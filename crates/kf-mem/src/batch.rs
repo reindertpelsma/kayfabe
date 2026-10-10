@@ -270,6 +270,15 @@ impl BatchBook {
     /// return (and forget) the handles with no live page left — the caller frees them.
     #[must_use]
     pub fn unmapped(&mut self, va: u64, len: u64) -> Vec<u32> {
+        self.unmapped_extents(va, len)
+            .into_iter()
+            .map(|(h, _, _)| h)
+            .collect()
+    }
+
+    /// [`BatchBook::unmapped`], with each emptied object's mapped extent `(handle, va, len)`.
+    #[must_use]
+    pub fn unmapped_extents(&mut self, va: u64, len: u64) -> Vec<(u32, u64, u64)> {
         let end = va.saturating_add(len);
         let floor = va.saturating_sub(self.max_len);
         let mut emptied = Vec::new();
@@ -293,8 +302,7 @@ impl BatchBook {
         }
         emptied
             .into_iter()
-            .filter_map(|s| self.by_va.remove(&s))
-            .map(|e| e.handle)
+            .filter_map(|s| self.by_va.remove(&s).map(|e| (e.handle, s.0, e.len)))
             .collect()
     }
 
@@ -437,6 +445,21 @@ impl OwnMaps {
         self.by_va.retain(|_, m| m.batch != Some(h));
     }
 
+    /// [`OwnMaps::forget_batch`] limited to `[va, end)` — every mapping of a batch object lies in
+    /// its own extent, so the lock is held O(log n + k), never O(n) (★ review fix 2026-10-10: the
+    /// ledger is shared with the channel plane's act thread, [`BatchedVas::hand_to_host`]).
+    pub fn forget_batch_in(&mut self, h: u32, va: u64, end: u64) {
+        let gone: Vec<u64> = self
+            .within(va, end)
+            .into_iter()
+            .filter(|(_, m)| m.batch == Some(h))
+            .map(|(s, _)| s)
+            .collect();
+        for s in gone {
+            self.by_va.remove(&s);
+        }
+    }
+
     /// Whether any mapping of ours intersects `[va, end)`.
     #[must_use]
     pub fn any_in(&self, va: u64, end: u64) -> bool {
@@ -462,17 +485,34 @@ impl OwnMaps {
 /// fixed part ≈ 4 RM calls + 2 mm syscalls) — below it the rows go per run.
 pub const LOW_RANGE_MIN_RUNS: usize = 8;
 
-/// ★ 2026-10-09: the most leaf mappings ONE row is split into outside a reservation (a 512 MiB
-/// guest row of 4 KiB leaves) — a bound on host calls per row, never sized by an unchecked guest
-/// value. A longer row stays one mapping (its later partial change is then refused by name,
-/// [`SPLIT_OUTSIDE_RESERVATION`], never split).
-pub const MAX_LEAF_PIECES: u64 = 1 << 17;
+/// ★ 2026-10-09: the most leaf mappings ONE row is split into outside a reservation — a bound on
+/// host calls per row, never sized by an unchecked guest value.
+///
+/// ★ Review fix 2026-10-10 (finding 1): a row beyond the bound is NO LONGER placed as one `NV01`
+/// mapping. ⊘ The text this corrects: *"(a 512 MiB guest row of 4 KiB leaves) … A longer row stays
+/// one mapping (its later partial change is then refused by name, [`SPLIT_OUTSIDE_RESERVATION`],
+/// never split)"* — that refusal acked the UNMAP run FAILED while its fully-kept MAP runs were acked
+/// APPLIED, so the walker held overlapping placements and the next refresh unmapped the old one
+/// whole, unchanged pages with it (`[model]` `sim::adversarial::a_huge_nv01_row_…`, no host error
+/// needed). Now: per leaf up to this bound (4 GiB of 4 KiB leaves — the whole Windows low range
+/// `[1 MiB, 4.5 GiB)` fits in one row's budget), beyond it THROUGH a micro reservation when
+/// [`BatchedVas::low_reserve`] is on (exact partial unmaps), else refused by name
+/// ([`HUGE_ROW_OUTSIDE_RESERVATION`], counted in [`BatchedVas::huge_refused`]): absence, never an
+/// unsplittable mapping.
+pub const MAX_LEAF_PIECES: u64 = 1 << 20;
+
+/// ★ Review fix 2026-10-10: why [`BatchedVas::map`] refused a row (see [`MAX_LEAF_PIECES`]).
+pub const HUGE_ROW_OUTSIDE_RESERVATION: &str = "row has more leaves than one row may be split into outside a VA-reserving hDma and no micro reservation can hold it — refused (one NV01 mapping could never be partially unmapped exactly)";
 
 /// ★★★ **A host VA space that places batches and keeps their objects' books** — the one
 /// implementation production (`kf_qemu::mem::GpuMirror`) and the hardware gate share.
 ///
 /// Every verb here is one WE author on OUR host space (§9); no lock is ever held across a host
-/// call (the VA thread is the only caller; plan under the lock, call, then record).
+/// call (plan under the lock, call, then record). ⊘ Corrected 2026-10-10, above the text it
+/// corrects: the VA thread is no longer the only caller — the channel plane's falcon-context steer
+/// calls [`BatchedVas::hand_to_host`] from the act thread; a micro reservation with a map in flight
+/// through it is pinned ([`MicroResv::pins`]) so neither frees what the other is using.
+/// (Was: "the VA thread is the only caller; plan under the lock, call, then record".)
 ///
 /// ★★★ **STATUS (2026-10-09): three rules, from host RM's own source, enforced HERE so no caller
 /// can break them** (`V3_BATCHED_MAP.md` §8):
@@ -500,8 +540,8 @@ pub struct BatchedVas<'rm, V: SpaceVerbs = HostVas<'rm>> {
     pub book: std::sync::Mutex<BatchBook>,
     /// ★ Every host mapping of ours in it ([`OwnMaps`]).
     pub own: std::sync::Mutex<OwnMaps>,
-    /// ★ Our micro reservations, `lo → (hi, handle)` (rule 2).
-    pub micro: std::sync::Mutex<BTreeMap<u64, (u64, u32)>>,
+    /// ★ Our micro reservations, by their low VA (rule 2).
+    pub micro: std::sync::Mutex<BTreeMap<u64, MicroResv>>,
     /// ★ Batch outside the guest reservations through micro reservations (rule 2). Off: rows
     /// there go per run.
     pub low_reserve: bool,
@@ -516,7 +556,49 @@ pub struct BatchedVas<'rm, V: SpaceVerbs = HostVas<'rm>> {
     /// ★ Range unmaps refused because they would split one of our mappings in the `NV01` range
     /// (the caller then unmaps run by run) — expected 0; counted, never silent.
     pub unsafe_splits: std::sync::atomic::AtomicU64,
+    /// ★ Review fix 2026-10-10: the per-row leaf bound ([`MAX_LEAF_PIECES`]; tests lower it).
+    pub max_leaf_pieces: u64,
+    /// ★ Review fix 2026-10-10: rows refused by [`HUGE_ROW_OUTSIDE_RESERVATION`].
+    pub huge_refused: std::sync::atomic::AtomicU64,
+    /// ★ Review fix 2026-10-10: mappings of ours found where a NEW row was about to be mapped (a
+    /// mapping a refused rollback or take-down left behind) and removed first — counted.
+    pub strays_removed: std::sync::atomic::AtomicU64,
+    /// ★ Review fix 2026-10-10 (finding 5): batch objects whose free host RM refused — still OURS,
+    /// still mapped somewhere: [`BatchedVas::leftovers`] reports them so the space is never recycled.
+    pub stuck_objects: std::sync::Mutex<Vec<u32>>,
     _rm: std::marker::PhantomData<&'rm ()>,
+}
+
+/// ★ One micro reservation of ours: `[lo, hi)` (its key is `lo`), its handle, and the maps in
+/// flight THROUGH it.
+///
+/// ★ Review fix 2026-10-10 (finding 6): `pins` > 0 while a map through it is between its host call
+/// and its record in the ledger — a reservation is released only when nothing of ours is in it
+/// AND nothing is being mapped through it, so a caller on another thread (the falcon-context
+/// steer, [`BatchedVas::hand_to_host`]) can release it without racing the VA thread.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MicroResv {
+    /// Its end.
+    pub hi: u64,
+    /// Its handle (an `hDma`).
+    pub handle: u32,
+    /// Maps in flight through it.
+    pub pins: u32,
+}
+
+/// ★ Review fix 2026-10-10 (finding 6): what [`BatchedVas::hand_to_host`] did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HandOver {
+    /// Nothing of ours is mapped or reserved there any more: host RM can place its own mapping.
+    Free,
+    /// Our mappings there are gone, but a micro reservation of ours still covers part of the range
+    /// (other rows live in it): host RM cannot place there until it is released.
+    StillReserved,
+    /// A mapping of ours is there again (the VA thread mapped a new row meanwhile).
+    StillOurs,
+    /// Host RM refused (or the range would split one of ours in the `NV01` range); the ledger
+    /// keeps whatever is still ours.
+    Refused(String),
 }
 
 /// ★ Why [`BatchedVas::unmap_range`] refused before any host call.
@@ -548,26 +630,31 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
             micro_freed: std::sync::atomic::AtomicU64::new(0),
             micro_refused: std::sync::atomic::AtomicU64::new(0),
             unsafe_splits: std::sync::atomic::AtomicU64::new(0),
+            max_leaf_pieces: MAX_LEAF_PIECES,
+            huge_refused: std::sync::atomic::AtomicU64::new(0),
+            strays_removed: std::sync::atomic::AtomicU64::new(0),
+            stuck_objects: std::sync::Mutex::new(Vec::new()),
             _rm: std::marker::PhantomData,
         }
     }
 
-    /// `[va, end)` cut at our micro reservations' edges: `(via, start, end)` in VA order.
+    /// `[va, end)` cut at our micro reservations' edges: `(via, start, end)` in VA order. ★ Every
+    /// reservation it routes through is PINNED ([`MicroResv::pins`]) until the caller's
+    /// [`BatchedVas::unpin`] — so no release frees it while a map through it is in flight.
     fn segments(&self, va: u64, end: u64) -> Vec<(Option<u32>, u64, u64)> {
-        let micro = self.micro.lock().map(|m| m.clone()).unwrap_or_default();
         let mut out = Vec::new();
+        let Ok(mut micro) = self.micro.lock() else {
+            return vec![(None, va, end)];
+        };
         let mut cur = va;
-        let covering = micro
-            .range(..end)
-            .filter(|&(_, &(hi, _))| hi > va)
-            .map(|(&lo, &(hi, h))| (lo, hi, h));
-        for (lo, hi, h) in covering {
+        for (&lo, r) in micro.range_mut(..end).filter(|(_, r)| r.hi > va) {
             if lo > cur {
                 out.push((None, cur, lo.min(end)));
             }
-            let (s, e) = (lo.max(cur), hi.min(end));
+            let (s, e) = (lo.max(cur), r.hi.min(end));
             if s < e {
-                out.push((Some(h), s, e));
+                r.pins += 1;
+                out.push((Some(r.handle), s, e));
                 cur = e;
             }
         }
@@ -577,17 +664,59 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
         out
     }
 
+    /// Record a NEW micro reservation of ours, pinned once (the caller maps through it next).
+    fn add_micro(&self, lo: u64, hi: u64, handle: u32) {
+        bump(&self.micro_made);
+        if let Ok(mut m) = self.micro.lock() {
+            m.insert(
+                lo,
+                MicroResv {
+                    hi,
+                    handle,
+                    pins: 1,
+                },
+            );
+        }
+    }
+
+    /// Undo [`BatchedVas::segments`]' pins (and [`BatchedVas::add_micro`]'s) on `vias`.
+    fn unpin(&self, vias: impl IntoIterator<Item = Option<u32>>) {
+        let Ok(mut m) = self.micro.lock() else {
+            return;
+        };
+        for h in vias.into_iter().flatten() {
+            if let Some(r) = m.values_mut().find(|r| r.handle == h) {
+                r.pins = r.pins.saturating_sub(1);
+            }
+        }
+    }
+
     /// ★★★ 2026-10-09 — **[`BatchedVas::segments`], then one segment per guest LEAF wherever the
     /// mapping would go through the space's `NV01` range** (no reservation of any kind over it).
     /// There each map owns its own VA block and only a whole-mapping unmap is exact (rule 2), and a
     /// guest can change any single leaf on its own (its PTEs are not coalesced), so the host
     /// mapping unit is the leaf: `leaf` bytes when the segment is whole aligned leaves of it, else
     /// the 4 KiB grain. Inside a reservation a coalesced row stays one mapping (partial unmaps are
-    /// exact there). Bounded: a hostile row is at most [`MAX_LEAF_PIECES`] pieces, else one piece
-    /// per segment is refused by the caller's own bounds (see `crate::apply`'s whole-page check).
-    fn leaf_segments(&self, va: u64, end: u64, leaf: u64) -> Vec<(Option<u32>, u64, u64)> {
+    /// exact there). Bounded: a hostile row is at most [`BatchedVas::max_leaf_pieces`] pieces.
+    ///
+    /// ★ Review fix 2026-10-10 (finding 1): ⊘ a segment beyond the bound used to stay ONE `NV01`
+    /// mapping — unsplittable, so any later one-page change of it desynced the walker. Now it goes
+    /// THROUGH a micro reservation made over exactly it ([`BatchedVas::low_reserve`]), else the row
+    /// is refused by name ([`HUGE_ROW_OUTSIDE_RESERVATION`]). A reservation made here is released
+    /// by the caller's failure path ([`BatchedVas::release_micro`]) when nothing of ours is in it.
+    ///
+    /// # Errors
+    /// [`HUGE_ROW_OUTSIDE_RESERVATION`] (or the refused reservation), before any map.
+    fn leaf_segments(
+        &self,
+        va: u64,
+        end: u64,
+        leaf: u64,
+    ) -> Result<Vec<(Option<u32>, u64, u64)>, String> {
         let mut out = Vec::new();
-        for (via, s, e) in self.segments(va, end) {
+        let mut fresh: Vec<u32> = Vec::new();
+        let segs = self.segments(va, end);
+        for &(via, s, e) in &segs {
             if via.is_some() || self.vas.splits_safely(s, e - s) {
                 out.push((via, s, e));
                 continue;
@@ -598,8 +727,33 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
             } else {
                 BATCH_PAGE
             };
-            if (e - s) / l > MAX_LEAF_PIECES {
-                out.push((None, s, e));
+            if (e - s) / l > self.max_leaf_pieces {
+                let h = if self.low_reserve {
+                    let r = self.vas.reserve(s, e - s).ok();
+                    if r.is_none() {
+                        bump(&self.micro_refused);
+                    }
+                    r
+                } else {
+                    None
+                };
+                let Some(h) = h else {
+                    bump(&self.huge_refused);
+                    // Every pin taken so far goes (the caller maps nothing).
+                    self.unpin(
+                        segs.iter()
+                            .map(|x| x.0)
+                            .chain(fresh.iter().map(|&h| Some(h))),
+                    );
+                    return Err(format!(
+                        "map {s:#x}+{:#x} ({} leaves of {l:#x}): {HUGE_ROW_OUTSIDE_RESERVATION}",
+                        e - s,
+                        (e - s) / l
+                    ));
+                };
+                self.add_micro(s, e, h);
+                fresh.push(h);
+                out.push((Some(h), s, e));
                 continue;
             }
             let mut cur = s;
@@ -609,7 +763,97 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
                 cur = next;
             }
         }
-        out
+        Ok(out)
+    }
+
+    /// ★ Review fix 2026-10-10: before a NEW row is mapped at `[va, end)`, remove any mapping of
+    /// ours still recorded there. The apply only maps a piece no committed placement keeps (a kept
+    /// page is never re-mapped; a piece over a placement whose unmap failed is never attempted),
+    /// so what the ledger still holds there is a STRAY — a rollback or a take-down host RM refused
+    /// earlier — never an unchanged VA. Without this the map would find the VA occupied, answer
+    /// HELD, and the stray would outlive the walker's record of it.
+    fn clear_strays(&self, va: u64, end: u64, defer: bool) -> Result<(), String> {
+        let any = self.own.lock().is_ok_and(|o| o.any_in(va, end));
+        if !any {
+            return Ok(());
+        }
+        bump(&self.strays_removed);
+        self.unmap_range(va, end - va, defer)
+            .map_err(|e| format!("map {va:#x}+{:#x}: a stray mapping of ours is there and could not be removed first: {e}", end - va))
+    }
+
+    /// ★ Review fix 2026-10-10 (findings 1 and 3): what the apply may KEEP inside `[va, end)` —
+    /// the bytes a mapping of ours covers (`owned`, merged), and the mappings of ours there that
+    /// host RM cannot split exactly (`rigid`: outside every VA-reserving `hDma`, rule 2), each
+    /// `(start, end)` whole even where it crosses the range's edges.
+    #[must_use]
+    pub fn own_view(&self, va: u64, end: u64) -> crate::ledger::OwnView {
+        let entries = self
+            .own
+            .lock()
+            .map(|o| o.within(va, end))
+            .unwrap_or_default();
+        let mut v = crate::ledger::OwnView::default();
+        for (s, m) in entries {
+            let e = s.saturating_add(m.len);
+            let (cs, ce) = (s.max(va), e.min(end));
+            match v.owned.last_mut() {
+                Some(last) if last.1 == cs => last.1 = ce,
+                _ => v.owned.push((cs, ce)),
+            }
+            if m.via.is_none() && !self.vas.splits_safely(s, m.len) {
+                v.rigid.push((s, e));
+            }
+        }
+        v
+    }
+
+    /// ★ Review fix 2026-10-10 (finding 6) — **hand `[va, va+len)` to host RM**: unmap every
+    /// mapping of OURS there through the ledger (owned spans only, each through the `hDma` it was
+    /// mapped through — a micro reservation included; never a split in the `NV01` range) and say
+    /// whether host RM can now place its own mapping there. Safe OFF the VA-manager thread (the
+    /// channel plane's falcon-context steer): the ledger locks are never held across a host call,
+    /// and a micro reservation emptied here is released only while no map through it is in flight
+    /// ([`MicroResv::pins`]). ⊘ It replaces a raw `HostRm::unmap_range` that was not
+    /// limited to our mappings, left the ledger (and batch book) stale, and — for a row mapped
+    /// through a micro reservation — named the wrong `hDma`, so it removed nothing while the log
+    /// said "steered".
+    #[must_use]
+    pub fn hand_to_host(&self, va: u64, len: u64) -> HandOver {
+        let end = va.saturating_add(len);
+        if let Err(e) = self.unmap_owned(va, len, false) {
+            return HandOver::Refused(e);
+        }
+        // Race-free with the VA thread: a reservation is released only when nothing of ours is in
+        // it and no map through it is in flight ([`MicroResv::pins`]).
+        self.release_micro(va, end);
+        if self.own.lock().is_ok_and(|o| o.any_in(va, end)) {
+            HandOver::StillOurs
+        } else if self.micro_covers(va, end) {
+            HandOver::StillReserved
+        } else {
+            HandOver::Free
+        }
+    }
+
+    /// ★ Review fix 2026-10-10: whether one of OUR micro reservations still covers any byte of
+    /// `[va, end)` (host RM cannot place its own mapping there while it lives).
+    #[must_use]
+    pub fn micro_covers(&self, va: u64, end: u64) -> bool {
+        self.micro
+            .lock()
+            .is_ok_and(|m| m.range(..end).any(|(_, r)| r.hi > va))
+    }
+
+    /// ★ Review fix 2026-10-10 (finding 5): what this space still holds of ours that a retire
+    /// could not release — mappings in the ledger, micro reservations and batch objects whose free
+    /// host RM refused. Non-zero ⇒ the space must not be recycled (free it instead).
+    #[must_use]
+    pub fn leftovers(&self) -> usize {
+        self.own.lock().map_or(1, |o| o.len())
+            + self.micro.lock().map_or(1, |m| m.len())
+            + self.book.lock().map_or(1, |b| b.len())
+            + self.stuck_objects.lock().map_or(1, |s| s.len())
     }
 
     fn record(&self, va: u64, len: u64, batch: Option<u32>, via: Option<u32>) {
@@ -637,7 +881,14 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
         defer: bool,
         one: &dyn Fn(Option<u32>, u64, u64) -> Result<Mapped, String>,
     ) -> Result<Mapped, String> {
-        let segs = self.leaf_segments(va, end, leaf);
+        self.clear_strays(va, end, defer)?;
+        let segs = match self.leaf_segments(va, end, leaf) {
+            Ok(s) => s,
+            Err(e) => {
+                self.release_micro(va, end);
+                return Err(e);
+            }
+        };
         let mut placed: Vec<(Option<u32>, u64, u64)> = Vec::new();
         let mut verdict = Ok(Mapped::Placed);
         for &(via, s, e) in &segs {
@@ -651,6 +902,7 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
         }
         if verdict != Ok(Mapped::Placed) {
             // All or nothing: the pieces already placed go again (they were never acknowledged).
+            let mut stray: Option<String> = None;
             for &(via, s, e) in placed.iter().rev() {
                 let m = OwnMap {
                     len: e - s,
@@ -658,17 +910,33 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
                     via,
                 };
                 if let Err(r) = self.unmap_entry(s, m, defer) {
+                    // ★ Review fix 2026-10-10: the piece is still OURS on the host — recorded, so
+                    // a later map there removes it first ([`BatchedVas::clear_strays`]) and a
+                    // retire takes it down; never an unrecorded mapping of ours.
+                    self.record(s, e - s, None, via);
                     eprintln!(
-                        "kf-mem: map {va:#x}+{:#x}: rolling back piece {s:#x} refused ({r})",
+                        "kf-mem: map {va:#x}+{:#x}: rolling back piece {s:#x} refused ({r}) — kept in the ledger as a stray",
                         end - va
                     );
+                    stray.get_or_insert(r);
                 }
             }
-            return verdict;
+            self.unpin(segs.iter().map(|x| x.0));
+            self.release_micro(va, end);
+            // ★ Something of ours is left there: never "held by host" (the walker would commit a
+            // placement it never asks us to take down) — refused, retried, the stray removed first.
+            return match stray {
+                Some(r) => Err(format!(
+                    "map {va:#x}+{:#x}: not placed whole, and rolling back a placed piece was refused ({r})",
+                    end - va
+                )),
+                None => verdict,
+            };
         }
         for (via, s, e) in placed {
             self.record(s, e - s, None, via);
         }
+        self.unpin(segs.iter().map(|x| x.0));
         Ok(Mapped::Placed)
     }
 
@@ -742,18 +1010,27 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
             _ => return Err("empty batch".into()),
         };
         let end = va + len;
+        self.clear_strays(va, end, defer)?;
         let segs = self.segments(va, end);
-        let (handle, via) = match segs.as_slice() {
-            [(None, ..)] if self.vas.splits_safely(va, len) => {
-                (self.vas.map_scattered(ram_fd, rows, defer)?, None)
-            }
-            [(Some(h), ..)] => (
-                self.vas.map_scattered_in(*h, ram_fd, rows, defer)?,
-                Some(*h),
-            ),
+        let mut pinned: Vec<Option<u32>> = segs.iter().map(|x| x.0).collect();
+        let mapped: Result<(u32, Option<u32>), String> = match segs.as_slice() {
+            [(None, ..)] if self.vas.splits_safely(va, len) => self
+                .vas
+                .map_scattered(ram_fd, rows, defer)
+                .map(|h| (h, None)),
+            [(Some(h), ..)] => self
+                .vas
+                .map_scattered_in(*h, ram_fd, rows, defer)
+                .map(|o| (o, Some(*h))),
             [(None, ..)] if self.low_reserve && rows.len() >= LOW_RANGE_MIN_RUNS => {
-                let h = match self.vas.reserve(va, len) {
-                    Ok(h) => h,
+                match self.vas.reserve(va, len) {
+                    Ok(h) => {
+                        self.add_micro(va, end, h);
+                        pinned.push(Some(h));
+                        self.vas
+                            .map_scattered_in(h, ram_fd, rows, defer)
+                            .map(|o| (o, Some(h)))
+                    }
                     Err(e) => {
                         if self
                             .micro_refused
@@ -764,22 +1041,19 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
                                 "kf-mem: micro reservation {va:#x}+{len:#x} refused ({e}) — the rows go per run"
                             );
                         }
-                        return Err(crate::ledger::NOT_BATCHED.into());
-                    }
-                };
-                bump(&self.micro_made);
-                if let Ok(mut m) = self.micro.lock() {
-                    m.insert(va, (end, h));
-                }
-                match self.vas.map_scattered_in(h, ram_fd, rows, defer) {
-                    Ok(obj) => (obj, Some(h)),
-                    Err(e) => {
-                        self.release_micro(va, end);
-                        return Err(e);
+                        Err(crate::ledger::NOT_BATCHED.into())
                     }
                 }
             }
-            _ => return Err(crate::ledger::NOT_BATCHED.into()),
+            _ => Err(crate::ledger::NOT_BATCHED.into()),
+        };
+        let (handle, via) = match mapped {
+            Ok(x) => x,
+            Err(e) => {
+                self.unpin(pinned);
+                self.release_micro(va, end);
+                return Err(e);
+            }
         };
         let booked = self
             .book
@@ -788,12 +1062,14 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
             .and_then(|mut b| b.insert(va, len, handle).map_err(|e| format!("{e:?}")));
         if let Err(e) = booked {
             self.free(vec![handle]);
+            self.unpin(pinned);
             self.release_micro(va, end);
             return Err(format!(
                 "batch {va:#x}+{len:#x}: its object could not be booked ({e}) — freed, nothing placed"
             ));
         }
         self.record(va, len, Some(handle), via);
+        self.unpin(pinned);
         Ok(())
     }
 
@@ -805,6 +1081,20 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
     /// [`SPLIT_OUTSIDE_RESERVATION`] before any host call (the caller unmaps run by run); else the
     /// host's refusal (the spans before it are recorded as gone; the rest is untouched).
     pub fn unmap_range(&self, va: u64, len: u64, defer: bool) -> Result<(), String> {
+        let r = self.unmap_owned(va, len, defer);
+        // ★ Review fix 2026-10-10 (finding 5): ⊘ an erroring span used to return BEFORE this, so a
+        // micro reservation emptied by the spans that did land was never released.
+        self.release_micro(va, va.saturating_add(len));
+        r
+    }
+
+    /// ★ Review fix 2026-10-10: [`BatchedVas::unmap_range`] without the release of the micro
+    /// reservations it empties (the caller releases them).
+    ///
+    /// # Errors
+    /// As [`BatchedVas::unmap_range`]. The ledger is cut for exactly the spans host RM answered
+    /// `Ok` for; a span that failed stays recorded (a range over it is idempotent: retried later).
+    pub fn unmap_owned(&self, va: u64, len: u64, defer: bool) -> Result<(), String> {
         let end = va
             .checked_add(len)
             .ok_or_else(|| format!("unmap range {va:#x}+{len:#x} wraps"))?;
@@ -833,60 +1123,78 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
             }
             self.retired(s, e - s);
         }
-        self.release_micro(va, end);
         Ok(())
     }
 
     /// ★ Unmap ONE committed run at `va` (`len` when known). A run that is exactly our host
     /// mapping(s) — one, or one per `hDma` piece — goes by the whole-mapping verb; a PIECE of a
     /// larger mapping of ours (a batch) goes by range ([`BatchedVas::unmap_range`]); nothing of
-    /// ours at `va` is answered with no host call.
+    /// ours in the run is answered with no host call.
+    ///
+    /// ★ Review fix 2026-10-10 (finding 4): with a known `len` the WHOLE run `[va, va+len)` is
+    /// asked, never its start alone. ⊘ Before, "nothing of ours here" was decided from `va`: after a
+    /// range that cut the run's start and then failed on its tail, the fallback answered `Ok` with
+    /// no host call and the tail outlived the guest's unmap, still mapping the old guest page
+    /// (`[model]` adversarial seed 36 step 7 call 2).
     ///
     /// # Errors
     /// The host's refusal.
     pub fn unmap_run(&self, va: u64, len: Option<u64>, defer: bool) -> Result<(), String> {
-        let hit = self.own.lock().ok().and_then(|o| o.containing(va));
-        let Some((start, first)) = hit else {
-            static LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-            if LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 16 {
-                eprintln!(
-                    "kf-mem: unmap {va:#x}: no host mapping of ours there — no host call (nothing of ours to take down)"
-                );
-            }
-            return Ok(());
+        let end = match len {
+            Some(l) => va.saturating_add(l),
+            None => match self.own.lock().ok().and_then(|o| o.containing(va)) {
+                Some((s, m)) if s == va => va.saturating_add(m.len),
+                Some(_) => {
+                    return Err(format!(
+                        "unmap {va:#x}: a piece of a larger mapping of ours with no known length — refused (a whole-mapping unmap would take the rest)"
+                    ));
+                }
+                None => va,
+            },
         };
-        let end = va.saturating_add(len.unwrap_or(first.len));
         let entries = self
             .own
             .lock()
             .map(|o| o.within(va, end))
             .unwrap_or_default();
-        // Whole ⇔ the entries tile [va, end) exactly, each starting and ending inside it.
-        let mut cur = va;
-        let whole = start == va
-            && entries.iter().all(|&(s, m)| {
-                let ok = s == cur && s.saturating_add(m.len) <= end;
-                cur = s.saturating_add(m.len);
-                ok
-            })
-            && cur == end;
-        if whole {
-            for (s, m) in entries {
-                self.unmap_entry(s, m, defer)?;
-                if let Ok(mut o) = self.own.lock() {
-                    o.cut(s, s.saturating_add(m.len));
-                }
-                self.retired(s, m.len);
+        if entries.is_empty() {
+            static LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+            if LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 16 {
+                eprintln!(
+                    "kf-mem: unmap {va:#x}+{:#x}: no host mapping of ours there — no host call (nothing of ours to take down)",
+                    end - va
+                );
             }
-            self.release_micro(va, end);
             return Ok(());
         }
-        match len {
-            Some(l) => self.unmap_range(va, l, defer),
-            None => Err(format!(
-                "unmap {va:#x}: a piece of a larger mapping of ours with no known length — refused (a whole-mapping unmap would take the rest)"
-            )),
+        // Whole ⇔ the entries tile [va, end) exactly, each starting and ending inside it.
+        let mut cur = va;
+        let whole = entries.iter().all(|&(s, m)| {
+            let ok = s == cur && s.saturating_add(m.len) <= end;
+            cur = s.saturating_add(m.len);
+            ok
+        }) && cur == end;
+        if !whole {
+            return match len {
+                Some(l) => self.unmap_range(va, l, defer),
+                None => Err(format!(
+                    "unmap {va:#x}: a piece of a larger mapping of ours with no known length — refused (a whole-mapping unmap would take the rest)"
+                )),
+            };
         }
+        let mut r = Ok(());
+        for (s, m) in entries {
+            if let Err(e) = self.unmap_entry(s, m, defer) {
+                r = Err(e);
+                break;
+            }
+            if let Ok(mut o) = self.own.lock() {
+                o.cut(s, s.saturating_add(m.len));
+            }
+            self.retired(s, m.len);
+        }
+        self.release_micro(va, end);
+        r
     }
 
     /// Free every batch object and micro reservation left (the space is being retired). Returns
@@ -900,54 +1208,84 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
         }
         let n = rest.len();
         self.free(rest);
-        let micro: Vec<(u64, u64, u32)> = self
+        // ★ Review fix 2026-10-10 (finding 5): a batch object whose free was refused earlier is
+        // retried here, once more.
+        let stuck = self
+            .stuck_objects
+            .lock()
+            .map(|mut s| core::mem::take(&mut *s))
+            .unwrap_or_default();
+        self.free(stuck);
+        let micro: Vec<(u64, MicroResv)> = self
             .micro
             .lock()
-            .map(|mut m| {
-                core::mem::take(&mut *m)
-                    .into_iter()
-                    .map(|(lo, (hi, h))| (lo, hi, h))
-                    .collect()
-            })
+            .map(|mut m| core::mem::take(&mut *m).into_iter().collect())
             .unwrap_or_default();
-        for (lo, hi, h) in micro {
-            if let Ok(mut o) = self.own.lock() {
-                o.cut(lo, hi);
+        for (lo, r) in micro {
+            if self.free_micro(r.handle) {
+                // Freeing a reservation unmaps everything inside it.
+                if let Ok(mut o) = self.own.lock() {
+                    o.cut(lo, r.hi);
+                }
+            } else if let Ok(mut m) = self.micro.lock() {
+                // ★ Still OURS: kept tracked ([`BatchedVas::leftovers`]) — the caller frees the
+                // whole space instead of recycling it.
+                m.insert(lo, r);
             }
-            self.free_micro(h);
         }
         n
     }
 
     /// Free every micro reservation intersecting `[va, end)` that holds nothing of ours any more.
+    ///
+    /// ★ Review fix 2026-10-10 (finding 5): a reservation leaves `micro` only when host RM freed it.
+    /// ⊘ Before, it was dropped from `micro` BEFORE the free was tried, so a refused free left its
+    /// VA reserved for the space's life with nothing tracking it: every later map there found the
+    /// VA held (`HeldByHost` → committed HELD → never mapped; `[model]` adversarial seed 7 step 7
+    /// call 4), and the retire never retried it. Now a refused free stays tracked: a later map
+    /// there goes THROUGH it ([`BatchedVas::segments`]), the next release over it retries the free,
+    /// and the retire retries once more and reports it ([`BatchedVas::leftovers`]).
     fn release_micro(&self, va: u64, end: u64) {
-        let candidates: Vec<(u64, u64, u32)> = self
-            .micro
-            .lock()
-            .map(|m| {
-                m.range(..end)
-                    .filter(|&(_, &(hi, _))| hi > va)
-                    .map(|(&lo, &(hi, h))| (lo, hi, h))
-                    .collect()
-            })
-            .unwrap_or_default();
-        for (lo, hi, h) in candidates {
-            let empty = self.own.lock().is_ok_and(|o| !o.any_in(lo, hi));
-            if empty {
-                if let Ok(mut m) = self.micro.lock() {
-                    m.remove(&lo);
-                }
-                self.free_micro(h);
+        // Chosen and taken out under the `micro` lock (then `own`, always in that order), so only
+        // one caller frees each, and none is taken while a map through it is in flight (`pins`).
+        let taken: Vec<(u64, MicroResv)> = {
+            let Ok(mut m) = self.micro.lock() else {
+                return;
+            };
+            let Ok(o) = self.own.lock() else {
+                return;
+            };
+            let lows: Vec<u64> = m
+                .range(..end)
+                .filter(|&(&lo, r)| r.hi > va && r.pins == 0 && !o.any_in(lo, r.hi))
+                .map(|(&lo, _)| lo)
+                .collect();
+            lows.into_iter()
+                .filter_map(|lo| m.remove(&lo).map(|r| (lo, r)))
+                .collect()
+        };
+        for (lo, r) in taken {
+            if !self.free_micro(r.handle)
+                && let Ok(mut m) = self.micro.lock()
+            {
+                m.insert(lo, r);
             }
         }
     }
 
-    fn free_micro(&self, h: u32) {
+    /// Free one micro reservation; `true` when host RM freed it.
+    fn free_micro(&self, h: u32) -> bool {
         match self.vas.free(h) {
-            Ok(()) => bump(&self.micro_freed),
-            Err(e) => eprintln!(
-                "kf-mem: micro reservation {h:#x} free refused: {e} — its VA stays reserved until the space is freed"
-            ),
+            Ok(()) => {
+                bump(&self.micro_freed);
+                true
+            }
+            Err(e) => {
+                eprintln!(
+                    "kf-mem: micro reservation {h:#x} free refused: {e} — kept tracked; retried at the next release over it and at retire"
+                );
+                false
+            }
         }
     }
 
@@ -955,14 +1293,14 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
         let emptied = self
             .book
             .lock()
-            .map(|mut b| b.unmapped(va, len))
+            .map(|mut b| b.unmapped_extents(va, len))
             .unwrap_or_default();
         if let Ok(mut o) = self.own.lock() {
-            for &h in &emptied {
-                o.forget_batch(h);
+            for &(h, s, l) in &emptied {
+                o.forget_batch_in(h, s, s.saturating_add(l));
             }
         }
-        self.free(emptied);
+        self.free(emptied.into_iter().map(|(h, _, _)| h).collect());
     }
 
     fn free(&self, handles: Vec<u32>) {
@@ -970,10 +1308,16 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
             match self.vas.free(h) {
                 Ok(()) => bump(&self.frees),
                 // ⊘ Not fatal to the unmap that emptied it (its mappings ARE gone); the object and
-                // its pinned pages live until the host client closes — named.
-                Err(e) => eprintln!(
-                    "kf-mem: batch object {h:#x} free refused: {e} — its pages stay pinned until the host client closes"
-                ),
+                // its pinned pages live on — named. ★ Review fix 2026-10-10: and TRACKED
+                // (`stuck_objects`), retried at retire and reported by [`BatchedVas::leftovers`].
+                Err(e) => {
+                    eprintln!(
+                        "kf-mem: batch object {h:#x} free refused: {e} — kept tracked, retried at retire"
+                    );
+                    if let Ok(mut s) = self.stuck_objects.lock() {
+                        s.push(h);
+                    }
+                }
             }
         }
     }

@@ -1035,7 +1035,9 @@ pub struct GpuMirror {
     /// (`None`: this mirror never batches).
     pub ram: Option<&'static RamMap>,
     /// ★ `V3_BATCHED_MAP.md` §5: the same space, placing batches and booking their objects.
-    pub bv: kf_mem::batch::BatchedVas<'static>,
+    /// ★ Review fix 2026-10-10 (finding 6): shared with the channel plane's [`Mirror::ledger`], so
+    /// the falcon-context steer unmaps through the same ownership ledger.
+    pub bv: std::sync::Arc<kf_mem::batch::BatchedVas<'static>>,
     /// ★ Host RM calls this space has cost, for the retire line (per CUDA process).
     pub calls: SpaceCalls,
     /// ★★★ v3-roperm: this space is the guest KERNEL's (a Translated channel was born in it, or
@@ -1090,6 +1092,12 @@ impl SpaceCalls {
     }
 }
 
+/// ⊘ **Corrected 2026-10-10 (`V3_BATCHED_MAP.md` §8.7.6), above the text it corrects:** the flag
+/// turns off the stitched BATCH OBJECTS only ([`GpuMirror::map_batch`] answers `NOT_BATCHED`).
+/// The net diff, one host mapping per guest leaf outside reservations, the owned-span range unmaps
+/// and the ownership ledger stay on, so it is NOT "the per-run path as before" and it does not
+/// reproduce run 244 (that is revision `c6fff2e3` with the flag).
+///
 /// ★ `KF3_NO_BATCHED_MAP=1` turns batched MAPS off (the per-run path, as before
 /// `V3_BATCHED_MAP.md`) — an explicit OPT-OUT for A/B measurement only. Read once. Default: ON.
 /// ⊘ (2026-10-09) It no longer turns range unmaps off: an exact range over our own placements is
@@ -1132,16 +1140,56 @@ impl GpuMirror {
         ram: Option<&'static RamMap>,
         kernel_vas: std::sync::Arc<crate::twin::TwinState>,
     ) -> Self {
+        Self::with_ledger(
+            std::sync::Arc::new(new_ledger(vas)),
+            (rows, log),
+            reserved,
+            ram,
+            kernel_vas,
+        )
+    }
+
+    /// [`GpuMirror::new`] over a ledger the caller shares (the channel plane's [`Mirror::ledger`]).
+    #[must_use]
+    pub fn with_ledger(
+        bv: std::sync::Arc<kf_mem::batch::BatchedVas<'static>>,
+        (rows, log): (PlacedRows, std::sync::Arc<RowsLog>),
+        reserved: Vec<(u64, u64)>,
+        ram: Option<&'static RamMap>,
+        kernel_vas: std::sync::Arc<crate::twin::TwinState>,
+    ) -> Self {
         GpuMirror {
-            vas,
+            vas: bv.vas,
             rows,
             log,
             reserved,
             ram,
-            bv: kf_mem::batch::BatchedVas::with_low_reserve(vas, micro_reserve_enabled()),
+            bv,
             calls: SpaceCalls::default(),
             kernel_vas,
             sked: Mutex::new(std::collections::BTreeMap::new()),
+        }
+    }
+
+    /// ★ Review fix 2026-10-10 (finding 4): the rows follow the LEDGER over `[va, end)` — every part
+    /// of it no mapping of ours covers any more is cut from the rows (host RM removed it before an
+    /// error, or the batch layer removed a stray there before a map). A reader never resolves
+    /// through a mapping that is gone, and the rows never claim more than the host holds.
+    fn rows_follow_ledger(&self, va: u64, end: u64) {
+        let owned = self.bv.own_view(va, end).owned;
+        let Ok(mut rows) = self.rows.write() else {
+            return;
+        };
+        let mut cur = va;
+        let mut changed = false;
+        for (s, e) in owned.into_iter().chain(std::iter::once((end, end))) {
+            if s > cur && !cut_rows(&mut rows, cur, s).original.is_empty() {
+                changed = true;
+            }
+            cur = cur.max(e);
+        }
+        if changed {
+            self.log.commit(va, end);
         }
     }
 
@@ -1195,8 +1243,18 @@ impl GpuMirror {
         // Whatever batch objects remain (a refused unmap left a piece): freeing one unmaps its
         // pieces (`rs_client.c:1342-1395`) — the space is being retired, nothing may keep them.
         let _ = self.bv.drain();
+        // ★ Review fix 2026-10-10 (finding 5): anything of ours the drain could not release (a
+        // mapping, a micro reservation or a batch object whose free host RM refused) makes the
+        // space unclean — it is freed whole, never recycled into another guest VA space.
+        let leftovers = self.bv.leftovers();
+        if leftovers != 0 {
+            eprintln!(
+                "kf3: mem retire {:#x}: {leftovers} mapping(s)/reservation(s)/object(s) of ours could not be released — the space is freed, not recycled",
+                self.vas.space.space
+            );
+        }
         let after = self.calls.unmaps.load(Ordering::Relaxed) + self.frees();
-        (rows.len() + sked.len(), refused, after - before)
+        (rows.len() + sked.len(), refused + leftovers, after - before)
     }
 }
 
@@ -1215,6 +1273,8 @@ impl MapTarget for GpuMirror {
         let m = self.bv.map(d, defer);
         self.calls.maps.fetch_add(1, Ordering::Relaxed);
         self.calls.map_ns.fetch_add(ns_since(t), Ordering::Relaxed);
+        // ★ Review fix 2026-10-10: a stray the batch layer removed there first is no row.
+        self.rows_follow_ledger(d.va, d.va.saturating_add(d.len));
         let m = m?;
         // ★ P6b ruling (a): only a mapping WE placed is a row a reader may resolve through.
         if m == Mapped::Placed
@@ -1235,6 +1295,9 @@ impl MapTarget for GpuMirror {
         let t = std::time::Instant::now();
         let placed = self.bv.place(fd.borrow(), rows, defer);
         self.calls.map_ns.fetch_add(ns_since(t), Ordering::Relaxed);
+        if let (Some(a), Some(b)) = (rows.first(), rows.last()) {
+            self.rows_follow_ledger(a.va, b.va.saturating_add(b.len));
+        }
         if let Err(e) = placed {
             // ★ 2026-10-09: `NOT_BATCHED` = rows outside a guest reservation, placed per run by
             // design (`BatchedVas` rule 2) — not a refused batch.
@@ -1315,6 +1378,14 @@ impl MapTarget for GpuMirror {
         self.calls
             .unmap_ns
             .fetch_add(ns_since(t), Ordering::Relaxed);
+        if r.is_err() {
+            // ★ Review fix 2026-10-10 (finding 4): the row is back for the part still ours.
+            if let Ok(mut rows) = self.rows.write() {
+                rows.insert(va, row);
+                self.log.commit(va, va.saturating_add(row.0));
+            }
+            self.rows_follow_ledger(va, va.saturating_add(row.0));
+        }
         r
     }
     fn unmap_range(&self, va: u64, len: u64, defer: bool) -> Result<(), String> {
@@ -1367,8 +1438,18 @@ impl MapTarget for GpuMirror {
                 }
                 uncut_rows(&mut rows, cut);
             }
+            // ★ Review fix 2026-10-10 (finding 4): ⊘ the rows used to be put back WHOLE although
+            // the ledger had been cut for every span host RM unmapped before the error — a reader
+            // then resolved through a mapping that was gone, and the per-run fallback found "no
+            // mapping of ours" at a run's start while its tail was still mapped. Now the rows
+            // follow the ledger.
+            self.rows_follow_ledger(va, end);
             if let Ok(mut k) = self.sked.lock() {
-                k.extend(sked_removed);
+                let still: Vec<(u64, u64)> = sked_removed
+                    .into_iter()
+                    .filter(|&(v, l)| !self.bv.own_view(v, v.saturating_add(l)).owned.is_empty())
+                    .collect();
+                k.extend(still);
             }
         }
         self.calls
@@ -1382,6 +1463,16 @@ impl MapTarget for GpuMirror {
     fn va_extent(&self) -> Option<u64> {
         self.vas.va_extent()
     }
+    fn own_view(&self, va: u64, end: u64) -> Option<kf_mem::ledger::OwnView> {
+        Some(self.bv.own_view(va, end))
+    }
+}
+
+/// ★ The batch / ownership ledger of one mirrored space (`kf_mem::batch::BatchedVas`), with the
+/// process's micro-reservation policy.
+#[must_use]
+pub fn new_ledger(vas: HostVas<'static>) -> kf_mem::batch::BatchedVas<'static> {
+    kf_mem::batch::BatchedVas::with_low_reserve(vas, micro_reserve_enabled())
 }
 
 /// ★ P5: one mirrored guest VA space as the channel plane sees it — the host space and our rows.
@@ -1411,6 +1502,11 @@ pub struct Mirror {
     /// ★ Review fix 2026-10-04: the commit log of `rows` ([`RowsLog`]), shared with the walker's
     /// [`GpuMirror::log`].
     pub log: std::sync::Arc<RowsLog>,
+    /// ★ Review fix 2026-10-10 (finding 6): the space's ownership ledger, shared with the walker's
+    /// [`GpuMirror::bv`] — so the channel plane's falcon-context steer unmaps OUR mappings only,
+    /// through the `hDma` each was mapped through, and the ledger never keeps a stale entry.
+    /// `None` until the walker's mirror exists.
+    pub ledger: Option<std::sync::Arc<kf_mem::batch::BatchedVas<'static>>>,
 }
 
 /// ★★★ v3-roperm: a mirror's starting classification — KERNEL for one of the guest RM's own
@@ -1560,6 +1656,15 @@ impl MapTarget for Target {
         match self {
             Target::Window(_) | Target::Bar1(_) => false,
             Target::Gpu(g) => g.gpu_space(),
+        }
+    }
+    // ★ Review fix 2026-10-10: forwarded EXPLICITLY — the trait default (`None`) would keep pages
+    // no mapping of ours covers and parts of mappings host RM cannot split (findings 1, 3).
+    fn own_view(&self, va: u64, end: u64) -> Option<kf_mem::ledger::OwnView> {
+        match self {
+            Target::Window(w) => w.own_view(va, end),
+            Target::Bar1(b) => b.win.own_view(va, end),
+            Target::Gpu(g) => g.own_view(va, end),
         }
     }
 }
@@ -2545,6 +2650,7 @@ fn twin_record(
             live: Default::default(),
             kernel_vas: kernel_vas_for(key),
             log: std::sync::Arc::default(),
+            ledger: None,
         },
         // ⊘ A twin has no ring region and no window: only the positive control's window, when
         // it mapped one, is a VMM range here.
@@ -2584,7 +2690,10 @@ fn record_twin(
     rm: &'static HostRm,
     store: u32,
 ) {
-    let TwinRecord { mirror, reserved } = rec;
+    let TwinRecord {
+        mut mirror,
+        reserved,
+    } = rec;
     let (space, ram_obj, rows, log, kernel_vas) = (
         mirror.space,
         mirror.ram_obj,
@@ -2592,18 +2701,20 @@ fn record_twin(
         mirror.log.clone(),
         mirror.kernel_vas.clone(),
     );
+    let ledger = std::sync::Arc::new(new_ledger(HostVas {
+        rm,
+        space,
+        store,
+        ram_obj,
+    }));
+    mirror.ledger = Some(ledger.clone());
     if let Ok(mut mm) = plane.mirrors.lock() {
         mm.insert(key, mirror);
     }
     m.table.insert(
         key,
-        Target::Gpu(GpuMirror::new(
-            HostVas {
-                rm,
-                space,
-                store,
-                ram_obj,
-            },
+        Target::Gpu(GpuMirror::with_ledger(
+            ledger,
             (rows, log),
             reserved,
             Some(plane.ram),

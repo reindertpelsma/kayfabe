@@ -110,6 +110,8 @@ fn remap_inside(
             at: back,
             unmap: false,
             held: false,
+            // A change inside a big leaf is a split of it: the pieces are 4 KiB leaves.
+            leaf: if old.run.leaf > P { P } else { old.run.leaf },
             ..old.run
         });
         i = j;
@@ -306,11 +308,14 @@ fn a_flat_fb_alias_straddling_the_carve_out_is_placed_below_it() {
     assert!(rm.violations.is_empty(), "{:?}", rm.violations);
 }
 
-/// ★ A leaf-SIZE change is a change of the guest's mapping (its PTE level), so those VAs are
-/// re-made — but nothing else is touched, nothing stale is left, and it works both ways: sixteen
-/// 4 KiB leaves → one 64 KiB leaf over the same pages, and back.
+/// ★ Review fix 2026-10-10 (finding 3; owner rule: an identical TRANSLATION is unchanged, whatever
+/// the leaf size). ⊘ This test was "a leaf-size change remakes only those VAs" — its guard keyed on
+/// the leaf, so it could not see the sixteen re-made VAs transiently unmapped. Now: sixteen 4 KiB
+/// leaves → one 64 KiB leaf over the same pages makes NO host call (the walker's table moves the
+/// placement between page-size classes; the host keeps its sixteen mappings), and back again with
+/// page 5 re-pointed is exact — one unmap, one map — because those host mappings are 4 KiB.
 #[test]
-fn a_leaf_size_change_remakes_only_those_vas() {
+fn a_leaf_size_change_with_the_same_translation_keeps_every_host_mapping() {
     for low in [false, true] {
         let (sim, base) = big_space();
         let m = SimMirror::new(&sim, true, low);
@@ -328,14 +333,37 @@ fn a_leaf_size_change_remakes_only_those_vas() {
             unmap_run(base + 0x1_0000, &c[&(base + 0x1_0000)]),
             leaf_run(base + 0x1_0000, 0x1_0000, 0x3200_0000, 0x1_0000),
         ];
-        assert_eq!(apply_and_commit(&m, &up, &mut c).refused, 0);
+        let before = sim.0.borrow().n;
+        let out = apply_and_commit(&m, &up, &mut c);
+        assert_eq!(out.refused, 0);
+        assert_eq!(
+            out.codes,
+            vec![KFWR_ACK_APPLIED; 2],
+            "both commit: the class moves"
+        );
+        assert_eq!(sim.0.borrow().n, before, "no host call at all");
         check(&sim, &c, &BTreeMap::new(), base, base + 0x3_0000).unwrap();
         // ... and back: one 64 KiB leaf → sixteen 4 KiB leaves, page 5 remapped.
         let mut down = vec![unmap_run(base + 0x1_0000, &c[&(base + 0x1_0000)])];
         down.push(leaf_run(base + 0x1_0000, 5 * P, 0x3200_0000, 0x1000));
         down.push(leaf_run(base + 0x1_5000, P, 0x3300_0000, 0x1000));
         down.push(leaf_run(base + 0x1_6000, 10 * P, 0x3200_6000, 0x1000));
-        assert_eq!(apply_and_commit(&m, &down, &mut c).refused, 0);
+        let before = sim.0.borrow().n;
+        let out = apply_and_commit(&m, &down, &mut c);
+        let after = sim.0.borrow().n;
+        assert_eq!(out.refused, 0);
+        assert_eq!(
+            out.remade_unchanged_pages, 0,
+            "exact: the host mappings are 4 KiB"
+        );
+        assert_eq!(
+            (
+                after.rm_unmap - before.rm_unmap,
+                after.rm_map - before.rm_map
+            ),
+            (1, 1),
+            "exactly the changed page"
+        );
         check(&sim, &c, &BTreeMap::new(), base, base + 0x3_0000).unwrap();
         // The neighbours were never touched: their single mappings are the originals.
         let rm = sim.0.borrow();
@@ -349,6 +377,50 @@ fn a_leaf_size_change_remakes_only_those_vas() {
                 "neighbour leaf {v:#x} intact"
             );
         }
+    }
+}
+
+/// ★ Review fix 2026-10-10 (finding 3, the inexact case, `V3_BATCHED_MAP.md` §8.7): a 64 KiB leaf
+/// placed in the `NV01` range is ONE host mapping. When the guest splits it into 4 KiB leaves and
+/// re-points page 5 in the same refresh, host RM cannot remove page 5 alone (it would free the
+/// whole VA block), so the mapping is RE-MADE: its 15 unchanged pages are transiently unmapped —
+/// declared (`remade_unchanged_pages` = 15), never silent, and never a refusal that would hold the
+/// guest's invalidate. Inside a guest reservation the same change is exact (no re-make).
+#[test]
+fn splitting_a_big_nv01_leaf_and_changing_part_of_it_remakes_it_declared() {
+    for (reserved, label) in [(false, "NV01"), (true, "reservation")] {
+        let (sim, base) = big_space();
+        let base = if reserved { base + (64 << 20) } else { base };
+        let m = SimMirror::new(&sim, true, false);
+        let mut c = BTreeMap::new();
+        let big = leaf_run(base, 0x1_0000, 0x3200_0000, 0x1_0000);
+        assert_eq!(apply_and_commit(&m, &[big], &mut c).refused, 0);
+        let down = vec![
+            unmap_run(base, &c[&base]),
+            leaf_run(base, 5 * P, 0x3200_0000, 0x1000),
+            leaf_run(base + 5 * P, P, 0x3300_0000, 0x1000),
+            leaf_run(base + 6 * P, 10 * P, 0x3200_6000, 0x1000),
+        ];
+        let out = apply_and_commit(&m, &down, &mut c);
+        assert_eq!(out.refused, 0, "{label}: {:?}", out.first_refusal);
+        let rm = sim.0.borrow();
+        assert!(rm.transient.is_empty(), "{label}: {:?}", rm.transient);
+        if reserved {
+            assert_eq!(
+                (out.remade_unchanged_pages, rm.remade_transients),
+                (0, 0),
+                "{label}"
+            );
+        } else {
+            assert_eq!(out.remade_unchanged_pages, 15, "{label}");
+            assert!(
+                rm.remade_transients > 0,
+                "{label}: the guard saw the declared re-make"
+            );
+        }
+        drop(rm);
+        check(&sim, &c, &BTreeMap::new(), base, base + 0x1_0000).unwrap();
+        assert_eq!(m.bv.unsafe_splits.load(Relaxed), 0, "{label}");
     }
 }
 
@@ -697,6 +769,19 @@ struct Stats {
     held: usize,
     retires: usize,
     micro: u64,
+    /// ★ Review fix 2026-10-10: leaf-size re-expressions (same translation), and those that
+    /// changed one page in the same refresh.
+    releafs: usize,
+    releaf_changes: usize,
+    /// Refused unmaps injected, runs acknowledged FAILED, retries the walker made.
+    injected: u64,
+    failed_runs: usize,
+    retries: usize,
+    /// Unchanged pages the apply had to re-make (an `NV01` mapping the guest split), and the guard
+    /// hits inside them.
+    remade_pages: u64,
+    remade_transients: u64,
+    kept_runs: usize,
 }
 
 impl Stats {
@@ -705,6 +790,13 @@ impl Stats {
         self.ranges += a.range_unmaps;
         self.fallbacks += a.batch_fallbacks;
         self.held += a.held;
+        self.failed_runs += a
+            .codes
+            .iter()
+            .filter(|&&c| c == kf_cuda::abi::KFWR_ACK_FAILED)
+            .count();
+        self.remade_pages += a.remade_unchanged_pages;
+        self.kept_runs += a.kept_runs;
     }
     fn sum(&mut self, o: Stats) {
         self.batches += o.batches;
@@ -713,27 +805,50 @@ impl Stats {
         self.held += o.held;
         self.retires += o.retires;
         self.micro += o.micro;
+        self.releafs += o.releafs;
+        self.releaf_changes += o.releaf_changes;
+        self.injected += o.injected;
+        self.failed_runs += o.failed_runs;
+        self.retries += o.retries;
+        self.remade_pages += o.remade_pages;
+        self.remade_transients += o.remade_transients;
+        self.kept_runs += o.kept_runs;
     }
 }
 
 /// ★★★ **The property test**: random walker diffs — maps (scattered, contiguous, vidmem,
-/// read-only), remaps, partial and sparse unmaps, straddles of the reservation edges, whole-space
-/// retires — through the REAL apply + [`BatchedVas`] code against the model, with foreign mappings
-/// sprinkled into gaps. After EVERY host call: no unchanged VA transiently unmapped; after EVERY
-/// step: every invariant of [`check`].
+/// read-only, 64 KiB leaves), remaps, partial and sparse unmaps, straddles of the reservation
+/// edges, leaf-size re-expressions with the same translation (with and without a one-page change
+/// in the same refresh), whole-space retires — through the REAL apply + [`BatchedVas`] code against
+/// the model, with foreign mappings sprinkled into gaps. After EVERY host call: no unchanged VA
+/// transiently unmapped; after EVERY step: every invariant of [`check`], and the walker's slot
+/// never holds two placements over one VA ([`apply_and_commit`]).
+///
+/// ★ Review fix 2026-10-10 (finding 8): the same seeds again with host RM REFUSING every 5th /
+/// 7th mirror unmap (before acting, and after acting), each refusal followed by the walker's
+/// retry of exactly the runs acknowledged FAILED (its next diff) — the walker's slot and the
+/// host must agree after it.
 #[test]
 fn property_batched_mirror_against_the_host_rm_model() {
-    for low in [false, true] {
+    for (low, fault) in [
+        (false, None),
+        (true, None),
+        (false, Some((5, false))),
+        (true, Some((7, true))),
+        (true, Some((5, false))),
+        (false, Some((7, true))),
+    ] {
         let mut failures = Vec::new();
         let mut total = Stats::default();
         for seed in 1..=300u64 {
-            match run_seed(seed, 60, true, low) {
+            match run_seed(seed, 60, true, low, fault) {
                 Ok(s) => total.sum(s),
                 Err(e) => failures.push(format!("seed {seed}: {e}")),
             }
         }
         let kinds = [
             "VIOLATION",
+            "OVERLAP",
             "TRANSIENT",
             "FAULT_PTE",
             "assertion",
@@ -746,13 +861,18 @@ fn property_batched_mirror_against_the_host_rm_model() {
             .collect();
         assert!(
             failures.is_empty(),
-            "low={low}: {} of 300 seeds failed {histogram:?}; first: {}",
+            "low={low} fault={fault:?}: {} of 300 seeds failed {histogram:?}; first: {}",
             failures.len(),
             failures[0]
         );
-        eprintln!("property (batched, low_reserve={low}): {total:?}");
+        eprintln!("property (batched, low_reserve={low}, fault={fault:?}): {total:?}");
         assert!(
-            total.batches > 100 && total.ranges > 100 && total.held > 10 && total.retires > 10,
+            total.batches > 100
+                && total.ranges > 100
+                && total.held > 10
+                && total.retires > 10
+                && total.releafs > 100
+                && total.releaf_changes > 30,
             "the property run did not exercise the batched path: {total:?}"
         );
         assert_eq!(
@@ -760,23 +880,113 @@ fn property_batched_mirror_against_the_host_rm_model() {
             low,
             "micro reservations iff low_reserve: {total:?}"
         );
+        assert_eq!(
+            fault.is_some(),
+            total.injected > 100 && total.retries > 100,
+            "refusals injected iff asked: {total:?}"
+        );
     }
 }
 
-/// The same property on the per-run path (`KF3_NO_BATCHED_MAP=1`, the A/B opt-out).
+/// The same property on the per-run path (`KF3_NO_BATCHED_MAP=1`, the A/B opt-out), with and
+/// without injected unmap refusals.
+#[test]
+#[ignore = "debug replay: KF_SIM_SEED, KF_SIM_FAULT=every,after, KF_SIM_BATCH, KF_SIM_LOW"]
+fn property_debug_replay() {
+    let seed: u64 = std::env::var("KF_SIM_SEED").unwrap().parse().unwrap();
+    let fault = std::env::var("KF_SIM_FAULT").ok().map(|f| {
+        let (a, b) = f.split_once(',').unwrap();
+        (a.parse().unwrap(), b == "1")
+    });
+    let r = run_seed(
+        seed,
+        60,
+        std::env::var_os("KF_SIM_BATCH").is_some(),
+        std::env::var_os("KF_SIM_LOW").is_some(),
+        fault,
+    );
+    eprintln!("{r:?}");
+}
+
 #[test]
 fn property_per_run_path_against_the_host_rm_model() {
-    for seed in 1..=100u64 {
-        let s = run_seed(seed, 60, false, false).unwrap_or_else(|e| panic!("seed {seed}: {e}"));
-        assert_eq!(s.batches, 0, "the opt-out never batches");
+    for fault in [None, Some((6, false)), Some((6, true))] {
+        for seed in 1..=100u64 {
+            let s = run_seed(seed, 60, false, false, fault)
+                .unwrap_or_else(|e| panic!("fault={fault:?} seed {seed}: {e}"));
+            assert_eq!(s.batches, 0, "the opt-out never batches");
+        }
     }
+}
+
+/// One refresh, then — as the walker's next diff would — a retry of exactly the runs acknowledged
+/// FAILED, with injected refusals paused (a refused run stays a difference; its placement, if an
+/// UNMAP, stays committed and is emitted again).
+fn refresh(m: &SimMirror<'_>, runs: &[DiffRun], c: &mut BTreeMap<u64, Committed>, st: &mut Stats) {
+    let out = apply_and_commit(m, runs, c);
+    st.add(&out);
+    if std::env::var_os("KF_SIM_DEBUG").is_some() {
+        eprintln!(
+            "  runs {:x?}\n  codes {:?} refusal {:?} own {:x?}",
+            runs.iter()
+                .map(|r| (r.unmap, (r.va - BASE) / P, r.len / P, r.at / P, r.leaf))
+                .collect::<Vec<_>>(),
+            out.codes,
+            out.first_refusal,
+            m.bv.own
+                .lock()
+                .unwrap()
+                .within(BASE, pg(PAGES))
+                .iter()
+                .map(|(v, o)| ((v - BASE) / P, o.len / P))
+                .collect::<Vec<_>>()
+        );
+    }
+    let failed: Vec<DiffRun> = runs
+        .iter()
+        .zip(&out.codes)
+        .filter(|&(_, &code)| code == kf_cuda::abi::KFWR_ACK_FAILED)
+        .map(|(r, _)| *r)
+        .collect();
+    let sim = m.sim();
+    if failed.is_empty() || sim.0.borrow().fail_unmaps.is_none() {
+        return;
+    }
+    // Only runs the walker would emit again: an UNMAP of a placement still committed, a MAP of
+    // pages no committed placement holds.
+    let failed: Vec<DiffRun> = failed
+        .into_iter()
+        .filter(|r| {
+            if r.unmap {
+                c.get(&r.va).is_some_and(|x| x.len == r.len)
+            } else {
+                true
+            }
+        })
+        .collect();
+    let paused = sim.0.borrow_mut().fail_unmaps.take();
+    st.retries += 1;
+    let again = apply_and_commit(m, &failed, c);
+    st.add(&again);
+    sim.0.borrow_mut().fail_unmaps = paused;
 }
 
 #[allow(clippy::too_many_lines)]
-fn run_seed(seed: u64, steps: usize, batching: bool, low: bool) -> Result<Stats, String> {
+fn run_seed(
+    seed: u64,
+    steps: usize,
+    batching: bool,
+    low: bool,
+    fault: Option<(u64, bool)>,
+) -> Result<Stats, String> {
     let mut st = Stats::default();
     let mut rng = Rng(seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1);
     let sim = fresh();
+    sim.0.borrow_mut().fail_unmaps = fault.map(|(every, after)| UnmapFault {
+        every,
+        after,
+        seen: seed % every,
+    });
     let mut m = SimMirror::new(&sim, batching, low);
     let mut c: BTreeMap<u64, Committed> = BTreeMap::new();
     let mut foreign: BTreeMap<u32, (u64, u64)> = BTreeMap::new();
@@ -793,10 +1003,12 @@ fn run_seed(seed: u64, steps: usize, batching: bool, low: bool) -> Result<Stats,
             .next_back()
             .is_some_and(|(&v, x)| pg(p) < v + x.len)
     };
+    const BIG: u64 = 0x1_0000;
+    const BIG_PAGES: u64 = BIG / P;
     for step in 0..steps {
         let op = rng.below(100);
         let what;
-        if op < 45 {
+        if op < 40 {
             // MAP a window of uncommitted pages (foreign pages may be inside: HeldByHost).
             let start = rng.below(PAGES);
             let want = 1 + rng.below(24);
@@ -821,8 +1033,8 @@ fn run_seed(seed: u64, steps: usize, batching: bool, low: bool) -> Result<Stats,
                 p += k;
             }
             what = format!("map {} run(s) from page {start}", runs.len());
-            st.add(&apply_and_commit(&m, &runs, &mut c));
-        } else if op < 70 {
+            refresh(&m, &runs, &mut c, &mut st);
+        } else if op < 62 {
             // UNMAP (sparse or contiguous) the placements wholly inside a window.
             let start = rng.below(PAGES);
             let n = 1 + rng.below(16);
@@ -835,8 +1047,8 @@ fn run_seed(seed: u64, steps: usize, batching: bool, low: bool) -> Result<Stats,
                 .map(|(_, (&v, x))| unmap_run(v, x))
                 .collect();
             what = format!("unmap {} run(s) in pages {start}+{n}", runs.len());
-            st.add(&apply_and_commit(&m, &runs, &mut c));
-        } else if op < 85 {
+            refresh(&m, &runs, &mut c, &mut st);
+        } else if op < 76 {
             // REMAP: unmap the placements inside a window and map new backing over them.
             let start = rng.below(PAGES);
             let n = 1 + rng.below(10);
@@ -861,8 +1073,8 @@ fn run_seed(seed: u64, steps: usize, batching: bool, low: bool) -> Result<Stats,
                 }
             }
             what = format!("remap {} placement(s) in pages {start}+{n}", old.len());
-            st.add(&apply_and_commit(&m, &runs, &mut c));
-        } else if op < 89 {
+            refresh(&m, &runs, &mut c, &mut st);
+        } else if op < 80 {
             // PARTIAL REMAP: some pages inside one committed placement change, the rest is
             // re-emitted with its old backing (the walker's diff) — the rest must stay mapped.
             let keys: Vec<u64> = c.iter().filter(|(_, x)| !x.held).map(|(&v, _)| v).collect();
@@ -872,9 +1084,91 @@ fn run_seed(seed: u64, steps: usize, batching: bool, low: bool) -> Result<Stats,
                 let n = c[&v].len / P;
                 let changed: Vec<u64> = (at..at + n).filter(|_| rng.below(3) == 0).collect();
                 let runs = remap_inside(&c, at, &changed, 2000 + rng.below(1000));
-                st.add(&apply_and_commit(&m, &runs, &mut c));
+                refresh(&m, &runs, &mut c, &mut st);
             }
-        } else if op < 93 {
+        } else if op < 86 {
+            // ★ Review fix 2026-10-10 (finding 3): LEAF SIZES. A fresh 64 KiB-leaf placement; or a
+            // committed placement re-expressed with another leaf size over the SAME translation
+            // (4 KiB ↔ 64 KiB), sometimes with one page changed in the same refresh (the guest
+            // splits a big leaf and re-points part of it).
+            let keys: Vec<u64> = c
+                .iter()
+                .filter(|&(&v, x)| {
+                    !x.held && x.ram && v.is_multiple_of(BIG) && x.len.is_multiple_of(BIG)
+                })
+                .map(|(&v, _)| v)
+                .collect();
+            let pick = if rng.below(2) == 0 {
+                keys.get(rng.below(keys.len() as u64) as usize).copied()
+            } else {
+                None
+            };
+            if let Some(v) = pick {
+                let x = c[&v];
+                let big = x.run.leaf == BIG;
+                let aligned = v.is_multiple_of(BIG) && x.len.is_multiple_of(BIG);
+                let change = rng.below(2) == 0;
+                let mut runs = vec![unmap_run(v, &x)];
+                let piece = |va: u64, len: u64, at: u64, leaf: u64| DiffRun {
+                    va,
+                    len,
+                    at,
+                    leaf,
+                    unmap: false,
+                    held: false,
+                    ..x.run
+                };
+                if big && aligned {
+                    // Split ONE of its 64 KiB leaves into 4 KiB leaves (same translation), and
+                    // maybe re-point one page of it.
+                    let leaf_i = rng.below(x.len / BIG);
+                    let (ls, le) = (v + leaf_i * BIG, v + (leaf_i + 1) * BIG);
+                    if ls > v {
+                        runs.push(piece(v, ls - v, x.off, BIG));
+                    }
+                    let k = ls + rng.below(BIG_PAGES) * P;
+                    if change {
+                        if k > ls {
+                            runs.push(piece(ls, k - ls, x.off + (ls - v), P));
+                        }
+                        runs.push(piece(k, P, (3000 + rng.below(1000)) * P, P));
+                        if k + P < le {
+                            runs.push(piece(k + P, le - k - P, x.off + (k + P - v), P));
+                        }
+                        st.releaf_changes += 1;
+                    } else {
+                        runs.push(piece(ls, BIG, x.off + (ls - v), P));
+                    }
+                    if le < v + x.len {
+                        runs.push(piece(le, v + x.len - le, x.off + (le - v), BIG));
+                    }
+                    st.releafs += 1;
+                } else if aligned {
+                    // 4 KiB leaves → 64 KiB leaves over the same pages.
+                    runs.push(piece(v, x.len, x.off, BIG));
+                    st.releafs += 1;
+                } else {
+                    runs.clear();
+                }
+                what = format!("re-leaf {v:#x}+{:#x} (big={big}, change={change})", x.len);
+                if !runs.is_empty() {
+                    refresh(&m, &runs, &mut c, &mut st);
+                }
+            } else {
+                // A fresh 64 KiB-leaf row over a free aligned block.
+                let b = rng.below(PAGES / BIG_PAGES);
+                let n_leaves = 1 + rng.below(2).min(PAGES / BIG_PAGES - 1 - b);
+                let (p0, n) = (b * BIG_PAGES, n_leaves * BIG_PAGES);
+                what = format!("big map at page {p0}+{n}");
+                if (p0..p0 + n).all(|q| !busy(&c, &foreign, q)) {
+                    let run = DiffRun {
+                        leaf: BIG,
+                        ..map_run(pg(p0), n * P, true, rng.below(256) * BIG, false)
+                    };
+                    refresh(&m, &[run], &mut c, &mut st);
+                }
+            }
+        } else if op < 91 {
             // A FOREIGN mapping lands in a gap (never inside a micro reservation: other kayfabe
             // code maps through the space's own routing, which RM refuses there).
             let p = rng.below(PAGES);
@@ -886,7 +1180,7 @@ fn run_seed(seed: u64, steps: usize, batching: bool, low: bool) -> Result<Stats,
                 next_id += 1;
             }
             what = format!("foreign at page {p}+{n}");
-        } else if op < 97 {
+        } else if op < 96 {
             // Its owner removes a foreign mapping.
             let key = foreign
                 .keys()
@@ -899,9 +1193,17 @@ fn run_seed(seed: u64, steps: usize, batching: bool, low: bool) -> Result<Stats,
             what = "foreign removed".into();
         } else {
             // The guest frees the VA space: retire, then a fresh mirror on the SAME host space.
+            let paused = sim.0.borrow_mut().fail_unmaps.take();
             let refused = m.retire();
+            sim.0.borrow_mut().fail_unmaps = paused;
             if refused != 0 {
                 return Err(format!("step {step}: retire refused {refused} row(s)"));
+            }
+            if m.bv.leftovers() != 0 {
+                return Err(format!(
+                    "step {step}: retire left {} mapping(s)/reservation(s)/object(s) of ours",
+                    m.bv.leftovers()
+                ));
             }
             st.micro += m.bv.micro_made.load(Relaxed);
             c.clear();
@@ -918,6 +1220,9 @@ fn run_seed(seed: u64, steps: usize, batching: bool, low: bool) -> Result<Stats,
             st.retires += 1;
             what = "retire".into();
         }
+        if std::env::var_os("KF_SIM_DEBUG").is_some() {
+            eprintln!("step {step}: {what}");
+        }
         check(&sim, &c, &foreign, BASE, pg(PAGES))
             .map_err(|e| format!("step {step} ({what}): {e}"))?;
         let splits = m.bv.unsafe_splits.load(Relaxed);
@@ -926,14 +1231,18 @@ fn run_seed(seed: u64, steps: usize, batching: bool, low: bool) -> Result<Stats,
                 "step {step} ({what}): {splits} range(s) refused as unsafe splits"
             ));
         }
+        // A range over a gap is a defect — except the retry of a range host RM answered with an
+        // error AFTER acting (the ledger still listed what it had removed; idempotent).
         let gap = sim.0.borrow().gap_bytes;
-        if gap != 0 {
+        if gap != 0 && !fault.is_some_and(|(_, after)| after) {
             return Err(format!(
                 "step {step} ({what}): a range unmap covered {gap:#x} gap bytes"
             ));
         }
     }
     st.micro += m.bv.micro_made.load(Relaxed);
+    st.injected = sim.0.borrow().injected;
+    st.remade_transients = sim.0.borrow().remade_transients;
     Ok(st)
 }
 

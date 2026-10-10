@@ -1143,6 +1143,15 @@ impl HostRm {
         kind: u8,
         perm: MapPerm,
     ) -> Result<u32, ScatterError> {
+        // ★ Review fix 2026-10-10: never stitch a new view while the reaper is behind — the
+        // caller's thread (the VA manager) must not wait for it, and the views must not pile up.
+        let backlog = view_reaper().map_or(0, |r| {
+            r.flush();
+            r.backlog()
+        });
+        if backlog >= REAP_OVERFLOW {
+            return Err(ScatterError::ReaperBacklog(backlog));
+        }
         let t0 = std::time::Instant::now();
         let view = kf_linux_raw::MappedRegion::stitch(
             fd,
@@ -1963,42 +1972,154 @@ pub enum ScatterError {
     Descriptor(RmError),
     /// The fixed map refused (incl. `VA_ALREADY_MAPPED`, [`RmError::PlacementRefused`]).
     Map(RmError),
+    /// ★ Review fix 2026-10-10: [`REAP_OVERFLOW`] stitched views already wait for the reaper —
+    /// nothing was stitched (the caller maps the rows one by one; never a wait on the reaper).
+    ReaperBacklog(usize),
 }
 
 /// ★ `V3_BATCHED_MAP.md` §3: release a stitched view OFF the caller's thread.
 ///
 /// The view is dead the moment its descriptor exists — RM pinned its pages and keeps no address
 /// (`os-mlock.c:216-254`, `nv.c:3357-3400`); nothing reads it — so WHEN it is unmapped changes
-/// nothing but who waits. One long-lived reaper thread `munmap`s views in order. The queue holds at
-/// most [`REAP_QUEUE`] views: beyond that the caller waits for the reaper (backpressure keeps the
-/// process's VMA count bounded — each queued view is up to `BATCH_MAX_RUNS` VMAs — never an
-/// unbounded pile against `vm.max_map_count`). If the thread cannot be started, the view is dropped
-/// here, as before.
+/// nothing but who waits. One long-lived reaper thread `munmap`s views in order. If the thread
+/// cannot be started, the view is dropped here, as before.
+///
+/// ★ Review fix 2026-10-10 (rule: no thread that serves input may stall). ⊘ The hand-over used to
+/// be a BLOCKING `SyncSender::send` into a queue of [`REAP_QUEUE`]: with the reaper behind (each
+/// `munmap` of a 4 096-VMA view is 80-97 ms on the nested bench, §7.2) the VA-manager thread
+/// waited for it. Now it never waits ([`Reaper::hand`]): a full queue parks the view in a bounded
+/// overflow, retried on every later hand-over and before every stitch; [`HostRm::map_scattered`]
+/// refuses to stitch while [`REAP_OVERFLOW`] views wait (the rows go per run, by name), so the
+/// views waiting are bounded by `REAP_QUEUE + REAP_OVERFLOW` and none is ever forgotten.
 fn reap_view(view: kf_linux_raw::MappedRegion) {
-    type Tx = std::sync::mpsc::SyncSender<kf_linux_raw::MappedRegion>;
-    static REAPER: std::sync::OnceLock<Option<std::sync::Mutex<Tx>>> = std::sync::OnceLock::new();
-    let tx = REAPER.get_or_init(|| {
-        let (tx, rx) = std::sync::mpsc::sync_channel::<kf_linux_raw::MappedRegion>(REAP_QUEUE);
-        std::thread::Builder::new()
-            .name("kf-view-reaper".into())
-            .spawn(move || {
-                for v in rx {
-                    drop(v);
-                }
-            })
-            .ok()
-            .map(|_| std::sync::Mutex::new(tx))
-    });
-    let sent = tx
-        .as_ref()
-        .and_then(|m| m.lock().ok().map(|tx| tx.send(view)));
-    if let Some(Err(std::sync::mpsc::SendError(v))) = sent {
-        drop(v);
+    match view_reaper() {
+        Some(r) => {
+            if let Err(v) = r.hand(view) {
+                // Unreachable while `map_scattered` checks the backlog first (one producer); the
+                // bound holds anyway: dropped here (an inline `munmap`), never queued unbounded.
+                drop(v);
+            }
+        }
+        None => drop(view),
     }
 }
 
-/// Stitched views that may wait for the reaper at once.
+/// The process's view reaper (`None` if its thread could not be started).
+fn view_reaper() -> Option<&'static Reaper<kf_linux_raw::MappedRegion>> {
+    static REAPER: std::sync::OnceLock<Option<Reaper<kf_linux_raw::MappedRegion>>> =
+        std::sync::OnceLock::new();
+    REAPER
+        .get_or_init(|| Reaper::spawn("kf-view-reaper", REAP_QUEUE, REAP_OVERFLOW, drop))
+        .as_ref()
+}
+
+/// Stitched views that may wait for the reaper in its queue.
 const REAP_QUEUE: usize = 2;
+/// ★ Review fix 2026-10-10: views that may wait beside the queue (the hand-over never blocks).
+pub const REAP_OVERFLOW: usize = 2;
+
+/// ★ Review fix 2026-10-10 — **a hand-over to one worker thread that NEVER blocks the caller.**
+/// `T` goes into a bounded queue (`try_send`); when the queue is full it waits in a bounded
+/// overflow that every later [`Reaper::hand`] / [`Reaper::flush`] retries first, in order; past
+/// the overflow bound the value is handed BACK ([`Reaper::hand`] → `Err`) for the caller to deal
+/// with — never a wait, never an unbounded pile, never a dropped value nobody released.
+pub struct Reaper<T: Send + 'static> {
+    tx: std::sync::Mutex<std::sync::mpsc::SyncSender<T>>,
+    overflow: std::sync::Mutex<std::collections::VecDeque<T>>,
+    max_overflow: usize,
+}
+
+impl<T: Send + 'static> Reaper<T> {
+    /// A worker thread named `name` that calls `work` on every value, in order; `None` if the
+    /// thread cannot be started.
+    pub fn spawn(
+        name: &str,
+        queue: usize,
+        max_overflow: usize,
+        work: impl Fn(T) + Send + 'static,
+    ) -> Option<Self> {
+        let (tx, rx) = std::sync::mpsc::sync_channel::<T>(queue);
+        std::thread::Builder::new()
+            .name(name.into())
+            .spawn(move || {
+                for v in rx {
+                    work(v);
+                }
+            })
+            .ok()
+            .map(|_| Self::over(tx, max_overflow))
+    }
+
+    /// A reaper over an existing sender (the worker is the caller's).
+    #[must_use]
+    pub fn over(tx: std::sync::mpsc::SyncSender<T>, max_overflow: usize) -> Self {
+        Reaper {
+            tx: std::sync::Mutex::new(tx),
+            overflow: std::sync::Mutex::new(std::collections::VecDeque::new()),
+            max_overflow,
+        }
+    }
+
+    /// Hand `v` to the worker without ever blocking.
+    ///
+    /// # Errors
+    /// `v` back when the queue is full and the overflow already holds its bound (or the worker is
+    /// gone): the caller releases it itself.
+    pub fn hand(&self, v: T) -> Result<(), T> {
+        self.flush();
+        let Ok(mut over) = self.overflow.lock() else {
+            return Err(v);
+        };
+        if !over.is_empty() {
+            if over.len() >= self.max_overflow {
+                return Err(v);
+            }
+            over.push_back(v);
+            return Ok(());
+        }
+        let sent = match self.tx.lock() {
+            Ok(tx) => tx.try_send(v),
+            Err(_) => return Err(v),
+        };
+        match sent {
+            Ok(()) => Ok(()),
+            Err(std::sync::mpsc::TrySendError::Full(v)) if self.max_overflow > 0 => {
+                over.push_back(v);
+                Ok(())
+            }
+            Err(
+                std::sync::mpsc::TrySendError::Full(v)
+                | std::sync::mpsc::TrySendError::Disconnected(v),
+            ) => Err(v),
+        }
+    }
+
+    /// Move what waits in the overflow into the queue, in order, as far as it has room (never
+    /// blocking).
+    pub fn flush(&self) {
+        let (Ok(mut over), Ok(tx)) = (self.overflow.lock(), self.tx.lock()) else {
+            return;
+        };
+        while let Some(v) = over.pop_front() {
+            match tx.try_send(v) {
+                Ok(()) => {}
+                Err(
+                    std::sync::mpsc::TrySendError::Full(v)
+                    | std::sync::mpsc::TrySendError::Disconnected(v),
+                ) => {
+                    over.push_front(v);
+                    break;
+                }
+            }
+        }
+    }
+
+    /// Values waiting in the overflow (not yet in the queue).
+    #[must_use]
+    pub fn backlog(&self) -> usize {
+        self.overflow.lock().map_or(usize::MAX, |o| o.len())
+    }
+}
 
 /// `GF100_DISP_SW` (`ogkm-580: class/cl9072.h`).
 pub const GF100_DISP_SW: u32 = 0x9072;
@@ -3035,5 +3156,62 @@ mod privilege_tests {
             birth_privilege(req.flags, &[0u8; 23]),
             Err(PrivilegeRefusal::ReplyUnreadable)
         );
+    }
+}
+
+#[cfg(test)]
+mod reaper_tests {
+    use super::Reaper;
+
+    /// ★ Review fix 2026-10-10: the hand-over NEVER blocks — with the worker stalled (nobody
+    /// drains the queue) every `hand` returns at once: the queue fills, then the bounded overflow,
+    /// then the value comes BACK to the caller. Nothing is lost or reordered once the worker
+    /// catches up. (At 6fafcc6e the hand-over was a blocking `send`: the second `hand` below would
+    /// have waited for the worker forever.)
+    #[test]
+    fn a_stalled_reaper_never_blocks_the_caller_and_loses_nothing() {
+        let (tx, rx) = std::sync::mpsc::sync_channel::<u32>(1);
+        let r = Reaper::over(tx, 2);
+        assert_eq!(r.hand(1), Ok(()), "into the queue");
+        assert_eq!(r.hand(2), Ok(()), "queue full: into the overflow");
+        assert_eq!(r.hand(3), Ok(()));
+        assert_eq!(r.backlog(), 2);
+        assert_eq!(r.hand(4), Err(4), "the bound: handed back, never a wait");
+        // The worker catches up: order kept, nothing lost.
+        assert_eq!(rx.recv(), Ok(1));
+        r.flush();
+        assert_eq!(r.backlog(), 1);
+        assert_eq!(rx.recv(), Ok(2));
+        assert_eq!(r.hand(5), Ok(()), "3 moves first, 5 waits behind it");
+        assert_eq!(rx.recv(), Ok(3));
+        r.flush();
+        assert_eq!(rx.recv(), Ok(5));
+        assert_eq!(r.backlog(), 0);
+        drop(rx);
+        assert_eq!(r.hand(6), Err(6), "worker gone: handed back");
+    }
+
+    /// The spawned worker runs every value, in order.
+    #[test]
+    fn a_spawned_reaper_runs_every_value() {
+        let (done_tx, done_rx) = std::sync::mpsc::channel::<u32>();
+        let done_tx = std::sync::Mutex::new(done_tx);
+        let r = Reaper::spawn("kf-test-reaper", 2, 2, move |v: u32| {
+            let _ = done_tx.lock().map(|t| t.send(v));
+        })
+        .expect("thread");
+        for v in 0..4 {
+            assert_eq!(r.hand(v), Ok(()), "queue 2 + overflow 2 hold four");
+        }
+        let mut got = Vec::new();
+        while got.len() < 4 {
+            r.flush();
+            if let Ok(v) = done_rx.recv_timeout(std::time::Duration::from_secs(5)) {
+                got.push(v);
+            } else {
+                break;
+            }
+        }
+        assert_eq!(got, vec![0, 1, 2, 3]);
     }
 }

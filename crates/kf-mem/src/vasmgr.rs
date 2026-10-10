@@ -682,6 +682,12 @@ pub struct VaStats {
     pub range_unmaps: u64,
     /// Batches / ranges the target refused (their runs then went one by one).
     pub batch_fallbacks: u64,
+    /// ★ Review fix 2026-10-10: unchanged pages whose `NV01` host mapping had to be re-made (the
+    /// guest split a big leaf and changed part of it — `V3_BATCHED_MAP.md` §8.7), and runs
+    /// acknowledged FAILED only because a linked run failed (commit consistency).
+    pub remade_unchanged_pages: u64,
+    /// See [`VaStats::remade_unchanged_pages`].
+    pub linked_failed: u64,
     /// Host TLB invalidates issued (ONE per space per applied diff that changed anything).
     pub host_invalidates: u64,
     /// Triggers cleared by us.
@@ -1473,6 +1479,8 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             self.stats.batched_runs += a.batched_runs as u64;
             self.stats.range_unmaps += a.range_unmaps as u64;
             self.stats.batch_fallbacks += a.batch_fallbacks as u64;
+            self.stats.remade_unchanged_pages += a.remade_unchanged_pages;
+            self.stats.linked_failed += a.linked_failed as u64;
             self.stats.mapped += a.mapped as u64;
             self.stats.unmapped += a.unmapped as u64;
             self.stats.host_invalidates += u64::from(a.invalidated);

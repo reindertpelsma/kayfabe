@@ -134,6 +134,14 @@ pub struct SimRm {
     pub violations: Vec<String>,
     /// Unchanged VAs found unmapped (or re-pointed) after a host call.
     pub transient: Vec<String>,
+    /// The VA of each [`SimRm::transient`] entry, in order.
+    pub transient_va: Vec<u64>,
+    /// ★ Review fix 2026-10-10 (finding 8): host RM refuses every `n`-th mirror UNMAP call (any
+    /// verb); `after` = it acted first (all of it) and still answered an error — the superset of
+    /// `serverInterUnmapInternal`'s mid-loop `goto done`.
+    pub fail_unmaps: Option<UnmapFault>,
+    /// Unmap calls refused by [`SimRm::fail_unmaps`].
+    pub injected: u64,
     /// The pages that must keep their translation after every host call (the guard).
     pub guard: Vec<(u64, Backing)>,
     /// `gvaspaceFree` found no block (`NV_ASSERT @ gpu_vaspace.c:1639`).
@@ -150,6 +158,19 @@ pub struct SimRm {
     pub fail_next_batch_map: bool,
     /// Calls issued.
     pub n: Counters,
+    /// ★ Review fix 2026-10-10: guard hits inside intervals the apply declared re-made.
+    pub remade_transients: u64,
+}
+
+/// ★ Review fix 2026-10-10 (finding 8): refused mirror unmaps, injected.
+#[derive(Debug, Clone, Copy)]
+pub struct UnmapFault {
+    /// Every `every`-th mirror unmap call is refused.
+    pub every: u64,
+    /// A refused RANGE unmap acted first (all of it), then answered the error.
+    pub after: bool,
+    /// Calls seen.
+    pub seen: u64,
 }
 
 /// The model behind a `&Sim` [`SpaceVerbs`].
@@ -187,6 +208,9 @@ impl Sim {
             next_obj: 0x1000,
             violations: Vec::new(),
             transient: Vec::new(),
+            transient_va: Vec::new(),
+            fail_unmaps: None,
+            injected: 0,
             guard: Vec::new(),
             asserts: 0,
             ranges: Vec::new(),
@@ -195,6 +219,7 @@ impl Sim {
             no_guard: false,
             fail_next_batch_map: false,
             n: Counters::default(),
+            remade_transients: 0,
         }))
     }
 }
@@ -212,18 +237,37 @@ impl SimRm {
 
     /// ★ The guard: every unchanged VA still translates as before. Called after EVERY host call.
     fn check_guard(&mut self, after: &str) {
-        let bad: Vec<String> = self
+        let bad: Vec<(u64, String)> = self
             .guard
             .iter()
             .filter(|&&(p, want)| self.translate(p, Owner::Mirror) != Some(want))
             .map(|&(p, want)| {
-                format!(
-                    "after {after}: UNCHANGED VA {p:#x} transiently unmapped or re-pointed (want {want:x?}, got {:x?})",
-                    self.translate(p, Owner::Mirror)
+                (
+                    p,
+                    format!(
+                        "after {after}: UNCHANGED VA {p:#x} transiently unmapped or re-pointed (want {want:x?}, got {:x?})",
+                        self.translate(p, Owner::Mirror)
+                    ),
                 )
             })
             .collect();
-        self.transient.extend(bad);
+        for (p, m) in bad {
+            self.transient_va.push(p);
+            self.transient.push(m);
+        }
+    }
+
+    /// ★ Review fix 2026-10-10: whether THIS mirror unmap call is refused ([`SimRm::fail_unmaps`]);
+    /// `Some(acted_first)` when it is.
+    fn inject_unmap(&mut self) -> Option<bool> {
+        let f = self.fail_unmaps.as_mut()?;
+        f.seen += 1;
+        if f.seen.is_multiple_of(f.every) {
+            self.injected += 1;
+            Some(f.after)
+        } else {
+            None
+        }
     }
 
     /// Whether a heap block overlaps `[va, va+len)` (blocks never overlap one another).
@@ -560,11 +604,17 @@ impl SpaceVerbs for &Sim {
     }
     fn unmap_whole(&self, va: u64, _defer: bool) -> Result<(), String> {
         let mut rm = self.0.borrow_mut();
+        if rm.inject_unmap().is_some() {
+            return Err(format!("unmap {va:#x}: refused (injected)"));
+        }
         let h = rm.space.dma_for(va, 1).map_err(|e| format!("{e:?}"))?;
         rm.unmap_whole_in(h, va, true)
     }
     fn unmap_row(&self, va: u64, len: u64, _defer: bool) -> Result<(), String> {
         let mut rm = self.0.borrow_mut();
+        if rm.inject_unmap().is_some() {
+            return Err(format!("unmap row {va:#x}: refused (injected)"));
+        }
         let mut first = Ok(());
         for (h, pv, _) in rm.pieces(va, len)? {
             if let Err(e) = rm.unmap_whole_in(h, pv, true) {
@@ -575,6 +625,10 @@ impl SpaceVerbs for &Sim {
     }
     fn unmap_range(&self, va: u64, len: u64, _defer: bool) -> Result<(), String> {
         let mut rm = self.0.borrow_mut();
+        let injected = rm.inject_unmap();
+        if injected == Some(false) {
+            return Err(format!("unmap range {va:#x}+{len:#x}: refused (injected)"));
+        }
         rm.ranges.push((va, len));
         let gap = (0..len / P)
             .filter(|i| {
@@ -585,6 +639,11 @@ impl SpaceVerbs for &Sim {
         rm.gap_bytes += gap * P;
         for (h, pv, pl) in rm.pieces(va, len)? {
             rm.unmap_range_in(h, pv, pv + pl, true);
+        }
+        if injected == Some(true) {
+            return Err(format!(
+                "unmap range {va:#x}+{len:#x}: refused AFTER acting (injected)"
+            ));
         }
         Ok(())
     }
@@ -645,11 +704,25 @@ impl SpaceVerbs for &Sim {
     }
     fn unmap_in(&self, h: u32, va: u64, size: u64, _defer: bool) -> Result<(), String> {
         let mut rm = self.0.borrow_mut();
+        let injected = rm.inject_unmap();
         if size == 0 {
+            if injected.is_some() {
+                return Err(format!("unmap {va:#x} in {h:#x}: refused (injected)"));
+            }
             rm.unmap_whole_in(h, va, true)
         } else {
+            if injected == Some(false) {
+                return Err(format!(
+                    "unmap {va:#x}+{size:#x} in {h:#x}: refused (injected)"
+                ));
+            }
             rm.ranges.push((va, size));
             rm.unmap_range_in(h, va, va + size, true);
+            if injected == Some(true) {
+                return Err(format!(
+                    "unmap {va:#x}+{size:#x} in {h:#x}: refused AFTER acting (injected)"
+                ));
+            }
             Ok(())
         }
     }
@@ -716,18 +789,26 @@ impl MapTarget for SimMirror<'_> {
         true
     }
     fn map(&self, d: &Desired, defer: bool) -> Result<Mapped, String> {
-        let m = self.bv.map(d, defer)?;
-        if m == Mapped::Placed {
+        let m = self.bv.map(d, defer);
+        // ★ Review fix 2026-10-10: what the batch layer found there was a stray — never a row a
+        // reader may resolve through; the rows follow the ledger.
+        restore_owned_rows(&mut self.rows.borrow_mut(), &self.bv, d.va, d.va + d.len);
+        if m == Ok(Mapped::Placed) {
             self.rows.borrow_mut().insert(d.va, d.len);
         }
-        Ok(m)
+        m
     }
     fn map_batch(&self, rows: &[Desired], defer: bool) -> Result<(), String> {
         if !self.batching {
             return Err(NOT_BATCHED.into());
         }
-        self.bv
-            .place(std::os::fd::AsFd::as_fd(&std::io::stdin()), rows, defer)?;
+        let res = self
+            .bv
+            .place(std::os::fd::AsFd::as_fd(&std::io::stdin()), rows, defer);
+        if let (Some(a), Some(b)) = (rows.first(), rows.last()) {
+            restore_owned_rows(&mut self.rows.borrow_mut(), &self.bv, a.va, b.va + b.len);
+        }
+        res?;
         let mut r = self.rows.borrow_mut();
         for d in rows {
             r.insert(d.va, d.len);
@@ -741,6 +822,7 @@ impl MapTarget for SimMirror<'_> {
         let r = self.bv.unmap_run(va, Some(len), defer);
         if r.is_err() {
             self.rows.borrow_mut().insert(va, len);
+            restore_owned_rows(&mut self.rows.borrow_mut(), &self.bv, va, va + len);
         }
         r
     }
@@ -750,31 +832,60 @@ impl MapTarget for SimMirror<'_> {
         let end = va + len;
         // `cut_rows` (strict): rows wholly inside go, straddlers keep their outside parts.
         let saved = self.rows.borrow().clone();
-        {
-            let mut r = self.rows.borrow_mut();
-            let keys: Vec<(u64, u64)> = r
-                .iter()
-                .filter(|&(&k, &l)| k < end && va < k + l)
-                .map(|(&k, &l)| (k, l))
-                .collect();
-            for (k, l) in keys {
-                r.remove(&k);
-                if k < va {
-                    r.insert(k, va - k);
-                }
-                if k + l > end {
-                    r.insert(end, k + l - end);
-                }
-            }
-        }
+        cut_sim_rows(&mut self.rows.borrow_mut(), va, end);
         let res = self.bv.unmap_range(va, len, defer);
         if res.is_err() {
+            // ★ Review fix 2026-10-10 (finding 4): the rows follow the LEDGER, never the
+            // pre-call state — a span host RM did unmap before the error stays cut.
             *self.rows.borrow_mut() = saved;
+            restore_owned_rows(&mut self.rows.borrow_mut(), &self.bv, va, end);
         }
         res
     }
     fn invalidate(&self) -> Result<(), String> {
         Ok(())
+    }
+    fn own_view(&self, va: u64, end: u64) -> Option<crate::ledger::OwnView> {
+        Some(self.bv.own_view(va, end))
+    }
+}
+
+/// `GpuMirror`'s `cut_rows` over the model's `va → len` rows: rows wholly inside `[va, end)` go,
+/// straddlers keep their outside parts.
+pub fn cut_sim_rows(r: &mut BTreeMap<u64, u64>, va: u64, end: u64) {
+    let keys: Vec<(u64, u64)> = r
+        .iter()
+        .filter(|&(&k, &l)| k < end && va < k + l)
+        .map(|(&k, &l)| (k, l))
+        .collect();
+    for (k, l) in keys {
+        r.remove(&k);
+        if k < va {
+            r.insert(k, va - k);
+        }
+        if k + l > end {
+            r.insert(end, k + l - end);
+        }
+    }
+}
+
+/// ★ Review fix 2026-10-10 (finding 4) — `GpuMirror::unmap_range`'s refusal path over the model:
+/// with the rows put back as they were, cut every part of `[va, end)` the ledger no longer holds
+/// (host RM unmapped it before the error), so a reader never resolves through a mapping that is
+/// gone and the rows never claim more than the host holds.
+pub fn restore_owned_rows<V: SpaceVerbs>(
+    r: &mut BTreeMap<u64, u64>,
+    bv: &BatchedVas<'_, V>,
+    va: u64,
+    end: u64,
+) {
+    let owned = bv.own_view(va, end).owned;
+    let mut cur = va;
+    for (s, e) in owned.into_iter().chain(std::iter::once((end, end))) {
+        if s > cur {
+            cut_sim_rows(r, cur, s);
+        }
+        cur = cur.max(e);
     }
 }
 
@@ -858,27 +969,33 @@ pub fn unmap_run(va: u64, c: &Committed) -> DiffRun {
     }
 }
 
-/// The backing a page has per the walker's committed placements (non-held): `(ram, off, ro)`.
-/// (A leaf-size change is a change of the guest's mapping: it is part of the key.)
-fn backing_of(c: &BTreeMap<u64, Committed>, p: u64) -> Option<(bool, u64, bool, u8, u64)> {
+/// The translation a page has per the walker's committed placements (non-held):
+/// `(ram, off, read-only, kind)`.
+///
+/// ★ Review fix 2026-10-10 (finding 3): ⊘ the LEAF SIZE was part of this key ("a leaf-size
+/// change is a change of the guest's mapping"), so the guard could not see sixteen 4 KiB leaves
+/// re-expressed as one 64 KiB leaf over the same pages being transiently unmapped. The owner's
+/// rule is about the TRANSLATION; the leaf is not part of it.
+fn backing_of(c: &BTreeMap<u64, Committed>, p: u64) -> Option<(bool, u64, bool, u8)> {
     c.range(..=p)
         .next_back()
         .filter(|&(&v, x)| p < v + x.len && !x.held)
-        .map(|(&v, x)| {
-            (
-                x.ram,
-                x.off + (p - v),
-                x.run.perm.read_only,
-                x.run.kind,
-                x.run.leaf,
-            )
-        })
+        .map(|(&v, x)| (x.ram, x.off + (p - v), x.run.perm.read_only, x.run.kind))
 }
 
 /// ★ Apply `runs` (one refresh) and commit by the acknowledgements, as the walker does — with the
 /// GUARD armed: every page mapped before the refresh whose guest mapping is the SAME after it
-/// (same backing, same permissions, same kind — whether or not a run of the diff names it) is
-/// UNCHANGED and must translate as before after EVERY host call of the refresh.
+/// (same backing, same permissions, same kind — whether or not a run of the diff names it) and
+/// that the host maps that way right now is UNCHANGED and must translate as before after EVERY
+/// host call of the refresh.
+///
+/// ★ Review fix 2026-10-10 (finding 8): the commit is the walker's — WHOLE runs, an APPLIED UNMAP
+/// removed, an APPLIED/HELD MAP inserted — and a MAP that would land over a placement still
+/// committed is recorded as a VIOLATION ("WALKER SLOT OVERLAP"): the real slot would then hold two
+/// placements over one VA (`kf_cuda::diffmodel::commit` keeps both), which this `va → placement`
+/// map used to overwrite silently. A transient inside an interval the apply declares re-made
+/// ([`crate::apply::Applied::remade`]: the one inexact case, an `NV01` mapping the guest split)
+/// is moved to [`SimRm::remade_transients`] — counted, never silent.
 pub fn apply_and_commit(
     m: &SimMirror<'_>,
     runs: &[DiffRun],
@@ -904,18 +1021,37 @@ pub fn apply_and_commit(
     }
     let guard_on = !m.sim().0.borrow().no_guard;
     if guard_on {
+        let rm = m.sim().0.borrow();
         let guard: Vec<(u64, Backing)> = committed
             .iter()
             .filter(|(_, c)| !c.held)
             .flat_map(|(&v, c)| (0..c.len / P).map(move |i| v + i * P))
             .filter(|&p| backing_of(committed, p) == backing_of(&after, p))
             .filter_map(|p| backing_of(committed, p).map(|(r, o, ..)| (p, (r, o))))
+            .filter(|&(p, want)| rm.translate(p, Owner::Mirror) == Some(want))
             .collect();
+        drop(rm);
         m.sim().0.borrow_mut().guard = guard;
     }
     let id = |gpa: u64, _len: u64| Some(gpa);
     let out = apply_entry(m, runs, &cfg(&id));
-    m.sim().0.borrow_mut().guard.clear();
+    {
+        let mut rm = m.sim().0.borrow_mut();
+        rm.guard.clear();
+        let (mut kept_t, mut kept_va) = (Vec::new(), Vec::new());
+        let t = core::mem::take(&mut rm.transient);
+        let tv = core::mem::take(&mut rm.transient_va);
+        for (msg, va) in t.into_iter().zip(tv) {
+            if out.remade.iter().any(|&(s, e)| s <= va && va < e) {
+                rm.remade_transients += 1;
+            } else {
+                kept_t.push(msg);
+                kept_va.push(va);
+            }
+        }
+        rm.transient = kept_t;
+        rm.transient_va = kept_va;
+    }
     let acked = |i: usize| out.codes[i] == KFWR_ACK_APPLIED || out.codes[i] == KFWR_ACK_HELD;
     for (i, r) in runs.iter().enumerate().filter(|(_, r)| r.unmap) {
         if acked(i) {
@@ -924,6 +1060,18 @@ pub fn apply_and_commit(
     }
     for (i, r) in runs.iter().enumerate().filter(|(_, r)| !r.unmap) {
         if acked(i) {
+            let end = r.va + r.len;
+            let clash = committed
+                .range(..end)
+                .next_back()
+                .filter(|&(&v, x)| v + x.len > r.va)
+                .map(|(&v, x)| (v, x.len));
+            if let Some((v, l)) = clash {
+                m.sim().0.borrow_mut().violations.push(format!(
+                    "WALKER SLOT OVERLAP: map {:#x}+{:#x} acknowledged over the committed placement {v:#x}+{l:#x} (codes {:?})",
+                    r.va, r.len, out.codes
+                ));
+            }
             committed.insert(
                 r.va,
                 Committed {
@@ -994,5 +1142,7 @@ pub fn check(
     Ok(())
 }
 
+#[cfg(test)]
+mod adversarial;
 #[cfg(test)]
 mod tests;

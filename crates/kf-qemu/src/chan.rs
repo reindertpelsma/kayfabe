@@ -136,6 +136,8 @@ struct PtChan {
     /// ★ v3-video: the twin's host VA space (the mirror of the guest's) and its placement rows.
     space: kf_host::VaSpace,
     rows: crate::mem::PlacedRows,
+    /// ★ Review fix 2026-10-10 (finding 6): the space's ownership ledger ([`crate::mem::Mirror::ledger`]).
+    ledger: Option<Arc<kf_mem::batch::BatchedVas<'static>>>,
     /// ★ v3-video: the guest's falcon context buffer `(VA, size)` from its falcon promote — the VA
     /// the host's own falcon context is steered onto (see `ChanPlane::engine_object`).
     falcon_ctx: Option<(u64, u64)>,
@@ -3819,9 +3821,9 @@ impl ChanPlane {
         class: u32,
         copy_engine: Option<u32>,
     ) -> ChanAnswer {
-        let Some((chan, engine, space, rows)) = self.pt.lock().ok().and_then(|m| {
+        let Some((chan, engine, space, rows, ledger)) = self.pt.lock().ok().and_then(|m| {
             m.get(&(client, parent))
-                .map(|v| (v.chan, v.engine, v.space, v.rows.clone()))
+                .map(|v| (v.chan, v.engine, v.space, v.rows.clone(), v.ledger.clone()))
         }) else {
             return ChanAnswer::NotOurs;
         };
@@ -3877,10 +3879,17 @@ impl ChanPlane {
                     Err(_) => format!(" [placement rows poisoned — host ctx placement unsteered]"),
                     // ★ 2026-10-09: by RANGE over the whole row — outside a reservation a row is one
                     // host mapping per guest leaf (`kf_mem::batch`), so a start-keyed unmap would take
-                    // only its first leaf. The range covers whole mappings of ours only (no split).
-                    Ok(Some(row)) => match me.rm.unmap_range(space, va, row.0, false) {
-                    Ok(()) => format!(" [host ctx steered onto the guest's ctx VA {va:#x}+{len:#x}]"),
-                    Err(e) => format!(" [guest ctx VA {va:#x} not unmapped ({e:?}) — host ctx placement unsteered]"),
+                    // only its first leaf. ★ Review fix 2026-10-10 (finding 6): THROUGH the space's
+                    // ownership ledger (`BatchedVas::hand_to_host`) — our mappings only, each through
+                    // the hDma it was mapped through (a micro reservation included), the ledger cut.
+                    // ⊘ It was a raw `HostRm::unmap_range`: not limited to our mappings, the ledger
+                    // left stale, and a no-op (logged "steered") for a micro-reserved row.
+                    Ok(Some(row)) => match ledger.as_ref().map(|bv| bv.hand_to_host(va, row.0)) {
+                        Some(kf_mem::batch::HandOver::Free) => format!(" [host ctx steered onto the guest's ctx VA {va:#x}+{len:#x}]"),
+                        Some(kf_mem::batch::HandOver::StillReserved) => format!(" [guest ctx VA {va:#x} unmapped, but a micro reservation of ours still covers it (other rows live in it) — host ctx placement unsteered]"),
+                        Some(kf_mem::batch::HandOver::StillOurs) => format!(" [guest ctx VA {va:#x}: a new mapping of ours landed there meanwhile — host ctx placement unsteered]"),
+                        Some(kf_mem::batch::HandOver::Refused(e)) => format!(" [guest ctx VA {va:#x} not unmapped ({e}) — host ctx placement unsteered]"),
+                        None => format!(" [guest ctx VA {va:#x}: no ownership ledger for this space — not unmapped, host ctx placement unsteered]"),
                     },
                 });
                 let h = kf_chan::passthrough::engine_object(me.rm, chan, engine, class, kind, copy_engine).map_err(|e| (NV_ERR_INVALID_CLASS, e))?;
@@ -5684,6 +5693,7 @@ impl ChanPlane {
             let space = mirror.space;
             let relay_mirror = mirror.clone();
             let rows = mirror.rows.clone();
+            let ledger = mirror.ledger.clone();
             // ★ P5c: counted NOW (on the drainer, in statement order), so a VA-space free that
             // follows can never recycle the space under a birth still queued.
             let live = mirror.live.clone();
@@ -5808,6 +5818,7 @@ impl ChanPlane {
                             disabled: false,
                             space,
                             rows,
+                            ledger,
                             falcon_ctx: None,
                             ring_at: (
                                 a.gpfifo_va,
@@ -7009,6 +7020,7 @@ mod dispsw_tests {
                 guest: [kf_host::channel::GuestVaRange::default(); 3],
             },
             rows: crate::mem::PlacedRows::default(),
+            ledger: None,
             falcon_ctx: None,
             ring_at: (0, 0, None),
         }

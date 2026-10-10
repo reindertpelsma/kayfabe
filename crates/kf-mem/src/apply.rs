@@ -160,6 +160,21 @@ pub struct Applied {
     /// ★ 2026-10-10: carve-out bytes left ABSENT from runs that straddle the carve-out base (the
     /// run's part below it is placed and the run acknowledged — [`prepare_row`]).
     pub carve_clipped_bytes: u64,
+    /// ★ Review fix 2026-10-10 (findings 1, 2): runs acknowledged FAILED only because a LINKED run
+    /// failed — a MAP sharing kept pages with a failed UNMAP, or overlapping one that stays
+    /// committed; an UNMAP whose kept pages a failed MAP was to carry. Counted in `refused` too.
+    /// (The walker's slot must never hold two placements over one VA, and must keep every page we
+    /// keep mapped: [`apply_entry`], "commit consistency".)
+    pub linked_failed: usize,
+    /// ★ Review fix 2026-10-10 (finding 3): pages whose guest translation did NOT change but whose
+    /// host mapping had to be re-made — a mapping in the `NV01` range (no VA-reserving `hDma`) that
+    /// a changed part of the same placement would SPLIT, which host RM cannot do exactly. The one
+    /// remaining transient of an unchanged VA; `V3_BATCHED_MAP.md` §8.7 names the owner decision.
+    pub remade_unchanged_pages: u64,
+    /// The VA intervals of [`Applied::remade_unchanged_pages`], `(start, end)`.
+    pub remade: Vec<(u64, u64)>,
+    /// ★ Review fix 2026-10-10: new pieces of a FAILED map run taken down again (never a kept page).
+    pub taken_down: usize,
 }
 
 impl Applied {
@@ -404,57 +419,253 @@ fn carve_reached(
 /// (2026-10-09): *every VA whose guest mapping is unchanged stays accessible at all times* — so on
 /// a GPU target those pages get NO host call at all: neither unmapped nor re-mapped.
 ///
-/// Unchanged ⇔ the UNMAP and the MAP name the same aperture, kind, permissions, privilege and
-/// LEAF SIZE, and the same linear backing over their overlap. (A leaf-size change is a change of
-/// the guest's mapping: its host mappings are re-made.)
+/// ★ Review fix 2026-10-10 (finding 3; owner rule: an IDENTICAL TRANSLATION is unchanged, whatever
+/// the leaf size): unchanged ⇔ the UNMAP and the MAP name the same aperture, kind, permissions and
+/// privilege, and the same linear backing over their overlap. ⊘ The text this corrects: *"… and
+/// LEAF SIZE … (A leaf-size change is a change of the guest's mapping: its host mappings are
+/// re-made.)"* — sixteen 4 KiB leaves re-expressed as one 64 KiB leaf over the same pages (or back)
+/// transiently unmapped all sixteen VAs, in a reservation too (`[model]`
+/// `sim::adversarial::a_leaf_size_change_with_identical_translation_transiently_unmaps`). Now the
+/// host keeps its mappings and only the walker's table changes: its UNMAP (old page-size class)
+/// and MAP (new class) are both acknowledged APPLIED with no host call — the walker's own commit
+/// (`kf_cuda::diffmodel::commit`) moves the placement between classes. Where keeping would leave a
+/// mapping host RM cannot split under a later change, [`keep_only_what_stays_exact`] decides.
 fn same_mapping(u: &DiffRun, m: &DiffRun) -> bool {
     u.ap == m.ap
         && u.kind == m.kind
         && u.perm == m.perm
         && u.privileged == m.privileged
-        && u.leaf == m.leaf
         && u.at.wrapping_sub(u.va) == m.at.wrapping_sub(m.va)
 }
 
-/// Per run, the sub-ranges that are UNCHANGED ([`same_mapping`]) — for an UNMAP run the part that
-/// must NOT be unmapped, for a MAP run the part that must NOT be mapped. Only plain memory runs
-/// take part (a usermode view or a SKED page keeps its own verbs). O((U + M) log M).
-fn unchanged_parts(
-    runs: &[DiffRun],
-    cfg: &ApplyCfg<'_>,
-    withhold_privileged: bool,
-) -> Vec<Vec<(u64, u64)>> {
-    let plain = |r: &DiffRun| {
-        cfg.usermode
-            .and_then(|u| u.classify(r.ap, r.kind, r.at, r.len))
-            .is_none()
-            && kf_chip::sked::message_leaf(r.ap, r.kind) != Some(MessageLeaf::SkedReflected)
-    };
-    let mut kept: Vec<Vec<(u64, u64)>> = vec![Vec::new(); runs.len()];
+/// ★ Review fix 2026-10-10: one kept interval — UNMAP run `u` and MAP run `m` name the same
+/// mapping ([`same_mapping`]) over `[s, e)`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Kept {
+    u: usize,
+    m: usize,
+    s: u64,
+    e: u64,
+}
+
+/// Whether `r` is a plain memory run (a usermode view or a SKED page keeps its own verbs).
+fn plain_run(r: &DiffRun, cfg: &ApplyCfg<'_>) -> bool {
+    cfg.usermode
+        .and_then(|u| u.classify(r.ap, r.kind, r.at, r.len))
+        .is_none()
+        && kf_chip::sked::message_leaf(r.ap, r.kind) != Some(MessageLeaf::SkedReflected)
+}
+
+/// The MAP runs of `runs`, sorted by VA (they are disjoint: one leaf per walked VA).
+fn maps_by_va(runs: &[DiffRun], keep: impl Fn(usize) -> bool) -> Vec<usize> {
     let mut maps: Vec<usize> = (0..runs.len())
-        .filter(|&i| !runs[i].unmap && plain(&runs[i]))
-        .filter(|&i| !(runs[i].privileged && withhold_privileged))
+        .filter(|&i| !runs[i].unmap && keep(i))
         .collect();
     maps.sort_by_key(|&i| runs[i].va);
+    maps
+}
+
+/// The MAP runs (indices into `maps`' runs) overlapping `[va, end)`.
+fn maps_over<'m>(
+    runs: &[DiffRun],
+    maps: &'m [usize],
+    va: u64,
+    end: u64,
+) -> impl Iterator<Item = usize> + 'm {
+    let first = maps.partition_point(|&m| runs[m].va.saturating_add(runs[m].len) <= va);
+    let count = maps[first..]
+        .iter()
+        .take_while(|&&m| runs[m].va < end)
+        .count();
+    maps[first..first + count].iter().copied()
+}
+
+/// The UNCHANGED intervals ([`same_mapping`]) between this entry's UNMAP and MAP runs — for an
+/// UNMAP run the part that must NOT be unmapped, for a MAP run the part that must NOT be mapped.
+/// Only plain memory runs take part. O((U + M) log M).
+fn unchanged_pairs(runs: &[DiffRun], cfg: &ApplyCfg<'_>, withhold_privileged: bool) -> Vec<Kept> {
+    let maps = maps_by_va(runs, |i| {
+        plain_run(&runs[i], cfg) && !(runs[i].privileged && withhold_privileged)
+    });
+    let mut out = Vec::new();
     for (u, ur) in runs.iter().enumerate() {
-        if !ur.unmap || ur.held || !plain(ur) {
+        if !ur.unmap || ur.held || !plain_run(ur, cfg) {
             continue;
         }
         let u_end = ur.va.saturating_add(ur.len);
-        let first = maps.partition_point(|&m| runs[m].va.saturating_add(runs[m].len) <= ur.va);
-        for &m in maps[first..].iter().take_while(|&&m| runs[m].va < u_end) {
+        for m in maps_over(runs, &maps, ur.va, u_end) {
             let mr = &runs[m];
             let (s, e) = (ur.va.max(mr.va), u_end.min(mr.va.saturating_add(mr.len)));
             if s < e && same_mapping(ur, mr) {
-                kept[u].push((s, e));
-                kept[m].push((s, e));
+                out.push(Kept { u, m, s, e });
             }
         }
     }
-    for k in &mut kept {
-        k.sort_unstable();
+    out
+}
+
+/// Per run, its kept intervals, sorted and merged.
+fn kept_by_run<'k>(pairs: impl IntoIterator<Item = &'k Kept>, n: usize) -> Vec<Vec<(u64, u64)>> {
+    let mut k: Vec<Vec<(u64, u64)>> = vec![Vec::new(); n];
+    for p in pairs {
+        k[p.u].push((p.s, p.e));
+        k[p.m].push((p.s, p.e));
     }
-    kept
+    for v in &mut k {
+        v.sort_unstable();
+        let mut merged: Vec<(u64, u64)> = Vec::with_capacity(v.len());
+        for &(s, e) in v.iter() {
+            match merged.last_mut() {
+                Some(last) if s <= last.1 => last.1 = last.1.max(e),
+                _ => merged.push((s, e)),
+            }
+        }
+        *v = merged;
+    }
+    k
+}
+
+/// ★★ Review fix 2026-10-10 (findings 1, 3) — **keep only what stays exact.** On a target that
+/// keeps a ledger of its own mappings ([`MapTarget::own_view`]), a kept interval survives only
+/// where:
+/// 1. **a mapping of OURS covers it** — a page the walker still lists but whose host mapping is
+///    gone (host RM answered an error AFTER acting, a take-down) is mapped again as a new piece,
+///    never "kept" absent;
+/// 2. **it does not hold PART of a rigid mapping** — one host RM cannot split exactly (no
+///    VA-reserving `hDma` holds it, `crate::batch::BatchedVas` rule 2). A rigid mapping inside
+///    this placement that carries kept pages AND changed pages of it (the guest split a big leaf
+///    and changed part of it), or the kept pages of two different MAP runs (a later change of one
+///    would have to split it), is RE-MADE whole: unmapped with the changed pieces, its kept pages
+///    mapped again as new pieces of their MAP runs. That is the one remaining case in which an
+///    UNCHANGED VA is transiently unmapped — no exact alternative exists in the `NV01` range
+///    (RM frees the whole VA block on a partial unmap; it refuses a second map over a mapped VA),
+///    and the alternative, refusing the unmap, holds the guest's invalidate forever (§AA does not
+///    cover a refused unmap). Counted in [`Applied::remade_unchanged_pages`] and named;
+///    `V3_BATCHED_MAP.md` §8.7 names the owner decision that would make it exact (4 KiB-grain
+///    placement in the `NV01` range, or micro reservations for every row there).
+///
+/// A rigid mapping that reaches OUTSIDE this placement is left alone (re-making it would touch a
+/// placement the diff does not name); a changed piece that would split it is refused by the target
+/// (`SPLIT_OUTSIDE_RESERVATION`) and the run stays a difference. Returns the intervals un-kept for
+/// rule 2, so an UNMAP that fails before any host call keeps its rigid mappings whole.
+fn keep_only_what_stays_exact(
+    target: &dyn MapTarget,
+    runs: &[DiffRun],
+    pairs: &mut Vec<Kept>,
+) -> Vec<Kept> {
+    let mut by_u: std::collections::BTreeMap<usize, Vec<Kept>> = std::collections::BTreeMap::new();
+    for p in pairs.drain(..) {
+        by_u.entry(p.u).or_default().push(p);
+    }
+    let mut remade = Vec::new();
+    for (u, mut ps) in by_u {
+        let r = &runs[u];
+        let end = r.va.saturating_add(r.len);
+        if let Some(view) = target.own_view(r.va, end) {
+            ps = ps
+                .iter()
+                .flat_map(|p| {
+                    view.owned.iter().filter_map(move |&(os, oe)| {
+                        let (s, e) = (p.s.max(os), p.e.min(oe));
+                        (s < e).then_some(Kept { s, e, ..*p })
+                    })
+                })
+                .collect();
+            for &(xs, xe) in &view.rigid {
+                if xs < r.va || xe > end {
+                    continue;
+                }
+                let inside: Vec<&Kept> = ps.iter().filter(|p| p.s < xe && xs < p.e).collect();
+                let whole_in_one = matches!(inside.as_slice(), [p] if p.s <= xs && p.e >= xe);
+                if inside.is_empty() || whole_in_one {
+                    continue;
+                }
+                let mut next = Vec::with_capacity(ps.len() + 1);
+                for p in ps {
+                    if p.s < xe && xs < p.e {
+                        remade.push(Kept {
+                            s: p.s.max(xs),
+                            e: p.e.min(xe),
+                            ..p
+                        });
+                        if p.s < xs {
+                            next.push(Kept { e: xs, ..p });
+                        }
+                        if p.e > xe {
+                            next.push(Kept { s: xe, ..p });
+                        }
+                    } else {
+                        next.push(p);
+                    }
+                }
+                ps = next;
+            }
+        }
+        pairs.extend(ps);
+    }
+    remade
+}
+
+/// ★★ Review fix 2026-10-10 (findings 1, 2) — **commit consistency.** The walker commits WHOLE
+/// runs (`kf_cuda::diffmodel::commit`): an APPLIED UNMAP leaves its slot, an APPLIED/HELD MAP
+/// enters it, a FAILED run leaves the slot as it was. Two rules keep that slot equal to what the
+/// host holds:
+/// - (a) a MAP that overlaps an UNMAP which stays committed (FAILED) fails too — else the slot
+///   holds two placements over one VA, and the next refresh unmaps the old one WHOLE, the kept
+///   pages with it (finding 1: `[model]` a refused sub-range unmap, and a > 512 MiB `NV01` row);
+/// - (b) an UNMAP whose kept pages a FAILED MAP was to carry fails too — the kept pages stay
+///   mapped (never taken down for a neighbour's refusal, finding 2), so their placement stays
+///   committed.
+///
+/// `links` are the kept intervals (and the re-made ones: their pages are carried the same way);
+/// `over[u]` the MAP runs overlapping UNMAP `u`. Iterated to a fixpoint; returns the runs it newly
+/// failed, each with its reason.
+fn fail_linked(
+    runs: &[DiffRun],
+    links: &[Kept],
+    over: &[Vec<usize>],
+    failed: &mut [bool],
+) -> Vec<(usize, String)> {
+    let mut newly = Vec::new();
+    let mut work: Vec<usize> = (0..runs.len()).filter(|&i| failed[i]).collect();
+    while let Some(i) = work.pop() {
+        let next: Vec<(usize, String)> = if runs[i].unmap {
+            over[i]
+                .iter()
+                .map(|&m| {
+                    (
+                        m,
+                        format!(
+                            "map {:#x}+{:#x}: overlaps the placement {:#x}+{:#x}, which stays committed (its unmap did not land) — refused with it, so the walker never holds two placements over one VA",
+                            runs[m].va, runs[m].len, runs[i].va, runs[i].len
+                        ),
+                    )
+                })
+                .collect()
+        } else {
+            links
+                .iter()
+                .filter(|p| p.m == i)
+                .map(|p| {
+                    (
+                        p.u,
+                        format!(
+                            "unmap {:#x}+{:#x}: its unchanged pages {:#x}..{:#x} were to be carried by the map {:#x}+{:#x}, which failed — the placement stays committed and those pages stay mapped",
+                            runs[p.u].va, runs[p.u].len, p.s, p.e, runs[i].va, runs[i].len
+                        ),
+                    )
+                })
+                .collect()
+        };
+        for (j, why) in next {
+            if !failed[j] {
+                failed[j] = true;
+                work.push(j);
+                newly.push((j, why));
+            }
+        }
+    }
+    newly
 }
 
 /// `[lo, hi)` minus the sorted, disjoint `kept` intervals.
@@ -474,6 +685,16 @@ fn subtract(lo: u64, hi: u64, kept: &[(u64, u64)]) -> Vec<(u64, u64)> {
     out
 }
 
+impl Applied {
+    /// ★ Review fix 2026-10-10: refuse run `i` once (a run with several failing pieces is ONE
+    /// refused run); a later reason is dropped.
+    fn refuse_once(&mut self, i: usize, why: String) {
+        if self.codes[i] != KFWR_ACK_FAILED {
+            self.refuse(i, why);
+        }
+    }
+}
+
 /// ★★★★★ **Apply `runs` (one entry's diff) through `target`.** Unmaps first (a held placement
 /// is retired without a host call), then maps, then ONE invalidate if anything changed.
 ///
@@ -483,42 +704,148 @@ fn subtract(lo: u64, hi: u64, kept: &[(u64, u64)]) -> Vec<(u64, u64)> {
 /// placements (`crate::batch::BatchedVas::unmap_range`) and only the new pieces are mapped. A
 /// target that cannot unmap a sub-range answers by name and that run is refused.
 ///
+/// ★★ Review fix 2026-10-10 — **the verdicts keep the walker's slot equal to the host**
+/// ([`fail_linked`]): every MAP run's rows are checked BEFORE any host call, and a run that fails
+/// fails the runs linked to it (a refused leaf never takes its unchanged neighbours down, finding
+/// 2; a refused unmap never leaves overlapping placements, finding 1). The changed pieces of an
+/// UNMAP that fails that way are still unmapped (what the guest changed must not stay reachable:
+/// absence, as §AA), its kept pages stay; a FAILED map run's NEW pieces that were placed are taken
+/// down again — never a kept page. On a GPU target a refused range falls back to one range per
+/// changed piece, so every run gets its own verdict. ⊘ The text this corrects (2026-10-09): *"A MAP
+/// run whose new piece fails takes its kept part down too (named) so the ledger never holds what
+/// the walker did not commit"* — that unmapped unchanged pages for a neighbour's refusal.
+///
 /// A map is not attempted — and is acknowledged FAILED, so the next diff retries it — when it
 /// cannot become a host row (outside the store, not guest RAM, not whole pages), when it overlaps
 /// one of OUR VMM placements (a guest VA may never alias a VMM address), or when it overlaps a
-/// placement whose unmap was just refused (the two would overlap on the host). A walked piece
-/// wholly above a CPU window's extent has no CPU address: it is satisfied as HELD (nothing of
-/// ours placed); one crossing the extent is placed up to it.
+/// placement whose unmap failed (the two would overlap on the host). A walked piece wholly above a
+/// CPU window's extent has no CPU address: it is satisfied as HELD (nothing of ours placed); one
+/// crossing the extent is placed up to it.
 #[allow(clippy::too_many_lines)]
 pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>) -> Applied {
+    let n = runs.len();
     let mut out = Applied {
-        codes: vec![KFWR_ACK_APPLIED; runs.len()],
+        codes: vec![KFWR_ACK_APPLIED; n],
         ..Applied::default()
     };
     let net = target.gpu_space();
     let withhold_privileged = target.withholds_privileged();
-    let kept = if net {
-        unchanged_parts(runs, cfg, withhold_privileged)
+    let mut pairs = if net {
+        unchanged_pairs(runs, cfg, withhold_privileged)
     } else {
-        vec![Vec::new(); runs.len()]
+        Vec::new()
     };
-    let mut failed_unmaps: Vec<(u64, u64)> = Vec::new();
-    // ★ `V3_BATCHED_MAP.md` §4: VA-adjacent unmaps go as ONE range (the union of exactly the
-    // placements being removed, nothing else); a refused range falls back to one call per run,
-    // so every run still gets its own verdict. ★ 2026-10-09: on a GPU target the pieces are the
-    // CHANGED sub-ranges only, and even a lone piece goes by range (a kept remnant is no longer
-    // keyed by the placement's start).
+    let remade = if net {
+        keep_only_what_stays_exact(target, runs, &mut pairs)
+    } else {
+        Vec::new()
+    };
+    let links: Vec<Kept> = pairs.iter().chain(&remade).copied().collect();
+    let kept = kept_by_run(&pairs, n);
+    // Every MAP run overlapping each UNMAP run (rule (a) of `fail_linked`).
+    let all_maps = maps_by_va(runs, |_| true);
+    let over: Vec<Vec<usize>> = runs
+        .iter()
+        .map(|r| {
+            if r.unmap && !r.held {
+                maps_over(runs, &all_maps, r.va, r.va.saturating_add(r.len)).collect()
+            } else {
+                Vec::new()
+            }
+        })
+        .collect();
+    let mut failed = vec![false; n];
+    let link_fail = |out: &mut Applied, failed: &mut [bool]| {
+        for (j, why) in fail_linked(runs, &links, &over, failed) {
+            out.linked_failed += 1;
+            out.refuse_once(j, why);
+        }
+    };
+
+    // ── 1. Every plain MAP run's host rows, checked before ANY host call.
+    let extent = target.va_extent();
+    let reserved = target.reserved();
+    let mut rows: Vec<Vec<Desired>> = vec![Vec::new(); n];
+    for (i, r0) in runs.iter().enumerate().filter(|(_, r)| !r.unmap) {
+        if !plain_run(r0, cfg) {
+            continue; // usermode views and SKED pages: step 3
+        }
+        // ★★★ v3-roperm: a PRIVILEGED memory leaf never reaches a user twin (guest-internal
+        // isolation: an unprivileged guest channel must not reach what the guest kernel marked
+        // privileged, and the host cannot express the bit). Withheld, counted, named.
+        if r0.privileged {
+            if withhold_privileged {
+                out.withhold_privileged(i, r0);
+                failed[i] = true;
+                continue;
+            }
+            out.priv_mirrored += 1;
+        }
+        // ★ 2026-10-09: only the NEW pieces of the run reach the host; the unchanged part is
+        // already ours (a kept remnant of the placement this entry unmaps).
+        let new = subtract(r0.va, r0.va.saturating_add(r0.len), &kept[i]);
+        if new.is_empty() {
+            out.kept_runs += 1;
+            continue;
+        }
+        for (s, e) in new {
+            let r = DiffRun {
+                va: s,
+                len: e - s,
+                at: r0.at.wrapping_add(s - r0.va),
+                ..*r0
+            };
+            match prepare_row(target, &r, i, cfg, extent, &reserved, &[], &mut out) {
+                Some((d, true)) => rows[i].extend(split_at_leaf(d)),
+                Some((d, false)) => rows[i].push(d),
+                None if out.codes[i] == KFWR_ACK_FAILED => {
+                    failed[i] = true;
+                    rows[i].clear();
+                    break;
+                }
+                None => {} // satisfied above a CPU window's extent
+            }
+        }
+    }
+    link_fail(&mut out, &mut failed);
+
+    // ── 2. Unmaps: the CHANGED pieces of every UNMAP run. An UNMAP already failed by a link keeps
+    // its rigid mappings whole (its placement stays committed), but its changed pieces still go.
+    // ★ `V3_BATCHED_MAP.md` §4: VA-adjacent pieces go as ONE range (the union of exactly the
+    // placements being removed); a refused range falls back piece by piece (GPU) or run by run.
     let mut pieces: Vec<(usize, u64, u64)> = Vec::new();
     for (i, r) in runs.iter().enumerate().filter(|(_, r)| r.unmap) {
         if r.held {
             out.held_retired += 1;
             continue;
         }
-        let changed = subtract(r.va, r.va.saturating_add(r.len), &kept[i]);
+        let keep_whole: Vec<(u64, u64)>;
+        let k = if failed[i] && remade.iter().any(|p| p.u == i) {
+            keep_whole =
+                kept_by_run(pairs.iter().chain(&remade).filter(|p| p.u == i), n).swap_remove(i);
+            &keep_whole
+        } else {
+            &kept[i]
+        };
+        let changed = subtract(r.va, r.va.saturating_add(r.len), k);
         if changed.is_empty() {
             out.kept_runs += 1;
         }
         pieces.extend(changed.into_iter().map(|(s, e)| (i, s, e - s)));
+    }
+    // Re-made pages (rule 2 of `keep_only_what_stays_exact`) of UNMAPs that will run.
+    for p in remade.iter().filter(|p| !failed[p.u]) {
+        out.remade_unchanged_pages += (p.e - p.s) / crate::batch::BATCH_PAGE;
+        out.remade.push((p.s, p.e));
+    }
+    if out.remade_unchanged_pages > 0 {
+        static LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        if LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 32 {
+            eprintln!(
+                "kf-mem: {} UNCHANGED page(s) re-made: a mapping outside every VA-reserving hDma holds them and a changed part of the same placement — host RM cannot split it exactly (V3_BATCHED_MAP.md §8.7)",
+                out.remade_unchanged_pages
+            );
+        }
     }
     pieces.sort_by_key(|&(_, va, _)| va);
     let idx: Vec<usize> = (0..pieces.len()).collect();
@@ -533,6 +860,7 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
             v.dedup();
             v.len()
         };
+        let mut group_err: Option<String> = None;
         if group.len() >= 2 || net {
             let va = pieces[group[0]].1;
             let last = pieces[group[group.len() - 1]];
@@ -545,36 +873,57 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
                     out.range_unmapped_runs += runs_in(group);
                     continue;
                 }
-                Err(e) => out.fallback(e),
+                Err(e) => {
+                    out.fallback(e.clone());
+                    group_err = Some(e);
+                }
             }
         }
         for &k in group {
             let (i, va, len) = pieces[k];
             let r = &runs[i];
-            if va != r.va || len != r.len {
-                failed_unmaps.push((va, va.saturating_add(len)));
-                out.unmap_refused += 1;
-                out.refuse(
-                    i,
-                    format!("unmap {va:#x}+{len:#x}: a sub-range of a placement and the target could not unmap it by range"),
-                );
-                continue;
-            }
-            out.unmap_calls += 1;
-            match target.unmap(r.va, true) {
+            let res = if net {
+                // ★ Review fix 2026-10-10: every changed piece by its own exact range (a lone piece
+                // was just tried as its group), so every run gets its own verdict.
+                match (&group_err, group.len()) {
+                    (Some(e), 1) => Err(e.clone()),
+                    _ => {
+                        out.unmap_calls += 1;
+                        target.unmap_range(va, len, true)
+                    }
+                }
+            } else if va != r.va || len != r.len {
+                Err("a sub-range of a placement and the target could not unmap it by range".into())
+            } else {
+                out.unmap_calls += 1;
+                target.unmap(r.va, true)
+            };
+            match res {
                 Ok(()) => out.unmapped += 1,
                 Err(e) => {
-                    failed_unmaps.push((r.va, r.va.saturating_add(r.len)));
                     out.unmap_refused += 1;
-                    out.refuse(i, format!("{e} (len {:#x})", r.len));
+                    failed[i] = true;
+                    out.refuse_once(i, format!("unmap {va:#x}+{len:#x}: {e}"));
                 }
             }
         }
     }
-    let extent = target.va_extent();
-    let reserved = target.reserved();
-    let mut pending: Vec<(usize, Desired)> = Vec::new();
+    link_fail(&mut out, &mut failed);
+    let failed_unmaps: Vec<(u64, u64)> = runs
+        .iter()
+        .enumerate()
+        .filter(|&(i, r)| r.unmap && failed[i])
+        .map(|(_, r)| (r.va, r.va.saturating_add(r.len)))
+        .collect();
+
+    // ── 3. Usermode views and SKED pages (their own verbs), then the plain rows.
+    // Per MAP run: pieces placed (ours), a piece held by the host.
+    let mut placed: Vec<Vec<(u64, u64)>> = vec![Vec::new(); n];
+    let mut held_any = vec![false; n];
     for (i, r0) in runs.iter().enumerate().filter(|(_, r)| !r.unmap) {
+        if failed[i] || plain_run(r0, cfg) {
+            continue;
+        }
         // ★★★ Hopper+ internal MMIO FIRST: a usermode-page view is never a memory row.
         if let Some(leaf) = cfg
             .usermode
@@ -590,66 +939,33 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
                 i,
                 &mut out,
             );
-            continue;
-        }
-        // ★★★ v3-cdp: a SKED-reflected page is never a memory row either — it is placed as a
-        // message-kind mapping (`V3_CDP.md`). ⊘ Only that case is diverted: a SYS_COH message leaf
-        // on a family with no usermode MMIO (Turing … Ada: no producer is known) keeps its
-        // pre-existing path, unchanged.
-        if kf_chip::sked::message_leaf(r0.ap, r0.kind) == Some(MessageLeaf::SkedReflected) {
+        } else {
+            // ★★★ v3-cdp: a SKED-reflected page is never a memory row either — it is placed as a
+            // message-kind mapping (`V3_CDP.md`). ⊘ Only that case is diverted: a SYS_COH message
+            // leaf on a family with no usermode MMIO (Turing … Ada: no producer is known) keeps its
+            // pre-existing path, unchanged.
             let at = SkedAt {
                 extent,
                 reserved: &reserved,
                 failed_unmaps: &failed_unmaps,
                 withhold_privileged,
             };
-            apply_sked(target, r0, cfg, &at, i, &mut out);
-            continue;
-        }
-        // ★★★ v3-roperm: a PRIVILEGED memory leaf never reaches a user twin (guest-internal
-        // isolation: an unprivileged guest channel must not reach what the guest kernel marked
-        // privileged, and the host cannot express the bit). Withheld, counted, named.
-        if r0.privileged {
-            if withhold_privileged {
-                out.withhold_privileged(i, r0);
-                continue;
-            }
-            out.priv_mirrored += 1;
-        }
-        // ★ 2026-10-09: only the NEW pieces of the run reach the host; the unchanged part is
-        // already ours (a kept remnant of the placement this entry unmapped).
-        let new = subtract(r0.va, r0.va.saturating_add(r0.len), &kept[i]);
-        if new.is_empty() {
-            out.kept_runs += 1;
-            continue;
-        }
-        for (s, e) in new {
-            let r = DiffRun {
-                va: s,
-                len: e - s,
-                at: r0.at.wrapping_add(s - r0.va),
-                ..*r0
-            };
-            match prepare_row(
-                target,
-                &r,
-                i,
-                cfg,
-                extent,
-                &reserved,
-                &failed_unmaps,
-                &mut out,
-            ) {
-                Some((d, true)) => pending.extend(split_at_leaf(d).into_iter().map(|p| (i, p))),
-                Some((d, false)) => pending.push((i, d)),
-                None => {}
+            if let Some(p) = apply_sked(target, r0, cfg, &at, i, &mut out) {
+                placed[i].push(p);
             }
         }
+        failed[i] = out.codes[i] == KFWR_ACK_FAILED;
     }
     // ★ `V3_BATCHED_MAP.md` §3: VA-contiguous guest-RAM rows of one kind go as ONE batched
     // placement; a refused batch placed nothing, so its rows go one by one and each gets its own
     // verdict (HELD included). ★★★ v3-roperm: and of ONE permission set — one host map carries
     // one, so a batch across a RO/RW boundary would widen the RO rows (or narrow the RW ones).
+    let mut pending: Vec<(usize, Desired)> = runs
+        .iter()
+        .enumerate()
+        .filter(|&(i, r)| !r.unmap && !failed[i])
+        .flat_map(|(i, _)| rows[i].iter().map(move |&d| (i, d)))
+        .collect();
     pending.sort_by_key(|&(_, d)| d.va);
     let idx: Vec<usize> = (0..pending.len()).collect();
     let same = |a: usize, b: usize| {
@@ -658,9 +974,6 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
             && pending[a].1.kind == pending[b].1.kind
             && pending[a].1.perm == pending[b].1.perm
     };
-    // Per MAP run: a piece placed, a piece held by the host.
-    let mut placed: Vec<Vec<(u64, u64)>> = vec![Vec::new(); runs.len()];
-    let mut held_any = vec![false; runs.len()];
     for group in contiguous_groups(
         &idx,
         |k| (pending[k].1.va, pending[k].1.len),
@@ -709,27 +1022,27 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
                         );
                     }
                 }
-                Err(e) => out.refuse(i, e),
+                Err(e) => {
+                    failed[i] = true;
+                    out.refuse_once(i, e);
+                }
             }
         }
     }
-    // Verdicts of the MAP runs: HELD only when nothing of it is ours (no piece placed, nothing
-    // kept); a FAILED run's own pieces and kept part are taken down again (the walker re-emits it,
-    // and the ledger must hold nothing it does not commit) — named.
+    link_fail(&mut out, &mut failed);
+
+    // ── 4. Verdicts of the MAP runs. A FAILED run's NEW pieces that were placed go again (the
+    // walker re-emits the run; the ledger must hold nothing it does not commit) — never a kept
+    // page. HELD only when nothing of the run is ours (no piece placed, nothing kept).
     for (i, r) in runs.iter().enumerate().filter(|(_, r)| !r.unmap) {
-        if out.codes[i] == KFWR_ACK_FAILED {
-            let ours: Vec<(u64, u64)> = kept[i]
-                .iter()
-                .copied()
-                .chain(placed[i].iter().map(|&(v, l)| (v, v.saturating_add(l))))
-                .collect();
-            for (s, end) in ours {
+        if failed[i] {
+            for &(s, len) in &placed[i] {
                 out.unmap_calls += 1;
-                if let Err(why) = target.unmap_range(s, end - s, true) {
+                out.taken_down += 1;
+                if let Err(why) = target.unmap_range(s, len, true) {
                     out.first_refusal.get_or_insert(format!(
-                        "map {:#x}: refused, and taking down its other part {s:#x}+{:#x} was refused too: {why}",
-                        r.va,
-                        end - s
+                        "map {:#x}: refused, and taking down its new piece {s:#x}+{len:#x} was refused too: {why}",
+                        r.va
                     ));
                 }
             }
@@ -737,7 +1050,7 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
             out.codes[i] = KFWR_ACK_HELD;
         }
     }
-    if out.mapped + out.unmapped + out.usermode_trapped + out.sked_placed > 0 {
+    if out.mapped + out.unmapped + out.taken_down + out.usermode_trapped + out.sked_placed > 0 {
         match target.invalidate() {
             Ok(()) => out.invalidated = true,
             Err(e) => {
@@ -920,13 +1233,13 @@ fn apply_sked(
     at: &SkedAt<'_>,
     i: usize,
     out: &mut Applied,
-) {
+) -> Option<(u64, u64)> {
     // ★★★ v3-roperm: the same policy as a memory leaf — a user twin never gets a leaf the guest
     // kernel marked privileged.
     if r.privileged {
         if at.withhold_privileged {
             out.withhold_privileged(i, r);
-            return;
+            return None;
         }
         out.priv_mirrored += 1;
     }
@@ -953,7 +1266,7 @@ fn apply_sked(
                 s.va, s.len, s.off, cfg.grain
             ),
         );
-        return;
+        return None;
     }
     if carve_reached(target, s.off, s.len, cfg, out) {
         out.refuse(
@@ -963,7 +1276,7 @@ fn apply_sked(
                 s.va, s.len, s.off, cfg.carve
             ),
         );
-        return;
+        return None;
     }
     if s.off.checked_add(s.len).is_none_or(|e| e > cfg.store_bytes) {
         out.refuse(
@@ -973,13 +1286,13 @@ fn apply_sked(
                 s.va, s.len, s.off
             ),
         );
-        return;
+        return None;
     }
     if let Some(ext) = at.extent {
         if s.va >= ext {
             out.clipped_bytes += s.len;
             out.codes[i] = KFWR_ACK_HELD;
-            return;
+            return None;
         }
         let end = s.va.saturating_add(s.len);
         if end > ext {
@@ -997,7 +1310,7 @@ fn apply_sked(
                 s.va, s.len
             ),
         );
-        return;
+        return None;
     }
     if at.failed_unmaps.iter().any(|&(a, b)| s.va < b && a < end) {
         out.refuse(
@@ -1007,7 +1320,7 @@ fn apply_sked(
                 s.va, s.len
             ),
         );
-        return;
+        return None;
     }
     out.map_calls += 1;
     match target.map_sked(&s, true) {
@@ -1020,6 +1333,7 @@ fn apply_sked(
                     s.va, s.len, r.ap, r.at
                 );
             }
+            Some((s.va, s.len))
         }
         Ok(Mapped::HeldByHost) => {
             out.held += 1;
@@ -1029,8 +1343,12 @@ fn apply_sked(
                 "kf-mem: SKED-reflected leaf {:#x}+{:#x} HELD BY HOST (host RM already maps that VA)",
                 s.va, s.len
             );
+            None
         }
-        Err(e) => out.refuse(i, e),
+        Err(e) => {
+            out.refuse(i, e);
+            None
+        }
     }
 }
 
