@@ -1094,3 +1094,16 @@ Consequences recorded by the coordinator (not yet implemented, measured first):
   yet in place is only allowed under §AA (absence), never silently.
 - `V3_BATCHED_MAP.md` §8.8 worst cases (a refresh budget of 2^21 grain calls, about 45 s of VA thread
   by the document's own estimate) violate this rule and need a latency-bounded design.
+
+## §AE. No heuristics; a fallback is a clean mode, 2026-10-10
+
+**STATUS: LIVE, 2026-10-10 (owner, Windows TDR session).** Avoid heuristics: no cap, threshold or knob whose only
+justification is that it makes a symptom go away, because it can break other things and stays forever. A fallback must be a
+CLEAN MODE: a complete, named configuration with a defined contract and its own tests, like the virtual scanout on Linux (a
+whole alternative display path, not a tweak to the real one). Where a feature cannot yet be done right, the stock path stays
+correct without it and the feature is added later (post-release if apps run without it, see the priority rule: anything that
+prevents apps from running first). Consequences: the "fewer usable windows per head" idea for overlays is a diagnostic only;
+the product answer is to fix the overlay flip completion, or to define a real single-plane display profile as a clean mode
+with a derived, named capability, never an ad hoc cap. Priority rule recorded with it (owner, same day): focus on anything
+that prevents apps from running; console fidelity, Linux-style simplifications and performance beyond "decent" are
+post-release.
