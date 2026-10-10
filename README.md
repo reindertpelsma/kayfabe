@@ -21,6 +21,14 @@ It is written in Rust. The architecture is **v3** ([`ARCHITECTURE.md`](ARCHITECT
 [`docs/design/THE_ARCHITECTURE_v3.md`](docs/design/THE_ARCHITECTURE_v3.md)). The C research
 prototype that first proved the idea is frozen under [`archive/nvkvm/`](archive/README.md).
 
+## Status - 2026-10-11
+
+Windows booted and Edge loaded websites, youtube shorts worked through the GPU. still very buggy. nvidia-smi enumerated the device.
+
+![Windows on kayfabe attempt](traces/windows_on_kayfabe.png)
+
+*NOTE:* This is not yet on master branch
+
 ## Status — 2026-09-30
 
 **Research stage:** no install path, no stable interface. Results come from rented vast.ai boxes that are
