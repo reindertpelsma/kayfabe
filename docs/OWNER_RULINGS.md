@@ -1077,3 +1077,20 @@ Opus 5.5 only when Sonnet fails (use less Opus, weekly usage). Haiku 5.5 is to b
 upgrade, on mechanical lanes only (evidence collection, formatting, running a script, grep sweeps).
 Supersedes the "Opus runs hypothesis work" half of `CLAUDE.md` *Models by risk*; correctness still
 beats cost: a lane that fails on Sonnet is rerun on Opus, never accepted.
+
+## §AD. An invalidate is never left incomplete for long, 2026-10-10
+
+**STATUS: LIVE, 2026-10-10 (owner, in the Windows TDR session).** No MMU invalidate may stay marked
+incomplete for longer than about a dozen milliseconds. A guest thread polls the trigger bit while
+holding driver locks (run 223 was exactly that hang), and a suspended scheduler or a recovery waits
+behind it, so the latency of the clear is part of the guest's own latency, not a background detail.
+Consequences recorded by the coordinator (not yet implemented, measured first):
+- The trigger-to-clear latency of every invalidate is measured and reported (distribution, max, count
+  above 12 ms) in every run's status line and in the Windows and Linux lanes.
+- Work that would exceed the bound (large rows at 4 KiB grain, budgeted refreshes, a map queued behind a
+  long steer) must not hold the invalidate: it either completes within the bound or the design must
+  make the host mapping ahead of the invalidate (the guest writes its PTEs before it triggers, so the
+  mirror has the time between the PTE writes and the trigger). Clearing over a mapping that is not
+  yet in place is only allowed under §AA (absence), never silently.
+- `V3_BATCHED_MAP.md` §8.8 worst cases (a refresh budget of 2^21 grain calls, about 45 s of VA thread
+  by the document's own estimate) violate this rule and need a latency-bounded design.
