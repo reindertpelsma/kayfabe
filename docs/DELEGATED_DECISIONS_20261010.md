@@ -14,7 +14,7 @@ case; a patched host is an optional better tier (`design/V3_HOST_PATCH_LIST.md`)
 | D4 | Which class-B behaviour flags to hardwire next | All class-B flags that the production profile needs, in the inventory §9 order, but only after the TDR fix lands (it may change the set) and the Linux regression passes. Flags that carry a captured table (`KF3_DISPLAY_CAPS_PROBE`, `KF3_GFX_POOL_PROBE`, the `KF3_DISPLAY_CTRL_PROBE` echo) are re-derived from ogkm / host controls first; they are never hardwired as written. Windows-only behaviour is keyed on the guest's own declared state, not a flag. | `V3_FLAG_INVENTORY.md` rules + derive-never-capture. | not started |
 | D5 | Fixed broker (`/opt/nvkvm-broker-next`, 9b5f64b) as the `interactive.sh` default | Yes, after `broker_lane.sh` passes and the owner has had the Linux desktop on it. | It carries bug fixes (branch `kf-broker-fixes-20261008`); the old broker stays reachable by an explicit path. | waiting for the Linux retest |
 | D6 | `claude/vfio-refusal-ablation-20261009` | Stays unmerged (diagnostic only; conflicts on `tools/vfio-gsp-observer`). The branch is kept as the archive. | Merging adds a conflicting old tool to the product tree for no product value. | closed |
-| D7 | H5 scope (what the `OWNER_RULINGS.md` §AB.2 'USERD exception' covers) | The exception covers ONLY a host-side DMA address-size constraint on the memory a guest declares as USERD (the 40-bit USERD pointer field of the runlist entry). It maps nothing into any GPU VA space; Passthrough spaces still hold only guest-PT-leaf mappings. Preferred implementation: option (a), a per-allocation 40-bit constraint for USERD memory (narrow); option (b), capping the whole device mask at 40 bits, only if (a) cannot be located. Relaxing the software size check is forbidden (it truncates the pointer). | The patch list shows the check mirrors a 40-bit hardware field, so the fix must make the DMA address fit; (a) has the smaller blast radius. Detected at runtime by the capability query; stock path stays the USERD relay. | decided; build-only work started, not loaded anywhere |
+| D7 | H5 scope (what the `OWNER_RULINGS.md` §AB.2 'USERD exception' covers) | The exception covers ONLY a host-side DMA address-size constraint on the memory a guest declares as USERD (the 40-bit USERD pointer field of the runlist entry). It maps nothing into any GPU VA space; Passthrough spaces still hold only guest-PT-leaf mappings. Preferred implementation: option (a), a per-allocation 40-bit constraint for USERD memory (narrow); option (b), capping the whole device mask at 40 bits, only if (a) cannot be located. Relaxing the software size check is forbidden (it truncates the pointer). | The patch list shows the check mirrors a 40-bit hardware field, so the fix must make the DMA address fit; (a) has the smaller blast radius. Detected at runtime by the capability query; stock path stays the USERD relay. | decided; patch written and build-only verified at 595.91.07 (`design/V3_H5_USERD_DMA_PATCH.md`, `tools/host_patches/h5_userd_dma/`); (a) located, built per OS-descriptor allocation, not USERD-recognised in the kernel (§2.3 there); never loaded; the kayfabe behaviour is not enabled |
 
 ## Standing follow-ups the owner asked for
 
@@ -25,3 +25,11 @@ case; a patched host is an optional better tier (`design/V3_HOST_PATCH_LIST.md`)
   needs a working Windows run first (the TDR hunt, branch `claude/tdr-hunt-20261010`), an app
   inventory, and the scripted sign-in harness brought into git.
 - **Models**: `OWNER_RULINGS.md` §AC.
+
+## WARNING: integration at `aeda9ffd`..`d44f70cd` carries a known-bad D1-D3 implementation
+
+The first batched-map decisions code (merged as `aeda9ffd`) failed two independent reviews and, on
+hardware, produced host Xid 31 FAULT_PTE (7 in 3 Windows runs, 272-274; e.g. CE3 reads at VA
+0x04036000), against 0 in the 12 runs before it and 0 in run 275 on the fixed code (measured, TDR
+hunt README). Do not validate or benchmark integration heads in this range. The fix is on
+`claude/batched-map-decisions-20261010` and is merged into integration only after a review passes.

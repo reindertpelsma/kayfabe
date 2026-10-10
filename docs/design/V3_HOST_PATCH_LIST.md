@@ -1,8 +1,9 @@
 # V3 — the host patch list: every optional host-kernel/driver enhancement, in one plan
 
-**STATUS: DESIGN-ONLY, 2026-10-10.** Nothing in this document is built, apart from what each entry
-says is already built (the b3 nvidia-uvm patch, the ioeventfd fast path, the USERD relay, the
-stock-path fallbacks). It consolidates the candidates scattered over `V3_COOPERATIVE_TIERS.md`,
+**STATUS: DESIGN-ONLY, 2026-10-10 (H5 since written and build-verified, same day: see §4.5 and `V3_H5_USERD_DMA_PATCH.md`).**
+Nothing in this document is built, apart from what each entry says is already built (the b3
+nvidia-uvm patch, the ioeventfd fast path, the USERD relay, the stock-path fallbacks, and the H5
+patch file, which has been compiled but never loaded). It consolidates the candidates scattered over `V3_COOPERATIVE_TIERS.md`,
 `V3_UVM_DEMAND_PAGING.md`, `V3_UVM_B3_IMPLEMENTATION.md`, `V3_VFIO_USER_FRONTEND.md`,
 `V3_BATCHED_MAP.md`, `V3_USERD_RELAY.md`, `V3_DOORBELL_IOEVENTFD.md`, `OWNER_RULINGS.md` and the
 Windows records under `traces/`. It does not supersede them; where one of them disagrees with this
@@ -43,7 +44,7 @@ no CPU executor for GPU work; no forged completions.
 | H2 | mdev shim: software vfio device for stock hypervisors | new GPL module (`kayfabe_mdev`) | kayfabe's QEMU overlay `kf3-gpu` | L | design only; four prove-first questions open |
 | H3 | b3: external fault service in host `nvidia-uvm` (managed memory) | `nvidia-uvm.ko` (patch, ~1.3 kLoC) | no GPU demand faults; loud failure | L overall (patch itself S-M to port) | **host-only proof passes on hardware (580.159.04)**; guest side unbuilt |
 | H4 | host-owned UVM pool (module-owned backing, CPU VA != GPU VA) | new module + `nvidia-uvm.ko` change | H3, else the fault-free pool in the guest (stage 2) or loud failure | L | design only; first experiment not run |
-| H5 | USERD-in-sysmem address-size fix (Windows) | `nvidia.ko` (DMA address ceiling) | the USERD relay (built, measured) | S-M | owner-confirmed item; **not implemented, and must stay absent until ruled on** |
+| H5 | USERD-in-sysmem address-size fix (Windows; Turing/Ampere/Ada hosts only) | `nvidia.ko` kernel-interface layer (`kernel-open/nvidia/nv.c`; applies to the packaged DKMS tree) | the USERD relay (built, measured) | S | scope ruled (D7, 2026-10-10); **patch written, build-only verified at 595.91.07, never loaded**; the kayfabe behaviour that uses it is not enabled (`V3_H5_USERD_DMA_PATCH.md`) |
 | H6 | exact partial unmap of `NV01_MEMORY_VIRTUAL` mappings | `nvidia.ko` RM core (open source build) | per-leaf mappings, micro reservation if it passes, else 4 KiB grain; never re-make | M | candidate from source reading; **not owner-decided, not hardware-measured** |
 | H7 | scatter-map verb (no stitched views) | `nvidia.ko` RM core | stitched OS descriptor, batched (built, measured nested) | M | candidate derived by this page; lowest priority |
 
@@ -79,7 +80,7 @@ The probes proposed per component:
 | component | probe | stock answer | patched answer |
 |---|---|---|---|
 | `nvidia-uvm.ko` (H3) | `UVM_INITIALIZE` with `UVM_INIT_FLAGS_EXTERNAL_FAULT_SERVICE`, then `UVM_EFS_QUERY` | `NV_ERR_INVALID_ARGUMENT` (unknown flag) | `NV_ERR_NOT_SUPPORTED` when the module parameter `uvm_efs_enable` is 0 (patched, disabled); OK when 1, and `abiVersion` (1 today) **[read: `tools/uvm_efs/patch/uvm_efs_ioctl.h`]** |
-| `nvidia.ko` (H5, H6, H7, H1-A) | one new escape in `nvidia_ioctl`'s switch (`nv.c:2598...`), e.g. `NV_ESC_KF_QUERY`, returning `{abi, feature mask}` **[proposed]** | an unknown escape falls to `rm_ioctl` and returns `-EINVAL` **[read: `nv.c:2846-2856`]** | `0`, abi and a mask with one bit per feature; each feature also has its own abi byte |
+| `nvidia.ko` (H5, H6, H7, H1-A) | one new escape in `nvidia_ioctl`'s switch (`nv.c:2598...`), `NV_ESC_KF_QUERY` (`NV_IOCTL_BASE+40`), returning `{abi, feature mask, per-feature abi}` **[built into the H5 patch, compiled; not run]**. Kayfabe side: `crates/kf-host/src/tier.rs` (probe, three outcomes, tests) | an unknown escape returns `-EINVAL` from `nv_validate_ioctls()` **before** the switch, and logs `NVRM:unknown NVRM ioctl command` once per probe **[read, 595.91.07 `nv.c:2404-2466`; corrected 2026-10-10, the old text cited the `default:` branch]** | `0`, abi and a mask with one bit per feature; each feature also has its own abi byte |
 | new kayfabe module (H1-B, H2) | `open("/dev/kayfabe-host")` then `KF_HOST_QUERY` **[proposed]** | `ENOENT` (no node) | abi and a feature mask |
 
 Detection by name, in this repo, does not exist yet: `crates/` has no EFS client and no host-tier
@@ -336,6 +337,35 @@ does KVM fault cleanly through the module's file (get_user_pages, MMU notifier z
 
 ### 4.5 H5 — the USERD-in-sysmem address-size fix (Windows)
 
+⊘ **Corrections and status (2026-10-10, from reading 595.91.07 and 595.84 and building the patch; they sit above the text they correct;
+full reasoning, security review and test plan: `V3_H5_USERD_DMA_PATCH.md`).**
+
+1. **Scope ruled and implemented as option (a), in a narrower sense than written.** `DELEGATED_DECISIONS_20261010.md` D7 answers the
+   "owner ruling to obtain first" below: the §AB.2 exception covers only a DMA address-size constraint on the memory a guest declares
+   as USERD; nothing is mapped into any GPU VA; relaxing the size check is forbidden. **[read]** The IOVA of an OS descriptor is
+   assigned *inside* the `NV_ESC_RM_ALLOC_MEMORY` call that creates it (`osmemdesc.c:296` -> `memdescMapIommu` -> `osIovaMap` ->
+   `nv_dma_map_alloc` -> `dma_map_page_attrs`/`dma_map_sg`), long before a channel names the memory as USERD; the RM core has no way
+   to re-map a part of it (`io_vaspace.c:258-340`, sub-mappings are subsets of the root mapping). "A constraint for USERD memory
+   only" is therefore implemented as **a per-allocation constraint requested by the creator of the OS descriptor**
+   (`NV_ESC_KF_ALLOC_MEMORY_DMA_WINDOW`), and kayfabe chooses which descriptors (the guest's USERD pages; or, simpler and wider, the
+   guest-RAM object). Option (b) is not shipped. The patch is 4 files and maps nothing.
+2. **[read] The wall exists on Turing, Ampere and Ada only.** The USERD pointer is 40 bits there (`_GV100`, `_GA100` checks); on Hopper
+   and Blackwell it is 52 bits (`dev_ram.h:28` gh100/gb10b) and the 47-bit IOVA fits. The width to request is derived from that field.
+   The trusted host's GPU is an RTX 4070 (AD104, Ada) **[measured, read-only, 2026-10-10]**.
+3. **[read, replaces "[inferred]"] The IOVA allocator.** `iommu_dma_alloc_iova` takes `dma_get_mask(dev)` at every mapping and allocates the
+   highest free range at or below it (`dma-iommu.c` v7.0). RM already lowers the mask for one allocation once, for the flush buffer
+   (`kern_mem_sys_gm107.c:300-322`); H5 is that technique, per call, under a lock.
+4. **[measured] No full-source rebuild tier is needed for H5.** The change is in `kernel-open/nvidia/`. The host's packaged
+   `/usr/src/nvidia-595.91.07` is identical to the tag's `kernel-open/` apart from the prebuilt RM-core objects, the patch applies to it
+   (dry run) and builds against it (`BUILD_RC=0`, kernel 7.0.0-34), and the patched `nvidia.ko` has byte-identical export CRCs. (Still
+   true for H6/H7.) §5 and §9.1 are corrected accordingly.
+5. **[measured, read-only ssh] The GPU's IOMMU group (11) reads `identity` on the trusted host now**, where the patch answers
+   `NOT_TRANSLATED` and the wall is not present. The A/B needs the group at `DMA-FQ` (`V3_H5_USERD_DMA_PATCH.md` §6.0).
+6. The query escape is built (`NV_ESC_KF_QUERY`); the kayfabe probe is built and logs the tier; **the behaviour that would use it (adopt the
+   guest's USERD instead of the relay) is not enabled**, condition in `V3_H5_USERD_DMA_PATCH.md` §7.
+
+*The original text of this entry follows; where it disagrees with the list above, the list wins.*
+
 **Fixes.** A Windows per-process channel declares its USERD as a 512-byte slot in guest system
 memory. A Passthrough twin adopts it through kayfabe's guest-RAM OS descriptor; the host IOMMU
 (`DMA-FQ` domain) maps that page at an IOVA such as `0x7ff9_f969_b000`, and host RM refuses the
@@ -362,17 +392,16 @@ USERD is in video memory).
 **What the kernel change is.** `nvidia.ko`, open-flavour source build. The device's DMA mask is set by
 RM through `nv_set_dma_address_size` (`kernel-open/nvidia/nv.c:3273-3290`, 595.84), which sets the
 device mask to the GPU's physical address bits; the IOMMU allocator then hands out IOVAs down from that
-mask **[inferred]**. Two ways, **[inferred]**, to be chosen when implementing: (a) a per-allocation 40-bit constraint
-for memory that will be a USERD (**to locate** in the OS-descriptor / DMA-map path,
-`src/nvidia/src/kernel/mem_mgr/os_desc_mem.c` and `kernel-open/nvidia/nv-dma.c`); (b) cap the device
+mask ⊘ **[read, see correction 3]**. Two ways, ⊘ **[chosen: (a), see correction 1]**: (a) a per-allocation 40-bit constraint
+for memory that will be a USERD (⊘ **located: the OS-descriptor creation call, `osmemdesc.c:296` and `nv-dma.c:594`**); (b) cap the device
 mask at 40 bits when the IOMMU translates (IOVAs below 1 TiB are plentiful; without an IOMMU,
 physical memory above 1 TiB would bounce). (b) is smaller and wider in effect; (a) is narrower. The
 `NV_ASSERT(0)` on the refusal path (`kernel_channel_gv100.c:217`) fires on every refused birth, so
 attempt-and-fall-back is not a clean probe; use the query.
 
-**Detection.** §3.1 query bit; if absent, the relay as today.
+**Detection.** §3.1 query bit (⊘ built: `NV_ESC_KF_QUERY` bit 0); if absent, the relay as today.
 
-**Owner ruling to obtain first.** `OWNER_RULINGS.md` §AB.2 and the exposure review name this fix as "the
+**Owner ruling to obtain first.** ⊘ *Answered by D7 (correction 1).* `OWNER_RULINGS.md` §AB.2 and the exposure review name this fix as "the
 only future exception" to "nothing host-owned in a Passthrough space", and say it must stay **absent
 until ruled on**. The text does not say what mapping the exception would add (an address-size fix maps
 nothing into the GPU VA space). Ask the owner what the exception covers before writing any kayfabe
@@ -388,9 +417,9 @@ assumed more than 40 bits.
 copy → ring) **[reasoned]**; no latency figure for the relay exists **[measured: none]**.
 
 **Validation.** Windows only: the D3D lane with `KF3_USERD_RELAY_OFF=1` on a patched host vs the relay
-on a stock host, same binary; Linux gates unchanged. **Effort** S-M (the diff is small; the cost is
-the `nvidia.ko` rebuild tier it shares with H6/H7). **Dependencies** the owner ruling; the rebuild
-tier (§9.1).
+on a stock host, same binary; Linux gates unchanged. ⊘ The hardware test plan is `V3_H5_USERD_DMA_PATCH.md` §6.
+**Effort** S-M (the diff is small; ⊘ the rebuild tier is not needed, correction 4). **Dependencies** ⊘ the owner ruling is given (D7);
+the kayfabe follow-up and the hardware proof.
 
 ### 4.6 H6 — exact partial unmap of `NV01_MEMORY_VIRTUAL` mappings
 
@@ -476,8 +505,9 @@ this entry. **Effort** M. **Dependencies** the rebuild tier; lowest priority.
   packaging and needs no kernel change of its own.
 - **The `nvidia.ko` rebuild tier** (a source build of the matching open-gpu-kernel-modules tag, a
   stop-VMs/stop-desktop/replace/reload/rollback procedure, a vast KVM-image box to prove it on) is a
-  prerequisite of H5, H6, H7 and H1 variant A. H1 variant B, H2 and H3 do not need it.
-- **Owner decisions** gate: H5 (the scope of the §AB.2 exception), H1 (variant, vCPU-store judgement),
+  prerequisite of H6, H7 and H1 variant A. ⊘ *H5 (2026-10-10): not a prerequisite of the **build**, since the patch applies to the packaged
+  DKMS tree; the stack reload and rollback procedure still is, and is written in `V3_H5_USERD_DMA_PATCH.md` §6.* H1 variant B, H2 and H3 do not need it.
+- **Owner decisions** gate: H5 (⊘ the scope of the §AB.2 exception: given, D7), H1 (variant, vCPU-store judgement),
   H6 (opt-in flag; and the §8.8 big-leaf decision it must agree with).
 - **Hardware verdicts** gate value, not correctness: the `reserve` probe (H6), the bare-metal
   wake-to-ring figure (H1), the non-nested stitch cost (H7).
@@ -487,7 +517,7 @@ H0 ──┬─ H1-B (module, no nvidia.ko rebuild)
      ├─ H3 (nvidia-uvm patch) ── guest fault plane (kayfabe side) ── H4
      ├─ H2 (mdev module) ── four prove-first answers
      └─ rebuild tier ──┬─ H6 (after reserve verdict + §8.8)
-                       ├─ H5 (after owner ruling)
+                       ├─ H5 (ruled, D7; needs the reload procedure, not the source build)
                        ├─ H7 (after non-nested stitch cost)
                        └─ H1-A (hardening of H1-B)
 ```
@@ -554,7 +584,7 @@ patch.
 | H1 doorbell | no notification is ever lost, and none is delayed on purpose (no timers, no batching: `OWNER_RULINGS.md` §D, 2026-09-28 refinement). Ordering of one channel's rings is preserved. Translated/Emulated tokens always reach kayfabe's translation path. A refused registration leaves that token on the trapped path, named and counted, and a test exhausts the limit. Unloading or losing the module mid-run moves bound tokens back to the drainer without a lost ring |
 | H2 mdev | n/a to stock correctness: stock is the overlay. The shim must not change the overlay's behaviour, and the overlay must not need the module |
 | H3 UVM | on a stock host, no opt-in is attempted (probe says Absent). Prefetch/advise work; a GPU fault on a managed twin fails loudly and corrupts nothing (fix the silent `conjugateGradientUM` case); read-only duplicates stay read-only (loud 719 + Xid 31). If the patched module is present but disabled, behaviour is the stock one byte for byte |
-| H5 USERD | the relay's bounds stay: `GP_PUT >= gpFifoEntries` is refused, counted, logged by name (the twin keeps its last good value); `GP_GET` write-back is host-derived and bounded to `[0, entries)`, never reads `GP_PUT`; the relay's lock is taken blocking, never `try_lock` (run 77). The relay maps nothing into any GPU VA (§AB.2). The rule "stay absent until ruled on" holds for the patched path |
+| H5 USERD | the relay's bounds stay: `GP_PUT >= gpFifoEntries` is refused, counted, logged by name (the twin keeps its last good value); `GP_GET` write-back is host-derived and bounded to `[0, entries)`, never reads `GP_PUT`; the relay's lock is taken blocking, never `try_lock` (run 77). The relay maps nothing into any GPU VA (§AB.2). ⊘ The scope is ruled (D7); the kayfabe behaviour that adopts the guest USERD stays off until the hardware test passes and the owner confirms (`V3_H5_USERD_DMA_PATCH.md` §7) |
 | H6 unmap | **the walker protocol and the owner invariant of 2026-10-10 are unchanged**: unchanged VAs stay accessible at every instant of a refresh; no unmap-then-remap; no overlay (`VA_ALREADY_MAPPED`); commit-on-ack; a refused unmap holds the invalidate as before (§AA). On a stock RM the decision in `V3_BATCHED_MAP.md` §8.7/§8.8 is the rule: **micro reservation if it passes, else 4 KiB grain, never re-make**; the `remade_unchanged_pages` counter stays 0 on the stock path once §8.8 lands. The ownership ledger (`OwnMaps`) stays authoritative with or without the patch. `kf_mem::sim` runs under both RM models |
 | H7 scatter | the stitched, batched path (§3 of `V3_BATCHED_MAP.md`) with its fallback to per-run on `ReaperBacklog`/refusal |
 | all | no result of a patched run may change a guest-visible value; a patched feature that cannot be used degrades per object (§3.1); no build-time switch selects the tier; the gates (`v3_gates.sh` 9/9, fast suite 30/30) are the stock bar and pass with no patch installed |
@@ -582,6 +612,11 @@ build of the matching `NVIDIA/open-gpu-kernel-modules` tag, installed in place o
 modules. Closed-flavour hosts could then take H1-B, H2 and H3 (UVM source ships in both) but not
 H5-H7. Check before promising H5-H7 to anyone.
 
+⊘ **Checked for H5 (2026-10-10), [measured]:** the host's packaged tree (`/usr/src/nvidia-595.91.07`, package `nvidia-dkms-595-open`) has
+`nvidia/nv-kernel.o_binary` (17.6 MB) and is otherwise identical to the tag's `kernel-open/` (`diff -rq`). The inference above is
+right for RM-core patches (H6, H7, H1-A) and **does not bite H5**, which patches only `kernel-open/nvidia/nv.c` and two new headers;
+the patch applies to the packaged tree and builds against the prebuilt RM core. Closed-flavour hosts are not checked.
+
 ### 9.2 Version pinning and other driver versions
 
 - **The verified pin is the trusted host's driver, 595.91.07 (open module, kernel 7.0.0-34)**
@@ -589,8 +624,9 @@ H5-H7. Check before promising H5-H7 to anyone.
   proven. A patched-tier claim names its tag.
 - A **manifest** lists, per tag, one of `verified` (the entry's hardware proof ran at that tag),
   `applies` (dry-run only), `unknown`. Today: H3 `verified` at 580.159.04, `applies` at 595.84 (note
-  that is not 595.91.07: the dry-run above used the 595.84 tree, the nearest available), everything
-  else unbuilt.
+  that is not 595.91.07: the dry-run above used the 595.84 tree, the nearest available); ⊘ H5 `applies` at 595.91.07 (dry run on the
+  packaged tree and on the tag, **plus a build-only compile against the host's kernel 7.0.0-34**) and at 595.84 (dry run, offsets),
+  not `verified` (never loaded); everything else unbuilt.
 - **Policy for any other driver version** **[proposed, owner to decide]:** the stock tier works with
   every driver version kayfabe accepts, with no patch. The patched tier is built only for manifest
   tags. On any other tag the DKMS `PRE_BUILD` runs `patch --dry-run`; a failure skips the patched build,
@@ -640,13 +676,29 @@ result. An unreachable tier is information, not an error.
 - **GPU reset or unbind** with H1 bound: the binding is revoked by the unmap, never left writing to a
   stale address (§4.1). This is a validation item, not an assumption.
 
+### 9.6 Directory layout and packaging, as built for H5 (2026-10-10)
+
+`tools/host_patches/<entry>/` follows `tools/uvm_efs/`: `patch/<name>_<tag>.patch` (applied with `-p1` from `kernel-open/` or a packaged
+tree root), `include/` (copies of files the patch adds, checked against it), `box/` (scripts that act on a box: `build_h5.sh` is
+**build-only**, refuses live output paths), `tests/` (GPU-free tests plus `tests/hw/` helpers for the later hardware step). One patch file per
+driver tag: the same file applies to 595.84 with offsets, so a second tag gets a second file only when a dry run fails.
+
+Packaging [proposed, not built]: the second source package of §9.1 (`kayfabe-nvidia-patches`) holds `patches/<tag>/*.patch` and a
+`dkms.conf` that builds the same four modules as the packaged one from a patched copy of `/usr/src/nvidia-<tag>`; `PRE_BUILD` runs
+`patch --dry-run` first (a failure leaves the stock modules, §9.2). Two DKMS registrations for the same module names and version
+must not coexist: install the patched one with the stock registration removed (`dkms remove nvidia/<tag> --all`), or use the `insmod`
+method of `V3_H5_USERD_DMA_PATCH.md` §6.3, which persists nothing. The version string is unchanged, so userspace libraries keep working.
+Secure Boot: sign with the machine's key (§9.4).
+
 ## 10. Questions for the owner
 
 1. **H1 variant:** B (separate module, no `nvidia.ko` rebuild, caller-supplied page with MMU-notifier
    revocation) first, with A kept as the hardening; or A only? And is a posted MMIO store on the
    vCPU thread acceptable under "nothing blocks on a vCPU", or must it go through a work item?
-2. **H5 scope:** what does the §AB.2 "sysmem-USERD address-size fix" exception cover, and is a 40-bit
-   device-mask cap (option b) acceptable, or only a per-allocation constraint (option a)?
+2. **H5 scope:** ⊘ *answered by `DELEGATED_DECISIONS_20261010.md` D7 (address-size constraint only; option (a) preferred, (b) only if (a)
+   cannot be located; never relax the check). (a) was located and built. Still open for the owner: F2 (a descriptor per USERD page range)
+   vs F1 (the whole guest-RAM object through the window), `V3_H5_USERD_DMA_PATCH.md` §7.* Original: what does the §AB.2 "sysmem-USERD
+   address-size fix" exception cover, and is a 40-bit device-mask cap (option b) acceptable, or only a per-allocation constraint (option a)?
 3. **Install policy** for tags that apply but are not hardware-verified (§9.2).
 4. **RM-core patches** (H5-H7) are proven on vast KVM-image boxes only until a second GPU host exists
    that can stand a stack reload. Acceptable?
@@ -654,7 +706,7 @@ result. An unreachable tier is information, not an error.
 
 ## 11. Sources
 
-`docs/design/V3_COOPERATIVE_TIERS.md` (stages, §3.2, §5); `V3_UVM_DEMAND_PAGING.md` (§0, §4.4);
+`docs/design/V3_COOPERATIVE_TIERS.md` (stages, §3.2, §5); `V3_H5_USERD_DMA_PATCH.md` and `tools/host_patches/h5_userd_dma/` (H5); `V3_UVM_DEMAND_PAGING.md` (§0, §4.4);
 `V3_UVM_B3_IMPLEMENTATION.md` (§0); `tools/uvm_efs/` (patch, ioctl header, `box/build_efs.sh`);
 `V3_VFIO_USER_FRONTEND.md` (§1, §2); `V3_BATCHED_MAP.md` (§1, §2, §7, §8.0-§8.7); `V3_USERD_RELAY.md`;
 `V3_DOORBELL_IOEVENTFD.md`; `V3_BAR1_DOORBELL.md`; `V3_GUEST_DOORBELL_MODULE.md`;
