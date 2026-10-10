@@ -60,6 +60,7 @@ cleanup(){
   rm -f $STOPF
   exit 0
 }
+# SAMPLER=1: irq_sampler.py (LAPIC IRR/ISR/TPR, MSI-X table + PBA, eventfd counts, RFLAGS.IF per vCPU every SAMPLER_PERIOD s from the sign-in to the first TDR + SAMPLER_AFTER s).
 # STALLDUMP=1: after the sign-in, watch kayfabe's display trace (needs KF3_DISPLAY_WRITE_TRACE=1): the guest acks every VSync
 # (WRITE 0x611800) while LAST_DATA is enabled. When the display thread keeps raising VSyncs (VSYNC h0 ... rm=0x2) and the
 # guest has acked none for 600 ms, take (a) six register samples of every vCPU (stop; info registers -a; cont, 200 ms apart)
@@ -127,6 +128,10 @@ if [ "$TA" != 0 ] && alive; then
     for c in k f s i g n 7; do key $c; done; key ret
     L "SIGNIN sent"
     [ "${STALLDUMP:-0}" = 1 ] && { stall_watch & }
+    if [ "${SAMPLER:-0}" = 1 ]; then
+      ( python3 $W/tdrhunt/irq_sampler.py $RUN/qmp.sock $QPID $O/irq-samples.txt $O/.sampler_stop ${SAMPLER_PERIOD:-0.25} 8 &
+        SP=$!; C0=$(ncyc); while alive && [ "$(ncyc)" -le "$C0" ]; do sleep 0.2; done; sleep ${SAMPLER_AFTER:-3}; touch $O/.sampler_stop; wait $SP ) &
+    fi
     if [ "${ETW:-0}" = 1 ]; then
       ( C0=$(ncyc); while alive && [ "$(ncyc)" -le "$C0" ]; do sleep 0.3; done
         alive && { touch $O/.etw_stopped; L "ETW stop (tdr_cycles=$(ncyc))"; GT=900 timeout 900 python3 $W/boundary-tools/qmp.py $RUN/qga.sock qga-exec powershell.exe -NoProfile -Command "$(cat $W/kayfabe-win-6fafcc6e/scripts/bench/windows/dxg_etw_stop_tail.ps1)" > $O/etw-stop.txt 2>&1; L "ETW stop rc=$? lines=$(wc -l < $O/etw-stop.txt)"; } ) &

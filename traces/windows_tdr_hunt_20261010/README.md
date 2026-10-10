@@ -183,3 +183,21 @@ bits are pending and no ISR runs. Cheap falsifier first: make a host non-stall e
 ### Code in this branch (diagnostic only, probe thread, default off)
 `RELAY-LAG`, `VCPU-STUCK`/`VCPU-MAX`, guest-silence `PT-SNAP` + `RELAY-DUMP` (all behind `KF3_COMPLETION_PROBE`), `scripts/bench/windows/dxg_etw_stop_tail.ps1`, `tooling/tdr-run.sh`. `cargo test -p kf-qemu -p kf-chan` on the host: 295 passed, 0 failed
 (the local disk was full). No behaviour changed, no fix. Host left clean after every run (DMA-FQ, no QEMU, nvidia bound, stop file removed, Xid 0); big dumps stay on the host under `dumps/` (`run264/265/266-WATCHDOG.dmp`, `run270-stall.elf`) and are not in git.
+
+---
+## Round 2 (coordinator reset: runs 272-275; merged `origin/integration/windows-20261010` at `96646daa`; binary `40481dd5` = merge + diagnostics only, no kf-mem change)
+
+### CORRECTION to "Measured 4" above (found while planning round 2)
+Every observation of "pending CE2/CE3/display leaf bits and the guest's interrupt-tree write counter flat" (PROBE-DUMP device lines of runs 268/269/271) was taken AFTER the guest declared the TDR and
+entered its own live dump (run 270: all vCPUs corralled with IF=0 at +0.1..0.6 s after the last VSync ack; the earliest PROBE dumps after the declaration). Run 269 at 59541.30, before the last ack: `leaf0=0x0 top=0x0`.
+So those lines show the dump, not an interrupt the guest failed to take during the 2 s before the declaration. What is still true: packets queued ~2.0 s before the declaration (run 269) / a paging batch (271) complete
+only at the recovery, while kayfabe had completed the host side. Whether the guest was *delivered* the completion interrupts in the 2 s BEFORE the declaration is therefore still unmeasured: it is what round 2 samples
+(`tooling/irq_sampler.py`: LAPIC IRR/ISR/TPR/PPR per vCPU, MSI-X table + PBA of the device, eventfd counts, RFLAGS.IF, every 250 ms from the sign-in to the first TDR, plus kayfabe's `IRQ-RING`: every interrupt decision
+with a UTC millisecond, who decided it and what came of it (raised / held / NotArmed / owed), dumped at the silence).
+
+### Run 272 — H-G (written before the run)
+**H-G:** a host non-stall (or FIFO_EVENT_MTHD) edge that the relay judges `NotArmed` is dropped, so the guest is never told that a Passthrough twin's work completed; WDDM then waits for the fence until the 2 s timeout.
+**Variable:** `KF3_DIAG_NSI_UNCONDITIONAL=1` (every edge judged armed, none dropped; diagnostic only). Everything else = production + measurement flags that do not change behaviour
+(`KF3_COMPLETION_PROBE`, `KF3_DISPLAY_WRITE_TRACE`, the LAPIC sampler).
+**Falsifier:** the first TDR still comes within ~10 s of the sign-in keys (as in every run so far: 5-9 s) and the run still shows the 80-125 s cluster; with H-G true the first TDR (and the cluster) disappear or are much rarer. Control: the
+`IRQ-RING` of the same run must show `NotArmed` verdicts in the baseline (run 271: `nsi` counters CE2 `wakes=3064 raised=2775`, so ~10 % of edges dropped) and none in this run, else the switch did nothing.
