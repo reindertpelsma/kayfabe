@@ -1836,7 +1836,7 @@ fn a_run_whose_rows_fit_a_budget_alone_but_not_together_places_nothing_and_leave
     }
     // Each walk is one refresh with a fresh budget: the same bounded cost, never growing.
     assert!(calls.windows(2).all(|w| w[0] == w[1]), "{calls:?}");
-    assert!(calls[0] <= (kf_mem_budget() * 2) as u64 + 4096, "{calls:?}");
+    assert!(calls[0] <= kf_mem_budget() * 2 + 4096, "{calls:?}");
 }
 
 fn kf_mem_budget() -> u64 {

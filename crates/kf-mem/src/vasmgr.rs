@@ -1539,7 +1539,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 // while the refresh made progress" was tried and DELETED: `mapped > 0` ignored rows
                 // the apply took down again, so a run whose rows fit a budget alone but not together
                 // (carve-clip split rows) re-queued for ever on the VA thread, which serves every
-                // space (`[measured, model, review 3]` mapped 1, taken_down 1, budget_refused 1,
+                // space (`[measured, model, review 3, 2026-10-10]` mapped 1, taken_down 1, budget_refused 1,
                 // ~131 k host calls per walk, walk after walk).
                 self.stats.budget_refused_runs = self
                     .stats

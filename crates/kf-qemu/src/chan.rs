@@ -104,7 +104,7 @@ const ACT_REQUEUED: u32 = 0xFFFF_FFF0;
 ///
 /// STEER THE HOST'S FALCON CONTEXT ONTO THE GUEST'S. In a video channel's VA space guest RM and host
 /// RM place buffers with the SAME lowest-free allocator, user buffers and RM-internal ones alike.
-/// `[measured vvid vid10]` the guest put its falcon ctx at G = 0x12002a000; host RM, allocating the
+/// `[measured vvid vid10, V3_VIDEO_ENGINES.md]` the guest put its falcon ctx at G = 0x12002a000; host RM, allocating the
 /// twin's own ctx with this object, found G mirrored and took G+0x1000 — where nvcuvid then mapped a
 /// live 4 KiB buffer, which the walker could only report HELD BY HOST: the engine used the wrong page
 /// and NVDEC produced untouched frames. So G (the guest's ctx, which no engine ever reads — the twin
@@ -148,7 +148,7 @@ impl EngineObj {
         steered: Option<(u64, u64)>,
         d: kf_gsp::Deferred,
     ) -> Result<String, (u32, String)> {
-        let Self { client, parent, handle, class, copy_engine, chan, engine, space, ref rows, ref ledger, kind } = self;
+        let Self { client, parent, space, ref rows, ref ledger, kind, .. } = self;
         if tries > 0 {
             std::thread::sleep(kf_mem::batch::STEER_RETRY_SPACING);
         }

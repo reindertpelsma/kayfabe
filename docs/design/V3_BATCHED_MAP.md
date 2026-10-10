@@ -1132,9 +1132,20 @@ class). Now:
   line (`GATE10_FALLBACK_UNPROVEN` ⇒ `gate10=FAIL` otherwise). Tests: probe unit tests
   (`only_a_host_rm_refusal_status_is_a_refusal`, `the_fallback_posture_needs_all_five_small_refused_by_status`,
   the ladder budget) and the CI fixtures `g10-fallback` / `g10-fallback-unproven`.
+- *What the probe proves, and what it cannot* (third review, item 4): it proves a CAPABILITY OF THE HOST
+  DRIVER — that it accepts a small FIXED reservation and unmaps part of it exactly, or, when it refuses
+  them all, that a 2 MiB leaf reservation at the alias base still works. It cannot detect a defect in
+  `kf-mem`'s placement ladder. The 6fafcc6e class is covered by the fast suite 30/30 on hardware and by
+  the GPU-free model test `sim::tests::the_flat_fb_alias_survives_a_host_that_refuses_the_big_reservation`
+  (3 965 leaves of 2 MiB land through the per-leaf tier inside one refresh's budget; it asserts the
+  spend). An ioctl failure (`kf-host` reports `Other(0x8000_0000 | errno)`) is an ERROR, not a refusal.
 - *Not run on hardware.* The proof path (a 2 MiB device-local object, `map_in`, two CE reads) mirrors
   the existing small-reservation arm line by line but has only been compiled; it is the first thing to
   look at if gate 10 reports anything but `PASS`.
+
+⊘ **Corrected 2026-10-10 (third review, §8.8.13.2), above the text it corrects:** a hull is bounded by
+HOST CALLS (≤ `STEER_HULL_MAX_CALLS` = 16), not by ledger entries; "one hull" below read as "≤ 2 048
+entries", which in the per-leaf reservation tier was 2 048 host calls under one claim.
 
 **8.8.11.2 The VA thread must not wait on a guest-sized steer (item 2).** `[measured, model, review]` a
 steer over a 2^20-piece row held ONE claim over `[va, va+row.len)` for 494 ms and the VA thread's map
@@ -1163,6 +1174,14 @@ announcement spans both acquisitions. `[measured, model, debug, 2026-10-10]` the
 against a VA thread looping `hold2`: p90 **1-13 µs** now; **2 020 µs** with the old acquire (the test
 fails: `hold2_never_yields_while_holding_a_lock_the_act_thread_waits_for`, bound 800 µs).
 
+⊘ **WITHDRAWN 2026-10-10 (third review, §8.8.13.6), above the text it withdraws:** the finding below
+was wrong for the production path, and its fix (`rows_after_steer`, restoring rows) is DELETED. The
+net apply unmaps every changed piece by RANGE over the ledger (`GpuMirror::unmap_range` does not
+consult the rows), so the walker's later UNMAP removes a mapping a failed steer left, row or no row;
+the per-run `unmap(va)` that answers "no row ⇒ no host call" is used only by the retire, which
+reports ledger leftovers (`leftovers() != 0` ⇒ the space is freed, not recycled). The restore held the
+`rows` write lock across a ledger walk and could resurrect a stale row. Kept below as history.
+
 **8.8.11.4 A steer that did not complete left a stale host mapping (item 4, found by reading, then
 tested).** The steer removes the placement row FIRST (so the walker's UNMAP of a page handed to host RM
 makes no host call). When `hand_to_host` then answered `Busy`, `StillOurs` or `Refused`, mappings of
@@ -1177,6 +1196,11 @@ With no ledger for the space the row goes back whole.
 *The arbitration §8.8.2's `cut_own` argument relies on:* `rows.remove(&va)` makes the VA thread's own
 UNMAP of that page issue no host call, so while a steer runs, the only unmappers of the steered range
 are the steer and idempotent range unmaps; maps are excluded by the claims (§8.8.8.2, §8.8.11.2).
+
+⊘ **WITHDRAWN 2026-10-10 (third review, §8.8.13.1), above the text it withdraws:** the follow-up
+walk described below is DELETED. It livelocked the VA thread (`mapped > 0` ignored rows the apply took
+down again). A budget-refused run is absent, counted and logged by name, the invalidate is cleared over
+it (§AA), and the guest's NEXT walk of the space retries it with a fresh budget — nothing else does.
 
 **8.8.11.5 The budget in FALLBACK is loud and has a retry (item 5).** With every reservation refused, a
 legitimate > 8 GiB mapping in one walk (a `cuMemHostAlloc`-style run) exceeds the 2^21-grain placement
@@ -1220,8 +1244,98 @@ stand-in (a real RM unmap is 84-123 µs `[measured earlier, vast 52624429, 2026-
   host and that its call count fits the budget, not that 3 965 reservations in one space are accepted.
 - A steer whose range a map is in flight over is `Busy` (host RM's context then lands where the guest's
   page is); the map is the guest's own concurrent use of the very VA, which is racy by nature.
-- A hull's claim lasts for one hull's host call (84-123 µs measured earlier; a hung call would hold the
-  maps over that hull — and the VA thread's own host calls hang equally).
+- ⊘ **Corrected 2026-10-10 (third review, §8.8.13.2), above the text it corrects:** a hull's claim lasts for
+  at most `STEER_HULL_MAX_CALLS` (16) host calls, not "one hull's host call" (which in the per-leaf
+  tier was 2 048). A hung call would hold the maps over that hull — and the VA thread's own host calls
+  hang equally.
 - The follow-up walks after budget refusals can repeat while each makes progress: the invalidate is
   already cleared, but the VA thread works on the space for the extra walks.
+
+### 8.8.13 Third review round (2026-10-10, review of `5f9d479c`)
+
+**STATUS: LIVE, 2026-10-10 — CODE + MODEL-TESTED; hardware verdict pending (§8.8.6).** Direction from
+the coordinator: each round the NEW mechanisms brought new defects, so remove mechanism that is not
+needed for correctness. Net effect of this round: two mechanisms DELETED (the follow-up walk, the row
+restore), one simplified (the hull bound), two added where a defect required them (the aggregate
+extent cap, the re-queued steer).
+
+**8.8.13.1 The follow-up walk is deleted (item 1, a guest-triggerable livelock).** `[measured, model,
+review 3, 2026-10-10]` a run of 2 MiB leaves split by the carve-out clip into two rows that each fit a
+fresh refresh's amplification budget alone but not together (every reservation refused) reported
+`mapped` 1 / `taken_down` 1 / `budget_refused` 1 — the first row landed, then came down with its failed
+run — walk after walk, ~131 k host calls each; "progress" (`mapped > 0`) was illusory, so the VA
+thread, which serves every space, re-queued the space for ever. The mechanism is not needed for
+correctness: a budget-refused run is acknowledged FAILED = absence, **the invalidate is cleared over it**
+(§AA), it is counted (`VaStats::budget_refused_runs`) and logged by name, and the guest's next walk of
+the space retries it with a fresh budget. If the guest never walks the space again, the run stays absent
+(a GPU access faults on that space's twin, contained) — as every refused map already did. Tests:
+`a_run_whose_rows_fit_a_budget_alone_but_not_together_places_nothing_and_leaves_nothing` (the
+adversarial shape: 3 walks, the same bounded cost each, nothing left on the host),
+`a_budget_refused_run_is_absent_loud_and_not_walked_again_by_itself` (no walk of its own),
+`a_budget_refusal_that_never_fits_costs_one_walk_per_guest_invalidate`.
+
+**8.8.13.2 A hull is bounded by host calls (item 2).** `[measured, model, review 3]` in the per-leaf
+reservation tier a 2 048-entry hull was 2 048 `unmap_in` calls under one claim: a 661 ms steer, a map
+inside the claimed hull waited 329 ms. The hull now ends before `STEER_HULL_MAX_CALLS` = 16 calls: one
+per maximal run of entries through the same `hDma`, one per distinct batch object a span can empty (its
+`free`). `[measured, model, debug, 100 µs stand-in per unmap, 2026-10-10, cargo test -p kf-mem a_hull_in_the_per_leaf_tier]`
+2 100 reservations: steer 352 ms, a map inside a claimed hull waited **2 ms** (330 ms with the bound
+removed — the test fails). Entries per hull stay ≤ `LEDGER_CHUNK` (the ledger-lock bound of D2).
+
+**8.8.13.3 Aggregate batch memory (item 3).** `[measured, model, review 3, 2026-10-10]` 256 batches × 16 aliased
+4 GiB runs (16 TiB of VA, each batch at the 64 GiB per-batch cap) still cost 519 MiB. The book also
+sums the extent of every booked batch and refuses past `BATCH_MAX_TOTAL_EXTENT` = 512 GiB (16 MiB of
+bitmap per space): refused by name before the host map (`BATCH_TOTAL_CAPPED`, `total_capped`, the
+first 8 logged), the rows go per run, the room returns as batches empty. Test
+`the_aggregate_extent_of_the_batches_of_a_space_is_capped`: 8 of 256 placed, RSS < +64 MiB, room
+returned after a batch is taken down.
+
+**8.8.13.4 Gate 10's classifier and its honesty (item 4).** `kf-host` reports an ioctl failure as
+`Other(0x8000_0000 | errno)`; the probe's `0x4B00..0x4C00` test counted those as refusals. Any code with
+the high bit is now an `Error` (FAIL). The `GATE10_FALLBACK_ACTIVE` echo and `box/README.md` no longer
+describe the old "any refusal passes" rule; the probe header and §8.8.11.1 say what the probe cannot
+prove (above). The flat-alias model test now asserts the per-leaf tier's spend (≥ 2 × 3 965 amplified
+calls, inside both budgets, no budget refusal).
+
+**8.8.13.5 The steer never proceeds without `Free` (item 5, SERIOUS).** The falcon steer exists so the
+host-owned context lands ON the guest's VA; the host alloc after a steer that did not complete
+re-introduces the original NVDEC wrong-frames bug (`[measured vvid vid10, V3_VIDEO_ENGINES.md]`). Before D2 a failed unmap
+was "logged, best effort" and the alloc went ahead; D2's `Busy` / `StillOurs` / `Refused` answers were
+then treated the same, and `StillReserved` too. Now `EngineObj::run` (`chan.rs`) allocates only after
+`HandOver::Free` (`kf_mem::batch::steer_step`); every other answer re-queues the step behind the other
+acts (`ChanPlane::requeue`, the act returns the `ACT_REQUEUED` sentinel and the act loop gives no
+reply) after a 1 ms pause, up to `STEER_MAX_TRIES` = 20 / `STEER_MAX_AGE` = 100 ms, then the birth is
+REFUSED by name with the answer and the tries in the message. The removed placement row is carried
+between tries (a retry must not read the missing row as "nothing mirrored there"). Unchanged:
+no falcon ctx / G inside a reserved guest range / row not mirrored yet ⇒ nothing to steer, proceed; no
+ledger for the space ⇒ nothing of ours to hand over, proceed (named); poisoned rows ⇒ refused (was
+logged). The act thread waits only that 1 ms per retry, never for the VA thread. A retry reorders this
+guest's act behind later acts of the queue; the guest's RPC reply for this object is held (its
+`Deferred` is unresolved) until the birth completes or is refused. Tests (model host, map in
+flight): `the_steer_proceeds_only_on_free_retries_the_rest_and_then_refuses`,
+`a_steer_that_meets_a_map_in_flight_retries_and_then_completes`. *Not tested:* the act loop's requeue
+with a real `ChanPlane` (needs the host RM); the policy and the model are.
+
+**8.8.13.6 Items 6 and 7 were solved by deletion.** The row restore is gone (§8.8.11.4's withdrawal): the
+steer takes the `rows` write lock only for `remove(&va)` (O(log n)); there is no ledger walk under it,
+nothing to resurrect, and no `log.commit` question for a restore. `rows.remove` WITHOUT a `log.commit`
+is the pre-existing steer behaviour (the row epoch log is not told the page left; the page is the
+guest's falcon context, never read) and is unchanged. Every taker of `rows.read()/write()`: the placed-row
+resolvers (`resolve_placed`, `resolve_placed_prefix`, `resolve_rows`, `resolve_rows_epoch`) run on the
+worker/act threads under short read locks and are untouched; the only writers are the VA thread
+(`GpuMirror` map/unmap, one row per lock hold) and the steer's single `remove`. Test
+`a_steer_that_did_not_complete_still_lets_the_walkers_unmap_reach_the_host` pins the corrected reading
+on the real apply path.
+
+**8.8.13.7 Measured vs inferred (this round, 2026-10-10).**
+
+| claim | status |
+|---|---|
+| livelock shape: mapped 1 / taken_down 1 / budget_refused 1, same cost every walk, nothing left on the host | measured (model) |
+| per-leaf hull: map wait 330 ms → 2 ms; steer 352 ms (100 µs stand-in per call) | measured (model, debug) |
+| aggregate bitmap: 8 of 256 batches placed, RSS < +64 MiB (was 519 MiB) | measured (model) |
+| the steer never allocates before Free; retry/refuse decision table; Busy then Free ordering | measured (model + pure policy) |
+| a 1 ms retry pause + 20 tries ≈ 20 ms worst delay of the act queue per stuck steer | inferred |
+| the act loop's requeue works with a real `ChanPlane` and a real video lane | NOT measured (hardware) |
+| the probe's per-leaf proof reflects 3 965 reservations in one space | NOT measured (it maps one leaf) |
 

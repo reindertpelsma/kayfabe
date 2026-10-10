@@ -1039,7 +1039,7 @@ pub struct MicroResv {
 }
 
 /// ★ Review 3 item 5 — **what the falcon-context steer does with each answer.** The steer exists so
-/// that host RM's own context lands ON the guest's context VA, not beside it (`[measured vvid vid10]`
+/// that host RM's own context lands ON the guest's context VA, not beside it (`[measured vvid vid10, V3_VIDEO_ENGINES.md]`
 /// host RM took G+0x1000 where nvcuvid then mapped a live buffer: NVDEC wrote the wrong frames). So the
 /// host allocation may proceed ONLY after [`HandOver::Free`]: every other answer — `Busy` (a map in
 /// flight), `StillOurs` (a mapping of ours landed again), `StillReserved` (a micro reservation covers
@@ -1787,7 +1787,7 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
             };
             // ★ Review 3 item 2 — **a hull is bounded by HOST CALLS, not by ledger entries.** In
             // the per-leaf reservation tier every entry is its own reservation: a 2 048-entry hull
-            // was 2 048 `unmap_in` calls under ONE claim (`[measured, model, review 3]` 661 ms of
+            // was 2 048 `unmap_in` calls under ONE claim (`[measured, model, review 3, 2026-10-10]` 661 ms of
             // steer, a map inside the claimed hull waited 329 ms). The hull ends before the call
             // budget [`STEER_HULL_MAX_CALLS`] would be exceeded: one call per maximal run of
             // entries through the same `hDma`, one `free` per distinct batch object a span can
@@ -1805,10 +1805,10 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
                     break;
                 }
                 calls = calls.saturating_add(cost);
-                if let Some(b) = m.batch {
-                    if !batches.contains(&b) {
-                        batches.push(b);
-                    }
+                if let Some(b) = m.batch
+                    && !batches.contains(&b)
+                {
+                    batches.push(b);
                 }
                 let e = s0.saturating_add(m.len);
                 prev = Some((e, m.via));
@@ -3790,7 +3790,7 @@ mod tests {
 
     /// ★ Review 3 item 2 (`rv3_per_leaf_hull_claim_lasts_2048_host_calls`) — a hull is bounded by
     /// HOST CALLS. In the per-leaf reservation tier every ledger entry is its own reservation, so the
-    /// old 2 048-entry hull was 2 048 `unmap_in` calls under one claim (`[measured, model, review 3]`
+    /// old 2 048-entry hull was 2 048 `unmap_in` calls under one claim (`[measured, model, review 3, 2026-10-10]`
     /// steer 661 ms, a map inside the claimed hull waited 329 ms). Each call here takes the 100 µs
     /// stand-in of a real RM unmap; a hull is now ≤ [`STEER_HULL_MAX_CALLS`] of them.
     #[test]
