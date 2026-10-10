@@ -167,6 +167,24 @@ pub struct SimRm {
     pub n: Counters,
     /// ★ Review fix 2026-10-10: guard hits inside intervals the apply declared re-made.
     pub remade_transients: u64,
+    /// ★ Held-hole fix 2026-10-10: host RM's VA reservation geometry (`[measured, run 289 dmesg]`
+    /// `virtmemAllocResources: VA Space alloc failed! Status 0x51 Size: 0x20000 RangeLo: 0x144d0000`
+    /// for a request at `0x144d5000`; `gvaspaceApplyDefaultAlignment`, `gpu_vaspace.c:1645`): a
+    /// reservation's START is aligned DOWN and its SIZE aligned UP to the page size RM picks for
+    /// it (2 MiB when the request is >= 2 MiB, else the 64 KiB big page). The block therefore
+    /// differs from the requested range unless both ends are aligned. Default ON (the model of the
+    /// real host); `false` = the exact-block model the pre-fix tests assumed.
+    pub reserve_rounds: bool,
+    /// Every fixed map that found its VA occupied by something that is NOT a foreign mapping
+    /// (the mirror's own reservation pad, a stray, a remnant): such an answer reaches the apply as
+    /// `HeldByHost` and the guest's leaf is silently absent. Must stay empty (`sim::check`).
+    pub self_held: Vec<String>,
+}
+
+/// The size a reservation of `len` bytes is aligned to by host RM (see [`SimRm::reserve_rounds`]).
+#[must_use]
+pub fn reserve_align(len: u64) -> u64 {
+    if len >= 0x20_0000 { 0x20_0000 } else { 0x1_0000 }
 }
 
 /// ★ D1/D3 (2026-10-10): runtime refusals of the micro-reservation machinery, injected. Every
@@ -276,6 +294,8 @@ impl Sim {
             fail_next_batch_map: false,
             n: Counters::default(),
             remade_transients: 0,
+            reserve_rounds: true,
+            self_held: Vec::new(),
         }))
     }
 }
@@ -353,8 +373,17 @@ impl SimRm {
         off: u64,
         owner: Owner,
     ) -> Result<(), bool> {
-        if pieces.iter().any(|&(h, pv, pl)| self.occupied(h, pv, pl)) {
+        if let Some(&(h, pv, pl)) = pieces.iter().find(|&&(h, pv, pl)| self.occupied(h, pv, pl)) {
             self.n.rm_map += 1;
+            // Who holds it? Only a FOREIGN mapping may (host RM's own buffer: legitimately HELD).
+            let foreign = self.maps.iter().any(|m| {
+                matches!(m.owner, Owner::Foreign(_)) && m.hdma == h && overlaps(m.va, m.len, pv, pl)
+            });
+            if !foreign {
+                self.self_held.push(format!(
+                    "fixed map {pv:#x}+{pl:#x} (hDma {h:#x}) found its VA occupied by something that is not a foreign mapping (the mirror's own reservation pad, stray or remnant): the guest's leaf would be silently absent"
+                ));
+            }
             return Err(true);
         }
         for &(h, pv, pl) in pieces {
@@ -524,10 +553,30 @@ impl SimRm {
         {
             return Err(format!("reserve {va:#x}+{len:#x}: NV_ERR_NO_MEMORY"));
         }
+        let (lo, hi) = if self.reserve_rounds {
+            let a = reserve_align(len);
+            let lo = va / a * a;
+            (lo, lo + len.div_ceil(a) * a)
+        } else {
+            (va, va + len)
+        };
+        // The ROUNDED block must be free too (RM refuses on any overlap).
+        if (lo, hi) != (va, va + len)
+            && (self.block_overlaps(lo, hi - lo)
+                || self
+                    .space
+                    .guest
+                    .iter()
+                    .any(|g| g.handle != 0 && overlaps(g.lo, g.hi - g.lo, lo, hi - lo)))
+        {
+            return Err(format!(
+                "reserve {va:#x}+{len:#x}: NV_ERR_NO_MEMORY (rounded block {lo:#x}..{hi:#x} is occupied)"
+            ));
+        }
         let h = self.next_obj;
         self.next_obj += 1;
-        self.blocks.insert(va, va + len);
-        self.resv.insert(h, (va, va + len));
+        self.blocks.insert(lo, hi);
+        self.resv.insert(h, (lo, hi));
         Ok(h)
     }
 
@@ -1196,6 +1245,11 @@ pub fn check(
             "{} gvaspaceFree(NULL pMemBlock) assertion(s) (gpu_vaspace.c:1639)",
             rm.asserts
         ));
+    }
+    // ★ Held-hole fix: zero SILENT absence. A fixed map refused because the VA is held by the
+    // mirror's own block (not a foreign mapping) leaves a guest leaf unmapped under a HELD ack.
+    if let Some(v) = rm.self_held.first() {
+        return Err(format!("SILENT ABSENCE {v}"));
     }
     // ★ D1 (2026-10-10): outside every VA-reserving hDma (the NV01 range) a mapping of ours is ONE
     // 4 KiB page — the unit no partial change can split. Anything bigger there is a mapping host
