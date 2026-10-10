@@ -337,3 +337,40 @@ unmeasured link.
 * **F:** `KF3_BAR0_READ_TRACE` on the display range plus the interrupt tree, ETW on: **H-F2** "during the 2 s the driver thread that
   received the flip polls a BAR0 register kayfabe never changes". Falsifier: no BAR0 offset is read repeatedly in the window
   (then the wait is on guest memory or a lock, and the same S-type dump at the declaration names the thread).
+
+### Shape S, offline reading before run H-S (coordinator's items 1-2)
+**How kayfabe delivers a `RUNLIST_PREEMPT_COMPLETE` (code).** `ChanPlane::disable_channels` (act thread) runs the host disable +
+preempt and pushes `(client, eventData)` on `preempt_done` (bounded 64) only after the HOST verb returned. The drainer, when its
+privileged ring is empty, calls `Device::deliver_preempt_complete` (`crates/kf-qemu/src/device.rs`): under the GSP lock and only
+while no reply is held (`chan::preempt_posts_ready`: the event follows its control's reply, as vfio-10 shows), it encodes one LIST
+`POST_EVENT` per completion (`kf_abi::postevent::SubdeviceNotify`: hClient/hEvent = the guest's live registration for notifier 139,
+notifyIndex 139, data 0, info16 0, status 0, eventDataSize 8, bNotifyList 1, eventData = the guest's own `pRunlistPreemptEvent`),
+writes it into the status queue (`GspFsm::post`: elements first, writePtr last, `swgen0_pending`), publishes the registers
+(IRQSTAT SWGEN0) and latches the GSP vector (`GSP_STALL_VECTOR` 0x9b) once per pass. `QueueFull` requeues the tail in order.
+**Contract (open ogkm 595.84, `kernel_gsp.c` / `kernel_gsp_tu102.c`).** On the GSP interrupt `kgspService_TU102` clears SWGEN0
+(IRQSCLR) BEFORE servicing, then `kgspRpcRecvEvents` drains **every** pending element until the queue is empty; in addition every
+synchronous RPC's `_kgspRpcRecvPoll` processes all events queued ahead of its reply. `_kgspRpcPostEvent` needs
+`CliGetEventInfo(hClient, hEvent)` (else the element is dropped with an assert) and, with `bNotifyList` on a Subdevice notifier,
+calls `gpuNotifySubDeviceEvent(139, eventData, 8, ...)`. **Byte comparison with the VFIO reference** (boundary-vfio-10 `gsp.jsonl`,
+fn 4099 elements of notifyIndex 0x8b): `hClient 0xc1d00002, hEvent 0xff0620a0, notify 0x8b, data 0, info16 0, status 0,
+eventDataSize 8, bNotifyList 1, eventData = a guest kernel pointer` — the same fields and order kayfabe encodes; per async
+disable the reference posts reply then event, as kayfabe does.
+**Exactly once / in order / not coalesced away:** one post per completed preempt, FIFO; in run 269 the 22 were posted in two
+drainer passes (12 at maplog 59539.776, 10 at .793), one GSP vector latch per pass; ogkm drains all elements per interrupt, so 22
+elements behind one interrupt are not a loss by themselves. The one known loss window (completion audit finding 10: a guest
+IRQSCLR applied after a newer post clears its SWGEN0) leaves elements unread only until the guest's NEXT RPC drains them
+— in run 269 five RPCs followed 17-50 ms later (perf controls of another guest thread), **so by ogkm's code the 22 events were
+consumed by maplog ~59539.83 [inferred]**. That is what run H-S measures directly (`GSPQ-*` lines below, plus the KEVENTs).
+**Healthy vs failing cycle (kayfabe's log, run 269).** Healthy (mem t 65.364, client 0xc1d0004f, 18 twins): per twin
+`DISABLE(true)` → reply → event, then the `DISABLE(false)` list for the same 18 immediately, no other RPC between. Failing
+(59539.776, client 0xc1d00002, 22 twins): the same per-twin sequence (held reply posted, then the event), no RPC in flight at the
+same time (every `HELD-REPLY depth=1`), then only five periodic performance controls (answered NOT_SUPPORTED as always), then
+nothing. kayfabe's side shows **no protocol difference** between the two cycles. The guest-visible GP_GET lag of 19 of 22 relays
+in 269 is not required for shape S: run 267 (GET refresh on) has an S reset with guest GET == PUT on every disabled twin.
+
+### Diagnostic added for H-S (probe thread, `KF3_COMPLETION_PROBE` only; no behaviour change)
+`GSPQ-UNREAD` / `GSPQ-CONSUMED` / `GSPQ` (every 2 s): our status-queue writePtr vs the guest's readPtr and the unread count,
+sampled every 100 ms with `try_lock` (the probe never waits on the GSP lock); an episode of unread elements with an unmoved
+readPtr for >= 200 ms is logged once with the guest-visible and FSM IRQSTAT, the interrupt tree and the IRQ ring. Each
+`RUNLIST_PREEMPT_COMPLETE posted` line now carries `utc_ms` and the queue's w/r/unread at the post. `kf_gsp::GspFsm::stat_queue_diag`
+is read-only. `cargo test -p kf-gsp -p kf-qemu`: 192 passed, 0 failed.

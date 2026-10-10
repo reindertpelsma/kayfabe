@@ -1683,6 +1683,8 @@ impl Device {
         let mut streak: std::collections::HashMap<u32, u32> = std::collections::HashMap::new();
         let mut vcpu_reported = [0u64; VCPU_SLOTS];
         let (mut quiet_last, mut quiet_ticks, mut snapped, mut snaps) = (u64::MAX, 0u32, false, 0u32);
+        // (last guest readPtr, ticks unread with it unmoved, episode reported, longest episode in ms)
+        let mut gspq: (Option<u32>, u64, bool, u64) = (None, 0, false, 0);
         while !self.stop.load(Ordering::Acquire) {
             {
                 let s = self.chans.relay_lag_sample();
@@ -1761,6 +1763,57 @@ impl Device {
                         for l in crate::diagring::dump(8) {
                             eprintln!("{l}");
                         }
+                    }
+                }
+            }
+            // ⚠ DIAGNOSTIC (2026-10-10, TDR hunt, shape S): does the guest consume what we post on the status queue?
+            // Every 100 ms (try_lock only: the probe never waits on the GSP lock): our writePtr, the guest's readPtr and
+            // the unread count; an episode of unread elements with an unmoved readPtr for >= 200 ms is named once with the
+            // IRQSTAT the guest reads (shadow), the FSM's own value and the interrupt tree. Summary every 2 s.
+            if let Ok(mut g) = self.gsp.try_lock() {
+                let mut ram = Ram(self);
+                if let Some((w, r, unread)) = g.fsm.stat_queue_diag(&mut ram) {
+                    let irq_off = g.model.at(GspReg::GspFalconIrqstat).map(|(_, o)| o);
+                    let fsm_irq = irq_off.and_then(|o| g.fsm.mmio_read_with(g.model.as_ref(), 0, o)).and_then(Result::ok);
+                    let shadow_irq = irq_off.map(|o| self.shadow_word(o));
+                    drop(g);
+                    if unread > 0 && Some(r) == gspq.0 {
+                        gspq.1 += 1;
+                    } else {
+                        if gspq.2 && unread == 0 {
+                            eprintln!(
+                                "kf3: GSPQ-CONSUMED t={:.3} utc_ms={} after {} ms unread: w={w} r={r}",
+                                kf_mem::maplog::t(),
+                                crate::diagring::utc_ms_pub(),
+                                gspq.1 * 100
+                            );
+                        }
+                        gspq.1 = 0;
+                        gspq.2 = false;
+                    }
+                    gspq.0 = Some(r);
+                    gspq.3 = gspq.3.max(gspq.1 * 100);
+                    if gspq.1 >= 2 && !gspq.2 {
+                        gspq.2 = true;
+                        eprintln!(
+                            "kf3: GSPQ-UNREAD t={:.3} utc_ms={} unread={unread} w={w} r={r} for >= {} ms; IRQSTAT guest-visible={:?} fsm={:?}",
+                            kf_mem::maplog::t(),
+                            crate::diagring::utc_ms_pub(),
+                            gspq.1 * 100,
+                            shadow_irq.map(|v| format!("{v:#x}")),
+                            fsm_irq.map(|v| format!("{v:#x}"))
+                        );
+                        eprintln!("{}", self.probe_device_state());
+                        for l in crate::diagring::dump(3) {
+                            eprintln!("{l}");
+                        }
+                    }
+                    if ticks % 20 == 0 {
+                        eprintln!(
+                            "kf3: GSPQ t={:.3} w={w} r={r} unread={unread} longest_unread_ms={}",
+                            kf_mem::maplog::t(),
+                            gspq.3
+                        );
                     }
                 }
             }
@@ -3210,8 +3263,11 @@ impl Device {
                 Ok(()) => {
                     posted_any = true;
                     eprintln!(
-                        "kf3: RUNLIST_PREEMPT_COMPLETE posted to {:#x}:{:#x} (eventData {ev:#x}) after the host's disable+preempt returned",
-                        t.client, t.event
+                        "kf3: RUNLIST_PREEMPT_COMPLETE posted to {:#x}:{:#x} (eventData {ev:#x}) after the host's disable+preempt returned (utc_ms={} stat w/r/unread={:?})",
+                        t.client,
+                        t.event,
+                        crate::diagring::utc_ms_pub(),
+                        g.fsm.stat_queue_diag(&mut ram)
                     );
                 }
                 Err(kf_gsp::GspFault::QueueFull { .. }) => {

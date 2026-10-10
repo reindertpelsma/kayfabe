@@ -38,6 +38,12 @@ fn utc_ms() -> u64 {
         & 0xFF_FFFF_FFFF
 }
 
+/// The ring's UTC-ms clock, for diagnostic lines that must align with it.
+#[must_use]
+pub fn utc_ms_pub() -> u64 {
+    utc_ms()
+}
+
 /// Record one event (no-op unless the probe is on).
 pub fn note(src: u8, vector: u32, res: u8) {
     if crate::chan::completion_probe_ms().is_none() {
