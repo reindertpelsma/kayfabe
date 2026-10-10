@@ -1,0 +1,1109 @@
+{
+ "schema": 1,
+ "name": "kayfabe Windows app matrix app disk",
+ "created_for": "docs/design/V3_WINDOWS_APP_MATRIX.md",
+ "image": {
+  "file": "kfapps.iso",
+  "label": "KFAPPS",
+  "format": "iso9660+udf+joliet",
+  "sha256": "183c13aa6b2c3c20475f7e1c5eed9979ca973056886d2b519c013386ba4da652",
+  "size": 6785255424,
+  "built_utc": "2026-10-10T12:05:23Z",
+  "identity": "b67d6a2a8629278d5ef7000e7765577038ab546a54344eb09500d6b08c7ee6b8",
+  "built_with": "genisoimage"
+ },
+ "guest_root": "C:\\kfapps",
+ "packages": [
+  {
+   "id": "cuda_demo_suite",
+   "title": "CUDA Toolkit demo suite (prebuilt: deviceQuery, bandwidthTest, vectorAdd, nbody, oceanFFT, randomFog, busGrind)",
+   "version": "12.9.79",
+   "tier": 1,
+   "license": "NVIDIA CUDA Toolkit EULA (LICENSE inside the archive)",
+   "redistribution": "Redistributable component of the CUDA Toolkit per the EULA attachment A; staged for internal test use only",
+   "stage": {
+    "mode": "unzip",
+    "dest": "cuda_demo",
+    "strip_top": true
+   },
+   "files": [
+    {
+     "name": "cuda_demo_suite-windows-x86_64-12.9.79-archive.zip",
+     "url": "https://developer.download.nvidia.com/compute/cuda/redist/cuda_demo_suite/windows-x86_64/cuda_demo_suite-windows-x86_64-12.9.79-archive.zip",
+     "sha256": "adffd0b0f7cca262025f171dcaa73f62af020de5d9a0d6e0fbe7dbd827dd77a8",
+     "size": 5164004,
+     "http": 200,
+     "head_length": 5164004,
+     "verified_utc": "2026-10-10T11:24:50Z"
+    }
+   ]
+  },
+  {
+   "id": "python_embed",
+   "title": "CPython 3.12 embeddable (portable, no installer)",
+   "version": "3.12.10",
+   "tier": 1,
+   "license": "PSF License",
+   "redistribution": "Redistributable",
+   "stage": {
+    "mode": "python_embed",
+    "dest": "py"
+   },
+   "files": [
+    {
+     "name": "python-3.12.10-embed-amd64.zip",
+     "url": "https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip",
+     "sha256": "4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3",
+     "size": 11133606,
+     "http": 200,
+     "head_length": 11133606,
+     "verified_utc": "2026-10-10T11:24:51Z"
+    }
+   ]
+  },
+  {
+   "id": "pywheels",
+   "title": "Python wheels for CPython 3.12 / win_amd64: torch 2.8.0+cu126, torchvision, numpy, cupy-cuda12x 14.2.0, onnxruntime-directml 1.24.4, onnx and their dependencies",
+   "version": "2026-10-10 resolution",
+   "tier": 1,
+   "license": "torch/torchvision BSD-3 (CUDA libs inside the torch wheel under the NVIDIA EULA); cupy MIT; onnxruntime MIT; others BSD/MIT/Apache/PSF per wheel metadata",
+   "redistribution": "Redistributable (open-source licences); the NVIDIA CUDA libraries inside the torch wheel are redistributable under the CUDA EULA",
+   "stage": {
+    "mode": "wheels",
+    "dest": "py\\Lib\\site-packages"
+   },
+   "files": [
+    {
+     "name": "torch-2.8.0+cu126-cp312-cp312-win_amd64.whl",
+     "url": "https://download.pytorch.org/whl/cu126/torch-2.8.0%2Bcu126-cp312-cp312-win_amd64.whl",
+     "sha256": "f6c79eac0018f9d131479ee1b7a68edb030619a316bfbc69275043aa4f338e4c",
+     "size": 2915418348,
+     "http": 200,
+     "head_length": 2915418348,
+     "verified_utc": "2026-10-10T11:24:52Z"
+    },
+    {
+     "name": "torchvision-0.23.0+cu126-cp312-cp312-win_amd64.whl",
+     "url": "https://download.pytorch.org/whl/cu126/torchvision-0.23.0%2Bcu126-cp312-cp312-win_amd64.whl",
+     "sha256": "e59fc7405f2e0cfceefc2f867794900478871c2639d02779d55dc143657a7bbb",
+     "size": 6227539,
+     "http": 200,
+     "head_length": 6227539,
+     "verified_utc": "2026-10-10T11:24:53Z"
+    },
+    {
+     "name": "cuda_pathfinder-1.8.3-py3-none-any.whl",
+     "url": "https://files.pythonhosted.org/packages/b9/fb/f8e1890428f9f590b4beebd63b068aac1ce32a3331510c847b9f9a78f261/cuda_pathfinder-1.8.3-py3-none-any.whl",
+     "sha256": "e29e59829c297a7a5233bd9cc71094fc5bddbd076951482670178f9eade39b1f",
+     "size": 62561,
+     "http": 200,
+     "head_length": 62561,
+     "verified_utc": "2026-10-10T11:24:53Z"
+    },
+    {
+     "name": "cupy_cuda12x-14.2.0-cp312-cp312-win_amd64.whl",
+     "url": "https://files.pythonhosted.org/packages/e9/18/ddea819204701024bef7fa748730702245d803847c841b737723b94fd091/cupy_cuda12x-14.2.0-cp312-cp312-win_amd64.whl",
+     "sha256": "c9571d3b5f2e65758137e210f7fb3c3b34767f0af6b6ca04035a244b6141ee12",
+     "size": 98780018,
+     "http": 200,
+     "head_length": 98780018,
+     "verified_utc": "2026-10-10T11:24:53Z"
+    },
+    {
+     "name": "filelock-4.1.0-py3-none-any.whl",
+     "url": "https://files.pythonhosted.org/packages/ee/86/032133892a5de43b5a98200b01aadcad68cc255e274a762f08b8a76d2912/filelock-4.1.0-py3-none-any.whl",
+     "sha256": "2ce9818e3e2d8f284c1a964414447ef148d42a5fd5e2a477a7118e574b293ec1",
+     "size": 133003,
+     "http": 200,
+     "head_length": 133003,
+     "verified_utc": "2026-10-10T11:24:53Z"
+    },
+    {
+     "name": "flatbuffers-25.12.19-py2.py3-none-any.whl",
+     "url": "https://files.pythonhosted.org/packages/e8/2d/d2a548598be01649e2d46231d151a6c56d10b964d94043a335ae56ea2d92/flatbuffers-25.12.19-py2.py3-none-any.whl",
+     "sha256": "7634f50c427838bb021c2d66a3d1168e9d199b0607e6329399f04846d42e20b4",
+     "size": 26661,
+     "http": 200,
+     "head_length": 26661,
+     "verified_utc": "2026-10-10T11:24:53Z"
+    },
+    {
+     "name": "fsspec-2026.9.0-py3-none-any.whl",
+     "url": "https://files.pythonhosted.org/packages/6c/c0/a98505f18594f1bce828bb159cec0fcf9860562f1a2c85913409fc8f3d9e/fsspec-2026.9.0-py3-none-any.whl",
+     "sha256": "8dd6e646e99ea382bd85f97a45e6b526a442d79423a7dc673f1e2756d05fcb5f",
+     "size": 221738,
+     "http": 200,
+     "head_length": 221738,
+     "verified_utc": "2026-10-10T11:24:53Z"
+    },
+    {
+     "name": "jinja2-3.1.6-py3-none-any.whl",
+     "url": "https://files.pythonhosted.org/packages/62/a1/3d680cbfd5f4b8f15abc1d571870c5fc3e594bb582bc3b64ea099db13e56/jinja2-3.1.6-py3-none-any.whl",
+     "sha256": "85ece4451f492d0c13c5dd7c13a64681a86afae63a5f347908daf103ce6d2f67",
+     "size": 134899,
+     "http": 200,
+     "head_length": 134899,
+     "verified_utc": "2026-10-10T11:24:53Z"
+    },
+    {
+     "name": "markupsafe-3.0.4-cp312-cp312-win_amd64.whl",
+     "url": "https://files.pythonhosted.org/packages/3f/bf/62495e180b7000aaf30000fff849e933f74264638057176cf46852500adc/markupsafe-3.0.4-cp312-cp312-win_amd64.whl",
+     "sha256": "11935df9bf455ed0c04eb87bcd720f02b1fe5e02128a9430f23aed6f93336fc7",
+     "size": 14303,
+     "http": 200,
+     "head_length": 14303,
+     "verified_utc": "2026-10-10T11:24:54Z"
+    },
+    {
+     "name": "ml_dtypes-0.6.0-cp312-cp312-win_amd64.whl",
+     "url": "https://files.pythonhosted.org/packages/ba/db/9c61ec2760b5cbfb1c6558d5c991a6d8fd3271053c32db20506a9a90272b/ml_dtypes-0.6.0-cp312-cp312-win_amd64.whl",
+     "sha256": "2a3e9d53925597fbffafd2a37048dadeddd0bdaba58058f6ae0869ed709a184d",
+     "size": 439333,
+     "http": 200,
+     "head_length": 439333,
+     "verified_utc": "2026-10-10T11:24:54Z"
+    },
+    {
+     "name": "mpmath-1.3.0-py3-none-any.whl",
+     "url": "https://files.pythonhosted.org/packages/43/e3/7d92a15f894aa0c9c4b49b8ee9ac9850d6e63b03c9c32c0367a13ae62209/mpmath-1.3.0-py3-none-any.whl",
+     "sha256": "a0b2b9fe80bbcd81a6647ff13108738cfb482d481d826cc0e02f5b35e5c88d2c",
+     "size": 536198,
+     "http": 200,
+     "head_length": 536198,
+     "verified_utc": "2026-10-10T11:24:54Z"
+    },
+    {
+     "name": "networkx-3.7-py3-none-any.whl",
+     "url": "https://files.pythonhosted.org/packages/7e/cd/fe58041e9011f307c490e3e17dd48cc516448f7c698a3f2d9d9d65d7e6a8/networkx-3.7-py3-none-any.whl",
+     "sha256": "e3fd2c13a7814cee3746340d8d7f8598a67f16a58bf47fb7f8793fab6efca1b0",
+     "size": 2142205,
+     "http": 200,
+     "head_length": 2142205,
+     "verified_utc": "2026-10-10T11:24:54Z"
+    },
+    {
+     "name": "numpy-2.5.3-cp312-cp312-win_amd64.whl",
+     "url": "https://files.pythonhosted.org/packages/3c/a1/accf6d4f0c80c5d9ba9735d6b1550e444180599f34dec69ca01360f717ad/numpy-2.5.3-cp312-cp312-win_amd64.whl",
+     "sha256": "0a59a421a32580a009e8a1751345bf829631b990dc1794b80514ab722b435def",
+     "size": 12567828,
+     "http": 200,
+     "head_length": 12567828,
+     "verified_utc": "2026-10-10T11:24:54Z"
+    },
+    {
+     "name": "onnx-1.23.2-cp312-abi3-win_amd64.whl",
+     "url": "https://files.pythonhosted.org/packages/38/ce/102fd4a0b2a6d111a9c86745e084c4c68c0ee020eaa359a03a8d43e4646f/onnx-1.23.2-cp312-abi3-win_amd64.whl",
+     "sha256": "9b382ba898a7c142a0801d03cf04ecabced96c1543c7b643a86f0928143802de",
+     "size": 7872489,
+     "http": 200,
+     "head_length": 7872489,
+     "verified_utc": "2026-10-10T11:24:54Z"
+    },
+    {
+     "name": "onnxruntime_directml-1.24.4-cp312-cp312-win_amd64.whl",
+     "url": "https://files.pythonhosted.org/packages/88/ea/33814eb0ec96775eda4c1d30b0d86e91d7d2cd0d84c66d3915aef0e06fa3/onnxruntime_directml-1.24.4-cp312-cp312-win_amd64.whl",
+     "sha256": "f2ecb68b7b7b259d2ef3112ae760149f9b5a1e7c0fbb73d539da6250a648a614",
+     "size": 25111930,
+     "http": 200,
+     "head_length": 25111930,
+     "verified_utc": "2026-10-10T11:24:54Z"
+    },
+    {
+     "name": "packaging-26.3-py3-none-any.whl",
+     "url": "https://files.pythonhosted.org/packages/63/34/ba1c580383c9eada3711951fef0795c80b829a078d72188184bcab9dd527/packaging-26.3-py3-none-any.whl",
+     "sha256": "d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c",
+     "size": 129956,
+     "http": 200,
+     "head_length": 129956,
+     "verified_utc": "2026-10-10T11:24:54Z"
+    },
+    {
+     "name": "pillow-12.3.0-cp312-cp312-win_amd64.whl",
+     "url": "https://files.pythonhosted.org/packages/45/89/da2f7971a317f83d807fdd4065c0af40208e59e692cc43d315a71a0e96d1/pillow-12.3.0-cp312-cp312-win_amd64.whl",
+     "sha256": "a2b55dd6b2a4c4b7d87ffa56bdb33fdc5fdb9a462173861a7bc097f17d91cb09",
+     "size": 7227137,
+     "http": 200,
+     "head_length": 7227137,
+     "verified_utc": "2026-10-10T11:24:54Z"
+    },
+    {
+     "name": "protobuf-7.36.2-cp310-abi3-win_amd64.whl",
+     "url": "https://files.pythonhosted.org/packages/8a/55/b77bda4e5e5f5971fb51b07663694690e9afdb9402136c16a522bd621cad/protobuf-7.36.2-cp310-abi3-win_amd64.whl",
+     "sha256": "a300819d441e078a5608c0d3c709796bb548136058fda017ae51d425b44fd353",
+     "size": 456514,
+     "http": 200,
+     "head_length": 456514,
+     "verified_utc": "2026-10-10T11:24:54Z"
+    },
+    {
+     "name": "setuptools-84.0.0-py3-none-any.whl",
+     "url": "https://files.pythonhosted.org/packages/95/9c/c510029fc6ef33a6275cd2c5d3cecd6613dfd6aa401d57c54f1c18852ccf/setuptools-84.0.0-py3-none-any.whl",
+     "sha256": "51a52592b3b99e102b609654876bd65f19f999935166d1352678931132b0c670",
+     "size": 818216,
+     "http": 200,
+     "head_length": 818216,
+     "verified_utc": "2026-10-10T11:24:54Z"
+    },
+    {
+     "name": "sympy-1.14.0-py3-none-any.whl",
+     "url": "https://files.pythonhosted.org/packages/a2/09/77d55d46fd61b4a135c444fc97158ef34a095e5681d0a6c10b75bf356191/sympy-1.14.0-py3-none-any.whl",
+     "sha256": "e091cc3e99d2141a0ba2847328f5479b05d94a6635cb96148ccb3f34671bd8f5",
+     "size": 6299353,
+     "http": 200,
+     "head_length": 6299353,
+     "verified_utc": "2026-10-10T11:24:54Z"
+    },
+    {
+     "name": "typing_extensions-4.16.0-py3-none-any.whl",
+     "url": "https://files.pythonhosted.org/packages/49/d3/b8441a820a491ddfc024b0b0cf0393375b75ea13866d9c66727e54c2fc80/typing_extensions-4.16.0-py3-none-any.whl",
+     "sha256": "481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8",
+     "size": 45571,
+     "http": 200,
+     "head_length": 45571,
+     "verified_utc": "2026-10-10T11:24:54Z"
+    }
+   ],
+   "note": "resolved with pip download --platform win_amd64 --python-version 3.12 --abi cp312 --only-binary=:all: (torch/torchvision from download.pytorch.org/whl/cu126, the rest from PyPI); extracted in the guest into C:\\kfapps\\py\\Lib\\site-packages (a pre-extracted-tree image form exists in appdisk.py but costs 2 GB more disk)",
+   "needs": [
+    "python_embed"
+   ]
+  },
+  {
+   "id": "llama_cuda",
+   "title": "llama.cpp b11541 Windows CUDA 12.4 build + its cudart",
+   "version": "b11541",
+   "tier": 1,
+   "license": "MIT",
+   "redistribution": "Redistributable (MIT; cudart under the CUDA EULA)",
+   "stage": {
+    "mode": "unzip",
+    "dest": "llama_cuda"
+   },
+   "files": [
+    {
+     "name": "llama-b11541-bin-win-cuda-12.4-x64.zip",
+     "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11541/llama-b11541-bin-win-cuda-12.4-x64.zip",
+     "sha256": "c5ccdd22e6b11c013efd6a931f93c3707e6fa5ab2f90df5c7d1838785540ece3",
+     "size": 265224711,
+     "http": 200,
+     "head_length": 265224711,
+     "verified_utc": "2026-10-10T11:24:54Z"
+    },
+    {
+     "name": "cudart-llama-bin-win-cuda-12.4-x64.zip",
+     "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11541/cudart-llama-bin-win-cuda-12.4-x64.zip",
+     "sha256": "8c79a9b226de4b3cacfd1f83d24f962d0773be79f1e7b75c6af4ded7e32ae1d6",
+     "size": 391443627,
+     "http": 200,
+     "head_length": 391443627,
+     "verified_utc": "2026-10-10T11:25:05Z"
+    }
+   ]
+  },
+  {
+   "id": "llama_vulkan",
+   "title": "llama.cpp b11541 Windows Vulkan build",
+   "version": "b11541",
+   "tier": 1,
+   "license": "MIT",
+   "redistribution": "Redistributable",
+   "stage": {
+    "mode": "unzip",
+    "dest": "llama_vulkan"
+   },
+   "files": [
+    {
+     "name": "llama-b11541-bin-win-vulkan-x64.zip",
+     "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11541/llama-b11541-bin-win-vulkan-x64.zip",
+     "sha256": "37bba511d120222f13c3d520dd875f739a530cc124e78f7cbce0026de0173d8a",
+     "size": 33464528,
+     "http": 200,
+     "head_length": 33464528,
+     "verified_utc": "2026-10-10T11:25:19Z"
+    }
+   ]
+  },
+  {
+   "id": "qwen_gguf",
+   "title": "Qwen2.5-1.5B-Instruct Q4_K_M (GGUF) at HF commit 91cad51",
+   "version": "2.5-1.5B-Instruct",
+   "tier": 1,
+   "license": "Apache-2.0",
+   "redistribution": "Redistributable (Apache-2.0)",
+   "stage": {
+    "mode": "copy",
+    "dest": "models"
+   },
+   "files": [
+    {
+     "name": "qwen2.5-1.5b-instruct-q4_k_m.gguf",
+     "url": "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/91cad51170dc346986eccefdc2dd33a9da36ead9/qwen2.5-1.5b-instruct-q4_k_m.gguf",
+     "sha256": "6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e",
+     "size": 1117320736,
+     "http": 200,
+     "head_length": 1117320736,
+     "verified_utc": "2026-10-10T11:25:20Z"
+    }
+   ]
+  },
+  {
+   "id": "vulkan_rt",
+   "title": "LunarG Vulkan Runtime components (vulkan-1.dll, vulkaninfo.exe), portable zip",
+   "version": "1.4.363.0",
+   "tier": 1,
+   "license": "LunarG Vulkan Runtime licence (VulkanRT-License.txt inside)",
+   "redistribution": "Redistributable per the licence text",
+   "stage": {
+    "mode": "unzip",
+    "dest": "vulkan_rt",
+    "strip_top": true
+   },
+   "files": [
+    {
+     "name": "vulkan-runtime-components-1.4.363.0.zip",
+     "url": "https://sdk.lunarg.com/sdk/download/1.4.363.0/windows/vulkan-runtime-components.zip",
+     "sha256": "a25a927aa8b9f0371048f1861cf88ac3b9bc9b1fb332c42d897c8ab32695769a",
+     "size": 18211191,
+     "http": 200,
+     "head_length": 18211191,
+     "verified_utc": "2026-10-10T11:25:54Z"
+    }
+   ]
+  },
+  {
+   "id": "vulkan_sdk",
+   "title": "LunarG Vulkan SDK installer (for vkcube.exe); silent Qt installer, NOT portable",
+   "version": "1.4.363.0",
+   "tier": 2,
+   "license": "LunarG SDK EULA / Apache-2.0 components",
+   "redistribution": "Installer used locally only; not redistributed",
+   "stage": {
+    "mode": "installer",
+    "dest": "vulkan_sdk",
+    "run": [
+     "{file}",
+     "--root",
+     "{dest}",
+     "--accept-licenses",
+     "--default-answer",
+     "--confirm-command",
+     "install"
+    ]
+   },
+   "files": [
+    {
+     "name": "vulkansdk-windows-X64-1.4.363.0.exe",
+     "url": "https://sdk.lunarg.com/sdk/download/1.4.363.0/windows/vulkan_sdk.exe",
+     "sha256": "94a82d378f7a5e3e54c9db7d2fb7016af136e14ac0a18dbf0f2f67a36352d141",
+     "size": 303082720,
+     "http": 200,
+     "head_length": 303082720,
+     "verified_utc": "2026-10-10T11:25:54Z"
+    }
+   ]
+  },
+  {
+   "id": "vkpeak",
+   "title": "vkpeak (Vulkan peak FLOPS/bandwidth) 20260527 Windows",
+   "version": "20260527",
+   "tier": 1,
+   "license": "MIT",
+   "redistribution": "Redistributable",
+   "stage": {
+    "mode": "unzip",
+    "dest": "vkpeak",
+    "strip_top": true
+   },
+   "files": [
+    {
+     "name": "vkpeak-20260527-windows.zip",
+     "url": "https://github.com/nihui/vkpeak/releases/download/20260527/vkpeak-20260527-windows.zip",
+     "sha256": "6e81d1f3143bd3c85ab6616773b373e4482b37a03287a8d2ecdd7c6c75557899",
+     "size": 889422,
+     "http": 200,
+     "head_length": 889422,
+     "verified_utc": "2026-10-10T11:26:03Z"
+    }
+   ]
+  },
+  {
+   "id": "ffmpeg",
+   "title": "FFmpeg n8.1.3 win64 GPL (BtbN autobuild 2026-10-08-13-05): NVENC/NVDEC/D3D11VA/DXVA2/Vulkan/libx264",
+   "version": "n8.1.3-14-g330caae0c1",
+   "tier": 1,
+   "license": "GPL-3.0-or-later build (LGPL/GPL components)",
+   "redistribution": "Redistributable under the GPL (source offer via BtbN)",
+   "stage": {
+    "mode": "unzip",
+    "dest": "ffmpeg",
+    "strip_top": true
+   },
+   "files": [
+    {
+     "name": "ffmpeg-n8.1.3-14-g330caae0c1-win64-gpl-8.1.zip",
+     "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-08-13-05/ffmpeg-n8.1.3-14-g330caae0c1-win64-gpl-8.1.zip",
+     "sha256": "6e63b4f8aae35949f4a5b471784f97a51b29b2466038769e3f8ecf513316ec6c",
+     "size": 193034772,
+     "http": 200,
+     "head_length": 193034772,
+     "verified_utc": "2026-10-10T11:26:04Z"
+    }
+   ]
+  },
+  {
+   "id": "blender",
+   "title": "Blender 4.5.0 Windows x64 portable zip",
+   "version": "4.5.0",
+   "tier": 1,
+   "license": "GPL-3.0-or-later",
+   "redistribution": "Redistributable",
+   "stage": {
+    "mode": "unzip",
+    "dest": "blender",
+    "strip_top": true
+   },
+   "files": [
+    {
+     "name": "blender-4.5.0-windows-x64.zip",
+     "url": "https://download.blender.org/release/Blender4.5/blender-4.5.0-windows-x64.zip",
+     "sha256": "2ee75e9466d293a784fdf020f60fe1309c1e0610ecf73c64f1fc09b01e5eec56",
+     "size": 399946398,
+     "http": 200,
+     "head_length": 399946398,
+     "verified_utc": "2026-10-10T11:26:12Z"
+    }
+   ]
+  },
+  {
+   "id": "gravitymark",
+   "title": "GravityMark 1.89 (Tellusim) Windows MSI, extracted with msiexec /a (no install)",
+   "version": "1.89",
+   "tier": 1,
+   "license": "Tellusim freeware EULA",
+   "redistribution": "Free to download and use; redistribution not granted, so the image is internal only",
+   "stage": {
+    "mode": "msi_admin",
+    "dest": "gravitymark"
+   },
+   "files": [
+    {
+     "name": "GravityMark_1.89.msi",
+     "url": "https://tellusim.com/download/GravityMark_1.89.msi",
+     "sha256": "38e32b475cf93eca2085334f7421fc738fb605c5b37f35e90e06d73a54169c8f",
+     "size": 220901376,
+     "http": 200,
+     "head_length": 220901376,
+     "verified_utc": "2026-10-10T11:26:24Z"
+    }
+   ]
+  },
+  {
+   "id": "furmark2",
+   "title": "FurMark 2.10.2 win64 portable zip (Geeks3D / GPUmagick)",
+   "version": "2.10.2",
+   "tier": 1,
+   "license": "Geeks3D freeware licence",
+   "redistribution": "Free to download and use; redistribution not granted, so the image is internal only",
+   "stage": {
+    "mode": "unzip",
+    "dest": "furmark2",
+    "strip_top": true
+   },
+   "files": [
+    {
+     "name": "FurMark_2.10.2_win64.zip",
+     "url": "https://gpumagick.com/downloads/files/2025/fm2/2_10_dbc69dd0a08da5ff09169a4fc759ddaa/FurMark_2.10.2_win64.zip",
+     "sha256": "27ab2e723e2e65df720bcafea681d2104744eda4a1e0a0374d7e61eaa820e63b",
+     "size": 35267572,
+     "http": 200,
+     "head_length": 35267572,
+     "verified_utc": "2026-10-10T11:27:00Z"
+    }
+   ]
+  },
+  {
+   "id": "gputest",
+   "title": "GpuTest 0.7.0 Windows x64 (Geeks3D OpenGL benchmark)",
+   "version": "0.7.0",
+   "tier": 1,
+   "license": "Geeks3D freeware licence",
+   "redistribution": "Free to download and use; redistribution not granted, so the image is internal only",
+   "stage": {
+    "mode": "unzip",
+    "dest": "gputest",
+    "strip_top": true
+   },
+   "files": [
+    {
+     "name": "GpuTest_Windows_x64_0.7.0.zip",
+     "url": "https://ozone3d.net/gputest/dl/GpuTest_Windows_x64_0.7.0.zip",
+     "sha256": "f88b98ac2fe11da92bd291eda898b248aee37d9f4e2bcfc29dd2d335d2ac79ef",
+     "size": 2103678,
+     "http": 200,
+     "head_length": 2103678,
+     "verified_utc": "2026-10-10T11:27:02Z"
+    }
+   ]
+  },
+  {
+   "id": "heaven",
+   "title": "Unigine Heaven Benchmark 4.0 Basic (installer, silent)",
+   "version": "4.0",
+   "tier": 2,
+   "license": "Unigine Heaven Basic EULA",
+   "redistribution": "Free to download and use for non-commercial benchmarking; redistribution not granted, so the image is internal only",
+   "stage": {
+    "mode": "installer",
+    "dest": "heaven",
+    "run": [
+     "{file}",
+     "/VERYSILENT",
+     "/SUPPRESSMSGBOXES",
+     "/NORESTART",
+     "/SP-",
+     "/DIR={dest}"
+    ]
+   },
+   "files": [
+    {
+     "name": "Unigine_Heaven-4.0.exe",
+     "url": "https://assets.unigine.com/d/Unigine_Heaven-4.0.exe",
+     "sha256": "497865a09af205a7d2e8812bfc2dd54870216cc1e95541b63cef89a4433b0e5f",
+     "size": 259708359,
+     "http": 200,
+     "head_length": 259708359,
+     "verified_utc": "2026-10-10T11:27:05Z"
+    }
+   ],
+   "note": "Inno Setup installer (innoextract lists a 32-bit app: bin\\Heaven.exe / Valley.exe); silent flags are Inno's"
+  },
+  {
+   "id": "valley",
+   "title": "Unigine Valley Benchmark 1.0 Basic (installer, silent)",
+   "version": "1.0",
+   "tier": 2,
+   "license": "Unigine Valley Basic EULA",
+   "redistribution": "Free to download and use for non-commercial benchmarking; redistribution not granted, so the image is internal only",
+   "stage": {
+    "mode": "installer",
+    "dest": "valley",
+    "run": [
+     "{file}",
+     "/VERYSILENT",
+     "/SUPPRESSMSGBOXES",
+     "/NORESTART",
+     "/SP-",
+     "/DIR={dest}"
+    ]
+   },
+   "files": [
+    {
+     "name": "Unigine_Valley-1.0.exe",
+     "url": "https://assets.unigine.com/d/Unigine_Valley-1.0.exe",
+     "sha256": "312b2a4363da3e7e4401ab97a3329d656cb0c00a9ae4e84b189653676c5eed75",
+     "size": 359278792,
+     "http": 200,
+     "head_length": 359278792,
+     "verified_utc": "2026-10-10T11:27:13Z"
+    }
+   ],
+   "note": "Inno Setup installer (innoextract lists a 32-bit app: bin\\Heaven.exe / Valley.exe); silent flags are Inno's"
+  },
+  {
+   "id": "clpeak_ocl",
+   "title": "clpeak 3.0.1 Windows (OpenCL backend)",
+   "version": "3.0.1",
+   "tier": 1,
+   "license": "Apache-2.0",
+   "redistribution": "Redistributable",
+   "stage": {
+    "mode": "unzip",
+    "dest": "clpeak_ocl",
+    "strip_top": true
+   },
+   "files": [
+    {
+     "name": "clpeak-3.0.1-windows-AMD64.zip",
+     "url": "https://github.com/krrishnarraj/clpeak/releases/download/3.0.1/clpeak-3.0.1-windows-AMD64.zip",
+     "sha256": "53f0687d810f71a8ffbc10ccd5591a6cb1f983ef7da3a4240bbb8f3b6871a815",
+     "size": 13932566,
+     "http": 200,
+     "head_length": 13932566,
+     "verified_utc": "2026-10-10T11:27:24Z"
+    }
+   ]
+  },
+  {
+   "id": "clpeak_cuda",
+   "title": "clpeak 3.0.1 Windows (CUDA backend)",
+   "version": "3.0.1",
+   "tier": 1,
+   "license": "Apache-2.0",
+   "redistribution": "Redistributable",
+   "stage": {
+    "mode": "unzip",
+    "dest": "clpeak_cuda",
+    "strip_top": true
+   },
+   "files": [
+    {
+     "name": "clpeak-3.0.1-windows-AMD64-cuda.zip",
+     "url": "https://github.com/krrishnarraj/clpeak/releases/download/3.0.1/clpeak-3.0.1-windows-AMD64-cuda.zip",
+     "sha256": "b5657a10d4b9e771a16583c6cfcd7e89dde8505a799a6b6eddacbfa60b593ee1",
+     "size": 14725271,
+     "http": 200,
+     "head_length": 14725271,
+     "verified_utc": "2026-10-10T11:27:25Z"
+    }
+   ]
+  },
+  {
+   "id": "hashcat",
+   "title": "hashcat 7.1.2 Windows 7z (portable)",
+   "version": "7.1.2",
+   "tier": 1,
+   "license": "MIT",
+   "redistribution": "Redistributable",
+   "stage": {
+    "mode": "7z",
+    "dest": "hashcat",
+    "strip_top": true
+   },
+   "files": [
+    {
+     "name": "hashcat-7.1.2.7z",
+     "url": "https://hashcat.net/files/hashcat-7.1.2.7z",
+     "sha256": "80db0316387794ce9d14ed376da75b8a7742972485b45db790f5f8260307ff98",
+     "size": 19682772,
+     "http": 200,
+     "head_length": 19682772,
+     "verified_utc": "2026-10-10T11:27:26Z"
+    }
+   ],
+   "needs": [
+    "sevenzip"
+   ]
+  },
+  {
+   "id": "sevenzip",
+   "title": "7-Zip 7zr.exe (standalone console extractor)",
+   "version": "26.x (7zr.exe as served 2026-10-10)",
+   "tier": 1,
+   "license": "LGPL-2.1+ with unRAR restriction (7zr.exe has no RAR code)",
+   "redistribution": "Redistributable",
+   "stage": {
+    "mode": "copy",
+    "dest": "tools"
+   },
+   "files": [
+    {
+     "name": "7zr.exe",
+     "url": "https://www.7-zip.org/a/7zr.exe",
+     "sha256": "256feca8e274e5da655e2a284fabafd9f554365eb164862089dacd4e8276d282",
+     "size": 602624,
+     "http": 200,
+     "head_length": 602624,
+     "verified_utc": "2026-10-10T11:27:27Z"
+    }
+   ]
+  },
+  {
+   "id": "cuda_cudart",
+   "title": "CUDA cudart redistributable (headers: cuda_pipeline.h, cooperative_groups.h, ...) for NVRTC",
+   "version": "12.9.79",
+   "tier": 1,
+   "license": "NVIDIA CUDA Toolkit EULA",
+   "redistribution": "Redistributable component (EULA attachment A)",
+   "stage": {
+    "mode": "unzip",
+    "dest": "cuda_cudart",
+    "strip_top": true
+   },
+   "files": [
+    {
+     "name": "cuda_cudart-windows-x86_64-12.9.79-archive.zip",
+     "url": "https://developer.download.nvidia.com/compute/cuda/redist/cuda_cudart/windows-x86_64/cuda_cudart-windows-x86_64-12.9.79-archive.zip",
+     "sha256": "179e9c43b0735ffe67207b3da556eb5a0c50f3047961882b7657d3b822d34ef8",
+     "size": 3521238,
+     "http": 200,
+     "head_length": 3521238,
+     "verified_utc": "2026-10-10T11:39:32Z"
+    }
+   ]
+  },
+  {
+   "id": "cuda_cccl",
+   "title": "CUDA CCCL (libcu++/Thrust/CUB headers) for NVRTC",
+   "version": "12.9.27",
+   "tier": 1,
+   "license": "Apache-2.0 with LLVM exceptions / NVIDIA CUDA EULA",
+   "redistribution": "Redistributable",
+   "stage": {
+    "mode": "unzip",
+    "dest": "cuda_cccl",
+    "strip_top": true
+   },
+   "files": [
+    {
+     "name": "cuda_cccl-windows-x86_64-12.9.27-archive.zip",
+     "url": "https://developer.download.nvidia.com/compute/cuda/redist/cuda_cccl/windows-x86_64/cuda_cccl-windows-x86_64-12.9.27-archive.zip",
+     "sha256": "17aaa7c6b8f94a417d8f3261780b7e34b9cbdfab7513bce86768623b06aa28b5",
+     "size": 3127658,
+     "http": 200,
+     "head_length": 3127658,
+     "verified_utc": "2026-10-10T11:39:34Z"
+    }
+   ]
+  },
+  {
+   "id": "vc_redist",
+   "title": "Microsoft Visual C++ Redistributable (x64), permalink aka.ms/vs/17/release",
+   "version": "latest as of 2026-10-10",
+   "tier": 1,
+   "license": "Microsoft Visual C++ Redistributable licence",
+   "redistribution": "Redistributable by Microsoft licence terms (the CRT runtime DLLs torch and several apps need)",
+   "stage": {
+    "mode": "installer",
+    "dest": "vc_redist",
+    "run": [
+     "{file}",
+     "/install",
+     "/quiet",
+     "/norestart"
+    ]
+   },
+   "files": [
+    {
+     "name": "vc_redist.x64.exe",
+     "url": "https://aka.ms/vs/17/release/vc_redist.x64.exe",
+     "sha256": "cc0ff0eb1dc3f5188ae6300faef32bf5beeba4bdd6e8e445a9184072096b713b",
+     "size": 25635768,
+     "http": 200,
+     "head_length": 25635768,
+     "verified_utc": "2026-10-10T11:39:37Z"
+    }
+   ],
+   "note": "installed by kf_guest_setup before any other package; the permalink moves with each VC++ release, so the pinned sha256 will mismatch after Microsoft updates it (re-pin deliberately)"
+  }
+ ],
+ "dropped": [
+  {
+   "id": "superposition",
+   "url": "https://assets.unigine.com/d/Unigine_Superposition-1.1.exe",
+   "size": 1339177360,
+   "reason": "size: 1.3 GB would be 2.6 GB with the ISO copy; Heaven + Valley + GravityMark cover D3D11/OpenGL/Vulkan 3D"
+  },
+  {
+   "id": "xonotic",
+   "url": "https://dl.xonotic.org/xonotic-0.8.6.zip",
+   "size": 1238439495,
+   "reason": "size: 1.2 GB; the benchmark mode needs a timedemo and a working game window; deferred until the 3D path is stable (add as tier 3)"
+  },
+  {
+   "id": "q2rtx",
+   "url": "https://github.com/NVIDIA/Q2RTX/releases/download/v1.8.1/q2rtx-1.8.1-windows.exe",
+   "size": 1047923972,
+   "reason": "size and an installer; ray-tracing path is not a first-wave target"
+  },
+  {
+   "id": "geekbench6",
+   "url": "https://www.geekbench.com/",
+   "size": null,
+   "reason": "needs internet to upload results (the Linux row passes on \"Uploading results\"); the lane forbids guest internet at run time"
+  },
+  {
+   "id": "tensorrt",
+   "url": "https://developer.nvidia.com/tensorrt",
+   "size": null,
+   "reason": "download requires an NVIDIA developer login; the pip tensorrt-cu12 libs are ~1 GB and need an engine build step"
+  },
+  {
+   "id": "busGrind",
+   "url": "https://developer.download.nvidia.com/compute/cuda/redist/cuda_demo_suite/windows-x86_64/cuda_demo_suite-windows-x86_64-12.9.79-archive.zip",
+   "size": 5164004,
+   "reason": "busGrind.exe imports VCOMP110.DLL (VC++ 2012 OpenMP runtime) which the guest does not have; staged inside cuda_demo but NOT run"
+  },
+  {
+   "id": "hf_transformers",
+   "url": "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct",
+   "size": null,
+   "reason": "transformers+tokenizers wheels and a 1 GB fp16 model: size; torch_correct/torch_ai_bench and llama.cpp cover the same code paths"
+  },
+  {
+   "id": "3dmark",
+   "url": "https://www.3dmark.com/",
+   "size": null,
+   "reason": "licensed (paid) software: excluded by the lane rules"
+  }
+ ],
+ "files": {
+  "pkg/cuda_demo_suite/cuda_demo_suite-windows-x86_64-12.9.79-archive.zip": {
+   "sha256": "adffd0b0f7cca262025f171dcaa73f62af020de5d9a0d6e0fbe7dbd827dd77a8",
+   "size": 5164004
+  },
+  "pkg/python_embed/python-3.12.10-embed-amd64.zip": {
+   "sha256": "4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3",
+   "size": 11133606
+  },
+  "pkg/pywheels/torch-2.8.0+cu126-cp312-cp312-win_amd64.whl": {
+   "sha256": "f6c79eac0018f9d131479ee1b7a68edb030619a316bfbc69275043aa4f338e4c",
+   "size": 2915418348
+  },
+  "pkg/pywheels/torchvision-0.23.0+cu126-cp312-cp312-win_amd64.whl": {
+   "sha256": "e59fc7405f2e0cfceefc2f867794900478871c2639d02779d55dc143657a7bbb",
+   "size": 6227539
+  },
+  "pkg/pywheels/cuda_pathfinder-1.8.3-py3-none-any.whl": {
+   "sha256": "e29e59829c297a7a5233bd9cc71094fc5bddbd076951482670178f9eade39b1f",
+   "size": 62561
+  },
+  "pkg/pywheels/cupy_cuda12x-14.2.0-cp312-cp312-win_amd64.whl": {
+   "sha256": "c9571d3b5f2e65758137e210f7fb3c3b34767f0af6b6ca04035a244b6141ee12",
+   "size": 98780018
+  },
+  "pkg/pywheels/filelock-4.1.0-py3-none-any.whl": {
+   "sha256": "2ce9818e3e2d8f284c1a964414447ef148d42a5fd5e2a477a7118e574b293ec1",
+   "size": 133003
+  },
+  "pkg/pywheels/flatbuffers-25.12.19-py2.py3-none-any.whl": {
+   "sha256": "7634f50c427838bb021c2d66a3d1168e9d199b0607e6329399f04846d42e20b4",
+   "size": 26661
+  },
+  "pkg/pywheels/fsspec-2026.9.0-py3-none-any.whl": {
+   "sha256": "8dd6e646e99ea382bd85f97a45e6b526a442d79423a7dc673f1e2756d05fcb5f",
+   "size": 221738
+  },
+  "pkg/pywheels/jinja2-3.1.6-py3-none-any.whl": {
+   "sha256": "85ece4451f492d0c13c5dd7c13a64681a86afae63a5f347908daf103ce6d2f67",
+   "size": 134899
+  },
+  "pkg/pywheels/markupsafe-3.0.4-cp312-cp312-win_amd64.whl": {
+   "sha256": "11935df9bf455ed0c04eb87bcd720f02b1fe5e02128a9430f23aed6f93336fc7",
+   "size": 14303
+  },
+  "pkg/pywheels/ml_dtypes-0.6.0-cp312-cp312-win_amd64.whl": {
+   "sha256": "2a3e9d53925597fbffafd2a37048dadeddd0bdaba58058f6ae0869ed709a184d",
+   "size": 439333
+  },
+  "pkg/pywheels/mpmath-1.3.0-py3-none-any.whl": {
+   "sha256": "a0b2b9fe80bbcd81a6647ff13108738cfb482d481d826cc0e02f5b35e5c88d2c",
+   "size": 536198
+  },
+  "pkg/pywheels/networkx-3.7-py3-none-any.whl": {
+   "sha256": "e3fd2c13a7814cee3746340d8d7f8598a67f16a58bf47fb7f8793fab6efca1b0",
+   "size": 2142205
+  },
+  "pkg/pywheels/numpy-2.5.3-cp312-cp312-win_amd64.whl": {
+   "sha256": "0a59a421a32580a009e8a1751345bf829631b990dc1794b80514ab722b435def",
+   "size": 12567828
+  },
+  "pkg/pywheels/onnx-1.23.2-cp312-abi3-win_amd64.whl": {
+   "sha256": "9b382ba898a7c142a0801d03cf04ecabced96c1543c7b643a86f0928143802de",
+   "size": 7872489
+  },
+  "pkg/pywheels/onnxruntime_directml-1.24.4-cp312-cp312-win_amd64.whl": {
+   "sha256": "f2ecb68b7b7b259d2ef3112ae760149f9b5a1e7c0fbb73d539da6250a648a614",
+   "size": 25111930
+  },
+  "pkg/pywheels/packaging-26.3-py3-none-any.whl": {
+   "sha256": "d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c",
+   "size": 129956
+  },
+  "pkg/pywheels/pillow-12.3.0-cp312-cp312-win_amd64.whl": {
+   "sha256": "a2b55dd6b2a4c4b7d87ffa56bdb33fdc5fdb9a462173861a7bc097f17d91cb09",
+   "size": 7227137
+  },
+  "pkg/pywheels/protobuf-7.36.2-cp310-abi3-win_amd64.whl": {
+   "sha256": "a300819d441e078a5608c0d3c709796bb548136058fda017ae51d425b44fd353",
+   "size": 456514
+  },
+  "pkg/pywheels/setuptools-84.0.0-py3-none-any.whl": {
+   "sha256": "51a52592b3b99e102b609654876bd65f19f999935166d1352678931132b0c670",
+   "size": 818216
+  },
+  "pkg/pywheels/sympy-1.14.0-py3-none-any.whl": {
+   "sha256": "e091cc3e99d2141a0ba2847328f5479b05d94a6635cb96148ccb3f34671bd8f5",
+   "size": 6299353
+  },
+  "pkg/pywheels/typing_extensions-4.16.0-py3-none-any.whl": {
+   "sha256": "481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8",
+   "size": 45571
+  },
+  "pkg/llama_cuda/llama-b11541-bin-win-cuda-12.4-x64.zip": {
+   "sha256": "c5ccdd22e6b11c013efd6a931f93c3707e6fa5ab2f90df5c7d1838785540ece3",
+   "size": 265224711
+  },
+  "pkg/llama_cuda/cudart-llama-bin-win-cuda-12.4-x64.zip": {
+   "sha256": "8c79a9b226de4b3cacfd1f83d24f962d0773be79f1e7b75c6af4ded7e32ae1d6",
+   "size": 391443627
+  },
+  "pkg/llama_vulkan/llama-b11541-bin-win-vulkan-x64.zip": {
+   "sha256": "37bba511d120222f13c3d520dd875f739a530cc124e78f7cbce0026de0173d8a",
+   "size": 33464528
+  },
+  "pkg/qwen_gguf/qwen2.5-1.5b-instruct-q4_k_m.gguf": {
+   "sha256": "6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e",
+   "size": 1117320736
+  },
+  "pkg/vulkan_rt/vulkan-runtime-components-1.4.363.0.zip": {
+   "sha256": "a25a927aa8b9f0371048f1861cf88ac3b9bc9b1fb332c42d897c8ab32695769a",
+   "size": 18211191
+  },
+  "pkg/vulkan_sdk/vulkansdk-windows-X64-1.4.363.0.exe": {
+   "sha256": "94a82d378f7a5e3e54c9db7d2fb7016af136e14ac0a18dbf0f2f67a36352d141",
+   "size": 303082720
+  },
+  "pkg/vkpeak/vkpeak-20260527-windows.zip": {
+   "sha256": "6e81d1f3143bd3c85ab6616773b373e4482b37a03287a8d2ecdd7c6c75557899",
+   "size": 889422
+  },
+  "pkg/ffmpeg/ffmpeg-n8.1.3-14-g330caae0c1-win64-gpl-8.1.zip": {
+   "sha256": "6e63b4f8aae35949f4a5b471784f97a51b29b2466038769e3f8ecf513316ec6c",
+   "size": 193034772
+  },
+  "pkg/blender/blender-4.5.0-windows-x64.zip": {
+   "sha256": "2ee75e9466d293a784fdf020f60fe1309c1e0610ecf73c64f1fc09b01e5eec56",
+   "size": 399946398
+  },
+  "pkg/gravitymark/GravityMark_1.89.msi": {
+   "sha256": "38e32b475cf93eca2085334f7421fc738fb605c5b37f35e90e06d73a54169c8f",
+   "size": 220901376
+  },
+  "pkg/furmark2/FurMark_2.10.2_win64.zip": {
+   "sha256": "27ab2e723e2e65df720bcafea681d2104744eda4a1e0a0374d7e61eaa820e63b",
+   "size": 35267572
+  },
+  "pkg/gputest/GpuTest_Windows_x64_0.7.0.zip": {
+   "sha256": "f88b98ac2fe11da92bd291eda898b248aee37d9f4e2bcfc29dd2d335d2ac79ef",
+   "size": 2103678
+  },
+  "pkg/heaven/Unigine_Heaven-4.0.exe": {
+   "sha256": "497865a09af205a7d2e8812bfc2dd54870216cc1e95541b63cef89a4433b0e5f",
+   "size": 259708359
+  },
+  "pkg/valley/Unigine_Valley-1.0.exe": {
+   "sha256": "312b2a4363da3e7e4401ab97a3329d656cb0c00a9ae4e84b189653676c5eed75",
+   "size": 359278792
+  },
+  "pkg/clpeak_ocl/clpeak-3.0.1-windows-AMD64.zip": {
+   "sha256": "53f0687d810f71a8ffbc10ccd5591a6cb1f983ef7da3a4240bbb8f3b6871a815",
+   "size": 13932566
+  },
+  "pkg/clpeak_cuda/clpeak-3.0.1-windows-AMD64-cuda.zip": {
+   "sha256": "b5657a10d4b9e771a16583c6cfcd7e89dde8505a799a6b6eddacbfa60b593ee1",
+   "size": 14725271
+  },
+  "pkg/sevenzip/7zr.exe": {
+   "sha256": "256feca8e274e5da655e2a284fabafd9f554365eb164862089dacd4e8276d282",
+   "size": 602624
+  },
+  "pkg/hashcat/hashcat-7.1.2.7z": {
+   "sha256": "80db0316387794ce9d14ed376da75b8a7742972485b45db790f5f8260307ff98",
+   "size": 19682772
+  },
+  "pkg/cuda_cudart/cuda_cudart-windows-x86_64-12.9.79-archive.zip": {
+   "sha256": "179e9c43b0735ffe67207b3da556eb5a0c50f3047961882b7657d3b822d34ef8",
+   "size": 3521238
+  },
+  "pkg/cuda_cccl/cuda_cccl-windows-x86_64-12.9.27-archive.zip": {
+   "sha256": "17aaa7c6b8f94a417d8f3261780b7e34b9cbdfab7513bce86768623b06aa28b5",
+   "size": 3127658
+  },
+  "pkg/vc_redist/vc_redist.x64.exe": {
+   "sha256": "cc0ff0eb1dc3f5188ae6300faef32bf5beeba4bdd6e8e445a9184072096b713b",
+   "size": 25635768
+  },
+  "tools/cup2.exe": {
+   "sha256": "9e7053e26389acb6c224a3f29aa37a19791b0c83a71a5966f86fcfa8a473ea71",
+   "size": 271502
+  },
+  "tools/cup3.exe": {
+   "sha256": "93452a44433c2cf6763135441ed167671d6468475df3138255b4e90b5143ddee",
+   "size": 273494
+  },
+  "tools/cup8.exe": {
+   "sha256": "e71e81b4e29234cd1f6630a41600b736c8f9692d89ed6f685618906acc589a5b",
+   "size": 276402
+  },
+  "tools/kf_dxprobe.exe": {
+   "sha256": "cf231b29f73e711d3c34024954658e0633cd09b4f15edf9602b75b704d911877",
+   "size": 592402
+  },
+  "tools/kf_glgears.exe": {
+   "sha256": "1f90f9dc68db24599c0ca4b9dfe72ac4aceb056fdfc0db7615106ca0890e08e3",
+   "size": 286533
+  },
+  "guest/kf_apphelpers.ps1": {
+   "sha256": "8c3528c95f0e75fb43950b439b4b54cd53719b248c95e86be408fa8b63567290",
+   "size": 3187
+  },
+  "guest/kf_cleanup.ps1": {
+   "sha256": "7a6ecc36337850e7b90e42055538e9dfeb6a520d70cccc464704979e76f1a194",
+   "size": 867
+  },
+  "guest/kf_common.ps1": {
+   "sha256": "352399bfa582feddf071a01284a6b0db8267b69231fbeccc4f5b7a7654db4c27",
+   "size": 6123
+  },
+  "guest/kf_edge.ps1": {
+   "sha256": "5206209980ce10e883720a9414e72f52c2412345f010456f60d6da3a3f3d89f8",
+   "size": 5731
+  },
+  "guest/kf_guest_setup.ps1": {
+   "sha256": "72ace332311365b477e76a33824565596980b73b5911ad269205174003753393",
+   "size": 5521
+  },
+  "guest/kf_health.ps1": {
+   "sha256": "243d702bfe221a521bd68317a92d34959b6bb53c86e70e9a01efc4d01ac7ee61",
+   "size": 1933
+  },
+  "guest/kf_launch.ps1": {
+   "sha256": "a22578757f865af1f00d24ffc2e3c60c8950c4875a8d47401f6c612be7ab0d72",
+   "size": 1759
+  },
+  "guest/kf_run_app.ps1": {
+   "sha256": "cf52aa6634accc7dd07d29c20f78eab40b74e9ebd6e755bf4c8a8947137a0040",
+   "size": 6336
+  },
+  "guest/kf_stage.ps1": {
+   "sha256": "6a4a231475161e06bcea5479415bdd684f6a9233e2f1a81d3c3fbee9669f7353",
+   "size": 5503
+  },
+  "guest/py/cupy_nvrtc.py": {
+   "sha256": "7ffa9fa09428ccac08503c41a9eb0f699d7c967d6655bc70ceaad4d58996490f",
+   "size": 6045
+  },
+  "guest/py/kf_runpy.py": {
+   "sha256": "51d956017770acd9f7cee0c7809c16de00220a4bc9f8e7253e1cc6fa633e6091",
+   "size": 969
+  },
+  "guest/py/ort_dml.py": {
+   "sha256": "a9aa4bd7977cb928e9ea7ae8f7686de7fa7fe3b6fe0e8c1faab41fa9f3d5a128",
+   "size": 2946
+  },
+  "guest/py/torch_burn.py": {
+   "sha256": "574b59cd0f5a91de87aac4093eb286174aa4185293dd6c4e641a7a5f5c5e2f80",
+   "size": 1395
+  },
+  "guest/py/win_cuda_equiv.py": {
+   "sha256": "04b1458c415de424c379128dc2b22fc5c429757ad51d0a73a4428b300dc8d922",
+   "size": 14080
+  },
+  "guest/web/video.html": {
+   "sha256": "438d3da10f9a097cef3c3b10fe3a9ae8360ebd85563e1b3258ff353e67779cea",
+   "size": 1687
+  },
+  "guest/web/webgl.html": {
+   "sha256": "b8ef03b4dac4b4d1841b7d464891dfd5030a1afb506f9fd2b91914638c6f041c",
+   "size": 3447
+  },
+  "guest/web/webgpu.html": {
+   "sha256": "2591cbe6ae119c0190086f2261c358c72247b63e77e514a309d86f744be6b90e",
+   "size": 3087
+  },
+  "apps.json": {
+   "sha256": "685adbd46305cdd8a00c6a38474a020b9d298e16de30a6354340391b98e45279",
+   "size": 112404
+  }
+ }
+}

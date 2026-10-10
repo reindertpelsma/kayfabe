@@ -9,6 +9,13 @@ fix this file. Entries below the first are dated history.
 
 ## 0. Current resumption — start here
 
+**Windows app matrix lane built (GPU-free), 2026-10-10 (branch `claude/windows-appmatrix-20261010`, design [`V3_WINDOWS_APP_MATRIX.md`](design/V3_WINDOWS_APP_MATRIX.md), STATUS DESIGN-ONLY).**
+⊘ *This supersedes the "Windows app-matrix lane is TODO and does not exist" sentence of the next entry:* the inventory (100 Windows apps; all 71 Linux rows mapped or explained),
+a 6.8 GB read-only app disk (`/var/lib/kf-windows-20261005/appmatrix/image/kfapps.iso`, 44 sha256-pinned downloads, no guest internet needed), the QGA driver
+(`scripts/bench/windows/appmatrix/run_windows_apps.sh`: detached supervised apps, TDR/WER/GSP-cycle accounting, fresh-guest recovery, phase-2 isolation, the Linux
+`APPRES` vocabulary) and a mock guest with 66 unit tests exist. **Nothing has run on a Windows guest**; the design doc's §5 gives the exact steps once the desktop stays
+up and §6 the untested list (start with the USB CD-ROM hot-plug and `kf_guest_setup.ps1`). Open owner decision: a VFIO Windows arm as the per-app baseline (§7).
+
 **Host patch tier plan and an owner requirement on the Windows app matrix, 2026-10-10 (docs only, branch `claude/host-patch-list-20261010`).**
 (1) The owner policy of 2026-10-10 is binding: the STOCK install works with no kernel patch; a patched host kernel/driver is an
 optional better tier, and the owner now plans to implement it. Every candidate (in-kernel doorbell, mdev shim, b3 nvidia-uvm,
