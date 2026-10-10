@@ -37,6 +37,10 @@ pub struct VmCaps {
     caps: [u32; 4],
     live: [u32; 4],
     refused: [u64; 4],
+    /// ★ 2026-10-11: live channel twins per guest runlist. The channel cap is PER RUNLIST (the count
+    /// the guest was told per runlist, `kf_abi::chanbudget`), so a guest that fills one runlist cannot
+    /// take another's share of the host's channels.
+    chan_live_rl: Vec<u32>,
 }
 
 fn ix(t: Twin) -> usize {
@@ -60,7 +64,47 @@ impl VmCaps {
             caps: [channels, engine_objects, address_spaces, sysmem_leaves],
             live: [0; 4],
             refused: [0; 4],
+            chan_live_rl: Vec::new(),
         }
+    }
+
+    /// ★ Acquire a channel twin on guest `runlist`: refused past `caps[Channel]` live on THAT runlist.
+    /// The refusal's `asked` is the count the guest would reach (`cap + 1`), `cap` the per-runlist budget.
+    ///
+    /// # Errors
+    /// [`Refusal::OverDeclaredCap`], counted.
+    pub fn acquire_channel(&mut self, runlist: u32) -> Result<(), Refusal> {
+        let r = runlist as usize;
+        if self.chan_live_rl.len() <= r {
+            self.chan_live_rl.resize(r + 1, 0);
+        }
+        if self.chan_live_rl[r] >= self.caps[0] {
+            self.refused[0] += 1;
+            return Err(Refusal::OverDeclaredCap {
+                twin: Twin::Channel,
+                cap: self.caps[0],
+                asked: self.chan_live_rl[r] + 1,
+            });
+        }
+        self.chan_live_rl[r] += 1;
+        self.live[0] += 1;
+        Ok(())
+    }
+
+    /// Release what [`VmCaps::acquire_channel`] took on `runlist`.
+    pub fn release_channel(&mut self, runlist: u32) {
+        if let Some(n) = self.chan_live_rl.get_mut(runlist as usize) {
+            if *n > 0 {
+                *n -= 1;
+                self.live[0] = self.live[0].saturating_sub(1);
+            }
+        }
+    }
+
+    /// Live channel twins on `runlist`.
+    #[must_use]
+    pub fn live_on_runlist(&self, runlist: u32) -> u32 {
+        self.chan_live_rl.get(runlist as usize).copied().unwrap_or(0)
     }
 
     pub fn acquire(&mut self, t: Twin) -> Result<(), Refusal> {

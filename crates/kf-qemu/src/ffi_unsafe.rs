@@ -64,7 +64,9 @@ use std::os::unix::ffi::OsStrExt as _;
 /// number at its merge.
 /// 25 (2026-10-09, the merge of both at `claude/windows-reset-20261009`): 24's trace verbs AND
 /// 23's input/cursor verbs (disjoint surfaces).
-pub const KF3_ABI: u32 = 25;
+/// 26 (2026-10-11, `claude/gl-icd-crash-20261011`): 25 plus the `channel-budget` property — `kf3_realize` gains
+/// `channel_budget` (channels per runlist; 0 = derive from the host) after `pci_devfn`.
+pub const KF3_ABI: u32 = 26;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -149,6 +151,7 @@ pub unsafe extern "C" fn kf3_realize(
     gpu_uuid: *const c_char,
     vm_id: *const c_char,
     pci_devfn: u32,
+    channel_budget: u32,
     out: *mut *mut c_void,
     err: *mut c_char,
     err_len: usize,
@@ -190,6 +193,7 @@ pub unsafe extern "C" fn kf3_realize(
         gpu_uuid,
         vm_id,
         pci_devfn,
+        channel_budget,
     };
     // ★ Review addendum: a panic on any service thread stops the VM, visibly (`failclosed`).
     crate::failclosed::install();

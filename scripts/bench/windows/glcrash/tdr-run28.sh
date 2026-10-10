@@ -266,13 +266,14 @@ if [ "$TA" != 0 ] && alive; then
         done
     fi
     if [ "${GLTEST:-0}" = 1 ]; then
-      Q cmd blockdev-add '{"driver":"raw","node-name":"kfapps_exfat","read-only":true,"file":{"driver":"file","filename":"'$W'/appmatrix/image/kfapps_exfat.img","read-only":true}}' >/dev/null 2>&1
-      Q cmd device_add '{"driver":"usb-storage","id":"kfappsusb2","bus":"xhci.0","drive":"kfapps_exfat","removable":true}' >/dev/null 2>&1
-      L "app disk attached"
+      Q cmd blockdev-add '{"driver":"raw","node-name":"kfapps_exfat","read-only":true,"file":{"driver":"file","filename":"'$W'/appmatrix/image/kfapps_exfat.img","read-only":true}}' > $O/attach.txt 2>&1
+      Q cmd device_add '{"driver":"usb-storage","id":"kfappsusb2","bus":"xhci.0","drive":"kfapps_exfat","removable":true}' >> $O/attach.txt 2>&1
+      sleep 6; gps vols.txt 'Get-Volume | Format-Table DriveLetter,FileSystemLabel,FileSystem,Size | Out-String'
+      L "app disk attached: $(tr -s ' \n' ' ' < $O/attach.txt | cut -c1-200) vols: $(tr -s ' \n' ' ' < $O/vols.txt | cut -c1-300)"
       usertask kfgl kfgl.ps1
       sleep 20; shot gl-t20; sleep 3; shot gl-t23
       L "GL frames differ (AE): $(compare -metric AE $O/gl-t20.png $O/gl-t23.png null: 2>&1)"
-      for k in $(seq 1 12); do sleep 5; GT=30 G qga-exec powershell.exe -NoProfile -Command "if (Test-Path C:\\kf\\gl-result.txt) { Get-Content C:\\kf\\gl-result.txt }" 2>&1 | tr -d '\r' > $O/gl-result.txt; grep -q DONE $O/gl-result.txt && break; done
+      for k in $(seq 1 30); do sleep 5; GT=30 G qga-exec powershell.exe -NoProfile -Command "if (Test-Path C:\\kf\\gl-result.txt) { Get-Content C:\\kf\\gl-result.txt }" 2>&1 | tr -d '\r' > $O/gl-result.txt; grep -q DONE $O/gl-result.txt && break; done
       L "GL result: $(tr '\n' ';' < $O/gl-result.txt | cut -c1-900)"
       shot gl-final
     else

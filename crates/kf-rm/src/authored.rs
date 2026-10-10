@@ -500,31 +500,23 @@ pub fn runlist_of_engine_type(engines: &[FifoDeviceEntry], nv2080: u32) -> Optio
         .map(|e| e.engine_data[slot::RUNLIST])
 }
 
-/// ★ 2026-10-11 (OpenGL/CUDA crash on the Windows guest, `traces/windows_gl_crash_20261011/README.md`):
-/// the number of channel twins the guest may hold LIVE, which is what we told it.
-///
-/// `V3` §9.1 says the cap "is not a number we invent": the guest was handed `numChannels`
-/// per runlist by `NV2080_CTRL_CMD_INTERNAL_FIFO_GET_NUM_CHANNELS` (`fifochannels`, row
-/// `FifoChannelsRow::channels_per_runlist`), and its chid heaps (`kfifoChidMgrConstruct`,
-/// `kernel_fifo.c:300-331`) are built to exactly that extent on every runlist the served FIFO
-/// table names. So the number of channels the guest can legitimately have is
-/// `channels_per_runlist` times the number of distinct runlists. The cap was a hardcoded 64 and
-/// the 65th live channel (Windows: kernel + DWM + Edge + one more D3D/GL/CUDA context) was
-/// refused `0x1a`, which the GL ICD dereferenced and cuCtxCreate returned 999 for.
+/// ★ 2026-10-11 (channel budget, `docs/design/V3_CHANNEL_BUDGET.md`): one `NV2080_ENGINE_TYPE_*` per distinct
+/// runlist of the served FIFO table (the first host-driven engine on each), in runlist order: the engines the
+/// host is asked about to learn how many channels each served runlist can really give.
 #[must_use]
-pub fn declared_channel_cap(
-    row: &kf_abi::fifochannels::FifoChannelsRow,
-    engines: &[FifoDeviceEntry],
-) -> u32 {
-    let mut runlists: Vec<u32> = engines
-        .iter()
-        .filter(|e| e.engine_data[slot::IS_HOST_DRIVEN_ENGINE] != 0)
-        .map(|e| e.engine_data[slot::RUNLIST])
-        .collect();
-    runlists.sort_unstable();
-    runlists.dedup();
-    row.channels_per_runlist
-        .saturating_mul(u32::try_from(runlists.len()).unwrap_or(u32::MAX))
+pub fn one_engine_per_served_runlist(engines: &[FifoDeviceEntry]) -> Vec<u32> {
+    let mut seen: Vec<(u32, u32)> = Vec::new();
+    for e in engines.iter().filter(|e| e.engine_data[slot::IS_HOST_DRIVEN_ENGINE] != 0) {
+        let rl = e.engine_data[slot::RUNLIST];
+        if seen.iter().any(|(r, _)| *r == rl) {
+            continue;
+        }
+        if let Some(t) = nv2080_of_rm(e.engine_data[slot::RM_ENGINE_TYPE]) {
+            seen.push((rl, t));
+        }
+    }
+    seen.sort_unstable();
+    seen.into_iter().map(|(_, t)| t).collect()
 }
 
 /// `NV2080_ENGINE_TYPE_COPY(i)` over both decades.
@@ -793,12 +785,13 @@ mod hwref_check {
 }
 
 #[cfg(test)]
-mod declared_channel_cap_tests {
+mod served_runlist_engine_tests {
     use super::*;
 
-    fn entry(runlist: u32, host_driven: u32) -> FifoDeviceEntry {
+    fn entry(runlist: u32, rm_engine: u32, host_driven: u32) -> FifoDeviceEntry {
         let mut engine_data = [0u32; kf_abi::inittables::ENGINE_DATA_TYPES];
         engine_data[slot::RUNLIST] = runlist;
+        engine_data[slot::RM_ENGINE_TYPE] = rm_engine;
         engine_data[slot::IS_HOST_DRIVEN_ENGINE] = host_driven;
         FifoDeviceEntry {
             name: "t",
@@ -809,14 +802,13 @@ mod declared_channel_cap_tests {
         }
     }
 
-    /// The cap is the count the guest was told, per runlist, over the runlists it was told about:
-    /// far more than the 64 it used to be (a Windows desktop holds about 64 live channels).
+    /// One engine per distinct served runlist; engines not driven by the host are not asked about.
     #[test]
-    fn cap_is_what_the_guest_was_told() {
-        let row = kf_abi::fifochannels::FifoChannelsRow { channels_per_runlist: 0x800 };
-        // GR + GRCE share runlist 0; two async CEs own 1 and 2; a non-host-driven row is not counted.
-        let engines = [entry(0, 1), entry(0, 1), entry(1, 1), entry(2, 1), entry(9, 0)];
-        assert_eq!(declared_channel_cap(&row, &engines), 3 * 0x800);
-        assert!(declared_channel_cap(&row, &engines) > 65);
+    fn one_engine_per_runlist_host_driven_only() {
+        // GR (rm 1) + a GRCE (COPY0 in RM space) share runlist 0; COPY2 owns 1; a non-driven row is skipped.
+        let engines = [entry(0, 1, 1), entry(0, 9, 1), entry(1, 0xb, 1), entry(9, 0xa, 0)];
+        let got = one_engine_per_served_runlist(&engines);
+        assert_eq!(got.len(), 2, "{got:?}");
+        assert_eq!(got[0], 1, "GR asks for runlist 0");
     }
 }
