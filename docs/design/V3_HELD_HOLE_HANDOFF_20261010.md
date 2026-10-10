@@ -85,7 +85,7 @@ GPU while the arms ran: environmental, not a regression — never start arms whi
    no-op: the host has no cargo). It installs `win-qemu/kf3-bins/<sha>`; the runner reads `$W/kf3-bins/<sha>`, so
    `cp -a` it there (and into `/workspace/bench/kf3-bins/` for the fast suite). `W=/var/lib/kf-windows-20261005`.
 2. Run (through the shared lock, never holding it idle):
-   `cd $W/tdrhunt; nohup flock -w 28800 -o /tmp/kayfabe-fastguest.lock env KF_GUEST_PW=kfsign7 KF3_REV_BIN=<sha>
+   `cd $W/tdrhunt; nohup flock -w 28800 -o /tmp/kayfabe-fastguest.lock env KF_GUEST_PW=${KF_GUEST_PW:?} KF3_REV_BIN=<sha>
    HOLD_SECS=900 RUN_WIN_FLAGS= bash tdr-run15.sh <N> > /root/held-run<N>.out 2>&1 &` (pick an unused N; a refused run
    still burns its N's `winprod/run<N>`; do NOT kill a runner mid-hold: its cleanup takes minutes and blocks the
    queue; if you must, `kill -TERM` the bash script and wait for `END type=DMA-FQ`).
