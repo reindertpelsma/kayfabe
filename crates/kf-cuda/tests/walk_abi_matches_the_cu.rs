@@ -501,7 +501,12 @@ fn every_report_field_decodes_to_what_the_c_compiler_reads() {
     use std::collections::{BTreeMap, BTreeSet};
     let root = repo_root();
     let h = std::fs::read_to_string(root.join("cuda/walk/kf_walk.h")).expect("the .h");
-    let names = ["KfRefusalSample", "KfReportHeader", "KfPdbEntry", "KfMapRun"];
+    let names = [
+        "KfRefusalSample",
+        "KfReportHeader",
+        "KfPdbEntry",
+        "KfMapRun",
+    ];
     // ABI 6: the one array-of-struct member. Its layout (offset, width) is checked here and its
     // bytes by the whole-struct `encode(decode(C's bytes)) == C's bytes`; its elements' fields are
     // checked by the `KfRefusalSample` entry above, whose size is the array's stride.
@@ -1080,7 +1085,10 @@ fn the_report_constants_match_the_header() {
         ("KFWR_R_OOB", kf_cuda::abi::KFWR_R_OOB),
         ("KFWR_R_UNALIGNED", kf_cuda::abi::KFWR_R_UNALIGNED),
         ("KFWR_R_FOREIGN_AP", kf_cuda::abi::KFWR_R_FOREIGN_AP),
-        ("KFWR_R_MISALIGNED_LEAF", kf_cuda::abi::KFWR_R_MISALIGNED_LEAF),
+        (
+            "KFWR_R_MISALIGNED_LEAF",
+            kf_cuda::abi::KFWR_R_MISALIGNED_LEAF,
+        ),
         ("KFWR_R_LEAF_OOB", kf_cuda::abi::KFWR_R_LEAF_OOB),
     ] {
         assert_eq!(parse(n), u64::from(r), "{n} differs");

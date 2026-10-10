@@ -1297,7 +1297,8 @@ impl Engine {
                     st.effects.extend(notify);
                 }
                 // the new entry's own notifier: BEGUN
-                st.effects.extend(Self::notify_of(&v, c, n, Chan::armed, false, was_active));
+                st.effects
+                    .extend(Self::notify_of(&v, c, n, Chan::armed, false, was_active));
             }
             ChannelKind::WindowImm | ChannelKind::Cursor => {}
         }
@@ -1497,6 +1498,15 @@ pub struct Scanout {
     pub out_width: u32,
     /// Output height.
     pub out_height: u32,
+    /// ★ Plane 1 (the chroma plane of a semi-planar YUV format): `SET_CONTEXT_DMA_ISO(1)` handle
+    /// (0 = the class has no plane 1, or it was never programmed: the luma plane's context DMA).
+    pub iso1: u32,
+    /// `SET_OFFSET(1)` in bytes.
+    pub offset1: u64,
+    /// `SET_PLANAR_STORAGE(1).PITCH`, in the units of `pitch`.
+    pub pitch1: u32,
+    /// `SET_PARAMS.SWAP_UV`.
+    pub swap_uv: bool,
     /// `SET_COMPOSITION_CONTROL.DEPTH` — smaller is closer to the front (`nvkms-evo3.c:4813`).
     pub depth: u32,
     /// `SET_COMPOSITION_CONSTANT_ALPHA.K1` / `.K2`.
@@ -1535,6 +1545,10 @@ pub struct ScanVocab {
     params: (u32, (u8, u8)),
     storage: (u32, (u8, u8)),
     size_out: (u32, (u8, u8), (u8, u8)),
+    /// Plane 1 of a semi-planar format (`None`: the class names none).
+    plane1: Option<(u32, u32, u32, (u8, u8))>,
+    /// `SET_PARAMS.SWAP_UV`.
+    swap_uv: Option<(u8, u8)>,
     comp_depth: (u32, (u8, u8)),
     comp_alpha: (u32, (u8, u8), (u8, u8)),
     comp_factor: (u32, (u8, u8), (u8, u8)),
@@ -1579,6 +1593,15 @@ impl ScanVocab {
                 t.f(win, "SET_STORAGE_BLOCK_HEIGHT")?,
             ),
             size_out: wh("SET_SIZE_OUT")?,
+            plane1: (|| {
+                Some((
+                    t.a(win, "SET_CONTEXT_DMA_ISO", 1)?,
+                    t.a(win, "SET_OFFSET", 1)?,
+                    t.a(win, "SET_PLANAR_STORAGE", 1)?,
+                    t.f(win, "SET_PLANAR_STORAGE_PITCH")?,
+                ))
+            })(),
+            swap_uv: t.f(win, "SET_PARAMS_SWAP_UV"),
             comp_depth: (
                 t.v(win, "SET_COMPOSITION_CONTROL")?,
                 t.f(win, "SET_COMPOSITION_CONTROL_DEPTH")?,
@@ -1696,6 +1719,12 @@ impl Engine {
                 out_y: fld(point_out, qy),
                 out_width: fld(c.armed(om), ow),
                 out_height: fld(c.armed(om), oh),
+                iso1: sv.plane1.map_or(0, |p| c.armed(p.0)),
+                offset1: sv.plane1.map_or(0, |p| u64::from(c.armed(p.1)) << 8),
+                pitch1: sv.plane1.map_or(0, |p| fld(c.armed(p.2), p.3)),
+                swap_uv: sv
+                    .swap_uv
+                    .is_some_and(|f| fld(c.armed(sv.params.0), f) != 0),
                 depth: fld(c.armed(sv.comp_depth.0), sv.comp_depth.1),
                 k1: fld(alpha, sv.comp_alpha.1),
                 k2: fld(alpha, sv.comp_alpha.2),

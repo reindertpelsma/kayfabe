@@ -79,7 +79,11 @@ impl VblankGate {
     /// The earliest moment a held edge reaches [`EDGE_CAP`] (the display thread's wake-up), if any is held.
     #[must_use]
     pub fn deadline(&self) -> Option<Instant> {
-        self.held.iter().flatten().map(|(_, at)| *at + EDGE_CAP).min()
+        self.held
+            .iter()
+            .flatten()
+            .map(|(_, at)| *at + EDGE_CAP)
+            .min()
     }
 
     /// Whether head `h` has an edge held.
@@ -110,7 +114,12 @@ mod tests {
         let t0 = Instant::now();
         let mut gate = VblankGate::default();
         let mut queue: Vec<&str> = Vec::new();
-        let mut s = Seen { event: false, latched: false, notified: false, get_past_update: false };
+        let mut s = Seen {
+            event: false,
+            latched: false,
+            notified: false,
+            get_past_update: false,
+        };
         let mut obs = vec![s];
         for item in ["Latched", "Notify", "Get"] {
             queue.push(item);
@@ -154,8 +163,14 @@ mod tests {
     fn a_guest_vsync_handler_never_sees_the_event_without_the_whole_latch() {
         for copy_done_after in 0..6 {
             let (obs, gate) = simulate(true, copy_done_after);
-            assert!(obs.last().is_some_and(|o| o.event), "the edge is raised once the completions landed");
-            assert!(!obs.iter().any(half_applied), "copy after {copy_done_after}: {obs:?}");
+            assert!(
+                obs.last().is_some_and(|o| o.event),
+                "the edge is raised once the completions landed"
+            );
+            assert!(
+                !obs.iter().any(half_applied),
+                "copy after {copy_done_after}: {obs:?}"
+            );
             assert_eq!(gate.forced, 0);
         }
     }

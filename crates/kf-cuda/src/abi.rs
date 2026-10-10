@@ -806,7 +806,9 @@ impl LeField for KfRefusalSample {
 
 impl<const N: usize> LeField for [KfRefusalSample; N] {
     fn get(b: &[u8], at: usize) -> Self {
-        core::array::from_fn(|i| <KfRefusalSample as LeField>::get(b, at + i * KfRefusalSample::BYTES))
+        core::array::from_fn(|i| {
+            <KfRefusalSample as LeField>::get(b, at + i * KfRefusalSample::BYTES)
+        })
     }
     fn put(&self, b: &mut [u8], at: usize) {
         for (i, s) in self.iter().enumerate() {
@@ -1226,7 +1228,9 @@ mod tests {
         ];
         assert_eq!(
             h,
-            [0, 4, 6, 8, 16, 24, 28, 32, 36, 40, 48, 52, 56, 60, 64, 68, 72]
+            [
+                0, 4, 6, 8, 16, 24, 28, 32, 36, 40, 48, 52, 56, 60, 64, 68, 72
+            ]
         );
         let p = [
             offset_of!(KfPdbEntry, pdb),

@@ -157,7 +157,13 @@ struct EngineObj {
 impl EngineObj {
     /// The act for try number `tries`; `steered` = the `(va, row length)` whose placement row an
     /// earlier try already removed (a retry must not read the missing row as "nothing there").
-    fn act(self, tries: u32, born: Option<std::time::Instant>, steered: Option<(u64, u64)>, d: kf_gsp::Deferred) -> Act {
+    fn act(
+        self,
+        tries: u32,
+        born: Option<std::time::Instant>,
+        steered: Option<(u64, u64)>,
+        d: kf_gsp::Deferred,
+    ) -> Act {
         Box::new(move |me: &ChanPlane| self.run(me, tries, born, steered, d))
     }
 
@@ -169,7 +175,15 @@ impl EngineObj {
         steered: Option<(u64, u64)>,
         d: kf_gsp::Deferred,
     ) -> Result<String, (u32, String)> {
-        let Self { client, parent, space, ref rows, ref ledger, kind, .. } = self;
+        let Self {
+            client,
+            parent,
+            space,
+            ref rows,
+            ref ledger,
+            kind,
+            ..
+        } = self;
         // ★ Review 4 item 3: the age bound runs from the FIRST EXECUTION of the step, not from its
         // enqueue — a busy act queue must not eat the retry budget.
         let born = born.unwrap_or_else(std::time::Instant::now);
@@ -185,15 +199,22 @@ impl EngineObj {
             if !alive {
                 return Err((
                     NV_ERR_INVALID_STATE,
-                    format!("chan {client:#x}:{parent:#x} was freed while its falcon ctx steer was retrying — object birth REFUSED"),
+                    format!(
+                        "chan {client:#x}:{parent:#x} was freed while its falcon ctx steer was retrying — object birth REFUSED"
+                    ),
                 ));
             }
         }
         let fc = if matches!(
             kind,
-            kf_chip::classes::Kind::VideoEncoder | kf_chip::classes::Kind::VideoDecoder | kf_chip::classes::Kind::OpticalFlow
+            kf_chip::classes::Kind::VideoEncoder
+                | kf_chip::classes::Kind::VideoDecoder
+                | kf_chip::classes::Kind::OpticalFlow
         ) {
-            me.pt.lock().ok().and_then(|m| m.get(&(client, parent)).and_then(|v| v.falcon_ctx))
+            me.pt
+                .lock()
+                .ok()
+                .and_then(|m| m.get(&(client, parent)).and_then(|v| v.falcon_ctx))
         } else {
             None
         };
@@ -216,7 +237,9 @@ impl EngineObj {
         if tries > 0 && steered.is_some() && fc.is_none() {
             return Err((
                 NV_ERR_INVALID_STATE,
-                format!("chan {client:#x}:{parent:#x}: the falcon ctx is no longer known while its steer was retrying — object birth REFUSED"),
+                format!(
+                    "chan {client:#x}:{parent:#x}: the falcon ctx is no longer known while its steer was retrying — object birth REFUSED"
+                ),
             ));
         }
         let mut steer_msg = String::new();
@@ -237,7 +260,9 @@ impl EngineObj {
                     Err(_) => {
                         return Err((
                             NV_ERR_INVALID_STATE,
-                            format!("guest ctx VA {va:#x}: the placement rows are poisoned — the steer cannot be known to have happened; object birth REFUSED"),
+                            format!(
+                                "guest ctx VA {va:#x}: the placement rows are poisoned — the steer cannot be known to have happened; object birth REFUSED"
+                            ),
                         ));
                     }
                 },
@@ -251,7 +276,9 @@ impl EngineObj {
                 // through, the ledger cut. D2: the ledger's locks are taken here (act thread) and held
                 // for at most one chunk; the observed bounds are part of the log line.
                 let Some(bv) = ledger.as_ref() else {
-                    steer_msg = format!(" [guest ctx VA {va:#x}: no ownership ledger for this space — nothing of ours to hand over, host ctx placement unsteered]");
+                    steer_msg = format!(
+                        " [guest ctx VA {va:#x}: no ownership ledger for this space — nothing of ours to hand over, host ctx placement unsteered]"
+                    );
                     return self.finish(me, steer_msg);
                 };
                 // One act's hand-over is bounded by a time slice (a hostile row is thousands of
@@ -259,16 +286,26 @@ impl EngineObj {
                 let over = bv.hand_to_host_within(va, rl, kf_mem::batch::STEER_SLICE);
                 let (touched, hold_us) = bv.hold_stats();
                 let (act_wait_us, act_op_us) = bv.act_stats();
-                let holds = format!(" (ledger lock holds: at most {touched} entries, longest {hold_us} us; this thread waited at most {act_wait_us} us for a ledger lock, hand-over took at most {act_op_us} us; try {})", tries.saturating_add(1));
+                let holds = format!(
+                    " (ledger lock holds: at most {touched} entries, longest {hold_us} us; this thread waited at most {act_wait_us} us for a ledger lock, hand-over took at most {act_op_us} us; try {})",
+                    tries.saturating_add(1)
+                );
                 match kf_mem::batch::steer_step(&over, tries, born.elapsed()) {
                     kf_mem::batch::SteerStep::Done => {
-                        steer_msg = format!(" [host ctx steered onto the guest's ctx VA {va:#x}+{len:#x}{holds}]");
+                        steer_msg = format!(
+                            " [host ctx steered onto the guest's ctx VA {va:#x}+{len:#x}{holds}]"
+                        );
                     }
                     kf_mem::batch::SteerStep::Retry => {
                         eprintln!(
                             "kf3: chan {client:#x}:{parent:#x} falcon ctx steer of {va:#x}+{rl:#x} not complete ({over:?}){holds} — re-queued, the host alloc waits"
                         );
-                        let next = self.clone().act(tries.saturating_add(1), Some(born), Some((va, rl)), d.clone());
+                        let next = self.clone().act(
+                            tries.saturating_add(1),
+                            Some(born),
+                            Some((va, rl)),
+                            d.clone(),
+                        );
                         // PARKED, not slept on: the act thread runs other acts until it is due.
                         let due = std::time::Instant::now()
                             .checked_add(kf_mem::batch::STEER_RETRY_SPACING)
@@ -294,8 +331,19 @@ impl EngineObj {
 
     /// The host alloc and the bookkeeping, after the steer is done (or not needed).
     fn finish(&self, me: &ChanPlane, steer: String) -> Result<String, (u32, String)> {
-        let Self { client, parent, handle, class, copy_engine, chan, engine, kind, .. } = *self;
-        let h = kf_chan::passthrough::engine_object(me.rm, chan, engine, class, kind, copy_engine).map_err(|e| (NV_ERR_INVALID_CLASS, e))?;
+        let Self {
+            client,
+            parent,
+            handle,
+            class,
+            copy_engine,
+            chan,
+            engine,
+            kind,
+            ..
+        } = *self;
+        let h = kf_chan::passthrough::engine_object(me.rm, chan, engine, class, kind, copy_engine)
+            .map_err(|e| (NV_ERR_INVALID_CLASS, e))?;
         if let Ok(mut m) = me.pt.lock()
             && let Some(v) = m.get_mut(&(client, parent))
         {
@@ -304,7 +352,10 @@ impl EngineObj {
         if let Ok(mut m) = me.pt_objs.lock() {
             m.insert((client, handle), (client, parent));
         }
-        Ok(format!("{client:#x}:{handle:#x} class {class:#x} ({kind:?}) on twin host {:#x} -> host object {h:#x}{steer}", chan.token))
+        Ok(format!(
+            "{client:#x}:{handle:#x} class {class:#x} ({kind:?}) on twin host {:#x} -> host object {h:#x}{steer}",
+            chan.token
+        ))
     }
 }
 
@@ -1058,7 +1109,13 @@ fn ring_dist(a: u32, b: u32, n: u32) -> u32 {
         u64::from(a).checked_rem(n).unwrap_or(0),
         u64::from(b).checked_rem(n).unwrap_or(0),
     );
-    u32::try_from(a.saturating_add(n).saturating_sub(b).checked_rem(n).unwrap_or(0)).unwrap_or(0)
+    u32::try_from(
+        a.saturating_add(n)
+            .saturating_sub(b)
+            .checked_rem(n)
+            .unwrap_or(0),
+    )
+    .unwrap_or(0)
 }
 
 /// ★ Review addendum (hostile guest): the `[done, done + n)` window of a read buffer, or a named
@@ -2599,7 +2656,9 @@ impl ChanPlane {
                     let t0 = std::time::Instant::now();
                     let r = act(self);
                     // Retries the act parked (a steer waiting for a map in flight to end).
-                    for (when, a, dd, w) in ACT_DELAYED.with(|c| std::mem::take(&mut *c.borrow_mut())) {
+                    for (when, a, dd, w) in
+                        ACT_DELAYED.with(|c| std::mem::take(&mut *c.borrow_mut()))
+                    {
                         q.delay(when, (a, dd, w));
                     }
                     let us = u64::try_from(t0.elapsed().as_micros()).unwrap_or(u64::MAX);
@@ -2660,7 +2719,10 @@ impl ChanPlane {
     /// event the guest armed (GR0's otherwise) — via `deliver`. Never dropped: unarmed is counted,
     /// paced is owed. With `KF3_PT_NSI_RELAY=0` the edge is counted only (the falsifier run).
     pub fn nsi_fifo_edge(&self, deliver: impl FnOnce(u32)) -> kf_chan::ptnsi::Verdict {
-        let n = self.pt_fifo_edges.fetch_add(1, Ordering::Relaxed).saturating_add(1);
+        let n = self
+            .pt_fifo_edges
+            .fetch_add(1, Ordering::Relaxed)
+            .saturating_add(1);
         let armed = self.nsi_armed(Some(kf_abi::eventnotify::NONSTALL_SLOT_FIFO_EVENT_MTHD));
         let vector = if armed {
             kf_chan::ptnsi::host_notify_vector(
@@ -5359,7 +5421,8 @@ impl ChanPlane {
                 );
             }
         };
-        while g.peek.entries < PEEK_ENTRY_BUDGET && idx != new_put.checked_rem(entries).unwrap_or(0) {
+        while g.peek.entries < PEEK_ENTRY_BUDGET && idx != new_put.checked_rem(entries).unwrap_or(0)
+        {
             let mut e = [0u8; 8];
             let gpva = g.gpfifo_va.saturating_add(u64::from(idx).saturating_mul(8));
             g.peek.entries = g.peek.entries.saturating_add(1);
@@ -6525,7 +6588,10 @@ impl ChanPlane {
         };
         let words = |f: &dyn Fn(u64) -> Result<u32, String>, n: u64| -> String {
             (0..n)
-                .map(|i| f(i.saturating_mul(4)).map_or_else(|e| format!("?({e})"), |v| format!("{v:08x}")))
+                .map(|i| {
+                    f(i.saturating_mul(4))
+                        .map_or_else(|e| format!("?({e})"), |v| format!("{v:08x}"))
+                })
                 .collect::<Vec<_>>()
                 .join(" ")
         };
@@ -8075,7 +8141,15 @@ mod snap_tests {
     /// ★ Review 4 item 1 — a missing row hands the ctx range over, it is not "nothing there".
     #[test]
     fn a_missing_steer_row_still_hands_the_ctx_range_over() {
-        assert_eq!(crate::chan::steer_len(Some(0x20_0000), 0x1_0000), 0x20_0000, "the whole row when one was removed");
-        assert_eq!(crate::chan::steer_len(None, 0x1_0000), 0x1_0000, "the ctx range when the row is gone");
+        assert_eq!(
+            crate::chan::steer_len(Some(0x20_0000), 0x1_0000),
+            0x20_0000,
+            "the whole row when one was removed"
+        );
+        assert_eq!(
+            crate::chan::steer_len(None, 0x1_0000),
+            0x1_0000,
+            "the ctx range when the row is gone"
+        );
     }
 }

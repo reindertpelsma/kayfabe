@@ -1296,9 +1296,7 @@ impl GpuMirror {
                 j = j.saturating_add(1);
             }
             let run = rows.get(k..j).unwrap_or_default();
-            let end = run
-                .last()
-                .map_or(0, |&(v, l)| v.saturating_add(l));
+            let end = run.last().map_or(0, |&(v, l)| v.saturating_add(l));
             let va = run.first().map_or(0, |&(v, _)| v);
             if run.len() < 2 || self.unmap_range(va, end.saturating_sub(va), true).is_err() {
                 for &(va, _) in run {
@@ -1971,7 +1969,11 @@ impl Bar1Target {
                 (true, 0) => {
                     // ★ 2026-09-26 (T1 evidence, `V3_BAR1_DOORBELL.md` §7): one bounded line per
                     // view, on the VA thread — the heartbeat misses an arm shorter than its period.
-                    let n = self.overlay.installed.fetch_add(1, Ordering::Relaxed).saturating_add(1);
+                    let n = self
+                        .overlay
+                        .installed
+                        .fetch_add(1, Ordering::Relaxed)
+                        .saturating_add(1);
                     if n <= 32 {
                         eprintln!(
                             "kf3: bar1db view LIVE #{n}: BAR1 {:#x}+{:#x} (usermode page {:#x}) now traps its doorbell",
@@ -1980,7 +1982,11 @@ impl Bar1Target {
                     }
                 }
                 (false, 0) => {
-                    let n = self.overlay.removed.fetch_add(1, Ordering::Relaxed).saturating_add(1);
+                    let n = self
+                        .overlay
+                        .removed
+                        .fetch_add(1, Ordering::Relaxed)
+                        .saturating_add(1);
                     if n <= 32 {
                         eprintln!(
                             "kf3: bar1db view REMOVED #{n}: BAR1 {:#x}+{:#x} (doorbells through BAR1 views so far: {})",
@@ -4096,7 +4102,9 @@ mod tests {
             off: 0x2_0000,
             ram: false,
             kind: 0,
-            perm: kf_host::MapPerm::READ_WRITE, leaf: 0, };
+            perm: kf_host::MapPerm::READ_WRITE,
+            leaf: 0,
+        };
         win.map(&d, false).expect("map");
         assert_eq!(mappings_of(view_name), 1, "the view is placed");
         let before = WINDOW_ADVICE_REFUSED.load(Ordering::Relaxed);

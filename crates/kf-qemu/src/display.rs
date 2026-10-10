@@ -1272,6 +1272,8 @@ impl ColorDmas {
 #[derive(Debug, Default)]
 struct Planned {
     layers: Vec<LayerPlan>,
+    /// ★ Semi-planar YUV windows (Edge's video overlay), composed after the RGB layers.
+    yuv: Vec<kf_disp::scanout::YuvPlan>,
     refused: Vec<String>,
 }
 
@@ -2951,7 +2953,11 @@ impl Device {
                         awaken,
                         finished,
                     } => {
-                        let status = if finished { io.notifier_finished } else { io.notifier_begun };
+                        let status = if finished {
+                            io.notifier_finished
+                        } else {
+                            io.notifier_begun
+                        };
                         let r = io.resolve(client, handle, chn).and_then(|dma| {
                             let ts = self.rm.gpu_time_ns().unwrap_or(0);
                             let mut n = [0u8; 16];
@@ -3053,7 +3059,8 @@ impl Device {
                 std::sync::atomic::fence(Ordering::SeqCst);
             }
             for h in due {
-                let irq = frame_edge_out(dp, &store, h, edge_frame[h], loadv, wtrace, &vsync_traced);
+                let irq =
+                    frame_edge_out(dp, &store, h, edge_frame[h], loadv, wtrace, &vsync_traced);
                 raised |= irq != 0;
                 if irq & dp.map.head_vblank != 0 {
                     counts[h].vblirq += 1;
@@ -3236,6 +3243,31 @@ fn console_composition(engine: &Engine, dp: &DisplayPlane) -> Option<Composition
         .iter()
         .filter(|m| m.period_ns > 0)
         .find_map(|m| engine.composition(sv, m.head))
+}
+
+/// The kf-cuda mirror of a planned YUV window.
+fn yuv_layer(l: &kf_disp::scanout::YuvPlan) -> kf_cuda::display::YuvLayer {
+    kf_cuda::display::YuvLayer {
+        y_src: l.y_src,
+        y_extent: l.y_extent,
+        c_src: l.c_src,
+        c_extent: l.c_extent,
+        block_linear: l.block_linear,
+        y_pitch: l.y_pitch,
+        c_pitch: l.c_pitch,
+        block_height_log2: l.block_height_log2,
+        sx0: l.sx0,
+        sy0: l.sy0,
+        sw: l.sw,
+        sh: l.sh,
+        ox: l.ox,
+        oy: l.oy,
+        dw: l.dw,
+        dh: l.dh,
+        sub_x_log2: l.sub_x_log2,
+        sub_y_log2: l.sub_y_log2,
+        vu_first: l.vu_first,
+    }
 }
 
 /// The kf-cuda mirror of a planned layer.
@@ -4218,6 +4250,41 @@ impl ScanState {
             self.finish(dp, n, req);
             return;
         };
+        // ★ the YUV windows: composed after the RGB layers and before the cursor. Without the
+        // kernel, or for a window the kernel's own bounds refuse, the window is left out of the
+        // console copy by name (console-only); a real CUDA error still fails the copy.
+        let yuv_run: &[kf_disp::scanout::YuvPlan] = match (planned.yuv.is_empty(), gpu.yuv_ready())
+        {
+            (true, _) => &[],
+            (false, Ok(())) => &planned.yuv,
+            (false, Err(e)) => {
+                for y in &planned.yuv {
+                    self.note_refusal(
+                        &dp.counters,
+                        &format!("window {} left out of the console copy: {e}", y.window),
+                    );
+                    dp.counters
+                        .console_windows_left_out
+                        .fetch_add(1, Ordering::Relaxed);
+                }
+                &[]
+            }
+        };
+        let mut yuv_left_out: Vec<String> = Vec::new();
+        let mut compose_yuvs =
+            |gpu: &mut kf_cuda::display::DisplayGpu| -> Result<(), kf_cuda::CudaError> {
+                for y in yuv_run {
+                    match gpu.compose_yuv(&yuv_layer(y), w, h) {
+                        Ok(()) => {}
+                        Err(kf_cuda::CudaError::Refused { code: 0, name, .. }) => {
+                            yuv_left_out.push(format!("window {}: {name}", y.window));
+                        }
+                        Err(e) => return Err(e),
+                    }
+                }
+                Ok(())
+            };
+        let n_rgb = planned.layers.len();
         let composed =
             if let Some((inputs, out, matrix)) = &color {
                 gpu.color_begin(w, h)
@@ -4237,8 +4304,9 @@ impl ScanState {
                         )
                     })
                     .and_then(|()| gpu.color_output(w, h, *out, matrix))
+                    .and_then(|()| compose_yuvs(gpu))
                     .and_then(|()| {
-                        layers[planned.layers.len()..]
+                        layers[n_rgb..]
                             .iter()
                             .try_for_each(|l| gpu.compose_layer(&compose_layer(l), w, h))
                     })
@@ -4247,12 +4315,25 @@ impl ScanState {
                 gpu.compose_begin(w, h)
                     .map_err(|e| format!("composition {w}x{h}: {e}"))
                     .and_then(|()| {
-                        layers.iter().try_for_each(|l| {
+                        layers[..n_rgb].iter().try_for_each(|l| {
+                            gpu.compose_layer(&compose_layer(l), w, h)
+                                .map_err(|e| format!("window {}: {e}", l.window))
+                        })
+                    })
+                    .and_then(|()| compose_yuvs(gpu).map_err(|e| format!("YUV window: {e}")))
+                    .and_then(|()| {
+                        layers[n_rgb..].iter().try_for_each(|l| {
                             gpu.compose_layer(&compose_layer(l), w, h)
                                 .map_err(|e| format!("window {}: {e}", l.window))
                         })
                     })
             };
+        for why in std::mem::take(&mut yuv_left_out) {
+            self.note_refusal(&dp.counters, &format!("YUV {why}"));
+            dp.counters
+                .console_windows_left_out
+                .fetch_add(1, Ordering::Relaxed);
+        }
         if let Err(e) = composed {
             self.refuse(dp, &e);
             self.failed = true;
@@ -4506,6 +4587,35 @@ impl ScanState {
             Shown::Blank(_) => &[],
         };
         for so in windows {
+            // ★ a semi-planar YUV window (Edge's video overlay, `FORMAT 0x38`): its own planner
+            if let Some(yf) = formats.yuv_of(so.format) {
+                let planned = self.latched.resolve(so, || resolve(so)).and_then(|y_dma| {
+                    let c_dma = if so.iso1 == 0 || so.iso1 == so.handle {
+                        y_dma
+                    } else {
+                        resolve(&kf_disp::engine::Scanout {
+                            handle: so.iso1,
+                            ..*so
+                        })?
+                    };
+                    kf_disp::scanout::plan_yuv(so, yf, &y_dma, &c_dma, w, h).map_err(|r| r.0)
+                });
+                match planned {
+                    Ok(Some(l)) => {
+                        static LOGGED: AtomicU32 = AtomicU32::new(0);
+                        if trace_slot(&LOGGED, 6) {
+                            eprintln!(
+                                "kf3: display: YUV window {} composed for the console: armed {so:?} -> {l:?}",
+                                so.window
+                            );
+                        }
+                        p.yuv.push(l);
+                    }
+                    Ok(None) => {}
+                    Err(e) => p.refused.push(e),
+                }
+                continue;
+            }
             let planned = self.latched.resolve(so, || resolve(so)).and_then(|dma| {
                 kf_disp::scanout::plan_layer(so, &dma, formats, w, h).map_err(|r| r.0)
             });
@@ -5043,6 +5153,10 @@ mod tests {
             out_y: 0,
             out_width: 1920,
             out_height: 1080,
+            iso1: 0,
+            offset1: 0,
+            pitch1: 0,
+            swap_uv: false,
             depth: 0,
             k1: 255,
             k2: 0,
@@ -5310,10 +5424,18 @@ mod tests {
             window: 4,
             head: 0,
             format: 0x38,
+            iso1: 0,
+            offset1: 0x10_0000,
+            pitch1: 120,
+            width: 1920,
+            height: 1080,
             ..scanout_6()
         };
-        assert!(formats.of(desktop.format).is_some());
-        assert!(formats.of(0x38).is_none(), "the YUV overlay format has no console format");
+        assert!(formats.of(video.format).is_none(), "no RGB console format");
+        assert!(
+            formats.yuv_of(video.format).is_some(),
+            "but a console YUV format"
+        );
         let armed = Shown::Armed(Composition {
             head: 0,
             width: 1920,
@@ -5329,10 +5451,39 @@ mod tests {
         };
         let mut scan = ScanState::default();
         let planned = scan.plan(&armed, &formats, (1920, 1080), 1, |_| Ok(console_dma));
-        assert_eq!(planned.layers.len(), 1, "the desktop window is still composed");
+        assert_eq!(
+            planned.layers.len(),
+            1,
+            "the desktop window is still composed"
+        );
         assert_eq!(planned.layers[0].window, 0);
+        assert_eq!(
+            planned.yuv.len(),
+            1,
+            "the YUV overlay is composed for the console"
+        );
+        assert_eq!(planned.yuv[0].window, 4);
+        assert!(planned.refused.is_empty(), "{:?}", planned.refused);
+        // a window format nothing can compose (I8) is left out by name, console-only
+        let odd = kf_disp::engine::Scanout {
+            format: 0x1E,
+            ..video
+        };
+        let armed_odd = Shown::Armed(Composition {
+            head: 0,
+            width: 1920,
+            height: 1080,
+            layers: vec![desktop, odd],
+        });
+        let planned = scan.plan(&armed_odd, &formats, (1920, 1080), 2, |_| Ok(console_dma));
+        assert_eq!(planned.layers.len(), 1);
+        assert!(planned.yuv.is_empty());
         assert_eq!(planned.refused.len(), 1);
-        assert!(planned.refused[0].contains("0x38 has no console format"), "{:?}", planned.refused);
+        assert!(
+            planned.refused[0].contains("0x1e has no console format"),
+            "{:?}",
+            planned.refused
+        );
 
         // a flip of window 0 waits for copy 1; the copy cannot be made for the console
         let (counters, console) = (DispCounters::default(), ConsoleShare::default());
@@ -5345,8 +5496,14 @@ mod tests {
             0,
             Fault::Console("SDR colour program: x".into()),
         );
-        assert!(!scan.failed, "the display thread would halt every guest channel on this");
-        assert!(scan.done >= scan.barrier, "the flip queued behind copy 1 is released");
+        assert!(
+            !scan.failed,
+            "the display thread would halt every guest channel on this"
+        );
+        assert!(
+            scan.done >= scan.barrier,
+            "the flip queued behind copy 1 is released"
+        );
         assert_eq!(counters.console_copies_skipped.load(Ordering::Relaxed), 1);
         assert_eq!(counters.scanout_refused.load(Ordering::Relaxed), 1);
         // ... and the next copy is made as usual
@@ -5359,7 +5516,13 @@ mod tests {
         let mut gpu = ScanState::default();
         gpu.barrier = 1;
         gpu.started = 1;
-        gpu.fault(&counters, &console, 1, 0, Fault::Gpu("the completion signal: x".into()));
+        gpu.fault(
+            &counters,
+            &console,
+            1,
+            0,
+            Fault::Gpu("the completion signal: x".into()),
+        );
         assert!(gpu.failed);
         assert!(gpu.done < gpu.barrier, "no forged completion for GPU work");
     }

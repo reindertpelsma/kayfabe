@@ -368,12 +368,29 @@ fn a_pending_update_that_waits_for_a_channel_latches_with_that_channels_next_upd
     let i4 = ChannelKind::WindowImm.channel_number(4);
     let mut w = Ring::new();
     w.m(m(WIN, "SET_WINDOW_INTERLOCK_FLAGS"), 1 << 0);
-    w.m(m(WIN, "UPDATE"), put(0, fl(WIN, "UPDATE_INTERLOCK_WITH_WIN_IMM"), 1));
-    assert!(e.step(w4, &w.bytes(), w.put(), &mut all_ok).effects.is_empty());
+    w.m(
+        m(WIN, "UPDATE"),
+        put(0, fl(WIN, "UPDATE_INTERLOCK_WITH_WIN_IMM"), 1),
+    );
+    assert!(
+        e.step(w4, &w.bytes(), w.put(), &mut all_ok)
+            .effects
+            .is_empty()
+    );
     let mut i = Ring::new();
-    i.m(m(IMM, "UPDATE"), put(0, fl(IMM, "UPDATE_INTERLOCK_WITH_WINDOW"), 1));
-    assert!(e.step(i4, &i.bytes(), i.put(), &mut all_ok).effects.is_empty());
-    assert!(e.waiting(w4) && e.waiting(i4), "the overlay waits for window 0");
+    i.m(
+        m(IMM, "UPDATE"),
+        put(0, fl(IMM, "UPDATE_INTERLOCK_WITH_WINDOW"), 1),
+    );
+    assert!(
+        e.step(i4, &i.bytes(), i.put(), &mut all_ok)
+            .effects
+            .is_empty()
+    );
+    assert!(
+        e.waiting(w4) && e.waiting(i4),
+        "the overlay waits for window 0"
+    );
     // window 0's update, interlocked with nothing
     let mut z = Ring::new();
     z.m(m(WIN, "UPDATE"), 0);
@@ -386,7 +403,12 @@ fn a_pending_update_that_waits_for_a_channel_latches_with_that_channels_next_upd
             _ => None,
         })
         .collect();
-    assert_eq!(latched, vec![0, 4], "window 0 latches WITH the overlay: {:?}", s.effects);
+    assert_eq!(
+        latched,
+        vec![0, 4],
+        "window 0 latches WITH the overlay: {:?}",
+        s.effects
+    );
     assert!(!e.waiting(1) && !e.waiting(w4) && !e.waiting(i4));
 }
 
@@ -483,8 +505,18 @@ fn a_non_tearing_flip_waits_for_vblank_and_its_acquire() {
                 ..
             },
             // the outgoing entry's notifier FINISHED (its flip-away), then the incoming one's (BEGUN)
-            Effect::Notify { chn: 1, offset: 16, finished: true, .. },
-            Effect::Notify { chn: 1, offset: 16, finished: false, .. },
+            Effect::Notify {
+                chn: 1,
+                offset: 16,
+                finished: true,
+                ..
+            },
+            Effect::Notify {
+                chn: 1,
+                offset: 16,
+                finished: false,
+                ..
+            },
         ] => {}
         other => panic!("the outgoing entry's release, not the incoming one's: {other:?}"),
     }
@@ -503,21 +535,42 @@ fn a_flip_away_writes_the_outgoing_notifier_finished_and_the_new_one_begun() {
     e.step(0, &c.bytes(), c.put(), &mut all_ok);
     let mut w = Ring::new();
     w.m(m(WIN, "SET_CONTEXT_DMA_NOTIFIER"), 0xcafe_00f0);
-    w.m(m(WIN, "SET_NOTIFIER_CONTROL"), put(0, fl(WIN, "SET_NOTIFIER_CONTROL_OFFSET"), 1));
-    w.m(m(WIN, "UPDATE"), 0);
-    e.step(1, &w.bytes(), w.put(), &mut all_ok);
-    match e.vblank(0, &mut all_ok).effects.as_slice() {
-        [Effect::Latched { window: 0 }, Effect::Notify { offset: 16, finished: false, .. }] => {}
-        other => panic!("{other:?}"),
-    }
-    w.m(m(WIN, "SET_NOTIFIER_CONTROL"), put(0, fl(WIN, "SET_NOTIFIER_CONTROL_OFFSET"), 2));
+    w.m(
+        m(WIN, "SET_NOTIFIER_CONTROL"),
+        put(0, fl(WIN, "SET_NOTIFIER_CONTROL_OFFSET"), 1),
+    );
     w.m(m(WIN, "UPDATE"), 0);
     e.step(1, &w.bytes(), w.put(), &mut all_ok);
     match e.vblank(0, &mut all_ok).effects.as_slice() {
         [
             Effect::Latched { window: 0 },
-            Effect::Notify { offset: 16, finished: true, .. },
-            Effect::Notify { offset: 32, finished: false, .. },
+            Effect::Notify {
+                offset: 16,
+                finished: false,
+                ..
+            },
+        ] => {}
+        other => panic!("{other:?}"),
+    }
+    w.m(
+        m(WIN, "SET_NOTIFIER_CONTROL"),
+        put(0, fl(WIN, "SET_NOTIFIER_CONTROL_OFFSET"), 2),
+    );
+    w.m(m(WIN, "UPDATE"), 0);
+    e.step(1, &w.bytes(), w.put(), &mut all_ok);
+    match e.vblank(0, &mut all_ok).effects.as_slice() {
+        [
+            Effect::Latched { window: 0 },
+            Effect::Notify {
+                offset: 16,
+                finished: true,
+                ..
+            },
+            Effect::Notify {
+                offset: 32,
+                finished: false,
+                ..
+            },
         ] => {}
         other => panic!("{other:?}"),
     }
