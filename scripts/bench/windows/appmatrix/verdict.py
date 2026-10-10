@@ -41,7 +41,8 @@ def eval_proof(proofs, log, facts):
             ok = re.search(arg, log, re.M) is not None
             (held if ok else missed).append("out")
         elif kind == "pdh":
-            hit = sorted(e for e, v in pdh.items() if re.search(arg, e) and v and float(v) >= ENGINE_MIN_UTIL)
+            # Get-Counter lower-cases the instance names (engtype_3D arrives as "3d"): match the engine type case-insensitively
+            hit = sorted(e for e, v in pdh.items() if re.search(arg, e, re.I) and v and float(v) >= ENGINE_MIN_UTIL)
             (held if hit else missed).append(f"pdh:{'+'.join(hit) if hit else arg}")
         else:
             base = smi.get("mem_used_base_mb")

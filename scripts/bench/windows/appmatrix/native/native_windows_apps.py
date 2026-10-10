@@ -254,6 +254,21 @@ class NativeVm(winapps.Vm):
         return True
 
 
+def install_override(conn, override_dir):
+    """Overlay locally built test programs (build_tools.sh output, never committed) over the image's tools after each guest's
+    setup: lets the baseline run a fixed probe without rebuilding the 6.8 GB image."""
+    orig = winapps.GuestSession._setup
+
+    def _setup(self):
+        orig(self)
+        q = SshQga(conn)
+        for f in sorted(os.listdir(override_dir)):
+            if f.endswith(".exe"):
+                q.file_write(rf"C:\kfapps\tools\{f}", open(os.path.join(override_dir, f), "rb").read())
+                self.log(f"[{self.tag}] override tool {f}")
+    winapps.GuestSession._setup = _setup
+
+
 def install_transport(conn):
     qgamod.Qga = lambda path, io_timeout=20.0: SshQga(conn, io_timeout)
 
@@ -315,6 +330,8 @@ def cmd_run(a, conn):
     cfg = winapps.Cfg(iso=None, image_identity=ident, per_guest=a.per_guest, max_tdr=a.max_tdr, tier=a.tier, password=None,
                       user=conn.user, screenshots=True, boot_timeout=a.boot_timeout, session_timeout=420, recover_wait=300, io_timeout=30.0, ping_s=10.0)
     install_transport(conn)
+    if a.override_dir:
+        install_override(conn, a.override_dir)
     push_helpers(conn)
     vm = NativeVm(conn, log, reboot_fresh=not a.no_reboot)
     meta = dict(started_utc=winapps.utc(), kind="native-nvidia-baseline", args={k: v for k, v in vars(a).items() if k not in ("func",)},
@@ -352,6 +369,7 @@ def main(argv=None):
     p.add_argument("--max-tdr", type=int, default=1000)
     p.add_argument("--boot-timeout", type=int, default=900)
     p.add_argument("--no-isolate", action="store_true")
+    p.add_argument("--override-dir", default="", help="directory of locally built *.exe copied over C:\\kfapps\\tools after each guest's setup")
     p.add_argument("--no-reboot", action="store_true", help="a 'fresh guest' does not reboot the box")
     p.add_argument("--resume", action="store_true")
     p.add_argument("--list", action="store_true")

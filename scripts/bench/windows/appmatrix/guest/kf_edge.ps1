@@ -10,8 +10,9 @@ $ErrorActionPreference = 'Continue'
 $edge = @("${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe", "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $edge) { Write-Output 'KFEDGE {"ok":false,"why":"msedge.exe not found"}'; exit 3 }
 $web = 'C:\kf\web'
-$page = Join-Path $web ($Page + '.html')
-if (-not (Test-Path $page)) { Write-Output "KFEDGE {`"ok`":false,`"why`":`"no page $page`"}"; exit 3 }
+# NB: PowerShell variables are case-insensitive: `$page` would overwrite the -Page parameter (the URL became /C:/kf/web/webgl.html.html)
+$pagePath = Join-Path $web ($Page + '.html')
+if (-not (Test-Path $pagePath)) { Write-Output "KFEDGE {`"ok`":false,`"why`":`"no page $pagePath`"}"; exit 3 }
 $media = $null
 if ($Page -eq 'video') {
     $ff = 'C:\kfapps\ffmpeg\bin\ffmpeg.exe'
@@ -49,7 +50,7 @@ while (-not $result -and (Get-Date) -lt $deadline) {
     $resp = $ctx.Response
     try {
         if ($path -eq "/$Page.html") {
-            $b = [System.IO.File]::ReadAllBytes($page); $resp.ContentType = 'text/html; charset=utf-8'; $resp.ContentLength64 = $b.Length; $resp.OutputStream.Write($b, 0, $b.Length)
+            $b = [System.IO.File]::ReadAllBytes($pagePath); $resp.ContentType = 'text/html; charset=utf-8'; $resp.ContentLength64 = $b.Length; $resp.OutputStream.Write($b, 0, $b.Length)
         } elseif ($path -like '/media/*' -and $media) {
             $fs = [System.IO.File]::OpenRead($media); $len = $fs.Length; $start = 0; $end = $len - 1
             $rg = $ctx.Request.Headers['Range']
