@@ -480,3 +480,32 @@ writes only; the VFIO reference's own trace format, so the read set compares 1:1
 display register with a value different from what it reads at every completing vblank (a register kayfabe changes during its latch
 pass). **Falsifier:** the same reads with the same values as at completing vblanks — then the decision is taken from guest memory
 (notifier/semaphore), named next from the same trace's timing.
+
+### Run 279 result (read trace; stopped after 2 TDRs) and the named cause of shape F
+* Same signature again (`vsrace`: stuck flips at 67885.028 with the guest's VSync handling +19.3 ms after the latch, and 67894.927
+  at +0.03 ms). The read trace at the first one shows the guest's VSync interrupt for that vblank was not taken before kayfabe's
+  latch pass at all (no ISR read sequence between the flip's PUT at 12:30:05.944 and 12:30:05.978, one frame later): the guest's
+  handling of the vblank in which the flip latched came after the latch pass — the same condition as the other stuck flips.
+* Register reads in the ISR are the same at completing and at stuck vblanks (`0x611c30`, `0x611ec0`, `0x611c00`, `0x611800` = 0x6,
+  then the W1C ack): **H-F3's falsifier is met — no register value differs**; the decision is taken from guest memory. (Differences
+  from the VFIO reference noted for later, not the cause: kayfabe returns 0 for the reads the driver makes before each flip,
+  `0x690a2c`/`0x690aec`/`0x680220` (HW 0xcf/0xa0/0xe5), and `0x611800` reads 0x6 where HW reads 0x7/0x5.)
+* **What kayfabe writes to guest memory in its latch pass that hardware would not have written yet: the flip's own RELEASE
+  semaphore.** The engine (`kf_disp::engine::Engine::complete`) wrote, at flip N's latch, the release value programmed WITH flip N.
+  NVDisplay writes that value when flip N is flipped away by the next latched update; open NVKMS states this for the behaviour it
+  emulates: *"We write the semaphore's release value when the NVHsChannelFlipQueueEntry is removed from current (i.e., when we do the
+  equivalent of 'flip away')"* (`ogkm-595.84 nvidia-modeset/include/nvkms-headsurface-priv.h:236-244`). A driver whose VSync handling
+  runs after the latch pass therefore finds the new flip already "released" (= no longer scanned out) at the vblank it should become
+  current, never reports that present (ETW: the previous present stays current at every later VSync), and VidSch's flip queue times out
+  2 s later. When the handling runs before the pass (0.5 ms margin, ~99.7 % of flips) the driver reports the flip before the early
+  release lands, which is why it works almost always.
+* **Fix (branch `claude/tdr-opus-base-20261010` 20390253, also to be carried onto the integration line):** at a window latch the
+  engine writes the release of the OUTGOING armed entry (the one this latch flipped away), never the incoming one; a window's first
+  latch writes none. Test `a_non_tearing_flip_waits_for_vblank_and_its_acquire` pins both. `cargo test -p kf-disp -p kf-qemu`: 286
+  passed, 0 failed.
+
+### Run 280 (written before the run): the fix on the production profile, zero measurement flags
+Binary 20390253 (clean base + diagnostics that are inert without their flags + the fix). Flags: production only (no `KF3_*`
+measurement flag, no guest ETW). Scripted sign-in, Edge, Shorts, hold 1000 s with a "down" key every 20 s.
+**Prediction:** no flip-queue (shape F) TDR. **Falsifier:** any TDR cycle; if one occurs, the qemu.log `seq`/ack-latch analysis tells
+whether it is F (fix incomplete/wrong) or S (the remaining shape).
