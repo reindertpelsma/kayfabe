@@ -33,3 +33,8 @@ hardware, produced host Xid 31 FAULT_PTE (7 in 3 Windows runs, 272-274; e.g. CE3
 0x04036000), against 0 in the 12 runs before it and 0 in run 275 on the fixed code (measured, TDR
 hunt README). Do not validate or benchmark integration heads in this range. The fix is on
 `claude/batched-map-decisions-20261010` and is merged into integration only after a review passes.
+
+**Resolved 2026-10-10:** integration is at `11b67100` (the batched-map decisions code after four
+independent reviews; the fourth said MERGE-OK for integration, with residuals being fixed in a
+follow-up). The warning above applies to heads from `aeda9ffd` up to, not including, `11b67100`.
+Not yet run on hardware: gates 9/9 + gate 10, fast suite 30/30, Windows production profile.
