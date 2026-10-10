@@ -61,8 +61,9 @@ pub struct PbLoc {
 pub enum Effect {
     /// Publish these core ARMED words — `(method offset, value)` — in the user area's ARMED half.
     CoreArmed(Vec<(u32, u32)>),
-    /// Write a 16-byte NVDisplay notifier `FINISHED` at `offset` of context DMA `handle` (bound to
-    /// channel number `chn` by `client`), then raise AWAKEN for `chn` if `awaken`.
+    /// Write a 16-byte NVDisplay notifier at `offset` of context DMA `handle` (bound to channel number
+    /// `chn` by `client`) — status FINISHED if `finished`, else BEGUN — then raise AWAKEN for `chn` if
+    /// `awaken`.
     Notify {
         /// Channel number.
         chn: u32,
@@ -74,6 +75,9 @@ pub enum Effect {
         offset: u64,
         /// `MODE_WRITE_AWAKEN`.
         awaken: bool,
+        /// FINISHED: the core's completion notifier, or a window entry FLIPPED AWAY by the next latch.
+        /// `false`: a window flip's own notifier at its latch (BEGUN).
+        finished: bool,
     },
     /// Release a semaphore: write `value` (32 or 64 bits) at `offset` of context DMA `handle`, then
     /// raise the window's semaphore event if `awaken`.
@@ -1231,6 +1235,18 @@ impl Engine {
             return;
         };
         let Stage::Latch { .. } = c.stage else { return };
+        // ★ 2026-10-10 (Windows TDR hunt, `traces/windows_tdr_hunt_20261010/README.md`): what a window latch writes for
+        // the entry it FLIPS AWAY (the outgoing ARMED state, read before the arm below): its release semaphore and its
+        // notifier FINISHED. The display writes a release when its entry is flipped away (`ogkm-595.84:
+        // nvidia-modeset/src/nvkms-displayless.c:272-280`, `include/nvkms-headsurface-priv.h:236-244`), and a window
+        // flip's notifier BEGUN when it performs the flip (`src/nvkms-headsurface.c:1925-1952`). [measured, Windows runs
+        // 282-287, RTX 4070] the Windows driver polls flip N's and flip N-1's notifiers after programming flip N and
+        // leaves only once N-1 reads FINISHED; with a VSync handler that sees the post-latch state, every flip stuck
+        // (5 TDR cycles in boot) unless N-1 was FINISHED at N's latch.
+        let outgoing = (c.kind == ChannelKind::Window).then(|| {
+            let notify = Self::notify_of(&v, c, n, Chan::armed, true, false);
+            (Self::release_of(&v, c, n), notify)
+        });
         // 1. arm
         let mut changed = Vec::new();
         for (i, (a, b)) in c.assy.iter().zip(c.armed.iter_mut()).enumerate() {
@@ -1258,38 +1274,19 @@ impl Engine {
                         handle,
                         offset: u64::from(fld(ctl, v.n_offset)) * 16,
                         awaken: fld(ctl, v.n_mode) == v.n_mode_awaken,
+                        finished: true,
                     });
                 }
             }
             ChannelKind::Window => {
                 st.effects.push(Effect::Latched { window: c.instance });
-                let sem = c.armed(v.w_ctxdma_sem);
-                if sem != 0 {
-                    let ctl = c.armed(v.w_sem_control);
-                    let wide = fld(ctl, v.w_sem_payload) == 1;
-                    let hi = v.w_sem_release_hi.map_or(0, |m| c.armed(m));
-                    let lo = u64::from(c.armed(v.w_sem_release));
-                    st.effects.push(Effect::Release {
-                        chn: n,
-                        client: c.client,
-                        handle: sem,
-                        offset: u64::from(fld(ctl, v.w_sem_offset)) * 16,
-                        value: if wide { u64::from(hi) << 32 | lo } else { lo },
-                        wide,
-                        awaken: fld(ctl, v.w_sem_rel_mode) == 1,
-                    });
+                // the entry this latch flipped away: its release, its notifier FINISHED — never the new entry's
+                if let Some((release, notify)) = outgoing {
+                    st.effects.extend(release);
+                    st.effects.extend(notify);
                 }
-                let handle = c.armed(v.w_ctxdma_notifier);
-                if handle != 0 {
-                    let ctl = c.armed(v.w_notifier_control);
-                    st.effects.push(Effect::Notify {
-                        chn: n,
-                        client: c.client,
-                        handle,
-                        offset: u64::from(fld(ctl, v.n_offset)) * 16,
-                        awaken: was_active && fld(ctl, v.n_mode) == v.n_mode_awaken,
-                    });
-                }
+                // the new entry's own notifier: BEGUN
+                st.effects.extend(Self::notify_of(&v, c, n, Chan::armed, false, was_active));
             }
             ChannelKind::WindowImm | ChannelKind::Cursor => {}
         }
@@ -1301,6 +1298,52 @@ impl Engine {
         {
             c.get = c.queue.front().map_or(c.decoded, |f| f.header);
         }
+    }
+
+    /// The release a window's ARMED entry asks for: `None` without a semaphore context DMA.
+    fn release_of(v: &Vocab, c: &Chan, n: u32) -> Option<Effect> {
+        let sem = c.armed(v.w_ctxdma_sem);
+        if sem == 0 {
+            return None;
+        }
+        let ctl = c.armed(v.w_sem_control);
+        let wide = fld(ctl, v.w_sem_payload) == 1;
+        let hi = v.w_sem_release_hi.map_or(0, |m| c.armed(m));
+        let lo = u64::from(c.armed(v.w_sem_release));
+        Some(Effect::Release {
+            chn: n,
+            client: c.client,
+            handle: sem,
+            offset: u64::from(fld(ctl, v.w_sem_offset)) * 16,
+            value: if wide { u64::from(hi) << 32 | lo } else { lo },
+            wide,
+            awaken: fld(ctl, v.w_sem_rel_mode) == 1,
+        })
+    }
+
+    /// The notifier a window entry asks for, read through `get`: `None` without a notifier context DMA. `finished`:
+    /// the flip-away (FINISHED, never AWAKEN); else the entry's own latch (BEGUN, AWAKEN per its mode if `was_active`).
+    fn notify_of(
+        v: &Vocab,
+        c: &Chan,
+        n: u32,
+        get: fn(&Chan, u32) -> u32,
+        finished: bool,
+        was_active: bool,
+    ) -> Option<Effect> {
+        let handle = get(c, v.w_ctxdma_notifier);
+        if handle == 0 {
+            return None;
+        }
+        let ctl = get(c, v.w_notifier_control);
+        Some(Effect::Notify {
+            chn: n,
+            client: c.client,
+            handle,
+            offset: u64::from(fld(ctl, v.n_offset)) * 16,
+            awaken: !finished && was_active && fld(ctl, v.n_mode) == v.n_mode_awaken,
+            finished,
+        })
     }
 
     /// The head window `w` is owned by in the ARMED core state (`None`: no owner or no core).
