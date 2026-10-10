@@ -11,6 +11,14 @@
 //!
 //! ⊘ **No O(placements) work here.** Everything below is proportional to the DIFF.
 
+// Indexing: every `x[i]` in this module indexes a per-run vector (`codes`, `rows`, `failed`, `kept`,
+// `placed`, ...) built in `apply_entry` with exactly `runs.len()` elements, by a run index produced by
+// enumerating the same `runs` (or a position `partition_point`/`position` returned over the same
+// slice) — never by a guest value. The guest values (VA, length, GPA, leaf size, aperture) are
+// only ever added/subtracted with `checked_*`/`saturating_*` (the lint below stays on for those),
+// and `sim::fuzz::hostile_rows_never_panic_…` drives hostile rows through every path.
+#![allow(clippy::indexing_slicing)]
+
 use crate::ledger::{Desired, MapTarget, Mapped, SkedRow, UsermodeRow, desired_from_leaves};
 use kf_chip::sked::MessageLeaf;
 use kf_chip::usermode::{UsermodeLeaf, UsermodeMmio};
@@ -194,14 +202,14 @@ impl Applied {
 
     fn refuse(&mut self, i: usize, why: String) {
         self.codes[i] = KFWR_ACK_FAILED;
-        self.refused += 1;
+        self.refused = self.refused.saturating_add(1);
         self.first_refusal.get_or_insert(why);
     }
 
     /// ★★★ v3-roperm: withhold a privileged map run from a user twin, by name (bounded log).
     fn withhold_privileged(&mut self, i: usize, r: &DiffRun) {
         self.codes[i] = KFWR_ACK_FAILED;
-        self.priv_withheld += 1;
+        self.priv_withheld = self.priv_withheld.saturating_add(1);
         self.priv_withheld_bytes = self.priv_withheld_bytes.saturating_add(r.len);
         static LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
         if LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 64 {
@@ -215,7 +223,7 @@ impl Applied {
     fn fallback(&mut self, why: String) {
         // A target that does not batch at all is not a fallback — it is the per-run path.
         if why != crate::ledger::NOT_BATCHED {
-            self.batch_fallbacks += 1;
+            self.batch_fallbacks = self.batch_fallbacks.saturating_add(1);
             self.first_batch_fallback.get_or_insert(why);
         }
     }
@@ -238,8 +246,8 @@ fn contiguous_groups(
     let mut out = Vec::new();
     let mut start = 0;
     for k in 1..=items.len() {
-        let breaks = k == items.len() || k - start >= cap || {
-            let (va, len) = span(items[k - 1]);
+        let breaks = k == items.len() || k.saturating_sub(start) >= cap || {
+            let (va, len) = span(items[k.saturating_sub(1)]);
             va.checked_add(len) != Some(span(items[k]).0) || !compatible(items[start], items[k])
         };
         if breaks {
@@ -405,13 +413,13 @@ fn carve_reached(
         return false;
     }
     if !target.gpu_space() {
-        out.carve_cpu += 1;
+        out.carve_cpu = out.carve_cpu.saturating_add(1);
         false
     } else if target.withholds_privileged() {
-        out.carve_gpu += 1;
+        out.carve_gpu = out.carve_gpu.saturating_add(1);
         cfg.carve_refuse
     } else {
-        out.carve_kernel += 1;
+        out.carve_kernel = out.carve_kernel.saturating_add(1);
         cfg.carve_refuse
     }
 }
@@ -482,7 +490,7 @@ fn maps_over<'m>(
         .iter()
         .take_while(|&&m| runs[m].va < end)
         .count();
-    maps[first..first + count].iter().copied()
+    maps[first..first.saturating_add(count)].iter().copied()
 }
 
 /// The UNCHANGED intervals ([`same_mapping`]) between this entry's UNMAP and MAP runs — for an
@@ -589,7 +597,7 @@ fn keep_only_what_stays_exact(
                 if inside.is_empty() || whole_in_one {
                     continue;
                 }
-                let mut next = Vec::with_capacity(ps.len() + 1);
+                let mut next = Vec::with_capacity(ps.len().saturating_add(1));
                 for p in ps {
                     if p.s < xe && xs < p.e {
                         remade.push(Kept {
@@ -768,7 +776,7 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
     let mut failed = vec![false; n];
     let link_fail = |out: &mut Applied, failed: &mut [bool]| {
         for (j, why) in fail_linked(runs, &links, &over, failed) {
-            out.linked_failed += 1;
+            out.linked_failed = out.linked_failed.saturating_add(1);
             out.refuse_once(j, why);
         }
     };
@@ -790,20 +798,20 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
                 failed[i] = true;
                 continue;
             }
-            out.priv_mirrored += 1;
+            out.priv_mirrored = out.priv_mirrored.saturating_add(1);
         }
         // ★ 2026-10-09: only the NEW pieces of the run reach the host; the unchanged part is
         // already ours (a kept remnant of the placement this entry unmaps).
         let new = subtract(r0.va, r0.va.saturating_add(r0.len), &kept[i]);
         if new.is_empty() {
-            out.kept_runs += 1;
+            out.kept_runs = out.kept_runs.saturating_add(1);
             continue;
         }
         for (s, e) in new {
             let r = DiffRun {
                 va: s,
-                len: e - s,
-                at: r0.at.wrapping_add(s - r0.va),
+                len: e.saturating_sub(s),
+                at: r0.at.wrapping_add(s.saturating_sub(r0.va)),
                 ..*r0
             };
             match prepare_row(target, &r, i, cfg, extent, &reserved, &[], &mut out) {
@@ -827,7 +835,7 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
     let mut pieces: Vec<(usize, u64, u64)> = Vec::new();
     for (i, r) in runs.iter().enumerate().filter(|(_, r)| r.unmap) {
         if r.held {
-            out.held_retired += 1;
+            out.held_retired = out.held_retired.saturating_add(1);
             continue;
         }
         let keep_whole: Vec<(u64, u64)>;
@@ -840,13 +848,19 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
         };
         let changed = subtract(r.va, r.va.saturating_add(r.len), k);
         if changed.is_empty() {
-            out.kept_runs += 1;
+            out.kept_runs = out.kept_runs.saturating_add(1);
         }
-        pieces.extend(changed.into_iter().map(|(s, e)| (i, s, e - s)));
+        pieces.extend(
+            changed
+                .into_iter()
+                .map(|(s, e)| (i, s, e.saturating_sub(s))),
+        );
     }
     // Re-made pages (rule 2 of `keep_only_what_stays_exact`) of UNMAPs that will run.
     for p in remade.iter().filter(|p| !failed[p.u]) {
-        out.remade_unchanged_pages += (p.e - p.s) / crate::batch::BATCH_PAGE;
+        out.remade_unchanged_pages = out
+            .remade_unchanged_pages
+            .saturating_add(p.e.saturating_sub(p.s) / crate::batch::BATCH_PAGE);
         out.remade.push((p.s, p.e));
     }
     if out.remade_unchanged_pages > 0 {
@@ -874,14 +888,15 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
         let mut group_err: Option<String> = None;
         if group.len() >= 2 || net {
             let va = pieces[group[0]].1;
-            let last = pieces[group[group.len() - 1]];
-            let end = last.1 + last.2;
-            out.unmap_calls += 1;
-            match target.unmap_range(va, end - va, true) {
+            let last = group.last().map_or(pieces[group[0]], |&l| pieces[l]);
+            let end = last.1.saturating_add(last.2);
+            out.unmap_calls = out.unmap_calls.saturating_add(1);
+            match target.unmap_range(va, end.saturating_sub(va), true) {
                 Ok(()) => {
-                    out.unmapped += runs_in(group);
-                    out.range_unmaps += 1;
-                    out.range_unmapped_runs += runs_in(group);
+                    out.unmapped = out.unmapped.saturating_add(runs_in(group));
+                    out.range_unmaps = out.range_unmaps.saturating_add(1);
+                    out.range_unmapped_runs =
+                        out.range_unmapped_runs.saturating_add(runs_in(group));
                     continue;
                 }
                 Err(e) => {
@@ -899,20 +914,20 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
                 match (&group_err, group.len()) {
                     (Some(e), 1) => Err(e.clone()),
                     _ => {
-                        out.unmap_calls += 1;
+                        out.unmap_calls = out.unmap_calls.saturating_add(1);
                         target.unmap_range(va, len, true)
                     }
                 }
             } else if va != r.va || len != r.len {
                 Err("a sub-range of a placement and the target could not unmap it by range".into())
             } else {
-                out.unmap_calls += 1;
+                out.unmap_calls = out.unmap_calls.saturating_add(1);
                 target.unmap(r.va, true)
             };
             match res {
-                Ok(()) => out.unmapped += 1,
+                Ok(()) => out.unmapped = out.unmapped.saturating_add(1),
                 Err(e) => {
-                    out.unmap_refused += 1;
+                    out.unmap_refused = out.unmap_refused.saturating_add(1);
                     failed[i] = true;
                     out.refuse_once(i, format!("unmap {va:#x}+{len:#x}: {e}"));
                 }
@@ -993,12 +1008,12 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
     ) {
         if group.len() >= 2 && pending[group[0]].1.ram {
             let rows: Vec<Desired> = group.iter().map(|&k| pending[k].1).collect();
-            out.map_calls += 1;
+            out.map_calls = out.map_calls.saturating_add(1);
             match target.map_batch(&rows, true) {
                 Ok(()) => {
-                    out.mapped += rows.len();
-                    out.batches += 1;
-                    out.batched_runs += rows.len();
+                    out.mapped = out.mapped.saturating_add(rows.len());
+                    out.batches = out.batches.saturating_add(1);
+                    out.batched_runs = out.batched_runs.saturating_add(rows.len());
                     for &k in group {
                         placed[pending[k].0].push((pending[k].1.va, pending[k].1.len));
                     }
@@ -1009,10 +1024,10 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
         }
         for &k in group {
             let (i, d) = pending[k];
-            out.map_calls += 1;
+            out.map_calls = out.map_calls.saturating_add(1);
             match target.map(&d, true) {
                 Ok(Mapped::Placed) => {
-                    out.mapped += 1;
+                    out.mapped = out.mapped.saturating_add(1);
                     placed[i].push((d.va, d.len));
                 }
                 Ok(Mapped::HeldByHost) => {
@@ -1021,7 +1036,7 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
                         "kf3: mem leaf {:#x}+{:#x} HELD BY HOST (host RM placed its own buffer there)",
                         d.va, d.len
                     );
-                    out.held += 1;
+                    out.held = out.held.saturating_add(1);
                     held_any[i] = true;
                     // ★ v3-gfx: name WHERE (bounded) — a held row is a guest VA host RM already owns.
                     static HELD_LOGGED: std::sync::atomic::AtomicU32 =
@@ -1048,8 +1063,8 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
     for (i, r) in runs.iter().enumerate().filter(|(_, r)| !r.unmap) {
         if failed[i] {
             for &(s, len) in &placed[i] {
-                out.unmap_calls += 1;
-                out.taken_down += 1;
+                out.unmap_calls = out.unmap_calls.saturating_add(1);
+                out.taken_down = out.taken_down.saturating_add(1);
                 if let Err(why) = target.unmap_range(s, len, true) {
                     out.first_refusal.get_or_insert(format!(
                         "map {:#x}: refused, and taking down its new piece {s:#x}+{len:#x} was refused too: {why}",
@@ -1061,13 +1076,20 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
             out.codes[i] = KFWR_ACK_HELD;
         }
     }
-    if out.mapped + out.unmapped + out.taken_down + out.usermode_trapped + out.sked_placed > 0 {
+    if out
+        .mapped
+        .saturating_add(out.unmapped)
+        .saturating_add(out.taken_down)
+        .saturating_add(out.usermode_trapped)
+        .saturating_add(out.sked_placed)
+        > 0
+    {
         match target.invalidate() {
             Ok(()) => out.invalidated = true,
             Err(e) => {
                 // ⊘ The rows landed (their verdicts stand — the host holds them); the space is
                 // not settled until an invalidate succeeds, so the caller must not clear.
-                out.refused += 1;
+                out.refused = out.refused.saturating_add(1);
                 out.invalidate_refused = true;
                 out.first_refusal.get_or_insert(e);
             }
@@ -1108,6 +1130,19 @@ fn prepare_row(
                 return None;
             }
         };
+    // ★ Review addendum (hostile guest): neither the VA range nor the backing range of a row may
+    // wrap — a sysmem leaf's backing offset comes from the VMM's layout closure, unchecked by
+    // `desired_from_leaves`. Refused by name before any arithmetic on the row.
+    if d.va.checked_add(d.len).is_none() || d.off.checked_add(d.len).is_none() {
+        out.refuse(
+            i,
+            format!(
+                "leaf {:#x}+{:#x} (backing {:#x}) wraps the address space — refused",
+                d.va, d.len, d.off
+            ),
+        );
+        return None;
+    }
     // ★★★ 2026-10-10 (fix of the 6fafcc6e fast-suite regression; see
     // `tests::a_run_straddling_the_carve_out_maps_all_but_the_carve_bytes`): only the carve-out
     // BYTES are refused. A run that starts inside the carve-out is refused whole, as before; a run
@@ -1127,8 +1162,10 @@ fn prepare_row(
             );
             return None;
         }
-        let below = cfg.carve - d.off;
-        out.carve_clipped_bytes += d.len - below;
+        let below = cfg.carve.saturating_sub(d.off);
+        out.carve_clipped_bytes = out
+            .carve_clipped_bytes
+            .saturating_add(d.len.saturating_sub(below));
         static CLIPPED_LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
         if CLIPPED_LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 16 {
             eprintln!(
@@ -1139,8 +1176,8 @@ fn prepare_row(
                 cfg.carve,
                 d.va,
                 below,
-                d.va + below,
-                d.len - below
+                d.va.saturating_add(below),
+                d.len.saturating_sub(below)
             );
         }
         d.len = below;
@@ -1158,19 +1195,19 @@ fn prepare_row(
     }
     if let Some(ext) = extent {
         if d.va >= ext {
-            out.clipped_bytes += d.len;
+            out.clipped_bytes = out.clipped_bytes.saturating_add(d.len);
             out.codes[i] = KFWR_ACK_HELD;
             return None;
         }
         let end = d.va.saturating_add(d.len);
         if end > ext {
-            out.clipped_bytes += end - ext;
-            d.len = ext - d.va;
+            out.clipped_bytes = out.clipped_bytes.saturating_add(end.saturating_sub(ext));
+            d.len = ext.saturating_sub(d.va);
         }
     }
     let end = d.va.saturating_add(d.len);
     if let Some(&(a, b)) = reserved.iter().find(|&&(a, b)| d.va < b && a < end) {
-        out.vmm_overlaps += 1;
+        out.vmm_overlaps = out.vmm_overlaps.saturating_add(1);
         out.refuse(
             i,
             format!(
@@ -1203,8 +1240,8 @@ fn split_at_leaf(d: Desired) -> Vec<Desired> {
     if !d.leaf.is_power_of_two() || end.is_multiple_of(d.leaf) {
         return vec![d];
     }
-    let cut = end & !(d.leaf - 1);
-    let tail_leaf = |s: u64| (1u64 << (s | end).trailing_zeros()).min(d.leaf);
+    let cut = end & !d.leaf.saturating_sub(1);
+    let tail_leaf = |s: u64| 1u64.unbounded_shl((s | end).trailing_zeros()).min(d.leaf);
     if cut <= d.va {
         return vec![Desired {
             leaf: tail_leaf(d.va),
@@ -1213,13 +1250,14 @@ fn split_at_leaf(d: Desired) -> Vec<Desired> {
     }
     vec![
         Desired {
-            len: cut - d.va,
+            len: cut.saturating_sub(d.va),
             ..d
         },
         Desired {
             va: cut,
-            len: end - cut,
-            off: d.off + (cut - d.va),
+            len: end.saturating_sub(cut),
+            // `check_row`-style: d.off + len cannot wrap (prepare_row refused it), cut - d.va < len.
+            off: d.off.saturating_add(cut.saturating_sub(d.va)),
             leaf: tail_leaf(cut),
             ..d
         },
@@ -1252,7 +1290,7 @@ fn apply_sked(
             out.withhold_privileged(i, r);
             return None;
         }
-        out.priv_mirrored += 1;
+        out.priv_mirrored = out.priv_mirrored.saturating_add(1);
     }
     // The hardware ignores the address. A VIDEO leaf keeps the guest's own (bounded by the store
     // like any vidmem row); a SYSTEM_NON_COHERENT one names the store's first page, so the host PTE
@@ -1301,19 +1339,19 @@ fn apply_sked(
     }
     if let Some(ext) = at.extent {
         if s.va >= ext {
-            out.clipped_bytes += s.len;
+            out.clipped_bytes = out.clipped_bytes.saturating_add(s.len);
             out.codes[i] = KFWR_ACK_HELD;
             return None;
         }
         let end = s.va.saturating_add(s.len);
         if end > ext {
-            out.clipped_bytes += end - ext;
-            s.len = ext - s.va;
+            out.clipped_bytes = out.clipped_bytes.saturating_add(end.saturating_sub(ext));
+            s.len = ext.saturating_sub(s.va);
         }
     }
     let end = s.va.saturating_add(s.len);
     if let Some(&(a, b)) = at.reserved.iter().find(|&&(a, b)| s.va < b && a < end) {
-        out.vmm_overlaps += 1;
+        out.vmm_overlaps = out.vmm_overlaps.saturating_add(1);
         out.refuse(
             i,
             format!(
@@ -1333,10 +1371,10 @@ fn apply_sked(
         );
         return None;
     }
-    out.map_calls += 1;
+    out.map_calls = out.map_calls.saturating_add(1);
     match target.map_sked(&s, true) {
         Ok(Mapped::Placed) => {
-            out.sked_placed += 1;
+            out.sked_placed = out.sked_placed.saturating_add(1);
             static LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
             if LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 64 {
                 eprintln!(
@@ -1347,8 +1385,8 @@ fn apply_sked(
             Some((s.va, s.len))
         }
         Ok(Mapped::HeldByHost) => {
-            out.held += 1;
-            out.sked_held += 1;
+            out.held = out.held.saturating_add(1);
+            out.sked_held = out.sked_held.saturating_add(1);
             out.codes[i] = KFWR_ACK_HELD;
             eprintln!(
                 "kf-mem: SKED-reflected leaf {:#x}+{:#x} HELD BY HOST (host RM already maps that VA)",
@@ -1417,19 +1455,19 @@ fn apply_usermode(
     }
     if let Some(ext) = extent {
         if u.va >= ext {
-            out.clipped_bytes += u.len;
+            out.clipped_bytes = out.clipped_bytes.saturating_add(u.len);
             out.codes[i] = KFWR_ACK_HELD;
             return;
         }
         let end = u.va.saturating_add(u.len);
         if end > ext {
-            out.clipped_bytes += end - ext;
-            u.len = ext - u.va;
+            out.clipped_bytes = out.clipped_bytes.saturating_add(end.saturating_sub(ext));
+            u.len = ext.saturating_sub(u.va);
         }
     }
     let end = u.va.saturating_add(u.len);
     if let Some(&(a, b)) = reserved.iter().find(|&&(a, b)| u.va < b && a < end) {
-        out.vmm_overlaps += 1;
+        out.vmm_overlaps = out.vmm_overlaps.saturating_add(1);
         out.refuse(
             i,
             format!(
@@ -1450,9 +1488,9 @@ fn apply_usermode(
         return;
     }
     match target.map_usermode(&u) {
-        Ok(Mapped::Placed) => out.usermode_trapped += 1,
+        Ok(Mapped::Placed) => out.usermode_trapped = out.usermode_trapped.saturating_add(1),
         Ok(Mapped::HeldByHost) => {
-            out.usermode_unmirrored += 1;
+            out.usermode_unmirrored = out.usermode_unmirrored.saturating_add(1);
             out.codes[i] = KFWR_ACK_HELD;
             static LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
             if LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 16 {

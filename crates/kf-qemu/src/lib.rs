@@ -17,6 +17,7 @@ pub mod device;
 pub mod display;
 pub mod dispsw;
 pub mod exposure;
+pub mod failclosed;
 pub mod ffi_unsafe;
 pub mod gop;
 pub mod gpucopy;

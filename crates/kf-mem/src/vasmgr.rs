@@ -479,7 +479,12 @@ impl Walker for GpuWalker {
             .map(|p| {
                 // `validate` proved every slice lies inside the run array.
                 let first = p.first_run as usize;
-                let runs = r.runs[first..first + p.run_count as usize]
+                // (Never out of range after `validate`; if it ever were, an empty slice — the entry's
+                // runs are then simply absent — beats a panic on the VA thread.)
+                let runs = r
+                    .runs
+                    .get(first..first.saturating_add(p.run_count as usize))
+                    .unwrap_or_default()
                     .iter()
                     .map(|m| self.perm.diff_run(m))
                     .collect();
@@ -528,30 +533,34 @@ fn run_census(runs: &[kf_cuda::abi::KfMapRun]) -> String {
     let mut lens: BTreeMap<u64, usize> = BTreeMap::new();
     let mut gib: BTreeMap<u64, (usize, u64, u64)> = BTreeMap::new();
     for m in runs {
-        *ap.entry(m.aperture()).or_default() += 1;
-        *lens.entry(m.len).or_default() += 1;
+        let a = ap.entry(m.aperture()).or_default();
+        *a = a.saturating_add(1);
+        let l = lens.entry(m.len).or_default();
+        *l = l.saturating_add(1);
         let g = gib.entry(m.va >> 30).or_insert((0, u64::MAX, 0));
-        g.0 += 1;
+        g.0 = g.0.saturating_add(1);
         g.1 = g.1.min(m.gpga);
         g.2 = g.2.max(m.gpga);
     }
     // ★ Why neighbours did NOT coalesce: VA-contiguous pairs, split by address or only by flags.
     let (mut va_contig, mut flag_split, mut xor) = (0usize, 0usize, 0u32);
     for w in runs.windows(2) {
-        if w[0].va + w[0].len == w[1].va {
-            va_contig += 1;
-            if w[0].gpga + w[0].len == w[1].gpga && w[0].aperture() == w[1].aperture() {
-                flag_split += 1;
-                xor |= w[0].flags ^ w[1].flags;
+        let [a, b] = w else { continue };
+        if a.va.checked_add(a.len) == Some(b.va) {
+            va_contig = va_contig.saturating_add(1);
+            if a.gpga.checked_add(a.len) == Some(b.gpga) && a.aperture() == b.aperture() {
+                flag_split = flag_split.saturating_add(1);
+                xor |= a.flags ^ b.flags;
             }
         }
     }
     let mut flags: BTreeMap<u32, usize> = BTreeMap::new();
     for m in runs {
-        *flags.entry(m.flags).or_default() += 1;
+        let f = flags.entry(m.flags).or_default();
+        *f = f.saturating_add(1);
     }
     let mut top_lens: Vec<(u64, usize)> = lens.into_iter().collect();
-    top_lens.sort_by(|a, b| b.1.cmp(&a.1));
+    top_lens.sort_by_key(|&(_, n)| std::cmp::Reverse(n));
     top_lens.truncate(6);
     let gib: Vec<String> = gib
         .iter()
@@ -817,9 +826,9 @@ impl VaStats {
     }
     fn outcome(&mut self, o: ClearOutcome) {
         match o {
-            ClearOutcome::Cleared => self.cleared += 1,
-            ClearOutcome::Superseded => self.superseded += 1,
-            ClearOutcome::AlreadyIdle => self.already_idle += 1,
+            ClearOutcome::Cleared => self.cleared = self.cleared.saturating_add(1),
+            ClearOutcome::Superseded => self.superseded = self.superseded.saturating_add(1),
+            ClearOutcome::AlreadyIdle => self.already_idle = self.already_idle.saturating_add(1),
         }
     }
 }
@@ -1015,8 +1024,8 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         self.stats.outcome(o);
         let ns = ns_since(at);
         let tm = &mut self.stats.timing;
-        tm.invals += 1;
-        tm.inval_ns += ns;
+        tm.invals = tm.invals.saturating_add(1);
+        tm.inval_ns = tm.inval_ns.saturating_add(ns);
         tm.inval_ns_max = tm.inval_ns_max.max(ns);
         out.completed.push((r.seq, o));
     }
@@ -1037,7 +1046,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 Settle::Live => self.complete_invalidate(r, at, trigger, &mut out),
                 Settle::Pending => self.awaiting.push((r, keys, at)),
                 Settle::Failed(e) => {
-                    self.stats.unreconciled += 1;
+                    self.stats.unreconciled = self.stats.unreconciled.saturating_add(1);
                     self.stats.refuse(format!(
                         "invalidate seq {}: target work failed after apply: {e}",
                         r.seq
@@ -1107,7 +1116,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                     .map_or("none".to_string(), |b| format!("#{}", b.id))
             );
         }
-        self.stats.splits += 1;
+        self.stats.splits = self.stats.splits.saturating_add(1);
         self.pending.push(Want::Split {
             pdb,
             ticket,
@@ -1132,7 +1141,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 maplog_want(&w)
             );
         }
-        self.stats.splits += 1;
+        self.stats.splits = self.stats.splits.saturating_add(1);
         self.pending.push(w);
         self.pump(trigger);
     }
@@ -1170,7 +1179,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             wants: Vec::with_capacity(wants.len()),
             walked: BTreeMap::new(),
             submitted: std::time::Instant::now(),
-            id: self.stats.walks_submitted + 1,
+            id: self.stats.walks_submitted.saturating_add(1),
         };
         let mut vacuous: Vec<u64> = Vec::new();
         let mut no_slot: Vec<VasKey> = Vec::new();
@@ -1193,7 +1202,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             {
                 // Nothing of ours is under that root: nothing can be stale.
                 if pdb.is_some() {
-                    self.stats.split_missed += 1;
+                    self.stats.split_missed = self.stats.split_missed.saturating_add(1);
                 }
                 self.splits_done.push((ticket, Ok(())));
                 continue;
@@ -1202,7 +1211,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 && keys.is_empty()
             {
                 if !r.inval.all_pdb {
-                    self.stats.named_missed += 1;
+                    self.stats.named_missed = self.stats.named_missed.saturating_add(1);
                 }
                 vacuous.push(r.seq);
                 continue;
@@ -1233,7 +1242,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             self.stats.outcome(trigger.complete(seq));
         }
         for k in no_slot {
-            self.stats.no_slot += 1;
+            self.stats.no_slot = self.stats.no_slot.saturating_add(1);
             self.stats.refuse(format!(
                 "{k:?}: no walker slot left — its mappings cannot be diffed"
             ));
@@ -1267,7 +1276,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         self.stats.submit_ns_max = self.stats.submit_ns_max.max(ns);
         match r {
             Ok(()) => {
-                self.stats.walks_submitted += 1;
+                self.stats.walks_submitted = self.stats.walks_submitted.saturating_add(1);
                 batch.submitted = std::time::Instant::now();
                 if crate::maplog::on() {
                     eprintln!(
@@ -1280,7 +1289,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 self.inflight = Some(batch);
             }
             Err(e) => {
-                self.stats.walks_refused += 1;
+                self.stats.walks_refused = self.stats.walks_refused.saturating_add(1);
                 self.refuse_batch(&batch, format!("walk submit: {e}"));
             }
         }
@@ -1307,7 +1316,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
     fn refuse_batch(&mut self, batch: &Batch, why: String) {
         for (w, _, _) in &batch.wants {
             match w {
-                Want::Invalidate(..) => self.stats.unreconciled += 1,
+                Want::Invalidate(..) => self.stats.unreconciled = self.stats.unreconciled.saturating_add(1),
                 Want::Split { ticket, .. } => self.splits_done.push((*ticket, Err(why.clone()))),
                 Want::Root(_) => {}
             }
@@ -1327,7 +1336,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             Ok(None) => return out,
             Ok(Some(d)) => d,
             Err(e) => {
-                self.stats.walks_refused += 1;
+                self.stats.walks_refused = self.stats.walks_refused.saturating_add(1);
                 // ★ Name WHAT was walked: a refused report is about the batch, and a batch can
                 // carry objects the refusing want never named (ALL_PDB, or several objects under
                 // one root). Without this the refusal names only the root that asked.
@@ -1338,7 +1347,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 if let Some(b) = self.inflight.take() {
                     for (w, _, _) in &b.wants {
                         if let Want::Invalidate(r, _) = w {
-                            self.stats.unreconciled += 1;
+                            self.stats.unreconciled = self.stats.unreconciled.saturating_add(1);
                             out.unreconciled.push(r.seq);
                         }
                         if let Want::Split { ticket, .. } = w {
@@ -1356,11 +1365,11 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         let Some(batch) = self.inflight.take() else {
             return out;
         };
-        self.stats.walks_reconciled += 1;
+        self.stats.walks_reconciled = self.stats.walks_reconciled.saturating_add(1);
         let tm = &mut self.stats.timing;
-        tm.walks += 1;
-        tm.walk_ns += ns_since(batch.submitted);
-        tm.gpu_us += done.gpu_us;
+        tm.walks = tm.walks.saturating_add(1);
+        tm.walk_ns = tm.walk_ns.saturating_add(ns_since(batch.submitted));
+        tm.gpu_us = tm.gpu_us.saturating_add(done.gpu_us);
         tm.leaves_last = done.nrun as u64;
         let by_slot: BTreeMap<u32, &EntryDiff> = done.entries.iter().map(|e| (e.slot, e)).collect();
         // ★ One verdict per report run; anything not applied below stays FAILED (0): the next
@@ -1443,11 +1452,11 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                     );
                 }
             }
-            self.stats.timing.apply_ns += apply_ns;
+            self.stats.timing.apply_ns = self.stats.timing.apply_ns.saturating_add(apply_ns);
             // ★ w829: the host-map cost of a large diff (a fragmented CUDA space is ~10^4 runs,
             // each ONE host map call on the guest-RAM object) — named, it is the next budget.
             // ★ V3_BATCHED_MAP: runs vs the verbs they cost (a batch / a range is ONE verb).
-            if a.mapped + a.unmapped >= 1000 {
+            if a.mapped.saturating_add(a.unmapped) >= 1000 {
                 eprintln!(
                     "kf3: mem large apply {key:?}: {} maps + {} unmaps in {} ms — {} map verb(s) ({} batch(es) carrying {} runs), {} unmap verb(s) ({} range(s) carrying {} runs), {} fallback(s){}",
                     a.mapped,
@@ -1469,35 +1478,37 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 eprintln!("kf3: mem batch fallback {key:?}: {w}");
             }
             for (i, &c) in a.codes.iter().enumerate() {
-                if let Some(slot) = codes.get_mut(e.first + i) {
+                if let Some(slot) = codes.get_mut(e.first.saturating_add(i)) {
                     *slot = c;
                 }
             }
-            self.stats.timing.host_calls +=
-                (a.map_calls + a.unmap_calls) as u64 + u64::from(a.invalidated);
-            self.stats.batches += a.batches as u64;
-            self.stats.batched_runs += a.batched_runs as u64;
-            self.stats.range_unmaps += a.range_unmaps as u64;
-            self.stats.batch_fallbacks += a.batch_fallbacks as u64;
-            self.stats.remade_unchanged_pages += a.remade_unchanged_pages;
-            self.stats.linked_failed += a.linked_failed as u64;
-            self.stats.mapped += a.mapped as u64;
-            self.stats.unmapped += a.unmapped as u64;
-            self.stats.host_invalidates += u64::from(a.invalidated);
-            self.stats.held += a.held as u64;
-            self.stats.vmm_overlaps += a.vmm_overlaps as u64;
-            self.stats.usermode_trapped += a.usermode_trapped as u64;
-            self.stats.usermode_unmirrored += a.usermode_unmirrored as u64;
-            self.stats.clipped_bytes += a.clipped_bytes;
-            self.stats.priv_withheld += a.priv_withheld as u64;
-            self.stats.priv_withheld_bytes += a.priv_withheld_bytes;
-            self.stats.priv_mirrored += a.priv_mirrored as u64;
-            self.stats.sked_placed += a.sked_placed as u64;
-            self.stats.sked_held += a.sked_held as u64;
-            self.stats.carve_gpu += a.carve_gpu as u64;
-            self.stats.carve_kernel += a.carve_kernel as u64;
-            self.stats.carve_cpu += a.carve_cpu as u64;
-            self.stats.carve_clipped_bytes += a.carve_clipped_bytes;
+            self.stats.timing.host_calls = self.stats.timing.host_calls.saturating_add(
+                (a.map_calls.saturating_add(a.unmap_calls) as u64)
+                    .saturating_add(u64::from(a.invalidated)),
+            );
+            self.stats.batches = self.stats.batches.saturating_add(a.batches as u64);
+            self.stats.batched_runs = self.stats.batched_runs.saturating_add(a.batched_runs as u64);
+            self.stats.range_unmaps = self.stats.range_unmaps.saturating_add(a.range_unmaps as u64);
+            self.stats.batch_fallbacks = self.stats.batch_fallbacks.saturating_add(a.batch_fallbacks as u64);
+            self.stats.remade_unchanged_pages = self.stats.remade_unchanged_pages.saturating_add(a.remade_unchanged_pages);
+            self.stats.linked_failed = self.stats.linked_failed.saturating_add(a.linked_failed as u64);
+            self.stats.mapped = self.stats.mapped.saturating_add(a.mapped as u64);
+            self.stats.unmapped = self.stats.unmapped.saturating_add(a.unmapped as u64);
+            self.stats.host_invalidates = self.stats.host_invalidates.saturating_add(u64::from(a.invalidated));
+            self.stats.held = self.stats.held.saturating_add(a.held as u64);
+            self.stats.vmm_overlaps = self.stats.vmm_overlaps.saturating_add(a.vmm_overlaps as u64);
+            self.stats.usermode_trapped = self.stats.usermode_trapped.saturating_add(a.usermode_trapped as u64);
+            self.stats.usermode_unmirrored = self.stats.usermode_unmirrored.saturating_add(a.usermode_unmirrored as u64);
+            self.stats.clipped_bytes = self.stats.clipped_bytes.saturating_add(a.clipped_bytes);
+            self.stats.priv_withheld = self.stats.priv_withheld.saturating_add(a.priv_withheld as u64);
+            self.stats.priv_withheld_bytes = self.stats.priv_withheld_bytes.saturating_add(a.priv_withheld_bytes);
+            self.stats.priv_mirrored = self.stats.priv_mirrored.saturating_add(a.priv_mirrored as u64);
+            self.stats.sked_placed = self.stats.sked_placed.saturating_add(a.sked_placed as u64);
+            self.stats.sked_held = self.stats.sked_held.saturating_add(a.sked_held as u64);
+            self.stats.carve_gpu = self.stats.carve_gpu.saturating_add(a.carve_gpu as u64);
+            self.stats.carve_kernel = self.stats.carve_kernel.saturating_add(a.carve_kernel as u64);
+            self.stats.carve_cpu = self.stats.carve_cpu.saturating_add(a.carve_cpu as u64);
+            self.stats.carve_clipped_bytes = self.stats.carve_clipped_bytes.saturating_add(a.carve_clipped_bytes);
             if a.priv_mirrored > 0 {
                 static MIRRORED: std::sync::atomic::AtomicU32 =
                     std::sync::atomic::AtomicU32::new(0);
@@ -1534,16 +1545,16 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 // name so its invalidate is not cleared over leaves nobody mapped.
                 failed.insert(key);
                 absent_only.insert(key);
-                self.stats.walk_refused_spaces += 1;
+                self.stats.walk_refused_spaces = self.stats.walk_refused_spaces.saturating_add(1);
                 self.stats.refuse(format!(
                     "{key:?} root {walked_root:#x}: the walk REFUSED leaves (refuse_mask={:#x}) — absent, not mapped",
                     e.refused
                 ));
             } else if e.partial {
-                self.stats.partial += 1;
+                self.stats.partial = self.stats.partial.saturating_add(1);
                 partial.insert(key);
             } else {
-                self.stats.spaces_reconciled += 1;
+                self.stats.spaces_reconciled = self.stats.spaces_reconciled.saturating_add(1);
             }
             out.applied.push((key, a));
         }
@@ -1589,7 +1600,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                         .push((*ticket, Err(format!("split {pdb:x?}: {k:?} did not apply")))),
                     (None, _) if again => requeue.push((*w, *at)),
                     (None, Some(k)) => {
-                        self.stats.splits_unsettled += 1;
+                        self.stats.splits_unsettled = self.stats.splits_unsettled.saturating_add(1);
                         if self.stats.splits_unsettled <= 64 {
                             eprintln!(
                                 "kf-mem: split {pdb:x?} (ticket {ticket}) completed over UNSETTLED {k:?} — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them"
@@ -1620,7 +1631,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                     .iter()
                     .all(|k| !failed.contains(k) || (absent_only.contains(k) && !rewalk.contains(k)));
             if bad.is_some() && !absent_ok {
-                self.stats.unreconciled += 1;
+                self.stats.unreconciled = self.stats.unreconciled.saturating_add(1);
                 out.unreconciled.push(r.seq);
             } else if again {
                 // ★ Its maps were withheld (slot capacity): the unmaps landed, walk again now.
@@ -1630,7 +1641,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 // BAR1 doorbell overlay) defers THIS clear only — the guest keeps polling, which is
                 // legal; [`VaManager::on_targets`] clears it when the work is live.
                 if absent_ok {
-                    self.stats.cleared_over_absent += 1;
+                    self.stats.cleared_over_absent = self.stats.cleared_over_absent.saturating_add(1);
                     if self.stats.cleared_over_absent <= 64 {
                         eprintln!(
                             "kf3: mem invalidate seq {} CLEARED OVER ABSENCE ({:?}): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT",
@@ -1641,11 +1652,11 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 match self.settle_keys(keys, &mut settled) {
                     Settle::Live => self.complete_invalidate(*r, *at, trigger, &mut out),
                     Settle::Pending => {
-                        self.stats.deferred_clears += 1;
+                        self.stats.deferred_clears = self.stats.deferred_clears.saturating_add(1);
                         self.awaiting.push((*r, keys.clone(), *at));
                     }
                     Settle::Failed(e) => {
-                        self.stats.unreconciled += 1;
+                        self.stats.unreconciled = self.stats.unreconciled.saturating_add(1);
                         self.stats.refuse(format!(
                             "invalidate seq {}: target work failed after apply: {e}",
                             r.seq

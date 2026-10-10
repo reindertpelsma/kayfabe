@@ -34,6 +34,23 @@
 //! irqfd — `Device::latch_and_deliver`. ⊘ Never forged, never inline: a host NSI is the only
 //! trigger, and it carries no channel identity (RM's waiters re-check their semaphores).
 
+// ★ Review addendum (2026-10-10, `V3_BATCHED_MAP.md` §8.8.9): THE GUEST IS UNTRUSTED. This plane
+// reads the guest's rings, pushbuffers and USERD and the rows that back them; a panic on a thread
+// that serves it is a denial of service. Guest-derived values (VAs, lengths, ring indices) are only
+// added/subtracted/divided with `checked_*` / `saturating_*`, and nothing unwraps or indexes blindly.
+// A new panic site fails CI.
+#![cfg_attr(
+    not(test),
+    deny(
+        clippy::arithmetic_side_effects,
+        clippy::indexing_slicing,
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::unreachable
+    )
+)]
+
 use crate::mem::{Mirror, Mirrors, RamMap, resolve_placed, resolve_placed_prefix};
 use crate::raw_unsafe::RawRegion;
 use kf_chan::completions::Completions;
@@ -265,7 +282,7 @@ impl PtNotifier {
     fn words(&self) -> Option<[u32; 4]> {
         let mut w = [0u32; 4];
         for (i, x) in w.iter_mut().enumerate() {
-            *x = self.view.load(4 * i as u64).ok()?;
+            *x = self.view.load((i as u64).saturating_mul(4)).ok()?;
         }
         Some(w)
     }
@@ -379,20 +396,20 @@ impl UserdView {
     fn load(&self, off: u64) -> Result<u32, String> {
         match self {
             UserdView::Store { region, at, .. } => region
-                .load_u32(HostOffset::new(at + off))
+                .load_u32(HostOffset::new(at.saturating_add(off)))
                 .map_err(|e| format!("{e:?}")),
             UserdView::Ram { mem, at } => mem
-                .load_u32(at + off as usize)
+                .load_u32(at.saturating_add(off as usize))
                 .ok_or_else(|| "guest-RAM USERD load".to_string()),
         }
     }
     fn store(&self, off: u64, v: u32) -> Result<(), String> {
         match self {
             UserdView::Store { region, at, .. } => region
-                .store_u32(HostOffset::new(at + off), v)
+                .store_u32(HostOffset::new(at.saturating_add(off)), v)
                 .map_err(|e| format!("{e:?}")),
             UserdView::Ram { mem, at } => mem
-                .store_u32(at + off as usize, v)
+                .store_u32(at.saturating_add(off as usize), v)
                 .then_some(())
                 .ok_or_else(|| "guest-RAM USERD store".to_string()),
         }
@@ -405,7 +422,7 @@ impl UserdView {
 impl kf_chan::host::UserdInit for UserdView {
     fn store_u32(&mut self, off: u64, v: u32) -> Result<(), String> {
         if let UserdView::Store { at, .. } = self
-            && *at + off + 4 > 0x1000
+            && at.saturating_add(off).saturating_add(4) > 0x1000
         {
             return Err(format!("USERD +{off:#x} is past the page its view maps"));
         }
@@ -494,8 +511,8 @@ struct SwScan {
 fn scan_sw_methods(words: &[u32]) -> SwScan {
     let mut out = SwScan::default();
     let mut i = 0usize;
-    while i < words.len() {
-        let Some(h) = kf_abi::submit::method_header_decode(words[i]) else {
+    while let Some(&word) = words.get(i) {
+        let Some(h) = kf_abi::submit::method_header_decode(word) else {
             out.undecodable_at = Some(i);
             break;
         };
@@ -505,7 +522,7 @@ fn scan_sw_methods(words: &[u32]) -> SwScan {
         );
         if counted && (h.arg_words > 0 || h.form == kf_abi::submit::MethodForm::Immediate) {
             if let Some(n) = out.per_subch.get_mut(h.subchannel as usize) {
-                *n += 1;
+                *n = n.saturating_add(1);
             }
             let host_only = h.method != kf_abi::submit::SET_OBJECT && h.method < 0x100;
             if h.subchannel >= 5 && !host_only {
@@ -516,7 +533,7 @@ fn scan_sw_methods(words: &[u32]) -> SwScan {
                     data: if h.form == kf_abi::submit::MethodForm::Immediate {
                         Some(h.immd)
                     } else {
-                        words.get(i + 1).copied()
+                        words.get(i.saturating_add(1)).copied()
                     },
                 });
             }
@@ -607,8 +624,8 @@ fn snap_decode(words: &[u32], max: usize) -> SnapDecoded {
     };
     let (mut lo, mut hi, mut plo, mut phi) = (0u32, 0u32, 0u32, 0u32);
     let mut i = 0usize;
-    while i < words.len() {
-        let Some(h) = method_header_decode(words[i]) else {
+    while let Some(&word) = words.get(i) {
+        let Some(h) = method_header_decode(word) else {
             d.stopped_at = Some(i);
             break;
         };
@@ -616,16 +633,31 @@ fn snap_decode(words: &[u32], max: usize) -> SnapDecoded {
             MethodForm::EndPbSegment => break,
             MethodForm::Immediate => vec![(h.method, h.immd)],
             MethodForm::Incrementing => (0..h.arg_words)
-                .filter_map(|k| words.get(i + 1 + k).map(|v| (h.method + 4 * k as u32, *v)))
+                .filter_map(|k| {
+                    words
+                        .get(i.saturating_add(1).saturating_add(k))
+                        .map(|v| (h.method.saturating_add((k as u32).saturating_mul(4)), *v))
+                })
                 .collect(),
             MethodForm::NonIncrementing => (0..h.arg_words)
-                .filter_map(|k| words.get(i + 1 + k).map(|v| (h.method, *v)))
+                .filter_map(|k| {
+                    words
+                        .get(i.saturating_add(1).saturating_add(k))
+                        .map(|v| (h.method, *v))
+                })
                 .collect(),
             MethodForm::IncrementOnce => (0..h.arg_words)
                 .filter_map(|k| {
-                    words
-                        .get(i + 1 + k)
-                        .map(|v| (if k == 0 { h.method } else { h.method + 4 }, *v))
+                    words.get(i.saturating_add(1).saturating_add(k)).map(|v| {
+                        (
+                            if k == 0 {
+                                h.method
+                            } else {
+                                h.method.saturating_add(4)
+                            },
+                            *v,
+                        )
+                    })
                 })
                 .collect(),
             _ => Vec::new(),
@@ -642,7 +674,7 @@ fn snap_decode(words: &[u32], max: usize) -> SnapDecoded {
                 0x6c => {
                     let wide = (v >> 24) & 1 == 1;
                     d.sems.push(SemRef {
-                        op: OPS[(v & 7) as usize],
+                        op: OPS.get((v & 7) as usize).copied().unwrap_or("?"),
                         va: (u64::from(hi & 0xff) << 32) | u64::from(lo & !3),
                         payload: if wide {
                             (u64::from(phi) << 32) | u64::from(plo)
@@ -672,24 +704,20 @@ fn snap_decode(words: &[u32], max: usize) -> SnapDecoded {
 fn last_fence_release(words: &[u32]) -> Option<(&'static str, u64, u32)> {
     let mut out = None;
     let mut i = 0usize;
-    while i < words.len() {
-        let Some(h) = kf_abi::submit::method_header_decode(words[i]) else {
+    while let Some(&word) = words.get(i) {
+        let Some(h) = kf_abi::submit::method_header_decode(word) else {
             break;
         };
-        let args = words.get(i + 1..i + 1 + h.arg_words);
+        let args = words.get(i.saturating_add(1)..i.saturating_add(1).saturating_add(h.arg_words));
         if h.form == kf_abi::submit::MethodForm::Incrementing
             && let Some(a) = args
         {
-            match (h.method, a.len()) {
-                (0x1b00, 4) if a[3] & 3 == 0 && a[3] & (1 << 28) != 0 => {
-                    out = Some(("3d", (u64::from(a[0] & 0xff) << 32) | u64::from(a[1]), a[2]));
+            match (h.method, a) {
+                (0x1b00, &[a0, a1, a2, a3]) if a3 & 3 == 0 && a3 & (1 << 28) != 0 => {
+                    out = Some(("3d", (u64::from(a0 & 0xff) << 32) | u64::from(a1), a2));
                 }
-                (0x240, 3) => {
-                    out = Some((
-                        "ce",
-                        (u64::from(a[0] & 0x1ffff) << 32) | u64::from(a[1]),
-                        a[2],
-                    ));
+                (0x240, &[a0, a1, a2]) => {
+                    out = Some(("ce", (u64::from(a0 & 0x1ffff) << 32) | u64::from(a1), a2));
                 }
                 _ => {}
             }
@@ -809,6 +837,28 @@ fn view_span(bound: u64, at: u64) -> Result<(u64, u64), String> {
     Ok((off, len))
 }
 
+/// `(a - b) mod n` on a ring of `n` entries (`a`, `b` taken mod `n` first; `n == 0` is a ring of
+/// one). The stall snapshot's GP indices come from the guest's USERD: no `%`, `-` or `+` on them
+/// may panic.
+fn ring_dist(a: u32, b: u32, n: u32) -> u32 {
+    let n = u64::from(n.max(1));
+    let (a, b) = (
+        u64::from(a).checked_rem(n).unwrap_or(0),
+        u64::from(b).checked_rem(n).unwrap_or(0),
+    );
+    u32::try_from(a.saturating_add(n).saturating_sub(b).checked_rem(n).unwrap_or(0)).unwrap_or(0)
+}
+
+/// ★ Review addendum (hostile guest): the `[done, done + n)` window of a read buffer, or a named
+/// error — a read loop's indices come from guest-derived row lengths and never index blindly.
+fn out_window(out: &mut [u8], done: u64, n: u64) -> Result<&mut [u8], String> {
+    let a = usize::try_from(done).map_err(|_| format!("read offset {done:#x} out of range"))?;
+    let b = usize::try_from(done.saturating_add(n))
+        .map_err(|_| format!("read end {done:#x}+{n:#x} out of range"))?;
+    out.get_mut(a..b)
+        .ok_or_else(|| format!("read window {done:#x}+{n:#x} is outside the buffer"))
+}
+
 impl StoreViews {
     const fn new() -> Self {
         StoreViews {
@@ -821,7 +871,7 @@ impl StoreViews {
         if let Some(i) = self
             .views
             .iter()
-            .position(|v| at >= v.off && at < v.off + v.len)
+            .position(|v| at >= v.off && at < v.off.saturating_add(v.len))
         {
             return Ok(i);
         }
@@ -843,7 +893,7 @@ impl StoreViews {
             HostPageSize::query(),
         )
         .map_err(|e| format!("view mmap: {e:?}"))?;
-        self.armed += 1;
+        self.armed = self.armed.saturating_add(1);
         self.views.push(StoreSpan {
             off,
             len,
@@ -851,7 +901,7 @@ impl StoreViews {
             _node: node,
             cookie,
         });
-        Ok(self.views.len() - 1)
+        Ok(self.views.len().saturating_sub(1))
     }
 
     fn read(
@@ -865,17 +915,27 @@ impl StoreViews {
         let len = out.len() as u64;
         let mut done = 0u64;
         while done < len {
-            let at = off + done;
+            let at = off.saturating_add(done);
             let i = self.view_for(rm, store, fb_len, at)?;
-            let v = &self.views[i];
-            let n = (v.off + v.len - at).min(len - done);
+            let v = self
+                .views
+                .get(i)
+                .ok_or_else(|| format!("store read {at:#x}: no view"))?;
+            let n = v
+                .off
+                .saturating_add(v.len)
+                .saturating_sub(at)
+                .min(len.saturating_sub(done));
+            if n == 0 {
+                return Err(format!("store read {at:#x}: no progress"));
+            }
             v.region
                 .copy_out(
-                    HostOffset::new(at - v.off),
-                    &mut out[done as usize..(done + n) as usize],
+                    HostOffset::new(at.saturating_sub(v.off)),
+                    out_window(out, done, n)?,
                 )
                 .map_err(|e| format!("store read {at:#x}: {e:?}"))?;
-            done += n;
+            done = done.saturating_add(n);
         }
         Ok(())
     }
@@ -927,7 +987,12 @@ pub(crate) fn resolve_rows(
     kf_chan::tmode::resolve_spans(va, len, |at| {
         let (&start, &(rlen, off, ram, perm)) = r.range(..=at).next_back()?;
         let end = start.checked_add(rlen)?;
-        (at < end).then(|| (ram, off + (at - start), end - at, perm))
+        (at < end)
+            .then(|| {
+                off.checked_add(at.saturating_sub(start))
+                    .map(|o| (ram, o, end.saturating_sub(at), perm))
+            })
+            .flatten()
     })
 }
 
@@ -959,7 +1024,7 @@ impl GuestMemory for Mem<'_> {
         // ★ P5b: piece by piece across OUR rows — a segment may span two adjacent placements.
         let mut done = 0u64;
         while done < len {
-            let at_va = va + done;
+            let at_va = va.saturating_add(done);
             let (ram, off, avail) =
                 resolve_placed_prefix(&self.mirror.rows, at_va).ok_or_else(|| {
                     format!(
@@ -967,11 +1032,14 @@ impl GuestMemory for Mem<'_> {
                         crate::mem::describe_neighbours(&self.mirror.rows, at_va)
                     )
                 })?;
-            let n = avail.min(len - done);
+            let n = avail.min(len.saturating_sub(done));
+            if n == 0 {
+                return Err(format!("{at_va:#x}: no progress"));
+            }
             if !ram {
                 // ★ P6 (Q3): a vidmem GPFIFO / pushbuffer (UVM's default GPFIFO) is read through a
                 // CPU view WE arm over the store slice our own row placed there.
-                let dst = &mut out[done as usize..(done + n) as usize];
+                let dst = out_window(out, done, n)?;
                 let t0 = crate::prof::on().then(crate::prof::now_ns);
                 self.views
                     .read(self.rm, self.store, self.store_len, off, dst)
@@ -982,19 +1050,19 @@ impl GuestMemory for Mem<'_> {
                     crate::prof::VIEW_READ_NS
                         .fetch_add(crate::prof::now_ns().saturating_sub(t0), Ordering::Relaxed);
                 }
-                done += n;
+                done = done.saturating_add(n);
                 continue;
             }
             let (mem, at) = self
                 .ram
                 .at_file_offset(off, n)
                 .ok_or_else(|| format!("{at_va:#x}: guest-RAM offset {off:#x} unregistered"))?;
-            let dst = &mut out[done as usize..(done + n) as usize];
+            let dst = out_window(out, done, n)?;
             if !mem.read_into(at, dst) {
                 return Err(format!("{at_va:#x}: guest-RAM read"));
             }
             crate::prof::RAM_READ_BYTES.fetch_add(n, Ordering::Relaxed);
-            done += n;
+            done = done.saturating_add(n);
         }
         Ok(())
     }
@@ -1145,7 +1213,7 @@ impl Publisher for VaSplit<'_> {
     fn invalidated(&mut self, pdb: Option<u64>) -> Result<Split, String> {
         let Some(t) = *self.ticket else {
             *self.ticket = Some(self.inbox.request_split(self.token, pdb));
-            *self.requested += 1;
+            *self.requested = self.requested.saturating_add(1);
             return Ok(Split::Pending);
         };
         match self.inbox.split_result(t) {
@@ -1488,8 +1556,8 @@ fn probe_read(
 fn hex16(b: &[u8]) -> String {
     b.chunks(4)
         .map(|c| {
-            if c.len() == 4 {
-                format!("{:08x}", u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+            if let Ok(w) = <[u8; 4]>::try_from(c) {
+                format!("{:08x}", u32::from_le_bytes(w))
             } else {
                 format!("{c:02x?}")
             }
@@ -2067,7 +2135,7 @@ impl ChanPlane {
             .find(|&et| rm.ce_is_grce(et) == Ok(false))
             .ok_or("no async (non-GRCE) copy engine on the host — a Translated ring has nowhere to run")?;
         let completions = Completions::open(rm, tokens)?;
-        let lce = host_ce - kf_abi::submit::ENGINE_TYPE_COPY0;
+        let lce = host_ce.saturating_sub(kf_abi::submit::ENGINE_TYPE_COPY0);
         completions.also(rm, kf_host::event::notifier_ce(lce))?;
         // ★ GR tier: a kernel-GR ring's fence tail NSI wakes FIFO_EVENT_MTHD, and NOT the GR0
         // notifier (measured 2026-10-07 by `kf-gr-tier` at 01870988, `completion_edges`:
@@ -2170,8 +2238,12 @@ impl ChanPlane {
             .position(|e| e.engine_type == kf_abi::submit::ENGINE_TYPE_GRAPHICS);
         eprintln!(
             "kf3: non-stall relay (owner ruling 2026-10-08): every host edge -> the guest vector of every event this guest ARMED, never dropped; FIFO_EVENT_MTHD -> a vector no armed engine shares, else {} vector {:?} (relay={}, pacing={}; KF3_PT_NSI_RELAY / KF3_PT_NSI_MIN_INTERVAL_US)",
-            host_notify_engine.map_or("no GR0", |i| engines[i].name.as_str()),
-            host_notify_engine.and_then(|i| engines[i].vector),
+            host_notify_engine
+                .and_then(|i| engines.get(i))
+                .map_or("no GR0", |e| e.name.as_str()),
+            host_notify_engine
+                .and_then(|i| engines.get(i))
+                .and_then(|e| e.vector),
             if nsi.relays_fifo() {
                 "on"
             } else {
@@ -2369,7 +2441,7 @@ impl ChanPlane {
     /// event the guest armed (GR0's otherwise) — via `deliver`. Never dropped: unarmed is counted,
     /// paced is owed. With `KF3_PT_NSI_RELAY=0` the edge is counted only (the falsifier run).
     pub fn nsi_fifo_edge(&self, deliver: impl FnOnce(u32)) -> kf_chan::ptnsi::Verdict {
-        let n = self.pt_fifo_edges.fetch_add(1, Ordering::Relaxed) + 1;
+        let n = self.pt_fifo_edges.fetch_add(1, Ordering::Relaxed).saturating_add(1);
         let armed = self.nsi_armed(Some(kf_abi::eventnotify::NONSTALL_SLOT_FIFO_EVENT_MTHD));
         let vector = if armed {
             kf_chan::ptnsi::host_notify_vector(
@@ -2589,7 +2661,7 @@ impl ChanPlane {
             .find(|e| e.engine_type == kf_abi::submit::ENGINE_TYPE_GRAPHICS)?;
         let v = e.vector?;
         e.raised.fetch_add(1, Ordering::Relaxed);
-        let n = e.trelays.fetch_add(1, Ordering::Relaxed) + 1;
+        let n = e.trelays.fetch_add(1, Ordering::Relaxed).saturating_add(1);
         Some((v, e.name.as_str(), n, e.tlive.load(Ordering::Relaxed)))
     }
 
@@ -2603,7 +2675,7 @@ impl ChanPlane {
             }
             let Some(v) = e.vector else { continue };
             e.raised.fetch_add(1, Ordering::Relaxed);
-            let n = e.crelays.fetch_add(1, Ordering::Relaxed) + 1;
+            let n = e.crelays.fetch_add(1, Ordering::Relaxed).saturating_add(1);
             f(v, e.name.as_str(), n);
         }
     }
@@ -2749,7 +2821,7 @@ impl ChanPlane {
             "schedule",
             Box::new(move |me: &ChanPlane| {
                 let run = || -> Result<String, (u32, String)> {
-                    let mut restarted = 0;
+                    let mut restarted = 0u32;
                     // ★ v3-video: twins of one guest TSG share ONE host group — schedule it once.
                     let mut groups_done = std::collections::HashSet::new();
                     for (k, c) in &twins {
@@ -2765,7 +2837,7 @@ impl ChanPlane {
                                     .disable_channels(&[*c], false, false, false)
                                     .map_err(|e| (NV_ERR_INVALID_STATE, format!("host {:#x} re-enable after STOP: {e:?}", c.token)))?;
                             }
-                            restarted += 1;
+                            restarted = restarted.saturating_add(1);
                             if let Ok(mut m) = me.pt.lock()
                                 && let Some(v) = m.get_mut(k)
                             {
@@ -3590,7 +3662,7 @@ impl ChanPlane {
                 g.ctx.initialized |= initialize;
                 g.ctx.va_bound |= with_va;
                 g.ctx.bound |= with_va != 0;
-                g.ctx.promotes += 1;
+                g.ctx.promotes = g.ctx.promotes.saturating_add(1);
                 Ok(format!("{client:#x}:{object:#x} GPU_PROMOTE_CTX satisfied by Translated host {ht:#x} GR={context:x?} VIDEO={video:x?} entries={entries} init_ids={initialize:#x} va_ids={with_va:#x} bound={} — no guest buffer touched", g.ctx.bound))
             }));
         }
@@ -3621,7 +3693,7 @@ impl ChanPlane {
             let Some(v) = m.get_mut(&(client, object)) else {
                 return ChanAnswer::NotOurs;
             };
-            v.ctx.promotes += 1;
+            v.ctx.promotes = v.ctx.promotes.saturating_add(1);
             eprintln!(
                 "kf3: chan {client:#x}:{object:#x} GPU_PROMOTE_CTX (video falcon ctx, engine {engine:#x}) SATISFIED BY TWIN host {ht:#x}: entries={entries} host_objects={} — not forwarded",
                 v.objects.len()
@@ -3647,7 +3719,7 @@ impl ChanPlane {
                 return ChanAnswer::NotOurs;
             };
             v.ctx.initialized |= initialize;
-            v.ctx.promotes += 1;
+            v.ctx.promotes = v.ctx.promotes.saturating_add(1);
             eprintln!(
                 "kf3: chan {client:#x}:{object:#x} GPU_PROMOTE_CTX (initialize) SATISFIED BY TWIN host {ht:#x}: entries={entries} init_ids={initialize:#x} host_objects={} — not forwarded, no guest byte touched",
                 v.objects.len()
@@ -3678,7 +3750,7 @@ impl ChanPlane {
                 v.ctx.initialized |= initialize;
                 v.ctx.va_bound |= with_va;
                 v.ctx.bound |= with_va != 0;
-                v.ctx.promotes += 1;
+                v.ctx.promotes = v.ctx.promotes.saturating_add(1);
                 Ok(format!(
                     "chan {client:#x}:{object:#x} GPU_PROMOTE_CTX SATISFIED BY TWIN host {ht:#x} (host GR object(s) {host_ctx:x?}{}): entries={entries} init_ids={initialize:#x} va_ids={with_va:#x} bound={} — not forwarded, no guest byte touched",
                     if pending { " — none yet: the engine object this promote precedes births the host context" } else { "" },
@@ -3710,7 +3782,7 @@ impl ChanPlane {
                 g.scheduled = false;
                 g.ctx.bound = false;
                 g.ctx.va_bound = 0;
-                g.ctx.evicts += 1;
+                g.ctx.evicts = g.ctx.evicts.saturating_add(1);
                 Ok(format!("{client:#x}:{object:#x} GPU_EVICT_CTX: Translated host {ht:#x} off runlist, context UNBOUND"))
             }));
         }
@@ -3739,7 +3811,7 @@ impl ChanPlane {
                     m.get_mut(&(client, object)).map(|v| {
                         v.ctx.bound = false;
                         v.ctx.va_bound = 0;
-                        v.ctx.evicts += 1;
+                        v.ctx.evicts = v.ctx.evicts.saturating_add(1);
                         v.ctx
                     })
                 });
@@ -4264,7 +4336,7 @@ impl ChanPlane {
                     let mut g = slot
                         .lock()
                         .map_err(|_| (NV_ERR_INVALID_STATE, "slot poisoned".to_string()))?;
-                    g.ctx.promotes += 1;
+                    g.ctx.promotes = g.ctx.promotes.saturating_add(1);
                 }
                 crate::defapi::CtxEffect::Evict => {
                     let host = slot
@@ -4282,7 +4354,7 @@ impl ChanPlane {
                     g.scheduled = false;
                     g.ctx.bound = false;
                     g.ctx.va_bound = 0;
-                    g.ctx.evicts += 1;
+                    g.ctx.evicts = g.ctx.evicts.saturating_add(1);
                 }
             }
         }
@@ -4338,9 +4410,9 @@ impl ChanPlane {
                 if evict {
                     v.ctx.bound = false;
                     v.ctx.va_bound = 0;
-                    v.ctx.evicts += 1;
+                    v.ctx.evicts = v.ctx.evicts.saturating_add(1);
                 } else {
-                    v.ctx.promotes += 1;
+                    v.ctx.promotes = v.ctx.promotes.saturating_add(1);
                 }
             }
         }
@@ -4703,12 +4775,12 @@ impl ChanPlane {
                     // `rung`/`forwarded` cover BOTH transports (the grader's rule is per token and
                     // must not lose the doorbells the trap no longer sees); `trap=`/`fast=` split them.
                     let (trap_rung, trap_reached) = me.take_ledger(t.idx);
-                    let (f_rung, f_fwd) = fast.map_or((0, 0), |l| (l.doorbells - l.absorbed, l.forwarded));
-                    let (rung, reached) = (trap_rung + f_rung, trap_reached + f_fwd);
+                    let (f_rung, f_fwd) = fast.map_or((0, 0), |l| (l.doorbells.saturating_sub(l.absorbed), l.forwarded));
+                    let (rung, reached) = (trap_rung.saturating_add(f_rung), trap_reached.saturating_add(f_fwd));
                     eprintln!(
                         "kf3: DOORBELL-LEDGER tok={:#010x} route=passthrough rung={rung} emulated={} forwarded={reached} host={:#x} trap={trap_rung}{}",
                         t.idx,
-                        rung - reached.min(rung),
+                        rung.saturating_sub(reached.min(rung)),
                         t.chan.token,
                         Self::fast_fields(fast)
                     );
@@ -4772,7 +4844,7 @@ impl ChanPlane {
                 let now = me.enc_sessions.lock().map(|mut m| {
                     let c = m.entry(client).or_insert(0);
                     if acquire {
-                        *c += 1
+                        *c = c.saturating_add(1)
                     } else {
                         *c = c.saturating_sub(1)
                     }
@@ -4831,7 +4903,7 @@ impl ChanPlane {
             .lock()
             .map_or(true, |mut m| match m.get_mut(&k) {
                 Some(g) if g.1 > 1 => {
-                    g.1 -= 1;
+                    g.1 = g.1.saturating_sub(1);
                     false
                 }
                 _ => {
@@ -5046,7 +5118,7 @@ impl ChanPlane {
         let (mut seen, mut stored) = (0u32, 0u32);
         for (ht, r) in rs {
             let Ok(mut g) = r.try_lock() else { continue };
-            seen += 1;
+            seen = seen.saturating_add(1);
             let g = &mut *g;
             let mut io = RelayMem {
                 guest: &g.guest,
@@ -5056,7 +5128,7 @@ impl ChanPlane {
             };
             match kf_chan::userd_relay::refresh(&mut g.st, &mut io) {
                 Ok(kf_chan::userd_relay::Refresh::Stored(v)) => {
-                    stored += 1;
+                    stored = stored.saturating_add(1);
                     let n = g.st.refreshed;
                     if n <= 8 || n.is_power_of_two() {
                         eprintln!(
@@ -5113,7 +5185,7 @@ impl ChanPlane {
         // guest AFTER it rang for it (then the engine may have fetched the old bytes).
         for (i, old) in std::mem::take(&mut g.peek.prev) {
             let mut e = [0u8; 8];
-            let gpva = g.gpfifo_va + u64::from(i) * 8;
+            let gpva = g.gpfifo_va.saturating_add(u64::from(i).saturating_mul(8));
             if mem.read(gpva, &mut e).is_ok() && e != old {
                 eprintln!(
                     "kf3: chan token {tok:#x} RELAY-PEEK (diagnostic) GP[{i:#x}] CHANGED after its doorbell: was {:016x} now {:016x}",
@@ -5123,7 +5195,7 @@ impl ChanPlane {
             }
         }
         // Every entry in [next, new_put), bounded per twin; zero entries are counted, not listed.
-        let mut idx = g.peek.next % entries;
+        let mut idx = g.peek.next.checked_rem(entries).unwrap_or(0);
         let mut zeros: Option<(u32, u32)> = None;
         let flush_zeros = |z: &mut Option<(u32, u32)>| {
             if let Some((a, n)) = z.take() {
@@ -5132,10 +5204,10 @@ impl ChanPlane {
                 );
             }
         };
-        while g.peek.entries < PEEK_ENTRY_BUDGET && idx != new_put % entries {
+        while g.peek.entries < PEEK_ENTRY_BUDGET && idx != new_put.checked_rem(entries).unwrap_or(0) {
             let mut e = [0u8; 8];
-            let gpva = g.gpfifo_va + u64::from(idx) * 8;
-            g.peek.entries += 1;
+            let gpva = g.gpfifo_va.saturating_add(u64::from(idx).saturating_mul(8));
+            g.peek.entries = g.peek.entries.saturating_add(1);
             match mem.read(gpva, &mut e) {
                 Err(why) => {
                     flush_zeros(&mut zeros);
@@ -5146,7 +5218,7 @@ impl ChanPlane {
                 Ok(()) if e == [0u8; 8] => {
                     g.peek.prev.push((idx, e));
                     zeros = match zeros {
-                        Some((a, n)) => Some((a, n + 1)),
+                        Some((a, n)) => Some((a, n.saturating_add(1))),
                         None => Some((idx, 1)),
                     };
                 }
@@ -5165,7 +5237,7 @@ impl ChanPlane {
                         );
                     } else {
                         let n = (words as usize).min(PEEK_SEGMENT_WORDS);
-                        let mut buf = vec![0u8; n * 4];
+                        let mut buf = vec![0u8; n.saturating_mul(4)];
                         match mem.read(va, &mut buf) {
                             Ok(()) => {
                                 let w: Vec<u32> = buf
@@ -5196,7 +5268,7 @@ impl ChanPlane {
                                     if g.peek.sw_logged >= PEEK_SW_BUDGET {
                                         break;
                                     }
-                                    g.peek.sw_logged += 1;
+                                    g.peek.sw_logged = g.peek.sw_logged.saturating_add(1);
                                     eprintln!(
                                         "kf3: chan token {tok:#x} RELAY-PEEK (diagnostic) SW-SUBCH METHOD GP[{idx:#x}] word {} subch {} method {:#x} data {:x?} — a software method (PBDMA DEVICE on the twin)",
                                         h.word, h.subch, h.method, h.data
@@ -5210,7 +5282,7 @@ impl ChanPlane {
                     }
                 }
             }
-            idx = (idx + 1) % entries;
+            idx = idx.saturating_add(1).checked_rem(entries).unwrap_or(0);
         }
         flush_zeros(&mut zeros);
         g.peek.next = idx;
@@ -5252,7 +5324,7 @@ impl ChanPlane {
             return;
         }
         *armed = false;
-        *taken += 1;
+        *taken = taken.saturating_add(1);
         let n = *taken;
         drop(st);
         self.pt_snapshot_all(&format!(
@@ -5312,7 +5384,11 @@ impl ChanPlane {
                     Err("USERD read".to_string())
                 }
             });
-        let w = |o: usize| u32::from_le_bytes([u[o], u[o + 1], u[o + 2], u[o + 3]]);
+        let w = |o: usize| {
+            u.get(o..o.saturating_add(4))
+                .and_then(|b| <[u8; 4]>::try_from(b).ok())
+                .map_or(0, u32::from_le_bytes)
+        };
         let (gp_get, gp_put) = (w(0x88), w(0x8c));
         match &userd {
             Ok(()) => eprintln!(
@@ -5345,13 +5421,21 @@ impl ChanPlane {
         let n = entries.max(1);
         // entries [GPGet - 2, GPPut + 2), at most SNAP_ENTRIES; the segments of the last
         // SNAP_SEGMENTS before GPPut are decoded
-        let first = (gp_get % n + n - 2.min(n - 1)) % n;
-        let span = ((gp_put % n + n - first) % n + 2).min(SNAP_ENTRIES);
+        let first = ring_dist(gp_get, 2.min(n.saturating_sub(1)), n);
+        let span = ring_dist(gp_put, first, n)
+            .saturating_add(2)
+            .min(SNAP_ENTRIES);
         let mut sems: Vec<SemRef> = Vec::new();
         for k in 0..span {
-            let i = (first + k) % n;
+            let i = u32::try_from(
+                u64::from(first)
+                    .saturating_add(u64::from(k))
+                    .checked_rem(u64::from(n))
+                    .unwrap_or(0),
+            )
+            .unwrap_or(0);
             let mut e = [0u8; 8];
-            let gpva = gpfifo_va + u64::from(i) * 8;
+            let gpva = gpfifo_va.saturating_add(u64::from(i).saturating_mul(8));
             if let Err(why) = self.snap_read(&t.rows, gpva, &mut e) {
                 eprintln!("kf3: PT-SNAP tok={tok:#x} GP[{i:#x}] @{gpva:#x}: {why}");
                 continue;
@@ -5360,14 +5444,15 @@ impl ChanPlane {
             let hi = u32::from_le_bytes([e[4], e[5], e[6], e[7]]);
             let va = u64::from(lo & !3) | (u64::from(hi & 0xff) << 32);
             let words = (hi >> 10) & 0x1f_ffff;
-            let pending = (i + n - gp_get % n) % n < (gp_put % n + n - gp_get % n) % n;
-            let decode = (gp_put % n + n - i) % n <= SNAP_SEGMENTS && (gp_put % n + n - i) % n > 0;
+            let pending = ring_dist(i, gp_get, n) < ring_dist(gp_put, gp_get, n);
+            let to_put = ring_dist(gp_put, i, n);
+            let decode = to_put <= SNAP_SEGMENTS && to_put > 0;
             let mut line = format!(
                 "kf3: PT-SNAP tok={tok:#x} GP[{i:#x}] {} lo={lo:#010x} hi={hi:#010x} va={va:#x} words={words}",
                 if pending { "PENDING" } else { "fetched" }
             );
             if decode && words > 0 {
-                let mut buf = vec![0u8; (words as usize).min(SNAP_WORDS) * 4];
+                let mut buf = vec![0u8; (words as usize).min(SNAP_WORDS).saturating_mul(4)];
                 match self.snap_read(&t.rows, va, &mut buf) {
                     Ok(()) => {
                         let ws: Vec<u32> = buf
@@ -5416,7 +5501,7 @@ impl ChanPlane {
         for s in &sems {
             let mut b = [0u8; 8];
             let now = self
-                .snap_read(&t.rows, s.va, &mut b[..if s.wide { 8 } else { 4 }])
+                .snap_read(&t.rows, s.va, b.split_at_mut(if s.wide { 8 } else { 4 }).0)
                 .map(|()| u64::from_le_bytes(b));
             eprintln!(
                 "kf3: PT-SNAP tok={tok:#x} SEM {} (GP[{:#x}]) va={:#x} payload={:#x} memory={} — {}",
@@ -5451,7 +5536,7 @@ impl ChanPlane {
         let len = out.len() as u64;
         let mut done = 0u64;
         while done < len {
-            let at_va = va + done;
+            let at_va = va.saturating_add(done);
             let (ram, off, avail) = crate::mem::resolve_placed_prefix(rows, at_va)
                 .ok_or_else(|| format!("{at_va:#x} not placed by us"))?;
             if !ram {
@@ -5459,15 +5544,18 @@ impl ChanPlane {
                     "{at_va:#x} is a vidmem row (not read by the snapshot)"
                 ));
             }
-            let n = avail.min(len - done);
+            let n = avail.min(len.saturating_sub(done));
+            if n == 0 {
+                return Err(format!("{at_va:#x}: no progress"));
+            }
             let (mem, at) = self
                 .ram
                 .at_file_offset(off, n)
                 .ok_or_else(|| format!("{at_va:#x}: guest-RAM offset {off:#x} unregistered"))?;
-            if !mem.read_into(at, &mut out[done as usize..(done + n) as usize]) {
+            if !mem.read_into(at, out_window(out, done, n)?) {
                 return Err(format!("{at_va:#x}: guest-RAM read"));
             }
-            done += n;
+            done = done.saturating_add(n);
         }
         Ok(())
     }
@@ -5757,7 +5845,7 @@ impl ChanPlane {
                     let chan = match kf_chan::passthrough::birth_twin_in(me.rm, space, g, join) {
                         Ok(c) => {
                             if let (Some(k), Ok(mut m)) = (gkey, me.groups.lock()) {
-                                m.entry(k).and_modify(|g| g.1 += 1).or_insert((c.tsg, 1));
+                                m.entry(k).and_modify(|g| g.1 = g.1.saturating_add(1)).or_insert((c.tsg, 1));
                             }
                             c
                         }
@@ -5991,11 +6079,12 @@ impl ChanPlane {
                 let gr_gp_get = if gr_tier {
                     let at = match a.userd {
                         Some(kf_arch::UserdMem::Framebuffer { base, .. }) => {
-                            t.windows(privileged).fb(base + kf_abi::submit::USERD_GP_GET, 4)
+                            t.windows(privileged)
+                                .fb(base.saturating_add(kf_abi::submit::USERD_GP_GET), 4)
                         }
                         Some(kf_arch::UserdMem::Sysmem { base, .. }) => me
                             .ram
-                            .dma_to_file_range(base + kf_abi::submit::USERD_GP_GET, 4)
+                            .dma_to_file_range(base.saturating_add(kf_abi::submit::USERD_GP_GET), 4)
                             .and_then(|off| t.windows(privileged).ram(off, 4)),
                         _ => None,
                     };
@@ -6281,7 +6370,7 @@ impl ChanPlane {
         };
         let words = |f: &dyn Fn(u64) -> Result<u32, String>, n: u64| -> String {
             (0..n)
-                .map(|i| f(4 * i).map_or_else(|e| format!("?({e})"), |v| format!("{v:08x}")))
+                .map(|i| f(i.saturating_mul(4)).map_or_else(|e| format!("?({e})"), |v| format!("{v:08x}")))
                 .collect::<Vec<_>>()
                 .join(" ")
         };
@@ -6306,7 +6395,7 @@ impl ChanPlane {
                             "sysmem @{gpa:#x}: {}",
                             words(
                                 &|o| mem
-                                    .load_u32(at + o as usize)
+                                    .load_u32(at.saturating_add(o as usize))
                                     .ok_or_else(|| "load".to_string()),
                                 4
                             )
@@ -6365,7 +6454,7 @@ impl ChanPlane {
                     region,
                     _node: node,
                     cookie,
-                    at: base - page,
+                    at: base.saturating_sub(page),
                 })
             }
             Some(kf_arch::UserdMem::Sysmem { base, .. }) => {
@@ -6558,7 +6647,7 @@ impl ChanPlane {
             return false;
         };
         let g = &mut *g;
-        g.serves += 1;
+        g.serves = g.serves.saturating_add(1);
         if g.dead.is_some()
             || !g.scheduled
             || g.disabled
@@ -6661,7 +6750,7 @@ impl ChanPlane {
         let inca = g.chan.inca().total();
         if inca > g.inca_seen {
             self.inca_counted
-                .fetch_add(inca - g.inca_seen, Ordering::Relaxed);
+                .fetch_add(inca.saturating_sub(g.inca_seen), Ordering::Relaxed);
             g.inca_seen = inca;
         }
         if probe {
@@ -6714,7 +6803,7 @@ impl ChanPlane {
                     ));
                 }
                 if g.probe.logged < 8 || bad || copy_bad {
-                    g.probe.logged += 1;
+                    g.probe.logged = g.probe.logged.saturating_add(1);
                     eprintln!(
                         "kf3: PROBE t={:.6} tok={:#x} fence seq={} gp_get={:?} submit->seen-complete={dt}us put={:?} releases=[{}]{} data=[{}]",
                         kf_mem::maplog::t(),

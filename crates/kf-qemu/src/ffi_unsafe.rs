@@ -191,6 +191,8 @@ pub unsafe extern "C" fn kf3_realize(
         vm_id,
         pci_devfn,
     };
+    // ★ Review addendum: a panic on any service thread stops the VM, visibly (`failclosed`).
+    crate::failclosed::install();
     match Device::realize(&cfg) {
         Ok(d) => {
             let d: &'static Device = Box::leak(Box::new(d));

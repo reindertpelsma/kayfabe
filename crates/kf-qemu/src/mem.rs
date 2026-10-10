@@ -38,6 +38,22 @@
 //! BAR1). ⚠ Each placed view costs host BAR1 aperture (`V3_P4_PORT_MAP.md` Q5 — the budget check
 //! is still not built).
 
+// ★ Review addendum (2026-10-10, `V3_BATCHED_MAP.md` §8.8.9): THE GUEST IS UNTRUSTED and this module
+// holds the rows it places (VAs, lengths, backing offsets from its page tables). A panic here is a
+// denial of service, so guest-derived values are only added/subtracted with `checked_*` /
+// `saturating_*`, and nothing unwraps. A new panic site fails CI.
+#![cfg_attr(
+    not(test),
+    deny(
+        clippy::arithmetic_side_effects,
+        clippy::indexing_slicing,
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::unreachable
+    )
+)]
+
 use crate::raw_unsafe::{BackendFd, RawRegion};
 use kf_host::{CpuViewRelease, HostRm, MapNode, ViewAccess};
 use kf_linux_raw::{
@@ -140,7 +156,7 @@ impl RamMap {
                 gpa >= b.gpa
                     && gpa
                         .checked_add(len)
-                        .is_some_and(|e| e - b.gpa <= b.mem.len() as u64)
+                        .is_some_and(|e| e.saturating_sub(b.gpa) <= b.mem.len() as u64)
             })
             .copied()
     }
@@ -158,9 +174,9 @@ impl RamMap {
                 off >= b.fd_off
                     && off
                         .checked_add(len)
-                        .is_some_and(|e| e - b.fd_off <= b.mem.len() as u64)
+                        .is_some_and(|e| e.saturating_sub(b.fd_off) <= b.mem.len() as u64)
             })
-            .map(|b| (b.mem, (off - b.fd_off) as usize))
+            .map(|b| (b.mem, off.saturating_sub(b.fd_off) as usize))
     }
 
     /// ★ The guest-RAM object's fd and the file offset of `[gpa, gpa+len)`. `None` when no single
@@ -170,7 +186,10 @@ impl RamMap {
     pub fn file_range(&self, gpa: u64, len: u64) -> Option<(BackendFd, u64)> {
         let b = self.block_for(gpa, len)?;
         let first = self.blocks.read().ok()?.iter().find_map(|x| x.fd)?;
-        (b.fd == Some(first)).then(|| (first, b.fd_off + (gpa - b.gpa)))
+        (b.fd == Some(first))
+            .then(|| b.fd_off.checked_add(gpa.saturating_sub(b.gpa)))
+            .flatten()
+            .map(|o| (first, o))
     }
 
     /// ★★ P1+P2 (`docs/design/V3_P1P2_TSPACE.md` §2.6) — **THE vIOMMU SEAM: the one path from a
@@ -218,7 +237,7 @@ fn memory_list_block(blocks: &[RamBlock], span: kf_rm::memory_list::RamSpan) -> 
         return None;
     }
     b.fd_off
-        .checked_add(span.base - b.gpa)?
+        .checked_add(span.base.saturating_sub(b.gpa))?
         .checked_add(span.length)?;
     Some(b)
 }
@@ -253,7 +272,9 @@ impl kf_rm::memory_list::GuestRamAuthority for MemoryListRam {
         let Some(b) = memory_list_block(&guard, span) else {
             return false;
         };
-        let Some(at) = (span.base - b.gpa)
+        let Some(at) = span
+            .base
+            .saturating_sub(b.gpa)
             .checked_add(offset)
             .and_then(|v| usize::try_from(v).ok())
         else {
@@ -284,7 +305,9 @@ impl kf_rm::memory_list::GuestRamAuthority for MemoryListRam {
         let Some(b) = memory_list_block(&guard, span) else {
             return false;
         };
-        let Some(at) = (span.base - b.gpa)
+        let Some(at) = span
+            .base
+            .saturating_sub(b.gpa)
             .checked_add(offset)
             .and_then(|v| usize::try_from(v).ok())
         else {
@@ -366,12 +389,12 @@ impl ViewIndex {
             let mut p = 0;
             while p < len {
                 let (wp, sp) = (
-                    (at + p) & !(VIEW_PAGE - 1),
-                    (store_off + p) & !(VIEW_PAGE - 1),
+                    at.saturating_add(p) & !(VIEW_PAGE - 1),
+                    store_off.saturating_add(p) & !(VIEW_PAGE - 1),
                 );
                 g.by_win.insert((name, wp), sp);
                 g.by_store.entry(sp).or_default().push((name, win, wp));
-                p += VIEW_PAGE;
+                p = p.saturating_add(VIEW_PAGE);
             }
         });
     }
@@ -391,7 +414,7 @@ impl ViewIndex {
         };
         v.iter()
             .map(|(name, win, wp)| {
-                let at = wp + (off & (VIEW_PAGE - 1));
+                let at = wp.saturating_add(off & (VIEW_PAGE - 1));
                 let mut b = vec![0u8; n];
                 let got = win.read_into(HostOffset::new(at), &mut b).ok().map(|()| b);
                 (*name, at, got)
@@ -719,7 +742,9 @@ pub fn resolve_placed(rows: &PlacedRows, va: u64, len: u64) -> Option<(bool, u64
     let r = rows.read().ok()?;
     let (&start, &(rlen, off, ram, _)) = r.range(..=va).next_back()?;
     let end = va.checked_add(len)?;
-    (end <= start.checked_add(rlen)?).then(|| (ram, off + (va - start)))
+    (end <= start.checked_add(rlen)?)
+        .then(|| off.checked_add(va.saturating_sub(start)).map(|o| (ram, o)))
+        .flatten()
 }
 
 /// ★ P5b: the placement covering `va` — `(ram, offset of va, bytes of the row left from va)`.
@@ -731,7 +756,12 @@ pub fn resolve_placed_prefix(rows: &PlacedRows, va: u64) -> Option<(bool, u64, u
     let r = rows.read().ok()?;
     let (&start, &(rlen, off, ram, _)) = r.range(..=va).next_back()?;
     let end = start.checked_add(rlen)?;
-    (va < end).then(|| (ram, off + (va - start), end - va))
+    (va < end)
+        .then(|| {
+            off.checked_add(va.saturating_sub(start))
+                .map(|o| (ram, o, end.saturating_sub(va)))
+        })
+        .flatten()
 }
 
 /// ★ 2026-10-07 (Windows Code43, run38: a kernel copy channel died reading GP entry 2 of a ring
@@ -782,7 +812,7 @@ const ROWS_LOG_MAX: usize = 4096;
 impl RowsLog {
     /// A change to the rows over `[lo, hi)` — call with the rows' write lock HELD.
     pub fn commit(&self, lo: u64, hi: u64) {
-        let e = self.epoch.fetch_add(1, Ordering::AcqRel) + 1;
+        let e = self.epoch.fetch_add(1, Ordering::AcqRel).saturating_add(1);
         if let Ok(mut l) = self.log.lock() {
             if l.len() >= ROWS_LOG_MAX {
                 l.pop_front();
@@ -823,7 +853,7 @@ impl RowsLog {
         };
         let reaches = l
             .front()
-            .map_or(self.epoch() <= epoch, |c| c.0 <= epoch + 1);
+            .map_or(self.epoch() <= epoch, |c| c.0 <= epoch.saturating_add(1));
         if !reaches {
             return Changed::Unknown;
         }
@@ -849,7 +879,12 @@ pub fn resolve_rows_epoch(
     let spans = kf_chan::tmode::resolve_spans(va, len, |at| {
         let (&start, &(rlen, off, ram, perm)) = r.range(..=at).next_back()?;
         let end = start.checked_add(rlen)?;
-        (at < end).then(|| (ram, off + (at - start), end - at, perm))
+        (at < end)
+            .then(|| {
+                off.checked_add(at.saturating_sub(start))
+                    .map(|o| (ram, o, end.saturating_sub(at), perm))
+            })
+            .flatten()
     });
     (spans, epoch)
 }
@@ -899,11 +934,19 @@ pub fn cut_rows(
         cut.original.push((k, row));
         let row_end = k.saturating_add(len);
         if k < va {
-            rows.insert(k, (va - k, off, ram, perm));
+            rows.insert(k, (va.saturating_sub(k), off, ram, perm));
             cut.remnants.push(k);
         }
         if row_end > end {
-            rows.insert(end, (row_end - end, off + (end - k), ram, perm));
+            rows.insert(
+                end,
+                (
+                    row_end.saturating_sub(end),
+                    off.saturating_add(end.saturating_sub(k)),
+                    ram,
+                    perm,
+                ),
+            );
             cut.remnants.push(end);
         }
     }
@@ -1003,8 +1046,8 @@ pub fn take_ring_slot(slots: &RingSlots) -> Option<u64> {
     }
     let i = p.next;
     (i < per).then(|| {
-        p.next += 1;
-        RING_REGION_BASE + i * kf_chan::host::RING_BYTES
+        p.next = p.next.saturating_add(1);
+        RING_REGION_BASE.saturating_add(i.saturating_mul(kf_chan::host::RING_BYTES))
     })
 }
 
@@ -1078,7 +1121,7 @@ impl SpaceCalls {
         let g = |a: &AtomicU64| a.load(Ordering::Relaxed);
         format!(
             "host RM over its life: {} map call(s) ({} per-run, {} batch(es) x2 carrying {} runs, {} batch(es) refused) in {} ms; {} unmap call(s) ({} range(s)) + {} free(s) in {} ms",
-            g(&self.maps) + 2 * g(&self.batches),
+            g(&self.maps).saturating_add(g(&self.batches).saturating_mul(2)),
             g(&self.maps),
             g(&self.batches),
             g(&self.batched_runs),
@@ -1223,7 +1266,11 @@ impl GpuMirror {
             .read()
             .map(|r| r.iter().map(|(&va, &(len, _, _, _))| (va, len)).collect())
             .unwrap_or_default();
-        let before = self.calls.unmaps.load(Ordering::Relaxed) + self.frees();
+        let before = self
+            .calls
+            .unmaps
+            .load(Ordering::Relaxed)
+            .saturating_add(self.frees());
         let mut refused = 0usize;
         // ★★★ v3-cdp: the SKED-reflected placements first (whole-mapping unmaps; never batched).
         let sked: Vec<u64> = self
@@ -1233,20 +1280,30 @@ impl GpuMirror {
             .unwrap_or_default();
         for &va in &sked {
             if self.unmap(va, true).is_err() {
-                refused += 1;
+                refused = refused.saturating_add(1);
             }
         }
         let mut k = 0;
         while k < rows.len() {
-            let mut j = k + 1;
-            while j < rows.len() && rows[j - 1].0.checked_add(rows[j - 1].1) == Some(rows[j].0) {
-                j += 1;
+            let mut j = k.saturating_add(1);
+            // (`j` and `k` index `rows`, both bounded by `rows.len()`; the VA arithmetic is checked.)
+            while j < rows.len()
+                && rows
+                    .get(j.saturating_sub(1))
+                    .zip(rows.get(j))
+                    .is_some_and(|(a, b)| a.0.checked_add(a.1) == Some(b.0))
+            {
+                j = j.saturating_add(1);
             }
-            let (va, end) = (rows[k].0, rows[j - 1].0 + rows[j - 1].1);
-            if j - k < 2 || self.unmap_range(va, end - va, true).is_err() {
-                for &(va, _) in &rows[k..j] {
+            let run = rows.get(k..j).unwrap_or_default();
+            let end = run
+                .last()
+                .map_or(0, |&(v, l)| v.saturating_add(l));
+            let va = run.first().map_or(0, |&(v, _)| v);
+            if run.len() < 2 || self.unmap_range(va, end.saturating_sub(va), true).is_err() {
+                for &(va, _) in run {
                     if self.unmap(va, true).is_err() {
-                        refused += 1;
+                        refused = refused.saturating_add(1);
                     }
                 }
             }
@@ -1265,8 +1322,16 @@ impl GpuMirror {
                 self.vas.space.space
             );
         }
-        let after = self.calls.unmaps.load(Ordering::Relaxed) + self.frees();
-        (rows.len() + sked.len(), refused + leftovers, after - before)
+        let after = self
+            .calls
+            .unmaps
+            .load(Ordering::Relaxed)
+            .saturating_add(self.frees());
+        (
+            rows.len().saturating_add(sked.len()),
+            refused.saturating_add(leftovers),
+            after.saturating_sub(before),
+        )
     }
 }
 
@@ -1830,7 +1895,7 @@ impl Bar1Target {
         hook.submit(seq, u32::from(install), v.base, v.len, v.vf_rel).map_err(|e| {
             format!("BAR1 doorbell view {:#x}+{:#x}: the C device refused to queue the change (errno {e})", v.base, v.len)
         })?;
-        self.next_seq.set(seq + 1);
+        self.next_seq.set(seq.saturating_add(1));
         self.inflight
             .borrow_mut()
             .insert(seq, InFlight { install, view: v });
@@ -1847,7 +1912,7 @@ impl Bar1Target {
             .db
             .borrow()
             .views()
-            .find(|v| v.base < end && d.va < v.base + v.len)
+            .find(|v| v.base < end && d.va < v.base.saturating_add(v.len))
         {
             return self.refuse(format!(
                 "BAR1 leaf {:#x}+{:#x} lies under the live doorbell view {:#x}+{:#x}; refused until that view is unmapped",
@@ -1906,7 +1971,7 @@ impl Bar1Target {
                 (true, 0) => {
                     // ★ 2026-09-26 (T1 evidence, `V3_BAR1_DOORBELL.md` §7): one bounded line per
                     // view, on the VA thread — the heartbeat misses an arm shorter than its period.
-                    let n = self.overlay.installed.fetch_add(1, Ordering::Relaxed) + 1;
+                    let n = self.overlay.installed.fetch_add(1, Ordering::Relaxed).saturating_add(1);
                     if n <= 32 {
                         eprintln!(
                             "kf3: bar1db view LIVE #{n}: BAR1 {:#x}+{:#x} (usermode page {:#x}) now traps its doorbell",
@@ -1915,7 +1980,7 @@ impl Bar1Target {
                     }
                 }
                 (false, 0) => {
-                    let n = self.overlay.removed.fetch_add(1, Ordering::Relaxed) + 1;
+                    let n = self.overlay.removed.fetch_add(1, Ordering::Relaxed).saturating_add(1);
                     if n <= 32 {
                         eprintln!(
                             "kf3: bar1db view REMOVED #{n}: BAR1 {:#x}+{:#x} (doorbells through BAR1 views so far: {})",
@@ -2370,11 +2435,16 @@ impl MemPlane {
         eprintln!(
             "kf3: scratch host-RAM bound {:#x} for this device (PRAMIN {:#x} + BAR1 {:#x} + BAR2 \
              {:#x}); whole-window scratch would have allowed {:#x}",
-            pramin_scratch.tile_len() + bar1_scratch.tile_len() + bar2_scratch.tile_len(),
+            pramin_scratch
+                .tile_len()
+                .saturating_add(bar1_scratch.tile_len())
+                .saturating_add(bar2_scratch.tile_len()),
             pramin_scratch.tile_len(),
             bar1_scratch.tile_len(),
             bar2_scratch.tile_len(),
-            pramin_len + bar1_bytes + bar2_bytes,
+            pramin_len
+                .saturating_add(bar1_bytes)
+                .saturating_add(bar2_bytes),
         );
         // ★ PRAMIN (the one window with a trap) runs on the vCPU: no advice there.
         let ops = |name, win, scratch, trap: Option<&'static TrapNodes>| WindowOps {
@@ -2899,9 +2969,9 @@ fn retire_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, key: Va
     // ★ V3_BATCHED_MAP: VA-contiguous rows go as one range each; every batch object is freed.
     let t_unmap = std::time::Instant::now();
     let (nrows, mut refused, calls) = g.unmap_all_rows();
-    let host_calls = calls + u64::from(nrows > 0);
+    let host_calls = calls.saturating_add(u64::from(nrows > 0));
     if nrows > 0 && g.invalidate().is_err() {
-        refused += 1;
+        refused = refused.saturating_add(1);
     }
     let unmap_us = t_unmap.elapsed().as_micros();
     let recycled = match mirror.as_ref().and_then(|mi| retire_spare(mi, refused)) {
@@ -2998,7 +3068,11 @@ pub fn apply_statement(
         MemStatement::Sysmembar => {
             let t = std::time::Instant::now();
             let r = rm.fb_flush();
-            let n = plane.counters.sysmembars.fetch_add(1, Ordering::Relaxed) + 1;
+            let n = plane
+                .counters
+                .sysmembars
+                .fetch_add(1, Ordering::Relaxed)
+                .saturating_add(1);
             match r {
                 Ok(()) => format!(
                     "sysmembar #{n}: host FB_FLUSH_GPU_CACHE(FB_FLUSH_YES) in {} us",

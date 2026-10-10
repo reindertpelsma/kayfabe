@@ -700,7 +700,9 @@ impl SpaceVerbs for &Sim {
             return Err(format!("unmap range {va:#x}+{len:#x}: refused (injected)"));
         }
         rm.ranges.push((va, len));
-        let gap = (0..len / P)
+        // (The model's gap accounting is per page: skipped for ranges no test asks it about — the
+        // hostile-input fuzz passes ranges of up to 2^63 bytes.)
+        let gap = (0..if len / P <= 1 << 16 { len / P } else { 0 })
             .filter(|i| {
                 let p = va + i * P;
                 !rm.maps.iter().any(|m| m.va <= p && p < m.va + m.len)
@@ -1245,5 +1247,7 @@ pub fn check(
 
 #[cfg(test)]
 mod adversarial;
+#[cfg(test)]
+mod fuzz;
 #[cfg(test)]
 mod tests;

@@ -368,8 +368,8 @@ pub fn clip_leaves(leaves: &[(u64, u64, u64, u8)], extent: u64) -> (Vec<(u64, u6
         if va >= extent {
             cut = cut.saturating_add(len);
         } else if end > extent {
-            cut = cut.saturating_add(end - extent);
-            out.push((va, at, extent - va, ap));
+            cut = cut.saturating_add(end.saturating_sub(extent));
+            out.push((va, at, extent.saturating_sub(va), ap));
         } else {
             out.push((va, at, len, ap));
         }
@@ -435,7 +435,11 @@ impl HostVas<'_> {
             next = d.va.checked_add(d.len).ok_or("batch VA overflows")?;
             // Coalesce pieces that are also file-contiguous: fewer mappings to stitch.
             match pieces.last_mut() {
-                Some((o, l)) if o.checked_add(*l) == Some(d.off) => *l += d.len,
+                Some((o, l))
+                    if o.checked_add(*l) == Some(d.off) && l.checked_add(d.len).is_some() =>
+                {
+                    *l = l.saturating_add(d.len);
+                }
                 _ => pieces.push((d.off, d.len)),
             }
         }
@@ -447,7 +451,7 @@ impl HostVas<'_> {
                 format!(
                     "batch {:#x}+{:#x} ({} rows, {} pieces): {e:?}",
                     first.va,
-                    next - first.va,
+                    next.saturating_sub(first.va),
                     rows.len(),
                     pieces.len()
                 )
