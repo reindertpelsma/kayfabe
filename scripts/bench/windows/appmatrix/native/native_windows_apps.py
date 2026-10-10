@@ -264,6 +264,7 @@ def install_override(conn, override_dir):
         q = SshQga(conn)
         for f in sorted(os.listdir(override_dir)):
             if f.endswith(".exe"):
+                conn.run(rf"Remove-Item -Force -ErrorAction SilentlyContinue C:\kfapps\tools\{f}")      # the copy from the ISO is read-only
                 q.file_write(rf"C:\kfapps\tools\{f}", open(os.path.join(override_dir, f), "rb").read())
                 self.log(f"[{self.tag}] override tool {f}")
     winapps.GuestSession._setup = _setup

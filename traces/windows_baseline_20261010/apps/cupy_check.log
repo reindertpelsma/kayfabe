@@ -1,0 +1,9 @@
+=== cupy_check start=2026-10-10T09:38:51.1427065-07:00 host=DESKTOP-397P3NI session=0 boot=2026-10-10T15:50:57.5000000Z timeout=300
+KFDEV NVIDIA GeForce RTX 4060 Ti
+CHECK cupy_matmul ok
+CHECK cupy_reduce ok
+CHECK cupy_nvrtc_kernel ok
+CHECK cupy_fft ok
+CHECK cupy_random ok
+CUPY_DONE
+=== end rc=0 secs=9 2026-10-10T09:39:00.2180367-07:00

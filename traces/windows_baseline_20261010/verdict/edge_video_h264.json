@@ -1,0 +1,12 @@
+{
+ "verdict": "FAIL",
+ "rc": 1,
+ "secs": 85,
+ "quiet": 0,
+ "note": "rc=1,success-string-missing,no-gpu-proof",
+ "proof": "none:pdh:VideoDecode",
+ "tdr": 0,
+ "wer": 0,
+ "rebooted": false,
+ "run": "t1b"
+}

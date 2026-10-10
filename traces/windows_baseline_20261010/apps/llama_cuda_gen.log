@@ -1,0 +1,58 @@
+=== llama_cuda_gen start=2026-10-10T10:03:38.0509038-07:00 host=DESKTOP-397P3NI session=0 boot=2026-10-10T15:50:57.5000000Z timeout=600
+Available devices:
+  CUDA0: NVIDIA GeForce RTX 4060 Ti (16379 MiB, 15235 MiB free)
+0.00.244.047 I llama_completion: llama backend init
+0.00.244.083 I llama_completion: load the model and apply lora adapter, if any
+0.01.944.792 W load: control-looking token: 128247 '</s>' was not control-type; this is probably a bug in the model. its type will be overridden
+0.04.078.449 I cmn          init: llama threadpool init, n_threads = 4
+0.04.662.000 I llama_completion: chat template is available, enabling conversation mode (disable it with -no-cnv)
+0.04.662.029 W *** User-specified prompt will pre-start conversation, did you mean to set --system-prompt (-sys) instead?
+0.04.667.604 I llama_completion: chat template example:
+<|im_start|>system
+You are a helpful assistant<|im_end|>
+<|im_start|>user
+Hello<|im_end|>
+<|im_start|>assistant
+Hi there<|im_end|>
+<|im_start|>user
+How are you?<|im_end|>
+<|im_start|>assistant
+
+0.04.667.615 I 
+0.04.667.662 I system_info: n_threads = 4 (n_threads_batch = 4) / 4 | CUDA : ARCHS = 500,610,700,750,800,860,890,900 | USE_GRAPHS = 1 | FA_QUANTS = q4_0-q4_0,q8_0-q8_0,f16-f16,bf16-bf16 | CPU : SSE3 = 1 | SSSE3 = 1 | AVX = 1 | AVX2 = 1 | F16C = 1 | FMA = 1 | BMI2 = 1 | LLAMAFILE = 1 | OPENMP = 1 | REPACK = 1 | 
+0.04.667.672 I 
+0.04.667.895 I llama_completion: interactive mode on.
+0.04.667.912 I sampler seed: 4294967295
+0.04.667.941 I sampler params: 
+	repeat_last_n = 64, repeat_penalty = 1.000, frequency_penalty = 0.000, presence_penalty = 0.000
+	dry_multiplier = 0.000, dry_base = 1.750, dry_allowed_length = 2, dry_penalty_last_n = 64
+	top_k = 40, top_p = 0.950, min_p = 0.050, xtc_probability = 0.000, xtc_threshold = 0.100, typical_p = 1.000, top_n_sigma = -1.000, temp = 0.000
+	mirostat = 0, mirostat_lr = 0.100, mirostat_ent = 5.000, adaptive_target = -1.000, adaptive_decay = 0.900
+0.04.668.397 I sampler chain: logits -> ?penalties -> ?dry -> ?top-n-sigma -> top-k -> ?typical -> top-p -> min-p -> ?xtc -> temp-ext -> greedy 
+0.04.668.407 I generate: n_ctx = 32768, n_batch = 2048, n_predict = 64, n_keep = 0
+0.04.668.416 I 
+0.04.668.425 I == Running in interactive mode. ==
+0.04.668.435 I  - Press Ctrl+C to interject at any time.
+0.04.668.444 I  - Press Return to return control to the AI.
+ - To return control without starting a new line, end your input with '/'.
+ - If you want to submit another line, end your input with '\'.
+0.04.668.453 I  - Not using system message. To change it, set a different value via -sys PROMPT
+0.04.668.480 I 
+0.05.290.688 I common_perf_print:    sampling time =      14.62 ms
+0.05.290.699 I common_perf_print:    samplers time =       3.25 ms /    49 tokens
+0.05.290.718 I common_perf_print:        load time =    2822.04 ms
+0.05.290.730 I common_perf_print: prompt eval time =     371.31 ms /    19 tokens (   19.54 ms per token,    51.17 tokens per second)
+0.05.290.743 I common_perf_print:        eval time =     232.50 ms /    29 runs   (    8.02 ms per token,   124.73 tokens per second)
+0.05.290.754 I common_perf_print:       total time =     628.72 ms /    48 tokens
+0.05.290.766 I common_perf_print: unaccounted time =      10.29 ms /   1.6 %      (total - sampling - prompt eval - eval) / (total)
+0.05.290.794 I common_perf_print:    graphs reused =         28
+GEN The sky appears blue because shorter blue wavelengths of light are scattered more by the atmosphere, making them scatter towards our eyes from all directions.
+GEN 
+GEN > 
+GEN 
+GEN 
+GEN > EOF by user
+GEN 
+GEN 
+OUTSHA llama_cpp 28286d684e78a1b0
+=== end rc=0 secs=13 2026-10-10T10:03:51.3878089-07:00

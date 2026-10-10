@@ -1,0 +1,8 @@
+=== ort_directml start=2026-10-10T08:22:59.1263589-07:00 host=DESKTOP-397P3NI session=0 boot=2026-10-10T13:30:47.5000000Z timeout=240
+ORT_PROVIDERS ['DmlExecutionProvider', 'CPUExecutionProvider']
+ORT_DML_DEVICE index 0 of [(0, 'NVIDIA GeForce RTX 4060 Ti'), (1, 'Microsoft Basic Render Driver')]
+ORT_SESSION_PROVIDERS ['DmlExecutionProvider', 'CPUExecutionProvider']
+CHECK dml_provider_active ok
+CHECK dml_matches_cpu ok
+ORT_DML_DONE
+=== end rc=0 secs=9 2026-10-10T08:23:08.3043452-07:00

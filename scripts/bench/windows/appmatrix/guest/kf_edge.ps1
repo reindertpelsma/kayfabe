@@ -42,10 +42,13 @@ $eargs += $url
 $proc = Start-Process -FilePath $edge -ArgumentList $eargs -PassThru
 $deadline = (Get-Date).AddSeconds($Seconds + 60)
 $result = $null
+$ar = $null
 while (-not $result -and (Get-Date) -lt $deadline) {
-    $ar = $l.BeginGetContext($null, $null)
+    # ONE pending BeginGetContext until it completes: re-issuing it after every 1 s timeout orphaned the earlier pending operations,
+    # and the first request (Edge starts later than 1 s) was handed to one of them and lost (the page sat on "Loading...")
+    if (-not $ar) { $ar = $l.BeginGetContext($null, $null) }
     if (-not $ar.AsyncWaitHandle.WaitOne(1000)) { continue }
-    $ctx = $l.EndGetContext($ar)
+    $ctx = $l.EndGetContext($ar); $ar = $null
     $path = $ctx.Request.Url.AbsolutePath
     $resp = $ctx.Response
     try {

@@ -1,0 +1,6 @@
+=== triad_t start=2026-10-10T08:38:41.2574091-07:00 host=DESKTOP-397P3NI session=0 boot=2026-10-10T13:30:47.5000000Z timeout=120
+[eq] device NVIDIA GeForce RTX 4060 Ti torch 2.8.0+cu126
+CHECK triad_correct ok
+CHECK triad_bandwidth_sane ok GB/s=257.1
+WINEQ_DONE triad
+=== end rc=0 secs=6 2026-10-10T08:38:47.7485860-07:00

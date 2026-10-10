@@ -1,0 +1,64 @@
+{
+ "quiet": 2,
+ "end_utc": "2026-10-10T17:04:38.9450791Z",
+ "start_utc": "2026-10-10T17:04:29.8784397Z",
+ "rc": 0,
+ "secs": 9,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4060 Ti status=OK code=0"
+ ],
+ "digests": [],
+ "session": 0,
+ "out_files": [],
+ "boot_utc_start": "2026-10-10T15:50:57.5000000Z",
+ "log_tail": [
+  "=== managed_t start=2026-10-10T10:04:29.8784397-07:00 host=DESKTOP-397P3NI session=0 boot=2026-10-10T15:50:57.5000000Z timeout=180",
+  "KFDEV NVIDIA GeForce RTX 4060 Ti",
+  "[eq] device NVIDIA GeForce RTX 4060 Ti torch 2.8.0+cu126",
+  "CHECK managed_gpu_write_cpu_read ok",
+  "CHECK managed_cpu_write_gpu_read ok",
+  "WINEQ_DONE managed",
+  "=== end rc=0 secs=9 2026-10-10T10:04:38.9450791-07:00"
+ ],
+ "pdh": {
+  "pids": [
+   "9788",
+   "7840",
+   "8480"
+  ],
+  "nv": {
+   "security": 0,
+   "3d": 0,
+   "vr": 0,
+   "videodecode": 0,
+   "copy": 0,
+   "ofa_0": 0,
+   "legacyoverlay": 0,
+   "videoencode": 0
+  },
+  "samples": 4,
+  "other": {},
+  "nvidia_luids": "0_6040"
+ },
+ "timed_out": false,
+ "token": "g1-managed_t-1791651856",
+ "boot_utc_end": "2026-10-10T15:50:57.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "managed_t",
+ "smi": {
+  "samples": 2,
+  "mem_used_base_mb": 127,
+  "util_max": 0,
+  "mem_used_max_mb": 127
+ }
+}

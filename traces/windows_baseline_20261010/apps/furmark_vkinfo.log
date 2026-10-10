@@ -1,0 +1,11 @@
+=== furmark_vkinfo start=2026-10-10T09:50:53.8570571-07:00 host=DESKTOP-397P3NI session=1 boot=2026-10-10T15:50:57.5000000Z timeout=90
+[ Vulkan info ]
+- # of devices: 1
+- [device 0]
+ - name: NVIDIA GeForce RTX 4060 Ti
+ - deviceID: 10DE-2803 (4318-10243)
+ - API version: 1.4.329
+ - NVIDIA driver: 595.97.0.0
+
+KFNOTE furmark info modes print the info and exit 1 by design (measured on native NVIDIA)
+=== end rc=0 secs=4 2026-10-10T09:50:58.2820340-07:00

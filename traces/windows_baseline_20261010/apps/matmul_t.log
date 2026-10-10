@@ -1,0 +1,5 @@
+=== matmul_t start=2026-10-10T08:13:03.2730831-07:00 host=DESKTOP-397P3NI session=0 boot=2026-10-10T13:30:47.5000000Z timeout=120
+[eq] device NVIDIA GeForce RTX 4060 Ti torch 2.8.0+cu126
+CHECK matmul_fp32 ok maxerr=6.87e-05
+WINEQ_DONE matmul
+=== end rc=0 secs=7 2026-10-10T08:13:09.9003844-07:00

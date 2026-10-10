@@ -1,0 +1,101 @@
+{
+ "quiet": 1,
+ "end_utc": "2026-10-10T16:20:11.4660976Z",
+ "start_utc": "2026-10-10T16:00:35.7742530Z",
+ "rc": 0,
+ "secs": 1176,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4060 Ti status=OK code=0"
+ ],
+ "digests": [],
+ "session": 0,
+ "out_files": [],
+ "boot_utc_start": "2026-10-10T15:50:57.5000000Z",
+ "log_tail": [
+  "      fp32_s512  : 300 GFLOPS",
+  "      int8_qdq_s512 : 293 GOPS",
+  "",
+  "    Transformer block, decode",
+  "      fp16_kv2048 : 2.17 GB/s",
+  "      int8_qdq_kv2048 : 6.79 GB/s",
+  "      fp32_kv2048     : 37.2 GB/s",
+  "",
+  "    Transformer block latency",
+  "      fp16_prefill_s512 : 292 ms",
+  "      fp16_decode_kv512 : 53.7 ms",
+  "      fp16_decode_kv2048 : 54.3 ms",
+  "      fp16_decode_kv8192 : 91.6 ms",
+  "      int8_qdq_prefill_s512 : 184 ms",
+  "      int8_qdq_decode_kv2048 : 9.92 ms",
+  "      fp32_prefill_s512      : 180 ms",
+  "      fp32_decode_kv2048     : 6.34 ms",
+  "",
+  "    ONNX activation throughput",
+  "      silu_8mb : 5.83 GB/s",
+  "      silu_128mb : 3.62 GB/s",
+  "      softmax_8mb : 4.20 GB/s",
+  "      softmax_128mb : 37.1 GB/s",
+  "      layernorm_8mb : 3.91 GB/s",
+  "      layernorm_128mb : 11.7 GB/s",
+  "",
+  "    ONNX resident-tensor bandwidth",
+  "      8mb      : 139 GB/s",
+  "      32mb     : 13.1 GB/s",
+  "      128mb    : 56.3 GB/s",
+  "",
+  "    ONNX host transfer bandwidth",
+  "      roundtrip : 1.02 GB/s",
+  "",
+  "    ONNX dispatch latency",
+  "      trivial_op : 41.1 us",
+  "      matmul_256 : 160 us",
+  "      session_create : 8.98 ms",
+  "",
+  "=== end rc=0 secs=1176 2026-10-10T09:20:11.4660976-07:00"
+ ],
+ "pdh": {
+  "pids": [
+   "4344",
+   "656",
+   "6280"
+  ],
+  "nv": {
+   "security": 0,
+   "3d": 3251.4156473865546,
+   "vr": 0,
+   "videodecode": 0,
+   "copy": 1.4233894905237823,
+   "ofa_0": 0,
+   "legacyoverlay": 0,
+   "videoencode": 0
+  },
+  "samples": 540,
+  "other": {},
+  "nvidia_luids": "0_6040"
+ },
+ "timed_out": false,
+ "token": "g1-clpeak_cuda-1791648018",
+ "boot_utc_end": "2026-10-10T15:50:57.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 3,
+  "other_nvlddmkm": 0,
+  "lines": [
+   "2026-10-10T16:09:14.8469848Z nvlddmkm/153 ",
+   "2026-10-10T16:09:14.8452360Z nvlddmkm/153 ",
+   "2026-10-10T16:09:14.8348313Z nvlddmkm/153 "
+  ],
+  "live_kernel": 0
+ },
+ "app": "clpeak_cuda",
+ "smi": {
+  "samples": 188,
+  "mem_used_base_mb": 107,
+  "util_max": 100,
+  "mem_used_max_mb": 3242
+ }
+}

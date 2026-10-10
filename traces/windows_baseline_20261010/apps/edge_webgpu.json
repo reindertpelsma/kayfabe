@@ -1,0 +1,51 @@
+{
+ "quiet": 0,
+ "end_utc": "2026-10-10T16:49:10.0466013Z",
+ "start_utc": "2026-10-10T16:47:52.4708365Z",
+ "rc": 1,
+ "secs": 78,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4060 Ti status=OK code=0"
+ ],
+ "digests": [],
+ "session": 1,
+ "out_files": [],
+ "boot_utc_start": "2026-10-10T15:50:57.5000000Z",
+ "log_tail": [
+  "=== edge_webgpu start=2026-10-10T09:47:52.4708365-07:00 host=DESKTOP-397P3NI session=1 boot=2026-10-10T15:50:57.5000000Z timeout=150",
+  "KFEDGE {\"ok\":false,\"why\":\"no result posted before the deadline\"}",
+  "=== end rc=1 secs=78 2026-10-10T09:49:10.0466013-07:00"
+ ],
+ "pdh": {
+  "pids": [
+   "1524",
+   "3328",
+   "7492"
+  ],
+  "nv": {},
+  "samples": 35,
+  "other": {},
+  "nvidia_luids": "0_6040"
+ },
+ "timed_out": false,
+ "token": "g1-edge_webgpu-1791650858",
+ "boot_utc_end": "2026-10-10T15:50:57.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "edge_webgpu",
+ "smi": {
+  "samples": 13,
+  "mem_used_base_mb": 125,
+  "util_max": 3,
+  "mem_used_max_mb": 166
+ }
+}

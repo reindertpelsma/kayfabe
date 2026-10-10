@@ -1,0 +1,8 @@
+=== glgears_wgl start=2026-10-10T07:42:36.1077873-07:00 host=DESKTOP-397P3NI session=1 boot=2026-10-10T13:30:47.5000000Z timeout=90
+KFGL vendor NVIDIA Corporation
+KFGL renderer NVIDIA GeForce RTX 4060 Ti/PCIe/SSE2
+KFGL version 4.6.0 NVIDIA 595.97
+KFGL pixel 64,128,191,255
+KFGL gears frames=19519 secs=10.0 fps=1951.9 glerr=0x0
+KFGL RESULT OK
+=== end rc=0 secs=14 2026-10-10T07:42:49.6233640-07:00

@@ -1,0 +1,74 @@
+{
+ "quiet": 2,
+ "end_utc": "2026-10-10T15:20:18.2719687Z",
+ "start_utc": "2026-10-10T15:20:15.3229543Z",
+ "rc": 0,
+ "secs": 3,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4060 Ti status=OK code=0"
+ ],
+ "digests": [],
+ "session": 0,
+ "out_files": [],
+ "boot_utc_start": "2026-10-10T13:30:47.5000000Z",
+ "log_tail": [
+  "=== nvidia_smi start=2026-10-10T08:20:15.3229543-07:00 host=DESKTOP-397P3NI session=0 boot=2026-10-10T13:30:47.5000000Z timeout=60",
+  "Sat Oct 10 08:20:17 2026       ",
+  "+-----------------------------------------------------------------------------------------+",
+  "| NVIDIA-SMI 595.97                 Driver Version: 595.97         CUDA Version: 13.2     |",
+  "+-----------------------------------------+------------------------+----------------------+",
+  "| GPU  Name                  Driver-Model | Bus-Id          Disp.A | Volatile Uncorr. ECC |",
+  "| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |",
+  "|                                         |                        |               MIG M. |",
+  "|=========================================+========================+======================|",
+  "|   0  NVIDIA GeForce RTX 4060 Ti   WDDM  |   00000000:00:07.0 Off |                  N/A |",
+  "|  0%   32C    P8              8W /  165W |     130MiB /  16380MiB |      0%      Default |",
+  "|                                         |                        |                  N/A |",
+  "+-----------------------------------------+------------------------+----------------------+",
+  "",
+  "+-----------------------------------------------------------------------------------------+",
+  "| Processes:                                                                              |",
+  "|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |",
+  "|        ID   ID                                                               Usage      |",
+  "|=========================================================================================|",
+  "|    0   N/A  N/A            1500    C+G   C:\\Windows\\System32\\dwm.exe           N/A      |",
+  "|    0   N/A  N/A            5380    C+G   ...y\\StartMenuExperienceHost.exe      N/A      |",
+  "|    0   N/A  N/A            5408    C+G   ...indows\\System32\\ShellHost.exe      N/A      |",
+  "|    0   N/A  N/A            5440    C+G   C:\\Windows\\explorer.exe               N/A      |",
+  "|    0   N/A  N/A            5824    C+G   ..._cw5n1h2txyewy\\SearchHost.exe      N/A      |",
+  "|    0   N/A  N/A            7248    C+G   ...xyewy\\ShellExperienceHost.exe      N/A      |",
+  "+-----------------------------------------------------------------------------------------+",
+  "=== end rc=0 secs=3 2026-10-10T08:20:18.2719687-07:00"
+ ],
+ "pdh": {
+  "pids": [
+   "8204",
+   "4128"
+  ],
+  "nv": {},
+  "samples": 1,
+  "other": {},
+  "nvidia_luids": "0_5ecc"
+ },
+ "timed_out": false,
+ "token": "g1-nvidia_smi-1791645601",
+ "boot_utc_end": "2026-10-10T13:30:47.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "nvidia_smi",
+ "smi": {
+  "samples": 0,
+  "mem_used_base_mb": 130,
+  "util_max": 0,
+  "mem_used_max_mb": 130
+ }
+}

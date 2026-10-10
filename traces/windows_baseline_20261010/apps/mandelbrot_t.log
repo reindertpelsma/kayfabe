@@ -1,0 +1,5 @@
+=== mandelbrot_t start=2026-10-10T08:12:23.0831338-07:00 host=DESKTOP-397P3NI session=0 boot=2026-10-10T13:30:47.5000000Z timeout=120
+[eq] device NVIDIA GeForce RTX 4060 Ti torch 2.8.0+cu126
+CHECK mandelbrot_vs_cpu ok agree=0.99962
+WINEQ_DONE mandelbrot
+=== end rc=0 secs=7 2026-10-10T08:12:29.8222342-07:00
