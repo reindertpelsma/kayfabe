@@ -2086,7 +2086,7 @@ pub struct ChanPlane {
     /// restore v3-gfx's measured shape for Vulkan (a separate host group per subcontext).
     groups: Mutex<HashMap<(u32, u32, u32), (u32, u32)>>,
     /// ★ 2026-10-09 (`crate::latejoin`): which guest TSGs the guest has scheduled — written at
-    /// statement time by the drainer, read by the birth act (`KF3_SCHEDULE_LATE_JOINERS`).
+    /// statement time by the drainer, read by the birth act (`crate::latejoin`).
     guest_sched: Mutex<crate::latejoin::GuestTsgSched>,
     /// ★ Per guest token: doorbells the vCPU trap rang INLINE, and how many reached the host's
     /// doorbell (the `DOORBELL-LEDGER` line at free; atomics only — the vCPU writes them).
@@ -6021,12 +6021,12 @@ impl ChanPlane {
                         }
                     };
                     let owner = if a.kernel_client && !a.user_work { Owner::Kernel } else { Owner::User };
-                    // ★ 2026-10-09 (`KF3_SCHEDULE_LATE_JOINERS=1`, default off; `crate::latejoin`): a twin
+                    // ★ 2026-10-09, hardwired 2026-10-10 (`crate::latejoin`, hardware-verified): a twin
                     // born into a guest TSG the guest has ALREADY scheduled is in a host group nobody
                     // else schedules (the guest sent its one schedule before the channel existed).
                     // The schedule of its own host group, authored from the guest's own scheduled
                     // state. A refusal is the birth's refusal, by name.
-                    let late = crate::latejoin::schedule_late_joiner(me.rm, crate::latejoin::enabled(), &me.guest_sched, a.client, a.tsg, chan);
+                    let late = crate::latejoin::schedule_late_joiner(me.rm, &me.guest_sched, a.client, a.tsg, chan);
                     let alloc = late
                         .clone()
                         .map(|_| ())
