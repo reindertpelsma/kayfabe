@@ -1,0 +1,75 @@
+== run 268
+latches=1434  ack-minus-latch ms over completed-looking flips: n=344 min=-36.884 p10=-0.574 p50=-0.530 p90=-0.499 max=0.084
+ack before latch (ack-latch<0): 343 of 344
+STUCK? latch 58836.272457  vsync -33.189 ms  guest-ack +26.862 ms  next PUT after 3.34 s
+STUCK? latch 58836.290777  vsync -51.509 ms  guest-ack +8.542 ms  next PUT after 3.32 s
+STUCK? latch 58836.306702  vsync -0.813 ms  guest-ack -0.580 ms  next PUT after 3.31 s
+STUCK? latch 58840.457066  vsync -0.874 ms  guest-ack -0.545 ms  next PUT after 29.37 s
+STUCK? latch 58869.840745  vsync -0.927 ms  guest-ack -0.528 ms  next PUT after 18.40 s
+STUCK? latch 58889.040551  vsync -0.842 ms  guest-ack -0.486 ms  next PUT after 1.02 s
+STUCK? latch 58896.423647  vsync -0.891 ms  guest-ack -0.016 ms  next PUT after 4.45 s
+STUCK? latch 58904.022373  vsync -50.046 ms  guest-ack +1860.096 ms  next PUT after 3.68 s
+STUCK? latch 58904.040386  vsync -68.059 ms  guest-ack +1842.083 ms  next PUT after 3.66 s
+STUCK? latch 58904.057483  vsync -85.156 ms  guest-ack +1824.986 ms  next PUT after 3.64 s
+STUCK? latch 58908.639842  vsync -0.894 ms  guest-ack +0.008 ms  next PUT after 2.27 s
+STUCK? latch 58910.922432  vsync -0.032 ms  guest-ack +0.062 ms  next PUT after 1.10 s
+== run 269
+latches=1269  ack-minus-latch ms over completed-looking flips: n=409 min=-285.997 p10=-0.630 p50=-0.540 p90=-0.504 max=0.032
+ack before latch (ack-latch<0): 408 of 409
+STUCK? latch 59494.125949  vsync -32.574 ms  guest-ack +23.774 ms  next PUT after 2.96 s
+STUCK? latch 59494.144113  vsync -50.738 ms  guest-ack +5.610 ms  next PUT after 2.95 s
+STUCK? latch 59494.160007  vsync -0.794 ms  guest-ack -0.579 ms  next PUT after 2.93 s
+STUCK? latch 59498.193665  vsync -0.862 ms  guest-ack -0.551 ms  next PUT after 29.35 s
+STUCK? latch 59527.560333  vsync -0.898 ms  guest-ack -0.532 ms  next PUT after 1.12 s
+STUCK? latch 59529.527082  vsync -0.862 ms  guest-ack -0.565 ms  next PUT after 1.00 s
+STUCK? latch 59537.894021  vsync -0.816 ms  guest-ack +0.115 ms  next PUT after 6.24 s
+STUCK? latch 59544.142947  vsync -16.249 ms  guest-ack -16.050 ms  next PUT after 1.05 s
+STUCK? latch 59548.326003  vsync -299.262 ms  guest-ack +270.272 ms  next PUT after 2.02 s
+STUCK? latch 59548.343971  vsync -317.230 ms  guest-ack +252.304 ms  next PUT after 2.00 s
+STUCK? latch 59548.361259  vsync -334.518 ms  guest-ack +235.016 ms  next PUT after 1.99 s
+STUCK? latch 59550.877573  vsync -0.821 ms  guest-ack -0.519 ms  next PUT after 2.44 s
+== run 276
+latches=327  ack-minus-latch ms over completed-looking flips: n=305 min=-23185.232 p10=-0.574 p50=-0.533 p90=-0.504 max=0.124
+ack before latch (ack-latch<0): 301 of 305
+STUCK? latch 65842.963668  vsync -33.509 ms  guest-ack +23.068 ms  next PUT after 2.89 s
+STUCK? latch 65842.981940  vsync -51.781 ms  guest-ack +4.796 ms  next PUT after 2.87 s
+STUCK? latch 65842.997840  vsync -0.810 ms  guest-ack -0.536 ms  next PUT after 2.85 s
+STUCK? latch 65847.047684  vsync -0.882 ms  guest-ack -0.534 ms  next PUT after 29.37 s
+STUCK? latch 65886.131826  vsync -1.004 ms  guest-ack -0.007 ms  next PUT after 6.74 s
+STUCK? latch 65892.880495  vsync -17.127 ms  guest-ack -16.838 ms  next PUT after 1.35 s
+STUCK? latch 65896.346852  vsync -32.881 ms  guest-ack +1048.768 ms  next PUT after 3.51 s
+STUCK? latch 65896.365028  vsync -51.057 ms  guest-ack +1030.592 ms  next PUT after 3.49 s
+STUCK? latch 65896.381007  vsync -67.036 ms  guest-ack +1014.613 ms  next PUT after 3.47 s
+STUCK? latch 66082.280040  vsync -16.165 ms  guest-ack -1.971 ms  next PUT after 23.18 s
+STUCK? latch 66082.298051  vsync -34.176 ms  guest-ack -19.982 ms  next PUT after 23.16 s
+STUCK? latch 66082.315069  vsync -51.194 ms  guest-ack -37.000 ms  next PUT after 23.15 s
+== run 277
+latches=251  ack-minus-latch ms over completed-looking flips: n=239 min=-115.216 p10=-0.548 p50=-0.524 p90=-0.496 max=0.148
+ack before latch (ack-latch<0): 236 of 239
+STUCK? latch 66463.005099  vsync -33.814 ms  guest-ack +23.748 ms  next PUT after 2.94 s
+STUCK? latch 66463.023309  vsync -52.024 ms  guest-ack +5.538 ms  next PUT after 2.92 s
+STUCK? latch 66463.039205  vsync -0.796 ms  guest-ack -0.578 ms  next PUT after 2.90 s
+STUCK? latch 66467.122707  vsync -0.927 ms  guest-ack -0.529 ms  next PUT after 28.62 s
+STUCK? latch 66495.822729  vsync -0.849 ms  guest-ack +34.114 ms  next PUT after 4.11 s
+STUCK? latch 66502.471228  vsync -16.035 ms  guest-ack -13.222 ms  next PUT after 1.59 s
+STUCK? latch 66502.489350  vsync -34.157 ms  guest-ack -31.344 ms  next PUT after 1.57 s
+STUCK? latch 66502.505436  vsync -50.243 ms  guest-ack -47.430 ms  next PUT after 1.55 s
+STUCK? latch 66507.172698  vsync -0.863 ms  guest-ack -0.005 ms  next PUT after 2.27 s
+STUCK? latch 66513.122018  vsync -0.907 ms  guest-ack -0.462 ms  next PUT after 1.65 s
+STUCK? latch 66513.137991  vsync -0.886 ms  guest-ack -0.507 ms  next PUT after 1.63 s
+STUCK? latch 66514.884216  vsync -4.001 ms  guest-ack None ms  next PUT after 28.46 s
+== run 278
+latches=1628  ack-minus-latch ms over completed-looking flips: n=381 min=-23.975 p10=-0.564 p50=-0.530 p90=-0.504 max=-0.282
+ack before latch (ack-latch<0): 381 of 381
+STUCK? latch 66902.086417  vsync -33.892 ms  guest-ack +25.314 ms  next PUT after 2.80 s
+STUCK? latch 66902.104598  vsync -52.073 ms  guest-ack +7.133 ms  next PUT after 2.78 s
+STUCK? latch 66902.120497  vsync -0.801 ms  guest-ack -0.473 ms  next PUT after 2.77 s
+STUCK? latch 66906.054131  vsync -0.844 ms  guest-ack -0.447 ms  next PUT after 29.35 s
+STUCK? latch 66936.804093  vsync -0.878 ms  guest-ack -0.513 ms  next PUT after 1.07 s
+STUCK? latch 66944.104220  vsync -0.896 ms  guest-ack -0.008 ms  next PUT after 4.38 s
+STUCK? latch 66951.119429  vsync -16.518 ms  guest-ack -2.997 ms  next PUT after 3.29 s
+STUCK? latch 66951.137373  vsync -34.462 ms  guest-ack -20.941 ms  next PUT after 3.27 s
+STUCK? latch 66951.154697  vsync -51.786 ms  guest-ack -38.265 ms  next PUT after 3.25 s
+STUCK? latch 66955.904613  vsync -1.389 ms  guest-ack -0.995 ms  next PUT after 9.92 s
+STUCK? latch 66965.837616  vsync -0.860 ms  guest-ack -0.546 ms  next PUT after 1.77 s
+STUCK? latch 66967.821423  vsync -2.067 ms  guest-ack -0.431 ms  next PUT after 1.29 s

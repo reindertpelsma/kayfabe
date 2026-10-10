@@ -448,3 +448,35 @@ then ended the hold at READY; the guest ETW stop failed (QGA lost during the dum
 * **H-P (guest-visible):** some invalidate is held > 12 ms near a suspend/TDR window. Falsifier: no `INVAL-SLOW` within 2 s before any
   declaration (the distribution is reported either way).
 * **H-S** and **H-F1** as for 277.
+
+### Run 278 result (binary 1b921070, clean base; 0 new host Xid) and the shape-F finding across runs 268-278
+**Guest-visible MMU invalidate latency (H-P, ruling §AD), measured** (`INVAL-LAT`, whole boot): n=16391, avg 0.30 ms, p50 0.16 ms,
+p90 0.26 ms, p99 1.3 ms, **max 74.8 ms, 46 invalidates over 12 ms** (each named by `INVAL-SLOW` with its time; the VA thread was
+either "away" 12-60 ms since its previous publish with no walk and nothing pending — busy outside the walk path — or not away while a
+walk/settle held the clear). They cluster at guest activity bursts (process creation, `DEFERRED-API` context init) and around each
+TDR: e.g. 8 between 66944.12 and 66944.87, right after the flip that timed out at TDR 1 (66944.09). **[measured] invalidates do
+exceed the 12 ms ruling by up to ~6x**; **[measured] none stays armed for anything near the 2 s a TDR needs** (max 74.8 ms; the run-223
+class is ruled out again). Whether a 26-68 ms invalidate burst is what delays the flip's completion is answered below: it is not the
+mechanism the flips show.
+
+**Shape F, measured on every first TDR with a display trace (runs 268, 269, 276, 277, 278; `tooling/vsrace.py`,
+`evidence/vsync-ack-vs-latch-runs268-278.txt`).** For each vblank, kayfabe raises the head's VSync interrupt, then — about 0.9 ms
+later, in the same display-thread pass that applies the vblank's effects — LATCHes the pending window update and writes its
+notifier/semaphore completion. The guest's VSync ack (`W1C 0x611800`, as applied by the display thread) lands, for **every one of
+~1680 flips that completed**, 0.50-0.57 ms BEFORE that latch (p10..p90; at most 4 per run within +0.15 ms). **For the flip whose
+queue entry timed out, in all five runs, the ack is applied at the latch** (-0.016, +0.115, -0.007, +34.1, -0.008 ms): the guest's
+VSync handling and kayfabe's latch of that flip ran together, and from then on every VSync DPC (ETW 273) reports the PREVIOUS
+present as current until the TDR. Run 277/278 ETW with the flips aligned to kayfabe's window PUTs (5-flip interval patterns match
+to 0.1 ms): the driver reports each completed flip at the VSync DPC that runs ~0.5 ms BEFORE kayfabe latches it (so the driver does
+not wait for kayfabe's notifier), and the one DPC that ran at/after the latch reported the flip not done, for good.
+**[inferred]** the guest driver decides "flip displayed" at the first VSync after programming from state that kayfabe changes during
+its latch pass (GET past the UPDATE, ARMED words, LOADV, the semaphore/notifier words), and a decision taken mid-pass is wrong and
+never revisited. Hardware latches at the vblank BEFORE raising it, so a driver never observes a half-applied latch there.
+
+### Run 279 (written before the run): which value the guest's VSync handling reads differently (H-F3)
+Binary 1b921070; flags production + probe + display write trace + **`KF3_BAR0_READ_TRACE=1`** (display range reads, display-range
+writes only; the VFIO reference's own trace format, so the read set compares 1:1 with `vfio-dvi-20261008/boot3/trace.log`);
+`WIN_TRACE=1`; ETW. PERTURBING (each traced read is a VM exit). **H-F3:** at the vblank of the stuck flip the guest reads at least one
+display register with a value different from what it reads at every completing vblank (a register kayfabe changes during its latch
+pass). **Falsifier:** the same reads with the same values as at completing vblanks — then the decision is taken from guest memory
+(notifier/semaphore), named next from the same trace's timing.
