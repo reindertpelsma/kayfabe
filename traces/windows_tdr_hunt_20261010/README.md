@@ -721,3 +721,34 @@ the end of the hold window, 988 by shutdown.
 Guest DxgKrnl ETW on (guest-side only), so any TDR can be classified. **Prediction:** no TDR in boot / sign-in / Edge; the hold either
 clean or with the residual non-flip TDR of 287. **Falsifier for the fix:** any TDR whose ETW shows a flip handed to the driver and
 never reported (shape F).
+
+### Run 288 result (production profile, zero kayfabe measurement flags, guest ETW; binary 81cf89c8)
+**TDR cycles per phase: boot 0, after sign-in 0, after Edge 0, after the Shorts step 0; hold: 4 cycles at hold_t 87, 102, 108, 128 s**,
+then none to 900 s. The screen was black from the first cycle, and QGA was dead at the end. 0 forced edges, 0 new host Xid.
+**Falsifier for the display fix NOT met: ETW (recovered from the run's disk, `tdropus/r288/dxg.csv`, host-only) shows no flip in
+flight at the first TDR**:
+* VSync DPCs (17/273) ran normally to 13:49:35.4 (guest clock) with the two current presents. No flip was handed (259/386) after
+  that.
+* At 13:49:42.562 process 0x2354 submitted the **first** render command buffer (178, fence 14; 450) on each of three new contexts.
+  No completion (451) followed for any of them. At 13:49:42.85 the process destroyed them (`DXGK_BLOCK_THREAD_FLUSH_CONTEXT`), the
+  flush blocked, and the declaration came at 13:49:44.6-44.7 (540, 547).
+* **kayfabe side, measured:** the three contexts are GR channels born together in one TSG with subcontexts (`ctxShare` 0xff0e0200,
+  0x0201, 0x0202): tokens 0x27 (host 0x4e), 0x28 (0x4f), 0x29 (0x50), 0x2a (0x51).
+  * Token 0x27 (subcontext 0): context bound (`CtxBind{initialized:4, bound:true}`), host GP_GET 0x14 = PUT, so it executed.
+  * **Tokens 0x28 and 0x29 (subcontexts 1, 2): GP_PUT forwarded and rung, `CtxBind{initialized:0, va_bound:0, bound:false}`,
+    host GP_GET stayed 0.** The host PBDMA never fetched a GP entry, so the work never ran and its fence never signalled.
+* The same pair (tokens 0x28/0x29, host GP_GET 0) is the cause of **run 287's** single hold TDR. In 288 it repeats for each
+  re-created TSG (0x1f/0x20, 0x21/0x22): one per cycle. Run 280's resets did not show it (they were stuck flips). [inferred] The
+  hold_t ~87 s timing in both runs is the guest workload creating that multi-subcontext TSG.
+* **So the remaining Windows TDR is a channel/context-bind defect for non-zero subcontexts of a TSG (passthrough GR twins), not
+  the display.** Next: the twin's subcontext / VEID binding and its scheduling on the host runlist (owner of the channel/GR tier).
+
+### Integration-line port (branch `claude/display-latch-contract-20261010`, off integration `ababd8d1`)
+`6f429343` (kf-disp: flip-away release, flipped-away notifier FINISHED, new notifier BEGUN, tests) and `daded67e` (kf-qemu:
+VblankGate owed-raise, BEGUN plumbing, interleaving tests). No diagnostic switches (raise-delay, tick, slot history are not on
+this line). `cargo test -p kf-qemu -p kf-disp` passes, clippy is clean.
+
+### Run 289 (written before the run): the integration port on hardware (production profile, zero measurement flags, hold 300 s)
+Two questions. **(1)** Does the display fix hold on the integration code? Falsifier: a stuck-flip TDR in boot, sign-in or Edge.
+**(2)** Does the reviewed batched-map kf-mem (integration) still leave HELD-BY-HOST holes? Measured by `HELD BY HOST` lines and
+new host Xid 31.
