@@ -356,7 +356,13 @@ fn hostile_rows_never_panic_and_keep_the_ledger_invariants() {
         .unwrap_or(400);
     let mut failures = Vec::new();
     for (low, batching) in [(true, true), (false, true), (true, false), (false, false)] {
-        for seed in 1..=seeds {
+        // `KF_FUZZ_BASE=n` shifts the seed window (n+1..=n+seeds): independent windows, same seeds
+        // never re-run.
+        let base: u64 = std::env::var("KF_FUZZ_BASE")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0);
+        for seed in base.saturating_add(1)..=base.saturating_add(seeds) {
             if let Err(e) = run_seed(seed, 25, low, batching) {
                 failures.push(format!("low={low} batching={batching}: {e}"));
                 if failures.len() >= 5 {

@@ -186,6 +186,10 @@ pub struct Applied {
     pub remade_unchanged_pages: u64,
     /// The VA intervals of [`Applied::remade_unchanged_pages`], `(start, end)`.
     pub remade: Vec<(u64, u64)>,
+    /// ★ Review 2 item 5: runs refused for the refresh's host-call budget
+    /// ([`crate::batch::REFRESH_BUDGET_EXHAUSTED`]) — counted in `refused` too. The VA manager
+    /// walks the space again (fresh budget) while a refresh makes progress.
+    pub budget_refused: usize,
     /// ★ Review fix 2026-10-10: new pieces of a FAILED map run taken down again (never a kept page).
     pub taken_down: usize,
 }
@@ -201,6 +205,9 @@ impl Applied {
     }
 
     fn refuse(&mut self, i: usize, why: String) {
+        if why.contains(crate::batch::REFRESH_BUDGET_EXHAUSTED) {
+            self.budget_refused = self.budget_refused.saturating_add(1);
+        }
         self.codes[i] = KFWR_ACK_FAILED;
         self.refused = self.refused.saturating_add(1);
         self.first_refusal.get_or_insert(why);

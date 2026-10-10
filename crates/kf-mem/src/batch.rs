@@ -673,6 +673,15 @@ impl OwnMaps {
 /// fixed part ≈ 4 RM calls + 2 mm syscalls) — below it the rows go per run.
 pub const LOW_RANGE_MIN_RUNS: usize = 8;
 
+/// ★ Review 2 item 7 (hostile guest): the most VA a ONE batch may span. The batch book keeps one
+/// liveness bit per 4 KiB page of the batch's VA EXTENT — which the guest chooses (the same guest-RAM
+/// run aliased at consecutive VAs) — so an uncapped extent let 4 096 aliased 4 GiB runs (16 TiB of
+/// VA) allocate 517 MiB of host memory (`[measured, model, review, 2026-10-10]`). 64 GiB is 2 MiB of
+/// bitmap per batch (one bit per page); a batch beyond it is refused by name and its rows go per run.
+pub const BATCH_MAX_EXTENT: u64 = 64 << 30;
+/// ★ Review 2 item 7: why [`BatchedVas::place`] refused a batch for its VA extent.
+pub const BATCH_EXTENT_CAPPED: &str = "batch spans more VA than BATCH_MAX_EXTENT (64 GiB): its liveness bitmap would be sized by a guest-chosen extent — refused by name, the rows go per run";
+
 /// ★ 2026-10-09: the most host mappings ONE row is split into outside a reservation — a bound on
 /// host calls per row, never sized by an unchecked guest value.
 ///
@@ -822,11 +831,16 @@ impl Drop for ActScope {
 struct Claims {
     maps: Vec<(u64, u64)>,
     steers: Vec<(u64, u64)>,
+    /// ★ Review 2 item 2: maps WAITING for a running steer over their range. A steer over a range
+    /// a map waits for answers [`HandOver::Busy`] at once, so a flood of steers cannot starve the
+    /// map (the act thread never waits; the map waits for at most the steer already running).
+    waiting: Vec<(u64, u64)>,
 }
 
-/// A claim, released on drop.
+/// A claim, released on drop (a released steer wakes the maps waiting for it).
 struct ClaimGuard<'a> {
     claims: &'a std::sync::Mutex<Claims>,
+    cv: &'a std::sync::Condvar,
     is_map: bool,
     va: u64,
     end: u64,
@@ -842,6 +856,10 @@ impl Drop for ClaimGuard<'_> {
         };
         if let Some(i) = v.iter().position(|&r| r == (self.va, self.end)) {
             v.swap_remove(i);
+        }
+        drop(c);
+        if !self.is_map {
+            self.cv.notify_all();
         }
     }
 }
@@ -950,6 +968,8 @@ pub struct BatchedVas<'rm, V: SpaceVerbs = HostVas<'rm>> {
     act_waiting: std::sync::atomic::AtomicU32,
     /// ★ Review item 5: map / steer range claims ([`Claims`]).
     claims: std::sync::Mutex<Claims>,
+    /// Wakes a map waiting in [`BatchedVas::claim_map`] when a steer claim is released.
+    claims_cv: std::sync::Condvar,
     /// ★ Review item 4: [`BatchedVas::begin_refresh`] was called at least once, so the per-refresh
     /// host-call budget below is enforced (a user that never marks refreshes — a test, a one-shot
     /// tool — is not limited).
@@ -1047,6 +1067,7 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
             holds: HoldStats::default(),
             act_waiting: std::sync::atomic::AtomicU32::new(0),
             claims: std::sync::Mutex::new(Claims::default()),
+            claims_cv: std::sync::Condvar::new(),
             refresh_armed: std::sync::atomic::AtomicBool::new(false),
             placed_spent: std::sync::atomic::AtomicU64::new(0),
             amp_spent: std::sync::atomic::AtomicU64::new(0),
@@ -1076,8 +1097,26 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
         b: &std::sync::Mutex<B>,
         f: impl FnOnce(&mut A, &mut B) -> (R, usize),
     ) -> R {
-        let mut ga = self.lock_for(a);
-        let mut gb = self.lock_for(b);
+        // ★ Review 2 item 3: the yield to the act thread happens BEFORE the first lock is taken —
+        // never while holding `a` (a thread yielding while it holds the very lock the act thread
+        // waits for stalls the act thread for the whole yield). The act thread announces itself
+        // across BOTH acquisitions.
+        use std::sync::atomic::Ordering::SeqCst;
+        let act = ACT_THREAD.get();
+        let announced = std::time::Instant::now();
+        if act {
+            self.act_waiting.fetch_add(1, SeqCst);
+        } else {
+            self.yield_to_act();
+        }
+        let mut ga = lk(a);
+        let mut gb = lk(b);
+        if act {
+            self.act_waiting.fetch_sub(1, SeqCst);
+            self.holds
+                .act_wait_max_ns
+                .fetch_max(HoldStats::ns(announced.elapsed()), SeqCst);
+        }
         let t0 = std::time::Instant::now();
         let (r, touched) = f(&mut ga, &mut gb);
         self.holds.note(touched, t0.elapsed());
@@ -1130,52 +1169,70 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
             .fetch_max(HoldStats::ns(t.elapsed()), Relaxed);
     }
 
-    /// ★ Review item 5: claim `[va, end)` for a MAP. Waits (yielding) while a steer is running over
-    /// an overlapping range — the steer's host calls are bounded and it never waits for us — then
-    /// registers the claim atomically with that check.
+    /// ★ Review item 5 / review 2 item 2: claim `[va, end)` for a MAP. If a steer is running over an
+    /// overlapping range the map WAITS on a condition variable (no polling) for that steer CHUNK to
+    /// finish — a steer holds its claim for at most [`LEDGER_CHUNK`] ledger entries
+    /// ([`BatchedVas::hand_to_host`]), so the wait is one chunk, not the guest-chosen length of the
+    /// row being handed over. While it waits it is registered in `waiting`, which makes every new
+    /// steer over its range answer `Busy`: a flood of steers cannot starve it. The 100 ms timeout
+    /// only re-checks (a missed wake-up cannot hang the VA thread).
     fn claim_map(&self, va: u64, end: u64) -> ClaimGuard<'_> {
+        let mut c = lk(&self.claims);
         let mut waited: Option<std::time::Instant> = None;
-        loop {
-            {
-                let mut c = lk(&self.claims);
-                if !c.steers.iter().any(|&r| overlap(r, va, end)) {
-                    c.maps.push((va, end));
-                    break;
-                }
+        while c.steers.iter().any(|&r| overlap(r, va, end)) {
+            if waited.is_none() {
+                waited = Some(std::time::Instant::now());
+                c.waiting.push((va, end));
             }
-            waited.get_or_insert_with(std::time::Instant::now);
-            std::thread::sleep(std::time::Duration::from_micros(50));
+            c = self
+                .claims_cv
+                .wait_timeout(c, std::time::Duration::from_millis(100))
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .0;
         }
         if let Some(t) = waited {
             use std::sync::atomic::Ordering::Relaxed;
+            if let Some(i) = c.waiting.iter().position(|&r| r == (va, end)) {
+                c.waiting.swap_remove(i);
+            }
             self.holds.va_claim_waits.fetch_add(1, Relaxed);
             self.holds
                 .va_claim_wait_max_ns
                 .fetch_max(HoldStats::ns(t.elapsed()), Relaxed);
         }
+        c.maps.push((va, end));
+        drop(c);
         ClaimGuard {
             claims: &self.claims,
+            cv: &self.claims_cv,
             is_map: true,
             va,
             end,
         }
     }
 
-    /// ★ Review item 5: claim `[va, end)` for a STEER, or `None` when a map is in flight over an
-    /// overlapping range (the act thread never waits for the VA thread).
+    /// ★ Review item 5: claim `[va, end)` for a STEER chunk, or `None` when a map is in flight — or
+    /// waiting — over an overlapping range (the act thread never waits for the VA thread).
     fn claim_steer(&self, va: u64, end: u64) -> Option<ClaimGuard<'_>> {
         let mut c = lk(&self.claims);
-        if c.maps.iter().any(|&r| overlap(r, va, end)) {
+        if c.maps.iter().any(|&r| overlap(r, va, end)) || c.waiting.iter().any(|&r| overlap(r, va, end)) {
             return None;
         }
         c.steers.push((va, end));
         drop(c);
         Some(ClaimGuard {
             claims: &self.claims,
+            cv: &self.claims_cv,
             is_map: false,
             va,
             end,
         })
+    }
+
+    /// Whether a MAP is in flight or waiting over any part of `[va, end)`.
+    fn map_claimed(&self, va: u64, end: u64) -> bool {
+        let c = lk(&self.claims);
+        c.maps.iter().any(|&r| overlap(r, va, end)) || c.waiting.iter().any(|&r| overlap(r, va, end))
     }
 
     /// ★ Review item 4: a new refresh begins (the apply calls this once per walker entry): the
@@ -1372,6 +1429,14 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
             let big = leaf > BATCH_PAGE && (s | e).is_multiple_of(leaf);
             let grains = (e.saturating_sub(s)) / BATCH_PAGE;
             let over = grains > self.max_leaf_pieces;
+            if (big || over) && self.low_reserve && !self.spend(1, 0) {
+                self.fail_segments(&segs, &fresh, true);
+                self.note_budget_refusal(s, e.saturating_sub(s));
+                return Err(format!(
+                    "map {s:#x}+{:#x}: {REFRESH_BUDGET_EXHAUSTED}",
+                    e.saturating_sub(s)
+                ));
+            }
             if (big || over) && self.low_reserve {
                 match self.vas.reserve(s, e.saturating_sub(s)) {
                     Ok(h) => {
@@ -1396,6 +1461,7 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
                 };
                 if !self.spend(grains, grains.saturating_sub(leaves)) {
                     self.fail_segments(&segs, &fresh, true);
+                    self.note_budget_refusal(s, e.saturating_sub(s));
                     return Err(format!(
                         "map {s:#x}+{:#x} ({grains} grains): {REFRESH_BUDGET_EXHAUSTED}",
                         e.saturating_sub(s)
@@ -1413,7 +1479,11 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
                 match self.per_leaf_reservations(s, e, leaf, &mut out, &mut fresh) {
                     Ok(()) => continue,
                     Err(msg) => {
-                        self.fail_segments(&segs, &fresh, msg.contains(REFRESH_BUDGET_EXHAUSTED));
+                        let budget = msg.contains(REFRESH_BUDGET_EXHAUSTED);
+                        self.fail_segments(&segs, &fresh, budget);
+                        if budget {
+                            self.note_budget_refusal(s, e.saturating_sub(s));
+                        }
                         return Err(msg);
                     }
                 }
@@ -1425,6 +1495,20 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
             ));
         }
         Ok(out)
+    }
+
+    /// ★ Review 2 item 5: a row refused for the refresh's host-call budget is LOUD — counted
+    /// (`budget_refused`) and named in the log (the first 16), with what happens next: the run is
+    /// acknowledged FAILED (absence: the invalidate is still cleared over it, §AA) and the VA
+    /// manager walks the space AGAIN with a fresh budget ([`crate::apply::Applied::budget_refused`]).
+    fn note_budget_refusal(&self, s: u64, len: u64) {
+        static LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        if LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 16 {
+            eprintln!(
+                "kf-mem: row {s:#x}+{len:#x} REFUSED for this refresh's host-call budget (placement {} / amplification {}): absent now, re-walked with a fresh budget while progress is made",
+                self.placement_budget, self.amplification_budget
+            );
+        }
     }
 
     /// Every pin taken so far goes (the caller maps nothing); the fresh reservations stay for the
@@ -1603,19 +1687,48 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
 
     fn hand_to_host_inner(&self, va: u64, len: u64) -> HandOver {
         let end = va.saturating_add(len);
-        // ★ Review item 5: never over a range a map is in flight over (its host mapping may not be
-        // recorded yet: Free would be a lie), and no map starts over it until this steer is done
-        // (its record could otherwise be cut with the span this steer unmapped).
-        let Some(_claim) = self.claim_steer(va, end) else {
-            return HandOver::Busy;
-        };
-        if let Err(e) = self.unmap_owned(va, len, false) {
-            return HandOver::Refused(e);
+        // ★ Review 2 item 2 — **the steer claims in CHUNKS.** The row being handed over has a
+        // guest-chosen length (`[measured, model, review]` a 4 GiB row: 494 ms of steer, and the
+        // VA thread's map over the same range waited 489 ms for the claim). So the range is
+        // walked as the hulls of at most [`LEDGER_CHUNK`] ledger entries: each hull is claimed,
+        // unmapped (host call, ledger cut, book), and RELEASED before the next — a map over the
+        // range waits for one hull, not for the row. The claim of §8.8.8.2 is otherwise unchanged:
+        // never over a range a map is in flight or waiting over (answered `Busy`; the hulls
+        // already handed over stay handed over).
+        // (A map in flight over a range with no ledger entries yet — its host mapping not
+        // recorded — is invisible to the chunk walk below; the verdict re-checks the whole range.)
+        let mut cur = va;
+        while cur < end {
+            let chunk = self.hold(&self.own, |o| {
+                let c = o.within_limited(cur, end, LEDGER_CHUNK);
+                let n = c.len();
+                (c, n)
+            });
+            let (Some(&(first, _)), Some(&(last, lm))) = (chunk.first(), chunk.last()) else {
+                break;
+            };
+            let lo = first.max(cur);
+            let hi = last.saturating_add(lm.len).min(end);
+            let Some(_claim) = self.claim_steer(lo, hi) else {
+                return HandOver::Busy;
+            };
+            if let Err(e) = self.unmap_owned(lo, hi.saturating_sub(lo), false) {
+                return HandOver::Refused(e);
+            }
+            drop(_claim);
+            cur = hi;
+            if chunk.len() < LEDGER_CHUNK {
+                break;
+            }
         }
         // Race-free with the VA thread: a reservation is released only when nothing of ours is in
         // it and no map through it is in flight ([`MicroResv::pins`]).
         self.release_micro(va, end);
-        if self.hold(&self.own, |o| (o.any_in(va, end), 1)) {
+        if self.map_claimed(va, end) {
+            // A map in flight or waiting over any part of the range at the verdict: its pages are
+            // (about to be) ours again — `Busy`, never `Free`.
+            HandOver::Busy
+        } else if self.hold(&self.own, |o| (o.any_in(va, end), 1)) {
             HandOver::StillOurs
         } else if self.micro_covers(va, end) {
             HandOver::StillReserved
@@ -1880,6 +1993,9 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
             ),
             _ => return Err("empty batch".into()),
         };
+        if len > BATCH_MAX_EXTENT {
+            return Err(format!("batch {va:#x}+{len:#x}: {BATCH_EXTENT_CAPPED}"));
+        }
         let end = va.saturating_add(len);
         let _claim = self.claim_map(va, end); // ★ review item 5 (see `map_segments`)
         self.clear_strays(va, end, defer)?;
@@ -2550,6 +2666,14 @@ mod tests {
         }
     }
 
+    /// The timing tests below measure latencies of threads running concurrently: they take this lock
+    /// so the test harness's other threads do not load the box under them.
+    static TIMING: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn timing() -> std::sync::MutexGuard<'static, ()> {
+        TIMING.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
     /// The bound every hold must keep: a chunk, plus the one predecessor a range scan may add.
     const BOUND: u64 = LEDGER_CHUNK as u64 + 1;
 
@@ -2559,6 +2683,7 @@ mod tests {
     /// by run; and no ledger lock hold, on any of those paths, touches more than one chunk.
     #[test]
     fn a_2_pow_20_piece_row_never_holds_a_ledger_lock_beyond_one_chunk() {
+        let _t = timing();
         let host = NullHost::new(0); // no reservation: the 4 KiB grain
         let bv = BatchedVas::with_low_reserve(&host, false);
         let (va, len) = (0x1_0000_0000u64, MAX_LEAF_PIECES * BATCH_PAGE);
@@ -3199,7 +3324,14 @@ mod tests {
             "the map must wait for the steer over its range"
         );
         gtx.send(()).unwrap();
-        assert_eq!(steer.join().unwrap(), HandOver::Free);
+        // The map may land before the steer's verdict (then `StillOurs`: valid, a mapping of ours is
+        // there again) or after it (`Free`).
+        let verdict = steer.join().unwrap();
+        // (`Busy` too: the waiting map is a map over the range at the verdict.)
+        assert!(
+            matches!(verdict, HandOver::Free | HandOver::StillOurs | HandOver::Busy),
+            "{verdict:?}"
+        );
         assert_eq!(va_thread.join().unwrap(), Ok(Mapped::Placed));
         assert!(
             host.pages.lock().unwrap().contains(&va),
@@ -3219,6 +3351,7 @@ mod tests {
     /// for the operation.
     #[test]
     fn the_act_thread_waits_for_a_chunk_not_for_the_operation() {
+        let _t = timing();
         use std::sync::atomic::AtomicBool;
         let host = NullHost::new(0);
         let bv = BatchedVas::with_low_reserve(&host, false);
@@ -3264,6 +3397,256 @@ mod tests {
             "the act thread waited {wait_us} us for a ledger lock"
         );
         assert!(op_us < 3 * ACT_WAIT_BOUND_US, "a hand-over took {op_us} us");
+    }
+
+    /// ★ Review 2 item 3 (`review_hold2_yield_while_holding_micro…`) — the VA thread must not yield
+    /// to the act thread while HOLDING the lock the act thread waits for. `hold2` (micro, then own)
+    /// used to call the yielding acquire for `own` with `micro` held: the act thread, waiting for
+    /// `micro`, then waited out the VA thread's whole yield (up to 2 ms) every time. Now the yield
+    /// is before the first lock. The act thread here takes `micro` alone, over and over.
+    #[test]
+    fn hold2_never_yields_while_holding_a_lock_the_act_thread_waits_for() {
+        let _t = timing();
+        use std::sync::atomic::AtomicBool;
+        let host = NullHost::new(0);
+        let bv = BatchedVas::with_low_reserve(&host, false);
+        let stop = AtomicBool::new(false);
+        let mut lat: Vec<u128> = Vec::new();
+        std::thread::scope(|s| {
+            s.spawn(|| {
+                while !stop.load(Relaxed) {
+                    bv.hold2(&bv.micro, &bv.own, |_, _| ((), 1));
+                }
+            });
+            let _a = ActScope::enter();
+            let t = std::time::Instant::now();
+            while t.elapsed() < std::time::Duration::from_millis(1500) {
+                let t1 = std::time::Instant::now();
+                bv.hold(&bv.micro, |_| ((), 1));
+                lat.push(t1.elapsed().as_micros());
+                std::thread::sleep(std::time::Duration::from_micros(30));
+            }
+            stop.store(true, Relaxed);
+        });
+        lat.sort_unstable();
+        let (p50, p90, max) = (lat[lat.len() / 2], lat[lat.len() * 9 / 10], lat[lat.len() - 1]);
+        let (wait_us, _) = bv.act_stats();
+        eprintln!(
+            "hold2: act thread micro-lock wait p50 {p50} p90 {p90} max {max} us (n={}, announce-to-acquire max {wait_us} us); VA yields {} (longest {} us)",
+            lat.len(),
+            bv.holds.va_yields.load(Relaxed),
+            bv.holds.va_yield_max_ns.load(Relaxed) / 1000
+        );
+        // Pre-fix every contended acquisition waited out the VA thread's yield (~2 ms): the p90 was
+        // that cap. Now it is one trivial hold plus the wake-up.
+        assert!(p90 < HOLD2_ACT_P90_BOUND_US, "act micro-lock wait p90 {p90} us");
+    }
+
+    /// The p90 of an act-thread acquisition of an almost-always contended lock whose holds are
+    /// trivial, in a debug build on a loaded box — well under the 2 ms yield cap the pre-fix code
+    /// made it wait out.
+    const HOLD2_ACT_P90_BOUND_US: u128 = 800;
+
+    /// A host whose range unmap takes a while (a real RM unmap is 84-123 µs; this one 25 ms, so a
+    /// test can land a map INSIDE a claimed hull deterministically).
+    struct SlowHost(NullHost);
+
+    macro_rules! delegate_to_null {
+        () => {
+            fn map_row(&self, d: &Desired, f: bool) -> Result<Mapped, String> {
+                (&self.0).map_row(d, f)
+            }
+            fn map_sked_row(&self, s: &SkedRow, f: bool) -> Result<Mapped, String> {
+                (&self.0).map_sked_row(s, f)
+            }
+            fn map_scattered(
+                &self,
+                fd: std::os::fd::BorrowedFd<'_>,
+                r: &[Desired],
+                f: bool,
+            ) -> Result<u32, String> {
+                (&self.0).map_scattered(fd, r, f)
+            }
+            fn unmap_whole(&self, v: u64, f: bool) -> Result<(), String> {
+                (&self.0).unmap_whole(v, f)
+            }
+            fn unmap_row(&self, v: u64, l: u64, f: bool) -> Result<(), String> {
+                (&self.0).unmap_row(v, l, f)
+            }
+            fn free(&self, h: u32) -> Result<(), String> {
+                (&self.0).free(h)
+            }
+            fn splits_safely(&self, v: u64, l: u64) -> bool {
+                (&self.0).splits_safely(v, l)
+            }
+            fn reserve(&self, v: u64, l: u64) -> Result<u32, String> {
+                (&self.0).reserve(v, l)
+            }
+            fn map_row_in(&self, h: u32, d: &Desired, f: bool) -> Result<Mapped, String> {
+                (&self.0).map_row_in(h, d, f)
+            }
+            fn map_sked_in(&self, h: u32, s: &SkedRow, f: bool) -> Result<Mapped, String> {
+                (&self.0).map_sked_in(h, s, f)
+            }
+            fn map_scattered_in(
+                &self,
+                h: u32,
+                fd: std::os::fd::BorrowedFd<'_>,
+                r: &[Desired],
+                f: bool,
+            ) -> Result<u32, String> {
+                (&self.0).map_scattered_in(h, fd, r, f)
+            }
+            fn unmap_in(&self, h: u32, v: u64, s: u64, f: bool) -> Result<(), String> {
+                (&self.0).unmap_in(h, v, s, f)
+            }
+        };
+    }
+
+    impl SpaceVerbs for &SlowHost {
+        delegate_to_null!();
+        fn unmap_range(&self, v: u64, l: u64, f: bool) -> Result<(), String> {
+            std::thread::sleep(std::time::Duration::from_millis(25));
+            (&self.0).unmap_range(v, l, f)
+        }
+    }
+
+    /// ★ Review 2 item 2 (`review_big_steer_blocks_the_va_thread_in_claim_map`) — a steer over a
+    /// guest-sized row must not make the VA thread wait for the whole row. The steer claims and
+    /// releases hull by hull (≤ `LEDGER_CHUNK` entries each); here each hull's host call takes 25 ms,
+    /// the row is 8 hulls (~200+ ms), and a map landed INSIDE a claimed hull waits for that hull
+    /// only. (Pre-fix: the claim covered the whole row for the whole steer — `[measured, model,
+    /// review]` a 494 ms steer, a 489 ms map wait on the 2^20-piece row.)
+    #[test]
+    fn a_big_steer_makes_a_map_wait_for_a_hull_not_for_the_row() {
+        let _t = timing();
+        let host = SlowHost(NullHost::new(0));
+        let bv = BatchedVas::with_low_reserve(&host, false);
+        let pages = 8 * LEDGER_CHUNK as u64;
+        let (va, len) = (0x1_0000_0000u64, pages * BATCH_PAGE);
+        bv.map(&row(va, len, BATCH_PAGE), true).unwrap();
+        let (steer_ms, map_ms, verdict) = std::thread::scope(|s| {
+            let h = s.spawn(|| {
+                let t = std::time::Instant::now();
+                let r = bv.hand_to_host(va, len);
+                (t.elapsed().as_millis(), r)
+            });
+            // Wait until the steer is inside a hull, then map a page inside THAT hull.
+            let hull = loop {
+                if let Some(&r) = lk(&bv.claims).steers.first() {
+                    break r;
+                }
+                std::thread::yield_now();
+            };
+            let t = std::time::Instant::now();
+            bv.map(&row(hull.0 + P, P, P), true).unwrap();
+            let map_ms = t.elapsed().as_millis();
+            let (steer_ms, r) = h.join().unwrap();
+            (steer_ms, map_ms, r)
+        });
+        eprintln!(
+            "big steer: {verdict:?} took {steer_ms} ms ({pages} entries, 8 hulls); a map inside a claimed hull waited {map_ms} ms; claim waits {} (longest {} us)",
+            bv.holds.va_claim_waits.load(Relaxed),
+            bv.holds.va_claim_wait_max_ns.load(Relaxed) / 1000
+        );
+        assert_eq!(bv.holds.va_claim_waits.load(Relaxed), 1, "the map really met a claimed hull");
+        assert!(steer_ms >= 150, "the steer ran hull by hull ({steer_ms} ms)");
+        assert!(
+            map_ms < 100 && map_ms * 2 < steer_ms,
+            "the map waited {map_ms} ms for one hull of a {steer_ms} ms steer"
+        );
+        assert!(
+            matches!(verdict, HandOver::StillOurs | HandOver::Busy),
+            "the page the VA thread mapped is ours again: {verdict:?}"
+        );
+    }
+
+
+    /// ★ Review 2 item 2 (`review_steer_flood_vs_map_latency`) — a flood of steers over the very
+    /// range the VA thread wants to map cannot starve the map: a waiting map makes every new steer
+    /// over its range answer `Busy`, so it waits for the steer already running and no more.
+    #[test]
+    fn a_steer_flood_cannot_starve_a_map() {
+        let _t = timing();
+        use std::sync::atomic::AtomicBool;
+        let host = NullHost::new(0);
+        let bv = BatchedVas::with_low_reserve(&host, false);
+        let stop = AtomicBool::new(false);
+        let va = 0x10_0000u64;
+        let mut lat: Vec<u128> = Vec::new();
+        std::thread::scope(|s| {
+            s.spawn(|| {
+                while !stop.load(Relaxed) {
+                    let _ = bv.hand_to_host(va, 16 * P);
+                }
+            });
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            for _ in 0..300 {
+                let t = std::time::Instant::now();
+                bv.map(&row(va, P, P), true).unwrap();
+                lat.push(t.elapsed().as_micros());
+                bv.unmap_range(va, P, true).unwrap();
+            }
+            stop.store(true, Relaxed);
+        });
+        lat.sort_unstable();
+        let (p50, p99, max) = (lat[150], lat[296], lat[299]);
+        eprintln!(
+            "steer flood: map latency us p50 {p50} p99 {p99} max {max}; claim waits {} (longest {} us); steers answered Busy {}",
+            bv.holds.va_claim_waits.load(Relaxed),
+            bv.holds.va_claim_wait_max_ns.load(Relaxed) / 1000,
+            bv.holds.act_busy.load(Relaxed)
+        );
+        assert!(p99 < 20_000, "p99 map latency {p99} us under a steer flood");
+        assert!(max < 100_000, "worst map latency {max} us under a steer flood");
+    }
+
+    /// ★ Review 2 item 7 (`review_batch_bitmap_scales_with_va_extent_not_guest_ram`) — a batch's
+    /// liveness bitmap is sized by its VA EXTENT, which the guest chooses (the same guest-RAM run
+    /// aliased at consecutive VAs). 4 096 × 4 GiB used to allocate 517 MiB `[measured, model,
+    /// review]`; now a batch beyond `BATCH_MAX_EXTENT` is refused by name and allocates nothing.
+    #[test]
+    fn a_batch_extent_beyond_the_cap_is_refused_before_its_bitmap_is_allocated() {
+        use std::os::fd::AsFd;
+        let host = NullHost::new(u64::MAX);
+        let bv = BatchedVas::with_low_reserve(&host, true);
+        let f = std::fs::File::open("/dev/null").unwrap();
+        let g = 4u64 << 30;
+        let rows: Vec<Desired> = (0..4096u64)
+            .map(|i| Desired {
+                va: 0x1_0000_0000 + i * g,
+                len: g,
+                off: 0,
+                ram: true,
+                kind: 0,
+                perm: kf_host::MapPerm::READ_WRITE,
+                leaf: P,
+            })
+            .collect();
+        let rss = || {
+            std::fs::read_to_string("/proc/self/statm")
+                .ok()
+                .and_then(|t| t.split_whitespace().nth(1).and_then(|x| x.parse::<u64>().ok()))
+                .map_or(0, |p| p * 4096 / (1 << 20))
+        };
+        let before = rss();
+        let e = bv.place(f.as_fd(), &rows, true).unwrap_err();
+        assert!(e.contains(BATCH_EXTENT_CAPPED), "{e}");
+        assert!(rss() < before + 64, "RSS {before} -> {} MiB", rss());
+        assert_eq!(bv.leftovers(), 0);
+        // Within the cap a batch is still booked (64 GiB = 2 MiB of bitmap).
+        let ok: Vec<Desired> = (0..8u64)
+            .map(|i| Desired {
+                va: 0x1_0000_0000 + i * 0x1000,
+                len: 0x1000,
+                off: 0,
+                ram: true,
+                kind: 0,
+                perm: kf_host::MapPerm::READ_WRITE,
+                leaf: P,
+            })
+            .collect();
+        assert_eq!(bv.place(f.as_fd(), &ok, true), Ok(()));
     }
 
     /// The act-thread wait the test above allows: ~one chunk plus one host call plus scheduling in a
