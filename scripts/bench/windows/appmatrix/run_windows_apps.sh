@@ -16,7 +16,8 @@
 #      KF_GUEST_USER      that account (default vast)
 #      WIN_DIR            default /var/lib/kf-windows-20261005
 #      WIN_RUN_BASE       first boundary-kayfabe-N run number; each guest takes the next free one
-#      KF_LOCK            the GPU lock (default /tmp/kayfabe-fastguest.lock, the lock of the Linux lanes and tdr-run.sh)
+#      KF_LOCK            the GPU lock (default /tmp/kayfabe-fastguest.lock, the lock of the Linux lanes and tdr-run.sh);
+#                         KF_LOCKED=1 when the caller already holds it
 #      WIN_PRE_GUEST_CMD / WIN_POST_GUEST_CMD  host-specific hooks around every guest, e.g. on the 1.20 host
 #                         "bash $WIN_DIR/pti-iommu_nogdm.sh identity" / "... DMA-FQ" (what tdr-run.sh does per run)
 #      KF3_*, WIN_FLAGS   passed through to the broker (production flags are the broker's own list; add measurement flags here)
@@ -38,6 +39,7 @@ if [ "$DRY" = 1 ]; then
   say "DRY-RUN 1/5 manifest + inventory"
   python3 -I "$HERE/appdisk.py" check --manifest "$HERE/manifest.json" --apps "$HERE/apps.json" --require-pinned || fail=1
   python3 -I "$HERE/gen_apps.py" --check || fail=1
+  python3 -I "$HERE/gen_doc.py" --check || fail=1
   say "DRY-RUN 2/5 shell syntax"
   for f in "$HERE"/run_windows_apps.sh "$HERE"/build_appdisk.sh "$HERE"/build_tools.sh; do bash -n "$f" || fail=1; done
   say "DRY-RUN 3/5 unit tests (python -m unittest)"
@@ -69,8 +71,10 @@ fi
 if [ "$(pgrep -c qemu-system)" != 0 ]; then say "REFUSED: another QEMU is running (the GPU is serial)"; exit 4; fi
 if [ -e "$RUN/session.log" ] && ! printf '%s\n' "${PASS[@]}" | grep -qx -- '--resume'; then say "REFUSED: $RUN has a session.log (use --resume or a new --run-dir)"; exit 4; fi
 mkdir -p "$RUN"
-exec 9>"${KF_LOCK:-/tmp/kayfabe-fastguest.lock}"
-if ! flock -n 9; then say "waiting for the GPU lock ${KF_LOCK:-/tmp/kayfabe-fastguest.lock}"; flock 9; fi
+if [ "${KF_LOCKED:-0}" != 1 ]; then      # KF_LOCKED=1: the caller already holds the lock (e.g. `flock -o LOCK bash run_windows_apps.sh ...`, as tdr-run.sh is launched)
+  exec 9>"${KF_LOCK:-/tmp/kayfabe-fastguest.lock}"
+  if ! flock -n 9; then say "waiting for the GPU lock ${KF_LOCK:-/tmp/kayfabe-fastguest.lock}"; flock 9; fi
+fi
 XID0=$(dmesg 2>/dev/null | grep -c 'NVRM: Xid')
 say "START run=$RUN kf3=$REV iso=$ISO xid_before=$XID0 gpu=$(nvidia-smi --query-gpu=name,driver_version --format=csv,noheader 2>/dev/null | head -1)"
 export KF3_REV=$REV

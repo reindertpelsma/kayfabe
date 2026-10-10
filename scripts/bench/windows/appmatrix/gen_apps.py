@@ -12,6 +12,7 @@ here has run on a kayfabe Windows guest yet).
 """
 import json
 import os
+import re
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -20,9 +21,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 PRELUDE = r"""$ErrorActionPreference = 'Continue'
 . C:\kf\kf_apphelpers.ps1
 $K = 'C:\kfapps'; $CD = '@@CD@@'; $OUT = 'C:\kf\out\@@ID@@'
-$PY = "$CD\py\python.exe"; $TL = "$CD\py\Lib\site-packages\torch\lib"
+$PY = "$K\py\python.exe"; $TL = "$K\py\Lib\site-packages\torch\lib"
 New-Item -ItemType Directory -Force -Path $OUT | Out-Null
-$env:CUPY_CACHE_DIR = 'C:\kf\cupy_cache'; $env:KF_TORCH_LIB = $TL; $env:CUDA_PATH = "$CD\py\Lib\site-packages\torch"
+$env:CUPY_CACHE_DIR = 'C:\kf\cupy_cache'; $env:KF_TORCH_LIB = $TL; $env:CUDA_PATH = "$K\py\Lib\site-packages\torch"
 $env:KF_CUDA_INCLUDE = "$K\cuda_cudart\include;$K\cuda_cccl\include"
 $PYA = @('-X', 'utf8', '-X', 'pycache_prefix=C:\kf\pycache')
 """
@@ -50,15 +51,15 @@ GPU_ENG = "pdh:Cuda|Compute|3D|Copy"
 OUT_NV = "out:NVIDIA|GeForce|RTX"
 
 # difficulty vocabulary (reasoned): what a kayfabe Windows guest has to get right for the app
-W_COMPUTE_SMALL = ("low", "CUDA context + a few kernels and small copies: the compute path with no display, no video engine and no long run; "
-                   "Windows user work runs as Passthrough twins whose guest-visible GP_GET lags the host (traces/windows_tdr_hunt: H-D)")
-W_COMPUTE_BIG = ("medium", "sustained cuBLAS/cuDNN/cuFFT work, 1-4 GiB allocations, many launches per second: stresses the twin/USERD relay and the "
-                 "completion path for minutes, and the guest TDRs about once a minute today (traces/windows_prod_20261010: 7 resets in ~8 min)")
-W_GFX = ("high", "needs a 3D/graphics channel, the display flip/VSync path and DWM composition on kf3's display; the first TDR coincides with "
-         "the first new GPU client after sign-in (DWM, Edge, Shorts) in every recorded run, so any windowed app is exposed to it")
-W_VIDEO = ("high", "needs the NVENC/NVDEC/DXVA engines through Windows' video-engine nodes (a separate scheduler node from 3D/compute); "
-           "no Windows run of these engines exists yet, only the Linux ones")
-W_LONG = ("high", "runs longer than the ~1 minute TDR cadence recorded today, so a TDR inside the run is likely; the result is only meaningful "
+W_COMPUTE_SMALL = ("low", "CUDA context + a few kernels and small copies: the compute path with no display, no video engine and no long run. Windows user work "
+                   "runs as Passthrough twins whose guest-visible GP_GET was measured behind the host's (claude/tdr-hunt-20261010, traces/windows_tdr_hunt_20261010/README.md, runs 263-266)")
+W_COMPUTE_BIG = ("medium", "sustained cuBLAS/cuDNN/cuFFT work, 1-4 GiB allocations and many launches per second: stresses the twin/USERD relay and the completion path "
+                 "for minutes; the recorded Windows runs reset the GPU (TDR) every 1-4 minutes and run 263 ended in a 0x116 bugcheck (traces/windows_prod_20261010; tdr-hunt README)")
+W_GFX = ("high", "needs a 3D/graphics channel, the display flip/VSync path and DWM composition on kf3's display; in the recorded runs the first TDR coincides with "
+         "the first new GPU client after sign-in (DWM, Edge, Shorts), so any windowed app is exposed to it")
+W_VIDEO = ("high", "needs the NVENC/NVDEC/DXVA engines through Windows' video-engine scheduler nodes (separate from 3D/compute); no Windows run of these "
+           "engines exists yet, only the Linux ones")
+W_LONG = ("high", "runs longer than the 1-4 minute reset cadence recorded today, so a TDR inside the run is likely; the result is only meaningful "
           "once the guest survives idle for the whole app")
 
 # ---------------------------------------------------------------------------------------------- A. system / probes
@@ -147,7 +148,7 @@ app("managed_t", "cuda-equiv", py("win_cuda_equiv.py", "managed"), r"^WINEQ_DONE
     note="CuPy malloc_managed; expected to be the hardest compute row on both OSes")
 for name, lin in (("default", "stream_default"), ("created", "stream_created"), ("nonblocking", "stream_nonblocking"), ("two", "stream_two"),
                   ("created2nd", "stream_created2nd"), ("perthread", "stream_perthread")):
-    app("stream_%s_t" % name, "probe", py("win_cuda_equiv.py", "stream_" + name), r"^STREAM_PROBE_DONE %s rc=0" % name, 120, 5, [OUT_NV, GPU_ENG],
+    app("stream_%s_t" % name, "stream-probe", py("win_cuda_equiv.py", "stream_" + name), r"^STREAM_PROBE_DONE %s rc=0" % name, 120, 5, [OUT_NV, GPU_ENG],
         *W_COMPUTE_SMALL, linux=[lin], pkgs=PYPK, note=("CuPy per-thread default stream (cupy.cuda.Stream.ptds)" if name == "perthread" else
                                                            "torch streams are created cudaStreamNonBlocking" if name in ("created", "nonblocking") else None))
 for aid, test, lin, exp in (("cupy_cg", "cg", ["simpleCooperativeGroups"], 10), ("cupy_asynccopy", "asynccopy", ["globalToShmemAsyncCopy"], 10),
@@ -390,7 +391,54 @@ NO_EQUIVALENT = {
 }
 
 
+CMD_OVERRIDES = {
+    "dxgi_adapters": "PowerShell: read C:\\kf\\adapters.json (DXGI list written by kf_guest_setup.ps1)",
+    "driver_status": "PowerShell: Get-CimInstance Win32_VideoController (NVIDIA, ConfigManagerErrorCode 0)",
+    "d3d12_signal_probe": "powershell -File d3d12_signal_probe.ps1 (scripts/bench/windows)",
+    "dxdiag_report": "dxdiag /whql:off /t report.txt, then grep the report",
+    "opencl_icd": "PowerShell: list HKLM:\\SOFTWARE\\Khronos\\OpenCL\\Vendors",
+    "llama_cuda_gen": "llama-completion.exe -m qwen2.5-1.5b-instruct-q4_k_m.gguf -p \"Explain in three sentences why the sky is blue.\" -n 64 -ngl 99 --temp 0 --seed 1 --no-display-prompt (stdin empty); OUTSHA of the text",
+    "blender_cycles": "blender.exe -b --factory-startup --python blender_render.py -- CUDA|OPTIX out.png (both devices)",
+    "nvenc_h264": "ffmpeg -f lavfi -i testsrc=size=1280x720:rate=30:duration=20 -c:v h264_nvenc -preset p4; ffprobe -count_frames",
+    "nvenc_hevc": "ffmpeg -f lavfi -i testsrc=... -c:v hevc_nvenc -preset p4; ffprobe -count_frames",
+    "nvenc_av1": "ffmpeg -f lavfi -i testsrc=... -c:v av1_nvenc -preset p4; ffprobe -count_frames",
+    "nvdec_h264": "ffmpeg (libx264 prep) then ffmpeg -hwaccel cuda -hwaccel_output_format cuda -i x264.mp4 -f null -",
+    "d3d11va_h264": "ffmpeg (libx264 prep) then ffmpeg -hwaccel d3d11va -hwaccel_output_format d3d11 -i x264.mp4 -f null -",
+    "dxva2_h264": "ffmpeg (libx264 prep) then ffmpeg -hwaccel dxva2 -i x264.mp4 -f null -",
+    "scale_cuda_nvenc": "ffmpeg -hwaccel cuda -hwaccel_output_format cuda -i x264.mp4 -vf scale_cuda=640:360 -c:v h264_nvenc",
+    "vkcube": "vkcube.exe --c 600 (from the LunarG SDK installed silently into C:\\kfapps\\vulkan_sdk)",
+    "vulkan_video_decode": "ffmpeg -init_hw_device vulkan=vk -hwaccel vulkan -hwaccel_output_format vulkan -i x264.mp4 -f null -",
+}
+
+
+def derive_cmd(a):
+    if a["id"] in CMD_OVERRIDES:
+        return CMD_OVERRIDES[a["id"]]
+    ps = a["ps"]
+    m = re.search(r"kf_runpy\.py', 'C:\\kf\\py\\([\w.]+)'(?:, ([^)]*))?\)", ps)
+    if m:
+        return ("python " + m.group(1) + " " + re.sub(r"'", "", m.group(2) or "")).strip()
+    m = re.search(r"kf_edge\.ps1 (?:-Id @@ID@@ )?(-Page \w+[^|\n]*?) 2>&1", ps)
+    if m:
+        return "kf_edge.ps1 " + m.group(1).strip()
+    m = re.search(r"-Exe (\"[^\"]+\"|\$\w+|\S+)", ps)
+    exe = ""
+    if m:
+        exe = m.group(1).strip('"')
+        for k, v in (("$K\\", ""), ("$d\\", ""), ("$t\\", "tools\\"), ("$gt\\", ""), ("$fm\\", ""), ("$u\\", ""), ("$env:SystemRoot\\System32\\", ""), ("$gmx", "GravityMark.exe"), ("$dx", "tools\\kf_dxprobe.exe")):
+            exe = exe.replace(k, v)
+    args = re.search(r"-ArgList @\((.*?)\)(?:, '-image'|\s+-Cwd| -Seconds| -TimeoutS|\n|$)", ps)
+    if exe and args:
+        a2 = re.sub(r"'", "", args.group(1)).replace(", ", " ").replace('"$OUT\\', "").replace('"', "")
+        if a["id"].startswith("gravitymark"):
+            a2 += " -image gm.png -times gm_times.txt"
+        return (exe + " " + a2).replace("$m", "qwen2.5-1.5b-instruct-q4_k_m.gguf")
+    return exe or "PowerShell"
+
+
 def build():
+    for a in APPS:
+        a["cmd"] = derive_cmd(a)
     apps = sorted(APPS, key=lambda a: a["id"])
     linux_map = {}
     for a in apps:

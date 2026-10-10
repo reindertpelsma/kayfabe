@@ -95,6 +95,10 @@ class AppsJson(unittest.TestCase):
             out = H.pwsh_parse(sorted(os.path.join(d, f) for f in os.listdir(d)))
             self.assertIn("PARSED_BAD=0", out, out)
 
+    def test_design_document_tables_are_in_sync(self):
+        import gen_doc
+        self.assertEqual(gen_doc.main(["--check"]), 0)
+
     def test_counts_by_category_are_stable_enough_to_quote(self):
         n = len(self.doc["apps"])
         self.assertGreaterEqual(n, 90)

@@ -15,6 +15,7 @@ read-only. Binaries are never committed: manifest.json (URLs, sha256, sizes, lic
                                                    assemble the staging tree and make the ISO;
                                                    writes OUT/manifest.json with the sha256 of
                                                    every file (downloads, tools, image)
+  appdisk.py verify-image --iso ISO [--whole] [--mount]      read every file back out of the image and compare with manifest["files"]
   appdisk.py layout  [--manifest M]                print the ISO tree that `build` would make
 
 Exit codes: 0 ok, 1 a check failed (named), 2 usage.
@@ -329,15 +330,16 @@ def stage_table(man):
 def make_iso(tree, out_iso, label="KFAPPS"):
     epoch = os.environ.get("SOURCE_DATE_EPOCH", "1760000000")
     env = dict(os.environ, SOURCE_DATE_EPOCH=epoch)
-    flags = ["-iso-level", "3", "-udf", "-J", "-joliet-long", "-R", "-V", label, "-follow-links", "-quiet", "-o", out_iso, tree]
-    if shutil.which("xorriso"):
+    flags = ["-iso-level", "3", "-J", "-joliet-long", "-R", "-V", label, "-follow-links", "-quiet", "-o", out_iso, tree]
+    # genisoimage/mkisofs can add a UDF filesystem (Windows prefers it for big files); xorriso's mkisofs emulation cannot
+    if shutil.which("genisoimage"):
+        cmd = ["genisoimage", "-udf"] + flags
+    elif shutil.which("mkisofs") and "genisoimage" not in os.path.realpath(shutil.which("mkisofs")):
+        cmd = ["mkisofs", "-udf"] + flags
+    elif shutil.which("xorriso"):
         cmd = ["xorriso", "-as", "mkisofs"] + flags
-    elif shutil.which("genisoimage"):
-        cmd = ["genisoimage"] + flags
-    elif shutil.which("mkisofs"):
-        cmd = ["mkisofs"] + flags
     else:
-        raise RuntimeError("no xorriso/genisoimage/mkisofs")
+        raise RuntimeError("no genisoimage/mkisofs/xorriso")
     r = subprocess.run(cmd, env=env, capture_output=True, text=True)
     if r.returncode != 0:
         raise RuntimeError(f"{cmd[0]} failed rc={r.returncode}: {r.stderr[-400:]}")
@@ -399,6 +401,62 @@ def cmd_build(a):
     return 0
 
 
+def cmd_verify_image(a):
+    """Read every file back out of the ISO (isoinfo -J -x) and compare with manifest["files"]; also the image's own sha256."""
+    man = load(a.manifest)
+    mnt = None
+    if a.mount:                                       # isoinfo cannot read files over 2 GiB (torch's wheel is 2.9 GB): loop-mount instead
+        mnt = tempfile.mkdtemp(prefix="kfiso-")
+        r = subprocess.run(["mount", "-o", "loop,ro", a.iso, mnt], capture_output=True, text=True)
+        if r.returncode != 0:
+            print("mount failed:", r.stderr.strip())
+            return 2
+    elif not shutil.which("isoinfo"):
+        print("isoinfo missing (genisoimage package)")
+        return 2
+    try:
+        return _verify_image(a, man, mnt)
+    finally:
+        if mnt:
+            subprocess.run(["umount", mnt], capture_output=True)
+            os.rmdir(mnt)
+
+
+def _verify_image(a, man, mnt):
+    bad = n = 0
+    got = sha256_file(a.iso) if a.whole else None
+    if got is not None:
+        ok = got == man["image"]["sha256"]
+        print(("OK" if ok else "MISMATCH") + f" image sha256 {got}")
+        bad += 0 if ok else 1
+    for path, rec in sorted(man.get("files", {}).items()):
+        if "<" in path:
+            continue                                  # entries of pre-extracted tree packages are recorded by archive, not by path
+        h = hashlib.sha256()
+        size = 0
+        if mnt:
+            with open(os.path.join(mnt, path), "rb") as fh:
+                for chunk in iter(lambda: fh.read(1 << 22), b""):
+                    h.update(chunk)
+                    size += len(chunk)
+        else:
+            p = subprocess.Popen(["isoinfo", "-J", "-i", a.iso, "-x", "/" + path], stdout=subprocess.PIPE)
+            for chunk in iter(lambda: p.stdout.read(1 << 22), b""):
+                h.update(chunk)
+                size += len(chunk)
+            p.wait()
+        n += 1
+        if h.hexdigest() != rec["sha256"] or size != rec["size"]:
+            print(f"MISMATCH {path}: image has {h.hexdigest()} ({size} B), manifest {rec['sha256']} ({rec['size']} B)")
+            bad += 1
+    ident = hashlib.sha256(json.dumps(man.get("files", {}), sort_keys=True).encode()).hexdigest()
+    ok = ident == man["image"].get("identity")
+    print(("OK" if ok else "MISMATCH") + f" image identity {ident}")
+    bad += 0 if ok else 1
+    print(f"VERIFY_IMAGE_DONE files={n} bad={bad}")
+    return 1 if bad else 0
+
+
 def cmd_layout(a):
     man = load(a.manifest)
     for isop, src in plan_layout(man, None, a.max_tier, None):
@@ -432,6 +490,7 @@ def main(argv=None):
     f = sub.add_parser("fetch"); common(f); f.add_argument("--dl", required=True); f.add_argument("--pipdl"); f.add_argument("--only"); f.add_argument("--no-write", action="store_true"); f.set_defaults(fn=cmd_fetch)
     v = sub.add_parser("verify"); common(v); v.add_argument("--dl", required=True); v.set_defaults(fn=cmd_verify)
     b = sub.add_parser("build"); common(b); b.add_argument("--dl", required=True); b.add_argument("--tools"); b.add_argument("--out", required=True); b.add_argument("--only"); b.set_defaults(fn=cmd_build)
+    vi = sub.add_parser("verify-image"); common(vi); vi.add_argument("--iso", required=True); vi.add_argument("--whole", action="store_true", help="also hash the whole image file"); vi.add_argument("--mount", action="store_true", help="loop-mount (root) instead of isoinfo; needed for files > 2 GiB"); vi.set_defaults(fn=cmd_verify_image)
     l = sub.add_parser("layout"); common(l); l.set_defaults(fn=cmd_layout)
     a = ap.parse_args(argv)
     return a.fn(a)

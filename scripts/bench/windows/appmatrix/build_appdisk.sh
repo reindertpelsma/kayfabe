@@ -7,6 +7,8 @@
 #
 #   --root DIR     staging root (default /var/lib/kf-windows-20261005/appmatrix); uses DIR/dl (downloads), DIR/pipdl
 #                  (optional pre-fetched wheels, hard-linked), DIR/built (mingw test programs), DIR/image (output)
+#   --out DIR      write the image and its manifest here instead of DIR/image (e.g. /dev/shm when the staging disk
+#                  cannot hold downloads + image at once; then delete the downloads and move the image)
 #   --tools DIR    use already-built test programs from DIR instead of DIR/built (build_tools.sh needs mingw-w64,
 #                  which the GPU host does not have: build on a dev machine and copy DIR over)
 #   --max-tier N   leave out packages of a higher tier (1 = no installers/big extras; default 9 = everything)
@@ -17,19 +19,20 @@
 # Free space: refuses unless MIN_FREE_GB (default 100) stays free on the staging filesystem after the estimated need.
 set -euo pipefail
 HERE=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)
-ROOT=/var/lib/kf-windows-20261005/appmatrix; TOOLS=""; TIER=9; ONLY=""; FETCH=1; BUILDTOOLS=1; DRY=0; UPDATE=0
+ROOT=/var/lib/kf-windows-20261005/appmatrix; OUT=""; TOOLS=""; TIER=9; ONLY=""; FETCH=1; BUILDTOOLS=1; DRY=0; UPDATE=0
 while [ $# -gt 0 ]; do case "$1" in
-  --root) ROOT=$2; shift 2;; --tools) TOOLS=$2; shift 2;; --max-tier) TIER=$2; shift 2;; --only) ONLY=$2; shift 2;;
+  --root) ROOT=$2; shift 2;; --out) OUT=$2; shift 2;; --tools) TOOLS=$2; shift 2;; --max-tier) TIER=$2; shift 2;; --only) ONLY=$2; shift 2;;
   --no-fetch) FETCH=0; shift;; --no-tools) BUILDTOOLS=0; shift;; --dry-run) DRY=1; shift;; --update-repo) UPDATE=1; shift;;
   -h|--help) sed -n '2,20p' "$0"; exit 0;; *) echo "unknown option $1" >&2; exit 2;; esac; done
 MIN_FREE_GB=${MIN_FREE_GB:-100}
+OUT=${OUT:-$ROOT/image}
 say(){ echo "[build_appdisk $(date -u +%FT%TZ)] $*"; }
 M=$HERE/manifest.json
 python3 -I "$HERE/appdisk.py" check --manifest "$M" --apps "$HERE/apps.json" || exit 1
-need_gb=$(python3 -I - "$M" "$TIER" "$ROOT/dl" <<'PY'
+read -r need_dl need_img <<<"$(python3 -I - "$M" "$TIER" "$ROOT/dl" <<'PY'
 import json, os, sys
 m = json.load(open(sys.argv[1])); t = int(sys.argv[2]); dl = sys.argv[3]
-miss = img = tree = 0
+miss = img = 0
 for p in m["packages"]:
     if p.get("tier", 1) > t:
         continue
@@ -37,21 +40,21 @@ for p in m["packages"]:
         sz = f.get("size") or 0
         if not os.path.exists(os.path.join(dl, p["id"], f["name"])):
             miss += sz                                   # still to download
-        if p.get("image_form") == "tree":
-            tree += sz * 1.7                             # extracted copy, temporary
-        img += sz * (1.7 if p.get("image_form") == "tree" else 1)   # the image itself
-print(int((miss + img + tree) / 1e9) + 2)
+        img += sz * (2.7 if p.get("image_form") == "tree" else 1)   # the image (a pre-extracted tree costs its extracted size twice while building)
+print(int(miss / 1e9) + 1, int(img / 1e9) + 1)
 PY
-)
-mkdir -p "$ROOT"
+)"
+mkdir -p "$ROOT" "$OUT"
 free_gb=$(df -BG --output=avail "$ROOT" | tail -1 | tr -dc 0-9)
-say "root=$ROOT free=${free_gb}G need~${need_gb}G keep>=${MIN_FREE_GB}G tier<=$TIER"
+need_gb=$need_dl
+[ "$(df --output=source "$OUT" | tail -1)" = "$(df --output=source "$ROOT" | tail -1)" ] && need_gb=$((need_dl + need_img))
+say "root=$ROOT out=$OUT free=${free_gb}G need~${need_gb}G (downloads ${need_dl}G, image ${need_img}G) keep>=${MIN_FREE_GB}G tier<=$TIER"
 if [ "$DRY" = 1 ]; then
   python3 -I "$HERE/appdisk.py" layout --manifest "$M" --max-tier "$TIER" | head -5
   say "DRY-RUN ok (nothing fetched or built)"; exit 0
 fi
 [ $((free_gb - need_gb)) -ge "$MIN_FREE_GB" ] || { say "REFUSED: free space would drop below ${MIN_FREE_GB}G"; exit 3; }
-mkdir -p "$ROOT"/{dl,pipdl,built,image,work}
+mkdir -p "$ROOT"/{dl,pipdl,built,work} "$OUT"
 ARGS=(--manifest "$M" --max-tier "$TIER"); [ -n "$ONLY" ] && ARGS+=(--only "$ONLY")
 if [ "$FETCH" = 1 ]; then
   say "START fetch"; python3 -I "$HERE/appdisk.py" fetch "${ARGS[@]}" --dl "$ROOT/dl" --pipdl "$ROOT/pipdl"; say "EXIT fetch rc=$?"
@@ -62,8 +65,8 @@ if [ -z "$TOOLS" ]; then
 fi
 [ -f "$TOOLS/kf_dxprobe.exe" ] || say "WARNING: no test programs in $TOOLS (dxprobe_*, glgears_wgl, cup*_ladder will be NOTRUN)"
 say "START build image"
-python3 -I "$HERE/appdisk.py" build "${ARGS[@]}" --dl "$ROOT/dl" --tools "$TOOLS" --out "$ROOT/image"
+python3 -I "$HERE/appdisk.py" build "${ARGS[@]}" --dl "$ROOT/dl" --tools "$TOOLS" --out "$OUT"
 say "EXIT build image rc=$?"
-( cd "$ROOT/image" && sha256sum kfapps.iso | tee kfapps.iso.sha256 )
-[ "$UPDATE" = 1 ] && cp "$ROOT/image/manifest.json" "$M" && say "manifest written back to $M"
+( cd "$OUT" && sha256sum kfapps.iso | tee kfapps.iso.sha256 )
+[ "$UPDATE" = 1 ] && cp "$OUT/manifest.json" "$M" && say "manifest written back to $M"
 say "DONE"

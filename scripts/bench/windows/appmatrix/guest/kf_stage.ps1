@@ -48,6 +48,28 @@ switch ($def.mode) {
         if ($def.strip_top) { Flatten-SingleTop $dest }
         Done $true "extracted to $dest"
     }
+    'python_embed' {
+        New-Item -ItemType Directory -Force -Path $dest | Out-Null
+        foreach ($f in $def.files) {
+            & tar.exe -xf (Join-Path $src $f) -C $dest 2>&1 | Out-Null
+            if ($LASTEXITCODE -ne 0) { Done $false "tar -xf $f failed rc=$LASTEXITCODE" }
+        }
+        # the embeddable distribution ignores PYTHONPATH/site: its ._pth file must list site-packages and enable `site`
+        $pth = Get-ChildItem -Path $dest -Filter 'python*._pth' | Select-Object -First 1
+        if (-not $pth) { Done $false 'no python*._pth in the embeddable zip' }
+        $zipname = $pth.BaseName + '.zip'
+        Set-Content -Path $pth.FullName -Value @($zipname, '.', 'Lib\site-packages', 'import site') -Encoding ASCII
+        New-Item -ItemType Directory -Force -Path (Join-Path $dest 'Lib\site-packages') | Out-Null
+        Done $true "python in $dest"
+    }
+    'wheels' {
+        New-Item -ItemType Directory -Force -Path $dest | Out-Null
+        foreach ($f in $def.files) {
+            & tar.exe -xf (Join-Path $src $f) -C $dest 2>&1 | Out-Null
+            if ($LASTEXITCODE -ne 0) { Done $false "tar -xf $f failed rc=$LASTEXITCODE" }
+        }
+        Done $true "$($def.files.Count) wheels unpacked into $dest"
+    }
     'copy' {
         New-Item -ItemType Directory -Force -Path $dest | Out-Null
         foreach ($f in $def.files) { Copy-Item -Force -Path (Join-Path $src $f) -Destination $dest }
