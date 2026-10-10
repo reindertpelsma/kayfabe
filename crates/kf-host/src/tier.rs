@@ -215,7 +215,10 @@ mod tests {
     fn stock_host_is_absent_on_einval_and_enotty() {
         assert_eq!(interpret(Err(Some(22))), Probe::Absent);
         assert_eq!(interpret(Err(Some(25))), Probe::Absent);
-        assert_eq!(HostTier::from_probe(Probe::Absent).line(), "host tier: stock");
+        assert_eq!(
+            HostTier::from_probe(Probe::Absent).line(),
+            "host tier: stock"
+        );
         assert!(!HostTier::stock().h5_dma_window());
     }
 
@@ -297,13 +300,10 @@ mod tests {
     /// text is read from the repository, so a drift in either side fails here.
     #[test]
     fn constants_equal_the_patch_header() {
-        let hdr = include_str!(
-            "../../../tools/host_patches/h5_userd_dma/include/nv-kf-host-patch.h"
-        );
+        let hdr =
+            include_str!("../../../tools/host_patches/h5_userd_dma/include/nv-kf-host-patch.h");
         assert!(hdr.contains("#define NV_ESC_KF_QUERY                    (NV_IOCTL_BASE + 40)"));
-        assert!(hdr.contains(
-            "#define NV_ESC_KF_ALLOC_MEMORY_DMA_WINDOW  (NV_IOCTL_BASE + 41)"
-        ));
+        assert!(hdr.contains("#define NV_ESC_KF_ALLOC_MEMORY_DMA_WINDOW  (NV_IOCTL_BASE + 41)"));
         assert!(hdr.contains("#define NV_KF_QUERY_ABI                    1"));
         assert!(hdr.contains("#define NV_KF_FEATURE_H5_DMA_WINDOW        0x1u"));
         assert!(hdr.contains("#define NV_KF_H5_DMA_WINDOW_ABI            1"));
