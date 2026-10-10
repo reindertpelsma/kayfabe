@@ -27,6 +27,7 @@
 #include <d3d11.h>
 #include <dxgi1_3.h>
 #include <dxgi1_4.h>
+#include <dxgi1_6.h>
 #include <dcomp.h>
 #include <stdarg.h>
 #include <atomic>
@@ -182,6 +183,7 @@ static DXGI_FORMAT fmt_of(const char *s, const char **name) {
   if (!strcmp(s, "nv12")) { *name = "nv12"; return DXGI_FORMAT_NV12; }
   if (!strcmp(s, "yuy2")) { *name = "yuy2"; return DXGI_FORMAT_YUY2; }
   if (!strcmp(s, "p010")) { *name = "p010"; return DXGI_FORMAT_P010; }
+  if (!strcmp(s, "bgra")) { *name = "bgra"; return DXGI_FORMAT_B8G8R8A8_UNORM; }   // CONTROL format: exercises the window/present/scenario machinery where no YUV swap chain can be made; never reaches an overlay
   return DXGI_FORMAT_UNKNOWN;
 }
 
@@ -219,7 +221,30 @@ static bool check_overlay_support() {
     g_stats.support_json += (first ? "\"" : ",\"") + std::string(f.n) + "\":" + e.text(); first = false;
   }
   g_stats.support_checked = true;
+  // Extra evidence (does not change the verdict): IDXGIOutput6::CheckHardwareCompositionSupport (bit0 FULLSCREEN, bit1 WINDOWED, bit2 CURSOR_STRETCHED),
+  // the desktop colour-space/refresh info, the D3D11 format support of NV12/YUY2/P010 (bit 1<<? per D3D11_FORMAT_SUPPORT), and every other output's flags.
+  IDXGIOutput6 *o6 = nullptr;
+  if (SUCCEEDED(o->QueryInterface(__uuidof(IDXGIOutput6), (void **)&o6))) {
+    UINT hf = 0; HRESULT hr6 = o6->CheckHardwareCompositionSupport(&hf);
+    say("hwcomp", "IDXGIOutput6::CheckHardwareCompositionSupport hr=0x%08lx flags=0x%x fullscreen=%d windowed=%d cursor_stretched=%d", (unsigned long)hr6, hf, (hf & 1) != 0, (hf & 2) != 0, (hf & 4) != 0);
+    char b[160]; snprintf(b, sizeof b, "IDXGIOutput6::CheckHardwareCompositionSupport hr=0x%08lx flags=0x%x", (unsigned long)hr6, hf); g_stats.note += std::string(g_stats.note.empty() ? "" : "; ") + b;
+    o6->Release();
+  } else say("hwcomp", "IDXGIOutput6 not available");
+  for (auto &f : F) {
+    UINT sup = 0; HRESULT hrs = g_dev->CheckFormatSupport(f.f, &sup);
+    say("format_support", "%s hr=0x%08lx d3d11_format_support=0x%08x render_target=%d texture2d=%d display=%d", f.n, (unsigned long)hrs, sup, (sup & D3D11_FORMAT_SUPPORT_RENDER_TARGET) != 0, (sup & D3D11_FORMAT_SUPPORT_TEXTURE2D) != 0, (sup & D3D11_FORMAT_SUPPORT_DISPLAY) != 0);
+  }
   o3->Release(); o->Release();
+  for (UINT oi = 1;; oi++) {
+    IDXGIOutput *ox = nullptr; if (g_adp->EnumOutputs(oi, &ox) != S_OK) break;
+    DXGI_OUTPUT_DESC xd; ox->GetDesc(&xd); IDXGIOutput3 *x3 = nullptr;
+    if (SUCCEEDED(ox->QueryInterface(__uuidof(IDXGIOutput3), (void **)&x3))) {
+      for (auto &f : F) { UINT fl = 0; HRESULT hr = x3->CheckOverlaySupport(f.f, g_dev, &fl); say("overlay_support_output", "output=%u %s hr=0x%08lx flags=0x%x", oi, f.n, (unsigned long)hr, fl); }
+      x3->Release();
+    }
+    say("output", "index=%u left=%ld top=%ld right=%ld bottom=%ld attached=%d", oi, xd.DesktopCoordinates.left, xd.DesktopCoordinates.top, xd.DesktopCoordinates.right, xd.DesktopCoordinates.bottom, xd.AttachedToDesktop);
+    ox->Release();
+  }
   return true;
 }
 
@@ -293,6 +318,11 @@ static bool present_frame(uint32_t frame, double *last_done_ms) {
   switch (g_cfg.fmt) {
     case DXGI_FORMAT_NV12: fill_nv12((uint8_t *)m.pData, (int)m.RowPitch, g_vw, g_vh, frame); break;
     case DXGI_FORMAT_P010: fill_p010((uint8_t *)m.pData, (int)m.RowPitch, g_vw, g_vh, frame); break;
+    case DXGI_FORMAT_B8G8R8A8_UNORM: {   // control pattern: horizontal gradient, a marker moving 8 px/frame, no overlay claim
+      for (int y = 0; y < g_vh; y++) { uint32_t *row = (uint32_t *)((uint8_t *)m.pData + (size_t)y * m.RowPitch);
+        for (int x = 0; x < g_vw; x++) { uint32_t g = (uint32_t)(x * 255 / g_vw); row[x] = 0xff000000u | (g << 16) | (g << 8) | (uint32_t)(y * 255 / g_vh); }
+        int mx = (int)((frame * 8u) % (uint32_t)g_vw); for (int x = mx; x < mx + 16 && x < g_vw; x++) row[x] = 0xffffffffu; }
+      break; }
     default: fill_yuy2((uint8_t *)m.pData, (int)m.RowPitch, g_vw, g_vh, frame); break;
   }
   g_ctx->Unmap(g_stage, 0);
@@ -425,6 +455,10 @@ int main(int argc, char **argv) {
     else return usage(("bad argument " + a).c_str());
   }
   g_cfg.vw &= ~15; g_cfg.vh &= ~1;
+  if (g_cfg.fmt == DXGI_FORMAT_B8G8R8A8_UNORM) {   // control run: no YUV flag, no overlay support gate, no "must reach overlay" abort (the verdict stays NEVER_OVERLAY by design)
+    g_cfg.ignore_support = true; g_cfg.sc_flags = 0; g_cfg.flags_name = "none";
+    g_cfg.require_ms = (user_dur > 0 ? user_dur : 600000) + 600000;
+  }
   int sw = GetSystemMetrics(SM_CXSCREEN), sh = GetSystemMetrics(SM_CYSCREEN);
   int64_t def_dur = g_cfg.scenario == 7 ? 60000 : 30000;
   Evs evs; int64_t dur = build_events(g_cfg.scenario, user_dur > 0 ? user_dur : def_dur, sw, sh, evs);
