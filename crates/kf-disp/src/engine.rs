@@ -957,17 +957,28 @@ impl Engine {
             if pending & bit(start) == 0 {
                 continue;
             }
-            // the closure of `start` over interlock edges, among pending channels
+            // the closure of `start` over interlock edges IN BOTH DIRECTIONS, among pending channels:
+            // what a member waits for, and every pending update that waits for a member.
+            // ★ 2026-10-10 (Windows TDR hunt, run 293, measured): an overlay window's UPDATE interlocked
+            // with window 0 and its immediate channel, while window 0's own UPDATEs named nothing; with
+            // forward edges only, window 0 latched alone at every vblank (54 times) and the overlay
+            // update starved until the TDR. An interlocked UPDATE waits for an UPDATE on each channel
+            // it names, and is latched TOGETHER with it (`ogkm-595.84:
+            // nvidia-modeset/src/nvkms-evo3.c:2829-2837`), so a pending update another pending update
+            // waits for cannot latch without it.
             let mut group = bit(start);
             let mut ready = true;
             loop {
                 let mut want = 0;
                 for n in 0..CHANNELS as u32 {
-                    if group & bit(n) != 0
-                        && let Some(Stage::Interlock { ilk, .. }) =
-                            self.chans[n as usize].as_ref().map(|c| c.stage)
+                    if let Some(Stage::Interlock { ilk, .. }) =
+                        self.chans[n as usize].as_ref().map(|c| c.stage)
                     {
-                        want |= ilk & live;
+                        if group & bit(n) != 0 {
+                            want |= ilk & live;
+                        } else if ilk & group != 0 {
+                            want |= bit(n);
+                        }
                     }
                 }
                 if want & !pending != 0 {
