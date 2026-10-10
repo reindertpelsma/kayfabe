@@ -927,6 +927,9 @@ impl MapTarget for SimMirror<'_> {
     fn own_view(&self, va: u64, end: u64) -> Option<crate::ledger::OwnView> {
         Some(self.bv.own_view(va, end))
     }
+    fn begin_refresh(&self) {
+        self.bv.begin_refresh();
+    }
 }
 
 /// `GpuMirror`'s `cut_rows` over the model's `va → len` rows: rows wholly inside `[va, end)` go,

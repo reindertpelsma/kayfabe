@@ -334,6 +334,11 @@ pub trait MapTarget {
         let _ = (va, end);
         None
     }
+
+    /// ★ Review item 4 (2026-10-10): a new refresh (one walker entry) begins — the target renews
+    /// the per-refresh host-call budget it keeps for placing rows ([`crate::batch::BatchedVas::
+    /// begin_refresh`]). Default: nothing to renew. A wrapping target must FORWARD this.
+    fn begin_refresh(&self) {}
 }
 
 /// ★ Review fix 2026-10-10 — [`MapTarget::own_view`]'s answer.

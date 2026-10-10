@@ -1478,6 +1478,9 @@ impl MapTarget for GpuMirror {
     fn own_view(&self, va: u64, end: u64) -> Option<kf_mem::ledger::OwnView> {
         Some(self.bv.own_view(va, end))
     }
+    fn begin_refresh(&self) {
+        self.bv.begin_refresh();
+    }
 }
 
 /// ★ The batch / ownership ledger of one mirrored space (`kf_mem::batch::BatchedVas`), with the
@@ -1677,6 +1680,14 @@ impl MapTarget for Target {
             Target::Window(w) => w.own_view(va, end),
             Target::Bar1(b) => b.win.own_view(va, end),
             Target::Gpu(g) => g.own_view(va, end),
+        }
+    }
+    // ★ Review item 4: forwarded EXPLICITLY (the default renews nothing).
+    fn begin_refresh(&self) {
+        match self {
+            Target::Window(w) => w.begin_refresh(),
+            Target::Bar1(b) => b.win.begin_refresh(),
+            Target::Gpu(g) => g.begin_refresh(),
         }
     }
 }

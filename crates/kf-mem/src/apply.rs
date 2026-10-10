@@ -732,6 +732,8 @@ impl Applied {
 /// crossing the extent is placed up to it.
 #[allow(clippy::too_many_lines)]
 pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>) -> Applied {
+    // ★ Review item 4: one walker entry is one refresh — the target's per-refresh host-call budget.
+    target.begin_refresh();
     let n = runs.len();
     let mut out = Applied {
         codes: vec![KFWR_ACK_APPLIED; n],

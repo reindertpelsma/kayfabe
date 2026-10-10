@@ -316,11 +316,15 @@ fn flat_alias(host: AliasHost) {
         assert!(
             out.first_refusal
                 .as_deref()
-                .is_some_and(|w| w.contains(crate::batch::HUGE_ROW_OUTSIDE_RESERVATION)),
+                .is_some_and(|w| w.contains(crate::batch::HUGE_ROW_OUTSIDE_RESERVATION)
+                    || w.contains(crate::batch::REFRESH_BUDGET_EXHAUSTED)),
             "{host:?}: {:?}",
             out.first_refusal
         );
-        assert_eq!(m.bv.huge_refused.load(Relaxed), 1);
+        // Refused by name either way: the grain bound (no reservation at all) or, when every
+        // per-leaf reservation is refused too, the refresh's amplification budget (review item 4).
+        // (The tail row may be refused by the spent budget too: counted per row, one run.)
+        assert!(m.bv.huge_refused.load(Relaxed) + m.bv.budget_refused.load(Relaxed) >= 1);
         let rm = sim.0.borrow();
         assert!(
             rm.maps.is_empty() && rm.resv.is_empty(),

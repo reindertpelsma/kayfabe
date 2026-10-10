@@ -3890,10 +3890,12 @@ impl ChanPlane {
                     // part of the log line, so the cost is observed, not assumed.
                     Ok(Some(row)) => match ledger.as_ref().map(|bv| (bv.hand_to_host(va, row.0), bv.hold_stats())) {
                         Some((over, (touched, hold_us))) => {
-                            let holds = format!(" (ledger lock holds: at most {touched} entries, longest {hold_us} us)");
+                            let (act_wait_us, act_op_us) = ledger.as_ref().map_or((0, 0), |bv| bv.act_stats());
+                            let holds = format!(" (ledger lock holds: at most {touched} entries, longest {hold_us} us; this thread waited at most {act_wait_us} us for a ledger lock, hand-over took at most {act_op_us} us)");
                             match over {
                                 kf_mem::batch::HandOver::Free => format!(" [host ctx steered onto the guest's ctx VA {va:#x}+{len:#x}{holds}]"),
                                 kf_mem::batch::HandOver::StillReserved => format!(" [guest ctx VA {va:#x} unmapped, but a micro reservation of ours still covers it (other rows live in it) — host ctx placement unsteered{holds}]"),
+                                kf_mem::batch::HandOver::Busy => format!(" [guest ctx VA {va:#x}: the VA thread is mapping a row there right now — nothing touched, host ctx placement unsteered{holds}]"),
                                 kf_mem::batch::HandOver::StillOurs => format!(" [guest ctx VA {va:#x}: a new mapping of ours landed there meanwhile — host ctx placement unsteered{holds}]"),
                                 kf_mem::batch::HandOver::Refused(e) => format!(" [guest ctx VA {va:#x} not unmapped ({e}) — host ctx placement unsteered{holds}]"),
                             }
