@@ -1104,6 +1104,9 @@ whole alternative display path, not a tweak to the real one). Where a feature ca
 correct without it and the feature is added later (post-release if apps run without it, see the priority rule: anything that
 prevents apps from running first). Consequences: the "fewer usable windows per head" idea for overlays is a diagnostic only;
 the product answer is to fix the overlay flip completion, or to define a real single-plane display profile as a clean mode
-with a derived, named capability, never an ad hoc cap. Priority rule recorded with it (owner, same day): focus on anything
-that prevents apps from running; console fidelity, Linux-style simplifications and performance beyond "decent" are
-post-release.
+with a derived, named capability, never an ad hoc cap. Priority rule recorded with it (owner, same day, his words): "I would focus on
+anything that prevents apps from running. Anything that also works without, just like the virtual scanout on Linux and
+decent perf, I tend to do post release." So: anything that prevents apps from running comes first; features that apps
+work fine without (the owner's example is the simple virtual scanout Linux guests already use instead of the full display
+engine) and performance beyond "decent" are post-release. Console fidelity (YUV overlay rendering on the console, z-order,
+HDR on the console) falls under "works without".
