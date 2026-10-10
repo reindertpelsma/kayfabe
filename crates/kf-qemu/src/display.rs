@@ -305,6 +305,68 @@ fn frame_edge(ports: &Ports, map: &RegMap, h: usize, loadv: bool) -> u32 {
     ports.rm_head_timing(h)
 }
 
+/// A head's whole frame edge: its frame counters (`RG_DPCA`, LOADV), then [`frame_edge`]. Returns the RM-visible bits.
+fn frame_edge_out(
+    dp: &DisplayPlane,
+    store: &dyn Fn(u64, u32),
+    h: usize,
+    f: u32,
+    loadv: bool,
+    wtrace: bool,
+    traced: &AtomicU32,
+) -> u32 {
+    let (b, st, fld) = dp.map.rg_dpca;
+    store(b + h as u64 * st, kf_disp::class::put(0, fld, f));
+    if let Some((lb, ls)) = dp.map.loadv {
+        store(lb + h as u64 * ls, f);
+    }
+    let irq = frame_edge(&dp.ports, &dp.map, h, loadv);
+    if wtrace && irq != 0 && trace_slot(traced, display_trace_cap()) {
+        eprintln!(
+            "kf3: display: WTRACE t={:.6} VSYNC h{h} frame={f} evt={:#x} en={:#x} rm={irq:#x}",
+            kf_mem::maplog::t(),
+            dp.ports.event(EventReg::HeadTiming(h)),
+            dp.ports.event(EventReg::HeadTimingEn(h)),
+        );
+    }
+    irq
+}
+
+/// ⚠ DIAGNOSTIC (`KF3_DIAG_SLOT_HISTORY=1`, default off, 2026-10-10 TDR hunt): the host clock in microseconds.
+fn utc_us() -> u128 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_micros())
+}
+
+/// ⚠ DIAGNOSTIC slot history: where the slot `e` names is, what it holds now, and what kayfabe last wrote there.
+fn slot_now(io: &mut Io<'_>, e: &Effect, last: &std::collections::HashMap<(bool, u64), u64>) -> String {
+    let (kind, chn, client, handle, offset, wide) = match *e {
+        Effect::Notify { chn, client, handle, offset, .. } => ("notify", chn, client, handle, offset, false),
+        Effect::Release { chn, client, handle, offset, wide, .. } => ("release", chn, client, handle, offset, wide),
+        _ => return String::new(),
+    };
+    match io.resolve(client, handle, chn) {
+        Ok(dma) => {
+            let mut b = [0u8; 8];
+            let n = if wide { 8 } else { 4 };
+            let now = io.read(dma, offset, &mut b[..n]).map(|()| u64::from_le_bytes(b));
+            let key = (dma.target == Target::Vidmem, dma.base + offset);
+            format!(
+                "{kind} ctxdma {handle:#x} +{offset:#x} at {:?} {:#x} now={} kf_last={}",
+                dma.target,
+                dma.base + offset,
+                now.map_or_else(|e| format!("ERR({e})"), |v| format!("{v:#x}")),
+                last.get(&key).map_or_else(|| "none".to_string(), |v| format!("{v:#x}"))
+            )
+        }
+        Err(err) => format!("{kind} ctxdma {handle:#x} +{offset:#x} UNRESOLVED({err})"),
+    }
+}
+
+/// ⚠ DIAGNOSTIC slot-history line budget per run.
+const SLOT_LINES: u64 = 400_000;
+
 /// `NV_PDISP_FE_CORE_HEAD_STATE(i)`: base, stride, the `OPERATING_MODE` field `(hi, lo)`, and its
 /// `AWAKE` and `SLEEP` values.
 type CoreHeadState = (u64, u64, (u8, u8), u32, u32);
@@ -2338,6 +2400,16 @@ impl Device {
         // head's vblank, as the hardware's do (`kf_disp::engine::Engine::core_latch_at_vblank`)
         engine.core_latch_at_vblank =
             std::env::var("KF3_DISPLAY_CORE_AT_VBLANK").is_ok_and(|v| v == "1");
+        // ⚠ DIAGNOSTIC A/B switches (2026-10-10 TDR hunt; default off, never product settings)
+        engine.release_at_latch = std::env::var("KF3_DIAG_RELEASE_AT_LATCH").is_ok_and(|v| v == "1");
+        let order = crate::vblankgate::VblankOrder::from_env();
+        let slot_hist = std::env::var("KF3_DIAG_SLOT_HISTORY").is_ok_and(|v| v == "1");
+        if engine.release_at_latch || order != crate::vblankgate::VblankOrder::Tick || slot_hist {
+            eprintln!(
+                "kf3: display: DIAGNOSTIC release_at_latch={} vblank_order={order:?} slot_history={slot_hist}",
+                engine.release_at_latch
+            );
+        }
         if engine.core_latch_at_vblank {
             eprintln!(
                 "kf3: display: EXPERIMENT KF3_DISPLAY_CORE_AT_VBLANK=1 — a core update on an active head latches (and notifies) at its next vblank"
@@ -2437,6 +2509,10 @@ impl Device {
         let mut gate = crate::vblankgate::VblankGate::default();
         let mut edge_frame = [0u32; MAX_HEADS];
         let mut forced_logged = 0u64;
+        let mut last_edge: Option<Instant> = None;
+        let mut slot_lines = 0u64;
+        let mut committed_seen = vec![0u64; engine.ledger.committed.len()];
+        let mut slot_last: std::collections::HashMap<(bool, u64), u64> = std::collections::HashMap::new();
         let mut ledger_q = LedgerQ::default();
         let mut ledger_last = Instant::now();
         let mut cursor_seen = [0u32; MAX_HEADS];
@@ -2472,6 +2548,12 @@ impl Device {
             }
             if let Some(t) = gate.deadline() {
                 deadline = deadline.min(t);
+            }
+            if order == crate::vblankgate::VblankOrder::RaiseDelay
+                && !queue.is_empty()
+                && let Some(t) = last_edge
+            {
+                deadline = deadline.min(t + crate::vblankgate::RAISE_DELAY);
             }
             // a lit head without a window: wake when its hold ends (then the console may go black)
             if let Some(t) = windowless_since.map(|t| t + WINDOWLESS_HOLD)
@@ -2604,6 +2686,24 @@ impl Device {
                         }
                         effects.extend(s.effects);
                         gets.extend(s.gets);
+                        // ⚠ DIAGNOSTIC slot history: a new request (UPDATE) — the slots it names and what they hold now
+                        let k = engine.ledger.committed[chn as usize];
+                        if slot_hist && k != committed_seen[chn as usize] {
+                            let prev = committed_seen[chn as usize];
+                            committed_seen[chn as usize] = k;
+                            for e in engine.window_slots(chn, false) {
+                                if slot_lines < SLOT_LINES {
+                                    slot_lines += 1;
+                                    eprintln!(
+                                        "kf3: display: SLOT REQ utc_us={} t={:.6} chn {chn} commit#{k} (+{}) {}",
+                                        utc_us(),
+                                        kf_mem::maplog::t(),
+                                        k - prev,
+                                        slot_now(&mut io, &e, &slot_last)
+                                    );
+                                }
+                            }
+                        }
                     }
                     Err(e) => io.refuse(&format!("channel {chn}: {e}")),
                 }
@@ -2658,6 +2758,25 @@ impl Device {
                     .wrapping_add(1);
                 counts[h].ticks += 1;
                 ticked |= 1 << h;
+                if order != crate::vblankgate::VblankOrder::LatchFirst {
+                    // the current default (and `raise-delay`): the edge at the tick
+                    let irq = frame_edge_out(dp, &store, h, edge_frame[h], loadv, wtrace, &vsync_traced);
+                    raised |= irq != 0;
+                    if irq & dp.map.head_vblank != 0 {
+                        counts[h].vblirq += 1;
+                    }
+                    last_edge = Some(Instant::now());
+                    if slot_hist && slot_lines < SLOT_LINES {
+                        slot_lines += 1;
+                        eprintln!(
+                            "kf3: display: SLOT EDGE utc_us={} t={:.6} h{h} frame={} rm={irq:#x} queued={}",
+                            utc_us(),
+                            kf_mem::maplog::t(),
+                            edge_frame[h],
+                            queue.len()
+                        );
+                    }
+                }
             }
             // 5. acquires waiting without a vblank
             if engine.acquire_pending() {
@@ -2819,7 +2938,7 @@ impl Device {
             // every head that ticked: its edge waits for everything queued up to and including its vblank
             let tick_at = Instant::now();
             for h in 0..MAX_HEADS {
-                if ticked & (1 << h) != 0 {
+                if order == crate::vblankgate::VblankOrder::LatchFirst && ticked & (1 << h) != 0 {
                     gate.tick(h, tick_at);
                 }
             }
@@ -2865,7 +2984,10 @@ impl Device {
                 engine.halt_scanout();
             }
             // 7. completions, IN ORDER — each after the state it reports and the copy it follows
-            while queue.front().is_some_and(|q| q.need <= scan.done) {
+            // (⚠ `raise-delay`, diagnostic: none within RAISE_DELAY of an edge)
+            let held_by_delay = order == crate::vblankgate::VblankOrder::RaiseDelay
+                && last_edge.is_some_and(|t| t.elapsed() < crate::vblankgate::RAISE_DELAY);
+            while !held_by_delay && queue.front().is_some_and(|q| q.need <= scan.done) {
                 let Some(Queued { item, enq, need }) = queue.pop_front() else {
                     break;
                 };
@@ -2940,8 +3062,22 @@ impl Device {
                         offset,
                         awaken,
                     } => {
+                        if slot_hist && slot_lines < SLOT_LINES {
+                            slot_lines += 1;
+                            let fin = io.notifier_finished;
+                            let at = slot_now(&mut io, &Effect::Notify { chn, client, handle, offset, awaken }, &slot_last);
+                            eprintln!(
+                                "kf3: display: SLOT WRITE utc_us={} t={:.6} chn {chn} completed#{} new=FINISHED({fin:#x}) {at}",
+                                utc_us(),
+                                kf_mem::maplog::t(),
+                                engine.ledger.completed[chn as usize],
+                            );
+                        }
                         let dres = io.resolve(client, handle, chn);
                         let at = dres.as_ref().ok().map(|d| (d.target, d.base + offset));
+                        if slot_hist && let Some((t, a)) = at {
+                            slot_last.insert((t == Target::Vidmem, a), u64::from(io.notifier_finished));
+                        }
                         let r = dres.and_then(|dma| {
                             let ts = self.rm.gpu_time_ns().unwrap_or(0);
                             let mut n = [0u8; 16];
@@ -2988,8 +3124,25 @@ impl Device {
                         wide,
                         awaken,
                     } => {
+                        if slot_hist && slot_lines < SLOT_LINES {
+                            slot_lines += 1;
+                            eprintln!(
+                                "kf3: display: SLOT WRITE utc_us={} t={:.6} chn {chn} completed#{} new={value:#x} {}",
+                                utc_us(),
+                                kf_mem::maplog::t(),
+                                engine.ledger.completed[chn as usize],
+                                slot_now(
+                                    &mut io,
+                                    &Effect::Release { chn, client, handle, offset, value, wide, awaken },
+                                    &slot_last
+                                )
+                            );
+                        }
                         let dres = io.resolve(client, handle, chn);
                         let at = dres.as_ref().ok().map(|d| (d.target, d.base + offset));
+                        if slot_hist && let Some((t, a)) = at {
+                            slot_last.insert((t == Target::Vidmem, a), value);
+                        }
                         let r = dres.and_then(|dma| {
                             let b = value.to_le_bytes();
                             io.write(dma, offset, if wide { &b[..] } else { &b[..4] })
@@ -3060,24 +3213,20 @@ impl Device {
                 std::sync::atomic::fence(Ordering::SeqCst);
             }
             for h in due {
-                let f = edge_frame[h];
-                let (b, st, fld) = dp.map.rg_dpca;
-                store(b + h as u64 * st, kf_disp::class::put(0, fld, f));
-                if let Some((lb, ls)) = dp.map.loadv {
-                    store(lb + h as u64 * ls, f);
-                }
-                let irq = frame_edge(&dp.ports, &dp.map, h, loadv);
+                let irq = frame_edge_out(dp, &store, h, edge_frame[h], loadv, wtrace, &vsync_traced);
                 raised |= irq != 0;
-                if wtrace && irq != 0 && trace_slot(&vsync_traced, display_trace_cap()) {
-                    eprintln!(
-                        "kf3: display: WTRACE t={:.6} VSYNC h{h} frame={f} evt={:#x} en={:#x} rm={irq:#x}",
-                        kf_mem::maplog::t(),
-                        dp.ports.event(EventReg::HeadTiming(h)),
-                        dp.ports.event(EventReg::HeadTimingEn(h)),
-                    );
-                }
                 if irq & dp.map.head_vblank != 0 {
                     counts[h].vblirq += 1;
+                }
+                if slot_hist && slot_lines < SLOT_LINES {
+                    slot_lines += 1;
+                    eprintln!(
+                        "kf3: display: SLOT EDGE utc_us={} t={:.6} h{h} frame={} rm={irq:#x} queued={} (latch-first)",
+                        utc_us(),
+                        kf_mem::maplog::t(),
+                        edge_frame[h],
+                        queue.len()
+                    );
                 }
             }
             if gate.forced > forced_logged {

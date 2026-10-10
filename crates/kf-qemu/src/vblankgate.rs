@@ -12,8 +12,41 @@
 //! vblank together with a pre-latch word of the same vblank. Pure bookkeeping: no lock, no wait — the display thread
 //! asks [`VblankGate::due`] once per pass. A completion that cannot be delivered for [`EDGE_CAP`] (a console copy stuck
 //! behind the host) releases the edge anyway, counted, rather than stopping the guest's vblanks.
+//!
+//! ⚠ 2026-10-10: NOT the default yet (owner: only once the forced latch-first order runs clean). [measured, run 282,
+//! `6b8e9b8e`] latch-first + the flip-away release: 5 TDR cycles in the first 22 s of boot, frozen lock screen — so
+//! kayfabe's POST-latch state is itself wrong somewhere. It runs under `KF3_DIAG_VBLANK_ORDER=latch-first` only.
 
 use std::time::{Duration, Instant};
+
+/// ⚠ DIAGNOSTIC (2026-10-10, TDR hunt A/B; `KF3_DIAG_VBLANK_ORDER`, read once; never a product setting): where a
+/// head's frame edge goes relative to its vblank's latch completions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VblankOrder {
+    /// The current default: the edge at the tick, the completions when their console copy is done (~0.9 ms later).
+    Tick,
+    /// `latch-first`: the hardware's order — the edge only after every completion of its vblank ([`VblankGate`]); the
+    /// guest's VSync handler always sees the post-latch state.
+    LatchFirst,
+    /// `raise-delay`: the edge at the tick and no completion delivered within [`RAISE_DELAY`] of any edge — the guest's
+    /// VSync handler never sees the post-latch state of its own vblank. A DELAY: diagnostic only, never the product.
+    RaiseDelay,
+}
+
+/// [`VblankOrder::RaiseDelay`]'s hold after an edge.
+pub const RAISE_DELAY: Duration = Duration::from_millis(3);
+
+impl VblankOrder {
+    /// `KF3_DIAG_VBLANK_ORDER` = `latch-first` | `raise-delay`; anything else (or unset) is [`VblankOrder::Tick`].
+    #[must_use]
+    pub fn from_env() -> VblankOrder {
+        match std::env::var("KF3_DIAG_VBLANK_ORDER").as_deref() {
+            Ok("latch-first") => VblankOrder::LatchFirst,
+            Ok("raise-delay") => VblankOrder::RaiseDelay,
+            _ => VblankOrder::Tick,
+        }
+    }
+}
 
 /// Heads the gate tracks (the display model's ceiling).
 pub const HEADS: usize = kf_disp::ports::MAX_HEADS;

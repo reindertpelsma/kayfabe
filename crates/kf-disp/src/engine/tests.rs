@@ -452,6 +452,52 @@ fn a_non_tearing_flip_waits_for_vblank_and_its_acquire() {
     }
 }
 
+/// ⚠ The diagnostic A/B switch (`release_at_latch`) restores the old order: the incoming entry's release at its own
+/// latch. And `window_slots` names the slots a committed request (ASSEMBLY) asks for, before it latches.
+#[test]
+fn release_at_latch_restores_the_old_order_and_window_slots_name_the_request() {
+    let mut e = engine();
+    e.release_at_latch = true;
+    e.alloc(ChannelKind::Core, 0, CLIENT, 1, pb(), 0);
+    e.alloc(ChannelKind::Window, 0, CLIENT, 1, pb(), 0);
+    let mut c = Ring::new();
+    modeset(&mut c, 0, 0);
+    c.m(m(CORE, "UPDATE"), 0);
+    e.step(0, &c.bytes(), c.put(), &mut all_ok);
+    let mut w = Ring::new();
+    w.m(m(WIN, "SET_CONTEXT_DMA_NOTIFIER"), 0xcafe_00f0);
+    w.m(
+        m(WIN, "SET_NOTIFIER_CONTROL"),
+        put(0, fl(WIN, "SET_NOTIFIER_CONTROL_OFFSET"), 1),
+    );
+    w.m(m(WIN, "SET_CONTEXT_DMA_SEMAPHORE"), 0xcafe_0b00);
+    w.m(
+        m(WIN, "SET_SEMAPHORE_CONTROL"),
+        put(0, fl(WIN, "SET_SEMAPHORE_CONTROL_OFFSET"), 4),
+    );
+    w.m(m(WIN, "SET_SEMAPHORE_RELEASE"), 0xd00d_d00d);
+    w.m(m(WIN, "UPDATE"), 0);
+    let s = e.step(1, &w.bytes(), w.put(), &mut all_ok);
+    assert!(s.effects.is_empty(), "parked for vblank: {:?}", s.effects);
+    match e.window_slots(1, false).as_slice() {
+        [
+            Effect::Notify { handle: 0xcafe_00f0, offset: 16, .. },
+            Effect::Release { handle: 0xcafe_0b00, offset: 64, value: 0xd00d_d00d, .. },
+        ] => {}
+        other => panic!("{other:?}"),
+    }
+    assert!(e.window_slots(1, true).is_empty(), "nothing armed yet");
+    let s = e.vblank(0, &mut all_ok);
+    match s.effects.as_slice() {
+        [
+            Effect::Latched { window: 0 },
+            Effect::Release { handle: 0xcafe_0b00, offset: 64, value: 0xd00d_d00d, .. },
+            Effect::Notify { chn: 1, .. },
+        ] => {}
+        other => panic!("the incoming entry's release at its own latch: {other:?}"),
+    }
+}
+
 /// A window on an INACTIVE head (no raster armed) latches at once; so does an immediate flip.
 #[test]
 fn flips_without_an_active_head_latch_at_once() {

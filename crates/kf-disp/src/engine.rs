@@ -569,6 +569,9 @@ pub struct Engine {
     pub pace: [PaceCounts; 8],
     /// ⚠ DIAGNOSTIC flip ledger (TDR hunt; always on, plain counters on the display thread).
     pub ledger: FlipLedger,
+    /// ⚠ DIAGNOSTIC (default `false`, 2026-10-10 TDR hunt; `KF3_DIAG_RELEASE_AT_LATCH=1`): the pre-2026-10-10
+    /// behaviour — a window's release written at its OWN entry's latch, not at flip-away — for the A/B runs.
+    pub release_at_latch: bool,
 }
 
 impl Engine {
@@ -592,6 +595,7 @@ impl Engine {
             presented: [false; 8],
             pace: [PaceCounts::default(); 8],
             ledger: FlipLedger::default(),
+            release_at_latch: false,
         }
     }
 
@@ -1312,6 +1316,7 @@ impl Engine {
     /// does its notifier raise the flip event).
     fn complete(&mut self, n: u32, was_active: bool, st: &mut Step) {
         let v = self.vocab.clone();
+        let at_latch = self.release_at_latch;
         let Some(c) = self.chans.get_mut(n as usize).and_then(|c| c.as_mut()) else {
             return;
         };
@@ -1324,8 +1329,9 @@ impl Engine {
         // is the OUTGOING armed state's, read before the arm below. [measured, runs 268-279] writing the incoming
         // entry's release at its own latch told a guest whose VSync handling ran after the latch pass that the flip it
         // was waiting for had already been flipped away; it never reported that present, its flip queue timed out (TDR).
+        // (⚠ `release_at_latch`, diagnostic: the incoming entry's release — its ASSEMBLY words, armed just below)
         let outgoing_release = (c.kind == ChannelKind::Window)
-            .then(|| Self::release_of(&v, c, n, Chan::armed))
+            .then(|| Self::release_of(&v, c, n, if at_latch { Chan::a } else { Chan::armed }))
             .flatten();
         // 1. arm
         let mut changed = Vec::new();
@@ -1406,6 +1412,35 @@ impl Engine {
         {
             c.get = c.queue.front().map_or(c.decoded, |f| f.header);
         }
+    }
+
+    /// ⚠ DIAGNOSTIC (slot history, 2026-10-10 TDR hunt): window channel `n`'s notifier and release slots as its
+    /// ASSEMBLY (`armed == false`: the request just committed) or ARMED state names them, as `Notify` / `Release`
+    /// effects (never queued — the display thread only samples the slots they name).
+    #[must_use]
+    pub fn window_slots(&self, n: u32, armed: bool) -> Vec<Effect> {
+        let Some(c) = self.chans.get(n as usize).and_then(|c| c.as_ref()) else {
+            return Vec::new();
+        };
+        if c.kind != ChannelKind::Window {
+            return Vec::new();
+        }
+        let v = &self.vocab;
+        let get: fn(&Chan, u32) -> u32 = if armed { Chan::armed } else { Chan::a };
+        let mut out = Vec::new();
+        let handle = get(c, v.w_ctxdma_notifier);
+        if handle != 0 {
+            let ctl = get(c, v.w_notifier_control);
+            out.push(Effect::Notify {
+                chn: n,
+                client: c.client,
+                handle,
+                offset: u64::from(fld(ctl, v.n_offset)) * 16,
+                awaken: false,
+            });
+        }
+        out.extend(Self::release_of(v, c, n, get));
+        out
     }
 
     /// The release a window entry asks for, read through `get` (its ARMED or ASSEMBLY words): `None` without a
