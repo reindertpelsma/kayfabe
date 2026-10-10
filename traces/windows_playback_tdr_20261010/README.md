@@ -4,6 +4,23 @@
 
 STATUS: LIVE. Work on branch `claude/overlay-h1-20261010` (from 575d5b20).
 
+* 4. [measured + inferred, runs 415/416 (18da7c3c, OVLDUMP: guest-memory dump at the first window-4 STALL report); engine replay tests] CAUSE of H1 (the
+  first half measured, the pairing rule inferred):
+  - [measured, dump 415] at the stall ALL vCPUs are in HLT (3 samples), the VidSch workers wait for scheduler events, DWM/Edge wait on events: nobody spins, nobody is
+    blocked in a trapped BAR0 write (H-VCPU false); [measured, VFIO reference + run 414 trace] the driver does not wait for GET per flip (H-GET false for the
+    flip path); the stuck window-4 UPDATE (decoded from the stalled guest's pushbuffer in the dump) is the plane's FIRST FLIP C: surface, notifier, semaphore, and
+    `SET_WINDOW_INTERLOCK_FLAGS`=window 0 with `UPDATE`.INTERLOCK_WITH_WIN_IMM. The UPDATEs it names are the NEXT frame's, which the guest sends only after this
+    present completes (DWM is idle). In run 414 and on hardware C pairs with window 0's and window 4's immediate channel's UPDATEs KICKED JUST BEFORE it
+    (PUT order in the trace: w4 enable batches, w0, imm0, w4, imm4, w4=C).
+  - [measured, run 416 WTRACE + engine ring] kayfabe paired them with EARLIER window-4 UPDATEs: (a) the display worker applied "every channel whose PUT moved" in CHANNEL
+    NUMBER order at whatever moment it woke (up to ms after the writes, which are 25-1000 us apart), so window 0 (chn 1) was processed before window 4's earlier
+    UPDATEs and joined their group; (b) the engine held window 4's surface-less UPDATE B for the vblank, so window 0's UPDATE joined B instead of waiting for C. Replay
+    test `the_overlay_enable_sequence_pairs_in_arrival_order` (arrival order + (b) fix: C pairs and latches at the vblank) and
+    `batched_in_channel_number_order_the_same_writes_leave_the_overlay_flip_unpaired` (the old worker order: C unpaired).
+  - Fix 72784ba7: (1) `PutLog` (kf-disp ports): vCPU PUT writes are logged lock-free in arrival order and the worker steps the engine in that order (the latest-PUT pass
+    remains only to resynchronise after a log overflow); (2) a window UPDATE that scans no surface before and names none after is not a flip: no vblank wait.
+    FALSIFIER (written before the run): with 72784ba7, zero flags, runs 417-419 (overlay active) must show no `display: STALL Window 4` and the Edge phase TDR count 0;
+    one stall in three falsifies it (then the pairing rule (2) is wrong or incomplete, and the dump of that run says what the guest waits for).
 * 3. [measured, run 414, binary 18da7c3c, `KF3_BAR0_READ_TRACE=1` display ranges + `WIN_TRACE=1`, runner `tdr-run24.sh` = tdr-run23 + `OVLDUMP`]
   with BAR0 READS trapped and traced the overlay path WORKS: window 4 (1295x985 RGB, Edge plane 1) is in use from +207 s, 28261 window-4 PUT
   writes, 19534 window-0, 6957 imm-4, 0 TDR in all phases (boot/sign-in/Edge/Shorts/hold 92 s), 0 STALL reports. In runs 408/409/411/413 (no read
