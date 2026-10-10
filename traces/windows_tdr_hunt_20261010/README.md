@@ -600,3 +600,28 @@ to FINISHED).
 ### Run 284 (written before the run; binary dbbcb387: latch-first + window notifiers written BEGUN, `KF3_DIAG_WINDOW_NOTIFIER_BEGUN`)
 **H-N:** with hardware's status value (BEGUN) for window flip notifiers, the hardware order completes every flip. **Falsifier:** TDR
 cycles in boot as in 282/283. Flags: latch-first + BEGUN + slot history + BAR0 traces, hold 240 s.
+
+### Run 284 result (H-N): falsifier met
+5 TDR cycles in boot and sign-in, the same as 282/283, so BEGUN alone does not complete the flip under the hardware order. The status
+word does reach the driver's decision, measured: with FINISHED the first post-latch VSync reads the window GET/PUT once, and does
+so once per later VSync. With BEGUN the same VSync is followed by a ~1.5 ms busy poll of GET/PUT (about 20 reads, GET==PUT==0xa80),
+repeated at every later VSync. The driver reads the notifier at VSync and branches on it. BEGUN (hardware's value) puts it in a
+"flip begun, wait for it to finish" branch that kayfabe never ends. Slot history 284: the guest re-arms each new notifier slot to 0
+before its UPDATE. The open item from 283 is a LOGGER gap: UPDATEs decoded in the run-on after a latch (inside `vblank`) were not
+sampled. It is not an engine write without a request; the guest itself re-used `+0xf80` / release `+0x0`=1 for two boot updates.
+
+### Where this stands (runs 276-284; time-box: 9 of 10 runs used)
+* Measured: (1) the ordering race in the default order. (2) kayfabe's post-latch state is wrong: under the hardware order every
+  first flip sticks, whichever release timing and whichever notifier status (FINISHED or BEGUN) is written. (3) The driver reads the
+  notifier status at VSync and branches on it.
+* Not yet known: which further guest-visible word the driver needs after BEGUN. Candidates are the notifier timestamp words
+  (kayfabe writes the GPU time at the latch pass; hardware time-stamps the flip), PRESENT_COUNT (bits 7:0, always 0 in kayfabe), and
+  a later FINISHED.
+* Next measurement (the owner's item 2): hardware read-watchpoints on the stuck flip's notifier words through the QEMU gdbstub.
+  Find the guest VA of the notifier page by walking the kernel page tables (`info tlb` filtered on the host for its PA, e.g.
+  0x239975f40 in run 284). Set `rwatch` on status and timestamp. Log value and RIP per hit, symbolised with MS public symbols where
+  they apply (diagnosis only; outputs stay on the host). Use latch-first + BEGUN, so the stuck path runs deterministically in the
+  first seconds of boot.
+* Product: no change is proposed yet. The default stays the old order with the flip-away release, which is hardware semantics per
+  NVKMS. Latch-first, raise-delay, release-at-latch and window-BEGUN are diagnostics, off by default. The "publish, then raise owed
+  interrupts" structure the owner specified is the intended product shape, once the post-latch state is right.
