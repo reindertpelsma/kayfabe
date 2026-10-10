@@ -4335,9 +4335,8 @@ impl ScanState {
                 .fetch_add(1, Ordering::Relaxed);
         }
         if let Err(e) = composed {
-            self.refuse(dp, &e);
-            self.failed = true;
-            self.serve_now(dp);
+            // work sent to the GPU failed: no synthetic success
+            self.fault(&dp.counters, &dp.console, n, req, Fault::Gpu(e));
             return;
         }
         // ★ §8.16: the change detector, queued behind the composition (a refusal costs only the

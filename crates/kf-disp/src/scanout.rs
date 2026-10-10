@@ -697,9 +697,9 @@ pub fn plan_yuv(
         }
     };
     let (y_src, y_extent, y_pitch) =
-        bound("luma", y_dma, s.offset, s.pitch, 1, x_end, y_end).map_err(&refuse)?;
+        bound("luma", y_dma, s.offset, s.pitch, 1, x_end, y_end).map_err(refuse)?;
     let (c_src, c_extent, c_pitch) =
-        bound("chroma", c_dma, s.offset1, s.pitch1, 2, cx_end, cy_end).map_err(&refuse)?;
+        bound("chroma", c_dma, s.offset1, s.pitch1, 2, cx_end, cy_end).map_err(refuse)?;
     Ok(Some(YuvPlan {
         window: s.window,
         y_src,
@@ -1536,7 +1536,7 @@ mod tests {
         let dma = vid(0x4000_0000, 64 << 20);
         let p = plan_yuv(&s, yf, &dma, &dma, 1920, 1080).unwrap().unwrap();
         assert_eq!((p.y_src, p.c_src), (0x4000_1000, 0x4000_1000 + 768 * 1280));
-        assert_eq!(p.y_extent, 767 * 0 + 1279 * 768 + 720);
+        assert_eq!(p.y_extent, 1279 * 768 + 720);
         assert_eq!(
             p.c_extent,
             639 * 768 + 720,
