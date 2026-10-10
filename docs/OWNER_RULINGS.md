@@ -1069,3 +1069,11 @@ Implemented on `claude/hardwire-tspace-20261010` (GPU-free tests only; the hardw
   half. The `KF3_TSPACE` / `KF3_INCA_REFUSE` "default off until box step 1" rollout in
   `design/V3_P1P2_TSPACE.md` §8 (corrected there). The `KF3_TSPACE` row of
   `design/V3_FLAG_INVENTORY.md` (its follow-up note is `design/V3_TSPACE_HARDWIRED.md`).
+
+## §AB. Models, 2026-10-10
+
+**STATUS: LIVE, 2026-10-10.** Owner: for the 5.5 generation Sonnet 5.5 is the default for everything;
+Opus 5.5 only when Sonnet fails (use less Opus, weekly usage). Haiku 5.5 is to be tried after the CLI
+upgrade, on mechanical lanes only (evidence collection, formatting, running a script, grep sweeps).
+Supersedes the "Opus runs hypothesis work" half of `CLAUDE.md` *Models by risk*; correctness still
+beats cost: a lane that fails on Sonnet is rerun on Opus, never accepted.
