@@ -802,3 +802,24 @@ host GP_GET == GP_PUT; the late-joiner schedule is in effect), no display flip i
 Runner 15 scripts run 291's manual steps (consent "Reject all", play) and checks real playback (two screenshots 3 s apart must
 differ). Guest DxgKrnl ETW, recovered from the disk after the run. **Question:** which dependency is stuck at the declaration:
 a flip (259/386 without 505), a decode/video/render packet (178 without 180, which node/engine), or a paging/fence wait.
+
+### Run 292 result (binary a82e5c09, guest ETW, runner 15 = scripted consent + play)
+**PROGRESS LINE: a NEW stuck-flip class, measured — the MPO overlay plane.** TDR cycles: boot 0, sign-in 0, **Edge 2**, Shorts step 1,
+hold 1. Playback check: frames identical (the video area is black in the console). ETW recovered from the disk (`tdropus/r292`,
+host-only):
+* Multi-plane present 0x1AD was handed at 15:09:06.4625 with plane 0 (1920x1080) and **plane 1 (1295x986 at 22,13: Edge's
+  overlay)**.
+* Plane 0 completed (505 at 06.4708). **Plane 1 never did.** Declaration (547) at 15:09:08.69.
+* kayfabe side, measured: the FLIP-LEDGER shows **window 4 (ch5) committed and never latched** (4/3, then 7/5, `pend` growing
+  849 -> 6851 ms, `acqblk 0`: no acquire involved). Its window-immediate channel ch37 likewise (3/2, `pend` 1.5-3.6 s). Runs
+  288/290/291 had no such pending commit.
+* Runs 290/291 did not hit it in their Edge phase; the plane-1 overlay is intermittent.
+* The engine latches an update only when every live channel in its interlock set is also waiting at an UPDATE
+  (`Engine::ready_group`). The interlock set comes from the window's ASSEMBLY state. NVKMS re-programs both interlock masks before
+  every UPDATE (`nvkms-evo3.c:2660-2790`), so open source cannot tell sticky from one-shot.
+
+### Run 293 (written before the run): which channel the stuck overlay update waits for (H-I)
+Binary a82e5c09 + `KF3_DISPLAY_TRACE=1` (each UPDATE's interlock mask, each group's latch) + `KF3_DIAG_SLOT_HISTORY` + guest ETW,
+runner 15, hold 600 s. **H-I:** the stuck window-4 UPDATE's interlock set names a channel (core, a cursor or window 0) that is not at
+an UPDATE and never sends a matching one. **Falsifier:** its interlock set is satisfied by pending channels, so the update is
+stuck elsewhere (a park for an inactive head, the latch path).
