@@ -29,6 +29,10 @@ Windows booted and Edge loaded websites, youtube shorts worked through the GPU. 
 
 *NOTE:* This is not yet on master branch
 
+No host or guest driver, both kernel or userspace, was patched, all nvidia stuff was using stock binaries. Kayfabe only requires a patched hypervisor like QEMU KVM. The only custom guest side drivers are the well-known stock virtio drivers from Red Hat and NVIDIA's official installer.
+
+VRAM memory is preallocated for the guest just like a real vGPU (in this case 4GiB of 12GiB card), the remaining space is free for the host to use simultaneously.
+
 ## Status — 2026-09-30
 
 **Research stage:** no install path, no stable interface. Results come from rented vast.ai boxes that are
