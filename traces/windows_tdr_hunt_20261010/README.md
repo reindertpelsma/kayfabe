@@ -201,3 +201,21 @@ with a UTC millisecond, who decided it and what came of it (raised / held / NotA
 (`KF3_COMPLETION_PROBE`, `KF3_DISPLAY_WRITE_TRACE`, the LAPIC sampler).
 **Falsifier:** the first TDR still comes within ~10 s of the sign-in keys (as in every run so far: 5-9 s) and the run still shows the 80-125 s cluster; with H-G true the first TDR (and the cluster) disappear or are much rarer. Control: the
 `IRQ-RING` of the same run must show `NotArmed` verdicts in the baseline (run 271: `nsi` counters CE2 `wakes=3064 raised=2775`, so ~10 % of edges dropped) and none in this run, else the switch did nothing.
+
+### Run 272 result (H-G, `KF3_DIAG_NSI_UNCONDITIONAL=1`, binary 40481dd5) — INVALID as a test
+Two host Xid 31 (MMU FAULT_PTE, channels 0x3c GR0_PBDMA read @0x1499c000 and 0x36 GRAPHICS write @0x040fc000) hit at boot (t=16 s and 27 s, the two `Running -> Suspending` cycles at mem t=20.4/29.1 s, no nvlddmkm 153
+in the System log), then the display stayed black and the guest wedged (QGA dead, no screenshots after sign-in): no TDR after the sign-in because there was no desktop. Not a result for H-G (a boot fault run, like 265). H-G is neither confirmed nor refuted; needs a clean replicate after the flip ledger.
+
+### Owner challenge (via coordinator): "is every flip answered? trace it. dependency not done = buffers we allocated for the flip hanging"
+**What the code says (read before measuring):** `kf_disp::Engine` stops a window channel at its UPDATE until (a) its interlock group is complete, (b) the head's next vblank (non-tearing flip), (c) its ACQUIRE semaphore holds its value in guest memory
+(`latch_group`: the whole group keeps waiting if any acquire fails; re-polled every 2 ms). On completion it arms and states notifier / release semaphore / GET as `Effect`s; the plane (`display.rs`, step 6-7) queues each with `need: scan.barrier`
+and delivers it only when scanout copy number `need` is done (`scan.done`): **a flip's completion is gated on the console frame copy to the host broker**, and the copy needs a broker frame slot the host compositor window releases.
+The log shows the broker reclaiming slots that were never released (`broker: reclaimed frame slot N: no RELEASE X ms after its commit`): [measured, runs 263-271] in every run the first TDR is preceded (within ~1000 log lines) by such a reclaim of
+4.5-4.7 s (264: 4701, 266: 4493, 267: 4723, 268: 4703, 271: 4700), and the cluster resets by reclaims of 1.8-2.4 s (about TdrDelay); runs with few TDRs have few reclaims (272: 7). The release comes from a real Wayland compositor window on the host.
+**What was missing:** a per-flip ledger. Added (always on, plain counters on the display thread; no vCPU/drainer cost): `FLIP-LEDGER` every 2 s (`chN: committed/completed (max ms, slow, acquire-blocked, pending age)`, completions queued/oldest/delivered/slow/max wait,
+copies started/done), `FLIP-SLOW` for every update > 50 ms commit-to-complete (what blocked: acquire ctxdma/offset/value, update data, assembly surface/semaphore/notifier ctxdma), `FLIP-QUEUED-LAG` for every completion that waited > 50 ms behind the console copy.
+
+### Run 273 — H-L (written before the run; binary 735b352e = merge + diagnostics, production flags + `KF3_COMPLETION_PROBE`)
+**H-L:** the flip the guest queues about 2 s before its first TDR is committed (UPDATE reached the engine) but its completion (notifier / release / GET) is delivered late because it waits behind the console copy (no free broker slot / slot not released),
+or it waits on an acquire / has no window to latch. **Falsifier:** around the first TDR (5-9 s after the sign-in keys) every committed update completes < 50 ms after commit (no `FLIP-SLOW`) and every queued completion is delivered < 50 ms after it was queued (no
+`FLIP-QUEUED-LAG`); then the answer path is exonerated and the hunt returns to the paging/user-queue completions.
