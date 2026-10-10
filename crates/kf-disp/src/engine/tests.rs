@@ -355,6 +355,41 @@ fn an_interlocked_group_waits_for_every_member() {
     assert_eq!(h[1].period_ns, 0);
 }
 
+/// ★ 2026-10-10 (run 293, measured): a ONE-SIDED interlock. The overlay window 4 interlocks with window 0 and with
+/// its immediate channel; window 0's own UPDATE names nothing. Window 0's update must latch TOGETHER with the waiting
+/// overlay update (and its immediate channel), never alone ahead of it — alone, the overlay starves.
+#[test]
+fn a_pending_update_that_waits_for_a_channel_latches_with_that_channels_next_update() {
+    let mut e = engine();
+    e.alloc(ChannelKind::Window, 0, CLIENT, 1, pb(), 0);
+    e.alloc(ChannelKind::Window, 4, CLIENT, 1, pb(), 0);
+    e.alloc(ChannelKind::WindowImm, 4, CLIENT, 1, pb(), 0);
+    let w4 = ChannelKind::Window.channel_number(4);
+    let i4 = ChannelKind::WindowImm.channel_number(4);
+    let mut w = Ring::new();
+    w.m(m(WIN, "SET_WINDOW_INTERLOCK_FLAGS"), 1 << 0);
+    w.m(m(WIN, "UPDATE"), put(0, fl(WIN, "UPDATE_INTERLOCK_WITH_WIN_IMM"), 1));
+    assert!(e.step(w4, &w.bytes(), w.put(), &mut all_ok).effects.is_empty());
+    let mut i = Ring::new();
+    i.m(m(IMM, "UPDATE"), put(0, fl(IMM, "UPDATE_INTERLOCK_WITH_WINDOW"), 1));
+    assert!(e.step(i4, &i.bytes(), i.put(), &mut all_ok).effects.is_empty());
+    assert!(e.waiting(w4) && e.waiting(i4), "the overlay waits for window 0");
+    // window 0's update, interlocked with nothing
+    let mut z = Ring::new();
+    z.m(m(WIN, "UPDATE"), 0);
+    let s = e.step(1, &z.bytes(), z.put(), &mut all_ok);
+    let latched: Vec<u32> = s
+        .effects
+        .iter()
+        .filter_map(|x| match x {
+            Effect::Latched { window } => Some(*window),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(latched, vec![0, 4], "window 0 latches WITH the overlay: {:?}", s.effects);
+    assert!(!e.waiting(1) && !e.waiting(w4) && !e.waiting(i4));
+}
+
 /// ★ A plain non-tearing flip on an active head latches at the head's VBLANK: until then the window
 /// is busy with GET before its UPDATE, and the flip's notifier is NOT written.
 #[test]
