@@ -1,6 +1,6 @@
 # Windows TDR hunt, 2026-10-10 (branch `claude/tdr-hunt-20261010` from `integration/windows-20261010` eff1b692 = code 459da55d)
 
-STATUS: RESEARCH, 2026-10-10 — time-box reached after 8 hardware runs (264-271): partial measured cause, no fix. See "RESULT" at the bottom. Host RTX 4070, driver 595.91.07.
+STATUS: RESEARCH, 2026-10-10 — round 3 in progress (runs 276-284): shape F measured, ordering race and wrong post-latch state separated; no fix yet. Latest at the bottom. Host RTX 4070, driver 595.91.07.
 Labels: **[measured]** = a log line / counter / guest event with its run; **[inferred]** = reasoning not yet tested.
 
 ## Runbook (host-only tooling outside git, `/var/lib/kf-windows-20261005`)
@@ -490,6 +490,11 @@ pass). **Falsifier:** the same reads with the same values as at completing vblan
   then the W1C ack): **H-F3's falsifier is met — no register value differs**; the decision is taken from guest memory. (Differences
   from the VFIO reference noted for later, not the cause: kayfabe returns 0 for the reads the driver makes before each flip,
   `0x690a2c`/`0x690aec`/`0x680220` (HW 0xcf/0xa0/0xe5), and `0x611800` reads 0x6 where HW reads 0x7/0x5.)
+* **CORRECTION (2026-10-10, after runs 280, 282, 283): the release mechanism in the next bullet was INFERRED, never measured, and
+  is FALSIFIED as the cause.** Run 280 (flip-away release, default order) still had 3 resets. Runs 282/283 (hardware order forced,
+  flip-away vs latch release) both had 5 resets in boot. The release timing is kept because it is what hardware does (NVKMS
+  `nvkms-displayless.c:272-280`, `nvkms-headsurface-priv.h:236-244`, `nvkms-api.h:680-690`), not because it fixes anything. See
+  "Owner's question" below for what is measured.
 * **What kayfabe writes to guest memory in its latch pass that hardware would not have written yet: the flip's own RELEASE
   semaphore.** The engine (`kf_disp::engine::Engine::complete`) wrote, at flip N's latch, the release value programmed WITH flip N.
   NVDisplay writes that value when flip N is flipped away by the next latched update; open NVKMS states this for the behaviour it
@@ -534,3 +539,64 @@ semaphore slot of the stuck flip in guest memory hold a state the completed flip
 dump at the logged addresses). **Falsifier:** the stuck flip's slots are byte-identical in form to those of completed flips (same status,
 same semaphore value pattern) — then the decision is in driver-private state and the next step is the gdb breakpoint on the driver's
 VSync path (diagnosis-only), as the owner suggested.
+
+### Run 281 result (H-M): falsifier met
+The dump at the stuck flip: the stuck flip's notifier slot and semaphore slot have the same form as completed flips' slots (notifier
+status FINISHED + timestamp, release value in sequence). So the decision is not visible as an odd slot value; it is in what the driver
+reads WHEN, or in driver-private state.
+
+### Owner's question: "how can the guest see a completed semaphore for something that has not flipped?" — measured contract
+Measured facts (labels as above; host traces are kayfabe's VFIO-format BAR0 trace, `WIN_TRACE=1` + `KF3_BAR0_READ_TRACE=1`):
+* **The race (ordering), measured, runs 268-279:** in the default order kayfabe raises the head's LAST_DATA event and the display
+  interrupt at the vblank tick, and delivers that vblank's latch results (ARMED, notifier, semaphore, GET) about 0.9 ms later, behind
+  the console copy. For about 1680 completed flips the guest acked the VSync 0.50-0.57 ms BEFORE the latch pass. So the guest's
+  handler normally saw the PRE-latch state and found the flip one vblank later. The first stuck flip of each run had its ack within
+  about ±0.12 ms of the latch pass, or later (`evidence/vsync-ack-vs-latch-runs268-278.txt`). Two late stuck flips (+19.3 ms in 279,
+  +34.1 ms in 277) saw the COMPLETE post-latch state and still stuck. That points at the post-latch state itself, which is a separate
+  question from the ordering.
+* **Why real hardware does not race:** the trace cannot show GPU memory writes, so the order of the latch's memory writes against
+  the interrupt on hardware is not measured. The open sources imply it: RM services LAST_DATA as the vblank, and NVKMS's vblank
+  callback reads the window notifier and expects BEGUN (`nvkms-modeset.c:1878-1918`, `nvkms-headsurface.c:2291`). That only works if
+  the latch's writes are visible before the interrupt. [inferred from source] The VFIO reference (`vfio-dvi-20261008/boot3`,
+  Windows on a real RTX 4070) shows the ISR reads `0x611c30`, `0x611ec0`, `0x611c00`=2, `0x611800`=7, then W1C 2. It never reads
+  AWAKEN/SEM_WIN, and never reads the window GET except for ring-wrap polls.
+* **Lock-step of the slots (slot history, run 283, `KF3_DIAG_SLOT_HISTORY`):** the guest resets each window notifier slot to 0
+  (NOT_BEGUN) before the UPDATE that names it (`SLOT REQ ... now=0x0`). It names a new 16-byte semaphore slot per flip, and the
+  value increases by one per flip (release `+0x0`=1, `+0x10`=2, ...). Kayfabe writes each once, after the request. There is no stale
+  write over a re-armed slot in the window before the first TDR. **Open item:** two window completions at boot (`completed#3/#4`,
+  69540.31/.33) re-wrote the same notifier (`+0xf80`) and release (`+0x0`, 1) on consecutive vblanks while the logger had seen no
+  new request. This is either a logger counting gap or kayfabe completing without a request (violation "write with no request
+  pending"); to be resolved from the engine's group logic.
+* **The contract in the open sources (ogkm 595.84; AD104 runs the C6 path: core C77D, window C67E, `nvkms-hal.c:148`):**
+  * Release: written at FLIP-AWAY (the three citations above).
+  * Semaphore lock-step (DRM path): the driver sets the slot NOT_READY, the CPU sets READY once rendering is done, the display
+    acquires READY, and DONE is written at flip-away (`nvkms-kapi-notifiers.c:291-326`, `nvkms-kapi.c:2691-2707`).
+  * **Window flip notifier: reset to NOT_BEGUN by the driver; hardware writes BEGUN when it performs the flip**
+    (`nvkms-headsurface.c:1925-1952`: `IsPreviousFlipDone` tests `== BEGUN`; `:2037` asserts it).
+  * FINISHED is the CORE completion notifier's value (`nvkms-evo3.c:6224-6243`).
+  * **kayfabe writes FINISHED for window notifiers too: a second difference in the post-latch state, not yet tested.**
+
+### Run 282 (binary 6b8e9b8e: hardware order as the default via `vblankgate`, flip-away release; production profile, zero measurement flags)
+**Prediction:** no TDR. **Falsifier:** any TDR cycle. **Result, falsifier met:** 5 TDR cycles (nvlddmkm 153 x15) between
+12:51:04 and 12:51:26, all before sign-in. The lock screen froze; ch1 had completed only 5 window flips. No forced edges and no new
+host Xid. **So with the hardware order, kayfabe's post-latch state is wrong: every flip whose VSync handler sees it gets stuck.** The
+default order works about 99.7 % of the time only because the handler usually runs before the latch pass. The gate went back to
+opt-in (`1712c5c9`: `KF3_DIAG_VBLANK_ORDER=latch-first|raise-delay`, `KF3_DIAG_RELEASE_AT_LATCH`, `KF3_DIAG_SLOT_HISTORY`, all
+diagnostic and off by default; raise-delay is a delay and diagnostic only).
+Runner note (owner's question about run 280): run 280 ended after 20 s of hold with `stopfile=1` because I touched
+`/tmp/kf-stop-winprod` at READY. Its falsifier (3 TDRs) was already met. The runner's cleanup removes the file. No stale stop file
+was left; run 282 started with none.
+
+### Run 283 (binary 1712c5c9: latch-first + the OLD release at latch + slot history + BAR0 read/write traces)
+**Owner's prediction:** with the old release, shape F reproduces in seconds. **Result:** 5 TDR cycles in boot, the same as 282. So
+the release timing does not decide it. The read trace at the stuck first flip (PUT 12:57:44.0876, latch and VSync 44.0945, MSI
+44.0947) shows the ISR reads the window GET/PUT at once (`0x690004`=`0x690000`=0xa80, idle). It does so at every later VSync and
+never disables LAST_DATA. A healthy default-order flip (run 279, PUT 12:29:37.2783): the first VSync does NOT read GET; the second
+reads GET==PUT, then the driver disables LAST_DATA (`0x611d80`<-0). **So the guest's state machine needs a word that it gets when its
+first VSync sees the PRE-latch state and then the post-latch state, and that it never gets when the first VSync already sees
+kayfabe's post-latch state.** The candidate is the window notifier status (NOT_BEGUN, then BEGUN on hardware; kayfabe goes straight
+to FINISHED).
+
+### Run 284 (written before the run; binary dbbcb387: latch-first + window notifiers written BEGUN, `KF3_DIAG_WINDOW_NOTIFIER_BEGUN`)
+**H-N:** with hardware's status value (BEGUN) for window flip notifiers, the hardware order completes every flip. **Falsifier:** TDR
+cycles in boot as in 282/283. Flags: latch-first + BEGUN + slot history + BAR0 traces, hold 240 s.
