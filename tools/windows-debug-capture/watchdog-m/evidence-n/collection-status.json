@@ -1,0 +1,45 @@
+{
+  "schema": "kayfabe-sanitized-watchdog-N-recovery/1",
+  "product_revision": "9312854d0f67e2db9c6c5dffc7c467955970b816",
+  "qemu_sha256": "7d6b9266182581ec95ad5dae1de0b46c7d07d80d3744d982982727e1f90ee975",
+  "flags": {
+    "KF3_GFX_POOL_PROBE": "1",
+    "KF3_TIMER_MAP": "1",
+    "KF3_TSPACE": "1",
+    "KF3_SW_RUNLIST_PROBE": "1",
+    "KF3_MEMORY_LIST_PROBE": "1",
+    "KF3_DISPLAY_TMO_CONSTRUCTOR_PROBE": "1",
+    "KF3_DISPLAY_ILUT_CONSTRUCTOR_PROBE": "1",
+    "KF3_DISPLAY_TMO_SURFACE_CONSTRUCTOR_PROBE": "1"
+  },
+  "recovery": {
+    "schema": "kayfabe-private-watchdog-recovery/1",
+    "run": 9,
+    "filename": "WATCHDOG-20261005-1424.dmp",
+    "bytes": 343710,
+    "sha256": "4daf4bebe29c6fcf657e0b62cb8816b101fdfabded5ab75f6e3136fee13c7e23",
+    "dump_mtime_utc": "2026-10-05T14:24:28.448735+00:00",
+    "experiment_start_utc": "2026-10-05T14:24:05.406308+00:00",
+    "disk_access": "read-only NBD and NTFS; supervisor stopped",
+    "baseline_sha256": "9ff194d31f0a871757fd436f14ab0da2e1e8a6360dc36bb925c12af12a64f85c",
+    "windows_offset": 332398592,
+    "cleanup_verified": true
+  },
+  "kd_executed": false,
+  "controller_complete": true,
+  "supervisor_result": "success",
+  "supervisor_exit_code": 0,
+  "clean_guest_shutdown": "verified by parent controller owner; no in-guest KD execution",
+  "windows_version": "10.0.26100",
+  "driver_sha256": "31c79cce80b573e21647ace8d1a2b65697f992e7f86196f89e30af477b1bd47c",
+  "nvidia_pnp_code": 43,
+  "nvidia_smi_exit_code": 9,
+  "source_receipts_sha256": {
+    "watchdog-offline/receipt.json": "dcf760889f9bd40392b7943c4418314ef7fff5d8e036235492dad1c4d4c69769",
+    "command.json": "9f5d0c651666627885e5ea831432448e603659454df5808af4b1ddec5f417f5b",
+    "status.json": "438fbc1b61f0db24515292e0cfbca965c25f5b08daf7f9d366c4f25663925b10",
+    "complete.json": "d9a2ab356debc935a9efaeefb7a8053a0df92001ffe0f90127d194d54e4d3563",
+    "unit-result.txt": "2e53c1060c795356d29fa8abee67dad2afd83357dbe4f719dc4ad7b0150f690c",
+    "host-health.txt": "d03530293e87de2afe9deb904ac41bd07cc35ee103b685917816128a738f58e2"
+  }
+}

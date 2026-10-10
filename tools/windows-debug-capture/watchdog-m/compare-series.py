@@ -11,9 +11,8 @@ import importlib.util
 import json
 from pathlib import Path
 import re
-import struct
 
-RAW_SHA='10e794b09ea0def90482033cffb8d2688c0b251d0482055c86336ae7ba06381f'
+RAW_SHA='e8a0a593326291761044b3f974417fdd6aee8638a7ec7cbb9f5f616963ff8d2f'
 
 def load(path,name,sha):
     with path.open('rb') as f:data=f.read(1024*1024+1)
@@ -68,8 +67,7 @@ def main():
             nvcd=journal['nvcd'],assertion_count=len(records),
             module_record_file_offset=hex(entry[2]),module_name_file_offset=hex(entry[3]),
             pe_identity={k:hex(v) for k,v in pe.items()},
-            bugcheck_code=hex(struct.unpack_from('<I',data,56)[0]),
-            bugcheck_parameters_1_to_3=[hex(x) for x in struct.unpack_from('<3Q',data,64)]))
+            **raw.bugcheck_profile(data)))
     comparisons=[]
     for i in range(1,len(cases)):
         comparisons.append(dict(previous=cases[i-1]['label'],current=cases[i]['label'],**delta(rows[i-1],rows[i])))
@@ -77,6 +75,7 @@ def main():
         reference_label=cases[0]['label'],reference_raw_matches_independent_kd=True,
         cases=summaries,incremental_comparisons=comparisons,
         limits=['Saved complete protobuf records only; inspect each outer NVCD integrity result.',
+                'Only the exact reviewed bugcheck scalar profile is accepted; parameter4 is never exported.',
                 'No live descriptor locals; no assertion-level interpretation as NV_STATUS.',
                 'Labels/revisions supplied by caller; retain separate run metadata.',
                 'Module recognition is a checked580.88 triage profile, not a general Windows ABI.']),indent=2))
