@@ -60,3 +60,27 @@ STATUS: LIVE, 2026-10-10. Progress log; newest HANDOFF at the top when I stop.
   the bars correctly from DWM composition (no overlay), so it did not exercise the YUV kernel.
 * Added a bounded STALL report (91b2890a): an UPDATE parked > 1 s is named once (stage, group, head, acquire and the semaphore value it
   reads), to see which wait the overlay flip is stuck on in the next overlay run.
+
+## Progress 4 (the overlay flip that never completes: root cause and engine fix; measured vs inferred)
+* [measured, ETW of runs 400 and 403] both TDR declarations (flip-queue 547) follow a present whose PLANE 0 completed (505) and whose PLANE 1
+  (the video overlay, window 4) never did; run 403: plane 1 had been flipped to NO surface at presents 5212-5214 and was RE-ENABLED
+  at present 5215 (run 400: the same last-present shape). No render/video packet was open (178 without 180: none), no Xid.
+* [measured, run 403, STALL report 7750480b] chn 5 (window 4) update 0x1000 parked 1016 ms waiting for its interlock group
+  `{chn 1, chn 37}`; chn 37 (window-immediate 4) update 0x2 waiting for `{chn 5}`; chn 1 (window 0) NOT parked at an UPDATE; no acquire.
+  An earlier line: chn 1 and chn 5 both ready and waiting for head 0's vblank.
+* [inferred from those two, consistent with the 21 us between the two 259 events of present 5215] the guest pushes window 0's UPDATE first
+  (it names nothing) and window 4's (names window 0 and its immediate channel) microseconds later. The engine parked window 0's update for
+  the vblank (Stage::Latch); window 4's update then waited for an UPDATE on window 0 that never comes (the driver waits for plane 1's completion
+  before sending more), while window 0 latched alone: plane 0 completed, plane 1 never. nvkms (`nvkms-evo3.c:2829-2905`) confirms the
+  hardware rule that an interlocked UPDATE waits for the named channels' updates and latches with them; a parked update is still PENDING until
+  its latch.
+* Fix 17eb8b2f (`engine.rs` `ready_group`/`group_ready`): a channel parked for its vblank or acquire counts as pending for the closure; an UPDATE
+  naming it joins its latch group (with the channels it latches with). Test
+  `an_update_naming_a_channel_already_parked_for_the_vblank_joins_its_latch`: FAILS on the old code (only window 0 latches at the vblank,
+  window 4 and its immediate channel stay waiting), passes now; the run-293 one-sided tests and the other 118 engine/disp tests pass.
+* Also pushed: an always-on ring of recent interlock events and a STALL report with queue/copy/tick context (bounded, loud, read-only).
+* Hardware validation of 17eb8b2f: run 408 (queued; 20-minute hold).
+* MPO decision (owner question): [measured] nothing in our logs or the open sources names a derived capability the guest reads to turn the overlay
+  off: the guest asks nothing we log for the window assignment; the family row's `windows` count and the caps page's `SYS_CAPB_WINDOW_EXISTS`
+  bits are the real die's (derived); Windows' MPO decision lives in the closed driver. Therefore no knob is proposed: the product answer
+  is the flip-completion fix. `OverlayTestMode=5` stays a guest-side diagnostic (run 404).
