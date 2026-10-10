@@ -409,17 +409,11 @@ fn a_non_tearing_flip_waits_for_vblank_and_its_acquire() {
         "another head's vblank latches nothing"
     );
     let s = e.vblank(0, &mut |a: &Acquire| a.satisfied_by(sem));
-    // the window had no surface before this flip: the notifier is written, the flip EVENT is not
+    // the window had no surface before this flip: the notifier is written, the flip EVENT is not; and
+    // its RELEASE is NOT written now — only when this entry is flipped away (the next latch)
     match s.effects.as_slice() {
         [
             Effect::Latched { window: 0 },
-            Effect::Release {
-                handle: 0xcafe_0b00,
-                offset: 64,
-                value: 0xd00d_d00d,
-                wide: false,
-                ..
-            },
             Effect::Notify {
                 chn: 1,
                 handle: 0xcafe_00f0,
@@ -431,6 +425,31 @@ fn a_non_tearing_flip_waits_for_vblank_and_its_acquire() {
         other => panic!("{other:?}"),
     }
     assert!(s.gets.contains(&(1, 1, w.put())));
+    // the next flip (slot 5, value 0xbeef) flips the first away: ITS release (slot 4, 0xd00dd00d) is written now
+    let w2 = &mut w;
+    w2.m(
+        m(WIN, "SET_SEMAPHORE_CONTROL"),
+        put(0, fl(WIN, "SET_SEMAPHORE_CONTROL_OFFSET"), 5),
+    );
+    w2.m(m(WIN, "SET_SEMAPHORE_RELEASE"), 0xbeef);
+    w2.m(m(WIN, "UPDATE"), 0);
+    let s = e.step(1, &w2.bytes(), w2.put(), &mut all_ok);
+    assert!(s.effects.is_empty(), "parked for vblank: {:?}", s.effects);
+    let s = e.vblank(0, &mut |a: &Acquire| a.satisfied_by(sem));
+    match s.effects.as_slice() {
+        [
+            Effect::Latched { window: 0 },
+            Effect::Release {
+                handle: 0xcafe_0b00,
+                offset: 64,
+                value: 0xd00d_d00d,
+                wide: false,
+                ..
+            },
+            Effect::Notify { chn: 1, .. },
+        ] => {}
+        other => panic!("the outgoing entry's release, not the incoming one's: {other:?}"),
+    }
 }
 
 /// A window on an INACTIVE head (no raster armed) latches at once; so does an immediate flip.
