@@ -1,0 +1,3140 @@
+{
+ "schema": 1,
+ "generator": "gen_apps.py",
+ "prelude": "$ErrorActionPreference = 'Continue'\n. C:\\kf\\kf_apphelpers.ps1\n$K = 'C:\\kfapps'; $CD = '@@CD@@'; $OUT = 'C:\\kf\\out\\@@ID@@'\n$PY = \"$CD\\py\\python.exe\"; $TL = \"$CD\\py\\Lib\\site-packages\\torch\\lib\"\nNew-Item -ItemType Directory -Force -Path $OUT | Out-Null\n$env:CUPY_CACHE_DIR = 'C:\\kf\\cupy_cache'; $env:KF_TORCH_LIB = $TL; $env:CUDA_PATH = \"$CD\\py\\Lib\\site-packages\\torch\"\n$env:KF_CUDA_INCLUDE = \"$K\\cuda_cudart\\include;$K\\cuda_cccl\\include\"\n$PYA = @('-X', 'utf8', '-X', 'pycache_prefix=C:\\kf\\pycache')\n",
+ "apps": [
+  {
+   "id": "atomics_t",
+   "category": "cuda-equiv",
+   "linux": [
+    "simpleAtomicIntrinsics"
+   ],
+   "pkgs": [
+    "python_embed",
+    "pywheels",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 120,
+   "expect_s": 5,
+   "rx": "^WINEQ_DONE atomics",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA|GeForce|RTX",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "low",
+   "why": "CUDA context + a few kernels and small copies: the compute path with no display, no video engine and no long run; Windows user work runs as Passthrough twins whose guest-visible GP_GET lags the host (traces/windows_tdr_hunt: H-D)",
+   "ps": "Invoke-KfExe -Exe $PY -ArgList ($PYA + @('C:\\kf\\py\\kf_runpy.py', 'C:\\kf\\py\\win_cuda_equiv.py', 'atomics'))\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "bandwidthTest_demo",
+   "category": "cuda-demo",
+   "linux": [
+    "bandwidthTest"
+   ],
+   "pkgs": [
+    "cuda_demo_suite",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 120,
+   "expect_s": 15,
+   "rx": "Result = PASS",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA|GeForce|RTX",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "medium",
+   "why": "sustained cuBLAS/cuDNN/cuFFT work, 1-4 GiB allocations, many launches per second: stresses the twin/USERD relay and the completion path for minutes, and the guest TDRs about once a minute today (traces/windows_prod_20261010: 7 resets in ~8 min)",
+   "ps": "$d = \"$K\\cuda_demo\\demo_suite\"\nInvoke-KfExe -Exe \"$d\\bandwidthTest.exe\" -ArgList @('--memory=pinned') -Cwd $d\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "blackscholes_t",
+   "category": "cuda-equiv",
+   "linux": [
+    "BlackScholes",
+    "blackscholes"
+   ],
+   "pkgs": [
+    "python_embed",
+    "pywheels",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 120,
+   "expect_s": 5,
+   "rx": "^WINEQ_DONE blackscholes",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA|GeForce|RTX",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "low",
+   "why": "CUDA context + a few kernels and small copies: the compute path with no display, no video engine and no long run; Windows user work runs as Passthrough twins whose guest-visible GP_GET lags the host (traces/windows_tdr_hunt: H-D)",
+   "ps": "Invoke-KfExe -Exe $PY -ArgList ($PYA + @('C:\\kf\\py\\kf_runpy.py', 'C:\\kf\\py\\win_cuda_equiv.py', 'blackscholes'))\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "blender_cycles",
+   "category": "render",
+   "linux": [
+    "blender_cycles"
+   ],
+   "pkgs": [
+    "blender",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 900,
+   "expect_s": 120,
+   "rx": "BLENDER_OK OPTIX",
+   "fail_rx": "^CHECK .*FAIL|BLENDER_FAIL",
+   "proof": [
+    "out:BLENDER_OK .* gpu=NVIDIA|gpu=NVIDIA",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "high",
+   "why": "Cycles on CUDA then OptiX (RT cores) on a scripted scene; minutes of mixed compute and BVH work; OptiX needs the driver's nvoptix.dll",
+   "ps": "$bl = \"$K\\blender\\blender.exe\"\nforeach ($dev in 'CUDA', 'OPTIX') {\n    Invoke-KfExe -Exe $bl -ArgList @('-b', '--factory-startup', '--python', 'C:\\kf\\py\\blender_render.py', '--', $dev, \"$OUT\\blender_$dev.png\") | Where-Object { $_ -match 'BLENDER_|Error|error|Finished' } | Select-Object -Last 8\n}\nexit 0\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": "the same scripts/apps/src/blender_render.py as the Linux row; CUDA and OPTIX are rendered one after the other",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "cg_t",
+   "category": "cuda-equiv",
+   "linux": [
+    "conjugateGradient"
+   ],
+   "pkgs": [
+    "python_embed",
+    "pywheels",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 120,
+   "expect_s": 5,
+   "rx": "^WINEQ_DONE cg",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA|GeForce|RTX",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "low",
+   "why": "CUDA context + a few kernels and small copies: the compute path with no display, no video engine and no long run; Windows user work runs as Passthrough twins whose guest-visible GP_GET lags the host (traces/windows_tdr_hunt: H-D)",
+   "ps": "Invoke-KfExe -Exe $PY -ArgList ($PYA + @('C:\\kf\\py\\kf_runpy.py', 'C:\\kf\\py\\win_cuda_equiv.py', 'cg'))\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "clpeak_cuda",
+   "category": "opencl",
+   "linux": [],
+   "pkgs": [
+    "clpeak_cuda",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 600,
+   "expect_s": 60,
+   "rx": "Global memory bandwidth",
+   "fail_rx": "^CHECK .*FAIL|Tests skipped|clFinish \\(-",
+   "proof": [
+    "out:NVIDIA",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "high",
+   "why": "runs longer than the ~1 minute TDR cadence recorded today, so a TDR inside the run is likely; the result is only meaningful once the guest survives idle for the whole app",
+   "ps": "Invoke-KfExe -Exe \"$K\\clpeak_cuda\\bin\\clpeak.exe\" -Cwd \"$K\\clpeak_cuda\\bin\"\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": "clpeak 3.0.1's CUDA backend build",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "clpeak_ocl",
+   "category": "opencl",
+   "linux": [
+    "clpeak"
+   ],
+   "pkgs": [
+    "clpeak_ocl",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 600,
+   "expect_s": 60,
+   "rx": "Global memory bandwidth",
+   "fail_rx": "^CHECK .*FAIL|Tests skipped|clFinish \\(-",
+   "proof": [
+    "out:NVIDIA",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "high",
+   "why": "runs longer than the ~1 minute TDR cadence recorded today, so a TDR inside the run is likely; the result is only meaningful once the guest survives idle for the whole app",
+   "ps": "Invoke-KfExe -Exe \"$K\\clpeak_ocl\\bin\\clpeak.exe\" -Cwd \"$K\\clpeak_ocl\\bin\"\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "cup2_ladder",
+   "category": "cuda-ladder",
+   "linux": [
+    "vectorAddDrv"
+   ],
+   "pkgs": [
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 60,
+   "expect_s": 3,
+   "rx": "CE rv=0xabcd1234 want=0xabcd1234 -> PASS",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:name=NVIDIA|name=.*GeForce",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "low",
+   "why": "one copy-engine launch through the driver API (the first rung of the Linux ladder)",
+   "ps": "$t = \"$K\\tools\"\nInvoke-KfExe -Exe \"$t\\cup2.exe\"\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "cup3_ladder",
+   "category": "cuda-ladder",
+   "linux": [],
+   "pkgs": [
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 60,
+   "expect_s": 3,
+   "rx": "KERNEL rv=43 want=43 -> PASS",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:name=NVIDIA|name=.*GeForce|PTX_TARGET",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "low",
+   "why": "one compute kernel (PTX JIT, sm rewrite) through the driver API",
+   "ps": "$t = \"$K\\tools\"\nInvoke-KfExe -Exe \"$t\\cup3.exe\"\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "cup8_ladder",
+   "category": "cuda-ladder",
+   "linux": [
+    "matrixMulDrv"
+   ],
+   "pkgs": [
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 180,
+   "expect_s": 10,
+   "rx": "CUP8 RESULT N=\\d+ bad=0 maxerr=0 ",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "pdh:Cuda|Compute|3D|Copy",
+    "smi"
+   ],
+   "difficulty": "medium",
+   "why": "a 2048x2048 fp32 matmul through the driver API, byte-exact against the host",
+   "ps": "$t = \"$K\\tools\"\nInvoke-KfExe -Exe \"$t\\cup8.exe\"\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "cupy_asynccopy",
+   "category": "cuda-equiv",
+   "linux": [
+    "globalToShmemAsyncCopy"
+   ],
+   "pkgs": [
+    "python_embed",
+    "pywheels",
+    "vc_redist",
+    "cuda_cudart",
+    "cuda_cccl"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 180,
+   "expect_s": 10,
+   "rx": "^NVRTC_DONE asynccopy",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA|GeForce|RTX",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "low",
+   "why": "CUDA context + a few kernels and small copies: the compute path with no display, no video engine and no long run; Windows user work runs as Passthrough twins whose guest-visible GP_GET lags the host (traces/windows_tdr_hunt: H-D)",
+   "ps": "Invoke-KfExe -Exe $PY -ArgList ($PYA + @('C:\\kf\\py\\kf_runpy.py', 'C:\\kf\\py\\cupy_nvrtc.py', 'asynccopy'))\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": "NVRTC through CuPy: no nvcc/MSVC in the guest",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "cupy_cg",
+   "category": "cuda-equiv",
+   "linux": [
+    "simpleCooperativeGroups"
+   ],
+   "pkgs": [
+    "python_embed",
+    "pywheels",
+    "vc_redist",
+    "cuda_cudart",
+    "cuda_cccl"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 180,
+   "expect_s": 10,
+   "rx": "^NVRTC_DONE cg",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA|GeForce|RTX",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "low",
+   "why": "CUDA context + a few kernels and small copies: the compute path with no display, no video engine and no long run; Windows user work runs as Passthrough twins whose guest-visible GP_GET lags the host (traces/windows_tdr_hunt: H-D)",
+   "ps": "Invoke-KfExe -Exe $PY -ArgList ($PYA + @('C:\\kf\\py\\kf_runpy.py', 'C:\\kf\\py\\cupy_nvrtc.py', 'cg'))\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": "NVRTC through CuPy: no nvcc/MSVC in the guest",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "cupy_check",
+   "category": "torch",
+   "linux": [
+    "cupy"
+   ],
+   "pkgs": [
+    "python_embed",
+    "pywheels",
+    "vc_redist",
+    "cuda_cudart"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 300,
+   "expect_s": 30,
+   "rx": "CUPY_DONE",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "medium",
+   "why": "sustained cuBLAS/cuDNN/cuFFT work, 1-4 GiB allocations, many launches per second: stresses the twin/USERD relay and the completion path for minutes, and the guest TDRs about once a minute today (traces/windows_prod_20261010: 7 resets in ~8 min)",
+   "ps": "Invoke-KfExe -Exe $PY -ArgList ($PYA + @('C:\\kf\\py\\kf_runpy.py', 'C:\\kf\\py\\cupy_check.py'))\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": "unmodified scripts/apps/src/cupy_check.py via kf_runpy.py (torch imported first so CuPy finds the CUDA DLLs)",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "cupy_sha256",
+   "category": "cuda-equiv",
+   "linux": [
+    "sha256"
+   ],
+   "pkgs": [
+    "python_embed",
+    "pywheels",
+    "vc_redist",
+    "cuda_cudart",
+    "cuda_cccl"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 180,
+   "expect_s": 10,
+   "rx": "^NVRTC_DONE sha256",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA|GeForce|RTX",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "low",
+   "why": "CUDA context + a few kernels and small copies: the compute path with no display, no video engine and no long run; Windows user work runs as Passthrough twins whose guest-visible GP_GET lags the host (traces/windows_tdr_hunt: H-D)",
+   "ps": "Invoke-KfExe -Exe $PY -ArgList ($PYA + @('C:\\kf\\py\\kf_runpy.py', 'C:\\kf\\py\\cupy_nvrtc.py', 'sha256'))\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": "NVRTC through CuPy: no nvcc/MSVC in the guest",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "d3d11va_h264",
+   "category": "video",
+   "linux": [],
+   "pkgs": [
+    "ffmpeg",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 180,
+   "expect_s": 20,
+   "rx": "frame= *600 ",
+   "fail_rx": "^CHECK .*FAIL|Failed setup for format|DECODE_PREP_FAIL|hwaccel initialisation returned error",
+   "proof": [
+    "pdh:VideoDecode",
+    "smi"
+   ],
+   "difficulty": "high",
+   "why": "needs the NVENC/NVDEC/DXVA engines through Windows' video-engine nodes (a separate scheduler node from 3D/compute); no Windows run of these engines exists yet, only the Linux ones",
+   "ps": "$ff = \"$K\\ffmpeg\\bin\\ffmpeg.exe\"; $fp = \"$K\\ffmpeg\\bin\\ffprobe.exe\"\nInvoke-KfExe -Exe $ff -ArgList @('-y', '-hide_banner', '-nostats', '-f', 'lavfi', '-i', 'testsrc=size=1280x720:rate=30:duration=20', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', \"$OUT\\x264.mp4\")\nif ($global:KfRc -ne 0) { 'DECODE_PREP_FAIL libx264 encode'; exit 1 }\nInvoke-KfExe -Exe $ff -ArgList @('-hide_banner', '-nostats', '-progress', \"$OUT\\prog.txt\", '-hwaccel', 'd3d11va', '-hwaccel_output_format', 'd3d11', '-i', \"$OUT\\x264.mp4\", '-f', 'null', '-')\n$rc = $global:KfRc\n$log = (Get-Content \"$OUT\\prog.txt\" -ErrorAction SilentlyContinue | Where-Object { $_ -match '^frame=' } | Select-Object -Last 1)\n\"frame= $($log -replace 'frame=', '') \"\nexit $rc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": "the DXVA2/D3D11 video-decode API path (what Edge, Media Foundation and VLC use); the Linux matrix has no counterpart",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "d3d12_signal_probe",
+   "category": "d3d",
+   "linux": [],
+   "pkgs": [
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 180,
+   "expect_s": 10,
+   "rx": "COPY Signal\\(3\\) hr 0x00000000 wait SIGNALED",
+   "fail_rx": "TIMEOUT|no NVIDIA adapter|PROBE exception",
+   "proof": [
+    "out:vendor 0x10de",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "medium",
+   "why": "the smallest D3D12 GPU work (fence Signal on DIRECT and COPY queues, 20 s wait each); already used on earlier Windows runs (scripts/bench/windows/d3d12_signal_probe.ps1) where Passthrough completion interrupts were the wall",
+   "ps": "& powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\\kf\\d3d12_signal_probe.ps1 2>&1 | ForEach-Object { \"$_\" }\nexit 0\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "deviceQuery_demo",
+   "category": "cuda-demo",
+   "linux": [
+    "deviceQuery"
+   ],
+   "pkgs": [
+    "cuda_demo_suite",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 60,
+   "expect_s": 3,
+   "rx": "Result = PASS",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA|GeForce|RTX"
+   ],
+   "difficulty": "low",
+   "why": "CUDA context + a few kernels and small copies: the compute path with no display, no video engine and no long run; Windows user work runs as Passthrough twins whose guest-visible GP_GET lags the host (traces/windows_tdr_hunt: H-D)",
+   "ps": "$d = \"$K\\cuda_demo\\demo_suite\"\nInvoke-KfExe -Exe \"$d\\deviceQuery.exe\" -Cwd $d\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "driver_status",
+   "category": "probe",
+   "linux": [],
+   "pkgs": [],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 60,
+   "expect_s": 2,
+   "rx": "^DRIVER_OK",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:name=NVIDIA"
+   ],
+   "difficulty": "low",
+   "why": "device-manager state only; the Code 43 wall of the earlier runs would show here",
+   "ps": "$v = Get-CimInstance Win32_VideoController | Where-Object { $_.Name -match 'NVIDIA' }\nforeach ($x in $v) { \"VIDEO name=$($x.Name) driver=$($x.DriverVersion) status=$($x.Status) code=$($x.ConfigManagerErrorCode)\" }\nif (@($v | Where-Object { $_.ConfigManagerErrorCode -eq 0 }).Count -ge 1) { 'DRIVER_OK'; exit 0 } else { 'DRIVER_FAIL (Code 43 or missing)'; exit 1 }\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": false,
+   "nvidia_only": true
+  },
+  {
+   "id": "dxdiag_report",
+   "category": "probe",
+   "linux": [],
+   "pkgs": [],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 180,
+   "expect_s": 25,
+   "rx": "^DXDIAG_OK",
+   "fail_rx": "Card name: .*Microsoft Basic Render",
+   "proof": [
+    "out:Card name: .*NVIDIA"
+   ],
+   "difficulty": "medium",
+   "why": "dxdiag instantiates D3D9/10/11/12 devices to fill its report; any of them failing shows as missing feature levels",
+   "ps": "$f = \"$OUT\\dxdiag.txt\"\nStart-Process dxdiag.exe -ArgumentList @('/whql:off', '/t', $f) -Wait -NoNewWindow\nfor ($i = 0; $i -lt 60 -and -not (Test-Path $f); $i++) { Start-Sleep -Seconds 1 }\nStart-Sleep -Seconds 3\nif (Test-Path $f) {\n    Get-Content $f | Select-String -Pattern 'Card name|Chip type|Driver Version|DDI Version|Feature Levels|Display Memory|Driver Model|Basic Render' | ForEach-Object { \"DXDIAG $($_.Line.Trim())\" }\n    if ((Get-Content $f -Raw) -match 'Card name: .*NVIDIA') { 'DXDIAG_OK'; exit 0 }\n}\n'DXDIAG_FAIL'; exit 1\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": false,
+   "nvidia_only": true
+  },
+  {
+   "id": "dxgi_adapters",
+   "category": "probe",
+   "linux": [],
+   "pkgs": [],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 60,
+   "expect_s": 2,
+   "rx": "^DXGI_OK",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:vendor=4318"
+   ],
+   "difficulty": "low",
+   "why": "DXGI adapter enumeration only (no GPU work); fails if the NVIDIA device is in Code 43 or absent",
+   "ps": "$a = Get-Content C:\\kf\\adapters.json -Raw | ConvertFrom-Json\nforeach ($x in $a.adapters) { \"ADAPTER index=$($x.index) vendor=$($x.vendor) name=$($x.name) luid=$($x.luid_high)_$($x.luid_low) dedicated_mb=$($x.dedicated_mb) software=$((($x.flags -band 2) -ne 0))\" }\nif (@($a.adapters | Where-Object { $_.vendor -eq 4318 -and (($_.flags -band 2) -eq 0) }).Count -ge 1) { 'DXGI_OK NVIDIA hardware adapter present'; exit 0 } else { 'DXGI_FAIL no NVIDIA hardware adapter'; exit 1 }\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": false,
+   "nvidia_only": true
+  },
+  {
+   "id": "dxprobe_d3d11",
+   "category": "d3d",
+   "linux": [],
+   "pkgs": [
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 120,
+   "expect_s": 8,
+   "rx": "^KFDX RESULT OK",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:KFDX selected \"NVIDIA",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "high",
+   "why": "D3D11 device on the NVIDIA adapter, a compute dispatch and a draw read back through a staging resource; WARP excluded by construction",
+   "ps": "$dx = \"$K\\tools\\kf_dxprobe.exe\"\nInvoke-KfExe -Exe $dx -ArgList @('d3d11', '--iters', '200')\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "dxprobe_d3d12",
+   "category": "d3d",
+   "linux": [],
+   "pkgs": [
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 120,
+   "expect_s": 8,
+   "rx": "^KFDX RESULT OK",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:KFDX selected \"NVIDIA",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "high",
+   "why": "D3D12 device, DIRECT+COPY queue fences, a compute PSO with a root UAV and a readback: kernel-mode WDDM2 device creation was the wall of runs 53-72",
+   "ps": "$dx = \"$K\\tools\\kf_dxprobe.exe\"\nInvoke-KfExe -Exe $dx -ArgList @('d3d12', '--iters', '200')\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "dxva2_h264",
+   "category": "video",
+   "linux": [],
+   "pkgs": [
+    "ffmpeg",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 2,
+   "timeout_s": 180,
+   "expect_s": 20,
+   "rx": "frame= *600 ",
+   "fail_rx": "^CHECK .*FAIL|Failed setup for format|DECODE_PREP_FAIL|hwaccel initialisation returned error",
+   "proof": [
+    "pdh:VideoDecode",
+    "smi"
+   ],
+   "difficulty": "high",
+   "why": "needs the NVENC/NVDEC/DXVA engines through Windows' video-engine nodes (a separate scheduler node from 3D/compute); no Windows run of these engines exists yet, only the Linux ones",
+   "ps": "$ff = \"$K\\ffmpeg\\bin\\ffmpeg.exe\"; $fp = \"$K\\ffmpeg\\bin\\ffprobe.exe\"\nInvoke-KfExe -Exe $ff -ArgList @('-y', '-hide_banner', '-nostats', '-f', 'lavfi', '-i', 'testsrc=size=1280x720:rate=30:duration=20', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', \"$OUT\\x264.mp4\")\nif ($global:KfRc -ne 0) { 'DECODE_PREP_FAIL libx264 encode'; exit 1 }\nInvoke-KfExe -Exe $ff -ArgList @('-hide_banner', '-nostats', '-progress', \"$OUT\\prog.txt\", '-hwaccel', 'dxva2', '-i', \"$OUT\\x264.mp4\", '-f', 'null', '-')\n$rc = $global:KfRc\n$log = (Get-Content \"$OUT\\prog.txt\" -ErrorAction SilentlyContinue | Where-Object { $_ -match '^frame=' } | Select-Object -Last 1)\n\"frame= $($log -replace 'frame=', '') \"\nexit $rc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "edge_video_h264",
+   "category": "video",
+   "linux": [],
+   "pkgs": [
+    "ffmpeg",
+    "vc_redist"
+   ],
+   "session": "interactive",
+   "tier": 1,
+   "timeout_s": 180,
+   "expect_s": 45,
+   "rx": "^KFEDGE \\{.*\"ok\":true",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "pdh:VideoDecode"
+   ],
+   "difficulty": "high",
+   "why": "needs the NVENC/NVDEC/DXVA engines through Windows' video-engine nodes (a separate scheduler node from 3D/compute); no Windows run of these engines exists yet, only the Linux ones",
+   "ps": "& C:\\kf\\kf_edge.ps1 -Id @@ID@@ -Page video -Seconds 15 -Codec h264 2>&1 | ForEach-Object { \"$_\" }\nexit $LASTEXITCODE\n",
+   "kill_names": [],
+   "screenshot_s": 8,
+   "note": "the owner's own Edge + YouTube Shorts scenario without the internet: a generated 720p H.264 clip played by <video>; HW decode proof = VideoDecode engine activity",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "edge_video_vp9",
+   "category": "video",
+   "linux": [],
+   "pkgs": [
+    "ffmpeg",
+    "vc_redist"
+   ],
+   "session": "interactive",
+   "tier": 2,
+   "timeout_s": 180,
+   "expect_s": 45,
+   "rx": "^KFEDGE \\{.*\"ok\":true",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "pdh:VideoDecode"
+   ],
+   "difficulty": "high",
+   "why": "needs the NVENC/NVDEC/DXVA engines through Windows' video-engine nodes (a separate scheduler node from 3D/compute); no Windows run of these engines exists yet, only the Linux ones",
+   "ps": "& C:\\kf\\kf_edge.ps1 -Id @@ID@@ -Page video -Seconds 15 -Codec vp9 2>&1 | ForEach-Object { \"$_\" }\nexit $LASTEXITCODE\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": "VP9 decode through DXVA (Edge)",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "edge_webgl",
+   "category": "browser",
+   "linux": [],
+   "pkgs": [],
+   "session": "interactive",
+   "tier": 1,
+   "timeout_s": 150,
+   "expect_s": 30,
+   "rx": "^KFEDGE \\{.*\"ok\":true",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:\"renderer\":\"[^\"]*NVIDIA",
+    "pdh:3D|Compute|Copy"
+   ],
+   "difficulty": "high",
+   "why": "needs a 3D/graphics channel, the display flip/VSync path and DWM composition on kf3's display; the first TDR coincides with the first new GPU client after sign-in (DWM, Edge, Shorts) in every recorded run, so any windowed app is exposed to it",
+   "ps": "& C:\\kf\\kf_edge.ps1 -Id @@ID@@ -Page webgl -Seconds 12 2>&1 | ForEach-Object { \"$_\" }\nexit $LASTEXITCODE\n",
+   "kill_names": [],
+   "screenshot_s": 8,
+   "note": "Edge (inbox) WebGL2 through ANGLE/D3D11; the page reports the unmasked renderer and read-back; replaces nothing on Linux",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "edge_webgl_headless",
+   "category": "browser",
+   "linux": [],
+   "pkgs": [],
+   "session": "interactive",
+   "tier": 1,
+   "timeout_s": 150,
+   "expect_s": 30,
+   "rx": "^KFEDGE \\{.*\"ok\":true",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:\"renderer\":\"[^\"]*NVIDIA",
+    "pdh:3D|Compute|Copy"
+   ],
+   "difficulty": "medium",
+   "why": "no window or display path: only the GPU process's D3D11 device (ANGLE)",
+   "ps": "& C:\\kf\\kf_edge.ps1 -Id @@ID@@ -Page webgl -Seconds 8 -Headless 1 2>&1 | ForEach-Object { \"$_\" }\nexit $LASTEXITCODE\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "edge_webgpu",
+   "category": "browser",
+   "linux": [],
+   "pkgs": [],
+   "session": "interactive",
+   "tier": 1,
+   "timeout_s": 150,
+   "expect_s": 30,
+   "rx": "^KFEDGE \\{.*\"ok\":true",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:\"vendor\":\"nvidia\"",
+    "pdh:Compute|3D|Copy"
+   ],
+   "difficulty": "high",
+   "why": "needs a 3D/graphics channel, the display flip/VSync path and DWM composition on kf3's display; the first TDR coincides with the first new GPU client after sign-in (DWM, Edge, Shorts) in every recorded run, so any windowed app is exposed to it",
+   "ps": "& C:\\kf\\kf_edge.ps1 -Id @@ID@@ -Page webgpu -Seconds 12 2>&1 | ForEach-Object { \"$_\" }\nexit $LASTEXITCODE\n",
+   "kill_names": [],
+   "screenshot_s": 8,
+   "note": "WebGPU on the D3D12 backend: compute pipeline + render pass each frame; mapAsync read-back",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "fft_t",
+   "category": "cuda-equiv",
+   "linux": [
+    "simpleCUFFT",
+    "fft_cufft"
+   ],
+   "pkgs": [
+    "python_embed",
+    "pywheels",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 120,
+   "expect_s": 5,
+   "rx": "^WINEQ_DONE fft",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA|GeForce|RTX",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "low",
+   "why": "CUDA context + a few kernels and small copies: the compute path with no display, no video engine and no long run; Windows user work runs as Passthrough twins whose guest-visible GP_GET lags the host (traces/windows_tdr_hunt: H-D)",
+   "ps": "Invoke-KfExe -Exe $PY -ArgList ($PYA + @('C:\\kf\\py\\kf_runpy.py', 'C:\\kf\\py\\win_cuda_equiv.py', 'fft'))\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "furmark_gl_bench",
+   "category": "opengl",
+   "linux": [],
+   "pkgs": [
+    "furmark2",
+    "vc_redist"
+   ],
+   "session": "interactive",
+   "tier": 1,
+   "timeout_s": 135,
+   "expect_s": 25,
+   "rx": "KFWAIT furmark_gl_bench EXITED rc=0",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "high",
+   "why": "needs a 3D/graphics channel, the display flip/VSync path and DWM composition on kf3's display; the first TDR coincides with the first new GPU client after sign-in (DWM, Edge, Shorts) in every recorded run, so any windowed app is exposed to it",
+   "ps": "$fm = \"$K\\furmark2\"\nRemove-Item \"$fm\\_scores.csv\" -ErrorAction SilentlyContinue\nInvoke-KfWait -Exe \"$fm\\furmark.exe\" -ArgList @('--demo', 'furmark-gl', '--width', '1280', '--height', '720', '--max-time', '15', '--no-score-box', '--benchmark') -Cwd $fm -TimeoutS 105 -Tag furmark_gl_bench\n$rc = $global:KfRc\nif (Test-Path \"$fm\\_scores.csv\") { Get-Content \"$fm\\_scores.csv\" | Select-Object -Last 3 | ForEach-Object { \"FM_SCORE $_\" } }\nGet-ChildItem $fm -Filter '*.log' -ErrorAction SilentlyContinue | Select-Object -First 1 | ForEach-Object { Get-Content $_.FullName | Select-String 'GL_RENDERER|Renderer|NVIDIA' | Select-Object -First 5 | ForEach-Object { \"FM_LOG $_\" } }\nexit $rc\n",
+   "kill_names": [],
+   "screenshot_s": 8,
+   "note": "FurMark 2.10.2 command line from its help text",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "furmark_gl_stress",
+   "category": "stress",
+   "linux": [
+    "gpu_burn"
+   ],
+   "pkgs": [
+    "furmark2",
+    "vc_redist"
+   ],
+   "session": "interactive",
+   "tier": 2,
+   "timeout_s": 180,
+   "expect_s": 70,
+   "rx": "KFWAIT furmark_gl_stress EXITED rc=0",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "high",
+   "why": "runs longer than the ~1 minute TDR cadence recorded today, so a TDR inside the run is likely; the result is only meaningful once the guest survives idle for the whole app",
+   "ps": "$fm = \"$K\\furmark2\"\nRemove-Item \"$fm\\_scores.csv\" -ErrorAction SilentlyContinue\nInvoke-KfWait -Exe \"$fm\\furmark.exe\" -ArgList @('--demo', 'furmark-gl', '--width', '1280', '--height', '720', '--max-time', '60', '--no-score-box') -Cwd $fm -TimeoutS 150 -Tag furmark_gl_stress\n$rc = $global:KfRc\nif (Test-Path \"$fm\\_scores.csv\") { Get-Content \"$fm\\_scores.csv\" | Select-Object -Last 3 | ForEach-Object { \"FM_SCORE $_\" } }\nGet-ChildItem $fm -Filter '*.log' -ErrorAction SilentlyContinue | Select-Object -First 1 | ForEach-Object { Get-Content $_.FullName | Select-String 'GL_RENDERER|Renderer|NVIDIA' | Select-Object -First 5 | ForEach-Object { \"FM_LOG $_\" } }\nexit $rc\n",
+   "kill_names": [],
+   "screenshot_s": 8,
+   "note": "FurMark 2.10.2 command line from its help (--demo/--benchmark/--max-time/--no-score-box); the stress variant is the closest free counterpart of gpu_burn's heat, not of its correctness check",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "furmark_glinfo",
+   "category": "opengl",
+   "linux": [],
+   "pkgs": [
+    "furmark2",
+    "vc_redist"
+   ],
+   "session": "interactive",
+   "tier": 1,
+   "timeout_s": 90,
+   "expect_s": 8,
+   "rx": "NVIDIA",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA"
+   ],
+   "difficulty": "medium",
+   "why": "creates a GL/Vulkan context on the NVIDIA device and prints driver strings; no sustained rendering",
+   "ps": "$fm = \"$K\\furmark2\"\nInvoke-KfExe -Exe \"$fm\\furmark.exe\" -ArgList @('--glrenderer') -Cwd $fm\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": false,
+   "nvidia_only": true
+  },
+  {
+   "id": "furmark_knot_gl",
+   "category": "opengl",
+   "linux": [],
+   "pkgs": [
+    "furmark2",
+    "vc_redist"
+   ],
+   "session": "interactive",
+   "tier": 1,
+   "timeout_s": 135,
+   "expect_s": 25,
+   "rx": "KFWAIT furmark_knot_gl EXITED rc=0",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "high",
+   "why": "needs a 3D/graphics channel, the display flip/VSync path and DWM composition on kf3's display; the first TDR coincides with the first new GPU client after sign-in (DWM, Edge, Shorts) in every recorded run, so any windowed app is exposed to it",
+   "ps": "$fm = \"$K\\furmark2\"\nRemove-Item \"$fm\\_scores.csv\" -ErrorAction SilentlyContinue\nInvoke-KfWait -Exe \"$fm\\furmark.exe\" -ArgList @('--demo', 'furmark-knot-gl', '--width', '1280', '--height', '720', '--max-time', '15', '--no-score-box', '--benchmark') -Cwd $fm -TimeoutS 105 -Tag furmark_knot_gl\n$rc = $global:KfRc\nif (Test-Path \"$fm\\_scores.csv\") { Get-Content \"$fm\\_scores.csv\" | Select-Object -Last 3 | ForEach-Object { \"FM_SCORE $_\" } }\nGet-ChildItem $fm -Filter '*.log' -ErrorAction SilentlyContinue | Select-Object -First 1 | ForEach-Object { Get-Content $_.FullName | Select-String 'GL_RENDERER|Renderer|NVIDIA' | Select-Object -First 5 | ForEach-Object { \"FM_LOG $_\" } }\nexit $rc\n",
+   "kill_names": [],
+   "screenshot_s": 8,
+   "note": "FurMark 2.10.2 command line from its help text",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "furmark_vk_bench",
+   "category": "vulkan",
+   "linux": [],
+   "pkgs": [
+    "furmark2",
+    "vc_redist"
+   ],
+   "session": "interactive",
+   "tier": 1,
+   "timeout_s": 135,
+   "expect_s": 25,
+   "rx": "KFWAIT furmark_vk_bench EXITED rc=0",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "high",
+   "why": "needs a 3D/graphics channel, the display flip/VSync path and DWM composition on kf3's display; the first TDR coincides with the first new GPU client after sign-in (DWM, Edge, Shorts) in every recorded run, so any windowed app is exposed to it",
+   "ps": "$fm = \"$K\\furmark2\"\nRemove-Item \"$fm\\_scores.csv\" -ErrorAction SilentlyContinue\nInvoke-KfWait -Exe \"$fm\\furmark.exe\" -ArgList @('--demo', 'furmark-vk', '--width', '1280', '--height', '720', '--max-time', '15', '--no-score-box', '--benchmark') -Cwd $fm -TimeoutS 105 -Tag furmark_vk_bench\n$rc = $global:KfRc\nif (Test-Path \"$fm\\_scores.csv\") { Get-Content \"$fm\\_scores.csv\" | Select-Object -Last 3 | ForEach-Object { \"FM_SCORE $_\" } }\nGet-ChildItem $fm -Filter '*.log' -ErrorAction SilentlyContinue | Select-Object -First 1 | ForEach-Object { Get-Content $_.FullName | Select-String 'GL_RENDERER|Renderer|NVIDIA' | Select-Object -First 5 | ForEach-Object { \"FM_LOG $_\" } }\nexit $rc\n",
+   "kill_names": [],
+   "screenshot_s": 8,
+   "note": "FurMark 2.10.2 command line from its help text",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "furmark_vkinfo",
+   "category": "vulkan",
+   "linux": [],
+   "pkgs": [
+    "furmark2",
+    "vc_redist"
+   ],
+   "session": "interactive",
+   "tier": 1,
+   "timeout_s": 90,
+   "expect_s": 8,
+   "rx": "NVIDIA",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA"
+   ],
+   "difficulty": "medium",
+   "why": "creates a GL/Vulkan context on the NVIDIA device and prints driver strings; no sustained rendering",
+   "ps": "$fm = \"$K\\furmark2\"\nInvoke-KfExe -Exe \"$fm\\furmark.exe\" -ArgList @('--vkinfo') -Cwd $fm\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": false,
+   "nvidia_only": true
+  },
+  {
+   "id": "fwt_t",
+   "category": "cuda-equiv",
+   "linux": [
+    "fastWalshTransform"
+   ],
+   "pkgs": [
+    "python_embed",
+    "pywheels",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 120,
+   "expect_s": 5,
+   "rx": "^WINEQ_DONE fwt",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA|GeForce|RTX",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "low",
+   "why": "CUDA context + a few kernels and small copies: the compute path with no display, no video engine and no long run; Windows user work runs as Passthrough twins whose guest-visible GP_GET lags the host (traces/windows_tdr_hunt: H-D)",
+   "ps": "Invoke-KfExe -Exe $PY -ArgList ($PYA + @('C:\\kf\\py\\kf_runpy.py', 'C:\\kf\\py\\win_cuda_equiv.py', 'fwt'))\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "glgears_wgl",
+   "category": "opengl",
+   "linux": [
+    "egl_offscreen"
+   ],
+   "pkgs": [
+    "vc_redist"
+   ],
+   "session": "interactive",
+   "tier": 1,
+   "timeout_s": 90,
+   "expect_s": 15,
+   "rx": "^KFGL RESULT OK",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:renderer .*NVIDIA",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "high",
+   "why": "needs a 3D/graphics channel, the display flip/VSync path and DWM composition on kf3's display; the first TDR coincides with the first new GPU client after sign-in (DWM, Edge, Shorts) in every recorded run, so any windowed app is exposed to it",
+   "ps": "Invoke-KfExe -Exe \"$K\\tools\\kf_glgears.exe\" -ArgList @('--seconds', '10')\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": 5,
+   "note": "WGL window, colour read-back, gears; replaces the Linux EGL device-platform probe (EGL surfaceless is Linux-only)",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "gputest_fur",
+   "category": "opengl",
+   "linux": [],
+   "pkgs": [
+    "gputest",
+    "vc_redist"
+   ],
+   "session": "interactive",
+   "tier": 1,
+   "timeout_s": 100,
+   "expect_s": 25,
+   "rx": "GPUTEST .*Renderer model: .*NVIDIA",
+   "fail_rx": "^CHECK .*FAIL|GPUTEST .*[Ee]rror: ",
+   "proof": [
+    "out:Renderer model: .*NVIDIA",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "high",
+   "why": "needs a 3D/graphics channel, the display flip/VSync path and DWM composition on kf3's display; the first TDR coincides with the first new GPU client after sign-in (DWM, Edge, Shorts) in every recorded run, so any windowed app is exposed to it",
+   "ps": "$gt = \"$K\\gputest\"\nRemove-Item \"$gt\\_geeks3d_gputest_log.txt\" -ErrorAction SilentlyContinue\nInvoke-KfWait -Exe \"$gt\\GpuTest.exe\" -ArgList @('/test=fur', '/width=1280', '/height=720', '/benchmark', '/benchmark_duration_ms=10000', '/no_scorebox') -Cwd $gt -TimeoutS 70 -Tag gputest_fur\n$rc = $global:KfRc\nGet-Content \"$gt\\_geeks3d_gputest_log.txt\" -ErrorAction SilentlyContinue | Select-String -Pattern 'Renderer model|enchmark|score|Score|error|Error' | ForEach-Object { \"GPUTEST $_\" }\nexit $rc\n",
+   "kill_names": [],
+   "screenshot_s": 5,
+   "note": "Geeks3D GpuTest 0.7.0 (2014, OpenGL 2.1-4.x); /benchmark with a fixed duration and no score box",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "gputest_gi",
+   "category": "opengl",
+   "linux": [],
+   "pkgs": [
+    "gputest",
+    "vc_redist"
+   ],
+   "session": "interactive",
+   "tier": 2,
+   "timeout_s": 100,
+   "expect_s": 25,
+   "rx": "GPUTEST .*Renderer model: .*NVIDIA",
+   "fail_rx": "^CHECK .*FAIL|GPUTEST .*[Ee]rror: ",
+   "proof": [
+    "out:Renderer model: .*NVIDIA",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "high",
+   "why": "needs a 3D/graphics channel, the display flip/VSync path and DWM composition on kf3's display; the first TDR coincides with the first new GPU client after sign-in (DWM, Edge, Shorts) in every recorded run, so any windowed app is exposed to it",
+   "ps": "$gt = \"$K\\gputest\"\nRemove-Item \"$gt\\_geeks3d_gputest_log.txt\" -ErrorAction SilentlyContinue\nInvoke-KfWait -Exe \"$gt\\GpuTest.exe\" -ArgList @('/test=gi', '/width=1280', '/height=720', '/benchmark', '/benchmark_duration_ms=10000', '/no_scorebox') -Cwd $gt -TimeoutS 70 -Tag gputest_gi\n$rc = $global:KfRc\nGet-Content \"$gt\\_geeks3d_gputest_log.txt\" -ErrorAction SilentlyContinue | Select-String -Pattern 'Renderer model|enchmark|score|Score|error|Error' | ForEach-Object { \"GPUTEST $_\" }\nexit $rc\n",
+   "kill_names": [],
+   "screenshot_s": 5,
+   "note": "Geeks3D GpuTest 0.7.0 (2014, OpenGL 2.1-4.x); /benchmark with a fixed duration and no score box",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "gputest_pixmark_piano",
+   "category": "opengl",
+   "linux": [],
+   "pkgs": [
+    "gputest",
+    "vc_redist"
+   ],
+   "session": "interactive",
+   "tier": 2,
+   "timeout_s": 100,
+   "expect_s": 25,
+   "rx": "GPUTEST .*Renderer model: .*NVIDIA",
+   "fail_rx": "^CHECK .*FAIL|GPUTEST .*[Ee]rror: ",
+   "proof": [
+    "out:Renderer model: .*NVIDIA",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "high",
+   "why": "needs a 3D/graphics channel, the display flip/VSync path and DWM composition on kf3's display; the first TDR coincides with the first new GPU client after sign-in (DWM, Edge, Shorts) in every recorded run, so any windowed app is exposed to it",
+   "ps": "$gt = \"$K\\gputest\"\nRemove-Item \"$gt\\_geeks3d_gputest_log.txt\" -ErrorAction SilentlyContinue\nInvoke-KfWait -Exe \"$gt\\GpuTest.exe\" -ArgList @('/test=pixmark_piano', '/width=1280', '/height=720', '/benchmark', '/benchmark_duration_ms=10000', '/no_scorebox') -Cwd $gt -TimeoutS 70 -Tag gputest_pixmark_piano\n$rc = $global:KfRc\nGet-Content \"$gt\\_geeks3d_gputest_log.txt\" -ErrorAction SilentlyContinue | Select-String -Pattern 'Renderer model|enchmark|score|Score|error|Error' | ForEach-Object { \"GPUTEST $_\" }\nexit $rc\n",
+   "kill_names": [],
+   "screenshot_s": 5,
+   "note": "Geeks3D GpuTest 0.7.0 (2014, OpenGL 2.1-4.x); /benchmark with a fixed duration and no score box",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "gputest_plot3d",
+   "category": "opengl",
+   "linux": [],
+   "pkgs": [
+    "gputest",
+    "vc_redist"
+   ],
+   "session": "interactive",
+   "tier": 2,
+   "timeout_s": 100,
+   "expect_s": 25,
+   "rx": "GPUTEST .*Renderer model: .*NVIDIA",
+   "fail_rx": "^CHECK .*FAIL|GPUTEST .*[Ee]rror: ",
+   "proof": [
+    "out:Renderer model: .*NVIDIA",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "high",
+   "why": "needs a 3D/graphics channel, the display flip/VSync path and DWM composition on kf3's display; the first TDR coincides with the first new GPU client after sign-in (DWM, Edge, Shorts) in every recorded run, so any windowed app is exposed to it",
+   "ps": "$gt = \"$K\\gputest\"\nRemove-Item \"$gt\\_geeks3d_gputest_log.txt\" -ErrorAction SilentlyContinue\nInvoke-KfWait -Exe \"$gt\\GpuTest.exe\" -ArgList @('/test=plot3d', '/width=1280', '/height=720', '/benchmark', '/benchmark_duration_ms=10000', '/no_scorebox') -Cwd $gt -TimeoutS 70 -Tag gputest_plot3d\n$rc = $global:KfRc\nGet-Content \"$gt\\_geeks3d_gputest_log.txt\" -ErrorAction SilentlyContinue | Select-String -Pattern 'Renderer model|enchmark|score|Score|error|Error' | ForEach-Object { \"GPUTEST $_\" }\nexit $rc\n",
+   "kill_names": [],
+   "screenshot_s": 5,
+   "note": "Geeks3D GpuTest 0.7.0 (2014, OpenGL 2.1-4.x); /benchmark with a fixed duration and no score box",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "gputest_tess",
+   "category": "opengl",
+   "linux": [],
+   "pkgs": [
+    "gputest",
+    "vc_redist"
+   ],
+   "session": "interactive",
+   "tier": 2,
+   "timeout_s": 100,
+   "expect_s": 25,
+   "rx": "GPUTEST .*Renderer model: .*NVIDIA",
+   "fail_rx": "^CHECK .*FAIL|GPUTEST .*[Ee]rror: ",
+   "proof": [
+    "out:Renderer model: .*NVIDIA",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "high",
+   "why": "needs a 3D/graphics channel, the display flip/VSync path and DWM composition on kf3's display; the first TDR coincides with the first new GPU client after sign-in (DWM, Edge, Shorts) in every recorded run, so any windowed app is exposed to it",
+   "ps": "$gt = \"$K\\gputest\"\nRemove-Item \"$gt\\_geeks3d_gputest_log.txt\" -ErrorAction SilentlyContinue\nInvoke-KfWait -Exe \"$gt\\GpuTest.exe\" -ArgList @('/test=tess', '/width=1280', '/height=720', '/benchmark', '/benchmark_duration_ms=10000', '/no_scorebox') -Cwd $gt -TimeoutS 70 -Tag gputest_tess\n$rc = $global:KfRc\nGet-Content \"$gt\\_geeks3d_gputest_log.txt\" -ErrorAction SilentlyContinue | Select-String -Pattern 'Renderer model|enchmark|score|Score|error|Error' | ForEach-Object { \"GPUTEST $_\" }\nexit $rc\n",
+   "kill_names": [],
+   "screenshot_s": 5,
+   "note": "Geeks3D GpuTest 0.7.0 (2014, OpenGL 2.1-4.x); /benchmark with a fixed duration and no score box",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "gputest_triangle",
+   "category": "opengl",
+   "linux": [],
+   "pkgs": [
+    "gputest",
+    "vc_redist"
+   ],
+   "session": "interactive",
+   "tier": 1,
+   "timeout_s": 98,
+   "expect_s": 23,
+   "rx": "GPUTEST .*Renderer model: .*NVIDIA",
+   "fail_rx": "^CHECK .*FAIL|GPUTEST .*[Ee]rror: ",
+   "proof": [
+    "out:Renderer model: .*NVIDIA",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "high",
+   "why": "needs a 3D/graphics channel, the display flip/VSync path and DWM composition on kf3's display; the first TDR coincides with the first new GPU client after sign-in (DWM, Edge, Shorts) in every recorded run, so any windowed app is exposed to it",
+   "ps": "$gt = \"$K\\gputest\"\nRemove-Item \"$gt\\_geeks3d_gputest_log.txt\" -ErrorAction SilentlyContinue\nInvoke-KfWait -Exe \"$gt\\GpuTest.exe\" -ArgList @('/test=triangle', '/width=1280', '/height=720', '/benchmark', '/benchmark_duration_ms=8000', '/no_scorebox') -Cwd $gt -TimeoutS 68 -Tag gputest_triangle\n$rc = $global:KfRc\nGet-Content \"$gt\\_geeks3d_gputest_log.txt\" -ErrorAction SilentlyContinue | Select-String -Pattern 'Renderer model|enchmark|score|Score|error|Error' | ForEach-Object { \"GPUTEST $_\" }\nexit $rc\n",
+   "kill_names": [],
+   "screenshot_s": 5,
+   "note": "Geeks3D GpuTest 0.7.0 (2014, OpenGL 2.1-4.x); /benchmark with a fixed duration and no score box",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "graphs_t",
+   "category": "cuda-equiv",
+   "linux": [
+    "simpleCudaGraphs",
+    "graphMemoryNodes"
+   ],
+   "pkgs": [
+    "python_embed",
+    "pywheels",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 120,
+   "expect_s": 5,
+   "rx": "^WINEQ_DONE graphs",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA|GeForce|RTX",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "low",
+   "why": "CUDA context + a few kernels and small copies: the compute path with no display, no video engine and no long run; Windows user work runs as Passthrough twins whose guest-visible GP_GET lags the host (traces/windows_tdr_hunt: H-D)",
+   "ps": "Invoke-KfExe -Exe $PY -ArgList ($PYA + @('C:\\kf\\py\\kf_runpy.py', 'C:\\kf\\py\\win_cuda_equiv.py', 'graphs'))\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "gravitymark_d3d11",
+   "category": "d3d",
+   "linux": [],
+   "pkgs": [
+    "gravitymark",
+    "vc_redist"
+   ],
+   "session": "interactive",
+   "tier": 1,
+   "timeout_s": 360,
+   "expect_s": 60,
+   "rx": "^GM_OK",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "high",
+   "why": "needs a 3D/graphics channel, the display flip/VSync path and DWM composition on kf3's display; the first TDR coincides with the first new GPU client after sign-in (DWM, Edge, Shorts) in every recorded run, so any windowed app is exposed to it",
+   "ps": "$gmx = Find-KfFile -Root \"$K\\gravitymark\" -Name GravityMark.exe\nif (-not $gmx) { 'GM_NOTFOUND'; exit 1 }\n$gmd = Split-Path $gmx\nInvoke-KfWait -Exe $gmx -ArgList @('-temporal', '1', '-fps', '1', '-info', '1', '-benchmark', '1', '-close', '1', '-count', '1', '-asteroids', '20000', '-width', '1280', '-height', '720', '-fullscreen', '0', '-d3d11', '-image', \"$OUT\\gm.png\", '-times', \"$OUT\\gm_times.txt\") -Cwd $gmd -TimeoutS 300 -Tag gravitymark_d3d11\n$rc = $global:KfRc\nif ((Test-Path \"$OUT\\gm.png\") -and ((Get-Item \"$OUT\\gm.png\").Length -gt 10000)) { \"GM_OK image=$((Get-Item \"$OUT\\gm.png\").Length) bytes\" } else { 'GM_FAIL no benchmark image' ; if ($rc -eq 0) { $rc = 1 } }\nif (Test-Path \"$OUT\\gm_times.txt\") { \"GM_TIMES lines=$((Get-Content \"$OUT\\gm_times.txt\").Count)\" }\nexit $rc\n",
+   "kill_names": [],
+   "screenshot_s": 20,
+   "note": "GravityMark 1.89 flags from its own run_*.bat (-benchmark 1 -close 1 -count 1 -image -times); asteroids reduced to 20000",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "gravitymark_d3d12",
+   "category": "d3d",
+   "linux": [],
+   "pkgs": [
+    "gravitymark",
+    "vc_redist"
+   ],
+   "session": "interactive",
+   "tier": 1,
+   "timeout_s": 360,
+   "expect_s": 60,
+   "rx": "^GM_OK",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "high",
+   "why": "needs a 3D/graphics channel, the display flip/VSync path and DWM composition on kf3's display; the first TDR coincides with the first new GPU client after sign-in (DWM, Edge, Shorts) in every recorded run, so any windowed app is exposed to it",
+   "ps": "$gmx = Find-KfFile -Root \"$K\\gravitymark\" -Name GravityMark.exe\nif (-not $gmx) { 'GM_NOTFOUND'; exit 1 }\n$gmd = Split-Path $gmx\nInvoke-KfWait -Exe $gmx -ArgList @('-temporal', '1', '-fps', '1', '-info', '1', '-benchmark', '1', '-close', '1', '-count', '1', '-asteroids', '20000', '-width', '1280', '-height', '720', '-fullscreen', '0', '-d3d12', '-image', \"$OUT\\gm.png\", '-times', \"$OUT\\gm_times.txt\") -Cwd $gmd -TimeoutS 300 -Tag gravitymark_d3d12\n$rc = $global:KfRc\nif ((Test-Path \"$OUT\\gm.png\") -and ((Get-Item \"$OUT\\gm.png\").Length -gt 10000)) { \"GM_OK image=$((Get-Item \"$OUT\\gm.png\").Length) bytes\" } else { 'GM_FAIL no benchmark image' ; if ($rc -eq 0) { $rc = 1 } }\nif (Test-Path \"$OUT\\gm_times.txt\") { \"GM_TIMES lines=$((Get-Content \"$OUT\\gm_times.txt\").Count)\" }\nexit $rc\n",
+   "kill_names": [],
+   "screenshot_s": 20,
+   "note": "GravityMark 1.89 flags from its own run_*.bat (-benchmark 1 -close 1 -count 1 -image -times); asteroids reduced to 20000",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "gravitymark_d3d12_raster",
+   "category": "d3d",
+   "linux": [],
+   "pkgs": [
+    "gravitymark",
+    "vc_redist"
+   ],
+   "session": "interactive",
+   "tier": 2,
+   "timeout_s": 360,
+   "expect_s": 60,
+   "rx": "^GM_OK",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "high",
+   "why": "needs a 3D/graphics channel, the display flip/VSync path and DWM composition on kf3's display; the first TDR coincides with the first new GPU client after sign-in (DWM, Edge, Shorts) in every recorded run, so any windowed app is exposed to it",
+   "ps": "$gmx = Find-KfFile -Root \"$K\\gravitymark\" -Name GravityMark.exe\nif (-not $gmx) { 'GM_NOTFOUND'; exit 1 }\n$gmd = Split-Path $gmx\nInvoke-KfWait -Exe $gmx -ArgList @('-temporal', '1', '-fps', '1', '-info', '1', '-benchmark', '1', '-close', '1', '-count', '1', '-asteroids', '20000', '-width', '1280', '-height', '720', '-fullscreen', '0', '-d3d12', '-raster', '1', '-image', \"$OUT\\gm.png\", '-times', \"$OUT\\gm_times.txt\") -Cwd $gmd -TimeoutS 300 -Tag gravitymark_d3d12_raster\n$rc = $global:KfRc\nif ((Test-Path \"$OUT\\gm.png\") -and ((Get-Item \"$OUT\\gm.png\").Length -gt 10000)) { \"GM_OK image=$((Get-Item \"$OUT\\gm.png\").Length) bytes\" } else { 'GM_FAIL no benchmark image' ; if ($rc -eq 0) { $rc = 1 } }\nif (Test-Path \"$OUT\\gm_times.txt\") { \"GM_TIMES lines=$((Get-Content \"$OUT\\gm_times.txt\").Count)\" }\nexit $rc\n",
+   "kill_names": [],
+   "screenshot_s": 20,
+   "note": "GravityMark 1.89 flags from its own run_*.bat (-benchmark 1 -close 1 -count 1 -image -times); asteroids reduced to 20000",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "gravitymark_d3d12_rt",
+   "category": "d3d",
+   "linux": [],
+   "pkgs": [
+    "gravitymark",
+    "vc_redist"
+   ],
+   "session": "interactive",
+   "tier": 3,
+   "timeout_s": 360,
+   "expect_s": 60,
+   "rx": "^GM_OK",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "high",
+   "why": "DXR ray tracing on RT cores through the Translated/Passthrough split: the least-trodden path",
+   "ps": "$gmx = Find-KfFile -Root \"$K\\gravitymark\" -Name GravityMark.exe\nif (-not $gmx) { 'GM_NOTFOUND'; exit 1 }\n$gmd = Split-Path $gmx\nInvoke-KfWait -Exe $gmx -ArgList @('-temporal', '1', '-fps', '1', '-info', '1', '-benchmark', '1', '-close', '1', '-count', '1', '-asteroids', '20000', '-width', '1280', '-height', '720', '-fullscreen', '0', '-d3d12', '-raytracing', '1', '-image', \"$OUT\\gm.png\", '-times', \"$OUT\\gm_times.txt\") -Cwd $gmd -TimeoutS 300 -Tag gravitymark_d3d12_rt\n$rc = $global:KfRc\nif ((Test-Path \"$OUT\\gm.png\") -and ((Get-Item \"$OUT\\gm.png\").Length -gt 10000)) { \"GM_OK image=$((Get-Item \"$OUT\\gm.png\").Length) bytes\" } else { 'GM_FAIL no benchmark image' ; if ($rc -eq 0) { $rc = 1 } }\nif (Test-Path \"$OUT\\gm_times.txt\") { \"GM_TIMES lines=$((Get-Content \"$OUT\\gm_times.txt\").Count)\" }\nexit $rc\n",
+   "kill_names": [],
+   "screenshot_s": 20,
+   "note": "GravityMark 1.89 flags from its own run_*.bat (-benchmark 1 -close 1 -count 1 -image -times); asteroids reduced to 20000",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "gravitymark_gl",
+   "category": "opengl",
+   "linux": [],
+   "pkgs": [
+    "gravitymark",
+    "vc_redist"
+   ],
+   "session": "interactive",
+   "tier": 2,
+   "timeout_s": 360,
+   "expect_s": 60,
+   "rx": "^GM_OK",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "high",
+   "why": "needs a 3D/graphics channel, the display flip/VSync path and DWM composition on kf3's display; the first TDR coincides with the first new GPU client after sign-in (DWM, Edge, Shorts) in every recorded run, so any windowed app is exposed to it",
+   "ps": "$gmx = Find-KfFile -Root \"$K\\gravitymark\" -Name GravityMark.exe\nif (-not $gmx) { 'GM_NOTFOUND'; exit 1 }\n$gmd = Split-Path $gmx\nInvoke-KfWait -Exe $gmx -ArgList @('-temporal', '1', '-fps', '1', '-info', '1', '-benchmark', '1', '-close', '1', '-count', '1', '-asteroids', '20000', '-width', '1280', '-height', '720', '-fullscreen', '0', '-gl', '-image', \"$OUT\\gm.png\", '-times', \"$OUT\\gm_times.txt\") -Cwd $gmd -TimeoutS 300 -Tag gravitymark_gl\n$rc = $global:KfRc\nif ((Test-Path \"$OUT\\gm.png\") -and ((Get-Item \"$OUT\\gm.png\").Length -gt 10000)) { \"GM_OK image=$((Get-Item \"$OUT\\gm.png\").Length) bytes\" } else { 'GM_FAIL no benchmark image' ; if ($rc -eq 0) { $rc = 1 } }\nif (Test-Path \"$OUT\\gm_times.txt\") { \"GM_TIMES lines=$((Get-Content \"$OUT\\gm_times.txt\").Count)\" }\nexit $rc\n",
+   "kill_names": [],
+   "screenshot_s": 20,
+   "note": "GravityMark 1.89 flags from its own run_*.bat (-benchmark 1 -close 1 -count 1 -image -times); asteroids reduced to 20000",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "gravitymark_vk",
+   "category": "vulkan",
+   "linux": [],
+   "pkgs": [
+    "gravitymark",
+    "vc_redist"
+   ],
+   "session": "interactive",
+   "tier": 1,
+   "timeout_s": 360,
+   "expect_s": 60,
+   "rx": "^GM_OK",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "high",
+   "why": "needs a 3D/graphics channel, the display flip/VSync path and DWM composition on kf3's display; the first TDR coincides with the first new GPU client after sign-in (DWM, Edge, Shorts) in every recorded run, so any windowed app is exposed to it",
+   "ps": "$gmx = Find-KfFile -Root \"$K\\gravitymark\" -Name GravityMark.exe\nif (-not $gmx) { 'GM_NOTFOUND'; exit 1 }\n$gmd = Split-Path $gmx\nInvoke-KfWait -Exe $gmx -ArgList @('-temporal', '1', '-fps', '1', '-info', '1', '-benchmark', '1', '-close', '1', '-count', '1', '-asteroids', '20000', '-width', '1280', '-height', '720', '-fullscreen', '0', '-vk', '-image', \"$OUT\\gm.png\", '-times', \"$OUT\\gm_times.txt\") -Cwd $gmd -TimeoutS 300 -Tag gravitymark_vk\n$rc = $global:KfRc\nif ((Test-Path \"$OUT\\gm.png\") -and ((Get-Item \"$OUT\\gm.png\").Length -gt 10000)) { \"GM_OK image=$((Get-Item \"$OUT\\gm.png\").Length) bytes\" } else { 'GM_FAIL no benchmark image' ; if ($rc -eq 0) { $rc = 1 } }\nif (Test-Path \"$OUT\\gm_times.txt\") { \"GM_TIMES lines=$((Get-Content \"$OUT\\gm_times.txt\").Count)\" }\nexit $rc\n",
+   "kill_names": [],
+   "screenshot_s": 20,
+   "note": "GravityMark 1.89 flags from its own run_*.bat (-benchmark 1 -close 1 -count 1 -image -times); asteroids reduced to 20000",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "hashcat",
+   "category": "crypto",
+   "linux": [
+    "hashcat"
+   ],
+   "pkgs": [
+    "hashcat",
+    "sevenzip",
+    "pywheels",
+    "python_embed",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 300,
+   "expect_s": 40,
+   "rx": "e4726719b68b205913167f0975d977ee:kayfab",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA|CUDA|OpenCL",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "medium",
+   "why": "md5 mask attack; hashcat prefers its CUDA backend (needs nvrtc64_*.dll, found on PATH from the torch wheel) and falls back to the OpenCL ICD",
+   "ps": "$env:PATH = \"$TL;$env:PATH\"\nInvoke-KfExe -Exe \"$K\\hashcat\\hashcat.exe\" -ArgList @('--potfile-disable', '-O', '-m', '0', '-a', '3', 'e4726719b68b205913167f0975d977ee', '?l?l?l?l?l?l') -Cwd \"$K\\hashcat\"\nexit 0\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": "hashcat is flagged HackTool by Defender: kf_guest_setup excludes C:\\kfapps",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "heaven_d3d11",
+   "category": "d3d",
+   "linux": [],
+   "pkgs": [
+    "heaven",
+    "vc_redist"
+   ],
+   "session": "interactive",
+   "tier": 2,
+   "timeout_s": 150,
+   "expect_s": 50,
+   "rx": "KFSURVIVE heaven_d3d11 ALIVE_AT",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "high",
+   "why": "needs a 3D/graphics channel, the display flip/VSync path and DWM composition on kf3's display; the first TDR coincides with the first new GPU client after sign-in (DWM, Edge, Shorts) in every recorded run, so any windowed app is exposed to it",
+   "ps": "$u = \"$K\\heaven\\bin\"\nInvoke-KfSurvive -Exe \"$u\\Heaven.exe\" -ArgList @('-project_name', 'Heaven', '-data_path', '../', '-engine_config', '../data/heaven_4.0.cfg', '-system_script', 'heaven/unigine.cpp', '-sound_app', 'null', '-video_app', 'direct3d11', '-video_multisample', '0', '-video_fullscreen', '0', '-video_mode', '-1', '-video_width', '1280', '-video_height', '720', '-extern_define', 'RELEASE,QUALITY_MEDIUM') -Cwd $u -Seconds 45 -Tag heaven_d3d11\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": 30,
+   "note": "Unigine Heaven Basic (32-bit); command line rebuilt from the launcher's own js (launcher/js/*.js); Basic has no scripted benchmark, so the app auto-plays its camera path for 45 s and must still be alive",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "heaven_opengl",
+   "category": "opengl",
+   "linux": [],
+   "pkgs": [
+    "heaven",
+    "vc_redist"
+   ],
+   "session": "interactive",
+   "tier": 2,
+   "timeout_s": 150,
+   "expect_s": 50,
+   "rx": "KFSURVIVE heaven_opengl ALIVE_AT",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "high",
+   "why": "needs a 3D/graphics channel, the display flip/VSync path and DWM composition on kf3's display; the first TDR coincides with the first new GPU client after sign-in (DWM, Edge, Shorts) in every recorded run, so any windowed app is exposed to it",
+   "ps": "$u = \"$K\\heaven\\bin\"\nInvoke-KfSurvive -Exe \"$u\\Heaven.exe\" -ArgList @('-project_name', 'Heaven', '-data_path', '../', '-engine_config', '../data/heaven_4.0.cfg', '-system_script', 'heaven/unigine.cpp', '-sound_app', 'null', '-video_app', 'opengl', '-video_multisample', '0', '-video_fullscreen', '0', '-video_mode', '-1', '-video_width', '1280', '-video_height', '720', '-extern_define', 'RELEASE,QUALITY_MEDIUM') -Cwd $u -Seconds 45 -Tag heaven_opengl\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": 30,
+   "note": "Unigine Heaven Basic (32-bit); command line rebuilt from the launcher's own js (launcher/js/*.js); Basic has no scripted benchmark, so the app auto-plays its camera path for 45 s and must still be alive",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "hist_t",
+   "category": "cuda-equiv",
+   "linux": [
+    "histogram"
+   ],
+   "pkgs": [
+    "python_embed",
+    "pywheels",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 120,
+   "expect_s": 5,
+   "rx": "^WINEQ_DONE hist",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA|GeForce|RTX",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "low",
+   "why": "CUDA context + a few kernels and small copies: the compute path with no display, no video engine and no long run; Windows user work runs as Passthrough twins whose guest-visible GP_GET lags the host (traces/windows_tdr_hunt: H-D)",
+   "ps": "Invoke-KfExe -Exe $PY -ArgList ($PYA + @('C:\\kf\\py\\kf_runpy.py', 'C:\\kf\\py\\win_cuda_equiv.py', 'hist'))\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "llama_cuda_bench",
+   "category": "llm",
+   "linux": [
+    "llama_bench"
+   ],
+   "pkgs": [
+    "llama_cuda",
+    "qwen_gguf",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 900,
+   "expect_s": 90,
+   "rx": "tg64",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:CUDA|NVIDIA",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "high",
+   "why": "runs longer than the ~1 minute TDR cadence recorded today, so a TDR inside the run is likely; the result is only meaningful once the guest survives idle for the whole app",
+   "ps": "$m = \"$K\\models\\qwen2.5-1.5b-instruct-q4_k_m.gguf\"\nInvoke-KfExe -Exe \"$K\\llama_cuda\\llama-bench.exe\" -ArgList @('-m', $m, '-ngl', '99', '-p', '512', '-n', '64', '-r', '2')\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "llama_cuda_gen",
+   "category": "llm",
+   "linux": [
+    "llama_cpp_gen"
+   ],
+   "pkgs": [
+    "llama_cuda",
+    "qwen_gguf",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 600,
+   "expect_s": 60,
+   "rx": "^OUTSHA llama_cpp ",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:Device 0: NVIDIA|offloaded [0-9]+/[0-9]+ layers to GPU|CUDA0",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "high",
+   "why": "greedy generation: ~1 GiB of weights, thousands of small kernel launches per second through the relay; Linux row passes with identical digests",
+   "ps": "$m = \"$K\\models\\qwen2.5-1.5b-instruct-q4_k_m.gguf\"\n$exe = \"$K\\llama_cuda\\llama-completion.exe\"\n'' | Set-Content \"$OUT\\empty.txt\"\n$p = Start-Process -FilePath $exe -ArgumentList @('-m', $m, '-p', '\"Explain in three sentences why the sky is blue.\"', '-n', '64', '-ngl', '99', '--temp', '0', '--seed', '1', '--no-display-prompt') `\n    -RedirectStandardInput \"$OUT\\empty.txt\" -RedirectStandardOutput \"$OUT\\gen.txt\" -RedirectStandardError \"$OUT\\gen.err\" -Wait -PassThru -NoNewWindow\nGet-Content \"$OUT\\gen.err\" -ErrorAction SilentlyContinue | Select-Object -First 400 | ForEach-Object { \"$_\" }\nGet-Content \"$OUT\\gen.txt\" -ErrorAction SilentlyContinue | ForEach-Object { \"GEN $_\" }\n$txt = (Get-Content \"$OUT\\gen.txt\" -Raw -ErrorAction SilentlyContinue)\nif ($p.ExitCode -eq 0 -and $txt -and $txt.Trim().Length -gt 20) { \"OUTSHA llama_cpp $(Get-KfDigest ($txt -replace '\\s+', ' '))\" ; exit 0 } else { 'LLAMA_FAIL no output'; exit 1 }\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": "digest is compared across Windows runs and informationally with Linux (different llama.cpp build)",
+   "digest": true,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "llama_vulkan_bench",
+   "category": "llm",
+   "linux": [],
+   "pkgs": [
+    "llama_vulkan",
+    "qwen_gguf",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 900,
+   "expect_s": 90,
+   "rx": "tg64",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:Vulkan|NVIDIA",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "high",
+   "why": "Vulkan compute (not CUDA) with 1.5 GiB device-local buffers and many dispatches: the Vulkan queue family/ICD path of the Windows driver",
+   "ps": "$m = \"$K\\models\\qwen2.5-1.5b-instruct-q4_k_m.gguf\"\nInvoke-KfExe -Exe \"$K\\llama_vulkan\\llama-bench.exe\" -ArgList @('-m', $m, '-ngl', '99', '-p', '512', '-n', '64', '-r', '2')\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "managed_t",
+   "category": "cuda-equiv",
+   "linux": [
+    "UnifiedMemoryStreams",
+    "UnifiedMemoryPerf",
+    "conjugateGradientUM",
+    "attach_verify"
+   ],
+   "pkgs": [
+    "python_embed",
+    "pywheels",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 180,
+   "expect_s": 15,
+   "rx": "^WINEQ_DONE managed",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "pdh:Cuda|Compute|3D|Copy",
+    "out:NVIDIA|GeForce|RTX"
+   ],
+   "difficulty": "high",
+   "why": "managed (unified) memory: the Linux rows UnifiedMemoryStreams/Perf, conjugateGradientUM and attach_verify are the four that fail on Linux kayfabe (UVM demand paging, docs/design/V3_UVM_DEMAND_PAGING.md); on Windows WDDM managed memory is the limited model (no oversubscription)",
+   "ps": "Invoke-KfExe -Exe $PY -ArgList ($PYA + @('C:\\kf\\py\\kf_runpy.py', 'C:\\kf\\py\\win_cuda_equiv.py', 'managed'))\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": "CuPy malloc_managed; expected to be the hardest compute row on both OSes",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "mandelbrot_t",
+   "category": "cuda-equiv",
+   "linux": [
+    "mandelbrot"
+   ],
+   "pkgs": [
+    "python_embed",
+    "pywheels",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 120,
+   "expect_s": 8,
+   "rx": "^WINEQ_DONE mandelbrot",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA|GeForce|RTX",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "low",
+   "why": "CUDA context + a few kernels and small copies: the compute path with no display, no video engine and no long run; Windows user work runs as Passthrough twins whose guest-visible GP_GET lags the host (traces/windows_tdr_hunt: H-D)",
+   "ps": "Invoke-KfExe -Exe $PY -ArgList ($PYA + @('C:\\kf\\py\\kf_runpy.py', 'C:\\kf\\py\\win_cuda_equiv.py', 'mandelbrot'))\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "matmul_t",
+   "category": "cuda-equiv",
+   "linux": [
+    "matrixMul",
+    "sgemm_cublas",
+    "simpleCUBLAS"
+   ],
+   "pkgs": [
+    "python_embed",
+    "pywheels",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 120,
+   "expect_s": 5,
+   "rx": "^WINEQ_DONE matmul",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA|GeForce|RTX",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "low",
+   "why": "CUDA context + a few kernels and small copies: the compute path with no display, no video engine and no long run; Windows user work runs as Passthrough twins whose guest-visible GP_GET lags the host (traces/windows_tdr_hunt: H-D)",
+   "ps": "Invoke-KfExe -Exe $PY -ArgList ($PYA + @('C:\\kf\\py\\kf_runpy.py', 'C:\\kf\\py\\win_cuda_equiv.py', 'matmul'))\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "memcpy2d_t",
+   "category": "cuda-equiv",
+   "linux": [
+    "memcpy2d"
+   ],
+   "pkgs": [
+    "python_embed",
+    "pywheels",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 120,
+   "expect_s": 8,
+   "rx": "^WINEQ_DONE memcpy2d",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA|GeForce|RTX",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "medium",
+   "why": "sustained cuBLAS/cuDNN/cuFFT work, 1-4 GiB allocations, many launches per second: stresses the twin/USERD relay and the completion path for minutes, and the guest TDRs about once a minute today (traces/windows_prod_20261010: 7 resets in ~8 min)",
+   "ps": "Invoke-KfExe -Exe $PY -ArgList ($PYA + @('C:\\kf\\py\\kf_runpy.py', 'C:\\kf\\py\\win_cuda_equiv.py', 'memcpy2d'))\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "nbody_demo_bench",
+   "category": "cuda-demo",
+   "linux": [
+    "nbody"
+   ],
+   "pkgs": [
+    "cuda_demo_suite",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 120,
+   "expect_s": 15,
+   "rx": "GFLOP/s",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA|GeForce|RTX",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "medium",
+   "why": "sustained cuBLAS/cuDNN/cuFFT work, 1-4 GiB allocations, many launches per second: stresses the twin/USERD relay and the completion path for minutes, and the guest TDRs about once a minute today (traces/windows_prod_20261010: 7 resets in ~8 min)",
+   "ps": "$d = \"$K\\cuda_demo\\demo_suite\"\nInvoke-KfExe -Exe \"$d\\nbody.exe\" -ArgList @('-benchmark', '-numbodies=32768') -Cwd $d\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": "-benchmark should not open a window in the sample; if it does, move to session=interactive",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "nbody_demo_gl",
+   "category": "cuda-demo",
+   "linux": [
+    "nbody"
+   ],
+   "pkgs": [
+    "cuda_demo_suite",
+    "vc_redist"
+   ],
+   "session": "interactive",
+   "tier": 1,
+   "timeout_s": 90,
+   "expect_s": 25,
+   "rx": "KFSURVIVE nbody_gl ALIVE_AT",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "high",
+   "why": "needs a 3D/graphics channel, the display flip/VSync path and DWM composition on kf3's display; the first TDR coincides with the first new GPU client after sign-in (DWM, Edge, Shorts) in every recorded run, so any windowed app is exposed to it",
+   "ps": "$d = \"$K\\cuda_demo\\demo_suite\"\nInvoke-KfSurvive -Exe \"$d\\nbody.exe\" -ArgList @('-numbodies=16384') -Cwd $d -Seconds 25 -Tag nbody_gl\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": 15,
+   "note": "CUDA-OpenGL interop: the simulation runs on CUDA, the points are drawn by OpenGL from the same buffer",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "nbody_t",
+   "category": "cuda-equiv",
+   "linux": [
+    "nbody"
+   ],
+   "pkgs": [
+    "python_embed",
+    "pywheels",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 120,
+   "expect_s": 5,
+   "rx": "^WINEQ_DONE nbody",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA|GeForce|RTX",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "low",
+   "why": "CUDA context + a few kernels and small copies: the compute path with no display, no video engine and no long run; Windows user work runs as Passthrough twins whose guest-visible GP_GET lags the host (traces/windows_tdr_hunt: H-D)",
+   "ps": "Invoke-KfExe -Exe $PY -ArgList ($PYA + @('C:\\kf\\py\\kf_runpy.py', 'C:\\kf\\py\\win_cuda_equiv.py', 'nbody'))\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "nvdec_h264",
+   "category": "video",
+   "linux": [
+    "nvdec_h264"
+   ],
+   "pkgs": [
+    "ffmpeg",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 180,
+   "expect_s": 20,
+   "rx": "frame= *600 ",
+   "fail_rx": "^CHECK .*FAIL|Failed setup for format|DECODE_PREP_FAIL|hwaccel initialisation returned error",
+   "proof": [
+    "pdh:VideoDecode",
+    "smi"
+   ],
+   "difficulty": "high",
+   "why": "needs the NVENC/NVDEC/DXVA engines through Windows' video-engine nodes (a separate scheduler node from 3D/compute); no Windows run of these engines exists yet, only the Linux ones",
+   "ps": "$ff = \"$K\\ffmpeg\\bin\\ffmpeg.exe\"; $fp = \"$K\\ffmpeg\\bin\\ffprobe.exe\"\nInvoke-KfExe -Exe $ff -ArgList @('-y', '-hide_banner', '-nostats', '-f', 'lavfi', '-i', 'testsrc=size=1280x720:rate=30:duration=20', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', \"$OUT\\x264.mp4\")\nif ($global:KfRc -ne 0) { 'DECODE_PREP_FAIL libx264 encode'; exit 1 }\nInvoke-KfExe -Exe $ff -ArgList @('-hide_banner', '-nostats', '-progress', \"$OUT\\prog.txt\", '-hwaccel', 'cuda', '-hwaccel_output_format', 'cuda', '-i', \"$OUT\\x264.mp4\", '-f', 'null', '-')\n$rc = $global:KfRc\n$log = (Get-Content \"$OUT\\prog.txt\" -ErrorAction SilentlyContinue | Where-Object { $_ -match '^frame=' } | Select-Object -Last 1)\n\"frame= $($log -replace 'frame=', '') \"\nexit $rc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "nvenc_av1",
+   "category": "video",
+   "linux": [],
+   "pkgs": [
+    "ffmpeg",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 180,
+   "expect_s": 20,
+   "rx": "frame= *600 ",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "pdh:VideoEncode",
+    "smi"
+   ],
+   "difficulty": "high",
+   "why": "needs the NVENC/NVDEC/DXVA engines through Windows' video-engine nodes (a separate scheduler node from 3D/compute); no Windows run of these engines exists yet, only the Linux ones",
+   "ps": "$ff = \"$K\\ffmpeg\\bin\\ffmpeg.exe\"; $fp = \"$K\\ffmpeg\\bin\\ffprobe.exe\"\nInvoke-KfExe -Exe $ff -ArgList @('-y', '-hide_banner', '-nostats', '-f', 'lavfi', '-i', 'testsrc=size=1280x720:rate=30:duration=20', '-c:v', 'av1_nvenc', '-preset', 'p4', \"$OUT\\enc.mp4\")\n$rc = $global:KfRc\n$n = & $fp -v error -count_frames -select_streams v:0 -show_entries stream=nb_read_frames -of csv=p=0 \"$OUT\\enc.mp4\"\n\"frame= $n \"\nexit $rc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": "AV1 encode exists on Ada (AD104) and Blackwell, not on Ampere: NOTRUN-by-design on older GPUs",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "nvenc_h264",
+   "category": "video",
+   "linux": [
+    "nvenc_h264"
+   ],
+   "pkgs": [
+    "ffmpeg",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 180,
+   "expect_s": 20,
+   "rx": "frame= *600 ",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "pdh:VideoEncode",
+    "smi"
+   ],
+   "difficulty": "high",
+   "why": "needs the NVENC/NVDEC/DXVA engines through Windows' video-engine nodes (a separate scheduler node from 3D/compute); no Windows run of these engines exists yet, only the Linux ones",
+   "ps": "$ff = \"$K\\ffmpeg\\bin\\ffmpeg.exe\"; $fp = \"$K\\ffmpeg\\bin\\ffprobe.exe\"\nInvoke-KfExe -Exe $ff -ArgList @('-y', '-hide_banner', '-nostats', '-f', 'lavfi', '-i', 'testsrc=size=1280x720:rate=30:duration=20', '-c:v', 'h264_nvenc', '-preset', 'p4', \"$OUT\\enc.mp4\")\n$rc = $global:KfRc\n$n = & $fp -v error -count_frames -select_streams v:0 -show_entries stream=nb_read_frames -of csv=p=0 \"$OUT\\enc.mp4\"\n\"frame= $n \"\nexit $rc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "nvenc_hevc",
+   "category": "video",
+   "linux": [
+    "nvenc_hevc"
+   ],
+   "pkgs": [
+    "ffmpeg",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 180,
+   "expect_s": 20,
+   "rx": "frame= *600 ",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "pdh:VideoEncode",
+    "smi"
+   ],
+   "difficulty": "high",
+   "why": "needs the NVENC/NVDEC/DXVA engines through Windows' video-engine nodes (a separate scheduler node from 3D/compute); no Windows run of these engines exists yet, only the Linux ones",
+   "ps": "$ff = \"$K\\ffmpeg\\bin\\ffmpeg.exe\"; $fp = \"$K\\ffmpeg\\bin\\ffprobe.exe\"\nInvoke-KfExe -Exe $ff -ArgList @('-y', '-hide_banner', '-nostats', '-f', 'lavfi', '-i', 'testsrc=size=1280x720:rate=30:duration=20', '-c:v', 'hevc_nvenc', '-preset', 'p4', \"$OUT\\enc.mp4\")\n$rc = $global:KfRc\n$n = & $fp -v error -count_frames -select_streams v:0 -show_entries stream=nb_read_frames -of csv=p=0 \"$OUT\\enc.mp4\"\n\"frame= $n \"\nexit $rc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "nvidia_smi",
+   "category": "smi",
+   "linux": [
+    "nvidia_smi"
+   ],
+   "pkgs": [],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 60,
+   "expect_s": 3,
+   "rx": "(GeForce|RTX|Quadro|Tesla)",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:GeForce|RTX|Quadro|Tesla"
+   ],
+   "difficulty": "low",
+   "why": "RM control path only (GSP info, utilisation); no channel needed",
+   "ps": "Invoke-KfExe -Exe \"$env:SystemRoot\\System32\\nvidia-smi.exe\"\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": false,
+   "nvidia_only": true
+  },
+  {
+   "id": "oceanFFT_demo",
+   "category": "cuda-demo",
+   "linux": [
+    "simpleCUFFT"
+   ],
+   "pkgs": [
+    "cuda_demo_suite",
+    "pywheels",
+    "python_embed",
+    "vc_redist"
+   ],
+   "session": "interactive",
+   "tier": 1,
+   "timeout_s": 90,
+   "expect_s": 25,
+   "rx": "KFSURVIVE oceanFFT ALIVE_AT",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "high",
+   "why": "needs a 3D/graphics channel, the display flip/VSync path and DWM composition on kf3's display; the first TDR coincides with the first new GPU client after sign-in (DWM, Edge, Shorts) in every recorded run, so any windowed app is exposed to it",
+   "ps": "$d = \"$K\\cuda_demo\\demo_suite\"\n$env:PATH = \"$TL;$env:PATH\"\nInvoke-KfSurvive -Exe \"$d\\oceanFFT.exe\" -Cwd $d -Seconds 25 -Tag oceanFFT\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": 15,
+   "note": "cufft64_11.dll comes from the torch wheel on PATH; CUDA-OpenGL interop",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "opencl_icd",
+   "category": "opencl",
+   "linux": [
+    "clinfo"
+   ],
+   "pkgs": [],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 60,
+   "expect_s": 2,
+   "rx": "OPENCL_ICD .*nvopencl",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:nvopencl"
+   ],
+   "difficulty": "low",
+   "why": "registry only; proves the ICD is installed (the clinfo row's NVIDIA platform check)",
+   "ps": "$k = 'HKLM:\\SOFTWARE\\Khronos\\OpenCL\\Vendors'\nif (Test-Path $k) { (Get-Item $k).Property | ForEach-Object { \"OPENCL_ICD $_\" } } else { 'OPENCL_ICD (none registered)' }\nexit 0\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": false,
+   "nvidia_only": true
+  },
+  {
+   "id": "ort_directml",
+   "category": "d3d",
+   "linux": [],
+   "pkgs": [
+    "python_embed",
+    "pywheels",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 240,
+   "expect_s": 20,
+   "rx": "^ORT_DML_DONE",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "high",
+   "why": "ONNX Runtime DirectML = Direct3D 12 compute (root signature, UAV, DIRECT queue) on the NVIDIA adapter; D3D12 device creation was the wall of the 2026-10-08 runs (D3D devices created by a test process RC their twins)",
+   "ps": "Invoke-KfExe -Exe $PY -ArgList ($PYA + @('C:\\kf\\py\\kf_runpy.py', 'C:\\kf\\py\\ort_dml.py'))\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "randomFog_demo",
+   "category": "cuda-demo",
+   "linux": [
+    "MersenneTwisterGP11213"
+   ],
+   "pkgs": [
+    "cuda_demo_suite",
+    "pywheels",
+    "python_embed",
+    "vc_redist"
+   ],
+   "session": "interactive",
+   "tier": 1,
+   "timeout_s": 90,
+   "expect_s": 25,
+   "rx": "KFSURVIVE randomFog ALIVE_AT",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "high",
+   "why": "needs a 3D/graphics channel, the display flip/VSync path and DWM composition on kf3's display; the first TDR coincides with the first new GPU client after sign-in (DWM, Edge, Shorts) in every recorded run, so any windowed app is exposed to it",
+   "ps": "$d = \"$K\\cuda_demo\\demo_suite\"\n$env:PATH = \"$TL;$env:PATH\"\nInvoke-KfSurvive -Exe \"$d\\randomFog.exe\" -Cwd $d -Seconds 25 -Tag randomFog\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": 15,
+   "note": "curand64_10.dll from the torch wheel; CUDA-OpenGL interop",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "reduce_t",
+   "category": "cuda-equiv",
+   "linux": [
+    "reduction",
+    "reduce"
+   ],
+   "pkgs": [
+    "python_embed",
+    "pywheels",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 120,
+   "expect_s": 8,
+   "rx": "^WINEQ_DONE reduce",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA|GeForce|RTX",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "medium",
+   "why": "sustained cuBLAS/cuDNN/cuFFT work, 1-4 GiB allocations, many launches per second: stresses the twin/USERD relay and the completion path for minutes, and the guest TDRs about once a minute today (traces/windows_prod_20261010: 7 resets in ~8 min)",
+   "ps": "Invoke-KfExe -Exe $PY -ArgList ($PYA + @('C:\\kf\\py\\kf_runpy.py', 'C:\\kf\\py\\win_cuda_equiv.py', 'reduce'))\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "rng_t",
+   "category": "cuda-equiv",
+   "linux": [
+    "MersenneTwisterGP11213"
+   ],
+   "pkgs": [
+    "python_embed",
+    "pywheels",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 120,
+   "expect_s": 5,
+   "rx": "^WINEQ_DONE rng",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA|GeForce|RTX",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "low",
+   "why": "CUDA context + a few kernels and small copies: the compute path with no display, no video engine and no long run; Windows user work runs as Passthrough twins whose guest-visible GP_GET lags the host (traces/windows_tdr_hunt: H-D)",
+   "ps": "Invoke-KfExe -Exe $PY -ArgList ($PYA + @('C:\\kf\\py\\kf_runpy.py', 'C:\\kf\\py\\win_cuda_equiv.py', 'rng'))\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "scale_cuda_nvenc",
+   "category": "video",
+   "linux": [],
+   "pkgs": [
+    "ffmpeg",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 2,
+   "timeout_s": 240,
+   "expect_s": 30,
+   "rx": "frame= *600 ",
+   "fail_rx": "^CHECK .*FAIL|Failed setup for format|Impossible to convert",
+   "proof": [
+    "pdh:VideoEncode|VideoDecode",
+    "smi"
+   ],
+   "difficulty": "high",
+   "why": "needs the NVENC/NVDEC/DXVA engines through Windows' video-engine nodes (a separate scheduler node from 3D/compute); no Windows run of these engines exists yet, only the Linux ones",
+   "ps": "$ff = \"$K\\ffmpeg\\bin\\ffmpeg.exe\"; $fp = \"$K\\ffmpeg\\bin\\ffprobe.exe\"\nInvoke-KfExe -Exe $ff -ArgList @('-y', '-hide_banner', '-nostats', '-f', 'lavfi', '-i', 'testsrc=size=1280x720:rate=30:duration=20', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', \"$OUT\\x264.mp4\")\nInvoke-KfExe -Exe $ff -ArgList @('-y', '-hide_banner', '-nostats', '-hwaccel', 'cuda', '-hwaccel_output_format', 'cuda', '-i', \"$OUT\\x264.mp4\", '-vf', 'scale_cuda=640:360', '-c:v', 'h264_nvenc', \"$OUT\\scaled.mp4\")\n$rc = $global:KfRc\n$n = & $fp -v error -count_frames -select_streams v:0 -show_entries stream=nb_read_frames -of csv=p=0 \"$OUT\\scaled.mp4\"\n\"frame= $n \"\nexit $rc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": "NVDEC -> CUDA scale filter -> NVENC with frames kept on the GPU",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "scan_t",
+   "category": "cuda-equiv",
+   "linux": [
+    "scan"
+   ],
+   "pkgs": [
+    "python_embed",
+    "pywheels",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 120,
+   "expect_s": 5,
+   "rx": "^WINEQ_DONE scan",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA|GeForce|RTX",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "low",
+   "why": "CUDA context + a few kernels and small copies: the compute path with no display, no video engine and no long run; Windows user work runs as Passthrough twins whose guest-visible GP_GET lags the host (traces/windows_tdr_hunt: H-D)",
+   "ps": "Invoke-KfExe -Exe $PY -ArgList ($PYA + @('C:\\kf\\py\\kf_runpy.py', 'C:\\kf\\py\\win_cuda_equiv.py', 'scan'))\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "sort_t",
+   "category": "cuda-equiv",
+   "linux": [
+    "sortingNetworks"
+   ],
+   "pkgs": [
+    "python_embed",
+    "pywheels",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 120,
+   "expect_s": 5,
+   "rx": "^WINEQ_DONE sort",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA|GeForce|RTX",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "low",
+   "why": "CUDA context + a few kernels and small copies: the compute path with no display, no video engine and no long run; Windows user work runs as Passthrough twins whose guest-visible GP_GET lags the host (traces/windows_tdr_hunt: H-D)",
+   "ps": "Invoke-KfExe -Exe $PY -ArgList ($PYA + @('C:\\kf\\py\\kf_runpy.py', 'C:\\kf\\py\\win_cuda_equiv.py', 'sort'))\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "stream_created2nd_t",
+   "category": "probe",
+   "linux": [
+    "stream_created2nd"
+   ],
+   "pkgs": [
+    "python_embed",
+    "pywheels",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 120,
+   "expect_s": 5,
+   "rx": "^STREAM_PROBE_DONE created2nd rc=0",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA|GeForce|RTX",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "low",
+   "why": "CUDA context + a few kernels and small copies: the compute path with no display, no video engine and no long run; Windows user work runs as Passthrough twins whose guest-visible GP_GET lags the host (traces/windows_tdr_hunt: H-D)",
+   "ps": "Invoke-KfExe -Exe $PY -ArgList ($PYA + @('C:\\kf\\py\\kf_runpy.py', 'C:\\kf\\py\\win_cuda_equiv.py', 'stream_created2nd'))\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "stream_created_t",
+   "category": "probe",
+   "linux": [
+    "stream_created"
+   ],
+   "pkgs": [
+    "python_embed",
+    "pywheels",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 120,
+   "expect_s": 5,
+   "rx": "^STREAM_PROBE_DONE created rc=0",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA|GeForce|RTX",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "low",
+   "why": "CUDA context + a few kernels and small copies: the compute path with no display, no video engine and no long run; Windows user work runs as Passthrough twins whose guest-visible GP_GET lags the host (traces/windows_tdr_hunt: H-D)",
+   "ps": "Invoke-KfExe -Exe $PY -ArgList ($PYA + @('C:\\kf\\py\\kf_runpy.py', 'C:\\kf\\py\\win_cuda_equiv.py', 'stream_created'))\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": "torch streams are created cudaStreamNonBlocking",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "stream_default_t",
+   "category": "probe",
+   "linux": [
+    "stream_default"
+   ],
+   "pkgs": [
+    "python_embed",
+    "pywheels",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 120,
+   "expect_s": 5,
+   "rx": "^STREAM_PROBE_DONE default rc=0",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA|GeForce|RTX",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "low",
+   "why": "CUDA context + a few kernels and small copies: the compute path with no display, no video engine and no long run; Windows user work runs as Passthrough twins whose guest-visible GP_GET lags the host (traces/windows_tdr_hunt: H-D)",
+   "ps": "Invoke-KfExe -Exe $PY -ArgList ($PYA + @('C:\\kf\\py\\kf_runpy.py', 'C:\\kf\\py\\win_cuda_equiv.py', 'stream_default'))\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "stream_nonblocking_t",
+   "category": "probe",
+   "linux": [
+    "stream_nonblocking"
+   ],
+   "pkgs": [
+    "python_embed",
+    "pywheels",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 120,
+   "expect_s": 5,
+   "rx": "^STREAM_PROBE_DONE nonblocking rc=0",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA|GeForce|RTX",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "low",
+   "why": "CUDA context + a few kernels and small copies: the compute path with no display, no video engine and no long run; Windows user work runs as Passthrough twins whose guest-visible GP_GET lags the host (traces/windows_tdr_hunt: H-D)",
+   "ps": "Invoke-KfExe -Exe $PY -ArgList ($PYA + @('C:\\kf\\py\\kf_runpy.py', 'C:\\kf\\py\\win_cuda_equiv.py', 'stream_nonblocking'))\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": "torch streams are created cudaStreamNonBlocking",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "stream_perthread_t",
+   "category": "probe",
+   "linux": [
+    "stream_perthread"
+   ],
+   "pkgs": [
+    "python_embed",
+    "pywheels",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 120,
+   "expect_s": 5,
+   "rx": "^STREAM_PROBE_DONE perthread rc=0",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA|GeForce|RTX",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "low",
+   "why": "CUDA context + a few kernels and small copies: the compute path with no display, no video engine and no long run; Windows user work runs as Passthrough twins whose guest-visible GP_GET lags the host (traces/windows_tdr_hunt: H-D)",
+   "ps": "Invoke-KfExe -Exe $PY -ArgList ($PYA + @('C:\\kf\\py\\kf_runpy.py', 'C:\\kf\\py\\win_cuda_equiv.py', 'stream_perthread'))\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": "CuPy per-thread default stream (cupy.cuda.Stream.ptds)",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "stream_two_t",
+   "category": "probe",
+   "linux": [
+    "stream_two"
+   ],
+   "pkgs": [
+    "python_embed",
+    "pywheels",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 120,
+   "expect_s": 5,
+   "rx": "^STREAM_PROBE_DONE two rc=0",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA|GeForce|RTX",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "low",
+   "why": "CUDA context + a few kernels and small copies: the compute path with no display, no video engine and no long run; Windows user work runs as Passthrough twins whose guest-visible GP_GET lags the host (traces/windows_tdr_hunt: H-D)",
+   "ps": "Invoke-KfExe -Exe $PY -ArgList ($PYA + @('C:\\kf\\py\\kf_runpy.py', 'C:\\kf\\py\\win_cuda_equiv.py', 'stream_two'))\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "streams_t",
+   "category": "cuda-equiv",
+   "linux": [
+    "simpleStreams",
+    "asyncAPI",
+    "concurrentKernels"
+   ],
+   "pkgs": [
+    "python_embed",
+    "pywheels",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 120,
+   "expect_s": 5,
+   "rx": "^WINEQ_DONE streams",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA|GeForce|RTX",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "low",
+   "why": "CUDA context + a few kernels and small copies: the compute path with no display, no video engine and no long run; Windows user work runs as Passthrough twins whose guest-visible GP_GET lags the host (traces/windows_tdr_hunt: H-D)",
+   "ps": "Invoke-KfExe -Exe $PY -ArgList ($PYA + @('C:\\kf\\py\\kf_runpy.py', 'C:\\kf\\py\\win_cuda_equiv.py', 'streams'))\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "tc16_t",
+   "category": "cuda-equiv",
+   "linux": [
+    "cudaTensorCoreGemm"
+   ],
+   "pkgs": [
+    "python_embed",
+    "pywheels",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 120,
+   "expect_s": 5,
+   "rx": "^WINEQ_DONE tc16",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA|GeForce|RTX",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "low",
+   "why": "CUDA context + a few kernels and small copies: the compute path with no display, no video engine and no long run; Windows user work runs as Passthrough twins whose guest-visible GP_GET lags the host (traces/windows_tdr_hunt: H-D)",
+   "ps": "Invoke-KfExe -Exe $PY -ArgList ($PYA + @('C:\\kf\\py\\kf_runpy.py', 'C:\\kf\\py\\win_cuda_equiv.py', 'tc16'))\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "tcbf16_t",
+   "category": "cuda-equiv",
+   "linux": [
+    "bf16TensorCoreGemm"
+   ],
+   "pkgs": [
+    "python_embed",
+    "pywheels",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 120,
+   "expect_s": 5,
+   "rx": "^WINEQ_DONE tcbf16",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA|GeForce|RTX",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "low",
+   "why": "CUDA context + a few kernels and small copies: the compute path with no display, no video engine and no long run; Windows user work runs as Passthrough twins whose guest-visible GP_GET lags the host (traces/windows_tdr_hunt: H-D)",
+   "ps": "Invoke-KfExe -Exe $PY -ArgList ($PYA + @('C:\\kf\\py\\kf_runpy.py', 'C:\\kf\\py\\win_cuda_equiv.py', 'tcbf16'))\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "torch_ai_bench",
+   "category": "torch",
+   "linux": [
+    "torch_ai_bench"
+   ],
+   "pkgs": [
+    "python_embed",
+    "pywheels",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 900,
+   "expect_s": 180,
+   "rx": "CHECK bert_infer_seqs ok",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA|GeForce|RTX",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "high",
+   "why": "unmodified scripts/apps/src/ai_bench.py: 8192^2 GEMMs, CNN training, BERT-like inference; minutes of GPU load, so it crosses several TDR windows",
+   "ps": "Invoke-KfExe -Exe $PY -ArgList ($PYA + @('C:\\kf\\py\\kf_runpy.py', 'C:\\kf\\py\\ai_bench.py'))\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "torch_burn",
+   "category": "stress",
+   "linux": [
+    "gpu_burn"
+   ],
+   "pkgs": [
+    "python_embed",
+    "pywheels",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 180,
+   "expect_s": 70,
+   "rx": "^GPU 0: OK",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA|GeForce|RTX",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "high",
+   "why": "runs longer than the ~1 minute TDR cadence recorded today, so a TDR inside the run is likely; the result is only meaningful once the guest survives idle for the whole app",
+   "ps": "Invoke-KfExe -Exe $PY -ArgList ($PYA + @('C:\\kf\\py\\kf_runpy.py', 'C:\\kf\\py\\torch_burn.py', '60'))\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": "60 s of fp32 matmul with bit-exact comparison (gpu_burn semantics)",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "torch_correct",
+   "category": "torch",
+   "linux": [
+    "torch_correct",
+    "conv2d"
+   ],
+   "pkgs": [
+    "python_embed",
+    "pywheels",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 300,
+   "expect_s": 30,
+   "rx": "TORCH_CORRECT_DONE",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA|GeForce|RTX",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "medium",
+   "why": "sustained cuBLAS/cuDNN/cuFFT work, 1-4 GiB allocations, many launches per second: stresses the twin/USERD relay and the completion path for minutes, and the guest TDRs about once a minute today (traces/windows_prod_20261010: 7 resets in ~8 min)",
+   "ps": "Invoke-KfExe -Exe $PY -ArgList ($PYA + @('C:\\kf\\py\\kf_runpy.py', 'C:\\kf\\py\\torch_correct.py'))\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": "unmodified scripts/apps/src/torch_correct.py (the Linux row); includes a 1 GiB round trip and a cuDNN conv",
+   "digest": true,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "transpose_t",
+   "category": "cuda-equiv",
+   "linux": [
+    "transpose"
+   ],
+   "pkgs": [
+    "python_embed",
+    "pywheels",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 120,
+   "expect_s": 5,
+   "rx": "^WINEQ_DONE transpose",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA|GeForce|RTX",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "medium",
+   "why": "sustained cuBLAS/cuDNN/cuFFT work, 1-4 GiB allocations, many launches per second: stresses the twin/USERD relay and the completion path for minutes, and the guest TDRs about once a minute today (traces/windows_prod_20261010: 7 resets in ~8 min)",
+   "ps": "Invoke-KfExe -Exe $PY -ArgList ($PYA + @('C:\\kf\\py\\kf_runpy.py', 'C:\\kf\\py\\win_cuda_equiv.py', 'transpose'))\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "triad_t",
+   "category": "cuda-equiv",
+   "linux": [
+    "stream_triad"
+   ],
+   "pkgs": [
+    "python_embed",
+    "pywheels",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 120,
+   "expect_s": 8,
+   "rx": "^WINEQ_DONE triad",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA|GeForce|RTX",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "medium",
+   "why": "sustained cuBLAS/cuDNN/cuFFT work, 1-4 GiB allocations, many launches per second: stresses the twin/USERD relay and the completion path for minutes, and the guest TDRs about once a minute today (traces/windows_prod_20261010: 7 resets in ~8 min)",
+   "ps": "Invoke-KfExe -Exe $PY -ArgList ($PYA + @('C:\\kf\\py\\kf_runpy.py', 'C:\\kf\\py\\win_cuda_equiv.py', 'triad'))\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "valley_d3d11",
+   "category": "d3d",
+   "linux": [],
+   "pkgs": [
+    "valley",
+    "vc_redist"
+   ],
+   "session": "interactive",
+   "tier": 2,
+   "timeout_s": 150,
+   "expect_s": 50,
+   "rx": "KFSURVIVE valley_d3d11 ALIVE_AT",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "high",
+   "why": "needs a 3D/graphics channel, the display flip/VSync path and DWM composition on kf3's display; the first TDR coincides with the first new GPU client after sign-in (DWM, Edge, Shorts) in every recorded run, so any windowed app is exposed to it",
+   "ps": "$u = \"$K\\valley\\bin\"\nInvoke-KfSurvive -Exe \"$u\\Valley.exe\" -ArgList @('-project_name', 'Valley', '-data_path', '../', '-engine_config', '../data/valley_1.0.cfg', '-system_script', 'valley/unigine.cpp', '-sound_app', 'null', '-video_app', 'direct3d11', '-video_multisample', '0', '-video_fullscreen', '0', '-video_mode', '-1', '-video_width', '1280', '-video_height', '720', '-extern_define', 'RELEASE,QUALITY_MEDIUM') -Cwd $u -Seconds 45 -Tag valley_d3d11\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": 30,
+   "note": "Unigine Valley Basic (32-bit); command line rebuilt from the launcher's own js (launcher/js/*.js); Basic has no scripted benchmark, so the app auto-plays its camera path for 45 s and must still be alive",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "valley_opengl",
+   "category": "opengl",
+   "linux": [],
+   "pkgs": [
+    "valley",
+    "vc_redist"
+   ],
+   "session": "interactive",
+   "tier": 2,
+   "timeout_s": 150,
+   "expect_s": 50,
+   "rx": "KFSURVIVE valley_opengl ALIVE_AT",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "high",
+   "why": "needs a 3D/graphics channel, the display flip/VSync path and DWM composition on kf3's display; the first TDR coincides with the first new GPU client after sign-in (DWM, Edge, Shorts) in every recorded run, so any windowed app is exposed to it",
+   "ps": "$u = \"$K\\valley\\bin\"\nInvoke-KfSurvive -Exe \"$u\\Valley.exe\" -ArgList @('-project_name', 'Valley', '-data_path', '../', '-engine_config', '../data/valley_1.0.cfg', '-system_script', 'valley/unigine.cpp', '-sound_app', 'null', '-video_app', 'opengl', '-video_multisample', '0', '-video_fullscreen', '0', '-video_mode', '-1', '-video_width', '1280', '-video_height', '720', '-extern_define', 'RELEASE,QUALITY_MEDIUM') -Cwd $u -Seconds 45 -Tag valley_opengl\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": 30,
+   "note": "Unigine Valley Basic (32-bit); command line rebuilt from the launcher's own js (launcher/js/*.js); Basic has no scripted benchmark, so the app auto-plays its camera path for 45 s and must still be alive",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "vectorAdd_demo",
+   "category": "cuda-demo",
+   "linux": [
+    "vectorAdd"
+   ],
+   "pkgs": [
+    "cuda_demo_suite",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 60,
+   "expect_s": 3,
+   "rx": "Test PASSED",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "pdh:Cuda|Compute|3D|Copy",
+    "smi"
+   ],
+   "difficulty": "low",
+   "why": "CUDA context + a few kernels and small copies: the compute path with no display, no video engine and no long run; Windows user work runs as Passthrough twins whose guest-visible GP_GET lags the host (traces/windows_tdr_hunt: H-D)",
+   "ps": "$d = \"$K\\cuda_demo\\demo_suite\"\nInvoke-KfExe -Exe \"$d\\vectorAdd.exe\" -Cwd $d\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "vkcube",
+   "category": "vulkan",
+   "linux": [],
+   "pkgs": [
+    "vulkan_sdk",
+    "vc_redist"
+   ],
+   "session": "interactive",
+   "tier": 2,
+   "timeout_s": 180,
+   "expect_s": 15,
+   "rx": "KFWAIT vkcube EXITED rc=0",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "high",
+   "why": "needs a 3D/graphics channel, the display flip/VSync path and DWM composition on kf3's display; the first TDR coincides with the first new GPU client after sign-in (DWM, Edge, Shorts) in every recorded run, so any windowed app is exposed to it",
+   "ps": "$exe = Find-KfFile -Root \"$K\\vulkan_sdk\" -Name vkcube.exe\nif (-not $exe) { 'VKCUBE_NOTFOUND (SDK install did not produce vkcube.exe)'; exit 1 }\nInvoke-KfWait -Exe $exe -ArgList @('--c', '600') -TimeoutS 90 -Tag vkcube\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": 5,
+   "note": "installs the LunarG SDK silently (tier 2): the only portable-less item; vkcube presents through a Vulkan swapchain to the DWM window",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "vkpeak",
+   "category": "vulkan",
+   "linux": [
+    "vkpeak"
+   ],
+   "pkgs": [
+    "vkpeak",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 600,
+   "expect_s": 60,
+   "rx": "fp32-scalar",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "high",
+   "why": "Vulkan compute peak tests: long dependent-FMA dispatches (seconds each) and a bandwidth test; submit/fence on a compute queue",
+   "ps": "Invoke-KfExe -Exe \"$K\\vkpeak\\vkpeak.exe\" -ArgList @('0')\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "vulkan_video_decode",
+   "category": "video",
+   "linux": [],
+   "pkgs": [
+    "ffmpeg",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 3,
+   "timeout_s": 240,
+   "expect_s": 30,
+   "rx": "frame= *600 ",
+   "fail_rx": "^CHECK .*FAIL|Failed setup for format|DECODE_PREP_FAIL|hwaccel initialisation returned error|Cannot load",
+   "proof": [
+    "pdh:VideoDecode",
+    "smi"
+   ],
+   "difficulty": "high",
+   "why": "needs the NVENC/NVDEC/DXVA engines through Windows' video-engine nodes (a separate scheduler node from 3D/compute); no Windows run of these engines exists yet, only the Linux ones",
+   "ps": "$ff = \"$K\\ffmpeg\\bin\\ffmpeg.exe\"; $fp = \"$K\\ffmpeg\\bin\\ffprobe.exe\"\nInvoke-KfExe -Exe $ff -ArgList @('-y', '-hide_banner', '-nostats', '-f', 'lavfi', '-i', 'testsrc=size=1280x720:rate=30:duration=20', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', \"$OUT\\x264.mp4\")\nif ($global:KfRc -ne 0) { 'DECODE_PREP_FAIL libx264 encode'; exit 1 }\nInvoke-KfExe -Exe $ff -ArgList @('-hide_banner', '-nostats', '-progress', \"$OUT\\prog.txt\", '-init_hw_device', 'vulkan=vk', '-hwaccel', 'vulkan', '-hwaccel_output_format', 'vulkan', '-i', \"$OUT\\x264.mp4\", '-f', 'null', '-')\n$rc = $global:KfRc\n$log = (Get-Content \"$OUT\\prog.txt\" -ErrorAction SilentlyContinue | Where-Object { $_ -match '^frame=' } | Select-Object -Last 1)\n\"frame= $($log -replace 'frame=', '') \"\nexit $rc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": "Vulkan Video decode extension; optional",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  },
+  {
+   "id": "vulkaninfo",
+   "category": "vulkan",
+   "linux": [
+    "vulkaninfo"
+   ],
+   "pkgs": [
+    "vulkan_rt",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 60,
+   "expect_s": 5,
+   "rx": "deviceName\\s*=\\s*NVIDIA",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:deviceName\\s*=\\s*NVIDIA"
+   ],
+   "difficulty": "low",
+   "why": "instance/physical-device queries only (no queue submit); the NVIDIA ICD must load",
+   "ps": "Invoke-KfExe -Exe \"$K\\vulkan_rt\\x64\\vulkaninfo.exe\" -ArgList @('--summary')\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": false,
+   "nvidia_only": true
+  },
+  {
+   "id": "zerocopy_t",
+   "category": "cuda-equiv",
+   "linux": [
+    "simpleZeroCopy"
+   ],
+   "pkgs": [
+    "python_embed",
+    "pywheels",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 120,
+   "expect_s": 8,
+   "rx": "^WINEQ_DONE zerocopy",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA|GeForce|RTX",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "medium",
+   "why": "sustained cuBLAS/cuDNN/cuFFT work, 1-4 GiB allocations, many launches per second: stresses the twin/USERD relay and the completion path for minutes, and the guest TDRs about once a minute today (traces/windows_prod_20261010: 7 resets in ~8 min)",
+   "ps": "Invoke-KfExe -Exe $PY -ArgList ($PYA + @('C:\\kf\\py\\kf_runpy.py', 'C:\\kf\\py\\win_cuda_equiv.py', 'zerocopy'))\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": null,
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true
+  }
+ ],
+ "linux_map": {
+  "BlackScholes": [
+   "blackscholes_t"
+  ],
+  "MersenneTwisterGP11213": [
+   "randomFog_demo",
+   "rng_t"
+  ],
+  "UnifiedMemoryPerf": [
+   "managed_t"
+  ],
+  "UnifiedMemoryStreams": [
+   "managed_t"
+  ],
+  "asyncAPI": [
+   "streams_t"
+  ],
+  "attach_verify": [
+   "managed_t"
+  ],
+  "bandwidthTest": [
+   "bandwidthTest_demo"
+  ],
+  "bf16TensorCoreGemm": [
+   "tcbf16_t"
+  ],
+  "blackscholes": [
+   "blackscholes_t"
+  ],
+  "blender_cycles": [
+   "blender_cycles"
+  ],
+  "clinfo": [
+   "opencl_icd"
+  ],
+  "clpeak": [
+   "clpeak_ocl"
+  ],
+  "concurrentKernels": [
+   "streams_t"
+  ],
+  "conjugateGradient": [
+   "cg_t"
+  ],
+  "conjugateGradientUM": [
+   "managed_t"
+  ],
+  "conv2d": [
+   "torch_correct"
+  ],
+  "cudaTensorCoreGemm": [
+   "tc16_t"
+  ],
+  "cupy": [
+   "cupy_check"
+  ],
+  "deviceQuery": [
+   "deviceQuery_demo"
+  ],
+  "egl_offscreen": [
+   "glgears_wgl"
+  ],
+  "fastWalshTransform": [
+   "fwt_t"
+  ],
+  "fft_cufft": [
+   "fft_t"
+  ],
+  "globalToShmemAsyncCopy": [
+   "cupy_asynccopy"
+  ],
+  "gpu_burn": [
+   "furmark_gl_stress",
+   "torch_burn"
+  ],
+  "graphMemoryNodes": [
+   "graphs_t"
+  ],
+  "hashcat": [
+   "hashcat"
+  ],
+  "histogram": [
+   "hist_t"
+  ],
+  "llama_bench": [
+   "llama_cuda_bench"
+  ],
+  "llama_cpp_gen": [
+   "llama_cuda_gen"
+  ],
+  "mandelbrot": [
+   "mandelbrot_t"
+  ],
+  "matrixMul": [
+   "matmul_t"
+  ],
+  "matrixMulDrv": [
+   "cup8_ladder"
+  ],
+  "memcpy2d": [
+   "memcpy2d_t"
+  ],
+  "nbody": [
+   "nbody_demo_bench",
+   "nbody_demo_gl",
+   "nbody_t"
+  ],
+  "nvdec_h264": [
+   "nvdec_h264"
+  ],
+  "nvenc_h264": [
+   "nvenc_h264"
+  ],
+  "nvenc_hevc": [
+   "nvenc_hevc"
+  ],
+  "nvidia_smi": [
+   "nvidia_smi"
+  ],
+  "reduce": [
+   "reduce_t"
+  ],
+  "reduction": [
+   "reduce_t"
+  ],
+  "scan": [
+   "scan_t"
+  ],
+  "sgemm_cublas": [
+   "matmul_t"
+  ],
+  "sha256": [
+   "cupy_sha256"
+  ],
+  "simpleAtomicIntrinsics": [
+   "atomics_t"
+  ],
+  "simpleCUBLAS": [
+   "matmul_t"
+  ],
+  "simpleCUFFT": [
+   "fft_t",
+   "oceanFFT_demo"
+  ],
+  "simpleCooperativeGroups": [
+   "cupy_cg"
+  ],
+  "simpleCudaGraphs": [
+   "graphs_t"
+  ],
+  "simpleStreams": [
+   "streams_t"
+  ],
+  "simpleZeroCopy": [
+   "zerocopy_t"
+  ],
+  "sortingNetworks": [
+   "sort_t"
+  ],
+  "stream_created": [
+   "stream_created_t"
+  ],
+  "stream_created2nd": [
+   "stream_created2nd_t"
+  ],
+  "stream_default": [
+   "stream_default_t"
+  ],
+  "stream_nonblocking": [
+   "stream_nonblocking_t"
+  ],
+  "stream_perthread": [
+   "stream_perthread_t"
+  ],
+  "stream_triad": [
+   "triad_t"
+  ],
+  "stream_two": [
+   "stream_two_t"
+  ],
+  "torch_ai_bench": [
+   "torch_ai_bench"
+  ],
+  "torch_correct": [
+   "torch_correct"
+  ],
+  "transpose": [
+   "transpose_t"
+  ],
+  "vectorAdd": [
+   "vectorAdd_demo"
+  ],
+  "vectorAddDrv": [
+   "cup2_ladder"
+  ],
+  "vkpeak": [
+   "vkpeak"
+  ],
+  "vulkaninfo": [
+   "vulkaninfo"
+  ]
+ },
+ "no_equivalent": {
+  "simpleCallback": "cudaLaunchHostFunc/stream callbacks are not exposed by PyTorch and no prebuilt binary exists; a C++ build needs nvcc + MSVC, which the guest lacks",
+  "simpleOccupancy": "occupancy API sample needs a cudart C++ build (nvcc + MSVC); NVRTC/CuPy exposes no occupancy sample",
+  "simpleIPC": "CUDA IPC (cudaIpcGetMemHandle) is not supported on WDDM Windows (TCC/Linux only)",
+  "cdpSimpleQuicksort": "dynamic parallelism needs relocatable device code linked with cudadevrt; no prebuilt Windows binary and no NVRTC route without nvcc/MSVC",
+  "hf_generate": "dropped for size: transformers + tokenizers wheels and a 1 GB fp16 model; torch_correct/torch_ai_bench and the llama.cpp rows cover the same stacks",
+  "geekbench_gpu": "Geekbench needs the internet to upload results (the Linux pass string is 'Uploading results'); the lane forbids guest internet at run time"
+ }
+}
