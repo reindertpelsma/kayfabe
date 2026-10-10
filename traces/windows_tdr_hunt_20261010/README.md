@@ -848,3 +848,25 @@ the lock was free while its QEMU ran; my runner's own QEMU check refused correct
 wrapper exits early leaves the GPU unprotected. Re-queued as **run 295** (same plan as 294) behind `tdropus/queue.sh`, which waits for
 no QEMU and no other tdr-run before taking the lock. **NEXT RUN NEEDS:** the GPU for ~25 min (binary bd9a0959, zero flags, 15-min hold).
 When `/var/lib/kf-windows-20261005/COMBINED_LINE.txt` appears, later runs switch to the combined line.
+
+### Run 295 (binary bd9a0959 = display contract + late joiner + both-direction interlock; production, zero flags, 15 min)
+**PROGRESS LINE: boot 0, sign-in 0, Edge 0** (runs 292/293 had 2 in Edge: the overlay-interlock fix holds there), **Shorts step 1,
+hold 1 (hold_t 302)**. Playback check: frames identical (the video did not play). kayfabe side at the resets: no new host Xid (19,
+all from run 289), no pending flip of 100 ms or more, no unfetched channel, no HELD BY HOST, no forced edge. **A new class, not
+classified without ETW.** [inferred] The video path (decode/processing) is the candidate. **NEXT RUN NEEDS:** run 296, binary bd9a0959
++ guest ETW, 600 s hold (~20 min of GPU), queued behind the kf-mem agent.
+
+### Audit: publish-then-raise and stale writes on every guest interrupt path (owner request; code reading, branch display-latch-contract)
+| path | publish-then-raise | stale-write risk | blocking |
+|---|---|---|---|
+| display VSync (VblankGate, 7b) | yes, but vidmem writes go through a pageable `cuMemcpyHtoD`, which CUDA documents may return before the DMA lands | none measured | none |
+| display AWAKEN_WIN / AWAKEN_OTHER / SEM_WIN | partly: each bit is set right after its own notifier, before the whole pass (GETs) is published; a guest W1C publishes events mid-pass | possible: a FINISHED/release held behind a stuck console copy could land in a slot the guest re-armed after a timeout | none |
+| GSP status queue | yes (entries, writePtr, Release fence, IRQSTAT, deliver); no fence between the entry bytes and writePtr (safe on x86, not by the Rust model) | none (kayfabe writes only its own writePtr) | none |
+| CE/GR non-stall | yes (GPU-written state precedes the edge); the optional pacing (`KF3_PT_NSI_MIN_INTERVAL_US`, off) raises on a timer | none (no CPU-written semaphores) | none |
+| USERD relay GP_GET | **no**: the GP_GET refresh is off by default (`KF3_RELAY_GET_REFRESH`) and runs only on the engine-edge path, so a non-stall raise can come while the guest's GP_GET lags the engine | none after free | none |
+
+Proposed (not yet done, each with a test):
+* Owe AWAKEN/SEM_WIN bits like the frame edge.
+* Make vidmem display writes provably landed before the raise (stream copy + event, or a CPU BAR1 view).
+* Add a Release fence before writePtr.
+* Hardwire the GP_GET refresh before every non-stall raise, owed when a step holds the relay.
