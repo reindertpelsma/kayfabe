@@ -269,3 +269,71 @@ But the guest was NOT healthy at boot: two `Running -> Suspending` cycles at mem
 **Not done / not measured:** the LAPIC/MSI-X/eventfd time series at the stall (the sampler works, 2918 samples in run 272, but runs 272-275 were consumed by the Xid/boot-crash problem and one QMP-contention failure); the NO_BATCHED_MAP control; the per-address mirror resolution of the stale packets' dependencies (kf-mem not touched per instruction; no per-VA event ring was added); H-G (unconditional NSI) has no valid run.
 **What is ruled out so far (all rounds):** engine stalls on the host (no HOST-FENCE-OVERDUE, rings drained), stale relayed GP_GET (267), blocked vCPU handlers, a lost VSync, the display answer path (flips answered, 273/275), the broker/console-copy gate (ledger), the live dump as cause of the silence (it is the effect).
 **Still open:** what the pending packets (user render/device in 269, paging in 271, and at boot the first flip) wait for in the guest: host work is done, completions are not seen until the recovery. Exact next step: rerun the sampler on the FIXED build (2da71abe) in a run that reaches the post-sign-in TDR, starting it from the QGA answer with QMP not contended (no screenshots during the window), and read vector 0x62 in IRR/ISR/eventfd/PBA in the 2 s before the last VSync ack, together with `IRQ-RING` (UTC aligned).
+
+---
+## Round 3 (escalated hunt, 2026-10-10 afternoon): the dependency, named from data already on disk (zero hardware runs)
+
+Method: the guest's own DxgKrnl ETW captures of runs 269 and 271 (public Microsoft-Windows-DxgKrnl provider, circular session,
+re-decoded event by event with `tooling/etwwin.py`), aligned with kayfabe's `qemu.log` (`tooling/tslog.py`, display-trace time
+base; run 269 maplog = UTC + 22879.93 s ± 0.05 s, calibrated on the recovery's `HeadTimingEn(0)` at 59544.138 = ETW recovery at
+10:11:04.20 and on the paging ring's last doorbell). Event-ID semantics are those of the provider's own field names
+(QueuePacket 178/179/180, DmaPacket 175/176/177, wait 244, signal 245/294/295/297, fence signalled 551/552, paging-queue op
+322/324/325, VidSch wait 18/19 with its reason string, FlushScheduler 360, child status 1096/1097).
+**The Microsoft public PDBs carry no type information** (`user_types` is empty for dxgkrnl and dxgmms2), so a walk of the
+VidSch flip-queue structures "via the PDB types" is not possible; the dependency below is named from the provider's events.
+
+### Run 269 (first TDR after sign-in), measured: the chain, from the declaration backwards
+1. Declared 10:11:01.86 by the flip-queue check. The pending flip-queue entries (`FLIPMODE_IMMEDIATE_SW_FLIP_QUEUE` 279, 280, 281)
+   are retired only by the recovery at 10:11:04.2026. The last flip the scheduler handed to the driver was submit sequence 279 at
+   10:10:57.947 (event 259); kayfabe saw the matching window PUT at maplog 59537.878 and latched it at 59537.894 — every flip
+   the guest programmed was latched (no display-side loss).
+2. Those flips wait on the render packets of pids 0x19DC / 0x18D4 queued at 10:10:59.853. Each of those contexts has a WAIT packet
+   ahead of its render packet: **context 0xFFFF820EC17720F0 waits on monitored fence 0xFFFF820EC1D5FD10 for 7098 and 7099
+   (current value 7097, signalled at 10:10:59.854286); context 0xFFFF820EBCA0B310 waits on 0xFFFF820EBBFD2A10 for 7234 (current
+   7231, signalled 10:10:59.854988)**. Both fences are **VidMm paging fences of the process devices, signalled by the CPU**
+   (event 551 by the VidMm worker thread when a paging-queue operation finishes), not by a GPU semaphore write.
+3. The operations that would signal 7098/7099 and 7232-7234 are VidMm paging-queue ops 97, 98 (pid 0x19DC, MakeResident),
+   231-233 and 2, 3 (pid 0x18D4), queued at 10:10:59.853. **The VidMm worker never processes them** until 10:11:04.2035 (the
+   recovery), where each one completes in < 1 ms without a GPU packet and signals 7098, 7099, 7232-7234 at once.
+4. At 10:10:59.8537 pid 0xD18 issues a display child-status query (1096/1097, NonDestructiveOnly = false, success in 0.26 ms) and
+   at 10:10:59.853989 **`DXGADAPTER_FLUSHSCHEDULER_SUSPEND`**. It queues a DEVICE command buffer at .868602; the VidSch worker takes it
+   and enters **`VIDSCH_WAIT_COMPLETION` at 10:10:59.868825 and stays there until 10:11:04.203000**; the matching
+   `FLUSHSCHEDULER_RESUME` is at 10:11:04.203472 (after the recovery). The scheduler is suspended for the whole TDR window.
+5. Kayfabe, same instant (maplog 59539.776-59539.793 = UTC .846-.863): the guest disables **every** Passthrough twin
+   (`DISABLE_CHANNELS(bDisable=true)` with an async-preempt event, 22 calls, client 0xc1d00002), kayfabe answers NV_OK and posts
+   22 `RUNLIST_PREEMPT_COMPLETE` events — and **no `bDisable=false` follows**; afterwards the guest issues only periodic
+   performance controls until the recovery. In healthy suspend/resume cycles of the same runs the `bDisable=false` list follows
+   the disable list immediately (e.g. run 269 lines 13987-14149: D+ x18 then D- x18).
+6. Ruled out for this TDR: render work outstanding on the GPU (854 of 854 render submissions 450/451 paired before the suspend,
+   p99 1.4 ms), paging DMA outstanding (last paging DMA 1809 completed 10:10:59.854888), a lost VSync, the display answer path,
+   **and family B (data not visible): the fences the stuck packets wait on are CPU-signalled paging fences whose values are
+   behind because the CPU-side producer never ran, not GPU-written words that failed to land.**
+
+**Named dependency (run 269):** the timed-out flip waits on render packets that wait on two VidMm paging fences (values 7098
+and 7234), which wait on paging operations that the scheduler never lets run because a `FlushScheduler(SUSPEND)` from a display
+child-status poll never completes; the suspend's own wait (`VIDSCH_WAIT_COMPLETION`) coincides with the guest driver's
+preempt-all of the 22 twins, answered by kayfabe with 22 `RUNLIST_PREEMPT_COMPLETE` posts and never followed by the re-enable.
+**[inferred, not measured]** the suspend waits for the driver to report the preemption complete; whether the guest consumed the
+22 posted events (the async-preempt KEVENTs in guest memory, whose addresses are in kayfabe's log as `eventData`) is the
+unmeasured link.
+
+### Run 271 (its ETW-captured TDR), measured: a second shape, no suspend
+* Paging queue packet 4562 (and every later one, queued from 10:23:17.4848) never gets a DMA start; the last paging DMA (1664) starts
+  10:23:17.488136 and completes .489154. No `FLUSHSCHEDULER_SUSPEND` anywhere near it.
+* The VidSch worker's last events: a flip handed to the driver at 10:23:17.4884 (present 0x12D: events 530/382/541), one event at
+  .5528, then **no wait event (18/19) and no submission until the recovery at 10:23:19.9615** — it is not waiting in VidSch's own
+  wait; the flip queue entry 471 (`MMIOFLIP`, queued .566974 by dwm) and two dwm render submissions are victims.
+* So in this shape the scheduler thread stops right after handing a flip to the driver. Not yet named: what it is blocked on.
+
+### Both shapes across the runs (kayfabe-side signature: a disable list not followed by its enable list before the cycle)
+`evidence/disable-enable-vs-tdr-runs263-271.txt`. "S" (preempt-all not re-enabled before the reset): 263 #1, #2; 264 #3, #4;
+266 #3; 267 #2; 269 #1, #2; 271 #2. "F" (only balanced lists before the reset): 264 #1, #2; 266 #1, #2; 267 #1; 268 #1, #2;
+271 #1 (the ETW one); 273/275 boot TDRs. The first TDR after the sign-in keys is F in 264/266/267/268/271 and S in 263/269.
+
+### Next measurements (proposed; each with its falsifier)
+* **S:** a host-side trigger on "disable list without its enable list for 300 ms" takes `dump-guest-memory` (before the 2 s
+  declaration) and reads the `eventData` KEVENTs of the open list (public `_KEVENT`, ntoskrnl types): **H-S** "the guest never
+  consumed the posted preempt-complete events". Falsifier: every open KEVENT is signalled (SignalState = 1) or has no waiter.
+* **F:** `KF3_BAR0_READ_TRACE` on the display range plus the interrupt tree, ETW on: **H-F2** "during the 2 s the driver thread that
+  received the flip polls a BAR0 register kayfabe never changes". Falsifier: no BAR0 offset is read repeatedly in the window
+  (then the wait is on guest memory or a lock, and the same S-type dump at the declaration names the thread).
