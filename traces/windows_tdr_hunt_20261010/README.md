@@ -509,3 +509,10 @@ Binary 20390253 (clean base + diagnostics that are inert without their flags + t
 measurement flag, no guest ETW). Scripted sign-in, Edge, Shorts, hold 1000 s with a "down" key every 20 s.
 **Prediction:** no flip-queue (shape F) TDR. **Falsifier:** any TDR cycle; if one occurs, the qemu.log `seq`/ack-latch analysis tells
 whether it is F (fix incomplete/wrong) or S (the remaining shape).
+
+**Correction (round 3's run-269 chain, measured from the same ETW):** the run-269 TDR also begins with a stuck flip. Present 0x117
+was handed to the driver at 10:10:57.947191 and never reported (every VSync DPC from 57.963 to the declaration reports 0x116
+current); this is the flip `vsrace` names for run 269 (latch 59537.894, guest VSync ack +0.115 ms after it). The display child-status
+poll's `FLUSHSCHEDULER_SUSPEND` at 10:10:59.854, the preempt-all without re-enable, the VidMm paging stall and the user render waits
+all came ~1.9 s AFTER the flip stuck: shape S as seen in 269 is downstream of shape F, not an independent cause. [inferred] The other S
+resets likely share it; run 280 tests the fix against both.
