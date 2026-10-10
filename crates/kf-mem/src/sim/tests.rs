@@ -880,6 +880,73 @@ fn the_guard_catches_split_by_remap() {
     );
 }
 
+/// ★★★ THE HELD-HOLE REGRESSION (Windows run 289: 14 leaves HELD BY HOST, 4 host Xid 31 `FAULT_PTE`,
+/// every faulting VA the TAIL of a 64 KiB unit: `0x1499c000+0x4000`, `0x15bac000+0x4000`,
+/// `0x14588000+0x8000`). Host RM rounds a micro reservation to 64 KiB (start down, size up:
+/// `[measured, run 289 dmesg]` `RangeLo 0x144d0000` for a request at `0x144d5000`), so a batch of
+/// 12 pages held 16 — the 4 pages past the ledger's record were occupied, and when the guest mapped
+/// them (a later refresh, the same process) the map found the VA held, the leaf was acknowledged
+/// HELD and never mapped. `sim::check` fails any fixed map refused by a non-foreign occupant
+/// ("SILENT ABSENCE"); the model's reservations are rounded like the host's.
+#[test]
+fn a_batch_leaves_no_unrecorded_pad_the_guest_cannot_map() {
+    // (start page, rows) in the UNRESERVED part (pages 64..96 = two 64 KiB units): aligned start; unaligned
+    // start and end; a tail pad AND a head pad.
+    for (first, n) in [(64u64, 12u64), (69, 9), (72, 8), (80, 12), (84, 10)] {
+        let sim = fresh();
+        let m = SimMirror::new(&sim, true, true);
+        let mut c = BTreeMap::new();
+        map_ram(&m, &mut c, &scattered(first, n));
+        assert_eq!(
+            sim.0.borrow().resv.len(),
+            1,
+            "first={first} n={n}: the batch went through a micro reservation"
+        );
+        for (&_h, &(lo, hi)) in &sim.0.borrow().resv {
+            assert!(
+                m.bv.micro.lock().unwrap().get(&lo).is_some_and(|r| r.hi == hi),
+                "first={first} n={n}: the host's block {lo:#x}..{hi:#x} is exactly the ledger's record"
+            );
+        }
+        // The guest now maps the rest of the 64 KiB units the batch touched (the pads).
+        let lo_unit = first / 16 * 16;
+        let hi_unit = (first + n).div_ceil(16) * 16;
+        let pads: Vec<(u64, u64, u64)> = (lo_unit..hi_unit)
+            .filter(|&p| p < first || p >= first + n)
+            .map(|p| (p, 1, 3000 + p))
+            .collect();
+        map_ram(&m, &mut c, &pads);
+        ok(&sim, &c, &BTreeMap::new());
+        assert_eq!(m.bv.held_ours.load(Relaxed), 0, "first={first} n={n}: HELD-BY-OURSELVES");
+        assert!(
+            c.values().all(|x| !x.held),
+            "first={first} n={n}: no leaf acknowledged HELD without a foreign occupant"
+        );
+        // ... and every page of the unit translates (nothing silently absent).
+        for p in lo_unit..hi_unit {
+            assert!(
+                sim.0.borrow().translate(pg(p), Owner::Mirror).is_some(),
+                "first={first} n={n}: page {p} unmapped"
+            );
+        }
+    }
+}
+
+/// A host buffer (foreign) in a pad IS a legitimate HELD — the only one: the model accepts it and
+/// the leaf is acknowledged HELD, while the reservation is refused (NoMemory) and the rows go per run.
+#[test]
+fn a_foreign_buffer_in_the_pad_makes_the_reservation_impossible_not_the_leaf_silent() {
+    let sim = fresh();
+    assert!(sim.0.borrow_mut().place_foreign(1, pg(78), P)); // inside the 64 KiB unit of 64..76
+    let m = SimMirror::new(&sim, true, true);
+    let mut c = BTreeMap::new();
+    map_ram(&m, &mut c, &scattered(64, 12));
+    assert_eq!(sim.0.borrow().resv.len(), 0, "the unit is not ours to reserve");
+    assert_eq!(sim.0.borrow().maps.len(), 12 + 1, "per run at the grain + the foreign buffer");
+    let f = BTreeMap::from([(1u32, (pg(78), P))]);
+    ok(&sim, &c, &f);
+}
+
 /// The micro reservation is refused (a host that does not accept small reservations): the rows go
 /// per run, named and counted, exact.
 #[test]

@@ -305,6 +305,33 @@ fn frame_edge(ports: &Ports, map: &RegMap, h: usize, loadv: bool) -> u32 {
     ports.rm_head_timing(h)
 }
 
+/// A head's whole frame edge: its frame counters (`RG_DPCA`, LOADV), then [`frame_edge`]. Returns the RM-visible bits.
+fn frame_edge_out(
+    dp: &DisplayPlane,
+    store: &dyn Fn(u64, u32),
+    h: usize,
+    f: u32,
+    loadv: bool,
+    wtrace: bool,
+    traced: &AtomicU32,
+) -> u32 {
+    let (b, st, fld) = dp.map.rg_dpca;
+    store(b + h as u64 * st, kf_disp::class::put(0, fld, f));
+    if let Some((lb, ls)) = dp.map.loadv {
+        store(lb + h as u64 * ls, f);
+    }
+    let irq = frame_edge(&dp.ports, &dp.map, h, loadv);
+    if wtrace && irq != 0 && trace_slot(traced, display_trace_cap()) {
+        eprintln!(
+            "kf3: display: WTRACE t={:.6} VSYNC h{h} frame={f} evt={:#x} en={:#x} rm={irq:#x}",
+            kf_mem::maplog::t(),
+            dp.ports.event(EventReg::HeadTiming(h)),
+            dp.ports.event(EventReg::HeadTimingEn(h)),
+        );
+    }
+    irq
+}
+
 /// `NV_PDISP_FE_CORE_HEAD_STATE(i)`: base, stride, the `OPERATING_MODE` field `(hi, lo)`, and its
 /// `AWAKE` and `SLEEP` values.
 type CoreHeadState = (u64, u64, (u8, u8), u32, u32);
@@ -1418,6 +1445,8 @@ struct WorkerInit {
     gpu: Option<DisplayGpu>,
     layout: Layout,
     notifier_finished: u32,
+    /// `NV_DISP_NOTIFIER__0_STATUS_BEGUN` as a status word: a window flip's notifier at its latch.
+    notifier_begun: u32,
     /// ★ The GPU-copy rung's worker half (§8.11), when the device offers it.
     vram: Option<VramWorker>,
 }
@@ -1796,6 +1825,15 @@ impl DisplayPlane {
             .zip(t.notifier_value("__0_STATUS_FINISHED"))
             .map(|(fld, v)| kf_disp::class::put(0, fld, v))
             .ok_or("display=on: NV_DISP_NOTIFIER__0_STATUS is not derived")?;
+        // ★ 2026-10-10: a WINDOW flip's notifier is BEGUN at its latch and FINISHED at its flip-away (open NVKMS: the
+        // display writes it BEGUN when it performs the flip, `ogkm-595.84: nvidia-modeset/src/nvkms-headsurface.c:
+        // 1925-1952`; `kf_disp::engine::Effect::Notify`); the core's completion notifier is FINISHED
+        // (`nvkms-evo3.c:6224-6243`)
+        let notifier_begun = t
+            .notifier_field("__0_STATUS")
+            .zip(t.notifier_value("__0_STATUS_BEGUN"))
+            .map(|(fld, v)| kf_disp::class::put(0, fld, v))
+            .ok_or("display=on: NV_DISP_NOTIFIER__0_STATUS_BEGUN is not derived")?;
         let model = kf_rm::display::model_for(table, row, max_fps).ok_or_else(|| {
             format!("display=on: no derived display layouts for driver {version}")
         })?;
@@ -1886,6 +1924,7 @@ impl DisplayPlane {
                 gpu: Some(gpu),
                 layout,
                 notifier_finished,
+                notifier_begun,
                 vram,
             })),
             cursor: core::array::from_fn(|_| CursorPorts::default()),
@@ -2136,6 +2175,7 @@ struct Io<'d> {
     /// The instance-memory image, read (by the GPU) at most once per worker pass.
     img: Option<Vec<u8>>,
     notifier_finished: u32,
+    notifier_begun: u32,
     refusals_logged: u32,
 }
 
@@ -2291,6 +2331,7 @@ impl Device {
             gpu,
             layout,
             notifier_finished,
+            notifier_begun,
             vram,
         } = init;
         if let Some(g) = &gpu
@@ -2390,6 +2431,7 @@ impl Device {
             inst: None,
             img: None,
             notifier_finished,
+            notifier_begun,
             refusals_logged: 0,
         };
         // ★ `display-max-fps` (§8.16): every head's vblank tick, CAPPED — the pacer owns the periods
@@ -2433,6 +2475,10 @@ impl Device {
             ..ScanState::default()
         };
         let mut queue: VecDeque<Queued> = VecDeque::new();
+        // ★ 2026-10-10: a head's frame edge is OWED until its vblank's completions are published (`vblankgate`)
+        let mut gate = crate::vblankgate::VblankGate::default();
+        let mut edge_frame = [0u32; MAX_HEADS];
+        let mut forced_logged = 0u64;
         let mut cursor_seen = [0u32; MAX_HEADS];
         let mut published_get = [u32::MAX; kf_disp::ports::NUM_CHANNELS];
         let mut logged_updates = 0u32;
@@ -2462,6 +2508,9 @@ impl Device {
                 deadline = deadline.min(now + Duration::from_millis(2));
             }
             if let Some(t) = scan.idle_at {
+                deadline = deadline.min(t);
+            }
+            if let Some(t) = gate.deadline() {
                 deadline = deadline.min(t);
             }
             // a lit head without a window: wake when its hold ends (then the console may go black)
@@ -2641,28 +2690,12 @@ impl Device {
                 let s = engine.vblank(t.head, &mut |a| io.acquired(a));
                 effects.extend(s.effects);
                 gets.extend(s.gets);
-                let f = dp.ports.frames[h]
+                // ★ the frame edge itself (frame counters, head-timing event, interrupt) is NOT raised here: the
+                // hardware raises it after the latch it announces — it is owed until step 7b
+                edge_frame[h] = dp.ports.frames[h]
                     .fetch_add(1, Ordering::AcqRel)
                     .wrapping_add(1);
-                let (b, st, fld) = dp.map.rg_dpca;
-                store(b + h as u64 * st, kf_disp::class::put(0, fld, f));
-                if let Some((lb, ls)) = dp.map.loadv {
-                    store(lb + h as u64 * ls, f);
-                }
-                let irq = frame_edge(&dp.ports, &dp.map, h, loadv);
-                raised |= irq != 0;
-                if wtrace && irq != 0 && trace_slot(&vsync_traced, display_trace_cap()) {
-                    eprintln!(
-                        "kf3: display: WTRACE t={:.6} VSYNC h{h} frame={f} evt={:#x} en={:#x} rm={irq:#x}",
-                        kf_mem::maplog::t(),
-                        dp.ports.event(EventReg::HeadTiming(h)),
-                        dp.ports.event(EventReg::HeadTimingEn(h)),
-                    );
-                }
                 counts[h].ticks += 1;
-                if irq & dp.map.head_vblank != 0 {
-                    counts[h].vblirq += 1;
-                }
                 ticked |= 1 << h;
             }
             // 5. acquires waiting without a vblank
@@ -2811,12 +2844,21 @@ impl Device {
                     need: scan.barrier,
                     item: Item::Effect(e),
                 });
+                gate.pushed();
             }
             for (chn, life, get) in gets {
                 queue.push_back(Queued {
                     need: scan.barrier,
                     item: Item::Get(chn, life, get),
                 });
+                gate.pushed();
+            }
+            // every head that ticked: its edge is owed until everything queued up to its vblank is published
+            let tick_at = Instant::now();
+            for h in 0..MAX_HEADS {
+                if ticked & (1 << h) != 0 {
+                    gate.tick(h, tick_at);
+                }
             }
             if io
                 .gpu
@@ -2900,7 +2942,9 @@ impl Device {
                         handle,
                         offset,
                         awaken,
+                        finished,
                     } => {
+                        let status = if finished { io.notifier_finished } else { io.notifier_begun };
                         let r = io.resolve(client, handle, chn).and_then(|dma| {
                             let ts = self.rm.gpu_time_ns().unwrap_or(0);
                             let mut n = [0u8; 16];
@@ -2908,7 +2952,7 @@ impl Device {
                             n[12..16].copy_from_slice(&((ts >> 32) as u32).to_le_bytes());
                             // the timestamp words first, the status word (what the guest polls) last
                             io.write(dma, offset + 4, &n[4..16])?;
-                            io.write(dma, offset, &io.notifier_finished.to_le_bytes())
+                            io.write(dma, offset, &status.to_le_bytes())
                         });
                         if trace {
                             eprintln!(
@@ -2992,6 +3036,31 @@ impl Device {
                         eprintln!("kf3: display: channel {chn} STOPPED at {at:#x}: {what}");
                     }
                 }
+            }
+            // 7b. ★ 2026-10-10 (`vblankgate`): the owed frame edges whose vblank's completions are all published —
+            // the hardware's order: latch, notifier/semaphore/GET, THEN the vblank event and its interrupt. Every
+            // guest-visible word above is written (the vidmem writes are synchronous) before the fence; the edge after.
+            gate.remaining(queue.len());
+            let due = gate.due(Instant::now());
+            if !due.is_empty() {
+                std::sync::atomic::fence(Ordering::SeqCst);
+            }
+            for h in due {
+                let irq = frame_edge_out(dp, &store, h, edge_frame[h], loadv, wtrace, &vsync_traced);
+                raised |= irq != 0;
+                if irq & dp.map.head_vblank != 0 {
+                    counts[h].vblirq += 1;
+                }
+            }
+            if gate.forced > forced_logged {
+                if forced_logged < 20 {
+                    eprintln!(
+                        "kf3: display: a frame edge waited {} ms for its completions (a console copy behind the host) and was raised without them — {} so far",
+                        crate::vblankgate::EDGE_CAP.as_millis(),
+                        gate.forced
+                    );
+                }
+                forced_logged = gate.forced;
             }
             if engine.updates > u64::from(logged_updates) && logged_updates < 64 {
                 logged_updates = u32::try_from(engine.updates.min(64)).unwrap_or(64);

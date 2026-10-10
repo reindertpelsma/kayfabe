@@ -1,6 +1,16 @@
 # V3 — the late TSG joiner: a twin born after the guest's one schedule
 
-**STATUS: LIVE (default OFF), 2026-10-09 — code and GPU-free tests on branch
+**STATUS: LIVE (hardwired), 2026-10-10 — hardware-verified, section 6 falsifier NOT met.** [measured, Windows 11 / RTX 4070,
+`traces/windows_tdr_hunt_20261010/README.md` (branch `claude/tdr-opus-20261010`) runs 287, 288 vs 290, base binary 81cf89c8]
+Without the schedule, the compute+copy joiners of a D3D12 device's TSG (ctxShare 0xff0e0201/0202, logged
+`late_joiner_schedule=Some(SwitchOff)`) kept host `GP_GET=0` with `GP_PUT=0x10` after their doorbell. Their first
+submissions never completed, the context flush hung and Windows reset the GPU (run 287: 1 TDR in a 240 s hold; run 288: 4 in
+900 s, ETW: first render submissions on three new contexts never complete). With `KF3_SCHEDULE_LATE_JOINERS=1` (run 290,
+one variable vs 288) there were 15 joiners `Authored`, none left unfetched, 0 TDR in boot, sign-in, Edge and a 300 s hold,
+and 0 new host Xid. The switch is removed; the schedule is unconditional. (Section 2.3's hardware rule remains inferred: the
+VFIO reference has no doorbell trace of a late joiner.) The text below is the 2026-10-09 state:
+
+**STATUS (superseded above): LIVE (default OFF), 2026-10-09 — code and GPU-free tests on branch
 `claude/late-tsg-joiner-20261009`, NOT hardware-verified.** The fix is behind
 `KF3_SCHEDULE_LATE_JOINERS=1` because the rule it follows on real hardware is inferred, not shown
 (section 2.3). Flip the default only after the falsifier in section 6 has passed on a box.

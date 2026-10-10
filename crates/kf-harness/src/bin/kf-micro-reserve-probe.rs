@@ -431,6 +431,85 @@ fn run(l: &mut Ledger, arm: &str) -> Result<bool, String> {
                 back.is_ok(),
                 format!("NV01 map at the freed VA: {back:?}"),
             );
+            // ★★★ Held-hole geometry (2026-10-10, run 289): host RM rounds a reservation to 64 KiB
+            // (start down, size up). MEASURE it (informational), then GATE the rule production relies
+            // on: a reservation over an ALIGNED 64 KiB range holds exactly that — the page after it
+            // is mappable through the NV01 range and the whole range maps through the reservation.
+            if back.is_ok() {
+                let _ = rm.unmap(space, V_RESERVE, false);
+            }
+            let nv01_page = |at: u64| {
+                rm.map_kind(
+                    space,
+                    src,
+                    MapBacking::SharedSlice,
+                    0,
+                    P,
+                    Some(at),
+                    false,
+                    0,
+                    MapPerm::READ_WRITE,
+                )
+            };
+            // (1) 8 pages asked: is the pad past them held? (the run-289 mechanism)
+            let h8 = rm
+                .reserve_va(space.space, V_RESERVE, PAGES * P)
+                .map_err(|e| format!("pad probe reserve: {e:?}"))?;
+            let pad = nv01_page(V_RESERVE + PAGES * P);
+            l.measure(
+                "reserve_rounding_pad_after_8_pages",
+                format!("NV01 map one page past the request: {pad:?} (an error = host RM rounded the block up)"),
+            );
+            if pad.is_ok() {
+                let _ = rm.unmap(space, V_RESERVE + PAGES * P, false);
+            }
+            rm.free(h8).map_err(|e| format!("free: {e:?}"))?;
+            // (2) an UNALIGNED start: is the span below it held?
+            match rm.reserve_va(space.space, V_RESERVE + 0x5000, 0x2_0000) {
+                Ok(hu) => {
+                    let below = nv01_page(V_RESERVE + 0x2000);
+                    l.measure(
+                        "reserve_rounding_below_unaligned_start",
+                        format!("NV01 map one page below the request: {below:?} (an error = the start was rounded down)"),
+                    );
+                    if below.is_ok() {
+                        let _ = rm.unmap(space, V_RESERVE + 0x2000, false);
+                    }
+                    rm.free(hu).map_err(|e| format!("free: {e:?}"))?;
+                }
+                Err(e) => l.measure("reserve_rounding_below_unaligned_start", format!("refused: {e:?}")),
+            }
+            // (3) THE GATE: an aligned 64 KiB reservation holds exactly 64 KiB.
+            let ha = rm
+                .reserve_va(space.space, V_RESERVE, 0x1_0000)
+                .map_err(|e| format!("aligned reserve: {e:?}"))?;
+            let after = nv01_page(V_RESERVE + 0x1_0000);
+            l.check(
+                "reserve_aligned_holds_exactly",
+                after.is_ok(),
+                format!("NV01 map one page past an aligned 64 KiB reservation: {after:?}"),
+            );
+            if after.is_ok() {
+                let _ = rm.unmap(space, V_RESERVE + 0x1_0000, false);
+            }
+            let whole = rm.map_in(
+                ha,
+                src,
+                MapBacking::SharedSlice,
+                0,
+                0x1_0000,
+                V_RESERVE,
+                false,
+                0,
+                MapPerm::READ_WRITE,
+            );
+            l.check(
+                "reserve_aligned_maps_whole",
+                whole.is_ok(),
+                format!("64 KiB mapped through the aligned reservation: {whole:?}"),
+            );
+            let _ = rm.unmap_in(ha, V_RESERVE, 0x1_0000, false);
+            rm.free(ha).map_err(|e| format!("free: {e:?}"))?;
             Ok(false)
         }
         "nv01-control" => {

@@ -205,6 +205,117 @@ fn held_or(r: Result<u64, kf_host::RmError>, va: u64, len: u64) -> Result<Mapped
 /// every guest-RAM row is whole multiples of (`crate::apply` refuses a sub-page row).
 pub const BATCH_PAGE: u64 = 0x1000;
 
+/// ★★★ **The granule host RM rounds a VA reservation to** (held-hole fix, 2026-10-10).
+/// `[measured, run 289, host dmesg]` `virtmemAllocResources: VA Space alloc failed! Status Code:
+/// 0x51 Size: 0x20000 RangeLo: 0x144d0000 … pageSzLockMask: 0x11000` for a reservation asked at
+/// `0x144d5000+0x20000`; `gvaspaceApplyDefaultAlignment` (`gpu_vaspace.c:1645`) and
+/// `_memmgrPickDefaultGpuPageSize` (`mem_mgr.c:1743`): the START is aligned DOWN and the SIZE aligned
+/// UP to the page size RM picks for the request — 2 MiB when the request is at least 2 MiB, else
+/// the 64 KiB big page. An UNALIGNED request therefore holds a block that differs from the range
+/// the ledger recorded: the pad past the recorded end (and the span below an unaligned start) is
+/// occupied on the host, every later 4 KiB map there is answered occupied (`VA_ALREADY_MAPPED` →
+/// `HeldByHost`), the guest's leaf has no PTE and the engine faults (`Xid 31 FAULT_PTE`, run 289:
+/// every faulting VA is a tail page of a 64 KiB block). The rule here: **a reservation is made
+/// only over a range [`reserve_exact`] says RM will hold exactly** (its aligned core); the unaligned
+/// head and tail of a row go at the 4 KiB grain.
+pub const RESERVE_SMALL_ALIGN: u64 = 0x1_0000;
+/// See [`RESERVE_SMALL_ALIGN`]: the alignment of a reservation of at least [`RESERVE_HUGE_MIN`].
+pub const RESERVE_HUGE_ALIGN: u64 = 0x20_0000;
+/// See [`RESERVE_SMALL_ALIGN`]: a request this large is aligned to 2 MiB, not 64 KiB.
+pub const RESERVE_HUGE_MIN: u64 = 0x20_0000;
+/// The longest 64 KiB-aligned reservation (just below [`RESERVE_HUGE_MIN`], which would change the
+/// alignment RM applies).
+const RESERVE_SMALL_MAX: u64 = RESERVE_HUGE_MIN - RESERVE_SMALL_ALIGN;
+
+/// The alignment host RM applies to a reservation request of `len` bytes.
+#[must_use]
+pub fn reserve_align(len: u64) -> u64 {
+    if len >= RESERVE_HUGE_MIN {
+        RESERVE_HUGE_ALIGN
+    } else {
+        RESERVE_SMALL_ALIGN
+    }
+}
+
+/// Whether host RM holds EXACTLY `[va, va+len)` for a reservation request of it (both ends aligned
+/// to [`reserve_align`], non-empty). Only such requests are ever made.
+#[must_use]
+pub fn reserve_exact(va: u64, len: u64) -> bool {
+    let a = reserve_align(len);
+    len != 0 && va.is_multiple_of(a) && len.is_multiple_of(a) && va.checked_add(len).is_some()
+}
+
+/// The reservations that tile the aligned core of `[s, e)`: disjoint, ascending, each
+/// [`reserve_exact`]. The head and tail left over (each shorter than the alignment of the core
+/// next to it) are the caller's, at the 4 KiB grain. Empty when `[s, e)` holds no aligned unit.
+#[must_use]
+pub fn reserve_cores(s: u64, e: u64) -> Vec<(u64, u64)> {
+    fn up(x: u64, a: u64) -> u64 {
+        x.div_ceil(a).saturating_mul(a)
+    }
+    fn small(s: u64, e: u64, out: &mut Vec<(u64, u64)>) {
+        let (mut cur, end) = (up(s, RESERVE_SMALL_ALIGN), (e / RESERVE_SMALL_ALIGN).saturating_mul(RESERVE_SMALL_ALIGN));
+        while cur < end {
+            let n = end.saturating_sub(cur).min(RESERVE_SMALL_MAX);
+            out.push((cur, cur.saturating_add(n)));
+            cur = cur.saturating_add(n);
+        }
+    }
+    let mut out = Vec::new();
+    if e <= s {
+        return out;
+    }
+    let (ms, me) = (up(s, RESERVE_HUGE_ALIGN), (e / RESERVE_HUGE_ALIGN).saturating_mul(RESERVE_HUGE_ALIGN));
+    if me > ms {
+        small(s, ms, &mut out);
+        out.push((ms, me));
+        small(me, e, &mut out);
+    } else {
+        small(s, e, &mut out);
+    }
+    out
+}
+
+/// The smallest [`reserve_exact`] range that contains `[s, e)`: its HULL (64 KiB units, 2 MiB when
+/// that makes it 2 MiB or more). `None` when `[s, e)` is empty or the hull wraps.
+#[must_use]
+pub fn reserve_hull(s: u64, e: u64) -> Option<(u64, u64)> {
+    if e <= s {
+        return None;
+    }
+    let hull = |a: u64| -> Option<(u64, u64)> {
+        Some((s.checked_div(a)?.saturating_mul(a), e.checked_next_multiple_of(a)?))
+    };
+    let small = hull(RESERVE_SMALL_ALIGN)?;
+    let h = if small.1.saturating_sub(small.0) >= RESERVE_HUGE_MIN {
+        hull(RESERVE_HUGE_ALIGN)?
+    } else {
+        small
+    };
+    reserve_exact(h.0, h.1.saturating_sub(h.0)).then_some(h)
+}
+
+/// The single largest [`reserve_cores`] unit of `[s, e)` — the core a batch is placed through.
+#[must_use]
+pub fn batch_core(s: u64, e: u64) -> Option<(u64, u64)> {
+    reserve_cores(s, e).into_iter().max_by_key(|&(a, b)| b.saturating_sub(a))
+}
+
+/// `rows` clipped to `[lo, hi)` (rows are VA-contiguous; offsets move with the clip).
+fn clip_rows(rows: &[Desired], lo: u64, hi: u64) -> Vec<Desired> {
+    rows.iter()
+        .filter_map(|d| {
+            let (s, e) = (d.va.max(lo), d.va.saturating_add(d.len).min(hi));
+            (s < e).then(|| Desired {
+                va: s,
+                len: e.saturating_sub(s),
+                off: d.off.saturating_add(s.saturating_sub(d.va)),
+                ..*d
+            })
+        })
+        .collect()
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Entry {
     handle: u32,
@@ -980,6 +1091,11 @@ pub struct BatchedVas<'rm, V: SpaceVerbs = HostVas<'rm>> {
     /// ★ Review fix 2026-10-10: mappings of ours found where a NEW row was about to be mapped (a
     /// mapping a refused rollback or take-down left behind) and removed first — counted.
     pub strays_removed: std::sync::atomic::AtomicU64,
+    /// ★ Held-hole fix: fixed maps host RM answered "occupied" for a VA OUR ledger says is ours (an
+    /// own mapping, or a micro reservation of ours covering the piece): the guest's leaf is
+    /// silently absent through a kayfabe defect, never through a host-owned buffer. Loud (named in
+    /// the log, the first 16) and counted; the GPU-free model fails on any (`sim::check`).
+    pub held_ours: std::sync::atomic::AtomicU64,
     /// ★ Review fix 2026-10-10 (finding 5): batch objects whose free host RM refused — still OURS,
     /// still mapped somewhere: [`BatchedVas::leftovers`] reports them so the space is never recycled.
     pub stuck_objects: std::sync::Mutex<Vec<u32>>,
@@ -1139,6 +1255,7 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
             max_leaf_pieces: MAX_LEAF_PIECES,
             huge_refused: std::sync::atomic::AtomicU64::new(0),
             strays_removed: std::sync::atomic::AtomicU64::new(0),
+            held_ours: std::sync::atomic::AtomicU64::new(0),
             stuck_objects: std::sync::Mutex::new(Vec::new()),
             leaf_reserved: std::sync::atomic::AtomicU64::new(0),
             leaf_grained: std::sync::atomic::AtomicU64::new(0),
@@ -1421,6 +1538,31 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
         out
     }
 
+    /// ★ Held-hole fix: a piece host RM answered "occupied" for. If OUR ledger says the VA is ours
+    /// (a mapping of ours there, or a reservation of ours covering a piece placed outside one) the
+    /// absence of the guest's leaf is a kayfabe defect — counted and named.
+    fn note_held(&self, via: Option<u32>, s: u64, e: u64) {
+        let ours = via.is_none()
+            && (self.hold(&self.own, |o| (o.any_in(s, e), 1)) || self.micro_covers(s, e));
+        if ours {
+            static LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+            bump(&self.held_ours);
+            if LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 16 {
+                eprintln!(
+                    "kf-mem: HELD-BY-OURSELVES {s:#x}+{:#x}: host RM reports the VA occupied and OUR ledger says it is ours (a mapping or reservation of ours) — the guest's leaf is absent through a kayfabe defect, not a host buffer",
+                    e.saturating_sub(s)
+                );
+            }
+        }
+    }
+
+    /// Whether `[a, b)` (a pad, possibly empty) holds none of our mappings and is covered by none of
+    /// our reservations — the precondition for taking it into a reservation's hull.
+    fn segments_free_of_ours(&self, a: u64, b: u64) -> bool {
+        b <= a
+            || (!self.hold(&self.own, |o| (o.any_in(a, b), 1)) && !self.micro_covers(a, b))
+    }
+
     /// Record a NEW micro reservation of ours, pinned once (the caller maps through it next).
     fn add_micro(&self, lo: u64, hi: u64, handle: u32) {
         bump(&self.micro_made);
@@ -1500,7 +1642,9 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
         // ★ Review item 3: a hostile or malformed page-size code reaches here as leaf 0 (apply's
         // `leaf_bytes` answers 0 for an unknown code; `ledger.rs` builds rows with `leaf: 0`) or as
         // a leaf that is not a power of two. Treated as 4 KiB — never divided by.
-        let leaf = if leaf.is_power_of_two() && leaf >= BATCH_PAGE {
+        // ★ Held-hole fix: a leaf below the 64 KiB big page is not a GMMU leaf size (4 KiB, 64 KiB,
+        // 2 MiB, …): it is treated as the 4 KiB grain, so no reservation is ever sized to it.
+        let leaf = if leaf.is_power_of_two() && leaf >= RESERVE_SMALL_ALIGN {
             leaf
         } else {
             BATCH_PAGE
@@ -1516,26 +1660,72 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
             let big = leaf > BATCH_PAGE && (s | e).is_multiple_of(leaf);
             let grains = (e.saturating_sub(s)) / BATCH_PAGE;
             let over = grains > self.max_leaf_pieces;
-            if (big || over) && self.low_reserve && !self.spend(1, 0) {
-                self.fail_segments(&segs, &fresh, true);
-                self.note_budget_refusal(s, e.saturating_sub(s));
-                return Err(format!(
-                    "map {s:#x}+{:#x}: {REFRESH_BUDGET_EXHAUSTED}",
-                    e.saturating_sub(s)
-                ));
-            }
-            if (big || over) && self.low_reserve {
-                match self.vas.reserve(s, e.saturating_sub(s)) {
-                    Ok(h) => {
-                        self.add_micro(s, e, h);
-                        fresh.push((Some(h), s, e));
-                        out.push((Some(h), s, e));
-                        if big {
-                            bump(&self.leaf_reserved);
+            // ★ Held-hole fix: reserve only the ALIGNED CORE(S) of the segment ([`reserve_cores`]) — host
+            // RM holds exactly what it was asked for, so the ledger's record IS the host's block. The
+            // unaligned head/tail goes at the 4 KiB grain.
+            let cores = if (big || over) && self.low_reserve {
+                reserve_cores(s, e)
+            } else {
+                Vec::new()
+            };
+            if !cores.is_empty() {
+                if !self.spend(cores.len() as u64, 0) {
+                    self.fail_segments(&segs, &fresh, true);
+                    self.note_budget_refusal(s, e.saturating_sub(s));
+                    return Err(format!(
+                        "map {s:#x}+{:#x}: {REFRESH_BUDGET_EXHAUSTED}",
+                        e.saturating_sub(s)
+                    ));
+                }
+                let mut made: Vec<Seg> = Vec::with_capacity(cores.len());
+                let mut refused = false;
+                for &(cs, ce) in &cores {
+                    match self.vas.reserve(cs, ce.saturating_sub(cs)) {
+                        Ok(h) => {
+                            self.add_micro(cs, ce, h);
+                            made.push((Some(h), cs, ce));
                         }
-                        continue;
+                        Err(why) => {
+                            self.reserve_refused(cs, ce.saturating_sub(cs), &why);
+                            refused = true;
+                            break;
+                        }
                     }
-                    Err(why) => self.reserve_refused(s, e.saturating_sub(s), &why),
+                }
+                if refused {
+                    // Nothing placed or lost: give back what was made (unpinned, then freed empty).
+                    self.unpin(&made);
+                    for &(_, cs, ce) in &made {
+                        self.release_micro(cs, ce);
+                    }
+                } else {
+                    let mut cur = s;
+                    let mut rem = 0u64;
+                    for &(via, cs, ce) in &made {
+                        if cs > cur {
+                            rem = rem.saturating_add(cs.saturating_sub(cur) / BATCH_PAGE);
+                            push_grains(&mut out, cur, cs);
+                        }
+                        out.push((via, cs, ce));
+                        cur = ce;
+                    }
+                    if cur < e {
+                        rem = rem.saturating_add(e.saturating_sub(cur) / BATCH_PAGE);
+                        push_grains(&mut out, cur, e);
+                    }
+                    fresh.extend(made.iter().copied());
+                    if rem > 0 && !self.spend(rem, rem) {
+                        self.fail_segments(&segs, &fresh, true);
+                        self.note_budget_refusal(s, e.saturating_sub(s));
+                        return Err(format!(
+                            "map {s:#x}+{:#x} ({rem} head/tail grains): {REFRESH_BUDGET_EXHAUSTED}",
+                            e.saturating_sub(s)
+                        ));
+                    }
+                    if big {
+                        bump(&self.leaf_reserved);
+                    }
+                    continue;
                 }
             }
             if !over {
@@ -1982,6 +2172,9 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
             match one(via, s, e.saturating_sub(s)) {
                 Ok(Mapped::Placed) => placed.push((via, s, e)),
                 other => {
+                    if other == Ok(Mapped::HeldByHost) {
+                        self.note_held(via, s, e);
+                    }
                     verdict = other;
                     break;
                 }
@@ -2143,6 +2336,11 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
         self.clear_strays(va, end, defer)?;
         let segs = self.segments(va, end);
         let mut pinned: Vec<Seg> = segs.clone();
+        // The extent the batch object covers (and the book/ledger record): the whole run, or — when
+        // a NEW micro reservation carries it — the reservation's aligned core only ([`batch_core`]).
+        let (mut bva, mut blen) = (va, len);
+        // Pieces of the rows OUTSIDE the core, placed per run after the batch.
+        let mut outside: Vec<Desired> = Vec::new();
         let mapped: Result<(u32, Option<u32>), String> = match segs.as_slice() {
             [(None, ..)] if self.vas.splits_safely(va, len) => self
                 .vas
@@ -2153,19 +2351,46 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
                 .map_scattered_in(*h, ram_fd, rows, defer)
                 .map(|o| (o, Some(*h))),
             [(None, ..)] if self.low_reserve && rows.len() >= LOW_RANGE_MIN_RUNS => {
-                match self.vas.reserve(va, len) {
-                    Ok(h) => {
-                        self.add_micro(va, end, h);
-                        pinned.push((Some(h), va, end));
-                        self.vas
-                            .map_scattered_in(h, ram_fd, rows, defer)
-                            .map(|o| (o, Some(h)))
+                // ★ Held-hole fix: host RM rounds a reservation to 64 KiB / 2 MiB ([`reserve_exact`]).
+                // The reservation is made over the run's aligned HULL when nothing of ours lies in
+                // the pads (the ledger then records exactly the block RM holds, pads included — a
+                // later row in a pad maps THROUGH it), else over the aligned CORE only; the rest of
+                // the run goes per run.
+                let hull = reserve_hull(va, end).filter(|&(hs, he)| {
+                    self.segments_free_of_ours(hs, va) && self.segments_free_of_ours(end, he)
+                });
+                let core = batch_core(va, end)
+                    .filter(|&(cs, ce)| clip_rows(rows, cs, ce).len() >= LOW_RANGE_MIN_RUNS);
+                // Candidates in order: (reservation range, mapped range).
+                let plans = [hull.map(|h| (h, (va, end))), core.map(|c| (c, c))];
+                let mut result: Result<(u32, Option<u32>), String> =
+                    Err(crate::ledger::NOT_BATCHED.into());
+                let mut tried: Option<(u64, u64)> = None;
+                for ((rs, re), (ms, me)) in plans.into_iter().flatten() {
+                    if tried == Some((rs, re)) {
+                        continue;
                     }
-                    Err(e) => {
-                        self.reserve_refused(va, len, &e);
-                        Err(crate::ledger::NOT_BATCHED.into())
+                    tried = Some((rs, re));
+                    match self.vas.reserve(rs, re.saturating_sub(rs)) {
+                        Ok(h) => {
+                            self.add_micro(rs, re, h);
+                            pinned.push((Some(h), rs, re));
+                            let core_rows = clip_rows(rows, ms, me);
+                            outside = clip_rows(rows, va, ms);
+                            outside.extend(clip_rows(rows, me, end));
+                            (bva, blen) = (ms, me.saturating_sub(ms));
+                            result = self
+                                .vas
+                                .map_scattered_in(h, ram_fd, &core_rows, defer)
+                                .map(|o| (o, Some(h)));
+                            break;
+                        }
+                        // Refused (the hull may touch a guest reservation or a host buffer): the
+                        // aligned core is the next candidate.
+                        Err(e) => self.reserve_refused(rs, re.saturating_sub(rs), &e),
                     }
                 }
+                result
             }
             _ => Err(crate::ledger::NOT_BATCHED.into()),
         };
@@ -2178,7 +2403,7 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
             }
         };
         // The liveness bitmap is built OUTSIDE the lock (D2).
-        let booked = BatchBook::prepare(va, len, handle)
+        let booked = BatchBook::prepare(bva, blen, handle)
             .and_then(|p| self.hold(&self.book, |b| (b.insert_prepared(p), 1)))
             .map_err(|e| format!("{e:?}"));
         if let Err(e) = booked {
@@ -2189,8 +2414,28 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
                 "batch {va:#x}+{len:#x}: its object could not be booked ({e}) — freed, nothing placed"
             ));
         }
-        self.record(va, len, Some(handle), via);
+        self.record(bva, blen, Some(handle), via);
         self.unpin(&pinned);
+        // The head and tail of the run (outside the reservation's core), per run at the 4 KiB grain.
+        // All or nothing: a piece that does not land takes the batch and the pieces already placed
+        // down again, and the caller places every row on its own (each gets its own verdict).
+        let mut extra: Vec<(u64, u64)> = Vec::new();
+        for d in &outside {
+            let why = match self.map(d, defer) {
+                Ok(Mapped::Placed) => {
+                    extra.push((d.va, d.va.saturating_add(d.len)));
+                    continue;
+                }
+                Ok(Mapped::HeldByHost) => format!("row {:#x}+{:#x} is held by the host", d.va, d.len),
+                Err(e) => e,
+            };
+            for (s, e) in extra.iter().copied().chain(std::iter::once((bva, bva.saturating_add(blen)))) {
+                if let Err(r) = self.unmap_range(s, e.saturating_sub(s), defer) {
+                    eprintln!("kf-mem: batch {va:#x}+{len:#x}: taking {s:#x}..{e:#x} down after a refused head/tail piece was refused too ({r}) — kept in the ledger as strays");
+                }
+            }
+            return Err(format!("batch {va:#x}+{len:#x}: head/tail piece not placed ({why})"));
+        }
         Ok(())
     }
 
