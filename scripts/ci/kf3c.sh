@@ -7,13 +7,21 @@
 #
 #   bash scripts/ci/kf3c.sh
 #
-# Steps: the tarball (sha256 pinned in qemu-10.2.4.tar.xz.sha256, signer recorded there);
-# configure with build_kf3.sh's own CONF_FLAGS (parsed, never edited) plus --disable-download;
-# generate the 354 headers edu.c needs (kf3.c and edu.c are both in `system_ss`, so edu.c's
-# compile command IS kf3.c's); compile kf3.c to an object with -Werror -Wextra; clang
-# -fsyntax-only -Werror and clang --analyze -analyzer-werror; the link closure (the kf3_*
-# symbols kf3.c leaves undefined equal kf-qemu's #[unsafe(no_mangle)] names); the depfile (K5).
-# Known positives K1-K3 run every time: a case that cannot fail is not a check.
+# Steps: the tarball (sha256 pinned in qemu-10.2.4.tar.xz.sha256, signer recorded there); the
+# kf3 overlay applied to the pristine tree by build_kf3.sh's OWN lines (the `cp` of the overlay
+# sources and its two one-line hunks, parsed, never edited; an empty archive stands in for
+# libkf_qemu.a, which nothing here links); configure with build_kf3.sh's CONF_FLAGS plus
+# --disable-download; generate the headers kf3.c's object needs; compile EVERY C file meson
+# compiles for kf3 (from compile_commands.json, with kf3's own flags, `c_args` included) to an
+# object with -Werror -Wextra; clang -fsyntax-only -Werror and clang --analyze -analyzer-werror;
+# the link closure (the kf3_* symbols kf3's objects leave undefined equal kf-qemu's
+# #[unsafe(no_mangle)] names); the depfile (K5). Known positives K0-K3 and K5 run every time: a
+# case that cannot fail is not a check.
+#
+# ⊘ Until 2026-10-04 this compiled kf3.c with edu.c's command line (review): a `c_args` in kf3's
+# meson.build, or a second C file in its `files(…)`, would ship through build_kf3.sh and never be
+# compiled or analyzed here. Now kf3's own entries are the ones compiled, and `perimeter.py
+# manifest` (K6) pins meson.build's hash and the overlay's file set.
 #
 # Environment: KF3C_WORK (default $RUNNER_TEMP/kf3c), KF3C_TARBALL (a local tarball to use),
 # KF3C_BUILD (reuse an already configured build dir: local runs only).
@@ -54,6 +62,25 @@ PY
 )
   [ -n "$flags" ] || { echo "★ could not extract CONF_FLAGS from scripts/bench/build_kf3.sh"; exit 2; }
   case "$flags" in *--enable-pixman*) ;; *) echo "★ CONF_FLAGS lacks --enable-pixman (kf3.c needs it)"; exit 2 ;; esac
+  # --- build_kf3.sh's overlay, applied by its own lines: the `cp` of every overlay source and
+  # the two hunks. Exactly these three lines must be found, or the bench script changed shape.
+  overlay=$(python3 - "$root/scripts/bench/build_kf3.sh" <<'PY'
+import re, sys
+lines = open(sys.argv[1]).read().splitlines()
+cp = [l for l in lines if re.match(r'^cp "\$REPO"/qemu/hw/misc/kf3/\S+ .*"\$QEMU/hw/misc/kf3/"$', l)]
+hunks = [l for l in lines if re.match(r'^grep -q .*\|\| printf .*>> "\$QEMU/hw/misc/(meson\.build|Kconfig)"$', l)]
+if len(cp) != 1 or len(hunks) != 2:
+    sys.exit(f"overlay lines: cp={len(cp)} hunks={len(hunks)} (want 1 and 2)")
+print("\n".join(cp + hunks))
+PY
+) || { echo "★ could not extract build_kf3.sh's overlay lines: $overlay"; exit 2; }
+  step "overlay (build_kf3.sh's own lines)"
+  echo "$overlay"
+  mkdir -p "$work/qemu-$ver/hw/misc/kf3"
+  # shellcheck disable=SC2034  # REPO and QEMU are read by the eval'd lines
+  (set -e; REPO="$root"; QEMU="$work/qemu-$ver"; eval "$overlay")
+  # the archive is only named by meson's link_args; nothing here links, so an empty one suffices
+  ar rcs "$work/qemu-$ver/hw/misc/kf3/libkf_qemu.a"
   step "configure: $flags --disable-download"
   mkdir -p "$work/build"
   # shellcheck disable=SC2086  # a flag list by design
@@ -64,18 +91,34 @@ else
   build="$KF3C_BUILD"
 fi
 
-step "generate the headers edu.c depends on"
-mapfile -t hdrs < <(cd "$build" && ninja -t query libsystem.a.p/hw_misc_edu.c.o | awk '/^ *\|\| /{print $2}')
-[ "${#hdrs[@]}" -gt 100 ] || { echo "★ only ${#hdrs[@]} generated headers found for edu.c"; exit 2; }
+# kf3's OWN compile entries: every C file meson compiles from the overlay directory.
+mapfile -t entries < <(python3 - "$build/compile_commands.json" <<'PY'
+import json, sys
+es = [e for e in json.load(open(sys.argv[1])) if "/hw/misc/kf3/" in e["file"].replace("\\", "/")]
+for e in es:
+    print(e["file"].rsplit("/hw/misc/kf3/", 1)[1] + "\t" + e["output"])
+PY
+)
+[ "${#entries[@]}" -ge 1 ] || { echo "★ meson compiles nothing from hw/misc/kf3 (is CONFIG_KF3 selected?)"; exit 2; }
+printf 'kf3 compile entry: %s\n' "${entries[@]}"
+case " ${entries[*]} " in *"kf3.c"*) ;; *) echo "★ no compile entry for kf3.c"; exit 2 ;; esac
+
+step "generate the headers kf3's objects depend on"
+hdrs=()
+for e in "${entries[@]}"; do
+  mapfile -t -O "${#hdrs[@]}" hdrs < <(cd "$build" && ninja -t query "${e#*$'\t'}" | awk '/^ *\|\| /{print $2}')
+done
+[ "${#hdrs[@]}" -gt 100 ] || { echo "★ only ${#hdrs[@]} generated headers found for kf3's objects"; exit 2; }
 (cd "$build" && ninja "${hdrs[@]}" >/dev/null)
 echo "headers: ${#hdrs[@]}"
 
-# edu.c's compile command, minus its own source/output/depfile arguments
-mapfile -t base < <(python3 - "$build/compile_commands.json" <<'PY'
+# A file's own compile command, minus its source/output/depfile arguments
+cmd_for() {
+  python3 - "$build/compile_commands.json" "$1" <<'PY'
 import json, shlex, sys
-cmds = [e for e in json.load(open(sys.argv[1])) if e["file"].endswith("hw/misc/edu.c")]
+cmds = [e for e in json.load(open(sys.argv[1])) if e["file"].replace("\\", "/").endswith("/hw/misc/kf3/" + sys.argv[2])]
 if len(cmds) != 1:
-    sys.exit(f"edu.c compile commands: {len(cmds)}")
+    sys.exit(f"{sys.argv[2]}: {len(cmds)} compile commands")
 argv = shlex.split(cmds[0]["command"])
 out, skip = [], 0
 for i, a in enumerate(argv):
@@ -85,33 +128,52 @@ for i, a in enumerate(argv):
     if a in ("-MQ", "-MF", "-o", "-c"):
         skip = 1
         continue
-    if a == "-MD":
+    if a == "-MD" or a == cmds[0]["file"]:
         continue
     out.append(a)
 print("\n".join(out))
 PY
-)
+}
+# clang knows neither gcc's `=N` forms nor -fzero-init-padding-bits; -Wno-unknown-warning-option
+# covers gcc-only warning names. Prints the filtered flags, one per line.
+to_clang() {
+  for f in "$@"; do
+    case "$f" in
+      -Wimplicit-fallthrough=*) echo -Wimplicit-fallthrough ;;
+      -Wshadow=*|-fzero-init-padding-bits=*|-fdiagnostics-color=*) ;;
+      *) printf '%s\n' "$f" ;;
+    esac
+  done
+}
+base_txt=$(cmd_for kf3.c) || { echo "★ no compile command for kf3.c: $base_txt"; exit 2; }
+mapfile -t base <<<"$base_txt"
 cc_bin="${base[0]}"
 flags_c=("${base[@]:1}")
 T="$work/out"
 rm -rf "$T"; mkdir -p "$T"
 STRICT=(-Werror -Wextra -Wno-unused-parameter -Wno-sign-compare)
 
+# Every OTHER C file meson compiles for kf3 (a second `kf3_*.c` in `files(…)`), from the CHECKOUT,
+# with its own flags, -Werror -Wextra and the analyzer. (K6 already fails a new C file that
+# perimeter.toml [c].files does not list.)
+others=()
+for e in "${entries[@]}"; do f="${e%%$'\t'*}"; [ "$f" = kf3.c ] || others+=("$f"); done
+for f in "${others[@]}"; do
+  step "gcc + clang analyzer: $f (kf3's own flags)"
+  ob_txt=$(cmd_for "$f") || { bad "no compile command for $f"; continue; }
+  mapfile -t ob <<<"$ob_txt"
+  mapfile -t ocl < <(to_clang "${ob[@]:1}")
+  (cd "$build" && "${ob[0]}" "${ob[@]:1}" "${STRICT[@]}" -c "$kf3/$f" -o "$T/${f%.c}.o") || bad "$f does not compile cleanly"
+  (cd "$build" && clang "${ocl[@]}" -Wno-unknown-warning-option --analyze -Xanalyzer -analyzer-werror \
+     -o "$T/${f%.c}.plist" "$kf3/$f") || bad "the clang static analyzer reports on $f"
+done
+
 step "gcc: kf3.c to an object, -Werror -Wextra ($("$cc_bin" --version | head -1))"
 if ! (cd "$build" && "$cc_bin" "${flags_c[@]}" "${STRICT[@]}" -MD -MF "$T/kf3.d" -c "$kf3/kf3.c" -o "$T/kf3.o"); then
   bad "kf3.c does not compile cleanly"
 fi
 
-# clang knows neither gcc's `=N` forms nor -fzero-init-padding-bits; -Wno-unknown-warning-option
-# covers gcc-only warning names.
-clang_flags=()
-for f in "${flags_c[@]}"; do
-  case "$f" in
-    -Wimplicit-fallthrough=*) clang_flags+=(-Wimplicit-fallthrough) ;;
-    -Wshadow=*|-fzero-init-padding-bits=*|-fdiagnostics-color=*) ;;
-    *) clang_flags+=("$f") ;;
-  esac
-done
+mapfile -t clang_flags < <(to_clang "${flags_c[@]}")
 step "clang -fsyntax-only -Werror ($(clang --version | head -1))"
 (cd "$build" && clang "${clang_flags[@]}" -Werror -Wno-unknown-warning-option -fsyntax-only "$kf3/kf3.c") \
   || bad "clang rejects kf3.c"
@@ -134,7 +196,7 @@ for it in s.items:
 print("\n".join(sorted(names)))
 PY
 )
-c_names=$(nm -u "$T/kf3.o" 2>/dev/null | awk '{print $NF}' | grep '^kf3_' | sort || true)
+c_names=$(for o in "$T"/*.o; do nm -u "$o" 2>/dev/null; done | awk '{print $NF}' | grep '^kf3_' | sort -u || true)
 closure() {  # $1 = the Rust name list to compare against
   if [ "$1" != "$c_names" ]; then
     diff <(echo "$1") <(echo "$c_names") || true

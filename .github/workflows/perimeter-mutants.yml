@@ -19,6 +19,15 @@ on:
     paths:
       - '**/*_unsafe.rs'
       - 'docs/design/PERIMETER_EXPORTS.md'
+      # the VALIDATES files (PERIMETER_EXPORTS.md, Validation dependencies): their mutants are
+      # charged to the OK rows that rely on them. `perimeter.py exports` (E11b) fails when a
+      # VALIDATES file is missing here.
+      - 'crates/kf-linux-raw/src/bounds.rs'
+      - 'crates/kf-linux-raw/src/cache.rs'
+      - 'crates/kf-linux-raw/src/geometry.rs'
+      - 'crates/kf-linux-raw/src/ioctl.rs'
+      - 'crates/kf-linux-raw/src/page_size.rs'
+      - 'crates/kf-linux-raw/src/view.rs'
   # A push that changes the instrument itself runs its known positive (the `selftest` job) only.
   push:
     paths:
@@ -84,12 +93,25 @@ jobs:
             git diff "$PR_BASE"...HEAD > "$RUNNER_TEMP/pr.diff"
             extra=(--in-diff "$RUNNER_TEMP/pr.diff")
           fi
-          # cargo-mutants exits nonzero when a mutant is missed; the verdict below decides.
-          cargo mutants -p "$CRATE" --file "crates/$CRATE/src/**/*_unsafe.rs" --jobs 4 --timeout-multiplier 3 \
+          # The crate's perimeter files AND its VALIDATES files: a check that lives in bounds.rs is
+          # mutated there and charged to the OK rows that call it.
+          files=(--file "crates/$CRATE/src/**/*_unsafe.rs")
+          while IFS= read -r v; do files+=(--file "$v"); done < <(python3 scripts/ci/perimeter.py validates --crate "crates/$CRATE")
+          echo "mutating: ${files[*]}"
+          # cargo-mutants exits nonzero when a mutant is missed; the verdict below decides, and it
+          # also fails a run whose unmutated baseline did not succeed.
+          cargo mutants -p "$CRATE" "${files[@]}" --jobs 4 --timeout-multiplier 3 \
             -o "$RUNNER_TEMP/mutants" "${extra[@]}" || echo "cargo mutants rc=$?"
           test -s "$RUNNER_TEMP/mutants/mutants.out/outcomes.json"
-      - name: "E3c verdict: OK rows have no missed mutants"
-        run: python3 scripts/ci/perimeter.py mutants --outcomes "$RUNNER_TEMP/mutants/mutants.out/outcomes.json"
+      - name: "E3c verdict: OK rows have no missed mutants (and, on a full run, at least one caught)"
+        env:
+          EVENT: ${{ github.event_name }}
+          CRATE: ${{ matrix.crate }}
+        run: |
+          set -euo pipefail
+          full=()
+          if [ "$EVENT" != pull_request ]; then full=(--require-caught --crate "crates/$CRATE"); fi
+          python3 scripts/ci/perimeter.py mutants --outcomes "$RUNNER_TEMP/mutants/mutants.out/outcomes.json" "${full[@]}"
       - name: Remove the CI-only namespace profile
         if: always()
         run: python3 scripts/ci/runner_namespaces.py --remove

@@ -34,9 +34,13 @@ crates = [
 "crates/kayfabe-isolate-host/build.rs" = "a43d7f29e1ed6117ca9474ae2a35b57dd7f73023c8fcd57d9ad32ad3484d0aa3"
 "firmware/kf-gop/build.rs" = "305b5721e8e84930648fcdd7672cd6ec60ea4586488631cc75a06f6ca88e727e"
 
-# The C half of the perimeter (rule d).
+# The C half of the perimeter (rule d). K6 (`perimeter.py manifest`): the overlay directory holds
+# exactly `files` plus meson.build, and meson.build's hash is this one: what kf3 compiles, and with
+# which flags, is a reviewed change (kf3c.sh compiles kf3's own compile entries).
 [c]
 files = ["qemu/hw/misc/kf3/kf3.c", "qemu/hw/misc/kf3/kf3.h", "qemu/hw/misc/kf3/kf3_gop.h"]
+overlay = "qemu/hw/misc/kf3"
+meson_sha256 = "95ebdfb44fce9e3372cdeb957d6040b9959553d5b549a958eac0b6a3c64bcf94"
 
 # M3: the exact `[lints]` table of every class U manifest and every standalone package. Deleting
 # a line (for example `undocumented_unsafe_blocks`) fails the manifest gate.
@@ -75,8 +79,10 @@ member_features = { "kf-oprom" = ["alloc", "default"] }
 custom_build = ["kf-gop-image", "libc"]
 
 # M7: the whole lock, every dependency kind. A new external crate, a new edge from a member to
-# one, or a newly reachable proc-macro is a reviewed change here.
+# one, or a newly reachable proc-macro is a reviewed change here. Every external package comes
+# from `source`, and every lock entry for one carries a checksum.
 [external]
+source = "registry+https://github.com/rust-lang/crates.io-index"
 packages = [
   "equivalent", "glob", "hashbrown", "indexmap", "itoa", "libc", "memchr", "proc-macro2",
   "quote", "serde", "serde_core", "serde_derive", "serde_json", "serde_spanned", "syn",
@@ -109,6 +115,17 @@ macros = ["require_kvm"]
 path = "crates/kayfabe-doorbell"
 bound = "debt.py frozen"
 reason = "frozen v2 model outside kf3; 1 unsafe fn + 3 blocks, hash-bound"
+# M8: the package's cargo targets, exactly. Cargo discovers `src/bin/<name>/main.rs` by itself, so a
+# new target under the exempt path is a reviewed change to this list (and to `debt.py frozen`).
+targets = [
+  "example:model_report", "example:swref_residual", "example:swref_survey", "example:zlib_emit",
+  "lib:kayfabe_doorbell",
+  "test:campaign_findings", "test:memory_map", "test:no_orphans", "test:no_vmm_pointers_in_safe_code",
+  "test:nouveau_citations", "test:rpc_coverage",
+]
+# G1: the exempt diagnostics per location pass, exactly (hostverb.rs:121 in the lib and the test
+# unit, tests.rs:2119, :2123, :2138). Measured on CI run 37168007181, 2026-10-04.
+diagnostics = { x86_64 = 5, aarch64 = 5 }
 
 # Tracked packages that are not root-workspace members, and how the compiler location gate
 # compiles them (each entry of `runs` is one `cargo check` argument set).
@@ -146,7 +163,32 @@ sites = [
   "crates/kayfabe-cuda/src/driver_unsafe.rs::view_bytes",
   "crates/kayfabe-cuda/src/driver_unsafe.rs::zeroed",
   "crates/kayfabe-linux-raw/src/spawn_unsafe.rs::SandboxChild::wait",
+  "crates/kayfabe-linux-raw/src/window_unsafe.rs::GuestWindow::fixed_map",
   "firmware/kf-gop/src/bin/kf-gop-test/check_unsafe.rs::Screen::blt",
+]
+# L8b: SAFE, non-extern fns in perimeter files taking a raw pointer or a RawFd (rule (a): the
+# body cannot check what it names). Exact, and it only shrinks. Added 2026-10-04 (review): kf3's
+# entries are LANE:v3-sec-rawaddr (kf-cuda driver_unsafe.rs, kf-qemu ffi_unsafe.rs, §4.3/§4.4);
+# the rest are the v2 grader and the guest firmware. kf-linux-raw's `map_fixed`, `replug` and
+# `set_memslot` became `unsafe fn` in the same commit.
+raw_params = [
+  "crates/kayfabe-cuda/src/driver_unsafe.rs::sym_or_null",
+  "crates/kf-cuda/src/driver_unsafe.rs::sym_or_null",
+  "crates/kf-qemu/src/ffi_unsafe.rs::dev",
+  "crates/kf-qemu/src/ffi_unsafe.rs::write_err",
+  "firmware/kf-gop/src/bin/kf-gop-test/check_unsafe.rs::Screen::blt",
+  "firmware/kf-gop/src/bin/kf-gop-test/check_unsafe.rs::bar_range",
+  "firmware/kf-gop/src/driver_unsafe.rs::attributes",
+  "firmware/kf-gop/src/driver_unsafe.rs::bar_range",
+  "firmware/kf-gop/src/driver_unsafe.rs::build",
+  "firmware/kf-gop/src/driver_unsafe.rs::config_dword",
+  "firmware/kf-gop/src/driver_unsafe.rs::ctx_of",
+  "firmware/kf-gop/src/driver_unsafe.rs::driver",
+  "firmware/kf-gop/src/driver_unsafe.rs::examine",
+  "firmware/kf-gop/src/driver_unsafe.rs::remaining_is_end",
+  "firmware/kf-gop/src/driver_unsafe.rs::remaining_ok",
+  "firmware/kf-gop/src/driver_unsafe.rs::start_on",
+  "firmware/kf-gop/src/efi_unsafe.rs::Bs::uninstall",
 ]
 
 # L9 (V3_SEC_PERIMETER.md §5.3): sites that name a type or function whose values carry an address
@@ -184,6 +226,12 @@ args = "--workspace --all-targets --all-features --target x86_64-unknown-linux-g
 name = "aarch64"
 args = "--workspace --all-targets --target aarch64-unknown-linux-gnu"
 env = { KAYFABE_ISOLATE_IMAGE_STUB = "1" }
+# kf3's own configuration: x86_64, kf-qemu's DEFAULT features (M6 pins them; `force-host-page-size`
+# is off). The --all-features pass above never compiles a `cfg(not(feature = …))` arm, so without
+# this one such an arm in kf3's build would be tokenizer-only (review 2026-10-04).
+[[location.pass]]
+name = "x86_64-kf3"
+args = "-p kf-qemu --lib --target x86_64-unknown-linux-gnu"
 
 # G5, the export table (docs/design/PERIMETER_EXPORTS.md; V3_SEC_PERIMETER.md §3).
 [exports]
@@ -191,6 +239,14 @@ targets = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"]
 # E9 (S1-08): safe `extern "C"` fns taking a raw pointer. Exact, and it only goes down. 12 at
 # 789dee9f: the design's 11 in kf-qemu/src/ffi_unsafe.rs, plus kf-cuda's `completion_hostfn`.
 e9_baseline = 12
+# The shape rules (E4-E8, E12, E14) bind EVERY row (review 2026-10-04): a violation on an OPEN or
+# LANE row is listed here, `<rule>|<file>|<item>`, exactly. It only shrinks: an entry that no longer
+# violates fails as stale (E15). `E4L|<file>|<Owner::>fn` is the tokenizer's `# Safety` check on
+# every unsafe fn, private ones included.
+[exports.debt]
+items = [
+  "E8|crates/kf-linux-raw/src/mapping_unsafe.rs|HostSpan",   # LANE:v3-broker: HostSpan<'a> (§4.3)
+]
 # Files a lane edits: their new rows start `LANE:<branch>: …` (V3_SEC_PERIMETER.md §4.3, §4.4, §6).
 [exports.lanes]
 "crates/kf-cuda/src/driver_unsafe.rs" = "v3-sec-rawaddr"

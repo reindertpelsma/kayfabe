@@ -51,6 +51,12 @@ const KVM_GET_API_VERSION: libc::c_ulong = 0xAE00;
 const KVM_CREATE_VM: libc::c_ulong = 0xAE01;
 /// `_IO(KVMIO, 0x03)` — query one capability.
 const KVM_CHECK_EXTENSION: libc::c_ulong = 0xAE03;
+/// `_IO(KVMIO, 0x04)` — the size of the per-vCPU shared run structure.
+const KVM_GET_VCPU_MMAP_SIZE: libc::c_ulong = 0xAE04;
+/// `_IO(KVMIO, 0x41)` — create a vCPU, returning its descriptor.
+const KVM_CREATE_VCPU: libc::c_ulong = 0xAE41;
+/// `_IO(KVMIO, 0x47)` — where the hypervisor may put its 3-page task-state segment.
+const KVM_SET_TSS_ADDR: libc::c_ulong = 0xAE47;
 /// `_IOW(KVMIO, 0x46, struct kvm_userspace_memory_region)` — 32 bytes.
 const KVM_SET_USER_MEMORY_REGION: libc::c_ulong =
     (1 << 30) | ((32 as libc::c_ulong) << 16) | 0xAE46;
@@ -168,12 +174,7 @@ impl Kvm {
         let raw = unsafe { libc::open(c"/dev/kvm".as_ptr(), libc::O_RDWR | libc::O_CLOEXEC) };
         let fd = adopt_fd(raw, "open(/dev/kvm)")?;
         let kvm = Kvm { fd };
-        let version = ioctl_arg(
-            kvm.fd.as_fd(),
-            KVM_GET_API_VERSION,
-            0,
-            "KVM_GET_API_VERSION",
-        )?;
+        let version = kvm.by_value(SystemRequest::GetApiVersion)?;
         if version != KVM_STABLE_API_VERSION {
             return Err(RawError::Unsupported {
                 what: "the running kernel's KVM API version",
@@ -184,10 +185,21 @@ impl Kvm {
         Ok(kvm)
     }
 
-    /// The subsystem descriptor, borrowed, for the sibling module that creates vCPUs: what
-    /// [`ioctl_arg`] takes (a3). Crate-private, so it is not an API at all.
-    pub(crate) fn borrow_fd(&self) -> BorrowedFd<'_> {
-        self.fd.as_fd()
+    /// ★ A by-value `ioctl` on the `/dev/kvm` descriptor, from a CLOSED set of requests.
+    ///
+    /// The request is not a number a caller supplies: it is one of [`SystemRequest`]'s
+    /// variants, each mapped to its `_IO(KVMIO, …)` constant in this file, and the descriptor
+    /// is this type's own (opened from `/dev/kvm`). See [`by_value_ioctl`] for why both halves
+    /// matter (review 2026-10-04).
+    ///
+    /// # Errors
+    /// [`RawError::Syscall`] with the kernel's `errno`.
+    pub(crate) fn by_value(&self, request: SystemRequest) -> Result<libc::c_int, RawError> {
+        let (nr, arg, call) = request.encode();
+        // SAFETY: `by_value_ioctl`'s contract: `self.fd` is the `/dev/kvm` descriptor this type
+        // opened, and `nr` is one of the `/dev/kvm` requests `SystemRequest::encode` maps, each
+        // an `_IO` request whose argument the kernel reads by value (`kvm_dev_ioctl`).
+        unsafe { by_value_ioctl(self.fd.as_fd(), nr, arg, call) }
     }
 
     /// Create a VM. The returned descriptor owns an address space, and nothing else —
@@ -201,7 +213,7 @@ impl Kvm {
     pub fn create_vm(&self) -> Result<KvmVm, RawError> {
         lockwitness::assert_lock_free("KVM_CREATE_VM");
         leafwitness::assert_leaf_free("KVM_CREATE_VM");
-        let raw = ioctl_arg(self.fd.as_fd(), KVM_CREATE_VM, 0, "KVM_CREATE_VM")?;
+        let raw = self.by_value(SystemRequest::CreateVm)?;
         Ok(KvmVm {
             fd: adopt_fd(raw, "KVM_CREATE_VM")?,
         })
@@ -409,18 +421,22 @@ impl KvmVm {
     pub(crate) fn check_extension(&self, cap: libc::c_ulong) -> Result<libc::c_int, RawError> {
         lockwitness::assert_lock_free("KVM_CHECK_EXTENSION");
         leafwitness::assert_leaf_free("KVM_CHECK_EXTENSION");
-        ioctl_arg(
-            self.fd.as_fd(),
-            KVM_CHECK_EXTENSION,
-            cap,
-            "KVM_CHECK_EXTENSION",
-        )
+        self.by_value(VmRequest::CheckExtension(cap))
     }
 
-    /// This VM's descriptor, borrowed, for the sibling module that creates vCPUs (see
-    /// [`Kvm::borrow_fd`]).
-    pub(crate) fn borrow_fd(&self) -> BorrowedFd<'_> {
-        self.fd.as_fd()
+    /// ★ A by-value `ioctl` on this VM's descriptor, from a CLOSED set of requests (see
+    /// [`Kvm::by_value`]). Every constructor makes or checks the descriptor: `create_vm`
+    /// creates it, and a5's `adopt` and `discover_in_this_process` check its link.
+    ///
+    /// # Errors
+    /// [`RawError::Syscall`] with the kernel's `errno`.
+    pub(crate) fn by_value(&self, request: VmRequest) -> Result<libc::c_int, RawError> {
+        let (nr, arg, call) = request.encode();
+        // SAFETY: `by_value_ioctl`'s contract: `self.fd` is a KVM VM descriptor (every
+        // constructor of this type creates one or checks its link), and `nr` is one of the VM
+        // requests `VmRequest::encode` maps, each an `_IO` request whose argument the kernel
+        // reads by value (`kvm_vm_ioctl`, `kvm_arch_vm_ioctl`).
+        unsafe { by_value_ioctl(self.fd.as_fd(), nr, arg, call) }
     }
 
     /// How many memslots this VM may hold at once.
@@ -438,12 +454,7 @@ impl KvmVm {
     pub fn max_memslots(&self) -> Result<u32, RawError> {
         lockwitness::assert_lock_free("KVM_CHECK_EXTENSION(NR_MEMSLOTS)");
         leafwitness::assert_leaf_free("KVM_CHECK_EXTENSION(NR_MEMSLOTS)");
-        let n = ioctl_arg(
-            self.fd.as_fd(),
-            KVM_CHECK_EXTENSION,
-            KVM_CAP_NR_MEMSLOTS,
-            "KVM_CHECK_EXTENSION",
-        )?;
+        let n = self.by_value(VmRequest::CheckExtension(KVM_CAP_NR_MEMSLOTS))?;
         Ok(u32::try_from(n).unwrap_or(0))
     }
 
@@ -480,7 +491,14 @@ impl KvmVm {
     ///
     /// # Panics
     /// If called with any ranked lock held (R1, §4.5).
-    fn set_memslot(
+    ///
+    /// # Safety
+    ///
+    /// The kernel keeps `window`'s host address for as long as the memslot exists. The caller
+    /// must keep `window` mapped until the slot is removed — or, if removing it fails, forever
+    /// (rule (a), review 2026-10-04: a precondition this fn cannot check is an `unsafe fn`).
+    /// [`KvmMemslot`] is the one caller, and discharges it by owning an `Arc` of the window.
+    unsafe fn set_memslot(
         &self,
         slot: u32,
         gpa: u64,
@@ -492,10 +510,9 @@ impl KvmVm {
         lockwitness::assert_lock_free("KVM_SET_USER_MEMORY_REGION (installing a memslot)");
         leafwitness::assert_leaf_free("KVM_SET_USER_MEMORY_REGION (installing a memslot)");
         // SAFETY: `userspace_addr_at`'s contract (a7): the address goes straight into the
-        // kernel's memslot struct below and is never stored or dereferenced here. The window
-        // outlives the memslot only when the caller keeps it alive: `KvmMemslot::install` holds
-        // an `Arc` of it for the memslot's life; a direct safe caller of this `pub` fn can break
-        // that, which is why this fn becomes private (a4, its row is OPEN until then).
+        // kernel's memslot struct below and is never stored or dereferenced here, and the
+        // window outlives the memslot by THIS fn's own `# Safety` contract, which its caller
+        // discharges.
         let addr = unsafe { window.userspace_addr_at(window_offset, len)? };
         let region = UserspaceMemoryRegion::install(slot, gpa, addr, len, guest_readonly);
         ioctl_ptr(self.fd.as_raw_fd(), &region)
@@ -676,7 +693,10 @@ impl KvmMemslot {
         len: u64,
         guest_readonly: bool,
     ) -> Result<Self, RawError> {
-        vm.set_memslot(slot, gpa, &window, window_offset, len, guest_readonly)?;
+        // SAFETY: `set_memslot`'s contract: the `Arc` of the window moves into the returned
+        // `KvmMemslot`, whose `Drop` removes the slot before releasing it and LEAKS it if the
+        // removal fails. On an error here no slot was installed.
+        unsafe { vm.set_memslot(slot, gpa, &window, window_offset, len, guest_readonly)? };
         Ok(KvmMemslot {
             vm,
             window,
@@ -720,6 +740,14 @@ impl Drop for KvmMemslot {
         // very drop is about to release, which is a strictly worse outcome than a late
         // assertion.
         let cleared = self.vm.clear_memslot_in_drop(self.slot);
+        if cleared.is_err() {
+            // ★ The kernel still names the window's host address. The `window` field is
+            // dropped after this body whatever happens — after the panic below too — and its
+            // last `Arc` would `munmap` a range a live memslot points at, so a later mapping
+            // there would be guest-visible. Leak one strong count: the window then outlives
+            // the slot, as `set_memslot`'s `# Safety` requires (review 2026-10-04).
+            core::mem::forget(Arc::clone(&self.window));
+        }
         if !std::thread::panicking() {
             assert!(
                 cleared.is_ok(),
@@ -745,42 +773,85 @@ impl KvmVm {
     }
 }
 
-/// `ioctl(fd, request, arg)` for the by-value requests, returning the kernel's
-/// non-negative result.
+/// The by-value requests on the `/dev/kvm` descriptor ([`Kvm::by_value`]): a closed set, so no
+/// request NUMBER crosses a function boundary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SystemRequest {
+    /// `KVM_GET_API_VERSION`.
+    GetApiVersion,
+    /// `KVM_CREATE_VM`, machine type 0.
+    CreateVm,
+    /// `KVM_GET_VCPU_MMAP_SIZE`.
+    GetVcpuMmapSize,
+}
+
+impl SystemRequest {
+    fn encode(self) -> (libc::c_ulong, libc::c_ulong, &'static str) {
+        match self {
+            SystemRequest::GetApiVersion => (KVM_GET_API_VERSION, 0, "KVM_GET_API_VERSION"),
+            SystemRequest::CreateVm => (KVM_CREATE_VM, 0, "KVM_CREATE_VM"),
+            SystemRequest::GetVcpuMmapSize => (KVM_GET_VCPU_MMAP_SIZE, 0, "KVM_GET_VCPU_MMAP_SIZE"),
+        }
+    }
+}
+
+/// The by-value requests on a VM descriptor ([`KvmVm::by_value`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum VmRequest {
+    /// `KVM_CHECK_EXTENSION`: the capability number, by value.
+    CheckExtension(libc::c_ulong),
+    /// `KVM_CREATE_VCPU`: the vCPU id, by value.
+    CreateVcpu(u32),
+    /// `KVM_SET_TSS_ADDR`: a guest-PHYSICAL address the kernel stores; this process's memory is
+    /// never read through it.
+    SetTssAddr(libc::c_ulong),
+}
+
+impl VmRequest {
+    fn encode(self) -> (libc::c_ulong, libc::c_ulong, &'static str) {
+        match self {
+            VmRequest::CheckExtension(cap) => (KVM_CHECK_EXTENSION, cap, "KVM_CHECK_EXTENSION"),
+            VmRequest::CreateVcpu(id) => {
+                (KVM_CREATE_VCPU, libc::c_ulong::from(id), "KVM_CREATE_VCPU")
+            }
+            VmRequest::SetTssAddr(gpa) => (KVM_SET_TSS_ADDR, gpa, "KVM_SET_TSS_ADDR"),
+        }
+    }
+}
+
+/// `ioctl(fd, request, arg)` with `arg` an integer, returning the kernel's non-negative result.
 ///
-/// ★ a3 (V3_SEC_PERIMETER.md §4.1): the request must be an `_IO` encoding — no direction
-/// bits and no size — or it is refused before the syscall. That is the property that makes
-/// passing `arg` as a plain integer correct: a request whose bits say "the kernel copies N
-/// bytes" would read or write through `arg` as an address. Checked here, where the syscall
-/// is, rather than trusted from the seven callers.
-pub(crate) fn ioctl_arg(
+/// ⊘ This was `pub(crate) fn ioctl_arg(fd, request: c_ulong, arg, …)`, a SAFE fn whose a3 check
+/// was that the request's direction and size bits are zero. That does not prove the property
+/// its SAFETY stated ("the kernel does not treat `arg` as an address"): legacy requests predate
+/// the `_IOC` encoding, so `FIONREAD` (`0x541B`) passes the check and the kernel writes 4 bytes
+/// at `arg`, and some drivers encode pointer-taking requests as `_IO` (VFIO's whole ABI). The
+/// request number and the descriptor together decide what `arg` is, and neither can be checked
+/// from an integer (review 2026-10-04). So the property now lives in two closed sets —
+/// [`SystemRequest`] and [`VmRequest`], mapped to constants in this file — and in the two
+/// receivers that own the matching descriptor; this fn is `unsafe` and private.
+///
+/// # Safety
+///
+/// The kernel must read `arg` BY VALUE for `request` on `fd`: `fd` is a KVM descriptor of the
+/// kind `request` belongs to (`/dev/kvm` or a VM), and `request` is one of the `_IO` KVM requests
+/// [`SystemRequest::encode`] or [`VmRequest::encode`] produces. Any other pairing may make the
+/// kernel read or write through `arg` as an address.
+unsafe fn by_value_ioctl(
     fd: BorrowedFd<'_>,
     request: libc::c_ulong,
     arg: libc::c_ulong,
     call: &'static str,
 ) -> Result<libc::c_int, RawError> {
-    if !is_plain_io(request) {
-        return Err(RawError::Unsupported {
-            what: "a by-value ioctl",
-            detail: "the request's direction or size bits say the kernel copies through the \
-                     argument; only `_IO` requests may take an integer",
-        });
-    }
-    // SAFETY: all three arguments are integers passed by value, and `request` was checked
-    // above to be an `_IO` encoding (no direction, no size), so the kernel does not treat
-    // `arg` as an address. `fd` is a borrowed, live descriptor for the duration of the call.
-    // The result is checked for negativity below.
+    // SAFETY: the caller's contract above: for this (descriptor, request) pair the kernel takes
+    // `arg` by value, so no memory of this process is read or written through it. `fd` is a
+    // borrowed, live descriptor for the duration of the call. The result is checked for
+    // negativity below.
     let rc = unsafe { libc::ioctl(fd.as_raw_fd(), request as _, arg) };
     if rc < 0 {
         return Err(last_syscall_error(call));
     }
     Ok(rc)
-}
-
-/// `_IOC_DIR(request) == _IOC_NONE && _IOC_SIZE(request) == 0`: the direction (bits 30-31) and
-/// size (bits 16-29) fields of the Linux ioctl encoding are both zero.
-fn is_plain_io(request: libc::c_ulong) -> bool {
-    (request >> 30) & 0b11 == 0 && (request >> 16) & 0x3FFF == 0
 }
 
 /// `ioctl(fd, KVM_SET_USER_MEMORY_REGION, &region)`.
@@ -814,48 +885,80 @@ mod tests {
         std::fs::File::open("/dev/null").expect("/dev/null").into()
     }
 
-    /// ★ a3: a request whose bits say the kernel copies through the argument is refused before
-    /// any syscall, whatever the descriptor. Needs no `/dev/kvm`. On the code before a3,
-    /// `ioctl_arg` passed it to the kernel with `arg` read as an address.
+    /// ★ a3, as rebuilt after review (2026-10-04): every by-value request is a KVM `_IO` encoding
+    /// (magic `0xAE`, no direction, no size), and each maps to the constant its uapi header
+    /// gives it. The numbers are retyped from `include/uapi/linux/kvm.h` rather than imported,
+    /// so a wrong constant fails here. ⊘ The rule this replaces was "no direction and no size
+    /// bits", which `FIONREAD` (0x541B, a 4-byte write through `arg`) satisfies: below, it is
+    /// shown passing that old check, which is why the check is no longer what decides.
     #[test]
-    fn an_ior_encoded_request_is_refused_before_any_syscall() {
-        let fd = dev_null();
-        // `_IOR(0xAE, 0x01, u64)`: direction READ, size 8.
-        let ior: libc::c_ulong = (2 << 30) | (8 << 16) | (0xAE << 8) | 0x01;
-        let r = ioctl_arg(fd.as_fd(), ior, 0x1000, "probe");
-        assert!(
-            matches!(
-                r,
-                Err(RawError::Unsupported {
-                    what: "a by-value ioctl",
-                    ..
-                })
+    fn every_by_value_request_is_a_kvm_io_encoding_with_its_uapi_number() {
+        let io = |nr: libc::c_ulong| (0xAE << 8) | nr;
+        let all = [
+            (SystemRequest::GetApiVersion.encode(), io(0x00), 0),
+            (SystemRequest::CreateVm.encode(), io(0x01), 0),
+            (SystemRequest::GetVcpuMmapSize.encode(), io(0x04), 0),
+            (VmRequest::CheckExtension(10).encode(), io(0x03), 10),
+            (VmRequest::CreateVcpu(3).encode(), io(0x41), 3),
+            (
+                VmRequest::SetTssAddr(0xfffb_d000).encode(),
+                io(0x47),
+                0xfffb_d000,
             ),
-            "{r:?}"
-        );
-        // Direction bits alone are enough to refuse: `_IOW(0xAE, 0x01)` with a zero size field.
-        let iow0: libc::c_ulong = (1 << 30) | (0xAE << 8) | 0x01;
-        let r = ioctl_arg(fd.as_fd(), iow0, 0x1000, "probe");
-        assert!(
-            matches!(
-                r,
-                Err(RawError::Unsupported {
-                    what: "a by-value ioctl",
-                    ..
-                })
-            ),
-            "{r:?}"
-        );
-        // `_IO(0xAE, 0x00)` (KVM_GET_API_VERSION) passes the check and reaches the kernel,
-        // which refuses it on /dev/null as a syscall error, not as this refusal.
-        let r = ioctl_arg(fd.as_fd(), KVM_GET_API_VERSION, 0, "probe");
-        assert!(matches!(r, Err(RawError::Syscall { .. })), "{r:?}");
-        // And a request the kernel serves on any descriptor (`FIOCLEX`, no size, no direction)
-        // returns the kernel's 0: only a negative return is an error.
+        ];
+        for ((nr, arg, call), want_nr, want_arg) in all {
+            assert_eq!((nr, arg), (want_nr, want_arg), "{call}");
+            assert_eq!(nr >> 30, 0, "{call}: an _IO request has no direction");
+            assert_eq!((nr >> 16) & 0x3FFF, 0, "{call}: an _IO request has no size");
+            assert_eq!((nr >> 8) & 0xFF, 0xAE, "{call}: KVMIO");
+        }
+        // The old check's blind spot, kept as a fact: FIONREAD has no direction or size bits
+        // and writes 4 bytes through its argument. No variant above can produce it.
+        let fionread = libc::FIONREAD as libc::c_ulong;
+        assert_eq!((fionread >> 30, (fionread >> 16) & 0x3FFF), (0, 0));
+        assert_ne!((fionread >> 8) & 0xFF, 0xAE);
+    }
+
+    /// The by-value door on a real descriptor still reaches the kernel and reports its refusal:
+    /// a VM request on a descriptor that is not one (constructed directly; only this module can)
+    /// is the kernel's `ENOTTY`, by name. Needs no `/dev/kvm`.
+    #[test]
+    fn a_by_value_request_reaches_the_kernel_and_its_refusal_is_reported() {
+        let not_a_vm = KvmVm { fd: dev_null() };
         assert_eq!(
-            ioctl_arg(fd.as_fd(), libc::FIOCLEX as libc::c_ulong, 0, "probe"),
-            Ok(0)
+            not_a_vm.by_value(VmRequest::CheckExtension(KVM_CAP_NR_MEMSLOTS)),
+            Err(RawError::Syscall {
+                call: "KVM_CHECK_EXTENSION",
+                errno: Some(libc::ENOTTY),
+            })
         );
+    }
+
+    /// ★ A memslot whose removal FAILS leaves its window mapped (review 2026-10-04). The VM here
+    /// is `/dev/null` dressed as one (only this module can build that), so the clearing ioctl
+    /// fails with `ENOTTY` exactly as a failed removal would; `Drop` then panics by design. On
+    /// the code before the fix the `Arc` field was released after the panic and the window was
+    /// unmapped while the kernel, on a real VM, still named it. Needs no `/dev/kvm`.
+    #[test]
+    fn a_memslot_whose_removal_fails_leaks_its_window_rather_than_unmap_it() {
+        let p = HostPageSize::query();
+        let window = Arc::new(GuestWindow::create(p.bytes(), p).expect("a one-page window"));
+        let watch = Arc::downgrade(&window);
+        let slot = KvmMemslot {
+            vm: Arc::new(KvmVm { fd: dev_null() }),
+            window,
+            slot: 0,
+            gpa: 0,
+            len: p.bytes(),
+        };
+        let dropped = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || drop(slot)));
+        assert!(dropped.is_err(), "a failed removal is loud");
+        let still = watch
+            .upgrade()
+            .expect("the window must outlive a memslot the kernel may still name");
+        still
+            .read_into(crate::HostOffset::ZERO, &mut [0u8; 8])
+            .expect("and it is still mapped");
     }
 
     /// ★ a5: adopting a descriptor that is not a KVM VM is refused by name. Needs no

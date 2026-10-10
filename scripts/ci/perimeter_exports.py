@@ -77,11 +77,35 @@ class Finding:
 # ---------------------------------------------------------------------------------------
 
 
-def run_rustdoc(root: Path, crate: str, target: str, out: Path) -> Path:
-    """`cargo rustdoc --output-format json`, private and hidden items included. RUSTC_BOOTSTRAP
-    is set for THIS process only (never in a workflow env); the target dir is separate and no
-    verdict uses its build."""
-    env = {**os.environ, "RUSTC_BOOTSTRAP": "1", "CARGO_TARGET_DIR": str(out)}
+# What the generator's cargo inherits: nothing else (G1's allowlist, compiler_location.sh step 1).
+RUSTDOC_ENV_KEEP = ("PATH", "HOME", "CARGO_HOME", "RUSTUP_HOME", "CARGO_TERM_COLOR")
+
+
+def rustdoc_env(out: Path, toolchain: str | None) -> dict[str, str]:
+    """The generator's environment, from an allowlist. The pinned toolchain's own `rustc` and
+    `rustdoc` are named explicitly (`RUSTDOC`/`RUSTC` override `build.rustdoc`/`build.rustc` in any
+    cargo config), and both wrappers are set EMPTY, which disables a configured one. ⊘ The first
+    version inherited the whole environment: a committed `[build] rustdoc = "./rd.sh"` ran in
+    its place and could filter the JSON this table is built from (review 2026-10-04)."""
+    env = {k: os.environ[k] for k in RUSTDOC_ENV_KEEP if k in os.environ}
+    if toolchain:
+        env["RUSTUP_TOOLCHAIN"] = toolchain
+        for tool, var in (("rustc", "RUSTC"), ("rustdoc", "RUSTDOC")):
+            r = subprocess.run(["rustup", "which", tool, "--toolchain", toolchain], capture_output=True, text=True,
+                               env=env)
+            if r.returncode != 0 or not r.stdout.strip():
+                raise SystemExit(f"rustup cannot find {tool} for the pinned toolchain {toolchain}: {r.stderr}")
+            env[var] = r.stdout.strip()
+    env.update({"RUSTC_WRAPPER": "", "RUSTC_WORKSPACE_WRAPPER": "", "RUSTC_BOOTSTRAP": "1",
+                "CARGO_TARGET_DIR": str(out)})
+    return env
+
+
+def run_rustdoc(root: Path, crate: str, target: str, out: Path, toolchain: str | None = None) -> Path:
+    """`cargo rustdoc --output-format json`, private and hidden items included, in `rustdoc_env`.
+    RUSTC_BOOTSTRAP is set for THIS process only (never in a workflow env); the target dir is
+    separate and no verdict uses its build."""
+    env = rustdoc_env(out, toolchain)
     cmd = ["cargo", "rustdoc", "-p", crate, "--lib", "--locked", "--target", target, "--",
            "-Z", "unstable-options", "--output-format", "json", "--document-private-items",
            "--document-hidden-items"]
@@ -216,10 +240,13 @@ def unsafe_impl_lines(root: Path, files: set[str]) -> dict[str, set[int]]:
 
 def inventory(doc: Doc, perimeter: set[str], unsafe_lines: dict[str, set[int]]) -> tuple[dict, dict, dict]:
     """Rows keyed (file, item); types keyed (file, name); and every item name per file (any
-    visibility) for the reach check."""
+    visibility) for the reach check. Also `names[("impls", f)]`: the (Self, Trait) pairs of the
+    trait impls whose span is in `f`, derived ones included (E1b's impl half), and
+    `names[("spliced", f)]`: items whose span is in perimeter file `f` but whose module is
+    another file's (E1d)."""
     rows: dict[tuple[str, str], Row] = {}
     types: dict[tuple[str, str], TypeInfo] = {}
-    names: dict[str, set[str]] = {}
+    names: dict = {}
     idx = doc.idx
 
     def module_file(mid) -> str | None:
@@ -241,6 +268,29 @@ def inventory(doc: Doc, perimeter: set[str], unsafe_lines: dict[str, set[int]]) 
         if name:
             names.setdefault(f, set()).add(name)
 
+    # ★ Exported macros, by their SPAN, whatever module lists them: rustdoc puts every
+    # `#[macro_export]` macro under the crate ROOT module (measured 2026-10-04: perimeter module
+    # items [], root items [the macros]), so a walk of perimeter modules never saw one, and the
+    # `macro` row kind could not fire (review 2026-10-04).
+    for it in idx.values():
+        if Doc.kind(it) == "macro" and Doc.file(it) in perimeter:
+            f = Doc.file(it)
+            note(f, it.get("name"))
+            if exported(it, f):
+                add(f, f"{it['name']}!", vis_text(it["visibility"]), "macro", {"id": it["id"]})
+    # E1d: an item whose span is a perimeter file inside a module that is NOT that file's is
+    # spliced code (`include!`, an alias of it, a macro): the compiler attributes it to the
+    # perimeter file, so only this can see where it landed (review 2026-10-04).
+    for it in idx.values():
+        if Doc.kind(it) != "module" or Doc.file(it) is None:
+            continue
+        for cid in it["inner"]["module"]["items"]:
+            c = idx.get(str(cid))
+            if c is None or Doc.kind(c) in ("macro", "use", "module"):  # a module's span is its own file
+                continue
+            cf = Doc.file(c)
+            if cf in perimeter and cf != Doc.file(it):
+                names.setdefault(("spliced", cf), set()).add(f"{c.get('name')} (in the module of {Doc.file(it)})")
     for it in idx.values():
         if Doc.kind(it) != "module" or Doc.file(it) not in perimeter:
             continue
@@ -284,8 +334,7 @@ def inventory(doc: Doc, perimeter: set[str], unsafe_lines: dict[str, set[int]]) 
                     add(f, c["name"], vis_text(c["visibility"]), "static",
                         {"id": c["id"], "static": c["inner"]["static"]})
             elif k == "macro":
-                if ex:
-                    add(f, f"{c['name']}!", vis_text(c["visibility"]), "macro", {"id": c["id"]})
+                pass  # rows for every macro by its span, above
     # impls: membership by span, whatever the Self type
     for it in idx.values():
         if Doc.kind(it) != "impl" or Doc.file(it) not in perimeter:
@@ -298,6 +347,8 @@ def inventory(doc: Doc, perimeter: set[str], unsafe_lines: dict[str, set[int]]) 
             note(f, idx[str(mid)].get("name"))
         self_t = imp["for"]
         self_name = render_type(self_t)
+        if imp.get("trait") is not None:
+            names.setdefault(("impls", f), set()).add((impl_key(self_name), imp["trait"]["path"].split("::")[-1]))
         local = self_t.get("resolved_path", {}).get("id") if isinstance(self_t, dict) else None
         local_item = idx.get(str(local)) if local is not None else None
         if local_item is not None and Doc.file(local_item) is not None:
@@ -443,6 +494,12 @@ def auto_rows(types: dict, table_kinds: dict[tuple[str, str], str], carrying: se
                 if a in t.auto:
                     rows[(f, f"{name}: {a}")] = Row(f, f"{name}: {a}", t.vis, "auto trait")
     return rows
+
+
+def impl_key(self_name: str) -> str:
+    """A Self type as both sides spell it: generics, references and paths dropped."""
+    base = re.sub(r"<.*$", "", self_name).replace("&", "").replace("mut ", "").strip()
+    return base.split("::")[-1]
 
 
 def union_inventories(parts: list[tuple[dict, dict, dict]]) -> tuple[dict, dict, dict, list[str]]:
@@ -602,9 +659,26 @@ def item_ident(item: str) -> str:
     return re.sub(r"\W", "", base)
 
 
+SHAPE_RULES = ("E4", "E5", "E6", "E7", "E8", "E12", "E14")
+
+
+def debt_key(rule: str, f: str, item: str) -> str:
+    return f"{rule}|{f}|{item}"
+
+
 def check_rows(root: Path, inv: dict, table: dict, types: dict, carrying: set[str], fds: set[str],
-               skip_guards: set[str], base_table: dict | None, e9_baseline: int) -> list[Finding]:
+               skip_guards: set[str], base_table: dict | None, e9_baseline: int,
+               debt: set[str] | None = None) -> list[Finding]:
+    """E1-E14 over the inventory and the table. E3-E3e and E13 bind OK rows (a review's evidence);
+    the SHAPE rules (E4-E8, E12, E14: what the owner adopted as gates, "no Copy/Clone on owning
+    handles", "private fields on address-carrying handles", a `# Safety` on every unsafe fn) bind
+    EVERY row: a violation on an OPEN or LANE row must be listed in `[exports.debt]`, an exact
+    per-item baseline that only shrinks. ⊘ They bound OK rows only until 2026-10-04 (review): 437
+    of 440 rows were OPEN or LANE, so a new owning handle deriving Copy landed green under the
+    skeleton status E1 itself prints."""
     out: list[Finding] = []
+    debt = set(debt or ())
+    seen_debt: set[str] = set()
     # E1: inventory equals the table
     for k in sorted(inv.keys() - table.keys()):
         r = inv[k]
@@ -633,9 +707,22 @@ def check_rows(root: Path, inv: dict, table: dict, types: dict, carrying: set[st
         elif base_table is not None and k in base_table and base_table[k].status == "OK" and t.status != "OK":
             # an OK row going back to OPEN/LANE is a regression the reviewer must see named
             print(f"  E10 note: `{t.item}` was OK at the base and is now {t.status!r}")
-        if t.status != "OK":
+        shape = shape_rules(g, t, n, type_by_name, carrying, fds)
+        if t.status == "OK":
+            out += ok_row_rules(root, g, t, n, skip_guards, tests_cache)
+            out += shape
             continue
-        out += ok_row_rules(root, g, t, n, type_by_name, carrying, fds, skip_guards, tests_cache)
+        for f in shape:
+            key = debt_key(f.rule, k[0], k[1])
+            if key in debt:
+                seen_debt.add(key)
+            else:
+                out.append(Finding(f.rule, TABLE, n, f"{f.msg} (an {t.status.split(':')[0]} row: the shape rules bind "
+                                                     f"every row; fix it, or list `{key}` in perimeter.toml "
+                                                     "[exports.debt])"))
+    for key in sorted(k for k in debt - seen_debt if k.split("|")[0] in SHAPE_RULES):
+        out.append(Finding("E15", TABLE, 0, f"[exports.debt] lists `{key}`, which no longer violates: remove it "
+                                            "(the debt only shrinks, exactly)"))
     # E9: safe extern fns taking a raw pointer, an exact baseline
     e9 = sorted(k for k, r in inv.items() if r.kind == "safe extern fn" and type_contains(
         [x[1] for x in r.meta.get("fn", {}).get("inner", {}).get("function", {}).get("sig", {}).get("inputs", [])],
@@ -647,8 +734,8 @@ def check_rows(root: Path, inv: dict, table: dict, types: dict, carrying: set[st
     return out
 
 
-def ok_row_rules(root: Path, g: Row, t: Row, n: int, type_by_name: dict, carrying: set[str], fds: set[str],
-                 skip_guards: set[str], cache: dict) -> list[Finding]:
+def ok_row_rules(root: Path, g: Row, t: Row, n: int, skip_guards: set[str], cache: dict) -> list[Finding]:
+    """E3-E3e and E13: an OK row's evidence."""
     out = []
     labels = [x.strip() for x in t.checks.split(";") if x.strip()]
     refs: dict[str, list[str]] = {}
@@ -699,6 +786,16 @@ def ok_row_rules(root: Path, g: Row, t: Row, n: int, type_by_name: dict, carryin
                 good = good or False
         if not good:
             out.append(Finding("E3", TABLE, n, f"`{t.item}`: check `{lab}` has no t:/ui: test that runs in CI"))
+    # E13: safe traits
+    if t.kind == "trait" and not ({"sealed", "no-reliance"} & set(labels)):
+        out.append(Finding("E13", TABLE, n, f"safe trait `{t.item}`: state `sealed` or `no-reliance` in checks"))
+    return out
+
+
+def shape_rules(g: Row, t: Row, n: int, type_by_name: dict, carrying: set[str], fds: set[str]) -> list[Finding]:
+    """E4-E8, E12, E14: properties of the item itself, whatever the row's status."""
+    out = []
+    labels = [x.strip() for x in t.checks.split(";") if x.strip()]
     # E4: # Safety
     if t.kind in ("unsafe fn", "unsafe extern fn", "unsafe trait"):
         docs = (g.meta.get("fn") or g.meta.get("trait") or {}).get("docs") or ""
@@ -742,9 +839,6 @@ def ok_row_rules(root: Path, g: Row, t: Row, n: int, type_by_name: dict, carryin
             for lab in ("untrusted-impls", "panic-safe"):
                 if lab not in labels:
                     out.append(Finding("E12", TABLE, n, f"generic export `{t.item}` needs the check `{lab}` with a test"))
-    # E13: safe traits
-    if t.kind == "trait" and not ({"sealed", "no-reliance"} & set(labels)):
-        out.append(Finding("E13", TABLE, n, f"safe trait `{t.item}`: state `sealed` or `no-reliance` in checks"))
     # E14: statics of an address-carrying type
     st = g.meta.get("static")
     if st is not None and (type_contains(st.get("type"), lambda x: isinstance(x, dict) and "raw_pointer" in x)
@@ -753,48 +847,160 @@ def ok_row_rules(root: Path, g: Row, t: Row, n: int, type_by_name: dict, carryin
     return out
 
 
+def has_safety_heading(text: str) -> bool:
+    return re.search(r"(?m)^\s*#+\s*Safety\b", text) is not None
+
+
+def item_docs(s: rslex.Structure, it: rslex.Item) -> str:
+    """The doc text written on an item: its outer doc comments (between its attributes too) and
+    its `#[doc = "…"]` string literals."""
+    c = s.code
+    pos = {id(t): i for i, t in enumerate(s.all)}
+    lo = pos[id(c[it.start])]
+    j = lo - 1
+    while j >= 0 and not s.all[j].is_code:
+        j -= 1
+    text = []
+    for t in s.all[j + 1:pos[id(c[it.kw])]]:
+        if t.kind == "doc" and not t.inner:
+            text.append(t.text[3:] if t.text.startswith("///") else t.text[3:-2])
+    for a in it.attrs:
+        toks = c[a[0]:a[1] + 1]
+        for k, t in enumerate(toks):
+            if t.is_ident("doc") and k + 2 < len(toks) and toks[k + 1].is_punct("=") and toks[k + 2].kind == "str":
+                text.append(toks[k + 2].text)
+    return "\n".join(text)
+
+
+def unsafe_fn_safety_findings(root: Path, files: list[str], debt: set[str]) -> list[Finding]:
+    """E4, by the tokenizer, for EVERY `unsafe fn` and `unsafe trait` in a perimeter file, private
+    ones included (they have no rows, and rule (a) makes them the place a precondition lives):
+    each has a `# Safety` heading. Exact baseline `E4L|<file>|<Owner::>fn` in [exports.debt]."""
+    out, seen = [], set()
+    for f in files:
+        s = rslex.Structure(rslex.tokenize_file(root / f, f), f)
+        tests = s.test_ranges()
+        c = s.code
+        for it in s.items:
+            if it.kind not in ("fn", "trait") or rslex.KEYWORD_UNSAFE not in it.qualifiers:
+                continue
+            if rslex.in_ranges(it.kw, tests) or (it.parent is not None and it.parent.kind == "extern_block"):
+                continue
+            if it.kind == "fn" and it.parent is not None and it.parent.kind == "impl" and " as " in it.parent.name:
+                continue  # an impl of a trait method: its contract is the trait's `# Safety`
+            if has_safety_heading(item_docs(s, it)):
+                continue
+            owner = f"{it.parent.name}::" if it.parent is not None and it.parent.kind in ("impl", "trait") else ""
+            key = debt_key("E4L", f, owner + it.name)
+            if key in debt:
+                seen.add(key)
+                continue
+            out.append(Finding("E4L", f, c[it.kw].line, f"`{owner}{it.name}` is unsafe and has no `# Safety` heading "
+                                                        f"(every unsafe fn in a perimeter file, private or not; or list "
+                                                        f"`{key}` in [exports.debt])"))
+    for key in sorted(k for k in debt - seen if k.startswith("E4L|") and k.split("|")[1] in files):
+        out.append(Finding("E15", TABLE, 0, f"[exports.debt] lists `{key}`, which no longer violates: remove it"))
+    return out
+
+
+def cfg_predicates(toks: list[rslex.Tok]) -> list[list[rslex.Tok]]:
+    """Every `cfg(P)` and `cfg_attr(P, …)` predicate inside one attribute's tokens, at ANY depth:
+    `cfg_attr(all(), cfg_attr(not(doc), derive(Clone)))` has two. ⊘ Reading only the outer one
+    let `not(doc)` through, and rustdoc (which sets `cfg(doc)`) then never saw the Clone impl
+    (review 2026-10-04)."""
+    out = []
+    for j, t in enumerate(toks):
+        if not (t.is_ident("cfg") or t.is_ident("cfg_attr")) or j + 1 >= len(toks) or not toks[j + 1].is_punct("("):
+            continue
+        depth, pred = 0, []
+        for x in toks[j + 2:]:
+            if x.is_punct("(") or x.is_punct("["):
+                depth += 1
+            elif x.is_punct(")") or x.is_punct("]"):
+                if depth == 0:
+                    break
+                depth -= 1
+            if depth == 0 and x.is_punct(",") and t.is_ident("cfg_attr"):
+                break
+            pred.append(x)
+        out.append(pred)
+    return out
+
+
+def cfg_atoms(pred: list[rslex.Tok]) -> list[str]:
+    atoms, k = [], 0
+    while k < len(pred):
+        x = pred[k]
+        if x.kind == "ident" and x.text in ("any", "all", "not") and k + 1 < len(pred) and pred[k + 1].is_punct("("):
+            k += 2
+            continue
+        if x.kind == "ident":
+            if k + 2 < len(pred) and pred[k + 1].is_punct("=") and pred[k + 2].kind == "str":
+                atoms.append(f"{x.text} = {pred[k + 2].text}")
+                k += 3
+                continue
+            atoms.append(x.text)
+        k += 1
+    return atoms
+
+
 def cfg_findings(root: Path, files: list[str], allowed: set[str], features: dict[str, set[str]],
                  crate_of) -> list[Finding]:
-    """E1c: cfg/cfg_attr predicates on items in perimeter files use only the allowed atoms and the
-    crate's own features; `debug_assertions` is banned there."""
+    """E1c: cfg/cfg_attr predicates on items in perimeter files, nested ones included, use only
+    the allowed atoms and the crate's own features; `debug_assertions` is banned there, and so is
+    `doc` (rustdoc sets it: an item under `not(doc)` is invisible to the generator)."""
     out = []
     for f in files:
         s = rslex.Structure(rslex.tokenize_file(root / f, f), f)
         c = s.code
         feats = features.get(crate_of(f), set())
         for o, e, _ in s.attrs:
-            toks = c[o:e + 1]
-            j = 3 if toks[1].is_punct("!") else 2
-            if j >= len(toks) or toks[j].text not in ("cfg", "cfg_attr"):
-                continue
-            # the predicate: cfg(P) or cfg_attr(P, attrs…) — take tokens up to the first top-level comma
-            depth, pred = 0, []
-            for x in toks[j + 2:-2]:
-                if x.is_punct("(") or x.is_punct("["):
-                    depth += 1
-                elif x.is_punct(")") or x.is_punct("]"):
-                    depth -= 1
-                if depth == 0 and x.is_punct(",") and toks[j].text == "cfg_attr":
-                    break
-                pred.append(x)
-            atoms, k = [], 0
-            while k < len(pred):
-                x = pred[k]
-                if x.kind == "ident" and x.text in ("any", "all", "not") and k + 1 < len(pred) and pred[k + 1].is_punct("("):
-                    k += 2
-                    continue
-                if x.kind == "ident":
-                    if k + 2 < len(pred) and pred[k + 1].is_punct("=") and pred[k + 2].kind == "str":
-                        atoms.append(f"{x.text} = {pred[k + 2].text}")
-                        k += 3
-                        continue
-                    atoms.append(x.text)
-                k += 1
-            for a in atoms:
-                ok = a in allowed or (a.startswith("feature = ") and a.split(" = ", 1)[1].strip('"') in feats)
-                if a == "debug_assertions" or not ok:
-                    out.append(Finding("E1c", f, toks[0].line, f"cfg predicate `{a}` on a perimeter item: only "
-                                                               f"{sorted(allowed)} and the crate's features"))
+            for pred in cfg_predicates(c[o:e + 1]):
+                for a in cfg_atoms(pred):
+                    ok = a in allowed or (a.startswith("feature = ") and a.split(" = ", 1)[1].strip('"') in feats)
+                    if a in ("debug_assertions", "doc") or not ok:
+                        out.append(Finding("E1c", f, c[o].line, f"cfg predicate `{a}` on a perimeter item: only "
+                                                                f"{sorted(allowed)} and the crate's features"))
+    uniq = {(x.rule, x.path, x.line, x.msg): x for x in out}
+    return [uniq[k] for k in sorted(uniq)]
+
+
+def lexer_impl_pairs(s: rslex.Structure) -> list[tuple[str, str, int]]:
+    """(Self, Trait, line) for every trait impl and every derived trait the tokenizer sees in a
+    file, at ANY depth (fn and const bodies, inline modules), outside `#[cfg(test)]` and outside
+    macro bodies (whose `$t` it cannot resolve). A derive is found in any attribute, cfg_attr
+    included, on a struct, enum or union."""
+    c = s.code
+    tests = s.test_ranges()
+    macros = [(it.body_open, it.end) for it in s.items if it.kind == "macro_rules" and it.body_open is not None]
+    out = []
+    for it in s.items:
+        if rslex.in_ranges(it.kw, tests) or rslex.in_ranges(it.kw, macros):
+            continue
+        if it.kind == "impl" and it.name.startswith("<") and " as " in it.name:
+            ty, _, tr = it.name[1:-1].partition(" as ")
+            out.append((impl_key(ty), re.sub(r"<.*$", "", tr).split("::")[-1], c[it.kw].line))
+        elif it.kind in ("struct", "enum", "union"):
+            for a in it.attrs:
+                toks = c[a[0]:a[1] + 1]
+                for j, t in enumerate(toks):
+                    if t.is_ident("derive") and j + 1 < len(toks) and toks[j + 1].is_punct("("):
+                        depth, last = 0, None
+                        for x in toks[j + 2:]:
+                            if x.is_punct("(") or x.is_punct("<"):
+                                depth += 1
+                            elif x.is_punct(")") or x.is_punct(">"):
+                                if depth == 0:
+                                    break
+                                depth -= 1
+                            elif x.is_punct(",") and depth == 0:
+                                if last:
+                                    out.append((it.name, last, c[it.kw].line))
+                                last = None
+                            elif x.kind == "ident" and depth == 0:
+                                last = x.text  # a path `core::clone::Clone` names its last segment
+                        if last:
+                            out.append((it.name, last, c[it.kw].line))
     return out
 
 
@@ -804,12 +1010,21 @@ def reach_findings(root: Path, files: list[str], names: dict[str, set[str]]) -> 
     out: rustdoc documents only exported macros."""
     out = []
     for f in files:
+        for what in sorted(names.get(("spliced", f), ())):
+            out.append(Finding("E1d", f, 0, f"`{what}`: code of this perimeter file compiled into another "
+                                             "file's module (include!, or an alias of it)"))
         got = names.get(f, set())
         if not got:
             out.append(Finding("E1b", f, 0, "no item of this perimeter file reached the rustdoc union "
                                             "(unreached, or every item hidden from the generator)"))
             continue
         s = rslex.Structure(rslex.tokenize_file(root / f, f), f)
+        impls = names.get(("impls", f), set())
+        for ty, tr, ln in lexer_impl_pairs(s):
+            if (ty, tr) not in impls:
+                out.append(Finding("E1b", f, ln, f"`impl {tr} for {ty}` (written or derived) is missing from the "
+                                                 "rustdoc union: an impl hidden from the generator (cfg(doc)) is a "
+                                                 "row nobody reviews"))
         tests = s.test_ranges()
         for it in s.items:
             if it.kind not in ("fn", "struct", "enum", "union", "trait", "type", "const", "static"):
@@ -912,39 +1127,132 @@ def fn_row_name(s: rslex.Structure, line: int, name: str) -> str | None:
     return None
 
 
-def mutant_findings(root: Path, outcomes: list[dict], table: dict) -> tuple[list[Finding], dict]:
-    """E3c: an OK fn row has zero MISSED mutants in its body, apart from its `equiv:` entries."""
-    ok_rows = {(f, norm_item(r.item)): r for (f, _), r in table.items() if r.status == "OK"}
+FN_ROW_KINDS = ("safe fn", "unsafe fn", "safe extern fn", "unsafe extern fn")
+
+
+def call_graph(s: rslex.Structure) -> dict[str, set[str]]:
+    """fn name -> the names it calls, by the tokenizer: an identifier followed by `(` or `::<`,
+    or after `.`. Same-named fns merge, which over-charges (the safe direction)."""
+    c = s.code
+    out: dict[str, set[str]] = {}
+    for it in s.items:
+        if it.kind != "fn" or it.body_open is None:
+            continue
+        called = out.setdefault(it.name, set())
+        for k in range(it.body_open + 1, it.end):
+            t = c[k]
+            if t.kind == "ident" and ((k + 1 < len(c) and (c[k + 1].is_punct("(") or c[k + 1].is_punct(":")))
+                                      or (k > 0 and c[k - 1].is_punct("."))):
+                called.add(t.text)
+    return out
+
+
+def closure_of(graph: dict[str, set[str]], start: str) -> set[str]:
+    seen, stack = set(), [start]
+    while stack:
+        x = stack.pop()
+        if x in seen:
+            continue
+        seen.add(x)
+        stack.extend(graph.get(x, ()))
+    return seen
+
+
+def mutant_findings(root: Path, outcomes: list[dict], table: dict, validates: list[str] = (),
+                    require_caught_under: str | None = None) -> tuple[list[Finding], dict]:
+    """E3c: an OK fn row has ZERO missed mutants, apart from its `equiv:` entries, counting the
+    mutants of the code its check actually lives in: its own body, every same-file fn it calls
+    (transitively), and every VALIDATES-file fn those bodies name. With `require_caught_under`
+    (a full run over that crate), each OK fn row there also needs at least one CAUGHT mutant or
+    an `equiv:` entry, and the unmutated baseline must have succeeded.
+
+    ⊘ Until 2026-10-04 (review) only the row's own body counted: `KvmVm::adopt` was OK on "1
+    unviable" (zero caught) while its check lived in the private `confirm_is_a_vm`, a VALIDATES
+    file was never mutated, and a run whose baseline failed (so no MissedMutant at all) passed."""
+    ok_rows = {(f, norm_item(r.item)): r for (f, _), r in table.items() if r.status == "OK" and r.kind in FN_ROW_KINDS}
     structs: dict[str, rslex.Structure] = {}
+
+    def struct(f: str) -> rslex.Structure | None:
+        if f not in structs:
+            p = root / f
+            structs[f] = rslex.Structure(rslex.tokenize_file(p, f), f) if p.exists() else None
+        return structs[f]
+
+    # for each OK row: the fn names whose mutants are charged to it, per file
+    charged: dict[tuple[str, str], dict[str, set[str]]] = {}
+    for (f, item) in ok_rows:
+        s = struct(f)
+        if s is None:
+            continue
+        own = item.split("::")[-1]
+        names = closure_of(call_graph(s), own)
+        charged[(f, item)] = {f: names}
+        anchored = "/" + f
+        crate_src = anchored[1:anchored.rfind("/src/") + 4]  # crates/<x>/src (or a fixture's src)
+        bodies = [s.code[it.body_open:it.end] for it in s.items
+                  if it.kind == "fn" and it.name in names and it.body_open is not None]
+        idents = {t.text for b in bodies for t in b if t.kind == "ident"}
+        local_fns = {it.name for it in s.items if it.kind == "fn"}
+        for v in validates:
+            if v.startswith(crate_src + "/"):
+                vs = struct(v)
+                if vs is None:
+                    continue
+                vg = call_graph(vs)
+                stem = PurePosixPath(v).stem
+                # A name the perimeter file ALSO defines counts only when written `stem::name`.
+                used = {n for n in idents & set(vg) if n not in local_fns or any(
+                    b[k].is_ident(stem) and b[k + 1].is_punct(":") and b[k + 2].is_punct(":") and b[k + 3].is_ident(n)
+                    for b in bodies for k in range(len(b) - 3))}
+                hit = set().union(*(closure_of(vg, n) for n in used)) if used else set()
+                if hit:
+                    charged[(f, item)][v] = hit
     missed: dict[tuple[str, str], list[str]] = {}
+    caught: dict[tuple[str, str], int] = {}
+    baseline = None
     for o in outcomes:
-        m = (o.get("scenario") or {}).get("Mutant") if isinstance(o.get("scenario"), dict) else None
-        if not m or o.get("summary") != "MissedMutant":
+        sc = o.get("scenario")
+        if sc == "Baseline" or (isinstance(sc, dict) and "Baseline" in sc):
+            baseline = o.get("summary")
+            continue
+        m = sc.get("Mutant") if isinstance(sc, dict) else None
+        if not m:
             continue
         f = m["file"]
         fn = (m.get("function") or {}).get("function_name")
         if not fn:
             continue
-        if f not in structs:
-            p = root / f
-            if not p.exists():
-                continue
-            structs[f] = rslex.Structure(rslex.tokenize_file(p, f), f)
+        s = struct(f)
+        if s is None:
+            continue
         # the mutant's own line: the function span starts at its doc comment, not its `fn`
-        name = fn_row_name(structs[f], m["span"]["start"]["line"], fn.split("::")[-1])
+        name = fn_row_name(s, m["span"]["start"]["line"], fn.split("::")[-1])
         if name is None:
             continue
+        bare = name.split("::")[-1]
         desc = m["name"].split(": ", 1)[-1]
-        missed.setdefault((f, norm_item(name)), []).append(desc)
+        targets = {key for key, per in charged.items() if bare in per.get(f, ())}
+        if o.get("summary") == "MissedMutant":
+            missed.setdefault((f, norm_item(name)), []).append(desc)
+            for key in targets:
+                missed.setdefault(("charged",) + key, []).append(f"{desc} (in `{name}`, {f})")
+        elif o.get("summary") == "CaughtMutant":
+            for key in targets:
+                caught[key] = caught.get(key, 0) + 1
     out = []
-    for key, descs in sorted(missed.items()):
-        r = ok_rows.get(key)
-        if r is None:
-            continue
+    for key, r in sorted(ok_rows.items()):
+        descs = missed.get(("charged",) + key, [])
         equiv = {x.split("=", 1)[1][len("equiv:"):].strip() for x in r.tests.split(";")
                  if "=" in x and x.split("=", 1)[1].strip().startswith("equiv:")}
-        left = [d for d in descs if d not in equiv]
+        left = [d for d in descs if d.split(" (in `")[0] not in equiv]
         if left:
-            out.append(Finding("E3c", TABLE, r.line, f"OK row `{r.item}` has {len(left)} MISSED mutant(s): "
-                                                     + "; ".join(left[:6])))
-    return out, missed
+            out.append(Finding("E3c", TABLE, r.line, f"OK row `{r.item}` has {len(left)} MISSED mutant(s) in the code "
+                                                     "its checks live in: " + "; ".join(left[:6])))
+        if require_caught_under is not None and key[0].startswith(require_caught_under.rstrip("/") + "/") \
+                and caught.get(key, 0) == 0 and not equiv:
+            out.append(Finding("E3c", TABLE, r.line, f"OK row `{r.item}` has ZERO caught mutants: no mutation shows "
+                                                     "its test checks anything (add one, or an `equiv:` entry)"))
+    if require_caught_under is not None and baseline != "Success":
+        out.append(Finding("E3c", TABLE, 0, f"the unmutated baseline is {baseline!r}, not 'Success': a run whose "
+                                            "tests never passed has no missed mutant to report"))
+    return out, {k: v for k, v in missed.items() if k[0] != "charged"}

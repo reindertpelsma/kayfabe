@@ -147,12 +147,21 @@ class Tree:
     def __init__(self, root: Path, files: list[str]):
         self.root = root
         self.files = files
+        self._text: dict[str, str] = {}
         self._toks: dict[str, list[rslex.Tok]] = {}
         self._struct: dict[str, rslex.Structure] = {}
 
+    def text(self, f: str) -> str:
+        if f not in self._text:
+            try:
+                self._text[f] = (self.root / f).read_text(encoding="utf-8")
+            except UnicodeDecodeError as e:
+                raise rslex.LexError(f"{f}: not UTF-8 ({e})") from e
+        return self._text[f]
+
     def toks(self, f: str) -> list[rslex.Tok]:
         if f not in self._toks:
-            self._toks[f] = rslex.tokenize_file(self.root / f, f)
+            self._toks[f] = rslex.tokenize(self.text(f), f)
         return self._toks[f]
 
     def struct(self, f: str) -> rslex.Structure:
@@ -197,7 +206,15 @@ def manifest_roots(root: Path, manifests: list[str]) -> set[str]:
 
 
 def lex_unsafe(tree: Tree, cfg: Config) -> list[Finding]:
-    """L1: `unsafe` in code only in class U perimeter files or exempt paths."""
+    """L1: `unsafe`, and the names of the asm macros, in code only in class U perimeter files or
+    exempt paths.
+
+    `global_asm!`/`naked_asm!`/`asm!` need no keyword: `global_asm!` links arbitrary machine code
+    from safe Rust, and the compiler's `unsafe_code` lint is silent for it when it arrives from
+    another crate's exported macro (measured 2026-10-04, review finding: a `#[macro_export]`
+    wrapper in kf-linux-raw expanded in kf-host emitted a symbol with no diagnostic). So the NAME
+    is the keyword's equal here, raw spelling included, wherever it appears (a `use … as`
+    alias still names it)."""
     out = []
     for f in tree.files:
         if may_hold_unsafe(f, cfg):
@@ -206,6 +223,10 @@ def lex_unsafe(tree: Tree, cfg: Config) -> list[Finding]:
             if t.is_ident(UNSAFE):
                 out.append(Finding("L1", f, t.line,
                                    f"`{UNSAFE}` outside the perimeter (a class U crate's src/**/*_unsafe.rs)"))
+            elif any(t.is_ident(m) for m in rslex.ASM_MACROS):
+                out.append(Finding("L1", f, t.line,
+                                   f"`{t.text}` outside the perimeter: the asm macros need no keyword, so their "
+                                   "name is one"))
     return out
 
 
@@ -294,12 +315,17 @@ def lex_modules(tree: Tree, cfg: Config) -> list[Finding]:
             for j, t in enumerate(body):
                 if t.is_ident("path") and j + 1 < len(body) and body[j + 1].is_punct("=") and o not in reuse_ok:
                     out.append(Finding("L4", f, t.line, "#[path] in a class U/P crate's src/"))
+        # ★ The NAME, anywhere in code, not `include` followed by `!`: `use core::include as
+        # splice; splice!("x_unsafe.rs")` and `r#include!(…)` both compile (measured 2026-10-04)
+        # and splice a perimeter file into a safe module, where the compiler attributes the
+        # spliced code to the perimeter file (review finding, 2026-10-04).
         for k, t in enumerate(c):
-            if t.is_ident("include") and k + 1 < len(c) and c[k + 1].is_punct("!"):
-                out.append(Finding("L4", f, t.line, "include!() in a class U/P crate's src/"))
-        for it in s.items:
-            if it.kind == "mod" and any(s.attr_is(a, "macro_use") for a in it.attrs):
-                out.append(Finding("L4", f, c[it.kw].line, "#[macro_use] on a module in a class U/P crate"))
+            if t.is_ident("include"):
+                out.append(Finding("L4", f, t.line, "`include` (include!, or an alias of it) in a class U/P "
+                                                    "crate's src/"))
+            elif t.is_ident("macro_use") and s.in_attr(k):
+                out.append(Finding("L4", f, t.line, "#[macro_use] (at any depth, cfg_attr included) in a class "
+                                                    "U/P crate's src/"))
         if f.endswith("_unsafe.rs") and is_perimeter_file(f, cfg):
             for k in range(len(c)):
                 if is_mod_decl(c, k):
@@ -318,26 +344,70 @@ def lex_modules(tree: Tree, cfg: Config) -> list[Finding]:
     return out
 
 
+def attr_names(s: rslex.Structure, a: tuple[int, int]) -> list[rslex.Tok]:
+    return s.code[a[0]:a[1] + 1]
+
+
+def macro_danger(c: list[rslex.Tok], lo: int, hi: int) -> str | None:
+    """What in code tokens c[lo:hi] an exported macro may not carry: what the compiler cannot
+    see once it is expanded in ANOTHER crate (rustc suppresses `unsafe_code` for spans from an
+    external macro), or what splices a file in relative to the CALLER's file (`include!` and
+    `#[path]` resolve against the outermost call site). None if nothing."""
+    for k in range(lo, hi):
+        t = c[k]
+        if t.is_ident(UNSAFE):
+            return f"`{UNSAFE}`"
+        if any(t.is_ident(m) for m in (*rslex.ASM_MACROS, "include")):
+            return f"`{t.text}`"
+        if t.is_ident("path") and k + 1 < hi and c[k + 1].is_punct("="):
+            return "`#[path]`"
+        if t.is_ident("macro_rules") and k + 1 < hi and c[k + 1].is_punct("!"):
+            return "a nested `macro_rules!`"
+        if t.is_ident("mod") and (
+                (k + 2 < hi and c[k + 1].kind == "ident" and c[k + 2].is_punct(";"))
+                or (k + 3 < hi and c[k + 1].is_punct("$") and c[k + 3].is_punct(";"))):
+            return "an out-of-line `mod`"
+    return None
+
+
 def lex_macros(tree: Tree, cfg: Config) -> list[Finding]:
-    """L5: no exported macro in a class U crate carries `unsafe` in its body."""
+    """L5, in EVERY crate: an exported macro carries nothing the compiler cannot see once it is
+    expanded elsewhere (`macro_danger`).
+
+    Exported means any attribute naming `macro_export` at any depth (`#[cfg_attr(all(),
+    macro_export)]` exports; an exact `#[macro_export]` match missed it, review 2026-10-04), or
+    a body that can define an exported macro: one naming `macro_export`, or one that puts a
+    `$fragment` attribute on a nested `macro_rules!` (`#[$m] macro_rules! …`, invoked with
+    `macro_export`). Every crate, not class U alone: a forbid crate's safe file has no keyword
+    (L1), but it can carry an exported macro wrapping `include!` or `#[path]` (review
+    2026-10-04)."""
+    del cfg
     out = []
     for f in tree.files:
-        if crate_of(f, cfg.class_u) is None:
-            continue
         s = tree.struct(f)
         c = s.code
         for it in s.items:
             if it.kind != "macro_rules" or it.body_open is None:
                 continue
-            body = c[it.body_open:it.end + 1]
-            has_unsafe = any(t.is_ident(UNSAFE) for t in body)
-            exported = any(s.attr_is(a, "macro_export") or
-                           s.attr_is(a, "macro_export", "(", "local_inner_macros", ")") for a in it.attrs)
-            defines_export = any(t.is_ident("macro_export") for t in body)
-            if has_unsafe and (exported or defines_export):
+            exported = any(x.is_ident("macro_export") for a in it.attrs for x in attr_names(s, a))
+            body_exports = any(c[k].is_ident("macro_export") for k in range(it.body_open, it.end + 1))
+            # A nested `macro_rules!` in a body that has ANY attribute carrying a `$fragment` can be
+            # given `macro_export` by its caller (`#[$m]`, or `$(#[$m])*` before it, which no
+            # adjacency test sees). Conservative on purpose: such a body fails below, because a
+            # nested `macro_rules!` is itself on the list.
+            nested = any(c[k].is_ident("macro_rules") and k + 1 < len(c) and c[k + 1].is_punct("!")
+                         for k in range(it.body_open + 1, it.end))
+            if nested and any(it.body_open < o < it.end and any(x.is_punct("$") for x in c[o:e + 1])
+                              for o, e, _ in s.attrs):
+                body_exports = True
+            if not (exported or body_exports):
+                continue
+            what = macro_danger(c, it.body_open + 1, it.end)
+            if what is not None:
                 out.append(Finding("L5", f, c[it.kw].line,
-                                   f"exported macro `{it.name}!` has `{UNSAFE}` in its body; its expansions in "
-                                   "other crates are invisible to the compiler location gate"))
+                                   f"exported macro `{it.name}!` carries {what} in its body: expanded in another "
+                                   "crate it is invisible to the compiler location gate, or it splices a file "
+                                   "relative to the caller's"))
     return out
 
 
@@ -435,34 +505,163 @@ def fence_has_unsafe(body: list[tuple[int, str]]) -> int | None:
         return None
 
 
+def indented_blocks(lines: list[tuple[int, str]]) -> list[list[tuple[int, str]]]:
+    """CommonMark indented code blocks, which rustdoc runs as Rust doctests: lines indented at
+    least four columns past the run's common indentation (rustdoc unindents doc fragments by
+    it), opened after a blank line or at the start, outside a fence. A list item's indented
+    paragraph reads the same way; that over-reads, which is the safe direction."""
+    nonblank = [len(t) - len(t.lstrip(" ")) for _, t in lines if t.strip()]
+    if not nonblank:
+        return []
+    base = min(nonblank)
+    out: list[list[tuple[int, str]]] = []
+    cur: list[tuple[int, str]] = []
+    prev_blank, in_fence = True, None
+    for ln, t in lines:
+        m = re.match(r"^\s*(```+|~~~+)", t)
+        if in_fence is not None:
+            if re.match(rf"^\s*{re.escape(in_fence[0])}{{{len(in_fence)},}}\s*$", t):
+                in_fence = None
+            prev_blank = False
+            continue
+        if m and len(t) - len(t.lstrip(" ")) < base + 4:
+            if cur:
+                out.append(cur)
+                cur = []
+            in_fence = m.group(1)
+            continue
+        indent = len(t) - len(t.lstrip(" "))
+        if t.strip() and indent >= base + 4 and (cur or prev_blank):
+            cur.append((ln, t[base + 4:]))
+        elif not t.strip() and cur:
+            cur.append((ln, ""))
+        elif cur:
+            out.append(cur)
+            cur = []
+        prev_blank = not t.strip()
+    if cur:
+        out.append(cur)
+    return out
+
+
+def str_value(tok: rslex.Tok) -> str | None:
+    """The value of a string literal token (escapes decoded), or None for byte/C strings."""
+    text = tok.text
+    if text.startswith(("b", "c")):
+        return None
+    if text.startswith("r"):
+        hashes = len(text) - len(text[1:].lstrip("#")) - 1
+        return text[2 + hashes:len(text) - 1 - hashes]
+    body, out, i = text[1:-1], [], 0
+    while i < len(body):
+        ch = body[i]
+        if ch != "\\":
+            out.append(ch)
+            i += 1
+            continue
+        nxt = body[i + 1] if i + 1 < len(body) else ""
+        if nxt == "\n":  # a line continuation swallows the next line's leading whitespace
+            i += 2
+            while i < len(body) and body[i] in rslex.RUST_WS:
+                i += 1
+            continue
+        simple = {"n": "\n", "t": "\t", "r": "\r", "0": "\0", "\\": "\\", "'": "'", '"': '"'}
+        if nxt in simple:
+            out.append(simple[nxt])
+            i += 2
+        elif nxt == "x":
+            out.append(chr(int(body[i + 2:i + 4], 16)))
+            i += 4
+        elif nxt == "u":
+            e = body.index("}", i)
+            out.append(chr(int(body[i + 3:e].replace("_", ""), 16)))
+            i = e + 1
+        else:
+            out.append(nxt)
+            i += 2
+    return "".join(out)
+
+
+def doc_attr_values(tree: Tree, f: str) -> tuple[list[tuple[int, list[tuple[int, str]]]], list[Finding]]:
+    """`#[doc = …]` / `#![doc = …]` at any depth (cfg_attr included): the string literals of the
+    value, concatenated, and `include_str!(<literal>)` resolved against this file (raw strings
+    included). A value this cannot read is a finding, never a skip (fail closed)."""
+    s = tree.struct(f)
+    c = s.code
+    runs, out = [], []
+    for o, e, _ in s.attrs:
+        k = o
+        while k <= e:
+            if not (c[k].is_ident("doc") and k + 1 <= e and c[k + 1].is_punct("=")):
+                k += 1
+                continue
+            j, depth, parts = k + 2, 0, []
+            while j < e:
+                x = c[j]
+                if x.kind == "punct" and x.text in "([{":
+                    depth += 1
+                elif x.kind == "punct" and x.text in ")]}":
+                    if depth == 0:
+                        break
+                    depth -= 1
+                elif x.is_punct(",") and depth == 0:
+                    break
+                if x.is_ident("include_str"):
+                    # exactly `include_str ! ( <literal> )`; anything else cannot be resolved here
+                    lit = c[j + 3] if j + 4 < len(c) and c[j + 1].is_punct("!") and c[j + 2].is_punct("(") \
+                        and c[j + 4].is_punct(")") else None
+                    val = str_value(lit) if lit is not None and lit.kind == "str" else None
+                    md = (tree.root / f).parent / val if val is not None else None
+                    if md is None or not md.is_file():
+                        out.append(Finding("L10", f, x.line, "a `doc = include_str!(…)` whose file this gate "
+                                                             "cannot resolve (fail closed): name it with a string "
+                                                             "literal relative to this file"))
+                    else:
+                        parts.append(md.read_text())
+                    j += 5
+                    continue
+                if x.kind == "str":
+                    v = str_value(x)
+                    if v is not None:
+                        parts.append(v)
+                j += 1
+            if parts:
+                text = "".join(parts)
+                runs.append((c[k].line, [(c[k].line, ln) for ln in text.split("\n")]))
+            k = j
+    return runs, out
+
+
 def lex_doctests(tree: Tree, cfg: Config) -> list[Finding]:
-    """L10: no `unsafe` in a doc-comment Rust fence outside the perimeter."""
+    """L10: no `unsafe` in Rust doctest code outside the perimeter: a doc-comment fence, a
+    `#[doc = …]` attribute's fence (cfg_attr and include_str! included), a CommonMark indented
+    code block, and any string literal that holds a fence or an indented block (a macro can turn
+    a call-site literal into a doc: `#[doc = $doc]`)."""
     out = []
     for f in tree.files:
         if may_hold_unsafe(f, cfg):
             continue
         toks = tree.toks(f)
         runs = doc_lines(toks)
-        # `#[doc = include_str!("x.md")]`: that file's fences are doctests too.
-        s = tree.struct(f)
-        c = s.code
-        for o, e, _ in s.attrs:
-            words = [t for t in c[o:e + 1]]
-            for j, t in enumerate(words):
-                if t.is_ident("include_str") and j + 3 < len(words) and words[j + 2].is_punct("(") \
-                        and words[j + 3].kind == "str":
-                    lit = words[j + 3].text.strip('"')
-                    md = (tree.root / f).parent / lit
-                    if md.exists():
-                        lines = [(i + 1, x) for i, x in enumerate(md.read_text().splitlines())]
-                        runs.append((t.line, lines))
+        attr_runs, errs = doc_attr_values(tree, f)
+        out += errs
+        runs += attr_runs
+        for t in tree.struct(f).code:
+            if t.kind == "str":
+                v = str_value(t)
+                if v is not None and ("```" in v or "~~~" in v or "\n    " in v):
+                    runs.append((t.line, [(t.line, ln) for ln in v.split("\n")]))
         for _, lines in runs:
             for ln, info, body in fences(lines):
                 if fence_is_rust(info):
                     hit = fence_has_unsafe(body)
                     if hit is not None:
                         out.append(Finding("L10", f, hit, f"`{UNSAFE}` in a doctest fence (from line {ln})"))
-    return out
+            for block in indented_blocks(lines):
+                hit = fence_has_unsafe(block)
+                if hit is not None:
+                    out.append(Finding("L10", f, hit, f"`{UNSAFE}` in an indented (four-space) doctest block"))
+    return sorted(set(out))
 
 
 def symlink_findings(ls_stage: str) -> list[Finding]:
@@ -493,6 +692,12 @@ def run_lex(root: Path, cfg: Config, files: list[str] | None = None) -> tuple[li
     for f in files:
         try:
             tree.struct(f)
+            if rslex.shebang_len(tree.text(f)):
+                # rustc strips a first line it reads as a shebang, and its rule is subtle enough
+                # (`#!/**/[…]` is Rust, `#!/x` is not) that a gate which agrees with it today is
+                # one edge case from hiding a line. No tracked file has one: none may.
+                findings.append(Finding("L0", f, 1, "a first line rustc would strip as a shebang: not allowed "
+                                                    "in a tracked .rs file (fail closed)"))
         except rslex.LexError as e:
             findings.append(Finding("L0", f, 0, f"cannot tokenize: {e}"))
     if findings:
@@ -511,19 +716,19 @@ def run_lex(root: Path, cfg: Config, files: list[str] | None = None) -> tuple[li
 # G6: the size ratchet (rule c), L8 and L9
 # ---------------------------------------------------------------------------------------
 
-SIZE_COLUMNS = ("code", *rslex.KINDS, "macro_unsafe", "exports")
+SIZE_COLUMNS = ("tokens", *rslex.KINDS, "macro_unsafe", "exports")
 SIZES_TSV = "scripts/ci/perimeter/sizes.tsv"
 REASON_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}): (.*?)\s*— (.+)$")
 
 
-def code_lines(s: rslex.Structure) -> int:
-    """Lines holding at least one code token, outside items under exactly `#[cfg(test)]`."""
+def code_tokens(s: rslex.Structure) -> int:
+    """Code tokens outside items under exactly `#[cfg(test)]`.
+
+    Tokens, not lines (review 2026-10-04): a line count measures formatting, so `#[rustfmt::skip]`,
+    a macro body rustfmt never touches, or two statements joined on one line add code while the
+    count stays put or falls, and a fall needs no reason. A token count moves with the code."""
     tests = s.test_ranges()
-    lines: set[int] = set()
-    for k, t in enumerate(s.code):
-        if not rslex.in_ranges(k, tests):
-            lines.update(range(t.line, t.end_line + 1))
-    return len(lines)
+    return sum(1 for k in range(len(s.code)) if not rslex.in_ranges(k, tests))
 
 
 def strip_c(src: str) -> str:
@@ -552,8 +757,14 @@ def strip_c(src: str) -> str:
     return "".join(out)
 
 
-def c_code_lines(text: str) -> int:
-    return sum(1 for ln in strip_c(text).splitlines() if ln.strip())
+C_TOKEN = re.compile(r'"(?:\\.|[^"\\\n])*"|\'(?:\\.|[^\'\\\n])*\'|[A-Za-z_]\w*|\d[\w.]*|\S')
+
+
+def c_code_tokens(text: str) -> int:
+    """C tokens after comments are stripped: identifiers, numbers, string and character
+    literals each count one, and every other non-space character one (exact, and moved by
+    code, not by layout)."""
+    return len(C_TOKEN.findall(strip_c(text)))
 
 
 def crate_files(tree: Tree, crate: str) -> list[str]:
@@ -563,7 +774,7 @@ def crate_files(tree: Tree, crate: str) -> list[str]:
 def measure_file(tree: Tree, f: str, crate_structs: list[rslex.Structure]) -> dict[str, int]:
     s = tree.struct(f)
     row = {c: 0 for c in SIZE_COLUMNS}
-    row["code"] = code_lines(s)
+    row["tokens"] = code_tokens(s)
     for site in rslex.unsafe_sites(s):
         if site.kind in rslex.KINDS:
             row[site.kind] += 1
@@ -590,7 +801,7 @@ def size_rows(tree: Tree, cfg: Config, c_files: list[str], exports: dict[str, in
         rows[f]["exports"] = (exports or {}).get(f, 0)
     for f in c_files:
         row = {c: 0 for c in SIZE_COLUMNS}
-        row["code"] = c_code_lines((tree.root / f).read_text())
+        row["tokens"] = c_code_tokens((tree.root / f).read_text())
         rows[f] = row
     return rows
 
@@ -615,7 +826,8 @@ def read_tsv(text: str) -> dict[str, dict]:
 
 def write_tsv(rows: dict[str, dict]) -> str:
     head = ("# The perimeter size ratchet (docs/design/V3_SEC_PERIMETER.md §2; OWNER_RULINGS §R rule c).\n"
-            "# Every count is EXACT. A decrease needs only the new number (`perimeter.py sizes --update`).\n"
+            "# Every count is EXACT. `tokens` counts code tokens outside #[cfg(test)] (C: tokens after\n"
+            "# comments are stripped). A decrease needs only the new number (`perimeter.py sizes --update`).\n"
             "# A rise, or a new row, needs a new reason: `YYYY-MM-DD: <column>+<delta> ... — <why>`.\n")
     out = [head + "\t".join(["path", *SIZE_COLUMNS, "reason"])]
     for f in sorted(rows):
@@ -669,10 +881,15 @@ def fmt_row(r: dict) -> str:
 
 # The phrasing of a precondition handed to callers. "the caller's buffer is borrowed in this
 # expression" or "the CALLING thread" describe the call, not an obligation, and do not match.
+# ⊘ Widened 2026-10-04 (review): "the caller keeps it alive", "its caller established that…",
+# "validated by the caller two frames up" each hand a precondition to a caller and matched none
+# of the first family.
 CALLER_OBLIGATION = re.compile(
     r"\b(?:every|each|all) callers?\b"
-    r"|\bcallers? (?:size|sizes|bound|bounds|must|ensure|ensures|guarantee|guarantees|pass|passes|promise)\b"
-    r"|\bcaller'?s obligation\b|\bthe caller passed\b|\bthe caller \(",
+    r"|\bcallers? (?:size|sizes|bound|bounds|must|ensure|ensures|guarantee|guarantees|pass|passes|promise"
+    r"|keeps?|kept|establish|established|establishes|validated|validates|checked|checks|holds?)\b"
+    r"|\b(?:validated|checked|established|guaranteed|ensured) by (?:the|its|a) caller\b"
+    r"|\bcaller'?s obligation\b|\bthe caller passed\b|\bthe caller \(|\bcaller two frames up\b",
     re.IGNORECASE)
 
 
@@ -720,38 +937,102 @@ def l8_sites(tree: Tree, cfg: Config) -> list[tuple[str, str, int]]:
     return sorted(out)
 
 
-def mint_aliases(s: rslex.Structure, names: set[str]) -> set[str]:
-    """Names a file introduces for a mint name: `use … name as Alias` and `type Alias = …name…`."""
+def l8b_sites(tree: Tree, cfg: Config) -> list[str]:
+    """L8b: a SAFE, non-extern fn in a perimeter file with a raw-pointer (`*const`/`*mut`) or
+    `RawFd` parameter. Its body cannot check what the pointer or descriptor names, so the
+    precondition is its caller's (rule (a)) whatever its SAFETY comments say. Safe `extern "C"`
+    fns are E9's. Keyed `<file>::<Type::>fn`; an exact set that only shrinks."""
+    out = []
+    for f in tree.files:
+        if not is_perimeter_file(f, cfg):
+            continue
+        s = tree.struct(f)
+        c = s.code
+        tests = s.test_ranges()
+        for it in s.items:
+            if it.kind != "fn" or UNSAFE in it.qualifiers or "extern" in it.qualifiers or rslex.in_ranges(it.kw, tests):
+                continue
+            if it.parent is not None and it.parent.kind == "extern_block":
+                continue
+            k, angle = it.kw + 2, 0  # past `fn name`; skip the generic list, `<…>` is not bracket-matched
+            while k < len(c) and not (angle == 0 and c[k].is_punct("(")):
+                angle += 1 if c[k].is_punct("<") else -1 if c[k].is_punct(">") else 0
+                k += 1
+            if k >= len(c):
+                continue
+            params = c[k:s.match[k] + 1]
+            raw = any(params[i].is_punct("*") and (params[i + 1].is_ident("const") or params[i + 1].is_ident("mut"))
+                      for i in range(len(params) - 1))
+            if raw or any(t.is_ident("RawFd") for t in params):
+                owner = f"{it.parent.name}::" if it.parent is not None and it.parent.kind in ("impl", "trait") else ""
+                out.append(f"{f}::{owner}{it.name}")
+    return sorted(set(out))
+
+
+def l8b_findings(sites: list[str], baseline: list[str]) -> list[Finding]:
+    out = []
+    for key in sorted(set(sites) - set(baseline)):
+        out.append(Finding("L8b", key.split("::", 1)[0], 0, f"safe fn `{key.split('::', 1)[1]}` takes a raw pointer or "
+                                                            "RawFd: make it `unsafe fn` with a `# Safety`, or take a "
+                                                            "type that carries its own bound"))
+    for key in sorted(set(baseline) - set(sites)):
+        out.append(Finding("L8b", key.split("::", 1)[0], 0, f"[l8].raw_params lists `{key}`, which is gone: remove it"))
+    return out
+
+
+def mint_aliases(s: rslex.Structure, names: set[str]) -> tuple[set[str], set[str]]:
+    """Names a file introduces for a mint name: `use … name as Alias` and `type Alias = …name…`.
+    Returns (every alias, the `pub` ones): a `pub` alias is a name other crates can use too
+    (`pub type P = Nvos21Parameters;` in kf-abi, used as `kf_abi::P` in kf-host, review
+    2026-10-04). Raw spellings count: `r#Nvos21Parameters` is the same name."""
     c = s.code
-    found = set()
+    found: set[str] = set()
+    public: set[str] = set()
+    uses = [it for it in s.items if it.kind == "use"]
     for k in range(len(c) - 2):
         if c[k].kind == "ident" and c[k].text in names and c[k + 1].is_ident("as") and c[k + 2].kind == "ident":
             found.add(c[k + 2].text)
+            if any(u.start <= k <= u.end and "pub" in u.qualifiers for u in uses):
+                public.add(c[k + 2].text)
     for it in s.items:
         if it.kind == "type" and any(x.kind == "ident" and x.text in names for x in c[it.kw:it.end + 1]):
             found.add(it.name)
-    return found
+            if "pub" in it.qualifiers:
+                public.add(it.name)
+    return found, public
 
 
 def mint_sites(tree: Tree, cfg: Config, kf3_crates: list[str]) -> dict[str, list[int]]:
-    """L9: mint-name sites in src/ of kf3-graph crates, outside cfg(test), perimeter files and kf-abi."""
+    """L9: mint-name sites in src/ of kf3-graph crates, outside cfg(test), perimeter files and
+    kf-abi. Aliases are followed to a fixpoint: a crate's own, and every crate's `pub` ones
+    (kf-abi's included, though its sites are not counted)."""
     names = set(cfg.raw.get("mint", {}).get("names", []))
+    files_of = {cr: [f for f in crate_files(tree, cr) if in_src(f, cr) and not is_perimeter_file(f, cfg)]
+                for cr in kf3_crates}
+    local: dict[str, set[str]] = {cr: set(names) for cr in kf3_crates}
+    shared: set[str] = set()
+    while True:
+        changed = False
+        for cr in kf3_crates:
+            known = local[cr] | shared
+            for f in files_of[cr]:
+                found, public = mint_aliases(tree.struct(f), known)
+                if not found <= local[cr] or not public <= shared:
+                    local[cr] |= found
+                    pass
+                    changed = True
+        if not changed:
+            break
     out: dict[str, list[int]] = {}
     for cr in kf3_crates:
         if cr.endswith("/kf-abi"):
             continue
-        files = [f for f in crate_files(tree, cr) if in_src(f, cr) and not is_perimeter_file(f, cfg)]
-        crate_names = set(names)
-        while True:
-            more = set().union(*(mint_aliases(tree.struct(f), crate_names) for f in files)) - crate_names
-            if not more:
-                break
-            crate_names |= more
-        for f in files:
+        crate_names = local[cr] | shared
+        for f in files_of[cr]:
             s = tree.struct(f)
             tests = s.test_ranges()
             hits = [t.line for k, t in enumerate(s.code)
-                    if t.kind == "ident" and not t.raw and t.text in crate_names and not rslex.in_ranges(k, tests)]
+                    if t.kind == "ident" and t.text in crate_names and not rslex.in_ranges(k, tests)]
             if hits:
                 out[f] = hits
     return out
@@ -786,14 +1067,26 @@ def l8_findings(sites: list[tuple[str, str, int]], baseline: list[str]) -> list[
 # G4: manifests
 # ---------------------------------------------------------------------------------------
 
-FORBIDDEN_CONFIG_KEYS = ("rustflags", "rustdocflags", "rustc", "rustc-wrapper", "rustc-workspace-wrapper")
+# `rustdoc`: an interposed rustdoc writes the JSON the export table is built from (review
+# 2026-10-04: a committed `[build] rustdoc = "./rd.sh"` ran and its output was used).
+FORBIDDEN_CONFIG_KEYS = ("rustflags", "rustdocflags", "rustc", "rustc-wrapper", "rustc-workspace-wrapper",
+                         "rustdoc")
+# Whole tables a committed cargo config may not have: `[unstable]` (turned on by the export
+# generator's RUSTC_BOOTSTRAP), and every way to swap a dependency's source under its own name
+# (`[source]` replace-with, `[registries]`, `[registry]`, `[patch]`, `[paths]`).
+FORBIDDEN_CONFIG_TABLES = ("unstable", "source", "registries", "registry", "patch", "paths")
 FORBIDDEN_ENV = re.compile(r"^(RUSTFLAGS|CARGO_ENCODED_RUSTFLAGS|CARGO_TARGET_\w+_RUSTFLAGS|RUSTDOCFLAGS|"
                            r"CARGO_ENCODED_RUSTDOCFLAGS|RUSTC|RUSTC_WRAPPER|RUSTC_WORKSPACE_WRAPPER|"
-                           r"RUSTC_BOOTSTRAP|CARGO_BUILD_RUSTFLAGS|CARGO_BUILD_RUSTC\w*)$")
+                           r"RUSTC_BOOTSTRAP|CARGO_BUILD_RUSTFLAGS|CARGO_BUILD_RUSTC\w*|RUSTDOC|"
+                           r"CARGO_BUILD_RUSTDOC\w*|CARGO_UNSTABLE_\w+|CARGO_REGISTRIES_\w+|"
+                           r"CARGO_SOURCE_\w+|CARGO_REGISTRY_\w+)$")
 
 
 def cargo_config_violations(path: str, data: dict) -> list[Finding]:
     out = []
+    for t in FORBIDDEN_CONFIG_TABLES:
+        if t in data:
+            out.append(Finding("M4", path, 1, f"cargo config has a `[{t}]` table"))
 
     def walk(d: dict, trail: str) -> None:
         for k, v in d.items():
@@ -805,6 +1098,26 @@ def cargo_config_violations(path: str, data: dict) -> list[Finding]:
             if isinstance(v, dict):
                 walk(v, key)
     walk(data, "")
+    return out
+
+
+DEP_TABLES = ("dependencies", "dev-dependencies", "build-dependencies")
+
+
+def manifest_source_violations(path: str, data: dict) -> list[Finding]:
+    """M7 (manifest half): no dependency names another registry (`registry =`, `registry-index =`),
+    and no manifest patches or replaces a dependency (`[patch]`, `[replace]`): each swaps what
+    a package NAME resolves to, which a name-only external list cannot see."""
+    out = []
+    for t in ("patch", "replace"):
+        if t in data:
+            out.append(Finding("M7", path, 1, f"a `[{t}]` table"))
+    tables = [data, data.get("workspace") or {}, *(data.get("target") or {}).values()]
+    for tbl in tables:
+        for dt in DEP_TABLES:
+            for name, spec in (tbl.get(dt) or {}).items():
+                if isinstance(spec, dict) and ({"registry", "registry-index"} & spec.keys()):
+                    out.append(Finding("M7", path, 1, f"dependency `{name}` names another registry"))
     return out
 
 
@@ -835,9 +1148,31 @@ def workflow_env_violations(path: str, text: str) -> list[Finding]:
     return out
 
 
+def kf3_overlay_findings(root: Path, cfg: Config, tracked: list[str]) -> list[Finding]:
+    """K6: the kf3 C overlay is exactly `[c].files` plus its meson.build, and meson.build is the
+    reviewed one (sha256). build_kf3.sh copies EVERY `*.c`/`*.h` of the directory into QEMU, and
+    meson.build decides what is compiled and with which flags (`c_args`, `files(…)`, link_args):
+    an unlisted C file would ship with no size row, and a `c_args` change would switch on code
+    paths (review 2026-10-04)."""
+    c = cfg.raw.get("c", {})
+    d = c.get("overlay")
+    if not d:
+        return []
+    meson = f"{d}/meson.build"
+    want = set(c.get("files", [])) | {meson}
+    got = {f for f in tracked if under(f, d)}
+    out = [Finding("K6", f, 1, "a file in the kf3 overlay that perimeter.toml [c].files does not list "
+                               "(build_kf3.sh copies every overlay source into QEMU)") for f in sorted(got - want)]
+    out += [Finding("K6", f, 1, "[c].files lists a file the overlay no longer has") for f in sorted(want - got)]
+    if meson in got and hashlib.sha256((root / meson).read_bytes()).hexdigest() != c.get("meson_sha256"):
+        out.append(Finding("K6", meson, 1, "kf3's meson.build changed: re-review what it compiles and with which "
+                                           "flags, then update perimeter.toml [c].meson_sha256"))
+    return out
+
+
 def run_manifest(root: Path, cfg: Config, members: list[str] | None = None,
                  manifests: list[str] | None = None, configs: list[str] | None = None,
-                 workflows: list[str] | None = None) -> list[Finding]:
+                 workflows: list[str] | None = None, overlay: list[str] | None = None) -> list[Finding]:
     """M1-M5 plus manifest coverage and the pinned build scripts.
 
     `members` are package directories relative to root (from `cargo metadata --no-deps`).
@@ -880,6 +1215,23 @@ def run_manifest(root: Path, cfg: Config, members: list[str] | None = None,
     # M4
     for f in configs:
         out += cargo_config_violations(f, tomllib.loads((root / f).read_text()))
+    # M7's manifest half, and M10: every package is edition 2024. The tokenizer's keyword covers
+    # `#[unsafe(no_mangle)]`, `export_name` and `link_section` only because edition 2024 requires
+    # the `unsafe(…)` wrapper; under 2021 those attributes carry no keyword at all.
+    root_ws_pkg = (tomllib.loads((root / "Cargo.toml").read_text()).get("workspace") or {}).get("package") or {}
+    for m in manifests:
+        data = tomllib.loads((root / m).read_text())
+        out += manifest_source_violations(m, data)
+        pkg = data.get("package")
+        if pkg is None:
+            continue
+        ed = pkg.get("edition")
+        if isinstance(ed, dict) and ed.get("workspace"):
+            ws_pkg = root_ws_pkg if "workspace" not in data else (data["workspace"].get("package") or {})
+            ed = ws_pkg.get("edition")
+        if ed != "2024":
+            out.append(Finding("M10", m, 1, f"edition {ed!r}: every package is edition 2024 (the unsafe "
+                                            "attributes carry a keyword only there)"))
     for f in workflows:
         out += workflow_env_violations(f, (root / f).read_text())
     # The toolchain pin: perimeter.toml, rust-toolchain.toml and every workflow `toolchain:` agree,
@@ -893,6 +1245,9 @@ def run_manifest(root: Path, cfg: Config, members: list[str] | None = None,
             m = re.match(r"^\s*toolchain:\s*([^\s#]+)", line)
             if m and m.group(1).strip("'\"") != pin:
                 out.append(Finding("M0", f, n, f"workflow toolchain {m.group(1)} differs from the pin {pin!r}"))
+    # K6: the kf3 overlay's file set and meson.build
+    d = cfg.raw.get("c", {}).get("overlay")
+    out += kf3_overlay_findings(root, cfg, overlay if overlay is not None else (git_ls(root, f"{d}/*") if d else []))
     # M5 and coverage
     known = set(members) | set(standalone)
     for m in manifests:
@@ -1020,6 +1375,25 @@ def metadata_violations(root: Path, cfg: Config, meta: dict, standalone_metas: d
         for p in m["packages"]:
             if p["source"] and p["source"].startswith("git+"):
                 out.append(Finding("M7", "Cargo.lock", 1, f"git source `{p['name']}` ({p['source']})"))
+    # ★ (name, SOURCE), not the name alone: a dependency resolved from another registry, or a
+    # `[source]` replacement, keeps the name `libc` and passed a names-only list (review 2026-10-04).
+    pinned_src = ext.get("source")
+    for m in allmeta:
+        for p in m["packages"]:
+            if p["source"] is not None and p["source"] != pinned_src:
+                out.append(Finding("M7", "Cargo.lock", 1, f"external package `{p['name']}` from {p['source']!r}, "
+                                                          f"not the pinned source {pinned_src!r}"))
+    # The exempt package's target list, exactly: cargo discovers `src/bin/<x>/main.rs` (any name,
+    # `target` included), so a new target under the exempt path is a reviewed change here.
+    for ex in cfg.raw.get("exempt", []):
+        want_t = ex.get("targets")
+        for m in allmeta:
+            for p in m["packages"]:
+                if p["source"] is None and rel_dir(root, p["manifest_path"]) == ex["path"]:
+                    got_t = sorted(f"{'/'.join(t['kind'])}:{t['name']}" for t in p["targets"])
+                    if want_t is None or got_t != sorted(want_t):
+                        out.append(Finding("M8", f"{ex['path']}/Cargo.toml", 1,
+                                           f"the exempt package's targets {got_t} != [[exempt]].targets {want_t}"))
     # M8: every path package is a root member or a standalone package (or a member of one)
     standalone = {s["path"] for s in cfg.standalone}
     root_members = {rel_dir(root, pk[i]["manifest_path"]) for i in meta["workspace_members"]}
@@ -1045,10 +1419,30 @@ def metadata_violations(root: Path, cfg: Config, meta: dict, standalone_metas: d
     return sorted(set(out))
 
 
+def lock_violations(path: str, data: dict, pinned_source: str | None) -> list[Finding]:
+    """M7 (lock half): every non-path package in a lock file comes from the pinned source and
+    carries a 64-hex checksum (a registry package without one is not what it says it is)."""
+    out = []
+    for p in data.get("package", []):
+        src = p.get("source")
+        if src is None:
+            continue
+        if src != pinned_source:
+            out.append(Finding("M7", path, 1, f"`{p.get('name')}` from {src!r}, not {pinned_source!r}"))
+        if not re.fullmatch(r"[0-9a-f]{64}", str(p.get("checksum", ""))):
+            out.append(Finding("M7", path, 1, f"`{p.get('name')}` has no checksum"))
+    return out
+
+
 def run_metadata(root: Path, cfg: Config) -> list[Finding]:
     meta = cargo_metadata(root)
     sm = {s["path"]: cargo_metadata(root, f"{s['path']}/Cargo.toml") for s in cfg.standalone}
-    return metadata_violations(root, cfg, meta, sm)
+    out = metadata_violations(root, cfg, meta, sm)
+    for lock in ["Cargo.lock", *(f"{s['path']}/Cargo.lock" for s in cfg.standalone)]:
+        if (root / lock).exists():
+            out += lock_violations(lock, tomllib.loads((root / lock).read_text()),
+                                   cfg.raw.get("external", {}).get("source"))
+    return sorted(set(out))
 
 
 # ---------------------------------------------------------------------------------------
@@ -1089,6 +1483,7 @@ def location_findings(recs: list[dict], cfg: Config, frozen_ok: bool) -> tuple[l
     path and `debt.py frozen` passed. E0453 (an `allow` under forbid) never passes."""
     out: list[Finding] = []
     stats = {"units": len(recs), "diagnostics": 0, "outside": 0, "exempt": 0}
+    per_pass: dict[str, int] = {}
     for r in recs:
         u = r["unit"]
         own = u["manifest_dir"]
@@ -1108,6 +1503,7 @@ def location_findings(recs: list[dict], cfg: Config, frozen_ok: bool) -> tuple[l
                 continue
             if frozen_ok and all(f and any(under(f, e) for e in cfg.exempt) for f in files):
                 stats["exempt"] += 1
+                per_pass[u.get("pass", "?")] = per_pass.get(u.get("pass", "?"), 0) + 1
                 continue
             ok = own_u and all(f and f.endswith("_unsafe.rs") and under(f, f"{own}/src") for f in files)
             if not ok:
@@ -1116,6 +1512,19 @@ def location_findings(recs: list[dict], cfg: Config, frozen_ok: bool) -> tuple[l
                 out.append(Finding("G1", d["file"], d["line"],
                                    f"{diag_kind(d['message'])} outside the perimeter of unit "
                                    f"{own} ({u['crate_name']}, class {u['class']}){via} [{where}]"))
+    # ★ The exempt count is asserted, per pass and exactly, not printed (review 2026-10-04): the
+    # path is hash-bound, but a count nobody checks would let a new exempt site through as a
+    # changed number in a log.
+    if frozen_ok:
+        want: dict[str, int] = {}
+        for ex in cfg.raw.get("exempt", []):
+            for name, n in (ex.get("diagnostics") or {}).items():
+                want[name] = want.get(name, 0) + n
+        for name in sorted(set(want) | set(per_pass)):
+            if per_pass.get(name, 0) != want.get(name, 0):
+                out.append(Finding("G1", cfg.exempt[0] if cfg.exempt else "-", 0,
+                                   f"pass {name}: {per_pass.get(name, 0)} exempt diagnostics, "
+                                   f"[[exempt]].diagnostics says {want.get(name, 0)} (exact)"))
     return sorted(set(out)), stats
 
 
@@ -1174,10 +1583,13 @@ def expected_units(meta: dict, pass_args: list[str], root: Path) -> tuple[set, l
         elif a.startswith("--features="):
             feats |= set(re.split(r"[,\s]+", a.split("=", 1)[1]))
     members = set(meta["workspace_members"])
+    # `-p <name>` / `--package <name>` selects packages; without it, `--workspace` selects all
+    picked = {pass_args[i + 1] for i, a in enumerate(pass_args) if a in ("-p", "--package") and i + 1 < len(pass_args)}
+    picked |= {a.split("=", 1)[1] for a in pass_args if a.startswith("--package=")}
     want: set = set()
     skipped: list[str] = []
     for p in meta["packages"]:
-        if p["id"] not in members:
+        if p["id"] not in members or (picked and p["name"] not in picked):
             continue
         enabled = set(feats)
         if "--no-default-features" not in pass_args:
@@ -1358,6 +1770,7 @@ def run_sizes(root: Path, cfg: Config, base: str | None, update: bool,
         stored = new
     findings += size_findings(actual, stored, base_rows, judge=base is not None)
     findings += l8_findings(l8_sites(tree, cfg), cfg.raw.get("l8", {}).get("sites", []))
+    findings += l8b_findings(l8b_sites(tree, cfg), cfg.raw.get("l8", {}).get("raw_params", []))
     if kf3_crates is None:
         kf3_crates = kf3_member_dirs(root, cfg)
     findings += mint_findings(mint_sites(tree, cfg, kf3_crates), cfg.raw.get("mint", {}).get("baseline", {}))
@@ -1398,7 +1811,7 @@ def run_exports(root: Path, cfg: Config, json_dir: Path | None, write: bool, dat
                 if not path.exists():
                     path = json_dir / f"{pkg.replace('-', '_')}.json"
             else:
-                path = px.run_rustdoc(root, pkg, tgt, out_dir or rustdoc_dir())
+                path = px.run_rustdoc(root, pkg, tgt, out_dir or rustdoc_dir(), cfg.raw.get("toolchain"))
             doc = px.Doc(json.loads(path.read_text()), fmt)
             parts.append(px.inventory(doc, perim, unsafe_lines))
     inv, types, names, conflicts = px.union_inventories(parts)
@@ -1436,8 +1849,10 @@ def run_exports(root: Path, cfg: Config, json_dir: Path | None, write: bool, dat
         tpath.write_text(px.render_table(merged, vd, date, notes))
         table, vdeps, errs = px.parse_table(tpath.read_text())
         findings += errs
+    debt = set(ex.get("debt", {}).get("items", []))
     findings += px.check_rows(root, inv, table, types, carrying, fds, set(cfg.raw.get("skip_guards", {}).get("macros", [])),
-                              None, int(ex.get("e9_baseline", 0)))
+                              None, int(ex.get("e9_baseline", 0)), debt)
+    findings += px.unsafe_fn_safety_findings(root, sorted(perim), debt)
     findings += px.reach_findings(root, sorted(perim), names)
     feats = {cr: set(tomllib.loads((root / cr / "Cargo.toml").read_text()).get("features", {})) for cr in crates}
     findings += px.cfg_findings(root, sorted(perim), set(cfg.raw.get("cfg", {}).get("allowed", [])), feats,
@@ -1450,6 +1865,14 @@ def run_exports(root: Path, cfg: Config, json_dir: Path | None, write: bool, dat
     for f, (role, _, line) in sorted(vdeps.items()):
         if role not in ("VALIDATES", "USES"):
             findings.append(px.Finding("E11", px.TABLE, line, f"`{f}`: role must be VALIDATES or USES, got {role!r}"))
+    # E11b: a VALIDATES file is mutated by the E3c workflow (`perimeter.py validates`), so a pull
+    # request touching it must start that workflow: its `paths:` filter names every one.
+    wf = root / ".github/workflows/perimeter-mutants.yml"
+    wf_text = wf.read_text() if wf.exists() else None  # a fixture workspace has no workflows
+    for f, (role, _, line) in sorted(vdeps.items()):
+        if role == "VALIDATES" and wf_text is not None and f"'{f}'" not in wf_text:
+            findings.append(px.Finding("E11b", px.TABLE, line, f"VALIDATES `{f}` is not in perimeter-mutants.yml's "
+                                                               "pull_request paths"))
     open_rows = sum(1 for r in table.values() if r.status.startswith("OPEN"))
     lane_rows = sum(1 for r in table.values() if r.status.startswith("LANE"))
     ok_rows = sum(1 for r in table.values() if r.status == "OK")
@@ -1525,7 +1948,11 @@ def report(name: str, findings: list[Finding], extra: str = "") -> int:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("cmd", choices=("lex", "manifest", "metadata", "sizes", "location", "reached", "depinfo",
-                                    "passes", "toolchain", "exports", "k4", "mutants"))
+                                    "passes", "toolchain", "exports", "k4", "mutants", "validates"))
+    ap.add_argument("--crate", help="mutants/validates: the crate directory (crates/<name>) of a full run")
+    ap.add_argument("--require-caught", action="store_true",
+                    help="mutants: a full run over --crate: every OK fn row there needs a caught mutant, and the "
+                         "baseline must have succeeded")
     ap.add_argument("--outcomes", type=Path, action="append", default=[],
                     help="mutants: cargo-mutants' mutants.out/outcomes.json (repeatable)")
     ap.add_argument("--json-dir", type=Path, help="exports: pre-generated rustdoc JSON (default: run rustdoc)")
@@ -1569,11 +1996,20 @@ def main(argv: list[str] | None = None) -> int:
         date = args.date or datetime.date.today().isoformat()
         findings, n = run_exports(root, cfg, args.json_dir, args.write, date)
         return report("exports", findings, f" rows={n}")
+    if args.cmd == "validates":
+        import perimeter_exports as px  # noqa: PLC0415
+        _, vfiles = px.table_counts((root / px.TABLE).read_text())
+        for f in vfiles:
+            if args.crate is None or f.startswith(args.crate.rstrip("/") + "/"):
+                print(f)
+        return 0
     if args.cmd == "mutants":
         import perimeter_exports as px  # noqa: PLC0415
-        table, _, _ = px.parse_table((root / px.TABLE).read_text())
+        text = (root / px.TABLE).read_text()
+        table, _, _ = px.parse_table(text)
         outcomes = [o for p in args.outcomes for o in json.loads(p.read_text())["outcomes"]]
-        findings, missed = px.mutant_findings(root, outcomes, table)
+        findings, missed = px.mutant_findings(root, outcomes, table, px.table_counts(text)[1],
+                                              args.crate if args.require_caught else None)
         for (f, item), descs in sorted(missed.items()):
             print(f"  missed {len(descs):3d}  {f}  {item}")
         total = sum(1 for o in outcomes if o.get("summary") == "MissedMutant")

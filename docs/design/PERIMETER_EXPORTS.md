@@ -189,7 +189,7 @@ Every item a perimeter file (`*_unsafe.rs` of a class U crate in kf3's graph) ex
 | `DevDir::try_clone` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
 | `Indirect` | pub | borrowed view |  |  | OPEN: 2026-10-04: unreviewed |
 | `Indirect::at` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
-| `Indirect::describing` | pub | safe fn | zero-len; range-in-region | zero-len=t:crates/kf-linux-raw/src/chardev_unsafe.rs::a_described_range_past_the_region_is_refused_at_construction; range-in-region=t:crates/kf-linux-raw/src/chardev_unsafe.rs::a_described_range_past_the_region_is_refused_at_construction | OK |
+| `Indirect::describing` | pub | safe fn | zero-len; range-in-region; overflow; writable | zero-len=t:crates/kf-linux-raw/src/chardev_unsafe.rs::a_described_range_past_the_region_is_refused_at_construction; range-in-region=t:crates/kf-linux-raw/src/chardev_unsafe.rs::a_described_range_past_the_region_is_refused_at_construction; overflow=t:crates/kf-linux-raw/src/chardev_unsafe.rs::a_described_range_that_overflows_or_a_read_only_region_is_refused; writable=t:crates/kf-linux-raw/src/chardev_unsafe.rs::a_described_range_that_overflows_or_a_read_only_region_is_refused | OPEN: 2026-10-04: was OK, returned to OPEN by review: its checks bound a `len` the driver never reads, because RM pins `limit + 1` bytes and the caller writes `limit` itself (S1-40, kf-host `lib.rs:1855`), and the pin outlives this borrow of the region (a lifetime left to callers). OK after P2-a2 (the funnel writes the size field) and once the pin is tied to an owning keep-alive or this becomes `unsafe fn`. `overflow` and `writable` (a read-only region is refused) added the same day |
 | `Indirect::is_empty` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed; cargo-mutants 27.1.0 (2026-10-04, lib tests): 1 missed |
 | `Indirect::len` | pub | safe fn |  |  | OPEN: 2026-10-04: carries a caller contract (`chardev_unsafe.rs:365-377`, S1-40); removed by P2-a2 |
 | `Indirect::nested` | pub | safe fn |  |  | OPEN: 2026-10-04: the nested size field is caller-declared like Indirect::new's (S1-40); cargo-mutants 27.1.0 (2026-10-04, lib tests): 1 missed |
@@ -249,6 +249,12 @@ Every item a perimeter file (`*_unsafe.rs` of a class U crate in kf3's graph) ex
 |---|---|---|---|---|---|
 | `<KvmMemslot as Drop>` | default | trait impl |  |  | OPEN: 2026-10-04: unreviewed |
 | `<KvmMemslot as Drop>::drop` | default | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
+| `<SystemRequest as Clone>` | default | trait impl |  |  | OPEN: 2026-10-04: derived; a closed set of KVM request names, no address |
+| `<SystemRequest as Clone>::clone` | default | safe fn |  |  | OPEN: 2026-10-04: derived |
+| `<SystemRequest as Copy>` | default | trait impl |  |  | OPEN: 2026-10-04: derived; a closed set of KVM request names, no address |
+| `<VmRequest as Clone>` | default | trait impl |  |  | OPEN: 2026-10-04: derived; the payloads are a capability number, a vCPU id and a guest-physical TSS address |
+| `<VmRequest as Clone>::clone` | default | safe fn |  |  | OPEN: 2026-10-04: derived |
+| `<VmRequest as Copy>` | default | trait impl |  |  | OPEN: 2026-10-04: derived; the payloads are a capability number, a vCPU id and a guest-physical TSS address |
 | `CoalescedZone: Send` | pub(in ::kvm_unsafe) | auto trait |  |  | OPEN: 2026-10-04: unreviewed |
 | `CoalescedZone: Sync` | pub(in ::kvm_unsafe) | auto trait |  |  | OPEN: 2026-10-04: unreviewed |
 | `IoEventFd: Send` | pub(in ::kvm_unsafe) | auto trait |  |  | OPEN: 2026-10-04: unreviewed |
@@ -256,7 +262,7 @@ Every item a perimeter file (`*_unsafe.rs` of a class U crate in kf3's graph) ex
 | `Kvm` | pub | owning handle |  |  | OPEN: 2026-10-04: unreviewed |
 | `Kvm: Send` | pub | auto trait |  |  | OPEN: 2026-10-04: unreviewed |
 | `Kvm: Sync` | pub | auto trait |  |  | OPEN: 2026-10-04: unreviewed |
-| `Kvm::borrow_fd` | pub(crate) | safe fn |  |  | OPEN: 2026-10-04: a borrowed descriptor for ioctl_arg (a3), crate-private; not yet mutation-proved |
+| `Kvm::by_value` | pub(crate) | safe fn |  |  | OPEN: 2026-10-04: replaces `ioctl_arg` (review: its `_IO`-bits check passed FIONREAD): a closed request set mapped to constants in this file, on the descriptor this type opened; mutation-proved locally (a wrong request number, a dropped argument, a negative return read as success: each killed by every_by_value_request_is_a_kvm_io_encoding_with_its_uapi_number / a_by_value_request_reaches_the_kernel_and_its_refusal_is_reported); awaiting the full E3c run |
 | `Kvm::create_vm` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
 | `Kvm::open` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
 | `KvmMemslot` | pub | owning handle |  |  | OPEN: 2026-10-04: unreviewed |
@@ -271,7 +277,7 @@ Every item a perimeter file (`*_unsafe.rs` of a class U crate in kf3's graph) ex
 | `KvmVm: Send` | pub | auto trait |  |  | OPEN: 2026-10-04: unreviewed |
 | `KvmVm: Sync` | pub | auto trait |  |  | OPEN: 2026-10-04: unreviewed |
 | `KvmVm::adopt` | pub | safe fn | is-a-vm | is-a-vm=t:crates/kf-linux-raw/src/kvm_unsafe.rs::adopting_a_descriptor_that_is_not_a_vm_is_refused | OK |
-| `KvmVm::borrow_fd` | pub(crate) | safe fn |  |  | OPEN: 2026-10-04: a borrowed descriptor for ioctl_arg (a3), crate-private; not yet mutation-proved |
+| `KvmVm::by_value` | pub(crate) | safe fn |  |  | OPEN: 2026-10-04: as `Kvm::by_value`, on a descriptor every constructor of KvmVm confirmed (a5); awaiting the full E3c run |
 | `KvmVm::check_extension` | pub(crate) | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
 | `KvmVm::clear_memslot` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
 | `KvmVm::discover_in_this_process` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
@@ -280,9 +286,10 @@ Every item a perimeter file (`*_unsafe.rs` of a class U crate in kf3's graph) ex
 | `KvmVm::max_memslots` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
 | `KvmVm::register_coalesced_mmio` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
 | `KvmVm::try_clone_descriptor` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
+| `SystemRequest` | pub(crate) | plain data |  |  | OPEN: 2026-10-04: the `/dev/kvm` by-value requests, a closed set (review 2026-10-04) |
 | `UserspaceMemoryRegion: Send` | pub(in ::kvm_unsafe) | auto trait |  |  | OPEN: 2026-10-04: unreviewed |
 | `UserspaceMemoryRegion: Sync` | pub(in ::kvm_unsafe) | auto trait |  |  | OPEN: 2026-10-04: unreviewed |
-| `ioctl_arg` | pub(crate) | safe fn | io-only; negative-is-error | io-only=t:crates/kf-linux-raw/src/kvm_unsafe.rs::an_ior_encoded_request_is_refused_before_any_syscall; negative-is-error=t:crates/kf-linux-raw/src/kvm_unsafe.rs::an_ior_encoded_request_is_refused_before_any_syscall | OK |
+| `VmRequest` | pub(crate) | plain data |  |  | OPEN: 2026-10-04: the VM by-value requests, a closed set; `SetTssAddr` carries a guest-physical address the kernel stores, never a host one |
 
 ## crates/kf-linux-raw/src/mapping_unsafe.rs
 
@@ -403,7 +410,7 @@ Every item a perimeter file (`*_unsafe.rs` of a class U crate in kf3's graph) ex
 | `<GuestWindow as Drop>` | default | trait impl |  |  | OPEN: 2026-10-04: unreviewed |
 | `<GuestWindow as Drop>::drop` | default | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
 | `<GuestWindow as Send>` | default | unsafe trait impl |  |  | OPEN: 2026-10-04: unreviewed |
-| `<GuestWindow as Sync>` | default | unsafe trait impl |  |  | OPEN: 2026-10-04: unreviewed |
+| `<GuestWindow as Sync>` | default | unsafe trait impl |  |  | OPEN: 2026-10-04: residual stated in its SAFETY: a FAILED file-backed MAP_FIXED leaves a gap until the re-plug, and an accessor on another thread that passed `live()` can fault in it or touch a foreign mapping an unrelated mmap placed there; a concurrent placement can MAP_FIXED over that mapping. Closing it needs an owner decision: exclusion on the copy path (a lock/seqlock, against the no-lock vCPU design) or an atomic replace (staging map + mremap, one more vCPU syscall per PRAMIN move than OWNER_RULINGS item 4) |
 | `GuestWindow` | pub | owning handle |  |  | OPEN: 2026-10-04: unreviewed |
 | `GuestWindow::create` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
 | `GuestWindow::host_span` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
@@ -411,11 +418,19 @@ Every item a perimeter file (`*_unsafe.rs` of a class U crate in kf3's graph) ex
 | `GuestWindow::page_size` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
 | `GuestWindow::place` | pub | safe fn |  |  | OPEN: 2026-10-04: a8 re-plugs or poisons after a failed placement and a10 refuses a placement past end-of-file (tests in this file); OPEN residuals: a file truncated after placement (needs F_SEAL_SHRINK), and a foreign anonymous mapping merged into the filler is indistinguishable from it; not yet mutation-proved |
 | `GuestWindow::place_device_view` | pub | safe fn |  |  | OPEN: 2026-10-04: a9 refuses a read-only view and a8 re-plugs or poisons after a failed placement; whether NVIDIA device mappings survive mremap is unmeasured (box bar), so device views keep the single MAP_FIXED; not yet mutation-proved |
-| `GuestWindow::read_into` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
+| `GuestWindow::place_sealed` | pub | safe fn |  |  | OPEN: 2026-10-04: a10 against the size a SealedFile recorded (no syscall but the mmap: OWNER_RULINGS item 4's budget), mutation-proved locally (the bound, killed by a_sealed_file_places_without_a_syscall_and_refuses_past_its_size); and the concurrent-gap residual of `<GuestWindow as Sync>` (a failed file-backed MAP_FIXED is visible to accessors on other threads until the re-plug; review 2026-10-04); kf-qemu `mem.rs` adopts it with v3-p1p2 (P11) |
+| `GuestWindow::read_into` | pub | safe fn |  |  | OPEN: 2026-10-04: the concurrent-gap residual of `<GuestWindow as Sync>` (a failed file-backed MAP_FIXED is visible to accessors on other threads until the re-plug; review 2026-10-04) |
 | `GuestWindow::restore` | pub | safe fn |  |  | OPEN: 2026-10-04: a8 re-plugs or poisons after a failed MAP_FIXED; not yet mutation-proved |
-| `GuestWindow::store_u32` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
+| `GuestWindow::store_u32` | pub | safe fn |  |  | OPEN: 2026-10-04: the concurrent-gap residual of `<GuestWindow as Sync>` (a failed file-backed MAP_FIXED is visible to accessors on other threads until the re-plug; review 2026-10-04) |
 | `GuestWindow::userspace_addr_at` | pub(crate) | unsafe fn |  |  | OPEN: 2026-10-04: an `unsafe fn` since a7, its `# Safety` stating the lifetime contract; its only test is KVM-gated (E3d), so CI holds no evidence for it |
-| `GuestWindow::write_from` | pub | safe fn |  |  | OPEN: 2026-10-04: unreviewed |
+| `GuestWindow::write_from` | pub | safe fn |  |  | OPEN: 2026-10-04: the concurrent-gap residual of `<GuestWindow as Sync>` (a failed file-backed MAP_FIXED is visible to accessors on other threads until the re-plug; review 2026-10-04) |
+| `SealedFile` | pub | owning handle |  |  | OPEN: 2026-10-04: owns a dup of the descriptor; the size is recorded after F_SEAL_SHRINK is confirmed, so it is a lower bound for the file's life |
+| `SealedFile: Send` | pub | auto trait |  |  | OPEN: 2026-10-04: OwnedFd and u64 |
+| `SealedFile: Sync` | pub | auto trait |  |  | OPEN: 2026-10-04: OwnedFd and u64, no interior mutability |
+| `SealedFile::adopt` | pub | safe fn |  |  | OPEN: 2026-10-04: refuses a file without F_SEAL_SHRINK (a plain file and an unsealed memfd, both tested; the seal check mutation-proved locally) |
+| `SealedFile::len_bytes` | pub | safe fn |  |  | OPEN: 2026-10-04: the recorded size |
+| `Source: Send` | pub(in ::window_unsafe) | auto trait |  |  | OPEN: 2026-10-04: private; borrowed descriptors and a borrowed SealedFile, alive for one placement |
+| `Source: Sync` | pub(in ::window_unsafe) | auto trait |  |  | OPEN: 2026-10-04: private; borrowed descriptors and a borrowed SealedFile, alive for one placement |
 
 ## crates/kf-qemu/src/ffi_unsafe.rs
 
