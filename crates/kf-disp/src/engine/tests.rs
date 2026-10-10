@@ -495,6 +495,7 @@ fn a_non_tearing_flip_waits_for_vblank_and_its_acquire() {
     c.m(m(CORE, "UPDATE"), 0);
     e.step(0, &c.bytes(), c.put(), &mut all_ok);
     let mut w = Ring::new();
+    w.m(ma(WIN, "SET_CONTEXT_DMA_ISO", 0), 0x1_0001);
     w.m(m(WIN, "SET_CONTEXT_DMA_NOTIFIER"), 0xcafe_00f0);
     w.m(
         m(WIN, "SET_NOTIFIER_CONTROL"),
@@ -605,6 +606,7 @@ fn a_flip_away_writes_the_outgoing_notifier_finished_and_the_new_one_begun() {
     c.m(m(CORE, "UPDATE"), 0);
     e.step(0, &c.bytes(), c.put(), &mut all_ok);
     let mut w = Ring::new();
+    w.m(ma(WIN, "SET_CONTEXT_DMA_ISO", 0), 0x1_0001);
     w.m(m(WIN, "SET_CONTEXT_DMA_NOTIFIER"), 0xcafe_00f0);
     w.m(
         m(WIN, "SET_NOTIFIER_CONTROL"),
@@ -1110,6 +1112,8 @@ fn a_head_cursor_is_scanned_from_the_core_and_its_pio_point() {
 /// A window flip: `SET_PRESENT_CONTROL.BEGIN_MODE` = `mode` (0 non-tearing, 1 immediate — what
 /// nvidia-drm's async flips program), interlocked with the windows in `with`, then `UPDATE`.
 fn flip(r: &mut Ring, mode: u32, with: u32) {
+    // a flip shows a surface (an UPDATE with none anywhere is not a flip: `group_ready`)
+    r.m(ma(WIN, "SET_CONTEXT_DMA_ISO", 0), 0x1_0001);
     r.m(
         m(WIN, "SET_PRESENT_CONTROL"),
         put(0, fl(WIN, "SET_PRESENT_CONTROL_BEGIN_MODE"), mode),
@@ -1359,4 +1363,168 @@ fn a_core_update_on_an_active_head_waits_for_the_vblank_only_under_the_experimen
             assert!(notified(&s), "default: at once");
         }
     }
+}
+
+/// ★ 2026-10-11 (overlay stall H1, runs 408-416; `traces/windows_playback_tdr_20261010/README.md`): the Windows
+/// driver's enable sequence for the overlay plane (window 4), as kicked in REAL TIME (PUT writes of run 416, µs
+/// apart): core UPDATE; core UPDATE naming window 4 and window 4's ownership; window 4 UPDATE naming the core (A);
+/// window 4 UPDATE naming nothing (B, no surface yet); window 0's UPDATE naming window 4; window 0's immediate
+/// channel; window 4's immediate channel naming window 4; window 4's flip C naming window 0 and its immediate
+/// channel. Each channel's fetch is independent and the hardware sees the writes in the order they were made, so
+/// A and B are gone (latched) before window 0's UPDATE arrives, and window 0's and the immediate channel's UPDATEs
+/// wait for C and latch with it at the vblank.
+struct Overlay {
+    e: Engine,
+    c: Ring,
+    r0: Ring,
+    r4: Ring,
+    i0: Ring,
+    i4: Ring,
+    marks: Vec<(u32, u32)>,
+}
+
+const W0: u32 = 1;
+const I0: u32 = 33;
+
+fn overlay_sequence() -> Overlay {
+    let mut e = engine();
+    e.alloc(ChannelKind::Core, 0, CLIENT, 1, pb(), 0);
+    e.alloc(ChannelKind::Window, 0, CLIENT, 1, pb(), 0);
+    e.alloc(ChannelKind::Window, 4, CLIENT, 1, pb(), 0);
+    e.alloc(ChannelKind::WindowImm, 0, CLIENT, 1, pb(), 0);
+    e.alloc(ChannelKind::WindowImm, 4, CLIENT, 1, pb(), 0);
+    let mut c = Ring::new();
+    modeset(&mut c, 0, 0);
+    c.m(m(CORE, "UPDATE"), 0);
+    e.step(0, &c.bytes(), c.put(), &mut all_ok);
+    // window 0 scans a surface (its ring keeps growing)
+    let mut r0 = Ring::new();
+    r0.m(ma(WIN, "SET_CONTEXT_DMA_ISO", 0), 0x1_0001);
+    r0.m(m(WIN, "SET_WINDOW_INTERLOCK_FLAGS"), 0);
+    r0.m(m(WIN, "UPDATE"), 0);
+    e.step(W0, &r0.bytes(), r0.put(), &mut all_ok);
+    e.vblank(0, &mut all_ok);
+    Overlay {
+        e,
+        c,
+        r0,
+        r4: Ring::new(),
+        i0: Ring::new(),
+        i4: Ring::new(),
+        marks: Vec::new(),
+    }
+}
+
+impl Overlay {
+    /// Record the ring writes in the order the guest made them: `(channel, PUT)` after each batch.
+    fn kick(&mut self, chn: u32) {
+        let put = match chn {
+            0 => self.c.put(),
+            W0 => self.r0.put(),
+            I0 => self.i0.put(),
+            5 => self.r4.put(),
+            _ => self.i4.put(),
+        };
+        self.marks.push((chn, put));
+    }
+
+    fn build(&mut self) {
+        let w4 = ChannelKind::Window.channel_number(4);
+        // core UPDATE (alone), then the core naming window 4, owning it for head 0
+        self.c.m(m(CORE, "UPDATE"), 0);
+        self.kick(0);
+        self.c.m(ma(CORE, "WINDOW_SET_CONTROL", 4), 0);
+        self.c.m(m(CORE, "SET_WINDOW_INTERLOCK_FLAGS"), 1 << 4);
+        self.c.m(m(CORE, "UPDATE"), 0);
+        self.kick(0);
+        // A: window 4 UPDATE naming the core
+        self.r4.m(
+            m(WIN, "SET_INTERLOCK_FLAGS"),
+            put(0, fl(WIN, "SET_INTERLOCK_FLAGS_INTERLOCK_WITH_CORE"), 1),
+        );
+        self.r4.m(m(WIN, "UPDATE"), 0);
+        self.kick(w4);
+        // B: window 4 UPDATE naming nothing (no surface yet)
+        self.r4.m(m(WIN, "SET_INTERLOCK_FLAGS"), 0);
+        self.r4.m(m(WIN, "UPDATE"), 0);
+        self.kick(w4);
+        // window 0's UPDATE naming window 4, and its immediate channel
+        self.r0.m(m(WIN, "SET_WINDOW_INTERLOCK_FLAGS"), 1 << 4);
+        self.r0.m(m(WIN, "UPDATE"), 0);
+        self.i0.m(m(IMM, "UPDATE"), 0);
+        self.kick(I0);
+        self.kick(W0);
+        // window 4's immediate channel, naming window 4
+        self.i4.m(
+            m(IMM, "UPDATE"),
+            put(0, fl(IMM, "UPDATE_INTERLOCK_WITH_WINDOW"), 1),
+        );
+        self.kick(ChannelKind::WindowImm.channel_number(4));
+        // C: window 4's first flip, naming window 0 and its immediate channel
+        self.r4.m(ma(WIN, "SET_CONTEXT_DMA_ISO", 0), 0x1_0002);
+        self.r4.m(m(WIN, "SET_WINDOW_INTERLOCK_FLAGS"), 1 << 0);
+        self.r4.m(
+            m(WIN, "UPDATE"),
+            put(0, fl(WIN, "UPDATE_INTERLOCK_WITH_WIN_IMM"), 1),
+        );
+        self.r4.m(m(WIN, "SET_WINDOW_INTERLOCK_FLAGS"), 0);
+        self.kick(w4);
+    }
+
+    fn ring_of(&self, chn: u32) -> &Ring {
+        match chn {
+            0 => &self.c,
+            W0 => &self.r0,
+            I0 => &self.i0,
+            5 => &self.r4,
+            _ => &self.i4,
+        }
+    }
+}
+
+/// In ARRIVAL order the overlay's first flip finds its partners: window 4's flip waits for the vblank WITH window 0's
+/// UPDATE and its immediate channel's, and all three latch together there.
+#[test]
+fn the_overlay_enable_sequence_pairs_in_arrival_order() {
+    let mut o = overlay_sequence();
+    o.build();
+    let w4 = ChannelKind::Window.channel_number(4);
+    let marks = o.marks.clone();
+    for (chn, put) in marks {
+        let bytes = o.ring_of(chn).bytes();
+        o.e.step(chn, &bytes, put, &mut all_ok);
+    }
+    assert!(
+        o.e.waiting(w4) && o.e.waiting(W0),
+        "window 4's flip and window 0's UPDATE wait for the vblank together: {:?}",
+        o.e.parked()
+    );
+    let s = o.e.vblank(0, &mut all_ok);
+    let mut l = latched(&s);
+    l.sort_unstable();
+    assert_eq!(l, vec![0, 4], "{:?}", s.effects);
+    assert!(!o.e.waiting(w4), "window 4's flip latched with window 0's: {:?}", o.e.parked());
+}
+
+/// The same writes applied the way the display worker did before 2026-10-11 — every channel whose PUT moved, in CHANNEL
+/// NUMBER order, each to its LATEST PUT — pair differently: window 0's UPDATE joins window 4's earlier A, the immediate
+/// channel's joins B, and flip C is left naming two channels that will not UPDATE again until the next present, which
+/// the guest never submits (it is waiting for this one). This is the stall H1 of runs 408-416.
+#[test]
+fn batched_in_channel_number_order_the_same_writes_leave_the_overlay_flip_unpaired() {
+    let mut o = overlay_sequence();
+    o.build();
+    let w4 = ChannelKind::Window.channel_number(4);
+    for chn in [0, W0, w4, I0, ChannelKind::WindowImm.channel_number(4)] {
+        let bytes = o.ring_of(chn).bytes();
+        let put = o.ring_of(chn).put();
+        o.e.step(chn, &bytes, put, &mut all_ok);
+    }
+    let s = o.e.vblank(0, &mut all_ok);
+    assert!(
+        o.e.waiting(w4),
+        "window 4's flip C is parked with no partner: {:?} / {:?}",
+        o.e.parked(),
+        s.effects
+    );
 }

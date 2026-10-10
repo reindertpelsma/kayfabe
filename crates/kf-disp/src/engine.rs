@@ -1198,6 +1198,17 @@ impl Engine {
             else {
                 continue;
             };
+            // ★ 2026-10-11 (overlay stall H1, runs 408-416): a window that scans no surface before the update AND
+            // names none in it has nothing to tear — its UPDATE is not a flip and has no vblank to wait for.
+            // Windows' enable sequence for the overlay plane kicks such an UPDATE (window 4 owned by the head,
+            // no surface yet) microseconds before the UPDATEs of window 0 and window 4's immediate channel that
+            // belong to the plane's FIRST flip; held for the vblank it absorbed those two (they name window 4
+            // and joined the parked latch), and the first flip then waited for UPDATEs the driver sends only
+            // after that flip completes. [inferred from the guest's behaviour on hardware and in the one
+            // traced run that did not stall, 414; a run decides]
+            if c.a(self.vocab.w_iso0) == 0 && c.armed(self.vocab.w_iso0) == 0 {
+                continue;
+            }
             if self.tearing(c) {
                 tear_head = Some(tear_head.unwrap_or(h));
             } else {

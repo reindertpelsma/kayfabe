@@ -2506,6 +2506,8 @@ impl Device {
         let mut gate = crate::vblankgate::VblankGate::default();
         let mut edge_frame = [0u32; MAX_HEADS];
         let mut forced_logged = 0u64;
+        let mut put_head = 0u64;
+        let mut put_dropped = 0u64;
         let mut cursor_seen = [0u32; MAX_HEADS];
         let mut published_get = [u32::MAX; kf_disp::ports::NUM_CHANNELS];
         let mut logged_updates = 0u32;
@@ -2648,17 +2650,17 @@ impl Device {
             if req != 0 {
                 self.apply_ui_request(dp, req);
             }
-            // 2. every DMA channel whose PUT moved
-            for chn in 0..kf_disp::ports::NUM_CHANNELS as u32 {
-                if queue.len() >= QUEUE_CAP {
-                    break; // backpressure: PUT stays behind in the guest's ring (see QUEUE_CAP)
-                }
+            // 2. every DMA channel whose PUT moved — ★ 2026-10-11 in the ORDER THE GUEST WROTE THE PUTs. The hardware
+            // fetches each channel as its PUT arrives, so UPDATEs become pending in arrival order; applying the
+            // channels in number order at whatever moment the worker wakes pairs them differently (the overlay
+            // stall H1: window 0's UPDATE joined an earlier group of window 4's, leaving window 4's first flip
+            // without partners). The latest-PUT pass below runs only to resynchronise after the log lost writes.
+            let mut step_put = |chn: u32, put: u32| {
                 let Some((pb, decoded, life)) = engine.pushbuffer(chn) else {
-                    continue;
+                    return;
                 };
-                let put = dp.ports.put(chn);
                 if put == decoded || dp.ports.generation(chn) != life {
-                    continue;
+                    return;
                 }
                 match io.pushbuffer(pb) {
                     Ok(bytes) => {
@@ -2673,6 +2675,22 @@ impl Device {
                         gets.extend(s.gets);
                     }
                     Err(e) => io.refuse(&format!("channel {chn}: {e}")),
+                }
+            };
+            while queue.len() < QUEUE_CAP {
+                // backpressure otherwise: PUT stays behind in the guest's ring (see QUEUE_CAP) and the log keeps the rest
+                match dp.ports.put_log.next(&mut put_head) {
+                    kf_disp::ports::PutPoll::Put(chn, put) => step_put(chn, put),
+                    kf_disp::ports::PutPoll::Empty | kf_disp::ports::PutPoll::Pending => break,
+                }
+            }
+            if dp.ports.put_log.dropped() != put_dropped {
+                put_dropped = dp.ports.put_log.dropped();
+                for chn in 0..kf_disp::ports::NUM_CHANNELS as u32 {
+                    if queue.len() >= QUEUE_CAP {
+                        break;
+                    }
+                    step_put(chn, dp.ports.put(chn));
                 }
             }
             // 3. cursors: every posted Update
