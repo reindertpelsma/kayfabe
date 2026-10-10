@@ -725,6 +725,13 @@ pub struct DispCounters {
     pub scanouts: AtomicU64,
     /// Scanouts refused (a surface the console cannot copy, by name in the log).
     pub scanout_refused: AtomicU64,
+    /// ★ Windows left out of a console copy because the console cannot compose them (a format with
+    /// no console pixel format, a context DMA that does not resolve, ...). Console-only: the
+    /// guest's flip of that window still completes.
+    pub console_windows_left_out: AtomicU64,
+    /// ★ Console copies given up for a console-only reason (a colour program the console cannot
+    /// build). The flips behind them completed; the console kept its last frame.
+    pub console_copies_skipped: AtomicU64,
     /// Microseconds from queueing a scanout copy to observing its completion: the sum and the max.
     pub scanout_us_total: AtomicU64,
     /// The longest one.
@@ -3324,6 +3331,16 @@ fn cursor_composed(mode: CursorMode, want: Option<&CursorWant>) -> bool {
     want.is_none_or(|w| mode.composes(w))
 }
 
+/// ★ Who a failed scanout copy is the failure of ([`ScanState::fault`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Fault {
+    /// The console cannot show it; nothing reached the GPU or the guest's display. The flips
+    /// behind the copy complete.
+    Console(String),
+    /// Work sent to the GPU failed or was lost. The display stops; nothing is forged.
+    Gpu(String),
+}
+
 /// ★ M2 — the worker's scanout copies (`V3_DISPLAY.md` §4.6). One copy in flight at a time, on the
 /// plane's own stream; its completion is the `cuLaunchHostFunc` signal queued after it.
 #[derive(Default)]
@@ -3626,20 +3643,54 @@ impl ScanState {
     /// ★ Copy `n` is over (published, found unchanged, refused, or given up): the completions
     /// behind it go, and the refresh requests it started after are served.
     fn finish(&mut self, dp: &DisplayPlane, n: u64, req: u64) {
+        self.finish_with(&dp.counters, &dp.console, n, req);
+    }
+
+    fn finish_with(&mut self, c: &DispCounters, console: &ConsoleShare, n: u64, req: u64) {
         self.done = self.done.max(n);
         if self.nonflip.serve(req) {
-            dp.counters.ondemand.fetch_add(1, Ordering::Relaxed);
-            dp.console.serve_refresh(req);
+            c.ondemand.fetch_add(1, Ordering::Relaxed);
+            console.serve_refresh(req);
         }
     }
 
     /// ★ Nothing can be copied now (nothing shown, no GPU): every waiting request is served by the
     /// frame the console already has.
     fn serve_now(&mut self, dp: &DisplayPlane) {
+        self.serve_now_with(&dp.counters, &dp.console);
+    }
+
+    fn serve_now_with(&mut self, c: &DispCounters, console: &ConsoleShare) {
         let req = self.nonflip.snapshot();
         if self.nonflip.serve(req) {
-            dp.counters.ondemand.fetch_add(1, Ordering::Relaxed);
-            dp.console.serve_refresh(req);
+            c.ondemand.fetch_add(1, Ordering::Relaxed);
+            console.serve_refresh(req);
+        }
+    }
+
+    /// ★ A copy `n` that cannot be made. The two kinds are NOT alike:
+    ///
+    /// * [`Fault::Console`]: the console (the host's viewer, not the guest's scanout) cannot
+    ///   show something: a colour program it cannot build. The display engine here is emulated
+    ///   and no GPU work stands behind the guest's flip, so the flips behind this copy COMPLETE
+    ///   ([`ScanState::finish`]) with the console keeping its last good frame; the refusal is
+    ///   loud (named counter, the first lines in the log). Never sets `failed`: a console-only
+    ///   refusal must not halt the guest's display channels (run 296: it did, and the guest's
+    ///   flips stopped until the TDR).
+    /// * [`Fault::Gpu`]: work sent to the GPU failed or was lost: no synthetic success, `failed`
+    ///   stops the display (`engine.halt_scanout`).
+    fn fault(&mut self, c: &DispCounters, console: &ConsoleShare, n: u64, req: u64, f: Fault) {
+        match f {
+            Fault::Console(why) => {
+                c.console_copies_skipped.fetch_add(1, Ordering::Relaxed);
+                self.note_refusal(c, &why);
+                self.finish_with(c, console, n, req);
+            }
+            Fault::Gpu(why) => {
+                self.note_refusal(c, &why);
+                self.failed = true;
+                self.serve_now_with(c, console);
+            }
         }
     }
 
@@ -3834,7 +3885,11 @@ impl ScanState {
     }
 
     fn refuse(&mut self, dp: &DisplayPlane, why: &str) {
-        dp.counters.scanout_refused.fetch_add(1, Ordering::Relaxed);
+        self.note_refusal(&dp.counters, why);
+    }
+
+    fn note_refusal(&mut self, c: &DispCounters, why: &str) {
+        c.scanout_refused.fetch_add(1, Ordering::Relaxed);
         if self.refusals_logged < 16 {
             self.refusals_logged += 1;
             eprintln!("kf3: display: scanout REFUSED {why}");
@@ -4008,12 +4063,15 @@ impl ScanState {
         });
         for e in &planned.refused {
             self.refuse(dp, e);
+            dp.counters
+                .console_windows_left_out
+                .fetch_add(1, Ordering::Relaxed);
         }
         let color = if let (Some((t, win, core)), Shown::Armed(comp)) = (dp.sdr_color, shown) {
             let program = (|| -> Result<_, String> {
-                if !planned.refused.is_empty() {
-                    return Err("colour frame has refused windows".into());
-                }
+                // ★ a window the console cannot compose (planned.refused, already counted and named)
+                // is simply not among `planned.layers`: the colour frame is composed without it.
+                // It used to fail the whole copy, and `failed` halted the guest's display.
                 let mut inputs = Vec::new();
                 let x = color_experiments();
                 let mut matrices = Vec::new();
@@ -4115,9 +4173,14 @@ impl ScanState {
             match program {
                 Ok(p) => Some(p),
                 Err(e) => {
-                    self.refuse(dp, &format!("SDR colour program: {e}"));
-                    self.failed = true;
-                    self.serve_now(dp);
+                    // the console's colour conversion of this frame is what failed: console-only
+                    self.fault(
+                        &dp.counters,
+                        &dp.console,
+                        n,
+                        req,
+                        Fault::Console(format!("SDR colour program: {e}")),
+                    );
                     return;
                 }
             }
@@ -5225,6 +5288,80 @@ mod tests {
             scan.plan(&armed, &formats, size, 7, unbound).refused.len(),
             1
         );
+    }
+
+    /// ★ Windows playback (run 296, 2026-10-10): Edge's YUV video overlay (window 4, `SET_PARAMS.FORMAT`
+    /// 0x38) has no console pixel format. The SDR colour program used to fail the whole copy for
+    /// it (`colour frame has refused windows`), `failed` was set for the VM's life and the display
+    /// thread halted EVERY guest display channel: window 0's flips froze and the guest reset the GPU
+    /// (TDR). A console-only refusal now leaves the window out of the console copy, the flips behind
+    /// the copy complete, nothing is halted, and the refusal is counted by name. A GPU failure still
+    /// stops the display (known-positive: no forged completion for work that reached the GPU).
+    #[test]
+    fn a_console_only_refusal_completes_the_flip_and_never_halts_the_display() {
+        let formats =
+            ScanFormats::resolve(kf_disp::class::for_version("580.159.04").unwrap(), 0xC67E);
+        let desktop = kf_disp::engine::Scanout {
+            window: 0,
+            head: 0,
+            ..scanout_6()
+        };
+        let video = kf_disp::engine::Scanout {
+            window: 4,
+            head: 0,
+            format: 0x38,
+            ..scanout_6()
+        };
+        assert!(formats.of(desktop.format).is_some());
+        assert!(formats.of(0x38).is_none(), "the YUV overlay format has no console format");
+        let armed = Shown::Armed(Composition {
+            head: 0,
+            width: 1920,
+            height: 1080,
+            layers: vec![desktop, video],
+        });
+        let console_dma = CtxDma {
+            target: Target::Vidmem,
+            base: 0,
+            limit: 0x7F_FFFF,
+            block_linear: false,
+            writable: true,
+        };
+        let mut scan = ScanState::default();
+        let planned = scan.plan(&armed, &formats, (1920, 1080), 1, |_| Ok(console_dma));
+        assert_eq!(planned.layers.len(), 1, "the desktop window is still composed");
+        assert_eq!(planned.layers[0].window, 0);
+        assert_eq!(planned.refused.len(), 1);
+        assert!(planned.refused[0].contains("0x38 has no console format"), "{:?}", planned.refused);
+
+        // a flip of window 0 waits for copy 1; the copy cannot be made for the console
+        let (counters, console) = (DispCounters::default(), ConsoleShare::default());
+        scan.barrier = 1;
+        scan.started = 1;
+        scan.fault(
+            &counters,
+            &console,
+            1,
+            0,
+            Fault::Console("SDR colour program: x".into()),
+        );
+        assert!(!scan.failed, "the display thread would halt every guest channel on this");
+        assert!(scan.done >= scan.barrier, "the flip queued behind copy 1 is released");
+        assert_eq!(counters.console_copies_skipped.load(Ordering::Relaxed), 1);
+        assert_eq!(counters.scanout_refused.load(Ordering::Relaxed), 1);
+        // ... and the next copy is made as usual
+        scan.barrier = 2;
+        scan.started = 2;
+        scan.finish_with(&counters, &console, 2, 0);
+        assert!(scan.done >= scan.barrier && !scan.failed);
+
+        // known-positive: a lost or failed GPU copy still stops the display and completes nothing
+        let mut gpu = ScanState::default();
+        gpu.barrier = 1;
+        gpu.started = 1;
+        gpu.fault(&counters, &console, 1, 0, Fault::Gpu("the completion signal: x".into()));
+        assert!(gpu.failed);
+        assert!(gpu.done < gpu.barrier, "no forged completion for GPU work");
     }
 
     /// ⊘ The review of `v3-gop-unload` (2026-10-03): a page flip (a new context DMA or offset in

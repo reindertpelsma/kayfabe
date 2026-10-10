@@ -2648,14 +2648,16 @@ impl Device {
                     format!(" {f}")
                 }
             } + &format!(
-                " scanout_no_slot={} scanout_d2h={} scanout_pack={} pack_skipped={} display_vram_mib={} host_cursor_reads={} host_cursor_refused={}",
+                " scanout_no_slot={} scanout_d2h={} scanout_pack={} pack_skipped={} display_vram_mib={} host_cursor_reads={} host_cursor_refused={} console_windows_left_out={} console_copies_skipped={}",
                 d.scanout_no_slot.load(o),
                 d.scanout_d2h.load(o),
                 d.scanout_pack.load(o),
                 d.scanout_pack_skipped.load(o),
                 d.vram_bytes.load(o) >> 20,
                 d.host_cursor_reads.load(o),
-                d.host_cursor_refused.load(o)
+                d.host_cursor_refused.load(o),
+                d.console_windows_left_out.load(o),
+                d.console_copies_skipped.load(o)
             )
                 + &dp
                     .broker
