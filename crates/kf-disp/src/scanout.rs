@@ -698,8 +698,26 @@ pub fn plan_yuv(
     };
     let (y_src, y_extent, y_pitch) =
         bound("luma", y_dma, s.offset, s.pitch, 1, x_end, y_end).map_err(refuse)?;
+    // ⊘ [measured, run 401, Windows 11 / Edge MPO overlay, 2026-10-10] the guest programs
+    // `SET_PLANAR_STORAGE(1)` but leaves `SET_CONTEXT_DMA_ISO(1)` and `SET_OFFSET(1)` at 0: no
+    // separate chroma allocation. The console then read the chroma plane from the luma plane's
+    // first byte (magenta/green picture). A chroma plane that was not programmed follows the luma
+    // plane in the same surface: its first byte is the end of the luma plane's whole surface.
+    let chroma_off = if s.iso1 == 0 && s.offset1 == 0 {
+        let rows = u64::from(s.surface_height);
+        let luma_bytes = if y_dma.block_linear {
+            rows.div_ceil(8u64 << s.block_height_log2)
+                * u64::from(s.pitch)
+                * (GOB_BYTES << s.block_height_log2)
+        } else {
+            rows * u64::from(s.pitch) * 64
+        };
+        s.offset.saturating_add(luma_bytes.next_multiple_of(256))
+    } else {
+        s.offset1
+    };
     let (c_src, c_extent, c_pitch) =
-        bound("chroma", c_dma, s.offset1, s.pitch1, 2, cx_end, cy_end).map_err(refuse)?;
+        bound("chroma", c_dma, chroma_off, s.pitch1, 2, cx_end, cy_end).map_err(refuse)?;
     Ok(Some(YuvPlan {
         window: s.window,
         y_src,
@@ -1558,6 +1576,35 @@ mod tests {
             plan_yuv(&Scanout { out_x: 1920, ..s }, yf, &dma, &dma, 1920, 1080),
             Ok(None)
         );
+        // Windows' overlay (run 401): plane 1 never programmed (ISO(1) = OFFSET(1) = 0), block-linear
+        // 448x796, 7 GOBs wide, 2 GOBs per block: the chroma plane follows the luma surface
+        let win = Scanout {
+            iso1: 0,
+            offset1: 0,
+            pitch: 7,
+            pitch1: 7,
+            width: 448,
+            height: 796,
+            surface_width: 448,
+            surface_height: 796,
+            block_height_log2: 1,
+            offset: 0x10_0000,
+            out_width: 448,
+            out_height: 795,
+            ..s
+        };
+        let blm = CtxDma {
+            block_linear: true,
+            ..dma
+        };
+        let p = plan_yuv(&win, yf, &blm, &blm, 1920, 1080).unwrap().unwrap();
+        assert_eq!(p.y_extent, 50 * 7 * 1024);
+        assert_eq!(
+            p.c_src - p.y_src,
+            358_400,
+            "the chroma plane starts where the luma surface ends"
+        );
+        assert_eq!(p.c_extent, 25 * 7 * 1024);
         // hostile: the chroma plane leaves its context DMA by one byte; the luma plane does
         let small = vid(0x4000_0000, 0x1000 + 768 * 1280 + 639 * 768 + 719);
         let e = plan_yuv(&s, yf, &dma, &small, 1920, 1080).unwrap_err();
