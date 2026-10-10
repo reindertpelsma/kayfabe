@@ -1,5 +1,16 @@
 # V3 — batched guest-RAM maps: N scattered runs, O(1) host calls
 
+**★ CORRECTION (2026-10-10, branch `claude/batched-map-decisions-20261010`, off `integration/windows-20261010` @ eff1b692) —
+the three decisions §8.7 left open are decided and implemented; read §8.8 first.** (D1) The
+transient of an UNCHANGED VA (`remade_unchanged_pages`) is gone by construction: outside every
+VA-reserving `hDma` a mapping of ours is ONE 4 KiB page, or sits in a micro reservation sized to its
+row — so any later partial change is exact, and no RM partial-unmap semantics are relied on in the
+4 KiB case. §8.7.3's "Owner decision (open)" is ANSWERED. (D2) The act thread (falcon-context steer)
+taking the ledger mutexes is accepted on condition: every hold is bounded by `LEDGER_CHUNK` entries
+and tested. (D3) Micro reservations are the DEFAULT (no flag; `KF3_BATCH_MICRO_RESERVE` is gone);
+gate 10 of `scripts/bench/v3_gates.sh` re-measures them. Model-tested (`cargo test -p kf-mem`); no
+hardware run yet (§8.8.6).
+
 **★ CORRECTION (2026-10-10, branch `claude/batched-map-review-fixes-20261010`, off 6fafcc6e) — the
 adversarial review of the 2026-10-09 fix found its verdicts could leave the walker and the host out
 of sync; read §8.7 first.** (1) A refused or unsplittable unmap of a changed sub-range acked the
@@ -241,6 +252,13 @@ outside a reservation the host mapping unit is the guest LEAF.
 
 ### 8.0 ★ THE DECISION POINT — the micro-reservation experiment (run it first)
 
+⊘ **ANSWERED 2026-10-10 (§8.8.3), above the text it answers:** the decision is taken — micro
+reservations are the default, with no flag. Basis: the delegating session reports `kf-micro-reserve-probe
+reserve` PASSED on the trusted host at `6fafcc6e` (no log is in this tree; not re-run here). The probe is
+now gate 10 of `scripts/bench/v3_gates.sh` and also records, information only, whether host RM accepts
+the 7.9 GiB flat-FB-alias reservation. Rows below that read "make `KF3_BATCH_MICRO_RESERVE=1` the
+default" are done by DELETING the flag.
+
 Can an unprivileged client reserve a SMALL fixed range in `[1 MiB, 4.5 GiB)` of a Windows-config
 twin space (`vaBase = TWIN_VA_FLOOR` 64 KiB, `[64 KiB, 1 MiB)` already reserved) and unmap part of
 a batch mapped THROUGH it exactly?
@@ -314,6 +332,14 @@ faults in Windows runs is not measured.)
 
 ### 8.3 The design (code)
 
+⊘ **Corrected 2026-10-10 (§8.8), above the text it corrects:** rule 2's "one host map per 4 KiB /
+64 KiB / 2 MiB leaf in the `NV01` range" is wrong since D1: outside every VA-reserving `hDma` a row
+whose leaf is bigger than 4 KiB goes THROUGH one micro reservation sized to it, else at 4 KiB grain
+(one host mapping per page) — never one mapping per big leaf. Rule 3's "`KF3_BATCH_MICRO_RESERVE=1`
+(default OFF until §8.0 passes)" is wrong: ON by default (D3). The "re-made, declared" part of the
+§8.7 correction below is wrong too: nothing is re-made (`remade_unchanged_pages` is a guard that
+stays 0).
+
 ⊘ **Corrected 2026-10-10 (§8.7), above the text it corrects:** rule 1's key no longer has the LEAF
 SIZE (an identical translation is unchanged, §8.7.3); a kept page must be covered by a mapping of
 ours, and part of an `NV01` mapping that a changed piece would split is re-made, declared (§8.7.3);
@@ -352,6 +378,13 @@ reservation free stays tracked (§8.7.5).
    new `unsafe`; nothing per family.
 
 ### 8.4 Syscall budget (reasoned from the numbers measured earlier; no new measurement)
+
+⊘ **Corrected 2026-10-10 (§8.8), above the text it corrects:** the "per run / per leaf" row now
+reads "per run / per 4 KiB page" wherever no micro reservation holds the row (reservations off, or
+refused by host RM at run time): a 64 KiB leaf costs 16 RM map calls and a 2 MiB leaf 512 there
+(cost only reasoned, not measured). With reservations (the default) a big-leaf row costs one
+reservation alloc, one map, and later one free: ~3 RM calls whatever its size. The "micro" columns
+of the table below describe the default now.
 
 Inputs — *measured earlier (nested vast box, §1/§7)*: per-run RM map 19-22 µs; per-run unmap
 84-123 µs at ~12 k mappings in the `hDma` (35-39 µs at 1-4 k: grows with the count); stitch 6-14 µs
@@ -416,6 +449,8 @@ map per leaf, the unmap side ranges over whole leaves). Either way no partial un
 
 ### 8.5 Tests (GPU-free, `cargo test -p kf-mem`, ~17 s; `kf_mem::sim`)
 
+⊘ **Extended 2026-10-10 (§8.8.4):** 148 lib tests now (was 135), ~41 s wall in a debug build; the property tests also run with runtime refusals of the reservation machinery and assert `remade_unchanged_pages == 0`, nothing rigid, no NV01 mapping bigger than a page, and every lock hold within one chunk.
+
 ⊘ **Corrected 2026-10-10 (§8.7.7), above the text it corrects:** the model had two blind spots. Its
 walker keyed placements by VA, so overlapping placements overwrote each other silently. Its host
 never refused an unmap. Both are fixed, and its guard no longer keys on the leaf size. The suite now
@@ -446,6 +481,11 @@ mirror translation == walker's committed set, zero gap bytes, zero unsafe splits
 in a Windows boot and the CUDA lanes; each line names the §8.7.3 inexact case. 6: the status line's
 batch counters, and no `ReaperBacklog` refusals with batching on. 7: the retire lines never report
 `could not be released` (§8.7.5).
+
+⊘ **Corrected 2026-10-10 (§8.8.6), above the text it corrects:** item 1 is now gate 10 of
+`scripts/bench/v3_gates.sh` (`GATE10_VERDICT=PASS`), item 2 runs with micro reservations ON (the
+default; there is no flag), item 5 is a guard (`UNCHANGED page(s) re-made` must NEVER appear), and
+items 8-10 are added in §8.8.6.
 
 1. §8.0 `kf-micro-reserve-probe reserve` (and optionally `nv01-control`).
 2. A Windows boot WITHOUT `KF3_NO_BATCHED_MAP` (and, after 1, with `KF3_BATCH_MICRO_RESERVE=1`):
@@ -493,7 +533,9 @@ already placed are taken down again. A kept page is never taken down.
 
 Finding 1 with no host error was a > 512 MiB 4 KiB row in the `NV01` range, kept as one mapping.
 Now a row is placed one mapping per leaf up to `MAX_LEAF_PIECES` = 2^20 leaves (4 GiB of 4 KiB:
-the whole Windows low range). Beyond that, the row goes through a micro reservation when
+the whole Windows low range). ⊘ **Corrected 2026-10-10 (§8.8.1), above the text it corrects:** the unit of the 2^20 bound is the 4 KiB
+grain now (not the guest leaf), and the reservation is the default (D3), not `KF3_BATCH_MICRO_RESERVE=1`.
+Beyond that, the row goes through a micro reservation when
 `KF3_BATCH_MICRO_RESERVE=1`, or it is refused by name (`HUGE_ROW_OUTSIDE_RESERVATION`, absence,
 counted in `huge_refused`). No row is ever one mapping that cannot be split.
 
@@ -514,12 +556,20 @@ property variants: 5 of 300 seeds, "walker committed …, host translates None".
 
 ### 8.7.3 Leaf size is not identity (finding 3) — and the one inexact case
 
+⊘ **ANSWERED 2026-10-10 (§8.8.1), above the text it answers:** "the one inexact case" no longer
+exists. Outside every VA-reserving `hDma` a mapping of ours is one 4 KiB page or sits in a micro
+reservation, so the apply never re-makes anything (`remade_unchanged_pages` == 0, a guard), and
+`SPLIT_OUTSIDE_RESERVATION` is unreachable for page-aligned ranges. The paragraphs "The inexact
+case", "Owner decision (open)" and the "pathological case" below are SUPERSEDED by §8.8.1 and kept for
+the record. The sentence *"`[model]` Property test … 668 pages re-made, all in the `NV01` range"* is
+the pre-D1 measurement; the same property test now re-makes 0 pages.
+
 `same_mapping` compares aperture, kind, permissions, privilege and linear backing. It no longer
 compares the leaf size. An identical translation re-expressed with another leaf size makes NO host
 call. The walker's UNMAP (old page-size class) and MAP (new class) are both acked APPLIED, and its
 own commit moves the placement between classes.
 
-**The inexact case.** Outside every VA-reserving `hDma` (the `NV01` range), a big leaf is ONE host
+**⊘ SUPERSEDED 2026-10-10 (§8.8.1) — The inexact case.** Outside every VA-reserving `hDma` (the `NV01` range), a big leaf WAS ONE host
 mapping (rule 2). The guest can split it into 4 KiB leaves and re-point part of it. Host RM cannot
 remove that part alone: a partial unmap frees the whole VA block (§8.1). It also cannot map a second
 mapping over the first (`VA_ALREADY_MAPPED`). The same holds for a 64 KiB mapping kept across a
@@ -534,13 +584,13 @@ At 6fafcc6e this case had the same transient, undeclared: the leaf-size key made
 "changed". The alternative, refusing the unmap, would hold the guest's invalidate forever (§AA does
 not cover a refused unmap: the run-223 hang class).
 
-**Owner decision (open).** Two exact alternatives exist:
+**Owner decision — ANSWERED 2026-10-10 (§8.8.1): both, in this order — (2) when a micro reservation is available, else (1).** Two exact alternatives existed:
 1. Map every leaf in the `NV01` range at 4 KiB grain. A 64 KiB leaf then costs 16 RM map calls and a
    2 MiB leaf 512, and the twin uses 4 KiB host PTEs (GPU TLB reach). Cost only reasoned.
 2. After §8.0 passes, map every big-leaf row in the `NV01` range through a micro reservation sized
    to the row. That costs one reservation alloc and one free per row.
 
-One combination is not re-made: an UNMAP whose placement holds such a mapping AND that already
+**SUPERSEDED (§8.8.1: unreachable) —** One combination is not re-made: an UNMAP whose placement holds such a mapping AND that already
 fails by a link (§8.7.1 (b)) before any host call, for example a split big leaf plus a refused leaf
 coalesced into the same placement in one refresh. Its kept pages must stay, so its changed pages
 inside the mapping cannot be removed. That unmap is refused (`SPLIT_OUTSIDE_RESERVATION`, counted in
@@ -590,6 +640,12 @@ Running on the act thread is safe for two reasons. No ledger lock is held across
 reservation with a map in flight through it is pinned (`MicroResv::pins`), so the act thread never
 frees it under the VA thread.
 
+⊘ **ANSWERED 2026-10-10 (§8.8.2), above the text it answers:** accepted, on a condition that is now
+code and a test — every ledger lock hold touches at most `LEDGER_CHUNK` (2048) entries. The
+"O(log n + k)" claim below was FALSE for several paths (the book's backward scan, `OwnMaps::within`
+collecting k entries under the lock, `release_micro`/`segments` iterating all reservations from 0,
+`unpin` and `drain` O(n)); §8.8.2 lists them.
+
 Non-stall note (rule 4): the steer now takes the ledger's mutexes. Each is held O(log n + k) for
 the range touched; `forget_batch` was O(n) and is now range-limited. This is the same class as the
 `rows` lock the steer already took. It is still a lock the VA thread also takes. Whether that is
@@ -602,8 +658,8 @@ without the flag:
 - the net diff (kept pages get no host call; linked failures);
 - one host mapping per guest leaf outside reservations, with the 2^20-leaf bound;
 - owned-span range unmaps (`GpuMirror::unmap_range` is not gated);
-- the ownership ledger, stray removal, micro reservations for over-bound rows when
-  `KF3_BATCH_MICRO_RESERVE=1`;
+- the ownership ledger, stray removal, micro reservations (⊘ 2026-10-10: ALL big-leaf and over-bound
+  rows, ON by default — D1/D3; was "over-bound rows when `KF3_BATCH_MICRO_RESERVE=1`");
 - the steer through the ledger.
 
 So the flag is an A/B of the batch objects only. It does NOT reproduce run 244, which mapped each
@@ -638,3 +694,191 @@ run. The VA thread never waits for the reaper, and no view is forgotten. Tested 
 `kf-host` (`channel::reaper_tests`). A remaining kernel-level coupling is documented in §7.2: the
 stitch's `mmap`s and the reaper's `munmap` share `mmap_lock`.
 
+
+## 8.8 Delegated decisions 2026-10-10 (D1 big-leaf split, D2 act-thread ledger locks, D3 reservation default)
+
+**STATUS: LIVE, 2026-10-10 — CODE + MODEL-TESTED; hardware verdict pending (§8.8.6).** Branch
+`claude/batched-map-decisions-20261010`, off `integration/windows-20261010` @ eff1b692. The owner
+delegated the three items §8.7 left open to the coordinating session, which decided them as below.
+They are binding in the code; they are not yet entered in `docs/OWNER_RULINGS.md` (the owner may
+confirm or amend them there). The invariant behind D1 is the owner's, 2026-10-09 (§8 STATUS): *an
+UNCHANGED VA is never transiently unmapped during a refresh; no unmap-then-remap of kept pages.*
+*Measured* below means the GPU-free model (`cargo test -p kf-mem`) or a number printed by a test;
+nothing here ran on hardware.
+
+### 8.8.1 D1 — outside a reservation every change is exact
+
+**The rule (`kf_mem::batch::BatchedVas::leaf_segments`).** Outside every VA-reserving `hDma` (the
+`NV01` range) a mapping of ours is either exactly ONE 4 KiB page, or lies inside a micro
+reservation. A page is the unit nothing can split, and the walker changes translations in whole
+pages, so a later partial change can never need a partial unmap of an `NV01` mapping. Per unreserved
+segment `[s, e)` of a row whose guest leaf is `leaf`:
+
+| case | placement | later partial change |
+|---|---|---|
+| (a) `leaf` > 4 KiB, aligned, or the segment exceeds `max_leaf_pieces` (2^20) grains, and reservations are on | ONE micro reservation over exactly `[s, e)` (alloc + free per segment), ONE host mapping through it | exact range unmap inside the reservation (NV50 invalidates only the unmapped PTEs, `virt_mem_allocator_gm107.c:1578-1633`) |
+| (b) reservations off, or host RM refused (a) at run time | 4 KiB grain: one host mapping per page; bounded by 2^20 pieces | each page is its own host mapping and its own unit of unmap — **no RM partial-unmap semantics are relied on** |
+| (a2) *(my addition)* (a) refused AND (b) would exceed the bound, segment is whole leaves ≤ 2^20 of them | ONE reservation per leaf; a leaf whose reservation is refused too goes at 4 KiB grain, the grains of all such leaves within the same 2^20 budget | as (a) / (b) |
+| none of them fits | refused by name, `HUGE_ROW_OUTSIDE_RESERVATION` (absence; nothing of ours left behind) | — |
+
+A 4 KiB-leaf row is case (b) already (as before). A refused reservation changes nothing: the alloc
+happens before any map, nothing is placed or lost (model: reservation allocs refused every 3rd/4th
+call, and `refuse_reserve_over`). A reservation host RM accepts is always used for its segment
+(`out` carries `(Some(h), s, e)`, pinned until the map is recorded). A map that fails in the middle
+of a multi-piece row rolls back the pieces already placed (existing all-or-nothing code, now also
+exercised with reservations; model: every 7th/11th row map fails).
+
+**Why (a2) exists.** The measured regression at 6fafcc6e (fast suite 0/30) was a refused row: a
+guest-KERNEL space's flat FB alias is ONE run of 2 MiB leaves of 7.9 GiB; below the carve-out it is
+3 963 whole leaves = 2 029 056 grains — more than 2^20, so it can only be placed through a reservation. If host RM refused the one 7.9 GiB reservation
+(the probe passed on small ranges; `[measured gfx8]` it refused one LARGE `[1 MiB, 4 GiB)`), D1 as
+literally decided would refuse the row again and poison every kernel CE channel. (a2) keeps the row
+placed and exact (3 963 leaf reservations, ~8 000 RM calls, reasoned ≈ 0.2 s). If every reservation is
+refused (or reservations are off) the alias IS refused by name — the decision's rule, and the largest
+residual risk (§8.8.7). Model test: `flat_alias(AliasHost::{Accepts, RefusesBig, RefusesAll, Off})`.
+
+**What disappears, and the proof.**
+- `Applied::remade_unchanged_pages` (the re-make in `apply::keep_only_what_stays_exact`) is 0 by
+  construction: `OwnView::rigid` needs a mapping of ours bigger than a page outside a reservation,
+  and none can be made. The counter and the declared re-make stay as a last resort. Guards:
+  `BatchedVas::rigid_seen` counts any rigid mapping `own_view` reports; the property tests assert
+  `remade_pages == 0`, `rigid_seen == 0`, `remade_transients == 0` after every step, and
+  `sim::check` fails any mirror mapping in the `NV01` range that is not exactly one page
+  (mutation: placing big leaves one mapping per leaf again → all property tests fail at the first
+  big map, "NV01 mapping … is bigger than one 4 KiB page"). `[model]` 100 releaf steps per
+  config, 44 with a same-refresh change: **0 pages re-made** (was 668).
+- `SPLIT_OUTSIDE_RESERVATION` is **unreachable for page-aligned ranges** (state: proven by the
+  invariant above, not by a separate argument): it fires only when an edge of the range cuts a
+  mapping of ours that has `via == None` and is not guest-reserved; every such mapping is one page, so
+  a page-aligned edge never cuts one. Every apply path unmaps whole pages. The check stays as the
+  refusal for an UNALIGNED range, and a test plants a 64 KiB `NV01` mapping to show the branch, the
+  counter (`unsafe_splits`), `rigid_seen` and the last-resort re-make (declared, 15 pages) still work.
+- The tests that asserted the old shape are replaced, not weakened:
+  `big_leaves_are_placed_exactly_and_change_alone` (was "…one mapping each…"),
+  `splitting_a_big_leaf_and_changing_part_of_it_is_exact_everywhere` (was "…remakes_it_declared": now
+  exactly 1 unmap + 1 map, 0 re-made, in 3 configurations), `no_nv01_mapping_bigger_than_a_page_can_be_made`,
+  `a_planted_rigid_mapping_is_counted_refused_and_remade_declared`.
+
+**Cost (reasoned, not measured).** With reservations (default): per big-leaf segment one RM alloc +
+one map + one free — independent of its size. Without: 16 (64 KiB) / 512 (2 MiB) RM map calls per
+leaf and the TLB reach of 4 KiB host PTEs; the unmap side is one range call per owned span.
+
+### 8.8.2 D2 — the act thread takes the ledger locks, on a condition that is now a test
+
+**Decision.** Accept the steer (`BatchedVas::hand_to_host`, act thread) taking the ledger mutexes
+(`book`, `own`, `micro`). The alternative — a steer request answered by the VA thread — makes the
+act thread WAIT on the VA thread, strictly worse. Condition: no ledger lock is held across a host RM
+call, a syscall, a log line, or an allocation proportional to a large `n`; every critical section
+touches at most `LEDGER_CHUNK` = 2048 ledger entries (or bitmap words) and the structure is
+consistent between chunks.
+
+**Audit: violations found and fixed.** All locks go through `BatchedVas::hold`/`hold2`, which record
+the entries touched and the time held (`HoldStats`; `BatchedVas::hold_stats()` is `(max entries,
+longest µs)` and is now part of the steer's log line, so the cost is observed on every steer).
+
+| violation (the §8.7.6 claim "O(log n + k)" was false for these) | fix |
+|---|---|
+| `OwnMaps::within` collected all k entries (k up to 2^20) under the lock: `plan`, `cut`, `own_view`, `unmap_run`, `any_in` | `within_limited` (≤ 2048); `any_in` O(log n); `unmap_owned` forms and unmaps spans while the chunks stream by; `cut_own` / `forget_batch_range` / `collect_within` loop over chunks |
+| `BatchBook::unmapped_extents`: backward scan from `va - max_len` plus a bit-per-page loop, all under one hold | `unmapped_step` with a unit budget and a (entry, page) cursor; always makes progress |
+| `BatchBook::insert` built the liveness bitmap (pages/64 words, hostile-sized) under the lock | `BatchBook::prepare` outside, `insert_prepared` O(log n) inside |
+| `BatchBook::drain` and `OwnMaps::forget_batch` (`retain`, O(n) per batch) under the lock | `take_all` O(1) + dismantled outside; chunked `forget_batch_step` over the batch's own extent |
+| `segments`, `release_micro`, `micro_covers` iterated every reservation from key 0 (`range(..end)`) under the lock; `unpin` scanned all reservations once per handle (O(n·h)) | reservations never overlap: only the predecessor can reach into `va`, then `range(va..end)` in chunks; `unpin` finds its reservation by `range(..=s).next_back()`; emptiness test O(log n) |
+| a poisoned lock was silently treated as "nothing of ours" | poison-tolerant `lk()` |
+
+Audited and clean: no host call, syscall, `eprintln!` or `free` runs inside a `hold` closure (read
+line by line; the logs and frees are after it); the `micro`-then-`own` order is unchanged.
+
+**Consistency between chunks (reasoned).** A chunked `segments` pins reservations as it goes; only
+the VA thread ADDS a reservation, so none appears in a gap meanwhile, and one the act thread
+releases before it is pinned is simply not seen — the same window the single-hold version had after
+`release_micro` took a reservation out and before it freed it. A chunked cut leaves, between chunks,
+ledger entries for mappings host RM already removed (the span was unmapped first); that window
+existed (host call → cut) and is now as long as the cut. A concurrent `clear_strays` finds them and
+unmaps an empty range, which host RM answers `NV_OK`.
+
+**Measured (model + release build, `a_2_pow_20_piece_row_never_holds_a_ledger_lock_beyond_one_chunk`).**
+A 2^20-piece row (4 GiB of 4 KiB grains, the largest row the ledger holds outside a reservation) is
+placed, read, handed to host RM in part and whole, unmapped by run and by range: 1 054 750 holds,
+**at most 2 048 entries touched by any one hold** (the bound is 2 049 = chunk + the one predecessor a
+range scan adds); before, one hold touched 1 048 576 (mutation: `cut_chunk` unbounded → the test fails
+with "a hold touched 1048576 entries"). Longest hold seen: 5.0 ms in three release runs (4 984 /
+5 003 / 5 210 µs), 1.5-5.7 ms in debug; the outliers were single `OwnMaps::cut` holds on a 1M-entry
+map (backtrace: `unmap_run`, `cut_own`) — cause *inferred* to be the allocator freeing tree nodes, not
+measured; no histogram is kept, so the typical hold is not claimed. For comparison the unbounded
+hold was O(2^20). Other tests: 6 151 reservations walked by `segments`/`hand_to_host`/`release_micro`;
+chunked book step and chunked cut equal to the unbounded versions on 200 random rounds each at
+budgets 1-5; property tests assert the bound after every step.
+
+### 8.8.3 D3 — micro reservations are the default
+
+- `BatchedVas::new` → reservations ON; `kf_qemu::mem::micro_reserve_enabled` → ON. The flag
+  `KF3_BATCH_MICRO_RESERVE` is **deleted** (setting it does nothing). Reasons: (i) a row beyond 2^20
+  grains is otherwise refused — a correctness hole (the 7.9 GiB flat alias is one); (ii) the delegating
+  session reports `kf-micro-reserve-probe reserve` PASSED on the host at `6fafcc6e` (no log in this tree;
+  not re-run here).
+- Opt-out: `KF3_NEGCTL_NO_MICRO_RESERVE=1` (read once). **Named NEGCTL, not `KF3_DIAG_NO_MICRO_RESERVE`
+  as suggested:** `V3_FLAG_INVENTORY.md` §8 reserves `KF3_DIAG_*` for pure measurement that changes no
+  behaviour; this flag changes placement, so it is a negative control. It is for A/B and bisecting
+  a host that misbehaves, never a launcher setting; off, over-bound rows are refused by name.
+- A run-time refusal is a clean fallback to the 4 KiB grain / per-run (batch: `NOT_BATCHED`), nothing
+  placed or lost; an accepted reservation is always used consistently (§8.8.1). A refused FREE stays
+  tracked and retried (§8.7.5, now model-tested with injected free refusals, including the retire).
+- **Gate 10.** `scripts/bench/v3_gates.sh` runs `kf-micro-reserve-probe reserve` after the nine
+  `kf-gate*` and prints `GATE10_VERDICT=PASS|FAIL`; the script's exit status requires it.
+  `V3_GATES_SUMMARY pass=9 fail=0` keeps its meaning (the nine only; `merge_check.sh` still greps it)
+  and `merge_check.sh` / `box/README.md` additionally require `GATE10_VERDICT=PASS`. The probe also
+  records, information only, whether host RM accepts the 7.9 GiB flat-alias reservation
+  (`reserve_flat_fb_alias`). **Not run here.**
+
+### 8.8.4 Tests (GPU-free)
+
+`cargo test -p kf-mem`: **153 passed** (148 lib + 2 + 3 integration), 0 failed, 2 ignored (was 140:
+135 + 2 + 3); `cargo test -p kf-qemu`: 162 passed, 0 failed; `cargo test -p kf-harness`: 3 passed;
+`cargo clippy -p kf-mem --all-targets`: no warning in `batch.rs`, `sim.rs`, `sim/tests.rs`.
+Added: runtime-fault properties (300 seeds × 60 steps each): reservation allocs refused (136 hits),
+reservation frees refused (81 hits, retire retried), a row map failing mid-row (4 138 hits at low=true,
+4 488 at low=false), all three together with unmap refusals (2 configs); targeted D1 tests
+(§8.8.1); D2 tests (§8.8.2); the flat-alias tests in four host behaviours. The six existing
+property configurations (300 × 60) all pass with the stronger invariants. Mutations that make
+the suite fail: big leaves placed as one `NV01` mapping each again (all property tests); unbounded
+`cut_chunk` (the 2^20 test).
+
+### 8.8.5 Measured vs inferred
+
+| claim | status |
+|---|---|
+| 0 pages re-made, 0 transients, 0 rigid mappings in 300 seeds × 60 steps × {6 + 5 configs} | measured (model) |
+| every ledger lock hold ≤ 2 049 entries on the 2^20-piece row and in the property tests | measured (model + release build) |
+| longest hold ~5 ms on a 1M-entry ledger | measured; cause (allocator frees) inferred |
+| host RM accepts the reservations D1 asks for (small: probe passed per the delegating session; 7.9 GiB: unknown) | small: reported, not re-run; large: **unknown** |
+| a reservation alloc costs ≈ one RM call; 4 KiB grain costs 16/512 calls per 64 KiB/2 MiB leaf | inferred |
+| the stale-ledger window during a chunked cut is harmless | inferred |
+| act thread blocking time on the ledger in production | not measured (the steer log line now prints it) |
+
+### 8.8.6 Still to verify on hardware (adds to §8.6)
+
+8. `v3_gates.sh`: 9/9 and `GATE10_VERDICT=PASS`; read `reserve_flat_fb_alias` in the log.
+9. The 30-arm fast suite at this revision (the flat FB alias goes through the reservation path
+   now; watch `kf-mem: micro reservation … refused` lines — a few at most, and none for the alias, or
+   the (a2) fallback is what carries it).
+10. A Windows boot on the production flags: no Xid 31, no `UNCHANGED page(s) re-made` line (that
+    line is now a defect, not a declared case), micro reservation counters sane, the retire never
+    reports `could not be released`.
+11. A video lane: the steer's log line `ledger lock holds: at most N entries, longest M us`.
+12. Windows low-range cost with reservations on (`workload_numbers` predicts 0.49 RM calls/page;
+    measure).
+
+### 8.8.7 Residual risks
+
+- **Both reservation routes refused for a row beyond the grain bound** → refused by name (absence).
+  For the flat FB alias this is the 6fafcc6e failure class (poisoned kernel CE channels). The decision
+  accepted it; (a2) shrinks the exposure to "host RM refuses leaf-sized reservations too". Gate 10 and
+  the fast suite tell. If it ever matters, the exact fallback is one more tier (the old one-mapping-
+  per-leaf placement, with its declared re-make), which D1 forbids.
+- Reservations are one RM object per big-leaf row: a guest that maps many big-leaf rows makes many
+  (bounded by the walker's rows; each is a map entry in `micro`).
+- The ledger scans of the book still start at `va - max_len` (longest batch ever); the scan is
+  chunked (no long hold) but its total work grows with the number of batches below `va`.
+- A window between "reservation removed from `micro`" and "host free done" lets the VA thread map
+  through the `NV01` range over a VA still reserved on the host (answered HELD) — pre-existing, not
+  worsened.

@@ -43,6 +43,8 @@ awk '/^test result:/{s+=$4; f+=$6} END{print "TESTS passed",s,"failed",f; if(s==
 bash scripts/bench/v3_gates.sh "$PROV/${T}_gates.log" >"$PROV/${T}_gates.run" 2>&1
 echo "GATES_RC=0"
 grep '^V3_GATES_SUMMARY pass=9 fail=0$' "$PROV/${T}_gates.log"
+# ★ D3 (2026-10-10): gate 10, the micro-reservation probe (micro reservations are the default).
+grep '^GATE10_VERDICT=PASS$' "$PROV/${T}_gates.log"
 bash scripts/bench/build_kf3.sh "$BENCH_DIR/qemu-10.2.4" "$BENCH_DIR/qemu-build-kf3" >"$PROV/${T}_kf3.log" 2>&1
 echo "KF3_RC=0"
 tail -1 "$PROV/${T}_kf3.log"
