@@ -2471,6 +2471,9 @@ impl Device {
         let mut stall_reported: std::collections::HashSet<(u32, u32)> =
             std::collections::HashSet::new();
         let mut stall_logged = 0u32;
+        // ★ the last effects the plane performed (notifier writes, releases, latches), for the STALL report
+        let mut fx_ring: VecDeque<(u64, &'static str, u32, u32, u64, u64, bool)> = VecDeque::new();
+        let mut fx_seq = 0u64;
         // Boot/preserved pictures have no armed head: their non-flip checks run at the preferred
         // rate under the cap
         let idle_period = Duration::from_nanos(kf_disp::pace::paced_period_ns(
@@ -2760,6 +2763,10 @@ impl Device {
                                 .iter()
                                 .map(|q| (q.chn, q.update, q.waiting_for_interlock))
                                 .collect::<Vec<_>>()
+                        );
+                        eprintln!(
+                            "kf3: display: STALL recent effects (seq, kind, chn, handle, offset, awaken-or-value, ok; oldest first): {:?}",
+                            fx_ring.iter().rev().take(60).rev().collect::<Vec<_>>()
                         );
                         eprintln!(
                             "kf3: display: STALL recent events (seq, event; oldest first): {:?}",
@@ -3071,6 +3078,23 @@ impl Device {
                             io.write(dma, offset + 4, &n[4..16])?;
                             io.write(dma, offset, &status.to_le_bytes())
                         });
+                        fx_seq += 1;
+                        if fx_ring.len() >= 192 {
+                            fx_ring.pop_front();
+                        }
+                        fx_ring.push_back((
+                            fx_seq,
+                            if finished {
+                                "NOTIFY-FINISHED"
+                            } else {
+                                "NOTIFY-BEGUN"
+                            },
+                            chn,
+                            handle,
+                            offset,
+                            u64::from(awaken),
+                            r.is_ok(),
+                        ));
                         if trace {
                             eprintln!(
                                 "kf3: display: TRACE notify chn {chn} handle {handle:#x} +{offset:#x} awaken={awaken} -> {r:?}"
@@ -3105,6 +3129,19 @@ impl Device {
                             let b = value.to_le_bytes();
                             io.write(dma, offset, if wide { &b[..] } else { &b[..4] })
                         });
+                        fx_seq += 1;
+                        if fx_ring.len() >= 192 {
+                            fx_ring.pop_front();
+                        }
+                        fx_ring.push_back((
+                            fx_seq,
+                            "RELEASE",
+                            chn,
+                            handle,
+                            offset,
+                            value,
+                            r.is_ok(),
+                        ));
                         if trace {
                             eprintln!(
                                 "kf3: display: TRACE release chn {chn} handle {handle:#x} +{offset:#x} value {value:#x} -> {r:?}"
