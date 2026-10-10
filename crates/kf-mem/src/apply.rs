@@ -166,10 +166,15 @@ pub struct Applied {
     /// (The walker's slot must never hold two placements over one VA, and must keep every page we
     /// keep mapped: [`apply_entry`], "commit consistency".)
     pub linked_failed: usize,
-    /// ★ Review fix 2026-10-10 (finding 3): pages whose guest translation did NOT change but whose
-    /// host mapping had to be re-made — a mapping in the `NV01` range (no VA-reserving `hDma`) that
-    /// a changed part of the same placement would SPLIT, which host RM cannot do exactly. The one
-    /// remaining transient of an unchanged VA; `V3_BATCHED_MAP.md` §8.7 names the owner decision.
+    /// ★ D1 (2026-10-10, `V3_BATCHED_MAP.md` §8.8): **a guard that must stay 0.** Pages whose guest
+    /// translation did NOT change but whose host mapping had to be re-made — a mapping outside
+    /// every VA-reserving `hDma` that a changed part of the same placement would SPLIT, which host
+    /// RM cannot do exactly. Since D1 every such mapping is one 4 KiB page or sits in a micro
+    /// reservation, so this cannot happen; the re-make stays as a declared last resort and the
+    /// property tests assert 0.
+    /// ⊘ The text this corrects (review fix 2026-10-10, finding 3): *"The one remaining transient of
+    /// an unchanged VA; §8.7 names the owner decision"* — the owner's invariant (no unmap-then-remap
+    /// of kept pages) was met by placing differently, not by re-making.
     pub remade_unchanged_pages: u64,
     /// The VA intervals of [`Applied::remade_unchanged_pages`], `(start, end)`.
     pub remade: Vec<(u64, u64)>,
@@ -531,7 +536,11 @@ fn kept_by_run<'k>(pairs: impl IntoIterator<Item = &'k Kept>, n: usize) -> Vec<V
 /// 1. **a mapping of OURS covers it** — a page the walker still lists but whose host mapping is
 ///    gone (host RM answered an error AFTER acting, a take-down) is mapped again as a new piece,
 ///    never "kept" absent;
-/// 2. **it does not hold PART of a rigid mapping** — one host RM cannot split exactly (no
+/// 2. ★ D1 (2026-10-10): **UNREACHABLE since D1, kept as a declared last resort.** Every mapping of
+///    ours outside a VA-reserving `hDma` is one 4 KiB page or inside a micro reservation, so
+///    `OwnView::rigid` is empty (`BatchedVas::rigid_seen` counts any violation; tests assert 0).
+///    ⊘ The text below is the pre-D1 description of what this rule did.
+///    **it does not hold PART of a rigid mapping** — one host RM cannot split exactly (no
 ///    VA-reserving `hDma` holds it, `crate::batch::BatchedVas` rule 2). A rigid mapping inside
 ///    this placement that carries kept pages AND changed pages of it (the guest split a big leaf
 ///    and changed part of it), or the kept pages of two different MAP runs (a later change of one
@@ -1183,10 +1192,10 @@ fn prepare_row(
 }
 
 /// ★ 2026-10-10: a row clipped at the carve-out ends inside a guest leaf. Its whole leaves stay ONE
-/// host mapping each (`crate::batch::BatchedVas` rule 2: the guest changes a leaf alone, so the
-/// leaf is the host unit), and the cut leaf's lower part becomes its own row with the largest
-/// leaf its edges allow — never the 4 KiB fallback over the WHOLE row, which past
-/// `MAX_LEAF_PIECES` would make the entire alias one mapping no later leaf change could split.
+/// row (placed by `crate::batch::BatchedVas` through ONE micro reservation, D1 2026-10-10 — ⊘ it
+/// was "one host mapping per leaf, the leaf being the host unit"), and the cut leaf's lower part
+/// becomes its own row with the largest leaf its edges allow — never the 4 KiB fallback over the
+/// WHOLE row, which past `MAX_LEAF_PIECES` grains could not be placed at all without a reservation.
 fn split_at_leaf(d: Desired) -> Vec<Desired> {
     let end = d.va.saturating_add(d.len);
     if !d.leaf.is_power_of_two() || end.is_multiple_of(d.leaf) {
