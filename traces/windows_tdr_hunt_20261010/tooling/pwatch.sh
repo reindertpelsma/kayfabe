@@ -1,23 +1,21 @@
-# PREEMPTDUMP=1 (H-S, shape S): watch kayfabe's log for a preempt-all burst the guest never re-enables: >= PD_MIN (6)
-# DISABLE_CHANNELS(bDisable=true) since the last bDisable=false, and no bDisable=false for PD_QUIET_MS (500) after the last one.
-# Then: one LAPIC/MSI-X sample, info registers -a, and a full guest-memory dump (the VM resumes after it); the hold continues
-# 60 s more. The open list's eventData (KEVENT addresses) are saved from the RUNLIST_PREEMPT_COMPLETE lines.
+# PREEMPTDUMP=1 (H-S, shape S): watch kayfabe's log, line by line in order, for a disable list (DISABLE_CHANNELS(bDisable=true)) of
+# >= PD_MIN entries that no bDisable=false follows for PD_QUIET_MS; then dump guest memory at once (the VM resumes after it).
 preempt_watch(){
-  local lg=$RUN/qemu.log off cur chunk p m burst=0 lastp=0 now
+  local lg=$RUN/qemu.log off cur ln burst=0 lastp=0 now
   off=$(stat -c %s $lg); : > $O/pdump-open.txt
   while alive && [ ! -e $O/.pdump_done ]; do
     sleep 0.1
-    cur=$(stat -c %s $lg); chunk=$(tail -c +$((off+1)) $lg | head -c $((cur-off))); off=$cur
-    p=$(printf '%s' "$chunk" | grep -a -c 'DISABLE_CHANNELS(bDisable=true')
-    m=$(printf '%s' "$chunk" | grep -a -c 'DISABLE_CHANNELS(bDisable=false')
-    now=$(date +%s%3N)
-    if [ "$m" -gt 0 ]; then burst=0; : > $O/pdump-open.txt; fi
-    if [ "$p" -gt 0 ]; then burst=$((burst+p)); lastp=$now; printf '%s\n' "$chunk" | grep -a 'RUNLIST_PREEMPT_COMPLETE posted\|DISABLE_CHANNELS(bDisable=true' >> $O/pdump-open.txt; fi
-    if [ $burst -ge ${PD_MIN:-6} ] && [ $((now-lastp)) -ge ${PD_QUIET_MS:-500} ]; then
-      L "PREEMPT-OPEN detected: $burst disables, no enable for $((now-lastp)) ms; sampling + dumping"
-      ( timeout 3 python3 $W/tdrhunt/irq_sampler.py $RUN/qmp.sock $QPID $O/pdump-irq.txt $O/.pdump_irq_stop 0.2 8 & SP=$!; sleep 0.7; touch $O/.pdump_irq_stop; wait $SP ) 2>/dev/null
-      { echo "== $(date -u +%FT%T.%3N)"; Q cmd human-monitor-command '{"command-line":"info registers -a"}' 2>&1; } > $O/pdump-regs.txt
-      L "PREEMPT-OPEN: dump start"
+    cur=$(stat -c %s $lg); now=$(date +%s%3N)
+    while IFS= read -r ln; do
+      case "$ln" in
+        *'bDisable=true'*) burst=$((burst+1)); lastp=$now; printf '%s\n' "$ln" >> $O/pdump-open.txt;;
+        *'bDisable=false'*) burst=0; : > $O/pdump-open.txt;;
+        *'RUNLIST_PREEMPT_COMPLETE posted'*) printf '%s\n' "$ln" >> $O/pdump-open.txt;;
+      esac
+    done < <(tail -c +$((off+1)) $lg | head -c $((cur-off)) | grep -a 'DISABLE_CHANNELS(bDisable\|RUNLIST_PREEMPT_COMPLETE posted')
+    off=$cur
+    if [ $burst -ge ${PD_MIN:-6} ] && [ $lastp -gt 0 ] && [ $((now-lastp)) -ge ${PD_QUIET_MS:-1500} ]; then
+      L "PREEMPT-OPEN detected: $burst disables open, no enable for $((now-lastp)) ms; dumping"
       timeout 20 python3 $W/boundary-tools/qmp.py $RUN/qmp.sock cmd dump-guest-memory "{\"paging\":false,\"protocol\":\"file:$W/dumps/run$N-preempt.elf\"}" >/dev/null 2>&1
       local st=""
       for k in $(seq 1 120); do

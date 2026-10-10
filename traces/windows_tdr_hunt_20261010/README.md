@@ -414,3 +414,37 @@ threshold (`tooling/pwatch.sh`; host runner tdr-run9).
   (and `LATCH`) follows that hand-off within a frame — then the flip was programmed and its completion report is what is missing.
 * **H-S** (as for 276): unconsumed status-queue elements at a preempt-all with no enable. Falsifier: `GSPQ` drained.
 * Validity gate: any host Xid in the run makes it a mirror-fault run, not a TDR-mechanism run.
+
+### Run 277 result (clean base e6e6a9ed; 0 new host Xid)
+3 TDR cycles (mem t 48.4 / 58.2 / 92.1 s). The preempt-open watcher misfired on a healthy disable-16/enable-16 cycle (its burst
+counter was reset and refilled within one 100 ms chunk: fixed, `tooling/pwatch.sh` now reads lines in order) and the hold rule
+then ended the hold at READY; the guest ETW stop failed (QGA lost during the dump). **No usable sample for H-S or H-F1.**
+`GSPQ`: drained throughout again (no `GSPQ-UNREAD`).
+
+### H-P (owner: "a suspended scheduler should not stop paging, and an invalidate just completes — a kayfabe bug?") — offline part
+1. **Paging during healthy suspends** (`evidence/scheduler-suspend-windows-paging.txt`, every `FLUSHSCHEDULER_SUSPEND→RESUME` in the
+   guest ETW of runs 232/237/238/269/271): healthy suspends last 0.07-68 ms; paging ops START inside them occasionally (238: one op in a
+   68.6 ms suspend; 232/237/271: one op in a 0.2-0.3 ms suspend), paging DMA starts inside a suspend only in 237 (2) and 269's failing one
+   (1, op 230 finishing). The failing 269 suspend lasted 4349 ms with 0 op starts. Long suspends without paging also appear in
+   232 (2760 ms, its 30 s-TdrDelay run) and 237 (32529 ms, the run-232-class hang). No VFIO-reference DxgKrnl ETW exists to compare.
+   **[measured] paging ops do start during a suspend, but rarely; [inferred] the VidMm worker can be gated by a suspend — not decided.**
+2. **MMU invalidates (VA-thread side, the only per-invalidate quantity the old logs carry):** `evidence/invalidate-va-side-stats-runs263-277.txt`.
+   Every run's status lines give per 2 s window the count and the mean arrive→clear, and the boot-cumulative maximum. Means are
+   0.2-0.7 ms in every window of every run (no window mean > 12 ms). **The maximum is above 12 ms in every run** (44-90 ms; 270 ms in
+   276): the first ~45 ms one appears in the boot window (t≈10 s) of every run, larger ones near TDR recoveries (263: 58.7/70.9 ms right
+   after reset 1; 264: 51.7 ms after reset 1; 269: 51.9 ms in the window after reset 1). **Before the first TDR of 269 and 271 the
+   maximum was 46.6 ms and 44.2 ms**: no invalidate was held anywhere near the 2 s the TDR needs, all were cleared at every 2 s
+   sample (inval == cleared), none pending at the declaration; the run-223 class (an invalidate held for seconds while the guest polls
+   under its locks) is **ruled out for 269 and 271**. Not available from the old logs: the per-invalidate distribution (p50/p99), each one
+   over 12 ms with its time, and the GUEST-visible latency (the VA side stamps "arrive" when the VA thread takes the request; the time
+   from the guest's trapped trigger write to that point is not measured, so a VA thread busy in a large apply is invisible here).
+   **These latencies violate ruling §AD (12 ms) irrespective of the TDR**: reported to the batched-map / VA-manager owner.
+3. New diagnostic for that (base branch 1b921070, probe flag only): `INVAL-SLOW` = every invalidate whose GUEST-visible latency (vCPU
+   trap that armed the trigger → the VA thread's publication of the idle word in the BAR0 read shadow, which the guest spin-reads)
+   exceeds 12 ms, with the VA thread's state (walk in flight, pending wants, settled, ms since its previous publish); `INVAL-PENDING`
+   for one still armed past 12 ms; `INVAL-LAT` distribution (n, p50/p90/p99, max) every 2 s.
+
+### Run 278 (written before the run): binary 1b921070, same flags as 277, runner tdr-run10 (fixed watcher, full hold)
+* **H-P (guest-visible):** some invalidate is held > 12 ms near a suspend/TDR window. Falsifier: no `INVAL-SLOW` within 2 s before any
+  declaration (the distribution is reported either way).
+* **H-S** and **H-F1** as for 277.
