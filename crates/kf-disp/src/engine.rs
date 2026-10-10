@@ -1316,6 +1316,17 @@ impl Engine {
             return;
         };
         let Stage::Latch { .. } = c.stage else { return };
+        // ★ 2026-10-10 (TDR hunt, shape F): a window's RELEASE semaphore is written when the entry it was programmed
+        // with is FLIPPED AWAY — replaced by the next latched update — not when that entry itself latches. Open NVKMS
+        // states the EVO/NVDisplay behaviour it simulates in software: "We write the semaphore's release value when the
+        // NVHsChannelFlipQueueEntry is removed from current (i.e., when we do the equivalent of 'flip away')"
+        // (`ogkm-595.84: nvidia-modeset/include/nvkms-headsurface-priv.h:236-244`). So the release written at this latch
+        // is the OUTGOING armed state's, read before the arm below. [measured, runs 268-279] writing the incoming
+        // entry's release at its own latch told a guest whose VSync handling ran after the latch pass that the flip it
+        // was waiting for had already been flipped away; it never reported that present, its flip queue timed out (TDR).
+        let outgoing_release = (c.kind == ChannelKind::Window)
+            .then(|| Self::release_of(&v, c, n, Chan::armed))
+            .flatten();
         // 1. arm
         let mut changed = Vec::new();
         for (i, (a, b)) in c.assy.iter().zip(c.armed.iter_mut()).enumerate() {
@@ -1369,21 +1380,9 @@ impl Engine {
             }
             ChannelKind::Window => {
                 st.effects.push(Effect::Latched { window: c.instance });
-                let sem = c.armed(v.w_ctxdma_sem);
-                if sem != 0 {
-                    let ctl = c.armed(v.w_sem_control);
-                    let wide = fld(ctl, v.w_sem_payload) == 1;
-                    let hi = v.w_sem_release_hi.map_or(0, |m| c.armed(m));
-                    let lo = u64::from(c.armed(v.w_sem_release));
-                    st.effects.push(Effect::Release {
-                        chn: n,
-                        client: c.client,
-                        handle: sem,
-                        offset: u64::from(fld(ctl, v.w_sem_offset)) * 16,
-                        value: if wide { u64::from(hi) << 32 | lo } else { lo },
-                        wide,
-                        awaken: fld(ctl, v.w_sem_rel_mode) == 1,
-                    });
+                // the entry this latch flipped away (see `outgoing_release` above), never the one just armed
+                if let Some(r) = outgoing_release {
+                    st.effects.push(r);
                 }
                 let handle = c.armed(v.w_ctxdma_notifier);
                 if handle != 0 {
@@ -1407,6 +1406,28 @@ impl Engine {
         {
             c.get = c.queue.front().map_or(c.decoded, |f| f.header);
         }
+    }
+
+    /// The release a window entry asks for, read through `get` (its ARMED or ASSEMBLY words): `None` without a
+    /// semaphore context DMA.
+    fn release_of(v: &Vocab, c: &Chan, n: u32, get: fn(&Chan, u32) -> u32) -> Option<Effect> {
+        let sem = get(c, v.w_ctxdma_sem);
+        if sem == 0 {
+            return None;
+        }
+        let ctl = get(c, v.w_sem_control);
+        let wide = fld(ctl, v.w_sem_payload) == 1;
+        let hi = v.w_sem_release_hi.map_or(0, |m| get(c, m));
+        let lo = u64::from(get(c, v.w_sem_release));
+        Some(Effect::Release {
+            chn: n,
+            client: c.client,
+            handle: sem,
+            offset: u64::from(fld(ctl, v.w_sem_offset)) * 16,
+            value: if wide { u64::from(hi) << 32 | lo } else { lo },
+            wide,
+            awaken: fld(ctl, v.w_sem_rel_mode) == 1,
+        })
     }
 
     /// The head window `w` is owned by in the ARMED core state (`None`: no owner or no core).
