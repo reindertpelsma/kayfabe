@@ -22,7 +22,7 @@ use kf_core::{HostOps, HostSlice, Plane, Step, Translatable, Vmm};
 use kf_gsp::{CommandPolicy, GspFsm, GuestRam, RamRefused};
 use kf_linux_raw::{Notifier, PollTimeout, Poller, ReadyTokens};
 use kf_trap::{Action, Class, Route, WriteSemantics};
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Mutex, OnceLock};
 
 /// `NV_PROM_DATA(i) = 0x300000 + i`, 1 MiB — where RM streams the VBIOS from.
@@ -315,6 +315,13 @@ pub struct Device {
     /// trace in the VFIO reference's record format. Off: the C device takes none of its paths.
     pub trace: crate::readtrace::AccessTrace,
 }
+
+/// ⚠ DIAGNOSTIC (TDR hunt): vCPU threads seen inside `bar0_write` (see `Device::vcpu_note`).
+const VCPU_SLOTS: usize = 64;
+static VCPU_NEXT: AtomicUsize = AtomicUsize::new(0);
+static VCPU_START: [AtomicU64; VCPU_SLOTS] = [const { AtomicU64::new(0) }; VCPU_SLOTS];
+static VCPU_OFF: [AtomicU64; VCPU_SLOTS] = [const { AtomicU64::new(0) }; VCPU_SLOTS];
+static VCPU_MAX_NS: AtomicU64 = AtomicU64::new(0);
 
 impl Device {
     /// ★ Realize: host session → family → store → derived BAR0 → GSP FSM + answers → plane.
@@ -1386,6 +1393,23 @@ impl Device {
         }
     }
 
+    /// ⚠ DIAGNOSTIC (2026-10-10, TDR hunt; only with `KF3_COMPLETION_PROBE`): which BAR0 write each vCPU thread is inside
+    /// right now and since when, for the probe thread ([`Device::probe_loop`]) to name a handler that does not return.
+    /// Two relaxed stores and a clock read per trapped write when the probe is on; one load of a `OnceLock` when off.
+    fn vcpu_note(&self, off: u64) -> Option<usize> {
+        crate::chan::completion_probe_ms()?;
+        thread_local! { static SLOT: std::cell::Cell<usize> = const { std::cell::Cell::new(usize::MAX) }; }
+        let i = SLOT.with(|c| {
+            if c.get() == usize::MAX {
+                c.set(VCPU_NEXT.fetch_add(1, Ordering::Relaxed) % VCPU_SLOTS);
+            }
+            c.get()
+        });
+        VCPU_OFF[i].store(off, Ordering::Relaxed);
+        VCPU_START[i].store(crate::prof::now_ns().max(1), Ordering::Release);
+        Some(i)
+    }
+
     /// ★ THE vCPU PATH for a BAR0 write. Lock-free: a shadow store (so a plain register reads
     /// back what was written, as hardware does), the plane's trap, and at most one eventfd write
     /// when a waiter is parked. ⊘ Never blocks, never services.
@@ -1402,7 +1426,13 @@ impl Device {
             off == self.qhead_off,
         );
         if !crate::prof::on() {
-            return self.bar0_write_inner(off, val, width);
+            let slot = self.vcpu_note(off);
+            self.bar0_write_inner(off, val, width);
+            if let Some(i) = slot {
+                let t0 = VCPU_START[i].swap(0, Ordering::AcqRel);
+                VCPU_MAX_NS.fetch_max(crate::prof::now_ns().saturating_sub(t0), Ordering::Relaxed);
+            }
+            return;
         }
         let t0 = crate::prof::now_ns();
         if off == self.qhead_off {
@@ -1650,6 +1680,7 @@ impl Device {
         // up independently of doorbells, over time rather than only at a twin's free.
         let (mut ticks, mut samples, mut lagged, mut max_lag, mut stuck) = (0u32, 0u64, 0u64, 0u32, 0u64);
         let mut streak: std::collections::HashMap<u32, u32> = std::collections::HashMap::new();
+        let mut vcpu_reported = [0u64; VCPU_SLOTS];
         while !self.stop.load(Ordering::Acquire) {
             {
                 let s = self.chans.relay_lag_sample();
@@ -1678,6 +1709,29 @@ impl Device {
                         "kf3: RELAY-LAG t={:.3} relays={} lagged_now={now_lagged} | cumulative twin-samples={samples} lagged={lagged} max_lag_entries={max_lag} lagged_500ms_runs={stuck}",
                         kf_mem::maplog::t(),
                         s.len()
+                    );
+                }
+            }
+            // ⚠ DIAGNOSTIC (TDR hunt): a vCPU inside one BAR0 write for >200 ms is named once per episode.
+            {
+                let now = crate::prof::now_ns();
+                for i in 0..VCPU_SLOTS {
+                    let st = VCPU_START[i].load(Ordering::Acquire);
+                    if st != 0 && now.saturating_sub(st) > 200_000_000 && vcpu_reported[i] != st {
+                        vcpu_reported[i] = st;
+                        eprintln!(
+                            "kf3: VCPU-STUCK t={:.3} vcpu-slot={i} inside the BAR0 write {:#x} for {} ms",
+                            kf_mem::maplog::t(),
+                            VCPU_OFF[i].load(Ordering::Relaxed),
+                            now.saturating_sub(st) / 1_000_000
+                        );
+                    }
+                }
+                if ticks % 20 == 0 {
+                    eprintln!(
+                        "kf3: VCPU-MAX t={:.3} longest finished BAR0 write handler so far: {} us",
+                        kf_mem::maplog::t(),
+                        VCPU_MAX_NS.load(Ordering::Relaxed) / 1000
                     );
                 }
             }
