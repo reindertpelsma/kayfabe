@@ -659,3 +659,37 @@ trace, BAR0 read trace (`WIN_TRACE=1`). Runner `tdr-run13.sh` with `RWATCH=1`. H
 which word decides. **Falsifier:** no guest access to the slot between its latch and the TDR (other than the guest's own reset
 before the UPDATE). Then the decision does not read the notifier through these mappings, and the semaphore slot / other words are
 next.
+
+### Run 285 result: tooling failure, H-W not tested
+The guest-RAM memfd is named `memory-backend-memfd`, not `ram0`, so `revmap` never opened guest RAM and found no VA (5 cycles,
+`vas=[]`). It was fixed and replaced by a C walker (`tdropus/revmap.c`: 0.25 s per walk, mmap of the memfd). The walker was
+validated on the live VM: every vCPU's kernel RIP page, translated with `gva2gpa`, is found by the reverse walk.
+
+### Run 286 result (H-W): the driver's poll is measured — it waits on the PREVIOUS flip's notifier too
+Binary dbbcb387, latch-first + BEGUN, watch on kernel VA `0xffff8088e17ef000` (the page of PA `0x2398f0000`), slots `+0xf40` and
+`+0xf80`. 178,802 guest accesses were logged in 10 min. Each one stops the VM for about 3-4 ms, so the guest crawled (no TDR was
+declared, QGA never answered); the access pattern itself is the result. Merged with kayfabe's slot history (host UTC, aligned):
+* 198.151-198.187: programming flip #5 (one vCPU). It reads `+0xf40` (word0 = FINISHED `0x80000000` from an earlier life) and its
+  timestamp, then **writes the whole slot to zero** (NOT_BEGUN, both timestamp words). That is the lock-step reset before the
+  request.
+* 198.188: kayfabe sees the UPDATE (`SLOT REQ commit#5 ... +0xf40 now=0x0`).
+* From 198.190 the driver loops at a single instruction reading `+0xf40` and `+0xf80` alternately (8-byte reads of word0+word1),
+  plus a second instruction every 4th pair. It reads the timestamp words only once, during the reset. Before the latch:
+  `+0xf40`=0 (NOT_BEGUN), `+0xf80`=BEGUN (flip #4).
+* 198.2013: kayfabe latches flip #5 (`+0xf40` <- BEGUN, timestamp; release `+0x0` <- 1 = flip #4's at flip-away).
+* After that the loop reads `+0xf40`=BEGUN and `+0xf80`=BEGUN and **never leaves the loop** (about 90,000 reads of each).
+* **So the driver polls the new flip's notifier AND the previous flip's notifier, and two BEGUN values do not satisfy it.** The
+  only state it can be waiting for is a FINISHED on one of them. [inferred, the next test] The previous entry's notifier becomes
+  FINISHED when that entry is flipped away, at the next latch, exactly like its release semaphore. In the default order kayfabe
+  writes FINISHED to every window notifier at its own latch. That makes the previous slot FINISHED long before; the driver tolerates
+  it only when its first VSync sees the new slot still NOT_BEGUN.
+* Notifier layout check (ogkm `clc37d.h`/`clc77d.h` `NV_DISP_NOTIFIER`, 16 bytes): word0 = PRESENT_COUNT 7:0, FIELD 8, FLIP_TYPE 9,
+  STATUS 31:30; word1 reserved; words 2-3 TIMESTAMP. Kayfabe writes word0 = status only (count, field, flip type 0), word1 = 0, and
+  words 2-3 = GPU time at the latch pass, timestamp first and status last. The driver's loop reads only word0+word1. The VFIO
+  reference cannot show this memory (no guest-visible register mirrors it).
+
+### Run 287 (written before the run; binary fb84cc29): + the outgoing notifier FINISHED at flip-away
+Flags as 284 (latch-first, window notifier BEGUN at latch, slot history, BAR0 traces) **plus**
+`KF3_DIAG_WINDOW_NOTIFIER_FINISH_AT_FLIP_AWAY=1`. At a window latch kayfabe also writes the outgoing entry's notifier FINISHED.
+No watchpoints (they stall the VM). **H-NF:** with BEGUN at latch and FINISHED at flip-away, the hardware order completes every flip,
+with no TDR in boot. **Falsifier:** TDR cycles in boot as in 282-284.
