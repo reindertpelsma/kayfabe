@@ -1,0 +1,6 @@
+=== gputest_plot3d start=2026-10-10T18:19:47.2122949-07:00 host=DESKTOP-397P3NI session=1 boot=2026-10-11T00:42:27.5000000Z timeout=100
+KFWAIT gputest_plot3d EXITED rc=0
+GPUTEST 2026/10/10@18:19:49(0000000002) < > GpuTest: Cross Platform Graphics Benchmark Utility
+GPUTEST 2026/10/10@18:19:50(0000000027) < > Plot3D - OpenGL - Renderer model: NVIDIA GeForce RTX 4060 Ti/PCIe/SSE2
+GPUTEST 2026/10/10@18:20:04(0000000033) < > [Benchmark_Score] - module: Plot3D - Score: 16616 points (1028x720 windowed, duration:10000 ms).
+=== end rc=0 secs=20 2026-10-10T18:20:07.0454665-07:00

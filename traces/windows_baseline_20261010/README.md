@@ -1,10 +1,57 @@
 # Native-NVIDIA Windows baseline of the app matrix (2026-10-10)
 
-**STATUS: LIVE (in progress), 2026-10-10 17:15 UTC.** 78 of 83 tier-1 apps PASS on a real NVIDIA GPU with the stock Windows driver
-and no kayfabe; 5 are open (4 Edge apps, `gravitymark_vk`). The box is **still running** (handed off, see below). Everything in
-*Measured* was seen on the box; everything in *Inferred* is labelled.
+**STATUS: LIVE (final, box destroyed), 2026-10-10 19:15 UTC.** 100 apps (tier 1 + 2 + 3) run on a real NVIDIA GPU (RTX 4060 Ti, driver 595.97)
+with the stock Windows driver and no kayfabe: **99 PASS, 1 TIMEOUT (`gravitymark_vk`)**. Tier 1: 82/83 PASS; tier 2/3: 17/17 PASS. The vast
+instance was destroyed at the end of the second session (the HANDOFF below is historical). Everything in *Measured* was seen on the box;
+everything in *Inferred* is labelled.
 
-## HANDOFF (a fresh agent resumes from here)
+## FINAL RESULTS (second session, 2026-10-10 17:10-19:15 UTC) -- these supersede the open items of the first session
+
+Merged table: `results.md` / `results.tsv` (later runs win: `t1a`, `t1b`, Edge re-runs, `gravitymark_vk` 20-min run, tier 2/3 run, fix re-runs).
+
+| area | result |
+|---|---|
+| tier 1 (83) | 82 PASS, 1 TIMEOUT (`gravitymark_vk`); sum of per-app runtimes 5107 s (incl. the 1234 s timeout) |
+| tier 2/3 (17) | 17 PASS (sum 890 s tier 2, 220 s tier 3); `dxva2_h264` needed `session=interactive` (below) |
+| Edge apps (5: webgl, webgl_headless, webgpu, video_h264, video_vp9) | **5 PASS** after two fixes (below) |
+| stability pass (10 random tier-1 PASS apps, <= 150 s, seed 20261010) | 10/10 PASS again, same proof kinds; runtimes within +-1 s except `hist_t` 6 s -> 16 s (cold python import; `stability.tsv`) |
+| D3D11 probe winding fix (override build of the committed `kf_dxprobe.cpp`) | `dxprobe_d3d11` PASS with `KFDX ok draw result matches (centre pixel 64,128,191,255)`; d3d12 PASS |
+| Per-app runtimes | `results.md` (column `secs`); longest: gravitymark_vk 1234 (timeout), clpeak_cuda 1176, clpeak_ocl 1037, gravitymark_d3d11 204, gravitymark_gl 187, gravitymark_d3d12 184, vkpeak 136 |
+
+### Edge and "YouTube Shorts plays natively on this driver" (the kayfabe reference), measured
+- **Edge version 155.0.4283.45** (inbox Edge, Windows 11 LTSC 2024), NVIDIA 595.97, one display adapter (the NVIDIA GPU).
+- The 4 Edge failures had two causes. (1) `kf_edge.ps1` orphaned pending `BeginGetContext` operations (fixed in the first session): after the fix the
+  page loads and posts. (2) The matrix' GPU proof `pdh:VideoDecode` found nothing because Edge's browser tree is **not** a descendant of the
+  supervisor (the sampled tree held 3-5 pids and none of Edge's 10+ processes); `kf_run_app.ps1` now also samples every `msedge.exe` for `edge_*` apps.
+  After that: `edge_video_h264` PASS proof `pdh:videodecode` (VideoDecode engine peak 3.9 %), `edge_video_vp9` PASS (2.2 %), `edge_webgl` / `edge_webgpu`
+  PASS with `3d` engine use (3.1 % / 1.3 %). No Edge first-run policy was needed for the test pages (the matrix profile uses `--no-first-run`).
+- Test video page (`traces/.../edge/edge_probe1.txt`): `canPlayType probably`, `mediaCapabilities` supported, smooth, **powerEfficient true**; GPU process
+  `engtype=videodecode` non-zero in 7 of 7 samples (2.2-4.1 %), 3d 0.5 %, copy; screenshot `edge/video_h264_test_playing.png` (frame counter running).
+- **Real YouTube Shorts** (box has internet; `edge/shorts_probe.ps1` sets HideFirstRunExperience / AutoplayAllowed, opens `https://www.youtube.com/shorts`
+  in a private profile): no consent page appeared (region CA), the Short (id luANrw9UQlk) autoplayed with sound icon. Two screenshots 12 s apart
+  differ (`edge/shorts_t0.png`, `edge/shorts_t12s.png`; 144k pixels differ in the video area; caption text and the speaker's pose change). Over 120 s of
+  playback the Edge **GPU process** showed engine `videodecode` in 46 samples (0.65-1.74 %, i.e. NVDEC hardware decode is active), `3d` 0.1-1.3 % (compositor),
+  `copy` <= 0.12 %; no nvlddmkm event, no TDR. (`edge/shorts_probe.txt` has every sample.)
+- Not measured: `edge://gpu` text (not scriptable here); hardware decode is inferred-from-counters (VideoDecode engine of the NVIDIA adapter attributed to the Edge GPU pid), which is direct evidence of NVDEC use, not of which codec path.
+
+### gravitymark_vk (diagnosed: never finishes natively; not slowness; cause unknown)
+- 20000 asteroids, 1230 s budget: still running at the end; CPU time 84 s per 90 s sampled (about one core busy), working set steady at ~520 MB, 20-25 threads,
+  `Responding` True, GPU 71-92 % util, 2.1 GB, 2640 MHz, 82-91 W, no output, no image (`gravitymark_vk_diag/process_samples_1230s_run.txt`). The D3D11/D3D12/GL
+  GravityMark runs with the same flags end in 177-204 s.
+- 3000 asteroids, 400 s: TIMEOUT too. Two direct variants (`-vk`, with and without `-benchmark`, 1000 asteroids, `-close 1`, 150 s each): still running, ~0.9 core CPU, no image.
+- **Measured:** it keeps the GPU busy and does not finish in 20 min whatever the load. **Inferred:** a benchmark loop that never reaches its end condition
+  (the Vulkan path or its present on this box); not proven, since in-window frames cannot be screenshotted (`CopyFromScreen` is white for D3D/Vulkan). The kayfabe comparison should
+  treat `gravitymark_vk` as "no native reference" (compare the D3D11/D3D12/GL GravityMark only), and `vkcube`/`vkpeak`/`vulkan_video_decode` as the native Vulkan references (all PASS).
+
+### Other lane fixes this session (all in git)
+- `kf_run_app.ps1`: Edge pids sampled for `edge_*` (above). `gen_apps.py`: `dxva2_h264` `session="interactive"` (in session 0 ffmpeg: `Failed to create Direct3D device`,
+  rc -1313558101; interactive PASS with VideoDecode 36 %); `apps.json` and the design-doc tables regenerated, `pytest scripts/bench/windows/appmatrix/tests` 67 passed.
+- New helpers in `native/`: `edge_probe.ps1`, `shorts_probe.ps1`, `click.ps1` (cursor click / SendKeys in the interactive session).
+- Environment traps measured: after the second Edge run the box's sshd accepted keys but closed every session ("closed by remote host", also for `cmd /c`) for >10 min;
+  `vastai reboot instance` recovered it (cause unknown; no TDR/WER seen in any run). The controller's root disk filled (2.6 GB free) during the first re-run (`OSError 28`): keep run dirs on /data.
+- Caveats for the comparison: 4-vCPU guest; `clpeak_*` ~1040-1180 s; 595.97 instead of 595.91; the matrix' own clock on the box is not UTC-aligned (boot times in the logs are off), use `session.log` times.
+
+## HANDOFF (first session; HISTORICAL, the box is destroyed)
 
 **Instance** `55209252` (vast, our own; account is shared: act on this id only). Rented 12:20 UTC, $0.2657/h (~$1.3 at 17:15). **Cap: about
 $6 or 8 h wall = destroy by 20:20 UTC at the latest.** Never print or store the vast API key or `instance_api_key`.
@@ -51,7 +98,7 @@ Nothing on the box is needed after the results are in git. Evidence is text/JSON
 **Password self-check** (owner's accidentally pasted string, never used, never written): worktree NO, controller scratch NO, cloned reference
 repo NO, git history NO, files on the box NO.
 
-### Ranked open items and next step for each
+### Ranked open items and next step for each (SUPERSEDED by FINAL RESULTS above: items 1-3 are done except gravitymark_vk, which never finishes; phase-2 isolation was not exercised)
 1. **`edge_webgl`, `edge_webgl_headless`, `edge_webgpu`, `edge_video_h264`** (all FAIL: "no result posted"). Edge starts and shows the page URL
    but sits on "Loading...". Cause found and fixed in git, **not yet re-run**: `kf_edge.ps1` re-issued `BeginGetContext` after every 1 s timeout,
    orphaning the pending operation that then received Edge's first request (falsifier: after the fix the page loads and posts; if not, test Edge
@@ -63,7 +110,7 @@ repo NO, git history NO, files on the box NO.
    stability, `furmark_*` bench runtimes, per-app digests compare (`PASS*`).
 4. Kayfabe comparison caveats: runtimes below are on a 4-vCPU guest; `clpeak_*` need ~1040-1180 s here (new budget 1500 s).
 
-## Results (merged: `t1a` first full run, `t1b` re-run of the 20 apps that needed a fix; later wins; all re-judged with the current verdict.py)
+## Results of the first session (SUPERSEDED by FINAL RESULTS above; kept for the record; merged: `t1a` first full run, `t1b` re-run of the 20 apps that needed a fix; later wins; all re-judged with the current verdict.py)
 
 Counts, tier 1 (83 apps): **PASS 78, FAIL 4, TIMEOUT 1** (`results.md` has the per-category and per-app tables, `results.tsv` the machine form with
 per-app seconds, proof, GPU engine peaks, nvlddmkm/153 events; `apps/ID.json|log`, `verdict/ID.json`, `screenshots/`). Sum of per-app runtimes 4706 s

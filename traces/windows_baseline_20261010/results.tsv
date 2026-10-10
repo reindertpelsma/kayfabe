@@ -19,14 +19,17 @@ deviceQuery_demo	cuda-demo	1	low	service	PASS	3	0	out		0	0	0	0	t1a
 driver_status	probe	1	low	service	PASS	4	0	out		0	0	0	0	t1a	
 dxdiag_report	probe	1	medium	service	PASS	88	0	out		0	0	0	0	t1a	
 dxgi_adapters	probe	1	low	service	PASS	3	0	out		0	0	0	0	t1a	
-dxprobe_d3d11	d3d	1	high	service	PASS	5	0	out		0	0	0	0	t1b	
-dxprobe_d3d12	d3d	1	high	service	PASS	4	0	out		0	0	0	0	t1a	
-edge_video_h264	video	1	high	interactive	FAIL	85	1	none:pdh:VideoDecode		2	0	0	0	t1b	rc=1,success-string-missing,no-gpu-proof
-edge_webgl	browser	1	high	interactive	FAIL	78	1	none:out,pdh:3D|Compute|Copy		3	0	0	0	t1b	rc=1,success-string-missing,no-gpu-proof
-edge_webgl_headless	browser	1	medium	interactive	FAIL	75	1	none:out,pdh:3D|Compute|Copy		2	0	0	0	t1b	rc=1,success-string-missing,no-gpu-proof
-edge_webgpu	browser	1	high	interactive	FAIL	78	1	none:out,pdh:Compute|3D|Copy		3	0	0	0	t1b	rc=1,success-string-missing,no-gpu-proof
+dxprobe_d3d11	d3d	1	high	service	PASS	5	0	out		0	0	0	0	fixes	
+dxprobe_d3d12	d3d	1	high	service	PASS	5	0	out		0	0	0	0	fixes	
+dxva2_h264	video	2	high	interactive	PASS	87	0	pdh:videodecode,smi	3d=21,videodecode=36	34	0	0	0	fixes	
+edge_video_h264	video	1	high	interactive	PASS	23	0	pdh:videodecode	3d=1,videodecode=4	6	0	0	0	edge3	
+edge_video_vp9	video	2	high	interactive	PASS	24	0	pdh:videodecode	videodecode=2	5	0	0	0	t23	
+edge_webgl	browser	1	high	interactive	PASS	24	0	out,pdh:3d	3d=3	5	0	0	0	edge3	
+edge_webgl_headless	browser	1	medium	interactive	PASS	16	0	out		5	0	0	0	edge2	
+edge_webgpu	browser	1	high	interactive	PASS	23	0	out,pdh:3d	3d=1	8	0	0	0	edge3	
 fft_t	cuda-equiv	1	low	service	PASS	7	0	out		0	0	0	0	t1a	
 furmark_gl_bench	opengl	1	high	interactive	PASS	27	0	out,pdh:3d	3d=52	100	0	0	0	t1a	
+furmark_gl_stress	stress	2	high	interactive	PASS	66	0	pdh:3d	3d=54	100	0	0	0	t23	
 furmark_glinfo	opengl	1	medium	interactive	PASS	7	0	out		0	0	0	0	t1b	
 furmark_knot_gl	opengl	1	high	interactive	PASS	27	0	out,pdh:3d	3d=55	100	0	0	0	t1a	
 furmark_vk_bench	vulkan	1	high	interactive	PASS	27	0	out,pdh:3d	3d=98	100	0	0	0	t1a	
@@ -34,12 +37,21 @@ furmark_vkinfo	vulkan	1	medium	interactive	PASS	4	0	out		0	0	0	0	t1b
 fwt_t	cuda-equiv	1	low	service	PASS	7	0	out		0	0	0	0	t1a	
 glgears_wgl	opengl	1	high	interactive	PASS	14	0	out,pdh:3d	3d=2	10	0	0	0	t1a	
 gputest_fur	opengl	1	high	interactive	PASS	21	0	out,pdh:3d	3d=49	68	0	0	0	t1a	
+gputest_gi	opengl	2	high	interactive	PASS	18	0	out,pdh:3d	3d=52	100	0	0	0	t23	
+gputest_pixmark_piano	opengl	2	high	interactive	PASS	19	0	out,pdh:3d	3d=2	100	0	0	0	t23	
+gputest_plot3d	opengl	2	high	interactive	PASS	20	0	out,pdh:3d	3d=32	40	0	0	0	t23	
+gputest_tess	opengl	2	high	interactive	PASS	20	0	out,pdh:3d	3d=33	66	0	0	0	t23	
 gputest_triangle	opengl	1	high	interactive	PASS	17	0	out,pdh:3d	3d=1	21	0	0	0	t1a	
 graphs_t	cuda-equiv	1	low	service	PASS	7	0	out		0	0	0	0	t1a	
 gravitymark_d3d11	d3d	1	high	interactive	PASS	204	0	pdh:3d+copy	3d=51,copy=5	47	0	0	0	t1a	
 gravitymark_d3d12	d3d	1	high	interactive	PASS	184	0	pdh:3d	3d=100	99	0	0	0	t1a	
-gravitymark_vk	vulkan	1	high	interactive	TIMEOUT	604	124	-	3d=48,copy=14	96	0	0	0	t1b	KFWAIT gravitymark_vk STILL_RUNNING_AFTER 600 s
+gravitymark_d3d12_raster	d3d	2	high	interactive	PASS	177	0	pdh:3d	3d=100	99	0	0	0	t23	
+gravitymark_d3d12_rt	d3d	3	high	interactive	PASS	178	0	pdh:3d	3d=100	99	0	0	0	t23	
+gravitymark_gl	opengl	2	high	interactive	PASS	187	0	pdh:3d+copy	3d=91,copy=3	98	0	0	0	t23	
+gravitymark_vk	vulkan	1	high	interactive	TIMEOUT	1234	124	-	3d=49,copy=16	96	0	0	0	gmvk	KFWAIT gravitymark_vk STILL_RUNNING_AFTER 1230 s
 hashcat	crypto	1	medium	service	PASS	22	0	out		0	0	0	0	t1b	warn:Watchdog: Temperature abort trigger set to 90c
+heaven_d3d11	d3d	2	high	interactive	PASS	50	0	pdh:3d	3d=46	48	0	0	0	t23	
+heaven_opengl	opengl	2	high	interactive	PASS	49	0	pdh:3d	3d=38	41	0	0	0	t23	
 hist_t	cuda-equiv	1	low	service	PASS	6	0	out		0	0	0	0	t1a	
 llama_cuda_bench	llm	1	high	service	PASS	81	0	out		0	0	0	0	t1a	
 llama_cuda_gen	llm	1	high	service	PASS	13	0	out		0	0	0	0	t1b	
@@ -62,6 +74,7 @@ ort_directml	d3d	1	high	service	PASS	9	0	out		0	0	0	0	t1a
 randomFog_demo	cuda-demo	1	high	interactive	PASS	29	0	pdh:3d	3d=24	50	0	0	0	t1a	
 reduce_t	cuda-equiv	1	medium	service	PASS	7	0	out		0	0	0	0	t1a	
 rng_t	cuda-equiv	1	low	service	PASS	7	0	out		0	0	0	0	t1a	
+scale_cuda_nvenc	video	2	high	service	PASS	21	0	pdh:videodecode+videoencode,smi	3d=662,videodecode=29,videoencode=14	1	0	0	0	t23	
 scan_t	cuda-equiv	1	low	service	PASS	7	0	out		0	0	0	0	t1a	
 sort_t	cuda-equiv	1	low	service	PASS	7	0	out		0	0	0	0	t1a	
 stream_created2nd_t	stream-probe	1	low	service	PASS	7	0	out		0	0	0	0	t1a	
@@ -78,7 +91,11 @@ torch_burn	stress	1	high	service	PASS	67	0	out,pdh:3d,smi	3d=156	99	0	0	0	t1b	wa
 torch_correct	torch	1	medium	service	PASS	11	0	out		13	0	0	0	t1a	
 transpose_t	cuda-equiv	1	medium	service	PASS	7	0	out		0	0	0	0	t1a	
 triad_t	cuda-equiv	1	medium	service	PASS	6	0	out		0	0	0	0	t1a	
+valley_d3d11	d3d	2	high	interactive	PASS	50	0	pdh:3d	3d=47	40	0	0	0	t23	
+valley_opengl	opengl	2	high	interactive	PASS	49	0	pdh:3d	3d=43	46	0	0	0	t23	
 vectorAdd_demo	cuda-demo	1	low	service	PASS	4	0	smi		0	0	0	0	t1a	
+vkcube	vulkan	2	high	interactive	PASS	53	0	pdh:3d	3d=1	5	0	0	0	t23	
 vkpeak	vulkan	1	high	service	PASS	136	0	out,pdh:3d	3d=255	100	0	0	0	t1a	warn:System.Management.Automation.RemoteException
+vulkan_video_decode	video	3	high	service	PASS	42	0	pdh:videodecode,smi	copy=21,videodecode=61	1	0	0	0	t23	
 vulkaninfo	vulkan	1	low	service	PASS	4	0	out		0	0	0	0	t1a	warn:WARNING: [Loader Message] Code 0 : windows_read_data_files_in_registry: Registry lookup failed to get layer manifest files.
 zerocopy_t	cuda-equiv	1	medium	service	PASS	7	0	out		0	0	0	0	t1a	

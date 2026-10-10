@@ -315,7 +315,8 @@ app("d3d11va_h264", "video", dec("'-hwaccel', 'd3d11va', '-hwaccel_output_format
     pkgs=("ffmpeg", "vc_redist"), fail_rx=r"^CHECK .*FAIL|Failed setup for format|DECODE_PREP_FAIL|hwaccel initialisation returned error",
     note="the DXVA2/D3D11 video-decode API path (what Edge, Media Foundation and VLC use); the Linux matrix has no counterpart")
 app("dxva2_h264", "video", dec("'-hwaccel', 'dxva2'", "dxva2", ""), r"frame= *18000 ", 180, 20, ["pdh:VideoDecode", "smi"], *W_VIDEO, pkgs=("ffmpeg", "vc_redist"),
-    fail_rx=r"^CHECK .*FAIL|Failed setup for format|DECODE_PREP_FAIL|hwaccel initialisation returned error", tier=2)
+    fail_rx=r"^CHECK .*FAIL|Failed setup for format|DECODE_PREP_FAIL|hwaccel initialisation returned error", tier=2,
+    session="interactive")  # native baseline: DXVA2 needs a D3D9 device on a desktop; in session 0 ffmpeg "Failed to create Direct3D device" (rc -1313558101), interactive PASSes
 app("scale_cuda_nvenc", "video", FF + rf"""Invoke-KfExe -Exe $ff -ArgList @('-y', '-hide_banner', '-nostats', '-f', 'lavfi', '-i', '{SRC}', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', "$OUT\x264.mp4")
 Invoke-KfExe -Exe $ff -ArgList @('-y', '-hide_banner', '-nostats', '-hwaccel', 'cuda', '-hwaccel_output_format', 'cuda', '-i', "$OUT\x264.mp4", '-vf', 'scale_cuda=640:360', '-c:v', 'h264_nvenc', "$OUT\scaled.mp4")
 $rc = $global:KfRc

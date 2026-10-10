@@ -1,12 +1,12 @@
 {
- "verdict": "FAIL",
- "rc": 1,
- "secs": 78,
- "quiet": 0,
- "note": "rc=1,success-string-missing,no-gpu-proof",
- "proof": "none:out,pdh:Compute|3D|Copy",
+ "verdict": "PASS",
+ "rc": 0,
+ "secs": 23,
+ "quiet": 2,
+ "note": "",
+ "proof": "out,pdh:3d",
  "tdr": 0,
  "wer": 0,
  "rebooted": false,
- "run": "t1b"
+ "run": "edge3"
 }

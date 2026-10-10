@@ -1,35 +1,63 @@
 {
- "quiet": 0,
- "end_utc": "2026-10-10T16:49:10.0466013Z",
- "start_utc": "2026-10-10T16:47:52.4708365Z",
- "rc": 1,
- "secs": 78,
+ "quiet": 2,
+ "end_utc": "2026-10-11T00:46:18.5565968Z",
+ "start_utc": "2026-10-11T00:45:55.6714301Z",
+ "rc": 0,
+ "secs": 23,
  "gpu_devices": [
   "NVIDIA GeForce RTX 4060 Ti status=OK code=0"
  ],
  "digests": [],
  "session": 1,
- "out_files": [],
- "boot_utc_start": "2026-10-10T15:50:57.5000000Z",
+ "out_files": [
+  "C:\\kf\\out\\edge_webgpu\\edge_result.json 162"
+ ],
+ "boot_utc_start": "2026-10-11T00:42:27.5000000Z",
  "log_tail": [
-  "=== edge_webgpu start=2026-10-10T09:47:52.4708365-07:00 host=DESKTOP-397P3NI session=1 boot=2026-10-10T15:50:57.5000000Z timeout=150",
-  "KFEDGE {\"ok\":false,\"why\":\"no result posted before the deadline\"}",
-  "=== end rc=1 secs=78 2026-10-10T09:49:10.0466013-07:00"
+  "=== edge_webgpu start=2026-10-10T17:45:55.6714301-07:00 host=DESKTOP-397P3NI session=1 boot=2026-10-11T00:42:27.5000000Z timeout=150",
+  "KFEDGE {\"page\":\"webgpu\",\"ok\":true,\"vendor\":\"nvidia\",\"architecture\":\"lovelace\",\"description\":\"\",\"device_name\":\"\",\"fallback\":false,\"frames\":632,\"bad\":0,\"secs\":12.005}",
+  "=== end rc=0 secs=23 2026-10-10T17:46:18.5565968-07:00"
  ],
  "pdh": {
   "pids": [
-   "1524",
-   "3328",
-   "7492"
+   "3748",
+   "1744",
+   "476",
+   "7756",
+   "6296",
+   "8348",
+   "8392",
+   "8292",
+   "8872",
+   "8448",
+   "1528",
+   "1960",
+   "9096",
+   "6752",
+   "5068",
+   "1484",
+   "4812",
+   "7252",
+   "6384",
+   "5760"
   ],
-  "nv": {},
-  "samples": 35,
+  "nv": {
+   "security": 0,
+   "3d": 1.29594052843545,
+   "vr": 0,
+   "videodecode": 0,
+   "copy": 0.013273843041652666,
+   "ofa_0": 0,
+   "legacyoverlay": 0,
+   "videoencode": 0
+  },
+  "samples": 10,
   "other": {},
-  "nvidia_luids": "0_6040"
+  "nvidia_luids": "0_6bdf"
  },
  "timed_out": false,
- "token": "g1-edge_webgpu-1791650858",
- "boot_utc_end": "2026-10-10T15:50:57.5000000Z",
+ "token": "g1-edge_webgpu-1791654342",
+ "boot_utc_end": "2026-10-11T00:42:27.5000000Z",
  "events": {
   "kernel_power_41": 0,
   "bugcheck": 0,
@@ -43,9 +71,9 @@
  },
  "app": "edge_webgpu",
  "smi": {
-  "samples": 13,
+  "samples": 4,
   "mem_used_base_mb": 125,
-  "util_max": 3,
-  "mem_used_max_mb": 166
+  "util_max": 8,
+  "mem_used_max_mb": 190
  }
 }

@@ -1,0 +1,11 @@
+app	first_verdict	first_secs	second_verdict	second_secs	proof_first	proof_second
+nvenc_av1	PASS	7	PASS	7	pdh:videoencode,smi	pdh:videoencode,smi
+gputest_triangle	PASS	17	PASS	18	out,pdh:3d	out,pdh:3d
+cup2_ladder	PASS	4	PASS	5	out	out
+hist_t	PASS	6	PASS	16	out	out
+nbody_t	PASS	7	PASS	7	out	out
+randomFog_demo	PASS	29	PASS	29	pdh:3d	pdh:3d
+nbody_demo_gl	PASS	30	PASS	31	pdh:3d	pdh:3d
+nvenc_h264	PASS	7	PASS	7	pdh:videoencode,smi	pdh:videoencode,smi
+vectorAdd_demo	PASS	4	PASS	3	smi	smi
+furmark_glinfo	PASS	7	PASS	5	out	out

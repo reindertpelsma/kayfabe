@@ -1,35 +1,35 @@
 {
  "quiet": 2,
- "end_utc": "2026-10-10T16:47:03.7505181Z",
- "start_utc": "2026-10-10T16:45:49.1829108Z",
- "rc": 1,
- "secs": 75,
+ "end_utc": "2026-10-10T17:32:07.1296551Z",
+ "start_utc": "2026-10-10T17:31:50.7111061Z",
+ "rc": 0,
+ "secs": 16,
  "gpu_devices": [
   "NVIDIA GeForce RTX 4060 Ti status=OK code=0"
  ],
  "digests": [],
  "session": 1,
- "out_files": [],
+ "out_files": [
+  "C:\\kf\\out\\edge_webgl_headless\\edge_result.json 345"
+ ],
  "boot_utc_start": "2026-10-10T15:50:57.5000000Z",
  "log_tail": [
-  "=== edge_webgl_headless start=2026-10-10T09:45:49.1829108-07:00 host=DESKTOP-397P3NI session=1 boot=2026-10-10T15:50:57.5000000Z timeout=150",
-  "KFEDGE {\"ok\":false,\"why\":\"no result posted before the deadline\"}",
-  "=== end rc=1 secs=75 2026-10-10T09:47:03.7505181-07:00"
+  "=== edge_webgl_headless start=2026-10-10T10:31:50.7111061-07:00 host=DESKTOP-397P3NI session=1 boot=2026-10-10T15:50:57.5000000Z timeout=150",
+  "KFEDGE {\"page\":\"webgl\",\"ok\":true,\"api\":\"webgl2\",\"vendor\":\"Google Inc. (NVIDIA)\",\"renderer\":\"ANGLE (NVIDIA, NVIDIA GeForce RTX 4060 Ti (0x00002803) Direct3D11 vs_5_0 ps_5_0, D3D11)\",\"version\":\"WebGL 2.0 (OpenGL ES 3.0 Chromium)\",\"pixel\":[64,127,191,255],\"pixel_ok\":true,\"frames\":436,\"secs\":8.009,\"fps\":54.438756399051066,\"glerr\":0,\"software\":false}",
+  "=== end rc=0 secs=16 2026-10-10T10:32:07.1296551-07:00"
  ],
  "pdh": {
   "pids": [
-   "8872",
-   "8928",
-   "4532",
-   "8208"
+   "2236",
+   "9140"
   ],
   "nv": {},
-  "samples": 34,
+  "samples": 7,
   "other": {},
   "nvidia_luids": "0_6040"
  },
  "timed_out": false,
- "token": "g1-edge_webgl_headless-1791650735",
+ "token": "g1-edge_webgl_headless-1791653496",
  "boot_utc_end": "2026-10-10T15:50:57.5000000Z",
  "events": {
   "kernel_power_41": 0,
@@ -44,9 +44,9 @@
  },
  "app": "edge_webgl_headless",
  "smi": {
-  "samples": 12,
-  "mem_used_base_mb": 125,
-  "util_max": 2,
-  "mem_used_max_mb": 158
+  "samples": 3,
+  "mem_used_base_mb": 133,
+  "util_max": 5,
+  "mem_used_max_mb": 180
  }
 }

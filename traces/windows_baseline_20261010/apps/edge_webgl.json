@@ -1,34 +1,61 @@
 {
  "quiet": 2,
- "end_utc": "2026-10-10T16:44:59.8179208Z",
- "start_utc": "2026-10-10T16:43:41.9804336Z",
- "rc": 1,
- "secs": 78,
+ "end_utc": "2026-10-11T00:45:14.7315805Z",
+ "start_utc": "2026-10-11T00:44:50.6636286Z",
+ "rc": 0,
+ "secs": 24,
  "gpu_devices": [
   "NVIDIA GeForce RTX 4060 Ti status=OK code=0"
  ],
  "digests": [],
  "session": 1,
- "out_files": [],
- "boot_utc_start": "2026-10-10T15:50:57.5000000Z",
+ "out_files": [
+  "C:\\kf\\out\\edge_webgl\\edge_result.json 346"
+ ],
+ "boot_utc_start": "2026-10-11T00:42:27.5000000Z",
  "log_tail": [
-  "=== edge_webgl start=2026-10-10T09:43:41.9804336-07:00 host=DESKTOP-397P3NI session=1 boot=2026-10-10T15:50:57.5000000Z timeout=150",
-  "KFEDGE {\"ok\":false,\"why\":\"no result posted before the deadline\"}",
-  "=== end rc=1 secs=78 2026-10-10T09:44:59.8179208-07:00"
+  "=== edge_webgl start=2026-10-10T17:44:50.6636286-07:00 host=DESKTOP-397P3NI session=1 boot=2026-10-11T00:42:27.5000000Z timeout=150",
+  "KFEDGE {\"page\":\"webgl\",\"ok\":true,\"api\":\"webgl2\",\"vendor\":\"Google Inc. (NVIDIA)\",\"renderer\":\"ANGLE (NVIDIA, NVIDIA GeForce RTX 4060 Ti (0x00002803) Direct3D11 vs_5_0 ps_5_0, D3D11)\",\"version\":\"WebGL 2.0 (OpenGL ES 3.0 Chromium)\",\"pixel\":[64,127,191,255],\"pixel_ok\":true,\"frames\":651,\"secs\":12.017,\"fps\":54.173254556045606,\"glerr\":0,\"software\":false}",
+  "=== end rc=0 secs=24 2026-10-10T17:45:14.7315805-07:00"
  ],
  "pdh": {
   "pids": [
-   "9480",
-   "9504"
+   "1208",
+   "6948",
+   "3292",
+   "7496",
+   "2904",
+   "8720",
+   "3812",
+   "744",
+   "7144",
+   "8464",
+   "7732",
+   "7760",
+   "7440",
+   "6784",
+   "7516",
+   "4760",
+   "2460",
+   "9108"
   ],
-  "nv": {},
-  "samples": 35,
+  "nv": {
+   "security": 0,
+   "3d": 3.1407081137458612,
+   "vr": 0,
+   "videodecode": 0,
+   "copy": 0.013732661768717116,
+   "ofa_0": 0,
+   "legacyoverlay": 0,
+   "videoencode": 0
+  },
+  "samples": 9,
   "other": {},
-  "nvidia_luids": "0_6040"
+  "nvidia_luids": "0_6bdf"
  },
  "timed_out": false,
- "token": "g1-edge_webgl-1791650608",
- "boot_utc_end": "2026-10-10T15:50:57.5000000Z",
+ "token": "g1-edge_webgl-1791654275",
+ "boot_utc_end": "2026-10-11T00:42:27.5000000Z",
  "events": {
   "kernel_power_41": 0,
   "bugcheck": 0,
@@ -42,9 +69,9 @@
  },
  "app": "edge_webgl",
  "smi": {
-  "samples": 13,
-  "mem_used_base_mb": 125,
-  "util_max": 3,
-  "mem_used_max_mb": 154
+  "samples": 4,
+  "mem_used_base_mb": 118,
+  "util_max": 5,
+  "mem_used_max_mb": 173
  }
 }

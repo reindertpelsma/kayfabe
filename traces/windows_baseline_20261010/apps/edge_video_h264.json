@@ -1,36 +1,63 @@
 {
  "quiet": 0,
- "end_utc": "2026-10-10T16:42:54.3582850Z",
- "start_utc": "2026-10-10T16:41:29.6398169Z",
- "rc": 1,
- "secs": 85,
+ "end_utc": "2026-10-11T00:47:27.5688302Z",
+ "start_utc": "2026-10-11T00:47:04.0748280Z",
+ "rc": 0,
+ "secs": 23,
  "gpu_devices": [
   "NVIDIA GeForce RTX 4060 Ti status=OK code=0"
  ],
  "digests": [],
  "session": 1,
- "out_files": [],
- "boot_utc_start": "2026-10-10T15:50:57.5000000Z",
+ "out_files": [
+  "C:\\kf\\out\\edge_video_h264\\edge_result.json 248"
+ ],
+ "boot_utc_start": "2026-10-11T00:42:27.5000000Z",
  "log_tail": [
-  "=== edge_video_h264 start=2026-10-10T09:41:29.6398169-07:00 host=DESKTOP-397P3NI session=1 boot=2026-10-10T15:50:57.5000000Z timeout=180",
-  "KFEDGE {\"ok\":false,\"why\":\"no result posted before the deadline\"}",
-  "=== end rc=1 secs=85 2026-10-10T09:42:54.3582850-07:00"
+  "=== edge_video_h264 start=2026-10-10T17:47:04.0748280-07:00 host=DESKTOP-397P3NI session=1 boot=2026-10-11T00:42:27.5000000Z timeout=180",
+  "KFEDGE {\"page\":\"video\",\"src\":\"/media/t_h264.mp4\",\"ok\":true,\"can_play\":\"probably\",\"mc_supported\":true,\"mc_smooth\":true,\"mc_power_efficient\":true,\"wall_s\":15.006,\"played_s\":15.006,\"total_frames\":456,\"dropped_frames\":44,\"decoded_w\":1280,\"decoded_h\":720}",
+  "=== end rc=0 secs=23 2026-10-10T17:47:27.5688302-07:00"
  ],
  "pdh": {
   "pids": [
-   "3696",
-   "7796",
-   "3584",
-   "7012"
+   "7312",
+   "2224",
+   "8940",
+   "7828",
+   "7308",
+   "2904",
+   "8792",
+   "8516",
+   "8660",
+   "3176",
+   "5696",
+   "3128",
+   "7148",
+   "8884",
+   "2616",
+   "8252",
+   "4176",
+   "4268",
+   "8472",
+   "9208"
   ],
-  "nv": {},
-  "samples": 38,
+  "nv": {
+   "security": 0,
+   "3d": 0.5103907360414037,
+   "vr": 0,
+   "videodecode": 3.889969250663329,
+   "copy": 0.14106633930012863,
+   "ofa_0": 0,
+   "legacyoverlay": 0,
+   "videoencode": 0
+  },
+  "samples": 10,
   "other": {},
-  "nvidia_luids": "0_6040"
+  "nvidia_luids": "0_6bdf"
  },
  "timed_out": false,
- "token": "g1-edge_video_h264-1791650475",
- "boot_utc_end": "2026-10-10T15:50:57.5000000Z",
+ "token": "g1-edge_video_h264-1791654407",
+ "boot_utc_end": "2026-10-11T00:42:27.5000000Z",
  "events": {
   "kernel_power_41": 0,
   "bugcheck": 0,
@@ -44,9 +71,9 @@
  },
  "app": "edge_video_h264",
  "smi": {
-  "samples": 14,
-  "mem_used_base_mb": 115,
-  "util_max": 2,
-  "mem_used_max_mb": 156
+  "samples": 4,
+  "mem_used_base_mb": 125,
+  "util_max": 6,
+  "mem_used_max_mb": 171
  }
 }

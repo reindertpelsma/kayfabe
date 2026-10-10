@@ -1,0 +1,6 @@
+=== gputest_gi start=2026-10-10T18:18:02.2839046-07:00 host=DESKTOP-397P3NI session=1 boot=2026-10-11T00:42:27.5000000Z timeout=100
+KFWAIT gputest_gi EXITED rc=0
+GPUTEST 2026/10/10@18:18:04(0000000002) < > GpuTest: Cross Platform Graphics Benchmark Utility
+GPUTEST 2026/10/10@18:18:05(0000000027) < > GiMark - OpenGL - Renderer model: NVIDIA GeForce RTX 4060 Ti/PCIe/SSE2
+GPUTEST 2026/10/10@18:18:19(0000000032) < > [Benchmark_Score] - module: GiMark - Score: 2811 points (1028x720 windowed, duration:10000 ms).
+=== end rc=0 secs=18 2026-10-10T18:18:20.7338543-07:00
