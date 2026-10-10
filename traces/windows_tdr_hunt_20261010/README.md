@@ -219,3 +219,17 @@ copies started/done), `FLIP-SLOW` for every update > 50 ms commit-to-complete (w
 **H-L:** the flip the guest queues about 2 s before its first TDR is committed (UPDATE reached the engine) but its completion (notifier / release / GET) is delivered late because it waits behind the console copy (no free broker slot / slot not released),
 or it waits on an acquire / has no window to latch. **Falsifier:** around the first TDR (5-9 s after the sign-in keys) every committed update completes < 50 ms after commit (no `FLIP-SLOW`) and every queued completion is delivered < 50 ms after it was queued (no
 `FLIP-QUEUED-LAG`); then the answer path is exonerated and the hunt returns to the paging/user-queue completions.
+
+### Run 273 result (H-L): the display answer path is EXONERATED for that TDR (binary 735b352e, production + `KF3_COMPLETION_PROBE`)
+`FLIP-LEDGER`, the whole run: window 0 (ch1) 367 UPDATEs committed / 367 completed (slowest 17 ms), window-imm (ch33) 355/355 (max 0 ms), core (ch0) 39/39 (max 0 ms), acquire-blocked 0, `FLIP-SLOW` 0, `FLIP-QUEUED-LAG` 0, every queued completion
+delivered within 1 ms (`max_wait=1ms`), console copies started == done. The two TDRs of this run (nvlddmkm 153 at 10:58:09.5 and 10:58:14.5, mem t=18.3 / 23.3 s: BOOT-time, before any sign-in) happened with the display engine at
+`pend 0 ms` on every channel (ledger lines 2 s apart before and after). So: no unanswered flip, no flip held behind the broker's frame slots (the broker reclaims of 1-4 s exist: 9 in this run, none delayed a completion), no acquire waits.
+Third cycle at t=55.8 s (the sign-in) has no nvlddmkm event (an ordinary driver restart); none after it in 240 s. [measured]
+=> The flip the guest's VidSch times out on is not waiting for kayfabe's display answer. It waits on its own dependency (the render/device packets pending in run 269; the paging batch in 271) — consistent with the owner's "dependency not done". **Falsifier of H-L met: H-L refuted** for this run.
+Note: TDR timing varies run to run: first TDR at BOOT (t=18 s: 265, 272-cycle, 273) or 5 s after the sign-in (263, 264, 266-271).
+
+### Run 274 — interrupt-delivery state at the TDR (coordinator step 2; written before the run)
+Binary 735b352e. Flags: production + `KF3_COMPLETION_PROBE=1500` (IRQ-RING) + `KF3_DISPLAY_WRITE_TRACE=1` (the last VSync ack = the declaration time) + the LAPIC sampler from the QGA answer (every ~0.3 s: per-vCPU IRR/ISR/TPR/PPR, RFLAGS.IF/HLT, the
+device's MSI-X table + PBA, eventfd counts). Decision tree (coordinator): vector in IRR but undelivered with IF=1 -> guest/LAPIC state; vector never in IRR while the ring shows raises -> our delivery path (MSI-X mask/PBA, irqfd routing,
+coalescing, NotArmed drop); vector in ISR never EOI'd -> guest ISR stuck / level semantics. **Hypothesis H-I:** during the ~2 s BEFORE the declaration, the CE2/CE3/GR/display vector is raised by kayfabe (ring: `res=0` messages) while no vCPU's IRR/ISR ever holds
+vector 0x62 for a stale packet's completion, i.e. the eventfd/irqfd path loses or coalesces them (eventfd count > 0 or PBA bit set at the stall). **Falsifier:** the vector shows in IRR/ISR and is serviced (ISR/EOI cycles) throughout the 2 s window.

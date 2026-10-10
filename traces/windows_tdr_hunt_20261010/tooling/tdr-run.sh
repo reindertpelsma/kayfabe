@@ -120,6 +120,11 @@ if [ "$TA" != 0 ] && alive; then
   fi
   G qga-exec net.exe user vast $PW >/dev/null 2>&1; L "password set rc=$?"
   gps guest-pre.txt '"utc now: " + (Get-Date).ToUniversalTime().ToString("o"); $gd="HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers"; "GraphicsDrivers: " + ((Get-ItemProperty $gd | Select-Object * -ExcludeProperty PS* | Out-String).Trim())'
+  if [ "${SAMPLER:-0}" = 1 ]; then
+    ( python3 $W/tdrhunt/irq_sampler.py $RUN/qmp.sock $QPID $O/irq-samples.txt $O/.sampler_stop ${SAMPLER_PERIOD:-0.25} 8 &
+      SP=$!; while alive && [ ! -e $O/.signin_done ]; do sleep 0.2; done
+      C0=$(ncyc); while alive && [ "$(ncyc)" -le "$C0" ]; do sleep 0.2; done; sleep ${SAMPLER_AFTER:-3}; touch $O/.sampler_stop; wait $SP ) &
+  fi
   while alive && [ $(( $(date +%s) - TA )) -lt ${SIGNIN_DELAY:-30} ]; do sleep 1; done
   if alive; then
     shot pre-signin
@@ -128,11 +133,8 @@ if [ "$TA" != 0 ] && alive; then
     for c in k f s i g n 7; do key $c; done; key ret
     L "SIGNIN sent"
     [ "${STALLDUMP:-0}" = 1 ] && { stall_watch & }
-    if [ "${SAMPLER:-0}" = 1 ]; then
-      ( python3 $W/tdrhunt/irq_sampler.py $RUN/qmp.sock $QPID $O/irq-samples.txt $O/.sampler_stop ${SAMPLER_PERIOD:-0.25} 8 &
-        SP=$!; C0=$(ncyc); while alive && [ "$(ncyc)" -le "$C0" ]; do sleep 0.2; done; sleep ${SAMPLER_AFTER:-3}; touch $O/.sampler_stop; wait $SP ) &
-    fi
-    if [ "${ETW:-0}" = 1 ]; then
+    touch $O/.signin_done
+   if [ "${ETW:-0}" = 1 ]; then
       ( C0=$(ncyc); while alive && [ "$(ncyc)" -le "$C0" ]; do sleep 0.3; done
         alive && { touch $O/.etw_stopped; L "ETW stop (tdr_cycles=$(ncyc))"; GT=900 timeout 900 python3 $W/boundary-tools/qmp.py $RUN/qga.sock qga-exec powershell.exe -NoProfile -Command "$(cat $W/kayfabe-win-6fafcc6e/scripts/bench/windows/dxg_etw_stop_tail.ps1)" > $O/etw-stop.txt 2>&1; L "ETW stop rc=$? lines=$(wc -l < $O/etw-stop.txt)"; } ) &
     fi
