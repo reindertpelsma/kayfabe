@@ -88,7 +88,7 @@ enum Posture {
 fn posture(small: &[Answer]) -> Posture {
     let acc = small.iter().filter(|&&a| a == Answer::Accepted).count();
     let refused = small.iter().filter(|&&a| a == Answer::Refused).count();
-    if small.iter().any(|&a| a == Answer::Error) {
+    if small.contains(&Answer::Error) {
         Posture::Inconsistent
     } else if acc >= 4 {
         Posture::Expected
