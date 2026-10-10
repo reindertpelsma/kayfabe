@@ -625,3 +625,37 @@ sampled. It is not an engine write without a request; the guest itself re-used `
 * Product: no change is proposed yet. The default stays the old order with the flip-away release, which is hardware semantics per
   NVKMS. Latch-first, raise-delay, release-at-latch and window-BEGUN are diagnostics, off by default. The "publish, then raise owed
   interrupts" structure the owner specified is the intended product shape, once the post-latch state is right.
+
+### Coordinator question (a): the run-276 mapping hole — exact revision and Xid details
+* Binary **f7303e72**: this branch with `2540b547` merged, the FIRST fixed batched-map version. It contains none of the eight later
+  kf-mem review commits that integration has (`604a1826` .. `80b30741`: chunked steer claims, steer restores rows, steer hand-over
+  of the ctx range, StillReserved refusals, ...). **Whether the hole remains on the reviewed code (integration 6c51302b+) is NOT
+  measured by any run of mine.** Runs 277-284 used the eff1b692-era base (0 new Xid).
+* The Xids (host dmesg, `evidence/run276-held-by-host-and-xid.txt`), all `FAULT_PTE`:
+  * VA `0x4036000`: 5 of 8, engine `CE3_PBDMA0` / `HUBCLIENT_ESC`, channels `0x02000040`, `0x0200003d`, `0x0200004b`,
+    `0x02000041`, `0x0200003b`.
+  * VA `0x15bb2000`: `CE0` / `HUBCLIENT_CE1`, channel `0x36`.
+  * VA `0x1496c000`: `GR0_PBDMA0`, channel `0x42`.
+  * VA `0x1974b000`: `GRAPHICS GPC1 PE_3`, channel `0x3b`.
+* The kayfabe events before them, in qemu.log order:
+  * Several Passthrough CE twins are BORN with `gpfifo=0x4036000x8192` (lines 2977, 3629, 6868, 6911; tokens 0x1010, 0x1016,
+    0x1019, 0x101a).
+  * Then `kf-mem: HELD-BY-HOST guest row 0x4036000+0x10000 (ram=true) — host RM already maps that VA` (line 6966), and the same for
+    `0x4035000+0x1000`, `0x15bb2000`, `0x1496c000`, `0x9b580000`, `0x9b8a0000`, `0x15bb1000`, `0x15bb4000`.
+  * `PT-SNAP tok=0x1019 GP[0x0] @0x4036000: 0x4036000 not placed by us` (lines 7794, 8111).
+  * So the twin's GPFIFO VA is a guest leaf that kf-mem refused to map because host RM already holds that VA in the mirror space,
+    and the twin's PBDMA then fetches it.
+
+### Run 285 (written before the run): guest reads of the stuck flip's notifier (read-watchpoints)
+Binary dbbcb387. Flags: `KF3_DIAG_VBLANK_ORDER=latch-first`, `KF3_DIAG_WINDOW_NOTIFIER_BEGUN`, `KF3_DIAG_SLOT_HISTORY`, display write
+trace, BAR0 read trace (`WIN_TRACE=1`). Runner `tdr-run13.sh` with `RWATCH=1`. Host-only tooling: `tdropus/rwatch.py`,
+`revmap.py`, `gdbwatch.py`.
+* For each driver life, the first `SLOT REQ` names the window notifier page's guest PA.
+* `revmap.py` walks the guest's kernel page tables from a CPL-0 vCPU's CR3, reading guest RAM through QEMU's shared memfd (no VM
+  stop), and finds the kernel VA(s) of that page.
+* `gdbwatch.py` sets x86 access watchpoints through QEMU's gdbstub on slot `+0xf40` (the stuck flip: status+word1, then the
+  timestamp) and `+0xf80` (the previous one). It logs time, vCPU, pc, rsp, stack and the 16 bytes at every guest access.
+**H-W:** at the VSyncs after the stuck flip latches, the driver reads that slot (status and/or timestamp). The value and pc tell
+which word decides. **Falsifier:** no guest access to the slot between its latch and the TDR (other than the guest's own reset
+before the UPDATE). Then the decision does not read the notifier through these mappings, and the semaphore slot / other words are
+next.
