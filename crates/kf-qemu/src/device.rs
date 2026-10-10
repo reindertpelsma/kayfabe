@@ -1645,7 +1645,42 @@ impl Device {
         };
         eprintln!("kf3: PROBE on — completion probe, overdue after {ms} ms (KF3_COMPLETION_PROBE)");
         let overdue = std::time::Duration::from_millis(ms);
+        // ⚠ DIAGNOSTIC (2026-10-10, TDR hunt): every 100 ms, how far each relayed twin's guest-visible GP_GET trails
+        // the engine's; one summary line per 2 s. Measures whether the refresh (`KF3_RELAY_GET_REFRESH`) catches
+        // up independently of doorbells, over time rather than only at a twin's free.
+        let (mut ticks, mut samples, mut lagged, mut max_lag, mut stuck) = (0u32, 0u64, 0u64, 0u32, 0u64);
+        let mut streak: std::collections::HashMap<u32, u32> = std::collections::HashMap::new();
         while !self.stop.load(Ordering::Acquire) {
+            {
+                let s = self.chans.relay_lag_sample();
+                let mut now_lagged = 0u32;
+                let mut seen = std::collections::HashSet::new();
+                for (ht, lag) in &s {
+                    samples += 1;
+                    seen.insert(*ht);
+                    if *lag > 0 {
+                        lagged += 1;
+                        now_lagged += 1;
+                        max_lag = max_lag.max(*lag);
+                        let c = streak.entry(*ht).or_insert(0);
+                        *c += 1;
+                        if *c == 5 {
+                            stuck += 1; // lagging 5 samples (0.5 s) in a row
+                        }
+                    } else {
+                        streak.remove(ht);
+                    }
+                }
+                streak.retain(|k, _| seen.contains(k));
+                ticks += 1;
+                if ticks % 20 == 0 && !s.is_empty() {
+                    eprintln!(
+                        "kf3: RELAY-LAG t={:.3} relays={} lagged_now={now_lagged} | cumulative twin-samples={samples} lagged={lagged} max_lag_entries={max_lag} lagged_500ms_runs={stuck}",
+                        kf_mem::maplog::t(),
+                        s.len()
+                    );
+                }
+            }
             let lines = self.chans.probe_tick(overdue);
             if !lines.is_empty() {
                 for l in &lines {

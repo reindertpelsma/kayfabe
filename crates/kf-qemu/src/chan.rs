@@ -5072,6 +5072,37 @@ impl ChanPlane {
         (seen, stored)
     }
 
+    /// ⚠ DIAGNOSTIC (2026-10-10, TDR hunt; the completion probe's thread only, `KF3_COMPLETION_PROBE`): for every
+    /// live relayed twin, `(host token, entries the guest's slot trails the engine's GP_GET by)` — two 4-byte loads
+    /// per relay under `try_lock` (a relay a worker holds is skipped). Nothing stored, rung or waited for.
+    #[must_use]
+    pub fn relay_lag_sample(&self) -> Vec<(u32, u32)> {
+        let rs: Vec<_> = match self.relays.lock() {
+            Ok(m) => m.iter().map(|(k, v)| (*k, v.clone())).collect(),
+            Err(_) => return Vec::new(),
+        };
+        let mut out = Vec::with_capacity(rs.len());
+        for (ht, r) in rs {
+            let Ok(g) = r.try_lock() else { continue };
+            let mut io = RelayMem {
+                guest: &g.guest,
+                host: &g.host,
+                rm: self.rm,
+                token: g.chan.token,
+            };
+            use kf_chan::userd_relay::RelayIo;
+            let (Ok(host), Ok(guest)) = (
+                io.host_get(),
+                io.guest.load(kf_abi::submit::USERD_GP_GET),
+            ) else {
+                continue;
+            };
+            let n = g.st.entries.max(1);
+            out.push((ht, host.wrapping_add(n).wrapping_sub(guest) % n));
+        }
+        out
+    }
+
     /// ⚠⚠ DIAGNOSTIC (2026-10-08, `KF3_RELAY_PB_PEEK=1`, default off — the one place a relayed
     /// twin's guest bytes are READ, never executed or forwarded by kayfabe): log the GP entries a relayed
     /// twin was rung for (v2, run73: EVERY entry of each batch up to [`PEEK_ENTRY_BUDGET`], runs of zero
