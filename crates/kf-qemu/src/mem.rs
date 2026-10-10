@@ -2504,6 +2504,7 @@ impl MemPlane {
             PortWrite::Latched => self.port.read(off),
             PortWrite::Publish(_) => {
                 self.counters.invalidates.fetch_add(1, Ordering::Relaxed);
+                crate::invaldiag::armed();
                 let v = self.port.read(off);
                 let _ = self.inbox.wake.signal();
                 v

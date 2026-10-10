@@ -1817,6 +1817,12 @@ impl Device {
                     }
                 }
             }
+            if let Some(l) = crate::invaldiag::pending_line() {
+                eprintln!("{l}");
+            }
+            if ticks % 20 == 0 {
+                eprintln!("{}", crate::invaldiag::summary());
+            }
             let lines = self.chans.probe_tick(overdue);
             if !lines.is_empty() {
                 for l in &lines {
@@ -2033,6 +2039,7 @@ impl Device {
         let mut logged = 0u32;
         let mut refusals_seen = 0usize;
         let mut armed_seen: Option<u64> = None;
+        let mut inval_last_pub = std::time::Instant::now();
         // ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): BAR1 back to its physical view — the request
         // waiting for the VA manager to go idle, with the BAR1 window's change count at the newest
         // request's notice (a change since means an RM took BAR1 again first). Two log families,
@@ -2301,6 +2308,16 @@ impl Device {
             }
             refusals_seen = m.stats.refusals.len();
             self.publish_trigger();
+            crate::invaldiag::after_publish(self.mem.port.armed_request().is_none(), || {
+                format!(
+                    "VA thread: walk in flight={} pending wants={} all_settled={} away since its previous publish {:.1} ms",
+                    m.in_flight(),
+                    m.pending(),
+                    self.mem.inbox.all_settled(),
+                    inval_last_pub.elapsed().as_secs_f64() * 1000.0
+                )
+            });
+            inval_last_pub = std::time::Instant::now();
             // ★ Everything received so far is applied and nothing is walking: held replies go.
             if !m.in_flight() && m.pending() == 0 && self.mem.inbox.settle(taken) {
                 let _ = self.drainer_efd.signal();
