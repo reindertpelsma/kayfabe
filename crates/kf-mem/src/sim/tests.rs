@@ -1789,3 +1789,56 @@ fn workload_numbers() {
     );
     assert!(get("Windows", "batch + micro").rm_total() < get("Windows", "per-run").rm_total());
 }
+
+/// ★ Review 3 item 1 (`rv3_budget_refusal_progress_is_illusory`) — the adversarial shape that made a
+/// "walk again while the refresh made progress" livelock: a run of 2 MiB leaves split by the carve-out
+/// clip into two rows that each fit a fresh refresh's amplification budget ALONE but not together,
+/// with every reservation refused. The first row lands (`mapped` 1), the second is refused for the
+/// budget, and the run fails as a whole so the first row is TAKEN DOWN again (`taken_down` 1): net
+/// nothing placed, every walk, forever. There is no follow-up walk any more, so this costs one
+/// bounded refresh per walk the guest causes; the test pins the per-walk numbers and that nothing is
+/// left on the host.
+#[test]
+fn a_run_whose_rows_fit_a_budget_alone_but_not_together_places_nothing_and_leaves_nothing() {
+    const STORE: u64 = 0x2_0000_0000;
+    const CARVE: u64 = STORE - 0x1042_0000;
+    const LEAF: u64 = 0x20_0000;
+    let sim = Sim::new(space(0x80_0000_0000, 0x80_4000_0000));
+    sim.0.borrow_mut().no_guard = true;
+    sim.0.borrow_mut().refuse_reserve = true; // the FALLBACK configuration
+    let m = SimMirror::new(&sim, true, true);
+    let id = |gpa: u64, _len: u64| Some(gpa);
+    let cfg = ApplyCfg {
+        store_bytes: STORE,
+        carve: CARVE,
+        carve_refuse: true,
+        ..cfg(&id)
+    };
+    let off = 0x1_efa0_0000u64 - 256 * LEAF;
+    let run = DiffRun {
+        leaf: LEAF,
+        ..map_run(0x1_2000_0000, 257 * LEAF, false, off, false)
+    };
+    let mut calls = Vec::new();
+    for walk in 0..3 {
+        let before = sim.0.borrow().n.rm_total();
+        let out = apply_entry(&m, &[run], &cfg);
+        calls.push(sim.0.borrow().n.rm_total() - before);
+        assert_eq!(out.budget_refused, 1, "walk {walk}: refused for the budget, by name");
+        assert_eq!(
+            (out.mapped, out.taken_down),
+            (1, 1),
+            "walk {walk}: the row that fit landed and was taken down with its run"
+        );
+        assert!(sim.0.borrow().maps.is_empty(), "walk {walk}: nothing left on the host");
+        assert_eq!(m.bv.leftovers(), 0);
+    }
+    // Each walk is one refresh with a fresh budget: the same bounded cost, never growing.
+    assert!(calls.windows(2).all(|w| w[0] == w[1]), "{calls:?}");
+    assert!(calls[0] <= (kf_mem_budget() * 2) as u64 + 4096, "{calls:?}");
+}
+
+fn kf_mem_budget() -> u64 {
+    crate::batch::REFRESH_PLACEMENT_BUDGET
+}
+

@@ -742,11 +742,9 @@ pub struct VaStats {
     pub no_slot: u64,
     /// ★ Spaces failed because their walk refused leaves (owner ruling 2026-09-25).
     pub walk_refused_spaces: u64,
-    /// ★ Review 2 item 5: runs refused for the refresh's host-call budget, and the follow-up walks
-    /// (fresh budget) they queued.
+    /// ★ Review 2 item 5: runs refused for the refresh's host-call budget (absent until the guest's
+    /// next walk of the space; no follow-up walk — review 3 item 1).
     pub budget_refused_runs: u64,
-    /// See [`VaStats::budget_refused_runs`].
-    pub budget_follow_ups: u64,
     /// ★ v3-mapfix: `MEM_OP` splits completed over a space left UNSETTLED — its walk ran and its
     /// diff applied except for refused MAPs / walk-refused leaves, which stay absent (and stay a
     /// difference the next diff retries). The channel proceeds; see [`VaManager::on_walk_ready`].
@@ -1387,8 +1385,6 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         // ★ v3-mapfix: of `failed`, spaces whose root moved during the walk (re-walked at once).
         let mut rewalk: BTreeSet<VasKey> = BTreeSet::new();
         let mut partial: BTreeSet<VasKey> = BTreeSet::new();
-        // ★ Review 2 item 5: spaces with runs refused for the refresh's host-call budget.
-        let mut budget_follow: BTreeSet<VasKey> = BTreeSet::new();
         let cfg = ApplyCfg {
             store_bytes: self.store_bytes,
             grain: self.page_grain,
@@ -1537,16 +1533,18 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 }
             }
             if a.budget_refused > 0 {
+                // ★ Review 3 item 1: counted and named, NOTHING more. The refused run is acked FAILED
+                // = absence (§AA: the invalidate is cleared over it); it stays a difference the
+                // guest's next walk of the space retries with a fresh budget. A "follow-up walk
+                // while the refresh made progress" was tried and DELETED: `mapped > 0` ignored rows
+                // the apply took down again, so a run whose rows fit a budget alone but not together
+                // (carve-clip split rows) re-queued for ever on the VA thread, which serves every
+                // space (`[measured, model, review 3]` mapped 1, taken_down 1, budget_refused 1,
+                // ~131 k host calls per walk, walk after walk).
                 self.stats.budget_refused_runs = self
                     .stats
                     .budget_refused_runs
                     .saturating_add(a.budget_refused as u64);
-                // Progress ⇒ walk the space again with a fresh budget (the refused tail is still a
-                // difference); NO progress (a row that can never fit) ⇒ stop: absent, named, retried
-                // by the guest's next invalidate — never a loop.
-                if a.mapped > 0 {
-                    budget_follow.insert(key);
-                }
             }
             if a.refused > 0 {
                 failed.insert(key);
@@ -1683,21 +1681,6 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                         out.unreconciled.push(r.seq);
                     }
                 }
-            }
-        }
-        for k in budget_follow {
-            let have = self
-                .pending
-                .iter()
-                .any(|w| matches!(w, Want::Root(r) if *r == k));
-            if !have {
-                self.stats.budget_follow_ups = self.stats.budget_follow_ups.saturating_add(1);
-                if self.stats.budget_follow_ups <= 16 {
-                    eprintln!(
-                        "kf3: {k:?}: runs refused for the refresh's host-call budget — walking the space again with a fresh budget (the invalidate is cleared over their absence, §AA)"
-                    );
-                }
-                self.pending.push(Want::Root(k));
             }
         }
         for (w, at) in requeue.into_iter().rev() {
@@ -2654,12 +2637,12 @@ mod tests {
         );
     }
 
-    /// ★ Review 2 item 5 — a run refused for the refresh's host-call budget is LOUD and NOT
-    /// forgotten: the invalidate is cleared over its absence (§AA, the guest is not left polling),
-    /// AND the space is walked again with a fresh budget while the refresh made progress, so the
-    /// refused tail lands without waiting for a guest invalidate that may never come.
+    /// ★ Review 2 item 5 / review 3 item 1 — a run refused for the refresh's host-call budget is
+    /// LOUD (counted by name) and the invalidate is cleared over its absence (§AA); it is retried by
+    /// the guest's NEXT walk of the space with a fresh budget, and by NOTHING else: no follow-up walk
+    /// is queued (one livelocked the VA thread, `rv3_budget_refusal_progress_is_illusory`).
     #[test]
-    fn a_budget_refused_tail_is_walked_again_and_the_invalidate_is_not_held() {
+    fn a_budget_refused_run_is_absent_loud_and_not_walked_again_by_itself() {
         let mut r = rig();
         let h = host(&r, None, Vec::new());
         h.budget_refusals.set(1);
@@ -2676,26 +2659,30 @@ mod tests {
         assert_eq!(out.completed.len(), 1, "the invalidate is cleared over absence");
         assert!(!busy(&r.port));
         assert_eq!(r.m.stats.budget_refused_runs, 1, "counted by name");
-        assert_eq!(r.m.stats.budget_follow_ups, 1, "and a follow-up walk is queued");
         assert_eq!(
             ops(&r),
             vec![Op::Map(0x2000_0000, 0x0300_0000, 0x1000), Op::Invalidate],
-            "the other run landed; the refused tail is absent"
+            "the other run landed; the refused one is absent"
         );
-        // The follow-up walk (nothing to clear) places the tail with a fresh budget.
-        r.ops.borrow_mut().clear();
+        // Nothing walks the space again by itself.
+        let walks = r.m.walker().submits.len();
         r.m.on_walk_ready(r.port.trigger());
+        assert_eq!(r.m.walker().submits.len(), walks, "no follow-up walk");
+        // The guest's next invalidate retries it with a fresh budget.
+        r.ops.borrow_mut().clear();
+        let out = settle(&mut r, PDB_A);
+        assert_eq!(out.completed.len(), 1);
         assert_eq!(
             ops(&r),
-            vec![Op::Map(0x1000_0000, 0x0200_0000, 0x1000), Op::Invalidate]
+            vec![Op::Map(0x1000_0000, 0x0200_0000, 0x1000), Op::Invalidate],
+            "only the refused run, again"
         );
-        assert_eq!(r.m.stats.budget_follow_ups, 1, "no further loop: progress stopped it");
-        assert!(!busy(&r.port));
     }
 
-    /// A budget refusal with NO progress (a row that can never fit) does not loop.
+    /// A run that can NEVER fit the budget is refused by every walk, quietly bounded: each walk is
+    /// one refresh, the invalidate is cleared, the VA thread is not re-queued.
     #[test]
-    fn a_budget_refusal_without_progress_does_not_loop() {
+    fn a_budget_refusal_that_never_fits_costs_one_walk_per_guest_invalidate() {
         let mut r = rig();
         let h = host(&r, None, Vec::new());
         h.budget_refusals.set(u32::MAX);
@@ -2704,10 +2691,13 @@ mod tests {
         r.tables
             .borrow_mut()
             .insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0)]);
-        let out = settle(&mut r, PDB_A);
-        assert_eq!(out.completed.len(), 1);
-        assert_eq!(r.m.stats.budget_follow_ups, 0, "nothing landed ⇒ no follow-up");
+        for n in 1..=3u64 {
+            let out = settle(&mut r, PDB_A);
+            assert_eq!(out.completed.len(), 1);
+            assert_eq!(r.m.stats.budget_refused_runs, n);
+        }
         assert!(r.ops.borrow().iter().all(|(o, _)| !matches!(o, Op::Map(..))));
+        assert_eq!(r.m.walker().submits.len(), 3, "one walk per invalidate, none of its own");
     }
 
     #[test]

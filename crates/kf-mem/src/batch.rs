@@ -222,6 +222,9 @@ pub struct BatchBook {
     by_va: BTreeMap<(u64, u32), Entry>,
     /// The longest entry ever recorded — bounds the backward scan in [`BatchBook::unmapped`].
     max_len: u64,
+    /// ★ Review 3 item 3: the VA extent of every booked batch, summed — what the liveness bitmaps
+    /// are sized by ([`BATCH_MAX_TOTAL_EXTENT`]).
+    total: u64,
 }
 
 /// Why [`BatchBook::insert`] refused to record a batch.
@@ -231,6 +234,8 @@ pub enum BookRefusal {
     Shape,
     /// That handle is already tracked at that VA.
     Occupied,
+    /// ★ Review 3 item 3: booking it would take the space past [`BATCH_MAX_TOTAL_EXTENT`].
+    Total,
 }
 
 /// ★ D2 (2026-10-10): the most ledger entries — or bitmap words — one lock hold may touch. Every
@@ -239,6 +244,11 @@ pub enum BookRefusal {
 /// [`BatchedVas::hand_to_host`]) never waits behind a hold proportional to a guest-sized row. Big
 /// inserts and removals go in chunks of this size, the structure consistent between chunks.
 pub const LEDGER_CHUNK: usize = 2048;
+
+/// ★ Review 3 item 2: the most host calls ONE steer hull (one claim) may cost — see
+/// [`BatchedVas::hand_to_host`]. At 84-123 µs per unmap `[measured earlier, vast 52624429,
+/// 2026-09-26]` a hull holds its claim for ≲ 2 ms.
+pub const STEER_HULL_MAX_CALLS: usize = 16;
 
 /// A batch ready to be recorded: its liveness bitmap is built OUTSIDE the book's lock (an
 /// allocation proportional to the batch's pages — never under a lock).
@@ -307,6 +317,10 @@ impl BatchBook {
         if self.by_va.contains_key(&p.key) {
             return Err(BookRefusal::Occupied);
         }
+        if self.total.saturating_add(p.entry.len) > BATCH_MAX_TOTAL_EXTENT {
+            return Err(BookRefusal::Total);
+        }
+        self.total = self.total.saturating_add(p.entry.len);
         self.max_len = self.max_len.max(p.entry.len);
         self.by_va.insert(p.key, p.entry);
         Ok(())
@@ -419,6 +433,7 @@ impl BatchBook {
         }
         for s in emptied {
             if let Some(e) = self.by_va.remove(&s) {
+                self.total = self.total.saturating_sub(e.len);
                 out.push((e.handle, s.0, e.len));
             }
         }
@@ -463,7 +478,14 @@ impl BatchBook {
     #[must_use]
     pub fn take_all(&mut self) -> TakenBook {
         self.max_len = 0;
+        self.total = 0;
         TakenBook(core::mem::take(&mut self.by_va))
+    }
+
+    /// ★ Review 3 item 3: the VA extent of every batch booked (the bitmaps' size × 32 768).
+    #[must_use]
+    pub fn booked_extent(&self) -> u64 {
+        self.total
     }
 
     /// Batches tracked.
@@ -679,6 +701,14 @@ pub const LOW_RANGE_MIN_RUNS: usize = 8;
 /// VA) allocate 517 MiB of host memory (`[measured, model, review, 2026-10-10]`). 64 GiB is 2 MiB of
 /// bitmap per batch (one bit per page); a batch beyond it is refused by name and its rows go per run.
 pub const BATCH_MAX_EXTENT: u64 = 64 << 30;
+/// ★ Review 3 item 3: the most VA ALL the batches of one space may span together — the per-batch cap
+/// alone left 256 batches × 16 aliased 4 GiB runs (16 TiB of VA) at 519 MiB RSS `[measured, model,
+/// review 3, 2026-10-10]`. 512 GiB is 16 MiB of bitmap per space. A batch past it is refused by name
+/// ([`BATCH_TOTAL_CAPPED`], counted in [`BatchedVas::total_capped`]) and its rows go per run; the
+/// room comes back as batches empty.
+pub const BATCH_MAX_TOTAL_EXTENT: u64 = 512 << 30;
+/// ★ Review 3 item 3: why [`BatchedVas::place`] refused a batch for the space's total extent.
+pub const BATCH_TOTAL_CAPPED: &str = "the batches of this space already span BATCH_MAX_TOTAL_EXTENT (512 GiB) of VA together: this batch's liveness bitmap is refused by name, the rows go per run";
 /// ★ Review 2 item 7: why [`BatchedVas::place`] refused a batch for its VA extent.
 pub const BATCH_EXTENT_CAPPED: &str = "batch spans more VA than BATCH_MAX_EXTENT (64 GiB): its liveness bitmap would be sized by a guest-chosen extent — refused by name, the rows go per run";
 
@@ -963,6 +993,8 @@ pub struct BatchedVas<'rm, V: SpaceVerbs = HostVas<'rm>> {
     pub rigid_seen: std::sync::atomic::AtomicU64,
     /// ★ D2: what the ledger locks cost ([`HoldStats`]).
     pub holds: HoldStats,
+    /// ★ Review 3 item 3: batches refused for [`BATCH_MAX_TOTAL_EXTENT`].
+    pub total_capped: std::sync::atomic::AtomicU64,
     /// ★ Review item 2: act-thread callers currently waiting for a ledger lock; the VA thread
     /// yields to them at the start of every hold ([`BatchedVas::yield_to_act`]).
     act_waiting: std::sync::atomic::AtomicU32,
@@ -1065,6 +1097,7 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
             leaf_grained: std::sync::atomic::AtomicU64::new(0),
             rigid_seen: std::sync::atomic::AtomicU64::new(0),
             holds: HoldStats::default(),
+            total_capped: std::sync::atomic::AtomicU64::new(0),
             act_waiting: std::sync::atomic::AtomicU32::new(0),
             claims: std::sync::Mutex::new(Claims::default()),
             claims_cv: std::sync::Condvar::new(),
@@ -1704,11 +1737,40 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
                 let n = c.len();
                 (c, n)
             });
-            let (Some(&(first, _)), Some(&(last, lm))) = (chunk.first(), chunk.last()) else {
+            let Some(&(first, _)) = chunk.first() else {
                 break;
             };
+            // ★ Review 3 item 2 — **a hull is bounded by HOST CALLS, not by ledger entries.** In
+            // the per-leaf reservation tier every entry is its own reservation: a 2 048-entry hull
+            // was 2 048 `unmap_in` calls under ONE claim (`[measured, model, review 3]` 661 ms of
+            // steer, a map inside the claimed hull waited 329 ms). The hull ends before the call
+            // budget [`STEER_HULL_MAX_CALLS`] would be exceeded: one call per maximal run of
+            // entries through the same `hDma`, one `free` per distinct batch object a span can
+            // empty.
+            let mut calls = 0usize;
+            let mut hi = first.max(cur);
+            let mut consumed = 0usize;
+            let mut prev: Option<(u64, Option<u32>)> = None; // (end of the last entry, its via)
+            let mut batches: Vec<u32> = Vec::new();
+            for &(s0, m) in &chunk {
+                let contiguous = prev.is_some_and(|(pe, pv)| pe == s0 && pv == m.via);
+                let new_batch = m.batch.is_some_and(|b| !batches.contains(&b));
+                let cost = usize::from(!contiguous).saturating_add(usize::from(new_batch));
+                if calls.saturating_add(cost) > STEER_HULL_MAX_CALLS && consumed > 0 {
+                    break;
+                }
+                calls = calls.saturating_add(cost);
+                if let Some(b) = m.batch {
+                    if !batches.contains(&b) {
+                        batches.push(b);
+                    }
+                }
+                let e = s0.saturating_add(m.len);
+                prev = Some((e, m.via));
+                hi = e.min(end);
+                consumed = consumed.saturating_add(1);
+            }
             let lo = first.max(cur);
-            let hi = last.saturating_add(lm.len).min(end);
             let Some(_claim) = self.claim_steer(lo, hi) else {
                 return HandOver::Busy;
             };
@@ -1717,7 +1779,7 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
             }
             drop(_claim);
             cur = hi;
-            if chunk.len() < LEDGER_CHUNK {
+            if consumed == chunk.len() && chunk.len() < LEDGER_CHUNK {
                 break;
             }
         }
@@ -1995,6 +2057,14 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
         };
         if len > BATCH_MAX_EXTENT {
             return Err(format!("batch {va:#x}+{len:#x}: {BATCH_EXTENT_CAPPED}"));
+        }
+        if self.hold(&self.book, |b| (b.booked_extent().saturating_add(len) > BATCH_MAX_TOTAL_EXTENT, 1)) {
+            static LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+            bump(&self.total_capped);
+            if LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 8 {
+                eprintln!("kf-mem: batch {va:#x}+{len:#x}: {BATCH_TOTAL_CAPPED}");
+            }
+            return Err(format!("batch {va:#x}+{len:#x}: {BATCH_TOTAL_CAPPED}"));
         }
         let end = va.saturating_add(len);
         let _claim = self.claim_map(va, end); // ★ review item 5 (see `map_segments`)
@@ -3447,9 +3517,60 @@ mod tests {
     /// made it wait out.
     const HOLD2_ACT_P90_BOUND_US: u128 = 800;
 
+    /// ★ Review 3 item 3 (`rv3_cap_does_not_bound_aggregate_bitmap`) — the per-batch extent cap does
+    /// not bound the AGGREGATE: 256 batches of 16 aliased 4 GiB runs (64 GiB each, 16 TiB of VA)
+    /// still cost 519 MiB of bitmaps `[measured, model, review 3, 2026-10-10]`. The space's total
+    /// booked extent is capped too; the room returns as batches empty.
+    #[test]
+    fn the_aggregate_extent_of_the_batches_of_a_space_is_capped() {
+        use std::os::fd::AsFd;
+        let host = NullHost::new(u64::MAX);
+        let bv = BatchedVas::with_low_reserve(&host, true);
+        let f = std::fs::File::open("/dev/null").unwrap();
+        let g = 4u64 << 30;
+        let rss = || {
+            std::fs::read_to_string("/proc/self/statm")
+                .ok()
+                .and_then(|t| t.split_whitespace().nth(1).and_then(|x| x.parse::<u64>().ok()))
+                .map_or(0, |p| p * 4096 / (1 << 20))
+        };
+        let batch = |b: u64| -> Vec<Desired> {
+            let base = 0x1_0000_0000u64 + b * (128u64 << 30);
+            (0..16u64)
+                .map(|i| Desired {
+                    va: base + i * g,
+                    len: g,
+                    off: 0,
+                    ram: true,
+                    kind: 0,
+                    perm: kf_host::MapPerm::READ_WRITE,
+                    leaf: P,
+                })
+                .collect()
+        };
+        let before = rss();
+        let mut placed = Vec::new();
+        for b in 0..256u64 {
+            if bv.place(f.as_fd(), &batch(b), true).is_ok() {
+                placed.push(b);
+            }
+        }
+        // 512 GiB / 64 GiB per batch.
+        assert_eq!(placed.len() as u64, BATCH_MAX_TOTAL_EXTENT / (64 << 30), "{placed:?}");
+        assert_eq!(bv.total_capped.load(Relaxed), 256 - placed.len() as u64);
+        assert!(rss() < before + 64, "RSS {before} -> {} MiB", rss());
+        let first = placed[0];
+        let e = bv.place(f.as_fd(), &batch(250), true);
+        assert!(e.is_err_and(|e| e.contains(BATCH_TOTAL_CAPPED)));
+        // The room comes back when a batch is taken down.
+        let base = 0x1_0000_0000u64 + first * (128u64 << 30);
+        assert_eq!(bv.unmap_range(base, 16 * g, true), Ok(()));
+        assert!(bv.place(f.as_fd(), &batch(250), true).is_ok(), "room returned");
+    }
+
     /// A host whose range unmap takes a while (a real RM unmap is 84-123 µs; this one 25 ms, so a
     /// test can land a map INSIDE a claimed hull deterministically).
-    struct SlowHost(NullHost);
+    struct SlowHost(NullHost, u64, u64);
 
     macro_rules! delegate_to_null {
         () => {
@@ -3497,17 +3618,18 @@ mod tests {
             ) -> Result<u32, String> {
                 (&self.0).map_scattered_in(h, fd, r, f)
             }
-            fn unmap_in(&self, h: u32, v: u64, s: u64, f: bool) -> Result<(), String> {
-                (&self.0).unmap_in(h, v, s, f)
-            }
         };
     }
 
     impl SpaceVerbs for &SlowHost {
         delegate_to_null!();
         fn unmap_range(&self, v: u64, l: u64, f: bool) -> Result<(), String> {
-            std::thread::sleep(std::time::Duration::from_millis(25));
+            std::thread::sleep(std::time::Duration::from_millis(self.1));
             (&self.0).unmap_range(v, l, f)
+        }
+        fn unmap_in(&self, h: u32, v: u64, s: u64, f: bool) -> Result<(), String> {
+            std::thread::sleep(std::time::Duration::from_micros(self.2));
+            (&self.0).unmap_in(h, v, s, f)
         }
     }
 
@@ -3520,7 +3642,7 @@ mod tests {
     #[test]
     fn a_big_steer_makes_a_map_wait_for_a_hull_not_for_the_row() {
         let _t = timing();
-        let host = SlowHost(NullHost::new(0));
+        let host = SlowHost(NullHost::new(0), 25, 0);
         let bv = BatchedVas::with_low_reserve(&host, false);
         let pages = 8 * LEDGER_CHUNK as u64;
         let (va, len) = (0x1_0000_0000u64, pages * BATCH_PAGE);
@@ -3561,6 +3683,45 @@ mod tests {
         );
     }
 
+
+    /// ★ Review 3 item 2 (`rv3_per_leaf_hull_claim_lasts_2048_host_calls`) — a hull is bounded by
+    /// HOST CALLS. In the per-leaf reservation tier every ledger entry is its own reservation, so the
+    /// old 2 048-entry hull was 2 048 `unmap_in` calls under one claim (`[measured, model, review 3]`
+    /// steer 661 ms, a map inside the claimed hull waited 329 ms). Each call here takes the 100 µs
+    /// stand-in of a real RM unmap; a hull is now ≤ [`STEER_HULL_MAX_CALLS`] of them.
+    #[test]
+    fn a_hull_in_the_per_leaf_tier_is_bounded_by_host_calls_not_entries() {
+        let _t = timing();
+        // Whole-row reservation refused, per-2-MiB-leaf accepted: 2 100 reservations, 2 100 entries.
+        let host = SlowHost(NullHost::new(2 << 20), 0, 100);
+        let bv = BatchedVas::with_low_reserve(&host, true);
+        let leaves = 2100u64; // 1 075 200 grains: over the 2^20 bound, so the per-leaf tier
+        let (va, len) = (0x1_2000_0000u64, leaves * (2 << 20));
+        bv.map(&row(va, len, 2 << 20), true).unwrap();
+        assert_eq!(bv.leaf_reserved.load(Relaxed), leaves);
+        let (steer_ms, map_ms) = std::thread::scope(|s| {
+            let h = s.spawn(|| {
+                let t = std::time::Instant::now();
+                let r = bv.hand_to_host(va, len);
+                (t.elapsed().as_millis(), r)
+            });
+            let hull = loop {
+                if let Some(&r) = lk(&bv.claims).steers.first() {
+                    break r;
+                }
+                std::thread::yield_now();
+            };
+            let t = std::time::Instant::now();
+            let _ = bv.map(&row(hull.0 + 2 * P, P, P), true);
+            let map_ms = t.elapsed().as_millis();
+            let (steer_ms, _r) = h.join().unwrap();
+            (steer_ms, map_ms)
+        });
+        eprintln!("per-leaf steer {steer_ms} ms; a map inside a claimed hull waited {map_ms} ms");
+        assert!(steer_ms >= 100, "the steer was long ({steer_ms} ms)");
+        // 16 calls x 100 us + scheduling; the 2 048-entry hull made it hundreds of ms.
+        assert!(map_ms < 40, "a map waited {map_ms} ms for one hull of a {steer_ms} ms steer");
+    }
 
     /// ★ Review 2 item 2 (`review_steer_flood_vs_map_latency`) — a flood of steers over the very
     /// range the VA thread wants to map cannot starve the map: a waiting map makes every new steer
