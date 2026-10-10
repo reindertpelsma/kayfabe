@@ -1,0 +1,18 @@
+KFOVL start scenario=occlude duration_ms=13000 fps=30 format=nv12 mode=comp flags=yuv video=1280x720 require_overlay_within_ms=10000
+KFOVL adapter_enum 0 "NVIDIA GeForce RTX 4090" vendor=0x10de flags=0x0
+KFOVL adapter_enum 1 "Microsoft Basic Render Driver" vendor=0x1414 flags=0x2
+KFOVL adapter "NVIDIA GeForce RTX 4090" vendor=0x10de device=0x2684 dedicated_mb=24142
+KFOVL device feature_level=0xb100
+KFOVL output left=0 top=0 right=1024 bottom=768 attached=1
+KFOVL overlay_support nv12 hr=0x00000000 flags=0x0 direct=0 scaling=0
+KFOVL overlay_support yuy2 hr=0x00000000 flags=0x0 direct=0 scaling=0
+KFOVL overlay_support p010 hr=0x00000000 flags=0x0 direct=0 scaling=0
+KFOVL hwcomp IDXGIOutput6::CheckHardwareCompositionSupport hr=0x00000000 flags=0x0 fullscreen=0 windowed=0 cursor_stretched=0
+KFOVL format_support nv12 hr=0x00000000 d3d11_format_support=0xfa82c320 render_target=1 texture2d=1 display=0
+KFOVL format_support yuy2 hr=0x00000000 d3d11_format_support=0x3a820320 render_target=0 texture2d=1 display=0
+KFOVL format_support p010 hr=0x00000000 d3d11_format_support=0x3a82c320 render_target=1 texture2d=1 display=0
+KFOVL setup CheckOverlaySupport reports no DXGI_OVERLAY_SUPPORT_FLAG_DIRECT for the chosen format (use --ignore-support to try anyway)
+KFOVL summary frames=0 first_overlay_ms=-1 overlay=0 composed=0 none=0 worst_present_ms=0.00 transitions=0
+KFOVL RESULT SETUP CheckOverlaySupport reports no DXGI_OVERLAY_SUPPORT_FLAG_DIRECT for the chosen format (use --ignore-support to try anyway) (code=5)
+EXITCODE 5 
+

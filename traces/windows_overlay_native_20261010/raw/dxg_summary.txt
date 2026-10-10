@@ -1,0 +1,184 @@
+Files Processed:
+	C:\kf\ovl\dxg.etl
+Total Buffers Processed 1073
+Total Events  Processed 77051
+Total Events  Lost      2661
+Start Time              Saturday, October 10, 2026
+End Time                Saturday, October 10, 2026
+Elapsed Time            13 sec
++-------------------------------------------------------------------------------------------------------------------------+
+|Event Count   Event Name           Task            Opcode          Version         Guid                                  |
++-------------------------------------------------------------------------------------------------------------------------+
+|          1   EventTrace           0               PartitionInfoExtension 2               {68fdd900-4a3e-11d1-84f4-0000f80464e3}|
+|          1   EventTrace           0               Header          2               {68fdd900-4a3e-11d1-84f4-0000f80464e3}|
+|        169   Microsoft-Windows-DxgKrnl 352             Info            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|          4   Microsoft-Windows-DxgKrnl 282             Info            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|          1   Microsoft-Windows-DxgKrnl 112             Info            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|          2   Microsoft-Windows-DxgKrnl 176             Info            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|          2   Microsoft-Windows-DxgKrnl 175             Info            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|          5   Microsoft-Windows-DxgKrnl 109             Stop            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|          8   Microsoft-Windows-DxgKrnl 109             Start           0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|          8   Microsoft-Windows-DxgKrnl 109             Info            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|          1   Microsoft-Windows-DxgKrnl 51              Info            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|          8   Microsoft-Windows-DxgKrnl 111             Info            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|          6   Microsoft-Windows-DxgKrnl 62              Stop            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|         28   Microsoft-Windows-DxgKrnl 63              Stop            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|          1   Microsoft-Windows-DxgKrnl 29              Info            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|          3   Microsoft-Windows-DxgKrnl 62              Start           0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|         28   Microsoft-Windows-DxgKrnl 63              Start           0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|         38   Microsoft-Windows-DxgKrnl 100             Stop            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|         38   Microsoft-Windows-DxgKrnl 100             Start           0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|         19   Microsoft-Windows-DxgKrnl 99              Stop            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|         19   Microsoft-Windows-DxgKrnl 99              Start           0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        109   Microsoft-Windows-DxgKrnl 60              Stop            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|          8   Microsoft-Windows-DxgKrnl 24              Info            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|         11   Microsoft-Windows-DxgKrnl 14              Info            2               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|          9   Microsoft-Windows-DxgKrnl 285             Start           0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        152   Microsoft-Windows-DxgKrnl 172             Info            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|         20   Microsoft-Windows-DxgKrnl 322             Info            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|         84   Microsoft-Windows-DxgKrnl 60              Start           0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|         30   Microsoft-Windows-DxgKrnl 335             Start           0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        603   Microsoft-Windows-DxgKrnl 168             Stop            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|          2   Microsoft-Windows-DxgKrnl 278             Info            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        456   Microsoft-Windows-DxgKrnl 212             Info            2               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        417   Microsoft-Windows-DxgKrnl 168             Start           0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|         91   Microsoft-Windows-DxgKrnl 66              Info            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|         42   Microsoft-Windows-DxgKrnl 281             Info            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|         21   Microsoft-Windows-DxgKrnl 277             Info            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|         21   Microsoft-Windows-DxgKrnl 5               Info            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        179   Microsoft-Windows-DxgKrnl 137             Info            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|         50   Microsoft-Windows-DxgKrnl 163             Stop            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|         50   Microsoft-Windows-DxgKrnl 163             Start           0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        511   Microsoft-Windows-DxgKrnl 49              Info            2               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        510   Microsoft-Windows-DxgKrnl 45              Stop            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        510   Microsoft-Windows-DxgKrnl 45              Start           0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        510   Microsoft-Windows-DxgKrnl 47              Info            2               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        219   Microsoft-Windows-DxgKrnl 50              Info            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|       1189   Microsoft-Windows-DxgKrnl 177             Info            1               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|       1943   Microsoft-Windows-DxgKrnl 178             Stop            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|       1947   Microsoft-Windows-DxgKrnl 178             Info            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|       1949   Microsoft-Windows-DxgKrnl 178             Start           1               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|       2922   Microsoft-Windows-DxgKrnl 165             Stop            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|       1496   Microsoft-Windows-DxgKrnl 160             Info            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        983   Microsoft-Windows-DxgKrnl 48              Info            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|       2921   Microsoft-Windows-DxgKrnl 165             Start           0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|          4   Microsoft-Windows-DxgKrnl 1046            Info            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|       4330   Microsoft-Windows-DxgKrnl 351             Info            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|       2497   Microsoft-Windows-DxgKrnl 8               Stop            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|       2497   Microsoft-Windows-DxgKrnl 8               Info            1               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        323   Microsoft-Windows-DxgKrnl 132             Info            1               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|       2519   Microsoft-Windows-DxgKrnl 8               Start           1               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|       7169   Microsoft-Windows-DxgKrnl 9               Info            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|       2518   Microsoft-Windows-DxgKrnl 15              Info            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        437   Microsoft-Windows-DxgKrnl 169             Info            1               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        327   Microsoft-Windows-DxgKrnl 4               Info            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        319   Microsoft-Windows-DxgKrnl 133             Info            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        644   Microsoft-Windows-DxgKrnl 350             Info            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        203   Microsoft-Windows-DxgKrnl 6               Start           2               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        334   Microsoft-Windows-DxgKrnl 107             Info            1               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|       4728   Microsoft-Windows-DxgKrnl 9               Start           3               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        152   Microsoft-Windows-DxgKrnl 126             Start           2               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        835   Microsoft-Windows-DxgKrnl 9               Start           2               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        566   Microsoft-Windows-DxgKrnl 170             Info            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|       1129   Microsoft-Windows-DxgKrnl 25              Info            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|       1364   Microsoft-Windows-DxgKrnl 349             Info            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|       4256   Microsoft-Windows-DxgKrnl 9               Start           1               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        543   Microsoft-Windows-DxgKrnl 105             Info            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|         19   Microsoft-Windows-DxgKrnl 285             Stop            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        356   Microsoft-Windows-DxgKrnl 6               Stop            2               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|       2436   Microsoft-Windows-DxgKrnl 12              Start           0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|       2438   Microsoft-Windows-DxgKrnl 12              Stop            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        356   Microsoft-Windows-DxgKrnl 6               Info            2               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        832   Microsoft-Windows-DxgKrnl 134             Info            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|       9794   Microsoft-Windows-DxgKrnl 9               Stop            1               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|       2771   Microsoft-Windows-DxgKrnl 8               Info            0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
++-------------------------------------------------------------------------------------------------------------------------+
++---------------------------------------------------------------------------------------------------------+
+|Event Count   Event Name           Event ID        Version         Guid                                  |
++---------------------------------------------------------------------------------------------------------+
+|          2   EventTrace           0               2               {68fdd900-4a3e-11d1-84f4-0000f80464e3}|
+|       2436   Microsoft-Windows-DxgKrnl 18              0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|       2438   Microsoft-Windows-DxgKrnl 19              0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|         11   Microsoft-Windows-DxgKrnl 21              2               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|       2518   Microsoft-Windows-DxgKrnl 22              0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|          8   Microsoft-Windows-DxgKrnl 41              0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|          8   Microsoft-Windows-DxgKrnl 42              0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|          1   Microsoft-Windows-DxgKrnl 46              0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        510   Microsoft-Windows-DxgKrnl 67              0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        510   Microsoft-Windows-DxgKrnl 68              0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        510   Microsoft-Windows-DxgKrnl 71              2               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        983   Microsoft-Windows-DxgKrnl 72              0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        511   Microsoft-Windows-DxgKrnl 73              2               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        219   Microsoft-Windows-DxgKrnl 74              0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|          1   Microsoft-Windows-DxgKrnl 75              0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|         84   Microsoft-Windows-DxgKrnl 84              0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        109   Microsoft-Windows-DxgKrnl 86              0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|          3   Microsoft-Windows-DxgKrnl 92              0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|          6   Microsoft-Windows-DxgKrnl 94              0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|         28   Microsoft-Windows-DxgKrnl 96              0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|         28   Microsoft-Windows-DxgKrnl 98              0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|         91   Microsoft-Windows-DxgKrnl 103             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|         19   Microsoft-Windows-DxgKrnl 122             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|         19   Microsoft-Windows-DxgKrnl 123             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|         38   Microsoft-Windows-DxgKrnl 124             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|         38   Microsoft-Windows-DxgKrnl 125             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        327   Microsoft-Windows-DxgKrnl 169             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|         21   Microsoft-Windows-DxgKrnl 170             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        203   Microsoft-Windows-DxgKrnl 171             2               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        356   Microsoft-Windows-DxgKrnl 172             2               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        356   Microsoft-Windows-DxgKrnl 173             2               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|       2519   Microsoft-Windows-DxgKrnl 175             1               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|       2497   Microsoft-Windows-DxgKrnl 176             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|       2497   Microsoft-Windows-DxgKrnl 177             1               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|       4256   Microsoft-Windows-DxgKrnl 178             1               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|       7169   Microsoft-Windows-DxgKrnl 179             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|       9794   Microsoft-Windows-DxgKrnl 180             1               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        543   Microsoft-Windows-DxgKrnl 182             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        334   Microsoft-Windows-DxgKrnl 184             1               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|          8   Microsoft-Windows-DxgKrnl 186             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|          8   Microsoft-Windows-DxgKrnl 187             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|          5   Microsoft-Windows-DxgKrnl 188             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|          8   Microsoft-Windows-DxgKrnl 190             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|          1   Microsoft-Windows-DxgKrnl 191             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        152   Microsoft-Windows-DxgKrnl 215             2               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        323   Microsoft-Windows-DxgKrnl 230             1               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        319   Microsoft-Windows-DxgKrnl 231             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        832   Microsoft-Windows-DxgKrnl 238             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        179   Microsoft-Windows-DxgKrnl 242             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        835   Microsoft-Windows-DxgKrnl 244             2               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|       4728   Microsoft-Windows-DxgKrnl 245             3               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|       1496   Microsoft-Windows-DxgKrnl 274             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|         50   Microsoft-Windows-DxgKrnl 277             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|         50   Microsoft-Windows-DxgKrnl 278             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|       2921   Microsoft-Windows-DxgKrnl 281             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|       2922   Microsoft-Windows-DxgKrnl 282             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        417   Microsoft-Windows-DxgKrnl 290             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        603   Microsoft-Windows-DxgKrnl 292             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        437   Microsoft-Windows-DxgKrnl 294             1               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        566   Microsoft-Windows-DxgKrnl 295             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        152   Microsoft-Windows-DxgKrnl 297             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|          2   Microsoft-Windows-DxgKrnl 298             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|          2   Microsoft-Windows-DxgKrnl 299             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|       1189   Microsoft-Windows-DxgKrnl 300             1               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        962   Microsoft-Windows-DxgKrnl 322             1               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        987   Microsoft-Windows-DxgKrnl 323             1               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|       1947   Microsoft-Windows-DxgKrnl 324             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|       1943   Microsoft-Windows-DxgKrnl 325             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|          4   Microsoft-Windows-DxgKrnl 329             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|       1121   Microsoft-Windows-DxgKrnl 341             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|       1385   Microsoft-Windows-DxgKrnl 450             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|       1386   Microsoft-Windows-DxgKrnl 451             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|         21   Microsoft-Windows-DxgKrnl 461             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|          2   Microsoft-Windows-DxgKrnl 462             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|         42   Microsoft-Windows-DxgKrnl 466             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|          4   Microsoft-Windows-DxgKrnl 467             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|          9   Microsoft-Windows-DxgKrnl 471             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|         19   Microsoft-Windows-DxgKrnl 473             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|         20   Microsoft-Windows-DxgKrnl 515             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|         30   Microsoft-Windows-DxgKrnl 532             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|       1364   Microsoft-Windows-DxgKrnl 550             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        644   Microsoft-Windows-DxgKrnl 551             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|       4330   Microsoft-Windows-DxgKrnl 552             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        169   Microsoft-Windows-DxgKrnl 553             0               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
+|        456   Microsoft-Windows-DxgKrnl 1069            2               {802ec45a-1e99-4b83-9920-87c98277ba9d}|
++---------------------------------------------------------------------------------------------------------+

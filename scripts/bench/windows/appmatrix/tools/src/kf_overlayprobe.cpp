@@ -50,7 +50,7 @@ static std::atomic<bool> g_finished{false};
 struct Config {
   int scenario = 0; int64_t duration_ms = 30000, require_ms = 10000; int fps = 30; DXGI_FORMAT fmt = DXGI_FORMAT_NV12; const char *fmt_name = "nv12";
   int vw = 1280, vh = 720; bool hwnd_mode = false; UINT sc_flags = 0x200; const char *flags_name = "yuv"; std::string out; uint32_t tolerate = 0; int64_t grace_extra = 0;
-  bool ignore_support = false, any_vendor = false;
+  bool ignore_support = false, any_vendor = false; int64_t inject_stall_ms = 0;   // --inject-stall MS: one blocking Sleep at t=3 s (watchdog self-test, exit 4 expected when MS > 3000)
 } g_cfg;
 
 struct Stats {
@@ -452,6 +452,7 @@ int main(int argc, char **argv) {
     else if (a == "--grace-ms" && (v = val())) g_cfg.grace_extra = atoll(v);
     else if (a == "--ignore-support") g_cfg.ignore_support = true;
     else if (a == "--any-vendor") g_cfg.any_vendor = true;
+    else if (a == "--inject-stall" && (v = val())) g_cfg.inject_stall_ms = atoll(v);
     else return usage(("bad argument " + a).c_str());
   }
   g_cfg.vw &= ~15; g_cfg.vh &= ~1;
@@ -506,6 +507,7 @@ int main(int argc, char **argv) {
     beat("loop");
     pump();
     int64_t t = now_ms() - start;
+    if (g_cfg.inject_stall_ms > 0 && t >= 3000) { beat("inject-stall"); Sleep((DWORD)g_cfg.inject_stall_ms); g_cfg.inject_stall_ms = 0; continue; }
     if (g_quit) { abort_code = kSetup; abort_why = "window closed"; break; }
     if (t >= dur) break;
     if (t >= g_cfg.require_ms) {
