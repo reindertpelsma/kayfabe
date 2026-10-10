@@ -361,6 +361,9 @@ impl BatchBook {
         let floor = va.saturating_sub(self.max_len);
         let from = cur.key.unwrap_or((floor, 0));
         let mut touched = 0usize;
+        // At least one unit of real work per call, so a step always makes progress whatever the
+        // budget; with the production budget the bound is `budget` (the first unit is within it).
+        let mut worked = false;
         let mut emptied: Vec<(u64, u32)> = Vec::new();
         let mut resume: Option<((u64, u32), u64)> = None;
         'entries: for (&(start, h), e) in self.by_va.range_mut(from..(end, 0)) {
@@ -381,7 +384,7 @@ impl BatchBook {
                 lo
             };
             while p < hi {
-                if touched >= budget {
+                if touched >= budget && worked {
                     resume = Some(((start, h), p));
                     break 'entries;
                 }
@@ -397,8 +400,10 @@ impl BatchBook {
                 e.live[w] &= !mask;
                 e.live_pages -= u64::from(was.count_ones());
                 touched += 1;
+                worked = true;
                 p = wend;
             }
+            worked = true;
             if e.live_pages == 0 {
                 emptied.push((start, h));
             }
@@ -2019,5 +2024,420 @@ mod tests {
         assert!(!b.covers(0x40_0000 + 3 * P) && !b.covers(0x40_0000 - 1));
         assert!(b.unmapped(0x40_0000 + P, P).is_empty());
         assert!(!b.covers(0x40_0000 + P), "a dead page is not covered");
+    }
+
+    // ─── D2 (2026-10-10): the ledger locks are held for a bounded time ─────────────────────────
+
+    use std::sync::atomic::{AtomicU32, AtomicU64, Ordering::Relaxed};
+
+    /// A host that accepts every verb and remembers nothing — the ledger code alone is under test,
+    /// at sizes the host model (`crate::sim`, linear scans) could not carry.
+    struct NullHost {
+        next: AtomicU32,
+        /// Reservations longer than this are refused (0 = all refused).
+        reserve_max: AtomicU64,
+        host_calls: AtomicU64,
+    }
+
+    impl NullHost {
+        fn new(reserve_max: u64) -> Self {
+            NullHost {
+                next: AtomicU32::new(0x100),
+                reserve_max: AtomicU64::new(reserve_max),
+                host_calls: AtomicU64::new(0),
+            }
+        }
+        fn call(&self) {
+            self.host_calls.fetch_add(1, Relaxed);
+        }
+    }
+
+    impl SpaceVerbs for &NullHost {
+        fn map_row(&self, _: &Desired, _: bool) -> Result<Mapped, String> {
+            self.call();
+            Ok(Mapped::Placed)
+        }
+        fn map_sked_row(&self, _: &SkedRow, _: bool) -> Result<Mapped, String> {
+            self.call();
+            Ok(Mapped::Placed)
+        }
+        fn map_scattered(
+            &self,
+            _: std::os::fd::BorrowedFd<'_>,
+            _: &[Desired],
+            _: bool,
+        ) -> Result<u32, String> {
+            self.call();
+            Ok(self.next.fetch_add(1, Relaxed))
+        }
+        fn unmap_whole(&self, _: u64, _: bool) -> Result<(), String> {
+            self.call();
+            Ok(())
+        }
+        fn unmap_row(&self, _: u64, _: u64, _: bool) -> Result<(), String> {
+            self.call();
+            Ok(())
+        }
+        fn unmap_range(&self, _: u64, _: u64, _: bool) -> Result<(), String> {
+            self.call();
+            Ok(())
+        }
+        fn free(&self, _: u32) -> Result<(), String> {
+            self.call();
+            Ok(())
+        }
+        fn splits_safely(&self, _: u64, _: u64) -> bool {
+            false
+        }
+        fn reserve(&self, va: u64, len: u64) -> Result<u32, String> {
+            self.call();
+            if len > self.reserve_max.load(Relaxed) {
+                return Err(format!("reserve {va:#x}+{len:#x}: refused"));
+            }
+            Ok(self.next.fetch_add(1, Relaxed))
+        }
+        fn map_row_in(&self, _: u32, _: &Desired, _: bool) -> Result<Mapped, String> {
+            self.call();
+            Ok(Mapped::Placed)
+        }
+        fn map_sked_in(&self, _: u32, _: &SkedRow, _: bool) -> Result<Mapped, String> {
+            self.call();
+            Ok(Mapped::Placed)
+        }
+        fn map_scattered_in(
+            &self,
+            _: u32,
+            _: std::os::fd::BorrowedFd<'_>,
+            _: &[Desired],
+            _: bool,
+        ) -> Result<u32, String> {
+            self.call();
+            Ok(self.next.fetch_add(1, Relaxed))
+        }
+        fn unmap_in(&self, _: u32, _: u64, _: u64, _: bool) -> Result<(), String> {
+            self.call();
+            Ok(())
+        }
+    }
+
+    fn row(va: u64, len: u64, leaf: u64) -> Desired {
+        Desired {
+            va,
+            len,
+            off: va,
+            ram: true,
+            kind: 0,
+            perm: kf_host::MapPerm::READ_WRITE,
+            leaf,
+        }
+    }
+
+    /// The bound every hold must keep: a chunk, plus the one predecessor a range scan may add.
+    const BOUND: u64 = LEDGER_CHUNK as u64 + 1;
+
+    /// ★ D2 — **the 2^20-piece row.** The largest row the ledger is ever asked to hold outside a
+    /// reservation (`MAX_LEAF_PIECES` 4 KiB grains, 4 GiB — the whole Windows low range) is placed,
+    /// read (`own_view`), handed to host RM in part (the act thread's path), unmapped by range and
+    /// by run; and no ledger lock hold, on any of those paths, touches more than one chunk.
+    #[test]
+    fn a_2_pow_20_piece_row_never_holds_a_ledger_lock_beyond_one_chunk() {
+        let host = NullHost::new(0); // no reservation: the 4 KiB grain
+        let bv = BatchedVas::with_low_reserve(&host, false);
+        let (va, len) = (0x1_0000_0000u64, MAX_LEAF_PIECES * BATCH_PAGE);
+        let end = va + len;
+        let d = row(va, len, BATCH_PAGE);
+        assert_eq!(bv.map(&d, true), Ok(Mapped::Placed));
+        assert_eq!(bv.own.lock().unwrap().len() as u64, MAX_LEAF_PIECES);
+        let v = bv.own_view(va, end);
+        assert_eq!(v.owned, vec![(va, end)]);
+        assert!(v.rigid.is_empty());
+        // The steer: hand a quarter of it to host RM, then the rest.
+        assert_eq!(bv.hand_to_host(va + len / 4, len / 4), HandOver::Free);
+        assert_eq!(
+            bv.own.lock().unwrap().len() as u64,
+            MAX_LEAF_PIECES - MAX_LEAF_PIECES / 4
+        );
+        assert_eq!(bv.hand_to_host(va, len), HandOver::Free);
+        assert!(bv.own.lock().unwrap().is_empty());
+        // By run (the whole-mapping verb, one entry at a time) and by range.
+        assert_eq!(bv.map(&d, true), Ok(Mapped::Placed));
+        assert_eq!(bv.unmap_run(va, Some(len), true), Ok(()));
+        assert!(bv.own.lock().unwrap().is_empty());
+        assert_eq!(bv.map(&d, true), Ok(Mapped::Placed));
+        assert_eq!(bv.unmap_range(va, len, true), Ok(()));
+        assert!(bv.own.lock().unwrap().is_empty());
+        assert_eq!(bv.leftovers(), 0);
+        let (touched, hold_us) = bv.hold_stats();
+        eprintln!(
+            "2^20-piece row: max entries per lock hold = {touched} (chunk {LEDGER_CHUNK}), longest hold = {hold_us} us, {} holds",
+            bv.holds.holds.load(Relaxed)
+        );
+        assert!(touched <= BOUND, "a hold touched {touched} entries");
+        assert!(
+            touched >= LEDGER_CHUNK as u64 / 2,
+            "the chunking was exercised (a hold touched {touched})"
+        );
+        assert!(bv.holds.holds.load(Relaxed) > MAX_LEAF_PIECES / BOUND);
+    }
+
+    /// ★ D1/D2 — a big-leaf row far beyond the grain bound is ONE ledger entry through ONE
+    /// reservation; when the host refuses the whole-row reservation, one reservation per leaf
+    /// ((a2), every hold still one chunk); when it refuses all, refused by name with nothing left.
+    #[test]
+    fn a_huge_big_leaf_row_is_reserved_whole_per_leaf_or_refused_by_name() {
+        let (va, leaf) = (0x1_0000_0000u64, 0x20_0000u64);
+        let len = 2 * MAX_LEAF_PIECES * BATCH_PAGE; // 8 GiB: 2^21 grains, 4096 leaves
+        let end = va + len;
+        // (a) accepted.
+        let host = NullHost::new(u64::MAX);
+        let bv = BatchedVas::with_low_reserve(&host, true);
+        assert_eq!(bv.map(&row(va, len, leaf), true), Ok(Mapped::Placed));
+        assert_eq!(
+            (bv.own.lock().unwrap().len(), bv.micro.lock().unwrap().len()),
+            (1, 1)
+        );
+        assert_eq!(
+            bv.unmap_range(va + leaf, leaf, true),
+            Ok(()),
+            "exact, inside"
+        );
+        assert_eq!(bv.hand_to_host(va, len), HandOver::Free);
+        assert_eq!((bv.leftovers(), bv.leaf_reserved.load(Relaxed)), (0, 1));
+        // (a2) the whole row refused, one leaf accepted.
+        let host = NullHost::new(leaf);
+        let bv = BatchedVas::with_low_reserve(&host, true);
+        assert_eq!(bv.map(&row(va, len, leaf), true), Ok(Mapped::Placed));
+        assert_eq!(bv.micro.lock().unwrap().len() as u64, len / leaf);
+        assert_eq!(bv.own.lock().unwrap().len() as u64, len / leaf);
+        assert_eq!(bv.own_view(va, end).owned, vec![(va, end)]);
+        assert_eq!(bv.hand_to_host(va, len), HandOver::Free);
+        assert_eq!(bv.leftovers(), 0);
+        assert!(bv.hold_stats().0 <= BOUND, "{:?}", bv.hold_stats());
+        // Everything refused: by name, nothing left, pins released.
+        let host = NullHost::new(0);
+        let bv = BatchedVas::with_low_reserve(&host, true);
+        let e = bv.map(&row(va, len, leaf), true).unwrap_err();
+        assert!(e.contains(HUGE_ROW_OUTSIDE_RESERVATION), "{e}");
+        assert_eq!(bv.leftovers(), 0);
+        assert_eq!(bv.huge_refused.load(Relaxed), 1);
+    }
+
+    /// ★ D1 (a2) — a host that refuses some leaf-sized reservations too: those leaves go at 4 KiB
+    /// grain within the same grain budget; past it the row is refused by name and nothing is left.
+    #[test]
+    fn per_leaf_reservations_that_are_refused_spend_the_grain_budget() {
+        struct Flaky(NullHost, AtomicU32);
+        impl SpaceVerbs for &Flaky {
+            fn map_row(&self, d: &Desired, f: bool) -> Result<Mapped, String> {
+                (&self.0).map_row(d, f)
+            }
+            fn map_sked_row(&self, s: &SkedRow, f: bool) -> Result<Mapped, String> {
+                (&self.0).map_sked_row(s, f)
+            }
+            fn map_scattered(
+                &self,
+                fd: std::os::fd::BorrowedFd<'_>,
+                r: &[Desired],
+                f: bool,
+            ) -> Result<u32, String> {
+                (&self.0).map_scattered(fd, r, f)
+            }
+            fn unmap_whole(&self, v: u64, f: bool) -> Result<(), String> {
+                (&self.0).unmap_whole(v, f)
+            }
+            fn unmap_row(&self, v: u64, l: u64, f: bool) -> Result<(), String> {
+                (&self.0).unmap_row(v, l, f)
+            }
+            fn unmap_range(&self, v: u64, l: u64, f: bool) -> Result<(), String> {
+                (&self.0).unmap_range(v, l, f)
+            }
+            fn free(&self, h: u32) -> Result<(), String> {
+                (&self.0).free(h)
+            }
+            fn splits_safely(&self, v: u64, l: u64) -> bool {
+                (&self.0).splits_safely(v, l)
+            }
+            // Whole rows refused; every 3rd leaf-sized one refused too.
+            fn reserve(&self, v: u64, l: u64) -> Result<u32, String> {
+                if self.1.fetch_add(1, Relaxed).is_multiple_of(3) {
+                    return Err(format!("reserve {v:#x}+{l:#x}: refused (flaky)"));
+                }
+                (&self.0).reserve(v, l)
+            }
+            fn map_row_in(&self, h: u32, d: &Desired, f: bool) -> Result<Mapped, String> {
+                (&self.0).map_row_in(h, d, f)
+            }
+            fn map_sked_in(&self, h: u32, s: &SkedRow, f: bool) -> Result<Mapped, String> {
+                (&self.0).map_sked_in(h, s, f)
+            }
+            fn map_scattered_in(
+                &self,
+                h: u32,
+                fd: std::os::fd::BorrowedFd<'_>,
+                r: &[Desired],
+                f: bool,
+            ) -> Result<u32, String> {
+                (&self.0).map_scattered_in(h, fd, r, f)
+            }
+            fn unmap_in(&self, h: u32, v: u64, s: u64, f: bool) -> Result<(), String> {
+                (&self.0).unmap_in(h, v, s, f)
+            }
+        }
+        let (va, leaf) = (0x1_0000_0000u64, 0x1_0000u64);
+        let len = 96 * leaf; // 96 leaves = 1536 grains
+        let flaky = Flaky(NullHost::new(leaf), AtomicU32::new(0));
+        let mut bv = BatchedVas::with_low_reserve(&flaky, true);
+        bv.max_leaf_pieces = 1024; // the whole row (1536 grains) is over the bound
+        // The whole-row reservation is refused (len > leaf), then 1 leaf in 3 is refused: 32 leaves
+        // = 512 grains, within the budget of 1024.
+        assert_eq!(bv.map(&row(va, len, leaf), true), Ok(Mapped::Placed));
+        let reserved = bv.micro.lock().unwrap().len() as u64;
+        let grained = bv.own.lock().unwrap().len() as u64 - reserved;
+        assert!(
+            reserved > 50 && grained > 400,
+            "{reserved} reserved, {grained} grains"
+        );
+        assert_eq!(bv.hand_to_host(va, len), HandOver::Free);
+        assert_eq!(bv.leftovers(), 0);
+        // A budget of 256 grains cannot take 512: refused by name, nothing left behind.
+        let flaky = Flaky(NullHost::new(leaf), AtomicU32::new(0));
+        let mut bv = BatchedVas::with_low_reserve(&flaky, true);
+        bv.max_leaf_pieces = 256;
+        let e = bv.map(&row(va, len, leaf), true).unwrap_err();
+        assert!(e.contains(HUGE_ROW_OUTSIDE_RESERVATION), "{e}");
+        assert_eq!(
+            bv.leftovers(),
+            0,
+            "the reservations made on the way are released"
+        );
+        assert!(bv.micro.lock().unwrap().values().all(|r| r.pins == 0));
+    }
+
+    /// ★ D2 — many reservations in one row's range: placement over all of them, hand-over and
+    /// release walk them in chunks (the lock is dropped between), pins are all released, and no
+    /// hold exceeds one chunk.
+    #[test]
+    fn thousands_of_micro_reservations_are_walked_in_bounded_holds() {
+        let host = NullHost::new(u64::MAX);
+        let bv = BatchedVas::with_low_reserve(&host, true);
+        let n = 3 * LEDGER_CHUNK as u64 + 7;
+        let (base, leaf) = (0x2_0000_0000u64, 0x1_0000u64);
+        // One reserved 64 KiB leaf every other 64 KiB.
+        for i in 0..n {
+            let r = row(base + 2 * i * leaf, leaf, leaf);
+            assert_eq!(bv.map(&r, true), Ok(Mapped::Placed));
+        }
+        assert_eq!(bv.micro.lock().unwrap().len() as u64, n);
+        // One 4 KiB-leaf row over the lot: routed through every reservation, grains in the gaps.
+        let span = 2 * n * leaf;
+        // (The gaps are free, the reserved leaves are ours: mapping a row over our own mappings
+        // would be a stray; unmap them first through the steer, which must leave the
+        // reservations in place.)
+        assert_eq!(bv.hand_to_host(base, span), HandOver::Free);
+        assert!(bv.own.lock().unwrap().is_empty());
+        assert!(
+            bv.micro.lock().unwrap().is_empty(),
+            "emptied reservations released"
+        );
+        assert_eq!(bv.leftovers(), 0);
+        // Again, this time a row over live reservations (pinned while it maps, then released).
+        for i in 0..n {
+            let r = row(base + 2 * i * leaf, leaf, leaf);
+            assert_eq!(bv.map(&r, true), Ok(Mapped::Placed));
+        }
+        let segs = bv.segments(base, base + span);
+        assert_eq!(segs.iter().filter(|x| x.0.is_some()).count() as u64, n);
+        assert!(bv.micro.lock().unwrap().values().all(|r| r.pins == 1));
+        bv.unpin(&segs);
+        assert!(bv.micro.lock().unwrap().values().all(|r| r.pins == 0));
+        assert!(bv.micro_covers(base, base + span));
+        assert_eq!(bv.unmap_range(base, span, true), Ok(()));
+        assert!(!bv.micro_covers(base, base + span));
+        assert_eq!(bv.leftovers(), 0);
+        assert!(bv.hold_stats().0 <= BOUND, "{:?}", bv.hold_stats());
+    }
+
+    /// ★ D2 — the chunked book step is the unbounded one: on random batches and unmaps, stepping
+    /// with a tiny budget empties exactly the same objects at the same time and leaves the same
+    /// pages live; no step touches more than its budget.
+    #[test]
+    fn the_book_step_equals_the_unbounded_clear_at_any_budget() {
+        let mut rng = 0x9E37_79B9_7F4A_7C15u64;
+        let mut next = || {
+            rng ^= rng << 13;
+            rng ^= rng >> 7;
+            rng ^= rng << 17;
+            rng
+        };
+        for round in 0..200u32 {
+            let (mut a, mut b) = (BatchBook::default(), BatchBook::default());
+            let n = 1 + next() % 12;
+            for h in 0..n {
+                let (va, len) = ((next() % 64) * P, (1 + next() % 200) * P);
+                let _ = a.insert(va, len, h as u32);
+                let _ = b.insert(va, len, h as u32);
+            }
+            for _ in 0..8 {
+                let (va, len) = ((next() % 80) * P, (1 + next() % 120) * P);
+                let want = a.unmapped_extents(va, len);
+                let budget = 1 + (next() % 5) as usize;
+                let mut cur = BookCursor::default();
+                let mut got = Vec::new();
+                loop {
+                    let mut step = Vec::new();
+                    let (t, done) =
+                        b.unmapped_step(va, va.saturating_add(len), &mut cur, budget, &mut step);
+                    assert!(t <= budget + 1, "round {round}: {t} > {budget} + 1");
+                    got.extend(step);
+                    if done {
+                        break;
+                    }
+                }
+                let (mut w, mut g) = (want, got);
+                w.sort_unstable();
+                g.sort_unstable();
+                assert_eq!(w, g, "round {round}");
+                assert_eq!(a, b, "round {round}: same live pages afterwards");
+            }
+        }
+    }
+
+    /// ★ D2 — chunked ledger cuts equal the unbounded cut, and a chunk always makes progress.
+    #[test]
+    fn the_ledger_cut_in_chunks_equals_the_unbounded_cut() {
+        let mut rng = 0xC0FF_EE11_u64;
+        let mut next = || {
+            rng ^= rng << 13;
+            rng ^= rng >> 7;
+            rng ^= rng << 17;
+            rng
+        };
+        for round in 0..200u32 {
+            let (mut a, mut b) = (OwnMaps::default(), OwnMaps::default());
+            let mut at = 0u64;
+            for _ in 0..(1 + next() % 40) {
+                at += (next() % 3) * P;
+                let len = (1 + next() % 4) * P;
+                let (batch, via) = (Some((next() % 3) as u32), Some((next() % 2) as u32));
+                a.insert(at, len, batch, via);
+                b.insert(at, len, batch, via);
+                at += len;
+            }
+            let (va, end) = ((next() % 30) * P, (30 + next() % 100) * P);
+            a.cut(va, end);
+            let limit = 1 + (next() % 4) as usize;
+            let mut guard = 0;
+            loop {
+                let (n, done) = b.cut_chunk(va, end, limit);
+                assert!(n <= limit);
+                if done {
+                    break;
+                }
+                guard += 1;
+                assert!(guard < 1000, "round {round}: no progress");
+            }
+            assert_eq!(a, b, "round {round}");
+            assert!(!b.any_in(va, end));
+        }
     }
 }
