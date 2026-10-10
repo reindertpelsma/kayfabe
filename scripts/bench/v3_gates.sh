@@ -87,7 +87,7 @@ export PATH="$PATH:$HOME/.cargo/bin"
   fi
   echo "GATE10_VERDICT=$g10"
   if [ "$g10" = "FALLBACK" ]; then
-    echo "GATE10_FALLBACK_ACTIVE: host RM refused micro reservations on this driver — the batched map runs on the 4 KiB floor (rows beyond 2^20 grains are refused by name); not a failure, but NOT the default path"
+    echo "GATE10_FALLBACK_ACTIVE: host RM refused ALL small micro reservations with a refusal status on this driver, and the probe proved a 2 MiB leaf reservation at the flat FB alias base still works — the batched map runs on the per-leaf / 4 KiB ladder (the probe proves the DRIVER can do it, not that kf-mem does: the model test and the fast suite cover that); not a failure, but NOT the default path"
   fi
   # Gate 10 is part of the summary line every consumer reads (sweep.sh, matrix_table.py, merge_check.sh).
   echo "V3_GATES_SUMMARY pass=$pass fail=$fail gate10=$g10${failed:+ failed:$failed}"

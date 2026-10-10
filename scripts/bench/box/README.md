@@ -77,7 +77,7 @@ ssh <alias> 'cat /root/prov/<tag>.log'           # TESTS / V3_GATES_SUMMARY / KF
   guest that did not shut down cleanly (`dmesg`: "recovery required on readonly filesystem"). Connect it
   read-write with `qemu-nbd` and run `e2fsck -p` on the root AND /boot partitions, then rebuild. Never
   promote on a suite that ran a stale initrd when the raw-client crates changed.
-- A merge to master needs `TESTS … failed 0`, `V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS` (2026-10-10: `gate10=FALLBACK` = host RM refused micro reservations, accepted but loud; `gate10=FAIL` never), `KF3_RC=0`,
+- A merge to master needs `TESTS … failed 0`, `V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS` (2026-10-10: `gate10=FALLBACK` = host RM refused all small micro reservations by a refusal status AND the probe proved a per-2-MiB-leaf reservation works at the flat FB alias, accepted but loud; `gate10=FAIL` never), `KF3_RC=0`,
   `FAST_SUITE_PASS=30` and `BIRTH_CENSUS_OK` on the **exact revision** promoted (docs-only commits on
   top are fine; say so). *[2026-10-03, `v3-sec-nonpriv`]* `BIRTH_CENSUS_OK` (`birth_census.sh`,
   `<tag>_births.log`) means every channel the suite and the gates birthed read

@@ -46,6 +46,14 @@ const PATTERN: u32 = 0x5EED_0000;
 const V_RESERVE: u64 = 0x0403_0000;
 const V_CONTROL: u64 = 0x0503_0000;
 
+// ★ HONESTY (review 3 item 4): this probe proves a CAPABILITY OF THE HOST DRIVER — that it accepts a small
+// FIXED reservation and unmaps part of what is mapped through it exactly, or (when it refuses them all)
+// that a 2 MiB leaf reservation at the flat-FB-alias base still works. It cannot detect a defect in
+// `kf-mem`'s placement ladder. The 6fafcc6e failure class (the flat alias refused ⇒ every guest kernel
+// CE channel poisoned) is covered by the fast suite 30/30 on hardware AND by the GPU-free model test
+// `kf_mem::sim::tests::the_flat_fb_alias_survives_a_host_that_refuses_the_big_reservation`, which pins
+// that 3 965 leaves of 2 MiB land through the fallback ladder inside one refresh's budget.
+
 /// How host RM answered one reservation request.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Answer {
@@ -67,8 +75,15 @@ fn classify(r: &Result<u32, kf_host::RmError>) -> Answer {
         Err(kf_host::RmError::NoMemory | kf_host::RmError::InsufficientPermissions) => {
             Answer::Refused
         }
-        // The crate's own named codes live in 0x4B00..0x4C00 (`ABI_ENCODE_FAILED` 0x4B63, …).
-        Err(kf_host::RmError::Other(c)) if !(0x4B00..0x4C00).contains(c) => Answer::Refused,
+        // NOT a refusal: the crate's own named codes (0x4B00..0x4C00: `ABI_ENCODE_FAILED` 0x4B63, …)
+        // and an ioctl failure's errno, which `kf-host` (`ioctl_error`) reports as
+        // `Other(0x8000_0000 | errno)` — the driver never answered. Only a status the driver
+        // itself returned is a refusal.
+        Err(kf_host::RmError::Other(c))
+            if !(0x4B00..0x4C00).contains(c) && c & 0x8000_0000 == 0 =>
+        {
+            Answer::Refused
+        }
         Err(_) => Answer::Error,
     }
 }
@@ -498,6 +513,10 @@ mod tests {
             RmError::Other(kf_host::IOCTL_NUMBER_UNBUILDABLE),
             RmError::Other(kf_host::ABI_DECODE_FAILED),
             RmError::Other(kf_host::NOT_ON_THIS_RUNG),
+            // An ioctl failure: errno EINVAL (22) / ENOMEM (12) / EIO (5) — transport, not a refusal.
+            RmError::Other(0x8000_0000 | 22),
+            RmError::Other(0x8000_0000 | 12),
+            RmError::Other(0x8000_0000 | 5),
             RmError::Interrupted,
             RmError::PlacementRefused { want: 1, got: 2 },
         ] {

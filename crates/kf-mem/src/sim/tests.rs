@@ -380,6 +380,18 @@ fn flat_alias(host: AliasHost) {
     }
     assert_eq!(m.bv.unsafe_splits.load(Relaxed), 0);
     assert_eq!(m.bv.rigid_seen.load(Relaxed), 0);
+    if host == AliasHost::RefusesBig {
+        // ★ Review 3 item 4 — THE 6fafcc6e CLASS, GPU-free: with the whole-row reservation refused,
+        // 3 965 leaves of 2 MiB land through the per-leaf tier and the refresh stays inside its
+        // budget (2 amplified calls per leaf, one placement call per leaf and one for the tail).
+        let (placed, amp) = m.bv.budget_spent();
+        let leaves = CARVE / LEAF;
+        assert_eq!(leaves, 3965);
+        assert!(amp >= 2 * leaves && amp <= m.bv.amplification_budget, "{amp}");
+        assert!(placed <= m.bv.placement_budget, "{placed}");
+        assert_eq!(m.bv.budget_refused.load(Relaxed), 0);
+        assert!(m.bv.leaf_reserved.load(Relaxed) >= leaves);
+    }
     let c = Committed {
         len: LEN,
         held: false,

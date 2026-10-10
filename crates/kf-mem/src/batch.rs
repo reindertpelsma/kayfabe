@@ -1268,6 +1268,13 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
         c.maps.iter().any(|&r| overlap(r, va, end)) || c.waiting.iter().any(|&r| overlap(r, va, end))
     }
 
+    /// ★ Review 3 item 4: `(placement calls, amplified calls)` spent so far in this refresh.
+    #[must_use]
+    pub fn budget_spent(&self) -> (u64, u64) {
+        use std::sync::atomic::Ordering::Relaxed;
+        (self.placed_spent.load(Relaxed), self.amp_spent.load(Relaxed))
+    }
+
     /// ★ Review item 4: a new refresh begins (the apply calls this once per walker entry): the
     /// host-call budget for placing rows outside a reservation is renewed, and enforced from now on.
     pub fn begin_refresh(&self) {
