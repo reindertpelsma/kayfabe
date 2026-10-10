@@ -693,3 +693,31 @@ Flags as 284 (latch-first, window notifier BEGUN at latch, slot history, BAR0 tr
 `KF3_DIAG_WINDOW_NOTIFIER_FINISH_AT_FLIP_AWAY=1`. At a window latch kayfabe also writes the outgoing entry's notifier FINISHED.
 No watchpoints (they stall the VM). **H-NF:** with BEGUN at latch and FINISHED at flip-away, the hardware order completes every flip,
 with no TDR in boot. **Falsifier:** TDR cycles in boot as in 282-284.
+
+### Run 287 result (H-NF): falsifier NOT met — the boot failure is gone
+Binary fb84cc29, latch-first + BEGUN at latch + FINISHED at flip-away (+ slot history, BAR0 traces). **TDR cycles per phase: boot 0,
+after sign-in 0, after Edge 0, after the Shorts step 0; 1 during the 240 s hold** (host 13:39:25, hold_t=87; guest nvlddmkm 153 x3 at
+13:39:22.8). 0 forced edges, 0 new host Xid. In 282-284 every first flip stuck (5 cycles in boot). Window flips completed: ch1 453 by
+the end of the hold window, 988 by shutdown.
+* The hold's TDR is **not the boot signature**. Window 0 (ch1) flipped at 72002.69, 72002.71 and 72020.29, then nothing until the
+  driver's recovery group at 72043.07 (core x3 + window 0 to no surface). The overlay window (ch5) stopped at 71888. So no flip was
+  in flight in the 20 s before the declaration, and no latch could have been seen "early" or "half". The slot history before it is
+  in lock-step (each slot reset to 0 by the guest before its UPDATE, BEGUN at latch, FINISHED at flip-away, release values in
+  sequence). [not yet classified] Without ETW its stuck present / engine is unknown. The screen was black for about 2.5 min after
+  it, then window 0 scanned out again.
+* Runner note: in 287 the Shorts URL went into Edge's first-run welcome page (screenshot `hold-56`), so the hold ran on a static
+  page. In run 280 Edge was past the welcome page (MSN new tab). The guest workload therefore differs between runs.
+
+### Product change (base branch `81cf89c8`): the measured contract is the default
+* Hardware order: VblankGate; the raise is held as owed until its vblank's completions are published, then fence and raise in the
+  same pass. `KF3_DIAG_VBLANK_ORDER=tick|raise-delay` are diagnostics.
+* Window notifier BEGUN at latch, FINISHED at flip-away; release at flip-away; core notifier FINISHED.
+  `KF3_DIAG_WINDOW_NOTIFIER_FINISHED_AT_LATCH` restores the old notifier (diagnostic).
+* Tests: the interleaving model (the gated order never shows a half-applied latch; the old order does, as a control), merge, cap
+  and deadline; engine: flip-away FINISHED + BEGUN order, release at flip-away, the diagnostic old release. `cargo test -p kf-qemu
+  -p kf-disp` passes.
+
+### Run 288 (written before the run; binary 81cf89c8): production profile, zero kayfabe measurement flags, 900 s hold
+Guest DxgKrnl ETW on (guest-side only), so any TDR can be classified. **Prediction:** no TDR in boot / sign-in / Edge; the hold either
+clean or with the residual non-flip TDR of 287. **Falsifier for the fix:** any TDR whose ETW shows a flip handed to the driver and
+never reported (shape F).
