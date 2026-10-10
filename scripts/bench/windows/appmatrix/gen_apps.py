@@ -250,6 +250,25 @@ exit $global:KfRc""", r"^KFDX RESULT OK", 120, 8, [r'out:KFDX selected "NVIDIA',
 app("dxprobe_d3d12", "d3d", DX + r"""Invoke-KfExe -Exe $dx -ArgList @('d3d12', '--iters', '200')
 exit $global:KfRc""", r"^KFDX RESULT OK", 120, 8, [r'out:KFDX selected "NVIDIA', GPU_ENG], "high",
     "D3D12 device, DIRECT+COPY queue fences, a compute PSO with a root UAV and a readback: kernel-mode WDDM2 device creation was the wall of runs 53-72", pkgs=("vc_redist",))
+# Forced YUV overlay (multi-plane overlay) probe: the program asserts IDXGISwapChainMedia CompositionMode == OVERLAY and exits non-zero
+# (2 never reached, 3 lost, 4 STUCK, 5 setup, 7 too few frames, 8 device lost) when the overlay path silently falls back to composition.
+OVL = r'$ov = "$K\tools\kf_overlayprobe.exe"' + "\n"
+W_OVERLAY = ("high", "[GFX] a flip-model NV12 swap chain on a DirectComposition visual must reach a hardware overlay plane: needs IDXGIOutput3::CheckOverlaySupport on a kf3 display output, "
+             "DWM's MPO path and flip presents with media statistics; the program fails loudly if DWM composes instead")
+for sc, tier, secs, extra, why in (
+        ("steady", 1, 30, ["--duration", "30"], "30 s of NV12 overlay presents at 30 fps; PASS only if the overlay is reached within 10 s and held"),
+        ("move", 2, 25, [], "the window moved across the screen for 20 s; overlay must be held (programmatic moves)"),
+        ("resize", 2, 20, [], "window resize, maximise and restore under a DirectComposition scale transform; overlay must survive"),
+        ("fullscreen", 2, 30, [], "borderless fullscreen toggled three times; overlay may demote for 2 s around each toggle and must recover"),
+        ("occlude", 2, 20, [], "a topmost window covers part of the video for 5 s, then closes: demotion is recorded, presents must keep completing (no STUCK) and the overlay must return"),
+        ("hide", 2, 20, [], "hide/show and minimise/restore: presents continue, overlay returns after each"),
+        ("recreate", 2, 28, [], "ResizeBuffers and a brand-new swap chain with new surfaces every 2 s (the Shorts scroll pattern)"),
+        ("soak", 3, 180, ["--duration", "150"], "all scenarios in rotation for 150 s (use --duration 1200 for the 20 min soak)")):
+    app("overlay_yuv_probe" if sc == "steady" else "overlay_yuv_" + sc, "d3d",
+        OVL + "Invoke-KfExe -Exe $ov -ArgList @('--scenario', '%s'%s, '--out', \"$OUT\\overlay.json\")\nexit $global:KfRc" % (sc, "".join(", '%s'" % x for x in extra)),
+        r"^KFOVL RESULT PASS", secs + 120, secs + 10, [r'out:KFOVL adapter "NVIDIA', GPU_ENG], *W_OVERLAY, session="interactive", tier=tier, shot=min(10, secs - 2),
+        note="kf_overlayprobe.exe (tools/src/kf_overlayprobe.cpp); result JSON " + "(PASS/FAIL, per-second presentation modes, transitions, worst present latency) in the app's out dir: " + why)
+
 GM = r'''$gmx = Find-KfFile -Root "$K\gravitymark" -Name GravityMark.exe
 if (-not $gmx) { 'GM_NOTFOUND'; exit 1 }
 $gmd = Split-Path $gmx
@@ -432,7 +451,7 @@ def derive_cmd(a):
     exe = ""
     if m:
         exe = m.group(1).strip('"')
-        for k, v in (("$K\\", ""), ("$d\\", ""), ("$t\\", "tools\\"), ("$gt\\", ""), ("$fm\\", ""), ("$u\\", ""), ("$env:SystemRoot\\System32\\", ""), ("$gmx", "GravityMark.exe"), ("$dx", "tools\\kf_dxprobe.exe")):
+        for k, v in (("$K\\", ""), ("$d\\", ""), ("$t\\", "tools\\"), ("$gt\\", ""), ("$fm\\", ""), ("$u\\", ""), ("$env:SystemRoot\\System32\\", ""), ("$gmx", "GravityMark.exe"), ("$dx", "tools\\kf_dxprobe.exe"), ("$ov", "tools\\kf_overlayprobe.exe")):
             exe = exe.replace(k, v)
     args = re.search(r"-ArgList @\((.*?)\)(?:, '-image'|\s+-Cwd| -Seconds| -TimeoutS|\n|$)", ps)
     if exe and args:
