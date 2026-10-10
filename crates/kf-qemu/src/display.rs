@@ -2939,7 +2939,9 @@ impl Device {
                         offset,
                         awaken,
                     } => {
-                        let r = io.resolve(client, handle, chn).and_then(|dma| {
+                        let dres = io.resolve(client, handle, chn);
+                        let at = dres.as_ref().ok().map(|d| (d.target, d.base + offset));
+                        let r = dres.and_then(|dma| {
                             let ts = self.rm.gpu_time_ns().unwrap_or(0);
                             let mut n = [0u8; 16];
                             n[8..12].copy_from_slice(&(ts as u32).to_le_bytes());
@@ -2951,6 +2953,13 @@ impl Device {
                         if trace {
                             eprintln!(
                                 "kf3: display: TRACE notify chn {chn} handle {handle:#x} +{offset:#x} awaken={awaken} -> {r:?}"
+                            );
+                        }
+                        if wtrace {
+                            eprintln!(
+                                "kf3: display: WTRACE t={:.6} NOTIFY chn {chn} handle {handle:#x} +{offset:#x} at {at:x?} -> {}",
+                                kf_mem::maplog::t(),
+                                if r.is_ok() { "ok" } else { "REFUSED" }
                             );
                         }
                         match r {
@@ -2978,13 +2987,22 @@ impl Device {
                         wide,
                         awaken,
                     } => {
-                        let r = io.resolve(client, handle, chn).and_then(|dma| {
+                        let dres = io.resolve(client, handle, chn);
+                        let at = dres.as_ref().ok().map(|d| (d.target, d.base + offset));
+                        let r = dres.and_then(|dma| {
                             let b = value.to_le_bytes();
                             io.write(dma, offset, if wide { &b[..] } else { &b[..4] })
                         });
                         if trace {
                             eprintln!(
                                 "kf3: display: TRACE release chn {chn} handle {handle:#x} +{offset:#x} value {value:#x} -> {r:?}"
+                            );
+                        }
+                        if wtrace {
+                            eprintln!(
+                                "kf3: display: WTRACE t={:.6} RELEASE chn {chn} handle {handle:#x} +{offset:#x} value {value:#x} at {at:x?} -> {}",
+                                kf_mem::maplog::t(),
+                                if r.is_ok() { "ok" } else { "REFUSED" }
                             );
                         }
                         match r {
