@@ -1,0 +1,26 @@
+<!doctype html><meta charset="utf-8"><title>kf video</title>
+<body style="margin:0;background:#000"><video id="v" muted autoplay playsinline width="1280" height="720"></video>
+<script>
+const P = new URLSearchParams(location.search), secs = +(P.get('s') || 10), src = P.get('src');
+async function post(o) { try { await fetch('/result', {method: 'POST', body: JSON.stringify(o)}); } catch (e) {} }
+(async () => {
+  const r = {page: 'video', src, ok: false};
+  try {
+    const v = document.getElementById('v');
+    const mime = /webm$/.test(src) ? 'video/webm; codecs="vp9"' : 'video/mp4; codecs="avc1.640028"';
+    r.can_play = v.canPlayType(mime);
+    try { const mc = await navigator.mediaCapabilities.decodingInfo({type: 'file', video: {contentType: mime, width: 1280, height: 720, bitrate: 2000000, framerate: 30}}); r.mc_supported = mc.supported; r.mc_smooth = mc.smooth; r.mc_power_efficient = mc.powerEfficient; } catch (e) { r.mc_error = String(e); }
+    v.src = src;
+    await v.play();
+    const wall0 = performance.now(), t0 = v.currentTime;
+    await new Promise(res => setTimeout(res, secs * 1000));
+    const wall = (performance.now() - wall0) / 1000, played = v.currentTime - t0;
+    const q = v.getVideoPlaybackQuality();
+    r.wall_s = wall; r.played_s = played; r.total_frames = q.totalVideoFrames; r.dropped_frames = q.droppedVideoFrames;
+    r.decoded_w = v.videoWidth; r.decoded_h = v.videoHeight;
+    r.ok = played >= 0.8 * wall && q.totalVideoFrames >= 10 && q.droppedVideoFrames <= 0.2 * q.totalVideoFrames;
+    if (!r.ok) r.why = played < 0.8 * wall ? 'playback stalled' : 'too many dropped frames';
+  } catch (e) { r.why = String(e); }
+  post(r);
+})();
+</script>
