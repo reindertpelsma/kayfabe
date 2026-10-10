@@ -397,6 +397,28 @@ fn bit(chn: u32) -> ChanSet {
     }
 }
 
+/// ★ One channel parked at an `UPDATE` ([`Engine::parked`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Parked {
+    /// The channel number.
+    pub chn: u32,
+    /// Its kind and instance (the window index for a window).
+    pub kind: ChannelKind,
+    /// See `kind`.
+    pub instance: u32,
+    /// The UPDATE data word.
+    pub update: u32,
+    /// Waiting for the other members of its interlock group (else latched-pending: a vblank or an
+    /// acquire).
+    pub waiting_for_interlock: bool,
+    /// The channels it waits for (interlock) or the group that latches together, as bits.
+    pub set: u128,
+    /// The head whose vblank it waits for (`None`: only an acquire).
+    pub head: Option<u32>,
+    /// The semaphore acquire its window must satisfy before the latch.
+    pub acquire: Option<Acquire>,
+}
+
 /// Where a pending update stands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Stage {
@@ -754,6 +776,46 @@ impl Engine {
             .into_iter()
             .map(|g| (0..CHANNELS as u32).filter(|n| g & bit(*n) != 0).collect())
             .collect()
+    }
+
+    /// ★ Every channel parked at an `UPDATE` (for its interlock group, or for a vblank/an acquire),
+    /// as plain data for the display thread's stall report: `(channel, window or kind, stage,
+    /// group bits, head, the acquire it must satisfy)`. Read-only; never decides anything.
+    #[must_use]
+    pub fn parked(&self) -> Vec<Parked> {
+        let mut out = Vec::new();
+        for (n, c) in self.chans.iter().enumerate() {
+            let Some(c) = c else { continue };
+            let n = n as u32;
+            match c.stage {
+                Stage::Running => {}
+                Stage::Interlock { update, ilk } => out.push(Parked {
+                    chn: n,
+                    kind: c.kind,
+                    instance: c.instance,
+                    update,
+                    waiting_for_interlock: true,
+                    set: ilk,
+                    head: None,
+                    acquire: None,
+                }),
+                Stage::Latch {
+                    update,
+                    head,
+                    group,
+                } => out.push(Parked {
+                    chn: n,
+                    kind: c.kind,
+                    instance: c.instance,
+                    update,
+                    waiting_for_interlock: false,
+                    set: group,
+                    head,
+                    acquire: self.acquire_of(n),
+                }),
+            }
+        }
+        out
     }
 
     /// Is any update waiting for an acquire without a vblank to re-check it?

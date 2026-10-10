@@ -2299,6 +2299,15 @@ impl Io<'_> {
         a.satisfied_by(u64::from_le_bytes(b))
     }
 
+    /// The semaphore value an acquire reads now (diagnostic: `Err` text when it cannot be read).
+    fn peek_acquire(&mut self, a: &Acquire) -> Result<u64, String> {
+        let dma = self.resolve(a.client, a.handle, a.chn)?;
+        let mut b = [0u8; 8];
+        let n = if a.wide { 8 } else { 4 };
+        self.read(dma, a.offset, &mut b[..n])?;
+        Ok(u64::from_le_bytes(b))
+    }
+
     fn refuse(&mut self, why: &str) {
         self.dp.counters.refused.fetch_add(1, Ordering::Relaxed);
         if self.refusals_logged < 64 {
@@ -2456,6 +2465,12 @@ impl Device {
         let mut counts = [HeadCounts::default(); MAX_HEADS];
         let mut fps_printed: Option<(Instant, String)> = None;
         let mut watch_epoch = dp.console.watch_epoch();
+        let mut last_stall_check = Instant::now();
+        let mut parked_since: std::collections::HashMap<(u32, u32), Instant> =
+            std::collections::HashMap::new();
+        let mut stall_reported: std::collections::HashSet<(u32, u32)> =
+            std::collections::HashSet::new();
+        let mut stall_logged = 0u32;
         // Boot/preserved pictures have no armed head: their non-flip checks run at the preferred
         // rate under the cap
         let idle_period = Duration::from_nanos(kf_disp::pace::paced_period_ns(
@@ -2706,6 +2721,49 @@ impl Device {
                     .wrapping_add(1);
                 counts[h].ticks += 1;
                 ticked |= 1 << h;
+            }
+            // 4b. ★ a loud, bounded STALL report (2026-10-10, runs 400/401: an overlay-plane flip never
+            // completed after ~10 min of playback and the guest declared a TDR 2 s later): when an
+            // update has been parked at its UPDATE for over a second, name what it waits for,
+            // once per episode and at most 16 lines per VM. Read-only; decides nothing.
+            if last_stall_check.elapsed() >= Duration::from_millis(250) {
+                last_stall_check = Instant::now();
+                let parked = engine.parked();
+                let now = Instant::now();
+                parked_since.retain(|k, _| parked.iter().any(|p| (p.chn, p.update) == *k));
+                for p in &parked {
+                    let first = *parked_since.entry((p.chn, p.update)).or_insert(now);
+                    if now.duration_since(first) >= Duration::from_secs(1)
+                        && stall_logged < 16
+                        && !stall_reported.contains(&(p.chn, p.update))
+                    {
+                        stall_reported.insert((p.chn, p.update));
+                        stall_logged += 1;
+                        let seen = p.acquire.map(|a| io.peek_acquire(&a));
+                        eprintln!(
+                            "kf3: display: STALL {:?} {} (chn {}) update {:#x} parked {} ms: {} group/interlock bits {:#x} head {:?} acquire {:?} current {:?}; every parked channel: {:?}",
+                            p.kind,
+                            p.instance,
+                            p.chn,
+                            p.update,
+                            now.duration_since(first).as_millis(),
+                            if p.waiting_for_interlock {
+                                "waiting for its interlock group"
+                            } else {
+                                "ready, waiting for a vblank or its acquire"
+                            },
+                            p.set,
+                            p.head,
+                            p.acquire,
+                            seen,
+                            parked
+                                .iter()
+                                .map(|q| (q.chn, q.update, q.waiting_for_interlock))
+                                .collect::<Vec<_>>()
+                        );
+                    }
+                }
+                stall_reported.retain(|k| parked.iter().any(|p| (p.chn, p.update) == *k));
             }
             // 5. acquires waiting without a vblank
             if engine.acquire_pending() {
