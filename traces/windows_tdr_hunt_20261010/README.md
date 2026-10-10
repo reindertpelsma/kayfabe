@@ -249,3 +249,23 @@ its first sample, so there is no LAPIC time series from it (the `IRQ-RING`, `FLI
 
 ### Run 275 — H-M (written before the run; binary 2da71abe = this branch merged with `origin/claude/batched-map-decisions-20261010` 2540b547, i.e. the FIXED batched-map code; production flags + `KF3_COMPLETION_PROBE` + `KF3_DISPLAY_WRITE_TRACE`)
 **H-M:** the FIXED code runs without host Xids and behaves like the eff1b692-era runs (first TDR timing as in 263-271: 5 s after the sign-in, cluster 80-125 s after READY), i.e. the Xid/black-screen runs 272-274 were the unfixed code. **Falsifier:** any host Xid 31 in run 275, or a boot that wedges again. As a data point for the owner's question (does batching explain the black screen / the stale packets): if H-M holds AND the first TDR still comes at the usual time with the display ledger clean, batching is not the cause of the TDR (the eff1b692-era runs 264-271 had the older batched-map code too, and the NO_BATCHED_MAP control was not run: see below).
+
+### Run 275 result (H-M; binary 2da71abe = FIXED batched-map code 2540b547 merged; production + probe + display write trace)
+**H-M's falsifier did not fire: no new host Xid** (`xid_lines` 7 before and after; no `failclosed`/`panicked` in `qemu.log`; no `FLIP-SLOW`, no `FLIP-QUEUED-LAG`, ledger `ch1 10/10 max 17 ms, ch0 28/28, ch33 2/2`, `pend 0 ms`).
+But the guest was NOT healthy at boot: two `Running -> Suspending` cycles at mem t=19.1 and 24.4 s, a WATCHDOG live dump at 11:19:26 (the boot-time TDR; the same flip-queue-timeout class as 265), and then a **bugcheck 0x113 (VIDEO_DXGKRNL_FATAL_ERROR, 0x2b, 0xffff8601dbbbe5a0, 0xffffd385508b3000, 0)** at ~11:19:44 (t~40 s) and an in-guest reboot
+(Kernel-Power 41 + WER 1001 in `evidence/run275-guest-events.txt`); after that second boot no TDR at all in the 4-minute hold. So with the fixed code: no mirror faults (0 Xid) but a boot-time TDR and a 0x113.
+
+### ROUND 2 SUMMARY (runs 272-275; no measured cause)
+| run | binary (code base) | change | outcome |
+|---|---|---|---|
+| 272 | 40481dd5 (aeda9ffd batched-map decisions, unfixed) | `KF3_DIAG_NSI_UNCONDITIONAL=1` + sampler | 2 host Xid 31 at boot, 2 boot cycles, display black, guest wedged; INVALID for H-G |
+| 273 | 735b352e (aeda9ffd + flip ledger) | production + probe | 2 boot TDRs (nvlddmkm 153 at t=18/23 s), no later TDR in 240 s; **flip ledger: all UPDATEs answered, `FLIP-SLOW` 0, `FLIP-QUEUED-LAG` 0**; 2 Xid (cumulative 4) |
+| 274 | 735b352e | + sampler | 3 more Xid (cumulative 7), boot TDR t=19, wedged shutdown; sampler lost to QMP `EAGAIN` |
+| 275 | 2da71abe (fixed batched-map 2540b547 merged) | production + probe | 0 Xid; boot TDR (t=19/24) then bugcheck 0x113 and reboot; no TDR afterwards |
+
+**Measured in round 2:** (1) the display answer path is clean: committed == answered for every window/core channel, nothing waits behind the console copy or an acquire (runs 273, 275). (2) The first batched-map decisions code (aeda9ffd) produces host Xid 31 FAULT_PTE mirror faults
+(0 in 12 earlier runs; 7 in the 3 runs on it; 0 in the run on the fixed code); the TDRs themselves are NOT explained by mirror state: before the first TDR of run 271 the mirror counters are flat (`absent_cleared` 3 constant, `unreconciled` 0, `named_missed` 0, no REFUSED line in the 6 s before), and no host fault occurred in 264-271.
+(3) The corrected picture of "interrupt pending" (above).
+**Not done / not measured:** the LAPIC/MSI-X/eventfd time series at the stall (the sampler works, 2918 samples in run 272, but runs 272-275 were consumed by the Xid/boot-crash problem and one QMP-contention failure); the NO_BATCHED_MAP control; the per-address mirror resolution of the stale packets' dependencies (kf-mem not touched per instruction; no per-VA event ring was added); H-G (unconditional NSI) has no valid run.
+**What is ruled out so far (all rounds):** engine stalls on the host (no HOST-FENCE-OVERDUE, rings drained), stale relayed GP_GET (267), blocked vCPU handlers, a lost VSync, the display answer path (flips answered, 273/275), the broker/console-copy gate (ledger), the live dump as cause of the silence (it is the effect).
+**Still open:** what the pending packets (user render/device in 269, paging in 271, and at boot the first flip) wait for in the guest: host work is done, completions are not seen until the recovery. Exact next step: rerun the sampler on the FIXED build (2da71abe) in a run that reaches the post-sign-in TDR, starting it from the QGA answer with QMP not contended (no screenshots during the window), and read vector 0x62 in IRR/ISR/eventfd/PBA in the 2 s before the last VSync ack, together with `IRQ-RING` (UTC aligned).

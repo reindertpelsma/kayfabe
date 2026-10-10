@@ -1,0 +1,21 @@
+utc now: 2026-10-10T11:12:05.2479028Z
+uptime: 00:05:32.7982226
+2026-10-10T11:06:33.7928385Z Microsoft-Windows-Kernel-Power 172 Connectivity state in standby: Disconnected, Reason: NIC compliance
+2026-10-10T11:06:34.6435689Z Microsoft-Windows-Kernel-Processor-Power 55 Processor 0 in group 0 exposes the following power management capabilities: Idle state type: ACPI Idle (C) States (1 state(s)) Performance state type: None Nominal Frequency (MHz): 3700 Maximum performance percentage: 100
+2026-10-10T11:06:34.6450661Z Microsoft-Windows-Kernel-Processor-Power 55 Processor 1 in group 0 exposes the following power management capabilities: Idle state type: ACPI Idle (C) States (1 state(s)) Performance state type: None Nominal Frequency (MHz): 3700 Maximum performance percentage: 100
+2026-10-10T11:06:34.6458628Z Microsoft-Windows-Kernel-Processor-Power 55 Processor 2 in group 0 exposes the following power management capabilities: Idle state type: ACPI Idle (C) States (1 state(s)) Performance state type: None Nominal Frequency (MHz): 3700 Maximum performance percentage: 100
+2026-10-10T11:06:34.6462775Z Microsoft-Windows-Kernel-Processor-Power 55 Processor 3 in group 0 exposes the following power management capabilities: Idle state type: ACPI Idle (C) States (1 state(s)) Performance state type: None Nominal Frequency (MHz): 3700 Maximum performance percentage: 100
+2026-10-10T11:06:34.6469406Z Microsoft-Windows-Kernel-Processor-Power 55 Processor 4 in group 0 exposes the following power management capabilities: Idle state type: ACPI Idle (C) States (1 state(s)) Performance state type: None Nominal Frequency (MHz): 3700 Maximum performance percentage: 100
+2026-10-10T11:06:34.6484255Z Microsoft-Windows-Kernel-Processor-Power 55 Processor 5 in group 0 exposes the following power management capabilities: Idle state type: ACPI Idle (C) States (1 state(s)) Performance state type: None Nominal Frequency (MHz): 3700 Maximum performance percentage: 100
+2026-10-10T11:06:34.6497686Z Microsoft-Windows-Kernel-Processor-Power 55 Processor 6 in group 0 exposes the following power management capabilities: Idle state type: ACPI Idle (C) States (1 state(s)) Performance state type: None Nominal Frequency (MHz): 3700 Maximum performance percentage: 100
+2026-10-10T11:06:34.6507670Z Microsoft-Windows-Kernel-Processor-Power 55 Processor 7 in group 0 exposes the following power management capabilities: Idle state type: ACPI Idle (C) States (1 state(s)) Performance state type: None Nominal Frequency (MHz): 3700 Maximum performance percentage: 100
+2026-10-10T11:06:37.9378551Z Microsoft-Windows-Wininit 14 Credential Guard configuration: Registry Configuration: 0x2 Test Configuration: 0 Auto Enablement: 1
+2026-10-10T11:06:37.9378806Z Microsoft-Windows-Wininit 15 Credential Guard and/or VBS Key Isolation are configured but the secure kernel is not running; continuing without them.
+2026-10-10T11:06:37.9390987Z Microsoft-Windows-Wininit 12 LSASS.exe was started as a protected process with level: 4.
+2026-10-10T11:06:46.4363443Z nvlddmkm 153 
+2026-10-10T11:06:46.6942450Z nvlddmkm 153 
+2026-10-10T11:06:47.0620787Z nvlddmkm 153 
+LiveKernelReports: FullName                                                Length     LastWriteTime         
+--------                                                ------     -------------         
+C:\Windows\LiveKernelReports\WATCHDOG                              10/10/2026 11:06:53 AM
+C:\Windows\LiveKernelReports\WATCHDOG-20261010-1106.dmp 1163205245 10/10/2026 11:06:48 AM
