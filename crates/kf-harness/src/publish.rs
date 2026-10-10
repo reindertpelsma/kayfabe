@@ -112,6 +112,9 @@ impl<T: MapTarget> MapTarget for Recorded<T> {
     fn own_view(&self, va: u64, end: u64) -> Option<kf_mem::ledger::OwnView> {
         self.inner.own_view(va, end)
     }
+    fn begin_refresh(&self) {
+        self.inner.begin_refresh();
+    }
 }
 
 /// ★ `V3_BATCHED_MAP.md`: a host space that places VA-contiguous guest-RAM runs as batches

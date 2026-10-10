@@ -8,7 +8,8 @@ sweep*.log) and keeps, per (arch, host, guest), the LATEST revision's rows:
   LADDER host=H guest=G rev=R k/n CUT ...                      -> ladder k/n cut   (sweep.sh: cut off
                                                                   by its bound; n is the PLANNED count)
   THIN host=H guest=G rev=R NO_RESULT ...                      -> thin none        (sweep.sh: no numeric p/n)
-  GATES host=H V3_GATES_SUMMARY pass=p fail=f                    -> gates (per arch and host)
+  GATES host=H V3_GATES_SUMMARY pass=p fail=f [gate10=PASS|FALLBACK|FAIL]  -> gates (per arch and host;
+                                                                  a gate10 other than PASS is shown beside p/n)
 Queue logs that predate the host= field on LADDER lines (a guest walk on the bench host) are read
 with the log's own `host=` from its *_START line.
 
@@ -67,6 +68,13 @@ def parse(walk):
         if kind not in c or c[kind][0] <= order:
             c[kind] = (order, rev, text)
 
+    def g10_suffix(line):
+        """Gate 10 (2026-10-10, the micro-reservation probe) rides on the summary line as
+        `gate10=PASS|FALLBACK|FAIL`; older logs have none (no suffix). A failing or fallback gate 10
+        must not read as a plain 9/9."""
+        m = re.search(r"\bgate10=(\w+)", line)
+        return "" if not m or m.group(1) == "PASS" else f" (gate 10: {m.group(1).lower()})"
+
     def put_gates(arch, host, text, order):
         if (arch, host) not in gates or gates[(arch, host)][0] <= order:
             gates[(arch, host)] = (order, "", text)
@@ -91,7 +99,7 @@ def parse(walk):
                 recorded = False
                 m = re.match(r"V3_GATES_SUMMARY pass=(\d+) fail=(\d+)", line)
                 if m and start_host:
-                    put_gates(arch, start_host, f"{m.group(1)}/{int(m.group(1)) + int(m.group(2))}", order)
+                    put_gates(arch, start_host, f"{m.group(1)}/{int(m.group(1)) + int(m.group(2))}" + g10_suffix(line), order)
                     recorded = True
                 m = None if recorded else re.match(
                     r"MATRIX_ROW host=([\d.]+) guest=([\d.]+) rev=(\w+) .*?(?:thin=(\d+/\d+)|FAST_SUITE_PASS=(\d+) .*ARMS=(\d+))", line)
@@ -115,7 +123,7 @@ def parse(walk):
                     recorded = True
                 m = None if recorded else re.match(r"GATES host=([\d.]+) V3_GATES_SUMMARY pass=(\d+) fail=(\d+)", line)
                 if m:
-                    put_gates(arch, m.group(1), f"{m.group(2)}/{int(m.group(2)) + int(m.group(3))}", order)
+                    put_gates(arch, m.group(1), f"{m.group(2)}/{int(m.group(2)) + int(m.group(3))}" + g10_suffix(line), order)
                     recorded = True
                 if recorded:
                     boxes.setdefault(arch, set()).add(box)
@@ -219,7 +227,7 @@ def selftest():
                 "SWEEP_HOST_START 2026-09-29T01:10:00+00:00 rev=0123abcd host=580.159.04 arch=ZZ999",
                 "SWAP host=580.159.04 already installed arch=ZZ999",
                 "SWEEP_ROW_START 2026-09-29T01:10:01+00:00 row=gates:580.159.04",
-                "GATES host=580.159.04 V3_GATES_SUMMARY pass=8 fail=1 failed: kf-gate9(rc=1,verdict=FAIL) arch=ZZ999",
+                "GATES host=580.159.04 V3_GATES_SUMMARY pass=8 fail=1 gate10=FAIL failed: kf-gate9(rc=1,verdict=FAIL) arch=ZZ999",
                 "SWEEP_ROW_EXIT 2026-09-29T01:20:00+00:00 row=gates:580.159.04 rc=1 secs=599",
                 "MATRIX_ROW host=580.159.04 guest=580.159.04 rev=0123abcd thin=29/30 ladder=- arch=ZZ999",
                 "LADDER host=580.159.04 guest=580.159.04 rev=0123abcd 4/4 arch=ZZ999",
@@ -240,7 +248,7 @@ def selftest():
         want_zz = [
             "| guest \\ host | 580.159.04 |",
             "|---|---|",
-            "| *gates* | 8/9 |",
+            "| *gates* | 8/9 (gate 10: fail) |",
             "| 550.54.14 | ladder unstaged |",
             "| 580.65.06 | thin none `0123abcd` |",
             "| 580.159.04 | thin 29/30, ladder 4/4 `0123abcd` |",

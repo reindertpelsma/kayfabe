@@ -10,8 +10,9 @@
 #   killed job and a running one otherwise look identical.
 # - **The verdict is each gate's own `GATEn_VERDICT=` line**, never "the binary exited" or "we got to
 #   the end" (the_last_line_is_not_the_verdict). A gate that prints no verdict line is a FAIL.
-# - **Gate 10 (2026-10-10, D3)** is `kf-micro-reserve-probe reserve`, reported as `GATE10_VERDICT=`
-#   after the nine `kf-gate*` and required for the exit status; the "9/9" count is the nine only.
+# - **Gate 10 (2026-10-10, D3)** is `kf-micro-reserve-probe reserve`: `GATE10_VERDICT=PASS|FALLBACK|FAIL`
+#   (FALLBACK = host RM refused reservations, the 4 KiB floor is active: loud, not a failure), and
+#   `gate10=` is a field of `V3_GATES_SUMMARY`. The "9/9" count (`pass=`) is the nine only.
 # - **Every channel the gates birth is USER** (THE_CONSTRAINTS §30): each `kf-host: channel birth`
 #   line must read `PRIVILEGED_CHANNEL=0 privilege=USER`, no refusal line may appear, and a run with
 #   no birth line at all fails (`V3_GATES_BIRTHS … ok=0`, exit 1).
@@ -46,14 +47,19 @@ export PATH="$PATH:$HOME/.cargo/bin"
     v=$(echo "$out" | grep -E '^GATE[0-9]+_VERDICT=' | tail -1 | cut -d= -f2)
     if [ "$v" = "PASS" ] && [ "$rc" -eq 0 ]; then pass=$((pass+1)); else fail=$((fail+1)); failed="$failed $g(rc=$rc,verdict=${v:-NONE})"; fi
   done
-  echo "V3_GATES_SUMMARY pass=$pass fail=$fail${failed:+ failed:$failed}"
-  # ★ D3 (2026-10-10) — GATE 10, the micro-reservation probe (`V3_BATCHED_MAP.md` §8.8). Micro
+  # ★ D3 (2026-10-10) — GATE 10, the micro-reservation probe (`V3_BATCHED_MAP.md` §8.8.3). Micro
   # reservations are the default for the batched map, so the claim "host RM accepts a small FIXED
   # reservation in the unreserved range and unmaps part of what is mapped through it exactly" is
   # re-measured on every box. It is NOT one of the nine `kf-gate*` binaries and is NOT in the
-  # `pass=` / `fail=` counts above: the "9/9" of V3_GATES_SUMMARY keeps its meaning, and this gate
-  # is reported (and required) on its own line. Its verdict is the probe's own
-  # `MICRO_RESERVE_VERDICT arm=reserve PASS|FAIL`, not its exit status alone. Informational lines
+  # `pass=` / `fail=` counts: the "9/9" keeps its meaning. Its verdict is the probe's own
+  # `MICRO_RESERVE_VERDICT arm=reserve PASS|FALLBACK|FAIL`, not its exit status alone:
+  #   PASS      host RM accepted the reservation and every remnant read (the exact path works);
+  #   FALLBACK  host RM REFUSED the reservation — NOT a failure: the batched map falls back to the
+  #             4 KiB grain (D3), so the driver stays usable. Printed loudly; the exit status stays 0;
+  #   FAIL      anything else — above all an accepted reservation whose remnant does not read (an
+  #             inconsistency: the exact-partial-unmap premise is wrong), a probe error, a missing
+  #             binary, no verdict line.
+  # The probe's channel births join the USER census below. Informational lines
   # (`reserve_flat_fb_alias`, the census) are in the log and never gate.
   g10=FAIL
   bin10="$TARGET/release/kf-micro-reserve-probe"
@@ -63,14 +69,22 @@ export PATH="$PATH:$HOME/.cargo/bin"
   else
     out10=$(KF3_WIN_USER_CHANNELS_PASSTHROUGH=1 timeout 180 "$bin10" reserve 2>&1); rc10=$?
     echo "$out10"
+    births=$((births + $(echo "$out10" | grep -ac 'kf-host: channel birth ')))
+    user=$((user + $(echo "$out10" | grep -a 'kf-host: channel birth ' | grep -ac ' PRIVILEGED_CHANNEL=0 privilege=USER ')))
+    refused=$((refused + $(echo "$out10" | grep -acE 'PRIVILEGED CHANNEL REFUSED|CHANNEL BIRTH REFUSED|CHANNEL CLASS REFUSED|CUDA THREAD REFUSED')))
     v10=$(echo "$out10" | grep -E '^MICRO_RESERVE_VERDICT arm=reserve ' | tail -1 | awk '{print $3}')
-    if [ "$v10" = "PASS" ] && [ "$rc10" -eq 0 ]; then g10=PASS; fi
+    if [ "$rc10" -eq 0 ] && { [ "$v10" = "PASS" ] || [ "$v10" = "FALLBACK" ]; }; then g10=$v10; fi
   fi
   echo "GATE10_VERDICT=$g10"
+  if [ "$g10" = "FALLBACK" ]; then
+    echo "GATE10_FALLBACK_ACTIVE: host RM refused micro reservations on this driver — the batched map runs on the 4 KiB floor (rows beyond 2^20 grains are refused by name); not a failure, but NOT the default path"
+  fi
+  # Gate 10 is part of the summary line every consumer reads (sweep.sh, matrix_table.py, merge_check.sh).
+  echo "V3_GATES_SUMMARY pass=$pass fail=$fail gate10=$g10${failed:+ failed:$failed}"
   # ⊘ A gate run with no channel birth at all has not shown the birth check can report one.
   births_ok=0
   [ "$births" -ge 1 ] && [ "$user" -eq "$births" ] && [ "$refused" -eq 0 ] && births_ok=1
   echo "V3_GATES_BIRTHS births=$births user=$user refused=$refused ok=$births_ok"
   echo "V3_GATES_EXIT pass=$pass fail=$fail births_ok=$births_ok gate10=$g10 $(date -Is)"
-  [ "$pass" -eq 9 ] && [ "$fail" -eq 0 ] && [ "$births_ok" -eq 1 ] && [ "$g10" = "PASS" ]
+  [ "$pass" -eq 9 ] && [ "$fail" -eq 0 ] && [ "$births_ok" -eq 1 ] && { [ "$g10" = "PASS" ] || [ "$g10" = "FALLBACK" ]; }
 } 2>&1 | tee "$OUT"

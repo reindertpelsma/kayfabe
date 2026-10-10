@@ -262,7 +262,7 @@ enum AliasHost {
     RefusesBig,
     /// Every reservation refused: 4 KiB grain, which the 8 GiB row exceeds → refused by name.
     RefusesAll,
-    /// Reservations off (`KF3_DIAG_NO_MICRO_RESERVE`): the same refusal.
+    /// Reservations off (`KF3_NEGCTL_NO_MICRO_RESERVE`): the same refusal.
     Off,
 }
 
@@ -316,11 +316,15 @@ fn flat_alias(host: AliasHost) {
         assert!(
             out.first_refusal
                 .as_deref()
-                .is_some_and(|w| w.contains(crate::batch::HUGE_ROW_OUTSIDE_RESERVATION)),
+                .is_some_and(|w| w.contains(crate::batch::HUGE_ROW_OUTSIDE_RESERVATION)
+                    || w.contains(crate::batch::REFRESH_BUDGET_EXHAUSTED)),
             "{host:?}: {:?}",
             out.first_refusal
         );
-        assert_eq!(m.bv.huge_refused.load(Relaxed), 1);
+        // Refused by name either way: the grain bound (no reservation at all) or, when every
+        // per-leaf reservation is refused too, the refresh's amplification budget (review item 4).
+        // (The tail row may be refused by the spent budget too: counted per row, one run.)
+        assert!(m.bv.huge_refused.load(Relaxed) + m.bv.budget_refused.load(Relaxed) >= 1);
         let rm = sim.0.borrow();
         assert!(
             rm.maps.is_empty() && rm.resv.is_empty(),
