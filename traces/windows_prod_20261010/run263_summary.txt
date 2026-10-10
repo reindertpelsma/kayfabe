@@ -1,0 +1,18 @@
+run 263, kf3-bins/459da55d (integration 459da55d), pure production profile (20 class-B behaviour flags, no measurement flags, batching on, PID4 hardwired); sampled 2026-10-10T03:12:08+02:00
+tdr_cycles(Running->Suspending)=7
+bad(KernelInUserSpace|birth REFUSED|DEAD|POISON)=0
+gpu_vaspace asserts in qemu.log=0
+host Xid total=54 (54 before run 260)
+last status line:
+kf3: family=Ada phase=Running trapped=1061066 applied=22078 refused=0 serviced=14546 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110c00 mem[inval=24577 walks=36572/36572 cleared=24577 superseded=0 named_missed=493 unreconciled=0 absent_cleared=36 mapped=52543 unmapped=22598 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=128427 priv_withheld_bytes=0x153e1a60000 priv_mirrored=191 sked=63/0held carve_gpu=0 carve_kernel=32 carve_cpu=15 carve_clipped=0x100000 fn70=15 roots=137 root_moves=0 stmts=300/300 refused=16 pramin_repoints=158 pramin_miss=0 last_miss=0x0 pramin_worst_us=108 (m
+
+ENV passed:
+ENV_PASSED KF3_ASYNC_PREEMPT KF3_DEFERRED_API KF3_DISPLAY_CAPS_PROBE KF3_DISPLAY_CTRL_PROBE KF3_DISPLAY_ILUT_OFFSET_256 KF3_DISPLAY_IMP_ENABLE KF3_DISPLAY_LUT_MIRROR KF3_DISPLAY_SDR_COLOR KF3_GFX_POOL_PROBE KF3_KERNEL_GR_CE KF3_KERNEL_GR_WORK KF3_MEMORY_LIST_PROBE KF3_PREEMPT_BIND_PROBE KF3_SW_RUNLIST_HOST_OWNED KF3_SW_RUNLIST_PROBE KF3_TIMER_MAP KF3_TRANSLATED_CE_RELAY KF3_WIN_TWIN_DEFAPI_OBJECT KF3_WIN_USER_CHANNELS_PASSTHROUGH KF3_ZCULL_BIND_PROBE
+
+WINPROD 2026-10-10T01:04:50.47602519Z SIGNIN keys at +31s
+WINPROD 2026-10-10T01:04:56.244407275Z SIGNIN sent
+WINPROD 2026-10-10T01:05:22.916365551Z EDGE double-click sent (abs 802,4854)
+WINPROD 2026-10-10T01:05:25.277216828Z EDGE Enter sent
+WINPROD 2026-10-10T01:05:58.349752921Z SHORTS url typed
+WINPROD 2026-10-10T01:06:54.499085296Z SHORTS scrolled
+WINPROD 2026-10-10T01:07:14.162033485Z READY alive=1
