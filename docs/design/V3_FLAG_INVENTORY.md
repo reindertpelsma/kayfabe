@@ -1,5 +1,7 @@
 # V3 FLAG INVENTORY — every `KF3_*` the Windows run profile sets or this line of work adds, what it does, and how it stops being a flag
 
+**Amended 2026-10-10 (`V3_BATCHED_MAP.md` §8.8):** `KF3_BATCH_MICRO_RESERVE` is deleted (micro reservations are hardwired ON) and `KF3_NEGCTL_NO_MICRO_RESERVE` is a new negative control; both rows are in §5. The counts below were taken on 2026-10-09 and are not updated.
+
 **STATUS: RESEARCH, 2026-10-09.** Code and record reading only; no hardware was touched and no behaviour changed. Tree: branch
 `claude/flag-inventory-20261009` = `claude/tmode-pieces-20261009` at `c6fff2e3`. Nothing here is derived from, or cites, a closed-source
 driver binary; the sources are kayfabe's own code and run records, kayfabe's captures of the real GPU's behaviour (`vfio-10`, "VFIO DVI
@@ -165,6 +167,8 @@ thread.
 | `KF3_PT_NSI_MIN_INTERVAL_US` | `chan.rs:2078` → `kf-chan/ptnsi.rs:77-82` (clamped to 1 s) | off (unset/junk/0). Loss-free per-vector pacing; no run sets it (pacing at 50 ms lost no completion, `STATUS_AND_HANDOFF.md:104`). Worker; with pacing on the worker ticks ≥ every 1 ms while anything is owed: bounded | **KEEP AS CONFIG** per §X ("env-tunable, default off, loss-free"); consider a device property |
 | `KF3_TWIN_VA_BASE` | none (comments only: `kf-host/channel.rs:253, 692`) | The run 70-72 diagnostic; replaced by the `MirrorVaStart` rule; measured not required (runs 73-103 without it) | Delete the comments |
 | `KF3_NO_BATCHED_MAP` | `mem.rs:1114` | **ON** unless set to **any** value (`=0` also disables batching): the batched map / range-unmap product path (`V3_BATCHED_MAP.md`) | Delete: the on path is the product path; the flag is an A/B escape hatch (`:134`) |
+| `KF3_BATCH_MICRO_RESERVE` | `mem.rs` (was `micro_reserve_enabled`) | **DELETED 2026-10-10** (`V3_BATCHED_MAP.md` §8.8.3, D3): it was `=1` → micro reservations ON, default OFF until the reserve probe passed; the probe passed on the host at `6fafcc6e` (reported, not re-run), so the behaviour is hardwired ON. Setting it now does nothing | Done — the flag no longer exists (no launcher or script set it) |
+| `KF3_NEGCTL_NO_MICRO_RESERVE` | `mem.rs` (`micro_reserve_enabled`) | **new 2026-10-10**, off unless exactly `1`: turns micro reservations OFF (every big-leaf row at 4 KiB grain, over-bound rows refused by name). Read once; VA thread only | **Keep as a negative control** for A/B and bisecting a host that misbehaves with reservations; never in a launcher. NEGCTL, not DIAG: it changes placement (§8 rule 2). Delete after the hardware verdict of `V3_BATCHED_MAP.md` §8.8.6 if nobody needs it |
 | `KF3_NO_GUEST_VA_RESERVE` | `kf-host/channel.rs:673` | **ON** unless set to any value: guest-mirror host VA spaces reserve `GUEST_VA_RANGES` | Delete with the `chan.rs:3927-3928` branch: it was the run 69 H-room A/B, FALSIFIED (W43 run 69) |
 | `KF3_NEGCTL_NO_BAR1_DOORBELL` | `device.rs:996` | **ON** (classification) unless set to any value (`is_some()`) | Keep as a control (`V3_BAR1_DOORBELL.md` §7 T1); tighten the test to `=="1"` |
 

@@ -342,7 +342,9 @@ pub struct OwnView {
     /// Bytes of `[va, end)` a mapping of ours covers, `(start, end)`, sorted, merged.
     pub owned: Vec<(u64, u64)>,
     /// Our mappings intersecting `[va, end)` that host RM cannot split exactly (no VA-reserving
-    /// `hDma` holds them), each WHOLE `(start, end)`.
+    /// `hDma` holds them), each WHOLE `(start, end)`. ★ D1 (2026-10-10): EMPTY by construction —
+    /// outside a reservation every mapping of ours is one 4 KiB page, or sits in a micro
+    /// reservation (`V3_BATCHED_MAP.md` §8.8); kept as the apply's last-resort signal.
     pub rigid: Vec<(u64, u64)>,
 }
 

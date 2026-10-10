@@ -4,6 +4,8 @@
 and the review's corrections are folded in. Nothing here is decided or built, apart from what
 `docs/OWNER_RULINGS.md` §H already rules (the stub rule, and the vGPU guest stack crossed off).
 
+> **2026-10-10:** the host-side stages (3 and 4) and the other host-kernel candidates are consolidated, with probes, stock fallbacks and an implementation order, in `V3_HOST_PATCH_LIST.md`. Owner policy: the stock tier needs no patch; the patched host is an optional better tier.
+
 The idea is one **stock tier** that needs no kernel change anywhere, plus **opt-in stages** that
 each need one named piece of cooperation. The owner's stated goal is that, with these stages,
 kayfabe replaces nvkvm-pv (§7).
