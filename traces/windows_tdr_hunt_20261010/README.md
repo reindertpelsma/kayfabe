@@ -765,3 +765,14 @@ leaf kayfabe logged as HELD BY HOST in the same boot:
 classified per cycle. **Blocker for the integration line (kf-mem owner):** a guest-declared leaf that host RM already maps in the
 mirror space is left unmapped, and the twin engines fault on it. Windows validation of the display fix continues on the
 eff1b692-era base (0 Xid in runs 277-288).
+
+### The residual TDR is the known "late TSG joiner" (docs/design/V3_LATE_TSG_JOINER.md), and its fix is OFF
+Every birth of the stuck joiners logs `late_joiner_schedule=Some(SwitchOff)`. The compute+copy channels on ctxShare 0xff0e0201 were
+allocated into TSG 0xff0e0000 after the guest's one `GPFIFO_SCHEDULE`. Their host group (keyed by ctxShare) is never scheduled, so
+host GP_GET stays 0, which is that note's run-111 signature. The note's fix (`latejoin::schedule_late_joiner`, behind
+`KF3_SCHEDULE_LATE_JOINERS=1`) was never hardware-verified (its section 6 falsifier).
+
+### Run 290 (written before the run): binary 81cf89c8 + `KF3_SCHEDULE_LATE_JOINERS=1` only (one variable vs 288)
+Same runner, guest ETW, hold 300 s (288's TDRs came at hold_t 87-128). **Prediction (the note's section 6):** the joiners' BORN lines
+end `Some(Authored)`, their host GP_GET equals GP_PUT, and there is no hold TDR. **Falsifier:** `Authored`, the host accepts it, and a
+joiner still has `GP_GET=0, GP_PUT>0` with a TDR. **Fix wrong:** a birth refused by name, new host Xid, or a running twin stalling.
