@@ -2433,6 +2433,10 @@ impl Device {
             ..ScanState::default()
         };
         let mut queue: VecDeque<Queued> = VecDeque::new();
+        // ★ 2026-10-10 (shape F): a head's frame edge waits for its vblank's completions (`vblankgate`)
+        let mut gate = crate::vblankgate::VblankGate::default();
+        let mut edge_frame = [0u32; MAX_HEADS];
+        let mut forced_logged = 0u64;
         let mut ledger_q = LedgerQ::default();
         let mut ledger_last = Instant::now();
         let mut cursor_seen = [0u32; MAX_HEADS];
@@ -2464,6 +2468,9 @@ impl Device {
                 deadline = deadline.min(now + Duration::from_millis(2));
             }
             if let Some(t) = scan.idle_at {
+                deadline = deadline.min(t);
+            }
+            if let Some(t) = gate.deadline() {
                 deadline = deadline.min(t);
             }
             // a lit head without a window: wake when its hold ends (then the console may go black)
@@ -2643,28 +2650,13 @@ impl Device {
                 let s = engine.vblank(t.head, &mut |a| io.acquired(a));
                 effects.extend(s.effects);
                 gets.extend(s.gets);
-                let f = dp.ports.frames[h]
+                // ★ the frame edge itself (the frame counters, the head-timing event, the interrupt) is
+                // NOT raised here: the hardware raises it after the latch it announces, so it goes
+                // through the gate below, once this vblank's completions are delivered (step 7b)
+                edge_frame[h] = dp.ports.frames[h]
                     .fetch_add(1, Ordering::AcqRel)
                     .wrapping_add(1);
-                let (b, st, fld) = dp.map.rg_dpca;
-                store(b + h as u64 * st, kf_disp::class::put(0, fld, f));
-                if let Some((lb, ls)) = dp.map.loadv {
-                    store(lb + h as u64 * ls, f);
-                }
-                let irq = frame_edge(&dp.ports, &dp.map, h, loadv);
-                raised |= irq != 0;
-                if wtrace && irq != 0 && trace_slot(&vsync_traced, display_trace_cap()) {
-                    eprintln!(
-                        "kf3: display: WTRACE t={:.6} VSYNC h{h} frame={f} evt={:#x} en={:#x} rm={irq:#x}",
-                        kf_mem::maplog::t(),
-                        dp.ports.event(EventReg::HeadTiming(h)),
-                        dp.ports.event(EventReg::HeadTimingEn(h)),
-                    );
-                }
                 counts[h].ticks += 1;
-                if irq & dp.map.head_vblank != 0 {
-                    counts[h].vblirq += 1;
-                }
                 ticked |= 1 << h;
             }
             // 5. acquires waiting without a vblank
@@ -2814,6 +2806,7 @@ impl Device {
                     item: Item::Effect(e),
                     enq: Instant::now(),
                 });
+                gate.pushed();
             }
             for (chn, life, get) in gets {
                 queue.push_back(Queued {
@@ -2821,6 +2814,14 @@ impl Device {
                     item: Item::Get(chn, life, get),
                     enq: Instant::now(),
                 });
+                gate.pushed();
+            }
+            // every head that ticked: its edge waits for everything queued up to and including its vblank
+            let tick_at = Instant::now();
+            for h in 0..MAX_HEADS {
+                if ticked & (1 << h) != 0 {
+                    gate.tick(h, tick_at);
+                }
             }
             if io
                 .gpu
@@ -3048,6 +3049,46 @@ impl Device {
                         eprintln!("kf3: display: channel {chn} STOPPED at {at:#x}: {what}");
                     }
                 }
+            }
+            // 7b. ★ 2026-10-10 (shape F, `vblankgate`): the frame edges whose vblank's completions are all
+            // delivered — the hardware order: latch, notifier/semaphore/GET, THEN the vblank event and its
+            // interrupt. Every guest-visible word above is written (the vidmem copies are synchronous)
+            // before the fence; the edge's words and event bits after it.
+            gate.remaining(queue.len());
+            let due = gate.due(Instant::now());
+            if !due.is_empty() {
+                std::sync::atomic::fence(Ordering::SeqCst);
+            }
+            for h in due {
+                let f = edge_frame[h];
+                let (b, st, fld) = dp.map.rg_dpca;
+                store(b + h as u64 * st, kf_disp::class::put(0, fld, f));
+                if let Some((lb, ls)) = dp.map.loadv {
+                    store(lb + h as u64 * ls, f);
+                }
+                let irq = frame_edge(&dp.ports, &dp.map, h, loadv);
+                raised |= irq != 0;
+                if wtrace && irq != 0 && trace_slot(&vsync_traced, display_trace_cap()) {
+                    eprintln!(
+                        "kf3: display: WTRACE t={:.6} VSYNC h{h} frame={f} evt={:#x} en={:#x} rm={irq:#x}",
+                        kf_mem::maplog::t(),
+                        dp.ports.event(EventReg::HeadTiming(h)),
+                        dp.ports.event(EventReg::HeadTimingEn(h)),
+                    );
+                }
+                if irq & dp.map.head_vblank != 0 {
+                    counts[h].vblirq += 1;
+                }
+            }
+            if gate.forced > forced_logged {
+                if forced_logged < 20 {
+                    eprintln!(
+                        "kf3: display: a frame edge waited {} ms for its completions (a console copy behind the host) and was raised without them — {} so far",
+                        crate::vblankgate::EDGE_CAP.as_millis(),
+                        gate.forced
+                    );
+                }
+                forced_logged = gate.forced;
             }
             // ⚠ DIAGNOSTIC (flip ledger, owner challenge): slow commits as they complete, a summary every 2 s.
             for l in std::mem::take(&mut engine.ledger.slow) {

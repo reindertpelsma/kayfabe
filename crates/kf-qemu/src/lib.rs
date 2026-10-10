@@ -16,6 +16,7 @@ pub mod defapi;
 pub mod device;
 pub mod diagring;
 pub mod invaldiag;
+pub mod vblankgate;
 pub mod display;
 pub mod dispsw;
 pub mod exposure;
