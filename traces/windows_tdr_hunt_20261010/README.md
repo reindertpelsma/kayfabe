@@ -403,3 +403,14 @@ notification path (registration / `CliGetEventInfo`).
   66082.28 → 66083.40), 70 ms after a host Xid on one of the disabled set's VAs. The quiet threshold is raised to 1500 ms for later runs.
 * First TDR (F, 10 s after sign-in): a CE3 Xid on `0x4036000` at 65887.07 inside its 2 s window (last flip 65886.117) — a mirror
   fault, so not a clean F sample either.
+
+### Run 277 (written before the run): clean code base, both shapes
+Binary e6e6a9ed = branch `claude/tdr-opus-base-20261010`: caef62dc (the eff1b692-era code of runs 263-271, 0 Xid in 12 runs) + the
+IRQ-RING, FLIP-LEDGER and GSPQ diagnostics cherry-picked (no kf-mem change). Flags: production + `KF3_COMPLETION_PROBE=1500` +
+`KF3_DISPLAY_WRITE_TRACE=1`; guest ETW (full CSV recovered offline from the disk image); `PREEMPTDUMP=1` with a 1500 ms quiet
+threshold (`tooling/pwatch.sh`; host runner tdr-run9).
+* **H-F1 (shape F):** the flip whose queue entry times out was handed to the driver (ETW 259/386 with its present id ~2.0 s
+  before the declaration) but **never reached kayfabe's window channel** (no window `PUT` after it). Falsifier: a window `PUT`
+  (and `LATCH`) follows that hand-off within a frame — then the flip was programmed and its completion report is what is missing.
+* **H-S** (as for 276): unconsumed status-queue elements at a preempt-all with no enable. Falsifier: `GSPQ` drained.
+* Validity gate: any host Xid in the run makes it a mirror-fault run, not a TDR-mechanism run.
