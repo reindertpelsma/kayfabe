@@ -1655,6 +1655,7 @@ impl Device {
             kf_trap::cpuintr::Raise::Message => {
                 let _ = self.irq_lines[0].signal();
                 self.irq_counts.raised.fetch_add(1, Ordering::Relaxed);
+                crate::diagring::note(crate::diagring::SRC_GUEST_WRITE, 0, crate::diagring::RES_MESSAGE);
             }
             kf_trap::cpuintr::Raise::None => {}
             kf_trap::cpuintr::Raise::OutOfRange => {
@@ -1707,8 +1708,11 @@ impl Device {
                 ticks += 1;
                 if ticks % 20 == 0 && !s.is_empty() {
                     eprintln!(
-                        "kf3: RELAY-LAG t={:.3} relays={} lagged_now={now_lagged} | cumulative twin-samples={samples} lagged={lagged} max_lag_entries={max_lag} lagged_500ms_runs={stuck}",
+                        "kf3: RELAY-LAG t={:.3} utc_ms={} relays={} lagged_now={now_lagged} | cumulative twin-samples={samples} lagged={lagged} max_lag_entries={max_lag} lagged_500ms_runs={stuck}",
                         kf_mem::maplog::t(),
+                        std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .map_or(0, |d| d.as_millis()),
                         s.len()
                     );
                 }
@@ -1754,6 +1758,9 @@ impl Device {
                             quiet_ticks * 100
                         ));
                         eprintln!("{}", self.probe_device_state());
+                        for l in crate::diagring::dump(8) {
+                            eprintln!("{l}");
+                        }
                     }
                 }
             }
@@ -1821,6 +1828,9 @@ impl Device {
             .shadow_all(|o, v| self.shadow_store(o, u64::from(v), 4));
         if raise == kf_trap::cpuintr::Raise::None {
             self.irq_counts.held.fetch_add(1, Ordering::Relaxed);
+            crate::diagring::note(crate::diagring::SRC_LATCH, vector, crate::diagring::RES_HELD);
+        } else {
+            crate::diagring::note(crate::diagring::SRC_LATCH, vector, crate::diagring::RES_MESSAGE);
         }
         self.deliver(raise);
     }

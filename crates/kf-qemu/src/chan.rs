@@ -1277,6 +1277,13 @@ fn relay_get_refresh() -> bool {
     *ON.get_or_init(|| std::env::var_os("KF3_RELAY_GET_REFRESH").is_some_and(|v| v == "1"))
 }
 
+/// ⚠ DIAGNOSTIC (2026-10-10, TDR hunt run 272, default off): `KF3_DIAG_NSI_UNCONDITIONAL=1` judges every host
+/// non-stall / FIFO_EVENT_MTHD edge as ARMED, so none is dropped as `NotArmed` (the cheap falsifier of the audit's finding 3).
+fn diag_nsi_unconditional() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("KF3_DIAG_NSI_UNCONDITIONAL").is_some_and(|v| v == "1"))
+}
+
 // ⚠ CONTROL (2026-10-08, owner decision): `KF3_USERD_RELAY_OFF=1` births Windows user-work twins over
 // the guest's own sysmem USERD (adoption, no relay). Default off.
 fn userd_relay_off() -> bool {
@@ -2370,12 +2377,13 @@ impl ChanPlane {
     /// paced is owed. With `KF3_PT_NSI_RELAY=0` the edge is counted only (the falsifier run).
     pub fn nsi_fifo_edge(&self, deliver: impl FnOnce(u32)) -> kf_chan::ptnsi::Verdict {
         let n = self.pt_fifo_edges.fetch_add(1, Ordering::Relaxed) + 1;
-        let armed = self.nsi_armed(Some(kf_abi::eventnotify::NONSTALL_SLOT_FIFO_EVENT_MTHD));
+        let armed = self.nsi_armed(Some(kf_abi::eventnotify::NONSTALL_SLOT_FIFO_EVENT_MTHD))
+            || diag_nsi_unconditional();
         let vector = if armed {
             kf_chan::ptnsi::host_notify_vector(
                 self.engines
                     .iter()
-                    .map(|e| (e.vector, self.nsi_armed(e.slot))),
+                    .map(|e| (e.vector, self.nsi_armed(e.slot) || diag_nsi_unconditional())),
                 self.host_notify_engine
                     .and_then(|i| self.engines.get(i))
                     .and_then(|e| e.vector),
@@ -2389,6 +2397,16 @@ impl ChanPlane {
             vector,
             self.nsi_now_ns(),
         );
+        {
+            use crate::diagring as dr;
+            let (v, r) = match verdict {
+                kf_chan::ptnsi::Verdict::Raise(v) => (v, dr::RES_MESSAGE),
+                kf_chan::ptnsi::Verdict::NotArmed => (vector.unwrap_or(0), dr::RES_NOT_ARMED),
+                kf_chan::ptnsi::Verdict::Owed => (vector.unwrap_or(0), dr::RES_OWED),
+                _ => (vector.unwrap_or(0), dr::RES_OTHER),
+            };
+            dr::note(dr::SRC_FIFO, v, r);
+        }
         match verdict {
             kf_chan::ptnsi::Verdict::Raise(v) => {
                 self.pt_fifo_raised.fetch_add(1, Ordering::Relaxed);
@@ -2419,13 +2437,25 @@ impl ChanPlane {
         e: &EngineEvent,
         deliver: impl FnOnce(u32),
     ) -> kf_chan::ptnsi::Verdict {
-        let armed = self.nsi_armed(e.slot);
+        // ⚠ DIAGNOSTIC (`KF3_DIAG_NSI_UNCONDITIONAL=1`, default off; TDR hunt run 272): judge every host edge as armed.
+        let armed = self.nsi_armed(e.slot) || diag_nsi_unconditional();
         let verdict = self.nsi.edge(
             kf_chan::ptnsi::EdgeKind::Engine,
             armed,
             e.vector,
             self.nsi_now_ns(),
         );
+        {
+            use crate::diagring as dr;
+            let eidx = self.engines.iter().position(|x| std::ptr::eq(x, e)).unwrap_or(0) as u8;
+            let (v, r) = match verdict {
+                kf_chan::ptnsi::Verdict::Raise(v) => (v, dr::RES_MESSAGE),
+                kf_chan::ptnsi::Verdict::NotArmed => (e.vector.unwrap_or(0), dr::RES_NOT_ARMED),
+                kf_chan::ptnsi::Verdict::Owed => (e.vector.unwrap_or(0), dr::RES_OWED),
+                _ => (e.vector.unwrap_or(0), dr::RES_OTHER),
+            };
+            dr::note(dr::SRC_ENGINE + eidx, v, r);
+        }
         match verdict {
             kf_chan::ptnsi::Verdict::Raise(v) => {
                 e.raised.fetch_add(1, Ordering::Relaxed);
