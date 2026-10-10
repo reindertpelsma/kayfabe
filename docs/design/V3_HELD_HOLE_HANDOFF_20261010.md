@@ -69,9 +69,9 @@ The TDR counts of 381 differ from 384 because 381 lacks the display/late-joiner 
 the periodic resets of 384 (~290 s) are the TDR hunt's, not this fix's (HELD 0, Xid 0). Linux fast suite
 (`KF_DEVICE=kf3 scripts/fastguest/fast_suite.sh heldhole 180`, host `/workspace/bench/heldhole_suite.out`):
 **30/30 PASS, 0 FAIL, 0 CRASH** — but MIXED revisions (the first 16 arms ran on `4db48053`, the other 14 on `183e1b8f`
-because the host worktree was advanced mid-suite). A clean single-revision rerun (`heldhole3`, `183e1b8f`, outer lock
-`/tmp/kayfabe-fastguest.lock`) was queued behind the Opus agent's runs; its result is in
-`/workspace/bench/heldhole3_suite.out` on the host (not recorded here). NOTE: a first rerun (`heldhole2`) CRASHED every
+because the host worktree was advanced mid-suite). The clean single-revision rerun
+(`heldhole3`, `rev=183e1b8f`, outer lock `/tmp/kayfabe-fastguest.lock`, started 20:31) is **30/30 PASS, 0 FAIL, 0 CRASH**
+(`/workspace/bench/heldhole3_suite.out`). NOTE: a first rerun (`heldhole2`) CRASHED every
 arm with `realize refused: store of 8192 MiB refused: NoMemory` because another agent's Windows VM (run 400) held the
 GPU while the arms ran: environmental, not a regression — never start arms while a QEMU holds the card.
 
@@ -104,8 +104,7 @@ GPU while the arms ran: environmental, not a regression — never start arms whi
 - **Gates 9/9 and gate 10 on the final revision:** not run in this session (the gate binaries need a full release
   build of the harness crates and the box root disk was ~2 GB free). Gate 10 (the probe) PASSED on `02b984e5`
   (same kf-mem and probe code; measured lines above). Run `scripts/bench/v3_gates.sh` before integrating.
-- **Linux fast suite 30/30 on the final revision:** see the table; the first 16 arms ran at `4db48053`, the whole
-  suite must be one revision (rerun if not).
+- **Linux fast suite 30/30:** DONE at `183e1b8f` (single revision, see the table); not re-run at `3aea0a79`+ (arithmetic-only change).
 - **Broker lane / desktop retest** (`broker_lane.sh`, `interactive.sh`; owner memory: after interrupt/GSP/drainer/display
   changes): not run.
 - **OWNER_RULINGS §AD (12 ms invalidate latency bound):** the fix adds no sleeps and no blocking; the refresh's host
