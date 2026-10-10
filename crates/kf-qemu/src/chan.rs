@@ -3944,8 +3944,13 @@ impl ChanPlane {
                     }
                     !reserved
                 });
-                // The row goes first (and for good): from here G is host RM's, and the walker's
-                // eventual unmap of the guest's page there is answered without a host call.
+                // The row goes first: from here G is host RM's, and the walker's eventual unmap of the
+                // guest's page there is answered without a host call. ★ Review 2 item 4: "and for
+                // good" only when the hand-over completes — otherwise the rows of what is still ours
+                // are put back (below). `rows.remove` is also the arbitration `cut_own`'s argument
+                // relies on (`V3_BATCHED_MAP.md` §8.8.2): once the row is gone the VA thread's unmap
+                // of that page issues no host call, so the only unmappers of the range during the
+                // steer are the steer itself and idempotent range unmaps.
                 let steer = fc.map(|(va, len)| match rows.write().map(|mut r| r.remove(&va)) {
                     Ok(None) => format!(" [guest ctx VA {va:#x} not mirrored yet — host RM takes it free; the walker will find it held]"),
                     Err(_) => format!(" [placement rows poisoned — host ctx placement unsteered]"),
@@ -3962,8 +3967,26 @@ impl ChanPlane {
                     // part of the log line, so the cost is observed, not assumed.
                     Ok(Some(row)) => match ledger.as_ref().map(|bv| (bv.hand_to_host(va, row.0), bv.hold_stats())) {
                         Some((over, (touched, hold_us))) => {
+                            // ★ Review 2 item 4: the row was removed FIRST (so a walker UNMAP of a
+                            // page handed to host RM makes no host call). When the hand-over did
+                            // not complete — Busy / StillOurs / Refused — mappings of OURS are still
+                            // on the host: put their rows back, or the walker's later UNMAP is
+                            // acknowledged with no host call and they stay until the retire. A part
+                            // the VA thread already re-placed (its own row) is not overwritten.
+                            let mut restored = 0usize;
+                            if !matches!(
+                                over,
+                                kf_mem::batch::HandOver::Free | kf_mem::batch::HandOver::StillReserved
+                            ) && let (Some(bv), Ok(mut r)) = (ledger.as_ref(), rows.write())
+                            {
+                                let owned = bv.own_view(va, va.saturating_add(row.0)).owned;
+                                for (k, v) in crate::mem::rows_after_steer(&r, va, row, &owned) {
+                                    r.insert(k, v);
+                                    restored = restored.saturating_add(1);
+                                }
+                            }
                             let (act_wait_us, act_op_us) = ledger.as_ref().map_or((0, 0), |bv| bv.act_stats());
-                            let holds = format!(" (ledger lock holds: at most {touched} entries, longest {hold_us} us; this thread waited at most {act_wait_us} us for a ledger lock, hand-over took at most {act_op_us} us)");
+                            let holds = format!(" (ledger lock holds: at most {touched} entries, longest {hold_us} us; this thread waited at most {act_wait_us} us for a ledger lock, hand-over took at most {act_op_us} us; {restored} placement row(s) restored)");
                             match over {
                                 kf_mem::batch::HandOver::Free => format!(" [host ctx steered onto the guest's ctx VA {va:#x}+{len:#x}{holds}]"),
                                 kf_mem::batch::HandOver::StillReserved => format!(" [guest ctx VA {va:#x} unmapped, but a micro reservation of ours still covers it (other rows live in it) — host ctx placement unsteered{holds}]"),
@@ -3972,7 +3995,13 @@ impl ChanPlane {
                                 kf_mem::batch::HandOver::Refused(e) => format!(" [guest ctx VA {va:#x} not unmapped ({e}) — host ctx placement unsteered{holds}]"),
                             }
                         }
-                        None => format!(" [guest ctx VA {va:#x}: no ownership ledger for this space — not unmapped, host ctx placement unsteered]"),
+                        None => {
+                            // Nothing was unmapped: the row goes back whole.
+                            if let Ok(mut r) = rows.write() {
+                                r.entry(va).or_insert(row);
+                            }
+                            format!(" [guest ctx VA {va:#x}: no ownership ledger for this space — not unmapped, row restored, host ctx placement unsteered]")
+                        }
                     },
                 });
                 let h = kf_chan::passthrough::engine_object(me.rm, chan, engine, class, kind, copy_engine).map_err(|e| (NV_ERR_INVALID_CLASS, e))?;

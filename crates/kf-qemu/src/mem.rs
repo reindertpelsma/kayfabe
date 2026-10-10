@@ -794,6 +794,68 @@ pub fn describe_neighbours(rows: &PlacedRows, va: u64) -> String {
 /// resolver refuses a write, release or reduction through.
 pub type PlacedRow = (u64, u64, bool, kf_host::MapPerm);
 
+/// ★ Review 2 item 4 — **what to put back when a steer did not hand the whole row over.** The
+/// falcon-context steer removes the placement row FIRST (so a walker UNMAP of that page is answered
+/// "no row ⇒ nothing of ours there" with no host call — the mapping may become host RM's own).
+/// When `hand_to_host` then answers anything but Free/StillReserved (`Busy`, `StillOurs`,
+/// `Refused`), mappings of OURS are still on the host: without a row the walker's later UNMAP is
+/// acknowledged with no host call and the mapping stays until a stray sweep or the retire.
+/// This returns the rows to restore: for every interval `owned` (what the ledger still holds
+/// inside the steered row), the part of it no existing row of `rows` covers, with the old row's
+/// backing offset advanced to it. A part already covered by a row — a mapping the VA thread placed
+/// there meanwhile, with its own backing — is NOT overwritten.
+#[must_use]
+pub fn rows_after_steer(
+    rows: &std::collections::BTreeMap<u64, PlacedRow>,
+    va: u64,
+    old: PlacedRow,
+    owned: &[(u64, u64)],
+) -> Vec<(u64, PlacedRow)> {
+    let (len, off, ram, perm) = old;
+    let row_end = va.saturating_add(len);
+    let mut out = Vec::new();
+    let mut put = |s: u64, e: u64| {
+        if s < e {
+            out.push((
+                s,
+                (
+                    e.saturating_sub(s),
+                    off.saturating_add(s.saturating_sub(va)),
+                    ram,
+                    perm,
+                ),
+            ));
+        }
+    };
+    for &(os, oe) in owned {
+        let (s, e) = (os.max(va), oe.min(row_end));
+        if s >= e {
+            continue;
+        }
+        let mut cur = s;
+        // Existing rows reaching into [s, e): the one starting below `s`, then those starting in it.
+        let below = rows
+            .range(..s)
+            .next_back()
+            .map(|(&k, r)| (k, k.saturating_add(r.0)));
+        let inside = rows
+            .range(s..e)
+            .map(|(&k, r)| (k, k.saturating_add(r.0)));
+        for (rs, re) in below.into_iter().chain(inside) {
+            if re <= cur {
+                continue;
+            }
+            put(cur, rs.min(e));
+            cur = cur.max(re);
+            if cur >= e {
+                break;
+            }
+        }
+        put(cur, e);
+    }
+    out
+}
+
 /// ★ P1+P2 review fix (2026-10-04, `V3_P1P2_TSPACE.md` §7.13) — **every change the walk commits
 /// to a mirror's placement rows, numbered.** The stale-bind counter asks which change landed while
 /// a bound piece's fence was still incomplete ([`kf_chan::tmode::Rows::changed_since`]). ⊘ Bumped
@@ -4287,5 +4349,40 @@ mod memory_list_tests {
         ram.0.del(block.gpa);
         ram.0.add(block);
         assert_eq!(ram.validate(span), None);
+    }
+
+    /// ★ Review 2 item 4 — which rows a steer that did not complete puts back.
+    #[test]
+    fn rows_after_steer_restores_only_what_is_ours_and_not_yet_re_placed() {
+        use std::collections::BTreeMap;
+        let perm = kf_host::MapPerm::READ_WRITE;
+        let old: PlacedRow = (0x8000, 0x10_0000, true, perm);
+        let va = 0x4000_0000u64;
+        let mut rows: BTreeMap<u64, PlacedRow> = BTreeMap::new();
+        // Everything still ours: the whole row comes back, backing offset intact.
+        let all = rows_after_steer(&rows, va, old, &[(va, va + 0x8000)]);
+        assert_eq!(all, vec![(va, old)]);
+        // Only the middle two pages are still ours: their rows, offset advanced.
+        let mid = rows_after_steer(&rows, va, old, &[(va + 0x2000, va + 0x4000)]);
+        assert_eq!(mid, vec![(va + 0x2000, (0x2000, 0x10_2000, true, perm))]);
+        // The VA thread re-placed page 3 (its own row, own backing) meanwhile: not overwritten, the
+        // gaps around it are restored.
+        rows.insert(va + 0x3000, (0x1000, 0x99_0000, true, perm));
+        let got = rows_after_steer(&rows, va, old, &[(va, va + 0x8000)]);
+        assert_eq!(
+            got,
+            vec![
+                (va, (0x3000, 0x10_0000, true, perm)),
+                (va + 0x4000, (0x4000, 0x10_4000, true, perm)),
+            ]
+        );
+        // A row that starts below the interval and overlaps it: covered part skipped.
+        let mut rows = BTreeMap::new();
+        rows.insert(va - 0x1000, (0x3000, 0x77_0000, true, perm));
+        let got = rows_after_steer(&rows, va, old, &[(va, va + 0x8000)]);
+        assert_eq!(got, vec![(va + 0x2000, (0x6000, 0x10_2000, true, perm))]);
+        // Nothing owned, or an interval outside the row: nothing to put back.
+        assert!(rows_after_steer(&rows, va, old, &[]).is_empty());
+        assert!(rows_after_steer(&rows, va, old, &[(va + 0x9000, va + 0xa000)]).is_empty());
     }
 }

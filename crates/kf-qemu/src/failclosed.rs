@@ -10,6 +10,13 @@
 //! no TDR); with the act thread dead every queued RM call stays unresolved. A poisoned mutex does
 //! the rest quietly.
 //!
+//! Coverage (2026-10-10, review 2 item 6): the drainer, the workers, the VA manager, the display
+//! worker, the act thread, and the helpers `kf3-pramin-reaper`, `kf3-vram-provision` and
+//! `kf-view-reaper`. NOT covered, each for a stated reason: `kf3-probe` (the completion probe,
+//! default OFF, a diagnostic nothing waits on); `on_cuda_thread`'s scoped threads (the join maps a
+//! panic to a refusal by name); every `std::thread::spawn` in `kf-rm/src/osevent.rs`, `kf-util`,
+//! `kf-linux-raw` and `readtrace.rs` is inside `#[cfg(test)]` — no production thread is unnamed.
+//!
 //! The hook below aborts the process when one of these threads panics, after naming it: the VM
 //! stops, the operator sees why, and no guest is left waiting on a dead thread. A thread that
 //! handles its own panics (`on_cuda_thread` maps a join error to a refusal) is NOT a service thread
@@ -26,6 +33,13 @@ pub fn is_service_thread(name: Option<&str>) -> bool {
         || n == "kf3-vamgr"
         || n == "kf3-display"
         || n == kf_rm::gssnative::ACT_THREAD
+        // ★ Review 2 item 6: the helper threads. A dead PRAMIN reaper stops releasing store views
+        // (the pool of nodes runs dry); a dead VRAM provisioning thread leaves display slots
+        // unmade for ever; a dead view reaper (`kf-host`) leaks pinned guest pages. None is
+        // guest-reachable by design, so a panic is a bug — and a silent one is the worst kind.
+        || n == "kf3-pramin-reaper"
+        || n == "kf3-vram-provision"
+        || n == "kf-view-reaper"
         || n.strip_prefix("kf3-worker")
             .is_some_and(|rest| !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit()))
 }
@@ -56,7 +70,16 @@ mod tests {
 
     #[test]
     fn exactly_the_service_threads_are_named() {
-        for n in ["kf3-drainer", "kf3-vamgr", "kf3-display", "kf3-worker0", "kf3-worker17"] {
+        for n in [
+            "kf3-drainer",
+            "kf3-vamgr",
+            "kf3-display",
+            "kf3-worker0",
+            "kf3-worker17",
+            "kf3-pramin-reaper",
+            "kf3-vram-provision",
+            "kf-view-reaper",
+        ] {
             assert!(is_service_thread(Some(n)), "{n}");
         }
         assert!(is_service_thread(Some(kf_rm::gssnative::ACT_THREAD)));
@@ -64,7 +87,6 @@ mod tests {
             "kf3-worker",
             "kf3-workerX",
             "kf3-probe",
-            "kf3-pramin-reaper",
             "main",
             "kf3-cuda",
             "",
