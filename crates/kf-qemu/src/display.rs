@@ -725,6 +725,13 @@ pub struct DispCounters {
     pub scanouts: AtomicU64,
     /// Scanouts refused (a surface the console cannot copy, by name in the log).
     pub scanout_refused: AtomicU64,
+    /// ★ Windows left out of a console copy because the console cannot compose them (a format with
+    /// no console pixel format, a context DMA that does not resolve, ...). Console-only: the
+    /// guest's flip of that window still completes.
+    pub console_windows_left_out: AtomicU64,
+    /// ★ Console copies given up for a console-only reason (a colour program the console cannot
+    /// build). The flips behind them completed; the console kept its last frame.
+    pub console_copies_skipped: AtomicU64,
     /// Microseconds from queueing a scanout copy to observing its completion: the sum and the max.
     pub scanout_us_total: AtomicU64,
     /// The longest one.
@@ -1265,6 +1272,8 @@ impl ColorDmas {
 #[derive(Debug, Default)]
 struct Planned {
     layers: Vec<LayerPlan>,
+    /// ★ Semi-planar YUV windows (Edge's video overlay), composed after the RGB layers.
+    yuv: Vec<kf_disp::scanout::YuvPlan>,
     refused: Vec<String>,
 }
 
@@ -2290,6 +2299,15 @@ impl Io<'_> {
         a.satisfied_by(u64::from_le_bytes(b))
     }
 
+    /// The semaphore value an acquire reads now (diagnostic: `Err` text when it cannot be read).
+    fn peek_acquire(&mut self, a: &Acquire) -> Result<u64, String> {
+        let dma = self.resolve(a.client, a.handle, a.chn)?;
+        let mut b = [0u8; 8];
+        let n = if a.wide { 8 } else { 4 };
+        self.read(dma, a.offset, &mut b[..n])?;
+        Ok(u64::from_le_bytes(b))
+    }
+
     fn refuse(&mut self, why: &str) {
         self.dp.counters.refused.fetch_add(1, Ordering::Relaxed);
         if self.refusals_logged < 64 {
@@ -2447,6 +2465,15 @@ impl Device {
         let mut counts = [HeadCounts::default(); MAX_HEADS];
         let mut fps_printed: Option<(Instant, String)> = None;
         let mut watch_epoch = dp.console.watch_epoch();
+        let mut last_stall_check = Instant::now();
+        let mut parked_since: std::collections::HashMap<(u32, u32), Instant> =
+            std::collections::HashMap::new();
+        let mut stall_reported: std::collections::HashSet<(u32, u32)> =
+            std::collections::HashSet::new();
+        let mut stall_logged = 0u32;
+        // ★ the last effects the plane performed (notifier writes, releases, latches), for the STALL report
+        let mut fx_ring: VecDeque<(u64, &'static str, u32, u32, u64, u64, bool)> = VecDeque::new();
+        let mut fx_seq = 0u64;
         // Boot/preserved pictures have no armed head: their non-flip checks run at the preferred
         // rate under the cap
         let idle_period = Duration::from_nanos(kf_disp::pace::paced_period_ns(
@@ -2698,6 +2725,99 @@ impl Device {
                 counts[h].ticks += 1;
                 ticked |= 1 << h;
             }
+            // 4b. ★ a loud, bounded STALL report (2026-10-10, runs 400/401: an overlay-plane flip never
+            // completed after ~10 min of playback and the guest declared a TDR 2 s later): when an
+            // update has been parked at its UPDATE for over a second, name what it waits for,
+            // once per episode and at most 16 lines per VM. Read-only; decides nothing.
+            if last_stall_check.elapsed() >= Duration::from_millis(250) {
+                last_stall_check = Instant::now();
+                let parked = engine.parked();
+                let now = Instant::now();
+                parked_since.retain(|k, _| parked.iter().any(|p| (p.chn, p.update) == *k));
+                for p in &parked {
+                    let first = *parked_since.entry((p.chn, p.update)).or_insert(now);
+                    if now.duration_since(first) >= Duration::from_secs(1)
+                        && stall_logged < 16
+                        && !stall_reported.contains(&(p.chn, p.update))
+                    {
+                        stall_reported.insert((p.chn, p.update));
+                        stall_logged += 1;
+                        let seen = p.acquire.map(|a| io.peek_acquire(&a));
+                        eprintln!(
+                            "kf3: display: STALL {:?} {} (chn {}) update {:#x} parked {} ms: {} group/interlock bits {:#x} head {:?} acquire {:?} current {:?}; every parked channel: {:?}",
+                            p.kind,
+                            p.instance,
+                            p.chn,
+                            p.update,
+                            now.duration_since(first).as_millis(),
+                            if p.waiting_for_interlock {
+                                "waiting for its interlock group"
+                            } else {
+                                "ready, waiting for a vblank or its acquire"
+                            },
+                            p.set,
+                            p.head,
+                            p.acquire,
+                            seen,
+                            parked
+                                .iter()
+                                .map(|q| (q.chn, q.update, q.waiting_for_interlock))
+                                .collect::<Vec<_>>()
+                        );
+                        eprintln!(
+                            "kf3: display: STALL recent effects (seq, kind, chn, handle, offset, awaken-or-value, ok; oldest first): {:?}",
+                            fx_ring.iter().rev().take(60).rev().collect::<Vec<_>>()
+                        );
+                        eprintln!(
+                            "kf3: display: STALL recent events (seq, event; oldest first): {:?}",
+                            {
+                                let e = engine.recent_events();
+                                let from = e.len().saturating_sub(200);
+                                e[from..].to_vec()
+                            }
+                        );
+                        for chn in [0u32, 1, 5, 33, 37] {
+                            let words = engine.pushbuffer(chn).and_then(|(pb, decoded, _)| {
+                                io.pushbuffer(pb).ok().map(|b| {
+                                    let at = (decoded as usize & !3).saturating_sub(16);
+                                    b.get(at..(at + 64).min(b.len()))
+                                        .unwrap_or(&[])
+                                        .chunks_exact(4)
+                                        .map(|w| u32::from_le_bytes([w[0], w[1], w[2], w[3]]))
+                                        .collect::<Vec<_>>()
+                                })
+                            });
+                            eprintln!(
+                                "kf3: display: STALL chn {chn}: PUT {:#x} ports-generation {} engine {:?} generation {:?}; ring words from decoded-16: {:x?}",
+                                dp.ports.put(chn),
+                                dp.ports.generation(chn),
+                                engine.chan_state(chn),
+                                engine.generation(chn),
+                                words
+                            );
+                        }
+                        eprintln!(
+                            "kf3: display: STALL context: queue {}/{QUEUE_CAP} copies started {} done {} barrier {} inflight {} want {} failed {} nonflip_pending {} vblanks_total {} ticks_per_head {:?} heads_armed {:?}",
+                            queue.len(),
+                            scan.started,
+                            scan.done,
+                            scan.barrier,
+                            scan.inflight.is_some(),
+                            scan.want,
+                            scan.failed,
+                            scan.nonflip.pending(),
+                            dp.counters.vblanks.load(Ordering::Relaxed),
+                            counts.iter().map(|c| c.ticks).collect::<Vec<_>>(),
+                            engine
+                                .heads_armed()
+                                .iter()
+                                .map(|m| (m.head, m.period_ns))
+                                .collect::<Vec<_>>()
+                        );
+                    }
+                }
+                stall_reported.retain(|k| parked.iter().any(|p| (p.chn, p.update) == *k));
+            }
             // 5. acquires waiting without a vblank
             if engine.acquire_pending() {
                 let s = engine.poll_acquires(&mut |a| io.acquired(a));
@@ -2944,7 +3064,11 @@ impl Device {
                         awaken,
                         finished,
                     } => {
-                        let status = if finished { io.notifier_finished } else { io.notifier_begun };
+                        let status = if finished {
+                            io.notifier_finished
+                        } else {
+                            io.notifier_begun
+                        };
                         let r = io.resolve(client, handle, chn).and_then(|dma| {
                             let ts = self.rm.gpu_time_ns().unwrap_or(0);
                             let mut n = [0u8; 16];
@@ -2954,6 +3078,23 @@ impl Device {
                             io.write(dma, offset + 4, &n[4..16])?;
                             io.write(dma, offset, &status.to_le_bytes())
                         });
+                        fx_seq += 1;
+                        if fx_ring.len() >= 192 {
+                            fx_ring.pop_front();
+                        }
+                        fx_ring.push_back((
+                            fx_seq,
+                            if finished {
+                                "NOTIFY-FINISHED"
+                            } else {
+                                "NOTIFY-BEGUN"
+                            },
+                            chn,
+                            handle,
+                            offset,
+                            u64::from(awaken),
+                            r.is_ok(),
+                        ));
                         if trace {
                             eprintln!(
                                 "kf3: display: TRACE notify chn {chn} handle {handle:#x} +{offset:#x} awaken={awaken} -> {r:?}"
@@ -2988,6 +3129,19 @@ impl Device {
                             let b = value.to_le_bytes();
                             io.write(dma, offset, if wide { &b[..] } else { &b[..4] })
                         });
+                        fx_seq += 1;
+                        if fx_ring.len() >= 192 {
+                            fx_ring.pop_front();
+                        }
+                        fx_ring.push_back((
+                            fx_seq,
+                            "RELEASE",
+                            chn,
+                            handle,
+                            offset,
+                            value,
+                            r.is_ok(),
+                        ));
                         if trace {
                             eprintln!(
                                 "kf3: display: TRACE release chn {chn} handle {handle:#x} +{offset:#x} value {value:#x} -> {r:?}"
@@ -3046,7 +3200,8 @@ impl Device {
                 std::sync::atomic::fence(Ordering::SeqCst);
             }
             for h in due {
-                let irq = frame_edge_out(dp, &store, h, edge_frame[h], loadv, wtrace, &vsync_traced);
+                let irq =
+                    frame_edge_out(dp, &store, h, edge_frame[h], loadv, wtrace, &vsync_traced);
                 raised |= irq != 0;
                 if irq & dp.map.head_vblank != 0 {
                     counts[h].vblirq += 1;
@@ -3231,6 +3386,66 @@ fn console_composition(engine: &Engine, dp: &DisplayPlane) -> Option<Composition
         .find_map(|m| engine.composition(sv, m.head))
 }
 
+/// ★ One composed item of a copy, in back-to-front order ([`z_order`]): an RGB layer or a YUV window,
+/// by index into the plan.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Z {
+    /// `planned.layers[i]`.
+    Rgb(usize),
+    /// `planned.yuv[j]`.
+    Yuv(usize),
+}
+
+/// ★ The back-to-front order of a copy's RGB layers and YUV windows: deepest
+/// `SET_COMPOSITION_CONTROL.DEPTH` first, equal depths in window order (the engine's own order for
+/// [`Composition::layers`]). `depth` maps a window to its armed depth. Without a YUV window the
+/// RGB layers keep the order they were planned in (a preserved composition is already ordered).
+fn z_order(
+    layers: &[LayerPlan],
+    yuv: &[kf_disp::scanout::YuvPlan],
+    depth: impl Fn(u32) -> u32,
+) -> Vec<Z> {
+    let mut v: Vec<(u32, u32, Z)> = layers
+        .iter()
+        .enumerate()
+        .map(|(i, l)| (depth(l.window), l.window, Z::Rgb(i)))
+        .chain(
+            yuv.iter()
+                .enumerate()
+                .map(|(j, y)| (depth(y.window), y.window, Z::Yuv(j))),
+        )
+        .collect();
+    if !yuv.is_empty() {
+        v.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
+    }
+    v.into_iter().map(|(_, _, z)| z).collect()
+}
+
+/// The kf-cuda mirror of a planned YUV window.
+fn yuv_layer(l: &kf_disp::scanout::YuvPlan) -> kf_cuda::display::YuvLayer {
+    kf_cuda::display::YuvLayer {
+        y_src: l.y_src,
+        y_extent: l.y_extent,
+        c_src: l.c_src,
+        c_extent: l.c_extent,
+        block_linear: l.block_linear,
+        y_pitch: l.y_pitch,
+        c_pitch: l.c_pitch,
+        block_height_log2: l.block_height_log2,
+        sx0: l.sx0,
+        sy0: l.sy0,
+        sw: l.sw,
+        sh: l.sh,
+        ox: l.ox,
+        oy: l.oy,
+        dw: l.dw,
+        dh: l.dh,
+        sub_x_log2: l.sub_x_log2,
+        sub_y_log2: l.sub_y_log2,
+        vu_first: l.vu_first,
+    }
+}
+
 /// The kf-cuda mirror of a planned layer.
 fn compose_layer(l: &LayerPlan) -> ComposeLayer {
     ComposeLayer {
@@ -3322,6 +3537,16 @@ const FRAME_MAX: usize = kf_disp::scanout::MAX_PIXELS as usize * 4;
 /// grab; in hover only a cursor the host cannot show ([`CursorMode::composes`]).
 fn cursor_composed(mode: CursorMode, want: Option<&CursorWant>) -> bool {
     want.is_none_or(|w| mode.composes(w))
+}
+
+/// ★ Who a failed scanout copy is the failure of ([`ScanState::fault`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Fault {
+    /// The console cannot show it; nothing reached the GPU or the guest's display. The flips
+    /// behind the copy complete.
+    Console(String),
+    /// Work sent to the GPU failed or was lost. The display stops; nothing is forged.
+    Gpu(String),
 }
 
 /// ★ M2 — the worker's scanout copies (`V3_DISPLAY.md` §4.6). One copy in flight at a time, on the
@@ -3626,20 +3851,54 @@ impl ScanState {
     /// ★ Copy `n` is over (published, found unchanged, refused, or given up): the completions
     /// behind it go, and the refresh requests it started after are served.
     fn finish(&mut self, dp: &DisplayPlane, n: u64, req: u64) {
+        self.finish_with(&dp.counters, &dp.console, n, req);
+    }
+
+    fn finish_with(&mut self, c: &DispCounters, console: &ConsoleShare, n: u64, req: u64) {
         self.done = self.done.max(n);
         if self.nonflip.serve(req) {
-            dp.counters.ondemand.fetch_add(1, Ordering::Relaxed);
-            dp.console.serve_refresh(req);
+            c.ondemand.fetch_add(1, Ordering::Relaxed);
+            console.serve_refresh(req);
         }
     }
 
     /// ★ Nothing can be copied now (nothing shown, no GPU): every waiting request is served by the
     /// frame the console already has.
     fn serve_now(&mut self, dp: &DisplayPlane) {
+        self.serve_now_with(&dp.counters, &dp.console);
+    }
+
+    fn serve_now_with(&mut self, c: &DispCounters, console: &ConsoleShare) {
         let req = self.nonflip.snapshot();
         if self.nonflip.serve(req) {
-            dp.counters.ondemand.fetch_add(1, Ordering::Relaxed);
-            dp.console.serve_refresh(req);
+            c.ondemand.fetch_add(1, Ordering::Relaxed);
+            console.serve_refresh(req);
+        }
+    }
+
+    /// ★ A copy `n` that cannot be made. The two kinds are NOT alike:
+    ///
+    /// * [`Fault::Console`]: the console (the host's viewer, not the guest's scanout) cannot
+    ///   show something: a colour program it cannot build. The display engine here is emulated
+    ///   and no GPU work stands behind the guest's flip, so the flips behind this copy COMPLETE
+    ///   ([`ScanState::finish`]) with the console keeping its last good frame; the refusal is
+    ///   loud (named counter, the first lines in the log). Never sets `failed`: a console-only
+    ///   refusal must not halt the guest's display channels (run 296: it did, and the guest's
+    ///   flips stopped until the TDR).
+    /// * [`Fault::Gpu`]: work sent to the GPU failed or was lost: no synthetic success, `failed`
+    ///   stops the display (`engine.halt_scanout`).
+    fn fault(&mut self, c: &DispCounters, console: &ConsoleShare, n: u64, req: u64, f: Fault) {
+        match f {
+            Fault::Console(why) => {
+                c.console_copies_skipped.fetch_add(1, Ordering::Relaxed);
+                self.note_refusal(c, &why);
+                self.finish_with(c, console, n, req);
+            }
+            Fault::Gpu(why) => {
+                self.note_refusal(c, &why);
+                self.failed = true;
+                self.serve_now_with(c, console);
+            }
         }
     }
 
@@ -3834,7 +4093,11 @@ impl ScanState {
     }
 
     fn refuse(&mut self, dp: &DisplayPlane, why: &str) {
-        dp.counters.scanout_refused.fetch_add(1, Ordering::Relaxed);
+        self.note_refusal(&dp.counters, why);
+    }
+
+    fn note_refusal(&mut self, c: &DispCounters, why: &str) {
+        c.scanout_refused.fetch_add(1, Ordering::Relaxed);
         if self.refusals_logged < 16 {
             self.refusals_logged += 1;
             eprintln!("kf3: display: scanout REFUSED {why}");
@@ -4008,12 +4271,15 @@ impl ScanState {
         });
         for e in &planned.refused {
             self.refuse(dp, e);
+            dp.counters
+                .console_windows_left_out
+                .fetch_add(1, Ordering::Relaxed);
         }
         let color = if let (Some((t, win, core)), Shown::Armed(comp)) = (dp.sdr_color, shown) {
             let program = (|| -> Result<_, String> {
-                if !planned.refused.is_empty() {
-                    return Err("colour frame has refused windows".into());
-                }
+                // ★ a window the console cannot compose (planned.refused, already counted and named)
+                // is simply not among `planned.layers`: the colour frame is composed without it.
+                // It used to fail the whole copy, and `failed` halted the guest's display.
                 let mut inputs = Vec::new();
                 let x = color_experiments();
                 let mut matrices = Vec::new();
@@ -4115,9 +4381,14 @@ impl ScanState {
             match program {
                 Ok(p) => Some(p),
                 Err(e) => {
-                    self.refuse(dp, &format!("SDR colour program: {e}"));
-                    self.failed = true;
-                    self.serve_now(dp);
+                    // the console's colour conversion of this frame is what failed: console-only
+                    self.fault(
+                        &dp.counters,
+                        &dp.console,
+                        n,
+                        req,
+                        Fault::Console(format!("SDR colour program: {e}")),
+                    );
                     return;
                 }
             }
@@ -4155,45 +4426,138 @@ impl ScanState {
             self.finish(dp, n, req);
             return;
         };
-        let composed =
-            if let Some((inputs, out, matrix)) = &color {
-                gpu.color_begin(w, h)
-                    .and_then(|()| {
-                        planned.layers.iter().zip(inputs).try_for_each(
-                            |(l, (lut, tmo, program))| {
-                                gpu.color_pipeline_layer(
-                                    l.window,
-                                    &compose_layer(l),
-                                    *lut,
-                                    *tmo,
-                                    Some(program),
-                                    w,
-                                    h,
-                                )
-                            },
-                        )
-                    })
-                    .and_then(|()| gpu.color_output(w, h, *out, matrix))
-                    .and_then(|()| {
-                        layers[planned.layers.len()..]
-                            .iter()
-                            .try_for_each(|l| gpu.compose_layer(&compose_layer(l), w, h))
-                    })
-                    .map_err(|e| format!("SDR composition {w}x{h}: {e}"))
+        // ★ the YUV windows: composed after the RGB layers and before the cursor. Without the
+        // kernel, or for a window the kernel's own bounds refuse, the window is left out of the
+        // console copy by name (console-only); a real CUDA error still fails the copy.
+        let yuv_run: &[kf_disp::scanout::YuvPlan] = match (planned.yuv.is_empty(), gpu.yuv_ready())
+        {
+            (true, _) => &[],
+            (false, Ok(())) => &planned.yuv,
+            (false, Err(e)) => {
+                for y in &planned.yuv {
+                    self.note_refusal(
+                        &dp.counters,
+                        &format!("window {} left out of the console copy: {e}", y.window),
+                    );
+                    dp.counters
+                        .console_windows_left_out
+                        .fetch_add(1, Ordering::Relaxed);
+                }
+                &[]
+            }
+        };
+        let mut yuv_left_out: Vec<String> = Vec::new();
+        // ★ one YUV window onto the staging frame (`colour`: the FP32 frame of the SDR pipeline)
+        let mut yuv_one = |gpu: &kf_cuda::display::DisplayGpu,
+                           y: &kf_disp::scanout::YuvPlan,
+                           colour: bool|
+         -> Result<(), kf_cuda::CudaError> {
+            let l = yuv_layer(y);
+            let r = if colour {
+                gpu.color_yuv(&l, w, h)
             } else {
-                gpu.compose_begin(w, h)
-                    .map_err(|e| format!("composition {w}x{h}: {e}"))
-                    .and_then(|()| {
-                        layers.iter().try_for_each(|l| {
-                            gpu.compose_layer(&compose_layer(l), w, h)
-                                .map_err(|e| format!("window {}: {e}", l.window))
-                        })
-                    })
+                gpu.compose_yuv(&l, w, h)
             };
+            match r {
+                Err(kf_cuda::CudaError::Refused { code: 0, name, .. }) => {
+                    yuv_left_out.push(format!("window {}: {name}", y.window));
+                    Ok(())
+                }
+                r => r,
+            }
+        };
+        // ★ the programmed depth order: RGB layers and YUV windows back to front by
+        // `SET_COMPOSITION_CONTROL.DEPTH` (deepest first), not "YUV last"
+        let depth_of = |win: u32| match shown {
+            Shown::Armed(c) => c
+                .layers
+                .iter()
+                .find(|l| l.window == win)
+                .map_or(0, |l| l.depth),
+            _ => 0,
+        };
+        let order = z_order(&planned.layers, yuv_run, depth_of);
+        if !yuv_run.is_empty() {
+            static ORDER_LOGGED: AtomicU32 = AtomicU32::new(0);
+            if trace_slot(&ORDER_LOGGED, 4) {
+                let depths: Vec<_> = match shown {
+                    Shown::Armed(c) => c
+                        .layers
+                        .iter()
+                        .map(|l| {
+                            (
+                                l.window,
+                                l.depth,
+                                l.format,
+                                l.src_factor,
+                                l.dst_factor,
+                                l.k1,
+                            )
+                        })
+                        .collect(),
+                    _ => Vec::new(),
+                };
+                eprintln!(
+                    "kf3: display: composition with a YUV window: (window, depth, format, src_factor, dst_factor, k1) {depths:?}; back-to-front order {order:?}"
+                );
+            }
+        }
+        let n_rgb = planned.layers.len();
+        let composed = if let Some((inputs, out, matrix)) = &color {
+            gpu.color_begin(w, h)
+                .and_then(|()| {
+                    order.iter().try_for_each(|z| match *z {
+                        Z::Rgb(i) => {
+                            let (lut, tmo, program) = &inputs[i];
+                            gpu.color_pipeline_layer(
+                                planned.layers[i].window,
+                                &compose_layer(&planned.layers[i]),
+                                *lut,
+                                *tmo,
+                                Some(program),
+                                w,
+                                h,
+                            )
+                        }
+                        Z::Yuv(j) => yuv_one(gpu, &yuv_run[j], true),
+                    })
+                })
+                .and_then(|()| gpu.color_output(w, h, *out, matrix))
+                .and_then(|()| {
+                    layers[n_rgb..]
+                        .iter()
+                        .try_for_each(|l| gpu.compose_layer(&compose_layer(l), w, h))
+                })
+                .map_err(|e| format!("SDR composition {w}x{h}: {e}"))
+        } else {
+            gpu.compose_begin(w, h)
+                .map_err(|e| format!("composition {w}x{h}: {e}"))
+                .and_then(|()| {
+                    order.iter().try_for_each(|z| match *z {
+                        Z::Rgb(i) => gpu
+                            .compose_layer(&compose_layer(&layers[i]), w, h)
+                            .map_err(|e| format!("window {}: {e}", layers[i].window)),
+                        Z::Yuv(j) => {
+                            yuv_one(gpu, &yuv_run[j], false).map_err(|e| format!("YUV window: {e}"))
+                        }
+                    })
+                })
+                .and_then(|()| {
+                    layers[n_rgb..].iter().try_for_each(|l| {
+                        gpu.compose_layer(&compose_layer(l), w, h)
+                            .map_err(|e| format!("window {}: {e}", l.window))
+                    })
+                })
+        };
+        for why in std::mem::take(&mut yuv_left_out) {
+            self.note_refusal(&dp.counters, &format!("YUV {why}"));
+            dp.counters
+                .console_windows_left_out
+                .fetch_add(1, Ordering::Relaxed);
+        }
         if let Err(e) = composed {
-            self.refuse(dp, &e);
-            self.failed = true;
-            self.serve_now(dp);
+            // work sent to the GPU failed: no synthetic success
+            self.fault(&dp.counters, &dp.console, n, req, Fault::Gpu(e));
             return;
         }
         // ★ §8.16: the change detector, queued behind the composition (a refusal costs only the
@@ -4443,6 +4807,35 @@ impl ScanState {
             Shown::Blank(_) => &[],
         };
         for so in windows {
+            // ★ a semi-planar YUV window (Edge's video overlay, `FORMAT 0x38`): its own planner
+            if let Some(yf) = formats.yuv_of(so.format) {
+                let planned = self.latched.resolve(so, || resolve(so)).and_then(|y_dma| {
+                    let c_dma = if so.iso1 == 0 || so.iso1 == so.handle {
+                        y_dma
+                    } else {
+                        resolve(&kf_disp::engine::Scanout {
+                            handle: so.iso1,
+                            ..*so
+                        })?
+                    };
+                    kf_disp::scanout::plan_yuv(so, yf, &y_dma, &c_dma, w, h).map_err(|r| r.0)
+                });
+                match planned {
+                    Ok(Some(l)) => {
+                        static LOGGED: AtomicU32 = AtomicU32::new(0);
+                        if trace_slot(&LOGGED, 6) {
+                            eprintln!(
+                                "kf3: display: YUV window {} composed for the console: armed {so:?} -> {l:?}",
+                                so.window
+                            );
+                        }
+                        p.yuv.push(l);
+                    }
+                    Ok(None) => {}
+                    Err(e) => p.refused.push(e),
+                }
+                continue;
+            }
             let planned = self.latched.resolve(so, || resolve(so)).and_then(|dma| {
                 kf_disp::scanout::plan_layer(so, &dma, formats, w, h).map_err(|r| r.0)
             });
@@ -4980,6 +5373,10 @@ mod tests {
             out_y: 0,
             out_width: 1920,
             out_height: 1080,
+            iso1: 0,
+            offset1: 0,
+            pitch1: 0,
+            swap_uv: false,
             depth: 0,
             k1: 255,
             k2: 0,
@@ -5224,6 +5621,220 @@ mod tests {
         assert_eq!(
             scan.plan(&armed, &formats, size, 7, unbound).refused.len(),
             1
+        );
+    }
+
+    /// ★ Windows playback (run 296, 2026-10-10): Edge's YUV video overlay (window 4, `SET_PARAMS.FORMAT`
+    /// 0x38) has no console pixel format. The SDR colour program used to fail the whole copy for
+    /// it (`colour frame has refused windows`), `failed` was set for the VM's life and the display
+    /// thread halted EVERY guest display channel: window 0's flips froze and the guest reset the GPU
+    /// (TDR). A console-only refusal now leaves the window out of the console copy, the flips behind
+    /// the copy complete, nothing is halted, and the refusal is counted by name. A GPU failure still
+    /// stops the display (known-positive: no forged completion for work that reached the GPU).
+    #[test]
+    fn a_console_only_refusal_completes_the_flip_and_never_halts_the_display() {
+        let formats =
+            ScanFormats::resolve(kf_disp::class::for_version("580.159.04").unwrap(), 0xC67E);
+        let desktop = kf_disp::engine::Scanout {
+            window: 0,
+            head: 0,
+            ..scanout_6()
+        };
+        let video = kf_disp::engine::Scanout {
+            window: 4,
+            head: 0,
+            format: 0x38,
+            iso1: 0,
+            offset1: 0x10_0000,
+            pitch1: 120,
+            width: 1920,
+            height: 1080,
+            ..scanout_6()
+        };
+        assert!(formats.of(video.format).is_none(), "no RGB console format");
+        assert!(
+            formats.yuv_of(video.format).is_some(),
+            "but a console YUV format"
+        );
+        let armed = Shown::Armed(Composition {
+            head: 0,
+            width: 1920,
+            height: 1080,
+            layers: vec![desktop, video],
+        });
+        let console_dma = CtxDma {
+            target: Target::Vidmem,
+            base: 0,
+            limit: 0x7F_FFFF,
+            block_linear: false,
+            writable: true,
+        };
+        let mut scan = ScanState::default();
+        let planned = scan.plan(&armed, &formats, (1920, 1080), 1, |_| Ok(console_dma));
+        assert_eq!(
+            planned.layers.len(),
+            1,
+            "the desktop window is still composed"
+        );
+        assert_eq!(planned.layers[0].window, 0);
+        assert_eq!(
+            planned.yuv.len(),
+            1,
+            "the YUV overlay is composed for the console"
+        );
+        assert_eq!(planned.yuv[0].window, 4);
+        assert!(planned.refused.is_empty(), "{:?}", planned.refused);
+        // a window format nothing can compose (I8) is left out by name, console-only
+        let odd = kf_disp::engine::Scanout {
+            format: 0x1E,
+            ..video
+        };
+        let armed_odd = Shown::Armed(Composition {
+            head: 0,
+            width: 1920,
+            height: 1080,
+            layers: vec![desktop, odd],
+        });
+        let planned = scan.plan(&armed_odd, &formats, (1920, 1080), 2, |_| Ok(console_dma));
+        assert_eq!(planned.layers.len(), 1);
+        assert!(planned.yuv.is_empty());
+        assert_eq!(planned.refused.len(), 1);
+        assert!(
+            planned.refused[0].contains("0x1e has no console format"),
+            "{:?}",
+            planned.refused
+        );
+
+        // a flip of window 0 waits for copy 1; the copy cannot be made for the console
+        let (counters, console) = (DispCounters::default(), ConsoleShare::default());
+        scan.barrier = 1;
+        scan.started = 1;
+        scan.fault(
+            &counters,
+            &console,
+            1,
+            0,
+            Fault::Console("SDR colour program: x".into()),
+        );
+        assert!(
+            !scan.failed,
+            "the display thread would halt every guest channel on this"
+        );
+        assert!(
+            scan.done >= scan.barrier,
+            "the flip queued behind copy 1 is released"
+        );
+        assert_eq!(counters.console_copies_skipped.load(Ordering::Relaxed), 1);
+        assert_eq!(counters.scanout_refused.load(Ordering::Relaxed), 1);
+        // ... and the next copy is made as usual
+        scan.barrier = 2;
+        scan.started = 2;
+        scan.finish_with(&counters, &console, 2, 0);
+        assert!(scan.done >= scan.barrier && !scan.failed);
+
+        // known-positive: a lost or failed GPU copy still stops the display and completes nothing
+        let mut gpu = ScanState::default();
+        gpu.barrier = 1;
+        gpu.started = 1;
+        gpu.fault(
+            &counters,
+            &console,
+            1,
+            0,
+            Fault::Gpu("the completion signal: x".into()),
+        );
+        assert!(gpu.failed);
+        assert!(gpu.done < gpu.barrier, "no forged completion for GPU work");
+    }
+
+    /// ★ The overlay's place is its programmed depth, not "last": a base plane in front of the video
+    /// (an underlay with an alpha hole, depth smaller than the video's) composes AFTER it; a video in
+    /// front of the base composes after the base; equal depths follow the window order.
+    #[test]
+    fn rgb_layers_and_yuv_windows_compose_in_programmed_depth_order() {
+        let rgb = |window| LayerPlan {
+            window,
+            src: 0,
+            extent: 0,
+            block_linear: false,
+            pitch: 0,
+            block_height_log2: 0,
+            x0_bytes: 0,
+            y0: 0,
+            width: 1,
+            rows: 1,
+            ox: 0,
+            oy: 0,
+            flags: 0,
+            a_s: 255,
+            b_s: 0,
+            a_d: 0,
+            b_d: 0,
+        };
+        let yuv = |window| kf_disp::scanout::YuvPlan {
+            window,
+            y_src: 0,
+            y_extent: 0,
+            c_src: 0,
+            c_extent: 0,
+            block_linear: false,
+            y_pitch: 0,
+            c_pitch: 0,
+            block_height_log2: 0,
+            sx0: 0,
+            sy0: 0,
+            sw: 1,
+            sh: 1,
+            ox: 0,
+            oy: 0,
+            dw: 1,
+            dh: 1,
+            sub_x_log2: 1,
+            sub_y_log2: 1,
+            vu_first: false,
+        };
+        let d = |m: &[(u32, u32)]| {
+            let m = m.to_vec();
+            move |w: u32| m.iter().find(|(x, _)| *x == w).map_or(0, |(_, d)| *d)
+        };
+        // Windows' MPO as measured (run 401): base window 0, overlay window 4 at depth 11
+        assert_eq!(
+            z_order(&[rgb(0)], &[yuv(4)], d(&[(0, 255), (4, 11)])),
+            [Z::Rgb(0), Z::Yuv(0)],
+            "the video in front of the base"
+        );
+        // the underlay: the base plane (alpha hole) in front of the video
+        assert_eq!(
+            z_order(&[rgb(0)], &[yuv(4)], d(&[(0, 5), (4, 11)])),
+            [Z::Yuv(0), Z::Rgb(0)],
+            "the base in front of the video"
+        );
+        // between two RGB layers
+        assert_eq!(
+            z_order(
+                &[rgb(0), rgb(2)],
+                &[yuv(4)],
+                d(&[(0, 255), (2, 100), (4, 50)])
+            ),
+            [Z::Rgb(0), Z::Rgb(1), Z::Yuv(0)]
+        );
+        assert_eq!(
+            z_order(
+                &[rgb(0), rgb(2)],
+                &[yuv(4)],
+                d(&[(0, 255), (2, 20), (4, 50)])
+            ),
+            [Z::Rgb(0), Z::Yuv(0), Z::Rgb(1)]
+        );
+        // equal depth: window order
+        assert_eq!(
+            z_order(&[rgb(3)], &[yuv(1)], d(&[(3, 10), (1, 10)])),
+            [Z::Yuv(0), Z::Rgb(0)]
+        );
+        // no YUV window: the planned order stands, whatever the depths
+        assert_eq!(
+            z_order(&[rgb(2), rgb(0)], &[], d(&[(0, 255), (2, 1)])),
+            [Z::Rgb(0), Z::Rgb(1)]
         );
     }
 

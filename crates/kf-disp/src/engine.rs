@@ -39,6 +39,9 @@ use std::collections::VecDeque;
 
 /// Channel numbers (`NV_PDISP_CHN_NUM_*`).
 pub const CHANNELS: usize = crate::ports::NUM_CHANNELS;
+/// How many events [`Engine::recent_events`] keeps.
+pub const RING_EVENTS: usize = 512;
+
 /// ★ Hostile guest: the most decoded-but-unapplied writes a channel may hold (a 4 KiB ring holds at
 /// most 1023; the rest is a PUT that ignored GET).
 pub const MAX_QUEUE: usize = 4096;
@@ -397,6 +400,57 @@ fn bit(chn: u32) -> ChanSet {
     }
 }
 
+/// ★ One entry of the engine's always-on ring of recent interlock-relevant events
+/// ([`Engine::recent_events`]): what the STALL report prints to name a deadlock.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RingEvent {
+    /// A channel stopped at its `UPDATE` (`update` data word) naming `ilk` as the channels it waits for.
+    Update {
+        /// Channel.
+        chn: u32,
+        /// The UPDATE data word.
+        update: u32,
+        /// The interlock set it named.
+        ilk: u128,
+    },
+    /// A write to an interlock-flags method (`SET_INTERLOCK_FLAGS` or `SET_WINDOW_INTERLOCK_FLAGS`).
+    Flags {
+        /// Channel.
+        chn: u32,
+        /// 0 = `SET_INTERLOCK_FLAGS`, 1 = `SET_WINDOW_INTERLOCK_FLAGS`.
+        window_flags: bool,
+        /// Data written.
+        data: u32,
+    },
+    /// A group latched (the members, as bits).
+    Latch {
+        /// Members.
+        group: u128,
+    },
+}
+
+/// ★ One channel parked at an `UPDATE` ([`Engine::parked`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Parked {
+    /// The channel number.
+    pub chn: u32,
+    /// Its kind and instance (the window index for a window).
+    pub kind: ChannelKind,
+    /// See `kind`.
+    pub instance: u32,
+    /// The UPDATE data word.
+    pub update: u32,
+    /// Waiting for the other members of its interlock group (else latched-pending: a vblank or an
+    /// acquire).
+    pub waiting_for_interlock: bool,
+    /// The channels it waits for (interlock) or the group that latches together, as bits.
+    pub set: u128,
+    /// The head whose vblank it waits for (`None`: only an acquire).
+    pub head: Option<u32>,
+    /// The semaphore acquire its window must satisfy before the latch.
+    pub acquire: Option<Acquire>,
+}
+
 /// Where a pending update stands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Stage {
@@ -514,6 +568,9 @@ pub struct Engine {
     pub trace: bool,
     method_trace_remaining: u32,
     method_trace_configured: bool,
+    /// ★ Always-on ring of the last [`RING_EVENTS`] interlock-relevant events (see [`RingEvent`]).
+    ring: VecDeque<(u64, RingEvent)>,
+    ring_seq: u64,
     /// ★ D1 (`OWNER_RULINGS.md` §M, 2026-10-04): a TEARING (immediate) flip on an active head that
     /// already presented since the head's last tick waits for the next one, so async flips count
     /// against the cap too. In kayfabe a flip copies a finished buffer, so it never tears; the gate
@@ -547,6 +604,8 @@ impl Engine {
             trace: false,
             method_trace_remaining: 0,
             method_trace_configured: false,
+            ring: VecDeque::new(),
+            ring_seq: 0,
             tear_gate: true,
             core_latch_at_vblank: false,
             presented: [false; 8],
@@ -756,6 +815,73 @@ impl Engine {
             .collect()
     }
 
+    fn note(&mut self, e: RingEvent) {
+        ring_push(&mut self.ring, &mut self.ring_seq, e);
+    }
+
+    /// ★ The recent interlock-relevant events, oldest first, with their sequence numbers.
+    #[must_use]
+    pub fn recent_events(&self) -> Vec<(u64, RingEvent)> {
+        self.ring.iter().copied().collect()
+    }
+
+    /// ★ Every channel parked at an `UPDATE` (for its interlock group, or for a vblank/an acquire),
+    /// as plain data for the display thread's stall report: `(channel, window or kind, stage,
+    /// group bits, head, the acquire it must satisfy)`. Read-only; never decides anything.
+    #[must_use]
+    pub fn parked(&self) -> Vec<Parked> {
+        let mut out = Vec::new();
+        for (n, c) in self.chans.iter().enumerate() {
+            let Some(c) = c else { continue };
+            let n = n as u32;
+            match c.stage {
+                Stage::Running => {}
+                Stage::Interlock { update, ilk } => out.push(Parked {
+                    chn: n,
+                    kind: c.kind,
+                    instance: c.instance,
+                    update,
+                    waiting_for_interlock: true,
+                    set: ilk,
+                    head: None,
+                    acquire: None,
+                }),
+                Stage::Latch {
+                    update,
+                    head,
+                    group,
+                } => out.push(Parked {
+                    chn: n,
+                    kind: c.kind,
+                    instance: c.instance,
+                    update,
+                    waiting_for_interlock: false,
+                    set: group,
+                    head,
+                    acquire: self.acquire_of(n),
+                }),
+            }
+        }
+        out
+    }
+
+    /// ★ Diagnostic: channel `chn`'s decode state `(decoded, get, queued writes, halted, stage name)`.
+    #[must_use]
+    pub fn chan_state(&self, chn: u32) -> Option<(u32, u32, usize, bool, &'static str)> {
+        let c = self.chans.get(chn as usize)?.as_ref()?;
+        Some((
+            c.decoded,
+            c.get,
+            c.queue.len(),
+            c.halted,
+            match c.stage {
+                Stage::Running => "running",
+                Stage::Interlock { .. } => "interlock",
+                Stage::Latch { .. } => "latch",
+            },
+        ))
+    }
+
     /// Is any update waiting for an acquire without a vblank to re-check it?
     #[must_use]
     pub fn acquire_pending(&self) -> bool {
@@ -880,6 +1006,15 @@ impl Engine {
                     ilk,
                 };
                 c.get = l.header;
+                ring_push(
+                    &mut self.ring,
+                    &mut self.ring_seq,
+                    RingEvent::Update {
+                        chn: n,
+                        update: l.write.data,
+                        ilk,
+                    },
+                );
                 if self.trace {
                     st.effects.push(Effect::Trace(format!(
                         "chn {n} UPDATE {:#x} at {:#x} waits for {ilk:#x}",
@@ -923,6 +1058,19 @@ impl Engine {
                     }
                 }
             }
+            if c.kind == ChannelKind::Window
+                && (m == vocab.w_interlock || m == vocab.w_window_interlock)
+            {
+                ring_push(
+                    &mut self.ring,
+                    &mut self.ring_seq,
+                    RingEvent::Flags {
+                        chn: n,
+                        window_flags: m == vocab.w_window_interlock,
+                        data: l.write.data,
+                    },
+                );
+            }
             c.assy[(m / 4) as usize] = l.write.data;
             self.methods += 1;
             c.queue.pop_front();
@@ -953,6 +1101,19 @@ impl Engine {
         let live: ChanSet = (0..CHANNELS as u32)
             .filter(|n| self.chans[*n as usize].is_some())
             .fold(0, |m, n| m | bit(n));
+        // ★ 2026-10-10 (runs 400/403): a channel whose UPDATE is already parked for its vblank or
+        // acquire (Stage::Latch) is still a PENDING update in hardware until it latches. A later
+        // UPDATE that names it joins its latch (with the channels it latches with) instead of waiting
+        // for another UPDATE on that channel, which the driver does not send while it waits for the
+        // flip to complete.
+        let latching: ChanSet = (0..CHANNELS as u32)
+            .filter(|n| {
+                matches!(
+                    self.chans[*n as usize].as_ref().map(|c| c.stage),
+                    Some(Stage::Latch { .. })
+                )
+            })
+            .fold(0, |m, n| m | bit(n));
         for start in 0..CHANNELS as u32 {
             if pending & bit(start) == 0 {
                 continue;
@@ -981,11 +1142,21 @@ impl Engine {
                         }
                     }
                 }
-                if want & !pending != 0 {
+                if want & !(pending | latching) != 0 {
                     ready = false;
                     break;
                 }
-                let next = group | want;
+                // a joined latching channel brings the group it latches with
+                let mut joined = want;
+                for n in 0..CHANNELS as u32 {
+                    if want & latching & bit(n) != 0
+                        && let Some(Stage::Latch { group: g, .. }) =
+                            self.chans[n as usize].as_ref().map(|c| c.stage)
+                    {
+                        joined |= g;
+                    }
+                }
+                let next = group | joined;
                 if next == group {
                     break;
                 }
@@ -1050,7 +1221,7 @@ impl Engine {
         let set = group.iter().fold(0, |m, n| m | bit(*n));
         for &n in group {
             if let Some(c) = self.chans[n as usize].as_mut()
-                && let Stage::Interlock { update, .. } = c.stage
+                && let Stage::Interlock { update, .. } | Stage::Latch { update, .. } = c.stage
             {
                 c.stage = Stage::Latch {
                     update,
@@ -1137,6 +1308,9 @@ impl Engine {
                 return;
             }
         }
+        self.note(RingEvent::Latch {
+            group: members.iter().fold(0u128, |m, n| m | bit(*n)),
+        });
         let heads_before = self.heads_armed();
         // ★ A window's flip raises its FLIP event (AWAKEN) only if the window was scanning a surface on
         // an active head BEFORE this update: nvidia-drm queues events only for "planes which were
@@ -1297,7 +1471,8 @@ impl Engine {
                     st.effects.extend(notify);
                 }
                 // the new entry's own notifier: BEGUN
-                st.effects.extend(Self::notify_of(&v, c, n, Chan::armed, false, was_active));
+                st.effects
+                    .extend(Self::notify_of(&v, c, n, Chan::armed, false, was_active));
             }
             ChannelKind::WindowImm | ChannelKind::Cursor => {}
         }
@@ -1497,6 +1672,15 @@ pub struct Scanout {
     pub out_width: u32,
     /// Output height.
     pub out_height: u32,
+    /// ★ Plane 1 (the chroma plane of a semi-planar YUV format): `SET_CONTEXT_DMA_ISO(1)` handle
+    /// (0 = the class has no plane 1, or it was never programmed: the luma plane's context DMA).
+    pub iso1: u32,
+    /// `SET_OFFSET(1)` in bytes.
+    pub offset1: u64,
+    /// `SET_PLANAR_STORAGE(1).PITCH`, in the units of `pitch`.
+    pub pitch1: u32,
+    /// `SET_PARAMS.SWAP_UV`.
+    pub swap_uv: bool,
     /// `SET_COMPOSITION_CONTROL.DEPTH` — smaller is closer to the front (`nvkms-evo3.c:4813`).
     pub depth: u32,
     /// `SET_COMPOSITION_CONSTANT_ALPHA.K1` / `.K2`.
@@ -1535,6 +1719,10 @@ pub struct ScanVocab {
     params: (u32, (u8, u8)),
     storage: (u32, (u8, u8)),
     size_out: (u32, (u8, u8), (u8, u8)),
+    /// Plane 1 of a semi-planar format (`None`: the class names none).
+    plane1: Option<(u32, u32, u32, (u8, u8))>,
+    /// `SET_PARAMS.SWAP_UV`.
+    swap_uv: Option<(u8, u8)>,
     comp_depth: (u32, (u8, u8)),
     comp_alpha: (u32, (u8, u8), (u8, u8)),
     comp_factor: (u32, (u8, u8), (u8, u8)),
@@ -1579,6 +1767,15 @@ impl ScanVocab {
                 t.f(win, "SET_STORAGE_BLOCK_HEIGHT")?,
             ),
             size_out: wh("SET_SIZE_OUT")?,
+            plane1: (|| {
+                Some((
+                    t.a(win, "SET_CONTEXT_DMA_ISO", 1)?,
+                    t.a(win, "SET_OFFSET", 1)?,
+                    t.a(win, "SET_PLANAR_STORAGE", 1)?,
+                    t.f(win, "SET_PLANAR_STORAGE_PITCH")?,
+                ))
+            })(),
+            swap_uv: t.f(win, "SET_PARAMS_SWAP_UV"),
             comp_depth: (
                 t.v(win, "SET_COMPOSITION_CONTROL")?,
                 t.f(win, "SET_COMPOSITION_CONTROL_DEPTH")?,
@@ -1696,6 +1893,12 @@ impl Engine {
                 out_y: fld(point_out, qy),
                 out_width: fld(c.armed(om), ow),
                 out_height: fld(c.armed(om), oh),
+                iso1: sv.plane1.map_or(0, |p| c.armed(p.0)),
+                offset1: sv.plane1.map_or(0, |p| u64::from(c.armed(p.1)) << 8),
+                pitch1: sv.plane1.map_or(0, |p| fld(c.armed(p.2), p.3)),
+                swap_uv: sv
+                    .swap_uv
+                    .is_some_and(|f| fld(c.armed(sv.params.0), f) != 0),
                 depth: fld(c.armed(sv.comp_depth.0), sv.comp_depth.1),
                 k1: fld(alpha, sv.comp_alpha.1),
                 k2: fld(alpha, sv.comp_alpha.2),
@@ -1847,6 +2050,14 @@ impl Engine {
             mode: fld(comp, cv.mode),
         })
     }
+}
+
+fn ring_push(ring: &mut VecDeque<(u64, RingEvent)>, seq: &mut u64, e: RingEvent) {
+    if ring.len() >= RING_EVENTS {
+        ring.pop_front();
+    }
+    *seq = seq.wrapping_add(1);
+    ring.push_back((*seq, e));
 }
 
 /// The channels an UPDATE on `c` (with data `update`) waits for.

@@ -168,7 +168,11 @@ mod tests {
             total += sample_lines(&r, &b, REFUSAL_SAMPLE_LINE_CAP).len();
         }
         assert_eq!(total, 32, "10 walks x 8 samples, capped at 32 lines");
-        assert_eq!(b.load(Ordering::Relaxed), 32, "the counter saturates at the cap");
+        assert_eq!(
+            b.load(Ordering::Relaxed),
+            32,
+            "the counter saturates at the cap"
+        );
     }
 
     #[test]

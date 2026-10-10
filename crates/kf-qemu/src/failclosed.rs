@@ -103,7 +103,11 @@ mod tests {
         use std::os::unix::process::ExitStatusExt;
         if let Ok(mode) = std::env::var("KF3_FAILCLOSED_CHILD") {
             install();
-            let name = if mode == "service" { "kf3-vamgr" } else { "kf3-other" };
+            let name = if mode == "service" {
+                "kf3-vamgr"
+            } else {
+                "kf3-other"
+            };
             let h = std::thread::Builder::new()
                 .name(name.into())
                 .spawn(|| panic!("injected"))
@@ -114,16 +118,34 @@ mod tests {
         let me = std::env::current_exe().unwrap();
         let run = |mode: &str| {
             std::process::Command::new(&me)
-                .args(["--exact", "failclosed::tests::a_panic_on_the_va_thread_aborts_the_process_and_names_it", "--nocapture", "--test-threads=1"])
+                .args([
+                    "--exact",
+                    "failclosed::tests::a_panic_on_the_va_thread_aborts_the_process_and_names_it",
+                    "--nocapture",
+                    "--test-threads=1",
+                ])
                 .env("KF3_FAILCLOSED_CHILD", mode)
                 .output()
                 .unwrap()
         };
         let o = run("service");
-        assert_eq!(o.status.signal(), Some(6), "SIGABRT expected: {:?}", o.status);
+        assert_eq!(
+            o.status.signal(),
+            Some(6),
+            "SIGABRT expected: {:?}",
+            o.status
+        );
         let err = String::from_utf8_lossy(&o.stderr);
-        assert!(err.contains("FATAL: service thread") && err.contains("kf3-vamgr"), "{err}");
+        assert!(
+            err.contains("FATAL: service thread") && err.contains("kf3-vamgr"),
+            "{err}"
+        );
         let o = run("other");
-        assert_eq!(o.status.code(), Some(7), "an unrelated thread's panic is not fatal: {:?}", o.status);
+        assert_eq!(
+            o.status.code(),
+            Some(7),
+            "an unrelated thread's panic is not fatal: {:?}",
+            o.status
+        );
     }
 }

@@ -100,7 +100,10 @@ mod tests {
                 match it {
                     Item::Stuck(n) if n + 1 < TRIES => {
                         retries += 1;
-                        q.delay(Instant::now() + Duration::from_millis(1), Item::Stuck(n + 1));
+                        q.delay(
+                            Instant::now() + Duration::from_millis(1),
+                            Item::Stuck(n + 1),
+                        );
                     }
                     Item::Stuck(_) => {}
                     Item::Other(t0) => {
@@ -121,7 +124,11 @@ mod tests {
         let (worst, others, retries, parked) = worker.join().unwrap();
         eprintln!("unrelated acts: worst latency {worst:?} over {others} acts; {retries} retries");
         assert_eq!(others, 40);
-        assert_eq!(retries, STUCK * (TRIES - 1), "every stuck steer got all its tries");
+        assert_eq!(
+            retries,
+            STUCK * (TRIES - 1),
+            "every stuck steer got all its tries"
+        );
         assert_eq!(parked, 0);
         // The sleeping design cost 50 x 1 ms = 50 ms per retry round; here: scheduling only.
         assert!(worst < Duration::from_millis(15), "worst latency {worst:?}");
@@ -136,7 +143,10 @@ mod tests {
         tx.send(1).unwrap();
         assert_eq!(q.next_act(), Some(1), "queued first");
         assert_eq!(q.next_act(), Some(7));
-        assert!(t0.elapsed() >= Duration::from_millis(30), "not before its time");
+        assert!(
+            t0.elapsed() >= Duration::from_millis(30),
+            "not before its time"
+        );
         drop(tx);
         assert_eq!(q.next_act(), None);
     }
