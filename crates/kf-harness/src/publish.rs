@@ -107,6 +107,11 @@ impl<T: MapTarget> MapTarget for Recorded<T> {
     fn map_sked(&self, s: &kf_mem::ledger::SkedRow, defer: bool) -> Result<Mapped, String> {
         self.inner.map_sked(s, defer)
     }
+    // ★ Review fix 2026-10-10: forwarded EXPLICITLY — the trait default (`None`) would keep pages
+    // the inner target's ledger says are not ours, or parts of mappings it cannot split.
+    fn own_view(&self, va: u64, end: u64) -> Option<kf_mem::ledger::OwnView> {
+        self.inner.own_view(va, end)
+    }
 }
 
 /// ★ `V3_BATCHED_MAP.md`: a host space that places VA-contiguous guest-RAM runs as batches

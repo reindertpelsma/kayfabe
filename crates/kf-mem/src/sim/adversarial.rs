@@ -9,8 +9,16 @@
 //!   (its `unmap_range` never fails);
 //! - a guard keyed on the TRANSLATION only (backing + permission + kind), not on the leaf size.
 //!
-//! Tests that FAIL at 6fafcc6e are marked `// EXPECTED TO FAIL at 6fafcc6e` and are `#[ignore]`d
-//! so the default suite stays green; run them with `cargo test -p kf-mem adversarial -- --ignored`.
+//! ★ 2026-10-10 (branch `claude/batched-map-review-fixes-20261010`): every test that FAILED at
+//! 6fafcc6e passes and is in the DEFAULT suite (`// FAILED at 6fafcc6e …`); the huge-row test is
+//! rewritten for the new bound (one mapping per leaf up to `MAX_LEAF_PIECES`, beyond it a micro
+//! reservation or a refusal by name), and section 6 adds targeted tests for findings 4, 5, 6.
+//! Runtime: `adversarial_error_injection_at_every_call_index` is the long one: 4 924
+//! injected runs, 20.4 s in a debug build (measured on the build host, 2026-10-10);
+//! everything else is sub-second. ⊘ Was: "Tests that FAIL at 6fafcc6e are marked `// EXPECTED TO
+//! FAIL at 6fafcc6e` and are `#[ignore]`d so the default suite stays green; run them with `cargo
+//! test -p kf-mem adversarial -- --ignored`." Only `adversarial_debug_replay` is still ignored (it
+//! needs its environment).
 
 use super::*;
 use crate::apply::PermPolicy;
@@ -189,18 +197,24 @@ impl MapTarget for FMirror<'_> {
         true
     }
     fn map(&self, d: &Desired, defer: bool) -> Result<Mapped, String> {
-        let m = self.bv.map(d, defer)?;
-        if m == Mapped::Placed {
+        let m = self.bv.map(d, defer);
+        restore_owned_rows(&mut self.rows.borrow_mut(), &self.bv, d.va, d.va + d.len);
+        if m == Ok(Mapped::Placed) {
             self.rows.borrow_mut().insert(d.va, d.len);
         }
-        Ok(m)
+        m
     }
     fn map_batch(&self, rows: &[Desired], defer: bool) -> Result<(), String> {
         if !self.batching {
             return Err(NOT_BATCHED.into());
         }
-        self.bv
-            .place(std::os::fd::AsFd::as_fd(&std::io::stdin()), rows, defer)?;
+        let res = self
+            .bv
+            .place(std::os::fd::AsFd::as_fd(&std::io::stdin()), rows, defer);
+        if let (Some(a), Some(b)) = (rows.first(), rows.last()) {
+            restore_owned_rows(&mut self.rows.borrow_mut(), &self.bv, a.va, b.va + b.len);
+        }
+        res?;
         let mut r = self.rows.borrow_mut();
         for d in rows {
             r.insert(d.va, d.len);
@@ -214,37 +228,26 @@ impl MapTarget for FMirror<'_> {
         let r = self.bv.unmap_run(va, Some(len), defer);
         if r.is_err() {
             self.rows.borrow_mut().insert(va, len);
+            restore_owned_rows(&mut self.rows.borrow_mut(), &self.bv, va, va + len);
         }
         r
     }
     fn unmap_range(&self, va: u64, len: u64, defer: bool) -> Result<(), String> {
         let end = va + len;
         let saved = self.rows.borrow().clone();
-        {
-            let mut r = self.rows.borrow_mut();
-            let keys: Vec<(u64, u64)> = r
-                .iter()
-                .filter(|&(&k, &l)| k < end && va < k + l)
-                .map(|(&k, &l)| (k, l))
-                .collect();
-            for (k, l) in keys {
-                r.remove(&k);
-                if k < va {
-                    r.insert(k, va - k);
-                }
-                if k + l > end {
-                    r.insert(end, k + l - end);
-                }
-            }
-        }
+        cut_sim_rows(&mut self.rows.borrow_mut(), va, end);
         let res = self.bv.unmap_range(va, len, defer);
         if res.is_err() {
             *self.rows.borrow_mut() = saved;
+            restore_owned_rows(&mut self.rows.borrow_mut(), &self.bv, va, end);
         }
         res
     }
     fn invalidate(&self) -> Result<(), String> {
         Ok(())
+    }
+    fn own_view(&self, va: u64, end: u64) -> Option<crate::ledger::OwnView> {
+        Some(self.bv.own_view(va, end))
     }
 }
 
@@ -411,9 +414,8 @@ fn row(table: &mut [Pte], first: u64, n: u64, back: u64, ram: bool) {
 /// `kept_runs`), so the walker's slot now holds OVERLAPPING placements. On the next clean refresh
 /// the old placement is unmapped WHOLE (its pages are no longer "kept" by any MAP), which takes the
 /// host mappings of the 15 unchanged pages that the walker still believes are committed.
-// EXPECTED TO FAIL at 6fafcc6e
+// FAILED at 6fafcc6e; passes since the review fixes (2026-10-10) — in the default suite.
 #[test]
-#[ignore = "adversarial: fails at 6fafcc6e (finding 1)"]
 fn a_refused_subrange_unmap_desyncs_walker_and_host() {
     let mut fails = Vec::new();
     for (at, label) in [(4u64, "NV01"), (40, "reservation")] {
@@ -469,9 +471,8 @@ fn a_refused_subrange_unmap_desyncs_walker_and_host() {
 /// apply's "take its kept part down too" unmaps the 15 UNCHANGED pages — they are transiently AND
 /// persistently unmapped while the guest has the bad extension (hardware keeps them valid; a bad
 /// leaf must not damage its neighbours, owner rule (1)/(3), OWNER_RULINGS §AA).
-// EXPECTED TO FAIL at 6fafcc6e
+// FAILED at 6fafcc6e; passes since the review fixes (2026-10-10) — in the default suite.
 #[test]
-#[ignore = "adversarial: fails at 6fafcc6e (finding 2)"]
 fn a_refused_extension_takes_down_unchanged_neighbours() {
     let mut fails = Vec::new();
     for (at, label) in [(4u64, "NV01"), (40, "reservation")] {
@@ -521,9 +522,8 @@ fn a_refused_extension_takes_down_unchanged_neighbours() {
 /// `same_mapping` keys on the leaf size, so all 16 VAs are unmapped then re-mapped — inside a
 /// guest RESERVATION too, where the host mapping unit is the row, not the leaf, and nothing forces
 /// a re-make. The in-tree guard cannot see it: `sim::backing_of` puts the leaf into the key.
-// EXPECTED TO FAIL at 6fafcc6e
+// FAILED at 6fafcc6e; passes since the review fixes (2026-10-10) — in the default suite.
 #[test]
-#[ignore = "adversarial: fails at 6fafcc6e (finding 3)"]
 fn a_leaf_size_change_with_identical_translation_transiently_unmaps() {
     let mut fails = Vec::new();
     // 64 KiB-aligned 16-page window inside the static reservation, and one in the NV01 range.
@@ -544,7 +544,11 @@ fn a_leaf_size_change_with_identical_translation_transiently_unmaps() {
         let t = core::mem::take(&mut sim.0.borrow_mut().transient);
         sim.0.borrow_mut().guard.clear();
         if !t.is_empty() {
-            fails.push(format!("{label}: {} transient(s); first: {}", t.len(), t[0]));
+            fails.push(format!(
+                "{label}: {} transient(s); first: {}",
+                t.len(),
+                t[0]
+            ));
         }
         host_vs_walker(&sim, &com).unwrap();
     }
@@ -626,86 +630,110 @@ fn fuzz_one(
     let mut injected_at: Option<usize> = None;
     let mut had_overlap = false;
     let r = (|| -> Result<(), String> {
-    for step in 0..steps {
-        let mut new = random_table(&mut rng, &table);
-        for &p in &foreign_pages {
-            new[p as usize] = None; // the guest never maps over the foreign windows here
-        }
-        let injecting = inj.is_some_and(|(s, ..)| s == step);
-        let before = f.calls.get();
-        if let Some((_, k, _)) = inj.filter(|_| injecting) {
-            f.fail_at.set(Some(before + k));
-        } else {
-            f.fail_at.set(None);
-            // Clean refresh: arm the translation guard (only once the system has had two clean
-            // refreshes after an injection to converge).
-            if injected_at.is_none_or(|s| step >= s + 3) {
-                arm_guard(&sim, &table, &new);
+        for step in 0..steps {
+            let mut new = random_table(&mut rng, &table);
+            for &p in &foreign_pages {
+                new[p as usize] = None; // the guest never maps over the foreign windows here
             }
-        }
-        let (c2, out) = refresh(&m, &com, &new, 1 << 30);
-        if std::env::var_os("ADV_DEBUG").is_some() {
-            let d = diffmodel::diff(&com, &walk(&new), usize::MAX / 2);
-            eprintln!(
-                "step {step} inj={injecting} runs={:x?} codes={:?} refusal={:?} fallback={:?}",
-                d.runs.iter().map(|r| (r.op, (r.va - BASE) / P, r.len / P, r.gpga / P, r.flags)).collect::<Vec<_>>(),
-                out.codes,
-                out.first_refusal,
-                out.first_batch_fallback
-            );
-        }
-        com = c2;
-        if std::env::var_os("ADV_DEBUG").is_some() {
-            let own = m.bv.own.lock().unwrap().within(pg(0x40), pg(0x50));
-            eprintln!("  own[40..50]={:x?}", own.iter().map(|(v, o)| ((v - BASE) / P, o.len / P, o.batch, o.via)).collect::<Vec<_>>());
-            let rm = sim.0.borrow();
-            let mut hm: Vec<_> = rm.maps.iter().filter(|x| x.va < pg(0x50) && x.va + x.len > pg(0x40)).map(|x| ((x.va - BASE) / P, x.len / P, x.hdma, x.obj, x.broken)).collect();
-            hm.sort();
-            eprintln!("  host[40..50]={hm:x?} resv={:x?} micro={:x?}", rm.resv, m.bv.micro.lock().unwrap());
-        }
-        if injecting {
-            calls_in_inj = f.calls.get() - before;
-            injected_at = Some(step);
-        }
-        let t = core::mem::take(&mut sim.0.borrow_mut().transient);
-        sim.0.borrow_mut().guard.clear();
-        if !t.is_empty() {
-            return Err(format!("step {step}: TRANSIENT {}", t[0]));
-        }
-        table = new;
-        let ov = slot_overlaps(&com);
-        if injecting && !ov.is_empty() {
-            had_overlap = true;
-        }
-        if !ov.is_empty() && injected_at.is_none_or(|s| step >= s + 2) {
-            return Err(format!("step {step}: walker slot overlaps {ov:?}"));
-        }
-        // Consistency is required once the walker had two clean refreshes to retry.
-        if injected_at.is_none_or(|s| step >= s + 2) {
-            host_vs_walker(&sim, &com).map_err(|e| format!("step {step}: {e}"))?;
-            // Convergence: every page the guest maps translates to its backing (no refusals in
-            // this model: all RAM < 1 GiB, store 1 TiB, no VMM placements).
-            let rm = sim.0.borrow();
-            for i in 0..PAGES {
-                let want = table[i as usize].map(|(ram, b, ..)| (ram, b * P));
-                if want.is_some() && rm.translate(pg(i), Owner::Mirror) != want {
-                    return Err(format!(
-                        "step {step}: page {i}: guest maps {want:x?}, host has {:x?} (not converged 2 refreshes after the injection)",
-                        rm.translate(pg(i), Owner::Mirror)
-                    ));
+            let injecting = inj.is_some_and(|(s, ..)| s == step);
+            let before = f.calls.get();
+            if let Some((_, k, _)) = inj.filter(|_| injecting) {
+                f.fail_at.set(Some(before + k));
+            } else {
+                f.fail_at.set(None);
+                // Clean refresh: arm the translation guard (only once the system has had two clean
+                // refreshes after an injection to converge).
+                if injected_at.is_none_or(|s| step >= s + 3) {
+                    arm_guard(&sim, &table, &new);
+                }
+            }
+            let (c2, out) = refresh(&m, &com, &new, 1 << 30);
+            if std::env::var_os("ADV_DEBUG").is_some() {
+                let d = diffmodel::diff(&com, &walk(&new), usize::MAX / 2);
+                eprintln!(
+                    "step {step} inj={injecting} runs={:x?} codes={:?} refusal={:?} fallback={:?}",
+                    d.runs
+                        .iter()
+                        .map(|r| (r.op, (r.va - BASE) / P, r.len / P, r.gpga / P, r.flags))
+                        .collect::<Vec<_>>(),
+                    out.codes,
+                    out.first_refusal,
+                    out.first_batch_fallback
+                );
+            }
+            com = c2;
+            if std::env::var_os("ADV_DEBUG").is_some() {
+                let own = m.bv.own.lock().unwrap().within(pg(0x40), pg(0x50));
+                eprintln!(
+                    "  own[40..50]={:x?}",
+                    own.iter()
+                        .map(|(v, o)| ((v - BASE) / P, o.len / P, o.batch, o.via))
+                        .collect::<Vec<_>>()
+                );
+                let rm = sim.0.borrow();
+                let mut hm: Vec<_> = rm
+                    .maps
+                    .iter()
+                    .filter(|x| x.va < pg(0x50) && x.va + x.len > pg(0x40))
+                    .map(|x| ((x.va - BASE) / P, x.len / P, x.hdma, x.obj, x.broken))
+                    .collect();
+                hm.sort();
+                eprintln!(
+                    "  host[40..50]={hm:x?} resv={:x?} micro={:x?}",
+                    rm.resv,
+                    m.bv.micro.lock().unwrap()
+                );
+            }
+            if injecting {
+                calls_in_inj = f.calls.get() - before;
+                injected_at = Some(step);
+            }
+            let t = core::mem::take(&mut sim.0.borrow_mut().transient);
+            sim.0.borrow_mut().guard.clear();
+            if !t.is_empty() {
+                return Err(format!("step {step}: TRANSIENT {}", t[0]));
+            }
+            table = new;
+            let ov = slot_overlaps(&com);
+            if injecting && !ov.is_empty() {
+                had_overlap = true;
+            }
+            if !ov.is_empty() && injected_at.is_none_or(|s| step >= s + 2) {
+                return Err(format!("step {step}: walker slot overlaps {ov:?}"));
+            }
+            // Consistency is required once the walker had two clean refreshes to retry.
+            if injected_at.is_none_or(|s| step >= s + 2) {
+                host_vs_walker(&sim, &com).map_err(|e| format!("step {step}: {e}"))?;
+                // Convergence: every page the guest maps translates to its backing (no refusals in
+                // this model: all RAM < 1 GiB, store 1 TiB, no VMM placements).
+                let rm = sim.0.borrow();
+                for i in 0..PAGES {
+                    let want = table[i as usize].map(|(ram, b, ..)| (ram, b * P));
+                    if want.is_some() && rm.translate(pg(i), Owner::Mirror) != want {
+                        return Err(format!(
+                            "step {step}: page {i}: guest maps {want:x?}, host has {:x?} (not converged 2 refreshes after the injection)",
+                            rm.translate(pg(i), Owner::Mirror)
+                        ));
+                    }
+                }
+            }
+            for (id, va, len) in [(1u32, pg(2), 2 * P), (2, pg(70), P)] {
+                if !sim.0.borrow().foreign_intact(id, va, len) {
+                    return Err(format!("step {step}: foreign #{id} damaged"));
                 }
             }
         }
-        for (id, va, len) in [(1u32, pg(2), 2 * P), (2, pg(70), P)] {
-            if !sim.0.borrow().foreign_intact(id, va, len) {
-                return Err(format!("step {step}: foreign #{id} damaged"));
-            }
-        }
-    }
-    Ok(())
+        Ok(())
     })();
     r.map(|()| calls_in_inj).map_err(|e| {
-        format!("{e} [{}]", if had_overlap { "slot-overlap-at-injection" } else { "NO-overlap-at-injection" })
+        format!(
+            "{e} [{}]",
+            if had_overlap {
+                "slot-overlap-at-injection"
+            } else {
+                "NO-overlap-at-injection"
+            }
+        )
     })
 }
 
@@ -714,8 +742,7 @@ fn fuzz_one(
 fn adversarial_fuzz_without_injection_is_clean() {
     for low in [false, true] {
         for seed in 1..=150u64 {
-            fuzz_one(seed, 40, low, None)
-                .unwrap_or_else(|e| panic!("low={low} seed {seed}: {e}"));
+            fuzz_one(seed, 40, low, None).unwrap_or_else(|e| panic!("low={low} seed {seed}: {e}"));
         }
     }
 }
@@ -731,9 +758,8 @@ fn adversarial_fuzz_without_injection_is_clean() {
 /// adversarial_debug_replay -- --ignored --nocapture` (finding 4); `ADV_SEED=7 ADV_CALL=4` (5).
 /// After two clean refreshes the walker's committed set and the host must agree, every guest page
 /// must translate, no foreign mapping may be touched, no PTE lost, no `:1639` assert.
-// EXPECTED TO FAIL at 6fafcc6e
+// FAILED at 6fafcc6e; passes since the review fixes (2026-10-10) — in the default suite.
 #[test]
-#[ignore = "adversarial: fails at 6fafcc6e (findings 1, 4, 5)"]
 fn adversarial_error_injection_at_every_call_index() {
     let mut failures: Vec<String> = Vec::new();
     let mut runs = 0usize;
@@ -768,7 +794,11 @@ fn adversarial_error_injection_at_every_call_index() {
             }
         }
     }
-    for f in failures.iter().filter(|f| f.contains("NO-overlap")).take(12) {
+    for f in failures
+        .iter()
+        .filter(|f| f.contains("NO-overlap"))
+        .take(12)
+    {
         eprintln!("NO-OVERLAP FAILURE: {f}");
     }
     let kinds = [
@@ -791,7 +821,12 @@ fn adversarial_error_injection_at_every_call_index() {
         failures.is_empty(),
         "{} of {runs} injected runs broke an invariant {hist:?}\nfirst 6:\n{}",
         failures.len(),
-        failures.iter().take(6).cloned().collect::<Vec<_>>().join("\n")
+        failures
+            .iter()
+            .take(6)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("\n")
     );
 }
 
@@ -802,69 +837,101 @@ fn adversarial_debug_replay() {
     let step: usize = std::env::var("ADV_STEP").unwrap().parse().unwrap();
     let call: u64 = std::env::var("ADV_CALL").unwrap().parse().unwrap();
     let low = std::env::var_os("ADV_LOW").is_some();
-    let mode = if std::env::var_os("ADV_AFTER").is_some() { Inject::AfterRange } else { Inject::Before };
-    eprintln!("{:?}", fuzz_one(seed, step + 6, low, Some((step, call, mode))));
+    let mode = if std::env::var_os("ADV_AFTER").is_some() {
+        Inject::AfterRange
+    } else {
+        Inject::Before
+    };
+    eprintln!(
+        "{:?}",
+        fuzz_one(seed, step + 6, low, Some((step, call, mode)))
+    );
 }
 
 // ─── 5. finding 1 WITHOUT any host error: a > MAX_LEAF_PIECES row in the NV01 range ────────────
 
-/// ★ FINDING 1, guest-triggerable with no host error at all. A 4 KiB-leaf row longer than
-/// `MAX_LEAF_PIECES` (512 MiB + 4 KiB) in the unreserved range stays ONE host mapping
-/// (`BatchedVas::leaf_segments`); the guest then re-points ONE page of it. The changed sub-range's
-/// range unmap is refused before any host call (`SPLIT_OUTSIDE_RESERVATION`) → the UNMAP run is
-/// acked FAILED while the two fully-kept MAP runs are acked APPLIED → the walker's slot holds
-/// overlapping placements (`diffmodel::commit`), and the next refresh unmaps the old placement
-/// WHOLE — every unchanged page of the 512 MiB row with it — while the walker still believes the
-/// kept placements are mapped.
-// EXPECTED TO FAIL at 6fafcc6e
-#[test]
-#[ignore = "adversarial: fails at 6fafcc6e (finding 1, no injection)"]
-fn a_huge_nv01_row_with_one_changed_page_desyncs_without_any_host_error() {
-    let base = 0x4000_0000u64;
-    let pages = crate::batch::MAX_LEAF_PIECES + 1;
-    let sim = Sim::new(space(0x10_0000_0000, 0x10_1000_0000));
-    let f = Faulty::new(&sim);
-    let m = FMirror::new(&f, true, false);
+/// One refresh of the huge-row tests: the walker spec over `m`, every page RAM at its own GPA.
+fn huge_step(
+    m: &FMirror<'_>,
+    com: &diffmodel::Committed,
+    walk: &[KfMapRun],
+) -> (diffmodel::Committed, crate::apply::Applied) {
     let ram = |gpa: u64, _len: u64| Some(gpa);
     let cfgv = cfg(&ram);
-    let run = |va: u64, len: u64, back: u64| KfMapRun {
+    let d = diffmodel::diff(com, walk, usize::MAX / 2);
+    let runs: Vec<DiffRun> = d
+        .runs
+        .iter()
+        .map(|r| PermPolicy::default().diff_run(r))
+        .collect();
+    let out = apply_entry(m, &runs, &cfgv);
+    let codes: Vec<AckCode> = out.codes.iter().map(|&c| ack(c)).collect();
+    (diffmodel::commit(com, &d.runs, &codes), out)
+}
+
+fn ram_run(va: u64, len: u64, back: u64) -> KfMapRun {
+    KfMapRun {
         va,
         gpga: back,
         len,
         flags: flags_of(true, false, kf_cuda::abi::PS_4K),
         op: KFWR_OP_MAP,
         pdb_index: 0,
-    };
-    let step = |com: &diffmodel::Committed, walk: &[KfMapRun]| {
-        let d = diffmodel::diff(com, walk, usize::MAX / 2);
-        let runs: Vec<DiffRun> = d
-            .runs
-            .iter()
-            .map(|r| PermPolicy::default().diff_run(r))
-            .collect();
-        let out = apply_entry(&m, &runs, &cfgv);
-        let codes: Vec<AckCode> = out.codes.iter().map(|&c| ack(c)).collect();
-        (diffmodel::commit(com, &d.runs, &codes), out, d.runs)
-    };
+    }
+}
+
+/// ★ FINDING 1, guest-triggerable with no host error at all — FIXED 2026-10-10. At 6fafcc6e a
+/// 4 KiB-leaf row longer than the old `MAX_LEAF_PIECES` (512 MiB + 4 KiB) in the unreserved range
+/// stayed ONE host mapping; the guest then re-pointed ONE page of it, the changed sub-range's range
+/// unmap was refused before any host call (`SPLIT_OUTSIDE_RESERVATION`), the UNMAP run was acked
+/// FAILED while the two fully-kept MAP runs were acked APPLIED → overlapping placements in the
+/// walker's slot, and the next refresh unmapped the old placement WHOLE with every unchanged page.
+/// Now (same row, same change, no host error): the row is placed one mapping per leaf (the bound
+/// is 2^20 leaves), the change is exact, the slot never overlaps, no unchanged page is lost. Rows
+/// beyond the bound: [`a_row_beyond_the_leaf_bound_is_refused_or_micro_reserved`].
+#[test]
+fn a_huge_nv01_row_with_one_changed_page_desyncs_without_any_host_error() {
+    let base = 0x4000_0000u64;
+    let pages = (1u64 << 17) + 1; // the old bound + 1
+    let sim = Sim::new(space(0x10_0000_0000, 0x10_1000_0000));
+    let f = Faulty::new(&sim);
+    let m = FMirror::new(&f, true, false);
     let back = 0x1_0000_0000u64;
-    let (com, out, _) = step(&diffmodel::Committed::default(), &[run(base, pages * P, back)]);
-    assert_eq!(out.refused, 0);
-    assert_eq!(sim.0.borrow().maps.len(), 1, "> MAX_LEAF_PIECES: ONE host mapping");
+    let (com, out) = huge_step(
+        &m,
+        &diffmodel::Committed::default(),
+        &[ram_run(base, pages * P, back)],
+    );
+    assert_eq!(out.refused, 0, "{:?}", out.first_refusal);
+    assert_eq!(
+        sim.0.borrow().maps.len() as u64,
+        pages,
+        "one host mapping per leaf"
+    );
     // Page 5 re-pointed.
     let w1 = [
-        run(base, 5 * P, back),
-        run(base + 5 * P, P, 0x7000_0000),
-        run(base + 6 * P, (pages - 6) * P, back + 6 * P),
+        ram_run(base, 5 * P, back),
+        ram_run(base + 5 * P, P, 0x7000_0000),
+        ram_run(base + 6 * P, (pages - 6) * P, back + 6 * P),
     ];
-    let (com, out, runs) = step(&com, &w1);
-    let codes: Vec<(u16, u64, u8)> = runs
+    sim.0.borrow_mut().guard = [0u64, 4, 6, pages - 1]
         .iter()
-        .zip(&out.codes)
-        .map(|(r, &c)| (r.op, (r.va - base) / P, c))
+        .map(|&k| (base + k * P, (true, back + k * P)))
         .collect();
+    let (com, out) = huge_step(&m, &com, &w1);
+    let transient = core::mem::take(&mut sim.0.borrow_mut().transient);
+    sim.0.borrow_mut().guard.clear();
+    assert!(transient.is_empty(), "{transient:?}");
+    assert_eq!(out.refused, 0, "{:?}", out.first_refusal);
+    assert_eq!(
+        (out.unmap_calls, out.mapped),
+        (1, 1),
+        "exactly the changed page"
+    );
     let overlaps = slot_overlaps(&com);
-    // One more refresh with the same guest table: the walker retries.
-    let (com, _, _) = step(&com, &w1);
+    // One more refresh with the same guest table: nothing to do.
+    let (com, out) = huge_step(&m, &com, &w1);
+    assert_eq!(out.codes.len(), 0, "converged: the walker emits nothing");
     let rm = sim.0.borrow();
     let lost = [0u64, 4, 6, pages - 1]
         .iter()
@@ -872,8 +939,271 @@ fn a_huge_nv01_row_with_one_changed_page_desyncs_without_any_host_error() {
         .count();
     assert!(
         overlaps.is_empty() && lost == 0,
-        "acks (op, page, code) {codes:?}; walker slot overlaps {overlaps:?}; after the retry {lost} of 4 sampled UNCHANGED pages lost their host mapping (unsafe_splits={}); slot now {:x?}",
-        m.bv.unsafe_splits.load(std::sync::atomic::Ordering::Relaxed),
-        com.flat().iter().map(|r| ((r.va - base) / P, r.len / P)).collect::<Vec<_>>()
+        "walker slot overlaps {overlaps:?}; {lost} of 4 sampled UNCHANGED pages lost their host mapping (unsafe_splits={}); slot now {:x?}",
+        m.bv.unsafe_splits
+            .load(std::sync::atomic::Ordering::Relaxed),
+        com.flat()
+            .iter()
+            .map(|r| ((r.va - base) / P, r.len / P))
+            .collect::<Vec<_>>()
     );
+    assert_eq!(
+        rm.translate(base + 5 * P, Owner::Mirror),
+        Some((true, 0x7000_0000))
+    );
+}
+
+/// ★ Review fix 2026-10-10 (finding 1): a row with more leaves than the bound (lowered to 64 here)
+/// in the unreserved range is never ONE `NV01` mapping. Without micro reservations it is refused
+/// by name (absence; counted) and the walker keeps retrying it; with them it is ONE mapping THROUGH
+/// a micro reservation and a later one-page change is an exact range inside it.
+#[test]
+fn a_row_beyond_the_leaf_bound_is_refused_or_micro_reserved() {
+    for low in [false, true] {
+        let base = 0x4000_0000u64;
+        let pages = 65u64;
+        let sim = Sim::new(space(0x10_0000_0000, 0x10_1000_0000));
+        let f = Faulty::new(&sim);
+        let mut m = FMirror::new(&f, true, low);
+        m.bv.max_leaf_pieces = 64;
+        let back = 0x1_0000_0000u64;
+        let (com, out) = huge_step(
+            &m,
+            &diffmodel::Committed::default(),
+            &[ram_run(base, pages * P, back)],
+        );
+        if !low {
+            assert_eq!((out.refused, out.mapped), (1, 0));
+            assert!(
+                out.first_refusal
+                    .as_deref()
+                    .is_some_and(|w| w.contains(crate::batch::HUGE_ROW_OUTSIDE_RESERVATION)),
+                "{:?}",
+                out.first_refusal
+            );
+            assert!(out.refusals_are_absence(), "a refused map is absence (§AA)");
+            assert_eq!(
+                m.bv.huge_refused.load(std::sync::atomic::Ordering::Relaxed),
+                1
+            );
+            assert!(com.is_empty() && sim.0.borrow().maps.is_empty());
+            continue;
+        }
+        assert_eq!(out.refused, 0, "{:?}", out.first_refusal);
+        {
+            let rm = sim.0.borrow();
+            assert_eq!(
+                (rm.maps.len(), rm.resv.len()),
+                (1, 1),
+                "one mapping through one micro reservation"
+            );
+        }
+        let w1 = [
+            ram_run(base, 5 * P, back),
+            ram_run(base + 5 * P, P, 0x7000_0000),
+            ram_run(base + 6 * P, (pages - 6) * P, back + 6 * P),
+        ];
+        sim.0.borrow_mut().guard = (0..pages)
+            .filter(|&k| k != 5)
+            .map(|k| (base + k * P, (true, back + k * P)))
+            .collect();
+        let (com, out) = huge_step(&m, &com, &w1);
+        let transient = core::mem::take(&mut sim.0.borrow_mut().transient);
+        sim.0.borrow_mut().guard.clear();
+        assert!(transient.is_empty(), "{transient:?}");
+        assert_eq!(out.refused, 0, "{:?}", out.first_refusal);
+        assert!(slot_overlaps(&com).is_empty());
+        let rm = sim.0.borrow();
+        assert_eq!(
+            rm.translate(base + 5 * P, Owner::Mirror),
+            Some((true, 0x7000_0000))
+        );
+        assert!(rm.broken_mirror().is_empty() && rm.asserts == 0);
+    }
+}
+
+// ─── 6. targeted: findings 4, 5, 6 (review fixes 2026-10-10) ───────────────────────────────────
+
+/// Eight scattered guest-RAM pages at 4..12 (one batch: a micro reservation when `low`), and, when
+/// `vid_tail`, a vidmem page at 12 (never batched: one `NV01` leaf mapping).
+fn eight_scattered(m: &FMirror<'_>, vid_tail: bool) -> (Vec<Pte>, diffmodel::Committed) {
+    let mut table: Vec<Pte> = vec![None; PAGES as usize];
+    for k in 0..8u64 {
+        table[(4 + k) as usize] = Some((true, 700 + 13 * k, false, 0));
+    }
+    if vid_tail {
+        table[12] = Some((false, 40, false, 0));
+    }
+    let (com, out) = refresh(m, &diffmodel::Committed::default(), &table, 1 << 30);
+    assert_eq!(out.refused, 0, "{:?}", out.first_refusal);
+    (table, com)
+}
+
+/// ★ FINDING 4 (unit). `BatchedVas::unmap_run` with a known length must look at the WHOLE run.
+/// At 6fafcc6e it decided "nothing of ours here" from the run's START: after a range that cut the
+/// start (and failed on the tail) it answered `Ok` with no host call and the tail kept mapping the
+/// old guest page.
+#[test]
+fn unmap_run_with_a_known_length_takes_its_tail_when_its_start_is_already_gone() {
+    let sim = Sim::new(space(RESV_LO, RESV_HI));
+    let f = Faulty::new(&sim);
+    let m = FMirror::new(&f, true, false);
+    let mut table: Vec<Pte> = vec![None; PAGES as usize];
+    row(&mut table, 4, 2, 500, true); // one run, two NV01 leaf mappings
+    let _ = refresh(&m, &diffmodel::Committed::default(), &table, 1 << 30);
+    assert_eq!(sim.0.borrow().maps.len(), 2);
+    m.bv.unmap_range(pg(4), P, true).unwrap(); // the start goes first
+    m.bv.unmap_run(pg(4), Some(2 * P), true).unwrap();
+    assert_eq!(
+        sim.0.borrow().translate(pg(5), Owner::Mirror),
+        None,
+        "the tail of the run must not outlive its unmap"
+    );
+    assert!(m.bv.own.lock().unwrap().is_empty());
+}
+
+/// ★ FINDINGS 4 + 5 (glue). A range over two `hDma`s (a micro-reserved batch, then a vidmem leaf in
+/// the `NV01` range) whose SECOND host call fails: the batch's span is gone on the host and in the
+/// ledger, so (4) the rows must not claim it again — at 6fafcc6e `GpuMirror::unmap_range` put every
+/// row back — and (5) its now-empty micro reservation must still be released — at 6fafcc6e the
+/// error returned before `release_micro`.
+#[test]
+fn a_range_failing_on_its_second_span_leaves_rows_equal_to_the_ledger_and_releases_the_first() {
+    let sim = Sim::new(space(RESV_LO, RESV_HI));
+    let f = Faulty::new(&sim);
+    let m = FMirror::new(&f, true, true);
+    let _ = eight_scattered(&m, true);
+    assert_eq!(
+        sim.0.borrow().resv.len(),
+        1,
+        "the batch went through a micro reservation"
+    );
+    // Calls: 0 unmap_in (the batch's span), 1 free (its emptied object), 2 unmap_range (vidmem).
+    f.fail_at.set(Some(f.calls.get() + 2));
+    let r = m.unmap_range(pg(4), 9 * P, true);
+    assert!(r.is_err() && f.fired.get());
+    let rows: Vec<u64> = m.rows.borrow().keys().map(|&v| (v - BASE) / P).collect();
+    assert_eq!(rows, vec![12], "rows == what the ledger still holds");
+    let rm = sim.0.borrow();
+    assert!((4..12).all(|p| rm.translate(pg(p), Owner::Mirror).is_none()));
+    assert_eq!(rm.translate(pg(12), Owner::Mirror), Some((false, 40 * P)));
+    assert!(
+        rm.resv.is_empty(),
+        "the emptied micro reservation was released despite the error"
+    );
+}
+
+/// ★ FINDING 5. A micro reservation whose FREE host RM refuses stays tracked: a later map there
+/// goes THROUGH it (at 6fafcc6e it was forgotten, so the map found its VA held → HELD forever),
+/// the retire reports it, and the next release over it frees it.
+#[test]
+fn a_refused_micro_free_stays_tracked_and_is_retried() {
+    let sim = Sim::new(space(RESV_LO, RESV_HI));
+    let f = Faulty::new(&sim);
+    let m = FMirror::new(&f, true, true);
+    let _ = eight_scattered(&m, false);
+    // Calls: 0 unmap_in, 1 free (batch object), 2 free (micro reservation) — refused.
+    f.fail_at.set(Some(f.calls.get() + 2));
+    m.unmap_range(pg(4), 8 * P, true).unwrap();
+    assert!(f.fired.get());
+    assert_eq!(sim.0.borrow().resv.len(), 1, "host RM still holds it");
+    assert_eq!(m.bv.micro.lock().unwrap().len(), 1, "and so do we");
+    assert!(
+        m.bv.leftovers() > 0,
+        "a retire would not recycle this space"
+    );
+    let d = Desired {
+        va: pg(6),
+        len: P,
+        off: 900 * P,
+        ram: true,
+        kind: 0,
+        perm: MapPerm::READ_WRITE,
+        leaf: 0,
+    };
+    assert_eq!(
+        m.map(&d, true),
+        Ok(Mapped::Placed),
+        "never HELD by our own reservation"
+    );
+    assert_eq!(
+        sim.0.borrow().translate(pg(6), Owner::Mirror),
+        Some((true, 900 * P))
+    );
+    m.unmap_range(pg(6), P, true).unwrap();
+    assert!(
+        sim.0.borrow().resv.is_empty(),
+        "the free retried and landed"
+    );
+    assert_eq!(m.bv.leftovers(), 0);
+}
+
+/// ★ FINDING 6. The falcon-context steer (`kf_qemu::chan`, `BatchedVas::hand_to_host`) unmaps
+/// through the ledger: our mappings only (a foreign neighbour stays), each through its own `hDma`
+/// — a micro reservation included, where the raw `HostRm::unmap_range` it replaces named the
+/// space's own `hDma` and removed NOTHING (shown below) while the log said "steered" — and the
+/// reservation is released once nothing of ours is left in it.
+#[test]
+fn the_falcon_steer_unmaps_through_the_ledger() {
+    // (a) An NV01 row of two leaves, a foreign mapping right after it.
+    let sim = Sim::new(space(RESV_LO, RESV_HI));
+    let f = Faulty::new(&sim);
+    let m = FMirror::new(&f, true, false);
+    let mut table: Vec<Pte> = vec![None; PAGES as usize];
+    row(&mut table, 4, 2, 500, true);
+    let _ = refresh(&m, &diffmodel::Committed::default(), &table, 1 << 30);
+    assert!(sim.0.borrow_mut().place_foreign(9, pg(6), P));
+    assert_eq!(
+        m.bv.hand_to_host(pg(4), 2 * P),
+        crate::batch::HandOver::Free
+    );
+    {
+        let rm = sim.0.borrow();
+        assert!(
+            rm.translate(pg(4), Owner::Mirror).is_none()
+                && rm.translate(pg(5), Owner::Mirror).is_none()
+        );
+        assert!(rm.foreign_intact(9, pg(6), P) && rm.violations.is_empty() && rm.gap_bytes == 0);
+    }
+    assert!(m.bv.own.lock().unwrap().is_empty(), "no stale ledger entry");
+
+    // (b) The guest's context page inside a micro-reserved batch.
+    let sim = Sim::new(space(RESV_LO, RESV_HI));
+    let f = Faulty::new(&sim);
+    let m = FMirror::new(&f, true, true);
+    let _ = eight_scattered(&m, false);
+    let g = pg(6);
+    let before = sim.0.borrow().translate(g, Owner::Mirror);
+    // The raw call the steer used to make: the space's own routing (`NV01` hDma) — a no-op here.
+    SpaceVerbs::unmap_range(&&sim, g, P, false).unwrap();
+    assert_eq!(
+        sim.0.borrow().translate(g, Owner::Mirror),
+        before,
+        "the raw range removed nothing"
+    );
+    sim.0.borrow_mut().guard = (4..12u64)
+        .filter(|&p| p != 6)
+        .map(|p| {
+            (
+                pg(p),
+                sim.0.borrow().translate(pg(p), Owner::Mirror).unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        m.bv.hand_to_host(g, P),
+        crate::batch::HandOver::StillReserved
+    );
+    {
+        let mut rm = sim.0.borrow_mut();
+        assert!(rm.transient.is_empty(), "{:?}", rm.transient);
+        rm.guard.clear();
+        assert!(rm.translate(g, Owner::Mirror).is_none());
+    }
+    // Everything else handed over too: the reservation goes, the VA is free for host RM.
+    assert_eq!(
+        m.bv.hand_to_host(pg(4), 8 * P),
+        crate::batch::HandOver::Free
+    );
+    assert!(sim.0.borrow().resv.is_empty() && m.bv.leftovers() == 0);
 }

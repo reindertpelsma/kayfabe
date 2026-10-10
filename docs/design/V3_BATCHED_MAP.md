@@ -1,5 +1,17 @@
 # V3 — batched guest-RAM maps: N scattered runs, O(1) host calls
 
+**★ CORRECTION (2026-10-10, branch `claude/batched-map-review-fixes-20261010`, off 6fafcc6e) — the
+adversarial review of the 2026-10-09 fix found its verdicts could leave the walker and the host out
+of sync; read §8.7 first.** (1) A refused or unsplittable unmap of a changed sub-range acked the
+UNMAP run FAILED but its fully-kept MAP runs APPLIED: the walker's slot held overlapping placements
+and the next refresh unmapped the old one whole, unchanged pages with it — reproducible with NO host
+error by a > 512 MiB 4 KiB row in the `NV01` range (one host mapping, `MAX_LEAF_PIECES`). (2) A
+refused new part of a MAP run took its UNCHANGED part down. (3) A leaf-size change with an identical
+translation transiently unmapped every VA. (4) The per-run fallback decided "nothing of ours here"
+from a run's start. (5) A refused micro-reservation free was forgotten. (6) The falcon-context steer
+bypassed the ledger. All fixed and model-tested (§8.7); `KF3_NO_BATCHED_MAP=1` no longer reproduces
+run 244 (§8.7.6). Hardware verdict pending (§8.6).
+
 **★ CORRECTION (2026-10-09, branch `claude/batched-map-rootcause-20261009`) — read §8 first.** A
 range unmap that SPLITS a mapping placed through the space's `NV01_MEMORY_VIRTUAL` range frees the
 mapping's WHOLE VA block in host RM; the remnants lose their PTEs. Every batch outside a guest
@@ -144,6 +156,9 @@ live channel runs in it keeps its batches mapped — as it keeps its rows today.
 - **Host verbs authored, never forwarded** — every flag word, offset, VA and piece list is ours;
   pieces come from `Desired.off`, which `desired_from_leaves` already bounded to the guest memfd.
 - **The host RM is the ledger** — §3.2 / §4: verdicts only from host answers; `Err` means nothing.
+- ⊘ **Corrected 2026-10-10 (§8.7.6), above the text it corrects:** the ledger's mutexes (book,
+  own, micro) are also taken by the act thread's falcon-context steer. They are still never held
+  across a host call.
 - **No blocking on a vCPU / under a shared lock** — all of it runs where the per-run maps ran (the
   VA-manager thread); the book's mutex is VA-thread-only and never held across a host call.
 - **VMM addresses never guest-visible** — the stitched VA exists inside one call, inside
@@ -151,6 +166,10 @@ live channel runs in it keeps its batches mapped — as it keeps its rows today.
 - **§13** — the only new `unsafe` is in `mapping_unsafe.rs` (`kf-linux-raw`).
 - **All families first-class** — nothing here is per-die: NVOS46/NVOS47 and the OS descriptor are
   family-independent RM API; the grain is 4 KiB on Turing … Blackwell; kinds are carried as before.
+- ⊘ **Corrected 2026-10-10 (§8.7.6), above the text it corrects:** the flag no longer restores the
+  pre-batch path. It turns off stitched BATCH objects only; the net diff, the one-mapping-per-leaf
+  placement outside reservations and the owned-span range unmaps stay on. It does not reproduce run
+  244; build `c6fff2e3` for that.
 - ⊘ (2026-10-09: an explicit A/B OPT-OUT only; the default — batched on — is the correct path, §8.
   Windows runs no longer need it.) **Off switch** — `KF3_NO_BATCHED_MAP=1` restores the per-run
   path (A/B, and an escape hatch).
@@ -178,6 +197,10 @@ a full adapter re-init. Parsed by the `mem large apply` / `census retire` lines 
 (rev `b675274f`, before the reaper): 24/24, maps 428 ms, unmaps 7 ms, procs 4 321 ms mean.
 
 ### 7.2 Where the map side's time went (`bm3_diag`, per 4 096-piece batch)
+
+⊘ **Corrected 2026-10-10 (§8.7.7), above the text it corrects:** the hand-over to the reaper no
+longer blocks. A full queue parks the view in a bounded overflow, and the stitch is refused while
+the overflow is full.
 
 stitch 25-59 ms (4 096 `MAP_FIXED` ≈ 6-14 µs each on this nested box) · descriptor 7-18 ms (RM
 pins + IOMMU-maps 4 096 pages) · **the view's `munmap` 80-97 ms** · the map itself **0.5 ms**.
@@ -252,6 +275,10 @@ same heap, so the VA we reserve (exactly a batch's, about to be mapped) is free.
 
 ### 8.1 Root cause of the freeze (measured + source)
 
+⊘ **Corrected 2026-10-10 (§8.7.6), above the text it corrects:** "the only flag difference" held
+at `c6fff2e3`. Since 833a6f5a the flag no longer selects that difference: run 244's behaviour is the
+REVISION `c6fff2e3` with the flag, not any later revision with it.
+
 **Measured** (GPU host, RTX 4070 Ada, 595.91.07, kf3 `c6fff2e3`): runs 242/243 (batched on; the
 ONLY flag difference from run 244 is `KF3_NO_BATCHED_MAP`) each raise exactly one host
 `Xid 31 … GR0_PBDMA0 HUBCLIENT_ESC faulted @ 0x0_04034000 FAULT_PTE ACCESS_TYPE_VIRT_WRITE` on host
@@ -286,6 +313,14 @@ host mapping, so no exact partial unmap of it exists at all. (Whether this trans
 faults in Windows runs is not measured.)
 
 ### 8.3 The design (code)
+
+⊘ **Corrected 2026-10-10 (§8.7), above the text it corrects:** rule 1's key no longer has the LEAF
+SIZE (an identical translation is unchanged, §8.7.3); a kept page must be covered by a mapping of
+ours, and part of an `NV01` mapping that a changed piece would split is re-made, declared (§8.7.3);
+a failed MAP run never takes its kept part down — the runs linked to it fail with it (§8.7.1-2).
+Rule 2's "bounded, `MAX_LEAF_PIECES`" now means: per leaf up to 2^20 leaves, beyond that a micro
+reservation or a refusal by name, never one unsplittable mapping (§8.7.1). Rule 3: a refused
+reservation free stays tracked (§8.7.5).
 
 1. **Net diff (`kf_mem::apply`, GPU targets).** A page an UNMAP and a MAP of the same entry name
    with the same aperture, kind, permissions, privilege, LEAF SIZE and linear backing is
@@ -381,6 +416,11 @@ map per leaf, the unmap side ranges over whole leaves). Either way no partial un
 
 ### 8.5 Tests (GPU-free, `cargo test -p kf-mem`, ~17 s; `kf_mem::sim`)
 
+⊘ **Corrected 2026-10-10 (§8.7.7), above the text it corrects:** the model had two blind spots. Its
+walker keyed placements by VA, so overlapping placements overwrote each other silently. Its host
+never refused an unmap. Both are fixed, and its guard no longer keys on the leaf size. The suite now
+takes ~28 s wall (debug build; the longest test is the adversarial error injection, ~20 s).
+
 A host RM model of one client (per-`hDma` lists; NV01 per-map blocks and their whole-block free;
 NV50 reservations as one heap block, exact inside; occupancy; `size == 0` / `size != 0`; object and
 reservation free; foreign mappings) driven through the REAL `apply_entry` + `BatchedVas` with
@@ -400,11 +440,21 @@ mirror translation == walker's committed set, zero gap bytes, zero unsafe splits
 
 ### 8.6 Still to verify on hardware
 
+⊘ **Corrected 2026-10-10, above the text it corrects:** item 2 must run at a revision that has the
+§8.7 fixes, and items 4-7 are added. 4: the falcon-context steer on a video lane — the log line says
+`steered` and NVDEC writes frames. 5: no `kf-mem: … UNCHANGED page(s) re-made` lines, or only a few,
+in a Windows boot and the CUDA lanes; each line names the §8.7.3 inexact case. 6: the status line's
+batch counters, and no `ReaperBacklog` refusals with batching on. 7: the retire lines never report
+`could not be released` (§8.7.5).
+
 1. §8.0 `kf-micro-reserve-probe reserve` (and optionally `nv01-control`).
 2. A Windows boot WITHOUT `KF3_NO_BATCHED_MAP` (and, after 1, with `KF3_BATCH_MICRO_RESERVE=1`):
    expect no Xid 31, no `:1639` assert at exit, sign-in survives past `inval=4955`.
 3. `v3_gates.sh` 9/9 (gate 4: 1 batch, 1-call piece, 2 ranges, 1 free), the 30-arm fast suite, the
    CUDA no-PM lane (batch counts unchanged for CUDA spaces), the Linux broker lane.
+
+⊘ **Corrected 2026-10-10 (§8.7.6), above the text it corrects:** the follow-up is done. The steer
+now goes through the ledger (`BatchedVas::hand_to_host`).
 
 ⊘ **Related, fixed here:** the v3-video falcon-context steer (`kf_qemu::chan`) unmapped a guest row
 by its START outside `BatchedVas`; with per-leaf mappings that would take only the row's first
@@ -412,3 +462,179 @@ leaf. It now unmaps the row by exact range (whole mappings of ours only). It sti
 `OwnMaps` (the ledger keeps a stale entry for that row; a later owned-span range over it finds
 nothing of this client's `hDma` there and answers `NV_OK`) — route it through the mirror in a
 follow-up.
+
+## 8.7 Adversarial review fixes (2026-10-10)
+
+**STATUS: LIVE, 2026-10-10 — CODE + MODEL-TESTED; hardware verdict pending (§8.6).** Branch
+`claude/batched-map-review-fixes-20261010`, off 6fafcc6e (`integration/windows-20261010`). The
+review's tests are `crates/kf-mem/src/sim/adversarial.rs`, cherry-picked from
+`review/batched-map-adversarial-20261010`. At 6fafcc6e five of them failed; for example,
+`adversarial_error_injection_at_every_call_index` broke an invariant in 362 of 5 016 injected runs.
+All of them now pass in the default suite. *Measured* below means the GPU-free model; nothing here
+was run on hardware.
+
+### 8.7.1 Commit consistency (findings 1, 2)
+
+The walker commits WHOLE runs (`kf_cuda::diffmodel::commit`). An APPLIED UNMAP leaves its slot. An
+APPLIED or HELD MAP enters it. A FAILED run leaves the slot unchanged. `apply::fail_linked` keeps
+that slot equal to what the host holds, iterated to a fixpoint:
+
+- (a) A MAP that overlaps an UNMAP that stays committed fails too. Without this, the slot holds two
+  placements over one VA. This was finding 1. Its consequence: the next refresh unmapped the old
+  placement whole, unchanged pages with it.
+- (b) An UNMAP whose kept pages a failed MAP was to carry fails too. The kept pages stay mapped:
+  they are never taken down for a neighbour's refusal (finding 2). So their placement stays
+  committed.
+
+Every plain MAP run's rows are checked before any host call, so (b) mostly acts before anything is
+touched. The changed pieces of an UNMAP failed this way are still unmapped. What the guest changed
+must not stay reachable: it becomes absence, which §AA clears over. The new pieces a failed MAP
+already placed are taken down again. A kept page is never taken down.
+
+Finding 1 with no host error was a > 512 MiB 4 KiB row in the `NV01` range, kept as one mapping.
+Now a row is placed one mapping per leaf up to `MAX_LEAF_PIECES` = 2^20 leaves (4 GiB of 4 KiB:
+the whole Windows low range). Beyond that, the row goes through a micro reservation when
+`KF3_BATCH_MICRO_RESERVE=1`, or it is refused by name (`HUGE_ROW_OUTSIDE_RESERVATION`, absence,
+counted in `huge_refused`). No row is ever one mapping that cannot be split.
+
+Residual (inferred, not measured): an UNMAP failed by (b) leaves its changed pages absent while the
+walker still lists the old placement. If the guest restores exactly the old translation before the
+refused leaf is fixed, the walker sees nothing to do and the page stays absent until that placement
+changes again. A range that host RM refuses after acting has the same window. The walker protocol
+has no way to un-commit part of a placement. Closing this needs a walker change (a "dirty" re-emit),
+which is out of scope here.
+
+### 8.7.2 Keep only what a mapping of ours covers
+
+`MapTarget::own_view` reports what the ledger holds. A kept interval survives only where a mapping
+of ours covers it. A page the walker still lists but whose host mapping is gone is mapped again as
+a new piece. Such a page comes from a range host RM refused after acting, or from a take-down.
+Before, it was "kept" absent forever. `[model]` Disabling this alone fails the fault-injection
+property variants: 5 of 300 seeds, "walker committed …, host translates None".
+
+### 8.7.3 Leaf size is not identity (finding 3) — and the one inexact case
+
+`same_mapping` compares aperture, kind, permissions, privilege and linear backing. It no longer
+compares the leaf size. An identical translation re-expressed with another leaf size makes NO host
+call. The walker's UNMAP (old page-size class) and MAP (new class) are both acked APPLIED, and its
+own commit moves the placement between classes.
+
+**The inexact case.** Outside every VA-reserving `hDma` (the `NV01` range), a big leaf is ONE host
+mapping (rule 2). The guest can split it into 4 KiB leaves and re-point part of it. Host RM cannot
+remove that part alone: a partial unmap frees the whole VA block (§8.1). It also cannot map a second
+mapping over the first (`VA_ALREADY_MAPPED`). The same holds for a 64 KiB mapping kept across a
+64 KiB → 4 KiB re-expression that is later partly changed, and for a mapping that two different MAP
+runs would keep. For each of these, `apply::keep_only_what_stays_exact` RE-MAKES the mapping whole:
+it is unmapped with the changed pieces, and its kept pages are mapped again as new pieces of their
+MAP runs. This is the one remaining transient of an UNCHANGED VA. It is declared
+(`Applied::remade_unchanged_pages` and `remade`, `VaStats::remade_unchanged_pages`, a bounded
+`UNCHANGED page(s) re-made` log line), and the model guard counts it apart (`remade_transients`).
+
+At 6fafcc6e this case had the same transient, undeclared: the leaf-size key made every page
+"changed". The alternative, refusing the unmap, would hold the guest's invalidate forever (§AA does
+not cover a refused unmap: the run-223 hang class).
+
+**Owner decision (open).** Two exact alternatives exist:
+1. Map every leaf in the `NV01` range at 4 KiB grain. A 64 KiB leaf then costs 16 RM map calls and a
+   2 MiB leaf 512, and the twin uses 4 KiB host PTEs (GPU TLB reach). Cost only reasoned.
+2. After §8.0 passes, map every big-leaf row in the `NV01` range through a micro reservation sized
+   to the row. That costs one reservation alloc and one free per row.
+
+One combination is not re-made: an UNMAP whose placement holds such a mapping AND that already
+fails by a link (§8.7.1 (b)) before any host call, for example a split big leaf plus a refused leaf
+coalesced into the same placement in one refresh. Its kept pages must stay, so its changed pages
+inside the mapping cannot be removed. That unmap is refused (`SPLIT_OUTSIDE_RESERVATION`, counted in
+`unsafe_splits`), and the invalidate is held, as for any refused unmap. This is named, and is the
+pathological case.
+
+Inside guest reservations nothing is ever re-made: their splits are exact.
+`[model]` Property test, 300 seeds × 60 steps: 101 leaf re-expressions (44 of them with a change),
+668 pages re-made, all in the `NV01` range.
+
+### 8.7.4 The rows follow the ledger (finding 4)
+
+`BatchedVas::unmap_run` with a known length takes the WHOLE run `[va, va+len)`. Before, it decided
+"nothing of ours here" from `va`, so a tail outlived the guest's unmap.
+
+On a GPU target the apply no longer uses the per-run verb. Each changed piece falls back to its own
+exact range. After a refused range, `GpuMirror` (and the model's glue) cut the rows to what the
+ledger still holds. Before, the rows were put back whole while the ledger had been cut, so a reader
+resolved through mappings that were gone.
+
+A map over a VA where the ledger still holds a STRAY of ours removes the stray first
+(`clear_strays`, counted in `strays_removed`). A stray is a refused rollback or take-down. A rollback
+host RM refuses is recorded as a stray, never forgotten, and the row is refused instead of reported
+HELD.
+
+### 8.7.5 Micro reservations and batch objects are never forgotten (finding 5)
+
+A reservation leaves `micro` only when host RM has freed it. A refused free stays tracked:
+- a later map there goes THROUGH it;
+- the next release over it retries the free;
+- `drain` retries once more.
+
+An erroring range still releases what it emptied. A refused batch-object free goes to
+`stuck_objects`. `BatchedVas::leftovers` counts what a retire could not release. When it is
+non-zero, `GpuMirror::unmap_all_rows` reports it as refused, and `retire_mirror` frees the host
+space instead of recycling it into another guest VA space.
+
+### 8.7.6 The falcon steer through the ledger (finding 6); what `KF3_NO_BATCHED_MAP` does now (7)
+
+**The steer.** `kf_qemu::chan`'s steer calls `BatchedVas::hand_to_host`. That unmaps owned spans
+only, each through the `hDma` it was mapped through (a micro reservation included). It cuts the
+ledger, releases an emptied micro reservation, and says whether host RM can place there:
+`Free`, `StillReserved` (other rows live in the reservation) or `StillOurs`. The ledger
+(`Arc<BatchedVas>`) is shared between `GpuMirror` and the channel plane's `Mirror::ledger`.
+
+Running on the act thread is safe for two reasons. No ledger lock is held across a host call. And a
+reservation with a map in flight through it is pinned (`MicroResv::pins`), so the act thread never
+frees it under the VA thread.
+
+Non-stall note (rule 4): the steer now takes the ledger's mutexes. Each is held O(log n + k) for
+the range touched; `forget_batch` was O(n) and is now range-limited. This is the same class as the
+`rows` lock the steer already took. It is still a lock the VA thread also takes. Whether that is
+acceptable on the act thread is an owner judgment; the alternative is a steer request answered by
+the VA thread.
+
+**`KF3_NO_BATCHED_MAP=1` today** (`kf_qemu::mem::batching_enabled`): `GpuMirror::map_batch`
+answers `NOT_BATCHED`, so no stitched batch object is ever made. Everything else is on with or
+without the flag:
+- the net diff (kept pages get no host call; linked failures);
+- one host mapping per guest leaf outside reservations, with the 2^20-leaf bound;
+- owned-span range unmaps (`GpuMirror::unmap_range` is not gated);
+- the ownership ledger, stray removal, micro reservations for over-bound rows when
+  `KF3_BATCH_MICRO_RESERVE=1`;
+- the steer through the ledger.
+
+So the flag is an A/B of the batch objects only. It does NOT reproduce run 244, which mapped each
+walker run as one host mapping per `hDma` and unmapped whole placements. Run 244's behaviour is
+revision `c6fff2e3` (or any revision before 833a6f5a) with the flag. No flag was added.
+
+### 8.7.7 The model (finding 8) and the non-stall item
+
+**The model.** `sim::apply_and_commit` commits like the walker and records a `WALKER SLOT OVERLAP`
+violation when an acknowledged MAP lands over a committed placement. The guard keys on the
+translation only, and on pages the host maps right now. `SimRm::fail_unmaps` refuses every n-th
+mirror unmap, either before acting or after acting.
+
+The property test runs 300 seeds × 60 steps in six configurations: batched, batched with micro
+reservations, and each of those with refusals every 5th call (before) and every 7th call (after).
+The per-run path runs 100 seeds × 3. The test includes leaf-size re-expressions with and without a
+same-refresh change. After each refusal the walker's retry runs: exactly the runs acked FAILED.
+
+Mutations confirm the suite catches each fix when it is reverted:
+- the linked-failure closure → 6 tests fail;
+- the leaf-size key → 4 fail, 89/300 seeds TRANSIENT;
+- the start-only `unmap_run` → 1 fails;
+- the old micro release → 3 fail;
+- the rigid re-make → property fails with unsafe splits;
+- the owned-intersection → the fault variants fail.
+
+**The view reaper.** `reap_view`'s blocking `SyncSender::send` (queue of 2) could stall the VA
+thread behind a slow reaper. It is now `kf_host::channel::Reaper::hand`: `try_send`, plus a bounded
+overflow (`REAP_OVERFLOW` = 2) retried on every hand-over and before every stitch. `map_scattered`
+refuses to stitch while the overflow is full (`ScatterError::ReaperBacklog`), so the rows go per
+run. The VA thread never waits for the reaper, and no view is forgotten. Tested GPU-free in
+`kf-host` (`channel::reaper_tests`). A remaining kernel-level coupling is documented in §7.2: the
+stitch's `mmap`s and the reaper's `munmap` share `mmap_lock`.
+

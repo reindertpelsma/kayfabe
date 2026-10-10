@@ -324,6 +324,26 @@ pub trait MapTarget {
     fn gpu_space(&self) -> bool {
         false
     }
+
+    /// ★ Review fix 2026-10-10 (findings 1, 3): what this target holds of OURS inside `[va, end)`
+    /// ([`OwnView`]) — so the apply keeps (no host call) only pages a mapping of ours really
+    /// covers, and never keeps part of a mapping host RM cannot split exactly. ⊘ Default `None`:
+    /// the target keeps no such ledger and the apply keeps what the diff names. A wrapping target
+    /// must FORWARD this.
+    fn own_view(&self, va: u64, end: u64) -> Option<OwnView> {
+        let _ = (va, end);
+        None
+    }
+}
+
+/// ★ Review fix 2026-10-10 — [`MapTarget::own_view`]'s answer.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct OwnView {
+    /// Bytes of `[va, end)` a mapping of ours covers, `(start, end)`, sorted, merged.
+    pub owned: Vec<(u64, u64)>,
+    /// Our mappings intersecting `[va, end)` that host RM cannot split exactly (no VA-reserving
+    /// `hDma` holds them), each WHOLE `(start, end)`.
+    pub rigid: Vec<(u64, u64)>,
 }
 
 /// What a target that cannot batch answers [`MapTarget::map_batch`] / [`MapTarget::unmap_range`].
