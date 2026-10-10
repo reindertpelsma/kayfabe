@@ -47,6 +47,7 @@ Diverged duplicate: `claude/tdr-opus-base-20261010` carries a second port of the
 4. Invalidate latency vs §AD (guest-visible max 74.8 ms, 46 over 12 ms in run 278): latency-bounded VA-thread design.
 5. Console copy cannot compose the YUV overlay (`scanout REFUSED window 4 ... FORMAT 0x38`): console view only.
 6. Perf report (zero-flag production run vs `6692e621`); Windows app matrix on kayfabe after the baseline; H5 hardware step (desktop down, IOMMU group 11 must be DMA-FQ).
+7. Feature gaps beyond the TDR hunt (ranked P0/P1/P2, with the MPO-policy owner decision, 2026-10-10): `docs/design/V3_FEATURE_GAPS.md`. Every app-matrix failure becomes a gap row there.
 
 ## 5. Running resources and traps
 - Host `root@172.22.1.20`: GPU is shared by agents through `flock -o /tmp/kayfabe-fastguest.lock`; one QEMU at a time; runners switch IOMMU group 11 to
