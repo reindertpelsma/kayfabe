@@ -2761,6 +2761,24 @@ impl Device {
                                 .map(|q| (q.chn, q.update, q.waiting_for_interlock))
                                 .collect::<Vec<_>>()
                         );
+                        eprintln!(
+                            "kf3: display: STALL context: queue {}/{QUEUE_CAP} copies started {} done {} barrier {} inflight {} want {} failed {} nonflip_pending {} vblanks_total {} ticks_per_head {:?} heads_armed {:?}",
+                            queue.len(),
+                            scan.started,
+                            scan.done,
+                            scan.barrier,
+                            scan.inflight.is_some(),
+                            scan.want,
+                            scan.failed,
+                            scan.nonflip.pending(),
+                            dp.counters.vblanks.load(Ordering::Relaxed),
+                            counts.iter().map(|c| c.ticks).collect::<Vec<_>>(),
+                            engine
+                                .heads_armed()
+                                .iter()
+                                .map(|m| (m.head, m.period_ns))
+                                .collect::<Vec<_>>()
+                        );
                     }
                 }
                 stall_reported.retain(|k| parked.iter().any(|p| (p.chn, p.update) == *k));
