@@ -752,3 +752,16 @@ this line). `cargo test -p kf-qemu -p kf-disp` passes, clippy is clean.
 Two questions. **(1)** Does the display fix hold on the integration code? Falsifier: a stuck-flip TDR in boot, sign-in or Edge.
 **(2)** Does the reviewed batched-map kf-mem (integration) still leave HELD-BY-HOST holes? Measured by `HELD BY HOST` lines and
 new host Xid 31.
+
+### Run 289 result (integration port daded67e = integration ababd8d1 + the two display commits; production, zero flags, hold 300 s)
+**PROGRESS LINE: (2) answered — the reviewed batched-map kf-mem on integration STILL leaves holes, and they fault.** TDR cycles: boot 2,
+after sign-in 1, Edge 0, Shorts step 0, hold 0. **4 new host Xid 31 (15 -> 19)**, 14 `HELD BY HOST` leaves. Every faulting VA is a
+leaf kayfabe logged as HELD BY HOST in the same boot:
+* `0x1499c000`: GR0_PBDMA0 / ESC read, channel 0x3c.
+* `0x14589000`: CE0 / CE1 read, channel 0x36.
+* `0x14993000`: GRAPHICS FE write, channel 0x36.
+* `0x14995000`: CE3_PBDMA0 / ESC write, channel 0x02000037.
+(1) The display fix cannot be judged on this line while these faults reset the GPU. [inferred] The boot TDRs follow the faults; not
+classified per cycle. **Blocker for the integration line (kf-mem owner):** a guest-declared leaf that host RM already maps in the
+mirror space is left unmapped, and the twin engines fault on it. Windows validation of the display fix continues on the
+eff1b692-era base (0 Xid in runs 277-288).
