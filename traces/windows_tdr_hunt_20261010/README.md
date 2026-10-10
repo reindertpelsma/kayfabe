@@ -823,3 +823,22 @@ Binary a82e5c09 + `KF3_DISPLAY_TRACE=1` (each UPDATE's interlock mask, each grou
 runner 15, hold 600 s. **H-I:** the stuck window-4 UPDATE's interlock set names a channel (core, a cursor or window 0) that is not at
 an UPDATE and never sends a matching one. **Falsifier:** its interlock set is satisfied by pending channels, so the update is
 stuck elsewhere (a park for an inactive head, the latch path).
+
+### Run 293 result (H-I): mechanism measured — a one-sided interlock starves the overlay
+**PROGRESS LINE: overlay-plane TDR cause measured and fixed (integration `bb91b298`).** TDR cycles: boot 0, sign-in 0, Edge 2, Shorts
+1. I stopped it at READY: the mechanism was captured, and the stop file ended the hold (`stopfile=1`). Display trace:
+* `chn 5 UPDATE 0x1000 ... waits for 0x2000000002`: window 4's UPDATE with INTERLOCK_WITH_WIN_IMM, plus window interlock with
+  window 0. It waits for ch37 (its immediate channel, pending, mutual: `chn 37 UPDATE 0x2 waits for 0x20`) and **ch1 (window 0)**.
+* Every later window 0 UPDATE: `chn 1 UPDATE 0x0 ... waits for 0x0` -> `group [1] ready` -> latched ALONE, 54 times. Window 4
+  never joined (FLIP-LEDGER ch5 3/2, ch37 1/0, `pend` 451 -> 4466 ms) until the TDR.
+* **H-I is confirmed, with one refinement.** The named channel DOES send UPDATEs. kayfabe's `ready_group` built a group only along
+  the starting channel's own interlock edges, so window 0's un-interlocked update latched ahead of the waiter, every time.
+* **Fix (base `bd9a0959`, integration `bb91b298`):** the group is the closure over interlock edges in BOTH directions among pending
+  UPDATEs. A pending update that another pending update waits for latches together with it (an interlocked UPDATE waits for an
+  UPDATE on each channel it names: `ogkm-595.84 nvkms-evo3.c:2829-2837`). The test reproduces the trace exactly and fails on the
+  old code.
+
+### Run 294 (written before the run): binary bd9a0959, production profile, ZERO flags (no ETW), runner 15, 15-min hold
+**Prediction:** 0 TDR in every phase (boot / sign-in / Edge / Shorts with real playback / hold), playback frames differ.
+**Falsifier:** any TDR (classified from kayfabe logs: FLIP-LEDGER pending commits, unfetched channels, Xid).
+Note: another agent (kf-mem `held-hole`, runs 381/382) shares the host GPU through the same flock; runs serialise.
