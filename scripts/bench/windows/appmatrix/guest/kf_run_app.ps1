@@ -53,6 +53,9 @@ while (-not $p.HasExited) {
     if ($el -ge $nextSample) {
         $nextSample = $el + $sampleS
         $ids = Get-ProcessTreeIds -RootPid $rootPid
+        # Edge's browser process is not reliably a descendant of the supervisor (native baseline: the tree held 3 pids, none of Edge's
+        # 10+), so for kf_edge apps add every msedge.exe: the video-decode / 3D engine use is in the Edge GPU process
+        if ($Id -like "edge_*") { $ids = @($ids) + @(Get-Process -Name msedge -ErrorAction SilentlyContinue | ForEach-Object { [int]$_.Id }) }
         foreach ($i in $ids) { $allPids[[string]$i] = 1 }
         $s = Get-GpuEngineSample -Pids $ids -NvLuids $nv
         $pdhSamples++

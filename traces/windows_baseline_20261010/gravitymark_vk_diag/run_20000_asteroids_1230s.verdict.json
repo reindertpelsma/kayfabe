@@ -1,0 +1,14 @@
+{
+ "verdict": "TIMEOUT",
+ "rc": 124,
+ "secs": 1234,
+ "quiet": 1233,
+ "note": "KFWAIT gravitymark_vk STILL_RUNNING_AFTER 1230 s",
+ "proof": "-",
+ "tdr": 0,
+ "wer": 0,
+ "rebooted": false,
+ "gsp_cycles": "-",
+ "restart": "",
+ "guest": "g1"
+}

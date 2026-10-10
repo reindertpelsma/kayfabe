@@ -1,0 +1,101 @@
+{
+ "quiet": 1,
+ "end_utc": "2026-10-11T01:42:15.4088861Z",
+ "start_utc": "2026-10-11T01:41:32.9452630Z",
+ "rc": 0,
+ "secs": 42,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4060 Ti status=OK code=0"
+ ],
+ "digests": [],
+ "session": 0,
+ "out_files": [
+  "C:\\kf\\out\\vulkan_video_decode\\prog.txt 12162",
+  "C:\\kf\\out\\vulkan_video_decode\\x264.mp4 289867"
+ ],
+ "boot_utc_start": "2026-10-11T00:42:27.5000000Z",
+ "log_tail": [
+  "[libx264 @ 0000021e24774380] mb B  I16..4:  0.6%  0.0%  0.0%  B16..8:  3.0%  0.1%  0.0%  direct: 0.3%  skip:96.0%  L0:46.9% L1:51.9% BI: 1.2%",
+  "[libx264 @ 0000021e24774380] 8x8 transform intra:10.7% inter:67.2%",
+  "[libx264 @ 0000021e24774380] coded y,uvDC,uvAC intra: 2.3% 20.8% 10.2% inter: 0.0% 1.1% 0.0%",
+  "[libx264 @ 0000021e24774380] i16 v,h,dc,p: 84% 11%  1%  4%",
+  "[libx264 @ 0000021e24774380] i8 v,h,dc,ddl,ddr,vr,hd,vl,hu: 33% 20% 47%  0%  0%  0%  0%  0%  0%",
+  "[libx264 @ 0000021e24774380] i4 v,h,dc,ddl,ddr,vr,hd,vl,hu: 19% 52% 26%  1%  0%  1%  0%  1%  0%",
+  "[libx264 @ 0000021e24774380] i8c dc,h,v,p: 31% 15% 45%  9%",
+  "[libx264 @ 0000021e24774380] Weighted P-Frames: Y:0.0% UV:0.0%",
+  "[libx264 @ 0000021e24774380] ref P L0: 70.9%  0.7% 22.8%  5.6%",
+  "[libx264 @ 0000021e24774380] ref B L0: 84.9% 12.4%  2.7%",
+  "[libx264 @ 0000021e24774380] ref B L1: 92.9%  7.1%",
+  "[libx264 @ 0000021e24774380] kb/s:112.45",
+  "Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'C:\\kf\\out\\vulkan_video_decode\\x264.mp4':",
+  "  Metadata:",
+  "    major_brand     : isom",
+  "    minor_version   : 512",
+  "    compatible_brands: isomiso2avc1mp41",
+  "    encoder         : Lavf62.12.103",
+  "  Duration: 00:00:20.00, start: 0.000000, bitrate: 115 kb/s",
+  "  Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(progressive), 1280x720 [SAR 1:1 DAR 16:9], 112 kb/s, 30 fps, 30 tbr, 15360 tbn (default)",
+  "    Metadata:",
+  "      handler_name    : VideoHandler",
+  "      encoder         : Lavc62.28.103 libx264",
+  "Stream mapping:",
+  "  Stream #0:0 -> #0:0 (h264 (native) -> wrapped_avframe (native))",
+  "Press [q] to stop, [?] for help",
+  "Output #0, null, to 'pipe:':",
+  "  Metadata:",
+  "    major_brand     : isom",
+  "    minor_version   : 512",
+  "    compatible_brands: isomiso2avc1mp41",
+  "    encoder         : Lavf62.12.103",
+  "  Stream #0:0(und): Video: wrapped_avframe, vulkan(progressive), 1280x720 [SAR 1:1 DAR 16:9], q=2-31, 200 kb/s, 30 fps, 30 tbn (default)",
+  "    Metadata:",
+  "      encoder         : Lavc62.28.103 wrapped_avframe",
+  "      handler_name    : VideoHandler",
+  "[out#0/null @ 000002106f3d7200] video:7453KiB audio:0KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: unknown",
+  "frame=18000 fps=559 q=-0.0 Lsize=N/A time=00:10:00.00 bitrate=N/A speed=18.6x elapsed=0:00:32.17    ",
+  "frame= 18000 ",
+  "=== end rc=0 secs=42 2026-10-10T18:42:15.4088861-07:00"
+ ],
+ "pdh": {
+  "pids": [
+   "7696",
+   "6524",
+   "5036",
+   "4848"
+  ],
+  "nv": {
+   "security": 0,
+   "3d": 0,
+   "vr": 0,
+   "videodecode": 60.7563790270783,
+   "copy": 20.920011223754837,
+   "ofa_0": 0,
+   "legacyoverlay": 0,
+   "videoencode": 0
+  },
+  "samples": 19,
+  "other": {},
+  "nvidia_luids": "0_6bdf"
+ },
+ "timed_out": false,
+ "token": "g1-vulkan_video_decode-1791657680",
+ "boot_utc_end": "2026-10-11T00:42:27.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "vulkan_video_decode",
+ "smi": {
+  "samples": 7,
+  "mem_used_base_mb": 131,
+  "util_max": 1,
+  "mem_used_max_mb": 232
+ }
+}

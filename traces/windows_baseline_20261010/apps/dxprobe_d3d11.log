@@ -1,19 +1,19 @@
-=== dxprobe_d3d11 start=2026-10-10T09:40:51.2166338-07:00 host=DESKTOP-397P3NI session=0 boot=2026-10-10T15:50:57.5000000Z timeout=120
+=== dxprobe_d3d11 start=2026-10-10T18:46:45.1328642-07:00 host=DESKTOP-397P3NI session=0 boot=2026-10-11T00:42:27.5000000Z timeout=120
 KFDX start api=d3d11 iters=200 any_vendor=0
 KFDX ok CreateDXGIFactory1
-KFDX adapter index=0 vendor=0x10de device=0x2803 luid=0x00000000_0x00006040 dedicated_mb=16109 software=0 name="NVIDIA GeForce RTX 4060 Ti"
-KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000070a0 dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX adapter index=0 vendor=0x10de device=0x2803 luid=0x00000000_0x00006bdf dedicated_mb=16109 software=0 name="NVIDIA GeForce RTX 4060 Ti"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x00007c3f dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
 KFDX selected "NVIDIA GeForce RTX 4060 Ti"
 KFDX ok D3D11CreateDevice(hardware, chosen adapter)
 KFDX feature_level 0xb100
 KFDX ok compile cs_5_0
 KFDX ok CreateComputeShader
 KFDX ok CreateUnorderedAccessView
-KFDX compute iters=200 bad=0 ms=62
+KFDX compute iters=200 bad=0 ms=78
 KFDX ok compute shader result matches (UAV readback)
 KFDX ok compile vs_5_0/ps_5_0
 KFDX ok Map staging texture
 KFDX pixel 64,127,191,255
 KFDX ok draw result matches (centre pixel 64,128,191,255)
 KFDX RESULT OK api=d3d11 adapter="NVIDIA GeForce RTX 4060 Ti"
-=== end rc=0 secs=5 2026-10-10T09:40:55.8187039-07:00
+=== end rc=0 secs=5 2026-10-10T18:46:49.7662517-07:00

@@ -1,0 +1,6 @@
+=== gputest_tess start=2026-10-10T18:20:40.8860107-07:00 host=DESKTOP-397P3NI session=1 boot=2026-10-11T00:42:27.5000000Z timeout=100
+KFWAIT gputest_tess EXITED rc=0
+GPUTEST 2026/10/10@18:20:43(0000000002) < > GpuTest: Cross Platform Graphics Benchmark Utility
+GPUTEST 2026/10/10@18:20:44(0000000027) < > TessMark X32 - OpenGL - Renderer model: NVIDIA GeForce RTX 4060 Ti/PCIe/SSE2
+GPUTEST 2026/10/10@18:20:58(0000000032) < > [Benchmark_Score] - module: TessMark X32 - Score: 16133 points (1028x720 windowed, duration:10000 ms).
+=== end rc=0 secs=20 2026-10-10T18:21:01.1344242-07:00

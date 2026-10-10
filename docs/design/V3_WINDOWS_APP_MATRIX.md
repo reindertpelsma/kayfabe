@@ -479,7 +479,7 @@ with its class (§4.4). Commands are abbreviated; `apps.json` has the exact Powe
 | app | tier / session | command | success | GPU-use proof | runtime / timeout | difficulty: why |
 |---|---|---|---|---|---|---|
 | `d3d11va_h264` | 1 / service | `ffmpeg (libx264 prep) then ffmpeg -hwaccel d3d11va -hwaccel_output_format d3d11 -i x264.mp4 -f null -` | `frame= *18000 ` | pdh:VideoDecode, smi | ~20 s / 180 s | **high** [VID] the DXVA2/D3D11 video-decode API path (what Edge, Media Foundation and VLC use); the Linux matrix has no counterpart |
-| `dxva2_h264` | 2 / service | `ffmpeg (libx264 prep) then ffmpeg -hwaccel dxva2 -i x264.mp4 -f null -` | `frame= *18000 ` | pdh:VideoDecode, smi | ~20 s / 180 s | **high** [VID] |
+| `dxva2_h264` | 2 / desktop | `ffmpeg (libx264 prep) then ffmpeg -hwaccel dxva2 -i x264.mp4 -f null -` | `frame= *18000 ` | pdh:VideoDecode, smi | ~20 s / 180 s | **high** [VID] |
 | `edge_video_h264` | 1 / desktop | `kf_edge.ps1 -Page video -Seconds 15 -Codec h264` | `^KFEDGE \{.*"ok":true` | pdh:VideoDecode | ~45 s / 180 s | **high** [VID] the owner's own Edge + YouTube Shorts scenario without the internet: a generated 720p H.264 clip played by <video>; HW decode proof = VideoDecode engine activity |
 | `edge_video_vp9` | 2 / desktop | `kf_edge.ps1 -Page video -Seconds 15 -Codec vp9` | `^KFEDGE \{.*"ok":true` | pdh:VideoDecode | ~45 s / 180 s | **high** [VID] VP9 decode through DXVA (Edge) |
 | `nvdec_h264` | 1 / service | `ffmpeg (libx264 prep) then ffmpeg -hwaccel cuda -hwaccel_output_format cuda -i x264.mp4 -f null -` | `frame= *18000 ` | pdh:VideoDecode, smi | ~20 s / 180 s | **high** [VID] |

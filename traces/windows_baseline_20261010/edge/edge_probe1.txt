@@ -1,0 +1,149 @@
+
+t=2 proc pid=8744 ppid=8116 type=browser
+t=2 proc pid=5980 ppid=8744 type=crashpad-handler
+t=2 proc pid=7308 ppid=8744 type=gpu-process
+t=2 proc pid=4392 ppid=8744 type=utility:network.mojom.NetworkService
+t=2 proc pid=3204 ppid=8744 type=utility:storage.mojom.StorageService
+t=2 proc pid=1576 ppid=8744 type=renderer
+t=2 proc pid=1836 ppid=8744 type=renderer
+t=2 proc pid=3452 ppid=8744 type=renderer
+t=2 proc pid=8176 ppid=8744 type=renderer
+t=2 proc pid=8764 ppid=8744 type=renderer
+t=2 proc pid=3688 ppid=8744 type=renderer
+t=2 proc pid=6896 ppid=8744 type=renderer
+t=2 proc pid=7024 ppid=8744 type=renderer
+t=2 eng pid=4 (System) engtype=copy util=0.01
+t=2 eng pid=4 (System) engtype=copy util=8.7
+t=2 eng pid=7308 (msedge/gpu-process) engtype=3d util=0.29
+t=2 eng pid=7308 (msedge/gpu-process) engtype=videodecode util=2.19
+t=2 eng pid=7308 (msedge/gpu-process) engtype=copy util=0.14
+t=2 eng pid=7308 (msedge/gpu-process) engtype=copy util=0
+t=8 proc pid=8744 ppid=8116 type=browser
+t=8 proc pid=5980 ppid=8744 type=crashpad-handler
+t=8 proc pid=7308 ppid=8744 type=gpu-process
+t=8 proc pid=4392 ppid=8744 type=utility:network.mojom.NetworkService
+t=8 proc pid=3204 ppid=8744 type=utility:storage.mojom.StorageService
+t=8 proc pid=1576 ppid=8744 type=renderer
+t=8 proc pid=1836 ppid=8744 type=renderer
+t=8 proc pid=3452 ppid=8744 type=renderer
+t=8 proc pid=8176 ppid=8744 type=renderer
+t=8 proc pid=8764 ppid=8744 type=renderer
+t=8 proc pid=3688 ppid=8744 type=renderer
+t=8 proc pid=6896 ppid=8744 type=renderer
+t=8 proc pid=7024 ppid=8744 type=renderer
+t=8 proc pid=5704 ppid=8744 type=utility:entity_extraction_service.mojom.Extractor
+t=8 eng pid=4 (System) engtype=copy util=0.13
+t=8 eng pid=7308 (msedge/gpu-process) engtype=3d util=0.22
+t=8 eng pid=7308 (msedge/gpu-process) engtype=videodecode util=3.5
+t=8 eng pid=7308 (msedge/gpu-process) engtype=copy util=0.01
+t=11 proc pid=8744 ppid=8116 type=browser
+t=11 proc pid=5980 ppid=8744 type=crashpad-handler
+t=11 proc pid=7308 ppid=8744 type=gpu-process
+t=11 proc pid=4392 ppid=8744 type=utility:network.mojom.NetworkService
+t=11 proc pid=3204 ppid=8744 type=utility:storage.mojom.StorageService
+t=11 proc pid=1576 ppid=8744 type=renderer
+t=11 proc pid=1836 ppid=8744 type=renderer
+t=11 proc pid=3452 ppid=8744 type=renderer
+t=11 proc pid=8176 ppid=8744 type=renderer
+t=11 proc pid=8764 ppid=8744 type=renderer
+t=11 proc pid=3688 ppid=8744 type=renderer
+t=11 proc pid=6896 ppid=8744 type=renderer
+t=11 proc pid=7024 ppid=8744 type=renderer
+t=11 proc pid=5704 ppid=8744 type=utility:entity_extraction_service.mojom.Extractor
+t=11 eng pid=4 (System) engtype=copy util=0.36
+t=11 eng pid=7308 (msedge/gpu-process) engtype=3d util=0.24
+t=11 eng pid=7308 (msedge/gpu-process) engtype=videodecode util=4.1
+t=11 eng pid=7308 (msedge/gpu-process) engtype=copy util=0.01
+t=14 proc pid=8744 ppid=8116 type=browser
+t=14 proc pid=5980 ppid=8744 type=crashpad-handler
+t=14 proc pid=7308 ppid=8744 type=gpu-process
+t=14 proc pid=4392 ppid=8744 type=utility:network.mojom.NetworkService
+t=14 proc pid=3204 ppid=8744 type=utility:storage.mojom.StorageService
+t=14 proc pid=1576 ppid=8744 type=renderer
+t=14 proc pid=1836 ppid=8744 type=renderer
+t=14 proc pid=3452 ppid=8744 type=renderer
+t=14 proc pid=8176 ppid=8744 type=renderer
+t=14 proc pid=8764 ppid=8744 type=renderer
+t=14 proc pid=3688 ppid=8744 type=renderer
+t=14 proc pid=6896 ppid=8744 type=renderer
+t=14 proc pid=7024 ppid=8744 type=renderer
+t=14 proc pid=5704 ppid=8744 type=utility:entity_extraction_service.mojom.Extractor
+t=14 eng pid=7308 (msedge/gpu-process) engtype=3d util=0.24
+t=14 eng pid=7308 (msedge/gpu-process) engtype=videodecode util=3.86
+t=14 eng pid=7308 (msedge/gpu-process) engtype=copy util=0.01
+t=17 proc pid=8744 ppid=8116 type=browser
+t=17 proc pid=5980 ppid=8744 type=crashpad-handler
+t=17 proc pid=7308 ppid=8744 type=gpu-process
+t=17 proc pid=4392 ppid=8744 type=utility:network.mojom.NetworkService
+t=17 proc pid=3204 ppid=8744 type=utility:storage.mojom.StorageService
+t=17 proc pid=1576 ppid=8744 type=renderer
+t=17 proc pid=1836 ppid=8744 type=renderer
+t=17 proc pid=3452 ppid=8744 type=renderer
+t=17 proc pid=8176 ppid=8744 type=renderer
+t=17 proc pid=8764 ppid=8744 type=renderer
+t=17 proc pid=3688 ppid=8744 type=renderer
+t=17 proc pid=6896 ppid=8744 type=renderer
+t=17 proc pid=7024 ppid=8744 type=renderer
+t=17 proc pid=5704 ppid=8744 type=utility:entity_extraction_service.mojom.Extractor
+t=17 proc pid=9220 ppid=8744 type=utility:unzip.mojom.Unzipper
+t=17 eng pid=4 (System) engtype=copy util=0.16
+t=17 eng pid=7308 (msedge/gpu-process) engtype=3d util=0.25
+t=17 eng pid=7308 (msedge/gpu-process) engtype=videodecode util=3.62
+t=17 eng pid=7308 (msedge/gpu-process) engtype=copy util=0.01
+t=21 proc pid=8744 ppid=8116 type=browser
+t=21 proc pid=5980 ppid=8744 type=crashpad-handler
+t=21 proc pid=7308 ppid=8744 type=gpu-process
+t=21 proc pid=4392 ppid=8744 type=utility:network.mojom.NetworkService
+t=21 proc pid=3204 ppid=8744 type=utility:storage.mojom.StorageService
+t=21 proc pid=1576 ppid=8744 type=renderer
+t=21 proc pid=8764 ppid=8744 type=renderer
+t=21 proc pid=7024 ppid=8744 type=renderer
+t=21 proc pid=5704 ppid=8744 type=utility:entity_extraction_service.mojom.Extractor
+t=21 eng pid=4 (System) engtype=copy util=0.32
+t=21 eng pid=7308 (msedge/gpu-process) engtype=3d util=0.36
+t=21 eng pid=7308 (msedge/gpu-process) engtype=videodecode util=3.61
+t=21 eng pid=7308 (msedge/gpu-process) engtype=copy util=0.01
+t=24 proc pid=8744 ppid=8116 type=browser
+t=24 proc pid=5980 ppid=8744 type=crashpad-handler
+t=24 proc pid=7308 ppid=8744 type=gpu-process
+t=24 proc pid=4392 ppid=8744 type=utility:network.mojom.NetworkService
+t=24 proc pid=3204 ppid=8744 type=utility:storage.mojom.StorageService
+t=24 proc pid=1576 ppid=8744 type=renderer
+t=24 proc pid=8764 ppid=8744 type=renderer
+t=24 proc pid=7024 ppid=8744 type=renderer
+t=24 proc pid=5704 ppid=8744 type=utility:entity_extraction_service.mojom.Extractor
+t=24 eng pid=4 (System) engtype=copy util=0.17
+t=24 eng pid=7308 (msedge/gpu-process) engtype=3d util=0.32
+t=24 eng pid=7308 (msedge/gpu-process) engtype=videodecode util=3.66
+t=24 eng pid=7308 (msedge/gpu-process) engtype=copy util=0.01
+t=27 proc pid=8744 ppid=8116 type=browser
+t=27 proc pid=5980 ppid=8744 type=crashpad-handler
+t=27 proc pid=7308 ppid=8744 type=gpu-process
+t=27 proc pid=4392 ppid=8744 type=utility:network.mojom.NetworkService
+t=27 proc pid=3204 ppid=8744 type=utility:storage.mojom.StorageService
+t=27 proc pid=1576 ppid=8744 type=renderer
+t=27 proc pid=8764 ppid=8744 type=renderer
+t=27 proc pid=7024 ppid=8744 type=renderer
+t=27 proc pid=5704 ppid=8744 type=utility:entity_extraction_service.mojom.Extractor
+t=30 proc pid=8744 ppid=8116 type=browser
+t=30 proc pid=5980 ppid=8744 type=crashpad-handler
+t=30 proc pid=7308 ppid=8744 type=gpu-process
+t=30 proc pid=4392 ppid=8744 type=utility:network.mojom.NetworkService
+t=30 proc pid=3204 ppid=8744 type=utility:storage.mojom.StorageService
+t=30 proc pid=1576 ppid=8744 type=renderer
+t=30 proc pid=8764 ppid=8744 type=renderer
+t=30 proc pid=7024 ppid=8744 type=renderer
+t=30 proc pid=5704 ppid=8744 type=utility:entity_extraction_service.mojom.Extractor
+t=30 eng pid=5384 (explorer) engtype=3d util=0.01
+t=33 proc pid=8744 ppid=8116 type=browser
+t=33 proc pid=5980 ppid=8744 type=crashpad-handler
+t=33 proc pid=7308 ppid=8744 type=gpu-process
+t=33 proc pid=4392 ppid=8744 type=utility:network.mojom.NetworkService
+t=33 proc pid=3204 ppid=8744 type=utility:storage.mojom.StorageService
+t=33 proc pid=1576 ppid=8744 type=renderer
+t=33 proc pid=8764 ppid=8744 type=renderer
+t=33 proc pid=7024 ppid=8744 type=renderer
+t=33 proc pid=5704 ppid=8744 type=utility:entity_extraction_service.mojom.Extractor
+--- kfedge ---
+KFEDGE {"page":"video","src":"/media/t_h264.mp4","ok":false,"can_play":"probably","mc_supported":true,"mc_smooth":true,"mc_power_efficient":true,"wall_s":30.004,"played_s":20.998,"total_frames":630,"dropped_frames":62,"decoded_w":1280,"decoded_h":720,"why":"playback stalled"}
+DONE

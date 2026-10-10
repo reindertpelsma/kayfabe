@@ -1,45 +1,45 @@
 {
- "quiet": 603,
- "end_utc": "2026-10-10T17:01:38.8436330Z",
- "start_utc": "2026-10-10T16:51:35.0847899Z",
+ "quiet": 1233,
+ "end_utc": "2026-10-11T01:11:22.3737624Z",
+ "start_utc": "2026-10-11T00:50:48.7471188Z",
  "rc": 124,
- "secs": 604,
+ "secs": 1234,
  "gpu_devices": [
   "NVIDIA GeForce RTX 4060 Ti status=OK code=0"
  ],
  "digests": [],
  "session": 1,
  "out_files": [],
- "boot_utc_start": "2026-10-10T15:50:57.5000000Z",
+ "boot_utc_start": "2026-10-11T00:42:27.5000000Z",
  "log_tail": [
-  "=== gravitymark_vk start=2026-10-10T09:51:35.0847899-07:00 host=DESKTOP-397P3NI session=1 boot=2026-10-10T15:50:57.5000000Z timeout=660",
-  "KFWAIT gravitymark_vk STILL_RUNNING_AFTER 600 s",
+  "=== gravitymark_vk start=2026-10-10T17:50:48.7471188-07:00 host=DESKTOP-397P3NI session=1 boot=2026-10-11T00:42:27.5000000Z timeout=1300",
+  "KFWAIT gravitymark_vk STILL_RUNNING_AFTER 1230 s",
   "GM_FAIL no benchmark image",
-  "=== end rc=124 secs=604 2026-10-10T10:01:38.8436330-07:00"
+  "=== end rc=124 secs=1234 2026-10-10T18:11:22.3737624-07:00"
  ],
  "pdh": {
   "pids": [
-   "7396",
-   "7228",
-   "9568"
+   "2220",
+   "3868",
+   "5228"
   ],
   "nv": {
    "security": 0,
-   "3d": 48.49454257485091,
+   "3d": 48.592713066380725,
    "vr": 0,
    "videodecode": 0,
-   "copy": 14.140144422043802,
+   "copy": 15.681328306515493,
    "ofa_0": 0,
    "legacyoverlay": 0,
    "videoencode": 0
   },
-  "samples": 272,
+  "samples": 552,
   "other": {},
-  "nvidia_luids": "0_6040"
+  "nvidia_luids": "0_6bdf"
  },
  "timed_out": false,
- "token": "g1-gravitymark_vk-1791651077",
- "boot_utc_end": "2026-10-10T15:50:57.5000000Z",
+ "token": "g1-gravitymark_vk-1791654631",
+ "boot_utc_end": "2026-10-11T00:42:27.5000000Z",
  "events": {
   "kernel_power_41": 0,
   "bugcheck": 0,
@@ -53,9 +53,9 @@
  },
  "app": "gravitymark_vk",
  "smi": {
-  "samples": 98,
+  "samples": 207,
   "mem_used_base_mb": 125,
   "util_max": 96,
-  "mem_used_max_mb": 2137
+  "mem_used_max_mb": 2138
  }
 }

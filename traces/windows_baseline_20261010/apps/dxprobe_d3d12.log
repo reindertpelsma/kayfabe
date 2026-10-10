@@ -1,8 +1,8 @@
-=== dxprobe_d3d12 start=2026-10-10T07:26:54.7312003-07:00 host=DESKTOP-397P3NI session=0 boot=2026-10-10T13:30:47.5000000Z timeout=120
+=== dxprobe_d3d12 start=2026-10-10T18:47:22.3088497-07:00 host=DESKTOP-397P3NI session=0 boot=2026-10-11T00:42:27.5000000Z timeout=120
 KFDX start api=d3d12 iters=200 any_vendor=0
 KFDX ok CreateDXGIFactory1
-KFDX adapter index=0 vendor=0x10de device=0x2803 luid=0x00000000_0x00005ecc dedicated_mb=16109 software=0 name="NVIDIA GeForce RTX 4060 Ti"
-KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x00006f2d dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX adapter index=0 vendor=0x10de device=0x2803 luid=0x00000000_0x00006bdf dedicated_mb=16109 software=0 name="NVIDIA GeForce RTX 4060 Ti"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x00007c3f dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
 KFDX selected "NVIDIA GeForce RTX 4060 Ti"
 KFDX ok D3D12CreateDevice(chosen adapter)
 KFDX feature_level 0xc200
@@ -19,4 +19,4 @@ KFDX compute iters=200 bad=0 fence_wait_ok=1 ms=94
 KFDX ok compute queue fence completed
 KFDX ok compute shader result matches (UAV copy-back)
 KFDX RESULT OK api=d3d12 adapter="NVIDIA GeForce RTX 4060 Ti"
-=== end rc=0 secs=4 2026-10-10T07:26:59.2045398-07:00
+=== end rc=0 secs=5 2026-10-10T18:47:26.9596209-07:00

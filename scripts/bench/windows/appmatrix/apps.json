@@ -671,7 +671,7 @@
     "ffmpeg",
     "vc_redist"
    ],
-   "session": "service",
+   "session": "interactive",
    "tier": 2,
    "timeout_s": 180,
    "expect_s": 20,
