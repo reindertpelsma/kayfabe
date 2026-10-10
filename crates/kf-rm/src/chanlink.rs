@@ -291,14 +291,17 @@ pub struct UserWorkFacts {
 /// recovery paths (`[measured, runs 100-103, 113]` the post-TDR restart) run in it.
 pub const WINDOWS_SYSTEM_PID: u32 = 4;
 
-/// ★ EXPERIMENT (default off): the switch of [`UserWorkFacts::system_pid_is_kernel`].
-pub const KERNEL_PID4_FLAG: &str = "KF3_WIN_KERNEL_PID4";
-
-/// `KF3_WIN_KERNEL_PID4=1`, read once per process.
+/// ★ HARDWIRED 2026-10-10 (a flag needed for correctness is removed and its behaviour built in;
+/// `KF3_WIN_KERNEL_PID4` is gone). A channel declaring the Windows System process
+/// ([`WINDOWS_SYSTEM_PID`]) is the kernel driver's own and keeps the Translated route. `[measured,
+/// runs 245 and 262 vs run 260, 2026-10-10]` without it the post-TDR restart channel was judged
+/// user work and the second restart channel of the same VA space was refused `KernelInUserSpace`
+/// (RmAlloc 0x40, StartDevice 0xC000009A, bugcheck 0x116 — `V3_RECOVERY_WALL.md`); with it the
+/// guest survived the TDR resets. It can only keep a channel Translated, never move one to
+/// Passthrough, so it widens nothing for the guest.
 #[must_use]
 pub fn kernel_pid4_enabled() -> bool {
-    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| std::env::var(KERNEL_PID4_FLAG).as_deref() == Ok("1"))
+    true
 }
 
 /// ★★ 2026-10-08 (OWNER_RULINGS §V, the owner: "If you do not need to translate, then a translated can
@@ -775,7 +778,7 @@ impl ChannelPolicy {
     }
 
     /// ★ EXPERIMENT `KF3_WIN_KERNEL_PID4`, set explicitly (tests; [`ChannelPolicy::new`] reads
-    /// [`KERNEL_PID4_FLAG`] once per process).
+    /// [`kernel_pid4_enabled`], always on, is the default).
     #[must_use]
     pub fn with_kernel_pid4(mut self, on: bool) -> ChannelPolicy {
         self.system_pid_is_kernel = on;

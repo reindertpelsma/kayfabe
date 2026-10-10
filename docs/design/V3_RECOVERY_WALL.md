@@ -117,3 +117,12 @@ and the status line ends with ` EXPERIMENT KF3_WIN_KERNEL_PID4`. After the first
 If the `KernelInUserSpace` refusal still occurs, the flag is wrong or incomplete (e.g. pid 4 is not what the
 refused pair declares in that run, or a third path creates the Passthrough twin). If the refusal is gone and
 `0x116` remains with the same arguments (`0xc000009a`, `4`), the wall was not the only cause.
+
+> ⊘ **UPDATE 2026-10-10 (integration/windows-20261010): `KF3_WIN_KERNEL_PID4` is HARDWIRED, the flag is
+> gone** (`kf_rm::chanlink::kernel_pid4_enabled()` is `true`). `[measured]` Windows run 260 (production
+> profile without the flag, kf3 `a6587d6a`): the first TDR reset's restart channel was judged user work
+> and the second restart channel of the same VA space was refused `KernelInUserSpace(1)` (RmAlloc 0x40
+> -> StartDevice 0xC000009A -> bugcheck 0x116 VIDEO_TDR_FAILURE, then Code 43 after the reboot). Run
+> 262 (same build and profile plus the flag): no `KernelInUserSpace`, no refused birth, the guest
+> survived the TDR resets, as run 245 did. The rule only keeps a System-process channel Translated and
+> never moves one to Passthrough. Open, unmeasured: why the first TDR occurs and its rate.
