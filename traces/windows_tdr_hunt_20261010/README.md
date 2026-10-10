@@ -1,5 +1,156 @@
 # Windows TDR hunt, 2026-10-10 (branch `claude/tdr-hunt-20261010` from `integration/windows-20261010` eff1b692 = code 459da55d)
 
+# HANDOFF — 2026-10-10 19:30 CEST (read this first; a fresh agent resumes from here)
+
+STATUS: LIVE, 2026-10-10 — Windows 11 survives boot, sign-in and Edge with zero kayfabe flags; video playback (YouTube Shorts) still TDRs.
+The top open item is measured and has a fix plan, not run. Host: trusted RTX 4070 host, driver 595.91.07, `/var/lib/kf-windows-20261005`.
+Labels: [measured] = a log/ETW/dump line with its run; [inferred] = reasoning.
+
+## H1. State in one paragraph
+The original black-screen TDR (shape F, a flip handed to the driver and never reported) had a kayfabe display cause, now fixed in three
+parts: (a) the notifier contract and ordering, (b) the interlock closure, (c) the late TSG joiner on the channel side. With those, runs
+290, 291, 295 and 296 have **0 TDR in boot, sign-in and Edge, with zero flags**. What remains is **video playback**: as soon as Shorts is
+clicked to play, Windows resets the GPU about once per 5 min (runs 291, 295, 296, and the kf-mem agent's 383-385). The video area stays
+black. Two kayfabe defects are measured on that path: the NVDEC user channel refused (fixed, `c028265e`, NOT sufficient), and **the console
+colour composition halting the guest's display engine when the YUV video overlay appears** (measured correlation plus code path; fix
+planned, H2 item 1). Separately, the integration line's kf-mem leaves HELD-BY-HOST holes (Xid 31); the held-hole agent fixes those on the
+combined line.
+
+| cause | measured where | fix | carried by |
+|---|---|---|---|
+| Window flip notifier written FINISHED at its own latch; release at its own latch; VSync raised before the latch was published | runs 268-287: read-watchpoints (286): the driver polls flip N and N-1's notifiers and leaves only on N-1 FINISHED | BEGUN at latch, FINISHED + release at flip-away; frame edge owed until the latch is published (`vblankgate.rs`) | integration `6f429343`, `daded67e` |
+| Late TSG joiner (compute/copy subcontext channels never scheduled on the host) | runs 287/288 (host GP_GET=0); 290 clean | `latejoin` schedule hardwired | integration `6b597c9c` |
+| One-sided interlock: the MPO overlay window waits for window 0, which latched alone 54 times | runs 292 (ETW: plane 1 never completed), 293 (display trace) | group = closure over interlock edges in both directions | integration `bb91b298` |
+| Edge's NVDEC user channel classified kernel/Translated, refused `KernelInUserSpace`, RmAlloc 0x40 | run 295 (4 refusals -> 4 TDRs) | video engines judged by process like CE | integration `c028265e` — **falsified as SOLE cause by run 296** (0 refusals, the NVDEC channel ran: host GP_GET=GP_PUT=0x265; TDRs persist) |
+| HELD-BY-HOST leaves left unmapped (Xid 31 at 0x14589000/0x14993000/0x14995000/0x1499c000, deterministic) | runs 276, 289 (integration kf-mem) | kf-mem reservation-geometry fix (held-hole agent) | `claude/held-hole-20261010`; combined line |
+| **Console colour composition refuses the YUV overlay -> `failed` -> `halt_scanout()` halts every guest display channel** | runs 295/296: `scanout REFUSED window 4 head 0: SET_PARAMS.FORMAT 0x38 has no console format` + `SDR colour program: colour frame has refused windows` (296: 2 refusals, 2 TDRs; ch1 flips frozen at 610/610 after it) | **not done** — see H2 item 1 | — |
+
+Branches:
+* **Integration line (product): `claude/display-latch-contract-20261010`**, off integration `ababd8d1`, head **`c028265e`** (5 commits).
+* Research base (eff1b692-era kf-mem, 0 Xid): `claude/tdr-opus-base-20261010`, head `3e478540` (= the 5 fixes + diagnostics: slot history,
+  `KF3_DIAG_VBLANK_ORDER`, `KF3_DIAG_RELEASE_AT_LATCH`, `KF3_DIAG_WINDOW_NOTIFIER_FINISHED_AT_LATCH`, FLIP-LEDGER, IRQ-RING, invaldiag).
+* Combined line `claude/windows-combined-20261010` (held-hole agent integrates; SHA in `/var/lib/kf-windows-20261005/COMBINED_LINE.txt`,
+  4db48053 = bb91b298 + kf-mem fix at the time of writing; it does NOT yet have `c028265e`).
+* Evidence and this README: `claude/tdr-opus-20261010`.
+
+## H2. Open questions, ranked (next experiment + falsifier each)
+1. **Playback TDR: does the console's YUV-overlay refusal halt the guest's display?** [measured code] Two things combine: `planned.refused`
+   is non-empty -> the "SDR colour program" errors -> `self.failed = true` (display.rs, the scanout `start`/compose path), and the display
+   loop does `if scan.failed { queue.clear(); engine.halt_scanout(); }` (step 6), which sets `halted` on every channel, and `decode` returns
+   early on `halted`. [measured, 296] After the refusal (log line 8440), window 0's committed/completed froze at 610/610; resets came at lines
+   10490 and 13830. **Fix plan (principled):** the console is kayfabe's host viewer; its inability to compose a window format must never stop
+   the guest's display engine. Compose the console without the refused window (or black for it), keep `failed` for real GPU/copy failures
+   only, and never halt guest channels on a console-only refusal. Owner check needed: does releasing the latch completions without a console
+   copy of the new surface count as "synthetic success"? [inferred] No: the flip is display state, not GPU work, and the console is
+   not the guest's scanout. **Test:** an engine/display test where a window with a format the console cannot compose flips, and its
+   completions and later flips still complete. **Hardware falsifier:** on the fixed binary, playback still TDRs with NO `scanout REFUSED`
+   and NO halt -> the cause is elsewhere (go to item 2).
+2. **Trace the playback TDR guest-side (owner asked: not done yet).** Only the flip-queue class has a declarer stack (WATCHDOG dumps of
+   264-266). The playback TDRs (291/295/296) have kayfabe-log correlation and nvlddmkm 153 events only; no WATCHDOG dump or ETW was taken for
+   295/296 (292's ETW was the overlay class). **Recipe:** combined-line binary, `ETW=1` (circular, self-stops at the first 153), runner 15,
+   then recover `C:\kf\dxg.csv` and `C:\Windows\LiveKernelReports\WATCHDOG-*.dmp` from the disk (H3). Classify the declarer: flip-queue (547 after
+   a 259/386 without 505), an engine node (178 without 180, which node), or nvlddmkm's own reset. Optional: gdb hbreak at
+   `VidSchiReportHwHang` (MS public symbols) through the QEMU gdbstub. RE of nvlddmkm's video path is for DIAGNOSIS ONLY (notes stay on the
+   host, nothing in the repo).
+3. **Owner: Shorts played on the old builds (runs ~226-250).** [measured] Those boots created only the KERNEL's NVDEC channel (handle
+   0xff040003, GPFIFO 0x12050b000, re-created per client); no user NVDEC channel was ever created and there were 0 `KernelInUserSpace`.
+   Runs 291+ create user NVDEC channels (Edge's process). So the old playback was not on a per-process NVDEC channel. [inferred] Edge
+   decoded in software, possibly because its GPU process had crashed under the old shape-F resets and Chromium falls back. Not measured:
+   why it did not ask. **A/B:** (a) Edge with `--disable-accelerated-video-decode` on the current build: playback without TDR -> the HW
+   decode path is the trigger; (b) the old profile's flags one at a time (`KF3_GSS_NATIVE`, `KF3_USERD_RELAY_OFF`, `KF3_NO_BATCHED_MAP`,
+   `KF3_RELAY_GET_REFRESH`, the display experiments) on a known-playing workload. Requirement (owner): decode must work on the GPU, or
+   fall back cleanly, never TDR.
+4. **The periodic ~5-min TDRs in the hold** (run 295: hold_t 302, 726; 384: 261, 563, 844), each guest 153 event followed by two more
+   ~30 s later. [inferred] The same playback path (each "down" key loads the next Short); classify with item 2.
+5. **INVAL latency vs owner ruling §AD (12 ms):** [measured] VA-side maxima 44-90 ms in every run 263-277; run 278 guest-visible max 74.8 ms,
+   46 over 12 ms (`evidence/invalidate-va-side-stats-runs263-277.txt`, the `invaldiag` probe on the base branch). Not addressed.
+6. **Interrupt-path audit** (table further down): AWAKEN/SEM_WIN bits not owed; vidmem display writes through a pageable
+   `cuMemcpyHtoD` (CUDA: may return before the DMA lands); no Release fence before the GSP `writePtr`; the USERD GP_GET refresh is off
+   and is not run before every non-stall raise. Proposed changes listed there; none done.
+7. Console-only gap: the YUV overlay (format 0x38) has no console format, so even with item 1 the console shows the video area black.
+
+## H3. Runbook (host `/var/lib/kf-windows-20261005`; host-only tooling, not in git)
+* **Build** a revision: on the dev box `git bundle create x.bundle <base>..HEAD`; scp it to `tdrhunt/`; on the host `cd kayfabe-tdrhunt &&
+  git fetch ../tdrhunt/x.bundle HEAD:refs/heads/<name> && git checkout <name> && bash ../tdrhunt/build.sh` (log `tdrhunt/build.log`, ends
+  `BUILD_KF3_EXIT=0`). Then `cp -a win-qemu/kf3-bins/<rev> kf3-bins/`. The QEMU build dir is SHARED with the other agent: check
+  `pgrep -af build_kf3` first.
+* **Run** (always through the idle-guard queue): `tdropus/queue.sh <N> <bin-rev> <hold-s> <runner> KF_GUEST_PW=<pw> [ETW=1]
+  [RUN_WIN_FLAGS='KF3_...'] [WIN_TRACE=1] [RWATCH=1] [PAUSE_AT_SHORTS=1]`. The guard waits for no QEMU and no other tdr-run, then takes
+  `flock /tmp/kayfabe-fastguest.lock`. Runners in `tdrhunt/`:
+  * `tdr-run12.sh`: PHASE lines.
+  * `tdr-run13.sh`: + read-watchpoints (`RWATCH=1`).
+  * `tdr-run14.sh`: + Edge policies `HideFirstRunExperience`/`AutoplayAllowed`.
+  * **`tdr-run15.sh`: + scripted YouTube consent "Reject all" (1226,866) and play (1050,578), and a `PLAYBACK frames differ` check.**
+  The runner prints `PHASE boot/after-signin/after-edge/after-shorts-load/end-of-hold tdr_cycles=N` (N = cumulative GSP
+  Running->Suspending cycles = TDRs) and `tdr-timeline.txt`.
+* **Results:** `winprod/run<N>/` (winprod.log, tdr-timeline.txt, guest-events.txt (nvlddmkm 153 times), screenshots) and
+  `boundary-kayfabe-<N>/qemu.log`. Checks:
+  * `dmesg | grep -c 'NVRM: Xid'` and the pid in each line (attribute Xids to runs via `windows-broker-run<N>.state` QPID);
+  * FLIP-LEDGER `pend` above 100 ms (a stuck flip; `ch1` = window 0, `ch5` = window 4, `ch33+` = window-immediate);
+  * `USERD relay released ... host[GP_PUT=X GP_GET=Y]` with X != Y (unfetched work);
+  * `birth REFUSED`, `scanout REFUSED`, `late_joiner_schedule=`.
+* **ETW from disk after a run** (QGA dies after resets): `qemu-nbd -r -c /dev/nbd6 boundary-kayfabe-<N>/windows.qcow2; mount -t ntfs3 -o
+  ro,offset=$((649216*512)) /dev/nbd6 /mnt/x; cp /mnt/x/kf/dxg.csv tdropus/r<N>/; umount /mnt/x; qemu-nbd -d /dev/nbd6`. Then
+  `python3 tdropus/etwwin.py r<N>/dxg.csv HH:MM:SS HH:MM:SS | awk '$2==547||$2==259||$2==386||$2==505||$2==178||$2==180'`. Event ids:
+  * 259/386: flip handed to the driver (with present id); 505: flip completed;
+  * 17/273: VSync DPC; 547/540: TDR declaration;
+  * 178/180: queue packet start/stop; 450/451: render submission/completion fence; 360: FlushScheduler; 103: blocked flush context.
+  WATCHDOG dumps: `/mnt/x/Windows/LiveKernelReports/`.
+* **Live guest UI:** `tdropus/ui.sh <N> shot NAME | key QCODE | combo K1 K2 | click PX PY` (QMP; pixels of 1920x1080).
+* **Read-watchpoints on guest memory:** `RWATCH=1` (runner 13) -> `tdropus/rwatch.py`. It finds kernel VAs of a guest PA with
+  `tdropus/revmap` (C; reverse page-table walk over the guest-RAM memfd `/proc/<qpid>/fd/<memory-backend-memfd>`, 0.25 s, no VM stop), then
+  `gdbwatch.py` (x86 access watchpoints via the gdbstub, HMP `gdbserver tcp:127.0.0.1:1234`). Every hit stops the VM for ~3-4 ms, so watch
+  few words.
+* **Dumps:** QMP `dump-guest-memory` (8.6 GB) -> `dumps/`. Volatility config `dumpcfg/`, plugin `dumpcfg/plugins/windows/kevents.py`
+  (48-bit addresses).
+* **Traps:**
+  * `/tmp/kf-stop-winprod` is GLOBAL (it ends whoever's hold is running; runners delete it at start/cleanup).
+  * `pkill -f 'queue.sh N'` over ssh kills the ssh session itself: use `kill <pid>`.
+  * A run whose flock wrapper exits early leaves the GPU unlocked (run 294 was correctly refused by the runner's own QEMU check).
+  * The cleanup restores IOMMU group 11 to DMA-FQ and the nvidia binding; verify `pgrep -c qemu-system-x86` = 0 and `cat
+    /sys/kernel/iommu_groups/11/type` = DMA-FQ after your run.
+  * The dev box's `/tmp` filled up once: keep scratchpad bundles small.
+  * The guest clock differs from the host's by ~1-4 s: align by events, not wall time.
+* **Never in the repo:** anything derived from the closed NVIDIA/Microsoft binaries (disassembly, RE notes); dumps; the guest password;
+  host IPs. Host-only analysis lives in `tdropus/` and `dumps/`.
+
+## H4. Acceptance (owner)
+A zero-kayfabe-flag run with scripted sign-in, Edge and a **playing** Shorts page with scrolling (`PLAYBACK frames differ` > 0), held 15 min
+with **0 TDR in every phase** (boot / after sign-in / after Edge / after Shorts / hold). Then a 60-min soak. Report per-phase counts, the
+binary and the source revision. Product fixes go on a branch off the current integration head (or into the combined line) with tests; the
+coordinator runs the Linux display regression (broker lane, desktop) and the gates before merging.
+
+## H5. Run table 263-296 (per-phase TDR = boot / sign-in / Edge / Shorts / hold; "-" = phase not reached or not recorded)
+| run | binary | flags | TDR per phase | outcome |
+|---|---|---|---|---|
+| 263-266 | 459da55d (eff1b692) | probes, ETW | 264: 8 in 13 min; 265: boot+wedge; 266: 7 | WATCHDOG dumps 0x117 (flip-queue declarer) |
+| 267 | 459da55d | RELAY_GET_REFRESH | 6 / 15 min | H-D falsified |
+| 268-271 | a4b96ee0..bb53ec57 | display/relay traces, ETW | 2-7 each | shape F + S named |
+| 272-275 | 40481dd5..2da71abe (batched-map code) | probes | boot TDRs, Xid 31 | kf-mem holes noted |
+| 276 | f7303e72 (+2540b547) | probe, ETW, PREEMPTDUMP | Xid 31 x8 | HELD-BY-HOST holes |
+| 277-279 | e6e6a9ed/1b921070 | probe, write/read traces | 2-3 each | VSync ack vs latch race measured |
+| 280 | 20390253 (release at flip-away) | none | 3 (sign-in, Edge, Shorts) | release fix insufficient |
+| 281 | eab39a4b | dump at stuck flip | - | slots same form (H-M falsified) |
+| 282 | 6b8e9b8e (latch-first default) | none | 5 boot | post-latch state wrong |
+| 283 | 1712c5c9 | latch-first + old release + slot history | 5 boot | release not the cause |
+| 284 | dbbcb387 | latch-first + BEGUN | 5 by sign-in | BEGUN alone insufficient |
+| 285 | dbbcb387 | rwatch | - | tooling failure |
+| 286 | dbbcb387 | rwatch | - (VM crawled) | driver polls N and N-1 notifiers |
+| 287 | fb84cc29 | + FINISHED at flip-away | 0/0/0/0/1 | boot fixed; hold TDR = late joiner |
+| 288 | 81cf89c8 (contract default) | ETW only | 0/0/0/0/4 | late joiner (ETW + logs) |
+| 289 | daded67e (integration port) | none | 2/1/0/0/0 | 4 Xid 31: integration kf-mem holes |
+| 290 | 81cf89c8 + LATE_JOINERS | ETW | 0/0/0/0/0 (300 s) | late-joiner fix holds |
+| 291 | a82e5c09 | none, 15 min | 0/0/0/0/2 | TDRs after manual play (new class) |
+| 292 | a82e5c09 | ETW, runner 15 | 0/0/2/1/1 | MPO overlay stuck (ETW plane 1) |
+| 293 | a82e5c09 | display trace + slot history + ETW | 0/0/2/1/stopped | one-sided interlock measured |
+| 294 | bd9a0959 | - | - | refused (foreign QEMU) |
+| 295 | bd9a0959 (+interlock) | none, 15 min | 0/0/0/1/2 | Edge clean; NVDEC refusals + console YUV refusal precede TDRs |
+| 296 | 3e478540 (+video user work) | none, 15 min | 0/0/0/1/1 | no refusals, NVDEC ran; TDRs persist; console YUV refusal -> halt precedes both |
+(Runs 381-385: the kf-mem agent on the combined line; 384: 0/0/0/1 + hold TDRs at 261, 563, 844 s.)
+
+---
+
+
 STATUS: RESEARCH, 2026-10-10 — round 3 in progress (runs 276-284): shape F measured, ordering race and wrong post-latch state separated; no fix yet. Latest at the bottom. Host RTX 4070, driver 595.91.07.
 Labels: **[measured]** = a log line / counter / guest event with its run; **[inferred]** = reasoning not yet tested.
 
@@ -893,3 +1044,12 @@ NOT yet in the combined line 4db48053 — coordinator: please fold it in).**
 ### Run 296 (written before the run): base 3e478540 (display contract + late joiner + interlock + video user work), ZERO flags, 15 min
 **Prediction:** no `birth REFUSED`; the playback check shows frames that differ; 0 TDR in every phase. **Falsifier:** any TDR or a
 `birth REFUSED`. **NEXT RUN NEEDS:** ~25 min of GPU (queued behind the kf-mem agent via `tdropus/queue.sh`).
+
+### Run 296 result (base 3e478540 = all five fixes; zero flags; 15-min hold)
+**PROGRESS LINE: NVDEC refusal falsified as the SOLE cause of the playback TDR.** TDR per phase: boot 0, sign-in 0, Edge 0, Shorts 1,
+hold 1 (hold_t 102). No `birth REFUSED`, no `KernelInUserSpace`. The user NVDEC channel was born Passthrough (token 0x1829, host 0x30050,
+VideoDecoder 0xc9b0 object on the host) and its work ran (released with host GP_GET = GP_PUT = 0x265). 0 Xid from this run's QEMU
+(pid 2019007; the new Xids in dmesg belong to the other agent's runs). Playback frames identical. **Two `scanout REFUSED window 4 ...
+FORMAT 0x38 has no console format` + `SDR colour program: colour frame has refused windows`** at log line 8440 precede the resets (10490,
+13830). The code path from there to `engine.halt_scanout()` is in HANDOFF H2 item 1 (top open item). Host clean after the run (END
+DMA-FQ). Per the coordinator, no further runs from this agent.
