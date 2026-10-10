@@ -1070,7 +1070,7 @@ Implemented on `claude/hardwire-tspace-20261010` (GPU-free tests only; the hardw
   `design/V3_P1P2_TSPACE.md` §8 (corrected there). The `KF3_TSPACE` row of
   `design/V3_FLAG_INVENTORY.md` (its follow-up note is `design/V3_TSPACE_HARDWIRED.md`).
 
-## §AB. Models, 2026-10-10
+## §AC. Models, 2026-10-10
 
 **STATUS: LIVE, 2026-10-10.** Owner: for the 5.5 generation Sonnet 5.5 is the default for everything;
 Opus 5.5 only when Sonnet fails (use less Opus, weekly usage). Haiku 5.5 is to be tried after the CLI

@@ -23,4 +23,4 @@ case; a patched host is an optional better tier (`design/V3_HOST_PATCH_LIST.md`)
 - **Windows app matrix**: the app matrix must eventually also run on Windows guests. A Windows lane
   needs a working Windows run first (the TDR hunt, branch `claude/tdr-hunt-20261010`), an app
   inventory, and the scripted sign-in harness brought into git.
-- **Models**: `OWNER_RULINGS.md` §AB.
+- **Models**: `OWNER_RULINGS.md` §AC.
