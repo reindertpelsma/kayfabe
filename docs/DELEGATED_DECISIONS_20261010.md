@@ -25,3 +25,11 @@ case; a patched host is an optional better tier (`design/V3_HOST_PATCH_LIST.md`)
   needs a working Windows run first (the TDR hunt, branch `claude/tdr-hunt-20261010`), an app
   inventory, and the scripted sign-in harness brought into git.
 - **Models**: `OWNER_RULINGS.md` §AC.
+
+## WARNING: integration at `aeda9ffd`..`d44f70cd` carries a known-bad D1-D3 implementation
+
+The first batched-map decisions code (merged as `aeda9ffd`) failed two independent reviews and, on
+hardware, produced host Xid 31 FAULT_PTE (7 in 3 Windows runs, 272-274; e.g. CE3 reads at VA
+0x04036000), against 0 in the 12 runs before it and 0 in run 275 on the fixed code (measured, TDR
+hunt README). Do not validate or benchmark integration heads in this range. The fix is on
+`claude/batched-map-decisions-20261010` and is merged into integration only after a review passes.
