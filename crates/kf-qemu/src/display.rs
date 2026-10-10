@@ -1480,6 +1480,8 @@ struct WorkerInit {
     gpu: Option<DisplayGpu>,
     layout: Layout,
     notifier_finished: u32,
+    /// `NV_DISP_NOTIFIER__0_STATUS_BEGUN` as a status word, when derived (the ⚠ window-notifier A/B).
+    notifier_begun: Option<u32>,
     /// ★ The GPU-copy rung's worker half (§8.11), when the device offers it.
     vram: Option<VramWorker>,
 }
@@ -1858,6 +1860,10 @@ impl DisplayPlane {
             .zip(t.notifier_value("__0_STATUS_FINISHED"))
             .map(|(fld, v)| kf_disp::class::put(0, fld, v))
             .ok_or("display=on: NV_DISP_NOTIFIER__0_STATUS is not derived")?;
+        let notifier_begun = t
+            .notifier_field("__0_STATUS")
+            .zip(t.notifier_value("__0_STATUS_BEGUN"))
+            .map(|(fld, v)| kf_disp::class::put(0, fld, v));
         let model = kf_rm::display::model_for(table, row, max_fps).ok_or_else(|| {
             format!("display=on: no derived display layouts for driver {version}")
         })?;
@@ -1948,6 +1954,7 @@ impl DisplayPlane {
                 gpu: Some(gpu),
                 layout,
                 notifier_finished,
+                notifier_begun,
                 vram,
             })),
             cursor: core::array::from_fn(|_| CursorPorts::default()),
@@ -2198,6 +2205,8 @@ struct Io<'d> {
     /// The instance-memory image, read (by the GPU) at most once per worker pass.
     img: Option<Vec<u8>>,
     notifier_finished: u32,
+    /// The status word a WINDOW flip's notifier gets: FINISHED, or ⚠ (`KF3_DIAG_WINDOW_NOTIFIER_BEGUN=1`) BEGUN.
+    window_notifier: u32,
     refusals_logged: u32,
 }
 
@@ -2353,6 +2362,7 @@ impl Device {
             gpu,
             layout,
             notifier_finished,
+            notifier_begun,
             vram,
         } = init;
         if let Some(g) = &gpu
@@ -2462,6 +2472,16 @@ impl Device {
             inst: None,
             img: None,
             notifier_finished,
+            // ⚠ DIAGNOSTIC A/B (2026-10-10 TDR hunt, default off): open NVKMS says the display writes a WINDOW flip's
+            // notifier BEGUN when it performs the flip (`ogkm-595.84: nvidia-modeset/src/nvkms-headsurface.c:1925-1952`),
+            // FINISHED only for the core's completion notifier (`nvkms-evo3.c:6224-6243`)
+            window_notifier: if std::env::var("KF3_DIAG_WINDOW_NOTIFIER_BEGUN").is_ok_and(|v| v == "1") {
+                let b = notifier_begun.unwrap_or(notifier_finished);
+                eprintln!("kf3: display: DIAGNOSTIC window notifiers are written {b:#x} (BEGUN), the core's {notifier_finished:#x}");
+                b
+            } else {
+                notifier_finished
+            },
             refusals_logged: 0,
         };
         // ★ `display-max-fps` (§8.16): every head's vblank tick, CAPPED — the pacer owns the periods
@@ -3064,10 +3084,10 @@ impl Device {
                     } => {
                         if slot_hist && slot_lines < SLOT_LINES {
                             slot_lines += 1;
-                            let fin = io.notifier_finished;
+                            let fin = if chn == 0 { io.notifier_finished } else { io.window_notifier };
                             let at = slot_now(&mut io, &Effect::Notify { chn, client, handle, offset, awaken }, &slot_last);
                             eprintln!(
-                                "kf3: display: SLOT WRITE utc_us={} t={:.6} chn {chn} completed#{} new=FINISHED({fin:#x}) {at}",
+                                "kf3: display: SLOT WRITE utc_us={} t={:.6} chn {chn} completed#{} new=status({fin:#x}) {at}",
                                 utc_us(),
                                 kf_mem::maplog::t(),
                                 engine.ledger.completed[chn as usize],
@@ -3076,7 +3096,8 @@ impl Device {
                         let dres = io.resolve(client, handle, chn);
                         let at = dres.as_ref().ok().map(|d| (d.target, d.base + offset));
                         if slot_hist && let Some((t, a)) = at {
-                            slot_last.insert((t == Target::Vidmem, a), u64::from(io.notifier_finished));
+                            let fin = if chn == 0 { io.notifier_finished } else { io.window_notifier };
+                            slot_last.insert((t == Target::Vidmem, a), u64::from(fin));
                         }
                         let r = dres.and_then(|dma| {
                             let ts = self.rm.gpu_time_ns().unwrap_or(0);
@@ -3085,7 +3106,8 @@ impl Device {
                             n[12..16].copy_from_slice(&((ts >> 32) as u32).to_le_bytes());
                             // the timestamp words first, the status word (what the guest polls) last
                             io.write(dma, offset + 4, &n[4..16])?;
-                            io.write(dma, offset, &io.notifier_finished.to_le_bytes())
+                            let status = if chn == 0 { io.notifier_finished } else { io.window_notifier };
+                            io.write(dma, offset, &status.to_le_bytes())
                         });
                         if trace {
                             eprintln!(
