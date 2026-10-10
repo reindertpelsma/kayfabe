@@ -1,5 +1,7 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+> **2026-10-10 evening, Windows integration phase: resume from `docs/HANDOFF_WINDOWS_20261010.md`** (branches, fixes with measured causes, open items, traps, how to resume).
+
 **STATUS: LIVE, 2026-10-08 — §0.0 below is the resume point.** ⊘ *The 2026-09-30 paragraph that follows is history:* **(2026-09-30)** Master = the code of **`afb552ea`** (`v3-mc23`: CUDA dynamic parallelism +
 the guest-RAM-object race fix + everything below), which passed the full merge bar (§0 first entry), plus
 evidence and documentation. The single entry point for resuming work without any chat history. Decisions
