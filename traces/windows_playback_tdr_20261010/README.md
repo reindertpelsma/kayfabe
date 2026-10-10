@@ -34,3 +34,29 @@ STATUS: LIVE, 2026-10-10. Progress log; newest HANDOFF at the top when I stop.
 * Guest-side check added to the runner (tdr-run17.sh, host-only): `kfplay.ps1` runs in the interactive session (scheduled task /it),
   5 captures of the player column 3 s apart with pixel-diff counts, GPU Engine utilisation of msedge by engine type (VideoDecode = NVDEC),
   full PNGs left in C:\kf. Run 400's first attempt failed (`schtasks /run`: Element not found); run 401 discovers the interactive user.
+
+## Progress 3 (runs 400-402; measured vs inferred)
+* [measured, run 401 da6be258] the console now DRAWS the overlay (owner photo + `shorts-playing-2.png`): window 4 armed state logged:
+  448x796 block-linear (7 GOBs, bh 1), format 0x38, SWAP_UV=1 (so the effective chroma order is U,V = NV12), out (826,180) 448x795,
+  depth 11, ISO(1)=OFFSET(1)=0 (never programmed), PLANAR_STORAGE(1)=7. The picture was luma-correct but magenta/green: [measured] the
+  luma tile structure is right and a 2x-stretched copy of the luma image's top half appears in the chroma channels, i.e. the kernel read
+  the chroma plane from the luma plane's first byte (offset1 = 0). Fix cc378992: an unprogrammed chroma plane follows the luma surface
+  (offset + whole-surface luma size, 256-aligned; 358 400 bytes here). It is NOT a U/V-order or matrix bug; the order logic (format order
+  XOR SWAP_UV) is unchanged. [unverified on hardware until an overlay run with cc378992+: run 402 had no overlay.]
+* [measured] ETW from the WATCHDOG 0x117 of run 400 (cluster at hold_t 624): the guest's flip queue (event 547, pid 4) declared the TDR
+  at 17:51:50.159; the last present (id 10097) handed plane 0 and plane 1 (YCBCR_STUDIO_G22_LEFT_P709, 448x796 at 826,180) at
+  17:51:48.050; plane 0 completed (505) at .067, plane 1 NEVER completed; no render/video packet was open (178 without 180: none) and
+  no host Xid. So it is the same class as 264-266 (a flip handed and never reported), here on the overlay plane. The 0x117 dump's
+  param2 is an nvlddmkm address. Run 401: same shape at hold_t 732 (its ETW window ends earlier).
+* [measured] overlay presence correlates with the Edge phase: runs 400/401 (overlay active, console black/magenta before the fixes) had 0 TDR
+  through Shorts-load and a TDR cluster 10-12 min into the hold; runs 385 and 402 had 2-3 TDRs in the Edge phase, then NO overlay
+  window (0 YUV/REFUSED lines), correct video on the console from DWM composition. [inferred, H-MPO] a TDR makes Windows drop MPO
+  for the session; not proven (the registry/ETW MPO state was not read).
+* [measured] harness: `PLAYBACK frames differ` was blind by construction (console copy without the overlay). The in-guest check
+  (`kfplay.ps1`) reports GPU Engine use by msedge: run 401 `videodecode sum=4.74 max=1.25` = NVDEC ran for Shorts (hardware decode IS in use).
+  Its crop-diff output was empty in 400/401 (PowerShell alias `diff` shadowed the function; fixed) and 0/15000 in 402 (the clip was paused:
+  the Shorts play icon is visible in `shorts-playing-2.png`; [inferred] the scripted PLAY click toggled it).
+* Colour bars: `tdrhunt/bars.mp4` (10 stripes, BT.709 limited, exact RGB), staged in the guest, opened in Edge via an /it task: run 402 shows
+  the bars correctly from DWM composition (no overlay), so it did not exercise the YUV kernel.
+* Added a bounded STALL report (91b2890a): an UPDATE parked > 1 s is named once (stage, group, head, acquire and the semaphore value it
+  reads), to see which wait the overlay flip is stuck on in the next overlay run.
