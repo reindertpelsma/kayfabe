@@ -961,57 +961,46 @@ fn many_rows_beyond_the_cap_are_two_reserved_batches() {
     assert!(rm.maps.is_empty() && rm.resv.is_empty() && rm.objs.is_empty());
 }
 
-/// ★ Review 2 item 4 — the steer removes the placement row FIRST. If `hand_to_host` then does not
-/// complete (host RM refused, here), mappings of OURS stay on the host: with no row the walker's
-/// later UNMAP is acknowledged with NO host call (`SimMirror::unmap`, as `GpuMirror::unmap`) and the
-/// mapping stays — stale — until a stray sweep. The fix (`kf_qemu::mem::rows_after_steer` in the
-/// steer) puts back the rows of what the ledger still holds; this test replays both protocols.
+/// ★ Review 2 item 4, CORRECTED by review 3 (items 6, 7) — the steer removes the placement row FIRST.
+/// If `hand_to_host` then does not complete (host RM refused, here), mappings of OURS stay on the
+/// host and the row is gone. The first reading of this (a stale mapping, fixed by RESTORING rows) was
+/// wrong for the production path: the net apply unmaps every changed piece BY RANGE over the ledger
+/// (`GpuMirror::unmap_range` does not consult the rows), so the walker's later UNMAP removes the
+/// mapping all the same. This pins that on the real apply path; the restore (which held the rows
+/// lock across a ledger walk and could resurrect a stale row) is deleted.
 #[test]
-fn a_steer_that_did_not_complete_leaves_a_row_so_the_walkers_unmap_still_reaches_the_host() {
-    for restore in [false, true] {
-        let sim = fresh();
-        let m = SimMirror::new(&sim, true, false);
-        let mut c = BTreeMap::new();
-        map_ram(&m, &mut c, &[(4, 4, 700)]);
-        // The steer: row first ...
-        let va = pg(4);
-        let row = m.rows.borrow_mut().remove(&va).unwrap();
-        // ... then the hand-over, which host RM refuses.
-        sim.0.borrow_mut().fail_unmaps = Some(UnmapFault {
-            every: 1,
-            after: false,
-            seen: 0,
-        });
-        let over = m.bv.hand_to_host(va, row);
-        sim.0.borrow_mut().fail_unmaps = None;
-        assert!(matches!(over, crate::batch::HandOver::Refused(_)), "{over:?}");
-        assert!(!m.bv.own.lock().unwrap().is_empty(), "our mappings are still there");
-        if restore {
-            // What the steer now does: the rows of what the ledger still holds.
-            let owned = m.bv.own_view(va, va + row).owned;
-            for (s, e) in owned {
-                m.rows.borrow_mut().insert(s, e - s);
-            }
-        }
-        // The walker's UNMAP of the placement (the guest dropped the page).
-        let before = sim.0.borrow().n.rm_unmap;
-        let r = m.unmap(va, true);
-        assert!(r.is_ok());
-        let issued = sim.0.borrow().n.rm_unmap - before;
-        let host_still_maps = sim
-            .0
-            .borrow()
-            .maps
-            .iter()
-            .any(|x| x.owner == Owner::Mirror);
-        if restore {
-            assert!(issued >= 1, "the unmap reached the host");
-            assert!(!host_still_maps && m.bv.own.lock().unwrap().is_empty());
-        } else {
-            assert_eq!(issued, 0, "no row ⇒ acknowledged with no host call");
-            assert!(host_still_maps, "a stale host mapping the walker believes gone");
-        }
-    }
+fn a_steer_that_did_not_complete_still_lets_the_walkers_unmap_reach_the_host() {
+    let sim = fresh();
+    let m = SimMirror::new(&sim, true, false);
+    let mut c = BTreeMap::new();
+    map_ram(&m, &mut c, &[(4, 4, 700)]);
+    let va = pg(4);
+    // The steer: row first ...
+    let row = m.rows.borrow_mut().remove(&va).unwrap();
+    // ... then the hand-over, which host RM refuses.
+    sim.0.borrow_mut().fail_unmaps = Some(UnmapFault {
+        every: 1,
+        after: false,
+        seen: 0,
+    });
+    let over = m.bv.hand_to_host(va, row);
+    sim.0.borrow_mut().fail_unmaps = None;
+    assert!(matches!(over, crate::batch::HandOver::Refused(_)), "{over:?}");
+    assert_eq!(
+        crate::batch::steer_step(&over, 0, std::time::Duration::ZERO),
+        crate::batch::SteerStep::Retry,
+        "the host alloc does not go ahead on a refused hand-over"
+    );
+    assert!(!m.bv.own.lock().unwrap().is_empty(), "our mappings are still there");
+    // The walker's UNMAP of the placement (the guest dropped the page), through the real apply.
+    let out = apply_and_commit(&m, &[unmap_run(va, &c[&va])], &mut c);
+    assert_eq!(out.refused, 0, "{:?}", out.first_refusal);
+    assert!(
+        sim.0.borrow().maps.iter().all(|x| x.owner != Owner::Mirror),
+        "no stale host mapping"
+    );
+    assert!(m.bv.own.lock().unwrap().is_empty());
+    ok(&sim, &c, &BTreeMap::new());
 }
 
 /// What one seed exercised (so a green run cannot be a run that never batched).

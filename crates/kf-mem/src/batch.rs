@@ -1038,6 +1038,44 @@ pub struct MicroResv {
     pub pins: u32,
 }
 
+/// ★ Review 3 item 5 — **what the falcon-context steer does with each answer.** The steer exists so
+/// that host RM's own context lands ON the guest's context VA, not beside it (`[measured vvid vid10]`
+/// host RM took G+0x1000 where nvcuvid then mapped a live buffer: NVDEC wrote the wrong frames). So the
+/// host allocation may proceed ONLY after [`HandOver::Free`]: every other answer — `Busy` (a map in
+/// flight), `StillOurs` (a mapping of ours landed again), `StillReserved` (a micro reservation covers
+/// it), `Refused` (host RM refused the unmap) — is retried a bounded number of times and then REFUSES
+/// the birth by name (a visible failure, never a silent wrong placement). The act thread never waits
+/// for the VA thread: a retry is the step re-queued behind the other acts, after
+/// [`STEER_RETRY_SPACING`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SteerStep {
+    /// The VA is host RM's: allocate.
+    Done,
+    /// Not yet: re-queue the step.
+    Retry,
+    /// Out of tries / age: refuse the birth by name.
+    Refuse,
+}
+
+/// The most times one steer step is tried (the first try included).
+pub const STEER_MAX_TRIES: u32 = 20;
+/// The longest a steer step keeps retrying.
+pub const STEER_MAX_AGE: std::time::Duration = std::time::Duration::from_millis(100);
+/// The pause before a retry (the act thread sleeps this long, once per retry — the only wait).
+pub const STEER_RETRY_SPACING: std::time::Duration = std::time::Duration::from_millis(1);
+
+/// [`SteerStep`] for `over` after `tries` earlier tries and `age` since the first.
+#[must_use]
+pub fn steer_step(over: &HandOver, tries: u32, age: std::time::Duration) -> SteerStep {
+    if *over == HandOver::Free {
+        SteerStep::Done
+    } else if tries.saturating_add(1) < STEER_MAX_TRIES && age < STEER_MAX_AGE {
+        SteerStep::Retry
+    } else {
+        SteerStep::Refuse
+    }
+}
+
 /// ★ Review fix 2026-10-10 (finding 6): what [`BatchedVas::hand_to_host`] did.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HandOver {
@@ -3523,6 +3561,65 @@ mod tests {
     /// trivial, in a debug build on a loaded box — well under the 2 ms yield cap the pre-fix code
     /// made it wait out.
     const HOLD2_ACT_P90_BOUND_US: u128 = 800;
+
+    /// ★ Review 3 item 5 — the steer's decision table: only `Free` lets the host alloc go ahead;
+    /// everything else is retried a bounded number of times, then the birth is refused by name.
+    #[test]
+    fn the_steer_proceeds_only_on_free_retries_the_rest_and_then_refuses() {
+        use std::time::Duration;
+        for over in [
+            HandOver::Busy,
+            HandOver::StillOurs,
+            HandOver::StillReserved,
+            HandOver::Refused("x".into()),
+        ] {
+            let mut tries = 0;
+            let mut retries = 0;
+            let outcome = loop {
+                match steer_step(&over, tries, Duration::from_millis(u64::from(tries))) {
+                    SteerStep::Retry => {
+                        retries += 1;
+                        tries += 1;
+                    }
+                    other => break other,
+                }
+            };
+            assert_eq!(outcome, SteerStep::Refuse, "{over:?} never proceeds");
+            assert_eq!(retries, STEER_MAX_TRIES - 1, "{over:?}");
+            // By age too: a stuck step stops retrying after STEER_MAX_AGE whatever the count.
+            assert_eq!(steer_step(&over, 1, STEER_MAX_AGE), SteerStep::Refuse);
+        }
+        assert_eq!(steer_step(&HandOver::Free, 0, Duration::ZERO), SteerStep::Done);
+        assert_eq!(steer_step(&HandOver::Free, STEER_MAX_TRIES, STEER_MAX_AGE), SteerStep::Done);
+    }
+
+    /// ★ Review 3 item 5, with the model host and a map in flight — the first try meets the map
+    /// (`Busy` ⇒ `Retry`: the host alloc does NOT go ahead, nothing touched); the retry, after the map
+    /// has been recorded, hands the VA over (`Free` ⇒ `Done`) — the order the act loop produces. A
+    /// steer that is never `Free` (a map that never ends) refuses at the limit.
+    #[test]
+    fn a_steer_that_meets_a_map_in_flight_retries_and_then_completes() {
+        let host: &'static GateHost = Box::leak(Box::new(GateHost::new()));
+        let bv: &'static BatchedVas<'static, &'static GateHost> =
+            Box::leak(Box::new(BatchedVas::with_low_reserve(host, false)));
+        let va = 0x10_0000u64;
+        let first: std::sync::Arc<Mutex<Option<(HandOver, SteerStep)>>> = Default::default();
+        let f2 = first.clone();
+        *host.after_map.lock().unwrap() = Some(Box::new(move || {
+            let over = bv.hand_to_host(va, 2 * P);
+            let step = steer_step(&over, 0, std::time::Duration::ZERO);
+            *f2.lock().unwrap() = Some((over, step));
+        }));
+        assert_eq!(bv.map(&row(va, 2 * P, P), true), Ok(Mapped::Placed));
+        let (over, step) = first.lock().unwrap().take().unwrap();
+        assert_eq!((over, step), (HandOver::Busy, SteerStep::Retry));
+        assert_eq!(host.pages.lock().unwrap().len(), 2, "the first try touched nothing");
+        // The retry: the map is recorded now; this try hands the (guest-mapped) pages over.
+        let over = bv.hand_to_host(va, 2 * P);
+        assert_eq!(over, HandOver::Free);
+        assert_eq!(steer_step(&over, 1, std::time::Duration::ZERO), SteerStep::Done);
+        assert!(host.pages.lock().unwrap().is_empty());
+    }
 
     /// ★ Review 3 item 3 (`rv3_cap_does_not_bound_aggregate_bitmap`) — the per-batch extent cap does
     /// not bound the AGGREGATE: 256 batches of 16 aliased 4 GiB runs (64 GiB each, 16 TiB of VA)

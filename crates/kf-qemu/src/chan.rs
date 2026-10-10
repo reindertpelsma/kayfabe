@@ -96,6 +96,169 @@ impl kf_rm::gssnative::GssHost for GssHostRm {
 /// ★ P5b: one host act, run on the plane's act thread. `Err((status, why))` refuses by name.
 type Act = Box<dyn FnOnce(&ChanPlane) -> Result<String, (u32, String)> + Send>;
 
+/// ★ Review 3 item 5: the status an act returns after it has put ITSELF back on the act queue
+/// ([`ChanPlane::requeue`]): the act loop neither resolves its `Deferred` nor counts a refusal.
+const ACT_REQUEUED: u32 = 0xFFFF_FFF0;
+
+/// ★★ v3-video — one guest `engine object` alloc on a Passthrough twin, as a RE-QUEUEABLE act.
+///
+/// STEER THE HOST'S FALCON CONTEXT ONTO THE GUEST'S. In a video channel's VA space guest RM and host
+/// RM place buffers with the SAME lowest-free allocator, user buffers and RM-internal ones alike.
+/// `[measured vvid vid10]` the guest put its falcon ctx at G = 0x12002a000; host RM, allocating the
+/// twin's own ctx with this object, found G mirrored and took G+0x1000 — where nvcuvid then mapped a
+/// live 4 KiB buffer, which the walker could only report HELD BY HOST: the engine used the wrong page
+/// and NVDEC produced untouched frames. So G (the guest's ctx, which no engine ever reads — the twin
+/// runs on the host's) is unmapped from the twin first, and host RM takes G itself.
+///
+/// ★ Review 3 item 5: the host alloc happens ONLY after the hand-over answered `Free`
+/// ([`kf_mem::batch::steer_step`]). Before D2 a failed unmap was "logged, best effort" and the alloc
+/// went ahead — which re-introduces exactly the wrong-frames bug; D2's `Busy`/`StillOurs`/`Refused`
+/// answers were then treated the same. Now each is retried (re-queued behind the other acts, after a
+/// 1 ms pause — the act thread never waits on the VA thread) up to [`kf_mem::batch::STEER_MAX_TRIES`]
+/// / [`kf_mem::batch::STEER_MAX_AGE`], then the birth is REFUSED by name. Where there is nothing to
+/// steer (no falcon ctx, G inside a reserved guest range, the row not mirrored yet) it proceeds as it
+/// always did.
+#[derive(Clone)]
+struct EngineObj {
+    client: u32,
+    parent: u32,
+    handle: u32,
+    class: u32,
+    copy_engine: Option<u32>,
+    chan: kf_host::Channel,
+    engine: u32,
+    space: kf_host::VaSpace,
+    rows: crate::mem::PlacedRows,
+    ledger: Option<Arc<kf_mem::batch::BatchedVas<'static>>>,
+    kind: kf_chip::classes::Kind,
+}
+
+impl EngineObj {
+    /// The act for try number `tries`; `steered` = the `(va, row length)` whose placement row an
+    /// earlier try already removed (a retry must not read the missing row as "nothing there").
+    fn act(self, tries: u32, born: std::time::Instant, steered: Option<(u64, u64)>, d: kf_gsp::Deferred) -> Act {
+        Box::new(move |me: &ChanPlane| self.run(me, tries, born, steered, d))
+    }
+
+    fn run(
+        self,
+        me: &ChanPlane,
+        tries: u32,
+        born: std::time::Instant,
+        steered: Option<(u64, u64)>,
+        d: kf_gsp::Deferred,
+    ) -> Result<String, (u32, String)> {
+        let Self { client, parent, handle, class, copy_engine, chan, engine, space, ref rows, ref ledger, kind } = self;
+        if tries > 0 {
+            std::thread::sleep(kf_mem::batch::STEER_RETRY_SPACING);
+        }
+        let fc = if matches!(
+            kind,
+            kf_chip::classes::Kind::VideoEncoder | kf_chip::classes::Kind::VideoDecoder | kf_chip::classes::Kind::OpticalFlow
+        ) {
+            me.pt.lock().ok().and_then(|m| m.get(&(client, parent)).and_then(|v| v.falcon_ctx))
+        } else {
+            None
+        };
+        // ★★ v3-int — HOW THIS COMPOSES WITH THE v3-gfx GUEST-VA RESERVATION
+        // (`kf_host::GUEST_VA_RANGES`). The collision above exists only where host RM's
+        // allocator may place: with the guest's ranges reserved in the twin's space, host
+        // RM's falcon ctx can only land in the host hole `[HOST_HOLE_LO, 1 TiB)` — never
+        // at G nor G+0x1000 — so no guest buffer can meet it and there is nothing to steer.
+        // ⇒ Steer ONLY when G is outside a live reservation (reservation refused, or
+        // `KF3_NO_GUEST_VA_RESERVE`); otherwise the guest's own mapping at G is left alone.
+        let fc = fc.filter(|&(va, len)| {
+            let reserved = space.guest_reserved(va, len);
+            if reserved && tries == 0 {
+                eprintln!(
+                    "kf3: chan {client:#x}:{parent:#x} falcon ctx G={va:#x}+{len:#x} is inside the reserved guest VA — host RM places its own ctx in the host hole; not steered"
+                );
+            }
+            !reserved
+        });
+        let mut steer_msg = String::new();
+        if let Some((va, len)) = fc {
+            // The row goes first: from here G is host RM's. `rows.remove` is also the arbitration
+            // `cut_own`'s argument relies on (`V3_BATCHED_MAP.md` §8.8.2). The `rows` write lock is
+            // held for the `remove` ONLY (review 3 item 6): the ledger walk below is outside it.
+            let row_len = match steered {
+                Some((_, l)) => Some(l),
+                None => match rows.write().map(|mut r| r.remove(&va)) {
+                    Ok(None) => {
+                        steer_msg = format!(" [guest ctx VA {va:#x} not mirrored yet — host RM takes it free; the walker will find it held]");
+                        None
+                    }
+                    Err(_) => {
+                        return Err((
+                            NV_ERR_INVALID_STATE,
+                            format!("guest ctx VA {va:#x}: the placement rows are poisoned — the steer cannot be known to have happened; object birth REFUSED"),
+                        ));
+                    }
+                    Ok(Some(row)) => Some(row.0),
+                },
+            };
+            if let Some(rl) = row_len {
+                // ★ 2026-10-09: by RANGE over the whole row — outside a reservation a row is many host
+                // mappings (D1: one per 4 KiB page, or one reservation holding it), so a start-keyed
+                // unmap would take only its first. THROUGH the space's ownership ledger
+                // (`BatchedVas::hand_to_host`): our mappings only, each through the hDma it was mapped
+                // through, the ledger cut. D2: the ledger's locks are taken here (act thread) and held
+                // for at most one chunk; the observed bounds are part of the log line.
+                let Some(bv) = ledger.as_ref() else {
+                    steer_msg = format!(" [guest ctx VA {va:#x}: no ownership ledger for this space — nothing of ours to hand over, host ctx placement unsteered]");
+                    return self.finish(me, steer_msg);
+                };
+                let over = bv.hand_to_host(va, rl);
+                let (touched, hold_us) = bv.hold_stats();
+                let (act_wait_us, act_op_us) = bv.act_stats();
+                let holds = format!(" (ledger lock holds: at most {touched} entries, longest {hold_us} us; this thread waited at most {act_wait_us} us for a ledger lock, hand-over took at most {act_op_us} us; try {})", tries.saturating_add(1));
+                match kf_mem::batch::steer_step(&over, tries, born.elapsed()) {
+                    kf_mem::batch::SteerStep::Done => {
+                        steer_msg = format!(" [host ctx steered onto the guest's ctx VA {va:#x}+{len:#x}{holds}]");
+                    }
+                    kf_mem::batch::SteerStep::Retry => {
+                        eprintln!(
+                            "kf3: chan {client:#x}:{parent:#x} falcon ctx steer of {va:#x}+{rl:#x} not complete ({over:?}){holds} — re-queued, the host alloc waits"
+                        );
+                        let next = self.clone().act(tries.saturating_add(1), born, Some((va, rl)), d.clone());
+                        return if me.requeue("engine object", next, d) {
+                            Err((ACT_REQUEUED, "steer retry".into()))
+                        } else {
+                            Err((NV_ERR_INVALID_STATE, "the act thread is not running — object birth REFUSED".into()))
+                        };
+                    }
+                    kf_mem::batch::SteerStep::Refuse => {
+                        return Err((
+                            NV_ERR_INVALID_STATE,
+                            format!(
+                                "falcon ctx VA {va:#x}+{rl:#x} could not be handed to host RM after {} tries / {} ms: {over:?}{holds} — object birth REFUSED (a host ctx placed beside the guest's would land on a live guest buffer: wrong frames)",
+                                tries.saturating_add(1),
+                                born.elapsed().as_millis()
+                            ),
+                        ));
+                    }
+                }
+            }
+        }
+        self.finish(me, steer_msg)
+    }
+
+    /// The host alloc and the bookkeeping, after the steer is done (or not needed).
+    fn finish(&self, me: &ChanPlane, steer: String) -> Result<String, (u32, String)> {
+        let Self { client, parent, handle, class, copy_engine, chan, engine, kind, .. } = *self;
+        let h = kf_chan::passthrough::engine_object(me.rm, chan, engine, class, kind, copy_engine).map_err(|e| (NV_ERR_INVALID_CLASS, e))?;
+        if let Ok(mut m) = me.pt.lock()
+            && let Some(v) = m.get_mut(&(client, parent))
+        {
+            v.objects.insert(handle, (h, kind));
+        }
+        if let Ok(mut m) = me.pt_objs.lock() {
+            m.insert((client, handle), (client, parent));
+        }
+        Ok(format!("{client:#x}:{handle:#x} class {class:#x} ({kind:?}) on twin host {:#x} -> host object {h:#x}{steer}", chan.token))
+    }
+}
+
 /// ★ P5b: a guest USER channel's host twin (Passthrough).
 struct PtChan {
     chan: kf_host::Channel,
@@ -2398,6 +2561,8 @@ impl ChanPlane {
                             }
                             d.resolve(0);
                         }
+                        // ★ Review 3 item 5: the act put itself back on the queue; its reply is NOT given.
+                        Err((ACT_REQUEUED, _)) => continue,
                         Err((status, why)) => {
                             self.acts_refused.fetch_add(1, Ordering::Relaxed);
                             eprintln!("kf3: act {what} REFUSED ({status:#x}): {why} ({us} us)");
@@ -3908,114 +4073,31 @@ impl ChanPlane {
                 ),
             };
         };
-        self.defer(
-            "engine object",
-            Box::new(move |me: &ChanPlane| {
-                // ★★ v3-video — STEER THE HOST'S FALCON CONTEXT ONTO THE GUEST'S. In a video
-                // channel's VA space guest RM and host RM place buffers with the SAME lowest-free
-                // allocator, user buffers and RM-internal ones alike. `[measured vvid vid10]` the
-                // guest put its falcon ctx at G = 0x12002a000; host RM, allocating the twin's own ctx
-                // with this object, found G mirrored and took G+0x1000 — where nvcuvid then mapped a
-                // live 4 KiB buffer, which the walker could only report HELD BY HOST: the engine
-                // used the wrong page and NVDEC produced untouched frames. So G (the guest's ctx,
-                // which no engine ever reads — the twin runs on the host's) is unmapped from the
-                // twin first, and host RM takes G itself. Best effort: a failed unmap is logged.
-                let fc = if matches!(
-                    kind,
-                    kf_chip::classes::Kind::VideoEncoder | kf_chip::classes::Kind::VideoDecoder | kf_chip::classes::Kind::OpticalFlow
-                ) {
-                    me.pt.lock().ok().and_then(|m| m.get(&(client, parent)).and_then(|v| v.falcon_ctx))
-                } else {
-                    None
-                };
-                // ★★ v3-int — HOW THIS COMPOSES WITH THE v3-gfx GUEST-VA RESERVATION
-                // (`kf_host::GUEST_VA_RANGES`). The collision above exists only where host RM's
-                // allocator may place: with the guest's ranges reserved in the twin's space, host
-                // RM's falcon ctx can only land in the host hole `[HOST_HOLE_LO, 1 TiB)` — never
-                // at G nor G+0x1000 — so no guest buffer can meet it and there is nothing to steer.
-                // ⇒ Steer ONLY when G is outside a live reservation (reservation refused, or
-                // `KF3_NO_GUEST_VA_RESERVE`); otherwise the guest's own mapping at G is left alone.
-                let fc = fc.filter(|&(va, len)| {
-                    let reserved = space.guest_reserved(va, len);
-                    if reserved {
-                        eprintln!(
-                            "kf3: chan {client:#x}:{parent:#x} falcon ctx G={va:#x}+{len:#x} is inside the reserved guest VA — host RM places its own ctx in the host hole; not steered"
-                        );
-                    }
-                    !reserved
-                });
-                // The row goes first: from here G is host RM's, and the walker's eventual unmap of the
-                // guest's page there is answered without a host call. ★ Review 2 item 4: "and for
-                // good" only when the hand-over completes — otherwise the rows of what is still ours
-                // are put back (below). `rows.remove` is also the arbitration `cut_own`'s argument
-                // relies on (`V3_BATCHED_MAP.md` §8.8.2): once the row is gone the VA thread's unmap
-                // of that page issues no host call, so the only unmappers of the range during the
-                // steer are the steer itself and idempotent range unmaps.
-                let steer = fc.map(|(va, len)| match rows.write().map(|mut r| r.remove(&va)) {
-                    Ok(None) => format!(" [guest ctx VA {va:#x} not mirrored yet — host RM takes it free; the walker will find it held]"),
-                    Err(_) => format!(" [placement rows poisoned — host ctx placement unsteered]"),
-                    // ★ 2026-10-09: by RANGE over the whole row — outside a reservation a row is many
-                    // host mappings (D1, 2026-10-10: one per 4 KiB page, or one reservation holding
-                    // it; ⊘ it was "one per guest leaf") (`kf_mem::batch`), so a start-keyed unmap
-                    // would take only its first. ★ Review fix 2026-10-10 (finding 6): THROUGH the space's
-                    // ownership ledger (`BatchedVas::hand_to_host`) — our mappings only, each through
-                    // the hDma it was mapped through (a micro reservation included), the ledger cut.
-                    // ⊘ It was a raw `HostRm::unmap_range`: not limited to our mappings, the ledger
-                    // left stale, and a no-op (logged "steered") for a micro-reserved row.
-                    // ★ D2 (2026-10-10): the ledger's locks are taken here (act thread) and held for
-                    // at most one chunk (`kf_mem::batch::LEDGER_CHUNK`); the longest hold so far is
-                    // part of the log line, so the cost is observed, not assumed.
-                    Ok(Some(row)) => match ledger.as_ref().map(|bv| (bv.hand_to_host(va, row.0), bv.hold_stats())) {
-                        Some((over, (touched, hold_us))) => {
-                            // ★ Review 2 item 4: the row was removed FIRST (so a walker UNMAP of a
-                            // page handed to host RM makes no host call). When the hand-over did
-                            // not complete — Busy / StillOurs / Refused — mappings of OURS are still
-                            // on the host: put their rows back, or the walker's later UNMAP is
-                            // acknowledged with no host call and they stay until the retire. A part
-                            // the VA thread already re-placed (its own row) is not overwritten.
-                            let mut restored = 0usize;
-                            if !matches!(
-                                over,
-                                kf_mem::batch::HandOver::Free | kf_mem::batch::HandOver::StillReserved
-                            ) && let (Some(bv), Ok(mut r)) = (ledger.as_ref(), rows.write())
-                            {
-                                let owned = bv.own_view(va, va.saturating_add(row.0)).owned;
-                                for (k, v) in crate::mem::rows_after_steer(&r, va, row, &owned) {
-                                    r.insert(k, v);
-                                    restored = restored.saturating_add(1);
-                                }
-                            }
-                            let (act_wait_us, act_op_us) = ledger.as_ref().map_or((0, 0), |bv| bv.act_stats());
-                            let holds = format!(" (ledger lock holds: at most {touched} entries, longest {hold_us} us; this thread waited at most {act_wait_us} us for a ledger lock, hand-over took at most {act_op_us} us; {restored} placement row(s) restored)");
-                            match over {
-                                kf_mem::batch::HandOver::Free => format!(" [host ctx steered onto the guest's ctx VA {va:#x}+{len:#x}{holds}]"),
-                                kf_mem::batch::HandOver::StillReserved => format!(" [guest ctx VA {va:#x} unmapped, but a micro reservation of ours still covers it (other rows live in it) — host ctx placement unsteered{holds}]"),
-                                kf_mem::batch::HandOver::Busy => format!(" [guest ctx VA {va:#x}: the VA thread is mapping a row there right now — nothing touched, host ctx placement unsteered{holds}]"),
-                                kf_mem::batch::HandOver::StillOurs => format!(" [guest ctx VA {va:#x}: a new mapping of ours landed there meanwhile — host ctx placement unsteered{holds}]"),
-                                kf_mem::batch::HandOver::Refused(e) => format!(" [guest ctx VA {va:#x} not unmapped ({e}) — host ctx placement unsteered{holds}]"),
-                            }
-                        }
-                        None => {
-                            // Nothing was unmapped: the row goes back whole.
-                            if let Ok(mut r) = rows.write() {
-                                r.entry(va).or_insert(row);
-                            }
-                            format!(" [guest ctx VA {va:#x}: no ownership ledger for this space — not unmapped, row restored, host ctx placement unsteered]")
-                        }
-                    },
-                });
-                let h = kf_chan::passthrough::engine_object(me.rm, chan, engine, class, kind, copy_engine).map_err(|e| (NV_ERR_INVALID_CLASS, e))?;
-                if let Ok(mut m) = me.pt.lock()
-                    && let Some(v) = m.get_mut(&(client, parent))
-                {
-                    v.objects.insert(handle, (h, kind));
-                }
-                if let Ok(mut m) = me.pt_objs.lock() {
-                    m.insert((client, handle), (client, parent));
-                }
-                Ok(format!("{client:#x}:{handle:#x} class {class:#x} ({kind:?}) on twin host {:#x} -> host object {h:#x}{}", chan.token, steer.unwrap_or_default()))
-            }),
-        )
+        let d = kf_gsp::Deferred::new();
+        let step = EngineObj {
+            client,
+            parent,
+            handle,
+            class,
+            copy_engine,
+            chan,
+            engine,
+            space,
+            rows,
+            ledger,
+            kind,
+        };
+        self.defer_cell("engine object", step.act(0, std::time::Instant::now(), None, d.clone()), d)
+    }
+
+    /// ★ Review 3 item 5: put an act BEHIND the others again (a steer retry). `false` when the act
+    /// thread is not running.
+    fn requeue(&self, what: &'static str, act: Act, d: kf_gsp::Deferred) -> bool {
+        self.acts
+            .lock()
+            .ok()
+            .and_then(|a| a.as_ref().map(|tx| tx.send((act, d, what)).is_ok()))
+            == Some(true)
     }
 
     /// ★ EXPERIMENT `x11-dispsw` (default off; carried only when the device property is on,
