@@ -1,6 +1,6 @@
 # Windows TDR hunt, 2026-10-10 (branch `claude/tdr-hunt-20261010` from `integration/windows-20261010` eff1b692 = code 459da55d)
 
-STATUS: RESEARCH (live notes; see "Result" at the bottom when it exists). Host RTX 4070, driver 595.91.07.
+STATUS: RESEARCH, 2026-10-10 — time-box reached after 8 hardware runs (264-271): partial measured cause, no fix. See "RESULT" at the bottom. Host RTX 4070, driver 595.91.07.
 Labels: **[measured]** = a log line / counter / guest event with its run; **[inferred]** = reasoning not yet tested.
 
 ## Runbook (host-only tooling outside git, `/var/lib/kf-windows-20261005`)
@@ -128,3 +128,58 @@ max lag 1374 entries, 57 runs of >= 500 ms) - the lag does not heal by itself wi
 VSyncs raised and no ack for 600 ms, take six `stop; info registers -a; cont` samples of every vCPU and a full guest-memory dump at the stall, resolve RIPs with the Microsoft symbols (ntoskrnl/dxgkrnl/dxgmms2) and
 read the thread stacks with the Volatility tools (`windows.tdrctx`/`waitfast`). Falsifier of "the guest is spinning/blocked in its own driver and the interrupt cannot run": all vCPUs idle (HLT) with the
 vector pending (then the interrupt delivery path is the culprit: MSI-X routing/mask/irqfd).
+
+
+## RESULT (8 hardware runs, 264-271; evidence in `evidence/`)
+
+| run | build | flags beyond production | what it was for | outcome |
+|---|---|---|---|---|
+| 264 | 459da55d | COMPLETION_PROBE, PT_STALL_SNAPSHOT, live ETW (non-circular) | first look | 8 TDRs / 13 min; WATCHDOG dump (0x117); ETW capped before the stall |
+| 265 | 459da55d | same, bad ETW watcher | boot TDR t=18 s + one at t=53 s; then the display stayed black and the guest wedged, QEMU killed |
+| 266 | 459da55d | same | 7 TDRs (cluster of 4 at 82-108 s after READY, then 5 calm minutes); WATCHDOG dump |
+| 267 | 459da55d | `KF3_RELAY_GET_REFRESH=1` only | H-D test | GET lag 0; first TDR 5 s after sign-in, 2nd 5 s after Edge, cluster at 81-102 s, then NO TDR for 13 min (6 cycles in 15 min). **H-D falsified** (cause of first TDR / cluster) |
+| 268 | a4b96ee0 | probe + display traces | display/relay time series | 2 TDRs after sign-in, none later in 4 min; acks stop ~2.2 s |
+| 269 | fcafeb2e | probe + display write trace + circular ETW | name the stuck packet | 7 cycles; ETW captured the first TDR: user packets stuck 4.35 s |
+| 270 | fcafeb2e | probe + display write trace, STALLDUMP | what the vCPUs do during the silence | all vCPUs in the guest's own live-dump corral (IF=0) |
+| 271 | bb53ec57 | probe + circular ETW | pending object + both cursor sides | paging-queue packets pending 2.475 s; host side had completed them |
+
+Not one of the 8 reproduces "once a minute": the TDRs come as a first one 5 s after the sign-in keys, a second one ~5 s after the Edge launch, a cluster 80-125 s after READY (3-5 resets 4-5 s apart) in
+263/264/266/267/269/271, and then often nothing for 5-13 minutes (264: one at 461 s; 267: none in 13 min). Run 263's tail ended in a 0x116 bugcheck (5 resets in 29 s trips TdrLimitCount=5/60 s).
+
+### Measured (by run)
+1. **The TDR is declared by dxgmms2's flip-queue check** (`VidSchiCheckHwProgress -> VidSchiCheckFlipQueueTimeout -> VidSchiReportHwHang -> TdrIsRecoveryRequired -> TdrCollectDbgInfoStage1 -> live dump`),
+   in all three guest dumps (264, 265 = a boot TDR, 266). `evidence/watchdog-dump-run26[456]-stack.txt`. It is not an engine-node timeout.
+2. **What is pending at the declaration is queue packets whose host work is already done.** Run 269 (ETW): RENDER/SOFTWARE/DEVICE command-buffer packets of three user processes (pids 0x19DC, 0x18D4, 0xD18) queued
+   within 15 ms at 10:10:59.85, no other packet slower than 132 ms in 4412, all stopped only in the recovery 4.35 s later; declaration (= the guest's last VSync event) at 10:11:01.862, i.e. 2.0 s (TdrDelay)
+   after they were queued. Run 271: the kernel paging queue's packets 4562-4586+ queued 10:23:17.484 stopped only at 10:23:19.959 (2.475 s); **kayfabe's own log of the same instant:
+   `completed fence seq=2774 gp_get=14331 submit->seen=72us seen 1523ms ago` for the Translated paging ring (host GP_GET == guest GP_PUT == 14331), i.e. kayfabe completed it ~1.5 s before; no
+   `HOST-FENCE-OVERDUE` anywhere (0 in 271), no `DEAD`, `unreconciled=0`, no host Xid.** (`evidence/run269-etw-summary.txt`, `run271-etw-summary.txt`; log lines in `qemu.log` of run 271.)
+3. **Every relayed twin was fully consumed by the host engine at the stall** (RELAY-DUMP of run 271: engine GET == relay host_put == guest PUT for all 22 twins); only the guest-visible GET trails (without
+   `KF3_RELAY_GET_REFRESH`), and refreshing it does not change the TDR (run 267).
+4. **At the stall the interrupts are PENDING and unserviced, not absent**: `leaf0=0x6` (CE2 vec 1 + CE3 vec 2) and `leaf4=0x4000000` (display) set with enables on, `top=0x5`; the guest's interrupt-tree
+   register-write counter does not move for >=0.4 s while `raised` keeps growing (runs 268, 269, 271 PROBE-DUMP device lines); display VSyncs are raised every 16.7 ms and were acked up to the declaration.
+5. **Nothing in kayfabe blocks a vCPU**: `VCPU-MAX` 131-332 us for whole runs, no `VCPU-STUCK`.
+6. **The silence after the declaration is the guest's own live dump**: at the stall (run 270) all 8 vCPUs sit in `IopLiveDumpProcessCorralStateChange` / `IopLiveDumpBufferDumpData` with interrupts off
+   (`evidence/run270-rip-symbols.txt`), which is why the ISR is not running then. The declaration is therefore BEFORE the silence; the stale packets are older than it.
+
+### Ruled out (with the run)
+* H-D, stale guest `GP_GET` of relayed twins (267). H-A as an engine stall in the host (no HOST-FENCE-OVERDUE, host rings drained; 264-271). A vCPU blocked in a kayfabe BAR0 handler (269-271 VCPU-MAX).
+  A lost VSync (kayfabe raises and the guest acks up to the declaration; 268/269). A CPU_INTR shadow-publication race as the TDR trigger is not excluded in general but nothing showed
+  shadow != atomics (not measured directly: no shadow-vs-atomics counter was added).
+* A "once a minute" rate; a boot-time-only effect; the ETW itself as the cause (TDRs happen without it: 263, 266, 267).
+
+### Still inferred (not measured)
+* Which interrupt the guest never sees for the stale packets: the picture (host done, fence words written by the engine, `leaf0` CE2/CE3 bits pending, packets completing only at the TDR) fits a completion
+  notification the guest never acts on (the audit's finding 3 `NotArmed` drop of host non-stall edges, or finding 2's shadow race, or the Translated-CE relay not raising for a batch) — none of them is tied to a
+  specific stale packet yet.
+* Why the guest does not run its ISR for pending CE2/CE3 bits during the 2 s before the declaration (the live dump only explains the time AFTER it).
+
+### Exact next step
+One boot with both sides time-stamped at packet level: (a) kayfabe, for every Translated-CE pump and every Passthrough host non-stall edge, log (vector latched? MSI raised? leaf bit already set? armed?) with the maplog time;
+the `NotArmed`/`unvectored` verdicts per engine at the same second as the stall (the counters exist; they are only printed at 2 s granularity); (b) the same circular ETW stopped by the runner at the first TDR (works:
+`tooling/tdr-run.sh ETW=1`) so the first stale packet's queue time is known; (c) one `info registers -a` sample 1.0 s before the expected declaration (arm on the packet's queue time) to see what the vCPUs run while the CE2/CE3
+bits are pending and no ISR runs. Cheap falsifier first: make a host non-stall edge latch+raise its vector unconditionally (the audit's finding-3 switch) and see whether the first TDR disappears.
+
+### Code in this branch (diagnostic only, probe thread, default off)
+`RELAY-LAG`, `VCPU-STUCK`/`VCPU-MAX`, guest-silence `PT-SNAP` + `RELAY-DUMP` (all behind `KF3_COMPLETION_PROBE`), `scripts/bench/windows/dxg_etw_stop_tail.ps1`, `tooling/tdr-run.sh`. `cargo test -p kf-qemu -p kf-chan` on the host: 295 passed, 0 failed
+(the local disk was full). No behaviour changed, no fix. Host left clean after every run (DMA-FQ, no QEMU, nvidia bound, stop file removed, Xid 0); big dumps stay on the host under `dumps/` (`run264/265/266-WATCHDOG.dmp`, `run270-stall.elf`) and are not in git.

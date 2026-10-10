@@ -1,0 +1,8 @@
+Run 270, stall dump taken ~0.1-0.6 s after the guest stopped acking VSync (all 8 vCPUs, six samples 0.5 s apart: IF=0, CPL=0, none halted).
+RIPs resolved with the Microsoft ntoskrnl public symbols (module base from the dump):
+  ntoskrnl+0x4388bd  IopLiveDumpProcessCorralStateChange+0x31   (7 of 8 vCPUs, samples 1,3,4,5)
+  ntoskrnl+0x552c8c  IopLiveDumpBufferDumpData+0x184            (7 of 8 vCPUs, sample 6)
+  ntoskrnl+0x4b889e  HalpHpetQueryCounter+0xe                   (vCPU 0, samples 1-4)
+  others: SwapContext, RtlDecompressBufferXpressHuff, RtlpHpSegLockAcquire, ExpAddTagForBigPages, MmTryIdentifyPage, IopLiveDumpBufferDumpData+0x114
+=> by the time the VSync acks stop, the guest is inside its own live kernel dump (all CPUs corralled with interrupts off), the dump that
+   VidSchiReportHwHang -> TdrIsRecoveryRequired -> TdrCollectDbgInfoStage1 starts at the TDR declaration. The silence is the dump, not the cause.

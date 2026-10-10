@@ -1,0 +1,5 @@
+2026-10-10T09:32:38 tdr_cycles=3 hold_t=0
+2026-10-10T09:34:00 tdr_cycles=4 hold_t=82
+2026-10-10T09:34:10 tdr_cycles=5 hold_t=92
+2026-10-10T09:34:15 tdr_cycles=6 hold_t=97
+2026-10-10T09:34:26 tdr_cycles=7 hold_t=108
