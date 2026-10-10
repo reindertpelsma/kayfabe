@@ -75,12 +75,17 @@ cp $RUN/command.json $O/command.json
 TA=0; for j in $(seq 1 90); do alive || break; G qga-ping >/dev/null 2>&1 && { TA=$(date +%s); break; }; sleep 2; done
 L "qga answered: ta=$TA alive=$(alive && echo 1 || echo 0)"
 if [ "$TA" != 0 ] && alive; then
-  G qga-exec net.exe user vast $PW >/dev/null 2>&1; L "password set rc=$?"
-  gps guest-pre.txt '"utc now: " + (Get-Date).ToUniversalTime().ToString("o"); $gd="HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers"; "GraphicsDrivers: " + ((Get-ItemProperty $gd | Select-Object Td*,HwSchMode | Out-String).Trim()); "hags/HwSchMode=" + (Get-ItemProperty $gd).HwSchMode'
   if [ "${ETW:-0}" = 1 ]; then
-    gps etw-arm.txt 'New-Item -ItemType Directory -Force -Path C:\kf | Out-Null; logman delete kfdxg -ets 2>&1 | Out-Null; logman create trace kfdxg -p "Microsoft-Windows-DxgKrnl" 0x1 5 -o C:\kf\kfdxg.etl -f bincirc -bs 1024 -nb 64 512 -ft 1 -max 512 -ets 2>&1; logman query kfdxg -ets 2>&1 | Select-Object -First 12'
-    L "ETW armed (live): $(tail -3 $O/etw-arm.txt | tr '\n' ' ')"
+    for try in 1 2 3 4 5 6; do
+      : > $O/etw-arm.txt
+      GT=60 G qga-exec powershell.exe -NoProfile -Command 'New-Item -ItemType Directory -Force -Path C:\kf | Out-Null; logman delete kfdxg -ets 2>&1 | Out-Null; Remove-Item C:\kf\kfdxg*.etl -ErrorAction SilentlyContinue; logman create trace kfdxg -p "Microsoft-Windows-DxgKrnl" 0x1 5 -o C:\kf\kfdxg.etl -f bincirc -bs 1024 -nb 64 512 -ft 1 -max 512 -ets 2>&1; schtasks /create /tn kfetwstop /sc onevent /ec System /mo "*[System[Provider[@Name=\"nvlddmkm\"] and (EventID=153)]]" /ru SYSTEM /rl HIGHEST /f /tr "logman stop kfdxg -ets" 2>&1; logman query kfdxg -ets 2>&1 | Select-Object -First 6' > $O/etw-arm.txt 2>&1
+      grep -q "SUCCESS" $O/etw-arm.txt && break
+      sleep 5
+    done
+    L "ETW armed (try $try, circular; self-stop task on nvlddmkm 153): $(grep -c . $O/etw-arm.txt) lines, $(grep -c -i 'success' $O/etw-arm.txt) success"
   fi
+  G qga-exec net.exe user vast $PW >/dev/null 2>&1; L "password set rc=$?"
+  gps guest-pre.txt '"utc now: " + (Get-Date).ToUniversalTime().ToString("o"); $gd="HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers"; "GraphicsDrivers: " + ((Get-ItemProperty $gd | Select-Object * -ExcludeProperty PS* | Out-String).Trim())'
   while alive && [ $(( $(date +%s) - TA )) -lt ${SIGNIN_DELAY:-30} ]; do sleep 1; done
   if alive; then
     shot pre-signin
@@ -88,10 +93,6 @@ if [ "$TA" != 0 ] && alive; then
     key spc; sleep 3
     for c in k f s i g n 7; do key $c; done; key ret
     L "SIGNIN sent"
-  if [ "${ETW:-0}" = 1 ]; then
-    ( C0=$(ncyc); while alive && [ "$(ncyc)" -le "$C0" ]; do sleep 0.5; done
-      alive && { touch $O/.etw_stopped; L "ETW stop (tdr_cycles=$(ncyc))"; GT=900 timeout 900 python3 $W/boundary-tools/qmp.py $RUN/qga.sock qga-exec powershell.exe -NoProfile -Command "$(cat $W/kayfabe-win-6fafcc6e/scripts/bench/windows/dxg_etw_stop_tail.ps1)" > $O/etw-stop.txt 2>&1; L "ETW stop rc=$? lines=$(wc -l < $O/etw-stop.txt)"; } ) &
-  fi
     sleep 25; shot after-signin; snap after-signin
     ev(){ Q cmd input-send-event "{\"events\":$1}" >/dev/null 2>&1; sleep 0.15; }
     ev '[{"type":"abs","data":{"axis":"x","value":802}},{"type":"abs","data":{"axis":"y","value":4854}}]'
@@ -124,9 +125,10 @@ L "HOLD ended: alive=$(alive && echo 1 || echo 0) tdr_cycles=$(ncyc) stopfile=$(
 if alive; then
   gps guest-events.txt '"utc now: " + (Get-Date).ToUniversalTime().ToString("o"); "uptime: " + ((Get-Date) - (gcim Win32_OperatingSystem).LastBootUpTime).ToString(); Get-WinEvent -FilterHashtable @{LogName="System";StartTime=(Get-Date).AddMinutes(-60)} -ErrorAction SilentlyContinue | Where-Object { $_.ProviderName -match "nvlddmkm|Display|dxg|Kernel-Power|WER|BugCheck|LiveKernel|Watchdog|Wininit" -or $_.Id -in 4101,141,117,116,1001,41 } | Sort-Object TimeCreated | ForEach-Object { "{0} {1} {2} {3}" -f $_.TimeCreated.ToUniversalTime().ToString("o"),$_.ProviderName,$_.Id,(($_.Message -replace "\s+"," ")[0..220] -join "") }; "LiveKernelReports: " + ((Get-ChildItem C:\Windows\LiveKernelReports -Recurse -ErrorAction SilentlyContinue | Select-Object -First 30 FullName,Length,LastWriteTime | Out-String).Trim())'
 fi
-if [ "${ETW:-0}" = 1 ] && [ ! -e $O/.etw_stopped ] && alive; then
-  L "ETW stop at the end of the hold (no TDR after sign-in stopped it)"
+if [ "${ETW:-0}" = 1 ] && alive; then
+  L "ETW decode (the session was stopped by the guest task at the first nvlddmkm 153, or is stopped now)"
   GT=900 timeout 900 python3 $W/boundary-tools/qmp.py $RUN/qga.sock qga-exec powershell.exe -NoProfile -Command "$(cat $W/kayfabe-win-6fafcc6e/scripts/bench/windows/dxg_etw_stop_tail.ps1)" > $O/etw-stop.txt 2>&1
+  L "ETW decode rc=$? lines=$(wc -l < $O/etw-stop.txt)"
 fi
 L "DONE tdr_cycles=$(ncyc)"
 cleanup

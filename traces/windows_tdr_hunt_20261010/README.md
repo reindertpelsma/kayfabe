@@ -62,3 +62,43 @@ display flips queue behind it, and Windows' TDR timer then fires (nvlddmkm 153, 
 non-stall wake and on the worker tick; code exists, default off) the guest's `GP_GET` equals the host's at every twin's free and the TDR cadence
 drops. **Falsifier:** with the flag on, `GP_GET` agrees at free but the first TDR still comes within ~10 s of the sign-in keys and the 15-minute TDR count is not below the
 baselines above (263: 7 in 5 min then bugcheck; 264: 8 in 13 min).
+
+## Run 267 (H-D test) and the guest's own TDR-time snapshot (WATCHDOG live dumps of runs 264/265/266)
+
+**H-D FALSIFIED as the cause of the first TDR and of the cluster.** Run 267 (`KF3_RELAY_GET_REFRESH=1`, no other measurement flag, 459da55d): the lag is gone
+[measured: 0 of 46 submitted twins behind at free; 0 of 72 `act disable channels` samples behind, against 104 of 123 in run 266 and 157 of 161 at free in 264], but
+the first TDR still came 5 s after the sign-in keys (mem t=58.0 s, sign-in sent t~53 s), the second 5 s after the Edge double-click (t=84.7 s), and the same
+cluster appeared 81..102 s after READY (tdr_cycles 2 -> 6 by hold_t=102). (The GET refresh is still a fidelity fix: see "refresh" notes below.)
+
+**[measured] What declared the first TDR, in all three runs with a dump.** The guest generated a WATCHDOG live dump (bugcheck code 0x117 = VIDEO_TDR_TIMEOUT_DETECTED)
+at its first TDR in runs 264, 265 (a BOOT-time TDR, mem t=18 s) and 266. The dump header's context record is the thread that was writing the dump; its stack
+(Volatility 3 + the Microsoft public symbols of ntoskrnl/dxgkrnl/dxgmms2 only; host-side tools `dumpcfg/plugins/windows/tdrctx.py`, `symz3.py`, outputs `dumpcfg/ctx26[456].txt`) reads,
+innermost first, identical in all three:
+
+    IoCaptureLiveDump ... dxgkrnl!TdrCaptureLiveKernelDumpCallback <- dxgkrnl!TdrCollectDbgInfoStage1 <- dxgkrnl!TdrAllowToDebugTimeout
+    <- dxgkrnl!TdrIsRecoveryRequired <- dxgmms2!VidSchiReportHwHang <- dxgmms2!VidSchiCheckFlipQueueTimeout <- dxgmms2!VidSchiCheckHwProgress
+    <- dxgmms2!VidSchiScheduleCommandToRun <- dxgmms2!VidSchiRun_PriorityTable <- dxgmms2!VidSchiWorkerThread
+
+So **the TDR is declared by the VidSch FLIP QUEUE timeout, not by an engine-node (copy/graphics) timeout**: a flip that Windows queued for a display source was not
+retired within the TDR delay. (Run 232's paging-node picture was taken under a 30 s TdrDelay and an older build; it is not what the default-delay production
+TDR looks like.) Other threads in the run-264 dump: LogonUI waiting in `dxgkrnl!DxgkWaitForVerticalBlankEventInternal`, dwm in `DxgkSetSyncRefreshCountWaitTarget`,
+the VidSch worker threads idle in `VidSchiWaitForSchedulerEvents` (nothing else stuck in dxgkrnl/dxgmms2 locks).
+
+**[measured, kayfabe side, runs 264/266]** The display model reports, immediately before each first TDR, "`display: +N ms the console shows no new frame: a lit head has no window`" and then
+"`... BLACK 1920x1080 (the scanout shown is lost: a lit head has had no window past the hold)`" (run 266: t=74.4 s and 74.6 s; TDR teardown at t=74.8 s, 5 s after the sign-in).
+No `HOST-FENCE-OVERDUE` probe, no `DEAD`, `unreconciled=0`, no Xid: no engine ring is behind.
+
+**H-F (next, written before run 268):** a window flip queued by Windows (LogonUI -> desktop transition, Edge launch) is never retired because kayfabe's display model does not
+produce the completion the KMD waits for (the VSync/LAST_DATA edge after the window update, the flip's notifier/semaphore release, or the core-update completion) while the head is
+lit but its window is detached/unscanned. Run 268 collects: DxgKrnl ETW (circular, stopped by a guest task at the first nvlddmkm 153) naming the flip queue packet that never stops,
+and `KF3_DISPLAY_WRITE_TRACE` + `KF3_DISPLAY_METHOD_TRACE` for the display writes/methods around it. Falsifier: the unfinished ETW packet is not a flip (MMIOFLIP/flip-queue) packet, or the
+display trace shows the flip's notifier/release/VSync was delivered inside the TDR window.
+
+**Answers to the coordinator's refresh questions (code reading + measurement):** (1) `relay_refresh_all` runs on a worker (a) on every host non-stall wake (`on_other` of the engine tag,
+before the guest interrupt) and (b) from `on_other(TICK_TAG)` once per worker loop that parks, i.e. at most every `PARK_MS` = 50 ms when a worker is idle (and `OWED_PARK_MS` = 1 ms when
+the non-stall relay owes a raise); the tick is skipped on a loop iteration that found work (`continue`), which is why (a) matters under load. The refresh keeps no "owed" state:
+every tick compares the engine's GP_GET to the last value stored and stores if different, so it keeps catching up for as long as any worker loops, and cannot go idle while a lag remains;
+a relay whose lock a doorbell step holds is skipped that tick and caught up on the next. Measured at two instants only (free, disable): 0 lag with the flag, ~85-100 % lag without; a time series
+needs the `RELAY-LAG` line added in this branch (probe thread, 100 ms samples, summary per 2 s; first used in run 268). (2) The refresh stores only the engine's value (bounded to
+`[0, entries)`), never reads the guest's GP_PUT back into the twin, never rings; relay-lock takers are workers (`relay_serve`, `relay_refresh_all`, try_lock) and the act thread (`drop_relay`, after the
+host channel is gone, and the disable snapshot, try_lock); no vCPU or drainer path takes it (doorbell trap only sets the token bit).
