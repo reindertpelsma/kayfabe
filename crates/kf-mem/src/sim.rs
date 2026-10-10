@@ -379,7 +379,7 @@ impl SimRm {
             let foreign = self.maps.iter().any(|m| {
                 matches!(m.owner, Owner::Foreign(_)) && m.hdma == h && overlaps(m.va, m.len, pv, pl)
             });
-            if !foreign {
+            if !foreign && owner == Owner::Mirror {
                 self.self_held.push(format!(
                     "fixed map {pv:#x}+{pl:#x} (hDma {h:#x}) found its VA occupied by something that is not a foreign mapping (the mirror's own reservation pad, stray or remnant): the guest's leaf would be silently absent"
                 ));

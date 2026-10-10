@@ -994,8 +994,8 @@ fn a_row_beyond_the_leaf_bound_is_refused_or_micro_reserved() {
             let rm = sim.0.borrow();
             assert_eq!(
                 (rm.maps.len(), rm.resv.len()),
-                (1, 1),
-                "one mapping through one micro reservation"
+                (2, 1),
+                "one mapping through one micro reservation (the aligned 64 pages) + the 4 KiB tail at grain"
             );
         }
         let w1 = [
@@ -1025,14 +1025,16 @@ fn a_row_beyond_the_leaf_bound_is_refused_or_micro_reserved() {
 // ─── 6. targeted: findings 4, 5, 6 (review fixes 2026-10-10) ───────────────────────────────────
 
 /// Eight scattered guest-RAM pages at 4..12 (one batch: a micro reservation when `low`), and, when
-/// `vid_tail`, a vidmem page at 12 (never batched: one `NV01` leaf mapping).
+/// `vid_tail`, a vidmem page at 16 (never batched: one `NV01` leaf mapping). ★ Held-hole fix: it is
+/// at 16, not 12 — host RM holds a reservation as whole 64 KiB units (pages 0..16 here), and a
+/// neighbour of ours inside the unit makes the reservation impossible (`NoMemory`), not batchable.
 fn eight_scattered(m: &FMirror<'_>, vid_tail: bool) -> (Vec<Pte>, diffmodel::Committed) {
     let mut table: Vec<Pte> = vec![None; PAGES as usize];
     for k in 0..8u64 {
         table[(4 + k) as usize] = Some((true, 700 + 13 * k, false, 0));
     }
     if vid_tail {
-        table[12] = Some((false, 40, false, 0));
+        table[16] = Some((false, 40, false, 0));
     }
     let (com, out) = refresh(m, &diffmodel::Committed::default(), &table, 1 << 30);
     assert_eq!(out.refused, 0, "{:?}", out.first_refusal);
@@ -1080,13 +1082,13 @@ fn a_range_failing_on_its_second_span_leaves_rows_equal_to_the_ledger_and_releas
     );
     // Calls: 0 unmap_in (the batch's span), 1 free (its emptied object), 2 unmap_range (vidmem).
     f.fail_at.set(Some(f.calls.get() + 2));
-    let r = m.unmap_range(pg(4), 9 * P, true);
+    let r = m.unmap_range(pg(4), 13 * P, true);
     assert!(r.is_err() && f.fired.get());
     let rows: Vec<u64> = m.rows.borrow().keys().map(|&v| (v - BASE) / P).collect();
-    assert_eq!(rows, vec![12], "rows == what the ledger still holds");
+    assert_eq!(rows, vec![16], "rows == what the ledger still holds");
     let rm = sim.0.borrow();
     assert!((4..12).all(|p| rm.translate(pg(p), Owner::Mirror).is_none()));
-    assert_eq!(rm.translate(pg(12), Owner::Mirror), Some((false, 40 * P)));
+    assert_eq!(rm.translate(pg(16), Owner::Mirror), Some((false, 40 * P)));
     assert!(
         rm.resv.is_empty(),
         "the emptied micro reservation was released despite the error"
