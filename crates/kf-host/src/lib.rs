@@ -12,6 +12,7 @@
 pub mod birth;
 pub mod channel;
 pub mod event;
+pub mod tier;
 pub mod timer;
 pub use channel::{Channel, MapBacking, MapPerm, RingSpec, ScatterError, VaSpace};
 pub use event::EventFd;
@@ -483,6 +484,9 @@ pub struct HostRm {
     card: CardInfo,
     /// The RM device instance `GET_ID_INFO_V2` returned for [`HostRm::card`]'s `gpuId`.
     device_instance: u32,
+    /// ★ H0: what the host `nvidia.ko` reports about the kayfabe patch tier (`tier.rs`). Logged at
+    /// bring-up; read by no behaviour yet.
+    tier: tier::HostTier,
 }
 
 impl HostRm {
@@ -525,6 +529,12 @@ impl HostRm {
                 detail,
             })?;
 
+        // R2b — the patch-tier probe (H0): one extra escape that only a patched `nvidia.ko` knows.
+        // A stock module answers EINVAL (and logs one line); any failure is `Absent`/`Broken` and
+        // counts as stock. Never a gate, never a flag. The result is a log line and a capability
+        // bit that no behaviour reads yet (`V3_H5_USERD_DMA_PATCH.md` §7).
+        let tier = tier::probe_and_log(&ctl);
+
         // R3 — bind the device node to the control session. Required, and the failure
         // without it is `0x23 INVALID_CLIENT` rather than anything that names a binding.
         let mut reg = [0u8; 4];
@@ -565,6 +575,7 @@ impl HostRm {
             arch_info: (0, 0, 0),
             card: CardInfo::default(),
             device_instance: 0,
+            tier,
             objects: Mutex::new(Objects {
                 next: FIRST_HANDLE,
                 parents: BTreeMap::new(),
@@ -803,6 +814,13 @@ impl HostRm {
     #[must_use]
     pub fn card(&self) -> CardInfo {
         self.card
+    }
+
+    /// ★ H0: the host patch tier this session probed at bring-up (stock unless the host
+    /// `nvidia.ko` is the kayfabe-patched build). Informational: no behaviour reads it yet.
+    #[must_use]
+    pub fn host_tier(&self) -> &tier::HostTier {
+        &self.tier
     }
 
     /// The RM device instance our `NV01_DEVICE_0` was allocated with (resolved, not assumed).
