@@ -2769,6 +2769,26 @@ impl Device {
                                 e[from..].to_vec()
                             }
                         );
+                        for chn in [0u32, 1, 5, 33, 37] {
+                            let words = engine.pushbuffer(chn).and_then(|(pb, decoded, _)| {
+                                io.pushbuffer(pb).ok().map(|b| {
+                                    let at = (decoded as usize & !3).saturating_sub(16);
+                                    b.get(at..(at + 64).min(b.len()))
+                                        .unwrap_or(&[])
+                                        .chunks_exact(4)
+                                        .map(|w| u32::from_le_bytes([w[0], w[1], w[2], w[3]]))
+                                        .collect::<Vec<_>>()
+                                })
+                            });
+                            eprintln!(
+                                "kf3: display: STALL chn {chn}: PUT {:#x} ports-generation {} engine {:?} generation {:?}; ring words from decoded-16: {:x?}",
+                                dp.ports.put(chn),
+                                dp.ports.generation(chn),
+                                engine.chan_state(chn),
+                                engine.generation(chn),
+                                words
+                            );
+                        }
                         eprintln!(
                             "kf3: display: STALL context: queue {}/{QUEUE_CAP} copies started {} done {} barrier {} inflight {} want {} failed {} nonflip_pending {} vblanks_total {} ticks_per_head {:?} heads_armed {:?}",
                             queue.len(),

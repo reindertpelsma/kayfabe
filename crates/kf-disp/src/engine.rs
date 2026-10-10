@@ -865,6 +865,23 @@ impl Engine {
         out
     }
 
+    /// ★ Diagnostic: channel `chn`'s decode state `(decoded, get, queued writes, halted, stage name)`.
+    #[must_use]
+    pub fn chan_state(&self, chn: u32) -> Option<(u32, u32, usize, bool, &'static str)> {
+        let c = self.chans.get(chn as usize)?.as_ref()?;
+        Some((
+            c.decoded,
+            c.get,
+            c.queue.len(),
+            c.halted,
+            match c.stage {
+                Stage::Running => "running",
+                Stage::Interlock { .. } => "interlock",
+                Stage::Latch { .. } => "latch",
+            },
+        ))
+    }
+
     /// Is any update waiting for an acquire without a vblank to re-check it?
     #[must_use]
     pub fn acquire_pending(&self) -> bool {
