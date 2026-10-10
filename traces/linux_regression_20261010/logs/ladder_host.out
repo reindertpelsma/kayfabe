@@ -1,0 +1,47 @@
+CL_ROW mode=host rung=cup2 rep=1 verdict=PASS rc=0 wall_ms=308 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]
+CL_ROW mode=host rung=cup2 rep=2 verdict=PASS rc=0 wall_ms=207 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]
+CL_ROW mode=host rung=cup2 rep=3 verdict=PASS rc=0 wall_ms=209 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]
+CL_ROW mode=host rung=cup3 rep=1 verdict=PASS rc=0 wall_ms=208 graded=[CUP3_VAL=43]
+CL_ROW mode=host rung=cup3 rep=2 verdict=PASS rc=0 wall_ms=209 graded=[CUP3_VAL=43]
+CL_ROW mode=host rung=cup3 rep=3 verdict=PASS rc=0 wall_ms=208 graded=[CUP3_VAL=43]
+CL_ROW mode=host rung=cup8 rep=1 verdict=PASS rc=0 wall_ms=309 graded=[CUP8_BAD=0 CUP8_MAXERR=0]
+CL_ROW mode=host rung=cup8 rep=2 verdict=PASS rc=0 wall_ms=308 graded=[CUP8_BAD=0 CUP8_MAXERR=0]
+CL_ROW mode=host rung=cup8 rep=3 verdict=PASS rc=0 wall_ms=307 graded=[CUP8_BAD=0 CUP8_MAXERR=0]
+CL_BENCH mode=host rep=1 BSUM N=2048 iters=20 first_ms=10.109 med_ms=10.102 p90_ms=10.112 min_ms=10.095 max_ms=10.114 gflops=1700.651 batch_per_launch_ms=8.861 batch_gflops=1938.714 h2d_ms=2.761 d2h_med_ms=1.217 submit_med_ms=0.001 sync_med_ms=10.101 sync_cpu_med_ms=10.101 sync_offcpu_med_ms=-0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.002 bad=0 maxerr=0
+CL_BENCH mode=host rep=2 BSUM N=2048 iters=20 first_ms=8.746 med_ms=8.767 p90_ms=8.773 min_ms=8.746 max_ms=8.774 gflops=1959.638 batch_per_launch_ms=8.812 batch_gflops=1949.704 h2d_ms=2.704 d2h_med_ms=1.251 submit_med_ms=0.001 sync_med_ms=8.766 sync_cpu_med_ms=8.766 sync_offcpu_med_ms=-0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.002 bad=0 maxerr=0
+CL_BENCH mode=host rep=3 BSUM N=2048 iters=20 first_ms=8.751 med_ms=8.776 p90_ms=8.780 min_ms=8.745 max_ms=8.782 gflops=1957.584 batch_per_launch_ms=8.896 batch_gflops=1931.271 h2d_ms=2.660 d2h_med_ms=1.173 submit_med_ms=0.001 sync_med_ms=8.775 sync_cpu_med_ms=8.775 sync_offcpu_med_ms=-0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.002 bad=0 maxerr=0
+CUDA_LADDER_STARTED=2026-10-10T23:00:40+02:00 mode=host reps=3 rungs=cup2,cup3,cup8,cup8bench rev=c66d1b96
+bench sizes=16,2048 iters=20 batch=10
+host libcuda=/usr/lib/x86_64-linux-gnu/libcuda.so.595.91.07
+src cup2.c md5 d9f82375ebd54de500aeb7f85ef71efc
+src cup3.c md5 b353d96b3694261293e5bdd409c0863e
+src cup8.c md5 9947ae7ae0b98dc5b4d5b08a7b08d5c8
+src cup8bench.c md5 6c9f86d2581016ec9d34d6a7636fc8b5
+CL_ROW mode=host rung=cup2 rep=1 verdict=PASS rc=0 wall_ms=308 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]
+CL_ROW mode=host rung=cup2 rep=2 verdict=PASS rc=0 wall_ms=207 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]
+CL_ROW mode=host rung=cup2 rep=3 verdict=PASS rc=0 wall_ms=209 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]
+CL_ROW mode=host rung=cup3 rep=1 verdict=PASS rc=0 wall_ms=208 graded=[CUP3_VAL=43]
+CL_ROW mode=host rung=cup3 rep=2 verdict=PASS rc=0 wall_ms=209 graded=[CUP3_VAL=43]
+CL_ROW mode=host rung=cup3 rep=3 verdict=PASS rc=0 wall_ms=208 graded=[CUP3_VAL=43]
+CL_ROW mode=host rung=cup8 rep=1 verdict=PASS rc=0 wall_ms=309 graded=[CUP8_BAD=0 CUP8_MAXERR=0]
+CL_ROW mode=host rung=cup8 rep=2 verdict=PASS rc=0 wall_ms=308 graded=[CUP8_BAD=0 CUP8_MAXERR=0]
+CL_ROW mode=host rung=cup8 rep=3 verdict=PASS rc=0 wall_ms=307 graded=[CUP8_BAD=0 CUP8_MAXERR=0]
+CL_ROW mode=host rung=cup8bench rep=1 verdict=PASS rc=0 wall_ms=708 graded=[BENCH_TOTAL_BAD=0 BENCH_VERDICT: PASS (every timed iteration verified)]
+CL_BENCH mode=host rep=1 BENCH_INIT_MS=43.26
+CL_BENCH mode=host rep=1 BENCH_CTX_MS=72.55
+CL_BENCH mode=host rep=1 BENCH_MODULE_MS=1.49
+CL_BENCH mode=host rep=1 BSUM N=16 iters=20 first_ms=0.018 med_ms=0.005 p90_ms=0.005 min_ms=0.005 max_ms=0.007 gflops=1.707 batch_per_launch_ms=0.002 batch_gflops=3.724 h2d_ms=0.013 d2h_med_ms=0.004 submit_med_ms=0.001 sync_med_ms=0.003 sync_cpu_med_ms=0.003 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.003 bad=0 maxerr=0
+CL_BENCH mode=host rep=1 BSUM N=2048 iters=20 first_ms=10.109 med_ms=10.102 p90_ms=10.112 min_ms=10.095 max_ms=10.114 gflops=1700.651 batch_per_launch_ms=8.861 batch_gflops=1938.714 h2d_ms=2.761 d2h_med_ms=1.217 submit_med_ms=0.001 sync_med_ms=10.101 sync_cpu_med_ms=10.101 sync_offcpu_med_ms=-0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.002 bad=0 maxerr=0
+CL_ROW mode=host rung=cup8bench rep=2 verdict=PASS rc=0 wall_ms=608 graded=[BENCH_TOTAL_BAD=0 BENCH_VERDICT: PASS (every timed iteration verified)]
+CL_BENCH mode=host rep=2 BENCH_INIT_MS=39.08
+CL_BENCH mode=host rep=2 BENCH_CTX_MS=65.03
+CL_BENCH mode=host rep=2 BENCH_MODULE_MS=0.06
+CL_BENCH mode=host rep=2 BSUM N=16 iters=20 first_ms=0.017 med_ms=0.004 p90_ms=0.005 min_ms=0.004 max_ms=0.008 gflops=1.892 batch_per_launch_ms=0.002 batch_gflops=3.652 h2d_ms=0.012 d2h_med_ms=0.004 submit_med_ms=0.001 sync_med_ms=0.003 sync_cpu_med_ms=0.003 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.002 bad=0 maxerr=0
+CL_BENCH mode=host rep=2 BSUM N=2048 iters=20 first_ms=8.746 med_ms=8.767 p90_ms=8.773 min_ms=8.746 max_ms=8.774 gflops=1959.638 batch_per_launch_ms=8.812 batch_gflops=1949.704 h2d_ms=2.704 d2h_med_ms=1.251 submit_med_ms=0.001 sync_med_ms=8.766 sync_cpu_med_ms=8.766 sync_offcpu_med_ms=-0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.002 bad=0 maxerr=0
+CL_ROW mode=host rung=cup8bench rep=3 verdict=PASS rc=0 wall_ms=608 graded=[BENCH_TOTAL_BAD=0 BENCH_VERDICT: PASS (every timed iteration verified)]
+CL_BENCH mode=host rep=3 BENCH_INIT_MS=39.41
+CL_BENCH mode=host rep=3 BENCH_CTX_MS=66.64
+CL_BENCH mode=host rep=3 BENCH_MODULE_MS=0.06
+CL_BENCH mode=host rep=3 BSUM N=16 iters=20 first_ms=0.016 med_ms=0.004 p90_ms=0.005 min_ms=0.004 max_ms=0.008 gflops=1.841 batch_per_launch_ms=0.002 batch_gflops=4.203 h2d_ms=0.012 d2h_med_ms=0.004 submit_med_ms=0.001 sync_med_ms=0.003 sync_cpu_med_ms=0.003 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.002 bad=0 maxerr=0
+CL_BENCH mode=host rep=3 BSUM N=2048 iters=20 first_ms=8.751 med_ms=8.776 p90_ms=8.780 min_ms=8.745 max_ms=8.782 gflops=1957.584 batch_per_launch_ms=8.896 batch_gflops=1931.271 h2d_ms=2.660 d2h_med_ms=1.173 submit_med_ms=0.001 sync_med_ms=8.775 sync_cpu_med_ms=8.775 sync_offcpu_med_ms=-0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.002 bad=0 maxerr=0
+CUDA_LADDER_DONE=2026-10-10T23:10:42+02:00

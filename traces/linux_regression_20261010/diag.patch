@@ -1,0 +1,183 @@
+From d3f6c47ac92565a41a98747c678514a9eba9e3c9 Mon Sep 17 00:00:00 2001
+From: lr <lr@x>
+Date: Sat, 10 Oct 2026 21:22:20 +0200
+Subject: [PATCH] diag: INVAL-LAT/SLOW (1b921070 ported by hand onto c66d1b96,
+ probe flag only)
+
+---
+ crates/kf-qemu/src/device.rs    | 19 +++++++
+ crates/kf-qemu/src/invaldiag.rs | 91 +++++++++++++++++++++++++++++++++
+ crates/kf-qemu/src/lib.rs       |  1 +
+ crates/kf-qemu/src/mem.rs       |  1 +
+ 4 files changed, 112 insertions(+)
+ create mode 100644 crates/kf-qemu/src/invaldiag.rs
+
+diff --git a/crates/kf-qemu/src/device.rs b/crates/kf-qemu/src/device.rs
+index 79ae8ac..3ca6400 100644
+--- a/crates/kf-qemu/src/device.rs
++++ b/crates/kf-qemu/src/device.rs
+@@ -1645,7 +1645,15 @@ impl Device {
+         };
+         eprintln!("kf3: PROBE on — completion probe, overdue after {ms} ms (KF3_COMPLETION_PROBE)");
+         let overdue = std::time::Duration::from_millis(ms);
++        let mut ticks = 0u32;
+         while !self.stop.load(Ordering::Acquire) {
++            ticks += 1;
++            if let Some(l) = crate::invaldiag::pending_line() {
++                eprintln!("{l}");
++            }
++            if ticks % 20 == 0 {
++                eprintln!("{}", crate::invaldiag::summary());
++            }
+             let lines = self.chans.probe_tick(overdue);
+             if !lines.is_empty() {
+                 for l in &lines {
+@@ -1859,6 +1867,7 @@ impl Device {
+         let mut logged = 0u32;
+         let mut refusals_seen = 0usize;
+         let mut armed_seen: Option<u64> = None;
++        let mut inval_last_pub = std::time::Instant::now();
+         // ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): BAR1 back to its physical view — the request
+         // waiting for the VA manager to go idle, with the BAR1 window's change count at the newest
+         // request's notice (a change since means an RM took BAR1 again first). Two log families,
+@@ -2127,6 +2136,16 @@ impl Device {
+             }
+             refusals_seen = m.stats.refusals.len();
+             self.publish_trigger();
++            crate::invaldiag::after_publish(self.mem.port.armed_request().is_none(), || {
++                format!(
++                    "VA thread: walk in flight={} pending wants={} all_settled={} away since its previous publish {:.1} ms",
++                    m.in_flight(),
++                    m.pending(),
++                    self.mem.inbox.all_settled(),
++                    inval_last_pub.elapsed().as_secs_f64() * 1000.0
++                )
++            });
++            inval_last_pub = std::time::Instant::now();
+             // ★ Everything received so far is applied and nothing is walking: held replies go.
+             if !m.in_flight() && m.pending() == 0 && self.mem.inbox.settle(taken) {
+                 let _ = self.drainer_efd.signal();
+diff --git a/crates/kf-qemu/src/invaldiag.rs b/crates/kf-qemu/src/invaldiag.rs
+new file mode 100644
+index 0000000..3697254
+--- /dev/null
++++ b/crates/kf-qemu/src/invaldiag.rs
+@@ -0,0 +1,91 @@
++//! ⚠ DIAGNOSTIC (2026-10-10, TDR hunt; owner ruling §AD: no MMU invalidate may stay incomplete for longer than about a
++//! dozen milliseconds): the GUEST-VISIBLE latency of every MMU invalidate — from the vCPU trap that armed the trigger
++//! to the VA thread's publication of the idle word into the BAR0 read shadow (what the guest's spin-read sees).
++//! Only when `KF3_COMPLETION_PROBE` is set; one `OnceLock` load per invalidate otherwise. Never a decision input.
++//!
++//! A re-arm while the trigger is still busy keeps the EARLIER arm time (the guest has seen "busy" continuously since it).
++
++use std::sync::atomic::{AtomicU64, Ordering};
++use std::sync::{LazyLock, OnceLock};
++
++static ANCHOR: OnceLock<std::time::Instant> = OnceLock::new();
++static ARM_NS: AtomicU64 = AtomicU64::new(0);
++static REARMS: AtomicU64 = AtomicU64::new(0);
++static SLOW: AtomicU64 = AtomicU64::new(0);
++static PENDING_REPORTED: AtomicU64 = AtomicU64::new(0);
++static HIST: LazyLock<crate::prof::Hist> = LazyLock::new(crate::prof::Hist::default);
++
++/// The threshold of the owner ruling (12 ms).
++pub const SLOW_NS: u64 = 12_000_000;
++
++fn on() -> bool {
++    crate::chan::completion_probe_ms().is_some()
++}
++
++fn now_ns() -> u64 {
++    let a = ANCHOR.get_or_init(std::time::Instant::now);
++    u64::try_from(a.elapsed().as_nanos()).unwrap_or(u64::MAX).max(1)
++}
++
++/// vCPU, in the trap: an invalidate armed the trigger.
++pub fn armed() {
++    if !on() {
++        return;
++    }
++    if ARM_NS.compare_exchange(0, now_ns(), Ordering::AcqRel, Ordering::Acquire).is_err() {
++        REARMS.fetch_add(1, Ordering::Relaxed);
++    }
++}
++
++/// VA thread, right after it published the trigger word: `idle` = the guest now reads idle. `ctx` names what the VA
++/// thread was doing; it is evaluated only for a slow one.
++pub fn after_publish(idle: bool, ctx: impl FnOnce() -> String) {
++    if !on() || !idle {
++        return;
++    }
++    let a = ARM_NS.swap(0, Ordering::AcqRel);
++    if a == 0 {
++        return;
++    }
++    let d = now_ns().saturating_sub(a);
++    HIST.add(d);
++    if d > SLOW_NS {
++        SLOW.fetch_add(1, Ordering::Relaxed);
++        eprintln!(
++            "kf3: INVAL-SLOW t={:.3} utc_ms={} guest-visible arm->idle {:.1} ms; {}",
++            kf_mem::maplog::t(),
++            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64),
++            d as f64 / 1e6,
++            ctx()
++        );
++    }
++}
++
++/// Probe thread: an invalidate still busy past [`SLOW_NS`] (named once per arm).
++pub fn pending_line() -> Option<String> {
++    let a = ARM_NS.load(Ordering::Acquire);
++    if a == 0 {
++        return None;
++    }
++    let age = now_ns().saturating_sub(a);
++    if age <= SLOW_NS || PENDING_REPORTED.swap(a, Ordering::AcqRel) == a {
++        return None;
++    }
++    Some(format!(
++        "kf3: INVAL-PENDING t={:.3} utc_ms={} guest-visible busy for {:.1} ms (still armed)",
++        kf_mem::maplog::t(),
++        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64),
++        age as f64 / 1e6
++    ))
++}
++
++/// Probe thread: the distribution so far.
++pub fn summary() -> String {
++    format!(
++        "kf3: INVAL-LAT t={:.3} guest-visible arm->idle {} slow_over_12ms={} rearms_while_busy={}",
++        kf_mem::maplog::t(),
++        HIST.line(),
++        SLOW.load(Ordering::Relaxed),
++        REARMS.load(Ordering::Relaxed)
++    )
++}
+diff --git a/crates/kf-qemu/src/lib.rs b/crates/kf-qemu/src/lib.rs
+index e474fcf..9074619 100644
+--- a/crates/kf-qemu/src/lib.rs
++++ b/crates/kf-qemu/src/lib.rs
+@@ -15,6 +15,7 @@ pub mod cardbudget;
+ pub mod chan;
+ pub mod defapi;
+ pub mod device;
++pub mod invaldiag;
+ pub mod display;
+ pub mod dispsw;
+ pub mod exposure;
+diff --git a/crates/kf-qemu/src/mem.rs b/crates/kf-qemu/src/mem.rs
+index 73c9f4e..23f629a 100644
+--- a/crates/kf-qemu/src/mem.rs
++++ b/crates/kf-qemu/src/mem.rs
+@@ -2597,6 +2597,7 @@ impl MemPlane {
+             PortWrite::Latched => self.port.read(off),
+             PortWrite::Publish(_) => {
+                 self.counters.invalidates.fetch_add(1, Ordering::Relaxed);
++                crate::invaldiag::armed();
+                 let v = self.port.read(off);
+                 let _ = self.inbox.wake.signal();
+                 v
+-- 
+2.53.0
+
