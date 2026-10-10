@@ -2412,12 +2412,18 @@ impl Device {
             std::env::var("KF3_DISPLAY_CORE_AT_VBLANK").is_ok_and(|v| v == "1");
         // ⚠ DIAGNOSTIC A/B switches (2026-10-10 TDR hunt; default off, never product settings)
         engine.release_at_latch = std::env::var("KF3_DIAG_RELEASE_AT_LATCH").is_ok_and(|v| v == "1");
+        engine.notifier_finish_at_flip_away =
+            std::env::var("KF3_DIAG_WINDOW_NOTIFIER_FINISH_AT_FLIP_AWAY").is_ok_and(|v| v == "1");
         let order = crate::vblankgate::VblankOrder::from_env();
         let slot_hist = std::env::var("KF3_DIAG_SLOT_HISTORY").is_ok_and(|v| v == "1");
-        if engine.release_at_latch || order != crate::vblankgate::VblankOrder::Tick || slot_hist {
+        if engine.release_at_latch
+            || engine.notifier_finish_at_flip_away
+            || order != crate::vblankgate::VblankOrder::Tick
+            || slot_hist
+        {
             eprintln!(
-                "kf3: display: DIAGNOSTIC release_at_latch={} vblank_order={order:?} slot_history={slot_hist}",
-                engine.release_at_latch
+                "kf3: display: DIAGNOSTIC release_at_latch={} notifier_finish_at_flip_away={} vblank_order={order:?} slot_history={slot_hist}",
+                engine.release_at_latch, engine.notifier_finish_at_flip_away
             );
         }
         if engine.core_latch_at_vblank {
@@ -3081,11 +3087,16 @@ impl Device {
                         handle,
                         offset,
                         awaken,
+                        finished,
                     } => {
                         if slot_hist && slot_lines < SLOT_LINES {
                             slot_lines += 1;
-                            let fin = if chn == 0 { io.notifier_finished } else { io.window_notifier };
-                            let at = slot_now(&mut io, &Effect::Notify { chn, client, handle, offset, awaken }, &slot_last);
+                            let fin = if finished || chn == 0 { io.notifier_finished } else { io.window_notifier };
+                            let at = slot_now(
+                                &mut io,
+                                &Effect::Notify { chn, client, handle, offset, awaken, finished },
+                                &slot_last,
+                            );
                             eprintln!(
                                 "kf3: display: SLOT WRITE utc_us={} t={:.6} chn {chn} completed#{} new=status({fin:#x}) {at}",
                                 utc_us(),
@@ -3096,7 +3107,7 @@ impl Device {
                         let dres = io.resolve(client, handle, chn);
                         let at = dres.as_ref().ok().map(|d| (d.target, d.base + offset));
                         if slot_hist && let Some((t, a)) = at {
-                            let fin = if chn == 0 { io.notifier_finished } else { io.window_notifier };
+                            let fin = if finished || chn == 0 { io.notifier_finished } else { io.window_notifier };
                             slot_last.insert((t == Target::Vidmem, a), u64::from(fin));
                         }
                         let r = dres.and_then(|dma| {
@@ -3106,7 +3117,7 @@ impl Device {
                             n[12..16].copy_from_slice(&((ts >> 32) as u32).to_le_bytes());
                             // the timestamp words first, the status word (what the guest polls) last
                             io.write(dma, offset + 4, &n[4..16])?;
-                            let status = if chn == 0 { io.notifier_finished } else { io.window_notifier };
+                            let status = if finished || chn == 0 { io.notifier_finished } else { io.window_notifier };
                             io.write(dma, offset, &status.to_le_bytes())
                         });
                         if trace {

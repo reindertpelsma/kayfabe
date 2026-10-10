@@ -257,6 +257,7 @@ fn a_core_update_arms_then_notifies() {
                 handle: 0xcafe_0001,
                 offset: 32,
                 awaken: true,
+                finished: true,
             },
         ] => {
             assert!(
@@ -495,6 +496,40 @@ fn release_at_latch_restores_the_old_order_and_window_slots_name_the_request() {
             Effect::Notify { chn: 1, .. },
         ] => {}
         other => panic!("the incoming entry's release at its own latch: {other:?}"),
+    }
+}
+
+/// ⚠ The diagnostic `notifier_finish_at_flip_away`: a window's second latch writes the FIRST entry's notifier slot
+/// FINISHED (its flip-away) before the new entry's own notifier; the first latch writes only its own.
+#[test]
+fn notifier_finish_at_flip_away_writes_the_outgoing_slot_finished() {
+    let mut e = engine();
+    e.notifier_finish_at_flip_away = true;
+    e.alloc(ChannelKind::Core, 0, CLIENT, 1, pb(), 0);
+    e.alloc(ChannelKind::Window, 0, CLIENT, 1, pb(), 0);
+    let mut c = Ring::new();
+    modeset(&mut c, 0, 0);
+    c.m(m(CORE, "UPDATE"), 0);
+    e.step(0, &c.bytes(), c.put(), &mut all_ok);
+    let mut w = Ring::new();
+    w.m(m(WIN, "SET_CONTEXT_DMA_NOTIFIER"), 0xcafe_00f0);
+    w.m(m(WIN, "SET_NOTIFIER_CONTROL"), put(0, fl(WIN, "SET_NOTIFIER_CONTROL_OFFSET"), 1));
+    w.m(m(WIN, "UPDATE"), 0);
+    e.step(1, &w.bytes(), w.put(), &mut all_ok);
+    match e.vblank(0, &mut all_ok).effects.as_slice() {
+        [Effect::Latched { window: 0 }, Effect::Notify { offset: 16, finished: false, .. }] => {}
+        other => panic!("{other:?}"),
+    }
+    w.m(m(WIN, "SET_NOTIFIER_CONTROL"), put(0, fl(WIN, "SET_NOTIFIER_CONTROL_OFFSET"), 2));
+    w.m(m(WIN, "UPDATE"), 0);
+    e.step(1, &w.bytes(), w.put(), &mut all_ok);
+    match e.vblank(0, &mut all_ok).effects.as_slice() {
+        [
+            Effect::Latched { window: 0 },
+            Effect::Notify { offset: 16, finished: true, .. },
+            Effect::Notify { offset: 32, finished: false, .. },
+        ] => {}
+        other => panic!("{other:?}"),
     }
 }
 

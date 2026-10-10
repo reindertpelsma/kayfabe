@@ -74,6 +74,9 @@ pub enum Effect {
         offset: u64,
         /// `MODE_WRITE_AWAKEN`.
         awaken: bool,
+        /// The status is FINISHED (the core's completion notifier, or ⚠ a window entry flipped away under
+        /// `notifier_finish_at_flip_away`); `false` for a window flip's own notifier at its latch.
+        finished: bool,
     },
     /// Release a semaphore: write `value` (32 or 64 bits) at `offset` of context DMA `handle`, then
     /// raise the window's semaphore event if `awaken`.
@@ -572,6 +575,11 @@ pub struct Engine {
     /// ⚠ DIAGNOSTIC (default `false`, 2026-10-10 TDR hunt; `KF3_DIAG_RELEASE_AT_LATCH=1`): the pre-2026-10-10
     /// behaviour — a window's release written at its OWN entry's latch, not at flip-away — for the A/B runs.
     pub release_at_latch: bool,
+    /// ⚠ DIAGNOSTIC (default `false`, 2026-10-10 TDR hunt, `KF3_DIAG_WINDOW_NOTIFIER_FINISH_AT_FLIP_AWAY=1`): at a
+    /// window latch also write the OUTGOING entry's notifier FINISHED (the flip-away), besides the incoming one's.
+    /// [measured, run 286] the guest polls the previous flip's notifier together with the new one's and never leaves
+    /// the loop while both read BEGUN.
+    pub notifier_finish_at_flip_away: bool,
 }
 
 impl Engine {
@@ -596,6 +604,7 @@ impl Engine {
             pace: [PaceCounts::default(); 8],
             ledger: FlipLedger::default(),
             release_at_latch: false,
+            notifier_finish_at_flip_away: false,
         }
     }
 
@@ -1317,6 +1326,7 @@ impl Engine {
     fn complete(&mut self, n: u32, was_active: bool, st: &mut Step) {
         let v = self.vocab.clone();
         let at_latch = self.release_at_latch;
+        let finish_away = self.notifier_finish_at_flip_away;
         let Some(c) = self.chans.get_mut(n as usize).and_then(|c| c.as_mut()) else {
             return;
         };
@@ -1332,6 +1342,20 @@ impl Engine {
         // (⚠ `release_at_latch`, diagnostic: the incoming entry's release — its ASSEMBLY words, armed just below)
         let outgoing_release = (c.kind == ChannelKind::Window)
             .then(|| Self::release_of(&v, c, n, if at_latch { Chan::a } else { Chan::armed }))
+            .flatten();
+        // ⚠ (diagnostic) the outgoing entry's notifier, FINISHED at its flip-away — read before the arm
+        let outgoing_notify = (finish_away && c.kind == ChannelKind::Window)
+            .then(|| {
+                let handle = c.armed(v.w_ctxdma_notifier);
+                (handle != 0).then(|| Effect::Notify {
+                    chn: n,
+                    client: c.client,
+                    handle,
+                    offset: u64::from(fld(c.armed(v.w_notifier_control), v.n_offset)) * 16,
+                    awaken: false,
+                    finished: true,
+                })
+            })
             .flatten();
         // 1. arm
         let mut changed = Vec::new();
@@ -1381,6 +1405,7 @@ impl Engine {
                         handle,
                         offset: u64::from(fld(ctl, v.n_offset)) * 16,
                         awaken: fld(ctl, v.n_mode) == v.n_mode_awaken,
+                        finished: true,
                     });
                 }
             }
@@ -1389,6 +1414,9 @@ impl Engine {
                 // the entry this latch flipped away (see `outgoing_release` above), never the one just armed
                 if let Some(r) = outgoing_release {
                     st.effects.push(r);
+                }
+                if let Some(o) = outgoing_notify {
+                    st.effects.push(o);
                 }
                 let handle = c.armed(v.w_ctxdma_notifier);
                 if handle != 0 {
@@ -1399,6 +1427,7 @@ impl Engine {
                         handle,
                         offset: u64::from(fld(ctl, v.n_offset)) * 16,
                         awaken: was_active && fld(ctl, v.n_mode) == v.n_mode_awaken,
+                        finished: false,
                     });
                 }
             }
@@ -1437,6 +1466,7 @@ impl Engine {
                 handle,
                 offset: u64::from(fld(ctl, v.n_offset)) * 16,
                 awaken: false,
+                finished: false,
             });
         }
         out.extend(Self::release_of(v, c, n, get));
