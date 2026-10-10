@@ -36,6 +36,18 @@ unit is the Pascal+ big page (Maxwell's 128 KiB is not handled); a genuinely hos
 `HELD` (by design, §P6b) — the 12 ms invalidate bound and the lock-step hand-over of such a VA are
 unchanged.
 
+**Hardware verdict (2026-10-10, host RTX 4070 595.91.07, Windows 11 production profile, zero kayfabe flags,
+scripted sign-in + Edge + YouTube Shorts + 900 s hold, `tdr-run15.sh`).** `[measured]` run 381 at `02b984e5`
+(integration + this fix, no display fixes): 0 `HELD BY HOST`, 0 `batch fallback`, 0 new host Xid (19 = 19), 2 micro
+reservation refusals; run 382 at `50c13332` (+ tdr-opus-base display fixes, stopped at hold 260 s): 0 HELD, 0 refusals,
+0 Xid; run 384 at `4db48053` (`claude/windows-combined-20261010` = display-latch-contract bb91b298 + this fix): 0 HELD,
+0 `HELD-BY-OURSELVES`, 0 `batch fallback`, 3 refusals (a neighbour of ours in the 64 KiB unit), 0 new Xid.
+Run 289 (the unfixed D1-D3 code) had 14 HELD and 4 new Xid. TDR (guest driver reset) cycles per phase at 4db48053:
+boot 0, sign-in 0, Edge 0, Shorts load 1, end of hold 4 (resets at hold 0/261/563/844 s: periodic, a separate
+defect — the TDR hunt); run 291 (eff1b692 line) had 0/0/0/0/2. The probe `kf-micro-reserve-probe reserve` on the same
+host measures the geometry directly (pad past an 8-page reservation refused `VA_ALREADY_MAPPED`; below an unaligned
+start refused; aligned 64 KiB holds exactly 64 KiB).
+
 **★ CORRECTION (2026-10-10, branch `claude/batched-map-decisions-20261010`, off `integration/windows-20261010` @ eff1b692) —
 the three decisions §8.7 left open are decided and implemented; read §8.8 first.** (D1) The
 transient of an UNCHANGED VA (`remade_unchanged_pages`) is gone by construction: outside every
