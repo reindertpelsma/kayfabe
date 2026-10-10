@@ -516,3 +516,21 @@ current); this is the flip `vsrace` names for run 269 (latch 59537.894, guest VS
 poll's `FLUSHSCHEDULER_SUSPEND` at 10:10:59.854, the preempt-all without re-enable, the VidMm paging stall and the user render waits
 all came ~1.9 s AFTER the flip stuck: shape S as seen in 269 is downstream of shape F, not an independent cause. [inferred] The other S
 resets likely share it; run 280 tests the fix against both.
+
+### Run 280 result: the release fix is NOT sufficient (falsifier met)
+Binary 20390253, production profile, zero measurement flags: 3 resets (nvlddmkm 153 triples at 12:34:26 sign-in, 12:34:49 Edge,
+12:35:54 Shorts), the same cadence as before; display counters confirm the new release timing was active (releases = notifies - 40).
+So writing the release at flip-away (hardware semantics, kept: it is correct per NVKMS) does not by itself stop the stuck flips;
+the late-VSync-handling signature stands, the memory word the driver decides on is not (only) the release. Stopped early.
+Read trace of run 279, additional fact: after a stuck flip the driver polls the window channel's GET/PUT (`0x690004`/`0x690000`)
+at every VSync (GET == PUT, idle), which it never does after a completed flip — a different branch of its VSync handling.
+
+### Run 281 (written before the run): the guest memory the driver reads at the stuck flip
+Binary eab39a4b (base + the release fix + `NOTIFY`/`RELEASE` write-trace lines with time and resolved address), flags production +
+probe + display write trace, guest ETW, and `tooling/flipwatch.py` on the host: it recognises the stuck-flip signature online (a latch
+whose vblank the guest handled at/after the latch, then no PUT for 400 ms; replay on runs 268-279 fires first exactly on each run's
+first stuck flip) and dumps guest memory right then (before the 2 s declaration). **H-M:** at the stuck flip the notifier slot /
+semaphore slot of the stuck flip in guest memory hold a state the completed flips' slots never had at their first VSync (read from the
+dump at the logged addresses). **Falsifier:** the stuck flip's slots are byte-identical in form to those of completed flips (same status,
+same semaphore value pattern) — then the decision is in driver-private state and the next step is the gdb breakpoint on the driver's
+VSync path (diagnosis-only), as the owner suggested.
