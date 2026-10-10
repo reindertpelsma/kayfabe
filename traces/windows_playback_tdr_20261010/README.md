@@ -36,6 +36,23 @@ Hypotheses (falsifier in brackets):
 * H-VCPU: the guest pusher is blocked in a trapped BAR0 write. [Falsifier: dump stack of the thread shows no kayfabe-trapped access.]
 Do NOT add timeouts that release the stuck update, nor a window-count cap (owner rulings; the owner wants MPO supported, MPO-off is diagnostic only).
 
+## H3. Overlay probe verdicts (run 413, binary 18da7c3c, probe run BEFORE Edge, 0 TDR so far) [measured]
+`kf_overlayprobe.exe` (built by `appmatrix/build_tools.sh`; it staged and ran on the first attempt, no fix needed; one 24 KB QGA chunk timed out once
+during staging (`stage` printed a short length) yet the exe ran: re-check the staged length before trusting a verdict).
+| scenario | verdict | evidence |
+|---|---|---|
+| steady, occlude, recreate | SETUP (exit 5) | `CheckOverlaySupport`: NV12, YUY2, P010 all `flags=0x2` = SCALING only, `direct=0` (hr 0) on the RTX 4070 output (1920x1080, attached) |
+| steady-ign, occlude-ign, recreate-ign (`--ignore-support`) | SETUP (exit 5) | `CreateSwapChainForComposition nv12 1280x720 flags=0x200 (YUV_VIDEO)` fails `0x887A0001` (DXGI_ERROR_INVALID_CALL) |
+Run 411 (probe after Edge's TDRs) gave the same flags. So on the kayfabe display the DXGI layer does not report a DIRECT NV12 overlay, while Edge's window 4 MPO planes
+(RGB, `Opaque`, 1295x986 at 22,13) and the YUV video overlay (FORMAT 0x38, runs 400/401) do reach the display engine: the probe's YUV_VIDEO swap chain path is
+not the one Edge uses, or the DIRECT flag needs a state kayfabe does not provide. Where the driver derives it: the caps page kayfabe authors
+(`kf_disp::caps::page`) carries only `SYS_CAPB_WINDOW_EXISTS`, the per-window CSC/LUT presence bits and the head/SOR clocks; NO per-window surface-format or
+overlay capability word exists in it (nvkms derives window formats from the class, not from the page), so [inferred] the DIRECT flag comes from the closed
+driver's own model. Compare with the native baseline's flags (branch `claude/overlay-native-20261010`, not landed when this was written). NEXT: run the probe with
+`--format` RGB variants (BGRA overlay as Edge uses) and `--flags none`; compare native.
+Another [measured] observation: STALL reports (updates parked > 1 s) already occur BEFORE Edge starts (run 413: 9 reports at probe time, 0 TDR so far): the same
+window-4 interlock shape, and once "window 0 ready, waiting for a vblank" for 1 s on a head whose vblank counter keeps ticking. Treat "stall without TDR" as part of H1.
+
 ## H2. Runs (hold in seconds; TDR per phase boot/sign-in/Edge/Shorts-load/hold)
 | run | binary | note | TDR | outcome |
 |---|---|---|---|---|
@@ -48,7 +65,7 @@ Do NOT add timeouts that release the stuck update, nor a window-count cap (owner
 | 409 | 7d766cbd | per-channel state | 0/0/2/.. | H1 evidence |
 | 410 | 18da7c3c | + effects ring | 0/0/0/0 (120 s hold) | no stall that time (race) |
 | 411 | 18da7c3c | probe after Edge | 0/0/2/1 | probe: exit 5 (no overlay support after the TDRs) |
-| 412 | 18da7c3c | probe BEFORE Edge (runner tdr-run22.sh) | see below | |
+| 413 | 18da7c3c | probe BEFORE Edge, auto-retry with --ignore-support (tdr-run23.sh) | 0/0/2/1/0 (60 s hold) | probe SETUP failures (H3); stalls as H1 |
 Host tooling added (host-only, `tdrhunt/`, copies of the idea in this README): `tdr-run17..22.sh` (guest-side playback check `kfplay.ps1`, bars clip `bars.mp4`,
 staging over QGA `stage()`, interactive-session tasks `usertask()`, `DWM_OVERLAY_OFF=1`, `OCCLUDE=1`, `PROBE_SCNS="steady occlude recreate"` with
 `kf_overlayprobe.exe` built by `scripts/bench/windows/appmatrix/build_tools.sh`). TRAP: never edit a runner script while a run uses it (bash reads it
