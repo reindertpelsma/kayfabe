@@ -1115,15 +1115,27 @@ fn batching_enabled() -> bool {
     *ON.get_or_init(|| std::env::var_os("KF3_NO_BATCHED_MAP").is_none())
 }
 
-/// ★ 2026-10-09: `KF3_BATCH_MICRO_RESERVE=1` batches guest-RAM rows OUTSIDE the guest
-/// reservations (Windows process VAs, `[1 MiB, 4.5 GiB)`) through a small FIXED
-/// `NV50_MEMORY_VIRTUAL` made over exactly each batch's VA (`kf_mem::batch` rule 2), so a later
-/// partial unmap is exact. DEFAULT OFF until the hardware experiment (`kf-micro-reserve-probe`,
-/// `V3_BATCHED_MAP.md` §8.1) shows host RM accepts such reservations there; off, rows there are
-/// placed one host mapping per guest leaf. Read once.
+/// ★ D3 (2026-10-10, `V3_BATCHED_MAP.md` §8.8): micro reservations are the DEFAULT, with no flag.
+/// They batch guest-RAM rows OUTSIDE the guest reservations (Windows process VAs,
+/// `[1 MiB, 4.5 GiB)`) through a small FIXED `NV50_MEMORY_VIRTUAL` made over exactly each batch's VA,
+/// and place every big-leaf row there through one (`kf_mem::batch` rule 2), so a later partial
+/// unmap is exact. Why default ON: (i) a row beyond `MAX_LEAF_PIECES` grains is otherwise refused
+/// by name — a correctness hole (the 8 GiB flat FB alias of a guest-kernel space is one);
+/// (ii) the reserve probe (`kf-micro-reserve-probe reserve`, gate 10 of `scripts/bench/v3_gates.sh`)
+/// `[measured]` passed on the trusted host at `6fafcc6e`. A reservation host RM refuses at run time
+/// is a clean fallback (4 KiB grain / per run, nothing lost); one it accepts is always used.
+///
+/// ⊘ The text this corrects: *"`KF3_BATCH_MICRO_RESERVE=1` … DEFAULT OFF until the hardware
+/// experiment shows host RM accepts such reservations there; off, rows there are placed one host
+/// mapping per guest leaf"* — that flag is GONE (setting it now does nothing).
+///
+/// `KF3_NEGCTL_NO_MICRO_RESERVE=1` turns them off: a NEGATIVE CONTROL for A/B and bisecting a host
+/// that misbehaves with reservations, never a launcher setting (off, an over-bound row is refused
+/// by name and every big-leaf row costs one host mapping per 4 KiB page). Named NEGCTL, not DIAG,
+/// because it changes behaviour (`V3_FLAG_INVENTORY.md` §8). Read once.
 fn micro_reserve_enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| std::env::var("KF3_BATCH_MICRO_RESERVE").as_deref() == Ok("1"))
+    *ON.get_or_init(|| std::env::var("KF3_NEGCTL_NO_MICRO_RESERVE").as_deref() != Ok("1"))
 }
 
 fn ns_since(t: std::time::Instant) -> u64 {

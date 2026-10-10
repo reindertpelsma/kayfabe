@@ -10,6 +10,8 @@
 #   killed job and a running one otherwise look identical.
 # - **The verdict is each gate's own `GATEn_VERDICT=` line**, never "the binary exited" or "we got to
 #   the end" (the_last_line_is_not_the_verdict). A gate that prints no verdict line is a FAIL.
+# - **Gate 10 (2026-10-10, D3)** is `kf-micro-reserve-probe reserve`, reported as `GATE10_VERDICT=`
+#   after the nine `kf-gate*` and required for the exit status; the "9/9" count is the nine only.
 # - **Every channel the gates birth is USER** (THE_CONSTRAINTS §30): each `kf-host: channel birth`
 #   line must read `PRIVILEGED_CHANNEL=0 privilege=USER`, no refusal line may appear, and a run with
 #   no birth line at all fails (`V3_GATES_BIRTHS … ok=0`, exit 1).
@@ -45,10 +47,30 @@ export PATH="$PATH:$HOME/.cargo/bin"
     if [ "$v" = "PASS" ] && [ "$rc" -eq 0 ]; then pass=$((pass+1)); else fail=$((fail+1)); failed="$failed $g(rc=$rc,verdict=${v:-NONE})"; fi
   done
   echo "V3_GATES_SUMMARY pass=$pass fail=$fail${failed:+ failed:$failed}"
+  # ★ D3 (2026-10-10) — GATE 10, the micro-reservation probe (`V3_BATCHED_MAP.md` §8.8). Micro
+  # reservations are the default for the batched map, so the claim "host RM accepts a small FIXED
+  # reservation in the unreserved range and unmaps part of what is mapped through it exactly" is
+  # re-measured on every box. It is NOT one of the nine `kf-gate*` binaries and is NOT in the
+  # `pass=` / `fail=` counts above: the "9/9" of V3_GATES_SUMMARY keeps its meaning, and this gate
+  # is reported (and required) on its own line. Its verdict is the probe's own
+  # `MICRO_RESERVE_VERDICT arm=reserve PASS|FAIL`, not its exit status alone. Informational lines
+  # (`reserve_flat_fb_alias`, the census) are in the log and never gate.
+  g10=FAIL
+  bin10="$TARGET/release/kf-micro-reserve-probe"
+  echo "=== kf-micro-reserve-probe reserve (gate 10)"
+  if [ ! -x "$bin10" ]; then
+    echo "MISSING_GATE=kf-micro-reserve-probe"
+  else
+    out10=$(KF3_WIN_USER_CHANNELS_PASSTHROUGH=1 timeout 180 "$bin10" reserve 2>&1); rc10=$?
+    echo "$out10"
+    v10=$(echo "$out10" | grep -E '^MICRO_RESERVE_VERDICT arm=reserve ' | tail -1 | awk '{print $3}')
+    if [ "$v10" = "PASS" ] && [ "$rc10" -eq 0 ]; then g10=PASS; fi
+  fi
+  echo "GATE10_VERDICT=$g10"
   # ⊘ A gate run with no channel birth at all has not shown the birth check can report one.
   births_ok=0
   [ "$births" -ge 1 ] && [ "$user" -eq "$births" ] && [ "$refused" -eq 0 ] && births_ok=1
   echo "V3_GATES_BIRTHS births=$births user=$user refused=$refused ok=$births_ok"
-  echo "V3_GATES_EXIT pass=$pass fail=$fail births_ok=$births_ok $(date -Is)"
-  [ "$pass" -eq 9 ] && [ "$fail" -eq 0 ] && [ "$births_ok" -eq 1 ]
+  echo "V3_GATES_EXIT pass=$pass fail=$fail births_ok=$births_ok gate10=$g10 $(date -Is)"
+  [ "$pass" -eq 9 ] && [ "$fail" -eq 0 ] && [ "$births_ok" -eq 1 ] && [ "$g10" = "PASS" ]
 } 2>&1 | tee "$OUT"

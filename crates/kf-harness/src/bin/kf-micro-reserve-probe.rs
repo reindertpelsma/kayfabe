@@ -21,7 +21,9 @@
 //!   mapping, unmap page 3 by range, invalidate, and CE-copy pages 0 and 7 (must deliver their
 //!   pattern), re-map page 3 into the hole (must deliver), take it all down, free the reservation,
 //!   and show its VA is free again. PASS ⇒ batch the low range with micro reservations
-//!   (`KF3_BATCH_MICRO_RESERVE=1` → default). FAIL at `reserve_*` ⇒ leaf-granular maps there.
+//!   (★ D3, 2026-10-10: micro reservations are now the DEFAULT — this probe is gate 10 of
+//!   `scripts/bench/v3_gates.sh`). FAIL at `reserve_*` ⇒ every big-leaf row there goes at 4 KiB grain
+//!   and a row beyond `MAX_LEAF_PIECES` grains is refused by name (`V3_BATCHED_MAP.md` §8.8).
 //! - `nv01-control` (raises ONE host Xid 31 on this test's OWN channel — a result, not a failure):
 //!   the same partial unmap through the space's `NV01` range. A FIXED one-page map at the remnant's
 //!   start then SUCCEEDS (⇔ RM freed the remnant's whole VA block) and a CE read of page 7 FAULTS
@@ -109,6 +111,30 @@ fn run(l: &mut Ledger, arm: &str) -> Result<(), String> {
         accepted >= 4,
         format!("{accepted}/6 accepted (the 5 small ones decide)"),
     );
+    // ★ D1 (2026-10-10), INFORMATION ONLY (never gates): the flat FB alias of a guest-KERNEL space is
+    // one 7.9 GiB row of 2 MiB leaves (`0x120000000+0x1efc00000`), which can ONLY be placed through
+    // a reservation (2 031 616 grains > MAX_LEAF_PIECES). If host RM refuses this one, the placement
+    // falls back to one reservation per 2 MiB leaf (`kf_mem::batch`, (a2)) — that fallback is
+    // model-tested, this line is what says whether it is ever needed.
+    {
+        const ALIAS: (u64, u64) = (0x1_2000_0000, 0x1_efc0_0000);
+        match rm.reserve_va(space.space, ALIAS.0, ALIAS.1) {
+            Ok(h) => {
+                l.measure(
+                    "reserve_flat_fb_alias",
+                    format!("{:#x}+{:#x} (7.9 GiB): ACCEPTED", ALIAS.0, ALIAS.1),
+                );
+                let _ = rm.free(h);
+            }
+            Err(e) => l.measure(
+                "reserve_flat_fb_alias",
+                format!(
+                    "{:#x}+{:#x} (7.9 GiB): refused {e:?} — the per-2-MiB-leaf fallback applies",
+                    ALIAS.0, ALIAS.1
+                ),
+            ),
+        }
+    }
 
     // ── the objects: a VRAM source of 8 patterned pages, a VRAM destination, a CE rig ────────
     let src = rm

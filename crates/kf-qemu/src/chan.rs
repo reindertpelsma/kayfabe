@@ -3877,18 +3877,27 @@ impl ChanPlane {
                 let steer = fc.map(|(va, len)| match rows.write().map(|mut r| r.remove(&va)) {
                     Ok(None) => format!(" [guest ctx VA {va:#x} not mirrored yet — host RM takes it free; the walker will find it held]"),
                     Err(_) => format!(" [placement rows poisoned — host ctx placement unsteered]"),
-                    // ★ 2026-10-09: by RANGE over the whole row — outside a reservation a row is one
-                    // host mapping per guest leaf (`kf_mem::batch`), so a start-keyed unmap would take
-                    // only its first leaf. ★ Review fix 2026-10-10 (finding 6): THROUGH the space's
+                    // ★ 2026-10-09: by RANGE over the whole row — outside a reservation a row is many
+                    // host mappings (D1, 2026-10-10: one per 4 KiB page, or one reservation holding
+                    // it; ⊘ it was "one per guest leaf") (`kf_mem::batch`), so a start-keyed unmap
+                    // would take only its first. ★ Review fix 2026-10-10 (finding 6): THROUGH the space's
                     // ownership ledger (`BatchedVas::hand_to_host`) — our mappings only, each through
                     // the hDma it was mapped through (a micro reservation included), the ledger cut.
                     // ⊘ It was a raw `HostRm::unmap_range`: not limited to our mappings, the ledger
                     // left stale, and a no-op (logged "steered") for a micro-reserved row.
-                    Ok(Some(row)) => match ledger.as_ref().map(|bv| bv.hand_to_host(va, row.0)) {
-                        Some(kf_mem::batch::HandOver::Free) => format!(" [host ctx steered onto the guest's ctx VA {va:#x}+{len:#x}]"),
-                        Some(kf_mem::batch::HandOver::StillReserved) => format!(" [guest ctx VA {va:#x} unmapped, but a micro reservation of ours still covers it (other rows live in it) — host ctx placement unsteered]"),
-                        Some(kf_mem::batch::HandOver::StillOurs) => format!(" [guest ctx VA {va:#x}: a new mapping of ours landed there meanwhile — host ctx placement unsteered]"),
-                        Some(kf_mem::batch::HandOver::Refused(e)) => format!(" [guest ctx VA {va:#x} not unmapped ({e}) — host ctx placement unsteered]"),
+                    // ★ D2 (2026-10-10): the ledger's locks are taken here (act thread) and held for
+                    // at most one chunk (`kf_mem::batch::LEDGER_CHUNK`); the longest hold so far is
+                    // part of the log line, so the cost is observed, not assumed.
+                    Ok(Some(row)) => match ledger.as_ref().map(|bv| (bv.hand_to_host(va, row.0), bv.hold_stats())) {
+                        Some((over, (touched, hold_us))) => {
+                            let holds = format!(" (ledger lock holds: at most {touched} entries, longest {hold_us} us)");
+                            match over {
+                                kf_mem::batch::HandOver::Free => format!(" [host ctx steered onto the guest's ctx VA {va:#x}+{len:#x}{holds}]"),
+                                kf_mem::batch::HandOver::StillReserved => format!(" [guest ctx VA {va:#x} unmapped, but a micro reservation of ours still covers it (other rows live in it) — host ctx placement unsteered{holds}]"),
+                                kf_mem::batch::HandOver::StillOurs => format!(" [guest ctx VA {va:#x}: a new mapping of ours landed there meanwhile — host ctx placement unsteered{holds}]"),
+                                kf_mem::batch::HandOver::Refused(e) => format!(" [guest ctx VA {va:#x} not unmapped ({e}) — host ctx placement unsteered{holds}]"),
+                            }
+                        }
                         None => format!(" [guest ctx VA {va:#x}: no ownership ledger for this space — not unmapped, host ctx placement unsteered]"),
                     },
                 });
