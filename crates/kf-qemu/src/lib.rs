@@ -14,6 +14,7 @@ pub mod cardbudget;
 pub mod chan;
 pub mod defapi;
 pub mod device;
+pub mod diagring;
 pub mod display;
 pub mod dispsw;
 pub mod exposure;
