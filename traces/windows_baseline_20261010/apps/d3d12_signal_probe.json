@@ -1,0 +1,71 @@
+{
+ "quiet": 1,
+ "end_utc": "2026-10-10T14:21:24.9865878Z",
+ "start_utc": "2026-10-10T14:21:18.3018262Z",
+ "rc": 0,
+ "secs": 7,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4060 Ti status=OK code=0"
+ ],
+ "digests": [],
+ "session": 0,
+ "out_files": [],
+ "boot_utc_start": "2026-10-10T13:30:47.5000000Z",
+ "log_tail": [
+  "=== d3d12_signal_probe start=2026-10-10T07:21:18.3018262-07:00 host=DESKTOP-397P3NI session=0 boot=2026-10-10T13:30:47.5000000Z timeout=180",
+  "PROBE whoami nt authority\\system",
+  "PROBE session 0",
+  "PROBE quser USERNAME              SESSIONNAME        ID  STATE   IDLE TIME  LOGON TIME",
+  "PROBE quser vast                  console             1  Active      none   10/10/2026 6:31 AM",
+  "PROBE CreateDXGIFactory1 0x00000000",
+  "PROBE adapter 0 vendor 0x10de NVIDIA GeForce RTX 4060 Ti dedicated 16109 MB",
+  "PROBE adapter 1 vendor 0x1414 Microsoft Basic Render Driver dedicated 0 MB",
+  "PROBE control D3D12CreateDevice(Basic Render Driver, 11_0) 0x00000000",
+  "PROBE D3D11CreateDevice(NVIDIA, hardware) 0x00000000 feature level 0xb000",
+  "PROBE D3D12CreateDevice(11_0) 0x00000000",
+  "PROBE DIRECT CreateCommandQueue 0x00000000",
+  "PROBE DIRECT CreateFence 0x00000000",
+  "PROBE DIRECT Signal(1) hr 0x00000000 wait SIGNALED completed 1",
+  "PROBE DIRECT Signal(2) hr 0x00000000 wait SIGNALED completed 2",
+  "PROBE DIRECT Signal(3) hr 0x00000000 wait SIGNALED completed 3",
+  "PROBE COPY CreateCommandQueue 0x00000000",
+  "PROBE COPY CreateFence 0x00000000",
+  "PROBE COPY Signal(1) hr 0x00000000 wait SIGNALED completed 1",
+  "PROBE COPY Signal(2) hr 0x00000000 wait SIGNALED completed 2",
+  "PROBE COPY Signal(3) hr 0x00000000 wait SIGNALED completed 3",
+  "PROBE done",
+  "=== end rc=0 secs=7 2026-10-10T07:21:24.9865878-07:00"
+ ],
+ "pdh": {
+  "pids": [
+   "4476",
+   "3312",
+   "2464"
+  ],
+  "nv": {},
+  "samples": 3,
+  "other": {},
+  "nvidia_luids": "0_5ecc"
+ },
+ "timed_out": false,
+ "token": "g1-d3d12_signal_probe-1791642064",
+ "boot_utc_end": "2026-10-10T13:30:47.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "d3d12_signal_probe",
+ "smi": {
+  "samples": 1,
+  "mem_used_base_mb": 122,
+  "util_max": 0,
+  "mem_used_max_mb": 122
+ }
+}

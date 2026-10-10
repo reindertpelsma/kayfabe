@@ -1,0 +1,104 @@
+{
+ "quiet": 6,
+ "end_utc": "2026-10-10T17:03:51.3878089Z",
+ "start_utc": "2026-10-10T17:03:38.0509038Z",
+ "rc": 0,
+ "secs": 13,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4060 Ti status=OK code=0"
+ ],
+ "digests": [
+  "OUTSHA llama_cpp 28286d684e78a1b0"
+ ],
+ "session": 0,
+ "out_files": [
+  "C:\\kf\\out\\llama_cuda_gen\\empty.txt 2",
+  "C:\\kf\\out\\llama_cuda_gen\\gen.err 3213",
+  "C:\\kf\\out\\llama_cuda_gen\\gen.txt 189"
+ ],
+ "boot_utc_start": "2026-10-10T15:50:57.5000000Z",
+ "log_tail": [
+  "<|im_start|>assistant",
+  "",
+  "0.04.667.615 I ",
+  "0.04.667.662 I system_info: n_threads = 4 (n_threads_batch = 4) / 4 | CUDA : ARCHS = 500,610,700,750,800,860,890,900 | USE_GRAPHS = 1 | FA_QUANTS = q4_0-q4_0,q8_0-q8_0,f16-f16,bf16-bf16 | CPU : SSE3 = 1 | SSSE3 = 1 | AVX = 1 | AVX2 = 1 | F16C = 1 | FMA = 1 | BMI2 = 1 | LLAMAFILE = 1 | OPENMP = 1 | REPACK = 1 | ",
+  "0.04.667.672 I ",
+  "0.04.667.895 I llama_completion: interactive mode on.",
+  "0.04.667.912 I sampler seed: 4294967295",
+  "0.04.667.941 I sampler params: ",
+  "\trepeat_last_n = 64, repeat_penalty = 1.000, frequency_penalty = 0.000, presence_penalty = 0.000",
+  "\tdry_multiplier = 0.000, dry_base = 1.750, dry_allowed_length = 2, dry_penalty_last_n = 64",
+  "\ttop_k = 40, top_p = 0.950, min_p = 0.050, xtc_probability = 0.000, xtc_threshold = 0.100, typical_p = 1.000, top_n_sigma = -1.000, temp = 0.000",
+  "\tmirostat = 0, mirostat_lr = 0.100, mirostat_ent = 5.000, adaptive_target = -1.000, adaptive_decay = 0.900",
+  "0.04.668.397 I sampler chain: logits -> ?penalties -> ?dry -> ?top-n-sigma -> top-k -> ?typical -> top-p -> min-p -> ?xtc -> temp-ext -> greedy ",
+  "0.04.668.407 I generate: n_ctx = 32768, n_batch = 2048, n_predict = 64, n_keep = 0",
+  "0.04.668.416 I ",
+  "0.04.668.425 I == Running in interactive mode. ==",
+  "0.04.668.435 I  - Press Ctrl+C to interject at any time.",
+  "0.04.668.444 I  - Press Return to return control to the AI.",
+  " - To return control without starting a new line, end your input with '/'.",
+  " - If you want to submit another line, end your input with '\\'.",
+  "0.04.668.453 I  - Not using system message. To change it, set a different value via -sys PROMPT",
+  "0.04.668.480 I ",
+  "0.05.290.688 I common_perf_print:    sampling time =      14.62 ms",
+  "0.05.290.699 I common_perf_print:    samplers time =       3.25 ms /    49 tokens",
+  "0.05.290.718 I common_perf_print:        load time =    2822.04 ms",
+  "0.05.290.730 I common_perf_print: prompt eval time =     371.31 ms /    19 tokens (   19.54 ms per token,    51.17 tokens per second)",
+  "0.05.290.743 I common_perf_print:        eval time =     232.50 ms /    29 runs   (    8.02 ms per token,   124.73 tokens per second)",
+  "0.05.290.754 I common_perf_print:       total time =     628.72 ms /    48 tokens",
+  "0.05.290.766 I common_perf_print: unaccounted time =      10.29 ms /   1.6 %      (total - sampling - prompt eval - eval) / (total)",
+  "0.05.290.794 I common_perf_print:    graphs reused =         28",
+  "GEN The sky appears blue because shorter blue wavelengths of light are scattered more by the atmosphere, making them scatter towards our eyes from all directions.",
+  "GEN ",
+  "GEN > ",
+  "GEN ",
+  "GEN ",
+  "GEN > EOF by user",
+  "GEN ",
+  "GEN ",
+  "OUTSHA llama_cpp 28286d684e78a1b0",
+  "=== end rc=0 secs=13 2026-10-10T10:03:51.3878089-07:00"
+ ],
+ "pdh": {
+  "pids": [
+   "8880",
+   "8952",
+   "7852",
+   "8756"
+  ],
+  "nv": {
+   "security": 0,
+   "3d": 0,
+   "vr": 0,
+   "videodecode": 0,
+   "copy": 0,
+   "ofa_0": 0,
+   "legacyoverlay": 0,
+   "videoencode": 0
+  },
+  "samples": 6,
+  "other": {},
+  "nvidia_luids": "0_6040"
+ },
+ "timed_out": false,
+ "token": "g1-llama_cuda_gen-1791651796",
+ "boot_utc_end": "2026-10-10T15:50:57.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "llama_cuda_gen",
+ "smi": {
+  "samples": 2,
+  "mem_used_base_mb": 127,
+  "util_max": 0,
+  "mem_used_max_mb": 127
+ }
+}

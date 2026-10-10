@@ -1,0 +1,68 @@
+{
+ "quiet": 1,
+ "end_utc": "2026-10-10T14:14:35.6472706Z",
+ "start_utc": "2026-10-10T14:14:31.2731446Z",
+ "rc": 0,
+ "secs": 4,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4060 Ti status=OK code=0"
+ ],
+ "digests": [],
+ "session": 0,
+ "out_files": [],
+ "boot_utc_start": "2026-10-10T13:30:47.5000000Z",
+ "log_tail": [
+  "=== cup2_ladder start=2026-10-10T07:14:31.2731446-07:00 host=DESKTOP-397P3NI session=0 boot=2026-10-10T13:30:47.5000000Z timeout=60",
+  "ok   cuInit(0)",
+  "ok   cuDeviceGetCount(&n)",
+  "devices=1",
+  "ok   cuDeviceGet(&d,0)",
+  "ok   cuDeviceGetName(nm,256,d)",
+  "name=NVIDIA GeForce RTX 4060 Ti",
+  "ok   cuDeviceGetAttribute(&maj,CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR,d)",
+  "ok   cuDeviceGetAttribute(&min,CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR,d)",
+  "compute=8.9",
+  "ok   cuDeviceTotalMem(&tot,d)",
+  "totalMem=16379 MiB",
+  "ok   cuCtxCreate(&ctx,0,d)",
+  "CTX OK",
+  "ok   cuMemAlloc(&dp,4096)",
+  "MEMALLOC OK 0x1306600000",
+  "ok   cuMemcpyHtoD(dp,&hv,4)",
+  "ok   cuMemcpyDtoH(&rv,dp,4)",
+  "CE rv=0xabcd1234 want=0xabcd1234 -> PASS",
+  "DONE",
+  "=== end rc=0 secs=4 2026-10-10T07:14:35.6472706-07:00"
+ ],
+ "pdh": {
+  "pids": [
+   "1756",
+   "7732"
+  ],
+  "nv": {},
+  "samples": 2,
+  "other": {},
+  "nvidia_luids": "0_5ecc"
+ },
+ "timed_out": false,
+ "token": "g1-cup2_ladder-1791641657",
+ "boot_utc_end": "2026-10-10T13:30:47.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "cup2_ladder",
+ "smi": {
+  "samples": 1,
+  "mem_used_base_mb": 122,
+  "util_max": 0,
+  "mem_used_max_mb": 122
+ }
+}

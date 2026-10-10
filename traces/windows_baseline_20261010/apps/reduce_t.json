@@ -1,0 +1,55 @@
+{
+ "quiet": 1,
+ "end_utc": "2026-10-10T15:25:19.8897160Z",
+ "start_utc": "2026-10-10T15:25:13.3111271Z",
+ "rc": 0,
+ "secs": 7,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4060 Ti status=OK code=0"
+ ],
+ "digests": [],
+ "session": 0,
+ "out_files": [],
+ "boot_utc_start": "2026-10-10T13:30:47.5000000Z",
+ "log_tail": [
+  "=== reduce_t start=2026-10-10T08:25:13.3111271-07:00 host=DESKTOP-397P3NI session=0 boot=2026-10-10T13:30:47.5000000Z timeout=120",
+  "[eq] device NVIDIA GeForce RTX 4060 Ti torch 2.8.0+cu126",
+  "CHECK reduce_sum_f32 ok tol=2.0 over 16M",
+  "CHECK reduce_sum_i64_exact ok",
+  "CHECK reduce_minmax ok",
+  "WINEQ_DONE reduce",
+  "=== end rc=0 secs=7 2026-10-10T08:25:19.8897160-07:00"
+ ],
+ "pdh": {
+  "pids": [
+   "9032",
+   "11040",
+   "10200"
+  ],
+  "nv": {},
+  "samples": 3,
+  "other": {},
+  "nvidia_luids": "0_5ecc"
+ },
+ "timed_out": false,
+ "token": "g1-reduce_t-1791645899",
+ "boot_utc_end": "2026-10-10T13:30:47.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "reduce_t",
+ "smi": {
+  "samples": 1,
+  "mem_used_base_mb": 134,
+  "util_max": 0,
+  "mem_used_max_mb": 134
+ }
+}

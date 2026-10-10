@@ -1,0 +1,3 @@
+=== opencl_icd start=2026-10-10T10:07:15.8084271-07:00 host=DESKTOP-397P3NI session=0 boot=2026-10-10T15:50:57.5000000Z timeout=60
+OPENCL_ICD C:\WINDOWS\System32\DriverStore\FileRepository\nvmdi.inf_amd64_1c87a544b993d27c\nvopencl64.dll (NVIDIA GeForce RTX 4060 Ti)
+=== end rc=0 secs=3 2026-10-10T10:07:18.7488785-07:00

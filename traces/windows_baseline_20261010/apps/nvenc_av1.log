@@ -1,0 +1,19 @@
+=== nvenc_av1 start=2026-10-10T10:06:24.0991241-07:00 host=DESKTOP-397P3NI session=0 boot=2026-10-10T15:50:57.5000000Z timeout=180
+Input #0, lavfi, from 'testsrc=size=1280x720:rate=30:duration=20':
+  Duration: N/A, start: 0.000000, bitrate: N/A
+  Stream #0:0: Video: wrapped_avframe, rgb24, 1280x720 [SAR 1:1 DAR 16:9], 30 fps, 30 tbr, 30 tbn
+Stream mapping:
+  Stream #0:0 -> #0:0 (wrapped_avframe (native) -> av1 (av1_nvenc))
+Press [q] to stop, [?] for help
+Output #0, mp4, to 'C:\kf\out\nvenc_av1\enc.mp4':
+  Metadata:
+    encoder         : Lavf62.12.103
+  Stream #0:0: Video: av1 (Main) (av01 / 0x31307661), yuv420p(tv, progressive), 1280x720 [SAR 1:1 DAR 16:9], q=2-31, 2000 kb/s, 30 fps, 15360 tbn
+    Metadata:
+      encoder         : Lavc62.28.103 av1_nvenc
+    Side data:
+      CPB properties: bitrate max/min/avg: 0/0/2000000 buffer size: 4000000 vbv_delay: N/A
+[out#0/mp4 @ 000001f8d5a1bd00] video:1483KiB audio:0KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: 0.135919%
+frame=  600 fps=217 q=5.0 Lsize=    1485KiB time=00:00:20.00 bitrate= 608.2kbits/s speed=7.23x elapsed=0:00:02.76    
+frame= 600 
+=== end rc=0 secs=7 2026-10-10T10:06:31.5528740-07:00

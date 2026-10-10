@@ -160,17 +160,18 @@ app("torch_correct", "torch", py("torch_correct.py"), r"TORCH_CORRECT_DONE", 300
 app("torch_ai_bench", "torch", py("ai_bench.py"), r"CHECK bert_infer_seqs ok", 900, 180, [OUT_NV, GPU_ENG], "high",
     "unmodified scripts/apps/src/ai_bench.py: 8192^2 GEMMs, CNN training, BERT-like inference; minutes of GPU load, so it crosses several TDR windows",
     linux=["torch_ai_bench"], pkgs=PYPK)
-app("cupy_check", "torch", py("cupy_check.py"), r"CUPY_DONE", 300, 30, [GPU_ENG], *W_COMPUTE_BIG, linux=["cupy"], pkgs=PYPK + ("cuda_cudart",),
+app("cupy_check", "torch", py("cupy_check.py"), r"CUPY_DONE", 300, 30, [r"out:KFDEV .*NVIDIA", GPU_ENG], *W_COMPUTE_BIG, linux=["cupy"], pkgs=PYPK + ("cuda_cudart",),
     note="unmodified scripts/apps/src/cupy_check.py via kf_runpy.py (torch imported first so CuPy finds the CUDA DLLs)")
-app("torch_burn", "stress", py("torch_burn.py", "60"), r"^GPU 0: OK", 180, 70, [OUT_NV, GPU_ENG], *W_LONG, linux=["gpu_burn"], pkgs=PYPK,
+app("torch_burn", "stress", py("torch_burn.py", "60"), r"^GPU 0: OK", 180, 70, [OUT_NV, GPU_ENG, "smi"], *W_LONG, linux=["gpu_burn"], pkgs=PYPK,
     note="60 s of fp32 matmul with bit-exact comparison (gpu_burn semantics)")
-app("ort_directml", "d3d", py("ort_dml.py"), r"^ORT_DML_DONE", 240, 20, [GPU_ENG], "high",
+app("ort_directml", "d3d", py("ort_dml.py"), r"^ORT_DML_DONE", 240, 20, [r"out:ORT_DML_DEVICE index (\d+) of .*\(\1, 'NVIDIA", GPU_ENG], "high",
     "ONNX Runtime DirectML = Direct3D 12 compute (root signature, UAV, DIRECT queue) on the NVIDIA adapter; D3D12 device creation was the wall of the "
     "2026-10-08 runs (D3D devices created by a test process RC their twins)", pkgs=PYPK)
 
 # ---------------------------------------------------------------------------------------------- E. LLM
 MODEL = r'$m = "$K\models\qwen2.5-1.5b-instruct-q4_k_m.gguf"' + "\n"
 app("llama_cuda_gen", "llm", MODEL + r"""$exe = "$K\llama_cuda\llama-completion.exe"
+Invoke-KfExe -Exe $exe -ArgList @('--list-devices')
 '' | Set-Content "$OUT\empty.txt"
 $p = Start-Process -FilePath $exe -ArgumentList @('-m', $m, '-p', '"Explain in three sentences why the sky is blue."', '-n', '64', '-ngl', '99', '--temp', '0', '--seed', '1', '--no-display-prompt') `
     -RedirectStandardInput "$OUT\empty.txt" -RedirectStandardOutput "$OUT\gen.txt" -RedirectStandardError "$OUT\gen.err" -Wait -PassThru -NoNewWindow
@@ -178,7 +179,7 @@ Get-Content "$OUT\gen.err" -ErrorAction SilentlyContinue | Select-Object -First 
 Get-Content "$OUT\gen.txt" -ErrorAction SilentlyContinue | ForEach-Object { "GEN $_" }
 $txt = (Get-Content "$OUT\gen.txt" -Raw -ErrorAction SilentlyContinue)
 if ($p.ExitCode -eq 0 -and $txt -and $txt.Trim().Length -gt 20) { "OUTSHA llama_cpp $(Get-KfDigest ($txt -replace '\s+', ' '))" ; exit 0 } else { 'LLAMA_FAIL no output'; exit 1 }""",
-    r"^OUTSHA llama_cpp ", 600, 60, [r"out:Device 0: NVIDIA|offloaded [0-9]+/[0-9]+ layers to GPU|CUDA0", GPU_ENG], "high",
+    r"^OUTSHA llama_cpp ", 600, 60, [r"out:Device 0: NVIDIA|offloaded [0-9]+/[0-9]+ layers to GPU|CUDA0: NVIDIA", GPU_ENG], "high",
     "greedy generation: ~1 GiB of weights, thousands of small kernel launches per second through the relay; Linux row passes with identical digests",
     linux=["llama_cpp_gen"], pkgs=("llama_cuda", "qwen_gguf", "vc_redist"), digest=True,
     note="digest is compared across Windows runs and informationally with Linux (different llama.cpp build)")
@@ -221,7 +222,8 @@ for aid, demo, extra, secs, lin, cat in (("furmark_glinfo", None, ["--glrenderer
                                          ("furmark_gl_bench", "furmark-gl", [], 15, None, "opengl"), ("furmark_vk_bench", "furmark-vk", [], 15, None, "vulkan"),
                                          ("furmark_knot_gl", "furmark-knot-gl", [], 15, None, "opengl"), ("furmark_gl_stress", "furmark-gl", ["STRESS"], 60, ["gpu_burn"], "stress")):
     if demo is None:
-        body = FM + "Invoke-KfExe -Exe \"$fm\\furmark.exe\" -ArgList @(%s) -Cwd $fm\nexit $global:KfRc\n" % ", ".join("'%s'" % x for x in extra)
+        body = (FM + "Invoke-KfExe -Exe \"$fm\\furmark.exe\" -ArgList @(%s) -Cwd $fm\n" % ", ".join("'%s'" % x for x in extra)
+                + "if ($global:KfRc -eq 1) { 'KFNOTE furmark info modes print the info and exit 1 by design (measured on native NVIDIA)'; exit 0 }\nexit $global:KfRc\n")
         app(aid, cat, body, r"NVIDIA", 90, 8, [r"out:NVIDIA"], "medium" if cat == "opengl" else "medium",
             "creates a GL/Vulkan context on the NVIDIA device and prints driver strings; no sustained rendering", pkgs=("furmark2", "vc_redist"), session="interactive",
             smi=False, tier=1)
@@ -257,11 +259,11 @@ for aid, api, extra, tier, dif in (("gravitymark_d3d11", "-d3d11", [], 1, W_GFX)
                                    ("gravitymark_d3d12_rt", "-d3d12", ["-raytracing", "1"], 3, ("high", "DXR ray tracing on RT cores through the Translated/Passthrough split: the least-trodden path"))):
     args = ["-temporal", "1", "-fps", "1", "-info", "1", "-benchmark", "1", "-close", "1", "-count", "1", "-asteroids", "20000",
             "-width", "1280", "-height", "720", "-fullscreen", "0", api] + extra
-    app(aid, "d3d" if "d3d" in aid else ("vulkan" if aid.endswith("vk") else "opengl"), GM + rf"""Invoke-KfWait -Exe $gmx -ArgList @({", ".join("'%s'" % x for x in args)}, '-image', "$OUT\gm.png", '-times', "$OUT\gm_times.txt") -Cwd $gmd -TimeoutS 300 -Tag {aid}
+    app(aid, "d3d" if "d3d" in aid else ("vulkan" if aid.endswith("vk") else "opengl"), GM + rf"""Invoke-KfWait -Exe $gmx -ArgList @({", ".join("'%s'" % x for x in args)}, '-image', "$OUT\gm.png", '-times', "$OUT\gm_times.txt") -Cwd $gmd -TimeoutS 600 -Tag {aid}
 $rc = $global:KfRc
 if ((Test-Path "$OUT\gm.png") -and ((Get-Item "$OUT\gm.png").Length -gt 10000)) {{ "GM_OK image=$((Get-Item "$OUT\gm.png").Length) bytes" }} else {{ 'GM_FAIL no benchmark image' ; if ($rc -eq 0) {{ $rc = 1 }} }}
 if (Test-Path "$OUT\gm_times.txt") {{ "GM_TIMES lines=$((Get-Content "$OUT\gm_times.txt").Count)" }}
-exit $rc""", r"^GM_OK", 360, 60, [GPU_ENG], *dif, pkgs=("gravitymark", "vc_redist"), session="interactive", tier=tier, shot=20,
+exit $rc""", r"^GM_OK", 660, 60, [GPU_ENG], *dif, pkgs=("gravitymark", "vc_redist"), session="interactive", tier=tier, shot=20,
         note="GravityMark 1.89 flags from its own run_*.bat (-benchmark 1 -close 1 -count 1 -image -times); asteroids reduced to 20000")
 UN = r'$u = "$K\%s\bin"' + "\n"
 for aid, name, api, tier in (("heaven_d3d11", "heaven", "direct3d11", 2), ("heaven_opengl", "heaven", "opengl", 2), ("valley_d3d11", "valley", "direct3d11", 2), ("valley_opengl", "valley", "opengl", 2)):
@@ -284,7 +286,7 @@ SRC = "testsrc=size=1280x720:rate=30:duration=20"
 
 
 def enc(codec):
-    return FF + rf"""Invoke-KfExe -Exe $ff -ArgList @('-y', '-hide_banner', '-nostats', '-f', 'lavfi', '-i', '{SRC}', '-c:v', '{codec}', '-preset', 'p4', "$OUT\enc.mp4")
+    return FF + rf"""Invoke-KfExe -Exe $ff -ArgList @('-y', '-hide_banner', '-nostats', '-f', 'lavfi', '-i', '{SRC}', '-pix_fmt', 'yuv420p', '-c:v', '{codec}', '-preset', 'p4', "$OUT\enc.mp4")  # yuv420p: av1_nvenc rejects the lavfi source's yuv444p
 $rc = $global:KfRc
 $n = & $fp -v error -count_frames -select_streams v:0 -show_entries stream=nb_read_frames -of csv=p=0 "$OUT\enc.mp4"
 "frame= $n "
@@ -300,19 +302,19 @@ app("nvenc_av1", "video", enc("av1_nvenc"), r"frame= *600 ", 180, 20, ["pdh:Vide
 def dec(hw_args, tag, fail_msg):
     return FF + rf"""Invoke-KfExe -Exe $ff -ArgList @('-y', '-hide_banner', '-nostats', '-f', 'lavfi', '-i', '{SRC}', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', "$OUT\x264.mp4")
 if ($global:KfRc -ne 0) {{ 'DECODE_PREP_FAIL libx264 encode'; exit 1 }}
-Invoke-KfExe -Exe $ff -ArgList @('-hide_banner', '-nostats', '-progress', "$OUT\prog.txt", {hw_args}, '-i', "$OUT\x264.mp4", '-f', 'null', '-')
+Invoke-KfExe -Exe $ff -ArgList @('-hide_banner', '-nostats', '-progress', "$OUT\prog.txt", {hw_args}, '-stream_loop', '29', '-i', "$OUT\x264.mp4", '-f', 'null', '-')
 $rc = $global:KfRc
 $log = (Get-Content "$OUT\prog.txt" -ErrorAction SilentlyContinue | Where-Object {{ $_ -match '^frame=' }} | Select-Object -Last 1)
 "frame= $($log -replace 'frame=', '') "
 exit $rc"""
 
 
-app("nvdec_h264", "video", dec("'-hwaccel', 'cuda', '-hwaccel_output_format', 'cuda'", "cuda", ""), r"frame= *600 ", 180, 20, ["pdh:VideoDecode", "smi"], *W_VIDEO,
+app("nvdec_h264", "video", dec("'-hwaccel', 'cuda', '-hwaccel_output_format', 'cuda'", "cuda", ""), r"frame= *18000 ", 180, 20, ["pdh:VideoDecode", "smi"], *W_VIDEO,
     linux=["nvdec_h264"], pkgs=("ffmpeg", "vc_redist"), fail_rx=r"^CHECK .*FAIL|Failed setup for format|DECODE_PREP_FAIL|hwaccel initialisation returned error")
-app("d3d11va_h264", "video", dec("'-hwaccel', 'd3d11va', '-hwaccel_output_format', 'd3d11'", "d3d11va", ""), r"frame= *600 ", 180, 20, ["pdh:VideoDecode", "smi"], *W_VIDEO,
+app("d3d11va_h264", "video", dec("'-hwaccel', 'd3d11va', '-hwaccel_output_format', 'd3d11'", "d3d11va", ""), r"frame= *18000 ", 180, 20, ["pdh:VideoDecode", "smi"], *W_VIDEO,
     pkgs=("ffmpeg", "vc_redist"), fail_rx=r"^CHECK .*FAIL|Failed setup for format|DECODE_PREP_FAIL|hwaccel initialisation returned error",
     note="the DXVA2/D3D11 video-decode API path (what Edge, Media Foundation and VLC use); the Linux matrix has no counterpart")
-app("dxva2_h264", "video", dec("'-hwaccel', 'dxva2'", "dxva2", ""), r"frame= *600 ", 180, 20, ["pdh:VideoDecode", "smi"], *W_VIDEO, pkgs=("ffmpeg", "vc_redist"),
+app("dxva2_h264", "video", dec("'-hwaccel', 'dxva2'", "dxva2", ""), r"frame= *18000 ", 180, 20, ["pdh:VideoDecode", "smi"], *W_VIDEO, pkgs=("ffmpeg", "vc_redist"),
     fail_rx=r"^CHECK .*FAIL|Failed setup for format|DECODE_PREP_FAIL|hwaccel initialisation returned error", tier=2)
 app("scale_cuda_nvenc", "video", FF + rf"""Invoke-KfExe -Exe $ff -ArgList @('-y', '-hide_banner', '-nostats', '-f', 'lavfi', '-i', '{SRC}', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', "$OUT\x264.mp4")
 Invoke-KfExe -Exe $ff -ArgList @('-y', '-hide_banner', '-nostats', '-hwaccel', 'cuda', '-hwaccel_output_format', 'cuda', '-i', "$OUT\x264.mp4", '-vf', 'scale_cuda=640:360', '-c:v', 'h264_nvenc', "$OUT\scaled.mp4")
@@ -321,7 +323,7 @@ $n = & $fp -v error -count_frames -select_streams v:0 -show_entries stream=nb_re
 "frame= $n "
 exit $rc""", r"frame= *600 ", 240, 30, ["pdh:VideoEncode|VideoDecode", "smi"], *W_VIDEO, pkgs=("ffmpeg", "vc_redist"), tier=2,
     fail_rx=r"^CHECK .*FAIL|Failed setup for format|Impossible to convert", note="NVDEC -> CUDA scale filter -> NVENC with frames kept on the GPU")
-app("vulkan_video_decode", "video", dec("'-init_hw_device', 'vulkan=vk', '-hwaccel', 'vulkan', '-hwaccel_output_format', 'vulkan'", "vulkan", ""), r"frame= *600 ", 240, 30,
+app("vulkan_video_decode", "video", dec("'-init_hw_device', 'vulkan=vk', '-hwaccel', 'vulkan', '-hwaccel_output_format', 'vulkan'", "vulkan", ""), r"frame= *18000 ", 240, 30,
     ["pdh:VideoDecode", "smi"], *W_VIDEO, pkgs=("ffmpeg", "vc_redist"), tier=3,
     fail_rx=r"^CHECK .*FAIL|Failed setup for format|DECODE_PREP_FAIL|hwaccel initialisation returned error|Cannot load", note="Vulkan Video decode extension; optional")
 
@@ -334,18 +336,22 @@ exit 0""", r"BLENDER_OK OPTIX", 900, 120, [r"out:BLENDER_OK .* gpu=NVIDIA|gpu=NV
     "Cycles on CUDA then OptiX (RT cores) on a scripted scene; minutes of mixed compute and BVH work; OptiX needs the driver's nvoptix.dll", linux=["blender_cycles"],
     pkgs=("blender", "vc_redist"), fail_rx=r"^CHECK .*FAIL|BLENDER_FAIL", note="the same scripts/apps/src/blender_render.py as the Linux row; CUDA and OPTIX are rendered one after the other")
 app("hashcat", "crypto", r"""$env:PATH = "$TL;$env:PATH"
-Invoke-KfExe -Exe "$K\hashcat\hashcat.exe" -ArgList @('--potfile-disable', '-O', '-m', '0', '-a', '3', 'e4726719b68b205913167f0975d977ee', '?l?l?l?l?l?l') -Cwd "$K\hashcat"
+Invoke-KfUntil -Exe "$K\hashcat\hashcat.exe" -ArgList @('--potfile-disable', '-O', '-m', '0', '-a', '3', 'e4726719b68b205913167f0975d977ee', '?l?l?l?l?l?l') -Cwd "$K\hashcat" -Pattern 'Status\.+: Cracked' -TimeoutS 240 -Out $OUT -Tag hashcat
 exit 0""", r"e4726719b68b205913167f0975d977ee:kayfab", 300, 40, [r"out:NVIDIA|CUDA|OpenCL", GPU_ENG], "medium",
     "md5 mask attack; hashcat prefers its CUDA backend (needs nvrtc64_*.dll, found on PATH from the torch wheel) and falls back to the OpenCL ICD",
     linux=["hashcat"], pkgs=("hashcat", "sevenzip", "pywheels", "python_embed", "vc_redist"), note="hashcat is flagged HackTool by Defender: kf_guest_setup excludes C:\\kfapps")
 app("clpeak_ocl", "opencl", r"""Invoke-KfExe -Exe "$K\clpeak_ocl\bin\clpeak.exe" -Cwd "$K\clpeak_ocl\bin"
-exit $global:KfRc""", r"Global memory bandwidth", 600, 60, [r"out:NVIDIA", GPU_ENG], *W_LONG, linux=["clpeak"], pkgs=("clpeak_ocl", "vc_redist"),
+exit $global:KfRc""", r"Global memory bandwidth", 1500, 60, [r"out:NVIDIA", GPU_ENG], *W_LONG, linux=["clpeak"], pkgs=("clpeak_ocl", "vc_redist"),
     fail_rx=r"^CHECK .*FAIL|Tests skipped|clFinish \(-")
 app("clpeak_cuda", "opencl", r"""Invoke-KfExe -Exe "$K\clpeak_cuda\bin\clpeak.exe" -Cwd "$K\clpeak_cuda\bin"
-exit $global:KfRc""", r"Global memory bandwidth", 600, 60, [r"out:NVIDIA", GPU_ENG], *W_LONG, pkgs=("clpeak_cuda", "vc_redist"),
+exit $global:KfRc""", r"Global memory bandwidth", 1500, 60, [r"out:NVIDIA", GPU_ENG], *W_LONG, pkgs=("clpeak_cuda", "vc_redist"),
     fail_rx=r"^CHECK .*FAIL|Tests skipped|clFinish \(-", note="clpeak 3.0.1's CUDA backend build")
 app("opencl_icd", "opencl", r"""$k = 'HKLM:\SOFTWARE\Khronos\OpenCL\Vendors'
-if (Test-Path $k) { (Get-Item $k).Property | ForEach-Object { "OPENCL_ICD $_" } } else { 'OPENCL_ICD (none registered)' }
+if (Test-Path $k) { (Get-Item $k).Property | ForEach-Object { "OPENCL_ICD $_" } }
+# current drivers register the ICD per display adapter (class key value OpenCLDriverName), not under Khronos\OpenCL\Vendors
+$n = 0
+Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0*' -ErrorAction SilentlyContinue | Where-Object { $_.OpenCLDriverName } | ForEach-Object { $n++; "OPENCL_ICD $($_.OpenCLDriverName) ($($_.DriverDesc))" }
+if (-not (Test-Path $k) -and $n -eq 0) { 'OPENCL_ICD (none registered)' }
 exit 0""", r"OPENCL_ICD .*nvopencl", 60, 2, [r"out:nvopencl"], "low", "registry only; proves the ICD is installed (the clinfo row's NVIDIA platform check)", linux=["clinfo"], smi=False)
 
 # ---------------------------------------------------------------------------------------------- K. browsers (Edge)

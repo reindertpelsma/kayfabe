@@ -1,0 +1,3 @@
+=== edge_webgl_headless start=2026-10-10T09:45:49.1829108-07:00 host=DESKTOP-397P3NI session=1 boot=2026-10-10T15:50:57.5000000Z timeout=150
+KFEDGE {"ok":false,"why":"no result posted before the deadline"}
+=== end rc=1 secs=75 2026-10-10T09:47:03.7505181-07:00

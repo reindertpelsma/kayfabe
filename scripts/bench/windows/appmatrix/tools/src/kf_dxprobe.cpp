@@ -76,7 +76,9 @@ static IDXGIAdapter1 *pick_adapter(bool any, std::string &name) {
 static const char *CS11 =
     "RWStructuredBuffer<uint> o : register(u0);\n"
     "[numthreads(64,1,1)] void main(uint3 t : SV_DispatchThreadID) { o[t.x] = t.x * 3u + 7u; }\n";
-static const char *VS11 = "float4 main(uint id : SV_VertexID) : SV_Position { float2 p = float2((id << 1) & 2, id & 2); return float4(p * 2.0 - 1.0, 0, 1); }\n";
+// fullscreen triangle, CLOCKWISE in NDC (D3D11 default rasterizer culls back faces, front = clockwise: the previous
+// vertex order was counter-clockwise, was culled and left the clear colour in the readback on every hardware adapter)
+static const char *VS11 = "float4 main(uint id : SV_VertexID) : SV_Position { float2 p = float2(id & 2, (id << 1) & 2); return float4(p * 2.0 - 1.0, 0, 1); }\n";
 static const char *PS11 = "float4 main(float4 p : SV_Position) : SV_Target { return float4(0.25, 0.5, 0.75, 1.0); }\n";
 
 static int run_d3d11(IDXGIAdapter1 *ad, int iters) {

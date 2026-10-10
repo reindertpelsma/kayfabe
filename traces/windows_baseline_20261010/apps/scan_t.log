@@ -1,0 +1,6 @@
+=== scan_t start=2026-10-10T08:26:33.5994045-07:00 host=DESKTOP-397P3NI session=0 boot=2026-10-10T13:30:47.5000000Z timeout=120
+[eq] device NVIDIA GeForce RTX 4060 Ti torch 2.8.0+cu126
+CHECK scan_cumsum_i64_exact ok
+CHECK scan_cumsum_f64 ok
+WINEQ_DONE scan
+=== end rc=0 secs=7 2026-10-10T08:26:40.1600120-07:00
