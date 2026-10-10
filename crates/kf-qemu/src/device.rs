@@ -1681,6 +1681,7 @@ impl Device {
         let (mut ticks, mut samples, mut lagged, mut max_lag, mut stuck) = (0u32, 0u64, 0u64, 0u32, 0u64);
         let mut streak: std::collections::HashMap<u32, u32> = std::collections::HashMap::new();
         let mut vcpu_reported = [0u64; VCPU_SLOTS];
+        let (mut quiet_last, mut quiet_ticks, mut snapped, mut snaps) = (u64::MAX, 0u32, false, 0u32);
         while !self.stop.load(Ordering::Acquire) {
             {
                 let s = self.chans.relay_lag_sample();
@@ -1733,6 +1734,27 @@ impl Device {
                         kf_mem::maplog::t(),
                         VCPU_MAX_NS.load(Ordering::Relaxed) / 1000
                     );
+                }
+            }
+            // ⚠ DIAGNOSTIC (TDR hunt): the guest wrote no BAR0 register for 600 ms (its ISR acks one per VSync, so this is a
+            // whole-guest silence): snapshot every Passthrough twin once per silence, at most 4 per boot.
+            {
+                let tr = self.counters.trapped.load(Ordering::Relaxed);
+                if tr != quiet_last {
+                    quiet_last = tr;
+                    quiet_ticks = 0;
+                    snapped = false;
+                } else {
+                    quiet_ticks += 1;
+                    if quiet_ticks >= 6 && !snapped && snaps < 4 && tr > 20_000 {
+                        snapped = true;
+                        snaps += 1;
+                        self.chans.snapshot_now(&format!(
+                            "guest silence #{snaps}: no BAR0 write for {} ms",
+                            quiet_ticks * 100
+                        ));
+                        eprintln!("{}", self.probe_device_state());
+                    }
                 }
             }
             let lines = self.chans.probe_tick(overdue);

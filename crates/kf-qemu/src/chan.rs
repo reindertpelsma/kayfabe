@@ -5281,6 +5281,40 @@ impl ChanPlane {
         ));
     }
 
+    /// ⚠ DIAGNOSTIC (2026-10-10, TDR hunt; the completion probe's thread): the stall snapshot of every live Passthrough
+    /// twin NOW (guest USERD, ring entries, push-buffer methods, the value at each named semaphore), followed by one
+    /// line per relayed twin with BOTH sides of its cursors (guest PUT/GET, the relay's host PUT, the engine's GET).
+    /// Reads only; nothing reaches a host action.
+    pub fn snapshot_now(&self, why: &str) {
+        self.pt_snapshot_all(why);
+        let rs: Vec<_> = match self.relays.lock() {
+            Ok(m) => m.iter().map(|(k, v)| (*k, v.clone())).collect(),
+            Err(_) => return,
+        };
+        for (ht, r) in rs {
+            let Ok(g) = r.try_lock() else {
+                eprintln!("kf3: RELAY-DUMP host {ht:#x}: busy");
+                continue;
+            };
+            let mut io = RelayMem {
+                guest: &g.guest,
+                host: &g.host,
+                rm: self.rm,
+                token: g.chan.token,
+            };
+            use kf_chan::userd_relay::RelayIo;
+            eprintln!(
+                "kf3: RELAY-DUMP host {ht:#x} tok={:#x}: guest PUT={:?} GET={:?} | relay host_put={:#x} engine GET={:?} entries={}",
+                g.idx,
+                io.guest_put().ok().map(|v| format!("{v:#x}")),
+                io.guest.load(kf_abi::submit::USERD_GP_GET).ok().map(|v| format!("{v:#x}")),
+                g.st.host_put,
+                io.host_get().ok().map(|v| format!("{v:#x}")),
+                g.st.entries
+            );
+        }
+    }
+
     /// ⚠ DIAGNOSTIC: [`Self::pt_snapshot_twin`] for every live twin, under one `pt` lock.
     fn pt_snapshot_all(&self, why: &str) {
         let Ok(m) = self.pt.lock() else { return };
