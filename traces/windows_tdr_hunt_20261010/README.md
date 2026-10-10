@@ -842,3 +842,9 @@ stuck elsewhere (a park for an inactive head, the latch path).
 **Prediction:** 0 TDR in every phase (boot / sign-in / Edge / Shorts with real playback / hold), playback frames differ.
 **Falsifier:** any TDR (classified from kayfabe logs: FLIP-LEDGER pending commits, unfetched channels, Xid).
 Note: another agent (kf-mem `held-hole`, runs 381/382) shares the host GPU through the same flock; runs serialise.
+
+**Run 294: refused at start** ("another QEMU is running"). The kf-mem agent's run 382 was alive but its `flock` wrapper had exited, so
+the lock was free while its QEMU ran; my runner's own QEMU check refused correctly. **For the coordinator:** a run whose flock
+wrapper exits early leaves the GPU unprotected. Re-queued as **run 295** (same plan as 294) behind `tdropus/queue.sh`, which waits for
+no QEMU and no other tdr-run before taking the lock. **NEXT RUN NEEDS:** the GPU for ~25 min (binary bd9a0959, zero flags, 15-min hold).
+When `/var/lib/kf-windows-20261005/COMBINED_LINE.txt` appears, later runs switch to the combined line.
