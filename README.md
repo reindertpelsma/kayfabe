@@ -60,11 +60,8 @@ Not yet:
 - **Four apps need UVM demand paging.** The host side is proven; the guest side is in progress.
 - **Apps that launch every kernel separately are slow on nested hosts** (PyTorch eager on a small
   model: 0.29× host), because each launch traps into the VMM. Bare metal is not measured yet.
-- X11 desktops are partial; Windows guests are the last roadmap step; two VMs sharing one GPU is not
-  measured.
-
-**Roadmap (owner, 2026-09-26):** apps → nvkvm-pv's headless-graphics tests → display and a desktop →
-doorbell performance and Blackwell → the driver matrix (535 → 610, every family) → Windows.
+- X11 desktops are partial
+- Windows crashes too often, mostly because windows has quirks that are not derivable from OGKM
 
 ## How it compares
 
@@ -72,7 +69,7 @@ doorbell performance and Blackwell → the driver matrix (535 → 610, every fam
 |---|---|---|---|
 | What it is | Shipped Mode-1 stack: a guest module forwards the driver's own API to the host | Rust rewrite around a hostile-guest boundary | C research prototype that proved the emulated-GPU idea |
 | Guest kernel driver | Custom module you build and load | **Stock NVIDIA, unmodified** | **Stock NVIDIA, unmodified** |
-| Guest OS | Linux only | Linux measured; Windows is the goal | Linux |
+| Guest OS | Linux only | Linux and Windows measured | Linux |
 | GPUs run on hardware | Turing → Blackwell | Turing → Blackwell (Hopper source-derived only) | GA106 |
 | CUDA / real apps | Yes | `cup8` bit-exact; 61/65 apps | matmul, llama.cpp |
 | Graphics | Yes, incl. display | Headless Vulkan/EGL/GLX bit-identical; display opt-in (Mint desktop) | No |
