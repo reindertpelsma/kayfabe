@@ -254,18 +254,18 @@ pub fn reserve_cores(s: u64, e: u64) -> Vec<(u64, u64)> {
         x.div_ceil(a).saturating_mul(a)
     }
     fn small(s: u64, e: u64, out: &mut Vec<(u64, u64)>) {
-        let (mut cur, end) = (up(s, RESERVE_SMALL_ALIGN), e / RESERVE_SMALL_ALIGN * RESERVE_SMALL_ALIGN);
+        let (mut cur, end) = (up(s, RESERVE_SMALL_ALIGN), (e / RESERVE_SMALL_ALIGN).saturating_mul(RESERVE_SMALL_ALIGN));
         while cur < end {
-            let n = (end - cur).min(RESERVE_SMALL_MAX);
-            out.push((cur, cur + n));
-            cur += n;
+            let n = end.saturating_sub(cur).min(RESERVE_SMALL_MAX);
+            out.push((cur, cur.saturating_add(n)));
+            cur = cur.saturating_add(n);
         }
     }
     let mut out = Vec::new();
     if e <= s {
         return out;
     }
-    let (ms, me) = (up(s, RESERVE_HUGE_ALIGN), e / RESERVE_HUGE_ALIGN * RESERVE_HUGE_ALIGN);
+    let (ms, me) = (up(s, RESERVE_HUGE_ALIGN), (e / RESERVE_HUGE_ALIGN).saturating_mul(RESERVE_HUGE_ALIGN));
     if me > ms {
         small(s, ms, &mut out);
         out.push((ms, me));
@@ -284,21 +284,21 @@ pub fn reserve_hull(s: u64, e: u64) -> Option<(u64, u64)> {
         return None;
     }
     let hull = |a: u64| -> Option<(u64, u64)> {
-        Some((s / a * a, e.checked_next_multiple_of(a)?))
+        Some((s.checked_div(a)?.saturating_mul(a), e.checked_next_multiple_of(a)?))
     };
     let small = hull(RESERVE_SMALL_ALIGN)?;
-    let h = if small.1 - small.0 >= RESERVE_HUGE_MIN {
+    let h = if small.1.saturating_sub(small.0) >= RESERVE_HUGE_MIN {
         hull(RESERVE_HUGE_ALIGN)?
     } else {
         small
     };
-    reserve_exact(h.0, h.1 - h.0).then_some(h)
+    reserve_exact(h.0, h.1.saturating_sub(h.0)).then_some(h)
 }
 
 /// The single largest [`reserve_cores`] unit of `[s, e)` — the core a batch is placed through.
 #[must_use]
 pub fn batch_core(s: u64, e: u64) -> Option<(u64, u64)> {
-    reserve_cores(s, e).into_iter().max_by_key(|&(a, b)| b - a)
+    reserve_cores(s, e).into_iter().max_by_key(|&(a, b)| b.saturating_sub(a))
 }
 
 /// `rows` clipped to `[lo, hi)` (rows are VA-contiguous; offsets move with the clip).
@@ -308,8 +308,8 @@ fn clip_rows(rows: &[Desired], lo: u64, hi: u64) -> Vec<Desired> {
             let (s, e) = (d.va.max(lo), d.va.saturating_add(d.len).min(hi));
             (s < e).then(|| Desired {
                 va: s,
-                len: e - s,
-                off: d.off.saturating_add(s - d.va),
+                len: e.saturating_sub(s),
+                off: d.off.saturating_add(s.saturating_sub(d.va)),
                 ..*d
             })
         })
@@ -1703,14 +1703,14 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
                     let mut rem = 0u64;
                     for &(via, cs, ce) in &made {
                         if cs > cur {
-                            rem = rem.saturating_add((cs - cur) / BATCH_PAGE);
+                            rem = rem.saturating_add(cs.saturating_sub(cur) / BATCH_PAGE);
                             push_grains(&mut out, cur, cs);
                         }
                         out.push((via, cs, ce));
                         cur = ce;
                     }
                     if cur < e {
-                        rem = rem.saturating_add((e - cur) / BATCH_PAGE);
+                        rem = rem.saturating_add(e.saturating_sub(cur) / BATCH_PAGE);
                         push_grains(&mut out, cur, e);
                     }
                     fresh.extend(made.iter().copied());

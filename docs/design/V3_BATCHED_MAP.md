@@ -21,12 +21,18 @@ one-page map at `0x4038000` is refused (`Other(19305)` = `VA_ALREADY_MAPPED`), a
 start is refused too, and an aligned 64 KiB reservation holds exactly 64 KiB (the page after it maps).
 Gate 10 passed in 289's tree because it only ever used the 8 pages it asked for.
 
+⊘ **Corrected 2026-10-10 (independent review), above the text it corrects:** `BatchedVas::held_ours` is NOT an
+`Applied` field and not a vasmgr stat: it is an atomic counter read only by tests, plus a stderr line (the first 16
+are logged). And `HELD-BY-OURSELVES` would NOT have fired in run 289: the pad there was unrecorded, so the ledger
+said "not ours". The meaningful hardware gate is the plain `HELD` count = 0 (together with 0 new host Xid), not the
+HELD-BY-OURSELVES count.
+
 **Fix.** A reservation is made only over a range host RM holds EXACTLY (`reserve_exact`): `batch::place`
 reserves the run's aligned hull when nothing of ours lies in the pads (the ledger then records the real
 block; later pad rows map THROUGH it), else the aligned core only, and the head/tail go per run at the
 4 KiB grain; `leaf_segments` reserves aligned cores and grains the remnants; leaves below 64 KiB are 4 KiB
 grain. A neighbour of ours (or a host buffer) inside the 64 KiB unit makes the reservation impossible
-(`NoMemory`) and the rows go per run — correct, slower. `Applied`/`BatchedVas::held_ours` counts (and the log
+(`NoMemory`) and the rows go per run — correct, slower. ⊘ (see the correction above) `Applied`/`BatchedVas::held_ours` counts (and the log
 names, `HELD-BY-OURSELVES`) any `HeldByHost` for a VA our ledger says is ours. Model: `sim::SimRm` rounds
 reservations like the host (`reserve_rounds`, default ON) and fails any fixed map refused by a NON-foreign
 occupant (`SILENT ABSENCE`, `sim::check`); the 10 model tests that failed on the old code are the repro;
@@ -936,6 +942,8 @@ the suite fail: big leaves placed as one `NV01` mapping each again (all property
 | a reservation alloc costs ≈ one RM call; 4 KiB grain costs 16/512 calls per 64 KiB/2 MiB leaf | inferred |
 | the stale-ledger window during a chunked cut is harmless | inferred |
 | act thread blocking time on the ledger in production | not measured (the steer log line now prints it) |
+| the host RM reservation rounding is 2 MiB above a 2 MiB threshold, 2 MiB-aligned (`RESERVE_HUGE_MIN`/`RESERVE_HUGE_ALIGN`, and `sim::SimRm::reserve_rounds`) | **unmeasured assumption**: only the 64 KiB rounding was measured (driver 595.91); the 2 MiB figures are inferred |
+| `sim::SimRm` rounding coverage | the sim covers only 96-page ranges (`reserve_rounds`); larger ranges, and the 2 MiB case, are not exercised by it |
 
 ### 8.8.6 Still to verify on hardware (adds to §8.6)
 
