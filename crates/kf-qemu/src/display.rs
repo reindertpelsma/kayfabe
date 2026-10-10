@@ -3303,6 +3303,41 @@ fn console_composition(engine: &Engine, dp: &DisplayPlane) -> Option<Composition
         .find_map(|m| engine.composition(sv, m.head))
 }
 
+/// ★ One composed item of a copy, in back-to-front order ([`z_order`]): an RGB layer or a YUV window,
+/// by index into the plan.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Z {
+    /// `planned.layers[i]`.
+    Rgb(usize),
+    /// `planned.yuv[j]`.
+    Yuv(usize),
+}
+
+/// ★ The back-to-front order of a copy's RGB layers and YUV windows: deepest
+/// `SET_COMPOSITION_CONTROL.DEPTH` first, equal depths in window order (the engine's own order for
+/// [`Composition::layers`]). `depth` maps a window to its armed depth. Without a YUV window the
+/// RGB layers keep the order they were planned in (a preserved composition is already ordered).
+fn z_order(
+    layers: &[LayerPlan],
+    yuv: &[kf_disp::scanout::YuvPlan],
+    depth: impl Fn(u32) -> u32,
+) -> Vec<Z> {
+    let mut v: Vec<(u32, u32, Z)> = layers
+        .iter()
+        .enumerate()
+        .map(|(i, l)| (depth(l.window), l.window, Z::Rgb(i)))
+        .chain(
+            yuv.iter()
+                .enumerate()
+                .map(|(j, y)| (depth(y.window), y.window, Z::Yuv(j))),
+        )
+        .collect();
+    if !yuv.is_empty() {
+        v.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
+    }
+    v.into_iter().map(|(_, _, z)| z).collect()
+}
+
 /// The kf-cuda mirror of a planned YUV window.
 fn yuv_layer(l: &kf_disp::scanout::YuvPlan) -> kf_cuda::display::YuvLayer {
     kf_cuda::display::YuvLayer {
@@ -4329,63 +4364,108 @@ impl ScanState {
             }
         };
         let mut yuv_left_out: Vec<String> = Vec::new();
-        let mut compose_yuvs =
-            |gpu: &mut kf_cuda::display::DisplayGpu| -> Result<(), kf_cuda::CudaError> {
-                for y in yuv_run {
-                    match gpu.compose_yuv(&yuv_layer(y), w, h) {
-                        Ok(()) => {}
-                        Err(kf_cuda::CudaError::Refused { code: 0, name, .. }) => {
-                            yuv_left_out.push(format!("window {}: {name}", y.window));
-                        }
-                        Err(e) => return Err(e),
-                    }
-                }
-                Ok(())
-            };
-        let n_rgb = planned.layers.len();
-        let composed =
-            if let Some((inputs, out, matrix)) = &color {
-                gpu.color_begin(w, h)
-                    .and_then(|()| {
-                        planned.layers.iter().zip(inputs).try_for_each(
-                            |(l, (lut, tmo, program))| {
-                                gpu.color_pipeline_layer(
-                                    l.window,
-                                    &compose_layer(l),
-                                    *lut,
-                                    *tmo,
-                                    Some(program),
-                                    w,
-                                    h,
-                                )
-                            },
-                        )
-                    })
-                    .and_then(|()| gpu.color_output(w, h, *out, matrix))
-                    .and_then(|()| compose_yuvs(gpu))
-                    .and_then(|()| {
-                        layers[n_rgb..]
-                            .iter()
-                            .try_for_each(|l| gpu.compose_layer(&compose_layer(l), w, h))
-                    })
-                    .map_err(|e| format!("SDR composition {w}x{h}: {e}"))
+        // ★ one YUV window onto the staging frame (`colour`: the FP32 frame of the SDR pipeline)
+        let mut yuv_one = |gpu: &kf_cuda::display::DisplayGpu,
+                           y: &kf_disp::scanout::YuvPlan,
+                           colour: bool|
+         -> Result<(), kf_cuda::CudaError> {
+            let l = yuv_layer(y);
+            let r = if colour {
+                gpu.color_yuv(&l, w, h)
             } else {
-                gpu.compose_begin(w, h)
-                    .map_err(|e| format!("composition {w}x{h}: {e}"))
-                    .and_then(|()| {
-                        layers[..n_rgb].iter().try_for_each(|l| {
-                            gpu.compose_layer(&compose_layer(l), w, h)
-                                .map_err(|e| format!("window {}: {e}", l.window))
-                        })
-                    })
-                    .and_then(|()| compose_yuvs(gpu).map_err(|e| format!("YUV window: {e}")))
-                    .and_then(|()| {
-                        layers[n_rgb..].iter().try_for_each(|l| {
-                            gpu.compose_layer(&compose_layer(l), w, h)
-                                .map_err(|e| format!("window {}: {e}", l.window))
-                        })
-                    })
+                gpu.compose_yuv(&l, w, h)
             };
+            match r {
+                Err(kf_cuda::CudaError::Refused { code: 0, name, .. }) => {
+                    yuv_left_out.push(format!("window {}: {name}", y.window));
+                    Ok(())
+                }
+                r => r,
+            }
+        };
+        // ★ the programmed depth order: RGB layers and YUV windows back to front by
+        // `SET_COMPOSITION_CONTROL.DEPTH` (deepest first), not "YUV last"
+        let depth_of = |win: u32| match shown {
+            Shown::Armed(c) => c
+                .layers
+                .iter()
+                .find(|l| l.window == win)
+                .map_or(0, |l| l.depth),
+            _ => 0,
+        };
+        let order = z_order(&planned.layers, yuv_run, depth_of);
+        if !yuv_run.is_empty() {
+            static ORDER_LOGGED: AtomicU32 = AtomicU32::new(0);
+            if trace_slot(&ORDER_LOGGED, 4) {
+                let depths: Vec<_> = match shown {
+                    Shown::Armed(c) => c
+                        .layers
+                        .iter()
+                        .map(|l| {
+                            (
+                                l.window,
+                                l.depth,
+                                l.format,
+                                l.src_factor,
+                                l.dst_factor,
+                                l.k1,
+                            )
+                        })
+                        .collect(),
+                    _ => Vec::new(),
+                };
+                eprintln!(
+                    "kf3: display: composition with a YUV window: (window, depth, format, src_factor, dst_factor, k1) {depths:?}; back-to-front order {order:?}"
+                );
+            }
+        }
+        let n_rgb = planned.layers.len();
+        let composed = if let Some((inputs, out, matrix)) = &color {
+            gpu.color_begin(w, h)
+                .and_then(|()| {
+                    order.iter().try_for_each(|z| match *z {
+                        Z::Rgb(i) => {
+                            let (lut, tmo, program) = &inputs[i];
+                            gpu.color_pipeline_layer(
+                                planned.layers[i].window,
+                                &compose_layer(&planned.layers[i]),
+                                *lut,
+                                *tmo,
+                                Some(program),
+                                w,
+                                h,
+                            )
+                        }
+                        Z::Yuv(j) => yuv_one(gpu, &yuv_run[j], true),
+                    })
+                })
+                .and_then(|()| gpu.color_output(w, h, *out, matrix))
+                .and_then(|()| {
+                    layers[n_rgb..]
+                        .iter()
+                        .try_for_each(|l| gpu.compose_layer(&compose_layer(l), w, h))
+                })
+                .map_err(|e| format!("SDR composition {w}x{h}: {e}"))
+        } else {
+            gpu.compose_begin(w, h)
+                .map_err(|e| format!("composition {w}x{h}: {e}"))
+                .and_then(|()| {
+                    order.iter().try_for_each(|z| match *z {
+                        Z::Rgb(i) => gpu
+                            .compose_layer(&compose_layer(&layers[i]), w, h)
+                            .map_err(|e| format!("window {}: {e}", layers[i].window)),
+                        Z::Yuv(j) => {
+                            yuv_one(gpu, &yuv_run[j], false).map_err(|e| format!("YUV window: {e}"))
+                        }
+                    })
+                })
+                .and_then(|()| {
+                    layers[n_rgb..].iter().try_for_each(|l| {
+                        gpu.compose_layer(&compose_layer(l), w, h)
+                            .map_err(|e| format!("window {}: {e}", l.window))
+                    })
+                })
+        };
         for why in std::mem::take(&mut yuv_left_out) {
             self.note_refusal(&dp.counters, &format!("YUV {why}"));
             dp.counters
@@ -5582,6 +5662,97 @@ mod tests {
         );
         assert!(gpu.failed);
         assert!(gpu.done < gpu.barrier, "no forged completion for GPU work");
+    }
+
+    /// ★ The overlay's place is its programmed depth, not "last": a base plane in front of the video
+    /// (an underlay with an alpha hole, depth smaller than the video's) composes AFTER it; a video in
+    /// front of the base composes after the base; equal depths follow the window order.
+    #[test]
+    fn rgb_layers_and_yuv_windows_compose_in_programmed_depth_order() {
+        let rgb = |window| LayerPlan {
+            window,
+            src: 0,
+            extent: 0,
+            block_linear: false,
+            pitch: 0,
+            block_height_log2: 0,
+            x0_bytes: 0,
+            y0: 0,
+            width: 1,
+            rows: 1,
+            ox: 0,
+            oy: 0,
+            flags: 0,
+            a_s: 255,
+            b_s: 0,
+            a_d: 0,
+            b_d: 0,
+        };
+        let yuv = |window| kf_disp::scanout::YuvPlan {
+            window,
+            y_src: 0,
+            y_extent: 0,
+            c_src: 0,
+            c_extent: 0,
+            block_linear: false,
+            y_pitch: 0,
+            c_pitch: 0,
+            block_height_log2: 0,
+            sx0: 0,
+            sy0: 0,
+            sw: 1,
+            sh: 1,
+            ox: 0,
+            oy: 0,
+            dw: 1,
+            dh: 1,
+            sub_x_log2: 1,
+            sub_y_log2: 1,
+            vu_first: false,
+        };
+        let d = |m: &[(u32, u32)]| {
+            let m = m.to_vec();
+            move |w: u32| m.iter().find(|(x, _)| *x == w).map_or(0, |(_, d)| *d)
+        };
+        // Windows' MPO as measured (run 401): base window 0, overlay window 4 at depth 11
+        assert_eq!(
+            z_order(&[rgb(0)], &[yuv(4)], d(&[(0, 255), (4, 11)])),
+            [Z::Rgb(0), Z::Yuv(0)],
+            "the video in front of the base"
+        );
+        // the underlay: the base plane (alpha hole) in front of the video
+        assert_eq!(
+            z_order(&[rgb(0)], &[yuv(4)], d(&[(0, 5), (4, 11)])),
+            [Z::Yuv(0), Z::Rgb(0)],
+            "the base in front of the video"
+        );
+        // between two RGB layers
+        assert_eq!(
+            z_order(
+                &[rgb(0), rgb(2)],
+                &[yuv(4)],
+                d(&[(0, 255), (2, 100), (4, 50)])
+            ),
+            [Z::Rgb(0), Z::Rgb(1), Z::Yuv(0)]
+        );
+        assert_eq!(
+            z_order(
+                &[rgb(0), rgb(2)],
+                &[yuv(4)],
+                d(&[(0, 255), (2, 20), (4, 50)])
+            ),
+            [Z::Rgb(0), Z::Yuv(0), Z::Rgb(1)]
+        );
+        // equal depth: window order
+        assert_eq!(
+            z_order(&[rgb(3)], &[yuv(1)], d(&[(3, 10), (1, 10)])),
+            [Z::Yuv(0), Z::Rgb(0)]
+        );
+        // no YUV window: the planned order stands, whatever the depths
+        assert_eq!(
+            z_order(&[rgb(2), rgb(0)], &[], d(&[(0, 255), (2, 1)])),
+            [Z::Rgb(0), Z::Rgb(1)]
+        );
     }
 
     /// ⊘ The review of `v3-gop-unload` (2026-10-03): a page flip (a new context DMA or offset in

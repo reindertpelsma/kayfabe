@@ -28,11 +28,21 @@ static unsigned char *slurp(const char *p, size_t *n) {
 }
 int main(int argc, char **argv) {
     if (argc != 21) return 2;
+    (void)&kf_yuv_row; (void)&kf_yuv_row_f;
     /* argv[1..17] numbers, [18] ys, [19] cs, [20] out */
     unsigned v[17];
     for (int i = 0; i < 17; i++) v[i] = (unsigned)strtoul(argv[i + 1], 0, 10);
     size_t yn, cn; unsigned char *ys = slurp(argv[18], &yn), *cs = slurp(argv[19], &cn);
     unsigned fw = v[12], fh = v[13];
+#ifdef FLOAT_DST
+    float *dst = calloc((size_t)fw * fh, 16);
+    for (unsigned row = 0; row < v[11]; row++)
+        for (unsigned t = 0; t < KF_YUV_THREADS; t++)
+            kf_yuv_row_f(ys, cs, dst, v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8], v[9],
+                         v[10], v[11], fw, fh, v[14], v[15], v[16], row, t);
+    FILE *f = fopen(argv[20], "wb"); fwrite(dst, 16, (size_t)fw * fh, f); fclose(f);
+    return 0;
+#else
     unsigned int *dst = calloc((size_t)fw * fh, 4);
     for (unsigned row = 0; row < v[11]; row++)
         for (unsigned t = 0; t < KF_YUV_THREADS; t++)
@@ -40,17 +50,23 @@ int main(int argc, char **argv) {
                        v[10], v[11], fw, fh, v[14], v[15], v[16], row, t);
     FILE *f = fopen(argv[20], "wb"); fwrite(dst, 4, (size_t)fw * fh, f); fclose(f);
     return 0;
+#endif
 }
 "#;
 
-fn build(dir: &Path) -> PathBuf {
+fn build(dir: &Path, float_dst: bool) -> PathBuf {
     let c = dir.join("harness.c");
     std::fs::write(&c, HARNESS).unwrap();
-    let exe = dir.join("harness");
+    let exe = dir.join(if float_dst { "harness_f" } else { "harness" });
     let out = Command::new(std::env::var("CC").unwrap_or_else(|_| "cc".into()))
         .args(["-std=c99", "-O1", "-Wall", "-Werror", "-o"])
         .arg(&exe)
         .arg(format!("-DKF_SOURCE=\"{}\"", kernel_source().display()))
+        .args(if float_dst {
+            vec!["-DFLOAT_DST=1"]
+        } else {
+            vec![]
+        })
         .arg("-x")
         .arg("c")
         .arg(&c)
@@ -71,7 +87,7 @@ fn noise(n: usize, seed: u64) -> Vec<u8> {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn case(exe: &Path, dir: &Path, name: &str, l: &YuvPlan, fw: u32, fh: u32) {
+fn case(exe: &Path, exe_f: &Path, dir: &Path, name: &str, l: &YuvPlan, fw: u32, fh: u32) {
     let (ys, cs) = (noise(l.y_extent as usize, 1), noise(l.c_extent as usize, 7));
     let (yp, cp_, op) = (
         dir.join(format!("{name}.y")),
@@ -115,6 +131,36 @@ fn case(exe: &Path, dir: &Path, name: &str, l: &YuvPlan, fw: u32, fh: u32) {
         got == want,
         "{name}: the kernel body and yuv_reference differ"
     );
+    // the FP32 variant (the colour pipeline's frame): the same pixels as value / 255, alpha 1
+    let st = Command::new(exe_f)
+        .args(args.iter().map(u32::to_string))
+        .arg(&yp)
+        .arg(&cp_)
+        .arg(&op)
+        .status()
+        .unwrap();
+    assert!(st.success(), "{name}: float harness {st:?}");
+    let gotf = std::fs::read(&op).unwrap();
+    assert_eq!(gotf.len(), want.len() * 4);
+    for (i, px) in want.chunks(4).enumerate() {
+        let f = |o: usize| f32::from_le_bytes(gotf[i * 16 + o..i * 16 + o + 4].try_into().unwrap());
+        let (r, g, b, a) = (f(0), f(4), f(8), f(12));
+        if px[3] == 0xff {
+            let want_f = [px[2], px[1], px[0]].map(|v| f32::from(v) / 255.0);
+            assert!(
+                (r - want_f[0]).abs() < 1e-6
+                    && (g - want_f[1]).abs() < 1e-6
+                    && (b - want_f[2]).abs() < 1e-6
+                    && a == 1.0,
+                "{name}: float pixel {i}"
+            );
+        } else {
+            assert!(
+                r == 0.0 && g == 0.0 && b == 0.0 && a == 0.0,
+                "{name}: untouched pixel {i}"
+            );
+        }
+    }
     // something was written (the opaque alpha byte)
     assert!(
         want.chunks(4).any(|p| p[3] == 0xff),
@@ -152,30 +198,39 @@ fn plan(bl: bool, pitch_y: u32, pitch_c: u32, bh: u32) -> YuvPlan {
 fn the_kernel_body_is_the_reference_for_every_layout_and_scale() {
     let dir = std::env::temp_dir().join(format!("kf-yuv-kernel-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    let exe = build(&dir);
+    let exe = build(&dir, false);
+    let exe_f = build(&dir, true);
     let fw = 120;
     let fh = 90;
     // pitch, unscaled, 4:2:0 VU
-    case(&exe, &dir, "pitch420", &plan(false, 128, 128, 0), fw, fh);
+    case(
+        &exe,
+        &exe_f,
+        &dir,
+        "pitch420",
+        &plan(false, 128, 128, 0),
+        fw,
+        fh,
+    );
     // upscale and downscale, an offset origin and destination, a destination the frame edge cuts
     let mut up = plan(false, 128, 128, 0);
     (up.sx0, up.sy0, up.sw, up.sh, up.ox, up.oy, up.dw, up.dh) = (6, 4, 31, 23, 20, 10, 101, 85);
-    case(&exe, &dir, "upscale", &up, fw, fh);
+    case(&exe, &exe_f, &dir, "upscale", &up, fw, fh);
     let mut down = plan(false, 128, 128, 0);
     (down.dw, down.dh, down.ox, down.oy) = (17, 11, 3, 5);
-    case(&exe, &dir, "downscale", &down, fw, fh);
+    case(&exe, &exe_f, &dir, "downscale", &down, fw, fh);
     // 4:2:2, 4:4:4, UV order
     let mut p422 = plan(false, 128, 128, 0);
     (p422.sub_y_log2, p422.vu_first) = (0, false);
-    case(&exe, &dir, "p422", &p422, fw, fh);
+    case(&exe, &exe_f, &dir, "p422", &p422, fw, fh);
     let mut p444 = plan(false, 128, 128, 0);
     (p444.sub_x_log2, p444.sub_y_log2) = (0, 0);
-    case(&exe, &dir, "p444", &p444, fw, fh);
+    case(&exe, &exe_f, &dir, "p444", &p444, fw, fh);
     // block-linear, every block height; 128 GOBs-wide enough for 64 luma bytes / 128 chroma bytes
     for bh in 0..=3 {
         let mut p = plan(true, 4, 4, bh);
         (p.sx0, p.sy0, p.sw, p.sh, p.dw, p.dh) = (5, 3, 50, 41, 90, 70);
-        case(&exe, &dir, &format!("bl{bh}"), &p, fw, fh);
+        case(&exe, &exe_f, &dir, &format!("bl{bh}"), &p, fw, fh);
     }
     let _ = std::fs::remove_dir_all(&dir);
 }

@@ -53,8 +53,10 @@ pub static COLOR_PTX: &[u8] = include_bytes!("../../../cuda/display/kf_color.ptx
 /// YUV windows of the console copy (they are left out, by name), never the RGB composition.
 pub static YUV_PTX: &[u8] = include_bytes!("../../../cuda/display/kf_yuv.ptx");
 
-/// The YUV kernel's entry.
+/// The YUV kernel's entry (XRGB8888 staging frame) …
 pub const YUV_ENTRY: &str = "kf_compose_yuv";
+/// … and its twin for the SDR colour pipeline's FP32 frame.
+pub const YUV_COLOR_ENTRY: &str = "kf_color_yuv";
 const COLOR_LUT_BYTES: usize = (4 + 1025) * 8;
 
 /// A bounded source span; the table is copied device-to-device before it is used.
@@ -265,7 +267,7 @@ pub struct DisplayGpu {
     sums: Option<(CUdeviceptr, PinnedBuf, usize)>,
     color: Result<[Func; 4], String>,
     /// ★ The YUV window kernel, or why it did not load.
-    yuv: Result<Func, String>,
+    yuv: Result<[Func; 2], String>,
     color_frame: Option<(CUdeviceptr, usize)>,
     /// Fixed slots: 32 ILUTs, 32 TMO tables and one OLUT. Never guest-sized.
     color_luts: Option<CUdeviceptr>,
@@ -574,7 +576,12 @@ impl DisplayGpu {
         yuv_ptx.push(0);
         let yuv = cu
             .module_load(&yuv_ptx)
-            .and_then(|m| cu.module_function(m, YUV_ENTRY))
+            .and_then(|m| {
+                Ok([
+                    cu.module_function(m, YUV_ENTRY)?,
+                    cu.module_function(m, YUV_COLOR_ENTRY)?,
+                ])
+            })
             .map_err(|e| format!("the YUV kernel did not load: {e}"));
         let color_event = cu.event_create()?;
         let signal_event = cu.event_create()?;
@@ -839,11 +846,41 @@ impl DisplayGpu {
     /// store, or a write the frame; the CUDA error otherwise.
     pub fn compose_yuv(&self, l: &YuvLayer, w: u32, h: u32) -> Result<(), CudaError> {
         let what = "DisplayGpu::compose_yuv";
-        let f = *self.yuv.as_ref().map_err(|e| refused(what, e.clone()))?;
+        let f = self.yuv.as_ref().map_err(|e| refused(what, e.clone()))?[0];
         l.check(w, h).map_err(|e| refused(what, e))?;
         let Some((dst, _)) = self.staging else {
             return Err(refused(what, "no composition was begun".into()));
         };
+        self.launch_yuv(f, dst, l, w, h, what)
+    }
+
+    /// ★ The same window into the colour composition's FP32 frame ([`Self::color_begin`]), in its
+    /// place in the back-to-front order (opaque; the window's own colour pipeline is not applied).
+    ///
+    /// # Errors
+    /// As [`Self::compose_yuv`].
+    pub fn color_yuv(&self, l: &YuvLayer, w: u32, h: u32) -> Result<(), CudaError> {
+        let what = "DisplayGpu::color_yuv";
+        let f = self.yuv.as_ref().map_err(|e| refused(what, e.clone()))?[1];
+        l.check(w, h).map_err(|e| refused(what, e))?;
+        let (dst, len) = self
+            .color_frame
+            .ok_or_else(|| refused(what, "no colour frame".into()))?;
+        if u64::from(w) * u64::from(h) * 16 > len as u64 {
+            return Err(refused(what, "colour frame is too small".into()));
+        }
+        self.launch_yuv(f, dst, l, w, h, what)
+    }
+
+    fn launch_yuv(
+        &self,
+        f: Func,
+        dst: CUdeviceptr,
+        l: &YuvLayer,
+        w: u32,
+        h: u32,
+        what: &'static str,
+    ) -> Result<(), CudaError> {
         let ny = usize::try_from(l.y_extent).map_err(|_| refused(what, format!("{l:?}")))?;
         let nc = usize::try_from(l.c_extent).map_err(|_| refused(what, format!("{l:?}")))?;
         let ys = self.at(l.y_src, ny, what)?;
@@ -1946,13 +1983,22 @@ mod tests {
             .find_map(|l| l.strip_prefix("// source fnv1a64: "))
             .expect("the header names its source");
         assert_eq!(stated.trim(), format!("{h:016x}"), "re-run make_yuv_ptx.sh");
-        let head = ptx
-            .split(&format!(".visible .entry {YUV_ENTRY}("))
-            .nth(1)
-            .expect("the entry");
-        let params = head.split(')').next().unwrap().split(',').count();
-        assert_eq!(params, 20);
-        assert_eq!(head.matches(".param .u64 .ptr").count(), 3);
+        for entry in [YUV_ENTRY, YUV_COLOR_ENTRY] {
+            let head = ptx
+                .split(&format!(".visible .entry {entry}("))
+                .nth(1)
+                .expect("the entry");
+            let params = head.split(')').next().unwrap().split(',').count();
+            assert_eq!(params, 20, "{entry}");
+            assert_eq!(
+                head.split(')')
+                    .next()
+                    .unwrap()
+                    .matches(".param .u64 .ptr")
+                    .count(),
+                3
+            );
+        }
     }
 
     /// The YUV launch is bounded before it is queued, independently of the planner.

@@ -84,7 +84,42 @@ KF_DEVICE void kf_yuv_row(const unsigned char *ys, const unsigned char *cs, unsi
 	}
 }
 
+/* The same window into the SDR colour pipeline's FP32 staging frame (4 floats a pixel, alpha 1): the
+ * converted 8-bit value / 255, stored opaque in the window's place in the back-to-front order. The
+ * window's own colour pipeline is not applied (the console's view only; see kf_disp::scanout::plan_yuv). */
+KF_DEVICE void kf_yuv_row_f(const unsigned char *ys, const unsigned char *cs, float *dst,
+			    unsigned int bl, unsigned int yp, unsigned int cp, unsigned int bh,
+			    unsigned int sx0, unsigned int sy0, unsigned int sw, unsigned int sh,
+			    unsigned int ox, unsigned int oy, unsigned int dw, unsigned int dh,
+			    unsigned int fw, unsigned int fh, unsigned int sxl, unsigned int syl,
+			    unsigned int vu, unsigned int row, unsigned int thread)
+{
+	for (unsigned int x = thread; x < dw; x += KF_YUV_THREADS) {
+		unsigned int dx = ox + x, dy = oy + row;
+		if (dx >= fw || dy >= fh)
+			continue;
+		unsigned int p = kf_yuv_pixel(ys, cs, bl, yp, cp, bh, sx0, sy0, sw, sh, dw, dh, sxl,
+					      syl, vu, x, row);
+		unsigned long long d = ((unsigned long long)dy * fw + dx) * 4ull;
+		dst[d + 0] = (float)((p >> 16) & 255u) / 255.0f;
+		dst[d + 1] = (float)((p >> 8) & 255u) / 255.0f;
+		dst[d + 2] = (float)(p & 255u) / 255.0f;
+		dst[d + 3] = 1.0f;
+	}
+}
+
 #ifndef KF_HOST
+extern "C" __attribute__((global)) void
+kf_color_yuv(const unsigned char *ys, const unsigned char *cs, float *dst, unsigned int bl,
+	     unsigned int yp, unsigned int cp, unsigned int bh, unsigned int sx0, unsigned int sy0,
+	     unsigned int sw, unsigned int sh, unsigned int ox, unsigned int oy, unsigned int dw,
+	     unsigned int dh, unsigned int fw, unsigned int fh, unsigned int sxl, unsigned int syl,
+	     unsigned int vu)
+{
+	kf_yuv_row_f(ys, cs, dst, bl, yp, cp, bh, sx0, sy0, sw, sh, ox, oy, dw, dh, fw, fh, sxl, syl,
+		     vu, __nvvm_read_ptx_sreg_ctaid_x(), __nvvm_read_ptx_sreg_tid_x());
+}
+
 extern "C" __attribute__((global)) void
 kf_compose_yuv(const unsigned char *ys, const unsigned char *cs, unsigned int *dst, unsigned int bl,
 	       unsigned int yp, unsigned int cp, unsigned int bh, unsigned int sx0, unsigned int sy0,
