@@ -9,6 +9,23 @@ fix this file. Entries below the first are dated history.
 
 ## 0. Current resumption — start here
 
+**Host patch tier plan and an owner requirement on the Windows app matrix, 2026-10-10 (docs only, branch `claude/host-patch-list-20261010`).**
+(1) The owner policy of 2026-10-10 is binding: the STOCK install works with no kernel patch; a patched host kernel/driver is an
+optional better tier, and the owner now plans to implement it. Every candidate (in-kernel doorbell, mdev shim, b3 nvidia-uvm,
+host-owned UVM, the USERD-in-sysmem address-size fix, exact partial unmap, scatter-map verb), with its stock fallback, runtime
+probe, security bound, performance label (reasoned vs measured), validation plan, order, stock-path guarantees and the DKMS /
+version-pin / signing / unload story, is in `docs/design/V3_HOST_PATCH_LIST.md`. Recommended first patch: the in-kernel doorbell as a
+separate kayfabe module (no `nvidia.ko` rebuild), behind a bare-metal wake-to-ring measurement that can drop it. `[measured, 2026-10-10]`
+the b3 patch (written for 580.159.04) passes `patch --dry-run` against an ogkm 595.84 tree (textual only; the trusted host runs
+595.91.07 and no hardware re-run exists). (2) **Owner requirement: the app matrix must eventually also run on Windows guests.** A
+Windows app-matrix lane is TODO and does not exist. It needs: an app inventory (none yet; `docs/design/V3_APP_MATRIX.md` is Linux
+only: 61/65 apps + 6/6 probes at `6692e621`), Windows builds or binaries of the CUDA apps and probes (only `scripts/bench/windows/cuda/build_cup_win.sh`
+exists), a runner with per-app timeouts and a pass/fail oracle compatible with `scripts/apps/apps_matrix.sh` / `summarize.py`, a
+non-interactive way to start the guest and sign in (the scripted sign-in harness exists **host-only** at
+`/var/lib/kf-windows-20261005/winprod`, not in the repo), a host-native baseline per app, and TDR resilience (the guest still TDRs
+today, so each app needs a recovery and result-collection path through QGA, `scripts/bench/windows/qga_run_ps.py`). It is gated on the
+Windows desktop staying up; it is not a merge-bar item yet.
+
 **Windows reset after the first flips, 2026-10-09 (branch `claude/windows-reset-20261009` = `claude/display-reply-diff-20261008`
 + `claude/kf3-read-trace-20261008` + `claude/passthrough-nsi-nogate-20261008`; [record](../traces/windows_reset_20261009/README.md);
 4 hardware boots, runs 100-103, RTX 4070).** ⊘ The trace-mode ruling of the read-trace branch is renumbered **§Y** in
