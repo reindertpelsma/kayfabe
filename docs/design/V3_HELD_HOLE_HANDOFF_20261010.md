@@ -111,8 +111,14 @@ GPU while the arms ran: environmental, not a regression — never start arms whi
 - **OWNER_RULINGS §AD (12 ms invalidate latency bound):** the fix adds no sleeps and no blocking; the refresh's host
   calls are unchanged or fewer (a refused/impossible reservation now goes straight to the 4 KiB grain). Not
   re-measured against the 12 ms bound; the `INVAL-SLOW` diagnostics live on `tdr-opus-base` (not merged here).
-- **Reviewer items:** an independent review of the combined line is running; its open items are NOT recorded here
-  (append them when it reports).
+- **Reviewer items:** `3aea0a79` (independent review, on top of `183e1b8f`) cleared 13 `arithmetic_side_effects` in
+  `batch.rs` (same results) and corrected the docs: `held_ours` is a test-read atomic + stderr line, not an `Applied`
+  field, and it would NOT have fired in run 289 (the pad was unrecorded): the real hardware gate is the plain `HELD`
+  count = 0 with 0 new Xid. It also marks the 2 MiB rounding as an unmeasured assumption; note the run-289 dmesg does
+  show it (`Size: 0x800000 RangeLo: 0xa00000 ... pageSzLockMask: 0x211000` for a request at `0xa70000+0x7e9000`), so
+  the 2 MiB start-down/size-up alignment is measured for reservations >= 2 MiB, though never exercised by a probe
+  arm or by the sim beyond 96 pages. Any further reviewer item: append here. The hardware runs above are at
+  `183e1b8f`; the head after the review commit is `3aea0a79` (tests green: kf-mem, kf-qemu), not re-run on hardware.
 - **Residual design risks:** the 64 KiB unit is the Pascal+ big page (Maxwell 128 KiB not handled); a neighbour of ours
   or a host buffer inside a 64 KiB unit makes the reservation impossible (`NoMemory`) and the rows go per run
   (correct, slower; the 3 refusals of run 384 are this); a genuinely host-owned occupant is still `HELD`
