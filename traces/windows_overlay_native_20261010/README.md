@@ -41,7 +41,7 @@ either, so "do kayfabe's caps differ from real hardware" stays **unanswered**.
 
 ## Scenario results (probe as run: 7 scenarios x {default, `--ignore-support`}) -- measured
 Every YUV run ends before the scenario starts: default = `RESULT SETUP` (no DIRECT flag), `--ignore-support` = `FAILED CreateSwapChainForComposition nv12 1280x720 flags=0x200 hr=0x887a0001`
-(DXGI_ERROR_INVALID_CALL). Also refused with the same hr: yuy2, p010, flags `none`, flags `yuv+fsv`, `--mode hwnd` (`CreateSwapChainForHwnd`). Raw: `raw/y_*.txt`, `raw/t1.txt`, `raw/t2*`.
+(DXGI_ERROR_INVALID_CALL). Also refused with the same hr: yuy2, p010, flags `none`, flags `yuv+fsv`, `--mode hwnd` (`CreateSwapChainForHwnd`). Raw: `raw/y_*.txt`, `raw/t1.txt` (the other variants were run with the same result and not kept).
 
 | scenario | default | `--ignore-support` | overlay modes / transitions / latency |
 |---|---|---|---|
