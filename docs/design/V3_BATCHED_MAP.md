@@ -729,11 +729,11 @@ of a multi-piece row rolls back the pieces already placed (existing all-or-nothi
 exercised with reservations; model: every 7th/11th row map fails).
 
 **Why (a2) exists.** The measured regression at 6fafcc6e (fast suite 0/30) was a refused row: a
-guest-KERNEL space's flat FB alias is ONE row of 2 MiB leaves, 7.9 GiB = 2 031 616 grains — more than
-2^20, so it can only be placed through a reservation. If host RM refused the one 7.9 GiB reservation
+guest-KERNEL space's flat FB alias is ONE run of 2 MiB leaves of 7.9 GiB; below the carve-out it is
+3 963 whole leaves = 2 029 056 grains — more than 2^20, so it can only be placed through a reservation. If host RM refused the one 7.9 GiB reservation
 (the probe passed on small ranges; `[measured gfx8]` it refused one LARGE `[1 MiB, 4 GiB)`), D1 as
 literally decided would refuse the row again and poison every kernel CE channel. (a2) keeps the row
-placed and exact (3 964 leaf reservations, ~8 000 RM calls, reasoned ≈ 0.2 s). If every reservation is
+placed and exact (3 963 leaf reservations, ~8 000 RM calls, reasoned ≈ 0.2 s). If every reservation is
 refused (or reservations are off) the alias IS refused by name — the decision's rule, and the largest
 residual risk (§8.8.7). Model test: `flat_alias(AliasHost::{Accepts, RefusesBig, RefusesAll, Off})`.
 
