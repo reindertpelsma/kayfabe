@@ -2433,6 +2433,8 @@ impl Device {
             ..ScanState::default()
         };
         let mut queue: VecDeque<Queued> = VecDeque::new();
+        let mut ledger_q = LedgerQ::default();
+        let mut ledger_last = Instant::now();
         let mut cursor_seen = [0u32; MAX_HEADS];
         let mut published_get = [u32::MAX; kf_disp::ports::NUM_CHANNELS];
         let mut logged_updates = 0u32;
@@ -2810,12 +2812,14 @@ impl Device {
                 queue.push_back(Queued {
                     need: scan.barrier,
                     item: Item::Effect(e),
+                    enq: Instant::now(),
                 });
             }
             for (chn, life, get) in gets {
                 queue.push_back(Queued {
                     need: scan.barrier,
                     item: Item::Get(chn, life, get),
+                    enq: Instant::now(),
                 });
             }
             if io
@@ -2861,9 +2865,43 @@ impl Device {
             }
             // 7. completions, IN ORDER — each after the state it reports and the copy it follows
             while queue.front().is_some_and(|q| q.need <= scan.done) {
-                let Some(Queued { item, .. }) = queue.pop_front() else {
+                let Some(Queued { item, enq, need }) = queue.pop_front() else {
                     break;
                 };
+                {
+                    // ⚠ DIAGNOSTIC (flip ledger): how long this completion waited for the console copy it follows.
+                    let lag = enq.elapsed();
+                    ledger_q.n += 1;
+                    ledger_q.max_ms = ledger_q.max_ms.max(lag.as_millis() as u64);
+                    if lag > Duration::from_millis(50) {
+                        ledger_q.slow += 1;
+                        if ledger_q.slow <= 40 {
+                            let what = match &item {
+                                Item::Effect(Effect::Notify { chn, handle, offset, .. }) => {
+                                    format!("Notify chn {chn} ctxdma {handle:#x} +{offset:#x}")
+                                }
+                                Item::Effect(Effect::Release { chn, handle, offset, value, .. }) => {
+                                    format!("Release chn {chn} ctxdma {handle:#x} +{offset:#x} value {value:#x}")
+                                }
+                                Item::Effect(Effect::Latched { window }) => format!("Latched window {window}"),
+                                Item::Effect(Effect::CoreArmed(_)) => "CoreArmed".to_string(),
+                                Item::Effect(_) => "other effect".to_string(),
+                                Item::Get(chn, _, get) => format!("GET chn {chn} -> {get:#x}"),
+                            };
+                            eprintln!(
+                                "kf3: display: FLIP-QUEUED-LAG t={:.6} utc_ms={} {what}: waited {} ms for scanout copy {need} (copies started {} done {}, in flight {})",
+                                kf_mem::maplog::t(),
+                                std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .map_or(0, |d| d.as_millis()),
+                                lag.as_millis(),
+                                scan.started,
+                                scan.done,
+                                scan.inflight.is_some()
+                            );
+                        }
+                    }
+                }
                 let e = match item {
                     Item::Effect(e) => e,
                     Item::Get(chn, life, get) => {
@@ -2992,6 +3030,34 @@ impl Device {
                         eprintln!("kf3: display: channel {chn} STOPPED at {at:#x}: {what}");
                     }
                 }
+            }
+            // ⚠ DIAGNOSTIC (flip ledger, owner challenge): slow commits as they complete, a summary every 2 s.
+            for l in std::mem::take(&mut engine.ledger.slow) {
+                eprintln!(
+                    "kf3: display: FLIP-SLOW t={:.6} utc_ms={} {l}",
+                    kf_mem::maplog::t(),
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map_or(0, |d| d.as_millis())
+                );
+            }
+            if ledger_last.elapsed() >= Duration::from_secs(2) {
+                ledger_last = Instant::now();
+                let oldest = queue.front().map_or(0, |q| q.enq.elapsed().as_millis());
+                eprintln!(
+                    "kf3: display: FLIP-LEDGER t={:.3} utc_ms={} {} | completions queued={} oldest_queued={oldest}ms delivered={} slow(>50ms)={} max_wait={}ms | copies started={} done={}",
+                    kf_mem::maplog::t(),
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map_or(0, |d| d.as_millis()),
+                    engine.ledger_summary(),
+                    queue.len(),
+                    ledger_q.n,
+                    ledger_q.slow,
+                    ledger_q.max_ms,
+                    scan.started,
+                    scan.done
+                );
             }
             if engine.updates > u64::from(logged_updates) && logged_updates < 64 {
                 logged_updates = u32::try_from(engine.updates.min(64)).unwrap_or(64);
@@ -3184,6 +3250,14 @@ fn compose_layer(l: &LayerPlan) -> ComposeLayer {
     }
 }
 
+/// ⚠ DIAGNOSTIC (flip ledger): the completion queue's waits.
+#[derive(Default)]
+struct LedgerQ {
+    n: u64,
+    slow: u64,
+    max_ms: u64,
+}
+
 /// An effect or a GET on the worker's completion queue.
 enum Item {
     Effect(Effect),
@@ -3194,6 +3268,8 @@ enum Item {
 struct Queued {
     need: u64,
     item: Item,
+    /// ⚠ DIAGNOSTIC (flip ledger): when the effect was queued.
+    enq: Instant,
 }
 
 /// How long a scanout copy may take before its stream is asked whether it failed (§8.18; it used

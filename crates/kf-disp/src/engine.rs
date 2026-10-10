@@ -428,6 +428,11 @@ struct Chan {
     armed: Vec<u32>,
     stage: Stage,
     halted: bool,
+    /// ⚠ DIAGNOSTIC ledger (TDR hunt): when the pending UPDATE reached the engine, and when its acquire first failed.
+    commit: Option<std::time::Instant>,
+    commit_info: String,
+    acq_block: Option<std::time::Instant>,
+    acq_info: String,
 }
 
 impl Chan {
@@ -458,6 +463,10 @@ impl Chan {
             armed: vec![0; words],
             stage: Stage::Running,
             halted: false,
+            commit: None,
+            commit_info: String::new(),
+            acq_block: None,
+            acq_info: String::new(),
         }
     }
     fn a(&self, m: u32) -> u32 {
@@ -489,6 +498,39 @@ pub struct PaceCounts {
     pub tear_held: u64,
     /// Latches of groups holding the CORE: they latch at once, so the tick does not bound them.
     pub core_imm: u64,
+}
+
+/// ⚠ DIAGNOSTIC (2026-10-10, TDR hunt; owner challenge "no unanswered flips"): per display channel, UPDATEs the
+/// engine received (`committed`) against updates it completed (`completed`: armed, completions stated), the
+/// slowest commit-to-complete time, the acquire waits, and a bounded list of the slow ones (> 50 ms) with what they
+/// carried. Plain counters, display thread only: nothing on a vCPU or the drainer.
+#[derive(Debug, Clone)]
+pub struct FlipLedger {
+    /// UPDATEs reached, per channel number.
+    pub committed: [u64; CHANNELS],
+    /// UPDATEs completed, per channel number.
+    pub completed: [u64; CHANNELS],
+    /// Completions whose acquire had failed at least once.
+    pub acq_blocked: [u64; CHANNELS],
+    /// Slowest commit-to-complete (ms), per channel number.
+    pub max_ms: [u64; CHANNELS],
+    /// Completions slower than 50 ms, per channel number.
+    pub slow_n: [u64; CHANNELS],
+    /// Lines for the slow completions not yet drained (bounded).
+    pub slow: Vec<String>,
+}
+
+impl Default for FlipLedger {
+    fn default() -> Self {
+        FlipLedger {
+            committed: [0; CHANNELS],
+            completed: [0; CHANNELS],
+            acq_blocked: [0; CHANNELS],
+            max_ms: [0; CHANNELS],
+            slow_n: [0; CHANNELS],
+            slow: Vec::new(),
+        }
+    }
 }
 
 /// ★ The engine.
@@ -525,6 +567,8 @@ pub struct Engine {
     presented: [bool; 8],
     /// Per head: presents by path.
     pub pace: [PaceCounts; 8],
+    /// ⚠ DIAGNOSTIC flip ledger (TDR hunt; always on, plain counters on the display thread).
+    pub ledger: FlipLedger,
 }
 
 impl Engine {
@@ -547,6 +591,7 @@ impl Engine {
             core_latch_at_vblank: false,
             presented: [false; 8],
             pace: [PaceCounts::default(); 8],
+            ledger: FlipLedger::default(),
         }
     }
 
@@ -637,6 +682,27 @@ impl Engine {
     #[must_use]
     pub fn client(&self, chn: u32) -> Option<u32> {
         self.chans.get(chn as usize)?.as_ref().map(|c| c.client)
+    }
+
+    /// ⚠ DIAGNOSTIC: `ch<N>:committed/completed(slowest ms, slow n, acq-blocked n, pending age ms)` for every
+    /// channel that committed anything.
+    #[must_use]
+    pub fn ledger_summary(&self) -> String {
+        let l = &self.ledger;
+        (0..CHANNELS)
+            .filter(|&i| l.committed[i] > 0)
+            .map(|i| {
+                let age = self.chans[i]
+                    .as_ref()
+                    .and_then(|c| c.commit)
+                    .map_or(0, |t| t.elapsed().as_millis());
+                format!(
+                    "ch{i}:{}/{}(max {}ms slow {} acqblk {} pend {}ms)",
+                    l.committed[i], l.completed[i], l.max_ms[i], l.slow_n[i], l.acq_blocked[i], age
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(" ")
     }
 
     /// A GPU scanout failure stops the display engine without publishing successful
@@ -870,6 +936,16 @@ impl Engine {
                 )));
             }
             if m == update {
+                self.ledger.committed[n as usize] += 1;
+                c.commit = Some(std::time::Instant::now());
+                c.acq_block = None;
+                c.commit_info = format!(
+                    "update={:#x} iso0_assy={:#x} sem_ctxdma_assy={:#x} notif_ctxdma_assy={:#x}",
+                    l.write.data,
+                    c.a(vocab.w_iso0),
+                    c.a(vocab.w_ctxdma_sem),
+                    c.a(vocab.w_ctxdma_notifier)
+                );
                 let ilk = interlock_set(&vocab, c, l.write.data);
                 c.stage = Stage::Interlock {
                     update: l.write.data,
@@ -1119,6 +1195,15 @@ impl Engine {
             if let Some(a) = self.acquire_of(n)
                 && !acquired(&a)
             {
+                if let Some(c) = self.chans[n as usize].as_mut()
+                    && c.acq_block.is_none()
+                {
+                    c.acq_block = Some(std::time::Instant::now());
+                    c.acq_info = format!(
+                        "acquire ctxdma={:#x} +{:#x} want={:#x} wide={} mode={}",
+                        a.handle, a.offset, a.value, a.wide, a.mode
+                    );
+                }
                 return;
             }
         }
@@ -1243,6 +1328,27 @@ impl Engine {
             armed.clone_from(assy);
         }
         self.updates += 1;
+        {
+            let idx = n as usize;
+            self.ledger.completed[idx] += 1;
+            if let Some(t0) = c.commit.take() {
+                let ms = u64::try_from(t0.elapsed().as_millis()).unwrap_or(u64::MAX);
+                let blocked = c.acq_block.take().map(|t| t.elapsed().as_millis());
+                if blocked.is_some() {
+                    self.ledger.acq_blocked[idx] += 1;
+                }
+                self.ledger.max_ms[idx] = self.ledger.max_ms[idx].max(ms);
+                if ms > 50 {
+                    self.ledger.slow_n[idx] += 1;
+                    if self.ledger.slow.len() < 64 {
+                        self.ledger.slow.push(format!(
+                            "chn {n} {:?}#{} commit->complete {ms} ms (acquire blocked {:?} ms: {}); {}",
+                            c.kind, c.instance, blocked, c.acq_info, c.commit_info
+                        ));
+                    }
+                }
+            }
+        }
         // 2. the completions it asked for — only now that the state is armed
         match c.kind {
             ChannelKind::Core => {
