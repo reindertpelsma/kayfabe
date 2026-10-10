@@ -846,6 +846,10 @@ budgets 1-5; property tests assert the bound after every step.
   census reads gate 10's output too (the probe births a CE channel through kf-host). Before this, the
   summary line was printed BEFORE gate 10, so `sweep.sh`/`matrix_table.py` showed 9/9 green when
   gate 10 failed, and a driver refusing the reservations would have FAILED the whole script.
+- ⊘ **Corrected 2026-10-10 (second review, §8.8.11.1), above the text it corrects:** FALLBACK is NOT
+  "any refusal passes". It needs ALL 5 small reservations refused with a host-RM refusal status AND the
+  probe's proof that the flat FB alias still places in that configuration; anything else (a transport
+  error, 1-3 accepted, an unplaceable alias) is FAIL. The `reserve_small_accepted` check is back.
 - **Gate 10.** `scripts/bench/v3_gates.sh` runs `kf-micro-reserve-probe reserve` after the nine
   `kf-gate*` and prints `GATE10_VERDICT=PASS|FALLBACK|FAIL`; the script's exit status requires PASS or FALLBACK.
   `V3_GATES_SUMMARY pass=9 fail=0` keeps its meaning (the nine only; `merge_check.sh` still greps it)
@@ -900,6 +904,10 @@ the suite fail: big leaves placed as one `NV01` mapping each again (all property
 
 ### 8.8.7 Residual risks
 
+- ⊘ **Corrected 2026-10-10 (second review, §8.8.11.1), above the text it corrects:** gate 10 no longer
+  reports this as a passing FALLBACK. A host that refuses every small reservation is `gate10=FAIL`
+  unless the probe PROVES the flat FB alias still places through per-2-MiB-leaf reservations; a host
+  that refuses those too is the 6fafcc6e failure class and FAILS loudly (`MICRO_RESERVE_FLAT_ALIAS_UNPLACEABLE`).
 - **Both reservation routes refused for a row beyond the grain bound** → refused by name (absence).
   For the flat FB alias this is the 6fafcc6e failure class (poisoned kernel CE channels). The decision
   accepted it; (a2) shrinks the exposure to "host RM refuses leaf-sized reservations too". Gate 10 and
@@ -935,6 +943,12 @@ the VA thread places and unmaps a 2^20-piece row 3 times (1.6-1.9 s each) while 
 VA thread yielded ~3 100 times, longest 2.0-3.0 ms); the test bound is 30 ms. Mutation (yield
 disabled): **670 ms** wait — the test fails. The wait bound is "about one chunk plus one host call
 plus scheduling", not one operation.
+
+⊘ **Corrected 2026-10-10 (second review, §8.8.11.2), above the text it corrects:** the steer no longer
+holds ONE claim over the guest-chosen length of the row for the whole hand-over; it claims, hands
+over and releases hull by hull (≤ `LEDGER_CHUNK` entries), and a waiting map blocks new steers
+(`Busy`) instead of polling with `sleep`. "A map waits for that steer's host calls and cuts" below
+now means one hull's, not the row's.
 
 **8.8.8.2 Map/steer range claims (item 5).** The pin of §8.7.6 covered micro reservations only; a map
 outside a reservation was invisible to the steer. Now `Claims` holds the VA ranges with a MAP in
@@ -1090,4 +1104,124 @@ conversion `diff_run`; the GPU walk kernel is not in the model.
 - The per-refresh budget refuses (absence) a legitimate guest that maps more than 2^21 distinct 4 KiB
   pages (8 GiB) or needs more than 2^17 amplified calls in ONE refresh with reservations off or refused;
   with reservations accepted neither budget is touched by big-leaf rows.
+
+### 8.8.11 Second review round (2026-10-10, review of `2540b547`)
+
+**STATUS: LIVE, 2026-10-10 — CODE + MODEL-TESTED; hardware verdict pending (§8.8.6).** Experiments:
+`bmd2-review-experiments.patch`; each is a test below that fails when its fix is reverted.
+
+**8.8.11.1 Gate 10 (item 1).** The probe mapped any `reserve_va` error to FALLBACK, no longer checked
+the flat 7.9 GiB FB alias, and had demoted `reserve_small_accepted` to a measurement — so a transport
+error, or a host refusing every reservation, passed as a "clean fallback" (the 6fafcc6e 0/30 failure
+class). Now:
+- `classify`: `Accepted`; `Refused` = `NoMemory`, `InsufficientPermissions`, or an RM status that is
+  not one of `kf-host`'s own codes (`0x4B00..0x4C00`); `Error` = everything else (interrupted
+  syscall, mis-placed FIXED map, the crate's encode/decode codes).
+- `posture` of the 5 small reservations: `Expected` (≥ 4 accepted), `AllRefused` (all 5 `Refused`),
+  `Inconsistent` (1-3 accepted, or any `Error`). `reserve_small_accepted` is a CHECK again, failing on
+  `Inconsistent`. Under `Expected` the probe's own `V_RESERVE` reservation must be accepted (a refusal
+  after the census accepted is an error, not a fallback).
+- `AllRefused` ⇒ the fallback configuration, in which the flat FB alias row (3 965 leaves of 2 MiB =
+  2 030 080 grains > 2^20 per row) can only be placed by the last tier of the production ladder, one
+  reservation per 2 MiB leaf. The probe PROVES it: it reserves a 2 MiB leaf at the alias base, maps 2
+  MiB of VRAM through it, reads its first and last page through the CE, and checks that 3 965 leaves × 2
+  amplified calls fit `REFRESH_AMPLIFICATION_BUDGET`. Refused (a 2 MiB reservation is refused too) ⇒
+  `MICRO_RESERVE_FLAT_ALIAS_UNPLACEABLE` and **FAIL** — on such a host the alias row is refused by name
+  and every guest kernel CE channel is poisoned.
+- `v3_gates.sh` accepts FALLBACK only with the probe's `CHECK fallback_flat_fb_alias_placeable PASS`
+  line (`GATE10_FALLBACK_UNPROVEN` ⇒ `gate10=FAIL` otherwise). Tests: probe unit tests
+  (`only_a_host_rm_refusal_status_is_a_refusal`, `the_fallback_posture_needs_all_five_small_refused_by_status`,
+  the ladder budget) and the CI fixtures `g10-fallback` / `g10-fallback-unproven`.
+- *Not run on hardware.* The proof path (a 2 MiB device-local object, `map_in`, two CE reads) mirrors
+  the existing small-reservation arm line by line but has only been compiled; it is the first thing to
+  look at if gate 10 reports anything but `PASS`.
+
+**8.8.11.2 The VA thread must not wait on a guest-sized steer (item 2).** `[measured, model, review]` a
+steer over a 2^20-piece row held ONE claim over `[va, va+row.len)` for 494 ms and the VA thread's map
+over the same range waited 489 ms, polling with `sleep(50 µs)` (the VA thread serves every space).
+Redesign (`hand_to_host_inner`, `claim_map`, `claim_steer`):
+- the steer walks the range as the HULLS of at most `LEDGER_CHUNK` ledger entries; each hull is claimed,
+  unmapped (host call, ledger cut, book) and RELEASED before the next. The act thread still never waits
+  for the VA thread: a hull a map is in flight or waiting over ⇒ `Busy` (hulls already handed over stay
+  so); a map in flight over a range with no entries yet is caught by the verdict's whole-range check
+  (`Busy`, never `Free`);
+- a map over a claimed hull waits on a condition variable (no polling; a 100 ms timeout only
+  re-checks), registered in `waiting`: every new steer over its range answers `Busy`, so a flood of
+  steers cannot starve it;
+- `[measured, model, debug, 2026-10-10, cargo test -p kf-mem a_big_steer_makes_a_map_wait_for_a_hull_not_for_the_row]`
+  a 16 384-entry row (8 hulls, 25 ms host call each): the steer took 220 ms; a map landed inside a
+  claimed hull waited **27 ms** (one hull), not the row. `a_steer_flood_cannot_starve_a_map`: with a
+  thread handing the same 16 pages over in a loop, 300 maps: p50 3 µs, p99 5-13 µs, max 21-30 µs.
+  Mutation (one claim over the whole row): the big-steer test fails.
+- the verdict can now be `Busy` where it was `Free`/`StillOurs` (a map waiting over the range);
+  the steer log line says so.
+
+**8.8.11.3 `hold2` yielded while holding a lock (item 3).** `hold2` (micro, then own) called the
+yielding acquire for `own` with `micro` held, so an act thread waiting for `micro` waited out the VA
+thread's whole yield (the 2 ms cap). Now the yield is before the first lock, and the act thread's
+announcement spans both acquisitions. `[measured, model, debug, 2026-10-10]` the act thread's `micro` acquisition
+against a VA thread looping `hold2`: p90 **1-13 µs** now; **2 020 µs** with the old acquire (the test
+fails: `hold2_never_yields_while_holding_a_lock_the_act_thread_waits_for`, bound 800 µs).
+
+**8.8.11.4 A steer that did not complete left a stale host mapping (item 4, found by reading, then
+tested).** The steer removes the placement row FIRST (so the walker's UNMAP of a page handed to host RM
+makes no host call). When `hand_to_host` then answered `Busy`, `StillOurs` or `Refused`, mappings of
+ours stayed on the host while `GpuMirror::unmap` answered "no row ⇒ nothing of ours there" with no host
+call: the walker's later UNMAP was acknowledged and the mapping stayed until a stray sweep or the retire.
+`[model]` `a_steer_that_did_not_complete_leaves_a_row_so_the_walkers_unmap_still_reaches_the_host`
+reproduces it (0 host calls, the host still maps; with the restore the unmap reaches the host).
+Fix: the steer restores the rows of what the ledger still holds (`mem::rows_after_steer`: the owned
+intervals inside the steered row, minus anything a row already covers — a mapping the VA thread
+re-placed meanwhile keeps its own backing — with the old row's offset advanced), and logs how many.
+With no ledger for the space the row goes back whole.
+*The arbitration §8.8.2's `cut_own` argument relies on:* `rows.remove(&va)` makes the VA thread's own
+UNMAP of that page issue no host call, so while a steer runs, the only unmappers of the steered range
+are the steer and idempotent range unmaps; maps are excluded by the claims (§8.8.8.2, §8.8.11.2).
+
+**8.8.11.5 The budget in FALLBACK is loud and has a retry (item 5).** With every reservation refused, a
+legitimate > 8 GiB mapping in one walk (a `cuMemHostAlloc`-style run) exceeds the 2^21-grain placement
+budget. Before: refused at the tail, a bounded log, no follow-up. Now: every budget refusal is counted
+(`BatchedVas::budget_refused`, `Applied::budget_refused`, `VaStats::budget_refused_runs`) and logged by
+name (the first 16, with the row and both limits). *What happens next, stated:* the refused run is
+acknowledged FAILED = absence (§AA): **the invalidate IS cleared** (the guest is not left polling) and
+the run stays a difference. If that refresh placed anything (`mapped > 0`) the VA manager queues a
+follow-up `Want::Root` walk of the space — nothing to clear, a FRESH budget — and repeats while each
+walk makes progress; a refresh that places nothing (a row that can never fit, ≥ 2^17 amplified calls
+on its own) does not loop: it stays absent, named, retried only by the guest's next invalidate of that
+space (the pre-existing §AA semantics). Limit: with reservations refused, a single row needing more
+than 2^17 amplified calls (≈ a 512 MiB 2 MiB-leaf run at 4 KiB grain) never places. The reservation
+attempt itself (`reserve` of a whole segment) now spends one call of the placement budget, and the
+per-leaf tier spent 2 per leaf already — no reservation path is unbudgeted once the refresh is armed.
+Tests: `a_budget_refused_tail_is_walked_again_and_the_invalidate_is_not_held`,
+`a_budget_refusal_without_progress_does_not_loop`.
+
+**8.8.11.6 `failclosed` coverage (item 6).** Added: `kf3-pramin-reaper`, `kf3-vram-provision`,
+`kf-view-reaper` (named in `failclosed.rs` with the reason: a silent death leaks views/pinned pages or
+leaves display slots unmade for ever). Not covered, each with its reason in the module doc: `kf3-probe`
+(default-off diagnostic nothing waits on) and `on_cuda_thread`'s scoped threads (the join maps a panic to
+a refusal). The unnamed `std::thread::spawn`s of `osevent.rs` (and `kf-util`, `kf-linux-raw`,
+`readtrace.rs`) are all after the first `#[cfg(test)]` of their files: no production thread is unnamed.
+
+**8.8.11.7 The batch liveness bitmap (item 7).** `[measured, model, review, 2026-10-10]` the bitmap is one bit per
+4 KiB page of the batch's VA EXTENT, which the guest chooses: 4 096 runs of the same 4 GiB of guest RAM
+aliased at consecutive VAs (16 TiB of VA) allocated 517 MiB (predates this branch's diff). Now
+`BATCH_MAX_EXTENT` = 64 GiB (2 MiB of bitmap per batch): a larger batch is refused by name
+(`BATCH_EXTENT_CAPPED`, before any allocation) and its rows go per run
+(`a_batch_extent_beyond_the_cap_is_refused_before_its_bitmap_is_allocated`: RSS grows < 64 MiB). The fuzz
+takes `KF_FUZZ_BASE=n` (seeds n+1..=n+KF_FUZZ_SEEDS).
+
+**8.8.11.8 Counts and the bounds of this round (2026-10-10).** See the final report of the commit; the
+measured numbers above are debug-build model numbers; the 25 ms host call of the big-steer test is a
+stand-in (a real RM unmap is 84-123 µs `[measured earlier, vast 52624429, 2026-09-26]`).
+
+### 8.8.12 Residual risks added by the second review round
+
+- Gate 10's alias proof maps ONE 2 MiB leaf, not the 7.9 GiB row: it proves the per-leaf tier works on this
+  host and that its call count fits the budget, not that 3 965 reservations in one space are accepted.
+- A steer whose range a map is in flight over is `Busy` (host RM's context then lands where the guest's
+  page is); the map is the guest's own concurrent use of the very VA, which is racy by nature.
+- A hull's claim lasts for one hull's host call (84-123 µs measured earlier; a hung call would hold the
+  maps over that hull — and the VA thread's own host calls hang equally).
+- The follow-up walks after budget refusals can repeat while each makes progress: the invalidate is
+  already cleared, but the VA thread works on the space for the extra walks.
 

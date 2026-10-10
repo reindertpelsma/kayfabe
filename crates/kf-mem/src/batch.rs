@@ -3515,7 +3515,7 @@ mod tests {
     /// guest-sized row must not make the VA thread wait for the whole row. The steer claims and
     /// releases hull by hull (≤ `LEDGER_CHUNK` entries each); here each hull's host call takes 25 ms,
     /// the row is 8 hulls (~200+ ms), and a map landed INSIDE a claimed hull waits for that hull
-    /// only. (Pre-fix: the claim covered the whole row for the whole steer — `[measured, model,
+    /// only. (Pre-fix: the claim covered the whole row for the whole steer — `[measured, model, 2026-10-10,
     /// review]` a 494 ms steer, a 489 ms map wait on the 2^20-piece row.)
     #[test]
     fn a_big_steer_makes_a_map_wait_for_a_hull_not_for_the_row() {
@@ -3603,7 +3603,7 @@ mod tests {
 
     /// ★ Review 2 item 7 (`review_batch_bitmap_scales_with_va_extent_not_guest_ram`) — a batch's
     /// liveness bitmap is sized by its VA EXTENT, which the guest chooses (the same guest-RAM run
-    /// aliased at consecutive VAs). 4 096 × 4 GiB used to allocate 517 MiB `[measured, model,
+    /// aliased at consecutive VAs). 4 096 × 4 GiB used to allocate 517 MiB `[measured, model, 2026-10-10,
     /// review]`; now a batch beyond `BATCH_MAX_EXTENT` is refused by name and allocates nothing.
     #[test]
     fn a_batch_extent_beyond_the_cap_is_refused_before_its_bitmap_is_allocated() {
