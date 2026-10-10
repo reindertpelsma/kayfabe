@@ -262,7 +262,7 @@ enum AliasHost {
     RefusesBig,
     /// Every reservation refused: 4 KiB grain, which the 8 GiB row exceeds → refused by name.
     RefusesAll,
-    /// Reservations off (`KF3_DIAG_NO_MICRO_RESERVE`): the same refusal.
+    /// Reservations off (`KF3_NEGCTL_NO_MICRO_RESERVE`): the same refusal.
     Off,
 }
 

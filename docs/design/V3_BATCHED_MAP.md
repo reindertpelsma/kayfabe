@@ -278,11 +278,11 @@ at exit): runs 242/243 reproduced in isolation.
 
 | result of `reserve` | then |
 |---|---|
-| PASS (`reserve_small_accepted`, `remnant_*_reads`, `hole_remapped_reads`) | make `KF3_BATCH_MICRO_RESERVE=1` the default: the low range batches, partial unmaps exact (§8.3 rule 3) |
-| `reserve_*` refused | keep the default: one host map per guest leaf in the low range (zero risk, O(leaves) calls — §8.4); batch only inside guest reservations |
-| accepted but a remnant does not read | a defect in our reasoning about NV50 partial unmaps — stop, the CUDA path (which relies on it in the big reservations, gate 4) must be re-examined |
+| PASS (`remnant_*_reads`, `hole_remapped_reads`) | ⊘ SUPERSEDED 2026-10-10 (§8.8.3): done — micro reservations are the default, the flag `KF3_BATCH_MICRO_RESERVE` is deleted; the low range batches, partial unmaps exact (§8.3 rule 3). Gate 10 prints `PASS` |
+| `reserve_*` refused | ⊘ CORRECTED 2026-10-10 (§8.8.3): gate 10 prints `FALLBACK` (loud, NOT a failure): every big-leaf row in the low range goes at 4 KiB grain (O(grains) calls, §8.8.8 bounds them), a row beyond 2^20 grains is refused by name; batch only inside guest reservations |
+| accepted but a remnant does not read (gate 10 `FAIL`: the only failing verdict) | a defect in our reasoning about NV50 partial unmaps — stop, the CUDA path (which relies on it in the big reservations, gate 4) must be re-examined |
 
-Why it is expected to pass (source, inferred until measured): a FIXED `NV50_MEMORY_VIRTUAL` is a
+Why it is expected to pass (source read 2026-10-09, inferred until measured): a FIXED `NV50_MEMORY_VIRTUAL` is a
 FIXED `eheapAlloc` (`gpu_vaspace.c:1374-1386`) refused with `NV_ERR_NO_MEMORY` only over an
 existing heap block; the client RM of a GSP client withholds only the split window
 `[4 GiB, 4.5 GiB)` (`gpu_vaspace.c:394-467`, `SPLIT_VAS_SERVER_RM_MANAGED_VA_START/SIZE`,
@@ -291,7 +291,7 @@ default 1 MiB start, with host RM's own placements (the twin's context buffers, 
 in that range ⇒ an overlapping block (inferred). Our per-run FIXED maps there succeed through the
 same heap, so the VA we reserve (exactly a batch's, about to be mapped) is free.
 
-### 8.1 Root cause of the freeze (measured + source)
+### 8.1 Root cause of the freeze (measured 2026-10-09 + source)
 
 ⊘ **Corrected 2026-10-10 (§8.7.6), above the text it corrects:** "the only flag difference" held
 at `c6fff2e3`. Since 833a6f5a the flag no longer selects that difference: run 244's behaviour is the
@@ -360,7 +360,7 @@ reservation free stays tracked (§8.7.5).
    4 KiB / 64 KiB / 2 MiB leaf in the `NV01` range (bounded, `MAX_LEAF_PIECES`), one map per row
    inside a reservation. Every later change there is a whole-mapping removal.
 3. **Batches only inside a VA-reserving `hDma`.** A guest reservation (as before), or — with
-   `KF3_BATCH_MICRO_RESERVE=1` (default OFF until §8.0 passes) and ≥ `LOW_RANGE_MIN_RUNS` (8) rows —
+   a micro reservation (⊘ 2026-10-10: ON by default, the flag `KF3_BATCH_MICRO_RESERVE=1` is deleted, §8.8.3) and ≥ `LOW_RANGE_MIN_RUNS` (8) rows —
    a MICRO reservation made over exactly the batch's VA (`HostRm::reserve_va`), the batch mapped
    THROUGH it (`map_scattered_through`), later rows over its dead pages routed through it
    (`map_in`), unmaps inside it by `unmap_in`, the reservation freed when nothing of ours is left in
@@ -377,7 +377,7 @@ reservation free stays tracked (§8.7.5).
    held across a host call); guest values bounded (checked/saturating arithmetic, piece caps); no
    new `unsafe`; nothing per family.
 
-### 8.4 Syscall budget (reasoned from the numbers measured earlier; no new measurement)
+### 8.4 Syscall budget (reasoned from the numbers measured earlier, 2026-09-26; no new measurement)
 
 ⊘ **Corrected 2026-10-10 (§8.8), above the text it corrects:** the "per run / per leaf" row now
 reads "per run / per 4 KiB page" wherever no micro reservation holds the row (reservations off, or
@@ -488,7 +488,7 @@ default; there is no flag), item 5 is a guard (`UNCHANGED page(s) re-made` must 
 items 8-10 are added in §8.8.6.
 
 1. §8.0 `kf-micro-reserve-probe reserve` (and optionally `nv01-control`).
-2. A Windows boot WITHOUT `KF3_NO_BATCHED_MAP` (and, after 1, with `KF3_BATCH_MICRO_RESERVE=1`):
+2. A Windows boot WITHOUT `KF3_NO_BATCHED_MAP` (micro reservations are on by default; ⊘ 2026-10-10: there is no `KF3_BATCH_MICRO_RESERVE=1` any more):
    expect no Xid 31, no `:1639` assert at exit, sign-in survives past `inval=4955`.
 3. `v3_gates.sh` 9/9 (gate 4: 1 batch, 1-call piece, 2 ranges, 1 free), the 30-arm fast suite, the
    CUDA no-PM lane (batch counts unchanged for CUDA spaces), the Linux broker lane.
@@ -531,11 +531,13 @@ touched. The changed pieces of an UNMAP failed this way are still unmapped. What
 must not stay reachable: it becomes absence, which §AA clears over. The new pieces a failed MAP
 already placed are taken down again. A kept page is never taken down.
 
+⊘ **Corrected 2026-10-10 (§8.8.1, §8.8.3), above the text it corrects:** the unit of the 2^20 bound is
+the 4 KiB grain now (not the guest leaf), and the micro reservation is the default (D3), not
+`KF3_BATCH_MICRO_RESERVE=1`; the text below is the pre-D1 description.
+
 Finding 1 with no host error was a > 512 MiB 4 KiB row in the `NV01` range, kept as one mapping.
 Now a row is placed one mapping per leaf up to `MAX_LEAF_PIECES` = 2^20 leaves (4 GiB of 4 KiB:
-the whole Windows low range). ⊘ **Corrected 2026-10-10 (§8.8.1), above the text it corrects:** the unit of the 2^20 bound is the 4 KiB
-grain now (not the guest leaf), and the reservation is the default (D3), not `KF3_BATCH_MICRO_RESERVE=1`.
-Beyond that, the row goes through a micro reservation when
+the whole Windows low range). Beyond that, the row goes through a micro reservation when
 `KF3_BATCH_MICRO_RESERVE=1`, or it is refused by name (`HUGE_ROW_OUTSIDE_RESERVATION`, absence,
 counted in `huge_refused`). No row is ever one mapping that cannot be split.
 
@@ -796,7 +798,7 @@ ledger entries for mappings host RM already removed (the span was unmapped first
 existed (host call → cut) and is now as long as the cut. A concurrent `clear_strays` finds them and
 unmaps an empty range, which host RM answers `NV_OK`.
 
-**Measured (model + release build, `a_2_pow_20_piece_row_never_holds_a_ledger_lock_beyond_one_chunk`).**
+**Measured (2026-10-10, model + release build, `cargo test -p kf-mem a_2_pow_20_piece_row_never_holds_a_ledger_lock_beyond_one_chunk`).**
 A 2^20-piece row (4 GiB of 4 KiB grains, the largest row the ledger holds outside a reservation) is
 placed, read, handed to host RM in part and whole, unmapped by run and by range: 1 054 750 holds,
 **at most 2 048 entries touched by any one hold** (the bound is 2 049 = chunk + the one predecessor a
@@ -843,7 +845,7 @@ property configurations (300 × 60) all pass with the stronger invariants. Mutat
 the suite fail: big leaves placed as one `NV01` mapping each again (all property tests); unbounded
 `cut_chunk` (the 2^20 test).
 
-### 8.8.5 Measured vs inferred
+### 8.8.5 Measured vs inferred (2026-10-10)
 
 | claim | status |
 |---|---|

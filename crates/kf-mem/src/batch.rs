@@ -908,7 +908,7 @@ pub struct BatchedVas<'rm, V: SpaceVerbs = HostVas<'rm>> {
     /// ★ Micro reservations are used (rule 2): outside the guest reservations, a batch of at least
     /// [`LOW_RANGE_MIN_RUNS`] rows, a row bigger than [`MAX_LEAF_PIECES`] grains, and every row
     /// whose guest leaf is bigger than 4 KiB go through one. ★ D3 (2026-10-10): DEFAULT ON; off
-    /// (`KF3_DIAG_NO_MICRO_RESERVE`, a diagnostic) rows go at 4 KiB grain and over-bound rows are
+    /// (`KF3_NEGCTL_NO_MICRO_RESERVE`, a negative control) rows go at 4 KiB grain and over-bound rows are
     /// refused by name. A reservation host RM refuses at run time is ALWAYS a clean fallback to the
     /// 4 KiB grain; one it accepts is always used.
     pub low_reserve: bool,
@@ -1087,7 +1087,7 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
     /// ★ Review item 2 — **take a ledger lock without starving the act thread.** `std`'s mutex is
     /// not fair: a thread that releases it and takes it again at once beats a waiter that was
     /// already queued, so a bound on every HOLD is not a bound on the act thread's WAIT (`[measured,
-    /// review exp_d]` 117-142 ms behind holds of ≤ 5.5 ms, while the VA thread looped over a
+    /// review exp_d, 2026-10-10]` 117-142 ms behind holds of ≤ 5.5 ms, while the VA thread looped over a
     /// 2^20-piece row). So:
     /// - the act thread ([`BatchedVas::hand_to_host`]) announces itself in [`BatchedVas::act_waiting`]
     ///   before it blocks and withdraws once it holds the lock, and times the wait;
@@ -2086,7 +2086,7 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
             };
         }
         // ★ Review item 4: many entries tile the run (a row placed at 4 KiB grain): ONE range call
-        // per owned span, not one whole-mapping call per entry (`[measured, model]` 1 048 576 calls
+        // per owned span, not one whole-mapping call per entry (`[measured, model, 2026-10-10]` 1 048 576 calls
         // for a 4 GiB row of 2 MiB leaves, against 1). The entries tile [va, end) exactly and each
         // lies inside it, so the range splits nothing.
         if entries.len() > 1 {
@@ -3257,7 +3257,7 @@ mod tests {
         );
         assert!(steers > 20, "the act thread ran concurrently ({steers})");
         // One chunk (≤ 5.7 ms seen in a debug build) plus scheduling — not an operation (the VA
-        // thread's map alone takes hundreds of ms here), and far below the 117-142 ms measured
+        // thread's map alone takes hundreds of ms here), and far below the 117-142 ms measured in the review (2026-10-10, `cargo test -p kf-mem`, exp_d)
         // without the yield.
         assert!(
             wait_us < ACT_WAIT_BOUND_US,
