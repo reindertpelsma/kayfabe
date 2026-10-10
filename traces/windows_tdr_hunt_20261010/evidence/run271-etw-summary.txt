@@ -1,0 +1,16 @@
+run 271: DxgKrnl ETW (circular session, Base keyword), 23895 scheduler events 10:22:37.586 .. 10:23:23.385 UTC
+  GAP 14.90 s 10:22:37.586 -> 10:22:52.489 (next event QI)
+  GAP 13.69 s 10:22:52.491 -> 10:23:06.179 (next event QI)
+  GAP 0.31 s 10:23:09.936 -> 10:23:10.241 (next event QI)
+  GAP 0.32 s 10:23:10.986 -> 10:23:11.302 (next event VI)
+  GAP 1.03 s 10:23:17.567 -> 10:23:18.596 (next event QI2)
+  GAP 1.21 s 10:23:18.745 -> 10:23:19.951 (next event QI)
+  GAP 0.61 s 10:23:19.961 -> 10:23:20.573 (next event UNW)
+  GAP 1.75 s 10:23:20.573 -> 10:23:22.323 (next event QI)
+  longest queue-packet latencies (queued -> stopped):
+    2475 ms DXGKETW_PAGING_COMMAND_BUFFER pid=0x00000004 queued 10:23:17.484 stopped 10:23:19.959 queue=0xFFFFCB8B3D9AB510 id=4562
+    2475 ms DXGKETW_PAGING_COMMAND_BUFFER pid=0x00000004 queued 10:23:17.485 stopped 10:23:19.959 queue=0xFFFFCB8B3D9AB510 id=4564
+    2475 ms DXGKETW_PAGING_COMMAND_BUFFER pid=0x00000004 queued 10:23:17.485 stopped 10:23:19.959 queue=0xFFFFCB8B3D9AB510 id=4567
+    2474 ms DXGKETW_PAGING_COMMAND_BUFFER pid=0x00000004 queued 10:23:17.485 stopped 10:23:19.959 queue=0xFFFFCB8B3D9AB510 id=4570
+    2474 ms DXGKETW_PAGING_COMMAND_BUFFER pid=0x00000004 queued 10:23:17.486 stopped 10:23:19.960 queue=0xFFFFCB8B3D9AB510 id=4572
+    2473 ms DXGKETW_PAGING_COMMAND_BUFFER pid=0x00000004 queued 10:23:17.486 stopped 10:23:19.960 queue=0xFFFFCB8B3D9AB510 id=4575

@@ -74,6 +74,9 @@ pub enum Effect {
         offset: u64,
         /// `MODE_WRITE_AWAKEN`.
         awaken: bool,
+        /// The status is FINISHED (the core's completion notifier, or ⚠ a window entry flipped away under
+        /// `notifier_finish_at_flip_away`); `false` for a window flip's own notifier at its latch.
+        finished: bool,
     },
     /// Release a semaphore: write `value` (32 or 64 bits) at `offset` of context DMA `handle`, then
     /// raise the window's semaphore event if `awaken`.
@@ -428,6 +431,11 @@ struct Chan {
     armed: Vec<u32>,
     stage: Stage,
     halted: bool,
+    /// ⚠ DIAGNOSTIC ledger (TDR hunt): when the pending UPDATE reached the engine, and when its acquire first failed.
+    commit: Option<std::time::Instant>,
+    commit_info: String,
+    acq_block: Option<std::time::Instant>,
+    acq_info: String,
 }
 
 impl Chan {
@@ -458,6 +466,10 @@ impl Chan {
             armed: vec![0; words],
             stage: Stage::Running,
             halted: false,
+            commit: None,
+            commit_info: String::new(),
+            acq_block: None,
+            acq_info: String::new(),
         }
     }
     fn a(&self, m: u32) -> u32 {
@@ -489,6 +501,39 @@ pub struct PaceCounts {
     pub tear_held: u64,
     /// Latches of groups holding the CORE: they latch at once, so the tick does not bound them.
     pub core_imm: u64,
+}
+
+/// ⚠ DIAGNOSTIC (2026-10-10, TDR hunt; owner challenge "no unanswered flips"): per display channel, UPDATEs the
+/// engine received (`committed`) against updates it completed (`completed`: armed, completions stated), the
+/// slowest commit-to-complete time, the acquire waits, and a bounded list of the slow ones (> 50 ms) with what they
+/// carried. Plain counters, display thread only: nothing on a vCPU or the drainer.
+#[derive(Debug, Clone)]
+pub struct FlipLedger {
+    /// UPDATEs reached, per channel number.
+    pub committed: [u64; CHANNELS],
+    /// UPDATEs completed, per channel number.
+    pub completed: [u64; CHANNELS],
+    /// Completions whose acquire had failed at least once.
+    pub acq_blocked: [u64; CHANNELS],
+    /// Slowest commit-to-complete (ms), per channel number.
+    pub max_ms: [u64; CHANNELS],
+    /// Completions slower than 50 ms, per channel number.
+    pub slow_n: [u64; CHANNELS],
+    /// Lines for the slow completions not yet drained (bounded).
+    pub slow: Vec<String>,
+}
+
+impl Default for FlipLedger {
+    fn default() -> Self {
+        FlipLedger {
+            committed: [0; CHANNELS],
+            completed: [0; CHANNELS],
+            acq_blocked: [0; CHANNELS],
+            max_ms: [0; CHANNELS],
+            slow_n: [0; CHANNELS],
+            slow: Vec::new(),
+        }
+    }
 }
 
 /// ★ The engine.
@@ -525,6 +570,20 @@ pub struct Engine {
     presented: [bool; 8],
     /// Per head: presents by path.
     pub pace: [PaceCounts; 8],
+    /// ⚠ DIAGNOSTIC flip ledger (TDR hunt; always on, plain counters on the display thread).
+    pub ledger: FlipLedger,
+    /// ⚠ DIAGNOSTIC (default `false`, 2026-10-10 TDR hunt; `KF3_DIAG_RELEASE_AT_LATCH=1`): the pre-2026-10-10
+    /// behaviour — a window's release written at its OWN entry's latch, not at flip-away — for the A/B runs.
+    pub release_at_latch: bool,
+    /// ★ 2026-10-10 (TDR hunt, default `true`): at a window latch the OUTGOING entry's notifier is written FINISHED
+    /// (its flip-away), and the incoming entry's own notifier BEGUN (the display side writes the status words). Open
+    /// NVKMS: "when EVO performs the flip, it changes the notifier to BEGUN" (`ogkm-595.84:
+    /// nvidia-modeset/src/nvkms-headsurface.c:1925-1952`). [measured, run 286, read-watchpoints] after programming flip
+    /// N the Windows driver polls flip N's AND flip N-1's notifier status words together and leaves the loop only once
+    /// N-1 is FINISHED; [measured, runs 282-284 vs 287] with the hardware vblank order every first flip stuck without the
+    /// flip-away FINISHED (5 TDR cycles in boot), none with it. ⚠ `false` (`KF3_DIAG_WINDOW_NOTIFIER_FINISHED_AT_LATCH=1`):
+    /// the pre-2026-10-10 behaviour, every window notifier FINISHED at its own latch (diagnostic A/B only).
+    pub notifier_finish_at_flip_away: bool,
 }
 
 impl Engine {
@@ -547,6 +606,9 @@ impl Engine {
             core_latch_at_vblank: false,
             presented: [false; 8],
             pace: [PaceCounts::default(); 8],
+            ledger: FlipLedger::default(),
+            release_at_latch: false,
+            notifier_finish_at_flip_away: true,
         }
     }
 
@@ -637,6 +699,27 @@ impl Engine {
     #[must_use]
     pub fn client(&self, chn: u32) -> Option<u32> {
         self.chans.get(chn as usize)?.as_ref().map(|c| c.client)
+    }
+
+    /// ⚠ DIAGNOSTIC: `ch<N>:committed/completed(slowest ms, slow n, acq-blocked n, pending age ms)` for every
+    /// channel that committed anything.
+    #[must_use]
+    pub fn ledger_summary(&self) -> String {
+        let l = &self.ledger;
+        (0..CHANNELS)
+            .filter(|&i| l.committed[i] > 0)
+            .map(|i| {
+                let age = self.chans[i]
+                    .as_ref()
+                    .and_then(|c| c.commit)
+                    .map_or(0, |t| t.elapsed().as_millis());
+                format!(
+                    "ch{i}:{}/{}(max {}ms slow {} acqblk {} pend {}ms)",
+                    l.committed[i], l.completed[i], l.max_ms[i], l.slow_n[i], l.acq_blocked[i], age
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(" ")
     }
 
     /// A GPU scanout failure stops the display engine without publishing successful
@@ -870,6 +953,16 @@ impl Engine {
                 )));
             }
             if m == update {
+                self.ledger.committed[n as usize] += 1;
+                c.commit = Some(std::time::Instant::now());
+                c.acq_block = None;
+                c.commit_info = format!(
+                    "update={:#x} iso0_assy={:#x} sem_ctxdma_assy={:#x} notif_ctxdma_assy={:#x}",
+                    l.write.data,
+                    c.a(vocab.w_iso0),
+                    c.a(vocab.w_ctxdma_sem),
+                    c.a(vocab.w_ctxdma_notifier)
+                );
                 let ilk = interlock_set(&vocab, c, l.write.data);
                 c.stage = Stage::Interlock {
                     update: l.write.data,
@@ -1119,6 +1212,15 @@ impl Engine {
             if let Some(a) = self.acquire_of(n)
                 && !acquired(&a)
             {
+                if let Some(c) = self.chans[n as usize].as_mut()
+                    && c.acq_block.is_none()
+                {
+                    c.acq_block = Some(std::time::Instant::now());
+                    c.acq_info = format!(
+                        "acquire ctxdma={:#x} +{:#x} want={:#x} wide={} mode={}",
+                        a.handle, a.offset, a.value, a.wide, a.mode
+                    );
+                }
                 return;
             }
         }
@@ -1227,10 +1329,38 @@ impl Engine {
     /// does its notifier raise the flip event).
     fn complete(&mut self, n: u32, was_active: bool, st: &mut Step) {
         let v = self.vocab.clone();
+        let at_latch = self.release_at_latch;
+        let finish_away = self.notifier_finish_at_flip_away;
         let Some(c) = self.chans.get_mut(n as usize).and_then(|c| c.as_mut()) else {
             return;
         };
         let Stage::Latch { .. } = c.stage else { return };
+        // ★ 2026-10-10 (TDR hunt, shape F): a window's RELEASE semaphore is written when the entry it was programmed
+        // with is FLIPPED AWAY — replaced by the next latched update — not when that entry itself latches. Open NVKMS
+        // states the EVO/NVDisplay behaviour it simulates in software: "We write the semaphore's release value when the
+        // NVHsChannelFlipQueueEntry is removed from current (i.e., when we do the equivalent of 'flip away')"
+        // (`ogkm-595.84: nvidia-modeset/include/nvkms-headsurface-priv.h:236-244`). So the release written at this latch
+        // is the OUTGOING armed state's, read before the arm below. [measured, runs 268-279] writing the incoming
+        // entry's release at its own latch told a guest whose VSync handling ran after the latch pass that the flip it
+        // was waiting for had already been flipped away; it never reported that present, its flip queue timed out (TDR).
+        // (⚠ `release_at_latch`, diagnostic: the incoming entry's release — its ASSEMBLY words, armed just below)
+        let outgoing_release = (c.kind == ChannelKind::Window)
+            .then(|| Self::release_of(&v, c, n, if at_latch { Chan::a } else { Chan::armed }))
+            .flatten();
+        // the outgoing entry's notifier, FINISHED at its flip-away — read before the arm
+        let outgoing_notify = (finish_away && c.kind == ChannelKind::Window)
+            .then(|| {
+                let handle = c.armed(v.w_ctxdma_notifier);
+                (handle != 0).then(|| Effect::Notify {
+                    chn: n,
+                    client: c.client,
+                    handle,
+                    offset: u64::from(fld(c.armed(v.w_notifier_control), v.n_offset)) * 16,
+                    awaken: false,
+                    finished: true,
+                })
+            })
+            .flatten();
         // 1. arm
         let mut changed = Vec::new();
         for (i, (a, b)) in c.assy.iter().zip(c.armed.iter_mut()).enumerate() {
@@ -1243,6 +1373,27 @@ impl Engine {
             armed.clone_from(assy);
         }
         self.updates += 1;
+        {
+            let idx = n as usize;
+            self.ledger.completed[idx] += 1;
+            if let Some(t0) = c.commit.take() {
+                let ms = u64::try_from(t0.elapsed().as_millis()).unwrap_or(u64::MAX);
+                let blocked = c.acq_block.take().map(|t| t.elapsed().as_millis());
+                if blocked.is_some() {
+                    self.ledger.acq_blocked[idx] += 1;
+                }
+                self.ledger.max_ms[idx] = self.ledger.max_ms[idx].max(ms);
+                if ms > 50 {
+                    self.ledger.slow_n[idx] += 1;
+                    if self.ledger.slow.len() < 64 {
+                        self.ledger.slow.push(format!(
+                            "chn {n} {:?}#{} commit->complete {ms} ms (acquire blocked {:?} ms: {}); {}",
+                            c.kind, c.instance, blocked, c.acq_info, c.commit_info
+                        ));
+                    }
+                }
+            }
+        }
         // 2. the completions it asked for — only now that the state is armed
         match c.kind {
             ChannelKind::Core => {
@@ -1258,26 +1409,18 @@ impl Engine {
                         handle,
                         offset: u64::from(fld(ctl, v.n_offset)) * 16,
                         awaken: fld(ctl, v.n_mode) == v.n_mode_awaken,
+                        finished: true,
                     });
                 }
             }
             ChannelKind::Window => {
                 st.effects.push(Effect::Latched { window: c.instance });
-                let sem = c.armed(v.w_ctxdma_sem);
-                if sem != 0 {
-                    let ctl = c.armed(v.w_sem_control);
-                    let wide = fld(ctl, v.w_sem_payload) == 1;
-                    let hi = v.w_sem_release_hi.map_or(0, |m| c.armed(m));
-                    let lo = u64::from(c.armed(v.w_sem_release));
-                    st.effects.push(Effect::Release {
-                        chn: n,
-                        client: c.client,
-                        handle: sem,
-                        offset: u64::from(fld(ctl, v.w_sem_offset)) * 16,
-                        value: if wide { u64::from(hi) << 32 | lo } else { lo },
-                        wide,
-                        awaken: fld(ctl, v.w_sem_rel_mode) == 1,
-                    });
+                // the entry this latch flipped away (see `outgoing_release` above), never the one just armed
+                if let Some(r) = outgoing_release {
+                    st.effects.push(r);
+                }
+                if let Some(o) = outgoing_notify {
+                    st.effects.push(o);
                 }
                 let handle = c.armed(v.w_ctxdma_notifier);
                 if handle != 0 {
@@ -1288,6 +1431,7 @@ impl Engine {
                         handle,
                         offset: u64::from(fld(ctl, v.n_offset)) * 16,
                         awaken: was_active && fld(ctl, v.n_mode) == v.n_mode_awaken,
+                        finished: false,
                     });
                 }
             }
@@ -1301,6 +1445,58 @@ impl Engine {
         {
             c.get = c.queue.front().map_or(c.decoded, |f| f.header);
         }
+    }
+
+    /// ⚠ DIAGNOSTIC (slot history, 2026-10-10 TDR hunt): window channel `n`'s notifier and release slots as its
+    /// ASSEMBLY (`armed == false`: the request just committed) or ARMED state names them, as `Notify` / `Release`
+    /// effects (never queued — the display thread only samples the slots they name).
+    #[must_use]
+    pub fn window_slots(&self, n: u32, armed: bool) -> Vec<Effect> {
+        let Some(c) = self.chans.get(n as usize).and_then(|c| c.as_ref()) else {
+            return Vec::new();
+        };
+        if c.kind != ChannelKind::Window {
+            return Vec::new();
+        }
+        let v = &self.vocab;
+        let get: fn(&Chan, u32) -> u32 = if armed { Chan::armed } else { Chan::a };
+        let mut out = Vec::new();
+        let handle = get(c, v.w_ctxdma_notifier);
+        if handle != 0 {
+            let ctl = get(c, v.w_notifier_control);
+            out.push(Effect::Notify {
+                chn: n,
+                client: c.client,
+                handle,
+                offset: u64::from(fld(ctl, v.n_offset)) * 16,
+                awaken: false,
+                finished: false,
+            });
+        }
+        out.extend(Self::release_of(v, c, n, get));
+        out
+    }
+
+    /// The release a window entry asks for, read through `get` (its ARMED or ASSEMBLY words): `None` without a
+    /// semaphore context DMA.
+    fn release_of(v: &Vocab, c: &Chan, n: u32, get: fn(&Chan, u32) -> u32) -> Option<Effect> {
+        let sem = get(c, v.w_ctxdma_sem);
+        if sem == 0 {
+            return None;
+        }
+        let ctl = get(c, v.w_sem_control);
+        let wide = fld(ctl, v.w_sem_payload) == 1;
+        let hi = v.w_sem_release_hi.map_or(0, |m| get(c, m));
+        let lo = u64::from(get(c, v.w_sem_release));
+        Some(Effect::Release {
+            chn: n,
+            client: c.client,
+            handle: sem,
+            offset: u64::from(fld(ctl, v.w_sem_offset)) * 16,
+            value: if wide { u64::from(hi) << 32 | lo } else { lo },
+            wide,
+            awaken: fld(ctl, v.w_sem_rel_mode) == 1,
+        })
     }
 
     /// The head window `w` is owned by in the ARMED core state (`None`: no owner or no core).

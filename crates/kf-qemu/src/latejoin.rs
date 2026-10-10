@@ -1,5 +1,9 @@
 //! ★ 2026-10-09 — **a channel that joins a guest TSG the guest has already scheduled.**
-//! `STATUS: LIVE (default OFF: KF3_SCHEDULE_LATE_JOINERS=1), 2026-10-09` — `docs/design/V3_LATE_TSG_JOINER.md`.
+//! `STATUS: LIVE (hardwired), 2026-10-10` — `docs/design/V3_LATE_TSG_JOINER.md`. [measured, Windows 11 / RTX 4070,
+//! `traces/windows_tdr_hunt_20261010` runs 287, 288 vs 290] without it the compute+copy joiners of a D3D12 device's TSG
+//! (ctxShare 1, 2) kept host `GP_GET=0` under rung work, the context flush hung and Windows reset the GPU (1 and 4 TDRs in
+//! the hold); with it 15 joiners were `Authored`, none stayed unfetched, 0 TDR, 0 new host Xid. The design note's
+//! section 6 falsifier was not met. (Was default off behind `KF3_SCHEDULE_LATE_JOINERS=1` until then.)
 //!
 //! The guest schedules a TSG ONCE (`NVA06C_CTRL_CMD_GPFIFO_SCHEDULE`, `0xa06c0101`), and a channel
 //! it allocates into that TSG afterwards gets no schedule of its own: `[measured]` Windows' D3D12
@@ -26,16 +30,6 @@
 use kf_host::{Channel, HostRm};
 use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
-
-/// The switch (default OFF until the hardware falsifier in the design note has passed).
-pub const SWITCH: &str = "KF3_SCHEDULE_LATE_JOINERS";
-
-/// `KF3_SCHEDULE_LATE_JOINERS=1`, read once.
-#[must_use]
-pub fn enabled() -> bool {
-    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| std::env::var(SWITCH).as_deref() == Ok("1"))
-}
 
 /// What the guest has said about the scheduling of its TSGs: `(hClient, hTsg)` → the last
 /// `bEnable` of a schedule statement that named it.
@@ -98,8 +92,6 @@ impl GroupScheduler for HostRm {
 /// What [`schedule_late_joiner`] did.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LateJoin {
-    /// The switch is off.
-    SwitchOff,
     /// The channel is not in a TSG.
     NoTsg,
     /// The guest has not scheduled its TSG (or disabled it since): nothing to follow.
@@ -119,15 +111,11 @@ pub enum LateJoin {
 /// would not enable is not a twin that runs).
 pub fn schedule_late_joiner<S: GroupScheduler>(
     host: &S,
-    switch_on: bool,
     guest: &Mutex<GuestTsgSched>,
     client: u32,
     tsg: Option<u32>,
     chan: Channel,
 ) -> Result<LateJoin, String> {
-    if !switch_on {
-        return Ok(LateJoin::SwitchOff);
-    }
     let Some(tsg) = tsg else {
         return Ok(LateJoin::NoTsg);
     };
@@ -213,7 +201,7 @@ mod tests {
         let first = twin(0x1000, 0x1d);
         // The first member is born before the guest's schedule: nothing to follow.
         assert_eq!(
-            schedule_late_joiner(&host, true, &guest, CLIENT, Some(TSG), first),
+            schedule_late_joiner(&host, &guest, CLIENT, Some(TSG), first),
             Ok(LateJoin::GuestNotScheduled)
         );
         // The guest's schedule statement: its one twin's group.
@@ -224,7 +212,7 @@ mod tests {
         // The late joiner (its own context share: its own host group).
         let late = twin(0x2000, 0x1e);
         assert_eq!(
-            schedule_late_joiner(&host, true, &guest, CLIENT, Some(TSG), late),
+            schedule_late_joiner(&host, &guest, CLIENT, Some(TSG), late),
             Ok(LateJoin::Authored)
         );
         assert_eq!(
@@ -243,22 +231,18 @@ mod tests {
         let guest = Mutex::new(GuestTsgSched::default());
         let c = twin(0x3000, 0x20);
         assert_eq!(
-            schedule_late_joiner(&host, true, &guest, CLIENT, Some(TSG), c),
+            schedule_late_joiner(&host, &guest, CLIENT, Some(TSG), c),
             Ok(LateJoin::GuestNotScheduled)
         );
         assert_eq!(
-            schedule_late_joiner(&host, true, &guest, CLIENT, None, c),
+            schedule_late_joiner(&host, &guest, CLIENT, None, c),
             Ok(LateJoin::NoTsg)
         );
         let scheduled = Mutex::new(GuestTsgSched::default());
         scheduled.lock().expect("state").record(CLIENT, TSG, true);
-        assert_eq!(
-            schedule_late_joiner(&host, false, &scheduled, CLIENT, Some(TSG), c),
-            Ok(LateJoin::SwitchOff)
-        );
         // Another client's TSG with the same handle is not this client's.
         assert_eq!(
-            schedule_late_joiner(&host, true, &scheduled, CLIENT + 1, Some(TSG), c),
+            schedule_late_joiner(&host, &scheduled, CLIENT + 1, Some(TSG), c),
             Ok(LateJoin::GuestNotScheduled)
         );
         assert!(host.calls.borrow().is_empty());
@@ -274,19 +258,19 @@ mod tests {
         guest.lock().expect("state").record(CLIENT, TSG, true);
         guest.lock().expect("state").record(CLIENT, TSG, false);
         assert_eq!(
-            schedule_late_joiner(&host, true, &guest, CLIENT, Some(TSG), c),
+            schedule_late_joiner(&host, &guest, CLIENT, Some(TSG), c),
             Ok(LateJoin::GuestNotScheduled)
         );
         guest.lock().expect("state").record(CLIENT, TSG, true);
         assert_eq!(
-            schedule_late_joiner(&host, true, &guest, CLIENT, Some(TSG), c),
+            schedule_late_joiner(&host, &guest, CLIENT, Some(TSG), c),
             Ok(LateJoin::Authored)
         );
         // The TSG is freed; the handle comes back as a new, unscheduled group.
         guest.lock().expect("state").forget(CLIENT, TSG);
         assert!(guest.lock().expect("state").is_empty());
         assert_eq!(
-            schedule_late_joiner(&host, true, &guest, CLIENT, Some(TSG), c),
+            schedule_late_joiner(&host, &guest, CLIENT, Some(TSG), c),
             Ok(LateJoin::GuestNotScheduled)
         );
         // Freeing the client takes every row it held.
@@ -321,7 +305,7 @@ mod tests {
         let late_c = twin(0x3000, 0x20);
         for late in [late_a, late_b, late_c] {
             assert_eq!(
-                schedule_late_joiner(&host, true, &guest, CLIENT, Some(TSG), late),
+                schedule_late_joiner(&host, &guest, CLIENT, Some(TSG), late),
                 Ok(LateJoin::Authored)
             );
         }
@@ -351,7 +335,7 @@ mod tests {
         };
         let guest = Mutex::new(GuestTsgSched::default());
         guest.lock().expect("state").record(CLIENT, TSG, true);
-        let err = schedule_late_joiner(&host, true, &guest, CLIENT, Some(TSG), twin(0x2000, 0x1e))
+        let err = schedule_late_joiner(&host, &guest, CLIENT, Some(TSG), twin(0x2000, 0x1e))
             .expect_err("refused");
         assert!(err.contains("refused"), "{err}");
     }

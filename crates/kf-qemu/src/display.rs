@@ -305,6 +305,68 @@ fn frame_edge(ports: &Ports, map: &RegMap, h: usize, loadv: bool) -> u32 {
     ports.rm_head_timing(h)
 }
 
+/// A head's whole frame edge: its frame counters (`RG_DPCA`, LOADV), then [`frame_edge`]. Returns the RM-visible bits.
+fn frame_edge_out(
+    dp: &DisplayPlane,
+    store: &dyn Fn(u64, u32),
+    h: usize,
+    f: u32,
+    loadv: bool,
+    wtrace: bool,
+    traced: &AtomicU32,
+) -> u32 {
+    let (b, st, fld) = dp.map.rg_dpca;
+    store(b + h as u64 * st, kf_disp::class::put(0, fld, f));
+    if let Some((lb, ls)) = dp.map.loadv {
+        store(lb + h as u64 * ls, f);
+    }
+    let irq = frame_edge(&dp.ports, &dp.map, h, loadv);
+    if wtrace && irq != 0 && trace_slot(traced, display_trace_cap()) {
+        eprintln!(
+            "kf3: display: WTRACE t={:.6} VSYNC h{h} frame={f} evt={:#x} en={:#x} rm={irq:#x}",
+            kf_mem::maplog::t(),
+            dp.ports.event(EventReg::HeadTiming(h)),
+            dp.ports.event(EventReg::HeadTimingEn(h)),
+        );
+    }
+    irq
+}
+
+/// ⚠ DIAGNOSTIC (`KF3_DIAG_SLOT_HISTORY=1`, default off, 2026-10-10 TDR hunt): the host clock in microseconds.
+fn utc_us() -> u128 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_micros())
+}
+
+/// ⚠ DIAGNOSTIC slot history: where the slot `e` names is, what it holds now, and what kayfabe last wrote there.
+fn slot_now(io: &mut Io<'_>, e: &Effect, last: &std::collections::HashMap<(bool, u64), u64>) -> String {
+    let (kind, chn, client, handle, offset, wide) = match *e {
+        Effect::Notify { chn, client, handle, offset, .. } => ("notify", chn, client, handle, offset, false),
+        Effect::Release { chn, client, handle, offset, wide, .. } => ("release", chn, client, handle, offset, wide),
+        _ => return String::new(),
+    };
+    match io.resolve(client, handle, chn) {
+        Ok(dma) => {
+            let mut b = [0u8; 8];
+            let n = if wide { 8 } else { 4 };
+            let now = io.read(dma, offset, &mut b[..n]).map(|()| u64::from_le_bytes(b));
+            let key = (dma.target == Target::Vidmem, dma.base + offset);
+            format!(
+                "{kind} ctxdma {handle:#x} +{offset:#x} at {:?} {:#x} now={} kf_last={}",
+                dma.target,
+                dma.base + offset,
+                now.map_or_else(|e| format!("ERR({e})"), |v| format!("{v:#x}")),
+                last.get(&key).map_or_else(|| "none".to_string(), |v| format!("{v:#x}"))
+            )
+        }
+        Err(err) => format!("{kind} ctxdma {handle:#x} +{offset:#x} UNRESOLVED({err})"),
+    }
+}
+
+/// ⚠ DIAGNOSTIC slot-history line budget per run.
+const SLOT_LINES: u64 = 400_000;
+
 /// `NV_PDISP_FE_CORE_HEAD_STATE(i)`: base, stride, the `OPERATING_MODE` field `(hi, lo)`, and its
 /// `AWAKE` and `SLEEP` values.
 type CoreHeadState = (u64, u64, (u8, u8), u32, u32);
@@ -1418,6 +1480,8 @@ struct WorkerInit {
     gpu: Option<DisplayGpu>,
     layout: Layout,
     notifier_finished: u32,
+    /// `NV_DISP_NOTIFIER__0_STATUS_BEGUN` as a status word, when derived (the ⚠ window-notifier A/B).
+    notifier_begun: Option<u32>,
     /// ★ The GPU-copy rung's worker half (§8.11), when the device offers it.
     vram: Option<VramWorker>,
 }
@@ -1796,6 +1860,10 @@ impl DisplayPlane {
             .zip(t.notifier_value("__0_STATUS_FINISHED"))
             .map(|(fld, v)| kf_disp::class::put(0, fld, v))
             .ok_or("display=on: NV_DISP_NOTIFIER__0_STATUS is not derived")?;
+        let notifier_begun = t
+            .notifier_field("__0_STATUS")
+            .zip(t.notifier_value("__0_STATUS_BEGUN"))
+            .map(|(fld, v)| kf_disp::class::put(0, fld, v));
         let model = kf_rm::display::model_for(table, row, max_fps).ok_or_else(|| {
             format!("display=on: no derived display layouts for driver {version}")
         })?;
@@ -1886,6 +1954,7 @@ impl DisplayPlane {
                 gpu: Some(gpu),
                 layout,
                 notifier_finished,
+                notifier_begun,
                 vram,
             })),
             cursor: core::array::from_fn(|_| CursorPorts::default()),
@@ -2136,6 +2205,8 @@ struct Io<'d> {
     /// The instance-memory image, read (by the GPU) at most once per worker pass.
     img: Option<Vec<u8>>,
     notifier_finished: u32,
+    /// The status word a WINDOW flip's notifier gets: FINISHED, or ⚠ (`KF3_DIAG_WINDOW_NOTIFIER_BEGUN=1`) BEGUN.
+    window_notifier: u32,
     refusals_logged: u32,
 }
 
@@ -2291,6 +2362,7 @@ impl Device {
             gpu,
             layout,
             notifier_finished,
+            notifier_begun,
             vram,
         } = init;
         if let Some(g) = &gpu
@@ -2338,6 +2410,25 @@ impl Device {
         // head's vblank, as the hardware's do (`kf_disp::engine::Engine::core_latch_at_vblank`)
         engine.core_latch_at_vblank =
             std::env::var("KF3_DISPLAY_CORE_AT_VBLANK").is_ok_and(|v| v == "1");
+        // ⚠ DIAGNOSTIC A/B switches (2026-10-10 TDR hunt; default off, never product settings)
+        engine.release_at_latch = std::env::var("KF3_DIAG_RELEASE_AT_LATCH").is_ok_and(|v| v == "1");
+        // ⚠ DIAGNOSTIC A/B (default off): the pre-2026-10-10 window notifier — FINISHED at its own latch, nothing at
+        // its flip-away
+        let finished_at_latch =
+            std::env::var("KF3_DIAG_WINDOW_NOTIFIER_FINISHED_AT_LATCH").is_ok_and(|v| v == "1");
+        engine.notifier_finish_at_flip_away = !finished_at_latch;
+        let order = crate::vblankgate::VblankOrder::from_env();
+        let slot_hist = std::env::var("KF3_DIAG_SLOT_HISTORY").is_ok_and(|v| v == "1");
+        if engine.release_at_latch
+            || finished_at_latch
+            || order != crate::vblankgate::VblankOrder::LatchFirst
+            || slot_hist
+        {
+            eprintln!(
+                "kf3: display: DIAGNOSTIC release_at_latch={} notifier_finish_at_flip_away={} vblank_order={order:?} slot_history={slot_hist}",
+                engine.release_at_latch, engine.notifier_finish_at_flip_away
+            );
+        }
         if engine.core_latch_at_vblank {
             eprintln!(
                 "kf3: display: EXPERIMENT KF3_DISPLAY_CORE_AT_VBLANK=1 — a core update on an active head latches (and notifies) at its next vblank"
@@ -2390,6 +2481,21 @@ impl Device {
             inst: None,
             img: None,
             notifier_finished,
+            // ★ 2026-10-10: a WINDOW flip's notifier is written BEGUN at its latch — open NVKMS: the display writes it
+            // BEGUN when it performs the flip (`ogkm-595.84: nvidia-modeset/src/nvkms-headsurface.c:1925-1952`) — and
+            // FINISHED at its flip-away (`Engine::notifier_finish_at_flip_away`); the core's completion notifier is
+            // FINISHED (`nvkms-evo3.c:6224-6243`)
+            window_notifier: if std::env::var("KF3_DIAG_WINDOW_NOTIFIER_FINISHED_AT_LATCH").is_ok_and(|v| v == "1") {
+                eprintln!("kf3: display: DIAGNOSTIC window notifiers are written FINISHED at their own latch");
+                notifier_finished
+            } else if let Some(b) = notifier_begun {
+                b
+            } else {
+                eprintln!(
+                    "kf3: display: NV_DISP_NOTIFIER__0_STATUS_BEGUN is not derived — window notifiers are written FINISHED"
+                );
+                notifier_finished
+            },
             refusals_logged: 0,
         };
         // ★ `display-max-fps` (§8.16): every head's vblank tick, CAPPED — the pacer owns the periods
@@ -2433,6 +2539,16 @@ impl Device {
             ..ScanState::default()
         };
         let mut queue: VecDeque<Queued> = VecDeque::new();
+        // ★ 2026-10-10 (shape F): a head's frame edge waits for its vblank's completions (`vblankgate`)
+        let mut gate = crate::vblankgate::VblankGate::default();
+        let mut edge_frame = [0u32; MAX_HEADS];
+        let mut forced_logged = 0u64;
+        let mut last_edge: Option<Instant> = None;
+        let mut slot_lines = 0u64;
+        let mut committed_seen = vec![0u64; engine.ledger.committed.len()];
+        let mut slot_last: std::collections::HashMap<(bool, u64), u64> = std::collections::HashMap::new();
+        let mut ledger_q = LedgerQ::default();
+        let mut ledger_last = Instant::now();
         let mut cursor_seen = [0u32; MAX_HEADS];
         let mut published_get = [u32::MAX; kf_disp::ports::NUM_CHANNELS];
         let mut logged_updates = 0u32;
@@ -2463,6 +2579,15 @@ impl Device {
             }
             if let Some(t) = scan.idle_at {
                 deadline = deadline.min(t);
+            }
+            if let Some(t) = gate.deadline() {
+                deadline = deadline.min(t);
+            }
+            if order == crate::vblankgate::VblankOrder::RaiseDelay
+                && !queue.is_empty()
+                && let Some(t) = last_edge
+            {
+                deadline = deadline.min(t + crate::vblankgate::RAISE_DELAY);
             }
             // a lit head without a window: wake when its hold ends (then the console may go black)
             if let Some(t) = windowless_since.map(|t| t + WINDOWLESS_HOLD)
@@ -2595,6 +2720,24 @@ impl Device {
                         }
                         effects.extend(s.effects);
                         gets.extend(s.gets);
+                        // ⚠ DIAGNOSTIC slot history: a new request (UPDATE) — the slots it names and what they hold now
+                        let k = engine.ledger.committed[chn as usize];
+                        if slot_hist && k != committed_seen[chn as usize] {
+                            let prev = committed_seen[chn as usize];
+                            committed_seen[chn as usize] = k;
+                            for e in engine.window_slots(chn, false) {
+                                if slot_lines < SLOT_LINES {
+                                    slot_lines += 1;
+                                    eprintln!(
+                                        "kf3: display: SLOT REQ utc_us={} t={:.6} chn {chn} commit#{k} (+{}) {}",
+                                        utc_us(),
+                                        kf_mem::maplog::t(),
+                                        k - prev,
+                                        slot_now(&mut io, &e, &slot_last)
+                                    );
+                                }
+                            }
+                        }
                     }
                     Err(e) => io.refuse(&format!("channel {chn}: {e}")),
                 }
@@ -2641,29 +2784,33 @@ impl Device {
                 let s = engine.vblank(t.head, &mut |a| io.acquired(a));
                 effects.extend(s.effects);
                 gets.extend(s.gets);
-                let f = dp.ports.frames[h]
+                // ★ the frame edge itself (the frame counters, the head-timing event, the interrupt) is
+                // NOT raised here: the hardware raises it after the latch it announces, so it goes
+                // through the gate below, once this vblank's completions are delivered (step 7b)
+                edge_frame[h] = dp.ports.frames[h]
                     .fetch_add(1, Ordering::AcqRel)
                     .wrapping_add(1);
-                let (b, st, fld) = dp.map.rg_dpca;
-                store(b + h as u64 * st, kf_disp::class::put(0, fld, f));
-                if let Some((lb, ls)) = dp.map.loadv {
-                    store(lb + h as u64 * ls, f);
-                }
-                let irq = frame_edge(&dp.ports, &dp.map, h, loadv);
-                raised |= irq != 0;
-                if wtrace && irq != 0 && trace_slot(&vsync_traced, display_trace_cap()) {
-                    eprintln!(
-                        "kf3: display: WTRACE t={:.6} VSYNC h{h} frame={f} evt={:#x} en={:#x} rm={irq:#x}",
-                        kf_mem::maplog::t(),
-                        dp.ports.event(EventReg::HeadTiming(h)),
-                        dp.ports.event(EventReg::HeadTimingEn(h)),
-                    );
-                }
                 counts[h].ticks += 1;
-                if irq & dp.map.head_vblank != 0 {
-                    counts[h].vblirq += 1;
-                }
                 ticked |= 1 << h;
+                if order != crate::vblankgate::VblankOrder::LatchFirst {
+                    // the current default (and `raise-delay`): the edge at the tick
+                    let irq = frame_edge_out(dp, &store, h, edge_frame[h], loadv, wtrace, &vsync_traced);
+                    raised |= irq != 0;
+                    if irq & dp.map.head_vblank != 0 {
+                        counts[h].vblirq += 1;
+                    }
+                    last_edge = Some(Instant::now());
+                    if slot_hist && slot_lines < SLOT_LINES {
+                        slot_lines += 1;
+                        eprintln!(
+                            "kf3: display: SLOT EDGE utc_us={} t={:.6} h{h} frame={} rm={irq:#x} queued={}",
+                            utc_us(),
+                            kf_mem::maplog::t(),
+                            edge_frame[h],
+                            queue.len()
+                        );
+                    }
+                }
             }
             // 5. acquires waiting without a vblank
             if engine.acquire_pending() {
@@ -2810,13 +2957,24 @@ impl Device {
                 queue.push_back(Queued {
                     need: scan.barrier,
                     item: Item::Effect(e),
+                    enq: Instant::now(),
                 });
+                gate.pushed();
             }
             for (chn, life, get) in gets {
                 queue.push_back(Queued {
                     need: scan.barrier,
                     item: Item::Get(chn, life, get),
+                    enq: Instant::now(),
                 });
+                gate.pushed();
+            }
+            // every head that ticked: its edge waits for everything queued up to and including its vblank
+            let tick_at = Instant::now();
+            for h in 0..MAX_HEADS {
+                if order == crate::vblankgate::VblankOrder::LatchFirst && ticked & (1 << h) != 0 {
+                    gate.tick(h, tick_at);
+                }
             }
             if io
                 .gpu
@@ -2860,10 +3018,47 @@ impl Device {
                 engine.halt_scanout();
             }
             // 7. completions, IN ORDER — each after the state it reports and the copy it follows
-            while queue.front().is_some_and(|q| q.need <= scan.done) {
-                let Some(Queued { item, .. }) = queue.pop_front() else {
+            // (⚠ `raise-delay`, diagnostic: none within RAISE_DELAY of an edge)
+            let held_by_delay = order == crate::vblankgate::VblankOrder::RaiseDelay
+                && last_edge.is_some_and(|t| t.elapsed() < crate::vblankgate::RAISE_DELAY);
+            while !held_by_delay && queue.front().is_some_and(|q| q.need <= scan.done) {
+                let Some(Queued { item, enq, need }) = queue.pop_front() else {
                     break;
                 };
+                {
+                    // ⚠ DIAGNOSTIC (flip ledger): how long this completion waited for the console copy it follows.
+                    let lag = enq.elapsed();
+                    ledger_q.n += 1;
+                    ledger_q.max_ms = ledger_q.max_ms.max(lag.as_millis() as u64);
+                    if lag > Duration::from_millis(50) {
+                        ledger_q.slow += 1;
+                        if ledger_q.slow <= 40 {
+                            let what = match &item {
+                                Item::Effect(Effect::Notify { chn, handle, offset, .. }) => {
+                                    format!("Notify chn {chn} ctxdma {handle:#x} +{offset:#x}")
+                                }
+                                Item::Effect(Effect::Release { chn, handle, offset, value, .. }) => {
+                                    format!("Release chn {chn} ctxdma {handle:#x} +{offset:#x} value {value:#x}")
+                                }
+                                Item::Effect(Effect::Latched { window }) => format!("Latched window {window}"),
+                                Item::Effect(Effect::CoreArmed(_)) => "CoreArmed".to_string(),
+                                Item::Effect(_) => "other effect".to_string(),
+                                Item::Get(chn, _, get) => format!("GET chn {chn} -> {get:#x}"),
+                            };
+                            eprintln!(
+                                "kf3: display: FLIP-QUEUED-LAG t={:.6} utc_ms={} {what}: waited {} ms for scanout copy {need} (copies started {} done {}, in flight {})",
+                                kf_mem::maplog::t(),
+                                std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .map_or(0, |d| d.as_millis()),
+                                lag.as_millis(),
+                                scan.started,
+                                scan.done,
+                                scan.inflight.is_some()
+                            );
+                        }
+                    }
+                }
                 let e = match item {
                     Item::Effect(e) => e,
                     Item::Get(chn, life, get) => {
@@ -2900,19 +3095,49 @@ impl Device {
                         handle,
                         offset,
                         awaken,
+                        finished,
                     } => {
-                        let r = io.resolve(client, handle, chn).and_then(|dma| {
+                        if slot_hist && slot_lines < SLOT_LINES {
+                            slot_lines += 1;
+                            let fin = if finished || chn == 0 { io.notifier_finished } else { io.window_notifier };
+                            let at = slot_now(
+                                &mut io,
+                                &Effect::Notify { chn, client, handle, offset, awaken, finished },
+                                &slot_last,
+                            );
+                            eprintln!(
+                                "kf3: display: SLOT WRITE utc_us={} t={:.6} chn {chn} completed#{} new=status({fin:#x}) {at}",
+                                utc_us(),
+                                kf_mem::maplog::t(),
+                                engine.ledger.completed[chn as usize],
+                            );
+                        }
+                        let dres = io.resolve(client, handle, chn);
+                        let at = dres.as_ref().ok().map(|d| (d.target, d.base + offset));
+                        if slot_hist && let Some((t, a)) = at {
+                            let fin = if finished || chn == 0 { io.notifier_finished } else { io.window_notifier };
+                            slot_last.insert((t == Target::Vidmem, a), u64::from(fin));
+                        }
+                        let r = dres.and_then(|dma| {
                             let ts = self.rm.gpu_time_ns().unwrap_or(0);
                             let mut n = [0u8; 16];
                             n[8..12].copy_from_slice(&(ts as u32).to_le_bytes());
                             n[12..16].copy_from_slice(&((ts >> 32) as u32).to_le_bytes());
                             // the timestamp words first, the status word (what the guest polls) last
                             io.write(dma, offset + 4, &n[4..16])?;
-                            io.write(dma, offset, &io.notifier_finished.to_le_bytes())
+                            let status = if finished || chn == 0 { io.notifier_finished } else { io.window_notifier };
+                            io.write(dma, offset, &status.to_le_bytes())
                         });
                         if trace {
                             eprintln!(
                                 "kf3: display: TRACE notify chn {chn} handle {handle:#x} +{offset:#x} awaken={awaken} -> {r:?}"
+                            );
+                        }
+                        if wtrace {
+                            eprintln!(
+                                "kf3: display: WTRACE t={:.6} NOTIFY chn {chn} handle {handle:#x} +{offset:#x} at {at:x?} -> {}",
+                                kf_mem::maplog::t(),
+                                if r.is_ok() { "ok" } else { "REFUSED" }
                             );
                         }
                         match r {
@@ -2940,13 +3165,39 @@ impl Device {
                         wide,
                         awaken,
                     } => {
-                        let r = io.resolve(client, handle, chn).and_then(|dma| {
+                        if slot_hist && slot_lines < SLOT_LINES {
+                            slot_lines += 1;
+                            eprintln!(
+                                "kf3: display: SLOT WRITE utc_us={} t={:.6} chn {chn} completed#{} new={value:#x} {}",
+                                utc_us(),
+                                kf_mem::maplog::t(),
+                                engine.ledger.completed[chn as usize],
+                                slot_now(
+                                    &mut io,
+                                    &Effect::Release { chn, client, handle, offset, value, wide, awaken },
+                                    &slot_last
+                                )
+                            );
+                        }
+                        let dres = io.resolve(client, handle, chn);
+                        let at = dres.as_ref().ok().map(|d| (d.target, d.base + offset));
+                        if slot_hist && let Some((t, a)) = at {
+                            slot_last.insert((t == Target::Vidmem, a), value);
+                        }
+                        let r = dres.and_then(|dma| {
                             let b = value.to_le_bytes();
                             io.write(dma, offset, if wide { &b[..] } else { &b[..4] })
                         });
                         if trace {
                             eprintln!(
                                 "kf3: display: TRACE release chn {chn} handle {handle:#x} +{offset:#x} value {value:#x} -> {r:?}"
+                            );
+                        }
+                        if wtrace {
+                            eprintln!(
+                                "kf3: display: WTRACE t={:.6} RELEASE chn {chn} handle {handle:#x} +{offset:#x} value {value:#x} at {at:x?} -> {}",
+                                kf_mem::maplog::t(),
+                                if r.is_ok() { "ok" } else { "REFUSED" }
                             );
                         }
                         match r {
@@ -2992,6 +3243,70 @@ impl Device {
                         eprintln!("kf3: display: channel {chn} STOPPED at {at:#x}: {what}");
                     }
                 }
+            }
+            // 7b. ★ 2026-10-10 (shape F, `vblankgate`): the frame edges whose vblank's completions are all
+            // delivered — the hardware order: latch, notifier/semaphore/GET, THEN the vblank event and its
+            // interrupt. Every guest-visible word above is written (the vidmem copies are synchronous)
+            // before the fence; the edge's words and event bits after it.
+            gate.remaining(queue.len());
+            let due = gate.due(Instant::now());
+            if !due.is_empty() {
+                std::sync::atomic::fence(Ordering::SeqCst);
+            }
+            for h in due {
+                let irq = frame_edge_out(dp, &store, h, edge_frame[h], loadv, wtrace, &vsync_traced);
+                raised |= irq != 0;
+                if irq & dp.map.head_vblank != 0 {
+                    counts[h].vblirq += 1;
+                }
+                if slot_hist && slot_lines < SLOT_LINES {
+                    slot_lines += 1;
+                    eprintln!(
+                        "kf3: display: SLOT EDGE utc_us={} t={:.6} h{h} frame={} rm={irq:#x} queued={} (latch-first)",
+                        utc_us(),
+                        kf_mem::maplog::t(),
+                        edge_frame[h],
+                        queue.len()
+                    );
+                }
+            }
+            if gate.forced > forced_logged {
+                if forced_logged < 20 {
+                    eprintln!(
+                        "kf3: display: a frame edge waited {} ms for its completions (a console copy behind the host) and was raised without them — {} so far",
+                        crate::vblankgate::EDGE_CAP.as_millis(),
+                        gate.forced
+                    );
+                }
+                forced_logged = gate.forced;
+            }
+            // ⚠ DIAGNOSTIC (flip ledger, owner challenge): slow commits as they complete, a summary every 2 s.
+            for l in std::mem::take(&mut engine.ledger.slow) {
+                eprintln!(
+                    "kf3: display: FLIP-SLOW t={:.6} utc_ms={} {l}",
+                    kf_mem::maplog::t(),
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map_or(0, |d| d.as_millis())
+                );
+            }
+            if ledger_last.elapsed() >= Duration::from_secs(2) {
+                ledger_last = Instant::now();
+                let oldest = queue.front().map_or(0, |q| q.enq.elapsed().as_millis());
+                eprintln!(
+                    "kf3: display: FLIP-LEDGER t={:.3} utc_ms={} {} | completions queued={} oldest_queued={oldest}ms delivered={} slow(>50ms)={} max_wait={}ms | copies started={} done={}",
+                    kf_mem::maplog::t(),
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map_or(0, |d| d.as_millis()),
+                    engine.ledger_summary(),
+                    queue.len(),
+                    ledger_q.n,
+                    ledger_q.slow,
+                    ledger_q.max_ms,
+                    scan.started,
+                    scan.done
+                );
             }
             if engine.updates > u64::from(logged_updates) && logged_updates < 64 {
                 logged_updates = u32::try_from(engine.updates.min(64)).unwrap_or(64);
@@ -3184,6 +3499,14 @@ fn compose_layer(l: &LayerPlan) -> ComposeLayer {
     }
 }
 
+/// ⚠ DIAGNOSTIC (flip ledger): the completion queue's waits.
+#[derive(Default)]
+struct LedgerQ {
+    n: u64,
+    slow: u64,
+    max_ms: u64,
+}
+
 /// An effect or a GET on the worker's completion queue.
 enum Item {
     Effect(Effect),
@@ -3194,6 +3517,8 @@ enum Item {
 struct Queued {
     need: u64,
     item: Item,
+    /// ⚠ DIAGNOSTIC (flip ledger): when the effect was queued.
+    enq: Instant,
 }
 
 /// How long a scanout copy may take before its stream is asked whether it failed (§8.18; it used

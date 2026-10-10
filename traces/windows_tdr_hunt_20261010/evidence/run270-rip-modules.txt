@@ -1,0 +1,13 @@
+Volatility 3 Framework 2.28.2
+
+PID	Process	TID	State	WaitReason	WaitedSec	Stack
+
+0		0	0	0	0.0	ntoskrnl.exe+0x4b889e
+0		0	0	0	0.0	ntoskrnl.exe+0x4388bd
+0		0	0	0	0.0	ntoskrnl.exe+0x67b598
+0		0	0	0	0.0	ntoskrnl.exe+0x391524
+0		0	0	0	0.0	ntoskrnl.exe+0x235bbc
+0		0	0	0	0.0	ntoskrnl.exe+0x326af3
+0		0	0	0	0.0	ntoskrnl.exe+0x62fe59
+0		0	0	0	0.0	ntoskrnl.exe+0x552c1c
+0		0	0	0	0.0	ntoskrnl.exe+0x552c8c

@@ -22,7 +22,7 @@ use kf_core::{HostOps, HostSlice, Plane, Step, Translatable, Vmm};
 use kf_gsp::{CommandPolicy, GspFsm, GuestRam, RamRefused};
 use kf_linux_raw::{Notifier, PollTimeout, Poller, ReadyTokens};
 use kf_trap::{Action, Class, Route, WriteSemantics};
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Mutex, OnceLock};
 
 /// `NV_PROM_DATA(i) = 0x300000 + i`, 1 MiB — where RM streams the VBIOS from.
@@ -315,6 +315,13 @@ pub struct Device {
     /// trace in the VFIO reference's record format. Off: the C device takes none of its paths.
     pub trace: crate::readtrace::AccessTrace,
 }
+
+/// ⚠ DIAGNOSTIC (TDR hunt): vCPU threads seen inside `bar0_write` (see `Device::vcpu_note`).
+const VCPU_SLOTS: usize = 64;
+static VCPU_NEXT: AtomicUsize = AtomicUsize::new(0);
+static VCPU_START: [AtomicU64; VCPU_SLOTS] = [const { AtomicU64::new(0) }; VCPU_SLOTS];
+static VCPU_OFF: [AtomicU64; VCPU_SLOTS] = [const { AtomicU64::new(0) }; VCPU_SLOTS];
+static VCPU_MAX_NS: AtomicU64 = AtomicU64::new(0);
 
 impl Device {
     /// ★ Realize: host session → family → store → derived BAR0 → GSP FSM + answers → plane.
@@ -1386,6 +1393,23 @@ impl Device {
         }
     }
 
+    /// ⚠ DIAGNOSTIC (2026-10-10, TDR hunt; only with `KF3_COMPLETION_PROBE`): which BAR0 write each vCPU thread is inside
+    /// right now and since when, for the probe thread ([`Device::probe_loop`]) to name a handler that does not return.
+    /// Two relaxed stores and a clock read per trapped write when the probe is on; one load of a `OnceLock` when off.
+    fn vcpu_note(&self, off: u64) -> Option<usize> {
+        crate::chan::completion_probe_ms()?;
+        thread_local! { static SLOT: std::cell::Cell<usize> = const { std::cell::Cell::new(usize::MAX) }; }
+        let i = SLOT.with(|c| {
+            if c.get() == usize::MAX {
+                c.set(VCPU_NEXT.fetch_add(1, Ordering::Relaxed) % VCPU_SLOTS);
+            }
+            c.get()
+        });
+        VCPU_OFF[i].store(off, Ordering::Relaxed);
+        VCPU_START[i].store(crate::prof::now_ns().max(1), Ordering::Release);
+        Some(i)
+    }
+
     /// ★ THE vCPU PATH for a BAR0 write. Lock-free: a shadow store (so a plain register reads
     /// back what was written, as hardware does), the plane's trap, and at most one eventfd write
     /// when a waiter is parked. ⊘ Never blocks, never services.
@@ -1402,7 +1426,13 @@ impl Device {
             off == self.qhead_off,
         );
         if !crate::prof::on() {
-            return self.bar0_write_inner(off, val, width);
+            let slot = self.vcpu_note(off);
+            self.bar0_write_inner(off, val, width);
+            if let Some(i) = slot {
+                let t0 = VCPU_START[i].swap(0, Ordering::AcqRel);
+                VCPU_MAX_NS.fetch_max(crate::prof::now_ns().saturating_sub(t0), Ordering::Relaxed);
+            }
+            return;
         }
         let t0 = crate::prof::now_ns();
         if off == self.qhead_off {
@@ -1625,6 +1655,7 @@ impl Device {
             kf_trap::cpuintr::Raise::Message => {
                 let _ = self.irq_lines[0].signal();
                 self.irq_counts.raised.fetch_add(1, Ordering::Relaxed);
+                crate::diagring::note(crate::diagring::SRC_GUEST_WRITE, 0, crate::diagring::RES_MESSAGE);
             }
             kf_trap::cpuintr::Raise::None => {}
             kf_trap::cpuintr::Raise::OutOfRange => {
@@ -1645,7 +1676,153 @@ impl Device {
         };
         eprintln!("kf3: PROBE on — completion probe, overdue after {ms} ms (KF3_COMPLETION_PROBE)");
         let overdue = std::time::Duration::from_millis(ms);
+        // ⚠ DIAGNOSTIC (2026-10-10, TDR hunt): every 100 ms, how far each relayed twin's guest-visible GP_GET trails
+        // the engine's; one summary line per 2 s. Measures whether the refresh (`KF3_RELAY_GET_REFRESH`) catches
+        // up independently of doorbells, over time rather than only at a twin's free.
+        let (mut ticks, mut samples, mut lagged, mut max_lag, mut stuck) = (0u32, 0u64, 0u64, 0u32, 0u64);
+        let mut streak: std::collections::HashMap<u32, u32> = std::collections::HashMap::new();
+        let mut vcpu_reported = [0u64; VCPU_SLOTS];
+        let (mut quiet_last, mut quiet_ticks, mut snapped, mut snaps) = (u64::MAX, 0u32, false, 0u32);
+        // (last guest readPtr, ticks unread with it unmoved, episode reported, longest episode in ms)
+        let mut gspq: (Option<u32>, u64, bool, u64) = (None, 0, false, 0);
         while !self.stop.load(Ordering::Acquire) {
+            {
+                let s = self.chans.relay_lag_sample();
+                let mut now_lagged = 0u32;
+                let mut seen = std::collections::HashSet::new();
+                for (ht, lag) in &s {
+                    samples += 1;
+                    seen.insert(*ht);
+                    if *lag > 0 {
+                        lagged += 1;
+                        now_lagged += 1;
+                        max_lag = max_lag.max(*lag);
+                        let c = streak.entry(*ht).or_insert(0);
+                        *c += 1;
+                        if *c == 5 {
+                            stuck += 1; // lagging 5 samples (0.5 s) in a row
+                        }
+                    } else {
+                        streak.remove(ht);
+                    }
+                }
+                streak.retain(|k, _| seen.contains(k));
+                ticks += 1;
+                if ticks % 20 == 0 && !s.is_empty() {
+                    eprintln!(
+                        "kf3: RELAY-LAG t={:.3} utc_ms={} relays={} lagged_now={now_lagged} | cumulative twin-samples={samples} lagged={lagged} max_lag_entries={max_lag} lagged_500ms_runs={stuck}",
+                        kf_mem::maplog::t(),
+                        std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .map_or(0, |d| d.as_millis()),
+                        s.len()
+                    );
+                }
+            }
+            // ⚠ DIAGNOSTIC (TDR hunt): a vCPU inside one BAR0 write for >200 ms is named once per episode.
+            {
+                let now = crate::prof::now_ns();
+                for i in 0..VCPU_SLOTS {
+                    let st = VCPU_START[i].load(Ordering::Acquire);
+                    if st != 0 && now.saturating_sub(st) > 200_000_000 && vcpu_reported[i] != st {
+                        vcpu_reported[i] = st;
+                        eprintln!(
+                            "kf3: VCPU-STUCK t={:.3} vcpu-slot={i} inside the BAR0 write {:#x} for {} ms",
+                            kf_mem::maplog::t(),
+                            VCPU_OFF[i].load(Ordering::Relaxed),
+                            now.saturating_sub(st) / 1_000_000
+                        );
+                    }
+                }
+                if ticks % 20 == 0 {
+                    eprintln!(
+                        "kf3: VCPU-MAX t={:.3} longest finished BAR0 write handler so far: {} us",
+                        kf_mem::maplog::t(),
+                        VCPU_MAX_NS.load(Ordering::Relaxed) / 1000
+                    );
+                }
+            }
+            // ⚠ DIAGNOSTIC (TDR hunt): the guest wrote no BAR0 register for 600 ms (its ISR acks one per VSync, so this is a
+            // whole-guest silence): snapshot every Passthrough twin once per silence, at most 4 per boot.
+            {
+                let tr = self.counters.trapped.load(Ordering::Relaxed);
+                if tr != quiet_last {
+                    quiet_last = tr;
+                    quiet_ticks = 0;
+                    snapped = false;
+                } else {
+                    quiet_ticks += 1;
+                    if quiet_ticks >= 6 && !snapped && snaps < 4 && tr > 20_000 {
+                        snapped = true;
+                        snaps += 1;
+                        self.chans.snapshot_now(&format!(
+                            "guest silence #{snaps}: no BAR0 write for {} ms",
+                            quiet_ticks * 100
+                        ));
+                        eprintln!("{}", self.probe_device_state());
+                        for l in crate::diagring::dump(8) {
+                            eprintln!("{l}");
+                        }
+                    }
+                }
+            }
+            // ⚠ DIAGNOSTIC (2026-10-10, TDR hunt, shape S): does the guest consume what we post on the status queue?
+            // Every 100 ms (try_lock only: the probe never waits on the GSP lock): our writePtr, the guest's readPtr and
+            // the unread count; an episode of unread elements with an unmoved readPtr for >= 200 ms is named once with the
+            // IRQSTAT the guest reads (shadow), the FSM's own value and the interrupt tree. Summary every 2 s.
+            if let Ok(mut g) = self.gsp.try_lock() {
+                let mut ram = Ram(self);
+                if let Some((w, r, unread)) = g.fsm.stat_queue_diag(&mut ram) {
+                    let irq_off = g.model.at(GspReg::GspFalconIrqstat).map(|(_, o)| o);
+                    let fsm_irq = irq_off.and_then(|o| g.fsm.mmio_read_with(g.model.as_ref(), 0, o)).and_then(Result::ok);
+                    let shadow_irq = irq_off.map(|o| self.shadow_word(o));
+                    drop(g);
+                    if unread > 0 && Some(r) == gspq.0 {
+                        gspq.1 += 1;
+                    } else {
+                        if gspq.2 && unread == 0 {
+                            eprintln!(
+                                "kf3: GSPQ-CONSUMED t={:.3} utc_ms={} after {} ms unread: w={w} r={r}",
+                                kf_mem::maplog::t(),
+                                crate::diagring::utc_ms_pub(),
+                                gspq.1 * 100
+                            );
+                        }
+                        gspq.1 = 0;
+                        gspq.2 = false;
+                    }
+                    gspq.0 = Some(r);
+                    gspq.3 = gspq.3.max(gspq.1 * 100);
+                    if gspq.1 >= 2 && !gspq.2 {
+                        gspq.2 = true;
+                        eprintln!(
+                            "kf3: GSPQ-UNREAD t={:.3} utc_ms={} unread={unread} w={w} r={r} for >= {} ms; IRQSTAT guest-visible={:?} fsm={:?}",
+                            kf_mem::maplog::t(),
+                            crate::diagring::utc_ms_pub(),
+                            gspq.1 * 100,
+                            shadow_irq.map(|v| format!("{v:#x}")),
+                            fsm_irq.map(|v| format!("{v:#x}"))
+                        );
+                        eprintln!("{}", self.probe_device_state());
+                        for l in crate::diagring::dump(3) {
+                            eprintln!("{l}");
+                        }
+                    }
+                    if ticks % 20 == 0 {
+                        eprintln!(
+                            "kf3: GSPQ t={:.3} w={w} r={r} unread={unread} longest_unread_ms={}",
+                            kf_mem::maplog::t(),
+                            gspq.3
+                        );
+                    }
+                }
+            }
+            if let Some(l) = crate::invaldiag::pending_line() {
+                eprintln!("{l}");
+            }
+            if ticks % 20 == 0 {
+                eprintln!("{}", crate::invaldiag::summary());
+            }
             let lines = self.chans.probe_tick(overdue);
             if !lines.is_empty() {
                 for l in &lines {
@@ -1710,6 +1887,9 @@ impl Device {
             .shadow_all(|o, v| self.shadow_store(o, u64::from(v), 4));
         if raise == kf_trap::cpuintr::Raise::None {
             self.irq_counts.held.fetch_add(1, Ordering::Relaxed);
+            crate::diagring::note(crate::diagring::SRC_LATCH, vector, crate::diagring::RES_HELD);
+        } else {
+            crate::diagring::note(crate::diagring::SRC_LATCH, vector, crate::diagring::RES_MESSAGE);
         }
         self.deliver(raise);
     }
@@ -1859,6 +2039,7 @@ impl Device {
         let mut logged = 0u32;
         let mut refusals_seen = 0usize;
         let mut armed_seen: Option<u64> = None;
+        let mut inval_last_pub = std::time::Instant::now();
         // ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): BAR1 back to its physical view — the request
         // waiting for the VA manager to go idle, with the BAR1 window's change count at the newest
         // request's notice (a change since means an RM took BAR1 again first). Two log families,
@@ -2127,6 +2308,16 @@ impl Device {
             }
             refusals_seen = m.stats.refusals.len();
             self.publish_trigger();
+            crate::invaldiag::after_publish(self.mem.port.armed_request().is_none(), || {
+                format!(
+                    "VA thread: walk in flight={} pending wants={} all_settled={} away since its previous publish {:.1} ms",
+                    m.in_flight(),
+                    m.pending(),
+                    self.mem.inbox.all_settled(),
+                    inval_last_pub.elapsed().as_secs_f64() * 1000.0
+                )
+            });
+            inval_last_pub = std::time::Instant::now();
             // ★ Everything received so far is applied and nothing is walking: held replies go.
             if !m.in_flight() && m.pending() == 0 && self.mem.inbox.settle(taken) {
                 let _ = self.drainer_efd.signal();
@@ -3089,8 +3280,11 @@ impl Device {
                 Ok(()) => {
                     posted_any = true;
                     eprintln!(
-                        "kf3: RUNLIST_PREEMPT_COMPLETE posted to {:#x}:{:#x} (eventData {ev:#x}) after the host's disable+preempt returned",
-                        t.client, t.event
+                        "kf3: RUNLIST_PREEMPT_COMPLETE posted to {:#x}:{:#x} (eventData {ev:#x}) after the host's disable+preempt returned (utc_ms={} stat w/r/unread={:?})",
+                        t.client,
+                        t.event,
+                        crate::diagring::utc_ms_pub(),
+                        g.fsm.stat_queue_diag(&mut ram)
                     );
                 }
                 Err(kf_gsp::GspFault::QueueFull { .. }) => {

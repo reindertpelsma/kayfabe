@@ -2366,6 +2366,23 @@ impl GspFsm {
         }
     }
 
+    /// ⚠ DIAGNOSTIC (2026-10-10, TDR hunt; read-only, never a decision input): the status queue as
+    /// both sides see it — `(our writePtr, the guest's readPtr, elements posted and not yet consumed)`.
+    /// `None` while unbound or when the guest's pointer cannot be read or is out of range.
+    pub fn stat_queue_diag(&self, ram: &mut dyn GuestRam) -> Option<(u32, u32, u32)> {
+        let QueueState::Bound(b) = &self.queue else {
+            return None;
+        };
+        let read = b
+            .geom
+            .region()
+            .read_u32(ram, b.geom.peer_stat_read_ptr_off())
+            .ok()?;
+        let unread = available_elements(b.stat.write_ptr, read, b.geom.msg_count()).ok()?;
+        Some((b.stat.write_ptr, read, unread))
+    }
+
+
     /// Post one message to the status queue, flow-controlled.
     ///
     /// ★ **GSP-D2 — real flow control**, which the C has none of. `nvkvm_m3_post_status`

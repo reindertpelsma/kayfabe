@@ -1,0 +1,185 @@
+# Windows TDR hunt, 2026-10-10 (branch `claude/tdr-hunt-20261010` from `integration/windows-20261010` eff1b692 = code 459da55d)
+
+STATUS: RESEARCH, 2026-10-10 — time-box reached after 8 hardware runs (264-271): partial measured cause, no fix. See "RESULT" at the bottom. Host RTX 4070, driver 595.91.07.
+Labels: **[measured]** = a log line / counter / guest event with its run; **[inferred]** = reasoning not yet tested.
+
+## Runbook (host-only tooling outside git, `/var/lib/kf-windows-20261005`)
+
+* Runner used for runs 264+: `tooling/tdr-run.sh` (copy of `winprod/winprod-run3.sh`; host copy `tdrhunt/tdr-run.sh`). It
+  switches IOMMU group 11 to identity, launches `kayfabe-win-6fafcc6e/scripts/bench/windows/windows_broker_prod2.sh run N`
+  (binary `kf3-bins/$KF3_REV_BIN`, default 459da55d), scripted sign-in + Edge + Shorts URL, then holds `HOLD_SECS`, pressing
+  "down" every 20 s, logging the TDR (GSP cycle) count against the host clock every 5 s (`tdr-timeline.txt`), then collects
+  guest events through QGA, optionally decodes a live DxgKrnl ETW session (`ETW=1`), stops the guest, restores DMA-FQ.
+* Launch: `env KF_GUEST_PW=<test pw> ETW=1 HOLD_SECS=600 RUN_WIN_FLAGS="KF3_X=1 ..." setsid bash -c 'flock -o /tmp/kayfabe-fastguest.lock bash tdrhunt/tdr-run.sh N'`.
+  Output: `winprod/runN/` (winprod.log, evidence.log, tdr-timeline.txt, guest-*.txt, etw-*.txt, screenshots), QEMU log
+  `boundary-kayfabe-N/qemu.log`.
+* After a stop: `rm -f /tmp/kf-stop-winprod`; `cat /sys/kernel/iommu_groups/11/type` must say DMA-FQ; `pgrep qemu-system-x86` empty; GPU on `nvidia`.
+* `qemu.log` has no wall clock; `mem t=<s>` lines are seconds since the device was realised (QEMU start). Guest UTC equals host UTC.
+* Offline guest event log of a finished run: `qemu-nbd -r -c /dev/nbd0 boundary-kayfabe-N/windows.qcow2; ntfs-3g -o ro,norecover /dev/nbd0p3 /mnt/x`, copy
+  `Windows/System32/winevt/Logs/System.evtx`, read with python `Evtx` (`tdrhunt/evx.py`); then `umount; qemu-nbd -d /dev/nbd0`.
+
+## Correction to the record before the hunt starts [measured, run 263 System.evtx read offline]
+
+`traces/windows_prod_20261010/` calls run 263 "READY, 7 TDR resets in ~8 min". The guest's own System log says more:
+* nvlddmkm event 153 ("Resetting / Reset / Restarting TDR occurred on GPUID:6") at 01:05:03 (host t=60 s, 9 s after the logon event 7001),
+  at 01:05:25 (t=82..84 s, 2.5 s after the Edge double-click) and at 01:08:24 (t=261 s, during the Shorts page). kayfabe's `qemu.log`
+  shows GSP cycles at mem t = 60.4, 84.1, 261.4, 276.2, 280.3, 285.4, 289.8 s.
+* **The guest bugchecked at 01:09:12 (t=309 s): `0x116 (0xffff9f81f8198010, 0xfffff8015f744580, 0x0, 0xd)`**, rebooted, and the harness's "READY alive=1" and
+  ACPI stop belong to the rebooted guest. The last five resets (261, 276, 280, 285, 289 s) are inside one TdrLimitTime window (5 in 29 s):
+  **[inferred]** the default `TdrLimitCount=5 / TdrLimitTime=60 s` rule turned the cluster into the bugcheck.
+* The Windows 4101 event ("stopped responding and has recovered") count is 0; the only guest-visible TDR record is nvlddmkm 153.
+
+## Hypotheses and falsifiers, written BEFORE run 264 (diagnostic: `KF3_COMPLETION_PROBE=1500 KF3_PT_STALL_SNAPSHOT=1` + live DxgKrnl ETW)
+
+Common premise: every TDR coincides with a new GPU client appearing (logon -> DWM/shell, Edge's GPU process, Shorts playback) [measured, run 263 times above].
+* **H-A (Translated ring, kernel CE/paging)**: a Translated ring (the kernel copy channel, token 0x80c, or the GR ring) does not retire a submission, or
+  retires it and the guest never sees the release. Predicts a `PROBE-DUMP ... HOST-FENCE-OVERDUE` / `GUEST-SILENT-AFTER-COMPLETION` line in `qemu.log`
+  within 2 s before the first `Running -> Suspending`, and an ETW DMA packet of the paging node with a start and no stop. Falsified if neither appears.
+* **H-B (Passthrough twin of a new user process)**: a twin's host channel stalls (GPGet != GPPut at the stall, an un-retired semaphore acquire, a pushbuffer the
+  twin cannot read). Predicts a `PT-SNAP BEGIN stall` with some twin not drained, ETW unfinished packets of a 3D/compute node. Falsified if every twin is drained
+  and the unfinished ETW packets belong to the paging node.
+* **H-C (lost interrupt/notification)**: host work finished and the guest's fence words are visible, but the guest never ran the completion DPC. Predicts: no
+  PROBE-DUMP, twins drained, an ETW packet with a start and no stop whose ring state in kayfabe is complete, and CPU_INTR leaf bits set (`irq[...]` counters
+  raised > serviced). Falsified by H-A or H-B holding, or by every ETW packet completing and the TDR being a driver-internal timeout.
+
+## Run 264-266 results so far (diagnostic flags `KF3_COMPLETION_PROBE=1500 KF3_PT_STALL_SNAPSHOT=1`; 264 also a live DxgKrnl ETW session)
+
+| run | build | flags beyond production | outcome |
+|---|---|---|---|
+| 264 | 459da55d | COMPLETION_PROBE, PT_STALL_SNAPSHOT, live ETW (non-circular, 512 MiB) | desktop + Edge welcome page rendered; 8 TDR resets in 13 min (nvlddmkm 153 triples at 08:56:49, 56:58, 57:16, 57:24, 09:00:15, 00:28, 00:37, 09:06:31); a WATCHDOG live dump (bugcheck code 0x117 = VIDEO_TDR_TIMEOUT_DETECTED) at the first; guest alive at the end; ETW hit its 512 MiB cap at 08:56:46.8 (2.5 s BEFORE the first TDR): no stall captured |
+| 265 | 459da55d | same, ETW stopped by a watcher that fired on a BOOT-time cycle (bug, fixed in `tdr-run.sh`) | boot-time TDR at mem t=18 s (live dump 0x117 in the guest) and a second cycle at t=53.7 s; then the display stayed black and the guest wedged: no BAR0 write after `trapped=259047`, QGA dead at the end, QEMU had to be killed; no sign-in effect |
+| 266 | 459da55d | same, ETW arm failed (QGA timed out at t~35..63 s) | first TDR at t=74.8 s, 5 s after the sign-in keys; second at t=84.0 s |
+
+**[measured, runs 263/264/266, `USERD relay released` lines at each twin's free]** For Passthrough (relayed, Windows user-work) twins that received
+at least one submission, the guest-visible `GP_GET` is BEHIND the host's while the host twin is drained (host GET == PUT): run 263 77 of 79 twins,
+run 264 157 of 161, run 266 62 of 62. The lag is the last submission(s) (typically 0x11 = 17 entries, up to 0x22+). Production has
+`KF3_RELAY_GET_REFRESH` OFF, so the guest's `GP_GET` of a relayed twin is only ever updated at a doorbell, from the engine's value read at doorbell
+time (`docs/design/V3_USERD_RELAY.md` §2.2).
+
+**H-D (written before run 267):** a Windows guest thread that waits for a relayed channel to go idle (`GP_GET == GP_PUT` in its USERD) never sees it,
+because kayfabe never refreshes the guest's `GP_GET` after the last doorbell; the thread holds guest locks, the GPU scheduler's fences and the
+display flips queue behind it, and Windows' TDR timer then fires (nvlddmkm 153, `0x117`). Predicts: with `KF3_RELAY_GET_REFRESH=1` (refresh on every host
+non-stall wake and on the worker tick; code exists, default off) the guest's `GP_GET` equals the host's at every twin's free and the TDR cadence
+drops. **Falsifier:** with the flag on, `GP_GET` agrees at free but the first TDR still comes within ~10 s of the sign-in keys and the 15-minute TDR count is not below the
+baselines above (263: 7 in 5 min then bugcheck; 264: 8 in 13 min).
+
+## Run 267 (H-D test) and the guest's own TDR-time snapshot (WATCHDOG live dumps of runs 264/265/266)
+
+**H-D FALSIFIED as the cause of the first TDR and of the cluster.** Run 267 (`KF3_RELAY_GET_REFRESH=1`, no other measurement flag, 459da55d): the lag is gone
+[measured: 0 of 46 submitted twins behind at free; 0 of 72 `act disable channels` samples behind, against 104 of 123 in run 266 and 157 of 161 at free in 264], but
+the first TDR still came 5 s after the sign-in keys (mem t=58.0 s, sign-in sent t~53 s), the second 5 s after the Edge double-click (t=84.7 s), and the same
+cluster appeared 81..102 s after READY (tdr_cycles 2 -> 6 by hold_t=102). (The GET refresh is still a fidelity fix: see "refresh" notes below.)
+
+**[measured] What declared the first TDR, in all three runs with a dump.** The guest generated a WATCHDOG live dump (bugcheck code 0x117 = VIDEO_TDR_TIMEOUT_DETECTED)
+at its first TDR in runs 264, 265 (a BOOT-time TDR, mem t=18 s) and 266. The dump header's context record is the thread that was writing the dump; its stack
+(Volatility 3 + the Microsoft public symbols of ntoskrnl/dxgkrnl/dxgmms2 only; host-side tools `dumpcfg/plugins/windows/tdrctx.py`, `symz3.py`, outputs `dumpcfg/ctx26[456].txt`) reads,
+innermost first, identical in all three:
+
+    IoCaptureLiveDump ... dxgkrnl!TdrCaptureLiveKernelDumpCallback <- dxgkrnl!TdrCollectDbgInfoStage1 <- dxgkrnl!TdrAllowToDebugTimeout
+    <- dxgkrnl!TdrIsRecoveryRequired <- dxgmms2!VidSchiReportHwHang <- dxgmms2!VidSchiCheckFlipQueueTimeout <- dxgmms2!VidSchiCheckHwProgress
+    <- dxgmms2!VidSchiScheduleCommandToRun <- dxgmms2!VidSchiRun_PriorityTable <- dxgmms2!VidSchiWorkerThread
+
+So **the TDR is declared by the VidSch FLIP QUEUE timeout, not by an engine-node (copy/graphics) timeout**: a flip that Windows queued for a display source was not
+retired within the TDR delay. (Run 232's paging-node picture was taken under a 30 s TdrDelay and an older build; it is not what the default-delay production
+TDR looks like.) Other threads in the run-264 dump: LogonUI waiting in `dxgkrnl!DxgkWaitForVerticalBlankEventInternal`, dwm in `DxgkSetSyncRefreshCountWaitTarget`,
+the VidSch worker threads idle in `VidSchiWaitForSchedulerEvents` (nothing else stuck in dxgkrnl/dxgmms2 locks).
+
+**[measured, kayfabe side, runs 264/266]** The display model reports, immediately before each first TDR, "`display: +N ms the console shows no new frame: a lit head has no window`" and then
+"`... BLACK 1920x1080 (the scanout shown is lost: a lit head has had no window past the hold)`" (run 266: t=74.4 s and 74.6 s; TDR teardown at t=74.8 s, 5 s after the sign-in).
+No `HOST-FENCE-OVERDUE` probe, no `DEAD`, `unreconciled=0`, no Xid: no engine ring is behind.
+
+**H-F (next, written before run 268):** a window flip queued by Windows (LogonUI -> desktop transition, Edge launch) is never retired because kayfabe's display model does not
+produce the completion the KMD waits for (the VSync/LAST_DATA edge after the window update, the flip's notifier/semaphore release, or the core-update completion) while the head is
+lit but its window is detached/unscanned. Run 268 collects: DxgKrnl ETW (circular, stopped by a guest task at the first nvlddmkm 153) naming the flip queue packet that never stops,
+and `KF3_DISPLAY_WRITE_TRACE` + `KF3_DISPLAY_METHOD_TRACE` for the display writes/methods around it. Falsifier: the unfinished ETW packet is not a flip (MMIOFLIP/flip-queue) packet, or the
+display trace shows the flip's notifier/release/VSync was delivered inside the TDR window.
+
+**Answers to the coordinator's refresh questions (code reading + measurement):** (1) `relay_refresh_all` runs on a worker (a) on every host non-stall wake (`on_other` of the engine tag,
+before the guest interrupt) and (b) from `on_other(TICK_TAG)` once per worker loop that parks, i.e. at most every `PARK_MS` = 50 ms when a worker is idle (and `OWED_PARK_MS` = 1 ms when
+the non-stall relay owes a raise); the tick is skipped on a loop iteration that found work (`continue`), which is why (a) matters under load. The refresh keeps no "owed" state:
+every tick compares the engine's GP_GET to the last value stored and stores if different, so it keeps catching up for as long as any worker loops, and cannot go idle while a lag remains;
+a relay whose lock a doorbell step holds is skipped that tick and caught up on the next. Measured at two instants only (free, disable): 0 lag with the flag, ~85-100 % lag without; a time series
+needs the `RELAY-LAG` line added in this branch (probe thread, 100 ms samples, summary per 2 s; first used in run 268). (2) The refresh stores only the engine's value (bounded to
+`[0, entries)`), never reads the guest's GP_PUT back into the twin, never rings; relay-lock takers are workers (`relay_serve`, `relay_refresh_all`, try_lock) and the act thread (`drop_relay`, after the
+host channel is gone, and the disable snapshot, try_lock); no vCPU or drainer path takes it (doorbell trap only sets the token bit).
+
+## Runs 268/269: the guest goes silent for ~2 s with VSync interrupts pending (measured), then the flip queue times out
+
+Instruments added in this branch (diagnostic, probe thread only, `KF3_COMPLETION_PROBE`): `RELAY-LAG` (guest GP_GET trail of every relayed twin, 100 ms samples), `VCPU-MAX` / `VCPU-STUCK`
+(a vCPU inside one BAR0 write handler for >200 ms is named). Binary `fcafeb2e` (= branch tip at that commit; built on the host from the branch).
+
+**[measured, run 268, `KF3_DISPLAY_WRITE_TRACE`, binary a4b96ee0]** Time series, without the GET refresh: 11 of 17 relayed twins are behind in steady state (cumulative 64058 of 79832 twin-samples lagged,
+max lag 1374 entries, 57 runs of >= 500 ms) - the lag does not heal by itself without the flag (and with it, 0 at free/disable). **It is not the TDR cause (run 267).**
+
+**[measured, runs 268 and 269, kayfabe display trace + guest ETW]** At the first TDR of the run, with kayfabe's display model healthy and delivering:
+* kayfabe raises a VSync (LAST_DATA, `evt=0x6 en=0x2 rm=0x2`) every 16.7 ms throughout, and the guest acked every one (`WRITE 0x611800 <- 0x2`) up to a point, then **acks none for ~2.2 s**
+  (run 268: 58898.8..58900.85; run 269: 59541.9..59544.1 maplog seconds, 30 VSyncs raised per 0.5 s the whole time), then acks again and the guest starts its own TDR teardown.
+* The guest's DxgKrnl ETW (run 269, circular session, 10:11:01.862 -> 10:11:07.585 UTC) agrees to the millisecond: the last VSync interrupt event at 10:11:01.862, then **NO DxgKrnl event of any kind for
+  2.34 s** (no VSync, no packet, no queue event), then three small events, a gap of 1.7 s, and the recovery's paging burst from 10:11:06.5. All DMA packets that had started had stopped
+  (`DMA starts 1586 stops 1586` before the recovery; the "never stopped" list is only the recovery's own tail). So nothing on the engines is outstanding: the flip queue's retiring VSync is simply never serviced.
+* During the silence the CPU_INTR interrupt-tree write counter is flat (no ISR runs; `irq[writes=]` unchanged over 100 ms) while `raised` grows ~18 per 100 ms and `leaf0=0x6 leaf4=0x4000000` stay pending (probe dumps).
+* `VCPU-MAX` stays at 131 us through the stall and there is no `VCPU-STUCK`: **no vCPU is inside a kayfabe BAR0 write handler**. `unreconciled=0`, no `HOST-FENCE-OVERDUE`, no host Xid.
+* The last guest action before the silence, in both runs: one RPC `GSP_RM_CONTROL` that kayfabe answers as UNSERVICED (`GSP rpc UNSERVICED { code: 76 }` 15-20 ms before the last ack); the per-control refusal counters
+  of the two status lines around it differ in exactly one entry: **`fn76/0x007302a5` (NV0073, display) +1** (run 269). 0x007302a5 is in no OGKM header and is refused by name since run 30
+  (`traces/windows_code43_walls_20261007/README.md`: "issued ~6 times per boot ... not on the TDR's path"). Whether the silence is a consequence of that refusal or only coincident is NOT established:
+  inferred only.
+
+**Not yet known (what the next run measures):** what the guest's CPUs are executing during the silence. Plan (run 270): `STALLDUMP=1` (this branch's `tooling/tdr-run.sh`): when the display trace shows
+VSyncs raised and no ack for 600 ms, take six `stop; info registers -a; cont` samples of every vCPU and a full guest-memory dump at the stall, resolve RIPs with the Microsoft symbols (ntoskrnl/dxgkrnl/dxgmms2) and
+read the thread stacks with the Volatility tools (`windows.tdrctx`/`waitfast`). Falsifier of "the guest is spinning/blocked in its own driver and the interrupt cannot run": all vCPUs idle (HLT) with the
+vector pending (then the interrupt delivery path is the culprit: MSI-X routing/mask/irqfd).
+
+
+## RESULT (8 hardware runs, 264-271; evidence in `evidence/`)
+
+| run | build | flags beyond production | what it was for | outcome |
+|---|---|---|---|---|
+| 264 | 459da55d | COMPLETION_PROBE, PT_STALL_SNAPSHOT, live ETW (non-circular) | first look | 8 TDRs / 13 min; WATCHDOG dump (0x117); ETW capped before the stall |
+| 265 | 459da55d | same, bad ETW watcher | boot TDR t=18 s + one at t=53 s; then the display stayed black and the guest wedged, QEMU killed |
+| 266 | 459da55d | same | 7 TDRs (cluster of 4 at 82-108 s after READY, then 5 calm minutes); WATCHDOG dump |
+| 267 | 459da55d | `KF3_RELAY_GET_REFRESH=1` only | H-D test | GET lag 0; first TDR 5 s after sign-in, 2nd 5 s after Edge, cluster at 81-102 s, then NO TDR for 13 min (6 cycles in 15 min). **H-D falsified** (cause of first TDR / cluster) |
+| 268 | a4b96ee0 | probe + display traces | display/relay time series | 2 TDRs after sign-in, none later in 4 min; acks stop ~2.2 s |
+| 269 | fcafeb2e | probe + display write trace + circular ETW | name the stuck packet | 7 cycles; ETW captured the first TDR: user packets stuck 4.35 s |
+| 270 | fcafeb2e | probe + display write trace, STALLDUMP | what the vCPUs do during the silence | all vCPUs in the guest's own live-dump corral (IF=0) |
+| 271 | bb53ec57 | probe + circular ETW | pending object + both cursor sides | paging-queue packets pending 2.475 s; host side had completed them |
+
+Not one of the 8 reproduces "once a minute": the TDRs come as a first one 5 s after the sign-in keys, a second one ~5 s after the Edge launch, a cluster 80-125 s after READY (3-5 resets 4-5 s apart) in
+263/264/266/267/269/271, and then often nothing for 5-13 minutes (264: one at 461 s; 267: none in 13 min). Run 263's tail ended in a 0x116 bugcheck (5 resets in 29 s trips TdrLimitCount=5/60 s).
+
+### Measured (by run)
+1. **The TDR is declared by dxgmms2's flip-queue check** (`VidSchiCheckHwProgress -> VidSchiCheckFlipQueueTimeout -> VidSchiReportHwHang -> TdrIsRecoveryRequired -> TdrCollectDbgInfoStage1 -> live dump`),
+   in all three guest dumps (264, 265 = a boot TDR, 266). `evidence/watchdog-dump-run26[456]-stack.txt`. It is not an engine-node timeout.
+2. **What is pending at the declaration is queue packets whose host work is already done.** Run 269 (ETW): RENDER/SOFTWARE/DEVICE command-buffer packets of three user processes (pids 0x19DC, 0x18D4, 0xD18) queued
+   within 15 ms at 10:10:59.85, no other packet slower than 132 ms in 4412, all stopped only in the recovery 4.35 s later; declaration (= the guest's last VSync event) at 10:11:01.862, i.e. 2.0 s (TdrDelay)
+   after they were queued. Run 271: the kernel paging queue's packets 4562-4586+ queued 10:23:17.484 stopped only at 10:23:19.959 (2.475 s); **kayfabe's own log of the same instant:
+   `completed fence seq=2774 gp_get=14331 submit->seen=72us seen 1523ms ago` for the Translated paging ring (host GP_GET == guest GP_PUT == 14331), i.e. kayfabe completed it ~1.5 s before; no
+   `HOST-FENCE-OVERDUE` anywhere (0 in 271), no `DEAD`, `unreconciled=0`, no host Xid.** (`evidence/run269-etw-summary.txt`, `run271-etw-summary.txt`; log lines in `qemu.log` of run 271.)
+3. **Every relayed twin was fully consumed by the host engine at the stall** (RELAY-DUMP of run 271: engine GET == relay host_put == guest PUT for all 22 twins); only the guest-visible GET trails (without
+   `KF3_RELAY_GET_REFRESH`), and refreshing it does not change the TDR (run 267).
+4. **At the stall the interrupts are PENDING and unserviced, not absent**: `leaf0=0x6` (CE2 vec 1 + CE3 vec 2) and `leaf4=0x4000000` (display) set with enables on, `top=0x5`; the guest's interrupt-tree
+   register-write counter does not move for >=0.4 s while `raised` keeps growing (runs 268, 269, 271 PROBE-DUMP device lines); display VSyncs are raised every 16.7 ms and were acked up to the declaration.
+5. **Nothing in kayfabe blocks a vCPU**: `VCPU-MAX` 131-332 us for whole runs, no `VCPU-STUCK`.
+6. **The silence after the declaration is the guest's own live dump**: at the stall (run 270) all 8 vCPUs sit in `IopLiveDumpProcessCorralStateChange` / `IopLiveDumpBufferDumpData` with interrupts off
+   (`evidence/run270-rip-symbols.txt`), which is why the ISR is not running then. The declaration is therefore BEFORE the silence; the stale packets are older than it.
+
+### Ruled out (with the run)
+* H-D, stale guest `GP_GET` of relayed twins (267). H-A as an engine stall in the host (no HOST-FENCE-OVERDUE, host rings drained; 264-271). A vCPU blocked in a kayfabe BAR0 handler (269-271 VCPU-MAX).
+  A lost VSync (kayfabe raises and the guest acks up to the declaration; 268/269). A CPU_INTR shadow-publication race as the TDR trigger is not excluded in general but nothing showed
+  shadow != atomics (not measured directly: no shadow-vs-atomics counter was added).
+* A "once a minute" rate; a boot-time-only effect; the ETW itself as the cause (TDRs happen without it: 263, 266, 267).
+
+### Still inferred (not measured)
+* Which interrupt the guest never sees for the stale packets: the picture (host done, fence words written by the engine, `leaf0` CE2/CE3 bits pending, packets completing only at the TDR) fits a completion
+  notification the guest never acts on (the audit's finding 3 `NotArmed` drop of host non-stall edges, or finding 2's shadow race, or the Translated-CE relay not raising for a batch) — none of them is tied to a
+  specific stale packet yet.
+* Why the guest does not run its ISR for pending CE2/CE3 bits during the 2 s before the declaration (the live dump only explains the time AFTER it).
+
+### Exact next step
+One boot with both sides time-stamped at packet level: (a) kayfabe, for every Translated-CE pump and every Passthrough host non-stall edge, log (vector latched? MSI raised? leaf bit already set? armed?) with the maplog time;
+the `NotArmed`/`unvectored` verdicts per engine at the same second as the stall (the counters exist; they are only printed at 2 s granularity); (b) the same circular ETW stopped by the runner at the first TDR (works:
+`tooling/tdr-run.sh ETW=1`) so the first stale packet's queue time is known; (c) one `info registers -a` sample 1.0 s before the expected declaration (arm on the packet's queue time) to see what the vCPUs run while the CE2/CE3
+bits are pending and no ISR runs. Cheap falsifier first: make a host non-stall edge latch+raise its vector unconditionally (the audit's finding-3 switch) and see whether the first TDR disappears.
+
+### Code in this branch (diagnostic only, probe thread, default off)
+`RELAY-LAG`, `VCPU-STUCK`/`VCPU-MAX`, guest-silence `PT-SNAP` + `RELAY-DUMP` (all behind `KF3_COMPLETION_PROBE`), `scripts/bench/windows/dxg_etw_stop_tail.ps1`, `tooling/tdr-run.sh`. `cargo test -p kf-qemu -p kf-chan` on the host: 295 passed, 0 failed
+(the local disk was full). No behaviour changed, no fix. Host left clean after every run (DMA-FQ, no QEMU, nvidia bound, stop file removed, Xid 0); big dumps stay on the host under `dumps/` (`run264/265/266-WATCHDOG.dmp`, `run270-stall.elf`) and are not in git.

@@ -257,6 +257,7 @@ fn a_core_update_arms_then_notifies() {
                 handle: 0xcafe_0001,
                 offset: 32,
                 awaken: true,
+                finished: true,
             },
         ] => {
             assert!(
@@ -409,17 +410,11 @@ fn a_non_tearing_flip_waits_for_vblank_and_its_acquire() {
         "another head's vblank latches nothing"
     );
     let s = e.vblank(0, &mut |a: &Acquire| a.satisfied_by(sem));
-    // the window had no surface before this flip: the notifier is written, the flip EVENT is not
+    // the window had no surface before this flip: the notifier is written, the flip EVENT is not; and
+    // its RELEASE is NOT written now — only when this entry is flipped away (the next latch)
     match s.effects.as_slice() {
         [
             Effect::Latched { window: 0 },
-            Effect::Release {
-                handle: 0xcafe_0b00,
-                offset: 64,
-                value: 0xd00d_d00d,
-                wide: false,
-                ..
-            },
             Effect::Notify {
                 chn: 1,
                 handle: 0xcafe_00f0,
@@ -431,6 +426,113 @@ fn a_non_tearing_flip_waits_for_vblank_and_its_acquire() {
         other => panic!("{other:?}"),
     }
     assert!(s.gets.contains(&(1, 1, w.put())));
+    // the next flip (slot 5, value 0xbeef) flips the first away: ITS release (slot 4, 0xd00dd00d) is written now
+    let w2 = &mut w;
+    w2.m(
+        m(WIN, "SET_SEMAPHORE_CONTROL"),
+        put(0, fl(WIN, "SET_SEMAPHORE_CONTROL_OFFSET"), 5),
+    );
+    w2.m(m(WIN, "SET_SEMAPHORE_RELEASE"), 0xbeef);
+    w2.m(m(WIN, "UPDATE"), 0);
+    let s = e.step(1, &w2.bytes(), w2.put(), &mut all_ok);
+    assert!(s.effects.is_empty(), "parked for vblank: {:?}", s.effects);
+    let s = e.vblank(0, &mut |a: &Acquire| a.satisfied_by(sem));
+    match s.effects.as_slice() {
+        [
+            Effect::Latched { window: 0 },
+            Effect::Release {
+                handle: 0xcafe_0b00,
+                offset: 64,
+                value: 0xd00d_d00d,
+                wide: false,
+                ..
+            },
+            // the outgoing entry's notifier FINISHED (its flip-away), then the incoming one's (BEGUN)
+            Effect::Notify { chn: 1, offset: 16, finished: true, .. },
+            Effect::Notify { chn: 1, offset: 16, finished: false, .. },
+        ] => {}
+        other => panic!("the outgoing entry's release, not the incoming one's: {other:?}"),
+    }
+}
+
+/// ⚠ The diagnostic A/B switch (`release_at_latch`) restores the old order: the incoming entry's release at its own
+/// latch. And `window_slots` names the slots a committed request (ASSEMBLY) asks for, before it latches.
+#[test]
+fn release_at_latch_restores_the_old_order_and_window_slots_name_the_request() {
+    let mut e = engine();
+    e.release_at_latch = true;
+    e.alloc(ChannelKind::Core, 0, CLIENT, 1, pb(), 0);
+    e.alloc(ChannelKind::Window, 0, CLIENT, 1, pb(), 0);
+    let mut c = Ring::new();
+    modeset(&mut c, 0, 0);
+    c.m(m(CORE, "UPDATE"), 0);
+    e.step(0, &c.bytes(), c.put(), &mut all_ok);
+    let mut w = Ring::new();
+    w.m(m(WIN, "SET_CONTEXT_DMA_NOTIFIER"), 0xcafe_00f0);
+    w.m(
+        m(WIN, "SET_NOTIFIER_CONTROL"),
+        put(0, fl(WIN, "SET_NOTIFIER_CONTROL_OFFSET"), 1),
+    );
+    w.m(m(WIN, "SET_CONTEXT_DMA_SEMAPHORE"), 0xcafe_0b00);
+    w.m(
+        m(WIN, "SET_SEMAPHORE_CONTROL"),
+        put(0, fl(WIN, "SET_SEMAPHORE_CONTROL_OFFSET"), 4),
+    );
+    w.m(m(WIN, "SET_SEMAPHORE_RELEASE"), 0xd00d_d00d);
+    w.m(m(WIN, "UPDATE"), 0);
+    let s = e.step(1, &w.bytes(), w.put(), &mut all_ok);
+    assert!(s.effects.is_empty(), "parked for vblank: {:?}", s.effects);
+    match e.window_slots(1, false).as_slice() {
+        [
+            Effect::Notify { handle: 0xcafe_00f0, offset: 16, .. },
+            Effect::Release { handle: 0xcafe_0b00, offset: 64, value: 0xd00d_d00d, .. },
+        ] => {}
+        other => panic!("{other:?}"),
+    }
+    assert!(e.window_slots(1, true).is_empty(), "nothing armed yet");
+    let s = e.vblank(0, &mut all_ok);
+    match s.effects.as_slice() {
+        [
+            Effect::Latched { window: 0 },
+            Effect::Release { handle: 0xcafe_0b00, offset: 64, value: 0xd00d_d00d, .. },
+            Effect::Notify { chn: 1, .. },
+        ] => {}
+        other => panic!("the incoming entry's release at its own latch: {other:?}"),
+    }
+}
+
+/// ★ `notifier_finish_at_flip_away` (the default): a window's second latch writes the FIRST entry's notifier slot
+/// FINISHED (its flip-away) before the new entry's own notifier; the first latch writes only its own.
+#[test]
+fn notifier_finish_at_flip_away_writes_the_outgoing_slot_finished() {
+    let mut e = engine();
+    e.notifier_finish_at_flip_away = true;
+    e.alloc(ChannelKind::Core, 0, CLIENT, 1, pb(), 0);
+    e.alloc(ChannelKind::Window, 0, CLIENT, 1, pb(), 0);
+    let mut c = Ring::new();
+    modeset(&mut c, 0, 0);
+    c.m(m(CORE, "UPDATE"), 0);
+    e.step(0, &c.bytes(), c.put(), &mut all_ok);
+    let mut w = Ring::new();
+    w.m(m(WIN, "SET_CONTEXT_DMA_NOTIFIER"), 0xcafe_00f0);
+    w.m(m(WIN, "SET_NOTIFIER_CONTROL"), put(0, fl(WIN, "SET_NOTIFIER_CONTROL_OFFSET"), 1));
+    w.m(m(WIN, "UPDATE"), 0);
+    e.step(1, &w.bytes(), w.put(), &mut all_ok);
+    match e.vblank(0, &mut all_ok).effects.as_slice() {
+        [Effect::Latched { window: 0 }, Effect::Notify { offset: 16, finished: false, .. }] => {}
+        other => panic!("{other:?}"),
+    }
+    w.m(m(WIN, "SET_NOTIFIER_CONTROL"), put(0, fl(WIN, "SET_NOTIFIER_CONTROL_OFFSET"), 2));
+    w.m(m(WIN, "UPDATE"), 0);
+    e.step(1, &w.bytes(), w.put(), &mut all_ok);
+    match e.vblank(0, &mut all_ok).effects.as_slice() {
+        [
+            Effect::Latched { window: 0 },
+            Effect::Notify { offset: 16, finished: true, .. },
+            Effect::Notify { offset: 32, finished: false, .. },
+        ] => {}
+        other => panic!("{other:?}"),
+    }
 }
 
 /// A window on an INACTIVE head (no raster armed) latches at once; so does an immediate flip.

@@ -1,0 +1,30 @@
+== pid PID Process tid TID state State wr WaitReason waited WaitedSec
+     Stack
+== pid 4 System tid 892 state 2 wr 18 waited 0.0
+     ntoskrnl!MmDuplicateMemory+0x2e7
+     ntoskrnl!KiServiceLinkage+0x0
+     ntoskrnl!IopOpenRegistryKey+0x44
+     ntoskrnl!??_C@_1EK@GMOJIIIJ@?$AA?2?$AAK?$AAe?$AAr?$AAn?$AAe?$AAl?$AAO?$AAb?$AAj?$AAe?$AAc?$AAt?$AAs+0x0
+     ntoskrnl!Feature_Livedump_PPL_UM_Fix__private_IsEnabledDeviceUsageNoInline+0x2c
+     ntoskrnl!IoCaptureLiveDump+0x51d
+     ntoskrnl!??_C@_1EG@JCCHLBNP@?$AA?2?$AAK?$AAe?$AAr?$AAn?$AAe?$AAl?$AAO?$AAb?$AAj?$AAe?$AAc?$AAt?$AAs+0x0
+     ntoskrnl!vDbgPrintExWithPrefixInternalHelper+0x26b
+     ntoskrnl!ObpReferenceObjectByHandleWithTag+0x4de
+     ntoskrnl!memmove+0x1d3
+     ntoskrnl!??_C@_0CJ@NJPIGKGC@DBGK?3?5Invoking?5callback?5at?5addr@NNGAKEGL@+0x0
+     dxgkrnl!?TdrCaptureLiveKernelDumpCallback@@YAJPEAXP6AJ0PEBU_GUID@@0K@ZK_K3330@Z+0x2d
+     dxgkrnl!?TdrCaptureLiveKernelDumpCallback@@YAJPEAXP6AJ0PEBU_GUID@@0K@ZK_K3330@Z+0x0
+     ntoskrnl!??_C@_0CJ@NJPIGKGC@DBGK?3?5Invoking?5callback?5at?5addr@NNGAKEGL@+0x0
+     dxgkrnl!??_C@_1BC@MMNPADDN@?$AAW?$AAA?$AAT?$AAC?$AAH?$AAD?$AAO?$AAG@+0x0
+     dxgkrnl!?TdrUpdateDbgBuffer@@YAXPEAU_TDR_RECOVERY_CONTEXT@@@Z+0x4a
+     dxgkrnl!?TdrCaptureLiveKernelDumpCallback@@YAJPEAXP6AJ0PEBU_GUID@@0K@ZK_K3330@Z+0x0
+     dxgkrnl!?TdrCaptureLiveKernelDumpCallback@@YAJPEAXP6AJ0PEBU_GUID@@0K@ZK_K3330@Z+0x0
+     dxgkrnl!?TdrCollectDbgInfoStage1@@YAXPEAU_TDR_RECOVERY_CONTEXT@@_NIPEAX@Z+0xd29
+     dxgkrnl!?TdrCaptureLiveKernelDumpCallback@@YAJPEAXP6AJ0PEBU_GUID@@0K@ZK_K3330@Z+0x0
+     dxgkrnl!TdrAllowToDebugTimeout+0x74
+     dxgkrnl!?TdrIsRecoveryRequired@@YA_NPEAU_TDR_RECOVERY_CONTEXT@@@Z+0x155
+     dxgmms2!VidSchiReportHwHang+0x658
+     dxgmms2!VidSchiCheckFlipQueueTimeout+0xdf
+     dxgmms2!VidSchiCheckHwProgress+0x3e9
+     dxgmms2!VidSchiWaitForSchedulerEvents+0x3f9
+     dxgmms2!VidSchiScheduleCommandToRun+0x2e2

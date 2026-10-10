@@ -1557,6 +1557,13 @@ fn relay_get_refresh() -> bool {
     *ON.get_or_init(|| std::env::var_os("KF3_RELAY_GET_REFRESH").is_some_and(|v| v == "1"))
 }
 
+/// ⚠ DIAGNOSTIC (2026-10-10, TDR hunt run 272, default off): `KF3_DIAG_NSI_UNCONDITIONAL=1` judges every host
+/// non-stall / FIFO_EVENT_MTHD edge as ARMED, so none is dropped as `NotArmed` (the cheap falsifier of the audit's finding 3).
+fn diag_nsi_unconditional() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("KF3_DIAG_NSI_UNCONDITIONAL").is_some_and(|v| v == "1"))
+}
+
 // ⚠ CONTROL (2026-10-08, owner decision): `KF3_USERD_RELAY_OFF=1` births Windows user-work twins over
 // the guest's own sysmem USERD (adoption, no relay). Default off.
 fn userd_relay_off() -> bool {
@@ -2086,7 +2093,7 @@ pub struct ChanPlane {
     /// restore v3-gfx's measured shape for Vulkan (a separate host group per subcontext).
     groups: Mutex<HashMap<(u32, u32, u32), (u32, u32)>>,
     /// ★ 2026-10-09 (`crate::latejoin`): which guest TSGs the guest has scheduled — written at
-    /// statement time by the drainer, read by the birth act (`KF3_SCHEDULE_LATE_JOINERS`).
+    /// statement time by the drainer, read by the birth act (`crate::latejoin`).
     guest_sched: Mutex<crate::latejoin::GuestTsgSched>,
     /// ★ Per guest token: doorbells the vCPU trap rang INLINE, and how many reached the host's
     /// doorbell (the `DOORBELL-LEDGER` line at free; atomics only — the vCPU writes them).
@@ -2661,12 +2668,13 @@ impl ChanPlane {
     /// paced is owed. With `KF3_PT_NSI_RELAY=0` the edge is counted only (the falsifier run).
     pub fn nsi_fifo_edge(&self, deliver: impl FnOnce(u32)) -> kf_chan::ptnsi::Verdict {
         let n = self.pt_fifo_edges.fetch_add(1, Ordering::Relaxed).saturating_add(1);
-        let armed = self.nsi_armed(Some(kf_abi::eventnotify::NONSTALL_SLOT_FIFO_EVENT_MTHD));
+        let armed = self.nsi_armed(Some(kf_abi::eventnotify::NONSTALL_SLOT_FIFO_EVENT_MTHD))
+            || diag_nsi_unconditional();
         let vector = if armed {
             kf_chan::ptnsi::host_notify_vector(
                 self.engines
                     .iter()
-                    .map(|e| (e.vector, self.nsi_armed(e.slot))),
+                    .map(|e| (e.vector, self.nsi_armed(e.slot) || diag_nsi_unconditional())),
                 self.host_notify_engine
                     .and_then(|i| self.engines.get(i))
                     .and_then(|e| e.vector),
@@ -2680,6 +2688,16 @@ impl ChanPlane {
             vector,
             self.nsi_now_ns(),
         );
+        {
+            use crate::diagring as dr;
+            let (v, r) = match verdict {
+                kf_chan::ptnsi::Verdict::Raise(v) => (v, dr::RES_MESSAGE),
+                kf_chan::ptnsi::Verdict::NotArmed => (vector.unwrap_or(0), dr::RES_NOT_ARMED),
+                kf_chan::ptnsi::Verdict::Owed => (vector.unwrap_or(0), dr::RES_OWED),
+                _ => (vector.unwrap_or(0), dr::RES_OTHER),
+            };
+            dr::note(dr::SRC_FIFO, v, r);
+        }
         match verdict {
             kf_chan::ptnsi::Verdict::Raise(v) => {
                 self.pt_fifo_raised.fetch_add(1, Ordering::Relaxed);
@@ -2710,13 +2728,25 @@ impl ChanPlane {
         e: &EngineEvent,
         deliver: impl FnOnce(u32),
     ) -> kf_chan::ptnsi::Verdict {
-        let armed = self.nsi_armed(e.slot);
+        // ⚠ DIAGNOSTIC (`KF3_DIAG_NSI_UNCONDITIONAL=1`, default off; TDR hunt run 272): judge every host edge as armed.
+        let armed = self.nsi_armed(e.slot) || diag_nsi_unconditional();
         let verdict = self.nsi.edge(
             kf_chan::ptnsi::EdgeKind::Engine,
             armed,
             e.vector,
             self.nsi_now_ns(),
         );
+        {
+            use crate::diagring as dr;
+            let eidx = self.engines.iter().position(|x| std::ptr::eq(x, e)).unwrap_or(0) as u8;
+            let (v, r) = match verdict {
+                kf_chan::ptnsi::Verdict::Raise(v) => (v, dr::RES_MESSAGE),
+                kf_chan::ptnsi::Verdict::NotArmed => (e.vector.unwrap_or(0), dr::RES_NOT_ARMED),
+                kf_chan::ptnsi::Verdict::Owed => (e.vector.unwrap_or(0), dr::RES_OWED),
+                _ => (e.vector.unwrap_or(0), dr::RES_OTHER),
+            };
+            dr::note(dr::SRC_ENGINE + eidx, v, r);
+        }
         match verdict {
             kf_chan::ptnsi::Verdict::Raise(v) => {
                 e.raised.fetch_add(1, Ordering::Relaxed);
@@ -5310,6 +5340,37 @@ impl ChanPlane {
         (seen, stored)
     }
 
+    /// ⚠ DIAGNOSTIC (2026-10-10, TDR hunt; the completion probe's thread only, `KF3_COMPLETION_PROBE`): for every
+    /// live relayed twin, `(host token, entries the guest's slot trails the engine's GP_GET by)` — two 4-byte loads
+    /// per relay under `try_lock` (a relay a worker holds is skipped). Nothing stored, rung or waited for.
+    #[must_use]
+    pub fn relay_lag_sample(&self) -> Vec<(u32, u32)> {
+        let rs: Vec<_> = match self.relays.lock() {
+            Ok(m) => m.iter().map(|(k, v)| (*k, v.clone())).collect(),
+            Err(_) => return Vec::new(),
+        };
+        let mut out = Vec::with_capacity(rs.len());
+        for (ht, r) in rs {
+            let Ok(g) = r.try_lock() else { continue };
+            let mut io = RelayMem {
+                guest: &g.guest,
+                host: &g.host,
+                rm: self.rm,
+                token: g.chan.token,
+            };
+            use kf_chan::userd_relay::RelayIo;
+            let (Ok(host), Ok(guest)) = (
+                io.host_get(),
+                io.guest.load(kf_abi::submit::USERD_GP_GET),
+            ) else {
+                continue;
+            };
+            let n = g.st.entries.max(1);
+            out.push((ht, host.wrapping_add(n).wrapping_sub(guest) % n));
+        }
+        out
+    }
+
     /// ⚠⚠ DIAGNOSTIC (2026-10-08, `KF3_RELAY_PB_PEEK=1`, default off — the one place a relayed
     /// twin's guest bytes are READ, never executed or forwarded by kayfabe): log the GP entries a relayed
     /// twin was rung for (v2, run73: EVERY entry of each batch up to [`PEEK_ENTRY_BUDGET`], runs of zero
@@ -5486,6 +5547,40 @@ impl ChanPlane {
             "stall #{n}: no doorbell to any of {} live Passthrough twin(s) for {quiet} ms (doorbells so far {total})",
             tokens.len()
         ));
+    }
+
+    /// ⚠ DIAGNOSTIC (2026-10-10, TDR hunt; the completion probe's thread): the stall snapshot of every live Passthrough
+    /// twin NOW (guest USERD, ring entries, push-buffer methods, the value at each named semaphore), followed by one
+    /// line per relayed twin with BOTH sides of its cursors (guest PUT/GET, the relay's host PUT, the engine's GET).
+    /// Reads only; nothing reaches a host action.
+    pub fn snapshot_now(&self, why: &str) {
+        self.pt_snapshot_all(why);
+        let rs: Vec<_> = match self.relays.lock() {
+            Ok(m) => m.iter().map(|(k, v)| (*k, v.clone())).collect(),
+            Err(_) => return,
+        };
+        for (ht, r) in rs {
+            let Ok(g) = r.try_lock() else {
+                eprintln!("kf3: RELAY-DUMP host {ht:#x}: busy");
+                continue;
+            };
+            let mut io = RelayMem {
+                guest: &g.guest,
+                host: &g.host,
+                rm: self.rm,
+                token: g.chan.token,
+            };
+            use kf_chan::userd_relay::RelayIo;
+            eprintln!(
+                "kf3: RELAY-DUMP host {ht:#x} tok={:#x}: guest PUT={:?} GET={:?} | relay host_put={:#x} engine GET={:?} entries={}",
+                g.idx,
+                io.guest_put().ok().map(|v| format!("{v:#x}")),
+                io.guest.load(kf_abi::submit::USERD_GP_GET).ok().map(|v| format!("{v:#x}")),
+                g.st.host_put,
+                io.host_get().ok().map(|v| format!("{v:#x}")),
+                g.st.entries
+            );
+        }
     }
 
     /// ⚠ DIAGNOSTIC: [`Self::pt_snapshot_twin`] for every live twin, under one `pt` lock.
@@ -6021,12 +6116,12 @@ impl ChanPlane {
                         }
                     };
                     let owner = if a.kernel_client && !a.user_work { Owner::Kernel } else { Owner::User };
-                    // ★ 2026-10-09 (`KF3_SCHEDULE_LATE_JOINERS=1`, default off; `crate::latejoin`): a twin
+                    // ★ 2026-10-09, hardwired 2026-10-10 (`crate::latejoin`, hardware-verified): a twin
                     // born into a guest TSG the guest has ALREADY scheduled is in a host group nobody
                     // else schedules (the guest sent its one schedule before the channel existed).
                     // The schedule of its own host group, authored from the guest's own scheduled
                     // state. A refusal is the birth's refusal, by name.
-                    let late = crate::latejoin::schedule_late_joiner(me.rm, crate::latejoin::enabled(), &me.guest_sched, a.client, a.tsg, chan);
+                    let late = crate::latejoin::schedule_late_joiner(me.rm, &me.guest_sched, a.client, a.tsg, chan);
                     let alloc = late
                         .clone()
                         .map(|_| ())

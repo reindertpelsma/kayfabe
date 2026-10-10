@@ -1,0 +1,42 @@
+utc now: 2026-10-10T09:09:01.2090278Z
+uptime: 00:13:03.7809277
+2026-10-10T08:55:58.7310832Z Microsoft-Windows-Kernel-Power 172 Connectivity state in standby: Disconnected, Reason: NIC compliance
+2026-10-10T08:55:59.5459781Z Microsoft-Windows-Kernel-Processor-Power 55 Processor 0 in group 0 exposes the following power management capabilities: Idle state type: ACPI Idle (C) States (1 state(s)) Performance state type: None Nominal Frequency (MHz): 3700 Maximum performance percentage: 100
+2026-10-10T08:55:59.5469892Z Microsoft-Windows-Kernel-Processor-Power 55 Processor 1 in group 0 exposes the following power management capabilities: Idle state type: ACPI Idle (C) States (1 state(s)) Performance state type: None Nominal Frequency (MHz): 3700 Maximum performance percentage: 100
+2026-10-10T08:55:59.5476751Z Microsoft-Windows-Kernel-Processor-Power 55 Processor 2 in group 0 exposes the following power management capabilities: Idle state type: ACPI Idle (C) States (1 state(s)) Performance state type: None Nominal Frequency (MHz): 3700 Maximum performance percentage: 100
+2026-10-10T08:55:59.5483481Z Microsoft-Windows-Kernel-Processor-Power 55 Processor 3 in group 0 exposes the following power management capabilities: Idle state type: ACPI Idle (C) States (1 state(s)) Performance state type: None Nominal Frequency (MHz): 3700 Maximum performance percentage: 100
+2026-10-10T08:55:59.5494139Z Microsoft-Windows-Kernel-Processor-Power 55 Processor 4 in group 0 exposes the following power management capabilities: Idle state type: ACPI Idle (C) States (1 state(s)) Performance state type: None Nominal Frequency (MHz): 3700 Maximum performance percentage: 100
+2026-10-10T08:55:59.5503567Z Microsoft-Windows-Kernel-Processor-Power 55 Processor 5 in group 0 exposes the following power management capabilities: Idle state type: ACPI Idle (C) States (1 state(s)) Performance state type: None Nominal Frequency (MHz): 3700 Maximum performance percentage: 100
+2026-10-10T08:55:59.5509564Z Microsoft-Windows-Kernel-Processor-Power 55 Processor 6 in group 0 exposes the following power management capabilities: Idle state type: ACPI Idle (C) States (1 state(s)) Performance state type: None Nominal Frequency (MHz): 3700 Maximum performance percentage: 100
+2026-10-10T08:55:59.5515745Z Microsoft-Windows-Kernel-Processor-Power 55 Processor 7 in group 0 exposes the following power management capabilities: Idle state type: ACPI Idle (C) States (1 state(s)) Performance state type: None Nominal Frequency (MHz): 3700 Maximum performance percentage: 100
+2026-10-10T08:56:02.7099869Z Microsoft-Windows-Wininit 14 Credential Guard configuration: Registry Configuration: 0x2 Test Configuration: 0 Auto Enablement: 1
+2026-10-10T08:56:02.7100110Z Microsoft-Windows-Wininit 15 Credential Guard and/or VBS Key Isolation are configured but the secure kernel is not running; continuing without them.
+2026-10-10T08:56:02.7112821Z Microsoft-Windows-Wininit 12 LSASS.exe was started as a protected process with level: 4.
+2026-10-10T08:56:49.2942310Z nvlddmkm 153 
+2026-10-10T08:56:49.9056973Z nvlddmkm 153 
+2026-10-10T08:56:49.9865250Z nvlddmkm 153 
+2026-10-10T08:56:58.6090318Z nvlddmkm 153 
+2026-10-10T08:56:59.0401743Z nvlddmkm 153 
+2026-10-10T08:56:59.1403331Z nvlddmkm 153 
+2026-10-10T08:57:16.0653016Z nvlddmkm 153 
+2026-10-10T08:57:16.5710816Z nvlddmkm 153 
+2026-10-10T08:57:16.6710278Z nvlddmkm 153 
+2026-10-10T08:57:24.1187651Z nvlddmkm 153 
+2026-10-10T08:57:26.4644462Z nvlddmkm 153 
+2026-10-10T08:57:26.5493030Z nvlddmkm 153 
+2026-10-10T09:00:15.0492208Z nvlddmkm 153 
+2026-10-10T09:00:15.5533928Z nvlddmkm 153 
+2026-10-10T09:00:15.6074715Z nvlddmkm 153 
+2026-10-10T09:00:28.7112351Z nvlddmkm 153 
+2026-10-10T09:00:29.1758561Z nvlddmkm 153 
+2026-10-10T09:00:29.2252078Z nvlddmkm 153 
+2026-10-10T09:00:37.8840291Z nvlddmkm 153 
+2026-10-10T09:00:38.3881419Z nvlddmkm 153 
+2026-10-10T09:00:38.4331417Z nvlddmkm 153 
+2026-10-10T09:06:31.9001047Z nvlddmkm 153 
+2026-10-10T09:06:32.3041239Z nvlddmkm 153 
+2026-10-10T09:06:32.3406524Z nvlddmkm 153 
+LiveKernelReports: FullName                                                Length     LastWriteTime        
+--------                                                ------     -------------        
+C:\Windows\LiveKernelReports\WATCHDOG                              10/10/2026 9:06:34 AM
+C:\Windows\LiveKernelReports\WATCHDOG-20261010-0856.dmp 1979665132 10/10/2026 8:56:56 AM
