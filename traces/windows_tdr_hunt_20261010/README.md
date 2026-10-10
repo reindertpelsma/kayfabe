@@ -384,3 +384,22 @@ open KEVENT is signalled or has no waiter — then the events reached their KEVE
 from the waiting threads in the same dump). Branches: unread + interrupt pending/undelivered → family A (GSP vector delivery);
 unread + IRQSTAT 0 while unread → the IRQSCLR-after-post race (audit finding 10); consumed but KEVENT unsignalled → the RM-side
 notification path (registration / `CliGetEventInfo`).
+
+### Run 276 result (H-S; binary f7303e72 = the fixed batched-map code 2540b547 + the GSPQ diagnostic)
+* **INVALID as a TDR-mechanism run: 8 host Xid 31 FAULT_PTE** (`evidence/run276-held-by-host-and-xid.txt`). Every faulting VA is a
+  guest leaf kayfabe logged as `HELD BY HOST (host RM placed its own buffer there)` in the same boot: `0x4036000` (CE3 PBDMA reads,
+  5 Xids — a Passthrough CE twin's own GPFIFO VA, `gpfifo=0x4036000` in its birth line), `0x15bb2000` (CE0), `0x1496c000` (GR0 PBDMA).
+  `HELD BY HOST` lines: 0 in runs 263-271 (older batched-map code), 21 in 273, 4 in 275 (0 Xid there by luck), 7 in 276.
+  **[measured] The fixed batched-map code still leaves guest-declared leaves unmapped in a twin's mirror space where host RM holds
+  the VA, and the twin faults on them.** This is a kf-mem defect of the batched-map decisions line (reported to that owner);
+  until it is fixed, TDR runs must use the eff1b692-era code (0 Xid in 12 runs).
+* **H-S part (a), measured: every element kayfabe posted was consumed.** `GSPQ` 100 ms samples for the whole boot: readPtr == writePtr
+  at every 2 s summary, `longest_unread_ms=0`, no `GSPQ-UNREAD`; at each of the 21 posts of the preempt-all burst (12:00:04.342 UTC)
+  the guest's readPtr trailed by exactly the reply+event just written. **The guest drains the GSP status queue, including every
+  `RUNLIST_PREEMPT_COMPLETE`: family A (GSP vector delivery) and the IRQSCLR-after-post race are ruled out for this burst.**
+* H-S part (b): the `eventData` values are not KEVENTs (`_KEVENT` header invalid at every one of the 21 addresses in the dump); they
+  name driver-private objects, so the "is the KEVENT signalled" reading is not possible from public types. Not pursued further.
+* The watcher fired too early: in this boot the guest's own enable list (17 of 21) came 1.1 s after the disable list (maplog
+  66082.28 → 66083.40), 70 ms after a host Xid on one of the disabled set's VAs. The quiet threshold is raised to 1500 ms for later runs.
+* First TDR (F, 10 s after sign-in): a CE3 Xid on `0x4036000` at 65887.07 inside its 2 s window (last flip 65886.117) — a mirror
+  fault, so not a clean F sample either.

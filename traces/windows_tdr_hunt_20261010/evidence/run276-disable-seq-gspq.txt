@@ -1,0 +1,27 @@
+line 3423-3428 t~65845.767417 D+ x2
+line 3433-3437 t~65845.767417 D- x2
+line 9540-13204 t~60.876 SUSPEND x2
+line 17268-18146 t~66082.280040 D+ x21
+line 18151-18215 t~66083.401183 D- x17
+line 18405-18410 t~66084.006936 D+ x2
+line 18416-18420 t~66084.096 D- x2
+line 18429-18519 t~66084.104985 D+ x19
+line 18524-18596 t~66084.104985 D- x19
+line 19938-19938 t~273.478 SUSPEND x1
+line 23180-23185 t~66110.164 D+ x2
+line 23190-23194 t~66110.164 D- x2
+line 23200-23302 t~66110.285079 D+ x21
+line 23310-23404 t~66110.298129 D- x21
+line 23823-25033 t~66110.833498 D+ x12
+line 25038-25042 t~66113.159165 D- x2
+line 25051-25141 t~66113.213202 D+ x19
+line 25146-25229 t~66113.213202 D- x19
+line 26615-29846 t~284.648 SUSPEND x2
+line 31875-31880 t~66125.232990 D+ x2
+line 32783-36004 t~295.587 SUSPEND x2
+kf3: GSPQ t=66178.849 w=59 r=59 unread=0 longest_unread_ms=0
+kf3: GSPQ t=66180.853 w=59 r=59 unread=0 longest_unread_ms=0
+eventData 0xffffa98359e77b20) after the host's disable+preempt returned (utc_ms=692121738953 stat w/r/unread=Some((59, 58, 1)))
+eventData 0xffffa98359e84cc0) after the host's disable+preempt returned (utc_ms=692121738954 stat w/r/unread=Some((61, 60, 1)))
+eventData 0xffffa9835fe5d7c0) after the host's disable+preempt returned (utc_ms=692121975435 stat w/r/unread=Some((1, 0, 1)))
+eventData 0xffffa98359e85750) after the host's disable+preempt returned (utc_ms=692122018387 stat w/r/unread=Some((40, 39, 1)))

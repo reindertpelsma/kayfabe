@@ -1,0 +1,18 @@
+kf3: mem leaf 0x4035000+0x1000 HELD BY HOST (host RM placed its own buffer there)
+kf3: mem leaf 0x4036000+0x10000 HELD BY HOST (host RM placed its own buffer there)
+kf3: mem leaf 0x9b580000+0x20000 HELD BY HOST (host RM placed its own buffer there)
+kf3: mem leaf 0x15bb1000+0x1000 HELD BY HOST (host RM placed its own buffer there)
+kf3: mem leaf 0x15bb2000+0x2000 HELD BY HOST (host RM placed its own buffer there)
+kf3: mem leaf 0x15bb4000+0x10000 HELD BY HOST (host RM placed its own buffer there)
+kf3: mem leaf 0x9b8a0000+0x70000 HELD BY HOST (host RM placed its own buffer there)
+kf3: mem leaf 0x1496c000+0x10000 HELD BY HOST (host RM placed its own buffer there)
+kf3: mem leaf 0x4035000+0x1000 HELD BY HOST (host RM placed its own buffer there)
+kf3: mem leaf 0x4036000+0x10000 HELD BY HOST (host RM placed its own buffer there)
+Xid (PCI:0000:01:00): 31, pid=1608701, name=qemu-system-x86, channel 0x02000040, intr 00000000. MMU Fault: ENGINE CE3_PBDMA0 HUBCLIENT_ESC faulted @ 0x0_04036000. Fault is of type FAULT_PTE ACCESS_TYP
+Xid (PCI:0000:01:00): 31, pid=1608701, name=qemu-system-x86, channel 0x00000036, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x0_15bb2000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_
+Xid (PCI:0000:01:00): 31, pid=1608701, name=qemu-system-x86, channel 0x00000042, intr 00000000. MMU Fault: ENGINE GR0_PBDMA0 HUBCLIENT_ESC faulted @ 0x0_1496c000. Fault is of type FAULT_PTE ACCESS_TYP
+Xid (PCI:0000:01:00): 31, pid=1608701, name=qemu-system-x86, channel 0x0200003d, intr 00000000. MMU Fault: ENGINE CE3_PBDMA0 HUBCLIENT_ESC faulted @ 0x0_04036000. Fault is of type FAULT_PTE ACCESS_TYP
+Xid (PCI:0000:01:00): 31, pid=1608701, name=qemu-system-x86, channel 0x0000003b, intr 00000000. MMU Fault: ENGINE GRAPHICS GPC1 GPCCLIENT_PE_3 faulted @ 0x0_1974b000. Fault is of type FAULT_PTE ACCESS
+Xid (PCI:0000:01:00): 31, pid=1608701, name=qemu-system-x86, channel 0x0200004b, intr 00000000. MMU Fault: ENGINE CE3_PBDMA0 HUBCLIENT_ESC faulted @ 0x0_04036000. Fault is of type FAULT_PTE ACCESS_TYP
+Xid (PCI:0000:01:00): 31, pid=1608701, name=qemu-system-x86, channel 0x02000041, intr 00000000. MMU Fault: ENGINE CE3_PBDMA0 HUBCLIENT_ESC faulted @ 0x0_04036000. Fault is of type FAULT_PTE ACCESS_TYP
+Xid (PCI:0000:01:00): 31, pid=1608701, name=qemu-system-x86, channel 0x0200003b, intr 00000000. MMU Fault: ENGINE CE3_PBDMA0 HUBCLIENT_ESC faulted @ 0x0_04036000. Fault is of type FAULT_PTE ACCESS_TYP
