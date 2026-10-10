@@ -2412,13 +2412,16 @@ impl Device {
             std::env::var("KF3_DISPLAY_CORE_AT_VBLANK").is_ok_and(|v| v == "1");
         // ⚠ DIAGNOSTIC A/B switches (2026-10-10 TDR hunt; default off, never product settings)
         engine.release_at_latch = std::env::var("KF3_DIAG_RELEASE_AT_LATCH").is_ok_and(|v| v == "1");
-        engine.notifier_finish_at_flip_away =
-            std::env::var("KF3_DIAG_WINDOW_NOTIFIER_FINISH_AT_FLIP_AWAY").is_ok_and(|v| v == "1");
+        // ⚠ DIAGNOSTIC A/B (default off): the pre-2026-10-10 window notifier — FINISHED at its own latch, nothing at
+        // its flip-away
+        let finished_at_latch =
+            std::env::var("KF3_DIAG_WINDOW_NOTIFIER_FINISHED_AT_LATCH").is_ok_and(|v| v == "1");
+        engine.notifier_finish_at_flip_away = !finished_at_latch;
         let order = crate::vblankgate::VblankOrder::from_env();
         let slot_hist = std::env::var("KF3_DIAG_SLOT_HISTORY").is_ok_and(|v| v == "1");
         if engine.release_at_latch
-            || engine.notifier_finish_at_flip_away
-            || order != crate::vblankgate::VblankOrder::Tick
+            || finished_at_latch
+            || order != crate::vblankgate::VblankOrder::LatchFirst
             || slot_hist
         {
             eprintln!(
@@ -2478,14 +2481,19 @@ impl Device {
             inst: None,
             img: None,
             notifier_finished,
-            // ⚠ DIAGNOSTIC A/B (2026-10-10 TDR hunt, default off): open NVKMS says the display writes a WINDOW flip's
-            // notifier BEGUN when it performs the flip (`ogkm-595.84: nvidia-modeset/src/nvkms-headsurface.c:1925-1952`),
-            // FINISHED only for the core's completion notifier (`nvkms-evo3.c:6224-6243`)
-            window_notifier: if std::env::var("KF3_DIAG_WINDOW_NOTIFIER_BEGUN").is_ok_and(|v| v == "1") {
-                let b = notifier_begun.unwrap_or(notifier_finished);
-                eprintln!("kf3: display: DIAGNOSTIC window notifiers are written {b:#x} (BEGUN), the core's {notifier_finished:#x}");
+            // ★ 2026-10-10: a WINDOW flip's notifier is written BEGUN at its latch — open NVKMS: the display writes it
+            // BEGUN when it performs the flip (`ogkm-595.84: nvidia-modeset/src/nvkms-headsurface.c:1925-1952`) — and
+            // FINISHED at its flip-away (`Engine::notifier_finish_at_flip_away`); the core's completion notifier is
+            // FINISHED (`nvkms-evo3.c:6224-6243`)
+            window_notifier: if std::env::var("KF3_DIAG_WINDOW_NOTIFIER_FINISHED_AT_LATCH").is_ok_and(|v| v == "1") {
+                eprintln!("kf3: display: DIAGNOSTIC window notifiers are written FINISHED at their own latch");
+                notifier_finished
+            } else if let Some(b) = notifier_begun {
                 b
             } else {
+                eprintln!(
+                    "kf3: display: NV_DISP_NOTIFIER__0_STATUS_BEGUN is not derived — window notifiers are written FINISHED"
+                );
                 notifier_finished
             },
             refusals_logged: 0,

@@ -13,9 +13,12 @@
 //! asks [`VblankGate::due`] once per pass. A completion that cannot be delivered for [`EDGE_CAP`] (a console copy stuck
 //! behind the host) releases the edge anyway, counted, rather than stopping the guest's vblanks.
 //!
-//! ⚠ 2026-10-10: NOT the default yet (owner: only once the forced latch-first order runs clean). [measured, run 282,
-//! `6b8e9b8e`] latch-first + the flip-away release: 5 TDR cycles in the first 22 s of boot, frozen lock screen — so
-//! kayfabe's POST-latch state is itself wrong somewhere. It runs under `KF3_DIAG_VBLANK_ORDER=latch-first` only.
+//! ★ 2026-10-10: the default since the post-latch state is right. [measured, runs 282-284] latch-first with the
+//! window notifier written FINISHED at its own latch (or BEGUN without a flip-away FINISHED): 5 TDR cycles in boot,
+//! every first flip stuck — kayfabe's post-latch state was wrong. [measured, run 287] latch-first with BEGUN at the
+//! latch and FINISHED at the flip-away: 0 TDR in boot, sign-in and Edge. `KF3_DIAG_VBLANK_ORDER=tick` restores the
+//! old order (diagnostic). [`EDGE_CAP`] is a liveness backstop for a console copy stuck behind the host, never the
+//! ordering mechanism (0 forced edges in runs 282-287).
 
 use std::time::{Duration, Instant};
 
@@ -23,9 +26,10 @@ use std::time::{Duration, Instant};
 /// head's frame edge goes relative to its vblank's latch completions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VblankOrder {
-    /// The current default: the edge at the tick, the completions when their console copy is done (~0.9 ms later).
+    /// ⚠ `tick` (diagnostic, the pre-2026-10-10 order): the edge at the tick, the completions when their console copy is
+    /// done (~0.9 ms later) — the guest's VSync handler can see a pre-, mid- or post-latch state.
     Tick,
-    /// `latch-first`: the hardware's order — the edge only after every completion of its vblank ([`VblankGate`]); the
+    /// ★ The default: the hardware's order — the edge only after every completion of its vblank ([`VblankGate`]); the
     /// guest's VSync handler always sees the post-latch state.
     LatchFirst,
     /// `raise-delay`: the edge at the tick and no completion delivered within [`RAISE_DELAY`] of any edge — the guest's
@@ -37,13 +41,14 @@ pub enum VblankOrder {
 pub const RAISE_DELAY: Duration = Duration::from_millis(3);
 
 impl VblankOrder {
-    /// `KF3_DIAG_VBLANK_ORDER` = `latch-first` | `raise-delay`; anything else (or unset) is [`VblankOrder::Tick`].
+    /// `KF3_DIAG_VBLANK_ORDER` = `tick` | `raise-delay` (diagnostics); anything else (or unset) is the default,
+    /// [`VblankOrder::LatchFirst`].
     #[must_use]
     pub fn from_env() -> VblankOrder {
         match std::env::var("KF3_DIAG_VBLANK_ORDER").as_deref() {
-            Ok("latch-first") => VblankOrder::LatchFirst,
+            Ok("tick") => VblankOrder::Tick,
             Ok("raise-delay") => VblankOrder::RaiseDelay,
-            _ => VblankOrder::Tick,
+            _ => VblankOrder::LatchFirst,
         }
     }
 }

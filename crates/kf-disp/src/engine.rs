@@ -575,10 +575,14 @@ pub struct Engine {
     /// ⚠ DIAGNOSTIC (default `false`, 2026-10-10 TDR hunt; `KF3_DIAG_RELEASE_AT_LATCH=1`): the pre-2026-10-10
     /// behaviour — a window's release written at its OWN entry's latch, not at flip-away — for the A/B runs.
     pub release_at_latch: bool,
-    /// ⚠ DIAGNOSTIC (default `false`, 2026-10-10 TDR hunt, `KF3_DIAG_WINDOW_NOTIFIER_FINISH_AT_FLIP_AWAY=1`): at a
-    /// window latch also write the OUTGOING entry's notifier FINISHED (the flip-away), besides the incoming one's.
-    /// [measured, run 286] the guest polls the previous flip's notifier together with the new one's and never leaves
-    /// the loop while both read BEGUN.
+    /// ★ 2026-10-10 (TDR hunt, default `true`): at a window latch the OUTGOING entry's notifier is written FINISHED
+    /// (its flip-away), and the incoming entry's own notifier BEGUN (the display side writes the status words). Open
+    /// NVKMS: "when EVO performs the flip, it changes the notifier to BEGUN" (`ogkm-595.84:
+    /// nvidia-modeset/src/nvkms-headsurface.c:1925-1952`). [measured, run 286, read-watchpoints] after programming flip
+    /// N the Windows driver polls flip N's AND flip N-1's notifier status words together and leaves the loop only once
+    /// N-1 is FINISHED; [measured, runs 282-284 vs 287] with the hardware vblank order every first flip stuck without the
+    /// flip-away FINISHED (5 TDR cycles in boot), none with it. ⚠ `false` (`KF3_DIAG_WINDOW_NOTIFIER_FINISHED_AT_LATCH=1`):
+    /// the pre-2026-10-10 behaviour, every window notifier FINISHED at its own latch (diagnostic A/B only).
     pub notifier_finish_at_flip_away: bool,
 }
 
@@ -604,7 +608,7 @@ impl Engine {
             pace: [PaceCounts::default(); 8],
             ledger: FlipLedger::default(),
             release_at_latch: false,
-            notifier_finish_at_flip_away: false,
+            notifier_finish_at_flip_away: true,
         }
     }
 
@@ -1343,7 +1347,7 @@ impl Engine {
         let outgoing_release = (c.kind == ChannelKind::Window)
             .then(|| Self::release_of(&v, c, n, if at_latch { Chan::a } else { Chan::armed }))
             .flatten();
-        // ⚠ (diagnostic) the outgoing entry's notifier, FINISHED at its flip-away — read before the arm
+        // the outgoing entry's notifier, FINISHED at its flip-away — read before the arm
         let outgoing_notify = (finish_away && c.kind == ChannelKind::Window)
             .then(|| {
                 let handle = c.armed(v.w_ctxdma_notifier);

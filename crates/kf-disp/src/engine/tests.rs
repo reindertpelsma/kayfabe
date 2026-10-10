@@ -447,7 +447,9 @@ fn a_non_tearing_flip_waits_for_vblank_and_its_acquire() {
                 wide: false,
                 ..
             },
-            Effect::Notify { chn: 1, .. },
+            // the outgoing entry's notifier FINISHED (its flip-away), then the incoming one's (BEGUN)
+            Effect::Notify { chn: 1, offset: 16, finished: true, .. },
+            Effect::Notify { chn: 1, offset: 16, finished: false, .. },
         ] => {}
         other => panic!("the outgoing entry's release, not the incoming one's: {other:?}"),
     }
@@ -499,7 +501,7 @@ fn release_at_latch_restores_the_old_order_and_window_slots_name_the_request() {
     }
 }
 
-/// ⚠ The diagnostic `notifier_finish_at_flip_away`: a window's second latch writes the FIRST entry's notifier slot
+/// ★ `notifier_finish_at_flip_away` (the default): a window's second latch writes the FIRST entry's notifier slot
 /// FINISHED (its flip-away) before the new entry's own notifier; the first latch writes only its own.
 #[test]
 fn notifier_finish_at_flip_away_writes_the_outgoing_slot_finished() {
