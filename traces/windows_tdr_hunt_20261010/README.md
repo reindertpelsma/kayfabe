@@ -870,3 +870,26 @@ Proposed (not yet done, each with a test):
 * Make vidmem display writes provably landed before the raise (stream copy + event, or a CPU BAR1 view).
 * Add a Release fence before writePtr.
 * Hardwire the GP_GET refresh before every non-stall raise, owed when a step holds the relay.
+
+### The video/playback TDR class: measured cause and fix (from run 295's log, confirmed by the kf-mem agent's run 384 pattern)
+**PROGRESS LINE: playback TDR cause measured; fix integration `c028265e` (5th commit on `claude/display-latch-contract-20261010`,
+NOT yet in the combined line 4db48053 — coordinator: please fold it in).**
+* Every one of run 295's 4 TDR cycles is preceded by exactly one `chan ... birth REFUSED: twin state: VA space ...
+  (KernelInUserSpace(N)) — a Translated channel never runs in a space a user channel runs in` (log lines 8359/17737/24398/31231,
+  before the suspends at 10551/18971/26544/32973).
+* The refused channel: `CLASSIFY ... kernel work -> Translated (not a graphics or copy engine)`, engine 0x13 = NVDEC0, class
+  c56f, no context share, ProcessID 0x1db0 (Edge's decode), in that process's own VA space (6 user channels already there). Then
+  `GSP REFUSED fn103 (GSP_RM_ALLOC) = 0x40`. The decoder never starts (playback frames identical) and the driver resets.
+* This is the same class as the copy-engine case already in the classifier (`run70`): `windows_user_work` admitted only
+  graphics and copy engines. **Fix:** a video engine (NVDEC0-7, NVENC0-3, OFA0/1) is judged like a copy engine, by its process
+  alone. The kernel driver's own video channels (kernel pid, System pid 4) stay Translated; a user process's go Passthrough,
+  exactly like the user video twins of `V3_VIDEO_ENGINES.md` §2. The test uses the measured facts; the oracle and the refusal
+  table are updated.
+* Also seen once, before run 295's first cycle: `display: scanout REFUSED window 4 head 0: SET_PARAMS.FORMAT 0x38 has no console
+  format`. The console copy cannot compose the YUV overlay (console only; it is not the guest's scanout). Not yet shown to matter
+  for a TDR.
+* For the kf-mem agent: none of these resets coincide with host Xid 31 (19 before and after).
+
+### Run 296 (written before the run): base 3e478540 (display contract + late joiner + interlock + video user work), ZERO flags, 15 min
+**Prediction:** no `birth REFUSED`; the playback check shows frames that differ; 0 TDR in every phase. **Falsifier:** any TDR or a
+`birth REFUSED`. **NEXT RUN NEEDS:** ~25 min of GPU (queued behind the kf-mem agent via `tdropus/queue.sh`).
