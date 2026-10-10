@@ -776,3 +776,15 @@ host GP_GET stays 0, which is that note's run-111 signature. The note's fix (`la
 Same runner, guest ETW, hold 300 s (288's TDRs came at hold_t 87-128). **Prediction (the note's section 6):** the joiners' BORN lines
 end `Some(Authored)`, their host GP_GET equals GP_PUT, and there is no hold TDR. **Falsifier:** `Authored`, the host accepts it, and a
 joiner still has `GP_GET=0, GP_PUT>0` with a TDR. **Fix wrong:** a birth refused by name, new host Xid, or a running twin stalling.
+
+### Run 290 result: the late-joiner fix holds (falsifier NOT met)
+**PROGRESS LINE: 0 TDR in boot / sign-in / Edge / Shorts step / 300 s hold.** 15 joiners `late_joiner_schedule=Some(Authored)`
+(62 `GuestNotScheduled`), no joiner with host GP_GET=0 under GP_PUT>0, 0 new host Xid (19 before and after), 0 forced edges.
+**Fix:** the schedule is unconditional and the switch is removed. Integration line **`6b597c9c`** (third commit on
+`claude/display-latch-contract-20261010`, with the design note's STATUS updated above its old text); base `a82e5c09`.
+
+### Run 291 (written before the run): binary a82e5c09, production profile, ZERO flags, 15-min hold, runner 14
+Runner 14 sets Edge's `HideFirstRunExperience`/`AutoplayAllowed` policies through QGA before sign-in, so the URL reaches the
+address bar. It takes a `shorts-loaded` screenshot and, with `PAUSE_AT_SHORTS=1`, waits for me to inspect it (the YouTube consent
+page, if one appears) before the hold. The pause and clicks are workload, not kayfabe flags. **Prediction:** 0 TDR in every phase.
+**Falsifier:** any TDR (it is then classified from kayfabe logs and, if needed, the disk-recovered ETW).
