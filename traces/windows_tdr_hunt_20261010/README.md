@@ -788,3 +788,17 @@ Runner 14 sets Edge's `HideFirstRunExperience`/`AutoplayAllowed` policies throug
 address bar. It takes a `shorts-loaded` screenshot and, with `PAUSE_AT_SHORTS=1`, waits for me to inspect it (the YouTube consent
 page, if one appears) before the hold. The pause and clicks are workload, not kayfabe flags. **Prediction:** 0 TDR in every phase.
 **Falsifier:** any TDR (it is then classified from kayfabe logs and, if needed, the disk-recovered ETW).
+
+### Run 291 result (binary a82e5c09, production profile, zero flags, 15-min hold, runner 14)
+**PROGRESS LINE: 0 TDR in boot / sign-in / Edge; 2 in the 15-min hold, both after REAL video playback started.** With the
+Edge policies Edge skips first run, and the URL reaches YouTube's EU consent page (`consent.youtube.com`, screenshot
+`shorts-loaded`). Driven by hand over QMP (host `tdropus/ui.sh`) during the hold: Win+Up, End, "Reject all" at (1226,866), then the
+Shorts player's play button at (1050,578). Guest nvlddmkm 153 came at 14:53:55 (seconds after the play click) and 15:00:17/48
+(hold_t 845). 0 new host Xid. kayfabe side before the first one: no channel with unfetched work (every released USERD relay has
+host GP_GET == GP_PUT; the late-joiner schedule is in effect), no display flip in flight (`vblirq=0.0`, copies 0: idle display).
+**Unclassified without guest ETW** (zero-flag run). The playback workload is new: runs 280-290 never played video.
+
+### Run 292 (written before the run): the playback TDR, classified (binary a82e5c09, guest ETW, runner 15, hold 600 s)
+Runner 15 scripts run 291's manual steps (consent "Reject all", play) and checks real playback (two screenshots 3 s apart must
+differ). Guest DxgKrnl ETW, recovered from the disk after the run. **Question:** which dependency is stuck at the declaration:
+a flip (259/386 without 505), a decode/video/render packet (178 without 180, which node/engine), or a paging/fence wait.
