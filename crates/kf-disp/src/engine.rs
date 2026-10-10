@@ -1084,6 +1084,19 @@ impl Engine {
         let live: ChanSet = (0..CHANNELS as u32)
             .filter(|n| self.chans[*n as usize].is_some())
             .fold(0, |m, n| m | bit(n));
+        // ★ 2026-10-10 (runs 400/403): a channel whose UPDATE is already parked for its vblank or
+        // acquire (Stage::Latch) is still a PENDING update in hardware until it latches. A later
+        // UPDATE that names it joins its latch (with the channels it latches with) instead of waiting
+        // for another UPDATE on that channel, which the driver does not send while it waits for the
+        // flip to complete.
+        let latching: ChanSet = (0..CHANNELS as u32)
+            .filter(|n| {
+                matches!(
+                    self.chans[*n as usize].as_ref().map(|c| c.stage),
+                    Some(Stage::Latch { .. })
+                )
+            })
+            .fold(0, |m, n| m | bit(n));
         for start in 0..CHANNELS as u32 {
             if pending & bit(start) == 0 {
                 continue;
@@ -1112,11 +1125,21 @@ impl Engine {
                         }
                     }
                 }
-                if want & !pending != 0 {
+                if want & !(pending | latching) != 0 {
                     ready = false;
                     break;
                 }
-                let next = group | want;
+                // a joined latching channel brings the group it latches with
+                let mut joined = want;
+                for n in 0..CHANNELS as u32 {
+                    if want & latching & bit(n) != 0
+                        && let Some(Stage::Latch { group: g, .. }) =
+                            self.chans[n as usize].as_ref().map(|c| c.stage)
+                    {
+                        joined |= g;
+                    }
+                }
+                let next = group | joined;
                 if next == group {
                     break;
                 }
@@ -1181,7 +1204,7 @@ impl Engine {
         let set = group.iter().fold(0, |m, n| m | bit(*n));
         for &n in group {
             if let Some(c) = self.chans[n as usize].as_mut()
-                && let Stage::Interlock { update, .. } = c.stage
+                && let Stage::Interlock { update, .. } | Stage::Latch { update, .. } = c.stage
             {
                 c.stage = Stage::Latch {
                     update,

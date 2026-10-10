@@ -412,6 +412,77 @@ fn a_pending_update_that_waits_for_a_channel_latches_with_that_channels_next_upd
     assert!(!e.waiting(1) && !e.waiting(w4) && !e.waiting(i4));
 }
 
+/// ★ 2026-10-10 (runs 400/403, measured: the guest's flip queue declared a TDR 2 s after a present
+/// whose plane 0 completed and whose plane 1 never did; the STALL report named chn 5 waiting for chn 1
+/// and chn 37 while chn 1 was not at an UPDATE). The overlay window 4 re-enabled after being off:
+/// window 0's UPDATE (names nothing) arrived FIRST and was parked for its head's vblank; the overlay's
+/// UPDATE (names window 0 and its immediate channel) arrived 21 us later. Window 0's update is still
+/// PENDING in hardware until that vblank, so the overlay's update joins it and all latch together at
+/// the vblank — it must not wait for a window-0 UPDATE that the driver will never send (it waits for the
+/// overlay's completion).
+#[test]
+fn an_update_naming_a_channel_already_parked_for_the_vblank_joins_its_latch() {
+    let mut e = engine();
+    e.alloc(ChannelKind::Core, 0, CLIENT, 1, pb(), 0);
+    e.alloc(ChannelKind::Window, 0, CLIENT, 1, pb(), 0);
+    e.alloc(ChannelKind::Window, 4, CLIENT, 1, pb(), 0);
+    e.alloc(ChannelKind::WindowImm, 4, CLIENT, 1, pb(), 0);
+    let (w0, w4) = (1, ChannelKind::Window.channel_number(4));
+    let i4 = ChannelKind::WindowImm.channel_number(4);
+    // head 0 lit, windows 0 and 4 owned by it
+    let mut c = Ring::new();
+    modeset(&mut c, 0, 0);
+    c.m(ma(CORE, "WINDOW_SET_CONTROL", 4), 0);
+    c.m(m(CORE, "UPDATE"), 0);
+    e.step(0, &c.bytes(), c.put(), &mut all_ok);
+    // both windows scan a surface (each channel's ring keeps growing: GET follows PUT)
+    let (mut r0, mut r4, mut ri) = (Ring::new(), Ring::new(), Ring::new());
+    for (w, n, r) in [(0u32, w0, &mut r0), (4, w4, &mut r4)] {
+        r.m(ma(WIN, "SET_CONTEXT_DMA_ISO", 0), 0x1_0001 + w);
+        r.m(m(WIN, "SET_WINDOW_INTERLOCK_FLAGS"), 0);
+        r.m(m(WIN, "UPDATE"), 0);
+        e.step(n, &r.bytes(), r.put(), &mut all_ok);
+        e.vblank(0, &mut all_ok);
+    }
+    // window 0's flip first: parked for head 0's vblank
+    r0.m(m(WIN, "UPDATE"), 0);
+    let s = e.step(w0, &r0.bytes(), r0.put(), &mut all_ok);
+    assert!(
+        s.effects.is_empty(),
+        "parked for the vblank: {:?}",
+        s.effects
+    );
+    assert!(e.waiting(w0));
+    // 21 us later: the overlay's flip, naming window 0 and its immediate channel
+    r4.m(m(WIN, "SET_WINDOW_INTERLOCK_FLAGS"), 1 << 0);
+    r4.m(
+        m(WIN, "UPDATE"),
+        put(0, fl(WIN, "UPDATE_INTERLOCK_WITH_WIN_IMM"), 1),
+    );
+    e.step(w4, &r4.bytes(), r4.put(), &mut all_ok);
+    ri.m(
+        m(IMM, "UPDATE"),
+        put(0, fl(IMM, "UPDATE_INTERLOCK_WITH_WINDOW"), 1),
+    );
+    e.step(i4, &ri.bytes(), ri.put(), &mut all_ok);
+    assert!(
+        e.waiting(w0) && e.waiting(w4) && e.waiting(i4),
+        "all three wait for the vblank together"
+    );
+    let s = e.vblank(0, &mut all_ok);
+    let mut latched: Vec<u32> = s
+        .effects
+        .iter()
+        .filter_map(|x| match x {
+            Effect::Latched { window } => Some(*window),
+            _ => None,
+        })
+        .collect();
+    latched.sort_unstable();
+    assert_eq!(latched, vec![0, 4], "{:?}", s.effects);
+    assert!(!e.waiting(w0) && !e.waiting(w4) && !e.waiting(i4));
+}
+
 /// ★ A plain non-tearing flip on an active head latches at the head's VBLANK: until then the window
 /// is busy with GET before its UPDATE, and the flip's notifier is NOT written.
 #[test]
