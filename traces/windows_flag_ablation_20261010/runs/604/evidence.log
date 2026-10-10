@@ -1,0 +1,28 @@
+== snap after-signin 2026-10-10T23:35:43  alive=1 tdr_cycles=1
+
+xid_now=29 (before=29)
+DEAD=0 PROBE-DUMP=0 PT-SNAP=0 panics=0
+== snap after-shorts 2026-10-10T23:36:49  alive=1 tdr_cycles=1
+
+xid_now=29 (before=29)
+DEAD=0 PROBE-DUMP=0 PT-SNAP=0 panics=0
+== snap periodic 2026-10-10T23:37:44  alive=1 tdr_cycles=1
+
+xid_now=29 (before=29)
+DEAD=0 PROBE-DUMP=0 PT-SNAP=0 panics=0
+== snap periodic 2026-10-10T23:38:45  alive=1 tdr_cycles=1
+
+xid_now=29 (before=29)
+DEAD=0 PROBE-DUMP=0 PT-SNAP=0 panics=0
+== snap periodic 2026-10-10T23:39:45  alive=1 tdr_cycles=1
+
+xid_now=29 (before=29)
+DEAD=0 PROBE-DUMP=0 PT-SNAP=0 panics=0
+== snap final 2026-10-10T23:40:01  alive=1 tdr_cycles=1
+
+xid_now=29 (before=29)
+DEAD=0 PROBE-DUMP=0 PT-SNAP=0 panics=0
+== snap after-stop 2026-10-10T23:41:21  alive=0 tdr_cycles=1
+
+xid_now=29 (before=29)
+DEAD=0 PROBE-DUMP=0 PT-SNAP=0 panics=0

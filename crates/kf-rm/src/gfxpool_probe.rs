@@ -8,8 +8,18 @@
 use kf_abi::{gfxpool, versions::DriverAbiTable};
 use kf_gsp::{CommandPolicy, Reply, RpcCommand, RpcFunction};
 
+/// The first this-many answers are logged, then powers of two (the guest's call rate must not grow the log).
+const LOG_CAP: u64 = 16;
+
 pub(crate) struct GfxPoolProbe {
     pub(crate) driver: DriverAbiTable,
+    /// Queries answered so far (log cap only).
+    pub(crate) served: u64,
+}
+
+/// Whether the `n`th (1-based) answer is logged: the first [`LOG_CAP`], then every power of two.
+const fn should_log(n: u64) -> bool {
+    n <= LOG_CAP || n.is_power_of_two()
 }
 
 impl CommandPolicy for GfxPoolProbe {
@@ -42,14 +52,18 @@ impl CommandPolicy for GfxPoolProbe {
             return fail(0x1f);
         };
         let result = gfxpool::experimental_query(params);
-        eprintln!(
-            "kf-rm: EXPERIMENT virtual GFX_POOL_QUERY_SIZE bytes={} maxSlots={:?} result={:?}",
-            params.len(),
-            params
-                .get(..4)
-                .map(|p| u32::from_le_bytes(p.try_into().unwrap())),
-            result.as_ref().map(|_| ()).map_err(|e| *e)
-        );
+        self.served += 1;
+        if should_log(self.served) {
+            eprintln!(
+                "kf-rm: EXPERIMENT virtual GFX_POOL_QUERY_SIZE bytes={} maxSlots={:?} result={:?} #{}",
+                params.len(),
+                params
+                    .get(..4)
+                    .map(|p| u32::from_le_bytes(p.try_into().unwrap())),
+                result.as_ref().map(|_| ()).map_err(|e| *e),
+                self.served
+            );
+        }
         let Ok(output) = result else {
             return fail(0x1f);
         };
@@ -89,7 +103,7 @@ mod tests {
         payload[wire.params_off..wire.params_off + 4].copy_from_slice(&128u32.to_le_bytes());
         payload[wire.params_off + 4..].fill(0xff);
         (
-            GfxPoolProbe { driver },
+            GfxPoolProbe { driver, served: 0 },
             RpcCommand {
                 function: RpcFunction::RmControl,
                 code: 0,
@@ -99,6 +113,14 @@ mod tests {
                 delivered: Vec::new(),
             },
         )
+    }
+
+    #[test]
+    fn log_is_capped_then_powers_of_two() {
+        let logged: Vec<u64> = (1..=100).filter(|n| should_log(*n)).collect();
+        assert_eq!(&logged[..16], &(1..=16).collect::<Vec<u64>>()[..]);
+        assert_eq!(&logged[16..], &[32, 64]);
+        assert!(!should_log(17) && !should_log(1000));
     }
 
     #[test]

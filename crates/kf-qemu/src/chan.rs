@@ -1404,27 +1404,33 @@ impl Publisher for VaSplit<'_> {
             .clone()
             .ok_or("software method started with nothing planned")?;
         let p = self.sw.plane;
-        p.defapi_triggers.fetch_add(1, Ordering::Relaxed);
-        eprintln!(
-            "kf3: DEFERRED-API trigger token {:#x} subch {} value {:#x} method {:#x} hApiHandle {:#x} on {:#x}:{:#x} cmd {:#x}: {:?}",
-            self.token,
-            call.sub,
-            call.value,
-            call.method,
-            call.data,
-            planned.key.client,
-            planned.key.object,
-            planned.entry.cmd,
-            planned.entry.decoded
-        );
+        // Logged: the first 16 triggers, then powers of two (the guest's trigger rate must not grow the log).
+        let nth = p.defapi_triggers.fetch_add(1, Ordering::Relaxed) + 1;
+        let log = nth <= 16 || nth.is_power_of_two();
+        if log {
+            eprintln!(
+                "kf3: DEFERRED-API trigger #{nth} token {:#x} subch {} value {:#x} method {:#x} hApiHandle {:#x} on {:#x}:{:#x} cmd {:#x}: {:?}",
+                self.token,
+                call.sub,
+                call.value,
+                call.method,
+                call.data,
+                planned.key.client,
+                planned.key.object,
+                planned.entry.cmd,
+                planned.entry.decoded
+            );
+        }
         if let kf_abi::defapi::Bundle::InvalidateTlb { vaspace } = planned.entry.decoded {
             let (g, payload) =
                 gate.ok_or("deferred DMA_INVALIDATE_TLB started without its gate")?;
             // ★ §U.2: the guest's hClientVA/hDeviceVA/hVASpace are ignored: our OWN space.
-            eprintln!(
-                "kf3: DEFERRED-API token {:#x}: DMA_INVALIDATE_TLB (guest hVASpace {vaspace:#x} ignored) -> gate payload {payload} on the channel's own space {:?}",
-                self.token, self.sw.space
-            );
+            if log {
+                eprintln!(
+                    "kf3: DEFERRED-API token {:#x}: DMA_INVALIDATE_TLB (guest hVASpace {vaspace:#x} ignored) -> gate payload {payload} on the channel's own space {:?}",
+                    self.token, self.sw.space
+                );
+            }
             self.sw.st.ticket =
                 Some(
                     self.inbox
@@ -1466,10 +1472,15 @@ impl Publisher for VaSplit<'_> {
         }
         match outcome {
             Ok(line) => {
-                eprintln!(
-                    "kf3: DEFERRED-API token {:#x} hApiHandle {:#x} DONE: {line}",
-                    self.token, planned.entry.handle
-                );
+                // First 16 completions, then powers of two (as the trigger line above).
+                static DONE: AtomicU64 = AtomicU64::new(0);
+                let nth = DONE.fetch_add(1, Ordering::Relaxed) + 1;
+                if nth <= 16 || nth.is_power_of_two() {
+                    eprintln!(
+                        "kf3: DEFERRED-API token {:#x} hApiHandle {:#x} DONE #{nth}: {line}",
+                        self.token, planned.entry.handle
+                    );
+                }
                 Ok(Split::Done)
             }
             Err(e) => Err(format!(

@@ -269,7 +269,11 @@ impl MirrorVaStart {
     /// (`KF3_WIN_USER_CHANNELS_PASSTHROUGH=1`, default off).
     #[must_use]
     pub fn from_env() -> Self {
-        Self::select(std::env::var("KF3_WIN_USER_CHANNELS_PASSTHROUGH").as_deref() == Ok("1"))
+        // Read once: this runs on the VA thread for every mirror-space alloc (an env-lock round trip each).
+        static CACHED: std::sync::OnceLock<MirrorVaStart> = std::sync::OnceLock::new();
+        *CACHED.get_or_init(|| {
+            Self::select(std::env::var("KF3_WIN_USER_CHANNELS_PASSTHROUGH").as_deref() == Ok("1"))
+        })
     }
 
     /// Pure form of [`MirrorVaStart::from_env`].

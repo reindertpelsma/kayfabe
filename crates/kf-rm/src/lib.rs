@@ -584,7 +584,7 @@ pub fn served_chain(
         eprintln!(
             "kf-rm: EXPERIMENT virtual GfxP pool sizing enabled; lifecycle is not implemented"
         );
-        chain.push(Box::new(gfxpool_probe::GfxPoolProbe { driver }));
+        chain.push(Box::new(gfxpool_probe::GfxPoolProbe { driver, served: 0 }));
     }
     // ★ v3-display: the display link claims only its own controls, so its place is a matter of
     // which link answers first; it goes first so no other link's refusal can shadow it.
