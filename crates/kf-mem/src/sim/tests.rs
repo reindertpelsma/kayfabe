@@ -1003,6 +1003,44 @@ fn a_steer_that_did_not_complete_still_lets_the_walkers_unmap_reach_the_host() {
     ok(&sim, &c, &BTreeMap::new());
 }
 
+/// ★ Review 4 item 1 — degraded configuration (every reservation refused, host RM refusing unmaps):
+/// the first try of a falcon-ctx steer removes the placement row and is refused; the guest ctx mapping
+/// STAYS in the ledger. A SECOND alloc on the same channel finds no row (`rows.remove` → none) and
+/// used to conclude "not mirrored yet" and run the host alloc unsteered (the vvid wrong-frames bug).
+/// Now the ctx range is handed over anyway: still refused ⇒ no alloc; host RM recovered ⇒ `Free`
+/// ⇒ the alloc goes; a range with nothing of ours (and no reservation over it) is `Free` at once.
+#[test]
+fn a_second_alloc_after_a_refused_steer_never_runs_the_host_alloc_unsteered() {
+    use crate::batch::{HandOver, SteerStep, steer_step};
+    let sim = fresh();
+    sim.0.borrow_mut().refuse_reserve = true; // degraded: no reservation anywhere
+    let m = SimMirror::new(&sim, true, true);
+    let mut c = BTreeMap::new();
+    map_ram(&m, &mut c, &[(4, 4, 700)]);
+    let (va, ctx_len) = (pg(4), 2 * P);
+    let step = |over: &HandOver| steer_step(over, 0, std::time::Duration::ZERO);
+    // First alloc: row removed, host RM refuses the unmap.
+    let row = m.rows.borrow_mut().remove(&va).unwrap();
+    sim.0.borrow_mut().fail_unmaps = Some(UnmapFault { every: 1, after: false, seen: 0 });
+    let over = m.bv.hand_to_host(va, row);
+    assert!(matches!(over, HandOver::Refused(_)));
+    assert_ne!(step(&over), SteerStep::Done);
+    // Second alloc on the same channel: the row is gone ...
+    assert!(m.rows.borrow_mut().remove(&va).is_none());
+    // ... and the hand-over of the ctx range is attempted anyway; still refused ⇒ no alloc.
+    let over = m.bv.hand_to_host(va, ctx_len);
+    assert!(matches!(over, HandOver::Refused(_)), "{over:?}");
+    assert_ne!(step(&over), SteerStep::Done, "the host alloc must not run");
+    // Host RM recovers: Free ⇒ the alloc may go, and nothing of ours is left over the range.
+    sim.0.borrow_mut().fail_unmaps = None;
+    let over = m.bv.hand_to_host(va, ctx_len);
+    assert_eq!(over, HandOver::Free);
+    assert_eq!(step(&over), SteerStep::Done);
+    assert!(!m.bv.own.lock().unwrap().any_in(va, va + ctx_len));
+    // A range with nothing of ours at all is Free at once (the proof the alloc needs).
+    assert_eq!(m.bv.hand_to_host(pg(40), ctx_len), HandOver::Free);
+}
+
 /// What one seed exercised (so a green run cannot be a run that never batched).
 #[derive(Debug, Default, Clone, Copy)]
 struct Stats {

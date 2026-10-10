@@ -96,9 +96,30 @@ impl kf_rm::gssnative::GssHost for GssHostRm {
 /// ★ P5b: one host act, run on the plane's act thread. `Err((status, why))` refuses by name.
 type Act = Box<dyn FnOnce(&ChanPlane) -> Result<String, (u32, String)> + Send>;
 
+/// ★ Review 4 item 1: how much to hand to host RM for a falcon ctx at G of length `ctx_len`: the whole
+/// placement row when the steer removed one, else the ctx range itself — a MISSING row (an earlier
+/// try removed it and the steer was refused; the mapping stayed in the ledger) never means "nothing
+/// of ours there", so the hand-over is attempted all the same and only `Free` lets the alloc go.
+fn steer_len(removed_row_len: Option<u64>, ctx_len: u64) -> u64 {
+    removed_row_len.unwrap_or(ctx_len)
+}
+
 /// ★ Review 3 item 5: the status an act returns after it has put ITSELF back on the act queue
 /// ([`ChanPlane::requeue`]): the act loop neither resolves its `Deferred` nor counts a refusal.
 const ACT_REQUEUED: u32 = 0xFFFF_FFF0;
+
+thread_local! {
+    /// ★ Review 4 item 4: acts the running act asked to be parked ([`delay_act`]); the act loop moves
+    /// them into its delay list after the act returns.
+    static ACT_DELAYED: std::cell::RefCell<Vec<(std::time::Instant, Act, kf_gsp::Deferred, &'static str)>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// ★ Review 4 item 4: from INSIDE an act (on the act thread), park `act` until `not_before`; the act
+/// loop runs everything else meanwhile (no sleeping). The act then returns [`ACT_REQUEUED`].
+fn delay_act(not_before: std::time::Instant, what: &'static str, act: Act, d: kf_gsp::Deferred) {
+    ACT_DELAYED.with(|c| c.borrow_mut().push((not_before, act, d, what)));
+}
 
 /// ★★ v3-video — one guest `engine object` alloc on a Passthrough twin, as a RE-QUEUEABLE act.
 ///
@@ -136,7 +157,7 @@ struct EngineObj {
 impl EngineObj {
     /// The act for try number `tries`; `steered` = the `(va, row length)` whose placement row an
     /// earlier try already removed (a retry must not read the missing row as "nothing there").
-    fn act(self, tries: u32, born: std::time::Instant, steered: Option<(u64, u64)>, d: kf_gsp::Deferred) -> Act {
+    fn act(self, tries: u32, born: Option<std::time::Instant>, steered: Option<(u64, u64)>, d: kf_gsp::Deferred) -> Act {
         Box::new(move |me: &ChanPlane| self.run(me, tries, born, steered, d))
     }
 
@@ -144,13 +165,29 @@ impl EngineObj {
         self,
         me: &ChanPlane,
         tries: u32,
-        born: std::time::Instant,
+        born: Option<std::time::Instant>,
         steered: Option<(u64, u64)>,
         d: kf_gsp::Deferred,
     ) -> Result<String, (u32, String)> {
         let Self { client, parent, space, ref rows, ref ledger, kind, .. } = self;
+        // ★ Review 4 item 3: the age bound runs from the FIRST EXECUTION of the step, not from its
+        // enqueue — a busy act queue must not eat the retry budget.
+        let born = born.unwrap_or_else(std::time::Instant::now);
+        // ★ Review 4 (lower item): a retry that runs after the channel was freed (or replaced) must
+        // not run the host alloc on the old channel.
         if tries > 0 {
-            std::thread::sleep(kf_mem::batch::STEER_RETRY_SPACING);
+            let alive = me
+                .pt
+                .lock()
+                .ok()
+                .and_then(|m| m.get(&(client, parent)).map(|v| v.chan.token))
+                == Some(self.chan.token);
+            if !alive {
+                return Err((
+                    NV_ERR_INVALID_STATE,
+                    format!("chan {client:#x}:{parent:#x} was freed while its falcon ctx steer was retrying — object birth REFUSED"),
+                ));
+            }
         }
         let fc = if matches!(
             kind,
@@ -176,28 +213,37 @@ impl EngineObj {
             }
             !reserved
         });
+        if tries > 0 && steered.is_some() && fc.is_none() {
+            return Err((
+                NV_ERR_INVALID_STATE,
+                format!("chan {client:#x}:{parent:#x}: the falcon ctx is no longer known while its steer was retrying — object birth REFUSED"),
+            ));
+        }
         let mut steer_msg = String::new();
         if let Some((va, len)) = fc {
             // The row goes first: from here G is host RM's. `rows.remove` is also the arbitration
             // `cut_own`'s argument relies on (`V3_BATCHED_MAP.md` §8.8.2). The `rows` write lock is
             // held for the `remove` ONLY (review 3 item 6): the ledger walk below is outside it.
+            // ★ Review 4 item 1: a MISSING row is NOT "nothing mirrored there". After a refused first
+            // try the guest ctx mapping stays in the ledger (and `falcon_ctx` in `pt`): a later alloc
+            // on the same channel finds the row gone, and used to run the host alloc unsteered —
+            // the vvid wrong-frames bug. So with no row the ctx RANGE `[va, va+len)` is handed over
+            // all the same: `Free` is the proof that nothing of ours covers it (no mapping, no
+            // reservation), and only then does the host alloc go ahead.
             let row_len = match steered {
-                Some((_, l)) => Some(l),
+                Some((_, l)) => l,
                 None => match rows.write().map(|mut r| r.remove(&va)) {
-                    Ok(None) => {
-                        steer_msg = format!(" [guest ctx VA {va:#x} not mirrored yet — host RM takes it free; the walker will find it held]");
-                        None
-                    }
+                    Ok(removed) => steer_len(removed.map(|row| row.0), len),
                     Err(_) => {
                         return Err((
                             NV_ERR_INVALID_STATE,
                             format!("guest ctx VA {va:#x}: the placement rows are poisoned — the steer cannot be known to have happened; object birth REFUSED"),
                         ));
                     }
-                    Ok(Some(row)) => Some(row.0),
                 },
             };
-            if let Some(rl) = row_len {
+            {
+                let rl = row_len;
                 // ★ 2026-10-09: by RANGE over the whole row — outside a reservation a row is many host
                 // mappings (D1: one per 4 KiB page, or one reservation holding it), so a start-keyed
                 // unmap would take only its first. THROUGH the space's ownership ledger
@@ -208,7 +254,9 @@ impl EngineObj {
                     steer_msg = format!(" [guest ctx VA {va:#x}: no ownership ledger for this space — nothing of ours to hand over, host ctx placement unsteered]");
                     return self.finish(me, steer_msg);
                 };
-                let over = bv.hand_to_host(va, rl);
+                // One act's hand-over is bounded by a time slice (a hostile row is thousands of
+                // hulls); the rest continues in a later act.
+                let over = bv.hand_to_host_within(va, rl, kf_mem::batch::STEER_SLICE);
                 let (touched, hold_us) = bv.hold_stats();
                 let (act_wait_us, act_op_us) = bv.act_stats();
                 let holds = format!(" (ledger lock holds: at most {touched} entries, longest {hold_us} us; this thread waited at most {act_wait_us} us for a ledger lock, hand-over took at most {act_op_us} us; try {})", tries.saturating_add(1));
@@ -220,12 +268,13 @@ impl EngineObj {
                         eprintln!(
                             "kf3: chan {client:#x}:{parent:#x} falcon ctx steer of {va:#x}+{rl:#x} not complete ({over:?}){holds} — re-queued, the host alloc waits"
                         );
-                        let next = self.clone().act(tries.saturating_add(1), born, Some((va, rl)), d.clone());
-                        return if me.requeue("engine object", next, d) {
-                            Err((ACT_REQUEUED, "steer retry".into()))
-                        } else {
-                            Err((NV_ERR_INVALID_STATE, "the act thread is not running — object birth REFUSED".into()))
-                        };
+                        let next = self.clone().act(tries.saturating_add(1), Some(born), Some((va, rl)), d.clone());
+                        // PARKED, not slept on: the act thread runs other acts until it is due.
+                        let due = std::time::Instant::now()
+                            .checked_add(kf_mem::batch::STEER_RETRY_SPACING)
+                            .unwrap_or_else(std::time::Instant::now);
+                        delay_act(due, "engine object", next, d);
+                        return Err((ACT_REQUEUED, "steer retry".into()));
                     }
                     kf_mem::batch::SteerStep::Refuse => {
                         return Err((
@@ -2545,9 +2594,14 @@ impl ChanPlane {
         std::thread::Builder::new()
             .name(kf_rm::gssnative::ACT_THREAD.into())
             .spawn(move || {
-                while let Ok((act, d, what)) = rx.recv() {
+                let mut q = crate::actq::ActQueue::new(rx);
+                while let Some((act, d, what)) = q.next_act() {
                     let t0 = std::time::Instant::now();
                     let r = act(self);
+                    // Retries the act parked (a steer waiting for a map in flight to end).
+                    for (when, a, dd, w) in ACT_DELAYED.with(|c| std::mem::take(&mut *c.borrow_mut())) {
+                        q.delay(when, (a, dd, w));
+                    }
                     let us = u64::try_from(t0.elapsed().as_micros()).unwrap_or(u64::MAX);
                     self.act_worst_us.fetch_max(us, Ordering::Relaxed);
                     self.act_total_us.fetch_add(us, Ordering::Relaxed);
@@ -4087,17 +4141,7 @@ impl ChanPlane {
             ledger,
             kind,
         };
-        self.defer_cell("engine object", step.act(0, std::time::Instant::now(), None, d.clone()), d)
-    }
-
-    /// ★ Review 3 item 5: put an act BEHIND the others again (a steer retry). `false` when the act
-    /// thread is not running.
-    fn requeue(&self, what: &'static str, act: Act, d: kf_gsp::Deferred) -> bool {
-        self.acts
-            .lock()
-            .ok()
-            .and_then(|a| a.as_ref().map(|tx| tx.send((act, d, what)).is_ok()))
-            == Some(true)
+        self.defer_cell("engine object", step.act(0, None, None, d.clone()), d)
     }
 
     /// ★ EXPERIMENT `x11-dispsw` (default off; carried only when the device property is on,
@@ -8026,5 +8070,12 @@ mod snap_tests {
             .chain(std::iter::repeat_n(0, 4000))
             .collect();
         assert_eq!(snap_decode(&many, 5).methods.len(), 5);
+    }
+
+    /// ★ Review 4 item 1 — a missing row hands the ctx range over, it is not "nothing there".
+    #[test]
+    fn a_missing_steer_row_still_hands_the_ctx_range_over() {
+        assert_eq!(crate::chan::steer_len(Some(0x20_0000), 0x1_0000), 0x20_0000, "the whole row when one was removed");
+        assert_eq!(crate::chan::steer_len(None, 0x1_0000), 0x1_0000, "the ctx range when the row is gone");
     }
 }

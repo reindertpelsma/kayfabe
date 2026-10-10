@@ -1044,7 +1044,8 @@ pub struct MicroResv {
 /// host allocation may proceed ONLY after [`HandOver::Free`]: every other answer — `Busy` (a map in
 /// flight), `StillOurs` (a mapping of ours landed again), `StillReserved` (a micro reservation covers
 /// it), `Refused` (host RM refused the unmap) — is retried a bounded number of times and then REFUSES
-/// the birth by name (a visible failure, never a silent wrong placement). The act thread never waits
+/// the birth by name (a visible failure, never a silent wrong placement); `StillReserved` refuses at
+/// once (a reservation holding other rows cannot clear by retrying). The act thread never waits
 /// for the VA thread: a retry is the step re-queued behind the other acts, after
 /// [`STEER_RETRY_SPACING`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1059,9 +1060,13 @@ pub enum SteerStep {
 
 /// The most times one steer step is tried (the first try included).
 pub const STEER_MAX_TRIES: u32 = 20;
-/// The longest a steer step keeps retrying.
+/// The time slice of ONE act's hand-over ([`BatchedVas::hand_to_host_within`]); the rest continues in
+/// a later act.
+pub const STEER_SLICE: std::time::Duration = std::time::Duration::from_millis(10);
+/// The longest a steer step keeps retrying, counted from its FIRST EXECUTION (not from enqueue).
 pub const STEER_MAX_AGE: std::time::Duration = std::time::Duration::from_millis(100);
-/// The pause before a retry (the act thread sleeps this long, once per retry — the only wait).
+/// The pause before a retry: the retry is PARKED this long (`kf_qemu::actq`), the act thread does not
+/// sleep — other acts run meanwhile.
 pub const STEER_RETRY_SPACING: std::time::Duration = std::time::Duration::from_millis(1);
 
 /// [`SteerStep`] for `over` after `tries` earlier tries and `age` since the first.
@@ -1069,6 +1074,10 @@ pub const STEER_RETRY_SPACING: std::time::Duration = std::time::Duration::from_m
 pub fn steer_step(over: &HandOver, tries: u32, age: std::time::Duration) -> SteerStep {
     if *over == HandOver::Free {
         SteerStep::Done
+    } else if *over == HandOver::StillReserved {
+        // ★ Review 4 item 2: a micro reservation of ours covers the VA because OTHER rows live in
+        // it; nothing the steer does clears that, so retrying for 100 ms only delays the refusal.
+        SteerStep::Refuse
     } else if tries.saturating_add(1) < STEER_MAX_TRIES && age < STEER_MAX_AGE {
         SteerStep::Retry
     } else {
@@ -1577,13 +1586,15 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
 
     /// ★ Review 2 item 5: a row refused for the refresh's host-call budget is LOUD — counted
     /// (`budget_refused`) and named in the log (the first 16), with what happens next: the run is
-    /// acknowledged FAILED (absence: the invalidate is still cleared over it, §AA) and the VA
-    /// manager walks the space AGAIN with a fresh budget ([`crate::apply::Applied::budget_refused`]).
+    /// acknowledged FAILED (absence: the invalidate is still cleared over it, §AA) and the guest's
+    /// NEXT walk of the space retries it with a fresh budget.
+    /// ⊘ Corrected 2026-10-10 (review 4): this said "the VA manager walks the space AGAIN" — that
+    /// follow-up walk livelocked the VA thread and is DELETED (`V3_BATCHED_MAP.md` §8.8.13.1).
     fn note_budget_refusal(&self, s: u64, len: u64) {
         static LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
         if LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 16 {
             eprintln!(
-                "kf-mem: row {s:#x}+{len:#x} REFUSED for this refresh's host-call budget (placement {} / amplification {}): absent now, re-walked with a fresh budget while progress is made",
+                "kf-mem: row {s:#x}+{len:#x} REFUSED for this refresh's host-call budget (placement {} / amplification {}): absent until the guest's next walk of the space (fresh budget); no walk of its own",
                 self.placement_budget, self.amplification_budget
             );
         }
@@ -1747,11 +1758,22 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
     /// removed nothing while the log said "steered".
     #[must_use]
     pub fn hand_to_host(&self, va: u64, len: u64) -> HandOver {
+        self.hand_to_host_within(va, len, std::time::Duration::MAX)
+    }
+
+    /// [`BatchedVas::hand_to_host`] that stops starting new hulls once `slice` has elapsed and
+    /// answers [`HandOver::StillOurs`] (mappings of ours remain beyond what was handed over; call
+    /// again to continue — the hulls already handed over stay so). ★ Review 4 (lower item): the act
+    /// thread's cost of a hand-over is proportional to the row the GUEST named (a hostile
+    /// `PromoteCtx` naming a 4 GiB per-leaf row is thousands of hulls); with a slice the caller
+    /// bounds one act's time and continues through a delayed re-queue, never a stall.
+    #[must_use]
+    pub fn hand_to_host_within(&self, va: u64, len: u64, slice: std::time::Duration) -> HandOver {
         // ★ Review item 2: this is the act thread — its ledger-lock waits are announced (the VA
         // thread yields to them) and timed.
         let _act = ActScope::enter();
         let t0 = std::time::Instant::now();
-        let r = self.hand_to_host_inner(va, len);
+        let r = self.hand_to_host_inner(va, len, slice);
         use std::sync::atomic::Ordering::Relaxed;
         self.holds.act_ops.fetch_add(1, Relaxed);
         self.holds
@@ -1763,7 +1785,8 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
         r
     }
 
-    fn hand_to_host_inner(&self, va: u64, len: u64) -> HandOver {
+    fn hand_to_host_inner(&self, va: u64, len: u64, slice: std::time::Duration) -> HandOver {
+        let started = std::time::Instant::now();
         let end = va.saturating_add(len);
         // ★ Review 2 item 2 — **the steer claims in CHUNKS.** The row being handed over has a
         // guest-chosen length (`[measured, model, review]` a 4 GiB row: 494 ms of steer, and the
@@ -1777,6 +1800,10 @@ impl<V: SpaceVerbs> BatchedVas<'_, V> {
         // recorded — is invisible to the chunk walk below; the verdict re-checks the whole range.)
         let mut cur = va;
         while cur < end {
+            if started.elapsed() >= slice {
+                // Out of time for this act: what is left of ours is still there.
+                return HandOver::StillOurs;
+            }
             let chunk = self.hold(&self.own, |o| {
                 let c = o.within_limited(cur, end, LEDGER_CHUNK);
                 let n = c.len();
@@ -3570,7 +3597,6 @@ mod tests {
         for over in [
             HandOver::Busy,
             HandOver::StillOurs,
-            HandOver::StillReserved,
             HandOver::Refused("x".into()),
         ] {
             let mut tries = 0;
@@ -3589,6 +3615,11 @@ mod tests {
             // By age too: a stuck step stops retrying after STEER_MAX_AGE whatever the count.
             assert_eq!(steer_step(&over, 1, STEER_MAX_AGE), SteerStep::Refuse);
         }
+        // A reservation of ours holding other rows cannot clear by retrying: refused AT ONCE.
+        assert_eq!(
+            steer_step(&HandOver::StillReserved, 0, Duration::ZERO),
+            SteerStep::Refuse
+        );
         assert_eq!(steer_step(&HandOver::Free, 0, Duration::ZERO), SteerStep::Done);
         assert_eq!(steer_step(&HandOver::Free, STEER_MAX_TRIES, STEER_MAX_AGE), SteerStep::Done);
     }
@@ -3619,6 +3650,35 @@ mod tests {
         assert_eq!(over, HandOver::Free);
         assert_eq!(steer_step(&over, 1, std::time::Duration::ZERO), SteerStep::Done);
         assert!(host.pages.lock().unwrap().is_empty());
+    }
+
+    /// ★ Review 4 (lower item) — a hand-over of a row the GUEST named is bounded per act by a time
+    /// slice: it stops starting hulls once the slice is spent and answers `StillOurs`; calling again
+    /// continues (hulls already handed over stay so) until `Free`.
+    #[test]
+    fn a_hand_over_with_a_slice_stops_early_and_continues_to_free() {
+        let _t = timing();
+        let host = SlowHost(NullHost::new(0), 10, 0); // 10 ms per range unmap
+        let bv = BatchedVas::with_low_reserve(&host, false);
+        let pages = 8 * LEDGER_CHUNK as u64; // 8 hulls, ~80 ms in all
+        let (va, len) = (0x1_0000_0000u64, pages * BATCH_PAGE);
+        bv.map(&row(va, len, BATCH_PAGE), true).unwrap();
+        let slice = std::time::Duration::from_millis(15);
+        let mut calls = 0;
+        loop {
+            let t = std::time::Instant::now();
+            let over = bv.hand_to_host_within(va, len, slice);
+            calls += 1;
+            // One act never runs much past its slice (a slice plus one hull's host call).
+            assert!(t.elapsed().as_millis() < 60, "{} ms", t.elapsed().as_millis());
+            if over == HandOver::Free {
+                break;
+            }
+            assert_eq!(over, HandOver::StillOurs, "{over:?}");
+            assert!(calls < 20);
+        }
+        assert!(calls >= 3, "the row took {calls} slices");
+        assert!(bv.own.lock().unwrap().is_empty());
     }
 
     /// ★ Review 3 item 3 (`rv3_cap_does_not_bound_aggregate_bitmap`) — the per-batch extent cap does
@@ -3915,8 +3975,9 @@ mod tests {
     }
 
     /// The act-thread wait the test above allows: ~one chunk plus one host call plus scheduling in a
-    /// debug build on a loaded box.
-    const ACT_WAIT_BOUND_US: u64 = 30_000;
+    /// debug build on a loaded SHARED box (a 30 ms bound failed once under another agent's load; 6-12 ms
+    /// is the unloaded figure; the unfixed code waited 670 ms, so 60 ms still discriminates).
+    const ACT_WAIT_BOUND_US: u64 = 60_000;
 
     /// ★ Review addendum (hostile guest) — rows and ranges straight at the ledger verbs: empty,
     /// unaligned, wrapping (`va + len`, `off + len`), `u64::MAX` everything. Each is refused by name
