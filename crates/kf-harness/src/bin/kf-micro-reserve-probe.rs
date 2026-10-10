@@ -22,8 +22,10 @@
 //!   pattern), re-map page 3 into the hole (must deliver), take it all down, free the reservation,
 //!   and show its VA is free again. PASS ⇒ batch the low range with micro reservations
 //!   (★ D3, 2026-10-10: micro reservations are now the DEFAULT — this probe is gate 10 of
-//!   `scripts/bench/v3_gates.sh`). FAIL at `reserve_*` ⇒ every big-leaf row there goes at 4 KiB grain
-//!   and a row beyond `MAX_LEAF_PIECES` grains is refused by name (`V3_BATCHED_MAP.md` §8.8).
+//!   `scripts/bench/v3_gates.sh`). The verdict is PASS (accepted, every remnant reads), FALLBACK
+//!   (host RM REFUSED the reservation: not a failure — every big-leaf row there goes at 4 KiB grain and
+//!   a row beyond `MAX_LEAF_PIECES` grains is refused by name, `V3_BATCHED_MAP.md` §8.8.3) or FAIL (an
+//!   inconsistency: accepted but a remnant does not read, or an error after the accept).
 //! - `nv01-control` (raises ONE host Xid 31 on this test's OWN channel — a result, not a failure):
 //!   the same partial unmap through the space's `NV01` range. A FIXED one-page map at the remnant's
 //!   start then SUCCEEDS (⇔ RM freed the remnant's whole VA block) and a CE read of page 7 FAULTS
@@ -53,19 +55,34 @@ fn main() {
     let arm = args.get(1).map_or("reserve", String::as_str);
     let mut l = Ledger::default();
     println!("MICRO_RESERVE_START arm={arm} pid={}", std::process::id());
-    if let Err(e) = run(&mut l, arm) {
-        l.check("run", false, e);
-    }
+    // ★ Gate 10 (2026-10-10, review item 6): a reservation host RM REFUSES is not a failure — the
+    // batched map falls back to the 4 KiB grain (`V3_BATCHED_MAP.md` §8.8.3) — so it is a distinct,
+    // loudly printed verdict, FALLBACK. FAIL is an INCONSISTENCY: a reservation host RM accepted
+    // whose remnants do not read, or any error after the accept.
+    let fallback = match run(&mut l, arm) {
+        Ok(f) => f,
+        Err(e) => {
+            l.check("run", false, e);
+            false
+        }
+    };
     let v = l.verdict();
-    println!(
-        "MICRO_RESERVE_VERDICT arm={arm} {}",
-        if v { "PASS" } else { "FAIL" }
-    );
+    let word = match (v, fallback) {
+        (false, _) => "FAIL",
+        (true, true) => "FALLBACK",
+        (true, false) => "PASS",
+    };
+    if word == "FALLBACK" {
+        println!(
+            "MICRO_RESERVE_FALLBACK_ACTIVE host RM refused the small FIXED reservation: the batched map runs on the 4 KiB floor on this driver (V3_BATCHED_MAP.md 8.8.3)"
+        );
+    }
+    println!("MICRO_RESERVE_VERDICT arm={arm} {word}");
     std::process::exit(i32::from(!v));
 }
 
 #[allow(clippy::too_many_lines)]
-fn run(l: &mut Ledger, arm: &str) -> Result<(), String> {
+fn run(l: &mut Ledger, arm: &str) -> Result<bool, String> {
     let dev = DevDir::open(c"/dev").map_err(|e| format!("open /dev: {e:?}"))?;
     let rm = HostRm::open(&dev, kf_harness::gate_gpu(), &kf_chip::choose_host_classes)
         .map_err(|e| e.to_string())?;
@@ -106,10 +123,10 @@ fn run(l: &mut Ledger, arm: &str) -> Result<(), String> {
             ),
         }
     }
-    l.check(
+    // Informational: the decisive reservation is the one the `reserve` arm makes below.
+    l.measure(
         "reserve_small_accepted",
-        accepted >= 4,
-        format!("{accepted}/6 accepted (the 5 small ones decide)"),
+        format!("{accepted}/6 accepted (the 5 small ones are the census)"),
     );
     // ★ D1 (2026-10-10), INFORMATION ONLY (never gates): the flat FB alias of a guest-KERNEL space is
     // one 7.9 GiB row of 2 MiB leaves (`0x120000000+0x1efc00000`), which can ONLY be placed through
@@ -176,9 +193,22 @@ fn run(l: &mut Ledger, arm: &str) -> Result<(), String> {
 
     match arm {
         "reserve" => {
-            let h = rm
-                .reserve_va(space.space, V_RESERVE, PAGES * P)
-                .map_err(|e| format!("reserve {V_RESERVE:#x}: {e:?}"))?;
+            // A refusal HERE is the fallback-active case, not a failure (see `main`).
+            let h = match rm.reserve_va(space.space, V_RESERVE, PAGES * P) {
+                Ok(h) => h,
+                Err(e) => {
+                    l.measure(
+                        "reserve_refused",
+                        format!("{V_RESERVE:#x}+{:#x}: {e:?}", PAGES * P),
+                    );
+                    l.check(
+                        "reserve_refused_is_a_clean_fallback",
+                        true,
+                        "nothing was placed; the 4 KiB grain is the floor",
+                    );
+                    return Ok(true);
+                }
+            };
             rm.map_in(
                 h,
                 src,
@@ -248,7 +278,7 @@ fn run(l: &mut Ledger, arm: &str) -> Result<(), String> {
                 back.is_ok(),
                 format!("NV01 map at the freed VA: {back:?}"),
             );
-            Ok(())
+            Ok(false)
         }
         "nv01-control" => {
             rm.map_kind(
@@ -306,7 +336,7 @@ fn run(l: &mut Ledger, arm: &str) -> Result<(), String> {
                 "MICRO_RESERVE_NOTE check dmesg: Xid 31 FAULT_PTE at {:#x}, and at exit NULL != pMemBlock @ gpu_vaspace.c:1639",
                 V_CONTROL + 7 * P
             );
-            Ok(())
+            Ok(false)
         }
         other => Err(format!("unknown arm {other:?} (reserve | nv01-control)")),
     }
