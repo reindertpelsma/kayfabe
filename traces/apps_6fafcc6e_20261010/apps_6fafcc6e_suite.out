@@ -1,0 +1,45 @@
+FAST_SUITE_STARTED=2026-10-10T01:09:24+00:00 arms=30 budget=180s
+rev=6fafcc6e
+ARM                          VERDICT   secs  why
+--timer                      FAIL      21s   raw client rc=1
+FAST_CELL_ARM arm=timer verdict=FAIL secs=21 client_ms=8950
+--engines                    FAIL      22s   raw client rc=1
+FAST_CELL_ARM arm=engines verdict=FAIL secs=22 client_ms=9230
+--doorbell-census            FAIL      22s   raw client rc=1
+FAST_CELL_ARM arm=doorbell-census verdict=FAIL secs=22 client_ms=9470
+--gpu-info-sweep             FAIL      22s   raw client rc=1
+FAST_CELL_ARM arm=gpu-info-sweep verdict=FAIL secs=22 client_ms=9060
+--bus-info-sweep             FAIL      22s   raw client rc=1
+FAST_CELL_ARM arm=bus-info-sweep verdict=FAIL secs=22 client_ms=9370
+--concurrency                FAIL      21s   raw client rc=1
+FAST_CELL_ARM arm=concurrency verdict=FAIL secs=21 client_ms=8979
+--defer-liveness             FAIL      23s   raw client rc=1
+FAST_CELL_ARM arm=defer-liveness verdict=FAIL secs=23 client_ms=9510
+--blockage-coverage          FAIL      22s   raw client rc=1
+FAST_CELL_ARM arm=blockage-coverage verdict=FAIL secs=22 client_ms=8959
+--alias-two-vas              FAIL      22s   raw client rc=1
+FAST_CELL_ARM arm=alias-two-vas verdict=FAIL secs=22 client_ms=9009
+--alias-unmap-observe        FAIL      21s   raw client rc=1
+FAST_CELL_ARM arm=alias-unmap-observe verdict=FAIL secs=21 client_ms=9040
+--map-propagation            FAIL      22s   raw client rc=1
+FAST_CELL_ARM arm=map-propagation verdict=FAIL secs=22 client_ms=9040
+--late-map-race              FAIL      22s   raw client rc=1
+FAST_CELL_ARM arm=late-map-race verdict=FAIL secs=22 client_ms=9460
+--missing-page-fault         FAIL      22s   raw client rc=1
+FAST_CELL_ARM arm=missing-page-fault verdict=FAIL secs=22 client_ms=9490
+--uvm-invalidate             FAIL      22s   raw client rc=1
+FAST_CELL_ARM arm=uvm-invalidate verdict=FAIL secs=22 client_ms=9340
+--uvm-mean                   FAIL      22s   raw client rc=1
+FAST_CELL_ARM arm=uvm-mean verdict=FAIL secs=22 client_ms=9200
+--executor-vas               FAIL      22s   raw client rc=1
+FAST_CELL_ARM arm=executor-vas verdict=FAIL secs=22 client_ms=8930
+--guest-ring-channel         FAIL      22s   raw client rc=1
+FAST_CELL_ARM arm=guest-ring-channel verdict=FAIL secs=22 client_ms=9140
+--dictated-ring              FAIL      22s   raw client rc=1
+FAST_CELL_ARM arm=dictated-ring verdict=FAIL secs=22 client_ms=9470
+--dictated-ring-negative     FAIL      22s   raw client rc=1
+FAST_CELL_ARM arm=dictated-ring-negative verdict=FAIL secs=22 client_ms=9140
+--ce-client                  FAIL      22s   raw client rc=1
+FAST_CELL_ARM arm=ce-client verdict=FAIL secs=22 client_ms=9180
+--ce-client-guest-ram        FAIL      20s   raw client rc=1
+FAST_CELL_ARM arm=ce-client-guest-ram verdict=FAIL secs=20 client_ms=9030
