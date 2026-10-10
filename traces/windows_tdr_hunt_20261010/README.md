@@ -374,3 +374,13 @@ sampled every 100 ms with `try_lock` (the probe never waits on the GSP lock); an
 readPtr for >= 200 ms is logged once with the guest-visible and FSM IRQSTAT, the interrupt tree and the IRQ ring. Each
 `RUNLIST_PREEMPT_COMPLETE posted` line now carries `utc_ms` and the queue's w/r/unread at the post. `kf_gsp::GspFsm::stat_queue_diag`
 is read-only. `cargo test -p kf-gsp -p kf-qemu`: 192 passed, 0 failed.
+
+### Run 276 — H-S (written before the run; binary f7303e72 = this branch, production flags + `KF3_COMPLETION_PROBE=1500` + `KF3_DISPLAY_WRITE_TRACE=1`, guest ETW, `PREEMPTDUMP=1` = `tooling/pwatch.sh` in the host runner)
+**H-S:** in a shape-S reset the guest never consumes (or never acts on) the `RUNLIST_PREEMPT_COMPLETE` events kayfabe posted for
+the open disable list, so the KEVENTs the guest driver waits on stay unsignalled. Measured by: (a) `GSPQ-UNREAD` (readPtr behind
+writePtr >= 200 ms) around the open list; (b) the guest-memory dump taken 500 ms after the last unanswered disable: `_KEVENT`
+SignalState and waiters at every open `eventData`. **Falsifier:** the status queue is drained (`unread=0`, no `GSPQ-UNREAD`) AND every
+open KEVENT is signalled or has no waiter — then the events reached their KEVENTs and the suspend waits on something else (named
+from the waiting threads in the same dump). Branches: unread + interrupt pending/undelivered → family A (GSP vector delivery);
+unread + IRQSTAT 0 while unread → the IRQSCLR-after-post race (audit finding 10); consumed but KEVENT unsignalled → the RM-side
+notification path (registration / `CliGetEventInfo`).
