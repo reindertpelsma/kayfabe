@@ -1,5 +1,26 @@
 # Windows playback TDR, 2026-10-10 (branch `claude/playback-tdr-20261010`, from combined line 3aea0a79)
 
+# PROGRESS H1 (2026-10-10 night, agent overlay-h1; newest first; [measured] / [inferred])
+
+STATUS: LIVE. Work on branch `claude/overlay-h1-20261010` (from 575d5b20).
+
+* 3. [measured, run 414, binary 18da7c3c, `KF3_BAR0_READ_TRACE=1` display ranges + `WIN_TRACE=1`, runner `tdr-run24.sh` = tdr-run23 + `OVLDUMP`]
+  with BAR0 READS trapped and traced the overlay path WORKS: window 4 (1295x985 RGB, Edge plane 1) is in use from +207 s, 28261 window-4 PUT
+  writes, 19534 window-0, 6957 imm-4, 0 TDR in all phases (boot/sign-in/Edge/Shorts/hold 92 s), 0 STALL reports. In runs 408/409/411/413 (no read
+  trace) the stall H1 occurred every time (4/4). So H1 is a TIMING-dependent race, not a missing capability: the read exits slow the guest enough to hide it.
+* 2. [measured, VFIO reference `boot3` (real RTX 4070 + Windows to desktop, traced with the same tracer), 3949 window-0 PUT writes] H-GET is FALSIFIED
+  for the flip path: the driver reads window GET (`0x690004`) only 115 times, in bursts at the ring wrap (values 0xf30..0xfe0 then 0x0; flow-control room
+  checks), never once per UPDATE. Per flip the driver does (window 0, one flip per vblank): read ARMED `+0x22c`, PUT x3, read ARMED `+0x2ec`, PUT of the
+  window-imm channel, read core `0x680220`, PUT of the window (the UPDATE). Real values: ARMED 0x22c = 0xcf, 0x2ec = 0xa0, core 0x680220 = varying
+  0xb8..0x100. kayfabe serves 0 for all three (it mirrors only the CORE's ARMED half; the windows' ARMED halves and core 0x220 read 0). [inferred] harmless for
+  window 0 (works); not excluded for plane 1. The same per-window sequence is seen for window 4 in run 414 (read `0x694a2c`, PUT x3, read `0x694aec`, imm-4 PUT,
+  read core `0x680220`, PUT), with the imm UPDATE BEFORE the window UPDATE.
+* 1. [measured, runs 413/414, probe BEFORE any TDR (tdr_cycles=0)] kf_overlayprobe: `CheckOverlaySupport` NV12/YUY2/P010 = hr 0, flags 0x2 (SCALING only), no
+  DIRECT (0x1), exit 5; with `--ignore-support` the swap chain / DirectComposition setup fails (exit 5). So the missing DIRECT flag is NOT a post-TDR effect
+  (run 411's conclusion stands for the pre-TDR state too). Whether native Windows reports DIRECT: see `traces/windows_overlay_native_20261010/README.md` when it lands.
+  (Run 412 never ran: its queue entry was replaced by 413.) Stall shape in 413 identical to 411 (window-4 UPDATE 0x1000 naming {chn 1, chn 37}, then core UPDATE and
+  cursor updates keep flowing, window 0 flips cease): [measured] the display thread is alive; the FLIP-SUBMISSION thread is blocked between the kicks.
+
 # HANDOFF (2026-10-10 ~22:20 CEST; a fresh agent resumes from here; sections "Progress 1-4" below are the evidence)
 
 STATUS: LIVE. Product code on the branch, head = see `git log` (18da7c3c + docs). Labels: [measured] / [inferred].

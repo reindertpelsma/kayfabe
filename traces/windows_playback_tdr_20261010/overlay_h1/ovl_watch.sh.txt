@@ -1,0 +1,30 @@
+# OVLDUMP=1 (H-VCPU, overlay stall H1): the first kayfabe `display: STALL ` report (an UPDATE parked > 1 s) triggers a guest-memory dump at once
+# (the VM resumes after it), plus 3 register samples of every vCPU before it. The report line itself is kept in $O/ovldump-line.txt.
+ovl_watch(){
+  local lg=$RUN/qemu.log off cur ln
+  off=$(stat -c %s $lg)
+  while alive && [ ! -e $O/.ovldump_done ]; do
+    sleep 0.1
+    cur=$(stat -c %s $lg)
+    ln=$(tail -c +$((off+1)) $lg | head -c $((cur-off)) | grep -a -m1 "display: STALL Window [1-9][0-9]* (chn .*waiting for its interlock group")
+    off=$cur
+    if [ -n "$ln" ]; then
+      printf "%s\n" "$ln" > $O/ovldump-line.txt
+      L "OVLDUMP stall detected: $(printf %s "$ln" | cut -c1-200)"
+      for k in 1 2 3; do
+        Q cmd stop >/dev/null 2>&1
+        { echo "== sample $k $(date -u +%FT%T.%3N)"; Q cmd human-monitor-command "{\"command-line\":\"info registers -a\"}" 2>&1; } >> $O/ovldump-regs.txt
+        Q cmd cont >/dev/null 2>&1
+        sleep 0.05
+      done
+      timeout 20 python3 $W/boundary-tools/qmp.py $RUN/qmp.sock cmd dump-guest-memory "{\"paging\":false,\"protocol\":\"file:$W/dumps/run$N-ovlstall.elf\"}" >/dev/null 2>&1
+      local st=""
+      for k in $(seq 1 120); do
+        st=$(timeout 8 python3 $W/boundary-tools/qmp.py $RUN/qmp.sock cmd query-dump 2>&1 | tr -d "\n ")
+        case "$st" in *completed*|*failed*) break;; esac; sleep 2
+      done
+      L "OVLDUMP: dump $st"
+      date +%s > $O/.ovldump_done
+    fi
+  done
+}
