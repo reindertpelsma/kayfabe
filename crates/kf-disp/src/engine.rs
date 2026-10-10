@@ -39,6 +39,9 @@ use std::collections::VecDeque;
 
 /// Channel numbers (`NV_PDISP_CHN_NUM_*`).
 pub const CHANNELS: usize = crate::ports::NUM_CHANNELS;
+/// How many events [`Engine::recent_events`] keeps.
+pub const RING_EVENTS: usize = 512;
+
 /// ★ Hostile guest: the most decoded-but-unapplied writes a channel may hold (a 4 KiB ring holds at
 /// most 1023; the rest is a PUT that ignored GET).
 pub const MAX_QUEUE: usize = 4096;
@@ -397,6 +400,35 @@ fn bit(chn: u32) -> ChanSet {
     }
 }
 
+/// ★ One entry of the engine's always-on ring of recent interlock-relevant events
+/// ([`Engine::recent_events`]): what the STALL report prints to name a deadlock.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RingEvent {
+    /// A channel stopped at its `UPDATE` (`update` data word) naming `ilk` as the channels it waits for.
+    Update {
+        /// Channel.
+        chn: u32,
+        /// The UPDATE data word.
+        update: u32,
+        /// The interlock set it named.
+        ilk: u128,
+    },
+    /// A write to an interlock-flags method (`SET_INTERLOCK_FLAGS` or `SET_WINDOW_INTERLOCK_FLAGS`).
+    Flags {
+        /// Channel.
+        chn: u32,
+        /// 0 = `SET_INTERLOCK_FLAGS`, 1 = `SET_WINDOW_INTERLOCK_FLAGS`.
+        window_flags: bool,
+        /// Data written.
+        data: u32,
+    },
+    /// A group latched (the members, as bits).
+    Latch {
+        /// Members.
+        group: u128,
+    },
+}
+
 /// ★ One channel parked at an `UPDATE` ([`Engine::parked`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Parked {
@@ -536,6 +568,9 @@ pub struct Engine {
     pub trace: bool,
     method_trace_remaining: u32,
     method_trace_configured: bool,
+    /// ★ Always-on ring of the last [`RING_EVENTS`] interlock-relevant events (see [`RingEvent`]).
+    ring: VecDeque<(u64, RingEvent)>,
+    ring_seq: u64,
     /// ★ D1 (`OWNER_RULINGS.md` §M, 2026-10-04): a TEARING (immediate) flip on an active head that
     /// already presented since the head's last tick waits for the next one, so async flips count
     /// against the cap too. In kayfabe a flip copies a finished buffer, so it never tears; the gate
@@ -569,6 +604,8 @@ impl Engine {
             trace: false,
             method_trace_remaining: 0,
             method_trace_configured: false,
+            ring: VecDeque::new(),
+            ring_seq: 0,
             tear_gate: true,
             core_latch_at_vblank: false,
             presented: [false; 8],
@@ -778,6 +815,16 @@ impl Engine {
             .collect()
     }
 
+    fn note(&mut self, e: RingEvent) {
+        ring_push(&mut self.ring, &mut self.ring_seq, e);
+    }
+
+    /// ★ The recent interlock-relevant events, oldest first, with their sequence numbers.
+    #[must_use]
+    pub fn recent_events(&self) -> Vec<(u64, RingEvent)> {
+        self.ring.iter().copied().collect()
+    }
+
     /// ★ Every channel parked at an `UPDATE` (for its interlock group, or for a vblank/an acquire),
     /// as plain data for the display thread's stall report: `(channel, window or kind, stage,
     /// group bits, head, the acquire it must satisfy)`. Read-only; never decides anything.
@@ -942,6 +989,15 @@ impl Engine {
                     ilk,
                 };
                 c.get = l.header;
+                ring_push(
+                    &mut self.ring,
+                    &mut self.ring_seq,
+                    RingEvent::Update {
+                        chn: n,
+                        update: l.write.data,
+                        ilk,
+                    },
+                );
                 if self.trace {
                     st.effects.push(Effect::Trace(format!(
                         "chn {n} UPDATE {:#x} at {:#x} waits for {ilk:#x}",
@@ -984,6 +1040,19 @@ impl Engine {
                         return any;
                     }
                 }
+            }
+            if c.kind == ChannelKind::Window
+                && (m == vocab.w_interlock || m == vocab.w_window_interlock)
+            {
+                ring_push(
+                    &mut self.ring,
+                    &mut self.ring_seq,
+                    RingEvent::Flags {
+                        chn: n,
+                        window_flags: m == vocab.w_window_interlock,
+                        data: l.write.data,
+                    },
+                );
             }
             c.assy[(m / 4) as usize] = l.write.data;
             self.methods += 1;
@@ -1199,6 +1268,9 @@ impl Engine {
                 return;
             }
         }
+        self.note(RingEvent::Latch {
+            group: members.iter().fold(0u128, |m, n| m | bit(*n)),
+        });
         let heads_before = self.heads_armed();
         // ★ A window's flip raises its FLIP event (AWAKEN) only if the window was scanning a surface on
         // an active head BEFORE this update: nvidia-drm queues events only for "planes which were
@@ -1938,6 +2010,14 @@ impl Engine {
             mode: fld(comp, cv.mode),
         })
     }
+}
+
+fn ring_push(ring: &mut VecDeque<(u64, RingEvent)>, seq: &mut u64, e: RingEvent) {
+    if ring.len() >= RING_EVENTS {
+        ring.pop_front();
+    }
+    *seq = seq.wrapping_add(1);
+    ring.push_back((*seq, e));
 }
 
 /// The channels an UPDATE on `c` (with data `update`) waits for.

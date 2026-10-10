@@ -2762,6 +2762,14 @@ impl Device {
                                 .collect::<Vec<_>>()
                         );
                         eprintln!(
+                            "kf3: display: STALL recent events (seq, event; oldest first): {:?}",
+                            {
+                                let e = engine.recent_events();
+                                let from = e.len().saturating_sub(200);
+                                e[from..].to_vec()
+                            }
+                        );
+                        eprintln!(
                             "kf3: display: STALL context: queue {}/{QUEUE_CAP} copies started {} done {} barrier {} inflight {} want {} failed {} nonflip_pending {} vblanks_total {} ticks_per_head {:?} heads_armed {:?}",
                             queue.len(),
                             scan.started,
