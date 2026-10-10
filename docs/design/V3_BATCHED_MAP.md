@@ -790,7 +790,16 @@ longest µs)` and is now part of the steer's log line, so the cost is observed o
 Audited and clean: no host call, syscall, `eprintln!` or `free` runs inside a `hold` closure (read
 line by line; the logs and frees are after it); the `micro`-then-`own` order is unchanged.
 
-**Consistency between chunks (reasoned).** A chunked `segments` pins reservations as it goes; only
+⊘ **Corrected 2026-10-10 (review, §8.8.8), above the text it corrects:** the paragraph below
+considered only ONE order (the act thread's cut lagging a host unmap that the ledger still shows)
+and called the window harmless. The other orders are not harmless — `[model]` (review `exp_a`) the
+VA thread maps a new row between the act thread's host unmap and its ledger cut, and the cut then
+erased the record of a LIVE host mapping; (`exp_b`) a host map had landed but was not yet recorded
+when `hand_to_host` ran, and it answered `Free` for pages the host held. Both are closed by the
+range claims of §8.8.8.2; "harmless (inferred)" is withdrawn. The same review measured that a
+bound on every HOLD is not a bound on the act thread's WAIT: §8.8.8.1.
+
+**Consistency between chunks (reasoned, first order only).** A chunked `segments` pins reservations as it goes; only
 the VA thread ADDS a reservation, so none appears in a gap meanwhile, and one the act thread
 releases before it is pinned is simply not seen — the same window the single-hold version had after
 `release_micro` took a reservation out and before it freed it. A chunked cut leaves, between chunks,
@@ -825,8 +834,20 @@ budgets 1-5; property tests assert the bound after every step.
 - A run-time refusal is a clean fallback to the 4 KiB grain / per-run (batch: `NOT_BATCHED`), nothing
   placed or lost; an accepted reservation is always used consistently (§8.8.1). A refused FREE stays
   tracked and retried (§8.7.5, now model-tested with injected free refusals, including the retire).
+- ⊘ **Corrected 2026-10-10 (review item 6), above the text it corrects:** gate 10's verdict is
+  `PASS`, `FALLBACK` or `FAIL`, and it is a field of the summary line:
+  `V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS|FALLBACK|FAIL`. `FALLBACK` (host RM REFUSED the small
+  reservation) is NOT a failure — D3 makes a refused reservation a clean fallback to the 4 KiB floor,
+  so a driver that refuses them stays usable — and is printed loudly
+  (`GATE10_FALLBACK_ACTIVE`); `FAIL` is only an inconsistency: a reservation accepted whose
+  remnant does not read, an error after the accept, a missing probe, no verdict line. The probe's
+  census of 6 reservations no longer gates (information only). The consumers (`merge_check.sh`,
+  `sweep.sh`, `matrix_table.py`, `V3_SWEEP_AND_INSTALL.md` §5/§9) read `gate10=`; the USER-birth
+  census reads gate 10's output too (the probe births a CE channel through kf-host). Before this, the
+  summary line was printed BEFORE gate 10, so `sweep.sh`/`matrix_table.py` showed 9/9 green when
+  gate 10 failed, and a driver refusing the reservations would have FAILED the whole script.
 - **Gate 10.** `scripts/bench/v3_gates.sh` runs `kf-micro-reserve-probe reserve` after the nine
-  `kf-gate*` and prints `GATE10_VERDICT=PASS|FAIL`; the script's exit status requires it.
+  `kf-gate*` and prints `GATE10_VERDICT=PASS|FALLBACK|FAIL`; the script's exit status requires PASS or FALLBACK.
   `V3_GATES_SUMMARY pass=9 fail=0` keeps its meaning (the nine only; `merge_check.sh` still greps it)
   and `merge_check.sh` / `box/README.md` additionally require `GATE10_VERDICT=PASS`. The probe also
   records, information only, whether host RM accepts the 7.9 GiB flat-alias reservation
@@ -834,9 +855,16 @@ budgets 1-5; property tests assert the bound after every step.
 
 ### 8.8.4 Tests (GPU-free)
 
-`cargo test -p kf-mem`: **153 passed** (148 lib + 2 + 3 integration), 0 failed, 2 ignored (was 140:
-135 + 2 + 3); `cargo test -p kf-qemu`: 162 passed, 0 failed; `cargo test -p kf-harness`: 3 passed;
-`cargo clippy -p kf-mem --all-targets`: no warning in `batch.rs`, `sim.rs`, `sim/tests.rs`.
+`cargo test -p kf-mem -p kf-qemu -p kf-harness` (2026-10-10, after the review fixes): kf-mem **160
+passed** (155 lib + 2 + 3 integration), 0 failed, 3 ignored (was 140 at eff1b692, 153 at 828a06ab);
+kf-qemu 164 passed (146 lib incl. the 2 `failclosed` tests + 18 integration), 0 failed; kf-harness 3
+passed; `python3 -m unittest discover -s scripts/ci -p 'test_*.py'`: 38 OK (was 36 + 1 red at
+4a2fa957); `cargo clippy -p kf-mem -p kf-qemu -p kf-harness --all-targets`: no new warning in the
+touched files (the 2 new in the debt gate are `kf-vasmgr walker_mut` missing docs and `kf-cuda
+refusal_samples` deprecated, both from the merged integration, not from this branch).
+Review-round additions: §8.8.8's regression tests (act wait both with and without the yield; both
+steer/map orders; malformed leaf; amplification and the per-refresh budget), §8.8.9's hostile-row
+fuzz and hostile ledger verbs, the gate-10 verdict fixtures.
 Added: runtime-fault properties (300 seeds × 60 steps each): reservation allocs refused (136 hits),
 reservation frees refused (81 hits, retire retried), a row map failing mid-row (4 138 hits at low=true,
 4 488 at low=false), all three together with unmap refusals (2 configs); targeted D1 tests
@@ -884,3 +912,182 @@ the suite fail: big leaves placed as one `NV01` mapping each again (all property
 - A window between "reservation removed from `micro`" and "host free done" lets the VA thread map
   through the `NV01` range over a VA still reserved on the host (answered HELD) — pre-existing, not
   worsened.
+
+### 8.8.8 Review round 2026-10-10 — act-thread wait, range claims, host-call bounds
+
+**STATUS: LIVE, 2026-10-10 — CODE + MODEL-TESTED; hardware verdict pending (§8.8.6).** An independent
+review of §8.8 (merged as `aeda9ffd`) returned FIX-FIRST. Its experiments `exp_a..exp_f` are the
+regression tests (adapted to the fixed behaviour); each fails when the fix is reverted (mutations
+named below).
+
+**8.8.8.1 The act thread's WAIT (item 2).** `std::sync::Mutex` is not fair: a thread that releases it
+and takes it again at once beats a waiter already queued. `[model, review exp_d]` the act thread
+waited 117-142 ms behind VA-thread chunk loops although no hold lasted more than ~5.5 ms. Fix
+(`BatchedVas::lock_for`): the act thread (`hand_to_host`, flagged by a thread-local) announces itself in
+`act_waiting` before it blocks on a ledger lock and withdraws once it holds it; every other thread
+`yield_to_act`s at the start of every hold (bounded at 2 ms) while an announcement stands. The act
+thread therefore waits for the hold in progress plus the VA thread's yield. The act thread times its
+lock waits and its whole hand-over (`HoldStats::act_wait_max_ns`, `act_op_max_ns`); the steer's log
+line now reads `this thread waited at most N us for a ledger lock, hand-over took at most M us`.
+`[measured, model, debug build, 2026-10-10, cargo test -p kf-mem the_act_thread_waits_for_a_chunk_not_for_the_operation]`
+the VA thread places and unmaps a 2^20-piece row 3 times (1.6-1.9 s each) while the act thread runs
+~3 200 hand-overs: **longest lock WAIT 7.6 / 8.1 / 8.3 ms** (longest whole hand-over 9.2-10.7 ms; the
+VA thread yielded ~3 100 times, longest 2.0-3.0 ms); the test bound is 30 ms. Mutation (yield
+disabled): **670 ms** wait — the test fails. The wait bound is "about one chunk plus one host call
+plus scheduling", not one operation.
+
+**8.8.8.2 Map/steer range claims (item 5).** The pin of §8.7.6 covered micro reservations only; a map
+outside a reservation was invisible to the steer. Now `Claims` holds the VA ranges with a MAP in
+flight (the VA thread, from before `clear_strays` until its rows are recorded or rolled back —
+`map_segments`, `place`) and with a STEER running (`hand_to_host`, from its first ledger read to its
+last cut). They exclude each other over overlapping ranges, and neither side waits for the other
+unboundedly:
+- the steer **never waits** for the VA thread: a map in flight over the range ⇒ `HandOver::Busy`, nothing
+  touched, the host placement stays unsteered (logged); `[model]` `exp_b` (host map landed, record
+  not yet made) used to answer `Free` while the host held the pages;
+- a map starting over a range a steer is RUNNING over waits (50 µs polls, counted in
+  `va_claim_waits`) for that steer's host calls and cuts — bounded by one steer (a falcon context is a
+  few pages); `[model]` `exp_a` (map + record between the steer's host unmap and its cut, then the
+  cut erased the live record) cannot happen: the map starts after the cut.
+Tests (both orders, real threads for the second): `a_steer_during_a_map_in_flight_answers_busy_and_touches_nothing`,
+`a_map_waits_for_a_steer_running_over_its_range_and_its_record_survives`. Mutation (claims disabled):
+both fail. The identity/generation comparison for `cut_own` that the review suggested is not added:
+with the exclusion the only mutators of a steered range during a steer are idempotent unmaps (the VA
+thread's own range unmaps cut the same entries). Residual: `Free` is answered when `hand_to_host`
+returns, but the host's own allocation of its context happens after; a map arriving in between lands
+on a VA host RM is about to use (the original v3-video race, unchanged, now `Busy`/`StillOurs` only
+while the steer runs).
+
+**8.8.8.3 Leaf 0 (item 3).** `(e - s) / leaf` divided by zero for an over-bound row with a refused
+whole-row reservation when `leaf == 0` (`apply::leaf_bytes` answers 0 for an unknown page-size code;
+`ledger.rs` builds rows with `leaf: 0`). `leaf_segments` now treats any leaf that is not a power of two
+≥ 4 KiB as 4 KiB, and no code divides by a leaf unchecked (`checked_div`); `§8.8.9` is the class fix.
+Test: `a_malformed_leaf_is_4kib_never_a_panic` (leaves 0, 1, 3, 0x800, 0x1800, 3 MiB, `u64::MAX`, 2^63
+× reservation on/off/refused).
+
+**8.8.8.4 Host-call bounds (item 4).** `[model, review exp_c/exp_f]` a refused reservation (or the
+NEGCTL opt-out) made one 4 GiB row of 2 MiB leaves cost 1 048 577 host calls to place and
+**1 048 576 `unmap_row` calls** to take down (against 1 `unmap_range`; at 84-123 µs per unmap
+`[measured earlier, vast 52624429, 2026-09-26, §7]` ~90-130 s on the VA thread, the guest waiting). Fixed in four places:
+1. `unmap_run`'s whole-mapping branch uses ONE range call per owned span when the run is made of more
+   than one entry (the entries tile the run exactly, so the range splits nothing): 65 536 entries →
+   ≤ 2 calls (test `host_call_amplification_is_bounded_per_refresh`);
+2. the rollback of a row that failed mid-way unmaps the placed pieces by ONE range per contiguous
+   same-`hDma` run (was one whole-mapping call per piece);
+3. a per-refresh budget (`REFRESH_PLACEMENT_BUDGET` = 2^21 grain-placement calls,
+   `REFRESH_AMPLIFICATION_BUDGET` = 2^17 of them beyond one per guest leaf), armed by
+   `MapTarget::begin_refresh` (called once per `apply_entry`; a user that never calls it — a test, a
+   one-shot tool — is unlimited). A row that would exceed either is refused by name
+   (`REFRESH_BUDGET_EXHAUSTED`, absence, no host call; the walker retries it in a later refresh). The
+   (a2) tier spends 2 amplified calls per leaf, so its up-to-2^20 leaf reservations are bounded by the same
+   budget (≤ 65 536 leaves per refresh): the flat FB alias (3 963 leaves, ~8 000 amplified) fits; a 4
+   GiB row of 2 MiB leaves with every reservation refused (1 048 576 grains, ~1 046 528 amplified) does
+   NOT — it is refused cold (≤ 2 host calls) instead of costing a million;
+4. the straddle of the withheld split window `[4 GiB, 4.5 GiB)` (inferred: host RM refuses any map or
+   reservation there) is not special-cased: pre-refusing it would be wrong if the inference is, and a
+   row that fails at that window now costs at most its own grains once (budgeted) plus ONE rollback
+   range, repeated per refresh at most up to the placement budget.
+
+**Worst case per refresh (reasoned from the bounds; the 20 µs/map and 84-123 µs/unmap are the earlier
+nested-box measurements of vast 52624429, 2026-09-26, §7.2/§8.4, not re-measured):** placement ≤ 2^21 grain map calls + ≤ 2^17 reserve/free
+extras of (a2) (≈ 2.2 M calls, ≈ 45 s of VA-thread time, reached only by a guest that maps 8 GiB of
+distinct 4 KiB pages in ONE refresh); rollback ≤ one range call per contiguous run of a failed row;
+unmap ≤ one range call per maximal owned span of the changed range (spans are bounded by the ledger's
+hDma changes, i.e. by the reservations placed, themselves budgeted); a batch ≤ ~5 calls + 2 mm
+syscalls per 4 096 runs. Before: unbounded in the number of rows. The one-call-per-4-KiB-leaf cost of
+rows the guest really maps at 4 KiB is inherent (the per-run path) and counted in the placement
+budget, not in the amplified one.
+
+**8.8.8.5 Costs written down (item 8).**
+- *Per big-leaf row:* with a reservation the row costs reserve + map + (later) unmap + free = 4 RM calls
+  instead of map + unmap = 2 (`[model]` `big_leaves_are_placed_exactly_and_change_alone`: 1 reserve, 1
+  map, 1 range unmap, 1 free per row); the 2 extra calls are *inferred* ≈ 2 × 20 µs on the nested box,
+  not measured. A single-leaf 64 KiB row therefore costs MORE than the old one mapping per leaf; it
+  is the price of exactness (D1), cheaper than 16 grain maps.
+- *`BatchBook::unmapped_step` backward scan (known limit):* a step starts at `va - max_len`, where
+  `max_len` is the longest batch EVER booked in the space (it never shrinks), and visits every booked
+  batch whose start lies in that window. Each hold is bounded (one chunk), but the total work of a
+  retire grows with the number of batches in the window (bounded by the batches the space holds,
+  ≤ 4 096 runs each, themselves guest-driven but each costing a host batch object). A decaying
+  `max_len` or an interval index would remove it; not done.
+
+### 8.8.9 Hostile-guest hardening (review addendum 2026-10-10)
+
+**The rule (owner: "the guest is untrusted").** A guest-reachable panic on the VA, act, drainer or worker
+thread is a denial of service. Every value the guest controls — VAs, lengths, GPAs, leaf-size codes,
+apertures, ring indices and pushbuffer words — reaches arithmetic only through `checked_*` /
+`saturating_*` (a refusal by name, or a saturated range the host refuses), never `+`/`-`/`*`/`/`/`%`/
+indexing that can panic.
+
+**What a panic does today (checked).** Before this round: nothing turned it into a stop. Each service
+thread is a bare `std::thread::Builder::spawn` (`ffi_unsafe.rs`: `kf3-drainer`, `kf3-worker0/1`,
+`kf3-display`, `kf3-vamgr`; `chan.rs`: the act thread `kf3-chan-act`), the profile is `panic = "unwind"`,
+there was no `catch_unwind` around any loop and no panic hook. A panic therefore killed THAT thread
+only, printed one line to stderr, and left QEMU running: a dead VA thread never clears an invalidate
+(the guest polls its trigger bit forever, no TDR — the run-223 hang class, silently); a dead act thread
+leaves every queued RM call unresolved; a mutex it held stays poisoned (the old `if let Ok(..) =
+lock()` ledger code then answered "nothing of ours here" — now `lk()` recovers the guard). Owner,
+2026-10-08, `[profile.release] overflow-checks = true`: an overflowing guest integer must PANIC (the
+VM stops, fail closed), "never wrap silently" — the profile makes the panic, but nothing made the
+panic stop the VM. **Now** `kf_qemu::failclosed::install()` (called in `realize`, before the threads
+start) chains a panic hook that prints the panic and, on a service thread, aborts the process after
+naming it (`FATAL: service thread "kf3-vamgr" panicked — stopping the VM (fail closed)`); other
+threads (`on_cuda_thread`'s scoped join, which maps a panic to a refusal) are untouched. Test: a child
+process panicking on a thread named `kf3-vamgr` dies by SIGABRT with that line; one on `kf3-other`
+survives. This is the backstop; the conversions below remove the known sources.
+
+**Audit and conversion (counts).** `clippy::arithmetic_side_effects, indexing_slicing, unwrap_used,
+expect_used, panic, unreachable, todo, unimplemented` over the non-test code:
+- **kf-mem: 345 sites** (236 arithmetic, 109 indexing; 0 unwrap/expect/panic). **252 converted**
+  (`apply.rs` 68 arithmetic, `batch.rs` 64, `cpuwin.rs` 38, `vasmgr.rs` 76, `ledger.rs` 4, `addr.rs`
+  2); counters became `saturating_add`, guest-derived ranges `checked_*`/`saturating_*` with a named
+  refusal where a wrapped row would be wrong (`check_row`, `prepare_row`'s wrap check). **93 kept** under
+  one module-level `#![allow(clippy::indexing_slicing)]` in `apply.rs`, each indexing a per-run vector
+  built with exactly `runs.len()` elements by a run index from enumerating the same slice — never a
+  guest value (reason written at the attribute). The crate carries
+  `#![cfg_attr(not(test), deny(..))]` for the whole set: a new panic site fails CI.
+- **kf-qemu: 416 sites in the lib; 173 converted** — `mem.rs` 54 (the placed-row resolvers, the
+  row cut, the retire loop), `chan.rs` 119 (every guest-VA read loop, the pushbuffer decoders, the
+  GP-FIFO ring arithmetic of the peek and the stall snapshot — `% entries`, `entries` from the guest's
+  USERD, `ring_dist` — the USERD views, the doorbell ledger). `mem.rs` and `chan.rs` carry the same
+  `deny` set. **243 NOT converted**, all outside row/ring handling, none enabled by a lint: `display.rs`
+  124 (display geometry/format arithmetic on guest register values — guest-reachable in part),
+  `device.rs` 58 (+1 `expect`), `prof.rs` 20, `bar0trace.rs` 10, `readtrace.rs` 8, `twin.rs` 4, and
+  ≤ 3 each in `cardbudget`, `dispsw`, `tspace`, `ffi_unsafe`, `raw_unsafe`, `gpucopy`, `defapi`,
+  `hostfacts`. Reason: out of scope of the row/ring review and too large to convert and re-verify
+  blind; **the backstop above stops the VM visibly** if one fires. They are the next audit.
+
+**The fuzz (`sim::fuzz::hostile_rows_never_panic_and_keep_the_ledger_invariants`).** Arbitrary — about
+half "sane row with one hostile field", half fully hostile — walker rows (VA, length, GPA, aperture,
+kind, flags, leaf code, with 0, 1, 0xFFF, 2^47, 2^63, `u64::MAX` and wrap-around values; a hostile
+guest-RAM layout closure; hostile `store_bytes`/`grain`/`carve`) go through the REAL `apply_entry` and
+`BatchedVas` over the host RM model in four configurations (reservations on/off × batching on/off),
+as a conforming walker would (UNMAPs only of committed placements, remaps unmap what they overlap,
+refused UNMAPs stay committed, MAP runs of one entry disjoint). After every entry: one verdict per
+run, nothing rigid, no pin left, no model violation, bounded lock holds, **every host mapping of ours is in
+the ledger and every ledger entry has its host mapping**; then the hostile verbs (`unmap_range`,
+`unmap_run`, `hand_to_host`, `own_view`, `micro_covers` with arbitrary ranges), a ledger-level retire,
+`leftovers() == 0`. A debug test build has `overflow-checks` on, as the release profile does.
+`[measured, 2026-10-10, cargo test -p kf-mem hostile_rows, KF_FUZZ_SEEDS=6000]` 6 000 seeds × 4
+configs × 25 entries: 345 740 rows placed, 1 390 530 refused, **0 panics, 0 invariant breaks** (default
+400 seeds, ~2 s). On its first run, before the conversion, it found a real guest-reachable panic: the
+backing offset `d.off + (s - d.va)` of `BatchedVas::map` overflowed for a hostile layout
+(`batch.rs:1785`). `hostile_rows_and_ranges_at_the_ledger_verbs_are_refused_by_name` drives
+`map`/`map_sked`/ranges straight at the ledger with empty, unaligned, wrapping and `u64::MAX` rows.
+*Not covered:* the walker-report parser (`kf_cuda::abi`) is exercised only through its
+conversion `diff_run`; the GPU walk kernel is not in the model.
+
+### 8.8.10 Residual risks added by the review round
+
+- The 243 uncovered `kf-qemu` sites (§8.8.9): a panic there is caught only by the fail-closed hook (the
+  VM stops, visibly).
+- `failclosed` aborts the whole VMM on a service-thread panic: the one VM stops, deliberately — a dead
+  VA thread would hang the guest silently.
+- The act thread can still wait up to one hold plus the VA thread's 2 ms yield cap; a descheduled VA thread
+  cannot be preempted by us.
+- A map that waits for a running steer waits for that steer's host calls; a hung host call in the steer
+  would hold the VA thread too (it would hold it for its own host calls as well).
+- The per-refresh budget refuses (absence) a legitimate guest that maps more than 2^21 distinct 4 KiB
+  pages (8 GiB) or needs more than 2^17 amplified calls in ONE refresh with reservations off or refused;
+  with reservations accepted neither budget is touched by big-leaf rows.
+
