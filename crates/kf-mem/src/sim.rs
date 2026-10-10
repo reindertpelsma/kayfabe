@@ -150,8 +150,15 @@ pub struct SimRm {
     pub ranges: Vec<(u64, u64)>,
     /// Bytes mirror range unmaps covered where nothing at all was mapped.
     pub gap_bytes: u64,
-    /// The next micro reservation is refused (a host that does not accept small reservations).
+    /// Every micro reservation is refused (a host that does not accept reservations there).
     pub refuse_reserve: bool,
+    /// ★ D1/D3: a micro reservation LONGER than this is refused (a host that accepts small
+    /// reservations only, or one that finds a block in a big range).
+    pub refuse_reserve_over: Option<u64>,
+    /// ★ D1/D3 fault injection (runtime refusals): see [`ExtFault`].
+    pub ext: Option<ExtFault>,
+    /// What [`SimRm::ext`] injected so far.
+    pub ext_hits: ExtHits,
     /// Skip the guard (the workload counts only; the property test always guards).
     pub no_guard: bool,
     /// The next stitched-batch map fails after the descriptor is built.
@@ -160,6 +167,52 @@ pub struct SimRm {
     pub n: Counters,
     /// ★ Review fix 2026-10-10: guard hits inside intervals the apply declared re-made.
     pub remade_transients: u64,
+}
+
+/// ★ D1/D3 (2026-10-10): runtime refusals of the micro-reservation machinery, injected. Every
+/// `*_every` is "every n-th call of that kind"; 0 = never.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ExtFault {
+    /// Every n-th micro reservation ALLOC is refused (before acting).
+    pub reserve_every: u64,
+    /// Every n-th FREE of a micro reservation is refused (before acting: it stays reserved).
+    pub free_every: u64,
+    /// Every n-th mirror ROW map (`map_row`, `map_row_in`, SKED) fails before acting — a failure
+    /// in the middle of a multi-piece row, so the pieces already placed must be rolled back.
+    pub map_every: u64,
+    /// Calls seen: reserve, free, map.
+    pub seen: [u64; 3],
+}
+
+/// What [`ExtFault`] injected: reserve allocs refused, reservation frees refused, row maps failed.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct ExtHits {
+    /// Reservation allocs refused.
+    pub reserves: u64,
+    /// Reservation frees refused.
+    pub frees: u64,
+    /// Row maps failed.
+    pub maps: u64,
+}
+
+impl SimRm {
+    /// Whether the `kind`-th (0 reserve, 1 free, 2 map) call is refused by [`SimRm::ext`].
+    fn ext_hit(&mut self, kind: usize) -> bool {
+        let Some(f) = self.ext.as_mut() else {
+            return false;
+        };
+        let every = [f.reserve_every, f.free_every, f.map_every][kind];
+        f.seen[kind] += 1;
+        let hit = every != 0 && f.seen[kind].is_multiple_of(every);
+        if hit {
+            match kind {
+                0 => self.ext_hits.reserves += 1,
+                1 => self.ext_hits.frees += 1,
+                _ => self.ext_hits.maps += 1,
+            }
+        }
+        hit
+    }
 }
 
 /// ★ Review fix 2026-10-10 (finding 8): refused mirror unmaps, injected.
@@ -216,6 +269,9 @@ impl Sim {
             ranges: Vec::new(),
             gap_bytes: 0,
             refuse_reserve: false,
+            refuse_reserve_over: None,
+            ext: None,
+            ext_hits: ExtHits::default(),
             no_guard: false,
             fail_next_batch_map: false,
             n: Counters::default(),
@@ -433,6 +489,9 @@ impl SimRm {
     /// inside it goes, its block is returned).
     fn free(&mut self, h: u32) -> Result<(), String> {
         self.n.rm_free += 1;
+        if self.resv.contains_key(&h) && self.ext_hit(1) {
+            return Err(format!("free {h:#x}: refused (injected)"));
+        }
         if self.objs.remove(&h).is_some() {
             while let Some(m) = self.maps.iter().find(|m| m.obj == h).cloned() {
                 self.n.rm_unmap -= 1; // part of the free, not a separate ioctl
@@ -457,7 +516,12 @@ impl SimRm {
             .guest
             .iter()
             .any(|g| g.handle != 0 && overlaps(g.lo, g.hi - g.lo, va, len));
-        if self.refuse_reserve || statics || self.block_overlaps(va, len) {
+        if self.refuse_reserve
+            || self.refuse_reserve_over.is_some_and(|m| len > m)
+            || self.ext_hit(0)
+            || statics
+            || self.block_overlaps(va, len)
+        {
             return Err(format!("reserve {va:#x}+{len:#x}: NV_ERR_NO_MEMORY"));
         }
         let h = self.next_obj;
@@ -564,6 +628,9 @@ impl SimRm {
 
 impl SpaceVerbs for &Sim {
     fn map_row(&self, d: &Desired, _defer: bool) -> Result<Mapped, String> {
+        if self.0.borrow_mut().ext_hit(2) {
+            return Err(format!("map {:#x}+{:#x}: refused (injected)", d.va, d.len));
+        }
         let obj = if d.ram { RAM_OBJ } else { STORE_OBJ };
         match self
             .0
@@ -576,6 +643,9 @@ impl SpaceVerbs for &Sim {
         }
     }
     fn map_sked_row(&self, s: &SkedRow, _defer: bool) -> Result<Mapped, String> {
+        if self.0.borrow_mut().ext_hit(2) {
+            return Err(format!("map SKED {:#x}: refused (injected)", s.va));
+        }
         match self
             .0
             .borrow_mut()
@@ -657,6 +727,9 @@ impl SpaceVerbs for &Sim {
         self.0.borrow_mut().reserve(va, len)
     }
     fn map_row_in(&self, h: u32, d: &Desired, _defer: bool) -> Result<Mapped, String> {
+        if self.0.borrow_mut().ext_hit(2) {
+            return Err(format!("map {:#x} in {h:#x}: refused (injected)", d.va));
+        }
         let obj = if d.ram { RAM_OBJ } else { STORE_OBJ };
         match self.0.borrow_mut().map_through(h, d.va, d.len, obj, d.off) {
             Ok(()) => Ok(Mapped::Placed),
@@ -668,6 +741,12 @@ impl SpaceVerbs for &Sim {
         }
     }
     fn map_sked_in(&self, h: u32, s: &SkedRow, _defer: bool) -> Result<Mapped, String> {
+        if self.0.borrow_mut().ext_hit(2) {
+            return Err(format!(
+                "map SKED {:#x} in {h:#x}: refused (injected)",
+                s.va
+            ));
+        }
         match self
             .0
             .borrow_mut()
@@ -1111,6 +1190,25 @@ pub fn check(
         return Err(format!(
             "{} gvaspaceFree(NULL pMemBlock) assertion(s) (gpu_vaspace.c:1639)",
             rm.asserts
+        ));
+    }
+    // ★ D1 (2026-10-10): outside every VA-reserving hDma (the NV01 range) a mapping of ours is ONE
+    // 4 KiB page — the unit no partial change can split. Anything bigger there is a mapping host
+    // RM could not partly unmap exactly (the apply would have to re-make it).
+    if let Some(m) = rm
+        .maps
+        .iter()
+        .find(|m| m.owner == Owner::Mirror && m.hdma == RANGE && m.len != P)
+    {
+        return Err(format!(
+            "NV01 mapping {:#x}+{:#x} is bigger than one 4 KiB page (D1: split-exact placement)",
+            m.va, m.len
+        ));
+    }
+    if rm.remade_transients != 0 {
+        return Err(format!(
+            "{} UNCHANGED page(s) transiently unmapped inside a declared re-make (D1: must be 0)",
+            rm.remade_transients
         ));
     }
     let broken = rm.broken_mirror();
