@@ -233,3 +233,11 @@ IOMMU_SWITCH_END type=identity 2026-10-11T20:14:16+02:00
 2026-10-11T18:15:50Z [g9] staged vc_redist (installer, 13s)
 2026-10-11T18:15:54Z [g9] READY boot=2026-10-11T18:14:23.5000000Z user=VASTWIN\vast smi_ok=True
 2026-10-11T18:16:02Z [g9] staged gravitymark (msi_admin, 6s)
+2026-10-11T18:26:27Z [g9] gravitymark_vk: TIMEOUT (restart guest: tdr-budget:3>=3)
+2026-10-11T18:26:46Z post-guest hook rc=0 A GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-11T20:26:46+02:00
+RECLAIM_STOPPED_OVERLAY 1288 6441672704
+2026-10-11T18:26:46Z [g9] stopped (clean)
+2026-10-11T18:26:46Z [g9] session ended early: tdr-budget:3>=3; 0 apps move to a fresh guest
+2026-10-11T18:26:46Z MATRIX_DONE batched: 8 pass / 19
+2026-10-11T18:26:46Z EXIT rc=0

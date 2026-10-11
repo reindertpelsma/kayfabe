@@ -17,3 +17,4 @@ APPRES side=win app=gravitymark_d3d12 verdict=FAIL rc=1 secs=28 quiet=1 note=rc:
 APPRES side=win app=gravitymark_gl verdict=FAIL rc=-1073740791 secs=58 quiet=58 note=rc:-1073740791,success-string-missing,no-gpu-proof | GM_FAIL no benchmark image boot=g7 guest_tdr=3 wer=0 gsp_cycles=1 proof=none:pdh:Cuda|Compute|3D|Copy tier=2 cat=opengl
 APPRES side=win app=gravitymark_d3d11 verdict=FAIL rc=0 secs=189 quiet=1 note=no-gpu-proof boot=g8 guest_tdr=0 wer=0 gsp_cycles=0 proof=none:pdh:Cuda|Compute|3D|Copy tier=1 cat=d3d
 APPRES side=win app=clpeak_ocl verdict=FAIL rc=-1073741819 secs=350 quiet=4 note=rc:-1073741819 | Failed to read file: C:\Windows\TEMP\dep-eb4b8e.d boot=g8 guest_tdr=3 wer=0 gsp_cycles=1 proof=out tier=1 cat=opencl
+APPRES side=win app=gravitymark_vk verdict=TIMEOUT rc=124 secs=611 quiet=0 note=KFWAIT gravitymark_vk STILL_RUNNING_AFTER 600 s boot=g9 guest_tdr=3 wer=0 gsp_cycles=1 proof=- tier=1 cat=vulkan

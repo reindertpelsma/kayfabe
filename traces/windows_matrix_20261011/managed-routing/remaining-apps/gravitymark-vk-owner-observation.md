@@ -24,9 +24,11 @@ Passthrough twin. Snapshot and filtered records saved alongside. The exact
 offending method and initiating defect are unmeasured; shared raw Xid bits
 with other workloads do not establish the same cause.
 
-The test is still within its original600s budget at collection; no final app
-verdict yet. Preserve that verdict separately from this observed runtime error.
-Do not dismiss the dialog or extend the deadline to turn it into a pass.
+At the18:20UTC collection the original600s test was still active. Final result
+at18:26:46UTC is TIMEOUT611s/rc124: the application stayed open with the dialog,
+three guest driver153 records, WER0, no guest reboot, one GSPcycle. Saved app
+facts/verdict and end screenshot retain the original failure. No dialog dismissal
+or deadline change was used.
 
 Reference580.88/RTX4090 previously TIMEOUT603s with a blank window. The same
 device-lost dialog, host fault or cause has NOT been established there. A

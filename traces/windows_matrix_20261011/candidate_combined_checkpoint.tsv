@@ -51,7 +51,7 @@ gravitymark_d3d12	FAIL	72741e2b	72741e2b	FAIL	3	1	managed-routing/remaining-apps
 gravitymark_d3d12_raster	FAIL	72741e2b	72741e2b	FAIL	0	0	managed-routing/remaining-apps/win.res	2026-10-11T17:44:09.4279538Z	app_end
 gravitymark_d3d12_rt	FAIL	72741e2b	72741e2b	FAIL	3	1	managed-routing/remaining-apps/win.res	2026-10-11T17:44:55.9910653Z	app_end
 gravitymark_gl	FAIL	72741e2b	72741e2b	FAIL	3	1	managed-routing/remaining-apps/win.res	2026-10-11T18:01:59.2966661Z	app_end
-gravitymark_vk	PENDING								
+gravitymark_vk	TIMEOUT	72741e2b	72741e2b	TIMEOUT	3	1	managed-routing/remaining-apps/win.res	2026-10-11T18:26:17.7631369Z	app_end
 hashcat	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T14:51:31.7098494Z	app_end
 heaven_d3d11	FAIL	0f9c01f9	8037e19b	FAIL	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T15:02:05.1114147Z	app_end
 heaven_opengl	FAIL	0f9c01f9	8037e19b	FAIL	3	1	copy-slicing/full-checkpoint/win.res	2026-10-11T15:03:01.9296158Z	app_end

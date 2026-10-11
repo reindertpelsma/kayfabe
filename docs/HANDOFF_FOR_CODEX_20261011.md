@@ -5,6 +5,32 @@ again after the Wednesday 07:00 reset). Read `AGENTS.md` (= `CLAUDE.md`) first: 
 (state, branches, traps), `docs/DELEGATED_DECISIONS_20261010.md`, `docs/OWNER_RULINGS.md` §AB-§AE, `docs/design/V3_FEATURE_GAPS.md`
 (priorities: P0 = prevents apps running; fidelity and perf beyond "decent" are post-release), `docs/design/V3_NOT_IN_GIT.md`.
 
+## Latest checkpoint, 2026-10-11 18:43 UTC
+
+Last confirmed pushc30b7f679 adds a bench-only, host-authored native deferred
+channel-update probe (66 kf-host testsPASS). No production caller. The public
+5080 V2 path is tested unprivileged with owned handles and an actual GPU tail;
+registration refusal, missing tail, cleanup failure or Xid falsifies it. Native
+NOP/update runs are queued in the existing native video batch, with independent
+case verdicts. Bounded nbody diagnostic also includes Vulkan in a fresh guest,
+unchanged app deadlines and product72741e2b; exhausted coverage is inconclusive.
+
+Run1288 final TIMEOUT611s/rc124, device-lost dialog, three guest driver153
+records, no WER or guest reboot, one GSPcycle, hostXid32. Specific causal method
+unmeasured. Original oracle/deadline preserved. Stock Vulkan timeout does not
+establish the same dialog/fault there. Canonical103/104 executed:77cleanPASS,
+8PASS_WITH_RECOVERY,12FAIL,6TIMEOUT,1pending; Linux counterpart parity57/65.
+Fresh CUDAclpeak1310 is active within its original1500s budget. Existing serial
+queues and frozen3252 regression/manual1380 unchanged; manual not ready.
+
+Owner clarification: traces mean measurements against references such as VFIO.
+Compatibility axes and source tiers follow integration's V3_CONSTANT_STRATEGY:
+die/display IP, guest driver/firmware, host driver, monitor and environment are
+separate. A host query needs the applicable ABI and semantics; one capture does
+not establish other dies/branches. Published source-tagged measurements are an
+allowed tier. Private diagnosis is authorized, remains outside this public
+repository and supplies no implementation interface/layout/constant.
+
 ## Latest checkpoint, 2026-10-11 18:21 UTC
 
 Last confirmed push8d46a807. Owner reports GravityMark1.89 Vulkan device lost
