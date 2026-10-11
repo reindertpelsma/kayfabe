@@ -5,6 +5,21 @@ again after the Wednesday 07:00 reset). Read `AGENTS.md` (= `CLAUDE.md`) first: 
 (state, branches, traps), `docs/DELEGATED_DECISIONS_20261010.md`, `docs/OWNER_RULINGS.md` §AB-§AE, `docs/design/V3_FEATURE_GAPS.md`
 (priorities: P0 = prevents apps running; fidelity and perf beyond "decent" are post-release), `docs/design/V3_NOT_IN_GIT.md`.
 
+## UPDATE 2026-10-11 05:00 CEST (read this first; supersedes the OpenGL lines below where they differ)
+- **OpenGL (open P0):** branch `claude/gl-730101-20261011` (commit `417bad6d`, NOT merged). The RM replies now equal the real GPU's byte for byte
+  (`0x730101` = `81 2f`, `0x730102` CLIENT = 1, `0x73011a` answered, `DFP_ASSIGN_SOR` added; caps derived in `crates/kf-disp/src/dispcaps.rs`), and `kf_glgears`
+  STILL crashes (runs 640/641). CUDA cup2/cup3/cup8 pass. Next suspect: a race in the OpenGL driver (7 threads in the dump); falsifier: log microseconds per
+  control, race is out if kayfabe's calls are not slower than ~3 ms (real ~0.5 ms); alternative: diff the `GetGspStaticInfo` reply against the real boot capture.
+  Full handoff: `traces/windows_gl_crash_20261011/README.md` on that branch (top section).
+- **Before merging that branch:** Linux regression (gates 9/9 + gate 10, fast suite 30/30, broker smoke) on it; the caps now claim CROSS_BAR. One kf-rm
+  `display_seat` count test was already failing before the work; fix or record it.
+- **Not run yet:** the 13 OpenGL matrix apps, Minecraft, the Windows app matrix on kayfabe (use `windows_broker_prod2.sh`, exFAT app disk), flag ablation
+  (~16 runs left), perf comparison vs `6692e621`, invalidate latency (§AD).
+- **Docs added today:** `OWNER_RULINGS.md` §AF/§AG, `design/V3_PROVENANCE.md` (draft, lawyer review pending). Pre-release: sweep the whole git history for analysis
+  material and closed-binary offsets (the GL branch README still quotes one).
+- **Owner constraints:** Claude weekly limit nearly spent (resets Wed 07:00); Codex Sat/Mon. Models: Sonnet 5.5 default (§AC). Push at least every 30 minutes.
+- **Host state at 05:00:** no QEMU, IOMMU group 11 `DMA-FQ`, no stop file, `/var/lib` ~116 GB free (keep > 100 GB).
+
 ## What is true today (measured)
 Windows 11 + the stock NVIDIA driver boots, signs in, runs Edge and video on kayfabe, production profile, no TDR in run 501 (with the guest
 overlay disabled). Integration branch `integration/windows-20261010` carries every fix. Linux regression passed (gates 9/9 + gate 10, fast suite
