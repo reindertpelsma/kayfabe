@@ -20,7 +20,7 @@
 4. Suggested next experiment (needs an owner decision because it changes a design choice; batch it in ONE run, falsifier first): answer `0x730101` with the capability bits the
    model actually implements and the `0x730102` CLIENT flag from the heads whose raster runs; falsifier: the ICD's call sequence still stops after the first cycle. If the sequence
    then follows the real one, bisect which of the two.
-5. Linux regression for the display-model change: see "Linux regression" below (filled in when the lane finished).
+5. Linux regression for the display-model change, `[measured, kf3 2cedcc67, host 172.22.1.20, 2026-10-11 03:21-03:38 CEST]`: fast suite **30/30 PASS**, 0 FAIL, 0 CRASH (`FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0`, one revision, one hold), 5 new host Xid (the five intentional negative-control Xid of `--defer-liveness`/`--missing-page-fault`, as in `traces/linux_regression_20261010`); broker smoke `input_proof.sh lr73b` PASS (GRUB key, Cinnamon up, ABS x8, REL under grab (70,30), ABS dropped under grab, keys, broker re-attach, evdev sums). The first broker attempt (`lr73`) failed only because `/workspace/bench/kf3-bins/2cedcc67` did not exist (harness looks there; a symlink fixed it, removed afterwards): not a product result.
 
 ## Layout, gate and tests of the change (code: `kf-disp`, branch `claude/gl-73011a-20261011`)
 - `kf_disp::model::GET_DISPLAY_MODE` (`0x0073011a`), 28 bytes `[displayId, width, height, total_w, total_h, 0, refresh_hz]` (observed once, field meanings inferred),
