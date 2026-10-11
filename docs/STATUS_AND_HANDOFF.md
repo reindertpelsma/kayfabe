@@ -11,6 +11,43 @@ fix this file. Entries below the first are dated history.
 
 ## 0. Current resumption — start here
 
+## Latest checkpoint, 2026-10-11 20:23 UTC
+
+Last confirmed public push fc6f85b4a; private1dc9c0e. Owner explicitly reaffirms
+that the solution must follow v3: authored unprivileged host operations,
+validated ownership/lifetime, real GPU ordering/completion, no blocking vCPU.
+Native deferred registration is not permission to execute a privileged action.
+No production deferred-update caller or Vulkan fix was added.
+
+Native uid65534 USER discriminator: NOP clean; update and update-hold each
+Xid32 despite rc0/GPU tail. HOLD_BEGIN20:17:17.639216UTC, Xid17.639516UTC,
+HOLD_END19.639287UTC: fault300us into ownership hold falsifies early cleanup
+for this native case. Root read-only diagnostic queries return counts0/1/2,
+97-byte records, privately backed up. Exact public schema leaves nested fields
+opaque, so no inner status/faulting method/VA is claimed. Permissions remain
+a public-source hypothesis, not a measured cause. GravityMark's exact trigger
+still needs measurement; identical Xid bits alone do not identify it.
+
+Exact3252 Linux gates9/9+gate10/fast30 and both normal Windows controls1390/
+1460 PASS gears/vectorAdd/CUP8, zero recorded guest recovery/GSP and precise
+hostXid. Captured PDISP caps-page ablation1400 BOOT_FAIL/Code43; aborted1401
+before app execution, unclean shutdown recorded, DMA-FQ restored, hostXid0.
+This is separate from system GET_CAPS_V2 feature bits. No caps default promoted.
+
+Manual1380 READY20:17:45UTC, product3252a087, NVIDIA Code0, vast account,
+autologon disabled, no input/apps automated, no expiry. Owner notified with
+credentials; password stays solely in trusted host secrets file. GPU lock
+parent209237 remains held throughout the VM. Do not start hardware tests or
+another QGA client in this session. Stop request, only when owner wants it:
+/tmp/kf-stop-codex-manual-1380. Allocator65530 validation still waits for its
+actual exit. Remaining19 behavior flags are explicit; no zero-flag boot claim.
+
+Canonical104:79cleanPASS,8PASS_WITH_RECOVERY,11FAIL,6TIMEOUT; Linux59/65,
+mixed revisions explicit. Same-GPU VFIO GravityVK PASS183s remains strongest
+reference. Public/private results pushed separately; raw RAM/disks excluded.
+Open: Vulkan causal method and valid v3 fix, remaining Windows failures,
+derived caps/defaults, allocator hardware validation after owner session.
+
 ## Latest checkpoint, 2026-10-11 20:02 UTC
 
 Last confirmed public push428ad66d7; this checkpoint records later evidence.
