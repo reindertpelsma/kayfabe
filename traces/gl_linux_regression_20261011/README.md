@@ -32,3 +32,16 @@ Report every result, including a failure. Windows behavior needs a separate run 
 The preliminary run at `a590f10a` is not evidence for the final capabilities. Its per-stage Xid
 capture lacked a tool on the host; the final runner uses the available `grep` and separate output
 directories. It is not edited while running. Final hardware results are pending.
+
+The first runner also incorrectly applied `--user` to every raw-client arm. That optional census
+requires a guest USER-level channel, but the root raw client is stamped ADMIN (`privilege=1`);
+the independent host birth census still requires USER host channels. The documented T-space
+invocation is without `--user` (`V3_TSPACE_HARDWIRED.md`, hardware checklist). `finish.sh` reruns
+those checks over all 30 existing final-revision logs and runs the broker lane on the same binary.
+The rejected assertion and its log are preserved. This is a harness correction, not a product change.
+
+Planned Windows regression (run 642, source `02afce90`, `windows.sh`): fresh baseline, production
+profile, overlay disabled, exFAT application disk, CUDA cup2/cup3/cup8 and interactive gears.
+Hypothesis: truthful display claims preserve boot and CUDA; falsifier: adapter no longer Code 0,
+any CUDA probe fails, or a new TDR occurs. Gears has a known baseline crash; report whether it
+persists without treating a crash-free boot as an OpenGL pass. The RPC trace is diagnostic only.

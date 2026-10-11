@@ -34,7 +34,7 @@ test -x "$QBIN"
 stage client env KAYFABE_BUILD_REV=$REV cargo build --release -p kayfabe-rm-ladder --bin kayfabe-rm-ladder
 stage fastguest env KF_FROM_HOST=1 CLIENT=$CARGO_TARGET_DIR/release/kayfabe-rm-ladder bash scripts/fastguest/build_fast_guest.sh /workspace/bench/guest.qcow2 "$OUT/fastguest"
 stage fast env KF_LOCK=$OUT/private.lock KF_DEVICE=kf3 BENCH_DIR=$OUT/bench KF_FASTGUEST_DIR=$OUT/fastguest QEMU_BIN=$QBIN timeout 5000 bash scripts/fastguest/fast_suite.sh codexglreview 180
-stage tspace bash -c 'set -e; for log in "$1"/bench/fast_codexglreview_*_qemu.log; do echo "LOG=$log"; python3 -I scripts/p1p2/tspace_log_gate.py "$log" --user; done' _ "$OUT"
+stage tspace bash -c 'set -e; for log in "$1"/bench/fast_codexglreview_*_qemu.log; do echo "LOG=$log"; python3 -I scripts/p1p2/tspace_log_gate.py "$log"; done' _ "$OUT"
 # The broker harness selects its binary under /workspace/bench. Make only our revision visible.
 LINK=/workspace/bench/kf3-bins/$REV
 if [ ! -e "$LINK" ]; then

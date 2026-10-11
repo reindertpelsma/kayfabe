@@ -1268,7 +1268,7 @@ impl DisplayModel {
             }
             "num_heads" => {
                 let mut p = self.view("NV0073_CTRL_SYSTEM_GET_NUM_HEADS_PARAMS", params)?;
-                // ogkm: "This parameter must specify a value between zero and the total number of
+                // ogkm-580: ctrl0073system.h: "This parameter must specify a value between zero and the total number of
                 // subdevices" - this device has one.
                 if p.get("subDeviceInstance").unwrap_or(u64::MAX) != 0 {
                     return Err(NV_ERR_INVALID_ARGUMENT);

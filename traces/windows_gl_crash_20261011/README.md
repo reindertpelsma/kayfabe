@@ -6,7 +6,7 @@
 
 Independent review rejected the `417bad6d` candidate unchanged: field definitions for DP-capable SORs do not mean the emulated engine implements DP.
 The model is TMDS-only and refuses slave displays. The corrected candidate clears MST and dual-SST on every family. A second review also rejected the three physical-RM software bits because physical support
-does not implement HDCP validation, gamma compensation or a glitchless modeset contract in the emulator. Product code no longer carries that measured family row; every family answers `00 0c`. The historical `81 2f` runs below describe earlier binaries, not the corrected model.
+does not implement HDCP validation, gamma compensation or a glitchless modeset contract in the emulator. Product code no longer carries that physical-RM family row; every family answers `00 0c`. The historical `81 2f` runs below describe earlier binaries, not the corrected model.
 `DFP_ASSIGN_SOR` now respects the generated sublink input (secondary unsupported; invalid values invalid argument), and authors a zero reserved-panel mask.
 SOR flags are also validated (audio requests unsupported, unknown bits invalid); its output-only bit is authored clear. Five failing-first regressions reproduce these defects. Linux hardware validation and the new Windows verdict are pending.
 Private closed-driver diagnosis details have been removed from this working tree under owner §AG; historical commits still require the release history sweep.
