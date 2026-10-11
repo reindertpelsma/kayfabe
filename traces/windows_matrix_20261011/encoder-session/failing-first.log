@@ -1,0 +1,25 @@
+  --> crates/kf-abi/src/chanbudget.rs:96:58
+   |
+96 |     HostTooFull { derived: u32, engine: u32, total: u32, in_use: u32 },
+   |                                                          ^^^^^^^^^^^
+
+warning: `kf-abi` (lib) generated 11 warnings
+warning: `kf-abi` (lib test) generated 11 warnings (11 duplicates)
+    Finished `test` profile [unoptimized] target(s) in 5.51s
+     Running unittests src/lib.rs (/data/kf-encoder-probe-target/debug/deps/kf_abi-fbfaea97f12747c6)
+
+running 1 test
+
+thread 'hostabi::tests::encoder_session_contract_is_exact_and_bounded' (201253) panicked at crates/kf-abi/src/hostabi.rs:1012:22:
+measured: NoHeader { cmd: 545292643, source: "kf_abi::gssreplay ENC session (measured on 580.159.04 hosts)", version: DriverVersion { major: 595, minor: 91, patch: 7 } }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test hostabi::tests::encoder_session_contract_is_exact_and_bounded ... FAILED
+
+failures:
+
+failures:
+    hostabi::tests::encoder_session_contract_is_exact_and_bounded
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 466 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p kf-abi --lib`

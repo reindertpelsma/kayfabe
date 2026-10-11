@@ -80,3 +80,4 @@ APPRES side=win app=edge_video_h264 verdict=PASS rc=0 secs=29 quiet=1 note=- boo
 APPRES side=win app=edge_video_vp9 verdict=PASS rc=0 secs=50 quiet=3 note=- boot=g14 guest_tdr=3 wer=0 gsp_cycles=1 proof=pdh:videodecode tier=2 cat=video
 APPRES side=win app=heaven_d3d11 verdict=FAIL rc=0 secs=47 quiet=47 note=no-gpu-proof boot=g15 guest_tdr=0 wer=0 gsp_cycles=0 proof=none:pdh:Cuda|Compute|3D|Copy tier=2 cat=d3d
 APPRES side=win app=heaven_opengl verdict=FAIL rc=-1073740791 secs=44 quiet=2 note=rc:-1073740791,success-string-missing,no-gpu-proof | KFSURVIVE heaven_opengl EXITED_EARLY rc:-1073740791 after:29 s boot=g15 guest_tdr=3 wer=0 gsp_cycles=1 proof=none:pdh:Cuda|Compute|3D|Copy tier=2 cat=opengl
+APPRES side=win app=valley_d3d11 verdict=TIMEOUT rc=124 secs=266 quiet=- note=timeout boot=g16 guest_tdr=0 wer=0 gsp_cycles=1 proof=- tier=2 cat=d3d

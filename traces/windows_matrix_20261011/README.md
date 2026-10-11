@@ -3,6 +3,35 @@
 **STATUS: LIVE, 2026-10-11.** Product candidate `2c917f3e`, following the
 OpenGL gears fix. Results are pending; this is not a matrix pass claim.
 
+## Latest checkpoint, 2026-10-11 15:17 UTC
+
+Last pushed24a3da15. Broad0f9c01f9/8037 campaign deliberately stopped with82/102
+completed:63PASS,16FAIL,3TIMEOUT;58PASS without recovery. Valley D3D11 TIMEOUT266s
+has hostXid32 +1 GSP cycle; missing supervisor event facts do NOT prove zero events.
+All four timestamped host Xids saved. After run875 cleanup, run876 had only begun
+booting; controller stopped before app staging to prioritize known defects and
+avoid old-harness/long-test repeats. Original results stay intact, exit143 recorded.
+GPU lock held through teardown; noQEMU, IOMMUgroup11 DMA-FQ,181GiB free confirmed.
+
+Owned stock580.88 fresh Unigine/Nbody GUI reference5/5PASS, no guest recovery
+records; native GSP cycles not measured. Both Heaven and Valley APIs pass.
+Evidence reference-unigine-nbody/. Existing canonical OceanFFT/RandomFog2/2PASS.
+
+Queued supplement59215 ran probe-only and exited0. Unprivileged nobody NVENC
+acquire/release probe:595.91.07, two balanced cycles, four authored zero bytes,
+status0 and unchanged reply each time. Evidence encoder-session/probe.log.
+Product candidate adds exact595.91.07 MeasuredOpaque contract only for authored
+acquire/release, bounds4 bytes, unknown versions and other GSS controls refuse.
+Published inventory imported solely from constant-inventory branch plus two
+source-tagged measurement rows; AD104 measured, no other die coverage claimed.
+Failing-first reproduces old595 ABI refusal; corrected test passes. kf-abi/host
+646 tests passed; narrowed host-only size guard retest pending. Hardware untested.
+Next: commit/push, frozen source, gates9/9+10, build and host595 fast30/30,
+then fresh Windows NVENC/clean smoke and corrected full supplemental media.
+Remaining20 broad apps and corrected/new inventory rows must still run; no parity claim.
+Supplement probe-only marker /tmp/kf-supplement-probe-only must be removed before
+relaunch; prior waiter has finished. Use fresh log/result paths, own run ranges.
+
 ## Latest checkpoint, 2026-10-11 15:04 UTC
 
 Last pushed6a42d92c. Stock580.88 canonical OceanFFT + RandomFog now2/2 PASS,

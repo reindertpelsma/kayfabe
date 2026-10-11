@@ -1,0 +1,10 @@
+ENCODER_PROBE_SOURCE=cdad9267
+/tmp/kf-encoder-session-probe: OK
+kf-host: host tier: stock
+ENC_SESSION_DRIVER=595.91.07
+ENC_SESSION cycle=0 acquire_status=0x0 reply=[00, 00, 00, 00]
+ENC_SESSION cycle=0 release_status=0x0 reply=[00, 00, 00, 00]
+ENC_SESSION cycle=1 acquire_status=0x0 reply=[00, 00, 00, 00]
+ENC_SESSION cycle=1 release_status=0x0 reply=[00, 00, 00, 00]
+ENC_SESSION_PROBE=PASS
+ENCODER_PROBE_EXIT=0 at=2026-10-11T17:11:04+02:00

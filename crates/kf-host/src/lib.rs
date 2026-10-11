@@ -926,7 +926,7 @@ impl HostRm {
             Some(HostParams::Renamed { before, after }) => {
                 (before.name, self.abi.carry_renamed(before, after))
             }
-            Some(HostParams::NoHeader { .. }) => {
+            Some(HostParams::NoHeader { .. } | HostParams::MeasuredOpaque { .. }) => {
                 eprintln!("kf-host: HOST-ABI REFUSED {what}: allocation params with no header");
                 return Err(RmError::Other(HOST_ABI_REFUSED));
             }
@@ -1152,6 +1152,22 @@ impl HostRm {
                     .map_err(|e| abi_refused(&format!("control {cmd:#010x} ({name}) reply"), &e))?;
                 payload.copy_from_slice(&back);
                 Ok(())
+            }
+            Some(kf_abi::hostabi::Carry::Same { size })
+                if payload.len() != size
+                    && kf_abi::hostabi::host_control(cmd).is_some_and(|row| {
+                        matches!(
+                            row.params,
+                            kf_abi::hostabi::HostParams::MeasuredOpaque { .. }
+                        )
+                    }) =>
+            {
+                let err = kf_abi::hostabi::HostAbiError::Size {
+                    strukt: kf_abi::hostabi::host_control(cmd).map_or("host control", |r| r.name),
+                    want: size,
+                    got: payload.len(),
+                };
+                Err(abi_refused(&format!("control {cmd:#010x}"), &err))
             }
             _ => self.raw_control_exact(object, cmd, payload),
         }

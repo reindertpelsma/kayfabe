@@ -1,0 +1,25 @@
+
+     Running tests/mean_wire.rs (/data/kf-encoder-probe-target/debug/deps/mean_wire-4f6467bb35f4c3c3)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 27 filtered out; finished in 0.00s
+
+     Running tests/oracle_layout.rs (/data/kf-encoder-probe-target/debug/deps/oracle_layout-a2e469e8fbf7437e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 23 filtered out; finished in 0.00s
+
+     Running tests/real_ga106_bodies.rs (/data/kf-encoder-probe-target/debug/deps/real_ga106_bodies-6e48a8c6bccd535d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+     Running tests/truncated_row_reads.rs (/data/kf-encoder-probe-target/debug/deps/truncated_row_reads-b8e76f74b99a69cd)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+

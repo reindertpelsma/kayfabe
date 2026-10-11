@@ -102,6 +102,8 @@ PWR power/reset/reboot, FAM multi-GPU/families, PKG packaging/signing, TST harne
 | APP-heaven_d3d11 | Heaven window survives but GPU proof is absent | TST / GFX | Run874 rc0 and ALIVE_AT45, original FAIL/no-gpu-proof; no guest recovery. No offending RM control established | [measured] candidate0f9c01f9 full-checkpoint app facts/log | Same unchanged inventory on stock580.88; sampler/harness-only explanation falsified if stock passes and fresh candidate still lacks rendering/activity | lane: unchanged success string plus measured NVIDIA GPU work | S | G15 | no |
 | APP-heaven_opengl | Heaven OpenGL exits early with GPU recovery | GFX / CHAN | Run874 exits early after29s, rc=-1073740791, original FAIL; three nvlddmkm/display event records and one GSP recovery. No offending RM control established | [measured] candidate0f9c01f9 full-checkpoint app facts/log | Fresh isolated replay compared with unchanged stock580.88; collect timestamped completion/VA/refusal evidence | lane: original45s GUI survival, NVIDIA GPU work and zero unexpected recovery | M | G10 | no |
 
+| APP-valley_d3d11 | Valley D3D11 wedges the guest supervisor | GFX / CHAN | Run875 supervisor deadline266s, original TIMEOUT; one GSP recovery and hostXid32 intr00800000/channel0x4a. Missing guest event counts do not establish zero events | [measured] candidate0f9c01f9 full-checkpoint facts and timestamped host journal; stock580.88 PASS | Fresh isolated replay with same workload; compare hardware software-method/object setup and completion, without assuming a specific offending method | lane: original45s survival plus measured NVIDIA GPU work, no unexpected recovery | M | APP-heaven_opengl | no |
+
 ### 2.2 P1: production quality, security, derive-never-capture
 
 | id | title | area | missing / symptom | evidence | approach (short) | test (oracle / lane) | eff | deps | owner? |
@@ -155,7 +157,7 @@ PWR power/reset/reboot, FAM multi-GPU/families, PKG packaging/signing, TST harne
 | L13 | NVENC session cap accounting, `0x20808165` | VID | Assumes one slot per acquire; concurrent guest + host encoders hit the host's `0x69`; `0x20808165` refused | [read] | None | n/a | S | none | no |
 | L14 | Perf work on the display and VA paths | TST | Beyond "decent" | [read] owner rule | n/a | n/a | L | H26 | no |
 
-Counts: P0 44 rows (G01-G15 plus29 APP rows), P1 29 rows (H01-H29), P2 14 rows (L01-L14); 87 in all. `APP-<name>` rows are added by the app-matrix rule.
+Counts: P0 45 rows (G01-G15 plus30 APP rows), P1 29 rows (H01-H29), P2 14 rows (L01-L14); 88 in all. `APP-<name>` rows are added by the app-matrix rule.
 
 ## 3. Detail for the top items
 

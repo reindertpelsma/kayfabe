@@ -35,6 +35,11 @@ setpriv --reuid=65534 --regid=65534 --clear-groups timeout 30 /tmp/kf-encoder-se
 probe_rc=$?
 set -e
 echo "ENCODER_PROBE_EXIT=$probe_rc at=$(date -Is)" >> "$W/codex-encoder-session-probe.log"
+# Controller may prioritize this measurement at a clean matrix checkpoint.
+if [[ -e /tmp/kf-supplement-probe-only ]]; then
+ echo "SUPPLEMENT_PROBE_ONLY_EXIT=$probe_rc at=$(date -Is)"
+ exit "$probe_rc"
+fi
 # Build complete fresh-guest media, preserving the original verified base image.
 bash "$TREE/traces/windows_matrix_20261011/supplement/build_full_media.sh" "$TREE"
 ln -s "$W/readtrace/kf3-bins/$REV" "$W/kf3-bins/$REV"
