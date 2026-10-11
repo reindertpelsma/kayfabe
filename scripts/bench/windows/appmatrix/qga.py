@@ -275,6 +275,10 @@ class Qmp:
         """Hot-plug the read-only app disk as a USB-attached SCSI CD-ROM (inbox Windows drivers; no virtio driver needed)."""
         self.cmd("blockdev-add", {"driver": "raw", "node-name": node, "read-only": True,
                                   "file": {"driver": "file", "filename": iso, "read-only": True}})
+        if not iso.lower().endswith(".iso"):
+            self.cmd("device_add", {"driver": "usb-storage", "id": bus_id, "bus": xhci_bus,
+                                    "drive": node, "removable": True})
+            return "usb-storage"
         try:
             self.cmd("device_add", {"driver": "usb-bot", "id": bus_id, "bus": xhci_bus})
             self.cmd("device_add", {"driver": "scsi-cd", "id": dev_id, "bus": bus_id + ".0", "drive": node})

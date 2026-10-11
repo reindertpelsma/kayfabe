@@ -64,8 +64,8 @@ if [ "${PASS[0]:-}" = "--list" ]; then python3 -I "$HERE/winapps.py" --run-dir "
 ISO=${ISO:-$W/appmatrix/image/kfapps.iso}
 [ -f "$ISO" ] || { say "REFUSED: no app disk at $ISO (build_appdisk.sh)"; exit 4; }
 IMGMAN=$(dirname "$ISO")/manifest.json
-if [ -f "$ISO.sha256" ] || [ -f "$(dirname "$ISO")/kfapps.iso.sha256" ]; then
-  want=$(cut -d' ' -f1 "$(dirname "$ISO")/kfapps.iso.sha256"); got=$(sha256sum "$ISO" | cut -d' ' -f1)
+if [ -f "$ISO.sha256" ]; then
+  want=$(cut -d' ' -f1 "$ISO.sha256"); got=$(sha256sum "$ISO" | cut -d' ' -f1)
   [ "$want" = "$got" ] || { say "REFUSED: $ISO sha256 $got != recorded $want"; exit 4; }
 fi
 if [ "$(pgrep -c qemu-system)" != 0 ]; then say "REFUSED: another QEMU is running (the GPU is serial)"; exit 4; fi

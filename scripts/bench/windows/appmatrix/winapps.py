@@ -317,8 +317,27 @@ class GuestSession:
             return False
         r = self.q.exec(r"C:\Windows\System32\net.exe", ["user", c.user, c.password], timeout=60)
         self.log(f"[{self.tag}] password set for {c.user} rc={r.exitcode}")
+        if r.exitcode != 0:
+            raise GuestFailure("could not set the guest account password")
+        if os.environ.get("WIN_DISABLE_MPO") == "1":
+            r = self.q.exec(PS, ["-NoProfile", "-Command", 'New-ItemProperty -Path "HKLM:\\SOFTWARE\\Microsoft\\Windows\\Dwm" -Name OverlayTestMode -Value 5 -PropertyType DWord -Force | Out-Null'], timeout=60)
+            if r.exitcode != 0:
+                raise GuestFailure("could not configure the requested DWM overlay policy")
         while self.now() - ta < c.signin_delay:
             self.sleep(1)
+        if isinstance(self.vm, BrokerVm) and c.user == "vast":
+            helper = os.path.join(HERE, "..", "signin.py")
+            self.q.close()  # QGA accepts one client; signin.py verifies through its own connection.
+            for attempt in (1, 2, 3):
+                r = subprocess.run([sys.executable, helper,
+                                    os.path.join(self.vm.run_dir(), "qmp.sock"), self.vm.qga_path()],
+                                   env=dict(os.environ, KF_GUEST_PW=c.password),
+                                   capture_output=True, text=True, timeout=180)
+                self.log(f"[{self.tag}] verified sign-in attempt={attempt} rc={r.returncode}")
+                if r.returncode == 0:
+                    return self._wait_session(soft=True)
+                self.sleep(10)
+            return False
         for attempt in (1, 2, 3):
             self.vm.screendump(os.path.join(self.dir, f"pre-signin-{attempt}.png"))
             self.log(f"[{self.tag}] sign-in keystrokes (attempt {attempt}) as {c.user}")

@@ -70,5 +70,17 @@ class QgaAgainstMock(unittest.TestCase):
             self.assertIn(b"IHDR", png)
 
 
+class AppDiskTransport(unittest.TestCase):
+    def test_exfat_uses_mass_storage_without_trying_a_cdrom(self):
+        from unittest.mock import Mock
+        q = object.__new__(qga.Qmp)
+        q.cmd = Mock()
+        self.assertEqual(q.attach_cdrom("/images/kfapps_exfat.img"), "usb-storage")
+        calls = q.cmd.call_args_list
+        self.assertTrue(calls[0].args[1]["read-only"])
+        self.assertEqual(calls[1].args[1]["driver"], "usb-storage")
+        self.assertEqual(len(calls), 2)
+
+
 if __name__ == "__main__":
     unittest.main()
