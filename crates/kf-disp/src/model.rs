@@ -501,8 +501,6 @@ pub struct DisplayModel {
     /// derivation needs is missing from the class table or the layouts (the clean mode "no optional
     /// capability", what the model answered before the caps were derived).
     pub caps_unverified: u64,
-    /// The display caps class (`NVC773_DISP_CAPABILITIES` on Ada): the class table's key for the
-    /// engine facts.
     /// The one-time log line for the first such refusal; drained by [`Self::take_notice`].
     notice: Option<String>,
     /// Every display control answered (the first 512), for the log.
