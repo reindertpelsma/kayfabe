@@ -5,6 +5,34 @@ again after the Wednesday 07:00 reset). Read `AGENTS.md` (= `CLAUDE.md`) first: 
 (state, branches, traps), `docs/DELEGATED_DECISIONS_20261010.md`, `docs/OWNER_RULINGS.md` §AB-§AE, `docs/design/V3_FEATURE_GAPS.md`
 (priorities: P0 = prevents apps running; fidelity and perf beyond "decent" are post-release), `docs/design/V3_NOT_IN_GIT.md`.
 
+## Latest checkpoint, 2026-10-11 16:27 UTC
+
+Last pushed product `72741e2b` (KERNEL+UVM_OWNED routing correction); hardware
+verification PENDING. kf-rm + kf-qemu898 GPU-free tests PASS. Do not transfer
+old a61af1c3 hardware claims to this new product revision.
+
+Fresh isolated old-product managed1261 TIMEOUT181s at allocation, zero guest
+reset/GSP cycles, host Xid32 at16:15:17UTC. Faulting host0x10053 corresponds to
+KERNEL+UVM_OWNED guest copy channel classified as passthrough user work; public
+CE launch data0x3185 names physical source and destination. Correction keeps
+kernel UVM work on authored translation at birth; UVM flag alone is not privilege.
+Evidence and source/inference separation: encoder-session/managed-fresh/.
+
+Old diagnostics70226 continue startup/unchanged stream1262, then native video
+release/trap probes. Old remaining waiter70754 will correctly refuse its zero-Xid
+precondition after the isolated managed fault. New campaign64289 queued under
+the GPU lock: exact72741e2b Linux gates/build/fast, fresh managed+gears/vector/CUP8
+focus1320+, then remaining apps1270..1319 only if focus is clean. It audits the
+one identified old managed Xid explicitly and requires native probes to pass;
+any unidentified old fault or new regression stops it. Runners are saved in
+managed-routing/. No host build while Windows work is timing.
+
+Matching stock580.88 remaining15 FINISHED15/15 PASS, zero guest reset/WER
+records, native GSP cycles unmeasured. Evidence reference-remaining/. Fresh stock
+50-row reference is now active4292, log/tmp/kf-native-rest-reference.log.
+Canonical candidate counts remain68 clean/84 tested,53/65 Linux counterparts;
+20 candidate rows pending. No master/integration changes or full-green claim.
+
 ## Latest checkpoint, 2026-10-11 16:14 UTC
 
 Last confirmed GitHub push: `c00f6cb7` on `codex/windows-matrix-20261011`.

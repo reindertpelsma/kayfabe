@@ -1,0 +1,13 @@
+=== llama_cuda_bench start=2026-10-11T08:44:19.1954422-07:00 host=DESKTOP-JR70RMQ session=0 boot=2026-10-11T14:31:59.5000000Z timeout=900
+ggml_cuda_init: found 1 CUDA devices (Total VRAM: 24563 MiB):
+  Device 0: NVIDIA GeForce RTX 4090, compute capability 8.9, VMM: yes, VRAM: 24563 MiB
+load_backend: loaded CUDA backend from C:\kfapps\llama_cuda\ggml-cuda.dll
+load_backend: loaded RPC backend from C:\kfapps\llama_cuda\ggml-rpc.dll
+load_backend: loaded CPU backend from C:\kfapps\llama_cuda\ggml-cpu-haswell.dll
+| model                          |       size |     params | backend    | ngl |            test |                  t/s |
+| ------------------------------ | ---------: | ---------: | ---------- | --: | --------------: | -------------------: |
+| qwen2 1.5B Q4_K - Medium       |   1.04 GiB |     1.78 B | CUDA       |  99 |           pp512 |   21266.99 Â± 3529.56 |
+| qwen2 1.5B Q4_K - Medium       |   1.04 GiB |     1.78 B | CUDA       |  99 |            tg64 |       301.94 Â± 16.48 |
+
+build: f2918cabb (11541)
+=== end rc=0 secs=6 2026-10-11T08:44:25.5965483-07:00

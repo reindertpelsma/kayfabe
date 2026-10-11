@@ -1,0 +1,8 @@
+=== blender_cycles start=2026-10-11T08:46:21.4933008-07:00 host=DESKTOP-JR70RMQ session=0 boot=2026-10-11T14:31:59.5000000Z timeout=900
+Fra:1 Mem:51.03M (Peak 66.85M) | Time:00:01.18 | Mem:1039.15M, Peak:1039.15M | Scene, ViewLayer | Finished
+Saved: 'C:\kf\out\blender_cycles\blender_CUDA.png'
+BLENDER_OK CUDA gpu=NVIDIA GeForce RTX 4090 mean=0.6405
+Fra:1 Mem:49.83M (Peak 65.65M) | Time:00:03.38 | Mem:1039.02M, Peak:1039.02M | Scene, ViewLayer | Finished
+Saved: 'C:\kf\out\blender_cycles\blender_OPTIX.png'
+BLENDER_OK OPTIX gpu=NVIDIA GeForce RTX 4090 mean=0.6405
+=== end rc=0 secs=20 2026-10-11T08:46:41.4059279-07:00
