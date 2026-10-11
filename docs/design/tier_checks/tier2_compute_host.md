@@ -106,4 +106,4 @@ Rows that fail Q1 but pass Q2 are **not** sweep candidates; tier 2 answers them 
 2. **Then the s4.1 spike** for the module-dependent list; its falsifier decides whether the conditional RE list in s7 is real.
 3. **Tier-2 wiring candidates** that need no new measurement: `0x730101` caps (best display candidate), `0x730102 flags=0`, public GR/CE equivalents for the INTERNAL controls, class-list membership rule for `0x20800aaf`.
 4. **Fix list from s3**: GMMU sizes (item 2), 5070 caps (item 3), `0x20809064` request dependence (item 4), connector-table tail (item 1, a documentation fix to the inventory).
-5. The GSS-legacy family (25 rows) is the largest tier-2 win but is gated by a per-tenant telemetry policy and one measured forward at 595.91.07.
+5. The GSS-legacy family (26 rows) is the largest tier-2 win but is gated by a per-tenant telemetry policy and one measured forward at 595.91.07.
