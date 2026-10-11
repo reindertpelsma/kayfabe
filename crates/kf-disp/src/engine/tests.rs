@@ -973,6 +973,86 @@ fn a_running_head_lights_the_sor_that_names_it() {
     assert_eq!(e.lit_sors(), vec![None; 4], "detached");
 }
 
+/// A head's full CEA mode as NVKMS programs it: raster size (totals), blank end/start (the visible
+/// area lies between them) and the pixel clock.
+fn full_mode(r: &mut Ring, head: u32, t: &crate::edid::Timing) {
+    let xy = |x: &str, y: &str, vx: u32, vy: u32| put(put(0, fl(CORE, x), vx), fl(CORE, y), vy);
+    r.m(
+        ma(CORE, "HEAD_SET_RASTER_SIZE", head),
+        xy(
+            "HEAD_SET_RASTER_SIZE_WIDTH",
+            "HEAD_SET_RASTER_SIZE_HEIGHT",
+            t.h_total(),
+            t.v_total(),
+        ),
+    );
+    let (bex, bey) = (t.h_sync + t.h_back - 1, t.v_sync + t.v_back - 1);
+    r.m(
+        ma(CORE, "HEAD_SET_RASTER_BLANK_END", head),
+        xy("HEAD_SET_RASTER_BLANK_END_X", "HEAD_SET_RASTER_BLANK_END_Y", bex, bey),
+    );
+    r.m(
+        ma(CORE, "HEAD_SET_RASTER_BLANK_START", head),
+        xy(
+            "HEAD_SET_RASTER_BLANK_START_X",
+            "HEAD_SET_RASTER_BLANK_START_Y",
+            bex + t.h_active,
+            bey + t.v_active,
+        ),
+    );
+    r.m(
+        ma(CORE, "HEAD_SET_PIXEL_CLOCK_FREQUENCY", head),
+        t.pixel_khz * 1000,
+    );
+}
+
+/// ★ `0x73011a`'s source: after the UPDATE the head reports the mode the guest programmed, the visible
+/// raster from the blank interval and the totals from the raster size (1080p60 and 720p60), and a
+/// head with no raster reports none.
+#[test]
+fn an_armed_head_reports_its_programmed_mode() {
+    use crate::ports::HeadTiming;
+    let mut e = engine();
+    e.alloc(ChannelKind::Core, 0, CLIENT, 1, pb(), 0);
+    assert_eq!(e.head_timings(), vec![None; 4], "nothing at boot");
+    let t1080 = crate::edid::Timing::cea_1080p60();
+    let t720 = crate::edid::Timing {
+        h_active: 1280,
+        h_front: 110,
+        h_sync: 40,
+        h_back: 220,
+        v_active: 720,
+        v_front: 5,
+        v_sync: 5,
+        v_back: 20,
+        pixel_khz: 74_250,
+        h_pos: true,
+        v_pos: true,
+    };
+    let mut c = Ring::new();
+    full_mode(&mut c, 2, &t1080);
+    full_mode(&mut c, 0, &t720);
+    c.m(m(CORE, "UPDATE"), 0);
+    e.step(0, &c.bytes(), c.put(), &mut all_ok);
+    assert_eq!(
+        e.head_timings(),
+        vec![
+            Some(HeadTiming {
+                active: (1280, 720),
+                total: (1650, 750),
+                pclk_hz: 74_250_000
+            }),
+            None,
+            Some(HeadTiming {
+                active: (1920, 1080),
+                total: (2200, 1125),
+                pclk_hz: 148_500_000
+            }),
+            None
+        ]
+    );
+}
+
 /// ★ M3: a head shows EVERY enabled window it owns, back to front by `DEPTH` (smaller is closer to
 /// the front), each where its window-immediate `SET_POINT_OUT` puts it, inside the head's
 /// `VIEWPORT_SIZE_IN` — weston puts its clients on the overlay window

@@ -32,6 +32,7 @@
 //! that is not allocated. Nothing here sizes an allocation from a guest value.
 
 use crate::class::{ClassTable, get as fld};
+use crate::ports::HeadTiming;
 use crate::model::{ChannelKind, Classes};
 use crate::pushbuf::{self, DecodeError, Located};
 use crate::regs::Regs;
@@ -198,6 +199,10 @@ pub struct Vocab {
     c_raster_size: (u32, u32),
     c_raster_w: (u8, u8),
     c_raster_h: (u8, u8),
+    c_blank_end: (u32, u32),
+    c_blank_start: (u32, u32),
+    c_blank_x: (u8, u8),
+    c_blank_y: (u8, u8),
     c_sor_control: (u32, u32),
     c_sor_owner: (u8, u8),
     c_ilk_cursor0: (u8, u8),
@@ -306,6 +311,11 @@ impl Vocab {
             c_raster_size: arr(core, "HEAD_SET_RASTER_SIZE")?,
             c_raster_w: f(core, "HEAD_SET_RASTER_SIZE_WIDTH")?,
             c_raster_h: f(core, "HEAD_SET_RASTER_SIZE_HEIGHT")?,
+            c_blank_end: arr(core, "HEAD_SET_RASTER_BLANK_END")?,
+            c_blank_start: arr(core, "HEAD_SET_RASTER_BLANK_START")?,
+            // the END and START words share one layout (X in 14:0, Y in 30:16)
+            c_blank_x: f(core, "HEAD_SET_RASTER_BLANK_END_X")?,
+            c_blank_y: f(core, "HEAD_SET_RASTER_BLANK_END_Y")?,
             c_sor_control: arr(core, "SOR_SET_CONTROL")?,
             c_sor_owner: f(core, "SOR_SET_CONTROL_OWNER_MASK")?,
             c_ilk_cursor0: fa0(core, "SET_INTERLOCK_FLAGS_INTERLOCK_WITH_CURSOR")?,
@@ -1616,6 +1626,38 @@ impl Engine {
 }
 
 impl Engine {
+    /// ★ Per head, the ARMED mode while its raster runs (`None` when it does not): the visible raster
+    /// (`BLANK_START - BLANK_END` per axis: the blanking interval ends where the active region
+    /// begins and starts where it ends), the full raster (`HEAD_SET_RASTER_SIZE`) and the pixel
+    /// clock — what the physical-RM control `0x73011a` reports. Derived from the core channel's
+    /// armed words only.
+    #[must_use]
+    pub fn head_timings(&self) -> Vec<Option<HeadTiming>> {
+        let v = &self.vocab;
+        let modes = self.heads_armed();
+        (0..self.heads)
+            .map(|h| {
+                let core = self.chans[0].as_ref()?;
+                let m = modes.iter().find(|m| m.head == h && m.period_ns > 0)?;
+                let pclk = core.armed(v.c_pclk.0 + h * v.c_pclk.1);
+                let mut hz = u64::from(fld(pclk, v.c_pclk_hz));
+                if fld(pclk, v.c_pclk_adj) == 1 {
+                    hz = hz * 1000 / 1001;
+                }
+                let be = core.armed(v.c_blank_end.0 + h * v.c_blank_end.1);
+                let bs = core.armed(v.c_blank_start.0 + h * v.c_blank_start.1);
+                Some(HeadTiming {
+                    active: (
+                        fld(bs, v.c_blank_x).saturating_sub(fld(be, v.c_blank_x)),
+                        fld(bs, v.c_blank_y).saturating_sub(fld(be, v.c_blank_y)),
+                    ),
+                    total: m.raster,
+                    pclk_hz: hz,
+                })
+            })
+            .collect()
+    }
+
     /// ★ Per head, the SOR it lights: the lowest SOR whose ARMED `SOR_SET_CONTROL.OWNER_MASK` names
     /// the head, while the head's raster runs — what `NV0073_CTRL_CMD_SYSTEM_GET_ACTIVE` reports
     /// (as the connector on that SOR). `None` for an idle head or one no SOR drives.

@@ -33,6 +33,19 @@ pub const NV_ERR_INVALID_ARGUMENT: u32 = 0x1f;
 /// `NV_ERR_INVALID_OBJECT` — a channel query for a channel that does not exist.
 pub const NV_ERR_INVALID_OBJECT: u32 = 0x31;
 
+/// ★ `NV0073` display-common SYSTEM control `0x73011a` (2026-10-11): reports a display's CURRENT mode.
+/// ⊘ Not in the open ogkm headers (`ctrl0073system.h` has `GET_SRM_STATUS 0x730119` and
+/// `HDCP_REVOCATION_CHECK 0x73011b`, nothing between), so the id and the layout are `[observed on
+/// the real GPU (VFIO reference, RTX 4070, Windows 580.88, 2026-10-11)]`, 5 of 5 calls, never
+/// captured bytes: `NV_OK`, 28 bytes of params = 7 little-endian `u32` words, request
+/// `[displayId, 0, 0, 0, 0, 0, 0]`, reply `[displayId, w, h, total_w, total_h, 0, refresh_hz]`.
+/// The reply follows the head's current mode (observed at 1920x1080 and 1280x720, both 60 Hz).
+/// The FIELD MEANINGS are inferred from those values (1920/1080 and 2200/1125, 1280/720 and
+/// 1650/750 are the CEA-861 totals); no header defines them.
+pub const GET_DISPLAY_MODE: u32 = 0x0073_011a;
+/// The size of [`GET_DISPLAY_MODE`]'s params: seven `u32` words (observed).
+pub const GET_DISPLAY_MODE_SIZE: usize = 28;
+
 /// `NV2080_CTRL_CMD_INTERNAL_DISPLAY_GET_STATIC_INFO`.
 pub const GET_STATIC_INFO: u32 = 0x2080_0a01;
 /// `NV2080_CTRL_CMD_INTERNAL_DISPLAY_WRITE_INST_MEM`.
@@ -74,6 +87,7 @@ pub const MAX_STATEMENTS: usize = 1024;
 /// The subdevice-internal display controls (`ctrl2080internal.h`) and the kind of answer each gets.
 const INTERNAL_CONTROLS: &[(u32, &str)] = &[
     (GET_IP_VERSION, "ip_version"),
+    (GET_DISPLAY_MODE, "display_mode"),
     (GET_STATIC_INFO, "static_info"),
     (INIT_BRIGHTC_STATE_LOAD, "echo"),
     (SET_STATIC_EDID_DATA, "echo"),
@@ -1030,6 +1044,43 @@ impl DisplayModel {
                 }
                 Ok(p.buf)
             }
+            "display_mode" => {
+                // ⊘ Hostile guest: exactly the observed 28-byte shape; the display id must be one
+                // connector of this device (the status `OR_GET_INFO` and `GET_EDID_V2` give an id we
+                // do not have: the real GPU's answer for an unknown id was not captured).
+                if params.len() != GET_DISPLAY_MODE_SIZE {
+                    return Err(NV_ERR_INVALID_ARGUMENT);
+                }
+                let id = u32::from_le_bytes(params[0..4].try_into().unwrap_or([0; 4]));
+                let c = self.connector(id).ok_or(NV_ERR_INVALID_ARGUMENT)?;
+                // the head the display's SOR is lit by, from the ARMED state; its mode is the one
+                // the guest programmed. A display no head lights (never modeset) answers with the
+                // monitor's authored preferred mode, the one its EDID advertises ([inferred]: the
+                // real GPU's answer for an unlit display was not captured).
+                let lit = (0..crate::ports::MAX_HEADS)
+                    .find(|h| self.ports.lit_sor(*h) == Some(c.or_index))
+                    .and_then(|h| self.ports.head_timing(h));
+                let t = lit.unwrap_or_else(|| {
+                    let t = &c.monitor.preferred;
+                    crate::ports::HeadTiming {
+                        active: (t.h_active, t.v_active),
+                        total: (t.h_total(), t.v_total()),
+                        pclk_hz: u64::from(t.pixel_khz) * 1000,
+                    }
+                });
+                // refresh in whole Hz: round to nearest ([inferred]: only 60.00 Hz was observed)
+                let hz = t.refresh_mhz().map_or(0, |mhz| (mhz + 500) / 1000);
+                let words = [
+                    id,
+                    t.active.0,
+                    t.active.1,
+                    t.total.0,
+                    t.total.1,
+                    0,
+                    u32::try_from(hz).unwrap_or(u32::MAX),
+                ];
+                Ok(words.iter().flat_map(|w| w.to_le_bytes()).collect())
+            }
             "caps0073" => {
                 let mut p = self.view("NV0073_CTRL_SYSTEM_GET_CAPS_V2_PARAMS", params)?;
                 p.set_bytes("capsTbl", &[]); // no crossbar, no MIO power quirk, no ACR bug
@@ -1751,6 +1802,77 @@ mod tests {
         assert!(!m.display_sw_offered(), "refused by default");
     }
 
+    /// ★ `0x73011a` (the OpenGL ICD's mode query), observed on the real RTX 4070 (VFIO reference,
+    /// 2026-10-11): 28 bytes, the display id echoed, the head's CURRENT mode (visible, total),
+    /// 0, refresh in Hz. The vectors are the observed layouts for 1920x1080@60 and 1280x720@60; the
+    /// numbers come from the head's armed mode (published by the worker), not from a table.
+    #[test]
+    fn display_mode_follows_the_heads_armed_mode_in_the_observed_layout() {
+        use crate::ports::HeadTiming;
+        let mut m = model();
+        let words = |r: &[u8]| -> Vec<u32> {
+            r.chunks(4)
+                .map(|c| u32::from_le_bytes(c.try_into().unwrap()))
+                .collect()
+        };
+        let ask = |m: &mut DisplayModel, id: u32| {
+            let mut q = vec![0u8; GET_DISPLAY_MODE_SIZE];
+            q[0..4].copy_from_slice(&id.to_le_bytes());
+            m.control(GET_DISPLAY_MODE, &q)
+        };
+        assert!(m.claims(GET_DISPLAY_MODE) && m.claimed().contains(&GET_DISPLAY_MODE));
+        // head 0 lights SOR 0 (connector 0, display id 0x100), 1920x1080@60
+        m.ports.set_lit_sor(0, Some(0));
+        m.ports.set_head_timing(
+            0,
+            Some(HeadTiming {
+                active: (1920, 1080),
+                total: (2200, 1125),
+                pclk_hz: 148_500_000,
+            }),
+        );
+        let r = ask(&mut m, 0x100).unwrap().unwrap();
+        assert_eq!(r.len(), 28);
+        assert_eq!(words(&r), [0x100, 0x780, 0x438, 0x898, 0x465, 0, 0x3c]);
+        // the guest changes the mode to 1280x720@60: the answer follows
+        m.ports.set_head_timing(
+            0,
+            Some(HeadTiming {
+                active: (1280, 720),
+                total: (1650, 750),
+                pclk_hz: 74_250_000,
+            }),
+        );
+        let r = ask(&mut m, 0x100).unwrap().unwrap();
+        assert_eq!(words(&r), [0x100, 0x500, 0x2d0, 0x672, 0x2ee, 0, 0x3c]);
+        // the 1000/1001 clock (59.94 Hz) rounds to whole Hz [inferred]
+        m.ports.set_head_timing(
+            0,
+            Some(HeadTiming {
+                active: (1920, 1080),
+                total: (2200, 1125),
+                pclk_hz: 148_351_648,
+            }),
+        );
+        assert_eq!(words(&ask(&mut m, 0x100).unwrap().unwrap())[6], 60);
+        // a head that is idle: the monitor's authored preferred mode (1080p60), the id still echoed
+        m.ports.set_lit_sor(0, None);
+        m.ports.set_head_timing(0, None);
+        let r = ask(&mut m, 0x100).unwrap().unwrap();
+        assert_eq!(words(&r), [0x100, 0x780, 0x438, 0x898, 0x465, 0, 0x3c]);
+        // hostile guest: wrong sizes, an id we do not have, several ids, id 0
+        for bad in [0x200, 0x300, 0, u32::MAX] {
+            assert_eq!(ask(&mut m, bad), Some(Err(NV_ERR_INVALID_ARGUMENT)), "{bad:#x}");
+        }
+        for n in [0usize, 4, 27, 29, 4096] {
+            assert_eq!(
+                m.control(GET_DISPLAY_MODE, &vec![0; n]),
+                Some(Err(NV_ERR_INVALID_ARGUMENT)),
+                "{n} bytes"
+            );
+        }
+    }
+
     /// ★ EXPERIMENT `x11-dispsw`: offered, the display-SW constructor's query is answered with the
     /// displays the ARMED state lights and the head count (m3c's answer); withdrawn, it is refused
     /// again — the switch changes this one control and nothing else the model claims.
@@ -2027,7 +2149,8 @@ mod tests {
         // 41 → 42 on 2026-10-07: NV0073_CTRL_CMD_EVENT_SET_NOTIFICATION (Windows StartDevice).
         // 42 → 47 the same day (Windows run29): IMP_SET_GET_PARAMETER, SYSTEM_GET_HOTPLUG_STATE,
         // INTERNAL_DISPLAY_ACPI_SUBSYSTEM_ACTIVATED and INTERNAL_DISPLAY_PRE/POST_MODESET.
-        assert_eq!(set.len(), 47);
+        // 47 → 48 on 2026-10-11: NV0073 `0x73011a` (the display's current mode, GL ICD; observed id).
+        assert_eq!(set.len(), 48);
         let distinct: std::collections::BTreeSet<u32> = set.iter().copied().collect();
         assert_eq!(distinct.len(), set.len(), "no id twice");
         assert!(set.iter().all(|c| m.claims(*c)));

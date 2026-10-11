@@ -127,6 +127,39 @@ impl PutLog {
     }
 }
 
+/// ★ A head's ARMED mode, as the worker publishes it for the physical-RM controls that report it
+/// (`0x73011a`): the visible raster, the full raster with blanking, and the pixel clock. All three
+/// are read from the core channel's armed words (`HEAD_SET_RASTER_SIZE`, `HEAD_SET_RASTER_BLANK_END`
+/// / `_START`, `HEAD_SET_PIXEL_CLOCK_FREQUENCY`), never stored separately.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HeadTiming {
+    /// Visible width and height (`BLANK_START - BLANK_END`, per axis).
+    pub active: (u32, u32),
+    /// Full raster width and height, blanking included (`HEAD_SET_RASTER_SIZE`).
+    pub total: (u32, u32),
+    /// The pixel clock in Hz (with the 1000/1001 adjust applied).
+    pub pclk_hz: u64,
+}
+
+impl HeadTiming {
+    /// Refresh rate in millihertz: pixel clock over the full raster. `None` for an empty raster.
+    #[must_use]
+    pub fn refresh_mhz(&self) -> Option<u64> {
+        let tot = u64::from(self.total.0).checked_mul(u64::from(self.total.1))?;
+        self.pclk_hz.checked_mul(1000)?.checked_div(tot)
+    }
+}
+
+/// One head's published [`HeadTiming`]: a sequence lock over two words (one writer, the display
+/// worker; readers never block and never see two modes mixed).
+#[derive(Debug, Default)]
+struct TimingSlot {
+    seq: AtomicU32,
+    /// `active.w | active.h << 16 | total.w << 32 | total.h << 48`; 0 = no mode.
+    sizes: AtomicU64,
+    pclk_hz: AtomicU64,
+}
+
 /// ★ The shared ports.
 #[derive(Debug)]
 pub struct Ports {
@@ -146,6 +179,8 @@ pub struct Ports {
     /// Per head: the SOR it lights, plus one (0 = none) — the worker publishes it from the ARMED core
     /// state, the model's `SYSTEM_GET_ACTIVE` answers from it.
     lit_sor: [AtomicU32; MAX_HEADS],
+    /// Per head: the ARMED mode while the head's raster runs ([`HeadTiming`]).
+    timing: [TimingSlot; MAX_HEADS],
     /// PUT writes posted by vCPUs (boot-log counter).
     pub puts_posted: AtomicU64,
     /// The PUT writes in arrival order (see [`PutLog`]).
@@ -165,6 +200,7 @@ impl Default for Ports {
             head_timing_en: core::array::from_fn(|_| AtomicU32::new(0)),
             frames: core::array::from_fn(|_| AtomicU32::new(0)),
             lit_sor: core::array::from_fn(|_| AtomicU32::new(0)),
+            timing: core::array::from_fn(|_| TimingSlot::default()),
             puts_posted: AtomicU64::new(0),
             put_log: PutLog::default(),
             w1c_writes: AtomicU64::new(0),
@@ -188,6 +224,52 @@ impl Ports {
             .map(|a| a.load(Ordering::Acquire))
             .filter(|v| *v != 0)
             .map(|v| v - 1)
+    }
+
+    /// ★ **Worker** (the only writer): publish head `h`'s armed mode (`None` = the raster is not
+    /// running). A dimension past 16 bits (the hardware fields are 15 wide) publishes no mode.
+    pub fn set_head_timing(&self, h: usize, t: Option<HeadTiming>) {
+        let Some(slot) = self.timing.get(h) else {
+            return;
+        };
+        let packed = t.and_then(|t| {
+            let w = |v: u32| u16::try_from(v).ok().map(u64::from);
+            let sizes =
+                w(t.active.0)? | w(t.active.1)? << 16 | w(t.total.0)? << 32 | w(t.total.1)? << 48;
+            (sizes != 0).then_some((sizes, t.pclk_hz))
+        });
+        let (sizes, pclk) = packed.unwrap_or((0, 0));
+        // odd = being written
+        slot.seq.fetch_add(1, Ordering::AcqRel);
+        slot.sizes.store(sizes, Ordering::Release);
+        slot.pclk_hz.store(pclk, Ordering::Release);
+        slot.seq.fetch_add(1, Ordering::Release);
+    }
+
+    /// Head `h`'s armed mode, if its raster runs (`0x73011a`). Never blocks: a read that keeps
+    /// colliding with a publication gives up and reports no mode.
+    #[must_use]
+    pub fn head_timing(&self, h: usize) -> Option<HeadTiming> {
+        let slot = self.timing.get(h)?;
+        for _ in 0..8 {
+            let s1 = slot.seq.load(Ordering::Acquire);
+            if s1 % 2 == 1 {
+                core::hint::spin_loop();
+                continue;
+            }
+            let sizes = slot.sizes.load(Ordering::Acquire);
+            let pclk_hz = slot.pclk_hz.load(Ordering::Acquire);
+            if slot.seq.load(Ordering::Acquire) != s1 {
+                continue;
+            }
+            let f = |sh: u32| ((sizes >> sh) & 0xffff) as u32;
+            return (sizes != 0).then(|| HeadTiming {
+                active: (f(0), f(16)),
+                total: (f(32), f(48)),
+                pclk_hz,
+            });
+        }
+        None
     }
 
     fn chan(&self, chn: u32) -> Option<&ChanPort> {

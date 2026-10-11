@@ -1341,7 +1341,8 @@ mod tests {
             claimed.len(),
             // +1 on 2026-10-07: NV0073 EVENT_SET_NOTIFICATION; +5 the same day (Windows run29):
             // IMP_SET_GET_PARAMETER, SYSTEM_GET_HOTPLUG_STATE, ACPI_SUBSYSTEM_ACTIVATED, PRE/POST_MODESET
-            41 + 6,
+            // +1 on 2026-10-11: NV0073 0x73011a (the display's current mode)
+            41 + 6 + 1,
             "the NVKMS bring-up set (with the console pair, the display-SW object's query, the \
              internal hotplug state and SET_RMFREE_FLAGS) and the six internal controls"
         );

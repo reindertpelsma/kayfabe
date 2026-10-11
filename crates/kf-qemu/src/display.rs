@@ -3073,6 +3073,10 @@ impl Device {
                         for (h, sor) in engine.lit_sors().into_iter().enumerate() {
                             dp.ports.set_lit_sor(h, sor);
                         }
+                        // and its armed mode (`0x73011a`)
+                        for (h, t) in engine.head_timings().into_iter().enumerate() {
+                            dp.ports.set_head_timing(h, t);
+                        }
                     }
                     Effect::Notify {
                         chn,
