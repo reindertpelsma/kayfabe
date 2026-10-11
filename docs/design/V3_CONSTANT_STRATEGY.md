@@ -119,3 +119,18 @@ Rows whose reply depends on a lit head or a monitor, on a die we can reach only 
 from any die of the same display IP version that has a head) -> forced-connector measurement (§4 step 3b) -> contributor measurement on a machine with a monitor -> clean fallback
 for the die -> reverse engineering only for an unreachable display IP version (§4 step 4). The owner's machines with display: RTX 4070, RTX 3050 (desktop; GA106 8 GB or GA107 6 GB,
 to be confirmed), RTX 3050 laptop (whether its dGPU drives a head is to be confirmed; a MUXless laptop is a headless reference); the owner may have a Turing card and can get one Blackwell.
+
+## 10. Coverage must not wait on others, and iteration needs access (owner, 2026-10-11)
+
+- **Community contributions are the long tail, never the critical path** (slow, and a barrier to adoption). Launch coverage is proactive: a market-chosen set of dies (about the top 20 across
+  RTX 30/40/50 consumer and workstation RTX A/Ada) through the Vast sweep, the owner's display machines, forced-connector measurement and the nested acceptance run (§8); reverse
+  engineering (§4 step 4) for the residue of that set; every other die gets the clean fallback.
+- **The fallback must be a tested, working mode**, not only a defined one: run the acceptance layer with the fallback answers (HEAD already claims none of the optional display feature bits,
+  commit `b88f2f60`); if it passes, an unmeasured die works with fewer optional features and contributions only add fidelity. This is the number to get before stating launch criteria.
+- **Iterate on access, not logs** (owner: "I can't iterate on failures, so ssh to a host is infinitely more valuable than three log files"). A failure we can reproduce over ssh on a rental is fixed in a loop;
+  a log file from a user is not. So rentals are the primary source, and where a die can only be reached through a volunteer, the measurement tool emits a **replayable capture** (requests, replies and the state they
+  depended on, board data stripped) that becomes a GPU-free regression test, so iteration continues offline. A time-limited ssh session to a volunteer machine is better still, if a volunteer offers one.
+- **Measure at install** when a measurement needs only a root RM client (no kernel module): once per user machine, cached locally. Depends on the raw-GSP spike (§4 step 1).
+- **Vast reach, measured 2026-10-11 (one snapshot; offers change):** 29 rentable VM-capable offers (`vms_enabled=true`), 11 distinct GPU models: RTX 4090 (7), RTX 5090 (4), RTX PRO 5000 (3), RTX 3070 (3),
+  RTX 3060 (3), RTX 6000D (2), RTX 3080 (2), RTX A4000 (2), RTX 5070 Ti (1), RTX 3090 Ti (1), Tesla P100 (1). That is Ampere, Ada, Blackwell consumer and workstation and one Pascal datacenter card, and no Turing at this moment.
+  Re-query before each sweep; the sweep tool should record which models were reachable and when.
