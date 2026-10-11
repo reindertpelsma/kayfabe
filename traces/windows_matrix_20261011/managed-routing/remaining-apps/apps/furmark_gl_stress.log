@@ -1,0 +1,3 @@
+=== furmark_gl_stress start=2026-10-11T17:24:07.4113155+00:00 host=VASTWIN session=1 boot=2026-10-11T17:19:23.5000000Z timeout=180
+KFWAIT furmark_gl_stress EXITED rc=0
+=== end rc=0 secs=65 2026-10-11T17:25:12.3249168+00:00

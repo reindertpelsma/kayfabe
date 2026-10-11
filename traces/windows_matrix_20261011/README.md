@@ -3,6 +3,24 @@
 **STATUS: LIVE, 2026-10-11.** Product candidate `2c917f3e`, following the
 OpenGL gears fix. Results are pending; this is not a matrix pass claim.
 
+## Latest checkpoint, 2026-10-11 17:30 UTC
+
+Last confirmed push b56d6828. Candidate89/104 executed:71 cleanPASS,
+8PASS_WITH_RECOVERY,5FAIL,5TIMEOUT;15pending. Linux counterpart parity54/65.
+New torch_burn PASS117s, actual GPU stress/readback with zero errors and no
+recorded guest recovery; llama_cuda_gen also clean. FurMarkstress rc0/65s and
+visible NVIDIA rendering but FAIL/no sampled proof; original result retained.
+Bench0c5fa450 adds public unique logfile suffix and bounded fresh renderer-log
+collection, keeps all app/oracle budgets and thresholds. Existing75 tests pass;
+generated-doc staleness corrected and all11 inventory/document tests pass.
+Hardware result pending, queue3557/run1370+, product72741e2b unchanged.
+
+Coverage63669 continues new rows, then longCUDAclpeak1310. Other queued jobs:
+native video events71386, corrected stream43616/run1350+, nbody snapshot92370/
+1360+, new FurMark log collection3557/1370+. Single GPU lock, no extra QGAclient.
+Host169GiB free; own stopped overlays reclaimed after baseline check. Reference
+complete103/104 and backed up, own Vast retired. No complete parity claim.
+
 ## Latest checkpoint, 2026-10-11 17:25 UTC
 
 Last confirmed push d4f9aa47. Candidate now87/104 executed:70 cleanPASS,

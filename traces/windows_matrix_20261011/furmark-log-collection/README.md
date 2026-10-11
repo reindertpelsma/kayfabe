@@ -7,3 +7,5 @@ The old collector chooses the first root *.log. It does not establish that this 
 Primary artifact: pinned FurMark_2.10.2_win64.zip from manifest.json, SHA25627ab2e723e2e65df720bcafea681d2104744eda4a1e0a0374d7e61eaa820e63b. Its help.txt documents the logfile-suffix option; it was inspected as text on the controller, no executable run. No binary analysis.
 
 Validation: existing76-test suite had75PASS and one generated-document staleness failure. Regenerated documentation, then all11 inventory/document testsPASS, including generated app-script parsing. Product unchanged; no new product hardware claim.
+
+Frozen bench source0c5fa450, product72741e2b. Candidate queued3557 after existing jobs, own1370..1374, original stress oracle, logfile naming/collection only. Runner and post-guest cleanup saved alongside.

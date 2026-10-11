@@ -47,3 +47,17 @@ IOMMU_SWITCH_END type=identity 2026-10-11T19:19:17+02:00
 2026-10-11T17:22:27Z [g2] staged qwen_gguf (copy, 6s)
 2026-10-11T17:24:02Z [g2] llama_cuda_gen: PASS
 2026-10-11T17:24:04Z [g2] staged furmark2 (unzip, 0s)
+2026-10-11T17:25:22Z [g2] furmark_gl_stress: FAIL
+2026-10-11T17:25:24Z [g2] staged python_embed (python_embed, 0s)
+2026-10-11T17:26:49Z [g2] staged pywheels (wheels, 83s)
+2026-10-11T17:29:03Z [g2] torch_burn: PASS
+2026-10-11T17:29:21Z post-guest hook rc=0  GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-11T19:29:21+02:00
+RECLAIM_STOPPED_OVERLAY 1281 14128181248
+2026-10-11T17:29:21Z [g2] stopped (clean)
+2026-10-11T17:29:23Z pre-guest hook rc=0 :00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=identity 2026-10-11T19:29:23+02:00
+2026-10-11T17:29:25Z broker run 1282 rc=0 ['  └────────────────────────────────────────────────────────────────────────────────────────────┘']
+2026-10-11T17:29:25Z [g3] launched; waiting for the guest agent (<= 900s)

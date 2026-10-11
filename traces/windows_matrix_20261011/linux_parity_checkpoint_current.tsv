@@ -20,7 +20,7 @@ fastWalshTransform	PASS@2830988f	fwt_t	PASS
 fft_cufft	PASS@2830988f	fft_t	PASS
 geekbench_gpu	PASS@2830988f	Geekbench needs the internet to upload results (the Linux pass string is 'Uploading results'); the lane forbids guest internet at run time	OMITTED
 globalToShmemAsyncCopy	PASS@2830988f	cupy_asynccopy	PASS
-gpu_burn	PASS@2830988f	furmark_gl_stress,torch_burn	furmark_gl_stress:PENDING,torch_burn:PENDING
+gpu_burn	PASS@2830988f	furmark_gl_stress,torch_burn	furmark_gl_stress:FAIL,torch_burn:PASS
 graphMemoryNodes	PASS@2830988f	graphs_t	PASS
 hashcat	PASS@2830988f	hashcat	PASS
 hf_generate	PASS@2830988f	hf_generate	PASS
