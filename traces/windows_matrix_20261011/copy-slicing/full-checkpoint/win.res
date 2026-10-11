@@ -72,3 +72,9 @@ APPRES side=win app=edge_webgl_headless verdict=PASS rc=0 secs=13 quiet=1 note=-
 APPRES side=win app=edge_webgpu verdict=PASS rc=0 secs=18 quiet=0 note=- boot=g11 guest_tdr=0 wer=0 gsp_cycles=0 proof=out tier=1 cat=browser
 APPRES side=win app=nbody_demo_gl verdict=FAIL rc=0 secs=28 quiet=1 note=no-gpu-proof boot=g11 guest_tdr=0 wer=0 gsp_cycles=0 proof=none:pdh:Cuda|Compute|3D|Copy tier=1 cat=cuda-demo
 APPRES side=win app=scale_cuda_nvenc verdict=FAIL rc=-22 secs=41 quiet=0 note=rc:-22,no-gpu-proof | [h264_nvenc @ 00000190862922c0] OpenEncodeSessionEx failed: incompatible client key (21): (no details) boot=g11 guest_tdr=3 wer=0 gsp_cycles=1 proof=none:pdh:VideoEncode|VideoDecode,smi tier=2 cat=video
+APPRES side=win app=torch_correct verdict=PASS rc=0 secs=102 quiet=2 note=- boot=g12 guest_tdr=0 wer=0 gsp_cycles=0 proof=out tier=1 cat=torch
+APPDIG side=win app=torch_correct DIGEST cnn_train_step 763c693a5a53f948
+APPRES side=win app=hashcat verdict=PASS rc=0 secs=33 quiet=1 note=warn:Watchdog: Temperature abort trigger set to 90c boot=g12 guest_tdr=0 wer=0 gsp_cycles=0 proof=out tier=1 cat=crypto
+APPRES side=win app=vulkan_video_decode verdict=PASS rc=0 secs=62 quiet=23 note=- boot=g12 guest_tdr=3 wer=0 gsp_cycles=1 proof=pdh:videodecode tier=3 cat=video
+APPRES side=win app=edge_video_h264 verdict=PASS rc=0 secs=29 quiet=1 note=- boot=g13 guest_tdr=0 wer=0 gsp_cycles=1 proof=pdh:videodecode tier=1 cat=video
+APPRES side=win app=edge_video_vp9 verdict=PASS rc=0 secs=50 quiet=3 note=- boot=g14 guest_tdr=3 wer=0 gsp_cycles=1 proof=pdh:videodecode tier=2 cat=video

@@ -3,6 +3,22 @@
 **STATUS: LIVE, 2026-10-11.** Product candidate `2c917f3e`, following the
 OpenGL gears fix. Results are pending; this is not a matrix pass claim.
 
+## Latest checkpoint, 2026-10-11 15:01 UTC
+
+Last pushed582d72dc: canonical OceanFFT/RandomFog numerical QA + original25s
+GUI requirement; harness76/76 PASS. Fresh stock validation actively running at
+controller /data/kf-native-reference-20261011/demo-qa-gui (session90702).
+No new candidate QA verdict yet. Supplemental waiter59215 updated before execution
+to frozen /data/kf-supplement-harness-582d72dc; media revision derived from git
+because host abbreviated SHA is9 characters. Result directory suffix582d72dc.
+Authored encoder probe sourcecdad9267 unchanged; product0f9c01f9 unchanged.
+
+Broad8037 frozen campaign snapshot79/102:63PASS,14FAIL,2TIMEOUT; only58PASS
+without recovery events. Additional Vulkan decode and Edge H264/VP9 PASS rows
+each have one GSP recovery cycle (event records3/0/3 respectively); all remain
+open APP gaps and original verdicts retained. Driver4041868 active, nowrun874.
+Updated apps/win.res snapshot is backed up on controller; host logs preserved.
+
 ## Latest checkpoint, 2026-10-11 14:52 UTC
 
 Saved broad74/102:58PASS,14FAIL,2TIMEOUT; only56 PASS have no recovery events.

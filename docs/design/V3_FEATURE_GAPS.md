@@ -95,6 +95,10 @@ PWR power/reset/reboot, FAM multi-GPU/families, PKG packaging/signing, TST harne
 | APP-nbody_demo_gl | N-body GUI misses per-process GPU proof | TST / GFX | Run870 survives25s/exits0, zero PDH activity and FAIL/no-gpu-proof; zero guestTDR/GSP cycle. Separate CUDA benchmark passes | [measured] candidate0f9c01f9; stock GUI comparison pending | Compare official CUDA-vs-CPU-reference mode and original GUI; numerical oracle is verification only, GPU computation remains on CUDA | lane: real GPU reference comparison and GUI survival/activity | S | APP-oceanFFT_demo | no |
 | APP-scale_cuda_nvenc | CUDA scaling/encode repeats NVENC session refusal | VID / RM | Run870 fails OpenEncodeSessionEx incompatible client key21 and records three guestTDR records/one GSP recovery; no additional hostXid | [measured] candidate0f9c01f9; stock580.88 counterpart PASS without recovery | Resolve source-tagged host encoder-session layout; isolate the decode-side recovery separately | lane: real scaling/encode output and zero unexpected recovery | M | APP-nvenc_h264 | no |
 
+| APP-vulkan_video_decode | Video workload passes with GPU recovery | VID / CHAN | Run871 original app verdict PASS, 3 nvlddmkm153/display event records and one GSP suspend/recovery cycle; not a clean pass | [measured] candidate0f9c01f9 full-checkpoint facts; no specific offending control established | Fresh isolated playback/decode with timestamped event and completion evidence, compare stock580.88; distinguish recovery initiation from downstream symptoms | lane: output/GPU proof plus zero unexpected recovery | M | APP-nvdec_h264 | no |
+| APP-edge_video_h264 | Video workload passes with GPU recovery | VID / CHAN | Run872 original app verdict PASS, 0 nvlddmkm153/display event records and one GSP suspend/recovery cycle; not a clean pass | [measured] candidate0f9c01f9 full-checkpoint facts; no specific offending control established | Fresh isolated playback/decode with timestamped event and completion evidence, compare stock580.88; distinguish recovery initiation from downstream symptoms | lane: output/GPU proof plus zero unexpected recovery | M | APP-nvdec_h264 | no |
+| APP-edge_video_vp9 | Video workload passes with GPU recovery | VID / CHAN | Run873 original app verdict PASS, 3 nvlddmkm153/display event records and one GSP suspend/recovery cycle; not a clean pass | [measured] candidate0f9c01f9 full-checkpoint facts; no specific offending control established | Fresh isolated playback/decode with timestamped event and completion evidence, compare stock580.88; distinguish recovery initiation from downstream symptoms | lane: output/GPU proof plus zero unexpected recovery | M | APP-nvdec_h264 | no |
+
 ### 2.2 P1: production quality, security, derive-never-capture
 
 | id | title | area | missing / symptom | evidence | approach (short) | test (oracle / lane) | eff | deps | owner? |
@@ -148,7 +152,7 @@ PWR power/reset/reboot, FAM multi-GPU/families, PKG packaging/signing, TST harne
 | L13 | NVENC session cap accounting, `0x20808165` | VID | Assumes one slot per acquire; concurrent guest + host encoders hit the host's `0x69`; `0x20808165` refused | [read] | None | n/a | S | none | no |
 | L14 | Perf work on the display and VA paths | TST | Beyond "decent" | [read] owner rule | n/a | n/a | L | H26 | no |
 
-Counts: P0 39 rows (G01-G15 plus24 APP rows), P1 29 rows (H01-H29), P2 14 rows (L01-L14); 82 in all. `APP-<name>` rows are added by the app-matrix rule.
+Counts: P0 42 rows (G01-G15 plus27 APP rows), P1 29 rows (H01-H29), P2 14 rows (L01-L14); 85 in all. `APP-<name>` rows are added by the app-matrix rule.
 
 ## 3. Detail for the top items
 

@@ -1,0 +1,100 @@
+{
+ "quiet": 1,
+ "end_utc": "2026-10-11T14:51:31.7098494Z",
+ "start_utc": "2026-10-11T14:50:58.8097167Z",
+ "rc": 0,
+ "secs": 33,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4070 status=OK code=0"
+ ],
+ "digests": [],
+ "session": 0,
+ "out_files": [
+  "C:\\kf\\out\\hashcat\\hashcat.stderr.txt 593",
+  "C:\\kf\\out\\hashcat\\hashcat.stdout.txt 3409"
+ ],
+ "boot_utc_start": "2026-10-11T14:46:12.5000000Z",
+ "log_tail": [
+  "Hash.Target......: e4726719b68b205913167f0975d977ee",
+  "Time.Started.....: Sun Oct 11 14:51:13 2026 (0 secs)",
+  "Time.Estimated...: Sun Oct 11 14:51:13 2026 (0 secs)",
+  "Kernel.Feature...: Optimized Kernel (password length 0-55 bytes)",
+  "Guess.Mask.......: ?l?l?l?l?l?l [6]",
+  "Guess.Queue......: 1/1 (100.00%)",
+  "Speed.#01........: 24393.4 MH/s (4.63ms) @ Accel:25 Loops:512 Thr:1024 Vec:8",
+  "Recovered........: 1/1 (100.00%) Digests (total), 1/1 (100.00%) Digests (new)",
+  "Progress.........: 233971712/308915776 (75.74%)",
+  "Rejected.........: 0/233971712 (0.00%)",
+  "Restore.Point....: 0/456976 (0.00%)",
+  "Restore.Sub.#01..: Salt:0 Amplifier:0-512 Iteration:0-512",
+  "Candidate.Engine.: Device Generator",
+  "Candidates.#01...: sanier -> ezqfqx",
+  "Hardware.Mon.#01.: Temp:  0c Core:   0MHz Mem:   0MHz",
+  "",
+  "[stderr]",
+  "nvmlDeviceGetCurrPcieLinkWidth(): Unknown Error",
+  "",
+  "nvmlDeviceGetFanSpeed(): Not Supported",
+  "",
+  "nvmlDeviceGetTemperatureThreshold(): Not Supported",
+  "",
+  "nvmlDeviceGetTemperatureThreshold(): Not Supported",
+  "",
+  "NvAPI_GPU_GetPerfPoliciesInfo(): NVAPI_NOT_SUPPORTED",
+  "",
+  "NvAPI_GPU_GetPerfPoliciesStatus(): NVAPI_NOT_SUPPORTED",
+  "",
+  "nvmlDeviceGetUtilizationRates(): Not Supported",
+  "",
+  "NvAPI_GPU_GetPerfPoliciesInfo(): NVAPI_NOT_SUPPORTED",
+  "",
+  "NvAPI_GPU_GetPerfPoliciesStatus(): NVAPI_NOT_SUPPORTED",
+  "",
+  "NvAPI_GPU_GetPerfPoliciesInfo(): NVAPI_NOT_SUPPORTED",
+  "",
+  "NvAPI_GPU_GetPerfPoliciesStatus(): NVAPI_NOT_SUPPORTED",
+  "",
+  "=== end rc=0 secs=33 2026-10-11T14:51:31.7098494+00:00"
+ ],
+ "pdh": {
+  "pids": [
+   "5188",
+   "8700",
+   "6844",
+   "964"
+  ],
+  "nv": {
+   "copy": 0,
+   "3d": 0,
+   "videoencode": 0,
+   "videodecode": 0,
+   "vr": 0,
+   "legacyoverlay": 0,
+   "ofa_0": 0
+  },
+  "samples": 15,
+  "other": {},
+  "nvidia_luids": "0_5f0e"
+ },
+ "timed_out": false,
+ "token": "g12-hashcat-1791730246",
+ "boot_utc_end": "2026-10-11T14:46:12.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "hashcat",
+ "smi": {
+  "samples": 0,
+  "mem_used_base_mb": null,
+  "util_max": 0,
+  "mem_used_max_mb": 0
+ }
+}

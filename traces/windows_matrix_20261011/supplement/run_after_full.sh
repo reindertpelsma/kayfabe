@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 W=/var/lib/kf-windows-20261005
-TREE=/data/kf-supplement-harness-c5c97c00
+TREE=/data/kf-supplement-harness-582d72dc
 REV=0f9c01f9
 B=$W/kayfabe-win-6fafcc6e/scripts/bench/windows/windows_broker_prod3.sh
-RUN=$W/codex-matrix-supplement-c5c97c00-20261011
-MEDIA=$W/codex-supplement-20261011/full-image-c5c97c00/kfapps_supplement.img
+RUN=$W/codex-matrix-supplement-582d72dc-20261011
+HARNESS_REV=$(git -C "$TREE" rev-parse --short=8 HEAD)
+MEDIA=$W/codex-supplement-20261011/full-image-$HARNESS_REV/kfapps_supplement.img
 POST=/tmp/kf-supplement-post.sh
 START=$(date -u '+%Y-%m-%d %H:%M:%S UTC')
 export KF_LOCKED=1
@@ -52,23 +53,26 @@ for name in ('win.res','win_isolated.res'):
  for l in p.read_text().splitlines():
   if not l.startswith('APPRES '):continue
   d=dict(x.split('=',1) for x in l.split() if '=' in x);verdict[d['app']]=d['verdict']
-a=['hf_generate','cdp_quicksort','vectorAdd_demo','cup8_ladder','stream_perthread_t','cupy_sha256','cupy_cg','cupy_asynccopy','cupy_check']
+a=['oceanFFT_demo','randomFog_demo','hf_generate','cdp_quicksort','vectorAdd_demo','cup8_ladder','stream_perthread_t','cupy_sha256','cupy_cg','cupy_asynccopy','cupy_check']
 a+=sorted(k for k,v in verdict.items() if v!='PASS' and k not in a and k not in ('clpeak_cuda','managed_t','nvenc_av1','nvenc_h264','nvenc_hevc','scale_cuda_nvenc','furmark_gl_bench'))
 # Long-running clpeak and the managed-memory investigation each start in a fresh VM.
 print(','.join(a))
 PY
 )
+# Hypothesis: packaging/readback-proof corrections resolve those earlier failures.
+# Falsifier: unchanged numerical/GUI work fails under the corrected fresh-guest harness.
+# Product failures and every original verdict remain in their separate result directories.
 bash "$TREE/scripts/bench/windows/appmatrix/run_windows_apps.sh" --run-dir "$RUN" \
  --kf3-rev "$REV" --broker "$B" --run-base 1060 --override-dir "$W/codex-matrix-focus-tools-20261011" \
  --iso "$MEDIA" --apps "$APPS" --tier 3 --per-guest 4 --no-isolate
 # Fresh managed-memory stage isolation, with the same180s budget and corrected headers.
 # Falsifier of a shared-guest/setup-only explanation: fresh allocation/work still hangs.
-bash "$TREE/scripts/bench/windows/appmatrix/run_windows_apps.sh" --run-dir "$W/codex-managed-isolated-c5c97c00-20261011" \
+bash "$TREE/scripts/bench/windows/appmatrix/run_windows_apps.sh" --run-dir "$W/codex-managed-isolated-582d72dc-20261011" \
  --kf3-rev "$REV" --broker "$B" --run-base 1140 --override-dir "$W/codex-matrix-focus-tools-20261011" \
  --iso "$MEDIA" --apps managed_t --tier 3 --per-guest 1 --no-isolate
 # Only diagnostic switch added; first512 GP entries/64 software methods per twin.
 # A missing method after trace-budget exhaustion is inconclusive, never evidence of absence.
 export WIN_FLAGS=KF3_RELAY_PB_PEEK
-bash "$TREE/scripts/bench/windows/appmatrix/run_windows_apps.sh" --run-dir "$W/codex-furmark-peek-c5c97c00-20261011" \
+bash "$TREE/scripts/bench/windows/appmatrix/run_windows_apps.sh" --run-dir "$W/codex-furmark-peek-582d72dc-20261011" \
  --kf3-rev "$REV" --broker "$B" --run-base 1141 --override-dir "$W/codex-matrix-focus-tools-20261011" \
  --iso "$MEDIA" --apps furmark_gl_bench --tier 3 --per-guest 1 --no-isolate
