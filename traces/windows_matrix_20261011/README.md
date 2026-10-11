@@ -10,7 +10,8 @@ Last pushed6a42d92c. Stock580.88 canonical OceanFFT + RandomFog now2/2 PASS,
 recovery event records. Native GSP cycles unmeasured. Evidence reference-demo-qa-gui/.
 Product0f9c01f9 candidate QA retries pending; queued frozen harness582d72dc.
 Broad snapshot81/102:63PASS,16FAIL,2TIMEOUT;58PASS without recovery events.
-Both Heaven APIs fail/no-gpu-proof after ALIVE_AT45, no guest recovery; APP rows
+Heaven D3D11 survives45s but fails GPU proof, no guest recovery. Heaven OpenGL
+exits early29s with rc=-1073740791, three event records +1 GSP recovery; APP rows
 added. Unchanged stock580.88 Heaven/Valley/Nbody GUI comparison active:
 controller /data/kf-native-reference-20261011/unigine-nbody, session17867.
 Falsifier of a harness-only explanation: same stock test passes while fresh
