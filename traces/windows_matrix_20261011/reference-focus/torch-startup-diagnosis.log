@@ -1,0 +1,10 @@
+DIAG 0.0 python 3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]
+DIAG 0.0 before import torch
+DIAG 5.562 torch imported 2.8.0+cu126
+DIAG 5.562 before cuda.is_available
+CUDA_AVAILABLE True
+DIAG 5.594 before device name
+DEVICE NVIDIA GeForce RTX 4090
+DIAG 5.594 before GPU tensor
+DIAG 5.828 GPU readback passed
+

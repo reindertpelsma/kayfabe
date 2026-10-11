@@ -154,3 +154,18 @@ callbacks checked correctly. Python/CUDA startup on this fresh reference needs
 isolation before treating it as a clean BlackScholes comparison. Partial
 reference evidence (including exact source and binary hashes) is in
 `reference-focus/`; the six-app reference batch is still running.
+
+The corrected matching-host-driver fast suite **passes 30/30** on exact
+`0f9c01f9`; gate 10 and all nine gates also PASS. Build and arm evidence are
+in `copy-slicing/linux-hostdriver/`. The first 580-image setup's failed driver
+initializations remain separately recorded in `linux-wrong-driver/`.
+The Windows focus guest (run 850) is now running the same candidate.
+
+On the stock reference, the completed six-app batch has five PASS (callbacks,
+occupancy, deviceQuery, gears, matrix multiplication) and initial BlackScholes
+TIMEOUT. Matrix multiplication took 67 s, much slower than the previous native
+reference. A subsequent staged diagnostic imported Torch in 5.562 s, found
+CUDA in 0.032 s, and checked a real GPU tensor in 0.234 s. Hypothesis for an
+unchanged BlackScholes retry: cold Python/CUDA startup caused the first timeout;
+a repeated timeout or incorrect result at the same 120 s budget falsifies that
+explanation. Retry is pending; the first timeout is retained.

@@ -1,0 +1,66 @@
+FAST_SUITE_STARTED=2026-10-11T14:46:22+02:00 arms=30 budget=180s
+rev=0f9c01f94
+ARM                          VERDICT   secs  why
+--timer                      FAIL      7s    raw client rc=1
+FAST_CELL_ARM arm=timer verdict=FAIL secs=7 client_ms=4280
+--engines                    FAIL      7s    raw client rc=1
+FAST_CELL_ARM arm=engines verdict=FAIL secs=7 client_ms=4250
+--doorbell-census            FAIL      7s    raw client rc=1
+FAST_CELL_ARM arm=doorbell-census verdict=FAIL secs=7 client_ms=4240
+--gpu-info-sweep             FAIL      7s    raw client rc=1
+FAST_CELL_ARM arm=gpu-info-sweep verdict=FAIL secs=7 client_ms=4230
+--bus-info-sweep             FAIL      7s    raw client rc=1
+FAST_CELL_ARM arm=bus-info-sweep verdict=FAIL secs=7 client_ms=4240
+--concurrency                FAIL      7s    raw client rc=1
+FAST_CELL_ARM arm=concurrency verdict=FAIL secs=7 client_ms=4280
+--defer-liveness             FAIL      7s    raw client rc=1
+FAST_CELL_ARM arm=defer-liveness verdict=FAIL secs=7 client_ms=4270
+--blockage-coverage          FAIL      7s    raw client rc=1
+FAST_CELL_ARM arm=blockage-coverage verdict=FAIL secs=7 client_ms=4230
+--alias-two-vas              FAIL      7s    raw client rc=1
+FAST_CELL_ARM arm=alias-two-vas verdict=FAIL secs=7 client_ms=4290
+--alias-unmap-observe        FAIL      7s    raw client rc=1
+FAST_CELL_ARM arm=alias-unmap-observe verdict=FAIL secs=7 client_ms=4240
+--map-propagation            FAIL      6s    raw client rc=1
+FAST_CELL_ARM arm=map-propagation verdict=FAIL secs=6 client_ms=4240
+--late-map-race              FAIL      7s    raw client rc=1
+FAST_CELL_ARM arm=late-map-race verdict=FAIL secs=7 client_ms=4260
+--missing-page-fault         FAIL      7s    raw client rc=1
+FAST_CELL_ARM arm=missing-page-fault verdict=FAIL secs=7 client_ms=4230
+--uvm-invalidate             FAIL      6s    raw client rc=1
+FAST_CELL_ARM arm=uvm-invalidate verdict=FAIL secs=6 client_ms=4240
+--uvm-mean                   FAIL      6s    raw client rc=1
+FAST_CELL_ARM arm=uvm-mean verdict=FAIL secs=6 client_ms=4280
+--executor-vas               FAIL      7s    raw client rc=1
+FAST_CELL_ARM arm=executor-vas verdict=FAIL secs=7 client_ms=4239
+--guest-ring-channel         FAIL      7s    raw client rc=1
+FAST_CELL_ARM arm=guest-ring-channel verdict=FAIL secs=7 client_ms=4240
+--dictated-ring              FAIL      7s    raw client rc=1
+FAST_CELL_ARM arm=dictated-ring verdict=FAIL secs=7 client_ms=4229
+--dictated-ring-negative     FAIL      7s    raw client rc=1
+FAST_CELL_ARM arm=dictated-ring-negative verdict=FAIL secs=7 client_ms=4250
+--ce-client                  FAIL      7s    raw client rc=1
+FAST_CELL_ARM arm=ce-client verdict=FAIL secs=7 client_ms=4240
+--ce-client-guest-ram        FAIL      7s    raw client rc=1
+FAST_CELL_ARM arm=ce-client-guest-ram verdict=FAIL secs=7 client_ms=4279
+--guest-ram-pin              FAIL      8s    raw client rc=1
+FAST_CELL_ARM arm=guest-ram-pin verdict=FAIL secs=8 client_ms=4240
+--bar1-crossing              FAIL      6s    raw client rc=1
+FAST_CELL_ARM arm=bar1-crossing verdict=FAIL secs=6 client_ms=4270
+--atomics-probe              FAIL      7s    raw client rc=1
+FAST_CELL_ARM arm=atomics-probe verdict=FAIL secs=7 client_ms=4280
+--pce-mask-probe             FAIL      6s    raw client rc=1
+FAST_CELL_ARM arm=pce-mask-probe verdict=FAIL secs=6 client_ms=4270
+--gpga-reserve-probe         FAIL      7s    raw client rc=1
+FAST_CELL_ARM arm=gpga-reserve-probe verdict=FAIL secs=7 client_ms=4439
+--map-stress                 FAIL      7s    raw client rc=1
+FAST_CELL_ARM arm=map-stress verdict=FAIL secs=7 client_ms=4240
+--concurrent-fuzz            FAIL      6s    raw client rc=1
+FAST_CELL_ARM arm=concurrent-fuzz verdict=FAIL secs=6 client_ms=4229
+--cross-client-leak          FAIL      6s    raw client rc=1
+FAST_CELL_ARM arm=cross-client-leak verdict=FAIL secs=6 client_ms=4230
+--rpc-mixed-allocs           FAIL      7s    raw client rc=1
+FAST_CELL_ARM arm=rpc-mixed-allocs verdict=FAIL secs=7 client_ms=4280
+
+FAST_SUITE_PASS=0 FAST_SUITE_FAIL=30 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+FAST_SUITE_RC=1
