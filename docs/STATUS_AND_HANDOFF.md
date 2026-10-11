@@ -11,6 +11,48 @@ fix this file. Entries below the first are dated history.
 
 ## 0. Current resumption — start here
 
+## Latest checkpoint, 2026-10-11 20:02 UTC
+
+Last confirmed public push428ad66d7; this checkpoint records later evidence.
+Same-GPU RTX4070 VFIO GravityMark Vulkan PASS183s/rc0: image864279bytes,
+118694timing lines, NVIDIA3D98.43%/copy44.80%, guest153/4101/WER/reboot0.
+Original600s workload/oracle. Reference physical12GiB versus kayfabe-declared4GiB
+explicit; reference measured peak2247MiB. GSPcycles unmeasured: observer has
+21837 records, generations1/2, no reported missing records, incomplete header;
+whole-boot generations are not app recovery counts. Kayfabe1361 remains
+TIMEOUT603s/hostXid32/GSPcycle1. No Vulkan fix or common causal method claimed.
+
+Reference captures2successful50800104 registrations, inner20801116 channel-info
+update. This deferred operation changes GPFIFO/USERD channel metadata; it is
+separate from mapping/unmapping batches with a final invalidate. Registration
+stores an API handle; the5080software method triggers execution. Public source
+classifies FIFO update non-stalling, clearing PBDMA interrupt before execution;
+a later GPU tail alone therefore does not validate asynchronous action success.
+Native update currently faults while NOP does not. Next native discriminator
+retains resources2s after real GPU tail before cleanup; a fault during the hold
+rules out early cleanup for that native case. All channels USER/uid65534. Global
+RC journal query as uid65534 refused0x1b INSUFFICIENT_PERMISSIONS; no empty-journal
+claim. Separate root diagnostic read is queued, supplies no implementation data.
+
+Native diagnostic now runs before manual VM creation, under the original serial
+lock, after production controls; it cannot touch an already-ready owner VM.
+The old queued native waiter was canceled before lock acquisition. Manual source
+remains frozen under a copied path; no automation/expiry in the actual session.
+Manual1380 NOT READY. Allocator65530 validation still waits for its actual exit.
+
+Exact3252 Linux gates9/9+gate10, build/raw client/fast30/30 completed successfully,
+USER birth checks pass. Windows timer-default control1390: gears/vectorAdd/CUP8
+allPASS, zero guest events/GSP and precise-window hostXid0. Display-capability
+ablation1400 has BOOT_FAIL/no NVIDIA adapter; subsequent requested rows still
+running, no default promotion or zero-flag boot claim. Final production control
+follows. No active runner was edited.
+
+FurMark stress1370 cleanPASS with fresh renderer evidence is now folded into
+canonical checkpoint:104executed,79cleanPASS,8PASS_WITH_RECOVERY,11FAIL,6TIMEOUT;
+Linux counterpart parity59/65. Mixed product/harness revisions remain explicit.
+Public observer/benchmark artifacts backed up; password-input traces and guest
+RAM/disk excluded. Full private dump stays trusted-host only and regeneratable.
+
 ## Latest checkpoint, 2026-10-11 19:39 UTC
 
 Last confirmed public push fd54eef40. Canonical matrix remains104/104 executed:

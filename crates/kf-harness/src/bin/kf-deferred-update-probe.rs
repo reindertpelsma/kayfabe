@@ -28,10 +28,10 @@ fn method(out: &mut Vec<u32>, sub: u32, at: u32, args: &[u32]) -> Result<(), Str
 
 fn run() -> Result<(), String> {
     let args: Vec<_> = std::env::args().skip(1).collect();
-    if args.len() != 1 || !matches!(args[0].as_str(), "nop" | "update") {
-        return Err("usage: kf-deferred-update-probe nop|update".into());
+    if args.len() != 1 || !matches!(args[0].as_str(), "nop" | "update" | "update-hold") {
+        return Err("usage: kf-deferred-update-probe nop|update|update-hold".into());
     }
-    let trigger = args[0] == "update";
+    let trigger = args[0] != "nop";
     let engine = kf_abi::submit::ENGINE_TYPE_GRAPHICS;
     let dev = DevDir::open(c"/dev").map_err(|e| format!("dev: {e:?}"))?;
     let rm = HostRm::open(&dev, kf_harness::gate_gpu(), &kf_chip::choose_host_classes)
@@ -175,6 +175,20 @@ fn run() -> Result<(), String> {
                 ));
             }
             std::thread::sleep(Duration::from_millis(1));
+        }
+        if args[0] == "update-hold" {
+            // DIAGNOSTIC ONLY: retain every owned resource after the real GPU
+            // tail to separate an asynchronous action fault from early cleanup.
+            // A tail is not a deferred-action verdict. No product state is
+            // released by this observation interval and no completion is forged.
+            let unix_us = || {
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map_or(0, |d| d.as_micros())
+            };
+            println!("DEFERRED_UPDATE_HOLD_BEGIN unix_us={}", unix_us());
+            std::thread::sleep(Duration::from_secs(2));
+            println!("DEFERRED_UPDATE_HOLD_END unix_us={}", unix_us());
         }
         Ok(())
     })();

@@ -1,0 +1,21 @@
+2026-10-11T19:37:51Z START run_dir=/var/lib/kf-windows-20261005/codex-vfio-gravity-20261011/lane vm=broker kf3_rev=reference-vfio-580.88 apps=1
+2026-10-11T19:37:51Z MATRIX_START apps=1 (resume skips 0) per_guest=1 max_tdr=3 tier<=3
+2026-10-11T19:37:54Z VFIO reference launch boot=1 rc=0
+2026-10-11T19:37:54Z [g1] launched; waiting for the guest agent (<= 900s)
+2026-10-11T19:38:26Z [g1] agent answered after 34s
+2026-10-11T19:38:27Z [g1] password set for vast rc=0
+2026-10-11T19:39:18Z [g1] verified sign-in attempt=1 rc=0
+2026-10-11T19:39:19Z [g1] interactive session: VASTWIN\vast
+2026-10-11T19:39:20Z [g1] pushed 25 guest files
+2026-10-11T19:39:20Z [g1] app disk attached (usb-storage)
+2026-10-11T19:39:26Z [g1] setup ok: cd=D: nvidia_adapters=1 NVIDIA GeForce RTX 4070, 580.88, 12282 MiB
+2026-10-11T19:39:28Z [g1] override tool kf_cuda_control.exe sha256=3906f520c10e272215d9d7d79a90ce9a2042581923a4717db90be312ab3a67c8
+2026-10-11T19:39:31Z [g1] override tool kf_dxprobe.exe sha256=3c6ededa77430a18a13321eb72fdca7f60282f8d12ddc147a7e7df1284832c5f
+2026-10-11T19:39:45Z [g1] staged vc_redist (installer, 13s)
+2026-10-11T19:39:50Z [g1] READY boot=2026-10-11T19:37:58.5000000Z user=VASTWIN\vast smi_ok=True
+2026-10-11T19:40:00Z [g1] staged gravitymark (msi_admin, 8s)
+2026-10-11T19:43:20Z [g1] gravitymark_vk: PASS
+2026-10-11T19:47:08Z VFIO reference stopped clean
+2026-10-11T19:47:08Z [g1] stopped (clean)
+2026-10-11T19:47:08Z MATRIX_DONE batched: 1 pass / 1
+2026-10-11T19:47:08Z EXIT rc=0

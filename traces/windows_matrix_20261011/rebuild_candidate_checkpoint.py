@@ -18,6 +18,7 @@ SOURCES = [
     ("managed-routing/remaining-apps", "72741e2b", "72741e2b"),
     ("managed-routing/clpeak-cuda", "72741e2b", "72741e2b"),
     ("stream-startup/candidate-fresh", "72741e2b", "738b5385"),
+    ("gravity-vulkan/furmark-fresh-result", "72741e2b", "0c5fa450"),
 ]
 
 

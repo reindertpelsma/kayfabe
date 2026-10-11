@@ -1,0 +1,3 @@
+kf-host: host tier: stock
+RC_JOURNAL_PROBE=REFUSED count status=0x1b
+RC_JOURNAL_EXIT=1 at=2026-10-11T21:47:16+02:00

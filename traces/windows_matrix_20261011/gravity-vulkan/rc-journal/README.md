@@ -27,3 +27,44 @@ trusted/private storage. A stable count is not proof that a ring never changed.
 Validation: rustfmt and cargo build -p kf-harness --bin kf-rc-journal-probe
 PASS. No hardware pass claimed. No driver ABI or interface comes from private
 analysis. This bench-only public layout does not alter product constant tables.
+
+## Measured query and next discriminator
+
+At19:47:15UTC, after VFIO restored and before the frozen3252 campaign,
+uid65534 GET_ERROR_COUNT refused with0x1b INSUFFICIENT_PERMISSIONS.
+No raw record was returned. This does not establish an empty journal.
+The query had no channels/GPU work and did not change the product or history.
+
+Separate native lifetime diagnostic is queued under the serial GPU lock after
+the production-default controls and before manual VM creation, never interrupting that VM.
+Same fresh binary runs nop, update, update-hold. The final mode changes only
+retaining all resources for2s AFTER an actual GPU tail, before any cleanup.
+Hypothesis: earlier native update fault is caused by freeing resources before
+the non-stalling deferred action completes. Falsifier: Xid timestamp falls
+between HOLD_BEGIN and HOLD_END, while those resources remain owned. A fault
+only after cleanup keeps the hypothesis alive; no fault alone does not prove
+the deferred action succeeded. This is bench observation, never a product fix,
+release timeout, forged completion or Windows pass claim.
+
+All native channels stay USER/uid65534. A separate root read of the bounded
+global diagnostic journal follows each case, since its unprivileged form was
+refused; raw records stay private. This diagnostic read supplies no product
+interface/constants and never raises channel or guest privilege. Native API
+failure is not proof that GravityMark has the same initiating cause. Hardware
+results pending; build and Python/shell syntax checks pass.
+
+Exact595.91.07 public g_device_nvoc.c has GET_PTE_INFO flags0x100008
+(TEST_ONLY), whereas GET_PDE_INFO has0x10008. Thus direct leaf interrogation
+cannot be assumed available in a production driver. A present PDE only proves
+that a page-table directory exists, not that its leaf is valid or that the TLB
+contains the current mapping. No full PT/RM agreement claim follows.
+
+The first read-only stage finished19:47:16UTC. The later attempt to add the
+native hold test to that pending stage arrived after it had already executed;
+the hold test did NOT run there. Its separate waiting process was canceled
+before acquiring the lock, and the test now precedes manual VM creation via
+run_before_manual.sh. Active control runners were not edited. Original manual
+script remains frozen SHA256
+beb0513009bc0af205c5d8da44559ad0fc9020feb67fc07b1ef74fff9b9c7ad7.
+The owner session itself has no test automation or expiration; native outcomes
+cannot be substituted for its independent product controls.

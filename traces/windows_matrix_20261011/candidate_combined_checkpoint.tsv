@@ -32,7 +32,7 @@ edge_webgl_headless	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint
 edge_webgpu	PASS	a61af1c3	a61af1c3	PASS	0	0	encoder-session/edge-fresh/win.res	2026-10-11T15:39:46.5252793Z	app_end
 fft_t	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:29:56.8427689Z	app_end
 furmark_gl_bench	PASS	72741e2b	72741e2b	PASS	0	0	managed-routing/furmark-off/win.res	2026-10-11T17:11:35.8390352Z	app_end
-furmark_gl_stress	FAIL	72741e2b	72741e2b	FAIL	0	0	managed-routing/remaining-apps/win.res	2026-10-11T17:25:12.3249168Z	app_end
+furmark_gl_stress	PASS	72741e2b	0c5fa450	PASS	0	0	gravity-vulkan/furmark-fresh-result/win.res	2026-10-11T19:37:20.0814730Z	app_end
 furmark_glinfo	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:48:03.8254023Z	app_end
 furmark_knot_gl	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T14:33:12.5003875Z	app_end
 furmark_vk_bench	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T14:33:57.5548809Z	app_end

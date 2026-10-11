@@ -1,7 +1,12 @@
 //! ★ OWNER_RULINGS §U (2026-10-07) — **`NV50_DEFERRED_API_CLASS` (`0x5080`): the registration
 //! controls and the bundles they carry, read at the GUEST's measured layout.**
 //!
-//! What the real GSP receives (measured, Windows 580.88, VFIO boots 8/9/10, `gsp.jsonl`): only
+//! Correction 2026-10-11: the passing same-GPU GravityMark Vulkan VFIO capture includes two
+//! `_INTERNAL` registrations, both status0 (`traces/windows_matrix_20261011/gravity-vulkan/
+//! vfio-reference/`). The older observation below is scoped to boots8/9/10; it is not a
+//! statement that Windows never sends `_INTERNAL`. Layouts still come from public source.
+//!
+//! Historical observation (measured, Windows 580.88, VFIO boots 8/9/10, `gsp.jsonl`): only
 //! `NV5080_CTRL_CMD_DEFERRED_API` (`0x50800101`) as `GSP_RM_CONTROL` (fn 76), `paramsSize` 584,
 //! answered `NV_OK` with the params echoed. Why that and not `_V2` (`ogkm-580.95.05:
 //! src/nvidia/generated/g_deferred_api_nvoc.c:183-230`, flags decoded against
