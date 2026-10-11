@@ -226,3 +226,21 @@ fn a_guest_supplied_list_size_is_not_taken_on_trust() {
         assert!(r.body.is_empty());
     }
 }
+
+/// A Windows boot-time bus census stops at its first failed forwarded index.
+/// These fields describe the virtual PCIe link, which has no ASLM/ASPM transitions
+/// or physical link error source (ctrl2080bus.h:308-327,479-502).
+#[test]
+fn virtual_link_status_and_error_census_are_answered() {
+    let entries: Vec<_> = (0x18..=0x2b).map(|i| (i, 0xdead_beef)).collect();
+    let reply = policy()
+        .respond(&bus_command(&entries, BUS_GET_INFO_V2_PARAMS_SIZE as u32))
+        .expect("classified");
+    assert_eq!(reply.rpc_result, 0, "virtual PCIe census must complete");
+    let params = &reply.body[PARAMS_AT..PARAMS_AT + BUS_GET_INFO_V2_PARAMS_SIZE];
+    let expected: Vec<_> = (0x18..=0x2b)
+        .map(|i| (i, if i == 0x18 || i == 0x1b { 1 } else { 0 }))
+        .collect();
+    assert_eq!(businfo::decode_bus_info_pairs(params), Ok(expected));
+    assert!(params[4 + entries.len() * 8..].iter().all(|&b| b == 0xcd));
+}

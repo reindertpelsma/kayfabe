@@ -50,3 +50,28 @@ fails differently on kayfabe. Falsifier: corresponding calls have matching succe
 Raw diagnostic buffers stay private. No product capability is changed based on an inferred
 physical field; in particular, remaining fn65 memory geometry is not assumed to share Windows'
 semantics solely because the body size agrees with open Linux headers.
+
+## CPU-side bus census hypothesis (runs 645 and VFIO diagnostic boot 2)
+
+The same private syscall tracing probe reproduced the MakeCurrent crash on kayfabe;
+VFIO completed 43418 frames in 20 seconds, NVIDIA renderer, correct pixel, GL error 0,
+RESULT OK. Both sessions stopped cleanly, host nvidia restored, group 11 DMA-FQ, Xid count
+unchanged at 35. The first tracer attempt recursed and was discarded; these observations
+use the corrected tracer. Raw diagnostic buffers remain private.
+
+A CPU-side bus-information census was entirely zero on kayfabe. The public GSP trace
+shows its first missing forwarded index: BUS_GET_INFO_V2 index 0x18 (ASLM status), refused
+NV_ERR_NOT_SUPPORTED. VFIO completes the subsequent 0x19..0x2b link-status/error census.
+Open `kern_bus_ctrl.c:333` returns on the first failed forwarded query, explaining the
+lost earlier bus fields. This is a candidate explanation for the GL failure, not proof.
+
+Candidate derives the *virtual* PCIe link: present without ASLM, valid disabled ASPM,
+zero link-switch/line/CRC/NAK/L0s/AER error counters and clear variants. Definitions:
+`ctrl2080bus.h:308-327,479-502`. No physical link status is copied. Unknown indices still
+refuse the whole request. The served-boundary regression failed first with status 86;
+all eight bus-info tests pass after the change.
+
+Controlled run 646 hypothesis: completing this census restores the initialization data
+that gears needs. Falsifier: the census completes but gears still crashes. Oracle remains
+NVIDIA renderer, correct pixel, advancing frames, RESULT OK; a non-null WGL context alone
+is insufficient. Source revision and result will be recorded after the run.

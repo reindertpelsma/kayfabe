@@ -2766,10 +2766,21 @@ impl CommandPolicy for InitTablePolicy {
                 // `[measured 2026-08-08, real GA106, R22]`
                 // `traces/real_ga106/rmladder_r22_businfo_sweep_real_ga106.txt:38,63` and
                 // `traces/real_ga106/rmladder_r22_businfo_loaded_real_ga106.txt:37,62`.
-                let answers = [
+                let mut answers = vec![
                     (kf_abi::businfo::BUS_INFO_INDEX_PCIE_GEN_INFO, gen_info),
                     (kf_abi::businfo::BUS_INFO_INDEX_PCIE_GEN2_INFO, gen_info),
                 ];
+                // The presented PCIe link never changes width/speed or enters ASPM.
+                // ctrl2080bus.h:479-502: PCIe PRESENT, ASLM unsupported; ASPM VALID
+                // and DISABLED. The link has no physical error source: the switch,
+                // line-code/CRC/NAK/L0s and AER counters (including clear-on-read)
+                // are zero by construction, not copied from the host's live link.
+                // Windows' boot census returns on the first refusal; refusing ASLM
+                // also discards the already answered bus/link/DMA fields.
+                answers.extend((0x18..=0x2b).map(|index| {
+                    let value = if index == 0x18 || index == 0x1b { 1 } else { 0 };
+                    (index, value)
+                }));
                 match kf_abi::businfo::answer_bus_get_info_v2(
                     &cmd.payload[at..at + kf_abi::businfo::BUS_GET_INFO_V2_PARAMS_SIZE],
                     &answers,
