@@ -1110,3 +1110,22 @@ decent perf, I tend to do post release." So: anything that prevents apps from ru
 work fine without (the owner's example is the simple virtual scanout Linux guests already use instead of the full display
 engine) and performance beyond "decent" are post-release. Console fidelity (YUV overlay rendering on the console, z-order,
 HDR on the console) falls under "works without".
+
+## §AF. Per-die constants: guaranteed coverage, a published table, reuse of existing reverse engineering, 2026-10-11
+
+**STATUS: LIVE, 2026-10-11 (owner statements in the Windows/OpenGL session; recorded by the coordinator, wording to be confirmed by the owner).**
+- **Goal:** kayfabe must not support only the dies we could trace. The owner wants guaranteed, whole constant tables across a wide product
+  range (the reference is `nvkvm-pv`'s breadth), because a project that only works on a few dies will not be adopted. A per-die trace taken
+  by us, die after die, is not an acceptable coverage plan (one trace per die is a burden even for a few constants).
+- **Order of sources for any per-die constant or layout:** (1) computed from kayfabe's own state or the class tables; (2) NVIDIA's open
+  headers/docs (ogkm, open GPU docs) and every other open-source project that already carries it, **combinable**, pinned and licence-checked
+  (nouveau, nova, envytools, gVisor nvproxy, ...): reusing existing community reverse engineering is preferred over doing our own, because
+  those projects already span many dies and have users; (3) the host's own RM queried at runtime; (4) only for constants that remain, and
+  only if the owner decides so after a legal/provenance check: reverse engineering of the GSP firmware or other blobs **to extract constants,
+  not interfaces**, clean-room (a spec of facts is written; the implementation uses the spec), with the result **published as a table and
+  treated as the truth**. The build and any derivation script must NEVER contain or require a decompile step: people compiling fetch the open
+  repos and the published table.
+- **Display is required** (owner): people want display, so a render-only/headless Windows mode is at most a fallback or experiment, not the answer.
+- Our own traces remain valuable to find what must be answered and as test oracles for the die we own; they are not the coverage source.
+- Supersedes for this question the diagnosis-only wording in §S/`feedback_reverse_engineering_boundary` only to the extent stated above:
+  reverse engineering to extract constants is allowed in the last resort; interface extraction and decompilation inside the repo are not.
