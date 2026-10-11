@@ -58,6 +58,18 @@ Every open item is checked in this order. It moves to the next tier only with a 
   die constants only; monitor-dependent values stay authored by kayfabe.
 - A Windows rental is needed only for behaviour tied to the Windows driver; this may be empty if the raw-GSP spike works.
 
+## 7. Additions agreed 2026-10-11 (owner: "I agree with your corrections")
+
+- **Demand filter before the tiers.** Only rows that change guest behaviour go through the tiers. Run 641 booted, signed in, ran Edge and the CUDA probes
+  with 61 controls refused, so most inventory rows may not matter. Test each refused group (answer it, watch for a behaviour change), and tie every
+  app-matrix failure to the control it hit. Rows that matter get the per-die sweep; the rest stay a counted clean fallback. This is the largest cut to
+  the reverse-engineering list and does not lose hardware variation for the rows that matter.
+- **Delegate to the host driver wherever it is safe** (tier 2): kayfabe authors the same read-only request from validated fields (never guest bytes) and returns
+  the real reply, so no per-die table is needed. Tables are for what the open host driver lacks.
+- **Supported driver set.** Windows drivers change monthly; define the supported set (the newest N branches plus one long-lived one), clean fallback for the rest.
+- **Opt-in report of refused controls** from `kayfabe-measure`/kayfabe (anonymised counts per die and driver branch) to learn which dies and drivers users hit,
+  so sweeps are ordered by real demand. Nothing is collected without the user's opt-in.
+
 ## 6. Priority
 
 Release-coverage work, not the current blocker. The OpenGL failure on the RTX 4070 is not a constants problem (the replies already equal the real

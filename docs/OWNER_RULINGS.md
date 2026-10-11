@@ -1160,3 +1160,5 @@ HDR on the console) falls under "works without".
 - **Unknown things are not assumed to be per family** (owner): the default is measured per die and per firmware/driver branch; a family rule needs
   every measured die to agree plus a mechanism; an unmeasured die or branch gets the clean fallback, never a neighbour's row.
 - The strategy, plan and unverified assumptions: `docs/design/V3_CONSTANT_STRATEGY.md`.
+- Agreed additions (owner, 2026-10-11): demand filter before the tiers, delegation to the host driver where safe, a supported driver set, and an opt-in
+  report of refused controls (`V3_CONSTANT_STRATEGY.md` §7).
