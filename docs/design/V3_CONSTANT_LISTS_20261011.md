@@ -49,6 +49,24 @@ machine (VFIO observer with a monitor) and the raw-GSP spike; reverse engineerin
 - No tag has the physical-RM source: 60 of 67 ids with a generated method row are routed to the GSP firmware, so ogkm gives layouts, never reply values.
 - Host driver 595.91.07 is the open module, but its RM core ships as `nv-kernel.o_binary` in the DKMS tree: patching control tables or sending raw GSP RPCs needs a build from the GitHub source.
 
+## Revision 2026-10-11 (owner questions): the reverse-engineering list is empty for now
+
+Owner: a refused request visible in the kayfabe trace identifies what to measure (request visible, reply format unknown), and behaviour observed on the display
+RTX 4070 is acceptable when shown to hold on other dies; the owner has display machines: RTX 4070, RTX 3050 and RTX 3050 laptop, and a driver sweep is easy there.
+The five rows of list 5 move as follows (each from the inventory notes; none needs reverse engineering):
+
+| row | what it really is | route |
+|---|---|---|
+| ctl-20801222 `GR_GFX_POOL_REMOVE_SLOTS` | an action with no reply values; ogkm has the struct. kayfabe's guest issues it after we answered an INVENTED pool size (4096; ogkm says 64 max slots); the real GPU never issued it in 5 captures | fix the cause: derive the pool size from ogkm/host (also fixes the invented-constant bug). No capture needed |
+| const-sw-runlist-object (class 0xb297 admission) | an acceptance rule of kayfabe's object seat; the guest's allocation request is visible in the trace and class 0xb297 is in the AD104 class list | read the real status and params from the VFIO captures of the Windows boot (verify the capture holds the allocation), per die on the display machines |
+| const-lut-mirror-offset256 | hardware decoder acceptance of the colour program (control 0x4050a, ILUT offset 0x21): the request is visible, the semantics are hardware behaviour | program a real engine and read the output back on the three display machines (an oracle test), not a constant |
+| const-core-latch-vblank, const-head-timing-frame-edge | timing behaviours, already measured on the 4070 with display (run 93: three PUTs one frame apart on hardware) | the same VFIO timing capture on the 3050 and the 3050 laptop and across driver branches; keep as oracle tests |
+
+Conditions: the same-on-all-dies claim needs the measurements, per §AH (consistent so far, not a rule, unless a mechanism explains it). Two limits of the trace today:
+it does not log the parameter size of refused requests nor reply bytes outside the 0073 set; adding that logging (a measurement flag, never required to boot) makes every refused
+request an exact replay candidate. Open question for the owner: the 3050 variants (desktop GA106 8 GB / GA107 6 GB) and whether the laptop's dGPU drives any display head (an Optimus laptop
+without a MUX behaves like a headless reference, which is also useful), and the IOMMU grouping for the laptop.
+
 ## Not yet done
 
 - The demand filter (`V3_CONSTANT_STRATEGY.md` §7): which rows change guest behaviour at all (run 641 works with 61 refused controls).
