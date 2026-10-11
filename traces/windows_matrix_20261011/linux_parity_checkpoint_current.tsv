@@ -59,7 +59,7 @@ stream_nonblocking	PASS@2830988f	stream_nonblocking_t	PASS
 stream_perthread	PASS@2830988f	stream_perthread_t	stream_perthread_t:TIMEOUT
 stream_triad	PASS@2830988f	triad_t	PASS
 stream_two	PASS@2830988f	stream_two_t	PASS
-torch_ai_bench	PASS@2830988f	torch_ai_bench	torch_ai_bench:PENDING
+torch_ai_bench	PASS@2830988f	torch_ai_bench	torch_ai_bench:FAIL
 torch_correct	PASS@2830988f	torch_correct	PASS
 transpose	PASS@2830988f	transpose_t	PASS
 vectorAdd	PASS@2830988f	vectorAdd_demo	PASS

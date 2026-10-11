@@ -39,3 +39,13 @@ do not erase run1284 or increase its deadline. No hardware pass claimed.
 
 The queued3252 timer-default/manual campaign remains frozen; this correction
 is not silently substituted into that campaign or the owner's manual session.
+
+Exact product65530e6a is staged in trusted host /data/kf-capacity-host. Controller
+session80736 runs run_after_manual.sh: waits for the original campaign PID209237
+to finish and requires both MANUAL_SESSION_READY and MANUAL_SESSION_EXIT before
+it acquires the GPU lock. It neither interrupts nor expires the owner VM. If
+manual preparation fails, this follow-up also stops rather than bypassing it.
+Then run_regression.sh performs Linux validation, followed by run_focus.sh,
+original torch_ai_bench plus gears/vectorAdd/CUP8, runs1480..1484. Original20
+production flags, diagnostics off, native timer enabled as in72741e2b. Preserve
+all verdicts, including another failure. Source/runners are regeneratable from git.

@@ -11,7 +11,23 @@ fix this file. Entries below the first are dated history.
 
 ## 0. Current resumption — start here
 
-**2026-10-11 17:53 UTC, Codex Windows campaign (`codex/windows-matrix-20261011`):**
+**2026-10-11 18:07 UTC, Codex Windows campaign (`codex/windows-matrix-20261011`):**
+Last confirmed push65530e6a fixes false walk-slot capacity refusal under optional
+headroom pressure,421GPU-free testsPASS/3ignored; hardware pending. Run1284 AI
+rebooted (FAIL450s, GSPcycle1) after capacity refusal/channel death. Complete
+causality unproven; exact diff demand inferred upper bound, not a captured fact.
+Latest candidate100/104 executed:77cleanPASS,8PASS_WITH_RECOVERY,10FAIL,5TIMEOUT,
+4pending; Linux parity57/65. Fresh GravityD3D12/OpenGL also fail with recovery,
+GL hostXid32. Coverage and existing probes remain serial. Frozen3252 timer-default
+Linux/control campaign32315 precedes owner manual1380, still queued, no automatic
+input/login/apps or expiry. New capacity validation80736 waits for personal VM
+exit before locking/building/running1480+; cannot interrupt it. Reference580.88
+complete103PASS/1GravityVKTIMEOUT, owned Vast retired/evidence backed up. Other
+boot defaults still open, captured/placeholder replies not promoted. Integration
+and master unchanged. No full-green or zero-flag Windows claim. Resume detailed
+[handoff](HANDOFF_FOR_CODEX_20261011.md) and [evidence](../traces/windows_matrix_20261011/README.md).
+
+**2026-10-11 17:52 UTC, Codex Windows campaign (`codex/windows-matrix-20261011`):**
 [Current evidence and run instructions](../traces/windows_matrix_20261011/README.md).
 Last confirmed push3252a087: native timer mapping default,906 GPU-free testsPASS;
 new hardware validation queued. Previous exact product72741e2b passes Linux gates9/9+10 and

@@ -1,0 +1,14 @@
+{
+ "verdict": "FAIL",
+ "rc": -1073740791,
+ "secs": 58,
+ "quiet": 58,
+ "note": "rc=-1073740791,success-string-missing,no-gpu-proof | GM_FAIL no benchmark image",
+ "proof": "none:pdh:Cuda|Compute|3D|Copy",
+ "tdr": 3,
+ "wer": 0,
+ "rebooted": false,
+ "gsp_cycles": 1,
+ "restart": "tdr-budget:3>=3",
+ "guest": "g7"
+}

@@ -47,10 +47,10 @@ gputest_tess	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.re
 gputest_triangle	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T14:15:12.8033364Z	app_end
 graphs_t	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:30:29.7180175Z	app_end
 gravitymark_d3d11	PENDING								
-gravitymark_d3d12	PENDING								
+gravitymark_d3d12	FAIL	72741e2b	72741e2b	FAIL	3	1	managed-routing/remaining-apps/win.res	2026-10-11T17:57:51.9209662Z	app_end
 gravitymark_d3d12_raster	FAIL	72741e2b	72741e2b	FAIL	0	0	managed-routing/remaining-apps/win.res	2026-10-11T17:44:09.4279538Z	app_end
 gravitymark_d3d12_rt	FAIL	72741e2b	72741e2b	FAIL	3	1	managed-routing/remaining-apps/win.res	2026-10-11T17:44:55.9910653Z	app_end
-gravitymark_gl	PENDING								
+gravitymark_gl	FAIL	72741e2b	72741e2b	FAIL	3	1	managed-routing/remaining-apps/win.res	2026-10-11T18:01:59.2966661Z	app_end
 gravitymark_vk	PENDING								
 hashcat	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T14:51:31.7098494Z	app_end
 heaven_d3d11	FAIL	0f9c01f9	8037e19b	FAIL	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T15:02:05.1114147Z	app_end
@@ -90,7 +90,7 @@ stream_two_t	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.re
 streams_t	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:43:40.1117046Z	app_end
 tc16_t	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:44:03.2610258Z	app_end
 tcbf16_t	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:44:21.1782421Z	app_end
-torch_ai_bench	PENDING								
+torch_ai_bench	FAIL	72741e2b	72741e2b	FAIL	0	1	managed-routing/remaining-apps/win.res	2026-10-11T17:12:40Z	run_start_only
 torch_burn	PASS	72741e2b	72741e2b	PASS	0	0	managed-routing/remaining-apps/win.res	2026-10-11T17:28:51.4142523Z	app_end
 torch_correct	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T14:50:34.0860011Z	app_end
 transpose_t	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:44:38.7662047Z	app_end

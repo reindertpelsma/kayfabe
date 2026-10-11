@@ -5,7 +5,29 @@ again after the Wednesday 07:00 reset). Read `AGENTS.md` (= `CLAUDE.md`) first: 
 (state, branches, traps), `docs/DELEGATED_DECISIONS_20261010.md`, `docs/OWNER_RULINGS.md` §AB-§AE, `docs/design/V3_FEATURE_GAPS.md`
 (priorities: P0 = prevents apps running; fidelity and perf beyond "decent" are post-release), `docs/design/V3_NOT_IN_GIT.md`.
 
-## Latest checkpoint, 2026-10-11 17:53 UTC
+## Latest checkpoint, 2026-10-11 18:07 UTC
+
+Last confirmed push65530e6a: walk-slot allocator now accepts rounded actual
+need if optional1.5x growth headroom cannot fit, preserving fixed pool ceilings
+and disjoint copies.421 GPU-free testsPASS,3ignored; final numeric regression
+retested7/7. No hardware validation yet. Run1284 torch_ai_bench FAIL450s,
+Windows reboot/GSPcycle1, stopped17:54:55UTC. Allocator false capacity refusal
+and channel death precede recovery; full reboot causality remains unproven.
+Exact diff demand unlogged; its sufficient bound is inferred from growth formula.
+Evidence and source-grounded correction: walk-capacity/README.md.
+
+Canonical100/104 executed:77cleanPASS,8PASS_WITH_RECOVERY,10FAIL,5TIMEOUT,
+4pending; Linux parity57/65. New GravityD3D12 and OpenGL both fail with recovery;
+OpenGL also host Xid32 at18:01:15UTC. Coverage63669 continues D3D11/OpenCL/Vulkan,
+then isolated long CUDAclpeak. All existing queued probes and3252 timer-default
+regression/manual campaign32315 remain frozen. Owner manual1380 is not ready;
+no automatic input/login/apps, no expiry, GPU lock held for its lifetime.
+Capacity follow-up80736 waits until that personal session actually ends, then
+exact65530e6a Linux gates/build/fast and unchanged AI/gears/vectorAdd/CUP8 runs1480+.
+It cannot interrupt the manual VM and stops if manual preparation never succeeds.
+No full-matrix, zero-flag Windows or complete Linux parity success claimed.
+
+## Latest checkpoint, 2026-10-11 17:52 UTC
 
 Last confirmed push3252a087 (product: native timer mapping now automatic,
 906 GPU-free testsPASS; exact hardware regression pending). Combined candidate

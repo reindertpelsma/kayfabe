@@ -12,3 +12,6 @@ APPRES side=win app=blender_cycles verdict=PASS rc=0 secs=14 quiet=4 note=- boot
 APPRES side=win app=vkpeak verdict=PASS rc=0 secs=117 quiet=1 note=warn:System.Management.Automation.RemoteException boot=g4 guest_tdr=0 wer=0 gsp_cycles=0 proof=out tier=1 cat=vulkan
 APPRES side=win app=gravitymark_d3d12_raster verdict=FAIL rc=0 secs=188 quiet=188 note=no-gpu-proof boot=g4 guest_tdr=0 wer=0 gsp_cycles=0 proof=none:pdh:Cuda|Compute|3D|Copy tier=2 cat=d3d
 APPRES side=win app=gravitymark_d3d12_rt verdict=FAIL rc=1 secs=33 quiet=0 note=rc:1,success-string-missing,no-gpu-proof | GM_FAIL no benchmark image boot=g4 guest_tdr=3 wer=0 gsp_cycles=1 proof=none:pdh:Cuda|Compute|3D|Copy tier=3 cat=d3d
+APPRES side=win app=torch_ai_bench verdict=FAIL rc=- secs=450 quiet=- note=guest-rebooted (bugcheck?) boot=g5 guest_tdr=0 wer=0 gsp_cycles=1 proof=- tier=1 cat=torch
+APPRES side=win app=gravitymark_d3d12 verdict=FAIL rc=1 secs=28 quiet=1 note=rc:1,success-string-missing,no-gpu-proof | GM_FAIL no benchmark image boot=g6 guest_tdr=3 wer=0 gsp_cycles=1 proof=none:pdh:Cuda|Compute|3D|Copy tier=1 cat=d3d
+APPRES side=win app=gravitymark_gl verdict=FAIL rc=-1073740791 secs=58 quiet=58 note=rc:-1073740791,success-string-missing,no-gpu-proof | GM_FAIL no benchmark image boot=g7 guest_tdr=3 wer=0 gsp_cycles=1 proof=none:pdh:Cuda|Compute|3D|Copy tier=2 cat=opengl
