@@ -11,6 +11,23 @@ fix this file. Entries below the first are dated history.
 
 ## 0. Current resumption — start here
 
+**2026-10-11, Codex Windows matrix campaign (`codex/windows-matrix-20261011`):**
+[Current evidence and run instructions](../traces/windows_matrix_20261011/README.md).
+This supersedes the next entry's “Nothing has run on a Windows guest” claim:
+production Windows smoke passes 4/4 on exact product `2c917f3e`; the full lane
+has four completed PASS results and one FAIL so far. BlackScholes startup hit
+the translated channel's 4096-fragment limit (4155 measured). Candidate
+`0f9c01f9` slices large copies before binding; GPU-free tests and independent
+review pass, hardware validation is pending. The running old-product clpeak
+CUDA test will finish before a controlled stop and the candidate build.
+The prior stock Windows baseline is 99/100 PASS (GravityMark Vulkan TIMEOUT);
+a new owned Vast RTX 4090 reference is provisioned on matching driver 580.88,
+with app-disk transfer pending. Eight display-overlay tests are separate and
+MPO is disabled in the main campaign. No full-matrix success is claimed.
+Integration/master are unchanged. See the linked campaign record for exact
+runner revisions, tool hashes, checkpoints, and pending coverage.
+
+
 **Windows app matrix lane built (GPU-free), 2026-10-10 (branch `claude/windows-appmatrix-20261010`, design [`V3_WINDOWS_APP_MATRIX.md`](design/V3_WINDOWS_APP_MATRIX.md), STATUS DESIGN-ONLY).**
 ⊘ *This supersedes the "Windows app-matrix lane is TODO and does not exist" sentence of the next entry:* the inventory (100 Windows apps; all 71 Linux rows mapped or explained),
 a 6.8 GB read-only app disk (`/var/lib/kf-windows-20261005/appmatrix/image/kfapps.iso`, 44 sha256-pinned downloads, no guest internet needed), the QGA driver
