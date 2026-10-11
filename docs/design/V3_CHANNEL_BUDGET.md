@@ -7,8 +7,8 @@ Every guest channel is a real channel twin on the shared host GPU, and the host 
 quota (`kf-core/src/caps.rs`, §9.1). The cap was a hardcoded `VmCaps::from_declared(64, ...)` while the guest was
 told `numChannels = 2048` per runlist. A Windows desktop holds about 55-64 live twins idle (run 501 BORN/released
 replay), so the 65th channel — a GL or CUDA context — was refused `0x1a` (`act birth passthrough REFUSED
-OverDeclaredCap { cap: 64, asked: 65 }`, then `GSP REFUSED fn103/0x0000c56f=0x1a`): `nvoglv64.dll` crashed
-(0xb6d516) and `cuCtxCreate` returned 999. §9.1's own rule — "the cap is the number we told the guest" — had been broken.
+OverDeclaredCap { cap: 64, asked: 65 }`, then `GSP REFUSED fn103/0x0000c56f=0x1a`): the OpenGL driver crashed
+and `cuCtxCreate` returned 999. §9.1's own rule — "the cap is the number we told the guest" — had been broken.
 
 ## The rule
 One number, `channel_budget` (channels **per runlist**):

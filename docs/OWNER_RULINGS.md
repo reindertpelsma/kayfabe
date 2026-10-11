@@ -1137,3 +1137,16 @@ HDR on the console) falls under "works without".
 - Our own traces remain valuable to find what must be answered and as test oracles for the die we own; they are not the coverage source.
 - Supersedes for this question the diagnosis-only wording in §S/`feedback_reverse_engineering_boundary` only to the extent stated above:
   reverse engineering to extract constants is allowed in the last resort; interface extraction and decompilation inside the repo are not.
+
+## §AG. Reverse engineering stays small and private; the provenance policy is public, 2026-10-11
+
+**STATUS: LIVE, 2026-10-11 (owner statements; recorded by the coordinator, wording to be confirmed by the owner).**
+- Reverse engineering (decompiling, tracing a closed binary) is allowed for **interoperability, diagnosis and verification**, kept **small**,
+  and its output **is never made public** (private repository `reindertpelsma/kayfabe-private`). Reason (owner): this prevents the largest risk,
+  spreading annotated IP. It helped the project and is not use of leaked sources (owner).
+- The provenance **policy** itself is public, for transparency: `docs/design/V3_PROVENANCE.md`. It states rules, sources and checks, never what was
+  analysed or found, and it must not claim a clean-room process (the same people and agents did diagnosis and implementation).
+- Consequence for data: constants and interfaces come only from the sources in §AF; a diagnosis finding is turned into a behaviour-level
+  verification item and confirmed from those sources or by measurement before code depends on it.
+- To do: one lawyer review of the provenance page and of the overall reverse-engineering position before the public release; a sweep of the full
+  git history for analysis material and closed-binary offsets (release gate).
