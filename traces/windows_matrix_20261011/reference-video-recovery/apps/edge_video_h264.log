@@ -1,0 +1,3 @@
+=== edge_video_h264 start=2026-10-11T08:23:18.2586832-07:00 host=DESKTOP-JR70RMQ session=1 boot=2026-10-11T14:31:59.5000000Z timeout=180
+KFEDGE {"page":"video","src":"/media/t_h264.mp4","ok":true,"can_play":"probably","mc_supported":true,"mc_smooth":true,"mc_power_efficient":true,"wall_s":15.012,"played_s":14.686,"total_frames":446,"dropped_frames":44,"decoded_w":1280,"decoded_h":720}
+=== end rc=0 secs=29 2026-10-11T08:23:47.5629976-07:00

@@ -1,0 +1,22 @@
+2026-10-11T15:19:00Z START run_dir=/data/kf-native-reference-20261011/video-recovery-comparison vm=native apps=5
+2026-10-11T15:19:00Z MATRIX_START apps=5 (resume skips 0) per_guest=1000 max_tdr=1000 tier<=3
+2026-10-11T15:19:02Z [g1] launched; waiting for the guest agent (<= 900s)
+2026-10-11T15:19:03Z [g1] agent answered after 3s
+2026-10-11T15:19:03Z [g1] no KF_GUEST_PW: assuming autologon
+2026-10-11T15:19:07Z [g1] interactive session: DESKTOP-JR70RMQ\vast
+2026-10-11T15:20:01Z [g1] pushed 25 guest files
+2026-10-11T15:20:06Z [g1] app disk attached (KFMOUNT D:)
+2026-10-11T15:20:13Z [g1] setup ok: cd=D: nvidia_adapters=1 NVIDIA GeForce RTX 4090, 580.88, 24564 MiB
+2026-10-11T15:20:23Z [g1] override tool kf_cuda_control.exe sha256=3906f520c10e272215d9d7d79a90ce9a2042581923a4717db90be312ab3a67c8
+2026-10-11T15:20:32Z [g1] override tool kf_dxprobe.exe sha256=3c6ededa77430a18a13321eb72fdca7f60282f8d12ddc147a7e7df1284832c5f
+2026-10-11T15:20:36Z [g1] staged vc_redist (cached, 0s)
+2026-10-11T15:20:44Z [g1] READY boot=2026-10-11T14:31:59.5000000Z user=DESKTOP-JR70RMQ\vast smi_ok=True
+2026-10-11T15:20:48Z [g1] staged ffmpeg (cached, 0s)
+2026-10-11T15:21:48Z [g1] d3d11va_h264: PASS
+2026-10-11T15:23:03Z [g1] vulkan_video_decode: PASS
+2026-10-11T15:24:08Z [g1] edge_video_h264: PASS
+2026-10-11T15:25:09Z [g1] edge_video_vp9: PASS
+2026-10-11T15:26:43Z [g1] dxva2_h264: PASS
+2026-10-11T15:26:43Z [g1] stopped (noop (native box stays up))
+2026-10-11T15:26:43Z MATRIX_DONE batched: 5 pass / 5
+2026-10-11T15:26:43Z EXIT rc=0

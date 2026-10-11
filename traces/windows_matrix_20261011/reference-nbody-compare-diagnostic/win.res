@@ -1,0 +1,1 @@
+APPRES side=win app=nbody_compare_diagnostic verdict=FAIL rc=0 secs=4 quiet=1 note=success-string-missing,no-gpu-proof boot=g1 guest_tdr=0 wer=0 gsp_cycles=- proof=none:pdh:Cuda|Compute|3D|Copy tier=1 cat=cuda-demo

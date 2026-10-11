@@ -1,0 +1,114 @@
+ENCODER_WINDOWS_START=2026-10-11T17:22:40+02:00 source=a61af1c3cada56ffd6488fd3a6706262a023142f
+FULL_MEDIA_START harness=a61af1c3 at=2026-10-11T17:22:40+02:00
+exfatprogs version : 1.3.2
+Creating exFAT filesystem(/var/lib/kf-windows-20261005/codex-supplement-20261011/full-image-a61af1c3/kfapps_supplement.img, cluster size=32768)
+
+Writing volume boot record: done
+Writing backup volume boot record: done
+Fat table creation: done
+Allocation bitmap creation: done
+Upcase table creation: done
+Writing root directory entry: done
+Synchronizing...
+
+exFAT format complete!
+FULL_MEDIA_FILES 92 IDENTITY f5d28f726680218377c79dc62ece49af0257dd61791c6d1b828a377d3b768254
+FULL_MEDIA_SHA256 2b71886e95c9ed4f27ceeda4b4279e8a5423530ffc6ede09b091676d0be35d2b
+OK image sha256 2b71886e95c9ed4f27ceeda4b4279e8a5423530ffc6ede09b091676d0be35d2b
+OK image identity f5d28f726680218377c79dc62ece49af0257dd61791c6d1b828a377d3b768254
+VERIFY_IMAGE_DONE files=92 bad=0
+FULL_MEDIA_EXIT=0 harness=a61af1c3 at=2026-10-11T17:24:14+02:00
+[run_windows_apps 2026-10-11T15:24:51Z] START run=/var/lib/kf-windows-20261005/codex-encoder-windows-focus-20261011-a61af1c3 kf3=a61af1c3 iso=/var/lib/kf-windows-20261005/codex-supplement-20261011/full-image-a61af1c3/kfapps_supplement.img xid_before=36 gpu=NVIDIA GeForce RTX 4070, 595.91.07
+2026-10-11T15:24:51Z START run_dir=/var/lib/kf-windows-20261005/codex-encoder-windows-focus-20261011-a61af1c3 vm=broker kf3_rev=a61af1c3 apps=4
+2026-10-11T15:24:51Z MATRIX_START apps=4 (resume skips 0) per_guest=4 max_tdr=3 tier<=3
+2026-10-11T15:24:53Z pre-guest hook rc=0 :00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=identity 2026-10-11T17:24:53+02:00
+2026-10-11T15:24:55Z broker run 1160 rc=0 ['  └────────────────────────────────────────────────────────────────────────────────────────────┘']
+2026-10-11T15:24:55Z [g1] launched; waiting for the guest agent (<= 900s)
+2026-10-11T15:25:09Z [g1] agent answered after 17s
+2026-10-11T15:25:09Z [g1] password set for vast rc=0
+2026-10-11T15:25:55Z [g1] verified sign-in attempt=1 rc=0
+2026-10-11T15:25:56Z [g1] interactive session: VASTWIN\vast
+2026-10-11T15:25:57Z [g1] pushed 25 guest files
+2026-10-11T15:25:57Z [g1] app disk attached (usb-storage)
+2026-10-11T15:26:05Z [g1] setup ok: cd=D: nvidia_adapters=1 NVIDIA GeForce RTX 4070, 580.88, 4096 MiB
+2026-10-11T15:26:08Z [g1] override tool kf_cuda_control.exe sha256=3906f520c10e272215d9d7d79a90ce9a2042581923a4717db90be312ab3a67c8
+2026-10-11T15:26:11Z [g1] override tool kf_dxprobe.exe sha256=3c6ededa77430a18a13321eb72fdca7f60282f8d12ddc147a7e7df1284832c5f
+2026-10-11T15:26:25Z [g1] staged vc_redist (installer, 13s)
+2026-10-11T15:26:30Z [g1] READY boot=2026-10-11T15:25:00.5000000Z user=VASTWIN\vast smi_ok=True
+2026-10-11T15:26:56Z [g1] glgears_wgl: PASS
+2026-10-11T15:26:58Z [g1] staged ffmpeg (unzip, 1s)
+2026-10-11T15:27:47Z [g1] nvenc_h264: PASS (restart guest: tdr-budget:3>=3)
+2026-10-11T15:28:06Z post-guest hook rc=0 A GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-11T17:28:06+02:00
+RECLAIM_STOPPED_OVERLAY 1160 3942023168
+2026-10-11T15:28:06Z [g1] stopped (clean)
+2026-10-11T15:28:06Z [g1] session ended early: tdr-budget:3>=3; 2 apps move to a fresh guest
+2026-10-11T15:28:08Z pre-guest hook rc=0 :00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=identity 2026-10-11T17:28:08+02:00
+2026-10-11T15:28:09Z broker run 1161 rc=0 ['  └────────────────────────────────────────────────────────────────────────────────────────────┘']
+2026-10-11T15:28:09Z [g2] launched; waiting for the guest agent (<= 900s)
+2026-10-11T15:28:23Z [g2] agent answered after 16s
+2026-10-11T15:28:23Z [g2] password set for vast rc=0
+2026-10-11T15:29:09Z [g2] verified sign-in attempt=1 rc=0
+2026-10-11T15:29:10Z [g2] interactive session: VASTWIN\vast
+2026-10-11T15:29:11Z [g2] pushed 25 guest files
+2026-10-11T15:29:11Z [g2] app disk attached (usb-storage)
+2026-10-11T15:29:17Z [g2] setup ok: cd=D: nvidia_adapters=1 NVIDIA GeForce RTX 4070, 580.88, 4096 MiB
+2026-10-11T15:29:20Z [g2] override tool kf_cuda_control.exe sha256=3906f520c10e272215d9d7d79a90ce9a2042581923a4717db90be312ab3a67c8
+2026-10-11T15:29:23Z [g2] override tool kf_dxprobe.exe sha256=3c6ededa77430a18a13321eb72fdca7f60282f8d12ddc147a7e7df1284832c5f
+2026-10-11T15:29:36Z [g2] staged vc_redist (installer, 12s)
+2026-10-11T15:29:41Z [g2] READY boot=2026-10-11T15:28:14.5000000Z user=VASTWIN\vast smi_ok=True
+2026-10-11T15:29:43Z [g2] staged ffmpeg (unzip, 1s)
+2026-10-11T15:30:26Z [g2] nvenc_hevc: PASS (restart guest: tdr-budget:3>=3)
+2026-10-11T15:30:45Z post-guest hook rc=0 A GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-11T17:30:45+02:00
+RECLAIM_STOPPED_OVERLAY 1161 3787333632
+2026-10-11T15:30:45Z [g2] stopped (clean)
+2026-10-11T15:30:45Z [g2] session ended early: tdr-budget:3>=3; 1 apps move to a fresh guest
+2026-10-11T15:30:47Z pre-guest hook rc=0 :00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=identity 2026-10-11T17:30:47+02:00
+2026-10-11T15:30:49Z broker run 1162 rc=0 ['  └────────────────────────────────────────────────────────────────────────────────────────────┘']
+2026-10-11T15:30:49Z [g3] launched; waiting for the guest agent (<= 900s)
+2026-10-11T15:31:01Z [g3] agent answered after 16s
+2026-10-11T15:31:02Z [g3] password set for vast rc=0
+2026-10-11T15:31:49Z [g3] verified sign-in attempt=1 rc=0
+2026-10-11T15:31:50Z [g3] interactive session: VASTWIN\vast
+2026-10-11T15:31:51Z [g3] pushed 25 guest files
+2026-10-11T15:31:51Z [g3] app disk attached (usb-storage)
+2026-10-11T15:31:57Z [g3] setup ok: cd=D: nvidia_adapters=1 NVIDIA GeForce RTX 4070, 580.88, 4096 MiB
+2026-10-11T15:32:00Z [g3] override tool kf_cuda_control.exe sha256=3906f520c10e272215d9d7d79a90ce9a2042581923a4717db90be312ab3a67c8
+2026-10-11T15:32:03Z [g3] override tool kf_dxprobe.exe sha256=3c6ededa77430a18a13321eb72fdca7f60282f8d12ddc147a7e7df1284832c5f
+2026-10-11T15:32:17Z [g3] staged vc_redist (installer, 13s)
+2026-10-11T15:32:22Z [g3] READY boot=2026-10-11T15:30:53.5000000Z user=VASTWIN\vast smi_ok=True
+2026-10-11T15:32:24Z [g3] staged ffmpeg (unzip, 1s)
+2026-10-11T15:33:19Z [g3] nvenc_av1: PASS (restart guest: tdr-budget:3>=3)
+2026-10-11T15:33:37Z post-guest hook rc=0 A GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-11T17:33:37+02:00
+RECLAIM_STOPPED_OVERLAY 1162 3826204672
+2026-10-11T15:33:37Z [g3] stopped (clean)
+2026-10-11T15:33:37Z [g3] session ended early: tdr-budget:3>=3; 0 apps move to a fresh guest
+2026-10-11T15:33:37Z MATRIX_DONE batched: 4 pass / 4
+2026-10-11T15:33:37Z EXIT rc=0
+[run_windows_apps 2026-10-11T15:33:37Z] EXIT rc=0 host_xid_delta=0 summary=/var/lib/kf-windows-20261005/codex-encoder-windows-focus-20261011-a61af1c3/summary.md
+Traceback (most recent call last):
+  File "<stdin>", line 9, in <module>
+AssertionError: {'glgears_wgl': {'side': 'win', 'app': 'glgears_wgl', 'verdict': 'PASS', 'rc': '0', 'secs': '14', 'quiet': '9', 'note': '-', 'boot': 'g1', 'guest_tdr': '0', 'wer': '0', 'gsp_cycles': '0', 'proof': 'out', 'tier': '1', 'cat': 'opengl'}, 'nvenc_h264': {'side': 'win', 'app': 'nvenc_h264', 'verdict': 'PASS', 'rc': '0', 'secs': '37', 'quiet': '27', 'note': '-', 'boot': 'g1', 'guest_tdr': '3', 'wer': '0', 'gsp_cycles': '1', 'proof': 'pdh:videoencode', 'tier': '1', 'cat': 'video'}, 'nvenc_hevc': {'side': 'win', 'app': 'nvenc_hevc', 'verdict': 'PASS', 'rc': '0', 'secs': '29', 'quiet': '0', 'note': '-', 'boot': 'g2', 'guest_tdr': '3', 'wer': '0', 'gsp_cycles': '1', 'proof': 'pdh:videoencode', 'tier': '1', 'cat': 'video'}, 'nvenc_av1': {'side': 'win', 'app': 'nvenc_av1', 'verdict': 'PASS', 'rc': '0', 'secs': '40', 'quiet': '30', 'note': '-', 'boot': 'g3', 'guest_tdr': '3', 'wer': '0', 'gsp_cycles': '1', 'proof': 'pdh:videoencode', 'tier': '1', 'cat': 'video'}}
+[windows] no run1160 guest running
+[windows] run1160 stopped (Xid count now 36)
+[windows] no run1161 guest running
+[windows] run1161 stopped (Xid count now 36)
+[windows] no run1162 guest running
+[windows] run1162 stopped (Xid count now 36)
+IOMMU_SWITCH_START group=11 from=DMA-FQ to=DMA-FQ 2026-10-11T17:33:41+02:00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-11T17:33:43+02:00
+KERNEL_JOURNAL_XID_RECORDS 0 QUERY_EXIT 0
+ENCODER_WINDOWS_EXIT=1 at=2026-10-11T17:33:43+02:00

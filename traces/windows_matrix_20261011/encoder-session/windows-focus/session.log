@@ -1,0 +1,77 @@
+2026-10-11T15:24:51Z START run_dir=/var/lib/kf-windows-20261005/codex-encoder-windows-focus-20261011-a61af1c3 vm=broker kf3_rev=a61af1c3 apps=4
+2026-10-11T15:24:51Z MATRIX_START apps=4 (resume skips 0) per_guest=4 max_tdr=3 tier<=3
+2026-10-11T15:24:53Z pre-guest hook rc=0 :00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=identity 2026-10-11T17:24:53+02:00
+2026-10-11T15:24:55Z broker run 1160 rc=0 ['  └────────────────────────────────────────────────────────────────────────────────────────────┘']
+2026-10-11T15:24:55Z [g1] launched; waiting for the guest agent (<= 900s)
+2026-10-11T15:25:09Z [g1] agent answered after 17s
+2026-10-11T15:25:09Z [g1] password set for vast rc=0
+2026-10-11T15:25:55Z [g1] verified sign-in attempt=1 rc=0
+2026-10-11T15:25:56Z [g1] interactive session: VASTWIN\vast
+2026-10-11T15:25:57Z [g1] pushed 25 guest files
+2026-10-11T15:25:57Z [g1] app disk attached (usb-storage)
+2026-10-11T15:26:05Z [g1] setup ok: cd=D: nvidia_adapters=1 NVIDIA GeForce RTX 4070, 580.88, 4096 MiB
+2026-10-11T15:26:08Z [g1] override tool kf_cuda_control.exe sha256=3906f520c10e272215d9d7d79a90ce9a2042581923a4717db90be312ab3a67c8
+2026-10-11T15:26:11Z [g1] override tool kf_dxprobe.exe sha256=3c6ededa77430a18a13321eb72fdca7f60282f8d12ddc147a7e7df1284832c5f
+2026-10-11T15:26:25Z [g1] staged vc_redist (installer, 13s)
+2026-10-11T15:26:30Z [g1] READY boot=2026-10-11T15:25:00.5000000Z user=VASTWIN\vast smi_ok=True
+2026-10-11T15:26:56Z [g1] glgears_wgl: PASS
+2026-10-11T15:26:58Z [g1] staged ffmpeg (unzip, 1s)
+2026-10-11T15:27:47Z [g1] nvenc_h264: PASS (restart guest: tdr-budget:3>=3)
+2026-10-11T15:28:06Z post-guest hook rc=0 A GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-11T17:28:06+02:00
+RECLAIM_STOPPED_OVERLAY 1160 3942023168
+2026-10-11T15:28:06Z [g1] stopped (clean)
+2026-10-11T15:28:06Z [g1] session ended early: tdr-budget:3>=3; 2 apps move to a fresh guest
+2026-10-11T15:28:08Z pre-guest hook rc=0 :00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=identity 2026-10-11T17:28:08+02:00
+2026-10-11T15:28:09Z broker run 1161 rc=0 ['  └────────────────────────────────────────────────────────────────────────────────────────────┘']
+2026-10-11T15:28:09Z [g2] launched; waiting for the guest agent (<= 900s)
+2026-10-11T15:28:23Z [g2] agent answered after 16s
+2026-10-11T15:28:23Z [g2] password set for vast rc=0
+2026-10-11T15:29:09Z [g2] verified sign-in attempt=1 rc=0
+2026-10-11T15:29:10Z [g2] interactive session: VASTWIN\vast
+2026-10-11T15:29:11Z [g2] pushed 25 guest files
+2026-10-11T15:29:11Z [g2] app disk attached (usb-storage)
+2026-10-11T15:29:17Z [g2] setup ok: cd=D: nvidia_adapters=1 NVIDIA GeForce RTX 4070, 580.88, 4096 MiB
+2026-10-11T15:29:20Z [g2] override tool kf_cuda_control.exe sha256=3906f520c10e272215d9d7d79a90ce9a2042581923a4717db90be312ab3a67c8
+2026-10-11T15:29:23Z [g2] override tool kf_dxprobe.exe sha256=3c6ededa77430a18a13321eb72fdca7f60282f8d12ddc147a7e7df1284832c5f
+2026-10-11T15:29:36Z [g2] staged vc_redist (installer, 12s)
+2026-10-11T15:29:41Z [g2] READY boot=2026-10-11T15:28:14.5000000Z user=VASTWIN\vast smi_ok=True
+2026-10-11T15:29:43Z [g2] staged ffmpeg (unzip, 1s)
+2026-10-11T15:30:26Z [g2] nvenc_hevc: PASS (restart guest: tdr-budget:3>=3)
+2026-10-11T15:30:45Z post-guest hook rc=0 A GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-11T17:30:45+02:00
+RECLAIM_STOPPED_OVERLAY 1161 3787333632
+2026-10-11T15:30:45Z [g2] stopped (clean)
+2026-10-11T15:30:45Z [g2] session ended early: tdr-budget:3>=3; 1 apps move to a fresh guest
+2026-10-11T15:30:47Z pre-guest hook rc=0 :00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=identity 2026-10-11T17:30:47+02:00
+2026-10-11T15:30:49Z broker run 1162 rc=0 ['  └────────────────────────────────────────────────────────────────────────────────────────────┘']
+2026-10-11T15:30:49Z [g3] launched; waiting for the guest agent (<= 900s)
+2026-10-11T15:31:01Z [g3] agent answered after 16s
+2026-10-11T15:31:02Z [g3] password set for vast rc=0
+2026-10-11T15:31:49Z [g3] verified sign-in attempt=1 rc=0
+2026-10-11T15:31:50Z [g3] interactive session: VASTWIN\vast
+2026-10-11T15:31:51Z [g3] pushed 25 guest files
+2026-10-11T15:31:51Z [g3] app disk attached (usb-storage)
+2026-10-11T15:31:57Z [g3] setup ok: cd=D: nvidia_adapters=1 NVIDIA GeForce RTX 4070, 580.88, 4096 MiB
+2026-10-11T15:32:00Z [g3] override tool kf_cuda_control.exe sha256=3906f520c10e272215d9d7d79a90ce9a2042581923a4717db90be312ab3a67c8
+2026-10-11T15:32:03Z [g3] override tool kf_dxprobe.exe sha256=3c6ededa77430a18a13321eb72fdca7f60282f8d12ddc147a7e7df1284832c5f
+2026-10-11T15:32:17Z [g3] staged vc_redist (installer, 13s)
+2026-10-11T15:32:22Z [g3] READY boot=2026-10-11T15:30:53.5000000Z user=VASTWIN\vast smi_ok=True
+2026-10-11T15:32:24Z [g3] staged ffmpeg (unzip, 1s)
+2026-10-11T15:33:19Z [g3] nvenc_av1: PASS (restart guest: tdr-budget:3>=3)
+2026-10-11T15:33:37Z post-guest hook rc=0 A GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-11T17:33:37+02:00
+RECLAIM_STOPPED_OVERLAY 1162 3826204672
+2026-10-11T15:33:37Z [g3] stopped (clean)
+2026-10-11T15:33:37Z [g3] session ended early: tdr-budget:3>=3; 0 apps move to a fresh guest
+2026-10-11T15:33:37Z MATRIX_DONE batched: 4 pass / 4
+2026-10-11T15:33:37Z EXIT rc=0

@@ -1,0 +1,125 @@
+25:kf3: interrupt plane: host non-stall events -> guest vectors [GR0->Some(0) CE0->Some(0) CE1->Some(0) CE2->Some(1) CE3->Some(2) NVENC1->Some(4) NVDEC0->Some(3) OFA->Some(5)]
+77:kf3: PT-NSI host CE3 notifier wake #1: NotArmed (vector Some(2), live twins 0)
+78:kf3: PT-NSI host FIFO_EVENT_MTHD edge #1: NotArmed (guest armed=false, vector None)
+82:kf3: PT-NSI host CE3 notifier wake #2: NotArmed (vector Some(2), live twins 0)
+83:kf3: PT-NSI host FIFO_EVENT_MTHD edge #2: NotArmed (guest armed=false, vector None)
+84:kf3: PT-NSI host CE3 notifier wake #3: NotArmed (vector Some(2), live twins 0)
+85:kf3: PT-NSI host FIFO_EVENT_MTHD edge #3: NotArmed (guest armed=false, vector None)
+87:kf3: PT-NSI host CE3 notifier wake #4: NotArmed (vector Some(2), live twins 0)
+88:kf3: PT-NSI host FIFO_EVENT_MTHD edge #4: NotArmed (guest armed=false, vector None)
+89:kf3: PT-NSI host CE3 notifier wake #5: NotArmed (vector Some(2), live twins 0)
+90:kf3: PT-NSI host FIFO_EVENT_MTHD edge #5: NotArmed (guest armed=false, vector None)
+91:kf3: PT-NSI host CE3 notifier wake #6: NotArmed (vector Some(2), live twins 0)
+92:kf3: PT-NSI host FIFO_EVENT_MTHD edge #6: NotArmed (guest armed=false, vector None)
+93:kf3: PT-NSI host CE3 notifier wake #7: NotArmed (vector Some(2), live twins 0)
+94:kf3: PT-NSI host FIFO_EVENT_MTHD edge #7: NotArmed (guest armed=false, vector None)
+96:kf3: PT-NSI host CE3 notifier wake #8: NotArmed (vector Some(2), live twins 0)
+97:kf3: PT-NSI host FIFO_EVENT_MTHD edge #8: NotArmed (guest armed=false, vector None)
+98:kf3: PT-NSI host FIFO_EVENT_MTHD edge #9: NotArmed (guest armed=false, vector None)
+99:kf3: PT-NSI host FIFO_EVENT_MTHD edge #10: NotArmed (guest armed=false, vector None)
+100:kf3: PT-NSI host FIFO_EVENT_MTHD edge #11: NotArmed (guest armed=false, vector None)
+101:kf3: PT-NSI host FIFO_EVENT_MTHD edge #12: NotArmed (guest armed=false, vector None)
+102:kf3: PT-NSI host FIFO_EVENT_MTHD edge #13: NotArmed (guest armed=false, vector None)
+103:kf3: PT-NSI host FIFO_EVENT_MTHD edge #14: NotArmed (guest armed=false, vector None)
+104:kf3: PT-NSI host FIFO_EVENT_MTHD edge #15: NotArmed (guest armed=false, vector None)
+105:kf3: PT-NSI host CE3 notifier wake #16: NotArmed (vector Some(2), live twins 0)
+106:kf3: PT-NSI host FIFO_EVENT_MTHD edge #16: NotArmed (guest armed=false, vector None)
+107:kf3: PT-NSI host CE3 notifier wake #32: NotArmed (vector Some(2), live twins 0)
+108:kf3: PT-NSI host FIFO_EVENT_MTHD edge #32: NotArmed (guest armed=false, vector None)
+112:kf3: PT-NSI host CE3 notifier wake #64: NotArmed (vector Some(2), live twins 0)
+113:kf3: PT-NSI host FIFO_EVENT_MTHD edge #64: NotArmed (guest armed=false, vector None)
+115:kf3: PT-NSI host CE3 notifier wake #128: NotArmed (vector Some(2), live twins 0)
+116:kf3: PT-NSI host FIFO_EVENT_MTHD edge #128: NotArmed (guest armed=false, vector None)
+118:kf3: PT-NSI host CE3 notifier wake #256: NotArmed (vector Some(2), live twins 0)
+119:kf3: PT-NSI host FIFO_EVENT_MTHD edge #256: NotArmed (guest armed=false, vector None)
+693:kf3: PT-NSI host GR0 notifier wake #1: NotArmed (vector Some(0), live twins 0)
+700:kf3: PT-NSI host GR0 notifier wake #2: NotArmed (vector Some(0), live twins 0)
+706:kf3: PT-NSI host GR0 notifier wake #3: NotArmed (vector Some(0), live twins 0)
+708:kf3: PT-NSI host GR0 notifier wake #4: NotArmed (vector Some(0), live twins 0)
+731:kf3: PT-NSI host GR0 notifier wake #5: NotArmed (vector Some(0), live twins 0)
+733:kf3: PT-NSI host GR0 notifier wake #6: NotArmed (vector Some(0), live twins 0)
+739:kf3: PT-NSI host GR0 notifier wake #7: NotArmed (vector Some(0), live twins 0)
+741:kf3: PT-NSI host GR0 notifier wake #8: NotArmed (vector Some(0), live twins 0)
+755:kf3: PT-NSI host GR0 notifier wake #16: NotArmed (vector Some(0), live twins 0)
+826:kf3: PT-NSI host GR0 notifier wake #32: NotArmed (vector Some(0), live twins 0)
+879:kf3: PT-NSI host GR0 notifier wake #64: NotArmed (vector Some(0), live twins 0)
+948:kf3: PT-NSI host CE2 notifier wake #1: NotArmed (vector Some(1), live twins 0)
+951:kf3: PT-NSI host CE2 notifier wake #2: NotArmed (vector Some(1), live twins 0)
+1197:kf3: PT-NSI host FIFO_EVENT_MTHD edge #512: Raise(0) (guest armed=true, vector Some(0))
+1287:kf3: PT-NSI host GR0 notifier wake #128: NotArmed (vector Some(0), live twins 0)
+1839:kf3: PT-NSI host CE2 notifier wake #3: NotArmed (vector Some(1), live twins 0)
+2043:kf3: PT-NSI host CE2 notifier wake #4: NotArmed (vector Some(1), live twins 0)
+2073:kf3: PT-NSI host GR0 notifier wake #256: Raise(0) (vector Some(0), live twins 0)
+2106:kf3: PT-NSI host CE2 notifier wake #5: NotArmed (vector Some(1), live twins 0)
+2123:kf3: PT-NSI host GR0 notifier wake #512: Raise(0) (vector Some(0), live twins 0)
+2131:kf3: PT-NSI host FIFO_EVENT_MTHD edge #1024: Raise(1) (guest armed=true, vector Some(1))
+2164:kf3: PT-NSI host GR0 notifier wake #1024: Raise(0) (vector Some(0), live twins 0)
+2183:kf3: PT-NSI host FIFO_EVENT_MTHD edge #2048: Raise(1) (guest armed=true, vector Some(1))
+2184:kf3: PT-NSI host GR0 notifier wake #2048: Raise(0) (vector Some(0), live twins 0)
+2185:kf3: PT-NSI host CE3 notifier wake #512: Raise(2) (vector Some(2), live twins 0)
+2231:kf3: PT-NSI host CE2 notifier wake #6: NotArmed (vector Some(1), live twins 0)
+2233:kf3: PT-NSI host CE2 notifier wake #7: NotArmed (vector Some(1), live twins 0)
+2235:kf3: PT-NSI host CE2 notifier wake #8: NotArmed (vector Some(1), live twins 0)
+2396:kf3: PT-NSI host CE2 notifier wake #16: NotArmed (vector Some(1), live twins 0)
+2400:kf3: PT-NSI host CE2 notifier wake #32: NotArmed (vector Some(1), live twins 0)
+2748:kf3: PT-NSI host CE2 notifier wake #64: NotArmed (vector Some(1), live twins 0)
+2772:kf3: PT-NSI host CE2 notifier wake #128: NotArmed (vector Some(1), live twins 0)
+2851:kf3: PT-NSI host CE2 notifier wake #256: NotArmed (vector Some(1), live twins 0)
+3029:kf3: PT-NSI host CE2 notifier wake #512: NotArmed (vector Some(1), live twins 0)
+3151:kf3: PT-NSI host FIFO_EVENT_MTHD edge #4096: Raise(1) (guest armed=true, vector Some(1))
+3360:kf3: PT-NSI host CE2 notifier wake #1024: NotArmed (vector Some(1), live twins 0)
+3513:kf3: PT-NSI host CE3 notifier wake #1024: Raise(2) (vector Some(2), live twins 4)
+3580:kf3: PT-NSI host CE3 notifier wake #2048: Raise(2) (vector Some(2), live twins 4)
+3610:kf3: PT-NSI host FIFO_EVENT_MTHD edge #8192: Raise(1) (guest armed=true, vector Some(1))
+3776:kf3: PT-NSI host GR0 notifier wake #4096: Raise(0) (vector Some(0), live twins 5)
+4073:kf3: PT-NSI host CE2 notifier wake #2048: NotArmed (vector Some(1), live twins 0)
+5470:kf3: PT-NSI host CE2 notifier wake #4096: NotArmed (vector Some(1), live twins 0)
+6285:kf3: PT-NSI host FIFO_EVENT_MTHD edge #16384: Raise(1) (guest armed=true, vector Some(1))
+6844:kf3: PT-NSI host CE3 notifier wake #4096: Raise(2) (vector Some(2), live twins 10)
+7479:kf3: PT-NSI host GR0 notifier wake #8192: Raise(0) (vector Some(0), live twins 19)
+7495:kf3: act encoder session: 0xc1d00002 NVENC session ACQUIRED on the host (held now Ok(1)) (242 us, off the GSP lock)
+7586:kf3: PT-NSI host NVENC1 notifier wake #1: NotArmed (vector Some(4), live twins 1)
+7590:kf3: PT-NSI host NVENC1 notifier wake #2: NotArmed (vector Some(4), live twins 1)
+7596:kf3: PT-NSI host NVENC1 notifier wake #3: NotArmed (vector Some(4), live twins 1)
+7599:kf3: PT-NSI host NVENC1 notifier wake #4: NotArmed (vector Some(4), live twins 1)
+7600:kf3: PT-NSI host NVENC1 notifier wake #5: NotArmed (vector Some(4), live twins 1)
+7603:kf3: PT-NSI host NVENC1 notifier wake #6: NotArmed (vector Some(4), live twins 1)
+7604:kf3: PT-NSI host NVENC1 notifier wake #7: NotArmed (vector Some(4), live twins 1)
+7605:kf3: PT-NSI host NVENC1 notifier wake #8: NotArmed (vector Some(4), live twins 1)
+7608:kf3: PT-NSI host NVENC1 notifier wake #16: NotArmed (vector Some(4), live twins 1)
+7612:kf3: PT-NSI host NVENC1 notifier wake #32: NotArmed (vector Some(4), live twins 1)
+7616:EXTRACT NVENC1[vec=Some(4) armed=0 wakes=59 not_armed=59 raised=0 live_twins=1]
+7617:kf3: PT-NSI host NVENC1 notifier wake #64: NotArmed (vector Some(4), live twins 1)
+7621:kf3: PT-NSI host NVENC1 notifier wake #128: NotArmed (vector Some(4), live twins 1)
+7625:kf3: PT-NSI host NVENC1 notifier wake #256: NotArmed (vector Some(4), live twins 1)
+7630:kf3: PT-NSI host NVENC1 notifier wake #512: NotArmed (vector Some(4), live twins 1)
+7705:kf3: act encoder session: 0xc1d00002 NVENC session released on the host (held now Ok(0)) (254 us, off the GSP lock)
+7890:kf3: PT-NSI host CE2 notifier wake #8192: NotArmed (vector Some(1), live twins 0)
+7913:EXTRACT NVENC1[vec=Some(4) armed=0 wakes=893 not_armed=893 raised=0 live_twins=0]
+7916:EXTRACT NVENC1[vec=Some(4) armed=0 wakes=893 not_armed=893 raised=0 live_twins=0]
+7921:EXTRACT NVENC1[vec=Some(4) armed=0 wakes=893 not_armed=893 raised=0 live_twins=0]
+7924:EXTRACT NVENC1[vec=Some(4) armed=0 wakes=893 not_armed=893 raised=0 live_twins=0]
+7935:EXTRACT NVENC1[vec=Some(4) armed=0 wakes=893 not_armed=893 raised=0 live_twins=0]
+8440:kf3: PT-NSI host FIFO_EVENT_MTHD edge #32768: Raise(1) (guest armed=true, vector Some(1))
+9106:kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=0: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+9107:kf3: GSP phase Running -> Suspending
+9111:EXTRACT NVENC1[vec=Some(4) armed=0 wakes=893 not_armed=893 raised=0 live_twins=0]
+10305:kf3: PT-NSI host GR0 notifier wake #16384: Raise(0) (vector Some(0), live twins 0)
+10771:EXTRACT NVENC1[vec=Some(4) armed=0 wakes=893 not_armed=893 raised=0 live_twins=0]
+11554:EXTRACT NVENC1[vec=Some(4) armed=0 wakes=893 not_armed=893 raised=0 live_twins=0]
+11739:EXTRACT NVENC1[vec=Some(4) armed=0 wakes=893 not_armed=893 raised=0 live_twins=0]
+11741:EXTRACT NVENC1[vec=Some(4) armed=0 wakes=893 not_armed=893 raised=0 live_twins=0]
+11809:kf3: PT-NSI host CE3 notifier wake #8192: Raise(2) (vector Some(2), live twins 6)
+11885:EXTRACT NVENC1[vec=Some(4) armed=0 wakes=893 not_armed=893 raised=0 live_twins=0]
+11887:EXTRACT NVENC1[vec=Some(4) armed=0 wakes=893 not_armed=893 raised=0 live_twins=0]
+11889:EXTRACT NVENC1[vec=Some(4) armed=0 wakes=893 not_armed=893 raised=0 live_twins=0]
+11892:EXTRACT NVENC1[vec=Some(4) armed=0 wakes=893 not_armed=893 raised=0 live_twins=0]
+11961:EXTRACT NVENC1[vec=Some(4) armed=0 wakes=893 not_armed=893 raised=0 live_twins=0]
+12452:EXTRACT NVENC1[vec=Some(4) armed=0 wakes=893 not_armed=893 raised=0 live_twins=0]
+12479:EXTRACT NVENC1[vec=Some(4) armed=0 wakes=893 not_armed=893 raised=0 live_twins=0]
+12481:EXTRACT NVENC1[vec=Some(4) armed=0 wakes=893 not_armed=893 raised=0 live_twins=0]
+12485:EXTRACT NVENC1[vec=Some(4) armed=0 wakes=893 not_armed=893 raised=0 live_twins=0]
+12493:EXTRACT NVENC1[vec=Some(4) armed=0 wakes=893 not_armed=893 raised=0 live_twins=0]
+12576:EXTRACT NVENC1[vec=Some(4) armed=0 wakes=893 not_armed=893 raised=0 live_twins=0]
+12646:kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=0: bInPMTransition=false bGc6Entering=false newLevel=64 — the guest's RM gives BAR1 up
+12647:kf3: GSP phase Running -> Suspending

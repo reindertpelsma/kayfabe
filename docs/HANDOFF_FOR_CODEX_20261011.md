@@ -5,6 +5,40 @@ again after the Wednesday 07:00 reset). Read `AGENTS.md` (= `CLAUDE.md`) first: 
 (state, branches, traps), `docs/DELEGATED_DECISIONS_20261010.md`, `docs/OWNER_RULINGS.md` §AB-§AE, `docs/design/V3_FEATURE_GAPS.md`
 (priorities: P0 = prevents apps running; fidelity and perf beyond "decent" are post-release), `docs/design/V3_NOT_IN_GIT.md`.
 
+## Latest checkpoint, 2026-10-11 15:37 UTC
+
+Last pushed product a61af1c3 (this evidence checkpoint follows). Exact-revision
+Linux gates9/9 + gate10 PASS, matching595 fast30/30 PASS; birth census161 suite
+and12 gate births, all USER. Five expected deliberate fault-probe Xid31 records
+are saved; this is not an Xid-free Linux claim. See encoder-session/linux-regression/.
+
+Windows focus1160..1162: gears PASS14s, zero recovery. H264/HEVC/AV1 produce
+600 encoded frames each and PASS their output/PDH oracle, but EACH records three
+nvlddmkm153 events and one GSP restart. Strict clean-run assertion correctly
+exits1, host Xid delta0; all original facts retained. Session acquire/release now
+reaches the actual host and succeeds; the original incompatible-key blocker is
+resolved, clean video remains open. Teardown: no QEMU, DMA-FQ,172GiB free.
+Evidence encoder-session/windows-focus/, including bounded interrupt extracts.
+
+Owner reported manually launching Edge and seeing a black window recycle during
+this focus. Exact click time is unmeasured. Run1161 HEVC events are timestamped
+15:30:05.153,15:30:05.679,15:30:07.115 UTC; this does not identify Edge as cause.
+Mark run1161 as having additional manual browser activity. H264 and AV1 independently
+show the same recovery signature. New fresh unchanged Edge WebGL/WebGPU run1170
+is active, then eleven corrected/new apps1180+, bounded FurMark peek1250.
+Controller session41992; runner encoder-session/run_corrected_apps.sh; exact
+frozen source /data/kf-encoder-host at a61af1c3 and complete16GiB verified media.
+Hypotheses/falsifiers are in the runner. No product changes since Linux verification.
+
+Fresh stock580.88 reference video comparison5/5 PASS, zero guest event records
+(D3D11VA/Vulkan decode, EdgeH264/VP9, DXVA2); native GSP cycles unmeasured.
+Evidence reference-video-recovery/. Stock nbody -compare diagnostic exits0 but
+prints no expected OK and misses GPU proof: FAIL retained, no stronger canonical
+proof adopted from mismatching public-source behavior. Evidence reference-nbody-compare-diagnostic/.
+Broad old campaign remains82/102:63PASS,16FAIL,3TIMEOUT;58 cleanPASS.
+linux_parity_checkpoint_82.tsv maps43/65 passed-Linux counterparts conservatively;
+this does not claim full parity. Remaining20 broad apps still pending candidate.
+
 ## Latest checkpoint, 2026-10-11 15:17 UTC
 
 Last pushed24a3da15. Broad0f9c01f9/8037 campaign deliberately stopped with82/102

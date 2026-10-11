@@ -11,23 +11,20 @@ fix this file. Entries below the first are dated history.
 
 ## 0. Current resumption — start here
 
-**2026-10-11, Codex Windows matrix campaign (`codex/windows-matrix-20261011`):**
+**2026-10-11 15:37 UTC, Codex Windows campaign (`codex/windows-matrix-20261011`):**
 [Current evidence and run instructions](../traces/windows_matrix_20261011/README.md).
-This supersedes the next entry's “Nothing has run on a Windows guest” claim:
-production Windows smoke passes 4/4 on exact product `2c917f3e`; the full lane
-has four completed PASS, one FAIL, and one TIMEOUT so far. BlackScholes hit
-the translated channel's 4096-fragment limit (4155 measured). Candidate
-`0f9c01f9` slices large copies before binding; GPU-free tests and independent
-review pass; hardware gates 9/9 + gate 10 pass, matching-driver fast regression
-is underway. The old-product clpeak CUDA test timed out with host Xid 109;
-its results are preserved after a controlled stop.
-The prior stock Windows baseline is 99/100 PASS (GravityMark Vulkan TIMEOUT);
-a new owned Vast RTX 4090 reference is provisioned on matching driver 580.88,
-with verified app disk: five of six focus apps PASS, first BlackScholes TIMEOUT;
-Python/CUDA startup diagnosis is pending. Eight display-overlay tests are separate and
-MPO is disabled in the main campaign. No full-matrix success is claimed.
-Integration/master are unchanged. See the linked campaign record for exact
-runner revisions, tool hashes, checkpoints, and pending coverage.
+Exact product `a61af1c3` passes Linux gates9/9+10 and fast30/30, all births USER.
+Windows gears passes cleanly. The authored NVENC session ABI blocker is fixed:
+H264/HEVC/AV1 each encode600 frames, but each triggers a guest recovery and remains
+open. Old broad campaign stopped82/102:63PASS,16FAIL,3TIMEOUT,58 cleanPASS.
+Corrected packaging/numerical tests and fresh Edge reproduction are now running.
+Stock Windows580.88 fresh encoder/decode/browser-video/FurMark/Unigine comparisons
+pass without guest recovery records; GravityMark Vulkan also times out on stock.
+Native GSP cycles are unmeasured. Conservatively43/65 mapped passed-Linux rows
+have all Windows counterparts clean in the saved82-row checkpoint; remaining
+coverage is pending. IPC is WDDM-unsupported; Geekbench is a packaging gap.
+MPO remains disabled in the main lane; eight overlay cases are separate.
+Integration/master unchanged; no full-matrix or Linux parity success claimed.
 
 
 **Windows app matrix lane built (GPU-free), 2026-10-10 (branch `claude/windows-appmatrix-20261010`, design [`V3_WINDOWS_APP_MATRIX.md`](design/V3_WINDOWS_APP_MATRIX.md), STATUS DESIGN-ONLY).**
