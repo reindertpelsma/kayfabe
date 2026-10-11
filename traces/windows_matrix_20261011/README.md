@@ -3,6 +3,34 @@
 **STATUS: LIVE, 2026-10-11.** Product candidate `2c917f3e`, following the
 OpenGL gears fix. Results are pending; this is not a matrix pass claim.
 
+## Latest checkpoint, 2026-10-11 16:44 UTC
+
+Last pushedb03749c2; exact product72741e2b NOW hardware-verified on Linux:
+gates9/9+gate10 PASS, fast30/30, birth census161 suite+12 gate births all USER.
+Five expected deliberate fault-probe Xid31 records saved; not Xid-free.
+Evidence managed-routing/linux-regression/. Windows focus1320 active: fresh
+managed first, then gears/vectorAdd/CUP8. Remaining canonical app batch follows
+only if focus4/4 and timestamp-bounded kernel journal are clean.
+
+Authored native NVENC1/C9B7 release and release+trap probes35f97433 BOTH PASS
+on AD104 host595.91.07 as nobody: actual GPU payload and tail, USER births,
+clean teardown, zero new host Xids. OS-event/guest trap notification is still
+UNMEASURED. Production kernel-video submission remains unsupported; no encoder
+recovery fix is claimed. Evidence encoder-session/native-video-semaphore/results/.
+
+Cold startup diagnostic1262 TIMEOUT181s: Torch import82.5s, GPU readback84.6s,
+CuPy import178.1s; only2.4s remained for CuPy work. Warming experiment is
+inconclusive. Original stream in a fresh1263 TIMES OUT121s again, zero recovery.
+Bench-only direct CuPy per-thread stream correction is prepared, original120s
+budget/packages/markers retained, full independent CPU-reference readback.
+76 harness +11 inventory/doc tests PASS; new hardware oracle still pending.
+
+Matching stock580.88 fresh50-row reference is active4292, accumulating clean
+passes. Prior remaining15/15 saved. Candidate combined count remains68 clean
+passes from84 tested/104 and53/65 mapped Linux-pass rows;20 pending. No master
+or integration changes, no full-green claim. Latest runners and source revisions
+are in managed-routing/ and stream-startup/; active GPU campaign64289.
+
 ## Latest checkpoint, 2026-10-11 16:27 UTC
 
 Last pushed product `72741e2b` (KERNEL+UVM_OWNED routing correction); hardware

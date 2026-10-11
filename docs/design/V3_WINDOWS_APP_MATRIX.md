@@ -397,7 +397,7 @@ with its class (§4.4). Commands are abbreviated; `apps.json` has the exact Powe
 | `stream_created_t` | 1 / service | `python win_cuda_equiv.py stream_created` | `^STREAM_PROBE_DONE created rc=0` | out:NVIDIA\|GeForce\|RTX, pdh:Cuda\|Compute\|3D\|Copy | ~5 s / 120 s | **low** [C-small] torch streams are created cudaStreamNonBlocking |
 | `stream_default_t` | 1 / service | `python win_cuda_equiv.py stream_default` | `^STREAM_PROBE_DONE default rc=0` | out:NVIDIA\|GeForce\|RTX, pdh:Cuda\|Compute\|3D\|Copy | ~5 s / 120 s | **low** [C-small] |
 | `stream_nonblocking_t` | 1 / service | `python win_cuda_equiv.py stream_nonblocking` | `^STREAM_PROBE_DONE nonblocking rc=0` | out:NVIDIA\|GeForce\|RTX, pdh:Cuda\|Compute\|3D\|Copy | ~5 s / 120 s | **low** [C-small] torch streams are created cudaStreamNonBlocking |
-| `stream_perthread_t` | 1 / service | `python win_cuda_equiv.py stream_perthread` | `^STREAM_PROBE_DONE perthread rc=0` | out:NVIDIA\|GeForce\|RTX, pdh:Cuda\|Compute\|3D\|Copy | ~5 s / 120 s | **low** [C-small] CuPy per-thread default stream (cupy.cuda.Stream.ptds) |
+| `stream_perthread_t` | 1 / service | `python stream_perthread.py` | `^STREAM_PROBE_DONE perthread rc=0` | out:NVIDIA\|GeForce\|RTX, pdh:Cuda\|Compute\|3D\|Copy | ~5 s / 120 s | **low** [C-small] CuPy per-thread default stream (cupy.cuda.Stream.ptds) |
 | `stream_two_t` | 1 / service | `python win_cuda_equiv.py stream_two` | `^STREAM_PROBE_DONE two rc=0` | out:NVIDIA\|GeForce\|RTX, pdh:Cuda\|Compute\|3D\|Copy | ~5 s / 120 s | **low** [C-small] |
 
 **CUDA samples counterparts (PyTorch / CuPy / NVRTC)** (28)

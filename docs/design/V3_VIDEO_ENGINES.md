@@ -26,8 +26,12 @@ trap operations). The observed release then trap sequence must not be decoded
 as CE work, silently dropped, or completed on the CPU. Bench source35f97433
 adds an authored native release/trap oracle using only owned addresses, an owned
 video object and a verified USER host channel; real GPU payload and completion
-are required. Native measurement is queued, not yet evidence of supported
-submission. Production HostRing still refuses nonempty video submission.
+are required. Native measurement on AD104/595.91.07 as nobody now PASS for release and
+release+trap: GPU payload0x61fe0001, real tail1, USER births, clean teardown,
+zero bounded host Xids (native-video-semaphore/results/). OS-event and guest
+trap-notification delivery remain unmeasured. This is not yet evidence of
+supported translated submission. Production HostRing still refuses nonempty
+video submission.
 This names a repeated wall, not a causal claim for every Windows video/Edge reset.
 
 **2026-10-07 RESEARCH correction for kernel channels on `codex/sdr-lut-20261006`:**

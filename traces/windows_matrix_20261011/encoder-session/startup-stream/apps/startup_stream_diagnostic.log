@@ -1,0 +1,11 @@
+=== startup_stream_diagnostic start=2026-10-11T16:25:50.8497867+00:00 host=VASTWIN session=0 boot=2026-10-11T16:22:44.5000000Z timeout=180
+STARTUP_STAGE process elapsed_s=0.000008
+STARTUP_STAGE dll_search elapsed_s=0.000141
+STARTUP_STAGE torch_import elapsed_s=82.542193
+KFDEV NVIDIA GeForce RTX 4070
+STARTUP_STAGE torch_cuda_init elapsed_s=83.286596
+STARTUP_STAGE torch_gpu_readback elapsed_s=84.589888
+STARTUP_STAGE cupy_import elapsed_s=178.082436
+CUPY_VERSION 14.2.0
+STARTUP_STAGE cupy_arange elapsed_s=178.580723
+=== end rc=124 secs=181 2026-10-11T16:28:51.9832311+00:00

@@ -156,7 +156,12 @@ app("managed_t", "cuda-equiv", py("win_cuda_equiv.py", "managed"), r"^WINEQ_DONE
     note="CuPy malloc_managed; expected to be the hardest compute row on both OSes")
 for name, lin in (("default", "stream_default"), ("created", "stream_created"), ("nonblocking", "stream_nonblocking"), ("two", "stream_two"),
                   ("created2nd", "stream_created2nd"), ("perthread", "stream_perthread")):
-    app("stream_%s_t" % name, "stream-probe", py("win_cuda_equiv.py", "stream_" + name), r"^STREAM_PROBE_DONE %s rc=0" % name, 120, 5, [OUT_NV, GPU_ENG],
+    # Per-thread work needs CuPy, not Torch/CuPy interoperability. Fresh guest
+    # timing measured82.5s Torch import +93.5s CuPy import before any CuPy work.
+    # Keep the original budget, real CUDA stream and full numerical oracle.
+    body = ("Invoke-KfExe -Exe $PY -ArgList ($PYA + @('C:\\kf\\py\\stream_perthread.py'))\nexit $global:KfRc\n"
+            if name == "perthread" else py("win_cuda_equiv.py", "stream_" + name))
+    app("stream_%s_t" % name, "stream-probe", body, r"^STREAM_PROBE_DONE %s rc=0" % name, 120, 5, [OUT_NV, GPU_ENG],
         *W_COMPUTE_SMALL, linux=[lin], pkgs=PYPK + (("cuda_cudart",) if name == "perthread" else ()), note=("CuPy per-thread default stream (cupy.cuda.Stream.ptds)" if name == "perthread" else
                                                            "torch streams are created cudaStreamNonBlocking" if name in ("created", "nonblocking") else None))
 for aid, test, lin, exp in (("cupy_cg", "cg", ["simpleCooperativeGroups"], 10), ("cupy_asynccopy", "asynccopy", ["globalToShmemAsyncCopy"], 10),
@@ -447,6 +452,7 @@ NO_EQUIVALENT = {
 
 
 CMD_OVERRIDES = {
+    "stream_perthread_t": "python stream_perthread.py",
     "dxgi_adapters": "PowerShell: read C:\\kf\\adapters.json (DXGI list written by kf_guest_setup.ps1)",
     "driver_status": "PowerShell: Get-CimInstance Win32_VideoController (NVIDIA, ConfigManagerErrorCode 0)",
     "d3d12_signal_probe": "powershell -File d3d12_signal_probe.ps1 (scripts/bench/windows)",

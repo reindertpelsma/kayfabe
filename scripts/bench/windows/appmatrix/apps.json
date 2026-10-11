@@ -2830,14 +2830,14 @@
    ],
    "difficulty": "low",
    "why": "CUDA context + a few kernels and small copies: the compute path with no display, no video engine and no long run. Windows user work runs as Passthrough twins whose guest-visible GP_GET was measured behind the host's (claude/tdr-hunt-20261010, traces/windows_tdr_hunt_20261010/README.md, runs 263-266)",
-   "ps": "Invoke-KfExe -Exe $PY -ArgList ($PYA + @('C:\\kf\\py\\kf_runpy.py', 'C:\\kf\\py\\win_cuda_equiv.py', 'stream_perthread'))\nexit $global:KfRc\n",
+   "ps": "Invoke-KfExe -Exe $PY -ArgList ($PYA + @('C:\\kf\\py\\stream_perthread.py'))\nexit $global:KfRc\n",
    "kill_names": [],
    "screenshot_s": null,
    "note": "CuPy per-thread default stream (cupy.cuda.Stream.ptds)",
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "python win_cuda_equiv.py stream_perthread"
+   "cmd": "python stream_perthread.py"
   },
   {
    "id": "stream_two_t",
