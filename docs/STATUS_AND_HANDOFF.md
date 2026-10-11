@@ -15,14 +15,16 @@ fix this file. Entries below the first are dated history.
 [Current evidence and run instructions](../traces/windows_matrix_20261011/README.md).
 This supersedes the next entry's “Nothing has run on a Windows guest” claim:
 production Windows smoke passes 4/4 on exact product `2c917f3e`; the full lane
-has four completed PASS results and one FAIL so far. BlackScholes startup hit
+has four completed PASS, one FAIL, and one TIMEOUT so far. BlackScholes hit
 the translated channel's 4096-fragment limit (4155 measured). Candidate
 `0f9c01f9` slices large copies before binding; GPU-free tests and independent
-review pass, hardware validation is pending. The running old-product clpeak
-CUDA test will finish before a controlled stop and the candidate build.
+review pass; hardware gates 9/9 + gate 10 pass, matching-driver fast regression
+is underway. The old-product clpeak CUDA test timed out with host Xid 109;
+its results are preserved after a controlled stop.
 The prior stock Windows baseline is 99/100 PASS (GravityMark Vulkan TIMEOUT);
 a new owned Vast RTX 4090 reference is provisioned on matching driver 580.88,
-with app-disk transfer pending. Eight display-overlay tests are separate and
+with verified app disk: five of six focus apps PASS, first BlackScholes TIMEOUT;
+Python/CUDA startup diagnosis is pending. Eight display-overlay tests are separate and
 MPO is disabled in the main campaign. No full-matrix success is claimed.
 Integration/master are unchanged. See the linked campaign record for exact
 runner revisions, tool hashes, checkpoints, and pending coverage.
