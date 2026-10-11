@@ -3,6 +3,28 @@
 **STATUS: LIVE, 2026-10-11.** Product candidate `2c917f3e`, following the
 OpenGL gears fix. Results are pending; this is not a matrix pass claim.
 
+## Active checkpoint, 2026-10-11 14:32 UTC
+
+Product0f9c01f9 broad lane:63 completed/102,52PASS,9FAIL,2TIMEOUT.
+Six failures are known harness proof/header issues, three are NVENC session errors.
+Managed memory and FurMark GL timed out with distinct hostXid32 events; FurMark
+also recorded three guestTDRs. These remain open, with raw verdicts preserved.
+NVENC authored acquire hits HOST_ABI_REFUSED before the ioctl on595.91.07;
+a precise unprivileged layout probe is queued, no product guard relaxed.
+
+Stock580.88 video/managed run6/6PASS:all three encode formats, H264 decode,
+CUDA scaling/encode, and bidirectional managed-memory visibility (16s).
+Evidence `reference-video-managed/`. Fresh quicksort/CUP8 pass, while GravityMarkVK
+again times out603s after setup/reboot (`reference-fresh-cdp-cup8-gravity/`).
+A fresh stock FurMark comparison is active. The supplement runner is queued
+under the trusted host GPU lock, using frozen harnessc5c97c00 and fresh media;
+it covers corrected proof/header cases plus HF/CDP, preserving original failures.
+
+`linux_parity_checkpoint.tsv` explicitly compares the 67 passing Linux rows at
+2830988f:65 have Windows counterparts; IPC is WDDM-unsupported and Geekbench
+still has an offline-packaging gap. At its saved55-row checkpoint40/65 mapped
+rows had all Windows counterparts passing; this is not full parity.
+
 ## Current checkpoint, 2026-10-11 14:16 UTC
 
 Product0f9c01f9, frozen8037e19b broad campaign:55 completed of102,

@@ -53,3 +53,11 @@ APPRES side=win app=nvenc_h264 verdict=FAIL rc=-542398533 secs=3 quiet=3 note=rc
 APPRES side=win app=nvenc_hevc verdict=FAIL rc=-542398533 secs=3 quiet=2 note=rc:-542398533,success-string-missing,no-gpu-proof | [hevc_nvenc @ 0000015c1bb8a980] OpenEncodeSessionEx failed: incompatible client key (21): (no details) boot=g7 guest_tdr=0 wer=0 gsp_cycles=0 proof=none:pdh:VideoEncode,smi tier=1 cat=video
 APPRES side=win app=ort_directml verdict=PASS rc=0 secs=17 quiet=12 note=- boot=g7 guest_tdr=0 wer=0 gsp_cycles=0 proof=out tier=1 cat=d3d
 APPRES side=win app=gputest_triangle verdict=PASS rc=0 secs=16 quiet=16 note=- boot=g7 guest_tdr=0 wer=0 gsp_cycles=0 proof=out tier=1 cat=opengl
+APPRES side=win app=cupy_asynccopy verdict=FAIL rc=1 secs=140 quiet=0 note=rc:1,success-string-missing | RuntimeError: Failed to find CUDA headers. Please install CUDA toolkit headers (e.g., pip install cupy-cuda12x[ctk]) or specify CUDA_PATH environment variable. boot=g8 guest_tdr=0 wer=0 gsp_cycles=0 proof=out tier=1 cat=cuda-equiv
+APPRES side=win app=gputest_fur verdict=PASS rc=0 secs=18 quiet=0 note=- boot=g8 guest_tdr=0 wer=0 gsp_cycles=0 proof=out tier=1 cat=opengl
+APPRES side=win app=gputest_gi verdict=PASS rc=0 secs=17 quiet=17 note=- boot=g8 guest_tdr=0 wer=0 gsp_cycles=0 proof=out tier=2 cat=opengl
+APPRES side=win app=gputest_pixmark_piano verdict=PASS rc=0 secs=17 quiet=17 note=- boot=g8 guest_tdr=0 wer=0 gsp_cycles=0 proof=out tier=2 cat=opengl
+APPRES side=win app=gputest_plot3d verdict=PASS rc=0 secs=17 quiet=17 note=- boot=g8 guest_tdr=0 wer=0 gsp_cycles=0 proof=out tier=2 cat=opengl
+APPRES side=win app=gputest_tess verdict=PASS rc=0 secs=17 quiet=17 note=- boot=g8 guest_tdr=0 wer=0 gsp_cycles=0 proof=out tier=2 cat=opengl
+APPRES side=win app=nvdec_h264 verdict=PASS rc=0 secs=44 quiet=2 note=- boot=g8 guest_tdr=3 wer=0 gsp_cycles=1 proof=pdh:videodecode tier=1 cat=video
+APPRES side=win app=furmark_gl_bench verdict=TIMEOUT rc=124 secs=217 quiet=1 note=KFWAIT furmark_gl_bench STILL_RUNNING_AFTER 105 s boot=g9 guest_tdr=3 wer=0 gsp_cycles=1 proof=- tier=1 cat=opengl

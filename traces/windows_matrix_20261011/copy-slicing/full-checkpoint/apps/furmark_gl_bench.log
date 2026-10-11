@@ -1,0 +1,3 @@
+=== furmark_gl_bench start=2026-10-11T14:26:29.9536364+00:00 host=VASTWIN session=1 boot=2026-10-11T14:24:53.5000000Z timeout=135
+KFWAIT furmark_gl_bench STILL_RUNNING_AFTER 105 s
+=== end rc=124 secs=217 2026-10-11T14:30:07.1495619+00:00

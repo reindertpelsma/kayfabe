@@ -18,3 +18,8 @@
 2026-10-11T14:11:44Z [g1] cdp_quicksort: PASS
 2026-10-11T14:12:20Z [g1] cup8_ladder: PASS
 2026-10-11T14:12:23Z [g1] staged gravitymark (cached, 0s)
+2026-10-11T14:23:12Z [g1] gravitymark_vk: TIMEOUT (restart guest: app-timeout)
+2026-10-11T14:23:12Z [g1] stopped (noop (native box stays up))
+2026-10-11T14:23:12Z [g1] session ended early: app-timeout; 0 apps move to a fresh guest
+2026-10-11T14:23:12Z MATRIX_DONE batched: 2 pass / 3
+2026-10-11T14:23:12Z EXIT rc=0

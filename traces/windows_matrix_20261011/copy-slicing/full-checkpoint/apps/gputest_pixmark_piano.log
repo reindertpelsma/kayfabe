@@ -1,0 +1,6 @@
+=== gputest_pixmark_piano start=2026-10-11T14:21:53.6291786+00:00 host=VASTWIN session=1 boot=2026-10-11T14:15:46.5000000Z timeout=100
+KFWAIT gputest_pixmark_piano EXITED rc=0
+GPUTEST 2026/10/11@14:21:54(0000000002) < > GpuTest: Cross Platform Graphics Benchmark Utility
+GPUTEST 2026/10/11@14:21:55(0000000026) < > PixMark Piano - OpenGL - Renderer model: NVIDIA GeForce RTX 4070/PCIe/SSE2
+GPUTEST 2026/10/11@14:22:09(0000000031) < > [Benchmark_Score] - module: PixMark Piano - Score: 3558 points (1280x720 windowed, duration:10000 ms).
+=== end rc=0 secs=17 2026-10-11T14:22:11.0822843+00:00

@@ -5,6 +5,42 @@ again after the Wednesday 07:00 reset). Read `AGENTS.md` (= `CLAUDE.md`) first: 
 (state, branches, traps), `docs/DELEGATED_DECISIONS_20261010.md`, `docs/OWNER_RULINGS.md` §AB-§AE, `docs/design/V3_FEATURE_GAPS.md`
 (priorities: P0 = prevents apps running; fidelity and perf beyond "decent" are post-release), `docs/design/V3_NOT_IN_GIT.md`.
 
+## Active work, 2026-10-11 14:32 UTC
+
+Last pushedc5c97c00. Broad product0f9c01f9/frozen8037e19b now63 completed:
+52PASS,9FAIL,2TIMEOUT. Run868 FurMark GL starts rendering, hostXid32
+intr00800000/channel0x4a at14:26:53UTC, TIMEOUT217s/three guestTDRs.
+Fresh869 starts afterward. New APP row, stock counterpart queued after video.
+NVENC logs establish HOST_ABI_REFUSED19314 for authored acquire before host
+ioctl; not yet a measured595 layout. One-byte0x20808165 still unproven causal.
+Stock580.88 video:all5PASS (AV1/H264/HEVC encode, H264 decode, CUDA scale/encode).
+Managed stage-marker reference PASS16s, all six stock video/managed rows PASS;
+final EXIT captured in reference-video-managed/.
+
+GPU lock waiter:host4126326, controller session59215, executes
+`/tmp/kf-supplement-after-full.sh` after the broad campaign. Latest frozen source
+`/data/kf-supplement-harness-c5c97c00`. Before media build, queued authored
+NVENC session probe runs as nobody, bounded30s, two balanced acquire/releases,
+no guest bytes; result `$W/codex-encoder-session-probe.log`. Falsifier:any
+nonzero status or changed four-zero-byte reply. Probe binary built on controller,
+SHA25626d727fa00e76b91c1c2fbea0cc2b9341ecc27a1c90a0a5c6f6c6ccc4fc37347;
+bench source is kf-encoder-session-probe.rs (next commit). No product guard relaxed.
+Then complete16GiB fresh media builds under lock; supplemental HF/CDP/header/proof
+retry uses runs1060..1159, four apps/guest, original product0f9c01f9. Managed/clpeak
+and NVENC-family product failures are excluded from this corrected-harness retry
+and require focused diagnosis. Source recipe/runner/posthook in supplement/.
+The active broad harness and original disk remain untouched.
+
+Linux target explicit:67PASS at2830988f,65 have Windows counterparts in newest
+inventory; IPC is WDDM-unsupported, Geekbench offline packaging remains open.
+At saved55-app checkpoint40/65 have all mapped counterparts PASS; mapping TSV
+retains baseline/source and omissions. Inventory112/104 non-overlay,69 mapped
+includes the four known Linux UVM failures, which are outside the passed-Linux set.
+Stock fresh027 quicksort/CUP8 pass; GravityMarkVK again TIMEOUT603s after completed
+OOBE and reboot, zero TDR (native GSP cycles not measured), final EXIT captured.
+Stock FurMark comparison queued controller session34681 after video process176697;
+new reboot, unchanged four FurMark workloads, results native-reference/furmark.
+
 ## Current checkpoint, 2026-10-11 14:16 UTC
 
 Product remains0f9c01f9; latest pushed checkpoint02766ef3 (next backup follows).

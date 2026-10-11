@@ -221,3 +221,74 @@ IOMMU_SWITCH_END type=identity 2026-10-11T16:08:31+02:00
 2026-10-11T14:14:52Z [g7] ort_directml: PASS
 2026-10-11T14:14:53Z [g7] staged gputest (unzip, 0s)
 2026-10-11T14:15:20Z [g7] gputest_triangle: PASS
+2026-10-11T14:15:38Z post-guest hook rc=0 A GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-11T16:15:37+02:00
+RECLAIM_STOPPED_OVERLAY 866 10207838208
+2026-10-11T14:15:38Z [g7] stopped (clean)
+2026-10-11T14:15:40Z pre-guest hook rc=0 :00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=identity 2026-10-11T16:15:40+02:00
+2026-10-11T14:15:41Z broker run 867 rc=0 ['  └────────────────────────────────────────────────────────────────────────────────────────────┘']
+2026-10-11T14:15:41Z [g8] launched; waiting for the guest agent (<= 900s)
+2026-10-11T14:15:55Z [g8] agent answered after 16s
+2026-10-11T14:15:55Z [g8] password set for vast rc=0
+2026-10-11T14:16:41Z [g8] verified sign-in attempt=1 rc=0
+2026-10-11T14:16:42Z [g8] interactive session: VASTWIN\vast
+2026-10-11T14:16:44Z [g8] pushed 23 guest files
+2026-10-11T14:16:44Z [g8] app disk attached (usb-storage)
+2026-10-11T14:16:49Z [g8] setup ok: cd=D: nvidia_adapters=1 NVIDIA GeForce RTX 4070, 580.88, 4096 MiB
+2026-10-11T14:16:52Z [g8] override tool kf_cuda_control.exe sha256=3906f520c10e272215d9d7d79a90ce9a2042581923a4717db90be312ab3a67c8
+2026-10-11T14:16:55Z [g8] override tool kf_dxprobe.exe sha256=3c6ededa77430a18a13321eb72fdca7f60282f8d12ddc147a7e7df1284832c5f
+2026-10-11T14:17:10Z [g8] staged vc_redist (installer, 13s)
+2026-10-11T14:17:15Z [g8] READY boot=2026-10-11T14:15:46.5000000Z user=VASTWIN\vast smi_ok=True
+2026-10-11T14:17:16Z [g8] staged python_embed (python_embed, 0s)
+2026-10-11T14:18:12Z [g8] staged pywheels (wheels, 55s)
+2026-10-11T14:18:14Z [g8] staged cuda_cudart (unzip, 0s)
+2026-10-11T14:18:16Z [g8] staged cuda_cccl (unzip, 1s)
+2026-10-11T14:20:52Z [g8] cupy_asynccopy: FAIL
+2026-10-11T14:20:54Z [g8] staged gputest (unzip, 0s)
+2026-10-11T14:21:24Z [g8] gputest_fur: PASS
+2026-10-11T14:21:51Z [g8] gputest_gi: PASS
+2026-10-11T14:22:20Z [g8] gputest_pixmark_piano: PASS
+2026-10-11T14:22:51Z [g8] gputest_plot3d: PASS
+2026-10-11T14:23:22Z [g8] gputest_tess: PASS
+2026-10-11T14:23:24Z [g8] staged ffmpeg (unzip, 1s)
+2026-10-11T14:24:26Z [g8] nvdec_h264: PASS (restart guest: tdr-budget:3>=3)
+2026-10-11T14:24:45Z post-guest hook rc=0 A GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-11T16:24:44+02:00
+RECLAIM_STOPPED_OVERLAY 867 12219772928
+2026-10-11T14:24:45Z [g8] stopped (clean)
+2026-10-11T14:24:45Z [g8] session ended early: tdr-budget:3>=3; 1 apps move to a fresh guest
+2026-10-11T14:24:47Z pre-guest hook rc=0 :00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=identity 2026-10-11T16:24:47+02:00
+2026-10-11T14:24:48Z broker run 868 rc=0 ['  └────────────────────────────────────────────────────────────────────────────────────────────┘']
+2026-10-11T14:24:48Z [g9] launched; waiting for the guest agent (<= 900s)
+2026-10-11T14:25:02Z [g9] agent answered after 17s
+2026-10-11T14:25:02Z [g9] password set for vast rc=0
+2026-10-11T14:25:48Z [g9] verified sign-in attempt=1 rc=0
+2026-10-11T14:25:49Z [g9] interactive session: VASTWIN\vast
+2026-10-11T14:25:50Z [g9] pushed 23 guest files
+2026-10-11T14:25:50Z [g9] app disk attached (usb-storage)
+2026-10-11T14:25:56Z [g9] setup ok: cd=D: nvidia_adapters=1 NVIDIA GeForce RTX 4070, 580.88, 4096 MiB
+2026-10-11T14:25:59Z [g9] override tool kf_cuda_control.exe sha256=3906f520c10e272215d9d7d79a90ce9a2042581923a4717db90be312ab3a67c8
+2026-10-11T14:26:01Z [g9] override tool kf_dxprobe.exe sha256=3c6ededa77430a18a13321eb72fdca7f60282f8d12ddc147a7e7df1284832c5f
+2026-10-11T14:26:19Z [g9] staged vc_redist (installer, 17s)
+2026-10-11T14:26:24Z [g9] READY boot=2026-10-11T14:24:53.5000000Z user=VASTWIN\vast smi_ok=True
+2026-10-11T14:26:25Z [g9] staged furmark2 (unzip, 0s)
+2026-10-11T14:30:17Z [g9] furmark_gl_bench: TIMEOUT (restart guest: tdr-budget:3>=3)
+2026-10-11T14:30:38Z post-guest hook rc=0 IA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-11T16:30:38+02:00
+RECLAIM_STOPPED_OVERLAY 868 4626145280
+2026-10-11T14:30:38Z [g9] stopped (clean)
+2026-10-11T14:30:38Z [g9] session ended early: tdr-budget:3>=3; 7 apps move to a fresh guest
+2026-10-11T14:30:40Z pre-guest hook rc=0 :00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=identity 2026-10-11T16:30:40+02:00
+2026-10-11T14:30:42Z broker run 869 rc=0 ['  └────────────────────────────────────────────────────────────────────────────────────────────┘']
+2026-10-11T14:30:42Z [g10] launched; waiting for the guest agent (<= 900s)
+2026-10-11T14:30:54Z [g10] agent answered after 15s
+2026-10-11T14:30:54Z [g10] password set for vast rc=0

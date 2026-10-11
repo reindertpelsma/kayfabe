@@ -1,0 +1,62 @@
+{
+ "quiet": 17,
+ "end_utc": "2026-10-11T14:21:43.8421016Z",
+ "start_utc": "2026-10-11T14:21:26.8485809Z",
+ "rc": 0,
+ "secs": 17,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4070 status=OK code=0"
+ ],
+ "digests": [],
+ "session": 1,
+ "out_files": [],
+ "boot_utc_start": "2026-10-11T14:15:46.5000000Z",
+ "log_tail": [
+  "=== gputest_gi start=2026-10-11T14:21:26.8485809+00:00 host=VASTWIN session=1 boot=2026-10-11T14:15:46.5000000Z timeout=100",
+  "KFWAIT gputest_gi EXITED rc=0",
+  "GPUTEST 2026/10/11@14:21:28(0000000002) < > GpuTest: Cross Platform Graphics Benchmark Utility",
+  "GPUTEST 2026/10/11@14:21:28(0000000026) < > GiMark - OpenGL - Renderer model: NVIDIA GeForce RTX 4070/PCIe/SSE2",
+  "GPUTEST 2026/10/11@14:21:42(0000000031) < > [Benchmark_Score] - module: GiMark - Score: 2876 points (1280x720 windowed, duration:10000 ms).",
+  "=== end rc=0 secs=17 2026-10-11T14:21:43.8421016+00:00"
+ ],
+ "pdh": {
+  "pids": [
+   "5044",
+   "8828",
+   "1208"
+  ],
+  "nv": {
+   "copy": 0,
+   "3d": 0,
+   "videoencode": 0,
+   "videodecode": 0,
+   "vr": 0,
+   "legacyoverlay": 0,
+   "ofa_0": 0
+  },
+  "samples": 8,
+  "other": {},
+  "nvidia_luids": "0_60b4"
+ },
+ "timed_out": false,
+ "token": "g8-gputest_gi-1791728484",
+ "boot_utc_end": "2026-10-11T14:15:46.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "gputest_gi",
+ "smi": {
+  "samples": 0,
+  "mem_used_base_mb": null,
+  "util_max": 0,
+  "mem_used_max_mb": 0
+ }
+}
