@@ -989,7 +989,12 @@ fn full_mode(r: &mut Ring, head: u32, t: &crate::edid::Timing) {
     let (bex, bey) = (t.h_sync + t.h_back - 1, t.v_sync + t.v_back - 1);
     r.m(
         ma(CORE, "HEAD_SET_RASTER_BLANK_END", head),
-        xy("HEAD_SET_RASTER_BLANK_END_X", "HEAD_SET_RASTER_BLANK_END_Y", bex, bey),
+        xy(
+            "HEAD_SET_RASTER_BLANK_END_X",
+            "HEAD_SET_RASTER_BLANK_END_Y",
+            bex,
+            bey,
+        ),
     );
     r.m(
         ma(CORE, "HEAD_SET_RASTER_BLANK_START", head),
@@ -1051,6 +1056,63 @@ fn an_armed_head_reports_its_programmed_mode() {
             None
         ]
     );
+}
+
+/// ★ Oracle (observed on the real RTX 4070, Windows 580.88, 2026-10-11): the guest programs a mode
+/// through the core channel, the worker publishes the armed state, and `0x73011a` answers the observed
+/// layout for 1920x1080@60 and 1280x720@60 from it, nothing else.
+#[test]
+fn display_mode_control_follows_the_core_channels_programmed_mode_end_to_end() {
+    use crate::model::{DisplayModel, GET_DISPLAY_MODE, GET_DISPLAY_MODE_SIZE};
+    let mut dm = DisplayModel::new(
+        &kf_chip::display::AMPERE,
+        vec![crate::edid::Monitor::default_1080p()],
+        crate::layout::for_version("580.65.06").unwrap(),
+    );
+    let mut e = engine();
+    e.alloc(ChannelKind::Core, 0, CLIENT, 1, pb(), 0);
+    let owner = put(0, fl(CORE, "SOR_SET_CONTROL_OWNER_MASK"), 1);
+    let t720 = crate::edid::Timing {
+        h_active: 1280,
+        h_front: 110,
+        h_sync: 40,
+        h_back: 220,
+        v_active: 720,
+        v_front: 5,
+        v_sync: 5,
+        v_back: 20,
+        pixel_khz: 74_250,
+        h_pos: true,
+        v_pos: true,
+    };
+    let mut c = Ring::new();
+    for (t, want) in [
+        (
+            crate::edid::Timing::cea_1080p60(),
+            [0x100u32, 0x780, 0x438, 0x898, 0x465, 0, 0x3c],
+        ),
+        (t720, [0x100, 0x500, 0x2d0, 0x672, 0x2ee, 0, 0x3c]),
+    ] {
+        // head 0 on SOR 0 (connector 0, display id 0x100)
+        c.m(ma(CORE, "SOR_SET_CONTROL", 0), owner);
+        full_mode(&mut c, 0, &t);
+        c.m(m(CORE, "UPDATE"), 0);
+        e.step(0, &c.bytes(), c.put(), &mut all_ok);
+        for (h, sor) in e.lit_sors().into_iter().enumerate() {
+            dm.ports.set_lit_sor(h, sor);
+        }
+        for (h, t) in e.head_timings().into_iter().enumerate() {
+            dm.ports.set_head_timing(h, t);
+        }
+        let mut q = vec![0u8; GET_DISPLAY_MODE_SIZE];
+        q[0..4].copy_from_slice(&0x100u32.to_le_bytes());
+        let r = dm.control(GET_DISPLAY_MODE, &q).unwrap().unwrap();
+        let got: Vec<u32> = r
+            .chunks(4)
+            .map(|w| u32::from_le_bytes(w.try_into().unwrap()))
+            .collect();
+        assert_eq!(got, want);
+    }
 }
 
 /// ★ M3: a head shows EVERY enabled window it owns, back to front by `DEPTH` (smaller is closer to
@@ -1583,7 +1645,11 @@ fn the_overlay_enable_sequence_pairs_in_arrival_order() {
     let mut l = latched(&s);
     l.sort_unstable();
     assert_eq!(l, vec![0, 4], "{:?}", s.effects);
-    assert!(!o.e.waiting(w4), "window 4's flip latched with window 0's: {:?}", o.e.parked());
+    assert!(
+        !o.e.waiting(w4),
+        "window 4's flip latched with window 0's: {:?}",
+        o.e.parked()
+    );
 }
 
 /// The same writes applied the way the display worker did before 2026-10-11 — every channel whose PUT moved, in CHANNEL

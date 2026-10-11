@@ -36,13 +36,20 @@ pub const NV_ERR_INVALID_OBJECT: u32 = 0x31;
 /// ★ `NV0073` display-common SYSTEM control `0x73011a` (2026-10-11): reports a display's CURRENT mode.
 /// ⊘ Not in the open ogkm headers (`ctrl0073system.h` has `GET_SRM_STATUS 0x730119` and
 /// `HDCP_REVOCATION_CHECK 0x73011b`, nothing between), so the id and the layout are `[observed on
-/// the real GPU (VFIO reference, RTX 4070, Windows 580.88, 2026-10-11)]`, 5 of 5 calls, never
-/// captured bytes: `NV_OK`, 28 bytes of params = 7 little-endian `u32` words, request
-/// `[displayId, 0, 0, 0, 0, 0, 0]`, reply `[displayId, w, h, total_w, total_h, 0, refresh_hz]`.
-/// The reply follows the head's current mode (observed at 1920x1080 and 1280x720, both 60 Hz).
-/// The FIELD MEANINGS are inferred from those values (1920/1080 and 2200/1125, 1280/720 and
-/// 1650/750 are the CEA-861 totals); no header defines them.
+/// the real GPU]` ONCE: VFIO reference, RTX 4070 (die AD104), Windows guest driver 580.88 (branch
+/// `r580_78-7`, changelist 36308443; the port keys it as the Linux twin `580.65.06`), 2026-10-11,
+/// the OpenGL ICD's calls, 5 of 5 answered `NV_OK`: 28 bytes of params = 7 little-endian `u32`
+/// words, request `[displayId, 0, 0, 0, 0, 0, 0]`, reply `[displayId, w, h, total_w, total_h, 0,
+/// refresh_hz]`. The reply follows the head's current mode (observed at 1920x1080 and 1280x720,
+/// both 60 Hz). The FIELD MEANINGS are inferred from those values (1920/1080 and 2200/1125,
+/// 1280/720 and 1650/750 are the CEA-861 totals); no header defines them. Only the VALUES come from
+/// this display's own armed state; the observation is a test oracle, not data. The layout is
+/// answered ONLY for the guest branches observed ([`DISPLAY_MODE_OBSERVED_BRANCHES`]); any other
+/// is refused by name and counted ([`DisplayModel::display_mode_unverified`]).
 pub const GET_DISPLAY_MODE: u32 = 0x0073_011a;
+/// The guest driver branches (the layouts key; Windows 580.88 is `580.65.06`) on which
+/// [`GET_DISPLAY_MODE`]'s layout was observed on hardware.
+pub const DISPLAY_MODE_OBSERVED_BRANCHES: &[&str] = &["580.65.06"];
 /// The size of [`GET_DISPLAY_MODE`]'s params: seven `u32` words (observed).
 pub const GET_DISPLAY_MODE_SIZE: usize = 28;
 
@@ -485,6 +492,11 @@ pub struct DisplayModel {
     pub statements: Vec<Statement>,
     /// Statements not kept because [`Self::statements`] was full.
     pub statements_dropped: u64,
+    /// [`GET_DISPLAY_MODE`] requests refused because the guest's branch is not one whose layout was
+    /// observed on hardware ([`DISPLAY_MODE_OBSERVED_BRANCHES`]).
+    pub display_mode_unverified: u64,
+    /// The one-time log line for the first such refusal; drained by [`Self::take_notice`].
+    notice: Option<String>,
     /// Every display control answered (the first 512), for the log.
     pub seen: Vec<u32>,
     /// ★ The lock-free state shared with the vCPU and the display worker (PUT/GET, events).
@@ -601,6 +613,8 @@ impl DisplayModel {
             channels: BTreeMap::new(),
             statements: Vec::new(),
             statements_dropped: 0,
+            display_mode_unverified: 0,
+            notice: None,
             seen: Vec::new(),
             ports: Arc::new(Ports::default()),
             waker: None,
@@ -795,6 +809,12 @@ impl DisplayModel {
     #[must_use]
     pub fn waker(&self) -> Option<Waker> {
         self.waker.clone()
+    }
+
+    /// A one-time message for the log (drained), e.g. the first refusal of a control whose layout was
+    /// not observed for the guest's branch.
+    pub fn take_notice(&mut self) -> Option<String> {
+        self.notice.take()
     }
 
     /// ★ Answer with another driver version's `layouts` (a `ReselectAtFn1` rebuild for the guest's
@@ -1045,6 +1065,19 @@ impl DisplayModel {
                 Ok(p.buf)
             }
             "display_mode" => {
+                // ⊘ Not observed for this guest branch: do not guess a layout. Refused by name,
+                // counted, logged once.
+                if !DISPLAY_MODE_OBSERVED_BRANCHES.contains(&self.l.version.as_str()) {
+                    if self.display_mode_unverified == 0 {
+                        self.notice = Some(format!(
+                            "NV0073 0x73011a (display mode): layout unverified for guest branch {} \
+                             (observed only on {:?}); refused NOT_SUPPORTED, counted in display_mode_unverified",
+                            self.l.version, DISPLAY_MODE_OBSERVED_BRANCHES
+                        ));
+                    }
+                    self.display_mode_unverified = self.display_mode_unverified.saturating_add(1);
+                    return Err(NV_ERR_NOT_SUPPORTED);
+                }
                 // ⊘ Hostile guest: exactly the observed 28-byte shape; the display id must be one
                 // connector of this device (the status `OR_GET_INFO` and `GET_EDID_V2` give an id we
                 // do not have: the real GPU's answer for an unknown id was not captured).
@@ -1809,7 +1842,11 @@ mod tests {
     #[test]
     fn display_mode_follows_the_heads_armed_mode_in_the_observed_layout() {
         use crate::ports::HeadTiming;
-        let mut m = model();
+        let mut m = DisplayModel::new(
+            &kf_chip::display::AMPERE,
+            vec![Monitor::default_1080p()],
+            crate::layout::for_version("580.65.06").expect("layouts"),
+        );
         let words = |r: &[u8]| -> Vec<u32> {
             r.chunks(4)
                 .map(|c| u32::from_le_bytes(c.try_into().unwrap()))
@@ -1862,7 +1899,11 @@ mod tests {
         assert_eq!(words(&r), [0x100, 0x780, 0x438, 0x898, 0x465, 0, 0x3c]);
         // hostile guest: wrong sizes, an id we do not have, several ids, id 0
         for bad in [0x200, 0x300, 0, u32::MAX] {
-            assert_eq!(ask(&mut m, bad), Some(Err(NV_ERR_INVALID_ARGUMENT)), "{bad:#x}");
+            assert_eq!(
+                ask(&mut m, bad),
+                Some(Err(NV_ERR_INVALID_ARGUMENT)),
+                "{bad:#x}"
+            );
         }
         for n in [0usize, 4, 27, 29, 4096] {
             assert_eq!(
@@ -1870,6 +1911,24 @@ mod tests {
                 Some(Err(NV_ERR_INVALID_ARGUMENT)),
                 "{n} bytes"
             );
+        }
+        assert_eq!(m.display_mode_unverified, 0);
+        // a guest branch the layout was not observed on: refused by name, counted, logged once —
+        // never guessed (even for a well-formed request)
+        let mut other = model(); // 580.159.04
+        let mut q = vec![0u8; GET_DISPLAY_MODE_SIZE];
+        q[0..4].copy_from_slice(&0x100u32.to_le_bytes());
+        for n in 1..=3 {
+            assert_eq!(
+                other.control(GET_DISPLAY_MODE, &q),
+                Some(Err(NV_ERR_NOT_SUPPORTED))
+            );
+            assert_eq!(other.display_mode_unverified, n);
+            let note = other.take_notice();
+            assert_eq!(note.is_some(), n == 1, "logged once");
+            if let Some(note) = note {
+                assert!(note.contains("layout unverified for guest branch 580.159.04"));
+            }
         }
     }
 

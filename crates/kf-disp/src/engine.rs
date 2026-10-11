@@ -32,8 +32,8 @@
 //! that is not allocated. Nothing here sizes an allocation from a guest value.
 
 use crate::class::{ClassTable, get as fld};
-use crate::ports::HeadTiming;
 use crate::model::{ChannelKind, Classes};
+use crate::ports::HeadTiming;
 use crate::pushbuf::{self, DecodeError, Located};
 use crate::regs::Regs;
 use std::collections::VecDeque;

@@ -536,14 +536,17 @@ impl DisplayPolicy {
         let Some(m) = self.model.clone() else {
             return self.answer_m0(cmd, params);
         };
-        let (r, st) = {
+        let (r, st, note) = {
             let mut g = lock(&m);
             let r = match target {
                 Some((c, o)) => g.control_on(c, o, cmd, params),
                 None => g.control(cmd, params),
             };
-            (r, settle(&mut g))
+            (r, settle(&mut g), g.take_notice())
         };
+        if let Some(n) = note {
+            eprintln!("kf-rm: display: {n}");
+        }
         finish(st);
         r
     }

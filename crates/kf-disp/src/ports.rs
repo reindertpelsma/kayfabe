@@ -111,7 +111,9 @@ impl PutLog {
                 return PutPoll::Put(((v >> 32) & 0xFF) as u32, v as u32);
             }
             // a later lap already overwrote the slot: that write is lost to the log
-            if tag.wrapping_sub(want) & Self::TAG != 0 && tag.wrapping_sub(want) & Self::TAG < 0x80_0000 {
+            if tag.wrapping_sub(want) & Self::TAG != 0
+                && tag.wrapping_sub(want) & Self::TAG < 0x80_0000
+            {
                 self.dropped.fetch_add(1, Ordering::Relaxed);
                 *head = i + 1;
                 continue;
@@ -466,7 +468,10 @@ mod tests {
         while let PutPoll::Put(c, v) = p.put_log.next(&mut head) {
             got.push((c, v));
         }
-        assert_eq!(got, vec![(5, 0x950), (1, 0xf20), (37, 0x20), (5, 0xa10), (1, 0xf20)]);
+        assert_eq!(
+            got,
+            vec![(5, 0x950), (1, 0xf20), (37, 0x20), (5, 0xa10), (1, 0xf20)]
+        );
         assert_eq!(p.put_log.dropped(), 0);
         // a flood past the log: only the newest PUT_LOG entries survive, the loss is counted
         for i in 0..(PUT_LOG as u32 + 10) {
