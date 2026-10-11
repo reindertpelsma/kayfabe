@@ -11,7 +11,7 @@ fix this file. Entries below the first are dated history.
 
 ## 0. Current resumption — start here
 
-**2026-10-11 17:29 UTC, Codex Windows campaign (`codex/windows-matrix-20261011`):**
+**2026-10-11 17:25 UTC, Codex Windows campaign (`codex/windows-matrix-20261011`):**
 [Current evidence and run instructions](../traces/windows_matrix_20261011/README.md).
 Last confirmed push d4f9aa47. Exact product72741e2b passes Linux gates9/9+10 and
 fast30/30, all births USER. Windows gears/vectorAdd/CUP8 pass cleanly; managed

@@ -5,7 +5,7 @@ again after the Wednesday 07:00 reset). Read `AGENTS.md` (= `CLAUDE.md`) first: 
 (state, branches, traps), `docs/DELEGATED_DECISIONS_20261010.md`, `docs/OWNER_RULINGS.md` §AB-§AE, `docs/design/V3_FEATURE_GAPS.md`
 (priorities: P0 = prevents apps running; fidelity and perf beyond "decent" are post-release), `docs/design/V3_NOT_IN_GIT.md`.
 
-## Latest checkpoint, 2026-10-11 17:29 UTC
+## Latest checkpoint, 2026-10-11 17:25 UTC
 
 Last confirmed push d4f9aa47. Candidate now87/104 executed:70 cleanPASS,
 8PASS_WITH_RECOVERY,4FAIL,5TIMEOUT;17pending. Linux counterpart parity54/65.

@@ -3,7 +3,7 @@
 **STATUS: LIVE, 2026-10-11.** Product candidate `2c917f3e`, following the
 OpenGL gears fix. Results are pending; this is not a matrix pass claim.
 
-## Latest checkpoint, 2026-10-11 17:29 UTC
+## Latest checkpoint, 2026-10-11 17:25 UTC
 
 Last confirmed push d4f9aa47. Candidate now87/104 executed:70 cleanPASS,
 8PASS_WITH_RECOVERY,4FAIL,5TIMEOUT;17pending. Linux counterpart parity54/65.
