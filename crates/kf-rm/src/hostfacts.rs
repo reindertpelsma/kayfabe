@@ -284,7 +284,9 @@ pub const PROVENANCE: &[(&str, Source)] = &[
     ),
     (
         "fifo_channels",
-        Source::Authored("the channel count is ours to set: the VM's channel budget, derived from the host's FIFO_GET_INFO or the channel-budget property (V3_CHANNEL_BUDGET.md); AUTHORED_FIFO_CHANNELS is the fallback row for tests"),
+        Source::Authored(
+            "the channel count is ours to set: the VM's channel budget, derived from the host's FIFO_GET_INFO or the channel-budget property (V3_CHANNEL_BUDGET.md); AUTHORED_FIFO_CHANNELS is the fallback row for tests",
+        ),
     ),
     // ★ w827 ruling: ours to author. The physical computation IS in the open tree and is a
     // silicon reset-default read-back, not a formula (kern_gmmu_tu102.c:548-566).
