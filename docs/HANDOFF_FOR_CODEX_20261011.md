@@ -1,5 +1,19 @@
 # Handoff for a different agent (Codex or any fresh agent), 2026-10-11
 
+
+## UPDATE 2026-10-11 22:54UTC — narrow refusal prepared
+
+Last confirmed public push0e8d4ba62, private1dc9c0e. Next experiment prepared:
+`KF3_WIN_REFUSE_PT_FIFO_UPDATE=1`, default OFF, deliberate NOT_SUPPORTED at
+registration only on live Passthrough user-work twins. No whole5080 refusal,
+no accepted entry, no migration/host call/privilege/completion change. Full
+kf-rm tests and kf-qemu161 PASS. Hardware result pending. Existing manual1380
+records do not show Gravity's hostXid/FIFO signature; no common cause claimed.
+VFIO absence of plain20801116 does not prove no deferred GSP execution.
+Prior exact89 matched control/probe finished FAIL/TIMEOUT with Xid32; submitted
+matching migration candidate, actual GPU execution unmeasured. Personal image
+retained. Read compact resume and registration-refusal/README.md for current state.
+
 **Fresh chat: start with [RESUME_CODEX_WINDOWS_20261011.md](RESUME_CODEX_WINDOWS_20261011.md)** for the compact current state, branch names, live manual-session guard, evidence and next steps. The dated checkpoints below preserve history.
 
 **STATUS: LIVE, 2026-10-11.** Written because the Claude weekly budget is nearly spent (owner plan: Codex on Saturday/Monday, Claude

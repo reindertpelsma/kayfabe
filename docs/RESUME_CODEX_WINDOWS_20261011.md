@@ -1,6 +1,6 @@
 # Resume the Windows matrix and GravityMark Vulkan investigation
 
-**STATUS: LIVE, 2026-10-11 22:29 UTC.** Compact entry point for a new chat.
+**STATUS: LIVE, 2026-10-11 22:52 UTC.** Compact entry point for a new chat.
 Historical chronology is in [HANDOFF_FOR_CODEX_20261011.md](HANDOFF_FOR_CODEX_20261011.md).
 Read the current checkpoint here before treating an older pending/result paragraph
 in that chronology as current state.
@@ -8,7 +8,7 @@ in that chronology as current state.
 ## Branches and checkout
 
 Public repository: <https://github.com/reindertpelsma/kayfabe>.
-Branch: **`codex/windows-matrix-20261011`**. Last confirmed push **8358dabab**,
+Branch: **`codex/windows-matrix-20261011`**. Last confirmed push **0e8d4ba62**,
 containing reviewed source89e8ddf8b with161 GPU-free tests. Newer documentation checkpoints
 must not inherit exact-revision hardware claims automatically.
 Use the branch tip to get this document and the complete reachable source history.
@@ -79,7 +79,7 @@ retained; corrected exact suite alone supplies30/30. Original allocator queue
 cancelled while waiting, not a pass. Campaign log `$W/codex-late-fifo-campaign.log`.
 
 Kayfabe/VFIO cannot run simultaneously. After stop require noQEMU, group11
-DMA-FQ, remove /tmp/kf-stop-winprod; keep /var/lib above100GiB (131GiB at21:38).
+DMA-FQ, remove /tmp/kf-stop-winprod; keep /var/lib above100GiB (108GiB at22:31; reclaim only own disposable test overlays before another run).
 No host compilation during guest timing. No Vast instance remains rented by
 this session. Vast is untrusted: no secrets; rentals need vms_enabled=true/KVM.
 
@@ -131,29 +131,28 @@ the guest registers FIFO_UPDATE_CHANNEL_INFO. VFIO records two successful
 50800104 INTERNAL registrations for inner20801116. **The exact GPU triggering
 method and common initiating cause have not been measured.**
 
-Offline H1 audit21:07UTC: fault channel4e is **Passthrough/user-work**, not
-Translated. It is scheduled and forwards over4096 submissions before the one
-FIFO-update registration. The two Translated registering channels have no FIFO
-updates. VFIO also schedules before its first update registration (9.213s).
-Registration-time pre-token/pre-schedule conversion does not fit this sequence.
-Actual faulting0x200 remains UNMEASURED, so H1 is **inconclusive**, not falsified
-by registration alone. Do not implement a Translated-only migration as this
-channel's fix. Next capture needs a bounded peek armed after registration;
-earlier512-entry initialization peeks cannot cover this late window. Public
-source says clear the PBDMA interrupt *before* executing FIFO update, correcting
-the proposed plan's opposite wording. [Reproducible channel audit](../traces/windows_matrix_20261011/gravity-vulkan/h1-channel-audit/README.md).
-Owner has released1380; it is stopped and the installed personal chain retained.
+Offline H1 audit: fault channel4e is Passthrough/user-work, scheduled and
+4096+ submissions forwarded before registration; late conversion is invalid.
+Successor probe1510 captures submitted subch6/method200/API4000002c matching
+its FIFO-update registration. Earlier object binding and actual GPU execution
+remain unmeasured; this supports the migration hypothesis without independently
+formally falsifying the direct-doorbell/actual-execution H1 criterion. The target
+is not Translated, so the proposed Translated-only fix is inapplicable.
+Public source clears PBDMA interrupt BEFORE FIFO update execution.
 
-Linux hardware validated on exact89e8ddf8 (Windows probe pending): `KF3_RELAY_PB_PEEK=after-fifo-update` arms the
-existing bounded sample after the first update registration on a relay's
-associated5080 allocation lifetime. Default remains off; `=1` starts at birth.
-No migration or host registration is added. Three failing-first diagnostic
-packet tests fix missed multi-datum triggers; final kf-qemu lib tests161/161.
-Independent review complete, no blockers; binding/first-object/Legacy/arming
-and post-forward race limits explicitly remain. A sample is not GPU execution
-proof and cannot alone formally falsify H1. Hardware gates9+10/fast30 still
-completed for exact89e8ddf8: gates9/9+gate10 and fast30/30 PASS; fresh matched control/probe
-runs in the active combined campaign. See audit README.
+Exact89e8ddf8 Linux9+10/fast30 PASS; Windows1495control FAIL772s/Xid32 and
+1510probe TIMEOUT602s/Xid32. Campaign complete, no GPU job currently running.
+Default-off bounded late sampler is diagnostic only; independent review and
+161 GPU-free tests passed. Full results in late-fifo-89e8ddf8/README.md.
+
+Next experiment prepared: `KF3_WIN_REFUSE_PT_FIFO_UPDATE=1`, default OFF,
+returns NOT_SUPPORTED only to FIFO-update registrations on live Passthrough
+user-work parents; leaves5080 and other APIs intact. Native answers OK, so
+this is a deliberate compatibility divergence. No Windows fallback measured
+yet. See registration-refusal/README.md for hypothesis/falsifier, bounds,
+validation and no-implementation decision guard. Personal1380 is preserved;
+tests use disposable overlays. Native absence of a later plain RmControl does
+NOT establish no deferred execution inside GSP.
 
 FIFO_UPDATE_CHANNEL_INFO is a deferred FIFO/USERD metadata update, distinct
 from batching mapping/unmapping with a final invalidate. Keeping an authored
@@ -185,7 +184,7 @@ budget and no decoded segments for the needed fault window. Zero mapping
 refusal/HELD counters do not prove PT/PD/TLB correctness. Boot-wide invalidate
 maxima around76ms breach the12ms requirement but are not fault-time correlation.
 Before another run, state a falsifier, change one variable, and measure the
-actual software trigger or a specific mapping/completion failure. Hardware work now runs under the released shared lock in the combined campaign.
+actual software trigger or a specific mapping/completion failure. The prior combined campaign is complete; acquire the shared lock for the next experiment.
 
 ## Backup and restart artifacts
 

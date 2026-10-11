@@ -1,7 +1,12 @@
 # H1: deferred FIFO migration and channel classification
 
-**STATUS: RESEARCH, 2026-10-11 20:59UTC.** Evidence audit before implementation;
-no hardware run or owner-session interaction.
+**STATUS: RESEARCH, 2026-10-11 22:52UTC.** Original20:59UTC audit below is historical;
+its missing submitted-method coverage is superseded by matched control1495/probe1510
+in ../late-fifo-89e8ddf8/README.md. Probe captures matching migration request on
+Passthrough4e; actual GPU execution remains unmeasured. Linux9+10/30 PASS,
+control FAIL772s, probe TIMEOUT602s; campaign complete. Owner1380 stopped and
+personal image retained. Next experiment: ../registration-refusal/README.md.
+No Translated-only migration implementation justified.
 
 H1: only kernel-submitted Translated channels trigger FIFO_UPDATE_CHANNEL_INFO;
 direct-doorbell Passthrough user channels do not migrate their FIFO/USERD.

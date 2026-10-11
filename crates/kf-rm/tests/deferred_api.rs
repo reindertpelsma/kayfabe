@@ -169,11 +169,17 @@ fn v1(handle: u32, cmd: u32, flags: u32) -> Vec<u8> {
 }
 
 fn seat() -> (rmrpc::ObjectPolicy, std::sync::Arc<kf_rm::defapi::Registry>) {
+    seat_with_filter(None)
+}
+
+fn seat_with_filter(
+    filter: Option<std::sync::Arc<dyn kf_rm::defapi::FifoUpdateFilter>>,
+) -> (rmrpc::ObjectPolicy, std::sync::Arc<kf_rm::defapi::Registry>) {
     use kf_gsp::CommandPolicy;
     let reg = std::sync::Arc::new(kf_rm::defapi::Registry::new(
         kf_rm::defapi::Bounds::default(),
     ));
-    let o = objects().with_deferred_api(reg.clone());
+    let o = objects().with_deferred_api(reg.clone()).with_fifo_update_filter(filter);
     let abi = versions::table_for(versions::BENCH_DRIVER).unwrap();
     let mut p = rmrpc::ObjectPolicy::over(
         abi,
@@ -185,6 +191,37 @@ fn seat() -> (rmrpc::ObjectPolicy, std::sync::Arc<kf_rm::defapi::Registry>) {
     let r = p.respond(&command(3, &[])).expect("alloc answered");
     assert_eq!(r.rpc_result, 0);
     (p, reg)
+}
+
+#[derive(Debug)]
+struct TestFifoFilter(bool);
+impl kf_rm::defapi::FifoUpdateFilter for TestFifoFilter {
+    fn refuse_on_channel(&self, client: u32, channel: u32) -> bool {
+        assert_eq!((client, channel), (1, 3), "use the live object's parent, not bundle handles");
+        self.0
+    }
+}
+
+#[test]
+fn fifo_update_refusal_crosses_rpc_boundary_without_removing_the_5080_object() {
+    use kf_gsp::CommandPolicy;
+    for scope in [false, true] {
+        let (mut p, reg) = seat_with_filter(Some(std::sync::Arc::new(TestFifoFilter(scope))));
+        let key = kf_rm::defapi::ObjKey { client: 1, object: 4 };
+        // All three registration forms. Malicious bundle targets cannot bypass the filter.
+        for (outer, handle) in [(0x5080_0101, 10), (0x5080_0103, 11), (0x5080_0104, 12)] {
+            let mut params = v1(handle, 0x2080_1116, 0);
+            params[24..32].fill(0xff);
+            let r = p.respond(&control(1, 4, outer, &params)).unwrap();
+            assert_eq!(r.rpc_result, if scope { 0x56 } else { 0 });
+            assert_eq!(reg.entries(key).iter().any(|e| e.handle == handle), !scope);
+        }
+        assert_eq!(reg.stats().1.fifo_update_refused, if scope { 3 } else { 0 });
+        assert_eq!(p.respond(&control(1, 4, 0x5080_0104, &[0; 100])).unwrap().rpc_result, 0x3a);
+        assert_eq!(p.respond(&control(1, 3, 0x5080_0104, &v1(20, 0x2080_1116, 0))).unwrap().rpc_result, 0x33);
+        assert_eq!(p.respond(&control(1, 4, 0x5080_0104, &v1(20, 0x2080_2502, 0))).unwrap().rpc_result, 0);
+        assert_eq!(reg.lookup(key, 20).unwrap().cmd, 0x2080_2502);
+    }
 }
 
 #[test]

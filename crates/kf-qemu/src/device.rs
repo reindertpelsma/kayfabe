@@ -785,6 +785,7 @@ impl Device {
             kf_rm::defapi::Bounds::default(),
         ));
         chans.set_deferred_api(defapi_reg.clone());
+        let fifo_update_filter = crate::chan::PtFifoUpdateFilter::configured(chans);
         // ★ The served chain (census → sticky guard → init tables, static info, guest sys info,
         // inert, the object seat, the unserviced ledger). The object seat is the host-free graph
         // (`GraphObjects`): it answers ALLOC/FREE/DUP from the object model and refuses every
@@ -918,7 +919,8 @@ impl Device {
                         kf_rm::rmrpc::GraphObjects::new(family)
                             .with_guest_ram(std::sync::Arc::new(crate::mem::MemoryListRam(ram)))
                             .with_guest_framebuffer(memory_list_fb.clone())
-                            .with_deferred_api(defapi_reg.clone()),
+                            .with_deferred_api(defapi_reg.clone())
+                            .with_fifo_update_filter(fifo_update_filter.clone()),
                     ),
                     kf_rm::rmrpc::ReasmLimits::default(),
                 );

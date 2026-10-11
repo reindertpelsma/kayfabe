@@ -289,6 +289,7 @@ pub struct GraphObjects {
     /// ★ OWNER_RULINGS §U: the VM's deferred-API tables (shared with the channel plane, which
     /// looks entries up at the trigger). `None`: 5080 controls fall through, refused as before.
     deferred: Option<std::sync::Arc<crate::defapi::Registry>>,
+    fifo_update_filter: Option<std::sync::Arc<dyn crate::defapi::FifoUpdateFilter>>,
 }
 
 impl GraphObjects {
@@ -334,6 +335,7 @@ impl GraphObjects {
             ram: None,
             fb: None,
             deferred: None,
+            fifo_update_filter: None,
         }
     }
 
@@ -342,6 +344,16 @@ impl GraphObjects {
     #[must_use]
     pub fn with_deferred_api(mut self, registry: std::sync::Arc<crate::defapi::Registry>) -> Self {
         self.deferred = Some(registry);
+        self
+    }
+
+    /// Default-off diagnostic admission filter; class-5080 allocation is unchanged.
+    #[must_use]
+    pub fn with_fifo_update_filter(
+        mut self,
+        filter: Option<std::sync::Arc<dyn crate::defapi::FifoUpdateFilter>>,
+    ) -> Self {
+        self.fifo_update_filter = filter;
         self
     }
 
@@ -430,8 +442,16 @@ impl RmObjects for GraphObjects {
         if !self.is_deferred_api_object(key) {
             return Some(kf_abi::defapi::NV_ERR_INVALID_OBJECT_HANDLE);
         }
+        // Resolve the original object's parent from the validated graph. Never trust the
+        // FIFO bundle's hClient/hChannel to choose another channel's admission policy.
+        // Finish the channel lookup BEFORE taking the registry mutex (no nested locks).
+        let refuse_fifo = self.fifo_update_filter.as_ref().is_some_and(|filter| {
+            self.graph
+                .allocated_node(key)
+                .is_some_and(|n| filter.refuse_on_channel(client, n.parent.0))
+        });
         let graph = &self.graph;
-        Some(crate::defapi::serve(
+        Some(crate::defapi::serve_with_fifo_refusal(
             &reg,
             abi,
             crate::defapi::ObjKey { client, object },
@@ -445,6 +465,7 @@ impl RmObjects for GraphObjects {
                     ))
                     .is_some()
             },
+            refuse_fifo,
         ))
     }
 

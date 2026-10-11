@@ -1076,6 +1076,37 @@ fn twin_defapi_object() -> bool {
     *ON.get_or_init(|| std::env::var("KF3_WIN_TWIN_DEFAPI_OBJECT").as_deref() == Ok("1"))
 }
 
+/// Default-off compatibility experiment: decline the privileged FIFO migration at
+/// registration, allowing Windows to choose its own fallback. No trigger is consumed.
+pub(crate) struct PtFifoUpdateFilter(&'static ChanPlane);
+
+impl std::fmt::Debug for PtFifoUpdateFilter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("PtFifoUpdateFilter(KF3_WIN_REFUSE_PT_FIFO_UPDATE)")
+    }
+}
+
+impl PtFifoUpdateFilter {
+    pub(crate) fn configured(
+        plane: &'static ChanPlane,
+    ) -> Option<Arc<dyn kf_rm::defapi::FifoUpdateFilter>> {
+        (std::env::var("KF3_WIN_REFUSE_PT_FIFO_UPDATE").as_deref() == Ok("1"))
+            .then(|| Arc::new(Self(plane)) as Arc<dyn kf_rm::defapi::FifoUpdateFilter>)
+    }
+}
+
+impl kf_rm::defapi::FifoUpdateFilter for PtFifoUpdateFilter {
+    fn refuse_on_channel(&self, client: u32, channel: u32) -> bool {
+        // Drainer-only, the same short bookkeeping lock used at 5080 admission.
+        // No registry lock is held here, and this path never calls host RM.
+        self.0
+            .pt
+            .lock()
+            .ok()
+            .is_some_and(|m| m.get(&(client, channel)).is_some_and(|twin| twin.user_work))
+    }
+}
+
 /// The I/O of one relay step ([`kf_chan::userd_relay::step`]).
 struct RelayMem<'a> {
     guest: &'a UserdView,
@@ -2905,6 +2936,15 @@ impl ChanPlane {
     #[must_use]
     pub fn pt_summary(&self) -> String {
         let o = Ordering::Relaxed;
+        let fifo_refusals = self
+            .defapi_reg
+            .get()
+            .map_or(0, |r| r.stats().1.fifo_update_refused);
+        let fifo_refusal_summary = if fifo_refusals == 0 {
+            String::new()
+        } else {
+            format!(" fifo_update_registration_refused={fifo_refusals}")
+        };
         let arms = self.nsi_arms.get();
         let count = |slot: Option<usize>| match (slot, arms) {
             (Some(s), Some(a)) => a.count(s),
@@ -2942,7 +2982,7 @@ impl ChanPlane {
                 .get()
                 .map_or(0, kf_rm::osevent::OsEventLog::kernel_overflowed),
             self.nsi.summary(),
-            per.join(" ")
+            per.join(" ") + &fifo_refusal_summary
         )
     }
 

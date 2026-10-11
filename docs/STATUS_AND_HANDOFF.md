@@ -13,6 +13,19 @@ fix this file. Entries below the first are dated history.
 
 **Windows/Codex current resume point:** [RESUME_CODEX_WINDOWS_20261011.md](RESUME_CODEX_WINDOWS_20261011.md), branch `codex/windows-matrix-20261011`. Owner session is stopped; preserve its convenience disk chain described there.
 
+## Latest checkpoint, 2026-10-11 22:54 UTC
+
+Last confirmed push0e8d4ba62; private1dc9c0e unchanged. Prepared a default-OFF
+`KF3_WIN_REFUSE_PT_FIFO_UPDATE` experiment: NOT_SUPPORTED only for the inner
+FIFO-update registration on live Passthrough user-work parents, after normal
+validation. 5080/other APIs/default behavior unchanged; deliberate divergence
+from native OK. Full kf-rm tests and kf-qemu161 pass. No hardware result yet.
+Prior exact89 campaign completed with Linux9+10/30 PASS, Gravity control/probe
+FAIL/TIMEOUT/Xid32; matching submitted migration candidate captured. Formal
+GPU execution remains unmeasured. Manual1380 lacks the same observed signature;
+personal image chain retained. Next job needs lock/disk headroom;108GiB free.
+See compact resume and gravity-vulkan/registration-refusal/README.md.
+
 ## Latest checkpoint, 2026-10-11 22:29 UTC
 
 Last confirmed public push8358dabab, private1dc9c0e. Exact89 Linux9+10/30 PASS;

@@ -149,6 +149,8 @@ pub struct Stats {
     pub registered: u64,
     /// Registrations refused (any status).
     pub refused: u64,
+    /// Deliberate FIFO-update registration refusals in the default-off fallback experiment.
+    pub fifo_update_refused: u64,
     /// `_REMOVE_API`s that removed an entry.
     pub removed: u64,
     /// Triggers that found their entry.
@@ -223,6 +225,17 @@ impl Registry {
         decoded: Bundle,
         live_handle: impl Fn(u32) -> bool,
     ) -> u32 {
+        self.register_filtered(key, reg, decoded, live_handle, false)
+    }
+
+    fn register_filtered(
+        &self,
+        key: ObjKey,
+        reg: Registration,
+        decoded: Bundle,
+        live_handle: impl Fn(u32) -> bool,
+        refuse_fifo_update: bool,
+    ) -> u32 {
         let mut st = self.st();
         // `serverutilValidateNewResourceHandle(hClient, hDeferredApi)` (`:76-79`), then a
         // duplicate on THIS object (`:81-87`) — both INVALID_OBJECT_HANDLE.
@@ -243,6 +256,17 @@ impl Registry {
         {
             st.stats.refused += 1;
             return NV_ERR_NO_MEMORY;
+        }
+        if refuse_fifo_update {
+            st.stats.refused += 1;
+            st.stats.fifo_update_refused += 1;
+            if st.stats.fifo_update_refused == 1 {
+                eprintln!(
+                    "kf-rm: EXPERIMENT KF3_WIN_REFUSE_PT_FIFO_UPDATE: first refusal client={:#x} object={:#x} api={:#x} cmd={:#x} status=NV_ERR_NOT_SUPPORTED count=1; deliberately differs from native registration OK",
+                    key.client, key.object, reg.handle, reg.cmd
+                );
+            }
+            return kf_abi::defapi::NV_ERR_NOT_SUPPORTED;
         }
         let e = Entry {
             handle: reg.handle,
@@ -384,11 +408,26 @@ pub fn serve(
     params: &[u8],
     live_handle: impl Fn(u32) -> bool,
 ) -> u32 {
+    serve_with_fifo_refusal(reg, abi, key, ctl, params, live_handle, false)
+}
+
+/// Diagnostic registration filter. `refuse_on_channel` is host-authored from the live
+/// parent channel, not the bundle's guest-supplied target. Other commands/removals are unchanged.
+pub fn serve_with_fifo_refusal(
+    reg: &Registry,
+    abi: &DefApiAbi,
+    key: ObjKey,
+    ctl: Control,
+    params: &[u8],
+    live_handle: impl Fn(u32) -> bool,
+    refuse_on_channel: bool,
+) -> u32 {
     match ctl {
         Control::Register(form) => match abi.decode_registration(form, params) {
             Ok(r) => {
                 let decoded = abi.decode_bundle(r.cmd, &r.bundle);
-                reg.register(key, r, decoded, live_handle)
+                let refuse = refuse_on_channel && r.cmd == abi.cmds.update_channel_info;
+                reg.register_filtered(key, r, decoded, live_handle, refuse)
             }
             Err(_) => kf_abi::defapi::NV_ERR_INVALID_PARAM_STRUCT,
         },
@@ -400,6 +439,13 @@ pub fn serve(
 }
 
 kf_util::assert_send_sync!(Registry);
+
+/// Optional host-authored admission policy, consulted only on the RPC drainer, never a vCPU.
+/// No host action, guest-memory access, or waiting for GPU progress is permitted here.
+pub trait FifoUpdateFilter: std::fmt::Debug + Send + Sync {
+    /// Whether this live parent channel is in the FIFO-refusal experiment's scope.
+    fn refuse_on_channel(&self, client: u32, channel: u32) -> bool;
+}
 
 #[cfg(test)]
 mod tests {
@@ -437,6 +483,32 @@ mod tests {
             &params(handle, cmd, flags),
             |_| false,
         )
+    }
+
+    /// Fallback experiment: refuse only the requested inner command, with no saved entry.
+    #[test]
+    fn fifo_refusal_is_narrow_and_preserves_validation_and_object() {
+        let r = Registry::new(Bounds::default());
+        let abi = abi();
+        let update = abi.cmds.update_channel_info;
+        let call = |handle, cmd, scope| serve_with_fifo_refusal(
+            &r, &abi, OBJ, Control::Register(Form::V1),
+            &params(handle, cmd, 0), |_| false, scope,
+        );
+        assert_eq!(call(0, update, true), NV_ERR_INVALID_OBJECT_HANDLE);
+        assert_eq!(call(0x4000_0002, update, true), kf_abi::defapi::NV_ERR_NOT_SUPPORTED);
+        assert_eq!(r.lookup(OBJ, 0x4000_0002), Err(NV_ERR_INVALID_DATA));
+        assert_eq!(r.stats().0, 0);
+        assert_eq!(r.stats().1.fifo_update_refused, 1);
+        // Other deferred APIs and channels outside the experiment remain unchanged.
+        assert_eq!(call(0x4000_0003, abi.cmds.invalidate_tlb, true), NV_OK);
+        assert_eq!(call(0x4000_0002, update, false), NV_OK);
+        assert_eq!(call(0x4000_0002, update, true), NV_ERR_INVALID_OBJECT_HANDLE);
+        assert_eq!(r.stats().1.fifo_update_refused, 1);
+        assert_eq!(r.remove(OBJ, 0x4000_0002), NV_OK);
+        assert_eq!(call(0x4000_0002, update, true), kf_abi::defapi::NV_ERR_NOT_SUPPORTED);
+        assert_eq!(r.stats().1.fifo_update_refused, 2);
+        assert_eq!(r.lookup(OBJ, 0x4000_0003).unwrap().cmd, abi.cmds.invalidate_tlb);
     }
 
     /// ★ The VFIO sequence: register, look up, execute → implicitly deleted; the same handle may
