@@ -9,6 +9,19 @@ through: `V3_CONSTANT_INVENTORY_20261011.md` (being written; until it lands this
 kayfabe must work on a wide range of dies and guest driver branches, not only the ones we traced. Every value a guest can see that is not
 derived or computed must come from a published, source-tagged table, and an unmeasured die or branch gets a defined fallback.
 
+## 1a. The compatibility axes at a glance
+
+| axis | what varies | how it is tackled | open risk |
+|---|---|---|---|
+| **Die / display IP version** | capability bits, class sets, per-die constants (e.g. GMMU static info differs on AD102 vs GA102/GA106) | tiers §2: derive first; else measure per die (Vast sweep, home display machines RTX 4070 / 3050 / 3050 laptop, contributor tool); no "same family" assumption (§3); unmeasured die = clean fallback | dies nobody can measure with a head (§4 step 3b, §9) |
+| **Guest driver branch / firmware** | control ids are renumbered (ogkm 555.42.02), layouts change inside a branch (`0x20802a0f` 24/28/32 B), controls appear only from some version | request census per driver version under kayfabe; ogkm across all tags; per-(die, branch) table keys; a supported driver set (§7) | monthly Windows drivers add controls |
+| **Host driver version** | what the unpatched host driver answers unprivileged; ABI of host controls | tier 2 (delegate to the host where safe), `kf_abi::hostabi` rows, driver matrix, patched host as an optional tier (`V3_HOST_PATCH_LIST.md`) | host RM core ships as a binary object; patching needs a source build |
+| **Monitor / sink state** | connector table, EDID, modes, HDCP, DP vs TMDS | kayfabe authors it from its own virtual monitor; real behaviour is an oracle test on display machines; forced-connector measurement on rentals (§4 step 3b) | DP/MST/HDMI sinks, multi-head |
+| **Host environment** | nested KVM exit cost (10-40x), IOMMU, DMA address limits | per-box ratios; the H5 constraint is host-specific, not a die constant | Windows under nested kayfabe is untested (§8) |
+| **Guest OS** | Windows-only controls, Windows-only behaviour | Windows tracer / replay (§4), acceptance layer (§8) | headless Windows may not issue display controls (§5) |
+
+Acceptance for every axis: the nested-run test layer with falsifying tests, mutation checks and a native differential (§8).
+
 ## 2. The tiers (owner, 2026-10-11)
 
 Every open item is checked in this order. It moves to the next tier only with a written reason why the tier above does not work.
@@ -48,7 +61,14 @@ Every open item is checked in this order. It moves to the next tier only with a 
 3. **Sweep and tool:** an automated per-die run on rented machines (one boot per probe batch, a time limit, reboot on a wedge), ordered by how often
    a die is rented. The same measurement as a root-run tool (`kayfabe-measure`) that writes a table entry with board data stripped, so users can
    contribute dies beyond the rentals.
-4. **Reverse engineering** for the residue, per §AG and `V3_PROVENANCE.md`, with a legal review first.
+3b. **Forced-connector experiment (display behaviour on headless rentals):** on a rented Linux VM with root, make the driver treat a connector as connected with a custom EDID
+   (DRM `video=...:e` or the driver's connected-monitor option; an HDMI/DVI output needs no sink handshake), then modeset and flip, read the frame CRC capture through NVKMS,
+   and trace the display engine's behaviour (latch timing, vblank cadence, colour-program acceptance). Falsifier: one modeset on a forced connector on one rental. It is
+   measurement, not reverse engineering. Datacenter dies with no display engine need nothing here (headless is their real state); workstation and consumer dies of one
+   display IP generation share the IP version key but are still measured per die by default (§3).
+4. **Reverse engineering** for the residue, per §AG and `V3_PROVENANCE.md`, with a legal review first: only display-engine behaviour of display IP versions that nobody can measure
+   (no owned machine with a head, forced-connector failed), done as a two-party spec process (one session writes a spec of facts, another implements from the spec only), tagged
+   `re-spec:<id>`, and verified by the acceptance layer (§8).
 
 ## 5. Unverified assumptions (each has a falsifier above)
 
@@ -92,3 +112,10 @@ value). Owner: the test must be rigorous. What rigorous means here:
 
 Release-coverage work, not the current blocker. The OpenGL failure on the RTX 4070 is not a constants problem (the replies already equal the real
 GPU's), so the sweep runs beside the P0 work and does not replace it.
+
+## 9. Seventh class: display-state rows for dies without a head on hand (owner discussion 2026-10-11)
+
+Rows whose reply depends on a lit head or a monitor, on a die we can reach only by rental. Route in this order: authored by kayfabe from its own virtual monitor (the rules and formats
+from any die of the same display IP version that has a head) -> forced-connector measurement (§4 step 3b) -> contributor measurement on a machine with a monitor -> clean fallback
+for the die -> reverse engineering only for an unreachable display IP version (§4 step 4). The owner's machines with display: RTX 4070, RTX 3050 (desktop; GA106 8 GB or GA107 6 GB,
+to be confirmed), RTX 3050 laptop (whether its dGPU drives a head is to be confirmed; a MUXless laptop is a headless reference); the owner may have a Turing card and can get one Blackwell.

@@ -69,6 +69,10 @@ without a MUX behaves like a headless reference, which is also useful), and the 
 
 ## Not yet done
 
+- **`0x20808165` is missing from the inventory:** Codex's Windows app matrix (14:16 UTC checkpoint, `codex/windows-matrix-20261011`) shows three NVENC formats failing session creation with one
+  refusal of `0x20808165` (`0x56`) per encoder. Add it as a row and run it through the tiers; it is the first app failure tied to a specific control (a first test of the demand filter).
+- The refused-request logging (parameter size and reply bytes for all refused controls) as a measurement flag.
+
 - The demand filter (`V3_CONSTANT_STRATEGY.md` §7): which rows change guest behaviour at all (run 641 works with 61 refused controls).
 - The host probe for the 2-MEASURE-LAYOUT rows, and the raw-GSP spike (strategy §4.1). Both need the GPU lock.
 - Size-only layout comparisons: field offsets were not compared against payloads.
