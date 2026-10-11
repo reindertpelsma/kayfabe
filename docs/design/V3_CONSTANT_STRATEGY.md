@@ -13,7 +13,8 @@ derived or computed must come from a published, source-tagged table, and an unme
 
 Every open item is checked in this order. It moves to the next tier only with a written reason why the tier above does not work.
 
-1. **Derive or compute:** ogkm (the whole tree: generated code and the Windows-specific code it carries, not only what Linux builds), nouveau/nova,
+1. **Derive or compute:** ogkm (the whole tree: generated code and the Windows-specific code it carries, not only what Linux builds; and **any ogkm
+   version, older tags and newer ones, not only 595.84**: an item missing from one version may be defined in another), nouveau/nova,
    other open projects that already carry the table, kayfabe's own state, rules checked against class tables.
 2. **Unprivileged host ioctl at startup:** kayfabe starts unprivileged. Only what an unpatched host driver answers without extra permissions.
 3. **Privileged measurement, run once per die and driver in a sweep** (a script as root, a kernel module, hardware access, on rented machines).
