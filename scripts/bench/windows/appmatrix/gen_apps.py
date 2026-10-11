@@ -23,7 +23,7 @@ PRELUDE = r"""$ErrorActionPreference = 'Continue'
 $K = 'C:\kfapps'; $CD = '@@CD@@'; $OUT = 'C:\kf\out\@@ID@@'
 $PY = "$K\py\python.exe"; $TL = "$K\py\Lib\site-packages\torch\lib"
 New-Item -ItemType Directory -Force -Path $OUT | Out-Null
-$env:CUPY_CACHE_DIR = 'C:\kf\cupy_cache'; $env:KF_TORCH_LIB = $TL; $env:CUDA_PATH = "$K\py\Lib\site-packages\torch"
+$env:CUPY_CACHE_DIR = 'C:\kf\cupy_cache'; $env:KF_TORCH_LIB = $TL; $env:CUDA_PATH = "$K\cuda_cudart"
 $env:KF_CUDA_INCLUDE = "$K\cuda_cudart\include;$K\cuda_cccl\include"
 $PYA = @('-X', 'utf8', '-X', 'pycache_prefix=C:\kf\pycache')
 """
@@ -145,12 +145,12 @@ for aid, test, lin, tmo, exp, dif in EQ:
 app("managed_t", "cuda-equiv", py("win_cuda_equiv.py", "managed"), r"^WINEQ_DONE managed", 180, 15, [GPU_ENG, OUT_NV], "high",
     "managed (unified) memory: the Linux rows UnifiedMemoryStreams/Perf, conjugateGradientUM and attach_verify are the four that fail on Linux "
     "kayfabe (UVM demand paging, docs/design/V3_UVM_DEMAND_PAGING.md); on Windows WDDM managed memory is the limited model (no oversubscription)",
-    linux=["UnifiedMemoryStreams", "UnifiedMemoryPerf", "conjugateGradientUM", "attach_verify"], pkgs=PYPK,
+    linux=["UnifiedMemoryStreams", "UnifiedMemoryPerf", "conjugateGradientUM", "attach_verify"], pkgs=PYPK + ("cuda_cudart",),
     note="CuPy malloc_managed; expected to be the hardest compute row on both OSes")
 for name, lin in (("default", "stream_default"), ("created", "stream_created"), ("nonblocking", "stream_nonblocking"), ("two", "stream_two"),
                   ("created2nd", "stream_created2nd"), ("perthread", "stream_perthread")):
     app("stream_%s_t" % name, "stream-probe", py("win_cuda_equiv.py", "stream_" + name), r"^STREAM_PROBE_DONE %s rc=0" % name, 120, 5, [OUT_NV, GPU_ENG],
-        *W_COMPUTE_SMALL, linux=[lin], pkgs=PYPK, note=("CuPy per-thread default stream (cupy.cuda.Stream.ptds)" if name == "perthread" else
+        *W_COMPUTE_SMALL, linux=[lin], pkgs=PYPK + (("cuda_cudart",) if name == "perthread" else ()), note=("CuPy per-thread default stream (cupy.cuda.Stream.ptds)" if name == "perthread" else
                                                            "torch streams are created cudaStreamNonBlocking" if name in ("created", "nonblocking") else None))
 for aid, test, lin, exp in (("cupy_cg", "cg", ["simpleCooperativeGroups"], 10), ("cupy_asynccopy", "asynccopy", ["globalToShmemAsyncCopy"], 10),
                             ("cupy_sha256", "sha256", ["sha256"], 10)):

@@ -1,0 +1,7 @@
+=== sort_t start=2026-10-11T13:36:07.7415131+00:00 host=VASTWIN session=0 boot=2026-10-11T13:31:52.5000000Z timeout=120
+KFDEV NVIDIA GeForce RTX 4070
+[eq] device NVIDIA GeForce RTX 4070 torch 2.8.0+cu126
+CHECK sort_i32_exact ok
+CHECK sort_argsort_valid ok
+WINEQ_DONE sort
+=== end rc=0 secs=6 2026-10-11T13:36:13.6343313+00:00

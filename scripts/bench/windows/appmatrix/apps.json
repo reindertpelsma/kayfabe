@@ -1,7 +1,7 @@
 {
  "schema": 1,
  "generator": "gen_apps.py",
- "prelude": "$ErrorActionPreference = 'Continue'\n. C:\\kf\\kf_apphelpers.ps1\n$K = 'C:\\kfapps'; $CD = '@@CD@@'; $OUT = 'C:\\kf\\out\\@@ID@@'\n$PY = \"$K\\py\\python.exe\"; $TL = \"$K\\py\\Lib\\site-packages\\torch\\lib\"\nNew-Item -ItemType Directory -Force -Path $OUT | Out-Null\n$env:CUPY_CACHE_DIR = 'C:\\kf\\cupy_cache'; $env:KF_TORCH_LIB = $TL; $env:CUDA_PATH = \"$K\\py\\Lib\\site-packages\\torch\"\n$env:KF_CUDA_INCLUDE = \"$K\\cuda_cudart\\include;$K\\cuda_cccl\\include\"\n$PYA = @('-X', 'utf8', '-X', 'pycache_prefix=C:\\kf\\pycache')\n",
+ "prelude": "$ErrorActionPreference = 'Continue'\n. C:\\kf\\kf_apphelpers.ps1\n$K = 'C:\\kfapps'; $CD = '@@CD@@'; $OUT = 'C:\\kf\\out\\@@ID@@'\n$PY = \"$K\\py\\python.exe\"; $TL = \"$K\\py\\Lib\\site-packages\\torch\\lib\"\nNew-Item -ItemType Directory -Force -Path $OUT | Out-Null\n$env:CUPY_CACHE_DIR = 'C:\\kf\\cupy_cache'; $env:KF_TORCH_LIB = $TL; $env:CUDA_PATH = \"$K\\cuda_cudart\"\n$env:KF_CUDA_INCLUDE = \"$K\\cuda_cudart\\include;$K\\cuda_cccl\\include\"\n$PYA = @('-X', 'utf8', '-X', 'pycache_prefix=C:\\kf\\pycache')\n",
  "apps": [
   {
    "id": "atomics_t",
@@ -1826,7 +1826,8 @@
    "pkgs": [
     "python_embed",
     "pywheels",
-    "vc_redist"
+    "vc_redist",
+    "cuda_cudart"
    ],
    "session": "service",
    "tier": 1,
@@ -2813,7 +2814,8 @@
    "pkgs": [
     "python_embed",
     "pywheels",
-    "vc_redist"
+    "vc_redist",
+    "cuda_cudart"
    ],
    "session": "service",
    "tier": 1,

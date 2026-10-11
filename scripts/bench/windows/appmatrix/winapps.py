@@ -42,7 +42,7 @@ PS_PUSH = {  # guest path -> repo path (relative to HERE unless absolute)
     r"C:\kf\d3d12_signal_probe.ps1": "../d3d12_signal_probe.ps1",
 }
 WEB = ["webgl", "webgpu", "video"]
-PY_OWN = ["win_cuda_equiv.py", "torch_burn.py", "ort_dml.py", "cupy_nvrtc.py", "kf_runpy.py"]
+PY_OWN = ["win_cuda_equiv.py", "torch_burn.py", "ort_dml.py", "cupy_nvrtc.py", "kf_runpy.py", "hf_generate.py", "cdp_quicksort.py"]
 PY_LINUX = ["torch_correct.py", "ai_bench.py", "cupy_check.py", "blender_render.py"]     # the unmodified Linux-row scripts
 PS = r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
 

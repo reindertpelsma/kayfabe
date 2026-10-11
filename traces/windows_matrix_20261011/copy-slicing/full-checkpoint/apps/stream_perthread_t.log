@@ -1,0 +1,26 @@
+=== stream_perthread_t start=2026-10-11T13:37:39.0741884+00:00 host=VASTWIN session=0 boot=2026-10-11T13:31:52.5000000Z timeout=120
+KFDEV NVIDIA GeForce RTX 4070
+[eq] device NVIDIA GeForce RTX 4070 torch 2.8.0+cu126
+Traceback (most recent call last):
+  File "C:\kf\py\kf_runpy.py", line 22, in <module>
+    runpy.run_path(script, run_name="__main__")
+  File "<frozen runpy>", line 287, in run_path
+  File "<frozen runpy>", line 98, in _run_module_code
+  File "<frozen runpy>", line 88, in _run_code
+  File "C:\kf\py\win_cuda_equiv.py", line 278, in <module>
+    streams_probe(name[7:]); sys.exit(0)
+    ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\kf\py\win_cuda_equiv.py", line 252, in streams_probe
+    y = torch.as_tensor(cp.asarray(x) * 2, device=DEV)
+                        ~~~~~~~~~~~~~~^~~
+  File "cupy/_core/core.pyx", line 1586, in cupy._core.core._ndarray_base.__mul__
+  File "cupy/_core/core.pyx", line 2024, in cupy._core.core._ndarray_base.__array_ufunc__
+  File "cupy/_core/_kernel.pyx", line 1397, in cupy._core._kernel.ufunc.__call__
+  File "cupy/_core/_kernel.pyx", line 1426, in cupy._core._kernel.ufunc._get_ufunc_kernel
+  File "cupy/_core/_kernel.pyx", line 1098, in cupy._core._kernel._get_ufunc_kernel
+  File "cupy/_core/_kernel.pyx", line 124, in cupy._core._kernel._get_simple_elementwise_kernel
+  File "cupy/_core/_kernel.pyx", line 112, in cupy._core._kernel._get_simple_elementwise_kernel_from_code
+  File "cupy/_core/core.pyx", line 2637, in cupy._core.core.compile_with_cache
+  File "cupy/_core/core.pyx", line 2599, in cupy._core.core.assemble_cupy_compiler_options
+RuntimeError: Failed to find CUDA headers. Please install CUDA toolkit headers (e.g., pip install cupy-cuda12x[ctk]) or specify CUDA_PATH environment variable.
+=== end rc=1 secs=45 2026-10-11T13:38:23.5836751+00:00

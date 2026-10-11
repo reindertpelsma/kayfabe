@@ -46,6 +46,14 @@ class GuestScripts(unittest.TestCase):
             os.unlink(t.name)
             self.assertEqual(r.returncode, 0, f + r.stderr)
 
+    def test_every_python_script_referenced_by_apps_is_pushed(self):
+        import winapps
+        pushed = set(winapps.PY_OWN + winapps.PY_LINUX)
+        for app in H.load_apps()["apps"]:
+            scripts = re.findall(r"C:\\kf\\py\\([A-Za-z0-9_]+\.py)", app["ps"])
+            for script in scripts:
+                self.assertIn(script, pushed, f"{app['id']} references an unbundled guest script")
+
     def test_every_pushed_file_exists(self):
         import winapps
         for g, rel in winapps.PS_PUSH.items():

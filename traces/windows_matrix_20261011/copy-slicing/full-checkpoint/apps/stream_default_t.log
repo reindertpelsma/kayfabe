@@ -1,0 +1,6 @@
+=== stream_default_t start=2026-10-11T13:37:02.8630398+00:00 host=VASTWIN session=0 boot=2026-10-11T13:31:52.5000000Z timeout=120
+KFDEV NVIDIA GeForce RTX 4070
+[eq] device NVIDIA GeForce RTX 4070 torch 2.8.0+cu126
+CHECK stream_default ok
+STREAM_PROBE_DONE default rc=0
+=== end rc=0 secs=5 2026-10-11T13:37:07.4157892+00:00

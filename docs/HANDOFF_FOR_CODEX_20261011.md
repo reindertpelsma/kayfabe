@@ -61,6 +61,19 @@ model revision/hashes and extra wheels pinned, existing shared wheels unchanged.
 Addon ISO `/data/kf-matrix-supplement/addon-image/kfapps.iso` is reproducible;
 not yet uploaded or executed. All73 harness tests PASS.
 
+13:49UTC checkpoint: broad run32 completed,30PASS +vectorAdd proof miss +
+stream_perthread missing headers (newAPP row). Candidate has no journal Xid so far.
+Snapshot in `copy-slicing/full-checkpoint/`. CUDA_PATH corrected to staged cudart
+root; per-thread/managed dependencies now include headers. Active8037e19b unchanged.
+Stock HF/CDP addon first attempt omitted both scripts from explicit PY_OWN payload;
+HF correctly NOTRUN; CDP pending collection. Added failing-first generic inventory
+script-to-payload test, repaired list. Original results must be retained; next fresh
+frozen harness reruns actual workloads. Addon mounted on Vast as `kfapps.iso`, original
+preserved `C:\kfmedia\kfapps-base.iso`; addon SHA d437bc8b65e9eb46fe89a70ce638dc7a54f073a79cb869237c1f6eef31805308.
+No need to redownload/stage model. Restore original base ISO for shared CuPy checks
+after current native attempt ends, retaining staged addon packages. Source22e5ce7b
+was the incomplete-payload native attempt; the corrected harness revision follows.
+
 ## OpenGL continuation, 2026-10-11 13:19 CEST
 
 **Gears passes on candidate `2c917f3e`, branch `codex/opengl-gears-20261011`.** The boot
