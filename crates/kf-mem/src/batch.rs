@@ -3266,6 +3266,101 @@ mod tests {
         assert!(op_us < 3 * ACT_WAIT_BOUND_US, "a hand-over took {op_us} us");
     }
 
+    /// REVIEW EXPERIMENT (bmd2): the VA thread yields to the act thread while HOLDING the very lock
+    /// the act thread announced it waits for (hold2: micro, then lock_for(own) -> yield_to_act).
+    #[test]
+    fn review_hold2_yield_while_holding_micro_stalls_the_act_thread() {
+        use std::sync::atomic::AtomicBool;
+        let host = NullHost::new(0);
+        let bv = BatchedVas::with_low_reserve(&host, false);
+        let stop = AtomicBool::new(false);
+        std::thread::scope(|s| {
+            s.spawn(|| {
+                while !stop.load(Relaxed) {
+                    bv.hold2(&bv.micro, &bv.own, |_, _| ((), 1));
+                }
+            });
+            let _a = ActScope::enter();
+            let t = std::time::Instant::now();
+            while t.elapsed() < std::time::Duration::from_millis(1500) {
+                bv.hold(&bv.micro, |_| ((), 1));
+                std::thread::sleep(std::time::Duration::from_micros(30));
+            }
+            stop.store(true, Relaxed);
+        });
+        let (wait_us, _) = bv.act_stats();
+        eprintln!("REVIEW hold2: act thread longest micro-lock wait {wait_us} us; VA yields {} (longest {} us)",
+            bv.holds.va_yields.load(Relaxed), bv.holds.va_yield_max_ns.load(Relaxed)/1000);
+    }
+
+    /// REVIEW EXPERIMENT (bmd2): a steer flood over the range the VA thread wants to map.
+    #[test]
+    fn review_steer_flood_vs_map_latency() {
+        use std::sync::atomic::AtomicBool;
+        let host = NullHost::new(0);
+        let bv = BatchedVas::with_low_reserve(&host, false);
+        let stop = AtomicBool::new(false);
+        let va = 0x10_0000u64;
+        let mut lat = Vec::new();
+        std::thread::scope(|s| {
+            s.spawn(|| {
+                while !stop.load(Relaxed) {
+                    let _ = bv.hand_to_host(va, 16 * P);
+                }
+            });
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            for _ in 0..200 {
+                let t = std::time::Instant::now();
+                bv.map(&row(va, P, P), true).unwrap();
+                lat.push(t.elapsed().as_micros());
+                bv.unmap_range(va, P, true).unwrap();
+            }
+            stop.store(true, Relaxed);
+        });
+        lat.sort();
+        eprintln!("REVIEW flood: map latency us p50 {} p90 {} p99 {} max {}; claim waits {} (max {} us)",
+            lat[100], lat[180], lat[198], lat[199],
+            bv.holds.va_claim_waits.load(Relaxed), bv.holds.va_claim_wait_max_ns.load(Relaxed)/1000);
+    }
+
+    /// REVIEW EXPERIMENT (bmd2): how long a steer over a guest-sized row holds its claim, and how
+    /// long a map over the same range (VA thread, global) waits for it.
+    #[test]
+    fn review_big_steer_blocks_the_va_thread_in_claim_map() {
+        let host = NullHost::new(0);
+        let bv = BatchedVas::with_low_reserve(&host, false);
+        let (va, len) = (0x1_0000_0000u64, MAX_LEAF_PIECES * BATCH_PAGE);
+        bv.map(&row(va, len, BATCH_PAGE), true).unwrap();
+        let t = std::time::Instant::now();
+        let mut map_wait = 0u128;
+        std::thread::scope(|s| {
+            let h = s.spawn(|| { let t = std::time::Instant::now(); let r = bv.hand_to_host(va, len); (r, t.elapsed().as_millis()) });
+            std::thread::sleep(std::time::Duration::from_millis(5));
+            let t2 = std::time::Instant::now();
+            bv.map(&row(va, P, P), true).unwrap();
+            map_wait = t2.elapsed().as_millis();
+            let (r, ms) = h.join().unwrap();
+            eprintln!("REVIEW bigsteer: {r:?} steer took {ms} ms; VA-thread map of one page waited {map_wait} ms (claim waits {})", bv.holds.va_claim_waits.load(Relaxed));
+        });
+        let _ = t;
+    }
+
+    /// REVIEW EXPERIMENT (bmd2): the liveness bitmap is sized by the batch's VA extent, which a
+    /// guest chooses (the same big guest-RAM run aliased at consecutive VAs).
+    #[test]
+    fn review_batch_bitmap_scales_with_va_extent_not_guest_ram() {
+        use std::os::fd::AsFd;
+        let host = NullHost::new(u64::MAX);
+        let bv = BatchedVas::with_low_reserve(&host, true);
+        let f = std::fs::File::open("/dev/null").unwrap();
+        let g = 4u64 << 30; // 4 GiB runs, all aliasing the same guest RAM
+        let rows: Vec<Desired> = (0..4096u64).map(|i| Desired { va: 0x1_0000_0000 + i * g, len: g, off: 0, ram: true, kind: 0, perm: kf_host::MapPerm::READ_WRITE, leaf: P }).collect();
+        let rss = || std::fs::read_to_string("/proc/self/statm").unwrap().split_whitespace().nth(1).unwrap().parse::<u64>().unwrap() * 4096 / (1<<20);
+        let before = rss();
+        let r = bv.place(f.as_fd(), &rows, true);
+        eprintln!("REVIEW bitmap: place of 4096 x 4 GiB (16 TiB of VA) -> {r:?}; RSS {before} MiB -> {} MiB", rss());
+    }
+
     /// The act-thread wait the test above allows: ~one chunk plus one host call plus scheduling in a
     /// debug build on a loaded box.
     const ACT_WAIT_BOUND_US: u64 = 30_000;
