@@ -506,7 +506,10 @@ pub fn runlist_of_engine_type(engines: &[FifoDeviceEntry], nv2080: u32) -> Optio
 #[must_use]
 pub fn one_engine_per_served_runlist(engines: &[FifoDeviceEntry]) -> Vec<u32> {
     let mut seen: Vec<(u32, u32)> = Vec::new();
-    for e in engines.iter().filter(|e| e.engine_data[slot::IS_HOST_DRIVEN_ENGINE] != 0) {
+    for e in engines
+        .iter()
+        .filter(|e| e.engine_data[slot::IS_HOST_DRIVEN_ENGINE] != 0)
+    {
         let rl = e.engine_data[slot::RUNLIST];
         if seen.iter().any(|(r, _)| *r == rl) {
             continue;
@@ -806,7 +809,12 @@ mod served_runlist_engine_tests {
     #[test]
     fn one_engine_per_runlist_host_driven_only() {
         // GR (rm 1) + a GRCE (COPY0 in RM space) share runlist 0; COPY2 owns 1; a non-driven row is skipped.
-        let engines = [entry(0, 1, 1), entry(0, 9, 1), entry(1, 0xb, 1), entry(9, 0xa, 0)];
+        let engines = [
+            entry(0, 1, 1),
+            entry(0, 9, 1),
+            entry(1, 0xb, 1),
+            entry(9, 0xa, 0),
+        ];
         let got = one_engine_per_served_runlist(&engines);
         assert_eq!(got.len(), 2, "{got:?}");
         assert_eq!(got[0], 1, "GR asks for runlist 0");

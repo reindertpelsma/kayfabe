@@ -1,5 +1,11 @@
 # V3 display — a virtual NVIDIA display the stock driver drives, scanned out by kayfabe
 
+**STATUS: LIVE, 2026-10-11 — §4.14 (end of §4): layouts observed on hardware, not in the open headers; `0x73011a` answered.**
+The Windows OpenGL ICD queries NV0073 `0x73011a` right after `SYSTEM_GET_ACTIVE`; refusing it (0x56) crashed the ICD, the real GPU answers `NV_OK`.
+Rule recorded with it (owner, 2026-10-11): a trace finds what must be answered, explains behaviour and serves as a TEST ORACLE; it is never data in
+the product. Every value comes from kayfabe's own state, and a layout known only from one observation is answered only for the guest branches it
+was observed on (see the section).
+
 **STATUS: LIVE, 2026-10-08 (evening) — §8.20: the VMM-neutral input traits (`OWNER_RULINGS.md` §V,
 KF3 ABI 23).** The broker's input and console-cursor policy is `kf-broker`'s (`InputPolicy`,
 `ConsoleCursor::apply`) behind `InputSink`/`CursorSink`; kf3.c only implements the verbs. ⊘ §8.4's
@@ -2035,6 +2041,56 @@ BAR1-mode write and fn-47 lines print with `gop=off` too, and request nothing (`
 - (d) — a 7.x guest's `nv_get_screen_info` path — was not run.
 
 ---
+
+### 4.14 Layouts observed on hardware, not in the open headers (2026-10-11)
+
+A control whose id or layout is in no open ogkm header is answered only under these rules, so the next one follows the same path:
+1. **Values from kayfabe's own state** (here: the head's ARMED mode, published by the display worker into `Ports::head_timing`), never from captured bytes.
+2. **Provenance in the code and here**: what was observed, on which die, which guest driver branch, which date; field meanings marked inferred.
+3. **Gated by the guest**: the params size must equal the observed size (else `INVALID_ARGUMENT`), and the guest branch (the layouts key the GSP handshake
+   gave the model, `DisplayModel::layouts().version`) must be one the layout was observed on; otherwise the control is refused `NOT_SUPPORTED` BY NAME,
+   counted and logged once ("layout unverified for guest branch X"). Never guessed.
+4. **The observation is a test oracle**: the public tests carry only the mode-derived numbers of the vectors; raw reply bytes stay host-only.
+
+| control | observed on | layout (little-endian `u32`) | source of each value | gate |
+|---|---|---|---|---|
+| `0x0073011a` (NV0073 SYSTEM id 0x1a; between `GET_SRM_STATUS 0x730119` and `HDCP_REVOCATION_CHECK 0x73011b`) | real RTX 4070 (AD104), Windows guest 580.88 (`r580_78-7`, keyed `580.65.06`), VFIO reference, 2026-10-11, 5 of 5 calls `NV_OK` | 28 bytes: `[displayId, width, height, total_width, total_height, 0, refresh_hz]`; request `[displayId, 0, ...]`. Field meanings inferred from 1920x1080 (2200x1125) and 1280x720 (1650x750), both 60 Hz | displayId echoed (must be one of our connectors); width/height = `BLANK_START - BLANK_END` per axis of the armed core state; totals = `HEAD_SET_RASTER_SIZE`; refresh = pixel clock over the totals, rounded to whole Hz (rounding inferred; only 60.00 Hz observed). A display no head lights answers with the monitor's authored preferred mode (inferred; the real GPU's answer for an unlit display was not observed) | size 28; branch in `DISPLAY_MODE_OBSERVED_BRANCHES` |
+
+**Superseded 2026-10-11 (same day, after run 631: `0x73011a` answered, the ICD still stopped after one pass): the two answers below are now derived, §4.15.**
+Other display-common answers where the real GPU differs from the model, checked against the open headers and left (2026-10-11): `0x730101` GET_CAPS_V2
+(the model's all-zero `capsTbl` is the design choice "no crossbar": the header defines the bits but nothing that obliges a virtual display to claim a
+crossbar it does not implement; the real GPU's `81 2f` would advertise `CROSS_BAR_SUPPORTED`) and `0x730102` GET_NUM_HEADS with
+`NV0073_CTRL_SYSTEM_GET_NUM_HEADS_FLAGS_CLIENT` (the header says "heads currently in use by an NV client using a user display class instance", a
+count the model has no state for; the real GPU answered 1). Both are re-opened only if the crash persists after `0x73011a`.
+
+### 4.15 Display caps and heads-in-use, derived (2026-10-11)
+
+**STATUS: LIVE, 2026-10-11 (code: `kf_disp::dispcaps`, `DisplayModel`; hardware verdict in `traces/windows_gl_crash_20261011/README.md`).**
+Why: the real GPU's gears client calls `0x730101` eight times before its first `0x730102` and repeats the `730102 x2, 73010c, 73011a,
+73010c x3, 730101` pass five times; kayfabe's called it twice and stopped after one pass (run 631), so the ICD diverged BEFORE `0x73011a`.
+Two answers differed: `0x730101` capsTbl (real `81 2f`, model all-zero) and `0x730102` with the CLIENT flag (real 1, model 4).
+
+- **`NV0073_CTRL_CMD_SYSTEM_GET_CAPS_V2`** ("supported features and required workarounds for the display engine(s) within the device"). `0x81` =
+  `AA_FOS_GAMMA_COMP | KSV_SRM_VALIDATION`; `0x2f` = `SINGLE_HEAD_MST | SINGLE_HEAD_DUAL_SST | HDMI_2_0 | CROSS_BAR | GLITCHLESS_MODESET`
+  (offsets and masks compiled from the headers, `CAP_*_BYTE/_MASK` in `layouts-*.tsv`). Each bit has a rule over model facts (table in `dispcaps.rs`):
+  HDMI 2.0 from the authored TMDS clock (> 340 MHz, HDMI 1.4b's ceiling; the page authors 600 MHz), MST / dual SST from the caps class defining
+  `SOR_CAP_DP_A` / `_B` (and two SORs), CROSS_BAR from the model answering `DFP_ASSIGN_SOR`. **Three bits no open source derives** (gamma
+  compensation, KSV/SRM validation, glitchless modeset: RM-software features of the engine generation) come from a hand-kept FAMILY row
+  (`OBSERVED_RM_FEATURES`, only IP version `DISPv0404` = Ada, observed on one AD104; other generations claim none, they are not borrowed). Per
+  the per-die policy that is the last tier ("anything else"): the host RM's own `GET_CAPS_V2` is the better source and is not wired (follow-up).
+  Ampere/Turing/Blackwell derive `00 0f`. No workaround bit is ever set. A guest branch without a class table, or a layout without a name,
+  answers the empty table by name (counter `caps_unverified`, one log line): the previous behaviour, as a clean mode.
+- **`DFP_ASSIGN_SOR` (`0x731152`, 80 bytes; the real GPU answered 8 of 8 `NV_OK`)**: the crossbar the caps now claim is FIXED, connector `i` on
+  SOR `i` (what `SPECIFIC_OR_GET_INFO` already says): `sorAssignList[sor]` and `sorAssignListWithTag[sor] = {display, SINGLE}`; `displayId 0`
+  returns the stored table (the header); a display we do not have is `INVALID_ARGUMENT`; slave display / `bIs2Head1Or` / an exclude mask that
+  bars the connector's only SOR are `NOT_SUPPORTED` by name. Matches the real reply for one display (SOR 0 = `0x100`, SINGLE). The 2026-10-09
+  `KF3_DISPLAY_XBAR_PROBE` (run 98) already showed Windows runs with this crossbar answer.
+- **`NV0073_CTRL_CMD_SYSTEM_GET_NUM_HEADS`**: header, quoted: CLIENT "is used to request the number of heads that are currently in use by an NV
+  client using a user display class instance … If this flag is disabled then the total number of heads supported is returned." The physical-RM
+  implementation (`dispcmnCtrlCmdSystemGetNumHeads`) is NOT in the open tree (only its NVOC stub), so the rule is `[inferred]`: heads in use =
+  heads whose raster runs = the heads `SYSTEM_GET_ACTIVE` reports a display for (published by the display worker from the ARMED state, no vCPU
+  lock). The real value 1 (one monitor lit on head 0) agrees; 0 before any head is lit. Flags other than CLIENT and a subdevice other than 0
+  are `INVALID_ARGUMENT` (listed in the header's status values).
 
 ## 5. Plan
 

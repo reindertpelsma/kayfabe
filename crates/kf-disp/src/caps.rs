@@ -32,6 +32,26 @@ pub const PAGE: usize = 0x1000;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Missing(pub String);
 
+/// The `TMDS_MAX` field value the page authors for every SOR (`NVC573_SOR_CLK_CAP_TMDS_MAX_INIT`).
+///
+/// # Errors
+/// [`Missing`] when the class table lacks it.
+pub fn tmds_max_field(t: &ClassTable) -> Result<u32, Missing> {
+    t.v(0xC573, "SOR_CLK_CAP_TMDS_MAX_INIT")
+        .ok_or_else(|| Missing("NVC573_SOR_CLK_CAP_TMDS_MAX_INIT".into()))
+}
+
+/// The same clock in kHz, the way NVKMS reads it back (`maxTMDSClkKHz = TMDS_MAX * 10000`,
+/// `nvkms-evo3.c:5185`).
+///
+/// # Errors
+/// [`Missing`] when the class table lacks it or the product overflows.
+pub fn tmds_max_khz(t: &ClassTable) -> Result<u32, Missing> {
+    tmds_max_field(t)?
+        .checked_mul(10_000)
+        .ok_or_else(|| Missing("TMDS_MAX kHz overflow".into()))
+}
+
 /// ★ The page: `(byte offset within the page, value)` for every non-zero word, and its BAR0 base.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CapsPage {
@@ -355,9 +375,7 @@ pub fn page(
         set(sys_capb, fa("SYS_CAPB_WINDOW_EXISTS", i)?, 1);
     }
     // SORs
-    let tmds_max = t
-        .v(0xC573, "SOR_CLK_CAP_TMDS_MAX_INIT")
-        .ok_or_else(|| m("NVC573_SOR_CLK_CAP_TMDS_MAX_INIT".into()))?;
+    let tmds_max = tmds_max_field(t)?;
     for s in 0..heads {
         let cap = a("SOR_CAP", s)?;
         for fld in [
