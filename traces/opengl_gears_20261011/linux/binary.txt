@@ -1,0 +1,2 @@
+f345a5351e3d5c22045ac6fd42d5b09d7ce2097c5a3a109f02578578485cd7c1  /var/lib/kf-windows-20261005/readtrace/kf3-bins/2c917f3e/qemu-system-x86_64
+KF3_BUILT /var/lib/kf-windows-20261005/readtrace/kf3-bins/2c917f3e/qemu-system-x86_64 rev=2c917f3e mtime=2026-10-11 13:08:32.407342136 +0200 (shared build dir /var/lib/kf-windows-20261005/readtrace/qemu-build-kf3)

@@ -1,6 +1,6 @@
 # OpenGL gears investigation
 
-**STATUS: RESEARCH, 2026-10-11.** Starts at integration `c1aa06b0`.
+**STATUS: ANSWERED, 2026-10-11.** Starts at integration `c1aa06b0`.
 
 Run 643 uses the validated product binary `02afce90` with the GSP observer and corrected
 sign-in harness. Hypothesis: boot-time static information or a previously missed control
@@ -105,3 +105,28 @@ isolate which previously discarded bus field the ICD requires. The GR-caps chang
 was insufficient (run 644). Linux regressions on the exact passing product are pending.
 Only our stopped runs' 645/646 disposable overlays were removed after evidence collection
 to preserve the host's 100 GB free-space floor; logs and private diagnostic captures remain.
+
+## Exact-product Linux regression
+
+`2c917f3e` passed the ABI/RM GPU-free suite locally (1300 tests), host display/RM/QEMU
+GPU-free suite, hardware gates 9/9 plus gate 10, rebuilt QEMU/client/fast guest, fast suite
+30/30, T-space log checks 30/30, and broker/input proof. The outer GPU lock serialized all
+stages. `linux/` carries the run markers, gates, arm verdicts, T-space checks, broker proof
+and binary hash; full per-arm logs remain on the trusted host under
+`codex-gl-regression-20261011-2c917f3e/`. Regression exited 0 at 13:15:15 CEST.
+
+Run 648 is a fresh Windows boot of the same product with RPC tracing, QEMU trace and GSP
+observer disabled. It uses the ordinary open-source probe with no private hooks and
+records its native LASTEXITCODE. Result/teardown follow when complete. This checks the
+passing outcome without measurement flags; it is not a performance comparison.
+
+## Final normal-profile verdict
+
+Run 648 (`2c917f3e`), fresh baseline and measurement flags off: **93693 frames in 45.0s,
+NVIDIA renderer, pixel 64/128/191/255, GL error 0, RESULT OK, native exit 0**. Adapter Code 0,
+zero TDR; runner exited 0. The recorded command confirms RPC/QEMU tracing and the GSP
+observer are off, display is on. Host restored to nvidia and DMA-FQ, no QEMU or own stop
+file, 104 GiB free. `logs/648/` contains the launch profile, probe result and teardown.
+
+The candidate branch is pushed; integration/master remain unchanged. Their merge gates
+still apply. The broader OpenGL application matrix is a separate outstanding lane.

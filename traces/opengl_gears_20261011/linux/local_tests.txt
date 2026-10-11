@@ -1,0 +1,5 @@
+SOURCE=2c917f3e
+COMMAND=cargo test -p kf-abi -p kf-rm
+PASSED=1300
+FAILED=0
+TARGET=/root/kf-codex-display-target

@@ -1,0 +1,17 @@
+KFGL stage ChoosePixelFormat enter
+KFGL pixel_format 9
+KFGL stage SetPixelFormat enter
+KFGL stage wglCreateContext enter
+KFGL stage wglCreateContext returned; wglMakeCurrent enter
+KFGL context 0000000000010000
+KFGL stage wglMakeCurrent returned; glGetString vendor enter
+KFGL stage glGetString vendor returned; renderer enter
+KFGL stage glGetString renderer returned; version enter
+KFGL stage glGetString version returned
+KFGL vendor NVIDIA Corporation
+KFGL renderer NVIDIA GeForce RTX 4070/PCIe/SSE2
+KFGL version 4.6.0 NVIDIA 580.88
+KFGL pixel 64,128,191,255
+KFGL gears frames=93693 secs=45.0 fps=2082.1 glerr=0x0
+KFGL RESULT OK
+EXIT 0

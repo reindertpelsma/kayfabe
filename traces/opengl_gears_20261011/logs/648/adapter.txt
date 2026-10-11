@@ -1,0 +1,6 @@
+
+Name                    ConfigManagerErrorCode
+----                    ----------------------
+NVIDIA GeForce RTX 4070                      0
+
+
