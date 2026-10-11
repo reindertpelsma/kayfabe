@@ -101,9 +101,116 @@ pub fn host_facts(rm: &kf_host::HostRm, family: Family) -> Result<HostFacts, Str
     query_host_facts(&mut Session(rm, None), family).map_err(|e| e.to_string())
 }
 
+/// ★ 2026-10-11 (`docs/design/V3_CHANNEL_BUDGET.md`): resolve the VM's channel budget — the count per
+/// runlist the guest is told AND the cap kayfabe enforces — from the host's own unprivileged
+/// `FIFO_GET_INFO` answers (one per served runlist) and the `channel-budget` property (`0` = derive).
+///
+/// # Errors
+/// The host's refusal of the query, or the budget's own refusal ([`kf_abi::chanbudget::BudgetError`]), by name.
+pub fn channel_budget(
+    rm: &kf_host::HostRm,
+    engines: &[kf_abi::inittables::FifoDeviceEntry],
+    requested: u32,
+) -> Result<kf_abi::chanbudget::ChannelBudget, String> {
+    channel_budget_with(
+        |p| {
+            rm.raw_control(rm.subdevice(), kf_abi::chanbudget::CONTROL, p)
+                .map_err(|e| format!("{e:?}"))
+        },
+        engines,
+        requested,
+    )
+}
+
+/// [`channel_budget`] over any `ask` that issues the host's `FIFO_GET_INFO` (a test double speaks for the host).
+///
+/// # Errors
+/// As [`channel_budget`].
+pub fn channel_budget_with(
+    mut ask: impl FnMut(&mut [u8]) -> Result<(), String>,
+    engines: &[kf_abi::inittables::FifoDeviceEntry],
+    requested: u32,
+) -> Result<kf_abi::chanbudget::ChannelBudget, String> {
+    use kf_abi::chanbudget as cb;
+    let mut host = Vec::new();
+    for engine in kf_rm::authored::one_engine_per_served_runlist(engines) {
+        let mut p = cb::encode_request(engine);
+        ask(&mut p).map_err(|e| format!("channel budget: the host refused FIFO_GET_INFO for engine {engine:#x}: {e}"))?;
+        host.push(cb::decode_reply(engine, &p).ok_or_else(|| {
+            format!("channel budget: the host's FIFO_GET_INFO reply for engine {engine:#x} is not the two entries asked for")
+        })?);
+    }
+    cb::resolve(requested, &host).map_err(|e| e.to_string())
+}
+
 #[cfg(test)]
 mod tests {
-    use super::nv_status;
+    use super::{channel_budget_with, nv_status};
+    use kf_abi::chanbudget as cb;
+    use kf_abi::inittables::{ENGINE_DATA_TYPES, ENGINE_MAX_PBDMA, FifoDeviceEntry};
+    use kf_rm::authored::slot;
+
+    fn engine(runlist: u32, rm_engine: u32) -> FifoDeviceEntry {
+        let mut engine_data = [0u32; ENGINE_DATA_TYPES];
+        engine_data[slot::RUNLIST] = runlist;
+        engine_data[slot::RM_ENGINE_TYPE] = rm_engine;
+        engine_data[slot::IS_HOST_DRIVEN_ENGINE] = 1;
+        FifoDeviceEntry {
+            name: "t",
+            engine_data,
+            pbdma_ids: [0; ENGINE_MAX_PBDMA],
+            pbdma_fault_ids: [0; ENGINE_MAX_PBDMA],
+            num_pbdmas: 1,
+        }
+    }
+
+    /// A host with `total` channels per runlist of which `in_use` are taken (the same answer for each engine asked).
+    fn host(total: u32, in_use: u32) -> impl FnMut(&mut [u8]) -> Result<(), String> {
+        move |p| {
+            p[8..12].copy_from_slice(&total.to_le_bytes());
+            p[16..20].copy_from_slice(&in_use.to_le_bytes());
+            Ok(())
+        }
+    }
+
+    fn engines() -> [FifoDeviceEntry; 2] {
+        [engine(0, 1), engine(1, 0xb)]
+    }
+
+    /// Default derivation: asked once per served runlist, free minus the 1/8 reserve.
+    #[test]
+    fn default_budget_is_derived_from_the_host() {
+        let b = channel_budget_with(host(2048, 100), &engines(), 0).unwrap();
+        assert_eq!((b.per_runlist, b.source), (1692, cb::BudgetSource::Derived));
+    }
+
+    /// Property override: taken exactly, and the count the guest is TOLD (`GET_NUM_CHANNELS`) is that number.
+    #[test]
+    fn the_property_overrides_and_the_guest_is_told_it() {
+        let b = channel_budget_with(host(2048, 100), &engines(), 512).unwrap();
+        assert_eq!(b.per_runlist, 512);
+        let row = kf_abi::fifochannels::FifoChannelsRow { channels_per_runlist: b.per_runlist };
+        let reply = kf_abi::fifochannels::encode_fifo_num_channels(&row, 1).unwrap();
+        assert_eq!(u32::from_le_bytes(reply[4..8].try_into().unwrap()), 512, "numChannels follows the property");
+    }
+
+    /// Over-limit and under-minimum are refused at realize, by name, never clamped; a host that refuses the query refuses realize.
+    #[test]
+    fn realize_refuses_what_the_host_cannot_give() {
+        let e = channel_budget_with(host(2048, 100), &engines(), 2000).unwrap_err();
+        assert!(e.contains("channel-budget=2000") && e.contains("1948"), "{e}");
+        let e = channel_budget_with(host(2048, 100), &engines(), 100).unwrap_err();
+        assert!(e.contains("below the minimum"), "{e}");
+        let e = channel_budget_with(|_| Err("NV_ERR_INSUFFICIENT_PERMISSIONS".into()), &engines(), 0).unwrap_err();
+        assert!(e.contains("host refused FIFO_GET_INFO"), "{e}");
+    }
+
+    /// The enforced cap's ceiling is the token field the guest's doorbell carries.
+    #[test]
+    fn the_budget_ceiling_is_the_token_tables_extent() {
+        assert_eq!(cb::MAX_CHANNEL_BUDGET, 1 << kf_trap::tokenindex::TokenIndex::CHID_BITS);
+    }
+
     use kf_host::RmError;
 
     /// The seam must hand `hostquery` RM's own `NV_ERR_NOT_SUPPORTED` — it is how an absent

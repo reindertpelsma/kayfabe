@@ -1,0 +1,13 @@
+# kfgl.ps1 — runs in the INTERACTIVE session (scheduled task /it). CUDA probe, then the GL gears; result lines to C:\kf\gl-result.txt
+$out = 'C:\kf\gl-result.txt'; Remove-Item $out -ErrorAction SilentlyContinue
+function Rw($m) { Add-Content $out ("{0} {1}" -f (Get-Date).ToUniversalTime().ToString('o'), $m) }
+for ($i = 0; $i -lt 30 -and -not (Test-Path 'D:\tools\kf_glgears.exe'); $i++) { Start-Sleep 2 }
+Rw ("D: tools present=" + (Test-Path 'D:\tools\kf_glgears.exe'))
+foreach ($t in 'cup2.exe','cup3.exe','cup8.exe') {
+  $o = & ("D:\tools\" + $t) 2>&1 | Out-String; Rw ("$t exit=$LASTEXITCODE out=" + ($o -replace "[\r\n]+", ' | '))
+}
+$p = Start-Process 'D:\tools\kf_glgears.exe' -ArgumentList '--seconds','45' -PassThru; Start-Sleep 12
+$p.Refresh(); Rw ("kf_glgears alive=" + (-not $p.HasExited) + $(if ($p.HasExited) { " exit=" + $p.ExitCode } else { '' }))
+Rw 'GEARS-UP'
+Get-WinEvent -FilterHashtable @{LogName='Application'; Id=1000; StartTime=(Get-Date).AddMinutes(-5)} -ErrorAction SilentlyContinue | ForEach-Object { Rw ("APPCRASH " + ($_.Message -replace "[\r\n]+", ' ' ).Substring(0, [Math]::Min(300, $_.Message.Length))) }
+Rw 'DONE'

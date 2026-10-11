@@ -500,6 +500,25 @@ pub fn runlist_of_engine_type(engines: &[FifoDeviceEntry], nv2080: u32) -> Optio
         .map(|e| e.engine_data[slot::RUNLIST])
 }
 
+/// ★ 2026-10-11 (channel budget, `docs/design/V3_CHANNEL_BUDGET.md`): one `NV2080_ENGINE_TYPE_*` per distinct
+/// runlist of the served FIFO table (the first host-driven engine on each), in runlist order: the engines the
+/// host is asked about to learn how many channels each served runlist can really give.
+#[must_use]
+pub fn one_engine_per_served_runlist(engines: &[FifoDeviceEntry]) -> Vec<u32> {
+    let mut seen: Vec<(u32, u32)> = Vec::new();
+    for e in engines.iter().filter(|e| e.engine_data[slot::IS_HOST_DRIVEN_ENGINE] != 0) {
+        let rl = e.engine_data[slot::RUNLIST];
+        if seen.iter().any(|(r, _)| *r == rl) {
+            continue;
+        }
+        if let Some(t) = nv2080_of_rm(e.engine_data[slot::RM_ENGINE_TYPE]) {
+            seen.push((rl, t));
+        }
+    }
+    seen.sort_unstable();
+    seen.into_iter().map(|(_, t)| t).collect()
+}
+
 /// `NV2080_ENGINE_TYPE_COPY(i)` over both decades.
 fn kf_chan_copy_engine_type(i: u32) -> Option<u32> {
     match i {
@@ -762,5 +781,34 @@ mod hwref_check {
                 assert_eq!(ours, want, "{g:?} OFA{i}");
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod served_runlist_engine_tests {
+    use super::*;
+
+    fn entry(runlist: u32, rm_engine: u32, host_driven: u32) -> FifoDeviceEntry {
+        let mut engine_data = [0u32; kf_abi::inittables::ENGINE_DATA_TYPES];
+        engine_data[slot::RUNLIST] = runlist;
+        engine_data[slot::RM_ENGINE_TYPE] = rm_engine;
+        engine_data[slot::IS_HOST_DRIVEN_ENGINE] = host_driven;
+        FifoDeviceEntry {
+            name: "t",
+            engine_data,
+            pbdma_ids: [0; kf_abi::inittables::ENGINE_MAX_PBDMA],
+            pbdma_fault_ids: [0; kf_abi::inittables::ENGINE_MAX_PBDMA],
+            num_pbdmas: 1,
+        }
+    }
+
+    /// One engine per distinct served runlist; engines not driven by the host are not asked about.
+    #[test]
+    fn one_engine_per_runlist_host_driven_only() {
+        // GR (rm 1) + a GRCE (COPY0 in RM space) share runlist 0; COPY2 owns 1; a non-driven row is skipped.
+        let engines = [entry(0, 1, 1), entry(0, 9, 1), entry(1, 0xb, 1), entry(9, 0xa, 0)];
+        let got = one_engine_per_served_runlist(&engines);
+        assert_eq!(got.len(), 2, "{got:?}");
+        assert_eq!(got[0], 1, "GR asks for runlist 0");
     }
 }

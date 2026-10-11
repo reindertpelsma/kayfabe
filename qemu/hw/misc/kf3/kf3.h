@@ -57,7 +57,10 @@
  * kf3_display_cursor_pixels, kf3_display_cursor_done, and kf3_broker_ready's event array. */
 /* 25 (2026-10-09, merge of both at claude/windows-reset-20261009): 24's trace verbs AND 23's
  * input/cursor verbs; the two surfaces are disjoint. */
-#define KF3_ABI 25
+/* 26 (2026-10-11, claude/gl-icd-crash-20261011): 25 plus the channel-budget property: kf3_realize gains
+ * channel_budget (channels per runlist, the count the guest is told AND the enforced twin cap; 0 = derive
+ * from the host) after pci_devfn. Rust refuses a value above the host's limit or below the minimum, by name. */
+#define KF3_ABI 26
 #define KF3_BROKER_ON 1u
 #define KF3_BROKER_VRAM_AUTO 0u
 #define KF3_BROKER_VRAM_ON 1u
@@ -160,7 +163,7 @@ int32_t kf3_realize(uint32_t gpu_minor, uint64_t fb_mb, uint64_t bar1_bytes, uin
                     const char *guest_driver, uint32_t display, uint32_t gop, uint32_t x11_dispsw,
                     uint32_t display_broker,
                     uint32_t display_max_fps, const char *gop_efi,
-                    const char *gpu_uuid, const char *vm_id, uint32_t pci_devfn, void **out,
+                    const char *gpu_uuid, const char *vm_id, uint32_t pci_devfn, uint32_t channel_budget, void **out,
                     char *err, size_t err_len);
 int32_t kf3_identity(void *h, Kf3Identity *out);
 /* ★ ABI 7: config-space words the guest reads by config cycle (Hopper+ PCIe link caps). */

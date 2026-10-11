@@ -292,14 +292,16 @@ impl<'v> Plane<'v> {
                 asked: tok,
             });
         }
-        caps.acquire(Twin::Channel)?;
+        // ★ 2026-10-11: per RUNLIST, against the budget the guest was told (`kf_abi::chanbudget`).
+        let runlist = self.token_index.runlist_of(idx as u32);
+        caps.acquire_channel(runlist)?;
         // ⊘⊘ `[fable S3]` the return value is the point: a failed allocate leaves the OLD route
         // and host_token in place, and ignoring it serves the new channel's rings on the old
         // channel's twin.
         let ok = self.tokens[idx].allocate(route, host_token)
             || self.tokens[idx].allocate_fresh(route, host_token);
         if !ok {
-            caps.release(Twin::Channel);
+            caps.release_channel(runlist);
             return Err(Refusal::OverDeclaredCap {
                 twin: Twin::Channel,
                 cap: 0,
@@ -336,7 +338,7 @@ impl<'v> Plane<'v> {
         if let Ok(mut k) = self.kernel_tokens.lock() {
             k.retain(|t| *t != tok);
         }
-        caps.release(Twin::Channel);
+        caps.release_channel(self.token_index.runlist_of(idx as u32));
         true
     }
 

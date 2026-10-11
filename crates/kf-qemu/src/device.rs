@@ -71,6 +71,10 @@ pub struct Config {
     /// emulated vblank tick, in whole Hz, 24..=75; 0 (unset) caps at 75 with today's EDID.
     /// Validated by [`Config::check`]; needs `display=on`.
     pub display_max_fps: u32,
+    /// ★ 2026-10-11: `channel-budget=<N>` — channels PER RUNLIST: the count the guest is told
+    /// (`GET_NUM_CHANNELS`) AND the enforced twin cap. 0 (unset) = derived from the host
+    /// ([`kf_abi::chanbudget`]); refused at realize above what the host can give or below the minimum.
+    pub channel_budget: u32,
     /// ★ 2026-10-04 (`v3-windows`): `gop-efi=<path>`, a signed copy of the embedded GOP driver to
     /// serve instead of the unsigned one ([`crate::gop::SignedGop`]). Needs `gop=on`.
     pub gop_efi: Option<String>,
@@ -365,6 +369,20 @@ impl Device {
         // a field until 2026-09-26; UVM's hwref states HOST0 = 64 — `V3_HW_BOUNDARY_INVENTORY.md`.)
         let mut host = std::sync::Arc::new(
             crate::rmfacts::host_facts(rm, family).map_err(|e| format!("host facts: {e}"))?,
+        );
+        // ★ 2026-10-11: the VM's channel budget — told to the guest AND enforced as the twin cap (one number).
+        let budget = crate::rmfacts::channel_budget(rm, &host.engines, cfg.channel_budget)?;
+        match std::sync::Arc::get_mut(&mut host) {
+            Some(h) => {
+                h.fifo_channels = kf_abi::fifochannels::FifoChannelsRow {
+                    channels_per_runlist: budget.per_runlist,
+                };
+            }
+            None => return Err("channel budget: host facts are shared before the budget is set".into()),
+        }
+        eprintln!(
+            "kf3: channel budget {} per runlist ({:?}; derived default {}, host limit {}; the count the guest is told AND the enforced cap, refused by name past it — property channel-budget, docs/design/V3_CHANNEL_BUDGET.md)",
+            budget.per_runlist, budget.source, budget.derived, budget.limit
         );
         // ★ 2026-10-08: the guest-visible GPU UUID — resolved ONCE, here, from the properties and the
         // host GPU's own UUID (`HostFacts::host_gid`), before anything is reserved. It travels in
@@ -742,6 +760,7 @@ impl Device {
                 family,
                 &host.intr_table,
                 &host.engines,
+                host.fifo_channels.channels_per_runlist,
                 dbfast,
                 token_fmt,
             )?));
@@ -2598,11 +2617,12 @@ impl Device {
             )
         };
         let chan = format!(
-            " chan[births={} pt_births={} acts={}/{}refused worst_act_us={} nsi=[{}] pt_nsi=[{}] served={} parks={} host_rings={} contended={} poisoned={} tokens=[{}]]",
+            " chan[births={} pt_births={} acts={}/{}refused birth_refused_cap={} worst_act_us={} nsi=[{}] pt_nsi=[{}] served={} parks={} host_rings={} contended={} poisoned={} tokens=[{}]]",
             self.chans.births.load(o),
             self.chans.pt_births.load(o),
             self.chans.acts_run.load(o),
             self.chans.acts_refused.load(o),
+            self.chans.birth_refused_cap.load(o),
             self.chans.act_worst_us.load(o),
             nsi.join(" "),
             self.chans.pt_summary(),
@@ -3584,6 +3604,7 @@ mod config_tests {
             display_broker: false,
             display_broker_vram: Default::default(),
             display_max_fps: 0,
+            channel_budget: 0,
             gop: false,
             gop_efi: None,
             gpu_uuid: None,

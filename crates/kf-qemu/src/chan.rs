@@ -2126,6 +2126,9 @@ pub struct ChanPlane {
     pub acts_run: AtomicU64,
     /// Acts refused.
     pub acts_refused: AtomicU64,
+    /// ★ 2026-10-11: births refused because the guest's channel budget (`channel-budget`, the count
+    /// it was told per runlist) is spent on the birth's runlist. Named and always on: the status line's `birth_refused_cap`.
+    pub birth_refused_cap: AtomicU64,
     /// Slowest act, µs.
     pub act_worst_us: AtomicU64,
     /// ★ w827: every act's time, summed (the act thread's busy time).
@@ -2403,6 +2406,7 @@ impl ChanPlane {
         family: kf_chip::Family,
         intr_table: &[kf_abi::inittables::IntrTableEntry],
         engine_table: &[kf_abi::inittables::FifoDeviceEntry],
+        channel_budget: u32,
         dbfast: &'static kf_chan::dbfast::DbFast,
         token_fmt: Option<kf_trap::tokenindex::GuestTokenFormat>,
     ) -> Result<ChanPlane, String> {
@@ -2550,8 +2554,10 @@ impl ChanPlane {
             mirrors,
             inbox,
             completions,
-            // Declared caps: channels are the only twin this plane mints.
-            caps: Mutex::new(VmCaps::from_declared(64, 64, 64, 64)),
+            // Declared caps: channels are the only twin this plane mints, and the cap is the number
+            // the guest was TOLD per runlist (`kf_abi::chanbudget`, the `channel-budget` property, §9.1)
+            // — a hardcoded 64 refused the 65th live channel of a Windows desktop (OpenGL ICD crash, CUDA 999).
+            caps: Mutex::new(VmCaps::from_declared(channel_budget, 64, 64, 64)),
             slots: RwLock::new(HashMap::new()),
             by_obj: Mutex::new(HashMap::new()),
             sw_objs: Mutex::new(HashMap::new()),
@@ -2576,6 +2582,7 @@ impl ChanPlane {
             engines,
             acts_run: AtomicU64::new(0),
             acts_refused: AtomicU64::new(0),
+            birth_refused_cap: AtomicU64::new(0),
             act_worst_us: AtomicU64::new(0),
             act_total_us: AtomicU64::new(0),
             pt_births: AtomicU64::new(0),
@@ -6105,7 +6112,13 @@ impl ChanPlane {
                         .clone()
                         .map(|_| ())
                         .and_then(|()| me.caps.lock().map_err(|_| "caps poisoned".to_string()))
-                        .and_then(|mut c| me.plane.allocate_channel(&mut c, idx, if relay_host.is_some() { Route::Translated } else { Route::Passthrough }, chan.token, owner).map_err(|e| format!("{e:?}")));
+                        .and_then(|mut c| me.plane.allocate_channel(&mut c, idx, if relay_host.is_some() { Route::Translated } else { Route::Passthrough }, chan.token, owner).map_err(|e| {
+                            // ★ 2026-10-11: LOUD and counted by reason (a refused birth is a guest crash: the OpenGL ICD dereferences it).
+                            let rl = me.plane.token_index.runlist_of(me.plane.token_index.clamp(idx));
+                            let n = me.birth_refused_cap.fetch_add(1, Ordering::Relaxed) + 1;
+                            eprintln!("kf3: ⚠ CHANNEL BUDGET EXHAUSTED on guest runlist {rl}: {e:?} (refusal #{n}; the `channel-budget` property, docs/design/V3_CHANNEL_BUDGET.md)");
+                            format!("{e:?}")
+                        }));
                     if let Err(e) = alloc {
                         let _ = me.release_twin(a.client, a.tsg, a.ctx_share, chan);
                         live.fetch_sub(1, Ordering::AcqRel);

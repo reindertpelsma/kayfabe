@@ -548,6 +548,13 @@ pub static HOST_CONTROLS: &[HostControl] = &[
         0x0080_170e,
         NV0080_CTRL_FIFO_GET_LATENCY_BUFFER_SIZE_PARAMS
     ),
+    // ★ 2026-10-11 (channel budget, `kf_abi::chanbudget`): NON_PRIVILEGED (`flags = 0x30008`), asked at realize
+    // once per served runlist for its channel count and what is in use. One measured layout in the matrix.
+    hc!(
+        "NV2080_CTRL_CMD_FIFO_GET_INFO",
+        0x2080_1109,
+        NV2080_CTRL_FIFO_GET_INFO_PARAMS
+    ),
     HostControl {
         name: "NV0080_CTRL_CMD_MSENC_GET_CAPS_V2",
         cmd: 0x0080_1b02,

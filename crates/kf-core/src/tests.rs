@@ -1373,3 +1373,37 @@ fn caps_are_released_on_free_so_a_long_lived_guest_is_not_refused_forever() {
         "every acquire was matched by a release"
     );
 }
+
+#[test]
+fn a_hostile_guest_past_its_channel_budget_is_refused_by_name_per_runlist() {
+    // ★ 2026-10-11 (channel budget): the cap is per RUNLIST and equals the count the guest was told.
+    // A guest asking for budget+1 is refused loudly (cap and asked in the refusal, counted), another
+    // runlist's share is untouched, and a free gives the slot back.
+    let vmm = plane::Vmm::new();
+    let budget = 256u32;
+    let mut p = Plane::for_device(&vmm, 0, 0, kf_chip::Family::Ada, 0x100_0000);
+    let mut caps = VmCaps::from_declared(budget, 8, 8, 8);
+    let rl1 = 1u32 << kf_trap::tokenindex::TokenIndex::CHID_BITS;
+    for chid in 0..budget {
+        p.allocate_channel(&mut caps, chid, Route::Passthrough, chid + 1, Owner::User)
+            .unwrap_or_else(|e| panic!("chid {chid} within the budget refused: {e:?}"));
+    }
+    // runlist 0 is full: the (budget+1)th channel is refused with the number it was told.
+    // (A chid past the told count has no token index on the real device; here the table is the
+    // plane's own, so ask through a second chid space: reuse by freeing is checked below.)
+    assert_eq!(caps.live_on_runlist(0), budget);
+    let extra = p.allocate_channel(&mut caps, budget, Route::Passthrough, 9999, Owner::User);
+    assert_eq!(
+        extra,
+        Err(Refusal::OverDeclaredCap { twin: Twin::Channel, cap: budget, asked: budget + 1 }),
+        "N+1 is refused with cap and asked"
+    );
+    assert_eq!(caps.refused(Twin::Channel), 1, "and counted");
+    // another runlist is not affected by runlist 0 being full.
+    p.allocate_channel(&mut caps, rl1, Route::Passthrough, 7, Owner::User).unwrap();
+    assert_eq!(caps.live_on_runlist(1), 1);
+    // a free gives the slot back.
+    assert!(p.free_channel(&mut caps, 0));
+    p.allocate_channel(&mut caps, budget, Route::Passthrough, 9999, Owner::User).unwrap();
+    assert_eq!(caps.live_on_runlist(0), budget);
+}
