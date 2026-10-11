@@ -2,7 +2,32 @@
 
 **STATUS: LIVE, 2026-10-11.**
 
-## HANDOFF (newest, 0x73011a answered; the crash is NOT fixed by it)
+## HANDOFF (newest, 2026-10-11 ~04:30 CEST: caps, heads-in-use and the crossbar derived; every GSP-visible reply now equals the real GPU's; the crash persists)
+1. `[measured, runs 640 (kf3 62e29e21) and 641 (kf3 85f2217d), production profile, plain baseline, exFAT app disk, KF3_RPC_TRACE=1 added]` `kf_glgears.exe` STILL dies
+   (exit -1073741819, Application event 1000, nvoglv64.dll+0xb6d516, screenshots AE 0); cup2/cup3/cup8 still PASS. Run 641's trace now logs reply bytes (new: `KF3_RPC_TRACE` prints the first 96
+   reply bytes of NV0073 controls). For the gears client (0xc1d0007a) the replies are byte-identical to the real GPU's capture: `0x730101` = `81 2f` (was all zero), `0x730102` flags 0 -> 4 and
+   **flags CLIENT -> 1** (was 4: the head count is NOT the remaining suspect, it already matches), `0x73010c` heads 0..3, `0x73011a` = [0x100,1920,1080,2200,1125,0,60]. Falsifier of "the caps
+   table / head count steer the ICD" fired: the control sequence is unchanged (`20801315, 2080012f` x2, `730101` x2, `730102` x2, `73010c`, `73011a`, `73010c` x3, `730101`, Frees).
+2. What the change is (commit `62e29e21`, code `kf-disp::dispcaps`, `DisplayModel`, doc `V3_DISPLAY.md` section 4.15): `GET_CAPS_V2` derived per bit from model facts (HDMI 2.0 from the authored TMDS clock, MST/dual SST from
+   the caps class' DP SOR fields, CROSS_BAR from the model answering `DFP_ASSIGN_SOR`; three RM-software bits from a hand-kept family row observed on AD104 only, other families claim none: `00 0f`);
+   new `DFP_ASSIGN_SOR` (0x731152, 80 bytes, fixed crossbar, matches the real reply for one display); `GET_NUM_HEADS` CLIENT = heads whose raster runs (rule inferred: the physical-RM implementation
+   is not in the open tree, only the header text "heads currently in use by an NV client using a user display class instance"). GPU-free tests: 135 kf-disp, kf-rm green (also fixed a stale
+   `display_seat` claim-count test that the 0x73011a commit left failing). Tests were written together with the code, not failing-first; the hardware baseline (runs 631/640 replies) is the failing side.
+3. Measured about the remaining difference (real capture vs kayfabe, both seen through the GSP): real issues (`20801315, 2080012f`, `730101`) x5 and the `730102..730101` pass x5; kayfabe stops after
+   pair 2 / pass 1. Replies equal, so the cause is NOT a visible RM reply. Candidates, none proven:
+   a. **A race in the ICD** `[inferred]`: the minidump of run 641 has 7 threads (one in a wait inside nvoglv64 via opengl32, a nvoglv64 waiter at +0xa3aa57, three thread-pool waiters); the Frees seen after
+      pass 1 may be process teardown after a crash in ANOTHER thread, not an ICD decision. Real RM calls take ~0.5 ms, ours several ms (nested KVM), which would let a second thread read a pointer the
+      first has not stored yet. Falsifier: time stamps on the RPC trace (add elapsed-us per control) show kayfabe's calls are not slower than ~2x the real capture's (0.5 ms), or slowing the REAL guest
+      (VFIO run with a delay) does not crash it.
+   b. Non-GSP input: CPU-RM answered queries (from `GetGspStaticInfo`), D3DKMT/registry. Falsifier: diff the authored `GetGspStaticInfo` reply (fn 65) against the real boot capture field by field.
+   c. KMD-side refusals that the real GPU answers (`0x20809004` GSS-legacy, `0x007302a5` observed [0,0,0,3] -> [0,0,60000,3]); they appear periodically in the real capture (every ~0.14 s), so probably not tied to the ICD.
+4. Next step with its falsifier: (a) first, it is cheap: log `elapsed us` per control in `KF3_RPC_TRACE` and run once (gears + the same trace); if the per-control latency is > 3 ms against the real ~0.5 ms, try to
+   shorten the ICD's window (e.g. fewer vCPU exits per RPC) or verify by slowing the VFIO guest. Do not change the display model further on this lead: its replies now equal the real GPU's.
+5. Host: runs 640 and 641 done, no QEMU, IOMMU group 11 DMA-FQ, no /tmp/kf-stop-winprod. Host worktree `/data/kf-gl730101-host` and its target `/data/kf-gl730101-host-target` (to delete when the work is final);
+   local target `/root/kf-gl730101-target`. Binaries `kf3-bins/62e29e21`, `kf3-bins/85f2217d`. NOT run: the 13 OpenGL matrix apps and Minecraft (gears fail), the Linux regression for this display-model change (fast suite 30/30 +
+   broker smoke): required before merge because the caps now claim CROSS_BAR (NVKMS then calls `DFP_ASSIGN_SOR`).
+
+## HANDOFF (previous, 0x73011a answered; the crash is NOT fixed by it)
 1. `[measured, runs 630 and 631, kf3 `2cedcc67`, production profile (`windows_broker_prod3.sh`), plain baseline, exFAT app disk attached after sign-in]` `0x73011a` is now answered `NV_OK`
    (run 631 `KF3_RPC_TRACE=1`: `RmControl cmd=0x0073011a client=0xc1d0007a object=0xff0a0000 result=0x0`, right after `0x73010c` head 0), cup2/cup3/cup8 still PASS,
    and `kf_glgears.exe` STILL dies: exit -1073741819, Application event 1000, `nvoglv64.dll` 32.0.15.8088, fault offset `0xb6d516` (the same offset as before), screenshots do not differ
