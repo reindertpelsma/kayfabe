@@ -1699,3 +1699,255 @@ fn an_unresolved_operand_is_handed_back_unbound() {
     assert_eq!(wait_on(false, true), Some(WaitOn::Acquire));
     assert_eq!(wait_on(false, false), None, "unmapped: refused by name");
 }
+
+/// A real Windows paging copy exceeded 4096 fragments and killed its channel.
+/// The production submit path must make bounded progress and release only once.
+#[test]
+fn a_large_fragmented_launch_makes_bounded_progress() {
+    use kf_chan::tmode::{Pushed, push_bound};
+    let n = 4155u64;
+    let mut rows = MockRows::default().row(VA_FB, 0x1000, false, 0x40_0000);
+    for k in 0..n {
+        rows = rows.row(0x5_0000_0000 + k * 0x1000, 0x1000, true, k * 0x2000);
+    }
+    let mut pb = m(SUB, 0, &[0xc7b5]);
+    pb.extend(m(SUB, ce::OFFSET_IN_UPPER, &[5, 0, 0, 0x20_0000]));
+    pb.extend(m(SUB, ce::LINE_LENGTH_IN, &[(n * 0x1000) as u32]));
+    pb.extend(m(SUB, ce::SET_DST_PHYS_MODE, &[0]));
+    pb.extend(m(SUB, ce::SET_SEMAPHORE_A, &[2, 0, 0x1234]));
+    pb.extend(m(
+        SUB,
+        ce::LAUNCH_DMA,
+        &[0x182 | (1 << 13) | (1 << 3) | (2 << 5) | (1 << 2) | (1 << 25)],
+    ));
+    let mut ir = decode(&pb, is_ce, &mut Default::default(), None).unwrap();
+    let mut submitted = Vec::new();
+    let mut rec = Vec::new();
+    let mut calls = 0;
+    loop {
+        calls += 1;
+        assert!(calls <= 100, "no progress");
+        let result = push_bound(&ir, &rows, &windows(), &mut rec, |words| {
+            assert!(words.len() * 4 <= CHUNK_BYTES);
+            check(words, &windows()).unwrap();
+            submitted.extend(writes(words));
+            Ok(true)
+        })
+        .unwrap();
+        match result {
+            Pushed::All { .. } => break,
+            Pushed::Busy { rest, .. } | Pushed::Yield { rest, .. } => ir = rest,
+            other => panic!("{other:?}"),
+        }
+    }
+    assert!(calls > 1);
+    let lengths: u64 = submitted
+        .iter()
+        .filter(|w| w.1 == ce::LINE_LENGTH_IN)
+        .map(|w| u64::from(w.2))
+        .sum();
+    assert_eq!(lengths, n * 0x1000, "exactly the original bytes copied");
+    let launches: Vec<_> = submitted.iter().filter(|w| w.1 == ce::LAUNCH_DMA).collect();
+    assert!(launches.len() >= n as usize);
+    let completion = (3 << 3) | (3 << 5) | (1 << 2) | (1 << 25);
+    for w in &launches[..launches.len() - 1] {
+        assert_eq!(w.2 & completion, 0, "early completion/interrupt/flush");
+    }
+    assert_eq!(
+        launches.last().unwrap().2 & completion,
+        (1 << 3) | (2 << 5) | (1 << 2) | (1 << 25)
+    );
+    assert_eq!(
+        launches.last().unwrap().2 & 3,
+        2,
+        "final transfer must be ordered"
+    );
+}
+
+#[test]
+fn a_copy_tail_rebinds_after_backpressure_and_a_mapping_change() {
+    use kf_chan::tmode::{Pushed, push_bound};
+    let make_rows = |shift: u64| {
+        let mut r = MockRows::default();
+        for k in 0..300u64 {
+            r = r.row(VA_RAM + k * 4096, 4096, true, shift + k * 8192);
+        }
+        r
+    };
+    let old = make_rows(0);
+    let new = make_rows(0x100_0000);
+    let mut pb = m(SUB, 0, &[0xc7b5]);
+    pb.extend(m(
+        SUB,
+        ce::OFFSET_IN_UPPER,
+        &[(VA_RAM >> 32) as u32, VA_RAM as u32, 0, 0x20_0000],
+    ));
+    pb.extend(m(SUB, ce::LINE_LENGTH_IN, &[300 * 4096]));
+    pb.extend(m(SUB, ce::SET_DST_PHYS_MODE, &[0]));
+    pb.extend(m(SUB, ce::LAUNCH_DMA, &[0x182 | (1 << 13)]));
+    let ir = decode(&pb, is_ce, &mut Default::default(), None).unwrap();
+    let mut rec = Vec::new();
+    let r = push_bound(&ir, &old, &windows(), &mut rec, |_| Ok(false)).unwrap();
+    let Pushed::Busy { rest, pieces } = r else {
+        panic!("{r:?}");
+    };
+    assert_eq!(pieces, 0);
+    assert_eq!(rest, ir, "a rejected slice must retry the original bytes");
+    assert!(rec.is_empty(), "nothing was submitted");
+    let mut first = Vec::new();
+    let r = push_bound(&rest, &old, &windows(), &mut rec, |w| {
+        first.extend(w);
+        Ok(true)
+    })
+    .unwrap();
+    let Pushed::Yield { rest, pieces } = r else {
+        panic!("{r:?}");
+    };
+    assert_eq!(pieces, 1);
+    let mut todo = rest;
+    let before = rec.len();
+    for _ in 0..3 {
+        let r = push_bound(&todo, &old, &windows(), &mut rec, |_| Ok(false)).unwrap();
+        let Pushed::Busy { rest, pieces } = r else {
+            panic!("{r:?}");
+        };
+        assert_eq!(pieces, 0);
+        assert_eq!(
+            rest, todo,
+            "repeated backpressure must preserve the accepted prefix's tail"
+        );
+        assert_eq!(rec.len(), before);
+        todo = rest;
+    }
+    let mut later = Vec::new();
+    loop {
+        let r = push_bound(&todo, &new, &windows(), &mut rec, |w| {
+            assert!(w.len() * 4 <= CHUNK_BYTES);
+            later.extend(writes(w));
+            Ok(true)
+        })
+        .unwrap();
+        match r {
+            Pushed::All { .. } => break,
+            Pushed::Yield { rest, .. } => todo = rest,
+            other => panic!("{other:?}"),
+        }
+    }
+    let source_addresses: Vec<u64> = later
+        .windows(2)
+        .filter(|p| p[0].1 == ce::OFFSET_IN_UPPER)
+        .map(|p| (u64::from(p[0].2) << 32) | u64::from(p[1].2))
+        .collect();
+    assert!(!source_addresses.is_empty());
+    assert!(source_addresses.iter().all(|&a| a >= RAM.0 + 0x100_0000));
+    assert_eq!(
+        writes(&first)
+            .iter()
+            .chain(later.iter())
+            .filter(|w| w.1 == ce::LINE_LENGTH_IN)
+            .map(|w| u64::from(w.2))
+            .sum::<u64>(),
+        300 * 4096
+    );
+}
+
+#[test]
+fn sliced_remaps_and_fills_advance_in_element_units() {
+    use kf_chan::tmode::{COPY_SLICE_BYTES, Pushed, push_bound};
+    for (remap, se, de, reads) in [
+        ((3 << 16) | (3 << 20), 16u64, 4u64, true),
+        (4 | (5 << 4) | (3 << 16) | (1 << 24), 4, 8, false),
+    ] {
+        let count = COPY_SLICE_BYTES / se.max(de);
+        let total = count * 2 + 7;
+        let rows = MockRows::default()
+            .row(VA_RAM, total * se, true, 0x100_0000)
+            .row(VA_FB, total * de, false, 0x200_0000);
+        let mut pb = m(SUB, 0, &[0xc7b5]);
+        pb.extend(m(
+            SUB,
+            ce::OFFSET_IN_UPPER,
+            &[
+                (VA_RAM >> 32) as u32,
+                VA_RAM as u32,
+                (VA_FB >> 32) as u32,
+                VA_FB as u32,
+            ],
+        ));
+        pb.extend(m(SUB, ce::LINE_LENGTH_IN, &[total as u32]));
+        pb.extend(m(SUB, ce::SET_REMAP_COMPONENTS, &[remap]));
+        pb.extend(m(SUB, ce::LAUNCH_DMA, &[0x181 | (1 << 10)]));
+        let mut todo = decode(&pb, is_ce, &mut Default::default(), None).unwrap();
+        let mut submitted = Vec::new();
+        let mut rec = Vec::new();
+        for i in 0..3 {
+            let r = push_bound(&todo, &rows, &windows(), &mut rec, |w| {
+                check(w, &windows()).unwrap();
+                submitted.extend(writes(w));
+                Ok(true)
+            })
+            .unwrap();
+            if i < 2 {
+                let Pushed::Yield { rest, .. } = r else {
+                    panic!("{r:?}");
+                };
+                let Ir::Launch(l) = &rest[0] else {
+                    panic!("missing tail");
+                };
+                let done = count * (i + 1);
+                assert_eq!(
+                    l.dst,
+                    Some((Operand::Virtual(VA_FB + done * de), (total - done) * de))
+                );
+                assert_eq!(
+                    l.src,
+                    reads.then_some((Operand::Virtual(VA_RAM + done * se), (total - done) * se))
+                );
+                todo = rest;
+            } else {
+                assert!(matches!(r, Pushed::All { .. }));
+            }
+        }
+        let addresses = |method| {
+            submitted
+                .windows(2)
+                .filter(|p| p[0].1 == method)
+                .map(|p| (u64::from(p[0].2) << 32) | u64::from(p[1].2))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            addresses(ce::OFFSET_OUT_UPPER),
+            (0..3)
+                .map(|i| FB.0 + 0x200_0000 + i * count * de)
+                .collect::<Vec<_>>()
+        );
+        if reads {
+            assert_eq!(
+                addresses(ce::OFFSET_IN_UPPER),
+                (0..3)
+                    .map(|i| RAM.0 + 0x100_0000 + i * count * se)
+                    .collect::<Vec<_>>()
+            );
+        } else {
+            assert!(addresses(ce::OFFSET_IN_UPPER).is_empty());
+        }
+        assert_eq!(
+            submitted
+                .iter()
+                .filter(|w| w.1 == ce::LINE_LENGTH_IN)
+                .map(|w| u64::from(w.2))
+                .sum::<u64>(),
+            total
+        );
+        assert_eq!(
+            submitted
+                .iter()
+                .rev()
+                .find(|w| w.1 == ce::LAUNCH_DMA)
+                .unwrap()
+                .2
+                & 3,
+            2
+        );
+    }
+}

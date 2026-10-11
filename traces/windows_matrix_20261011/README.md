@@ -79,3 +79,32 @@ stock Windows/WDDM and can close the two packaging omissions. Falsifier:
 either API refuses the operation or GPU readback/callback ordering is wrong on
 the native reference. Even if native passes, a kayfabe failure remains a product
 or harness defect to investigate; compilation alone is not evidence of support.
+
+## BlackScholes startup: bounded translated-copy candidate
+
+Measured on product `2c917f3e`, run 652: BlackScholes exits before its CUDA
+banner, with three guest TDR records and one GSP recovery cycle. The translated
+paging channel stopped with `TooManyPieces { pieces: 4155 }`, exceeding the
+existing 4096-fragment bound. Sanitized app/health evidence is in
+`failures/blackscholes_t/`; private driver diagnostic material is retained off
+public git.
+
+Hypothesis: resolving this large paging copy incrementally removes that channel
+refusal and allows BlackScholes to start. Falsifier: the same refusal remains,
+or BlackScholes still fails on the candidate; absence of the refusal alone
+would establish only that this particular wall is cleared.
+
+The candidate slices single-line copy/fill geometry into at most 512 KiB of
+operand resolution per submission. Remaining work stays unbound across yields
+and backpressure. Only the final tail retains completion/interrupt/flush, and
+its nonpipelined transfer orders it after earlier slices. Guest retirement
+waits for the complete tail and real GPU fences. The 4096 bound is unchanged.
+The regression first reproduced the exact 4155-piece refusal, then passed.
+All `kf-chan` / `kf-qemu` GPU-free tests pass, including 23 T-mode tests covering
+fragmentation, exact byte counts, completion flags, element-unit remap/fill
+advancement, repeated backpressure, and changed mappings. Independent review
+found no blocker for hardware validation. Logs: `copy-slicing/`.
+
+**Hardware validation of the candidate is pending.** The existing clpeak CUDA
+run is allowed to finish before stopping the old campaign and building the
+new product on the GPU host; no host build competes with its timing run.

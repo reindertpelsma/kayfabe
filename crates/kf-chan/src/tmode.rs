@@ -40,6 +40,9 @@ use kf_host::MapPerm;
 pub const MAX_PIECES: usize = 4096;
 /// The output cap per pushed piece (§3.5): far below the host ring's half-pushbuffer limit.
 pub const CHUNK_BYTES: usize = 64 << 10;
+/// Maximum operand bytes resolved for one submitted part of a single-line copy.
+/// At 4 KiB mapping granularity the union of both sides has at most 258 spans.
+pub const COPY_SLICE_BYTES: u64 = 512 << 10;
 
 /// One resolved span of a guest VA range: its backing (`ram` = the guest memfd, else the store),
 /// the backing offset, the bytes, and the guest leaf's permission.
@@ -1648,6 +1651,14 @@ pub enum Pushed {
         /// Pushes made before the ring filled.
         pieces: usize,
     },
+    /// A large copy made bounded progress. Its remaining bytes stay unbound,
+    /// and the runner yields before resolving the next part.
+    Yield {
+        /// Remaining items; the first is the unsubmitted tail of the copy.
+        rest: Vec<Ir>,
+        /// Pushes made.
+        pieces: usize,
+    },
     /// ★ Review fix 2026-10-04 (§3.5): an item's virtual operand had NO placement row at bind —
     /// `rest` (that item on) was NOT pushed and stays UNBOUND; everything before it was. The
     /// runner WAITS (a walk pending on the space, or a host acquire ahead of it whose release
@@ -1690,6 +1701,56 @@ pub enum PushError {
     Host(String),
 }
 
+/// Split geometry before resolving rows. Completion/interrupt/flush belongs
+/// only to the tail; its NON_PIPELINED transfer orders it after earlier parts.
+fn slice_launch(l: &CeLaunch) -> Result<Option<(Ir, Ir)>, Refusal> {
+    if l.launch.multi_line || l.launch.transfer == 0 {
+        return Ok(None);
+    }
+    let elem = l.elem.0.max(l.elem.1).max(1);
+    let count = COPY_SLICE_BYTES / elem;
+    let total = u64::from(l.regs.line_len);
+    if total <= count {
+        return Ok(None);
+    }
+    let mut head = l.clone();
+    let mut tail = l.clone();
+    head.regs.line_len = u32::try_from(count).map_err(|_| Refusal::ExtentOverflow)?;
+    tail.regs.line_len -= head.regs.line_len;
+    let split_side = |side: Option<(Operand, u64)>, size: u64| {
+        let Some((op, bytes)) = side else {
+            return Ok((None, None));
+        };
+        let used = count.checked_mul(size).ok_or(Refusal::ExtentOverflow)?;
+        let remaining = bytes.checked_sub(used).ok_or(Refusal::ExtentOverflow)?;
+        let next = match op {
+            Operand::Virtual(va) => {
+                Operand::Virtual(va.checked_add(used).ok_or(Refusal::ExtentOverflow)?)
+            }
+            Operand::Physical(t, at) => {
+                Operand::Physical(t, at.checked_add(used).ok_or(Refusal::ExtentOverflow)?)
+            }
+        };
+        Ok::<_, Refusal>((Some((op, used)), Some((next, remaining))))
+    };
+    (head.src, tail.src) = split_side(l.src, l.elem.0)?;
+    (head.dst, tail.dst) = split_side(l.dst, l.elem.1)?;
+    head.sema = None;
+    head.launch.sema = 0;
+    head.launch.intr = 0;
+    head.launch.flush = false;
+    head.launch.flush_gl = false;
+    head.launch.reduction_enable = false;
+    head.launch.reduction = 0;
+    head.launch.reduction_unsigned = false;
+    head.launch.payload_two_word = false;
+    tail.launch.transfer = 2;
+    Ok(Some((
+        Ir::Launch(Box::new(head)),
+        Ir::Launch(Box::new(tail)),
+    )))
+}
+
 /// ★★ **Bind at submit** (§3.5): bind `items` one at a time against `rows` AS THEY ARE NOW, cut the
 /// output into pieces of at most [`CHUNK_BYTES`], and hand each piece to `push` (`Ok(true)` = taken,
 /// `Ok(false)` = the ring is full). A piece the ring refuses is NOT kept bound: its items are
@@ -1713,7 +1774,12 @@ pub fn push_bound(
     while i < items.len() {
         let mut words = Vec::new();
         let mut r = Vec::new();
-        match bind_rec(&items[i], rows, w, &mut words, &mut r) {
+        let split = match &items[i] {
+            Ir::Launch(l) => slice_launch(l).map_err(PushError::Refused)?,
+            _ => None,
+        };
+        let item = split.as_ref().map_or(&items[i], |(head, _)| head);
+        match bind_rec(item, rows, w, &mut words, &mut r) {
             Ok(_) => {}
             Err(why @ Refusal::VirtualUnresolved { .. }) => {
                 // ★ Push what is bound before it; hand the rest back UNBOUND (§3.5).
@@ -1749,6 +1815,19 @@ pub fn push_bound(
         }
         cur.extend(words);
         cur_rec.extend(r);
+        if let Some((_, tail)) = split {
+            if !push(&cur).map_err(PushError::Host)? {
+                return Ok(Pushed::Busy {
+                    rest: items[cur_first..].to_vec(),
+                    pieces,
+                });
+            }
+            pieces += 1;
+            rec.append(&mut cur_rec);
+            let mut rest = items[i..].to_vec();
+            rest[0] = tail;
+            return Ok(Pushed::Yield { rest, pieces });
+        }
         i += 1;
     }
     if !cur.is_empty() {

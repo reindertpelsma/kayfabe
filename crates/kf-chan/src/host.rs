@@ -1597,9 +1597,10 @@ impl TranslatedChannel {
                     });
                     let (pieces, rest, unresolved) = match r {
                         Ok(crate::tmode::Pushed::All { pieces }) => (pieces, None, None),
-                        Ok(crate::tmode::Pushed::Busy { rest, pieces }) => {
-                            (pieces, Some(rest), None)
-                        }
+                        Ok(
+                            crate::tmode::Pushed::Busy { rest, pieces }
+                            | crate::tmode::Pushed::Yield { rest, pieces },
+                        ) => (pieces, Some(rest), None),
                         Ok(crate::tmode::Pushed::Unresolved { rest, pieces, why }) => {
                             (pieces, Some(rest), Some(why))
                         }
