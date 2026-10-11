@@ -5,6 +5,22 @@ again after the Wednesday 07:00 reset). Read `AGENTS.md` (= `CLAUDE.md`) first: 
 (state, branches, traps), `docs/DELEGATED_DECISIONS_20261010.md`, `docs/OWNER_RULINGS.md` §AB-§AE, `docs/design/V3_FEATURE_GAPS.md`
 (priorities: P0 = prevents apps running; fidelity and perf beyond "decent" are post-release), `docs/design/V3_NOT_IN_GIT.md`.
 
+## Latest checkpoint, 2026-10-11 16:59 UTC
+
+Last confirmed push2876cc1e. Native video event probe extension builds on the
+controller (bench only). Separate dataless NVENC/FIFO listeners, quiet baseline,
+release/trap pair, explicit FIFO NSI positive-control pair, actual GPU payload
+and tail still sole completion oracle. Hardware pending behind current coverage
+under same GPU lock; source/runner/SHA/build log in encoder-session/native-video-semaphore/events/.
+No production video support change. Existing two-argument probe unchanged.
+
+Reviewed coverage63669 boot1340 missed sign-in because my partial738b5385
+source archive omitted ../signin.py. Full scripts/bench/windows + scripts/apps/src
+archive now present from same frozen revision; setup failure remains evidence,
+no app had run. Harness handles fresh retry; do not label this app/GPU failure.
+Native50 progressing cleanly through tc16_t, corrected native stream16365 queued.
+Canonical counts unchanged; complete Windows/reference matrix remains unfinished.
+
 ## Latest checkpoint, 2026-10-11 16:56 UTC
 
 Last confirmed push738b5385. Exact72741e2b Windows focus FINISHED: managed1320
