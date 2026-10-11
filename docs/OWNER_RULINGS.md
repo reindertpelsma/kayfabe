@@ -1125,6 +1125,14 @@ HDR on the console) falls under "works without".
   not interfaces**, clean-room (a spec of facts is written; the implementation uses the spec), with the result **published as a table and
   treated as the truth**. The build and any derivation script must NEVER contain or require a decompile step: people compiling fetch the open
   repos and the published table.
+- **Refinement (owner, later the same day): a combination of sources, with data that never comes from a blob.** The table is built from
+  (a) NVIDIA's open repos and docs (ogkm, open GPU docs), (b) open-source projects that already carry the legal/provenance burden (nouveau,
+  nova, envytools, gVisor nvproxy, ...), and (c) a **fleet of measurements on real GPUs rented on vast** (many GPU types), published as the table
+  and treated as the truth. **Reverse engineering of the GSP firmware or blobs is used only to find issues and to confirm that the table and the
+  behaviour are right** (verification), NOT as a data source, so no interface, layout or constant is derived from a blob. Every table entry
+  carries a source tag (`ogkm`, `nvidia-doc`, `nouveau`, `nova`, `measured:<die>,<driver>,<date>`, ...); an entry tagged `blob` is refused by CI.
+  This supersedes the "last resort: reverse engineering for constants" item above. Measured entries exclude anything board- or user-specific
+  (UUIDs, serials, VBIOS/PROM contents, MACs).
 - **Display is required** (owner): people want display, so a render-only/headless Windows mode is at most a fallback or experiment, not the answer.
 - Our own traces remain valuable to find what must be answered and as test oracles for the die we own; they are not the coverage source.
 - Supersedes for this question the diagnosis-only wording in §S/`feedback_reverse_engineering_boundary` only to the extent stated above:
