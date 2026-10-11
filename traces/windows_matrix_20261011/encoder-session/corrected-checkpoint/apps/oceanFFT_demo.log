@@ -1,0 +1,22 @@
+=== oceanFFT_demo start=2026-10-11T15:43:59.6155849+00:00 host=VASTWIN session=1 boot=2026-10-11T15:41:14.5000000Z timeout=120
+NOTE: The CUDA Samples are not meant for performance measurements. Results may vary when GPU Boost is enabled.
+
+C:\kfapps\cuda_demo\demo_suite\oceanFFT.exe Starting...
+
+MapSMtoCores for SM 8.9 is undefined.  Default to use 128 Cores/SM
+MapSMtoArchName for SM 8.9 is undefined.  Default to use Ampere
+GPU Device 0: "Ampere" with compute capability 8.9
+
+Compute capability 8.9
+sdkDumpBin: <spatialDomain.bin>
+> compareBin2Bin <float> nelements=65536, epsilon=0.10, threshold=0.15
+   src_file <spatialDomain.bin>, size=262144 bytes
+   ref_file <./ref_spatialDomain.bin>, size=262144 bytes
+  OK
+sdkDumpBin: <slopeShading.bin>
+> compareBin2Bin <float> nelements=131072, epsilon=0.10, threshold=0.15
+   src_file <slopeShading.bin>, size=524288 bytes
+   ref_file <./ref_slopeShading.bin>, size=524288 bytes
+  OK
+KFSURVIVE oceanFFT ALIVE_AT 25 s
+=== end rc=0 secs=37 2026-10-11T15:44:36.5595618+00:00

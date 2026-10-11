@@ -1,0 +1,6 @@
+=== cupy_cg start=2026-10-11T16:00:37.6245027+00:00 host=VASTWIN session=0 boot=2026-10-11T15:55:06.5000000Z timeout=180
+KFDEV NVIDIA GeForce RTX 4070
+[nvrtc] device NVIDIA GeForce RTX 4070 cupy 14.2.0 include ['C:\\kfapps\\cuda_cudart\\include', 'C:\\kfapps\\cuda_cccl\\include']
+CHECK cooperative_groups_block_sum ok
+NVRTC_DONE cg
+=== end rc=0 secs=7 2026-10-11T16:00:45.1107647+00:00

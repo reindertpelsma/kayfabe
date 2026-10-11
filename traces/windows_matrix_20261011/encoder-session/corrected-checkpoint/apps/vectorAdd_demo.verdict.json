@@ -1,0 +1,14 @@
+{
+ "verdict": "PASS",
+ "rc": 0,
+ "secs": 4,
+ "quiet": 3,
+ "note": "",
+ "proof": "cuda-vectoradd-readback",
+ "tdr": 0,
+ "wer": 0,
+ "rebooted": false,
+ "gsp_cycles": 0,
+ "restart": "",
+ "guest": "g2"
+}

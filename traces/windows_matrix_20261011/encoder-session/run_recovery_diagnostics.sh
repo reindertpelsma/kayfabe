@@ -53,6 +53,14 @@ bash "$TREE/scripts/bench/windows/appmatrix/run_windows_apps.sh" --run-dir "$RUN
 bash "$TREE/scripts/bench/windows/appmatrix/run_windows_apps.sh" --run-dir "$RUN/managed" \
  --kf3-rev "$REV" --broker "$B" --run-base 1261 --override-dir "$W/codex-matrix-focus-tools-20261011" \
  --iso "$MEDIA" --apps managed_t --tier 3 --per-guest 1 --no-isolate
+# Hypothesis: the120s stream timeout is dominated by fresh Python/CuPy startup.
+# Falsifier: timed preload/GPU readback completes, then the UNCHANGED120s stream
+# test still hangs. Diagnostic has a separate180s budget; neither original
+# verdict nor canonical stream timeout is changed.
+bash "$TREE/scripts/bench/windows/appmatrix/run_windows_apps.sh" --run-dir "$RUN/startup-stream" \
+ --kf3-rev "$REV" --broker "$B" --run-base 1262 --override-dir "$W/codex-matrix-focus-tools-20261011" \
+ --iso "$MEDIA" --apps-json /tmp/kf-startup-stream-diagnostic.json \
+ --apps startup_stream_diagnostic,stream_perthread_t --tier 3 --per-guest 2 --no-isolate
 # The earlier encoded-frame runs already identify a specific kernel video-method
 # refusal. Test authored native semaphore behavior before implementing a decoder.
 # Falsifier for each case: wrong GPU-written payload, absent real GPU tail, or Xid.

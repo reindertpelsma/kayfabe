@@ -10,6 +10,26 @@ Read with `V3_HEADLESS_GRAPHICS.md` §4, which listed the six gaps this branch c
 
 ---
 
+**2026-10-11 RESEARCH correction: Windows kernel video semaphore submission is
+still unsupported (product a61af1c3).** The context-only kernel route described
+below is now hardwired on, but its nonempty-work refusal remains. Windows
+H264/HEVC/AV1 user encoders each produce600 frames; afterwards the kernel NVENC1
+channel ff040005/token2007 dies at `NoCeObject {subch:4, method:0x240}` in the
+CE decoder. Three nvlddmkm153 records and one GSP recovery follow in each run,
+with no host Xid. Original facts and bounded excerpts:
+`traces/windows_matrix_20261011/encoder-session/windows-focus/`.
+
+Public NVIDIA `open-gpu-doc` `classes/video/clc9b7.h` revision
+`2ef75cf8d6cc6311625c772171834c465e0319d0` names0x240/244/248 video
+SEMAPHORE_A/B/C and0x304 SEMAPHORE_D (release, monitored-fence, extended-fence,
+trap operations). The observed release then trap sequence must not be decoded
+as CE work, silently dropped, or completed on the CPU. Bench source35f97433
+adds an authored native release/trap oracle using only owned addresses, an owned
+video object and a verified USER host channel; real GPU payload and completion
+are required. Native measurement is queued, not yet evidence of supported
+submission. Production HostRing still refuses nonempty video submission.
+This names a repeated wall, not a causal claim for every Windows video/Edge reset.
+
 **2026-10-07 RESEARCH correction for kernel channels on `codex/sdr-lut-20261006`:**
 The passthrough path below describes guest USER video channels. Experimental
 `KF3_KERNEL_NVDEC_CTX`, `KF3_KERNEL_NVENC_CTX` and `KF3_KERNEL_OFA_CTX` plus private

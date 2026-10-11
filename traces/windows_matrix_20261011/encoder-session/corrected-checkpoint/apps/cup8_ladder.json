@@ -1,0 +1,76 @@
+{
+ "quiet": 2,
+ "end_utc": "2026-10-11T15:51:05.0544602Z",
+ "start_utc": "2026-10-11T15:51:02.1647537Z",
+ "rc": 0,
+ "secs": 3,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4070 status=OK code=0"
+ ],
+ "digests": [],
+ "session": 0,
+ "out_files": [],
+ "boot_utc_start": "2026-10-11T15:48:58.5000000Z",
+ "log_tail": [
+  "=== cup8_ladder start=2026-10-11T15:51:02.1647537+00:00 host=VASTWIN session=0 boot=2026-10-11T15:48:58.5000000Z timeout=180",
+  "ok   cuInit(0)",
+  "ok   cuDeviceGetCount(&nd)",
+  "ok   cuDeviceGet(&d,0)",
+  "ok   cuCtxCreate(&ctx,0,d)",
+  "CTX OK",
+  "PTX_TARGET=sm_86 (device cc 8.9)",
+  "ok   cuModuleLoadData(&mod,PTX)",
+  "MODULE OK",
+  "ok   cuModuleGetFunction(&fn,mod,\"mm\")",
+  "FUNC OK",
+  "CUP8 matmul N=2048  per-matrix=16 MiB  device=48 MiB",
+  "ok   cuMemAlloc(&dA,sz)",
+  "ok   cuMemAlloc(&dB,sz)",
+  "ok   cuMemAlloc(&dC,sz)",
+  "MEMALLOC A=0x609400000 B=0x60a400000 C=0x60b400000",
+  "ok   cuMemcpyHtoD(dA,hA,sz)",
+  "ok   cuMemcpyHtoD(dB,hB,sz)",
+  "ok   cuMemsetD32(dC,0,(size_t)N*N)",
+  "LAUNCH grid=(128,128) block=(16,16)",
+  "ok   cuLaunchKernel(fn, g,g,1, 16,16,1, 0,0, args,0)",
+  "LAUNCH OK",
+  "ok   cuCtxSynchronize()",
+  "SYNC OK",
+  "ok   cuMemcpyDtoH(hC,dC,sz)",
+  "CUP8 RESULT N=2048 bad=0 maxerr=0 C[0]=2048(exp 2048) -> PASS",
+  "CUP8 VERDICT: PASS (host GR matmul byte-exact at scale)",
+  "DONE",
+  "=== end rc=0 secs=3 2026-10-11T15:51:05.0544602+00:00"
+ ],
+ "pdh": {
+  "pids": [
+   "2068",
+   "6436"
+  ],
+  "nv": {},
+  "samples": 1,
+  "other": {},
+  "nvidia_luids": "0_60e6"
+ },
+ "timed_out": false,
+ "token": "g2-cup8_ladder-1791733859",
+ "boot_utc_end": "2026-10-11T15:48:58.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "cup8_ladder",
+ "smi": {
+  "samples": 0,
+  "mem_used_base_mb": null,
+  "util_max": 0,
+  "mem_used_max_mb": 0
+ }
+}

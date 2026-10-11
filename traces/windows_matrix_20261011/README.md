@@ -3,6 +3,44 @@
 **STATUS: LIVE, 2026-10-11.** Product candidate `2c917f3e`, following the
 OpenGL gears fix. Results are pending; this is not a matrix pass claim.
 
+## Latest checkpoint, 2026-10-11 16:10 UTC
+
+Last pushedc98a9aa5. Corrected a61af1c3 matrix FINISHED10 cleanPASS/11,
+stream_perthread TIMEOUT121s. Zero guest recovery across those11 and bounded
+kernel journal15:41:06..16:02:29UTC has0 Xids. The old dmesg counter wrapped36→31;
+its host_xid.txt/delta are not authoritative. Use timestamp-bounded journal files.
+OceanFFT/Fog numerical+GUI, HF64-token digest, CDP490-child sort, vectorAdd,CUP8,
+CuPySHA256/CG/async-copy/shared checks all pass. Old verdicts remain intact.
+Fresh CuPySHA149s, then warmCG7s/async3s; timed startup + unchanged120s stream
+retry queued. Same package dependencies as original; no extra CCCL package in
+this diagnostic, so warming is the only setup variable. Original timeout remains.
+
+Combined canonical checkpoint84/104 (mixed product0f9c01f9 and a61af1c3, revisions
+explicit in candidate_combined_checkpoint_84.tsv):68 cleanPASS,8PASS_WITH_RECOVERY,
+4FAIL,4TIMEOUT. Linux counterpart snapshot53/65 all mapped counterparts clean;
+IPC unsupported on WDDM and Geekbench packaging gap remain OMITTED. Not full
+parity and not an exact-a61 full-matrix claim.20 candidate rows still pending.
+
+Bounded FurMark peek1250 unexpectedlyPASS25s, zero recovery and journal Xids.
+Keep canonical failure OPEN until measurement-off retry. Compressed bounded
+peek plus source-log hash saved in encoder-session/furmark-peek/; exhausted
+budget proves no absence. No offending instruction or graphics product fix proven.
+
+Controller70226 now RUNNING normal Edge launch1260 (normal profile/no flags,
+60s launch-only oracle), then isolated managed1261, startup/unchanged stream1262,
+then authored native video release/trap probes35f97433. Productiona61 unchanged.
+Native probes still unmeasured; no translated video work admitted by product.
+Remainder waiter70754 under GPU lock:1270 FurMark off,1280+19 untested rows,
+1310 fresh long CUDAclpeak(original1500s). It requires diagnostics exit0 and
+zero timestamp-bounded Xids before running; otherwise inspect native failure.
+Own ranges1270..1319 confirmed free; only own stopped overlays reclaimed.
+
+Vast55385171 stock580.88 reference remaining15 run active23345,12PASS so far
+through GravityMarkGL, all measured guest events0. Controller waiter4292 then
+runs50 previously unmeasured main-lane rows serially; list/runner backed up.
+Results remain on controller, no secrets on Vast. Retire only own55385171 when
+reference work ends. Update/push again within30min; no master/integration changes.
+
 ## Latest checkpoint, 2026-10-11 15:53 UTC
 
 Last pushedf45cf292; native probe source35f97433 and this evidence checkpoint follow.

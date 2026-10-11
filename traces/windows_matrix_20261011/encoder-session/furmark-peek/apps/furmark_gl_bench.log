@@ -1,0 +1,5 @@
+=== furmark_gl_bench start=2026-10-11T16:04:13.0744437+00:00 host=VASTWIN session=1 boot=2026-10-11T16:02:37.5000000Z timeout=135
+KFWAIT furmark_gl_bench EXITED rc=0
+FM_SCORE date,demo,platform,vendor,renderer,api_version,width,height,fullscreen,antialiasing,duration,max_gpu_temp,score,avg_fps,min_fps,max_fps
+FM_SCORE 2026.10.11@16:04:36,furmark-gl,Windows 64-bit,NVIDIA Corporation,NVIDIA GeForce RTX 4070/PCIe/SSE2,OpenGL 3.2.0 NVIDIA 580.88,1280,720,NO,Off,15002,-1,4671,310,278,318
+=== end rc=0 secs=25 2026-10-11T16:04:37.8214785+00:00

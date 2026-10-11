@@ -1,0 +1,289 @@
+{
+ "schema": 1,
+ "generator": "gen_apps.py",
+ "prelude": "$ErrorActionPreference = 'Continue'\n. C:\\kf\\kf_apphelpers.ps1\n$K = 'C:\\kfapps'; $CD = '@@CD@@'; $OUT = 'C:\\kf\\out\\@@ID@@'\n$PY = \"$K\\py\\python.exe\"; $TL = \"$K\\py\\Lib\\site-packages\\torch\\lib\"\nNew-Item -ItemType Directory -Force -Path $OUT | Out-Null\n$env:CUPY_CACHE_DIR = 'C:\\kf\\cupy_cache'; $env:KF_TORCH_LIB = $TL; $env:CUDA_PATH = \"$K\\cuda_cudart\"\n$env:KF_CUDA_INCLUDE = \"$K\\cuda_cudart\\include;$K\\cuda_cccl\\include\"\n$PYA = @('-X', 'utf8', '-X', 'pycache_prefix=C:\\kf\\pycache')\n",
+ "apps": [
+  {
+   "id": "startup_stream_diagnostic",
+   "category": "diagnostic-startup",
+   "linux": [],
+   "pkgs": [
+    "python_embed",
+    "pywheels",
+    "vc_redist",
+    "cuda_cudart"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 180,
+   "expect_s": 5,
+   "rx": "^STARTUP_DIAGNOSTIC_DONE gpu_readback=OK",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA|GeForce|RTX",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "low",
+   "why": "CUDA context + a few kernels and small copies: the compute path with no display, no video engine and no long run. Windows user work runs as Passthrough twins whose guest-visible GP_GET was measured behind the host's (claude/tdr-hunt-20261010, traces/windows_tdr_hunt_20261010/README.md, runs 263-266)",
+   "ps": "$diag = @'\nimport os,sys,time\nstarted=time.perf_counter()\ndef stage(name):\n print('STARTUP_STAGE',name,'elapsed_s=%.6f'%(time.perf_counter()-started),flush=True)\nstage('process')\nhandles=[]\ntl=os.environ.get('KF_TORCH_LIB')\nif tl:\n if hasattr(os,'add_dll_directory'):handles.append(os.add_dll_directory(tl))\n os.environ['PATH']=tl+os.pathsep+os.environ.get('PATH','')\nstage('dll_search')\nimport torch\nstage('torch_import')\nassert torch.cuda.is_available(),'CUDA unavailable'\nprint('KFDEV',torch.cuda.get_device_name(0),flush=True)\nstage('torch_cuda_init')\nx=torch.arange(1024,dtype=torch.float32,device='cuda')\nassert float((x*2).sum().cpu())==1023*1024,'Torch GPU readback mismatch'\nstage('torch_gpu_readback')\nimport cupy as cp\nstage('cupy_import')\nprint('CUPY_VERSION',cp.__version__,flush=True)\nc=cp.arange(1024,dtype=cp.float32)\nstage('cupy_arange')\nassert float((c*2).sum().get())==1023*1024,'CuPy GPU readback mismatch'\nstage('cupy_gpu_readback')\nprint('STARTUP_DIAGNOSTIC_DONE gpu_readback=OK',flush=True)\n'@\n$path = Join-Path $OUT 'startup_diag.py'\n[System.IO.File]::WriteAllText($path, $diag, [System.Text.Encoding]::ASCII)\nInvoke-KfExe -Exe $PY -ArgList ($PYA + @($path))\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": "Diagnostic only, followed by unchanged canonical120s per-thread stream test.",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true,
+   "cmd": "timed Torch/CuPy import and real GPU readback"
+  },
+  {
+   "id": "stream_perthread_t",
+   "category": "stream-probe",
+   "linux": [
+    "stream_perthread"
+   ],
+   "pkgs": [
+    "python_embed",
+    "pywheels",
+    "vc_redist",
+    "cuda_cudart"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 120,
+   "expect_s": 5,
+   "rx": "^STREAM_PROBE_DONE perthread rc=0",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:NVIDIA|GeForce|RTX",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "low",
+   "why": "CUDA context + a few kernels and small copies: the compute path with no display, no video engine and no long run. Windows user work runs as Passthrough twins whose guest-visible GP_GET was measured behind the host's (claude/tdr-hunt-20261010, traces/windows_tdr_hunt_20261010/README.md, runs 263-266)",
+   "ps": "Invoke-KfExe -Exe $PY -ArgList ($PYA + @('C:\\kf\\py\\kf_runpy.py', 'C:\\kf\\py\\win_cuda_equiv.py', 'stream_perthread'))\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": "CuPy per-thread default stream (cupy.cuda.Stream.ptds)",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true,
+   "cmd": "python win_cuda_equiv.py stream_perthread"
+  }
+ ],
+ "linux_map": {
+  "BlackScholes": [
+   "blackscholes_t"
+  ],
+  "MersenneTwisterGP11213": [
+   "randomFog_demo",
+   "rng_t"
+  ],
+  "UnifiedMemoryPerf": [
+   "managed_t"
+  ],
+  "UnifiedMemoryStreams": [
+   "managed_t"
+  ],
+  "asyncAPI": [
+   "streams_t"
+  ],
+  "attach_verify": [
+   "managed_t"
+  ],
+  "bandwidthTest": [
+   "bandwidthTest_demo"
+  ],
+  "bf16TensorCoreGemm": [
+   "tcbf16_t"
+  ],
+  "blackscholes": [
+   "blackscholes_t"
+  ],
+  "blender_cycles": [
+   "blender_cycles"
+  ],
+  "cdpSimpleQuicksort": [
+   "cdp_quicksort"
+  ],
+  "clinfo": [
+   "opencl_icd"
+  ],
+  "clpeak": [
+   "clpeak_ocl"
+  ],
+  "concurrentKernels": [
+   "streams_t"
+  ],
+  "conjugateGradient": [
+   "cg_t"
+  ],
+  "conjugateGradientUM": [
+   "managed_t"
+  ],
+  "conv2d": [
+   "torch_correct"
+  ],
+  "cudaTensorCoreGemm": [
+   "tc16_t"
+  ],
+  "cupy": [
+   "cupy_check"
+  ],
+  "deviceQuery": [
+   "deviceQuery_demo"
+  ],
+  "egl_offscreen": [
+   "glgears_wgl"
+  ],
+  "fastWalshTransform": [
+   "fwt_t"
+  ],
+  "fft_cufft": [
+   "fft_t"
+  ],
+  "globalToShmemAsyncCopy": [
+   "cupy_asynccopy"
+  ],
+  "gpu_burn": [
+   "furmark_gl_stress",
+   "torch_burn"
+  ],
+  "graphMemoryNodes": [
+   "graphs_t"
+  ],
+  "hashcat": [
+   "hashcat"
+  ],
+  "hf_generate": [
+   "hf_generate"
+  ],
+  "histogram": [
+   "hist_t"
+  ],
+  "llama_bench": [
+   "llama_cuda_bench"
+  ],
+  "llama_cpp_gen": [
+   "llama_cuda_gen"
+  ],
+  "mandelbrot": [
+   "mandelbrot_t"
+  ],
+  "matrixMul": [
+   "matmul_t"
+  ],
+  "matrixMulDrv": [
+   "cup8_ladder"
+  ],
+  "memcpy2d": [
+   "memcpy2d_t"
+  ],
+  "nbody": [
+   "nbody_demo_bench",
+   "nbody_demo_gl",
+   "nbody_t"
+  ],
+  "nvdec_h264": [
+   "nvdec_h264"
+  ],
+  "nvenc_h264": [
+   "nvenc_h264"
+  ],
+  "nvenc_hevc": [
+   "nvenc_hevc"
+  ],
+  "nvidia_smi": [
+   "nvidia_smi"
+  ],
+  "reduce": [
+   "reduce_t"
+  ],
+  "reduction": [
+   "reduce_t"
+  ],
+  "scan": [
+   "scan_t"
+  ],
+  "sgemm_cublas": [
+   "matmul_t"
+  ],
+  "sha256": [
+   "cupy_sha256"
+  ],
+  "simpleAtomicIntrinsics": [
+   "atomics_t"
+  ],
+  "simpleCUBLAS": [
+   "matmul_t"
+  ],
+  "simpleCUFFT": [
+   "fft_t",
+   "oceanFFT_demo"
+  ],
+  "simpleCallback": [
+   "cuda_callback"
+  ],
+  "simpleCooperativeGroups": [
+   "cupy_cg"
+  ],
+  "simpleCudaGraphs": [
+   "graphs_t"
+  ],
+  "simpleOccupancy": [
+   "cuda_occupancy"
+  ],
+  "simpleStreams": [
+   "streams_t"
+  ],
+  "simpleZeroCopy": [
+   "zerocopy_t"
+  ],
+  "sortingNetworks": [
+   "sort_t"
+  ],
+  "stream_created": [
+   "stream_created_t"
+  ],
+  "stream_created2nd": [
+   "stream_created2nd_t"
+  ],
+  "stream_default": [
+   "stream_default_t"
+  ],
+  "stream_nonblocking": [
+   "stream_nonblocking_t"
+  ],
+  "stream_perthread": [
+   "stream_perthread_t"
+  ],
+  "stream_triad": [
+   "triad_t"
+  ],
+  "stream_two": [
+   "stream_two_t"
+  ],
+  "torch_ai_bench": [
+   "torch_ai_bench"
+  ],
+  "torch_correct": [
+   "torch_correct"
+  ],
+  "transpose": [
+   "transpose_t"
+  ],
+  "vectorAdd": [
+   "vectorAdd_demo"
+  ],
+  "vectorAddDrv": [
+   "cup2_ladder"
+  ],
+  "vkpeak": [
+   "vkpeak"
+  ],
+  "vulkaninfo": [
+   "vulkaninfo"
+  ]
+ },
+ "no_equivalent": {
+  "simpleIPC": "CUDA IPC (cudaIpcGetMemHandle) is not supported on WDDM Windows (TCC/Linux only)",
+  "geekbench_gpu": "Geekbench needs the internet to upload results (the Linux pass string is 'Uploading results'); the lane forbids guest internet at run time"
+ }
+}
