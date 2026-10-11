@@ -38,3 +38,12 @@ hunt README). Do not validate or benchmark integration heads in this range. The 
 independent reviews; the fourth said MERGE-OK for integration, with residuals being fixed in a
 follow-up). The warning above applies to heads from `aeda9ffd` up to, not including, `11b67100`.
 Not yet run on hardware: gates 9/9 + gate 10, fast suite 30/30, Windows production profile.
+
+## D8 (owner, 2026-10-11): the raw RM client is not ported to Windows
+
+The 30-arm raw client (`kayfabe-rm-ladder`, used by `scripts/fastguest/`) talks to the Linux RM device interface directly (`/dev/nvidiactl`
+ioctls). Windows offers no equivalent to a user-mode program (RM is reached only through the kernel-mode driver), so it is not ported and
+will not be (a signed kernel driver would be needed). Coverage on Windows is by: the stock driver's own behaviour (boot, sign-in, Edge,
+video), the CUDA probes (`cup2/cup3/cup8`), the D3D/Vulkan/OpenGL probes (`kf_dxprobe`, `kf_glgears`, `kf_overlayprobe`), the Windows app
+matrix, and the guest event log + kayfabe's own refusal counters. The RM-emulation arms themselves are OS-independent GSP RPC logic and keep
+running in the Linux guest and host lanes (fast suite 30/30, ladder). Hostile-guest tests that need raw RM calls stay Linux-only.
