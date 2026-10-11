@@ -5,6 +5,45 @@ again after the Wednesday 07:00 reset). Read `AGENTS.md` (= `CLAUDE.md`) first: 
 (state, branches, traps), `docs/DELEGATED_DECISIONS_20261010.md`, `docs/OWNER_RULINGS.md` §AB-§AE, `docs/design/V3_FEATURE_GAPS.md`
 (priorities: P0 = prevents apps running; fidelity and perf beyond "decent" are post-release), `docs/design/V3_NOT_IN_GIT.md`.
 
+## Latest checkpoint, 2026-10-11 15:53 UTC
+
+Last pushedf45cf292; native probe source35f97433 and this evidence checkpoint follow.
+Fresh Edge WebGL/WebGPU1170 both PASS, zero guest events/GSP cycles, no hostXid.
+These use disposable profiles/launch flags; they do not falsify every ordinary
+Edge launch. A separate normal-profile/no-arguments60s launch-only diagnostic is
+queued1260. It makes no GPU correctness or matrix coverage claim.
+
+Corrected matrix1180+ active: OceanFFT, RandomFog, HF generation, CDP quicksort and
+vectorAdd five cleanPASS so far. Ocean/Fog include numerical references plus GUI;
+HF64-token digest0d973108a6251e14; quicksort490 child launches, CUDA error0, exact
+readback. Source/producta61af1c3 unchanged. Controller41992; seven remaining
+header/proof cases in that run (six after vectorAdd), then bounded FurMark1250.
+
+All three encoder recoveries have the SAME measured kernel-channel refusal:
+translated NVENC kernel channel ff040005/token2007 hits NoCeObject on subchannel4
+method0x240, then REFUSED-AND-POISONED and later recovery. Evidence kernel-video
+refusal extracts in encoder-session/windows-focus/. Public C9B7 header identifies
+0x240/244/248 as video SEMAPHORE_A/B/C,0x304 as SEMAPHORE_D; observed release then
+trap operations are not CE methods. No codec/translated-video execution is
+currently admitted by HostRing. This is a named lead, not proof that one fix
+will remove every recovery. Do not drop methods or forge completion.
+
+Bench-only authored oracle35f97433 builds GPU-free; production code unchanged.
+Pinned MIT public header/source hash is saved in native-video-semaphore/.
+BinarySHA81f695d518606def466684ee0cae8d64e0cbb55f66bfde752b9f42bdc029eb94.
+Queue70226 still waits for GPU lock; runner updated BEFORE it starts, now normal
+Edge1260, isolated managed1261, then native nobody release and trap probes in
+separate invocations. Native modes use only owned addresses/objects/USER channel;
+real GPU payload and completion required. Stop on failure. Earlier snapshot plan
+is superseded because the original logs already identify a concrete refusal.
+Runner encoder-session/run_recovery_diagnostics.sh; no overlapping GPU jobs.
+
+Owned stock580.88 remaining-app reference active: /data/kf-native-reference-20261011/remaining-apps,
+controller23345, log/tmp/kf-native-remaining-apps.log,15 selected apps. First six
+(vkcube, llama CUDA generate/bench, dxdiag, llama Vulkan bench, Blender) PASS;
+rest still running. Retain Vast55385171 only while collecting references.
+Original broad counts and conservative Linux parity snapshot remain unchanged.
+
 ## Latest checkpoint, 2026-10-11 15:37 UTC
 
 Last pushed product a61af1c3 (this evidence checkpoint follows). Exact-revision
