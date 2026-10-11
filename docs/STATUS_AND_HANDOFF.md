@@ -13,6 +13,22 @@ fix this file. Entries below the first are dated history.
 
 **Windows/Codex current resume point:** [RESUME_CODEX_WINDOWS_20261011.md](RESUME_CODEX_WINDOWS_20261011.md), branch `codex/windows-matrix-20261011`. Owner session is stopped; preserve its convenience disk chain described there.
 
+## Latest checkpoint, 2026-10-11 22:29 UTC
+
+Last confirmed public push8358dabab, private1dc9c0e. Exact89 Linux9+10/30 PASS;
+Windows1490 gears/vector/CUP8 PASS, TorchFAIL/new hard ceiling/reboot.
+Matched Gravity control1495 FAIL772s/unresponsive/Xid32, UNCLEAN-kill;
+probe1510 TIMEOUT602s/three153/per-appGSPcycle1/Xid32, acpi stop.
+Probe captures GP[4b63] subch6/method200 payload4000002c matching registered
+FIFO-update API on Passthrough token27/host4e. Bundle grows32768→65536 and
+relocatesFIFO/USERD. Earlier binding/GPU actual execution unmeasured; sample is
+not formal H1 falsification. Translated-only implementation guard NOT satisfied;
+late registration also cannot safely convert a token-used/scheduled twin.
+No migration/product fix/privileged host operation added. Full original logs,
+public-layout decode, marker-authoritative shutdowns in late-fifo-89e8ddf8.
+Campaign finished; verify noQEMU/DMA-FQ/lock before next job. Personal1380chain
+retained. Owner options/next decision in final evidence README and compact resume.
+
 ## Latest checkpoint, 2026-10-11 22:01 UTC
 
 Last confirmed public push05271adf3 (Windows1490 smoke + capacity failure), private

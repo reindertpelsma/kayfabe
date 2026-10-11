@@ -1,0 +1,14 @@
+{
+ "verdict": "FAIL",
+ "rc": "-",
+ "secs": 772,
+ "quiet": "-",
+ "note": "supervisor-deadline: guest unresponsive",
+ "proof": "-",
+ "tdr": 0,
+ "wer": 0,
+ "rebooted": false,
+ "gsp_cycles": 1,
+ "restart": "supervisor-deadline",
+ "guest": "g1"
+}

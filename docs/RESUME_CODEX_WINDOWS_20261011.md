@@ -1,6 +1,6 @@
 # Resume the Windows matrix and GravityMark Vulkan investigation
 
-**STATUS: LIVE, 2026-10-11 22:01 UTC.** Compact entry point for a new chat.
+**STATUS: LIVE, 2026-10-11 22:29 UTC.** Compact entry point for a new chat.
 Historical chronology is in [HANDOFF_FOR_CODEX_20261011.md](HANDOFF_FOR_CODEX_20261011.md).
 Read the current checkpoint here before treating an older pending/result paragraph
 in that chronology as current state.
@@ -8,7 +8,7 @@ in that chronology as current state.
 ## Branches and checkout
 
 Public repository: <https://github.com/reindertpelsma/kayfabe>.
-Branch: **`codex/windows-matrix-20261011`**. Last confirmed push **05271adf3**,
+Branch: **`codex/windows-matrix-20261011`**. Last confirmed push **8358dabab**,
 containing reviewed source89e8ddf8b with161 GPU-free tests. Newer documentation checkpoints
 must not inherit exact-revision hardware claims automatically.
 Use the branch tip to get this document and the complete reachable source history.
@@ -62,23 +62,21 @@ Old queued allocator65530 campaign was cancelled **while waiting**, not run;
 its exit0 trap is not a validation result. Validation is combined into exact
 **89e8ddf8** campaign, including allocator source and default-off diagnostic.
 Worktree `/data/kf-late-fifo-host-89e8ddf8`, detached exact89e8ddf8b.
-Run root `$W/codex-late-fifo-20261011-89e8ddf8`; shared GPUlock held by resumed
-campaign PID492472 (dated21:38UTC; recheck). Log `$W/codex-late-fifo-campaign.log`.
-**Do not duplicate it or edit its running scripts.**
-
-Linux gates9/9+gate10 PASS21:34UTC, binary/client/fastguest built. Initial
-fast suite never started because runner omitted BENCH_DIR mkdir; campaign
-exit1 preserved, no product failure inferred. New `resume_campaign.sh` fixes
-only runner preconditions, preserves fast-notrun.log and starts fast30 at21:38; completed30/30 PASS21:41:47UTC.
-Fast suite30/30 PASS21:41:47UTC, zero FAIL/CRASH/NOTRUN. Windows1490 smoke: gears/vectorAdd/CUP8 PASS, torch FAIL411s/guest reboot/GSPcycle1/precise-window hostXid0;
-no-capacity-refusal hypothesis FALSIFIED: slot48 need1049632 > hard walk ceiling1048576,
-split9194 TRUNCATED/refuse_mask0x10. See late-fifo-89e8ddf8 live prefix evidence.
-Now1495
-Gravity control reproduces Xid32/channel4e21:55:37UTC and GSPcycle1; final600s
-oracle pending. Same target Passthrough/Windows-user-work, FIFO update API4000002d
-registers0. Probe1510 follows. See late-fifo-89e8ddf8/control-live-observation. Only probe changes measurement value
-KF3_RELAY_PB_PEEK=after-fifo-update. Original600s benchmark/oracle retained.
-[Exact archived runners](../traces/windows_matrix_20261011/gravity-vulkan/h1-channel-audit/).
+Run root `$W/codex-late-fifo-20261011-89e8ddf8`; campaign complete (recheck
+processes/lock before another GPU job). Linux gates9/9+gate10/fast30 PASS.
+Windows1490 gears/vectorAdd/CUP8 PASS; torch FAIL411s/reboot/GSPcycle1 with
+hard walk ceiling1049632 >1048576. Control1495 FAIL772s/unresponsive/Xid32,
+UNCLEAN-kill. Probe1510 TIMEOUT602s/three153/per-appGSPcycle1/Xid32, acpi stop.
+**No Vulkan fix.** Probe captures submitted subch6/method0x200/API4000002c on
+Passthrough token27/host4e, matching FIFO-update bundle:32768→65536 entries,
+newFIFO0x42be000,USERDoffset0x600. Earlier binding and actual GPU execution
+remain unmeasured. Translated-only fix guard is not satisfied; do not convert
+this already scheduled/token-used channel. See
+[final matched evidence](../traces/windows_matrix_20261011/gravity-vulkan/late-fifo-89e8ddf8/README.md).
+Exact archived runners remain in h1-channel-audit; never replay completed runs
+or use the personal1380chain for tests. Original setup-failed fast attempt
+retained; corrected exact suite alone supplies30/30. Original allocator queue
+cancelled while waiting, not a pass. Campaign log `$W/codex-late-fifo-campaign.log`.
 
 Kayfabe/VFIO cannot run simultaneously. After stop require noQEMU, group11
 DMA-FQ, remove /tmp/kf-stop-winprod; keep /var/lib above100GiB (131GiB at21:38).

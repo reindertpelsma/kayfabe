@@ -81,3 +81,37 @@ No capacity ceiling in this control prefix: distinguish it from smoke1490.
 Initial Linux fast attempt has no usable suite output because output-directory
 creation was missing. It is classified as setup failure/no executed-arm evidence;
 no original NOTRUN tally is claimed. Corrected suite alone supplies30/30 PASS.
+
+## Final matched runs and candidate, 2026-10-11 22:29UTC
+
+Control1495 **FAIL772s**, supervisor-deadline/guest unresponsive, GSPcycle1;
+precise journal Xid1/channel4e21:55:37UTC. Broker stop **UNCLEAN-kill**, despite
+harness's generic stopped(clean) line; marker.txt is authoritative.
+Probe1510 **TIMEOUT602s**, unchanged600s workload/oracle, three guest153,
+WER0, per-app GSPcycle1; complete boot log has2 cycles (includes shutdown).
+Precise journal Xid1/channel4e22:17:19UTC. Broker stop acpi, DMA-FQ restored.
+Neither run passes; sampler is diagnostic, not a fix.
+
+Probe lines9039–9043: armed on Passthrough token27/host4e, object
+c1d0007a:ff1fe010, API4000002c/inner20801116. Public-layout bundle targets own
+channelff040025, USERDmemoryff00a00b, new65536 entries, FIFOoffset0x42be000,
+USERDoffset0x600. Old ring32768. GP[0x4b63] segment has exactly four words:
+`8000c01e 8000c009 2001c080 4000002c`; decoder logs subchannel6/method0x200,
+dataSome(4000002c), matching the registered FIFO update. No changed-entry or
+budget-exhaustion log. The initial offline formatter expected list syntax and
+missed Rust's Some(...); corrected formatter now records matching sample9043.
+Raw original logs retained, so this correction is reproducible.
+
+**Measured:** matching migration request is submitted on a channel Kayfabe
+classifies Passthrough, not Translated. **Still unmeasured:** earlier object
+binding/GPU-fetched bytes/actual inner execution. Candidate capture supports the
+migration hypothesis; does not independently formally falsify H1 or establish
+causality. The Translated-only implementation guard is NOT satisfied. Do not
+apply that proposed fix to this Passthrough target or convert it after token/
+schedule. Registration was already shown too late for that conversion.
+
+Owner options remain: a separately designed birth-time restricted Translated
+mode with a justified earlier signal; a clean NOT_SUPPORTED registration
+experiment if Windows tolerates it; optional patched-host tier. None built.
+No privileged host verb, migration, forged completion or product threshold
+change added. See compact resume for hardware state and next decision.
