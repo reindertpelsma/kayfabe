@@ -1570,6 +1570,45 @@ impl HostRm {
         Ok(h)
     }
 
+    /// Bench-only registration of an authored deferred channel-info update.
+    ///
+    /// Tests the public, unprivileged V2 registration path (`ctrl5080.h`,
+    /// `deferred_api.c:327-394`), not the privileged direct FIFO control. The client
+    /// is always this session's; channel, object and USERD memory must belong to
+    /// it. No guest registration or bundle is accepted. Registration success is
+    /// not evidence that the subsequent GPU trigger succeeds.
+    ///
+    /// # Errors
+    /// An ownership/layout refusal or the host's registration status.
+    pub fn probe_deferred_channel_update(
+        &self,
+        chan: Channel,
+        object: u32,
+        api_handle: u32,
+        ring: RingSpec,
+    ) -> Result<(), RmError> {
+        if chan.assert_user().is_err()
+            || self.parent_of(chan.chan) != Some(chan.tsg)
+            || self.parent_of(chan.tsg) != Some(self.device)
+            || self.parent_of(object) != Some(chan.chan)
+            || self.parent_of(ring.userd_memory) != Some(self.device)
+            || kf_abi::defapi::HandleRules::structurally_refused(self.client.raw(), api_handle)
+            || self.parent_of(api_handle).is_some()
+        {
+            return Err(RmError::Other(ABI_ENCODE_FAILED));
+        }
+        let (cmd, mut payload) = encode_deferred_channel_update(
+            self.abi.version(),
+            self.client.raw(),
+            chan.chan,
+            api_handle,
+            ring,
+        )
+        .ok_or(RmError::Other(ABI_ENCODE_FAILED))?;
+        // Already encoded at the exact compiler-derived HOST layout, not at the
+        // bench layout and not opaque guest bytes; no second transcode applies.
+        self.raw_control_exact(object, cmd, &mut payload)
+    }
     /// ★ EXPERIMENT `x11-dispsw` (default off; `docs/design/V3_DISPLAY.md`, the 2026-10-03 note): a
     /// `GF100_DISP_SW` object on `chan` — the host twin of a guest's display-software object, so the
     /// software methods the guest's channel sends reach a host object instead of raising Xid 32.
@@ -2128,6 +2167,162 @@ impl<T: Send + 'static> Reaper<T> {
 /// `GF100_DISP_SW` (`ogkm-580: class/cl9072.h`).
 pub const GF100_DISP_SW: u32 = 0x9072;
 
+fn encode_deferred_channel_update(
+    version: kf_abi::DriverVersion,
+    client: u32,
+    channel: u32,
+    api_handle: u32,
+    ring: RingSpec,
+) -> Option<(u32, Vec<u8>)> {
+    use kf_abi::{defapi::DefApiAbi, generated::matrix, matrix::Resolved};
+    let abi = DefApiAbi::at(version)?;
+    let layout = Resolved::of(&matrix::NV5080_CTRL_DEFERRED_API_V2_PARAMS, version).ok()?;
+    if !ring.gp_fifo_entries.is_power_of_two()
+        || ring.gp_fifo_va & 7 != 0
+        || ring
+            .gp_fifo_va
+            .checked_add(u64::from(ring.gp_fifo_entries) * 8)?
+            > 1 << 40
+        || ring.userd_offset % USERD_ALIGNMENT != 0
+    {
+        return None;
+    }
+    let mut bytes = vec![0; layout.size()];
+    let mut put = |path: &'static str, value: &[u8]| -> Option<()> {
+        let field = layout.need(path).ok()?.range()?;
+        if field.len() != value.len() {
+            return None;
+        }
+        bytes.get_mut(field)?.copy_from_slice(value);
+        Some(())
+    };
+    for (path, value) in [
+        ("hApiHandle", api_handle),
+        ("cmd", abi.cmds.update_channel_info),
+        ("api_bundle.ChannelInfoUpdate.hClient", client),
+        ("api_bundle.ChannelInfoUpdate.hChannel", channel),
+        (
+            "api_bundle.ChannelInfoUpdate.hUserdMemory",
+            ring.userd_memory,
+        ),
+        (
+            "api_bundle.ChannelInfoUpdate.gpFifoEntries",
+            ring.gp_fifo_entries,
+        ),
+    ] {
+        put(path, &value.to_le_bytes())?;
+    }
+    put(
+        "api_bundle.ChannelInfoUpdate.gpFifoOffset",
+        &ring.gp_fifo_va.to_le_bytes(),
+    )?;
+    put(
+        "api_bundle.ChannelInfoUpdate.userdOffset",
+        &ring.userd_offset.to_le_bytes(),
+    )?;
+    Some((abi.cmd_v2, bytes))
+}
+
+#[cfg(test)]
+mod deferred_update_probe_tests {
+    use super::*;
+
+    fn ring() -> RingSpec {
+        RingSpec {
+            gp_fifo_va: 0x10000,
+            gp_fifo_entries: 32,
+            userd_memory: 0xcafe_0020,
+            userd_offset: 0x2000,
+            err_notifier: 0,
+        }
+    }
+
+    #[test]
+    fn authored_registration_uses_the_measured_host_header_and_zero_flags() {
+        use kf_abi::defapi::{DefApiAbi, Form};
+        let v = kf_abi::DriverVersion {
+            major: 595,
+            minor: 91,
+            patch: 7,
+        };
+        let (cmd, bytes) =
+            encode_deferred_channel_update(v, 0xc0000001, 0xcafe0010, 0x40000001, ring())
+                .expect("measured");
+        let abi = DefApiAbi::at(v).expect("ABI");
+        assert_eq!(cmd, abi.cmd_v2);
+        let reg = abi.decode_registration(Form::V2, &bytes).expect("decode");
+        assert_eq!(reg.handle, 0x40000001);
+        assert_eq!(reg.cmd, abi.cmds.update_channel_info);
+        assert_eq!(reg.flags.raw, 0);
+        assert_eq!((reg.client_va, reg.device_va), (0, 0));
+    }
+
+    #[test]
+    fn malformed_rings_and_unmeasured_versions_refuse_before_host_io() {
+        let v = kf_abi::DriverVersion {
+            major: 595,
+            minor: 91,
+            patch: 7,
+        };
+        let encode = |r| encode_deferred_channel_update(v, 1, 2, 3, r);
+        assert!(
+            encode(RingSpec {
+                gp_fifo_entries: 0,
+                ..ring()
+            })
+            .is_none()
+        );
+        assert!(
+            encode(RingSpec {
+                gp_fifo_entries: 3,
+                ..ring()
+            })
+            .is_none()
+        );
+        assert!(
+            encode(RingSpec {
+                gp_fifo_va: 0x10001,
+                ..ring()
+            })
+            .is_none()
+        );
+        assert!(
+            encode(RingSpec {
+                gp_fifo_va: (1 << 40) - 8,
+                ..ring()
+            })
+            .is_none()
+        );
+        assert!(
+            encode(RingSpec {
+                gp_fifo_va: u64::MAX - 7,
+                ..ring()
+            })
+            .is_none()
+        );
+        assert!(
+            encode(RingSpec {
+                userd_offset: 1,
+                ..ring()
+            })
+            .is_none()
+        );
+        assert!(
+            encode_deferred_channel_update(
+                kf_abi::DriverVersion {
+                    major: 595,
+                    minor: 91,
+                    patch: 8
+                },
+                1,
+                2,
+                3,
+                ring()
+            )
+            .is_none()
+        );
+    }
+}
 /// `NV906F_CTRL_GET_CLASS_ENGINEID` (`ogkm-580: ctrl906f.h:94`) — on a channel, for one of its
 /// children: `{hObject, classEngineID, classID, engineID}` (`:98-103`).
 pub const NV906F_CTRL_GET_CLASS_ENGINEID: u32 = 0x906f_0101;

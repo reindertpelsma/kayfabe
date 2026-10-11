@@ -41,7 +41,10 @@ export KF_GUEST_PW
 # Falsifier: a valid late snapshot of that channel excludes such a method.
 # Missing coverage or exhausted budgets is INCONCLUSIVE, not falsification.
 # If logging changes the failure, retain the ordinary TIMEOUT as the oracle.
-# This is measurement only: original app, deadlines and product unchanged.
+# Vulkan is a separate fresh guest after owner run1288 device-lost report.
+# Same falsifier: a valid late faulting-channel window excludes SW/deferred
+# methods; missing coverage is INCONCLUSIVE. No shared cause assumed.
+# This is measurement only: original apps, deadlines and product unchanged.
 bash "$TREE/scripts/bench/windows/appmatrix/run_windows_apps.sh" --run-dir "$RUN" \
  --kf3-rev "$REV" --broker "$B" --run-base 1360 --override-dir "$W/codex-matrix-focus-tools-20261011" \
- --iso "$MEDIA" --apps nbody_demo_gl --tier 3 --per-guest 1 --no-isolate
+ --iso "$MEDIA" --apps nbody_demo_gl,gravitymark_vk --tier 3 --per-guest 1 --no-isolate

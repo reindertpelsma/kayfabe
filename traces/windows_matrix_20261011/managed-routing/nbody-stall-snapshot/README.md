@@ -5,3 +5,10 @@
 Hypothesis: snapshots identify a SW/deferred method on the faulting GR channel near its DEVICE fault. Falsifier: a valid late snapshot of that channel excludes such a method. The four-stall/32-free per-boot budgets may expire before the app; missing coverage is inconclusive. Existing bounds are12 GPFIFO entries, three segments and256 words per segment. No snapshot state authors GPU work or releases a wait. Logging may affect timing; preserve the ordinary TIMEOUT/Xid and do not substitute a diagnostic pass.
 
 Queued after current coverage and existing native-event/direct-stream probes. Own1360..1364 only; reclaim stopped baseline-backed overlays, keep evidence.
+
+2026-10-11 18:25UTC owner prioritizes GravityMark Vulkan device loss. While the
+probe was still queued (flock PID181140, no child), add gravitymark_vk after
+nbody_demo_gl, per-guest1, same frozen72741e2b and sole diagnostic flag. Own
+1360..1364 range already reserved. Every guest resets snapshot budgets. No
+active runner mutated. Missing/exhausted late-channel coverage is inconclusive;
+keep original failures and each unchanged app budget. No common cause assumed.
