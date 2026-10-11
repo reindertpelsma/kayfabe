@@ -1,6 +1,6 @@
 # Resume the Windows matrix and GravityMark Vulkan investigation
 
-**STATUS: LIVE, 2026-10-11 21:39 UTC.** Compact entry point for a new chat.
+**STATUS: LIVE, 2026-10-11 21:43 UTC.** Compact entry point for a new chat.
 Historical chronology is in [HANDOFF_FOR_CODEX_20261011.md](HANDOFF_FOR_CODEX_20261011.md).
 Read the current checkpoint here before treating an older pending/result paragraph
 in that chronology as current state.
@@ -69,8 +69,8 @@ campaign PID492472 (dated21:38UTC; recheck). Log `$W/codex-late-fifo-campaign.lo
 Linux gates9/9+gate10 PASS21:34UTC, binary/client/fastguest built. Initial
 fast suite never started because runner omitted BENCH_DIR mkdir; campaign
 exit1 preserved, no product failure inferred. New `resume_campaign.sh` fixes
-only runner preconditions, preserves fast-notrun.log and starts fast30 at21:38.
-If green, automatic fresh Windows1490 smoke (gears/vectorAdd/CUP8/torch),1495
+only runner preconditions, preserves fast-notrun.log and starts fast30 at21:38; completed30/30 PASS21:41:47UTC.
+Fast suite30/30 PASS21:41:47UTC, zero FAIL/CRASH/NOTRUN. Automatic fresh Windows1490 smoke (gears/vectorAdd/CUP8/torch),1495
 Gravity control,1510 Gravity probe. Only probe changes measurement value
 KF3_RELAY_PB_PEEK=after-fifo-update. Original600s benchmark/oracle retained.
 [Exact archived runners](../traces/windows_matrix_20261011/gravity-vulkan/h1-channel-audit/).
@@ -141,7 +141,7 @@ source says clear the PBDMA interrupt *before* executing FIFO update, correcting
 the proposed plan's opposite wording. [Reproducible channel audit](../traces/windows_matrix_20261011/gravity-vulkan/h1-channel-audit/README.md).
 Owner has released1380; it is stopped and the installed personal chain retained.
 
-Prepared, not hardware-validated: `KF3_RELAY_PB_PEEK=after-fifo-update` arms the
+Linux hardware validated on exact89e8ddf8 (Windows probe pending): `KF3_RELAY_PB_PEEK=after-fifo-update` arms the
 existing bounded sample after the first update registration on a relay's
 associated5080 allocation lifetime. Default remains off; `=1` starts at birth.
 No migration or host registration is added. Three failing-first diagnostic
@@ -149,7 +149,7 @@ packet tests fix missed multi-datum triggers; final kf-qemu lib tests161/161.
 Independent review complete, no blockers; binding/first-object/Legacy/arming
 and post-forward race limits explicitly remain. A sample is not GPU execution
 proof and cannot alone formally falsify H1. Hardware gates9+10/fast30 still
-fast30 pending after gates9+10 PASS for the exact diagnostic revision, then fresh matched control/probe
+completed for exact89e8ddf8: gates9/9+gate10 and fast30/30 PASS; fresh matched control/probe
 runs in the active combined campaign. See audit README.
 
 FIFO_UPDATE_CHANNEL_INFO is a deferred FIFO/USERD metadata update, distinct

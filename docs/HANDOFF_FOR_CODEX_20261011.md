@@ -7,6 +7,16 @@ again after the Wednesday 07:00 reset). Read `AGENTS.md` (= `CLAUDE.md`) first: 
 (state, branches, traps), `docs/DELEGATED_DECISIONS_20261010.md`, `docs/OWNER_RULINGS.md` §AB-§AE, `docs/design/V3_FEATURE_GAPS.md`
 (priorities: P0 = prevents apps running; fidelity and perf beyond "decent" are post-release), `docs/design/V3_NOT_IN_GIT.md`.
 
+## Latest checkpoint, 2026-10-11 21:43 UTC
+
+Last confirmed public push1b2d3fb22 (saved owner image, takeover/runners), private
+1dc9c0e. Exact product89e8ddf8 Linux gates9/9+gate10 and fast30/30 PASS, zero
+FAIL/CRASH/NOTRUN in the corrected suite. Original fast runner precondition
+NOTRUN/exit1 retained separately. Per-revision binary SHA and build/client/
+fastguest/fast logs published in gravity-vulkan/late-fifo-89e8ddf8/linux-result.
+Windows1490 smoke starting, then matched Gravity1495control/1510probe. No new
+Windows verdict yet; Vulkan unfixed. Owner personal1380chain remains preserved.
+
 ## Latest checkpoint, 2026-10-11 21:39 UTC
 
 Last confirmed public push89e8ddf8b, private1dc9c0e. Owner released172.22.1.20;

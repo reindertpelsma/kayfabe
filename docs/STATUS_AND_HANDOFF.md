@@ -13,6 +13,16 @@ fix this file. Entries below the first are dated history.
 
 **Windows/Codex current resume point:** [RESUME_CODEX_WINDOWS_20261011.md](RESUME_CODEX_WINDOWS_20261011.md), branch `codex/windows-matrix-20261011`. Owner session is stopped; preserve its convenience disk chain described there.
 
+## Latest checkpoint, 2026-10-11 21:43 UTC
+
+Last confirmed public push1b2d3fb22 (saved owner image, takeover/runners), private
+1dc9c0e. Exact product89e8ddf8 Linux gates9/9+gate10 and fast30/30 PASS, zero
+FAIL/CRASH/NOTRUN in the corrected suite. Original fast runner precondition
+NOTRUN/exit1 retained separately. Per-revision binary SHA and build/client/
+fastguest/fast logs published in gravity-vulkan/late-fifo-89e8ddf8/linux-result.
+Windows1490 smoke starting, then matched Gravity1495control/1510probe. No new
+Windows verdict yet; Vulkan unfixed. Owner personal1380chain remains preserved.
+
 ## Latest checkpoint, 2026-10-11 21:39 UTC
 
 Last confirmed public push89e8ddf8b, private1dc9c0e. Owner released172.22.1.20;

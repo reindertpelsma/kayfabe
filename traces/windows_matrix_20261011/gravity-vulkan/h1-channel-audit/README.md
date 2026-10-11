@@ -117,6 +117,13 @@ Reproduce offline: compile layout.c using OGKM580.65.06's public
 to layout.json, then `python3 audit.py`. All decoded layouts come from those
 headers; all inputs and their SHA256 values are recorded in audit.json.
 
+## Exact89e8ddf8 Linux result, 2026-10-11 21:43UTC
+
+Gates9/9+gate10 and corrected fast30/30 PASS, zero failures/crashes/notrun.
+Initial fast NOTRUN remains documented below. Logs/binary SHA in
+[late-fifo regression](../late-fifo-89e8ddf8/README.md). Windows smoke/control/
+probe active; candidate sample and GravityMark result remain pending.
+
 ## Hardware campaign update, 2026-10-11 21:39UTC
 
 Owner released manual1380; it stopped uncleanly and the installed disk is saved
