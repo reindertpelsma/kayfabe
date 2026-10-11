@@ -78,6 +78,11 @@ Every open item is checked in this order. It moves to the next tier only with a 
   die constants only; monitor-dependent values stay authored by kayfabe.
 - A Windows rental is needed only for behaviour tied to the Windows driver; this may be empty if the raw-GSP spike works.
 
+## 6. Priority
+
+Release-coverage work, not the current blocker. The OpenGL failure on the RTX 4070 is not a constants problem (the replies already equal the real
+GPU's), so the sweep runs beside the P0 work and does not replace it.
+
 ## 7. Additions agreed 2026-10-11 (owner: "I agree with your corrections")
 
 - **Demand filter before the tiers.** Only rows that change guest behaviour go through the tiers. Run 641 booted, signed in, ran Edge and the CUDA probes
@@ -107,11 +112,6 @@ value). Owner: the test must be rigorous. What rigorous means here:
 - **A pass is evidence only for the exercised paths.** Features with no test stay on the list as uncovered, not as passing.
 - **Unverified:** Windows has not been run under kayfabe on a nested Vast host (VM exits cost 10-40x; watchdogs and the TDR timeout may fire for reasons unrelated to
   constants). First check: one Windows boot under kayfabe on a rented Linux VM; tune budgets before reading a failure as a missing answer.
-
-## 6. Priority
-
-Release-coverage work, not the current blocker. The OpenGL failure on the RTX 4070 is not a constants problem (the replies already equal the real
-GPU's), so the sweep runs beside the P0 work and does not replace it.
 
 ## 9. Seventh class: display-state rows for dies without a head on hand (owner discussion 2026-10-11)
 
