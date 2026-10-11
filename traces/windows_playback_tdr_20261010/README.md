@@ -1,5 +1,50 @@
 # Windows playback TDR, 2026-10-10 (branch `claude/playback-tdr-20261010`, from combined line 3aea0a79)
 
+# PROGRESS H1 (2026-10-10 night, agent overlay-h1; newest first; [measured] / [inferred])
+
+STATUS: LIVE. Work on branch `claude/overlay-h1-20261010` (from 575d5b20).
+
+* 5. [measured, runs 417 and 418, binary 72784ba7, ZERO flags, tdr-run24.sh ETW=1 OVLDUMP=1, hold 241 s each] the stuck-flip class is GONE in both: 0 `STALL Window .. waiting for
+  its interlock group`, 0 OVLDUMP triggers, TDR cycles 0/0/0/0/0 (boot/sign-in/Edge/Shorts-load/hold), 0 channel exceptions, 0 scanout REFUSED. The overlay is active in both
+  (window 4 1295x985 RGB plane from +219 s / +187 s, then the NV12 video overlay `fmt 0x38` 156 / 141 console lines). Prior baseline with 18da7c3c: stall in 6 of 8 runs
+  (408/409/411/413/415/416; 410 and 414 did not). Two clean runs is not yet three; run 419 is queued. `4` extra `STALL Window 4 ... ready, waiting for a vblank` reports in 417
+  (parked 1012 ms while ticks and flips flow: the report's parked clock is per channel stage, not per UPDATE; benign, no TDR). The kf_overlayprobe verdict of 417/418 is NOT
+  valid: the QGA staging of the exe timed out and left a truncated file (exit -1073741819, no output; stage.txt TimeoutError, sizes 803160/821160 of 839160); the same flake hit
+  413 (821160) and 414. Probe verdicts of 413/415/416 (full exe, 839160 in 415): no DIRECT flag (flags 0x2) before any TDR.
+* 4. [measured + inferred, runs 415/416 (18da7c3c, OVLDUMP: guest-memory dump at the first window-4 STALL report); engine replay tests] CAUSE of H1 (the
+  first half measured, the pairing rule inferred):
+  - [measured, dump 415] at the stall ALL vCPUs are in HLT (3 samples), the VidSch workers wait for scheduler events, DWM/Edge wait on events: nobody spins, nobody is
+    blocked in a trapped BAR0 write (H-VCPU false); [measured, VFIO reference + run 414 trace] the driver does not wait for GET per flip (H-GET false for the
+    flip path); the stuck window-4 UPDATE (decoded from the stalled guest's pushbuffer in the dump) is the plane's FIRST FLIP C: surface, notifier, semaphore, and
+    `SET_WINDOW_INTERLOCK_FLAGS`=window 0 with `UPDATE`.INTERLOCK_WITH_WIN_IMM. The UPDATEs it names are the NEXT frame's, which the guest sends only after this
+    present completes (DWM is idle). In run 414 and on hardware C pairs with window 0's and window 4's immediate channel's UPDATEs KICKED JUST BEFORE it
+    (PUT order in the trace: w4 enable batches, w0, imm0, w4, imm4, w4=C).
+  - [measured, run 416 WTRACE + engine ring] kayfabe paired them with EARLIER window-4 UPDATEs: (a) the display worker applied "every channel whose PUT moved" in CHANNEL
+    NUMBER order at whatever moment it woke (up to ms after the writes, which are 25-1000 us apart), so window 0 (chn 1) was processed before window 4's earlier
+    UPDATEs and joined their group; (b) the engine held window 4's surface-less UPDATE B for the vblank, so window 0's UPDATE joined B instead of waiting for C. Replay
+    test `the_overlay_enable_sequence_pairs_in_arrival_order` (arrival order + (b) fix: C pairs and latches at the vblank) and
+    `batched_in_channel_number_order_the_same_writes_leave_the_overlay_flip_unpaired` (the old worker order: C unpaired).
+  - Fix 72784ba7: (1) `PutLog` (kf-disp ports): vCPU PUT writes are logged lock-free in arrival order and the worker steps the engine in that order (the latest-PUT pass
+    remains only to resynchronise after a log overflow); (2) a window UPDATE that scans no surface before and names none after is not a flip: no vblank wait.
+    FALSIFIER (written before the run): with 72784ba7, zero flags, runs 417-419 (overlay active) must show no `display: STALL Window 4` and the Edge phase TDR count 0;
+    one stall in three falsifies it (then the pairing rule (2) is wrong or incomplete, and the dump of that run says what the guest waits for).
+* 3. [measured, run 414, binary 18da7c3c, `KF3_BAR0_READ_TRACE=1` display ranges + `WIN_TRACE=1`, runner `tdr-run24.sh` = tdr-run23 + `OVLDUMP`]
+  with BAR0 READS trapped and traced the overlay path WORKS: window 4 (1295x985 RGB, Edge plane 1) is in use from +207 s, 28261 window-4 PUT
+  writes, 19534 window-0, 6957 imm-4, 0 TDR in all phases (boot/sign-in/Edge/Shorts/hold 92 s), 0 STALL reports. In runs 408/409/411/413 (no read
+  trace) the stall H1 occurred every time (4/4). So H1 is a TIMING-dependent race, not a missing capability: the read exits slow the guest enough to hide it.
+* 2. [measured, VFIO reference `boot3` (real RTX 4070 + Windows to desktop, traced with the same tracer), 3949 window-0 PUT writes] H-GET is FALSIFIED
+  for the flip path: the driver reads window GET (`0x690004`) only 115 times, in bursts at the ring wrap (values 0xf30..0xfe0 then 0x0; flow-control room
+  checks), never once per UPDATE. Per flip the driver does (window 0, one flip per vblank): read ARMED `+0x22c`, PUT x3, read ARMED `+0x2ec`, PUT of the
+  window-imm channel, read core `0x680220`, PUT of the window (the UPDATE). Real values: ARMED 0x22c = 0xcf, 0x2ec = 0xa0, core 0x680220 = varying
+  0xb8..0x100. kayfabe serves 0 for all three (it mirrors only the CORE's ARMED half; the windows' ARMED halves and core 0x220 read 0). [inferred] harmless for
+  window 0 (works); not excluded for plane 1. The same per-window sequence is seen for window 4 in run 414 (read `0x694a2c`, PUT x3, read `0x694aec`, imm-4 PUT,
+  read core `0x680220`, PUT), with the imm UPDATE BEFORE the window UPDATE.
+* 1. [measured, runs 413/414, probe BEFORE any TDR (tdr_cycles=0)] kf_overlayprobe: `CheckOverlaySupport` NV12/YUY2/P010 = hr 0, flags 0x2 (SCALING only), no
+  DIRECT (0x1), exit 5; with `--ignore-support` the swap chain / DirectComposition setup fails (exit 5). So the missing DIRECT flag is NOT a post-TDR effect
+  (run 411's conclusion stands for the pre-TDR state too). Whether native Windows reports DIRECT: see `traces/windows_overlay_native_20261010/README.md` when it lands.
+  (Run 412 never ran: its queue entry was replaced by 413.) Stall shape in 413 identical to 411 (window-4 UPDATE 0x1000 naming {chn 1, chn 37}, then core UPDATE and
+  cursor updates keep flowing, window 0 flips cease): [measured] the display thread is alive; the FLIP-SUBMISSION thread is blocked between the kicks.
+
 # HANDOFF (2026-10-10 ~22:20 CEST; a fresh agent resumes from here; sections "Progress 1-4" below are the evidence)
 
 STATUS: LIVE. Product code on the branch, head = see `git log` (18da7c3c + docs). Labels: [measured] / [inferred].

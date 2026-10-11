@@ -36,6 +36,97 @@ pub struct ChanPort {
     life: AtomicU32,
 }
 
+/// How many PUT writes the arrival log keeps (a power of two is not required).
+pub const PUT_LOG: usize = 1024;
+
+/// What the worker finds when it asks the arrival log for the next PUT.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PutPoll {
+    /// Channel number and the PUT value the guest wrote, in the order the writes were made.
+    Put(u32, u32),
+    /// Nothing more was written.
+    Empty,
+    /// A vCPU reserved the next slot and has not stored its write yet; the worker is woken again by
+    /// that vCPU's signal.
+    Pending,
+}
+
+/// ★ **The arrival order of the guest's PUT writes.** The display fetches each DMA channel as its PUT
+/// arrives, so the order in which channels' UPDATEs become pending is the order of the PUT writes; a
+/// worker that wakes late and applies "every channel whose PUT moved" in channel-number order pairs
+/// UPDATEs differently (`[measured]` the overlay stall H1: window 0's UPDATE joined an earlier group of
+/// window 4's and left window 4's first flip without its partners). The vCPU's write is one `fetch_add`
+/// and one store; the single worker reads in order. Bounded (hostile guest): the oldest entries are
+/// overwritten and counted, and the worker then resynchronises from the latest PUT of every channel,
+/// as before the log existed.
+#[derive(Debug)]
+pub struct PutLog {
+    slots: Box<[AtomicU64]>,
+    tail: AtomicU64,
+    dropped: AtomicU64,
+}
+
+impl Default for PutLog {
+    fn default() -> PutLog {
+        PutLog {
+            slots: (0..PUT_LOG).map(|_| AtomicU64::new(0)).collect(),
+            tail: AtomicU64::new(0),
+            dropped: AtomicU64::new(0),
+        }
+    }
+}
+
+impl PutLog {
+    const TAG: u64 = 0xFF_FFFF;
+
+    fn tag_of(index: u64) -> u64 {
+        (index / PUT_LOG as u64 + 1) & Self::TAG
+    }
+
+    /// **vCPU**: append a PUT write (lock-free).
+    pub fn push(&self, chn: u32, put: u32) {
+        let i = self.tail.fetch_add(1, Ordering::AcqRel);
+        let v = Self::tag_of(i) << 40 | u64::from(chn & 0xFF) << 32 | u64::from(put);
+        self.slots[(i % PUT_LOG as u64) as usize].store(v, Ordering::Release);
+    }
+
+    /// **Worker**: the next write after `*head`, advancing it. Entries the vCPUs overwrote before the
+    /// worker read them are skipped and counted in [`PutLog::dropped`].
+    pub fn next(&self, head: &mut u64) -> PutPoll {
+        loop {
+            let tail = self.tail.load(Ordering::Acquire);
+            if *head >= tail {
+                return PutPoll::Empty;
+            }
+            if tail - *head > PUT_LOG as u64 {
+                self.dropped
+                    .fetch_add(tail - *head - PUT_LOG as u64, Ordering::Relaxed);
+                *head = tail - PUT_LOG as u64;
+            }
+            let i = *head;
+            let v = self.slots[(i % PUT_LOG as u64) as usize].load(Ordering::Acquire);
+            let (tag, want) = (v >> 40, Self::tag_of(i));
+            if tag == want {
+                *head = i + 1;
+                return PutPoll::Put(((v >> 32) & 0xFF) as u32, v as u32);
+            }
+            // a later lap already overwrote the slot: that write is lost to the log
+            if tag.wrapping_sub(want) & Self::TAG != 0 && tag.wrapping_sub(want) & Self::TAG < 0x80_0000 {
+                self.dropped.fetch_add(1, Ordering::Relaxed);
+                *head = i + 1;
+                continue;
+            }
+            return PutPoll::Pending;
+        }
+    }
+
+    /// How many writes the log lost (overwritten before the worker read them).
+    #[must_use]
+    pub fn dropped(&self) -> u64 {
+        self.dropped.load(Ordering::Relaxed)
+    }
+}
+
 /// ★ The shared ports.
 #[derive(Debug)]
 pub struct Ports {
@@ -57,6 +148,8 @@ pub struct Ports {
     lit_sor: [AtomicU32; MAX_HEADS],
     /// PUT writes posted by vCPUs (boot-log counter).
     pub puts_posted: AtomicU64,
+    /// The PUT writes in arrival order (see [`PutLog`]).
+    pub put_log: PutLog,
     /// W1C writes applied by vCPUs (boot-log counter).
     pub w1c_writes: AtomicU64,
 }
@@ -73,6 +166,7 @@ impl Default for Ports {
             frames: core::array::from_fn(|_| AtomicU32::new(0)),
             lit_sor: core::array::from_fn(|_| AtomicU32::new(0)),
             puts_posted: AtomicU64::new(0),
+            put_log: PutLog::default(),
             w1c_writes: AtomicU64::new(0),
         }
     }
@@ -107,6 +201,7 @@ impl Ports {
             return false;
         };
         c.put.store(put, Ordering::Release);
+        self.put_log.push(chn, put);
         self.puts_posted.fetch_add(1, Ordering::Relaxed);
         true
     }
@@ -274,6 +369,37 @@ impl Ports {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// ★ The worker reads the guests' PUT writes in the order they were made, not in channel-number order
+    /// (the overlay stall H1), and a flood loses the oldest entries and says so.
+    #[test]
+    fn put_writes_are_read_in_arrival_order_and_a_flood_is_counted() {
+        let p = Ports::default();
+        let mut head = 0u64;
+        assert_eq!(p.put_log.next(&mut head), PutPoll::Empty);
+        for (chn, put) in [(5, 0x950), (1, 0xf20), (37, 0x20), (5, 0xa10), (1, 0xf20)] {
+            assert!(p.post_put(chn, put));
+        }
+        let mut got = Vec::new();
+        while let PutPoll::Put(c, v) = p.put_log.next(&mut head) {
+            got.push((c, v));
+        }
+        assert_eq!(got, vec![(5, 0x950), (1, 0xf20), (37, 0x20), (5, 0xa10), (1, 0xf20)]);
+        assert_eq!(p.put_log.dropped(), 0);
+        // a flood past the log: only the newest PUT_LOG entries survive, the loss is counted
+        for i in 0..(PUT_LOG as u32 + 10) {
+            p.post_put(2, i * 4);
+        }
+        let mut n = 0u32;
+        let mut first = None;
+        while let PutPoll::Put(_, v) = p.put_log.next(&mut head) {
+            first.get_or_insert(v);
+            n += 1;
+        }
+        assert_eq!(n as usize, PUT_LOG);
+        assert_eq!(first, Some(10 * 4));
+        assert_eq!(p.put_log.dropped(), 10);
+    }
 
     /// ★ A channel is idle exactly when its published GET equals its posted PUT; a free (or a
     /// rebirth) makes the worker's pending publication for the old life a no-op.
