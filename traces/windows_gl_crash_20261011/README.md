@@ -11,7 +11,7 @@
 2. The gate admitted the answer (the guest says `guestDriverVersion="580.88"`, the device answers as driver `580.65.06`, the observed branch); no `layout unverified` line, counter 0.
 3. **Next divergence, measured (run 631 trace vs the VFIO gears capture, command order only; raw bytes stay on the host):** kayfabe's gears client (0xc1d0007a) issues
    `20801315, 2080012f, 20801315, 2080012f, 730101 x2, 730102 x2, 73010c(h0), 73011a, 73010c x3, 730101`, then **Frees** (and the access violation). The real GPU's gears client
-   issues the same commands in a longer interleaving: `20801315, 2080012f, 20801315, 2080012f, 730101, (20801315, 2080012f, 730101) x2, 730101 x3, 730102 x2, 73010c, 73011a, 73010c x3,
+   issues, before the first `730102`, `20801315, 2080012f` x2, then `(730101, 20801315, 2080012f)` x3, then `730101` x5 (8 `730101` calls in all, kayfabe 2), then `730102 x2, 73010c, 73011a, 73010c x3,
    730101, 730102 x2` and repeats the `730102 x2, 73010c, 73011a, 73010c x3, 730101` cycle 5 times, then ZBC `0x9096010x` and the VA/channel allocs. So the ICD takes the exit right
    after the first cycle's final `0x730101` instead of going on to `0x730102 x2`. The three replies that differ between the machines and could steer it (inferred, none proven):
    `0x730101` capsTbl (real `81 2f`, model all-zero), `0x730102` with the CLIENT flag (real 1, model 4), and the number of `730101` calls before `730102` (real 8, kayfabe 2: the ICD
