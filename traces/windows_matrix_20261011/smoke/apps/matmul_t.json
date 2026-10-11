@@ -1,0 +1,54 @@
+{
+ "quiet": 0,
+ "end_utc": "2026-10-11T12:00:51.2297829Z",
+ "start_utc": "2026-10-11T11:59:49.4367273Z",
+ "rc": 0,
+ "secs": 62,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4070 status=OK code=0"
+ ],
+ "digests": [],
+ "session": 0,
+ "out_files": [],
+ "boot_utc_start": "2026-10-11T11:56:04.5000000Z",
+ "log_tail": [
+  "=== matmul_t start=2026-10-11T11:59:49.4367273+00:00 host=VASTWIN session=0 boot=2026-10-11T11:56:04.5000000Z timeout=120",
+  "KFDEV NVIDIA GeForce RTX 4070",
+  "[eq] device NVIDIA GeForce RTX 4070 torch 2.8.0+cu126",
+  "CHECK matmul_fp32 ok maxerr=6.10e-05",
+  "WINEQ_DONE matmul",
+  "=== end rc=0 secs=62 2026-10-11T12:00:51.2297829+00:00"
+ ],
+ "pdh": {
+  "pids": [
+   "5892",
+   "9604",
+   "9572"
+  ],
+  "nv": {},
+  "samples": 28,
+  "other": {},
+  "nvidia_luids": "0_610e"
+ },
+ "timed_out": false,
+ "token": "g1-matmul_t-1791719912",
+ "boot_utc_end": "2026-10-11T11:56:04.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "matmul_t",
+ "smi": {
+  "samples": 0,
+  "mem_used_base_mb": null,
+  "util_max": 0,
+  "mem_used_max_mb": 0
+ }
+}
