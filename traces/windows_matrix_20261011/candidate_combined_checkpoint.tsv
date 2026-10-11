@@ -1,0 +1,105 @@
+app	status	product	harness	verdict	guest_tdr	gsp_cycles	source	observation_utc	timestamp_basis
+atomics_t	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T14:12:47.1508159Z	app_end
+bandwidthTest_demo	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:59:03.8205676Z	app_end
+blackscholes_t	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T14:13:09.7574955Z	app_end
+blender_cycles	PENDING								
+cdp_quicksort	PASS	a61af1c3	a61af1c3	PASS	0	0	encoder-session/corrected-checkpoint/win.res	2026-10-11T15:48:22.4214792Z	app_end
+cg_t	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:29:41.2950586Z	app_end
+clpeak_cuda	PENDING								
+clpeak_ocl	PENDING								
+cuda_callback	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:44:53.9769517Z	app_end
+cuda_occupancy	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:45:08.5984460Z	app_end
+cup2_ladder	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:23:14.5602631Z	app_end
+cup3_ladder	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:21:58.7127963Z	app_end
+cup8_ladder	PASS	72741e2b	72741e2b	PASS	0	0	managed-routing/windows-focus/win.res	2026-10-11T16:54:46.1461860Z	app_end
+cupy_asynccopy	PASS	a61af1c3	a61af1c3	PASS	0	0	encoder-session/corrected-checkpoint/win.res	2026-10-11T16:01:01.1900100Z	app_end
+cupy_cg	PASS	a61af1c3	a61af1c3	PASS	0	0	encoder-session/corrected-checkpoint/win.res	2026-10-11T16:00:45.1107647Z	app_end
+cupy_check	PASS	a61af1c3	a61af1c3	PASS	0	0	encoder-session/corrected-checkpoint/win.res	2026-10-11T16:01:21.7481638Z	app_end
+cupy_sha256	PASS	a61af1c3	a61af1c3	PASS	0	0	encoder-session/corrected-checkpoint/win.res	2026-10-11T16:00:21.0234153Z	app_end
+d3d11va_h264	PASS_WITH_RECOVERY	0f9c01f9	8037e19b	PASS	3	1	copy-slicing/full-checkpoint/win.res	2026-10-11T14:40:13.2526244Z	app_end
+d3d12_signal_probe	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:58:34.2497774Z	app_end
+deviceQuery_demo	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:22:14.0826133Z	app_end
+driver_status	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:23:30.3312502Z	app_end
+dxdiag_report	PENDING								
+dxgi_adapters	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:22:28.6932251Z	app_end
+dxprobe_d3d11	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:45:23.9262572Z	app_end
+dxprobe_d3d12	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:47:42.7548381Z	app_end
+dxva2_h264	PENDING								
+edge_video_h264	PASS_WITH_RECOVERY	0f9c01f9	8037e19b	PASS	0	1	copy-slicing/full-checkpoint/win.res	2026-10-11T14:55:46.1473631Z	app_end
+edge_video_vp9	PASS_WITH_RECOVERY	0f9c01f9	8037e19b	PASS	3	1	copy-slicing/full-checkpoint/win.res	2026-10-11T14:59:07.1029916Z	app_end
+edge_webgl	PASS	a61af1c3	a61af1c3	PASS	0	0	encoder-session/edge-fresh/win.res	2026-10-11T15:39:16.2004071Z	app_end
+edge_webgl_headless	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T14:43:26.8310105Z	app_end
+edge_webgpu	PASS	a61af1c3	a61af1c3	PASS	0	0	encoder-session/edge-fresh/win.res	2026-10-11T15:39:46.5252793Z	app_end
+fft_t	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:29:56.8427689Z	app_end
+furmark_gl_bench	PASS	72741e2b	72741e2b	PASS	0	0	managed-routing/furmark-off/win.res	2026-10-11T17:11:35.8390352Z	app_end
+furmark_gl_stress	PENDING								
+furmark_glinfo	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:48:03.8254023Z	app_end
+furmark_knot_gl	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T14:33:12.5003875Z	app_end
+furmark_vk_bench	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T14:33:57.5548809Z	app_end
+furmark_vkinfo	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:48:21.1714231Z	app_end
+fwt_t	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:30:13.5194851Z	app_end
+glgears_wgl	PASS	72741e2b	72741e2b	PASS	0	0	managed-routing/windows-focus/win.res	2026-10-11T16:54:08.9399401Z	app_end
+gputest_fur	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T14:21:14.7098177Z	app_end
+gputest_gi	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T14:21:43.8421016Z	app_end
+gputest_pixmark_piano	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T14:22:11.0822843Z	app_end
+gputest_plot3d	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T14:22:40.7570074Z	app_end
+gputest_tess	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T14:23:11.7584582Z	app_end
+gputest_triangle	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T14:15:12.8033364Z	app_end
+graphs_t	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:30:29.7180175Z	app_end
+gravitymark_d3d11	PENDING								
+gravitymark_d3d12	PENDING								
+gravitymark_d3d12_raster	PENDING								
+gravitymark_d3d12_rt	PENDING								
+gravitymark_gl	PENDING								
+gravitymark_vk	PENDING								
+hashcat	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T14:51:31.7098494Z	app_end
+heaven_d3d11	FAIL	0f9c01f9	8037e19b	FAIL	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T15:02:05.1114147Z	app_end
+heaven_opengl	FAIL	0f9c01f9	8037e19b	FAIL	3	1	copy-slicing/full-checkpoint/win.res	2026-10-11T15:03:01.9296158Z	app_end
+hf_generate	PASS	a61af1c3	a61af1c3	PASS	0	0	encoder-session/corrected-checkpoint/win.res	2026-10-11T15:47:48.1637518Z	app_end
+hist_t	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:29:20.8991650Z	app_end
+llama_cuda_bench	PENDING								
+llama_cuda_gen	PENDING								
+llama_vulkan_bench	PENDING								
+managed_t	TIMEOUT	72741e2b	72741e2b	TIMEOUT	0	0	managed-routing/windows-focus/win.res	2026-10-11T16:46:22.3359553Z	app_end
+mandelbrot_t	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:50:55.8092620Z	app_end
+matmul_t	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:30:50.9852619Z	app_end
+memcpy2d_t	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:51:24.2528977Z	app_end
+nbody_demo_bench	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T14:10:29.6947271Z	app_end
+nbody_demo_gl	TIMEOUT	72741e2b	738b5385	TIMEOUT	0	1	managed-routing/nbody-fresh/win.res	2026-10-11T16:56:02Z	run_start_only
+nbody_t	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:31:10.8613560Z	app_end
+nvdec_h264	PASS_WITH_RECOVERY	0f9c01f9	8037e19b	PASS	3	1	copy-slicing/full-checkpoint/win.res	2026-10-11T14:24:13.0264863Z	app_end
+nvenc_av1	PASS_WITH_RECOVERY	a61af1c3	a61af1c3	PASS	3	1	encoder-session/windows-focus/win.res	2026-10-11T15:33:09.5486543Z	app_end
+nvenc_h264	PASS_WITH_RECOVERY	a61af1c3	a61af1c3	PASS	3	1	encoder-session/windows-focus/win.res	2026-10-11T15:27:38.5459770Z	app_end
+nvenc_hevc	PASS_WITH_RECOVERY	a61af1c3	a61af1c3	PASS	3	1	encoder-session/windows-focus/win.res	2026-10-11T15:30:16.3898384Z	app_end
+nvidia_smi	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:22:43.7502864Z	app_end
+oceanFFT_demo	PASS	a61af1c3	a61af1c3	PASS	0	0	encoder-session/corrected-checkpoint/win.res	2026-10-11T15:44:36.5595618Z	app_end
+opencl_icd	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:22:58.4666967Z	app_end
+ort_directml	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T14:14:42.7747263Z	app_end
+randomFog_demo	PASS	a61af1c3	a61af1c3	PASS	0	0	encoder-session/corrected-checkpoint/win.res	2026-10-11T15:45:26.5041498Z	app_end
+reduce_t	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:51:43.9337150Z	app_end
+rng_t	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:35:39.2778206Z	app_end
+scale_cuda_nvenc	FAIL	0f9c01f9	8037e19b	FAIL	3	1	copy-slicing/full-checkpoint/win.res	2026-10-11T14:45:31.0661517Z	app_end
+scan_t	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:35:56.8513893Z	app_end
+sort_t	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:36:13.6343313Z	app_end
+stream_created2nd_t	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:36:32.8842695Z	app_end
+stream_created_t	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:36:51.6380466Z	app_end
+stream_default_t	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:37:07.4157892Z	app_end
+stream_nonblocking_t	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:37:26.0547711Z	app_end
+stream_perthread_t	TIMEOUT	a61af1c3	a61af1c3	TIMEOUT	0	0	encoder-session/corrected-checkpoint/win.res	2026-10-11T15:54:26.4520777Z	app_end
+stream_two_t	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:43:12.4918748Z	app_end
+streams_t	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:43:40.1117046Z	app_end
+tc16_t	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:44:03.2610258Z	app_end
+tcbf16_t	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:44:21.1782421Z	app_end
+torch_ai_bench	PENDING								
+torch_burn	PENDING								
+torch_correct	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T14:50:34.0860011Z	app_end
+transpose_t	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:44:38.7662047Z	app_end
+triad_t	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:52:01.6827300Z	app_end
+valley_d3d11	TIMEOUT	0f9c01f9	8037e19b	TIMEOUT	0	1	copy-slicing/full-checkpoint/win.res	2026-10-11T13:20:11Z	run_start_only
+valley_opengl	PENDING								
+vectorAdd_demo	PASS	72741e2b	72741e2b	PASS	0	0	managed-routing/windows-focus/win.res	2026-10-11T16:54:27.2302490Z	app_end
+vkcube	PENDING								
+vkpeak	PENDING								
+vulkan_video_decode	PASS_WITH_RECOVERY	0f9c01f9	8037e19b	PASS	3	1	copy-slicing/full-checkpoint/win.res	2026-10-11T14:52:49.3437017Z	app_end
+vulkaninfo	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:26:26.9992074Z	app_end
+zerocopy_t	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:52:19.2103944Z	app_end

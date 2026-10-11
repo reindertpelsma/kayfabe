@@ -1,0 +1,18 @@
+{
+  "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-1341/qemu.log",
+  "sha256": "7ddb8eb08dc46220c5c58278dabac398328e508713849bd794061b2389c120d9",
+  "bytes": 2384813,
+  "matched_lines": 46,
+  "filter": [
+    "0xc1d00070:0xff040021",
+    "0xc1d00070:0xff1fe010",
+    "0xc1d00070:0xff1fe011",
+    "host 0x4a ",
+    "host 0x4a:",
+    "token 0x23 ",
+    "token 0x23:"
+  ],
+  "product": "72741e2bf6f8ede05e830d9b1267202f070f4542",
+  "harness": "738b5385",
+  "scope": "channel IDs may be reused; excerpts retain both births, offending method not measured"
+}

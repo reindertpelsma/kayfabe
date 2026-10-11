@@ -5,6 +5,31 @@ again after the Wednesday 07:00 reset). Read `AGENTS.md` (= `CLAUDE.md`) first: 
 (state, branches, traps), `docs/DELEGATED_DECISIONS_20261010.md`, `docs/OWNER_RULINGS.md` §AB-§AE, `docs/design/V3_FEATURE_GAPS.md`
 (priorities: P0 = prevents apps running; fidelity and perf beyond "decent" are post-release), `docs/design/V3_NOT_IN_GIT.md`.
 
+## Latest checkpoint, 2026-10-11 17:16 UTC
+
+Last confirmed pusha531cf99. Ordinary FurMark1270 product/harness72741e2b PASS25s,
+WIN_FLAGS empty, zero guest recovery/GSPcycles and bounded host Xids. This is a
+latest normal-launch pass, not a proven graphics root-cause fix; old untraced
+failure and a61 traced success retained. Fresh nbody1341 TIMEOUT192s with GSPcycle1
+and host Xid32; faulting guestc1d00070:ff040021 has a real host deferred-API object
+with no registered actions, guest registers FIFO_UPDATE_CHANNEL_INFO0x20801116.
+Correlation only: faulting method/trigger still unmeasured. Both evidence sets
+saved managed-routing/{furmark-off,nbody-fresh}/, gap rows updated.
+
+Reproducible combined candidate checkpoint now84/104 executed:69cleanPASS,
+8PASS_WITH_RECOVERY,3FAIL,4TIMEOUT;20pending. Linux parity still53/65. Script
+rebuild_candidate_checkpoint.py regenerates current TSVs, explicitly skips setup
+BOOT_FAIL as an executed app oracle, and names fallback run-start timestamps.
+Rows mix0f9c01f9,a61af1c3,72741e2b; no exact-revision full-matrix claim.
+
+Coverage63669 active1280 ValleyOpenGL, then18other rows and long CUDAclpeak1310.
+Native video event probe71386 and fresh corrected candidate stream43616/1350+
+queued under the same GPU lock. Reference direct stream738b5385 already PASS7s.
+Own stock-reference Vast55385171 destroyed after all evidence pusheda531cf99,
+absence verified via API/CLI filtered to that ID; other instances untouched.
+Matching stock580.88 combined104/104 latest103PASS, GravityVKTIMEOUT, native GSP
+cycles unmeasured. Native reference tasks all finished. No full-green claim.
+
 ## Latest checkpoint, 2026-10-11 17:10 UTC
 
 Last confirmed push85c31c9c. Stock580.88 reference FINISHED: fresh50/50PASS,

@@ -11,22 +11,25 @@ fix this file. Entries below the first are dated history.
 
 ## 0. Current resumption — start here
 
-**2026-10-11 16:14 UTC, Codex Windows campaign (`codex/windows-matrix-20261011`):**
+**2026-10-11 17:16 UTC, Codex Windows campaign (`codex/windows-matrix-20261011`):**
 [Current evidence and run instructions](../traces/windows_matrix_20261011/README.md).
-Last confirmed push `c00f6cb7`. Exact product `a61af1c3` passes Linux gates9/9+10
-and fast30/30, all births USER. Windows gears passes cleanly. The authored NVENC
-session ABI blocker is fixed: H264/HEVC/AV1 each encode600 frames but recover;
-the common kernel video semaphore refusal remains open. Fresh Edge WebGL/WebGPU
-pass cleanly. Ordinary first-launch Edge stays alive60s without recovery, but
-its screenshot is the welcome screen; no navigation/video claim follows.
-Combined canonical84/104 tested:68 clean PASS,8 passes with recovery,4 FAIL,
-4 TIMEOUT, with per-row product revisions recorded. Conservatively53/65 mapped
-passed-Linux rows have all counterparts clean.20 candidate rows remain pending.
-Stock580.88 encoder/decode/browser-video/FurMark/Unigine comparisons pass without
-guest recovery records; GravityMark Vulkan also times out on stock. Native GSP
-cycles are unmeasured. IPC is WDDM-unsupported; Geekbench is a packaging gap.
-MPO remains disabled in the main lane; eight overlay cases are separate.
-Integration/master unchanged; no full-matrix or Linux parity success claimed.
+Last confirmed pusha531cf99. Exact product72741e2b passes Linux gates9/9+10 and
+fast30/30, all births USER. Windows gears/vectorAdd/CUP8 pass cleanly; managed
+still times out at translated SYNC_WAIT. Native authored video semaphore/tail
+passes; notification experiment is queued, production kernel video still refuses.
+Combined canonical84/104 executed:69cleanPASS,8PASS_WITH_RECOVERY,3FAIL,4TIMEOUT,
+20pending. Per-row mixed product/harness revisions are explicit in current TSVs.
+Linux counterparts53/65 all clean. Normal-launch FurMark1270 now passes without
+recovery/Xid; old failure unroot-caused. Fresh nbodyGUI times out with host Xid32
+and one GSPcycle. Ordinary Edge launch only proves welcome-window survival;
+owner-observed black recycle remains open. Main lane MPOoff, eight overlay rows separate.
+Matching stock580.88 reference complete104/104 across batches: latest103PASS,
+GravityMarkVKTIMEOUT, zero recorded guest driver/reset events in passing rows;
+native GSPcycles UNMEASURED. Different GPU(RTX4090) from candidate(RTX4070).
+Corrected direct CuPy stream reference passes; candidate fresh retry queued.
+Owned reference Vast55385171 retired after evidence backup, exactID absence verified.
+IPC WDDM-unsupported; Geekbench packaging gap. Integration/master unchanged;
+no full-matrix or complete Linux parity success claimed. Resume latest detailed handoff.
 
 
 **Windows app matrix lane built (GPU-free), 2026-10-10 (branch `claude/windows-appmatrix-20261010`, design [`V3_WINDOWS_APP_MATRIX.md`](design/V3_WINDOWS_APP_MATRIX.md), STATUS DESIGN-ONLY).**

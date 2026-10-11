@@ -1,0 +1,11 @@
+{
+  "instance_id": 55385171,
+  "label": "codex-winmatrix-20261011",
+  "owner": "this Codex session",
+  "last_reference_exit_utc": "2026-10-11T17:08:49Z",
+  "evidence_pushed_commit": "a531cf99",
+  "destroy_requested": true,
+  "verification": "vastai show instances filtered by exact own ID: absent",
+  "verified_utc": "2026-10-11T17:10:53Z",
+  "note": "Destroy CLI output was not JSON; post-action instance absence is the authoritative verification. No other instance acted on."
+}
