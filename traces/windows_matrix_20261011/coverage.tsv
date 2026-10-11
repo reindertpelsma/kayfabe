@@ -6,6 +6,8 @@ blender_cycles	render	blender_cycles	PASS
 cg_t	cuda-equiv	conjugateGradient	PASS
 clpeak_cuda	opencl		PASS
 clpeak_ocl	opencl	clpeak	PASS
+cuda_callback	cuda-equiv	simpleCallback	NOTRUN
+cuda_occupancy	cuda-equiv	simpleOccupancy	NOTRUN
 cup2_ladder	cuda-ladder	vectorAddDrv	PASS
 cup3_ladder	cuda-ladder		PASS
 cup8_ladder	cuda-ladder	matrixMulDrv	PASS

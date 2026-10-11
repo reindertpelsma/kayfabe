@@ -223,6 +223,66 @@
    "cmd": "clpeak_ocl\\bin\\clpeak.exe"
   },
   {
+   "id": "cuda_callback",
+   "category": "cuda-equiv",
+   "linux": [
+    "simpleCallback"
+   ],
+   "pkgs": [
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 90,
+   "expect_s": 8,
+   "rx": "^KFCUDA RESULT OK callback",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:KFCUDA device .*NVIDIA",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "medium",
+   "why": "Driver API + PTX, no nvcc/MSVC needed. Two GPU kernels and pinned asynchronous copies are checked exactly; callbacks check copied output and stream ordering without CUDA calls inside the callback",
+   "ps": "Invoke-KfExe -Exe \"$K\\tools\\kf_cuda_control.exe\" -ArgList @('callback')\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": "New coverage added 2026-10-11; native and kayfabe validation pending.",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true,
+   "cmd": "tools\\kf_cuda_control.exe callback"
+  },
+  {
+   "id": "cuda_occupancy",
+   "category": "cuda-equiv",
+   "linux": [
+    "simpleOccupancy"
+   ],
+   "pkgs": [
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 90,
+   "expect_s": 8,
+   "rx": "^KFCUDA RESULT OK occupancy",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:KFCUDA device .*NVIDIA",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "medium",
+   "why": "Driver API + PTX, no nvcc/MSVC needed. Two GPU kernels and pinned asynchronous copies are checked exactly; occupancy calculator chooses a bounded block size and positive active-block count, then the kernel runs at that size",
+   "ps": "Invoke-KfExe -Exe \"$K\\tools\\kf_cuda_control.exe\" -ArgList @('occupancy')\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": "New coverage added 2026-10-11; native and kayfabe validation pending.",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true,
+   "cmd": "tools\\kf_cuda_control.exe occupancy"
+  },
+  {
    "id": "cup2_ladder",
    "category": "cuda-ladder",
    "linux": [
@@ -3382,11 +3442,17 @@
    "fft_t",
    "oceanFFT_demo"
   ],
+  "simpleCallback": [
+   "cuda_callback"
+  ],
   "simpleCooperativeGroups": [
    "cupy_cg"
   ],
   "simpleCudaGraphs": [
    "graphs_t"
+  ],
+  "simpleOccupancy": [
+   "cuda_occupancy"
   ],
   "simpleStreams": [
    "streams_t"
@@ -3441,8 +3507,6 @@
   ]
  },
  "no_equivalent": {
-  "simpleCallback": "cudaLaunchHostFunc/stream callbacks are not exposed by PyTorch and no prebuilt binary exists; a C++ build needs nvcc + MSVC, which the guest lacks",
-  "simpleOccupancy": "occupancy API sample needs a cudart C++ build (nvcc + MSVC); NVRTC/CuPy exposes no occupancy sample",
   "simpleIPC": "CUDA IPC (cudaIpcGetMemHandle) is not supported on WDDM Windows (TCC/Linux only)",
   "cdpSimpleQuicksort": "dynamic parallelism needs relocatable device code linked with cudadevrt; no prebuilt Windows binary and no NVRTC route without nvcc/MSVC",
   "hf_generate": "dropped for size: transformers + tokenizers wheels and a 1 GB fp16 model; torch_correct/torch_ai_bench and the llama.cpp rows cover the same stacks",

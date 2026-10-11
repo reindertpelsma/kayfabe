@@ -61,3 +61,21 @@ runs; all 71 harness tests pass. The rebuilt corrected probe used here has hash
 `3c6ededa77430a18a13321eb72fdca7f60282f8d12ddc147a7e7df1284832c5f`.
 `run_full2.sh` resumes the same results, skips the two completed tests, and starts
 fresh guests at run 652. Product binary remains `2c917f3e`.
+
+## Coverage additions being validated
+
+The inventory now has 110 tests mapping to 67 Linux rows, after adding
+`cuda_callback` / `cuda_occupancy` for `simpleCallback` / `simpleOccupancy`.
+They use public CUDA Driver API calls and handwritten PTX; cross-compilation
+needs only mingw-w64, not nvcc/MSVC. The callback checks two preceding GPU
+kernel/copy results and ordering; it issues no CUDA calls or waits. The
+occupancy test validates the returned launch bounds and executes at the chosen
+block size. Cross-build with warnings treated as errors and all 71 harness
+tests passed. Native and kayfabe results are **pending**. The in-flight full
+batch retains its frozen 100-test inventory.
+
+Hypothesis before reference execution: these driver-API equivalents work on
+stock Windows/WDDM and can close the two packaging omissions. Falsifier:
+either API refuses the operation or GPU readback/callback ordering is wrong on
+the native reference. Even if native passes, a kayfabe failure remains a product
+or harness defect to investigate; compilation alone is not evidence of support.

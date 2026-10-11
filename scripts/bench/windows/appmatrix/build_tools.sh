@@ -27,5 +27,9 @@ echo "START build kf_glgears"
 x86_64-w64-mingw32-gcc -O2 -static "$HERE/tools/src/kf_glgears.c" -o "$OUT/kf_glgears.exe" -lopengl32 -lgdi32 -lm
 echo "EXIT build kf_glgears rc=$? $(stat -c %s "$OUT/kf_glgears.exe") bytes"
 bash "$HERE/../cuda/build_cup_win.sh" "$OUT"
+echo "START build kf_cuda_control"
+x86_64-w64-mingw32-gcc -Wall -Wextra -Werror -O2 -static -I "$HERE/../../cuda_min" \
+  "$HERE/tools/src/kf_cuda_control.c" -L "$OUT" -lnvcuda -o "$OUT/kf_cuda_control.exe"
+echo "EXIT build kf_cuda_control rc=$? $(stat -c %s "$OUT/kf_cuda_control.exe") bytes"
 rm -f "$OUT/libnvcuda.a"
-( cd "$OUT" && sha256sum kf_dxprobe.exe kf_overlayprobe.exe kf_glgears.exe cup2.exe cup3.exe cup8.exe > tools.sha256 && cat tools.sha256 )
+( cd "$OUT" && sha256sum kf_dxprobe.exe kf_overlayprobe.exe kf_glgears.exe kf_cuda_control.exe cup2.exe cup3.exe cup8.exe > tools.sha256 && cat tools.sha256 )

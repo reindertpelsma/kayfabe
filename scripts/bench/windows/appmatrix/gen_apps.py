@@ -404,12 +404,20 @@ if (Test-Path $f) {
     "dxdiag instantiates D3D9/10/11/12 devices to fill its report; any of them failing shows as missing feature levels", pkgs=(), smi=False,
     fail_rx=r"Card name: .*Microsoft Basic Render")
 
+for mode, linux_row in (("callback", "simpleCallback"), ("occupancy", "simpleOccupancy")):
+    app("cuda_" + mode, "cuda-equiv",
+        'Invoke-KfExe -Exe "$K\\tools\\kf_cuda_control.exe" -ArgList @(\'' + mode + "')\nexit $global:KfRc",
+        r"^KFCUDA RESULT OK " + mode, 90, 8, [r"out:KFCUDA device .*NVIDIA", GPU_ENG], "medium",
+        "Driver API + PTX, no nvcc/MSVC needed. Two GPU kernels and pinned asynchronous copies are checked exactly; "
+        + ("callbacks check copied output and stream ordering without CUDA calls inside the callback" if mode == "callback"
+           else "occupancy calculator chooses a bounded block size and positive active-block count, then the kernel runs at that size"),
+        linux=[linux_row], pkgs=("vc_redist",),
+        note="New coverage added 2026-10-11; native and kayfabe validation pending.")
+
 # ---------------------------------------------------------------------------------------------- Linux matrix -> Windows map
 # every row of scripts/apps/run_apps.sh must appear here (tests/test_apps.py checks that) either with the Windows apps
 # that stand for it (derived from `linux=` above) or with the reason there is none.
 NO_EQUIVALENT = {
-    "simpleCallback": "cudaLaunchHostFunc/stream callbacks are not exposed by PyTorch and no prebuilt binary exists; a C++ build needs nvcc + MSVC, which the guest lacks",
-    "simpleOccupancy": "occupancy API sample needs a cudart C++ build (nvcc + MSVC); NVRTC/CuPy exposes no occupancy sample",
     "simpleIPC": "CUDA IPC (cudaIpcGetMemHandle) is not supported on WDDM Windows (TCC/Linux only)",
     "cdpSimpleQuicksort": "dynamic parallelism needs relocatable device code linked with cudadevrt; no prebuilt Windows binary and no NVRTC route without nvcc/MSVC",
     "hf_generate": "dropped for size: transformers + tokenizers wheels and a 1 GB fp16 model; torch_correct/torch_ai_bench and the llama.cpp rows cover the same stacks",
