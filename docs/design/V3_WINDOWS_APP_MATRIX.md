@@ -445,7 +445,7 @@ with its class (§4.4). Commands are abbreviated; `apps.json` has the exact Powe
 
 | app | tier / session | command | success | GPU-use proof | runtime / timeout | difficulty: why |
 |---|---|---|---|---|---|---|
-| `furmark_gl_stress` | 2 / desktop | `furmark.exe --demo furmark-gl --width 1280 --height 720 --max-time 60 --no-score-box` | `KFWAIT furmark_gl_stress EXITED rc=0` | out:NVIDIA, pdh:Cuda\|Compute\|3D\|Copy | ~70 s / 180 s | **high** [LONG] FurMark 2.10.2 command line from its help (--demo/--benchmark/--max-time/--no-score-box); the stress variant is the closest free counterpart of gpu_burn's heat, not of its correctness check |
+| `furmark_gl_stress` | 2 / desktop | `furmark.exe --demo furmark-gl --width 1280 --height 720 --max-time 60 --no-score-box --logfile-suffix $logSuffix` | `KFWAIT furmark_gl_stress EXITED rc=0` | out:NVIDIA, pdh:Cuda\|Compute\|3D\|Copy | ~70 s / 180 s | **high** [LONG] FurMark 2.10.2 command line from its help (--demo/--benchmark/--max-time/--no-score-box); the stress variant is the closest free counterpart of gpu_burn's heat, not of its correctness check |
 | `torch_burn` | 1 / service | `python torch_burn.py 60` | `^GPU 0: OK` | out:NVIDIA\|GeForce\|RTX, pdh:Cuda\|Compute\|3D\|Copy, smi | ~70 s / 180 s | **high** [LONG] 60 s of fp32 matmul with bit-exact comparison (gpu_burn semantics) |
 
 **LLM (llama.cpp CUDA and Vulkan)** (3)
@@ -460,7 +460,7 @@ with its class (§4.4). Commands are abbreviated; `apps.json` has the exact Powe
 
 | app | tier / session | command | success | GPU-use proof | runtime / timeout | difficulty: why |
 |---|---|---|---|---|---|---|
-| `furmark_vk_bench` | 1 / desktop | `furmark.exe --demo furmark-vk --width 1280 --height 720 --max-time 15 --no-score-box --benchmark` | `KFWAIT furmark_vk_bench EXITED rc=0` | out:NVIDIA, pdh:Cuda\|Compute\|3D\|Copy | ~25 s / 135 s | **high** [GFX] FurMark 2.10.2 command line from its help text |
+| `furmark_vk_bench` | 1 / desktop | `furmark.exe --demo furmark-vk --width 1280 --height 720 --max-time 15 --no-score-box --benchmark --logfile-suffix $logSuffix` | `KFWAIT furmark_vk_bench EXITED rc=0` | out:NVIDIA, pdh:Cuda\|Compute\|3D\|Copy | ~25 s / 135 s | **high** [GFX] FurMark 2.10.2 command line from its help text |
 | `furmark_vkinfo` | 1 / desktop | `furmark.exe --vkinfo` | `NVIDIA` | out:NVIDIA | ~8 s / 90 s | **medium**: creates a GL/Vulkan context on the NVIDIA device and prints driver strings; no sustained rendering |
 | `gravitymark_vk` | 1 / desktop | `GravityMark.exe -temporal 1 -fps 1 -info 1 -benchmark 1 -close 1 -count 1 -asteroids 20000 -width 1280 -height 720 -fullscreen 0 -vk -image gm.png -times gm_times.txt -image gm.png -times gm_times.txt` | `^GM_OK` | pdh:Cuda\|Compute\|3D\|Copy | ~60 s / 660 s | **high** [GFX] GravityMark 1.89 flags from its own run_*.bat (-benchmark 1 -close 1 -count 1 -image -times); asteroids reduced to 20000 |
 | `vkcube` | 2 / desktop | `vkcube.exe --c 600 (from the LunarG SDK installed silently into C:\kfapps\vulkan_sdk)` | `KFWAIT vkcube EXITED rc=0` | pdh:Cuda\|Compute\|3D\|Copy | ~15 s / 180 s | **high** [GFX] installs the LunarG SDK silently (tier 2): the only portable-less item; vkcube presents through a Vulkan swapchain to the DWM window |
@@ -471,9 +471,9 @@ with its class (§4.4). Commands are abbreviated; `apps.json` has the exact Powe
 
 | app | tier / session | command | success | GPU-use proof | runtime / timeout | difficulty: why |
 |---|---|---|---|---|---|---|
-| `furmark_gl_bench` | 1 / desktop | `furmark.exe --demo furmark-gl --width 1280 --height 720 --max-time 15 --no-score-box --benchmark` | `KFWAIT furmark_gl_bench EXITED rc=0` | out:NVIDIA, pdh:Cuda\|Compute\|3D\|Copy | ~25 s / 135 s | **high** [GFX] FurMark 2.10.2 command line from its help text |
+| `furmark_gl_bench` | 1 / desktop | `furmark.exe --demo furmark-gl --width 1280 --height 720 --max-time 15 --no-score-box --benchmark --logfile-suffix $logSuffix` | `KFWAIT furmark_gl_bench EXITED rc=0` | out:NVIDIA, pdh:Cuda\|Compute\|3D\|Copy | ~25 s / 135 s | **high** [GFX] FurMark 2.10.2 command line from its help text |
 | `furmark_glinfo` | 1 / desktop | `furmark.exe --glrenderer` | `NVIDIA` | out:NVIDIA | ~8 s / 90 s | **medium**: creates a GL/Vulkan context on the NVIDIA device and prints driver strings; no sustained rendering |
-| `furmark_knot_gl` | 1 / desktop | `furmark.exe --demo furmark-knot-gl --width 1280 --height 720 --max-time 15 --no-score-box --benchmark` | `KFWAIT furmark_knot_gl EXITED rc=0` | out:NVIDIA, pdh:Cuda\|Compute\|3D\|Copy | ~25 s / 135 s | **high** [GFX] FurMark 2.10.2 command line from its help text |
+| `furmark_knot_gl` | 1 / desktop | `furmark.exe --demo furmark-knot-gl --width 1280 --height 720 --max-time 15 --no-score-box --benchmark --logfile-suffix $logSuffix` | `KFWAIT furmark_knot_gl EXITED rc=0` | out:NVIDIA, pdh:Cuda\|Compute\|3D\|Copy | ~25 s / 135 s | **high** [GFX] FurMark 2.10.2 command line from its help text |
 | `glgears_wgl` | 1 / desktop | `tools\kf_glgears.exe --seconds 10` | `^KFGL RESULT OK` | out:renderer .*NVIDIA, pdh:Cuda\|Compute\|3D\|Copy | ~15 s / 90 s | **high** [GFX] WGL window, colour read-back, gears; replaces the Linux EGL device-platform probe (EGL surfaceless is Linux-only) |
 | `gputest_fur` | 1 / desktop | `GpuTest.exe /test=fur /width=1280 /height=720 /benchmark /benchmark_duration_ms=10000 /no_scorebox` | `GPUTEST .*Renderer model: .*NVIDIA` | out:Renderer model: .*NVIDIA, pdh:Cuda\|Compute\|3D\|Copy | ~25 s / 100 s | **high** [GFX] Geeks3D GpuTest 0.7.0 (2014, OpenGL 2.1-4.x); /benchmark with a fixed duration and no score box |
 | `gputest_gi` | 2 / desktop | `GpuTest.exe /test=gi /width=1280 /height=720 /benchmark /benchmark_duration_ms=10000 /no_scorebox` | `GPUTEST .*Renderer model: .*NVIDIA` | out:Renderer model: .*NVIDIA, pdh:Cuda\|Compute\|3D\|Copy | ~25 s / 100 s | **high** [GFX] Geeks3D GpuTest 0.7.0 (2014, OpenGL 2.1-4.x); /benchmark with a fixed duration and no score box |

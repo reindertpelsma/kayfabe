@@ -258,11 +258,18 @@ for aid, demo, extra, secs, lin, cat in (("furmark_glinfo", None, ["--glrenderer
     else:
         stress = "STRESS" in extra
         args = ["--demo", demo, "--width", "1280", "--height", "720", "--max-time", str(secs), "--no-score-box"] + ([] if stress else ["--benchmark"])
+        # A per-run public logfile suffix avoids selecting an unrelated *.log
+        # or reusing renderer text from a previous app. FurMark's own help.txt
+        # documents --logfile-suffix; filename extensions are not assumed.
         body = FM + rf"""Remove-Item "$fm\_scores.csv" -ErrorAction SilentlyContinue
-Invoke-KfWait -Exe "$fm\furmark.exe" -ArgList @({", ".join("'%s'" % x for x in args)}) -Cwd $fm -TimeoutS {secs + 90} -Tag {aid}
+$logSuffix = 'kf_' + [Guid]::NewGuid().ToString('N')
+Invoke-KfWait -Exe "$fm\furmark.exe" -ArgList @({", ".join("'%s'" % x for x in args)}, '--logfile-suffix', $logSuffix) -Cwd $fm -TimeoutS {secs + 90} -Tag {aid}
 $rc = $global:KfRc
 if (Test-Path "$fm\_scores.csv") {{ Get-Content "$fm\_scores.csv" | Select-Object -Last 3 | ForEach-Object {{ "FM_SCORE $_" }} }}
-Get-ChildItem $fm -Filter '*.log' -ErrorAction SilentlyContinue | Select-Object -First 1 | ForEach-Object {{ Get-Content $_.FullName | Select-String 'GL_RENDERER|Renderer|NVIDIA' | Select-Object -First 5 | ForEach-Object {{ "FM_LOG $_" }} }}
+Get-ChildItem $fm -Recurse -File -ErrorAction SilentlyContinue | Where-Object {{ $_.Name -like "*$logSuffix*" }} | Select-Object -First 16 | ForEach-Object {{
+ "FM_LOGFILE $($_.Name)"
+ Get-Content $_.FullName -Tail 256 -ErrorAction SilentlyContinue | Select-String 'GL_RENDERER|Renderer|NVIDIA' | Select-Object -First 5 | ForEach-Object {{ "FM_LOG $_" }}
+}}
 exit $rc"""
         app(aid, cat, body, r"KFWAIT %s EXITED rc=0" % aid, secs + 120, secs + 10, [r"out:NVIDIA", GPU_ENG], *(W_LONG if secs >= 60 else W_GFX), linux=lin or (),
             pkgs=("furmark2", "vc_redist"), session="interactive", shot=min(8, secs - 2), tier=1 if secs <= 15 else 2,

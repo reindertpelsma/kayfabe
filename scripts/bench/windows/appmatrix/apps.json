@@ -974,14 +974,14 @@
    ],
    "difficulty": "high",
    "why": "needs a 3D/graphics channel, the display flip/VSync path and DWM composition on kf3's display; in the recorded runs the first TDR coincides with the first new GPU client after sign-in (DWM, Edge, Shorts), so any windowed app is exposed to it",
-   "ps": "$fm = \"$K\\furmark2\"\nRemove-Item \"$fm\\_scores.csv\" -ErrorAction SilentlyContinue\nInvoke-KfWait -Exe \"$fm\\furmark.exe\" -ArgList @('--demo', 'furmark-gl', '--width', '1280', '--height', '720', '--max-time', '15', '--no-score-box', '--benchmark') -Cwd $fm -TimeoutS 105 -Tag furmark_gl_bench\n$rc = $global:KfRc\nif (Test-Path \"$fm\\_scores.csv\") { Get-Content \"$fm\\_scores.csv\" | Select-Object -Last 3 | ForEach-Object { \"FM_SCORE $_\" } }\nGet-ChildItem $fm -Filter '*.log' -ErrorAction SilentlyContinue | Select-Object -First 1 | ForEach-Object { Get-Content $_.FullName | Select-String 'GL_RENDERER|Renderer|NVIDIA' | Select-Object -First 5 | ForEach-Object { \"FM_LOG $_\" } }\nexit $rc\n",
+   "ps": "$fm = \"$K\\furmark2\"\nRemove-Item \"$fm\\_scores.csv\" -ErrorAction SilentlyContinue\n$logSuffix = 'kf_' + [Guid]::NewGuid().ToString('N')\nInvoke-KfWait -Exe \"$fm\\furmark.exe\" -ArgList @('--demo', 'furmark-gl', '--width', '1280', '--height', '720', '--max-time', '15', '--no-score-box', '--benchmark', '--logfile-suffix', $logSuffix) -Cwd $fm -TimeoutS 105 -Tag furmark_gl_bench\n$rc = $global:KfRc\nif (Test-Path \"$fm\\_scores.csv\") { Get-Content \"$fm\\_scores.csv\" | Select-Object -Last 3 | ForEach-Object { \"FM_SCORE $_\" } }\nGet-ChildItem $fm -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -like \"*$logSuffix*\" } | Select-Object -First 16 | ForEach-Object {\n \"FM_LOGFILE $($_.Name)\"\n Get-Content $_.FullName -Tail 256 -ErrorAction SilentlyContinue | Select-String 'GL_RENDERER|Renderer|NVIDIA' | Select-Object -First 5 | ForEach-Object { \"FM_LOG $_\" }\n}\nexit $rc\n",
    "kill_names": [],
    "screenshot_s": 8,
    "note": "FurMark 2.10.2 command line from its help text",
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "furmark.exe --demo furmark-gl --width 1280 --height 720 --max-time 15 --no-score-box --benchmark"
+   "cmd": "furmark.exe --demo furmark-gl --width 1280 --height 720 --max-time 15 --no-score-box --benchmark --logfile-suffix $logSuffix"
   },
   {
    "id": "furmark_gl_stress",
@@ -1005,14 +1005,14 @@
    ],
    "difficulty": "high",
    "why": "runs longer than the 1-4 minute reset cadence recorded today, so a TDR inside the run is likely; the result is only meaningful once the guest survives idle for the whole app",
-   "ps": "$fm = \"$K\\furmark2\"\nRemove-Item \"$fm\\_scores.csv\" -ErrorAction SilentlyContinue\nInvoke-KfWait -Exe \"$fm\\furmark.exe\" -ArgList @('--demo', 'furmark-gl', '--width', '1280', '--height', '720', '--max-time', '60', '--no-score-box') -Cwd $fm -TimeoutS 150 -Tag furmark_gl_stress\n$rc = $global:KfRc\nif (Test-Path \"$fm\\_scores.csv\") { Get-Content \"$fm\\_scores.csv\" | Select-Object -Last 3 | ForEach-Object { \"FM_SCORE $_\" } }\nGet-ChildItem $fm -Filter '*.log' -ErrorAction SilentlyContinue | Select-Object -First 1 | ForEach-Object { Get-Content $_.FullName | Select-String 'GL_RENDERER|Renderer|NVIDIA' | Select-Object -First 5 | ForEach-Object { \"FM_LOG $_\" } }\nexit $rc\n",
+   "ps": "$fm = \"$K\\furmark2\"\nRemove-Item \"$fm\\_scores.csv\" -ErrorAction SilentlyContinue\n$logSuffix = 'kf_' + [Guid]::NewGuid().ToString('N')\nInvoke-KfWait -Exe \"$fm\\furmark.exe\" -ArgList @('--demo', 'furmark-gl', '--width', '1280', '--height', '720', '--max-time', '60', '--no-score-box', '--logfile-suffix', $logSuffix) -Cwd $fm -TimeoutS 150 -Tag furmark_gl_stress\n$rc = $global:KfRc\nif (Test-Path \"$fm\\_scores.csv\") { Get-Content \"$fm\\_scores.csv\" | Select-Object -Last 3 | ForEach-Object { \"FM_SCORE $_\" } }\nGet-ChildItem $fm -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -like \"*$logSuffix*\" } | Select-Object -First 16 | ForEach-Object {\n \"FM_LOGFILE $($_.Name)\"\n Get-Content $_.FullName -Tail 256 -ErrorAction SilentlyContinue | Select-String 'GL_RENDERER|Renderer|NVIDIA' | Select-Object -First 5 | ForEach-Object { \"FM_LOG $_\" }\n}\nexit $rc\n",
    "kill_names": [],
    "screenshot_s": 8,
    "note": "FurMark 2.10.2 command line from its help (--demo/--benchmark/--max-time/--no-score-box); the stress variant is the closest free counterpart of gpu_burn's heat, not of its correctness check",
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "furmark.exe --demo furmark-gl --width 1280 --height 720 --max-time 60 --no-score-box"
+   "cmd": "furmark.exe --demo furmark-gl --width 1280 --height 720 --max-time 60 --no-score-box --logfile-suffix $logSuffix"
   },
   {
    "id": "furmark_glinfo",
@@ -1062,14 +1062,14 @@
    ],
    "difficulty": "high",
    "why": "needs a 3D/graphics channel, the display flip/VSync path and DWM composition on kf3's display; in the recorded runs the first TDR coincides with the first new GPU client after sign-in (DWM, Edge, Shorts), so any windowed app is exposed to it",
-   "ps": "$fm = \"$K\\furmark2\"\nRemove-Item \"$fm\\_scores.csv\" -ErrorAction SilentlyContinue\nInvoke-KfWait -Exe \"$fm\\furmark.exe\" -ArgList @('--demo', 'furmark-knot-gl', '--width', '1280', '--height', '720', '--max-time', '15', '--no-score-box', '--benchmark') -Cwd $fm -TimeoutS 105 -Tag furmark_knot_gl\n$rc = $global:KfRc\nif (Test-Path \"$fm\\_scores.csv\") { Get-Content \"$fm\\_scores.csv\" | Select-Object -Last 3 | ForEach-Object { \"FM_SCORE $_\" } }\nGet-ChildItem $fm -Filter '*.log' -ErrorAction SilentlyContinue | Select-Object -First 1 | ForEach-Object { Get-Content $_.FullName | Select-String 'GL_RENDERER|Renderer|NVIDIA' | Select-Object -First 5 | ForEach-Object { \"FM_LOG $_\" } }\nexit $rc\n",
+   "ps": "$fm = \"$K\\furmark2\"\nRemove-Item \"$fm\\_scores.csv\" -ErrorAction SilentlyContinue\n$logSuffix = 'kf_' + [Guid]::NewGuid().ToString('N')\nInvoke-KfWait -Exe \"$fm\\furmark.exe\" -ArgList @('--demo', 'furmark-knot-gl', '--width', '1280', '--height', '720', '--max-time', '15', '--no-score-box', '--benchmark', '--logfile-suffix', $logSuffix) -Cwd $fm -TimeoutS 105 -Tag furmark_knot_gl\n$rc = $global:KfRc\nif (Test-Path \"$fm\\_scores.csv\") { Get-Content \"$fm\\_scores.csv\" | Select-Object -Last 3 | ForEach-Object { \"FM_SCORE $_\" } }\nGet-ChildItem $fm -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -like \"*$logSuffix*\" } | Select-Object -First 16 | ForEach-Object {\n \"FM_LOGFILE $($_.Name)\"\n Get-Content $_.FullName -Tail 256 -ErrorAction SilentlyContinue | Select-String 'GL_RENDERER|Renderer|NVIDIA' | Select-Object -First 5 | ForEach-Object { \"FM_LOG $_\" }\n}\nexit $rc\n",
    "kill_names": [],
    "screenshot_s": 8,
    "note": "FurMark 2.10.2 command line from its help text",
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "furmark.exe --demo furmark-knot-gl --width 1280 --height 720 --max-time 15 --no-score-box --benchmark"
+   "cmd": "furmark.exe --demo furmark-knot-gl --width 1280 --height 720 --max-time 15 --no-score-box --benchmark --logfile-suffix $logSuffix"
   },
   {
    "id": "furmark_vk_bench",
@@ -1091,14 +1091,14 @@
    ],
    "difficulty": "high",
    "why": "needs a 3D/graphics channel, the display flip/VSync path and DWM composition on kf3's display; in the recorded runs the first TDR coincides with the first new GPU client after sign-in (DWM, Edge, Shorts), so any windowed app is exposed to it",
-   "ps": "$fm = \"$K\\furmark2\"\nRemove-Item \"$fm\\_scores.csv\" -ErrorAction SilentlyContinue\nInvoke-KfWait -Exe \"$fm\\furmark.exe\" -ArgList @('--demo', 'furmark-vk', '--width', '1280', '--height', '720', '--max-time', '15', '--no-score-box', '--benchmark') -Cwd $fm -TimeoutS 105 -Tag furmark_vk_bench\n$rc = $global:KfRc\nif (Test-Path \"$fm\\_scores.csv\") { Get-Content \"$fm\\_scores.csv\" | Select-Object -Last 3 | ForEach-Object { \"FM_SCORE $_\" } }\nGet-ChildItem $fm -Filter '*.log' -ErrorAction SilentlyContinue | Select-Object -First 1 | ForEach-Object { Get-Content $_.FullName | Select-String 'GL_RENDERER|Renderer|NVIDIA' | Select-Object -First 5 | ForEach-Object { \"FM_LOG $_\" } }\nexit $rc\n",
+   "ps": "$fm = \"$K\\furmark2\"\nRemove-Item \"$fm\\_scores.csv\" -ErrorAction SilentlyContinue\n$logSuffix = 'kf_' + [Guid]::NewGuid().ToString('N')\nInvoke-KfWait -Exe \"$fm\\furmark.exe\" -ArgList @('--demo', 'furmark-vk', '--width', '1280', '--height', '720', '--max-time', '15', '--no-score-box', '--benchmark', '--logfile-suffix', $logSuffix) -Cwd $fm -TimeoutS 105 -Tag furmark_vk_bench\n$rc = $global:KfRc\nif (Test-Path \"$fm\\_scores.csv\") { Get-Content \"$fm\\_scores.csv\" | Select-Object -Last 3 | ForEach-Object { \"FM_SCORE $_\" } }\nGet-ChildItem $fm -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -like \"*$logSuffix*\" } | Select-Object -First 16 | ForEach-Object {\n \"FM_LOGFILE $($_.Name)\"\n Get-Content $_.FullName -Tail 256 -ErrorAction SilentlyContinue | Select-String 'GL_RENDERER|Renderer|NVIDIA' | Select-Object -First 5 | ForEach-Object { \"FM_LOG $_\" }\n}\nexit $rc\n",
    "kill_names": [],
    "screenshot_s": 8,
    "note": "FurMark 2.10.2 command line from its help text",
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "furmark.exe --demo furmark-vk --width 1280 --height 720 --max-time 15 --no-score-box --benchmark"
+   "cmd": "furmark.exe --demo furmark-vk --width 1280 --height 720 --max-time 15 --no-score-box --benchmark --logfile-suffix $logSuffix"
   },
   {
    "id": "furmark_vkinfo",
