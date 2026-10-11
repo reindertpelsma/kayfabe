@@ -1,0 +1,242 @@
+
+=== Allow user namespaces for this CI checkout's test executables
+CI namespace profile: not a GitHub runner; host policy unchanged
+    ok
+
+=== Remove the CI-only namespace profile
+CI namespace profile: not a GitHub runner; host policy unchanged
+    ok
+
+=== v3 dependency isolation and CI guard self-tests
+V3_ISOLATION crates=21 violations=0
+frozen prototype: files=37 changed=0
+......................................
+----------------------------------------------------------------------
+Ran 38 tests in 21.414s
+
+OK
+QEMU_IDENTITY_SELFTEST PASS
+SELFTEST clean: pass (expected)
+SELFTEST admin: fail (expected)
+SELFTEST noline: fail (expected)
+SELFTEST refused: fail (expected)
+SELFTEST noposture: fail (expected)
+SELFTEST cudaheld: fail (expected)
+SELFTEST cudarefused: fail (expected)
+SELFTEST nogates: fail (expected)
+SELFTEST gateadmin: fail (expected)
+SELFTEST missingarm: fail (expected)
+SELFTEST shortboard: fail (expected)
+BIRTH_CENSUS_SELFTEST cases=11 wrong=0
+    ok
+
+=== Hexagonal boundary gate (no OS vocabulary in the pure logic crates)
+    ok
+
+=== VMM-vocabulary gate (no hypervisor API vocabulary in the core or the shell)
+    ok
+
+=== Generation-name gate (no concrete chip or driver version in the logic crates)
+    ok
+
+=== ABI-quarantine gate (Axis A — a C layout is quarantined, or provably own-wire)
+    ok
+
+=== Unsafe-surface gate (every unsafe file is named *_unsafe.rs, so `ls` enumerates it)
+./crates/kf-mem/src/sim/tests.rs
+
+★ UNSAFE-SURFACE BREACH — the *_unsafe.rs naming rule.
+An auditor must be able to enumerate the ENTIRE unsafe surface with
+`ls`: every .rs file that uses the keyword is named *_unsafe.rs, and
+the files above are not. Two legitimate fixes, no third:
+  - real unsafe code  -> move it into a *_unsafe.rs module, and
+    justify the relaxation there (the workspace lint is 'forbid').
+  - a comment or doc  -> reword it. Naming the LINT, `unsafe_code`,
+    never trips this gate, and neither does the suffix _unsafe.rs.
+Never widen the pattern and never add an allowlist: the moment this
+gate needs a judgement call, `ls` stops being the audit.
+    ★ FAILED
+
+=== Host-pointer gate (no *mut/*const/NonNull/transmute outside *_unsafe.rs)
+    ok
+
+=== Bridge-exclusivity gate (one crate names both RpcCommand and RmEvent)
+    ok
+
+=== ogkm-version-tag gate (every NVIDIA citation names its tree)
+crates/kf-abi/src/chanbudget.rs:10://! `ogkm: kernel_fifo_ctrl.c:317-326`) minus index `CHANNEL_GROUPS_IN_USE_PER_ENGINE` (9: what the host and every
+
+★ UNTAGGED-CITATION BREACH — mode2_gsp_port_plan.md §0.1.
+The lines above cite NVIDIA source as plain 'ogkm:', which does not say
+WHICH vendored tree the claim was read from. Two are vendored and they
+are different specifications:
+  ogkm-580: = research_clones/ogkm-580.159.04/  (580.159.04)
+              ★ the bench's own driver. Governs when the two disagree.
+  ogkm-610: = research_clones/ogkm/             (610.43.02)
+Re-read the claim against a tree and tag it. Three outcomes, all legitimate:
+  - holds at BOTH, identically -> cite both, e.g.
+        (`ogkm-610: rpc.c:10856`, `ogkm-580: :11051`)
+    This is a load-bearing negative result, not a shrug: it tells the next
+    reader there is no version seam here, so nobody adds a version profile
+    for a struct that has none.
+  - DIFFERS between the tags -> that is a SEAM. Tag it with the version it
+    describes and say what the other tag does. A version-split fact is a
+    profile/table entry, NEVER an `if version ==` in a logic crate.
+  - the path or line MOVED -> correct it, with the tag. The whole msgq
+    library is src/common/shared/msgq/ at 580 and
+    src/nvidia/src/libraries/msgq/ at 610; path drift is as dangerous as
+    content drift and less visible.
+Line numbers belong to the tagged tree ONLY — never carry one across a tag,
+even where the code is byte-identical.
+If the citation says what it claims at NEITHER tag, do not quietly repoint
+it: that is a phantom, and it is the most valuable thing you can find.
+    ★ FAILED
+
+=== Claim-ledger gate (a measurement word names its run, not a source read)
+NEW crates/kf-disp/src/ports.rs|unattributed|f2abc7da6592b07e5d6c11a6fa10b0c4ff7fc24b396499402621a26a079eaacd: UPDATEs differently (`[measured]` the overlay stall H1: window 0's UPDATE joined an earlier group of
+NEW crates/kf-host/src/channel.rs|unattributed|5cf1b02382d5ac74ca0553618d824065703cfef30bc3119a75efe8590d826ffa: ★ The two rows run 225 measured Windows mapping.
+NEW crates/kf-mem/src/sim/tests.rs|unattributed|a3bc492b7a38efd7d38a22ee46783194e343fc883be127555db19352f1c56bc5: `[measured, run 289 dmesg]` `RangeLo 0x144d0000` for a request at `0x144d5000`), so a batch of
+NEW crates/kf-qemu/src/display.rs|unattributed|364c9356477cb72b28a724c397ec412a2ff8a14bb0a6e95bb7938eba30733778: Windows' MPO as measured (run 401): base window 0, overlay window 4 at depth 11
+NEW crates/kf-qemu/src/twin.rs|unattributed|80961b50d43ebccc5b8b950a9010ffd8be9d8a9071138436d1e004fa688e784e: (`[measured, qemu.log 63705-63783]`): a pid-4 copy channel, then a pid-4 GR channel, born in
+NEW crates/kf-rm/src/chanlink.rs|unattributed|253949676f46232a619b15b2543a67d491bc84dc8cb56c9603f92ea63797188f: `[measured, run 113]`).
+NEW crates/kf-rm/src/chanlink.rs|unattributed|50890718c64295dc6528c9c42c52f3b88311898e17a969842fb7b11c22378777: [measured, run 295] NVDEC0 (0x13), no context share, ProcessID 0x1db0 (Edge's decode)
+NEW crates/kf-rm/src/chanlink.rs|unattributed|50a7a559e7940513b0246274a94e75c5e45c84e8c0ac0fe53cab8787052edc35: recovery paths (`[measured, runs 100-103, 113]` the post-TDR restart) run in it.
+NEW crates/kf-rm/src/chanlink.rs|unattributed|f3399cb55548b2a690f7e3e5f6363abd569ea8462f852ab04e4ca5d2f322e6e0: [measured, run 113, qemu.log line 63706] the post-TDR restart's copy channel.
+NEW crates/kf-rm/src/gssnative.rs|unattributed|5231650d168454d09df3426f4339dae8b4a6a018d09d575f2bc9fc2b6c2dd4c6: The largest `paramsSize` forwarded (the largest measured is 2188).
+NEW docs/DELEGATED_DECISIONS_20261010.md|unattributed|abb9e3fa87a097fd2ac5ba01c9587a610308f7a337d0386cfc9ca185af0facce: 0x04036000), against 0 in the 12 runs before it and 0 in run 275 on the fixed code (measured, TDR
+NEW docs/HANDOFF_FOR_CODEX_20261011.md|unattributed|c8efafe1e37716f97ead156f21b5d03a0593fabc98a3d75faa1a78593a58b973: correctness are hardwired; measurement flags are never required to boot. Derive, never capture. Keep measured and inferred apart in every doc.
+NEW docs/HANDOFF_WINDOWS_20261010.md|bare-hardware|0a525b375616db2160e5b227dbd82fc725e1454a989f66bf7894779a48b0dce9: | `claude/display-latch-contract-20261010` | integration-line port of the Windows display/TDR fixes (notifier contract + publish-then-raise `vblankgat
+NEW docs/design/V3_COMPLETION_AUDIT.md|unattributed|500268e89025040622a183fc30a9a6c22fdba4fde461416d01a3e649fa94d418: "loop" the coordinator saw. Does not explain the first stall. Confidence: *measured from code* and from the run-102 tail.
+NEW docs/design/V3_COMPLETION_AUDIT.md|unattributed|5bbfc3c1eadb813529ac4e7c9ea2d9b8d6391be31e4f893c6b098583d0f8d15c: carrying `pRunlistPreemptEvent` (`[measured runs 78/79]` TDR follows). With it on (all Windows runs):
+NEW docs/design/V3_COMPLETION_AUDIT.md|unattributed|909cb5e71a2d3e9fedd50be5b2321c72ed374e1230f9422a1b332606b0c7512c: **Measured `contended=0` in runs 100-103**, so downgraded; still a real lost-doorbell hazard for Translated rings.
+NEW docs/design/V3_COMPLETION_AUDIT.md|unattributed|b3b86e1e4580a0f3f5a14808ccba5e733c09f735c6dd21219765f1b2d2c196ae: - Makes a scheduler wait forever: **yes**. Confidence: mechanism *measured from code*; occurrence in run 232 *inferred*.
+NEW docs/design/V3_FEATURE_GAPS.md|unattributed|39ff13a8b35581452200d2d82212912c3e7d0d6a3db224116673a083c2dd6634: - [measured] The first overlay-class hang (run 292) was a one-sided interlock: window 4 waits for window 0, which latched alone 54 times. Fixed: the g
+NEW docs/design/V3_FEATURE_GAPS.md|unattributed|5da8d62829cda1dfb84f69288dee98921487cc4c90b74a3117d29a06072864c8: Facts: [measured] guest-visible max 74.8 ms, 46 over 12 ms (run 278). [read] batched-map section 8.8 worst cases (refresh budget 2^21 grain calls, abo
+NEW docs/design/V3_FEATURE_GAPS.md|unattributed|68b4ba9ac51c18b4f7a8c557b9c9bd105bdd17633f375c9faaf5d0c75d9339ea: plane never completes. [measured] runs 400/401: plane 0 completes (event 505), plane 1 never; no open render or video packet; no host Xid.
+NEW docs/design/V3_FEATURE_GAPS.md|unattributed|75a15165aa7abbb56abefaa3b3d9c88d4cbe0a36a20155d9e8474d26e7ab30bb: State: after boot, sign-in and Edge with zero flags the guest has 0 TDR; playback produces about one reset per 5 min. Fixed and measured as insufficie
+NEW docs/design/V3_FEATURE_GAPS.md|unattributed|7f4a4ed8f95741716b918d9aaad977f404ef89b445db64b13bdc329090df9bb6: Facts: [read] `kf3.c` has no reset handler; `device_reset` has no caller; `CpuIntr` has no reset; `enter_halted` keeps `held`, `pending_command_doorbe
+NEW docs/design/V3_FEATURE_GAPS.md|unattributed|b3b8017700291d4da731859b49af4f2bd10fd4672d5557a4e73c0b91662ccabc: P2 (console only, L01-L03): composing the overlay on the console copy needs a YUV CUDA kernel (exists, `cuda/display/kf_yuv.cu`, nearest, BT.709 limit
+NEW docs/design/V3_FLAG_INVENTORY.md|unattributed|1f812171c106c4716bb9ab171cbc80405dcd93550927edc915f3c6e57c8709b0: 2. **`KF3_DIAG_<NAME>`: pure measurement** (trace, snapshot, census, counter, log cap). **Hard rule: nothing under `KF3_DIAG_` changes a reply, a regi
+NEW docs/design/V3_FLAG_INVENTORY.md|unattributed|2cb2936d4dda5876a55c6317ebebe93727c2516ec86d4a56940037e9a25cc383: `KF3_BAR0_READ_TRACE` REFUSES realize on any value but `0/1/on/off` (a measurement typo can block a boot).
+NEW docs/design/V3_FLAG_INVENTORY.md|unattributed|61b07a0111b64d1337eafa73486858ec874bbf6b0fd8113e6b6aa470ff3637c6: | **M** | measurement / diagnostic only | 12 | 19 |
+NEW docs/design/V3_FLAG_INVENTORY.md|unattributed|71d809f836ce0c4873193126ba78794f1ead212031c3b5b2f01610f80cc3374e: Labels: **[measured, run N, record]** is a run record, counter or log line. **[code]** is read from the cited line. **[inferred]** is
+NEW docs/design/V3_FLAG_INVENTORY.md|unattributed|89b68ee37f4718d4f7a402ceaf49c6e17c1ea319ce97c7bcb1af2f762ef75b59: ## 6. Class M — measurement (19), and the rule-(3) check
+NEW docs/design/V3_FLAG_INVENTORY.md|unattributed|abd6d59a7cd7e1286701d0337cc98dc1c6f914e34042e5b7f8489aacd789bf8d: `KF3_TCENSUS` (at an older revision) have measured evidence of not being required. For `KF3_BAR0_TRACE`, `KF3_MAPLOG`, `KF3_RPC_TRACE`, `KF3_DISPLAY_M
+NEW docs/design/V3_FLAG_INVENTORY.md|unattributed|b8931a1d56db53c0ce811f1bb243389a817f6ce62b4ecfa2de714731075ca6b7: Columns: **boot** = required to boot (measured / inferred / unknown) with the evidence; **perf** = the performance verdict of what the flag *enables*
+NEW docs/design/V3_GSS_NATIVE.md|unattributed|666a09363c7f29affe5019faf75f9d2e10194e50a32f231017f914845cd40220: Convention: **[measured]** names a log line, a run or a source line read; **[inferred]** is reasoning from them.
+NEW docs/design/V3_GSS_NATIVE.md|unattributed|b249b0f6f942e7833e0ae8cc00e02a269b2714fc460a4cf2f33900f99eaf9755: **[measured, source read]** `ogkm-595.84 src/nvidia/interface/deprecated/rmapi_deprecated.h:41-43` defines
+NEW docs/design/V3_H5_USERD_DMA_PATCH.md|unattributed|30abf2eb4350cb1dc552bd40e892be3466b0fc3897157a8525f447334489f255: ## 4. Distribution, corrected: no rebuild tier for H5 [measured]
+NEW docs/design/V3_H5_USERD_DMA_PATCH.md|unattributed|a0d0e242030cf61adcf600af1909a02b1d0f9b289d531fa22aa27c99dfa07a6b: | USERD offset shift = 9 (512-byte slot) | `kernel_fifo_gm107.c:1080-1091`, `dev_ram.h:49` (`NV_RAMUSERD_BASE_SHIFT 9`) | [read]; run 61's `userAddrLo
+NEW docs/design/V3_HELD_HOLE_HANDOFF_20261010.md|unattributed|4619614982e167c606a2f88d6064daeaec8c51d6f615e12d05683a41fb46fde7: | 385 | `183e1b8f` (combined) | 0 | 0 (24 = 24) | 2 | 0 | 0 / 0 / 3 / 3 / 3 (no reset during the 900 s hold; `PLAYBACK frames differ: 0` = the two Sho
+NEW docs/design/V3_HELD_HOLE_HANDOFF_20261010.md|unattributed|516caffa9e0894fa3b88500b1fc49db9c6ac83498e8117bcd83674901db188ba: ## 1. The defect (measured, then inferred; kept apart)
+NEW docs/design/V3_HELD_HOLE_HANDOFF_20261010.md|unattributed|cdf995e5b19edd52bb9db883f8300615f2dfd1151908659de9bc824274c54efc: *Symptom, measured:* Windows run 289 (integration + D1-D3 code, `daded67e`): 14 leaves logged
+NEW docs/design/V3_HELD_HOLE_HANDOFF_20261010.md|unattributed|ef80cc1be7e05555142feb51b0924aeca6b8526752f8a647fd23e9706df19b4f: *Root cause, measured:* host RM does not hold the range a micro reservation asks for. It aligns the START
+NEW docs/design/V3_HOST_PATCH_LIST.md|bare-hardware|e435f49b76a167d1aa715e1b87e864c8f8a997db3e8670edcd53b308deea9997: 3. **Install policy** for tags that apply but are not hardware-verified (§9.2).
+NEW docs/design/V3_HOST_PATCH_LIST.md|unattributed|291a48e458554df1cf838a6224e59ea8b3dd5b33da0e2e50d42d1d74baf21fbb: wake-up **[measured, nested]**. A bare-metal wake-to-ring figure for the drainer has **not** been
+NEW docs/design/V3_HOST_PATCH_LIST.md|unattributed|796324d482b4bf2914797d364548a74581e3582327b7e9a4b595e275104d4abd: copy → ring) **[reasoned]**; no latency figure for the relay exists **[measured: none]**.
+NEW docs/design/V3_HOST_PATCH_LIST.md|unattributed|aece026f3052c8b01ce3b0b495527379588d148eae68f374951763a90374cac2: Labels used throughout: **[read]** seen in source (ogkm, Linux, or this repo), **[measured]** in a
+NEW docs/design/V3_LATE_TSG_JOINER.md|unattributed|062c513e5ec4bbbd05b7b3160ff15c8a6da9e46d325f76a285d8f79a324e3d8f: ### 1.2 Run 103 is a different failure [measured]
+NEW docs/design/V3_LATE_TSG_JOINER.md|unattributed|1e7b21ea9bcd55e9e84cc8bbafcf92ca017d8ec54d34dd469546b3b81791fa0c: ### 1.3 The same pattern on the real GPU [measured] (VFIO boot3, `gsp.jsonl`)
+NEW docs/design/V3_LATE_TSG_JOINER.md|unattributed|25de49cd0586825db5096c443b713252cfb8412efa780679bc70f2a9e4aadcab: `kf_abi::hostabi::HOST_CONTROLS` and its own hardware measurement, so it is NOT used here.
+NEW docs/design/V3_LATE_TSG_JOINER.md|unattributed|4edbb678fa34e6e5d8a233892b741b13d816b33ec120f73e821833da6bc4d1e4: ## 3. Why the twins stay unscheduled [measured code + inferred grouping]
+NEW docs/design/V3_LATE_TSG_JOINER.md|unattributed|55c0923703668cc280eba804691bf551155ca2280db5fa65dd402913862c5d68: Convention: **[measured]** names a log line or source line; **[inferred]** is reasoning from them.
+NEW docs/design/V3_LATE_TSG_JOINER.md|unattributed|6d03270834827cf03941f94cd5e418c0bb5667d46096856521a18cd35adcab7c: ### 1.1 Run 111 [measured] (`boundary-kayfabe-111/qemu.log`, parsed by `twins.py`)
+NEW docs/design/V3_LATE_TSG_JOINER.md|unattributed|df7a6fdb06d771e3824cd4f4f479c5ffd43bb94e0360509d260e904473194aff: ## 2. What RM does [measured source, ogkm 595.84]
+NEW docs/design/V3_LATE_TSG_JOINER.md|unattributed|e7b54ae80b5e994caec5e958e4a47299cbbd50f268c0eec4e31147d189c134d5: Hypothesis confirmed for run 111 by the logs; the causal step (an unscheduled host group is never
+NEW docs/design/V3_LINUX_PERF_BASELINE_6692e621.md|unattributed|1b82add50d46d3ee5d743938b4f43043194aa59dd84e1be4688fcbebfc4407cf: ## 2. Existing numbers (harvested from docs/ and traces/, not re-measured)
+NEW docs/design/V3_LINUX_PERF_BASELINE_6692e621.md|unattributed|744aac1b39b9538825e1dfae9411cab83aa550b7d324fee719b56782ab063c0b: Readings (derived from the table): most arms cost a roughly fixed +270-300 ms in the guest (device open, GSP boot, RM init through the emulated path);
+NEW docs/design/V3_LINUX_PERF_BASELINE_6692e621.md|unattributed|7d8d1cae6510cbb0d0ef0b8524700fc4a379a520905053d5346d3a00027e22da: Readings: per-launch cost is about 6x the host's (10.2 vs 1.7 us, measured) and is the Linux-path number a Windows-side change to the doorbell path wo
+NEW docs/design/V3_LINUX_PERF_BASELINE_6692e621.md|unattributed|c2dc4a7ebb3aee05b4f86c041efb37e7d1fa65e81a3558335f5ecd3e8c7c003b: **Suite totals (measured):**
+NEW docs/design/V3_LINUX_PERF_BASELINE_6692e621.md|unattributed|d0ee705f05f832820bff10e3683ff38359a3109d90939248f9772928c1c1b637: Two measured/derived facts limit what "before Windows" means:
+NEW docs/design/V3_PROVENANCE.md|conflated|0daeff50236b04b3cddb1ffc138de5eab79552054a7fa12dc30946e962a85f50: Measured entries never contain anything board- or user-specific (UUIDs, serials, VBIOS/PROM contents, MAC addresses).
+NEW docs/design/V3_PROVENANCE.md|unattributed|bbafb0ebcce54df9632f9ed094d267626bac23d3998fad8f15980c08232a333f: Each table entry carries a source tag (`ogkm`, `nvidia-doc`, `nouveau`, `nova`, `measured:<die>,<driver>,<date>`, and so on).
+NEW docs/design/V3_RECOVERY_WALL.md|unattributed|5598a49d046491e3993af9b58e56ec3d0ee8811dde3d14a47cfccc51284d675b: **[measured, run 113, `/var/lib/kf-windows-20261005/boundary-kayfabe-113/qemu.log`]** Before the first
+NEW docs/design/V3_RECOVERY_WALL.md|unattributed|55c0923703668cc280eba804691bf551155ca2280db5fa65dd402913862c5d68: Convention: **[measured]** names a log line or source line; **[inferred]** is reasoning from them.
+NEW docs/design/V3_WINDOWS_APP_MATRIX.md|unattributed|2097e448ab052b2cceef1fd3de2a92b8f8282b6668f934b3991b8d3e3f4ef1e0: measured to bring the NVIDIA adapter back in Code 43, `windows_broker_prod2.sh` comments). Everything else goes through the
+NEW docs/design/V3_WINDOWS_APP_MATRIX.md|unattributed|866c0964d61b72fd2676c3b7ff1f4c56627fd46892028c13b2cd684b2ef1efee: 108 apps in 17 categories (browser 3, crypto 1, cuda-demo 7, cuda-equiv 25, cuda-ladder 3, d3d 18, llm 3, opencl 3, opengl 13, probe 3, render 1, smi 
+NEW docs/design/V3_WINDOWS_APP_MATRIX.md|unattributed|86a27809b31f32a53a23afcc333ff841999dc953824098a166f211ffa1ef5de9: * A TDR does not change a PASS (the app finished and proved GPU use) but is visible in every row and in the summary.
+NEW docs/design/V3_WINDOWS_BRING_UP_20261009.md|unattributed|8057082a9a680d3c8c690664c984a206a0200bacddb558aafcb430b38b1464b5: ## Four defects found and fixed (each measured, each a kayfabe defect)
+NEW docs/design/V3_WINDOWS_BRING_UP_20261009.md|unattributed|c43fe1bb7482680dcef2c2c0d9c215fda06fb7e8a916fbe3d13c8bb0daddf957: ## What is left (measured, not yet explained)
+NEW docs/design/V3_WINDOW_EXPOSURE_REVIEW.md|unattributed|49b104a09f987ee5a7b1c2e58ecf5236f78d1f3f320f413e3556ae31ae909988: is predictable (**[measured]** the same base on every boot of that box). With it, the kernel can:
+NEW docs/design/V3_WINDOW_EXPOSURE_REVIEW.md|unattributed|5e14f65053241e3c9ad54f0ff2addad96bbaf2bfd00c8c0b6b88e1901763cc8c: **[measured]** On the default build, a `privilege=0` Passthrough twin was born in a space whose log
+NEW traces/windows_baseline_20261010/README.md|unattributed|377f35efd8d20c1d7d6dc116c44036d66aabb4b753f026dc6a4f3f98db8eb256: ### Measured findings worth carrying to the kayfabe comparison
+NEW traces/windows_baseline_20261010/README.md|unattributed|4d8a5f56fc818496beecd43ba2df62f11853324d0d1d58a7cba807619161b727: - **Measured:** it keeps the GPU busy and does not finish in 20 min whatever the load. **Inferred:** a benchmark loop that never reaches its end condi
+NEW traces/windows_baseline_20261010/README.md|unattributed|739b8e4c2bec9d974a278546f1248356068cca90450b4c9ef260715c866664d0: `vastai logs 55209252 --tail 3000 | grep -a -A2 'WINDOWS SSH HOST KEY'` (the intermediate installer has another key). Quirks measured:
+NEW traces/windows_baseline_20261010/README.md|unattributed|7d27cf8b150a923ff86e33bb7919ac1086a4f0fa04d22ea7de348e9f59746239: `hashcat` cracks in 0 s but never exits (killed after a 15 s grace by the new `Invoke-KfUntil`; app teardown hang on this driver, measured);
+NEW traces/windows_baseline_20261010/README.md|unattributed|95013efef61e4b6708a7e34c15512ce28ab2bed3808c98a3cc5f57c37c4b82a1: **On the box.** `C:\kfmedia\kfapps.iso` (the 6.8 GB app image, sha256 `183c13aa...a652` verified, pushed from the trusted host; mounted
+NEW traces/windows_baseline_20261010/README.md|unattributed|a938199dc0c65890cc39812cc3a65eab585645ea5fc5461aadb746fa8136da74: - Environment traps measured: after the second Edge run the box's sshd accepted keys but closed every session ("closed by remote host", also for `cmd 
+NEW traces/windows_flag_ablation_20261010/README.md|unattributed|4623502cbc724edf073734351cf489183300684267c43bff8be25bd8c0256f84: inference from timing, not a measurement. Every later failing run must be checked for it before it counts as a verdict.
+NEW traces/windows_flag_ablation_20261010/README.md|unattributed|c16d1151f4dc4671e08d2ace32188ece916ab499283266ec84a255edd93f5acf: earlier measured/unknown verdict stands until their run lands. The run TIMER_MAP shows the lane detects necessity.
+NEW traces/windows_flag_ablation_20261010/README.md|unattributed|c3ff2def689632147a14bb86f0790ea6f837962667672667c29c688374e99a04: `HOLD_SECS=180`, zero measurement flags. Driver `host_tools/abl-batch.sh` (pops `NAME|flags` from a todo file,
+NEW traces/windows_overlay_native_20261010/README.md|unattributed|2d8b42ca0433323fc148a26f807df41394f7278def6f51f37adc2e04caa70fe7: ## Native Edge 155.0.4283.45 + Shorts (overlay default ON), 595.97 -- measured
+NEW traces/windows_overlay_native_20261010/README.md|unattributed|48aee7b4c8dd1f151680303a4d51954a0fb72a564cb07ad1fd8db4b31da573f7: ## Scenario results (probe as run: 7 scenarios x {default, `--ignore-support`}) -- measured
+NEW traces/windows_overlay_native_20261010/README.md|unattributed|d89fb2cf18e0b3be1093c28ceecfd2404648adaa44060789d4667d072e6350ba: ## Machinery validation with the BGRA control format (`--format bgra`) -- measured
+NEW traces/windows_playback_tdr_20261010/README.md|bare-hardware|39ec010da4826810e97f8cfb9861746fe8d17ae9339ff4cc03ef858678e98039: * FIXED, hardware-verified (run 400-412): a console-only refusal never stops the guest display (`Fault::Console` vs `Fault::Gpu`); console YUV
+NEW traces/windows_playback_tdr_20261010/README.md|unattributed|14d9b8a4091ea848d836ef023a555891f0d65daab4de0cddd94dde8c65aa107a: ## H1. The stall that remains [measured: runs 408, 409, 411; STALL reports + ring + per-channel state + effects ring]
+NEW traces/windows_playback_tdr_20261010/README.md|unattributed|1c6168f0596e443a45537b8d98f4ec372b084e88a4080bdf512ae4b6fa1ddd25: ## Progress 4 (the overlay flip that never completes: root cause and engine fix; measured vs inferred)
+NEW traces/windows_playback_tdr_20261010/README.md|unattributed|39ec010da4826810e97f8cfb9861746fe8d17ae9339ff4cc03ef858678e98039: * FIXED, hardware-verified (run 400-412): a console-only refusal never stops the guest display (`Fault::Console` vs `Fault::Gpu`); console YUV
+NEW traces/windows_playback_tdr_20261010/README.md|unattributed|8a7adf34876c6847ff5328035fb1aa89ee3a7b889309b9fade31016b542b0ef5: * 1. Code finding [measured, code]: in `display.rs` `ScanState::start`, when `dp.sdr_color` is set (Windows SDR colour pipeline) any entry in
+NEW traces/windows_playback_tdr_20261010/README.md|unattributed|a3fb8e65851ad086a5b544530b7a37a520c17a59e5cbdaa7e76318feb881312f: STATUS: LIVE. Product code on the branch, head = see `git log` (18da7c3c + docs). Labels: [measured] / [inferred].
+NEW traces/windows_prod_20261010/README.md|unattributed|fe7fae17b921022421b0517a7a54db9d6a2443cebe00d66796be0336f1cb517b: | run | build | extra | outcome (measured from kayfabe's `qemu.log`, host dmesg, guest event log for 260) |
+claims: existing-debt=3145 new=85 resolved=9
+    ★ FAILED
+
+=== Section-number gate (no two design-doc sections share a number)
+⊘ V3_COMPLETION_AUDIT.md  duplicate section numbers: 1 2 3 
+SECTION_GATE files=96 offenders=1
+    ★ FAILED
+
+=== Unsafe-containment gates (A: forbid inheritance, B: the named crates, ratchet)
+crates/kayfabe-linux-raw: 127 relaxation(s) (bar: 127)
+crates/kayfabe-linux-raw/src/host_fd_unsafe.rs:9
+crates/kayfabe-linux-raw/src/scm_unsafe.rs:10
+crates/kayfabe-linux-raw/src/spawn_unsafe.rs:17
+crates/kayfabe-linux-raw/src/window_unsafe.rs:8
+crates/kayfabe-linux-raw/src/epoll_unsafe.rs:3
+crates/kayfabe-linux-raw/src/chardev_unsafe.rs:4
+crates/kayfabe-linux-raw/src/mapping_unsafe.rs:17
+crates/kayfabe-linux-raw/src/vcpu_unsafe.rs:8
+crates/kayfabe-linux-raw/src/sandbox_unsafe.rs:9
+crates/kayfabe-linux-raw/src/sysconf_unsafe.rs:1
+crates/kayfabe-linux-raw/src/signal_unsafe.rs:25
+crates/kayfabe-linux-raw/src/arena_unsafe.rs:6
+crates/kayfabe-linux-raw/src/kvm_unsafe.rs:4
+crates/kayfabe-linux-raw/src/affinity_unsafe.rs:6
+crates/kayfabe-cuda: 43 relaxation(s) (bar: 43)
+43
+crates/kf-linux-raw: 97 relaxation(s) (bar: 97)
+crates/kf-linux-raw/src/host_fd_unsafe.rs:14
+crates/kf-linux-raw/src/drm_unsafe.rs:4
+crates/kf-linux-raw/src/capability_unsafe.rs:2
+crates/kf-linux-raw/src/window_unsafe.rs:9
+crates/kf-linux-raw/src/epoll_unsafe.rs:3
+crates/kf-linux-raw/src/chardev_unsafe.rs:4
+crates/kf-linux-raw/src/mapping_unsafe.rs:24
+crates/kf-linux-raw/src/vcpu_unsafe.rs:8
+crates/kf-linux-raw/src/sysconf_unsafe.rs:1
+crates/kf-linux-raw/src/signal_unsafe.rs:6
+crates/kf-linux-raw/src/kvm_unsafe.rs:6
+crates/kf-linux-raw/src/affinity_unsafe.rs:6
+crates/kf-linux-raw/src/unixsock_unsafe.rs:10
+crates/kf-cuda: 78 relaxation(s) (bar: 78)
+78
+crates/kf-qemu: 86 relaxation(s) (bar: 86)
+crates/kf-qemu/src/raw_unsafe.rs:47
+crates/kf-qemu/src/ffi_unsafe.rs:39
+firmware/kf-gop: 78 relaxation(s) (bar: 78)
+firmware/kf-gop/src/bin/kf-gop-test/check_unsafe.rs:22
+firmware/kf-gop/src/driver_unsafe.rs:32
+firmware/kf-gop/src/efi_unsafe.rs:23
+firmware/kf-gop/src/port_unsafe.rs:1
+crates/kf-chan: 0 relaxation(s) (bar: 0)
+0
+    ok
+
+  deferred (needs --all, it reads the test log): Test (OS-free configuration — KVM forced absent)
+  deferred (needs --all, it reads the test log): KVM-gate reached-count (floor, not an exact match)
+  deferred (needs --all, it reads the test log): SANDBOX-gate reached-count (floor, not an exact match)
+  deferred (needs --all, it reads the test log): CAP-gate — the live capability tests, reached unprivileged and run as root
+  deferred (needs --all, it reads the test log): UDMABUF-gate reached-count (floor, not an exact match)
+★ AT LEAST ONE GATE FAILED — do not push.
+  oracle census (from /tmp/kayfabe-test.8n2HMN.log):
+    VBIOS-ORACLE             RAN=0    SKIPPED=0

@@ -24,5 +24,10 @@ rm -f /tmp/kf-stop-winprod
 export KF3_REV_BIN=$REV HOLD_SECS=10 DWM_OVERLAY_OFF=1 GLTEST=1 SKIP_SHORTS=1
 export RUN_WIN_FLAGS=KF3_RPC_TRACE=1
 bash /data/kf-gl730101-host/scripts/bench/windows/glcrash/tdr-run28.sh 642
+for probe in cup2 cup3 cup8; do
+    grep -q "$probe.exe exit=0" "$W/winprod/run642/gl-result.txt"
+done
+grep -q 'ADAPTER NVIDIA.*code=0' "$W/winprod/run642/winprod.log"
+grep -q 'DONE tdr_cycles=0' "$W/winprod/run642/winprod.log"
 test "$(cat /sys/kernel/iommu_groups/11/type)" = DMA-FQ
 if pgrep qemu-system-x86 >/dev/null; then exit 1; fi

@@ -7,9 +7,22 @@ again after the Wednesday 07:00 reset). Read `AGENTS.md` (= `CLAUDE.md`) first: 
 
 ## Codex continuation, 2026-10-11 (supersedes the integration recommendation below)
 
-Worktree `/data/kf-inval-absent`, candidate branch `codex/gl-display-review-20261011`; integration remains at `a2632e64` until validation.
-All origin branches fetched; `bx` at its recorded SSH endpoint times out. Independent review found false DP stream capabilities and an ignored SOR sublink
-request in the pending GL branch. Correcting and validating these precedes integration. See `traces/gl_linux_regression_20261011/` for the serial runner.
+Worktree `/data/kf-inval-absent`; reviewed candidate `codex/gl-display-review-20261011` is integrated into
+`integration/windows-20261010`. All origin branches were fetched; `bx` at its recorded SSH endpoint times out.
+Independent review corrected false DP/software capabilities, SOR sublink handling and guest-authored output flags.
+Every family now answers implemented capabilities `00 0c`, rather than copying the physical GPU's `81 2f`.
+Exact product revision `02afce90` passed 1044 GPU-free tests, gates 9/9 plus gate 10, fast suite 30/30,
+T-space checks 30/30 and broker/input smoke. Windows run 642 passed CUDA cup2/cup3/cup8, adapter Code 0,
+zero TDR; **OpenGL gears still crashes** (access violation). The runner's fixed-password sign-in was repaired
+with environment-password typing and verified interactive-session detection; run 642 used a recorded live recovery.
+Evidence, review and reproduction scripts: `traces/gl_linux_regression_20261011/`.
+
+Master is untouched: quick CI has four identical inherited failing categories, verified against `a2632e64`.
+Host teardown: no QEMU or stop file, group 11 DMA-FQ, 111 GB free. Next P0 investigation: compare full
+request-to-reply behavior with VFIO or the authored `GetGspStaticInfo` reply; state the falsifier first.
+The OpenGL/app matrices, flag ablation, perf comparison and invalidate-latency work remain outstanding.
+The 05:00 update and measured-state section below are historical where they differ from this continuation;
+CUDA error 999 and the recommendation to integrate the uncorrected `81 2f` capabilities are superseded.
 
 ## UPDATE 2026-10-11 05:00 CEST (read this first; supersedes the OpenGL lines below where they differ)
 - **OpenGL (open P0):** branch `claude/gl-730101-20261011` (commit `417bad6d`, NOT merged). The RM replies now equal the real GPU's byte for byte

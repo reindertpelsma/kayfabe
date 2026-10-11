@@ -8,7 +8,7 @@ Independent review rejected the `417bad6d` candidate unchanged: field definition
 The model is TMDS-only and refuses slave displays. The corrected candidate clears MST and dual-SST on every family. A second review also rejected the three physical-RM software bits because physical support
 does not implement HDCP validation, gamma compensation or a glitchless modeset contract in the emulator. Product code no longer carries that physical-RM family row; every family answers `00 0c`. The historical `81 2f` runs below describe earlier binaries, not the corrected model.
 `DFP_ASSIGN_SOR` now respects the generated sublink input (secondary unsupported; invalid values invalid argument), and authors a zero reserved-panel mask.
-SOR flags are also validated (audio requests unsupported, unknown bits invalid); its output-only bit is authored clear. Five failing-first regressions reproduce these defects. Linux hardware validation and the new Windows verdict are pending.
+SOR flags are also validated (audio requests unsupported, unknown bits invalid); its output-only bit is authored clear. Five failing-first regressions reproduce these defects. Exact product revision `02afce90` passed Linux gates 9/9 plus gate 10, fast suite 30/30 and broker/input smoke. Windows run 642 passed cup2/cup3/cup8, adapter Code 0, zero TDR; gears still exits with access violation (-1073741819). Evidence and sign-in recovery: `traces/gl_linux_regression_20261011/README.md`.
 Private closed-driver diagnosis details have been removed from this working tree under owner §AG; historical commits still require the release history sweep.
 
 ## HANDOFF (newest, 2026-10-11 ~04:30 CEST: caps, heads-in-use and the crossbar derived; every GSP-visible reply now equals the real GPU's; the crash persists)

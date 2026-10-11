@@ -1,4 +1,4 @@
-STATUS: LIVE, 2026-10-10 (v1; written from documents only: no GPU, host, box or build was used; nothing here was re-measured).
+STATUS: LIVE, 2026-10-11 (v1 plus measured OpenGL probe intake; original rows retain their cited dates).
 
 # V3 feature gaps: what kayfabe lacks, ranked, with a plan
 
@@ -61,6 +61,7 @@ PWR power/reset/reboot, FAM multi-GPU/families, PKG packaging/signing, TST harne
 | G13 | Pending: Linux regression on the combined line | TST | Gates 9/9 + 10, fast suite 30/30, CUDA ladder, broker lane + interactive; display ordering touches the Linux desktop path | [read] handoff section 4 item 2 | Run, serial, one box | lane | S | none | no |
 | G14 | Translated-CE / kernel work refusals that apps hit | RM | Any refused birth (`KernelInUserSpace`, `GSP REFUSED fn103 = 0x40`) kills the process's engine. NVDEC/NVENC/OFA is fixed (`c028265e`); the classifier (`windows_user_work`) is judged by process for GR, CE and video only | [measured] run 295; [read] classifier | Sweep the refusal ledger of every Windows app-matrix run for births refused by name; each becomes `APP-<name>` | oracle: classifier table test per engine class | S per item | TST2 | no |
 | G15 | Windows app matrix has never run on kayfabe | TST | 100 apps, 83 tier 1; reasoned difficulty only. Baseline: VFIO Windows launcher does not exist in git; native-NVIDIA baseline on a vast box is in progress | [read] `V3_WINDOWS_APP_MATRIX.md` sections 0, 6, 7 | Run after G12; each failure is a row (rule 8) | lane | L | G12 | **yes** (build the VFIO launcher, or accept the native baseline) |
+| APP-kf_glgears | Windows OpenGL gears crash | RM | Standalone probe exits -1073741819; GEARS-UP marker is not success | [measured] run 642, product `02afce90`, `traces/gl_linux_regression_20261011/README.md`; CUDA cup2/3/8 pass, adapter Code 0, zero TDR | Compare full request/reply behavior and static-info reply with VFIO; state falsifier before run | lane: live gears with advancing frames, no crash | M | none | no |
 
 ### 2.2 P1: production quality, security, derive-never-capture
 
@@ -115,7 +116,7 @@ PWR power/reset/reboot, FAM multi-GPU/families, PKG packaging/signing, TST harne
 | L13 | NVENC session cap accounting, `0x20808165` | VID | Assumes one slot per acquire; concurrent guest + host encoders hit the host's `0x69`; `0x20808165` refused | [read] | None | n/a | S | none | no |
 | L14 | Perf work on the display and VA paths | TST | Beyond "decent" | [read] owner rule | n/a | n/a | L | H26 | no |
 
-Counts: P0 15 rows (G01-G15), P1 29 rows (H01-H29), P2 14 rows (L01-L14); 58 in all. `APP-<name>` rows are added by the app-matrix rule.
+Counts: P0 16 rows (G01-G15, APP-kf_glgears), P1 29 rows (H01-H29), P2 14 rows (L01-L14); 59 in all. `APP-<name>` rows are added by the app-matrix rule.
 
 ## 3. Detail for the top items
 
