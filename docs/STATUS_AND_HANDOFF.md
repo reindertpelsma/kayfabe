@@ -21,6 +21,16 @@ live in `docs/OWNER_RULINGS.md` (doorbell refinements of 2026-09-30 in §D); per
 docs named below. ⊘ When this file and a design doc disagree, the design doc's dated STATUS wins — then
 fix this file. Entries below the first are dated history.
 
+## Decisions waiting for the owner — Windows FIFO migration, 2026-10-11
+
+[Concrete design options and recommendation](design/V3_WINDOWS_USER_FIFO_MIGRATION_DECISION_20261011.md).
+Run1540 narrow NOT_SUPPORTED registration refusal reaches counter1 but still
+hostXid32/channel4e and a Vulkan device-lost dialog; final deadline result pending.
+No clean fallback demonstrated. Choose priority: restricted mediated user
+channels at birth for stock hosts; optional validated H8 host tier; or explicitly
+unsupported migration while other app gaps proceed. No migration/host patch
+implemented. Late conversion and relay-only edits do not solve the observed case.
+
 ## 0. Current resumption — start here
 
 **Windows/Codex current resume point:** [RESUME_CODEX_WINDOWS_20261011.md](RESUME_CODEX_WINDOWS_20261011.md), branch `codex/windows-matrix-20261011`. Owner session is stopped; preserve its convenience disk chain described there.

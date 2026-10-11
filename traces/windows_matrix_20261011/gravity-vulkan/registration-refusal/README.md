@@ -1,6 +1,6 @@
 # Passthrough FIFO-update registration refusal
 
-STATUS: RESEARCH, 2026-10-11 22:59UTC. Default-off diagnostic; exact Linux PASS, Windows1540 pending.
+STATUS: RESEARCH, 2026-10-11 23:08UTC. Exact Linux PASS; Windows1540 clean-fallback falsifier observed, final oracle pending.
 
 ## Hypothesis and falsifier, before hardware
 
@@ -84,3 +84,27 @@ Reclaimed only completed own disposable1490/1495/1510 disks after checking162
 qcow2 headers for backing dependencies (see overlay-cleanup-summary.json).
 Personal1380 original, baseline parent and personal writable child retained.
 Host129GiB free before Windows. This is storage cleanup, not image validation.
+
+## Live falsifier, 2026-10-11 23:08UTC
+
+Run1540 exactb081f705a boots with NVIDIA580.88/Code0, original app/media/oracle.
+First refusal: clientc1d0007d/objectff1fe010/API40000030, inner20801116,
+registration50800104 status0x56. VM counter max1. Its host fault remains
+Xid32/channel4e/intr00800000 at23:02:37UTC. Precise23:01:27–23:07:33.641361UTC
+journal query0/Xid1; mid screenshot shows rendered asteroids with a Vulkan
+"device lost / can't submit command buffer" dialog. H2's clean fallback is
+**FALSIFIED**. App's original600s deadline still running; do not invent a final
+PASS/FAIL/TIMEOUT or guest recovery totals yet. No decoded status-handling error
+justifies an alternate INSUFFICIENT_PERMISSIONS experiment.
+
+Runtime flag diff against1495: only KF3_WIN_REFUSE_PT_FIFO_UPDATE=1. Exact
+source differs by the refusal and diagnostic counter; no other product change.
+Prefix has no walk-ceiling/slot-pool/OverDeclaredCap/HELD-BY-HOST lines,
+unreconciled0/held0/birth_refused_cap0. These do not prove mapping correctness.
+No late sampler enabled; later refused-handle trigger remains UNMEASURED.
+Do not interpret unrelated Translated0x200 logs as this Passthrough trigger.
+Original live observations, hashes and image in live-observation.
+
+No migration workaround implemented. Concrete alternatives, cost limits and
+recommendation in docs/design/V3_WINDOWS_USER_FIFO_MIGRATION_DECISION_20261011.md;
+optional own-channel host operation proposed as H8, not built/measured.

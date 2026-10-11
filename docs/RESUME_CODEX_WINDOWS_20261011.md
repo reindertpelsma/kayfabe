@@ -1,6 +1,6 @@
 # Resume the Windows matrix and GravityMark Vulkan investigation
 
-**STATUS: LIVE, 2026-10-11 22:59 UTC.** Compact entry point for a new chat.
+**STATUS: LIVE, 2026-10-11 23:09 UTC.** Compact entry point for a new chat.
 Historical chronology is in [HANDOFF_FOR_CODEX_20261011.md](HANDOFF_FOR_CODEX_20261011.md).
 Read the current checkpoint here before treating an older pending/result paragraph
 in that chronology as current state.
@@ -8,7 +8,7 @@ in that chronology as current state.
 ## Branches and checkout
 
 Public repository: <https://github.com/reindertpelsma/kayfabe>.
-Branch: **`codex/windows-matrix-20261011`**. Last confirmed push **b081f705a**,
+Branch: **`codex/windows-matrix-20261011`**. Last confirmed push **708d36919**,
 containing reviewed source89e8ddf8b with161 GPU-free tests. Newer documentation checkpoints
 must not inherit exact-revision hardware claims automatically.
 Use the branch tip to get this document and the complete reachable source history.
@@ -95,6 +95,22 @@ Shared lock parent579162/campaign579163; root
 only completed own1490/1495/1510 test disks reclaimed after dependency checks.
 Read registration-refusal/README.md and original logs for exact evidence/guard.
 
+
+## UPDATE 2026-10-11 23:09UTC — clean registration fallback falsified
+
+Last confirmed public push708d36919; private1dc9c0e unchanged. Exactb081f705a
+Windows1540 refuses FIFO-update registration50800104/API40000030 on
+clientc1d0007d/objectff1fe010, statusNOT_SUPPORTED, counter1, then still
+hostXid32/channel4e/intr00800000 at23:02:37UTC. Mid screenshot: rendered asteroids
+and Vulkan device-lost/cannot-submit dialog. H2 clean fallback FALSIFIED; original
+600s deadline and final guest event/recovery counts pending. No later refused-
+handle trigger measurement, no status-handling error to justify status sweep.
+Default-off experiment stays diagnostic; no migration/host patch/default change.
+[Concrete next design](design/V3_WINDOWS_USER_FIFO_MIGRATION_DECISION_20261011.md)
+compares restricted mediated user channels from birth, optional H8 host operation,
+and explicitly unsupported stock scope. Personal1380 remains intact. Campaign
+still active under shared lock; do not start another GPU job.
+
 ## What passes, and what remains open
 
 The [combined checkpoint](../traces/windows_matrix_20261011/candidate_combined_checkpoint.tsv)
@@ -160,8 +176,7 @@ Default-off bounded late sampler is diagnostic only; independent review and
 Next experiment prepared: `KF3_WIN_REFUSE_PT_FIFO_UPDATE=1`, default OFF,
 returns NOT_SUPPORTED only to FIFO-update registrations on live Passthrough
 user-work parents; leaves5080 and other APIs intact. Native answers OK, so
-this is a deliberate compatibility divergence. Exact refusal source b081f705a passes Linux9+10/30; Windows1540 now starts. No Windows fallback measured
-yet. See registration-refusal/README.md for hypothesis/falsifier, bounds,
+this is a deliberate compatibility divergence. Exact refusal source b081f705a passes Linux9+10/30; Windows1540 now starts. Run1540 has falsified the clean fallback: counter1, hostXid32 and device-lost dialog. Final deadline result pending. See registration-refusal/README.md for hypothesis/falsifier, bounds,
 validation and no-implementation decision guard. Personal1380 is preserved;
 tests use disposable overlays. Native absence of a later plain RmControl does
 NOT establish no deferred execution inside GSP.

@@ -1,6 +1,6 @@
 # V3 — the host patch list: every optional host-kernel/driver enhancement, in one plan
 
-**STATUS: DESIGN-ONLY, 2026-10-10 (H5 since written and build-verified, same day: see §4.5 and `V3_H5_USERD_DMA_PATCH.md`).**
+**STATUS: DESIGN-ONLY, 2026-10-11 (H8 proposed; H5 written and build-verified2026-10-10: see §4.5 and `V3_H5_USERD_DMA_PATCH.md`).**
 Nothing in this document is built, apart from what each entry says is already built (the b3
 nvidia-uvm patch, the ioeventfd fast path, the USERD relay, the stock-path fallbacks, and the H5
 patch file, which has been compiled but never loaded). It consolidates the candidates scattered over `V3_COOPERATIVE_TIERS.md`,
@@ -47,6 +47,7 @@ no CPU executor for GPU work; no forged completions.
 | H5 | USERD-in-sysmem address-size fix (Windows; Turing/Ampere/Ada hosts only) | `nvidia.ko` kernel-interface layer (`kernel-open/nvidia/nv.c`; applies to the packaged DKMS tree) | the USERD relay (built, measured) | S | scope ruled (D7, 2026-10-10); **patch written, build-only verified at 595.91.07, never loaded**; the kayfabe behaviour that uses it is not enabled (`V3_H5_USERD_DMA_PATCH.md`) |
 | H6 | exact partial unmap of `NV01_MEMORY_VIRTUAL` mappings | `nvidia.ko` RM core (open source build) | per-leaf mappings, micro reservation if it passes, else 4 KiB grain; never re-make | M | candidate from source reading; **not owner-decided, not hardware-measured** |
 | H7 | scatter-map verb (no stitched views) | `nvidia.ko` RM core | stitched OS descriptor, batched (built, measured nested) | M | candidate derived by this page; lowest priority |
+| H8 | validated own-channel FIFO/USERD migration for unprivileged clients | `nvidia.ko` RM core + authored VMM relay transition | migration unsupported; narrow registration refusal failed GravityMark1540 | M–L estimate | design only, not owner-decided, not built/measured; §4.8 |
 
 Considered and **not** host-patch items (carve-out refusal, MMU-invalidate refusals, the arm64
 mapping flag, IOMMU identity mode, the vfio-pci/QEMU tracer, vfio-user mmap changes, guest-side
@@ -499,16 +500,44 @@ take physical addresses from userspace. **Not owner-decided; derived by this pag
 trusted host (`bm3_diag` per batch); if the stitch is under ~10 % of a Windows boot's map time, drop
 this entry. **Effort** M. **Dependencies** the rebuild tier; lowest priority.
 
+### 4.8 H8 — validated own-channel FIFO/USERD migration
+
+**STATUS: DESIGN-ONLY, 2026-10-11.** Candidate only, not built or owner-decided.
+[Decision and evidence](V3_WINDOWS_USER_FIFO_MIGRATION_DECISION_20261011.md).
+
+Public595.84/595.91.07 marks FIFO_UPDATE_CHANNEL_INFO privileged; deferred
+registration retains the caller's privilege. The native USER probe faults while
+NOP is clean, without a decoded inner status. Windows native privileged
+registrations succeed. Kayfabe's Passthrough target submits a matching migration
+request; refusing registration in1540 does not prevent Xid32/device lost.
+Actual hardware execution/cause remains unmeasured.
+
+Propose a bounded operation permitting only a caller's own channel and its own
+host USERD memory, with caller/target-client checks, valid allocation type,
+checked aligned complete FIFO/USERD spans, entry-count cap, backing lifetime,
+scheduling/execution ordering and concurrent-free safety. The VMM authors host
+handles/addresses. Do not globally drop the privileged flag or forward guest
+controls. Preserve native stream-position semantics; define the private-USERD
+relay transition and observable completion before claiming a usable interface.
+
+Related H5 solves a different USERD DMA-address-size issue; H5 alone cannot
+resize/re-point a GPFIFO. H8 needs H0, matching full open-RM rebuild and controlled
+reload/rollback. Stock remains correct by explicitly lacking this feature;
+there is no successful stock GravityMark fallback yet. Effort M–L is an estimate;
+performance unmeasured, potential benefit is avoiding full command-stream CPU
+mediation. Validate GPU-free ownership/lifetime models, native USER positive and
+hostile negatives, then same-workload guest/reference and exact Linux regression.
+
 ## 5. Shared prerequisites and the dependency graph
 
 - **H0 (probe, packaging, manifest, tier line)** is a prerequisite of every entry. It is kayfabe-side plus
   packaging and needs no kernel change of its own.
 - **The `nvidia.ko` rebuild tier** (a source build of the matching open-gpu-kernel-modules tag, a
   stop-VMs/stop-desktop/replace/reload/rollback procedure, a vast KVM-image box to prove it on) is a
-  prerequisite of H6, H7 and H1 variant A. ⊘ *H5 (2026-10-10): not a prerequisite of the **build**, since the patch applies to the packaged
+  prerequisite of H6, H7, H8 and H1 variant A. ⊘ *H5 (2026-10-10): not a prerequisite of the **build**, since the patch applies to the packaged
   DKMS tree; the stack reload and rollback procedure still is, and is written in `V3_H5_USERD_DMA_PATCH.md` §6.* H1 variant B, H2 and H3 do not need it.
 - **Owner decisions** gate: H5 (⊘ the scope of the §AB.2 exception: given, D7), H1 (variant, vCPU-store judgement),
-  H6 (opt-in flag; and the §8.8 big-leaf decision it must agree with).
+  H6 (opt-in flag; and the §8.8 big-leaf decision it must agree with), H8 (scope and priority; no permission-only shortcut).
 - **Hardware verdicts** gate value, not correctness: the `reserve` probe (H6), the bare-metal
   wake-to-ring figure (H1), the non-nested stitch cost (H7).
 

@@ -1,5 +1,21 @@
 # Handoff for a different agent (Codex or any fresh agent), 2026-10-11
 
+## UPDATE 2026-10-11 23:09UTC — clean registration fallback falsified
+
+Last confirmed public push708d36919; private1dc9c0e unchanged. Exactb081f705a
+Windows1540 refuses FIFO-update registration50800104/API40000030 on
+clientc1d0007d/objectff1fe010, statusNOT_SUPPORTED, counter1, then still
+hostXid32/channel4e/intr00800000 at23:02:37UTC. Mid screenshot: rendered asteroids
+and Vulkan device-lost/cannot-submit dialog. H2 clean fallback FALSIFIED; original
+600s deadline and final guest event/recovery counts pending. No later refused-
+handle trigger measurement, no status-handling error to justify status sweep.
+Default-off experiment stays diagnostic; no migration/host patch/default change.
+[Concrete next design](design/V3_WINDOWS_USER_FIFO_MIGRATION_DECISION_20261011.md)
+compares restricted mediated user channels from birth, optional H8 host operation,
+and explicitly unsupported stock scope. Personal1380 remains intact. Campaign
+still active under shared lock; do not start another GPU job.
+
+
 ## UPDATE 2026-10-11 22:59UTC — exact refusal source Linux green; Windows1540 starts
 
 Last confirmed public pushb081f705a; private1dc9c0e unchanged. Exactb081f705a

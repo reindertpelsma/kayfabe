@@ -1,0 +1,11 @@
+{
+  "control_revision": "89e8ddf8",
+  "refusal_revision": "b081f705",
+  "changes": {
+    "KF3_WIN_REFUSE_PT_FIFO_UPDATE": [
+      null,
+      "1"
+    ]
+  },
+  "note": "Only runtime flag differs; source adds default-off refusal and diagnostic counter."
+}
