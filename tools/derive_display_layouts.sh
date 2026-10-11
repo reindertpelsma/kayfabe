@@ -223,6 +223,10 @@ CONSTS=(
     echo "  printf(\"CONST\\tCAP_${c}_MASK\\t0x%llx\\n\", (unsigned long long)(0?NV0073_CTRL_SYSTEM_CAPS_${c}));"
   done
   for c in "${CONSTS[@]}"; do echo "  printf(\"CONST\\t$c\\t0x%llx\\n\", (unsigned long long)($c));"; done
+  for f in AUDIO_OPTIMAL ACTIVE_SOR_NOT_AUDIO_CAPABLE_YES; do
+    range=${f%_*}
+    echo "  printf(\"CONST\\tASSIGN_SOR_FLAGS_${f}_MASK\\t0x%llx\\n\", (unsigned long long)(NV0073_CTRL_DFP_ASSIGN_SOR_FLAGS_${f} << (0?NV0073_CTRL_DFP_ASSIGN_SOR_FLAGS_${range})));"
+  done
   echo '  return 0; }'
 } > "$tmp/l.c"
 gcc -w -I"$INC" -I"$INC/ctrl" -I"$OG/src/common/inc" -o "$tmp/l" "$tmp/l.c" 2>"$tmp/err" || { echo "⊘ layout program did not compile:" >&2; head -20 "$tmp/err" >&2; exit 3; }

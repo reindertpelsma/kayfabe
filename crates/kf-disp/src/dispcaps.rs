@@ -12,7 +12,7 @@
 //! | `SINGLE_HEAD_MST_SUPPORTED` | unsupported: the authored SOR capabilities and connectors are TMDS-only |
 //! | `SINGLE_HEAD_DUAL_SST_SUPPORTED` | unsupported: the model refuses slave displays |
 //! | `CROSS_BAR_SUPPORTED` | this model answers `NV0073_CTRL_CMD_DFP_ASSIGN_SOR` (the crossbar's control; the routing is fixed, connector `i` on SOR `i`) |
-//! | `AA_FOS_GAMMA_COMP_SUPPORTED`, `KSV_SRM_VALIDATION_SUPPORTED`, `GLITCHLESS_MODESET_SUPPORTED` | RM-software features of the display engine generation: nothing in the open headers, the class tables or the model derives them, so they come from the family's [`RmFeatures`] row, kept by hand, and only for an IP version observed on hardware. Any other IP version claims none (named, [`rm_features`]) |
+//! | `AA_FOS_GAMMA_COMP_SUPPORTED`, `KSV_SRM_VALIDATION_SUPPORTED`, `GLITCHLESS_MODESET_SUPPORTED` | unsupported: a measurement of physical RM does not implement gamma compensation, HDCP validation or a glitchless modeset contract in this model |
 //!
 //! No workaround bit (`*_BUG_*`, `RASTER_LOCK_NEEDS_MIO_POWER`, `HDMI21_SW_ACR_BUG_3275257`) is ever
 //! set: this engine has none of those defects. Offsets and masks come from the compiled headers
@@ -26,46 +26,6 @@ use crate::layout::Layouts;
 /// an HDMI 2.0 transmitter.
 pub const HDMI_1_4_TMDS_MAX_KHZ: u32 = 340_000;
 
-/// The RM-software features of a display engine generation that no open source derives (see the
-/// module table). A hand-kept FAMILY row, not a per-die table.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct RmFeatures {
-    /// `NV0073_CTRL_SYSTEM_CAPS_AA_FOS_GAMMA_COMP_SUPPORTED`.
-    pub aa_fos_gamma_comp: bool,
-    /// `NV0073_CTRL_SYSTEM_CAPS_KSV_SRM_VALIDATION_SUPPORTED`.
-    pub ksv_srm_validation: bool,
-    /// `NV0073_CTRL_SYSTEM_CAPS_GLITCHLESS_MODESET_SUPPORTED`.
-    pub glitchless_modeset: bool,
-}
-
-/// The display IP versions whose [`RmFeatures`] were observed on hardware.
-///
-/// `[observed 2026-10-11]` `DISPv0404` (Ada, `kf_chip::display::ADA`): a real RTX 4070 (AD104),
-/// Windows 580.88, VFIO reference, 15 of 15 `0x730101` answers `NV_OK` with `capsTbl = 81 2f`: byte 0
-/// `0x81` = `AA_FOS_GAMMA_COMP | KSV_SRM_VALIDATION`, byte 1 `0x2f` = `SINGLE_HEAD_MST |
-/// SINGLE_HEAD_DUAL_SST | HDMI_2_0 | CROSS_BAR | GLITCHLESS_MODESET`. The capture is the ORACLE for
-/// the real engine, not a requirement to advertise features absent from our model; it is the DATA only for the three bits
-/// above that nothing else derives, and is inferred to hold for the family (AD102..AD107 share
-/// `DISPv0404`), not measured on those dies.
-pub const OBSERVED_RM_FEATURES: &[(u32, RmFeatures)] = &[(
-    0x0404_0000,
-    RmFeatures {
-        aa_fos_gamma_comp: true,
-        ksv_srm_validation: true,
-        glitchless_modeset: true,
-    },
-)];
-
-/// The [`RmFeatures`] for a display IP version: the observed row, or `None` for an IP version no
-/// capture covered (it then claims none of the three, never a neighbour's).
-#[must_use]
-pub fn rm_features(ip_version: u32) -> Option<RmFeatures> {
-    OBSERVED_RM_FEATURES
-        .iter()
-        .find(|(v, _)| *v == ip_version)
-        .map(|(_, f)| *f)
-}
-
 /// The facts the table is a function of.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EngineFacts {
@@ -73,26 +33,19 @@ pub struct EngineFacts {
     pub tmds_max_khz: u32,
     /// This model answers the SOR crossbar's control.
     pub sor_routing: bool,
-    /// [`rm_features`] of the IP version (all `false` when unobserved).
-    pub rm: RmFeatures,
 }
 
 impl EngineFacts {
-    /// Derive the TMDS-only model facts from its class table, display IP version, and
+    /// Derive the TMDS-only model facts from its class table and
     /// whether the model implements the crossbar control. DP stream capabilities remain absent
     /// on every family: class field definitions alone do not implement DP support.
     ///
     /// # Errors
     /// [`Missing`] when the class table lacks the TMDS clock the page itself needs.
-    pub fn derive(
-        t: &ClassTable,
-        ip_version: u32,
-        sor_routing: bool,
-    ) -> Result<EngineFacts, Missing> {
+    pub fn derive(t: &ClassTable, sor_routing: bool) -> Result<EngineFacts, Missing> {
         Ok(EngineFacts {
             tmds_max_khz: tmds_max_khz(t)?,
             sor_routing,
-            rm: rm_features(ip_version).unwrap_or_default(),
         })
     }
 
@@ -100,14 +53,11 @@ impl EngineFacts {
     #[must_use]
     pub fn caps(&self) -> Vec<&'static str> {
         [
-            (self.rm.aa_fos_gamma_comp, "AA_FOS_GAMMA_COMP_SUPPORTED"),
-            (self.rm.ksv_srm_validation, "KSV_SRM_VALIDATION_SUPPORTED"),
             (
                 self.tmds_max_khz > HDMI_1_4_TMDS_MAX_KHZ,
                 "HDMI_2_0_SUPPORTED",
             ),
             (self.sor_routing, "CROSS_BAR_SUPPORTED"),
-            (self.rm.glitchless_modeset, "GLITCHLESS_MODESET_SUPPORTED"),
         ]
         .into_iter()
         .filter_map(|(on, n)| on.then_some(n))
@@ -151,8 +101,6 @@ pub fn caps_table(l: &Layouts, facts: &EngineFacts) -> Result<Vec<u8>, Missing> 
 mod tests {
     use super::*;
 
-    const ADA_ROW: &kf_chip::display::DisplayRow = &kf_chip::display::ADA;
-
     fn tables() -> (&'static ClassTable, &'static Layouts) {
         (
             crate::class::for_version("580.65.06").expect("classes"),
@@ -160,9 +108,9 @@ mod tests {
         )
     }
 
-    fn facts(row: &kf_chip::display::DisplayRow, routing: bool) -> EngineFacts {
+    fn facts(routing: bool) -> EngineFacts {
         let (t, _) = tables();
-        EngineFacts::derive(t, row.ip_version, routing).expect("facts")
+        EngineFacts::derive(t, routing).expect("facts")
     }
 
     fn table(f: &EngineFacts) -> Vec<u8> {
@@ -173,47 +121,23 @@ mod tests {
     /// them. Each implemented capability still follows its own model fact.
     #[test]
     fn the_ada_model_advertises_only_implemented_features_and_each_rule_moves_its_own_bit() {
-        let f = facts(ADA_ROW, true);
-        assert_eq!(table(&f), [0x81, 0x2c]);
-        assert_eq!(
-            f.caps(),
-            [
-                "AA_FOS_GAMMA_COMP_SUPPORTED",
-                "KSV_SRM_VALIDATION_SUPPORTED",
-                "HDMI_2_0_SUPPORTED",
-                "CROSS_BAR_SUPPORTED",
-                "GLITCHLESS_MODESET_SUPPORTED"
-            ]
-        );
+        let f = facts(true);
+        assert_eq!(table(&f), [0x00, 0x0c]);
+        assert_eq!(f.caps(), ["HDMI_2_0_SUPPORTED", "CROSS_BAR_SUPPORTED"]);
         // the model does not answer the crossbar control: no CROSS_BAR, nothing else moves
-        assert_eq!(table(&facts(ADA_ROW, false)), [0x81, 0x24]);
+        assert_eq!(table(&facts(false)), [0x00, 0x04]);
         // TMDS: 340 MHz is HDMI 1.4b's ceiling, one kHz above is HDMI 2.0
         let mut g = f;
         g.tmds_max_khz = HDMI_1_4_TMDS_MAX_KHZ;
-        assert_eq!(table(&g), [0x81, 0x28]);
+        assert_eq!(table(&g), [0x00, 0x08]);
         g.tmds_max_khz = HDMI_1_4_TMDS_MAX_KHZ + 1;
-        assert_eq!(table(&g), [0x81, 0x2c]);
+        assert_eq!(table(&g), [0x00, 0x0c]);
         // no workaround bit is ever set, whatever the facts
         for routing in [false, true] {
-            let t = table(&facts(ADA_ROW, routing));
+            let t = table(&facts(routing));
             assert_eq!(t[0] & 0x7e, 0);
             assert_eq!(t[1] & 0x50, 0);
         }
-    }
-
-    /// A family whose RM-software bits were not observed claims none of them, and the class table
-    /// - not a copy of Ada's bytes - decides the rest. Turing's class defines both DP link bits too.
-    #[test]
-    fn other_families_follow_their_own_class_table_and_claim_no_unobserved_rm_bit() {
-        for row in [
-            &kf_chip::display::TURING,
-            &kf_chip::display::AMPERE,
-            &kf_chip::display::BLACKWELL_GB20X,
-        ] {
-            assert_eq!(rm_features(row.ip_version), None, "{}", row.chips);
-            assert_eq!(table(&facts(row, true)), [0x00, 0x0c], "{}", row.chips);
-        }
-        assert!(rm_features(ADA_ROW.ip_version).is_some());
     }
 
     /// Hostile layouts: a bit the layouts lack, a table size that is not the member's, or a bit
@@ -221,7 +145,7 @@ mod tests {
     #[test]
     fn a_layout_that_lacks_a_bit_or_the_table_size_is_refused_by_name() {
         let base = include_str!("../data/layouts-580.65.06.tsv");
-        let f = facts(ADA_ROW, true);
+        let f = facts(true);
         let without = |name: &str| -> String {
             base.lines()
                 .filter(|l| !l.contains(name))
@@ -259,6 +183,6 @@ mod tests {
         );
         // a class table lacking the TMDS clock cannot derive
         let none = ClassTable::parse("");
-        assert!(EngineFacts::derive(&none, ADA_ROW.ip_version, true).is_err());
+        assert!(EngineFacts::derive(&none, true).is_err());
     }
 }

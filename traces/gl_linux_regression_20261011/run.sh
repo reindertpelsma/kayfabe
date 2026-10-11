@@ -4,9 +4,9 @@
 set -euo pipefail
 export PATH="$HOME/.cargo/bin:$PATH"
 W=/var/lib/kf-windows-20261005
-OUT=$W/codex-gl-regression-20261011
-REPO=/data/kf-gl730101-host
 REV=${1:?source revision}
+OUT=$W/codex-gl-regression-20261011-$REV
+REPO=/data/kf-gl730101-host
 export CARGO_TARGET_DIR=/data/kf-glcrash-target
 mkdir -p "$OUT/logs" "$OUT/bench"
 cd "$REPO"
@@ -20,9 +20,9 @@ stage() {
     local name=$1 rc=0
     shift
     echo "STAGE_START $name $(date -Is)"
-    dmesg | rg 'Xid' > "$OUT/logs/${name}_xid_before.txt" || true
+    dmesg | grep -a 'Xid' > "$OUT/logs/${name}_xid_before.txt" || true
     "$@" > "$OUT/logs/$name.log" 2>&1 || rc=$?
-    dmesg | rg 'Xid' > "$OUT/logs/${name}_xid_after.txt" || true
+    dmesg | grep -a 'Xid' > "$OUT/logs/${name}_xid_after.txt" || true
     echo "STAGE_EXIT $name rc=$rc $(date -Is)"
     return "$rc"
 }

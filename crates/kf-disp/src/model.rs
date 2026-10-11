@@ -503,7 +503,6 @@ pub struct DisplayModel {
     pub caps_unverified: u64,
     /// The display caps class (`NVC773_DISP_CAPABILITIES` on Ada): the class table's key for the
     /// engine facts.
-    caps_class: u32,
     /// The one-time log line for the first such refusal; drained by [`Self::take_notice`].
     notice: Option<String>,
     /// Every display control answered (the first 512), for the log.
@@ -624,7 +623,6 @@ impl DisplayModel {
             statements_dropped: 0,
             display_mode_unverified: 0,
             caps_unverified: 0,
-            caps_class: row.classes.caps,
             notice: None,
             seen: Vec::new(),
             ports: Arc::new(Ports::default()),
@@ -890,7 +888,7 @@ impl DisplayModel {
             .ok_or_else(|| {
                 crate::caps::Missing(format!("class table for guest branch {}", l.version))
             })
-            .and_then(|t| crate::dispcaps::EngineFacts::derive(t, self.ip_version, sor_routing))
+            .and_then(|t| crate::dispcaps::EngineFacts::derive(t, sor_routing))
             .and_then(|f| crate::dispcaps::caps_table(l, &f));
         match table {
             Ok(t) => t,
@@ -953,6 +951,22 @@ impl DisplayModel {
         if sublink != none && sublink != primary {
             return Err(NV_ERR_INVALID_ARGUMENT);
         }
+        let flags = p.get("flags").ok_or(NV_ERR_NOT_SUPPORTED)?;
+        let audio = self
+            .l
+            .konst("ASSIGN_SOR_FLAGS_AUDIO_OPTIMAL_MASK")
+            .ok_or(NV_ERR_NOT_SUPPORTED)?;
+        let active_non_audio = self
+            .l
+            .konst("ASSIGN_SOR_FLAGS_ACTIVE_SOR_NOT_AUDIO_CAPABLE_YES_MASK")
+            .ok_or(NV_ERR_NOT_SUPPORTED)?;
+        if flags & !(audio | active_non_audio) != 0 {
+            return Err(NV_ERR_INVALID_ARGUMENT);
+        }
+        // No audio-capable SOR selection is implemented. The other flag is output only.
+        if flags & audio != 0 {
+            return Err(NV_ERR_NOT_SUPPORTED);
+        }
         // displayId 0: "RM shall return the XBAR config it has stored" (the header)
         if id != 0 {
             let c = self.connector(id).ok_or(NV_ERR_INVALID_ARGUMENT)?;
@@ -972,7 +986,8 @@ impl DisplayModel {
             }
         }
         let bytes = |w: Vec<u32>| w.iter().flat_map(|x| x.to_le_bytes()).collect::<Vec<u8>>();
-        let ok = p.set("reservedSorMask", 0)
+        let ok = p.set("flags", 0)
+            && p.set("reservedSorMask", 0)
             && p.set_bytes("sorAssignList", &bytes(list))
             && p.set_bytes(
                 "sorAssignListWithTag",
@@ -2815,6 +2830,49 @@ mod tests {
     }
 
     #[test]
+    fn physical_rm_features_are_not_emulator_capabilities() {
+        let mut m = ada("580.65.06");
+        let caps = caps_of(&mut m);
+        for name in [
+            "AA_FOS_GAMMA_COMP_SUPPORTED",
+            "KSV_SRM_VALIDATION_SUPPORTED",
+            "GLITCHLESS_MODESET_SUPPORTED",
+        ] {
+            let byte = m.l.konst(&format!("CAP_{name}_BYTE")).unwrap() as usize;
+            let mask = m.l.konst(&format!("CAP_{name}_MASK")).unwrap() as u8;
+            assert_eq!(caps[byte] & mask, 0, "{name}");
+        }
+    }
+
+    #[test]
+    fn assign_sor_validates_audio_request_and_authors_output_flags() {
+        for version in ["580.65.06", "580.159.04"] {
+            let mut m = ada(version);
+            // Open ctrl0073dfp.h: AUDIO at bit 0 (input), ACTIVE_SOR_NOT_AUDIO_CAPABLE at bit 1 (output).
+            let r = assign_sor(&mut m, |p| {
+                assert!(p.set("flags", 2));
+            })
+            .unwrap();
+            assert_eq!(get(&m, "NV0073_CTRL_DFP_ASSIGN_SOR_PARAMS", &r, "flags"), 0);
+            assert_eq!(
+                assign_sor(&mut m, |p| {
+                    assert!(p.set("displayId", 0x100));
+                    assert!(p.set("flags", 1));
+                }),
+                Err(NV_ERR_NOT_SUPPORTED)
+            );
+            for flags in [4, u64::from(u32::MAX)] {
+                assert_eq!(
+                    assign_sor(&mut m, |p| {
+                        assert!(p.set("flags", flags));
+                    }),
+                    Err(NV_ERR_INVALID_ARGUMENT)
+                );
+            }
+        }
+    }
+
+    #[test]
     fn assign_sor_respects_requested_sublink() {
         for version in ["580.65.06", "580.159.04"] {
             let mut m = ada(version);
@@ -2843,12 +2901,11 @@ mod tests {
     }
 
     /// The vector: the real AD104 answered `81 2f` (VFIO reference, 2026-10-11). Derived, the Ada
-    /// model omits its DP stream bits on both guest branches. Ampere and Turing also omit the
-    /// RM-software bits that have not been observed for their families.
+    /// model omits DP stream and physical-RM software bits on every family and guest branch.
     #[test]
     fn get_caps_v2_is_derived_from_the_family_and_model_support() {
         for v in ["580.65.06", "580.159.04"] {
-            assert_eq!(caps_of(&mut ada(v)), [0x81, 0x2c], "{v}");
+            assert_eq!(caps_of(&mut ada(v)), [0x00, 0x0c], "{v}");
         }
         let mut amp = model();
         assert_eq!(caps_of(&mut amp), [0x00, 0x0c]);
