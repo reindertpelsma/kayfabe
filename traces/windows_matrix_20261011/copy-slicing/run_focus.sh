@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+RUN_START=$(date -u "+%Y-%m-%d %H:%M:%S UTC")
 W=/var/lib/kf-windows-20261005
 TREE=/data/kf-slice-host-0f9c01f9
 REV=0f9c01f9
@@ -9,6 +10,7 @@ cleanup() {
   rc=$?; trap - EXIT
   bash "$B" stop 850 || true
   bash /tmp/kf-slice-post.sh
+  python3 /tmp/kf-capture-xids.py "$RUN" "$RUN_START" || true
   rm -f "$W/kf3-bins/$REV" /tmp/kf-stop-boundary-850
   echo "MATRIX_SLICE_FOCUS_EXIT=$rc at=$(date -Is)"
 }

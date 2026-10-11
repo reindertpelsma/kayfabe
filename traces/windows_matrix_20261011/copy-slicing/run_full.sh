@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+RUN_START=$(date -u "+%Y-%m-%d %H:%M:%S UTC")
 W=/var/lib/kf-windows-20261005
 TREE=/data/kf-slice-host-0f9c01f9
 REV=0f9c01f9
@@ -15,6 +16,7 @@ cleanup() {
   bash "$B" stop "$n" || true
  done
  bash "$POST"
+ python3 /tmp/kf-capture-xids.py "$RUN" "$RUN_START" || true
  rm -f "$W/kf3-bins/$REV"
  echo "MATRIX_SLICE_FULL_EXIT=$rc at=$(date -Is)"
 }
