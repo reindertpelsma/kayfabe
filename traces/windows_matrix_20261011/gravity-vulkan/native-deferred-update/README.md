@@ -1,6 +1,42 @@
 # Native authored deferred channel-update experiment
 
-**STATUS: RESEARCH, 2026-10-11.** Hardware pending; no production call site.
+**STATUS: RESEARCH, 2026-10-11.** Native experiment FAIL (host Xid32),
+no production call site. The earlier hardware-pending paragraph below is history.
+
+## Measured result, 2026-10-11 18:56:51 UTC
+
+Both native processes returned0, registered V2, and observed an actual GPU tail
+(NOP1055us, update1064us); cleanup calls returned success. Those facts do NOT
+establish that the asynchronous deferred software action succeeded. The kernel
+records Xid32 at18:56:51.221583UTC, PID287987, namekf-deferred-upd, channel4,
+intr00800000. Per-mode PID attribution was not recorded, so the faulty mode is
+unmeasured. The hypothesis's no-Xid requirement failed; no Windows fix follows.
+
+The original kernel capture wrongly reported0 because --until truncated the
+current timestamp to18:56:51.000000UTC, excluding the fault's fractional second.
+Original and corrected journals are both preserved under result/. The capture
+helper now uses microseconds and accepts an explicit endpoint, with the bounded
+known-fault window verified to contain1Xid. The clpeak run's supplementary
+capture also crossed into this later native test; corrected-journal/ limits it
+to its own stop time and contains only its context-switch Xid109.
+
+## Isolated repeat, 2026-10-11 19:02:55–59 UTC
+
+The SAME binary (SHA256 1c94782825cec20674817541546ff915aa74b94019772963754ab9383c1fa25a)
+ran both modes with actual process PIDs and separate precise windows, including
+two seconds of bench-only delayed-fault observation after process exit:
+
+| Mode | PID | Process rc | Host Xids | Verdict |
+| --- | ---: | ---: | ---: | --- |
+| NOP | 296840 | 0 | 0 | PASS |
+| Update | 296888 | 0 | 1 (Xid32) | FAIL |
+
+Raw logs and precise-window verdicts are in isolated-result/. Both cases ran;
+overall rc1. This attributes the fault to the update case, falsifying this exact
+unprivileged authored path. It does not identify the inner RM rejection status.
+The GPU-written tail still cannot prove asynchronous software-action success.
+The observation interval never releases product state or invents completion.
+
 
 Run1288 GravityMark Vulkan times out611s with a device-lost/submit/present
 dialog, three guest driver events, one GSPcycle and host Xid32/channel0x4e.

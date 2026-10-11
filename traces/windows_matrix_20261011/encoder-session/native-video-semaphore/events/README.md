@@ -1,6 +1,26 @@
 # Native video notification experiment
 
-**STATUS: RESEARCH, 2026-10-11.** Hardware pending; bench only.
+**STATUS: RESEARCH, 2026-10-11.** Hardware experiment FAIL; bench only.
+
+## Measured result, 2026-10-11 18:56:48–51 UTC
+
+| Case | GPU semaphore / tail | NVENC ready | FIFO ready | Process rc |
+| --- | --- | --- | --- | ---: |
+| release/events | actual completion | false | false | 0 |
+| trap/events | actual completion | true | false | 0 |
+| release/fifo-nsi | actual completion | true | false | 1 |
+| trap/fifo-nsi | NOT RUN | — | — | — |
+
+All executed cases had quiet200ms listener baselines. The FIFO NSI positive
+control failed to wake the FIFO listener, so the runner stopped before case4.
+The first pair measures a trap-related NVENC wake on this host, but the failed
+control leaves the full notification hypothesis incompletely validated.
+Overall experiment rc1. No guest notification forwarding or translated-video
+admission follows. Raw evidence: result/probe.log. The original whole-second
+kernel capture has the endpoint limitation documented in the deferred-update
+experiment; it is not used to establish absence of a delayed fault.
+
+## Original hypothesis and protocol
 
 The existing authored C9B7 release/trap oracle now optionally registers separate
 dataless NVENC and FIFO_EVENT_MTHD listeners, using the existing public-source

@@ -1,0 +1,39 @@
+VIDEO_EVENTS_START=2026-10-11T20:56:48+02:00
+c6b575e514bd81efd2cf44d14b4132b12d6571d1761cbb12d5d6f19c2f92c033  /tmp/kf-video-event-probe
+VIDEO_EVENTS_CASE_START mode=release events=events at=2026-10-11T20:56:48+02:00
+kf-host: host tier: stock
+VIDEO_SEMAPHORE driver=595.91.07 mode=release index=1 class=0xc9b7
+kf-host: channel birth h=0xcafe0008 engine=0x1c reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=not-held
+VIDEO_SEMAPHORE channel=Channel { tsg: cafe0007, chan: cafe0008, token: c0004, born_user: Some(BirthPrivilege { reply_flags: 80 }) } object=0xcafe0009 privilege=USER
+VIDEO_EVENT_BASELINE notifier=39 initial=false idle=false
+VIDEO_EVENT_BASELINE notifier=35 initial=false idle=false
+VIDEO_SEMAPHORE sem=0x61fe0001 fence=1 elapsed_us=1
+VIDEO_EVENT_RESULT mode=release fifo_nsi=false nvenc_ready=false fifo_ready=false window_ms=200_per_notifier
+VIDEO_SEMAPHORE_CLEANUP channel=Ok(Some(())) view=Ok(()) unmap=Ok(()) memory=Ok(())
+VIDEO_SEMAPHORE_PROBE=PASS
+VIDEO_EVENTS_CASE_EXIT mode=release events=events rc=0 at=2026-10-11T20:56:49+02:00
+VIDEO_EVENTS_CASE_START mode=trap events=events at=2026-10-11T20:56:49+02:00
+kf-host: host tier: stock
+VIDEO_SEMAPHORE driver=595.91.07 mode=trap index=1 class=0xc9b7
+kf-host: channel birth h=0xcafe0008 engine=0x1c reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=not-held
+VIDEO_SEMAPHORE channel=Channel { tsg: cafe0007, chan: cafe0008, token: c0004, born_user: Some(BirthPrivilege { reply_flags: 80 }) } object=0xcafe0009 privilege=USER
+VIDEO_EVENT_BASELINE notifier=39 initial=false idle=false
+VIDEO_EVENT_BASELINE notifier=35 initial=false idle=false
+VIDEO_SEMAPHORE sem=0x61fe0001 fence=1 elapsed_us=1
+VIDEO_EVENT_RESULT mode=trap fifo_nsi=false nvenc_ready=true fifo_ready=false window_ms=200_per_notifier
+VIDEO_SEMAPHORE_CLEANUP channel=Ok(Some(())) view=Ok(()) unmap=Ok(()) memory=Ok(())
+VIDEO_SEMAPHORE_PROBE=PASS
+VIDEO_EVENTS_CASE_EXIT mode=trap events=events rc=0 at=2026-10-11T20:56:50+02:00
+VIDEO_EVENTS_CASE_START mode=release events=fifo-nsi at=2026-10-11T20:56:50+02:00
+kf-host: host tier: stock
+VIDEO_SEMAPHORE driver=595.91.07 mode=release index=1 class=0xc9b7
+kf-host: channel birth h=0xcafe0008 engine=0x1c reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=not-held
+VIDEO_SEMAPHORE channel=Channel { tsg: cafe0007, chan: cafe0008, token: c0004, born_user: Some(BirthPrivilege { reply_flags: 80 }) } object=0xcafe0009 privilege=USER
+VIDEO_EVENT_BASELINE notifier=39 initial=false idle=false
+VIDEO_EVENT_BASELINE notifier=35 initial=false idle=false
+VIDEO_SEMAPHORE sem=0x61fe0001 fence=1 elapsed_us=1
+VIDEO_EVENT_RESULT mode=release fifo_nsi=true nvenc_ready=true fifo_ready=false window_ms=200_per_notifier
+VIDEO_SEMAPHORE_CLEANUP channel=Ok(Some(())) view=Ok(()) unmap=Ok(()) memory=Ok(())
+VIDEO_SEMAPHORE_PROBE=FAIL authored FIFO NSI positive control did not wake FIFO listener
+VIDEO_EVENTS_CASE_EXIT mode=release events=fifo-nsi rc=1 at=2026-10-11T20:56:51+02:00
+VIDEO_EVENTS_EXIT=1 at=2026-10-11T20:56:51+02:00

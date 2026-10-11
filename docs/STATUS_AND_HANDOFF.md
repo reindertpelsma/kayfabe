@@ -11,6 +11,18 @@ fix this file. Entries below the first are dated history.
 
 ## 0. Current resumption — start here
 
+**2026-10-11 19:10 UTC, Codex Windows campaign:** last confirmed push773e818e5.
+Latest combined104/104:78cleanPASS,8PASS_WITH_RECOVERY,12FAIL,6TIMEOUT;
+Linux parity58/65, mixed revisions explicit. Direct stream1350 cleanPASS;
+CUDAclpeak1310 TIMEOUT1504s/hostXid109, no guest driver/recovery records.
+Native unprivileged deferred update faults with Xid32 while same-binary NOP
+is clean; hypothesis failed, no production caller. Precise journal endpoint
+fix prevents missing current-second faults. Native video FIFO positive control
+fails, no notification implementation admitted. Vulkan snapshot1361 active;
+private hang diagnosis follows. Event153 alone is not TDR proof. Manual1380
+and exact3252 regression queued; allocator65530 validation waits for manual exit.
+[Detailed handoff](HANDOFF_FOR_CODEX_20261011.md).
+
 **2026-10-11 18:43 UTC, Codex Windows campaign:** last confirmed pushc30b7f679.
 Run1288 final Vulkan TIMEOUT611s with device-lost/hostXid32/GSPcycle1; cause
 still unmeasured. Canonical103/104:77cleanPASS,8PASS_WITH_RECOVERY,12FAIL,

@@ -3,6 +3,34 @@
 **STATUS: LIVE, 2026-10-11.** Product candidate `2c917f3e`, following the
 OpenGL gears fix. Results are pending; this is not a matrix pass claim.
 
+## Latest checkpoint, 2026-10-11 19:10 UTC
+
+Last confirmed push773e818e5; this checkpoint records subsequent evidence.
+Canonical104/104 executed:78cleanPASS,8PASS_WITH_RECOVERY,12FAIL,6TIMEOUT;
+Linux counterpart parity58/65. These are latest per-row results across explicit
+product/harness revisions, not one exact-revision full sweep. Corrected direct
+CuPy per-thread stream1350 passes94s with numerical readback and no guest driver
+or recovery records. CUDAclpeak1310 TIMEOUT1504s at its original1500s budget;
+hostXid109 context-switch timeout, no guest153/4101 or GSPcycle.
+
+Native deferred-update hypothesis FAILED: same binary, unprivileged USER
+channels, isolated NOP PID296840 passes with0Xid; update PID296888 returns0 and
+writes its GPU tail but causes1Xid32. Thus a GPU tail does not validate the
+asynchronous software action. No production caller or Windows fix. The first
+journal helper truncated --until to whole seconds and missed a fault in that
+second; raw and corrected captures retained, helper now uses microseconds.
+Native video trap wakes the NVENC listener, but the authored FIFO positive
+control fails; fourth case not run. Overall notification experiment fails;
+no translated-video admission follows.
+
+Snapshot1360 completed; fresh Vulkan1361 active, unchanged budgets, product727.
+Private bounded hang-breakpoint diagnosis follows under the same GPU lock;
+all closed-binary analysis remains private and supplies no implementation data.
+Guest event153 is counted separately from display4101/live-kernel evidence and
+is not by itself proof of a TDR. Existing frozen3252 regression/manual1380 still
+queued; manual not ready. Capacity65530 validation waits for that manual VM to
+exit and cannot interrupt it. Same-GPU VFIO Vulkan comparison remains open.
+
 ## Latest checkpoint, 2026-10-11 18:43 UTC
 
 Last confirmed pushc30b7f679 adds a bench-only, host-authored native deferred

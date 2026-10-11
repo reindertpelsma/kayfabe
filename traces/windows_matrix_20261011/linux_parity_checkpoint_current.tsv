@@ -56,7 +56,7 @@ stream_created	PASS@2830988f	stream_created_t	PASS
 stream_created2nd	PASS@2830988f	stream_created2nd_t	PASS
 stream_default	PASS@2830988f	stream_default_t	PASS
 stream_nonblocking	PASS@2830988f	stream_nonblocking_t	PASS
-stream_perthread	PASS@2830988f	stream_perthread_t	stream_perthread_t:TIMEOUT
+stream_perthread	PASS@2830988f	stream_perthread_t	PASS
 stream_triad	PASS@2830988f	triad_t	PASS
 stream_two	PASS@2830988f	stream_two_t	PASS
 torch_ai_bench	PASS@2830988f	torch_ai_bench	torch_ai_bench:FAIL
