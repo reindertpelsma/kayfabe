@@ -49,11 +49,23 @@ int main(int argc, char **argv) {
   HDC dc = GetDC(w);
   PIXELFORMATDESCRIPTOR pfd = {0}; pfd.nSize = sizeof pfd; pfd.nVersion = 1;
   pfd.dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER; pfd.iPixelType = PFD_TYPE_RGBA; pfd.cColorBits = 32; pfd.cDepthBits = 24;
+  say("stage", "ChoosePixelFormat enter");
   int pf = ChoosePixelFormat(dc, &pfd);
+  printf("KFGL pixel_format %d\n", pf); fflush(stdout);
+  say("stage", "SetPixelFormat enter");
   if (!pf || !SetPixelFormat(dc, pf, &pfd)) { bad("SetPixelFormat"); goto done; }
+  say("stage", "wglCreateContext enter");
   HGLRC rc = wglCreateContext(dc);
+  say("stage", "wglCreateContext returned; wglMakeCurrent enter");
+  printf("KFGL context %p\n", (void*)rc); fflush(stdout);
   if (!rc || !wglMakeCurrent(dc, rc)) { bad("wglCreateContext/MakeCurrent"); goto done; }
-  const char *ven = (const char *)glGetString(GL_VENDOR), *ren = (const char *)glGetString(GL_RENDERER), *ver = (const char *)glGetString(GL_VERSION);
+  say("stage", "wglMakeCurrent returned; glGetString vendor enter");
+  const char *ven = (const char *)glGetString(GL_VENDOR);
+  say("stage", "glGetString vendor returned; renderer enter");
+  const char *ren = (const char *)glGetString(GL_RENDERER);
+  say("stage", "glGetString renderer returned; version enter");
+  const char *ver = (const char *)glGetString(GL_VERSION);
+  say("stage", "glGetString version returned");
   printf("KFGL vendor %s\nKFGL renderer %s\nKFGL version %s\n", ven ? ven : "?", ren ? ren : "?", ver ? ver : "?"); fflush(stdout);
   if (!any && !(ven && strstr(ven, "NVIDIA") && ren && strstr(ren, "NVIDIA"))) { bad("GL renderer is not NVIDIA (software or wrong adapter)"); goto done; }
   PFNWGLSWAPINTERVALEXT sw = (PFNWGLSWAPINTERVALEXT)wglGetProcAddress("wglSwapIntervalEXT");

@@ -32,3 +32,21 @@ Controlled run 644 changes only this static field in the product. Falsifier: gea
 with access violation despite the populated field. Oracle: gears reports the NVIDIA GL renderer,
 remains alive while frames advance, and exits successfully after its workload; CUDA and adapter
 status must remain good. The binary source revision and actual result follow after the run.
+
+## Run 644 verdict and narrower probe
+
+`18bfb458` populated fn65 GR caps with the same queried bytes as VFIO; gears still exited
+-1073741819. The stated falsifier fired. CUDA cup2/3/8 passed, adapter Code 0, zero TDR.
+The GPU-free ABI/RM suite passed; this change is not an OpenGL fix and is not integrated.
+
+An instrumented build of the open-source gears probe selected pixel format 9, set that format,
+and returned a non-null WGL context. It crashed during `wglMakeCurrent`, before GL renderer
+queries. The runner was paused while these additional probes ran, then resumed for teardown.
+Its recorded hold is not an independent endurance test. Probe stage output is in `logs/644/`.
+
+Next diagnostic: run the same probe on VFIO and compare driver-call outcomes around that
+boundary. Hypothesis: a CPU-side query or client action not represented in the gears GSP stream
+fails differently on kayfabe. Falsifier: corresponding calls have matching successful results.
+Raw diagnostic buffers stay private. No product capability is changed based on an inferred
+physical field; in particular, remaining fn65 memory geometry is not assumed to share Windows'
+semantics solely because the body size agrees with open Linux headers.
