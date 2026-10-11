@@ -113,7 +113,7 @@ app("cup3_ladder", "cuda-ladder", LAD + r"""Invoke-KfExe -Exe "$t\cup3.exe"
 exit $global:KfRc""", r"KERNEL rv=43 want=43 -> PASS", 60, 3, [r"out:name=NVIDIA|name=.*GeForce|PTX_TARGET", GPU_ENG], "low",
     "one compute kernel (PTX JIT, sm rewrite) through the driver API", pkgs=("vc_redist",))
 app("cup8_ladder", "cuda-ladder", LAD + r"""Invoke-KfExe -Exe "$t\cup8.exe"
-exit $global:KfRc""", r"CUP8 RESULT N=\d+ bad=0 maxerr=0 ", 180, 10, [GPU_ENG, "smi"], "medium",
+exit $global:KfRc""", r"CUP8 RESULT N=\d+ bad=0 maxerr=0 ", 180, 10, ["cuda-cup8-readback", GPU_ENG, "smi"], "medium",
     "a 2048x2048 fp32 matmul through the driver API, byte-exact against the host", linux=["matrixMulDrv"], pkgs=("vc_redist",))
 
 # ---------------------------------------------------------------------------------------------- D. CUDA samples counterparts (PyTorch / CuPy / NVRTC)

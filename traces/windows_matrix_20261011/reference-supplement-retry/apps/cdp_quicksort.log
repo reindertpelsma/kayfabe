@@ -1,0 +1,18 @@
+=== cdp_quicksort start=2026-10-11T06:53:29.9826264-07:00 host=DESKTOP-JR70RMQ session=0 boot=2026-10-11T12:38:54.5000000Z timeout=600
+KFDEV NVIDIA GeForce RTX 4090
+nvrtc: error: failed to open nvrtc-builtins64_129.dll.
+  Make sure that nvrtc-builtins64_129.dll is installed correctly.
+Traceback (most recent call last):
+  File "C:\kf\py\kf_runpy.py", line 22, in <module>
+    runpy.run_path(script, run_name="__main__")
+  File "<frozen runpy>", line 287, in run_path
+  File "<frozen runpy>", line 98, in _run_module_code
+  File "<frozen runpy>", line 88, in _run_code
+  File "C:\kf\py\cdp_quicksort.py", line 148, in <module>
+    main()
+  File "C:\kf\py\cdp_quicksort.py", line 92, in main
+    check(rc, 'nvrtcCompileProgram')
+  File "C:\kf\py\cdp_quicksort.py", line 64, in check
+    raise RuntimeError(f'{name} returned {rc}')
+RuntimeError: nvrtcCompileProgram returned 7
+=== end rc=1 secs=11 2026-10-11T06:53:41.2084967-07:00

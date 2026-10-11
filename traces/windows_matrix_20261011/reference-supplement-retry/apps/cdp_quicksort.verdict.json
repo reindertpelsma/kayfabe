@@ -1,0 +1,14 @@
+{
+ "verdict": "FAIL",
+ "rc": 1,
+ "secs": 11,
+ "quiet": 6,
+ "note": "rc=1,success-string-missing,no-gpu-proof | nvrtc: error: failed to open nvrtc-builtins64_129.dll.",
+ "proof": "none:out,pdh:Cuda|Compute|3D|Copy",
+ "tdr": 0,
+ "wer": 0,
+ "rebooted": false,
+ "gsp_cycles": "-",
+ "restart": "",
+ "guest": "g1"
+}

@@ -1,0 +1,9 @@
+=== cupy_check start=2026-10-11T06:57:38.1606613-07:00 host=DESKTOP-JR70RMQ session=0 boot=2026-10-11T12:38:54.5000000Z timeout=300
+KFDEV NVIDIA GeForce RTX 4090
+CHECK cupy_matmul ok
+CHECK cupy_reduce ok
+CHECK cupy_nvrtc_kernel ok
+CHECK cupy_fft ok
+CHECK cupy_random ok
+CUPY_DONE
+=== end rc=0 secs=9 2026-10-11T06:57:46.7731855-07:00

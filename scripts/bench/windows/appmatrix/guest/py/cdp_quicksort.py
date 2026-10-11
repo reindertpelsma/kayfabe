@@ -69,7 +69,14 @@ def main():
     root = os.environ.get('KF_CDP_NVRTC', r'C:\kfapps\cuda_nvrtc')
     dll = [p for p in glob.glob(os.path.join(root, 'bin', 'nvrtc64_*.dll')) if not p.endswith('.alt.dll')]
     assert len(dll) == 1, f'expected one pinned NVRTC DLL under {root}'
-    dll_dir = os.add_dll_directory(os.path.dirname(dll[0]))
+    bin_dir = os.path.dirname(dll[0])
+    dll_dir = os.add_dll_directory(bin_dir)
+    os.environ['PATH'] = bin_dir + os.pathsep + os.environ.get('PATH', '')
+    # NVRTC loads its builtins by basename internally. Keep the matching pinned
+    # DLL loaded explicitly, including when Torch already loaded another NVRTC.
+    builtins = glob.glob(os.path.join(bin_dir, 'nvrtc-builtins64_*.dll'))
+    assert len(builtins) == 1, 'expected matching pinned NVRTC builtins'
+    builtins_lib = C.WinDLL(builtins[0])
     nv = C.WinDLL(dll[0]); cu = C.WinDLL('nvcuda.dll')
     vp, size = C.c_void_p, C.c_size_t
     create = bind(nv, 'nvrtcCreateProgram', [C.POINTER(vp), C.c_char_p, C.c_char_p, C.c_int, vp, vp])

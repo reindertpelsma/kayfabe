@@ -390,6 +390,7 @@
    "rx": "CUP8 RESULT N=\\d+ bad=0 maxerr=0 ",
    "fail_rx": "^CHECK .*FAIL",
    "proof": [
+    "cuda-cup8-readback",
     "pdh:Cuda|Compute|3D|Copy",
     "smi"
    ],

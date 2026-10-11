@@ -387,7 +387,7 @@ with its class (§4.4). Commands are abbreviated; `apps.json` has the exact Powe
 |---|---|---|---|---|---|---|
 | `cup2_ladder` | 1 / service | `tools\cup2.exe` | `CE rv=0xabcd1234 want=0xabcd1234 -> PASS` | out:name=NVIDIA\|name=.*GeForce, pdh:Cuda\|Compute\|3D\|Copy | ~3 s / 60 s | **low**: one copy-engine launch through the driver API (the first rung of the Linux ladder) |
 | `cup3_ladder` | 1 / service | `tools\cup3.exe` | `KERNEL rv=43 want=43 -> PASS` | out:name=NVIDIA\|name=.*GeForce\|PTX_TARGET, pdh:Cuda\|Compute\|3D\|Copy | ~3 s / 60 s | **low**: one compute kernel (PTX JIT, sm rewrite) through the driver API |
-| `cup8_ladder` | 1 / service | `tools\cup8.exe` | `CUP8 RESULT N=\d+ bad=0 maxerr=0 ` | pdh:Cuda\|Compute\|3D\|Copy, smi | ~10 s / 180 s | **medium**: a 2048x2048 fp32 matmul through the driver API, byte-exact against the host |
+| `cup8_ladder` | 1 / service | `tools\cup8.exe` | `CUP8 RESULT N=\d+ bad=0 maxerr=0 ` | cuda-cup8-readback, pdh:Cuda\|Compute\|3D\|Copy, smi | ~10 s / 180 s | **medium**: a 2048x2048 fp32 matmul through the driver API, byte-exact against the host |
 
 **CUDA stream-shape probes (the Linux stream_probe rows)** (6)
 

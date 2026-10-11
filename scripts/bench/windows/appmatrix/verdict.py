@@ -22,7 +22,7 @@ OTHER_ADAPTER_MAX = 1.0        # percent on a non-NVIDIA LUID before it counts a
 
 def parse_proof(p):
     """'out:<regex>' | 'pdh:<engine regex>' | 'smi' | 'cuda-vectoradd-readback' -> (kind, arg)"""
-    if p in ("smi", "cuda-vectoradd-readback"):
+    if p in ("smi", "cuda-vectoradd-readback", "cuda-cup8-readback"):
         return p, ""
     kind, _, arg = p.partition(":")
     if kind not in ("out", "pdh"):
@@ -44,7 +44,7 @@ def eval_proof(proofs, log, facts):
             # Get-Counter lower-cases the instance names (engtype_3D arrives as "3d"): match the engine type case-insensitively
             hit = sorted(e for e, v in pdh.items() if re.search(arg, e, re.I) and v and float(v) >= ENGINE_MIN_UTIL)
             (held if hit else missed).append(f"pdh:{'+'.join(hit) if hit else arg}")
-        elif kind == "cuda-vectoradd-readback":
+        elif kind in ("cuda-vectoradd-readback", "cuda-cup8-readback"):
             # NVIDIA cuda-samples v12.9, vectorAdd.cu: the CUDA launch and
             # synchronous DtoH copy must succeed before all 50000 elements are
             # checked. CUDA has no WARP/CPU backend. This narrow oracle avoids
@@ -55,6 +55,12 @@ def eval_proof(proofs, log, facts):
                         r"CUDA kernel launch with 196 blocks of 256 threads.*?"
                         r"Copy output data from the CUDA device to the host memory.*?"
                         r"Test PASSED\r?\nDone")
+            if kind == "cuda-cup8-readback":
+                # scripts/bench/cup8.c checks every returned matrix element;
+                # CK aborts on any failed Driver API call. No CPU executor.
+                sequence = (r"(?s)LAUNCH OK\r?\n.*?SYNC OK\r?\n.*?"
+                            r"ok   cuMemcpyDtoH\(hC,dC,sz\).*?"
+                            r"CUP8 RESULT N=2048 bad=0 maxerr=0 [^\r\n]+ -> PASS")
             healthy_nv = any(re.fullmatch(r"NVIDIA .+ status=OK code=0", str(d))
                              for d in facts.get("gpu_devices", []))
             ok = healthy_nv and re.search(sequence, log) is not None

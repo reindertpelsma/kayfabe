@@ -74,6 +74,30 @@ No need to redownload/stage model. Restore original base ISO for shared CuPy che
 after current native attempt ends, retaining staged addon packages. Source22e5ce7b
 was the incomplete-payload native attempt; the corrected harness revision follows.
 
+14:05UTC: native supplement retry41c797ec finished8PASS/9 (HF64tokens digest
+0d973108a6251e14; all6 CuPy/managed checks PASS; vectorAdd source oracle PASS).
+CDP fails before GPU execution because NVRTC cannot find builtins129 DLL; explicit
+absolute-path preload/PATH fix prepared and75 harness tests PASS. Source changes
+also add CUP8 exact CUDA readback oracle; raw sampler failure remains recorded.
+Complete fresh-guest media recipe `supplement/build_full_media.sh` prepared but NOT
+started: takes frozen worktree argument, owns bench flock, copies original8GiB
+exFAT into new16GiB file, adds pinned downloads, updates script/tool hashes/identity,
+verifies resulting image. Extra downloads already on trusted host under
+`codex-supplement-20261011/dl`; no host build while timing jobs run.
+
+Broad candidate run865: CUP8 proof miss, CuPySHA/cg header failures; gears PASS.
+Managed test TIMEOUT181s with host Xid32 at13:59:44UTC; zero guest TDR/GSP recovery.
+8037e19b harness correctly stops guest after app-timeout; campaign continues fresh.
+APP rows record every observed failure, including managed memory as open product
+investigation (stock PASS7s). Do not claim matrix free of Xids.
+
+Vast screenshots revealed privacy setup still covering interactive desktop. Ordinary
+CUDA/math/gears passes remain valid; GravityMark Vulkan timeout needs rerun after
+finishing this setup. Normal privacy-page input is in progress, no GPU jobs running
+there now. Controller one-shot helpers/screenshots under native-reference directory;
+original base ISO restored atC:\kfmedia\kfapps.iso, addon preserved as
+kfapps-addon-verified.iso; staged HF/NVRTC packages retained.
+
 ## OpenGL continuation, 2026-10-11 13:19 CEST
 
 **Gears passes on candidate `2c917f3e`, branch `codex/opengl-gears-20261011`.** The boot

@@ -1,0 +1,10 @@
+=== hf_generate start=2026-10-11T06:52:08.7935060-07:00 host=DESKTOP-JR70RMQ session=0 boot=2026-10-11T12:38:54.5000000Z timeout=600
+KFDEV NVIDIA GeForce RTX 4090
+`torch_dtype` is deprecated! Use `dtype` instead!
+HF_DEVICE NVIDIA GeForce RTX 4090
+The following generation flags are not valid and may be ignored: ['temperature', 'top_p', 'top_k']. Set `TRANSFORMERS_VERBOSITY=info` for more details.
+HF_TEXT= The sky appears to be blue because of the way light travels through the atmosphere. When sunlight enters the Earth's atmosphere, it is scattered by tiny particles such as dust and ice crystals. These particles scatter the light into different colors depending on their size and shape. As a result, s
+HF_NTOK=64
+OUTSHA hf_generate 0d973108a6251e14
+CHECK hf_generate ok
+=== end rc=0 secs=42 2026-10-11T06:52:50.7256619-07:00

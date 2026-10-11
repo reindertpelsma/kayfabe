@@ -1,0 +1,14 @@
+{
+ "verdict": "NOTRUN",
+ "rc": 1,
+ "secs": 6,
+ "quiet": 1,
+ "note": "FileNotFoundError: [Errno 2] No such file or directory: 'C:\\\\kf\\\\py\\\\hf_generate.py'",
+ "proof": "-",
+ "tdr": 0,
+ "wer": 0,
+ "rebooted": false,
+ "gsp_cycles": "-",
+ "restart": "",
+ "guest": "g1"
+}

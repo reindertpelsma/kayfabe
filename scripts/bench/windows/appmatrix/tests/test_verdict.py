@@ -40,6 +40,17 @@ class Verdicts(unittest.TestCase):
         self.assertEqual(V.decide(app, f, log + "CHECK vectorAdd FAIL\n")["verdict"], "FAIL")
         self.assertEqual(V.decide(app, dict(f, pdh=dict(nv={}, other={"3d": 10})), log)["verdict"], "FAIL")
 
+    def test_cup8_exact_cuda_readback_without_periodic_samples(self):
+        app = dict(APP, rx=r"CUP8 RESULT N=\d+ bad=0 maxerr=0 ", proof=["cuda-cup8-readback"])
+        f = facts(pdh=dict(nv={}, other={}), gpu_devices=["NVIDIA GeForce RTX 4070 status=OK code=0"])
+        log = ("LAUNCH OK\nSYNC OK\nok   cuMemcpyDtoH(hC,dC,sz)\n"
+               "CUP8 RESULT N=2048 bad=0 maxerr=0 C[0]=2048(exp 2048) -> PASS\n")
+        self.assertEqual(V.decide(app, f, log)["verdict"], "PASS")
+        for omitted in ("LAUNCH OK\n", "SYNC OK\n", "ok   cuMemcpyDtoH(hC,dC,sz)\n"):
+            self.assertEqual(V.decide(app, f, log.replace(omitted, ""))["verdict"], "FAIL")
+        self.assertEqual(V.decide(app, dict(f, gpu_devices=[]), log)["verdict"], "FAIL")
+        self.assertEqual(V.decide(app, f, log.replace('bad=0', 'bad=1'))["verdict"], "FAIL")
+
     def test_rc_nonzero_is_fail(self):
         d = V.decide(APP, facts(rc=1), "NVIDIA\nDONE\n")
         self.assertEqual(d["verdict"], "FAIL")

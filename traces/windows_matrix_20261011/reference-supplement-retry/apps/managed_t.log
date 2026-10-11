@@ -1,0 +1,7 @@
+=== managed_t start=2026-10-11T06:58:17.9313863-07:00 host=DESKTOP-JR70RMQ session=0 boot=2026-10-11T12:38:54.5000000Z timeout=180
+KFDEV NVIDIA GeForce RTX 4090
+[eq] device NVIDIA GeForce RTX 4090 torch 2.8.0+cu126
+CHECK managed_gpu_write_cpu_read ok
+CHECK managed_cpu_write_gpu_read ok
+WINEQ_DONE managed
+=== end rc=0 secs=7 2026-10-11T06:58:24.5412815-07:00

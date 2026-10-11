@@ -1,0 +1,3 @@
+APPRES side=win app=hf_generate verdict=NOTRUN rc=1 secs=6 quiet=1 note=FileNotFoundError: [Errno 2] No such file or directory: 'C:\\kf\\py\\hf_generate.py' boot=g1 guest_tdr=0 wer=0 gsp_cycles=- proof=- tier=1 cat=ai
+APPRES side=win app=cdp_quicksort verdict=NOTRUN rc=1 secs=6 quiet=1 note=FileNotFoundError: [Errno 2] No such file or directory: 'C:\\kf\\py\\cdp_quicksort.py' boot=g1 guest_tdr=0 wer=0 gsp_cycles=- proof=- tier=1 cat=cuda-equiv
+APPRES side=win app=vectorAdd_demo verdict=PASS rc=0 secs=3 quiet=2 note=- boot=g1 guest_tdr=0 wer=0 gsp_cycles=- proof=cuda-vectoradd-readback tier=1 cat=cuda-demo
