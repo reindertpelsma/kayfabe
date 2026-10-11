@@ -1,0 +1,24 @@
+=== nvenc_h264 start=2026-10-11T14:13:54.6120112+00:00 host=VASTWIN session=0 boot=2026-10-11T14:08:38.5000000Z timeout=180
+Input #0, lavfi, from 'testsrc=size=1280x720:rate=30:duration=20':
+  Duration: N/A, start: 0.000000, bitrate: N/A
+  Stream #0:0: Video: wrapped_avframe, rgb24, 1280x720 [SAR 1:1 DAR 16:9], 30 fps, 30 tbr, 30 tbn
+Stream mapping:
+  Stream #0:0 -> #0:0 (wrapped_avframe (native) -> h264 (h264_nvenc))
+Press [q] to stop, [?] for help
+[h264_nvenc @ 000001e27c52ac00] OpenEncodeSessionEx failed: incompatible client key (21): (no details)
+[h264_nvenc @ 000001e27c52ac00] No capable devices found
+[vost#0:0/h264_nvenc @ 000001e27c52a9c0] [enc:h264_nvenc @ 000001e27c529b80] Error while opening encoder - maybe incorrect parameters such as bit_rate, rate, width or height.
+[vf#0:0 @ 000001e27c545ac0] Error sending frames to consumers: Generic error in an external library
+[vf#0:0 @ 000001e27c545ac0] Task finished with error code: -542398533 (Generic error in an external library)
+[vf#0:0 @ 000001e27c545ac0] Terminating thread with return code -542398533 (Generic error in an external library)
+[vost#0:0/h264_nvenc @ 000001e27c52a9c0] [enc:h264_nvenc @ 000001e27c529b80] Could not open encoder before EOF
+[vost#0:0/h264_nvenc @ 000001e27c52a9c0] Task finished with error code: -22 (Invalid argument)
+[vost#0:0/h264_nvenc @ 000001e27c52a9c0] Terminating thread with return code -22 (Invalid argument)
+[out#0/mp4 @ 000001e27c4cce80] Nothing was written into output file, because at least one of its streams received no packets.
+frame=    0 fps=0.0 q=0.0 Lsize=       0KiB time=N/A bitrate=N/A speed=N/A elapsed=0:00:00.89    
+Conversion failed!
+frame=  
+[stderr]
+[mov,mp4,m4a,3gp,3g2,mj2 @ 00000259ad1c1180] moov atom not found
+C:\kf\out\nvenc_h264\enc.mp4: Invalid data found when processing input
+=== end rc=-542398533 secs=3 2026-10-11T14:13:57.6008822+00:00

@@ -3,6 +3,22 @@
 **STATUS: LIVE, 2026-10-11.** Product candidate `2c917f3e`, following the
 OpenGL gears fix. Results are pending; this is not a matrix pass claim.
 
+## Current checkpoint, 2026-10-11 14:16 UTC
+
+Product0f9c01f9, frozen8037e19b broad campaign:55 completed of102,
+46PASS,8FAIL,1TIMEOUT. Five failures are known harness header/proof issues;
+three are NVENC session errors. Managed memory timed out with hostXid32.
+BlackScholes and fresh gears pass. Original verdicts are retained in
+`copy-slicing/full-checkpoint/`; this is a live checkpoint, not full success.
+
+Stock580.88 supplement:HF generation and six CuPy/managed checks pass,
+vectorAdd proof passes. Fresh corrected loader now executes quicksort with
+490 GPU child launches, zero CUDA error, exact sorted readback; CUP8 also
+passes. `reference-fresh-cdp-cup8-gravity/` is partial while GravityMark runs.
+Stock clpeak CUDA PASS906s (`reference-clpeak/`). New inventory112 Windows
+rows maps69 Linux rows; HF/CDP and corrected-harness candidate runs remain pending.
+The dated historical sections below describe earlier checkpoints.
+
 ## Latest checkpoint, 2026-10-11 13:19 UTC
 
 This section supersedes pending-state statements below. Product `0f9c01f9` passed

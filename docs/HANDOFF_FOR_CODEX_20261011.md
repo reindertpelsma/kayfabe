@@ -5,6 +5,28 @@ again after the Wednesday 07:00 reset). Read `AGENTS.md` (= `CLAUDE.md`) first: 
 (state, branches, traps), `docs/DELEGATED_DECISIONS_20261010.md`, `docs/OWNER_RULINGS.md` §AB-§AE, `docs/design/V3_FEATURE_GAPS.md`
 (priorities: P0 = prevents apps running; fidelity and perf beyond "decent" are post-release), `docs/design/V3_NOT_IN_GIT.md`.
 
+## Current checkpoint, 2026-10-11 14:16 UTC
+
+Product remains0f9c01f9; latest pushed checkpoint02766ef3 (next backup follows).
+Broad frozen8037e19b campaign active:55 completed,46PASS,8FAIL,1TIMEOUT;
+102 non-overlay rows planned. Fresh866 resumed after managed timeout fallback.
+BlackScholes PASS10s, DirectML PASS. Three NVENC formats fail session creation
+with incompatible client key21; one-byte0x20808165 refused0x56 once per encoder.
+This correlation does not establish causality; compare stock580.88 video first.
+Managed Xid32 at13:59:44UTC is the only journal Xid in this checkpoint;
+source now adds flush-enabled stage markers for the later fresh isolated retry.
+Do not edit active8037e19b or its disk. Candidate supplemental fresh-media build
+must wait for the GPU lock and >150GiB free; pinned downloads already staged.
+
+Reference fresh02766ef3 after completed OOBE and reboot:CDP PASS17s,
+490 real GPU child launches, CUDA error0, exact sorted readback. CUP8 PASS
+with exact CUDA matmul readback proof. GravityMark Vulkan still active under
+its existing600s budget; results/controller path fresh-cdp-cup8-gravity.
+Evidence snapshot reference-fresh-cdp-cup8-gravity is partial until EXIT appears.
+Stock video next, no competing GPU jobs. Same rental55385171 remains active.
+Current inventory112/104 non-overlay,69 Linux mapped rows, but the in-flight
+campaign stays110/102. HF/CDP and corrected CuPy/proof retries pending on kayfabe.
+
 ## Matrix continuation, 2026-10-11 15:15 CEST (supersedes historical state below)
 
 Worktree `/data/kf-inval-absent`, branch `codex/windows-matrix-20261011`; last pushed

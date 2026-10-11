@@ -1,0 +1,14 @@
+{
+ "verdict": "PASS",
+ "rc": 0,
+ "secs": 17,
+ "quiet": 1,
+ "note": "warn:CDP_CHILD_LAUNCHES 490 CUDA_ERROR 0",
+ "proof": "out",
+ "tdr": 0,
+ "wer": 0,
+ "rebooted": false,
+ "gsp_cycles": "-",
+ "restart": "",
+ "guest": "g1"
+}

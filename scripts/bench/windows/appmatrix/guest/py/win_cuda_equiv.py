@@ -221,13 +221,20 @@ def t_managed():                     # UnifiedMemoryStreams/Perf, conjugateGradi
     import cupy as cp
     import numpy as np
     n = 1 << 26                       # 256 MiB of float32
+    print("MANAGED_STAGE allocating", flush=True)
     mem = cp.cuda.malloc_managed(n * 4)       # CuPy >= 14 returns a MemoryPointer already (wrapping it again was a TypeError)
+    print("MANAGED_STAGE allocated", flush=True)
     arr = cp.ndarray((n,), dtype=cp.float32, memptr=mem)
+    print("MANAGED_STAGE gpu_write", flush=True)
     arr[:] = cp.arange(n, dtype=cp.float32); cp.cuda.Device().synchronize()
+    print("MANAGED_STAGE gpu_write_synced", flush=True)
     host = np.frombuffer((ctypes.c_char * (n * 4)).from_address(mem.ptr), dtype=np.float32)
     chk("managed_gpu_write_cpu_read", bool(host[12345] == 12345.0 and host[n - 1] == float(n - 1)))
+    print("MANAGED_STAGE cpu_write", flush=True)
     host[:1024] = 7.0                 # CPU writes, GPU reads
+    print("MANAGED_STAGE gpu_read", flush=True)
     chk("managed_cpu_write_gpu_read", float(arr[:1024].sum()) == 7.0 * 1024)
+    print("MANAGED_STAGE done", flush=True)
 
 
 def streams_probe(name):             # stream_probe {default, created, nonblocking, two, created2nd}

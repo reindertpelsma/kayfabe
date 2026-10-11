@@ -131,3 +131,93 @@ NVIDIA GeForce RTX 4070, 9 MiB
 IOMMU_SWITCH_END type=identity 2026-10-11T15:45:57+02:00
 2026-10-11T13:45:59Z broker run 864 rc=0 ['  └────────────────────────────────────────────────────────────────────────────────────────────┘']
 2026-10-11T13:45:59Z [g5] launched; waiting for the guest agent (<= 900s)
+2026-10-11T13:46:15Z [g5] agent answered after 19s
+2026-10-11T13:46:15Z [g5] password set for vast rc=0
+2026-10-11T13:47:02Z [g5] verified sign-in attempt=1 rc=0
+2026-10-11T13:47:03Z [g5] interactive session: VASTWIN\vast
+2026-10-11T13:47:04Z [g5] pushed 23 guest files
+2026-10-11T13:47:04Z [g5] app disk attached (usb-storage)
+2026-10-11T13:47:10Z [g5] setup ok: cd=D: nvidia_adapters=1 NVIDIA GeForce RTX 4070, 580.88, 4096 MiB
+2026-10-11T13:47:13Z [g5] override tool kf_cuda_control.exe sha256=3906f520c10e272215d9d7d79a90ce9a2042581923a4717db90be312ab3a67c8
+2026-10-11T13:47:16Z [g5] override tool kf_dxprobe.exe sha256=3c6ededa77430a18a13321eb72fdca7f60282f8d12ddc147a7e7df1284832c5f
+2026-10-11T13:47:30Z [g5] staged vc_redist (installer, 13s)
+2026-10-11T13:47:34Z [g5] READY boot=2026-10-11T13:46:04.5000000Z user=VASTWIN\vast smi_ok=True
+2026-10-11T13:47:50Z [g5] dxprobe_d3d12: PASS
+2026-10-11T13:47:53Z [g5] staged furmark2 (unzip, 1s)
+2026-10-11T13:48:13Z [g5] furmark_glinfo: PASS
+2026-10-11T13:48:28Z [g5] furmark_vkinfo: PASS
+2026-10-11T13:48:29Z [g5] staged python_embed (python_embed, 0s)
+2026-10-11T13:49:47Z [g5] staged pywheels (wheels, 76s)
+2026-10-11T13:51:05Z [g5] mandelbrot_t: PASS
+2026-10-11T13:51:36Z [g5] memcpy2d_t: PASS
+2026-10-11T13:51:53Z [g5] reduce_t: PASS
+2026-10-11T13:52:11Z [g5] triad_t: PASS
+2026-10-11T13:52:29Z [g5] zerocopy_t: PASS
+2026-10-11T13:52:47Z post-guest hook rc=0 IA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-11T15:52:46+02:00
+RECLAIM_STOPPED_OVERLAY 864 9681862656
+2026-10-11T13:52:47Z [g5] stopped (clean)
+2026-10-11T13:52:49Z pre-guest hook rc=0 :00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=identity 2026-10-11T15:52:49+02:00
+2026-10-11T13:52:50Z broker run 865 rc=0 ['  └────────────────────────────────────────────────────────────────────────────────────────────┘']
+2026-10-11T13:52:50Z [g6] launched; waiting for the guest agent (<= 900s)
+2026-10-11T13:53:04Z [g6] agent answered after 16s
+2026-10-11T13:53:04Z [g6] password set for vast rc=0
+2026-10-11T13:53:52Z [g6] verified sign-in attempt=1 rc=0
+2026-10-11T13:53:53Z [g6] interactive session: VASTWIN\vast
+2026-10-11T13:53:54Z [g6] pushed 23 guest files
+2026-10-11T13:53:54Z [g6] app disk attached (usb-storage)
+2026-10-11T13:54:02Z [g6] setup ok: cd=D: nvidia_adapters=1 NVIDIA GeForce RTX 4070, 580.88, 4096 MiB
+2026-10-11T13:54:04Z [g6] override tool kf_cuda_control.exe sha256=3906f520c10e272215d9d7d79a90ce9a2042581923a4717db90be312ab3a67c8
+2026-10-11T13:54:07Z [g6] override tool kf_dxprobe.exe sha256=3c6ededa77430a18a13321eb72fdca7f60282f8d12ddc147a7e7df1284832c5f
+2026-10-11T13:54:21Z [g6] staged vc_redist (installer, 13s)
+2026-10-11T13:54:26Z [g6] READY boot=2026-10-11T13:52:54.5000000Z user=VASTWIN\vast smi_ok=True
+2026-10-11T13:54:52Z [g6] cup8_ladder: FAIL
+2026-10-11T13:54:54Z [g6] staged python_embed (python_embed, 0s)
+2026-10-11T13:55:47Z [g6] staged pywheels (wheels, 53s)
+2026-10-11T13:55:50Z [g6] staged cuda_cudart (unzip, 0s)
+2026-10-11T13:55:52Z [g6] staged cuda_cccl (unzip, 1s)
+2026-10-11T13:58:28Z [g6] cupy_sha256: FAIL
+2026-10-11T13:58:42Z [g6] d3d12_signal_probe: PASS
+2026-10-11T13:58:57Z [g6] cupy_cg: FAIL
+2026-10-11T13:58:59Z [g6] staged cuda_demo_suite (unzip, 0s)
+2026-10-11T13:59:14Z [g6] bandwidthTest_demo: PASS
+2026-10-11T13:59:37Z [g6] glgears_wgl: PASS
+2026-10-11T14:02:53Z [g6] managed_t: TIMEOUT (restart guest: app-timeout)
+2026-10-11T14:08:29Z post-guest hook rc=0 A GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-11T16:08:28+02:00
+RECLAIM_STOPPED_OVERLAY 865 10513276928
+2026-10-11T14:08:29Z [g6] stopped (clean)
+2026-10-11T14:08:29Z [g6] session ended early: app-timeout; 1 apps move to a fresh guest
+2026-10-11T14:08:31Z pre-guest hook rc=0 :00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=identity 2026-10-11T16:08:31+02:00
+2026-10-11T14:08:33Z broker run 866 rc=0 ['  └────────────────────────────────────────────────────────────────────────────────────────────┘']
+2026-10-11T14:08:33Z [g7] launched; waiting for the guest agent (<= 900s)
+2026-10-11T14:08:49Z [g7] agent answered after 19s
+2026-10-11T14:08:49Z [g7] password set for vast rc=0
+2026-10-11T14:09:35Z [g7] verified sign-in attempt=1 rc=0
+2026-10-11T14:09:37Z [g7] interactive session: VASTWIN\vast
+2026-10-11T14:09:38Z [g7] pushed 23 guest files
+2026-10-11T14:09:38Z [g7] app disk attached (usb-storage)
+2026-10-11T14:09:46Z [g7] setup ok: cd=D: nvidia_adapters=1 NVIDIA GeForce RTX 4070, 580.88, 4096 MiB
+2026-10-11T14:09:49Z [g7] override tool kf_cuda_control.exe sha256=3906f520c10e272215d9d7d79a90ce9a2042581923a4717db90be312ab3a67c8
+2026-10-11T14:09:51Z [g7] override tool kf_dxprobe.exe sha256=3c6ededa77430a18a13321eb72fdca7f60282f8d12ddc147a7e7df1284832c5f
+2026-10-11T14:10:11Z [g7] staged vc_redist (installer, 18s)
+2026-10-11T14:10:19Z [g7] READY boot=2026-10-11T14:08:38.5000000Z user=VASTWIN\vast smi_ok=True
+2026-10-11T14:10:21Z [g7] staged cuda_demo_suite (unzip, 1s)
+2026-10-11T14:10:37Z [g7] nbody_demo_bench: PASS
+2026-10-11T14:10:39Z [g7] staged python_embed (python_embed, 0s)
+2026-10-11T14:11:34Z [g7] staged pywheels (wheels, 53s)
+2026-10-11T14:12:56Z [g7] atomics_t: PASS
+2026-10-11T14:13:23Z [g7] blackscholes_t: PASS
+2026-10-11T14:13:26Z [g7] staged ffmpeg (unzip, 2s)
+2026-10-11T14:13:51Z [g7] nvenc_av1: FAIL
+2026-10-11T14:14:07Z [g7] nvenc_h264: FAIL
+2026-10-11T14:14:22Z [g7] nvenc_hevc: FAIL
+2026-10-11T14:14:52Z [g7] ort_directml: PASS
+2026-10-11T14:14:53Z [g7] staged gputest (unzip, 0s)
+2026-10-11T14:15:20Z [g7] gputest_triangle: PASS

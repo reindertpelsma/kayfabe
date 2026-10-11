@@ -1,0 +1,9 @@
+=== ort_directml start=2026-10-11T14:14:25.2771444+00:00 host=VASTWIN session=0 boot=2026-10-11T14:08:38.5000000Z timeout=240
+KFDEV NVIDIA GeForce RTX 4070
+ORT_PROVIDERS ['DmlExecutionProvider', 'CPUExecutionProvider']
+ORT_DML_DEVICE index 0 of [(0, 'NVIDIA GeForce RTX 4070'), (1, 'Microsoft Basic Render Driver')]
+ORT_SESSION_PROVIDERS ['DmlExecutionProvider', 'CPUExecutionProvider']
+CHECK dml_provider_active ok
+CHECK dml_matches_cpu ok
+ORT_DML_DONE
+=== end rc=0 secs=17 2026-10-11T14:14:42.7747263+00:00

@@ -1,0 +1,74 @@
+{
+ "quiet": 3,
+ "end_utc": "2026-10-11T14:13:57.6008822Z",
+ "start_utc": "2026-10-11T14:13:54.6120112Z",
+ "rc": -542398533,
+ "secs": 3,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4070 status=OK code=0"
+ ],
+ "digests": [],
+ "session": 0,
+ "out_files": [
+  "C:\\kf\\out\\nvenc_h264\\enc.mp4 0"
+ ],
+ "boot_utc_start": "2026-10-11T14:08:38.5000000Z",
+ "log_tail": [
+  "=== nvenc_h264 start=2026-10-11T14:13:54.6120112+00:00 host=VASTWIN session=0 boot=2026-10-11T14:08:38.5000000Z timeout=180",
+  "Input #0, lavfi, from 'testsrc=size=1280x720:rate=30:duration=20':",
+  "  Duration: N/A, start: 0.000000, bitrate: N/A",
+  "  Stream #0:0: Video: wrapped_avframe, rgb24, 1280x720 [SAR 1:1 DAR 16:9], 30 fps, 30 tbr, 30 tbn",
+  "Stream mapping:",
+  "  Stream #0:0 -> #0:0 (wrapped_avframe (native) -> h264 (h264_nvenc))",
+  "Press [q] to stop, [?] for help",
+  "[h264_nvenc @ 000001e27c52ac00] OpenEncodeSessionEx failed: incompatible client key (21): (no details)",
+  "[h264_nvenc @ 000001e27c52ac00] No capable devices found",
+  "[vost#0:0/h264_nvenc @ 000001e27c52a9c0] [enc:h264_nvenc @ 000001e27c529b80] Error while opening encoder - maybe incorrect parameters such as bit_rate, rate, width or height.",
+  "[vf#0:0 @ 000001e27c545ac0] Error sending frames to consumers: Generic error in an external library",
+  "[vf#0:0 @ 000001e27c545ac0] Task finished with error code: -542398533 (Generic error in an external library)",
+  "[vf#0:0 @ 000001e27c545ac0] Terminating thread with return code -542398533 (Generic error in an external library)",
+  "[vost#0:0/h264_nvenc @ 000001e27c52a9c0] [enc:h264_nvenc @ 000001e27c529b80] Could not open encoder before EOF",
+  "[vost#0:0/h264_nvenc @ 000001e27c52a9c0] Task finished with error code: -22 (Invalid argument)",
+  "[vost#0:0/h264_nvenc @ 000001e27c52a9c0] Terminating thread with return code -22 (Invalid argument)",
+  "[out#0/mp4 @ 000001e27c4cce80] Nothing was written into output file, because at least one of its streams received no packets.",
+  "frame=    0 fps=0.0 q=0.0 Lsize=       0KiB time=N/A bitrate=N/A speed=N/A elapsed=0:00:00.89    ",
+  "Conversion failed!",
+  "frame=  ",
+  "[stderr]",
+  "[mov,mp4,m4a,3gp,3g2,mj2 @ 00000259ad1c1180] moov atom not found",
+  "C:\\kf\\out\\nvenc_h264\\enc.mp4: Invalid data found when processing input",
+  "=== end rc=-542398533 secs=3 2026-10-11T14:13:57.6008822+00:00"
+ ],
+ "pdh": {
+  "pids": [
+   "9136",
+   "3248",
+   "9080"
+  ],
+  "nv": {},
+  "samples": 1,
+  "other": {},
+  "nvidia_luids": "0_60ef"
+ },
+ "timed_out": false,
+ "token": "g7-nvenc_h264-1791728031",
+ "boot_utc_end": "2026-10-11T14:08:38.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "nvenc_h264",
+ "smi": {
+  "samples": 0,
+  "mem_used_base_mb": null,
+  "util_max": 0,
+  "mem_used_max_mb": 0
+ }
+}

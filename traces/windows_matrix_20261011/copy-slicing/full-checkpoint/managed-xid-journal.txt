@@ -1,0 +1,2 @@
+Timestamp-bounded journal capture, since2026-10-11 13:20:00 UTC, host local CEST:
+Oct 11 15:59:44 claude kernel: NVRM: Xid (PCI:0000:01:00): 32, pid=4098321, name=qemu-system-x86, channel 0x01000053 intr1 00000004 HCE_DBG0 00000300 HCE_DBG1 00003185
