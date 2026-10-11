@@ -7,6 +7,18 @@ again after the Wednesday 07:00 reset). Read `AGENTS.md` (= `CLAUDE.md`) first: 
 (state, branches, traps), `docs/DELEGATED_DECISIONS_20261010.md`, `docs/OWNER_RULINGS.md` §AB-§AE, `docs/design/V3_FEATURE_GAPS.md`
 (priorities: P0 = prevents apps running; fidelity and perf beyond "decent" are post-release), `docs/design/V3_NOT_IN_GIT.md`.
 
+## Latest checkpoint, 2026-10-11 22:01 UTC
+
+Last confirmed public push05271adf3 (Windows1490 smoke + capacity failure), private
+1dc9c0e. Fresh same-source control1495 reproduces hostXid32/channel4e intr00800000
+at21:55:37UTC and GSPcycle1. Original600s final oracle pending; probe1510 follows.
+Fault target c1d0007a:ff040025 remains Passthrough/Windows-user-work; FIFO update
+API4000002d on its ff1fe010 object registers0. Default-off sampler records no late
+candidate in control. Saved live host journal query0/Xid1 and selected sequence
+in gravity-vulkan/late-fifo-89e8ddf8/control-live-observation. No translated-only
+migration justified; actual software trigger/initiating cause still unmeasured.
+No walk capacity ceiling in that prefix; keep separate from smoke1490TorchFAIL.
+
 ## Latest checkpoint, 2026-10-11 21:55 UTC
 
 Last confirmed public pushee8764481 (exact89 Linux9+10/30 green), private1dc9c0e.

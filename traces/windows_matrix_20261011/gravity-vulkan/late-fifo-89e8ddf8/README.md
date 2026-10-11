@@ -64,3 +64,20 @@ See smoke-result for unchanged app/oracle results, launch flags, public QEMU
 log, selected capacity/refusal lines and source-prefix hash. New hard-ceiling
 refusal precedes recovery; complete reboot causality remains unproven.
 Gravity control1495 and probe1510 follow, independently of this failed smoke.
+
+## Control1495 live observation, 2026-10-11 22:01UTC
+
+Fresh original workload reproduces hostXid32/channel4e intr00800000 at21:55:37UTC
+and one GSP recovery. Final600s oracle pending. Channel c1d0007a:ff040025 is
+Passthrough/Windows-user-work, guest token27, initial32768-entry ring. Its first
+5080 object ff1fe010 is host-authored/inert; FIFO-update API4000002d registration
+returns0. Relay release later logs GET=PUT0x789e; this is not execution proof or
+a successful app completion. Late sampler off in control; no late candidate
+method recorded. Prefix counter maxima: birth_refused_cap0,unreconciled0,held0,
+named_missed152; invalidate boot max115329us, no fault-time correlation.
+Host journal query0/Xid1 in saved live window. See control-live-observation.
+No capacity ceiling in this control prefix: distinguish it from smoke1490.
+
+Initial Linux fast attempt has no usable suite output because output-directory
+creation was missing. It is classified as setup failure/no executed-arm evidence;
+no original NOTRUN tally is claimed. Corrected suite alone supplies30/30 PASS.

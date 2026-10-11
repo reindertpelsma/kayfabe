@@ -1,6 +1,6 @@
 # Resume the Windows matrix and GravityMark Vulkan investigation
 
-**STATUS: LIVE, 2026-10-11 21:55 UTC.** Compact entry point for a new chat.
+**STATUS: LIVE, 2026-10-11 22:01 UTC.** Compact entry point for a new chat.
 Historical chronology is in [HANDOFF_FOR_CODEX_20261011.md](HANDOFF_FOR_CODEX_20261011.md).
 Read the current checkpoint here before treating an older pending/result paragraph
 in that chronology as current state.
@@ -8,7 +8,7 @@ in that chronology as current state.
 ## Branches and checkout
 
 Public repository: <https://github.com/reindertpelsma/kayfabe>.
-Branch: **`codex/windows-matrix-20261011`**. Last confirmed push **ee8764481**,
+Branch: **`codex/windows-matrix-20261011`**. Last confirmed push **05271adf3**,
 containing reviewed source89e8ddf8b with161 GPU-free tests. Newer documentation checkpoints
 must not inherit exact-revision hardware claims automatically.
 Use the branch tip to get this document and the complete reachable source history.
@@ -74,7 +74,9 @@ Fast suite30/30 PASS21:41:47UTC, zero FAIL/CRASH/NOTRUN. Windows1490 smoke: gear
 no-capacity-refusal hypothesis FALSIFIED: slot48 need1049632 > hard walk ceiling1048576,
 split9194 TRUNCATED/refuse_mask0x10. See late-fifo-89e8ddf8 live prefix evidence.
 Now1495
-Gravity control,1510 Gravity probe. Only probe changes measurement value
+Gravity control reproduces Xid32/channel4e21:55:37UTC and GSPcycle1; final600s
+oracle pending. Same target Passthrough/Windows-user-work, FIFO update API4000002d
+registers0. Probe1510 follows. See late-fifo-89e8ddf8/control-live-observation. Only probe changes measurement value
 KF3_RELAY_PB_PEEK=after-fifo-update. Original600s benchmark/oracle retained.
 [Exact archived runners](../traces/windows_matrix_20261011/gravity-vulkan/h1-channel-audit/).
 
