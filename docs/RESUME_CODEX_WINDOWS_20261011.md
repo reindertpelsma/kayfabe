@@ -1,6 +1,6 @@
 # Resume the Windows matrix and GravityMark Vulkan investigation
 
-**STATUS: LIVE, 2026-10-11 21:19 UTC.** Compact entry point for a new chat.
+**STATUS: LIVE, 2026-10-11 21:39 UTC.** Compact entry point for a new chat.
 Historical chronology is in [HANDOFF_FOR_CODEX_20261011.md](HANDOFF_FOR_CODEX_20261011.md).
 Read the current checkpoint here before treating an older pending/result paragraph
 in that chronology as current state.
@@ -8,9 +8,9 @@ in that chronology as current state.
 ## Branches and checkout
 
 Public repository: <https://github.com/reindertpelsma/kayfabe>.
-Branch: **`codex/windows-matrix-20261011`**. Last confirmed push before this
-diagnostic hardening: `a7719952a` (reviewed source,161 GPU-free tests);
-this later checkpoint also publishes lifetime before the allocation action queues.
+Branch: **`codex/windows-matrix-20261011`**. Last confirmed push **89e8ddf8b**,
+reviewed diagnostic source with161 GPU-free tests. Newer documentation checkpoints
+must not inherit exact-revision hardware claims automatically.
 Use the branch tip to get this document and the complete reachable source history.
 
 Controller worktree: **`/data/kf-inval-absent`**. `/workspace/kayfabe` is another
@@ -38,37 +38,47 @@ follow v3. Host actions must be authored and unprivileged; preserve ownership,
 lifetime, actual GPU ordering/completion and the nonblocking vCPU contract.
 Private diagnosis supplies no implementation interfaces/constants.
 
-## Live hardware state: protect the owner's session
+## Live hardware state: owner released the GPU; personal image saved
 
-Trusted host: **`root@172.22.1.20`**, one RTX4070/AD104. Host driver595.91.07,
-Windows driver580.88. `W=/var/lib/kf-windows-20261005`.
+Trusted host: **`root@172.22.1.20`**, one RTX4070/AD104. Host595.91.07,
+Windows580.88. `W=/var/lib/kf-windows-20261005`.
 
-**Manual Windows run1380 is READY**, since20:17:45UTC, exact product3252a087.
-Window title: `kayfabe Windows manual 1380 — no automation` on ubuntu's desktop.
-At readiness NVIDIA Code0, autologon disabled, no input or apps automated.
-Owner was notified and given credentials. Login `vast`; password only in
-`$W/windows-desktop/secrets/win_password`, never in Git. No expiration, restart,
-auto-click, sign-in or app loop is scheduled for this VM.
+Owner finished manual1380 and explicitly authorized stop and all further runs.
+VM stopped21:33:57UTC **UNCLEAN-kill** after ACPI/QGA failed to finish;
+parent209237 exited21:34UTC. HostXid total remained30. Before new tests:
+no QEMU, group11DMA-FQ, stop-winprod removed. Owner reports GPU/Minecraft freeze;
+see [manual evidence](../traces/windows_matrix_20261011/manual-1380/README.md).
+No matching Minecraft Windows reference/edition/version measured.
 
-The original parent PID209237 holds `flock -o /tmp/kayfabe-fastguest.lock` for
-the entire manual VM. QEMU PID398484 was live at20:23UTC; recheck processes and
-the campaign log because PIDs/state are a dated observation.
-Do not launch another GPU job, another QGA client or stop/reboot this VM merely
-to resume work. The owner's stop marker, only if requested, is
-`/tmp/kf-stop-codex-manual-1380`. Campaign log:
-`$W/codex-prod-defaults-campaign.log`.
+**Keep the convenience image:** `$W/boundary-kayfabe-1380/windows.qcow2` and
+its `$W/baseline/windows.qcow2` parent. Original1380 is read-only. Separate
+writable personal child **`$W/owner-state/manual1380/resume.qcow2`**, copied
+OVMF_VARS.fd and KEEP.json are ready for future personal use. qemu-img check0;
+this does not prove NTFS clean shutdown. Do not test on/delete the personal
+chain. User says all contents are regeneratable/redownloadable/re-signin.
+Disks/credentials stay solely on the trusted host, not Git/Vast.
 
-The allocator job `/tmp/kf-capacity-after-manual.sh` is already waiting for this
-parent's actual exit and both manual READY/EXIT markers. It then acquires the
-same lock, validates65530e6a on Linux and runs Windows1480+ controls. Do not
-duplicate it. Log: `$W/codex-capacity-after-manual.log`.
+Old queued allocator65530 campaign was cancelled **while waiting**, not run;
+its exit0 trap is not a validation result. Validation is combined into exact
+**89e8ddf8** campaign, including allocator source and default-off diagnostic.
+Worktree `/data/kf-late-fifo-host-89e8ddf8`, detached exact89e8ddf8b.
+Run root `$W/codex-late-fifo-20261011-89e8ddf8`; shared GPUlock held by resumed
+campaign PID492472 (dated21:38UTC; recheck). Log `$W/codex-late-fifo-campaign.log`.
+**Do not duplicate it or edit its running scripts.**
 
-Kayfabe and VFIO cannot run simultaneously. After any authorized stop, require
-no QEMU, IOMMU group11 `DMA-FQ`, and remove `/tmp/kf-stop-winprod`.
-Keep `/var/lib` above100GiB free (156GiB observed20:23UTC). No host compilation
-during guest timing. No Vast instances remain rented by this session.
-Vast is untrusted: no secrets; any future rental requires `vms_enabled=true`
-and a KVM template, with evidence backed up before teardown.
+Linux gates9/9+gate10 PASS21:34UTC, binary/client/fastguest built. Initial
+fast suite never started because runner omitted BENCH_DIR mkdir; campaign
+exit1 preserved, no product failure inferred. New `resume_campaign.sh` fixes
+only runner preconditions, preserves fast-notrun.log and starts fast30 at21:38.
+If green, automatic fresh Windows1490 smoke (gears/vectorAdd/CUP8/torch),1495
+Gravity control,1510 Gravity probe. Only probe changes measurement value
+KF3_RELAY_PB_PEEK=after-fifo-update. Original600s benchmark/oracle retained.
+[Exact archived runners](../traces/windows_matrix_20261011/gravity-vulkan/h1-channel-audit/).
+
+Kayfabe/VFIO cannot run simultaneously. After stop require noQEMU, group11
+DMA-FQ, remove /tmp/kf-stop-winprod; keep /var/lib above100GiB (131GiB at21:38).
+No host compilation during guest timing. No Vast instance remains rented by
+this session. Vast is untrusted: no secrets; rentals need vms_enabled=true/KVM.
 
 ## What passes, and what remains open
 
@@ -95,7 +105,7 @@ GET_CAPS_V2 feature bits. Derive the caps from public sources/our implementation
 do not promote a captured table into a default merely to boot Windows.
 
 Product**65530e6a** adds actual-need allocator fallback (421 GPU-free tests
-pass,3 ignored); hardware validation is pending the owner's manual-session exit.
+pass,3 ignored); hardware validation is part of the active exact89e8ddf8 campaign.
 Most matrix rows used**72741e2b** or explicitly named earlier revisions.
 Current branch HEAD includes later source/evidence commits; do not attribute
 the frozen3252 hardware results to arbitrary HEAD changes.
@@ -129,7 +139,7 @@ channel's fix. Next capture needs a bounded peek armed after registration;
 earlier512-entry initialization peeks cannot cover this late window. Public
 source says clear the PBDMA interrupt *before* executing FIFO update, correcting
 the proposed plan's opposite wording. [Reproducible channel audit](../traces/windows_matrix_20261011/gravity-vulkan/h1-channel-audit/README.md).
-Owner is now trying1380 and will say when finished; leave it untouched meanwhile.
+Owner has released1380; it is stopped and the installed personal chain retained.
 
 Prepared, not hardware-validated: `KF3_RELAY_PB_PEEK=after-fifo-update` arms the
 existing bounded sample after the first update registration on a relay's
@@ -139,8 +149,8 @@ packet tests fix missed multi-datum triggers; final kf-qemu lib tests161/161.
 Independent review complete, no blockers; binding/first-object/Legacy/arming
 and post-forward race limits explicitly remain. A sample is not GPU execution
 proof and cannot alone formally falsify H1. Hardware gates9+10/fast30 still
-required for the exact diagnostic revision, then fresh matched control/probe
-runs after the existing allocator job and owner session. See audit README.
+fast30 pending after gates9+10 PASS for the exact diagnostic revision, then fresh matched control/probe
+runs in the active combined campaign. See audit README.
 
 FIFO_UPDATE_CHANNEL_INFO is a deferred FIFO/USERD metadata update, distinct
 from batching mapping/unmapping with a final invalidate. Keeping an authored
@@ -172,8 +182,7 @@ budget and no decoded segments for the needed fault window. Zero mapping
 refusal/HELD counters do not prove PT/PD/TLB correctness. Boot-wide invalidate
 maxima around76ms breach the12ms requirement but are not fault-time correlation.
 Before another run, state a falsifier, change one variable, and measure the
-actual software trigger or a specific mapping/completion failure. Further
-hardware work must wait for the protected owner session to end.
+actual software trigger or a specific mapping/completion failure. Hardware work now runs under the released shared lock in the combined campaign.
 
 ## Backup and restart artifacts
 

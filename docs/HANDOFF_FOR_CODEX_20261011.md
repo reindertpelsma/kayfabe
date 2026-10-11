@@ -7,6 +7,25 @@ again after the Wednesday 07:00 reset). Read `AGENTS.md` (= `CLAUDE.md`) first: 
 (state, branches, traps), `docs/DELEGATED_DECISIONS_20261010.md`, `docs/OWNER_RULINGS.md` §AB-§AE, `docs/design/V3_FEATURE_GAPS.md`
 (priorities: P0 = prevents apps running; fidelity and perf beyond "decent" are post-release), `docs/design/V3_NOT_IN_GIT.md`.
 
+## Latest checkpoint, 2026-10-11 21:39 UTC
+
+Last confirmed public push89e8ddf8b, private1dc9c0e. Owner released172.22.1.20;
+manual1380 stopped UNCLEAN-kill21:33:57 after failed ACPI/QGA shutdown. Installed
+image + backing chain retained; writable personal child/firmware/KEEP.json in
+owner-state/manual1380. qcow2 check0 is not NTFS shutdown proof. User explicitly
+calls it convenience only; no VM disk/credentials in Git or on Vast.
+Owner-reported Minecraft/GPU freeze recorded separately, matching workload and
+Windows reference unmeasured. Guest three153, no queried Display4101; no new
+hostXid. No canonical104 matrix counts changed.
+
+Old allocator queue cancelled before running, combined into exact89 campaign.
+Linux gates9/9+gate10 PASS, build/client/fastguest succeeded; initial fast suite
+NOTRUN due missing runner output directory, exit1 preserved. Corrected archived
+resume runner started21:38UTC under shared GPUlock; fast30 pending, then fresh
+Windows1490 allocator smoke,1495 Gravity control,1510 opt-in late peek probe.
+Probe is observation only, no migration/native registration or Vulkan fix.
+See compact resume for paths/PID/decision guards. Personal1380chain never tested.
+
 ## Latest checkpoint, 2026-10-11 21:19 UTC
 
 Last confirmed public pusha7719952a, private1dc9c0e. Reviewed late diagnostic

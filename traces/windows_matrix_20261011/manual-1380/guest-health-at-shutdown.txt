@@ -1,0 +1,29 @@
+MANUAL1380 {"boot":"2026-10-11T20:17:31.5000000Z","system_events":[],"utc":"2026-10-11T21:27:02.7274894Z","run":1380,"app_event_counts":{"1002":2,"1000":0,"1001":39},"display":[{"status":"Unknown","name":"Microsoft Basic Display Adapter","problem":"CM_PROB_PHANTOM"},{"status":"OK","name":"NVIDIA GeForce RTX 4070","problem":"CM_PROB_NONE"}],"game_processes":[{"cpu_s":78.453125,"pid":5640,"name":"Minecraft","responding":true},{"cpu_s":76.21875,"pid":10392,"name":"Minecraft","responding":true},{"cpu_s":0.890625,"pid":13900,"name":"Minecraft","responding":true},{"cpu_s":0.953125,"pid":14260,"name":"Minecraft","responding":true},{"cpu_s":0.296875,"pid":14280,"name":"Minecraft","responding":true},{"cpu_s":0.25,"pid":14304,"name":"Minecraft","responding":true},{"cpu_s":78.953125,"pid":14328,"name":"Minecraft","responding":true}]}
+
+[stderr]
+You cannot call a method on a null-valued expression.
+At line:12 char:9
++         @{ utc = $_.TimeCreated.ToUniversalTime().ToString('o'); prov ...
++         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : InvalidOperation: (:) [], RuntimeException
+    + FullyQualifiedErrorId : InvokeMethodOnNull
+ 
+You cannot call a method on a null-valued expression.
+At line:12 char:9
++         @{ utc = $_.TimeCreated.ToUniversalTime().ToString('o'); prov ...
++         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : InvalidOperation: (:) [], RuntimeException
+    + FullyQualifiedErrorId : InvokeMethodOnNull
+ 
+You cannot call a method on a null-valued expression.
+At line:12 char:9
++         @{ utc = $_.TimeCreated.ToUniversalTime().ToString('o'); prov ...
++         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : InvalidOperation: (:) [], RuntimeException
+    + FullyQualifiedErrorId : InvokeMethodOnNull
+ 
+
+[rc=0]
+MANUAL1380 {"boot":"2026-10-11T20:17:31.5000000Z","system_events":[{"provider":"nvlddmkm","utc":"2026-10-11T21:18:48.4147721Z","message":"","id":153},{"provider":"nvlddmkm","utc":"2026-10-11T21:18:48.0636865Z","message":"","id":153},{"provider":"nvlddmkm","utc":"2026-10-11T21:18:47.1783768Z","message":"","id":153}],"utc":"2026-10-11T21:27:57.1253819Z","run":1380,"app_event_counts":{"1002":2,"1000":0,"1001":39},"display":[{"status":"Unknown","name":"Microsoft Basic Display Adapter","problem":"CM_PROB_PHANTOM"},{"status":"OK","name":"NVIDIA GeForce RTX 4070","problem":"CM_PROB_NONE"}],"system_events_selected":3,"game_processes":[{"cpu_s":89.859375,"pid":5640,"name":"Minecraft","responding":true},{"cpu_s":77.0625,"pid":10392,"name":"Minecraft","responding":true},{"cpu_s":0.890625,"pid":13900,"name":"Minecraft","responding":true},{"cpu_s":0.953125,"pid":14260,"name":"Minecraft","responding":true},{"cpu_s":0.296875,"pid":14280,"name":"Minecraft","responding":true},{"cpu_s":0.25,"pid":14304,"name":"Minecraft","responding":true},{"cpu_s":82.859375,"pid":14328,"name":"Minecraft","responding":true}]}
+
+[rc=0]

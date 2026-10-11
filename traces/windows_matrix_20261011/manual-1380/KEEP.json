@@ -1,0 +1,91 @@
+{
+  "status": "PRESERVED_LOCAL_CONVENIENCE",
+  "utc": "2026-10-11T21:34:01.000626+00:00",
+  "host": "172.22.1.20",
+  "installed_state": "/var/lib/kf-windows-20261005/boundary-kayfabe-1380/windows.qcow2",
+  "writable_personal_child": "/var/lib/kf-windows-20261005/owner-state/manual1380/resume.qcow2",
+  "firmware": "/var/lib/kf-windows-20261005/owner-state/manual1380/OVMF_VARS.fd",
+  "firmware_sha256": "1412974ed65e1edb003b9487f9360ee8f87271ec1101a80629a3673bf4e53c58",
+  "chain": [
+    {
+      "children": [
+        {
+          "name": "file",
+          "info": {
+            "children": [],
+            "virtual-size": 28240642048,
+            "filename": "/var/lib/kf-windows-20261005/boundary-kayfabe-1380/windows.qcow2",
+            "format": "file",
+            "actual-size": 27955179520,
+            "format-specific": {
+              "type": "file",
+              "data": {}
+            },
+            "dirty-flag": false
+          }
+        }
+      ],
+      "backing-filename-format": "qcow2",
+      "virtual-size": 161061273600,
+      "filename": "/var/lib/kf-windows-20261005/boundary-kayfabe-1380/windows.qcow2",
+      "cluster-size": 65536,
+      "format": "qcow2",
+      "actual-size": 27955179520,
+      "format-specific": {
+        "type": "qcow2",
+        "data": {
+          "compat": "1.1",
+          "compression-type": "zlib",
+          "lazy-refcounts": false,
+          "refcount-bits": 16,
+          "corrupt": false,
+          "extended-l2": false
+        }
+      },
+      "full-backing-filename": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "backing-filename": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "dirty-flag": false
+    },
+    {
+      "children": [
+        {
+          "name": "file",
+          "info": {
+            "children": [],
+            "virtual-size": 22330671104,
+            "filename": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+            "format": "file",
+            "actual-size": 22333235200,
+            "format-specific": {
+              "type": "file",
+              "data": {}
+            },
+            "dirty-flag": false
+          }
+        }
+      ],
+      "virtual-size": 161061273600,
+      "filename": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "cluster-size": 65536,
+      "format": "qcow2",
+      "actual-size": 22333235200,
+      "format-specific": {
+        "type": "qcow2",
+        "data": {
+          "compat": "1.1",
+          "compression-type": "zlib",
+          "lazy-refcounts": false,
+          "refcount-bits": 16,
+          "corrupt": false,
+          "extended-l2": false
+        }
+      },
+      "dirty-flag": false
+    }
+  ],
+  "image_check_exit": 0,
+  "image_check_log": "/var/lib/kf-windows-20261005/owner-state/manual1380/qemu-img-check.txt",
+  "retention": "Never garbage-collect/rebase/mutate original1380 or baseline parent; no test uses this personal chain.",
+  "privacy": "Disk and sign-in state stay on trusted host; no disk/credentials in Git or on Vast.",
+  "source_marker": "WINDOWS_START kf3=3252a087 run=/var/lib/kf-windows-20261005/boundary-kayfabe-1380 checkout=6fafcc6e xid_before=30 2026-10-11T22:17:24+02:00\nWINDOWS_EXIT stop=UNCLEAN-kill 2026-10-11T23:33:57+02:00 xid=30\nWINDOWS_EXIT qemu-gone 2026-10-11T23:33:57+02:00 xid_after=30\n"
+}

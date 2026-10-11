@@ -11,7 +11,26 @@ fix this file. Entries below the first are dated history.
 
 ## 0. Current resumption — start here
 
-**Windows/Codex current resume point:** [RESUME_CODEX_WINDOWS_20261011.md](RESUME_CODEX_WINDOWS_20261011.md), branch `codex/windows-matrix-20261011`. Protect the live owner manual session described there.
+**Windows/Codex current resume point:** [RESUME_CODEX_WINDOWS_20261011.md](RESUME_CODEX_WINDOWS_20261011.md), branch `codex/windows-matrix-20261011`. Owner session is stopped; preserve its convenience disk chain described there.
+
+## Latest checkpoint, 2026-10-11 21:39 UTC
+
+Last confirmed public push89e8ddf8b, private1dc9c0e. Owner released172.22.1.20;
+manual1380 stopped UNCLEAN-kill21:33:57 after failed ACPI/QGA shutdown. Installed
+image + backing chain retained; writable personal child/firmware/KEEP.json in
+owner-state/manual1380. qcow2 check0 is not NTFS shutdown proof. User explicitly
+calls it convenience only; no VM disk/credentials in Git or on Vast.
+Owner-reported Minecraft/GPU freeze recorded separately, matching workload and
+Windows reference unmeasured. Guest three153, no queried Display4101; no new
+hostXid. No canonical104 matrix counts changed.
+
+Old allocator queue cancelled before running, combined into exact89 campaign.
+Linux gates9/9+gate10 PASS, build/client/fastguest succeeded; initial fast suite
+NOTRUN due missing runner output directory, exit1 preserved. Corrected archived
+resume runner started21:38UTC under shared GPUlock; fast30 pending, then fresh
+Windows1490 allocator smoke,1495 Gravity control,1510 opt-in late peek probe.
+Probe is observation only, no migration/native registration or Vulkan fix.
+See compact resume for paths/PID/decision guards. Personal1380chain never tested.
 
 ## Latest checkpoint, 2026-10-11 21:19 UTC
 

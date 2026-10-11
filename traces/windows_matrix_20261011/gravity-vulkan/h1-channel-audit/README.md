@@ -117,6 +117,18 @@ Reproduce offline: compile layout.c using OGKM580.65.06's public
 to layout.json, then `python3 audit.py`. All decoded layouts come from those
 headers; all inputs and their SHA256 values are recorded in audit.json.
 
+## Hardware campaign update, 2026-10-11 21:39UTC
+
+Owner released manual1380; it stopped uncleanly and the installed disk is saved
+separately. Prior allocator queue cancelled before running; checks combined into
+exact89e8ddf8. Gates9/9+gate10 PASS, build/client/fastguest succeeded. Initial
+fast suite NOTRUN because this runner omitted BENCH_DIR mkdir; original exit1
+and fast log retained. Archived resume_campaign.sh fixes only that precondition
+and starts fast30, then Windows smoke1490/control1495/probe1510 under sharedlock.
+Only probe changes KF3_RELAY_PB_PEEK value; no migration or API registration.
+No GravityMark fix/actual GPU trigger claimed. Historical prepared/protected
+paragraphs below describe the earlier stage, superseded by this update.
+
 ## Prepared diagnostic, 2026-10-11 21:16UTC — NOT HARDWARE-VALIDATED
 
 `KF3_RELAY_PB_PEEK=after-fifo-update` is a new value of the existing measurement
