@@ -11,6 +11,40 @@ fix this file. Entries below the first are dated history.
 
 ## 0. Current resumption — start here
 
+## Latest checkpoint, 2026-10-11 19:39 UTC
+
+Last confirmed public push fd54eef40. Canonical matrix remains104/104 executed:
+78cleanPASS,8PASS_WITH_RECOVERY,12FAIL,6TIMEOUT; Linux parity58/65, mixed
+revisions explicit. Additional FurMark OpenGL stress1370 passes using fresh
+renderer-output evidence, zero guest recovery records; canonical integration
+pending evidence review. Same-GPU RTX4070 VFIO GravityMark Vulkan reference
+started19:37:51UTC, original600s workload/oracle, guest580.88; result pending.
+
+Diagnostic1361 Vulkan TIMEOUT603s: hostXid32 at19:09:06.062454UTC,
+PID302124/channel0x4e, first guest153 about28.576s after app start, three153,
+no4101/live-kernel/WER/reboot, oneGSPcycle. Mid-run screenshot shows asteroid
+rendering468.3FPS before failure. Diagnostic1360 nbody rc0/29s but FAIL for
+missing GPU proof; survival alone is not a pass. Neither replaces canonical.
+PT snapshot hypothesis INCONCLUSIVE: only free-time captures, no stall capture
+and zero decoded segments; global capture budget and segment window missed
+needed fault-channel coverage. Zero refusal/held counters do not prove all
+PT/PD mappings or lifetime/invalidate synchronization correct.
+
+Private1362 hardware-hang breakpoint hit after hostXid32. Guest CPUs paused
+about33s for a trusted-host dump and resumed; original app deadline retained,
+final TIMEOUT. This confirms the later hang path, not the initiating GPU cause.
+Raw memory and closed-image diagnostic notes remain private; no implementation
+interface or constant is sourced from them. Bounded public-header RC journal
+reader builds; not hardware-tested before VFIO detached the host driver.
+Read-only journal may expose earlier fault details; absent/denied records are
+inconclusive. No production caller, GPU work, or watchdog/history modification.
+
+Frozen3252 Linux regression, boot-default controls and manual1380 follow VFIO;
+manual NOT READY. No auto-input will run in the manual session. Capacity65530
+hardware validation still waits for that session to exit. Public and private
+scripts/evidence are backed up separately; regeneratable RAM dump stays on
+trusted host, excluded from Git and Vast. GravityMark Vulkan fix remains open.
+
 **2026-10-11 19:10 UTC, Codex Windows campaign:** last confirmed push773e818e5.
 Latest combined104/104:78cleanPASS,8PASS_WITH_RECOVERY,12FAIL,6TIMEOUT;
 Linux parity58/65, mixed revisions explicit. Direct stream1350 cleanPASS;

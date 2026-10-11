@@ -1,0 +1,66 @@
+{
+ "quiet": 64,
+ "end_utc": "2026-10-11T19:37:20.0814730Z",
+ "start_utc": "2026-10-11T19:36:15.8134598Z",
+ "rc": 0,
+ "secs": 64,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4070 status=OK code=0"
+ ],
+ "digests": [],
+ "session": 1,
+ "out_files": [],
+ "boot_utc_start": "2026-10-11T19:34:23.5000000Z",
+ "log_tail": [
+  "=== furmark_gl_stress start=2026-10-11T19:36:15.8134598+00:00 host=VASTWIN session=1 boot=2026-10-11T19:34:23.5000000Z timeout=180",
+  "KFWAIT furmark_gl_stress EXITED rc=0",
+  "FM_LOGFILE _furmark_logkf_43a7559c90bc49a697becee4840a2ab6.txt",
+  "FM_LOG (19:36:17:680)\t[GpuMonitor]   - name: NVIDIA GeForce RTX 4070",
+  "FM_LOG (19:36:17:680)\t[GpuMonitor]   - name: NVIDIA GeForce RTX 4070",
+  "FM_LOG (19:36:18:469)\tGL_RENDERER: NVIDIA GeForce RTX 4070/PCIe/SSE2",
+  "FM_LOG (19:36:18:469)\tGL_VENDOR: NVIDIA Corporation",
+  "FM_LOG (19:36:18:469)\tGL_VERSION: 3.2.0 NVIDIA 580.88",
+  "=== end rc=0 secs=64 2026-10-11T19:37:20.0814730+00:00"
+ ],
+ "pdh": {
+  "pids": [
+   "4120",
+   "9804",
+   "3076",
+   "5524"
+  ],
+  "nv": {
+   "copy": 0,
+   "3d": 0,
+   "videoencode": 0,
+   "videodecode": 0,
+   "vr": 0,
+   "legacyoverlay": 0,
+   "ofa_0": 0
+  },
+  "samples": 30,
+  "other": {},
+  "nvidia_luids": "0_6227"
+ },
+ "timed_out": false,
+ "token": "g1-furmark_gl_stress-1791747370",
+ "boot_utc_end": "2026-10-11T19:34:23.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "furmark_gl_stress",
+ "smi": {
+  "samples": 0,
+  "mem_used_base_mb": null,
+  "util_max": 0,
+  "mem_used_max_mb": 0
+ }
+}
