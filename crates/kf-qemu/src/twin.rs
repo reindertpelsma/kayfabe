@@ -300,6 +300,7 @@ mod tests {
             flag: true,
             windows: true,
             kernel_stamped: true,
+            uvm_owned: false,
             rm_internal: false,
             engine: Some(engine),
             ctx_share: 0,

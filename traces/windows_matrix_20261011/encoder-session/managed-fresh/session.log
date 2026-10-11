@@ -21,3 +21,11 @@ IOMMU_SWITCH_END type=identity 2026-10-11T18:10:17+02:00
 2026-10-11T16:12:57Z [g1] staged pywheels (wheels, 55s)
 2026-10-11T16:13:00Z [g1] staged cuda_cudart (unzip, 0s)
 2026-10-11T16:16:21Z [g1] managed_t: TIMEOUT (restart guest: app-timeout)
+2026-10-11T16:21:54Z post-guest hook rc=0 02:00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-11T18:21:54+02:00
+2026-10-11T16:21:54Z [g1] stopped (clean)
+2026-10-11T16:21:54Z [g1] session ended early: app-timeout; 0 apps move to a fresh guest
+2026-10-11T16:21:54Z MATRIX_DONE batched: 0 pass / 1
+2026-10-11T16:21:54Z EXIT rc=0

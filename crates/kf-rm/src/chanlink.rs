@@ -266,6 +266,10 @@ pub struct UserWorkFacts {
     pub windows: bool,
     /// The channel is guest-KERNEL by [`kernel_channel`] (only such a channel is reclassified).
     pub kernel_stamped: bool,
+    /// RM's decoded `internalFlags.UVM_OWNED`. Kernel UVM channels can issue physical
+    /// migration copies even when their ProcessID names the CUDA application.
+    /// This flag alone never supplies guest-kernel privilege.
+    pub uvm_owned: bool,
     /// The client is one of the guest RM's own internal clients.
     pub rm_internal: bool,
     /// `engineType` (resolved).
@@ -308,6 +312,11 @@ pub fn kernel_pid4_enabled() -> bool {
 /// become passthrough, if you know at channel creation"): is this Windows channel per-process USER
 /// work? `Ok(())` = yes (Passthrough); `Err(why)` = no, the channel keeps the route it had.
 ///
+/// Correction 2026-10-11: a KERNEL-stamped UVM-owned channel keeps Translated
+/// before the process rule below. Its physical migration copies need authored
+/// operands even when the allocating application's PID is declared. UVM_OWNED
+/// alone is not privilege; the existing [`kernel_channel`] proof is required.
+///
 /// The criterion, from `[measured, run60 at 3a578d50, 2026-10-08]` (every channel of one boot,
 /// `run60-chan-vas-facts.txt`): Windows stamps EVERY channel `PRIVILEGE=KERNEL`; the kernel driver's
 /// own channels (paging CE, kernel GR, video, and the two display-side GR/CE pairs) declare
@@ -333,6 +342,15 @@ pub fn windows_user_work(f: &UserWorkFacts) -> Result<(), &'static str> {
     }
     if !f.kernel_stamped {
         return Err("not guest-kernel (already Passthrough)");
+    }
+    // Run1261 (2026-10-11): managed allocation creates KERNEL+UVM_OWNED COPY2
+    // channels under the application's PID, in a separate UVM VA space. The old
+    // process-only rule made them Passthrough; physical LAUNCH_DMA 0x3185 then
+    // correctly failed on the USER host channel (Xid32). Preserve translation
+    // at birth for this declared kernel work; never grant the host privilege.
+    // UVM_OWNED without KERNEL has already been excluded above.
+    if f.uvm_owned {
+        return Err("guest-kernel UVM-owned work requires address translation");
     }
     if f.rm_internal {
         return Err("an RM-internal client");
@@ -1184,6 +1202,7 @@ impl ChannelPolicy {
             flag: self.user_work_flag,
             windows: self.windows_identity,
             kernel_stamped,
+            uvm_owned: privilege.is_some_and(|p| p.uvm_owned),
             rm_internal: is_rm_internal_client(h.client),
             engine: match self.abi.decode_channel_engine_type(params).ok().flatten() {
                 Some(0) | None => tsg.map(|t| t.2).filter(|e| *e != 0),
@@ -2426,6 +2445,7 @@ mod tests {
                 flag: true,
                 windows: true,
                 kernel_stamped: true,
+                uvm_owned: false,
                 rm_internal: false,
                 engine: Some(GR),
                 ctx_share: 0xff0e_0200,
@@ -2464,6 +2484,45 @@ mod tests {
                     ..dwm()
                 };
                 assert!(windows_user_work(&f).is_err(), "{engine:#x}");
+            }
+        }
+
+        #[test]
+        fn kernel_uvm_migration_work_keeps_translation_in_an_application_process() {
+            // Run1261's UVM client: KERNEL+UVM_OWNED, COPY2, no subcontext,
+            // application's PID. The physical copy must not reach a USER host
+            // ring unchanged merely because its PID differs from the driver.
+            let migration = UserWorkFacts {
+                uvm_owned: true,
+                engine: Some(CE0),
+                ctx_share: 0,
+                ctx_share_known: false,
+                ..dwm()
+            };
+            assert_eq!(
+                windows_user_work(&migration),
+                Err("guest-kernel UVM-owned work requires address translation")
+            );
+            assert_eq!(
+                windows_user_work(&UserWorkFacts {
+                    uvm_owned: false,
+                    ..migration
+                }),
+                Ok(())
+            );
+
+            // UVM_OWNED is not a substitute for the KERNEL privilege stamp.
+            let user_uvm = kf_abi::notifier::ChannelPrivilege::from_internal_flags(0x81);
+            assert!(user_uvm.uvm_owned);
+            assert!(!super::super::kernel_channel(0xc1d0_00b2, Some(user_uvm)));
+            for facts in grid() {
+                assert!(
+                    windows_user_work(&UserWorkFacts {
+                        uvm_owned: true,
+                        ..facts
+                    })
+                    .is_err()
+                );
             }
         }
 
@@ -2686,6 +2745,7 @@ mod tests {
                                     flag,
                                     windows,
                                     kernel_stamped,
+                                    uvm_owned: false,
                                     rm_internal,
                                     engine,
                                     ctx_share,
