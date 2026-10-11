@@ -22,7 +22,7 @@ OTHER_ADAPTER_MAX = 1.0        # percent on a non-NVIDIA LUID before it counts a
 
 def parse_proof(p):
     """'out:<regex>' | 'pdh:<engine regex>' | 'smi' | 'cuda-vectoradd-readback' -> (kind, arg)"""
-    if p in ("smi", "cuda-vectoradd-readback", "cuda-cup8-readback"):
+    if p in ("smi", "cuda-vectoradd-readback", "cuda-cup8-readback", "cuda-oceanfft-readback", "cuda-randomfog-readback"):
         return p, ""
     kind, _, arg = p.partition(":")
     if kind not in ("out", "pdh"):
@@ -44,7 +44,7 @@ def eval_proof(proofs, log, facts):
             # Get-Counter lower-cases the instance names (engtype_3D arrives as "3d"): match the engine type case-insensitively
             hit = sorted(e for e, v in pdh.items() if re.search(arg, e, re.I) and v and float(v) >= ENGINE_MIN_UTIL)
             (held if hit else missed).append(f"pdh:{'+'.join(hit) if hit else arg}")
-        elif kind in ("cuda-vectoradd-readback", "cuda-cup8-readback"):
+        elif kind in ("cuda-vectoradd-readback", "cuda-cup8-readback", "cuda-oceanfft-readback", "cuda-randomfog-readback"):
             # NVIDIA cuda-samples v12.9, vectorAdd.cu: the CUDA launch and
             # synchronous DtoH copy must succeed before all 50000 elements are
             # checked. CUDA has no WARP/CPU backend. This narrow oracle avoids
@@ -61,6 +61,25 @@ def eval_proof(proofs, log, facts):
                 sequence = (r"(?s)LAUNCH OK\r?\n.*?SYNC OK\r?\n.*?"
                             r"ok   cuMemcpyDtoH\(hC,dC,sz\).*?"
                             r"CUP8 RESULT N=2048 bad=0 maxerr=0 [^\r\n]+ -> PASS")
+            if kind in ("cuda-oceanfft-readback", "cuda-randomfog-readback"):
+                # https://github.com/NVIDIA/cuda-samples/blob/v12.9/Samples/4_CUDA_Libraries/oceanFFT/oceanFFT.cpp
+                # https://github.com/NVIDIA/cuda-samples/blob/v12.9/Samples/4_CUDA_Libraries/randomFog/randomFog.cpp
+                # -qatest executes CUDA/cuFFT or CURAND, copies the result back,
+                # and compares the bundled float references (sample tolerances).
+                # Require the original GUI survival separately via the app rx.
+                device = r'GPU Device \d+: "[^"\r\n]+" with compute capability \d+\.\d+'
+                if kind == "cuda-oceanfft-readback":
+                    sequence = (r"(?s)" + device + r".*?"
+                                r"compareBin2Bin <float> nelements=65536, epsilon=0\.10, threshold=0\.15\s+"
+                                r"src_file <spatialDomain\.bin>, size=262144 bytes\s+"
+                                r"ref_file <\./ref_spatialDomain\.bin>, size=262144 bytes\s+OK\s+.*?"
+                                r"compareBin2Bin <float> nelements=131072, epsilon=0\.10, threshold=0\.15\s+"
+                                r"src_file <slopeShading\.bin>, size=524288 bytes\s+"
+                                r"ref_file <\./ref_slopeShading\.bin>, size=524288 bytes\s+OK(?:\s|$)")
+                else:
+                    sequence = (r"(?s)" + device + r".*?CURAND initialized.*?"
+                                r"compareBin2Bin <float> nelements=1200000, epsilon=0\.25, threshold=0\.35\s+"
+                                r"src_file <randomFog\.bin>\s+ref_file <\./ref_randomFog\.bin>\s+OK(?:\s|$)")
             healthy_nv = any(re.fullmatch(r"NVIDIA .+ status=OK code=0", str(d))
                              for d in facts.get("gpu_devices", []))
             ok = healthy_nv and re.search(sequence, log) is not None

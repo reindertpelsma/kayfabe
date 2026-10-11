@@ -5,6 +5,18 @@ again after the Wednesday 07:00 reset). Read `AGENTS.md` (= `CLAUDE.md`) first: 
 (state, branches, traps), `docs/DELEGATED_DECISIONS_20261010.md`, `docs/OWNER_RULINGS.md` §AB-§AE, `docs/design/V3_FEATURE_GAPS.md`
 (priorities: P0 = prevents apps running; fidelity and perf beyond "decent" are post-release), `docs/design/V3_NOT_IN_GIT.md`.
 
+## Latest checkpoint, 2026-10-11 14:59 UTC
+
+Last pushed881d3c97 (74-row evidence checkpoint). Canonical OceanFFT/RandomFog
+harness now first runs bundled -qatest numerical comparisons from writable cwd,
+then the same25s GUI run. Proof requires healthy NVIDIA Code0 + exact reference
+checks; GUI survival alone and incidental PDH activity cannot bypass the math.
+Prior diagnostic FAIL/no-gpu-proof results remain unchanged. Fresh canonical
+stock and candidate validation pending; candidate uses unchanged frozen8037.
+Queued supplemental runner still usesc5c97c00; update only before it acquireslock.
+Full harness verification76/76 PASS (initial run caught generated doc drift;
+regenerated parent doc before the passing run).
+
 ## Latest checkpoint, 2026-10-11 14:52 UTC
 
 Last pushedcdad9267; backup of this checkpoint follows. Broad snapshot74/102:

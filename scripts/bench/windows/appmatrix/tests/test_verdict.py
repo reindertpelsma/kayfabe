@@ -51,6 +51,44 @@ class Verdicts(unittest.TestCase):
         self.assertEqual(V.decide(app, dict(f, gpu_devices=[]), log)["verdict"], "FAIL")
         self.assertEqual(V.decide(app, f, log.replace('bad=0', 'bad=1'))["verdict"], "FAIL")
 
+    def test_cuda_demo_readbacks_require_math_and_original_gui(self):
+        device = 'GPU Device 0: "Ampere" with compute capability 8.9\n'
+        ocean = (device +
+                 '> compareBin2Bin <float> nelements=65536, epsilon=0.10, threshold=0.15\n'
+                 '   src_file <spatialDomain.bin>, size=262144 bytes\n'
+                 '   ref_file <./ref_spatialDomain.bin>, size=262144 bytes\n  OK\n'
+                 '> compareBin2Bin <float> nelements=131072, epsilon=0.10, threshold=0.15\n'
+                 '   src_file <slopeShading.bin>, size=524288 bytes\n'
+                 '   ref_file <./ref_slopeShading.bin>, size=524288 bytes\n  OK\n')
+        fog = (device + 'CURAND initialized\n'
+               '> compareBin2Bin <float> nelements=1200000, epsilon=0.25, threshold=0.35\n'
+               '   src_file <randomFog.bin>\n   ref_file <./ref_randomFog.bin>\n  OK\n')
+        f = facts(pdh=dict(nv={}, other={}), gpu_devices=['NVIDIA GeForce RTX 4070 status=OK code=0'])
+        for kind, qa in [('oceanfft', ocean), ('randomfog', fog)]:
+            with self.subTest(kind=kind):
+                app = dict(APP, rx=r'^KFSURVIVE demo ALIVE_AT 25', proof=['cuda-' + kind + '-readback'])
+                log = qa + 'KFSURVIVE demo ALIVE_AT 25\n'
+                self.assertEqual(V.decide(app, f, log)['verdict'], 'PASS')
+                self.assertEqual(V.decide(app, f, log.replace('\n', '\r\n'))['verdict'], 'PASS')
+                # Each missing comparison, wrong count or failed result rejects
+                # even if a healthy GPU is busy during the GUI phase.
+                busy = dict(f, pdh=dict(nv={'3D': 90}, other={}))
+                mutations = [log.replace(device, ''), log.replace('ALIVE_AT', 'EXITED_EARLY'),
+                             log.replace('nelements=', 'nelements=9'), log.replace('ref_file', 'missing_ref'),
+                             log.replace('  OK', '  FAIL', 1), log.rsplit('  OK', 1)[0] + 'KFSURVIVE demo ALIVE_AT 25\n']
+                if kind == 'randomfog':
+                    mutations.append(log.replace('CURAND initialized', ''))
+                else:
+                    mutations.append(log.replace('size=524288', 'size=4'))
+                for bad in mutations:
+                    self.assertEqual(V.decide(app, busy, bad)['verdict'], 'FAIL')
+                for devices in ([], ['NVIDIA GeForce RTX 4070 status=OK code=43'],
+                                ['Microsoft Basic Render Driver status=OK code=0']):
+                    self.assertEqual(V.decide(app, dict(f, gpu_devices=devices), log)['verdict'], 'FAIL')
+                self.assertEqual(V.decide(app, dict(f, rc=1), log)['verdict'], 'FAIL')
+                self.assertEqual(V.decide(app, f, log + 'CHECK demo FAIL\n')['verdict'], 'FAIL')
+                self.assertEqual(V.decide(app, dict(f, pdh=dict(nv={}, other={'3D': 20})), log)['verdict'], 'FAIL')
+
     def test_rc_nonzero_is_fail(self):
         d = V.decide(APP, facts(rc=1), "NVIDIA\nDONE\n")
         self.assertEqual(d["verdict"], "FAIL")

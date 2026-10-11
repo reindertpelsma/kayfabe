@@ -377,8 +377,8 @@ with its class (§4.4). Commands are abbreviated; `apps.json` has the exact Powe
 | `deviceQuery_demo` | 1 / service | `deviceQuery.exe` | `Result = PASS` | out:NVIDIA\|GeForce\|RTX | ~3 s / 60 s | **low** [C-small] |
 | `nbody_demo_bench` | 1 / service | `nbody.exe -benchmark -numbodies=32768` | `GFLOP/s` | out:NVIDIA\|GeForce\|RTX, pdh:Cuda\|Compute\|3D\|Copy | ~15 s / 120 s | **medium** [C-big] -benchmark should not open a window in the sample; if it does, move to session=interactive |
 | `nbody_demo_gl` | 1 / desktop | `nbody.exe -numbodies=16384` | `KFSURVIVE nbody_gl ALIVE_AT` | pdh:Cuda\|Compute\|3D\|Copy | ~25 s / 90 s | **high** [GFX] CUDA-OpenGL interop: the simulation runs on CUDA, the points are drawn by OpenGL from the same buffer |
-| `oceanFFT_demo` | 1 / desktop | `oceanFFT.exe` | `KFSURVIVE oceanFFT ALIVE_AT` | pdh:Cuda\|Compute\|3D\|Copy | ~25 s / 90 s | **high** [GFX] cufft64_11.dll comes from the torch wheel on PATH; CUDA-OpenGL interop |
-| `randomFog_demo` | 1 / desktop | `randomFog.exe` | `KFSURVIVE randomFog ALIVE_AT` | pdh:Cuda\|Compute\|3D\|Copy | ~25 s / 90 s | **high** [GFX] curand64_10.dll from the torch wheel; CUDA-OpenGL interop |
+| `oceanFFT_demo` | 1 / desktop | `oceanFFT.exe -qatest` | `KFSURVIVE oceanFFT ALIVE_AT` | cuda-oceanfft-readback | ~30 s / 120 s | **high** [GFX] Bundled QA checks both CUDA/cuFFT readbacks, then the original 25 s CUDA-OpenGL window; cufft64_11.dll from torch |
+| `randomFog_demo` | 1 / desktop | `randomFog.exe -qatest` | `KFSURVIVE randomFog ALIVE_AT` | cuda-randomfog-readback | ~30 s / 120 s | **high** [GFX] Bundled QA checks CURAND readback, then the original 25 s CUDA-OpenGL window; curand64_10.dll from torch |
 | `vectorAdd_demo` | 1 / service | `vectorAdd.exe` | `Test PASSED` | cuda-vectoradd-readback, pdh:Cuda\|Compute\|3D\|Copy, smi | ~3 s / 60 s | **low** [C-small] Public CUDA sample's launch, synchronous DtoH and full element check plus healthy NVIDIA adapter prove GPU execution; PDH/SMI may miss this short kernel |
 
 **CUDA driver-API ladder (kayfabe's own, cross-built with mingw)** (3)

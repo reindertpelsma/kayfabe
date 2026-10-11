@@ -96,13 +96,20 @@ app("nbody_demo_gl", "cuda-demo", DEMO + r"""Invoke-KfSurvive -Exe "$d\nbody.exe
 exit $global:KfRc""", r"KFSURVIVE nbody_gl ALIVE_AT", 90, 25, [GPU_ENG], *W_GFX, linux=["nbody"], pkgs=("cuda_demo_suite", "vc_redist"), session="interactive",
     shot=15, note="CUDA-OpenGL interop: the simulation runs on CUDA, the points are drawn by OpenGL from the same buffer")
 app("oceanFFT_demo", "cuda-demo", DEMO + r"""$env:PATH = "$TL;$env:PATH"
+Copy-Item -LiteralPath "$d\oceanFFT_data_files\ref_spatialDomain.bin" -Destination $OUT -ErrorAction Stop
+Copy-Item -LiteralPath "$d\oceanFFT_data_files\ref_slopeShading.bin" -Destination $OUT -ErrorAction Stop
+Invoke-KfExe -Exe "$d\oceanFFT.exe" -ArgList @('-qatest') -Cwd $OUT
+if ($global:KfRc -ne 0) { exit $global:KfRc }
 Invoke-KfSurvive -Exe "$d\oceanFFT.exe" -Cwd $d -Seconds 25 -Tag oceanFFT
-exit $global:KfRc""", r"KFSURVIVE oceanFFT ALIVE_AT", 90, 25, [GPU_ENG], *W_GFX, linux=["simpleCUFFT"], pkgs=("cuda_demo_suite", "pywheels", "python_embed", "vc_redist"),
-    session="interactive", shot=15, note="cufft64_11.dll comes from the torch wheel on PATH; CUDA-OpenGL interop")
+exit $global:KfRc""", r"KFSURVIVE oceanFFT ALIVE_AT", 120, 30, ["cuda-oceanfft-readback"], *W_GFX, linux=["simpleCUFFT"], pkgs=("cuda_demo_suite", "pywheels", "python_embed", "vc_redist"),
+    session="interactive", shot=15, note="Bundled QA checks both CUDA/cuFFT readbacks, then the original 25 s CUDA-OpenGL window; cufft64_11.dll from torch")
 app("randomFog_demo", "cuda-demo", DEMO + r"""$env:PATH = "$TL;$env:PATH"
+Copy-Item -LiteralPath "$d\randomFog_data_files\ref_randomFog.bin" -Destination $OUT -ErrorAction Stop
+Invoke-KfExe -Exe "$d\randomFog.exe" -ArgList @('-qatest') -Cwd $OUT
+if ($global:KfRc -ne 0) { exit $global:KfRc }
 Invoke-KfSurvive -Exe "$d\randomFog.exe" -Cwd $d -Seconds 25 -Tag randomFog
-exit $global:KfRc""", r"KFSURVIVE randomFog ALIVE_AT", 90, 25, [GPU_ENG], *W_GFX, linux=["MersenneTwisterGP11213"],
-    pkgs=("cuda_demo_suite", "pywheels", "python_embed", "vc_redist"), session="interactive", shot=15, note="curand64_10.dll from the torch wheel; CUDA-OpenGL interop")
+exit $global:KfRc""", r"KFSURVIVE randomFog ALIVE_AT", 120, 30, ["cuda-randomfog-readback"], *W_GFX, linux=["MersenneTwisterGP11213"],
+    pkgs=("cuda_demo_suite", "pywheels", "python_embed", "vc_redist"), session="interactive", shot=15, note="Bundled QA checks CURAND readback, then the original 25 s CUDA-OpenGL window; curand64_10.dll from torch")
 
 # ---------------------------------------------------------------------------------------------- C. CUDA driver-API ladder (kayfabe's own, mingw)
 LAD = r'$t = "$K\tools"' + "\n"

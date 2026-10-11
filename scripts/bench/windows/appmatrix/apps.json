@@ -2205,23 +2205,23 @@
    ],
    "session": "interactive",
    "tier": 1,
-   "timeout_s": 90,
-   "expect_s": 25,
+   "timeout_s": 120,
+   "expect_s": 30,
    "rx": "KFSURVIVE oceanFFT ALIVE_AT",
    "fail_rx": "^CHECK .*FAIL",
    "proof": [
-    "pdh:Cuda|Compute|3D|Copy"
+    "cuda-oceanfft-readback"
    ],
    "difficulty": "high",
    "why": "needs a 3D/graphics channel, the display flip/VSync path and DWM composition on kf3's display; in the recorded runs the first TDR coincides with the first new GPU client after sign-in (DWM, Edge, Shorts), so any windowed app is exposed to it",
-   "ps": "$d = \"$K\\cuda_demo\\demo_suite\"\n$env:PATH = \"$TL;$env:PATH\"\nInvoke-KfSurvive -Exe \"$d\\oceanFFT.exe\" -Cwd $d -Seconds 25 -Tag oceanFFT\nexit $global:KfRc\n",
+   "ps": "$d = \"$K\\cuda_demo\\demo_suite\"\n$env:PATH = \"$TL;$env:PATH\"\nCopy-Item -LiteralPath \"$d\\oceanFFT_data_files\\ref_spatialDomain.bin\" -Destination $OUT -ErrorAction Stop\nCopy-Item -LiteralPath \"$d\\oceanFFT_data_files\\ref_slopeShading.bin\" -Destination $OUT -ErrorAction Stop\nInvoke-KfExe -Exe \"$d\\oceanFFT.exe\" -ArgList @('-qatest') -Cwd $OUT\nif ($global:KfRc -ne 0) { exit $global:KfRc }\nInvoke-KfSurvive -Exe \"$d\\oceanFFT.exe\" -Cwd $d -Seconds 25 -Tag oceanFFT\nexit $global:KfRc\n",
    "kill_names": [],
    "screenshot_s": 15,
-   "note": "cufft64_11.dll comes from the torch wheel on PATH; CUDA-OpenGL interop",
+   "note": "Bundled QA checks both CUDA/cuFFT readbacks, then the original 25 s CUDA-OpenGL window; cufft64_11.dll from torch",
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "oceanFFT.exe"
+   "cmd": "oceanFFT.exe -qatest"
   },
   {
    "id": "opencl_icd",
@@ -2502,23 +2502,23 @@
    ],
    "session": "interactive",
    "tier": 1,
-   "timeout_s": 90,
-   "expect_s": 25,
+   "timeout_s": 120,
+   "expect_s": 30,
    "rx": "KFSURVIVE randomFog ALIVE_AT",
    "fail_rx": "^CHECK .*FAIL",
    "proof": [
-    "pdh:Cuda|Compute|3D|Copy"
+    "cuda-randomfog-readback"
    ],
    "difficulty": "high",
    "why": "needs a 3D/graphics channel, the display flip/VSync path and DWM composition on kf3's display; in the recorded runs the first TDR coincides with the first new GPU client after sign-in (DWM, Edge, Shorts), so any windowed app is exposed to it",
-   "ps": "$d = \"$K\\cuda_demo\\demo_suite\"\n$env:PATH = \"$TL;$env:PATH\"\nInvoke-KfSurvive -Exe \"$d\\randomFog.exe\" -Cwd $d -Seconds 25 -Tag randomFog\nexit $global:KfRc\n",
+   "ps": "$d = \"$K\\cuda_demo\\demo_suite\"\n$env:PATH = \"$TL;$env:PATH\"\nCopy-Item -LiteralPath \"$d\\randomFog_data_files\\ref_randomFog.bin\" -Destination $OUT -ErrorAction Stop\nInvoke-KfExe -Exe \"$d\\randomFog.exe\" -ArgList @('-qatest') -Cwd $OUT\nif ($global:KfRc -ne 0) { exit $global:KfRc }\nInvoke-KfSurvive -Exe \"$d\\randomFog.exe\" -Cwd $d -Seconds 25 -Tag randomFog\nexit $global:KfRc\n",
    "kill_names": [],
    "screenshot_s": 15,
-   "note": "curand64_10.dll from the torch wheel; CUDA-OpenGL interop",
+   "note": "Bundled QA checks CURAND readback, then the original 25 s CUDA-OpenGL window; curand64_10.dll from torch",
    "digest": false,
    "smi": true,
    "nvidia_only": true,
-   "cmd": "randomFog.exe"
+   "cmd": "randomFog.exe -qatest"
   },
   {
    "id": "reduce_t",
