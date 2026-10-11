@@ -1,0 +1,141 @@
+id	class	shape	ogkm	thirdparty	q1	q2	q3	q4	display_state	why
+alloc-0000402c	1-OBTAINABLE	a	PARTIAL	PARTIAL	yes	yes	feasible	yes_if	unknown	layout from open source or trivial; value derived/host
+const-armed-min-frame-idle	1-OBTAINABLE	b	OBTAINABLE	PARTIAL	yes	n/a	feasible_if	yes_if	no	layout from open source or trivial; value derived/host
+const-bar0-boot-advertised	1-OBTAINABLE	b	PARTIAL	PARTIAL	yes	n/a	n/a	n/a	no	layout from open source or trivial; value derived/host
+const-caps-v2-observed-rm-features	1-OBTAINABLE	b	PARTIAL	PARTIAL	partial	yes	feasible	yes_if	no	layout from open source or trivial; value derived/host
+const-conf-compute-bif-static	1-OBTAINABLE	c	OBTAINABLE	PARTIAL	partial	no	feasible_if	yes_if	no	layout from open source or trivial; value derived/host
+const-crossbar-assign-sor	1-OBTAINABLE	c	PARTIAL	PARTIAL	yes	no	feasible	yes_if	yes	layout from open source or trivial; value derived/host
+const-cudartinit-rows	1-OBTAINABLE	e	PARTIAL	PARTIAL	no	yes	feasible	yes	no	layout from open source or trivial; value derived/host
+const-engine-layout	1-OBTAINABLE	c	PARTIAL	PARTIAL	yes	partial	n/a	n/a	no	layout from open source or trivial; value derived/host
+const-fecs-record-size	1-OBTAINABLE	b	PARTIAL	PARTIAL	yes	no	feasible_if	yes_if	no	layout from open source or trivial; value derived/host
+const-fecs-trace-absent	1-OBTAINABLE	b	OBTAINABLE	NOT_FOUND	yes	n/a	n/a	n/a	no	layout from open source or trivial; value derived/host
+const-get-active-heads	1-OBTAINABLE	b	PARTIAL	PARTIAL	yes	yes	n/a	no	yes	layout from open source or trivial; value derived/host
+const-get-hdcp-state-730280	1-OBTAINABLE	c	PARTIAL	NOT_FOUND	yes	no	feasible	no	yes	layout from open source or trivial; value derived/host
+const-gsp-disp-vectors	1-OBTAINABLE	b	PARTIAL	PARTIAL	yes	partial	n/a	n/a	no	layout from open source or trivial; value derived/host
+const-hostabi-rows	1-OBTAINABLE	c	OBTAINABLE	PARTIAL	yes	n/a	n/a	n/a	no	layout from open source or trivial; value derived/host
+const-memory-list-probe	1-OBTAINABLE	c	OBTAINABLE	PARTIAL	unknown	n/a	n/a	n/a	no	layout from open source or trivial; value derived/host
+const-monitor-pclk-165000	1-OBTAINABLE	b	OBTAINABLE	PARTIAL	yes	n/a	n/a	n/a	no	layout from open source or trivial; value derived/host
+const-num-heads-client	1-OBTAINABLE	b	PARTIAL	PARTIAL	yes	yes	feasible	yes_if	yes	layout from open source or trivial; value derived/host
+const-sdr-page	1-OBTAINABLE	c	PARTIAL	PARTIAL	yes	n/a	n/a	n/a	no	layout from open source or trivial; value derived/host
+ctl-00730107	1-OBTAINABLE	c	PARTIAL	PARTIAL	yes	yes	feasible	yes_if	no	layout from open source or trivial; value derived/host
+ctl-00730109	1-OBTAINABLE	c	PARTIAL	PARTIAL	yes	no	feasible	yes_if	no	layout from open source or trivial; value derived/host
+ctl-0073010a	1-OBTAINABLE	c	PARTIAL	PARTIAL	partial	yes	feasible	no	yes	layout from open source or trivial; value derived/host
+ctl-0073011d	1-OBTAINABLE	c	PARTIAL	OBTAINABLE	yes	no	feasible	yes_if	no	layout from open source or trivial; value derived/host
+ctl-0073012c	1-OBTAINABLE	c	PARTIAL	PARTIAL	yes	no	feasible	no	yes	layout from open source or trivial; value derived/host
+ctl-0073013d	1-OBTAINABLE	c	PARTIAL	PARTIAL	yes	no	feasible_if	yes_if	no	layout from open source or trivial; value derived/host
+ctl-00730245	1-OBTAINABLE	c	PARTIAL	PARTIAL	yes	no	n/a	n/a	yes	layout from open source or trivial; value derived/host
+ctl-00730250	1-OBTAINABLE	c	PARTIAL	PARTIAL	yes	yes	feasible	yes_if	no	layout from open source or trivial; value derived/host
+ctl-00730280	1-OBTAINABLE	c	PARTIAL	NOT_FOUND	yes	no	feasible	no	yes	layout from open source or trivial; value derived/host
+ctl-00730282	1-OBTAINABLE	c	PARTIAL	NOT_FOUND	yes	no	feasible	yes_if	unknown	layout from open source or trivial; value derived/host
+ctl-00730285	1-OBTAINABLE	c	PARTIAL	OBTAINABLE	yes	no	feasible	no	no	layout from open source or trivial; value derived/host
+ctl-00730288	1-OBTAINABLE	c	PARTIAL	OBTAINABLE	yes	no	feasible	yes_if	unknown	layout from open source or trivial; value derived/host
+ctl-0073028a	1-OBTAINABLE	c	PARTIAL	PARTIAL	yes	no	feasible_if	yes_if	unknown	layout from open source or trivial; value derived/host
+ctl-0073028b	1-OBTAINABLE	c	PARTIAL	PARTIAL	yes	no	feasible	no	yes	layout from open source or trivial; value derived/host
+ctl-00731140	1-OBTAINABLE	c	PARTIAL	PARTIAL	yes	yes	feasible	yes_if	unknown	layout from open source or trivial; value derived/host
+ctl-00800106	1-OBTAINABLE	c	PARTIAL	OBTAINABLE	yes	no	feasible_if	n/a	no	layout from open source or trivial; value derived/host
+ctl-00800292	1-OBTAINABLE	c	OBTAINABLE	OBTAINABLE	yes	yes	feasible	yes	no	layout from open source or trivial; value derived/host
+ctl-00801306	1-OBTAINABLE	c	PARTIAL	OBTAINABLE	partial	yes	feasible	yes	no	layout from open source or trivial; value derived/host
+ctl-2080012f	1-OBTAINABLE	c	PARTIAL	OBTAINABLE	partial	yes	feasible	yes	no	layout from open source or trivial; value derived/host
+ctl-2080013f	1-OBTAINABLE	c	PARTIAL	OBTAINABLE	partial	yes	no	n/a	no	layout from open source or trivial; value derived/host
+ctl-20800160	1-OBTAINABLE	c	PARTIAL	OBTAINABLE	partial	yes	feasible	yes	no	layout from open source or trivial; value derived/host
+ctl-20800173	1-OBTAINABLE	c	PARTIAL	OBTAINABLE	yes	yes	feasible	yes	no	layout from open source or trivial; value derived/host
+ctl-2080017e	1-OBTAINABLE	c	PARTIAL	OBTAINABLE	partial	yes	feasible	yes	no	layout from open source or trivial; value derived/host
+ctl-2080080b	1-OBTAINABLE	c	PARTIAL	OBTAINABLE	no	yes	feasible	yes_if	no	layout from open source or trivial; value derived/host
+ctl-20800a30	1-OBTAINABLE	c	PARTIAL	OBTAINABLE	yes	partial	feasible	yes	no	layout from open source or trivial; value derived/host
+ctl-20800a38	1-OBTAINABLE	c	OBTAINABLE	PARTIAL	yes	no	n/a	n/a	no	layout from open source or trivial; value derived/host
+ctl-20800a3a	1-OBTAINABLE	c	OBTAINABLE	OBTAINABLE	yes	n/a	n/a	n/a	no	layout from open source or trivial; value derived/host
+ctl-20800a9a	1-OBTAINABLE	c	PARTIAL	OBTAINABLE	yes	n/a	n/a	n/a	no	layout from open source or trivial; value derived/host
+ctl-20800aaf	1-OBTAINABLE	c	PARTIAL	OBTAINABLE	yes	partial	feasible	yes	no	layout from open source or trivial; value derived/host
+ctl-20800afe	1-OBTAINABLE	c	PARTIAL	OBTAINABLE	yes	n/a	n/a	n/a	no	layout from open source or trivial; value derived/host
+ctl-20800aff	1-OBTAINABLE	c	PARTIAL	OBTAINABLE	yes	n/a	n/a	n/a	no	layout from open source or trivial; value derived/host
+ctl-20800b05	1-OBTAINABLE	c	PARTIAL	OBTAINABLE	yes	partial	feasible	yes	no	layout from open source or trivial; value derived/host
+ctl-20801110	1-OBTAINABLE	c	PARTIAL	OBTAINABLE	yes	n/a	n/a	n/a	no	layout from open source or trivial; value derived/host
+ctl-20801208	1-OBTAINABLE	c	PARTIAL	PARTIAL	yes	n/a	n/a	n/a	no	layout from open source or trivial; value derived/host
+ctl-20801211	1-OBTAINABLE	c	PARTIAL	PARTIAL	yes	n/a	n/a	n/a	no	layout from open source or trivial; value derived/host
+ctl-20801220	1-OBTAINABLE	c	PARTIAL	OBTAINABLE	yes	n/a	n/a	n/a	no	layout from open source or trivial; value derived/host
+ctl-20801823-err	1-OBTAINABLE	c	OBTAINABLE	PARTIAL	partial	yes	feasible	yes	no	layout from open source or trivial; value derived/host
+ctl-2080205a	1-OBTAINABLE	c	PARTIAL	PARTIAL	yes	yes	n/a	n/a	no	layout from open source or trivial; value derived/host
+ctl-2080205b	1-OBTAINABLE	c	OBTAINABLE	OBTAINABLE	yes	n/a	n/a	n/a	no	layout from open source or trivial; value derived/host
+ctl-20802068	1-OBTAINABLE	c	PARTIAL	OBTAINABLE	partial	yes	feasible	yes	no	layout from open source or trivial; value derived/host
+ctl-2080220d	1-OBTAINABLE	c	OBTAINABLE	PARTIAL	yes	no	n/a	n/a	no	layout from open source or trivial; value derived/host
+ctl-20802a0f	1-OBTAINABLE	c	PARTIAL	OBTAINABLE	yes	partial	feasible	yes	no	layout from open source or trivial; value derived/host
+ctl-208081ea	1-OBTAINABLE	e	OBTAINABLE	OBTAINABLE	no	yes	feasible	yes	no	layout from open source or trivial; value derived/host
+ctl-2080852a	1-OBTAINABLE	e	NOT_IN_ANY_VERSION	PARTIAL	no	yes	feasible	yes	no	layout from open source or trivial; value derived/host
+ctl-2080852e	1-OBTAINABLE	e	NOT_IN_ANY_VERSION	PARTIAL	no	yes	feasible	yes	no	layout from open source or trivial; value derived/host
+ctl-2080852f	1-OBTAINABLE	e	NOT_IN_ANY_VERSION	PARTIAL	no	yes	feasible	yes	no	layout from open source or trivial; value derived/host
+ctl-2080853a	1-OBTAINABLE	e	NOT_IN_ANY_VERSION	PARTIAL	no	yes	feasible	yes	no	layout from open source or trivial; value derived/host
+ctl-20809009	1-OBTAINABLE	e	NOT_IN_ANY_VERSION	PARTIAL	no	yes	feasible	yes	no	layout from open source or trivial; value derived/host
+ctl-20809064	1-OBTAINABLE	e	NOT_IN_ANY_VERSION	PARTIAL	no	yes	feasible	yes	no	layout from open source or trivial; value derived/host
+ctl-2080a060	1-OBTAINABLE	e	NOT_IN_ANY_VERSION	PARTIAL	no	yes	feasible	yes	no	layout from open source or trivial; value derived/host
+ctl-2080a618	1-OBTAINABLE	e	NOT_IN_ANY_VERSION	PARTIAL	no	yes	feasible	yes	no	layout from open source or trivial; value derived/host
+ctl-20810108	1-OBTAINABLE	e	NOT_IN_ANY_VERSION	PARTIAL	partial	yes	feasible	yes	no	layout from open source or trivial; value derived/host
+ctl-2081010d	1-OBTAINABLE	a	NOT_IN_ANY_VERSION	NOT_FOUND	yes	yes	feasible	yes	no	layout from open source or trivial; value derived/host
+hostask-2080014a	1-OBTAINABLE	c	OBTAINABLE	OBTAINABLE	yes	yes	no	n/a	no	layout from open source or trivial; value derived/host
+hostask-20809064	1-OBTAINABLE	d	NOT_IN_ANY_VERSION	PARTIAL	no	yes	feasible	yes	no	layout from open source or trivial; value derived/host
+hostask-2080a084	1-OBTAINABLE	d	NOT_IN_ANY_VERSION	PARTIAL	no	yes	feasible	yes	no	layout from open source or trivial; value derived/host
+const-get-display-mode-73011a	2-MEASURE-LAYOUT	d	NOT_IN_ANY_VERSION	NOT_FOUND	yes	no	feasible_if	no	yes	value derivable, layout known only from one observation: confirm per branch by measurement
+const-gssreplay-rows	2-MEASURE-LAYOUT	d	NOT_IN_ANY_VERSION	NOT_FOUND	no	yes	feasible	yes	no	value derivable, layout known only from one observation: confirm per branch by measurement
+ctl-00809908	2-MEASURE-LAYOUT	e	NOT_IN_ANY_VERSION	NOT_FOUND	no	yes	feasible	yes	no	value derivable, layout known only from one observation: confirm per branch by measurement
+ctl-20801111	2-MEASURE-LAYOUT	e	NOT_IN_ANY_VERSION	NOT_FOUND	yes	n/a	n/a	n/a	no	value derivable, layout known only from one observation: confirm per branch by measurement
+ctl-20808524	2-MEASURE-LAYOUT	e	NOT_IN_ANY_VERSION	NOT_FOUND	partial	yes	feasible	yes	no	value derivable, layout known only from one observation: confirm per branch by measurement
+ctl-2080853b	2-MEASURE-LAYOUT	e	NOT_IN_ANY_VERSION	NOT_FOUND	unknown	yes	feasible	yes	no	value derivable, layout known only from one observation: confirm per branch by measurement
+ctl-20809001	2-MEASURE-LAYOUT	e	NOT_IN_ANY_VERSION	NOT_FOUND	no	yes	feasible	yes	no	value derivable, layout known only from one observation: confirm per branch by measurement
+ctl-20809004	2-MEASURE-LAYOUT	e	NOT_IN_ANY_VERSION	NOT_FOUND	no	yes	feasible	yes	no	value derivable, layout known only from one observation: confirm per branch by measurement
+ctl-2080a02f	2-MEASURE-LAYOUT	e	NOT_IN_ANY_VERSION	NOT_FOUND	yes	yes	feasible	yes	no	value derivable, layout known only from one observation: confirm per branch by measurement
+ctl-2080a088	2-MEASURE-LAYOUT	e	NOT_IN_ANY_VERSION	NOT_FOUND	partial	yes	feasible	yes	no	value derivable, layout known only from one observation: confirm per branch by measurement
+ctl-2080a619	2-MEASURE-LAYOUT	e	NOT_IN_ANY_VERSION	NOT_FOUND	unknown	yes	feasible	yes	no	value derivable, layout known only from one observation: confirm per branch by measurement
+ctl-2080a630	2-MEASURE-LAYOUT	e	NOT_IN_ANY_VERSION	NOT_FOUND	no	yes	feasible	yes	no	value derivable, layout known only from one observation: confirm per branch by measurement
+ctl-2080a70a	2-MEASURE-LAYOUT	e	NOT_IN_ANY_VERSION	NOT_FOUND	no	yes	feasible	yes	no	value derivable, layout known only from one observation: confirm per branch by measurement
+ctl-2080a801	2-MEASURE-LAYOUT	e	NOT_IN_ANY_VERSION	NOT_FOUND	no	yes	feasible	yes	no	value derivable, layout known only from one observation: confirm per branch by measurement
+ctl-2080b201	2-MEASURE-LAYOUT	e	NOT_IN_ANY_VERSION	NOT_FOUND	no	yes	feasible	yes	no	value derivable, layout known only from one observation: confirm per branch by measurement
+hostask-2080a026	2-MEASURE-LAYOUT	d	NOT_IN_ANY_VERSION	NOT_FOUND	no	yes	feasible	yes	no	value derivable, layout known only from one observation: confirm per branch by measurement
+hostask-2080a028	2-MEASURE-LAYOUT	d	NOT_IN_ANY_VERSION	NOT_FOUND	no	yes	feasible	yes	no	value derivable, layout known only from one observation: confirm per branch by measurement
+const-ce-fault-method-buffer	3-MEASURE-SWEEP	b	PARTIAL	PARTIAL	partial	no	feasible_if	yes_if	no	privileged sweep on rented machine
+const-display-caps-page-probe	3-MEASURE-SWEEP	e	PARTIAL	PARTIAL	partial	no	feasible_if	yes_if	no	privileged sweep on rented machine
+const-display-model-authored	3-MEASURE-SWEEP	c	PARTIAL	PARTIAL	partial	unknown	feasible_if	yes_if	unknown	privileged sweep on rented machine
+const-echo-730122	3-MEASURE-SWEEP	d	NOT_IN_ANY_VERSION	NOT_FOUND	partial	no	feasible_if	yes_if	unknown	privileged sweep on rented machine
+const-gfxpool-sizes	3-MEASURE-SWEEP	c	PARTIAL	NOT_FOUND	partial	no	feasible_if	yes_if	no	privileged sweep on rented machine
+const-gmmu-static	3-MEASURE-SWEEP	c	PARTIAL	PARTIAL	no	no	feasible_if	yes_if	no	privileged sweep on rented machine
+const-head-timing-en-base	3-MEASURE-SWEEP	b	PARTIAL	PARTIAL	no	no	feasible_if	yes_if	unknown	privileged sweep on rented machine
+const-reply-730128	3-MEASURE-SWEEP	d	NOT_IN_ANY_VERSION	NOT_FOUND	no	no	feasible_if	yes_if	unknown	privileged sweep on rented machine
+const-user-register-access-map	3-MEASURE-SWEEP	e	PARTIAL	NOT_FOUND	unknown	no	feasible_if	yes_if	no	privileged sweep on rented machine
+ctl-00730122	3-MEASURE-SWEEP	d	NOT_IN_ANY_VERSION	NOT_FOUND	partial	no	feasible_if	yes_if	unknown	privileged sweep on rented machine
+ctl-00730128	3-MEASURE-SWEEP	d	NOT_IN_ANY_VERSION	NOT_FOUND	no	no	feasible_if	yes_if	unknown	privileged sweep on rented machine
+ctl-0073014b	3-MEASURE-SWEEP	c	PARTIAL	PARTIAL	partial	no	feasible_if	yes_if	unknown	privileged sweep on rented machine
+ctl-007302a2	3-MEASURE-SWEEP	c	PARTIAL	OBTAINABLE	partial	no	feasible_if	yes_if	no	privileged sweep on rented machine
+ctl-007302a3	3-MEASURE-SWEEP	d	NOT_IN_ANY_VERSION	NOT_FOUND	partial	no	feasible_if	yes_if	unknown	privileged sweep on rented machine
+ctl-007302a5	3-MEASURE-SWEEP	e	NOT_IN_ANY_VERSION	NOT_FOUND	no	no	feasible_if	yes_if	unknown	privileged sweep on rented machine
+ctl-00731369	3-MEASURE-SWEEP	c	PARTIAL	PARTIAL	partial	no	feasible	yes_if	unknown	privileged sweep on rented machine
+ctl-20800a2e	3-MEASURE-SWEEP	c	PARTIAL	OBTAINABLE	partial	partial	feasible	yes	no	privileged sweep on rented machine
+ctl-20800a3f	3-MEASURE-SWEEP	c	PARTIAL	OBTAINABLE	partial	no	feasible_if	yes_if	no	privileged sweep on rented machine
+ctl-20800a80	3-MEASURE-SWEEP	c	PARTIAL	OBTAINABLE	no	no	feasible_if	yes_if	no	privileged sweep on rented machine
+ctl-20800a87	3-MEASURE-SWEEP	c	PARTIAL	OBTAINABLE	partial	partial	feasible	yes	no	privileged sweep on rented machine
+ctl-20800ab8	3-MEASURE-SWEEP	c	PARTIAL	OBTAINABLE	partial	partial	feasible_if	yes_if	no	privileged sweep on rented machine
+ctl-20800b03	3-MEASURE-SWEEP	c	PARTIAL	OBTAINABLE	partial	partial	feasible	yes	no	privileged sweep on rented machine
+ctl-2080121f	3-MEASURE-SWEEP	c	PARTIAL	PARTIAL	partial	no	feasible_if	yes_if	no	privileged sweep on rented machine
+ctl-20802801	3-MEASURE-SWEEP	c	PARTIAL	OBTAINABLE	no	no	feasible	yes_if	unknown	privileged sweep on rented machine
+ctl-20802806	3-MEASURE-SWEEP	e	NOT_IN_ANY_VERSION	NOT_FOUND	no	no	feasible_if	yes_if	unknown	privileged sweep on rented machine
+ctl-20802a12	3-MEASURE-SWEEP	c	PARTIAL	OBTAINABLE	partial	no	feasible	yes_if	no	privileged sweep on rented machine
+ctl-50700118	3-MEASURE-SWEEP	c	PARTIAL	PARTIAL	partial	no	feasible	yes_if	no	privileged sweep on rented machine
+ctl-50700709	3-MEASURE-SWEEP	c	PARTIAL	PARTIAL	partial	no	feasible	yes_if	no	privileged sweep on rented machine
+const-blank-state	4-MEASURE-NEEDS-DISPLAY	b	PARTIAL	PARTIAL	partial	n/a	feasible_if	no	yes	state dependent: needs a lit head/monitor or authored by kayfabe
+const-evt-stat-loadv	4-MEASURE-NEEDS-DISPLAY	b	NOT_IN_ANY_VERSION	PARTIAL	partial	n/a	feasible_if	no	yes	state dependent: needs a lit head/monitor or authored by kayfabe
+const-hdmi-path-probe	4-MEASURE-NEEDS-DISPLAY	c	PARTIAL	PARTIAL	partial	partial	feasible_if	yes_if	yes	state dependent: needs a lit head/monitor or authored by kayfabe
+ctl-00730293	4-MEASURE-NEEDS-DISPLAY	c	PARTIAL	OBTAINABLE	partial	no	feasible	no	yes	state dependent: needs a lit head/monitor or authored by kayfabe
+ctl-007302a6	4-MEASURE-NEEDS-DISPLAY	c	PARTIAL	OBTAINABLE	no	no	feasible	no	yes	state dependent: needs a lit head/monitor or authored by kayfabe
+const-core-latch-vblank	5-RE-CANDIDATE	a	NOT_IN_ANY_VERSION	NOT_FOUND	partial	n/a	no	no	yes	fails derive, host, headless measurement
+const-head-timing-frame-edge	5-RE-CANDIDATE	a	NOT_IN_ANY_VERSION	NOT_FOUND	partial	n/a	no	no	yes	fails derive, host, headless measurement
+const-lut-mirror-offset256	5-RE-CANDIDATE	b	PARTIAL	PARTIAL	partial	n/a	no	no	yes	fails derive, host, headless measurement
+const-sw-runlist-object	5-RE-CANDIDATE	c	NOT_IN_ANY_VERSION	NOT_FOUND	unknown	n/a	n/a	n/a	no	fails derive, host, headless measurement
+ctl-20801222	5-RE-CANDIDATE	c	PARTIAL	OBTAINABLE	unknown	n/a	n/a	n/a	no	fails derive, host, headless measurement
+fam-bar0-boot-regs	ALLOWED-FAMILY	n/a	PARTIAL	PARTIAL	partial	partial	n/a	n/a	no	hand-maintained family row (policy)
+fam-capability-allowlist	ALLOWED-FAMILY	n/a	PARTIAL	OBTAINABLE	n/a	n/a	n/a	n/a	no	hand-maintained family row (policy)
+fam-class-sets	ALLOWED-FAMILY	n/a	OBTAINABLE	OBTAINABLE	yes	yes	feasible	yes	no	hand-maintained family row (policy)
+fam-display-row	ALLOWED-FAMILY	n/a	PARTIAL	PARTIAL	partial	no	feasible	yes_if	no	hand-maintained family row (policy)
+fam-engine-table	ALLOWED-FAMILY	n/a	PARTIAL	PARTIAL	yes	partial	n/a	n/a	no	hand-maintained family row (policy)
+fam-gsp-model	ALLOWED-FAMILY	n/a	PARTIAL	PARTIAL	partial	n/a	n/a	n/a	no	hand-maintained family row (policy)
+fam-intr-subtree-map	ALLOWED-FAMILY	n/a	PARTIAL	PARTIAL	yes	yes	feasible	yes	no	hand-maintained family row (policy)
+fam-kf-chip-family	ALLOWED-FAMILY	n/a	PARTIAL	PARTIAL	partial	partial	n/a	n/a	no	hand-maintained family row (policy)
+fam-ptekind	ALLOWED-FAMILY	n/a	PARTIAL	OBTAINABLE	yes	n/a	n/a	n/a	no	hand-maintained family row (policy)
+fam-report-semaphore	ALLOWED-FAMILY	n/a	OBTAINABLE	OBTAINABLE	yes	n/a	n/a	n/a	no	hand-maintained family row (policy)
+fam-sked	ALLOWED-FAMILY	n/a	OBTAINABLE	PARTIAL	yes	n/a	n/a	n/a	no	hand-maintained family row (policy)

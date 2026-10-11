@@ -1,0 +1,101 @@
+# Tier-1 check: ogkm (NVIDIA open-gpu-kernel-modules), every published version, against the 140-row constant inventory
+
+**STATUS: RESEARCH, 2026-10-11.** Read-only source check; no crate was edited, no answer is proposed for implementation. Input: `docs/design/v3_constant_inventory.tsv`
+(branch `claude/constant-inventory-20261011`, 140 rows; observed sizes are the inventory's, from the 5 VFIO captures of the Windows 580.88 guest on one RTX 4070 / AD104).
+Output table: `tier1_ogkm.tsv` (same directory), one line per inventory row. Raw evidence: `ogkm_evidence/`.
+Strategy and rules this serves: `V3_CONSTANT_STRATEGY.md` section 2 (tier 1), `V3_PROVENANCE.md` section 1. Public source only; nothing from `kayfabe-private` or any closed-driver analysis was read.
+
+Convention: **M:** = measured (found in the source, cited `tag:path:line`). **I:** = inferred (my reading). The two are kept apart in every note of the TSV.
+
+## 1. Verdict counts (140 rows)
+
+| verdict | rows | meaning here |
+|---|---:|---|
+| OBTAINABLE | 17 | id, layout and a value rule (or the values themselves) can be taken from ogkm; the row says how |
+| PARTIAL | 83 | id and/or layout and/or field meanings are in ogkm; the VALUES (or the policy) are not, for the reason in `reason_if_not` |
+| NOT_IN_ANY_VERSION | 40 | absent from all 221 tags by number (and, where a name is known, by name); search evidence in each row |
+| UNKNOWN | 0 | |
+
+Convention for NOT_IN_ANY_VERSION (decided here, owner may overrule): a row is NOT_IN_ANY_VERSION when *the control the Windows guest sent* is defined in no tag. One of the 40 rows,
+`ctl-00730122` (and its twin `const-echo-730122`) is a **number collision**: the number 0x730122 exists in 127 tags but as a different control (GET_CONNECT_STATE, 16 B, before the
+555.42.02 renumbering), with a different size from the observed 8 B and not defined in any 580.x tag. Strictly "absent by number" does not hold for it; the row says so in its first words.
+
+PARTIAL dominates for a structural reason (M): **every tag has only `src/nvidia/src/{kernel,lib,libraries}`** (221 of 221 tags; `git ls-tree` per tag). The physical RM, i.e. what runs in GSP-RM firmware,
+has no source in any version. Every control whose exported-method flags in `src/nvidia/generated/g_*_nvoc.c` carry `RMCTRL_FLAGS_ROUTE_TO_PHYSICAL` (0x40, defined `src/nvidia/inc/kernel/rmapi/control.h` at 595.84:230) is
+answered by firmware, so ogkm gives its id, struct and field names but not the reply values. 67 of the inventory's ids have such a generated row at 580.178.04 or 595.84 and 60 of those carry the 0x40 bit; the flags are in `ogkm_evidence/exported_method_flags.tsv`.
+
+## 2. Method
+
+**Tags (M).** All 221 tags of https://github.com/NVIDIA/open-gpu-kernel-modules, oldest `515.43.04` to newest `615.78.08` (`git tag --sort=version:refname`; full list `ogkm_evidence/tags_searched.txt`).
+Per branch: 515:17 520:3 525:27 530:2 535:39 545:5 550:34 555:5 560:3 565:2 570:25 575:6 580:26 590:2 595:20 610:3 615:2. The 26 tags of branch 580 are `580.65.06 .. 580.178.04`
+(the inventory's guest branch key is 580.65.06; the Windows 580.88 build has no tag, so "580.x" below means "all 26 tags of the 580 branch").
+The controller copy `/workspace/ogkm-tars/open-gpu-kernel-modules-595.84` equals tag `595.84` for all 1028 files under `src/common/sdk/nvidia/inc` and `src/nvidia/generated` (M: git blob hash comparison); the rest of that tree was not hashed.
+Only tags are searched, not untagged commits of the repository.
+
+**Where the work ran.** A bare clone (182 MB) in `/var/lib/kf-tiercheck-ogkm` on the host (read-only `git grep`/`git show`/`git archive`, `nice`, 4 worker threads; no GPU, QEMU or run queue touched), deleted at the end.
+
+**Searches (exact patterns).** All run with `git -C ogkm.git grep ... <tag>` over every tag; no pathspec means the whole tree (headers, `.c/.cpp`, generated code, `src/nvidia/arch/nvalloc/common/inc/gsp`, `rmconfig`, `kernel-open`, `nvidia-modeset`, `common/` and the platform-guarded code, which `git grep` reads regardless of preprocessor guards).
+- **P1 (numeric id, all spellings):** `git grep -n -I -i -E '0x0*(<id without leading zeros, alternation of all 104 ids>)([^0-9a-fA-F]|$)'`. Covers `0x0073011a`, `0x73011A`, `0x73011aU`, `(0x73011a)`. Result file: 30,514 hit lines; the 34 ids with no hit are the ones in the NOT_IN rows (plus `0x73011a`, `0x730128`).
+- **P2 (raw hex and decimal, binary files included), for the 34 ids with no P1 hit:** `git grep -n -a -i -E '(^|[^0-9a-fA-F])0*(<hex>|<decimal>)([^0-9a-fA-F]|$)'` (positive control: the same pattern with `731140|2080a7d7` finds `ctrl0073dfp.h`, `ctrl2080internal.h`, `g_disp_objs_nvoc.c`, `g_subdevice_nvoc.c` at 595.84). Result: 0 lines in 221 tags.
+- **P3 (category scan, because ids are `(class, category byte, index)`):** every `#define NV*_CTRL_CMD_* (0x...)` in `src/common/sdk/nvidia/inc/ctrl` of every tag (537,168 define lines, `alldefs`); no tag uses the `NV2080_CTRL_CMD(cat,idx)` macro form outside the `*base.h` headers (M: `git grep -c -E 'NV(0073|0080|2080|2081|5070)_CTRL_CMD\('` = 0 files besides base). Categories named in `ctrl2080base.h` but unpopulated: see section 4.
+- **Layout (M):** for each control name, the `*_PARAMS` struct named in the `finn: Evaluated from "... | <X>_MESSAGE_ID"` comment is compiled per tag with `gcc -S` (`char buf[sizeof(T)]`, include path `src/common/sdk/nvidia/inc`) and the `.size` read. Tags before 525/530 use an older header style without `MESSAGE_ID`; there the id is defined but the struct was not located (the TSV says "size not computed"). `ogkm_evidence/layout_size_by_tag_range.txt` has every control, id and size by tag range.
+- **Handler location (M):** `/*methodId=*/ 0x<id>u` rows in `src/nvidia/generated/g_*_nvoc.c` at 580.178.04 and 595.84 give the exported-method flags and function name; a `^<func>_IMPL` definition search under `src/nvidia/src` says whether source exists.
+- **Observed vs source:** the TSV compares **sizes only** (inventory's reply params size vs `sizeof` at the 580.x tags). Field names/offsets were not compared to payloads (payloads are host-only evidence and not read here). "MATCH" therefore means size equality, nothing more.
+- **License (M):** every hand-written file relied on carries `SPDX-License-Identifier: MIT` in the first lines (`ogkm_evidence/spdx_of_cited_files.txt`: 52 files MIT). The three generated `g_device_nvoc.c`, `g_disp_objs_nvoc.c`, `g_subdevice_nvoc.c` have **no SPDX line** (NVOC output); they are used only for flags and function names. The repository README states MIT/GPL-2.0 dual licensing for the kernel-interface files; none of those was relied on.
+
+## 3. The 15 most important findings
+
+1. **Control ids are renumbered at 555.42.02 (M).** In `ctrl0073system.h` thirteen of the inventory's display controls changed number between `550.163.01` and `555.42.02`: GET_CAPS_V2 0x730138 -> 0x730101, GET_CONNECTOR_TABLE 0x730165 -> 0x73011d, GET_CONNECT_STATE 0x730122 -> 0x730108, GET_HOTPLUG_CONFIG 0x730123 -> 0x730109, GET_HOTPLUG_STATE 0x730124 -> 0x73010a, GET_ACTIVE 0x730126 -> 0x73010c, GET_SUPPORTED 0x730120 -> 0x730107, GET_VBLANK_COUNTER 0x730109 -> 0x730105, GET_VBLANK_ENABLE 0x73010a -> 0x730106, QUERY_DISPLAY_IDS_WITH_MUX 0x730190 -> 0x73013d, CHECK_SIDEBAND_I2C_SUPPORT 0x73019c -> 0x73014b, VRR_DISPLAY_INFO 0x730185 -> 0x73012c, GET_SCANLINE 0x730108 -> 0x730104. A numeric hit in a pre-555 tag can be a *different* control (0x730109 was VBLANK_COUNTER, 0x730122 was CONNECT_STATE). Any table keyed on ids must be keyed per branch. I: the Windows 580.88 guest uses the post-555 numbering for these (the observed sizes match the post-555 ids), except the unexplained 0x730122/0x730128/0x73011a.
+2. **40 rows are absent from all 221 tags (M).** 19 control ids and 4 host asks in the NV2080 legacy categories (0x85/0x90/0xa0/0xa6/0xa7/0xa8/0xb2), 2 ids of class `NV2081_BINAPI` (0x20810108, 0x2081010d), 7 other control ids (0x730122 as a number collision, 0x730128, 0x7302a3, 0x7302a5, 0x809908, 0x20801111, 0x20802806), 3 constant rows tied to such numbers (0x73011a, the 0x730122 echo, the 0x730128 reply) and 5 constant rows with no number (class 0xb297, EVT_STAT bit 0, two display timing rules, the GSS replay set). Section 4 lists them with the neighbours that *are* defined.
+3. **0x208081ea is defined, the inventory was wrong (M).** `NV2080_CTRL_CMD_RUSD_GET_SUPPORTED_FEATURES` = 0x208081ea in 575.51.02..580.178.04 (32 tags) (`580.65.06:ctrl2080gpu.h:4726`), renumbered 0x208001ea from 590.44.01. It has a complete CPU-RM value rule (`580.178.04:src/nvidia/src/kernel/gpu/gpu_user_shared_data.c:439-459`): bit 0x1 if not virtual, bit 0x2 if RUSD polling is supported. Verdict OBTAINABLE. The "GSS-legacy, cmd bit 15" label does not mean "unpublished": this id is the one published member of category 0x81.
+4. **No physical RM source exists in any version (M)** (all 221 tags list only `kernel`, `lib`, `libraries` under `src/nvidia/src`). 67 ids have exported-method rows; 60 of them carry the ROUTE_TO_PHYSICAL bit (the other 7 have CPU-RM handlers: GET_CLASSLIST_V2, GET_GID_INFO, BUS_GET_INFO_V2, PERF_SET_POWERSTATE, RC_GET_WATCHDOG_INFO, RUSD, BIF mask at 595.84). Tier 1 can therefore give ids, structs and field meanings for those, never their values. This is why 83 rows are PARTIAL.
+5. **Layouts differ by branch, and one control changes inside branch 580 (M).** `INTERNAL_CE_GET_PCE_CONFIG_FOR_LCE_TYPE` 0x20802a0f is 24 B up to 580.82.09 (== observed 24 B) and 28 B from 580.94.02. `FIFO_CONFIG_CTXSW_TIMEOUT` 0x20801110 exists only from 580.94.06 (absent in 580.65.06..580.94.03). `GET_CLASSLIST_V2` is 468/644/700/404/804 B across branches (804 at 580.65.06+, == observed). Other per-branch sizes: ECC_STATUS 1464 (565.57.01..580.178.04) vs 1664 (590+); PPC_MASKS 512 (580.65.06..590.48.01) vs 1024 (595.44.02+); DP_GET_CAPS 52/56/60/64; COMPBIT_STORE_INFO 72/80/88. A table must be per branch; "580.x" is not one layout.
+6. **The two HDCP controls the 580.88 guest sends are not in any 580.x tag (M).** `GET_HDCP_STATE` 0x730280 and `HDCP_CTRL` 0x730282 are defined only from 590.44.01. GET_HDCP_STATE is 12 B == observed; HDCP_CTRL is 2608 B vs observed 2600 B (**mismatch**, I: trailing alignment). The flag meaning of GET_HDCP_STATE is documented in the header comment (`595.84:ctrl0073specific.h:713-725`), the value to return is not in source.
+7. **GfxP pool: ogkm contradicts the invented sizing (M).** `NV2080_CTRL_GR_GFX_POOL_MAX_SLOTS 64U` (`595.84:ctrl2080gr.h:1326`, all 221 tags) vs kayfabe's "up to 4096 slots". The query/initialize/remove structs and field meanings are in `ctrl2080gr.h:1259-1400`; no size formula (handlers are physical). I: any answer should respect maxSlots <= 64.
+8. **RC watchdog reply {5} has a rule (M).** `subdeviceCtrlCmdRcGetWatchdogInfo_IMPL` (`595.84:kernel_rc_watchdog_ctrl.c:30-60`): INITIALIZED (4) and DISABLED (1) from the watchdog state; RUNNING (2) only if initialized, not disabled and the GPU is at full power. Flag values: `ctrl2080rc.h:183-185`. The captured 5 = INITIALIZED|DISABLED (not running). Of the five `const-cudartinit-rows` ids this is the only one in ogkm.
+9. **GMMU static info: formula in source, hardware default not (M).** `subdeviceCtrlCmdGmmuGetStaticInfo_IMPL` (`595.84:kern_gmmu.c:~3000`) sets both fault-buffer sizes from `kgmmuSetAndGetDefaultFaultBufferSize_HAL`; on Turing+ that writes `_SET_DEFAULT_YES` to `NV_VIRTUAL_FUNCTION_PRIV_MMU_FAULT_BUFFER_SIZE(i)` and returns `VAL * NVC369_BUF_SIZE (32)` (`kern_gmmu_tu102.c:577-592`; `clc369.h:35`). Shadow metadata sizes are non-zero only with confidential computing and GSP-owned buffers, so 0 is the source's answer for CC off. The reset value of VAL (0x31000/32) is hardware.
+10. **Scrubber handoff (M):** `NV_PGC6_BSI_VPR_SECURE_SCRATCH_15_SCRUBBER_HANDOFF` is field 31:29, `_DONE` = 3 (`595.84:ada/ad102/dev_gc6_island_addendum.h:28-29`), consumed as "done iff handoff >= DONE" (`kernel_gsp_ad102.c:43-45`): value 3<<29 is derivable. The access-counter size register (0x3110) is named for Turing and documented (`_HW_ENTRIES 4096`) only for Blackwell GB100 (`gb100/dev_vm.h:503-506`); kayfabe's 2*(4096/32)=128 has no source.
+11. **Display event bits (M):** `NV_PDISP_FE_EVT_STAT_HEAD_TIMING` defines LAST_DATA 1:1, VBLANK 2:2, RG_LINE_A 5:5, RG_LINE_B 6:6 (`615.78.08:disp/v03_00/dev_disp.h:242-261`) and RG_SEM(i) at bits 16+i, 6 entries (`disp/v04_01/dev_disp.h:50-54`, 575.51.02+). **Bit 0 (LOADV) is defined in no tag** (grep for `0:0` fields and `LOADV` finds nothing for this register). I: the firmware value 0x3f0060 = bits 5,6 + bits 16-21 matches those positions (assumes RM_INTR_EN mirrors EVT_STAT; only LAST_DATA is named for RM_INTR_EN, `disp/v04_00/dev_disp.h:36-38`).
+12. **MIN_FRAME_IDLE default (M):** nvkms programs leading 2, trailing 1 (`595.84:nvkms-evo3.c:1437-1438`; in all 221 tags; also `nvkms-evo4.c` 570.86.15+) with fields leading [14:0], trailing [30:16] (`clc37d.h:946-948`) = 0x10002, equal to the hardware read. OBTAINABLE.
+13. **Capability bits (M):** all seven observed `GET_CAPS_V2` bits have names: AA_FOS_GAMMA_COMP (byte0 0x01), KSV_SRM_VALIDATION (byte0 0x80), SINGLE_HEAD_MST (byte1 0x01), SINGLE_HEAD_DUAL_SST (0x02), HDMI_2_0 (0x04), CROSS_BAR (0x08), GLITCHLESS_MODESET (0x20) (`580.65.06:ctrl0073system.h:44-66`). Which bits a die sets is firmware (handler 0x48 ROUTE_TO_PHYSICAL). The display capabilities page (class 0xC773, base 0x640000) has a full register-field layout in `clc773.h` (204 tags, 520.56.06+) and the range `NV_PDISP_FE_SW` in `disp/v03_00/dev_disp.h:36`; the 99 non-zero words can be *named*, not *derived*.
+14. **Classes published without controls (M):** `NV2081_BINAPI` has an allocation struct and only a RESERVED interface id (`595.84:g_finn_rm_api.h:421`); `NV2080_CTRL_*_LEGACY_*` categories are named in `ctrl2080base.h` but hold no command. GSS-legacy (cmd bit 15) controls are not a published interface in any version. `NoPhysicalBoardBus` appears in no tag.
+15. **Smaller derivable rules (M):** `TMDS_SINGLE_LINK_PCLK_MAX 165000` (`nvkms-dpy.c:57` at 595.84, all tags) plus "DVI is up to 165 MHz" in `ctrl0073dfp.h:252-255`; `GET_CLASSLIST_V2` = `gpuGetClassList(..., ENG_INVALID)` (`device_ctrl.c:78-90`); `BUS_GET_INFO_V2` rejects list size 0 or > MAX with INVALID_ARGUMENT (`kern_bus_ctrl.c:530-545`); `PERF_SET_POWERSTATE` accepts only AC/BATTERY and requires full power (`kern_perf_pwr.c:206-250`); FECS trace HW-enable GET returns the last SET value, default FALSE (`kernel_graphics.c:4450`); the user register access map has a source-sanctioned "allow all" answer when `compressedSize == 0` (`gpu_register_access_map.c:286-290`; I: a policy with security impact, not a derivation).
+
+## 4. Ids defined only in versions newer or older than 595.84
+
+**Defined only in versions NEWER than 595.84:** none. Every inventory id that is defined at all is defined in 595.84 (or in older tags only, below). Newer tags change layouts, not presence:
+`COMPBIT_STORE_INFO` 80 -> 88 B (595.91.07+, in 595.44.14/.15 too), `GET_ACTIVE` 16 -> 20 B (615.71.09+), `DP_GET_CAPS` 60 -> 64 B (610.43.02+), `PCE_CONFIG_FOR_LCE_TYPE` 28 -> 32 B (610.43.02+), `GET_PCIE_P2P_CAPS` 3 -> 4 B (615.71.09+), `NVLINK_GET_NVLINK_DEVICE_INFO` 1064/1088/1072 B (590+/610+/615.71.09+), `PPC_MASKS` 2048 B (610.43.02+), `ECC_STATUS` 1664 B from 590.44.01 (so 1664 at 595.84, 1464 in all 580.x). A vGPU `FIFO_VGPU_SWRUNLIST_SUBMIT` exists only in 615.71.09..615.78.08 at 0x20801125 (16 B), not related to 0x20801111 (40 B observed).
+
+**Defined only in versions OLDER than 595.84 (not defined at that number in 595.84):**
+
+| row | number | defined where | note |
+|---|---|---|---|
+| ctl-208081ea | 0x208081ea RUSD_GET_SUPPORTED_FEATURES | 575.51.02..580.178.04 (32 tags); 0x208001ea from 590.44.01 | the inventory's "undefined in 595.84" is true only for the number; OBTAINABLE |
+| ctl-00730122 | 0x730122 GET_CONNECT_STATE (16 B) | 515.43.04..550.163.01 | number collision, different layout from the observed 8 B; unassigned from 555.42.02 |
+| ctl-00730109 / ctl-0073010a | 0x730109 / 0x73010a were VBLANK_COUNTER / VBLANK_ENABLE | 515.43.04..550.163.01 | the observed meaning (HOTPLUG_CONFIG / HOTPLUG_STATE) is 555.42.02+ |
+
+**Defined in 595.84 but missing from branch 580 (guest branch):** 0x730280, 0x730282 (590.44.01+); 0x20801110 missing in 580.65.06..580.94.03.
+
+**Absent by number from every tag, with what *is* defined nearby (the 40 NOT_IN rows):**
+- NV0073 SYSTEM: 0x73011a sits between 0x730119 GET_SRM_STATUS and 0x73011b HDCP_REVOCATION_CHECK (both 590.44.01+); 0x730128 has no neighbour between 0x730120 EXECUTE_ACPI_METHOD and 0x73012c VRR_DISPLAY_INFO. NV0073 SPECIFIC: 0x7302a3 and 0x7302a5 are gaps between 0x7302a2, 0x7302a4 DISPLAY_CHANGE, 0x7302a6.
+- NV0080: 0x809908 = category 0x99, named `NV0080_CTRL_PERF_LEGACY_NON_PRIVILEGED` (`ctrl0080base.h:49-52`), no command in it. The inventory's "class 0x9908 object control" reading is not supported (0x00809908 is a device-level number).
+- NV2080 FIFO / LPWR: 0x20801111 sits between 0x20801110 and 0x20801112 GET_DEVICE_INFO_TABLE; 0x20802806: LPWR has only 0x20802801 and 0x20802802.
+- NV2080 legacy categories: 0x81 holds only 0x208081ea and (610.43.02+) 0x208081f3/f4/f5; 0x85 only 0x20808513 THERMAL_SYSTEM_EXECUTE_V2_PHYSICAL (575.51.02+); 0xa7 only 0x2080a7d7 (530.30.02+); categories 0x82 0x90 0xa0 0xa3 0xa6 0xa8 0xb2 0xb4 0xc5 0xd0 0xe0 0xe6 0xe8 0xf2 hold nothing. Rows: 0x2080852{4,a,e,f}, 0x2080853{a,b}, 0x20809001/04/09/64, 0x2080a02f/060/088/618/619/630/70a/801, 0x2080b201, host asks 0x20809064/a026/a028/a084, 0x20808163/4, 0x2080a001.
+- NV2081: 0x20810108, 0x2081010d (class published, no controls).
+- Class 0xb297 (software runlist object): the only `0xb297...` strings are random bytes inside generated firmware tables (615.71.09..615.78.08).
+- Behaviour rows with no statement in source: `const-core-latch-vblank`, `const-head-timing-frame-edge` (0 lines matching `latch.{0,40}vblank|vblank.{0,40}latch` in the class headers, nvkms and kernel disp code of all 221 tags), `const-evt-stat-loadv` (bit 0 undefined).
+
+## 5. Limits, and rows not fully resolved
+
+- **Size-only comparison.** MATCH/NO MATCH is `sizeof` vs the inventory's reply size. Fields and offsets were not compared; a same-size layout can still differ. "DIFFERS" in the TSV also fires when the struct text changes at equal size.
+- **Tag mapping.** The Windows 580.88 build has no ogkm tag; I used all 26 tags of branch 580. Rows whose layout changes inside branch 580 say so (0x20802a0f).
+- **Older headers.** Tags before 525/530 lack `MESSAGE_ID` comments for some controls; their sizes are "not computed" (the ids are still defined).
+- **Handler claims.** "ROUTE_TO_PHYSICAL" is read from the exported-method flags of 580.178.04 and 595.84 only. A control the tables do not list (0x20800aaf GET_ENABLED_SEC2_CLASSES) has no handler row at all in those tags.
+- **Family rows (`fam-*`, 11 rows)** are checked only coarsely ("ogkm carries a per-arch HAL/header for this"), not entry by entry; the inventory marks them hand-maintained by design. Coarse rows: fam-kf-chip-family, fam-intr-subtree-map, fam-ptekind, fam-engine-table, fam-gsp-model, fam-bar0-boot-regs, fam-display-row, fam-capability-allowlist.
+- **Not verified field by field:** `const-lut-mirror-offset256` (decoder acceptance of MIRROR and the 256-byte ILUT unit is hardware behaviour; the header has the fields), `const-sdr-page`, `ctl-00730282`'s 8-byte difference (I: padding).
+- No row is UNKNOWN.
+
+## 6. Reproduce
+
+Scripts were run from `/var/lib/kf-tiercheck-ogkm` (deleted afterwards): `grep_ids.py` (P1), `nohit2.py` (P2), `cats.py` and `alldefs.py` (P3), `layout.py` (gcc sizes), `flags2.py` (exported-method flags), `impl.py` (handler definitions), `gall.sh` (single-pattern sweep over all tags). Every pattern is quoted in section 2 or in the row's notes. The generated evidence files in `ogkm_evidence/`:
+`tags_searched.txt`, `ids_searched.txt` (104 ids), `id_to_name_by_tag_range.txt` (which name each searched number carries in which tags), `layout_size_by_tag_range.txt`, `legacy_category_defines.txt`, `exported_method_flags.tsv`, `spdx_of_cited_files.txt`.
