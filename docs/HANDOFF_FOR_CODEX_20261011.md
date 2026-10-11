@@ -8,7 +8,7 @@ again after the Wednesday 07:00 reset). Read `AGENTS.md` (= `CLAUDE.md`) first: 
 ## Matrix continuation, 2026-10-11 15:15 CEST (supersedes historical state below)
 
 Worktree `/data/kf-inval-absent`, branch `codex/windows-matrix-20261011`; last pushed
-checkpoint `3335adcc`. Master/integration untouched. Product `0f9c01f9` fixes the measured
+checkpoint `8037e19b`. Master/integration untouched. Product `0f9c01f9` fixes the measured
 4155-piece translated-copy refusal with bounded 512-KiB slices, unchanged piece cap,
 real prefix fences and final-only guest retirement. GPU-free tests and independent review
 passed; exact-product Linux gates 9/9 plus gate 10 and matching-host-driver fast 30/30 passed.
@@ -24,7 +24,10 @@ BlackScholes. Falsifiers: fresh gears failure disproves a collateral-only explan
 stage timing distinguishes import latency from CUDA initialization or GPU work stalls.
 Do not expand the full lane until these checks are understood. The full runner's run numbers
 now start at 860 (focus/diagnostic reserve 850–859), with its own post hook.
-Fresh-gears-first in run 852 PASS; timed Torch and BlackScholes are still pending.
+Fresh-gears-first in run 852 PASS15s, diagnostic PASS84s (import79.328s, real GPU
+readback at80.515s), unchanged BlackScholes PASS5s; zero Xid/TDR/GSP recovery.
+Future broad runner uses frozen harness8037e19b with fresh VM after any app TIMEOUT;
+product binary remains0f9c01f9. Initial failures stay recorded; no expanded app budget.
 
 Trusted host: `/tmp/kf-slice-focus.sh`, `/tmp/kf-slice-diagnostic.sh`; result directories
 `/var/lib/kf-windows-20261005/codex-matrix-slice-{focus,diagnostic}-20261011`.

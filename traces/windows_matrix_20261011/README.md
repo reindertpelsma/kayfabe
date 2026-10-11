@@ -3,14 +3,15 @@
 **STATUS: LIVE, 2026-10-11.** Product candidate `2c917f3e`, following the
 OpenGL gears fix. Results are pending; this is not a matrix pass claim.
 
-## Latest checkpoint, 2026-10-11 13:20 UTC
+## Latest checkpoint, 2026-10-11 13:19 UTC
 
 This section supersedes pending-state statements below. Product `0f9c01f9` passed
 matching-driver Linux gates 9/9 plus gate 10 and fast30/30. Windows focused run
 850/851: callback, occupancy, deviceQuery and matmul PASS; BlackScholes TIMEOUT132s
 without TDR/GSP recovery/Xid; subsequent gears TIMEOUT197s with GSP recovery and
-host Xid32. Fresh-gears-first run852 PASS. Timed Torch startup diagnosis is running;
-full candidate coverage remains pending. The diagnostic is not an official app row.
+host Xid32. Fresh-gears-first run852 PASS. Timed Torch diagnosis PASS84s: import79.328s, CUDA discovery/device name0.219s,
+GPU tensor/readback0.968s. Unchanged BlackScholes then PASS5s. The diagnostic
+run had zero host Xid/TDR/GSP recovery; full candidate coverage remains pending. The diagnostic is not an official app row.
 Evidence: `copy-slicing/windows-focus/`; hypotheses/falsifiers in the handoff.
 
 Stock RTX4090/Windows580.88 reference completed five of six focus tests, then

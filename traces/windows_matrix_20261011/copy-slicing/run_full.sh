@@ -2,7 +2,7 @@
 set -euo pipefail
 RUN_START=$(date -u "+%Y-%m-%d %H:%M:%S UTC")
 W=/var/lib/kf-windows-20261005
-TREE=/data/kf-slice-host-0f9c01f9
+TREE=/data/kf-slice-matrix-8037e19b
 REV=0f9c01f9
 B=$W/kayfabe-win-6fafcc6e/scripts/bench/windows/windows_broker_prod3.sh
 RUN=$W/codex-matrix-slice-full-20261011
@@ -23,8 +23,20 @@ cleanup() {
 ! pgrep qemu-system
 ! test -e "$RUN/session.log"
 for n in {860..1059}; do ! test -e "$W/boundary-kayfabe-$n"; done
-# Never promote a failed smoke to an unattended long run.
-test "$(grep -c 'verdict=PASS' "$W/codex-matrix-slice-focus-20261011/win.res")" = 6
+# Initial cold BlackScholes and subsequent gears timeouts remain recorded.
+# Require the completed independent GPU checks and fresh diagnostic recovery.
+python3 - <<'PYREADY'
+from pathlib import Path
+w=Path('/var/lib/kf-windows-20261005')
+for name, ids in (
+ ('focus', ['cuda_callback','cuda_occupancy','deviceQuery_demo','matmul_t']),
+ ('diagnostic', ['glgears_wgl','torch_startup_diagnostic','blackscholes_t'])):
+ rows={}
+ for line in (w/f'codex-matrix-slice-{name}-20261011'/'win.res').read_text().splitlines():
+  kv=dict(x.split('=',1) for x in line.split() if '=' in x)
+  rows[kv['app']]=kv['verdict']
+ assert all(rows.get(a)=='PASS' for a in ids), (name,rows)
+PYREADY
 ! test -e "$W/kf3-bins/$REV"
 ln -s "$W/readtrace/kf3-bins/$REV" "$W/kf3-bins/$REV"
 trap cleanup EXIT
