@@ -15,8 +15,9 @@
 //! - one connector per configured monitor: a DVI-D connector on SOR `i`, protocol
 //!   `SINGLE_TMDS_A`, display id `0x100 << i` — no DPCD, no link training, EDID over
 //!   `SPECIFIC_GET_EDID_V2` (the simplest connector NVKMS accepts, §4.7).
-//! - no crossbar (`SYSTEM_GET_CAPS_V2` clear), so NVKMS uses each output's own SOR and never asks
-//!   `DFP_ASSIGN_SOR`.
+//! - a FIXED crossbar (`SYSTEM_GET_CAPS_V2` derives `CROSS_BAR_SUPPORTED` from this model answering
+//!   `DFP_ASSIGN_SOR`, [`crate::dispcaps`]): `DFP_ASSIGN_SOR` reports connector `i` on SOR `i` and
+//!   never moves it, the routing the real GPU reported for its one connected display.
 
 use crate::edid::Monitor;
 use crate::layout::{Layouts, Params};
@@ -144,6 +145,7 @@ const NAMED_CONTROLS: &[(&str, &str)] = &[
         "not_supported",
     ),
     ("NV0073_CTRL_CMD_DFP_GET_INFO", "dfp_info"),
+    ("NV0073_CTRL_CMD_DFP_ASSIGN_SOR", "assign_sor"),
     ("NV0073_CTRL_CMD_DFP_GET_DISPLAYPORT_DONGLE_INFO", "dongle"),
     ("NV5070_CTRL_CMD_SYSTEM_GET_CAPS_V2", "caps5070"),
     ("NVC370_CTRL_CMD_IDLE_CHANNEL", "echo"),
@@ -495,6 +497,13 @@ pub struct DisplayModel {
     /// [`GET_DISPLAY_MODE`] requests refused because the guest's branch is not one whose layout was
     /// observed on hardware ([`DISPLAY_MODE_OBSERVED_BRANCHES`]).
     pub display_mode_unverified: u64,
+    /// [`SYSTEM_GET_CAPS_V2`](crate::dispcaps) answers given as the empty table because a name the
+    /// derivation needs is missing from the class table or the layouts (the clean mode "no optional
+    /// capability", what the model answered before the caps were derived).
+    pub caps_unverified: u64,
+    /// The display caps class (`NVC773_DISP_CAPABILITIES` on Ada): the class table's key for the
+    /// engine facts.
+    caps_class: u32,
     /// The one-time log line for the first such refusal; drained by [`Self::take_notice`].
     notice: Option<String>,
     /// Every display control answered (the first 512), for the log.
@@ -614,6 +623,8 @@ impl DisplayModel {
             statements: Vec::new(),
             statements_dropped: 0,
             display_mode_unverified: 0,
+            caps_unverified: 0,
+            caps_class: row.classes.caps,
             notice: None,
             seen: Vec::new(),
             ports: Arc::new(Ports::default()),
@@ -855,6 +866,111 @@ impl DisplayModel {
 
     fn connector(&self, display_id: u32) -> Option<&Connector> {
         self.connectors.iter().find(|c| c.display_id == display_id)
+    }
+
+    /// ★ Heads "currently in use by an NV client": those whose raster runs, i.e. the ones
+    /// `SYSTEM_GET_ACTIVE` reports a display for (the worker publishes both from the ARMED core
+    /// state; no vCPU lock). `[inferred]` rule: ogkm defines the count's meaning but the physical-RM
+    /// implementation is closed; the real GPU answered 1 with one connected monitor lit on head 0
+    /// (VFIO reference, RTX 4070, Windows 580.88, 2026-10-11) and 4 without the flag.
+    fn heads_in_use(&self) -> u32 {
+        (0..self.heads as usize)
+            .filter(|h| self.ports.lit_sor(*h).is_some())
+            .count() as u32
+    }
+
+    /// ★ The `NV0073_CTRL_CMD_SYSTEM_GET_CAPS_V2` table: [`crate::dispcaps`]'s derivation from this
+    /// model's own facts. The empty table (the model's answer before the caps were derived) when the
+    /// class table or a layout name the derivation needs is missing, counted in
+    /// [`Self::caps_unverified`] and logged once.
+    fn caps0073_table(&mut self) -> Vec<u8> {
+        let l = self.l;
+        let sor_routing = l.k32("NV0073_CTRL_CMD_DFP_ASSIGN_SOR").is_some();
+        let table = crate::class::for_version(&l.version)
+            .ok_or_else(|| {
+                crate::caps::Missing(format!("class table for guest branch {}", l.version))
+            })
+            .and_then(|t| {
+                crate::dispcaps::EngineFacts::derive(
+                    t,
+                    self.caps_class,
+                    self.ip_version,
+                    self.heads,
+                    sor_routing,
+                )
+            })
+            .and_then(|f| crate::dispcaps::caps_table(l, &f));
+        match table {
+            Ok(t) => t,
+            Err(crate::caps::Missing(what)) => {
+                self.caps_unverified += 1;
+                if self.caps_unverified == 1 && self.notice.is_none() {
+                    self.notice = Some(format!(
+                        "display caps unverified ({what} missing): GET_CAPS_V2 answers the empty table"
+                    ));
+                }
+                let n = l
+                    .field("NV0073_CTRL_SYSTEM_GET_CAPS_V2_PARAMS", "capsTbl")
+                    .map_or(0, |f| f.1);
+                vec![0; n]
+            }
+        }
+    }
+
+    /// ★ `NV0073_CTRL_CMD_DFP_ASSIGN_SOR` (`ctrl0073dfp.h`, 80 bytes; the real GPU answered 8 of 8
+    /// `NV_OK` with 80 bytes, VFIO reference 2026-10-11): the crossbar here is FIXED, connector `i`
+    /// on SOR `i` (`or_info` says the same), so the answer is that table whatever was asked.
+    /// `sorAssignList[sor]` / `sorAssignListWithTag[sor]` = the display on that SOR (type SINGLE).
+    /// Refused: another subdevice, a display of another device, a slave display or `bIs2Head1Or`
+    /// (dual-SST / two-head-one-OR are not modelled: NOT_SUPPORTED by name), and an exclude mask
+    /// that bars the connector's only SOR (nothing else can drive it).
+    fn assign_sor(&mut self, params: &[u8]) -> Result<Vec<u8>, u32> {
+        let mut p = self.view("NV0073_CTRL_DFP_ASSIGN_SOR_PARAMS", params)?;
+        if p.get("subDeviceInstance").unwrap_or(u64::MAX) != 0 {
+            return Err(NV_ERR_INVALID_ARGUMENT);
+        }
+        let max = self
+            .l
+            .konst("NV0073_CTRL_CMD_DFP_ASSIGN_SOR_MAX_SORS")
+            .and_then(|n| u32::try_from(n).ok())
+            .ok_or(NV_ERR_NOT_SUPPORTED)?;
+        let single = self
+            .l
+            .konst("NV0073_CTRL_DFP_SOR_TYPE_SINGLE")
+            .ok_or(NV_ERR_NOT_SUPPORTED)?;
+        let id = p.get("displayId").unwrap_or(u64::MAX) as u32;
+        if p.get("slaveDisplayId").unwrap_or(1) != 0 || p.get("bIs2Head1Or").unwrap_or(1) != 0 {
+            return Err(NV_ERR_NOT_SUPPORTED);
+        }
+        // displayId 0: "RM shall return the XBAR config it has stored" (the header)
+        if id != 0 {
+            let c = self.connector(id).ok_or(NV_ERR_INVALID_ARGUMENT)?;
+            if c.or_index >= max {
+                return Err(NV_ERR_NOT_SUPPORTED);
+            }
+            if p.get("sorExcludeMask").unwrap_or(0) & (1 << c.or_index) != 0 {
+                return Err(NV_ERR_NOT_SUPPORTED);
+            }
+        }
+        let mut list = vec![0u32; max as usize];
+        let mut tagged = vec![(0u32, 0u32); max as usize];
+        for c in &self.connectors {
+            if let Some(slot) = list.get_mut(c.or_index as usize) {
+                *slot = c.display_id;
+                tagged[c.or_index as usize] = (c.display_id, single as u32);
+            }
+        }
+        let bytes = |w: Vec<u32>| w.iter().flat_map(|x| x.to_le_bytes()).collect::<Vec<u8>>();
+        let ok = p.set_bytes("sorAssignList", &bytes(list))
+            && p.set_bytes(
+                "sorAssignListWithTag",
+                &bytes(tagged.iter().flat_map(|(m, t)| [*m, *t]).collect()),
+            );
+        if ok {
+            Ok(p.buf)
+        } else {
+            Err(NV_ERR_NOT_SUPPORTED)
+        }
     }
 
     fn all_displays(&self) -> u32 {
@@ -1116,7 +1232,8 @@ impl DisplayModel {
             }
             "caps0073" => {
                 let mut p = self.view("NV0073_CTRL_SYSTEM_GET_CAPS_V2_PARAMS", params)?;
-                p.set_bytes("capsTbl", &[]); // no crossbar, no MIO power quirk, no ACR bug
+                let tbl = self.caps0073_table();
+                p.set_bytes("capsTbl", &tbl);
                 Ok(p.buf)
             }
             "caps5070" => {
@@ -1126,9 +1243,30 @@ impl DisplayModel {
             }
             "num_heads" => {
                 let mut p = self.view("NV0073_CTRL_SYSTEM_GET_NUM_HEADS_PARAMS", params)?;
-                p.set("numHeads", u64::from(self.heads));
+                // ogkm: "This parameter must specify a value between zero and the total number of
+                // subdevices" - this device has one.
+                if p.get("subDeviceInstance").unwrap_or(u64::MAX) != 0 {
+                    return Err(NV_ERR_INVALID_ARGUMENT);
+                }
+                // ★ `flags` (ctrl0073system.h): CLIENT "is used to request the number of heads that
+                // are currently in use by an NV client using a user display class instance … If this
+                // flag is disabled then the total number of heads supported is returned." The header
+                // defines no other bit, so another bit is refused (INVALID_ARGUMENT is in the
+                // control's status list), never ignored.
+                let client = k("NV0073_CTRL_SYSTEM_GET_NUM_HEADS_FLAGS_CLIENT_ENABLE")?;
+                let flags = p.get("flags").unwrap_or(u64::MAX);
+                if flags & !client != 0 {
+                    return Err(NV_ERR_INVALID_ARGUMENT);
+                }
+                let n = if flags & client != 0 {
+                    self.heads_in_use()
+                } else {
+                    self.heads
+                };
+                p.set("numHeads", u64::from(n));
                 Ok(p.buf)
             }
+            "assign_sor" => self.assign_sor(params),
             "head_mask" => {
                 let mut p = self.view("NV0073_CTRL_SPECIFIC_GET_ALL_HEAD_MASK_PARAMS", params)?;
                 p.set("headMask", u64::from((1u32 << self.heads) - 1));
@@ -2209,7 +2347,8 @@ mod tests {
         // 42 → 47 the same day (Windows run29): IMP_SET_GET_PARAMETER, SYSTEM_GET_HOTPLUG_STATE,
         // INTERNAL_DISPLAY_ACPI_SUBSYSTEM_ACTIVATED and INTERNAL_DISPLAY_PRE/POST_MODESET.
         // 47 → 48 on 2026-10-11: NV0073 `0x73011a` (the display's current mode, GL ICD; observed id).
-        assert_eq!(set.len(), 48);
+        // 48 → 49 on 2026-10-11: NV0073 `DFP_ASSIGN_SOR` (0x731152; the crossbar the derived caps claim).
+        assert_eq!(set.len(), 49);
         let distinct: std::collections::BTreeSet<u32> = set.iter().copied().collect();
         assert_eq!(distinct.len(), set.len(), "no id twice");
         assert!(set.iter().all(|c| m.claims(*c)));
@@ -2599,5 +2738,283 @@ mod tests {
         assert!(m.bind_display_event(3, 0x73, 0x5));
         assert_eq!(m.retire_all_display_events(), 1);
         assert!(m.display_events.is_empty());
+    }
+
+    // ---- 2026-10-11: GET_CAPS_V2 derived, GET_NUM_HEADS(CLIENT), DFP_ASSIGN_SOR (V3_DISPLAY.md §4.15) ----
+
+    fn ada(version: &str) -> DisplayModel {
+        DisplayModel::new(
+            &kf_chip::display::ADA,
+            vec![Monitor::default_1080p()],
+            crate::layout::for_version(version).expect("layouts"),
+        )
+    }
+    fn caps_of(m: &mut DisplayModel) -> Vec<u8> {
+        let c = cmd(m, "NV0073_CTRL_CMD_SYSTEM_GET_CAPS_V2");
+        let r = m.control(c, &[0, 0]).unwrap().unwrap();
+        assert_eq!(r.len(), 2);
+        r
+    }
+
+    /// The vector: the real AD104 answered `81 2f` (VFIO reference, 2026-10-11). Derived, the Ada
+    /// model reproduces it on both guest branches; Ampere and Turing, whose RM-software bits were
+    /// not observed, differ from it in exactly byte 0 (and Turing in nothing else the class table
+    /// does not say).
+    #[test]
+    fn get_caps_v2_is_derived_from_the_family_and_reproduces_the_ada_vector() {
+        for v in ["580.65.06", "580.159.04"] {
+            assert_eq!(caps_of(&mut ada(v)), [0x81, 0x2f], "{v}");
+        }
+        let mut amp = model();
+        assert_eq!(caps_of(&mut amp), [0x00, 0x0f]);
+        let mut tu = DisplayModel::new(
+            &kf_chip::display::TURING,
+            vec![Monitor::default_1080p()],
+            crate::layout::for_version("580.159.04").expect("layouts"),
+        );
+        assert_eq!(caps_of(&mut tu), [0x00, 0x0f]);
+        assert_eq!(amp.caps_unverified, 0);
+        // hostile: only the 2-byte shape
+        let c = cmd(&amp, "NV0073_CTRL_CMD_SYSTEM_GET_CAPS_V2");
+        for n in [0usize, 1, 3, 64] {
+            assert_eq!(
+                amp.control(c, &vec![0; n]),
+                Some(Err(NV_ERR_INVALID_ARGUMENT))
+            );
+        }
+    }
+
+    /// The crossbar bit follows the model: the claim set holds `DFP_ASSIGN_SOR` exactly when the
+    /// table carries `CROSS_BAR` (here: both).
+    #[test]
+    fn the_crossbar_bit_and_the_assign_sor_claim_agree() {
+        let mut m = ada("580.65.06");
+        let a = cmd(&m, "NV0073_CTRL_CMD_DFP_ASSIGN_SOR");
+        assert_eq!(a, 0x0073_1152);
+        assert!(m.claims(a) && m.claimed().contains(&a));
+        assert_eq!(caps_of(&mut m)[1] & 0x08, 0x08);
+    }
+
+    fn num_heads(m: &mut DisplayModel, sub: u32, flags: u32, n: usize) -> Result<u32, u32> {
+        let s = "NV0073_CTRL_SYSTEM_GET_NUM_HEADS_PARAMS";
+        let mut q = vec![0u8; n];
+        if n == size(m, s) {
+            let mut p = Params::new(m.layouts(), s, &q).unwrap();
+            p.set("subDeviceInstance", u64::from(sub));
+            p.set("flags", u64::from(flags));
+            q = p.buf;
+        }
+        let c = cmd(m, "NV0073_CTRL_CMD_SYSTEM_GET_NUM_HEADS");
+        m.control(c, &q)
+            .unwrap()
+            .map(|r| get(m, s, &r, "numHeads") as u32)
+    }
+
+    /// `NV0073_CTRL_SYSTEM_GET_NUM_HEADS_FLAGS_CLIENT` counts the heads in use (their rasters run,
+    /// the heads `GET_ACTIVE` reports a display for); without it, the heads supported. The vector:
+    /// the real GPU, one monitor lit on head 0, answered 4 without the flag and 1 with it.
+    #[test]
+    fn get_num_heads_with_the_client_flag_counts_the_heads_in_use() {
+        let mut m = ada("580.65.06");
+        let n = size(&m, "NV0073_CTRL_SYSTEM_GET_NUM_HEADS_PARAMS");
+        assert_eq!(num_heads(&mut m, 0, 0, n), Ok(4));
+        // nothing lit (a fresh boot): no head is in use
+        assert_eq!(num_heads(&mut m, 0, 1, n), Ok(0));
+        m.ports.set_lit_sor(0, Some(0));
+        assert_eq!(num_heads(&mut m, 0, 1, n), Ok(1));
+        assert_eq!(num_heads(&mut m, 0, 0, n), Ok(4), "the total does not move");
+        // the count IS the number of heads GET_ACTIVE reports a display for
+        m.ports.set_lit_sor(2, Some(0));
+        let act = cmd(&m, "NV0073_CTRL_CMD_SYSTEM_GET_ACTIVE");
+        let sa = "NV0073_CTRL_SYSTEM_GET_ACTIVE_PARAMS";
+        let active = (0..4u32)
+            .filter(|h| {
+                let mut p = Params::new(m.layouts(), sa, &vec![0; size(&m, sa)]).unwrap();
+                p.set("head", u64::from(*h));
+                let r = m.control(act, &p.buf).unwrap().unwrap();
+                get(&m, sa, &r, "displayId") != 0
+            })
+            .count() as u32;
+        assert_eq!(num_heads(&mut m, 0, 1, n), Ok(active));
+        assert_eq!(active, 2);
+        // the head goes dark
+        m.ports.set_lit_sor(0, None);
+        m.ports.set_lit_sor(2, None);
+        assert_eq!(num_heads(&mut m, 0, 1, n), Ok(0));
+    }
+
+    /// Hostile guest: another subdevice, a flag the header does not define, and a wrong shape are
+    /// refused, never answered.
+    #[test]
+    fn get_num_heads_refuses_hostile_shapes_by_name() {
+        let mut m = ada("580.65.06");
+        let n = size(&m, "NV0073_CTRL_SYSTEM_GET_NUM_HEADS_PARAMS");
+        for (sub, flags) in [
+            (1, 0),
+            (1, 1),
+            (u32::MAX, 0),
+            (0, 2),
+            (0, 3),
+            (0, u32::MAX),
+            (0, 0x8000_0000),
+        ] {
+            assert_eq!(
+                num_heads(&mut m, sub, flags, n),
+                Err(NV_ERR_INVALID_ARGUMENT),
+                "sub {sub} flags {flags:#x}"
+            );
+        }
+        for bad in [0, 1, n - 1, n + 1, 4096] {
+            assert_eq!(num_heads(&mut m, 0, 0, bad), Err(NV_ERR_INVALID_ARGUMENT));
+        }
+    }
+
+    fn assign_sor(m: &mut DisplayModel, mutate: impl FnOnce(&mut Params)) -> Result<Vec<u8>, u32> {
+        let s = "NV0073_CTRL_DFP_ASSIGN_SOR_PARAMS";
+        let mut p = Params::new(m.layouts(), s, &vec![0; size(m, s)]).unwrap();
+        mutate(&mut p);
+        let c = cmd(m, "NV0073_CTRL_CMD_DFP_ASSIGN_SOR");
+        m.control(c, &p.buf).unwrap()
+    }
+
+    /// `DFP_ASSIGN_SOR` reports the fixed crossbar - display `0x100 << i` on SOR `i`, type SINGLE.
+    /// The vector (real GPU, one display): `sorAssignList[0] = 0x100`, `sorAssignListWithTag[0] =
+    /// {0x100, SINGLE}`, the rest zero, 80 bytes, `NV_OK`.
+    #[test]
+    fn assign_sor_reports_the_fixed_crossbar() {
+        let mut m = ada("580.65.06");
+        let s = "NV0073_CTRL_DFP_ASSIGN_SOR_PARAMS";
+        assert_eq!(size(&m, s), 80);
+        let r = assign_sor(&mut m, |p| {
+            p.set("displayId", 0x100);
+        })
+        .unwrap();
+        let p = Params::new(m.layouts(), s, &r).unwrap();
+        let w = |b: &[u8]| -> Vec<u32> {
+            b.chunks(4)
+                .map(|c| u32::from_le_bytes(c.try_into().unwrap()))
+                .collect()
+        };
+        assert_eq!(p.get("displayId"), Some(0x100));
+        assert_eq!(w(p.bytes("sorAssignList").unwrap()), [0x100, 0, 0, 0]);
+        assert_eq!(
+            w(p.bytes("sorAssignListWithTag").unwrap()),
+            [0x100, 1, 0, 0, 0, 0, 0, 0]
+        );
+        // displayId 0 returns the stored configuration (the header)
+        let r0 = assign_sor(&mut m, |_| {}).unwrap();
+        let p0 = Params::new(m.layouts(), s, &r0).unwrap();
+        assert_eq!(w(p0.bytes("sorAssignList").unwrap()), [0x100, 0, 0, 0]);
+        // two monitors: display 0x200 is on SOR 1, and the table lists both
+        let mut two = DisplayModel::new(
+            &kf_chip::display::ADA,
+            vec![Monitor::default_1080p(), Monitor::default_1080p()],
+            crate::layout::for_version("580.65.06").expect("layouts"),
+        );
+        let r2 = assign_sor(&mut two, |p| {
+            p.set("displayId", 0x200);
+        })
+        .unwrap();
+        let p2 = Params::new(two.layouts(), s, &r2).unwrap();
+        assert_eq!(w(p2.bytes("sorAssignList").unwrap()), [0x100, 0x200, 0, 0]);
+        assert_eq!(
+            w(p2.bytes("sorAssignListWithTag").unwrap()),
+            [0x100, 1, 0x200, 1, 0, 0, 0, 0]
+        );
+        // asking for SOR 1's display while excluding SOR 1 is refused; SOR 0 excluded is fine
+        assert_eq!(
+            assign_sor(&mut two, |p| {
+                p.set("displayId", 0x200);
+                p.set("sorExcludeMask", 0x02);
+            }),
+            Err(NV_ERR_NOT_SUPPORTED)
+        );
+        assert!(
+            assign_sor(&mut two, |p| {
+                p.set("displayId", 0x200);
+                p.set("sorExcludeMask", 0x01);
+            })
+            .is_ok()
+        );
+    }
+
+    /// Hostile guest: every refusal is by name and nothing is left half-written.
+    #[test]
+    fn assign_sor_refuses_what_it_does_not_model() {
+        let mut m = ada("580.65.06");
+        // a display this device lacks, several displays, another subdevice
+        for id in [0x200u32, 0x300, 0x1, 0x8000_0000, u32::MAX] {
+            assert_eq!(
+                assign_sor(&mut m, |p| {
+                    p.set("displayId", u64::from(id));
+                }),
+                Err(NV_ERR_INVALID_ARGUMENT),
+                "{id:#x}"
+            );
+        }
+        assert_eq!(
+            assign_sor(&mut m, |p| {
+                p.set("displayId", 0x100);
+                p.set("subDeviceInstance", 1);
+            }),
+            Err(NV_ERR_INVALID_ARGUMENT)
+        );
+        // dual SST / two heads one OR are not modelled
+        assert_eq!(
+            assign_sor(&mut m, |p| {
+                p.set("displayId", 0x100);
+                p.set("slaveDisplayId", 0x200);
+            }),
+            Err(NV_ERR_NOT_SUPPORTED)
+        );
+        assert_eq!(
+            assign_sor(&mut m, |p| {
+                p.set("displayId", 0x100);
+                p.set("bIs2Head1Or", 1);
+            }),
+            Err(NV_ERR_NOT_SUPPORTED)
+        );
+        // the exclude mask bars the connector's only SOR
+        assert_eq!(
+            assign_sor(&mut m, |p| {
+                p.set("displayId", 0x100);
+                p.set("sorExcludeMask", 0x01);
+            }),
+            Err(NV_ERR_NOT_SUPPORTED)
+        );
+        assert!(
+            assign_sor(&mut m, |p| {
+                p.set("displayId", 0x100);
+                p.set("sorExcludeMask", 0xfe);
+            })
+            .is_ok()
+        );
+        // wrong shapes
+        let c = cmd(&m, "NV0073_CTRL_CMD_DFP_ASSIGN_SOR");
+        for n in [0usize, 4, 79, 81, 4096] {
+            assert_eq!(
+                m.control(c, &vec![0; n]),
+                Some(Err(NV_ERR_INVALID_ARGUMENT))
+            );
+        }
+    }
+
+    /// A guest branch whose class table this tree lacks answers the empty table by name (counted,
+    /// logged once): the clean mode "no optional capability" the model had before the derivation.
+    #[test]
+    fn caps_without_a_class_table_are_the_empty_table_by_name() {
+        let tsv = include_str!("../data/layouts-580.65.06.tsv")
+            .replace("VERSION\t580.65.06", "VERSION\t9.9.9");
+        let l: &'static Layouts = Box::leak(Box::new(Layouts::parse(&tsv)));
+        let mut m = DisplayModel::new(&kf_chip::display::ADA, vec![Monitor::default_1080p()], l);
+        assert_eq!(caps_of(&mut m), [0, 0]);
+        assert_eq!(caps_of(&mut m), [0, 0]);
+        assert_eq!(m.caps_unverified, 2);
+        let note = m.take_notice().expect("named once");
+        assert!(
+            note.contains("display caps unverified") && note.contains("9.9.9"),
+            "{note}"
+        );
+        assert!(m.take_notice().is_none());
     }
 }

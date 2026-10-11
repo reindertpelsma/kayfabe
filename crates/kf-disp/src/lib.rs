@@ -26,6 +26,7 @@
 pub mod caps;
 pub mod class;
 pub mod color;
+pub mod dispcaps;
 pub mod edid;
 pub mod engine;
 pub mod inst;
