@@ -1,0 +1,14 @@
+{
+ "verdict": "FAIL",
+ "rc": -1073740791,
+ "secs": 44,
+ "quiet": 2,
+ "note": "rc=-1073740791,success-string-missing,no-gpu-proof | KFSURVIVE heaven_opengl EXITED_EARLY rc=-1073740791 after=29 s",
+ "proof": "none:pdh:Cuda|Compute|3D|Copy",
+ "tdr": 3,
+ "wer": 0,
+ "rebooted": false,
+ "gsp_cycles": 1,
+ "restart": "tdr-budget:3>=3",
+ "guest": "g15"
+}

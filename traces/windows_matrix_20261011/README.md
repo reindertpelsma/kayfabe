@@ -3,6 +3,20 @@
 **STATUS: LIVE, 2026-10-11.** Product candidate `2c917f3e`, following the
 OpenGL gears fix. Results are pending; this is not a matrix pass claim.
 
+## Latest checkpoint, 2026-10-11 15:04 UTC
+
+Last pushed6a42d92c. Stock580.88 canonical OceanFFT + RandomFog now2/2 PASS,
+29s each, real float-reference checks + original25s GUI survival, zero guest
+recovery event records. Native GSP cycles unmeasured. Evidence reference-demo-qa-gui/.
+Product0f9c01f9 candidate QA retries pending; queued frozen harness582d72dc.
+Broad snapshot81/102:63PASS,16FAIL,2TIMEOUT;58PASS without recovery events.
+Both Heaven APIs fail/no-gpu-proof after ALIVE_AT45, no guest recovery; APP rows
+added. Unchanged stock580.88 Heaven/Valley/Nbody GUI comparison active:
+controller /data/kf-native-reference-20261011/unigine-nbody, session17867.
+Falsifier of a harness-only explanation: same stock test passes while fresh
+candidate still fails to produce rendering/activity. Preserve all raw verdicts.
+Trusted broad session69993 and supplemental lock waiter59215 still active.
+
 ## Latest checkpoint, 2026-10-11 15:01 UTC
 
 Last pushed582d72dc: canonical OceanFFT/RandomFog numerical QA + original25s

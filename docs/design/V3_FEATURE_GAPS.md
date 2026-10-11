@@ -99,6 +99,9 @@ PWR power/reset/reboot, FAM multi-GPU/families, PKG packaging/signing, TST harne
 | APP-edge_video_h264 | Video workload passes with GPU recovery | VID / CHAN | Run872 original app verdict PASS, 0 nvlddmkm153/display event records and one GSP suspend/recovery cycle; not a clean pass | [measured] candidate0f9c01f9 full-checkpoint facts; no specific offending control established | Fresh isolated playback/decode with timestamped event and completion evidence, compare stock580.88; distinguish recovery initiation from downstream symptoms | lane: output/GPU proof plus zero unexpected recovery | M | APP-nvdec_h264 | no |
 | APP-edge_video_vp9 | Video workload passes with GPU recovery | VID / CHAN | Run873 original app verdict PASS, 3 nvlddmkm153/display event records and one GSP suspend/recovery cycle; not a clean pass | [measured] candidate0f9c01f9 full-checkpoint facts; no specific offending control established | Fresh isolated playback/decode with timestamped event and completion evidence, compare stock580.88; distinguish recovery initiation from downstream symptoms | lane: output/GPU proof plus zero unexpected recovery | M | APP-nvdec_h264 | no |
 
+| APP-heaven_d3d11 | Heaven window survives but GPU proof is absent | TST / GFX | Run874 rc0 and ALIVE_AT45, original FAIL/no-gpu-proof; no guest recovery. No offending RM control established | [measured] candidate0f9c01f9 full-checkpoint app facts/log | Same unchanged inventory on stock580.88; sampler/harness-only explanation falsified if stock passes and fresh candidate still lacks rendering/activity | lane: unchanged success string plus measured NVIDIA GPU work | S | G15 | no |
+| APP-heaven_opengl | Heaven window survives but GPU proof is absent | TST / GFX | Run874 rc0 and ALIVE_AT45, original FAIL/no-gpu-proof; no guest recovery. No offending RM control established | [measured] candidate0f9c01f9 full-checkpoint app facts/log | Same unchanged inventory on stock580.88; sampler/harness-only explanation falsified if stock passes and fresh candidate still lacks rendering/activity | lane: unchanged success string plus measured NVIDIA GPU work | S | G15 | no |
+
 ### 2.2 P1: production quality, security, derive-never-capture
 
 | id | title | area | missing / symptom | evidence | approach (short) | test (oracle / lane) | eff | deps | owner? |
@@ -152,7 +155,7 @@ PWR power/reset/reboot, FAM multi-GPU/families, PKG packaging/signing, TST harne
 | L13 | NVENC session cap accounting, `0x20808165` | VID | Assumes one slot per acquire; concurrent guest + host encoders hit the host's `0x69`; `0x20808165` refused | [read] | None | n/a | S | none | no |
 | L14 | Perf work on the display and VA paths | TST | Beyond "decent" | [read] owner rule | n/a | n/a | L | H26 | no |
 
-Counts: P0 42 rows (G01-G15 plus27 APP rows), P1 29 rows (H01-H29), P2 14 rows (L01-L14); 85 in all. `APP-<name>` rows are added by the app-matrix rule.
+Counts: P0 44 rows (G01-G15 plus29 APP rows), P1 29 rows (H01-H29), P2 14 rows (L01-L14); 87 in all. `APP-<name>` rows are added by the app-matrix rule.
 
 ## 3. Detail for the top items
 
