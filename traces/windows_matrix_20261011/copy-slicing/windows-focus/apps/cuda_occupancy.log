@@ -1,0 +1,6 @@
+=== cuda_occupancy start=2026-10-11T13:01:06.5360566+00:00 host=VASTWIN session=0 boot=2026-10-11T12:54:29.5000000Z timeout=90
+KFCUDA device NVIDIA GeForce RTX 4070
+CHECK occupancy_bounds ok grid=92 block=768 active=2
+CHECK occupancy ok callbacks=0 bad=0
+KFCUDA RESULT OK occupancy
+=== end rc=0 secs=5 2026-10-11T13:01:11.5954717+00:00

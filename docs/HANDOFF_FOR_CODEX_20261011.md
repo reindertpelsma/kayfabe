@@ -5,6 +5,47 @@ again after the Wednesday 07:00 reset). Read `AGENTS.md` (= `CLAUDE.md`) first: 
 (state, branches, traps), `docs/DELEGATED_DECISIONS_20261010.md`, `docs/OWNER_RULINGS.md` §AB-§AE, `docs/design/V3_FEATURE_GAPS.md`
 (priorities: P0 = prevents apps running; fidelity and perf beyond "decent" are post-release), `docs/design/V3_NOT_IN_GIT.md`.
 
+## Matrix continuation, 2026-10-11 15:15 CEST (supersedes historical state below)
+
+Worktree `/data/kf-inval-absent`, branch `codex/windows-matrix-20261011`; last pushed
+checkpoint `3335adcc`. Master/integration untouched. Product `0f9c01f9` fixes the measured
+4155-piece translated-copy refusal with bounded 512-KiB slices, unchanged piece cap,
+real prefix fences and final-only guest retirement. GPU-free tests and independent review
+passed; exact-product Linux gates 9/9 plus gate 10 and matching-host-driver fast 30/30 passed.
+The first fast attempt used mismatched 580 guest modules and failed before tests; retained
+separately. Five Linux Xid31 probe faults match the prior baseline, so this is not an Xid-free claim.
+Evidence: `traces/windows_matrix_20261011/copy-slicing/`.
+
+Windows focus run 850: callbacks, occupancy and deviceQuery PASS; BlackScholes TIMEOUT132s
+with zero TDR/GSP/host Xid, then gears TIMEOUT with host Xid32. Matmul PASS74s in fresh
+run 851. A controlled diagnostic queued under the same GPU lock starts at run 852:
+fresh gears first, timestamped Torch import/CUDA initialization/readback, unchanged-budget
+BlackScholes. Falsifiers: fresh gears failure disproves a collateral-only explanation;
+stage timing distinguishes import latency from CUDA initialization or GPU work stalls.
+Do not expand the full lane until these checks are understood. The full runner's run numbers
+now start at 860 (focus/diagnostic reserve 850–859), with its own post hook.
+Fresh-gears-first in run 852 PASS; timed Torch and BlackScholes are still pending.
+
+Trusted host: `/tmp/kf-slice-focus.sh`, `/tmp/kf-slice-diagnostic.sh`; result directories
+`/var/lib/kf-windows-20261005/codex-matrix-slice-{focus,diagnostic}-20261011`.
+Exact binary: `readtrace/kf3-bins/0f9c01f9`; frozen source `/data/kf-slice-host-0f9c01f9`.
+One GPU job, outer flock, one QGA client. No edits to active harness files. Keep >100 GiB free.
+Timestamp-bounded kernel journal capture replaces unreliable dmesg line-count deltas.
+Old product `2c917f3e` broad checkpoint: four PASS, BlackScholes FAIL (4155 refusal),
+clpeak CUDA TIMEOUT with host Xid109 about 20 seconds after launch, no guest TDR/GSP cycle.
+Evidence: `full2-checkpoint/`; app-specific gap rows record remaining defects.
+
+Our Vast instance **55385171**, direct `vast@173.185.79.174:44316`, stock Windows/RTX4090,
+580.88, remains active; no secrets copied. App ISO SHA verified. Native six-app focus:
+five PASS, initial BlackScholes TIMEOUT; unchanged warm BlackScholes retry subsequently
+PASS9s with numerical/GPU proof. First retry was NOTRUN due missing stage marker, not an
+app failure. Stock Torch diagnostic passed5.828s (warm SSH user, not cold SYSTEM proof).
+Native clpeak CUDA is running with frozen harness `/data/kf-native-harness-3335adcc`,
+results `/data/kf-native-reference-20261011/clpeak-cuda`, controller console alongside it.
+Do not run competing GPU work or reboot this reference. Back up completed results, then
+retire only our55385171 when no longer needed; never act on owner's crashed55384005.
+The full 102 non-overlay Windows tests and eight separate overlay tests remain incomplete.
+
 ## OpenGL continuation, 2026-10-11 13:19 CEST
 
 **Gears passes on candidate `2c917f3e`, branch `codex/opengl-gears-20261011`.** The boot

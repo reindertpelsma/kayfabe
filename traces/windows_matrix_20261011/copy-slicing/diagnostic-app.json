@@ -1,0 +1,30 @@
+{
+ "id": "torch_startup_diagnostic",
+ "category": "cuda-equiv",
+ "linux": [],
+ "pkgs": [
+  "python_embed",
+  "pywheels",
+  "vc_redist"
+ ],
+ "session": "service",
+ "tier": 1,
+ "timeout_s": 300,
+ "expect_s": 20,
+ "rx": "GPU readback passed",
+ "fail_rx": "^CHECK .*FAIL",
+ "proof": [
+  "out:NVIDIA|GeForce|RTX",
+  "pdh:Cuda|Compute|3D|Copy"
+ ],
+ "difficulty": "low",
+ "why": "Time open-source Python/PyTorch stages to distinguish import latency from GPU/context stall",
+ "ps": "$code=@'\nimport faulthandler, os, sys, time\nfaulthandler.enable()\nfaulthandler.dump_traceback_later(30,repeat=True)\nt=time.monotonic()\ndef step(s): print('DIAG',round(time.monotonic()-t,3),s,flush=True)\nstep('python '+sys.version)\nlib=r'C:\\kfapps\\py\\Lib\\site-packages\\torch\\lib'\nos.add_dll_directory(lib)\nos.environ['PATH']=lib+os.pathsep+os.environ.get('PATH','')\nstep('before import torch')\nimport torch\nstep('torch imported '+torch.__version__)\nstep('before cuda.is_available')\nprint('CUDA_AVAILABLE',torch.cuda.is_available(),flush=True)\nstep('before device name')\nprint('DEVICE',torch.cuda.get_device_name(0),flush=True)\nstep('before GPU tensor')\nx=torch.arange(1024,device='cuda'); y=x*3+14\nassert y.cpu().tolist()==[i*3+14 for i in range(1024)]\nstep('GPU readback passed')\nfaulthandler.cancel_dump_traceback_later()\n'@\nSet-Content C:\\kf\\py\\torch_startup_diagnostic.py -Value $code -Encoding ASCII\nInvoke-KfExe -Exe $PY -ArgList ($PYA + @('-u','C:\\kf\\py\\torch_startup_diagnostic.py'))\nexit $global:KfRc\n",
+ "kill_names": [],
+ "screenshot_s": null,
+ "note": "Diagnostic, excluded from official matrix counts",
+ "digest": false,
+ "smi": true,
+ "nvidia_only": true,
+ "cmd": "timed PyTorch import/context/readback diagnostic"
+}

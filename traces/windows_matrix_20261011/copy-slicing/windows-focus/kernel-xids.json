@@ -1,0 +1,8 @@
+{
+  "since": "2026-10-11 12:54:20 UTC",
+  "until": "2026-10-11 13:13:22 UTC",
+  "source": "kernel journal",
+  "query_exit": 0,
+  "xid_records": 1,
+  "query_stderr": ""
+}

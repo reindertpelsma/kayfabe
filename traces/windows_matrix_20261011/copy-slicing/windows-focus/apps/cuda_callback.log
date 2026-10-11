@@ -1,0 +1,5 @@
+=== cuda_callback start=2026-10-11T13:00:32.0205144+00:00 host=VASTWIN session=0 boot=2026-10-11T12:54:29.5000000Z timeout=90
+KFCUDA device NVIDIA GeForce RTX 4070
+CHECK callback ok callbacks=2 bad=0
+KFCUDA RESULT OK callback
+=== end rc=0 secs=7 2026-10-11T13:00:38.7145394+00:00
