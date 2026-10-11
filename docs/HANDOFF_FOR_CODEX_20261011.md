@@ -7,6 +7,24 @@ again after the Wednesday 07:00 reset). Read `AGENTS.md` (= `CLAUDE.md`) first: 
 (state, branches, traps), `docs/DELEGATED_DECISIONS_20261010.md`, `docs/OWNER_RULINGS.md` §AB-§AE, `docs/design/V3_FEATURE_GAPS.md`
 (priorities: P0 = prevents apps running; fidelity and perf beyond "decent" are post-release), `docs/design/V3_NOT_IN_GIT.md`.
 
+## Latest checkpoint, 2026-10-11 21:07 UTC
+
+Last confirmed public push249e4e248, private1dc9c0e; this commit publishes the
+next offline audit. Owner is trying manual1380 and will notify when done.
+No GPU job, QGA access or owner-session change during this audit.
+
+Run1361 fault channel4e is Passthrough/user-work; schedule and over4096 relay
+submissions precede FIFO-update registration. Three registering channels audited:
+two Translated register no FIFO update, one Passthrough registers it. VFIO also
+registers after scheduling. Actual0x200 trigger remains UNMEASURED, so H1 is
+inconclusive and the Translated-only implementation guard is not met.
+Registration-time conversion before token/schedule does not fit this workload.
+Public595.84/595.91.07 source clears PBDMA interrupt before this update, contrary
+to the plan's wording. Audit script, compiler-derived public layout, input hashes
+and selected original log lines are in gravity-vulkan/h1-channel-audit.
+No product migration, privileged host call or new hardware result is claimed.
+Next: bounded post-registration trigger evidence, after owner's session ends.
+
 ## Latest checkpoint, 2026-10-11 20:23 UTC
 
 Last confirmed public push fc6f85b4a; private1dc9c0e. Owner explicitly reaffirms

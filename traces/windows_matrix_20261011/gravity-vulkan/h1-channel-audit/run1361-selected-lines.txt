@@ -1,0 +1,81 @@
+1467: kf3: act birth translated: chan 0xc1d00015:0xff040001 BORN Translated: token 0x3 -> host 0x2a in VasKey(13965662457344034928) gpfifo=0x12026e000x8192 userd=Some(Sysmem { base: 9555042816, size: 512 }) engine=0x1 tsg=Some(ff0e0000) kernel_by=PRIVILEGE=KERNEL ring_va=0xff00200000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=true gp_get_by_engine=true sw_subch_inert=false scheduled_at_birth=true fast=off (5130 us, off the GSP lock)
+1469: kf3: chan 0xc1d00015:0xff040001: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0x2a, software classID Some(1) (OWNER_RULINGS §U.1)
+1536: kf3: chan 0xc1d00015:0xff0e0000 GPFIFO_SCHEDULE enable=true (token 0x3, host 0x2a)
+2769: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x40000002 cmd=0x2080012d psz=584 -> 0x0
+2772: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x40000003 cmd=0x2080012b psz=584 -> 0x0
+2774: kf3: DEFERRED-API trigger #1 token 0x3 subch 5 value 0x1 method 0x200 hApiHandle 0x40000002 on 0xc1d00015:0xff1fe010 cmd 0x2080012d: InitializeCtx { engine_type: 1, h_client: 3251634216, chid: 15, chan_client: 3251634218, object: 4279107584, virt_memory: 0, phys_address: 3911815168, phys_attr: 0, dma_handle: 0, index: 15, size: 901888 }
+2990: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x40000004 cmd=0x2080012d psz=584 -> 0x0
+2992: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x40000005 cmd=0x2080012b psz=584 -> 0x0
+3135: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x40000006 cmd=0x2080012d psz=584 -> 0x0
+3137: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x40000007 cmd=0x2080012b psz=584 -> 0x0
+3380: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x40000008 cmd=0x2080012d psz=584 -> 0x0
+3382: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x40000009 cmd=0x2080012b psz=584 -> 0x0
+3867: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x4000000a cmd=0x2080012d psz=584 -> 0x0
+3869: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x4000000b cmd=0x2080012b psz=584 -> 0x0
+3903: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x4000000c cmd=0x2080012d psz=584 -> 0x0
+3905: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x4000000d cmd=0x2080012b psz=584 -> 0x0
+4239: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x4000000e cmd=0x2080012d psz=584 -> 0x0
+4241: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x4000000f cmd=0x2080012b psz=584 -> 0x0
+4323: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x40000010 cmd=0x2080012d psz=584 -> 0x0
+4332: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x40000011 cmd=0x2080012b psz=584 -> 0x0
+4514: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x40000012 cmd=0x2080012d psz=584 -> 0x0
+4516: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x40000013 cmd=0x2080012b psz=584 -> 0x0
+4645: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x40000014 cmd=0x2080012d psz=584 -> 0x0
+4647: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x40000015 cmd=0x2080012b psz=584 -> 0x0
+4837: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x40000016 cmd=0x2080012d psz=584 -> 0x0
+4839: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x40000017 cmd=0x2080012b psz=584 -> 0x0
+4932: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x40000018 cmd=0x2080012c psz=584 -> 0x0
+5698: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x40000019 cmd=0x2080012d psz=584 -> 0x0
+5700: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x4000001a cmd=0x2080012b psz=584 -> 0x0
+5804: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x4000001b cmd=0x2080012c psz=584 -> 0x0
+6017: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x4000001c cmd=0x2080012c psz=584 -> 0x0
+6264: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x4000001d cmd=0x2080012d psz=584 -> 0x0
+6266: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x4000001e cmd=0x2080012b psz=584 -> 0x0
+6444: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x4000001f cmd=0x2080012c psz=584 -> 0x0
+6667: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x40000020 cmd=0x2080012d psz=584 -> 0x0
+6669: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x40000021 cmd=0x2080012b psz=584 -> 0x0
+6848: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x40000022 cmd=0x2080012c psz=584 -> 0x0
+7098: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x40000023 cmd=0x2080012d psz=584 -> 0x0
+7100: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x40000024 cmd=0x2080012b psz=584 -> 0x0
+7158: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x40000025 cmd=0x2080012c psz=584 -> 0x0
+7526: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x40000026 cmd=0x2080012c psz=584 -> 0x0
+8090: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x40000027 cmd=0x2080012d psz=584 -> 0x0
+8092: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x40000028 cmd=0x2080012b psz=584 -> 0x0
+8311: kf3: act birth passthrough: chan 0xc1d0007a:0xff040025 BORN Passthrough: token 0x27 -> host 0x4e in VasKey(13965662942675339344) gpfifo=0x6b20000x32768 userd=Ram { ram: 3405643793, off: 8478042112 } engine=0x1 declared_kernel_pid=false PRIVILEGE=KERNEL WINDOWS-USER-WORK (§V, ProcessID/subcontext) rc=none late_joiner_schedule=Some(GuestNotScheduled) fast=off (USERD relay: doorbells go to a worker) (1965 us, off the GSP lock)
+8315: kf3: act deferred-API twin object: EXPERIMENT KF3_WIN_TWIN_DEFAPI_OBJECT: 0xc1d0007a:0xff1fe010 NV50_DEFERRED_API on Windows user-work twin host 0x4e -> host object 0xcafe0644 (authored, no params, NOTHING registered: a 0x200 on it fails closed) (213 us, off the GSP lock)
+8365: kf3: act schedule: 0xc1d0007a:0xff0e0000 GPFIFO_SCHEDULE enable=true on 1 twin(s) (0 restarted after STOP) (288 us, off the GSP lock)
+8367: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x40000029 cmd=0x2080012d psz=584 -> 0x0
+8369: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x4000002a cmd=0x2080012b psz=584 -> 0x0
+8437: kf3: chan token 0x27 (host 0x4e) USERD relay: GP_PUT 0x10 forwarded and rung (#1) — no GP entry or push-buffer word read
+8616: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x4000002b cmd=0x2080012d psz=584 -> 0x0
+8618: kf-rm: DEFERRED-API 0x50800101 on 0xc1d00015:0xff1fe010 hApiHandle=0x4000002c cmd=0x2080012b psz=584 -> 0x0
+9047: kf3: chan token 0x27 (host 0x4e) USERD relay: GP_PUT 0x39e0 forwarded and rung (#4096) — no GP entry or push-buffer word read
+9052: kf-rm: DEFERRED-API 0x50800104 on 0xc1d0007a:0xff1fe010 hApiHandle=0x4000002d cmd=0x20801116 psz=584 -> 0x0
+10319: kf3: chan token 0x27 (host 0x4e) USERD relay released: forwarded=4495 refused=0 gets=4501 last_put=12044 guest[GP_PUT=Some(2f0c) GP_GET=Some(2f0c)] host[GP_PUT=Some(2f0c) GP_GET=Some(2f0c)]
+11296: kf3: act birth translated: chan 0xc1d0009d:0xff040001 BORN Translated: token 0x3 -> host 0x2a in VasKey(13965663050049521776) gpfifo=0x12026e000x8192 userd=Some(Sysmem { base: 9555202560, size: 512 }) engine=0x1 tsg=Some(ff0e0000) kernel_by=PRIVILEGE=KERNEL ring_va=0xff00100000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=true gp_get_by_engine=true sw_subch_inert=false scheduled_at_birth=true fast=off (4795 us, off the GSP lock)
+11298: kf3: chan 0xc1d0009d:0xff040001: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0x2a, software classID Some(1) (OWNER_RULINGS §U.1)
+11332: kf3: chan 0xc1d0009d:0xff0e0000 GPFIFO_SCHEDULE enable=true (token 0x3, host 0x2a)
+12364: kf-rm: DEFERRED-API 0x50800101 on 0xc1d0009d:0xff1fe010 hApiHandle=0x4000002e cmd=0x2080012d psz=584 -> 0x0
+12366: kf-rm: DEFERRED-API 0x50800101 on 0xc1d0009d:0xff1fe010 hApiHandle=0x4000002f cmd=0x2080012b psz=584 -> 0x0
+12570: kf-rm: DEFERRED-API 0x50800101 on 0xc1d0009d:0xff1fe010 hApiHandle=0x40000030 cmd=0x2080012d psz=584 -> 0x0
+12572: kf-rm: DEFERRED-API 0x50800101 on 0xc1d0009d:0xff1fe010 hApiHandle=0x40000031 cmd=0x2080012b psz=584 -> 0x0
+12764: kf-rm: DEFERRED-API 0x50800101 on 0xc1d0009d:0xff1fe010 hApiHandle=0x40000032 cmd=0x2080012d psz=584 -> 0x0
+12766: kf-rm: DEFERRED-API 0x50800101 on 0xc1d0009d:0xff1fe010 hApiHandle=0x40000033 cmd=0x2080012b psz=584 -> 0x0
+12939: kf-rm: DEFERRED-API 0x50800101 on 0xc1d0009d:0xff1fe010 hApiHandle=0x40000034 cmd=0x2080012d psz=584 -> 0x0
+12941: kf-rm: DEFERRED-API 0x50800101 on 0xc1d0009d:0xff1fe010 hApiHandle=0x40000035 cmd=0x2080012b psz=584 -> 0x0
+13146: kf-rm: DEFERRED-API 0x50800101 on 0xc1d0009d:0xff1fe010 hApiHandle=0x40000036 cmd=0x2080012d psz=584 -> 0x0
+13148: kf-rm: DEFERRED-API 0x50800101 on 0xc1d0009d:0xff1fe010 hApiHandle=0x40000037 cmd=0x2080012b psz=584 -> 0x0
+13440: kf-rm: DEFERRED-API 0x50800101 on 0xc1d0009d:0xff1fe010 hApiHandle=0x40000038 cmd=0x2080012d psz=584 -> 0x0
+13442: kf-rm: DEFERRED-API 0x50800101 on 0xc1d0009d:0xff1fe010 hApiHandle=0x40000039 cmd=0x2080012b psz=584 -> 0x0
+19192: kf-rm: DEFERRED-API 0x50800101 on 0xc1d0009d:0xff1fe010 hApiHandle=0x4000003a cmd=0x2080012d psz=584 -> 0x0
+19194: kf-rm: DEFERRED-API 0x50800101 on 0xc1d0009d:0xff1fe010 hApiHandle=0x4000003b cmd=0x2080012b psz=584 -> 0x0
+19353: kf-rm: DEFERRED-API 0x50800101 on 0xc1d0009d:0xff1fe010 hApiHandle=0x4000003c cmd=0x2080012c psz=584 -> 0x0
+20224: kf-rm: DEFERRED-API 0x50800101 on 0xc1d0009d:0xff1fe010 hApiHandle=0x4000003d cmd=0x2080012d psz=584 -> 0x0
+20226: kf-rm: DEFERRED-API 0x50800101 on 0xc1d0009d:0xff1fe010 hApiHandle=0x4000003e cmd=0x2080012b psz=584 -> 0x0
+21442: kf-rm: DEFERRED-API 0x50800101 on 0xc1d0009d:0xff1fe010 hApiHandle=0x4000003f cmd=0x2080012c psz=584 -> 0x0
+21738: kf-rm: DEFERRED-API 0x50800101 on 0xc1d0009d:0xff1fe010 hApiHandle=0x40000040 cmd=0x2080012d psz=584 -> 0x0
+21740: kf-rm: DEFERRED-API 0x50800101 on 0xc1d0009d:0xff1fe010 hApiHandle=0x40000041 cmd=0x2080012b psz=584 -> 0x0
+21906: kf-rm: DEFERRED-API 0x50800101 on 0xc1d0009d:0xff1fe010 hApiHandle=0x40000042 cmd=0x2080012c psz=584 -> 0x0
+21908: kf3: DEFERRED-API trigger #64 token 0x3 subch 5 value 0x1 method 0x200 hApiHandle 0x40000042 on 0xc1d0009d:0xff1fe010 cmd 0x2080012c: EvictCtx { engine_type: 1, h_client: 3251634233, chid: 15, chan_client: 3251634350, object: 4279107584 }
+22005: kf-rm: DEFERRED-API 0x50800101 on 0xc1d0009d:0xff1fe010 hApiHandle=0x40000043 cmd=0x2080012c psz=584 -> 0x0
+22084: kf-rm: DEFERRED-API 0x50800101 on 0xc1d0009d:0xff1fe010 hApiHandle=0x40000044 cmd=0x2080012c psz=584 -> 0x0

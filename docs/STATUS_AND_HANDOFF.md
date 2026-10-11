@@ -13,6 +13,24 @@ fix this file. Entries below the first are dated history.
 
 **Windows/Codex current resume point:** [RESUME_CODEX_WINDOWS_20261011.md](RESUME_CODEX_WINDOWS_20261011.md), branch `codex/windows-matrix-20261011`. Protect the live owner manual session described there.
 
+## Latest checkpoint, 2026-10-11 21:07 UTC
+
+Last confirmed public push249e4e248, private1dc9c0e; this commit publishes the
+next offline audit. Owner is trying manual1380 and will notify when done.
+No GPU job, QGA access or owner-session change during this audit.
+
+Run1361 fault channel4e is Passthrough/user-work; schedule and over4096 relay
+submissions precede FIFO-update registration. Three registering channels audited:
+two Translated register no FIFO update, one Passthrough registers it. VFIO also
+registers after scheduling. Actual0x200 trigger remains UNMEASURED, so H1 is
+inconclusive and the Translated-only implementation guard is not met.
+Registration-time conversion before token/schedule does not fit this workload.
+Public595.84/595.91.07 source clears PBDMA interrupt before this update, contrary
+to the plan's wording. Audit script, compiler-derived public layout, input hashes
+and selected original log lines are in gravity-vulkan/h1-channel-audit.
+No product migration, privileged host call or new hardware result is claimed.
+Next: bounded post-registration trigger evidence, after owner's session ends.
+
 ## Latest checkpoint, 2026-10-11 20:23 UTC
 
 Last confirmed public push fc6f85b4a; private1dc9c0e. Owner explicitly reaffirms
