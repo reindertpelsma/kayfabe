@@ -2,6 +2,24 @@
 
 **STATUS: LIVE, 2026-10-11.**
 
+## VFIO REFERENCE RESULT (2026-10-11, real RTX 4070; supersedes HANDOFF item 4 "next step" and decides item 3's lead)
+Measured on the real GPU (Windows 11 baseline, NVIDIA 580.88, vfio-pci, GSP observer; the monitor was attached, so the display controls answered as with a head):
+- `kf_glgears.exe` RUNS on real hardware: RTX 4070 GL 4.6, RESULT OK, ~2200-2350 fps over 40 s, two screenshots 3 s apart differ (spinning gears), no Application event 1000.
+  `cup2.exe` (QGA exec) PASS. Gears process = 5 RM clients, 206 controls, 43 allocs; the first client allocs 0x0000, 0x0080, 0x2080, 0x0073, 0x9096 (same order as kayfabe run 615).
+- **`0x0073011a` is answered by the real GSP with `NV_OK`** (5 of 5 calls, 28-byte params, issued right after `0x73010c` head 0 returned a display id). kayfabe refuses it (0x56) and the
+  ICD then crashes: this is the measured divergence, the H-GL lead of item 3 is confirmed as the only gears-path control that differs (inference: it is also the crash cause; the falsifier
+  stays "answer it and the crash goes away"). The command is not in the open ogkm headers (`ctrl0073system.h` has `GET_SRM_STATUS 0x730119` and `HDCP_REVOCATION_CHECK 0x73011b`, nothing in between).
+  Observed (measured, field names inferred; raw bytes are host-only, `/var/lib/kf-windows-20261005/vfio-gl-20261011/summary.md`): the reply is derived from the display head's current mode
+  (it changed with the Windows mode: 1920x1080 and 1280x720, both at 60 Hz) and carries the request's display id; kayfabe's display engine holds the armed raster, so the answer can be
+  DERIVED from it (never captured).
+- `0x2080012f` (GPU_QUERY_ECC_STATUS): real status `0x56`, 5 of 5. Same as kayfabe: not a divergence (the falsifier's second suspect is out).
+- Other display-common answers that differ from kayfabe's model (open layouts, `ctrl0073system.h`): `0x730101` GET_CAPS_V2 real capsTbl `81 2f` (AA_FOS_GAMMA_COMP, KSV_SRM_VALIDATION; SINGLE_HEAD_MST,
+  SINGLE_HEAD_DUAL_SST, HDMI_2_0, CROSS_BAR, GLITCHLESS_MODESET) vs the model's all-zero table; `0x730102` GET_NUM_HEADS with `flags = NV0073_CTRL_SYSTEM_GET_NUM_HEADS_CLIENT` real 1 (flags 0: 4) vs the model's
+  constant; `0x73010c` GET_ACTIVE real: head 0 -> display id 0x100, heads 1..3 -> 0. Not shown to matter for the crash.
+- Every other gears control (ZBC `0x9096010x`, channel-group `0xa06c01xx`, `0x2080012b`, `0x80170e`, ...) was answered OK by the real GSP; kayfabe never reached them (crash first).
+- Provenance: harness `scripts/bench/windows/glcrash/vfio_gl_reference.sh` (+ `session_prep.sh`, `vfio_gl_user.ps1`, `vfio_gl_mode.ps1`, analysis `vfio_ctrl_*.py`), host dir `/var/lib/kf-windows-20261005/vfio-gl-20261011/`
+  (boot1 fresh overlay, boot2 reuse; observer 64 MiB cap, so keep the boot-to-GL window short). Host restored afterwards (nvidia 595.91.07, group 11 DMA-FQ, no qemu).
+
 ## HANDOFF (top)
 1. **CUDA is FIXED on the baseline guest (measured, runs 613/614/615 at `9e4e2ffb`, production profile):** `cuCtxCreate -> CTX OK`, cup2/cup3/cup8 PASS
    (raw lines below). Cause of the 999 (measured in run 501's qemu.log, causal link inferred): the 65th live channel twin was refused by a
