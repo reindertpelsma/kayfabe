@@ -108,3 +108,12 @@ found no blocker for hardware validation. Logs: `copy-slicing/`.
 **Hardware validation of the candidate is pending.** The existing clpeak CUDA
 run is allowed to finish before stopping the old campaign and building the
 new product on the GPU host; no host build competes with its timing run.
+
+The new Vast reference completed Windows setup and reports RTX 4090 / driver
+580.88 / device error code 0. A fresh rental-only autologon password was set;
+no trusted-host credentials were copied. Binary stdin through the Windows
+PowerShell SSH shell stalled the ISO upload; transfer was restarted via SFTP.
+The native adapter now uses the same `GuestSession._override_tools` checksum
+verification and evidence records as kayfabe, replacing its older unchecked
+setup monkeypatch. All 71 harness tests pass. Reference execution awaits the
+verified complete app disk and a signed-in console session.
