@@ -1,0 +1,22 @@
+{
+  "at": "2026-10-11T23:13:44.670003+00:00",
+  "qemu_running": false,
+  "gpu_lock_available": true,
+  "iommu_group11": "DMA-FQ",
+  "stop_file_present": false,
+  "available_bytes": 131623428096,
+  "personal_images": {
+    "/var/lib/kf-windows-20261005/boundary-kayfabe-1380/windows.qcow2": {
+      "exists": true,
+      "mode": "0o444"
+    },
+    "/var/lib/kf-windows-20261005/baseline/windows.qcow2": {
+      "exists": true,
+      "mode": "0o600"
+    },
+    "/var/lib/kf-windows-20261005/owner-state/manual1380/resume.qcow2": {
+      "exists": true,
+      "mode": "0o644"
+    }
+  }
+}

@@ -1,8 +1,8 @@
 # Windows user-channel FIFO/USERD migration: next design decision
 
-**STATUS: DESIGN-ONLY, 2026-10-11 23:06UTC.** No migration implementation or host
-patch. The narrow refusal experiment has reached its failure condition; final
-application/deadline recording is pending. This note is an implementation
+**STATUS: DESIGN-ONLY, 2026-10-11 23:15UTC.** No migration implementation or host
+patch. The narrow refusal experiment finished TIMEOUT605s/device-lost/hostXid32.
+Its clean-fallback hypothesis is falsified; no migration fix. This note is an implementation
 proposal, not a new owner ruling.
 
 ## What the measurements establish
@@ -27,7 +27,9 @@ on clientc1d0007d/objectff1fe010; counter1. HostXid32/channel4e at23:02:37UTC an
 mid-run screenshot shows Vulkan device-lost/cannot-submit. Thus a clean fallback
 under this status is falsified for this run. Actual later refused-handle trigger
 is UNMEASURED; Xid32 alone does not identify its method. No status-handling error
-has been measured to justify changing the error code as another variable.
+has been measured to justify changing the error code as another variable. Final
+guest153/4101/WER0, no reboot and per-appGSPcycles0 differ from1510 recovery;
+this does not make the application pass. Broker ACPI stop, no QEMU, DMA-FQ restored.
 
 Sources: [registration-refusal evidence](../../traces/windows_matrix_20261011/gravity-vulkan/registration-refusal/README.md),
 [matched submission capture](../../traces/windows_matrix_20261011/gravity-vulkan/late-fifo-89e8ddf8/README.md),

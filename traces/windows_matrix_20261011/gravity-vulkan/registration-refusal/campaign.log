@@ -1,0 +1,19 @@
+FIFO_REFUSAL_CAMPAIGN_START=2026-10-12T00:53:54+02:00 source=b081f705a7502380d584f37ab7da80e668f5018f
+{"removed": ["/var/lib/kf-windows-20261005/boundary-kayfabe-1490/windows.qcow2", "/var/lib/kf-windows-20261005/boundary-kayfabe-1495/windows.qcow2", "/var/lib/kf-windows-20261005/boundary-kayfabe-1510/windows.qcow2"], "protected": ["/var/lib/kf-windows-20261005/boundary-kayfabe-1380/windows.qcow2", "/var/lib/kf-windows-20261005/baseline/windows.qcow2", "/var/lib/kf-windows-20261005/owner-state/manual1380/resume.qcow2"]}
+HYPOTHESIS default-off refusal diagnostic preserves Linux behavior.
+FALSIFIER any gate/census/fast arm fails on exact source.
+FIFO_REFUSAL_LINUX_EXIT=0 at=2026-10-12T00:58:25+02:00
+HYPOTHESIS Windows uses a valid fallback after NOT_SUPPORTED for PT user FIFO migration registration.
+FALSIFIER original workload failure, device-lost, refused-handle trigger, hostXid or recovery.
+ONE_VARIABLE narrow registration-refusal flag; unchanged original600s oracle/media/production flags.
+COVERAGE no later plain RmControl is NOT no native execution; missing sampler records are NOT zero triggers.
+FIFO_REFUSAL_WINDOWS_START=2026-10-12T00:58:25+02:00
+KERNEL_JOURNAL_XID_RECORDS 1 QUERY_EXIT 0
+FIFO_REFUSAL_WINDOWS_EXIT=0 at=2026-10-12T01:12:58+02:00 (read app verdict separately)
+[windows] no run1540 guest running
+[windows] run1540 stopped (Xid count now 35)
+IOMMU_SWITCH_START group=11 from=DMA-FQ to=DMA-FQ 2026-10-12T01:12:59+02:00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-12T01:13:01+02:00
+FIFO_REFUSAL_CAMPAIGN_EXIT=0 at=2026-10-12T01:13:01+02:00 (recording status, not app verdict)

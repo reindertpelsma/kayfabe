@@ -1,5 +1,26 @@
 # Handoff for a different agent (Codex or any fresh agent), 2026-10-11
 
+## UPDATE 2026-10-11 23:16UTC — refusal experiment final; GPU idle
+
+Last confirmed public pusha4e7d3be5; private1dc9c0e unchanged. Exactb081f705a
+Linux9/9+gate10/fast30 PASS. Windows1540 **TIMEOUT605s/rc124**, no benchmark
+image/timings, device-lost dialog, refusal counter1, hostXid32/channel4e at
+23:02:37UTC (~19.7s after app start). Final kernel query0/Xid1. Guest153/4101/WER0,
+no reboot, **per-appGSPcycles0**; full boot's single Running→Suspending is later
+ACPI shutdown. Clean NOT_SUPPORTED fallback FALSIFIED; no alternate status run,
+no migration/default/privileged-host change. Exact later faulting method remains
+unmeasured. Complete facts/QEMU gzip/flags/marker/screenshots published under
+gravity-vulkan/registration-refusal/result; source gzip hash/size verified.
+
+Campaign recording EXIT0 at23:13:01UTC means completed, not application PASS.
+ACPI stop; post23:13:44 noQEMU, shared lock free, group11DMA-FQ, stop-file absent,
+122.6GiB free. Personal1380 original0444, baseline and personal writable child
+retained. No active loop/queue. Compact resume rewritten around final state;
+[design decision](design/V3_WINDOWS_USER_FIFO_MIGRATION_DECISION_20261011.md)
+compares stock restricted mediation from birth, optional H8, unsupported scope.
+No implementation of either proposal. Canonical104 matrix unchanged.
+
+
 ## UPDATE 2026-10-11 23:09UTC — clean registration fallback falsified
 
 Last confirmed public push708d36919; private1dc9c0e unchanged. Exactb081f705a

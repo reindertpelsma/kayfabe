@@ -1,0 +1,4 @@
+=== gravitymark_vk start=2026-10-11T23:02:17.3183206+00:00 host=VASTWIN session=1 boot=2026-10-11T22:59:13.5000000Z timeout=660
+KFWAIT gravitymark_vk STILL_RUNNING_AFTER 600 s
+GM_FAIL no benchmark image
+=== end rc=124 secs=605 2026-10-11T23:12:21.9239682+00:00

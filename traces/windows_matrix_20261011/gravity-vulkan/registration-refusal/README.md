@@ -1,6 +1,6 @@
 # Passthrough FIFO-update registration refusal
 
-STATUS: RESEARCH, 2026-10-11 23:08UTC. Exact Linux PASS; Windows1540 clean-fallback falsifier observed, final oracle pending.
+STATUS: ANSWERED EXPERIMENT, 2026-10-11 23:15UTC. Exact Linux PASS; Windows1540 TIMEOUT605s/device-lost/Xid32. Clean fallback falsified; migration unfixed.
 
 ## Hypothesis and falsifier, before hardware
 
@@ -108,3 +108,37 @@ Original live observations, hashes and image in live-observation.
 No migration workaround implemented. Concrete alternatives, cost limits and
 recommendation in docs/design/V3_WINDOWS_USER_FIFO_MIGRATION_DECISION_20261011.md;
 optional own-channel host operation proposed as H8, not built/measured.
+
+## Final result, 2026-10-11 23:15UTC — supersedes live pending verdicts
+
+Exact productb081f705a run1540: **TIMEOUT605s/rc124**, original600s app deadline;
+start23:02:17.3183206UTC, end23:12:21.9239682UTC. No benchmark image/timings or
+successful final proof. Mid screenshot shows asteroids plus Vulkan device-lost/
+can't-submit dialog. One refused FIFO registration, counter1; hostXid32/channel4e
+at23:02:37UTC (~19.7s after app start). Final kernel journal22:58:25–23:13:44.670003UTC
+query0/Xid1, including shutdown. **H2 clean fallback FALSIFIED.**
+
+Unlike1510's three153/per-appGSPcycle1,1540 records guest153=0, Display4101=0,
+WER1001=0, live_kernel=0, bugcheck=0, no reboot, **per-appGSPcycles0**. This is a
+measured difference, not an application pass. Full QEMU log contains one
+Running→Suspending during later ACPI shutdown; do not count it as app recovery.
+Source log4247648bytes, SHA25610c39f89c51c88ffd3967dd8c368773a32be369d7a47365347e824590c542d1e;
+gzip decodes to the recorded full-source hash/size. No later Passthrough refused-
+handle trigger was sampled; actual faulting method remains unmeasured.
+
+Final counter maxima: FIFOrefused1, birth_refused_cap0/unreconciled0/held0/
+named_missed0; no walk-ceiling/slot-pool/OverDeclaredCap/HELD lines. Boot-wide
+invalidate max51373us is not fault-time causality or evidence of a correct TLB.
+
+Broker stop **acpi**, QEMU gone23:12:54UTC, final recording EXIT0 at23:13:01UTC
+(recording completed, not benchmark PASS). Post-check23:13:44UTC: noQEMU,
+shared GPUlock available, group11DMA-FQ, stop-file absent, about122.6GiB free.
+Personal1380 original still0444, baseline and writable personal child retained.
+Full original app facts/verdict/logs, setup, health, command, marker, kerneljournal,
+QEMU gzip/decoder and screenshots in result; campaign/post-check retained here.
+
+No alternative status run: no status-handling error measured. No migration,
+privileged host call, threshold/default change or production compatibility fix.
+Negative-control flag remains OFF by default. See the design decision note for
+restricted mediated user-channel and optional H8 proposals. Canonical104 matrix
+counts unchanged by this confirming failed experiment.
