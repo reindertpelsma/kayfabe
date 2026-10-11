@@ -1,0 +1,338 @@
+=== clpeak_ocl start=2026-10-11T18:07:53.0136660+00:00 host=VASTWIN session=0 boot=2026-10-11T18:02:35.5000000Z timeout=1500
+Backend: Vulkan
+  Device 0: NVIDIA GeForce RTX 4070
+    Driver version   : 580.352.0
+    API version      : 1.4.312
+    VRAM             : 3747 MB
+    Compute units    : 46
+
+    Single-precision compute
+      float    : 32.3 TFLOPS
+      float2   : 32.7 TFLOPS
+      float4   : 32.4 TFLOPS
+
+    Half-precision compute fp16xfp16+fp16
+      half     : 33.1 TFLOPS
+      half2    : 33.3 TFLOPS
+      half4    : 33.0 TFLOPS
+
+    Double-precision compute
+      double   : 524 GFLOPS
+      double2  : 518 GFLOPS
+      double4  : 506 GFLOPS
+
+    Mixed-precision compute fp16xfp16+fp32
+      mp       : 32.4 TFLOPS
+      mp2      : 32.6 TFLOPS
+      mp4      : 32.8 TFLOPS
+
+    BF16 compute bf16xbf16+fp32
+      bf16     : 32.2 TFLOPS
+      bf16_2   : 32.4 TFLOPS
+      bf16_4   : 32.4 TFLOPS
+
+    Integer compute int32
+      int      : 16.7 TOPS
+      int2     : 16.6 TOPS
+      int4     : 16.6 TOPS
+
+    INT8 dot-product compute
+      int8_dp  : 15.0 TOPS
+      int8_dp2 : 15.5 TOPS
+      int8_dp4 : 15.2 TOPS
+
+    Cooperative matrix
+      fp16     : 66.4 TFLOPS
+      fp16 f16acc : 134 TFLOPS
+      bf16        : 66.9 TFLOPS
+      int8        : 266 TOPS
+
+    Global memory bandwidth
+      float    : 419 GB/s
+      float2   : 431 GB/s
+      float4   : 439 GB/s
+
+    Local memory bandwidth
+      float    : 6.07 TB/s
+      float2   : 11.1 TB/s
+      float4   : 12.9 TB/s
+
+    Image memory bandwidth
+      float4   : 431 GB/s
+
+    Transfer bandwidth
+      h2d      : 26.6 GB/s
+      d2h      : 26.2 GB/s
+
+    Kernel launch latency
+      dispatch : 81.5 us
+      roundtrip : 336 us
+
+Backend: OpenCL
+  Platform 0: NVIDIA CUDA
+    Device 0: NVIDIA GeForce RTX 4070
+      Driver version   : 580.88
+      Compute units    : 46
+      Clock frequency  : 0 MHz
+Failed to read file: C:\Windows\TEMP\dep-eb4b8e.d
+Failed to read file: C:\Windows\TEMP\dep-0f2ea3.d
+Failed to read file: C:\Windows\TEMP\dep-6c9613.d
+
+      Single-precision compute
+        float    : 30.7 TFLOPS
+        float2   : 31.5 TFLOPS
+        float4   : 31.7 TFLOPS
+        float8   : 31.8 TFLOPS
+        float16  : 31.6 TFLOPS
+
+      Double-precision compute
+        double   : 523 GFLOPS
+        double2  : 524 GFLOPS
+        double4  : 523 GFLOPS
+        double8  : 520 GFLOPS
+        double16 : 514 GFLOPS
+
+      Integer compute
+        int      : 16.0 TOPS
+        int2     : 16.0 TOPS
+        int4     : 15.9 TOPS
+        int8     : 16.0 TOPS
+        int16    : 16.0 TOPS
+
+      Integer compute Fast 24bit
+        int      : 16.0 TOPS
+        int2     : 16.0 TOPS
+        int4     : 16.0 TOPS
+        int8     : 15.9 TOPS
+        int16    : 15.7 TOPS
+
+      Integer char (8bit) compute
+        char     : 14.4 TOPS
+        char2    : 14.4 TOPS
+        char4    : 14.3 TOPS
+        char8    : 14.9 TOPS
+        char16   : 13.9 TOPS
+
+      Integer short (16bit) compute
+        short    : 14.3 TOPS
+        short2   : 14.4 TOPS
+        short4   : 14.4 TOPS
+        short8   : 13.7 TOPS
+        short16  : 13.8 TOPS
+
+      Global memory bandwidth
+        float    : 419 GB/s
+        float2   : 431 GB/s
+        float4   : 439 GB/s
+        float8   : 445 GB/s
+        float16  : 450 GB/s
+
+      Local memory bandwidth
+        float    : 6.81 TB/s
+        float2   : 12.1 TB/s
+        float4   : 13.5 TB/s
+        float8   : 7.80 TB/s
+
+      Image memory bandwidth
+        float4   : 436 GB/s
+
+      Transfer bandwidth
+        h2d_pinned : 26.8 GB/s
+        d2h_pinned : 26.4 GB/s
+
+      Kernel launch latency
+        dispatch : 60.5 us
+        roundtrip : 174 us
+
+Backend: CPU
+  Device 0: AMD Ryzen 9 7900 12-Core Processor
+    Vendor           : AuthenticAMD
+    ISA              : AVX-512
+    Cores            : 8 threads / 8 cores
+    L1d              : 512 KB (64 KB x 8)
+    L2               : 4 MB (512 KB x 8)
+    L3               : 128 MB (16 MB x 8)
+    RAM              : 8.0 GB
+
+    Single-precision compute [SSE2]
+      float ST : 64.6 GFLOPS
+      float MT : 501 GFLOPS
+
+    Single-precision compute [AVX2+FMA]
+      float ST : 161 GFLOPS
+      float MT : 1.22 TFLOPS
+
+    Single-precision compute [AVX-512]
+      float ST : 160 GFLOPS
+      float MT : 1.25 TFLOPS
+
+    Double-precision compute [SSE2]
+      double ST : 32.3 GFLOPS
+      double MT : 248 GFLOPS
+
+    Double-precision compute [AVX2+FMA]
+      double ST : 80.6 GFLOPS
+      double MT : 606 GFLOPS
+
+    Double-precision compute [AVX-512]
+      double ST : 68.1 GFLOPS
+      double MT : 348 GFLOPS
+
+    BF16 compute bf16xbf16+fp32 [AVX-512 BF16]
+      bf16 ST  : 151 GFLOPS
+      bf16 MT  : 2.53 TFLOPS
+
+    Divide and square-root throughput [SSE2]
+      fdiv fp32 ST : 6.72 GFLOPS
+      fdiv fp32 MT : 52.2 GFLOPS
+      fdiv fp64 ST : 2.11 GFLOPS
+      fdiv fp64 MT : 16.1 GFLOPS
+      fsqrt fp32 ST : 4.02 GFLOPS
+      fsqrt fp32 MT : 30.8 GFLOPS
+      fsqrt fp64 ST : 1.12 GFLOPS
+      fsqrt fp64 MT : 8.61 GFLOPS
+
+    Divide and square-root throughput [AVX2]
+      fdiv fp32 ST : 13.5 GFLOPS
+      fdiv fp32 MT : 98.9 GFLOPS
+      fdiv fp64 ST : 4.08 GFLOPS
+      fdiv fp64 MT : 32.2 GFLOPS
+      fsqrt fp32 ST : 8.07 GFLOPS
+      fsqrt fp32 MT : 63.2 GFLOPS
+      fsqrt fp64 ST : 2.24 GFLOPS
+      fsqrt fp64 MT : 17.4 GFLOPS
+
+    Divide and square-root throughput [AVX-512]
+      fdiv fp32 ST : 7.01 GFLOPS
+      fdiv fp32 MT : 63.5 GFLOPS
+      fdiv fp64 ST : 4.51 GFLOPS
+      fdiv fp64 MT : 33.3 GFLOPS
+      fsqrt fp32 ST : 7.98 GFLOPS
+      fsqrt fp32 MT : 62.2 GFLOPS
+      fsqrt fp64 ST : 2.52 GFLOPS
+      fsqrt fp64 MT : 19.3 GFLOPS
+
+    Integer compute [SSE2]
+      int ST   : 10.9 GOPS
+      int MT   : 84.0 GOPS
+
+    Integer compute [SSE4.2]
+      int ST   : 56.3 GOPS
+      int MT   : 429 GOPS
+
+    Integer compute [AVX2+FMA]
+      int ST   : 113 GOPS
+      int MT   : 904 GOPS
+
+    Integer compute [AVX-512]
+      int ST   : 113 GOPS
+      int MT   : 852 GOPS
+
+    Integer dot-product compute [AVX-512 VNNI]
+      int8_dp ST : 637 GOPS
+      int8_dp MT : 3.73 TOPS
+      int16_dp ST : 203 GOPS
+      int16_dp MT : 1.00 TOPS
+
+    Integer divide compute u64
+      u64 ST   : 420 MOPS
+      u64 MT   : 557 MOPS
+
+    AES-128 encrypt [AES-NI]
+      aes ST   : 10.6 GB/s
+      aes MT   : 41.1 GB/s
+
+    AES-128 encrypt [VAES-512]
+      aes ST   : 24.8 GB/s
+      aes MT   : 150 GB/s
+
+    SHA-256 hash [SHA-NI]
+      sha256 ST : 3.49 GB/s
+      sha256 MT : 15.7 GB/s
+
+    CRC32-C checksum [SSE4.2]
+      crc32c ST : 40.9 GB/s
+      crc32c MT : 279 GB/s
+
+    String scan [SSE2]
+      byte_scan ST : 97.1 GB/s
+      byte_scan MT : 454 GB/s
+
+    String scan [SSE4.2 PCMPISTRI]
+      byte_scan ST : 24.6 GB/s
+      byte_scan MT : 155 GB/s
+
+    String scan [AVX2]
+      byte_scan ST : 253 GB/s
+      byte_scan MT : 1.45 TB/s
+
+    String scan [AVX-512]
+      byte_scan ST : 176 GB/s
+      byte_scan MT : 1.07 TB/s
+
+    UTF-8 validate [SSSE3]
+      utf8 ST  : 12.4 GB/s
+      utf8 MT  : 96.0 GB/s
+
+    UTF-8 validate [AVX2]
+      utf8 ST  : 21.5 GB/s
+      utf8 MT  : 159 GB/s
+
+    UTF-8 validate [AVX-512]
+      utf8 ST  : 17.8 GB/s
+      utf8 MT  : 155 GB/s
+
+    DRAM bandwidth
+      read     : 45.6 GB/s
+      copy     : 42.9 GB/s
+      triad    : 30.6 GB/s
+
+    Cache bandwidth (read)
+      L1 ST    : 305 GB/s
+      L1 MT    : 1.72 TB/s
+      L2 ST    : 167 GB/s
+      L2 MT    : 595 GB/s
+      L3 ST    : 138 GB/s
+      L3 MT    : 256 GB/s
+
+    L1 bandwidth (write / copy)
+      write ST : 165 GB/s
+      write MT : 149 MB/s
+      copy ST  : 234 GB/s
+      copy MT  : 1.10 TB/s
+
+    Memory latency (pointer-chase)
+      L1       : 1.02 ns
+      L2       : 3.20 ns
+      L3       : 12.0 ns
+      DRAM     : 133 ns
+      DRAM linear : 1.61 ns
+      DRAM x8     : 17.4 ns
+      DRAM x32    : 7.29 ns
+      TLB miss    : 21.8 ns
+
+    Atomic fetch-add latency
+      uncontended ST : 1.36 ns
+      contended MT   : 6.49 ns
+
+    Branch mispredict penalty
+      predicted : 0.25 ns
+      random    : 2.21 ns
+      penalty   : 3.94 ns
+
+    Store-to-load forwarding
+      st->ld ST : 0.19 ns
+
+LiteRT: LiteRT library (libLiteRt) not found
+Backend: ONNX
+  Device 0: DirectML
+    Driver version   : 1.17.1
+    Execution provider: DmlExecutionProvider
+    Type             : GPU
+    ONNX Runtime     : 1.17.1
+
+    ONNX MatMul peak
+      fp32     : 13.4 TFLOPS
+      fp16     : 93.8 TFLOPS
+      int8_qdq : 12.6 TOPS
+=== end rc=-1073741819 secs=350 2026-10-11T18:13:42.7795916+00:00

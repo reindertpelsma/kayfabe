@@ -8,7 +8,7 @@ blackscholes	PASS@2830988f	blackscholes_t	PASS
 blender_cycles	PASS@2830988f	blender_cycles	PASS
 cdpSimpleQuicksort	PASS@2830988f	cdp_quicksort	PASS
 clinfo	PASS@2830988f	opencl_icd	PASS
-clpeak	PASS@2830988f	clpeak_ocl	clpeak_ocl:PENDING
+clpeak	PASS@2830988f	clpeak_ocl	clpeak_ocl:FAIL
 concurrentKernels	PASS@2830988f	streams_t	PASS
 conjugateGradient	PASS@2830988f	cg_t	PASS
 conv2d	PASS@2830988f	torch_correct	PASS

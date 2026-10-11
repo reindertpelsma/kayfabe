@@ -6,7 +6,7 @@ blender_cycles	PASS	72741e2b	72741e2b	PASS	0	0	managed-routing/remaining-apps/wi
 cdp_quicksort	PASS	a61af1c3	a61af1c3	PASS	0	0	encoder-session/corrected-checkpoint/win.res	2026-10-11T15:48:22.4214792Z	app_end
 cg_t	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:29:41.2950586Z	app_end
 clpeak_cuda	PENDING								
-clpeak_ocl	PENDING								
+clpeak_ocl	FAIL	72741e2b	72741e2b	FAIL	3	1	managed-routing/remaining-apps/win.res	2026-10-11T18:13:42.7795916Z	app_end
 cuda_callback	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:44:53.9769517Z	app_end
 cuda_occupancy	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:45:08.5984460Z	app_end
 cup2_ladder	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:23:14.5602631Z	app_end
@@ -46,7 +46,7 @@ gputest_plot3d	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.
 gputest_tess	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T14:23:11.7584582Z	app_end
 gputest_triangle	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T14:15:12.8033364Z	app_end
 graphs_t	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:30:29.7180175Z	app_end
-gravitymark_d3d11	PENDING								
+gravitymark_d3d11	FAIL	72741e2b	72741e2b	FAIL	0	0	managed-routing/remaining-apps/win.res	2026-10-11T18:07:40.0495689Z	app_end
 gravitymark_d3d12	FAIL	72741e2b	72741e2b	FAIL	3	1	managed-routing/remaining-apps/win.res	2026-10-11T17:57:51.9209662Z	app_end
 gravitymark_d3d12_raster	FAIL	72741e2b	72741e2b	FAIL	0	0	managed-routing/remaining-apps/win.res	2026-10-11T17:44:09.4279538Z	app_end
 gravitymark_d3d12_rt	FAIL	72741e2b	72741e2b	FAIL	3	1	managed-routing/remaining-apps/win.res	2026-10-11T17:44:55.9910653Z	app_end

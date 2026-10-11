@@ -11,6 +11,14 @@ fix this file. Entries below the first are dated history.
 
 ## 0. Current resumption — start here
 
+**2026-10-11 18:21 UTC, Codex Windows campaign:** last confirmed push8d46a807.
+Run1288 GravityMarkVK device-lost/submit/present dialog confirmed after owner
+report; hostXid32/channel0x4e at18:17:10UTC, GSPcycle1. Specific method/cause
+unmeasured; stock timeout does not establish same error. Original600s verdict
+pending. Canonical102/104 executed:77cleanPASS,8PASS_WITH_RECOVERY,12FAIL,
+5TIMEOUT,2pending; Linux parity57/65. Existing serial queues unchanged, manual
+1380 not ready. [Detailed handoff](HANDOFF_FOR_CODEX_20261011.md).
+
 **2026-10-11 18:07 UTC, Codex Windows campaign (`codex/windows-matrix-20261011`):**
 Last confirmed push65530e6a fixes false walk-slot capacity refusal under optional
 headroom pressure,421GPU-free testsPASS/3ignored; hardware pending. Run1284 AI

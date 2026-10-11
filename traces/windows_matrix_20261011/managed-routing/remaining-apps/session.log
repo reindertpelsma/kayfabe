@@ -204,3 +204,32 @@ IOMMU_SWITCH_END type=identity 2026-10-11T20:02:29+02:00
 2026-10-11T18:03:48Z [g8] setup ok: cd=D: nvidia_adapters=1 NVIDIA GeForce RTX 4070, 580.88, 4096 MiB
 2026-10-11T18:03:52Z [g8] override tool kf_cuda_control.exe sha256=3906f520c10e272215d9d7d79a90ce9a2042581923a4717db90be312ab3a67c8
 2026-10-11T18:03:55Z [g8] override tool kf_dxprobe.exe sha256=3c6ededa77430a18a13321eb72fdca7f60282f8d12ddc147a7e7df1284832c5f
+2026-10-11T18:04:09Z [g8] staged vc_redist (installer, 13s)
+2026-10-11T18:04:14Z [g8] READY boot=2026-10-11T18:02:35.5000000Z user=VASTWIN\vast smi_ok=True
+2026-10-11T18:04:23Z [g8] staged gravitymark (msi_admin, 8s)
+2026-10-11T18:07:49Z [g8] gravitymark_d3d11: FAIL
+2026-10-11T18:07:50Z [g8] staged clpeak_ocl (unzip, 0s)
+2026-10-11T18:13:54Z [g8] clpeak_ocl: FAIL (restart guest: tdr-budget:3>=3)
+2026-10-11T18:14:14Z post-guest hook rc=0 A GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-11T20:14:14+02:00
+RECLAIM_STOPPED_OVERLAY 1287 6643482624
+2026-10-11T18:14:14Z [g8] stopped (clean)
+2026-10-11T18:14:14Z [g8] session ended early: tdr-budget:3>=3; 1 apps move to a fresh guest
+2026-10-11T18:14:16Z pre-guest hook rc=0 :00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=identity 2026-10-11T20:14:16+02:00
+2026-10-11T18:14:18Z broker run 1288 rc=0 ['  └────────────────────────────────────────────────────────────────────────────────────────────┘']
+2026-10-11T18:14:18Z [g9] launched; waiting for the guest agent (<= 900s)
+2026-10-11T18:14:34Z [g9] agent answered after 19s
+2026-10-11T18:14:34Z [g9] password set for vast rc=0
+2026-10-11T18:15:20Z [g9] verified sign-in attempt=1 rc=0
+2026-10-11T18:15:22Z [g9] interactive session: VASTWIN\vast
+2026-10-11T18:15:23Z [g9] pushed 25 guest files
+2026-10-11T18:15:23Z [g9] app disk attached (usb-storage)
+2026-10-11T18:15:29Z [g9] setup ok: cd=D: nvidia_adapters=1 NVIDIA GeForce RTX 4070, 580.88, 4096 MiB
+2026-10-11T18:15:32Z [g9] override tool kf_cuda_control.exe sha256=3906f520c10e272215d9d7d79a90ce9a2042581923a4717db90be312ab3a67c8
+2026-10-11T18:15:34Z [g9] override tool kf_dxprobe.exe sha256=3c6ededa77430a18a13321eb72fdca7f60282f8d12ddc147a7e7df1284832c5f
+2026-10-11T18:15:50Z [g9] staged vc_redist (installer, 13s)
+2026-10-11T18:15:54Z [g9] READY boot=2026-10-11T18:14:23.5000000Z user=VASTWIN\vast smi_ok=True
+2026-10-11T18:16:02Z [g9] staged gravitymark (msi_admin, 6s)

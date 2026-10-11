@@ -3,6 +3,24 @@
 **STATUS: LIVE, 2026-10-11.** Product candidate `2c917f3e`, following the
 OpenGL gears fix. Results are pending; this is not a matrix pass claim.
 
+## Latest checkpoint, 2026-10-11 18:21 UTC
+
+Last confirmed push8d46a807. Owner reports GravityMark1.89 Vulkan device lost
+on1288; screenshot confirms submit-command-buffer/frame/context/present failures.
+Host Xid32 at18:17:10UTC PID240656/channel0x4e intr00800000, subsequent GSPcycle1.
+Exact offending method unmeasured; same raw bits do not prove shared root cause.
+Stock reference timeout/blank window does not establish this same error there.
+Snapshot/transcription saved managed-routing/remaining-apps/. Final Vulkan app
+verdict still pending its original600s budget; no input sent or deadline changed.
+
+Canonical102/104 executed:77cleanPASS,8PASS_WITH_RECOVERY,12FAIL,5TIMEOUT,
+2pending; Linux parity57/65. Fresh D3D11 FAIL/no-proof without recovery; OpenCL
+clpeak crashes/temp-file error with three driver events/GSPcycle1. Separate APP
+rows added. Then isolated longCUDAclpeak1310; existing probes and frozen3252
+regression/manual1380 remain queued. Allocator65530e6a GPU-free validated,
+hardware follow-up80736 waits until the personal manual VM actually exits.
+No full-green, complete parity or zero-flag Windows claim.
+
 ## Latest checkpoint, 2026-10-11 18:07 UTC
 
 Last confirmed push65530e6a: walk-slot allocator now accepts rounded actual
