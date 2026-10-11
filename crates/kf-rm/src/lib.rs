@@ -476,7 +476,8 @@ pub fn served_chain(
         console,
     } = links;
     let mut static_info = staticinfo::StaticInfoPolicy::new(board.clone(), driver)
-        .with_engine_caps(authored::engine_caps(&host.engines));
+        .with_engine_caps(authored::engine_caps(&host.engines))
+        .with_gr_caps(host.gr_static.caps);
     if let Some(seat) = console {
         static_info = static_info.with_console(seat);
     }

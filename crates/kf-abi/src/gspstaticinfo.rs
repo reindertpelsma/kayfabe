@@ -659,6 +659,8 @@ fn write_uuid_body(
 /// cannot be read.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GspStaticInfo<'a> {
+    /// Host-derived GR capability bits; same table served by the internal GR caps control.
+    pub gr_caps: [u8; crate::grstatic::GR_CAPS_TBL_SIZE],
     /// `fbRegionInfoParams.fbRegion[]`, in ascending address order.
     pub fb_regions: &'a [FbRegion],
     /// `fb_length` — the framebuffer this device advertises, in bytes.
@@ -850,6 +852,7 @@ pub fn encode_gsp_static_info(
     }
 
     let mut body = vec![0u8; GSP_STATIC_CONFIG_INFO_SIZE];
+    body[..info.gr_caps.len()].copy_from_slice(&info.gr_caps);
     // ★★★ `gidInfo`. `index` stays 0, which is what the captured GA106 reply carries and
     // what `gpuGenGidData_FWCLIENT` never reads; `flags` and `length` are written because
     // the real GSP writes them, and a field the guest does not read is not a licence to
@@ -987,6 +990,13 @@ pub fn encode_gsp_static_info_at(
     let put = |body: &mut Vec<u8>, off: usize, bytes: &[u8]| {
         body[off..off + bytes.len()].copy_from_slice(bytes);
     };
+    // The legacy GR caps member was removed in 595; do not spill into its successor.
+    if let Some(caps) = layout.maybe("grCapsBits") {
+        if caps.bytes() != Some(info.gr_caps.len()) {
+            return Err(GspStaticInfoError::MissingField { path: "grCapsBits" });
+        }
+        put(&mut body, caps.off(), &info.gr_caps);
+    }
     // gidInfo — see `encode_gsp_static_info` for why flags and length are written.
     put(
         &mut body,
@@ -1130,6 +1140,7 @@ mod tests {
         let fb = 1 << 20;
         let body = encode_gsp_static_info(
             &GspStaticInfo {
+                gr_caps: [0; crate::grstatic::GR_CAPS_TBL_SIZE],
                 fb_regions: &one_region(fb),
                 fb_length: fb,
                 gid: a_gid(),
@@ -1341,6 +1352,7 @@ mod tests {
         let fb = 1 << 20;
         let body = encode_gsp_static_info(
             &GspStaticInfo {
+                gr_caps: [0; crate::grstatic::GR_CAPS_TBL_SIZE],
                 fb_regions: &one_region(fb),
                 fb_length: fb,
                 gid: a_gid(),
@@ -1406,6 +1418,7 @@ mod tests {
     fn an_empty_table_is_refused_rather_than_encoded() {
         let e = encode_gsp_static_info(
             &GspStaticInfo {
+                gr_caps: [0; crate::grstatic::GR_CAPS_TBL_SIZE],
                 fb_regions: &[],
                 fb_length: 1 << 20,
                 gid: a_gid(),
@@ -1438,6 +1451,7 @@ mod tests {
         }
         let e = encode_gsp_static_info(
             &GspStaticInfo {
+                gr_caps: [0; crate::grstatic::GR_CAPS_TBL_SIZE],
                 fb_regions: &rows,
                 fb_length: 17 << 20,
                 gid: a_gid(),
@@ -1466,6 +1480,7 @@ mod tests {
         }];
         let e = encode_gsp_static_info(
             &GspStaticInfo {
+                gr_caps: [0; crate::grstatic::GR_CAPS_TBL_SIZE],
                 fb_regions: &rows,
                 fb_length: 0x1001,
                 gid: a_gid(),
@@ -1512,6 +1527,7 @@ mod tests {
         ];
         let e = encode_gsp_static_info(
             &GspStaticInfo {
+                gr_caps: [0; crate::grstatic::GR_CAPS_TBL_SIZE],
                 fb_regions: &rows,
                 fb_length: 0x2_0000,
                 gid: a_gid(),
@@ -1539,6 +1555,7 @@ mod tests {
         let fb = 1 << 20;
         let e = encode_gsp_static_info(
             &GspStaticInfo {
+                gr_caps: [0; crate::grstatic::GR_CAPS_TBL_SIZE],
                 fb_regions: &one_region(fb),
                 fb_length: fb * 2,
                 gid: a_gid(),
@@ -1565,6 +1582,7 @@ mod tests {
         let fb = 1 << 20;
         let e = encode_gsp_static_info(
             &GspStaticInfo {
+                gr_caps: [0; crate::grstatic::GR_CAPS_TBL_SIZE],
                 fb_regions: &one_region(fb),
                 fb_length: fb,
                 gid: a_gid(),
@@ -1588,6 +1606,7 @@ mod tests {
     /// A realistic info block: two regions (one reserved), all names, both roots, caps.
     fn full_info(regions: &[FbRegion], fb: u64) -> GspStaticInfo<'_> {
         GspStaticInfo {
+            gr_caps: [0; crate::grstatic::GR_CAPS_TBL_SIZE],
             fb_regions: regions,
             fb_length: fb,
             gid: a_gid(),

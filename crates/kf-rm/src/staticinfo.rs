@@ -188,6 +188,7 @@ pub struct StaticInfoPolicy {
     gid: GpuGid,
     name: Option<GpuName>,
     short_name: Option<GpuName>,
+    gr_caps: [u8; kf_abi::grstatic::GR_CAPS_TBL_SIZE],
     engine_caps: [u32; kf_abi::gspstaticinfo::ENGINE_CAPS_WORDS],
     /// ★ The boot display's console ([`ConsoleSeat`]); `None` serves the board's table, as before.
     console: Option<ConsoleSeat>,
@@ -224,6 +225,7 @@ impl StaticInfoPolicy {
             gid,
             name: None,
             short_name: None,
+            gr_caps: [0; kf_abi::grstatic::GR_CAPS_TBL_SIZE],
             engine_caps: [0; kf_abi::gspstaticinfo::ENGINE_CAPS_WORDS],
             console: None,
         }
@@ -327,6 +329,13 @@ impl StaticInfoPolicy {
         self
     }
 
+    /// The host-derived graphics caps already used by the internal GR static-info reply.
+    #[must_use]
+    pub fn with_gr_caps(mut self, caps: [u8; kf_abi::grstatic::GR_CAPS_TBL_SIZE]) -> Self {
+        self.gr_caps = caps;
+        self
+    }
+
     /// ★★★ **The door the model name comes through** — and it is deliberately the only
     /// one, with no default behind it.
     ///
@@ -392,6 +401,7 @@ impl StaticInfoPolicy {
     pub fn body(&self) -> Result<Vec<u8>, kf_abi::gspstaticinfo::GspStaticInfoError> {
         encode_gsp_static_info(
             &GspStaticInfo {
+                gr_caps: self.gr_caps,
                 fb_regions: &self.board.fb_regions,
                 fb_length: self.board.fb_length,
                 gid: self.gid,
@@ -447,6 +457,7 @@ impl StaticInfoPolicy {
         )?;
         kf_abi::gspstaticinfo::encode_gsp_static_info_at(
             &GspStaticInfo {
+                gr_caps: self.gr_caps,
                 fb_regions,
                 fb_length: self.board.fb_length,
                 gid: self.gid,
