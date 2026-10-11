@@ -1,11 +1,12 @@
 # V3 Windows app matrix — the Linux app matrix on a Windows guest
 
-**STATUS: DESIGN-ONLY, 2026-10-10.** The inventory, the app disk and the harness are built and unit-tested without a
-GPU; **nothing has run on a Windows guest yet** (the Windows desktop still TDRs; this lane is gated on it, as
-`STATUS_AND_HANDOFF.md` records). Every statement about how an app will behave on kayfabe is *reasoned*, never
-*measured*; §6 lists exactly what was tested and what was not. Owner requirement, 2026-10-10: *"the app matrix that
-passes on Linux guests must also run on Windows guests, for whatever works on Windows."* Branch
-`claude/windows-appmatrix-20261010` (from `integration/windows-20261010`); code in `scripts/bench/windows/appmatrix/`.
+**STATUS: LIVE, 2026-10-11.** Supersedes the 2026-10-10 DESIGN-ONLY status:
+the native Windows reference ran 100 tests (99 PASS, one Vulkan timeout; see
+[`windows_baseline_20261010`](../../traces/windows_baseline_20261010/README.md)).
+A kayfabe campaign on candidate `2c917f3e` is now running; full matrix results
+are pending. Its evidence and falsifiers are in
+[`windows_matrix_20261011`](../../traces/windows_matrix_20261011/README.md).
+OpenGL gears already passed independently on that candidate.
 
 ## 0. What exists
 
