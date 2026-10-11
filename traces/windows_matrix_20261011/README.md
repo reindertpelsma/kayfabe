@@ -3,6 +3,28 @@
 **STATUS: LIVE, 2026-10-11.** Product candidate `2c917f3e`, following the
 OpenGL gears fix. Results are pending; this is not a matrix pass claim.
 
+## Latest checkpoint, 2026-10-11 17:53 UTC
+
+Last confirmed push3252a087 (product: native timer mapping now automatic,
+906 GPU-free testsPASS; exact hardware regression pending). Combined candidate
+97/104 executed:77cleanPASS,8PASS_WITH_RECOVERY,7FAIL,5TIMEOUT;7pending.
+Linux parity57/65. New Blender, Vulkanpeak, CUDA/VulkanLlama bench, DXVA2decode
+and dxdiag cleanPASS. GravityD3D12raster FAIL/no-proof; RT fails/no-image and
+recovers once (three guest events). Separate APP rows added; no shared cause
+claimed. Remaining campaign bounded journal has only the earlier Valley Xid32.
+
+Coverage63669 activeTorchAI, then remaining Gravity/OpenCL and longCUDAclpeak.
+Native-event71386, corrected-stream43616, bounded-nbody92370, fresh-FurMark3557
+still queued. New campaign32315 follows: exact3252 Linux gates/build/fast,
+Windows smokes1390 with TIMER_MAP absent, one captured-caps ablation1400,
+fresh production control1460, then owner manual1380 if the production control
+is clean. Its visible VM has no automatic input/sign-in/apps/reboot loop, no
+measurement flags, no expiry; lock held for its lifetime. Login will be local
+vast, password from trusted host secrets only, never git. Not ready yet.
+
+Other boot defaults are under audit; captured/placeholder replies are not
+silently made defaults. No zero-flag Windows claim or full-matrix pass.
+
 ## Latest checkpoint, 2026-10-11 17:30 UTC
 
 Last confirmed push b56d6828. Candidate89/104 executed:71 cleanPASS,

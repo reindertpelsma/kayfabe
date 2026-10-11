@@ -1,0 +1,13 @@
+=== llama_cuda_bench start=2026-10-11T17:33:25.7496427+00:00 host=VASTWIN session=0 boot=2026-10-11T17:29:30.5000000Z timeout=900
+ggml_cuda_init: found 1 CUDA devices (Total VRAM: 3835 MiB):
+  Device 0: NVIDIA GeForce RTX 4070, compute capability 8.9, VMM: yes, VRAM: 3835 MiB
+load_backend: loaded CUDA backend from C:\kfapps\llama_cuda\ggml-cuda.dll
+load_backend: loaded RPC backend from C:\kfapps\llama_cuda\ggml-rpc.dll
+load_backend: loaded CPU backend from C:\kfapps\llama_cuda\ggml-cpu-zen4.dll
+| model                          |       size |     params | backend    | ngl |            test |                  t/s |
+| ------------------------------ | ---------: | ---------: | ---------- | --: | --------------: | -------------------: |
+| qwen2 1.5B Q4_K - Medium       |   1.04 GiB |     1.78 B | CUDA       |  99 |           pp512 |   13463.65 Â± 3389.11 |
+| qwen2 1.5B Q4_K - Medium       |   1.04 GiB |     1.78 B | CUDA       |  99 |            tg64 |        193.87 Â± 2.46 |
+
+build: f2918cabb (11541)
+=== end rc=0 secs=77 2026-10-11T17:34:42.3482676+00:00

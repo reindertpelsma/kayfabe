@@ -1,0 +1,61 @@
+{
+ "quiet": 0,
+ "end_utc": "2026-10-11T17:32:28.6552566Z",
+ "start_utc": "2026-10-11T17:32:06.6669183Z",
+ "rc": 0,
+ "secs": 22,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4070 status=OK code=0"
+ ],
+ "digests": [],
+ "session": 0,
+ "out_files": [
+  "C:\\kf\\out\\dxdiag_report\\dxdiag.txt 80749"
+ ],
+ "boot_utc_start": "2026-10-11T17:29:30.5000000Z",
+ "log_tail": [
+  "=== dxdiag_report start=2026-10-11T17:32:06.6669183+00:00 host=VASTWIN session=0 boot=2026-10-11T17:29:30.5000000Z timeout=180",
+  "DXDIAG Card name: NVIDIA GeForce RTX 4070",
+  "DXDIAG Chip type: NVIDIA GeForce RTX 4070",
+  "DXDIAG Display Memory: 7839 MB",
+  "DXDIAG Driver Version: 32.0.15.8088",
+  "DXDIAG DDI Version: 12",
+  "DXDIAG Feature Levels: 12_2,12_1,12_0,11_1,11_0,10_1,10_0,9_3,9_2,9_1,1_0_CORE",
+  "DXDIAG Driver Model: WDDM 3.2",
+  "DXDIAG Driver Version:",
+  "DXDIAG_OK",
+  "=== end rc=0 secs=22 2026-10-11T17:32:28.6552566+00:00"
+ ],
+ "pdh": {
+  "pids": [
+   "8416",
+   "6940",
+   "5992"
+  ],
+  "nv": {},
+  "samples": 10,
+  "other": {},
+  "nvidia_luids": "0_6223"
+ },
+ "timed_out": false,
+ "token": "g3-dxdiag_report-1791739923",
+ "boot_utc_end": "2026-10-11T17:29:30.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "dxdiag_report",
+ "smi": {
+  "samples": 0,
+  "mem_used_base_mb": null,
+  "util_max": 0,
+  "mem_used_max_mb": 0
+ }
+}

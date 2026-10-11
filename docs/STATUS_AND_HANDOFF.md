@@ -11,15 +11,16 @@ fix this file. Entries below the first are dated history.
 
 ## 0. Current resumption — start here
 
-**2026-10-11 17:30 UTC, Codex Windows campaign (`codex/windows-matrix-20261011`):**
+**2026-10-11 17:53 UTC, Codex Windows campaign (`codex/windows-matrix-20261011`):**
 [Current evidence and run instructions](../traces/windows_matrix_20261011/README.md).
-Last confirmed push b56d6828. Exact product72741e2b passes Linux gates9/9+10 and
+Last confirmed push3252a087: native timer mapping default,906 GPU-free testsPASS;
+new hardware validation queued. Previous exact product72741e2b passes Linux gates9/9+10 and
 fast30/30, all births USER. Windows gears/vectorAdd/CUP8 pass cleanly; managed
 still times out at translated SYNC_WAIT. Native authored video semaphore/tail
 passes; notification experiment is queued, production kernel video still refuses.
-Combined canonical89/104 executed:71cleanPASS,8PASS_WITH_RECOVERY,5FAIL,5TIMEOUT,
-15pending. Per-row mixed product/harness revisions are explicit in current TSVs.
-Linux counterparts54/65 all clean. Normal-launch FurMark1270 now passes without
+Combined canonical97/104 executed:77cleanPASS,8PASS_WITH_RECOVERY,7FAIL,5TIMEOUT,
+7pending. Per-row mixed product/harness revisions are explicit in current TSVs.
+Linux counterparts57/65 all clean. Normal-launch FurMark1270 now passes without
 recovery/Xid; old failure unroot-caused. Fresh nbodyGUI times out with host Xid32
 and one GSPcycle. ValleyOpenGL also TIMEOUT/Xid32; vkcube renders but fails
 GPU activity proof. FurMarkstress also proof-only FAIL; fresh logfile collection
@@ -29,6 +30,8 @@ Matching stock580.88 reference complete104/104 across batches: latest103PASS,
 GravityMarkVKTIMEOUT, zero recorded guest driver/reset events in passing rows;
 native GSPcycles UNMEASURED. Different GPU(RTX4090) from candidate(RTX4070).
 Corrected direct CuPy stream reference passes; candidate fresh retry queued.
+Owner manual1380 queued after verified3252 regressions/controls, no automatic
+input/sign-in/apps or diagnostics. Other required boot defaults remain under audit.
 Owned reference Vast55385171 retired after evidence backup, exactID absence verified.
 IPC WDDM-unsupported; Geekbench packaging gap. Integration/master unchanged;
 no full-matrix or complete Linux parity success claimed. Resume latest detailed handoff.

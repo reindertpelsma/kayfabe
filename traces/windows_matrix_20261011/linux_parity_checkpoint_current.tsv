@@ -5,7 +5,7 @@ asyncAPI	PASS@2830988f	streams_t	PASS
 bandwidthTest	PASS@2830988f	bandwidthTest_demo	PASS
 bf16TensorCoreGemm	PASS@2830988f	tcbf16_t	PASS
 blackscholes	PASS@2830988f	blackscholes_t	PASS
-blender_cycles	PASS@2830988f	blender_cycles	blender_cycles:PENDING
+blender_cycles	PASS@2830988f	blender_cycles	PASS
 cdpSimpleQuicksort	PASS@2830988f	cdp_quicksort	PASS
 clinfo	PASS@2830988f	opencl_icd	PASS
 clpeak	PASS@2830988f	clpeak_ocl	clpeak_ocl:PENDING
@@ -25,7 +25,7 @@ graphMemoryNodes	PASS@2830988f	graphs_t	PASS
 hashcat	PASS@2830988f	hashcat	PASS
 hf_generate	PASS@2830988f	hf_generate	PASS
 histogram	PASS@2830988f	hist_t	PASS
-llama_bench	PASS@2830988f	llama_cuda_bench	llama_cuda_bench:PENDING
+llama_bench	PASS@2830988f	llama_cuda_bench	PASS
 llama_cpp_gen	PASS@2830988f	llama_cuda_gen	PASS
 mandelbrot	PASS@2830988f	mandelbrot_t	PASS
 matrixMul	PASS@2830988f	matmul_t	PASS
@@ -64,5 +64,5 @@ torch_correct	PASS@2830988f	torch_correct	PASS
 transpose	PASS@2830988f	transpose_t	PASS
 vectorAdd	PASS@2830988f	vectorAdd_demo	PASS
 vectorAddDrv	PASS@2830988f	cup2_ladder	PASS
-vkpeak	PASS@2830988f	vkpeak	vkpeak:PENDING
+vkpeak	PASS@2830988f	vkpeak	PASS
 vulkaninfo	PASS@2830988f	vulkaninfo	PASS

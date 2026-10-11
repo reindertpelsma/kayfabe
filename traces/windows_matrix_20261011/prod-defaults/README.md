@@ -7,3 +7,5 @@ First promotion: native PTIMER mapping without KF3_TIMER_MAP. Source: unprivileg
 Other production flags remain under audit. Captured display caps, GfxP placeholder sizes and status-only control echoes are not promoted by merely flipping an environment default. No zero-flag stock-Windows boot claim yet.
 
 Owner session plan: a fresh run1380 under the shared GPU lock after finite matrix/diagnostic jobs, stock guest580.88, production settings only, measurement flags absent, manual sign-in. QGA may set the local account password and disable autologon/MPO, but no input injection, scripted login, app launch or repeated reboot. Hold the lock for the lifetime of the owner VM. Credentials stay on the trusted host and are never committed.
+
+Campaign queued32315: exact3252a087 Linux gates9+10/fast30, timer-flag-free smokes1390, single-variable caps ablation1400, fresh original production control1460, then manual1380. Controls must be clean before manual approval marker is written. No personal session is started by the matrix harness.
