@@ -200,6 +200,12 @@ app("hf_generate", "ai", r"$env:HF_MODEL = 'C:\kfapps\models\Qwen2-0.5B-Instruct
     linux=["hf_generate"], pkgs=PYPK + ("hf_wheels", "hf_model"), digest=True,
     note="Packaging prepared 2026-10-11; native/kayfabe GPU execution and token digest parity pending")
 
+app("cdp_quicksort", "cuda-equiv", py("cdp_quicksort.py"), r"^Validating results: OK", 600, 90,
+    [r"out:CDP_DEVICE .*NVIDIA", GPU_ENG], "high",
+    "NVRTC relocatable PTX linked with cudadevrt; GPU-recursive quicksort with device-side child launch/error counters and exact CPU readback oracle",
+    linux=["cdpSimpleQuicksort"], pkgs=PYPK + ("cuda_nvrtc", "cuda_cudart"),
+    note="Public NVRTC Windows dynamic-parallelism route; runtime compilation and native/kayfabe validation pending")
+
 # ---------------------------------------------------------------------------------------------- F. Vulkan
 app("vulkaninfo", "vulkan", r"""Invoke-KfExe -Exe "$K\vulkan_rt\x64\vulkaninfo.exe" -ArgList @('--summary')
 exit $global:KfRc""", r"deviceName\s*=\s*NVIDIA", 60, 5, [r"out:deviceName\s*=\s*NVIDIA"], "low",
@@ -429,7 +435,6 @@ for mode, linux_row in (("callback", "simpleCallback"), ("occupancy", "simpleOcc
 # that stand for it (derived from `linux=` above) or with the reason there is none.
 NO_EQUIVALENT = {
     "simpleIPC": "CUDA IPC (cudaIpcGetMemHandle) is not supported on WDDM Windows (TCC/Linux only)",
-    "cdpSimpleQuicksort": "dynamic parallelism needs relocatable device code linked with cudadevrt; no prebuilt Windows binary and no NVRTC route without nvcc/MSVC",
     "geekbench_gpu": "Geekbench needs the internet to upload results (the Linux pass string is 'Uploading results'); the lane forbids guest internet at run time",
 }
 

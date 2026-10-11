@@ -131,6 +131,40 @@
    "cmd": "blender.exe -b --factory-startup --python blender_render.py -- CUDA|OPTIX out.png (both devices)"
   },
   {
+   "id": "cdp_quicksort",
+   "category": "cuda-equiv",
+   "linux": [
+    "cdpSimpleQuicksort"
+   ],
+   "pkgs": [
+    "python_embed",
+    "pywheels",
+    "vc_redist",
+    "cuda_nvrtc",
+    "cuda_cudart"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 600,
+   "expect_s": 90,
+   "rx": "^Validating results: OK",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:CDP_DEVICE .*NVIDIA",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "high",
+   "why": "NVRTC relocatable PTX linked with cudadevrt; GPU-recursive quicksort with device-side child launch/error counters and exact CPU readback oracle",
+   "ps": "Invoke-KfExe -Exe $PY -ArgList ($PYA + @('C:\\kf\\py\\kf_runpy.py', 'C:\\kf\\py\\cdp_quicksort.py'))\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": "Public NVRTC Windows dynamic-parallelism route; runtime compilation and native/kayfabe validation pending",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true,
+   "cmd": "python cdp_quicksort.py"
+  },
+  {
    "id": "cg_t",
    "category": "cuda-equiv",
    "linux": [
@@ -3365,6 +3399,9 @@
   "blender_cycles": [
    "blender_cycles"
   ],
+  "cdpSimpleQuicksort": [
+   "cdp_quicksort"
+  ],
   "clinfo": [
    "opencl_icd"
   ],
@@ -3546,7 +3583,6 @@
  },
  "no_equivalent": {
   "simpleIPC": "CUDA IPC (cudaIpcGetMemHandle) is not supported on WDDM Windows (TCC/Linux only)",
-  "cdpSimpleQuicksort": "dynamic parallelism needs relocatable device code linked with cudadevrt; no prebuilt Windows binary and no NVRTC route without nvcc/MSVC",
   "geekbench_gpu": "Geekbench needs the internet to upload results (the Linux pass string is 'Uploading results'); the lane forbids guest internet at run time"
  }
 }

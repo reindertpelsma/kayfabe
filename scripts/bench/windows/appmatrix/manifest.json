@@ -1001,6 +1001,30 @@
      "verified_utc": "2026-10-11T13:29:46Z"
     }
    ]
+  },
+  {
+   "id": "cuda_nvrtc",
+   "title": "NVIDIA CUDA NVRTC runtime compiler and builtins (Windows)",
+   "version": "12.9.86",
+   "tier": 1,
+   "license": "NVIDIA CUDA Toolkit EULA (LICENSE inside archive)",
+   "redistribution": "Redistributable NVRTC component under CUDA EULA attachment A; staged for internal tests",
+   "stage": {
+    "mode": "unzip",
+    "dest": "cuda_nvrtc",
+    "strip_top": true
+   },
+   "files": [
+    {
+     "name": "cuda_nvrtc-windows-x86_64-12.9.86-archive.zip",
+     "url": "https://developer.download.nvidia.com/compute/cuda/redist/cuda_nvrtc/windows-x86_64/cuda_nvrtc-windows-x86_64-12.9.86-archive.zip",
+     "sha256": "1aa0644fa53c8ca34cdc73db17bcc73530557bdd3f582c7bfdbd7916c8b48f65",
+     "size": 314608748,
+     "http": 200,
+     "head_length": 314608748,
+     "verified_utc": "2026-10-11T13:37:40Z"
+    }
+   ]
   }
  ],
  "dropped": [
