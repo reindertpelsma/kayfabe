@@ -5,6 +5,18 @@ again after the Wednesday 07:00 reset). Read `AGENTS.md` (= `CLAUDE.md`) first: 
 (state, branches, traps), `docs/DELEGATED_DECISIONS_20261010.md`, `docs/OWNER_RULINGS.md` §AB-§AE, `docs/design/V3_FEATURE_GAPS.md`
 (priorities: P0 = prevents apps running; fidelity and perf beyond "decent" are post-release), `docs/design/V3_NOT_IN_GIT.md`.
 
+## OpenGL continuation, 2026-10-11 13:08 CEST
+
+**Gears passes on candidate `2c917f3e`, branch `codex/opengl-gears-20261011`.** The boot
+BUS_GET_INFO_V2 census refused forwarded ASLM status index 0x18, aborting the enclosing
+query; the CPU-side bus table was all zero. The source-backed virtual-link status/error
+answers complete that census. Run 647's ordinary app-disk gears executable completed
+95688 frames in 45 seconds, NVIDIA renderer, correct pixel, GL error 0, RESULT OK, exit 0.
+CUDA cup2/cup3/cup8 passed, adapter Code 0, zero TDR. GPU-free ABI/RM tests 1300 passed;
+independent review found no blocker. Exact-product Linux regression is running under the
+GPU lock before any integration. Master and integration are currently unchanged.
+Evidence and hypotheses/falsifiers: `traces/opengl_gears_20261011/README.md`.
+
 ## Codex continuation, 2026-10-11 (supersedes the integration recommendation below)
 
 Worktree `/data/kf-inval-absent`; reviewed candidate `codex/gl-display-review-20261011` is integrated into

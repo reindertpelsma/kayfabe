@@ -62,12 +62,13 @@ use the corrected tracer. Raw diagnostic buffers remain private.
 A CPU-side bus-information census was entirely zero on kayfabe. The public GSP trace
 shows its first missing forwarded index: BUS_GET_INFO_V2 index 0x18 (ASLM status), refused
 NV_ERR_NOT_SUPPORTED. VFIO completes the subsequent 0x19..0x2b link-status/error census.
-Open `kern_bus_ctrl.c:333` returns on the first failed forwarded query, explaining the
-lost earlier bus fields. This is a candidate explanation for the GL failure, not proof.
+Open `ogkm-580` `kern_bus_ctrl.c:333` returns on the first failed forwarded query.
+Separately, the Windows observation is that the enclosing caller discarded the partial
+census. This is a candidate explanation for the GL failure, not proof.
 
 Candidate derives the *virtual* PCIe link: present without ASLM, valid disabled ASPM,
 zero link-switch/line/CRC/NAK/L0s/AER error counters and clear variants. Definitions:
-`ctrl2080bus.h:308-327,479-502`. No physical link status is copied. Unknown indices still
+`ogkm-580` `ctrl2080bus.h:308-327,479-502`. No physical link status is copied. Unknown indices still
 refuse the whole request. The served-boundary regression failed first with status 86;
 all eight bus-info tests pass after the change.
 
@@ -75,3 +76,32 @@ Controlled run 646 hypothesis: completing this census restores the initializatio
 that gears needs. Falsifier: the census completes but gears still crashes. Oracle remains
 NVIDIA renderer, correct pixel, advancing frames, RESULT OK; a non-null WGL context alone
 is insufficient. Source revision and result will be recorded after the run.
+
+Independent review found no blocker in the bus candidate; the fixed-size answers apply
+uniformly across families and preserve request validation. GPU-free `kf-abi` + `kf-rm`
+tests: 1300 passed across 69 test/doc-test binaries, zero failures (candidate `2c917f3e`).
+
+Run 646 (`2c917f3e`) completed the formerly refused bus queries, but sign-in verification
+failed; no interactive gears probe ran. The harness exited 1 and restored DMA-FQ/nvidia,
+no QEMU remaining. This is not a gears verdict. Run 647 repeats the same binary with a
+longer harness boot readiness wait and verified sign-in retries; falsifier/oracle unchanged.
+
+## Run 647: gears passes
+
+Exact product `2c917f3e` changes only the bus-census handling relative to run 645's
+`18bfb458`. After a verified sign-in retry, the same traced probe passes: 43605 frames
+in 20 seconds, NVIDIA 580.88 renderer, pixel 64/128/191/255, GL error 0, RESULT OK.
+The CPU-side bus table is now populated. The stated falsifier did not fire.
+
+The ordinary app-disk `D:\tools\kf_glgears.exe` then passed independently of the private
+probe hooks: **95688 frames in 45.0 seconds, GL error 0, RESULT OK, exit 0**, NVIDIA renderer
+and correct pixel. CUDA cup2/cup3/cup8 each exited 0 and passed their result checks;
+adapter Code 0, zero TDR. Full output, the exact interactive task and a display screenshot
+are in `logs/647/`. Empty ExitCode from the earlier Start-Process helper is not treated as
+an exit-zero claim; the ordinary task invokes the executable directly and records LASTEXITCODE.
+
+This demonstrates that completing the census is sufficient in this comparison. It does not
+isolate which previously discarded bus field the ICD requires. The GR-caps change alone
+was insufficient (run 644). Linux regressions on the exact passing product are pending.
+Only our stopped runs' 645/646 disposable overlays were removed after evidence collection
+to preserve the host's 100 GB free-space floor; logs and private diagnostic captures remain.

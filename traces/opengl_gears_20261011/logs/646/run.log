@@ -1,0 +1,20 @@
+IOMMU_SWITCH_START group=11 from=DMA-FQ to=identity 2026-10-11T13:00:08+02:00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=identity 2026-10-11T13:00:10+02:00
+WINDOWS_START kf3=2c917f3e run=/var/lib/kf-windows-20261005/boundary-kayfabe-646 checkout=6fafcc6e xid_before=30 2026-10-11T13:00:10+02:00
+[windows] broker: backend wayland, socket /run/user/1000/nvkvm/windows-run646.sock, title 'kayfabe Windows run 646' (log /var/lib/kf-windows-20261005/boundary-kayfabe-646/broker-20261011-130010.log)
+[windows] QEMU pid 3625145, kf3 2c917f3e, run /var/lib/kf-windows-20261005/boundary-kayfabe-646 (qemu.log, serial.log, command.json, marker.txt)
+
+  ┌ kayfabe Windows window: "kayfabe Windows run 646" on ubuntu's desktop ┐
+  │ hover = absolute USB tablet; CTRL+ALT+G grab (PS/2 relative mouse); CTRL+ALT+F fullscreen
+  │ guest PowerShell as SYSTEM: scripts/bench/windows/qga_run_ps.py 646 <file.ps1>
+  │ stop: /var/lib/kf-windows-20261005/kayfabe-win-6fafcc6e/scripts/bench/windows/windows_broker_prod3.sh stop 646
+  └────────────────────────────────────────────────────────────────────────────────────────────┘
+SIGNIN_FAILED: check account, session, and keyboard configuration
+[windows] run646 stopped (Xid count now 30)
+IOMMU_SWITCH_START group=11 from=identity to=DMA-FQ 2026-10-11T13:01:43+02:00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-11T13:01:45+02:00
+BOUNDARY646_EXIT=1
