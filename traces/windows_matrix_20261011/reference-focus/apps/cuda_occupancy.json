@@ -1,0 +1,53 @@
+{
+ "quiet": 4,
+ "end_utc": "2026-10-11T12:48:15.0449480Z",
+ "start_utc": "2026-10-11T12:48:10.6221130Z",
+ "rc": 0,
+ "secs": 4,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4090 status=OK code=0"
+ ],
+ "digests": [],
+ "session": 0,
+ "out_files": [],
+ "boot_utc_start": "2026-10-11T12:38:54.5000000Z",
+ "log_tail": [
+  "=== cuda_occupancy start=2026-10-11T05:48:10.6221130-07:00 host=DESKTOP-JR70RMQ session=0 boot=2026-10-11T12:38:54.5000000Z timeout=90",
+  "KFCUDA device NVIDIA GeForce RTX 4090",
+  "CHECK occupancy_bounds ok grid=256 block=768 active=2",
+  "CHECK occupancy ok callbacks=0 bad=0",
+  "KFCUDA RESULT OK occupancy",
+  "=== end rc=0 secs=4 2026-10-11T05:48:15.0449480-07:00"
+ ],
+ "pdh": {
+  "pids": [
+   "6920",
+   "8412"
+  ],
+  "nv": {},
+  "samples": 2,
+  "other": {},
+  "nvidia_luids": "0_5fcf"
+ },
+ "timed_out": false,
+ "token": "g1-cuda_occupancy-1791722871",
+ "boot_utc_end": "2026-10-11T12:38:54.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "cuda_occupancy",
+ "smi": {
+  "samples": 1,
+  "mem_used_base_mb": 203,
+  "util_max": 0,
+  "mem_used_max_mb": 203
+ }
+}

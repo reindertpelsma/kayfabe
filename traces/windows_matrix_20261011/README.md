@@ -137,3 +137,20 @@ The copy-slicing candidate has separately passed hardware gates 9/9 plus gate
 10 with 12/12 USER births. Remaining regression and Windows results are pending.
 The next full campaign orders shorter apps first, retaining all 102 non-overlay
 tests, so the slow benchmarks do not delay other-path coverage.
+
+## Candidate regression setup correction and reference checkpoint
+
+The first candidate fast-guest build mistakenly used the fat-image 580.159.04
+modules, rather than the prior verified regression's host-mode 595 driver.
+Those boots fail GSP driver initialization (`WPR2 already up`) before reaching
+the test operation. Gates 9/9 + gate 10 passed separately; no fast-suite success
+is claimed. `copy-slicing/run_hostdriver_regression.sh` explicitly selects
+`KF_FROM_HOST=1`, rebuilds the guest, and reruns on the same exact product binary.
+
+The new stock reference's first BlackScholes attempt timed out after 122 s,
+with no CUDA banner, TDR, or WER. Basic driver/GPU execution is independently
+proven by **cuda_callback PASS**: both GPU kernel/copy readbacks and ordered
+callbacks checked correctly. Python/CUDA startup on this fresh reference needs
+isolation before treating it as a clean BlackScholes comparison. Partial
+reference evidence (including exact source and binary hashes) is in
+`reference-focus/`; the six-app reference batch is still running.
