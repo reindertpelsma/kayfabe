@@ -1,0 +1,7 @@
+kf3: GSP phase Cold -> ProtectedRegionUp
+kf3: GSP phase ProtectedRegionUp -> Booted
+kf3: GSP phase Booted -> Running
+kf3: mem t=205.874s the guest wrote NV_PBUS_BAR1_BLOCK = 0x0 (MODE PHYSICAL) at GSP phase Running
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=0: bInPMTransition=false bGc6Entering=false newLevel=64 — the guest's RM gives BAR1 up
+kf3: GSP phase Running -> Suspending
+kf3: GSP phase Suspending -> Halted

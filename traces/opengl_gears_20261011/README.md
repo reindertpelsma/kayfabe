@@ -130,3 +130,7 @@ file, 104 GiB free. `logs/648/` contains the launch profile, probe result and te
 
 The candidate branch is pushed; integration/master remain unchanged. Their merge gates
 still apply. The broader OpenGL application matrix is a separate outstanding lane.
+
+Run 648's single Running→Suspending transition belongs to the terminal driver unload
+(fn47, newLevel 64) during shutdown and goes directly to Halted; it is not a TDR/recovery
+cycle. `logs/648/driver-phases.txt` records all driver phase transitions for that distinction.
