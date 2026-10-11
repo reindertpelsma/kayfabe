@@ -1,0 +1,5 @@
+=== managed_t start=2026-10-11T16:13:08.4838700+00:00 host=VASTWIN session=0 boot=2026-10-11T16:10:24.5000000Z timeout=180
+KFDEV NVIDIA GeForce RTX 4070
+[eq] device NVIDIA GeForce RTX 4070 torch 2.8.0+cu126
+MANAGED_STAGE allocating
+=== end rc=124 secs=181 2026-10-11T16:16:09.9451973+00:00

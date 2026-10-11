@@ -5,6 +5,23 @@ again after the Wednesday 07:00 reset). Read `AGENTS.md` (= `CLAUDE.md`) first: 
 (state, branches, traps), `docs/DELEGATED_DECISIONS_20261010.md`, `docs/OWNER_RULINGS.md` §AB-§AE, `docs/design/V3_FEATURE_GAPS.md`
 (priorities: P0 = prevents apps running; fidelity and perf beyond "decent" are post-release), `docs/design/V3_NOT_IN_GIT.md`.
 
+## Latest checkpoint, 2026-10-11 16:14 UTC
+
+Last confirmed GitHub push: `c00f6cb7` on `codex/windows-matrix-20261011`.
+Fresh ordinary Edge launch1260 stayed alive60s, with zero guest driver/reset
+records, zero GSP cycles and zero timestamp-bounded host Xids. Its screenshot
+is the first-run welcome screen: setup/navigation/video were not exercised.
+Launch-only diagnostic, excluded from matrix counts; the owner's observed black
+recycle remains open. Evidence: `encoder-session/edge-default-launch/`.
+
+Canonical combined counts remain84/104 tested:68 clean PASS,8 passes with
+recovery,4 FAIL,4 TIMEOUT;53/65 mapped Linux-pass counterparts clean. Product
+revisions are mixed and recorded per row. No full-green claim.
+Managed1261 is active, then timed startup/unchanged stream1262 and native video
+release/trap probes; remaining app waiter70754 follows only if diagnostics are
+clean. Stock580.88 reference remaining15 has13 PASS through GravityMarkD3D11;
+OpenCL clpeak and torch burn remain active/pending, then50 unmeasured rows.
+
 ## Latest checkpoint, 2026-10-11 16:10 UTC
 
 Last pushedc98a9aa5. Corrected a61af1c3 matrix FINISHED10 cleanPASS/11,

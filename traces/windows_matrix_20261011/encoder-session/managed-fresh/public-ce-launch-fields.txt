@@ -1,0 +1,7 @@
+#define NVC7B5_LAUNCH_DMA                                                       (0x00000300)
+#define NVC7B5_LAUNCH_DMA_SRC_TYPE                                              12:12
+#define NVC7B5_LAUNCH_DMA_SRC_TYPE_VIRTUAL                                      (0x00000000)
+#define NVC7B5_LAUNCH_DMA_SRC_TYPE_PHYSICAL                                     (0x00000001)
+#define NVC7B5_LAUNCH_DMA_DST_TYPE                                              13:13
+#define NVC7B5_LAUNCH_DMA_DST_TYPE_VIRTUAL                                      (0x00000000)
+#define NVC7B5_LAUNCH_DMA_DST_TYPE_PHYSICAL                                     (0x00000001)

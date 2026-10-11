@@ -11,18 +11,20 @@ fix this file. Entries below the first are dated history.
 
 ## 0. Current resumption — start here
 
-**2026-10-11 15:37 UTC, Codex Windows campaign (`codex/windows-matrix-20261011`):**
+**2026-10-11 16:14 UTC, Codex Windows campaign (`codex/windows-matrix-20261011`):**
 [Current evidence and run instructions](../traces/windows_matrix_20261011/README.md).
-Exact product `a61af1c3` passes Linux gates9/9+10 and fast30/30, all births USER.
-Windows gears passes cleanly. The authored NVENC session ABI blocker is fixed:
-H264/HEVC/AV1 each encode600 frames, but each triggers a guest recovery and remains
-open. Old broad campaign stopped82/102:63PASS,16FAIL,3TIMEOUT,58 cleanPASS.
-Corrected packaging/numerical tests and fresh Edge reproduction are now running.
-Stock Windows580.88 fresh encoder/decode/browser-video/FurMark/Unigine comparisons
-pass without guest recovery records; GravityMark Vulkan also times out on stock.
-Native GSP cycles are unmeasured. Conservatively43/65 mapped passed-Linux rows
-have all Windows counterparts clean in the saved82-row checkpoint; remaining
-coverage is pending. IPC is WDDM-unsupported; Geekbench is a packaging gap.
+Last confirmed push `c00f6cb7`. Exact product `a61af1c3` passes Linux gates9/9+10
+and fast30/30, all births USER. Windows gears passes cleanly. The authored NVENC
+session ABI blocker is fixed: H264/HEVC/AV1 each encode600 frames but recover;
+the common kernel video semaphore refusal remains open. Fresh Edge WebGL/WebGPU
+pass cleanly. Ordinary first-launch Edge stays alive60s without recovery, but
+its screenshot is the welcome screen; no navigation/video claim follows.
+Combined canonical84/104 tested:68 clean PASS,8 passes with recovery,4 FAIL,
+4 TIMEOUT, with per-row product revisions recorded. Conservatively53/65 mapped
+passed-Linux rows have all counterparts clean.20 candidate rows remain pending.
+Stock580.88 encoder/decode/browser-video/FurMark/Unigine comparisons pass without
+guest recovery records; GravityMark Vulkan also times out on stock. Native GSP
+cycles are unmeasured. IPC is WDDM-unsupported; Geekbench is a packaging gap.
 MPO remains disabled in the main lane; eight overlay cases are separate.
 Integration/master unchanged; no full-matrix or Linux parity success claimed.
 
