@@ -536,14 +536,17 @@ impl DisplayPolicy {
         let Some(m) = self.model.clone() else {
             return self.answer_m0(cmd, params);
         };
-        let (r, st) = {
+        let (r, st, note) = {
             let mut g = lock(&m);
             let r = match target {
                 Some((c, o)) => g.control_on(c, o, cmd, params),
                 None => g.control(cmd, params),
             };
-            (r, settle(&mut g))
+            (r, settle(&mut g), g.take_notice())
         };
+        if let Some(n) = note {
+            eprintln!("kf-rm: display: {n}");
+        }
         finish(st);
         r
     }
@@ -1341,7 +1344,9 @@ mod tests {
             claimed.len(),
             // +1 on 2026-10-07: NV0073 EVENT_SET_NOTIFICATION; +5 the same day (Windows run29):
             // IMP_SET_GET_PARAMETER, SYSTEM_GET_HOTPLUG_STATE, ACPI_SUBSYSTEM_ACTIVATED, PRE/POST_MODESET
-            41 + 6,
+            // +1 on 2026-10-11: NV0073 0x73011a (the display's current mode)
+            // +1 on 2026-10-11: NV0073 DFP_ASSIGN_SOR (0x731152; the crossbar the derived caps claim)
+            41 + 6 + 1 + 1,
             "the NVKMS bring-up set (with the console pair, the display-SW object's query, the \
              internal hotplug state and SET_RMFREE_FLAGS) and the six internal controls"
         );

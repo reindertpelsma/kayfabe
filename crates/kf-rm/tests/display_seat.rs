@@ -362,7 +362,10 @@ fn default_off_every_claimed_control_still_reaches_the_ledger() {
         set.len(),
         // +1 on 2026-10-07: NV0073 EVENT_SET_NOTIFICATION; +5 the same day (Windows run29):
         // IMP_SET_GET_PARAMETER, SYSTEM_GET_HOTPLUG_STATE, ACPI_SUBSYSTEM_ACTIVATED, PRE/POST_MODESET
-        41 + 6,
+        // +1 on 2026-10-11: NV0073 0x73011a (the display's current mode; this test was not updated
+        // then and failed 47 != 48 from that commit on); +1 the same day: DFP_ASSIGN_SOR (the crossbar
+        // the derived caps claim)
+        41 + 6 + 1 + 1,
         "the NVKMS bring-up set (with the console pair, the display-SW object's query, the \
          internal hotplug state and SET_RMFREE_FLAGS) and the six internal controls"
     );

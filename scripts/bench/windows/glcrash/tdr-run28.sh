@@ -86,6 +86,7 @@ gps(){ # run a PowerShell snippet in the guest through QGA, output to $O/$1
   GT=${GT:-120} G qga-exec powershell.exe -NoProfile -Command "$1" 2>&1 | tr -d '\r' >> $O/$out
 }
 cleanup(){
+  local cleanup_status=${1:-0}
   trap - TERM INT
   L "CLEANUP begin (alive=$(alive && echo 1 || echo 0)) tdr_cycles=$(ncyc)"
   snap final
@@ -100,7 +101,7 @@ cleanup(){
   snap after-stop
   L "END type=$(cat /sys/kernel/iommu_groups/$GRP/type) driver=$(basename $(readlink /sys/bus/pci/devices/0000:01:00.0/driver)) xid_lines=$(dmesg | grep -c 'NVRM: Xid')"
   rm -f $STOPF
-  exit 0
+  exit "$cleanup_status"
 }
 # SAMPLER=1: irq_sampler.py (LAPIC IRR/ISR/TPR, MSI-X table + PBA, eventfd counts, RFLAGS.IF per vCPU every SAMPLER_PERIOD s from the sign-in to the first TDR + SAMPLER_AFTER s).
 # STALLDUMP=1: after the sign-in, watch kayfabe's display trace (needs KF3_DISPLAY_WRITE_TRACE=1): the guest acks every VSync
@@ -243,9 +244,12 @@ if [ "$TA" != 0 ] && alive; then
     shot pre-signin
     L "PHASE boot tdr_cycles=$(ncyc)"
     L "SIGNIN keys at +$(( $(date +%s) - TA ))s"
-    key spc; sleep 3
-    for c in k f s i g n 7; do key $c; done; key ret
-    L "SIGNIN sent"
+    if KF_GUEST_PW="$PW" python3 "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../signin.py" "$RUN/qmp.sock" "$RUN/qga.sock" > "$O/signin-check.txt" 2>&1; then
+      L "SIGNIN verified"
+    else
+      L "SIGNIN failed verification; interactive probes skipped"
+      cleanup 1
+    fi
     [ "${STALLDUMP:-0}" = 1 ] && { stall_watch & }
     touch $O/.signin_done
    if [ "${ETW:-0}" = 1 ]; then

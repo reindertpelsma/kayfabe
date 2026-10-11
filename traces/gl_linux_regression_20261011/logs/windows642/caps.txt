@@ -1,0 +1,5 @@
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730101 client=0xc1d00002 object=0xff0a0000 params=000c result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730101 client=0xc1d00002 object=0xff0a0000 params=000c result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730101 client=0xc1d00077 object=0xff0a0000 params=000c result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730101 client=0xc1d00077 object=0xff0a0000 params=000c result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730101 client=0xc1d00077 object=0xff0a0000 params=000c result=0x0

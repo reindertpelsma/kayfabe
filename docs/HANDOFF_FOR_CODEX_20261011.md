@@ -5,11 +5,30 @@ again after the Wednesday 07:00 reset). Read `AGENTS.md` (= `CLAUDE.md`) first: 
 (state, branches, traps), `docs/DELEGATED_DECISIONS_20261010.md`, `docs/OWNER_RULINGS.md` §AB-§AE, `docs/design/V3_FEATURE_GAPS.md`
 (priorities: P0 = prevents apps running; fidelity and perf beyond "decent" are post-release), `docs/design/V3_NOT_IN_GIT.md`.
 
+## Codex continuation, 2026-10-11 (supersedes the integration recommendation below)
+
+Worktree `/data/kf-inval-absent`; reviewed candidate `codex/gl-display-review-20261011` is integrated into
+`integration/windows-20261010`. All origin branches were fetched; `bx` at its recorded SSH endpoint times out.
+Independent review corrected false DP/software capabilities, SOR sublink handling and guest-authored output flags.
+Every family now answers implemented capabilities `00 0c`, rather than copying the physical GPU's `81 2f`.
+Exact product revision `02afce90` passed 1044 GPU-free tests, gates 9/9 plus gate 10, fast suite 30/30,
+T-space checks 30/30 and broker/input smoke. Windows run 642 passed CUDA cup2/cup3/cup8, adapter Code 0,
+zero TDR; **OpenGL gears still crashes** (access violation). The runner's fixed-password sign-in was repaired
+with environment-password typing and verified interactive-session detection; run 642 used a recorded live recovery.
+Evidence, review and reproduction scripts: `traces/gl_linux_regression_20261011/`.
+
+Master is untouched: quick CI has four identical inherited failing categories, verified against `a2632e64`.
+Host teardown: no QEMU or stop file, group 11 DMA-FQ, 111 GB free. Next P0 investigation: compare full
+request-to-reply behavior with VFIO or the authored `GetGspStaticInfo` reply; state the falsifier first.
+The OpenGL/app matrices, flag ablation, perf comparison and invalidate-latency work remain outstanding.
+The 05:00 update and measured-state section below are historical where they differ from this continuation;
+CUDA error 999 and the recommendation to integrate the uncorrected `81 2f` capabilities are superseded.
+
 ## UPDATE 2026-10-11 05:00 CEST (read this first; supersedes the OpenGL lines below where they differ)
 - **OpenGL (open P0):** branch `claude/gl-730101-20261011` (commit `417bad6d`, NOT merged). The RM replies now equal the real GPU's byte for byte
   (`0x730101` = `81 2f`, `0x730102` CLIENT = 1, `0x73011a` answered, `DFP_ASSIGN_SOR` added; caps derived in `crates/kf-disp/src/dispcaps.rs`), and `kf_glgears`
-  STILL crashes (runs 640/641). CUDA cup2/cup3/cup8 pass. Next suspect: a race in the OpenGL driver (7 threads in the dump); falsifier: log microseconds per
-  control, race is out if kayfabe's calls are not slower than ~3 ms (real ~0.5 ms); alternative: diff the `GetGspStaticInfo` reply against the real boot capture.
+  STILL crashes (runs 640/641). CUDA cup2/cup3/cup8 pass. Next diagnostic: compare full request-to-reply latency with the real GPU; handler timings alone cannot prove or exclude a race.
+  Alternative: diff the `GetGspStaticInfo` reply against the real boot capture.
   Full handoff: `traces/windows_gl_crash_20261011/README.md` on that branch (top section).
 - **Before merging that branch:** Linux regression (gates 9/9 + gate 10, fast suite 30/30, broker smoke) on it; the caps now claim CROSS_BAR. One kf-rm
   `display_seat` count test was already failing before the work; fix or record it.
