@@ -4,6 +4,13 @@
 
 STATUS: LIVE. Work on branch `claude/overlay-h1-20261010` (from 575d5b20).
 
+* 5. [measured, runs 417 and 418, binary 72784ba7, ZERO flags, tdr-run24.sh ETW=1 OVLDUMP=1, hold 241 s each] the stuck-flip class is GONE in both: 0 `STALL Window .. waiting for
+  its interlock group`, 0 OVLDUMP triggers, TDR cycles 0/0/0/0/0 (boot/sign-in/Edge/Shorts-load/hold), 0 channel exceptions, 0 scanout REFUSED. The overlay is active in both
+  (window 4 1295x985 RGB plane from +219 s / +187 s, then the NV12 video overlay `fmt 0x38` 156 / 141 console lines). Prior baseline with 18da7c3c: stall in 6 of 8 runs
+  (408/409/411/413/415/416; 410 and 414 did not). Two clean runs is not yet three; run 419 is queued. `4` extra `STALL Window 4 ... ready, waiting for a vblank` reports in 417
+  (parked 1012 ms while ticks and flips flow: the report's parked clock is per channel stage, not per UPDATE; benign, no TDR). The kf_overlayprobe verdict of 417/418 is NOT
+  valid: the QGA staging of the exe timed out and left a truncated file (exit -1073741819, no output; stage.txt TimeoutError, sizes 803160/821160 of 839160); the same flake hit
+  413 (821160) and 414. Probe verdicts of 413/415/416 (full exe, 839160 in 415): no DIRECT flag (flags 0x2) before any TDR.
 * 4. [measured + inferred, runs 415/416 (18da7c3c, OVLDUMP: guest-memory dump at the first window-4 STALL report); engine replay tests] CAUSE of H1 (the
   first half measured, the pairing rule inferred):
   - [measured, dump 415] at the stall ALL vCPUs are in HLT (3 samples), the VidSch workers wait for scheduler events, DWM/Edge wait on events: nobody spins, nobody is
