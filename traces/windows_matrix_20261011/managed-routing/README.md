@@ -1,6 +1,6 @@
 # Windows kernel UVM routing correction
 
-**STATUS: RESEARCH, 2026-10-11.** Product change, hardware verification pending.
+**STATUS: RESEARCH, 2026-10-11.** Product change, Linux verified; Windows managed test still fails.
 
 Fresh old-product evidence is in `../encoder-session/managed-fresh/`. Kernel
 UVM migration channels inherit the application's PID and were classified as
@@ -24,3 +24,16 @@ the physical-copy refusal and managed allocation/visibility tests complete.
 Falsifier: an allocation still hangs, any translated birth/operand refuses, a
 fresh host Xid appears, or the existing Linux gates/fast suite regresses.
 No supported managed-memory claim until the original180s oracle passes cleanly.
+
+Fresh727 Windows focus1320: managed TIMEOUT180s at allocation. UVM-owned births
+are now Translated and the original host physical-copy Xid is absent, but the
+first migration channel refuses SyncWait gp0. No guest recovery or host Xids.
+Fresh1321 gears/vectorAdd/CUP8 pass cleanly. Full evidence windows-focus/.
+The hypothesis that routing alone permits managed completion is FALSIFIED.
+Public uvm_hal_types.h specifies previous ESCHED execution before fetch, with
+engine idle a distinct synchronization; implementation must preserve that scope.
+Linux regression9+gate10/30 PASS at exact727, all host births USER.
+
+The original campaign correctly stops before coverage. Reviewed coverage uses
+three clean smokes plus this known managed failure and zero host Xids, keeping
+managed unsupported. Its immutable runner and cleanup script are saved here.

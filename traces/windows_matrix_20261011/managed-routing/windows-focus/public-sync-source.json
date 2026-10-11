@@ -1,0 +1,6 @@
+{
+  "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/580.65.06/kernel-open/nvidia-uvm/uvm_hal_types.h",
+  "sha256": "13b3967d8629067621fb4373d9c3404266d5557bb9e2e468a012dd2f182657ce",
+  "lines": "369..380",
+  "scope": "SYNC_WAIT waits for previous ESCHED execution, not necessarily full engine idle"
+}

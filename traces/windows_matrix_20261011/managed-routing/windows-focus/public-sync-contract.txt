@@ -1,0 +1,12 @@
+{
+    // Allow entry to be fetched before the previous entry finishes ESCHED
+    // execution.
+    UVM_GPFIFO_SYNC_PROCEED = 0,
+
+    // Fetch of this entry has to wait until the previous entry has finished
+    // executing by ESCHED.
+    // For a complete engine sync the previous entry needs to include
+    // WAIT_FOR_IDLE command or other engine synchronization.
+    UVM_GPFIFO_SYNC_WAIT,
+} uvm_gpfifo_sync_t;
+

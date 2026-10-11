@@ -5,6 +5,35 @@ again after the Wednesday 07:00 reset). Read `AGENTS.md` (= `CLAUDE.md`) first: 
 (state, branches, traps), `docs/DELEGATED_DECISIONS_20261010.md`, `docs/OWNER_RULINGS.md` §AB-§AE, `docs/design/V3_FEATURE_GAPS.md`
 (priorities: P0 = prevents apps running; fidelity and perf beyond "decent" are post-release), `docs/design/V3_NOT_IN_GIT.md`.
 
+## Latest checkpoint, 2026-10-11 16:56 UTC
+
+Last confirmed push738b5385. Exact72741e2b Windows focus FINISHED: managed1320
+TIMEOUT180s allocating, zero guest recovery and bounded-journal host Xids.
+Kernel UVM births now Translated; token0x82c refuses ring SyncWait gp0. This
+removes the previous physical-copy host fault but does NOT fix managed memory.
+Fresh1321 gears/vectorAdd/CUP8 all cleanPASS. Evidence managed-routing/windows-focus/.
+Public UVM contract: WAIT waits previous ESCHED execution before fetching this
+entry; a full engine synchronization separately requires WFI. Do not ignore
+SYNC, use timeout release, or silently substitute stronger ordering.
+
+Original strict campaign correctly exits1, leaving its remaining batch unrun.
+Reviewed coverage runner63669 now holds GPU lock and admits only the known
+managed timeout plus three clean smokes and zero bounded host Xids. First new
+stream738b5385 and unchanged fresh nbodyGUI1340+, then FurMark measurement-off1270,
+remaining19 at1280+, long CUDAclpeak1310. Product727 unchanged, Linux9+gate10/30
+already PASS. Runners saved managed-routing/run_reviewed_remaining_apps.sh and
+post_reviewed_remaining_guest.sh; log codex-reviewed-remaining.log. No hardware
+pass for corrected stream yet. Bench-only source archive738b5385 on trusted host
+/data/kf-stream-bench-738b5385, explicit product727 QEMU binary.
+
+Stock580.88 reference50 active4292, all observed passes through stream_created2nd.
+Direct corrected stream reference queued16365 after PID227144, frozen harness
+/data/kf-stream-harness-738b5385; runner stream-startup/run_native_after_rest.sh.
+Native video semaphore PASS scope remains GPU payload/tail only; event delivery
+unmeasured. Canonical combined counts remain68 clean/84 tested,53/65 Linux rows.
+No master/integration changes or full-green claim. Owner Edge black recycle
+remains open; fresh normal launch only proves welcome-window survival.
+
 ## Latest checkpoint, 2026-10-11 16:44 UTC
 
 Last pushedb03749c2; exact product72741e2b NOW hardware-verified on Linux:
