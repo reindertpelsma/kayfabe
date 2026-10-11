@@ -270,12 +270,25 @@ if [ "$TA" != 0 ] && alive; then
       Q cmd device_add '{"driver":"usb-storage","id":"kfappsusb2","bus":"xhci.0","drive":"kfapps_exfat","removable":true}' >> $O/attach.txt 2>&1
       sleep 6; gps vols.txt 'Get-Volume | Format-Table DriveLetter,FileSystemLabel,FileSystem,Size | Out-String'
       L "app disk attached: $(tr -s ' \n' ' ' < $O/attach.txt | cut -c1-200) vols: $(tr -s ' \n' ' ' < $O/vols.txt | cut -c1-300)"
+      gps wer.txt '$k="HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps"; New-Item -Path $k -Force | Out-Null; New-Item -ItemType Directory -Force -Path C:\kf\dumps | Out-Null; $a="$k\kf_glgears.exe"; New-Item -Path $a -Force | Out-Null; New-ItemProperty -Path $a -Name DumpFolder -Value "C:\kf\dumps" -PropertyType ExpandString -Force | Out-Null; New-ItemProperty -Path $a -Name DumpType -Value 1 -PropertyType DWord -Force | Out-Null; "WER armed"'
+      L "qemu.log lines before the GL tasks: $(wc -l < $RUN/qemu.log)"
       usertask kfgl kfgl.ps1
-      sleep 20; shot gl-t20; sleep 3; shot gl-t23
-      L "GL frames differ (AE): $(compare -metric AE $O/gl-t20.png $O/gl-t23.png null: 2>&1)"
+      for k in $(seq 1 36); do sleep 5; GT=30 G qga-exec powershell.exe -NoProfile -Command "if (Test-Path C:\\kf\\gl-result.txt) { Get-Content C:\\kf\\gl-result.txt }" 2>&1 | tr -d '\r' > $O/gl-result.txt; grep -q GEARS-UP $O/gl-result.txt && break; done
+      shot gl-a; sleep 3; shot gl-b; sleep 3; shot gl-c
+      L "GL frames differ (AE a/b, b/c): $(compare -metric AE $O/gl-a.png $O/gl-b.png null: 2>&1) / $(compare -metric AE $O/gl-b.png $O/gl-c.png null: 2>&1)"
       for k in $(seq 1 30); do sleep 5; GT=30 G qga-exec powershell.exe -NoProfile -Command "if (Test-Path C:\\kf\\gl-result.txt) { Get-Content C:\\kf\\gl-result.txt }" 2>&1 | tr -d '\r' > $O/gl-result.txt; grep -q DONE $O/gl-result.txt && break; done
       L "GL result: $(tr '\n' ';' < $O/gl-result.txt | cut -c1-900)"
       shot gl-final
+      L "qemu.log lines after the GL tasks: $(wc -l < $RUN/qemu.log)"
+      gps dumps.txt 'Get-ChildItem C:\kf\dumps -ErrorAction SilentlyContinue | ForEach-Object { "$($_.Name) $($_.Length)" }'
+      for f in $(grep -a -o '[A-Za-z_0-9.]*\.dmp' $O/dumps.txt | head -2); do
+        sz=$(grep -a "^$f " $O/dumps.txt | cut -d' ' -f2 | tr -d '\r'); off=0; : > $O/$f
+        while [ $off -lt $sz ]; do
+          GT=60 G qga-exec powershell.exe -NoProfile -Command "\$h=[IO.File]::OpenRead('C:\\kf\\dumps\\$f'); \$h.Seek($off,'Begin') | Out-Null; \$b=New-Object byte[] 150000; \$n=\$h.Read(\$b,0,150000); \$h.Close(); [Convert]::ToBase64String(\$b,0,\$n)" 2>&1 | tr -d '\r\n ' | base64 -d >> $O/$f 2>/dev/null
+          off=$((off+150000))
+        done
+        L "dump fetched: $f $(stat -c %s $O/$f) of $sz bytes"
+      done
     else
     ev(){ Q cmd input-send-event "{\"events\":$1}" >/dev/null 2>&1; sleep 0.15; }
     ev '[{"type":"abs","data":{"axis":"x","value":802}},{"type":"abs","data":{"axis":"y","value":4854}}]'
