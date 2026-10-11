@@ -3,6 +3,33 @@
 **STATUS: LIVE, 2026-10-11.** Product candidate `2c917f3e`, following the
 OpenGL gears fix. Results are pending; this is not a matrix pass claim.
 
+## Latest checkpoint, 2026-10-11 17:10 UTC
+
+Last confirmed push85c31c9c. Stock580.88 reference FINISHED: fresh50/50PASS,
+corrected direct CuPy per-thread stream738b5385 PASS7s(full1Mi CPU-reference
+readback, original120s), fresh frozen BlackScholes PASS. Combined latest stock
+checkpoint104/104:103PASS,1TIMEOUT(GravityMarkVK), zero recorded guest driver/reset/
+WER events in passing rows, native GSP cycles UNMEASURED. Exact harness per row
+and reproducible audit in stock_580_checkpoint.tsv/rebuild_stock_checkpoint.py.
+Evidence reference-rest/, reference-direct-stream/, reference-black-frozen/,
+reference-hf-cdp-vector/. No claim of same GPU or a single-revision sweep.
+Own Vast55385171 is now idle; back up/push then retire by this ID only.
+
+Candidate fresh nbody1341 TIMEOUT192s(supervisor deadline), GSPcycle1, host
+Xid32 at17:04:46UTC channel0x4a intr00800000. Other recorded guest driver/WER
+counters0. This is not a pass; stock GUI passes. Bounded fault correlation and
+method identification pending; public GA100 PBDMA bit23 names DEVICE/SW-method,
+application to AD104 remains inference, no offending method proven.
+Coverage63669 continues measurement-off FurMark1270 then19newrows1280+, CUDA
+clpeak1310, known nbody failure retained. Stream1340 only BOOT_FAIL due my missing
+sign-in helper, now corrected. Fresh single-stream candidate43616 queued1350+
+after remaining/event probe71386. Bench source738b5385, product727 unchanged.
+
+Native video event probe85c31c9c compiled/controller SHA saved, hardware pending
+behind same GPU lock. Existing GPU semaphore/tail PASS does not prove event
+forwarding. Canonical candidate68clean/84tested,53/65Linux rows remains previous
+snapshot until new executed rows are folded in. No full-green claim.
+
 ## Latest checkpoint, 2026-10-11 16:44 UTC
 
 Last pushedb03749c2; exact product72741e2b NOW hardware-verified on Linux:

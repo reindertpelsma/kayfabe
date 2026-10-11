@@ -1,0 +1,57 @@
+{
+ "quiet": 1,
+ "end_utc": "2026-10-11T13:46:49.4128811Z",
+ "start_utc": "2026-10-11T13:46:43.0430930Z",
+ "rc": 1,
+ "secs": 6,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4090 status=OK code=0"
+ ],
+ "digests": [],
+ "session": 0,
+ "out_files": [],
+ "boot_utc_start": "2026-10-11T12:38:54.5000000Z",
+ "log_tail": [
+  "=== hf_generate start=2026-10-11T06:46:43.0430930-07:00 host=DESKTOP-JR70RMQ session=0 boot=2026-10-11T12:38:54.5000000Z timeout=600",
+  "KFDEV NVIDIA GeForce RTX 4090",
+  "Traceback (most recent call last):",
+  "  File \"C:\\kf\\py\\kf_runpy.py\", line 22, in <module>",
+  "    runpy.run_path(script, run_name=\"__main__\")",
+  "  File \"<frozen runpy>\", line 286, in run_path",
+  "  File \"<frozen runpy>\", line 254, in _get_code_from_file",
+  "FileNotFoundError: [Errno 2] No such file or directory: 'C:\\\\kf\\\\py\\\\hf_generate.py'",
+  "=== end rc=1 secs=6 2026-10-11T06:46:49.4128811-07:00"
+ ],
+ "pdh": {
+  "pids": [
+   "2860",
+   "3568",
+   "6364"
+  ],
+  "nv": {},
+  "samples": 3,
+  "other": {},
+  "nvidia_luids": "0_5fcf"
+ },
+ "timed_out": false,
+ "token": "g1-hf_generate-1791726371",
+ "boot_utc_end": "2026-10-11T12:38:54.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "hf_generate",
+ "smi": {
+  "samples": 1,
+  "mem_used_base_mb": 209,
+  "util_max": 0,
+  "mem_used_max_mb": 209
+ }
+}

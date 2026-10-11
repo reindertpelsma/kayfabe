@@ -1,0 +1,6 @@
+=== gputest_tess start=2026-10-11T09:42:41.0169548-07:00 host=DESKTOP-JR70RMQ session=1 boot=2026-10-11T14:31:59.5000000Z timeout=100
+KFWAIT gputest_tess EXITED rc=0
+GPUTEST 2026/10/11@09:42:43(0000000002) < > GpuTest: Cross Platform Graphics Benchmark Utility
+GPUTEST 2026/10/11@09:42:43(0000000027) < > TessMark X32 - OpenGL - Renderer model: NVIDIA GeForce RTX 4090/PCIe/SSE2
+GPUTEST 2026/10/11@09:42:58(0000000032) < > [Benchmark_Score] - module: TessMark X32 - Score: 23102 points (1028x720 windowed, duration:10000 ms).
+=== end rc=0 secs=19 2026-10-11T09:42:59.7174362-07:00

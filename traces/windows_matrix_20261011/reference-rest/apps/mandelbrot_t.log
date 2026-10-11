@@ -1,0 +1,6 @@
+=== mandelbrot_t start=2026-10-11T09:47:18.3854848-07:00 host=DESKTOP-JR70RMQ session=0 boot=2026-10-11T14:31:59.5000000Z timeout=120
+KFDEV NVIDIA GeForce RTX 4090
+[eq] device NVIDIA GeForce RTX 4090 torch 2.8.0+cu126
+CHECK mandelbrot_vs_cpu ok agree=0.99962
+WINEQ_DONE mandelbrot
+=== end rc=0 secs=6 2026-10-11T09:47:24.7020790-07:00
