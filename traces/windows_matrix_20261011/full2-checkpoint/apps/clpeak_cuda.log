@@ -1,0 +1,40 @@
+=== clpeak_cuda start=2026-10-11T12:19:15.8752957+00:00 host=VASTWIN session=0 boot=2026-10-11T12:14:05.5000000Z timeout=1500
+Backend: CUDA
+  Device 0: NVIDIA GeForce RTX 4070
+    Driver version   : 13.0
+    Arch             : sm_89
+    Toolkit          : 13.4
+    SMs              : 46
+    VRAM             : 3835 MB
+
+    Single-precision compute
+      float    : 31.3 TFLOPS
+
+    Half-precision compute
+      half     : 32.1 TFLOPS
+      half2    : 32.2 TFLOPS
+
+    Double-precision compute
+      double   : 529 GFLOPS
+
+    Mixed-precision compute fp16xfp16+fp32
+      mp       : 31.6 TFLOPS
+
+    BF16 compute bf16xbf16+fp32
+      bf16     : 31.6 TFLOPS
+
+    Integer compute (32-bit IMAD)
+      int      : 16.4 TOPS
+
+    INT8 dot-product compute (__dp4a)
+      int8_dp  : 64.1 TOPS
+      int8_dp2 : 64.1 TOPS
+      int8_dp4 : 64.2 TOPS
+      int8_dp8 : 64.2 TOPS
+
+    Tensor cores (WMMA / mma.sync)
+      fp16     : 67.4 TFLOPS
+      fp16 f16acc : 132 TFLOPS
+      bf16        : 67.4 TFLOPS
+      tf32        : 33.7 TFLOPS
+=== end rc=124 secs=1501 2026-10-11T12:44:17.1714402+00:00

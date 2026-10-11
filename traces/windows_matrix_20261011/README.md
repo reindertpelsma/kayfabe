@@ -117,3 +117,23 @@ The native adapter now uses the same `GuestSession._override_tools` checksum
 verification and evidence records as kayfabe, replacing its older unchecked
 setup monkeypatch. All 71 harness tests pass. Reference execution awaits the
 verified complete app disk and a signed-in console session.
+
+## Old-product full batch checkpoint and clpeak failure
+
+At the controlled stop, `2c917f3e` has four PASS, BlackScholes FAIL, and
+`clpeak_cuda` TIMEOUT (1501 s, no guest TDR/GSP cycle). A timestamp-bounded
+kernel-journal search establishes **host Xid 109, CTX SWITCH TIMEOUT, at
+12:19:33 UTC**, about 20 s into clpeak. This is a hardware failure to diagnose,
+not evidence that the benchmark merely needs a larger budget. The old native
+baseline's CUDA clpeak PASS took 1176 s. The new driver-580.88 reference is
+being prepared for comparison.
+
+The wrapper's `dmesg` count subtraction reported `-3`: old ring entries had
+aged out, so this metric cannot establish absence of new Xids. The journal
+record in `full2-checkpoint/kernel-journal-xids.txt` corrects that accounting.
+The old driver was stopped after the clpeak result was durable; cleanup exited
+143, restored DMA-FQ, stopped its QEMUs, and reclaimed the disposable overlay.
+The copy-slicing candidate has separately passed hardware gates 9/9 plus gate
+10 with 12/12 USER births. Remaining regression and Windows results are pending.
+The next full campaign orders shorter apps first, retaining all 102 non-overlay
+tests, so the slow benchmarks do not delay other-path coverage.

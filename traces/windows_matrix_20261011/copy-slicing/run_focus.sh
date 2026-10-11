@@ -8,7 +8,7 @@ RUN=$W/codex-matrix-slice-focus-20261011
 cleanup() {
   rc=$?; trap - EXIT
   bash "$B" stop 850 || true
-  bash "$W/pti-iommu_nogdm.sh" DMA-FQ
+  bash /tmp/kf-slice-post.sh
   rm -f "$W/kf3-bins/$REV" /tmp/kf-stop-boundary-850
   echo "MATRIX_SLICE_FOCUS_EXIT=$rc at=$(date -Is)"
 }
@@ -20,7 +20,7 @@ ln -s "$W/readtrace/kf3-bins/$REV" "$W/kf3-bins/$REV"
 trap cleanup EXIT
 export KF_LOCKED=1 WIN_TRACE=0 WIN_GSP_OBSERVER=0 WIN_FLAGS= WIN_DISABLE_MPO=1
 export WIN_PRE_GUEST_CMD="bash $W/pti-iommu_nogdm.sh identity"
-export WIN_POST_GUEST_CMD="bash $W/pti-iommu_nogdm.sh DMA-FQ"
+export WIN_POST_GUEST_CMD="bash /tmp/kf-slice-post.sh"
 IFS= read -r KF_GUEST_PW < "$W/windows-desktop/secrets/win_password" || test -n "$KF_GUEST_PW"
 export KF_GUEST_PW
 bash "$TREE/scripts/bench/windows/appmatrix/run_windows_apps.sh" \
