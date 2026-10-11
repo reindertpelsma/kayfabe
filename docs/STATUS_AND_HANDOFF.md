@@ -1,5 +1,17 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-11 22:59UTC — exact refusal source Linux green; Windows1540 starts
+
+Last confirmed public pushb081f705a; private1dc9c0e unchanged. Exactb081f705a
+Linux gates9/9+gate10 PASS, USER births12/12, fast30/30 PASS, zeroFAIL/CRASH/NOTRUN.
+Windows1540 narrow registration refusal starts22:58:25UTC; no app result yet.
+Shared lock parent579162/campaign579163; root
+/var/lib/kf-windows-20261005/codex-fifo-refusal-20261011-b081f705 and log
+/var/lib/kf-windows-20261005/codex-fifo-refusal-campaign.log. Personal1380 retained;
+only completed own1490/1495/1510 test disks reclaimed after dependency checks.
+Read registration-refusal/README.md and original logs for exact evidence/guard.
+
+
 > **2026-10-10 evening, Windows integration phase: resume from `docs/HANDOFF_WINDOWS_20261010.md`** (branches, fixes with measured causes, open items, traps, how to resume).
 
 **STATUS: LIVE, 2026-10-08 — §0.0 below is the resume point.** ⊘ *The 2026-09-30 paragraph that follows is history:* **(2026-09-30)** Master = the code of **`afb552ea`** (`v3-mc23`: CUDA dynamic parallelism +

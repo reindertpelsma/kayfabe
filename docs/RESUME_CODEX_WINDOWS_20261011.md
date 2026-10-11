@@ -1,6 +1,6 @@
 # Resume the Windows matrix and GravityMark Vulkan investigation
 
-**STATUS: LIVE, 2026-10-11 22:52 UTC.** Compact entry point for a new chat.
+**STATUS: LIVE, 2026-10-11 22:59 UTC.** Compact entry point for a new chat.
 Historical chronology is in [HANDOFF_FOR_CODEX_20261011.md](HANDOFF_FOR_CODEX_20261011.md).
 Read the current checkpoint here before treating an older pending/result paragraph
 in that chronology as current state.
@@ -8,7 +8,7 @@ in that chronology as current state.
 ## Branches and checkout
 
 Public repository: <https://github.com/reindertpelsma/kayfabe>.
-Branch: **`codex/windows-matrix-20261011`**. Last confirmed push **0e8d4ba62**,
+Branch: **`codex/windows-matrix-20261011`**. Last confirmed push **b081f705a**,
 containing reviewed source89e8ddf8b with161 GPU-free tests. Newer documentation checkpoints
 must not inherit exact-revision hardware claims automatically.
 Use the branch tip to get this document and the complete reachable source history.
@@ -79,9 +79,21 @@ retained; corrected exact suite alone supplies30/30. Original allocator queue
 cancelled while waiting, not a pass. Campaign log `$W/codex-late-fifo-campaign.log`.
 
 Kayfabe/VFIO cannot run simultaneously. After stop require noQEMU, group11
-DMA-FQ, remove /tmp/kf-stop-winprod; keep /var/lib above100GiB (108GiB at22:31; reclaim only own disposable test overlays before another run).
+DMA-FQ, remove /tmp/kf-stop-winprod; keep /var/lib above100GiB (129GiB at22:56 after reclaiming completed own1490/1495/1510 test overlays).
 No host compilation during guest timing. No Vast instance remains rented by
 this session. Vast is untrusted: no secrets; rentals need vms_enabled=true/KVM.
+
+
+## UPDATE 2026-10-11 22:59UTC — exact refusal source Linux green; Windows1540 starts
+
+Last confirmed public pushb081f705a; private1dc9c0e unchanged. Exactb081f705a
+Linux gates9/9+gate10 PASS, USER births12/12, fast30/30 PASS, zeroFAIL/CRASH/NOTRUN.
+Windows1540 narrow registration refusal starts22:58:25UTC; no app result yet.
+Shared lock parent579162/campaign579163; root
+/var/lib/kf-windows-20261005/codex-fifo-refusal-20261011-b081f705 and log
+/var/lib/kf-windows-20261005/codex-fifo-refusal-campaign.log. Personal1380 retained;
+only completed own1490/1495/1510 test disks reclaimed after dependency checks.
+Read registration-refusal/README.md and original logs for exact evidence/guard.
 
 ## What passes, and what remains open
 
@@ -141,14 +153,14 @@ is not Translated, so the proposed Translated-only fix is inapplicable.
 Public source clears PBDMA interrupt BEFORE FIFO update execution.
 
 Exact89e8ddf8 Linux9+10/fast30 PASS; Windows1495control FAIL772s/Xid32 and
-1510probe TIMEOUT602s/Xid32. Campaign complete, no GPU job currently running.
+1510probe TIMEOUT602s/Xid32. Prior campaign complete; new refusal campaign now holds the shared lock.
 Default-off bounded late sampler is diagnostic only; independent review and
 161 GPU-free tests passed. Full results in late-fifo-89e8ddf8/README.md.
 
 Next experiment prepared: `KF3_WIN_REFUSE_PT_FIFO_UPDATE=1`, default OFF,
 returns NOT_SUPPORTED only to FIFO-update registrations on live Passthrough
 user-work parents; leaves5080 and other APIs intact. Native answers OK, so
-this is a deliberate compatibility divergence. No Windows fallback measured
+this is a deliberate compatibility divergence. Exact refusal source b081f705a passes Linux9+10/30; Windows1540 now starts. No Windows fallback measured
 yet. See registration-refusal/README.md for hypothesis/falsifier, bounds,
 validation and no-implementation decision guard. Personal1380 is preserved;
 tests use disposable overlays. Native absence of a later plain RmControl does

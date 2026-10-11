@@ -1,6 +1,6 @@
 # Passthrough FIFO-update registration refusal
 
-STATUS: RESEARCH, 2026-10-11 22:52UTC. Prepared default-off diagnostic; Windows result pending.
+STATUS: RESEARCH, 2026-10-11 22:59UTC. Default-off diagnostic; exact Linux PASS, Windows1540 pending.
 
 ## Hypothesis and falsifier, before hardware
 
@@ -70,3 +70,17 @@ operands); optional validated host-patch tier; or partial clean-refusal scope.
 Registration already occurs after scheduling and4096+ submissions, so it is too
 late to convert this channel. No cost estimate exists yet. Preserve personal
 manual1380 image chain; use disposable baseline-backed test overlays.
+
+## Exact-revision hardware checkpoint, 2026-10-11 22:59UTC
+
+Published product b081f705a7502380d584f37ab7da80e668f5018f; isolated host
+worktree /data/kf-fifo-refusal-host-b081f705, unique Cargo target. Linux gates9/9,
+gate10 PASS, USER births12/12; raw client and fast guest rebuilt; fast30/30 PASS,
+zero FAIL/CRASH/NOTRUN, at22:58:25UTC. Binary SHA and original logs in linux-result.
+Windows1540 starts next under the same GPU lock; app verdict pending.
+Runner/start/falsifiers archived in run_campaign.sh. Do not replay completed IDs.
+
+Reclaimed only completed own disposable1490/1495/1510 disks after checking162
+qcow2 headers for backing dependencies (see overlay-cleanup-summary.json).
+Personal1380 original, baseline parent and personal writable child retained.
+Host129GiB free before Windows. This is storage cleanup, not image validation.

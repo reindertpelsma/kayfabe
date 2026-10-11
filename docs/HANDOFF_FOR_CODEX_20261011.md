@@ -1,5 +1,17 @@
 # Handoff for a different agent (Codex or any fresh agent), 2026-10-11
 
+## UPDATE 2026-10-11 22:59UTC — exact refusal source Linux green; Windows1540 starts
+
+Last confirmed public pushb081f705a; private1dc9c0e unchanged. Exactb081f705a
+Linux gates9/9+gate10 PASS, USER births12/12, fast30/30 PASS, zeroFAIL/CRASH/NOTRUN.
+Windows1540 narrow registration refusal starts22:58:25UTC; no app result yet.
+Shared lock parent579162/campaign579163; root
+/var/lib/kf-windows-20261005/codex-fifo-refusal-20261011-b081f705 and log
+/var/lib/kf-windows-20261005/codex-fifo-refusal-campaign.log. Personal1380 retained;
+only completed own1490/1495/1510 test disks reclaimed after dependency checks.
+Read registration-refusal/README.md and original logs for exact evidence/guard.
+
+
 
 ## UPDATE 2026-10-11 22:54UTC — narrow refusal prepared
 
