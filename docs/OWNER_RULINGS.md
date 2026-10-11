@@ -1150,3 +1150,13 @@ HDR on the console) falls under "works without".
   verification item and confirmed from those sources or by measurement before code depends on it.
 - To do: one lawyer review of the provenance page and of the overall reverse-engineering position before the public release; a sweep of the full
   git history for analysis material and closed-binary offsets (release gate).
+
+## §AH. Per-die constants: the tier order and the per-die default, 2026-10-11
+
+**STATUS: LIVE, 2026-10-11 (owner statements; recorded by the coordinator, wording to be confirmed by the owner).**
+- **Tier order** for any value that is not derived: (1) derive/compute (ogkm incl. generated and Windows-specific code, nouveau/nova, other open
+  projects, kayfabe state); (2) unprivileged host ioctl at startup; (3) **privileged measurement in a sweep** (root script, kernel module, hardware
+  access) before any reverse engineering; (4) reverse engineering, only for the residue. An item moves down a tier only with a written reason.
+- **Unknown things are not assumed to be per family** (owner): the default is measured per die and per firmware/driver branch; a family rule needs
+  every measured die to agree plus a mechanism; an unmeasured die or branch gets the clean fallback, never a neighbour's row.
+- The strategy, plan and unverified assumptions: `docs/design/V3_CONSTANT_STRATEGY.md`.
