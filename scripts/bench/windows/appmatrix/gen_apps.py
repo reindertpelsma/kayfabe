@@ -85,7 +85,8 @@ DEMO = r'$d = "$K\cuda_demo\demo_suite"' + "\n"
 app("deviceQuery_demo", "cuda-demo", DEMO + r"""Invoke-KfExe -Exe "$d\deviceQuery.exe" -Cwd $d
 exit $global:KfRc""", r"Result = PASS", 60, 3, [OUT_NV], *W_COMPUTE_SMALL, linux=["deviceQuery"], pkgs=("cuda_demo_suite", "vc_redist"))
 app("vectorAdd_demo", "cuda-demo", DEMO + r"""Invoke-KfExe -Exe "$d\vectorAdd.exe" -Cwd $d
-exit $global:KfRc""", r"Test PASSED", 60, 3, [GPU_ENG, r"smi"], *W_COMPUTE_SMALL, linux=["vectorAdd"], pkgs=("cuda_demo_suite", "vc_redist"))
+exit $global:KfRc""", r"Test PASSED", 60, 3, ["cuda-vectoradd-readback", GPU_ENG, r"smi"], *W_COMPUTE_SMALL, linux=["vectorAdd"], pkgs=("cuda_demo_suite", "vc_redist"),
+    note="Public CUDA sample's launch, synchronous DtoH and full element check plus healthy NVIDIA adapter prove GPU execution; PDH/SMI may miss this short kernel")
 app("bandwidthTest_demo", "cuda-demo", DEMO + r"""Invoke-KfExe -Exe "$d\bandwidthTest.exe" -ArgList @('--memory=pinned') -Cwd $d
 exit $global:KfRc""", r"Result = PASS", 120, 15, [OUT_NV, GPU_ENG], *W_COMPUTE_BIG, linux=["bandwidthTest"], pkgs=("cuda_demo_suite", "vc_redist"))
 app("nbody_demo_bench", "cuda-demo", DEMO + r"""Invoke-KfExe -Exe "$d\nbody.exe" -ArgList @('-benchmark', '-numbodies=32768') -Cwd $d
@@ -189,6 +190,15 @@ app("llama_vulkan_bench", "llm", MODEL + r"""Invoke-KfExe -Exe "$K\llama_vulkan\
 exit $global:KfRc""", r"tg64", 900, 90, [r"out:Vulkan|NVIDIA", GPU_ENG], "high",
     "Vulkan compute (not CUDA) with 1.5 GiB device-local buffers and many dispatches: the Vulkan queue family/ICD path of the Windows driver",
     pkgs=("llama_vulkan", "qwen_gguf", "vc_redist"))
+
+# Offline model and wheel additions need a newly built app disk; the old image
+# remains usable for existing tests but does not contain these packages.
+app("hf_generate", "ai", r"$env:HF_MODEL = 'C:\kfapps\models\Qwen2-0.5B-Instruct'" + "\n"
+    + r"$env:HF_HUB_OFFLINE = '1'; $env:TRANSFORMERS_OFFLINE = '1'" + "\n" + py("hf_generate.py"),
+    r"^CHECK hf_generate ok", 600, 90, [r"out:HF_DEVICE .*NVIDIA", GPU_ENG], "high",
+    "Pinned Qwen2-0.5B-Instruct, full FP16 CUDA model, same prompt and greedy 64-token generation as Linux; offline local files only",
+    linux=["hf_generate"], pkgs=PYPK + ("hf_wheels", "hf_model"), digest=True,
+    note="Packaging prepared 2026-10-11; native/kayfabe GPU execution and token digest parity pending")
 
 # ---------------------------------------------------------------------------------------------- F. Vulkan
 app("vulkaninfo", "vulkan", r"""Invoke-KfExe -Exe "$K\vulkan_rt\x64\vulkaninfo.exe" -ArgList @('--summary')
@@ -420,7 +430,6 @@ for mode, linux_row in (("callback", "simpleCallback"), ("occupancy", "simpleOcc
 NO_EQUIVALENT = {
     "simpleIPC": "CUDA IPC (cudaIpcGetMemHandle) is not supported on WDDM Windows (TCC/Linux only)",
     "cdpSimpleQuicksort": "dynamic parallelism needs relocatable device code linked with cudadevrt; no prebuilt Windows binary and no NVRTC route without nvcc/MSVC",
-    "hf_generate": "dropped for size: transformers + tokenizers wheels and a 1 GB fp16 model; torch_correct/torch_ai_bench and the llama.cpp rows cover the same stacks",
     "geekbench_gpu": "Geekbench needs the internet to upload results (the Linux pass string is 'Uploading results'); the lane forbids guest internet at run time",
 }
 

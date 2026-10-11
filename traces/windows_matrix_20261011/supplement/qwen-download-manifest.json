@@ -1,0 +1,54 @@
+{
+  "model": "Qwen/Qwen2-0.5B-Instruct",
+  "revision": "c540970f9e29518b1d8f06ab8b24cba66ad77b6d",
+  "files": [
+    {
+      "name": "LICENSE",
+      "url": "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct/resolve/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/LICENSE",
+      "size": 11344,
+      "sha256": "c156170b718ec29139d3653d40ed1986fd92fb7e0959b5c71f3c48f62e6636f4"
+    },
+    {
+      "name": "config.json",
+      "url": "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct/resolve/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/config.json",
+      "size": 659,
+      "sha256": "168aa1bd401abc3bc262ba15ba4e499627a8b4e006e9d050b47c22de20660185"
+    },
+    {
+      "name": "generation_config.json",
+      "url": "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct/resolve/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/generation_config.json",
+      "size": 242,
+      "sha256": "e558847a8b4402616f1273797b015104dc266fe4b520056fca88823ba8f8ebe6"
+    },
+    {
+      "name": "merges.txt",
+      "url": "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct/resolve/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/merges.txt",
+      "size": 1671839,
+      "sha256": "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3"
+    },
+    {
+      "name": "model.safetensors",
+      "url": "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct/resolve/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/model.safetensors",
+      "size": 988097824,
+      "sha256": "130282af0dfa9fe5840737cc49a0d339d06075f83c5a315c3372c9a0740d0b96"
+    },
+    {
+      "name": "tokenizer.json",
+      "url": "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct/resolve/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/tokenizer.json",
+      "size": 7028015,
+      "sha256": "f7c9b2dba4a296b1aa76c16a34b8225c0c118978400d4bb66bff0902d702f5b8"
+    },
+    {
+      "name": "tokenizer_config.json",
+      "url": "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct/resolve/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/tokenizer_config.json",
+      "size": 1287,
+      "sha256": "482bd979881423375ca5414e4e0d94cd7c5349dbb17fffd46b4d36d71e62a1bc"
+    },
+    {
+      "name": "vocab.json",
+      "url": "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct/resolve/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/vocab.json",
+      "size": 2776833,
+      "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910"
+    }
+  ]
+}

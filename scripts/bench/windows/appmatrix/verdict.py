@@ -21,9 +21,9 @@ OTHER_ADAPTER_MAX = 1.0        # percent on a non-NVIDIA LUID before it counts a
 
 
 def parse_proof(p):
-    """'out:<regex>' | 'pdh:<engine regex>' | 'smi' -> (kind, arg)"""
-    if p == "smi":
-        return "smi", ""
+    """'out:<regex>' | 'pdh:<engine regex>' | 'smi' | 'cuda-vectoradd-readback' -> (kind, arg)"""
+    if p in ("smi", "cuda-vectoradd-readback"):
+        return p, ""
     kind, _, arg = p.partition(":")
     if kind not in ("out", "pdh"):
         raise ValueError(f"unknown proof kind {p!r}")
@@ -44,6 +44,21 @@ def eval_proof(proofs, log, facts):
             # Get-Counter lower-cases the instance names (engtype_3D arrives as "3d"): match the engine type case-insensitively
             hit = sorted(e for e, v in pdh.items() if re.search(arg, e, re.I) and v and float(v) >= ENGINE_MIN_UTIL)
             (held if hit else missed).append(f"pdh:{'+'.join(hit) if hit else arg}")
+        elif kind == "cuda-vectoradd-readback":
+            # NVIDIA cuda-samples v12.9, vectorAdd.cu: the CUDA launch and
+            # synchronous DtoH copy must succeed before all 50000 elements are
+            # checked. CUDA has no WARP/CPU backend. This narrow oracle avoids
+            # missing a submillisecond kernel between PDH/SMI samples.
+            # https://github.com/NVIDIA/cuda-samples/blob/v12.9/Samples/0_Introduction/vectorAdd/vectorAdd.cu
+            sequence = (r"(?s)\[Vector addition of 50000 elements\].*?"
+                        r"Copy input data from the host memory to the CUDA device.*?"
+                        r"CUDA kernel launch with 196 blocks of 256 threads.*?"
+                        r"Copy output data from the CUDA device to the host memory.*?"
+                        r"Test PASSED\r?\nDone")
+            healthy_nv = any(re.fullmatch(r"NVIDIA .+ status=OK code=0", str(d))
+                             for d in facts.get("gpu_devices", []))
+            ok = healthy_nv and re.search(sequence, log) is not None
+            (held if ok else missed).append(kind)
         else:
             base = smi.get("mem_used_base_mb")
             mem = (smi.get("mem_used_max_mb") or 0) - (base or 0) if base is not None else 0

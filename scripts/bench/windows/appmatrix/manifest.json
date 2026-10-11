@@ -784,6 +784,223 @@
     }
    ],
    "note": "installed by kf_guest_setup before any other package; the permalink moves with each VC++ release, so the pinned sha256 will mismatch after Microsoft updates it (re-pin deliberately)"
+  },
+  {
+   "id": "hf_wheels",
+   "title": "Offline transformers 4.57.1 and additional CPython 3.12 Windows dependencies",
+   "version": "4.57.1 with pinned dependency wheels",
+   "tier": 1,
+   "license": "Apache-2.0/BSD/MIT/PSF per wheel metadata",
+   "redistribution": "Redistributable open-source wheels; existing shared wheel versions remain unchanged",
+   "stage": {
+    "mode": "wheels",
+    "dest": "py\\Lib\\site-packages"
+   },
+   "files": [
+    {
+     "name": "certifi-2026.7.22-py3-none-any.whl",
+     "url": "https://files.pythonhosted.org/packages/0b/a7/71ac2cff56fec219ed242bb11b8efb69fcc4bec75db06fb7bfe35de520e6/certifi-2026.7.22-py3-none-any.whl",
+     "sha256": "62f22742b58a1a33014a2b6b706588a8d7e2a88ae7bd1a6ebe8c992928483775",
+     "size": 136983,
+     "http": 200,
+     "head_length": 136983,
+     "verified_utc": "2026-10-11T13:29:46Z"
+    },
+    {
+     "name": "charset_normalizer-3.5.2-cp312-cp312-win_amd64.whl",
+     "url": "https://files.pythonhosted.org/packages/eb/e6/e6e083884cbcfd49c64865af05027fe7011be7b2d9179524f099a1b611f3/charset_normalizer-3.5.2-cp312-cp312-win_amd64.whl",
+     "sha256": "780fbe7cab297b81dad9fb8dc5eb003c0468ffb0d9e5f65068c53a34661a96bc",
+     "size": 207486,
+     "http": 200,
+     "head_length": 207486,
+     "verified_utc": "2026-10-11T13:29:46Z"
+    },
+    {
+     "name": "hf_xet-1.7.0-cp38-abi3-win_amd64.whl",
+     "url": "https://files.pythonhosted.org/packages/4d/59/b35106dfa71b6eef605dc88bd038fe99c7f86fb132a15b60d0bf2f235b2c/hf_xet-1.7.0-cp38-abi3-win_amd64.whl",
+     "sha256": "2b7bb5727889b0f2436dbaaad8fc4c3e66b8240d992716989e0c086b4278b1bc",
+     "size": 3822644,
+     "http": 200,
+     "head_length": 3822644,
+     "verified_utc": "2026-10-11T13:29:46Z"
+    },
+    {
+     "name": "huggingface_hub-0.36.2-py3-none-any.whl",
+     "url": "https://files.pythonhosted.org/packages/a8/af/48ac8483240de756d2438c380746e7130d1c6f75802ef22f3c6d49982787/huggingface_hub-0.36.2-py3-none-any.whl",
+     "sha256": "48f0c8eac16145dfce371e9d2d7772854a4f591bcb56c9cf548accf531d54270",
+     "size": 566395,
+     "http": 200,
+     "head_length": 566395,
+     "verified_utc": "2026-10-11T13:29:46Z"
+    },
+    {
+     "name": "idna-3.20-py3-none-any.whl",
+     "url": "https://files.pythonhosted.org/packages/58/a2/bb081bab032533a855d44de1d56f8e8426114ff1ba5d1f07a438a0a654f8/idna-3.20-py3-none-any.whl",
+     "sha256": "ab7ae7122974553370f0bdb919e1a960b2cd1bc1ef0276416d896db81c14582c",
+     "size": 69583,
+     "http": 200,
+     "head_length": 69583,
+     "verified_utc": "2026-10-11T13:29:46Z"
+    },
+    {
+     "name": "pyyaml-6.0.3-cp312-cp312-win_amd64.whl",
+     "url": "https://files.pythonhosted.org/packages/86/bf/899e81e4cce32febab4fb42bb97dcdf66bc135272882d1987881a4b519e9/pyyaml-6.0.3-cp312-cp312-win_amd64.whl",
+     "sha256": "5fcd34e47f6e0b794d17de1b4ff496c00986e1c83f7ab2fb8fcfe9616ff7477b",
+     "size": 154003,
+     "http": 200,
+     "head_length": 154003,
+     "verified_utc": "2026-10-11T13:29:46Z"
+    },
+    {
+     "name": "regex-2026.9.29-cp312-cp312-win_amd64.whl",
+     "url": "https://files.pythonhosted.org/packages/93/19/489bc8db91196381c935752df01ba3f607140daece33b78d88573f028e64/regex-2026.9.29-cp312-cp312-win_amd64.whl",
+     "sha256": "fdd88ed5e20b1bcdd234421e454962c971aa44b653bdb7f1ea9ef683e90fb649",
+     "size": 280334,
+     "http": 200,
+     "head_length": 280334,
+     "verified_utc": "2026-10-11T13:29:46Z"
+    },
+    {
+     "name": "requests-2.34.2-py3-none-any.whl",
+     "url": "https://files.pythonhosted.org/packages/a0/f4/c67b0b3f1b9245e8d266f0f112c500d50e5b4e83cb6f3b71b6528104182a/requests-2.34.2-py3-none-any.whl",
+     "sha256": "2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0",
+     "size": 73075,
+     "http": 200,
+     "head_length": 73075,
+     "verified_utc": "2026-10-11T13:29:46Z"
+    },
+    {
+     "name": "safetensors-0.8.0-cp310-abi3-win_amd64.whl",
+     "url": "https://files.pythonhosted.org/packages/1b/6d/3fba214c1e5e0f69991677ec3bc17023f0421776975e1de0c682dca475e2/safetensors-0.8.0-cp310-abi3-win_amd64.whl",
+     "sha256": "096ec1a98435df7beb08853bb5aa9081a84f23d0adc67ed1a0a10550f608373f",
+     "size": 355540,
+     "http": 200,
+     "head_length": 355540,
+     "verified_utc": "2026-10-11T13:29:46Z"
+    },
+    {
+     "name": "tokenizers-0.22.2-cp39-abi3-win_amd64.whl",
+     "url": "https://files.pythonhosted.org/packages/65/71/0670843133a43d43070abeb1949abfdef12a86d490bea9cd9e18e37c5ff7/tokenizers-0.22.2-cp39-abi3-win_amd64.whl",
+     "sha256": "c9ea31edff2968b44a88f97d784c2f16dc0729b8b143ed004699ebca91f05c48",
+     "size": 2747786,
+     "http": 200,
+     "head_length": 2747786,
+     "verified_utc": "2026-10-11T13:29:46Z"
+    },
+    {
+     "name": "tqdm-4.70.1-py3-none-any.whl",
+     "url": "https://files.pythonhosted.org/packages/a7/03/921a3d3c75785aca9ebfbfcabfbc3a1be12e2ab5265deb026d55a5a3f83e/tqdm-4.70.1-py3-none-any.whl",
+     "sha256": "c293e525e6fef9c20e8728fd4612df02a0aa31bb5fe91ecd93e123b1b7bffa73",
+     "size": 80199,
+     "http": 200,
+     "head_length": 80199,
+     "verified_utc": "2026-10-11T13:29:46Z"
+    },
+    {
+     "name": "transformers-4.57.1-py3-none-any.whl",
+     "url": "https://files.pythonhosted.org/packages/71/d3/c16c3b3cf7655a67db1144da94b021c200ac1303f82428f2beef6c2e72bb/transformers-4.57.1-py3-none-any.whl",
+     "sha256": "b10d05da8fa67dc41644dbbf9bc45a44cb86ae33da6f9295f5fbf5b7890bd267",
+     "size": 11990925,
+     "http": 200,
+     "head_length": 11990925,
+     "verified_utc": "2026-10-11T13:29:46Z"
+    },
+    {
+     "name": "urllib3-2.8.0-py3-none-any.whl",
+     "url": "https://files.pythonhosted.org/packages/92/9d/c4e665119135114480843e7ab388fa94d8480650450e6f8e26b70d323a4c/urllib3-2.8.0-py3-none-any.whl",
+     "sha256": "0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3",
+     "size": 135717,
+     "http": 200,
+     "head_length": 135717,
+     "verified_utc": "2026-10-11T13:29:46Z"
+    }
+   ]
+  },
+  {
+   "id": "hf_model",
+   "title": "Qwen2-0.5B-Instruct offline model/tokenizer",
+   "version": "c540970f9e29518b1d8f06ab8b24cba66ad77b6d",
+   "tier": 1,
+   "license": "Apache-2.0 (LICENSE included)",
+   "redistribution": "Redistributable under Apache-2.0",
+   "stage": {
+    "mode": "copy",
+    "dest": "models\\Qwen2-0.5B-Instruct"
+   },
+   "files": [
+    {
+     "name": "LICENSE",
+     "url": "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct/resolve/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/LICENSE",
+     "size": 11344,
+     "sha256": "c156170b718ec29139d3653d40ed1986fd92fb7e0959b5c71f3c48f62e6636f4",
+     "http": 200,
+     "head_length": 11344,
+     "verified_utc": "2026-10-11T13:29:46Z"
+    },
+    {
+     "name": "config.json",
+     "url": "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct/resolve/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/config.json",
+     "size": 659,
+     "sha256": "168aa1bd401abc3bc262ba15ba4e499627a8b4e006e9d050b47c22de20660185",
+     "http": 200,
+     "head_length": 659,
+     "verified_utc": "2026-10-11T13:29:46Z"
+    },
+    {
+     "name": "generation_config.json",
+     "url": "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct/resolve/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/generation_config.json",
+     "size": 242,
+     "sha256": "e558847a8b4402616f1273797b015104dc266fe4b520056fca88823ba8f8ebe6",
+     "http": 200,
+     "head_length": 242,
+     "verified_utc": "2026-10-11T13:29:46Z"
+    },
+    {
+     "name": "merges.txt",
+     "url": "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct/resolve/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/merges.txt",
+     "size": 1671839,
+     "sha256": "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3",
+     "http": 200,
+     "head_length": 1671839,
+     "verified_utc": "2026-10-11T13:29:46Z"
+    },
+    {
+     "name": "model.safetensors",
+     "url": "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct/resolve/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/model.safetensors",
+     "size": 988097824,
+     "sha256": "130282af0dfa9fe5840737cc49a0d339d06075f83c5a315c3372c9a0740d0b96",
+     "http": 200,
+     "head_length": 988097824,
+     "verified_utc": "2026-10-11T13:29:46Z"
+    },
+    {
+     "name": "tokenizer.json",
+     "url": "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct/resolve/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/tokenizer.json",
+     "size": 7028015,
+     "sha256": "f7c9b2dba4a296b1aa76c16a34b8225c0c118978400d4bb66bff0902d702f5b8",
+     "http": 200,
+     "head_length": 7028015,
+     "verified_utc": "2026-10-11T13:29:46Z"
+    },
+    {
+     "name": "tokenizer_config.json",
+     "url": "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct/resolve/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/tokenizer_config.json",
+     "size": 1287,
+     "sha256": "482bd979881423375ca5414e4e0d94cd7c5349dbb17fffd46b4d36d71e62a1bc",
+     "http": 200,
+     "head_length": 1287,
+     "verified_utc": "2026-10-11T13:29:46Z"
+    },
+    {
+     "name": "vocab.json",
+     "url": "https://huggingface.co/Qwen/Qwen2-0.5B-Instruct/resolve/c540970f9e29518b1d8f06ab8b24cba66ad77b6d/vocab.json",
+     "size": 2776833,
+     "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910",
+     "http": 200,
+     "head_length": 2776833,
+     "verified_utc": "2026-10-11T13:29:46Z"
+    }
+   ]
   }
  ],
  "dropped": [

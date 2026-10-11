@@ -49,6 +49,18 @@ Do not run competing GPU work or reboot this reference. Back up completed result
 retire only our55385171 when no longer needed; never act on owner's crashed55384005.
 The full 102 non-overlay Windows tests and eight separate overlay tests remain incomplete.
 
+Latest13:33UTC: full102 non-overlay campaign active, runs860+, product0f9c01f9,
+frozen harness8037e19b, results `codex-matrix-slice-full-20261011`, log
+`codex-copy-slice-full.log`. First16:15PASS and vectorAdd FAIL/no-gpu-proof;
+stock580.88 reproduces the vectorAdd proof miss despite correct CUDA results.
+Source-backed narrow CUDA readback oracle prepared with negative tests; active
+harness unchanged. Stock clpeak CUDA PASS906s, archived in `reference-clpeak/`.
+Stock GravityMark Vulkan retry is active, results `vector-gravity/` on controller.
+HF packaging addition prepares111-test/68-row inventory (running lane stays110/102);
+model revision/hashes and extra wheels pinned, existing shared wheels unchanged.
+Addon ISO `/data/kf-matrix-supplement/addon-image/kfapps.iso` is reproducible;
+not yet uploaded or executed. All73 harness tests PASS.
+
 ## OpenGL continuation, 2026-10-11 13:19 CEST
 
 **Gears passes on candidate `2c917f3e`, branch `codex/opengl-gears-20261011`.** The boot

@@ -21,6 +21,25 @@ class Verdicts(unittest.TestCase):
         self.assertIn("out", d["proof"])
         self.assertIn("pdh:Compute_0", d["proof"])
 
+    def test_short_cuda_vectoradd_readback_proves_work_between_samples(self):
+        log = ("[Vector addition of 50000 elements]\n"
+               "Copy input data from the host memory to the CUDA device\n"
+               "CUDA kernel launch with 196 blocks of 256 threads\n"
+               "Copy output data from the CUDA device to the host memory\n"
+               "Test PASSED\nDone\n")
+        app = dict(APP, rx="Test PASSED", proof=["cuda-vectoradd-readback"])
+        f = facts(pdh=dict(nv={}, other={}), gpu_devices=["NVIDIA GeForce RTX 4070 status=OK code=0"])
+        self.assertEqual(V.decide(app, f, log)["verdict"], "PASS")
+        for devices in ([], ["Microsoft Basic Render Driver status=OK code=0"],
+                        ["NVIDIA GeForce RTX 4070 status=OK code=43"]):
+            self.assertEqual(V.decide(app, dict(f, gpu_devices=devices), log)["verdict"], "FAIL")
+        for omitted in ("CUDA kernel launch with 196 blocks of 256 threads\n",
+                        "Copy output data from the CUDA device to the host memory\n"):
+            self.assertEqual(V.decide(app, f, log.replace(omitted, ""))["verdict"], "FAIL")
+        self.assertEqual(V.decide(app, dict(f, rc=1), log)["verdict"], "FAIL")
+        self.assertEqual(V.decide(app, f, log + "CHECK vectorAdd FAIL\n")["verdict"], "FAIL")
+        self.assertEqual(V.decide(app, dict(f, pdh=dict(nv={}, other={"3d": 10})), log)["verdict"], "FAIL")
+
     def test_rc_nonzero_is_fail(self):
         d = V.decide(APP, facts(rc=1), "NVIDIA\nDONE\n")
         self.assertEqual(d["verdict"], "FAIL")

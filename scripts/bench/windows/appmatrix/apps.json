@@ -1621,6 +1621,40 @@
    "cmd": "Heaven.exe -project_name Heaven -data_path ../ -engine_config ../data/heaven_4.0.cfg -system_script heaven/unigine.cpp -sound_app null -video_app opengl -video_multisample 0 -video_fullscreen 0 -video_mode -1 -video_width 1280 -video_height 720 -extern_define RELEASE,QUALITY_MEDIUM"
   },
   {
+   "id": "hf_generate",
+   "category": "ai",
+   "linux": [
+    "hf_generate"
+   ],
+   "pkgs": [
+    "python_embed",
+    "pywheels",
+    "vc_redist",
+    "hf_wheels",
+    "hf_model"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 600,
+   "expect_s": 90,
+   "rx": "^CHECK hf_generate ok",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "out:HF_DEVICE .*NVIDIA",
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "high",
+   "why": "Pinned Qwen2-0.5B-Instruct, full FP16 CUDA model, same prompt and greedy 64-token generation as Linux; offline local files only",
+   "ps": "$env:HF_MODEL = 'C:\\kfapps\\models\\Qwen2-0.5B-Instruct'\n$env:HF_HUB_OFFLINE = '1'; $env:TRANSFORMERS_OFFLINE = '1'\nInvoke-KfExe -Exe $PY -ArgList ($PYA + @('C:\\kf\\py\\kf_runpy.py', 'C:\\kf\\py\\hf_generate.py'))\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": "Packaging prepared 2026-10-11; native/kayfabe GPU execution and token digest parity pending",
+   "digest": true,
+   "smi": true,
+   "nvidia_only": true,
+   "cmd": "python hf_generate.py"
+  },
+  {
    "id": "hist_t",
    "category": "cuda-equiv",
    "linux": [
@@ -3133,6 +3167,7 @@
    "rx": "Test PASSED",
    "fail_rx": "^CHECK .*FAIL",
    "proof": [
+    "cuda-vectoradd-readback",
     "pdh:Cuda|Compute|3D|Copy",
     "smi"
    ],
@@ -3141,7 +3176,7 @@
    "ps": "$d = \"$K\\cuda_demo\\demo_suite\"\nInvoke-KfExe -Exe \"$d\\vectorAdd.exe\" -Cwd $d\nexit $global:KfRc\n",
    "kill_names": [],
    "screenshot_s": null,
-   "note": null,
+   "note": "Public CUDA sample's launch, synchronous DtoH and full element check plus healthy NVIDIA adapter prove GPU execution; PDH/SMI may miss this short kernel",
    "digest": false,
    "smi": true,
    "nvidia_only": true,
@@ -3379,6 +3414,9 @@
   "hashcat": [
    "hashcat"
   ],
+  "hf_generate": [
+   "hf_generate"
+  ],
   "histogram": [
    "hist_t"
   ],
@@ -3509,7 +3547,6 @@
  "no_equivalent": {
   "simpleIPC": "CUDA IPC (cudaIpcGetMemHandle) is not supported on WDDM Windows (TCC/Linux only)",
   "cdpSimpleQuicksort": "dynamic parallelism needs relocatable device code linked with cudadevrt; no prebuilt Windows binary and no NVRTC route without nvcc/MSVC",
-  "hf_generate": "dropped for size: transformers + tokenizers wheels and a 1 GB fp16 model; torch_correct/torch_ai_bench and the llama.cpp rows cover the same stacks",
   "geekbench_gpu": "Geekbench needs the internet to upload results (the Linux pass string is 'Uploading results'); the lane forbids guest internet at run time"
  }
 }
