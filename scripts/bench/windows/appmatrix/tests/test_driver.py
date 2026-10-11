@@ -8,6 +8,8 @@ import os
 import re
 import tempfile
 import unittest
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 import helpers as H
 import winapps
@@ -36,6 +38,37 @@ def res(d, name="win.res"):
 
 def slog(d):
     return open(os.path.join(d, "session.log")).read()
+
+
+class ToolOverrides(unittest.TestCase):
+    def test_truncated_guest_upload_is_a_boot_failure(self):
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, "kf_probe.exe"), "wb") as f:
+                f.write(b"MZcomplete-build")
+            g = object.__new__(winapps.GuestSession)
+            g.cfg = SimpleNamespace(override_dir=d)
+            g.q = Mock()
+            g.q.exec.return_value = SimpleNamespace(exitcode=0, text=lambda: "wrong-sha256")
+            g.dir, g.tag, g.log = d, "g1", Mock()
+            with self.assertRaisesRegex(winapps.GuestFailure, "checksum mismatch"):
+                g._override_tools()
+            self.assertFalse(os.path.exists(os.path.join(d, "tool-overrides.json")))
+
+    def test_successful_guest_upload_records_exact_build_hash(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as d:
+            data = b"MZcomplete-build"
+            with open(os.path.join(d, "kf_probe.exe"), "wb") as f:
+                f.write(data)
+            g = object.__new__(winapps.GuestSession)
+            g.cfg = SimpleNamespace(override_dir=d)
+            g.q = Mock()
+            digest = hashlib.sha256(data).hexdigest()
+            g.q.exec.return_value = SimpleNamespace(exitcode=0, text=lambda: digest)
+            g.dir, g.tag, g.log = d, "g1", Mock()
+            g._override_tools()
+            with open(os.path.join(d, "tool-overrides.json")) as f:
+                self.assertEqual(json.load(f), {"kf_probe.exe": digest})
 
 
 class Driver(unittest.TestCase):

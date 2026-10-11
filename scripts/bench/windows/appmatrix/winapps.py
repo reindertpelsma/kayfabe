@@ -17,6 +17,7 @@ wer=, gsp_cycles=, proof=), apps/<id>.{json,log,verdict.json}, shots/*.png, gues
 import argparse
 import base64
 import datetime
+import hashlib
 import json
 import os
 import re
@@ -261,7 +262,7 @@ class Cfg:
     def __init__(self, **kw):
         self.__dict__.update(dict(
             poll_s=3.0, slack_s=90, boot_timeout=900, signin_delay=30, session_timeout=300, max_tdr=3, per_guest=8, recover_wait=180,
-            stage_timeout=1800, user="vast", password=None, iso=None, image_identity=None, tier=1, screenshots=True, sample_s=2,
+            stage_timeout=1800, user="vast", password=None, iso=None, image_identity=None, override_dir="", tier=1, screenshots=True, sample_s=2,
             max_guests=200, max_boot_failures=3, io_timeout=10.0, ping_s=5.0, time_scale=1.0), **kw)
 
 
@@ -395,11 +396,35 @@ class GuestSession:
                 if info.get("notes"):
                     self.log(f"[{self.tag}] setup notes: {info['notes']}")
                 self.log(f"[{self.tag}] setup ok: cd={self.cd} nvidia_adapters={info.get('nvidia_adapters')} {info.get('smi', '')}")
+                self._override_tools()
                 self._stage(["vc_redist"])
                 return
             self.log(f"[{self.tag}] setup attempt {attempt} not ok: cd={info.get('cd')} nvidia_adapters={info.get('nvidia_adapters')} notes={info.get('notes')}")
             self.sleep(20)
         raise GuestFailure("guest setup failed (app disk missing or no NVIDIA adapter)")
+
+    def _override_tools(self):
+        if not self.cfg.override_dir:
+            return
+        hashes = {}
+        for name in sorted(os.listdir(self.cfg.override_dir)):
+            if not name.endswith(".exe"):
+                continue
+            if not re.fullmatch(r"[A-Za-z0-9_.-]+\.exe", name):
+                raise GuestFailure("invalid override tool filename")
+            data = open(os.path.join(self.cfg.override_dir, name), "rb").read()
+            want = hashlib.sha256(data).hexdigest()
+            dest = rf"C:\kfapps\tools\{name}"
+            # The copy from the read-only image retains its read-only attribute.
+            self.q.exec(PS, ["-NoProfile", "-Command", f"Remove-Item -Force -ErrorAction SilentlyContinue '{dest}'"], timeout=60)
+            self.q.file_write(dest, data)
+            r = self.q.exec(PS, ["-NoProfile", "-Command", f"(Get-FileHash -Algorithm SHA256 '{dest}').Hash.ToLower()"], timeout=60)
+            if r.exitcode != 0 or r.text().strip() != want:
+                raise GuestFailure(f"override tool checksum mismatch: {name}")
+            hashes[name] = want
+            self.log(f"[{self.tag}] override tool {name} sha256={want}")
+        with open(os.path.join(self.dir, "tool-overrides.json"), "w") as f:
+            json.dump(hashes, f, indent=1)
 
     # ---- packages
     def _stage(self, pkgs):
@@ -711,6 +736,7 @@ def main(argv=None):
     ap.add_argument("--manifest", default=os.path.join(HERE, "manifest.json"))
     ap.add_argument("--apps-json", default=os.path.join(HERE, "apps.json"))
     ap.add_argument("--iso", help="the app disk image (kfapps.iso) to hot-plug")
+    ap.add_argument("--override-dir", default="", help="replace image tools with local *.exe, verify guest SHA256 and record hashes")
     ap.add_argument("--image-manifest", help="manifest.json written next to the image by build_appdisk.sh (gives the image identity)")
     ap.add_argument("--vm", choices=("broker", "mock"), default="broker")
     ap.add_argument("--broker", default="")
@@ -741,7 +767,7 @@ def main(argv=None):
     if a.image_manifest and os.path.exists(a.image_manifest):
         ident = json.load(open(a.image_manifest)).get("image", {}).get("identity")
     cfg = Cfg(iso=a.iso, image_identity=ident, per_guest=a.per_guest, max_tdr=a.max_tdr, tier=a.tier, password=os.environ.get("KF_GUEST_PW"),
-              user=os.environ.get("KF_GUEST_USER", "vast"))
+              user=os.environ.get("KF_GUEST_USER", "vast"), override_dir=a.override_dir)
     sleep, now = time.sleep, time.time
     if a.vm == "mock":
         import mock_guest
