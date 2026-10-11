@@ -656,21 +656,38 @@ impl Device {
         } else {
             16 << 20
         };
-        let timer = if std::env::var("KF3_TIMER_MAP").is_ok_and(|v| v == "1") {
-            let timer = rm
-                .open_timer()
-                .map_err(|e| format!("native timer view: {e:?}"))?;
-            if kf_abi::timer::layout(version) != Some(timer.layout()) {
-                return Err("native timer: host and guest register layouts differ".into());
+        // Production default (owner, 2026-10-11): use the host's unprivileged
+        // read-only timer view without an environment opt-in. A missing or
+        // incompatible view is an explicit unsupported capability; never borrow
+        // a layout from another driver or expose a wider register mapping.
+        let timer = match rm.open_timer() {
+            Ok(timer) if kf_abi::timer::layout(version) == Some(timer.layout()) => {
+                match kf_trap::memmap::memory_map(
+                    family,
+                    kf_trap::trappolicy::doorbell_for(family),
+                    bar0_bytes,
+                    cfg.bar1_bytes,
+                    cfg.bar2_bytes,
+                )
+                .with_timer(u64::from(timer.bar0_base()))
+                {
+                    Ok(_) => Some(timer),
+                    Err(why) => {
+                        eprintln!("kf3: native timer unsupported: {why}");
+                        None
+                    }
+                }
             }
-            kf_trap::memmap::memory_map(
-                family,
-                kf_trap::trappolicy::doorbell_for(family),
-                bar0_bytes,
-                cfg.bar1_bytes,
-                cfg.bar2_bytes,
-            )
-            .with_timer(u64::from(timer.bar0_base()))?;
+            Ok(_) => {
+                eprintln!("kf3: native timer unsupported: host and guest register layouts differ");
+                None
+            }
+            Err(e) => {
+                eprintln!("kf3: native timer unsupported: host view unavailable ({e:?})");
+                None
+            }
+        };
+        if let Some(timer) = &timer {
             std::sync::Arc::get_mut(&mut host)
                 .ok_or("timer facts already shared")?
                 .chip_info
@@ -680,10 +697,7 @@ impl Device {
                 timer.bar0_base(),
                 timer.layout()
             );
-            Some(timer)
-        } else {
-            None
-        };
+        }
         let plane: &'static Plane<'static> = Box::leak(Box::new(Plane::for_device(
             vmm,
             1 << 12,
