@@ -1,0 +1,62 @@
+{
+ "quiet": 25,
+ "end_utc": "2026-10-11T14:33:12.5003875Z",
+ "start_utc": "2026-10-11T14:32:47.2750334Z",
+ "rc": 0,
+ "secs": 25,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4070 status=OK code=0"
+ ],
+ "digests": [],
+ "session": 1,
+ "out_files": [],
+ "boot_utc_start": "2026-10-11T14:30:46.5000000Z",
+ "log_tail": [
+  "=== furmark_knot_gl start=2026-10-11T14:32:47.2750334+00:00 host=VASTWIN session=1 boot=2026-10-11T14:30:46.5000000Z timeout=135",
+  "KFWAIT furmark_knot_gl EXITED rc=0",
+  "FM_SCORE date,demo,platform,vendor,renderer,api_version,width,height,fullscreen,antialiasing,duration,max_gpu_temp,score,avg_fps,min_fps,max_fps",
+  "FM_SCORE 2026.10.11@14:33:10,furmark-knot-gl,Windows 64-bit,NVIDIA Corporation,NVIDIA GeForce RTX 4070/PCIe/SSE2,OpenGL 3.2.0 NVIDIA 580.88,1280,720,NO,Off,15002,-1,1590,105,92,108",
+  "=== end rc=0 secs=25 2026-10-11T14:33:12.5003875+00:00"
+ ],
+ "pdh": {
+  "pids": [
+   "6484",
+   "2884",
+   "4832",
+   "8940"
+  ],
+  "nv": {
+   "copy": 0,
+   "3d": 0,
+   "videoencode": 0,
+   "videodecode": 0,
+   "vr": 0,
+   "legacyoverlay": 0,
+   "ofa_0": 0
+  },
+  "samples": 11,
+  "other": {},
+  "nvidia_luids": "0_5ef8"
+ },
+ "timed_out": false,
+ "token": "g10-furmark_knot_gl-1791729161",
+ "boot_utc_end": "2026-10-11T14:30:46.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "furmark_knot_gl",
+ "smi": {
+  "samples": 0,
+  "mem_used_base_mb": null,
+  "util_max": 0,
+  "mem_used_max_mb": 0
+ }
+}

@@ -1,0 +1,5 @@
+=== furmark_vk_bench start=2026-10-11T07:36:38.2870011-07:00 host=DESKTOP-JR70RMQ session=1 boot=2026-10-11T14:31:59.5000000Z timeout=135
+KFWAIT furmark_vk_bench EXITED rc=0
+FM_SCORE date,demo,platform,vendor,renderer,api_version,width,height,fullscreen,antialiasing,duration,max_gpu_temp,score,avg_fps,min_fps,max_fps
+FM_SCORE 2026.10.11@07:37:05,furmark-vk,Windows 64-bit,NVIDIA,NVIDIA GeForce RTX 4090,Vulkan 1.4.312,1028,720,NO,Off,15000,66,9196,603,469,633
+=== end rc=0 secs=29 2026-10-11T07:37:06.7985728-07:00

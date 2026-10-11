@@ -1,0 +1,73 @@
+{
+ "quiet": 1,
+ "end_utc": "2026-10-11T14:45:22.5744172Z",
+ "start_utc": "2026-10-11T14:45:18.1011194Z",
+ "rc": 1,
+ "secs": 4,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4090 status=OK code=0"
+ ],
+ "digests": [],
+ "session": 0,
+ "out_files": [
+  "C:\\kf\\out\\oceanFFT_qa_diagnostic\\slopeShading.bin 524288",
+  "C:\\kf\\out\\oceanFFT_qa_diagnostic\\spatialDomain.bin 262144"
+ ],
+ "boot_utc_start": "2026-10-11T14:31:59.5000000Z",
+ "log_tail": [
+  "=== oceanFFT_qa_diagnostic start=2026-10-11T07:45:18.1011194-07:00 host=DESKTOP-JR70RMQ session=0 boot=2026-10-11T14:31:59.5000000Z timeout=120",
+  "NOTE: The CUDA Samples are not meant for performance measurements. Results may vary when GPU Boost is enabled.",
+  "",
+  "C:\\kfapps\\cuda_demo\\demo_suite\\oceanFFT.exe Starting...",
+  "",
+  "MapSMtoCores for SM 8.9 is undefined.  Default to use 128 Cores/SM",
+  "MapSMtoArchName for SM 8.9 is undefined.  Default to use Ampere",
+  "GPU Device 0: \"Ampere\" with compute capability 8.9",
+  "",
+  "Compute capability 8.9",
+  "sdkDumpBin: <spatialDomain.bin>",
+  "compareBin2Bin <float> unable to find <ref_spatialDomain.bin> in <C:\\kfapps\\cuda_demo\\demo_suite\\oceanFFT.exe>",
+  ">>> Check info.xml and [project//data] folder <C:\\kfapps\\cuda_demo\\demo_suite\\oceanFFT.exe> <<<",
+  "Aborting comparison!",
+  "  FAILED",
+  "  FAILURE: 1 errors...",
+  "sdkDumpBin: <slopeShading.bin>",
+  "compareBin2Bin <float> unable to find <ref_slopeShading.bin> in <C:\\kfapps\\cuda_demo\\demo_suite\\oceanFFT.exe>",
+  ">>> Check info.xml and [project//data] folder <C:\\kfapps\\cuda_demo\\demo_suite\\oceanFFT.exe> <<<",
+  "Aborting comparison!",
+  "  FAILED",
+  "  FAILURE: 1 errors...",
+  "=== end rc=1 secs=4 2026-10-11T07:45:22.5744172-07:00"
+ ],
+ "pdh": {
+  "pids": [
+   "7700",
+   "736"
+  ],
+  "nv": {},
+  "samples": 2,
+  "other": {},
+  "nvidia_luids": "0_5f8e"
+ },
+ "timed_out": false,
+ "token": "g1-oceanFFT_qa_diagnostic-1791729903",
+ "boot_utc_end": "2026-10-11T14:31:59.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "oceanFFT_qa_diagnostic",
+ "smi": {
+  "samples": 1,
+  "mem_used_base_mb": 155,
+  "util_max": 0,
+  "mem_used_max_mb": 155
+ }
+}

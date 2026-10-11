@@ -3,6 +3,18 @@
 **STATUS: LIVE, 2026-10-11.** Product candidate `2c917f3e`, following the
 OpenGL gears fix. Results are pending; this is not a matrix pass claim.
 
+## Latest checkpoint, 2026-10-11 14:52 UTC
+
+Saved broad74/102:58PASS,14FAIL,2TIMEOUT; only56 PASS have no recovery events.
+CUDA/D3D11VA decode PASS rows carry three153 records and one GSP recovery each;
+these remain open gaps. Stock580.88 video/managed6/6 and FurMark4/4 pass.
+OceanFFT/RandomFog GUI proof misses on candidate, both original GUI tests pass
+on stock. QA diagnostics initially missed bundled reference files; copied-ref
+OceanFFT matches both numerical outputs, rc0, but sampler verdict still FAIL.
+Original diagnostic facts stay archived; no canonical proof change made yet.
+GPU lock waiter includes isolated managed1140 and bounded FurMark1141 diagnostics.
+This supersedes earlier counts/pending statements below, and is not full parity.
+
 ## Active checkpoint, 2026-10-11 14:32 UTC
 
 Product0f9c01f9 broad lane:63 completed/102,52PASS,9FAIL,2TIMEOUT.

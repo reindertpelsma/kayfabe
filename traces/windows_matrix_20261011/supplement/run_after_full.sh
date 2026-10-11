@@ -27,8 +27,10 @@ echo "SUPPLEMENT_START at=$(date -Is)"
 ! test -e "$W/kf3-bins/$REV"
 # Hypothesis: the authored four-zero-byte session contract works on595.91.07.
 # Falsifier: any acquire/release failure or changed reply. Run as nobody, no guest bytes.
+echo 'ENCODER_PROBE_SOURCE=cdad9267' > "$W/codex-encoder-session-probe.log"
+echo '26d727fa00e76b91c1c2fbea0cc2b9341ecc27a1c90a0a5c6f6c6ccc4fc37347  /tmp/kf-encoder-session-probe' | sha256sum --check >> "$W/codex-encoder-session-probe.log"
 set +e
-setpriv --reuid=65534 --regid=65534 --clear-groups timeout 30 /tmp/kf-encoder-session-probe > "$W/codex-encoder-session-probe.log" 2>&1
+setpriv --reuid=65534 --regid=65534 --clear-groups timeout 30 /tmp/kf-encoder-session-probe >> "$W/codex-encoder-session-probe.log" 2>&1
 probe_rc=$?
 set -e
 echo "ENCODER_PROBE_EXIT=$probe_rc at=$(date -Is)" >> "$W/codex-encoder-session-probe.log"
@@ -51,7 +53,7 @@ for name in ('win.res','win_isolated.res'):
   if not l.startswith('APPRES '):continue
   d=dict(x.split('=',1) for x in l.split() if '=' in x);verdict[d['app']]=d['verdict']
 a=['hf_generate','cdp_quicksort','vectorAdd_demo','cup8_ladder','stream_perthread_t','cupy_sha256','cupy_cg','cupy_asynccopy','cupy_check']
-a+=sorted(k for k,v in verdict.items() if v!='PASS' and k not in a and k not in ('clpeak_cuda','managed_t','nvenc_av1','nvenc_h264','nvenc_hevc','scale_cuda_nvenc'))
+a+=sorted(k for k,v in verdict.items() if v!='PASS' and k not in a and k not in ('clpeak_cuda','managed_t','nvenc_av1','nvenc_h264','nvenc_hevc','scale_cuda_nvenc','furmark_gl_bench'))
 # Long-running clpeak and the managed-memory investigation each start in a fresh VM.
 print(','.join(a))
 PY
@@ -59,4 +61,14 @@ PY
 bash "$TREE/scripts/bench/windows/appmatrix/run_windows_apps.sh" --run-dir "$RUN" \
  --kf3-rev "$REV" --broker "$B" --run-base 1060 --override-dir "$W/codex-matrix-focus-tools-20261011" \
  --iso "$MEDIA" --apps "$APPS" --tier 3 --per-guest 4 --no-isolate
-# Managed and clpeak are scheduled separately after review of the broad results.
+# Fresh managed-memory stage isolation, with the same180s budget and corrected headers.
+# Falsifier of a shared-guest/setup-only explanation: fresh allocation/work still hangs.
+bash "$TREE/scripts/bench/windows/appmatrix/run_windows_apps.sh" --run-dir "$W/codex-managed-isolated-c5c97c00-20261011" \
+ --kf3-rev "$REV" --broker "$B" --run-base 1140 --override-dir "$W/codex-matrix-focus-tools-20261011" \
+ --iso "$MEDIA" --apps managed_t --tier 3 --per-guest 1 --no-isolate
+# Only diagnostic switch added; first512 GP entries/64 software methods per twin.
+# A missing method after trace-budget exhaustion is inconclusive, never evidence of absence.
+export WIN_FLAGS=KF3_RELAY_PB_PEEK
+bash "$TREE/scripts/bench/windows/appmatrix/run_windows_apps.sh" --run-dir "$W/codex-furmark-peek-c5c97c00-20261011" \
+ --kf3-rev "$REV" --broker "$B" --run-base 1141 --override-dir "$W/codex-matrix-focus-tools-20261011" \
+ --iso "$MEDIA" --apps furmark_gl_bench --tier 3 --per-guest 1 --no-isolate

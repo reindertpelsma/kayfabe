@@ -85,6 +85,16 @@ PWR power/reset/reboot, FAM multi-GPU/families, PKG packaging/signing, TST harne
 
 | APP-furmark_gl_bench | FurMark OpenGL triggers PBDMA DEVICE and TDRs | GFX / CHAN | Run868 starts rendering, then hostXid32 intr00800000 at14:26:53UTC on channel0x4a; TIMEOUT217s, three guest TDR records. No specific offending method established | [measured] candidate0f9c01f9 full checkpoint, screenshot and journal | Fresh stock580.88 counterpart, then bounded relay-PB diagnostic to identify software method/object mismatch; compare prior product before assigning regression | lane: ordinary benchmark completion and GPU proof, no unexpected TDR/Xid | M | G10 | no |
 
+| APP-oceanFFT_demo | OceanFFT GUI misses per-process GPU proof | TST / GFX | Run869 survives25s and exits0, but all PDH values are zero; original FAIL/no-gpu-proof, zero TDR/GSP cycle. OceanFFT screenshot shows rendered ocean | [measured] candidate0f9c01f9, app facts/screenshot | Compare stock580.88 original GUI and official QA modes; source-backed numerical/readback proof requires actual reference validation, no alive-only acceptance | lane: real CUDA output verification plus GUI survival/activity | S | G15 | no |
+| APP-randomFog_demo | RandomFog GUI misses per-process GPU proof | TST / GFX | Run869 survives25s and exits0, but all PDH values are zero; original FAIL/no-gpu-proof, zero TDR/GSP cycle. OceanFFT screenshot shows rendered ocean | [measured] candidate0f9c01f9, app facts/screenshot | Compare stock580.88 original GUI and official QA modes; source-backed numerical/readback proof requires actual reference validation, no alive-only acceptance | lane: real CUDA output verification plus GUI survival/activity | S | G15 | no |
+| APP-cupy_check | CuPy shared correctness script missing CUDA headers | TST | Run869 fails under frozen8037e19b CUDA_PATH setup; no specific RM refusal established | [measured] candidate FAIL; corrected stock580.88 PASS9s | Fresh candidate retry with existing header-path correction | lane: real CuPy operations/readback, existing math checks | S | APP-stream_perthread_t | no |
+
+| APP-nvdec_h264 | Decode completes with guest recovery events | VID / CHAN | Run867 app verdict PASS, but three guestTDR event records and one GSP recovery cycle during app; no new hostXid during decode. Not a clean pass | [measured] candidate0f9c01f9 facts/health; stock580.88 CUDA decode PASS without TDR | Fresh isolated replay and compare guest scheduling/completion/VA latency against reference; preserve original PASS and event counts separately | lane: decode output/proof plus zero unexpected recovery | M | G10 | no |
+| APP-d3d11va_h264 | Decode completes with guest recovery events | VID / CHAN | Run869 app verdict PASS, but three guestTDR event records and one GSP recovery cycle during app; no new hostXid during decode. Not a clean pass | [measured] candidate0f9c01f9 facts/health; stock580.88 CUDA decode PASS without TDR | Fresh isolated replay and compare guest scheduling/completion/VA latency against reference; preserve original PASS and event counts separately | lane: decode output/proof plus zero unexpected recovery | M | G10 | no |
+
+| APP-nbody_demo_gl | N-body GUI misses per-process GPU proof | TST / GFX | Run870 survives25s/exits0, zero PDH activity and FAIL/no-gpu-proof; zero guestTDR/GSP cycle. Separate CUDA benchmark passes | [measured] candidate0f9c01f9; stock GUI comparison pending | Compare official CUDA-vs-CPU-reference mode and original GUI; numerical oracle is verification only, GPU computation remains on CUDA | lane: real GPU reference comparison and GUI survival/activity | S | APP-oceanFFT_demo | no |
+| APP-scale_cuda_nvenc | CUDA scaling/encode repeats NVENC session refusal | VID / RM | Run870 fails OpenEncodeSessionEx incompatible client key21 and records three guestTDR records/one GSP recovery; no additional hostXid | [measured] candidate0f9c01f9; stock580.88 counterpart PASS without recovery | Resolve source-tagged host encoder-session layout; isolate the decode-side recovery separately | lane: real scaling/encode output and zero unexpected recovery | M | APP-nvenc_h264 | no |
+
 ### 2.2 P1: production quality, security, derive-never-capture
 
 | id | title | area | missing / symptom | evidence | approach (short) | test (oracle / lane) | eff | deps | owner? |
@@ -138,7 +148,7 @@ PWR power/reset/reboot, FAM multi-GPU/families, PKG packaging/signing, TST harne
 | L13 | NVENC session cap accounting, `0x20808165` | VID | Assumes one slot per acquire; concurrent guest + host encoders hit the host's `0x69`; `0x20808165` refused | [read] | None | n/a | S | none | no |
 | L14 | Perf work on the display and VA paths | TST | Beyond "decent" | [read] owner rule | n/a | n/a | L | H26 | no |
 
-Counts: P0 32 rows (G01-G15 plus17 APP rows), P1 29 rows (H01-H29), P2 14 rows (L01-L14); 75 in all. `APP-<name>` rows are added by the app-matrix rule.
+Counts: P0 39 rows (G01-G15 plus24 APP rows), P1 29 rows (H01-H29), P2 14 rows (L01-L14); 82 in all. `APP-<name>` rows are added by the app-matrix rule.
 
 ## 3. Detail for the top items
 

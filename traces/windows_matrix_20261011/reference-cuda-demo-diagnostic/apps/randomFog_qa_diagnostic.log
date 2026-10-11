@@ -1,0 +1,50 @@
+=== randomFog_qa_diagnostic start=2026-10-11T07:46:11.5114785-07:00 host=DESKTOP-JR70RMQ session=0 boot=2026-10-11T14:31:59.5000000Z timeout=120
+Random Fog
+==========
+
+MapSMtoCores for SM 8.9 is undefined.  Default to use 128 Cores/SM
+MapSMtoArchName for SM 8.9 is undefined.  Default to use Ampere
+GPU Device 0: "Ampere" with compute capability 8.9
+
+CURAND initialized
+
+Random number visualization
+
+On creation, randomFog generates 200,000 random coordinates in spherical coordinate space (radius, angle rho, angle theta) with curand's XORWOW algorithm. The coordinates are normalized for a uniform distribution through the sphere.
+
+The X axis is drawn with blue in the negative direction and yellow positive.
+The Y axis is drawn with green in the negative direction and magenta positive.
+The Z axis is drawn with red in the negative direction and cyan positive.
+
+The following keys can be used to control the output:
+
+	s         Generate a new set of random numbers and display as spherical coordinates (Sphere)
+	e         Generate a new set of random numbers and display on a spherical surface (shEll)
+	b         Generate a new set of random numbers and display as cartesian coordinates (cuBe/Box)
+	p         Generate a new set of random numbers and display on a cartesian plane (Plane)
+
+	i,l,j     Rotate the negative Z-axis up, right, down and left respectively
+	a         Toggle auto-rotation
+	t         Toggle 10x zoom
+	z         Toggle axes display
+
+	x         Select XORWOW generator (default)
+	c         Select Sobol' generator
+	v         Select scrambled Sobol' generator
+	r         Reset XORWOW (i.e. reset to initial seed) and regenerate
+	]         Increment the number of Sobol' dimensions and regenerate
+	[         Reset the number of Sobol' dimensions to 1 and regenerate
+
+	+         Increment the number of displayed points by 8,000 (up to maximum 200,000)
+	-         Decrement the number of displayed points by 8,000 (down to minimum 8,000)
+
+	q/[ESC]   Quit the application.
+
+
+CheckRender::dumpBin: <randomFog.bin>
+compareBin2Bin <float> unable to find <ref_randomFog.bin> in <C:\kfapps\cuda_demo\demo_suite\randomFog.exe>
+>>> Check info.xml and [project//data] folder <C:\kfapps\cuda_demo\demo_suite\randomFog.exe> <<<
+Aborting comparison!
+  FAILED
+  FAILURE: 1 errors...
+=== end rc=1 secs=3 2026-10-11T07:46:14.1665713-07:00

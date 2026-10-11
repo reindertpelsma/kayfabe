@@ -5,6 +5,35 @@ again after the Wednesday 07:00 reset). Read `AGENTS.md` (= `CLAUDE.md`) first: 
 (state, branches, traps), `docs/DELEGATED_DECISIONS_20261010.md`, `docs/OWNER_RULINGS.md` §AB-§AE, `docs/design/V3_FEATURE_GAPS.md`
 (priorities: P0 = prevents apps running; fidelity and perf beyond "decent" are post-release), `docs/design/V3_NOT_IN_GIT.md`.
 
+## Latest checkpoint, 2026-10-11 14:52 UTC
+
+Last pushedcdad9267; backup of this checkpoint follows. Broad snapshot74/102:
+58PASS,14FAIL,2TIMEOUT, but only56 PASS without recovery events. CUDA H264
+and D3D11VA decode each PASS with3 nvlddmkm153 records +1 GSP suspend/recovery;
+scale/encode FAIL has same recovery counts plus local NVENC ABI refusal.
+Original PASS verdicts retained; do NOT count them as clean passes. APP rows added.
+Latest live run871/g12 Torch correctness PASS; original frozen8037e19b unchanged.
+
+OceanFFT/RandomFog/nbody GUI miss PDH proof on candidate (scene renders for OceanFFT);
+stock580.88 original OceanFFT/RandomFog GUI both PASS. Official QA diagnostics:
+first failed missing ref files; after copying bundled refs to writable cwd,
+OceanFFT actual CUDA numerical output matches both references, rc0, but periodic
+GPU proof misses3s test (original diagnostic verdict FAIL retained). RandomFog
+QA collection complete; inspect its log before changing any canonical oracle.
+Source-backed narrow QA/readback proof + existing25s GUI survival may strengthen
+these tests; not yet implemented or validated on kayfabe. Official sources v12.9
+NVIDIA cuda-samples. Diagnostic inventories/evidence archived separately.
+
+Stock FurMark four workloads all PASS, including the failing candidate GL benchmark.
+Supplement waiter59215 still waits on broad lock. Runner now includes fresh isolated
+managed1140 and bounded relay-PB FurMark diagnostic1141 after primary corrected-harness
+retry; primary excludes known NVENC/FurMarkGL product failures. Managed unchanged180s
+budget, stage markers; FurMark only KF3_RELAY_PB_PEEK added, first512 GP entries/64 SW
+methods per twin. Exhausted trace budget is inconclusive, never evidence of absence.
+Probe sourcecdad9267/binary SHA26d727fa00e76b91c1c2fbea0cc2b9341ecc27a1c90a0a5c6f6c6ccc4fc37347
+verified before unprivileged authored acquire/release measurement. No product guard relaxed.
+Vast55385171 idle after QA diagnostics, retain only while reference validation is needed.
+
 ## Active work, 2026-10-11 14:32 UTC
 
 Last pushedc5c97c00. Broad product0f9c01f9/frozen8037e19b now63 completed:

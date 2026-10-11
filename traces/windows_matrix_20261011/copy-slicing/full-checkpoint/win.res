@@ -61,3 +61,14 @@ APPRES side=win app=gputest_plot3d verdict=PASS rc=0 secs=17 quiet=17 note=- boo
 APPRES side=win app=gputest_tess verdict=PASS rc=0 secs=17 quiet=17 note=- boot=g8 guest_tdr=0 wer=0 gsp_cycles=0 proof=out tier=2 cat=opengl
 APPRES side=win app=nvdec_h264 verdict=PASS rc=0 secs=44 quiet=2 note=- boot=g8 guest_tdr=3 wer=0 gsp_cycles=1 proof=pdh:videodecode tier=1 cat=video
 APPRES side=win app=furmark_gl_bench verdict=TIMEOUT rc=124 secs=217 quiet=1 note=KFWAIT furmark_gl_bench STILL_RUNNING_AFTER 105 s boot=g9 guest_tdr=3 wer=0 gsp_cycles=1 proof=- tier=1 cat=opengl
+APPRES side=win app=furmark_knot_gl verdict=PASS rc=0 secs=25 quiet=25 note=- boot=g10 guest_tdr=0 wer=0 gsp_cycles=0 proof=out tier=1 cat=opengl
+APPRES side=win app=furmark_vk_bench verdict=PASS rc=0 secs=28 quiet=28 note=- boot=g10 guest_tdr=0 wer=0 gsp_cycles=0 proof=out tier=1 cat=vulkan
+APPRES side=win app=oceanFFT_demo verdict=FAIL rc=0 secs=28 quiet=0 note=no-gpu-proof boot=g10 guest_tdr=0 wer=0 gsp_cycles=0 proof=none:pdh:Cuda|Compute|3D|Copy tier=1 cat=cuda-demo
+APPRES side=win app=randomFog_demo verdict=FAIL rc=0 secs=28 quiet=27 note=no-gpu-proof boot=g10 guest_tdr=0 wer=0 gsp_cycles=0 proof=none:pdh:Cuda|Compute|3D|Copy tier=1 cat=cuda-demo
+APPRES side=win app=cupy_check verdict=FAIL rc=1 secs=126 quiet=66 note=rc:1,success-string-missing | RuntimeError: Failed to find CUDA headers. Please install CUDA toolkit headers (e.g., pip install cupy-cuda12x[ctk]) or specify CUDA_PATH environment variable. boot=g10 guest_tdr=0 wer=0 gsp_cycles=0 proof=out tier=1 cat=torch
+APPRES side=win app=d3d11va_h264 verdict=PASS rc=0 secs=45 quiet=21 note=- boot=g10 guest_tdr=3 wer=0 gsp_cycles=1 proof=pdh:videodecode tier=1 cat=video
+APPRES side=win app=edge_webgl verdict=PASS rc=0 secs=20 quiet=2 note=- boot=g11 guest_tdr=0 wer=0 gsp_cycles=0 proof=out tier=1 cat=browser
+APPRES side=win app=edge_webgl_headless verdict=PASS rc=0 secs=13 quiet=1 note=- boot=g11 guest_tdr=0 wer=0 gsp_cycles=0 proof=out tier=1 cat=browser
+APPRES side=win app=edge_webgpu verdict=PASS rc=0 secs=18 quiet=0 note=- boot=g11 guest_tdr=0 wer=0 gsp_cycles=0 proof=out tier=1 cat=browser
+APPRES side=win app=nbody_demo_gl verdict=FAIL rc=0 secs=28 quiet=1 note=no-gpu-proof boot=g11 guest_tdr=0 wer=0 gsp_cycles=0 proof=none:pdh:Cuda|Compute|3D|Copy tier=1 cat=cuda-demo
+APPRES side=win app=scale_cuda_nvenc verdict=FAIL rc=-22 secs=41 quiet=0 note=rc:-22,no-gpu-proof | [h264_nvenc @ 00000190862922c0] OpenEncodeSessionEx failed: incompatible client key (21): (no details) boot=g11 guest_tdr=3 wer=0 gsp_cycles=1 proof=none:pdh:VideoEncode|VideoDecode,smi tier=2 cat=video
