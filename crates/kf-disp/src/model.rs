@@ -890,15 +890,7 @@ impl DisplayModel {
             .ok_or_else(|| {
                 crate::caps::Missing(format!("class table for guest branch {}", l.version))
             })
-            .and_then(|t| {
-                crate::dispcaps::EngineFacts::derive(
-                    t,
-                    self.caps_class,
-                    self.ip_version,
-                    self.heads,
-                    sor_routing,
-                )
-            })
+            .and_then(|t| crate::dispcaps::EngineFacts::derive(t, self.ip_version, sor_routing))
             .and_then(|f| crate::dispcaps::caps_table(l, &f));
         match table {
             Ok(t) => t,
@@ -942,6 +934,25 @@ impl DisplayModel {
         if p.get("slaveDisplayId").unwrap_or(1) != 0 || p.get("bIs2Head1Or").unwrap_or(1) != 0 {
             return Err(NV_ERR_NOT_SUPPORTED);
         }
+        let sublink = p.get("forceSublinkConfig").ok_or(NV_ERR_NOT_SUPPORTED)?;
+        let none = self
+            .l
+            .konst("NV0073_CTRL_DFP_ASSIGN_SOR_FORCE_NONE")
+            .ok_or(NV_ERR_NOT_SUPPORTED)?;
+        let primary = self
+            .l
+            .konst("NV0073_CTRL_DFP_ASSIGN_SOR_FORCE_PRIMARY_SOR_LINK")
+            .ok_or(NV_ERR_NOT_SUPPORTED)?;
+        let secondary = self
+            .l
+            .konst("NV0073_CTRL_DFP_ASSIGN_SOR_FORCE_SECONDARY_SOR_LINK")
+            .ok_or(NV_ERR_NOT_SUPPORTED)?;
+        if sublink == secondary {
+            return Err(NV_ERR_NOT_SUPPORTED);
+        }
+        if sublink != none && sublink != primary {
+            return Err(NV_ERR_INVALID_ARGUMENT);
+        }
         // displayId 0: "RM shall return the XBAR config it has stored" (the header)
         if id != 0 {
             let c = self.connector(id).ok_or(NV_ERR_INVALID_ARGUMENT)?;
@@ -961,7 +972,8 @@ impl DisplayModel {
             }
         }
         let bytes = |w: Vec<u32>| w.iter().flat_map(|x| x.to_le_bytes()).collect::<Vec<u8>>();
-        let ok = p.set_bytes("sorAssignList", &bytes(list))
+        let ok = p.set("reservedSorMask", 0)
+            && p.set_bytes("sorAssignList", &bytes(list))
             && p.set_bytes(
                 "sorAssignListWithTag",
                 &bytes(tagged.iter().flat_map(|(m, t)| [*m, *t]).collect()),
@@ -2756,23 +2768,96 @@ mod tests {
         r
     }
 
-    /// The vector: the real AD104 answered `81 2f` (VFIO reference, 2026-10-11). Derived, the Ada
-    /// model reproduces it on both guest branches; Ampere and Turing, whose RM-software bits were
-    /// not observed, differ from it in exactly byte 0 (and Turing in nothing else the class table
-    /// does not say).
     #[test]
-    fn get_caps_v2_is_derived_from_the_family_and_reproduces_the_ada_vector() {
+    fn tmds_only_models_do_not_advertise_dp_stream_support() {
+        for row in [
+            &kf_chip::display::TURING,
+            &kf_chip::display::AMPERE,
+            &kf_chip::display::ADA,
+            &kf_chip::display::BLACKWELL_GB20X,
+        ] {
+            for version in ["580.65.06", "580.159.04"] {
+                let mut m = DisplayModel::new(
+                    row,
+                    vec![Monitor::default_1080p()],
+                    crate::layout::for_version(version).unwrap(),
+                );
+                let caps = caps_of(&mut m);
+                for name in [
+                    "SINGLE_HEAD_MST_SUPPORTED",
+                    "SINGLE_HEAD_DUAL_SST_SUPPORTED",
+                ] {
+                    let byte = m.l.konst(&format!("CAP_{name}_BYTE")).unwrap() as usize;
+                    let mask = m.l.konst(&format!("CAP_{name}_MASK")).unwrap() as u8;
+                    assert_eq!(caps[byte] & mask, 0, "{} {version} {name}", row.chips);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn assign_sor_authors_reserved_panel_mask() {
+        let mut m = ada("580.65.06");
+        let r = assign_sor(&mut m, |p| {
+            assert!(p.set("displayId", 0x100));
+            assert!(p.set("reservedSorMask", 0xff));
+        })
+        .unwrap();
+        assert_eq!(
+            get(
+                &m,
+                "NV0073_CTRL_DFP_ASSIGN_SOR_PARAMS",
+                &r,
+                "reservedSorMask"
+            ),
+            0
+        );
+    }
+
+    #[test]
+    fn assign_sor_respects_requested_sublink() {
+        for version in ["580.65.06", "580.159.04"] {
+            let mut m = ada(version);
+            for name in ["NONE", "PRIMARY_SOR_LINK", "SECONDARY_SOR_LINK"] {
+                let value =
+                    m.l.konst(&format!("NV0073_CTRL_DFP_ASSIGN_SOR_FORCE_{name}"))
+                        .unwrap();
+                let result = assign_sor(&mut m, |p| {
+                    assert!(p.set("displayId", 0x100));
+                    assert!(p.set("forceSublinkConfig", value));
+                });
+                if name == "SECONDARY_SOR_LINK" {
+                    assert_eq!(result, Err(NV_ERR_NOT_SUPPORTED), "{version}");
+                } else {
+                    assert!(result.is_ok(), "{version} {name}");
+                }
+            }
+            assert_eq!(
+                assign_sor(&mut m, |p| {
+                    assert!(p.set("displayId", 0x100));
+                    assert!(p.set("forceSublinkConfig", u64::from(u32::MAX)));
+                }),
+                Err(NV_ERR_INVALID_ARGUMENT)
+            );
+        }
+    }
+
+    /// The vector: the real AD104 answered `81 2f` (VFIO reference, 2026-10-11). Derived, the Ada
+    /// model omits its DP stream bits on both guest branches. Ampere and Turing also omit the
+    /// RM-software bits that have not been observed for their families.
+    #[test]
+    fn get_caps_v2_is_derived_from_the_family_and_model_support() {
         for v in ["580.65.06", "580.159.04"] {
-            assert_eq!(caps_of(&mut ada(v)), [0x81, 0x2f], "{v}");
+            assert_eq!(caps_of(&mut ada(v)), [0x81, 0x2c], "{v}");
         }
         let mut amp = model();
-        assert_eq!(caps_of(&mut amp), [0x00, 0x0f]);
+        assert_eq!(caps_of(&mut amp), [0x00, 0x0c]);
         let mut tu = DisplayModel::new(
             &kf_chip::display::TURING,
             vec![Monitor::default_1080p()],
             crate::layout::for_version("580.159.04").expect("layouts"),
         );
-        assert_eq!(caps_of(&mut tu), [0x00, 0x0f]);
+        assert_eq!(caps_of(&mut tu), [0x00, 0x0c]);
         assert_eq!(amp.caps_unverified, 0);
         // hostile: only the 2-byte shape
         let c = cmd(&amp, "NV0073_CTRL_CMD_SYSTEM_GET_CAPS_V2");

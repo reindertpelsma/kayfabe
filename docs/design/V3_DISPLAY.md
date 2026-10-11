@@ -2066,6 +2066,12 @@ count the model has no state for; the real GPU answered 1). Both are re-opened o
 ### 4.15 Display caps and heads-in-use, derived (2026-10-11)
 
 **STATUS: LIVE, 2026-10-11 (code: `kf_disp::dispcaps`, `DisplayModel`; hardware verdict in `traces/windows_gl_crash_20261011/README.md`).**
+**Correction, 2026-10-11 (independent review):** the MST and dual-SST derivation below was wrong: class fields describe vocabulary, not implemented
+features. This model's authored SOR page and connectors are TMDS-only, and slave displays are refused. Those two bits are now clear on every family
+(Ada `81 2c`, others `00 0c`). The historical bytes below describe the earlier candidate. `DFP_ASSIGN_SOR` also validates the generated
+`forceSublinkConfig`: NONE and PRIMARY are supported, SECONDARY is `NOT_SUPPORTED`, other values `INVALID_ARGUMENT`; `reservedSorMask` is authored zero
+because there are no internal panels. Tests for these three defects failed before the fixes. Hardware validation is pending.
+
 Why: the real GPU's gears client calls `0x730101` eight times before its first `0x730102` and repeats the `730102 x2, 73010c, 73011a,
 73010c x3, 730101` pass five times; kayfabe's called it twice and stopped after one pass (run 631), so the ICD diverged BEFORE `0x73011a`.
 Two answers differed: `0x730101` capsTbl (real `81 2f`, model all-zero) and `0x730102` with the CLIENT flag (real 1, model 4).

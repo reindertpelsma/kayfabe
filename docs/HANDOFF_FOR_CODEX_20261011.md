@@ -5,11 +5,17 @@ again after the Wednesday 07:00 reset). Read `AGENTS.md` (= `CLAUDE.md`) first: 
 (state, branches, traps), `docs/DELEGATED_DECISIONS_20261010.md`, `docs/OWNER_RULINGS.md` §AB-§AE, `docs/design/V3_FEATURE_GAPS.md`
 (priorities: P0 = prevents apps running; fidelity and perf beyond "decent" are post-release), `docs/design/V3_NOT_IN_GIT.md`.
 
+## Codex continuation, 2026-10-11 (supersedes the integration recommendation below)
+
+Worktree `/data/kf-inval-absent`, candidate branch `codex/gl-display-review-20261011`; integration remains at `a2632e64` until validation.
+All origin branches fetched; `bx` at its recorded SSH endpoint times out. Independent review found false DP stream capabilities and an ignored SOR sublink
+request in the pending GL branch. Correcting and validating these precedes integration. See `traces/gl_linux_regression_20261011/` for the serial runner.
+
 ## UPDATE 2026-10-11 05:00 CEST (read this first; supersedes the OpenGL lines below where they differ)
 - **OpenGL (open P0):** branch `claude/gl-730101-20261011` (commit `417bad6d`, NOT merged). The RM replies now equal the real GPU's byte for byte
   (`0x730101` = `81 2f`, `0x730102` CLIENT = 1, `0x73011a` answered, `DFP_ASSIGN_SOR` added; caps derived in `crates/kf-disp/src/dispcaps.rs`), and `kf_glgears`
-  STILL crashes (runs 640/641). CUDA cup2/cup3/cup8 pass. Next suspect: a race in the OpenGL driver (7 threads in the dump); falsifier: log microseconds per
-  control, race is out if kayfabe's calls are not slower than ~3 ms (real ~0.5 ms); alternative: diff the `GetGspStaticInfo` reply against the real boot capture.
+  STILL crashes (runs 640/641). CUDA cup2/cup3/cup8 pass. Next diagnostic: compare full request-to-reply latency with the real GPU; handler timings alone cannot prove or exclude a race.
+  Alternative: diff the `GetGspStaticInfo` reply against the real boot capture.
   Full handoff: `traces/windows_gl_crash_20261011/README.md` on that branch (top section).
 - **Before merging that branch:** Linux regression (gates 9/9 + gate 10, fast suite 30/30, broker smoke) on it; the caps now claim CROSS_BAR. One kf-rm
   `display_seat` count test was already failing before the work; fix or record it.

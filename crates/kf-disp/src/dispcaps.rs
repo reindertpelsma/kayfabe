@@ -9,8 +9,8 @@
 //! | bit | rule |
 //! |---|---|
 //! | `HDMI_2_0_SUPPORTED` | the TMDS clock the capabilities page authors exceeds 340 MHz, HDMI 1.4b's ceiling (HDMI 2.0 raised the TMDS character rate to 600 MHz). NVKMS reads the same field: `maxTMDSClkKHz = TMDS_MAX * 10000` (`nvkms-evo3.c:5185`) |
-//! | `SINGLE_HEAD_MST_SUPPORTED` | the family's caps class defines a DP-capable SOR (`SOR_CAP_DP_A`) |
-//! | `SINGLE_HEAD_DUAL_SST_SUPPORTED` | the class defines both `SOR_CAP_DP_A` and `SOR_CAP_DP_B` and the engine has at least two SORs (two SST links feed one head) |
+//! | `SINGLE_HEAD_MST_SUPPORTED` | unsupported: the authored SOR capabilities and connectors are TMDS-only |
+//! | `SINGLE_HEAD_DUAL_SST_SUPPORTED` | unsupported: the model refuses slave displays |
 //! | `CROSS_BAR_SUPPORTED` | this model answers `NV0073_CTRL_CMD_DFP_ASSIGN_SOR` (the crossbar's control; the routing is fixed, connector `i` on SOR `i`) |
 //! | `AA_FOS_GAMMA_COMP_SUPPORTED`, `KSV_SRM_VALIDATION_SUPPORTED`, `GLITCHLESS_MODESET_SUPPORTED` | RM-software features of the display engine generation: nothing in the open headers, the class tables or the model derives them, so they come from the family's [`RmFeatures`] row, kept by hand, and only for an IP version observed on hardware. Any other IP version claims none (named, [`rm_features`]) |
 //!
@@ -44,7 +44,7 @@ pub struct RmFeatures {
 /// Windows 580.88, VFIO reference, 15 of 15 `0x730101` answers `NV_OK` with `capsTbl = 81 2f`: byte 0
 /// `0x81` = `AA_FOS_GAMMA_COMP | KSV_SRM_VALIDATION`, byte 1 `0x2f` = `SINGLE_HEAD_MST |
 /// SINGLE_HEAD_DUAL_SST | HDMI_2_0 | CROSS_BAR | GLITCHLESS_MODESET`. The capture is the ORACLE for
-/// the whole table (the derived bits must reproduce it); it is the DATA only for the three bits
+/// the real engine, not a requirement to advertise features absent from our model; it is the DATA only for the three bits
 /// above that nothing else derives, and is inferred to hold for the family (AD102..AD107 share
 /// `DISPv0404`), not measured on those dies.
 pub const OBSERVED_RM_FEATURES: &[(u32, RmFeatures)] = &[(
@@ -71,10 +71,6 @@ pub fn rm_features(ip_version: u32) -> Option<RmFeatures> {
 pub struct EngineFacts {
     /// Highest TMDS clock the capabilities page presents, kHz.
     pub tmds_max_khz: u32,
-    /// The caps class defines a DP-capable SOR.
-    pub dp_sor: bool,
-    /// The class defines both DP link bits and the engine has two or more SORs.
-    pub dp_sor_pair: bool,
     /// This model answers the SOR crossbar's control.
     pub sor_routing: bool,
     /// [`rm_features`] of the IP version (all `false` when unobserved).
@@ -82,24 +78,19 @@ pub struct EngineFacts {
 }
 
 impl EngineFacts {
-    /// Derive the facts for a family: its caps class `caps_class` in `t`, `heads` heads (one SOR
-    /// each, `caps::page`), `ip_version`, and whether the model implements the crossbar control.
+    /// Derive the TMDS-only model facts from its class table, display IP version, and
+    /// whether the model implements the crossbar control. DP stream capabilities remain absent
+    /// on every family: class field definitions alone do not implement DP support.
     ///
     /// # Errors
     /// [`Missing`] when the class table lacks the TMDS clock the page itself needs.
     pub fn derive(
         t: &ClassTable,
-        caps_class: u32,
         ip_version: u32,
-        heads: u32,
         sor_routing: bool,
     ) -> Result<EngineFacts, Missing> {
-        let dp_a = t.f(caps_class, "SOR_CAP_DP_A").is_some();
-        let dp_b = t.f(caps_class, "SOR_CAP_DP_B").is_some();
         Ok(EngineFacts {
             tmds_max_khz: tmds_max_khz(t)?,
-            dp_sor: dp_a,
-            dp_sor_pair: dp_a && dp_b && heads >= 2,
             sor_routing,
             rm: rm_features(ip_version).unwrap_or_default(),
         })
@@ -111,8 +102,6 @@ impl EngineFacts {
         [
             (self.rm.aa_fos_gamma_comp, "AA_FOS_GAMMA_COMP_SUPPORTED"),
             (self.rm.ksv_srm_validation, "KSV_SRM_VALIDATION_SUPPORTED"),
-            (self.dp_sor, "SINGLE_HEAD_MST_SUPPORTED"),
-            (self.dp_sor_pair, "SINGLE_HEAD_DUAL_SST_SUPPORTED"),
             (
                 self.tmds_max_khz > HDMI_1_4_TMDS_MAX_KHZ,
                 "HDMI_2_0_SUPPORTED",
@@ -173,42 +162,36 @@ mod tests {
 
     fn facts(row: &kf_chip::display::DisplayRow, routing: bool) -> EngineFacts {
         let (t, _) = tables();
-        EngineFacts::derive(t, row.classes.caps, row.ip_version, row.heads, routing).expect("facts")
+        EngineFacts::derive(t, row.ip_version, routing).expect("facts")
     }
 
     fn table(f: &EngineFacts) -> Vec<u8> {
         caps_table(tables().1, f).expect("table")
     }
 
-    /// The vector (real RTX 4070, AD104, 15 of 15 answers): `81 2f`. The Ada model's own facts
-    /// reproduce it; each bit's rule is then moved on its own to show it is the rule, not the byte.
+    /// The TMDS-only model omits DP stream bits even on a family whose real hardware supports
+    /// them. Each implemented capability still follows its own model fact.
     #[test]
-    fn the_ada_facts_derive_the_observed_table_and_each_rule_moves_its_own_bit() {
+    fn the_ada_model_advertises_only_implemented_features_and_each_rule_moves_its_own_bit() {
         let f = facts(ADA_ROW, true);
-        assert_eq!(table(&f), [0x81, 0x2f]);
+        assert_eq!(table(&f), [0x81, 0x2c]);
         assert_eq!(
             f.caps(),
             [
                 "AA_FOS_GAMMA_COMP_SUPPORTED",
                 "KSV_SRM_VALIDATION_SUPPORTED",
-                "SINGLE_HEAD_MST_SUPPORTED",
-                "SINGLE_HEAD_DUAL_SST_SUPPORTED",
                 "HDMI_2_0_SUPPORTED",
                 "CROSS_BAR_SUPPORTED",
                 "GLITCHLESS_MODESET_SUPPORTED"
             ]
         );
         // the model does not answer the crossbar control: no CROSS_BAR, nothing else moves
-        assert_eq!(table(&facts(ADA_ROW, false)), [0x81, 0x27]);
+        assert_eq!(table(&facts(ADA_ROW, false)), [0x81, 0x24]);
         // TMDS: 340 MHz is HDMI 1.4b's ceiling, one kHz above is HDMI 2.0
         let mut g = f;
         g.tmds_max_khz = HDMI_1_4_TMDS_MAX_KHZ;
-        assert_eq!(table(&g), [0x81, 0x2b]);
+        assert_eq!(table(&g), [0x81, 0x28]);
         g.tmds_max_khz = HDMI_1_4_TMDS_MAX_KHZ + 1;
-        assert_eq!(table(&g), [0x81, 0x2f]);
-        // no DP-capable SOR in the class: neither MST nor dual SST
-        g.dp_sor = false;
-        g.dp_sor_pair = false;
         assert_eq!(table(&g), [0x81, 0x2c]);
         // no workaround bit is ever set, whatever the facts
         for routing in [false, true] {
@@ -228,21 +211,9 @@ mod tests {
             &kf_chip::display::BLACKWELL_GB20X,
         ] {
             assert_eq!(rm_features(row.ip_version), None, "{}", row.chips);
-            assert_eq!(table(&facts(row, true)), [0x00, 0x0f], "{}", row.chips);
+            assert_eq!(table(&facts(row, true)), [0x00, 0x0c], "{}", row.chips);
         }
         assert!(rm_features(ADA_ROW.ip_version).is_some());
-        // a class table without the DP link bits: a different table from the same rule
-        let (t, _) = tables();
-        assert!(t.f(ADA_ROW.classes.caps, "SOR_CAP_DP_A").is_some());
-        assert!(t.f(0xDEAD, "SOR_CAP_DP_A").is_none());
-        let f = EngineFacts::derive(t, 0xDEAD, ADA_ROW.ip_version, 4, true).unwrap();
-        assert!(!f.dp_sor && !f.dp_sor_pair);
-        assert_eq!(table(&f), [0x81, 0x2c]);
-        // one head: two SST links cannot feed it from two SORs
-        let one =
-            EngineFacts::derive(t, ADA_ROW.classes.caps, ADA_ROW.ip_version, 1, true).unwrap();
-        assert!(one.dp_sor && !one.dp_sor_pair);
-        assert_eq!(table(&one), [0x81, 0x2d]);
     }
 
     /// Hostile layouts: a bit the layouts lack, a table size that is not the member's, or a bit
@@ -288,6 +259,6 @@ mod tests {
         );
         // a class table lacking the TMDS clock cannot derive
         let none = ClassTable::parse("");
-        assert!(EngineFacts::derive(&none, 0xC773, ADA_ROW.ip_version, 4, true).is_err());
+        assert!(EngineFacts::derive(&none, ADA_ROW.ip_version, true).is_err());
     }
 }

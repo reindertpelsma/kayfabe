@@ -2,9 +2,18 @@
 
 **STATUS: LIVE, 2026-10-11.**
 
+## Review correction, 2026-10-11 (Codex candidate; supersedes the capability derivation below)
+
+Independent review rejected the `417bad6d` candidate unchanged: field definitions for DP-capable SORs do not mean the emulated engine implements DP.
+The model is TMDS-only and refuses slave displays. The corrected candidate clears MST and dual-SST on every family; Ada therefore answers `81 2c`
+and unobserved RM-software families `00 0c`. The historical `81 2f` runs below describe earlier binaries, not the corrected model.
+`DFP_ASSIGN_SOR` now respects the generated sublink input (secondary unsupported; invalid values invalid argument), and authors a zero reserved-panel mask.
+Three failing-first regressions reproduce these defects. Linux hardware validation and the new Windows verdict are pending.
+Private closed-driver diagnosis details have been removed from this working tree under owner §AG; historical commits still require the release history sweep.
+
 ## HANDOFF (newest, 2026-10-11 ~04:30 CEST: caps, heads-in-use and the crossbar derived; every GSP-visible reply now equals the real GPU's; the crash persists)
 1. `[measured, runs 640 (kf3 62e29e21) and 641 (kf3 85f2217d), production profile, plain baseline, exFAT app disk, KF3_RPC_TRACE=1 added]` `kf_glgears.exe` STILL dies
-   (exit -1073741819, Application event 1000, nvoglv64.dll+0xb6d516, screenshots AE 0); cup2/cup3/cup8 still PASS. Run 641's trace now logs reply bytes (new: `KF3_RPC_TRACE` prints the first 96
+   (exit -1073741819, Application event 1000, nvoglv64.dll, screenshots AE 0); cup2/cup3/cup8 still PASS. Run 641's trace now logs reply bytes (new: `KF3_RPC_TRACE` prints the first 96
    reply bytes of NV0073 controls). For the gears client (0xc1d0007a) the replies are byte-identical to the real GPU's capture: `0x730101` = `81 2f` (was all zero), `0x730102` flags 0 -> 4 and
    **flags CLIENT -> 1** (was 4: the head count is NOT the remaining suspect, it already matches), `0x73010c` heads 0..3, `0x73011a` = [0x100,1920,1080,2200,1125,0,60]. Falsifier of "the caps
    table / head count steer the ICD" fired: the control sequence is unchanged (`20801315, 2080012f` x2, `730101` x2, `730102` x2, `73010c`, `73011a`, `73010c` x3, `730101`, Frees).
@@ -15,14 +24,13 @@
    `display_seat` claim-count test that the 0x73011a commit left failing). Tests were written together with the code, not failing-first; the hardware baseline (runs 631/640 replies) is the failing side.
 3. Measured about the remaining difference (real capture vs kayfabe, both seen through the GSP): real issues (`20801315, 2080012f`, `730101`) x5 and the `730102..730101` pass x5; kayfabe stops after
    pair 2 / pass 1. Replies equal, so the cause is NOT a visible RM reply. Candidates, none proven:
-   a. **A race in the ICD** `[inferred]`: the minidump of run 641 has 7 threads (one in a wait inside nvoglv64 via opengl32, a nvoglv64 waiter at +0xa3aa57, three thread-pool waiters); the Frees seen after
-      pass 1 may be process teardown after a crash in ANOTHER thread, not an ICD decision. Real RM calls take ~0.5 ms, ours several ms (nested KVM), which would let a second thread read a pointer the
-      first has not stored yet. Falsifier: time stamps on the RPC trace (add elapsed-us per control) show kayfabe's calls are not slower than ~2x the real capture's (0.5 ms), or slowing the REAL guest
-      (VFIO run with a delay) does not crash it.
+   a. **Sensitivity to RPC latency** `[hypothesis, untested]`: compare request-to-reply latency on kayfabe and the real GPU.
+      A latency difference alone cannot establish a race. Falsifier of latency sensitivity as the cause: adding the measured delay to the real-GPU
+      reference leaves gears working. Timing only the handler excludes queue and guest scheduling time and cannot decide this hypothesis.
    b. Non-GSP input: CPU-RM answered queries (from `GetGspStaticInfo`), D3DKMT/registry. Falsifier: diff the authored `GetGspStaticInfo` reply (fn 65) against the real boot capture field by field.
    c. KMD-side refusals that the real GPU answers (`0x20809004` GSS-legacy, `0x007302a5` observed [0,0,0,3] -> [0,0,60000,3]); they appear periodically in the real capture (every ~0.14 s), so probably not tied to the ICD.
-4. Next step with its falsifier: (a) first, it is cheap: log `elapsed us` per control in `KF3_RPC_TRACE` and run once (gears + the same trace); if the per-control latency is > 3 ms against the real ~0.5 ms, try to
-   shorten the ICD's window (e.g. fewer vCPU exits per RPC) or verify by slowing the VFIO guest. Do not change the display model further on this lead: its replies now equal the real GPU's.
+4. Next diagnostic: measure full request-to-reply latency on both configurations, then test any latency-sensitivity hypothesis with a delayed real-GPU control.
+   The latency numbers previously suggested here were estimates, not a committed paired measurement.
 5. Host: runs 640 and 641 done, no QEMU, IOMMU group 11 DMA-FQ, no /tmp/kf-stop-winprod. Host worktree `/data/kf-gl730101-host` and its target `/data/kf-gl730101-host-target` (to delete when the work is final);
    local target `/root/kf-gl730101-target`. Binaries `kf3-bins/62e29e21`, `kf3-bins/85f2217d`. NOT run: the 13 OpenGL matrix apps and Minecraft (gears fail), the Linux regression for this display-model change (fast suite 30/30 +
    broker smoke): required before merge because the caps now claim CROSS_BAR (NVKMS then calls `DFP_ASSIGN_SOR`).
@@ -30,7 +38,7 @@
 ## HANDOFF (previous, 0x73011a answered; the crash is NOT fixed by it)
 1. `[measured, runs 630 and 631, kf3 `2cedcc67`, production profile (`windows_broker_prod3.sh`), plain baseline, exFAT app disk attached after sign-in]` `0x73011a` is now answered `NV_OK`
    (run 631 `KF3_RPC_TRACE=1`: `RmControl cmd=0x0073011a client=0xc1d0007a object=0xff0a0000 result=0x0`, right after `0x73010c` head 0), cup2/cup3/cup8 still PASS,
-   and `kf_glgears.exe` STILL dies: exit -1073741819, Application event 1000, `nvoglv64.dll` 32.0.15.8088, fault offset `0xb6d516` (the same offset as before), screenshots do not differ
+   and `kf_glgears.exe` STILL dies: exit -1073741819, Application event 1000, `nvoglv64.dll` 32.0.15.8088, screenshots do not differ
    (AE 0). So the falsifier of the lead ("answer it and the crash goes away") **fired**: `0x73011a` refused was not the (only) cause. Evidence: `winprod/run630`, `winprod/run631` and
    `tdropus/glcrash-63{0,1}.log` on the host.
 2. The gate admitted the answer (the guest says `guestDriverVersion="580.88"`, the device answers as driver `580.65.06`, the observed branch); no `layout unverified` line, counter 0.
@@ -83,15 +91,14 @@ Measured on the real GPU (Windows 11 baseline, NVIDIA 580.88, vfio-pci, GSP obse
    2048 per runlist. Fix = the **channel budget** (`docs/design/V3_CHANNEL_BUDGET.md`): derived from the host's unprivileged FIFO_GET_INFO,
    told to the guest AND enforced per runlist, property `channel-budget`, counter `birth_refused_cap`. On this host: 1789 per runlist (Derived; limit 2045).
    **Not run:** the control (old binary, same baseline with >64 live channels) that would show the pre-fix failure on a fresh guest; run 501's log is the evidence.
-2. **OpenGL is NOT the same bug.** `kf_glgears.exe` STILL crashes at `nvoglv64.dll+0xb6d516` (Application event 1000, exit -1073741819) on the fresh
+2. **OpenGL is NOT the same bug.** `kf_glgears.exe` STILL crashes at `nvoglv64.dll` (Application event 1000, exit -1073741819) on the fresh
    baseline with budget 1789 and `birth_refused_cap=0` (runs 614, 615). The channel refusals in run 501 were coincident, not the GL cause.
 3. **GL lead (measured, run 615 with KF3_RPC_TRACE=1, qemu.log lines 10913-13330):** the gears process (client 0xc1d0007a) allocs client/device/subdevice/`0x0073`
    display-common, then controls `0x20801315` ok, `0x2080012f` (GPU_QUERY_ECC_STATUS) `result=none` (unserviced -> 0x56; bare metal also answers
    0x56 for it, `V3_REFUSAL_AUDIT.md`: not a divergence), `0x730101` x2, `0x730102` x2, `0x73010c` ok, **`0x0073011a` `result=none` (refused 0x56)**, `0x730101`, then
    Frees and the access violation. No VA space, channel or GL class is ever allocated, so the crash is in ICD initialisation right after the display-common
    queries. `0x73011a` is not in the open ogkm headers (sits between `GET_SRM_STATUS 0x730119` and `HDCP_REVOCATION_CHECK 0x73011b`), no VFIO reference capture
-   contains it (the vfio-8/9/10 boot captures end before an ICD runs). The WER minidump (analysed on the host only, `/var/lib/kf-windows-20261005/glcrash/`) shows a
-   NULL-based read, i.e. the ICD used an object it never got. **Inferred, not proven:** the refused `0x73011a` (or the ECC one) leaves that object NULL.
+   contains it (the vfio-8/9/10 boot captures end before an ICD runs). **Previous hypothesis, now falsified as sufficient:** refusing `0x73011a` causes the crash.
    Falsifier: answer `0x73011a` as the real GPU does and the crash goes away; if it does not, the next suspect is `0x2080012f`'s reply shape.
 4. **Next step (needs the owner's GPU time): a VFIO reference capture** of kf_glgears on the real GPU with the GSP observer running through the launch
    (`vfio_dvi_reference_click.sh` style, `gsp_ctrl_scan.py 0073011a,2080012f`) gives the real request size, reply bytes and status for both. Then answer them from
