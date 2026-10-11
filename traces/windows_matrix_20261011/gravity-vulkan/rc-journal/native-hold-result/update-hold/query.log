@@ -1,0 +1,8 @@
+kf-host: host tier: stock
+RC_JOURNAL driver=595.91.07 count=2 max_records=32
+RC_JOURNAL index=0 status=0x0
+RC_JOURNAL index=0 bytes=97
+RC_JOURNAL index=1 status=0x0
+RC_JOURNAL index=1 bytes=97
+RC_JOURNAL count_before=2 count_after=2
+RC_JOURNAL_PROBE=READ_COMPLETE (bounded records, not a fault-cause verdict)

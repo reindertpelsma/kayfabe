@@ -2,6 +2,31 @@
 
 STATUS: RESEARCH, 2026-10-11. Bench only; no production caller or GPU work.
 
+## Measured discriminator, 2026-10-11 20:17UTC
+
+Native USER/uid65534 runs completed before manual VM creation. NOP397745:
+rc0, GPU tail1054us, precise-window Xid0. Update397810: rc0/tail1056us,
+Xid32. Update-hold397864: rc0/tail1063us, Xid32 at20:17:17.639516UTC.
+HOLD_BEGIN=20:17:17.639216UTC, HOLD_END=20:17:19.639287UTC. Thus the fault
+arrived300us into the hold, before cleanup. This falsifies early resource
+cleanup for this native failure; it does not identify the inner RM error or
+establish that GravityMark faults on the same software method.
+Binary SHA256 is saved in native-hold-result/binary-sha256.txt.
+Per-mode verdicts, raw probe logs and exact kernel windows are saved alongside.
+The probe's PASS/rc0 only means its own GPU tail/cleanup checks succeeded;
+the supervisory update verdicts are FAIL because of hostXid. Batch exit0
+means all three diagnostics were recorded, not that they all passed.
+
+Separate root read-only journal queries succeeded, with counts0,1,2 after
+NOP/update/update-hold respectively. Each fault record has97bytes. Raw records
+and the bounded offline decoder stay private. The exact public595.91.07
+schema does not name the returned nested legacy fields; they remain opaque,
+so no offending method, MMU fault address or inner rejection status is claimed.
+No closed-driver interface/constants enter the implementation. A permission
+failure remains a public-source hypothesis: registration privilege is retained
+and the inner FIFO control remains privileged. No production caller is enabled.
+This supersedes the pending-hardware statements below.
+
 Hypothesis: the host RC journal preserves additional fault details for the
 measured GravityMark Xid32. Falsifier: a matching record has no such details.
 A refused query, absent/overwritten record or changed count is inconclusive.

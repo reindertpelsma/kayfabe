@@ -1,0 +1,12 @@
+{
+  "mode": "update",
+  "pid": 397810,
+  "rc": 0,
+  "query_rc": 0,
+  "start_utc": "2026-10-11 20:17:15.582463 UTC",
+  "process_end_utc": "2026-10-11 20:17:15.597885 UTC",
+  "end_utc": "2026-10-11 20:17:17.598207 UTC",
+  "xid_records": 1,
+  "verdict": "FAIL",
+  "scope": "same-config native lifetime diagnostic, not Windows repair"
+}

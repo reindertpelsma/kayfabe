@@ -3,6 +3,43 @@
 **STATUS: RESEARCH, 2026-10-11.** Native experiment FAIL (host Xid32),
 no production call site. The earlier hardware-pending paragraph below is history.
 
+At20:17UTC the lifetime discriminator also FAILS natively: NOP clean, update
+and update-hold each cause Xid32 despite rc0 and a GPU tail. The hold fault
+arrives300us after HOLD_BEGIN, about2s before resources are released, ruling
+out early cleanup for this native case. Root diagnostic reads return bounded
+records but no decoded inner status. See
+[`rc-journal`](../rc-journal/README.md). Registration privilege/permissions
+remain an investigation lead, not a measured failure status or Windows fix.
+
+## Proposed stream-preserving implementation, not yet validated
+
+The owner's suggested direction is to register an authored host channel-info
+update while retaining the deferred trigger in the GPU stream. Unlike our
+mapping/invalidate gate, this action can in principle be executed by native RM
+at the stream trigger. GPGA containment alone is insufficient: validate the
+target channel/space ownership, complete FIFO and USERD spans, alignment and
+entry count, and retain the backing/mappings through the hardware transition.
+Substitute our host client/channel/memory handles; do not forward guest control
+bytes. An unchanged numeric API handle also requires collision/lifetime checks
+in the host deferred object's namespace. Kayfabe's channel metadata and USERD
+tracking must follow the same transition, rather than switching at registration.
+
+Current Windows USERD is specifically a relayed guest-RAM slot, not an adopted
+GPGA USERD: the real host channel uses a private kayfabe-owned4KiB USERD object
+in no GPU VA space (`kf-qemu/src/chan.rs`, Relay and passthrough birth). A guest
+USERD move must therefore switch the validated relay endpoint at the proper
+stream transition while preserving that private host object. A FIFO resize
+also changes the relay's entry-count bound and ring metadata. Merely registering
+the guest's new USERD address would not preserve this existing contract.
+
+Public source preserves registration privilege for the inner deferred control;
+unprivileged V2 registration does not itself establish permission to execute
+the privileged FIFO update. Exact595.91.07 generated subdevice flags remain0x4.
+The measured native failure blocks promotion of this proposed path, but does
+not identify its inner failure status or prove every unprivileged equivalent
+impossible. The next isolated hold test separates asynchronous action failure
+from early resource cleanup; it does not test actual USERD migration yet.
+
 ## Measured result, 2026-10-11 18:56:51 UTC
 
 Both native processes returned0, registered V2, and observed an actual GPU tail

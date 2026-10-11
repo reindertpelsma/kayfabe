@@ -1,0 +1,38 @@
+[
+  {
+    "mode": "nop",
+    "pid": 397745,
+    "rc": 0,
+    "query_rc": 0,
+    "start_utc": "2026-10-11 20:17:13.473000 UTC",
+    "process_end_utc": "2026-10-11 20:17:13.536782 UTC",
+    "end_utc": "2026-10-11 20:17:15.536933 UTC",
+    "xid_records": 0,
+    "verdict": "PASS",
+    "scope": "same-config native lifetime diagnostic, not Windows repair"
+  },
+  {
+    "mode": "update",
+    "pid": 397810,
+    "rc": 0,
+    "query_rc": 0,
+    "start_utc": "2026-10-11 20:17:15.582463 UTC",
+    "process_end_utc": "2026-10-11 20:17:15.597885 UTC",
+    "end_utc": "2026-10-11 20:17:17.598207 UTC",
+    "xid_records": 1,
+    "verdict": "FAIL",
+    "scope": "same-config native lifetime diagnostic, not Windows repair"
+  },
+  {
+    "mode": "update-hold",
+    "pid": 397864,
+    "rc": 0,
+    "query_rc": 0,
+    "start_utc": "2026-10-11 20:17:17.631918 UTC",
+    "process_end_utc": "2026-10-11 20:17:19.658276 UTC",
+    "end_utc": "2026-10-11 20:17:21.658600 UTC",
+    "xid_records": 1,
+    "verdict": "FAIL",
+    "scope": "same-config native lifetime diagnostic, not Windows repair"
+  }
+]

@@ -1,0 +1,45 @@
+{
+ "os": "Microsoft Windows 11 Enterprise LTSC Evaluation build 26100",
+ "smi": "NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running. This can also be happening if non-NVIDIA GPU is running as primary display, and NVIDIA GPU is in WDDM mode.",
+ "explorer": true,
+ "image_identity": "f5d28f726680218377c79dc62ece49af0257dd61791c6d1b828a377d3b768254",
+ "tools": [
+  "cup2.exe",
+  "cup3.exe",
+  "cup8.exe",
+  "kf_cuda_control.exe",
+  "kf_dxprobe.exe",
+  "kf_glgears.exe"
+ ],
+ "notes": [],
+ "user": "VASTWIN\\vast",
+ "boot_utc": "2026-10-11T19:57:59.5000000Z",
+ "adapters": [
+  {
+   "device": 140,
+   "index": 0,
+   "luid_high": "00000000",
+   "name": "Microsoft Basic Render Driver",
+   "luid_low": "00005cae",
+   "flags": 0,
+   "vendor": 5140,
+   "dedicated_mb": 0
+  },
+  {
+   "device": 140,
+   "index": 1,
+   "luid_high": "00000000",
+   "name": "Microsoft Basic Render Driver",
+   "luid_low": "00005ceb",
+   "flags": 2,
+   "vendor": 5140,
+   "dedicated_mb": 0
+  }
+ ],
+ "cd": "D:",
+ "ok": false,
+ "nvidia_adapters": 0,
+ "video": [
+  "NVIDIA GeForce RTX 4070 | 32.0.15.8088 | Error | code 43"
+ ]
+}

@@ -170,6 +170,20 @@ Recorded, not recommended.
 
 ### 2.1 U′ — the deferred-API variant, unprivileged registration, physical side unknown
 
+**CORRECTION, 2026-10-11:** the claim below that deferred execution bypasses
+the privileged gate is unsupported. Public `deferred_api.c` stores the
+registration call's `secInfo.privLevel` and supplies it to the inner control,
+including `serverControl_Prologue`; registration and execution are separate
+permission checks. The exact host595.91.07 generated subdevice table still
+marks FIFO_UPDATE_CHANNEL_INFO privileged (`0x4`). Native USER/uid65534 probes
+successfully register V2 but the update trigger causes Xid32; the same binary's
+NOP control does not. The inner rejection status remains unmeasured, so a
+permission failure is a hypothesis, not the measured cause. A GPU-written tail
+does not validate the asynchronous update: public source classifies this
+particular action non-stalling. See
+[`native-deferred-update`](../../traces/windows_matrix_20261011/gravity-vulkan/native-deferred-update/README.md).
+There is no production caller and no demonstrated unprivileged migration path.
+
 `NV50_DEFERRED_API_CLASS` is `RS_FLAGS_ALLOC_NON_PRIVILEGED`, a channel descendant
 (`resource_list.h:1522-1534`); its ctrl `NV5080_CTRL_CMD_DEFERRED_API_V2` (`0x50800103`) carries
 flags `0x10008` = `NON_PRIVILEGED` (`g_deferred_api_nvoc.c:213-215`). `deferred_api.c:345-375`
