@@ -3,6 +3,31 @@
 **STATUS: LIVE, 2026-10-11.** Product candidate `2c917f3e`, following the
 OpenGL gears fix. Results are pending; this is not a matrix pass claim.
 
+## Latest checkpoint, 2026-10-11 13:20 UTC
+
+This section supersedes pending-state statements below. Product `0f9c01f9` passed
+matching-driver Linux gates 9/9 plus gate 10 and fast30/30. Windows focused run
+850/851: callback, occupancy, deviceQuery and matmul PASS; BlackScholes TIMEOUT132s
+without TDR/GSP recovery/Xid; subsequent gears TIMEOUT197s with GSP recovery and
+host Xid32. Fresh-gears-first run852 PASS. Timed Torch startup diagnosis is running;
+full candidate coverage remains pending. The diagnostic is not an official app row.
+Evidence: `copy-slicing/windows-focus/`; hypotheses/falsifiers in the handoff.
+
+Stock RTX4090/Windows580.88 reference completed five of six focus tests, then
+unchanged warm BlackScholes retry PASS9s with numerical/GPU proof. Initial TIMEOUT
+and a separate NOTRUN staging retry are retained. Native clpeak CUDA remains active.
+Evidence: `reference-focus/blackscholes-retry2/`, `blackscholes-retry-notrun/`.
+
+The matrix harness previously reused a guest after a reported app timeout if
+Windows health stayed clean. A failing-first mock regression reproduced this.
+Future frozen harnesses preserve the TIMEOUT verdict and restart before later
+apps, preventing such interrupted-workload state from contaminating the batch.
+All72 harness tests passed except a generated-document synchronization check;
+regeneration and all11 inventory/document tests subsequently passed. No active
+harness was edited. Callback/occupancy inventory notes now record both stock
+and kayfabe validation. Inventory:110 Windows tests,102 non-overlay,67 Linux rows;
+four Linux omissions remain explicitly documented.
+
 The current Windows inventory has 108 tests mapping to 65 Linux rows. The native
 Windows reference in `traces/windows_baseline_20261010/results.tsv` covers 100:
 99 PASS and `gravitymark_vk` TIMEOUT. Eight new YUV overlay tests have no recorded

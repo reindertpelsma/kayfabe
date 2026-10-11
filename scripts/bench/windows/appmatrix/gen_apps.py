@@ -412,7 +412,7 @@ for mode, linux_row in (("callback", "simpleCallback"), ("occupancy", "simpleOcc
         + ("callbacks check copied output and stream ordering without CUDA calls inside the callback" if mode == "callback"
            else "occupancy calculator chooses a bounded block size and positive active-block count, then the kernel runs at that size"),
         linux=[linux_row], pkgs=("vc_redist",),
-        note="New coverage added 2026-10-11; native and kayfabe validation pending.")
+        note="Validated 2026-10-11 on stock Windows 580.88 and kayfabe 0f9c01f9; exact GPU readback/API checks passed.")
 
 # ---------------------------------------------------------------------------------------------- Linux matrix -> Windows map
 # every row of scripts/apps/run_apps.sh must appear here (tests/test_apps.py checks that) either with the Windows apps

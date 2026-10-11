@@ -124,6 +124,15 @@ class Driver(unittest.TestCase):
         rc, d = run(["llama_cuda_bench"], {"llama_cuda_bench": {"kind": "hang"}}, ["--per-guest", "1"])
         self.assertEqual(res(d)["llama_cuda_bench"]["verdict"], "TIMEOUT")
 
+    def test_reported_timeout_moves_remaining_apps_to_a_fresh_guest(self):
+        rc, d = run(["blackscholes_t", "glgears_wgl"], {"blackscholes_t": "timeout"},
+                    ["--per-guest", "2", "--no-isolate"])
+        r = res(d)
+        self.assertEqual(r["blackscholes_t"]["verdict"], "TIMEOUT")
+        self.assertEqual(r["glgears_wgl"]["verdict"], "PASS")
+        self.assertNotEqual(r["blackscholes_t"]["boot"], r["glgears_wgl"]["boot"])
+        self.assertIn("app-timeout", slog(d))
+
     def test_vm_death_mid_app(self):
         rc, d = run(["nvidia_smi", "matmul_t"], {"nvidia_smi": {"kind": "qemu_exit", "once": True}}, ["--per-guest", "2"])
         r = res(d)

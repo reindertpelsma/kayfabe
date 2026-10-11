@@ -550,6 +550,10 @@ class GuestSession:
         self.tdr_total += int(d.get("tdr", 0))
         if not need_restart:
             need_restart = self._after_app(aid)
+        # A killed workload may leave GPU work behind even when Windows health
+        # counters remain clean. Preserve its verdict and isolate later apps.
+        if d["verdict"] == "TIMEOUT":
+            need_restart = need_restart or "app-timeout"
         return self._finish(app, d, log_text, facts, g0, need_restart=need_restart)
 
     def _shot(self, name):
