@@ -130,7 +130,8 @@ register anything natively, migrate the ring or execute software methods.
 All sampling follows the real host doorbell, as in the original peek.
 
 The association carries an allocation-lifetime flag shared with the channel.
-It publishes before deferred host allocation can wait; guest object/subtree
+It publishes at admission before the action can queue or host allocation can
+wait; later allocations cannot overwrite that pending lifetime. Guest object/subtree
 free invalidates it without taking the relay lock. The sampler checks liveness
 around registry lookup and also after arming, preventing ordinary handle reuse
 or a concurrent free during allocation from reviving a stale association.

@@ -7,6 +7,17 @@ again after the Wednesday 07:00 reset). Read `AGENTS.md` (= `CLAUDE.md`) first: 
 (state, branches, traps), `docs/DELEGATED_DECISIONS_20261010.md`, `docs/OWNER_RULINGS.md` §AB-§AE, `docs/design/V3_FEATURE_GAPS.md`
 (priorities: P0 = prevents apps running; fidelity and perf beyond "decent" are post-release), `docs/design/V3_NOT_IN_GIT.md`.
 
+## Latest checkpoint, 2026-10-11 21:19 UTC
+
+Last confirmed public pusha7719952a, private1dc9c0e. Reviewed late diagnostic
+source passes161 GPU-free tests. This follow-up moves lifetime publication to
+admission before queuing, covering hostile Free even before the allocation act
+starts; later objects cannot replace the pending flag. Independent re-review
+found no blockers; final161/161 PASS. Mode stays opt-in, candidate capture only.
+No GPU work was performed; manual1380 remains reserved for the owner. Linux
+hardware regression and matched GravityMark control/probe remain pending.
+See RESUME_CODEX_WINDOWS_20261011.md and gravity-vulkan/h1-channel-audit.
+
 ## Latest checkpoint, 2026-10-11 21:16 UTC
 
 Last confirmed public pushff1e3cd7e (offline H1 audit), private1dc9c0e.

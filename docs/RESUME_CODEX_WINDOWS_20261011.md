@@ -1,6 +1,6 @@
 # Resume the Windows matrix and GravityMark Vulkan investigation
 
-**STATUS: LIVE, 2026-10-11 21:16 UTC.** Compact entry point for a new chat.
+**STATUS: LIVE, 2026-10-11 21:19 UTC.** Compact entry point for a new chat.
 Historical chronology is in [HANDOFF_FOR_CODEX_20261011.md](HANDOFF_FOR_CODEX_20261011.md).
 Read the current checkpoint here before treating an older pending/result paragraph
 in that chronology as current state.
@@ -9,7 +9,8 @@ in that chronology as current state.
 
 Public repository: <https://github.com/reindertpelsma/kayfabe>.
 Branch: **`codex/windows-matrix-20261011`**. Last confirmed push before this
-diagnostic: `ff1e3cd7e`; the branch tip includes the later reviewed diagnostic.
+diagnostic hardening: `a7719952a` (reviewed source,161 GPU-free tests);
+this later checkpoint also publishes lifetime before the allocation action queues.
 Use the branch tip to get this document and the complete reachable source history.
 
 Controller worktree: **`/data/kf-inval-absent`**. `/workspace/kayfabe` is another

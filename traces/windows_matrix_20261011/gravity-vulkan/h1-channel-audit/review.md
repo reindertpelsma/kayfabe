@@ -14,8 +14,9 @@ Resolved during review:
   Iteration is bounded by the already capped input; method arithmetic fits u32.
 - A reusable guest handle could misattribute a registration: a shared allocation
   lifetime flag now invalidates on guest object/subtree free. The flag publishes
-  under the PtChan mutex before host allocation waits and is never revived.
-  This also closes the identified concurrent-free-during-allocation window.
+  under the PtChan mutex at admission before the action queues and is never
+  revived/replaced by later objects. Final follow-up review also verified Free
+  before action start and concurrent Free during host allocation are covered.
 - Bundle-prefix output is bounded by `len().min(64)`, once at arming, with no
   short-bundle panic. No guest registration bytes reach native host calls.
 

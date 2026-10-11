@@ -4487,21 +4487,36 @@ impl ChanPlane {
     /// trigger on that subchannel finds nothing registered and host RM fails it (fail closed, an RC of
     /// that twin only); no host action is ever taken from a guest word. At most one per twin.
     fn twin_defapi_act(&self, client: u32, parent: u32, handle: u32) -> ChanAnswer {
+        // Publish at admission, before the act can even queue. A hostile guest
+        // can free an object without waiting for its deferred allocation reply.
+        // Associate only the first lifetime; later guest-only objects cannot
+        // overwrite the flag a pending host allocation/free pair shares.
+        let peek = if configured_relay_peek_mode() == RelayPeekMode::AfterFifoUpdate {
+            self.pt.lock().ok().and_then(|mut m| {
+                let v = m.get_mut(&(client, parent))?;
+                if v.defapi_host.is_some() || v.peek_defapi.is_some() {
+                    return None;
+                }
+                let p = PeekDefapi {
+                    key: kf_rm::defapi::ObjKey { client, object: handle },
+                    live: Arc::new(AtomicBool::new(true)),
+                };
+                v.peek_defapi = Some(p.clone());
+                Some(p)
+            })
+        } else {
+            None
+        };
         self.defer(
             "deferred-API twin object",
             Box::new(move |me: &ChanPlane| {
-                let peek = (configured_relay_peek_mode() == RelayPeekMode::AfterFifoUpdate)
-                    .then(|| PeekDefapi {
-                        key: kf_rm::defapi::ObjKey { client, object: handle },
-                        live: Arc::new(AtomicBool::new(true)),
-                    });
                 let chan = {
-                    let mut m = me
+                    let m = me
                         .pt
                         .lock()
                         .map_err(|_| (NV_ERR_NOT_SUPPORTED, "pt poisoned".to_string()))?;
                     let v = m
-                        .get_mut(&(client, parent))
+                        .get(&(client, parent))
                         .ok_or((NV_ERR_NOT_SUPPORTED, "the twin is gone".to_string()))?;
                     if let Some((g, h)) = v.defapi_host {
                         return Ok(format!(
@@ -4509,9 +4524,6 @@ impl ChanPlane {
                             v.chan.token
                         ));
                     }
-                    // Publish before the host allocation can wait: a concurrent
-                    // guest free must invalidate this pending allocation too.
-                    v.peek_defapi = peek.clone();
                     v.chan
                 };
                 let h = me.rm.alloc_deferred_api(chan).map_err(|e| {
