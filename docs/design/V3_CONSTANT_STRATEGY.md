@@ -70,6 +70,24 @@ Every open item is checked in this order. It moves to the next tier only with a 
 - **Opt-in report of refused controls** from `kayfabe-measure`/kayfabe (anonymised counts per die and driver branch) to learn which dies and drivers users hit,
   so sweeps are ordered by real demand. Nothing is collected without the user's opt-in.
 
+## 8. The acceptance layer: a nested kayfabe run on each rented die (owner, 2026-10-11)
+
+kayfabe emulates the display engine, so a Windows or Linux guest under kayfabe on a headless rental still sees a head. A nested run per die is therefore the
+acceptance test for every value that did not come from a same-die measurement (an unmeasured die's clean fallback, a value from another die, a reverse-engineered
+value). Owner: the test must be rigorous. What rigorous means here:
+
+- **Every row has a falsifying test.** A row that came from reverse engineering or a fallback gets a behaviour-level verification item (`V3_PROVENANCE.md` §2) naming
+  the guest feature that depends on it (HDR, overlay, multi-monitor, colour program, flip timing, ...). A row with no such test is not "verified by a pass".
+- **Mutation check: prove the test can fail.** For each row, change the answer to a wrong value and confirm the suite fails. A test that still passes with a wrong value
+  is not evidence about that row and is listed as uncovered.
+- **Differential against the real driver on the same die.** The same app matrix runs natively on a Windows rental (baseline: 99/100 on the vast RTX 4060 Ti) and under kayfabe
+  on that die. Compare render checksums, engine usage, event-log errors and per-app verdicts; every difference is a finding. A pass on both is not enough if the outputs differ.
+- **Cover the features, not only boot:** sign-in, Edge video (overlay), OpenGL/D3D/Vulkan, NVENC/NVDEC, CUDA ladder, HDR and multi-monitor where the die supports them,
+  hot-plug/resize, and a soak (no TDR for 60 minutes).
+- **A pass is evidence only for the exercised paths.** Features with no test stay on the list as uncovered, not as passing.
+- **Unverified:** Windows has not been run under kayfabe on a nested Vast host (VM exits cost 10-40x; watchdogs and the TDR timeout may fire for reasons unrelated to
+  constants). First check: one Windows boot under kayfabe on a rented Linux VM; tune budgets before reading a failure as a missing answer.
+
 ## 6. Priority
 
 Release-coverage work, not the current blocker. The OpenGL failure on the RTX 4070 is not a constants problem (the replies already equal the real
