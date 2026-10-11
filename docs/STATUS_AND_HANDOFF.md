@@ -11,6 +11,8 @@ fix this file. Entries below the first are dated history.
 
 ## 0. Current resumption — start here
 
+**Windows/Codex current resume point:** [RESUME_CODEX_WINDOWS_20261011.md](RESUME_CODEX_WINDOWS_20261011.md), branch `codex/windows-matrix-20261011`. Protect the live owner manual session described there.
+
 ## Latest checkpoint, 2026-10-11 20:23 UTC
 
 Last confirmed public push fc6f85b4a; private1dc9c0e. Owner explicitly reaffirms

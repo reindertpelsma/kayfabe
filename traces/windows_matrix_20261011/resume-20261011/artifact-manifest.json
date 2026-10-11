@@ -1,0 +1,170 @@
+[
+  {
+    "source": "/tmp/kf-prod-defaults-campaign.sh",
+    "artifact": "host-scripts/kf-prod-defaults-campaign.sh",
+    "original_bytes": 462,
+    "original_sha256": "0c9ec48d46c6b68d6d3179243d76c731bebeeaf8dfc48e0e7beb3f0308c5ce1a",
+    "artifact_sha256": "0c9ec48d46c6b68d6d3179243d76c731bebeeaf8dfc48e0e7beb3f0308c5ce1a"
+  },
+  {
+    "source": "/tmp/kf-prod-defaults-campaign-without-reference.sh",
+    "artifact": "host-scripts/kf-prod-defaults-campaign-without-reference.sh",
+    "original_bytes": 1821,
+    "original_sha256": "ea6501d04efbccc327500d45e51da0dd6c9ed78797ebb6afcbb46b0f40318e3f",
+    "artifact_sha256": "ea6501d04efbccc327500d45e51da0dd6c9ed78797ebb6afcbb46b0f40318e3f"
+  },
+  {
+    "source": "/tmp/kf-prod-defaults-campaign-frozen-3252.sh",
+    "artifact": "host-scripts/kf-prod-defaults-campaign-frozen-3252.sh",
+    "original_bytes": 2068,
+    "original_sha256": "ab7170700647d447e124ba1c90f9a25fedac889e3f0e2af8eb7fa7a0cbf4b641",
+    "artifact_sha256": "ab7170700647d447e124ba1c90f9a25fedac889e3f0e2af8eb7fa7a0cbf4b641"
+  },
+  {
+    "source": "/tmp/kf-prod-defaults-regression.sh",
+    "artifact": "host-scripts/kf-prod-defaults-regression.sh",
+    "original_bytes": 1649,
+    "original_sha256": "53ebd4ded349a09f485e2d6ccab7087fe746b77b6aa85f17dbea208dae804333",
+    "artifact_sha256": "53ebd4ded349a09f485e2d6ccab7087fe746b77b6aa85f17dbea208dae804333"
+  },
+  {
+    "source": "/tmp/kf-prod-defaults-focus.sh",
+    "artifact": "host-scripts/kf-prod-defaults-focus.sh",
+    "original_bytes": 2027,
+    "original_sha256": "8df1354c0001feef7bfcedd27bbb2556110bbe186a087e49632b90ef90a183fa",
+    "artifact_sha256": "8df1354c0001feef7bfcedd27bbb2556110bbe186a087e49632b90ef90a183fa"
+  },
+  {
+    "source": "/tmp/kf-prod-defaults-control.sh",
+    "artifact": "host-scripts/kf-prod-defaults-control.sh",
+    "original_bytes": 2028,
+    "original_sha256": "44b6ee74ce7671c2b4bfaca4e157c922929f985d77b24ae11f6ccefa4f2bbd55",
+    "artifact_sha256": "44b6ee74ce7671c2b4bfaca4e157c922929f985d77b24ae11f6ccefa4f2bbd55"
+  },
+  {
+    "source": "/tmp/kf-prod-caps-ablation.sh",
+    "artifact": "host-scripts/kf-prod-caps-ablation.sh",
+    "original_bytes": 2126,
+    "original_sha256": "fea433008f8c1271922a0575454131ddbfad050abe0a6d02c5fb6ef40db8d398",
+    "artifact_sha256": "fea433008f8c1271922a0575454131ddbfad050abe0a6d02c5fb6ef40db8d398"
+  },
+  {
+    "source": "/tmp/kf-prod-caps-post.sh",
+    "artifact": "host-scripts/kf-prod-caps-post.sh",
+    "original_bytes": 720,
+    "original_sha256": "68c8c3d8c128cc36b385f622d68e024df2ff859614856dadabcb3684ffc9cfe4",
+    "artifact_sha256": "68c8c3d8c128cc36b385f622d68e024df2ff859614856dadabcb3684ffc9cfe4"
+  },
+  {
+    "source": "/tmp/kf-prod-manual-1380.sh",
+    "artifact": "host-scripts/kf-prod-manual-1380.sh",
+    "original_bytes": 648,
+    "original_sha256": "b0e926b9e340c99bb9a1048dbc01f682822b8e56beeb87d2e686a2787b07c1de",
+    "artifact_sha256": "b0e926b9e340c99bb9a1048dbc01f682822b8e56beeb87d2e686a2787b07c1de"
+  },
+  {
+    "source": "/tmp/kf-prod-manual-1380-frozen.sh",
+    "artifact": "host-scripts/kf-prod-manual-1380-frozen.sh",
+    "original_bytes": 1823,
+    "original_sha256": "beb0513009bc0af205c5d8da44559ad0fc9020feb67fc07b1ef74fff9b9c7ad7",
+    "artifact_sha256": "beb0513009bc0af205c5d8da44559ad0fc9020feb67fc07b1ef74fff9b9c7ad7"
+  },
+  {
+    "source": "/tmp/kf-prepare-manual-1380.py",
+    "artifact": "host-scripts/kf-prepare-manual-1380.py",
+    "original_bytes": 3010,
+    "original_sha256": "a8b650ed5ac6a4661ba6f7573d7e4e1901b079f7b88384e4189ab1caad8e3307",
+    "artifact_sha256": "a8b650ed5ac6a4661ba6f7573d7e4e1901b079f7b88384e4189ab1caad8e3307"
+  },
+  {
+    "source": "/tmp/kf-native-hold-and-journal.py",
+    "artifact": "host-scripts/kf-native-hold-and-journal.py",
+    "original_bytes": 2816,
+    "original_sha256": "af1faab63d1e00b9407351d23ce60c76149352daba93f8bec56acddf1472b638",
+    "artifact_sha256": "af1faab63d1e00b9407351d23ce60c76149352daba93f8bec56acddf1472b638"
+  },
+  {
+    "source": "/tmp/kf-capture-xids.py",
+    "artifact": "host-scripts/kf-capture-xids.py",
+    "original_bytes": 1299,
+    "original_sha256": "6d6ad653e7e2be5e1f5738e3a45f0832176a90384217cdbc98a22c893016a704",
+    "artifact_sha256": "6d6ad653e7e2be5e1f5738e3a45f0832176a90384217cdbc98a22c893016a704"
+  },
+  {
+    "source": "/tmp/kf-capacity-after-manual.sh",
+    "artifact": "host-scripts/kf-capacity-after-manual.sh",
+    "original_bytes": 973,
+    "original_sha256": "6dcc1d353c5d87df24f71ec0ccd991ab8fd1c5b27ebc18f4f0ddfc40cfda73f7",
+    "artifact_sha256": "6dcc1d353c5d87df24f71ec0ccd991ab8fd1c5b27ebc18f4f0ddfc40cfda73f7"
+  },
+  {
+    "source": "/var/lib/kf-windows-20261005/kayfabe-win-6fafcc6e/scripts/bench/windows/windows_broker_prod3.sh",
+    "artifact": "host-scripts/windows_broker_prod3.sh",
+    "original_bytes": 21010,
+    "original_sha256": "43867e7e449275c1061b373f3fc3c0e329b457019158ec017c43a2c2e4fbe3ca",
+    "artifact_sha256": "43867e7e449275c1061b373f3fc3c0e329b457019158ec017c43a2c2e4fbe3ca"
+  },
+  {
+    "source": "/var/lib/kf-windows-20261005/boundary-kayfabe-1400/qemu.log",
+    "artifact": "run1400/qemu.log.gz",
+    "original_bytes": 2247408,
+    "original_sha256": "4a6d8f6042f44eed61bfb3eb366ba169d43b92859912b1740c5a4ad453d08572",
+    "artifact_sha256": "b3b06bdde53895a4f04869f1ec27a5707e9b4bd6afe8bef267f55382fbe46ce3"
+  },
+  {
+    "source": "/var/lib/kf-windows-20261005/boundary-kayfabe-1400/command.json",
+    "artifact": "run1400/command.json",
+    "original_bytes": 2873,
+    "original_sha256": "63e2c4ea74413295af171af614a257152e95e73864230d254822efd253052416",
+    "artifact_sha256": "63e2c4ea74413295af171af614a257152e95e73864230d254822efd253052416"
+  },
+  {
+    "source": "/var/lib/kf-windows-20261005/boundary-kayfabe-1400/marker.txt",
+    "artifact": "run1400/marker.txt",
+    "original_bytes": 258,
+    "original_sha256": "c8cb873ec793fbabb849a6a1873e0d2c4ab4c1af5ad8db0c7a047ea819a707fb",
+    "artifact_sha256": "c8cb873ec793fbabb849a6a1873e0d2c4ab4c1af5ad8db0c7a047ea819a707fb"
+  },
+  {
+    "source": "/var/lib/kf-windows-20261005/boundary-kayfabe-1401/qemu.log",
+    "artifact": "run1401/qemu.log.gz",
+    "original_bytes": 3970604,
+    "original_sha256": "fc965050c0d2bfdfa02c532e728d4bc1829eb92f6bc0d825f1b94baa04e6d25e",
+    "artifact_sha256": "dae71608366d08cf627c8b1c2af6ac074477a23de23a90236db9a44b805aac9d"
+  },
+  {
+    "source": "/var/lib/kf-windows-20261005/boundary-kayfabe-1401/command.json",
+    "artifact": "run1401/command.json",
+    "original_bytes": 2873,
+    "original_sha256": "ec6e8e942b5a81c92b90c9a81a7e4bcd1c76f8ecb9a3d69e949c4df42fe6a02e",
+    "artifact_sha256": "ec6e8e942b5a81c92b90c9a81a7e4bcd1c76f8ecb9a3d69e949c4df42fe6a02e"
+  },
+  {
+    "source": "/var/lib/kf-windows-20261005/boundary-kayfabe-1401/marker.txt",
+    "artifact": "run1401/marker.txt",
+    "original_bytes": 266,
+    "original_sha256": "ba18bf60e3b2cf55bb2549c85bc2f5b5433b3226f2aa0d746cea9a5eb6a419c8",
+    "artifact_sha256": "ba18bf60e3b2cf55bb2549c85bc2f5b5433b3226f2aa0d746cea9a5eb6a419c8"
+  },
+  {
+    "source": "/var/lib/kf-windows-20261005/boundary-kayfabe-1460/qemu.log",
+    "artifact": "run1460/qemu.log.gz",
+    "original_bytes": 1810945,
+    "original_sha256": "e638e0ffc32ce3eaa465e2542d3c3b9c5e6eba3e8b065441cb35e9c03cc61866",
+    "artifact_sha256": "e276e38c2095a10d02ae8d3abebafd11bc5b1152993cc75d057504c6a72bbac7"
+  },
+  {
+    "source": "/var/lib/kf-windows-20261005/boundary-kayfabe-1460/command.json",
+    "artifact": "run1460/command.json",
+    "original_bytes": 2908,
+    "original_sha256": "97473d39992688438b0f60231d50b6d9b7ad8f52ab8645ec2ed65f0b71891191",
+    "artifact_sha256": "97473d39992688438b0f60231d50b6d9b7ad8f52ab8645ec2ed65f0b71891191"
+  },
+  {
+    "source": "/var/lib/kf-windows-20261005/boundary-kayfabe-1460/marker.txt",
+    "artifact": "run1460/marker.txt",
+    "original_bytes": 258,
+    "original_sha256": "6d5bec896ff3d8be09a3a2ba6d0dac53e41fe478af92e9fb9dbf360174893b27",
+    "artifact_sha256": "6d5bec896ff3d8be09a3a2ba6d0dac53e41fe478af92e9fb9dbf360174893b27"
+  }
+]
