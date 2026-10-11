@@ -43,3 +43,21 @@ is explicitly unsupported by WDDM; callback, occupancy, dynamic parallelism,
 transformers generation and Geekbench have packaging/build/network limitations
 in the current inventory. Those limitations are not proof that the applications
 cannot run on Windows, and the 65-row mapping must not be called full parity.
+
+## Controlled harness correction
+
+The initial batch completed `atomics_t` and `bandwidthTest_demo`: **2/2 PASS**,
+zero TDRs/new host Xids. It was deliberately stopped (exit 143) before the stale
+D3D probe could run. `initial-batch/` preserves that checkpoint. Inspection of
+the actual exFAT disk confirmed the old D3D probe hash
+`cf231b29f73e711d3c34024954658e0633cd09b4f15edf9602b75b704d911877`.
+The reference README had already identified this stale image; the initial
+preflight missed that detail. The corrected winding source is unchanged from
+`f0e11b89`.
+
+Harness `6cca39b2` adds `--override-dir` with guest SHA256 verification and a
+per-guest `tool-overrides.json`. Tests reject a truncated upload before any app
+runs; all 71 harness tests pass. The rebuilt corrected probe used here has hash
+`3c6ededa77430a18a13321eb72fdca7f60282f8d12ddc147a7e7df1284832c5f`.
+`run_full2.sh` resumes the same results, skips the two completed tests, and starts
+fresh guests at run 652. Product binary remains `2c917f3e`.

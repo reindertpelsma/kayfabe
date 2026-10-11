@@ -1,0 +1,33 @@
+[run_windows_apps 2026-10-11T12:01:34Z] START run=/var/lib/kf-windows-20261005/codex-matrix-full-20261011 kf3=2c917f3e iso=/var/lib/kf-windows-20261005/appmatrix/image/kfapps_exfat.img xid_before=35 gpu=NVIDIA GeForce RTX 4070, 595.91.07
+2026-10-11T12:01:34Z START run_dir=/var/lib/kf-windows-20261005/codex-matrix-full-20261011 vm=broker kf3_rev=2c917f3e apps=100
+2026-10-11T12:01:34Z MATRIX_START apps=100 (resume skips 0) per_guest=8 max_tdr=3 tier<=3
+2026-10-11T12:01:36Z pre-guest hook rc=0 :00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=identity 2026-10-11T14:01:36+02:00
+2026-10-11T12:01:38Z broker run 651 rc=0 ['  └────────────────────────────────────────────────────────────────────────────────────────────┘']
+2026-10-11T12:01:38Z [g1] launched; waiting for the guest agent (<= 900s)
+2026-10-11T12:01:54Z [g1] agent answered after 19s
+2026-10-11T12:01:54Z [g1] password set for vast rc=0
+2026-10-11T12:02:57Z [g1] verified sign-in attempt=1 rc=1
+2026-10-11T12:03:09Z [g1] verified sign-in attempt=2 rc=0
+2026-10-11T12:03:11Z [g1] interactive session: VASTWIN\vast
+2026-10-11T12:03:12Z [g1] pushed 23 guest files
+2026-10-11T12:03:12Z [g1] app disk attached (usb-storage)
+2026-10-11T12:03:18Z [g1] setup ok: cd=D: nvidia_adapters=1 NVIDIA GeForce RTX 4070, 580.88, 4096 MiB
+2026-10-11T12:03:36Z [g1] staged vc_redist (installer, 17s)
+2026-10-11T12:03:41Z [g1] READY boot=2026-10-11T12:01:43.5000000Z user=VASTWIN\vast smi_ok=True
+2026-10-11T12:03:42Z [g1] staged python_embed (python_embed, 0s)
+2026-10-11T12:04:57Z [g1] staged pywheels (wheels, 73s)
+2026-10-11T12:06:55Z [g1] atomics_t: PASS
+2026-10-11T12:06:58Z [g1] staged cuda_demo_suite (unzip, 1s)
+2026-10-11T12:07:21Z [g1] bandwidthTest_demo: PASS
+Terminated                 python3 -I "$HERE/winapps.py" --run-dir "$RUN" --kf3-rev "$REV" --iso "$ISO" --image-manifest "$IMGMAN" --w-dir "$W" "${PASS[@]}"
+[run_windows_apps 2026-10-11T12:07:29Z] EXIT rc=143 host_xid_delta=0 summary=/var/lib/kf-windows-20261005/codex-matrix-full-20261011/summary.md
+[windows] run651 stopped (Xid count now 35)
+IOMMU_SWITCH_START group=11 from=identity to=DMA-FQ 2026-10-11T14:07:48+02:00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-11T14:07:51+02:00
+RECLAIM_STOPPED_OVERLAY 651 9746694144
+MATRIX_FULL_EXIT=143 at=2026-10-11T14:07:51+02:00
