@@ -5,6 +5,23 @@ again after the Wednesday 07:00 reset). Read `AGENTS.md` (= `CLAUDE.md`) first: 
 (state, branches, traps), `docs/DELEGATED_DECISIONS_20261010.md`, `docs/OWNER_RULINGS.md` §AB-§AE, `docs/design/V3_FEATURE_GAPS.md`
 (priorities: P0 = prevents apps running; fidelity and perf beyond "decent" are post-release), `docs/design/V3_NOT_IN_GIT.md`.
 
+## Latest checkpoint, 2026-10-11 17:29 UTC
+
+Last confirmed push d4f9aa47. Candidate now87/104 executed:70 cleanPASS,
+8PASS_WITH_RECOVERY,4FAIL,5TIMEOUT;17pending. Linux counterpart parity54/65.
+New llama_cuda_gen PASS81s with original output oracle, zero guest recovery.
+ValleyOpenGL1280 TIMEOUT272s, GSPcycle1, host Xid32 intr00800000/channel0x4a;
+VulkanCube1281 visible render/rc0 but no activity proof (3D0, Copy0.0497%),
+FAIL retained. Matching stock counterparts both PASS. Evidence saved in
+managed-routing/remaining-apps, APP rows added. No common graphics cause proven.
+
+Coverage63669 still running (FurMarkstress current), native-event71386 and
+corrected direct-stream43616 queued. Added bounded nbody snapshot92370 queued
+1360..1364, exact727 product/harness, only diagnostic flag differs; original
+failure retained and exhausted snapshot budgets are inconclusive. Probe runners
+saved managed-routing/nbody-stall-snapshot/. No production fix or new hardware
+pass claimed. Stock103/104 complete and own Vast retired, evidence backed up.
+
 ## Latest checkpoint, 2026-10-11 17:16 UTC
 
 Last confirmed pusha531cf99. Ordinary FurMark1270 product/harness72741e2b PASS25s,

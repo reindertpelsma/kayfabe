@@ -1,0 +1,59 @@
+{
+ "quiet": 15,
+ "end_utc": "2026-10-11T17:21:43.4280377Z",
+ "start_utc": "2026-10-11T17:21:27.5480887Z",
+ "rc": 0,
+ "secs": 16,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4070 status=OK code=0"
+ ],
+ "digests": [],
+ "session": 1,
+ "out_files": [],
+ "boot_utc_start": "2026-10-11T17:19:23.5000000Z",
+ "log_tail": [
+  "=== vkcube start=2026-10-11T17:21:27.5480887+00:00 host=VASTWIN session=1 boot=2026-10-11T17:19:23.5000000Z timeout=180",
+  "KFWAIT vkcube EXITED rc=0",
+  "=== end rc=0 secs=16 2026-10-11T17:21:43.4280377+00:00"
+ ],
+ "pdh": {
+  "pids": [
+   "7696",
+   "5116",
+   "6816"
+  ],
+  "nv": {
+   "copy": 0.049719355383419525,
+   "3d": 0,
+   "videoencode": 0,
+   "videodecode": 0,
+   "vr": 0,
+   "legacyoverlay": 0,
+   "ofa_0": 0
+  },
+  "samples": 7,
+  "other": {},
+  "nvidia_luids": "0_61fe"
+ },
+ "timed_out": false,
+ "token": "g2-vkcube-1791739258",
+ "boot_utc_end": "2026-10-11T17:19:23.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "vkcube",
+ "smi": {
+  "samples": 0,
+  "mem_used_base_mb": null,
+  "util_max": 0,
+  "mem_used_max_mb": 0
+ }
+}

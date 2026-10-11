@@ -104,6 +104,10 @@ PWR power/reset/reboot, FAM multi-GPU/families, PKG packaging/signing, TST harne
 
 | APP-valley_d3d11 | Valley D3D11 wedges the guest supervisor | GFX / CHAN | Run875 supervisor deadline266s, original TIMEOUT; one GSP recovery and hostXid32 intr00800000/channel0x4a. Missing guest event counts do not establish zero events | [measured] candidate0f9c01f9 full-checkpoint facts and timestamped host journal; stock580.88 PASS | Fresh isolated replay with same workload; compare hardware software-method/object setup and completion, without assuming a specific offending method | lane: original45s survival plus measured NVIDIA GPU work, no unexpected recovery | M | APP-heaven_opengl | no |
 
+
+| APP-valley_opengl | Valley OpenGL times out with GPU fault | GFX / CHAN | Exact72741e2b run1280 TIMEOUT272s at supervisor deadline; one GSPcycle, host Xid32 at17:15:25UTC channel0x4a intr00800000. Guest driver/WER recorded0 | [measured] managed-routing/remaining-apps; matching stock580.88 PASS. Same raw fault code as fresh nbody, common cause not proven | Bounded channel snapshot; identify faulting method before proposing authored handling. Public GA100 DEVICE interpretation on AD104 is inference | lane: original survival/activity plus zero unexpected recovery | M | APP-nbody_demo_gl | no |
+| APP-vkcube | Vulkan cube renders but fails activity proof | TST / GFX | Exact72741e2b run1281 rc0 in16s, visible textured cube, but NVIDIA PDH3D0 and Copy0.0497% below unchanged0.5% oracle threshold. No guest events/GSPcycle; original FAIL retained | [measured] managed-routing/remaining-apps facts/screenshots; stock580.88 PASS37s with3D16.297%. No specific offending control established | Compare process counters/present behavior against reference; validate any stronger GPU identity/readback oracle before changing the test. Screenshot alone does not identify the rendering adapter | lane: unchanged600-frame exit plus NVIDIA GPU proof, no recovery | S | G15 | no |
+
 ### 2.2 P1: production quality, security, derive-never-capture
 
 | id | title | area | missing / symptom | evidence | approach (short) | test (oracle / lane) | eff | deps | owner? |

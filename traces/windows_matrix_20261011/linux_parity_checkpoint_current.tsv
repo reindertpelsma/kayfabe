@@ -26,7 +26,7 @@ hashcat	PASS@2830988f	hashcat	PASS
 hf_generate	PASS@2830988f	hf_generate	PASS
 histogram	PASS@2830988f	hist_t	PASS
 llama_bench	PASS@2830988f	llama_cuda_bench	llama_cuda_bench:PENDING
-llama_cpp_gen	PASS@2830988f	llama_cuda_gen	llama_cuda_gen:PENDING
+llama_cpp_gen	PASS@2830988f	llama_cuda_gen	PASS
 mandelbrot	PASS@2830988f	mandelbrot_t	PASS
 matrixMul	PASS@2830988f	matmul_t	PASS
 matrixMulDrv	PASS@2830988f	cup8_ladder	PASS

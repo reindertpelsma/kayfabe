@@ -11,17 +11,18 @@ fix this file. Entries below the first are dated history.
 
 ## 0. Current resumption — start here
 
-**2026-10-11 17:16 UTC, Codex Windows campaign (`codex/windows-matrix-20261011`):**
+**2026-10-11 17:29 UTC, Codex Windows campaign (`codex/windows-matrix-20261011`):**
 [Current evidence and run instructions](../traces/windows_matrix_20261011/README.md).
-Last confirmed pusha531cf99. Exact product72741e2b passes Linux gates9/9+10 and
+Last confirmed push d4f9aa47. Exact product72741e2b passes Linux gates9/9+10 and
 fast30/30, all births USER. Windows gears/vectorAdd/CUP8 pass cleanly; managed
 still times out at translated SYNC_WAIT. Native authored video semaphore/tail
 passes; notification experiment is queued, production kernel video still refuses.
-Combined canonical84/104 executed:69cleanPASS,8PASS_WITH_RECOVERY,3FAIL,4TIMEOUT,
-20pending. Per-row mixed product/harness revisions are explicit in current TSVs.
-Linux counterparts53/65 all clean. Normal-launch FurMark1270 now passes without
+Combined canonical87/104 executed:70cleanPASS,8PASS_WITH_RECOVERY,4FAIL,5TIMEOUT,
+17pending. Per-row mixed product/harness revisions are explicit in current TSVs.
+Linux counterparts54/65 all clean. Normal-launch FurMark1270 now passes without
 recovery/Xid; old failure unroot-caused. Fresh nbodyGUI times out with host Xid32
-and one GSPcycle. Ordinary Edge launch only proves welcome-window survival;
+and one GSPcycle. ValleyOpenGL also TIMEOUT/Xid32; vkcube renders but fails
+GPU activity proof. Both stock counterparts PASS; bounded nbody snapshot queued. Ordinary Edge launch only proves welcome-window survival;
 owner-observed black recycle remains open. Main lane MPOoff, eight overlay rows separate.
 Matching stock580.88 reference complete104/104 across batches: latest103PASS,
 GravityMarkVKTIMEOUT, zero recorded guest driver/reset events in passing rows;

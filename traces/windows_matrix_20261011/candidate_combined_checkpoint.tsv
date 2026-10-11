@@ -58,7 +58,7 @@ heaven_opengl	FAIL	0f9c01f9	8037e19b	FAIL	3	1	copy-slicing/full-checkpoint/win.r
 hf_generate	PASS	a61af1c3	a61af1c3	PASS	0	0	encoder-session/corrected-checkpoint/win.res	2026-10-11T15:47:48.1637518Z	app_end
 hist_t	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:29:20.8991650Z	app_end
 llama_cuda_bench	PENDING								
-llama_cuda_gen	PENDING								
+llama_cuda_gen	PASS	72741e2b	72741e2b	PASS	0	0	managed-routing/remaining-apps/win.res	2026-10-11T17:23:52.2710316Z	app_end
 llama_vulkan_bench	PENDING								
 managed_t	TIMEOUT	72741e2b	72741e2b	TIMEOUT	0	0	managed-routing/windows-focus/win.res	2026-10-11T16:46:22.3359553Z	app_end
 mandelbrot_t	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:50:55.8092620Z	app_end
@@ -96,9 +96,9 @@ torch_correct	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.r
 transpose_t	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:44:38.7662047Z	app_end
 triad_t	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:52:01.6827300Z	app_end
 valley_d3d11	TIMEOUT	0f9c01f9	8037e19b	TIMEOUT	0	1	copy-slicing/full-checkpoint/win.res	2026-10-11T13:20:11Z	run_start_only
-valley_opengl	PENDING								
+valley_opengl	TIMEOUT	72741e2b	72741e2b	TIMEOUT	0	1	managed-routing/remaining-apps/win.res	2026-10-11T17:12:40Z	run_start_only
 vectorAdd_demo	PASS	72741e2b	72741e2b	PASS	0	0	managed-routing/windows-focus/win.res	2026-10-11T16:54:27.2302490Z	app_end
-vkcube	PENDING								
+vkcube	FAIL	72741e2b	72741e2b	FAIL	0	0	managed-routing/remaining-apps/win.res	2026-10-11T17:21:43.4280377Z	app_end
 vkpeak	PENDING								
 vulkan_video_decode	PASS_WITH_RECOVERY	0f9c01f9	8037e19b	PASS	3	1	copy-slicing/full-checkpoint/win.res	2026-10-11T14:52:49.3437017Z	app_end
 vulkaninfo	PASS	0f9c01f9	8037e19b	PASS	0	0	copy-slicing/full-checkpoint/win.res	2026-10-11T13:26:26.9992074Z	app_end
