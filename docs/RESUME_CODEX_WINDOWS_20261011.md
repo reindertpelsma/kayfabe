@@ -1,6 +1,6 @@
 # Resume the Windows matrix and GravityMark Vulkan investigation
 
-**STATUS: LIVE, 2026-10-11 21:07 UTC.** Compact entry point for a new chat.
+**STATUS: LIVE, 2026-10-11 21:16 UTC.** Compact entry point for a new chat.
 Historical chronology is in [HANDOFF_FOR_CODEX_20261011.md](HANDOFF_FOR_CODEX_20261011.md).
 Read the current checkpoint here before treating an older pending/result paragraph
 in that chronology as current state.
@@ -9,7 +9,7 @@ in that chronology as current state.
 
 Public repository: <https://github.com/reindertpelsma/kayfabe>.
 Branch: **`codex/windows-matrix-20261011`**. Last confirmed push before this
-audit: `249e4e248`; the branch tip includes this later offline H1 checkpoint.
+diagnostic: `ff1e3cd7e`; the branch tip includes the later reviewed diagnostic.
 Use the branch tip to get this document and the complete reachable source history.
 
 Controller worktree: **`/data/kf-inval-absent`**. `/workspace/kayfabe` is another
@@ -129,6 +129,17 @@ earlier512-entry initialization peeks cannot cover this late window. Public
 source says clear the PBDMA interrupt *before* executing FIFO update, correcting
 the proposed plan's opposite wording. [Reproducible channel audit](../traces/windows_matrix_20261011/gravity-vulkan/h1-channel-audit/README.md).
 Owner is now trying1380 and will say when finished; leave it untouched meanwhile.
+
+Prepared, not hardware-validated: `KF3_RELAY_PB_PEEK=after-fifo-update` arms the
+existing bounded sample after the first update registration on a relay's
+associated5080 allocation lifetime. Default remains off; `=1` starts at birth.
+No migration or host registration is added. Three failing-first diagnostic
+packet tests fix missed multi-datum triggers; final kf-qemu lib tests161/161.
+Independent review complete, no blockers; binding/first-object/Legacy/arming
+and post-forward race limits explicitly remain. A sample is not GPU execution
+proof and cannot alone formally falsify H1. Hardware gates9+10/fast30 still
+required for the exact diagnostic revision, then fresh matched control/probe
+runs after the existing allocator job and owner session. See audit README.
 
 FIFO_UPDATE_CHANNEL_INFO is a deferred FIFO/USERD metadata update, distinct
 from batching mapping/unmapping with a final invalidate. Keeping an authored

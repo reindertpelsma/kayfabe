@@ -1,0 +1,45 @@
+2026-10-11 UTC, controller /data/kf-inval-absent, no hardware
+
+Failing-first diagnostic packet tests, old decoder:
+running 3 tests
+test chan::sw_scan_tests::diagnostic_finds_fifo_trigger_inside_an_incrementing_packet ... FAILED
+test chan::sw_scan_tests::diagnostic_keeps_each_nonincrementing_api_datum ... FAILED
+test chan::sw_scan_tests::diagnostic_keeps_increment_once_trigger_data ... FAILED
+
+failures:
+
+---- chan::sw_scan_tests::diagnostic_finds_fifo_trigger_inside_an_incrementing_packet stdout ----
+
+thread 'chan::sw_scan_tests::diagnostic_finds_fifo_trigger_inside_an_incrementing_packet' (331178) panicked at crates/kf-qemu/src/chan.rs:8009:9:
+assertion failed: s.hits.iter().any(|h| h.method == 0x200 && h.data == Some(0x4000_002d))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- chan::sw_scan_tests::diagnostic_keeps_each_nonincrementing_api_datum stdout ----
+
+thread 'chan::sw_scan_tests::diagnostic_keeps_each_nonincrementing_api_datum' (331179) panicked at crates/kf-qemu/src/chan.rs:8015:9:
+assertion `left == right` failed
+  left: [Some(1073741868)]
+ right: [Some(1073741868), Some(1073741869)]
+
+---- chan::sw_scan_tests::diagnostic_keeps_increment_once_trigger_data stdout ----
+
+thread 'chan::sw_scan_tests::diagnostic_keeps_increment_once_trigger_data' (331180) panicked at crates/kf-qemu/src/chan.rs:8022:9:
+assertion `left == right` failed
+  left: []
+ right: [Some(1073741868), Some(1073741869)]
+
+
+failures:
+    chan::sw_scan_tests::diagnostic_finds_fifo_trigger_inside_an_incrementing_packet
+    chan::sw_scan_tests::diagnostic_keeps_each_nonincrementing_api_datum
+    chan::sw_scan_tests::diagnostic_keeps_increment_once_trigger_data
+
+test result: FAILED. 0 passed; 3 failed; 0 ignored; 0 measured; 158 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p kf-qemu --lib`
+
+Final source tree: cargo test -p kf-qemu --lib
+test result: ok. 161 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+
+
+Hardware gates/fast suite/Windows diagnostic NOT RUN: owner manual1380 protected.

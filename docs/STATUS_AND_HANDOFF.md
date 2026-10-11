@@ -13,6 +13,21 @@ fix this file. Entries below the first are dated history.
 
 **Windows/Codex current resume point:** [RESUME_CODEX_WINDOWS_20261011.md](RESUME_CODEX_WINDOWS_20261011.md), branch `codex/windows-matrix-20261011`. Protect the live owner manual session described there.
 
+## Latest checkpoint, 2026-10-11 21:16 UTC
+
+Last confirmed public pushff1e3cd7e (offline H1 audit), private1dc9c0e.
+This source checkpoint adds only an opt-in late measurement mode:
+KF3_RELAY_PB_PEEK=after-fifo-update. It samples after registration using the
+existing hard bounds, tracks 5080 allocation lifetime through concurrent free,
+and never migrates/registers/executes guest bundles. Independent review found
+and resolved lifetime and diagnostic multi-datum decoding gaps. Three new tests
+failed first, final kf-qemu lib161/161 PASS. Probe still cannot prove GPU execution
+or alone falsify H1; earlier binding and timing/coverage gaps are documented.
+No hardware validation or GravityMark fix claimed. Protect owner manual1380;
+after owner ends it, allow queued allocator job and honor the shared GPU lock.
+Then exact-revision Linux gates9+10/fast30, fresh matched Gravity control/probe.
+Resume doc and gravity-vulkan/h1-channel-audit contain the full decision guard.
+
 ## Latest checkpoint, 2026-10-11 21:07 UTC
 
 Last confirmed public push249e4e248, private1dc9c0e; this commit publishes the

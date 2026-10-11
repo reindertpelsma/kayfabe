@@ -394,6 +394,8 @@ struct PtChan {
     /// alloc of that class on the channel — (guest handle, host handle). At most one per twin; freed
     /// by host RM with the twin's channel.
     defapi_host: Option<(u32, u32)>,
+    /// Late probe's first 5080 lifetime; invalidated at guest object/subtree free.
+    peek_defapi: Option<PeekDefapi>,
     /// ★ v3-promote: the guest's `GPU_PROMOTE_CTX` / `GPU_EVICT_CTX` statements for this channel,
     /// satisfied by the twin (never forwarded).
     ctx: CtxBind,
@@ -717,11 +719,26 @@ struct Relay {
     views: StoreViews,
     gpfifo_va: u64,
     peek: PeekState,
+    /// Guest object corresponding to this twin's authored 5080. Diagnostic lookup only;
+    /// no registration or guest bundle is ever forwarded to the host object.
+    peek_defapi: Option<PeekDefapi>,
+}
+
+/// Diagnostic association with one allocation lifetime, not just a reusable handle.
+#[derive(Clone)]
+struct PeekDefapi {
+    key: kf_rm::defapi::ObjKey,
+    live: Arc<AtomicBool>,
 }
 
 /// ⚠ DIAGNOSTIC only (`KF3_RELAY_PB_PEEK=1`): the peek's cursor and bounds for one relayed twin.
 #[derive(Default)]
 struct PeekState {
+    /// Late diagnostic mode arms once, at the first observed FIFO-update registration.
+    /// Never rearm/reset the bounded budget on another guest registration.
+    fifo_update_armed: bool,
+    /// Report truncated coverage once; registration cannot reset the budget.
+    budget_reported: bool,
     /// The next GP index to peek.
     next: u32,
     /// GP entries peeked so far (bounded by [`PEEK_ENTRY_BUDGET`]).
@@ -742,6 +759,28 @@ const PEEK_ENTRY_BUDGET: u32 = 512;
 const PEEK_SW_BUDGET: u32 = 64;
 /// Per segment: at most this many words are read (and scanned); at most 64 are printed.
 const PEEK_SEGMENT_WORDS: usize = 16384;
+
+/// The late mode avoids exhausting a channel's budget before its migration registration.
+/// Both modes only sample guest bytes after forwarding; neither gates/executes GPU work.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RelayPeekMode {
+    Off,
+    FromBirth,
+    AfterFifoUpdate,
+}
+
+fn relay_peek_mode(value: Option<&str>) -> RelayPeekMode {
+    match value {
+        Some("1") => RelayPeekMode::FromBirth,
+        Some("after-fifo-update") => RelayPeekMode::AfterFifoUpdate,
+        _ => RelayPeekMode::Off,
+    }
+}
+
+fn configured_relay_peek_mode() -> RelayPeekMode {
+    static MODE: std::sync::OnceLock<RelayPeekMode> = std::sync::OnceLock::new();
+    *MODE.get_or_init(|| relay_peek_mode(std::env::var("KF3_RELAY_PB_PEEK").ok().as_deref()))
+}
 
 /// ⚠ DIAGNOSTIC (2026-10-08, run73): one method a push-buffer segment addresses to a SOFTWARE
 /// subchannel. `[NVIDIA, open-gpu-doc ga100 dev_ram.ref "Subchannels 5-7 are for software methods"
@@ -787,18 +826,37 @@ fn scan_sw_methods(words: &[u32]) -> SwScan {
             if let Some(n) = out.per_subch.get_mut(h.subchannel as usize) {
                 *n = n.saturating_add(1);
             }
-            let host_only = h.method != kf_abi::submit::SET_OBJECT && h.method < 0x100;
-            if h.subchannel >= 5 && !host_only {
-                out.hits.push(SwMethod {
-                    word: i,
-                    subch: h.subchannel,
-                    method: h.method,
-                    data: if h.form == kf_abi::submit::MethodForm::Immediate {
-                        Some(h.immd)
-                    } else {
-                        words.get(i.saturating_add(1)).copied()
-                    },
-                });
+            // A packet can reach 0x200 after its first datum, or issue several
+            // API handles at 0x200. Do not reduce it to the starting method.
+            // Legacy forms are sized only by the public ABI; retain that limitation.
+            use kf_abi::submit::MethodForm;
+            let args = if matches!(h.form, MethodForm::Immediate | MethodForm::Legacy) {
+                1
+            } else {
+                h.arg_words.min(words.len().saturating_sub(i + 1)).max(1)
+            };
+            if h.subchannel >= 5 {
+                for arg in 0..args {
+                    let advance = match h.form {
+                        MethodForm::Incrementing => arg as u32 * 4,
+                        MethodForm::IncrementOnce if arg != 0 => 4,
+                        _ => 0,
+                    };
+                    let method = h.method + advance;
+                    let host_only = method != kf_abi::submit::SET_OBJECT && method < 0x100;
+                    if !host_only {
+                        out.hits.push(SwMethod {
+                            word: i,
+                            subch: h.subchannel,
+                            method,
+                            data: if h.form == MethodForm::Immediate {
+                                Some(h.immd)
+                            } else {
+                                words.get(i + 1 + arg).copied()
+                            },
+                        });
+                    }
+                }
             }
         }
         if h.form == kf_abi::submit::MethodForm::EndPbSegment {
@@ -4432,13 +4490,18 @@ impl ChanPlane {
         self.defer(
             "deferred-API twin object",
             Box::new(move |me: &ChanPlane| {
+                let peek = (configured_relay_peek_mode() == RelayPeekMode::AfterFifoUpdate)
+                    .then(|| PeekDefapi {
+                        key: kf_rm::defapi::ObjKey { client, object: handle },
+                        live: Arc::new(AtomicBool::new(true)),
+                    });
                 let chan = {
-                    let m = me
+                    let mut m = me
                         .pt
                         .lock()
                         .map_err(|_| (NV_ERR_NOT_SUPPORTED, "pt poisoned".to_string()))?;
                     let v = m
-                        .get(&(client, parent))
+                        .get_mut(&(client, parent))
                         .ok_or((NV_ERR_NOT_SUPPORTED, "the twin is gone".to_string()))?;
                     if let Some((g, h)) = v.defapi_host {
                         return Ok(format!(
@@ -4446,6 +4509,9 @@ impl ChanPlane {
                             v.chan.token
                         ));
                     }
+                    // Publish before the host allocation can wait: a concurrent
+                    // guest free must invalidate this pending allocation too.
+                    v.peek_defapi = peek.clone();
                     v.chan
                 };
                 let h = me.rm.alloc_deferred_api(chan).map_err(|e| {
@@ -4460,6 +4526,18 @@ impl ChanPlane {
                     && let Some(v) = m.get_mut(&(client, parent))
                 {
                     v.defapi_host = Some((handle, h));
+                }
+                // Offline H1 audit: FIFO update registers long after this Passthrough
+                // channel is scheduled. Remember its own guest 5080 for opt-in late sampling.
+                // The pt guard above is gone; neither this relay lock nor the registry is
+                // ever taken by a vCPU. Do not turn this into host registration/translation.
+                if configured_relay_peek_mode() == RelayPeekMode::AfterFifoUpdate {
+                    let relay = me.relays.lock().ok().and_then(|m| m.get(&chan.token).cloned());
+                    if let Some(relay) = relay
+                        && let Ok(mut g) = relay.lock()
+                    {
+                        g.peek_defapi = peek;
+                    }
                 }
                 Ok(format!(
                     "EXPERIMENT KF3_WIN_TWIN_DEFAPI_OBJECT: {client:#x}:{handle:#x} NV50_DEFERRED_API on Windows user-work twin host {:#x} -> host object {h:#x} (authored, no params, NOTHING registered: a 0x200 on it fails closed)",
@@ -4762,6 +4840,23 @@ impl ChanPlane {
     }
 
     fn free(&self, client: u32, object: u32) -> ChanAnswer {
+        // Invalidate before another allocation can reuse the guest handle. No relay
+        // lock here: a worker can hold it while sampling registry entries. The
+        // sampler checks this allocation's flag both before and after that lookup.
+        if configured_relay_peek_mode() == RelayPeekMode::AfterFifoUpdate
+            && let Ok(m) = self.pt.lock()
+        {
+            for (owner, twin) in m.iter() {
+                if let Some(peek) = &twin.peek_defapi {
+                    let scope = ChanScope { tsg: twin.tsg, parent: twin.parent, device: twin.device };
+                    if (peek.key.client == client && peek.key.object == object)
+                        || scope.freed_by(*owner, client, object)
+                    {
+                        peek.live.store(false, Ordering::Release);
+                    }
+                }
+            }
+        }
         // ★ 2026-10-09: a freed TSG (or client) is no longer scheduled — its handle may come back
         // as a new group, whose first channel must not be scheduled from the old one's state.
         if let Ok(mut s) = self.guest_sched.lock() {
@@ -5274,9 +5369,10 @@ impl ChanPlane {
             rm: self.rm,
             token: g.chan.token,
         };
+        let previous_put = g.st.host_put;
         match kf_chan::userd_relay::step(&mut g.st, &mut io) {
             Ok(kf_chan::userd_relay::Outcome::Forwarded(p)) => {
-                self.relay_peek(g, p);
+                self.relay_peek(g, p, previous_put);
                 if g.st.forwarded <= 8 || g.st.forwarded.is_power_of_two() {
                     eprintln!(
                         "kf3: chan token {:#x} (host {ht:#x}) USERD relay: GP_PUT {p:#x} forwarded and rung (#{}) — no GP entry or push-buffer word read",
@@ -5398,12 +5494,47 @@ impl ChanPlane {
     /// (`[measured, run71 at 2959ed5f]` Xid 32, PBDMA `DEVICE` interrupt) can be traced to a method, and
     /// so the owner's physical-operand question has a sample from a per-process channel. Bounded per
     /// twin; reads go through the mirror's own rows (an unmapped VA is reported, never followed).
-    fn relay_peek(&self, g: &mut Relay, new_put: u32) {
-        static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-        if !*ON.get_or_init(|| std::env::var("KF3_RELAY_PB_PEEK").as_deref() == Ok("1")) {
+    /// `KF3_RELAY_PB_PEEK=after-fifo-update` samples only after a registration
+    /// on this channel's own 5080. Starts at the previous forwarded PUT, wraps
+    /// using this ring's entry count and retains the existing per-twin caps.
+    /// Sampling occurs AFTER the real doorbell: guest bytes can race with GPU
+    /// fetch. A sampled method is not a hardware execution/completion record.
+    fn relay_peek(&self, g: &mut Relay, new_put: u32, previous_put: u32) {
+        let mode = configured_relay_peek_mode();
+        if mode == RelayPeekMode::Off {
+            return;
+        }
+        if mode == RelayPeekMode::AfterFifoUpdate
+            && g.peek_defapi.as_ref().is_none_or(|p| !p.live.load(Ordering::Acquire))
+        {
             return;
         }
         let entries = g.st.entries.max(1);
+        if mode == RelayPeekMode::AfterFifoUpdate && !g.peek.fifo_update_armed {
+            let Some(peek) = g.peek_defapi.as_ref() else { return };
+            if !peek.live.load(Ordering::Acquire) { return; }
+            let key = peek.key;
+            let Some(reg) = self.defapi_reg.get() else { return };
+            // Registry bounds cap this snapshot at 64 entries/object. `entries`
+            // does not mark an API executed, consume it or change lookup counters.
+            let update = reg.entries(key).into_iter().find(|e| matches!(
+                e.decoded,
+                kf_abi::defapi::Bundle::Unserved { what: "FIFO_UPDATE_CHANNEL_INFO", .. }
+            ));
+            let Some(update) = update else { return };
+            if !peek.live.load(Ordering::Acquire) { return; }
+            g.peek.next = previous_put;
+            g.peek.fifo_update_armed = true;
+            eprintln!(
+                "kf3: chan token {:#x} (host {:#x}) RELAY-PEEK ARMED after FIFO_UPDATE_CHANNEL_INFO registration on {:#x}:{:#x} api={:#x} cmd={:#x} GP=[{previous_put:#x},{new_put:#x}) entries={entries} t={:.6} — guest-byte sample after forwarding, NOT hardware trigger proof",
+                g.idx, g.chan.token, key.client, key.object, update.handle, update.cmd,
+                kf_mem::maplog::t()
+            );
+            eprintln!(
+                "kf3: chan token {:#x} RELAY-PEEK registration bundle prefix (diagnostic, <=64 bytes): {:02x?}",
+                g.idx, &update.bundle[..update.bundle.len().min(64)]
+            );
+        }
         let mirror = g.mirror.clone();
         let store_len = store_read_bound(self.layout.carve());
         let mut mem = Mem {
@@ -5522,6 +5653,13 @@ impl ChanPlane {
         }
         flush_zeros(&mut zeros);
         g.peek.next = idx;
+        if g.peek.entries >= PEEK_ENTRY_BUDGET && !g.peek.budget_reported {
+            g.peek.budget_reported = true;
+            eprintln!(
+                "kf3: chan token {tok:#x} RELAY-PEEK BUDGET exhausted after {} entries; next={idx:#x} observed_put={new_put:#x}; later methods UNMEASURED",
+                g.peek.entries
+            );
+        }
     }
 
     /// ⚠ DIAGNOSTIC (default off, 2026-10-09, `KF3_PT_STALL_SNAPSHOT=1`; record
@@ -6150,6 +6288,7 @@ impl ChanPlane {
                             sw_ids: crate::dispsw::SwClassIds::default(),
                             dispsw_host_refused: false,
                             defapi_host: None,
+                            peek_defapi: None,
                             ctx: CtxBind::default(),
                             user_work: a.user_work,
                             live,
@@ -6189,6 +6328,7 @@ impl ChanPlane {
                                     views: StoreViews::new(),
                                     gpfifo_va: a.gpfifo_va,
                                     peek: PeekState::default(),
+                                    peek_defapi: None,
                                 })));
                             }
                             true
@@ -7352,6 +7492,7 @@ mod dispsw_tests {
             sw_ids: crate::dispsw::SwClassIds::default(),
             dispsw_host_refused: false,
             defapi_host: None,
+            peek_defapi: None,
             ctx: CtxBind::default(),
             user_work: false,
             live: Arc::new(AtomicU64::new(0)),
@@ -7927,6 +8068,26 @@ mod sw_scan_tests {
         let s = scan_sw_methods(&[0xc000_0000, 0x2001_a080, 1]); // RESERVED6 first
         assert_eq!(s.undecodable_at, Some(0));
         assert!(s.hits.is_empty());
+    }
+
+    #[test]
+    fn diagnostic_finds_fifo_trigger_inside_an_incrementing_packet() {
+        let s = scan_sw_methods(&[0x2002_a07f, 7, 0x4000_002d]); // 0x1fc, then 0x200
+        assert!(s.hits.iter().any(|h| h.method == 0x200 && h.data == Some(0x4000_002d)));
+    }
+
+    #[test]
+    fn diagnostic_keeps_each_nonincrementing_api_datum() {
+        let s = scan_sw_methods(&[0x6002_a080, 0x4000_002c, 0x4000_002d]);
+        assert_eq!(s.hits.iter().filter(|h| h.method == 0x200).map(|h| h.data).collect::<Vec<_>>(),
+                   [Some(0x4000_002c), Some(0x4000_002d)]);
+    }
+
+    #[test]
+    fn diagnostic_keeps_increment_once_trigger_data() {
+        let s = scan_sw_methods(&[0xa003_a07f, 7, 0x4000_002c, 0x4000_002d]);
+        assert_eq!(s.hits.iter().filter(|h| h.method == 0x200).map(|h| h.data).collect::<Vec<_>>(),
+                   [Some(0x4000_002c), Some(0x4000_002d)]);
     }
 }
 

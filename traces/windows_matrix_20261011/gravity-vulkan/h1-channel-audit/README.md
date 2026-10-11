@@ -116,3 +116,47 @@ Reproduce offline: compile layout.c using OGKM580.65.06's public
 `src/common/sdk/nvidia/inc` and `src/common/inc` include paths, write its output
 to layout.json, then `python3 audit.py`. All decoded layouts come from those
 headers; all inputs and their SHA256 values are recorded in audit.json.
+
+## Prepared diagnostic, 2026-10-11 21:16UTC — NOT HARDWARE-VALIDATED
+
+`KF3_RELAY_PB_PEEK=after-fifo-update` is a new value of the existing measurement
+switch. Unset remains off; `=1` retains sampling from birth. The late mode
+requires the existing authored twin5080 object and watches its guest registry
+on a relay worker. On the first observed FIFO-update entry it starts at the
+previous forwarded PUT, retains512 entries/64 logged software methods/16K words
+per segment, emits a bounded64-byte bundle prefix and reports budget exhaustion.
+It does not reset its budget on additional registrations, forward bundles,
+register anything natively, migrate the ring or execute software methods.
+All sampling follows the real host doorbell, as in the original peek.
+
+The association carries an allocation-lifetime flag shared with the channel.
+It publishes before deferred host allocation can wait; guest object/subtree
+free invalidates it without taking the relay lock. The sampler checks liveness
+around registry lookup and also after arming, preventing ordinary handle reuse
+or a concurrent free during allocation from reviving a stale association.
+
+Independent review caught an existing diagnostic decoder omission: only the
+first method/datum of a packet was logged. Three failing-first tests demonstrate
+an incrementing packet crossing0x200, multiple nonincrementing API data words,
+and IncrementOnce reaching0x200. Diagnostic decoding now expands these public
+packet forms within the existing input bound. Final `cargo test -p kf-qemu --lib`:
+**161 passed**, zero failures/ignored. See [validation.txt](validation.txt) and
+[independent review](review.md). This is not a Linux hardware regression result.
+
+Pre-run question: does a submitted late packet on the faulting Passthrough twin
+contain0x200 with the registered update API handle? A matching sample supports
+the candidate; a different positively identified faulting method contradicts
+it. **No arm/no hit is inconclusive**, not the falsifier. Binding before the
+sampling window is not recorded; sampling can race with guest rewrites/GPU
+fetch, and registration can become visible after a batch was forwarded. Only
+the first host-authored5080 is associated; later guest-only5080 objects are not
+covered. Legacy formats remain sized-only. The probe cannot independently prove
+GPU execution or formally falsify H1. Correlate submitted method/object binding,
+GET/PUT, registration lifetime and fault time before an owner architecture choice.
+
+Do not run this in manual1380. After the owner ends that session, respect the
+already queued allocator campaign and GPU lock. Before a Windows claim, validate
+the exact diagnostic source revision with Linux gates9/9+gate10 and fast30/30.
+Use a fresh same-revision/same-flags GravityMark control and then change only
+the peek value for the measurement run. Preserve unclean stops and failures.
+No hardware run has been made with this diagnostic and no Vulkan fix is claimed.
