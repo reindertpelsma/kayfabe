@@ -33,3 +33,34 @@ Default diagnostic remains off. No FIFO migration/native registration added.
 
 Result artifacts will be folded here as measured; no whole-matrix or arbitrary
 branch-tip green claim follows from these selected exact-revision runs.
+
+## Live smoke observation, 2026-10-11 21:51UTC
+
+Gears/vectorAdd/CUP8 PASS with zero per-app153/WER/GSP cycles. Torch original
+workload has no final verdict yet, but the no-capacity-refusal hypothesis is
+already **FALSIFIED**: slot48 reports1049632 runs versus hard walk ceiling1048576,
+then1049630; split9194 refused TRUNCATED/refuse_mask0x10, no commit applied.
+This differs from the previous optional-growth-headroom exhaustion. At captured
+prefix: no slot-pool-exhausted line, no GSP restart, unreconciled maximum1;
+whole-boot invalidate max220424us is not fault-time causal proof. Do not claim
+allocator fix makes the full app pass. Source WalkCfg default walk_pool=2^20
+is itself this limit; simply removing per-space validation would exceed the
+allocated walk/scratch pool. A capacity design must remain bounded and honor
+§AD/§AE, not raise a threshold just to hide this symptom. Final app and host
+fault/recovery facts remain pending. smoke-live-observation is a dated prefix,
+not the stopped-run log. Method0x200 total includes unrelated Translated logs;
+only candidate_methods_0x200 lists late RELAY-PEEK samples, currently none.
+
+## Final smoke1490, 2026-10-11 21:52UTC
+
+Original app verdicts: gears/vectorAdd/CUP8 **PASS**, torch_ai_bench **FAIL**,
+411s, guest-rebooted, GSPcycle1, no successful final workload/readback proof.
+Precise kernel journal window21:41:47–21:52:24.991301UTC query0, Xid0.
+The harness's guest153/WER0 for the lost app session is not proof of clean
+recovery; boot changed and one GSP cycle was observed. Bugcheck cause is
+UNMEASURED; `bugcheck?` in the lane note is a question, not an identified stopcode.
+Subsequent broker shutdown was clean, separate from that unexpected app reboot.
+See smoke-result for unchanged app/oracle results, launch flags, public QEMU
+log, selected capacity/refusal lines and source-prefix hash. New hard-ceiling
+refusal precedes recovery; complete reboot causality remains unproven.
+Gravity control1495 and probe1510 follow, independently of this failed smoke.

@@ -1,6 +1,6 @@
 # Resume the Windows matrix and GravityMark Vulkan investigation
 
-**STATUS: LIVE, 2026-10-11 21:43 UTC.** Compact entry point for a new chat.
+**STATUS: LIVE, 2026-10-11 21:55 UTC.** Compact entry point for a new chat.
 Historical chronology is in [HANDOFF_FOR_CODEX_20261011.md](HANDOFF_FOR_CODEX_20261011.md).
 Read the current checkpoint here before treating an older pending/result paragraph
 in that chronology as current state.
@@ -8,8 +8,8 @@ in that chronology as current state.
 ## Branches and checkout
 
 Public repository: <https://github.com/reindertpelsma/kayfabe>.
-Branch: **`codex/windows-matrix-20261011`**. Last confirmed push **89e8ddf8b**,
-reviewed diagnostic source with161 GPU-free tests. Newer documentation checkpoints
+Branch: **`codex/windows-matrix-20261011`**. Last confirmed push **ee8764481**,
+containing reviewed source89e8ddf8b with161 GPU-free tests. Newer documentation checkpoints
 must not inherit exact-revision hardware claims automatically.
 Use the branch tip to get this document and the complete reachable source history.
 
@@ -70,7 +70,10 @@ Linux gates9/9+gate10 PASS21:34UTC, binary/client/fastguest built. Initial
 fast suite never started because runner omitted BENCH_DIR mkdir; campaign
 exit1 preserved, no product failure inferred. New `resume_campaign.sh` fixes
 only runner preconditions, preserves fast-notrun.log and starts fast30 at21:38; completed30/30 PASS21:41:47UTC.
-Fast suite30/30 PASS21:41:47UTC, zero FAIL/CRASH/NOTRUN. Automatic fresh Windows1490 smoke (gears/vectorAdd/CUP8/torch),1495
+Fast suite30/30 PASS21:41:47UTC, zero FAIL/CRASH/NOTRUN. Windows1490 smoke: gears/vectorAdd/CUP8 PASS, torch FAIL411s/guest reboot/GSPcycle1/precise-window hostXid0;
+no-capacity-refusal hypothesis FALSIFIED: slot48 need1049632 > hard walk ceiling1048576,
+split9194 TRUNCATED/refuse_mask0x10. See late-fifo-89e8ddf8 live prefix evidence.
+Now1495
 Gravity control,1510 Gravity probe. Only probe changes measurement value
 KF3_RELAY_PB_PEEK=after-fifo-update. Original600s benchmark/oracle retained.
 [Exact archived runners](../traces/windows_matrix_20261011/gravity-vulkan/h1-channel-audit/).
@@ -105,7 +108,7 @@ GET_CAPS_V2 feature bits. Derive the caps from public sources/our implementation
 do not promote a captured table into a default merely to boot Windows.
 
 Product**65530e6a** adds actual-need allocator fallback (421 GPU-free tests
-pass,3 ignored); hardware validation is part of the active exact89e8ddf8 campaign.
+pass,3 ignored); exact89 Linux9+10/30 passes; Windows1490 torch still FAIL411s with a new hard walk-ceiling refusal (need1049632 >1048576), reboot/GSPcycle1. No full-app fix claimed.
 Most matrix rows used**72741e2b** or explicitly named earlier revisions.
 Current branch HEAD includes later source/evidence commits; do not attribute
 the frozen3252 hardware results to arbitrary HEAD changes.

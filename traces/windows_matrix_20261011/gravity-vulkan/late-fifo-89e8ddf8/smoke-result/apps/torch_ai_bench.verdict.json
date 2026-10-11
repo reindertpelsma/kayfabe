@@ -1,0 +1,14 @@
+{
+ "verdict": "FAIL",
+ "rc": "-",
+ "secs": 411,
+ "quiet": "-",
+ "note": "guest-rebooted (bugcheck?)",
+ "proof": "-",
+ "tdr": 0,
+ "wer": 0,
+ "rebooted": true,
+ "gsp_cycles": 1,
+ "restart": "guest-rebooted",
+ "guest": "g1"
+}

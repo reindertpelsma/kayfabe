@@ -7,6 +7,20 @@ again after the Wednesday 07:00 reset). Read `AGENTS.md` (= `CLAUDE.md`) first: 
 (state, branches, traps), `docs/DELEGATED_DECISIONS_20261010.md`, `docs/OWNER_RULINGS.md` §AB-§AE, `docs/design/V3_FEATURE_GAPS.md`
 (priorities: P0 = prevents apps running; fidelity and perf beyond "decent" are post-release), `docs/design/V3_NOT_IN_GIT.md`.
 
+## Latest checkpoint, 2026-10-11 21:55 UTC
+
+Last confirmed public pushee8764481 (exact89 Linux9+10/30 green), private1dc9c0e.
+Windows1490 exact89: gears/vectorAdd/CUP8 PASS, torch_ai_bench FAIL411s with
+unexpected guest reboot/GSPcycle1; precise-window kernel journal Xid0/query0.
+The no-capacity-refusal hypothesis is FALSIFIED: slot48 needs1049632 rows versus
+hard walk ceiling1048576, split9194 TRUNCATED/refuse_mask0x10. This differs from
+optional-headroom exhaustion fixed earlier; no full Torch fix claimed. Pool
+itself has2^20 walk rows, so removing per-space guard alone is invalid. Complete
+reboot cause/bugcheck code unmeasured. Final log/original oracle/launch metadata
+published in gravity-vulkan/late-fifo-89e8ddf8/smoke-result. Matrix104 counts not
+changed by this confirming FAIL. Gravity1495control/1510probe continue; no fix
+or actual software trigger claimed yet. Personal1380chain retained untouched.
+
 ## Latest checkpoint, 2026-10-11 21:43 UTC
 
 Last confirmed public push1b2d3fb22 (saved owner image, takeover/runners), private

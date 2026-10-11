@@ -13,6 +13,20 @@ fix this file. Entries below the first are dated history.
 
 **Windows/Codex current resume point:** [RESUME_CODEX_WINDOWS_20261011.md](RESUME_CODEX_WINDOWS_20261011.md), branch `codex/windows-matrix-20261011`. Owner session is stopped; preserve its convenience disk chain described there.
 
+## Latest checkpoint, 2026-10-11 21:55 UTC
+
+Last confirmed public pushee8764481 (exact89 Linux9+10/30 green), private1dc9c0e.
+Windows1490 exact89: gears/vectorAdd/CUP8 PASS, torch_ai_bench FAIL411s with
+unexpected guest reboot/GSPcycle1; precise-window kernel journal Xid0/query0.
+The no-capacity-refusal hypothesis is FALSIFIED: slot48 needs1049632 rows versus
+hard walk ceiling1048576, split9194 TRUNCATED/refuse_mask0x10. This differs from
+optional-headroom exhaustion fixed earlier; no full Torch fix claimed. Pool
+itself has2^20 walk rows, so removing per-space guard alone is invalid. Complete
+reboot cause/bugcheck code unmeasured. Final log/original oracle/launch metadata
+published in gravity-vulkan/late-fifo-89e8ddf8/smoke-result. Matrix104 counts not
+changed by this confirming FAIL. Gravity1495control/1510probe continue; no fix
+or actual software trigger claimed yet. Personal1380chain retained untouched.
+
 ## Latest checkpoint, 2026-10-11 21:43 UTC
 
 Last confirmed public push1b2d3fb22 (saved owner image, takeover/runners), private
