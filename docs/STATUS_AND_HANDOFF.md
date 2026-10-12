@@ -1,5 +1,44 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-12 12:36UTC — reviewed three-mode CPU dispatch; runtime still off
+
+Previous confirmed push93dd13847; this checkpoint's source revision is its
+containing commit on codex/windows-matrix-20261011 (/data/kf-inval-absent).
+Owner's latest three-mode policy folded above superseded worker-only wording in
+§AI, relay design and original P0 review. Architecture rationale/evidence:
+docs/design/V3_WINDOWS_USER_RING_RELAY_ARCHITECTURE_REVIEW_20261012.md.
+
+Unconnected kf-trap companion-u64 prototype: fixed-cost atomics; full32 host token;
+25-bit generation refuses exhaustion; bounded four-GP delta; exclusive publication;
+durable pending; exact retirement/native-cleanup reuse gate. Direct Linux cannot
+convert to inspection; contended Direct gets an opaque-token drain. No PB read,
+lock, mapping or syscall in this module. Runtime wake adapter must publish the
+existing durable token bitmap and conditionally signal nonblocking eventfd.
+
+13 dispatch tests PASS (seven finite Loom programs, actual shared implementation,
+no preemption/permutation/time cap). Two intentional broken cutover guards RED;
+restored full trap/core/abi/rm/chan/qemu suite1877 PASS/0failed/exit0. Independent
+review found/fixed Direct last-ring drain and idle Worker requeue; final re-review
+no blocker in unconnected CPU scope, NOT runtime activation. Metadata must be
+resolved against post-claim generation; delayed callbacks can cross Free/reuse.
+Evidence gravity-vulkan/user-relay-dispatch.
+
+CPU handoff and native parser continuity remain separate. Fresh handoff excludes
+old CPU claimants and requires never-published history; any opaque native PUT
+keeps NativeHandoffPending. Public FIFO packet-fragment/TSG binding evidence
+prevents assuming GET==PUT is a parser boundary. Run1361 5080 allocation log8315
+precedes schedule8365/first forward8437, so selecting inspection there is a
+candidate for this app, not a universal guarantee. Late object allocation remains
+gated. Deferred notification source review establishes no repeatable CPU ack gate.
+
+Runtime userrelay::enabled() remains false. Notifier/USERD init, guarded source
+views, actual GP copy/worker submit, 5080 admission/migration and shared MMIO/
+ioeventfd integration remain open. No new GPU/Windows run. Gravity Kayfabe still
+FAIL/TIMEOUT versus same-GPU VFIO179/183s PASS; exact Linux hardware remains
+7f3f9fe16 gates9+10/fast30 PASS. Personal image retained. Vast last CLI empty;
+no rental. Matrix/driver sweep open; master untouched. Next integrate fresh
+5080 selection and submit only after remaining admission/order gates close.
+
 ## UPDATE 2026-10-12 12:18UTC — reviewed native-attempt quota; three dispatch modes
 
 Last confirmed push debb10bc1. New native quota ticket reserves actual advertised

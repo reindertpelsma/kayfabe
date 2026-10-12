@@ -6,6 +6,22 @@ OWNER_RULINGS §AI. No VM implementation or GravityMark pass yet.
 
 ## Decision and required corrections
 
+**Supersession, 2026-10-12:** the owner's later three-mode clarification in
+OWNER_RULINGS §AI supersedes this review's blanket worker-only and
+inspection-from-birth requirement. Bounded pre-mapped USERD/GP-descriptor copying
+is now intended for ordinary Windows user-work; inspection stays on workers.
+Direct Linux Passthrough retains its mapping prohibition. Copying user GP pointers
+can preserve native USER isolation without CPU pushbuffer inspection. A switch
+must exclude prior CPU publishers; if native opaque work was already published,
+parser/binding/ordering continuity remains a separate gate. Holding a reply alone
+still does not make that late handoff safe. Run1361's early 5080 object allocation
+is a candidate switch point only when exact history proves never-published.
+See [architecture review](V3_WINDOWS_USER_RING_RELAY_ARCHITECTURE_REVIEW_20261012.md).
+
+The HOST receipt correction below applies to tested complete host-authored
+packets. A nonempty witness appended to an opaque partial hardware method packet
+can become its data; GP boundaries are not universally parser boundaries.
+
 A stable host GPFIFO and private USERD are a useful direction: a guest ring
 relocation then need not relocate the native channel's ring. Develop this as
 restricted mediated Windows user-work selected at birth. Linux Passthrough

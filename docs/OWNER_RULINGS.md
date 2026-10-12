@@ -1158,6 +1158,27 @@ HDR on the console) falls under "works without".
 
 ## §AI. Windows user-work ring exception; Linux Passthrough unchanged, 2026-10-12
 
+**Latest owner clarification, 2026-10-12 (three-mode dispatch):** the owner
+requests direct native-token forwarding; bounded pre-mapped USERD/GP-descriptor
+copy with a worker fallback for large deltas; and always-worker dispatch for
+Translated, Emulated or migration-capable channels. No pushbuffer inspection on
+a vCPU, no mapping/native ioctl there, and only a conditional nonblocking worker
+wake syscall. MMIO and ioeventfd must use the same dispatch semantics. Review
+atomic interleavings rather than assuming lock-free means race-free. This
+supersedes the worker-only/inspection-from-birth requirement below to that extent;
+the Linux host-mapping prohibition and Windows read-only mapping scope remain.
+
+**Implementation interpretation, not a new owner ruling:** copying ordinary
+user GP pointers does not require CPU interpretation of their pushbuffers while
+the native channel remains USER, physical operands remain forbidden and its own
+restricted GPU address space protects host resources. Once software migration is
+possible, switch to immutable worker inspection before accepting it. The atomic
+switch must exclude old CPU publishers; if any opaque native stream was already
+published, native parser/binding/ordering continuity is a separate proof gate.
+Holding a registration reply or observing empty GET/PUT does not close that gate.
+A never-published channel may switch after all prior CPU claimants have exited.
+See [architecture review](design/V3_WINDOWS_USER_RING_RELAY_ARCHITECTURE_REVIEW_20261012.md).
+
 **Owner clarification, 2026-10-12:** "no host owned maps should remain for linux
  guests, but can be lifted for windows if its the only thing fixing the migration
  linux doesn't use". The owner also authorizes necessary Windows-specific rule

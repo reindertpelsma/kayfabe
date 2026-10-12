@@ -1,6 +1,25 @@
 # V3 Windows user-channel ring relay: private GPFIFO + private USERD, with a safe migration path
 
 **STATUS: DESIGN-ONLY, 2026-10-12 (proposal from the owner/coordinator discussion; the §AB.2 amendment in §6 is PROPOSED, not yet a ruling).**
+**LATEST OWNER/ARCHITECTURE UPDATE, 2026-10-12:** the owner's subsequent
+three-mode clarification in OWNER_RULINGS §AI supersedes the blanket worker-only
+and inspection-from-birth wording immediately below. Direct native-token dispatch,
+bounded pre-mapped USERD/GP-descriptor copy (large delta off-vCPU), and worker-only
+inspection are the intended policies. No pushbuffer inspection on a vCPU. Linux
+Passthrough still forbids host-owned GPU mappings. The first atomic prototype is
+unconnected; neither inline runtime submission nor GravityMark PASS is claimed.
+
+Conditional conversion still needs two distinct proofs: exclude old CPU
+publishers, then preserve any existing native parser/binding/ordering state.
+A never-published channel can avoid the second problem. Run1361's deferred-API
+object allocation precedes its first recorded submission, unlike registration;
+selecting worker mode at object-allocation admission is therefore a candidate.
+A previously published opaque stream remains gated. The public FIFO manual
+allows hardware method packets across GP boundaries, so an appended witness and
+empty GET/PUT cannot establish a parser boundary. See the
+[architecture review](V3_WINDOWS_USER_RING_RELAY_ARCHITECTURE_REVIEW_20261012.md)
+for rationale, evidence, model scope and remaining implementation gates.
+
 **REVIEW UPDATE, 2026-10-12:** imported from integration commit328fe4bf8.
 The owner has now approved a narrower exception: GPU-read-only private rings and
 command staging for declared Windows user-work, worker-only submission, command
