@@ -1,5 +1,27 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-12 20:40UTC — shadow checkpoint pushed; exact Linux fast PASS
+
+Last confirmed pushd8afb1e3ca9440580c227ee218ce0d1b3d06a7ef. On dedicated1.20,
+exact source9/9+gate10/USERbirth12/12/refused0 and rebuilt fast30/30/crash0/
+NOTRUN0 PASS. Linux NVIDIA580.159.04 Cinnamon/Xorg/gears PASS_WITH_WARNINGS (known startup
+assertions/DRM flip timeout); no desktop hostXid, clean stop/noQEMU/DMA-FQ20:39:38UTC.
+One locked campaign automatically starts shadow Windows1610 afterwards: desktop,
+EdgeH264, GravityD3D12, GravityVk, defaultOFFshadow1 only/originalproduction19flags.
+Root$W/codex-user-shadow-d8afb1e3c; log/data/kf-user-shadow-d8afb1e3c.log;
+Windows$W/codex-user-shadow-windows-d8afb1e3c. Windows1610 starting; no Windows verdict yet.
+
+Coordinator addendum assessed: RCscope source cannot prove crossVM availability;
+no such claim is relied on. M1-M3 remain open before crossVM guarantee. Native
+update test used live owned mapped same-config ring/USERD with successful V2
+registration, but neither a prepared relocation nor a privileged positiveinner
+reference. RCnestedstatus remains opaque; Xid32 is not permission evidence.
+Correction folded into native-deferred-update README. No new security finding
+or native capability established; per-driver positive capability evidence is
+required before an alternative is adopted. Avoid another unsupported negative
+inference. Vastinventory empty20:35UTC; personal image retained.
+
+
 ## UPDATE 2026-10-12 20:33UTC — bounded shadow diagnostic and native zero discriminator
 
 Last confirmed push16a1b6a78; working branch codex/windows-matrix-20261011.

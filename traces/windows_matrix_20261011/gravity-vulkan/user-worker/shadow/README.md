@@ -27,5 +27,7 @@ exact Linux9+10, rebuild/client/fresh fast30, Linux desktop, then run_windows.sh
 Windows workloads: desktop implicit, Edge H264 video, GravityMark D3D12 and Vulkan
 in one guest, original media/oracles. Production19flags plus shadow alone; normal
 migration interception remains OFF. A native unsupported deferred trigger may
-still RC; diagnostic is intended to batch observations, not fix it. Hardware
-results pending. Personal Windows disk chain is not opened by this campaign.
+still RC; diagnostic is intended to batch observations, not fix it. Exact d8afb1e3 Linux gates9/9+gate10/USERbirth12/12 and fast30/30 PASS;
+Linux Cinnamon/Xorg/gears PASS_WITH_WARNINGS (known shared-data assertions/DRM
+flip timeout), no desktop hostXid; clean stop/noQEMU/DMA-FQ20:39:38UTC. Fast suite
+has five expected negative-testXid31, no32. Evidence linux/. Windows pending. Personal Windows disk chain is not opened by this campaign.

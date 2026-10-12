@@ -11,6 +11,37 @@ records but no decoded inner status. See
 [`rc-journal`](../rc-journal/README.md). Registration privilege/permissions
 remain an investigation lead, not a measured failure status or Windows fix.
 
+## Correction 2026-10-12 — parameter preparation and missing inner status
+
+The coordinator's validity question is justified. Re-reading the retained
+harness and encoder: native memory64KiB was allocated and mapped; GPFIFO at
+VA+0x1000 (32entries) and client USERD in the same live object at offset0x2000
+are exactly the values that successfully birthed the channel. Public V2 CPU-RM
+registers hUserdMemory with GSP before INTERNAL; V2 registration returned OK.
+Owned client/channel/object ancestry and encoded offsets/counts are checked.
+The update-hold case retained all resources for2s after a real GPU tail, and
+faulted during that hold. Thus the test did not intentionally submit dangling
+memory or an unmapped replacement ring.
+
+It nevertheless did **not** prepare a new ring/USERD relocation or prove the
+same-config inner request valid with a successful privileged control. Native
+GSP acceptance constraints/inner status remain unmeasured. Both uid0 and65534
+faulted in the later reference; UID alone does not establish RM registration
+privilege. A tail cannot prove this nonstalling inner method succeeded. The
+bounded public RC journal supplied opaque nested bytes, no named inner status;
+there is no decoded NV_ERR_INSUFFICIENT_PERMISSIONS result to cite.
+
+Conclusion: this exact same-config experiment faults; it does not prove every
+valid unprivileged migration impossible or identify permission as the cause.
+No product path depends on that inference. An alternative requires a known-valid
+prepared migration/positive reference, a readback of actual relocation/progress,
+and a per-host-driver capability probe. Successful execution would require an
+explicit security/authority review before use; it is not currently observed.
+
+RC-scope source was read on origin/claude/rc-scope-20261012. GSP recovery policy
+is absent; M1-M3 remain required before any cross-VM availability claim. The
+current shadow experiment is exclusive single VM and grants no CPU API action.
+
 ## Proposed stream-preserving implementation, not yet validated
 
 The owner's suggested direction is to register an authored host channel-info
