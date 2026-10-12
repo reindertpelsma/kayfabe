@@ -1,6 +1,6 @@
 # Native USERD cursor observations around ring-growth registration
 
-**STATUS: RESEARCH, 2026-10-12.** Prepared; no cursor hardware result yet.
+**STATUS: RESEARCH, 2026-10-12.** Initial native app PASS; initial collector incomplete. Reviewed measurement prepared.
 
 H-CURSOR-OBS: read-only sampling of native SYSTEM memory-list USERD pages captures
 usable old/new cursor transitions during the same passing Gravity Vulkan workload.
@@ -31,3 +31,38 @@ Fresh disposable baseline child, personal1380 untouched; serial GPU lock and
 post-run NVIDIA/DMA-FQ/disk checks. No privileged driver call, pause, private
 driver analysis, disk/RAM export, or secret is added. GPU-free boundary/public
 memory-list/field-selection checks pass. Linux/Windows product runtime unchanged.
+
+## Initial096d1fac6 result and review corrections
+
+Native app PASS183s/rc0/image and timings, zero153/4101/WER/reboot. Native source
+and SHA unchanged5a407dcd8/1325fefb009c..., collector source096d1fac6. Sampler
+exited1 at100000-record cap without a footer. The wrapper's EXIT0 means native
+lane/cleanup success; **H-CURSOR-OBS collector failure occurred**, not full proof.
+Original compressed incomplete samples and strict complete GSP export are retained
+in initial-result/. Partial analyzer requires explicit --allow-incomplete and
+reports its independently computed hash; no collector footer is invented.
+
+Limited sampled facts: first registered slot0x600 observed GET/PUT0/0 about961us
+after registration observation, then225/948 at2094us. Second slot0x800 observed
+0/0 at996us, then250/1428 at2152us with a changed second CPU sample. These are
+native RAM field observations, not atomic trigger/cursor-transfer proof. Initial
+sampler's request-only candidate attribution was independently reviewed and is
+not promoted as valid allocation/lifetime authority. Preserve its limitations.
+
+Independent review found request-only success attribution, missing parent-free
+invalidation, oversized partial-line retry, gap correlation and offset-only
+summary joins. Corrections require unique successful observed fn4 reply, carry
+hDevice/request index, invalidate client/device/object frees and fail on gaps.
+This fresh cold-boot profile accepts only each queue's initial prefix at sequence0;
+nonzero retained-history prefixes or later discontinuities stop collection. No
+resumed VM snapshot is accepted. Successful empty replies still supply only a
+bounded passive candidate, never a product ownership pin. Summary joins exact
+client/handle/generation/allocation serial. Six GPU-free boundary/lifetime cases
+PASS. Independent reviewer found no reproducible parser/ledger model defect;
+all native-adapter gates remain open.
+
+Reviewed retry keeps1kHz reads but ordinary advancing exports at100Hz, preserving
+initial/identity/zero transitions immediately; planned record cap now writes a
+truthful limited footer. Original failure stays retained. New immutable runner
+uses a separate root and same native binary/workload; no change to a running
+script or product code. No usable reviewed hardware result yet.

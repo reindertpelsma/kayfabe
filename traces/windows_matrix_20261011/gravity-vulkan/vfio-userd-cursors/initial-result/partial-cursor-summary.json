@@ -1,0 +1,429 @@
+{
+  "schema": "kayfabe-native-userd-cursor-summary/1",
+  "complete": false,
+  "counts": {
+    "header": 1,
+    "generation-change": 2,
+    "memory-candidate": 2,
+    "sample": 99992,
+    "registration": 2,
+    "observed-free": 1
+  },
+  "footer": {
+    "file_export_complete": false,
+    "records": 100000,
+    "independently_computed_sha256": "2fa9deddc12f0e94ab60935f382759fcdd972160e3b2fba798f4aa3d0a90abf5",
+    "reason": "missing-collector-footer"
+  },
+  "registrations": [
+    {
+      "registration": {
+        "api_handle": "0x4000002b",
+        "channel": "0xff040026",
+        "client": "0xc1d0007a",
+        "entries": 65536,
+        "fifo": "0xa1c2c0000",
+        "generation": 2,
+        "kind": "registration",
+        "observed_ns": 200699439966904,
+        "record_index": 12326,
+        "sampled_ns": 200699461340205,
+        "sequence": 22,
+        "slot": 1536,
+        "userd": "0xff00a00b"
+      },
+      "memory_candidate": {
+        "allocation_serial": 1,
+        "client": "0xc1d0007a",
+        "generation": 2,
+        "gpa": 9548537856,
+        "handle": "0xff00a00b",
+        "kind": "memory-candidate",
+        "observed_ns": 200699439396430,
+        "offset": 8474796032,
+        "record_index": 12325,
+        "sampled_ns": 200699440847405,
+        "sequence": 3
+      },
+      "last_before": null,
+      "first_after": {
+        "sequence": 4,
+        "relative_us": 961.401,
+        "target": {
+          "get": 0,
+          "put": 0,
+          "reference": 0,
+          "slot": 1536
+        },
+        "second": {
+          "get": 0,
+          "put": 0,
+          "reference": 0,
+          "slot": 1536
+        },
+        "target_stable": true
+      },
+      "first_nonzero_after": {
+        "sequence": 5,
+        "relative_us": 2093.509,
+        "target": {
+          "get": 225,
+          "put": 948,
+          "reference": 0,
+          "slot": 1536
+        },
+        "second": {
+          "get": 225,
+          "put": 948,
+          "reference": 0,
+          "slot": 1536
+        },
+        "target_stable": true
+      },
+      "window_10ms": [
+        {
+          "sequence": 4,
+          "relative_us": 961.401,
+          "target": {
+            "get": 0,
+            "put": 0,
+            "reference": 0,
+            "slot": 1536
+          },
+          "second": {
+            "get": 0,
+            "put": 0,
+            "reference": 0,
+            "slot": 1536
+          },
+          "target_stable": true
+        },
+        {
+          "sequence": 5,
+          "relative_us": 2093.509,
+          "target": {
+            "get": 225,
+            "put": 948,
+            "reference": 0,
+            "slot": 1536
+          },
+          "second": {
+            "get": 225,
+            "put": 948,
+            "reference": 0,
+            "slot": 1536
+          },
+          "target_stable": true
+        },
+        {
+          "sequence": 6,
+          "relative_us": 3209.807,
+          "target": {
+            "get": 639,
+            "put": 1429,
+            "reference": 0,
+            "slot": 1536
+          },
+          "second": {
+            "get": 645,
+            "put": 1429,
+            "reference": 0,
+            "slot": 1536
+          },
+          "target_stable": false
+        },
+        {
+          "sequence": 7,
+          "relative_us": 4341.216,
+          "target": {
+            "get": 1094,
+            "put": 1908,
+            "reference": 0,
+            "slot": 1536
+          },
+          "second": {
+            "get": 1094,
+            "put": 1909,
+            "reference": 0,
+            "slot": 1536
+          },
+          "target_stable": false
+        },
+        {
+          "sequence": 8,
+          "relative_us": 5456.754,
+          "target": {
+            "get": 1553,
+            "put": 1909,
+            "reference": 0,
+            "slot": 1536
+          },
+          "second": {
+            "get": 1553,
+            "put": 1909,
+            "reference": 0,
+            "slot": 1536
+          },
+          "target_stable": true
+        },
+        {
+          "sequence": 9,
+          "relative_us": 6605.922,
+          "target": {
+            "get": 1983,
+            "put": 2388,
+            "reference": 0,
+            "slot": 1536
+          },
+          "second": {
+            "get": 2005,
+            "put": 2388,
+            "reference": 0,
+            "slot": 1536
+          },
+          "target_stable": false
+        },
+        {
+          "sequence": 10,
+          "relative_us": 7806.28,
+          "target": {
+            "get": 2379,
+            "put": 2869,
+            "reference": 0,
+            "slot": 1536
+          },
+          "second": {
+            "get": 2379,
+            "put": 2869,
+            "reference": 0,
+            "slot": 1536
+          },
+          "target_stable": true
+        },
+        {
+          "sequence": 11,
+          "relative_us": 8953.538,
+          "target": {
+            "get": 2821,
+            "put": 3349,
+            "reference": 0,
+            "slot": 1536
+          },
+          "second": {
+            "get": 2821,
+            "put": 3349,
+            "reference": 0,
+            "slot": 1536
+          },
+          "target_stable": true
+        }
+      ],
+      "note": "Native sampled fields only; live writer delay, non-atomic CPU samples and no executed-trigger proof."
+    },
+    {
+      "registration": {
+        "api_handle": "0x4000002c",
+        "channel": "0xff040026",
+        "client": "0xc1d0007a",
+        "entries": 131072,
+        "fifo": "0x2dfe90000",
+        "generation": 2,
+        "kind": "registration",
+        "observed_ns": 200713700228538,
+        "record_index": 12854,
+        "sampled_ns": 200713701198998,
+        "sequence": 12584,
+        "slot": 2048,
+        "userd": "0xff00a00c"
+      },
+      "memory_candidate": {
+        "allocation_serial": 2,
+        "client": "0xc1d0007a",
+        "generation": 2,
+        "gpa": 9548537856,
+        "handle": "0xff00a00c",
+        "kind": "memory-candidate",
+        "observed_ns": 200713699703653,
+        "offset": 8474796032,
+        "record_index": 12853,
+        "sampled_ns": 200713701156128,
+        "sequence": 12583
+      },
+      "last_before": null,
+      "first_after": {
+        "sequence": 12585,
+        "relative_us": 996.379,
+        "target": {
+          "get": 0,
+          "put": 0,
+          "reference": 0,
+          "slot": 2048
+        },
+        "second": {
+          "get": 0,
+          "put": 0,
+          "reference": 0,
+          "slot": 2048
+        },
+        "target_stable": true
+      },
+      "first_nonzero_after": {
+        "sequence": 12586,
+        "relative_us": 2152.027,
+        "target": {
+          "get": 250,
+          "put": 1428,
+          "reference": 0,
+          "slot": 2048
+        },
+        "second": {
+          "get": 250,
+          "put": 1429,
+          "reference": 0,
+          "slot": 2048
+        },
+        "target_stable": false
+      },
+      "window_10ms": [
+        {
+          "sequence": 12585,
+          "relative_us": 996.379,
+          "target": {
+            "get": 0,
+            "put": 0,
+            "reference": 0,
+            "slot": 2048
+          },
+          "second": {
+            "get": 0,
+            "put": 0,
+            "reference": 0,
+            "slot": 2048
+          },
+          "target_stable": true
+        },
+        {
+          "sequence": 12586,
+          "relative_us": 2152.027,
+          "target": {
+            "get": 250,
+            "put": 1428,
+            "reference": 0,
+            "slot": 2048
+          },
+          "second": {
+            "get": 250,
+            "put": 1429,
+            "reference": 0,
+            "slot": 2048
+          },
+          "target_stable": false
+        },
+        {
+          "sequence": 12587,
+          "relative_us": 3304.336,
+          "target": {
+            "get": 730,
+            "put": 1429,
+            "reference": 0,
+            "slot": 2048
+          },
+          "second": {
+            "get": 730,
+            "put": 1429,
+            "reference": 0,
+            "slot": 2048
+          },
+          "target_stable": true
+        },
+        {
+          "sequence": 12588,
+          "relative_us": 4439.064,
+          "target": {
+            "get": 1210,
+            "put": 1909,
+            "reference": 0,
+            "slot": 2048
+          },
+          "second": {
+            "get": 1210,
+            "put": 1909,
+            "reference": 0,
+            "slot": 2048
+          },
+          "target_stable": true
+        },
+        {
+          "sequence": 12589,
+          "relative_us": 5582.902,
+          "target": {
+            "get": 1678,
+            "put": 2389,
+            "reference": 0,
+            "slot": 2048
+          },
+          "second": {
+            "get": 1684,
+            "put": 2389,
+            "reference": 0,
+            "slot": 2048
+          },
+          "target_stable": false
+        },
+        {
+          "sequence": 12590,
+          "relative_us": 6739.731,
+          "target": {
+            "get": 2145,
+            "put": 2869,
+            "reference": 0,
+            "slot": 2048
+          },
+          "second": {
+            "get": 2151,
+            "put": 2869,
+            "reference": 0,
+            "slot": 2048
+          },
+          "target_stable": false
+        },
+        {
+          "sequence": 12591,
+          "relative_us": 7883.279,
+          "target": {
+            "get": 2625,
+            "put": 2869,
+            "reference": 0,
+            "slot": 2048
+          },
+          "second": {
+            "get": 2625,
+            "put": 2869,
+            "reference": 0,
+            "slot": 2048
+          },
+          "target_stable": true
+        },
+        {
+          "sequence": 12592,
+          "relative_us": 9013.317,
+          "target": {
+            "get": 3100,
+            "put": 3349,
+            "reference": 0,
+            "slot": 2048
+          },
+          "second": {
+            "get": 3100,
+            "put": 3349,
+            "reference": 0,
+            "slot": 2048
+          },
+          "target_stable": true
+        }
+      ],
+      "note": "Native sampled fields only; live writer delay, non-atomic CPU samples and no executed-trigger proof."
+    }
+  ],
+  "warning": "Observed initial cursor values are not a universal migration rule or ownership/lifetime proof."
+}

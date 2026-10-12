@@ -65,7 +65,71 @@ def memory_request(record):
     pfn = struct.unpack_from('<Q', b, 56)[0]
     if pfn >= 1 << 52:
         raise ValueError('PFN overflow')
-    return dict(client=hex(client), handle=hex(handle), gpa=pfn << 12)
+    return dict(client=hex(client), device=hex(device), handle=hex(handle), gpa=pfn << 12)
+
+
+class ObservationLimit(Exception):
+    """A bounded measurement stops recording, never changes GPU work."""
+
+
+class Candidates:
+    """Observed request/reply candidates, explicitly not authoritative pins."""
+    def __init__(self):
+        self.live = {}
+        self.pending = {}
+        self.generation = None
+        self.serial = 0
+        self.maximum_generation = 0
+
+    def boundary(self, generation, gap):
+        if generation != self.generation:
+            if generation <= self.maximum_generation:
+                raise ValueError('nonmonotonic observer generation')
+            self.live.clear(); self.pending.clear()
+            self.generation = generation; self.maximum_generation = generation
+        if gap:
+            self.live.clear(); self.pending.clear()
+            raise ValueError('observation gap prevents empty-reply correlation')
+
+    def observe(self, rec, generation):
+        events = []
+        key = (generation, rec['rpc_sequence'])
+        if rec['rpc_function'] == 4:
+            if rec['direction'] == 'request':
+                memory = memory_request(rec)
+                if memory:
+                    memory['request_index'] = rec.get('observation_index', 0)
+                count, previous = self.pending.get(key, (0, None))
+                # Empty replies cannot identify overlapping same-sequence calls.
+                if len(self.pending) >= 32 and key not in self.pending:
+                    raise ValueError('pending RPC cap exceeded')
+                self.pending[key] = (count + 1, memory if count == 0 else None)
+            else:
+                count, memory = self.pending.pop(key, (0, None))
+                if count > 1:
+                    self.pending[key] = (count - 1, None)
+                elif count == 1 and memory and rec['rpc_status'] == '0x0':
+                    self.serial += 1
+                    memory = dict(**memory, allocation_serial=self.serial)
+                    handle = (generation, memory['client'], memory['handle'])
+                    if handle not in self.live and len(self.live) >= 32:
+                        raise ValueError('tracked memory cap exceeded')
+                    self.live[handle] = memory
+                    events.append(dict(kind='memory-candidate', **memory))
+        if rec['rpc_function'] == 10 and rec['direction'] == 'request':
+            b = bytes.fromhex(rec['payload_hex'])[80:]
+            if len(b) >= 16:
+                client, parent, obj = (hex(v) for v in struct.unpack_from('<3I', b))
+                def affected(memory):
+                    return memory and memory['client'] == client and obj in {client, '0x0', memory['device'], memory['handle']}
+                for handle, memory in list(self.live.items()):
+                    if affected(memory):
+                        self.live.pop(handle)
+                        events.append(dict(kind='observed-free', **memory))
+                for pending, (count, memory) in list(self.pending.items()):
+                    if affected(memory):
+                        self.pending[pending] = (count, None)
+        return events
 
 
 def fields(page):
@@ -132,82 +196,94 @@ def main():
         def emit(kind, **values):
             nonlocal count
             if count >= 100000:
-                raise ValueError('sample output record cap reached')
+                raise ObservationLimit('sample output record cap reached')
             raw = json.dumps(dict(kind=kind, sequence=count, sampled_ns=time.monotonic_ns(), **values), sort_keys=True)+'\n'
             output.write(raw); output.flush(); digest.update(raw.encode()); count += 1
         emit('header', schema='kayfabe-native-userd-samples/1', pid=pid, guest_ram_bytes=size,
-             ranges=ranges, complete=False, period_seconds=.001, ram_fd=str(fds[0]),
+             ranges=ranges, complete=False, period_seconds=.001, ordinary_export_period_seconds=.010, ram_fd=str(fds[0]),
              note='Two CPU snapshots; no atomic GPU execution/cursor-transfer claim.')
-        end, tracked, last, serial, record_index = time.monotonic() + args.seconds, {}, {}, 0, 0
+        end, registry, last, record_index = time.monotonic() + args.seconds, Candidates(), {}, 0
+        emitted_at = {}
         reason = 'observation-deadline'
         active_generation = None
-        while time.monotonic() < end:
-            if (args.boot/'stop-userd-sampler').exists():
-                reason = 'owner-collection-stop'; break
-            if not proc.exists():
-                reason = 'qemu-exited'; break
-            for _ in range(4096):
-                position = trace.tell(); line = trace.readline(140001)
-                if not line or not line.endswith('\n'):
-                    trace.seek(position); break
-                if len(line) > 140000:
-                    raise ValueError('trace line cap exceeded')
-                row = json.loads(line)
-                if row.get('kind') != 'record':
-                    continue
-                record_index += 1
-                if row['generation'] != active_generation:
-                    tracked.clear(); last.clear(); active_generation = row['generation']
-                    emit('generation-change', generation=active_generation)
-                if row['direction'] != 0 or row['rpc_function'] not in {4, 10, 76}:
-                    continue
-                # Verify selected records' framing/checksum individually while
-                # live. Full footer/hash validation is mandatory after shutdown.
-                vals = [row[k] for k in ('magic','header_bytes','payload_bytes','direction','qpc','table_pa','queue_sequence','rpc_sequence','rpc_function','rpc_result','flags','missing_before','rpc_version','reserved')]
-                payload = bytes.fromhex(row['payload_hex'])
-                if len(payload) != row['payload_bytes'] or len(payload) > 65536:
-                    raise ValueError('record payload mismatch')
-                binary = decode.FILE.pack(0x5457474b,1,64,64,1000000000,0,1,0,0,0,0) + decode.RECORD.pack(*vals) + payload
-                rec = decode.parse(binary)['records'][0]
-                generation = row['generation']
-                memory = memory_request(rec)
-                if memory:
-                    key = (generation, memory['client'], memory['handle'])
-                    if key not in tracked and len(tracked) >= 32:
-                        raise ValueError('tracked memory cap exceeded')
-                    serial += 1
-                    offset = resolve(ranges, memory['gpa'], PAGE, size)
-                    tracked[key] = dict(**memory, allocation_serial=serial, offset=offset)
-                    emit('memory-candidate', record_index=record_index, observed_ns=row['qpc'], generation=generation, **tracked[key])
-                b = payload[80:]
-                if rec['rpc_function'] == 10 and len(b) >= 16:
-                    key = (generation, hex(struct.unpack_from('<I', b)[0]), hex(struct.unpack_from('<I', b, 8)[0]))
-                    old = tracked.pop(key, None)
-                    if old:
-                        emit('observed-free', generation=generation, record_index=record_index, **old)
-                ctrl = rec.get('control', {})
-                param = bytes.fromhex(ctrl.get('params_hex', ''))
-                if ctrl.get('command') in {'0x50800103', '0x50800104'} and len(param) == 584 and struct.unpack_from('<I', param, 4)[0] == 0x20801116:
-                    registrations += 1
-                    values = struct.unpack_from('<4I2Q', param, 24)
-                    emit('registration', record_index=record_index, observed_ns=row['qpc'], generation=generation,
-                        client=hex(values[0]), channel=hex(values[1]), userd=hex(values[2]), entries=values[3],
-                        fifo=hex(values[4]), slot=values[5], api_handle=hex(struct.unpack_from('<I', param)[0]))
-            # Deduplicate physical pages, but retain active observed aliases. No
-            # read is made through GPU BARs or arbitrary process virtual memory.
-            pages = {}
-            for key, item in tracked.items():
-                pages.setdefault(item['offset'], []).append(dict(generation=key[0], **item))
-            for offset, candidates in pages.items():
-                first = fields(os.pread(ram.fileno(), PAGE, offset))
-                second = fields(os.pread(ram.fileno(), PAGE, offset)); reads += 2
-                value = (first, second, candidates)
-                if last.get(offset) != value:
-                    emit('sample', offset=offset, candidates=candidates, fields=first, second=second, stable_fields=first == second)
-                    last[offset] = value
-            time.sleep(.001)
+        seen_queues = set()
+        try:
+            while time.monotonic() < end:
+                if (args.boot/'stop-userd-sampler').exists():
+                    reason = 'owner-collection-stop'; break
+                if not proc.exists():
+                    reason = 'qemu-exited'; break
+                for _ in range(4096):
+                    position = trace.tell(); line = trace.readline(140001)
+                    if len(line) > 140000:
+                        raise ValueError('trace line cap exceeded')
+                    if not line or not line.endswith('\n'):
+                        trace.seek(position); break
+                    row = json.loads(line)
+                    if row.get('kind') != 'record':
+                        continue
+                    record_index += 1
+                    if row['generation'] != active_generation:
+                        last.clear(); active_generation = row['generation']
+                        emit('generation-change', generation=active_generation)
+                    queue = (row['generation'], row['table_pa'], row['direction'])
+                    # This profile starts a fresh cold-boot QEMU with observer
+                    # active before vCPUs. Initial queue sequence0 is accepted;
+                    # retained/nonzero-prefix history or any later gap stops.
+                    initial_zero = queue not in seen_queues and row['queue_sequence'] == 0
+                    gap = bool(row['missing_before'] or (row['flags'] & 2 and not initial_zero))
+                    seen_queues.add(queue)
+                    registry.boundary(row['generation'], gap)
+                    if row['rpc_function'] not in {4, 10, 76}:
+                        continue
+                    # Verify selected records' framing/checksum individually while
+                    # live. Full footer/hash validation is mandatory after shutdown.
+                    vals = [row[k] for k in ('magic','header_bytes','payload_bytes','direction','qpc','table_pa','queue_sequence','rpc_sequence','rpc_function','rpc_result','flags','missing_before','rpc_version','reserved')]
+                    payload = bytes.fromhex(row['payload_hex'])
+                    if len(payload) != row['payload_bytes'] or len(payload) > 65536:
+                        raise ValueError('record payload mismatch')
+                    binary = decode.FILE.pack(0x5457474b,1,64,64,1000000000,0,1,0,0,0,0) + decode.RECORD.pack(*vals) + payload
+                    rec = decode.parse(binary)['records'][0]
+                    generation = row['generation']
+                    rec['observation_index'] = record_index
+                    for event in registry.observe(rec, generation):
+                        kind = event.pop('kind')
+                        if kind == 'memory-candidate':
+                            event['offset'] = resolve(ranges, event['gpa'], PAGE, size)
+                            registry.live[(generation, event['client'], event['handle'])]['offset'] = event['offset']
+                        emit(kind, record_index=record_index, observed_ns=row['qpc'], generation=generation, **event)
+                    ctrl = rec.get('control', {})
+                    param = bytes.fromhex(ctrl.get('params_hex', ''))
+                    if rec['direction'] == 'request' and ctrl.get('command') in {'0x50800103', '0x50800104'} and len(param) == 584 and struct.unpack_from('<I', param, 4)[0] == 0x20801116:
+                        registrations += 1
+                        values = struct.unpack_from('<4I2Q', param, 24)
+                        emit('registration', record_index=record_index, observed_ns=row['qpc'], generation=generation,
+                            client=hex(values[0]), channel=hex(values[1]), userd=hex(values[2]), entries=values[3],
+                            fifo=hex(values[4]), slot=values[5], api_handle=hex(struct.unpack_from('<I', param)[0]))
+                # Deduplicate physical pages, but retain active observed aliases. No
+                # read is made through GPU BARs or arbitrary process virtual memory.
+                pages = {}
+                for key, item in registry.live.items():
+                    pages.setdefault(item['offset'], []).append(dict(generation=key[0], **item))
+                for offset, candidates in pages.items():
+                    first = fields(os.pread(ram.fileno(), PAGE, offset))
+                    second = fields(os.pread(ram.fileno(), PAGE, offset)); reads += 2
+                    value = (first, second, candidates)
+                    previous = last.get(offset)
+                    now = time.monotonic_ns()
+                    # Preserve initial/identity/zero transitions; ordinary advancing
+                    # cursor exports are bounded to100Hz while reads remain1kHz.
+                    zero = previous is not None and any(
+                        f['get'] == f['put'] == 0 and (p['get'] or p['put'])
+                        for f,p in zip(first, previous[0]))
+                    if previous != value and (previous is None or previous[2] != candidates or zero or now - emitted_at.get(offset, 0) >= 10_000_000):
+                        emit('sample', offset=offset, candidates=candidates, fields=first, second=second, stable_fields=first == second)
+                        last[offset] = value; emitted_at[offset] = now
+                time.sleep(.001)
+        except ObservationLimit:
+            reason = 'record-cap'
         footer = dict(kind='footer', complete=False, file_export_complete=True, records=count,
-                      sha256=digest.hexdigest(), reads=reads, registrations=registrations, reason=reason)
+                      sha256=digest.hexdigest(), reads=reads, registrations=registrations, reason=reason, limited=reason in {'record-cap','observation-deadline'})
         output.write(json.dumps(footer,sort_keys=True)+'\n'); output.flush()
     print(json.dumps(footer, sort_keys=True))
 

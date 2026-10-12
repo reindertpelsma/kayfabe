@@ -45,4 +45,43 @@ class Bounds(unittest.TestCase):
         self.assertEqual(set(fields[3]),{'slot','reference','get','put'})
         with self.assertRaises(ValueError): m.fields(page[:-1])
 
+
+class Lifetimes(unittest.TestCase):
+    def request(self):
+        b=bytearray(144)
+        struct.pack_into('<7I',b,80,1,2,3,0x81,0x40000000,0,0)
+        struct.pack_into('<Q',b,112,4096)
+        struct.pack_into('<I',b,120,1)
+        struct.pack_into('<I',b,128,1<<16)
+        struct.pack_into('<Q',b,136,0x100000)
+        return dict(rpc_function=4,direction='request',rpc_sequence=0,rpc_status='0x0',payload_hex=b.hex())
+    def reply(self,status='0x0'):
+        return dict(rpc_function=4,direction='reply',rpc_sequence=0,rpc_status=status,payload_hex='')
+    def registry(self):
+        c=m.Candidates();c.boundary(1,False);return c
+    def free(self,obj):
+        b=bytearray(96);struct.pack_into('<4I',b,80,1,0,obj,0)
+        return dict(rpc_function=10,direction='request',rpc_sequence=0,payload_hex=b.hex())
+    def test_success_required_and_ambiguous_empty_replies_never_admit(self):
+        c=self.registry();c.observe(self.request(),1);self.assertFalse(c.live)
+        c.observe(self.reply('0x56'),1);self.assertFalse(c.live)
+        c.observe(self.request(),1);c.observe(self.request(),1)
+        c.observe(self.reply(),1);c.observe(self.reply(),1);self.assertFalse(c.live)
+        c.observe(self.request(),1);c.observe(self.reply(),1);self.assertEqual(len(c.live),1)
+    def test_client_device_and_object_free_invalidate_children_and_pending(self):
+        for obj in [1,2,3,0]:
+            c=self.registry();c.observe(self.request(),1);c.observe(self.reply(),1)
+            c.observe(self.free(obj),1);self.assertFalse(c.live)
+            c.observe(self.request(),1);c.observe(self.free(obj),1)
+            c.observe(self.reply(),1);self.assertFalse(c.live)
+    def test_gap_generation_and_handle_reuse_do_not_preserve_identity(self):
+        c=self.registry();c.observe(self.request(),1)
+        with self.assertRaises(ValueError): c.boundary(1,True)
+        c.observe(self.reply(),1);self.assertFalse(c.live)
+        c.observe(self.request(),1);c.observe(self.reply(),1);old=next(iter(c.live.values()))['allocation_serial']
+        c.observe(self.free(3),1);c.observe(self.request(),1);c.observe(self.reply(),1)
+        self.assertGreater(next(iter(c.live.values()))['allocation_serial'],old)
+        c.boundary(2,False);self.assertFalse(c.live)
+        with self.assertRaises(ValueError):c.boundary(1,False)
+
 if __name__=='__main__': unittest.main()
