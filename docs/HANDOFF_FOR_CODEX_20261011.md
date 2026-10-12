@@ -1,5 +1,21 @@
 # Handoff for a different agent (Codex or any fresh agent), 2026-10-11
 
+## UPDATE 2026-10-12 04:50UTC — reviewed VA birth cancellation, GPU-free PASS
+
+Last confirmed push6c255beb2. New Pending/Ready/Taken/Canceled reply state
+serializes cancellation against handout. VA worker releases only never-handed-out
+storage; Taken requires confirmed native free or never-born explicit cleanup.
+Failed cleanup retains pin/exclusion/storage after one automatic attempt, no
+retry spin. Canceled request churn preserves bounded initialization fairness.
+Full GPU-free abi/rm/qemu/chan PASS, userva12/12. Independent review found/corrected
+error-path second cleanup and starvation, then no source blocker. Evidence in
+gravity-vulkan/user-birth-cancel. No VM birth/migration caller or Gravity PASS;
+next exact pending birth/subtree identity and USERD/source ownership adapters.
+Prior exactcec428397 Linux9+10/fast30 PASS, no hardware claim for this new change.
+Gravity Kayfabe FAIL/TIMEOUT, VFIO PASS179/183s; matrix/sweep remain open.
+Personal image untouched. Vast API04:42UTC:[], nothing to retire; master untouched.
+
+
 ## UPDATE 2026-10-12 04:37UTC — exact cec428397 Linux9+10/30 PASS; typed migration decoder
 
 Last confirmed pushcec428397. On exactcec4283976009f2662e3f6812e810959911144c4,

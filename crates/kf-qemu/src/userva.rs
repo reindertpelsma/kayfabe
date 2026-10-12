@@ -142,27 +142,82 @@ pub struct Lease<V = CpuView> {
     retired: std::sync::atomic::AtomicBool,
     // 1: bounded clear,2: map on a later turn,0: ready/refused.
     initializing: std::sync::atomic::AtomicU8,
+    // Never-born error/cancellation cleanup gets ONE automatic attempt. A
+    // failed cleanup remains quarantined, rather than retrying on every turn.
+    never_born_cleanup_attempted: std::sync::atomic::AtomicBool,
     reply: Arc<Reply<V>>,
 }
 
 /// A nonblocking allocation reply. Lost replies retain resources in Queue.
-pub struct Reply<V = CpuView>(Mutex<Option<Result<std::sync::Weak<Lease<V>>, String>>>);
+pub struct Reply<V = CpuView>(Mutex<ReplyState<V>>);
+
+enum ReplyState<V> {
+    Pending,
+    Ready(Result<std::sync::Weak<Lease<V>>, String>),
+    Taken,
+    Canceled { reported: bool },
+}
 
 impl<V> Reply<V> {
     /// Act/worker poll; absence never grants a resource or reuse credit.
     pub fn take(&self) -> Result<Option<Result<Arc<Lease<V>>, String>>, String> {
         self.0
             .lock()
-            .map(|mut r| {
-                r.take().map(|result| {
-                    result.and_then(|lease| {
+            .map(|mut r| match &mut *r {
+                ReplyState::Pending | ReplyState::Taken => None,
+                ReplyState::Canceled { reported } => {
+                    if *reported {
+                        None
+                    } else {
+                        *reported = true;
+                        Some(Err("USER_RING_BIRTH_CANCELED".into()))
+                    }
+                }
+                ReplyState::Ready(_) => {
+                    let ReplyState::Ready(result) = std::mem::replace(&mut *r, ReplyState::Taken)
+                    else {
+                        return Some(Err("USER_RING_REPLY_STATE".into()));
+                    };
+                    Some(result.and_then(|lease| {
                         lease
                             .upgrade()
                             .ok_or_else(|| "USER_RING_REPLY_RETIRED".into())
-                    })
-                })
+                    }))
+                }
             })
             .map_err(|_| "USER_RING_REPLY_POISONED".into())
+    }
+
+    /// Cancel only BEFORE a successful resource handout. This does metadata
+    /// work only; the VA worker cleans resources that never had a channel.
+    /// Once take() wins, the caller owns native birth/free and must use the
+    /// explicit release_after_channel_free path. Cancellation cannot retire it.
+    pub fn cancel_before_birth(&self) -> Result<(), String> {
+        let mut state = self.0.lock().map_err(|_| "USER_RING_REPLY_POISONED")?;
+        match &*state {
+            ReplyState::Taken => Err("USER_RING_BIRTH_ALREADY_HANDED_OUT".into()),
+            ReplyState::Canceled { .. } => Ok(()),
+            ReplyState::Pending | ReplyState::Ready(_) => {
+                *state = ReplyState::Canceled { reported: false };
+                Ok(())
+            }
+        }
+    }
+
+    fn is_canceled(&self) -> bool {
+        self.0
+            .lock()
+            .is_ok_and(|state| matches!(*state, ReplyState::Canceled { .. }))
+    }
+
+    fn publish(&self, result: Result<std::sync::Weak<Lease<V>>, String>) {
+        if let Ok(mut state) = self.0.lock()
+            && matches!(*state, ReplyState::Pending)
+        {
+            *state = ReplyState::Ready(result);
+        }
+        // Cancellation may have won during a host operation. Never overwrite
+        // it with a successful handout; Queue still owns the resource.
     }
 }
 
@@ -220,7 +275,7 @@ impl<V> Queue<V> {
         }
         q.try_reserve(1)
             .map_err(|_| "USER_RING_REQUEST_ALLOCATION")?;
-        let reply = Arc::new(Reply(Mutex::new(None)));
+        let reply = Arc::new(Reply(Mutex::new(ReplyState::Pending)));
         // A pending allocation/storage keeps its mirror unrecyclable even if
         // the guest frees its VAS/channel before the allocation reply.
         mirror
@@ -262,8 +317,13 @@ impl<V> Queue<V> {
     pub fn has_work(&self) -> bool {
         self.pending.lock().is_ok_and(|q| !q.is_empty())
             || self.held.lock().is_ok_and(|v| {
-                v.iter()
-                    .any(|l| l.initializing.load(std::sync::atomic::Ordering::Acquire) != 0)
+                v.iter().any(|l| {
+                    l.initializing.load(std::sync::atomic::Ordering::Acquire) != 0
+                        || (l.reply.is_canceled()
+                            && !l
+                                .never_born_cleanup_attempted
+                                .load(std::sync::atomic::Ordering::Acquire))
+                })
             })
     }
 
@@ -271,9 +331,48 @@ impl<V> Queue<V> {
     /// reconciliation and only while no invalidate/walk/statement is pending.
     /// No deadline releases GPU state. Native RM latency is logged separately.
     pub fn serve(&self, manager: &Manager, rm: &impl StorageHost<View = V>) {
+        let (request, initializing) = self.pop_work();
+        if let Some(request) = request {
+            match request {
+                Request::Allocate {
+                    key, mirror, reply, ..
+                } => {
+                    if Self::abort_canceled_allocate(&mirror, &reply) {
+                        return;
+                    }
+                    let t = std::time::Instant::now();
+                    let result = self.build(manager, rm, key, &mirror, reply.clone());
+                    eprintln!(
+                        "kf3: USER_RING_PREPARE elapsed_us={} ok={}",
+                        t.elapsed().as_micros(),
+                        result.is_ok()
+                    );
+                    Self::report_prepare(&mirror, &reply, result);
+                }
+                Request::Release(lease) => self.retire(&lease, rm),
+            }
+            // Re-evaluate invalidate/statement priority on the next VA turn.
+            // Never stack an initialization map behind this request's RM ops.
+            return;
+        }
+        let Some(lease) = initializing else {
+            return;
+        };
+        self.initialize(&lease, rm);
+    }
+
+    // Scheduling is independent of request success/cancellation: request churn
+    // cannot starve an older bounded initialization phase.
+    fn pop_work(&self) -> (Option<Request<V>>, Option<Arc<Lease<V>>>) {
         let initializing = self.held.lock().ok().and_then(|v| {
             v.iter()
-                .find(|l| l.initializing.load(std::sync::atomic::Ordering::Acquire) != 0)
+                .find(|l| {
+                    l.initializing.load(std::sync::atomic::Ordering::Acquire) != 0
+                        || (l.reply.is_canceled()
+                            && !l
+                                .never_born_cleanup_attempted
+                                .load(std::sync::atomic::Ordering::Acquire))
+                })
                 .cloned()
         });
         let init_turn = self
@@ -286,37 +385,26 @@ impl<V> Queue<V> {
                 Some(q.remove(0))
             }
         });
-        if let Some(request) = request {
-            match request {
-                Request::Allocate {
-                    key, mirror, reply, ..
-                } => {
-                    let t = std::time::Instant::now();
-                    let result = self.build(manager, rm, key, &mirror, reply.clone());
-                    eprintln!(
-                        "kf3: USER_RING_PREPARE elapsed_us={} ok={}",
-                        t.elapsed().as_micros(),
-                        result.is_ok()
-                    );
-                    Self::report_prepare(&mirror, &reply, result);
-                }
-                Request::Release(lease) => self.retire(&lease, rm),
-            }
+        if request.is_some() {
             self.init_turn
                 .store(true, std::sync::atomic::Ordering::Relaxed);
-            // Re-evaluate invalidate/statement priority on the next VA turn.
-            // Never stack an initialization map behind this request's RM ops.
+        }
+        (request, initializing)
+    }
+
+    fn initialize(&self, lease: &Arc<Lease<V>>, rm: &impl StorageHost<View = V>) {
+        if self.reap_canceled(lease, rm) {
             return;
         }
-        let Some(lease) = initializing else {
-            return;
-        };
         let Ok(mut storage) = lease.storage.try_lock() else {
             return;
         };
         let phase = lease
             .initializing
             .load(std::sync::atomic::Ordering::Acquire);
+        if phase != 1 && phase != 2 {
+            return;
+        }
         let t = std::time::Instant::now();
         let result = if phase == 1 {
             storage.clear_next(rm).map(|done| {
@@ -340,21 +428,56 @@ impl<V> Queue<V> {
                 lease
                     .initializing
                     .store(0, std::sync::atomic::Ordering::Release);
-                if let Ok(mut out) = lease.reply.0.lock() {
-                    *out = Some(Ok(Arc::downgrade(&lease)));
-                }
+                lease.reply.publish(Ok(Arc::downgrade(&lease)));
             }
             Err(error) => {
                 lease
                     .initializing
                     .store(0, std::sync::atomic::Ordering::Release);
                 drop(storage);
-                // No native channel can exist before a successful init reply.
-                self.retire(&lease, rm);
-                if let Ok(mut out) = lease.reply.0.lock() {
-                    *out = Some(Err(error));
-                }
+                // Record this attempt before cleanup: cancellation can win
+                // during the host call or before the error reply is published.
+                // Either way it cannot manufacture a second automatic retry.
+                self.cleanup_never_born(lease, rm);
+                lease.reply.publish(Err(error));
             }
+        }
+    }
+
+    fn abort_canceled_allocate(mirror: &Mirror, reply: &Reply<V>) -> bool {
+        if !reply.is_canceled() {
+            return false;
+        }
+        // This request has been popped exactly once and performed no host op.
+        mirror
+            .live
+            .fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
+        true
+    }
+
+    fn reap_canceled(&self, lease: &Arc<Lease<V>>, rm: &impl StorageHost<View = V>) -> bool {
+        if !lease.reply.is_canceled()
+            || lease
+                .never_born_cleanup_attempted
+                .swap(true, std::sync::atomic::Ordering::AcqRel)
+        {
+            return false;
+        }
+        // Canceled and Taken are mutually exclusive under the reply mutex:
+        // no caller ever received this lease, so a native channel cannot exist.
+        lease
+            .initializing
+            .store(0, std::sync::atomic::Ordering::Release);
+        self.retire(lease, rm);
+        true
+    }
+
+    fn cleanup_never_born(&self, lease: &Arc<Lease<V>>, rm: &impl StorageHost<View = V>) {
+        if !lease
+            .never_born_cleanup_attempted
+            .swap(true, std::sync::atomic::Ordering::AcqRel)
+        {
+            self.retire(lease, rm);
         }
     }
 
@@ -459,9 +582,7 @@ impl<V> Queue<V> {
             mirror
                 .live
                 .fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
-            if let Ok(mut out) = reply.0.lock() {
-                *out = Some(Err(error));
-            }
+            reply.publish(Err(error));
         }
     }
 
@@ -487,6 +608,7 @@ impl<V> Queue<V> {
             va,
             retired: std::sync::atomic::AtomicBool::new(false),
             initializing: std::sync::atomic::AtomicU8::new(if error.is_none() { 1 } else { 0 }),
+            never_born_cleanup_attempted: std::sync::atomic::AtomicBool::new(error.is_some()),
             reply,
         });
         held.push(lease.clone());
@@ -562,9 +684,23 @@ mod tests {
     #[derive(Default)]
     struct Fake {
         failures: std::cell::RefCell<Vec<&'static str>>,
+        calls: std::cell::RefCell<Vec<&'static str>>,
+        on_op: std::cell::RefCell<Option<(&'static str, Box<dyn FnOnce()>)>>,
     }
     impl Fake {
         fn op(&self, name: &'static str) -> Result<(), String> {
+            self.calls.borrow_mut().push(name);
+            let callback = {
+                let mut callback = self.on_op.borrow_mut();
+                if callback.as_ref().is_some_and(|(op, _)| *op == name) {
+                    callback.take().map(|(_, f)| f)
+                } else {
+                    None
+                }
+            };
+            if let Some(callback) = callback {
+                callback();
+            }
             if self.failures.borrow().contains(&name) {
                 Err(name.into())
             } else {
@@ -586,6 +722,9 @@ mod tests {
             self.op("view")
         }
         fn clear(&self, _: &()) -> Result<(), String> {
+            self.op("clear")
+        }
+        fn clear_range(&self, _: &(), _: u64, _: u64) -> Result<(), String> {
             self.op("clear")
         }
         fn map_ro(
@@ -748,5 +887,203 @@ mod tests {
             &old.user_regions,
             &old
         ));
+    }
+
+    #[test]
+    fn cancellation_before_prepare_returns_only_the_pending_pin() {
+        let q = Queue::<()>::default();
+        let m = mirror();
+        let reply = request(&q, &m);
+        // request() also claims the fixture slot; no native allocation exists.
+        m.user_regions.release(BASE).unwrap();
+        reply.cancel_before_birth().unwrap();
+        assert!(Queue::abort_canceled_allocate(&m, &reply));
+        assert_eq!(m.live.load(std::sync::atomic::Ordering::Acquire), 0);
+        assert!(reply.take().unwrap().unwrap().is_err());
+        assert!(reply.take().unwrap().is_none());
+        assert!(q.held.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn cancellation_reaps_prepared_or_ready_storage_without_handout() {
+        for ready in [false, true] {
+            let q = Queue::<()>::default();
+            let m = mirror();
+            let host = Fake::default();
+            let lease = adopt_ready(&q, &m, &host);
+            if ready {
+                lease.reply.publish(Ok(Arc::downgrade(&lease)));
+            } else {
+                lease
+                    .initializing
+                    .store(1, std::sync::atomic::Ordering::Release);
+            }
+            lease.reply.cancel_before_birth().unwrap();
+            // Polling the cancellation does not swallow the worker's cleanup.
+            assert!(lease.reply.take().unwrap().unwrap().is_err());
+            assert!(q.has_work());
+            assert!(q.reap_canceled(&lease, &host));
+            assert!(!q.has_work());
+            assert!(q.held.lock().unwrap().is_empty());
+            assert_eq!(m.live.load(std::sync::atomic::Ordering::Acquire), 0);
+            assert!(m.user_regions.ranges().is_empty());
+        }
+    }
+
+    #[test]
+    fn successful_handout_disarms_automatic_cancellation() {
+        let q = Queue::<()>::default();
+        let m = mirror();
+        let host = Fake::default();
+        let lease = adopt_ready(&q, &m, &host);
+        lease.reply.publish(Ok(Arc::downgrade(&lease)));
+        let handed = lease.reply.take().unwrap().unwrap().unwrap();
+        assert!(Arc::ptr_eq(&handed, &lease));
+        assert!(lease.reply.cancel_before_birth().is_err());
+        assert!(!q.reap_canceled(&lease, &host));
+        assert!(!q.has_work());
+        assert_eq!(m.live.load(std::sync::atomic::Ordering::Acquire), 1);
+        assert!(m.user_regions.check(BASE, BYTES).is_err());
+        // Only confirmed never-born/native-freed cleanup may now retire it.
+        q.retire(&handed, &host);
+        assert_eq!(m.live.load(std::sync::atomic::Ordering::Acquire), 0);
+    }
+
+    #[test]
+    fn canceled_cleanup_failure_quarantines_without_retry_spin() {
+        let q = Queue::<()>::default();
+        let m = mirror();
+        let host = Fake::default();
+        let lease = adopt_ready(&q, &m, &host);
+        lease.reply.publish(Ok(Arc::downgrade(&lease)));
+        lease.reply.cancel_before_birth().unwrap();
+        host.failures.borrow_mut().push("unmap");
+        assert!(q.reap_canceled(&lease, &host));
+        assert!(!q.has_work());
+        assert_eq!(q.held.lock().unwrap().len(), 1);
+        assert_eq!(m.live.load(std::sync::atomic::Ordering::Acquire), 1);
+        assert!(m.user_regions.claim(BASE).is_err());
+        assert!(lease.reply.cancel_before_birth().is_ok());
+        assert!(!q.reap_canceled(&lease, &host), "no repeated native retry");
+        host.failures.borrow_mut().clear();
+        q.retire(&lease, &host);
+        assert_eq!(m.live.load(std::sync::atomic::Ordering::Acquire), 0);
+    }
+
+    #[test]
+    fn cancellation_during_or_after_phase_error_does_not_retry_failed_cleanup() {
+        for phase in [1, 2] {
+            for cancel_at in ["phase", "cleanup", "late"] {
+                let q = Queue::<()>::default();
+                let m = mirror();
+                let host = Fake::default();
+                let reply = request(&q, &m);
+                let lease = q
+                    .adopt(
+                        &mut q.held.lock().unwrap(),
+                        &m,
+                        BASE,
+                        reply.clone(),
+                        Storage::prepare(&host, m.space, BASE),
+                    )
+                    .unwrap();
+                if phase == 2 {
+                    let mut storage = lease.storage.lock().unwrap();
+                    while !storage.clear_next(&host).unwrap() {}
+                    lease
+                        .initializing
+                        .store(2, std::sync::atomic::Ordering::Release);
+                }
+                let phase_op = if phase == 1 { "clear" } else { "map" };
+                host.failures.borrow_mut().extend([phase_op, "revoke"]);
+                if cancel_at != "late" {
+                    let reply = reply.clone();
+                    *host.on_op.borrow_mut() = Some((
+                        if cancel_at == "phase" {
+                            phase_op
+                        } else {
+                            "revoke"
+                        },
+                        Box::new(move || reply.cancel_before_birth().unwrap()),
+                    ));
+                }
+                q.initialize(&lease, &host);
+                if cancel_at == "late" {
+                    reply.cancel_before_birth().unwrap();
+                }
+                assert!(reply.take().unwrap().unwrap().is_err());
+                assert!(!q.has_work(), "phase={phase} cancel_at={cancel_at}");
+                assert!(!q.reap_canceled(&lease, &host));
+                assert_eq!(
+                    host.calls
+                        .borrow()
+                        .iter()
+                        .filter(|&&s| s == "revoke")
+                        .count(),
+                    1
+                );
+                assert_eq!(m.live.load(std::sync::atomic::Ordering::Acquire), 1);
+                assert!(m.user_regions.claim(BASE).is_err());
+                host.failures.borrow_mut().clear();
+                q.retire(&lease, &host);
+                assert_eq!(m.live.load(std::sync::atomic::Ordering::Acquire), 0);
+            }
+        }
+    }
+
+    #[test]
+    fn canceled_request_churn_preserves_the_next_initialization_turn() {
+        let q = Queue::<()>::default();
+        let m = mirror();
+        let host = Fake::default();
+        let reply = request(&q, &m);
+        let lease = q
+            .adopt(
+                &mut q.held.lock().unwrap(),
+                &m,
+                BASE,
+                reply,
+                Storage::prepare(&host, m.space, BASE),
+            )
+            .unwrap();
+        let canceled = Arc::new(Reply(Mutex::new(ReplyState::Pending)));
+        canceled.cancel_before_birth().unwrap();
+        // Release requests have the same scheduler eligibility as allocation;
+        // exercise an actual canceled Allocate record with the existing permit.
+        let permit = kf_rm::chanlink::windows_user_ring_permit(&kf_rm::chanlink::UserWorkFacts {
+            flag: true,
+            windows: true,
+            kernel_stamped: true,
+            engine: Some(kf_abi::submit::ENGINE_TYPE_GRAPHICS),
+            ctx_share: 1,
+            ctx_share_known: true,
+            process_id: Some(200),
+            kernel_pid: Some(100),
+            ..Default::default()
+        })
+        .unwrap();
+        for _ in 0..3 {
+            m.live.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+            q.pending.lock().unwrap().push(Request::Allocate {
+                key: VasKey(7),
+                mirror: m.clone(),
+                _permit: permit,
+                reply: canceled.clone(),
+            });
+        }
+        let (Some(Request::Allocate { mirror, reply, .. }), _) = q.pop_work() else {
+            panic!()
+        };
+        assert!(Queue::abort_canceled_allocate(&mirror, &reply));
+        let (next, initializing) = q.pop_work();
+        assert!(
+            next.is_none(),
+            "canceled request must still yield to initialization"
+        );
+        assert!(Arc::ptr_eq(&initializing.unwrap(), &lease));
+        host.calls.borrow_mut().clear();
+        q.initialize(&lease, &host);
+        assert_eq!(&*host.calls.borrow(), &["clear"]);
+        assert_eq!(q.pending.lock().unwrap().len(), 2);
     }
 }
