@@ -39,6 +39,22 @@ Next: exact source Linux gates9+10, fast30, desktop smoke; then a single-variabl
 Windows relay experiment on a disposable child of the retained personal image.
 No host privileged FIFO-update verb and no host patch.
 
+## Resolved initial USERD correction, 2026-10-12 18:02UTC
+
+Windows1550 clean-refused birth with USER_RING_USERD_ACCESS Gone. No app or
+migration verdict. ACPI stopped; zero hostXid, noQEMU/DMA-FQ. See windows-1550.
+CPU-local birth handles are independent of GSP MemoryList handles. Corrected
+initial access uses the public resolved Sysmem descriptor, bounded512 bytes,
+exact channel lifetime and guarded RAM topology. Migrated USERD still requires
+its MemoryList lease. No vCPU work added. Independent source review passed;
+full six-crate1919PASS/0fail/exit0 (resolved-userd-tests.log). New tests exercise
+real RAM copies, bounds, topology revocation, channel reuse and graph/channel
+admission order. Native worker execution still needs the next VM experiment.
+Candidate channels are worker-routed from birth, not converted by registration.
+Source GET credit remains actual descriptor-fetch based; private native ring
+and USERD remain fixed. Owner permits a separate opt-in Linux relay diagnostic
+if useful; ordinary Linux Passthrough unchanged. Sysmem-only admission explicit.
+
 ## Exact Linux result and Windows start
 
 MEASURED on full source30c887c8651c3e79b6b62c6785eda30f443205d1, trusted
@@ -54,5 +70,5 @@ IOMMUgroup11DMA-FQ. This is desktop smoke, not full render parity.
 
 Windows relay experiment launched run1550 on the same pinned source. Original
 600s GravityMark Vk app/oracle/media; only added relay flag. Fresh baseline child;
-personal1380 chain untouched. Result pending. run_windows.sh is the executed
+personal1380 chain untouched. ABORTED_ADMISSION as corrected above; no app verdict. run_windows.sh is the executed
 runner (copied outside host checkout); Linux desktop runner likewise retained.

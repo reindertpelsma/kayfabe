@@ -93,6 +93,101 @@ impl<T> Cell<T> {
 }
 
 /// Kept even after statement-time Free; only confirmed native free retires it.
+#[derive(Clone)]
+pub(super) enum UserdSource {
+    /// CPU-RM resolved birth descriptor; its CPU-local handle is not a GSP name.
+    Resolved(crate::mem::userdram::Userd),
+    /// Later migration carries an independently registered GSP MemoryList name.
+    Registered(kf_rm::memory_access::Lease),
+}
+fn check_userd_owner(
+    current: Option<&Arc<()>>,
+    expected: &Arc<()>,
+) -> Result<(), kf_rm::memory_list::AccessError> {
+    if current.is_some_and(|id| Arc::ptr_eq(id, expected)) {
+        Ok(())
+    } else {
+        Err(kf_rm::memory_list::AccessError::Gone)
+    }
+}
+impl UserdSource {
+    fn owner<'a>(
+        me: &'a ChanPlane,
+        key: (u32, u32),
+        allocation: &Arc<()>,
+    ) -> Result<std::sync::MutexGuard<'a, PtMap>, kf_rm::memory_list::AccessError> {
+        use kf_rm::memory_list::AccessError;
+        let pt = me.pt.try_lock().map_err(|e| match e {
+            std::sync::TryLockError::WouldBlock => AccessError::Busy,
+            _ => AccessError::Poisoned,
+        })?;
+        check_userd_owner(
+            pt.get(&key).filter(|t| t.user_ring).map(|t| &t.allocation),
+            allocation,
+        )?;
+        Ok(pt)
+    }
+    pub fn read(
+        &self,
+        me: &ChanPlane,
+        key: (u32, u32),
+        allocation: &Arc<()>,
+        offset: u64,
+        bytes: &mut [u8],
+    ) -> Result<(), kf_rm::memory_list::AccessError> {
+        match self {
+            Self::Resolved(source) => {
+                let _owner = Self::owner(me, key, allocation)?;
+                source.read(offset, bytes)
+            }
+            Self::Registered(source) => {
+                source.read_admitted(offset, bytes, || Self::owner(me, key, allocation))
+            }
+        }
+    }
+    pub fn write(
+        &self,
+        me: &ChanPlane,
+        key: (u32, u32),
+        allocation: &Arc<()>,
+        offset: u64,
+        bytes: &[u8],
+    ) -> Result<(), kf_rm::memory_list::AccessError> {
+        match self {
+            Self::Resolved(source) => {
+                let _owner = Self::owner(me, key, allocation)?;
+                source.write(offset, bytes)
+            }
+            Self::Registered(source) => {
+                source.write_admitted(offset, bytes, || Self::owner(me, key, allocation))
+            }
+        }
+    }
+    /// Exact pending Book.commit owns the descriptor before Pt attachment.
+    fn initialize(
+        &self,
+        expected: &Arc<()>,
+        identity: &Arc<()>,
+    ) -> Result<(), kf_rm::memory_list::AccessError> {
+        check_userd_owner(Some(identity), expected)?;
+        match self {
+            Self::Resolved(source) => source.write(0, &[0; 0x200]),
+            Self::Registered(_) => Err(kf_rm::memory_list::AccessError::Unsupported),
+        }
+    }
+    /// The closure must retain exact Pt and final birth RAM-generation guards
+    /// through publication. A resolved descriptor needs no fabricated graph node.
+    pub fn admit<T>(
+        &self,
+        publish: impl FnOnce() -> T,
+    ) -> Result<T, kf_rm::memory_list::AccessError> {
+        match self {
+            Self::Resolved(_) => Ok(publish()),
+            Self::Registered(source) => source.admit(publish),
+        }
+    }
+}
+
 pub(super) struct Record {
     pub allocation: Arc<()>,
     pub quota: Arc<super::userquota::NativeQuota>,
@@ -101,7 +196,7 @@ pub(super) struct Record {
     pub chan: Option<kf_host::Channel>,
     pub lease: Arc<crate::userva::Lease>,
     pub mirror: Mirror,
-    pub userd: kf_rm::memory_access::Lease,
+    pub userd: UserdSource,
     pub source: (u64, u32),
     pub vas_key: VasKey,
     pub pump: Option<super::userpump::Pump>,
@@ -166,8 +261,9 @@ impl Birth {
             Some(Ok(lease)) => lease,
         };
         let a = &self.a;
-        // Do not forward physical USERD bytes. Resolve the original object
-        // declaration through the current graph and exact resource lifetime.
+        // CPU-local birth handles need not have a GSP MemoryList registration.
+        // The CPU-RM resolved descriptor supplies bounded own-VM RAM; runtime
+        // CPU access additionally retains exact Pt allocation identity.
         let source = (|| {
             if a.class != kf_abi::generated::classes::AMPERE_CHANNEL_GPFIFO_A
                 || a.entries < 2
@@ -185,20 +281,12 @@ impl Birth {
             if handle == 0 || offset & 0x1ff != 0 {
                 return Err("USER_RING_USERD_DECLARATION".into());
             }
-            let userd = me
-                .memory_access
-                .lease(a.client, handle, offset, 0x200)
-                .map_err(|e| format!("USER_RING_USERD_ACCESS {e:?}"))?;
-            let Some(kf_arch::UserdMem::Sysmem { base, .. }) = a.userd else {
+            let Some(kf_arch::UserdMem::Sysmem { base, size }) = a.userd else {
                 return Err("USER_RING_USERD_APERTURE_NOT_IMPLEMENTED".into());
             };
-            if !userd
-                .matches_ram_location(base)
-                .map_err(|e| format!("USER_RING_USERD_LOCATION {e:?}"))?
-            {
-                return Err("USER_RING_USERD_LOCATION_MISMATCH".into());
-            }
-            Ok(userd)
+            crate::mem::userdram::Userd::new(me.ram, base, size)
+                .map(UserdSource::Resolved)
+                .map_err(|e| format!("USER_RING_RESOLVED_USERD {e:?}"))
         })();
         let userd = match source {
             Ok(u) => u,
@@ -371,7 +459,7 @@ impl Birth {
                 .try_lock()
                 .map_err(|_| "USER_RING_RECORD_BUSY_AT_COMMIT")?;
             r.userd
-                .write(0, &[0u8; 0x200])
+                .initialize(&r.allocation, &identity)
                 .map_err(|e| format!("USER_RING_INITIAL_USERD {e:?}"))?;
             let mut pt = me.pt.lock().map_err(|_| "USER_RING_PT_POISONED")?;
             if pt.contains_key(&(a.client, a.handle)) {
@@ -703,6 +791,20 @@ mod tests {
     struct Host {
         cell: Cell<State>,
         metadata: Mutex<()>,
+    }
+    #[test]
+    fn resolved_userd_owner_requires_exact_channel_incarnation() {
+        let allocation = Arc::new(());
+        assert_eq!(check_userd_owner(Some(&allocation), &allocation), Ok(()));
+        assert_eq!(
+            check_userd_owner(None, &allocation),
+            Err(kf_rm::memory_list::AccessError::Gone)
+        );
+        let reused = Arc::new(());
+        assert_eq!(
+            check_userd_owner(Some(&reused), &allocation),
+            Err(kf_rm::memory_list::AccessError::Gone)
+        );
     }
     impl HostOps for Host {
         fn operands_translatable(&self, _: u32, _: u64) -> Translatable {

@@ -1,5 +1,30 @@
 # Handoff for a different agent (Codex or any fresh agent), 2026-10-11
 
+## UPDATE 2026-10-12 18:02UTC — Windows1550 admission falsifier; resolved USERD correction
+
+Last confirmed push6ab07c777; corrected source is this containing commit.
+Windows1550 on exact30c887c86 signed in but private USER birth clean-refused
+USER_RING_USERD_ACCESS Gone. ABORTED_ADMISSION: no benchmark/migration verdict.
+Stopped ACPI17:46:06UTC; no hostXid, noQEMU/DMA-FQ; personal images untouched.
+Evidence gravity-vulkan/user-worker/windows-1550 supersedes the pending entry below.
+
+Root cause: CPU-local birth hUserdMemory is not a GSP MemoryList name. Public
+ogkm resolves userdMem independently. Corrected initial Sysmem access is bounded
+512 bytes and guarded by exact channel allocation plus RAM topology; later
+migration still requires the registered MemoryList lease (graph -> channel -> RAM).
+Independent source review cleared this bounded default-OFF diagnostic. Six-crate
+GPU-free1919PASS/0failed/exit0, including new actual accessor/ownership/lock-order
+cases (user-worker/resolved-userd-tests.log). Full native Pump remains unexercised.
+
+Next repeat exact-revision Linux9+10/fast30/desktop, then one-variable Windows
+relay retry. Candidate channels already worker-routed from birth; registration
+never switches a live opaque history. Private native ring stays fixed; source
+GET needs real descriptor-fetch accounting. Migration source-zero remains an
+unverified diagnostic hypothesis. Normal Linux Passthrough unchanged; owner
+permits an explicit Linux forced-relay diagnostic if Windows fails. Current
+accessor Sysmem-only: do not implicitly reinterpret vidmem. No active Vast.
+
+
 ## UPDATE 2026-10-12 17:39UTC — exact Linux green; Windows1550 started
 
 Last confirmed push30c887c86. Exact full source30c887c8651c3e79b6b62c6785eda30f443205d1:

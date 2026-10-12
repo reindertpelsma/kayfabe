@@ -1170,6 +1170,16 @@ HDR on the console) falls under "works without".
 
 ## §AI. Windows user-work ring exception; Linux Passthrough unchanged, 2026-10-12
 
+**Owner diagnostic authorization, 2026-10-12:** after the Windows experiment,
+"you may also do a linux run with a flag to force the 'migratable passthrough'
+even if linux doesn't need it" because ogkm is easier to debug. This permits an
+explicit opt-in Linux lab experiment, not a change to normal Linux Passthrough.
+Keep the native USER/own-VAS permissions and physical-operand prohibition.
+Current diagnostic source accessor is Sysmem-only: either construct a suitable
+Linux test allocation or explicitly implement/test vidmem access before claiming
+ordinary Linux desktop channels exercise it. No such forced run has occurred yet.
+
+
 **Subsequent owner clarification, 2026-10-12 (USER authority):** native USER
 privileges and the channel's own explicitly admitted, refreshed GPU mappings
 are the access boundary. Do not map all guest VRAM into an unprivileged channel.

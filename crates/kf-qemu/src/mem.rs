@@ -803,6 +803,9 @@ pub type PlacedRows = std::sync::Arc<RwLock<std::collections::BTreeMap<u64, Plac
 #[path = "userread.rs"]
 pub(crate) mod userread;
 
+#[path = "userdram.rs"]
+pub(crate) mod userdram;
+
 /// Resolve `[va, va+len)` against `rows`: `(ram, offset)` when ONE placement covers it whole.
 #[must_use]
 pub fn resolve_placed(rows: &PlacedRows, va: u64, len: u64) -> Option<(bool, u64)> {

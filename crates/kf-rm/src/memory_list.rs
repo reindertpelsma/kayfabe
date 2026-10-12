@@ -637,6 +637,42 @@ mod tests {
     }
 
     #[test]
+    fn migrated_userd_copy_admits_channel_after_graph_and_refuses_stale_owner() {
+        use crate::memory_access::{Access, Refusal, SharedObjects};
+        let (objects, ram, d) = fixture(kf_chip::Family::Ada);
+        let access = Arc::new(Access::default());
+        let mut shared = SharedObjects::new(objects, &access);
+        shared.memory_list(d).unwrap();
+        let lease = access.lease(1, 4, 0x600, 0x200).unwrap();
+        let owner = Mutex::new(());
+        let guard = owner.lock().unwrap();
+        let before = ram.0.lock().unwrap().2;
+        assert_eq!(
+            lease.write_admitted(0, &[9], || {
+                assert_eq!(access.lease(1, 4, 0, 1).err(), Some(Refusal::Busy));
+                owner.try_lock().map_err(|_| Refusal::Busy)
+            }),
+            Err(Refusal::Busy)
+        );
+        assert_eq!(ram.0.lock().unwrap().2, before, "no RAM copy without owner");
+        drop(guard);
+        lease
+            .write_admitted(0, &[7], || owner.try_lock().map_err(|_| Refusal::Busy))
+            .unwrap();
+        let mut out = [0];
+        lease
+            .read_admitted(0, &mut out, || owner.try_lock().map_err(|_| Refusal::Busy))
+            .unwrap();
+        assert_eq!(out, [7]);
+        assert_eq!(
+            lease.write_admitted(0, &[9], || Err::<(), _>(Refusal::Gone)),
+            Err(Refusal::Gone)
+        );
+        lease.read(0, &mut out).unwrap();
+        assert_eq!(out, [7], "stale channel must not write into live memory");
+    }
+
+    #[test]
     fn shared_memory_lease_is_bounded_and_chain_reselection_revokes_old_graph() {
         use crate::memory_access::{Access, Refusal, SharedObjects};
         let (objects, ram, d) = fixture(kf_chip::Family::Ada);

@@ -10,7 +10,7 @@
 //! then channel. A private worker-state mutex is allowed only when no graph,
 //! RAM, channel-metadata or drainer path acquires it; Busy immediately unwinds.
 
-use crate::memory_list::{MAX_ACCESS, lookup};
+use crate::memory_list::{lookup, MAX_ACCESS};
 use crate::rmgraph::{NodeKey, ResourceLifetime, RmEvent};
 use crate::rmrpc::{GraphObjects, ObjectsRefusal, PageDirStatement, RmObjects};
 use kf_arch::ids::{HClient, HObject};
@@ -151,6 +151,36 @@ impl Lease {
     pub fn write(&self, offset: u64, bytes: &[u8]) -> Result<(), Refusal> {
         let at = self.at(offset, bytes.len())?;
         self.with_graph(|objects| objects.try_write_memory_list(self.key, at, bytes))
+    }
+
+    /// Keep graph identity, then caller-owned channel admission, then RAM across
+    /// a bounded copy. Callback and guard Drop must be bounded/nonblocking, do
+    /// no host/RM work and never acquire graph/Access again. The guard is dropped
+    /// before the graph; no graph pointer or RAM view escapes.
+    pub fn read_admitted<G>(
+        &self,
+        offset: u64,
+        bytes: &mut [u8],
+        admit: impl FnOnce() -> Result<G, Refusal>,
+    ) -> Result<(), Refusal> {
+        let at = self.at(offset, bytes.len())?;
+        self.with_graph(|objects| {
+            let _guard = admit()?;
+            objects.try_read_memory_list(self.key, at, bytes)
+        })
+    }
+    /// Write counterpart of read_admitted, with the same graph -> caller -> RAM order.
+    pub fn write_admitted<G>(
+        &self,
+        offset: u64,
+        bytes: &[u8],
+        admit: impl FnOnce() -> Result<G, Refusal>,
+    ) -> Result<(), Refusal> {
+        let at = self.at(offset, bytes.len())?;
+        self.with_graph(|objects| {
+            let _guard = admit()?;
+            objects.try_write_memory_list(self.key, at, bytes)
+        })
     }
 }
 

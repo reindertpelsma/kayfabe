@@ -236,10 +236,13 @@ impl Pump {
         if let Some((generation, get)) = self.guest_get {
             if generation == self.generation {
                 // Logical memory access revalidates Free/reuse and RAM topology.
-                match r
-                    .userd
-                    .write(kf_abi::submit::USERD_GP_GET, &get.to_le_bytes())
-                {
+                match r.userd.write(
+                    me,
+                    r.key,
+                    &r.allocation,
+                    kf_abi::submit::USERD_GP_GET,
+                    &get.to_le_bytes(),
+                ) {
                     Ok(()) => self.guest_get = None,
                     Err(kf_rm::memory_list::AccessError::Busy) => {
                         self.tick = true;
@@ -259,7 +262,13 @@ impl Pump {
             }
             let mut put = [0u8; 4];
             r.userd
-                .read(kf_abi::submit::USERD_GP_PUT, &mut put)
+                .read(
+                    me,
+                    r.key,
+                    &r.allocation,
+                    kf_abi::submit::USERD_GP_PUT,
+                    &mut put,
+                )
                 .map_err(|e| access_error(e, "USER_RING_PUT_READ"))?;
             let put = u32::from_le_bytes(put);
             if put >= r.source.1 {
@@ -750,7 +759,7 @@ impl Pump {
                     // DIAGNOSTIC hypothesis: new guest source starts at0. Same-GPU
                     // passive reference sees zero; exact trigger semantics still
                     // require the flag-OFF vertical-slice run. Never reset host GET.
-                    r.userd = userd.clone();
+                    r.userd = userrelay::UserdSource::Registered(userd.clone());
                     r.source = (u.gpfifo_va, u.entries);
                     t.ring_at = (u.gpfifo_va, u.entries, None);
                     self.generation = generation;
