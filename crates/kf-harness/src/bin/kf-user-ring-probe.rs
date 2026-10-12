@@ -46,7 +46,7 @@ fn reference_commands(output_va: u64, ce_class: u32) -> Result<Vec<u32>, String>
     Ok(words)
 }
 
-fn run_reference(held: bool) -> Result<(), String> {
+fn run_reference(held: bool, split: bool) -> Result<(), String> {
     use kf_abi::submit::{ENGINE_TYPE_COPY0, USERD_REFERENCE_C56F};
     let dev = DevDir::open(c"/dev").map_err(|e| format!("dev: {e:?}"))?;
     let rm = HostRm::open(&dev, kf_harness::gate_gpu(), &kf_chip::choose_host_classes)
@@ -90,19 +90,32 @@ fn run_reference(held: bool) -> Result<(), String> {
         rm.alloc_ce_object(chan, ENGINE_TYPE_COPY0)
             .map_err(|e| format!("CE: {e:?}"))?;
         println!(
-            "USER_RING_REFERENCE_SETUP held={held} class={class:#x} driver={} ring_gpu_read_only=true userd_gpu_mapped=false",
+            "USER_RING_REFERENCE_SETUP held={held} split={split} class={class:#x} driver={} ring_gpu_read_only=true userd_gpu_mapped=false",
             rm.driver_version()
         );
         let words = reference_commands(output_va, rm.ce_class_id())?;
         for (i, &word) in words.iter().enumerate() {
             ring.store(PB + 4 * i as u64, word)?;
         }
-        let gp = gp_entry(ring_va + PB, 4 * words.len() as u64).ok_or("GP encoding")?;
+        let split_words = if split { words.len() - 1 } else { words.len() };
+        let gp = gp_entry(ring_va + PB, 4 * split_words as u64).ok_or("GP encoding")?;
         ring.store(GP, gp as u32)?;
         ring.store(GP + 4, (gp >> 32) as u32)?;
+        let published_put = if split {
+            // Only change versus the reference: MAIN GP0 ends at the
+            // SET_REFERENCE header; MAIN GP1 contains its one argument.
+            // Command bytes, permissions, channel and acquire stimulus match.
+            let next = gp_entry(ring_va + PB + 4 * split_words as u64, 4)
+                .ok_or("continuation GP encoding")?;
+            ring.store(GP + 8, next as u32)?;
+            ring.store(GP + 12, (next >> 32) as u32)?;
+            2
+        } else {
+            1
+        };
         rm.schedule(chan).map_err(|e| format!("schedule: {e:?}"))?;
         kf_linux_raw::release_fence();
-        userd.store(USERD_GP_PUT, 1)?;
+        userd.store(USERD_GP_PUT, published_put)?;
         kf_linux_raw::release_fence();
         rm.doorbell(chan.token)
             .map_err(|e| format!("doorbell: {e:?}"))?;
@@ -115,7 +128,7 @@ fn run_reference(held: bool) -> Result<(), String> {
             // The acquire is intentionally unsatisfied for50ms, then published.
             while start.elapsed() < Duration::from_millis(50) {
                 early_reference |= userd.load(USERD_REFERENCE_C56F)? != 0;
-                fetched_while_held |= userd.load(USERD_GP_GET)? == 1;
+                fetched_while_held |= userd.load(USERD_GP_GET)? != 0;
                 held_samples += 1;
                 std::thread::sleep(Duration::from_millis(1));
             }
@@ -154,6 +167,8 @@ fn run_reference(held: bool) -> Result<(), String> {
             || early_reference
             || output.load(4)? != 1
             || (held && held_samples == 0)
+            || userd.load(USERD_GP_GET)? != published_put
+            || userd.load(USERD_GP_PUT)? != published_put
         {
             return Err("reference/copy/order criterion failed".into());
         }
@@ -185,7 +200,7 @@ impl Mode {
             "read-write" => Ok(Self::ReadWrite),
             "read-only" => Ok(Self::ReadOnly),
             "write-attempt" => Ok(Self::WriteAttempt),
-            _ => Err("usage: kf-user-ring-probe read-write|read-only|write-attempt|reference|reference-held".into()),
+            _ => Err("usage: kf-user-ring-probe read-write|read-only|write-attempt|reference|reference-held|reference-split|reference-split-held".into()),
         }
     }
 
@@ -325,9 +340,22 @@ fn run(mode: Mode) -> Result<(), String> {
         for (i, &word) in words.iter().enumerate() {
             ring.store(PB + 4 * i as u64, word)?;
         }
-        let gp = gp_entry(ring_va + PB, 4 * words.len() as u64).ok_or("GP encoding")?;
+        let split_words = if split { words.len() - 1 } else { words.len() };
+        let gp = gp_entry(ring_va + PB, 4 * split_words as u64).ok_or("GP encoding")?;
         ring.store(GP, gp as u32)?;
         ring.store(GP + 4, (gp >> 32) as u32)?;
+        let published_put = if split {
+            // Only change versus the reference: MAIN GP0 ends at the
+            // SET_REFERENCE header; MAIN GP1 contains its one argument.
+            // Command bytes, permissions, channel and acquire stimulus match.
+            let next = gp_entry(ring_va + PB + 4 * split_words as u64, 4)
+                .ok_or("continuation GP encoding")?;
+            ring.store(GP + 8, next as u32)?;
+            ring.store(GP + 12, (next >> 32) as u32)?;
+            2
+        } else {
+            1
+        };
         rm.schedule(chan).map_err(|e| format!("schedule: {e:?}"))?;
         kf_linux_raw::release_fence();
         userd.store(USERD_GP_PUT, 1)?;
@@ -384,13 +412,15 @@ fn main() {
     let args: Vec<_> = std::env::args().skip(1).collect();
     let result = if args.len() == 1 {
         match args[0].as_str() {
-            "reference" => run_reference(false),
-            "reference-held" => run_reference(true),
+            "reference" => run_reference(false, false),
+            "reference-held" => run_reference(true, false),
+            "reference-split" => run_reference(false, true),
+            "reference-split-held" => run_reference(true, true),
             s => Mode::parse(s).and_then(run),
         }
     } else {
         Err(
-            "usage: kf-user-ring-probe read-write|read-only|write-attempt|reference|reference-held"
+            "usage: kf-user-ring-probe read-write|read-only|write-attempt|reference|reference-held|reference-split|reference-split-held"
                 .into(),
         )
     };
