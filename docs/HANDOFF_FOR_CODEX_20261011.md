@@ -1,5 +1,19 @@
 # Handoff for a different agent (Codex or any fresh agent), 2026-10-11
 
+## UPDATE 2026-10-12 10:36UTC — reviewed source snapshots, GPU-free PASS
+
+Last confirmed push: eb968e209. Bounded immutable command snapshots now check
+complete confirmed spans and birth RAM topology before copying and publication.
+Independent review cleared unlogged row changes and partial RAM aliases; seven
+new tests and full abi/rm/qemu/chan suite PASS (QEMU lib191, RM lib138). Evidence:
+gravity-vulkan/user-source-snapshot. This helper has no runtime caller yet.
+Exact 7f3f9fe16 Linux9/9 + gate10 + fast30/30 remains the latest hardware PASS.
+Next: production source views, Windows birth/stream and ordered migration, then
+exact Linux and Gravity. Gravity Kayfabe FAIL/TIMEOUT; same-GPU VFIO PASS179/183s.
+Matrix and driver sweep remain open. Host10:36 idle/DMA-FQ/lockfree/stopabsent,
+117343203328 bytes free; personal image retained. Vast10:36 CLI:[], no instances
+to retire. Master untouched.
+
 ## UPDATE 2026-10-12 05:27UTC — exact 7f3f9fe16 Linux regression PASS
 
 Last confirmed push: 7f3f9fe16. Exact full source

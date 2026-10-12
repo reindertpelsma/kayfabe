@@ -779,6 +779,9 @@ impl Target {
 /// guest rings after its invalidate completed always finds the rows that invalidate published.
 pub type PlacedRows = std::sync::Arc<RwLock<std::collections::BTreeMap<u64, PlacedRow>>>;
 
+#[path = "userread.rs"]
+pub(crate) mod userread;
+
 /// Resolve `[va, va+len)` against `rows`: `(ram, offset)` when ONE placement covers it whole.
 #[must_use]
 pub fn resolve_placed(rows: &PlacedRows, va: u64, len: u64) -> Option<(bool, u64)> {
