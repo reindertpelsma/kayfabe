@@ -32,5 +32,6 @@ pub mod readtrace;
 pub mod rmfacts;
 pub mod tspace;
 pub mod twin;
+pub(crate) mod userbirth;
 pub mod userva;
 pub mod vblankgate;

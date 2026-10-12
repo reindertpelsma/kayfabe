@@ -2258,6 +2258,8 @@ pub struct ChanPlane {
     family: kf_chip::Family,
     /// ★ P5b: the guest's user channels' twins, by `(hClient, hChannel)`.
     pt: Mutex<HashMap<(u32, u32), PtChan>>,
+    /// Exact pending Windows USER births, canceled before live subtree removal.
+    user_births: crate::userbirth::Book,
     /// ★ 2026-10-08 (`V3_USERD_RELAY.md`): relayed-USERD twins, by host token.
     relays: Mutex<HashMap<u32, Arc<Mutex<Relay>>>>,
     /// ★ P5b: guest engine object `(hClient, hObject)` → its channel's key.
@@ -2867,6 +2869,10 @@ impl ChanPlane {
         let rc_ev = rm
             .open_event_fd()
             .map_err(|e| format!("RC event fd: {e:?}"))?;
+        let user_births = {
+            let inbox = inbox.clone();
+            crate::userbirth::Book::with_wake(move || { let _ = inbox.wake.signal(); })
+        };
         Ok(ChanPlane {
             gr_relay: AtomicU64::new(0),
             bar0trace: crate::bar0trace::Bar0Trace::from_env(),
@@ -2898,6 +2904,7 @@ impl ChanPlane {
             stop: AtomicBool::new(false),
             family,
             pt: Mutex::new(HashMap::new()),
+            user_births,
             relays: Mutex::new(HashMap::new()),
             pt_objs: Mutex::new(HashMap::new()),
             dbg: Mutex::new(HashMap::new()),
@@ -5176,6 +5183,10 @@ impl ChanPlane {
     }
 
     fn free(&self, client: u32, object: u32) -> ChanAnswer {
+        match self.user_births.cancel(client, object) {
+            Ok(_) => {},
+            Err(why) => eprintln!("kf3: USER_RING_BIRTH_CANCEL_REFUSED {client:#x}:{object:#x}: {why}"),
+        }
         // Invalidate before another allocation can reuse the guest handle. No relay
         // lock here: a worker can hold it while sampling registry entries. The
         // sampler checks this allocation's flag both before and after that lookup.

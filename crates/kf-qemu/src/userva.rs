@@ -1086,4 +1086,191 @@ mod tests {
         assert_eq!(&*host.calls.borrow(), &["clear"]);
         assert_eq!(q.pending.lock().unwrap().len(), 2);
     }
+
+    fn channel_declaration() -> kf_rm::chanlink::ChannelAlloc {
+        use kf_rm::chanlink::*;
+        ChannelAlloc {
+            client: 1,
+            parent: 2,
+            handle: 3,
+            class: 0xc56f,
+            gpfifo_va: 0x200000,
+            entries: 32768,
+            h_vaspace: 7,
+            vaspace: Some(7),
+            vaspace_client: 1,
+            chid: Some(1),
+            flags: 0,
+            engine_type: Some(kf_abi::submit::ENGINE_TYPE_GRAPHICS),
+            userd: None,
+            kernel_client: true,
+            privilege: None,
+            declared_kernel_pid: true,
+            tsg: Some(2),
+            ctx_share: 8,
+            device: 9,
+            error_notifier: None,
+            process_id: Some(200),
+            user_work: true,
+            user_ring_permit: windows_user_ring_permit(&UserWorkFacts {
+                flag: true,
+                windows: true,
+                kernel_stamped: true,
+                engine: Some(kf_abi::submit::ENGINE_TYPE_GRAPHICS),
+                ctx_share: 8,
+                ctx_share_known: true,
+                process_id: Some(200),
+                kernel_pid: Some(100),
+                ..Default::default()
+            })
+            .ok(),
+        }
+    }
+
+    #[test]
+    fn pending_windows_birth_free_reuse_and_old_commit_are_exact() {
+        use crate::userbirth::Book;
+        for object in [1, 2, 3, 9] {
+            let q = Queue::<()>::default();
+            let m = mirror();
+            let a = channel_declaration();
+            let book = Book::default();
+            let old = book.allocate(&q, &a, m.clone()).unwrap();
+            assert!(book.allocate(&q, &a, m.clone()).is_err());
+            assert_eq!(book.cancel(20, object).unwrap(), 0);
+            assert!(book.is_current(&old));
+            assert_eq!(book.cancel(1, object).unwrap(), 1);
+            let new = book.allocate(&q, &a, m.clone()).unwrap();
+            assert!(!book.is_current(&old));
+            assert!(book.is_current(&new));
+            let ran = std::cell::Cell::new(false);
+            assert!(
+                book.commit(&old, |_| {
+                    ran.set(true);
+                    Ok(())
+                })
+                .is_err()
+            );
+            assert!(!ran.get());
+            assert!(book.poll(&old).is_err());
+            assert!(book.poll(&new).unwrap().is_none());
+            assert!(
+                book.commit(&new, |_| {
+                    ran.set(true);
+                    Ok(())
+                })
+                .is_err(),
+                "cannot attach before lease handout"
+            );
+            assert!(!ran.get());
+        }
+    }
+
+    #[test]
+    fn pending_birth_handout_still_needs_an_exact_commit() {
+        use crate::userbirth::Book;
+        let q = Queue::<()>::default();
+        let m = mirror();
+        let a = channel_declaration();
+        let book = Book::default();
+        let birth = book.allocate(&q, &a, m.clone()).unwrap();
+        let Request::Allocate { reply, .. } = q.pending.lock().unwrap().remove(0) else {
+            panic!()
+        };
+        m.user_regions.claim(BASE).unwrap();
+        let host = Fake::default();
+        let lease = q
+            .adopt(
+                &mut q.held.lock().unwrap(),
+                &m,
+                BASE,
+                reply,
+                Storage::allocate(&host, m.space, BASE),
+            )
+            .unwrap();
+        lease
+            .initializing
+            .store(0, std::sync::atomic::Ordering::Release);
+        lease.reply.publish(Ok(Arc::downgrade(&lease)));
+        assert!(Arc::ptr_eq(
+            &book.poll(&birth).unwrap().unwrap().unwrap(),
+            &lease
+        ));
+        assert_eq!(book.cancel(1, 3).unwrap(), 1);
+        assert!(
+            !q.reap_canceled(&lease, &host),
+            "handout stays caller-owned"
+        );
+        assert!(book.commit(&birth, |_| Ok(())).is_err());
+        assert_eq!(m.live.load(std::sync::atomic::Ordering::Acquire), 1);
+        q.retire(&lease, &host); // caller confirms no native channel was born
+    }
+
+    #[test]
+    fn committed_birth_identity_is_unique_and_orphan_drops_cancel_pending_storage() {
+        use crate::userbirth::Book;
+        let q = Queue::<()>::default();
+        let m = mirror();
+        let a = channel_declaration();
+        let wakes = Arc::new(std::sync::atomic::AtomicU64::new(0));
+        let wake_counter = wakes.clone();
+        let book = Book::with_wake(move || {
+            wake_counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        });
+        let birth = book.allocate(&q, &a, m.clone()).unwrap();
+        assert_eq!(wakes.load(std::sync::atomic::Ordering::Relaxed), 1);
+        let Request::Allocate { reply, .. } = q.pending.lock().unwrap().remove(0) else {
+            panic!()
+        };
+        drop(birth);
+        assert_eq!(wakes.load(std::sync::atomic::Ordering::Relaxed), 2);
+        assert!(Queue::abort_canceled_allocate(&m, &reply));
+        assert_eq!(m.live.load(std::sync::atomic::Ordering::Acquire), 0);
+        let birth = book.allocate(&q, &a, m.clone()).unwrap();
+        let Request::Allocate { reply, .. } = q.pending.lock().unwrap().remove(0) else {
+            panic!()
+        };
+        m.user_regions.claim(BASE).unwrap();
+        let host = Fake::default();
+        let lease = q
+            .adopt(
+                &mut q.held.lock().unwrap(),
+                &m,
+                BASE,
+                reply,
+                Storage::allocate(&host, m.space, BASE),
+            )
+            .unwrap();
+        lease
+            .initializing
+            .store(0, std::sync::atomic::Ordering::Release);
+        lease.reply.publish(Ok(Arc::downgrade(&lease)));
+        book.poll(&birth).unwrap().unwrap().unwrap();
+        let identity = std::cell::RefCell::new(None);
+        book.commit(&birth, |allocation| {
+            *identity.borrow_mut() = Some(allocation.clone());
+            Ok(())
+        })
+        .unwrap();
+        assert!(!book.is_current(&birth));
+        assert_eq!(book.cancel(1, 3).unwrap(), 0);
+        assert!(book.commit(&birth, |_| Ok(())).is_err());
+        drop(birth);
+        assert!(!q.reap_canceled(&lease, &host));
+        assert!(identity.borrow().is_some());
+        q.retire(&lease, &host);
+    }
+
+    #[test]
+    fn pending_birth_without_windows_permit_allocates_nothing() {
+        let q = Queue::<()>::default();
+        let m = mirror();
+        let mut a = channel_declaration();
+        a.user_ring_permit = None;
+        let book = crate::userbirth::Book::default();
+        assert!(book.allocate(&q, &a, m.clone()).is_err());
+        assert!(q.pending.lock().unwrap().is_empty());
+        assert_eq!(m.live.load(std::sync::atomic::Ordering::Acquire), 0);
+        assert!(m.user_regions.ranges().is_empty());
+    }
 }

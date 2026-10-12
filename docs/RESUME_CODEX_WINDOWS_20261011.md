@@ -1,5 +1,22 @@
 # Resume Windows apps and GravityMark Vulkan
 
+## UPDATE 2026-10-12 05:01UTC — exact pending Windows birth/Free adapter
+
+Last confirmed push854533ec1. Bounded weak pending Birth identity binds the
+Windows permit, channel/subtree scope and VA reply. Poll/commit reject reused
+handles; commit needs successful handout and metadata-only exact attachment.
+Production Free cancels scopes before live removal. Orphan Drop cancels only
+before handout and signals VA eventfd; Taken remains act-owned through confirmed
+native cleanup. No runtime allocate/poll/commit caller yet. Full GPU-free
+abi/rm/qemu/chan PASS, userva16/16; independent review found no source blocker.
+Evidence gravity-vulkan/pending-user-birth. Next shared USERD object lifetime and
+immutable source/VA adapter, then migration and exact Linux/Windows. Public
+Windows580.88 identity canonicalizes to audited580.65.06; no guessed driver cell.
+Gravity Kayfabe still FAIL/TIMEOUT, VFIO PASS179/183s; matrix/sweep open.
+Prior exactcec428397 Linux9+10/fast30 PASS, no hardware claim for latest source.
+Personal image untouched; Vast04:42UTC empty; master untouched.
+
+
 ## UPDATE 2026-10-12 04:50UTC — reviewed VA birth cancellation, GPU-free PASS
 
 Last confirmed push6c255beb2. New Pending/Ready/Taken/Canceled reply state
