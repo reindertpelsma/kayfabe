@@ -1,0 +1,69 @@
+{
+  "utc": "2026-10-12 02:17:40.670003+00:00",
+  "scanned": 172,
+  "deleted": [
+    {
+      "path": "/var/lib/kf-windows-20261005/codex-vfio-ring-p0-20261012/retry-1/vfio/disk/windows.qcow2",
+      "children": [],
+      "allocated_bytes": 3010908160
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/codex-vfio-userd-cursors-20261012/vfio/disk/windows.qcow2",
+      "children": [],
+      "allocated_bytes": 3005677568
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/codex-vfio-userd-cursors-reviewed-20261012/vfio/disk/windows.qcow2",
+      "children": [],
+      "allocated_bytes": 2948698112
+    }
+  ],
+  "keep_before": [
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-1380/windows.qcow2",
+      "inode": 14718490,
+      "size": 28240642048,
+      "mtime_ns": 1791754434340351539,
+      "mode": 33060
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "inode": 12200819,
+      "size": 22330671104,
+      "mtime_ns": 1791152158267122517,
+      "mode": 33152
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/owner-state/manual1380/resume.qcow2",
+      "inode": 16946484,
+      "size": 199008,
+      "mtime_ns": 1791754440996296586,
+      "mode": 33188
+    }
+  ],
+  "keep_after": [
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-1380/windows.qcow2",
+      "inode": 14718490,
+      "size": 28240642048,
+      "mtime_ns": 1791754434340351539,
+      "mode": 33060
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "inode": 12200819,
+      "size": 22330671104,
+      "mtime_ns": 1791152158267122517,
+      "mode": 33152
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/owner-state/manual1380/resume.qcow2",
+      "inode": 16946484,
+      "size": 199008,
+      "mtime_ns": 1791754440996296586,
+      "mode": 33188
+    }
+  ],
+  "free_before": 113979568128,
+  "free_after": 122944851968
+}

@@ -1083,6 +1083,31 @@ impl HostRm {
         )
     }
 
+    /// One fixed, read-only, explicitly 4 KiB-paged map through a reservation
+    /// owned exclusively by the caller. No range routing or split maps.
+    /// The caller must retain the reservation and memory on an uncertain map
+    /// outcome, and clean the entire owned reservation before reusing it.
+    ///
+    /// # Errors
+    /// Invalid page alignment/span or the host's refusal. A mapping attempt may
+    /// have reached RM even when reply decoding/placement validation fails.
+    pub fn map_in_ro_4k(&self, h_dma: u32, memory: u32, len: u64, at: u64) -> Result<u64, RmError> {
+        guest_row_end(at, len)?;
+        if len == 0 || at % 4096 != 0 || len % 4096 != 0 {
+            return Err(RmError::Other(crate::NOT_IN_THIS_OBJECT));
+        }
+        self.raw_map_dma_slice(
+            h_dma,
+            memory,
+            0,
+            len,
+            Some(at),
+            NVOS46_FLAGS_ACCESS_READ_ONLY | kf_abi::bringup::NVOS46_FLAGS_PAGE_SIZE_4KB,
+            false,
+            0,
+        )
+    }
+
     /// ★ 2026-10-09: ONE unmap THROUGH `h_dma` (a reservation of ours): `size == 0` the whole
     /// mapping keyed by its exact start, else every mapping intersecting `[va, va+size)` — exact
     /// inside an `NV50_MEMORY_VIRTUAL` reservation (`virt_mem_allocator_gm107.c:1578-1633`).

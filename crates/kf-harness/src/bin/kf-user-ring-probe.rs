@@ -187,6 +187,130 @@ fn run_reference(held: bool, split: bool) -> Result<(), String> {
     result.and(cleanup)
 }
 
+/// Native helper test and one-variable HOST-processing witness discriminator.
+/// This is an authored bench fixture, never a guest execution adapter.
+fn run_storage(sync_wait: bool) -> Result<(), String> {
+    use kf_abi::submit::ENGINE_TYPE_COPY0;
+    use kf_chan::user_storage::Storage;
+    let dev = DevDir::open(c"/dev").map_err(|e| format!("dev: {e:?}"))?;
+    let rm = HostRm::open(&dev, kf_harness::gate_gpu(), &kf_chip::choose_host_classes)
+        .map_err(|e| e.to_string())?;
+    let (architecture, implementation, _) = rm.arch_info();
+    let chosen =
+        kf_chip::choose_host_classes(architecture, implementation, rm.supported_class_ids())?;
+    let class = chosen.gpfifo_channel().channel_id().0;
+    if class != kf_abi::generated::classes::AMPERE_CHANNEL_GPFIFO_A {
+        return Err(format!("STORAGE_CLASS_UNMEASURED class={class:#x}"));
+    }
+    let space = rm
+        .alloc_vaspace_bare()
+        .map_err(|e| format!("space: {e:?}"))?;
+    // Trusted fixture address in a bare native VAS with no guest reservations.
+    // Runtime placement must instead use the shared VA-manager exclusion ledger.
+    let mut storage =
+        Storage::allocate(&rm, space, (1 << 40) - (2 << 20)).map_err(|error| error.reason)?;
+    let output = Buffer::new(&rm, space, Some(MapPerm::READ_WRITE))?;
+    let output_va = output.va.ok_or("output VA absent")?;
+    output.store(0, 0)?;
+    for off in (0..4096).step_by(4) {
+        output.store(0x1000 + off, INITIAL ^ off as u32)?;
+    }
+    let chan = rm
+        .birth_channel(space, ENGINE_TYPE_COPY0, storage.spec(0)?)
+        .map_err(|e| format!("birth: {e:?}"))?;
+    let result = (|| {
+        chan.assert_user().map_err(str::to_string)?;
+        rm.alloc_ce_object(chan, ENGINE_TYPE_COPY0)
+            .map_err(|e| format!("CE: {e:?}"))?;
+        let mut preceding = reference_commands(output_va, rm.ce_class_id())?;
+        preceding.truncate(preceding.len() - 4); // No WFI or engine-idle tail in GP0.
+        let witness = [
+            0,
+            method_header_inc(0, fifo::SET_REFERENCE_C56F, 1).ok_or("reference")?,
+            1,
+        ];
+        storage.write_authored(0, &preceding)?;
+        storage.write_authored(0x1000, &witness)?;
+        storage.write_gp(0, 0, 4 * preceding.len() as u64, false)?;
+        storage.write_gp(1, 0x1000, 4 * witness.len() as u64, sync_wait)?;
+        println!(
+            "USER_STORAGE_SETUP sync_wait={sync_wait} class={class:#x} driver={} entries={} ring_gpu_read_only=true page_size=4096 userd_gpu_mapped=false",
+            rm.driver_version(),
+            kf_chan::user_storage::ENTRIES
+        );
+        rm.schedule(chan).map_err(|e| format!("schedule: {e:?}"))?;
+        storage.publish_put(2)?;
+        rm.doorbell(chan.token)
+            .map_err(|e| format!("doorbell: {e:?}"))?;
+        let start = Instant::now();
+        let mut samples = 0;
+        let mut max_get = 0;
+        let mut early_reference = false;
+        // Explicit stimulus only: keep the preceding HOST acquire unsatisfied.
+        while start.elapsed() < Duration::from_millis(50) {
+            max_get = max_get.max(storage.gpu_get()?);
+            early_reference |= storage.gpu_reference()? != 0;
+            samples += 1;
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        println!(
+            "USER_STORAGE_HELD samples={samples} max_get={max_get} early_reference={early_reference} acquire={} ce_semaphore={}",
+            output.load(0)?,
+            output.load(4)?
+        );
+        output.store(0, 1)?;
+        kf_linux_raw::release_fence();
+        let finished = loop {
+            if storage.gpu_reference()? == 1 {
+                break true;
+            }
+            if start.elapsed() > Duration::from_secs(3) {
+                break false;
+            }
+            std::thread::sleep(Duration::from_millis(1));
+        };
+        let mut copy_matches = true;
+        for off in (0..4096).step_by(4) {
+            copy_matches &= output.load(0x2000 + off)? == (INITIAL ^ off as u32);
+        }
+        let get = storage.gpu_get()?;
+        let reference = storage.gpu_reference()?;
+        println!(
+            "USER_STORAGE_OBSERVATION finished={finished} reference={reference} copy_matches={copy_matches} ce_semaphore={} GP_GET={get} GP_PUT=2 elapsed_us={}",
+            output.load(4)?,
+            start.elapsed().as_micros()
+        );
+        // Strict discriminator: the control must demonstrate early GP1 commit;
+        // SYNC_WAIT must prevent that same commit while HOST acquire is held.
+        if !finished
+            || reference != 1
+            || !copy_matches
+            || output.load(4)? != 1
+            || get != 2
+            || samples == 0
+            || early_reference
+            || max_get != if sync_wait { 1 } else { 2 }
+        {
+            return Err("storage/HOST-witness criterion failed".into());
+        }
+        Ok(())
+    })();
+    // A collection deadline never grants release: native channel free must succeed.
+    rm.free_channel(chan)
+        .map_err(|e| format!("channel free: {e:?}"))?;
+    let cleanup = storage.release(&rm);
+    println!(
+        "USER_STORAGE_CLEANUP result={cleanup:?} released={}",
+        storage.released()
+    );
+    cleanup?;
+    assert!(storage.spec(0).is_err());
+    assert!(storage.publish_put(0).is_err());
+    output.close(&rm, space)?;
+    rm.free_vaspace(space);
+    result
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Mode {
     ReadWrite,
@@ -399,6 +523,8 @@ fn main() {
     let args: Vec<_> = std::env::args().skip(1).collect();
     let result = if args.len() == 1 {
         match args[0].as_str() {
+            "storage-control" => run_storage(false),
+            "storage-sync-witness" => run_storage(true),
             "reference" => run_reference(false, false),
             "reference-held" => run_reference(true, false),
             "reference-split" => run_reference(false, true),
