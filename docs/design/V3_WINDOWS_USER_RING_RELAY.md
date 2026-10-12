@@ -1,6 +1,39 @@
 # V3 Windows user-channel ring relay: private GPFIFO + private USERD, with a safe migration path
 
-**STATUS: DESIGN-ONLY, 2026-10-12 (proposal from the owner/coordinator discussion; see §9 for the owner's later refinements, which supersede §4.3 where they differ; the rulings are PROPOSED, the Codex session records them as §AI/§AJ).**
+**STATUS: DESIGN-ONLY, 2026-10-12 (proposal from the owner/coordinator discussion; the §AB.2 amendment in §6 is PROPOSED, not yet a ruling).**
+**LATEST OWNER/ARCHITECTURE UPDATE, 2026-10-12:** the owner's subsequent
+three-mode clarification in OWNER_RULINGS §AI supersedes the blanket worker-only
+and inspection-from-birth wording immediately below. Direct native-token dispatch,
+bounded pre-mapped USERD/GP-descriptor copy (large delta off-vCPU), and worker-only
+inspection are the intended policies. No pushbuffer inspection on a vCPU. Linux
+Passthrough still forbids host-owned GPU mappings. The first atomic prototype is
+unconnected; neither inline runtime submission nor GravityMark PASS is claimed.
+
+Conditional conversion still needs two distinct proofs: exclude old CPU
+publishers, then preserve any existing native parser/binding/ordering state.
+A never-published channel can avoid the second problem. Run1361's deferred-API
+object allocation precedes its first recorded submission, unlike registration;
+selecting worker mode at object-allocation admission is therefore a candidate.
+A previously published opaque stream remains gated. The public FIFO manual
+allows hardware method packets across GP boundaries, so an appended witness and
+empty GET/PUT cannot establish a parser boundary. See the
+[architecture review](V3_WINDOWS_USER_RING_RELAY_ARCHITECTURE_REVIEW_20261012.md)
+for rationale, evidence, model scope and remaining implementation gates.
+
+**REVIEW UPDATE, 2026-10-12:** imported from integration commit328fe4bf8.
+The owner has now approved a narrower exception: GPU-read-only private rings and
+command staging for declared Windows user-work, worker-only submission, command
+inspection from birth; **Linux Passthrough still forbids host-owned mappings**.
+See OWNER_RULINGS §AI and [the P0 review](V3_WINDOWS_USER_RING_RELAY_REVIEW_20261012.md).
+This supersedes the pending wording above and §6 only to that extent. No inline
+copy or writable private fence is approved. No VM implementation or GravityMark
+PASS is claimed. The registration-reply race-free claim below is rejected;
+inspection must start at birth. Address reservation prevents collisions, not GPU
+access; actual read-only PTEs must protect integrity. The plain-RPC criterion in
+P0(d) cannot establish deferred execution inside GSP. Native cursor continuity,
+safe staging retirement and migration ordering remain measurement gates for both
+variants; failure to prove A-lite does not automatically establish PARSE safety.
+
 Supersedes nothing yet. Builds on `V3_USERD_RELAY.md` (private USERD, measured runs 68-78) and answers the decision note
 `V3_WINDOWS_USER_FIFO_MIGRATION_DECISION_20261011.md` (on branch `codex/windows-matrix-20261011`, options A/B/C). MEASURED = read from a log, capture or
 source file; INFERRED = a reading, must be checked.
@@ -106,39 +139,26 @@ No privileged host verb, no change to the guest's RM, no heuristics or timeouts 
 GPFIFO base is a VA; the reserved range is possible; an unprivileged harmless registration is accepted and executed; native cursor semantics are exact enough for A-lite; Windows tolerates the switch; the guest never relies on the
 old ring after the trigger. The cause of the growth is not established (ring growth is measured; why it is requested is not).
 
-## 9. Revision 2026-10-12 (owner): the doorbell table gets a third mode; the vCPU never waits
+## 9. Coordinator revision 2026-10-12 (after the owner's three-mode refinement and Codex's architecture review)
 
-Context: Codex's review (`V3_WINDOWS_USER_RING_RELAY_REVIEW_20261012.md`) and ruling §AI (on `codex/windows-matrix-20261011`) approved GPU-read-only private command mappings with worker-only submission and
-command inspection from birth, and rejected the inline path and the late switch. The owner's refinements below reverse those two points; the owner and Codex must reconcile §AI (record the result as a new
-ruling in the Codex branch, which owns §AI; this repo's `OWNER_RULINGS.md` is not touched here to avoid a conflicting append).
+This section is appended to Codex's current copy of this document (taken from `codex/windows-matrix-20261011` at `ea8b77ee1`) so both lines carry the same text. Dispatch mechanics are in
+`V3_WINDOWS_USER_RING_RELAY_ARCHITECTURE_REVIEW_20261012.md`; this section records only what is new or corrected.
 
-**What is required at birth in every design (agreed):** a private USERD and a private GPFIFO ring, because the host channel's ring base is fixed at birth, the privileged control cannot re-point it on a stock host, and the guest frees its
-old ring after a migration. The entry relay copies 8-byte entries only (about `8E` bytes per submission).
+**Corrected (coordinator):** my earlier "late switch at registration, race-free because kayfabe holds the reply" is withdrawn. Two reasons: (1) a hostile guest can publish the handle before the reply and an already-forwarded mutable
+pushbuffer can still be fetched later; (2) stronger, and valid for a cooperative guest too: starting inspection mid-stream needs parser state (subchannel binding, hardware method packets that span GP segments, persistent HOST methods,
+pending MEM_OPs) that an opaque history does not give (public FIFO manual cited in the architecture review). The sound variant is the owner's earlier idea: convert BEFORE the channel has published any native work, i.e. at the
+`5080` object-allocation admission (run 1361, channel 4e: birth 8311, 5080 alloc 8315, schedule 8365, first forwarded submission 8437), with old-claim exclusion before the object is acknowledged and the channel's "never published native work" history bit checked.
 
-**The doorbell table has three modes per matching token** (the table runs inline on the vCPU or from ioeventfd, equivalent):
-1. *Passthrough:* ring the host token inline on the vCPU (unchanged; Linux, kernel-visible simple channels).
-2. *Translated / emulated:* wake the drainer and a worker (unchanged).
-3. *Migratable Passthrough (new):* inline on the vCPU: check the guest `GP_PUT`; if the delta is at most K entries, copy the entries into the private ring, store `GP_PUT` into the private USERD behind a release fence, ring the
-   translated host doorbell, no syscall, return; if the delta is larger, or anything below fails, wake a worker as in mode 2. Pushbuffers are NOT inspected in this mode; the entry pointers are copied as-is.
-At birth a Passthrough channel gets a flag "migration possible later" (true for Windows user-work and for sysmem USERD; declared state, never an OS name or an environment flag). With the flag it NEVER enters mode 1; it enters mode 3.
-Late switch: when the guest registers the `FIFO_UPDATE_CHANNEL_INFO` bundle, the table atomically flips the channel from mode 3 to a restricted Translated mode (§4.4 PARSE), set BEFORE the registration reply is released, so
-a cooperative guest's trigger (written after the reply, in entries published after it) is parsed. The restricted mode is the GPU-read-only command-copy variant, not the privileged T-space.
+**Open value question (measure):** the earlier measurement says the `5080` is the first and only `ENG_SW` child of EVERY Windows channel. If every Windows user-work channel allocates it before its first submission, conversion at object allocation
+is in effect inspection from birth for all of them, and the CopyRing mode (inline or worker) rarely applies on Windows. Count, over the matrix runs, the Windows user-work channels that allocate a `5080` before their first forward, and those that do not.
 
-**The vCPU never waits (owner rule):**
-- Per-channel state word: `IDLE`, `INLINE_BUSY`, `WORKER_BUSY`, plus a `PENDING` bit. The vCPU does ONE compare-and-swap `IDLE -> INLINE_BUSY` (the channel's existing BUSY flag). On failure it sets `PENDING`, wakes a worker and returns:
-  no spin, no lock wait, no syscall, no allocation inside the inline critical section (so no lock a vCPU takes is ever held across a block).
-- Whoever releases (inline owner or worker) swaps the state to `IDLE` and re-checks `PENDING`; a set bit means one more step by a worker. Lost wakeups are impossible: `PENDING` is published before the failed vCPU's wake, and the releaser re-checks after the release.
-- Every step computes its delta from the CURRENT private cursor to the CURRENT guest `GP_PUT`, so racing doorbells coalesce, nothing is copied twice or skipped, and the order of handoffs does not matter. The single-writer rule covers the private ring and USERD.
-- The mode flip is made by the act thread by CAS-ing the state to a `SWITCHING` value; a vCPU that fails its CAS takes the failure path (pending + wake) and sees the new mode on the next doorbell.
-- Test it with an exhaustive interleaving model (loom or a state-machine simulation), failing first: two vCPUs racing, a worker racing a vCPU, a switch racing a doorbell, wrap, a full private ring (room check fails: wake the worker, never block, never overwrite).
+**Candidate to evaluate (cheaper inspection):** scan the pushbuffers from the first submission WITHOUT copying them (read-only scan for a `0x200` on the subchannel bound to the `5080` object, tracking packet/binding state from birth), forward the original GP entries unchanged,
+and take an immutable snapshot only for a segment that actually contains a trigger (rare). Safety rests on hardware containment, not on the scan: the twin is an unprivileged USER channel in its own restricted space with the physical-operand prohibition, and an unscanned trigger on it executes
+nothing and RCs only the guest's own channel (measured: Xid 32, run 1540; the exposure every Passthrough channel already has from a malformed method). Gates: the two-VM check (an RC in one VM while another runs a workload stays contained); Codex's concrete counterexample, if any, of a capability an unscanned trigger gives an unprivileged guest;
+a measured cost against full snapshots. If it holds, the private read-only command mappings and stores are used only on the trigger segment, which removes most of the always-on machinery.
 
-**Further guards:** the ring needs a guest-cursor to host-cursor pairing after the guest grows its ring (indices no longer match; the lazy `GP_GET` write-back maps back through it); entries are validated before they are stored (length cap, no privileged-pushbuffer
-flag); if the guest ring is in guest-visible video memory, each entry read from a vCPU is a PCIe read, so K is small and measured (P0c gives the aperture); an unparsed trigger on an unprivileged twin executes nothing and only RCs the guest's own channel
-(measured: Xid 32, run 1540), the exposure every Passthrough channel already has from a malformed method; the two-VM check (an RC in one VM while another runs a workload) confirms it stays contained and is a gate before the late switch is trusted.
-
-**Decision for the owner and Codex:** inline Migratable Passthrough plus late switch (this section) versus Codex's worker-only mediation from birth (§AI as written). The tie-breaker is the measured submit-to-completion latency and CPU cost of snapshots on the apps that pass today (Edge video, GravityMark D3D12, the desktop).
-
-**Correctness versus optimisation (owner, 2026-10-12):** the worker path is the correctness baseline; the inline path of mode 3 is an optimisation. Build and validate the worker path (private ring and USERD, entry relay, mode flip, migration) first; add the inline fast path only if the measured submit latency shows the worker wake matters.
-Note: with `ioeventfd` the kernel only signals an eventfd, so the inline copy cannot run there; an ioeventfd doorbell always takes the worker path. The inline mode exists only on the userspace trap path on the vCPU thread, so the two doorbell mechanisms are equivalent for the wake, not for the inline copy.
-
-**Linux guests and the guest doorbell helper (`V3_GUEST_DOORBELL_MODULE.md`):** the optional helper lets a Linux guest write the real host doorbell page for passthrough tokens without a VM exit. A token whose channel carries the "migration possible" flag must never be eligible for that guest-direct route (kayfabe must see its doorbell to copy the entries). With the flag set only for declared Windows user-work (the helper is a Linux-guest module and Windows has none), the module needs no change; keep the invariant and pin it with a test: flagged tokens are always routed through kayfabe, whatever the guest helper's table says.
+**Kept from the owner's discussion:**
+- The inline (vCPU) CopyRing path is an optimisation; the worker path is the correctness baseline and is built and validated first. With `ioeventfd` the kernel only signals an eventfd, so the inline copy cannot run there; an ioeventfd doorbell always takes the worker path.
+- The vCPU never waits: one compare-and-swap (the channel's BUSY word); on failure it sets a durable PENDING bit, requests a nonblocking worker wake and returns; the releaser re-checks PENDING; every step computes its delta from the current private cursor to the current guest `GP_PUT`, so doorbells coalesce (modelled, native and Loom atomics, in `kf-trap`).
+- Linux guests and the guest doorbell helper (`V3_GUEST_DOORBELL_MODULE.md`): the helper already writes the real host doorbell page only for a table route `Passthrough` and rings kayfabe's classic trapped page for `Emulated`, unknown, not found or a missing table ("any doubt rings the original kayfabe page"). Publish a flagged (CopyRing/Worker) token with a route that is not `Passthrough` and the module needs no change;
+  pin it with a test: an unknown route value takes the classic path.
