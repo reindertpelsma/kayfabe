@@ -1,6 +1,15 @@
 # V3 Windows user-channel ring relay: private GPFIFO + private USERD, with a safe migration path
 
 **STATUS: DESIGN-ONLY, 2026-10-12 (proposal from the owner/coordinator discussion; the §AB.2 amendment in §6 is PROPOSED, not yet a ruling).**
+**SUBSEQUENT OWNER CLARIFICATION, 2026-10-12:** native USER privilege and own
+explicitly admitted/refreshed mappings are the access boundary. Ordinary GP
+references may remain unchanged after scan-from-first-submission; stage only
+intercepted trigger segments. A mutable ordinary pushbuffer alone does not
+justify mandatory full snapshots. CPU scanning never authorizes a host action
+or proves GPU execution/completion. This supersedes blanket immutable-copy
+requirements below; exact ownership, stream order and containment still need
+validation. Linux Passthrough still forbids host-owned GPU mappings. See §AI.
+
 **LATEST OWNER/ARCHITECTURE UPDATE, 2026-10-12:** the owner's subsequent
 three-mode clarification in OWNER_RULINGS §AI supersedes the blanket worker-only
 and inspection-from-birth wording immediately below. Direct native-token dispatch,

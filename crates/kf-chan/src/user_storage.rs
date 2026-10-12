@@ -7,7 +7,8 @@
 //!
 //! Clear every byte before GPU exposure. Only commands/GP entries are mapped,
 //! always read-only; private USERD is outside the GPU mapping. There is no gate,
-//! writable fence, GPU-work completion or raw guest descriptor submission here.
+//! writable fence or GPU-work completion. Direct USER descriptors may be copied
+//! only after the worker's separate own-space/source-lifetime admission.
 //! The caller must quiesce/free its native channel before releasing storage.
 
 use kf_host::{HostRm, MapNode, VaSpace, ViewAccess};
@@ -487,6 +488,22 @@ impl Storage<CpuView> {
             .map_err(|e| format!("USER_STORAGE_GP_WRITE: {e:?}"))
     }
 
+    /// Copy a direct USER descriptor unchanged into the private ring. This
+    /// validates format and the trusted scan budget ONLY: the worker must also
+    /// resolve the complete source in this channel's own restricted address
+    /// space and retain source/channel admission through PUT publication.
+    /// Never use this for privileged Translated work or bypass software triggers.
+    pub fn write_user_gp(&self, slot: u32, entry: u64) -> Result<(), String> {
+        if slot >= ENTRIES {
+            return Err("USER_STORAGE_GP_BOUND".into());
+        }
+        crate::user_stream::inspect_entry(entry, 64 * 1024)
+            .map_err(|why| format!("USER_STORAGE_USER_GP: {why:?}"))?;
+        self.cpu()?
+            .store_u64(HostOffset::new(GP_OFFSET + u64::from(slot) * 8), entry)
+            .map_err(|e| format!("USER_STORAGE_GP_WRITE: {e:?}"))
+    }
+
     /// Author only the public CONTROL NOP/LENGTH0/SYNC_WAIT descriptor.
     /// The caller must insert this after a complete authored packet, then a
     /// nonempty witness. The barrier's own GET commit grants no PB-byte credit.
@@ -571,6 +588,117 @@ impl Storage<CpuView> {
 mod tests {
     use super::*;
     use std::cell::RefCell;
+
+    // Exercise the production memory accessors on a real CPU mapping without
+    // opening NVIDIA or making an RM call. No simulated GET is a GPU result.
+    fn anonymous_live_storage() -> Storage<CpuView> {
+        Storage {
+            va: 1 << 32,
+            reservation: Some(11),
+            live: true,
+            memory: Some(7),
+            view: Some(CpuView {
+                cpu: Some(
+                    VolatileRegion::map(
+                        Backing::PrivateAnonymous,
+                        BYTES,
+                        CachePolicy::WriteBack,
+                        HostPageSize::query(),
+                    )
+                    .unwrap(),
+                ),
+                _node: CharDevice::openat(&kf_linux_raw::DevDir::open(c"/dev").unwrap(), c"null")
+                    .unwrap(),
+                cookie: None,
+                map_error: None,
+            }),
+            mapped: Mapping::Live,
+            cleared: BYTES,
+        }
+    }
+
+    #[test]
+    fn private_ring_publication_keeps_user_addresses_and_never_forges_get_or_reference() {
+        let s = anonymous_live_storage();
+        let cpu = s.cpu().unwrap();
+        let get = HostOffset::new(USERD_OFFSET + kf_abi::submit::USERD_GP_GET);
+        let reference = HostOffset::new(USERD_OFFSET + kf_abi::submit::USERD_REFERENCE_C56F);
+        cpu.store_u32(get, 17).unwrap();
+        cpu.store_u32(reference, 0x1234).unwrap();
+        let entry = kf_abi::submit::gp_entry(0x420000, 4096).unwrap() | (1 << 63);
+        s.write_user_gp(ENTRIES - 1, entry).unwrap();
+        s.write_user_gp(0, 0).unwrap();
+        s.publish_put(1).unwrap();
+        assert_eq!(
+            cpu.load_u64(HostOffset::new(GP_OFFSET + u64::from(ENTRIES - 1) * 8))
+                .unwrap(),
+            entry
+        );
+        assert_eq!(cpu.load_u64(HostOffset::new(GP_OFFSET)).unwrap(), 0);
+        assert_eq!(
+            cpu.load_u32(HostOffset::new(USERD_OFFSET + kf_abi::submit::USERD_GP_PUT))
+                .unwrap(),
+            1
+        );
+        assert_eq!(s.gpu_get().unwrap(), 17);
+        assert_eq!(s.gpu_reference().unwrap(), 0x1234);
+    }
+
+    #[test]
+    fn bad_user_descriptor_cannot_modify_private_ring_or_userd() {
+        let s = anonymous_live_storage();
+        let good = kf_abi::submit::gp_entry(0x420000, 4).unwrap();
+        s.write_user_gp(0, good).unwrap();
+        for bad in [
+            1,
+            good | 1,
+            good | (1 << 41),
+            kf_abi::submit::gp_entry(0x420000, 65540).unwrap(),
+        ] {
+            assert!(s.write_user_gp(0, bad).is_err(), "entry={bad:#x}");
+            assert_eq!(
+                s.cpu()
+                    .unwrap()
+                    .load_u64(HostOffset::new(GP_OFFSET))
+                    .unwrap(),
+                good
+            );
+        }
+        assert!(s.write_user_gp(ENTRIES, good).is_err());
+        assert!(s.publish_put(ENTRIES).is_err());
+        assert_eq!(s.gpu_get().unwrap(), 0);
+        assert_eq!(
+            s.cpu()
+                .unwrap()
+                .load_u32(HostOffset::new(USERD_OFFSET + kf_abi::submit::USERD_GP_PUT))
+                .unwrap(),
+            0
+        );
+    }
+
+    #[test]
+    fn trigger_staging_and_host_witness_do_not_overlap_ring_or_unmapped_userd() {
+        let s = anonymous_live_storage();
+        s.write_authored(0, &[0, 0]).unwrap();
+        s.write_gp(0, 0, 8, false).unwrap();
+        s.write_host_barrier(1).unwrap();
+        s.write_host_witness(2).unwrap();
+        s.publish_put(3).unwrap();
+        let cpu = s.cpu().unwrap();
+        let read = |slot: u64| cpu.load_u64(HostOffset::new(GP_OFFSET + slot * 8)).unwrap();
+        assert_eq!(read(0), kf_abi::submit::gp_entry(s.va, 8).unwrap());
+        assert_eq!(read(1), 1 << 63);
+        let witness = s.va + GP_OFFSET + u64::from(ENTRIES) * 8;
+        assert_eq!(read(2), kf_abi::submit::gp_entry(witness, 4).unwrap());
+        assert_eq!(cpu.load_u32(HostOffset::new(witness - s.va)).unwrap(), 0);
+        assert!(s.write_authored(GP_OFFSET, &[99]).is_err());
+        assert!(s.write_gp(3, USERD_OFFSET, 4, false).is_err());
+        assert_eq!(
+            s.gpu_get().unwrap(),
+            0,
+            "CPU publication supplies no consumption receipt"
+        );
+    }
 
     #[derive(Default)]
     struct Fake {

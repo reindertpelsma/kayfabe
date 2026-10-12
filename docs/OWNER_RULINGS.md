@@ -1170,6 +1170,19 @@ HDR on the console) falls under "works without".
 
 ## §AI. Windows user-work ring exception; Linux Passthrough unchanged, 2026-10-12
 
+**Subsequent owner clarification, 2026-10-12 (USER authority):** native USER
+privileges and the channel's own explicitly admitted, refreshed GPU mappings
+are the access boundary. Do not map all guest VRAM into an unprivileged channel.
+Host-owned ring/staging addresses grant no extra execution authority; correct
+userspace follows its mapping and synchronization contract. A malicious mutation
+of its own ordinary commands is not, by itself, a reason to snapshot every
+pushbuffer. Evaluate scan-from-first-submission with ordinary GP references
+unchanged and staging only for intercepted triggers. This supersedes the blanket
+immutable-copy requirement below; it does not waive independent validation of
+host software actions or establish that native RC/reset stays contained. Actual
+ordering, lifetime and containment still require tests. No PB parsing on a vCPU;
+Linux Passthrough still forbids host-owned GPU mappings.
+
 **Latest owner clarification, 2026-10-12 (three-mode dispatch):** the owner
 requests direct native-token forwarding; bounded pre-mapped USERD/GP-descriptor
 copy with a worker fallback for large deltas; and always-worker dispatch for
@@ -1184,7 +1197,8 @@ the Linux host-mapping prohibition and Windows read-only mapping scope remain.
 user GP pointers does not require CPU interpretation of their pushbuffers while
 the native channel remains USER, physical operands remain forbidden and its own
 restricted GPU address space protects host resources. Once software migration is
-possible, switch to immutable worker inspection before accepting it. The atomic
+possible, worker inspection must cover its parser history before accepting it;
+the later owner clarification above permits trigger-only staging. The atomic
 switch must exclude old CPU publishers; if any opaque native stream was already
 published, native parser/binding/ordering continuity is a separate proof gate.
 Holding a registration reply or observing empty GET/PUT does not close that gate.

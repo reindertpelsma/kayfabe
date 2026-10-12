@@ -1,5 +1,33 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-12 15:28UTC — reviewed USER scan/accessor tests; baseline VM runs
+
+Previous confirmed push4df9c0095. New unconnected USER scanner/fetch ledger and
+private-ring descriptor accessor:19 scanner tests +3 production CPU-mapping
+accessor tests. Header-only fragment failing-first found/fixed an OOB panic;
+independent review found/fixed Legacy sizing ambiguity, sub-device filtering,
+modern reserved framing and hardware-subchannel false triggers. Final review
+cleared GPU-free primitive scope. Full trap/core/abi/rm/chan/qemu1899 PASS/0fail.
+Evidence gravity-vulkan/user-scan. Runtime userrelay::enabled() remains false;
+source admission/native ordering/software migration integration still open.
+
+Exact4df9c0095 hardware on172.22.1.20: gates9/9+gate10, USERbirths12/12,
+fast30/30/crash0/NOTRUN0/exit0. Five Xid31 match deliberate negative arms; no32.
+Linux desktop disposable child: Cinnamon/Xorg + NVIDIA580.159.04 RTX4070 gears
+~60FPS, no hostXid; guest startup flip timeout and shared-data assertions mean
+PASS_WITH_WARNINGS smoke, not a clean desktop/render-parity gate. Runner's first
+PASS missed those warnings; oracle corrected and executed original retained.
+No QEMU remains, group11DMA-FQ; personal Windows images preserved.
+
+Latest owner accepts native USER/own restricted VAS as authority, ordinary GP
+pointer forwarding plus scan-from-first-submission, and trigger-only staging;
+CPU scan is not proof of GPU execution/completion. Runtime host actions still
+need independent exact registration/ownership validation. Linux Passthrough
+host mappings remain forbidden. No new Windows/Gravity PASS; matrix and driver
+sweep open. Estimated3–5hours to first Windows relay experiment, not a guarantee.
+Branch codex/windows-matrix-20261011; master untouched.
+
+
 ## UPDATE 2026-10-12 12:36UTC — reviewed three-mode CPU dispatch; runtime still off
 
 Previous confirmed push93dd13847; this checkpoint's source revision is its
