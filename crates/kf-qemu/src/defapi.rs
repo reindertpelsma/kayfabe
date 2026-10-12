@@ -199,7 +199,7 @@ pub fn classify(
     let bundle = entry.decoded;
     let refuse = |why: String| -> Result<(SwKind, Option<Planned>), String> {
         // The real cleanup: executed + implicit delete, whatever the status.
-        reg.executed(key, call.data, false);
+        reg.executed_entry(key, &entry, false);
         Err(format!(
             "NV50_DEFERRED_API {:#x}:{handle:#x} hApiHandle {:#x} cmd {:#x}: {why}",
             key.client, call.data, entry.cmd

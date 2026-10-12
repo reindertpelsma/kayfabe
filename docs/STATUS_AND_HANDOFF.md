@@ -1,5 +1,21 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-12 11:21UTC — exact deferred registration cleanup
+
+Last confirmed push ab61d724a. Both production deferred completion/refusal sites
+now retain exact registration identity; remove/re-register and object recreation
+cannot let a delayed completion delete replacements or flush their waiting table.
+Failing-first reuse regression, two focused tests and full abi/rm/qemu/chan PASS;
+independent review cleared this scope. Evidence gravity-vulkan/deferred-registration-identity.
+Source review REJECTED own-PDB query/native USER FIFO invalidate candidate: query
+is kernel-only in ordinary native GSP mode; FIFO invalidate requires privileged
+channel authentication. No such probe/escalation attempted. GLOBAL_ACK action
+stays disconnected; this does not establish GravityMark uses that USER MEM_OP.
+No new Windows run/Gravity PASS; runtime birth/submit/migration remains open.
+Latest exact Linux hardware7f3f9fe16 gates9+10/fast30 PASS. Same-GPU VFIO179/183s
+PASS; matrix/sweep open; personal image retained; master untouched.
+
+
 ## UPDATE 2026-10-12 11:05UTC — reviewed stream invalidation and guarded admission
 
 Last confirmed push: 3a6a8a8ee. Typed user-stream own-space invalidates now wait

@@ -1621,7 +1621,7 @@ impl Publisher for VaSplit<'_> {
         );
         if let Some(reg) = self.sw.plane.defapi_reg.get() {
             // The trigger's cleanup, whatever the outcome (`deferred_api.c:653-670`).
-            reg.executed(planned.key, planned.entry.handle, tlb && outcome.is_ok());
+            reg.executed_entry(planned.key, &planned.entry, tlb && outcome.is_ok());
         }
         match outcome {
             Ok(line) => {
