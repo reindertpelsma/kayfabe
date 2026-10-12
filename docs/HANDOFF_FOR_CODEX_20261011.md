@@ -1,5 +1,21 @@
 # Handoff for a different agent (Codex or any fresh agent), 2026-10-11
 
+## UPDATE 2026-10-12 04:28UTC — reviewed exact object lifetimes; Linux regression next
+
+Last confirmed push1373317ce. Production EngineObj now retains exact channel AND
+pending child allocation identity through parked steer/native allocation/attachment;
+guest Free cancels pending child identity, and an orphan undo withdraws only the
+exact kept allocation once. Exact validated class retained for future user parser.
+Bounded64 weak pending map prunes failed/dropped acts, never reuses live identity.
+Independent review corrected the same-channel child Free/reuse gap then found no
+remaining source blocker. Full GPU-free kf-chan/kf-qemu/kf-rm pass; qemu lib173/173.
+Evidence/hypothesis/falsifier: gravity-vulkan/user-lifecycle. Next exact Linux gates
+9+10/build/rawclient/fast30 serial; NOT_RUN at checkpoint. Still no mediated Windows
+relay or migration wired, no Gravity Kayfabe PASS (VFIO reference PASS179/183s).
+Personal image retained; GPU idle/DMA-FQ/lockfree. Vast rechecked04:11UTC:[];
+nothing to retire. Full matrix and driver sweep remain open; master untouched.
+
+
 ## UPDATE 2026-10-12 04:15UTC — reviewed ordered source progress, GPU-free only
 
 Last confirmed push9f7cdd81f. New user_progress::Channel enforces one active

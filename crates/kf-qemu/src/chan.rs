@@ -141,6 +141,9 @@ fn delay_act(not_before: std::time::Instant, what: &'static str, act: Act, d: kf
 /// always did.
 #[derive(Clone)]
 struct EngineObj {
+    object_allocation: Arc<()>,
+    /// Allocation identity survives parked acts; numeric native handles can reuse.
+    allocation: Arc<()>,
     client: u32,
     parent: u32,
     handle: u32,
@@ -190,23 +193,20 @@ impl EngineObj {
         // ★ Review 4 item 3: the age bound runs from the FIRST EXECUTION of the step, not from its
         // enqueue — a busy act queue must not eat the retry budget.
         let born = born.unwrap_or_else(std::time::Instant::now);
-        // ★ Review 4 (lower item): a retry that runs after the channel was freed (or replaced) must
-        // not run the host alloc on the old channel.
-        if tries > 0 {
-            let alive = me
-                .pt
-                .lock()
-                .ok()
-                .and_then(|m| m.get(&(client, parent)).map(|v| v.chan.token))
-                == Some(self.chan.token);
-            if !alive {
-                return Err((
-                    NV_ERR_INVALID_STATE,
-                    format!(
-                        "chan {client:#x}:{parent:#x} was freed while its falcon ctx steer was retrying — object birth REFUSED"
-                    ),
-                ));
-            }
+        // Check allocation identity on the first turn AND every parked retry,
+        // before any context handover. Native tokens/handles can be reused.
+        if !engine_object_pending(
+            &me.pt,
+            (client, parent),
+            &self.allocation,
+            self.chan,
+            self.handle,
+            &self.object_allocation,
+        ) {
+            return Err((
+                NV_ERR_INVALID_STATE,
+                format!("ENGINE_OBJECT_OWNER_CHANGED chan {client:#x}:{parent:#x} before steer"),
+            ));
         }
         let fc = if matches!(
             kind,
@@ -214,10 +214,11 @@ impl EngineObj {
                 | kf_chip::classes::Kind::VideoDecoder
                 | kf_chip::classes::Kind::OpticalFlow
         ) {
-            me.pt
-                .lock()
-                .ok()
-                .and_then(|m| m.get(&(client, parent)).and_then(|v| v.falcon_ctx))
+            me.pt.lock().ok().and_then(|m| {
+                m.get(&(client, parent))
+                    .filter(|v| Arc::ptr_eq(&v.allocation, &self.allocation) && v.chan == self.chan)
+                    .and_then(|v| v.falcon_ctx)
+            })
         } else {
             None
         };
@@ -238,9 +239,12 @@ impl EngineObj {
             !reserved
         });
         if steered.is_some() && !steer_source_unchanged(self.steer_source, fc) {
-            return Err((NV_ERR_INVALID_STATE, format!(
-                "chan {client:#x}:{parent:#x}: falcon ctx changed while steer was parked; object birth REFUSED"
-            )));
+            return Err((
+                NV_ERR_INVALID_STATE,
+                format!(
+                    "chan {client:#x}:{parent:#x}: falcon ctx changed while steer was parked; object birth REFUSED"
+                ),
+            ));
         }
         let mut steer_msg = String::new();
         if let Some((va, len)) = fc {
@@ -265,8 +269,11 @@ impl EngineObj {
                     let length = steer_len(placed.get(&va).map(|row| row.0), len);
                     // Same rows -> Regions lock order as the VA allocator. Claim
                     // the FULL row before removing it or touching native RM.
-                    self.steer_claim = Some(self.user_regions.steer(va, length)
-                        .map_err(|e| (NV_ERR_INVALID_STATE, e))?);
+                    self.steer_claim = Some(
+                        self.user_regions
+                            .steer(va, length)
+                            .map_err(|e| (NV_ERR_INVALID_STATE, e))?,
+                    );
                     self.steer_source = Some((va, len));
                     placed.remove(&va);
                     length
@@ -347,15 +354,44 @@ impl EngineObj {
             kind,
             ..
         } = *self;
+        if !engine_object_pending(
+            &me.pt,
+            (client, parent),
+            &self.allocation,
+            chan,
+            handle,
+            &self.object_allocation,
+        ) {
+            return Err((
+                NV_ERR_INVALID_STATE,
+                "ENGINE_OBJECT_OWNER_CHANGED before allocation".into(),
+            ));
+        }
         let h = kf_chan::passthrough::engine_object(me.rm, chan, engine, class, kind, copy_engine)
             .map_err(|e| (NV_ERR_INVALID_CLASS, e))?;
-        if let Ok(mut m) = me.pt.lock()
-            && let Some(v) = m.get_mut(&(client, parent))
-        {
-            v.objects.insert(handle, (h, kind));
-        }
-        if let Ok(mut m) = me.pt_objs.lock() {
-            m.insert((client, handle), (client, parent));
+        if !keep_engine_object(
+            &me.pt,
+            &me.pt_objs,
+            (client, parent),
+            &self.allocation,
+            chan,
+            handle,
+            EngineObject {
+                allocation: self.object_allocation.clone(),
+                host: h,
+                kind,
+                class,
+            },
+        ) {
+            // Native verbs stay outside metadata locks. A refused free retains
+            // the object under its native parent/session; no replacement owns it.
+            let cleanup = me.rm.free(h);
+            return Err((
+                NV_ERR_INVALID_STATE,
+                format!(
+                    "ENGINE_OBJECT_OWNER_CHANGED after allocation; host object {h:#x} cleanup={cleanup:?}"
+                ),
+            ));
         }
         Ok(format!(
             "{client:#x}:{handle:#x} class {class:#x} ({kind:?}) on twin host {:#x} -> host object {h:#x}{steer}",
@@ -383,6 +419,8 @@ mod steer_identity_tests {
 
 /// ★ P5b: a guest USER channel's host twin (Passthrough).
 struct PtChan {
+    /// Distinct from a guest/native handle; retained by every parked birth act.
+    allocation: Arc<()>,
     chan: kf_host::Channel,
     /// The guest token (table index = the guest's chid).
     idx: u32,
@@ -396,8 +434,10 @@ struct PtChan {
     device: u32,
     /// The host engine (= the guest's `engineType`).
     engine: u32,
-    /// Engine objects on the twin: guest handle → (host handle, its class kind).
-    objects: HashMap<u32, (u32, kf_chip::classes::Kind)>,
+    /// Engine objects owned by this allocation, with the exact allocated class.
+    objects: HashMap<u32, EngineObject>,
+    /// Weak pending identities cannot keep failed/canceled acts alive.
+    pending_objects: HashMap<u32, std::sync::Weak<()>>,
     /// ★ EXPERIMENT `x11-dispsw`: the guest's `GF100_DISP_SW` objects on this channel, twinned on
     /// the twin: guest handle → host handle. Always empty with the switch off. Host RM frees them
     /// with the twin's channel (`HostRm::free` forgets the subtree), so they go with the twin.
@@ -2342,13 +2382,13 @@ pub struct ChanPlane {
 /// 2026-10-03, MEDIUM): its engine object (`false`) or, x11-dispsw only, its display-SW twin
 /// (`true`), with the host handle to free; `None` if the twin holds neither.
 fn take_twin_object(
-    objects: &mut HashMap<u32, (u32, kf_chip::classes::Kind)>,
+    objects: &mut HashMap<u32, EngineObject>,
     disp_sw: &mut HashMap<u32, u32>,
     object: u32,
 ) -> Option<(u32, bool)> {
     objects
         .remove(&object)
-        .map(|o| (o.0, false))
+        .map(|o| (o.host, false))
         .or_else(|| disp_sw.remove(&object).map(|h| (h, true)))
 }
 
@@ -2358,6 +2398,178 @@ type PtMap = HashMap<(u32, u32), PtChan>;
 /// The plane's object index, `(client, object handle) → (client, channel handle)` ([`ChanPlane`]'s
 /// `pt_objs`).
 type ObjIndex = HashMap<(u32, u32), (u32, u32)>;
+
+/// Exact generated/validated class allocated on this channel, never inferred
+/// from a family/kind or from a guest's later SET_OBJECT word.
+#[derive(Clone)]
+struct EngineObject {
+    allocation: Arc<()>,
+    host: u32,
+    kind: kf_chip::classes::Kind,
+    // Retained for the forthcoming immutable Windows user-stream binding lookup.
+    #[allow(dead_code)]
+    class: u32,
+}
+
+#[cfg(test)]
+fn engine_owner_current(
+    pt: &Mutex<PtMap>,
+    key: (u32, u32),
+    allocation: &Arc<()>,
+    chan: kf_host::Channel,
+) -> bool {
+    pt.lock().is_ok_and(|m| {
+        m.get(&key)
+            .is_some_and(|v| Arc::ptr_eq(&v.allocation, allocation) && v.chan == chan)
+    })
+}
+
+fn engine_object_pending(
+    pt: &Mutex<PtMap>,
+    key: (u32, u32),
+    allocation: &Arc<()>,
+    chan: kf_host::Channel,
+    handle: u32,
+    object: &Arc<()>,
+) -> bool {
+    pt.lock().is_ok_and(|pt| {
+        pt.get(&key).is_some_and(|v| {
+            Arc::ptr_eq(&v.allocation, allocation)
+                && v.chan == chan
+                && v.pending_objects
+                    .get(&handle)
+                    .and_then(std::sync::Weak::upgrade)
+                    .is_some_and(|pending| Arc::ptr_eq(&pending, object))
+        })
+    })
+}
+
+/// Trusted concurrent pending-object budget, not a family/die fact.
+const PENDING_ENGINE_OBJECTS: usize = 64;
+
+fn admit_engine_object(
+    v: &mut PtChan,
+    index: &ObjIndex,
+    key: (u32, u32),
+    handle: u32,
+) -> Result<Arc<()>, String> {
+    v.pending_objects.retain(|_, weak| weak.strong_count() != 0);
+    if v.objects.contains_key(&handle)
+        || v.disp_sw.contains_key(&handle)
+        || v.pending_objects.contains_key(&handle)
+        || index.contains_key(&(key.0, handle))
+    {
+        return Err("ENGINE_OBJECT_HANDLE_BUSY".into());
+    }
+    if v.pending_objects.len() >= PENDING_ENGINE_OBJECTS {
+        return Err("ENGINE_OBJECT_PENDING_BUDGET".into());
+    }
+    v.pending_objects
+        .try_reserve(1)
+        .map_err(|_| "ENGINE_OBJECT_PENDING_ALLOCATION")?;
+    let allocation = Arc::new(());
+    v.pending_objects
+        .insert(handle, Arc::downgrade(&allocation));
+    Ok(allocation)
+}
+
+fn cancel_pending_engine_objects(pt: &Mutex<PtMap>, client: u32, object: u32) {
+    if let Ok(mut pt) = pt.lock() {
+        for ((owner, _), channel) in pt.iter_mut() {
+            if *owner == client {
+                channel.pending_objects.remove(&object);
+            }
+        }
+    }
+}
+
+/// One brief metadata transaction; caller performs no host verb under either lock.
+fn keep_engine_object(
+    pt: &Mutex<PtMap>,
+    index: &Mutex<ObjIndex>,
+    key: (u32, u32),
+    allocation: &Arc<()>,
+    chan: kf_host::Channel,
+    handle: u32,
+    object: EngineObject,
+) -> bool {
+    let (Ok(mut pt), Ok(mut index)) = (pt.lock(), index.lock()) else {
+        return false;
+    };
+    let Some(v) = pt.get_mut(&key) else {
+        return false;
+    };
+    if !Arc::ptr_eq(&v.allocation, allocation)
+        || v.chan != chan
+        || !v
+            .pending_objects
+            .get(&handle)
+            .and_then(std::sync::Weak::upgrade)
+            .is_some_and(|pending| Arc::ptr_eq(&pending, &object.allocation))
+        || v.objects.contains_key(&handle)
+        || v.disp_sw.contains_key(&handle)
+        || index.contains_key(&(key.0, handle))
+    {
+        return false;
+    }
+    v.objects.insert(handle, object);
+    v.pending_objects.remove(&handle);
+    index.insert((key.0, handle), key);
+    true
+}
+
+/// Orphan undo names allocation identities, so a reused numeric guest/native
+/// handle cannot withdraw somebody else's later object. Host free is act-only.
+fn attach_engine_withdraw(
+    d: &kf_gsp::Deferred,
+    tx: std::sync::mpsc::Sender<(Act, kf_gsp::Deferred, &'static str)>,
+    key: (u32, u32),
+    channel: Arc<()>,
+    object: Arc<()>,
+    handle: u32,
+) {
+    d.on_orphaned(move || {
+        let undo: Act = Box::new(move |me| {
+            let h = withdraw_engine_object(&me.pt, &me.pt_objs, key, &channel, &object, handle);
+            Ok(match h {
+                Some(h) => format!(
+                    "ENGINE_OBJECT_ORPHAN {:#x}:{handle:#x} host {h:#x} cleanup={:?}",
+                    key.0,
+                    me.rm.free(h)
+                ),
+                None => "ENGINE_OBJECT_ORPHAN no allocation of this act remains".into(),
+            })
+        });
+        let _ = tx.send((undo, kf_gsp::Deferred::new(), "engine object withdraw"));
+    });
+}
+
+fn withdraw_engine_object(
+    pt: &Mutex<PtMap>,
+    index: &Mutex<ObjIndex>,
+    key: (u32, u32),
+    channel: &Arc<()>,
+    object: &Arc<()>,
+    handle: u32,
+) -> Option<u32> {
+    let (Ok(mut pt), Ok(mut index)) = (pt.lock(), index.lock()) else {
+        return None;
+    };
+    let v = pt.get_mut(&key)?;
+    if !Arc::ptr_eq(&v.allocation, channel) {
+        return None;
+    }
+    let o = v.objects.get(&handle)?;
+    if !Arc::ptr_eq(&o.allocation, object) {
+        return None;
+    }
+    let host = o.host;
+    v.objects.remove(&handle);
+    if index.get(&(key.0, handle)) == Some(&key) {
+        index.remove(&(key.0, handle));
+    }
+    Some(host)
+}
 
 /// ★ x11-dispsw: what the act checks before a display-SW twin ([`crate::dispsw::twin_one`]), read
 /// from the plane's channel map on the act thread, where every display-SW alloc and free runs in
@@ -4157,8 +4369,8 @@ impl ChanPlane {
                 let host_ctx: Vec<u32> = v
                     .objects
                     .values()
-                    .filter(|(_, k)| matches!(k, kf_chip::classes::Kind::Compute | kf_chip::classes::Kind::ThreeD))
-                    .map(|(h, _)| *h)
+                    .filter(|o| matches!(o.kind, kf_chip::classes::Kind::Compute | kf_chip::classes::Kind::ThreeD))
+                    .map(|o| o.host)
                     .collect();
                 // ★ v3-gfx: a graphics object's promote ARRIVES BEFORE its alloc — the guest's CPU-RM
                 // maps the context buffers into the channel's VA space and promotes them inside
@@ -4314,33 +4526,61 @@ impl ChanPlane {
         class: u32,
         copy_engine: Option<u32>,
     ) -> ChanAnswer {
-        let Some((chan, engine, space, rows, ledger, user_regions)) =
-            self.pt.lock().ok().and_then(|m| {
-                m.get(&(client, parent)).map(|v| {
-                    (
-                        v.chan,
-                        v.engine,
-                        v.space,
-                        v.rows.clone(),
-                        v.ledger.clone(),
-                        v.user_regions.clone(),
-                    )
-                })
-            })
-        else {
-            return ChanAnswer::NotOurs;
-        };
-        let Some(kind) = kf_chip::classes_for(self.family).kind_of(class) else {
-            return ChanAnswer::Refused {
-                status: NV_ERR_INVALID_CLASS,
-                why: format!(
-                    "class {class:#x} is not an engine class of the host family {:?}",
-                    self.family
-                ),
+        let key = (client, parent);
+        let (chan, engine, space, rows, ledger, user_regions, allocation, object_allocation, kind) = {
+            let (Ok(mut pt), Ok(index)) = (self.pt.lock(), self.pt_objs.lock()) else {
+                return ChanAnswer::Refused {
+                    status: NV_ERR_INVALID_STATE,
+                    why: "ENGINE_OBJECT_MAP_POISONED".into(),
+                };
             };
+            let Some(v) = pt.get_mut(&key) else {
+                return ChanAnswer::NotOurs;
+            };
+            let Some(kind) = kf_chip::classes_for(self.family).kind_of(class) else {
+                return ChanAnswer::Refused {
+                    status: NV_ERR_INVALID_CLASS,
+                    why: format!(
+                        "class {class:#x} is not an engine class of the host family {:?}",
+                        self.family
+                    ),
+                };
+            };
+            let object_allocation = match admit_engine_object(v, &index, key, handle) {
+                Ok(identity) => identity,
+                Err(why) => {
+                    return ChanAnswer::Refused {
+                        status: NV_ERR_INVALID_STATE,
+                        why,
+                    };
+                }
+            };
+            (
+                v.chan,
+                v.engine,
+                v.space,
+                v.rows.clone(),
+                v.ledger.clone(),
+                v.user_regions.clone(),
+                v.allocation.clone(),
+                object_allocation,
+                kind,
+            )
         };
         let d = kf_gsp::Deferred::new();
+        if let Some(tx) = self.acts.lock().ok().and_then(|a| a.as_ref().cloned()) {
+            attach_engine_withdraw(
+                &d,
+                tx,
+                key,
+                allocation.clone(),
+                object_allocation.clone(),
+                handle,
+            );
+        }
         let step = EngineObj {
+            object_allocation,
+            allocation,
             client,
             parent,
             handle,
@@ -4575,7 +4815,10 @@ impl ChanPlane {
                     return None;
                 }
                 let p = PeekDefapi {
-                    key: kf_rm::defapi::ObjKey { client, object: handle },
+                    key: kf_rm::defapi::ObjKey {
+                        client,
+                        object: handle,
+                    },
                     live: Arc::new(AtomicBool::new(true)),
                 };
                 v.peek_defapi = Some(p.clone());
@@ -4895,11 +5138,15 @@ impl ChanPlane {
                 self.pt
                     .lock()
                     .ok()
-                    .and_then(|m| m.get(&key).and_then(|v| v.objects.get(&obj3d).copied()))
+                    .and_then(|m| m.get(&key).and_then(|v| v.objects.get(&obj3d).cloned()))
             });
         let host_obj = match host_obj {
-            Some((h, kf_chip::classes::Kind::Compute | kf_chip::classes::Kind::ThreeD)) => h,
-            Some((_, k)) => {
+            Some(EngineObject {
+                host: h,
+                kind: kf_chip::classes::Kind::Compute | kf_chip::classes::Kind::ThreeD,
+                ..
+            }) => h,
+            Some(EngineObject { kind: k, .. }) => {
                 return ChanAnswer::Refused {
                     status: NV_ERR_INVALID_ARGUMENT,
                     why: format!(
@@ -4937,7 +5184,11 @@ impl ChanPlane {
         {
             for (owner, twin) in m.iter() {
                 if let Some(peek) = &twin.peek_defapi {
-                    let scope = ChanScope { tsg: twin.tsg, parent: twin.parent, device: twin.device };
+                    let scope = ChanScope {
+                        tsg: twin.tsg,
+                        parent: twin.parent,
+                        device: twin.device,
+                    };
                     if (peek.key.client == client && peek.key.object == object)
                         || scope.freed_by(*owner, client, object)
                     {
@@ -4946,6 +5197,7 @@ impl ChanPlane {
                 }
             }
         }
+        cancel_pending_engine_objects(&self.pt, client, object);
         // ★ 2026-10-09: a freed TSG (or client) is no longer scheduled — its handle may come back
         // as a new group, whose first channel must not be scheduled from the old one's state.
         if let Ok(mut s) = self.guest_sched.lock() {
@@ -4979,7 +5231,7 @@ impl ChanPlane {
                         }
                         .freed_by(**k, client, object)
                     })
-                    .flat_map(|(_, v)| v.objects.values().map(|o| o.0).collect::<Vec<_>>())
+                    .flat_map(|(_, v)| v.objects.values().map(|o| o.host).collect::<Vec<_>>())
                     .collect()
             })
             .unwrap_or_default();
@@ -4991,7 +5243,7 @@ impl ChanPlane {
             .and_then(|key| {
                 self.pt.lock().ok().and_then(|m| {
                     m.get(&key)
-                        .and_then(|v| v.objects.get(&object).map(|o| o.0))
+                        .and_then(|v| v.objects.get(&object).map(|o| o.host))
                 })
             });
         let debuggers: Vec<u32> = self
@@ -5600,16 +5852,27 @@ impl ChanPlane {
         }
         let entries = g.st.entries.max(1);
         if mode == RelayPeekMode::AfterFifoUpdate && !g.peek.fifo_update_armed {
-            let Some(peek) = g.peek_defapi.as_ref() else { return };
-            if !peek.live.load(Ordering::Acquire) { return; }
+            let Some(peek) = g.peek_defapi.as_ref() else {
+                return;
+            };
+            if !peek.live.load(Ordering::Acquire) {
+                return;
+            }
             let key = peek.key;
-            let Some(reg) = self.defapi_reg.get() else { return };
+            let Some(reg) = self.defapi_reg.get() else {
+                return;
+            };
             // Registry bounds cap this snapshot at 64 entries/object. `entries`
             // does not mark an API executed, consume it or change lookup counters.
-            let update = reg.entries(key).into_iter().find(|e| matches!(
-                e.decoded,
-                kf_abi::defapi::Bundle::Unserved { what: "FIFO_UPDATE_CHANNEL_INFO", .. }
-            ));
+            let update = reg.entries(key).into_iter().find(|e| {
+                matches!(
+                    e.decoded,
+                    kf_abi::defapi::Bundle::Unserved {
+                        what: "FIFO_UPDATE_CHANNEL_INFO",
+                        ..
+                    }
+                )
+            });
             let Some(update) = update else { return };
             if !peek.live.load(Ordering::Acquire) { return; }
             g.peek.next = previous_put;
@@ -6365,6 +6628,7 @@ impl ChanPlane {
                     let rc = if notifier.is_some() { "armed" } else { "none" };
                     if let Ok(mut m) = me.pt.lock() {
                         m.insert((a.client, a.handle), PtChan {
+                            allocation: Arc::new(()),
                             chan,
                             idx,
                             tsg: a.tsg,
@@ -6373,6 +6637,7 @@ impl ChanPlane {
                             device: a.device,
                             engine,
                             objects: HashMap::new(),
+                            pending_objects: HashMap::new(),
                             disp_sw: HashMap::new(),
                             sw_ids: crate::dispsw::SwClassIds::default(),
                             dispsw_host_refused: false,
@@ -7548,6 +7813,10 @@ mod dispsw_tests {
         CtxBind, DISPSW_WITHDRAW, PtChan, PtMap, attach_dispsw_withdraw, dispsw_live,
         dispsw_mark_host_refused, register_other_sw, take_twin_object, withdraw_kept,
     };
+    use super::{
+        EngineObject, PENDING_ENGINE_OBJECTS, admit_engine_object, engine_object_pending,
+        engine_owner_current, keep_engine_object, withdraw_engine_object,
+    };
     use crate::dispsw::{
         DispSwCounters, DispSwHost, Live, NV_ERR_INSUFFICIENT_RESOURCES, PER_CHANNEL_CAP, twin_one,
     };
@@ -7565,6 +7834,7 @@ mod dispsw_tests {
     /// A twin as the plane holds it, with `disp_sw` (guest handle → host object) on it.
     fn twin(token: u32, disp_sw: &[(u32, u32)]) -> PtChan {
         PtChan {
+            allocation: Arc::new(()),
             chan: kf_host::Channel {
                 tsg: token,
                 chan: token,
@@ -7578,6 +7848,7 @@ mod dispsw_tests {
             device: 0,
             engine: 0,
             objects: HashMap::new(),
+            pending_objects: HashMap::new(),
             disp_sw: disp_sw.iter().copied().collect(),
             sw_ids: crate::dispsw::SwClassIds::default(),
             dispsw_host_refused: false,
@@ -7622,6 +7893,195 @@ mod dispsw_tests {
             vm,
             host_refused_before: false,
         }
+    }
+
+    #[test]
+    fn parked_engine_birth_cannot_attach_after_identical_numeric_handles_reuse() {
+        let old = twin(1, &[]);
+        let allocation = old.allocation.clone();
+        let chan = old.chan;
+        let pt = Mutex::new(HashMap::from([((A, CH1), old)]));
+        let index = Mutex::new(HashMap::new());
+        assert!(engine_owner_current(&pt, (A, CH1), &allocation, chan));
+        // Exact guest key and ALL numeric host fields repeat; allocation does not.
+        pt.lock().unwrap().insert((A, CH1), twin(1, &[]));
+        assert!(!engine_owner_current(&pt, (A, CH1), &allocation, chan));
+        assert!(!keep_engine_object(
+            &pt,
+            &index,
+            (A, CH1),
+            &allocation,
+            chan,
+            0x10,
+            EngineObject {
+                allocation: Arc::new(()),
+                host: 0xa1,
+                kind: Kind::ThreeD,
+                class: 0xc997
+            }
+        ));
+        assert!(
+            pt.lock()
+                .unwrap()
+                .get(&(A, CH1))
+                .unwrap()
+                .objects
+                .is_empty()
+        );
+        assert!(index.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn engine_binding_retains_exact_owned_class_and_never_replaces_a_live_object() {
+        let v = twin(1, &[(0x20, 0xb2)]);
+        let allocation = v.allocation.clone();
+        let chan = v.chan;
+        let pt = Mutex::new(HashMap::from([((A, CH1), v)]));
+        let index = Mutex::new(HashMap::from([((A, 0x30), (A, CH2))]));
+        let object_allocation = admit_engine_object(
+            pt.lock().unwrap().get_mut(&(A, CH1)).unwrap(),
+            &index.lock().unwrap(),
+            (A, CH1),
+            0x10,
+        )
+        .unwrap();
+        let object = EngineObject {
+            allocation: object_allocation,
+            host: 0xa1,
+            kind: Kind::ThreeD,
+            class: 0xc997,
+        };
+        assert!(keep_engine_object(
+            &pt,
+            &index,
+            (A, CH1),
+            &allocation,
+            chan,
+            0x10,
+            object.clone()
+        ));
+        for handle in [0x10, 0x20, 0x30] {
+            assert!(!keep_engine_object(
+                &pt,
+                &index,
+                (A, CH1),
+                &allocation,
+                chan,
+                handle,
+                EngineObject {
+                    allocation: Arc::new(()),
+                    host: 0xa2,
+                    class: 0xc5c0,
+                    kind: Kind::Compute
+                }
+            ));
+        }
+        let taken = pt.lock().unwrap().get(&(A, CH1)).unwrap().objects[&0x10].clone();
+        assert_eq!(
+            (taken.host, taken.class, taken.kind),
+            (0xa1, 0xc997, Kind::ThreeD)
+        );
+        assert_eq!(index.lock().unwrap().get(&(A, 0x10)), Some(&(A, CH1)));
+        assert_eq!(index.lock().unwrap().get(&(A, 0x30)), Some(&(A, CH2)));
+        pt.lock().unwrap().remove(&(A, CH1));
+        assert!(!engine_owner_current(&pt, (A, CH1), &allocation, chan));
+        assert!(!keep_engine_object(
+            &pt,
+            &index,
+            (A, CH1),
+            &allocation,
+            chan,
+            0x40,
+            object.clone()
+        ));
+    }
+
+    #[test]
+    fn same_channel_object_free_reuse_cancels_parked_birth_and_old_orphan_undo() {
+        use super::cancel_pending_engine_objects;
+        let mut v = twin(1, &[]);
+        let channel = v.allocation.clone();
+        let chan = v.chan;
+        let key = (A, CH1);
+        let old = admit_engine_object(&mut v, &HashMap::new(), key, 0x10).unwrap();
+        let pt = Mutex::new(HashMap::from([(key, v)]));
+        let index = Mutex::new(HashMap::new());
+        assert!(engine_object_pending(&pt, key, &channel, chan, 0x10, &old));
+        cancel_pending_engine_objects(&pt, B, 0x10);
+        assert!(
+            engine_object_pending(&pt, key, &channel, chan, 0x10, &old),
+            "another client cannot cancel"
+        );
+        cancel_pending_engine_objects(&pt, A, 0x10);
+        assert!(!engine_object_pending(&pt, key, &channel, chan, 0x10, &old));
+        let new = admit_engine_object(
+            pt.lock().unwrap().get_mut(&key).unwrap(),
+            &index.lock().unwrap(),
+            key,
+            0x10,
+        )
+        .unwrap();
+        assert!(!keep_engine_object(
+            &pt,
+            &index,
+            key,
+            &channel,
+            chan,
+            0x10,
+            EngineObject {
+                allocation: old.clone(),
+                host: 0xa1,
+                kind: Kind::ThreeD,
+                class: 0xc997
+            }
+        ));
+        assert!(engine_object_pending(&pt, key, &channel, chan, 0x10, &new));
+        assert!(keep_engine_object(
+            &pt,
+            &index,
+            key,
+            &channel,
+            chan,
+            0x10,
+            EngineObject {
+                allocation: new.clone(),
+                host: 0xa2,
+                kind: Kind::Compute,
+                class: 0xc5c0
+            }
+        ));
+        assert_eq!(
+            withdraw_engine_object(&pt, &index, key, &channel, &old, 0x10),
+            None
+        );
+        assert_eq!(
+            withdraw_engine_object(&pt, &index, key, &channel, &new, 0x10),
+            Some(0xa2)
+        );
+        assert_eq!(
+            withdraw_engine_object(&pt, &index, key, &channel, &new, 0x10),
+            None,
+            "ordinary free/orphan can only take once"
+        );
+        assert!(index.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn dropped_pending_acts_release_admission_budget_without_reusing_live_identities() {
+        let mut v = twin(1, &[]);
+        let mut held = Vec::new();
+        for handle in 0..PENDING_ENGINE_OBJECTS as u32 {
+            held.push(admit_engine_object(&mut v, &HashMap::new(), (A, CH1), handle).unwrap());
+        }
+        assert!(admit_engine_object(&mut v, &HashMap::new(), (A, CH1), 0).is_err());
+        assert!(admit_engine_object(&mut v, &HashMap::new(), (A, CH1), 1000).is_err());
+        held.pop();
+        let next = admit_engine_object(&mut v, &HashMap::new(), (A, CH1), 1000).unwrap();
+        assert_eq!(v.pending_objects.len(), PENDING_ENGINE_OBJECTS);
+        drop(held);
+        let last = admit_engine_object(&mut v, &HashMap::new(), (A, CH1), 2000).unwrap();
+        assert_eq!(v.pending_objects.len(), 2);
+        assert!(!Arc::ptr_eq(&next, &last));
     }
 
     /// A host that frees (recorded) and must never be asked to allocate or read back.
@@ -7802,9 +8262,17 @@ mod dispsw_tests {
     /// and their tests are `crate::dispsw`'s.)
     #[test]
     fn a_guest_free_takes_the_display_sw_twin_from_a_live_channel() {
-        let mut objects: HashMap<u32, (u32, Kind)> = HashMap::new();
+        let mut objects: HashMap<u32, EngineObject> = HashMap::new();
         let mut ds: HashMap<u32, u32> = HashMap::new();
-        objects.insert(0x10, (0xa1, Kind::ThreeD));
+        objects.insert(
+            0x10,
+            EngineObject {
+                allocation: Arc::new(()),
+                host: 0xa1,
+                kind: Kind::ThreeD,
+                class: 0xc997,
+            },
+        );
         ds.insert(0x20, 0xb2);
         assert_eq!(
             take_twin_object(&mut objects, &mut ds, 0x20),
