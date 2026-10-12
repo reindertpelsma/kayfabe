@@ -1,5 +1,26 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-12 20:10UTC —1600 pre-benchmark zero-ID refusal; batching audit
+
+Last confirmed push71c608bc3; product testedb50774a7a. Windows1600 signedin/NVIDIA
+ready, but multiple USERwork births declare subDeviceId0 and newadmission refuses.
+ABORTED_ADMISSION_PRE_BENCHMARK/no app or migration verdict. CleanACPI stop/
+noQEMU/DMA-FQ20:03:46UTC/no boundedhostXid. Personal retained; raw evidence
+user-worker/windows-1600. Zero is not justified as malformed: public595.84
+UVM/watchdog allocation code intentionally leaves0, CPU->GSP copiesunchanged.
+Its effective mask initialization is absent frompublicsource. Nativeexplicitid1
+PASS doesnot establishzero equivalence. No productnormalization implemented.
+
+Owner relays coordinator batchingideas (not hardinstructions). Refusal taxonomy
+now in docs/design/V3_WINDOWS_USER_RING_REFUSALS_20261012.md +runtime labelinventory;
+shadow design remains unimplemented, mustretain ownership/credit checks and report
+lostparse suffix asunknown. RCscope branchmissing onorigin at20:04UTC; sharedengine/
+otherVM effectunverified. Historicallogs are partialcorpus, notfullpushbuffers.
+BeforeanotherWindowsboot, native matchedzero/id1 discriminator (probe6localPASS),
+no productcodechange. Newnative results pending. CurrentrelaydefaultOFF.
+Fullmatrix/drivercompat remainopen; no newGravityVkPASS. LastVastempty19:29UTC.
+
+
 ## UPDATE 2026-10-12 20:02UTC — exact mask native/Linux PASS; Windows1600 starting
 
 Last confirmed pushb50774a7a. Exactb50774a7a5343cf10af849db1445b577e9b21b3f:

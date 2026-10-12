@@ -1,0 +1,14 @@
+REMOVED_OWN_DISPOSABLE_1540 6771335168
+HYPOTHESIS public subdevice filtering with matched native identity preserves Windows desktop progress and original GravityMark Vulkan workload.
+FALSIFIER mask/source refusal, missing progress, device loss, wrong output or hostXid32/guest141/4101. Native mask2/2 and exact Linux9+10/fast30/desktop must precede this run.
+ONE_BEHAVIOR_VARIABLE public subdevice mask semantics/identity relative to1590; production flags, original600s oracle/media and source budget unchanged.
+HYPOTHESIS source-zero migration at the intercepted USER stream position preserves the original GravityMark Vulkan workload.
+FALSIFIER clean refusal, lost progress, wrong output, device loss, hostXid32 or guest141/4101.
+ONE_VARIABLE only KF3_WIN_USER_RING_RELAY=1; unchanged production flags and original600s oracle/media.
+SUCCESS normal benchmark exit, original image/timings/GPU activity, zero recovery; same-GPU VFIO reference183s.
+[windows] run1600 stopped (Xid count now 62)
+IOMMU_SWITCH_START group=11 from=identity to=DMA-FQ 2026-10-12T22:03:44+02:00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-12T22:03:46+02:00
+USER_WORKER_WINDOWS_EXIT=143 at=2026-10-12T22:03:46+02:00 source=b50774a7a5343cf10af849db1445b577e9b21b3f (harness status; app verdict separate)

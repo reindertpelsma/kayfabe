@@ -215,8 +215,9 @@ fn run_storage(
     assembled: bool,
     barrier_level: bool,
     large_source: bool,
-    subdevice: bool,
+    mask_identity: Option<u32>,
 ) -> Result<(), String> {
+    let subdevice = mask_identity.is_some();
     use kf_abi::submit::ENGINE_TYPE_COPY0;
     use kf_chan::user_storage::Storage;
     let uid = kf_linux_raw::effective_uid();
@@ -278,8 +279,8 @@ fn run_storage(
         output.store(0x1000 + off, INITIAL ^ off as u32)?;
     }
     let spec = storage.spec(0)?;
-    let chan = if subdevice {
-        rm.birth_user_ring_channel(space, ENGINE_TYPE_COPY0, spec, 1)
+    let chan = if let Some(id) = mask_identity.filter(|id| *id != 0) {
+        rm.birth_user_ring_channel(space, ENGINE_TYPE_COPY0, spec, id)
     } else {
         rm.birth_channel(space, ENGINE_TYPE_COPY0, spec)
     }
@@ -294,8 +295,8 @@ fn run_storage(
             preceding = padded_storage_prefix(preceding)?;
         }
         if subdevice {
-            // The native allocation explicitly authored subDeviceId1 through
-            // the public layout. Prove initial ACTIVE and every excluded bit.
+            // Test expected effective bit1, including the default-zero allocation
+            // discriminator. A failure is evidence, never a product normalization.
             let header = method_header_inc(0, fifo::SET_REFERENCE_C56F, 1).ok_or("reference")?;
             let mut masked = vec![header, 2, 0x10000, header, 99];
             for bit in 1..12 {
@@ -378,7 +379,7 @@ fn run_storage(
             }
         };
         println!(
-            "USER_STORAGE_SETUP source_bytes={} subdevice={subdevice} barrier_level={barrier_level} sync_wait={sync_wait} control_barrier={control_barrier} class={class:#x} driver={} entries={} ring_gpu_read_only=true page_size=4096 userd_gpu_mapped=false",
+            "USER_STORAGE_SETUP source_bytes={} subdevice={subdevice} allocation_mask={mask_identity:?} barrier_level={barrier_level} sync_wait={sync_wait} control_barrier={control_barrier} class={class:#x} driver={} entries={} ring_gpu_read_only=true page_size=4096 userd_gpu_mapped=false",
             preceding.len() * 4,
             rm.driver_version(),
             kf_chan::user_storage::ENTRIES
@@ -875,20 +876,25 @@ fn main() {
         match args[0].as_str() {
             "engine-witness-control" => run_engine_witness(false),
             "engine-witness-sync" => run_engine_witness(true),
-            "storage-assembled-phased" => run_storage(true, true, true, true, false, false, false),
-            "storage-subdevice-phased" => run_storage(true, true, true, false, false, false, true),
+            "storage-assembled-phased" => run_storage(true, true, true, true, false, false, None),
+            "storage-subdevice-default-phased" => {
+                run_storage(true, true, true, false, false, false, Some(0))
+            }
+            "storage-subdevice-phased" => {
+                run_storage(true, true, true, false, false, false, Some(1))
+            }
             "storage-control-barrier-large-phased" => {
-                run_storage(true, true, true, false, false, true, false)
+                run_storage(true, true, true, false, false, true, None)
             }
             "storage-control-barrier-phased" => {
-                run_storage(true, true, true, false, false, false, false)
+                run_storage(true, true, true, false, false, false, None)
             }
             "storage-control-barrier-level-phased" => {
-                run_storage(true, true, true, false, true, false, false)
+                run_storage(true, true, true, false, true, false, None)
             }
-            "storage-control-barrier" => run_storage(true, true, false, false, false, false, false),
-            "storage-control" => run_storage(false, false, false, false, false, false, false),
-            "storage-sync-witness" => run_storage(true, false, false, false, false, false, false),
+            "storage-control-barrier" => run_storage(true, true, false, false, false, false, None),
+            "storage-control" => run_storage(false, false, false, false, false, false, None),
+            "storage-sync-witness" => run_storage(true, false, false, false, false, false, None),
             "reference" => run_reference(false, false, false),
             "reference-subroutine" => run_reference(false, false, true),
             "reference-held" => run_reference(true, false, false),
