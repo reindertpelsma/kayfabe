@@ -54,3 +54,24 @@ no undocumented mask is applied. Runtime receipt attribution is still open.
 GPU-free kf-host/kf-chan and native harness tests pass. Initial local compilation
 used unavailable symbol spellings; corrected against existing ABI/public header
 before any GPU use; logs retained, not a native failure.
+
+## Measured result, 2026-10-12 02:33UTC
+
+Exact47509a6896e68c63b2ed37fefd33dad7761655d7 **FAIL**. Nativeuid65534,
+USER C56F/C997, host595.91.07. One attributed Xid69: classC997, method0x168,
+data0x2001, error3. Real reference0/engine report0 after3s, HOSTmarker1,
+GP_GET2; no witness cursor matched. Native channel free/storage release and
+fixture cleanup succeeded; no QEMU, group11DMA-FQ, lockfree,121667350528free.
+This failed native GR-acquire fixture supplies no retirement proof and is not
+a kayfabe/Gravity regression. Public-source sweep found no supported GR ACQUIRE
+caller/semantic restriction justifying another enum/field guess. Do not brute
+force modern/legacy acquire variants. Source header enum alone did not establish
+that the authored request is usable; preserve this falsifier and result.
+
+Next source-backed simplification: CONTROL NOP/LENGTH0/SYNC_WAIT gates **further
+GP-entry processing** explicitly (public manual104–138). Place another ordinary
+nonempty GP witness after that control, and observe GP_GET past the latter;
+its commitment then proves the prior control's HOST wait finished. This avoids
+assuming the WAIT entry's own commit is ordered after its fetch gate, and avoids
+USERD TOP_LEVEL_GET writeback/tearing and unsupported engine-acquire fixtures.
+Model publication/wrap and native known-CE/HOST-acquire gate before using it.

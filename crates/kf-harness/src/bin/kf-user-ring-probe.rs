@@ -189,7 +189,7 @@ fn run_reference(held: bool, split: bool) -> Result<(), String> {
 
 /// Native helper test and one-variable HOST-processing witness discriminator.
 /// This is an authored bench fixture, never a guest execution adapter.
-fn run_storage(sync_wait: bool) -> Result<(), String> {
+fn run_storage(sync_wait: bool, control_barrier: bool) -> Result<(), String> {
     use kf_abi::submit::ENGINE_TYPE_COPY0;
     use kf_chan::user_storage::Storage;
     let uid = kf_linux_raw::effective_uid();
@@ -237,14 +237,23 @@ fn run_storage(sync_wait: bool) -> Result<(), String> {
         storage.write_authored(0, &preceding)?;
         storage.write_authored(0x1000, &witness)?;
         storage.write_gp(0, 0, 4 * preceding.len() as u64, false)?;
-        storage.write_gp(1, 0x1000, 4 * witness.len() as u64, sync_wait)?;
+        let published_put = if control_barrier {
+            storage.write_host_barrier(1)?;
+            storage.write_host_witness(2)?;
+            // Final single-engine bench observation; not a runtime receipt.
+            storage.write_gp(3, 0x1004, 8, false)?;
+            4
+        } else {
+            storage.write_gp(1, 0x1000, 4 * witness.len() as u64, sync_wait)?;
+            2
+        };
         println!(
-            "USER_STORAGE_SETUP sync_wait={sync_wait} class={class:#x} driver={} entries={} ring_gpu_read_only=true page_size=4096 userd_gpu_mapped=false",
+            "USER_STORAGE_SETUP sync_wait={sync_wait} control_barrier={control_barrier} class={class:#x} driver={} entries={} ring_gpu_read_only=true page_size=4096 userd_gpu_mapped=false",
             rm.driver_version(),
             kf_chan::user_storage::ENTRIES
         );
         rm.schedule(chan).map_err(|e| format!("schedule: {e:?}"))?;
-        storage.publish_put(2)?;
+        storage.publish_put(published_put)?;
         rm.doorbell(chan.token)
             .map_err(|e| format!("doorbell: {e:?}"))?;
         let start = Instant::now();
@@ -281,20 +290,25 @@ fn run_storage(sync_wait: bool) -> Result<(), String> {
         let get = storage.gpu_get()?;
         let reference = storage.gpu_reference()?;
         println!(
-            "USER_STORAGE_OBSERVATION finished={finished} reference={reference} copy_matches={copy_matches} ce_semaphore={} GP_GET={get} GP_PUT=2 elapsed_us={}",
+            "USER_STORAGE_OBSERVATION finished={finished} reference={reference} copy_matches={copy_matches} ce_semaphore={} GP_GET={get} GP_PUT={published_put} elapsed_us={}",
             output.load(4)?,
             start.elapsed().as_micros()
         );
-        // Strict discriminator: the control must demonstrate early GP1 commit;
-        // SYNC_WAIT must prevent that same commit while HOST acquire is held.
+        // Earlier two-entry discriminator requires early control commitment.
+        // The new control-NOP WAIT receipt instead forbids subsequent GP2
+        // commitment while held, independent of GP1 commitment timing.
         if !finished
             || reference != 1
             || !copy_matches
             || output.load(4)? != 1
-            || get != 2
+            || get != published_put
             || samples == 0
             || early_reference
-            || max_get != if sync_wait { 1 } else { 2 }
+            || if control_barrier {
+                max_get == 0 || max_get >= 3
+            } else {
+                max_get != if sync_wait { 1 } else { 2 }
+            }
         {
             return Err("storage/HOST-witness criterion failed".into());
         }
@@ -707,8 +721,9 @@ fn main() {
         match args[0].as_str() {
             "engine-witness-control" => run_engine_witness(false),
             "engine-witness-sync" => run_engine_witness(true),
-            "storage-control" => run_storage(false),
-            "storage-sync-witness" => run_storage(true),
+            "storage-control-barrier" => run_storage(true, true),
+            "storage-control" => run_storage(false, false),
+            "storage-sync-witness" => run_storage(true, false),
             "reference" => run_reference(false, false),
             "reference-held" => run_reference(true, false),
             "reference-split" => run_reference(false, true),

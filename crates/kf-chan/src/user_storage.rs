@@ -378,6 +378,42 @@ impl Storage<CpuView> {
             .map_err(|e| format!("USER_STORAGE_GP_WRITE: {e:?}"))
     }
 
+    /// Author only the public CONTROL NOP/LENGTH0/SYNC_WAIT descriptor.
+    /// The caller must insert this after a complete authored packet, then a
+    /// nonempty witness. The barrier's own GET commit grants no PB-byte credit.
+    ///
+    /// # Errors
+    /// Invalid slot or retiring/released CPU view.
+    pub fn write_host_barrier(&self, slot: u32) -> Result<(), String> {
+        if slot >= ENTRIES {
+            return Err("USER_STORAGE_BARRIER_BOUND".into());
+        }
+        // Public595.84 class/clc56f.h: NOP opcode0, LENGTH0, SYNC_WAIT bit63.
+        self.cpu()?
+            .store_u64(HostOffset::new(GP_OFFSET + u64::from(slot) * 8), 1u64 << 63)
+            .map_err(|e| format!("USER_STORAGE_BARRIER_WRITE: {e:?}"))
+    }
+
+    /// Author a nonempty direct MAIN witness to permanently zero HOST DMA_NOP
+    /// bytes just beyond our descriptor array, inside the RO mapping. No CPU
+    /// writer exposed by this helper can mutate those bytes after initialization.
+    ///
+    /// # Errors
+    /// Invalid slot or retiring/released CPU view.
+    pub fn write_host_witness(&self, slot: u32) -> Result<(), String> {
+        if slot >= ENTRIES {
+            return Err("USER_STORAGE_WITNESS_BOUND".into());
+        }
+        let va = self
+            .va
+            .checked_add(GP_OFFSET + u64::from(ENTRIES) * 8)
+            .ok_or("USER_STORAGE_WITNESS_BOUND")?;
+        let entry = kf_abi::submit::gp_entry(va, 4).ok_or("USER_STORAGE_WITNESS_FORMAT")?;
+        self.cpu()?
+            .store_u64(HostOffset::new(GP_OFFSET + u64::from(slot) * 8), entry)
+            .map_err(|e| format!("USER_STORAGE_WITNESS_WRITE: {e:?}"))
+    }
+
     /// Publish a private PUT after commands and GP descriptors are stored. The
     /// native channel's own doorbell is a separate authored host action.
     ///
@@ -526,7 +562,7 @@ mod tests {
             ),
             (ENTRIES, 7, USERD_OFFSET, 19)
         );
-        assert!(GP_OFFSET + u64::from(ENTRIES) * 8 <= USERD_OFFSET);
+        assert!(GP_OFFSET + u64::from(ENTRIES) * 8 + 4 <= USERD_OFFSET);
         assert!(USERD_OFFSET + 512 <= BYTES);
         storage.release(&host).unwrap();
         assert!(storage.released());
