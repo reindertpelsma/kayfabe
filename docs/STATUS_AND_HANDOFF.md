@@ -1,5 +1,22 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-12 03:36UTC — ownership review gates and native timing probe
+
+Last confirmed push265bab71e. GPU-free kf-chan/kf-qemu/kf-rm suite passed;
+final kf-qemu lib169/169 after full-context-span correction. Six userva tests
+cover retained constructor cleanup/pins, retryable release, duplicate old release
+against reused VA, stale native-handle/mirror identity, bounded exclusions and
+parked steer ownership. Every channel shares its mirror's steer admission,
+including mixed Windows channel kinds; Linux still owns no private GPU mappings.
+Parked falcon retries refuse changed (VA,len); full row/context union is protected.
+One request OR one4KiB clear/map phase per idle VA turn, alternating for fairness.
+Independent review found no source blocker for the isolated native timing probe.
+Hypothesis/falsifier recorded in gravity-vulkan/user-storage-phased/README.md;
+probe NOT_RUN at checkpoint. Still no VM birth wiring/software migration or
+Gravity kayfabe PASS; exact Linux hardware regression remains pending. Personal
+Windows chain retained; GPU idle/DMA-FQ/noQEMU. Full matrix/driver sweep queued.
+
+
 ## UPDATE 2026-10-12 03:26UTC — bounded private-VA ownership checkpoint (not wired)
 
 Last confirmed push cf45eedfb, branch codex/windows-matrix-20261011,

@@ -97,11 +97,11 @@ impl kf_rm::gssnative::GssHost for GssHostRm {
 type Act = Box<dyn FnOnce(&ChanPlane) -> Result<String, (u32, String)> + Send>;
 
 /// ★ Review 4 item 1: how much to hand to host RM for a falcon ctx at G of length `ctx_len`: the whole
-/// placement row when the steer removed one, else the ctx range itself — a MISSING row (an earlier
+/// union of the placement row and ctx range, else the ctx range itself — a MISSING row (an earlier
 /// try removed it and the steer was refused; the mapping stayed in the ledger) never means "nothing
 /// of ours there", so the hand-over is attempted all the same and only `Free` lets the alloc go.
 fn steer_len(removed_row_len: Option<u64>, ctx_len: u64) -> u64 {
-    removed_row_len.unwrap_or(ctx_len)
+    removed_row_len.unwrap_or(ctx_len).max(ctx_len)
 }
 
 /// ★ Review 3 item 5: the status an act returns after it has put ITSELF back on the act queue
@@ -152,6 +152,9 @@ struct EngineObj {
     rows: crate::mem::PlacedRows,
     ledger: Option<Arc<kf_mem::batch::BatchedVas<'static>>>,
     kind: kf_chip::classes::Kind,
+    user_regions: Arc<crate::userva::Regions>,
+    steer_claim: Option<Arc<crate::userva::SteerClaim>>,
+    steer_source: Option<(u64, u64)>,
 }
 
 impl EngineObj {
@@ -168,7 +171,7 @@ impl EngineObj {
     }
 
     fn run(
-        self,
+        mut self,
         me: &ChanPlane,
         tries: u32,
         born: Option<std::time::Instant>,
@@ -234,13 +237,10 @@ impl EngineObj {
             }
             !reserved
         });
-        if tries > 0 && steered.is_some() && fc.is_none() {
-            return Err((
-                NV_ERR_INVALID_STATE,
-                format!(
-                    "chan {client:#x}:{parent:#x}: the falcon ctx is no longer known while its steer was retrying — object birth REFUSED"
-                ),
-            ));
+        if steered.is_some() && !steer_source_unchanged(self.steer_source, fc) {
+            return Err((NV_ERR_INVALID_STATE, format!(
+                "chan {client:#x}:{parent:#x}: falcon ctx changed while steer was parked; object birth REFUSED"
+            )));
         }
         let mut steer_msg = String::new();
         if let Some((va, len)) = fc {
@@ -255,17 +255,22 @@ impl EngineObj {
             // reservation), and only then does the host alloc go ahead.
             let row_len = match steered {
                 Some((_, l)) => l,
-                None => match rows.write().map(|mut r| r.remove(&va)) {
-                    Ok(removed) => steer_len(removed.map(|row| row.0), len),
-                    Err(_) => {
-                        return Err((
+                None => {
+                    let mut placed = rows.write().map_err(|_| {
+                        (
                             NV_ERR_INVALID_STATE,
-                            format!(
-                                "guest ctx VA {va:#x}: the placement rows are poisoned — the steer cannot be known to have happened; object birth REFUSED"
-                            ),
-                        ));
-                    }
-                },
+                            format!("guest ctx VA {va:#x}: poisoned placement rows; steer REFUSED"),
+                        )
+                    })?;
+                    let length = steer_len(placed.get(&va).map(|row| row.0), len);
+                    // Same rows -> Regions lock order as the VA allocator. Claim
+                    // the FULL row before removing it or touching native RM.
+                    self.steer_claim = Some(self.user_regions.steer(va, length)
+                        .map_err(|e| (NV_ERR_INVALID_STATE, e))?);
+                    self.steer_source = Some((va, len));
+                    placed.remove(&va);
+                    length
+                }
             };
             {
                 let rl = row_len;
@@ -359,6 +364,23 @@ impl EngineObj {
     }
 }
 
+fn steer_source_unchanged(original: Option<(u64, u64)>, current: Option<(u64, u64)>) -> bool {
+    original.is_some() && original == current
+}
+#[cfg(test)]
+mod steer_identity_tests {
+    use super::steer_source_unchanged;
+    #[test]
+    fn parked_claim_never_authorizes_a_changed_context() {
+        let original = Some((0x4000, 0x2000));
+        assert!(steer_source_unchanged(original, original));
+        assert!(!steer_source_unchanged(original, Some((0x8000, 0x2000))));
+        assert!(!steer_source_unchanged(original, Some((0x4000, 0x3000))));
+        assert!(!steer_source_unchanged(original, None));
+        assert!(!steer_source_unchanged(None, None));
+    }
+}
+
 /// ★ P5b: a guest USER channel's host twin (Passthrough).
 struct PtChan {
     chan: kf_host::Channel,
@@ -418,6 +440,8 @@ struct PtChan {
     /// ★ v3-video: the twin's host VA space (the mirror of the guest's) and its placement rows.
     space: kf_host::VaSpace,
     rows: crate::mem::PlacedRows,
+    /// Shared per-VAS private-span admission, including mixed channel kinds.
+    user_regions: Arc<crate::userva::Regions>,
     /// ★ Review fix 2026-10-10 (finding 6): the space's ownership ledger ([`crate::mem::Mirror::ledger`]).
     ledger: Option<Arc<kf_mem::batch::BatchedVas<'static>>>,
     /// ★ v3-video: the guest's falcon context buffer `(VA, size)` from its falcon promote — the VA
@@ -4290,10 +4314,20 @@ impl ChanPlane {
         class: u32,
         copy_engine: Option<u32>,
     ) -> ChanAnswer {
-        let Some((chan, engine, space, rows, ledger)) = self.pt.lock().ok().and_then(|m| {
-            m.get(&(client, parent))
-                .map(|v| (v.chan, v.engine, v.space, v.rows.clone(), v.ledger.clone()))
-        }) else {
+        let Some((chan, engine, space, rows, ledger, user_regions)) =
+            self.pt.lock().ok().and_then(|m| {
+                m.get(&(client, parent)).map(|v| {
+                    (
+                        v.chan,
+                        v.engine,
+                        v.space,
+                        v.rows.clone(),
+                        v.ledger.clone(),
+                        v.user_regions.clone(),
+                    )
+                })
+            })
+        else {
             return ChanAnswer::NotOurs;
         };
         let Some(kind) = kf_chip::classes_for(self.family).kind_of(class) else {
@@ -4318,6 +4352,9 @@ impl ChanPlane {
             rows,
             ledger,
             kind,
+            user_regions,
+            steer_claim: None,
+            steer_source: None,
         };
         self.defer_cell("engine object", step.act(0, None, None, d.clone()), d)
     }
@@ -6350,6 +6387,7 @@ impl ChanPlane {
                             disabled: false,
                             space,
                             rows,
+                            user_regions: relay_mirror.user_regions.clone(),
                             ledger,
                             falcon_ctx: None,
                             ring_at: (
@@ -7558,6 +7596,7 @@ mod dispsw_tests {
                 guest: [kf_host::channel::GuestVaRange::default(); 3],
             },
             rows: crate::mem::PlacedRows::default(),
+            user_regions: Arc::default(),
             ledger: None,
             falcon_ctx: None,
             ring_at: (0, 0, None),
@@ -8388,5 +8427,7 @@ mod snap_tests {
             0x1_0000,
             "the ctx range when the row is gone"
         );
+        assert_eq!(crate::chan::steer_len(Some(0x1000), 0x1_0000), 0x1_0000,
+            "a short row never truncates the required context span");
     }
 }

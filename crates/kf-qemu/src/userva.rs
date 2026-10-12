@@ -22,59 +22,113 @@ const REQUESTS: usize = 512;
 /// Private ownership shared by channel and VA planes for ONE mirror lifetime.
 #[derive(Default, Debug)]
 pub struct Regions {
-    slots: Mutex<Vec<(u64, u64)>>,
+    state: Mutex<RegionState>,
+}
+#[derive(Default, Debug)]
+struct RegionState {
+    slots: Vec<(u64, u64)>,
+    steers: Vec<(u64, u64, u64)>,
+    next: u64,
 }
 
+/// In-flight falcon handover admission, retained across parked retries and the
+/// native engine-object allocation. Drop removes metadata only, never RM state.
+#[derive(Debug)]
+pub struct SteerClaim {
+    regions: Arc<Regions>,
+    id: u64,
+}
+impl Drop for SteerClaim {
+    fn drop(&mut self) {
+        if let Ok(mut state) = self.regions.state.lock() {
+            state.steers.retain(|&(id, _, _)| id != self.id);
+        }
+    }
+}
 impl Regions {
     /// Snapshot exclusions; poisoning refuses all guest mappings below 2^40.
     pub fn ranges(&self) -> Vec<(u64, u64)> {
-        self.slots
+        self.state
             .lock()
-            .map(|v| v.clone())
+            .map(|s| s.slots.clone())
             .unwrap_or_else(|_| vec![(0, 1 << 40)])
     }
-
-    /// Guest map/unmap/steer paths check complete spans before host actions.
+    /// Guest map/unmap paths check complete spans before host actions.
     pub fn check(&self, va: u64, len: u64) -> Result<(), String> {
         let end = va.checked_add(len).ok_or("USER_RING_GUEST_SPAN_OVERFLOW")?;
-        let slots = self
-            .slots
+        let state = self
+            .state
             .lock()
             .map_err(|_| "USER_RING_REGIONS_POISONED")?;
-        if slots.iter().any(|&(a, b)| va < b && a < end) {
+        if state.slots.iter().any(|&(a, b)| va < b && a < end) {
             return Err(format!("USER_RING_PRIVATE_OVERLAP {va:#x}+{len:#x}"));
         }
         Ok(())
     }
-
-    // Called only on the VA worker; existing rows, SKED and ledger reservations
-    // must also be checked by that worker BEFORE installing this exclusion.
+    /// Atomic against private-slot admission. No metadata lock crosses a host
+    /// call, ledger handover, or parked retry. Every channel in this mirror uses
+    /// the same metadata; a Linux mirror still has no private GPU mappings.
+    pub fn steer(self: &Arc<Self>, va: u64, len: u64) -> Result<Arc<SteerClaim>, String> {
+        let end = va
+            .checked_add(len)
+            .filter(|_| len != 0)
+            .ok_or("USER_RING_STEER_SPAN")?;
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| "USER_RING_REGIONS_POISONED")?;
+        if state.steers.len() >= REQUESTS
+            || state.slots.iter().any(|&(a, b)| va < b && a < end)
+            || state.steers.iter().any(|&(_, a, b)| va < b && a < end)
+        {
+            return Err("USER_RING_STEER_BUSY".into());
+        }
+        let id = state
+            .next
+            .checked_add(1)
+            .ok_or("USER_RING_STEER_SEQUENCE")?;
+        state
+            .steers
+            .try_reserve(1)
+            .map_err(|_| "USER_RING_STEER_ALLOCATION")?;
+        state.next = id;
+        state.steers.push((id, va, end));
+        Ok(Arc::new(SteerClaim {
+            regions: self.clone(),
+            id,
+        }))
+    }
+    // VA worker checks placed rows, SKED and ledger BEFORE installing exclusion.
     fn claim(&self, va: u64) -> Result<(), String> {
         let end = va.checked_add(BYTES).ok_or("USER_RING_PRIVATE_SPAN")?;
-        let mut slots = self
-            .slots
+        let mut state = self
+            .state
             .lock()
             .map_err(|_| "USER_RING_REGIONS_POISONED")?;
-        if slots.len() >= SLOTS || slots.iter().any(|&(a, b)| va < b && a < end) {
+        if state.slots.len() >= SLOTS
+            || state.slots.iter().any(|&(a, b)| va < b && a < end)
+            || state.steers.iter().any(|&(_, a, b)| va < b && a < end)
+        {
             return Err("USER_RING_PRIVATE_SLOT_BUSY".into());
         }
-        slots
+        state
+            .slots
             .try_reserve(1)
             .map_err(|_| "USER_RING_REGION_ALLOCATION")?;
-        slots.push((va, end));
+        state.slots.push((va, end));
         Ok(())
     }
-
     fn release(&self, va: u64) -> Result<(), String> {
-        let mut slots = self
-            .slots
+        let mut state = self
+            .state
             .lock()
             .map_err(|_| "USER_RING_REGIONS_POISONED")?;
-        let at = slots
+        let at = state
+            .slots
             .iter()
             .position(|&(a, _)| a == va)
             .ok_or("USER_RING_REGION_MISSING")?;
-        slots.remove(at);
+        state.slots.remove(at);
         Ok(())
     }
 }
@@ -128,6 +182,8 @@ pub struct Queue<V = CpuView> {
     pending: Mutex<Vec<Request<V>>>,
     // Strong ownership even if a birth reply is lost or cleanup is refused.
     held: Mutex<Vec<Arc<Lease<V>>>>,
+    // VA-thread scheduling only: one initialization phase between requests.
+    init_turn: std::sync::atomic::AtomicBool,
 }
 
 impl<V> Default for Queue<V> {
@@ -135,6 +191,7 @@ impl<V> Default for Queue<V> {
         Self {
             pending: Mutex::new(Vec::new()),
             held: Mutex::new(Vec::new()),
+            init_turn: std::sync::atomic::AtomicBool::new(false),
         }
     }
 }
@@ -214,8 +271,16 @@ impl<V> Queue<V> {
     /// reconciliation and only while no invalidate/walk/statement is pending.
     /// No deadline releases GPU state. Native RM latency is logged separately.
     pub fn serve(&self, manager: &Manager, rm: &impl StorageHost<View = V>) {
+        let initializing = self.held.lock().ok().and_then(|v| {
+            v.iter()
+                .find(|l| l.initializing.load(std::sync::atomic::Ordering::Acquire) != 0)
+                .cloned()
+        });
+        let init_turn = self
+            .init_turn
+            .swap(false, std::sync::atomic::Ordering::Relaxed);
         let request = self.pending.lock().ok().and_then(|mut q| {
-            if q.is_empty() {
+            if q.is_empty() || (init_turn && initializing.is_some()) {
                 None
             } else {
                 Some(q.remove(0))
@@ -237,15 +302,12 @@ impl<V> Queue<V> {
                 }
                 Request::Release(lease) => self.retire(&lease, rm),
             }
+            self.init_turn
+                .store(true, std::sync::atomic::Ordering::Relaxed);
             // Re-evaluate invalidate/statement priority on the next VA turn.
             // Never stack an initialization map behind this request's RM ops.
             return;
         }
-        let initializing = self.held.lock().ok().and_then(|v| {
-            v.iter()
-                .find(|l| l.initializing.load(std::sync::atomic::Ordering::Acquire) != 0)
-                .cloned()
-        });
         let Some(lease) = initializing else {
             return;
         };
@@ -345,10 +407,7 @@ impl<V> Queue<V> {
         let Some(Target::Gpu(g)) = manager.table.target(key) else {
             return Err("USER_RING_MIRROR_GONE".into());
         };
-        if g.vas.space != mirror.space
-            || !Arc::ptr_eq(&g.rows, &mirror.rows)
-            || !Arc::ptr_eq(&g.user_regions, &mirror.user_regions)
-        {
+        if !same_lifetime(g.vas.space, &g.rows, &g.user_regions, mirror) {
             return Err("USER_RING_MIRROR_LIFETIME".into());
         }
         let mut held = self.held.lock().map_err(|_| "USER_RING_OWNER_POISONED")?;
@@ -380,12 +439,10 @@ impl<V> Queue<V> {
                         .guest
                         .iter()
                         .any(|r| r.handle != 0 && va < r.hi && r.lo < end)
-                    || !g.bv.own_view(va, end).owned.is_empty()
-                    || mirror.user_regions.check(va, BYTES).is_err();
-                (!collision).then_some(va)
+                    || !g.bv.own_view(va, end).owned.is_empty();
+                (!collision && mirror.user_regions.claim(va).is_ok()).then_some(va)
             })
             .ok_or("USER_RING_NO_PRIVATE_SLOT")?;
-        mirror.user_regions.claim(va)?;
         drop(sked);
         drop(rows);
         self.adopt(
@@ -446,6 +503,17 @@ impl<V> Queue<V> {
     }
 }
 
+fn same_lifetime(
+    space: kf_host::VaSpace,
+    rows: &crate::mem::PlacedRows,
+    regions: &Arc<Regions>,
+    mirror: &Mirror,
+) -> bool {
+    space == mirror.space
+        && Arc::ptr_eq(rows, &mirror.rows)
+        && Arc::ptr_eq(regions, &mirror.user_regions)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -473,5 +541,212 @@ mod tests {
         }
         assert!(r.claim(BASE + SLOTS as u64 * BYTES).is_err());
         assert_eq!(r.ranges().len(), SLOTS);
+    }
+    #[test]
+    fn steer_and_private_admission_are_atomic_and_retry_guarded() {
+        let r = Arc::new(Regions::default());
+        let guard = r.steer(BASE - 4, 8).unwrap();
+        assert!(r.claim(BASE).is_err());
+        let parked = guard.clone();
+        drop(guard);
+        assert!(r.claim(BASE).is_err());
+        assert!(r.steer(BASE - 4, 8).is_err());
+        drop(parked);
+        r.claim(BASE).unwrap();
+        assert!(r.steer(BASE - 4, 8).is_err());
+        r.release(BASE).unwrap();
+        assert!(r.steer(BASE - 4, 8).is_ok());
+        assert!(r.steer(u64::MAX - 3, 8).is_err());
+        assert!(r.steer(BASE, 0).is_err());
+    }
+    #[derive(Default)]
+    struct Fake {
+        failures: std::cell::RefCell<Vec<&'static str>>,
+    }
+    impl Fake {
+        fn op(&self, name: &'static str) -> Result<(), String> {
+            if self.failures.borrow().contains(&name) {
+                Err(name.into())
+            } else {
+                Ok(())
+            }
+        }
+    }
+    impl StorageHost for Fake {
+        type View = ();
+        fn reserve(&self, _: kf_host::VaSpace, _: u64) -> Result<u32, String> {
+            self.op("reserve")?;
+            Ok(1)
+        }
+        fn alloc(&self) -> Result<u32, String> {
+            self.op("alloc")?;
+            Ok(2)
+        }
+        fn view(&self, _: u32) -> Result<(), String> {
+            self.op("view")
+        }
+        fn clear(&self, _: &()) -> Result<(), String> {
+            self.op("clear")
+        }
+        fn map_ro(
+            &self,
+            _: u32,
+            _: u32,
+            va: u64,
+        ) -> Result<u64, kf_chan::user_storage::MapFailure> {
+            self.op("map")
+                .map(|_| va)
+                .map_err(|reason| kf_chan::user_storage::MapFailure {
+                    reason,
+                    unexpected: None,
+                })
+        }
+        fn revoke_view(&self, _: u32, _: &mut ()) -> Result<(), String> {
+            self.op("revoke")
+        }
+        fn unmap(&self, _: u32, _: u64) -> Result<(), String> {
+            self.op("unmap")
+        }
+        fn free_reservation(&self, _: u32) -> Result<(), String> {
+            self.op("free_reservation")
+        }
+        fn free(&self, _: u32) -> Result<(), String> {
+            self.op("free")
+        }
+    }
+    fn mirror() -> Mirror {
+        Mirror {
+            space: kf_host::VaSpace {
+                space: 1,
+                range: 2,
+                guest: Default::default(),
+            },
+            user_regions: Arc::default(),
+            negctl_window: None,
+            rows: Default::default(),
+            ram_obj: None,
+            live: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+            kernel_vas: crate::mem::kernel_vas_for(VasKey(7)),
+            log: Arc::default(),
+            ledger: None,
+        }
+    }
+    fn request(q: &Queue<()>, m: &Mirror) -> Arc<Reply<()>> {
+        let permit = kf_rm::chanlink::windows_user_ring_permit(&kf_rm::chanlink::UserWorkFacts {
+            flag: true,
+            windows: true,
+            kernel_stamped: true,
+            engine: Some(kf_abi::submit::ENGINE_TYPE_GRAPHICS),
+            ctx_share: 1,
+            ctx_share_known: true,
+            process_id: Some(200),
+            kernel_pid: Some(100),
+            ..Default::default()
+        })
+        .unwrap();
+        let reply = q.allocate(VasKey(7), m.clone(), permit).unwrap();
+        // Simulate the VA-worker pop, then exercise its actual adoption/report helpers.
+        assert!(matches!(
+            q.pending.lock().unwrap().remove(0),
+            Request::Allocate { .. }
+        ));
+        m.user_regions.claim(BASE).unwrap();
+        reply
+    }
+    fn adopt_ready(q: &Queue<()>, m: &Mirror, host: &Fake) -> Arc<Lease<()>> {
+        let reply = request(q, m);
+        let built = Storage::allocate(host, m.space, BASE);
+        let lease = q
+            .adopt(&mut q.held.lock().unwrap(), m, BASE, reply, built)
+            .unwrap_or_else(|e| panic!("{e}"));
+        // Native allocation fixture is ready; no channel has ever been born.
+        lease
+            .initializing
+            .store(0, std::sync::atomic::Ordering::Release);
+        lease
+    }
+    #[test]
+    fn construction_failure_retains_pin_only_while_resources_survive() {
+        for retained in [false, true] {
+            let q = Queue::<()>::default();
+            let m = mirror();
+            let host = Fake::default();
+            host.failures.borrow_mut().push("alloc");
+            if retained {
+                host.failures.borrow_mut().push("free_reservation");
+            }
+            let reply = request(&q, &m);
+            let result = q.adopt(
+                &mut q.held.lock().unwrap(),
+                &m,
+                BASE,
+                reply.clone(),
+                Storage::prepare(&host, m.space, BASE),
+            );
+            Queue::report_prepare(&m, &reply, result);
+            assert!(reply.take().unwrap().unwrap().is_err());
+            assert_eq!(
+                m.live.load(std::sync::atomic::Ordering::Acquire),
+                u64::from(retained)
+            );
+            assert_eq!(q.held.lock().unwrap().len(), usize::from(retained));
+            assert_eq!(m.user_regions.ranges().len(), usize::from(retained));
+            if retained {
+                let lease = q.held.lock().unwrap()[0].clone();
+                host.failures.borrow_mut().clear();
+                q.retire(&lease, &host);
+                assert!(m.user_regions.ranges().is_empty());
+                assert_eq!(m.live.load(std::sync::atomic::Ordering::Acquire), 0);
+            }
+        }
+    }
+    #[test]
+    fn failed_cleanup_requires_retry_and_old_release_cannot_remove_reused_slot() {
+        for failure in ["revoke", "unmap", "free_reservation", "free"] {
+            let q = Queue::<()>::default();
+            let m = mirror();
+            let host = Fake::default();
+            let old = adopt_ready(&q, &m, &host);
+            host.failures.borrow_mut().push(failure);
+            q.retire(&old, &host);
+            assert_eq!(m.live.load(std::sync::atomic::Ordering::Acquire), 1);
+            assert!(m.user_regions.claim(BASE).is_err());
+            assert!(!old.retired.load(std::sync::atomic::Ordering::Acquire));
+            host.failures.borrow_mut().clear();
+            q.retire(&old, &host);
+            assert_eq!(m.live.load(std::sync::atomic::Ordering::Acquire), 0);
+            let new = adopt_ready(&q, &m, &host);
+            q.retire(&old, &host);
+            assert_eq!(m.live.load(std::sync::atomic::Ordering::Acquire), 1);
+            assert_eq!(q.held.lock().unwrap().len(), 1);
+            assert!(m.user_regions.check(BASE, BYTES).is_err());
+            q.retire(&new, &host);
+            assert_eq!(m.live.load(std::sync::atomic::Ordering::Acquire), 0);
+        }
+    }
+    #[test]
+    fn reused_native_handles_cannot_admit_a_stale_mirror() {
+        let old = mirror();
+        let new = mirror();
+        assert!(same_lifetime(old.space, &old.rows, &old.user_regions, &old));
+        assert_eq!(old.space, new.space);
+        assert!(!same_lifetime(
+            new.space,
+            &new.rows,
+            &new.user_regions,
+            &old
+        ));
+        assert!(!same_lifetime(
+            new.space,
+            &old.rows,
+            &new.user_regions,
+            &old
+        ));
+        assert!(!same_lifetime(
+            new.space,
+            &new.rows,
+            &old.user_regions,
+            &old
+        ));
     }
 }

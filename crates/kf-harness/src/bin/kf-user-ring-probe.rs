@@ -189,7 +189,7 @@ fn run_reference(held: bool, split: bool) -> Result<(), String> {
 
 /// Native helper test and one-variable HOST-processing witness discriminator.
 /// This is an authored bench fixture, never a guest execution adapter.
-fn run_storage(sync_wait: bool, control_barrier: bool) -> Result<(), String> {
+fn run_storage(sync_wait: bool, control_barrier: bool, phased: bool) -> Result<(), String> {
     use kf_abi::submit::ENGINE_TYPE_COPY0;
     use kf_chan::user_storage::Storage;
     let uid = kf_linux_raw::effective_uid();
@@ -212,8 +212,38 @@ fn run_storage(sync_wait: bool, control_barrier: bool) -> Result<(), String> {
         .map_err(|e| format!("space: {e:?}"))?;
     // Trusted fixture address in a bare native VAS with no guest reservations.
     // Runtime placement must instead use the shared VA-manager exclusion ledger.
-    let mut storage =
-        Storage::allocate(&rm, space, (1 << 40) - (2 << 20)).map_err(|error| error.reason)?;
+    let start = Instant::now();
+    let mut storage = if phased {
+        let mut storage =
+            Storage::prepare(&rm, space, (1 << 40) - (2 << 20)).map_err(|error| error.reason)?;
+        let prepare_us = start.elapsed().as_micros();
+        let mut max_clear_us = 0;
+        let mut pieces = 0;
+        loop {
+            let t = Instant::now();
+            let done = storage.clear_next(&rm)?;
+            max_clear_us = max_clear_us.max(t.elapsed().as_micros());
+            pieces += 1;
+            if done {
+                break;
+            }
+        }
+        let t = Instant::now();
+        storage.map_initialized(&rm)?;
+        let map_us = t.elapsed().as_micros();
+        println!(
+            "USER_STORAGE_PHASES prepare_us={prepare_us} clear_steps={pieces} max_clear_us={max_clear_us} map_us={map_us}"
+        );
+        // Diagnostic rejection, never a timeout granting resource reuse.
+        if prepare_us > 12_000 || max_clear_us > 12_000 || map_us > 12_000 {
+            storage.release(&rm)?;
+            rm.free_vaspace(space);
+            return Err("USER_STORAGE_PHASE_EXCEEDS_INVALIDATE_BOUND".into());
+        }
+        storage
+    } else {
+        Storage::allocate(&rm, space, (1 << 40) - (2 << 20)).map_err(|error| error.reason)?
+    };
     let output = Buffer::new(&rm, space, Some(MapPerm::READ_WRITE))?;
     let output_va = output.va.ok_or("output VA absent")?;
     output.store(0, 0)?;
@@ -721,9 +751,10 @@ fn main() {
         match args[0].as_str() {
             "engine-witness-control" => run_engine_witness(false),
             "engine-witness-sync" => run_engine_witness(true),
-            "storage-control-barrier" => run_storage(true, true),
-            "storage-control" => run_storage(false, false),
-            "storage-sync-witness" => run_storage(true, false),
+            "storage-control-barrier-phased" => run_storage(true, true, true),
+            "storage-control-barrier" => run_storage(true, true, false),
+            "storage-control" => run_storage(false, false, false),
+            "storage-sync-witness" => run_storage(true, false, false),
             "reference" => run_reference(false, false),
             "reference-held" => run_reference(true, false),
             "reference-split" => run_reference(false, true),
