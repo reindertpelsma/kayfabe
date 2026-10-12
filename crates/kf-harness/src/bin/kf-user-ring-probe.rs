@@ -192,6 +192,11 @@ fn run_reference(held: bool, split: bool) -> Result<(), String> {
 fn run_storage(sync_wait: bool) -> Result<(), String> {
     use kf_abi::submit::ENGINE_TYPE_COPY0;
     use kf_chan::user_storage::Storage;
+    let uid = kf_linux_raw::effective_uid();
+    println!("USER_STORAGE_IDENTITY uid={uid}");
+    if uid != 65534 {
+        return Err("native storage probe requires unprivileged uid65534".into());
+    }
     let dev = DevDir::open(c"/dev").map_err(|e| format!("dev: {e:?}"))?;
     let rm = HostRm::open(&dev, kf_harness::gate_gpu(), &kf_chip::choose_host_classes)
         .map_err(|e| e.to_string())?;
@@ -295,6 +300,10 @@ fn run_storage(sync_wait: bool) -> Result<(), String> {
         }
         Ok(())
     })();
+    // Restore the deliberate bench stimulus even if a sample failed. This does
+    // not authorize cleanup: native channel free below must still succeed.
+    let fixture_release = output.store(0, 1);
+    kf_linux_raw::release_fence();
     // A collection deadline never grants release: native channel free must succeed.
     rm.free_channel(chan)
         .map_err(|e| format!("channel free: {e:?}"))?;
@@ -308,7 +317,7 @@ fn run_storage(sync_wait: bool) -> Result<(), String> {
     assert!(storage.publish_put(0).is_err());
     output.close(&rm, space)?;
     rm.free_vaspace(space);
-    result
+    result.and(fixture_release)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

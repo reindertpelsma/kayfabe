@@ -82,7 +82,8 @@ def main():
                               acquire=int(a[3]), ce_semaphore=int(a[4]))
         attributed = [s for s in xids if re.search(rf'\bpid={p.pid}\b', s)]
         channel_user = ('PRIVILEGED_CHANNEL=0 privilege=USER' in text
-                        and 'USER_STORAGE_SETUP' in text)
+                        and 'USER_STORAGE_SETUP' in text
+                        and 'USER_STORAGE_IDENTITY uid=65534' in text)
         cleanup_ok = 'USER_STORAGE_CLEANUP result=Ok(()) released=true' in text
         hold_ok = (held_facts and held_facts['samples'] > 0
                   and not held_facts['early_reference'] and held_facts['acquire'] == 0
