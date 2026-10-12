@@ -1045,6 +1045,11 @@ window-exposure review (`design/V3_WINDOW_EXPOSURE_REVIEW.md`) and complete §Q'
 Implemented on `claude/hardwire-tspace-20261010` (GPU-free tests only; the hardware gate is in
 `design/V3_TSPACE_HARDWIRED.md` §5).
 
+**2026-10-12 amendment:** §AI permits only GPU-read-only private command rings
+and staging for declared Windows user-work under its restrictions. Linux
+Passthrough's prohibition remains. This supersedes the absolute wording in
+AB.2/AB.3 only for that narrow exception; no writable private fence is included.
+
 1. **Delete `KF3_TSPACE`; hardwire the T-space behaviour.** Every Translated channel runs in the
    T-space, which is built at prewarm. With no T-space, a Translated birth is refused by name; there
    is never a fallback to a mirror window or a mirror ring.
@@ -1150,3 +1155,25 @@ HDR on the console) falls under "works without".
   verification item and confirmed from those sources or by measurement before code depends on it.
 - To do: one lawyer review of the provenance page and of the overall reverse-engineering position before the public release; a sweep of the full
   git history for analysis material and closed-binary offsets (release gate).
+
+## §AI. Windows user-work ring exception; Linux Passthrough unchanged, 2026-10-12
+
+**STATUS: LIVE, 2026-10-12 (owner approval in the Codex session).** Asked about a
+revision of V3_WINDOWS_USER_RING_RELAY.md permitting only GPU-read-only private
+command rings/staging for declared Windows user-work in its own restricted space,
+worker-only submission and command inspection from birth, the owner answered:
+"yes approve, as long as linux passthrough forbids host owned mappings".
+
+- The exception to §AB.2/AB.3 is limited to those GPU-read-only command mappings.
+  Linux Passthrough continues to forbid host-owned mappings. Kernel Translated
+  spaces and the physical-operand prohibition remain unchanged.
+- Reserved addresses prevent collisions; GPU PTE permissions must enforce write
+  protection. The guest may read these mappings: do not put host secrets there.
+  No writable private fence/gate, whole-GPGA mapping or privileged host channel
+  is authorized by this exception.
+- Submission remains on workers; no inline copy or new BAR1/BAR2 trap. Inspect
+  immutable command copies from birth; a held registration reply does not drain
+  previously submitted work or prevent hostile prepublication.
+- This authorizes development of the revised design, not a compatibility claim.
+  Native cursor, lifetime and ordering semantics still require evidence, bounded
+  models, independent review and exact-revision Linux/Windows hardware tests.
