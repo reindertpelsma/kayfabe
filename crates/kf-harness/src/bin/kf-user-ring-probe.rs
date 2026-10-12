@@ -46,7 +46,13 @@ fn reference_commands(output_va: u64, ce_class: u32) -> Result<Vec<u32>, String>
     Ok(words)
 }
 
-fn run_reference(held: bool, split: bool) -> Result<(), String> {
+/// Public C56F LEVEL bit only; this bench does not enable any VM acceptance.
+fn reference_descriptor(va: u64, bytes: u64, subroutine: bool) -> Result<u64, String> {
+    let entry = gp_entry(va, bytes).ok_or("GP encoding")?;
+    Ok(entry | (u64::from(subroutine) << 41))
+}
+
+fn run_reference(held: bool, split: bool, subroutine: bool) -> Result<(), String> {
     use kf_abi::submit::{ENGINE_TYPE_COPY0, USERD_REFERENCE_C56F};
     let dev = DevDir::open(c"/dev").map_err(|e| format!("dev: {e:?}"))?;
     let rm = HostRm::open(&dev, kf_harness::gate_gpu(), &kf_chip::choose_host_classes)
@@ -90,7 +96,7 @@ fn run_reference(held: bool, split: bool) -> Result<(), String> {
         rm.alloc_ce_object(chan, ENGINE_TYPE_COPY0)
             .map_err(|e| format!("CE: {e:?}"))?;
         println!(
-            "USER_RING_REFERENCE_SETUP held={held} split={split} class={class:#x} driver={} ring_gpu_read_only=true userd_gpu_mapped=false",
+            "USER_RING_REFERENCE_SETUP held={held} split={split} first_subroutine={subroutine} class={class:#x} driver={} ring_gpu_read_only=true userd_gpu_mapped=false",
             rm.driver_version()
         );
         let words = reference_commands(output_va, rm.ce_class_id())?;
@@ -98,7 +104,7 @@ fn run_reference(held: bool, split: bool) -> Result<(), String> {
             ring.store(PB + 4 * i as u64, word)?;
         }
         let split_words = if split { words.len() - 1 } else { words.len() };
-        let gp = gp_entry(ring_va + PB, 4 * split_words as u64).ok_or("GP encoding")?;
+        let gp = reference_descriptor(ring_va + PB, 4 * split_words as u64, subroutine)?;
         ring.store(GP, gp as u32)?;
         ring.store(GP + 4, (gp >> 32) as u32)?;
         let published_put = if split {
@@ -814,10 +820,13 @@ fn main() {
             "storage-control-barrier" => run_storage(true, true, false, false),
             "storage-control" => run_storage(false, false, false, false),
             "storage-sync-witness" => run_storage(true, false, false, false),
-            "reference" => run_reference(false, false),
-            "reference-held" => run_reference(true, false),
-            "reference-split" => run_reference(false, true),
-            "reference-split-held" => run_reference(true, true),
+            "reference" => run_reference(false, false, false),
+            "reference-subroutine" => run_reference(false, false, true),
+            "reference-held" => run_reference(true, false, false),
+            "reference-subroutine-held" => run_reference(true, false, true),
+            "reference-split" => run_reference(false, true, false),
+            "reference-split-held" => run_reference(true, true, false),
+            "reference-subroutine-split-held" => run_reference(true, true, true),
             s => Mode::parse(s).and_then(run),
         }
     } else {
@@ -838,6 +847,19 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reference_level_probe_changes_only_first_gp_level() {
+        let main = reference_descriptor(0x200004000, 128, false).unwrap();
+        let sub = reference_descriptor(0x200004000, 128, true).unwrap();
+        assert_eq!(main ^ sub, 1 << 41);
+        let a = kf_abi::submit::gp_entry_decode(main).unwrap();
+        let b = kf_abi::submit::gp_entry_decode(sub).unwrap();
+        assert!(!a.subroutine && b.subroutine);
+        assert_eq!(a.gpu_va, b.gpu_va);
+        assert_eq!(a.len_bytes, b.len_bytes);
+        assert_eq!(a.sync_wait, b.sync_wait);
+    }
 
     #[test]
     fn positive_ab_changes_only_gpu_mapping_permission() {

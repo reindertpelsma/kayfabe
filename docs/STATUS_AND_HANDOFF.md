@@ -1,5 +1,22 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-12 18:17UTC — Windows1560 reaches worker; GP format falsifier
+
+Last confirmed pushe6d858593; exact hardware source6ff5aaf29. Windows1560 admits
+private USER births and native5080 children, then clean-refuses GP_FORMAT Entry
+on desktop channels before sign-in/GravityMark. ABORTED_STARTUP/no app verdict.
+Stopped ACPI18:11:46UTC/noQEMU18:11:51UTC/DMA-FQ, no hostXid. Personal retained.
+Evidence user-worker/windows-1560. Earlier USERD handle mismatch resolved.
+
+Candidate, not proven: LEVEL_SUBROUTINE rejected by strict prototype decoder;
+existing1510 migration sample and1361 snapshots contain LEVEL1.1560 raw entry
+not logged. This checkpoint adds bounded refusal context, leaves acceptance
+unchanged, and adds native matched LEVEL0/LEVEL1 reference probe modes with
+GPU-free construction test. Native hypothesis/falsifier in windows-1560 README.
+Next native matched probe + exact Linux regression then Windows context retry.
+No new app PASS; migration/source-cursor semantics still unverified.
+
+
 ## UPDATE 2026-10-12 18:09UTC — corrected source Linux passes; Windows1560 launched
 
 Last confirmed push6ff5aaf29. Exact6ff5aaf293e9fc04ac8780983f26dc04d0f3b735

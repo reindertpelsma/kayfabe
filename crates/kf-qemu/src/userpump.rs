@@ -308,7 +308,12 @@ impl Pump {
                     .map_err(|_| "USER_RING_GP_SNAPSHOT_SIZE")?,
             );
             let descriptor = kf_chan::user_stream::inspect_entry(entry, userread::MAX_BYTES as u64)
-                .map_err(|e| format!("USER_RING_GP_FORMAT {e:?}"))?;
+                .map_err(|e| {
+                    format!(
+                        "USER_RING_GP_FORMAT {e:?} entry={entry:#018x} source_va={va:#x} cursor={:#x} put={put:#x} entries={}",
+                        self.cursor, r.source.1
+                    )
+                })?;
             let guest_get =
                 self.cursor.checked_add(1).ok_or("USER_RING_CURSOR")? & (r.source.1 - 1);
             if matches!(descriptor, kf_chan::user_stream::Source::Nop) {

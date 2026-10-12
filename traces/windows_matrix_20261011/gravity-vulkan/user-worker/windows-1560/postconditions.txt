@@ -1,0 +1,4 @@
+Mon Oct 12 18:16:38 UTC 2026
+DMA-FQ
+Filesystem         1B-blocks          Used    Available Use% Mounted on
+/dev/sda2      1966736678912 1755611095040 111145332736  95% /
