@@ -1,6 +1,27 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
-## UPDATE 2026-10-12 19:27UTC — source budget locally green/reviewed; exact hardware next
+## UPDATE 2026-10-12 19:28UTC — exact larger-source native/Linux PASS; Windows1590 starting
+
+Last confirmed push0578a7ab8. Exact0578a7ab81aa417f1e9350c871a4d963cdcb7041 native
+base/100KiB padded-barrier2/2PASS (heldmaxGET1/noearlyref/finalGET4/copy/reference),
+nohostXid. Linux9/9+gate10PASS/USERbirth12/12/refused0, rebuilt QEMU/client/fresh
+fastguest30/30/crash0/NOTRUN0/exit0. Five expected negativeXid31, no32. Linux
+NVIDIA580.159.04 desktop/Cinnamon/Xorg/gears PASS_WITH_WARNINGS (known startup
+shared-data assertions/DRMfliptimeout), nohostXid. Stopped19:27:18UTC/noQEMU/DMA-FQ.
+Evidence user-worker/source-budget-linux. No forced Linux relay test claimed.
+
+Windows1590 starting under globalGPUlock using same exact source/production
+setup+only defaultOFF relay flag, original600s GravityVk oracle/media unchanged.
+Host log/data /data/kf-user-span-windows-0578a7ab8.log and
+$W/codex-user-worker-windows-0578a7ab8. No Windows app verdict yet.
+Owner clarifies the suggested fast switching variants are ideas, not required
+implementation: prioritize the worker correctness slice, optimize from measured
+cost after functional progress. Current scan-from-birth worker remains diagnostic;
+vidmem source, migration cursor semantics/GET propagation and full matrix remain
+open. Personal image chain preserved. Last confirmed Vast inventoryempty18:28UTC.
+
+
+## UPDATE 2026-10-12 19:20UTC — source budget locally green/reviewed; exact hardware next
 
 Last confirmed pushbdfe801e0. Full GPU-free2152PASS/0failed (1875 main six-crate,
 271 kf-mem/trap, probe6); real Cache/RAM fixtures corrected and now pass.

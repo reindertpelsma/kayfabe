@@ -1,0 +1,180 @@
+1606 cinnamon --replace
+1011 /usr/lib/xorg/Xorg -core :0 -seat seat0 -auth /var/run/lightdm/root/:0 -nolisten tcp vt7 -novtswitch
+name of display: :0
+display: :0  screen: 0
+direct rendering: Yes
+Memory info (GL_NVX_gpu_memory_info):
+    Dedicated video memory: 8192 MB
+    Total available memory: 8192 MB
+    Currently available dedicated video memory: 7793 MB
+OpenGL vendor string: NVIDIA Corporation
+OpenGL renderer string: NVIDIA GeForce RTX 4070/PCIe/SSE2
+OpenGL core profile version string: 4.6.0 NVIDIA 580.159.04
+OpenGL core profile shading language version string: 4.60 NVIDIA
+OpenGL core profile context flags: (none)
+OpenGL core profile profile mask: core profile
+
+OpenGL version string: 4.6.0 NVIDIA 580.159.04
+OpenGL shading language version string: 4.60 NVIDIA
+OpenGL context flags: (none)
+OpenGL profile mask: (none)
+
+OpenGL ES profile version string: OpenGL ES 3.2 NVIDIA 580.159.04
+OpenGL ES profile shading language version string: OpenGL ES GLSL ES 3.20
+
+Running synchronized to the vertical refresh.  The framerate should be
+approximately the same as the monitor refresh rate.
+296 frames in 5.0 seconds = 59.002 FPS
+301 frames in 5.0 seconds = 60.000 FPS
+301 frames in 5.0 seconds = 60.008 FPS
+[    1.482943] ata3.00: applying bridge limits
+[    1.483910] ata3.00: configured for UDMA/100
+[    1.485199] scsi 2:0:0:0: CD-ROM            QEMU     QEMU DVD-ROM     2.5+ PQ: 0 ANSI: 5
+[    1.517136] sr 2:0:0:0: [sr0] scsi3-mmc drive: 4x/4x cd/rw xa/form2 tray
+[    1.542086] cdrom: Uniform CD-ROM driver Revision: 3.20
+[    1.554468] sr 2:0:0:0: Attached scsi CD-ROM sr0
+[    1.554707] sr 2:0:0:0: Attached scsi generic sg0 type 5
+[    1.751953] raid6: avx512x4 gen() 52762 MB/s
+[    1.768951] raid6: avx512x2 gen() 44992 MB/s
+[    1.785951] raid6: avx512x1 gen() 40198 MB/s
+[    1.802951] raid6: avx2x4   gen() 55634 MB/s
+[    1.819952] raid6: avx2x2   gen() 42789 MB/s
+[    1.836951] raid6: avx2x1   gen() 29813 MB/s
+[    1.837667] raid6: using algorithm avx2x4 gen() 55634 MB/s
+[    1.854951] raid6: .... xor() 5793 MB/s, rmw enabled
+[    1.855739] raid6: using avx512x2 recovery algorithm
+[    1.857315] xor: automatically using best checksumming function   avx       
+[    1.859310] async_tx: api initialized (async)
+[    1.942723] Btrfs loaded, zoned=yes, fsverity=yes
+[    2.174767] EXT4-fs (vda1): mounted filesystem 1bfefdfb-34c9-46c7-854f-399d0a1dea04 ro with ordered data mode. Quota mode: none.
+[    2.305898] systemd[1]: Inserted module 'autofs4'
+[    2.320624] systemd[1]: systemd 255.4-1ubuntu8.17 running in system mode (+PAM +AUDIT +SELINUX +APPARMOR +IMA +SMACK +SECCOMP +GCRYPT -GNUTLS +OPENSSL +ACL +BLKID +CURL +ELFUTILS +FIDO2 +IDN2 -IDN +IPTC +KMOD +LIBCRYPTSETUP +LIBFDISK +PCRE2 -PWQUALITY +P11KIT +QRENCODE +TPM2 +BZIP2 +LZ4 +XZ +ZLIB +ZSTD -BPF_FRAMEWORK -XKBCOMMON +UTMP +SYSVINIT default-hierarchy=unified)
+[    2.325698] systemd[1]: Detected virtualization kvm.
+[    2.327120] systemd[1]: Detected architecture x86-64.
+[    2.329917] systemd[1]: Hostname set to <ubuntu>.
+[    2.519812] systemd[1]: Queued start job for default target graphical.target.
+[    2.532805] systemd[1]: Created slice system-modprobe.slice - Slice /system/modprobe.
+[    2.536051] systemd[1]: Created slice system-serial\x2dgetty.slice - Slice /system/serial-getty.
+[    2.539858] systemd[1]: Created slice system-systemd\x2dfsck.slice - Slice /system/systemd-fsck.
+[    2.543203] systemd[1]: Created slice user.slice - User and Session Slice.
+[    2.545893] systemd[1]: Started systemd-ask-password-wall.path - Forward Password Requests to Wall Directory Watch.
+[    2.548890] systemd[1]: Set up automount proc-sys-fs-binfmt_misc.automount - Arbitrary Executable File Formats File System Automount Point.
+[    2.552404] systemd[1]: Expecting device dev-disk-by\x2dlabel-BOOT.device - /dev/disk/by-label/BOOT...
+[    2.555470] systemd[1]: Expecting device dev-disk-by\x2dlabel-UEFI.device - /dev/disk/by-label/UEFI...
+[    2.558104] systemd[1]: Expecting device dev-ttyS0.device - /dev/ttyS0...
+[    2.560659] systemd[1]: Reached target integritysetup.target - Local Integrity Protected Volumes.
+[    2.563623] systemd[1]: Reached target nss-user-lookup.target - User and Group Name Lookups.
+[    2.566716] systemd[1]: Reached target slices.target - Slice Units.
+[    2.569097] systemd[1]: Reached target snapd.mounts-pre.target - Mounting snaps.
+[    2.571918] systemd[1]: Reached target swap.target - Swaps.
+[    2.573879] systemd[1]: Reached target veritysetup.target - Local Verity Protected Volumes.
+[    2.576761] systemd[1]: Listening on dm-event.socket - Device-mapper event daemon FIFOs.
+[    2.579860] systemd[1]: Listening on lvm2-lvmpolld.socket - LVM2 poll daemon socket.
+[    2.582445] systemd[1]: Listening on multipathd.socket - multipathd control socket.
+[    2.585293] systemd[1]: Listening on syslog.socket - Syslog Socket.
+[    2.588133] systemd[1]: Listening on systemd-fsckd.socket - fsck to fsckd communication Socket.
+[    2.591286] systemd[1]: Listening on systemd-initctl.socket - initctl Compatibility Named Pipe.
+[    2.594447] systemd[1]: Listening on systemd-journald-dev-log.socket - Journal Socket (/dev/log).
+[    2.597317] systemd[1]: Listening on systemd-journald.socket - Journal Socket.
+[    2.600271] systemd[1]: Listening on systemd-networkd.socket - Network Service Netlink Socket.
+[    2.603386] systemd[1]: systemd-pcrextend.socket - TPM2 PCR Extension (Varlink) was skipped because of an unmet condition check (ConditionSecurity=measured-uki).
+[    2.607395] systemd[1]: Listening on systemd-udevd-control.socket - udev Control Socket.
+[    2.610390] systemd[1]: Listening on systemd-udevd-kernel.socket - udev Kernel Socket.
+[    2.629999] systemd[1]: Mounting dev-hugepages.mount - Huge Pages File System...
+[    2.633532] systemd[1]: Mounting dev-mqueue.mount - POSIX Message Queue File System...
+[    2.636942] systemd[1]: Mounting sys-kernel-debug.mount - Kernel Debug File System...
+[    2.640984] systemd[1]: Mounting sys-kernel-tracing.mount - Kernel Trace File System...
+[    2.645571] systemd[1]: Starting systemd-journald.service - Journal Service...
+[    2.648921] systemd[1]: Starting keyboard-setup.service - Set the console keyboard layout...
+[    2.652787] systemd[1]: Starting kmod-static-nodes.service - Create List of Static Device Nodes...
+[    2.655816] systemd[1]: Starting lvm2-monitor.service - Monitoring of LVM2 mirrors, snapshots etc. using dmeventd or progress polling...
+[    2.656831] systemd-journald[359]: Collecting audit messages is disabled.
+[    2.661524] systemd[1]: Starting modprobe@configfs.service - Load Kernel Module configfs...
+[    2.666471] systemd[1]: Starting modprobe@dm_mod.service - Load Kernel Module dm_mod...
+[    2.669870] systemd[1]: Starting modprobe@drm.service - Load Kernel Module drm...
+[    2.675132] systemd[1]: Starting modprobe@efi_pstore.service - Load Kernel Module efi_pstore...
+[    2.679629] systemd[1]: Starting modprobe@fuse.service - Load Kernel Module fuse...
+[    2.682782] pstore: Using crash dump compression: deflate
+[    2.683275] systemd[1]: Starting modprobe@loop.service - Load Kernel Module loop...
+[    2.684215] pstore: Registered efi_pstore as persistent store backend
+[    2.687528] systemd[1]: netplan-ovs-cleanup.service - OpenVSwitch configuration for cleanup was skipped because of an unmet condition check (ConditionFileIsExecutable=/usr/bin/ovs-vsctl).
+[    2.689808] systemd[1]: systemd-fsck-root.service - File System Check on Root Device was skipped because of an unmet condition check (ConditionPathExists=!/run/initramfs/fsck-root).
+[    2.694610] systemd[1]: Starting systemd-modules-load.service - Load Kernel Modules...
+[    2.697707] systemd[1]: systemd-pcrmachine.service - TPM2 PCR Machine ID Measurement was skipped because of an unmet condition check (ConditionSecurity=measured-uki).
+[    2.700984] systemd[1]: Starting systemd-remount-fs.service - Remount Root and Kernel File Systems...
+[    2.704646] systemd[1]: systemd-tpm2-setup-early.service - TPM2 SRK Setup (Early) was skipped because of an unmet condition check (ConditionSecurity=measured-uki).
+[    2.708224] systemd[1]: Starting systemd-udev-trigger.service - Coldplug All udev Devices...
+[    2.712506] systemd[1]: Started systemd-journald.service - Journal Service.
+[    2.723838] EXT4-fs (vda1): re-mounted 1bfefdfb-34c9-46c7-854f-399d0a1dea04 r/w.
+[    2.779490] systemd-journald[359]: Received client request to flush runtime journal.
+[    2.782923] systemd-journald[359]: File /var/log/journal/668d6c3efc774256b3332c2b3fa1dca6/system.journal corrupted or uncleanly shut down, renaming and replacing.
+[    2.828508] nvidia: loading out-of-tree module taints kernel.
+[    2.829839] nvidia: module verification failed: signature and/or required key missing - tainting kernel
+[    2.872142] nvidia-nvlink: Nvlink Core is being initialized, major device number 239
+
+[    2.888700] nvidia 0000:00:02.0: vgaarb: VGA decodes changed: olddecodes=io+mem,decodes=none:owns=io+mem
+[    2.892009] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+[    2.909106] loop0: detected capacity change from 0 to 8
+[    2.911681] loop1: detected capacity change from 0 to 136784
+[    2.915456] loop2: detected capacity change from 0 to 537160
+[    2.918129] nvidia-modeset: Loading NVIDIA UNIX Open Kernel Mode Setting Driver for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:04:37 UTC 2026
+[    2.919642] loop3: detected capacity change from 0 to 1260056
+[    2.926882] loop4: detected capacity change from 0 to 187776
+[    2.931448] loop5: detected capacity change from 0 to 823256
+[    2.936405] [drm] [nvidia-drm] [GPU ID 0x00000002] Loading driver
+[    2.938440] loop6: detected capacity change from 0 to 91568
+[    3.073077] input: QEMU Virtio Keyboard as /devices/pci0000:00/0000:00:03.0/virtio1/input/input5
+[    3.091171] parport_pc 00:02: reported by Plug and Play ACPI
+[    3.095796] parport0: PC-style at 0x378, irq 7 [PCSPP,TRISTATE]
+[    3.145753] input: QEMU Virtio Tablet as /devices/pci0000:00/0000:00:04.0/virtio2/input/input6
+[    3.149494] input: QEMU Virtio Mouse as /devices/pci0000:00/0000:00:05.0/virtio3/input/input7
+[    3.169173] kvm_amd: TSC scaling supported
+[    3.170292] kvm_amd: Nested Virtualization enabled
+[    3.171280] kvm_amd: Nested Paging enabled
+[    3.172156] kvm_amd: LBR virtualization supported
+[    3.174382] kvm_amd: Virtual GIF supported
+[    3.175235] kvm_amd: Virtual NMI enabled
+[    3.207270] ppdev: user-space parallel port driver
+[    3.294274] NVRM: tmrSetCurrentTime_GV100: ERROR: Write to PTIMER attempted even though Level 0 PLM is disabled.
+[    3.295961] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ timer_gv100.c:80
+[    3.309133] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:233
+[    3.312944] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_USER_SHARED_DATA_SET_DATA_POLL, &params, sizeof(params)) @ gpu_user_shared_data.c:268
+[    3.323271] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[    3.325659] NVRM: kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+[    3.328386] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_CE_GET_PCE_CONFIG_FOR_LCE_TYPE, &pceConfigParams, sizeof(pceConfigParams)) @ kernel_ce.c:1020
+[    3.332297] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, NV2080_CTRL_CE_LCE_TYPE_DECOMP, &numPcesPerLce, &numLces, &supportedPceMask, &supportedLceMask, &pcesPerHshub) @ kernel_ce_gp100.c:62
+[    3.544465] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgrobjPromoteContext(pGpu, pKernelGraphicsObject, pKernelGraphics) @ kernel_graphics_object.c:224
+[    3.547976] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->AllocWithHandle(pRmApi, hClientId, hChannelId, hObj3D, classNum, NULL, 0) @ kernel_graphics.c:2519
+[    3.552518] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[    3.553724] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[    3.554832] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[    3.555929] NVRM: vaListDestroy: non-zero mapCount(pVaList): 0x1
+[    3.558981] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgraphicsCreateGoldenImageChannel(pGpu, pKernelGraphics) @ kernel_graphics.c:508
+[    3.561836] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ kernel_fifo.c:3129
+[    3.565961] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0000a; hParent=0x31415903; hObject=0x31415900; hClass=0x0000c36f; paramsSize=0x00000170; paramsStatus=0x00000056; status=0x00000056
+[    3.569042] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from status @ kernel_channel.c:2827
+[    3.571601] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _kchannelSendChannelAllocRpc(pKernelChannel, pChannelGpfifoParams, pKernelChannelGroup, bFullSriov) @ kernel_channel.c:940
+[    3.575791] NVRM: nvAssertFailedNoLog: Assertion failed: status == NV_OK @ kernel_rc_watchdog.c:1198
+[    3.579532] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d0000b; hParent=0xcaf00001; hObject=0xcaf00002; hClass=0x0000402c; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+[    3.650846] [drm] Initialized nvidia-drm 0.0.0 20160202 for 0000:00:02.0 on minor 1
+[    3.656063] Console: switching to colour dummy device 80x25
+[    3.664594] nvidia 0000:00:02.0: vgaarb: deactivate vga console
+[    3.672403] fbcon: nvidia-drmdrmfb (fb0) is primary device
+[    3.676760] Console: switching to colour frame buffer device 240x67
+[    3.695675] nvidia 0000:00:02.0: [drm] fb0: nvidia-drmdrmfb frame buffer device
+[    3.737715] EXT4-fs (vda16): mounted filesystem fb8b4264-587e-4a60-a103-a1d39552f189 r/w with ordered data mode. Quota mode: none.
+[    3.805794] audit: type=1400 audit(1791833207.459:2): apparmor="STATUS" operation="profile_load" profile="unconfined" name="1password" pid=637 comm="apparmor_parser"
+[    3.805953] audit: type=1400 audit(1791833207.459:3): apparmor="STATUS" operation="profile_load" profile="unconfined" name=4D6F6E676F444220436F6D70617373 pid=639 comm="apparmor_parser"
+[    3.805957] audit: type=1400 audit(1791833207.459:4): apparmor="STATUS" operation="profile_load" profile="unconfined" name="brave" pid=642 comm="apparmor_parser"
+[    3.805959] audit: type=1400 audit(1791833207.459:5): apparmor="STATUS" operation="profile_load" profile="unconfined" name="balena-etcher" pid=641 comm="apparmor_parser"
+[    3.805961] audit: type=1400 audit(1791833207.459:6): apparmor="STATUS" operation="profile_load" profile="unconfined" name="Discord" pid=638 comm="apparmor_parser"
+[    3.806090] audit: type=1400 audit(1791833207.460:7): apparmor="STATUS" operation="profile_load" profile="unconfined" name="QtWebEngineProcess" pid=640 comm="apparmor_parser"
+[    3.807335] audit: type=1400 audit(1791833207.461:8): apparmor="STATUS" operation="profile_load" profile="unconfined" name="buildah" pid=646 comm="apparmor_parser"
+[    3.807450] audit: type=1400 audit(1791833207.461:9): apparmor="STATUS" operation="profile_load" profile="unconfined" name="cam" pid=647 comm="apparmor_parser"
+[    3.807673] audit: type=1400 audit(1791833207.461:10): apparmor="STATUS" operation="profile_load" profile="unconfined" name="ch-checkns" pid=648 comm="apparmor_parser"
+[    5.046135] loop7: detected capacity change from 0 to 8
+[    5.080689] systemd-journald[359]: File /var/log/journal/668d6c3efc774256b3332c2b3fa1dca6/user-1000.journal corrupted or uncleanly shut down, renaming and replacing.
+[    5.127584] NVRM: nvAssertFailedNoLog: Assertion failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:373
+[    5.127598] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _gpushareddataRequestDataPoll(pData, pAllocParams->polledDataMask) @ gpu_user_shared_data.c:95
+[    8.139003] [drm:nv_drm_atomic_commit [nvidia_drm]] *ERROR* [nvidia-drm] [GPU ID 0x00000002] Flip event timeout on head 0
+LINUX_DESKTOP_GUEST_SMOKE=PASS
