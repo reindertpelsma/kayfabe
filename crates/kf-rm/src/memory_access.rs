@@ -112,6 +112,19 @@ impl Lease {
         f(&objects)
     }
 
+    /// Cross-check a channel's already-resolved physical USERD descriptor against
+    /// this exact logical span. No pointer escapes and current RAM authority is
+    /// checked without reading contents. Subsequent accesses still revalidate.
+    pub fn matches_ram_location(&self, base: u64) -> Result<bool, Refusal> {
+        self.with_graph(|objects| {
+            let descriptor = lookup(&objects.graph, self.key).ok_or(Refusal::Gone)?;
+            let length = usize::try_from(self.length).map_err(|_| Refusal::Bounds)?;
+            let matches = descriptor.ram_location(self.offset, length) == Some(base);
+            objects.try_read_memory_list(self.key, self.offset, &mut [])?;
+            Ok(matches)
+        })
+    }
+
     /// Read only within this exact live lease and current RAM generation.
     pub fn read(&self, offset: u64, bytes: &mut [u8]) -> Result<(), Refusal> {
         let at = self.at(offset, bytes.len())?;

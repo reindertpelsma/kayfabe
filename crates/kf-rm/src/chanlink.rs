@@ -203,6 +203,10 @@ pub struct ChannelAlloc {
     pub engine_type: Option<u32>,
     /// The guest kernel's resolved USERD descriptor (`userdMem`).
     pub userd: Option<kf_arch::UserdMem>,
+    /// Client-allocated USERD memory handle and logical offset for subdevice0.
+    /// Decoded independently of the already-resolved physical descriptor above;
+    /// None means unavailable layout/short params, Some((0, _)) an explicit zero.
+    pub userd_source: Option<(u32, u64)>,
     /// ★★★ A guest-KERNEL channel (§7's policy, and the Translated route) — **PROPOSED Q7 rule**
     /// (`V3_P5_PORT_MAP.md` Q7, pending the owner): the guest's CPU-RM stamped
     /// `internalFlags.PRIVILEGE = KERNEL` on the alloc ([`kf_abi::notifier::ChannelPrivilege`]:
@@ -1278,6 +1282,7 @@ impl ChannelPolicy {
             flags: f.flags,
             engine_type,
             userd: self.abi.decode_channel_userd_mem(params).ok().flatten(),
+            userd_source: self.abi.decode_channel_userd(params).ok().flatten(),
             // ⊘⊘ P5b: the pid sentinel is reachable from guest userspace (`[measured p5bd]` the
             // raw client's sandboxed-isolate client `0xc1d0000c` declared `KERNEL_PID`), so it is
             // recorded (`declared_kernel_pid`), never trusted. ★ P6 (Q7, PROPOSED): the route's
@@ -4040,6 +4045,39 @@ mod tests {
             elements: 1,
             delivered: Vec::new(),
         }
+    }
+
+    #[test]
+    fn channel_birth_preserves_client_userd_handle_and_logical_offset() {
+        use std::sync::{Arc, Mutex};
+        let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).unwrap();
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let out = seen.clone();
+        let sink: ChanSink = Arc::new(move |st| {
+            if let ChanStatement::Alloc(a) = st {
+                out.lock().unwrap().push(a.userd_source);
+            }
+            ChanAnswer::Done
+        });
+        let mut link = ChannelPolicy::new(abi, kf_abi::GuestOs::Windows, sink);
+        let wire = kf_abi::matrix::Resolved::of(
+            &kf_abi::generated::matrix::NV_CHANNEL_ALLOC_PARAMS,
+            kf_abi::versions::BENCH_DRIVER,
+        )
+        .unwrap();
+        for (handle, offset) in [(0u32, 0u64), (0xff00_a004, 0x800)] {
+            let mut cmd = kernel_channel_alloc(0xc1d0_0013, 0xff0e_0000, 0xff04_0000, 1, 200);
+            let params = &mut cmd.payload[32..];
+            let h = wire.need("hUserdMemory").unwrap().off();
+            let o = wire.need("userdOffset").unwrap().off();
+            params[h..h + 4].copy_from_slice(&handle.to_le_bytes());
+            params[o..o + 8].copy_from_slice(&offset.to_le_bytes());
+            let _ = link.respond(&cmd);
+        }
+        assert_eq!(
+            *seen.lock().unwrap(),
+            [Some((0, 0)), Some((0xff00_a004, 0x800))]
+        );
     }
 
     /// ★ EXPERIMENT `KF3_WIN_KERNEL_PID4`, end to end through the link on the run-113 sequence: the

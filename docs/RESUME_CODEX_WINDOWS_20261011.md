@@ -1,5 +1,18 @@
 # Resume Windows apps and GravityMark Vulkan
 
+## UPDATE 2026-10-12 10:47UTC — reviewed USERD declaration and owned store views
+
+Last confirmed push: baa9150ef. ChannelAlloc retains the existing public-layout
+USERD memory handle/offset; exact live logical allocation checks the physical
+USERD location and RAM topology. New bounded owned store views prepare outside
+source guards, copy without native calls and retain failed cleanup ownership.
+Independent review caught/corrected read-only mmap protection, then no blocker.
+Full abi/rm/qemu/chan PASS (RM140, QEMU195). Evidence: user-source-adapters under
+gravity-vulkan. No runtime relay caller yet; next stream invalidate mediation,
+Windows birth/submit/migration and exact Linux/Windows tests. Latest exact Linux
+hardware PASS remains 7f3f9fe16, gates9+10/fast30. Gravity Kayfabe FAIL/TIMEOUT,
+VFIO179/183s PASS. Matrix/sweep open; personal image retained; Vast10:36 empty.
+
 ## UPDATE 2026-10-12 10:36UTC — reviewed source snapshots, GPU-free PASS
 
 Last confirmed push: eb968e209. Bounded immutable command snapshots now check

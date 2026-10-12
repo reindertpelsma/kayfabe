@@ -89,6 +89,12 @@ impl RegisteredMemory {
             length: self.declaration.span,
         }
     }
+    /// Derived physical byte address of a checked logical subspan; no pointer.
+    pub(crate) fn ram_location(self, offset: u64, bytes: usize) -> Option<u64> {
+        self.declaration
+            .page_base
+            .checked_add(self.access(offset, bytes)?)
+    }
     pub(crate) fn access(self, offset: u64, bytes: usize) -> Option<u64> {
         if bytes > MAX_ACCESS || offset.checked_add(bytes as u64)? > self.declaration.length {
             return None;
@@ -565,6 +571,38 @@ mod tests {
         ram.0.lock().unwrap().0 += 1;
         assert_eq!(new.read(0, &mut out), Err(Refusal::Topology));
         assert_eq!(new.write(0, &[9]), Err(Refusal::Topology));
+    }
+
+    #[test]
+    fn worker_userd_location_is_derived_from_the_live_logical_descriptor() {
+        use crate::memory_access::{Access, Refusal, SharedObjects};
+        let (objects, ram, mut d) = fixture(kf_chip::Family::Ada);
+        d.adjustment = 0x20;
+        d.length -= 0x20;
+        let access = Arc::new(Access::default());
+        let mut shared = SharedObjects::new(objects, &access);
+        shared.memory_list(d).unwrap();
+        let lease = access.lease(1, 4, 0x600, 0x200).unwrap();
+        let base = d.page_base + 0x620;
+        assert_eq!(lease.matches_ram_location(base), Ok(true));
+        assert_eq!(lease.matches_ram_location(base + 1), Ok(false));
+        assert_eq!(lease.matches_ram_location(u64::MAX), Ok(false));
+        let writer = ram.0.lock().unwrap();
+        assert_eq!(lease.matches_ram_location(base), Err(Refusal::Busy));
+        drop(writer);
+        ram.0.lock().unwrap().0 += 1;
+        assert_eq!(lease.matches_ram_location(base), Err(Refusal::Topology));
+        shared
+            .apply(
+                RmEvent::Free {
+                    client: HClient(1),
+                    handle: HObject(4),
+                },
+                &[],
+            )
+            .unwrap();
+        shared.memory_list(d).unwrap();
+        assert_eq!(lease.matches_ram_location(base), Err(Refusal::Gone));
     }
 
     #[test]

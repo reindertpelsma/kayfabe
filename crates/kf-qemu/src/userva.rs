@@ -1103,6 +1103,7 @@ mod tests {
             flags: 0,
             engine_type: Some(kf_abi::submit::ENGINE_TYPE_GRAPHICS),
             userd: None,
+            userd_source: None,
             kernel_client: true,
             privilege: None,
             declared_kernel_pid: true,
