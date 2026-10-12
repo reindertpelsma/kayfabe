@@ -1,5 +1,22 @@
 # Handoff for a different agent (Codex or any fresh agent), 2026-10-11
 
+## UPDATE 2026-10-12 03:39UTC — phased native storage PASS
+
+Last confirmed push7135568d3. Native exact7135568d3 USER C56F/uid65534 on
+RTX4070/595.91.07 PASS: prepare66us,256 clear pieces/max115us, RO-map78us;
+real4096-byte CE copy/reference1/sem1/GET4PUT4 at52899us after explicit held
+stimulus. Bounded hostXid0; successful channel/storage/fixture teardown, no kill.
+Evidence gravity-vulkan/user-storage-phased/result (text only, hashes).
+Hypothesis falsifier not observed in this run; not worst-case latency proof.
+GPU-free full kf-chan/kf-qemu/kf-rm suite and final qemu lib169/169 pass.
+No VM relay wiring yet, so Gravity kayfabe still FAIL/TIMEOUT, VFIO PASS179/183s.
+Next: birth identity/cancellation/free ownership adapter, source/VA epoch gate,
+and validated cursor migration; exact Linux9+10/30 before Windows claim.
+Personal image unchanged0444/28240642048bytes; noQEMU/DMA-FQ/lockfree/stop absent,
+120306757632bytes free. Vast last checked02:54UTC:[]; no instance to retire.
+Full Windows matrix and driver compatibility sweep remain queued.
+
+
 ## UPDATE 2026-10-12 03:36UTC — ownership review gates and native timing probe
 
 Last confirmed push265bab71e. GPU-free kf-chan/kf-qemu/kf-rm suite passed;

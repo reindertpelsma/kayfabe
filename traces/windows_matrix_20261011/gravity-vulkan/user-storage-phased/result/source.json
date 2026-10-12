@@ -1,0 +1,8 @@
+{
+  "revision": "7135568d3dc11c5a0af7ba6151ce74c760c340b4",
+  "binary": "/var/lib/kf-windows-20261005/codex-user-phased-build-7135568d3/kf-user-ring-probe",
+  "binary_sha256": "487d17136ca6fe07aab3f9aac113725a7652302ba32d665b9ed1649c050c4bce",
+  "uid": 65534,
+  "gid": 65534,
+  "scope": "native phased storage/control barrier; no VM"
+}

@@ -1,0 +1,17 @@
+{
+  "verdict": "PASS",
+  "start_utc": "2026-10-12T03:37:05.868886+00:00",
+  "end_utc": "2026-10-12T03:37:07.986495+00:00",
+  "pid": 900123,
+  "rc": 0,
+  "killed": false,
+  "journal_query_exit": 0,
+  "xid_records": 0,
+  "cleanup_ok": true,
+  "phases": {
+    "prepare_us": 66,
+    "clear_steps": 256,
+    "max_clear_us": 115,
+    "map_us": 78
+  }
+}
