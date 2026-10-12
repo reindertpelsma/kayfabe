@@ -1,5 +1,28 @@
 # Resume Windows apps and GravityMark Vulkan
 
+## UPDATE 2026-10-12 20:02UTC — exact mask native/Linux PASS; Windows1600 starting
+
+Last confirmed pushb50774a7a. Exactb50774a7a5343cf10af849db1445b577e9b21b3f:
+GPU-free2156PASS/source review no blocker; nativeuid65534 base/mask2/2PASS,
+initialACTIVE/all11excludedbits/STORE/USE/nativefetch/copy/reference verified,
+nohostXid. Linux9/9+gate10/USERbirth12/12/refused0, rebuiltfastguest30/30/
+crash0/NOTRUN0/exit0. Five expected negativeXid31/no32. Linux NVIDIA580.159.04
+Cinnamon/Xorg/gears PASS_WITH_WARNINGS (known shared-data assertions/DRMfliptimeout),
+nohostXid. Stopped20:01:03UTC/noQEMU/DMA-FQ. Evidence user-worker/mask-linux.
+
+Windows1600 starting with exactsame source, original600s GravityVkoracle/media,
+production19flags+only defaultOFFrelay experiment. Hypothesis/falsifier recorded
+beforelaunch; masksemantics/identity is sole behavior change relative1590.
+Hostlog /data/kf-user-mask-windows-b50774a7a.log, root$W/codex-user-worker-windows-b50774a7a.
+No new app/migration verdict yet. Own old1540 completed disposable removed after
+all-qcow/protectedaudit to keepdiskabove100GiB; personal image retained.
+Windows1590 is ABORTED_PRE_BENCHMARK, notappFAIL; no boundedhostXid.
+GuestGP_GET propagation exists; exact migrationcursor/TOP_LEVEL_GET semantics
+remainunproven. Fullmatrix/flagdefaultcleanup/drivercompatibility remainopen.
+Ownerideas optional: worker correctness first, optimizefrommeasuredcost later.
+Vastlastchecked empty19:29UTC. Branch codex/windows-matrix-20261011.
+
+
 ## UPDATE 2026-10-12 19:55UTC — Windows1590 stopped before benchmark; mask correction in progress
 
 Last confirmed push3d10c51a7. Exact0578a7ab8 Windows1590 signed in/driver ready,

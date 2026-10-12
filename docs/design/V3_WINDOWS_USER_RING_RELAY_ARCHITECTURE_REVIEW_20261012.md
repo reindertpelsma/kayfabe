@@ -1,14 +1,26 @@
 # Windows user-ring relay: review against v3
 
-**STATUS: RESEARCH, 2026-10-12.** Default-OFF worker diagnostic is now connected
-and source-reviewed; ordinary Linux Passthrough unchanged. Exact4ec9f9a24 native
-and Linux gates/fast/desktop passed. Windows1580 reached sign-in but refused a
-prototype source-buffer cap before the benchmark. No Windows migration PASS.
+**STATUS: RESEARCH, 2026-10-12.** Default-OFF worker diagnostic is connected
+and source-reviewed; ordinary Linux Passthrough unchanged. Latest sourceb50774a7a
+GPU-free2156PASS, native base/mask2/2PASS, exact Linux9+10/fast30PASS; desktop
+and Windows follow. Windows1590 at prior0578a7ab8 signed in but clean-refused a
+subdevice-mask command before benchmark; no Windows migration PASS.
 The atomic three-mode dispatch remains a separate unconnected prototype;
 inline CopyRing, no-API fast switching, vidmem source USERD and latency proof
-remain open. The runtime scans on workers from birth, copies only intercepted
-segments, and retains real HOST witness/GPfetch lifetimes. See the latest
-[resume](../RESUME_CODEX_WINDOWS_20261011.md) and user-worker evidence.
+remain open. Runtime scans on workers from birth, copies intercepted segments,
+and retains real HOST witness/GPfetch lifetimes. Owner's proposed optimizations
+are optional; current priority is worker correctness and original app progress.
+See [resume](../RESUME_CODEX_WINDOWS_20261011.md) and user-worker evidence.
+
+Public mask controls must be modeled even when native GPU commands stay opaque:
+inactive methods must neither bind software objects nor execute intercepted APIs.
+SET/STORE/USE controls themselves still apply while inactive. The scanner and
+native private USER channel use the same validated one-hot12bit subDeviceId from
+the versioned channel-allocation field. No GPU ordinal inference. Missing/zero/
+malformed identities clean-refuse. The ordinary Linux birth leaves its previous
+wire representation unchanged. Native uid65534 id1 probe verifies initial active,
+each excluded bit, stored masks and fetch ordering while inactive; other one-hot
+identities have model/encoding coverage, not a native hardware claim.
 
 Owner proposes initial inspection followed by fast forwarding while no deferred
 API is installed. This is distinct from object allocation: five campaigns show
