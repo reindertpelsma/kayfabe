@@ -1074,6 +1074,8 @@ pub struct GpuMirror {
     /// ★ P6b: OUR VMM placements in this space a guest leaf may not overlap. ⊘ 2026-10-10 (§AB
     /// rule 2): empty — a twin holds no window and no ring — except the positive control's window.
     pub reserved: Vec<(u64, u64)>,
+    /// Live Windows private command exclusions, shared with channel ownership.
+    pub user_regions: std::sync::Arc<crate::userva::Regions>,
     /// ★ `V3_BATCHED_MAP.md`: guest RAM as QEMU registered it — the memfd a batch is stitched from
     /// (`None`: this mirror never batches).
     pub ram: Option<&'static RamMap>,
@@ -1218,6 +1220,7 @@ impl GpuMirror {
             rows,
             log,
             reserved,
+            user_regions: Default::default(),
             ram,
             bv,
             calls: SpaceCalls::default(),
@@ -1342,6 +1345,7 @@ impl MapTarget for GpuMirror {
         true
     }
     fn map(&self, d: &Desired, defer: bool) -> Result<Mapped, String> {
+        self.user_regions.check(d.va, d.len)?;
         let t = std::time::Instant::now();
         // ★ 2026-10-09: through the batch layer, which records every host mapping of ours
         // (`kf_mem::batch::OwnMaps`) — a range unmap covers exactly those, never a gap.
@@ -1361,6 +1365,7 @@ impl MapTarget for GpuMirror {
         Ok(m)
     }
     fn map_batch(&self, rows: &[Desired], defer: bool) -> Result<(), String> {
+        for row in rows { self.user_regions.check(row.va, row.len)?; }
         let (Some(ram), true) = (self.ram, batching_enabled()) else {
             return Err(kf_mem::ledger::NOT_BATCHED.into());
         };
@@ -1394,9 +1399,12 @@ impl MapTarget for GpuMirror {
         Ok(())
     }
     fn reserved(&self) -> Vec<(u64, u64)> {
-        self.reserved.clone()
+        let mut ranges = self.reserved.clone();
+        ranges.extend(self.user_regions.ranges());
+        ranges
     }
     fn map_sked(&self, s: &kf_mem::ledger::SkedRow, defer: bool) -> Result<Mapped, String> {
+        self.user_regions.check(s.va, s.len)?;
         let t = std::time::Instant::now();
         let m = self.bv.map_sked(s, defer);
         self.calls.maps.fetch_add(1, Ordering::Relaxed);
@@ -1411,6 +1419,7 @@ impl MapTarget for GpuMirror {
         Ok(m)
     }
     fn unmap(&self, va: u64, defer: bool) -> Result<(), String> {
+        self.user_regions.check(va, 1)?;
         // ★★★ v3-cdp: a SKED-reflected placement of ours: a whole-mapping unmap (never batched).
         let sked = self.sked.lock().ok().and_then(|mut k| k.remove(&va));
         if let Some(len) = sked {
@@ -1471,7 +1480,7 @@ impl MapTarget for GpuMirror {
         let end = va.checked_add(len).ok_or("unmap range overflows")?;
         // ⊘ Belt and braces: RM removes EVERY mapping of ours in the range, so it must never reach
         // one of our VMM placements (a guest row over one is refused at map time — this re-checks).
-        if let Some(&(a, b)) = self.reserved.iter().find(|&&(a, b)| va < b && a < end) {
+        if let Some(&(a, b)) = self.reserved().iter().find(|&&(a, b)| va < b && a < end) {
             return Err(format!(
                 "unmap range {va:#x}+{len:#x} reaches OUR placement [{a:#x}, {b:#x}) — refused"
             ));
@@ -1562,6 +1571,8 @@ pub fn new_ledger(vas: HostVas<'static>) -> kf_mem::batch::BatchedVas<'static> {
 pub struct Mirror {
     /// The host VA space.
     pub space: kf_host::VaSpace,
+    /// Empty on Linux; dynamic read-only command exclusions on Windows only.
+    pub user_regions: std::sync::Arc<crate::userva::Regions>,
     /// ⚠ CONTROL ONLY: the store window `KF3_NEGCTL_TWIN_WINDOW=1` maps (`(base, len)`), recorded
     /// so the log line names it and the box-log gate's `WINDOWS=NONE` fails. `None` in production.
     pub negctl_window: Option<(u64, u64)>,
@@ -2046,6 +2057,8 @@ pub enum SplitTarget {
 /// flight or pending). A held reply is delivered when they are equal.
 #[derive(Debug)]
 pub struct Inbox {
+    /// Restricted Windows resource requests, consumed only by the VA worker.
+    pub user_va: crate::userva::Queue,
     /// ★ w827: guest L2 cache-op requests per [`kf_trap::cacheop::CacheOp`] — bumped by the vCPU
     /// (lock-free) after it stores the busy word; the VA thread performs the host op and publishes
     /// idle. See `ChanDevice::serve_cache_ops`.
@@ -2086,6 +2099,7 @@ impl Inbox {
     /// No eventfd.
     pub fn new() -> Result<Inbox, String> {
         Ok(Inbox {
+            user_va: Default::default(),
             cache_req: std::array::from_fn(|_| AtomicU64::new(0)),
             cache_done: std::array::from_fn(|_| AtomicU64::new(0)),
             q: Mutex::new(Vec::new()),
@@ -2727,7 +2741,7 @@ pub fn tmode_reuse(key: VasKey, sp: &Spare) -> TwinRecord {
 /// is freed instead.
 #[must_use]
 pub fn retire_spare(mi: &Mirror, refused: usize) -> Option<Spare> {
-    (refused == 0).then_some(Spare {
+    (refused == 0 && mi.user_regions.ranges().is_empty()).then_some(Spare {
         space: mi.space,
         negctl_window: mi.negctl_window,
         ram_obj: mi.ram_obj,
@@ -2743,6 +2757,7 @@ fn twin_record(
     TwinRecord {
         mirror: Mirror {
             space,
+            user_regions: Default::default(),
             negctl_window,
             rows: PlacedRows::default(),
             ram_obj,
@@ -2807,19 +2822,19 @@ fn record_twin(
         ram_obj,
     }));
     mirror.ledger = Some(ledger.clone());
+    let user_regions = mirror.user_regions.clone();
     if let Ok(mut mm) = plane.mirrors.lock() {
         mm.insert(key, mirror);
     }
-    m.table.insert(
-        key,
-        Target::Gpu(GpuMirror::with_ledger(
+    let mut gpu = GpuMirror::with_ledger(
             ledger,
             (rows, log),
             reserved,
             Some(plane.ram),
             kernel_vas,
-        )),
-    );
+        );
+    gpu.user_regions = user_regions;
+    m.table.insert(key, Target::Gpu(gpu));
 }
 
 /// ★ Build a fresh mirror for `key`: a host space and nothing of ours in it (§AB rule 2; the P5
@@ -2945,11 +2960,22 @@ pub fn prewarm(plane: &MemPlane, rm: &'static HostRm, store: u32) -> Option<Stri
 /// ★ P5c: the guest freed VA space `key` — unmap OUR rows (deferred, one invalidate) and keep the
 /// host space as a spare (it holds nothing of ours, §AB rule 2). ⊘ A space a live channel still
 /// runs in is never recycled (nor freed): it is kept, named.
+fn retire_association(mirrors: &Mirrors, key: VasKey) -> Result<Mirror, String> {
+    mirrors.lock().map_err(|_| "mirror associations poisoned".to_string())?
+        .get(&key).cloned().ok_or_else(|| "mirror association missing".to_string())
+}
+
 fn retire_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, key: VasKey) -> String {
-    let mirror = plane.mirrors.lock().ok().and_then(|mut mm| mm.remove(&key));
+    // Unknown ownership is never evidence that live-channel/resource count is
+    // zero. Preserve target/native VAS on missing/poisoned association.
+    let mirror = match retire_association(&plane.mirrors, key) {
+        Ok(mirror) => Some(mirror),
+        Err(error) => return format!("retire {key:?}: {error} — KEPT, never freed/recycled"),
+    };
     let Some(target) = m.remove(key) else {
         return format!("retire {key:?}: no mirror (no page-directory statement named it)");
     };
+    if let Ok(mut mirrors) = plane.mirrors.lock() { mirrors.remove(&key); }
     plane
         .counters
         .mirrors_retired
@@ -3180,6 +3206,20 @@ pub fn apply_statement(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn missing_or_poisoned_mirror_association_never_means_zero_live() {
+        let mirrors: Mirrors = Default::default();
+        assert!(retire_association(&mirrors,VasKey(7)).is_err());
+        let poisoned=mirrors.clone();
+        let _=std::panic::catch_unwind(move || {
+            let _guard=poisoned.lock().unwrap();
+            panic!("test-only association poison");
+        });
+        assert!(retire_association(&mirrors,VasKey(7)).is_err());
+        // The real retire_mirror returns before Manager::remove / any host verb
+        // on either error, retaining the native VAS and all resource ownership.
+    }
 
     /// The last commits of a rows log, newest last.
     #[test]

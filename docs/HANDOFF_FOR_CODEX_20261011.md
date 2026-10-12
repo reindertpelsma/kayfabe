@@ -1,5 +1,25 @@
 # Handoff for a different agent (Codex or any fresh agent), 2026-10-11
 
+## UPDATE 2026-10-12 03:26UTC — bounded private-VA ownership checkpoint (not wired)
+
+Last confirmed push cf45eedfb, branch codex/windows-matrix-20261011,
+worktree /data/kf-inval-absent. Added a Windows birth permit, bounded VA-worker
+allocation queue and shared private-span exclusions. Initialization clears at
+most4KiB per turn and maps only after all bytes are cleared; allocation, clearing
+and mapping run on separate VA turns after invalidate reconciliation. Retained
+cleanup failures keep their VAS pin and exclusion. Missing/poisoned retirement
+association now refuses before host VAS free. Linux Passthrough cannot request
+a private lease. These primitives are NOT connected to channel birth yet.
+GPU-free cargo test -p kf-chan -p kf-qemu -p kf-rm passed before the final small
+ownership-helper extraction; exact checkpoint recheck follows. Independent review
+still requires falcon-steer admission coordination, queue cleanup/reuse tests,
+and measured native phase latency before runtime wiring. No new hardware run.
+Gravity kayfabe remains FAIL/TIMEOUT; same-GPU VFIO PASS179/183s. No matrix or
+compatibility-axis completion claim. Personal Windows chain retained. Vast last
+checked02:54UTC:[]; no instances to retire. Next: finish those review gates,
+connect the restricted Windows relay, exact Linux9+10/30 and Gravity validation.
+
+
 ## UPDATE 2026-10-12 02:57UTC — native HOST-consumption barrier PASS
 
 Last confirmed push **6e60662d1**, codex/windows-matrix-20261011,

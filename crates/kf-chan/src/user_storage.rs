@@ -21,6 +21,10 @@ pub const GP_OFFSET: u64 = 0xe0000;
 pub const USERD_OFFSET: u64 = 0xf0000;
 /// Trusted private GP capacity, independent of the guest ring's changing size.
 pub const ENTRIES: u32 = 512;
+/// Trusted per-command-slot staging cell. One descriptor credit remains empty,
+/// so reusing a command slot needs GET beyond its old later witness (see the
+/// user_consumption model). Early commitment of GP0 alone cannot reuse its cell.
+pub const CELL_BYTES: u64 = 1024;
 
 /// Resource verbs, separated so cleanup failures are checkable without a GPU.
 /// Production calls must run on the VA-manager side, never a vCPU/trap.
@@ -35,6 +39,10 @@ pub trait StorageHost {
     fn view(&self, memory: u32) -> Result<Self::View, String>;
     /// Clear ALL bytes before any GPU map is installed.
     fn clear(&self, view: &Self::View) -> Result<(), String>;
+    /// Clear one bounded initialization piece before any GPU mapping exists.
+    fn clear_range(&self, _view: &Self::View, _offset: u64, _bytes: u64) -> Result<(), String> {
+        Err("USER_STORAGE_INCREMENTAL_CLEAR_UNSUPPORTED".into())
+    }
     /// Install exactly `[0, USERD_OFFSET)` read-only at the reserved VA.
     fn map_ro(&self, reservation: u32, memory: u32, va: u64) -> Result<u64, MapFailure>;
     /// Revoke CPU mapping before returning its aperture to RM; retryable.
@@ -82,14 +90,32 @@ pub struct Storage<V> {
     memory: Option<u32>,
     view: Option<V>,
     mapped: Mapping,
+    cleared: u64,
 }
 
 impl<V> Storage<V> {
-    /// Build over a trusted reserved slot. No guest-derived allocation size.
-    ///
-    /// # Errors
-    /// Bounds/host/clear failure; any unreleased resources remain in BuildError.
+    /// Standalone/native convenience; production uses prepare, bounded clear
+    /// steps and map_initialized on separate idle VA-worker turns.
     pub fn allocate(
+        host: &impl StorageHost<View = V>,
+        space: VaSpace,
+        va: u64,
+    ) -> Result<Self, BuildError<V>> {
+        let mut out = Self::prepare(host, space, va)?;
+        let build = (|| {
+            host.clear(out.view.as_ref().ok_or("USER_STORAGE_VIEW absent")?)?;
+            out.cleared = BYTES;
+            out.map_initialized(host)
+        })();
+        match build {
+            Ok(()) => Ok(out),
+            Err(reason) => Err(out.failed(host, reason)),
+        }
+    }
+
+    /// Reserve/allocate/arm the CPU view, without a GPU map or usable spec.
+    /// Only the VA worker calls this; every partial failure retains ownership.
+    pub fn prepare(
         host: &impl StorageHost<View = V>,
         space: VaSpace,
         va: u64,
@@ -101,6 +127,7 @@ impl<V> Storage<V> {
             memory: None,
             view: None,
             mapped: Mapping::None,
+            cleared: 0,
         };
         let build = (|| {
             if va % 0x10000 != 0 || va.checked_add(BYTES).is_none_or(|end| end > 1 << 40) {
@@ -108,45 +135,80 @@ impl<V> Storage<V> {
                     "USER_STORAGE_VA: reserved slot is not64KiB-aligned below2^40".to_string(),
                 );
             }
-            let reservation = host.reserve(space, va)?;
-            out.reservation = Some(reservation);
+            out.reservation = Some(host.reserve(space, va)?);
             let memory = host.alloc()?;
             out.memory = Some(memory);
             out.view = Some(host.view(memory)?);
-            host.clear(out.view.as_ref().ok_or("USER_STORAGE_VIEW absent")?)?;
-            // Set BEFORE the call: an error can follow a successful ioctl.
-            out.mapped = Mapping::Attempted;
-            let actual = match host.map_ro(reservation, memory, va) {
-                Ok(actual) => actual,
-                Err(error) => {
-                    if let Some(actual) = error.unexpected {
-                        out.note_placement(actual);
-                    }
-                    return Err(error.reason);
-                }
-            };
-            out.note_placement(actual);
-            if actual != va {
-                return Err(format!(
-                    "USER_STORAGE_FIXED: got{actual:#x}, expected{va:#x}"
-                ));
-            }
-            out.mapped = Mapping::Live;
-            out.live = true;
             Ok(())
         })();
         match build {
             Ok(()) => Ok(out),
-            Err(mut reason) => {
-                if let Err(cleanup) = out.release(host) {
-                    reason.push_str(&format!("; retained: {cleanup}"));
-                }
-                Err(BuildError {
-                    reason,
-                    retained: out,
-                })
-            }
+            Err(reason) => Err(out.failed(host, reason)),
         }
+    }
+
+    fn failed(mut self, host: &impl StorageHost<View = V>, mut reason: String) -> BuildError<V> {
+        if let Err(cleanup) = self.release(host) {
+            reason.push_str(&format!("; retained: {cleanup}"));
+        }
+        BuildError {
+            reason,
+            retained: self,
+        }
+    }
+
+    /// Clear at most4KiB this VA turn; no GPU map/spec exists until all bytes are
+    /// initialized. Failure never advances the initialized prefix.
+    pub fn clear_next(&mut self, host: &impl StorageHost<View = V>) -> Result<bool, String> {
+        if self.live
+            || self.mapped != Mapping::None
+            || self.reservation.is_none()
+            || self.memory.is_none()
+        {
+            return Err("USER_STORAGE_INITIALIZATION_STATE".into());
+        }
+        if self.cleared == BYTES {
+            return Ok(true);
+        }
+        let bytes = 4096.min(BYTES.saturating_sub(self.cleared));
+        host.clear_range(
+            self.view.as_ref().ok_or("USER_STORAGE_VIEW absent")?,
+            self.cleared,
+            bytes,
+        )?;
+        self.cleared += bytes;
+        Ok(self.cleared == BYTES)
+    }
+
+    /// Install RO PTEs only after the entire object was initialized. A failed
+    /// ioctl may have mapped: caller must retain ownership and explicitly clean.
+    pub fn map_initialized(&mut self, host: &impl StorageHost<View = V>) -> Result<(), String> {
+        if self.live || self.mapped != Mapping::None || self.cleared != BYTES || self.view.is_none()
+        {
+            return Err("USER_STORAGE_INITIALIZATION_INCOMPLETE".into());
+        }
+        let reservation = self.reservation.ok_or("USER_STORAGE_NO_RESERVATION")?;
+        let memory = self.memory.ok_or("USER_STORAGE_NO_MEMORY")?;
+        self.mapped = Mapping::Attempted;
+        let actual = match host.map_ro(reservation, memory, self.va) {
+            Ok(actual) => actual,
+            Err(error) => {
+                if let Some(actual) = error.unexpected {
+                    self.note_placement(actual);
+                }
+                return Err(error.reason);
+            }
+        };
+        self.note_placement(actual);
+        if actual != self.va {
+            return Err(format!(
+                "USER_STORAGE_FIXED: got{actual:#x}, expected{:#x}",
+                self.va
+            ));
+        }
+        self.mapped = Mapping::Live;
+        self.live = true;
+        Ok(())
     }
 
     /// Resources are gone; only this permits the VA manager to recycle a slot.
@@ -274,6 +336,27 @@ impl StorageHost for HostRm {
         kf_linux_raw::release_fence();
         Ok(())
     }
+    fn clear_range(&self, view: &CpuView, offset: u64, bytes: u64) -> Result<(), String> {
+        if bytes > 4096
+            || bytes == 0
+            || offset % 4 != 0
+            || bytes % 4 != 0
+            || offset.checked_add(bytes).is_none_or(|end| end > BYTES)
+        {
+            return Err("USER_STORAGE_CLEAR_BOUND".into());
+        }
+        let cpu = view.cpu.as_ref().ok_or_else(|| {
+            view.map_error
+                .clone()
+                .unwrap_or_else(|| "USER_STORAGE_CPU_MAP absent".into())
+        })?;
+        for off in (offset..offset + bytes).step_by(4) {
+            cpu.store_u32(HostOffset::new(off), 0)
+                .map_err(|e| format!("USER_STORAGE_CLEAR: {e:?}"))?;
+        }
+        kf_linux_raw::release_fence();
+        Ok(())
+    }
     fn map_ro(&self, reservation: u32, memory: u32, va: u64) -> Result<u64, MapFailure> {
         self.map_in_ro_4k(reservation, memory, USERD_OFFSET, va)
             .map_err(|error| MapFailure {
@@ -310,6 +393,32 @@ impl StorageHost for HostRm {
 }
 
 impl Storage<CpuView> {
+    /// Author one complete command batch and its HOST-consumption barrier.
+    /// Caller reserves the three GP credits through user_consumption FIRST.
+    /// All words are inspected/host-authored; no raw guest GP word is accepted.
+    pub fn write_publication(
+        &self,
+        publication: crate::user_consumption::Publication,
+        words: &[u32],
+        sync_wait: bool,
+    ) -> Result<(), String> {
+        if words.is_empty() || words.len() > (CELL_BYTES / 4) as usize {
+            return Err("USER_STORAGE_CELL_BOUND".into());
+        }
+        let offset = u64::from(publication.command_slot)
+            .checked_mul(CELL_BYTES)
+            .ok_or("USER_STORAGE_CELL_BOUND")?;
+        self.write_authored(offset, words)?;
+        self.write_gp(
+            publication.command_slot,
+            offset,
+            words.len() as u64 * 4,
+            sync_wait,
+        )?;
+        self.write_host_barrier(publication.barrier_slot)?;
+        self.write_host_witness(publication.witness_slot)
+    }
+
     fn cpu(&self) -> Result<&VolatileRegion, String> {
         if !self.live {
             return Err("USER_STORAGE_NOT_LIVE".into());
@@ -498,6 +607,11 @@ mod tests {
         fn clear(&self, _: &()) -> Result<(), String> {
             self.call("clear")
         }
+        fn clear_range(&self, _: &(), offset: u64, bytes: u64) -> Result<(), String> {
+            assert_eq!(bytes, 4096);
+            assert!(offset < BYTES && offset % 4096 == 0);
+            self.call("clear_range")
+        }
         fn map_ro(&self, reservation: u32, memory: u32, va: u64) -> Result<u64, MapFailure> {
             assert_eq!((reservation, memory), (11, 7));
             let call = self.call("map_ro");
@@ -571,6 +685,31 @@ mod tests {
             &host.calls.borrow()[5..],
             ["revoke", "unmap", "free_reservation", "free"]
         );
+    }
+    #[test]
+    fn sliced_initialization_cannot_expose_a_prefix_or_skip_a_failed_piece() {
+        let host = Fake::default();
+        let mut storage =
+            Storage::prepare(&host, space(), 1 << 32).unwrap_or_else(|e| panic!("{}", e.reason));
+        assert!(storage.spec(0).is_err());
+        assert!(storage.map_initialized(&host).is_err());
+        host.failures.borrow_mut().push("clear_range");
+        assert!(storage.clear_next(&host).is_err());
+        assert_eq!(storage.cleared, 0);
+        host.failures.borrow_mut().clear();
+        for i in 0..BYTES / 4096 {
+            assert_eq!(storage.clear_next(&host).unwrap(), i + 1 == BYTES / 4096);
+            assert!(storage.spec(0).is_err());
+            if i + 1 < BYTES / 4096 {
+                assert!(storage.map_initialized(&host).is_err());
+            }
+        }
+        assert!(!host.calls.borrow().contains(&"map_ro"));
+        storage.map_initialized(&host).unwrap();
+        assert!(storage.spec(0).is_ok());
+        assert!(storage.clear_next(&host).is_err());
+        storage.release(&host).unwrap();
+        assert!(storage.map_initialized(&host).is_err());
     }
     #[test]
     fn failed_map_is_unmapped_even_without_a_successful_reply() {

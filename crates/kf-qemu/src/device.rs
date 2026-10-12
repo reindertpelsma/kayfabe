@@ -2169,6 +2169,19 @@ impl Device {
             if let Ok(mut s) = self.va_stats.lock() {
                 *s = m.stats.clone();
             }
+            // Existing invalidates/reconciliation have priority. One private
+            // resource request and one4KiB initialization step per idle turn;
+            // never drain a queue of uncached1MiB clears ahead of a trigger.
+            if !m.in_flight() && m.pending() == 0
+                && self.mem.inbox.all_settled()
+                && !self.mem.inbox.walk_busy()
+                && self.mem.port.armed_request().is_none()
+            {
+                self.mem.inbox.user_va.serve(&m, self.rm);
+                if self.mem.inbox.user_va.has_work() {
+                    let _ = self.mem.inbox.wake.signal();
+                }
+            }
         }
         // ★ The boot display: a seed the guest never retired (it never loaded its driver) goes with
         // the device — scratch first, then the view's host aperture (`CpuWindow::retire_seed`).

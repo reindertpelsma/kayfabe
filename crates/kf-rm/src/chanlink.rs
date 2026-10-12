@@ -239,6 +239,9 @@ pub struct ChannelAlloc {
     /// unprivileged host channel, the VM's own VA space) instead of Translated. Decided once, from
     /// the alloc's facts; it never changes over the channel's life.
     pub user_work: bool,
+    /// Birth-time admission for the restricted read-only Windows user ring.
+    /// No other route can manufacture this witness from USERD placement alone.
+    pub user_ring_permit: Option<WindowsUserRingPermit>,
 }
 
 /// ★ 2026-10-08: `KF3_ASYNC_PREEMPT=1` (default off) serves `DISABLE_CHANNELS` with a
@@ -402,7 +405,7 @@ pub fn windows_user_work(f: &UserWorkFacts) -> Result<(), &'static str> {
 /// No mapping or runtime mode is enabled by constructing it. A future birth-time
 /// adapter must require this witness AND hardwire GPU-read-only permissions.
 /// It authorizes neither writable fences nor a kernel T-space/physical operands.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WindowsUserRingPermit {
     _private: (),
 }
@@ -1220,7 +1223,7 @@ impl ChannelPolicy {
         if kernel_stamped && !is_rm_internal_client(h.client) && self.windows_kernel_pid.is_none() {
             self.windows_kernel_pid = process_id;
         }
-        let user_work = windows_user_work(&UserWorkFacts {
+        let user_facts = UserWorkFacts {
             flag: self.user_work_flag,
             windows: self.windows_identity,
             kernel_stamped,
@@ -1236,7 +1239,8 @@ impl ChannelPolicy {
             process_id,
             kernel_pid: self.windows_kernel_pid,
             system_pid_is_kernel: self.system_pid_is_kernel,
-        });
+        };
+        let user_work = windows_user_work(&user_facts);
         if self.user_work_flag && kernel_stamped {
             eprintln!(
                 "kf-rm: chanlink: CLASSIFY {:#x}:{:#x} {} ({})",
@@ -1294,6 +1298,7 @@ impl ChannelPolicy {
                 .flatten(),
             process_id,
             user_work: user_work.is_ok(),
+            user_ring_permit: windows_user_ring_permit(&user_facts).ok(),
         };
         // ★ 2026-10-08 (Windows user-work classification, diagnostic): the declared process ids and
         // raw internal flags beside the facts the route uses — logged for the criterion's evidence.

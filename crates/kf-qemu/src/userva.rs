@@ -1,0 +1,477 @@
+//! VA-worker ownership of restricted Windows read-only command mappings.
+//!
+//! The shared exclusions are installed BEFORE any RM call and survive uncertain
+//! cleanup. Linux Passthrough cannot request a lease without a Windows birth
+//! permit. A lease is never retired by GET, a guest free, an error or a timer:
+//! its native channel must first have been successfully freed (or never born).
+
+use crate::mem::{Manager, Mirror, Target};
+use kf_chan::user_storage::StorageHost;
+use kf_chan::user_storage::{BYTES, CpuView, Storage};
+use kf_mem::vasmgr::VasKey;
+use kf_rm::chanlink::WindowsUserRingPermit;
+use std::sync::{Arc, Mutex};
+
+/// Trusted per-space resource budget, not a GPU/die fact or guest ring size.
+const SLOTS: usize = 256;
+/// Allocator policy below the public 40-bit command-fetch limit.
+const BASE: u64 = (1 << 40) - (1 << 32);
+/// Bounded pending VA-worker requests for the device.
+const REQUESTS: usize = 512;
+
+/// Private ownership shared by channel and VA planes for ONE mirror lifetime.
+#[derive(Default, Debug)]
+pub struct Regions {
+    slots: Mutex<Vec<(u64, u64)>>,
+}
+
+impl Regions {
+    /// Snapshot exclusions; poisoning refuses all guest mappings below 2^40.
+    pub fn ranges(&self) -> Vec<(u64, u64)> {
+        self.slots
+            .lock()
+            .map(|v| v.clone())
+            .unwrap_or_else(|_| vec![(0, 1 << 40)])
+    }
+
+    /// Guest map/unmap/steer paths check complete spans before host actions.
+    pub fn check(&self, va: u64, len: u64) -> Result<(), String> {
+        let end = va.checked_add(len).ok_or("USER_RING_GUEST_SPAN_OVERFLOW")?;
+        let slots = self
+            .slots
+            .lock()
+            .map_err(|_| "USER_RING_REGIONS_POISONED")?;
+        if slots.iter().any(|&(a, b)| va < b && a < end) {
+            return Err(format!("USER_RING_PRIVATE_OVERLAP {va:#x}+{len:#x}"));
+        }
+        Ok(())
+    }
+
+    // Called only on the VA worker; existing rows, SKED and ledger reservations
+    // must also be checked by that worker BEFORE installing this exclusion.
+    fn claim(&self, va: u64) -> Result<(), String> {
+        let end = va.checked_add(BYTES).ok_or("USER_RING_PRIVATE_SPAN")?;
+        let mut slots = self
+            .slots
+            .lock()
+            .map_err(|_| "USER_RING_REGIONS_POISONED")?;
+        if slots.len() >= SLOTS || slots.iter().any(|&(a, b)| va < b && a < end) {
+            return Err("USER_RING_PRIVATE_SLOT_BUSY".into());
+        }
+        slots
+            .try_reserve(1)
+            .map_err(|_| "USER_RING_REGION_ALLOCATION")?;
+        slots.push((va, end));
+        Ok(())
+    }
+
+    fn release(&self, va: u64) -> Result<(), String> {
+        let mut slots = self
+            .slots
+            .lock()
+            .map_err(|_| "USER_RING_REGIONS_POISONED")?;
+        let at = slots
+            .iter()
+            .position(|&(a, _)| a == va)
+            .ok_or("USER_RING_REGION_MISSING")?;
+        slots.remove(at);
+        Ok(())
+    }
+}
+
+/// Worker-owned native storage and its permanent mirror lifetime association.
+pub struct Lease<V = CpuView> {
+    /// CPU access is worker-only; no vCPU takes this mutex.
+    pub storage: Mutex<Storage<V>>,
+    mirror: Mirror,
+    va: u64,
+    retired: std::sync::atomic::AtomicBool,
+    // 1: bounded clear,2: map on a later turn,0: ready/refused.
+    initializing: std::sync::atomic::AtomicU8,
+    reply: Arc<Reply<V>>,
+}
+
+/// A nonblocking allocation reply. Lost replies retain resources in Queue.
+pub struct Reply<V = CpuView>(Mutex<Option<Result<std::sync::Weak<Lease<V>>, String>>>);
+
+impl<V> Reply<V> {
+    /// Act/worker poll; absence never grants a resource or reuse credit.
+    pub fn take(&self) -> Result<Option<Result<Arc<Lease<V>>, String>>, String> {
+        self.0
+            .lock()
+            .map(|mut r| {
+                r.take().map(|result| {
+                    result.and_then(|lease| {
+                        lease
+                            .upgrade()
+                            .ok_or_else(|| "USER_RING_REPLY_RETIRED".into())
+                    })
+                })
+            })
+            .map_err(|_| "USER_RING_REPLY_POISONED".into())
+    }
+}
+
+enum Request<V> {
+    Allocate {
+        key: VasKey,
+        mirror: Mirror,
+        _permit: WindowsUserRingPermit,
+        reply: Arc<Reply<V>>,
+    },
+    // Enqueued only after successful native channel free, or before birth.
+    Release(Arc<Lease<V>>),
+}
+
+/// No host verbs outside `serve`, called exclusively by Device::va_loop.
+pub struct Queue<V = CpuView> {
+    pending: Mutex<Vec<Request<V>>>,
+    // Strong ownership even if a birth reply is lost or cleanup is refused.
+    held: Mutex<Vec<Arc<Lease<V>>>>,
+}
+
+impl<V> Default for Queue<V> {
+    fn default() -> Self {
+        Self {
+            pending: Mutex::new(Vec::new()),
+            held: Mutex::new(Vec::new()),
+        }
+    }
+}
+
+impl<V> std::fmt::Debug for Queue<V> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("WindowsPrivateVaQueue")
+    }
+}
+
+impl<V> Queue<V> {
+    /// Bounded request; permit and mirror lifetime are retained before enqueue.
+    /// Caller signals Inbox::wake after success; never called by a vCPU.
+    pub fn allocate(
+        &self,
+        key: VasKey,
+        mirror: Mirror,
+        permit: WindowsUserRingPermit,
+    ) -> Result<Arc<Reply<V>>, String> {
+        let mut q = self
+            .pending
+            .lock()
+            .map_err(|_| "USER_RING_QUEUE_POISONED")?;
+        if q.len() >= REQUESTS {
+            return Err("USER_RING_REQUEST_BUDGET".into());
+        }
+        q.try_reserve(1)
+            .map_err(|_| "USER_RING_REQUEST_ALLOCATION")?;
+        let reply = Arc::new(Reply(Mutex::new(None)));
+        // A pending allocation/storage keeps its mirror unrecyclable even if
+        // the guest frees its VAS/channel before the allocation reply.
+        mirror
+            .live
+            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        q.push(Request::Allocate {
+            key,
+            mirror,
+            _permit: permit,
+            reply: reply.clone(),
+        });
+        Ok(reply)
+    }
+
+    /// Native channel successfully freed, or this lease never had a channel.
+    /// A failed enqueue retains Queue's strong ownership and mirror live count.
+    pub fn release_after_channel_free(&self, lease: Arc<Lease<V>>) -> Result<(), String> {
+        if lease
+            .initializing
+            .load(std::sync::atomic::Ordering::Acquire)
+            != 0
+        {
+            return Err("USER_RING_RELEASE_BEFORE_INIT_REPLY".into());
+        }
+        let mut q = self
+            .pending
+            .lock()
+            .map_err(|_| "USER_RING_QUEUE_POISONED")?;
+        if q.len() >= REQUESTS {
+            return Err("USER_RING_REQUEST_BUDGET".into());
+        }
+        q.try_reserve(1)
+            .map_err(|_| "USER_RING_REQUEST_ALLOCATION")?;
+        q.push(Request::Release(lease));
+        Ok(())
+    }
+
+    /// Pending work; an idle VA loop signals itself rather than sleeping 50ms.
+    pub fn has_work(&self) -> bool {
+        self.pending.lock().is_ok_and(|q| !q.is_empty())
+            || self.held.lock().is_ok_and(|v| {
+                v.iter()
+                    .any(|l| l.initializing.load(std::sync::atomic::Ordering::Acquire) != 0)
+            })
+    }
+
+    /// One request OR one bounded initialization step, only AFTER current
+    /// reconciliation and only while no invalidate/walk/statement is pending.
+    /// No deadline releases GPU state. Native RM latency is logged separately.
+    pub fn serve(&self, manager: &Manager, rm: &impl StorageHost<View = V>) {
+        let request = self.pending.lock().ok().and_then(|mut q| {
+            if q.is_empty() {
+                None
+            } else {
+                Some(q.remove(0))
+            }
+        });
+        if let Some(request) = request {
+            match request {
+                Request::Allocate {
+                    key, mirror, reply, ..
+                } => {
+                    let t = std::time::Instant::now();
+                    let result = self.build(manager, rm, key, &mirror, reply.clone());
+                    eprintln!(
+                        "kf3: USER_RING_PREPARE elapsed_us={} ok={}",
+                        t.elapsed().as_micros(),
+                        result.is_ok()
+                    );
+                    Self::report_prepare(&mirror, &reply, result);
+                }
+                Request::Release(lease) => self.retire(&lease, rm),
+            }
+            // Re-evaluate invalidate/statement priority on the next VA turn.
+            // Never stack an initialization map behind this request's RM ops.
+            return;
+        }
+        let initializing = self.held.lock().ok().and_then(|v| {
+            v.iter()
+                .find(|l| l.initializing.load(std::sync::atomic::Ordering::Acquire) != 0)
+                .cloned()
+        });
+        let Some(lease) = initializing else {
+            return;
+        };
+        let Ok(mut storage) = lease.storage.try_lock() else {
+            return;
+        };
+        let phase = lease
+            .initializing
+            .load(std::sync::atomic::Ordering::Acquire);
+        let t = std::time::Instant::now();
+        let result = if phase == 1 {
+            storage.clear_next(rm).map(|done| {
+                if done {
+                    lease
+                        .initializing
+                        .store(2, std::sync::atomic::Ordering::Release);
+                }
+                false
+            })
+        } else {
+            storage.map_initialized(rm).map(|()| true)
+        };
+        let elapsed = t.elapsed().as_micros();
+        if phase == 2 || elapsed > 1000 {
+            eprintln!("kf3: USER_RING_INIT phase={phase} elapsed_us={elapsed}");
+        }
+        match result {
+            Ok(false) => {}
+            Ok(true) => {
+                lease
+                    .initializing
+                    .store(0, std::sync::atomic::Ordering::Release);
+                if let Ok(mut out) = lease.reply.0.lock() {
+                    *out = Some(Ok(Arc::downgrade(&lease)));
+                }
+            }
+            Err(error) => {
+                lease
+                    .initializing
+                    .store(0, std::sync::atomic::Ordering::Release);
+                drop(storage);
+                // No native channel can exist before a successful init reply.
+                self.retire(&lease, rm);
+                if let Ok(mut out) = lease.reply.0.lock() {
+                    *out = Some(Err(error));
+                }
+            }
+        }
+    }
+
+    fn retire(&self, lease: &Arc<Lease<V>>, rm: &impl StorageHost<View = V>) {
+        if lease.retired.load(std::sync::atomic::Ordering::Acquire) {
+            return;
+        }
+        let Ok(mut storage) = lease.storage.try_lock() else {
+            eprintln!("kf3: USER_RING_RELEASE_BUSY retained va={:#x}", lease.va);
+            return;
+        };
+        if let Err(error) = storage.release(rm) {
+            eprintln!(
+                "kf3: USER_RING_RELEASE_REFUSED retained va={:#x}: {error}",
+                lease.va
+            );
+            return;
+        }
+        if !storage.released() {
+            return;
+        }
+        // Serialize duplicate retire with this storage lock through removal of
+        // the generation's exclusion; an old lease cannot remove a reused slot.
+        if let Err(error) = lease.mirror.user_regions.release(lease.va) {
+            eprintln!("kf3: USER_RING_REGION_RELEASE_REFUSED: {error}");
+            return;
+        }
+        lease
+            .retired
+            .store(true, std::sync::atomic::Ordering::Release);
+        if let Ok(mut held) = self.held.lock() {
+            if let Some(i) = held.iter().position(|v| Arc::ptr_eq(v, lease)) {
+                held.remove(i);
+                lease
+                    .mirror
+                    .live
+                    .fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
+            }
+        }
+    }
+
+    fn build(
+        &self,
+        manager: &Manager,
+        rm: &impl StorageHost<View = V>,
+        key: VasKey,
+        mirror: &Mirror,
+        reply: Arc<Reply<V>>,
+    ) -> Result<Arc<Lease<V>>, String> {
+        let Some(Target::Gpu(g)) = manager.table.target(key) else {
+            return Err("USER_RING_MIRROR_GONE".into());
+        };
+        if g.vas.space != mirror.space
+            || !Arc::ptr_eq(&g.rows, &mirror.rows)
+            || !Arc::ptr_eq(&g.user_regions, &mirror.user_regions)
+        {
+            return Err("USER_RING_MIRROR_LIFETIME".into());
+        }
+        let mut held = self.held.lock().map_err(|_| "USER_RING_OWNER_POISONED")?;
+        // Global VM ownership budget, including quarantined failed maps.
+        if held.len() >= REQUESTS {
+            return Err("USER_RING_STORAGE_BUDGET".into());
+        }
+        held.try_reserve(1)
+            .map_err(|_| "USER_RING_OWNER_ALLOCATION")?;
+        let rows = g.rows.read().map_err(|_| "USER_RING_ROWS_POISONED")?;
+        let sked = g.sked.lock().map_err(|_| "USER_RING_SKED_POISONED")?;
+        let va = (0..SLOTS)
+            .find_map(|i| {
+                let va = BASE.checked_add((i as u64).checked_mul(BYTES)?)?;
+                let end = va.checked_add(BYTES)?;
+                let collision = rows
+                    .range(..=va)
+                    .next_back()
+                    .is_some_and(|(&a, &(n, ..))| a.saturating_add(n) > va)
+                    || rows.range(va..end).next().is_some()
+                    || sked
+                        .range(..=va)
+                        .next_back()
+                        .is_some_and(|(&a, &n)| a.saturating_add(n) > va)
+                    || sked.range(va..end).next().is_some()
+                    || g.reserved.iter().any(|&(a, b)| va < b && a < end)
+                    || mirror
+                        .space
+                        .guest
+                        .iter()
+                        .any(|r| r.handle != 0 && va < r.hi && r.lo < end)
+                    || !g.bv.own_view(va, end).owned.is_empty()
+                    || mirror.user_regions.check(va, BYTES).is_err();
+                (!collision).then_some(va)
+            })
+            .ok_or("USER_RING_NO_PRIVATE_SLOT")?;
+        mirror.user_regions.claim(va)?;
+        drop(sked);
+        drop(rows);
+        self.adopt(
+            &mut held,
+            mirror,
+            va,
+            reply,
+            Storage::prepare(rm, mirror.space, va),
+        )
+    }
+
+    fn report_prepare(mirror: &Mirror, reply: &Reply<V>, result: Result<Arc<Lease<V>>, String>) {
+        if let Err(error) = result {
+            mirror
+                .live
+                .fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
+            if let Ok(mut out) = reply.0.lock() {
+                *out = Some(Err(error));
+            }
+        }
+    }
+
+    fn adopt(
+        &self,
+        held: &mut Vec<Arc<Lease<V>>>,
+        mirror: &Mirror,
+        va: u64,
+        reply: Arc<Reply<V>>,
+        prepared: Result<Storage<V>, kf_chan::user_storage::BuildError<V>>,
+    ) -> Result<Arc<Lease<V>>, String> {
+        let (storage, error) = match prepared {
+            Ok(storage) => (storage, None),
+            Err(error) => (error.retained, Some(error.reason)),
+        };
+        if storage.released() {
+            mirror.user_regions.release(va)?;
+            return Err(error.unwrap_or_else(|| "USER_RING_STORAGE_NOT_LIVE".into()));
+        }
+        let lease = Arc::new(Lease {
+            storage: Mutex::new(storage),
+            mirror: mirror.clone(),
+            va,
+            retired: std::sync::atomic::AtomicBool::new(false),
+            initializing: std::sync::atomic::AtomicU8::new(if error.is_none() { 1 } else { 0 }),
+            reply,
+        });
+        held.push(lease.clone());
+        if let Some(error) = error {
+            // Retained resource also needs its live-count pin after Err reply.
+            mirror
+                .live
+                .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+            eprintln!("kf3: USER_RING_BUILD_REFUSED retained va={va:#x}: {error}");
+            Err(error)
+        } else {
+            Ok(lease)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn exclusions_are_complete_spans_and_survive_no_receipt() {
+        let r = Regions::default();
+        r.claim(BASE).unwrap();
+        assert!(r.check(BASE - 4, 8).is_err());
+        assert!(r.check(BASE + BYTES - 4, 8).is_err());
+        assert!(r.check(BASE, 4).is_err());
+        assert!(r.check(u64::MAX - 3, 8).is_err());
+        assert!(r.check(BASE - 4, 4).is_ok());
+        assert!(r.check(BASE + BYTES, 4).is_ok());
+        assert!(r.claim(BASE).is_err());
+        assert_eq!(r.ranges(), [(BASE, BASE + BYTES)]);
+        r.release(BASE).unwrap();
+        assert!(r.check(BASE, BYTES).is_ok());
+    }
+    #[test]
+    fn linux_default_owns_no_private_ranges_and_budget_is_bounded() {
+        let r = Regions::default();
+        assert!(r.ranges().is_empty());
+        for i in 0..SLOTS {
+            r.claim(BASE + i as u64 * BYTES).unwrap();
+        }
+        assert!(r.claim(BASE + SLOTS as u64 * BYTES).is_err());
+        assert_eq!(r.ranges().len(), SLOTS);
+    }
+}

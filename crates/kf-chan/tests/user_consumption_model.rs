@@ -130,3 +130,36 @@ fn source_generations_survive_a_shared_native_ring_without_cross_writeback() {
     assert_eq!(q.observe_get(91, 3).unwrap(), [old]);
     assert_eq!(q.observe_get(91, 6).unwrap(), [new]);
 }
+
+#[test]
+fn command_slot_staging_cells_cannot_be_reused_before_the_old_witness() {
+    use std::collections::{HashMap, HashSet};
+    for entries in [4, 8, 16, 32, 64, 128, 256, 512] {
+        let mut ledger = Consumption::new(entries, 91).unwrap();
+        let mut by_receipt = HashMap::new();
+        let mut cells = HashSet::new();
+        let mut issued = 0u64;
+        let mut fetched = 0u64;
+        let mut tag = 0u32;
+        for _ in 0..10000 {
+            while ledger.available_gp() >= 3 {
+                tag += 1;
+                let publication = ledger.publish(source(tag)).unwrap();
+                assert!(
+                    cells.insert(publication.command_slot),
+                    "reused a cell before HOST receipt"
+                );
+                by_receipt.insert(tag, publication.command_slot);
+                issued = publication.witness_sequence;
+            }
+            assert!(fetched < issued);
+            fetched += 1;
+            for receipt in ledger
+                .observe_get(91, (fetched % u64::from(entries)) as u32)
+                .unwrap()
+            {
+                assert!(cells.remove(&by_receipt.remove(&receipt.guest_get).unwrap()));
+            }
+        }
+    }
+}
