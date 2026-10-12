@@ -1,5 +1,21 @@
 # Handoff for a different agent (Codex or any fresh agent), 2026-10-11
 
+## UPDATE 2026-10-12 04:00UTC — composed native submission PASS
+
+Last confirmed push3d261eb2a. Native exact3d261eb2afe3938e72d80c069ead77f812b0a0b8
+USER C56F/uid65534 PASS: immutable parser/planner17ops/34words -> private
+Storage.write_publication -> real4096-byte copy/ref1/CEsem1/GET3PUT3 and exact
+HOST-consumption receipt(gen1,get1),52810us. Prepare61us/clear256,max47us/map67us;
+bounded hostXid0 and clean native teardown. Evidence user-storage-assembled/result.
+Metadata full-hash typo preserved/corrected after941 staged-source-file checks;
+actual tested source is3d261eb2a. No runtime wiring or Windows migration claim.
+Next: multi-cell/software final-source receipt model, birth identity/cancellation,
+source/VA gate and measured migration semantics; then exact Linux9+10/30/Windows.
+Gravity kayfabe still FAIL/TIMEOUT, same-GPU VFIO PASS179/183s. Personal image
+unchanged0444/28240642048bytes, noQEMU/DMA-FQ/lockfree/stop absent,119615680512
+bytesfree. Vast rechecked04:00UTC:[]; nothing to retire. Matrix/sweep remain open.
+
+
 ## UPDATE 2026-10-12 03:57UTC — composed submission prototype; native probe next
 
 Last confirmed push742fb91aa. Bounded user_batch plans complete public packets
