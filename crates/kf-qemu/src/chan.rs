@@ -71,6 +71,8 @@ use std::sync::{Arc, Mutex, RwLock};
 mod userrelay;
 #[path = "userpump.rs"]
 mod userpump;
+#[path = "usershadow.rs"]
+mod usershadow;
 #[path = "userquota.rs"]
 mod userquota;
 

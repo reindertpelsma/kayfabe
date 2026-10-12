@@ -525,6 +525,18 @@ impl Storage<CpuView> {
             .map_err(|e| format!("USER_STORAGE_GP_WRITE: {e:?}"))
     }
 
+    /// Opaque diagnostic USER forwarding; caller must retain own restricted USER
+    /// eligibility, exact slot/source/allocation admission and no CPU API actions.
+    /// This does not validate native GP semantics or grant any receipt.
+    pub fn write_shadow_gp(&self, slot: u32, entry: u64) -> Result<(), String> {
+        if slot >= ENTRIES {
+            return Err("USER_STORAGE_SHADOW_GP_BOUND".into());
+        }
+        self.cpu()?
+            .store_u64(HostOffset::new(GP_OFFSET + u64::from(slot) * 8), entry)
+            .map_err(|e| format!("USER_STORAGE_SHADOW_GP_WRITE: {e:?}"))
+    }
+
     /// Author only the public CONTROL NOP/LENGTH0/SYNC_WAIT descriptor.
     /// The caller must insert this after a complete authored packet, then a
     /// nonempty witness. The barrier's own GET commit grants no PB-byte credit.
@@ -556,8 +568,8 @@ impl Storage<CpuView> {
             .checked_add(GP_OFFSET + u64::from(ENTRIES) * 8)
             .ok_or("USER_STORAGE_WITNESS_BOUND")?;
         // Synthetic private bytes must not replace TOP_LEVEL_GET monitoring.
-        let entry = kf_abi::submit::gp_entry(va, 4).ok_or("USER_STORAGE_WITNESS_FORMAT")?
-            | (1 << 41);
+        let entry =
+            kf_abi::submit::gp_entry(va, 4).ok_or("USER_STORAGE_WITNESS_FORMAT")? | (1 << 41);
         self.cpu()?
             .store_u64(HostOffset::new(GP_OFFSET + u64::from(slot) * 8), entry)
             .map_err(|e| format!("USER_STORAGE_WITNESS_WRITE: {e:?}"))
@@ -672,10 +684,18 @@ mod tests {
         let s = anonymous_live_storage();
         let entry = kf_abi::submit::gp_entry(0x420000, 128).unwrap() | (1 << 41) | (1 << 63);
         s.write_user_gp(0, entry).unwrap();
-        assert_eq!(s.cpu().unwrap().load_u64(HostOffset::new(GP_OFFSET)).unwrap(), entry);
+        assert_eq!(
+            s.cpu()
+                .unwrap()
+                .load_u64(HostOffset::new(GP_OFFSET))
+                .unwrap(),
+            entry
+        );
         assert_eq!(s.gpu_get().unwrap(), 0);
         assert_eq!(s.gpu_reference().unwrap(), 0);
-        let crate::user_stream::Source::Segment(d) = crate::user_stream::inspect_entry(entry, 65536).unwrap() else {
+        let crate::user_stream::Source::Segment(d) =
+            crate::user_stream::inspect_entry(entry, 65536).unwrap()
+        else {
             panic!("nonempty direct segment");
         };
         assert!(d.subroutine && d.sync_wait);
@@ -689,12 +709,28 @@ mod tests {
         for bytes in [100 << 10, GP_OFFSET] {
             let entry = kf_abi::submit::gp_entry(0x420000, bytes).unwrap() | (1 << 41);
             s.write_user_gp(0, entry).unwrap();
-            assert_eq!(s.cpu().unwrap().load_u64(HostOffset::new(GP_OFFSET)).unwrap(), entry);
+            assert_eq!(
+                s.cpu()
+                    .unwrap()
+                    .load_u64(HostOffset::new(GP_OFFSET))
+                    .unwrap(),
+                entry
+            );
         }
-        let before = s.cpu().unwrap().load_u64(HostOffset::new(GP_OFFSET)).unwrap();
+        let before = s
+            .cpu()
+            .unwrap()
+            .load_u64(HostOffset::new(GP_OFFSET))
+            .unwrap();
         let oversized = kf_abi::submit::gp_entry(0x420000, GP_OFFSET + 4).unwrap();
         assert!(s.write_user_gp(0, oversized).is_err());
-        assert_eq!(s.cpu().unwrap().load_u64(HostOffset::new(GP_OFFSET)).unwrap(), before);
+        assert_eq!(
+            s.cpu()
+                .unwrap()
+                .load_u64(HostOffset::new(GP_OFFSET))
+                .unwrap(),
+            before
+        );
         assert_eq!(s.gpu_get().unwrap(), 0);
         assert_eq!(s.gpu_reference().unwrap(), 0);
     }
@@ -704,9 +740,45 @@ mod tests {
         let s = anonymous_live_storage();
         let entry = 0x8000_0200_0000_0000;
         s.write_user_gp(0, entry).unwrap();
-        assert_eq!(s.cpu().unwrap().load_u64(HostOffset::new(GP_OFFSET)).unwrap(), entry);
+        assert_eq!(
+            s.cpu()
+                .unwrap()
+                .load_u64(HostOffset::new(GP_OFFSET))
+                .unwrap(),
+            entry
+        );
         assert_eq!(s.gpu_get().unwrap(), 0);
         assert_eq!(s.gpu_reference().unwrap(), 0);
+    }
+
+    #[test]
+    fn shadow_writer_preserves_opaque_bits_but_cannot_publish_or_forge_progress() {
+        let s = anonymous_live_storage();
+        for entry in [
+            1 << 32,
+            u64::MAX,
+            kf_abi::submit::gp_entry(0x420000, MAX_SOURCE_BYTES + 4).unwrap(),
+        ] {
+            assert!(s.write_user_gp(0, entry).is_err());
+            s.write_shadow_gp(ENTRIES - 1, entry).unwrap();
+            assert_eq!(
+                s.cpu()
+                    .unwrap()
+                    .load_u64(HostOffset::new(GP_OFFSET + u64::from(ENTRIES - 1) * 8))
+                    .unwrap(),
+                entry
+            );
+            assert_eq!(s.gpu_get().unwrap(), 0);
+            assert_eq!(s.gpu_reference().unwrap(), 0);
+            assert_eq!(
+                s.cpu()
+                    .unwrap()
+                    .load_u32(HostOffset::new(USERD_OFFSET + kf_abi::submit::USERD_GP_PUT))
+                    .unwrap(),
+                0
+            );
+            assert!(s.write_shadow_gp(ENTRIES, entry).is_err());
+        }
     }
 
     #[test]
@@ -747,8 +819,11 @@ mod tests {
         s.write_authored(0, &[0, 0]).unwrap();
         for (slot, level) in [(0, false), (1, true)] {
             s.write_gp_level(slot, 0, 8, true, level).unwrap();
-            let entry = s.cpu().unwrap()
-                .load_u64(HostOffset::new(GP_OFFSET + u64::from(slot) * 8)).unwrap();
+            let entry = s
+                .cpu()
+                .unwrap()
+                .load_u64(HostOffset::new(GP_OFFSET + u64::from(slot) * 8))
+                .unwrap();
             let d = kf_abi::submit::gp_entry_decode_direct_c56f(entry).unwrap();
             assert_eq!(d.subroutine, level);
             assert!(d.sync_wait);
@@ -774,7 +849,10 @@ mod tests {
         assert_eq!(read(0), kf_abi::submit::gp_entry(s.va, 8).unwrap());
         assert_eq!(read(1), 1 << 63);
         let witness = s.va + GP_OFFSET + u64::from(ENTRIES) * 8;
-        assert_eq!(read(2), kf_abi::submit::gp_entry(witness, 4).unwrap() | (1 << 41));
+        assert_eq!(
+            read(2),
+            kf_abi::submit::gp_entry(witness, 4).unwrap() | (1 << 41)
+        );
         assert_eq!(cpu.load_u32(HostOffset::new(witness - s.va)).unwrap(), 0);
         assert!(s.write_authored(GP_OFFSET, &[99]).is_err());
         assert!(s.write_gp(3, USERD_OFFSET, 4, false).is_err());

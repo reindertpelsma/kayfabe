@@ -13,6 +13,12 @@ pub(super) fn enabled() -> bool {
     // Cursor-zero migration is a run hypothesis, not established RM semantics.
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| std::env::var("KF3_WIN_USER_RING_RELAY").is_ok_and(|v| v == "1"))
+        || shadow_enabled()
+}
+
+pub(super) fn shadow_enabled() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("KF3_WIN_USER_RING_SHADOW").is_ok_and(|v| v == "1"))
 }
 
 /// Durable demand is outside the private publication mutex: a final doorbell
@@ -278,8 +284,10 @@ impl Birth {
                 return Err("USER_RING_SOURCE_DECLARATION".to_string());
             }
             let id = a.subdevice_id.ok_or("USER_RING_SUBDEVICE_ID_UNMEASURED")?;
-            kf_chan::user_scan::Scan::for_subdevice(id)
-                .map_err(|why| format!("USER_RING_SUBDEVICE_ID {id:#x}: {why}"))?;
+            if !shadow_enabled() || id != 0 {
+                kf_chan::user_scan::Scan::for_subdevice(id)
+                    .map_err(|why| format!("USER_RING_SUBDEVICE_ID {id:#x}: {why}"))?;
+            }
             let (handle, offset) = a.userd_source.ok_or("USER_RING_NO_USERD_DECLARATION")?;
             if handle == 0 || offset & 0x1ff != 0 {
                 return Err("USER_RING_USERD_DECLARATION".into());
@@ -300,14 +308,16 @@ impl Birth {
                 return Err(fail(format!("{why}; storage cleanup {cleanup:?}")));
             }
         };
-        let pump = match super::userpump::Pump::new(me, a.subdevice_id.unwrap_or(0)) {
-            Ok(pump) => pump,
-            Err(why) => {
-                let cleanup = me.inbox.user_va.release_after_channel_free(lease);
-                let _ = me.inbox.wake.signal();
-                return Err(fail(format!("{why}; never-born cleanup {cleanup:?}")));
-            }
-        };
+        let pump =
+            match super::userpump::Pump::new(me, a.subdevice_id.unwrap_or(0), (a.client, a.handle))
+            {
+                Ok(pump) => pump,
+                Err(why) => {
+                    let cleanup = me.inbox.user_va.release_after_channel_free(lease);
+                    let _ = me.inbox.wake.signal();
+                    return Err(fail(format!("{why}; never-born cleanup {cleanup:?}")));
+                }
+            };
         let notifier = self
             .err_at
             .and_then(|(obj, off, at)| me.arm_notifier(a.client, a.handle, obj, off, at));
@@ -392,15 +402,33 @@ impl Birth {
         // legacy host birth can hide a failed unwind. Keep the attempt, storage
         // and USER count until session close if no complete Channel is returned.
         self.count.native_attempted = true;
-        let native = match join {
-            Some(tsg) => me.rm.birth_user_ring_member(
+        let shadow_default = shadow_enabled() && a.subdevice_id == Some(0);
+        if shadow_enabled() {
+            eprintln!(
+                "kf3: EXPERIMENT KF3_WIN_USER_RING_SHADOW {:#x}:{:#x} declared_id={:x?}; opaque originalGP, no CPU API/staging/witness; mask1 sampled hypothesis for declared0, not guest parity",
+                a.client, a.handle, a.subdevice_id
+            );
+        }
+        let native = match (join, shadow_default) {
+            (Some(tsg), true) => me.rm.birth_member(
+                tsg,
+                a.engine_type.unwrap_or(0),
+                spec,
+                false,
+                kf_host::channel::PhysicalCeBelt::Deny,
+            ),
+            (None, true) => {
+                me.rm
+                    .birth_channel(self.mirror.space, a.engine_type.unwrap_or(0), spec)
+            }
+            (Some(tsg), false) => me.rm.birth_user_ring_member(
                 tsg,
                 a.engine_type.unwrap_or(0),
                 spec,
                 false,
                 a.subdevice_id.unwrap_or(0),
             ),
-            None => me.rm.birth_user_ring_channel(
+            (None, false) => me.rm.birth_user_ring_channel(
                 self.mirror.space,
                 a.engine_type.unwrap_or(0),
                 spec,

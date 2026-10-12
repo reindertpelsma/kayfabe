@@ -1,5 +1,33 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-12 20:33UTC — bounded shadow diagnostic and native zero discriminator
+
+Last confirmed push16a1b6a78; working branch codex/windows-matrix-20261011.
+Native exact16a host595.91.07 uid65534 USER/C7B5 zero/id1 fixtures bothPASS:
+initial marker/all11 excludedbits/STORE USE/native GET/copy/reference, no hostXid.
+Evidence user-worker/default-zero-native. This is not guest580.88 default-mask parity.
+
+Default-OFF KF3_WIN_USER_RING_SHADOW implemented: private USERD/ring relays original
+GP descriptors; bounded scanner observes only, no CPU deferred actions, PB staging
+or witnesses. It preserves existing native USER/own refreshed VAS/source/credit
+checks; zero declaration uses ordinary host native birth. Parser bit1 for zero is
+an explicit observation hypothesis. Lost history stops further CPU PB reads.
+Any failed publication discards parser history while retaining quota/attempt counts.
+Independent review found two blockers, reproduced failing-first and corrected;
+re-review has no source blocker for exclusive single-VM diagnostic. Changed-crate
+kf-chan/kf-qemu tests PASS; final eight-crate run2155PASS plus probe6PASS. Extra linux-raw run has
+three environment failures because controller /dev/null is regular (157PASS/3FAIL,
+serial retry also fails); not represented as green. Exact hardware regression pending.
+
+RCscope source now available/read; shared engine/otherVM recovery remains unproved.
+Shadow is not a migration fix and no new GravityVkPASS claimed. Next unused base1610:
+after exact Linux9+10/fast30/desktop, one shadow boot with Edge video, GravityMark
+D3D12 and Vulkan, original oracles/production19flags/media; desktop implicit. Time-box
+further full mediation cycles using measured refusal classes. Personal1380 image
+preserved; completed own1600 disposable removed after all-qcow/protected audit.
+Matrix, migration cursor semantics, vidmem USERD and compatibility sweep remain open.
+
+
 ## UPDATE 2026-10-12 20:10UTC —1600 pre-benchmark zero-ID refusal; batching audit
 
 Last confirmed push71c608bc3; product testedb50774a7a. Windows1600 signedin/NVIDIA

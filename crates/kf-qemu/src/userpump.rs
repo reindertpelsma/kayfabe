@@ -134,6 +134,8 @@ pub(super) struct Pump {
     source_admitted: bool,
     cursor: u32,
     scan: Scan,
+    shadow: Option<super::usershadow::Shadow>,
+    key: (u32, u32),
     fetch: Fetch,
     segment: Option<Segment>,
     guest_get: Option<(u64, u32)>,
@@ -173,7 +175,7 @@ enum PendingAction {
 }
 
 impl Pump {
-    pub(super) fn new(me: &ChanPlane, subdevice_id: u32) -> Result<Self, String> {
+    pub(super) fn new(me: &ChanPlane, subdevice_id: u32, key: (u32, u32)) -> Result<Self, String> {
         Ok(Self {
             cache: crate::userstore::Cache::new(
                 me.rm,
@@ -186,7 +188,14 @@ impl Pump {
             source_admitted: false,
             cursor: 0,
             // The native birth authors this same admitted channel identity.
-            scan: Scan::for_subdevice(subdevice_id).map_err(str::to_owned)?,
+            scan: if userrelay::shadow_enabled() {
+                Scan::default()
+            } else {
+                Scan::for_subdevice(subdevice_id).map_err(str::to_owned)?
+            },
+            shadow: userrelay::shadow_enabled()
+                .then(|| super::usershadow::Shadow::new(subdevice_id)),
+            key,
             fetch: Fetch::new(kf_chan::user_storage::ENTRIES).map_err(str::to_owned)?,
             segment: None,
             guest_get: None,
@@ -195,6 +204,12 @@ impl Pump {
         })
     }
     pub(super) fn release(&mut self) -> Result<(), String> {
+        if let Some(shadow) = self.shadow.take() {
+            eprintln!(
+                "kf3: USER_RING_SHADOW_SUMMARY {:x?} observation_attempt_counts={:?}; never execution or completion",
+                self.key, shadow.counts
+            );
+        }
         self.cache
             .release()
             .map_err(|e| format!("USER_RING_SOURCE_CLEANUP {e:?}"))
@@ -308,6 +323,9 @@ impl Pump {
                     .try_into()
                     .map_err(|_| "USER_RING_GP_SNAPSHOT_SIZE")?,
             );
+            if self.shadow.is_some() {
+                return self.shadow_entry(me, r, ring, source, entry);
+            }
             let descriptor = kf_chan::user_stream::inspect_entry(entry, userread::MAX_BYTES as u64)
                 .map_err(|e| {
                     format!(
@@ -402,6 +420,134 @@ impl Pump {
 
     /// No host verb inside any admission guard. The caller holds Record over
     /// the final mapped doorbell too; native Free takes that mutex off-drainer.
+    /// Opaque diagnostic: observations never authorize host actions or retirement.
+    fn shadow_entry(
+        &mut self,
+        me: &ChanPlane,
+        r: &userrelay::Record,
+        ring: Option<Mapping<'static>>,
+        source: Snapshot<'static>,
+        entry: u64,
+    ) -> Turn<bool> {
+        use super::usershadow::Class;
+        if self.fetch.available() == 0 {
+            self.tick = true;
+            return Ok(false);
+        }
+        let mut shadow = self.shadow.take().ok_or("USER_RING_SHADOW_ABSENT")?;
+        let mut events = Vec::new();
+        let mut sample = Vec::new();
+        match kf_chan::user_stream::inspect_entry(entry, userread::MAX_BYTES as u64) {
+            Ok(kf_chan::user_stream::Source::Nop) => {}
+            Ok(kf_chan::user_stream::Source::Segment(d)) => {
+                if !shadow.can_observe() {
+                    if shadow.record(Class::UnknownSuffix) {
+                        events.push((
+                            Class::UnknownSuffix,
+                            "history/address interpretation unknown; no further CPU PB reads"
+                                .into(),
+                        ));
+                    }
+                } else if shadow.charge(d.len_bytes as usize) {
+                    match self.snapshot(me, r, d.gpu_va, d.len_bytes as usize) {
+                        Ok(pb) => {
+                            let words =
+                                super::usershadow::decode_words(&pb.bytes, userread::MAX_BYTES);
+                            if let Err(why) = &words {
+                                shadow.lose_history();
+                                if shadow.record(Class::Budget) {
+                                    events.push((Class::Budget, (*why).to_owned()));
+                                }
+                            }
+                            if let Ok(words) = words {
+                                let sw = software_snapshot(me, r);
+                                match sw {
+                                    Ok(sw) => shadow.observe(
+                                        &words,
+                                        |v| sw.as_ref().is_some_and(|s| s.matches(v)),
+                                        |c, why| events.push((c, why)),
+                                    ),
+                                    Err(e) => {
+                                        shadow.lose_history();
+                                        if shadow.record(Class::Source) {
+                                            events.push((
+                                                Class::Source,
+                                                format!("software identity {e:?}"),
+                                            ));
+                                        }
+                                    }
+                                }
+                                if !events.is_empty() {
+                                    sample.extend(words.iter().take(128).copied());
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            shadow.lose_history();
+                            if shadow.record(Class::Source) {
+                                events.push((Class::Source, format!("observation read {e:?}")));
+                            }
+                        }
+                    }
+                } else if shadow.record(Class::ObservationBudget) {
+                    events.push((
+                        Class::ObservationBudget,
+                        "4MiB/channel observation cap; later semantic suffix unknown".into(),
+                    ));
+                }
+            }
+            Err(e) => {
+                shadow.lose_history();
+                let c = if e == kf_chan::user_stream::Refusal::Budget {
+                    Class::Budget
+                } else {
+                    Class::Entry
+                };
+                if shadow.record(c) {
+                    events.push((c, format!("GP {e:?}; no CPU dereference, suffix unknown")));
+                }
+            }
+        }
+        for (class, why) in events {
+            eprintln!(
+                "kf3: USER_RING_SHADOW {:x?} idx={} native={:x?} source_generation={} native_issued={} class={class:?} category={} GP={entry:#018x} cursor={} source_epoch={} {why}; sample_first128={sample:x?}; mutable observation NOT execution",
+                r.key,
+                r.idx,
+                r.chan.map(|c| (c.chan, c.token)),
+                self.generation,
+                self.fetch.issued(),
+                class.category(),
+                self.cursor,
+                source.epoch
+            );
+        }
+        let guest_get = (self.cursor + 1) & (r.source.1 - 1);
+        let publication = self.publish(
+            me,
+            r,
+            None,
+            ring.as_ref(),
+            Some(&source),
+            None,
+            |pump, storage| {
+                let (slot, put) = pump
+                    .fetch
+                    .publish(Some((pump.generation, guest_get)))
+                    .map_err(str::to_owned)?;
+                storage.write_shadow_gp(slot, entry)?;
+                storage.publish_put(put)
+            },
+        );
+        shadow.finish_publication(publication.is_ok());
+        self.shadow = Some(shadow);
+        publication?;
+        self.source_admitted = true;
+        self.cursor = guest_get;
+        self.tick = true;
+        self.again = true;
+        Ok(true)
+    }
+
     fn publish(
         &mut self,
         me: &ChanPlane,

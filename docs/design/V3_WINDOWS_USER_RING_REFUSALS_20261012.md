@@ -46,9 +46,9 @@ methods. user_batch/user_progress/user_ring model failures are plan/order/lifeti
 credit proofs (b,c,d), not a claim that all ordinary methods need interpretation.
 Their tests are useful but they do not secretly expand the connected runtime.
 
-## Batched observation, before implementation
+## Batched observation — implemented diagnostic, default OFF
 
-A useful shadow adapter would copy originalGP descriptors unchanged into a private
+The KF3_WIN_USER_RING_SHADOW adapter copies original GP descriptors unchanged into a private
 native ring, perform no CPU software action, stage no PB and add no witnesses.
 It must still preserve exact allocation/USERD/source authority, private ring
 credits and original native SYNC/LEVEL semantics. Staging-retirement checks do not
@@ -70,11 +70,28 @@ be reconstructed from those logs. Do not invent words from inferred headers.
 
 An unscanned native FIFO-update trigger is expected to RC its own channel based
 on1540. That is not proof a channel RC cannot cause engine/runlist reset or affect
-another VM. The proposed coordinator RC-scope branch was not onorigin at20:04UTC
-(fetch reported missing remote ref); recheck before concluding. A two-VM native
-containment test remains the hardware discriminator. No shadow runtime enabled
-in this checkpoint. After audit, choose a bounded observation run rather than
-another unexamined one-refusal Windows boot.
+another VM. The proposed coordinator RC-scope branch was not onorigin at20:04UTC,
+then became available and was read at20:14UTC (claude/rc-scope-20261012).
+It identifies channel/TSG notification scope, but GSP recovery policy is absent
+from public source; engine reset, fatalGSP and GPU-level recovery can affect
+others. Source reading does not prove a malformed channel always stays local. A two-VM native
+containment test remains the hardware discriminator. No shadow hardware run is claimed in this checkpoint. Use an exclusive single-VM
+diagnostic after exact Linux regression; do not infer other-VM availability.
+The observer has a 4 MiB attempted-read quota per channel, one bounded first
+sample per named class (at most 128 words), and saturating attempt counts. Once
+framing/history is unknown, it stops all later CPU pushbuffer reads. Any failed
+publication also discards parser history; retries retain quota and counters.
+Default-zero native birth uses the ordinary host profile. Its observer assumes
+effective bit 1 explicitly as a diagnostic hypothesis, never CPU action authority.
+Native zero/id1 fixture equivalence is measured only on host595.91.07 USER/C7B5.
+
+Review found two issues, both fixed with failing-first regressions: strict
+descriptor validation accidentally remained on the opaque writer, and a failed
+publication could leave advanced parser history for a retry. The separate raw
+writer retains slot/live-storage bounds without changing the strict writer.
+Original owned-source/native-credit publication guards and native GET receipts
+remain; there are no CPU API actions, private PB staging or witnesses in shadow.
+Independent re-review found no source blocker for this scoped diagnostic.
 
 ## Engine evidence and concrete authority
 
@@ -91,6 +108,6 @@ With those protections, guest mutation of ordinary native methods grants no CPU
 host verb. Only validated registry interpretation can grant that authority.
 A concrete remaining concern is shared-engine reset availability after RC, not
 an identified arbitrary-memory capability. This is unresolved, not asserted safe.
-Full snapshot interception remains necessary for any CPU action to correspond to
-the bytes the native prefix consumed. Shadow execution makes no such guarantee
+Full snapshot interception plus consistent prior parser/binding/mask history remain
+necessary for a CPU action to correspond to the native prefix. Shadow execution makes no such guarantee
 because it executes no CPU actions. Scan-only forwarding is not a migration fix.
