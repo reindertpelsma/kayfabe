@@ -13,8 +13,9 @@
 //! Object lookup must be channel-owned host
 //! metadata; registration reply timing is irrelevant to the parsing mode.
 //! Unsupported packet forms are refused, not silently copied. The model
-//! carries bounded packet metadata across GP entries. Subroutine/control entries
-//! other than the canonical zero GPFIFO NOP remain refused.
+//! carries bounded packet metadata across GP entries. Control entries other
+//! than the canonical zero GPFIFO NOP remain refused. LEVEL1 suppresses top-level
+//! progress reporting; it is not nested execution.
 
 use crate::tmode::SwCall;
 use crate::ttables::{HostMethod, host_method};

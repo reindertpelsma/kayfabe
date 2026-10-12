@@ -576,13 +576,14 @@ impl Pump {
                 if bytes != 0 {
                     let source = source_receipt(s.staged, true, s.generation, s.guest_get);
                     let (slot, _) = pump.fetch.publish(source).map_err(str::to_owned)?;
-                    storage.write_gp(
+                    storage.write_gp_level(
                         slot,
                         (s.at as u64)
                             .checked_mul(4)
                             .ok_or("USER_RING_PREFIX_BOUND")?,
                         bytes as u64,
                         s.entry & (1 << 63) != 0,
+                        s.entry & (1 << 41) != 0,
                     )?;
                 }
                 let source = source_receipt(s.staged, bytes == 0, s.generation, s.guest_get);

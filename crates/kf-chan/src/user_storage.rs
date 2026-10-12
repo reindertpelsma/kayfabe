@@ -465,6 +465,20 @@ impl Storage<CpuView> {
         bytes: u64,
         sync_wait: bool,
     ) -> Result<(), String> {
+        self.write_gp_level(slot, pb_offset, bytes, sync_wait, false)
+    }
+
+    /// Preserve the inspected source's public LEVEL progress classification on
+    /// an authored staged span. LEVEL1 suppresses TOP_LEVEL_GET; it grants no
+    /// execution privilege or receipt. All span checks remain identical.
+    pub fn write_gp_level(
+        &self,
+        slot: u32,
+        pb_offset: u64,
+        bytes: u64,
+        sync_wait: bool,
+        subroutine: bool,
+    ) -> Result<(), String> {
         if slot >= ENTRIES
             || bytes == 0
             || pb_offset
@@ -482,6 +496,9 @@ impl Storage<CpuView> {
         .ok_or("USER_STORAGE_GP_FORMAT")?;
         if sync_wait {
             entry |= 1 << 63;
+        }
+        if subroutine {
+            entry |= 1 << 41;
         }
         self.cpu()?
             .store_u64(HostOffset::new(GP_OFFSET + u64::from(slot) * 8), entry)
@@ -520,7 +537,7 @@ impl Storage<CpuView> {
             .map_err(|e| format!("USER_STORAGE_BARRIER_WRITE: {e:?}"))
     }
 
-    /// Author a nonempty direct MAIN witness to permanently zero HOST DMA_NOP
+    /// Author a nonempty LEVEL_SUBROUTINE witness to zero HOST DMA_NOP
     /// bytes just beyond our descriptor array, inside the RO mapping. No CPU
     /// writer exposed by this helper can mutate those bytes after initialization.
     ///
@@ -534,7 +551,9 @@ impl Storage<CpuView> {
             .va
             .checked_add(GP_OFFSET + u64::from(ENTRIES) * 8)
             .ok_or("USER_STORAGE_WITNESS_BOUND")?;
-        let entry = kf_abi::submit::gp_entry(va, 4).ok_or("USER_STORAGE_WITNESS_FORMAT")?;
+        // Synthetic private bytes must not replace TOP_LEVEL_GET monitoring.
+        let entry = kf_abi::submit::gp_entry(va, 4).ok_or("USER_STORAGE_WITNESS_FORMAT")?
+            | (1 << 41);
         self.cpu()?
             .store_u64(HostOffset::new(GP_OFFSET + u64::from(slot) * 8), entry)
             .map_err(|e| format!("USER_STORAGE_WITNESS_WRITE: {e:?}"))
@@ -645,6 +664,22 @@ mod tests {
     }
 
     #[test]
+    fn direct_level_one_keeps_original_descriptor_and_real_credit_fields() {
+        let s = anonymous_live_storage();
+        let entry = kf_abi::submit::gp_entry(0x420000, 128).unwrap() | (1 << 41) | (1 << 63);
+        s.write_user_gp(0, entry).unwrap();
+        assert_eq!(s.cpu().unwrap().load_u64(HostOffset::new(GP_OFFSET)).unwrap(), entry);
+        assert_eq!(s.gpu_get().unwrap(), 0);
+        assert_eq!(s.gpu_reference().unwrap(), 0);
+        let crate::user_stream::Source::Segment(d) = crate::user_stream::inspect_entry(entry, 65536).unwrap() else {
+            panic!("nonempty direct segment");
+        };
+        assert!(d.subroutine && d.sync_wait);
+        assert_eq!(d.gpu_va, 0x420000);
+        assert_eq!(d.len_bytes, 128);
+    }
+
+    #[test]
     fn bad_user_descriptor_cannot_modify_private_ring_or_userd() {
         let s = anonymous_live_storage();
         let good = kf_abi::submit::gp_entry(0x420000, 4).unwrap();
@@ -652,7 +687,7 @@ mod tests {
         for bad in [
             1,
             good | 1,
-            good | (1 << 41),
+            good | (1 << 40),
             kf_abi::submit::gp_entry(0x420000, 65540).unwrap(),
         ] {
             assert!(s.write_user_gp(0, bad).is_err(), "entry={bad:#x}");
@@ -677,6 +712,26 @@ mod tests {
     }
 
     #[test]
+    fn staged_level_and_sync_are_preserved_without_granting_receipts() {
+        let s = anonymous_live_storage();
+        s.write_authored(0, &[0, 0]).unwrap();
+        for (slot, level) in [(0, false), (1, true)] {
+            s.write_gp_level(slot, 0, 8, true, level).unwrap();
+            let entry = s.cpu().unwrap()
+                .load_u64(HostOffset::new(GP_OFFSET + u64::from(slot) * 8)).unwrap();
+            let d = kf_abi::submit::gp_entry_decode_direct_c56f(entry).unwrap();
+            assert_eq!(d.subroutine, level);
+            assert!(d.sync_wait);
+            assert_eq!(d.gpu_va, s.va);
+            assert_eq!(d.len_bytes, 8);
+        }
+        assert!(s.write_gp_level(ENTRIES, 0, 8, false, true).is_err());
+        assert!(s.write_gp_level(0, USERD_OFFSET, 4, false, true).is_err());
+        assert_eq!(s.gpu_get().unwrap(), 0);
+        assert_eq!(s.gpu_reference().unwrap(), 0);
+    }
+
+    #[test]
     fn trigger_staging_and_host_witness_do_not_overlap_ring_or_unmapped_userd() {
         let s = anonymous_live_storage();
         s.write_authored(0, &[0, 0]).unwrap();
@@ -689,7 +744,7 @@ mod tests {
         assert_eq!(read(0), kf_abi::submit::gp_entry(s.va, 8).unwrap());
         assert_eq!(read(1), 1 << 63);
         let witness = s.va + GP_OFFSET + u64::from(ENTRIES) * 8;
-        assert_eq!(read(2), kf_abi::submit::gp_entry(witness, 4).unwrap());
+        assert_eq!(read(2), kf_abi::submit::gp_entry(witness, 4).unwrap() | (1 << 41));
         assert_eq!(cpu.load_u32(HostOffset::new(witness - s.va)).unwrap(), 0);
         assert!(s.write_authored(GP_OFFSET, &[99]).is_err());
         assert!(s.write_gp(3, USERD_OFFSET, 4, false).is_err());

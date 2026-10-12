@@ -2063,8 +2063,9 @@ pub struct GpfifoEntry {
     pub gpu_va: u64,
     /// Their length in **bytes** (`GP_ENTRY1_LENGTH` is in dwords).
     pub len_bytes: u64,
-    /// `GP_ENTRY1_LEVEL == _SUBROUTINE` — a nested pushbuffer segment rather than a
-    /// top-level one. Carried, not acted on: it still names method words.
+    /// `GP_ENTRY1_LEVEL == _SUBROUTINE`: suppress TOP_LEVEL_GET progress updates.
+    /// Monitoring classification, not a call/return or parser context.
+    /// Public open-gpu-doc9fdf5c40 dev_pbdma.ref.txt:224-232.
     pub subroutine: bool,
     /// `GP_ENTRY1_SYNC == _WAIT` — the host must drain before fetching this entry.
     pub sync_wait: bool,
@@ -2100,13 +2101,14 @@ pub const fn gp_entry_decode(entry: u64) -> Option<GpfifoEntry> {
 }
 
 /// Restricted direct C56F segment: reject conditional FETCH, reserved entry0
-/// bit1/entry1 bit8, and SUBROUTINE. Public595.84 clc56f.h:266-284 enumerates
+/// bit1/entry1 bit8. LEVEL is monitoring classification and is preserved.
+/// Public595.84 clc56f.h:266-284 enumerates
 /// these fields (bit8 has no C56F definition; older classes used it for PRIV).
 /// SYNC_WAIT is preserved for an adapter to honor explicitly, never discarded.
 /// This validates framing only, not ownership, span bounds or a source lifetime.
 #[must_use]
 pub const fn gp_entry_decode_direct_c56f(entry: u64) -> Option<GpfifoEntry> {
-    let unsupported = (1_u64 << 0) | (1_u64 << 1) | (1_u64 << 40) | (1_u64 << 41);
+    let unsupported = (1_u64 << 0) | (1_u64 << 1) | (1_u64 << 40);
     if entry & unsupported != 0 {
         return None;
     }

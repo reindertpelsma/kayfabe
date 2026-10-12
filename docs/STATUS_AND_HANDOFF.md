@@ -1,5 +1,24 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-12 18:25UTC — public LEVEL semantics/native match; correction reviewed
+
+Last confirmed push7d00679ae. Native sameGPU/595.91.07/USERuid65534 matched probes
+at exact7d00679ae: reference versus firstGP LEVEL1 and split-held versus firstGP
+LEVEL1/MAIN continuation allPASS, real copy/reference/GP_GET=PUT, no earlyref or
+hostXid. Public manual defines LEVEL as TOP_LEVEL_GET monitoring, not nested
+execution. Evidence user-worker/native-level, pinned source/link/lines.
+
+This containing commit removes only LEVEL1 refusal, preserves it on ordinary
+rawGP and staged prefixes/suffixes, marks private witnesses LEVEL1; no receipt,
+privilege, lifetime or span relaxation. Failing-first actualCPUstorage test RED;
+full six-crate1921PASS/0failed, independent source review no blocker. Private
+witness change is not covered by old native measurements: next exact native
+storage recheck, Linux9+10/fast30/desktop, Windows1570 retry.1560 raw offending
+entry absent, so its cause is still inferred; new bounded refusal context helps.
+No guest TOP_LEVEL_GET/GET propagation or full progress compatibility claim.
+Worker flag defaultOFF; migration/source-zero remains diagnostic hypothesis.
+
+
 ## UPDATE 2026-10-12 18:17UTC — Windows1560 reaches worker; GP format falsifier
 
 Last confirmed pushe6d858593; exact hardware source6ff5aaf29. Windows1560 admits

@@ -137,7 +137,7 @@ fn gp_entry_flags_cannot_escape_copying_or_discard_wait_ordering() {
         matches!(inspect_entry(raw, 64), Ok(Source::Segment(e)) if e.gpu_va == 0x200000000 && !e.sync_wait)
     );
     assert!(matches!(inspect_entry(raw | (1 << 63), 64), Ok(Source::Segment(e)) if e.sync_wait));
-    for flag in [1 << 0, 1 << 1, 1 << 40, 1 << 41] {
+    for flag in [1 << 0, 1 << 1, 1 << 40] {
         assert_eq!(inspect_entry(raw | flag, 64), Err(Refusal::Entry));
     }
     assert_eq!(inspect_entry(0, 0), Ok(Source::Nop));

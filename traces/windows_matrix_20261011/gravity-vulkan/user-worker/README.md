@@ -105,3 +105,13 @@ NVIDIA580.159.04 RTX4070 Cinnamon/Xorg/gears59–60FPS PASS_WITH_WARNINGS, no ho
 Stopped/noQEMU/DMA-FQ. Evidence resolved-userd-linux. Windows1560 launched with
 only relay flag added to unchanged production setup/original600s oracle/media;
 result pending. No new Windows compatibility claim or cursor-continuity proof.
+
+## LEVEL1 correction, 2026-10-12
+
+Native matched7d00679ae probes4/4PASS/noXid; public LEVEL is monitoring metadata,
+not nested execution. Correction preserves LEVEL1 and SYNC_WAIT on direct and
+staged paths; witnesses LEVEL1 retain private progress confidentiality. Failing
+first actual mapping test RED; full six-crate1921PASS and independent review.
+No guest TOP_LEVEL_GET/GET propagation/full progress claim. Exact native storage,
+Linux and Windows retest still required;1560 cause inferred pending next run.
+See native-level for pinned public source, oracle and before-run falsifier.
