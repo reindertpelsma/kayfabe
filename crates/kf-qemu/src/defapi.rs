@@ -217,6 +217,9 @@ pub fn classify(
                     .into(),
             );
         }
+        Bundle::UpdateChannelInfo(_) => {
+            return refuse("FIFO_UPDATE_CHANNEL_INFO REFUSED: this Translated/T-space path has no Windows USER relay migration adapter or unprivileged host migration verb".into());
+        }
         Bundle::Unserved { what, .. } => {
             let why = match what {
                 "GR_CTXSW_PM_BIND" => {

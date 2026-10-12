@@ -1,0 +1,14 @@
+{
+  "source": "cec4283976009f2662e3f6812e810959911144c4",
+  "tree_head": "cec4283976009f2662e3f6812e810959911144c4",
+  "tracked_dirty": "",
+  "exit": "0",
+  "iommu_group11": "DMA-FQ",
+  "qemu": "",
+  "stop_absent": true,
+  "lock_free": true,
+  "available_bytes": 118513467392,
+  "personal_image_mode": "0o444",
+  "personal_image_size": 28240642048,
+  "host_gpu_driver": "NVIDIA GeForce RTX 4070, 595.91.07"
+}

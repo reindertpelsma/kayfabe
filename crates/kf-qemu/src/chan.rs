@@ -5867,10 +5867,7 @@ impl ChanPlane {
             let update = reg.entries(key).into_iter().find(|e| {
                 matches!(
                     e.decoded,
-                    kf_abi::defapi::Bundle::Unserved {
-                        what: "FIFO_UPDATE_CHANNEL_INFO",
-                        ..
-                    }
+                    kf_abi::defapi::Bundle::UpdateChannelInfo(_)
                 )
             });
             let Some(update) = update else { return };

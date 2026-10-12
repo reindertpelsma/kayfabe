@@ -1,5 +1,22 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-12 04:37UTC — exact cec428397 Linux9+10/30 PASS; typed migration decoder
+
+Last confirmed pushcec428397. On exactcec4283976009f2662e3f6812e810959911144c4,
+trusted RTX4070/595.91.07: gates9/9+gate10 PASS, births12/12 USER/refused0,
+rebuilt revision-private QEMU/rawclient/fresh fast guest, original fast30/30 PASS,
+zero crashes/NOTRUN, EXIT0. Full text/hash evidence in gravity-vulkan/user-lifecycle/
+linux-result. Five Xid31 match negative-test addresses; no Xid32, not zero-Xid claim.
+NoQEMU/DMA-FQ/lockfree/stopabsent/>100GiBfree; personal image unchanged0444/28240642048.
+New reviewed typed FIFO_UPDATE decoder uses existing public generated layouts,
+checks widths/full struct spans, and refuses missing/short layout locally. Current
+trigger still explicitly REFUSED: no VM relay/migration wired. Full GPU-free abi,
+rm,qemu,chan tests pass; new decoder has no exact hardware claim yet. Next: pending
+Windows birth/VA-source lifetime adapter and ordered migration, then exact Linux
+and Gravity. Gravity Kayfabe FAIL/TIMEOUT; native VFIO PASS179/183s. Matrix and
+compatibility sweep remain open; Vast lastchecked04:11UTC:[], master untouched.
+
+
 ## UPDATE 2026-10-12 04:28UTC — reviewed exact object lifetimes; Linux regression next
 
 Last confirmed push1373317ce. Production EngineObj now retains exact channel AND
