@@ -899,6 +899,7 @@ impl Device {
         // census, the memory inbox, the channel plane) is the SAME across a rebuild — only the
         // links that read layouts are new.
         let build = {
+            let memory_access = chans.memory_access.clone();
             let memory_list_fb = layout.clone();
             let x11_dispsw = cfg.x11_dispsw;
             let gss_native = gss_native.clone();
@@ -916,11 +917,14 @@ impl Device {
                     &t,
                     kf_abi::GuestOs::Linux,
                     Box::new(
-                        kf_rm::rmrpc::GraphObjects::new(family)
-                            .with_guest_ram(std::sync::Arc::new(crate::mem::MemoryListRam(ram)))
-                            .with_guest_framebuffer(memory_list_fb.clone())
-                            .with_deferred_api(defapi_reg.clone())
-                            .with_fifo_update_filter(fifo_update_filter.clone()),
+                        kf_rm::memory_access::SharedObjects::new(
+                            kf_rm::rmrpc::GraphObjects::new(family)
+                                .with_guest_ram(std::sync::Arc::new(crate::mem::MemoryListRam(ram)))
+                                .with_guest_framebuffer(memory_list_fb.clone())
+                                .with_deferred_api(defapi_reg.clone())
+                                .with_fifo_update_filter(fifo_update_filter.clone()),
+                            &memory_access,
+                        ),
                     ),
                     kf_rm::rmrpc::ReasmLimits::default(),
                 );

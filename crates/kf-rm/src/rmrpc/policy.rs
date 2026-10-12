@@ -327,6 +327,17 @@ impl GraphObjects {
         crate::memory_list::write(&self.graph, self.ram.as_ref(), key, offset, bytes)
     }
 
+    /// Bounded worker read with typed nonblocking topology admission.
+    pub fn try_read_memory_list(&self, key: crate::rmgraph::NodeKey, offset: u64,
+        bytes: &mut [u8]) -> Result<(), crate::memory_list::AccessError> {
+        crate::memory_list::try_read(&self.graph, self.ram.as_ref(), key, offset, bytes)
+    }
+    /// Bounded worker write; never falls back to a blocking RAM authority.
+    pub fn try_write_memory_list(&self, key: crate::rmgraph::NodeKey, offset: u64,
+        bytes: &[u8]) -> Result<(), crate::memory_list::AccessError> {
+        crate::memory_list::try_write(&self.graph, self.ram.as_ref(), key, offset, bytes)
+    }
+
     /// A fresh graph for `family`.
     #[must_use]
     pub fn new(family: kf_chip::Family) -> GraphObjects {

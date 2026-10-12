@@ -2260,6 +2260,8 @@ pub struct ChanPlane {
     pt: Mutex<HashMap<(u32, u32), PtChan>>,
     /// Exact pending Windows USER births, canceled before live subtree removal.
     user_births: crate::userbirth::Book,
+    /// Current live object graph for bounded, exact-lifetime USERD access.
+    pub memory_access: Arc<kf_rm::memory_access::Access>,
     /// ★ 2026-10-08 (`V3_USERD_RELAY.md`): relayed-USERD twins, by host token.
     relays: Mutex<HashMap<u32, Arc<Mutex<Relay>>>>,
     /// ★ P5b: guest engine object `(hClient, hObject)` → its channel's key.
@@ -2905,6 +2907,7 @@ impl ChanPlane {
             family,
             pt: Mutex::new(HashMap::new()),
             user_births,
+            memory_access: Arc::default(),
             relays: Mutex::new(HashMap::new()),
             pt_objs: Mutex::new(HashMap::new()),
             dbg: Mutex::new(HashMap::new()),

@@ -211,6 +211,37 @@ impl RamMap {
 /// supplies only writable real RAM (no ROM or RAM-device/MMIO). No raw span escapes
 /// the read guard here; unregister waits for the bounded copy before freeing backing.
 pub struct MemoryListRam(pub &'static RamMap);
+impl MemoryListRam {
+    fn try_access(
+        &self,
+        span: kf_rm::memory_list::RamSpan,
+        generation: u64,
+        offset: u64,
+        bytes: usize,
+        copy: impl FnOnce(&RamBlock, usize) -> bool,
+    ) -> Result<(), kf_rm::memory_list::AccessError> {
+        use kf_rm::memory_list::AccessError;
+        if bytes > kf_rm::memory_list::MAX_ACCESS
+            || offset.checked_add(bytes as u64).is_none_or(|end| end > span.length)
+        {
+            return Err(AccessError::Bounds);
+        }
+        let guard = self.0.blocks.try_read().map_err(|e| match e {
+            std::sync::TryLockError::WouldBlock => AccessError::Busy,
+            std::sync::TryLockError::Poisoned(_) => AccessError::Poisoned,
+        })?;
+        if generation == 0 || self.0.generation.load(Ordering::Relaxed) != generation {
+            return Err(AccessError::Topology);
+        }
+        let block = memory_list_block(&guard, span).ok_or(AccessError::Topology)?;
+        let at = span.base.checked_sub(block.gpa)
+            .and_then(|v| v.checked_add(offset))
+            .and_then(|v| usize::try_from(v).ok()).ok_or(AccessError::Topology)?;
+        // Keep the topology guard across the bounded CPU copy: unregister cannot
+        // free or replace this backing until the copy has returned.
+        if copy(block, at) { Ok(()) } else { Err(AccessError::Topology) }
+    }
+}
 impl core::fmt::Debug for MemoryListRam {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.write_str("MemoryListRam(..)")
@@ -243,6 +274,18 @@ fn memory_list_block(blocks: &[RamBlock], span: kf_rm::memory_list::RamSpan) -> 
 }
 
 impl kf_rm::memory_list::GuestRamAuthority for MemoryListRam {
+    fn try_read(
+        &self, span: kf_rm::memory_list::RamSpan, generation: u64,
+        offset: u64, bytes: &mut [u8],
+    ) -> Result<(), kf_rm::memory_list::AccessError> {
+        self.try_access(span, generation, offset, bytes.len(), |b, at| b.mem.read_into(at, bytes))
+    }
+    fn try_write(
+        &self, span: kf_rm::memory_list::RamSpan, generation: u64,
+        offset: u64, bytes: &[u8],
+    ) -> Result<(), kf_rm::memory_list::AccessError> {
+        self.try_access(span, generation, offset, bytes.len(), |b, at| b.mem.write_from(at, bytes))
+    }
     fn validate(&self, span: kf_rm::memory_list::RamSpan) -> Option<u64> {
         let guard = self.0.blocks.read().ok()?;
         memory_list_block(&guard, span)?;
@@ -4211,7 +4254,7 @@ mod tests {
 #[cfg(test)]
 mod memory_list_tests {
     use super::*;
-    use kf_rm::memory_list::{GuestRamAuthority, MAX_ACCESS, RamSpan};
+    use kf_rm::memory_list::{AccessError, GuestRamAuthority, MAX_ACCESS, RamSpan};
     fn setup() -> (MemoryListRam, RamBlock) {
         let (mem, fd) = crate::raw_unsafe::test_owned_ram(0x8000);
         let block = RamBlock {
@@ -4223,6 +4266,26 @@ mod memory_list_tests {
         let ram = Box::leak(Box::new(RamMap::default()));
         ram.add(block);
         (MemoryListRam(ram), block)
+    }
+    #[test]
+    fn memory_list_worker_contention_is_busy_and_replacement_is_revoked() {
+        let (ram, block) = setup();
+        let span = RamSpan { base: 0x3000, length: 0x7000 };
+        let epoch = ram.validate(span).unwrap();
+        let guard = ram.0.blocks.write().unwrap();
+        assert_eq!(ram.try_read(span, epoch, 0, &mut [0; 2]), Err(AccessError::Busy));
+        assert_eq!(ram.try_write(span, epoch, 0, &[1, 2]), Err(AccessError::Busy));
+        drop(guard);
+        assert_eq!(ram.try_write(span, epoch, span.length - 2, &[9, 7]), Ok(()));
+        let mut bytes = [0; 2];
+        assert_eq!(ram.try_read(span, epoch, span.length - 2, &mut bytes), Ok(()));
+        assert_eq!(bytes, [9, 7]);
+        assert_eq!(ram.try_read(span, epoch, span.length - 1, &mut bytes), Err(AccessError::Bounds));
+        assert_eq!(ram.try_write(span, epoch, 0, &vec![0; MAX_ACCESS + 1]), Err(AccessError::Bounds));
+        assert_eq!(ram.try_read(span, 0, 0, &mut bytes), Err(AccessError::Topology));
+        ram.0.del(block.gpa);
+        ram.0.add(block);
+        assert_eq!(ram.try_read(span, epoch, 0, &mut bytes), Err(AccessError::Topology));
     }
     #[test]
     fn memory_list_live_ram_copy_boundary_and_topology_revocation() {

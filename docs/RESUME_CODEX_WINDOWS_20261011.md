@@ -1,5 +1,21 @@
 # Resume Windows apps and GravityMark Vulkan
 
+## UPDATE 2026-10-12 05:17UTC — reviewed live USERD memory authority
+
+Last confirmed push: 407d5385d. Shared live graph adapter now provides bounded,
+nonblocking RAM-backed MemoryList leases with exact graph/resource/topology
+lifetimes. Independent review caught and cleared alias-back resurrection and
+RAM topology blocking; both have failing-first tests. Full GPU-free abi/rm/qemu/
+chan PASS (QEMU lib184, RM lib138). Original client allocations only; aliases
+refused by this worker adapter. No new Linux GPU mapping. No runtime relay or
+migration consumer yet; Gravity Kayfabe still FAIL/TIMEOUT, VFIO PASS179/183s.
+Next: exact Linux9+10/30 on this committed wrapper, then source/VA adapter and
+Windows birth/stream/migration. Evidence: gravity-vulkan/user-memory-access.
+Personal image retained, no QEMU, DMA-FQ,111GiB free at last check. Vast CLI
+05:15UTC:[], nothing to retire; owner authorizes any unused account instance.
+Matrix/driver sweep remain open. Master untouched.
+
+
 ## UPDATE 2026-10-12 05:01UTC — exact pending Windows birth/Free adapter
 
 Last confirmed push854533ec1. Bounded weak pending Birth identity binds the

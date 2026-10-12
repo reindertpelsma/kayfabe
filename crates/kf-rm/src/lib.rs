@@ -32,6 +32,7 @@ pub mod hoststub;
 pub mod inert;
 pub mod inittables;
 pub mod memory_list;
+pub mod memory_access;
 pub mod osevent;
 pub mod preempt_bind_probe;
 pub mod rmgraph;
