@@ -1,5 +1,19 @@
 # Handoff for a different agent (Codex or any fresh agent), 2026-10-11
 
+## UPDATE 2026-10-12 05:27UTC — exact 7f3f9fe16 Linux regression PASS
+
+Last confirmed push: 7f3f9fe16. Exact full source
+7f3f9fe16c6d97513c0c9406ddcdf011efca5937 passed gates9/9, gate10, USER
+births12/12/refused0 and original fast30/30, crashes0/NOTRUN0/exit0 on the trusted
+RTX4070/595.91.07. Fresh Linux guest and rebuilt private QEMU/client; full text
+and binary hashes: gravity-vulkan/user-memory-access/linux-result. Five Xid31
+match negative-test addresses; no Xid32 (not a zero-Xid claim). NoQEMU/DMA-FQ/
+lockfree/stopabsent/>100GiBfree afterward. Personal Windows original retained.
+Source snapshot adapter is under review; no Windows relay/migration wired yet.
+Gravity Kayfabe FAIL/TIMEOUT, same-GPU VFIO PASS179/183s. Matrix and driver sweep
+remain open. Vast CLI05:15UTC empty, nothing to retire; master untouched.
+
+
 ## UPDATE 2026-10-12 05:17UTC — reviewed live USERD memory authority
 
 Last confirmed push: 407d5385d. Shared live graph adapter now provides bounded,
