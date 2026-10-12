@@ -159,7 +159,11 @@ fn gp_source_full_span_and_trusted_budget_are_checked_before_copy() {
         inspect_entry(gp_entry((1 << 40) - 4, 8).unwrap(), 64),
         Err(Refusal::Entry)
     );
-    assert!(inspect_entry(gp_entry((1 << 40) - 4, 4).unwrap(), 64).is_ok());
+    assert_eq!(
+        inspect_entry(gp_entry((1 << 40) - 4, 4).unwrap(), 64),
+        Err(Refusal::Entry)
+    );
+    assert!(inspect_entry(gp_entry((1 << 40) - 8, 4).unwrap(), 64).is_ok());
 }
 
 #[test]

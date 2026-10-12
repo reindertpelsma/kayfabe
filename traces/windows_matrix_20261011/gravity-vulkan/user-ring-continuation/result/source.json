@@ -1,0 +1,8 @@
+{
+  "revision": "ed5c3ec0892c712328f5800a652354b62fbee85c",
+  "binary_sha256": "db7388cf062cc8c15b528b9a0dba5a3c17dd06ddfd4599a86484933573e07b3f",
+  "binary": "/var/lib/kf-windows-20261005/codex-user-continuation-build-ed5c3ec08/kf-user-ring-probe",
+  "uid": 65534,
+  "gid": 65534,
+  "scope": "native C56F MAIN GP-entry packet continuation, no VM/migration implementation"
+}

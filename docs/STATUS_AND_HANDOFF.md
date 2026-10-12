@@ -1,5 +1,37 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-12 02:18UTC — native packet continuation PASS; retirement correction
+
+Last confirmed push **ed5c3ec08**, branch codex/windows-matrix-20261011,
+worktree /data/kf-inval-absent. Exacted5 native C56F USER continuation probes:
+unsplit2267us, split2254us, split-held52682us, all PASS with correct real CE
+copy/reference/semaphore, expected GET/PUT, no Xid, clean teardown. Evidence:
+traces/windows_matrix_20261011/gravity-vulkan/user-ring-continuation/result.
+This closes only the tested final-reference-packet MAIN-entry continuation gate.
+
+Public NVIDIA FIFO manual correction: GP_GET commits a descriptor at processing
+start, not engine completion; SYNC_WAIT waits preceding HOST processing, not GPU
+engine completion. SET_REFERENCE itself waits the targeted engine; WFI_ALL is
+all classes of that engine, not all engines. The CE-only tail proof cannot
+justify arbitrary mixed-engine per-batch tails. Do not wire Ledger reference
+retirement to an arbitrary user stream. Need separate GP-slot and PB-byte
+consumption attribution, e.g. a validated HOST-processing witness/cursor.
+inspect_entry now refuses PB spans ending exactly2^40 (PUT cannot represent end).
+
+Private RO command storage is being developed, still unconnected to VM birth.
+Independent review identified uncertain-map cleanup and retiring-state blockers;
+addressing both with one exclusive reservation/map, explicit4KiB RO mapping,
+whole-owned-range cleanup after uncertain outcomes, retained ownership on failure,
+and publication disabled before teardown. Linux Passthrough unchanged. Full
+GPU-free kf-chan/kf-host tests pass; second independent review pending. No native
+storage-helper or new kayfabe Windows run yet; Gravity remains FAIL/TIMEOUT.
+Native reference Gravity remains PASS179s. Personal Windows image preserved.
+Vast API last checked01:41UTC:[]; owner authorizes retiring any unused instance.
+Next: reviewed storage/native HOST-consumption probe, bounded shared VA/source
+ownership and stream-position migration, exact Linux9+10/30 then Gravity. Full
+Windows matrix and driver compatibility sweep remain queued after the fix.
+
+
 ## UPDATE 2026-10-12 01:48UTC — reviewed native cursor reference; continuation parser
 
 Last confirmed push **c28d1bf61**, branch codex/windows-matrix-20261011,

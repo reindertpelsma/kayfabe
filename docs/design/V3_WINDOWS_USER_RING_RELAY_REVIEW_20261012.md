@@ -35,6 +35,30 @@ No substitute registration or registration-time source switch is implemented.
 
 ## P0 findings: source facts versus measurement gaps
 
+**Correction 2026-10-12 02:18UTC — consumption is distinct from completion:**
+NVIDIA's public FIFO manual states GP_GET advances when a GP descriptor starts
+processing and is committed (no refetch). It can retire descriptor storage, not
+the PB bytes or engine operands. SYNC_WAIT waits preceding PB HOST processing,
+not engine completion. SET_REFERENCE waits the targeted engine plus SysMemBar;
+WFI_ALL covers all classes/subchannels of the last-targeted engine, not every
+engine. The CE-only reference probe below therefore does not justify inserting
+WFI/reference tails at arbitrary mixed-engine boundaries: later submissions can
+supply dependencies. This is an inferred ordering risk, not a measured Gravity
+cause. Separate descriptor/PB consumption and engine completion. A nonempty
+host-authored SYNC_WAIT witness or coherent USERD processing cursor needs its
+own native/order/lifetime validation before runtime wiring. The public manual
+also requires PB end strictly below2^40; inspect_entry now refuses equality.
+Source: [public FIFO manual](https://github.com/NVIDIA/open-gpu-doc/blob/master/manuals/turing/tu104/dev_pbdma.ref.txt)
+GPFIFO/SYNC/PB address sections, SET_REF and WFI; public595.84 channel_utils.c
+channelAddHostSema distinguishes HOST-consumed PB reuse via RELEASE_WFI_DIS.
+
+Native exacted5 continuation control/split/split-held all PASS (result linked
+above in resume), limited to the final SET_REFERENCE argument split across MAIN
+entries. Neither retirement nor initial migration cursors are supplied by that
+result. The new user_storage helper remains unconnected; independent review
+required exclusive one-map reservation ownership, explicit4KiB RO pages,
+uncertain-map cleanup retention and a nonreusable retiring state before probing.
+
 **Correction 2026-10-12 01:48UTC:** the allocation and limited completion gaps
 below are partly closed: full native birth/registration parameters and SYSTEM
 USERD allocation candidates are published in vfio-ring-p0; the unprivileged

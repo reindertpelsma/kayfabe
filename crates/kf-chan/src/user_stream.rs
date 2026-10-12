@@ -44,10 +44,12 @@ pub fn inspect_entry(entry: u64, maximum_bytes: u64) -> Result<Source, Refusal> 
     if segment.len_bytes > maximum_bytes {
         return Err(Refusal::Budget);
     }
+    // Public NVIDIA dev_pbdma.ref: PB PUT names the first dword beyond the
+    // segment, so even a span ENDING exactly at2^40 cannot be represented.
     if segment
         .gpu_va
         .checked_add(segment.len_bytes)
-        .is_none_or(|end| end > 1 << 40)
+        .is_none_or(|end| end >= 1 << 40)
     {
         return Err(Refusal::Entry);
     }
