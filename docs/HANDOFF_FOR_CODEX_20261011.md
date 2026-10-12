@@ -1,5 +1,21 @@
 # Handoff for a different agent (Codex or any fresh agent), 2026-10-11
 
+## UPDATE 2026-10-12 04:15UTC — reviewed ordered source progress, GPU-free only
+
+Last confirmed push9f7cdd81f. New user_progress::Channel enforces one active
+immutable source plan per native allocation through command receipts/software
+success and once-only generation-checked source retirement. Reservation precedes
+issuance; Full/clean pre-I/O refusal cannot skip actions. Pending parser fragments
+cannot retire as empty/no-op plans. Independent review found/corrected both
+cross-plan software and empty-prefix holes, then no remaining model blocker.
+Full GPU-free kf-chan/kf-qemu/kf-rm tests passed; filtered evidence in gravity-vulkan/
+user-progress. No runtime caller or Windows migration yet. Next: birth cancellation,
+source/VA lifetime adapter and actual software migration; exact Linux9+10/30 then
+one-variable Gravity run. Kayfabe Gravity FAIL/TIMEOUT; same-GPU VFIO PASS179/183s.
+Personal Windows image retained. Vast API rechecked04:11UTC:[]; nothing to retire.
+Matrix and driver compatibility sweep remain open. Master untouched.
+
+
 ## UPDATE 2026-10-12 04:00UTC — composed native submission PASS
 
 Last confirmed push3d261eb2a. Native exact3d261eb2afe3938e72d80c069ead77f812b0a0b8

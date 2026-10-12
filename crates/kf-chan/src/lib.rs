@@ -28,6 +28,7 @@ pub mod tspace_unsafe;
 pub mod ttables;
 pub mod user_batch;
 pub mod user_consumption;
+pub mod user_progress;
 pub mod user_ring;
 pub mod user_storage;
 pub mod user_stream;
