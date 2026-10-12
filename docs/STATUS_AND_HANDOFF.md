@@ -1,5 +1,21 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-12 00:35UTC — restricted ring model and Linux green
+
+Last confirmed push70aa0d666; private1dc9c0e unchanged. Owner §AI approves only
+GPU-read-only private commands/staging for declared Windows user-work, workers,
+immutable inspection from birth; Linux Passthrough still forbids host mappings.
+No runtime relay/migration built. Exact70aa GPU-free kf-chan/kf-rm suites PASS;
+Linux gates9/9+gate10/fast30 PASS, USER births12/12. Initial fast NOT_RUN was a
+runner path/directory failure, retained with successful same-binary retry.
+Native unprivileged read-only fetch PASS and FIFO write denied with RO fault;
+GP_GET1/tail0 shows fetch is not completion. Completion/ownership/native cursor
+gates remain open. No new Windows app PASS; Gravity Vulkan remains unresolved.
+Evidence: gravity-vulkan/user-ring-p0. Post00:35UTC noQEMU/lockfree/DMA-FQ,
+129830002688bytesfree; personal image unused/preserved, no queued job or rental.
+Use compact RESUME_CODEX_WINDOWS_20261011.md and restricted design review.
+
+
 ## UPDATE 2026-10-11 23:16UTC — refusal experiment final; GPU idle
 
 Last confirmed public pusha4e7d3be5; private1dc9c0e unchanged. Exactb081f705a
@@ -42,7 +58,13 @@ live in `docs/OWNER_RULINGS.md` (doorbell refinements of 2026-09-30 in §D); per
 docs named below. ⊘ When this file and a design doc disagree, the design doc's dated STATUS wins — then
 fix this file. Entries below the first are dated history.
 
-## Decisions waiting for the owner — Windows FIFO migration, 2026-10-11
+## Decision resolved — restricted Windows FIFO model, 2026-10-12
+
+Owner §AI approves the restricted birth-time/read-only model. Completion and
+source-lifetime evidence still gate runtime wiring. The former alternatives below
+are history, not a pending request.
+
+### Earlier alternatives, 2026-10-11
 
 [Concrete design options and recommendation](design/V3_WINDOWS_USER_FIFO_MIGRATION_DECISION_20261011.md).
 Run1540 narrow NOT_SUPPORTED registration refusal reaches counter1 but still

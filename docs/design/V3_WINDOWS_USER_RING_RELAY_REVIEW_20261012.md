@@ -164,5 +164,14 @@ This proves the small scheduling argument, not a full parser/GPU contract.
 Native permission positives both PASS; the negative has attributedXid31
 FAULT_RO_VIOLATION and unchanged bytes. It directly observes GP_GET1/tail0.
 Actual mapping/free/reuse races, native migration cursors, command parser and
-completion adapter remain open. Linux exact-revision hardware regression is the
-next gate; Windows integration is not enabled by these prototype additions.
+completion adapter remain open. Linux exact70aa hardware regression has since
+passed below; Windows integration is not enabled by these prototype additions.
+
+## Exact prototype Linux verification, 2026-10-12 00:35UTC
+
+MEASURED exact70aa0d666: gates9/9+gate10 PASS, USER births12/12, rebuilt
+client/fastguest, fast30/30 PASS with zeroFAIL/CRASH/NOTRUN. Initial fast attempt
+was NOT_RUN due to runner directory/path errors; corrected immutable runner used
+the same exact binary. Both attempts are retained in user-ring-p0/linux-result.
+This is regression evidence for the unconnected prototype, not a Windows
+migration, complete ownership model or app pass. Personal Windows image unused.

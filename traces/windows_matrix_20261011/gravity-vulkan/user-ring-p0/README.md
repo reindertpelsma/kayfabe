@@ -1,6 +1,6 @@
 # Windows user-ring P0
 
-**STATUS: RESEARCH, 2026-10-12 00:13UTC.** Native permission measurement complete.
+**STATUS: RESEARCH, 2026-10-12 00:35UTC.** Native permission measurement and Linux verification complete.
 This is not a Windows migration implementation or GravityMark PASS.
 
 See docs/design/V3_WINDOWS_USER_RING_RELAY_REVIEW_20261012.md for the source
@@ -45,3 +45,19 @@ two new Linux/unknown/kernel/UVM/hostile-fact scope tests; full kf-rm suite gree
 ordering_model.py: four tests, seven late-switch counterexamples, zero with
 immutable birth-time inspection under those schedules. These are not a native
 migration or backing-lifetime proof; no runtime private ring is enabled.
+
+Linux exact **70aa0d666c22289583d8659e325b0763bef4a982**: gates **9/9 + gate10 PASS**,
+USER births12/12; raw client and Linux fastguest rebuilt; **fast30/30 PASS**,
+zeroFAIL/CRASH/NOTRUN. QEMU SHA256
+`6d4661860bfc1690e22dbb2f40c2ae07d65a64d7fbfa0f2bcfe806a62cd8886e`.
+This verifies the unconnected model/permit revision, not a Windows relay.
+
+The first runner passed gates/build but did not start the fast suite: missing
+BENCH_DIR and a nine-character binary prefix (installer uses eight). Initial
+EXIT2 is retained as a harness failure. A separate immutable retry runner changed
+only the harness and ran the original30-arm fast suite on the same binary;
+retry EXIT0. Runners are run_linux_initial.sh and run_linux_fast.sh. Original
+logs including the failed attempt and per-arm records are linux-result/original-logs.tar.gz;
+readable gates/fast summaries and final host receipt are alongside it. No personal
+Windows image was used. Post00:35UTC: noQEMU, lockfree, group11DMA-FQ, stop-file
+absent,129830002688bytes available (>100GiB). No queued run.

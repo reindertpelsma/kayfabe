@@ -1,18 +1,18 @@
 # Resume Windows apps and GravityMark Vulkan
 
-**STATUS: LIVE, 2026-10-11 23:15UTC.** This compact current state supersedes earlier
+**STATUS: LIVE, 2026-10-12 00:35UTC.** This compact current state supersedes earlier
 pending paragraphs in the chronological HANDOFF_FOR_CODEX_20261011.md.
 
 ## Branch and source
 
 Public <https://github.com/reindertpelsma/kayfabe>, branch
 **codex/windows-matrix-20261011**, controller worktree **/data/kf-inval-absent**.
-Last confirmed push **a4e7d3be5**; this final evidence checkpoint may be newer.
+Last confirmed push **70aa0d666**; this final evidence checkpoint may be newer.
 Fetch the branch tip to obtain all reachable source/evidence. Do not edit the
 separate /workspace/kayfabe or Claude worktrees. Do not merge master/integration
 without CI/review/exact-revision hardware requirements.
 
-Latest hardware product **b081f705a7502380d584f37ab7da80e668f5018f** adds a
+Latest Windows hardware product **b081f705a7502380d584f37ab7da80e668f5018f** adds a
 **default-OFF negative control**, KF3_WIN_REFUSE_PT_FIFO_UPDATE=1. It returns
 NOT_SUPPORTED only for FIFO_UPDATE_CHANNEL_INFO registrations on live
 Passthrough user-work parents; whole5080/other APIs/default behavior unchanged.
@@ -26,11 +26,40 @@ codex/gravity-vulkan-20261011, last confirmed push1dc9c0e, controller checkout
 Owner authorized private diagnosis; interfaces/constants stay public-source or
 validated measurement derived. Do not copy private driver analysis into product.
 
-Read AGENTS.md, OWNER_RULINGS §§U,V,AD–AH, V3_CONSTANT_STRATEGY.md,
+Read AGENTS.md, OWNER_RULINGS §§U,V,AD–AI, V3_CONSTANT_STRATEGY.md,
 V3_PROVENANCE.md, V3_FEATURE_GAPS.md. Current branch lacks §AH/strategy document:
 read origin/integration/windows-20261010 versions with git show, do not invent
 or silently import the entire newer integration. Hostile guest; authored
 unprivileged host verbs; no vCPU blocking or unsafe GPU completion; no heuristics.
+
+## Approved restricted user-ring work, 2026-10-12
+
+Owner approved §AI: GPU-read-only private commands/staging only for declared
+Windows user-work, workers and immutable inspection from birth; **Linux
+Passthrough forbids host-owned mappings**. No writable private fence, inline
+copy, privileged host GPU channel or late parsing conversion. Imported original
+integration328fe4bf8 proposal with superseding corrections at its top. Read
+[restricted review](design/V3_WINDOWS_USER_RING_RELAY_REVIEW_20261012.md).
+
+Exact70aa0d666 adds an **unconnected** bounded ring Ledger and Windows-only
+construction permit. Full kf-chan/kf-rm tests pass; failing-first and exhaustive
+ordering/model logs published. Native unprivileged exact91bf measurement: USER
+channel fetches read-only commands successfully; attempted FIFO write faults
+RO with unchanged sentinel. GP_GET1 despite tail0 disproves GET as work completion.
+A separate UID reference comparison did not provide a valid migration reference;
+that route is ended. No further privileged probes or private diagnosis queued.
+
+Linux exact70aa **gates9/9+gate10 and fast30/30 PASS**, USER births12/12. Initial
+fast attempt was a documented harness failure, corrected on the same binary.
+[Evidence and original logs](../traces/windows_matrix_20261011/gravity-vulkan/user-ring-p0/README.md).
+No VM relay/migration/default changes and no new Windows app result. Need bounded
+source/backing ownership, stream parser, permitted real completion and native
+cursor semantics before runtime wiring. Registration refusal below remains failed.
+
+Post00:35UTC noQEMU/shared lockfree/DMA-FQ/stop-file absent,129830002688bytesfree.
+Personal image retained; no active loop or Vast rental. Latest hardware source
+70aa at /data/kf-user-ring-host-70aa0d666; results under
+$W/codex-user-ring-linux-70aa0d666. Do not replay completed runners.
 
 ## Hardware is idle; preserve the personal image
 
@@ -49,7 +78,7 @@ regeneratable/redownloadable/re-signin; no offsite disk backup requested. Passwo
 is only in trusted-host $W/windows-desktop/secrets/win_password, accountvast;
 never print/commit it or place disks/credentials on Vast.
 
-Final refusal campaign **completed23:13:01UTC**. Root
+Earlier refusal campaign **completed23:13:01UTC**. Root
 $W/codex-fifo-refusal-20261011-b081f705, log $W/codex-fifo-refusal-campaign.log,
 isolated source /data/kf-fifo-refusal-host-b081f705, unique Cargo target
 /data/kf-fifo-refusal-target-b081f705. Run1540 stopped ACPI; final check23:13:44UTC:
