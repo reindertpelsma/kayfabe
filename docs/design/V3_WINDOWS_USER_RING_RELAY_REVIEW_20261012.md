@@ -35,6 +35,18 @@ No substitute registration or registration-time source switch is implemented.
 
 ## P0 findings: source facts versus measurement gaps
 
+**Correction 2026-10-12 02:57UTC — validated HOST receipt:** public manual
+CONTROL NOP/LENGTH0/SYNC_WAIT prevents FURTHER GP processing until preceding
+HOST processing finishes. Commitment of a later nonempty immutable witness thus
+certifies preceding command-byte consumption. Exact6e606 native fixture PASS,
+held48samples GET1/ref0/sem0 then release copy/ref/sem/GET4 correct, zeroXid.
+Bounded user_consumption ledger/storage writers independently reviewed, wrap,
+wrong-lifetime/unissued-cursor/source-generation/sequence-exhaustion tests pass.
+No arbitrary mixed-engine WFI/reference tail or writable host fence is needed.
+This closes the tested command-consumption gate, not engine completion or
+migration cursors/VA lifetime; models remain unconnected. See
+[barrier evidence](../../traces/windows_matrix_20261011/gravity-vulkan/user-control-barrier/README.md).
+
 **Correction 2026-10-12 02:18UTC — consumption is distinct from completion:**
 NVIDIA's public FIFO manual states GP_GET advances when a GP descriptor starts
 processing and is committed (no refetch). It can retire descriptor storage, not

@@ -1,0 +1,34 @@
+[
+  {
+    "mode": "storage-control-barrier",
+    "verdict": "PASS",
+    "pid": 858554,
+    "start_utc": "2026-10-12 02:55:04.039726 UTC",
+    "process_end_utc": "2026-10-12 02:55:04.153462 UTC",
+    "end_utc": "2026-10-12 02:55:06.153731 UTC",
+    "rc": 0,
+    "killed": false,
+    "journal_query_exit": 0,
+    "journal_stderr": "",
+    "xid_records": 0,
+    "pid_attributed_xids": 0,
+    "asserted_user_channel": true,
+    "cleanup_ok": true,
+    "observation": {
+      "finished": true,
+      "reference": 1,
+      "copy_matches": true,
+      "ce_semaphore": 1,
+      "gp_get": 4,
+      "gp_put": 4,
+      "elapsed_us": 52781
+    },
+    "held_observation": {
+      "samples": 48,
+      "max_get": 1,
+      "early_reference": false,
+      "acquire": 0,
+      "ce_semaphore": 0
+    }
+  }
+]

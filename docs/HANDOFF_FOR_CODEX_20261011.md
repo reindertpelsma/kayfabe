@@ -1,5 +1,25 @@
 # Handoff for a different agent (Codex or any fresh agent), 2026-10-11
 
+## UPDATE 2026-10-12 02:57UTC — native HOST-consumption barrier PASS
+
+Last confirmed push **6e60662d1**, codex/windows-matrix-20261011,
+/data/kf-inval-absent. Native exact6e606 USER C56F/uid65534 CONTROL NOP WAIT +
+following nonempty witness PASS52781us: held48 samples maxGET1/ref0/CEsem0,
+then explicit release real4096-copy/ref1/sem1/GET4/PUT4. Zero bounded hostXid,
+clean teardown. Evidence gravity-vulkan/user-control-barrier/result. Bounded
+consumption model (7 integration tests plus internal sequence exhaustion) and
+storage writers/native fixture independently reviewed with no blocker. Separate
+GP-descriptor and command-byte receipts; never engine-operand retirement.
+Earlier native HOST-acquire discriminator inconclusive; engine-held C997 fixture
+FAIL/Xid69 unsupported ACQUIRE, not a kayfabe app failure. Do not repeat enum
+variants. All evidence published. New storage/model still unconnected to VM
+birth; Windows relay/shared VA exclusion/software migration remain next work.
+Gravity kayfabe remains FAIL/TIMEOUT; same-GPU VFIO PASS179/183s. Linux hardware
+claim exact70aa9+10/30 only. No full matrix or driver-sweep completion claim.
+Personal Windows chain retained. GPU idle/noQEMU/DMA-FQ/lockfree/stop absent;
+Vast API rechecked02:54UTC:[]; owner permits all unused account instances retired.
+
+
 ## UPDATE 2026-10-12 02:18UTC — native packet continuation PASS; retirement correction
 
 Last confirmed push **ed5c3ec08**, branch codex/windows-matrix-20261011,

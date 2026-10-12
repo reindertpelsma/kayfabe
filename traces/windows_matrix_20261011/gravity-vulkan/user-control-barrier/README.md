@@ -52,3 +52,16 @@ ownership, actual software migration and exact Linux regression remain open.
 Primary source: NVIDIA/open-gpu-doc manuals/{turing/tu104,ampere/ga100}/dev_pbdma.ref.txt,
 GP_ENTRY and GP_GET sections; public595.84 class/clc56f.h GP_ENTRY1 SYNC/LENGTH/NOP.
 No captured per-die table or closed implementation interface enters this code.
+
+
+## Measured result, 2026-10-12 02:55UTC
+
+Exact6e60662d17b2b1d86ba9a3ace3cf58139a8b482a **PASS**, nativeuid65534,
+USER C56F, RTX4070/595.91.07. During48 held samples maxGP_GET1, reference0,
+acquire0, CEsemaphore0. Explicit release then real4096-byte copy matches,
+reference1/semaphore1/GET4/PUT4 at52781us. Bounded host journal Xid0, clean
+channel/storage/fixture teardown, no forced kill. Original logs/hash/verdict/
+posthost are under result/. This validates the tested HOST-consumption barrier;
+it is not engine-completion, software migration or a Windows app pass. No
+personal image was used. Independent review found no blocker; sequence-boundary
+and source-generation tests were included before the run.

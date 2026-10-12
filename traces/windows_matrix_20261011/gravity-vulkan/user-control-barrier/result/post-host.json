@@ -1,0 +1,8 @@
+{
+  "qemu_exit": 1,
+  "qemu": "",
+  "lock_free": true,
+  "iommu_group11": "DMA-FQ",
+  "free_bytes": 120998060032,
+  "stop_file_present": false
+}
