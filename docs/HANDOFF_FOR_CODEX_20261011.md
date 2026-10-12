@@ -1,5 +1,30 @@
 # Handoff for a different agent (Codex or any fresh agent), 2026-10-11
 
+## UPDATE 2026-10-12 21:01UTC — shadow Windows partial verdicts; prepared native discriminator
+
+Last confirmed push45825cc76; runtime exactd8afb1e3. Shadow1610 Edge H264 playback
+PASS40s/457frames/real video-decode; three153, zero4101/livekernel/WER/reboot/hostXid.
+Harness's153-inclusive tdr-budget caused restart, not an independently measured
+141/4101 TDR. Shadow1611 GravityD3D12 FAILrc1/19s/noimage/noGPUproof/three153,
+zero4101/livekernel/WER/reboot/hostXid. g3 Vulkan BOOT_FAIL due diskguard beforeapp.
+Owncompleted images+eightold own successful kernel/initrd copies safely reclaimed
+11.1GB afterprotected/allqcow audit; personal retained. Same-source1620 Vulkan
+original600s oracle in progress; hostXid32/channel4e20:52:32UTC. Final app verdict
+pending. Raw1610/1611 and partial mutable corpus in user-worker/shadow/windows-1610-1611.
+Coverage limited: early failedpublication/softwareidentity retries lose history;
+UnknownSuffix is not permission to claim all later scanner cases measured.
+
+Bench-only prepared-native-migration probe now grows/relocates GP and moves USERD
+within owned live64KiB, separate newPB GPU marker2/newGET2 provides actualrelocation
+observable. NOP/trigger matched128posttail kicks; two-second resourceshold; UID/
+CapEff recorded atregistration. Independent review corrected stimulus+uncertain
+free cleanup; no source blocker after corrections. Compile-only cargo test0unit
+tests PASS, no native result yet. Run uid65534 thenuid0 pairs only AFTER1620 frees
+GPU; no host build during timedguest. Product binary unchanged. Negative inner
+status remainsunknown; positive requires security/capability assessment beforeuse.
+M1-M3 crossVM containment remainsopen; no corresponding guarantee or newVkPASS.
+
+
 ## UPDATE 2026-10-12 20:40UTC — shadow checkpoint pushed; exact Linux fast PASS
 
 Last confirmed pushd8afb1e3ca9440580c227ee218ce0d1b3d06a7ef. On dedicated1.20,
