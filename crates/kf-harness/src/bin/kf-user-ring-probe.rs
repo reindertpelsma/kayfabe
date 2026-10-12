@@ -320,6 +320,179 @@ fn run_storage(sync_wait: bool) -> Result<(), String> {
     result.and(fixture_release)
 }
 
+/// Public595.84 class/clc997.h modern semaphore methods. Probe-only C997,
+/// not a family/die table. All addresses name the probe's own output fixture.
+const PROBE_ADA_A: u32 = 0xc997; // Public595.84 class/clc997.h ADA_A interface ID.
+
+fn engine_hold_commands(output_va: u64) -> Result<Vec<u32>, String> {
+    let mut out = vec![
+        method_header_inc(0, kf_abi::submit::SET_OBJECT, 1).ok_or("binding")?,
+        PROBE_ADA_A,
+    ];
+    for (address, operation) in [(output_va, 1), (output_va + 4, 0)] {
+        // PAYLOAD_LOWER/UPPER, ADDRESS_LOWER/UPPER, REPORT_SEMAPHORE_EXECUTE.
+        // STRUCTURE_SIZE=ONE_WORD (14:13); PIPELINE_LOCATION=NONE (5:2).
+        out.extend([
+            method_header_inc(0, 0x158, 5).ok_or("GR semaphore")?,
+            1,
+            0,
+            address as u32,
+            (address >> 32) as u32,
+            (1 << 13) | operation,
+        ]);
+    }
+    // HOST-only marker without WFI. Engine remains blocked at the first acquire.
+    out.extend([
+        method_header_inc(0, fifo::SEM_ADDR_LO, 5).ok_or("HOST marker")?,
+        (output_va + 8) as u32,
+        ((output_va + 8) >> 32) as u32,
+        1,
+        0,
+        fifo::SEM_EXECUTE_RELEASE_32BIT,
+    ]);
+    Ok(out)
+}
+
+fn run_engine_witness(sync_wait: bool) -> Result<(), String> {
+    use kf_abi::submit::ENGINE_TYPE_GRAPHICS;
+    use kf_chan::user_storage::Storage;
+    let uid = kf_linux_raw::effective_uid();
+    println!("USER_ENGINE_WITNESS_IDENTITY uid={uid}");
+    if uid != 65534 {
+        return Err("probe requires unprivileged uid65534".into());
+    }
+    let dev = DevDir::open(c"/dev").map_err(|e| format!("dev: {e:?}"))?;
+    let rm = HostRm::open(&dev, kf_harness::gate_gpu(), &kf_chip::choose_host_classes)
+        .map_err(|e| e.to_string())?;
+    let (architecture, implementation, _) = rm.arch_info();
+    let chosen =
+        kf_chip::choose_host_classes(architecture, implementation, rm.supported_class_ids())?;
+    if chosen.gpfifo_channel().channel_id().0 != kf_abi::generated::classes::AMPERE_CHANNEL_GPFIFO_A
+        || !rm.supported_class_ids().contains(&PROBE_ADA_A)
+    {
+        return Err("ENGINE_WITNESS_CLASSES_UNMEASURED: needs publicC56F/C997".into());
+    }
+    let space = rm
+        .alloc_vaspace_bare()
+        .map_err(|e| format!("space: {e:?}"))?;
+    let mut storage =
+        Storage::allocate(&rm, space, (1 << 40) - (2 << 20)).map_err(|error| error.reason)?;
+    let output = Buffer::new(&rm, space, Some(MapPerm::READ_WRITE))?;
+    let output_va = output.va.ok_or("output VA absent")?;
+    let spec = storage.spec(0)?;
+    let witness_va = spec.gp_fifo_va - kf_chan::user_storage::GP_OFFSET + 0x1000;
+    let chan = rm
+        .birth_channel(space, ENGINE_TYPE_GRAPHICS, spec)
+        .map_err(|e| format!("birth: {e:?}"))?;
+    let result = (|| {
+        chan.assert_user().map_err(str::to_string)?;
+        rm.alloc_engine_object(chan, PROBE_ADA_A, None)
+            .map_err(|e| format!("GR object: {e:?}"))?;
+        let initial_cursor = storage.gpu_top_get()?;
+        println!("USER_ENGINE_WITNESS_INITIAL cursor={initial_cursor:?}");
+        if initial_cursor != Some(0) {
+            return Err("native fixture USERD cursor not initially zero".into());
+        }
+        let preceding = engine_hold_commands(output_va)?;
+        let witness = [
+            0,
+            method_header_inc(0, fifo::SET_REFERENCE_C56F, 1).ok_or("reference")?,
+            1,
+        ];
+        storage.write_authored(0, &preceding)?;
+        storage.write_authored(0x1000, &witness)?;
+        storage.write_gp(0, 0, 4 * preceding.len() as u64, false)?;
+        storage.write_gp(1, 0x1000, 4 * witness.len() as u64, sync_wait)?;
+        println!(
+            "USER_ENGINE_WITNESS_SETUP sync_wait={sync_wait} driver={} witness_va={witness_va:#x} witness_bytes=12 ring_gpu_read_only=true userd_gpu_mapped=false",
+            rm.driver_version()
+        );
+        rm.schedule(chan).map_err(|e| format!("schedule: {e:?}"))?;
+        storage.publish_put(2)?;
+        rm.doorbell(chan.token)
+            .map_err(|e| format!("doorbell: {e:?}"))?;
+        let start = Instant::now();
+        let mut samples = 0;
+        let mut seen_cursor = None;
+        let mut seen_get = 0;
+        let mut early_engine = false;
+        let mut early_reference = false;
+        while start.elapsed() < Duration::from_millis(50) {
+            let cursor = storage.gpu_top_get()?;
+            let get = storage.gpu_get()?;
+            if cursor.is_some_and(|v| v > witness_va && v <= witness_va + 12)
+                && output.load(8)? == 1
+            {
+                seen_cursor = cursor;
+                seen_get = get;
+            }
+            early_engine |= output.load(4)? != 0;
+            early_reference |= storage.gpu_reference()? != 0;
+            samples += 1;
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        println!(
+            "USER_ENGINE_WITNESS_HELD samples={samples} cursor={seen_cursor:?} GP_GET={seen_get} early_engine={early_engine} early_reference={early_reference} acquire={} engine_release={} host_marker={}",
+            output.load(0)?,
+            output.load(4)?,
+            output.load(8)?
+        );
+        if let Some(cursor) = seen_cursor {
+            println!(
+                "USER_ENGINE_WITNESS_CURSOR raw_low={:#x} raw_high={:#x}",
+                cursor as u32,
+                cursor >> 32
+            );
+        }
+        output.store(0, 1)?;
+        kf_linux_raw::release_fence();
+        let finished = loop {
+            if storage.gpu_reference()? == 1 {
+                break true;
+            }
+            if start.elapsed() > Duration::from_secs(3) {
+                break false;
+            }
+            std::thread::sleep(Duration::from_millis(1));
+        };
+        let get = storage.gpu_get()?;
+        let reference = storage.gpu_reference()?;
+        let engine_release = output.load(4)?;
+        let host_marker = output.load(8)?;
+        println!(
+            "USER_ENGINE_WITNESS_OBSERVATION finished={finished} reference={reference} engine_release={engine_release} host_marker={host_marker} GP_GET={get} elapsed_us={}",
+            start.elapsed().as_micros()
+        );
+        if !finished
+            || reference != 1
+            || engine_release != 1
+            || host_marker != 1
+            || get != 2
+            || samples == 0
+            || seen_cursor.is_none()
+            || seen_get != 2
+            || early_engine
+            || early_reference
+        {
+            return Err("engine/HOST-consumption witness criterion failed".into());
+        }
+        Ok(())
+    })();
+    let fixture_release = output.store(0, 1);
+    kf_linux_raw::release_fence();
+    rm.free_channel(chan)
+        .map_err(|e| format!("channel free: {e:?}"))?;
+    let cleanup = storage.release(&rm);
+    println!(
+        "USER_ENGINE_WITNESS_CLEANUP result={cleanup:?} released={}",
+        storage.released()
+    );
+    cleanup?;
+    output.close(&rm, space)?;
+    rm.free_vaspace(space);
+    result.and(fixture_release)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Mode {
     ReadWrite,
@@ -532,6 +705,8 @@ fn main() {
     let args: Vec<_> = std::env::args().skip(1).collect();
     let result = if args.len() == 1 {
         match args[0].as_str() {
+            "engine-witness-control" => run_engine_witness(false),
+            "engine-witness-sync" => run_engine_witness(true),
             "storage-control" => run_storage(false),
             "storage-sync-witness" => run_storage(true),
             "reference" => run_reference(false, false),

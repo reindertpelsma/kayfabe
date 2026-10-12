@@ -48,3 +48,17 @@ early GP1 commit under a HOST acquire. If both stay1, record the discriminator
 inconclusive, never promote it to witness evidence. Independently reviewed
 run_storage has no ordinary storage-lifetime blocker for this isolated probe.
 An engine-side hold may be needed instead, without stopping HOST processing.
+
+## Measured host-acquire discriminator, 2026-10-12 02:22UTC
+
+Exactebe8e696b6b1ebc8f9307a928e939fa98159555b, uid65534/USER C56F,
+RTX4070/host595.91.07. Storage control completed real reference1, correct virtual
+CE4096-byte copy/semaphore1 and GET/PUT2 in52782us, zero host Xid, cleanupOk,
+storage released. H-STORAGE did not encounter its falsifier for this fixture.
+
+Overall discriminator **FAIL / INCONCLUSIVE**: control's48 held samples reached
+only GP_GET1, with reference0/acquire0/CEsemaphore0. It did not expose the early
+GP1-commit condition; SYNC_WAIT variant was NOT_RUN as specified. This provides
+no HOST-witness retirement proof. Native helper success must not be reported as
+an overall discriminator PASS or Gravity fix. Original bounded logs/results in
+host-acquire-result. Host clean/noQEMU/DMA-FQ/lockfree/122276106240bytesfree.

@@ -671,3 +671,28 @@ mod tests {
         }
     }
 }
+
+impl Storage<CpuView> {
+    /// Bounded double sample of C56F's public USERD TOP_LEVEL_GET fields.
+    /// Returns None if the two full samples disagree. This is a raw processing
+    /// cursor, not an engine completion or a receipt without lifetime validation.
+    ///
+    /// # Errors
+    /// Retiring/released storage or CPU-load failure.
+    pub fn gpu_top_get(&self) -> Result<Option<u64>, String> {
+        let cpu = self.cpu()?;
+        // Public595.84 class/clc56f.h Nvc56fControl.TopLevelGet/Hi, +0x58/+0x5c.
+        let sample = || -> Result<u64, String> {
+            let lo = cpu
+                .load_u32(HostOffset::new(USERD_OFFSET + 0x58))
+                .map_err(|e| format!("USER_STORAGE_TOP_GET: {e:?}"))?;
+            let hi = cpu
+                .load_u32(HostOffset::new(USERD_OFFSET + 0x5c))
+                .map_err(|e| format!("USER_STORAGE_TOP_GET_HI: {e:?}"))?;
+            Ok(u64::from(lo) | (u64::from(hi) << 32))
+        };
+        let first = sample()?;
+        let second = sample()?;
+        Ok((first == second).then_some(first))
+    }
+}

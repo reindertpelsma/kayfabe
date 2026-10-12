@@ -1,0 +1,8 @@
+{
+  "revision": "ebe8e696b6b1ebc8f9307a928e939fa98159555b",
+  "binary_sha256": "1109c77df17d32b9a6b35adea8e126c5812679b6dfdde0d655af861f0939c252",
+  "binary": "/var/lib/kf-windows-20261005/codex-user-storage-build-ebe8e696b/kf-user-ring-probe",
+  "uid": 65534,
+  "gid": 65534,
+  "scope": "native C56F private storage and HOST-processing SYNC_WAIT witness, no VM/migration implementation"
+}
