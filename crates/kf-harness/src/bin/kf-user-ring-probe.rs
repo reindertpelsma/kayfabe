@@ -340,22 +340,9 @@ fn run(mode: Mode) -> Result<(), String> {
         for (i, &word) in words.iter().enumerate() {
             ring.store(PB + 4 * i as u64, word)?;
         }
-        let split_words = if split { words.len() - 1 } else { words.len() };
-        let gp = gp_entry(ring_va + PB, 4 * split_words as u64).ok_or("GP encoding")?;
+        let gp = gp_entry(ring_va + PB, 4 * words.len() as u64).ok_or("GP encoding")?;
         ring.store(GP, gp as u32)?;
         ring.store(GP + 4, (gp >> 32) as u32)?;
-        let published_put = if split {
-            // Only change versus the reference: MAIN GP0 ends at the
-            // SET_REFERENCE header; MAIN GP1 contains its one argument.
-            // Command bytes, permissions, channel and acquire stimulus match.
-            let next = gp_entry(ring_va + PB + 4 * split_words as u64, 4)
-                .ok_or("continuation GP encoding")?;
-            ring.store(GP + 8, next as u32)?;
-            ring.store(GP + 12, (next >> 32) as u32)?;
-            2
-        } else {
-            1
-        };
         rm.schedule(chan).map_err(|e| format!("schedule: {e:?}"))?;
         kf_linux_raw::release_fence();
         userd.store(USERD_GP_PUT, 1)?;
