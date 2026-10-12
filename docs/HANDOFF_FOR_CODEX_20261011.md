@@ -1,5 +1,22 @@
 # Handoff for a different agent (Codex or any fresh agent), 2026-10-11
 
+## UPDATE 2026-10-12 03:57UTC — composed submission prototype; native probe next
+
+Last confirmed push742fb91aa. Bounded user_batch plans complete public packets
+in private cells, separates software actions and authors real SET_REFERENCE;
+no CPU reference completion. Full GPU-free kf-chan/harness tests pass. Independent
+review clears only the exactly-one-cell native composed probe; its pre-run
+hypothesis/falsifier is in gravity-vulkan/user-storage-assembled/README.md.
+NOT_RUN at checkpoint. Multi-cell+software final-source retirement model and
+live birth/source/SYNC_WAIT/VA-lifetime adapter gates remain pending. No VM wiring.
+Cross-slot reanalysis of existing reviewed VFIO samples: raw future-slot GET/PUT
+0/0 before second registration, then lower progressing cursors while old slot
+stops15705. Supports reset hypothesis, not exact initial/ownership/retirement
+proof; no product constant/rule added. Original strict association remains intact.
+Gravity kayfabe still FAIL/TIMEOUT, native VFIO PASS179/183s; full matrix/driver
+sweep incomplete. Personal image retained, no unused Vast instance at last check.
+
+
 ## UPDATE 2026-10-12 03:39UTC — phased native storage PASS
 
 Last confirmed push7135568d3. Native exact7135568d3 USER C56F/uid65534 on

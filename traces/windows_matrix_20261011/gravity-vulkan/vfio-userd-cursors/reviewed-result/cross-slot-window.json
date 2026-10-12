@@ -1,0 +1,220 @@
+{
+  "schema": "kayfabe-native-userd-cross-slot-window/1",
+  "complete": false,
+  "validated_sample_footer": {
+    "complete": false,
+    "file_export_complete": true,
+    "kind": "footer",
+    "limited": false,
+    "reads": 292126,
+    "reason": "owner-collection-stop",
+    "records": 14973,
+    "registrations": 2,
+    "sha256": "735a5e7cddf595372e5fc4427dedd49fd73815731c8e026dbd5dffd49819d023"
+  },
+  "validated_gsp_records": 18724,
+  "old_registration": {
+    "api_handle": "0x4000002b",
+    "channel": "0xff040026",
+    "client": "0xc1d0007a",
+    "entries": 65536,
+    "fifo": "0xa1c2c0000",
+    "generation": 2,
+    "kind": "registration",
+    "observed_ns": 201542007024450,
+    "record_index": 11991,
+    "sampled_ns": 201542008757352,
+    "sequence": 4,
+    "slot": 1536,
+    "userd": "0xff00a00b"
+  },
+  "new_registration": {
+    "api_handle": "0x4000002c",
+    "channel": "0xff040026",
+    "client": "0xc1d0007a",
+    "entries": 131072,
+    "fifo": "0x2dfe90000",
+    "generation": 2,
+    "kind": "registration",
+    "observed_ns": 201619708053512,
+    "record_index": 14938,
+    "sampled_ns": 201619709102641,
+    "sequence": 7268,
+    "slot": 2048,
+    "userd": "0xff00a00c"
+  },
+  "original_candidate": {
+    "allocation_serial": 1,
+    "client": "0xc1d0007a",
+    "device": "0xff020000",
+    "generation": 2,
+    "gpa": 9548849152,
+    "handle": "0xff00a00b",
+    "kind": "memory-candidate",
+    "observed_ns": 201542006908791,
+    "offset": 8475107328,
+    "record_index": 11990,
+    "request_index": 11989,
+    "sampled_ns": 201542008689333,
+    "sequence": 3
+  },
+  "later_candidate": {
+    "allocation_serial": 2,
+    "client": "0xc1d0007a",
+    "device": "0xff020000",
+    "generation": 2,
+    "gpa": 9548849152,
+    "handle": "0xff00a00c",
+    "kind": "memory-candidate",
+    "observed_ns": 201619708053512,
+    "offset": 8475107328,
+    "record_index": 14939,
+    "request_index": 14937,
+    "sampled_ns": 201619891543591,
+    "sequence": 7286
+  },
+  "window": [
+    {
+      "sequence": 7266,
+      "relative_us": -6655.303,
+      "fields": [
+        {
+          "get": 15213,
+          "put": 15213,
+          "reference": 0,
+          "slot": 1536
+        },
+        {
+          "get": 1768515945,
+          "put": 1768515945,
+          "reference": 1768515945,
+          "slot": 2048
+        }
+      ],
+      "second": [
+        {
+          "get": 15213,
+          "put": 15213,
+          "reference": 0,
+          "slot": 1536
+        },
+        {
+          "get": 1768515945,
+          "put": 1768515945,
+          "reference": 1768515945,
+          "slot": 2048
+        }
+      ],
+      "stable": true,
+      "candidate_handle": "0xff00a00b",
+      "new_handle_associated": false
+    },
+    {
+      "sequence": 7267,
+      "relative_us": -2329.676,
+      "fields": [
+        {
+          "get": 15693,
+          "put": 15693,
+          "reference": 0,
+          "slot": 1536
+        },
+        {
+          "get": 0,
+          "put": 0,
+          "reference": 0,
+          "slot": 2048
+        }
+      ],
+      "second": [
+        {
+          "get": 15693,
+          "put": 15693,
+          "reference": 0,
+          "slot": 1536
+        },
+        {
+          "get": 0,
+          "put": 0,
+          "reference": 0,
+          "slot": 2048
+        }
+      ],
+      "stable": true,
+      "candidate_handle": "0xff00a00b",
+      "new_handle_associated": false
+    },
+    {
+      "sequence": 7269,
+      "relative_us": 8616.813,
+      "fields": [
+        {
+          "get": 15705,
+          "put": 15705,
+          "reference": 0,
+          "slot": 1536
+        },
+        {
+          "get": 1429,
+          "put": 1429,
+          "reference": 0,
+          "slot": 2048
+        }
+      ],
+      "second": [
+        {
+          "get": 15705,
+          "put": 15705,
+          "reference": 0,
+          "slot": 1536
+        },
+        {
+          "get": 1429,
+          "put": 1429,
+          "reference": 0,
+          "slot": 2048
+        }
+      ],
+      "stable": true,
+      "candidate_handle": "0xff00a00b",
+      "new_handle_associated": false
+    },
+    {
+      "sequence": 7270,
+      "relative_us": 19389.284,
+      "fields": [
+        {
+          "get": 15705,
+          "put": 15705,
+          "reference": 0,
+          "slot": 1536
+        },
+        {
+          "get": 3953,
+          "put": 4309,
+          "reference": 0,
+          "slot": 2048
+        }
+      ],
+      "second": [
+        {
+          "get": 15705,
+          "put": 15705,
+          "reference": 0,
+          "slot": 1536
+        },
+        {
+          "get": 3953,
+          "put": 4309,
+          "reference": 0,
+          "slot": 2048
+        }
+      ],
+      "stable": true,
+      "candidate_handle": "0xff00a00b",
+      "new_handle_associated": false
+    }
+  ],
+  "limitation": "Raw fields of the original candidate's page. No new-handle ownership, atomic trigger, exact initial GPU cursor, or retirement proof.",
+  "inference": "Zero fields followed by lower progressing indices support a new-ring reset hypothesis; no universal reset/preserve rule is established."
+}

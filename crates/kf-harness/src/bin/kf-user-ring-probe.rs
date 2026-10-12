@@ -189,7 +189,12 @@ fn run_reference(held: bool, split: bool) -> Result<(), String> {
 
 /// Native helper test and one-variable HOST-processing witness discriminator.
 /// This is an authored bench fixture, never a guest execution adapter.
-fn run_storage(sync_wait: bool, control_barrier: bool, phased: bool) -> Result<(), String> {
+fn run_storage(
+    sync_wait: bool,
+    control_barrier: bool,
+    phased: bool,
+    assembled: bool,
+) -> Result<(), String> {
     use kf_abi::submit::ENGINE_TYPE_COPY0;
     use kf_chan::user_storage::Storage;
     let uid = kf_linux_raw::effective_uid();
@@ -264,18 +269,56 @@ fn run_storage(sync_wait: bool, control_barrier: bool, phased: bool) -> Result<(
             method_header_inc(0, fifo::SET_REFERENCE_C56F, 1).ok_or("reference")?,
             1,
         ];
-        storage.write_authored(0, &preceding)?;
-        storage.write_authored(0x1000, &witness)?;
-        storage.write_gp(0, 0, 4 * preceding.len() as u64, false)?;
-        let published_put = if control_barrier {
-            storage.write_host_barrier(1)?;
-            storage.write_host_witness(2)?;
-            // Final single-engine bench observation; not a runtime receipt.
-            storage.write_gp(3, 0x1004, 8, false)?;
-            4
+        let mut consumption = None;
+        let published_put = if assembled {
+            use kf_chan::{user_batch, user_consumption, user_stream};
+            let snapshot = user_stream::Commands::copy_from(&preceding, user_batch::MAX_OPS)
+                .map_err(|e| format!("snapshot: {e:?}"))?;
+            let mut state = user_stream::State::default();
+            let class = rm.ce_class_id();
+            let mut ops = user_stream::feed(&snapshot, &mut state, |value| {
+                (value == class).then_some(user_stream::Binding::Hardware { class })
+            })
+            .map_err(|e| format!("parser: {e:?}"))?;
+            state.finish().map_err(|e| format!("packet: {e:?}"))?;
+            ops.push(user_stream::Op::GuestReference(1));
+            let actions = user_batch::plan(&ops).map_err(|e| format!("plan: {e:?}"))?;
+            if actions.len() != 1 {
+                return Err("native fixture needs exactly one command cell".into());
+            }
+            let Some(user_batch::Action::Commands(words)) = actions.first() else {
+                return Err("native fixture contains a software action".into());
+            };
+            let mut ledger = user_consumption::Consumption::new(kf_chan::user_storage::ENTRIES, 1)
+                .map_err(|e| format!("ledger: {e:?}"))?;
+            let publication = ledger
+                .publish(user_consumption::ConsumedSource {
+                    generation: 1,
+                    guest_get: 1,
+                })
+                .map_err(|e| format!("publication: {e:?}"))?;
+            storage.write_publication(publication, words, false)?;
+            println!(
+                "USER_STORAGE_ASSEMBLED methods={} words={} immutable=true native_reference=true",
+                ops.len(),
+                words.len()
+            );
+            consumption = Some(ledger);
+            publication.put
         } else {
-            storage.write_gp(1, 0x1000, 4 * witness.len() as u64, sync_wait)?;
-            2
+            storage.write_authored(0, &preceding)?;
+            storage.write_authored(0x1000, &witness)?;
+            storage.write_gp(0, 0, 4 * preceding.len() as u64, false)?;
+            if control_barrier {
+                storage.write_host_barrier(1)?;
+                storage.write_host_witness(2)?;
+                // Final single-engine bench observation; not a runtime receipt.
+                storage.write_gp(3, 0x1004, 8, false)?;
+                4
+            } else {
+                storage.write_gp(1, 0x1000, 4 * witness.len() as u64, sync_wait)?;
+                2
+            }
         };
         println!(
             "USER_STORAGE_SETUP sync_wait={sync_wait} control_barrier={control_barrier} class={class:#x} driver={} entries={} ring_gpu_read_only=true page_size=4096 userd_gpu_mapped=false",
@@ -305,7 +348,8 @@ fn run_storage(sync_wait: bool, control_barrier: bool, phased: bool) -> Result<(
         output.store(0, 1)?;
         kf_linux_raw::release_fence();
         let finished = loop {
-            if storage.gpu_reference()? == 1 {
+            if storage.gpu_reference()? == 1 && (!assembled || storage.gpu_get()? == published_put)
+            {
                 break true;
             }
             if start.elapsed() > Duration::from_secs(3) {
@@ -324,6 +368,20 @@ fn run_storage(sync_wait: bool, control_barrier: bool, phased: bool) -> Result<(
             output.load(4)?,
             start.elapsed().as_micros()
         );
+        if let Some(mut ledger) = consumption {
+            let receipts = ledger
+                .observe_get(1, get)
+                .map_err(|e| format!("receipt: {e:?}"))?;
+            if receipts
+                != [kf_chan::user_consumption::ConsumedSource {
+                    generation: 1,
+                    guest_get: 1,
+                }]
+            {
+                return Err("assembled publication has no exact source receipt".into());
+            }
+            println!("USER_STORAGE_ASSEMBLED_RECEIPT generation=1 guest_get=1 native_get={get}");
+        }
         // Earlier two-entry discriminator requires early control commitment.
         // The new control-NOP WAIT receipt instead forbids subsequent GP2
         // commitment while held, independent of GP1 commitment timing.
@@ -751,10 +809,11 @@ fn main() {
         match args[0].as_str() {
             "engine-witness-control" => run_engine_witness(false),
             "engine-witness-sync" => run_engine_witness(true),
-            "storage-control-barrier-phased" => run_storage(true, true, true),
-            "storage-control-barrier" => run_storage(true, true, false),
-            "storage-control" => run_storage(false, false, false),
-            "storage-sync-witness" => run_storage(true, false, false),
+            "storage-assembled-phased" => run_storage(true, true, true, true),
+            "storage-control-barrier-phased" => run_storage(true, true, true, false),
+            "storage-control-barrier" => run_storage(true, true, false, false),
+            "storage-control" => run_storage(false, false, false, false),
+            "storage-sync-witness" => run_storage(true, false, false, false),
             "reference" => run_reference(false, false),
             "reference-held" => run_reference(true, false),
             "reference-split" => run_reference(false, true),

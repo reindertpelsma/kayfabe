@@ -20,6 +20,7 @@ def main():
     parser.add_argument("binary", type=Path)
     parser.add_argument("revision")
     parser.add_argument("result", type=Path)
+    parser.add_argument("--mode", choices=["storage-control-barrier-phased", "storage-assembled-phased"], default="storage-control-barrier-phased")
     args = parser.parse_args()
     lock = open("/tmp/kayfabe-fastguest.lock", "a")
     fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -36,10 +37,10 @@ def main():
     (args.result / "START").write_text(start + "\n")
     source = dict(revision=args.revision, binary=str(args.binary),
                   binary_sha256=hashlib.sha256(args.binary.read_bytes()).hexdigest(),
-                  uid=65534, gid=65534, scope="native phased storage/control barrier; no VM")
+                  uid=65534, gid=65534, scope="native phased storage/control barrier; no VM", mode=args.mode)
     (args.result / "source.json").write_text(json.dumps(source, indent=2) + "\n")
     with (args.result / "probe.log").open("wb") as log:
-        proc = subprocess.Popen([str(args.binary), "storage-control-barrier-phased"],
+        proc = subprocess.Popen([str(args.binary), args.mode],
                                 stdout=log, stderr=subprocess.STDOUT,
                                 user=65534, group=65534, extra_groups=[],
                                 env={"PATH": "/usr/bin:/bin", "LANG": "C"})

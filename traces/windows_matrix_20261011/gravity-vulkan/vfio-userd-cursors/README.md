@@ -104,3 +104,21 @@ Compressed raw exports, app/oracle, summaries, original logs and hashes are in
 reviewed-result/. Reproduce with strict summarize_samples.py and the public GSP
 decoder after decompression. No password, input keys, guest RAM or disk exported.
 No Kayfabe application behavior or compatibility claim changed.
+
+## Same-page cross-slot reanalysis, 2026-10-12 03:56UTC
+
+cross_slot_window.py validates both original exports before reporting the narrow
+second-registration window; reviewed-result/cross-slot-window.json preserves
+its output. Original candidateff00a00b and laterff00a00c resolve to the same
+SYSTEM page. While ONLY the original candidate is associated, raw slot0x800
+reads GET/PUT0/0 at-2329.676us relative to second registration observation,
+with old slot0x600 at15693/15693. At+8616.813us, old slot is15705/15705 and
+raw new slot1429/1429; at+19389.284us new3953/4309. Two CPU reads agree for
+these samples. This is a raw field observation on the original candidate's
+page, NOT retrospective new-handle ownership or an atomic trigger sample.
+
+INFERRED: the zero-to-lower-progress transition supports a new-ring reset
+hypothesis over copying the old cursor numerically. It does not prove an exact
+initial GPU cursor, universally exclude a wrap, or authorize old-backing
+retirement. No product reset/preserve rule or constant is added. Existing
+summarize_samples.py strict new-handle association and its limits remain intact.

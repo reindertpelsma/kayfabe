@@ -7,8 +7,10 @@
 //! serialize against VA-manager changes and provide real ordered completion.
 //! Linux Passthrough has no runtime call to this module and no new mapping.
 //!
-//! Parsing uses an owned bounded snapshot. Software calls and guest references
-//! never appear as hardware writes. Object lookup must be channel-owned host
+//! Parsing uses an owned bounded snapshot. Software calls never appear as
+//! hardware writes. Guest references are typed operations: user_batch authors
+//! real native SET_REFERENCE packets; parsing itself completes nothing.
+//! Object lookup must be channel-owned host
 //! metadata; registration reply timing is irrelevant to the parsing mode.
 //! Unsupported packet forms are refused, not silently copied. The model
 //! carries bounded packet metadata across GP entries. Subroutine/control entries
@@ -152,8 +154,9 @@ pub enum Op {
     },
     /// An ordered software split, classified later against the channel registry.
     Software(SwCall),
-    /// Guest reference bookkeeping ONLY. It is not emitted as a native reference
-    /// and cannot complete work. Publish it to guest USERD only after a real tail.
+    /// A requested native SET_REFERENCE, distinct from CPU bookkeeping. The
+    /// submission adapter must author this method on hardware. A later HOST
+    /// receipt may attribute its real processing; parsing completes nothing.
     GuestReference(u32),
 }
 
