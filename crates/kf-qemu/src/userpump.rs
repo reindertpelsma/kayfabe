@@ -878,14 +878,14 @@ impl ChanPlane {
             return Some(false);
         };
         if r.retired || r.free_attempted || r.dead.is_some() {
-            record.retry.store(false, Ordering::Release);
+            record.cancel();
             return Some(false);
         }
         let pt = match self.pt.try_lock() {
             Ok(pt) => pt,
             Err(std::sync::TryLockError::WouldBlock) => return Some(false),
             Err(std::sync::TryLockError::Poisoned(_)) => {
-                record.retry.store(false, Ordering::Release);
+                record.cancel();
                 r.dead = Some("USER_RING_PT_POISONED".into());
                 self.poisoned.fetch_add(1, Ordering::Relaxed);
                 return Some(false);
@@ -895,7 +895,7 @@ impl ChanPlane {
             .get(&r.key)
             .filter(|t| t.user_ring && Arc::ptr_eq(&t.allocation, &r.allocation))
         else {
-            record.retry.store(false, Ordering::Release);
+            record.cancel();
             return Some(false);
         };
         if t.stopped || t.disabled {
@@ -941,6 +941,7 @@ impl ChanPlane {
                     r.key.0, r.key.1
                 );
                 r.dead = Some(why);
+                record.cancel();
                 Some(false)
             }
         }
@@ -951,13 +952,14 @@ impl ChanPlane {
     pub(crate) fn user_ring_poll_due(&self) -> bool {
         self.user_rings.try_lock().is_ok_and(|rings| {
             rings.values().any(|record| {
-                record.retry.load(Ordering::Acquire)
-                    || record.try_lock().is_ok_and(|r| {
-                        !r.retired
-                            && !r.free_attempted
-                            && r.dead.is_none()
-                            && r.pump.as_ref().is_some_and(|p| p.tick)
-                    })
+                !record.is_canceled()
+                    && (record.pending()
+                        || record.try_lock().is_ok_and(|r| {
+                            !r.retired
+                                && !r.free_attempted
+                                && r.dead.is_none()
+                                && r.pump.as_ref().is_some_and(|p| p.tick)
+                        }))
             })
         })
     }
@@ -968,14 +970,17 @@ impl ChanPlane {
             return;
         };
         for record in rings.values() {
-            let pending = record.retry.load(Ordering::Acquire)
-                || record.try_lock().is_ok_and(|r| {
+            let mut signaled = false;
+            record.wake_if(
+                |r| {
                     !r.retired
                         && !r.free_attempted
                         && r.dead.is_none()
-                        && r.pump.as_ref().is_some_and(|p| p.tick)
-                });
-            if pending && self.plane.ring_internal(record.idx) {
+                        && (record.pending() || r.pump.as_ref().is_some_and(|p| p.tick))
+                },
+                |idx| signaled = self.plane.ring_internal(idx),
+            );
+            if signaled {
                 let _ = self.wake.signal();
             }
         }
@@ -983,10 +988,18 @@ impl ChanPlane {
 
     pub(super) fn user_ring_wake(&self, token: u32) {
         if let Some(record) = self.user_ring_record(token) {
-            record.retry.store(true, Ordering::Release);
-            if self.plane.ring_internal(record.idx) {
-                let _ = self.wake.signal();
+            if !record.request() {
+                return;
             }
+            record.wake_if(
+                |r| !r.retired && !r.free_attempted && r.dead.is_none(),
+                |idx| {
+                    self.plane.ring_internal(idx);
+                },
+            );
+            // Even when metadata is busy, wake the worker to observe durable
+            // demand; never publish a stale guest idx without its guard.
+            let _ = self.wake.signal();
         }
     }
 

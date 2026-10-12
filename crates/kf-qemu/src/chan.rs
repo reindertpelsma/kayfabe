@@ -5626,16 +5626,17 @@ impl ChanPlane {
         let user_record = self.user_ring_record(chan.token);
         if let Some(record) = &user_record {
             let quota = {
-                let mut record = record.lock().map_err(|_| kf_host::RmError::Other(NV_ERR_INVALID_STATE))?;
+                let mut owned = record.lock().map_err(|_| kf_host::RmError::Other(NV_ERR_INVALID_STATE))?;
                 // Quiesce CPU publication first; native free is OUTSIDE this guard.
                 // An uncertain native cleanup is quarantined until session teardown,
                 // with no second Free decrementing group/count state.
-                if !record.chan.is_some_and(|owned| owned.chan == chan.chan && owned.tsg == chan.tsg)
-                    || record.free_attempted {
+                if !owned.chan.is_some_and(|owned| owned.chan == chan.chan && owned.tsg == chan.tsg)
+                    || owned.free_attempted {
                     return Err(kf_host::RmError::Other(NV_ERR_INVALID_STATE));
                 }
-                record.free_attempted = true;
-                record.quota.clone()
+                owned.free_attempted = true;
+                record.cancel();
+                owned.quota.clone()
             };
             if let Err(why) = quota.prepare_native_cleanup() {
                 eprintln!("kf3: USER_RING_FREE_QUARANTINED host {:#x}: {why}; no native free attempted", chan.token);

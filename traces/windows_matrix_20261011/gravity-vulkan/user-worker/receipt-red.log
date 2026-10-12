@@ -1,0 +1,8 @@
+test chan::userpump::tests::descriptor_fetch_reports_old_source_before_evict_or_migration_and_keeps_staging ... FAILED
+---- chan::userpump::tests::descriptor_fetch_reports_old_source_before_evict_or_migration_and_keeps_staging stdout ----
+thread 'chan::userpump::tests::descriptor_fetch_reports_old_source_before_evict_or_migration_and_keeps_staging' (727910) panicked at crates/kf-qemu/src/userpump.rs:633:9:
+assertion `left == right` failed
+  left: []
+ right: [(1, 17)]
+    chan::userpump::tests::descriptor_fetch_reports_old_source_before_evict_or_migration_and_keeps_staging
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 212 filtered out; finished in 0.00s

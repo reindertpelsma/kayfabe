@@ -1,0 +1,18 @@
+     Running unittests src/lib.rs (target/debug/deps/kf_qemu-15335dd2dbdd475d)
+test result: ok. 217 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+     Running tests/bar0_trace_gate.rs (target/debug/deps/bar0_trace_gate-9c6c31d822cf5d79)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/channel_budget_lazy.rs (target/debug/deps/channel_budget_lazy-d2a061b00baef7a2)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+     Running tests/gop_rom_knobs.rs (target/debug/deps/gop_rom_knobs-ddd8a9d0288750eb)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+     Running tests/gpu_uuid_property.rs (target/debug/deps/gpu_uuid_property-a3933beb77187d3d)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/kf3_realize_discard.rs (target/debug/deps/kf3_realize_discard-7f635cf67e812e9c)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/max_fps_property.rs (target/debug/deps/max_fps_property-35efc0c5135b17f6)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/wire_mirror.rs (target/debug/deps/wire_mirror-7b02987759f9dc7b)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+   Doc-tests kf_qemu
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

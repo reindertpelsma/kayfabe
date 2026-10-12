@@ -20,6 +20,7 @@ pub(super) fn enabled() -> bool {
 pub(super) struct Cell<T = Record> {
     pub idx: u32,
     pub retry: AtomicBool,
+    canceled: AtomicBool,
     inner: Mutex<T>,
 }
 impl<T> Cell<T> {
@@ -27,6 +28,7 @@ impl<T> Cell<T> {
         Self {
             idx,
             retry: AtomicBool::new(false),
+            canceled: AtomicBool::new(false),
             inner: Mutex::new(value),
         }
     }
@@ -37,7 +39,9 @@ impl<T> Cell<T> {
         self.inner.try_lock()
     }
     pub fn enter(&self) -> std::sync::TryLockResult<std::sync::MutexGuard<'_, T>> {
-        self.retry.store(true, Ordering::Release);
+        if !self.request() {
+            return Err(std::sync::TryLockError::WouldBlock);
+        }
         self.inner.try_lock().inspect_err(|e| {
             if matches!(e, std::sync::TryLockError::Poisoned(_)) {
                 self.retry.store(false, Ordering::Release);
@@ -45,10 +49,45 @@ impl<T> Cell<T> {
         })
     }
     pub fn alive(&self, check: impl FnOnce(&T) -> bool) -> bool {
+        if self.canceled.load(Ordering::Acquire) {
+            return false;
+        }
         match self.inner.try_lock() {
             Ok(r) => check(&r),
             Err(std::sync::TryLockError::WouldBlock) => true,
             Err(std::sync::TryLockError::Poisoned(_)) => false,
+        }
+    }
+    pub fn request(&self) -> bool {
+        if self.canceled.load(Ordering::Acquire) {
+            return false;
+        }
+        self.retry.store(true, Ordering::Release);
+        // Cancellation may race the request, but pending() and the guarded
+        // index publisher also check cancellation. No canceled idx is rung.
+        if self.canceled.load(Ordering::Acquire) {
+            self.retry.store(false, Ordering::Release);
+            return false;
+        }
+        true
+    }
+    pub fn pending(&self) -> bool {
+        !self.is_canceled() && self.retry.load(Ordering::Acquire)
+    }
+    pub fn is_canceled(&self) -> bool {
+        self.canceled.load(Ordering::Acquire)
+    }
+    /// Called with inner held, before token retirement/native cleanup.
+    pub fn cancel(&self) {
+        self.canceled.store(true, Ordering::Release);
+        self.retry.store(false, Ordering::Release);
+    }
+    /// Keep the same private exclusion as retirement through idx publication.
+    pub fn wake_if(&self, active: impl FnOnce(&T) -> bool, ring: impl FnOnce(u32)) {
+        if let Ok(r) = self.inner.try_lock() {
+            if !self.canceled.load(Ordering::Acquire) && active(&r) {
+                ring(self.idx);
+            }
         }
     }
 }
@@ -500,7 +539,7 @@ impl ChanPlane {
         let (lease, identity, quota, sources_ok, notifier) = {
             let Ok(mut r) = record.lock() else { return };
             r.retired = true;
-            record.retry.store(false, Ordering::Release);
+            record.cancel();
             let sources_ok = r.pump.as_mut().is_none_or(|p| match p.release() {
                 Ok(()) => true,
                 Err(why) => {
@@ -563,7 +602,7 @@ impl ChanPlane {
         let (lease, identity, quota, sources_ok, notifier) = {
             let Ok(mut r) = record.lock() else { return };
             r.retired = true;
-            record.retry.store(false, Ordering::Release);
+            record.cancel();
             let sources_ok = r.pump.as_mut().is_none_or(|p| match p.release() {
                 Ok(()) => true,
                 Err(why) => {
@@ -602,6 +641,7 @@ impl ChanPlane {
             if !Arc::ptr_eq(&r.allocation, identity) {
                 return false;
             }
+            record.cancel();
             r.quota.clone()
         };
         quota.retire_token()
@@ -639,6 +679,8 @@ impl ChanPlane {
             if let Some(n) = t.notifier {
                 self.release_notifier(n);
             }
+        } else if let Some(n) = t.notifier {
+            self.retain_user_ring_notifier(t.chan.token, &t.allocation, n);
         }
         self.engine_live(t.engine, false);
         Ok(format!(
@@ -762,5 +804,63 @@ mod tests {
         plane.ring_internal(0);
         pass(&plane, &host);
         assert_eq!(host.cell.lock().unwrap().writes, 1);
+    }
+    #[test]
+    fn retained_failed_cleanup_cannot_rearm_a_reused_guest_index() {
+        let cell = Cell::new(7, ());
+        // Pending final doorbell, followed by cleanup that retains all storage
+        // (native Free or source-view cleanup failed). Cancellation is final.
+        assert!(cell.request());
+        {
+            let _guard = cell.lock().unwrap();
+            cell.cancel();
+        }
+        assert!(!cell.pending());
+        assert!(!cell.alive(|_| true));
+        let writes = AtomicU64::new(0);
+        for _ in 0..8 {
+            assert!(!cell.request());
+            cell.wake_if(
+                |_| true,
+                |_| {
+                    writes.fetch_add(1, Ordering::Relaxed);
+                },
+            );
+        }
+        assert_eq!(writes.load(Ordering::Relaxed), 0);
+    }
+    #[test]
+    fn cleanup_exclusion_cancels_concurrent_wake_without_index_publication() {
+        let cell = Cell::new(7, ());
+        let writes = AtomicU64::new(0);
+        let barrier = std::sync::Barrier::new(2);
+        std::thread::scope(|scope| {
+            let guard = cell.lock().unwrap();
+            scope.spawn(|| {
+                assert!(cell.request());
+                cell.wake_if(
+                    |_| true,
+                    |_| {
+                        writes.fetch_add(1, Ordering::Relaxed);
+                    },
+                );
+                barrier.wait();
+                barrier.wait();
+                // Simulate a late ready/enable callback after retirement.
+                assert!(!cell.request());
+                cell.wake_if(
+                    |_| true,
+                    |_| {
+                        writes.fetch_add(1, Ordering::Relaxed);
+                    },
+                );
+            });
+            barrier.wait();
+            cell.cancel();
+            drop(guard);
+            barrier.wait();
+        });
+        assert!(!cell.pending());
+        assert_eq!(writes.load(Ordering::Relaxed), 0);
     }
 }

@@ -1,3 +1,23 @@
+# Resume Windows apps and GravityMark Vulkan
+
+## UPDATE 2026-10-12 17:32UTC — USER worker diagnostic ready for Linux regression
+
+Last confirmed push32312b0c6; this checkpoint revision is its containing commit.
+Final independent source review clears one bounded default-OFF experiment.
+Worker connected from birth; trigger-only immutable staging, native fetch
+receipts, own-object software actions and migration source replacement. Linux
+Passthrough unchanged. Six-crate1913PASS before final cleanup fix; final kf-qemu
+suite passes including two new cancellation tests (user-worker/README.md).
+No remaining reviewed source blocker. Wake cancellation is permanent before
+retirement/cleanup, including failed native cleanup and stale callbacks.
+
+Migration cursor-zero remains an unverified diagnostic hypothesis. Do not claim
+GravityMark or Windows compatibility yet. Next exact-revision Linux9+10/fast30
+and desktop, then one-variable Windows relay run; personal images preserved.
+No active Vast instances. Existing exact4df9c0095 hardware baseline remains the
+last verified hardware source until these runs complete. Matrix/drivers open.
+
+
 ## 2026-10-12 17:28 UTC — disabled worker implementation checkpoint
 
 Current branch `codex/windows-matrix-20261011`; previous pushed checkpoint
@@ -14,8 +34,6 @@ resolved admission, lost wake, notification-constructor and failed-Free notifier
 findings. Remaining review item: permanently cancel pending wakes on cleanup,
 including failed cleanup and stale callbacks. Fix/test that before exact-revision
 Linux regression, then one-variable Windows diagnostic. Vast inventory empty.
-
-# Resume Windows apps and GravityMark Vulkan
 
 ## UPDATE 2026-10-12 16:56UTC — worker integration checkpoint, not activated
 
