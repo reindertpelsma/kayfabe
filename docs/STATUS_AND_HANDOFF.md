@@ -1,5 +1,40 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-12 12:18UTC — reviewed native-attempt quota; three dispatch modes
+
+Last confirmed push debb10bc1. New native quota ticket reserves actual advertised
+runlist budget BEFORE native allocation, retains across guest token Free and
+uncertain native cleanup, transfers one charge at publication and releases only
+on never-attempted or confirmed native cleanup. Six tests, old early-release
+RED regression and deterministic retirement/ownership interleaving test; full
+core/qemu/rm/chan PASS. Independent review found/fixed missing caps-lock exclusion
+between retirement CAS and replacement ownership, then cleared quota scope.
+Evidence gravity-vulkan/user-native-quota. Runtime enabled() is still false.
+Notifier, initialization, source/submit/migration and native cutover remain open.
+
+Owner now explicitly directs three lock-free dispatch modes: direct host token;
+bounded pre-mapped USERD/GP-pointer copy + native doorbell (large delta worker);
+always worker for Translated/Emulated/registered migration. No PB inspection or
+mapping/native syscall on vCPU; only conditional nonblocking worker eventfd wake.
+MMIO and ioeventfd must share dispatch semantics. Model actual atomic transitions
+and Free/reuse/cutover/wrap, with independent architecture review. Existing token
+word is FULL (3state+2route+32hosttoken+27stamp). Prefer separate companion atomic
+control word for a prototype; don't truncate host token/stamp or conflate Emulated
+completion with translated work. No inline path is implemented or enabled yet.
+
+Late conversion is being reassessed rather than assuming inspection-from-birth
+is the only possible design. Registration-reply timing alone and a mere table
+flip do not account for prior native PB or reconstruct packet/binding state.
+Public manual explicitly permits headers/arguments across GP entries, so a zero
+witness cannot be blindly appended to an opaque partial packet. Three-mode CPU
+atomic safety and native stream cutover are separate gates, neither claimed.
+
+No new GPU/Windows job. Gravity Kayfabe FAIL/TIMEOUT; same-GPU VFIO179/183s PASS.
+Latest exact Linux hardware7f3f9fe16 gates9+10/fast30 PASS. Personal image retained.
+Host idle/DMA-FQ/stopabsent/117323956224 bytes free; Vast CLI11:58 [], no rentals.
+Matrix/driver sweep open; master untouched. Continue on codex/windows-matrix-20261011.
+
+
 ## UPDATE 2026-10-12 11:50UTC — disabled runtime birth checkpoint; bounded doorbell steering
 
 Last confirmed push: 99dec1260. New Windows USER birth adapter is a draft and

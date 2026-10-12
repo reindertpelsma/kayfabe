@@ -18,6 +18,7 @@ pub(super) fn enabled() -> bool {
 /// Kept even after statement-time Free; only confirmed native free retires it.
 pub(super) struct Record {
     pub allocation: Arc<()>,
+    pub quota: Arc<super::userquota::NativeQuota>,
     pub key: (u32, u32),
     pub idx: u32,
     pub chan: Option<kf_host::Channel>,
@@ -36,10 +37,12 @@ struct NeverBorn {
     live: Arc<AtomicU64>,
     twin: Option<Arc<crate::twin::TwinState>>,
     native_attempted: bool,
+    quota: Option<Arc<super::userquota::NativeQuota>>,
 }
 impl Drop for NeverBorn {
     fn drop(&mut self) {
         if !self.native_attempted {
+            if let Some(q) = &self.quota { let _ = q.release_confirmed(); }
             self.live.fetch_sub(1, Ordering::AcqRel);
             if let Some(t) = &self.twin {
                 t.user_done();
@@ -127,6 +130,7 @@ impl Birth {
             }
         };
         let record = Arc::new(Mutex::new(Record {
+            quota: self.count.quota.as_ref().ok_or_else(|| fail("USER_RING_QUOTA_ABSENT".into()))?.clone(),
             allocation: self.pending.allocation(), key: (a.client, a.handle), idx: self.idx,
             chan: None, lease: lease.clone(), mirror: self.mirror.clone(), userd,
             source: (a.gpfifo_va, a.entries), retired: false, free_attempted: false, dead: None,
@@ -168,8 +172,13 @@ impl Birth {
         };
         record.lock().map_err(|_| fail("USER_RING_RECORD_POISONED".into()))?.chan = Some(chan);
         // Every failure after native birth still has an explicit attempt owner.
-        me.user_rings.lock().map_err(|_| fail("USER_RING_RECORDS_POISONED".into()))?
-            .insert(chan.token, record.clone());
+        {
+            let mut rings = me.user_rings.lock().map_err(|_| fail("USER_RING_RECORDS_POISONED".into()))?;
+            if rings.contains_key(&chan.token) {
+                return Err(fail("USER_RING_NATIVE_TOKEN_COLLISION_QUARANTINED".into()));
+            }
+            rings.insert(chan.token, record.clone());
+        }
         if let Some(k) = gkey {
             let mut groups = me.groups.lock().map_err(|_| fail("USER_RING_GROUPS_POISONED".into()))?;
             groups.entry(k).and_modify(|g| g.1 = g.1.saturating_add(1)).or_insert((chan.tsg, 1));
@@ -188,7 +197,6 @@ impl Birth {
         let attached = me.user_births.commit(&self.pending, |identity| {
             let mut pt = me.pt.lock().map_err(|_| "USER_RING_PT_POISONED")?;
             if pt.contains_key(&(a.client, a.handle)) { return Err("USER_RING_LIVE_COLLISION".into()); }
-            let mut caps = me.caps.lock().map_err(|_| "USER_RING_CAPS_POISONED")?;
             // Publish all metadata before making the token visible. Locks here
             // protect bounded metadata only; no native verb or source read.
             pt.insert((a.client, a.handle), PtChan {
@@ -205,8 +213,7 @@ impl Birth {
                 ring_at: (a.gpfifo_va, a.entries, match a.userd {
                     Some(kf_arch::UserdMem::Sysmem { base, .. }) => Some(base), _ => None }),
             });
-            if let Err(e) = me.plane.allocate_channel(&mut caps, self.idx,
-                Route::Translated, chan.token, Owner::User) {
+            if let Err(e) = self.count.quota.as_ref().ok_or("USER_RING_QUOTA_ABSENT")?.attach(chan.token) {
                 pt.remove(&(a.client, a.handle));
                 return Err(format!("USER_RING_TOKEN {e:?}"));
             }
@@ -232,7 +239,12 @@ impl ChanPlane {
     /// admission. No new route for Linux or a channel without the birth permit.
     pub(super) fn birth_user_ring(&self, a: ChannelAlloc, mirror: Mirror, idx: u32,
         twin: Option<Arc<crate::twin::TwinState>>) -> ChanAnswer {
-        let count = NeverBorn { live: mirror.live.clone(), twin, native_attempted: false };
+        let mut count = NeverBorn { live: mirror.live.clone(), twin, native_attempted: false, quota: None };
+        let quota = match super::userquota::NativeQuota::reserve(self.caps.clone(), self.plane, idx) {
+            Ok(q) => q,
+            Err(why) => return ChanAnswer::Refused { status: NV_ERR_INSUFFICIENT_RESOURCES, why },
+        };
+        count.quota = Some(quota);
         let pending = match self.user_births.allocate(&self.inbox.user_va, &a, mirror.clone()) {
             Ok(p) => p,
             Err(why) => return ChanAnswer::Refused { status: NV_ERR_NOT_SUPPORTED, why },
@@ -267,11 +279,14 @@ impl ChanPlane {
         record: Option<&Arc<Mutex<Record>>>, native_freed: bool) {
         let Some(record) = record else { return };
         if !native_freed { return; }
-        let (lease, identity) = {
+        let (lease, identity, quota) = {
             let Ok(mut r) = record.lock() else { return };
             r.retired = true;
-            (r.lease.clone(), r.allocation.clone())
+            (r.lease.clone(), r.allocation.clone(), r.quota.clone())
         };
+        if let Err(why) = quota.release_confirmed() {
+            eprintln!("kf3: USER_RING_QUOTA_RETAINED after confirmed native free: {why}");
+        }
         // Queue metadata may contend; no publisher guard is held over it.
         let cleanup = self.inbox.user_va.release_after_channel_free(lease);
         let _ = self.inbox.wake.signal();
@@ -286,17 +301,28 @@ impl ChanPlane {
     }
 
     fn release_never_born_record(&self, record: &Arc<Mutex<Record>>) {
-        let (lease, identity) = {
+        let (lease, identity, quota) = {
             let Ok(mut r) = record.lock() else { return };
             r.retired = true;
-            (r.lease.clone(), r.allocation.clone())
+            (r.lease.clone(), r.allocation.clone(), r.quota.clone())
         };
+        let _ = quota.release_confirmed();
         if self.inbox.user_va.release_after_channel_free(lease).is_ok() {
             if let Ok(mut holds) = self.user_birth_holds.lock() {
                 holds.retain(|(id, _)| !Arc::ptr_eq(id, &identity));
             }
         }
         let _ = self.inbox.wake.signal();
+    }
+
+    pub(super) fn retire_user_ring_token(&self, token: u32, identity: &Arc<()>) -> bool {
+        let Some(record) = self.user_ring_record(token) else { return false };
+        let quota = {
+            let Ok(r) = record.lock() else { return false };
+            if !Arc::ptr_eq(&r.allocation, identity) { return false; }
+            r.quota.clone()
+        };
+        quota.retire_token()
     }
 
     fn withdraw_user_ring(&self, key: (u32, u32), identity: &Arc<()>)
@@ -308,7 +334,7 @@ impl ChanPlane {
             }
             pt.remove(&key).ok_or((NV_ERR_INVALID_STATE, "USER_RING_WITHDRAW_GONE".into()))?
         };
-        if let Ok(mut caps) = self.caps.lock() { let _ = self.plane.free_channel(&mut caps, t.idx); }
+        self.retire_user_ring_token(t.chan.token, &t.allocation);
         if let Some(twin) = &t.twin { twin.user_freeing(); }
         let native = self.release_twin(key.0, t.tsg, t.ctx_share, t.chan);
         if native.is_ok() {

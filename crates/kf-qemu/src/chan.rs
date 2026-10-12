@@ -69,6 +69,8 @@ use std::sync::{Arc, Mutex, RwLock};
 
 #[path = "userrelay.rs"]
 mod userrelay;
+#[path = "userquota.rs"]
+mod userquota;
 
 /// `NV_ERR_INVALID_STATE`.
 const NV_ERR_INVALID_STATE: u32 = 0x40;
@@ -2230,7 +2232,7 @@ pub struct ChanPlane {
     inbox: std::sync::Arc<crate::mem::Inbox>,
     /// The session's ONE completion fd + in-flight set (`kf_chan::completions`).
     pub completions: Completions,
-    caps: Mutex<VmCaps>,
+    caps: Arc<Mutex<VmCaps>>,
     /// Host token → channel.
     slots: RwLock<HashMap<u32, Arc<Mutex<Slot>>>>,
     /// `(hClient, hObject)` → host token.
@@ -2898,7 +2900,7 @@ impl ChanPlane {
             // Declared caps: channels are the only twin this plane mints, and the cap is the number
             // the guest was TOLD per runlist (`kf_abi::chanbudget`, the `channel-budget` property, §9.1)
             // — a hardcoded 64 refused the 65th live channel of a Windows desktop (OpenGL ICD crash, CUDA 999).
-            caps: Mutex::new(VmCaps::from_declared(channel_budget, 64, 64, 64)),
+            caps: Arc::new(Mutex::new(VmCaps::from_declared(channel_budget, 64, 64, 64))),
             slots: RwLock::new(HashMap::new()),
             by_obj: Mutex::new(HashMap::new()),
             sw_objs: Mutex::new(HashMap::new()),
@@ -5392,8 +5394,11 @@ impl ChanPlane {
             }
             // ★ The guest's token stops ringing the twin before its host free (a Passthrough token
             // is never BUSY: no worker ever claims one).
-            if let Ok(mut c) = self.caps.lock() {
-                for (_, t) in &twins {
+            for (_, t) in &twins {
+                if t.user_ring {
+                    // Native-attempt quota survives guest token retirement.
+                    self.retire_user_ring_token(t.chan.token, &t.allocation);
+                } else if let Ok(mut c) = self.caps.lock() {
                     let _ = self.plane.free_channel(&mut c, t.idx);
                 }
             }
@@ -5595,12 +5600,22 @@ impl ChanPlane {
     ) -> Result<(), kf_host::RmError> {
         let user_record = self.user_ring_record(chan.token);
         if let Some(record) = &user_record {
-            let mut record = record.lock().map_err(|_| kf_host::RmError::Other(NV_ERR_INVALID_STATE))?;
-            // Quiesce CPU publication first; native free is OUTSIDE this guard.
-            // An uncertain native cleanup is quarantined until session teardown,
-            // with no second Free decrementing group/count state.
-            if record.free_attempted { return Err(kf_host::RmError::Other(NV_ERR_INVALID_STATE)); }
-            record.free_attempted = true;
+            let quota = {
+                let mut record = record.lock().map_err(|_| kf_host::RmError::Other(NV_ERR_INVALID_STATE))?;
+                // Quiesce CPU publication first; native free is OUTSIDE this guard.
+                // An uncertain native cleanup is quarantined until session teardown,
+                // with no second Free decrementing group/count state.
+                if !record.chan.is_some_and(|owned| owned.chan == chan.chan && owned.tsg == chan.tsg)
+                    || record.free_attempted {
+                    return Err(kf_host::RmError::Other(NV_ERR_INVALID_STATE));
+                }
+                record.free_attempted = true;
+                record.quota.clone()
+            };
+            if let Err(why) = quota.prepare_native_cleanup() {
+                eprintln!("kf3: USER_RING_FREE_QUARANTINED host {:#x}: {why}; no native free attempted", chan.token);
+                return Err(kf_host::RmError::Other(NV_ERR_INVALID_STATE));
+            }
         }
         let Some(k) = guest_tsg.map(|t| (client, t, ctx_share)) else {
             let r = self.rm.free_channel(chan);
