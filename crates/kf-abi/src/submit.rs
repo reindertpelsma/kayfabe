@@ -1983,6 +1983,11 @@ pub const USERD_GP_GET: u64 = 34 * 4;
 /// release-fence seam `kayfabe_linux_raw::VolatileRegion` names in its own docs.
 pub const USERD_GP_PUT: u64 = 35 * 4;
 
+/// `Nvc56fControl.Reference`, GPU-written read-only reference value at byte0x48.
+/// NVIDIA public595.84 `src/common/sdk/nvidia/inc/class/clc56f.h:52`.
+/// This layout alone does not prove engine completion or apply to other classes.
+pub const USERD_REFERENCE_C56F: u64 = 0x48;
+
 /// `NVC56F_GP_ENTRY__SIZE` —
 /// `ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:267`.
 pub const GP_ENTRY_SIZE: u64 = 8;
@@ -2544,6 +2549,13 @@ pub const SET_OBJECT: u32 = 0x0000_0000;
 /// is the bar this port is trying to clear: *"SEM LANDED — host doorbell+schedule+USERD
 /// mechanics GOOD"*.
 pub mod fifo {
+    /// `NVC56F_SET_REFERENCE` — public595.84 `class/clc56f.h:204`.
+    /// Do not assume support on Hopper: public RM watchdog uses a different tail.
+    pub const SET_REFERENCE_C56F: u32 = 0x50;
+    /// `NVC56F_WFI` — public595.84 `class/clc56f.h:247`.
+    pub const WFI_C56F: u32 = 0x78;
+    /// `NVC56F_WFI_SCOPE_ALL` — public595.84 `class/clc56f.h:251`.
+    pub const WFI_SCOPE_ALL_C56F: u32 = 1;
     /// `NVC56F_SEM_ADDR_LO` @ `0x5c` — semaphore address bits `31:2`
     /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:206-207`).
     pub const SEM_ADDR_LO: u32 = 0x0000_005C;

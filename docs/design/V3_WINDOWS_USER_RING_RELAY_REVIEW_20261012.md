@@ -175,3 +175,33 @@ was NOT_RUN due to runner directory/path errors; corrected immutable runner used
 the same exact binary. Both attempts are retained in user-ring-p0/linux-result.
 This is regression evidence for the unconnected prototype, not a Windows
 migration, complete ownership model or app pass. Personal Windows image unused.
+
+## USERD reference hypothesis, before native run (2026-10-12)
+
+Public595.84 clc56f.h names read-only Nvc56fControl.Reference at0x48,
+SET_REFERENCE at0x50 and WFI/SCOPE_ALL at0x78/value1. Public RM watchdog
+kernel_rc_watchdog.c:1429 uses SET_REFERENCE only before Hopper; on Hopper it
+uses a different WFI/MEMBAR sequence. This probe refuses any chosen channel class
+other than publicC56F; no other-family support or completion semantics inferred.
+The new constants are header-defined interfaces, not per-die captured facts.
+
+H-REFERENCE: a GPU-read-only command ring can execute a virtual CE copy followed
+by WFI_ALL and SET_REFERENCE, observed through a CPU view of **unmapped USERD**.
+Falsifier: missing real reference, incorrect4096-byte copy/CE semaphore at its
+first polled reference observation, new attributed fault, or teardown failure.
+No GPU mapping of a private writable completion word is made. Writable output
+is only the native test fixture representing guest-owned data.
+
+H-REFERENCE-ORDER: exactly the same commands, with an initially unsatisfied FIFO
+acquire, do not publish the reference before the test supplies the signal after
+an explicit50ms hold. Falsifier: any nonzero reference while the acquire is held,
+or failure to produce reference/copy after the explicit signal. GP_GET is logged
+separately and never used to complete work. The50ms signal is predetermined bench
+stimulus; no product timeout/gate exists. Three seconds ends observation only;
+channel free must succeed before explicit revoke.
+
+Run immediate then held, separate unprivileged USER processes under shared lock;
+stop if control fails. Capture exact source/SHA/UID/PID/time/journal/cleanup.
+These two cases only test one class and small CE work/FIFO ordering; even a PASS
+is not a general engine-completion, guest-SET_REFERENCE filtering, sequence-wrap,
+native migration-cursor or backing-lifetime proof. No VM behavior is changed.

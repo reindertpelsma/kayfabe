@@ -14,6 +14,164 @@ const SENTINEL: u64 = 0x8000;
 const INITIAL: u32 = 0x3141_5926;
 const ATTEMPT: u32 = 0x2718_2818;
 
+/// Same immutable commands in both reference cases; only the acquire fixture's
+/// initial value/publication time differs. No writable private GPU fence.
+fn reference_commands(output_va: u64, ce_class: u32) -> Result<Vec<u32>, String> {
+    let mut words = vec![method_header_inc(0, fifo::SEM_ADDR_LO, 5).ok_or("acquire")?];
+    words.extend_from_slice(&[
+        output_va as u32,
+        (output_va >> 32) as u32,
+        1,
+        0,
+        fifo::SEM_EXECUTE_ACQUIRE_32BIT,
+    ]);
+    words.extend(
+        kf_harness::ce_copy_push(
+            ce_class,
+            output_va + 0x1000,
+            output_va + 0x2000,
+            4096,
+            output_va + 4,
+            1,
+            false,
+        )
+        .ok_or("copy encoding")?,
+    );
+    words.extend([
+        method_header_inc(0, fifo::WFI_C56F, 1).ok_or("WFI")?,
+        fifo::WFI_SCOPE_ALL_C56F,
+        method_header_inc(0, fifo::SET_REFERENCE_C56F, 1).ok_or("reference")?,
+        1,
+    ]);
+    Ok(words)
+}
+
+fn run_reference(held: bool) -> Result<(), String> {
+    use kf_abi::submit::{ENGINE_TYPE_COPY0, USERD_REFERENCE_C56F};
+    let dev = DevDir::open(c"/dev").map_err(|e| format!("dev: {e:?}"))?;
+    let rm = HostRm::open(&dev, kf_harness::gate_gpu(), &kf_chip::choose_host_classes)
+        .map_err(|e| e.to_string())?;
+    let (architecture, implementation, _) = rm.arch_info();
+    let chosen =
+        kf_chip::choose_host_classes(architecture, implementation, rm.supported_class_ids())?;
+    let class = chosen.gpfifo_channel().channel_id().0;
+    if class != kf_abi::generated::classes::AMPERE_CHANNEL_GPFIFO_A {
+        return Err(format!(
+            "REFERENCE_CLASS_UNMEASURED class={class:#x}; probe only supports publicC56F"
+        ));
+    }
+    let space = rm
+        .alloc_vaspace_bare()
+        .map_err(|e| format!("space: {e:?}"))?;
+    let ring = Buffer::new(&rm, space, Some(Mode::ReadOnly.perm()))?;
+    let output = Buffer::new(&rm, space, Some(MapPerm::READ_WRITE))?;
+    let userd = Buffer::new(&rm, space, None)?;
+    let ring_va = ring.va.ok_or("ring VA absent")?;
+    let output_va = output.va.ok_or("output VA absent")?;
+    output.store(0, u32::from(!held))?;
+    for off in (0..4096).step_by(4) {
+        output.store(0x1000 + off, INITIAL ^ off as u32)?;
+    }
+    let chan = rm
+        .birth_channel(
+            space,
+            ENGINE_TYPE_COPY0,
+            kf_host::RingSpec {
+                gp_fifo_va: ring_va + GP,
+                gp_fifo_entries: 32,
+                userd_memory: userd.memory,
+                userd_offset: 0,
+                err_notifier: 0,
+            },
+        )
+        .map_err(|e| format!("birth: {e:?}"))?;
+    let result = (|| {
+        chan.assert_user().map_err(str::to_string)?;
+        rm.alloc_ce_object(chan, ENGINE_TYPE_COPY0)
+            .map_err(|e| format!("CE: {e:?}"))?;
+        println!(
+            "USER_RING_REFERENCE_SETUP held={held} class={class:#x} driver={} ring_gpu_read_only=true userd_gpu_mapped=false",
+            rm.driver_version()
+        );
+        let words = reference_commands(output_va, rm.ce_class_id())?;
+        for (i, &word) in words.iter().enumerate() {
+            ring.store(PB + 4 * i as u64, word)?;
+        }
+        let gp = gp_entry(ring_va + PB, 4 * words.len() as u64).ok_or("GP encoding")?;
+        ring.store(GP, gp as u32)?;
+        ring.store(GP + 4, (gp >> 32) as u32)?;
+        rm.schedule(chan).map_err(|e| format!("schedule: {e:?}"))?;
+        kf_linux_raw::release_fence();
+        userd.store(USERD_GP_PUT, 1)?;
+        kf_linux_raw::release_fence();
+        rm.doorbell(chan.token)
+            .map_err(|e| format!("doorbell: {e:?}"))?;
+        let start = Instant::now();
+        let mut early_reference = false;
+        let mut held_samples = 0;
+        let mut fetched_while_held = false;
+        if held {
+            // Explicit bench stimulus, not a timer releasing a product gate.
+            // The acquire is intentionally unsatisfied for50ms, then published.
+            while start.elapsed() < Duration::from_millis(50) {
+                early_reference |= userd.load(USERD_REFERENCE_C56F)? != 0;
+                fetched_while_held |= userd.load(USERD_GP_GET)? == 1;
+                held_samples += 1;
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            println!(
+                "USER_RING_REFERENCE_HELD samples={held_samples} early_reference={early_reference} fetched={fetched_while_held} acquire={} reference={} ce_semaphore={}",
+                output.load(0)?,
+                userd.load(USERD_REFERENCE_C56F)?,
+                output.load(4)?
+            );
+            output.store(0, 1)?;
+            kf_linux_raw::release_fence();
+        }
+        let finished = loop {
+            if userd.load(USERD_REFERENCE_C56F)? == 1 {
+                break true;
+            }
+            if start.elapsed() > Duration::from_secs(3) {
+                break false;
+            }
+            std::thread::sleep(Duration::from_millis(1));
+        };
+        let mut copy_matches = true;
+        for off in (0..4096).step_by(4) {
+            copy_matches &= output.load(0x2000 + off)? == (INITIAL ^ off as u32);
+        }
+        println!(
+            "USER_RING_REFERENCE_OBSERVATION finished={finished} reference={} copy_matches={copy_matches} ce_semaphore={} GP_GET={} GP_PUT={} elapsed_us={}",
+            userd.load(USERD_REFERENCE_C56F)?,
+            output.load(4)?,
+            userd.load(USERD_GP_GET)?,
+            userd.load(USERD_GP_PUT)?,
+            start.elapsed().as_micros()
+        );
+        if !finished
+            || !copy_matches
+            || early_reference
+            || output.load(4)? != 1
+            || (held && held_samples == 0)
+        {
+            return Err("reference/copy/order criterion failed".into());
+        }
+        Ok(())
+    })();
+    rm.free_channel(chan)
+        .map_err(|e| format!("channel free: {e:?}"))?;
+    let mut cleanup = Ok(());
+    for b in [ring, output, userd] {
+        if let Err(e) = b.close(&rm, space) {
+            cleanup = Err(e);
+        }
+    }
+    rm.free_vaspace(space);
+    println!("USER_RING_REFERENCE_CLEANUP result={cleanup:?}");
+    result.and(cleanup)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Mode {
     ReadWrite,
@@ -27,7 +185,7 @@ impl Mode {
             "read-write" => Ok(Self::ReadWrite),
             "read-only" => Ok(Self::ReadOnly),
             "write-attempt" => Ok(Self::WriteAttempt),
-            _ => Err("usage: kf-user-ring-probe read-write|read-only|write-attempt".into()),
+            _ => Err("usage: kf-user-ring-probe read-write|read-only|write-attempt|reference|reference-held".into()),
         }
     }
 
@@ -225,9 +383,16 @@ fn run(mode: Mode) -> Result<(), String> {
 fn main() {
     let args: Vec<_> = std::env::args().skip(1).collect();
     let result = if args.len() == 1 {
-        Mode::parse(&args[0]).and_then(run)
+        match args[0].as_str() {
+            "reference" => run_reference(false),
+            "reference-held" => run_reference(true),
+            s => Mode::parse(s).and_then(run),
+        }
     } else {
-        Err("usage: kf-user-ring-probe read-write|read-only|write-attempt".into())
+        Err(
+            "usage: kf-user-ring-probe read-write|read-only|write-attempt|reference|reference-held"
+                .into(),
+        )
     };
     match result {
         Ok(()) => println!("USER_RING_PROBE=PASS"),
@@ -268,5 +433,21 @@ mod tests {
     #[test]
     fn malformed_mode_cannot_launch_hardware() {
         assert!(Mode::parse("anything").is_err());
+    }
+
+    #[test]
+    fn reference_tail_follows_virtual_copy_and_all_scope_wfi() {
+        let words = reference_commands(0x200010000, 0xc6b5).unwrap();
+        assert_eq!(
+            &words[words.len() - 4..],
+            &[
+                method_header_inc(0, fifo::WFI_C56F, 1).unwrap(),
+                fifo::WFI_SCOPE_ALL_C56F,
+                method_header_inc(0, fifo::SET_REFERENCE_C56F, 1).unwrap(),
+                1,
+            ]
+        );
+        assert_eq!(words[5], fifo::SEM_EXECUTE_ACQUIRE_32BIT);
+        assert!(PB + 4 * words.len() as u64 <= SENTINEL);
     }
 }
