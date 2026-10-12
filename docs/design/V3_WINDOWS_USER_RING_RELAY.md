@@ -138,3 +138,27 @@ No privileged host verb, no change to the guest's RM, no heuristics or timeouts 
 
 GPFIFO base is a VA; the reserved range is possible; an unprivileged harmless registration is accepted and executed; native cursor semantics are exact enough for A-lite; Windows tolerates the switch; the guest never relies on the
 old ring after the trigger. The cause of the growth is not established (ring growth is measured; why it is requested is not).
+
+## 9. Coordinator revision 2026-10-12 (after the owner's three-mode refinement and Codex's architecture review)
+
+This section is appended to Codex's current copy of this document (taken from `codex/windows-matrix-20261011` at `ea8b77ee1`) so both lines carry the same text. Dispatch mechanics are in
+`V3_WINDOWS_USER_RING_RELAY_ARCHITECTURE_REVIEW_20261012.md`; this section records only what is new or corrected.
+
+**Corrected (coordinator):** my earlier "late switch at registration, race-free because kayfabe holds the reply" is withdrawn. Two reasons: (1) a hostile guest can publish the handle before the reply and an already-forwarded mutable
+pushbuffer can still be fetched later; (2) stronger, and valid for a cooperative guest too: starting inspection mid-stream needs parser state (subchannel binding, hardware method packets that span GP segments, persistent HOST methods,
+pending MEM_OPs) that an opaque history does not give (public FIFO manual cited in the architecture review). The sound variant is the owner's earlier idea: convert BEFORE the channel has published any native work, i.e. at the
+`5080` object-allocation admission (run 1361, channel 4e: birth 8311, 5080 alloc 8315, schedule 8365, first forwarded submission 8437), with old-claim exclusion before the object is acknowledged and the channel's "never published native work" history bit checked.
+
+**Open value question (measure):** the earlier measurement says the `5080` is the first and only `ENG_SW` child of EVERY Windows channel. If every Windows user-work channel allocates it before its first submission, conversion at object allocation
+is in effect inspection from birth for all of them, and the CopyRing mode (inline or worker) rarely applies on Windows. Count, over the matrix runs, the Windows user-work channels that allocate a `5080` before their first forward, and those that do not.
+
+**Candidate to evaluate (cheaper inspection):** scan the pushbuffers from the first submission WITHOUT copying them (read-only scan for a `0x200` on the subchannel bound to the `5080` object, tracking packet/binding state from birth), forward the original GP entries unchanged,
+and take an immutable snapshot only for a segment that actually contains a trigger (rare). Safety rests on hardware containment, not on the scan: the twin is an unprivileged USER channel in its own restricted space with the physical-operand prohibition, and an unscanned trigger on it executes
+nothing and RCs only the guest's own channel (measured: Xid 32, run 1540; the exposure every Passthrough channel already has from a malformed method). Gates: the two-VM check (an RC in one VM while another runs a workload stays contained); Codex's concrete counterexample, if any, of a capability an unscanned trigger gives an unprivileged guest;
+a measured cost against full snapshots. If it holds, the private read-only command mappings and stores are used only on the trigger segment, which removes most of the always-on machinery.
+
+**Kept from the owner's discussion:**
+- The inline (vCPU) CopyRing path is an optimisation; the worker path is the correctness baseline and is built and validated first. With `ioeventfd` the kernel only signals an eventfd, so the inline copy cannot run there; an ioeventfd doorbell always takes the worker path.
+- The vCPU never waits: one compare-and-swap (the channel's BUSY word); on failure it sets a durable PENDING bit, requests a nonblocking worker wake and returns; the releaser re-checks PENDING; every step computes its delta from the current private cursor to the current guest `GP_PUT`, so doorbells coalesce (modelled, native and Loom atomics, in `kf-trap`).
+- Linux guests and the guest doorbell helper (`V3_GUEST_DOORBELL_MODULE.md`): the helper already writes the real host doorbell page only for a table route `Passthrough` and rings kayfabe's classic trapped page for `Emulated`, unknown, not found or a missing table ("any doubt rings the original kayfabe page"). Publish a flagged (CopyRing/Worker) token with a route that is not `Passthrough` and the module needs no change;
+  pin it with a test: an unknown route value takes the classic path.

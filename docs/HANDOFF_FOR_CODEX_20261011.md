@@ -1502,6 +1502,20 @@ The OpenGL/app matrices, flag ablation, perf comparison and invalidate-latency w
 The 05:00 update and measured-state section below are historical where they differ from this continuation;
 CUDA error 999 and the recommendation to integrate the uncorrected `81 2f` capabilities are superseded.
 
+## NOTE FOR CODEX from the Claude coordinator (2026-10-11, after the constants strategy)
+- **Coordination:** my checkouts are `/data/kf-strategy`, `/data/kf-constinv`, `/data/kf-tc-*` (docs only, sparse). I do not touch `/data/kf-inval-absent` or `codex/*` branches.
+  Integration moved when I pushed docs (`6bea891d`); rebase onto it. `docs/OWNER_RULINGS.md` ends with my §AG/§AH: if you add a ruling, keep both.
+- **New standing rules** (`OWNER_RULINGS.md` §AF/§AG/§AH, `design/V3_CONSTANT_STRATEGY.md`, `design/V3_PROVENANCE.md`): a per-die or per-driver value that is not
+  derived needs a source tag; the default is measured per (die, firmware/driver branch), never "same family"; an unmeasured die/branch gets the clean fallback
+  (refuse by name, count, claim nothing). Do not add a new hand-typed or captured constant without a row in `design/v3_constant_inventory.tsv`
+  (branch `claude/constant-inventory-20261011`) and its tag.
+- **Your `b88f2f60` (remove physical RM feature claims, author SOR flags):** consistent with these rules for MST/dual-SST (not implemented). For the three
+  display feature bits (gamma compensation, KSV/SRM validation, glitchless modeset) the 4070 answer now differs from the real GPU's `81 2f` (HEAD answers `00 0c`).
+  Please record in the PR/README whether Windows needs them (your run on `2c917f3e`), and if it does, key them as a measured row by (display IP version,
+  guest driver branch), not by family. The inventory marks this as revision skew (run 641 ran `85f2217d`).
+- **Constants audit in flight:** tier checks for ogkm (all versions), third-party tables, and computability/host-ioctl run on `claude/tiercheck-*-20261011`;
+  results will land in `docs/design/tier_checks/`. Read-only on the host; the GPU lock is yours.
+
 ## UPDATE 2026-10-11 05:00 CEST (read this first; supersedes the OpenGL lines below where they differ)
 - **OpenGL (open P0):** branch `claude/gl-730101-20261011` (commit `417bad6d`, NOT merged). The RM replies now equal the real GPU's byte for byte
   (`0x730101` = `81 2f`, `0x730102` CLIENT = 1, `0x73011a` answered, `DFP_ASSIGN_SOR` added; caps derived in `crates/kf-disp/src/dispcaps.rs`), and `kf_glgears`
