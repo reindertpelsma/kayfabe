@@ -10,9 +10,12 @@ use super::{PlacedRows, RamMap, RowsLog};
 use kf_chan::tmode::Span;
 use std::sync::{Arc, RwLock, RwLockReadGuard, TryLockError, Weak, atomic::Ordering};
 
-/// Trusted per-worker copy budget, independent of guest PB/ring sizes.
-pub(crate) const MAX_BYTES: usize = 64 << 10;
-const PIECES: usize = 64;
+/// Trusted bounded snapshot policy, shared with native descriptor admission and
+/// limited by the existing private staging region. All reads remain off-vCPU.
+pub(crate) const MAX_BYTES: usize = kf_chan::user_storage::MAX_SOURCE_BYTES as usize;
+// Complete maximum span at public4KiB grain, including an unaligned first page.
+// Finer hostile fragmentation still refuses; no guest-sized unbounded traversal.
+const PIECES: usize = MAX_BYTES / 4096 + 1;
 // Trusted declared-ring metadata cap:8MiB at public4KiB pages, plus one for8-byte alignment.
 const RING_PIECES: usize = 2049;
 
@@ -319,6 +322,33 @@ mod tests {
     use super::*;
     use kf_host::MapPerm;
     use std::sync::atomic::Ordering;
+    #[test]
+    fn staging_sized_fragmented_source_is_bounded_and_rechecks_its_last_page() {
+        let bytes = kf_chan::user_storage::GP_OFFSET as usize;
+        let ram = RamMap::default();
+        let (mem, fd) = crate::raw_unsafe::test_owned_ram(bytes + 4096);
+        ram.add(super::super::RamBlock { gpa: 0x2000, mem, fd: Some(fd), fd_off: 0 });
+        let rows = PlacedRows::default();
+        for offset in (0..bytes + 4096).step_by(4096) {
+            rows.write().unwrap().insert(
+                0x100000 + offset as u64,
+                (4096, offset as u64, true, MapPerm::READ_WRITE),
+            );
+        }
+        assert!(mem.write_from(4, &[7, 8, 9, 10]));
+        assert!(mem.write_from(bytes, &[11, 12, 13, 14]));
+        let log = RowsLog::default();
+        let generation = ram.generation.load(Ordering::Relaxed);
+        let source = snapshot(&rows, &log, &ram, generation, 0x100004, bytes, &mut NoStore).unwrap();
+        assert_eq!(&source.bytes[..4], &[7, 8, 9, 10]);
+        assert_eq!(&source.bytes[bytes - 4..], &[11, 12, 13, 14]);
+        source.admit(|| ()).unwrap();
+        assert_eq!(snapshot(&rows, &log, &ram, generation, 0x100004, bytes + 1, &mut NoStore).err(), Some(Refusal::Bounds));
+        rows.write().unwrap().remove(&(0x100000 + bytes as u64));
+        assert_eq!(source.admit(|| ()), Err(Refusal::Changed));
+        assert!(snapshot(&rows, &log, &ram, generation, 0x100004, bytes, &mut NoStore).is_err());
+    }
+
     #[test]
     fn full_eight_mib_ring_at_four_kib_grain_is_bounded_and_admitted() {
         let (ram, _, rows, log, generation) = fixture();

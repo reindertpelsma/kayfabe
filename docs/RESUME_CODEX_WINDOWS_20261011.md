@@ -1,5 +1,32 @@
 # Resume Windows apps and GravityMark Vulkan
 
+## UPDATE 2026-10-12 19:18UTC — checkpoint; Windows1580 buffer-budget refusal
+
+Last confirmed push4ec9f9a24. Exact4ec9f9a24 native synchronized-NOP probes2/2PASS,
+Linux9/9+gate10, fast30/30, desktop/gears~59–60FPS PASS_WITH_WARNINGS. Evidence
+user-worker/nop-linux. Windows1580 signed in but desktop channels refused GP_FORMAT
+Budget on~100KiB buffers before GravityMark: ABORTED_PRE_BENCHMARK, no app verdict.
+Stopped ACPI18:57:49UTC/gone18:57:51UTC/DMA-FQ; bounded journal nohostXid.
+Personal images preserved. Windows raw evidence capture is next.
+
+This checkpoint raises the trusted source budget to existing896KiB staging space,
+with225 page pieces and16 cached64KiB CPU views (1MiB quota); arbitrary fragmented
+store spans exceeding that view quota still clean-refuse. Actual storage/read
+regressions failed first; actual Cache test now also reproduced Bounds after a
+fixture compile correction. Complete retest/review and exact hardware are PENDING.
+Do not call this checkpoint green. New100KiB native padded-barrier probe added.
+
+Census of five retained diagnostic campaigns:301/301 user-work channels allocated
+5080;213/213 with logged forwards allocated it first;88 have no forward evidence.
+Only3 channels successfully registered bundles. See user-worker/object-order.
+Current diagnostic still scans from birth on workers, Sysmem-only. Owner proposes
+initial inspection then fast forwarding until later deferred registration. Binding
+identity can potentially derive from own single-object metadata; not an absolute
+blocker. Re-entry still needs justified packet-boundary/state recovery. No fast
+switch implementation or latency claim yet. GravityVk, full matrix, compatibility
+axis and migration/source continuity remain open; no new Windows appPASS.
+
+
 ## UPDATE 2026-10-12 18:44UTC — Windows1570 identifies synchronized NOP; correction locally green
 
 Last confirmed push43780e21e. Exact a38602015 Windows1570 admits USER workers

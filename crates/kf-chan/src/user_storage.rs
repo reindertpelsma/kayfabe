@@ -18,6 +18,10 @@ use kf_linux_raw::{Backing, CachePolicy, CharDevice, HostOffset, HostPageSize, V
 pub const BYTES: u64 = 1 << 20;
 /// Pushbuffer region ends here; whole64KiB granules permit RO-only mapping.
 pub const GP_OFFSET: u64 = 0xe0000;
+/// Trusted source snapshot limit: any intercepted segment must fit completely
+/// in the existing private staging region. This is an allocation policy, not
+/// the hardware maximum GPFIFO length or a per-die compatibility constant.
+pub const MAX_SOURCE_BYTES: u64 = GP_OFFSET;
 /// USERD starts here and has NO GPU VA mapping.
 pub const USERD_OFFSET: u64 = 0xf0000;
 /// Trusted private GP capacity, independent of the guest ring's changing size.
@@ -514,7 +518,7 @@ impl Storage<CpuView> {
         if slot >= ENTRIES {
             return Err("USER_STORAGE_GP_BOUND".into());
         }
-        crate::user_stream::inspect_entry(entry, 64 * 1024)
+        crate::user_stream::inspect_entry(entry, MAX_SOURCE_BYTES)
             .map_err(|why| format!("USER_STORAGE_USER_GP: {why:?}"))?;
         self.cpu()?
             .store_u64(HostOffset::new(GP_OFFSET + u64::from(slot) * 8), entry)
@@ -680,6 +684,22 @@ mod tests {
     }
 
     #[test]
+    fn large_user_descriptor_fits_staging_policy_and_keeps_real_credit_fields() {
+        let s = anonymous_live_storage();
+        for bytes in [100 << 10, GP_OFFSET] {
+            let entry = kf_abi::submit::gp_entry(0x420000, bytes).unwrap() | (1 << 41);
+            s.write_user_gp(0, entry).unwrap();
+            assert_eq!(s.cpu().unwrap().load_u64(HostOffset::new(GP_OFFSET)).unwrap(), entry);
+        }
+        let before = s.cpu().unwrap().load_u64(HostOffset::new(GP_OFFSET)).unwrap();
+        let oversized = kf_abi::submit::gp_entry(0x420000, GP_OFFSET + 4).unwrap();
+        assert!(s.write_user_gp(0, oversized).is_err());
+        assert_eq!(s.cpu().unwrap().load_u64(HostOffset::new(GP_OFFSET)).unwrap(), before);
+        assert_eq!(s.gpu_get().unwrap(), 0);
+        assert_eq!(s.gpu_reference().unwrap(), 0);
+    }
+
+    #[test]
     fn source_sync_level_nop_is_kept_without_fabricating_credit() {
         let s = anonymous_live_storage();
         let entry = 0x8000_0200_0000_0000;
@@ -698,7 +718,7 @@ mod tests {
             1 << 32, // CONTROL/ILLEGAL, not an unused NOP operand.
             good | 1,
             good | (1 << 40),
-            kf_abi::submit::gp_entry(0x420000, 65540).unwrap(),
+            kf_abi::submit::gp_entry(0x420000, MAX_SOURCE_BYTES + 4).unwrap(),
         ] {
             assert!(s.write_user_gp(0, bad).is_err(), "entry={bad:#x}");
             assert_eq!(

@@ -1,0 +1,3734 @@
+{
+  "scope": "five retained Windows diagnostic campaigns, not full application matrix",
+  "reports": [
+    {
+      "input": "snapshot-result/run1360-qemu.log.gz",
+      "compressed_sha256": "7c317cbb32523e7d516b32607d24694d5c6b41f88697833f09ec2221f43ec500",
+      "counts": {
+        "births": 49,
+        "with_object": 49,
+        "before_first_forward": 37,
+        "after_first_forward": 0,
+        "forwarded_without_logged_object": 0,
+        "no_logged_forward": 12,
+        "with_successful_registration": 0,
+        "with_fifo_update_registration": 0
+      },
+      "unmatched_events": [],
+      "channels": [
+        {
+          "client": "0xc1d00027",
+          "channel": "0xff04000c",
+          "token": "0xe",
+          "host": "0x35",
+          "birth_line": 2265,
+          "object_alloc_lines": [
+            2269
+          ],
+          "first_forward_line": 2444,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0002d",
+          "channel": "0xff04000d",
+          "token": "0xf",
+          "host": "0x36",
+          "birth_line": 2679,
+          "object_alloc_lines": [
+            2683
+          ],
+          "first_forward_line": 2871,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0002e",
+          "channel": "0xff04000e",
+          "token": "0x1010",
+          "host": "0x20037",
+          "birth_line": 2807,
+          "object_alloc_lines": [
+            2811
+          ],
+          "first_forward_line": 7173,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00030",
+          "channel": "0xff04000f",
+          "token": "0x11",
+          "host": "0x38",
+          "birth_line": 2918,
+          "object_alloc_lines": [
+            2922
+          ],
+          "first_forward_line": 3036,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00031",
+          "channel": "0xff040010",
+          "token": "0x1012",
+          "host": "0x20039",
+          "birth_line": 3013,
+          "object_alloc_lines": [
+            3017
+          ],
+          "first_forward_line": 3039,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00032",
+          "channel": "0xff040011",
+          "token": "0x13",
+          "host": "0x3a",
+          "birth_line": 3064,
+          "object_alloc_lines": [
+            3068
+          ],
+          "first_forward_line": 3224,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00033",
+          "channel": "0xff040012",
+          "token": "0x1014",
+          "host": "0x2003b",
+          "birth_line": 3190,
+          "object_alloc_lines": [
+            3194
+          ],
+          "first_forward_line": 3227,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00036",
+          "channel": "0xff040013",
+          "token": "0x15",
+          "host": "0x3c",
+          "birth_line": 3308,
+          "object_alloc_lines": [
+            3312
+          ],
+          "first_forward_line": 3427,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00037",
+          "channel": "0xff040014",
+          "token": "0x1016",
+          "host": "0x2003d",
+          "birth_line": 3402,
+          "object_alloc_lines": [
+            3406
+          ],
+          "first_forward_line": 3430,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0003d",
+          "channel": "0xff040015",
+          "token": "0x17",
+          "host": "0x3e",
+          "birth_line": 3787,
+          "object_alloc_lines": [
+            3791
+          ],
+          "first_forward_line": 4087,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0003e",
+          "channel": "0xff040016",
+          "token": "0x18",
+          "host": "0x3f",
+          "birth_line": 3856,
+          "object_alloc_lines": [
+            3860
+          ],
+          "first_forward_line": 4090,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0003f",
+          "channel": "0xff040017",
+          "token": "0x1019",
+          "host": "0x20040",
+          "birth_line": 4010,
+          "object_alloc_lines": [
+            4014
+          ],
+          "first_forward_line": 4290,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00040",
+          "channel": "0xff040018",
+          "token": "0x101a",
+          "host": "0x20041",
+          "birth_line": 4045,
+          "object_alloc_lines": [
+            4049
+          ],
+          "first_forward_line": 4130,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00043",
+          "channel": "0xff040019",
+          "token": "0x1b",
+          "host": "0x42",
+          "birth_line": 4140,
+          "object_alloc_lines": [
+            4144
+          ],
+          "first_forward_line": 4428,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00046",
+          "channel": "0xff04001a",
+          "token": "0x1c",
+          "host": "0x43",
+          "birth_line": 4265,
+          "object_alloc_lines": [
+            4269
+          ],
+          "first_forward_line": 4435,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00047",
+          "channel": "0xff04001b",
+          "token": "0x101d",
+          "host": "0x20044",
+          "birth_line": 4364,
+          "object_alloc_lines": [
+            4368
+          ],
+          "first_forward_line": 4438,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00048",
+          "channel": "0xff04001c",
+          "token": "0x101e",
+          "host": "0x20045",
+          "birth_line": 4404,
+          "object_alloc_lines": [
+            4408
+          ],
+          "first_forward_line": 4439,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00049",
+          "channel": "0xff04001d",
+          "token": "0x1f",
+          "host": "0x46",
+          "birth_line": 4478,
+          "object_alloc_lines": [
+            4482
+          ],
+          "first_forward_line": 4662,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0004a",
+          "channel": "0xff04001e",
+          "token": "0x1020",
+          "host": "0x20047",
+          "birth_line": 4564,
+          "object_alloc_lines": [
+            4568
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0004b",
+          "channel": "0xff04001f",
+          "token": "0x21",
+          "host": "0x48",
+          "birth_line": 4606,
+          "object_alloc_lines": [
+            4610
+          ],
+          "first_forward_line": 4715,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0004c",
+          "channel": "0xff040020",
+          "token": "0x1022",
+          "host": "0x20049",
+          "birth_line": 4695,
+          "object_alloc_lines": [
+            4699
+          ],
+          "first_forward_line": 4718,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0004d",
+          "channel": "0xff040021",
+          "token": "0x23",
+          "host": "0x4a",
+          "birth_line": 4826,
+          "object_alloc_lines": [
+            4830
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0004e",
+          "channel": "0xff040022",
+          "token": "0x1024",
+          "host": "0x2004b",
+          "birth_line": 5366,
+          "object_alloc_lines": [
+            5370
+          ],
+          "first_forward_line": 5856,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0004f",
+          "channel": "0xff040013",
+          "token": "0x1015",
+          "host": "0x2003c",
+          "birth_line": 5496,
+          "object_alloc_lines": [
+            5500
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00050",
+          "channel": "0xff040014",
+          "token": "0x816",
+          "host": "0x1003d",
+          "birth_line": 5610,
+          "object_alloc_lines": [
+            5618
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00053",
+          "channel": "0xff040023",
+          "token": "0x25",
+          "host": "0x4c",
+          "birth_line": 5677,
+          "object_alloc_lines": [
+            5681
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00054",
+          "channel": "0xff040024",
+          "token": "0x1026",
+          "host": "0x2004d",
+          "birth_line": 5765,
+          "object_alloc_lines": [
+            5769
+          ],
+          "first_forward_line": 6066,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00055",
+          "channel": "0xff040025",
+          "token": "0x1027",
+          "host": "0x2004e",
+          "birth_line": 5800,
+          "object_alloc_lines": [
+            5804
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00056",
+          "channel": "0xff040026",
+          "token": "0x828",
+          "host": "0x1004f",
+          "birth_line": 5837,
+          "object_alloc_lines": [
+            5841
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00059",
+          "channel": "0xff040013",
+          "token": "0x15",
+          "host": "0x3c",
+          "birth_line": 6129,
+          "object_alloc_lines": [
+            6134
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0005a",
+          "channel": "0xff040014",
+          "token": "0x1016",
+          "host": "0x2003d",
+          "birth_line": 6293,
+          "object_alloc_lines": [
+            6298
+          ],
+          "first_forward_line": 6425,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0005b",
+          "channel": "0xff040021",
+          "token": "0x1023",
+          "host": "0x2004a",
+          "birth_line": 6366,
+          "object_alloc_lines": [
+            6370
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0005c",
+          "channel": "0xff040022",
+          "token": "0x824",
+          "host": "0x1004b",
+          "birth_line": 6403,
+          "object_alloc_lines": [
+            6407
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0005f",
+          "channel": "0xff040013",
+          "token": "0x15",
+          "host": "0x3c",
+          "birth_line": 6731,
+          "object_alloc_lines": [
+            6735
+          ],
+          "first_forward_line": 6843,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00060",
+          "channel": "0xff040014",
+          "token": "0x1016",
+          "host": "0x2003d",
+          "birth_line": 6820,
+          "object_alloc_lines": [
+            6824
+          ],
+          "first_forward_line": 6846,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0006c",
+          "channel": "0xff040021",
+          "token": "0x23",
+          "host": "0x4a",
+          "birth_line": 7342,
+          "object_alloc_lines": [
+            7346
+          ],
+          "first_forward_line": 7483,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0006d",
+          "channel": "0xff040022",
+          "token": "0x824",
+          "host": "0x1004b",
+          "birth_line": 7426,
+          "object_alloc_lines": [
+            7430
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0006e",
+          "channel": "0xff040023",
+          "token": "0x1025",
+          "host": "0x2004c",
+          "birth_line": 7460,
+          "object_alloc_lines": [
+            7464
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0006f",
+          "channel": "0xff040024",
+          "token": "0x26",
+          "host": "0x4d",
+          "birth_line": 7645,
+          "object_alloc_lines": [
+            7649
+          ],
+          "first_forward_line": 7887,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0006f",
+          "channel": "0xff0e0102",
+          "token": "0x27",
+          "host": "0x4e",
+          "birth_line": 7689,
+          "object_alloc_lines": [
+            7693
+          ],
+          "first_forward_line": 7888,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0006f",
+          "channel": "0xff0e0103",
+          "token": "0x28",
+          "host": "0x4f",
+          "birth_line": 7713,
+          "object_alloc_lines": [
+            7717
+          ],
+          "first_forward_line": 7889,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0006f",
+          "channel": "0xff0e0104",
+          "token": "0x29",
+          "host": "0x50",
+          "birth_line": 7737,
+          "object_alloc_lines": [
+            7741
+          ],
+          "first_forward_line": 7890,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0006f",
+          "channel": "0xff0e0105",
+          "token": "0x2a",
+          "host": "0x51",
+          "birth_line": 7761,
+          "object_alloc_lines": [
+            7765
+          ],
+          "first_forward_line": 7891,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0006f",
+          "channel": "0xff0e0106",
+          "token": "0x2b",
+          "host": "0x52",
+          "birth_line": 7785,
+          "object_alloc_lines": [
+            7789
+          ],
+          "first_forward_line": 7892,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0006f",
+          "channel": "0xff0e0107",
+          "token": "0x2c",
+          "host": "0x53",
+          "birth_line": 7809,
+          "object_alloc_lines": [
+            7813
+          ],
+          "first_forward_line": 7893,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0006f",
+          "channel": "0xff0e0108",
+          "token": "0x2d",
+          "host": "0x54",
+          "birth_line": 7833,
+          "object_alloc_lines": [
+            7837
+          ],
+          "first_forward_line": 7894,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00070",
+          "channel": "0xff040025",
+          "token": "0x102e",
+          "host": "0x20055",
+          "birth_line": 7868,
+          "object_alloc_lines": [
+            7872
+          ],
+          "first_forward_line": 7895,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00085",
+          "channel": "0xff040021",
+          "token": "0x23",
+          "host": "0x4a",
+          "birth_line": 8979,
+          "object_alloc_lines": [
+            8983
+          ],
+          "first_forward_line": 9087,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00086",
+          "channel": "0xff040022",
+          "token": "0x1024",
+          "host": "0x2004b",
+          "birth_line": 9064,
+          "object_alloc_lines": [
+            9068
+          ],
+          "first_forward_line": 9090,
+          "registrations": []
+        }
+      ]
+    },
+    {
+      "input": "snapshot-result/run1361-qemu.log.gz",
+      "compressed_sha256": "fdca3f62f765e62c62105b0808c73f47ca11b3c5a0972383707a3d90fe031093",
+      "counts": {
+        "births": 71,
+        "with_object": 71,
+        "before_first_forward": 52,
+        "after_first_forward": 0,
+        "forwarded_without_logged_object": 0,
+        "no_logged_forward": 19,
+        "with_successful_registration": 1,
+        "with_fifo_update_registration": 1
+      },
+      "unmatched_events": [],
+      "channels": [
+        {
+          "client": "0xc1d00027",
+          "channel": "0xff04000c",
+          "token": "0xe",
+          "host": "0x35",
+          "birth_line": 2279,
+          "object_alloc_lines": [
+            2283
+          ],
+          "first_forward_line": 2456,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0002a",
+          "channel": "0xff04000d",
+          "token": "0xf",
+          "host": "0x36",
+          "birth_line": 2645,
+          "object_alloc_lines": [
+            2649
+          ],
+          "first_forward_line": 2883,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0002e",
+          "channel": "0xff04000e",
+          "token": "0x1010",
+          "host": "0x20037",
+          "birth_line": 2818,
+          "object_alloc_lines": [
+            2822
+          ],
+          "first_forward_line": 7534,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00030",
+          "channel": "0xff04000f",
+          "token": "0x11",
+          "host": "0x38",
+          "birth_line": 2933,
+          "object_alloc_lines": [
+            2937
+          ],
+          "first_forward_line": 3051,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00031",
+          "channel": "0xff040010",
+          "token": "0x1012",
+          "host": "0x20039",
+          "birth_line": 3029,
+          "object_alloc_lines": [
+            3033
+          ],
+          "first_forward_line": 3054,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00032",
+          "channel": "0xff040011",
+          "token": "0x13",
+          "host": "0x3a",
+          "birth_line": 3079,
+          "object_alloc_lines": [
+            3083
+          ],
+          "first_forward_line": 3229,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00033",
+          "channel": "0xff040012",
+          "token": "0x1014",
+          "host": "0x2003b",
+          "birth_line": 3197,
+          "object_alloc_lines": [
+            3203
+          ],
+          "first_forward_line": 3232,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00036",
+          "channel": "0xff040013",
+          "token": "0x15",
+          "host": "0x3c",
+          "birth_line": 3323,
+          "object_alloc_lines": [
+            3327
+          ],
+          "first_forward_line": 3441,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00037",
+          "channel": "0xff040014",
+          "token": "0x1016",
+          "host": "0x2003d",
+          "birth_line": 3416,
+          "object_alloc_lines": [
+            3420
+          ],
+          "first_forward_line": 3444,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0003d",
+          "channel": "0xff040015",
+          "token": "0x17",
+          "host": "0x3e",
+          "birth_line": 3763,
+          "object_alloc_lines": [
+            3767
+          ],
+          "first_forward_line": 4064,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0003e",
+          "channel": "0xff040016",
+          "token": "0x18",
+          "host": "0x3f",
+          "birth_line": 3833,
+          "object_alloc_lines": [
+            3837
+          ],
+          "first_forward_line": 4067,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0003f",
+          "channel": "0xff040017",
+          "token": "0x1019",
+          "host": "0x20040",
+          "birth_line": 3985,
+          "object_alloc_lines": [
+            3991
+          ],
+          "first_forward_line": 4107,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00040",
+          "channel": "0xff040018",
+          "token": "0x101a",
+          "host": "0x20041",
+          "birth_line": 4036,
+          "object_alloc_lines": [
+            4040
+          ],
+          "first_forward_line": 4070,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00045",
+          "channel": "0xff040019",
+          "token": "0x1b",
+          "host": "0x42",
+          "birth_line": 4153,
+          "object_alloc_lines": [
+            4157
+          ],
+          "first_forward_line": 4405,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00046",
+          "channel": "0xff04001a",
+          "token": "0x1c",
+          "host": "0x43",
+          "birth_line": 4237,
+          "object_alloc_lines": [
+            4245
+          ],
+          "first_forward_line": 4412,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00047",
+          "channel": "0xff04001b",
+          "token": "0x101d",
+          "host": "0x20044",
+          "birth_line": 4330,
+          "object_alloc_lines": [
+            4336
+          ],
+          "first_forward_line": 4415,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00048",
+          "channel": "0xff04001c",
+          "token": "0x101e",
+          "host": "0x20045",
+          "birth_line": 4382,
+          "object_alloc_lines": [
+            4386
+          ],
+          "first_forward_line": 4416,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00049",
+          "channel": "0xff04001d",
+          "token": "0x1f",
+          "host": "0x46",
+          "birth_line": 4457,
+          "object_alloc_lines": [
+            4461
+          ],
+          "first_forward_line": 4563,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0004a",
+          "channel": "0xff04001e",
+          "token": "0x1020",
+          "host": "0x20047",
+          "birth_line": 4544,
+          "object_alloc_lines": [
+            4548
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0004b",
+          "channel": "0xff04001f",
+          "token": "0x21",
+          "host": "0x48",
+          "birth_line": 4589,
+          "object_alloc_lines": [
+            4593
+          ],
+          "first_forward_line": 4694,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0004c",
+          "channel": "0xff040020",
+          "token": "0x1022",
+          "host": "0x20049",
+          "birth_line": 4675,
+          "object_alloc_lines": [
+            4679
+          ],
+          "first_forward_line": 4697,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0004d",
+          "channel": "0xff040021",
+          "token": "0x23",
+          "host": "0x4a",
+          "birth_line": 4778,
+          "object_alloc_lines": [
+            4782
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0004e",
+          "channel": "0xff040022",
+          "token": "0x1024",
+          "host": "0x2004b",
+          "birth_line": 4881,
+          "object_alloc_lines": [
+            4887
+          ],
+          "first_forward_line": 5702,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0004f",
+          "channel": "0xff040023",
+          "token": "0x1025",
+          "host": "0x2004c",
+          "birth_line": 4928,
+          "object_alloc_lines": [
+            4936
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00050",
+          "channel": "0xff040013",
+          "token": "0x815",
+          "host": "0x1003c",
+          "birth_line": 5519,
+          "object_alloc_lines": [
+            5524
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00053",
+          "channel": "0xff040014",
+          "token": "0x16",
+          "host": "0x3d",
+          "birth_line": 5640,
+          "object_alloc_lines": [
+            5644
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00054",
+          "channel": "0xff040013",
+          "token": "0x1015",
+          "host": "0x2003c",
+          "birth_line": 5755,
+          "object_alloc_lines": [
+            5760
+          ],
+          "first_forward_line": 5957,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00055",
+          "channel": "0xff040021",
+          "token": "0x1023",
+          "host": "0x2004a",
+          "birth_line": 5891,
+          "object_alloc_lines": [
+            5895
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00056",
+          "channel": "0xff040022",
+          "token": "0x824",
+          "host": "0x1004b",
+          "birth_line": 5935,
+          "object_alloc_lines": [
+            5939
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00059",
+          "channel": "0xff040013",
+          "token": "0x15",
+          "host": "0x3c",
+          "birth_line": 6205,
+          "object_alloc_lines": [
+            6209
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0005a",
+          "channel": "0xff040014",
+          "token": "0x1016",
+          "host": "0x2003d",
+          "birth_line": 6293,
+          "object_alloc_lines": [
+            6297
+          ],
+          "first_forward_line": 6387,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0005b",
+          "channel": "0xff040021",
+          "token": "0x1023",
+          "host": "0x2004a",
+          "birth_line": 6328,
+          "object_alloc_lines": [
+            6332
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0005c",
+          "channel": "0xff040022",
+          "token": "0x824",
+          "host": "0x1004b",
+          "birth_line": 6365,
+          "object_alloc_lines": [
+            6369
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0005d",
+          "channel": "0xff040013",
+          "token": "0x15",
+          "host": "0x3c",
+          "birth_line": 6611,
+          "object_alloc_lines": [
+            6615
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0005e",
+          "channel": "0xff040014",
+          "token": "0x1016",
+          "host": "0x2003d",
+          "birth_line": 6698,
+          "object_alloc_lines": [
+            6702
+          ],
+          "first_forward_line": 6792,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0005f",
+          "channel": "0xff040021",
+          "token": "0x1023",
+          "host": "0x2004a",
+          "birth_line": 6733,
+          "object_alloc_lines": [
+            6737
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00060",
+          "channel": "0xff040022",
+          "token": "0x824",
+          "host": "0x1004b",
+          "birth_line": 6770,
+          "object_alloc_lines": [
+            6774
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00063",
+          "channel": "0xff040013",
+          "token": "0x15",
+          "host": "0x3c",
+          "birth_line": 7040,
+          "object_alloc_lines": [
+            7044
+          ],
+          "first_forward_line": 7148,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00064",
+          "channel": "0xff040014",
+          "token": "0x1016",
+          "host": "0x2003d",
+          "birth_line": 7125,
+          "object_alloc_lines": [
+            7129
+          ],
+          "first_forward_line": 7151,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00076",
+          "channel": "0xff040021",
+          "token": "0x23",
+          "host": "0x4a",
+          "birth_line": 8033,
+          "object_alloc_lines": [
+            8037
+          ],
+          "first_forward_line": 8176,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00077",
+          "channel": "0xff040022",
+          "token": "0x824",
+          "host": "0x1004b",
+          "birth_line": 8118,
+          "object_alloc_lines": [
+            8122
+          ],
+          "first_forward_line": 8289,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00078",
+          "channel": "0xff040023",
+          "token": "0x1025",
+          "host": "0x2004c",
+          "birth_line": 8153,
+          "object_alloc_lines": [
+            8157
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00079",
+          "channel": "0xff040024",
+          "token": "0x1026",
+          "host": "0x2004d",
+          "birth_line": 8260,
+          "object_alloc_lines": [
+            8264
+          ],
+          "first_forward_line": 8279,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0007a",
+          "channel": "0xff040025",
+          "token": "0x27",
+          "host": "0x4e",
+          "birth_line": 8311,
+          "object_alloc_lines": [
+            8315
+          ],
+          "first_forward_line": 8437,
+          "registrations": [
+            {
+              "line": 9052,
+              "outer": "0x50800104",
+              "api": "0x4000002d",
+              "inner": "0x20801116",
+              "status": "0x0"
+            }
+          ]
+        },
+        {
+          "client": "0xc1d0007a",
+          "channel": "0xff0e0102",
+          "token": "0x28",
+          "host": "0x4f",
+          "birth_line": 8384,
+          "object_alloc_lines": [
+            8388
+          ],
+          "first_forward_line": 8511,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0007b",
+          "channel": "0xff040026",
+          "token": "0x1029",
+          "host": "0x20050",
+          "birth_line": 8418,
+          "object_alloc_lines": [
+            8422
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0007c",
+          "channel": "0xff040027",
+          "token": "0x102a",
+          "host": "0x20051",
+          "birth_line": 8522,
+          "object_alloc_lines": [
+            8526
+          ],
+          "first_forward_line": 8541,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0007d",
+          "channel": "0xff040028",
+          "token": "0x2b",
+          "host": "0x52",
+          "birth_line": 8560,
+          "object_alloc_lines": [
+            8564
+          ],
+          "first_forward_line": 8663,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0007e",
+          "channel": "0xff040029",
+          "token": "0x102c",
+          "host": "0x20053",
+          "birth_line": 8644,
+          "object_alloc_lines": [
+            8648
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0007a",
+          "channel": "0xff0e0103",
+          "token": "0x2d",
+          "host": "0x54",
+          "birth_line": 8774,
+          "object_alloc_lines": [
+            8779
+          ],
+          "first_forward_line": 8808,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d000ad",
+          "channel": "0xff04000c",
+          "token": "0xe",
+          "host": "0x35",
+          "birth_line": 12089,
+          "object_alloc_lines": [
+            12093
+          ],
+          "first_forward_line": 12159,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d000ae",
+          "channel": "0xff04000d",
+          "token": "0xf",
+          "host": "0x36",
+          "birth_line": 12209,
+          "object_alloc_lines": [
+            12214
+          ],
+          "first_forward_line": 12415,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d000b0",
+          "channel": "0xff04000e",
+          "token": "0x1010",
+          "host": "0x20037",
+          "birth_line": 12391,
+          "object_alloc_lines": [
+            12395
+          ],
+          "first_forward_line": 12634,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d000b4",
+          "channel": "0xff04000f",
+          "token": "0x11",
+          "host": "0x38",
+          "birth_line": 12485,
+          "object_alloc_lines": [
+            12489
+          ],
+          "first_forward_line": 12618,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d000b5",
+          "channel": "0xff040010",
+          "token": "0x1012",
+          "host": "0x20039",
+          "birth_line": 12599,
+          "object_alloc_lines": [
+            12603
+          ],
+          "first_forward_line": 12622,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d000b6",
+          "channel": "0xff040011",
+          "token": "0x13",
+          "host": "0x3a",
+          "birth_line": 12698,
+          "object_alloc_lines": [
+            12702
+          ],
+          "first_forward_line": 12825,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d000b7",
+          "channel": "0xff040012",
+          "token": "0x1014",
+          "host": "0x2003b",
+          "birth_line": 12791,
+          "object_alloc_lines": [
+            12795
+          ],
+          "first_forward_line": 12828,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d000ba",
+          "channel": "0xff040013",
+          "token": "0x15",
+          "host": "0x3c",
+          "birth_line": 12880,
+          "object_alloc_lines": [
+            12884
+          ],
+          "first_forward_line": 12995,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d000bb",
+          "channel": "0xff040014",
+          "token": "0x1016",
+          "host": "0x2003d",
+          "birth_line": 12966,
+          "object_alloc_lines": [
+            12970
+          ],
+          "first_forward_line": 13305,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d000bf",
+          "channel": "0xff040015",
+          "token": "0x17",
+          "host": "0x3e",
+          "birth_line": 13090,
+          "object_alloc_lines": [
+            13094
+          ],
+          "first_forward_line": 13292,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d000c0",
+          "channel": "0xff040016",
+          "token": "0x1018",
+          "host": "0x2003f",
+          "birth_line": 13174,
+          "object_alloc_lines": [
+            13178
+          ],
+          "first_forward_line": 13296,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d000c1",
+          "channel": "0xff040017",
+          "token": "0x19",
+          "host": "0x40",
+          "birth_line": 13383,
+          "object_alloc_lines": [
+            13387
+          ],
+          "first_forward_line": 13486,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d000c2",
+          "channel": "0xff040018",
+          "token": "0x101a",
+          "host": "0x20041",
+          "birth_line": 13467,
+          "object_alloc_lines": [
+            13471
+          ],
+          "first_forward_line": 13489,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00194",
+          "channel": "0xff040019",
+          "token": "0x1b",
+          "host": "0x42",
+          "birth_line": 19135,
+          "object_alloc_lines": [
+            19139
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00195",
+          "channel": "0xff04001a",
+          "token": "0x101c",
+          "host": "0x20043",
+          "birth_line": 19219,
+          "object_alloc_lines": [
+            19223
+          ],
+          "first_forward_line": 19311,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00196",
+          "channel": "0xff04001b",
+          "token": "0x101d",
+          "host": "0x20044",
+          "birth_line": 19254,
+          "object_alloc_lines": [
+            19258
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00197",
+          "channel": "0xff04001c",
+          "token": "0x81e",
+          "host": "0x10045",
+          "birth_line": 19289,
+          "object_alloc_lines": [
+            19293
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d001b0",
+          "channel": "0xff040019",
+          "token": "0x1b",
+          "host": "0x42",
+          "birth_line": 20167,
+          "object_alloc_lines": [
+            20171
+          ],
+          "first_forward_line": 20274,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d001b1",
+          "channel": "0xff04001a",
+          "token": "0x101c",
+          "host": "0x20043",
+          "birth_line": 20251,
+          "object_alloc_lines": [
+            20255
+          ],
+          "first_forward_line": 20278,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d001db",
+          "channel": "0xff04001b",
+          "token": "0x1d",
+          "host": "0x44",
+          "birth_line": 21680,
+          "object_alloc_lines": [
+            21684
+          ],
+          "first_forward_line": 21787,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d001dc",
+          "channel": "0xff04001c",
+          "token": "0x101e",
+          "host": "0x20045",
+          "birth_line": 21764,
+          "object_alloc_lines": [
+            21768
+          ],
+          "first_forward_line": 21810,
+          "registrations": []
+        }
+      ]
+    },
+    {
+      "input": "late-fifo-89e8ddf8/control/run1495-qemu.log.gz",
+      "compressed_sha256": "69fc0c504d1aa6ac65c36be858b164fe44acadc7b5c50e60cb263f6fade292ec",
+      "counts": {
+        "births": 52,
+        "with_object": 52,
+        "before_first_forward": 35,
+        "after_first_forward": 0,
+        "forwarded_without_logged_object": 0,
+        "no_logged_forward": 17,
+        "with_successful_registration": 1,
+        "with_fifo_update_registration": 1
+      },
+      "unmatched_events": [],
+      "channels": [
+        {
+          "client": "0xc1d00027",
+          "channel": "0xff04000c",
+          "token": "0xe",
+          "host": "0x35",
+          "birth_line": 2266,
+          "object_alloc_lines": [
+            2270
+          ],
+          "first_forward_line": 2445,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0002a",
+          "channel": "0xff04000d",
+          "token": "0xf",
+          "host": "0x36",
+          "birth_line": 2634,
+          "object_alloc_lines": [
+            2638
+          ],
+          "first_forward_line": 2874,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0002e",
+          "channel": "0xff04000e",
+          "token": "0x1010",
+          "host": "0x20037",
+          "birth_line": 2809,
+          "object_alloc_lines": [
+            2813
+          ],
+          "first_forward_line": 7186,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0002f",
+          "channel": "0xff04000f",
+          "token": "0x11",
+          "host": "0x38",
+          "birth_line": 2908,
+          "object_alloc_lines": [
+            2912
+          ],
+          "first_forward_line": 3024,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00030",
+          "channel": "0xff040010",
+          "token": "0x1012",
+          "host": "0x20039",
+          "birth_line": 3002,
+          "object_alloc_lines": [
+            3006
+          ],
+          "first_forward_line": 3027,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00031",
+          "channel": "0xff040011",
+          "token": "0x13",
+          "host": "0x3a",
+          "birth_line": 3053,
+          "object_alloc_lines": [
+            3057
+          ],
+          "first_forward_line": 3236,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00033",
+          "channel": "0xff040012",
+          "token": "0x1014",
+          "host": "0x2003b",
+          "birth_line": 3161,
+          "object_alloc_lines": [
+            3165
+          ],
+          "first_forward_line": 3252,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00036",
+          "channel": "0xff040013",
+          "token": "0x15",
+          "host": "0x3c",
+          "birth_line": 3266,
+          "object_alloc_lines": [
+            3270
+          ],
+          "first_forward_line": 3415,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00037",
+          "channel": "0xff040014",
+          "token": "0x1016",
+          "host": "0x2003d",
+          "birth_line": 3378,
+          "object_alloc_lines": [
+            3382
+          ],
+          "first_forward_line": 3442,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0003e",
+          "channel": "0xff040015",
+          "token": "0x17",
+          "host": "0x3e",
+          "birth_line": 3758,
+          "object_alloc_lines": [
+            3773
+          ],
+          "first_forward_line": 4000,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0003d",
+          "channel": "0xff040016",
+          "token": "0x18",
+          "host": "0x3f",
+          "birth_line": 3765,
+          "object_alloc_lines": [
+            3769
+          ],
+          "first_forward_line": 4003,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0003f",
+          "channel": "0xff040017",
+          "token": "0x1019",
+          "host": "0x20040",
+          "birth_line": 3935,
+          "object_alloc_lines": [
+            3941
+          ],
+          "first_forward_line": 4043,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00040",
+          "channel": "0xff040018",
+          "token": "0x101a",
+          "host": "0x20041",
+          "birth_line": 3972,
+          "object_alloc_lines": [
+            3976
+          ],
+          "first_forward_line": 4063,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00045",
+          "channel": "0xff040019",
+          "token": "0x1b",
+          "host": "0x42",
+          "birth_line": 4150,
+          "object_alloc_lines": [
+            4154
+          ],
+          "first_forward_line": 4392,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00046",
+          "channel": "0xff04001a",
+          "token": "0x1c",
+          "host": "0x43",
+          "birth_line": 4224,
+          "object_alloc_lines": [
+            4228
+          ],
+          "first_forward_line": 4401,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00047",
+          "channel": "0xff04001b",
+          "token": "0x101d",
+          "host": "0x20044",
+          "birth_line": 4317,
+          "object_alloc_lines": [
+            4323
+          ],
+          "first_forward_line": 4395,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00048",
+          "channel": "0xff04001c",
+          "token": "0x101e",
+          "host": "0x20045",
+          "birth_line": 4369,
+          "object_alloc_lines": [
+            4373
+          ],
+          "first_forward_line": 4404,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00049",
+          "channel": "0xff04001d",
+          "token": "0x1f",
+          "host": "0x46",
+          "birth_line": 4444,
+          "object_alloc_lines": [
+            4448
+          ],
+          "first_forward_line": 4632,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0004a",
+          "channel": "0xff04001e",
+          "token": "0x1020",
+          "host": "0x20047",
+          "birth_line": 4530,
+          "object_alloc_lines": [
+            4534
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0004b",
+          "channel": "0xff04001f",
+          "token": "0x21",
+          "host": "0x48",
+          "birth_line": 4572,
+          "object_alloc_lines": [
+            4576
+          ],
+          "first_forward_line": 4680,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0004c",
+          "channel": "0xff040020",
+          "token": "0x1022",
+          "host": "0x20049",
+          "birth_line": 4661,
+          "object_alloc_lines": [
+            4665
+          ],
+          "first_forward_line": 4683,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0004d",
+          "channel": "0xff040021",
+          "token": "0x23",
+          "host": "0x4a",
+          "birth_line": 4782,
+          "object_alloc_lines": [
+            4786
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0004e",
+          "channel": "0xff040022",
+          "token": "0x1024",
+          "host": "0x2004b",
+          "birth_line": 5076,
+          "object_alloc_lines": [
+            5080
+          ],
+          "first_forward_line": 5630,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0004f",
+          "channel": "0xff040013",
+          "token": "0x1015",
+          "host": "0x2003c",
+          "birth_line": 5181,
+          "object_alloc_lines": [
+            5185
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00052",
+          "channel": "0xff040014",
+          "token": "0x816",
+          "host": "0x1003d",
+          "birth_line": 5373,
+          "object_alloc_lines": [
+            5377
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00053",
+          "channel": "0xff040023",
+          "token": "0x25",
+          "host": "0x4c",
+          "birth_line": 5408,
+          "object_alloc_lines": [
+            5412
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00054",
+          "channel": "0xff040024",
+          "token": "0x1026",
+          "host": "0x2004d",
+          "birth_line": 5502,
+          "object_alloc_lines": [
+            5506
+          ],
+          "first_forward_line": 5644,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00055",
+          "channel": "0xff040025",
+          "token": "0x1027",
+          "host": "0x2004e",
+          "birth_line": 5537,
+          "object_alloc_lines": [
+            5541
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00056",
+          "channel": "0xff040026",
+          "token": "0x828",
+          "host": "0x1004f",
+          "birth_line": 5574,
+          "object_alloc_lines": [
+            5578
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00059",
+          "channel": "0xff040013",
+          "token": "0x15",
+          "host": "0x3c",
+          "birth_line": 5909,
+          "object_alloc_lines": [
+            5913
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0005a",
+          "channel": "0xff040014",
+          "token": "0x1016",
+          "host": "0x2003d",
+          "birth_line": 5995,
+          "object_alloc_lines": [
+            5999
+          ],
+          "first_forward_line": 6090,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0005b",
+          "channel": "0xff040021",
+          "token": "0x1023",
+          "host": "0x2004a",
+          "birth_line": 6030,
+          "object_alloc_lines": [
+            6034
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0005c",
+          "channel": "0xff040022",
+          "token": "0x824",
+          "host": "0x1004b",
+          "birth_line": 6068,
+          "object_alloc_lines": [
+            6072
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0005d",
+          "channel": "0xff040013",
+          "token": "0x15",
+          "host": "0x3c",
+          "birth_line": 6267,
+          "object_alloc_lines": [
+            6271
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0005e",
+          "channel": "0xff040014",
+          "token": "0x1016",
+          "host": "0x2003d",
+          "birth_line": 6354,
+          "object_alloc_lines": [
+            6358
+          ],
+          "first_forward_line": 6449,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0005f",
+          "channel": "0xff040021",
+          "token": "0x1023",
+          "host": "0x2004a",
+          "birth_line": 6389,
+          "object_alloc_lines": [
+            6393
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00060",
+          "channel": "0xff040022",
+          "token": "0x824",
+          "host": "0x1004b",
+          "birth_line": 6427,
+          "object_alloc_lines": [
+            6431
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00063",
+          "channel": "0xff040013",
+          "token": "0x15",
+          "host": "0x3c",
+          "birth_line": 6730,
+          "object_alloc_lines": [
+            6734
+          ],
+          "first_forward_line": 6837,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00064",
+          "channel": "0xff040014",
+          "token": "0x1016",
+          "host": "0x2003d",
+          "birth_line": 6814,
+          "object_alloc_lines": [
+            6818
+          ],
+          "first_forward_line": 6840,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00076",
+          "channel": "0xff040021",
+          "token": "0x23",
+          "host": "0x4a",
+          "birth_line": 7684,
+          "object_alloc_lines": [
+            7688
+          ],
+          "first_forward_line": 7825,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00077",
+          "channel": "0xff040022",
+          "token": "0x824",
+          "host": "0x1004b",
+          "birth_line": 7768,
+          "object_alloc_lines": [
+            7772
+          ],
+          "first_forward_line": 7938,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00078",
+          "channel": "0xff040023",
+          "token": "0x1025",
+          "host": "0x2004c",
+          "birth_line": 7802,
+          "object_alloc_lines": [
+            7806
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00079",
+          "channel": "0xff040024",
+          "token": "0x1026",
+          "host": "0x2004d",
+          "birth_line": 7909,
+          "object_alloc_lines": [
+            7913
+          ],
+          "first_forward_line": 7928,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0007a",
+          "channel": "0xff040025",
+          "token": "0x27",
+          "host": "0x4e",
+          "birth_line": 7960,
+          "object_alloc_lines": [
+            7964
+          ],
+          "first_forward_line": 8086,
+          "registrations": [
+            {
+              "line": 8609,
+              "outer": "0x50800104",
+              "api": "0x4000002d",
+              "inner": "0x20801116",
+              "status": "0x0"
+            }
+          ]
+        },
+        {
+          "client": "0xc1d0007a",
+          "channel": "0xff0e0102",
+          "token": "0x28",
+          "host": "0x4f",
+          "birth_line": 8033,
+          "object_alloc_lines": [
+            8037
+          ],
+          "first_forward_line": 8159,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0007b",
+          "channel": "0xff040026",
+          "token": "0x1029",
+          "host": "0x20050",
+          "birth_line": 8067,
+          "object_alloc_lines": [
+            8071
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0007c",
+          "channel": "0xff040027",
+          "token": "0x102a",
+          "host": "0x20051",
+          "birth_line": 8171,
+          "object_alloc_lines": [
+            8175
+          ],
+          "first_forward_line": 8190,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0007d",
+          "channel": "0xff040028",
+          "token": "0x2b",
+          "host": "0x52",
+          "birth_line": 8209,
+          "object_alloc_lines": [
+            8213
+          ],
+          "first_forward_line": 8312,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0007e",
+          "channel": "0xff040029",
+          "token": "0x102c",
+          "host": "0x20053",
+          "birth_line": 8293,
+          "object_alloc_lines": [
+            8297
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0007a",
+          "channel": "0xff0e0103",
+          "token": "0x2d",
+          "host": "0x54",
+          "birth_line": 8384,
+          "object_alloc_lines": [
+            8389
+          ],
+          "first_forward_line": 8403,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d000aa",
+          "channel": "0xff04000c",
+          "token": "0xe",
+          "host": "0x35",
+          "birth_line": 11440,
+          "object_alloc_lines": [
+            11444
+          ],
+          "first_forward_line": 11656,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d000ac",
+          "channel": "0xff04000d",
+          "token": "0xf",
+          "host": "0x36",
+          "birth_line": 11578,
+          "object_alloc_lines": [
+            11582
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        }
+      ]
+    },
+    {
+      "input": "late-fifo-89e8ddf8/probe/run1510-qemu.log.gz",
+      "compressed_sha256": "79192e14212a31a09d94a6ab36fb3f818e6a31d683c1b13aaf2a56678dee01c4",
+      "counts": {
+        "births": 73,
+        "with_object": 73,
+        "before_first_forward": 52,
+        "after_first_forward": 0,
+        "forwarded_without_logged_object": 0,
+        "no_logged_forward": 21,
+        "with_successful_registration": 1,
+        "with_fifo_update_registration": 1
+      },
+      "unmatched_events": [],
+      "channels": [
+        {
+          "client": "0xc1d00027",
+          "channel": "0xff04000c",
+          "token": "0xe",
+          "host": "0x35",
+          "birth_line": 2262,
+          "object_alloc_lines": [
+            2266
+          ],
+          "first_forward_line": 2437,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0002a",
+          "channel": "0xff04000d",
+          "token": "0xf",
+          "host": "0x36",
+          "birth_line": 2629,
+          "object_alloc_lines": [
+            2635
+          ],
+          "first_forward_line": 2879,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0002e",
+          "channel": "0xff04000e",
+          "token": "0x1010",
+          "host": "0x20037",
+          "birth_line": 2799,
+          "object_alloc_lines": [
+            2803
+          ],
+          "first_forward_line": 6931,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00030",
+          "channel": "0xff04000f",
+          "token": "0x11",
+          "host": "0x38",
+          "birth_line": 2913,
+          "object_alloc_lines": [
+            2917
+          ],
+          "first_forward_line": 3036,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00031",
+          "channel": "0xff040010",
+          "token": "0x1012",
+          "host": "0x20039",
+          "birth_line": 3012,
+          "object_alloc_lines": [
+            3016
+          ],
+          "first_forward_line": 3039,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00032",
+          "channel": "0xff040011",
+          "token": "0x13",
+          "host": "0x3a",
+          "birth_line": 3065,
+          "object_alloc_lines": [
+            3069
+          ],
+          "first_forward_line": 3331,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00033",
+          "channel": "0xff040012",
+          "token": "0x1014",
+          "host": "0x2003b",
+          "birth_line": 3203,
+          "object_alloc_lines": [
+            3211
+          ],
+          "first_forward_line": 3350,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00036",
+          "channel": "0xff040013",
+          "token": "0x15",
+          "host": "0x3c",
+          "birth_line": 3269,
+          "object_alloc_lines": [
+            3273
+          ],
+          "first_forward_line": 3412,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00037",
+          "channel": "0xff040014",
+          "token": "0x1016",
+          "host": "0x2003d",
+          "birth_line": 3368,
+          "object_alloc_lines": [
+            3372
+          ],
+          "first_forward_line": 3439,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0003b",
+          "channel": "0xff040015",
+          "token": "0x17",
+          "host": "0x3e",
+          "birth_line": 3762,
+          "object_alloc_lines": [
+            3770
+          ],
+          "first_forward_line": 4039,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0003e",
+          "channel": "0xff040016",
+          "token": "0x18",
+          "host": "0x3f",
+          "birth_line": 3866,
+          "object_alloc_lines": [
+            3870
+          ],
+          "first_forward_line": 4082,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0003f",
+          "channel": "0xff040017",
+          "token": "0x1019",
+          "host": "0x20040",
+          "birth_line": 3945,
+          "object_alloc_lines": [
+            3951
+          ],
+          "first_forward_line": 4091,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00040",
+          "channel": "0xff040018",
+          "token": "0x101a",
+          "host": "0x20041",
+          "birth_line": 4005,
+          "object_alloc_lines": [
+            4009
+          ],
+          "first_forward_line": 4226,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00043",
+          "channel": "0xff040019",
+          "token": "0x1b",
+          "host": "0x42",
+          "birth_line": 4139,
+          "object_alloc_lines": [
+            4143
+          ],
+          "first_forward_line": 4427,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00046",
+          "channel": "0xff04001a",
+          "token": "0x1c",
+          "host": "0x43",
+          "birth_line": 4272,
+          "object_alloc_lines": [
+            4276
+          ],
+          "first_forward_line": 4434,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00047",
+          "channel": "0xff04001b",
+          "token": "0x101d",
+          "host": "0x20044",
+          "birth_line": 4350,
+          "object_alloc_lines": [
+            4358
+          ],
+          "first_forward_line": 4437,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00048",
+          "channel": "0xff04001c",
+          "token": "0x101e",
+          "host": "0x20045",
+          "birth_line": 4404,
+          "object_alloc_lines": [
+            4408
+          ],
+          "first_forward_line": 4439,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00049",
+          "channel": "0xff04001d",
+          "token": "0x1f",
+          "host": "0x46",
+          "birth_line": 4482,
+          "object_alloc_lines": [
+            4486
+          ],
+          "first_forward_line": 4667,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0004a",
+          "channel": "0xff04001e",
+          "token": "0x1020",
+          "host": "0x20047",
+          "birth_line": 4569,
+          "object_alloc_lines": [
+            4573
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0004b",
+          "channel": "0xff04001f",
+          "token": "0x21",
+          "host": "0x48",
+          "birth_line": 4611,
+          "object_alloc_lines": [
+            4615
+          ],
+          "first_forward_line": 4719,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0004c",
+          "channel": "0xff040020",
+          "token": "0x1022",
+          "host": "0x20049",
+          "birth_line": 4700,
+          "object_alloc_lines": [
+            4704
+          ],
+          "first_forward_line": 4722,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0004d",
+          "channel": "0xff040021",
+          "token": "0x23",
+          "host": "0x4a",
+          "birth_line": 4813,
+          "object_alloc_lines": [
+            4817
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0004e",
+          "channel": "0xff040013",
+          "token": "0x1015",
+          "host": "0x2003c",
+          "birth_line": 4981,
+          "object_alloc_lines": [
+            4988
+          ],
+          "first_forward_line": 5383,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0004f",
+          "channel": "0xff040014",
+          "token": "0x1016",
+          "host": "0x2003d",
+          "birth_line": 5019,
+          "object_alloc_lines": [
+            5023
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00050",
+          "channel": "0xff040022",
+          "token": "0x824",
+          "host": "0x1004b",
+          "birth_line": 5081,
+          "object_alloc_lines": [
+            5089
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00053",
+          "channel": "0xff040023",
+          "token": "0x25",
+          "host": "0x4c",
+          "birth_line": 5190,
+          "object_alloc_lines": [
+            5194
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00054",
+          "channel": "0xff040024",
+          "token": "0x1026",
+          "host": "0x2004d",
+          "birth_line": 5291,
+          "object_alloc_lines": [
+            5295
+          ],
+          "first_forward_line": 5404,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00055",
+          "channel": "0xff040025",
+          "token": "0x1027",
+          "host": "0x2004e",
+          "birth_line": 5326,
+          "object_alloc_lines": [
+            5330
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00056",
+          "channel": "0xff040026",
+          "token": "0x828",
+          "host": "0x1004f",
+          "birth_line": 5364,
+          "object_alloc_lines": [
+            5368
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00059",
+          "channel": "0xff040013",
+          "token": "0x15",
+          "host": "0x3c",
+          "birth_line": 5685,
+          "object_alloc_lines": [
+            5689
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0005a",
+          "channel": "0xff040014",
+          "token": "0x1016",
+          "host": "0x2003d",
+          "birth_line": 5772,
+          "object_alloc_lines": [
+            5776
+          ],
+          "first_forward_line": 5867,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0005b",
+          "channel": "0xff040021",
+          "token": "0x1023",
+          "host": "0x2004a",
+          "birth_line": 5807,
+          "object_alloc_lines": [
+            5811
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0005c",
+          "channel": "0xff040022",
+          "token": "0x824",
+          "host": "0x1004b",
+          "birth_line": 5845,
+          "object_alloc_lines": [
+            5849
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0005d",
+          "channel": "0xff040013",
+          "token": "0x15",
+          "host": "0x3c",
+          "birth_line": 6053,
+          "object_alloc_lines": [
+            6057
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0005e",
+          "channel": "0xff040014",
+          "token": "0x1016",
+          "host": "0x2003d",
+          "birth_line": 6140,
+          "object_alloc_lines": [
+            6144
+          ],
+          "first_forward_line": 6235,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0005f",
+          "channel": "0xff040021",
+          "token": "0x1023",
+          "host": "0x2004a",
+          "birth_line": 6175,
+          "object_alloc_lines": [
+            6179
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00060",
+          "channel": "0xff040022",
+          "token": "0x824",
+          "host": "0x1004b",
+          "birth_line": 6213,
+          "object_alloc_lines": [
+            6217
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00063",
+          "channel": "0xff040013",
+          "token": "0x15",
+          "host": "0x3c",
+          "birth_line": 6453,
+          "object_alloc_lines": [
+            6457
+          ],
+          "first_forward_line": 6561,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00064",
+          "channel": "0xff040014",
+          "token": "0x1016",
+          "host": "0x2003d",
+          "birth_line": 6538,
+          "object_alloc_lines": [
+            6542
+          ],
+          "first_forward_line": 6564,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00076",
+          "channel": "0xff040021",
+          "token": "0x23",
+          "host": "0x4a",
+          "birth_line": 7426,
+          "object_alloc_lines": [
+            7430
+          ],
+          "first_forward_line": 7567,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00077",
+          "channel": "0xff040022",
+          "token": "0x824",
+          "host": "0x1004b",
+          "birth_line": 7510,
+          "object_alloc_lines": [
+            7514
+          ],
+          "first_forward_line": 7680,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00078",
+          "channel": "0xff040023",
+          "token": "0x1025",
+          "host": "0x2004c",
+          "birth_line": 7544,
+          "object_alloc_lines": [
+            7548
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00079",
+          "channel": "0xff040024",
+          "token": "0x1026",
+          "host": "0x2004d",
+          "birth_line": 7651,
+          "object_alloc_lines": [
+            7655
+          ],
+          "first_forward_line": 7670,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0007a",
+          "channel": "0xff040025",
+          "token": "0x27",
+          "host": "0x4e",
+          "birth_line": 7702,
+          "object_alloc_lines": [
+            7706
+          ],
+          "first_forward_line": 7829,
+          "registrations": [
+            {
+              "line": 9037,
+              "outer": "0x50800104",
+              "api": "0x4000002c",
+              "inner": "0x20801116",
+              "status": "0x0"
+            }
+          ]
+        },
+        {
+          "client": "0xc1d0007a",
+          "channel": "0xff0e0102",
+          "token": "0x28",
+          "host": "0x4f",
+          "birth_line": 7776,
+          "object_alloc_lines": [
+            7780
+          ],
+          "first_forward_line": 7902,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0007b",
+          "channel": "0xff040026",
+          "token": "0x1029",
+          "host": "0x20050",
+          "birth_line": 7810,
+          "object_alloc_lines": [
+            7814
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0007c",
+          "channel": "0xff040027",
+          "token": "0x102a",
+          "host": "0x20051",
+          "birth_line": 7913,
+          "object_alloc_lines": [
+            7917
+          ],
+          "first_forward_line": 7932,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0007d",
+          "channel": "0xff040028",
+          "token": "0x2b",
+          "host": "0x52",
+          "birth_line": 7951,
+          "object_alloc_lines": [
+            7955
+          ],
+          "first_forward_line": 8054,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0007e",
+          "channel": "0xff040029",
+          "token": "0x102c",
+          "host": "0x20053",
+          "birth_line": 8035,
+          "object_alloc_lines": [
+            8039
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0007a",
+          "channel": "0xff0e0103",
+          "token": "0x2d",
+          "host": "0x54",
+          "birth_line": 8128,
+          "object_alloc_lines": [
+            8132
+          ],
+          "first_forward_line": 8146,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d000bc",
+          "channel": "0xff04000c",
+          "token": "0xe",
+          "host": "0x35",
+          "birth_line": 11829,
+          "object_alloc_lines": [
+            11833
+          ],
+          "first_forward_line": 12248,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d000c0",
+          "channel": "0xff04000d",
+          "token": "0xf",
+          "host": "0x36",
+          "birth_line": 11931,
+          "object_alloc_lines": [
+            11935
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d000c1",
+          "channel": "0xff04000e",
+          "token": "0x1010",
+          "host": "0x20037",
+          "birth_line": 12018,
+          "object_alloc_lines": [
+            12022
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d000c3",
+          "channel": "0xff04000f",
+          "token": "0x11",
+          "host": "0x38",
+          "birth_line": 12095,
+          "object_alloc_lines": [
+            12101
+          ],
+          "first_forward_line": 12288,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d000c4",
+          "channel": "0xff040010",
+          "token": "0x1012",
+          "host": "0x20039",
+          "birth_line": 12202,
+          "object_alloc_lines": [
+            12206
+          ],
+          "first_forward_line": 12784,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d000c8",
+          "channel": "0xff04000d",
+          "token": "0xf",
+          "host": "0x36",
+          "birth_line": 12488,
+          "object_alloc_lines": [
+            12496
+          ],
+          "first_forward_line": 12796,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d000c9",
+          "channel": "0xff04000e",
+          "token": "0x10",
+          "host": "0x37",
+          "birth_line": 12540,
+          "object_alloc_lines": [
+            12553
+          ],
+          "first_forward_line": 12824,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d000ca",
+          "channel": "0xff040011",
+          "token": "0x1013",
+          "host": "0x2003a",
+          "birth_line": 12736,
+          "object_alloc_lines": [
+            12747
+          ],
+          "first_forward_line": 12802,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d000cb",
+          "channel": "0xff040012",
+          "token": "0x1014",
+          "host": "0x2003b",
+          "birth_line": 12743,
+          "object_alloc_lines": [
+            12755
+          ],
+          "first_forward_line": 12828,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d000ce",
+          "channel": "0xff040013",
+          "token": "0x15",
+          "host": "0x3c",
+          "birth_line": 12884,
+          "object_alloc_lines": [
+            12888
+          ],
+          "first_forward_line": 12992,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d000cf",
+          "channel": "0xff040014",
+          "token": "0x1016",
+          "host": "0x2003d",
+          "birth_line": 12969,
+          "object_alloc_lines": [
+            12973
+          ],
+          "first_forward_line": 13234,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d000d0",
+          "channel": "0xff040015",
+          "token": "0x17",
+          "host": "0x3e",
+          "birth_line": 13018,
+          "object_alloc_lines": [
+            13022
+          ],
+          "first_forward_line": 13121,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d000d1",
+          "channel": "0xff040016",
+          "token": "0x1018",
+          "host": "0x2003f",
+          "birth_line": 13101,
+          "object_alloc_lines": [
+            13105
+          ],
+          "first_forward_line": 13224,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d000d2",
+          "channel": "0xff040017",
+          "token": "0x19",
+          "host": "0x40",
+          "birth_line": 13289,
+          "object_alloc_lines": [
+            13296
+          ],
+          "first_forward_line": 13409,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d000d3",
+          "channel": "0xff040018",
+          "token": "0x101a",
+          "host": "0x20041",
+          "birth_line": 13378,
+          "object_alloc_lines": [
+            13382
+          ],
+          "first_forward_line": 13413,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00109",
+          "channel": "0xff040019",
+          "token": "0x1b",
+          "host": "0x42",
+          "birth_line": 15158,
+          "object_alloc_lines": [
+            15162
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0010a",
+          "channel": "0xff04001a",
+          "token": "0x101c",
+          "host": "0x20043",
+          "birth_line": 15242,
+          "object_alloc_lines": [
+            15246
+          ],
+          "first_forward_line": 15334,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0010b",
+          "channel": "0xff04001b",
+          "token": "0x101d",
+          "host": "0x20044",
+          "birth_line": 15277,
+          "object_alloc_lines": [
+            15281
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0010c",
+          "channel": "0xff04001c",
+          "token": "0x81e",
+          "host": "0x10045",
+          "birth_line": 15312,
+          "object_alloc_lines": [
+            15316
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d001b8",
+          "channel": "0xff040019",
+          "token": "0x1b",
+          "host": "0x42",
+          "birth_line": 19679,
+          "object_alloc_lines": [
+            19683
+          ],
+          "first_forward_line": 19785,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d001b9",
+          "channel": "0xff04001a",
+          "token": "0x101c",
+          "host": "0x20043",
+          "birth_line": 19762,
+          "object_alloc_lines": [
+            19766
+          ],
+          "first_forward_line": 19788,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d001dd",
+          "channel": "0xff04001b",
+          "token": "0x1d",
+          "host": "0x44",
+          "birth_line": 20862,
+          "object_alloc_lines": [
+            20866
+          ],
+          "first_forward_line": 20970,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d001de",
+          "channel": "0xff04001c",
+          "token": "0x101e",
+          "host": "0x20045",
+          "birth_line": 20947,
+          "object_alloc_lines": [
+            20951
+          ],
+          "first_forward_line": 20973,
+          "registrations": []
+        }
+      ]
+    },
+    {
+      "input": "registration-refusal/result/qemu.log.gz",
+      "compressed_sha256": "97b7d3fc7ae8ae50ed18b3b47180aed6102089382b922bde7096807976969e39",
+      "counts": {
+        "births": 56,
+        "with_object": 56,
+        "before_first_forward": 37,
+        "after_first_forward": 0,
+        "forwarded_without_logged_object": 0,
+        "no_logged_forward": 19,
+        "with_successful_registration": 0,
+        "with_fifo_update_registration": 0
+      },
+      "unmatched_events": [],
+      "channels": [
+        {
+          "client": "0xc1d00027",
+          "channel": "0xff04000c",
+          "token": "0xe",
+          "host": "0x35",
+          "birth_line": 2261,
+          "object_alloc_lines": [
+            2265
+          ],
+          "first_forward_line": 2440,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0002a",
+          "channel": "0xff04000d",
+          "token": "0xf",
+          "host": "0x36",
+          "birth_line": 2653,
+          "object_alloc_lines": [
+            2657
+          ],
+          "first_forward_line": 2894,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0002e",
+          "channel": "0xff04000e",
+          "token": "0x1010",
+          "host": "0x20037",
+          "birth_line": 2827,
+          "object_alloc_lines": [
+            2831
+          ],
+          "first_forward_line": 7401,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0002f",
+          "channel": "0xff04000f",
+          "token": "0x11",
+          "host": "0x38",
+          "birth_line": 2928,
+          "object_alloc_lines": [
+            2932
+          ],
+          "first_forward_line": 3044,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00030",
+          "channel": "0xff040010",
+          "token": "0x1012",
+          "host": "0x20039",
+          "birth_line": 3021,
+          "object_alloc_lines": [
+            3025
+          ],
+          "first_forward_line": 3047,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00031",
+          "channel": "0xff040011",
+          "token": "0x13",
+          "host": "0x3a",
+          "birth_line": 3072,
+          "object_alloc_lines": [
+            3076
+          ],
+          "first_forward_line": 3338,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00033",
+          "channel": "0xff040012",
+          "token": "0x1014",
+          "host": "0x2003b",
+          "birth_line": 3188,
+          "object_alloc_lines": [
+            3194
+          ],
+          "first_forward_line": 3369,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00036",
+          "channel": "0xff040013",
+          "token": "0x15",
+          "host": "0x3c",
+          "birth_line": 3281,
+          "object_alloc_lines": [
+            3285
+          ],
+          "first_forward_line": 3435,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00037",
+          "channel": "0xff040014",
+          "token": "0x1016",
+          "host": "0x2003d",
+          "birth_line": 3379,
+          "object_alloc_lines": [
+            3383
+          ],
+          "first_forward_line": 3447,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0003b",
+          "channel": "0xff040015",
+          "token": "0x17",
+          "host": "0x3e",
+          "birth_line": 3738,
+          "object_alloc_lines": [
+            3742
+          ],
+          "first_forward_line": 4010,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0003e",
+          "channel": "0xff040016",
+          "token": "0x18",
+          "host": "0x3f",
+          "birth_line": 3854,
+          "object_alloc_lines": [
+            3858
+          ],
+          "first_forward_line": 4029,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0003f",
+          "channel": "0xff040017",
+          "token": "0x1019",
+          "host": "0x20040",
+          "birth_line": 3933,
+          "object_alloc_lines": [
+            3937
+          ],
+          "first_forward_line": 4032,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00040",
+          "channel": "0xff040018",
+          "token": "0x101a",
+          "host": "0x20041",
+          "birth_line": 3988,
+          "object_alloc_lines": [
+            3992
+          ],
+          "first_forward_line": 4085,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00045",
+          "channel": "0xff040019",
+          "token": "0x1b",
+          "host": "0x42",
+          "birth_line": 4176,
+          "object_alloc_lines": [
+            4180
+          ],
+          "first_forward_line": 4419,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00046",
+          "channel": "0xff04001a",
+          "token": "0x1c",
+          "host": "0x43",
+          "birth_line": 4238,
+          "object_alloc_lines": [
+            4246
+          ],
+          "first_forward_line": 4428,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00047",
+          "channel": "0xff04001b",
+          "token": "0x101d",
+          "host": "0x20044",
+          "birth_line": 4359,
+          "object_alloc_lines": [
+            4364
+          ],
+          "first_forward_line": 4422,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00048",
+          "channel": "0xff04001c",
+          "token": "0x101e",
+          "host": "0x20045",
+          "birth_line": 4395,
+          "object_alloc_lines": [
+            4399
+          ],
+          "first_forward_line": 4431,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00049",
+          "channel": "0xff04001d",
+          "token": "0x1f",
+          "host": "0x46",
+          "birth_line": 4470,
+          "object_alloc_lines": [
+            4474
+          ],
+          "first_forward_line": 4663,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0004a",
+          "channel": "0xff04001e",
+          "token": "0x1020",
+          "host": "0x20047",
+          "birth_line": 4562,
+          "object_alloc_lines": [
+            4566
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0004b",
+          "channel": "0xff04001f",
+          "token": "0x21",
+          "host": "0x48",
+          "birth_line": 4598,
+          "object_alloc_lines": [
+            4602
+          ],
+          "first_forward_line": 4706,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0004c",
+          "channel": "0xff040020",
+          "token": "0x1022",
+          "host": "0x20049",
+          "birth_line": 4687,
+          "object_alloc_lines": [
+            4691
+          ],
+          "first_forward_line": 4709,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0004d",
+          "channel": "0xff040021",
+          "token": "0x23",
+          "host": "0x4a",
+          "birth_line": 4798,
+          "object_alloc_lines": [
+            4802
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0004e",
+          "channel": "0xff040022",
+          "token": "0x1024",
+          "host": "0x2004b",
+          "birth_line": 5301,
+          "object_alloc_lines": [
+            5305
+          ],
+          "first_forward_line": 5915,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0004f",
+          "channel": "0xff040023",
+          "token": "0x1025",
+          "host": "0x2004c",
+          "birth_line": 5352,
+          "object_alloc_lines": [
+            5356
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00052",
+          "channel": "0xff040024",
+          "token": "0x26",
+          "host": "0x4d",
+          "birth_line": 5435,
+          "object_alloc_lines": [
+            5443
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00053",
+          "channel": "0xff040025",
+          "token": "0x827",
+          "host": "0x1004e",
+          "birth_line": 5552,
+          "object_alloc_lines": [
+            5562
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00054",
+          "channel": "0xff040013",
+          "token": "0x1015",
+          "host": "0x2003c",
+          "birth_line": 5666,
+          "object_alloc_lines": [
+            5670
+          ],
+          "first_forward_line": 5926,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00055",
+          "channel": "0xff040014",
+          "token": "0x1016",
+          "host": "0x2003d",
+          "birth_line": 5701,
+          "object_alloc_lines": [
+            5705
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00056",
+          "channel": "0xff040026",
+          "token": "0x828",
+          "host": "0x1004f",
+          "birth_line": 5763,
+          "object_alloc_lines": [
+            5767
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00059",
+          "channel": "0xff040027",
+          "token": "0x29",
+          "host": "0x50",
+          "birth_line": 5854,
+          "object_alloc_lines": [
+            5858
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0005a",
+          "channel": "0xff040025",
+          "token": "0x1027",
+          "host": "0x2004e",
+          "birth_line": 5985,
+          "object_alloc_lines": [
+            5989
+          ],
+          "first_forward_line": 6239,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0005b",
+          "channel": "0xff040014",
+          "token": "0x1016",
+          "host": "0x2003d",
+          "birth_line": 6160,
+          "object_alloc_lines": [
+            6171
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0005c",
+          "channel": "0xff040013",
+          "token": "0x815",
+          "host": "0x1003c",
+          "birth_line": 6217,
+          "object_alloc_lines": [
+            6221
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0005d",
+          "channel": "0xff040013",
+          "token": "0x15",
+          "host": "0x3c",
+          "birth_line": 6426,
+          "object_alloc_lines": [
+            6430
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0005e",
+          "channel": "0xff040014",
+          "token": "0x1016",
+          "host": "0x2003d",
+          "birth_line": 6513,
+          "object_alloc_lines": [
+            6517
+          ],
+          "first_forward_line": 6608,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0005f",
+          "channel": "0xff040021",
+          "token": "0x1023",
+          "host": "0x2004a",
+          "birth_line": 6548,
+          "object_alloc_lines": [
+            6552
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00060",
+          "channel": "0xff040022",
+          "token": "0x824",
+          "host": "0x1004b",
+          "birth_line": 6586,
+          "object_alloc_lines": [
+            6590
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00063",
+          "channel": "0xff040013",
+          "token": "0x15",
+          "host": "0x3c",
+          "birth_line": 6903,
+          "object_alloc_lines": [
+            6907
+          ],
+          "first_forward_line": 7011,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00064",
+          "channel": "0xff040014",
+          "token": "0x1016",
+          "host": "0x2003d",
+          "birth_line": 6987,
+          "object_alloc_lines": [
+            6991
+          ],
+          "first_forward_line": 7014,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00079",
+          "channel": "0xff040021",
+          "token": "0x23",
+          "host": "0x4a",
+          "birth_line": 8095,
+          "object_alloc_lines": [
+            8099
+          ],
+          "first_forward_line": 8236,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0007a",
+          "channel": "0xff040022",
+          "token": "0x824",
+          "host": "0x1004b",
+          "birth_line": 8179,
+          "object_alloc_lines": [
+            8183
+          ],
+          "first_forward_line": 8349,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0007b",
+          "channel": "0xff040023",
+          "token": "0x1025",
+          "host": "0x2004c",
+          "birth_line": 8213,
+          "object_alloc_lines": [
+            8217
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0007c",
+          "channel": "0xff040024",
+          "token": "0x1026",
+          "host": "0x2004d",
+          "birth_line": 8320,
+          "object_alloc_lines": [
+            8324
+          ],
+          "first_forward_line": 8339,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0007d",
+          "channel": "0xff040025",
+          "token": "0x27",
+          "host": "0x4e",
+          "birth_line": 8372,
+          "object_alloc_lines": [
+            8376
+          ],
+          "first_forward_line": 8499,
+          "registrations": [
+            {
+              "line": 9557,
+              "outer": "0x50800104",
+              "api": "0x40000030",
+              "inner": "0x20801116",
+              "status": "0x56"
+            }
+          ]
+        },
+        {
+          "client": "0xc1d0007d",
+          "channel": "0xff0e0102",
+          "token": "0x28",
+          "host": "0x4f",
+          "birth_line": 8446,
+          "object_alloc_lines": [
+            8450
+          ],
+          "first_forward_line": 8572,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0007e",
+          "channel": "0xff040026",
+          "token": "0x1029",
+          "host": "0x20050",
+          "birth_line": 8480,
+          "object_alloc_lines": [
+            8484
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0007f",
+          "channel": "0xff040027",
+          "token": "0x102a",
+          "host": "0x20051",
+          "birth_line": 8584,
+          "object_alloc_lines": [
+            8588
+          ],
+          "first_forward_line": 8603,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00080",
+          "channel": "0xff040028",
+          "token": "0x2b",
+          "host": "0x52",
+          "birth_line": 8622,
+          "object_alloc_lines": [
+            8626
+          ],
+          "first_forward_line": 8725,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00081",
+          "channel": "0xff040029",
+          "token": "0x102c",
+          "host": "0x20053",
+          "birth_line": 8706,
+          "object_alloc_lines": [
+            8710
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d0007d",
+          "channel": "0xff0e0103",
+          "token": "0x2d",
+          "host": "0x54",
+          "birth_line": 8796,
+          "object_alloc_lines": [
+            8801
+          ],
+          "first_forward_line": 8815,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00084",
+          "channel": "0xff04002a",
+          "token": "0x2e",
+          "host": "0x55",
+          "birth_line": 9132,
+          "object_alloc_lines": [
+            9139
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00085",
+          "channel": "0xff04002b",
+          "token": "0x102f",
+          "host": "0x20056",
+          "birth_line": 9228,
+          "object_alloc_lines": [
+            9235
+          ],
+          "first_forward_line": 9338,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00086",
+          "channel": "0xff04002c",
+          "token": "0x1030",
+          "host": "0x20057",
+          "birth_line": 9267,
+          "object_alloc_lines": [
+            9271
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d00087",
+          "channel": "0xff04002d",
+          "token": "0x831",
+          "host": "0x10058",
+          "birth_line": 9305,
+          "object_alloc_lines": [
+            9309
+          ],
+          "first_forward_line": null,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d001aa",
+          "channel": "0xff040021",
+          "token": "0x23",
+          "host": "0x4a",
+          "birth_line": 19511,
+          "object_alloc_lines": [
+            19515
+          ],
+          "first_forward_line": 19619,
+          "registrations": []
+        },
+        {
+          "client": "0xc1d001ab",
+          "channel": "0xff040022",
+          "token": "0x1024",
+          "host": "0x2004b",
+          "birth_line": 19595,
+          "object_alloc_lines": [
+            19599
+          ],
+          "first_forward_line": 19622,
+          "registrations": []
+        }
+      ]
+    }
+  ]
+}

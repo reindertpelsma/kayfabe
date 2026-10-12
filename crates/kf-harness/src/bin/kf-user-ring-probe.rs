@@ -195,12 +195,24 @@ fn run_reference(held: bool, split: bool, subroutine: bool) -> Result<(), String
 
 /// Native helper test and one-variable HOST-processing witness discriminator.
 /// This is an authored bench fixture, never a guest execution adapter.
+/// Public DMA_NOP padding changes only fixture length; no synthetic completion.
+fn padded_storage_prefix(mut words: Vec<u32>) -> Result<Vec<u32>, String> {
+    const WORDS: usize = (100 << 10) / 4;
+    if words.len() > WORDS {
+        return Err("source fixture too large".into());
+    }
+    words.try_reserve_exact(WORDS - words.len()).map_err(|_| "source fixture allocation")?;
+    words.resize(WORDS, 0);
+    Ok(words)
+}
+
 fn run_storage(
     sync_wait: bool,
     control_barrier: bool,
     phased: bool,
     assembled: bool,
     barrier_level: bool,
+    large_source: bool,
 ) -> Result<(), String> {
     use kf_abi::submit::ENGINE_TYPE_COPY0;
     use kf_chan::user_storage::Storage;
@@ -271,6 +283,10 @@ fn run_storage(
             .map_err(|e| format!("CE: {e:?}"))?;
         let mut preceding = reference_commands(output_va, rm.ce_class_id())?;
         preceding.truncate(preceding.len() - 4); // No WFI or engine-idle tail in GP0.
+        if large_source {
+            preceding = padded_storage_prefix(preceding)?;
+        }
+        let witness_offset = if large_source { 128 << 10 } else { 0x1000 };
         let witness = [
             0,
             method_header_inc(0, fifo::SET_REFERENCE_C56F, 1).ok_or("reference")?,
@@ -314,8 +330,12 @@ fn run_storage(
             publication.put
         } else {
             storage.write_authored(0, &preceding)?;
-            storage.write_authored(0x1000, &witness)?;
-            storage.write_gp(0, 0, 4 * preceding.len() as u64, false)?;
+            storage.write_authored(witness_offset, &witness)?;
+            // Exercise the exact runtime raw USER descriptor writer as well as
+            // native fetching of the larger, still bounded public direct span.
+            let va = storage.spec(0)?.gp_fifo_va - kf_chan::user_storage::GP_OFFSET;
+            let entry = gp_entry(va, 4 * preceding.len() as u64).ok_or("source GP")?;
+            storage.write_user_gp(0, entry)?;
             if control_barrier {
                 if barrier_level {
                     // Same public LENGTH0/SYNC_WAIT/NOP, only LEVEL differs.
@@ -325,7 +345,7 @@ fn run_storage(
                 }
                 storage.write_host_witness(2)?;
                 // Final single-engine bench observation; not a runtime receipt.
-                storage.write_gp(3, 0x1004, 8, false)?;
+                storage.write_gp(3, witness_offset + 4, 8, false)?;
                 4
             } else {
                 storage.write_gp(1, 0x1000, 4 * witness.len() as u64, sync_wait)?;
@@ -333,7 +353,8 @@ fn run_storage(
             }
         };
         println!(
-            "USER_STORAGE_SETUP barrier_level={barrier_level} sync_wait={sync_wait} control_barrier={control_barrier} class={class:#x} driver={} entries={} ring_gpu_read_only=true page_size=4096 userd_gpu_mapped=false",
+            "USER_STORAGE_SETUP source_bytes={} barrier_level={barrier_level} sync_wait={sync_wait} control_barrier={control_barrier} class={class:#x} driver={} entries={} ring_gpu_read_only=true page_size=4096 userd_gpu_mapped=false",
+            preceding.len() * 4,
             rm.driver_version(),
             kf_chan::user_storage::ENTRIES
         );
@@ -821,12 +842,13 @@ fn main() {
         match args[0].as_str() {
             "engine-witness-control" => run_engine_witness(false),
             "engine-witness-sync" => run_engine_witness(true),
-            "storage-assembled-phased" => run_storage(true, true, true, true, false),
-            "storage-control-barrier-phased" => run_storage(true, true, true, false, false),
-            "storage-control-barrier-level-phased" => run_storage(true, true, true, false, true),
-            "storage-control-barrier" => run_storage(true, true, false, false, false),
-            "storage-control" => run_storage(false, false, false, false, false),
-            "storage-sync-witness" => run_storage(true, false, false, false, false),
+            "storage-assembled-phased" => run_storage(true, true, true, true, false, false),
+            "storage-control-barrier-large-phased" => run_storage(true, true, true, false, false, true),
+            "storage-control-barrier-phased" => run_storage(true, true, true, false, false, false),
+            "storage-control-barrier-level-phased" => run_storage(true, true, true, false, true, false),
+            "storage-control-barrier" => run_storage(true, true, false, false, false, false),
+            "storage-control" => run_storage(false, false, false, false, false, false),
+            "storage-sync-witness" => run_storage(true, false, false, false, false, false),
             "reference" => run_reference(false, false, false),
             "reference-subroutine" => run_reference(false, false, true),
             "reference-held" => run_reference(true, false, false),
@@ -855,6 +877,15 @@ fn main() {
 mod tests {
     use super::*;
 
+    #[test]
+    fn large_storage_prefix_keeps_commands_and_adds_only_public_nops() {
+        let original = reference_commands(0x400000, 0xc6b5).unwrap();
+        let padded = padded_storage_prefix(original.clone()).unwrap();
+        assert_eq!(padded.len() * 4, 100 << 10);
+        assert_eq!(&padded[..original.len()], original.as_slice());
+        assert!(padded[original.len()..].iter().all(|v| *v == 0));
+        assert!((padded.len() * 4) as u64 <= kf_chan::user_storage::MAX_SOURCE_BYTES);
+    }
     #[test]
     fn reference_level_probe_changes_only_first_gp_level() {
         let main = reference_descriptor(0x200004000, 128, false).unwrap();

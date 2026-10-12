@@ -13,8 +13,10 @@ use kf_host::{HostRm, MapNode, ViewAccess};
 use kf_linux_raw::{Backing, CachePolicy, CharDevice, HostOffset, HostPageSize, VolatileRegion};
 
 const BYTES: u64 = 64 << 10;
-const VIEWS: usize = 8;
-const SPANS: usize = 64;
+// Trusted CPU-view quota: at most1MiB per channel, independent of fragmentation.
+// A source requiring more disjoint64KiB store windows refuses before host actions.
+const VIEWS: usize = (kf_chan::user_storage::BYTES / BYTES) as usize;
+const SPANS: usize = crate::mem::userread::MAX_BYTES / 4096 + 1;
 
 /// An arm can fail after the RM mapping exists. Never discard that ownership.
 struct ArmError<V> {
@@ -303,6 +305,40 @@ mod tests {
         }
     }
     #[test]
+    fn actual_cache_prepares_full_fragmented_ram_and_contiguous_store_snapshots() {
+        use crate::mem::{PlacedRows, RamBlock, RamMap, RowsLog, userread};
+        let bytes = kf_chan::user_storage::GP_OFFSET as usize;
+        for in_ram in [true, false] {
+            let ram = RamMap::default();
+            let (mem, fd) = crate::raw_unsafe::test_owned_ram(bytes + 4096);
+            ram.add(RamBlock { gpa: 0x2000, mem, fd: Some(fd), fd_off: 0 });
+            assert!(mem.write_from(4, &[7]));
+            assert!(mem.write_from(bytes + 3, &[11]));
+            let generation = ram.try_generation().unwrap();
+            let rows = PlacedRows::default();
+            for offset in (0..bytes + 4096).step_by(4096) {
+                rows.write().unwrap().insert(0x100000 + offset as u64,
+                    (4096, offset as u64 + if in_ram { 0x2000 } else { 0 }, in_ram, kf_host::MapPerm::READ_WRITE));
+            }
+            let mut cache = Cache::create(Fake::default(), bytes as u64 + BYTES).unwrap();
+            let log = RowsLog::default();
+            let source = userread::snapshot(&rows, &log, &ram, generation, 0x100004, bytes, &mut cache).unwrap();
+            assert_eq!(source.bytes.len(), bytes);
+            if in_ram {
+                assert!(cache.host.events.borrow().is_empty());
+                assert_eq!((source.bytes[0], source.bytes[bytes - 1]), (7, 11));
+            } else {
+                assert_eq!(cache.views.len(), 15);
+                assert_eq!((source.bytes[0], source.bytes[bytes - 1]), (0, 14));
+            }
+            source.admit(|| ()).unwrap();
+            rows.write().unwrap().remove(&(0x100000 + bytes as u64));
+            assert_eq!(source.admit(|| ()), Err(Refusal::Changed));
+            cache.release().unwrap();
+        }
+    }
+
+    #[test]
     fn cross_view_copy_is_prepared_and_missing_span_has_no_side_effect() {
         let mut c = Cache::create(Fake::default(), BYTES * 16).unwrap();
         c.prepare(&[span(BYTES - 4, 8)]).unwrap();
@@ -319,13 +355,13 @@ mod tests {
     }
     #[test]
     fn complete_budget_and_store_bounds_are_checked_before_host_actions() {
-        let mut c = Cache::create(Fake::default(), BYTES * 16).unwrap();
-        let spans: Vec<_> = (0..9).map(|i| span(i * BYTES, 4)).collect();
+        let mut c = Cache::create(Fake::default(), BYTES * (VIEWS as u64 + 1)).unwrap();
+        let spans: Vec<_> = (0..VIEWS as u64 + 1).map(|i| span(i * BYTES, 4)).collect();
         assert_eq!(c.prepare(&spans), Err(Refusal::Bounds));
         for s in [
             span(u64::MAX, 4),
-            span(BYTES * 16 - 1, 2),
-            span(0, BYTES + 1),
+            span(c.bound - 1, 2),
+            span(0, crate::mem::userread::MAX_BYTES as u64 + 1),
         ] {
             assert_eq!(c.prepare(&[s]), Err(Refusal::Bounds));
         }

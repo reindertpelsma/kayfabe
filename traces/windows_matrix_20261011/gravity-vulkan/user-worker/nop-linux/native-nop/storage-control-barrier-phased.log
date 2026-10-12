@@ -1,0 +1,10 @@
+USER_STORAGE_IDENTITY uid=65534
+kf-host: host tier: stock
+USER_STORAGE_PHASES prepare_us=62 clear_steps=256 max_clear_us=1 map_us=66
+kf-host: channel birth h=0xcafe000a engine=0x9 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=not-held
+USER_STORAGE_SETUP barrier_level=false sync_wait=true control_barrier=true class=0xc56f driver=595.91.07 entries=512 ring_gpu_read_only=true page_size=4096 userd_gpu_mapped=false
+USER_STORAGE_HELD samples=48 max_get=1 early_reference=false acquire=0 ce_semaphore=0
+USER_STORAGE_OBSERVATION finished=true reference=1 copy_matches=true ce_semaphore=1 GP_GET=4 GP_PUT=4 elapsed_us=52863
+USER_STORAGE_CLEANUP result=Ok(()) released=true
+USER_RING_BUFFER_CLEANUP view=Ok(()) unmap=Ok(Some(())) memory=Ok(())
+USER_RING_PROBE=PASS
