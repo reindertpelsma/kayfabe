@@ -17,3 +17,10 @@ Capture window300s from each boot, same fixed source/output bounds. A limit is
 reported as missing coverage, never absence of migration. Input key events are
 not traced. Do not archive guest password, RAM, disk or environment. No native
 cursor rule or Windows product compatibility claim follows from alloc params.
+
+Initial5a407dcd8 build completed; writer unit test lacked explicit libqom.a target,
+so it exited before GPU detach/VM launch. Cleanup also found rg unavailable on
+host (kernel query saved, filter unavailable). EXIT1 is a harness failure/Windows
+NOT_RUN. New immutable retry runner uses the same compiled native binary, verifies
+all observer sources byte-identical, builds that test library and uses grep.
+Results stay separate in retry-1; source/runner provenance recorded separately.
