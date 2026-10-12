@@ -127,3 +127,37 @@ fn snapshot_and_plan_stay_within_trusted_budget() {
         Err(Refusal::Method { .. })
     ));
 }
+
+#[test]
+fn gp_entry_flags_cannot_escape_copying_or_discard_wait_ordering() {
+    use kf_abi::submit::gp_entry;
+    use kf_chan::user_stream::{Source, inspect_entry};
+    let raw = gp_entry(0x200000000, 64).unwrap();
+    assert!(
+        matches!(inspect_entry(raw, 64), Ok(Source::Segment(e)) if e.gpu_va == 0x200000000 && !e.sync_wait)
+    );
+    assert!(matches!(inspect_entry(raw | (1 << 63), 64), Ok(Source::Segment(e)) if e.sync_wait));
+    for flag in [1 << 0, 1 << 1, 1 << 40, 1 << 41] {
+        assert_eq!(inspect_entry(raw | flag, 64), Err(Refusal::Entry));
+    }
+    assert_eq!(inspect_entry(0, 0), Ok(Source::Nop));
+    // CRC/extended-base/unknown controls do not become empty segment successes.
+    for opcode in 1..=255u64 {
+        assert_eq!(inspect_entry(opcode << 32, 4096), Err(Refusal::Entry));
+    }
+}
+
+#[test]
+fn gp_source_full_span_and_trusted_budget_are_checked_before_copy() {
+    use kf_abi::submit::gp_entry;
+    use kf_chan::user_stream::inspect_entry;
+    assert_eq!(
+        inspect_entry(gp_entry(0x200000000, 68).unwrap(), 64),
+        Err(Refusal::Budget)
+    );
+    assert_eq!(
+        inspect_entry(gp_entry((1 << 40) - 4, 8).unwrap(), 64),
+        Err(Refusal::Entry)
+    );
+    assert!(inspect_entry(gp_entry((1 << 40) - 4, 4).unwrap(), 64).is_ok());
+}

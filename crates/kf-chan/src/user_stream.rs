@@ -11,11 +11,48 @@
 //! never appear as hardware writes. Object lookup must be channel-owned host
 //! metadata; registration reply timing is irrelevant to the parsing mode.
 //! Unsupported packet forms are refused, not silently copied. The model does
-//! not yet handle packets split across GP entries or subroutine/control entries.
+//! not yet handle packets split across GP entries or subroutine/control entries
+//! other than the canonical zero GPFIFO NOP.
 
 use crate::tmode::SwCall;
 use crate::ttables::{HostMethod, host_method};
-use kf_abi::submit::{MethodForm, fifo, method_header_decode, method_header_inc};
+use kf_abi::submit::{
+    GpfifoEntry, MethodForm, fifo, gp_entry_decode_direct_c56f, method_header_decode,
+    method_header_inc,
+};
+
+/// A validated direct source descriptor, still requiring full pinned resolution.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Source {
+    /// The canonical zero GPFIFO NOP; no work/completion is claimed here.
+    Nop,
+    /// Source span and explicit SYNC_WAIT bit. Never a host GP entry to copy raw.
+    Segment(GpfifoEntry),
+}
+
+/// Check one captured C56F GP word before copying any pushbuffer. No indirect,
+/// conditional, privileged/reserved or extended-base entry can bypass inspection.
+/// The TRUSTED worker's byte budget bounds the subsequent snapshot, not guest PUT.
+///
+/// # Errors
+/// Unsupported entry, over-budget or out-of-format span. No mapping is resolved.
+pub fn inspect_entry(entry: u64, maximum_bytes: u64) -> Result<Source, Refusal> {
+    if entry == 0 {
+        return Ok(Source::Nop);
+    }
+    let segment = gp_entry_decode_direct_c56f(entry).ok_or(Refusal::Entry)?;
+    if segment.len_bytes > maximum_bytes {
+        return Err(Refusal::Budget);
+    }
+    if segment
+        .gpu_va
+        .checked_add(segment.len_bytes)
+        .is_none_or(|end| end > 1 << 40)
+    {
+        return Err(Refusal::Entry);
+    }
+    Ok(Source::Segment(segment))
+}
 
 /// A method stream copied into private host memory; no borrowed guest storage.
 #[derive(Debug)]
@@ -90,6 +127,8 @@ pub enum Op {
 /// Named refusals; state commits only when the whole snapshot passes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Refusal {
+    /// Unsupported C56F GP entry or span beyond its40-bit address format.
+    Entry,
     /// Snapshot exceeds the trusted word budget.
     Budget,
     /// Bounded allocation failed.

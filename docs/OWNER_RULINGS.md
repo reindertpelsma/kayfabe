@@ -1158,6 +1158,20 @@ HDR on the console) falls under "works without".
 
 ## §AI. Windows user-work ring exception; Linux Passthrough unchanged, 2026-10-12
 
+**Owner clarification, 2026-10-12:** "no host owned maps should remain for linux
+ guests, but can be lifted for windows if its the only thing fixing the migration
+ linux doesn't use". The owner also authorizes necessary Windows-specific rule
+ changes, with an afterwards report of what changed and why. This preserves the
+ Linux prohibition; it does not require a broader mapping exception. The current
+ implementation target remains the read-only command mappings below, because
+ the native reference mechanism works without a GPU-writable private fence.
+
+USERD sysmem placement is a useful routing fact, not the sole admission rule:
+allocation requests and declared OS identity are guest-controlled. Keep explicit
+Windows user-work scope plus ownership/permissions checks; those checks must
+remain safe even if a different OS declares that identity. An observed Linux
+layout is not proof that Linux cannot request another layout.
+
 **STATUS: LIVE, 2026-10-12 (owner approval in the Codex session).** Asked about a
 revision of V3_WINDOWS_USER_RING_RELAY.md permitting only GPU-read-only private
 command rings/staging for declared Windows user-work in its own restricted space,

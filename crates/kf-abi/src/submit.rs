@@ -2099,6 +2099,20 @@ pub const fn gp_entry_decode(entry: u64) -> Option<GpfifoEntry> {
     })
 }
 
+/// Restricted direct C56F segment: reject conditional FETCH, reserved entry0
+/// bit1/entry1 bit8, and SUBROUTINE. Public595.84 clc56f.h:266-284 enumerates
+/// these fields (bit8 has no C56F definition; older classes used it for PRIV).
+/// SYNC_WAIT is preserved for an adapter to honor explicitly, never discarded.
+/// This validates framing only, not ownership, span bounds or a source lifetime.
+#[must_use]
+pub const fn gp_entry_decode_direct_c56f(entry: u64) -> Option<GpfifoEntry> {
+    let unsupported = (1_u64 << 0) | (1_u64 << 1) | (1_u64 << 40) | (1_u64 << 41);
+    if entry & unsupported != 0 {
+        return None;
+    }
+    gp_entry_decode(entry)
+}
+
 /// `GP_ENTRY1_OPCODE` values of a control entry (`LENGTH == 0`) —
 /// `ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:280-284` (`NOP` … `PB_CRC`, every family)
 /// and `clc86f.h:184-189` (`SET_PB_SEGMENT_EXTENDED_BASE`, Hopper and later).

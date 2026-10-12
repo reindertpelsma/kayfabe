@@ -41,3 +41,11 @@ never native hardware receipts. Seven parser tests plus two new receipt tests;
 full kf-chan70lib/all integrations PASS. Failing-first and full green logs retained.
 Legacy/control/subroutine/cross-entry packet support, mapping/backing lifetime,
 actual cursor migration and native adapter remain open. No VM runtime call exists.
+
+Direct-GP descriptor follow-up: inspect the whole C56F descriptor before copying
+commands. Conditional fetch, subroutine, reserved/older privilege flags and
+nonzero control entries are refused. The canonical zero NOP is explicit; SYNC_WAIT
+is retained for a future adapter. Trusted byte budget and complete40-bit VA span
+are checked first. Nine parser/descriptor cases and full kf-chan/kf-abi suites
+PASS (stream-direct-* logs). This remains unconnected and does not pin mappings,
+implement cross-entry packets or claim native cursor transfer.
