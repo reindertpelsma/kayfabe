@@ -39,6 +39,9 @@ pub enum Refusal {
 }
 
 impl Scan {
+    /// Whether the metadata is between complete method packets. This is not
+    /// evidence that hardware executed the same bytes or completed engine work.
+    pub fn at_boundary(&self) -> bool { self.pending.is_none() }
     /// Scan at most the supplied bounded segment. State commits transactionally;
     /// return at the first trigger, with state AFTER that packet only. Ordinary
     /// methods remain unchanged and gain no CPU-authored privilege.

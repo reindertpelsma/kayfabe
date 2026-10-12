@@ -1,5 +1,24 @@
 # Handoff for a different agent (Codex or any fresh agent), 2026-10-11
 
+## UPDATE 2026-10-12 16:56UTC — worker integration checkpoint, not activated
+
+Last confirmed push1d35bd9df; this checkpoint's revision is its containing commit
+on codex/windows-matrix-20261011. Whole-ring mapping admission now checks complete
+confirmed spans with bounded row/RAM traversal without copying a guest-sized ring;
+9 userread tests PASS (including two new whole-ring tests), exit0. Added a compiling
+worker integration draft and an own-space VA split request. Runtime enabled()
+remains false and Record.pump remains None. No new hardware or Windows result.
+
+OPEN BEFORE ACTIVATION: typed transient retry before publication, exact software
+object/classID admission and metadata snapshot, source/notifier cleanup wiring,
+exact pending-birth USERD initialization, whole-ring initial admission, and review
+of rare-segment witness/retirement ordering. Migration cursor-zero is an unverified
+diagnostic hypothesis, not measured semantics. Drainer retirement now try-locks
+Record; worker source preparation must never make the drainer wait for native RM.
+Existing hardware baseline4df9c0095 gates9+10/fast30 remains the last verified one.
+GravityMark Vulkan still FAIL/TIMEOUT on kayfabe versus same-GPU VFIO PASS.
+
+
 ## UPDATE 2026-10-12 15:28UTC — reviewed USER scan/accessor tests; baseline VM runs
 
 Previous confirmed push4df9c0095. New unconnected USER scanner/fetch ledger and

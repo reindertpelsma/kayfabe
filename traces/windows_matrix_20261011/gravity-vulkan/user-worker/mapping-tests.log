@@ -1,0 +1,12 @@
+running 9 tests
+test mem::userread::tests::complete_ring_mapping_is_checked_without_copying_or_preparing_store_views ... ok
+test mem::userread::tests::mixed_ram_store_copy_holds_guards_and_store_error_returns_no_snapshot ... ok
+test mem::userread::tests::fragmented_rows_exceeding_trusted_piece_budget_refuse_before_copy ... ok
+test mem::userread::tests::partial_file_alias_starting_inside_copy_is_refused ... ok
+test mem::userread::tests::preparation_runs_outside_row_guard_and_changed_rows_are_not_copied ... ok
+test mem::userread::tests::publication_admission_rechecks_exact_source_and_retains_guards ... ok
+test mem::userread::tests::ring_mapping_rejects_ram_holes_aliases_revocation_and_guest_sized_work ... ok
+test mem::userread::tests::snapshots_are_owned_bounded_and_never_expose_partial_hole_reads ... ok
+test mem::userread::tests::unlogged_row_replacement_during_prepare_never_uses_stale_spans ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 194 filtered out; finished in 0.00s

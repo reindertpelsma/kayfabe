@@ -66,6 +66,64 @@ impl Snapshot<'_> {
     }
 }
 
+/// Whole-ring mapping admission without reading a guest-sized ring. The trusted
+/// ring cap and row/RAM-piece caps bound all work; no CPU store view is armed.
+pub(crate) struct Mapping<'a>(Snapshot<'a>);
+impl Mapping<'_> {
+    pub(crate) fn admit<T>(&self, publish: impl FnOnce() -> T) -> Result<T, Refusal> {
+        self.0.admit(publish)
+    }
+}
+
+pub(crate) fn mapped<'a>(rows: &PlacedRows, log: &RowsLog, ram: &'a RamMap,
+    generation: u64, va: u64, bytes: u64, store_bound: u64)
+    -> Result<Mapping<'a>, Refusal> {
+    // Allocation policy, not a die/driver fact: at most2^20 source GP entries.
+    if bytes == 0 || bytes > 8 << 20 || va & 7 != 0 {
+        return Err(Refusal::Bounds);
+    }
+    let end = va.checked_add(bytes).filter(|end| *end < 1 << 40)
+        .ok_or(Refusal::Bounds)?;
+    let guard = try_read(rows)?;
+    let epoch = log.epoch();
+    let spans = resolve(&guard, va, end)?;
+    let blocks = try_read(&ram.blocks)?;
+    if generation == 0 || ram.generation.load(Ordering::Relaxed) != generation {
+        return Err(Refusal::Topology);
+    }
+    if blocks.len() > PIECES { return Err(Refusal::Bounds); }
+    let fd = blocks.iter().find_map(|b| b.fd);
+    let mut pieces = 0;
+    for span in &spans {
+        let end = span.off.checked_add(span.len).ok_or(Refusal::Bounds)?;
+        if !span.ram {
+            if end > store_bound { return Err(Refusal::Bounds); }
+            continue;
+        }
+        let fd = fd.ok_or(Refusal::Topology)?;
+        let mut at = span.off;
+        while at < end {
+            if pieces == PIECES { return Err(Refusal::Bounds); }
+            pieces += 1;
+            let mut covers = blocks.iter().enumerate().filter(|(_, b)|
+                b.fd == Some(fd) && at >= b.fd_off && b.fd_off
+                    .checked_add(b.mem.len() as u64).is_some_and(|e| at < e));
+            let (index, block) = covers.next().ok_or(Refusal::Topology)?;
+            if covers.next().is_some() { return Err(Refusal::Topology); }
+            let until = block.fd_off.checked_add(block.mem.len() as u64)
+                .ok_or(Refusal::Bounds)?.min(end);
+            if blocks.iter().enumerate().any(|(i, other)| i != index
+                && other.fd == Some(fd) && other.fd_off < until
+                && other.fd_off.checked_add(other.mem.len() as u64).is_none_or(|e| at < e)) {
+                return Err(Refusal::Topology);
+            }
+            at = until;
+        }
+    }
+    Ok(Mapping(Snapshot { bytes: Vec::new(), epoch, rows: Arc::downgrade(rows),
+        spans, va, end, ram, generation }))
+}
+
 fn try_read<T>(lock: &RwLock<T>) -> Result<RwLockReadGuard<'_, T>, Refusal> {
     lock.try_read().map_err(|e| match e {
         TryLockError::WouldBlock => Refusal::Busy,
@@ -363,6 +421,32 @@ mod tests {
         assert_eq!(s.admit(|| panic!("old topology")), Err(Refusal::Topology));
         drop(rows);
         assert_eq!(s.admit(|| panic!("gone source")), Err(Refusal::Changed));
+    }
+    #[test]
+    fn complete_ring_mapping_is_checked_without_copying_or_preparing_store_views() {
+        let (ram, _, rows, log, generation) = fixture();
+        rows.write().unwrap().insert(0x10000, (0x80000, 0, false, MapPerm::READ_WRITE));
+        let source = mapped(&rows, &log, &ram, generation, 0x10000, 0x80000, 0x80000).unwrap();
+        assert_eq!(source.admit(|| {
+            assert!(rows.try_write().is_err());
+            assert!(ram.blocks.try_write().is_err());
+            7
+        }), Ok(7));
+        assert_eq!(mapped(&rows, &log, &ram, generation, 0x10000, 0x80008, 0x100000).err(), Some(Refusal::Missing(0x90000)));
+        assert_eq!(mapped(&rows, &log, &ram, generation, 0x10000, 0x80000, 0x7ffff).err(), Some(Refusal::Bounds));
+        rows.write().unwrap().clear();
+        assert_eq!(source.admit(|| panic!("revoked ring")), Err(Refusal::Missing(0x10000)));
+    }
+    #[test]
+    fn ring_mapping_rejects_ram_holes_aliases_revocation_and_guest_sized_work() {
+        let (ram, block, rows, log, generation) = fixture();
+        assert!(mapped(&rows, &log, &ram, generation, 0x10000, 0x8000, 0).is_ok());
+        rows.write().unwrap().insert(0x10000, (0x10000, 0, true, MapPerm::READ_WRITE));
+        assert_eq!(mapped(&rows, &log, &ram, generation, 0x10000, 0x10000, 0).err(), Some(Refusal::Topology));
+        assert_eq!(mapped(&rows, &log, &ram, generation, 0x10001, 8, 0).err(), Some(Refusal::Bounds));
+        assert_eq!(mapped(&rows, &log, &ram, generation, 0x10000, (8 << 20) + 8, 0).err(), Some(Refusal::Bounds));
+        ram.del(block.gpa);
+        assert_eq!(mapped(&rows, &log, &ram, generation, 0x10000, 8, 0).err(), Some(Refusal::Topology));
     }
     struct CheckedStore<'a> {
         rows: &'a PlacedRows,

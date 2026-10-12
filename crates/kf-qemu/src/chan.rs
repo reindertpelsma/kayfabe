@@ -69,6 +69,8 @@ use std::sync::{Arc, Mutex, RwLock};
 
 #[path = "userrelay.rs"]
 mod userrelay;
+#[path = "userpump.rs"]
+mod userpump;
 #[path = "userquota.rs"]
 mod userquota;
 
@@ -5836,6 +5838,7 @@ impl ChanPlane {
     /// worker's park tick. A relay whose lock a doorbell step holds is skipped (that step writes it
     /// back). Returns `(relays seen, stores made)`; nothing at all with the switch off.
     pub fn relay_refresh_all(&self, why: &str) -> (u32, u32) {
+        self.user_ring_refresh();
         if !relay_get_refresh() {
             return (0, 0);
         }
@@ -7432,6 +7435,7 @@ impl ChanPlane {
     /// ★ A WORKER's entry (`HostOps::run_translated`): pump the channel behind `ht`. Never waits.
     /// Returns whether anything reached the GPU.
     pub fn serve(&self, ht: u32) -> bool {
+        if let Some(r) = self.user_ring_serve(ht) { return r; }
         if let Some(r) = self.relay_serve(ht) {
             return r;
         }

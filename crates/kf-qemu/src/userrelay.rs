@@ -26,6 +26,8 @@ pub(super) struct Record {
     pub mirror: Mirror,
     pub userd: kf_rm::memory_access::Lease,
     pub source: (u64, u32),
+    pub vas_key: VasKey,
+    pub pump: Option<super::userpump::Pump>,
     pub retired: bool,
     pub free_attempted: bool,
     pub dead: Option<String>,
@@ -134,6 +136,10 @@ impl Birth {
             allocation: self.pending.allocation(), key: (a.client, a.handle), idx: self.idx,
             chan: None, lease: lease.clone(), mirror: self.mirror.clone(), userd,
             source: (a.gpfifo_va, a.entries), retired: false, free_attempted: false, dead: None,
+            vas_key: VasKey((u64::from(a.vaspace_client) << 32)
+                | u64::from(a.vaspace.ok_or_else(|| fail("USER_RING_NO_VASPACE".into()))?)),
+            // Kept unconnected until publication/retry/5080 admission review.
+            pump: None,
         }));
         let hold = (|| {
             let mut holds = me.user_birth_holds.lock().map_err(|_| "USER_RING_HOLDS_POISONED")?;
@@ -318,7 +324,7 @@ impl ChanPlane {
     pub(super) fn retire_user_ring_token(&self, token: u32, identity: &Arc<()>) -> bool {
         let Some(record) = self.user_ring_record(token) else { return false };
         let quota = {
-            let Ok(r) = record.lock() else { return false };
+            let Ok(r) = record.try_lock() else { return false };
             if !Arc::ptr_eq(&r.allocation, identity) { return false; }
             r.quota.clone()
         };

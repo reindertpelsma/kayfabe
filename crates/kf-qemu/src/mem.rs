@@ -109,6 +109,13 @@ impl Default for RamMap {
 }
 
 impl RamMap {
+    /// Capture the topology incarnation without waiting for registration. A
+    /// channel retains this value; revocation never refreshes an old lease.
+    pub(crate) fn try_generation(&self) -> Option<u64> {
+        let _guard = self.blocks.try_read().ok()?;
+        let generation = self.generation.load(Ordering::Acquire);
+        (generation != 0).then_some(generation)
+    }
     // Called with the registration write guard held. Zero is terminal: an exhausted
     // counter can never revive a descriptor from an earlier topology incarnation.
     fn revoke(&self) {
@@ -2226,6 +2233,23 @@ impl Inbox {
         }
         let _ = self.wake.signal();
         t
+    }
+
+    /// Worker-only USER relay invalidate after a real prefix HOST receipt.
+    /// Later USER publications remain held until the actual VA result arrives;
+    /// this path has no writable GPU gate and never trusts guest target handles.
+    pub(crate) fn request_user_split(&self, token: u32, key: kf_mem::vasmgr::VasKey)
+        -> Result<u64, &'static str> {
+        let t = self.next_ticket.fetch_update(Ordering::Relaxed, Ordering::Relaxed,
+            |n| n.checked_add(1)).map_err(|_| "USER_RING_SPLIT_SEQUENCE")?;
+        {
+            let mut q = self.splits.try_lock().map_err(|_| "USER_RING_SPLIT_BUSY")?;
+            if q.len() >= 512 { return Err("USER_RING_SPLIT_BUDGET"); }
+            q.try_reserve(1).map_err(|_| "USER_RING_SPLIT_ALLOCATION")?;
+            q.push((t, token, SplitTarget::Space(key)));
+        }
+        let _ = self.wake.signal();
+        Ok(t)
     }
 
     /// ★★ OWNER_RULINGS §U.2, a WORKER: channel `token` reached a deferred `DMA_INVALIDATE_TLB`;
