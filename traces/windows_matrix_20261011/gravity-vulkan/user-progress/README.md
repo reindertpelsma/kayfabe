@@ -1,5 +1,11 @@
 **STATUS: RESEARCH, 2026-10-12 04:15UTC.**
 
+Correction 2026-10-12: this is an unconnected model, not the live worker's
+progress rule. The diagnostic worker now reports source GP_GET from the first
+actual native descriptor-fetch receipt, independently of later staged storage
+retirement and software action completion. See ../user-worker/README.md. The
+model's final-only source progress below must not be read as current runtime.
+
 Ordered source progress for the Windows user relay; no runtime caller yet.
 Based on pushed9f7cdd81f; the commit containing this file is the tested checkpoint.
 

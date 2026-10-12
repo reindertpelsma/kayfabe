@@ -1,5 +1,22 @@
 # Resume Windows apps and GravityMark Vulkan
 
+## UPDATE 2026-10-12 17:39UTC — exact Linux green; Windows1550 started
+
+Last confirmed push30c887c86. Exact full source30c887c8651c3e79b6b62c6785eda30f443205d1:
+Linux9/9+gate10, USERbirths12/12/refused0, rebuilt QEMU/client/fastguest,
+fast30/30/crash0/NOTRUN0/exit0. Five deliberate negative-test Xid31, no32.
+Linux desktop NVIDIA RTX4070 Cinnamon/Xorg/gears59–60FPS PASS_WITH_WARNINGS:
+known shared-data assertions/one DRMfliptimeout; no hostXid. Disposable stopped,
+noQEMU/DMA-FQ. Evidence gravity-vulkan/user-worker/linux-result +linux-desktop.
+
+Windows1550 launched under global GPU lock with only relay flag added to current
+production setup and original600s GravityVk oracle/media. Result pending; native
+reference183sPASS, diagnostic migration cursor-zero still unverified. Personal
+image chain untouched. Host job/data: /data/kf-user-worker-windows-30c887c86.log,
+$W/codex-user-worker-windows-30c887c86. Runner committed in user-worker/run_windows.sh.
+Do not start another GPU job while this runs. No active Vast instances.
+
+
 ## UPDATE 2026-10-12 17:32UTC — USER worker diagnostic ready for Linux regression
 
 Last confirmed push32312b0c6; this checkpoint revision is its containing commit.

@@ -1,0 +1,12 @@
+USER_MEMORY_ACCESS_LINUX_START=2026-10-12T19:32:55+02:00 source=30c887c8651c3e79b6b62c6785eda30f443205d1
+HYPOTHESIS exact source preserves Linux object policy, USER birth/isolation and original fast arms with the shared graph wrapper.
+FALSIFIER any gate, privilege census or fast arm FAIL/CRASH/TIMEOUT/NOTRUN.
+USER_MEMORY_ACCESS_LINUX_EXIT=0 at=2026-10-12T19:37:28+02:00
+DMA-FQ
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/sda2       1.8T  1.6T  108G  94% /
+HYPOTHESIS reviewed exact source preserves the provisioned Linux Cinnamon/Xorg desktop and OpenGL gears smoke.
+FALSIFIER boot/SSH fails, Cinnamon/Xorg absent, renderer is software, gears reports no frames, or guest/host has an unexpected fault. This is not render-hash parity or a relay-fix test.
+LINUX_DESKTOP_SMOKE=PASS_WITH_WARNINGS
+LINUX_DESKTOP_EXIT=0 at=2026-10-12T19:38:19+02:00 source=30c887c8651c3e79b6b62c6785eda30f443205d1
+USER_WORKER_LINUX_EXIT=0
