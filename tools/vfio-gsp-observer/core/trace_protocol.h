@@ -16,6 +16,9 @@ typedef unsigned __int64 uint64_t;
 #define KFGT_SAMPLED 1u /* Always set: passive observation cannot prove completeness. */
 #define KFGT_PREFIX_UNKNOWN 2u
 #define KFGT_GAP_BEFORE 4u
+/* Bounded fn103 params outside rpc.length's checksum, within stable committed
+ * transport pages. Export hash includes them; RPC checksum does NOT. */
+#define KFGT_ALLOC_PARAMS_TAIL 8u
 #define KFGT_PAGE 4096u
 #define KFGT_MAX_PAGES 512u
 #define KFGT_MAX_QUEUE (1024u * 1024u)

@@ -229,3 +229,30 @@ native migration cursor/backing evidence; account for cross-GP-entry packets and
 unsupported forms before deciding supported runtime scope. Actual native32-bit
 reference wrap and all-engine completion behavior remain unmeasured. Independent
 review remains required before wiring these model interfaces into GPU submission.
+
+## Native allocation observability, before reference run (2026-10-12)
+
+MEASURED old VFIO capture's fn103 channel requests/replies have paramsSize368
+but rpc.length64 and only the32-byte body prefix retained: no original allocation
+params. Public595.84 rpc.c:rpcRmApiAlloc_GSP sets that fixed prefix length then
+copies params; message_queue_cpu.c:GspMsgQueueSendCommand checksums only msgLen
+but copies full committed elements. rpc_gsp_rm_alloc_v03_00's status/paramsSize/
+flags are offsets16/20/24, reserved is four BYTES, params begins at32. Existing
+gsp_alloc_scan.py incorrectly used44; corrected to32. The previous capture cannot
+be repaired offline because it omitted the bytes.
+
+The observer now preserves only declared fn103 params fitting stable committed
+pages, with flag8 explicitly denoting the portion outside RPC checksum coverage.
+No unbounded read, extra page, changed queue cursor or ordinary product code.
+GPU-free GCC/Clang ASAN/UBSAN and decoder tests pass, including overlarge claim,
+exact-page bound, truncated tail, mismatched envelope and checksum corruption.
+
+H-ALLOC-OBS: this captures complete originalC56F allocations on a fresh same-GPU
+VFIO Gravity workload while the benchmark still passes. Falsifier: missing or
+malformed/truncated allocation params, incompatible layout/bounds, or native
+workload failure. If app PASS but a300s observation limit loses migration coverage,
+state that limit; do not infer absent execution. No cursor transfer rule follows
+from allocations alone. Use a fresh disposable baseline child, not personal1380.
+The exact original600s workload/oracle, driver580.88 and RTX4070 remain pinned;
+only observation/launch tooling changes. No privileged driver probe or private
+analysis is involved. Native cursor/backing generations remain next measurements.

@@ -65,6 +65,18 @@ int kf_queue_records(const unsigned char *p,size_t n,unsigned char *scratch,KFGT
         r.direction=direction;r.table_pa=table;r.qpc=qpc;r.queue_sequence=seq;
         r.rpc_sequence=kf_u32(scratch+72);r.rpc_function=kf_u32(scratch+60);
         r.rpc_result=kf_u32(scratch+64);r.rpc_version=kf_u32(scratch+48);r.flags=KFGT_SAMPLED;
+        /* Public rpc_gsp_rm_alloc_v03_00 has a32-byte body prefix. The CPU
+         * sender can checksum only that prefix but copies whole committed queue
+         * elements (GspMsgQueueSendCommand, public OGKM595.84). Preserve ONLY the
+         * declared params within those stable pages, explicitly unchecksummed.
+         * Never read another element or trust a guest-controlled huge size. */
+        if(r.rpc_function==103u && bytes>=112u) {
+            uint32_t params=kf_u32(scratch+100);
+            if(params<=pages*KFGT_PAGE-112u && 112u+params>r.payload_bytes) {
+                r.payload_bytes=(112u+params+7u)&~7u;
+                r.flags|=KFGT_ALLOC_PARAMS_TAIL;
+            }
+        }
         if(!cursor->initialized) r.flags|=KFGT_PREFIX_UNKNOWN;
         else if((uint32_t)(seq-cursor->last)!=1) {
             r.flags|=KFGT_GAP_BEFORE;r.missing_before=seq-cursor->last-1;cursor->gaps+=r.missing_before;

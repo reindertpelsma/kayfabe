@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-typedef struct { unsigned char ram[65536];unsigned emitted,reads,mutate;KFGT_RECORD last;uint64_t gen; } FIXTURE;
+typedef struct { unsigned char ram[65536];unsigned emitted,reads,mutate;KFGT_RECORD last;uint64_t gen;unsigned char payload[KFGT_MAX_MESSAGE]; } FIXTURE;
 static void w32(unsigned char *p,uint32_t v) {unsigned i;for(i=0;i<4;i++)p[i]=(unsigned char)(v>>(i*8));}
 static void w64(unsigned char *p,uint64_t v) {w32(p,(uint32_t)v);w32(p+4,(uint32_t)(v>>32));}
 static int read_ram(void *opaque,uint64_t pa,void *out,size_t n) {
@@ -16,7 +16,8 @@ static int read_ram(void *opaque,uint64_t pa,void *out,size_t n) {
     return 1;
 }
 static void emit(void *opaque,uint64_t gen,const KFGT_RECORD *r,const unsigned char *payload) {
-    FIXTURE *f=opaque;assert(r->payload_bytes==80);assert(kf_u32(payload+52)==KFGT_RPC_SIGNATURE);
+    FIXTURE *f=opaque;assert(r->payload_bytes<=KFGT_MAX_MESSAGE);assert(kf_u32(payload+52)==KFGT_RPC_SIGNATURE);
+    memcpy(f->payload,payload,r->payload_bytes);
     f->emitted++;f->last=*r;f->gen=gen;
 }
 static void header(unsigned char *p) {
@@ -63,5 +64,31 @@ int main(void) {
     /* High mailbox alone or unrelated MMIO cannot attach. */
     fixture(f);vg_reset(v);vg_mmio(v,0x110044,0,4,1,8);assert(!v->active);
     vg_mmio(v,0x1000,0x1000,4,1,9);assert(!v->active);
+    /* fn103 declares params outside rpc.length but the committed transport
+       element contains them. Capture only the bounded declared tail, mark it
+       separately from the checksummed prefix, never include page padding. */
+    fixture(f);vg_reset(v);
+    {
+        unsigned char *p=f->ram+0x5000;uint32_t sum=0;
+        message(p,0,103,0);w32(p+56,64);w32(p+80,1);w32(p+84,2);
+        w32(p+88,3);w32(p+92,0xc56f);w32(p+100,368);
+        for(i=0;i<368;i++)p[112+i]=(unsigned char)(i^0x5a);
+        w32(p+32,0);for(i=0;i<112;i+=4) { sum^=kf_u32(p+i); }
+        w32(p+32,sum);
+        boot(v);assert(f->emitted==1);
+        assert(f->last.payload_bytes==480&&f->last.flags&KFGT_ALLOC_PARAMS_TAIL);
+        assert(!memcmp(f->payload+112,p+112,368));
+        /* A too-large params claim gets the valid prefix only, no tail flag. */
+        w32(p+36,1);w32(p+100,4096);w32(p+32,0);sum=0;
+        for(i=0;i<112;i+=4) { sum^=kf_u32(p+i); }
+        w32(p+32,sum);
+        vg_poll(v,10);assert(f->emitted==2);
+        assert(f->last.payload_bytes==112&&!(f->last.flags&KFGT_ALLOC_PARAMS_TAIL));
+        /* Exact remaining element extent is permitted. */
+        w32(p+36,2);w32(p+100,4096-112);w32(p+32,0);sum=0;
+        for(i=0;i<112;i+=4) { sum^=kf_u32(p+i); }
+        w32(p+32,sum);
+        vg_poll(v,11);assert(f->emitted==3&&f->last.payload_bytes==4096);
+    }
     free(f);free(v);puts("VFIO GSP bootstrap/queue core tests passed");return 0;
 }

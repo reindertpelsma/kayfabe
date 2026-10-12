@@ -21,6 +21,24 @@ It changes neither Kayfabe product semantics nor a guest/GPU queue pointer.
 > log" below is about this observer: the BAR0 access records of a reference run come from QEMU's
 > own `vfio_region_read`/`vfio_region_write` trace events, which kf3's trace mode emits too.
 
+## 2026-10-12 allocation-tail observation amendment
+
+Public OGKM595.84 rpc.c:rpcRmApiAlloc_GSP writes a32-byte allocation body prefix
+and then its declared params. message_queue_cpu.c:GspMsgQueueSendCommand copies
+complete committed queue elements even when rpc.length/checksum cover only the
+prefix. The previous observer truncated its exported bytes to that checksum span;
+reference channel allocations therefore declared368 parameters but saved none.
+
+For fn103/v03_00 only, preserve the declared params when they fit the already
+validated stable committed elements. Capture ends at rounded declared params,
+never at arbitrary page padding or a following element. Overlarge claims retain
+only the valid prefix. Record flag8 marks this tail; updated decode.py checks the
+original RPC checksum span and reports allocation params and whether that checksum
+covers them. Stable double snapshots and the export hash cover observation
+integrity; **the RPC checksum does not cover this extra tail**. Older decoders
+correctly refuse the new flag. The transport/ring bounds and output caps remain.
+No product semantics/guest-memory writes or native cursor claims follow.
+
 ## Why the existing capture misses initialization
 
 The Windows physical-RAM scanner successfully recorded GSP requests and replies,

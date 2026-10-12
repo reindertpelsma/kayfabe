@@ -114,7 +114,7 @@ def parse(blob, generations=None):
         magic, header, size, direction, qpc, table, seq, rpc_seq, fn, result, flags, gap, version, reserved = r
         if magic != 0x5247474b or header != 64 or not 80 <= size <= 65536 or size % 8 or direction > 1:
             raise InvalidTrace('invalid record framing')
-        if flags & ~7 or not flags & 1 or reserved or bool(flags & 4) != bool(gap):
+        if flags & ~15 or not flags & 1 or reserved or bool(flags & 4) != bool(gap):
             raise InvalidTrace('invalid record flags')
         at += RECORD.size
         if size > len(blob) - at:
@@ -123,18 +123,28 @@ def parse(blob, generations=None):
         at += size
         if any(payload[:32]) or version != 0x03000000:
             raise InvalidTrace('encrypted or unsupported RPC header version')
-        checksum = 0
-        for (word,) in struct.iter_unpack('<I', payload):
-            checksum ^= word
-        if checksum:
-            raise InvalidTrace('message checksum mismatch')
         e_seq, pages = struct.unpack_from('<II', payload, 36)
         rpc = struct.unpack_from('<8I', payload, 48)
         if (rpc[0], rpc[1], rpc[3], rpc[4], rpc[6], e_seq) != (version, 0x43505256, fn, result, rpc_seq, seq):
             raise InvalidTrace('record metadata disagrees with payload')
         length = rpc[2]
-        if length < 32 or (48 + length + 7) & ~7 != size or pages != (48 + length + 4095) // 4096:
+        verified_size = (48 + length + 7) & ~7
+        if length < 32 or verified_size > size or pages != (48 + length + 4095) // 4096:
             raise InvalidTrace('message length mismatch')
+        if flags & 8:
+            if fn != 103 or length < 64 or not 1 <= pages <= 16:
+                raise InvalidTrace('allocation tail on unsupported envelope')
+            params_size = struct.unpack_from('<I', payload, 100)[0]
+            tail_size = (112 + params_size + 7) & ~7
+            if tail_size != size or 112 + params_size <= verified_size or size > pages * 4096:
+                raise InvalidTrace('allocation tail exceeds declared params/committed elements')
+        elif verified_size != size:
+            raise InvalidTrace('unmarked allocation/message tail')
+        checksum = 0
+        for (word,) in struct.iter_unpack('<I', payload[:verified_size]):
+            checksum ^= word
+        if checksum:
+            raise InvalidTrace('message checksum mismatch')
         generation = generations[len(records)] if generations is not None else 0
         key = (generation, table, direction)
         if key in prior and not flags & 2:
@@ -150,6 +160,17 @@ def parse(blob, generations=None):
                     observed_qpc=qpc, queue_sequence=seq, rpc_sequence=rpc_seq,
                     rpc_function=fn, rpc_status=hex(result), missing_before=missing,
                     prefix_unknown=bool(flags & 2), payload_hex=payload.hex())
+        if fn == 103 and length >= 64:
+            client, parent, obj, cls, status, params_size, alloc_flags = struct.unpack_from('<7I', payload, 80)
+            observed_size = min(params_size, size - 112 if flags & 8 else length - 64)
+            item['allocation'] = dict(client=hex(client), parent=hex(parent), object=hex(obj),
+                class_id=hex(cls), status=hex(status), flags=hex(alloc_flags),
+                params_bytes_declared=params_size, params_bytes_observed=observed_size,
+                params_complete=observed_size == params_size,
+                rpc_checksum_covers_params=(112 + params_size <= verified_size),
+                params_hex=payload[112:112 + observed_size].hex())
+            if flags & 8:
+                item['allocation']['tail_provenance'] = 'stable committed transport elements; export hash; outside RPC checksum'
         if fn == 76:
             if length < 72:
                 raise InvalidTrace('short RM_CONTROL envelope')
