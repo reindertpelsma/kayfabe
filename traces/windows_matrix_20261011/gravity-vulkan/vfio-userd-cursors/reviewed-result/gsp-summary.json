@@ -1,0 +1,122 @@
+{
+  "schema": "kayfabe-gsp-observer/1",
+  "complete": false,
+  "records": 18724,
+  "observed_missing": 0,
+  "text_export": {
+    "selection": "all",
+    "omitted_records": 0,
+    "source_bytes": 30370544,
+    "source_sha256": "433b8fcd928815830197cd1c34ecdd305440be769719a6669648d6549618c5b0",
+    "source_hash_verifiable_from_export": true,
+    "note": "In a selected export, sequence gaps can include intentionally omitted records; full-source hash is provenance only."
+  },
+  "driver_stats": {
+    "triggers": 235389,
+    "bootstrap_attempts": 2,
+    "attached_tables": 2,
+    "invalid_bootstrap": 0,
+    "uninitialized_headers": 1,
+    "invalid_headers": 0,
+    "read_failures": 0,
+    "unstable_snapshots": 160,
+    "mapping_changed": 0,
+    "recorded": 18724,
+    "dropped": 0,
+    "sequence_gaps": 0,
+    "invalid_elements": 6661392,
+    "limited": true,
+    "buffered_bytes": 0
+  },
+  "gfx_pool_observations": [
+    {
+      "direction": "request",
+      "table_pa": "0x10fe78000",
+      "observed_qpc": 201422482193062,
+      "queue_sequence": 164,
+      "rpc_sequence": 0,
+      "rpc_function": 76,
+      "rpc_status": "0xffffffff",
+      "missing_before": 0,
+      "prefix_unknown": false,
+      "payload_hex": "0000000000000000000000000000000000000000000000000000000000000000fe40035ea400000001000000000000000000000356525043700000004c000000ffffffffffffffff00000000000000000200d0c1000003ff1f1280200000000028000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "control": {
+        "client": "0xc1d00002",
+        "object": "0xff030000",
+        "command": "0x2080121f",
+        "status": "0x0",
+        "params_bytes_declared": 40,
+        "params_bytes_observed": 40,
+        "params_complete": true,
+        "params_hex": "04000000000000000000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "gfx_pool": {
+        "maxSlots": 4,
+        "slotStride": 0,
+        "ctrlStructSize": 0,
+        "ctrlStructAlign": 0,
+        "poolSize": 0,
+        "poolAlign": 0
+      },
+      "generation": 2,
+      "trigger": 2
+    },
+    {
+      "direction": "reply",
+      "table_pa": "0x10fe78000",
+      "observed_qpc": 201422482522659,
+      "queue_sequence": 167,
+      "rpc_sequence": 0,
+      "rpc_function": 76,
+      "rpc_status": "0x0",
+      "missing_before": 0,
+      "prefix_unknown": false,
+      "payload_hex": "0000000000000000000000000000000000000000000000000000000000000000d9a41f5da700000001000000000000000000000356525043700000004c000000000000000000000000000000000000000200d0c1000003ff1f12802000000000280000000000000040000000000000000000000000000000040000000060f900640400000000000000100000000000000080e503000000000010000000000000",
+      "control": {
+        "client": "0xc1d00002",
+        "object": "0xff030000",
+        "command": "0x2080121f",
+        "status": "0x0",
+        "params_bytes_declared": 40,
+        "params_bytes_observed": 40,
+        "params_complete": true,
+        "params_hex": "040000000060f900640400000000000000100000000000000080e503000000000010000000000000"
+      },
+      "gfx_pool": {
+        "maxSlots": 4,
+        "slotStride": 16343040,
+        "ctrlStructSize": 1124,
+        "ctrlStructAlign": 4096,
+        "poolSize": 65372160,
+        "poolAlign": 4096
+      },
+      "generation": 2,
+      "trigger": 2
+    }
+  ],
+  "unambiguous_query_pairs": [
+    {
+      "request": {
+        "maxSlots": 4,
+        "slotStride": 0,
+        "ctrlStructSize": 0,
+        "ctrlStructAlign": 0,
+        "poolSize": 0,
+        "poolAlign": 0
+      },
+      "reply": {
+        "maxSlots": 4,
+        "slotStride": 16343040,
+        "ctrlStructSize": 1124,
+        "ctrlStructAlign": 4096,
+        "poolSize": 65372160,
+        "poolAlign": 4096
+      },
+      "successful": true,
+      "rpc_sequence": 0,
+      "table_pa": "0x10fe78000",
+      "generation": 2
+    }
+  ],
+  "warning": "Passive samples cannot prove completeness or cross-GPU behavior. Retained history may predate collector start."
+}

@@ -35,6 +35,17 @@ No substitute registration or registration-time source switch is implemented.
 
 ## P0 findings: source facts versus measurement gaps
 
+**Correction 2026-10-12 01:48UTC:** the allocation and limited completion gaps
+below are partly closed: full native birth/registration parameters and SYSTEM
+USERD allocation candidates are published in vfio-ring-p0; the unprivileged
+C56F read-only-command/unmapped-USERD reference tail passes immediate/held CE
+probes. The reviewed native cursor collector now has a validated bounded export
+and native Gravity PASS179s, but both requested slots were already progressing
+when associated sampling began. It supplies no exact initial/reset/old-backing
+retirement rule. Earlier unmeasured statements below describe the prior capture.
+See vfio-userd-cursors/README.md and preserve those limits. No adapter is wired.
+
+
 - **Source-confirmed GPFIFO VA:** OGKM595.84
   src/nvidia/src/kernel/gpu/fifo/arch/maxwell/kernel_fifo_gm107.c:1129 and
   arch/hopper/kernel_fifo_gh100.c:598 explicitly call gpFifoOffset a virtual

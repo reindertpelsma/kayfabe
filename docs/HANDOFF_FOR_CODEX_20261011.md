@@ -1,5 +1,33 @@
 # Handoff for a different agent (Codex or any fresh agent), 2026-10-11
 
+## UPDATE 2026-10-12 01:48UTC — reviewed native cursor reference; continuation parser
+
+Last confirmed push **c28d1bf61**, branch codex/windows-matrix-20261011,
+worktree /data/kf-inval-absent. Native same-GPU Gravity Vulkan **PASS179s**
+(the previous reference was183s), image/timings, zero guest153/4101/WER/reboot
+and bounded hostXid0. Reviewed sampler EXIT0:14973-record hashed/footer-valid
+export; strict GSP18724 records, no declared gaps/drops but300s-limited capture.
+First associated new-slot cursors already progressed (35/949 and58526/58549);
+exact initial/reset/old-source retirement remains UNMEASURED. Do not infer a
+zero-reset rule from the earlier request-only incomplete collector. Evidence:
+traces/windows_matrix_20261011/gravity-vulkan/vfio-userd-cursors/reviewed-result.
+Trusted GPU now idle/NVIDIA restored/DMA-FQ/noQEMU/lockfree/stop absent,
+115960332288bytesfree. Personal Windows chain preserved. Vast API rechecked:
+no instances; owner authorizes retiring any unused instance in this account.
+
+Unconnected user_stream parser now retains constant-size bounded packet metadata
+across immutable GP-entry snapshots; no source bytes/pins/completions created.
+Independent review found no reproducible control/reference/state-commit defect;
+additional continuation rollback/reference-data/state-equality tests added.
+Native GP continuation and VA-manager reservations/source lifetimes/real ordered
+completion/software migration adapters still gate wiring. Linux hardware claim
+remains exact70aa9+10/30; Gravity on kayfabe remains FAIL/TIMEOUT. Next priority:
+complete native/parser boundary validation and build the restricted Windows relay,
+then exact Linux gates and one-variable Gravity run. After the fix, finish the
+full Windows matrix, then driver compatibility/derivation sweep. No stock-default
+or full-matrix completion claim.
+
+
 ## UPDATE 2026-10-12 01:15UTC — native allocation reference PASS; Windows scope clarified
 
 Last confirmed pushf3a670f20 (this evidence checkpoint may be newer). Native

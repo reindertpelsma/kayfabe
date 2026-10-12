@@ -1,0 +1,65 @@
+{
+ "quiet": 1,
+ "end_utc": "2026-10-12T01:40:24.6906510Z",
+ "start_utc": "2026-10-12T01:37:25.7462229Z",
+ "rc": 0,
+ "secs": 179,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4070 status=OK code=0"
+ ],
+ "digests": [],
+ "session": 1,
+ "out_files": [
+  "C:\\kf\\out\\gravitymark_vk\\gm.png 862178",
+  "C:\\kf\\out\\gravitymark_vk\\gm_times.txt 4545975"
+ ],
+ "boot_utc_start": "2026-10-12T01:35:35.5000000Z",
+ "log_tail": [
+  "=== gravitymark_vk start=2026-10-12T01:37:25.7462229+00:00 host=VASTWIN session=1 boot=2026-10-12T01:35:35.5000000Z timeout=660",
+  "KFWAIT gravitymark_vk EXITED rc=0",
+  "GM_OK image=862178 bytes",
+  "GM_TIMES lines=129885",
+  "=== end rc=0 secs=179 2026-10-12T01:40:24.6906510+00:00"
+ ],
+ "pdh": {
+  "pids": [
+   "2788",
+   "3108",
+   "7480"
+  ],
+  "nv": {
+   "security": 0,
+   "3d": 98.62507690554519,
+   "videoencode": 0,
+   "videodecode": 0,
+   "vr": 0,
+   "copy": 39.99996603551327,
+   "ofa_0": 0,
+   "legacyoverlay": 0
+  },
+  "samples": 84,
+  "other": {},
+  "nvidia_luids": "0_6a43"
+ },
+ "timed_out": false,
+ "token": "g1-gravitymark_vk-1791769030",
+ "boot_utc_end": "2026-10-12T01:35:35.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "gravitymark_vk",
+ "smi": {
+  "samples": 28,
+  "mem_used_base_mb": 208,
+  "util_max": 96,
+  "mem_used_max_mb": 2247
+ }
+}

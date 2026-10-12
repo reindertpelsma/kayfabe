@@ -1,6 +1,6 @@
 # Native USERD cursor observations around ring-growth registration
 
-**STATUS: RESEARCH, 2026-10-12.** Initial native app PASS; initial collector incomplete. Reviewed measurement prepared.
+**STATUS: RESEARCH, 2026-10-12.** Reviewed native app PASS179s; complete bounded sample export. Exact cursor reset remains unmeasured.
 
 H-CURSOR-OBS: read-only sampling of native SYSTEM memory-list USERD pages captures
 usable old/new cursor transitions during the same passing Gravity Vulkan workload.
@@ -66,3 +66,41 @@ initial/identity/zero transitions immediately; planned record cap now writes a
 truthful limited footer. Original failure stays retained. New immutable runner
 uses a separate root and same native binary/workload; no change to a running
 script or product code. No usable reviewed hardware result yet.
+
+
+## Reviewed c28d1bf61 result, 2026-10-12 01:44UTC
+
+Native QEMU source/SHA unchanged5a407dcd8/1325fefb009c..., reviewed runner and
+sampler sourcec28d1bf61. **Native app PASS179s/rc0**, image862178bytes,
+129885 timing lines, NVIDIA3D98.63%/copy40.00%, peak2247MiB. Zero guest
+153/4101/WER/live-kernel/reboot and bounded hostXid0. The previous183s result
+is a separate passing reference; this run is179s. Wrapper and sampler EXIT0.
+Normal shutdown, NVIDIA restored, DMA-FQ/noQEMU/lockfree/stop-file absent;
+115960332288bytesfree. Personal Windows chain untouched; no Vast instance exists.
+
+Strict GSP decoder validates18724 records/source/export metadata hashes,
+no declared sequence gaps/drops. Capture still limited=true at300s,
+160 unstable snapshots/6661392 invalid-element attempts; those are observer
+counters, not GPU faults. The separate sample export validates14973 records
+and its SHA735a5e7cddf595372e5fc4427dedd49fd73815731c8e026dbd5dffd49819d023.
+292126 page reads, two successful-reply-paired SYSTEM memory candidates,
+two registration observations and two observed free barriers. Footer reason
+owner-collection-stop/limited=false means a complete bounded file, not complete
+GPU/RM history. Collection stopped normally at the app's end.
+
+Measured first registered slot0x600: first associated CPU sample GET35/PUT949,
+1794us after registration observation, both reads stable. Second slot0x800:
+first associated sample GET58526/PUT58549,183653us after registration observation,
+both reads stable. No associated sample precedes either registration. Successful
+reply pairing delayed the second candidate's installation. Both requests resolve
+to the same SYSTEM page in this run; handles and allocation serials differ.
+Samples show real cursor progress on requested slots, **not exact initial values,
+old/new transfer, trigger execution or retirement semantics**. The initial
+request-only collector's zero observations remain separately limited evidence;
+they are not upgraded by this reviewed run. H-CURSOR-OBS supplies useful new-slot
+observations but does not close the old/new transition measurement gate.
+
+Compressed raw exports, app/oracle, summaries, original logs and hashes are in
+reviewed-result/. Reproduce with strict summarize_samples.py and the public GSP
+decoder after decompression. No password, input keys, guest RAM or disk exported.
+No Kayfabe application behavior or compatibility claim changed.

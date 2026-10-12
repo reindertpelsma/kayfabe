@@ -10,14 +10,14 @@
 //! Parsing uses an owned bounded snapshot. Software calls and guest references
 //! never appear as hardware writes. Object lookup must be channel-owned host
 //! metadata; registration reply timing is irrelevant to the parsing mode.
-//! Unsupported packet forms are refused, not silently copied. The model does
-//! not yet handle packets split across GP entries or subroutine/control entries
-//! other than the canonical zero GPFIFO NOP.
+//! Unsupported packet forms are refused, not silently copied. The model
+//! carries bounded packet metadata across GP entries. Subroutine/control entries
+//! other than the canonical zero GPFIFO NOP remain refused.
 
 use crate::tmode::SwCall;
 use crate::ttables::{HostMethod, host_method};
 use kf_abi::submit::{
-    GpfifoEntry, MethodForm, fifo, gp_entry_decode_direct_c56f, method_header_decode,
+    GpfifoEntry, MethodForm, MethodHeader, fifo, gp_entry_decode_direct_c56f, method_header_decode,
     method_header_inc,
 };
 
@@ -95,6 +95,37 @@ pub enum Binding {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct State {
     bindings: [Option<Binding>; 8],
+    pending: Option<Packet>,
+}
+
+/// Only packet metadata survives a source snapshot. No borrowed guest bytes,
+/// unbounded buffered payload or native header is held for a continuation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Packet {
+    header: MethodHeader,
+    consumed: usize,
+}
+
+impl State {
+    /// A packet still needs data from a later immutable GP-entry snapshot.
+    /// A future adapter must keep source receipts/pins for it: accepting the
+    /// prefix does not retire its source or synthesize a completion.
+    #[must_use]
+    pub const fn has_pending(&self) -> bool {
+        self.pending.is_some()
+    }
+
+    /// Check an explicitly terminated stream, never an idle doorbell or timeout.
+    /// Partial packets may legally wait indefinitely for another source entry.
+    ///
+    /// # Errors
+    /// A packet has declared arguments not supplied by the stream.
+    pub fn finish(&self) -> Result<(), Refusal> {
+        if let Some(p) = self.pending {
+            return Err(Refusal::Truncated { at: p.consumed });
+        }
+        Ok(())
+    }
 }
 
 /// Bounded unbound operations, not GPU words or executed actions.
@@ -169,7 +200,52 @@ pub enum Refusal {
 pub fn decode(
     commands: &Commands,
     state: &mut State,
+    lookup: impl FnMut(u32) -> Option<Binding>,
+) -> Result<Vec<Op>, Refusal> {
+    decode_fragment(commands, state, lookup, false)
+}
+
+/// Decode one source fragment, retaining a bounded unfinished packet in `state`.
+/// Every fragment is an owned snapshot with a trusted word budget. Output count
+/// is at most this fragment's word count; a header can claim at most the public
+/// C56F field's count, and no allocation depends on unsupplied arguments.
+///
+/// Returned operations are inspection IR, not work or source retirement. A
+/// future adapter must preserve their order across fragments/software gates,
+/// retain contributing source lifetimes until a real completion, and honor GP
+/// SYNC_WAIT independently. No partial native packet is forwarded.
+///
+/// # Errors
+/// Any refusal leaves state unchanged and exposes no output from this fragment.
+/// Previously accepted fragments cannot be undone; a refused live stream must
+/// be stopped/quiesced, never bypassed or released on a timer.
+pub fn feed(
+    commands: &Commands,
+    state: &mut State,
+    lookup: impl FnMut(u32) -> Option<Binding>,
+) -> Result<Vec<Op>, Refusal> {
+    decode_fragment(commands, state, lookup, true)
+}
+
+fn method_at(h: MethodHeader, index: usize) -> Result<u32, Refusal> {
+    let method = match h.form {
+        MethodForm::Immediate | MethodForm::NonIncrementing => h.method,
+        MethodForm::IncrementOnce if index > 0 => h.method + 4,
+        _ => h.method + 4 * index as u32,
+    };
+    // Expanded method arithmetic is bounded by the public 13-bit count. Check
+    // the last method at header admission as well as every consumed argument.
+    if method_header_inc(h.subchannel, method, 1).is_none() {
+        return Err(Refusal::Method { method });
+    }
+    Ok(method)
+}
+
+fn decode_fragment(
+    commands: &Commands,
+    state: &mut State,
     mut lookup: impl FnMut(u32) -> Option<Binding>,
+    fragmented: bool,
 ) -> Result<Vec<Op>, Refusal> {
     let words = &commands.0;
     let mut next = state.clone();
@@ -178,9 +254,23 @@ pub fn decode(
         .map_err(|_| Refusal::Allocation)?;
     let mut at = 0usize;
     while at < words.len() {
-        let header_at = at;
+        if let Some(mut packet) = next.pending {
+            let m = method_at(packet.header, packet.consumed)?;
+            apply(
+                &mut next,
+                &mut out,
+                packet.header.subchannel,
+                m,
+                words[at],
+                &mut lookup,
+            )?;
+            packet.consumed += 1;
+            next.pending = (packet.consumed < packet.header.arg_words).then_some(packet);
+            at += 1;
+            continue;
+        }
         let raw = words[at];
-        // Canonical legacy DMA_NOP only. No unmeasured legacy/control flow.
+        // A zero is NOP only at a header position, never as a pending datum.
         if raw == 0 {
             at += 1;
             continue;
@@ -191,80 +281,88 @@ pub fn decode(
                 h.form,
                 MethodForm::Legacy | MethodForm::SubDeviceMask | MethodForm::EndPbSegment
             )
+            || (h.form != MethodForm::Immediate && h.arg_words == 0)
         {
             return Err(Refusal::Header { at });
         }
-        at += 1;
         let count = if h.form == MethodForm::Immediate {
             1
         } else {
             h.arg_words
         };
-        if count == 0 {
-            return Err(Refusal::Header { at: header_at });
-        }
-        if h.form != MethodForm::Immediate && count > words.len() - at {
-            return Err(Refusal::Truncated { at });
-        }
-        for k in 0..count {
-            let m = match h.form {
-                MethodForm::Immediate | MethodForm::NonIncrementing => h.method,
-                MethodForm::IncrementOnce if k > 0 => h.method + 4,
-                _ => h.method + 4 * k as u32,
-            };
-            // Bound every expanded method; never wrap an overflowing increment
-            // into SET_OBJECT/SET_REFERENCE or a software method.
-            if method_header_inc(h.subchannel, m, 1).is_none() {
-                return Err(Refusal::Method { method: m });
+        method_at(h, count - 1)?;
+        at += 1;
+        if h.form == MethodForm::Immediate {
+            apply(
+                &mut next,
+                &mut out,
+                h.subchannel,
+                h.method,
+                h.immd,
+                &mut lookup,
+            )?;
+        } else {
+            if !fragmented && count > words.len() - at {
+                return Err(Refusal::Truncated { at });
             }
-            let data = if h.form == MethodForm::Immediate {
-                h.immd
-            } else {
-                words[at + k]
-            };
-            if m == 0 {
-                let binding = lookup(data).ok_or(Refusal::Object { value: data })?;
-                next.bindings[h.subchannel as usize] = Some(binding);
-                if let Binding::Hardware { class } = binding {
-                    out.push(Op::Bind {
-                        sub: h.subchannel,
-                        class,
-                    });
-                }
-            } else if m == fifo::SET_REFERENCE_C56F {
-                out.push(Op::GuestReference(data));
-            } else if m < 0x100 {
-                match host_method(m) {
-                    Some(HostMethod::Refused(_)) | None => {
-                        return Err(Refusal::Method { method: m });
-                    }
-                    _ => out.push(Op::Hardware {
-                        sub: h.subchannel,
-                        method: m,
-                        data,
-                    }),
-                }
-            } else {
-                match next.bindings[h.subchannel as usize] {
-                    Some(Binding::Hardware { .. }) => out.push(Op::Hardware {
-                        sub: h.subchannel,
-                        method: m,
-                        data,
-                    }),
-                    Some(Binding::Software { value }) => out.push(Op::Software(SwCall {
-                        sub: h.subchannel,
-                        value,
-                        method: m,
-                        data,
-                    })),
-                    None => return Err(Refusal::Unbound { sub: h.subchannel }),
-                }
-            }
+            next.pending = Some(Packet {
+                header: h,
+                consumed: 0,
+            });
         }
-        if h.form != MethodForm::Immediate {
-            at += count;
-        }
+    }
+    if !fragmented {
+        next.finish()?;
     }
     *state = next;
     Ok(out)
+}
+
+fn apply(
+    state: &mut State,
+    out: &mut Vec<Op>,
+    subchannel: u32,
+    m: u32,
+    data: u32,
+    lookup: &mut impl FnMut(u32) -> Option<Binding>,
+) -> Result<(), Refusal> {
+    if m == 0 {
+        let binding = lookup(data).ok_or(Refusal::Object { value: data })?;
+        state.bindings[subchannel as usize] = Some(binding);
+        if let Binding::Hardware { class } = binding {
+            out.push(Op::Bind {
+                sub: subchannel,
+                class,
+            });
+        }
+    } else if m == fifo::SET_REFERENCE_C56F {
+        out.push(Op::GuestReference(data));
+    } else if m < 0x100 {
+        match host_method(m) {
+            Some(HostMethod::Refused(_)) | None => {
+                return Err(Refusal::Method { method: m });
+            }
+            _ => out.push(Op::Hardware {
+                sub: subchannel,
+                method: m,
+                data,
+            }),
+        }
+    } else {
+        match state.bindings[subchannel as usize] {
+            Some(Binding::Hardware { .. }) => out.push(Op::Hardware {
+                sub: subchannel,
+                method: m,
+                data,
+            }),
+            Some(Binding::Software { value }) => out.push(Op::Software(SwCall {
+                sub: subchannel,
+                value,
+                method: m,
+                data,
+            })),
+            None => return Err(Refusal::Unbound { sub: subchannel }),
+        }
+    }
+    Ok(())
 }

@@ -161,3 +161,193 @@ fn gp_source_full_span_and_trusted_budget_are_checked_before_copy() {
     );
     assert!(inspect_entry(gp_entry((1 << 40) - 4, 4).unwrap(), 64).is_ok());
 }
+
+#[test]
+fn every_fragmentation_preserves_bindings_software_calls_and_reference_filtering() {
+    use kf_chan::user_stream::feed;
+    let mut words = packet(4, 0, &[0xc6b5]);
+    words.extend(packet(4, 0x200, &[0, 0x5080, 0x4000002c]));
+    words.extend(packet(6, 0, &[0x5080]));
+    words.extend(packet(6, 0x200, &[0, 0x4000002c]));
+    words.extend([(3 << 29) | (3 << 16) | (0x50 / 4), 0, 12, 13]);
+    let mut final_state = State::default();
+    let expected = parse(&words, &mut final_state).unwrap();
+    for split in 0..=words.len() {
+        let mut state = State::default();
+        let mut got = feed(
+            &Commands::copy_from(&words[..split], 128).unwrap(),
+            &mut state,
+            object,
+        )
+        .unwrap();
+        got.extend(
+            feed(
+                &Commands::copy_from(&words[split..], 128).unwrap(),
+                &mut state,
+                object,
+            )
+            .unwrap(),
+        );
+        assert_eq!(got, expected, "split={split}");
+        assert_eq!(state, final_state, "split={split}");
+        assert!(!state.has_pending());
+        state.finish().unwrap();
+    }
+    let mut state = State::default();
+    let mut got = Vec::new();
+    for word in &words {
+        got.extend(
+            feed(
+                &Commands::copy_from(&[*word], 1).unwrap(),
+                &mut state,
+                object,
+            )
+            .unwrap(),
+        );
+    }
+    assert_eq!(got, expected);
+    assert_eq!(state, final_state);
+    state.finish().unwrap();
+}
+
+#[test]
+fn pending_arguments_never_become_headers_and_failed_continuations_are_transactional() {
+    use kf_chan::user_stream::feed;
+    let mut state = State::default();
+    // A split SET_OBJECT argument must still be channel-owned; a value that is
+    // itself a valid immediate header cannot escape as a header on the next GP.
+    feed(
+        &Commands::copy_from(&[method_header_inc(6, 0, 1).unwrap()], 1).unwrap(),
+        &mut state,
+        object,
+    )
+    .unwrap();
+    let before = state.clone();
+    assert!(state.has_pending());
+    assert!(matches!(state.finish(), Err(Refusal::Truncated { .. })));
+    let raw_header = (4 << 29) | (7 << 16) | (0x50 / 4);
+    assert_eq!(
+        feed(
+            &Commands::copy_from(&[raw_header], 1).unwrap(),
+            &mut state,
+            object
+        ),
+        Err(Refusal::Object { value: raw_header })
+    );
+    assert_eq!(state, before);
+    // Retrying a rejected fragment doesn't consume the pending argument.
+    assert_eq!(
+        feed(
+            &Commands::copy_from(&[0x5080], 1).unwrap(),
+            &mut state,
+            object
+        )
+        .unwrap(),
+        []
+    );
+    assert!(!state.has_pending());
+    assert!(
+        matches!(feed(&Commands::copy_from(&packet(6, 0x200, &[31]), 128).unwrap(), &mut state, object).unwrap().as_slice(), [Op::Software(call)] if call.data == 31)
+    );
+}
+
+#[test]
+fn split_one_increment_and_declared_overflow_are_checked_before_publication() {
+    use kf_chan::user_stream::feed;
+    let mut state = State::default();
+    parse(&packet(4, 0, &[0xc6b5]), &mut state).unwrap();
+    let words = [(5 << 29) | (3 << 16) | (4 << 13) | (0x200 / 4), 1, 2, 3];
+    let expected = parse(&words, &mut state.clone()).unwrap();
+    let mut got = Vec::new();
+    for word in words {
+        got.extend(
+            feed(
+                &Commands::copy_from(&[word], 1).unwrap(),
+                &mut state,
+                object,
+            )
+            .unwrap(),
+        );
+    }
+    assert_eq!(got, expected);
+    assert!(matches!(
+        got.as_slice(),
+        [
+            Op::Hardware { method: 0x200, .. },
+            Op::Hardware { method: 0x204, .. },
+            Op::Hardware { method: 0x204, .. }
+        ]
+    ));
+    let before = state.clone();
+    // Even with no argument yet available, reject an increment that would wrap
+    // into reference/binding methods rather than deferring validation to later.
+    assert_eq!(
+        feed(
+            &Commands::copy_from(&[method_header_inc(4, 0x3ffc, 2).unwrap()], 1).unwrap(),
+            &mut state,
+            object
+        ),
+        Err(Refusal::Method { method: 0x4000 })
+    );
+    assert_eq!(state, before);
+}
+
+#[test]
+fn malformed_suffix_restores_an_already_consumed_pending_binding() {
+    use kf_chan::user_stream::feed;
+    let mut state = State::default();
+    feed(
+        &Commands::copy_from(&[method_header_inc(6, 0, 1).unwrap()], 1).unwrap(),
+        &mut state,
+        object,
+    )
+    .unwrap();
+    let before = state.clone();
+    // Valid pending binding followed by a forbidden control header: neither the
+    // binding nor the consumed-argument progress may escape this failed fragment.
+    assert!(matches!(
+        feed(
+            &Commands::copy_from(&[0x5080, 6 << 29], 2).unwrap(),
+            &mut state,
+            object
+        ),
+        Err(Refusal::Header { at: 1 })
+    ));
+    assert_eq!(state, before);
+    feed(
+        &Commands::copy_from(&[0x5080], 1).unwrap(),
+        &mut state,
+        object,
+    )
+    .unwrap();
+    assert!(
+        matches!(feed(&Commands::copy_from(&packet(6, 0x200, &[19]), 128).unwrap(), &mut state, object).unwrap().as_slice(), [Op::Software(call)] if call.data == 19)
+    );
+}
+
+#[test]
+fn split_reference_header_shaped_data_is_bookkeeping_only() {
+    use kf_chan::user_stream::feed;
+    let mut state = State::default();
+    feed(
+        &Commands::copy_from(
+            &[method_header_inc(7, fifo::SET_REFERENCE_C56F, 1).unwrap()],
+            1,
+        )
+        .unwrap(),
+        &mut state,
+        object,
+    )
+    .unwrap();
+    let nested = (4 << 29) | (31 << 16) | (fifo::SET_REFERENCE_C56F / 4);
+    assert_eq!(
+        feed(
+            &Commands::copy_from(&[nested], 1).unwrap(),
+            &mut state,
+            object
+        )
+        .unwrap(),
+        [Op::GuestReference(nested)]
+    );
+    state.finish().unwrap();
+}
