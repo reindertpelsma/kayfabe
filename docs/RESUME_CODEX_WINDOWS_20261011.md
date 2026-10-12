@@ -1,13 +1,13 @@
 # Resume Windows apps and GravityMark Vulkan
 
-**STATUS: LIVE, 2026-10-12 00:48UTC.** This compact current state supersedes earlier
+**STATUS: LIVE, 2026-10-12 01:15UTC.** This compact current state supersedes earlier
 pending paragraphs in the chronological HANDOFF_FOR_CODEX_20261011.md.
 
 ## Branch and source
 
 Public <https://github.com/reindertpelsma/kayfabe>, branch
 **codex/windows-matrix-20261011**, controller worktree **/data/kf-inval-absent**.
-Last confirmed push **9b65e3c9e**; this final evidence checkpoint may be newer.
+Last confirmed push **f3a670f20**; this final evidence checkpoint may be newer.
 Fetch the branch tip to obtain all reachable source/evidence. Do not edit the
 separate /workspace/kayfabe or Claude worktrees. Do not merge master/integration
 without CI/review/exact-revision hardware requirements.
@@ -70,6 +70,24 @@ New unconnected receipt-wrap/parser models pass full kf-chan70lib/all integratio
 no VM call or Windows app result. Parser rejects unsupported forms; source pins,
 cross-entry packets, native migration cursors, broader completion evidence and
 independent review still gate runtime integration. Latest host job is complete.
+
+## UPDATE 2026-10-12 01:15UTC — native allocation reference PASS; Windows scope clarified
+
+Last confirmed pushf3a670f20 (this evidence checkpoint may be newer). Native
+reference source5a407dcd8/retry harnessf15da21bc Gravity Vulkan PASS183s, image
+and timings, zero guest153/4101/WER/reboot and bounded hostXid0. Strict passive
+export validates18923 records, all65 observedC56F alloc params complete. Four
+successful FIFO registrations request32768→65536→131072→262144→524288 entries,
+new GP ring addresses and SYSTEM USERD handles/slots. Registration is not GPU
+execution; cursor continuity/backing retirement remain unmeasured. Evidence:
+gravity-vulkan/vfio-ring-p0. DirectGP parser guards now fullGPU-free kf-abi/
+kf-chan green; VM runtime unchanged. Linux hardware remains exact70aa9+10/30.
+Owner permits necessary Windows-specific mapping exception, keeps Linux host
+mapping prohibition; sysmem USERD alone is not an admission discriminator.
+After Gravity fix: finish full Windows app matrix, then compatibility driver
+sweep and derivation checks. Vast checked through API01:12UTC: no instances.
+Trusted GPUidle/noQEMU/lockfree/DMA-FQ/stopabsent,123491311616bytesfree;
+personal Windows chain preserved. Next native cursor sampling; no app fix yet.
 
 ## Hardware is idle; preserve the personal image
 

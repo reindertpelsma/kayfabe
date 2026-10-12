@@ -1,5 +1,24 @@
 # Handoff for a different agent (Codex or any fresh agent), 2026-10-11
 
+## UPDATE 2026-10-12 01:15UTC — native allocation reference PASS; Windows scope clarified
+
+Last confirmed pushf3a670f20 (this evidence checkpoint may be newer). Native
+reference source5a407dcd8/retry harnessf15da21bc Gravity Vulkan PASS183s, image
+and timings, zero guest153/4101/WER/reboot and bounded hostXid0. Strict passive
+export validates18923 records, all65 observedC56F alloc params complete. Four
+successful FIFO registrations request32768→65536→131072→262144→524288 entries,
+new GP ring addresses and SYSTEM USERD handles/slots. Registration is not GPU
+execution; cursor continuity/backing retirement remain unmeasured. Evidence:
+gravity-vulkan/vfio-ring-p0. DirectGP parser guards now fullGPU-free kf-abi/
+kf-chan green; VM runtime unchanged. Linux hardware remains exact70aa9+10/30.
+Owner permits necessary Windows-specific mapping exception, keeps Linux host
+mapping prohibition; sysmem USERD alone is not an admission discriminator.
+After Gravity fix: finish full Windows app matrix, then compatibility driver
+sweep and derivation checks. Vast checked through API01:12UTC: no instances.
+Trusted GPUidle/noQEMU/lockfree/DMA-FQ/stopabsent,123491311616bytesfree;
+personal Windows chain preserved. Next native cursor sampling; no app fix yet.
+
+
 ## UPDATE 2026-10-12 00:48UTC — native USERD reference passes; stream model
 
 Last confirmed push9b65e3c9e. Native immediate/held WFI+SET_REFERENCE cases on

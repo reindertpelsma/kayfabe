@@ -1,0 +1,463 @@
+{
+  "schema": "kayfabe-native-ring-allocation-audit/1",
+  "complete": false,
+  "layout_source": "NVIDIA/open-gpu-kernel-modules tag 580.65.06",
+  "records": 18923,
+  "export": {
+    "selection": "all",
+    "omitted_records": 0,
+    "source_bytes": 30537280,
+    "source_sha256": "4af887e820ed08edc61df5e9c1195b7dedc3a6f3ebcf1c6381ca5e7e5e378615",
+    "source_hash_verifiable_from_export": true,
+    "note": "In a selected export, sequence gaps can include intentionally omitted records; full-source hash is provenance only."
+  },
+  "capture_stats": {
+    "triggers": 237125,
+    "bootstrap_attempts": 2,
+    "attached_tables": 2,
+    "invalid_bootstrap": 0,
+    "uninitialized_headers": 1,
+    "invalid_headers": 0,
+    "read_failures": 0,
+    "unstable_snapshots": 142,
+    "mapping_changed": 0,
+    "recorded": 18923,
+    "dropped": 0,
+    "sequence_gaps": 0,
+    "invalid_elements": 6818590,
+    "limited": true,
+    "buffered_bytes": 0
+  },
+  "channel_request_coverage": [
+    {
+      "complete": true,
+      "bytes": 368,
+      "count": 65
+    }
+  ],
+  "fifo_registrations": [
+    {
+      "index": 14261,
+      "generation": 2,
+      "client": "0xc1d0007a",
+      "object": "0xff1fe010",
+      "api_handle": "0x4000002b",
+      "update": {
+        "hClient": "0xc1d0007a",
+        "hChannel": "0xff040026",
+        "hUserdMemory": "0xff00a00b",
+        "gpFifoEntries": "0x10000",
+        "gpFifoOffset": "0xa1c2c0000",
+        "userdOffset": "0x600"
+      },
+      "deferred_object_candidate": {
+        "index": 11134,
+        "allocation": {
+          "client": "0xc1d0007a",
+          "parent": "0xff040026",
+          "object": "0xff1fe010",
+          "class_id": "0x5080",
+          "status": "0x0",
+          "flags": "0x0",
+          "params_bytes_declared": 0,
+          "params_bytes_observed": 0,
+          "params_complete": true,
+          "rpc_checksum_covers_params": true,
+          "params_hex": ""
+        }
+      },
+      "channel_birth_candidate": {
+        "index": 11132,
+        "allocation": {
+          "client": "0xc1d0007a",
+          "parent": "0xff0e0000",
+          "object": "0xff040026",
+          "class_id": "0xc56f",
+          "status": "0x0",
+          "flags": "0x0",
+          "params_bytes_declared": 368,
+          "params_bytes_observed": 368,
+          "params_complete": true,
+          "rpc_checksum_covers_params": false,
+          "params_hex": "00000000000000000000b20600000000008000002050208000020eff0000000004a000ff00000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000a096ea02000000001000000000000002000000010000000058be3d020000000002000000000000010000000100000000a096ea02000000000200000000000002000000010000000000773902000000005000000000000001000000000000000000000016000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000e81300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+          "tail_provenance": "stable committed transport elements; export hash; outside RPC checksum"
+        }
+      },
+      "birth": {
+        "gpFifoOffset": "0x6b20000",
+        "gpFifoEntries": "0x8000",
+        "flags": "0x80205020",
+        "hContextShare": "0xff0e0200",
+        "hVASpace": "0x0",
+        "hUserdMemory": "0xff00a004",
+        "userdOffset": "0x800",
+        "engineType": "0x1",
+        "internalFlags": "0x16",
+        "ProcessID": "0x13e8",
+        "SubProcessID": "0x0"
+      },
+      "userd_memory_candidate": {
+        "index": 14260,
+        "memory_list": {
+          "client": "0xc1d0007a",
+          "object": "0xff00a00b",
+          "class_id": "0x81",
+          "aperture": "SYSTEM",
+          "length": "0x1000",
+          "page_count": 1,
+          "pte_adjust": 0
+        }
+      },
+      "replies": [
+        {
+          "index": 14263,
+          "status": "0x0",
+          "rpc_status": "0x0"
+        }
+      ],
+      "target_matches_parent": true,
+      "comparison_to_birth": {
+        "hUserdMemory": {
+          "old": "0xff00a004",
+          "requested": "0xff00a00b",
+          "changed": true
+        },
+        "gpFifoEntries": {
+          "old": "0x8000",
+          "requested": "0x10000",
+          "changed": true
+        },
+        "gpFifoOffset": {
+          "old": "0x6b20000",
+          "requested": "0xa1c2c0000",
+          "changed": true
+        },
+        "userdOffset": {
+          "old": "0x800",
+          "requested": "0x600",
+          "changed": true
+        }
+      },
+      "execution": "UNMEASURED: registration is not an executed GPU method"
+    },
+    {
+      "index": 14311,
+      "generation": 2,
+      "client": "0xc1d0007a",
+      "object": "0xff1fe010",
+      "api_handle": "0x4000002c",
+      "update": {
+        "hClient": "0xc1d0007a",
+        "hChannel": "0xff040026",
+        "hUserdMemory": "0xff00a00c",
+        "gpFifoEntries": "0x20000",
+        "gpFifoOffset": "0x2dfe90000",
+        "userdOffset": "0x800"
+      },
+      "deferred_object_candidate": {
+        "index": 11134,
+        "allocation": {
+          "client": "0xc1d0007a",
+          "parent": "0xff040026",
+          "object": "0xff1fe010",
+          "class_id": "0x5080",
+          "status": "0x0",
+          "flags": "0x0",
+          "params_bytes_declared": 0,
+          "params_bytes_observed": 0,
+          "params_complete": true,
+          "rpc_checksum_covers_params": true,
+          "params_hex": ""
+        }
+      },
+      "channel_birth_candidate": {
+        "index": 11132,
+        "allocation": {
+          "client": "0xc1d0007a",
+          "parent": "0xff0e0000",
+          "object": "0xff040026",
+          "class_id": "0xc56f",
+          "status": "0x0",
+          "flags": "0x0",
+          "params_bytes_declared": 368,
+          "params_bytes_observed": 368,
+          "params_complete": true,
+          "rpc_checksum_covers_params": false,
+          "params_hex": "00000000000000000000b20600000000008000002050208000020eff0000000004a000ff00000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000a096ea02000000001000000000000002000000010000000058be3d020000000002000000000000010000000100000000a096ea02000000000200000000000002000000010000000000773902000000005000000000000001000000000000000000000016000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000e81300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+          "tail_provenance": "stable committed transport elements; export hash; outside RPC checksum"
+        }
+      },
+      "birth": {
+        "gpFifoOffset": "0x6b20000",
+        "gpFifoEntries": "0x8000",
+        "flags": "0x80205020",
+        "hContextShare": "0xff0e0200",
+        "hVASpace": "0x0",
+        "hUserdMemory": "0xff00a004",
+        "userdOffset": "0x800",
+        "engineType": "0x1",
+        "internalFlags": "0x16",
+        "ProcessID": "0x13e8",
+        "SubProcessID": "0x0"
+      },
+      "userd_memory_candidate": {
+        "index": 14310,
+        "memory_list": {
+          "client": "0xc1d0007a",
+          "object": "0xff00a00c",
+          "class_id": "0x81",
+          "aperture": "SYSTEM",
+          "length": "0x1000",
+          "page_count": 1,
+          "pte_adjust": 0
+        }
+      },
+      "replies": [
+        {
+          "index": 14313,
+          "status": "0x0",
+          "rpc_status": "0x0"
+        }
+      ],
+      "target_matches_parent": true,
+      "comparison_to_birth": {
+        "hUserdMemory": {
+          "old": "0xff00a004",
+          "requested": "0xff00a00c",
+          "changed": true
+        },
+        "gpFifoEntries": {
+          "old": "0x8000",
+          "requested": "0x20000",
+          "changed": true
+        },
+        "gpFifoOffset": {
+          "old": "0x6b20000",
+          "requested": "0x2dfe90000",
+          "changed": true
+        },
+        "userdOffset": {
+          "old": "0x800",
+          "requested": "0x800",
+          "changed": false
+        }
+      },
+      "execution": "UNMEASURED: registration is not an executed GPU method"
+    },
+    {
+      "index": 14853,
+      "generation": 2,
+      "client": "0xc1d0007a",
+      "object": "0xff1fe010",
+      "api_handle": "0x4000002d",
+      "update": {
+        "hClient": "0xc1d0007a",
+        "hChannel": "0xff040026",
+        "hUserdMemory": "0xff00a00b",
+        "gpFifoEntries": "0x40000",
+        "gpFifoOffset": "0x1fe00000",
+        "userdOffset": "0x600"
+      },
+      "deferred_object_candidate": {
+        "index": 11134,
+        "allocation": {
+          "client": "0xc1d0007a",
+          "parent": "0xff040026",
+          "object": "0xff1fe010",
+          "class_id": "0x5080",
+          "status": "0x0",
+          "flags": "0x0",
+          "params_bytes_declared": 0,
+          "params_bytes_observed": 0,
+          "params_complete": true,
+          "rpc_checksum_covers_params": true,
+          "params_hex": ""
+        }
+      },
+      "channel_birth_candidate": {
+        "index": 11132,
+        "allocation": {
+          "client": "0xc1d0007a",
+          "parent": "0xff0e0000",
+          "object": "0xff040026",
+          "class_id": "0xc56f",
+          "status": "0x0",
+          "flags": "0x0",
+          "params_bytes_declared": 368,
+          "params_bytes_observed": 368,
+          "params_complete": true,
+          "rpc_checksum_covers_params": false,
+          "params_hex": "00000000000000000000b20600000000008000002050208000020eff0000000004a000ff00000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000a096ea02000000001000000000000002000000010000000058be3d020000000002000000000000010000000100000000a096ea02000000000200000000000002000000010000000000773902000000005000000000000001000000000000000000000016000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000e81300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+          "tail_provenance": "stable committed transport elements; export hash; outside RPC checksum"
+        }
+      },
+      "birth": {
+        "gpFifoOffset": "0x6b20000",
+        "gpFifoEntries": "0x8000",
+        "flags": "0x80205020",
+        "hContextShare": "0xff0e0200",
+        "hVASpace": "0x0",
+        "hUserdMemory": "0xff00a004",
+        "userdOffset": "0x800",
+        "engineType": "0x1",
+        "internalFlags": "0x16",
+        "ProcessID": "0x13e8",
+        "SubProcessID": "0x0"
+      },
+      "userd_memory_candidate": {
+        "index": 14852,
+        "memory_list": {
+          "client": "0xc1d0007a",
+          "object": "0xff00a00b",
+          "class_id": "0x81",
+          "aperture": "SYSTEM",
+          "length": "0x1000",
+          "page_count": 1,
+          "pte_adjust": 0
+        }
+      },
+      "replies": [
+        {
+          "index": 14855,
+          "status": "0x0",
+          "rpc_status": "0x0"
+        }
+      ],
+      "target_matches_parent": true,
+      "comparison_to_birth": {
+        "hUserdMemory": {
+          "old": "0xff00a004",
+          "requested": "0xff00a00b",
+          "changed": true
+        },
+        "gpFifoEntries": {
+          "old": "0x8000",
+          "requested": "0x40000",
+          "changed": true
+        },
+        "gpFifoOffset": {
+          "old": "0x6b20000",
+          "requested": "0x1fe00000",
+          "changed": true
+        },
+        "userdOffset": {
+          "old": "0x800",
+          "requested": "0x600",
+          "changed": true
+        }
+      },
+      "execution": "UNMEASURED: registration is not an executed GPU method"
+    },
+    {
+      "index": 15031,
+      "generation": 2,
+      "client": "0xc1d0007a",
+      "object": "0xff1fe010",
+      "api_handle": "0x4000002e",
+      "update": {
+        "hClient": "0xc1d0007a",
+        "hChannel": "0xff040026",
+        "hUserdMemory": "0xff00a00c",
+        "gpFifoEntries": "0x80000",
+        "gpFifoOffset": "0x2ffaa0000",
+        "userdOffset": "0x800"
+      },
+      "deferred_object_candidate": {
+        "index": 11134,
+        "allocation": {
+          "client": "0xc1d0007a",
+          "parent": "0xff040026",
+          "object": "0xff1fe010",
+          "class_id": "0x5080",
+          "status": "0x0",
+          "flags": "0x0",
+          "params_bytes_declared": 0,
+          "params_bytes_observed": 0,
+          "params_complete": true,
+          "rpc_checksum_covers_params": true,
+          "params_hex": ""
+        }
+      },
+      "channel_birth_candidate": {
+        "index": 11132,
+        "allocation": {
+          "client": "0xc1d0007a",
+          "parent": "0xff0e0000",
+          "object": "0xff040026",
+          "class_id": "0xc56f",
+          "status": "0x0",
+          "flags": "0x0",
+          "params_bytes_declared": 368,
+          "params_bytes_observed": 368,
+          "params_complete": true,
+          "rpc_checksum_covers_params": false,
+          "params_hex": "00000000000000000000b20600000000008000002050208000020eff0000000004a000ff00000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000a096ea02000000001000000000000002000000010000000058be3d020000000002000000000000010000000100000000a096ea02000000000200000000000002000000010000000000773902000000005000000000000001000000000000000000000016000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000e81300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+          "tail_provenance": "stable committed transport elements; export hash; outside RPC checksum"
+        }
+      },
+      "birth": {
+        "gpFifoOffset": "0x6b20000",
+        "gpFifoEntries": "0x8000",
+        "flags": "0x80205020",
+        "hContextShare": "0xff0e0200",
+        "hVASpace": "0x0",
+        "hUserdMemory": "0xff00a004",
+        "userdOffset": "0x800",
+        "engineType": "0x1",
+        "internalFlags": "0x16",
+        "ProcessID": "0x13e8",
+        "SubProcessID": "0x0"
+      },
+      "userd_memory_candidate": {
+        "index": 15030,
+        "memory_list": {
+          "client": "0xc1d0007a",
+          "object": "0xff00a00c",
+          "class_id": "0x81",
+          "aperture": "SYSTEM",
+          "length": "0x1000",
+          "page_count": 1,
+          "pte_adjust": 0
+        }
+      },
+      "replies": [
+        {
+          "index": 15033,
+          "status": "0x0",
+          "rpc_status": "0x0"
+        }
+      ],
+      "target_matches_parent": true,
+      "comparison_to_birth": {
+        "hUserdMemory": {
+          "old": "0xff00a004",
+          "requested": "0xff00a00c",
+          "changed": true
+        },
+        "gpFifoEntries": {
+          "old": "0x8000",
+          "requested": "0x80000",
+          "changed": true
+        },
+        "gpFifoOffset": {
+          "old": "0x6b20000",
+          "requested": "0x2ffaa0000",
+          "changed": true
+        },
+        "userdOffset": {
+          "old": "0x800",
+          "requested": "0x800",
+          "changed": false
+        }
+      },
+      "execution": "UNMEASURED: registration is not an executed GPU method"
+    }
+  ],
+  "limitations": [
+    "Passive sampled capture, limited=true: absence is not nonexecution.",
+    "Allocation tails have stable transport/export-hash provenance, outside RPC checksum.",
+    "Candidates use observed request order and free barriers, not authoritative ownership/lifetime pins.",
+    "No old/new USERD cursor samples, native execution or retirement semantics are captured.",
+    "Each comparison is against birth; a preceding registration is not assumed executed."
+  ]
+}

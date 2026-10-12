@@ -256,3 +256,14 @@ from allocations alone. Use a fresh disposable baseline child, not personal1380.
 The exact original600s workload/oracle, driver580.88 and RTX4070 remain pinned;
 only observation/launch tooling changes. No privileged driver probe or private
 analysis is involved. Native cursor/backing generations remain next measurements.
+
+## Native allocation result, 2026-10-12 01:15UTC
+
+Same reference workload PASS183s/zero guest recovery and boundedhostXid0.
+All65 observedC56F allocs complete; four successful registrations change both
+ring address/count and SYSTEM USERD memory handle/slot. Strict raw export and
+reproducible candidate audit: gravity-vulkan/vfio-ring-p0. Falsifier not observed.
+No actual GPU trigger/cursor/old backing retirement is supplied by registration
+or allocation order. Next: bounded native USERD cursor samples from guest RAM,
+with public memory-list page encoding, allocation/free generations and sampling
+limits recorded. No closed-driver analysis or privileged inner control probe.
