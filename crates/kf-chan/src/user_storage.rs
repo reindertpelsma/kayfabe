@@ -680,12 +680,22 @@ mod tests {
     }
 
     #[test]
+    fn source_sync_level_nop_is_kept_without_fabricating_credit() {
+        let s = anonymous_live_storage();
+        let entry = 0x8000_0200_0000_0000;
+        s.write_user_gp(0, entry).unwrap();
+        assert_eq!(s.cpu().unwrap().load_u64(HostOffset::new(GP_OFFSET)).unwrap(), entry);
+        assert_eq!(s.gpu_get().unwrap(), 0);
+        assert_eq!(s.gpu_reference().unwrap(), 0);
+    }
+
+    #[test]
     fn bad_user_descriptor_cannot_modify_private_ring_or_userd() {
         let s = anonymous_live_storage();
         let good = kf_abi::submit::gp_entry(0x420000, 4).unwrap();
         s.write_user_gp(0, good).unwrap();
         for bad in [
-            1,
+            1 << 32, // CONTROL/ILLEGAL, not an unused NOP operand.
             good | 1,
             good | (1 << 40),
             kf_abi::submit::gp_entry(0x420000, 65540).unwrap(),

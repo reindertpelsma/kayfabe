@@ -200,6 +200,7 @@ fn run_storage(
     control_barrier: bool,
     phased: bool,
     assembled: bool,
+    barrier_level: bool,
 ) -> Result<(), String> {
     use kf_abi::submit::ENGINE_TYPE_COPY0;
     use kf_chan::user_storage::Storage;
@@ -316,7 +317,12 @@ fn run_storage(
             storage.write_authored(0x1000, &witness)?;
             storage.write_gp(0, 0, 4 * preceding.len() as u64, false)?;
             if control_barrier {
-                storage.write_host_barrier(1)?;
+                if barrier_level {
+                    // Same public LENGTH0/SYNC_WAIT/NOP, only LEVEL differs.
+                    storage.write_user_gp(1, (1 << 63) | (1 << 41))?;
+                } else {
+                    storage.write_host_barrier(1)?;
+                }
                 storage.write_host_witness(2)?;
                 // Final single-engine bench observation; not a runtime receipt.
                 storage.write_gp(3, 0x1004, 8, false)?;
@@ -327,7 +333,7 @@ fn run_storage(
             }
         };
         println!(
-            "USER_STORAGE_SETUP sync_wait={sync_wait} control_barrier={control_barrier} class={class:#x} driver={} entries={} ring_gpu_read_only=true page_size=4096 userd_gpu_mapped=false",
+            "USER_STORAGE_SETUP barrier_level={barrier_level} sync_wait={sync_wait} control_barrier={control_barrier} class={class:#x} driver={} entries={} ring_gpu_read_only=true page_size=4096 userd_gpu_mapped=false",
             rm.driver_version(),
             kf_chan::user_storage::ENTRIES
         );
@@ -815,11 +821,12 @@ fn main() {
         match args[0].as_str() {
             "engine-witness-control" => run_engine_witness(false),
             "engine-witness-sync" => run_engine_witness(true),
-            "storage-assembled-phased" => run_storage(true, true, true, true),
-            "storage-control-barrier-phased" => run_storage(true, true, true, false),
-            "storage-control-barrier" => run_storage(true, true, false, false),
-            "storage-control" => run_storage(false, false, false, false),
-            "storage-sync-witness" => run_storage(true, false, false, false),
+            "storage-assembled-phased" => run_storage(true, true, true, true, false),
+            "storage-control-barrier-phased" => run_storage(true, true, true, false, false),
+            "storage-control-barrier-level-phased" => run_storage(true, true, true, false, true),
+            "storage-control-barrier" => run_storage(true, true, false, false, false),
+            "storage-control" => run_storage(false, false, false, false, false),
+            "storage-sync-witness" => run_storage(true, false, false, false, false),
             "reference" => run_reference(false, false, false),
             "reference-subroutine" => run_reference(false, false, true),
             "reference-held" => run_reference(true, false, false),

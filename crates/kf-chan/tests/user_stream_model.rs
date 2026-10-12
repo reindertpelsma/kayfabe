@@ -141,6 +141,14 @@ fn gp_entry_flags_cannot_escape_copying_or_discard_wait_ordering() {
         assert_eq!(inspect_entry(raw | flag, 64), Err(Refusal::Entry));
     }
     assert_eq!(inspect_entry(0, 0), Ok(Source::Nop));
+    for sync in [0, 1 << 63] {
+        for level in [0, 1 << 41] {
+            for operand in [0, 1, u32::MAX as u64] {
+                assert_eq!(inspect_entry(sync | level | operand, 0), Ok(Source::Nop));
+            }
+        }
+    }
+    assert_eq!(inspect_entry(1 << 40, 0), Err(Refusal::Entry));
     // CRC/extended-base/unknown controls do not become empty segment successes.
     for opcode in 1..=255u64 {
         assert_eq!(inspect_entry(opcode << 32, 4096), Err(Refusal::Entry));

@@ -136,3 +136,19 @@ a38602015 nativewitness2/2PASS/noXid; Linux9+10/fast30PASS, desktop/gears59–60
 with startupwarnings/no hostXid. Evidence level-linux. Windows1570 launched on
 that exact source, verdict pending. Personal images preserved. Full app matrix
 and compatibility sweep remain open after the required Windows Vulkan PASS.
+
+## Synchronized source NOP correction, 2026-10-12
+
+Windows1570 exacta38602015 ABORTED_STARTUP on measured0x8000020000000000;
+no app verdict. UNCLEAN controller stop/noQEMU/DMA-FQ/nohostXid; see windows-1570.
+Public CONTROL NOP permits SYNC/LEVEL and unused OPERAND; preserve raw descriptor
+on native hardware. Failing-first CPU storage test red, then six-crate1922PASS
+and probe5PASS, independent source review no blocker. Native matched LEVEL barrier
+probe and exact Linux/Windows tests pending; no compatibility claim.
+
+Current diagnostic scans on worker even when Software=None. This is not yet the
+requested no-API fast path. First5080 admission versus firstPUT is serialized
+under Pt; late object allocation refuses. Registration alone does not recover
+prior hardware packet/binding state, and last unregister alone does not retire
+queued triggers or establish a reversible parser boundary. Source USERD is
+Sysmem-only; vidmem access must be explicit, bounded and lifetime checked.

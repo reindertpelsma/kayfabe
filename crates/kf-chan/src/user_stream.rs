@@ -14,7 +14,7 @@
 //! metadata; registration reply timing is irrelevant to the parsing mode.
 //! Unsupported packet forms are refused, not silently copied. The model
 //! carries bounded packet metadata across GP entries. Control entries other
-//! than the canonical zero GPFIFO NOP remain refused. LEVEL1 suppresses top-level
+//! than public GPFIFO NOP remain refused. LEVEL1 suppresses top-level
 //! progress reporting; it is not nested execution.
 
 use crate::tmode::SwCall;
@@ -27,7 +27,8 @@ use kf_abi::submit::{
 /// A validated direct source descriptor, still requiring full pinned resolution.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Source {
-    /// The canonical zero GPFIFO NOP; no work/completion is claimed here.
+    /// Public CONTROL/NOP, including SYNC_WAIT/LEVEL; no PB data is fetched.
+    /// Original descriptor must reach native hardware; no CPU credit is granted.
     Nop,
     /// Source span and explicit SYNC_WAIT bit. Never a host GP entry to copy raw.
     Segment(GpfifoEntry),
@@ -40,7 +41,11 @@ pub enum Source {
 /// # Errors
 /// Unsupported entry, over-budget or out-of-format span. No mapping is resolved.
 pub fn inspect_entry(entry: u64, maximum_bytes: u64) -> Result<Source, Refusal> {
-    if entry == 0 {
+    // Public clc56f.h: LENGTH0/OPCODE_NOP; dev_pbdma.ref.txt:107-115:
+    // no operation or PB fetch, but SYNC is respected. OPERAND is unused.
+    // Reject all other upper bits (including reserved bit8); preserve the raw
+    // descriptor in the caller so SYNC_WAIT is never converted to a CPU noop.
+    if (entry >> 32) & !((1_u64 << 31) | (1_u64 << 9)) == 0 {
         return Ok(Source::Nop);
     }
     let segment = gp_entry_decode_direct_c56f(entry).ok_or(Refusal::Entry)?;

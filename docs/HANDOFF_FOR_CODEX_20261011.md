@@ -1,5 +1,32 @@
 # Handoff for a different agent (Codex or any fresh agent), 2026-10-11
 
+## UPDATE 2026-10-12 18:44UTC — Windows1570 identifies synchronized NOP; correction locally green
+
+Last confirmed push43780e21e. Exact a38602015 Windows1570 admits USER workers
+but refuses measured entry0x8000020000000000 (LENGTH0/NOP/SYNC_WAIT/LEVEL1)
+on several desktop channels. ABORTED_STARTUP; no GravityMark/migration verdict.
+Intentional harness143; ACPI/QGA failed and QEMU stopped UNCLEAN18:42:27UTC,
+gone18:42:31UTC/DMA-FQ/no bounded hostXid/count59 unchanged. Personal retained.
+Full evidence user-worker/windows-1570 supersedes the pending1570 entry below.
+
+This checkpoint accepts only public CONTROL NOP with optional SYNC/LEVEL and
+unused operand, preserving raw descriptor through native hardware. Other controls/
+reserved forms still refuse. Actual storage regression failed first; six-crate
+1922PASS/0fail plus probe5PASS; independent review no blocker. Native matched
+barrier LEVEL probe hypothesis/falsifier recorded before run in1570 README.
+Next exact native probe + Linux9+10/fast30/desktop, then Windows1580. No new appPASS.
+
+Owner requests no PB inspection while deferred API is absent, reverse fast-path
+switch when none can execute, and source USERD access for sysmem and vidmem.
+Current diagnostic still scans on workers from birth and admits Sysmem only.
+CPU exclusion is separate from retained GPU packet/binding state: try-lock alone
+cannot reconstruct an opaque prefix. Existing user_scan tests cover hardware
+packet continuation/binding; object allocation before firstPUT remains admission
+point. Optimize later without folding it into this single NOP acceptance retry.
+Migration cursor-zero, old-source PUT continuity, guest GET/TOP_LEVEL_GET,
+forced Linux relay diagnostic and full matrix/compatibility axis remain open.
+
+
 ## UPDATE 2026-10-12 18:34UTC — exact LEVEL correction green on Linux; Windows1570 launched
 
 Last confirmed pusha38602015. Exacta38602015d0c295fdbb9a03e2e28fbabf78174ae:
