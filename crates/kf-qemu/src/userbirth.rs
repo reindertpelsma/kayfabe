@@ -51,6 +51,11 @@ pub(crate) struct Birth<V = CpuView> {
     handed_out: std::sync::atomic::AtomicBool,
     wake: Option<Wake>,
 }
+impl<V> Birth<V> {
+    /// Exact identity for metadata prepared before commit/token publication.
+    pub(crate) fn allocation(&self) -> Arc<()> { self.allocation.clone() }
+}
+
 impl<V> Drop for Birth<V> {
     fn drop(&mut self) {
         // Metadata only. Taken refuses cancellation and remains caller-owned.

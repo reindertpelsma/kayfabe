@@ -4,7 +4,7 @@
 
 use kf_core::{Twin, VmCaps};
 
-/// Host channels are minted only by the guest-driven act path (`chan.rs`): no other `kf-qemu` source — realize,
+/// Host channels are minted only by the guest-driven act path (`chan.rs` and its guest-birth child `userrelay.rs`): no other `kf-qemu` source — realize,
 /// prewarm, the T-space, the VA manager, display — calls a host channel birth.
 #[test]
 fn no_realize_or_prewarm_path_births_a_host_channel() {
@@ -12,7 +12,7 @@ fn no_realize_or_prewarm_path_births_a_host_channel() {
     let needles = ["birth_twin", "birth_channel", "birth_group", "birth_member", "passthrough::birth", "host::birth"];
     for entry in std::fs::read_dir(src).unwrap() {
         let p = entry.unwrap().path();
-        if p.extension().is_none_or(|e| e != "rs") || p.file_name().unwrap() == "chan.rs" {
+        if p.extension().is_none_or(|e| e != "rs") || matches!(p.file_name().unwrap().to_str(), Some("chan.rs" | "userrelay.rs")) {
             continue;
         }
         let text = std::fs::read_to_string(&p).unwrap();

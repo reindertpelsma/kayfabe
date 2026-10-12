@@ -1,5 +1,30 @@
 # Resume Windows apps and GravityMark Vulkan
 
+## UPDATE 2026-10-12 11:50UTC — disabled runtime birth checkpoint; bounded doorbell steering
+
+Last confirmed push: 99dec1260. New Windows USER birth adapter is a draft and
+`userrelay::enabled()` is unconditionally false: no environment variable can
+activate it. Exact pending birth and native cleanup ownership are integrated,
+but per-runlist quota must be reserved BEFORE native allocation and retained
+through uncertain cleanup. USERD initialization, notifier, submission and migration
+are still open. Review found a stale USERD initialization write (removed) and
+rewind lookup race (resolution now uses one locked snapshot). Guest-driven birth
+structural test now includes chan.rs's private userrelay child. GPU-free suite is
+being rerun after those fixes; earlier full run caught that structural allowlist.
+
+Owner steering: no pushbuffer inspection on a vCPU; at most a few bounded ring
+reads/writes. Reassess pointer-only forwarding with a separate proven migration
+mechanism. Public deferred completion notifications are being checked; no exact
+cursor/notification proof yet, and no claim that A-lite works. Worker-prepared
+publication remains a candidate. Existing §AI worker-only runtime remains in
+force while this is investigated; no new inline path implemented.
+
+No new GPU job or Windows result. Gravity Kayfabe FAIL/TIMEOUT; same-GPU VFIO
+PASS179/183s. Latest exact Linux hardware7f3f9fe16 gates9+10/fast30 PASS, no hardware
+claim for this draft. Personal Windows image retained. Matrix/driver sweep open;
+master untouched. Branch codex/windows-matrix-20261011, /data/kf-inval-absent.
+
+
 ## UPDATE 2026-10-12 11:21UTC — exact deferred registration cleanup
 
 Last confirmed push ab61d724a. Both production deferred completion/refusal sites

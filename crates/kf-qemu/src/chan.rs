@@ -67,6 +67,9 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 
+#[path = "userrelay.rs"]
+mod userrelay;
+
 /// `NV_ERR_INVALID_STATE`.
 const NV_ERR_INVALID_STATE: u32 = 0x40;
 /// `NV_ERR_INVALID_ARGUMENT`.
@@ -464,6 +467,7 @@ struct PtChan {
     /// ★ 2026-10-08: a Windows guest-kernel channel classified per-process USER work at its alloc
     /// (`KF3_WIN_USER_CHANNELS_PASSTHROUGH`); fixed for the twin's life.
     user_work: bool,
+    user_ring: bool,
     /// ★ P5c: the mirror's live-channel count (released at free).
     live: Arc<AtomicU64>,
     /// ★ P1+P2 inc D: the twin's state word, when this channel was counted as a user of it
@@ -2260,6 +2264,10 @@ pub struct ChanPlane {
     pt: Mutex<HashMap<(u32, u32), PtChan>>,
     /// Exact pending Windows USER births, canceled before live subtree removal.
     user_births: crate::userbirth::Book,
+    user_rings: Mutex<HashMap<u32, Arc<Mutex<userrelay::Record>>>>,
+    // Bounded ownership for every native attempt, including errors whose legacy
+    // unwind result is unavailable. These rows never retire on a plain Err.
+    user_birth_holds: Mutex<Vec<(Arc<()>, Arc<Mutex<userrelay::Record>>)>>,
     /// Current live object graph for bounded, exact-lifetime USERD access.
     pub memory_access: Arc<kf_rm::memory_access::Access>,
     /// ★ 2026-10-08 (`V3_USERD_RELAY.md`): relayed-USERD twins, by host token.
@@ -2907,6 +2915,8 @@ impl ChanPlane {
             family,
             pt: Mutex::new(HashMap::new()),
             user_births,
+            user_rings: Mutex::new(HashMap::new()),
+            user_birth_holds: Mutex::new(Vec::new()),
             memory_access: Arc::default(),
             relays: Mutex::new(HashMap::new()),
             pt_objs: Mutex::new(HashMap::new()),
@@ -4081,14 +4091,14 @@ impl ChanPlane {
             // Vacuously true: RM disables nothing (the only in-tree caller never sends it).
             return ChanAnswer::Done;
         }
-        let DisableList { pt, tr, unknown } = {
+        let (DisableList { pt, tr, unknown }, private_ring) = {
             let Ok(m) = self.pt.lock() else {
                 return ChanAnswer::Refused {
                     status: NV_ERR_INVALID_STATE,
                     why: "twins poisoned".into(),
                 };
             };
-            resolve_disable_list(
+            let resolved = resolve_disable_list(
                 list,
                 |c, h| m.get(&(c, h)).map(|v| v.chan),
                 |c, h| {
@@ -4098,7 +4108,12 @@ impl ChanPlane {
                         .collect()
                 },
                 |c, h| self.translated_of(c, h),
-            )
+            );
+            // Same locked allocation snapshot as native channel resolution.
+            // A second lookup by numeric handle could see a replacement.
+            let private_ring = resolved.pt.iter().any(|(key, _)|
+                m.get(key).is_some_and(|t| t.user_ring));
+            (resolved, private_ring)
         };
         if pt.is_empty() && tr.is_empty() {
             return ChanAnswer::NotOurs;
@@ -4112,11 +4127,11 @@ impl ChanPlane {
                 ),
             };
         }
-        if rewind && !tr.is_empty() {
+        if rewind && (!tr.is_empty() || private_ring) {
             return ChanAnswer::Refused {
                 status: NV_ERR_INVALID_ARGUMENT,
                 why: format!(
-                    "DISABLE_CHANNELS bRewindGpPut on Translated channel(s) {tr:x?}: our host ring's GP_PUT is not the guest's"
+                    "DISABLE_CHANNELS bRewindGpPut on private host ring(s) {tr:x?}: our host ring's GP_PUT is not the guest's"
                 ),
             };
         }
@@ -5433,7 +5448,9 @@ impl ChanPlane {
                     }
                     let fast = me.dbfast.deregister(t.idx);
                     let r = me.release_twin(c, t.tsg, t.ctx_share, t.chan);
-                    t.live.fetch_sub(1, Ordering::AcqRel);
+                    if !t.user_ring || r.is_ok() {
+                        t.live.fetch_sub(1, Ordering::AcqRel);
+                    }
                     // ★ P1+P2 inc D, review fix 2026-10-04 (§4.2): the twin's user ends only if
                     // host RM really freed the channel. A refused free leaves it counted — the
                     // space can then never become a guest-KERNEL space, where privileged leaves
@@ -5576,17 +5593,29 @@ impl ChanPlane {
         ctx_share: u32,
         chan: kf_host::Channel,
     ) -> Result<(), kf_host::RmError> {
+        let user_record = self.user_ring_record(chan.token);
+        if let Some(record) = &user_record {
+            let mut record = record.lock().map_err(|_| kf_host::RmError::Other(NV_ERR_INVALID_STATE))?;
+            // Quiesce CPU publication first; native free is OUTSIDE this guard.
+            // An uncertain native cleanup is quarantined until session teardown,
+            // with no second Free decrementing group/count state.
+            if record.free_attempted { return Err(kf_host::RmError::Other(NV_ERR_INVALID_STATE)); }
+            record.free_attempted = true;
+        }
         let Some(k) = guest_tsg.map(|t| (client, t, ctx_share)) else {
             let r = self.rm.free_channel(chan);
             self.drop_relay(chan.token);
+            self.finish_user_ring_free(chan.token, user_record.as_ref(), r.is_ok());
             return r;
         };
         let r = self.rm.free_member(chan);
         self.drop_relay(chan.token);
+        if user_record.is_some() && r.is_err() { return r; }
         let last = self
             .groups
             .lock()
             .map_or(true, |mut m| match m.get_mut(&k) {
+                Some(g) if user_record.is_some() && g.0 != chan.tsg => false,
                 Some(g) if g.1 > 1 => {
                     g.1 = g.1.saturating_sub(1);
                     false
@@ -5596,11 +5625,9 @@ impl ChanPlane {
                     true
                 }
             });
-        if last {
-            r.and(self.rm.free(chan.tsg))
-        } else {
-            r
-        }
+        let outcome = if last { r.and(self.rm.free(chan.tsg)) } else { r };
+        self.finish_user_ring_free(chan.token, user_record.as_ref(), outcome.is_ok());
+        outcome
     }
 
     /// ★ 2026-10-08 (`V3_USERD_RELAY.md` §2): kayfabe's own USERD for a relayed twin — a 4 KiB
@@ -6430,7 +6457,7 @@ impl ChanPlane {
             // the Windows user-work twin ADOPTS the guest's sysmem USERD like any Passthrough twin.
             // Only meaningful with the GPU's IOMMU group in identity mode (host RM refuses a USERD
             // whose DMA address is wider than PTR_HI allows; the birth then fails by name, as run61).
-            let relay_guest = if userd_relay_off() {
+            let relay_guest = if userd_relay_off() || (userrelay::enabled() && a.user_ring_permit.is_some()) {
                 None
             } else if a.user_work && matches!(a.userd, Some(kf_arch::UserdMem::Sysmem { .. })) {
                 match self.userd_view(a.userd) {
@@ -6554,6 +6581,9 @@ impl ChanPlane {
                 Some(mirror.kernel_vas.clone())
             };
             live.fetch_add(1, Ordering::AcqRel);
+            if userrelay::enabled() && a.user_ring_permit.is_some() {
+                return self.birth_user_ring(a, mirror, idx, twin);
+            }
             return self.defer(
                 "birth passthrough",
                 Box::new(move |me: &ChanPlane| {
@@ -6656,6 +6686,7 @@ impl ChanPlane {
                             peek_defapi: None,
                             ctx: CtxBind::default(),
                             user_work: a.user_work,
+                            user_ring: false,
                             live,
                             twin,
                             notifier,
@@ -7867,6 +7898,7 @@ mod dispsw_tests {
             peek_defapi: None,
             ctx: CtxBind::default(),
             user_work: false,
+            user_ring: false,
             live: Arc::new(AtomicU64::new(0)),
             twin: None,
             notifier: None,
