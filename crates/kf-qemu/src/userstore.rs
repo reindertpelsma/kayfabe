@@ -318,7 +318,7 @@ mod tests {
             let rows = PlacedRows::default();
             for offset in (0..bytes + 4096).step_by(4096) {
                 rows.write().unwrap().insert(0x100000 + offset as u64,
-                    (4096, offset as u64 + if in_ram { 0x2000 } else { 0 }, in_ram, kf_host::MapPerm::READ_WRITE));
+                    (4096, offset as u64, in_ram, kf_host::MapPerm::READ_WRITE));
             }
             let mut cache = Cache::create(Fake::default(), bytes as u64 + BYTES).unwrap();
             let log = RowsLog::default();
@@ -333,7 +333,7 @@ mod tests {
             }
             source.admit(|| ()).unwrap();
             rows.write().unwrap().remove(&(0x100000 + bytes as u64));
-            assert_eq!(source.admit(|| ()), Err(Refusal::Changed));
+            assert_eq!(source.admit(|| ()), Err(Refusal::Missing(0x100000 + bytes as u64)));
             cache.release().unwrap();
         }
     }

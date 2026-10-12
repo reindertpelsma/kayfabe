@@ -1,11 +1,24 @@
 # Windows user-ring relay: review against v3
 
-**STATUS: RESEARCH, 2026-10-12.** Three-mode policy approved by the owner;
-atomic dispatch prototype under review, not connected to a VM. This review
-amends the earlier worker-only interpretation in
-[V3_WINDOWS_USER_RING_RELAY.md](V3_WINDOWS_USER_RING_RELAY.md), not its remaining
-native ordering gates. MEASURED below includes public source and recorded traces;
-INFERRED labels design implications. No new hardware result.
+**STATUS: RESEARCH, 2026-10-12.** Default-OFF worker diagnostic is now connected
+and source-reviewed; ordinary Linux Passthrough unchanged. Exact4ec9f9a24 native
+and Linux gates/fast/desktop passed. Windows1580 reached sign-in but refused a
+prototype source-buffer cap before the benchmark. No Windows migration PASS.
+The atomic three-mode dispatch remains a separate unconnected prototype;
+inline CopyRing, no-API fast switching, vidmem source USERD and latency proof
+remain open. The runtime scans on workers from birth, copies only intercepted
+segments, and retains real HOST witness/GPfetch lifetimes. See the latest
+[resume](../RESUME_CODEX_WINDOWS_20261011.md) and user-worker evidence.
+
+Owner proposes initial inspection followed by fast forwarding while no deferred
+API is installed. This is distinct from object allocation: five campaigns show
+3015080 allocations but only3 successful bundle-registration channels. Metadata
+may identify a sole software object without historical SET_OBJECT, so that binding
+is not an absolute late-switch blocker. Opaque later hardware packet continuation
+still needs a justified recovery/admission boundary; CPU exclusion alone does not
+supply it. No measured compliant Windows cutover violation is asserted. A late
+5080 allocation and a later API registration on an existing object are separate
+admission events. Any fast path must account for both before returning success.
 
 ## Architectural judgment
 

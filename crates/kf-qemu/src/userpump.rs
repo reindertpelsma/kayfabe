@@ -558,7 +558,15 @@ impl Pump {
         if self.fetch.available() < credits {
             return Ok((false, false));
         }
-        // Initial staging retains exact source guards. Once staged, the owned
+        // Record excludes native Free, and a previous segment cannot retire
+        // until its real HOST witness has fetched. Populate unsubmitted private
+        // bytes before taking shared source/topology/Pt publication guards.
+        // A retry leaves PUT unchanged; re-staging those bytes is harmless.
+        if !s.staged {
+            let storage = locked(r.lease.storage.try_lock(), "USER_RING_STORAGE_POISONED")?;
+            storage.write_authored(0, &s.patched)?;
+        }
+        // Initial publication retains exact source guards. Once staged, the owned
         // snapshot survives the guest freeing/moving its old ring at migration.
         let gp = (!s.staged).then_some(&s.source);
         let pb = (!s.staged).then_some(&s.pb);
@@ -570,9 +578,6 @@ impl Pump {
             gp,
             pb,
             |pump, storage| {
-                if !s.staged {
-                    storage.write_authored(0, &s.patched)?;
-                }
                 if bytes != 0 {
                     let source = source_receipt(s.staged, true, s.generation, s.guest_get);
                     let (slot, _) = pump.fetch.publish(source).map_err(str::to_owned)?;

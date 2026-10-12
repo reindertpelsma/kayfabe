@@ -1,5 +1,20 @@
 # Resume Windows apps and GravityMark Vulkan
 
+## UPDATE 2026-10-12 19:27UTC — source budget locally green/reviewed; exact hardware next
+
+Last confirmed pushbdfe801e0. Full GPU-free2152PASS/0failed (1875 main six-crate,
+271 kf-mem/trap, probe6); real Cache/RAM fixtures corrected and now pass.
+Independent review no runtime blocker. Private staging is populated before shared
+publication guards; exact source/channel/topology admission still precedes PUT.
+225 pieces and16CPUviews are explicit bounded policies; excess fragmentation
+clean-refuses. Larger snapshot guard latency remains unmeasured.
+Windows1580 full evidence captured in user-worker/windows-1580, ABORTED_PRE_BENCHMARK,
+no app verdict/no boundedhostXid; own disposable removed after all-qcow dependency
+and protected-image audit. Personal retained; noQEMU/DMA-FQ,110.9GBavailable.
+Next exact source native base/100KiB barrier probes, Linux9+10/fast30/desktop,
+then Windows1590 (unused) on unchanged original oracle. No new GravityVkPASS.
+
+
 ## UPDATE 2026-10-12 19:18UTC — checkpoint; Windows1580 buffer-budget refusal
 
 Last confirmed push4ec9f9a24. Exact4ec9f9a24 native synchronized-NOP probes2/2PASS,

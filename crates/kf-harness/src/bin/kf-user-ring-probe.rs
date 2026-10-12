@@ -193,8 +193,6 @@ fn run_reference(held: bool, split: bool, subroutine: bool) -> Result<(), String
     result.and(cleanup)
 }
 
-/// Native helper test and one-variable HOST-processing witness discriminator.
-/// This is an authored bench fixture, never a guest execution adapter.
 /// Public DMA_NOP padding changes only fixture length; no synthetic completion.
 fn padded_storage_prefix(mut words: Vec<u32>) -> Result<Vec<u32>, String> {
     const WORDS: usize = (100 << 10) / 4;
@@ -206,6 +204,8 @@ fn padded_storage_prefix(mut words: Vec<u32>) -> Result<Vec<u32>, String> {
     Ok(words)
 }
 
+/// Native helper test and one-variable HOST-processing witness discriminator.
+/// This is an authored bench fixture, never a guest execution adapter.
 fn run_storage(
     sync_wait: bool,
     control_barrier: bool,

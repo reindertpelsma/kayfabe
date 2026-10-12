@@ -345,7 +345,7 @@ mod tests {
         source.admit(|| ()).unwrap();
         assert_eq!(snapshot(&rows, &log, &ram, generation, 0x100004, bytes + 1, &mut NoStore).err(), Some(Refusal::Bounds));
         rows.write().unwrap().remove(&(0x100000 + bytes as u64));
-        assert_eq!(source.admit(|| ()), Err(Refusal::Changed));
+        assert_eq!(source.admit(|| ()), Err(Refusal::Missing(0x100000 + bytes as u64)));
         assert!(snapshot(&rows, &log, &ram, generation, 0x100004, bytes, &mut NoStore).is_err());
     }
 
