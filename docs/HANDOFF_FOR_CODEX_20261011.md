@@ -1,5 +1,25 @@
 # Handoff for a different agent (Codex or any fresh agent), 2026-10-11
 
+## UPDATE 2026-10-12 18:09UTC — corrected source Linux passes; Windows1560 launched
+
+Last confirmed push6ff5aaf29. Exact6ff5aaf293e9fc04ac8780983f26dc04d0f3b735
+Linux9/9+gate10, USERbirth12/12/refused0, rebuilt QEMU/client/fresh fastguest,
+fast30/30/crash0/NOTRUN0/exit0. Five expected negative-test Xid31; no32.
+Linux NVIDIA580.159.04 RTX4070 Cinnamon/Xorg/gears59–60FPS PASS_WITH_WARNINGS:
+startup assertions/flip-timeout warnings; no hostXid. Disposable stopped,
+noQEMU/DMA-FQ. Evidence user-worker/resolved-userd-linux includes binary SHA,
+full fast scoreboard, hostXid window, desktop log and own1550 disk cleanup audit.
+
+Windows1560 launched under global GPU lock on exact6ff5aaf29, unchanged production
+setup +only KF3_WIN_USER_RING_RELAY=1 and original600s GravityVk oracle/media.
+Result pending; no new Windows PASS or migration-semantic claim. Same-GPU VFIO
+reference183sPASS. Exact initial USERD correction passed GPU-free1919 and review;
+registration/doorbell review found no new race, but preservation of arbitrary
+old-source PUT across source-swap remains unverified cursor/reset semantics.
+Host log /data/kf-userd-resolved-windows-6ff5aaf29.log; root
+$W/codex-user-worker-windows-6ff5aaf29. Personal image retained; no other GPU job.
+
+
 ## UPDATE 2026-10-12 18:02UTC — Windows1550 admission falsifier; resolved USERD correction
 
 Last confirmed push6ab07c777; corrected source is this containing commit.

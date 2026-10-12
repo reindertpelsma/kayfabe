@@ -1,5 +1,45 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-12 18:09UTC — corrected source Linux passes; Windows1560 launched
+
+Last confirmed push6ff5aaf29. Exact6ff5aaf293e9fc04ac8780983f26dc04d0f3b735
+Linux9/9+gate10, USERbirth12/12/refused0, rebuilt QEMU/client/fresh fastguest,
+fast30/30/crash0/NOTRUN0/exit0. Five expected negative-test Xid31; no32.
+Linux NVIDIA580.159.04 RTX4070 Cinnamon/Xorg/gears59–60FPS PASS_WITH_WARNINGS:
+startup assertions/flip-timeout warnings; no hostXid. Disposable stopped,
+noQEMU/DMA-FQ. Evidence user-worker/resolved-userd-linux includes binary SHA,
+full fast scoreboard, hostXid window, desktop log and own1550 disk cleanup audit.
+
+Windows1560 launched under global GPU lock on exact6ff5aaf29, unchanged production
+setup +only KF3_WIN_USER_RING_RELAY=1 and original600s GravityVk oracle/media.
+Result pending; no new Windows PASS or migration-semantic claim. Same-GPU VFIO
+reference183sPASS. Exact initial USERD correction passed GPU-free1919 and review;
+registration/doorbell review found no new race, but preservation of arbitrary
+old-source PUT across source-swap remains unverified cursor/reset semantics.
+Host log /data/kf-userd-resolved-windows-6ff5aaf29.log; root
+$W/codex-user-worker-windows-6ff5aaf29. Personal image retained; no other GPU job.
+
+
+## UPDATE 2026-10-12 18:07UTC — Windows USER worker diagnostic and admission correction
+
+Branch codex/windows-matrix-20261011, pushed6ff5aaf29. Worker runtime is now
+connected but defaultOFF, not the disabled draft below. Exact30c887c86 Linux
+9+10/fast30PASS; desktop/gears59–60FPS with known startup warnings/no hostXid.
+Windows1550 ABORTED_ADMISSION at CPU-local USERD handle/GSP MemoryList mismatch;
+no app/migration verdict, ACPI stop/no hostXid/personal images untouched.
+Corrected initial Sysmem source uses resolved descriptor, bounded512 bytes and
+exact channel/RAM guards; migrated source retains MemoryList lease. Reviewed
+six-crate1919PASS/0failed. Exact6ff5aaf29 hardware Linux gates9+10PASS; fast/desktop
+and Windows relay retry pending. Source-zero migration remains a hypothesis.
+
+Candidate USER routes are worker-owned from birth; first5080 alloc competes with
+firstPUT under shared Pt admission, late opaque history is not converted. No PB
+reads on vCPU. Normal Linux Passthrough unchanged; optional Linux forced-relay
+experiment authorized by owner if Windows fails, but not implemented. Current
+accessor Sysmem-only. See docs/RESUME_CODEX_WINDOWS_20261011.md and evidence
+traces/windows_matrix_20261011/gravity-vulkan/user-worker. Master untouched.
+
+
 ## UPDATE 2026-10-12 16:56UTC — worker integration checkpoint, not activated
 
 Last confirmed push1d35bd9df; this checkpoint's revision is its containing commit
