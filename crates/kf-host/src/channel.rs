@@ -1271,6 +1271,45 @@ impl HostRm {
         self.birth_channel_with(space, engine_type, ring, PhysicalCeBelt::Deny)
     }
 
+    /// Restricted private-ring USER channel with an authored single-device
+    /// filtering identity. Same USER privilege/physical-CE prohibition; only
+    /// the experimental Windows relay and native oracle use this profile.
+    pub fn birth_user_ring_channel(
+        &self,
+        space: VaSpace,
+        engine_type: u32,
+        ring: RingSpec,
+        subdevice_id: u32,
+    ) -> Result<Channel, RmError> {
+        if !ring.userd_offset.is_multiple_of(USERD_ALIGNMENT) {
+            return Err(RmError::Other(USERD_OFFSET_MISALIGNED));
+        }
+        let tsg = self.birth_group(space, engine_type)?;
+        self.birth_user_ring_member(tsg, engine_type, ring, true, subdevice_id)
+            .inspect_err(|_| {
+                let _ = self.free(tsg);
+            })
+    }
+
+    /// Private-ring member of an owned group, with an explicit public one-hot subDeviceId.
+    pub fn birth_user_ring_member(
+        &self,
+        tsg: u32,
+        engine_type: u32,
+        ring: RingSpec,
+        first: bool,
+        subdevice_id: u32,
+    ) -> Result<Channel, RmError> {
+        self.birth_member_profile(
+            tsg,
+            engine_type,
+            ring,
+            first,
+            PhysicalCeBelt::Deny,
+            Some(subdevice_id),
+        )
+    }
+
     /// Like [`HostRm::birth_channel`] but with `DENY_PHYSICAL_MODE_CE` chosen by the caller.
     ///
     /// ⊘ Production uses [`HostRm::birth_channel`] (`deny_physical_ce = true`). The `false` form is
@@ -1351,12 +1390,32 @@ impl HostRm {
         first: bool,
         belt: PhysicalCeBelt,
     ) -> Result<Channel, RmError> {
+        self.birth_member_profile(tsg, engine_type, ring, first, belt, None)
+    }
+
+    fn birth_member_profile(
+        &self,
+        tsg: u32,
+        engine_type: u32,
+        ring: RingSpec,
+        first: bool,
+        belt: PhysicalCeBelt,
+        subdevice_id: Option<u32>,
+    ) -> Result<Channel, RmError> {
         if !ring.userd_offset.is_multiple_of(USERD_ALIGNMENT) {
             return Err(RmError::Other(USERD_OFFSET_MISALIGNED));
         }
         let request = channel_alloc_request_with(&ring, engine_type, belt.denied());
         let mut chan_params = [0u8; ChannelAllocParams::SIZE];
-        if request.encode_into(&mut chan_params).is_err() {
+        let encoded = if let Some(id) = subdevice_id {
+            if id == 0 || !id.is_power_of_two() || id & !0xfff != 0 {
+                return Err(RmError::Other(ABI_ENCODE_FAILED));
+            }
+            request.encode_with_subdevice_id(&mut chan_params, id)
+        } else {
+            request.encode_into(&mut chan_params)
+        };
+        if encoded.is_err() {
             return Err(RmError::Other(ABI_ENCODE_FAILED));
         }
         let want = self.mint();

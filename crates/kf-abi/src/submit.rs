@@ -504,6 +504,15 @@ impl ChannelAllocParams {
     /// `alignof`.
     pub const ALIGN: usize = 8;
 
+    /// Author public NV_CHANNEL_ALLOC_PARAMS.subDeviceId: a one-hot bitmask
+    /// matching SET_SUBDEVICE_MASK (ogkm595.84 alloc/alloc_channel.h:319–320).
+    /// Offset136 is the bench layout; HostAbi carries this field by name.
+    /// Ordinary channel allocation continues to leave it zero.
+    pub fn encode_with_subdevice_id(&self, bytes: &mut [u8], id: u32) -> Result<(), AbiError> {
+        self.encode_into(bytes)?;
+        put(bytes, Self::C_NAME, Self::SIZE, 136, &id.to_le_bytes())
+    }
+
     /// Encode into a little-endian image of at least [`Self::SIZE`] bytes. Every byte
     /// this struct does not name is left as found — so the caller must supply a
     /// **zeroed** buffer, which is what the reserved tail requires.

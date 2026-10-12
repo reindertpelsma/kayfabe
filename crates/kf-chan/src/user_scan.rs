@@ -10,6 +10,14 @@ use kf_abi::submit::{MethodForm, MethodHeader, method_header_decode};
 pub struct Scan {
     bindings: [u32; 8],
     pending: Option<(MethodHeader, usize)>,
+    subdevice: Option<Subdevice>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Subdevice {
+    id: u32,
+    active: bool,
+    stored: Option<u32>,
 }
 
 /// One complete software-method packet at its exact position in this segment.
@@ -31,7 +39,7 @@ pub enum Refusal {
     /// Shared ABI sizes legacy packets but does not retain their inc/non-inc form.
     Legacy,
     /// Sub-device filtering changes which methods hardware executes.
-    SubDeviceMask,
+    SubDeviceMask(u32),
     /// Software packet is split across segments or has unsupported arity.
     SoftwarePacket,
     /// Incremented method exceeds the public method address range.
@@ -39,9 +47,28 @@ pub enum Refusal {
 }
 
 impl Scan {
+    /// Native SUBDEVICE_ID bit, validated and explicitly authored at channel birth.
+    /// Public C56F DMA_SUBDEVICE_MASK is15:4 (12bits); this is channel configuration.
+    /// Unknown identity retains the default scanner's named refusal.
+    pub fn for_subdevice(id: u32) -> Result<Self, &'static str> {
+        if !id.is_power_of_two() || id & !0xfff != 0 {
+            return Err("USER_SCAN_SUBDEVICE_ID");
+        }
+        Ok(Self {
+            subdevice: Some(Subdevice {
+                id,
+                active: true,
+                stored: None,
+            }),
+            ..Self::default()
+        })
+    }
+
     /// Whether the metadata is between complete method packets. This is not
     /// evidence that hardware executed the same bytes or completed engine work.
-    pub fn at_boundary(&self) -> bool { self.pending.is_none() }
+    pub fn at_boundary(&self) -> bool {
+        self.pending.is_none()
+    }
     /// Scan at most the supplied bounded segment. State commits transactionally;
     /// return at the first trigger, with state AFTER that packet only. Ordinary
     /// methods remain unchanged and gain no CPU-authored privilege.
@@ -80,7 +107,24 @@ impl Scan {
                     return Err(Refusal::Legacy);
                 }
                 if h.form == MethodForm::SubDeviceMask {
-                    return Err(Refusal::SubDeviceMask);
+                    // Public595.84 clc56f.h DMA_TERT_OP/DMA_SUBDEVICE_MASK;
+                    // open-gpu-doc9fdf5c4 dev_ram.ref SSDM/STORE/USE. These are
+                    // header-only controls and still execute while inactive.
+                    let mask = next.subdevice.as_mut().ok_or(Refusal::SubDeviceMask(raw))?;
+                    if raw & 0xf != 0 {
+                        return Err(Refusal::SubDeviceMask(raw));
+                    }
+                    let value = (raw >> 4) & 0xfff;
+                    match raw >> 16 {
+                        1 => mask.active = value & mask.id != 0,
+                        2 => mask.stored = Some(value),
+                        3 if value == 0 => {
+                            mask.active =
+                                mask.stored.ok_or(Refusal::SubDeviceMask(raw))? & mask.id != 0
+                        }
+                        _ => return Err(Refusal::SubDeviceMask(raw)),
+                    }
+                    continue;
                 }
                 if h.form == MethodForm::Immediate {
                     if let Some(call) = next.datum(h, 0, h.immd, &software)? {
@@ -132,6 +176,11 @@ impl Scan {
         data: u32,
         software: &impl Fn(u32) -> bool,
     ) -> Result<Option<SwCall>, Refusal> {
+        // Inactive hardware methods neither bind objects nor invoke software.
+        // The outer scanner still sizes packets and recognizes mask controls.
+        if self.subdevice.as_ref().is_some_and(|mask| !mask.active) {
+            return Ok(None);
+        }
         let add = match h.form {
             MethodForm::NonIncrementing => 0,
             MethodForm::IncrementOnce => usize::from(n != 0),
@@ -323,6 +372,80 @@ mod tests {
         assert_eq!(s.segment(&[0, 0], |v| v == 1), Ok(None));
     }
     #[test]
+    fn subdevice_filters_preserve_bindings_and_skip_unexecuted_software_calls() {
+        for id in [1, 4] {
+            let mut s = Scan::for_subdevice(id).unwrap();
+            let bind = [h(6, 0, 1).unwrap(), 1];
+            s.segment(&bind, |v| v == 1).unwrap();
+            // Public SET mask0: neither binding9 nor API27 executes.
+            assert_eq!(
+                s.segment(
+                    &[0x10000, h(6, 0, 1).unwrap(), 9, h(6, 0x200, 1).unwrap(), 27],
+                    |v| v == 1
+                ),
+                Ok(None)
+            );
+            // STORE does not activate; USE applies the stored mask.
+            assert_eq!(
+                s.segment(&[0x20000 | (id << 4), h(6, 0x200, 1).unwrap(), 27], |v| v
+                    == 1),
+                Ok(None)
+            );
+            assert_eq!(
+                s.segment(&[0x30000, h(6, 0x200, 1).unwrap(), 27], |v| v == 1)
+                    .unwrap()
+                    .unwrap()
+                    .call
+                    .data,
+                27
+            );
+            // A different valid device mask disables this channel.
+            let other = if id == 1 { 4 } else { 1 };
+            assert_eq!(
+                s.segment(
+                    &[0x10000 | (other << 4), h(6, 0x200, 1).unwrap(), 29],
+                    |v| v == 1
+                ),
+                Ok(None)
+            );
+            assert!(
+                s.segment(&[0x1fff0, h(6, 0x200, 1).unwrap(), 31], |v| v == 1)
+                    .unwrap()
+                    .is_some()
+            );
+        }
+    }
+    #[test]
+    fn subdevice_controls_do_not_reinterpret_arguments_and_refusals_are_transactional() {
+        let mut s = Scan::for_subdevice(1).unwrap();
+        // Header-looking argument is only data; inactive metadata must not leak.
+        s.segment(&[h(0, 0x400, 2).unwrap(), 0x10000], |_| false)
+            .unwrap();
+        assert_eq!(
+            s.segment(
+                &[0x10000, h(6, 0, 1).unwrap(), 1, h(6, 0x200, 1).unwrap(), 27],
+                |v| v == 1
+            )
+            .unwrap()
+            .unwrap()
+            .call
+            .data,
+            27
+        );
+        let mut s = Scan::for_subdevice(1).unwrap();
+        for bad in [0x30000, 0x30010, 0x10001, 0x50010, 0x7fff0] {
+            let before = s.clone();
+            assert_eq!(
+                s.segment(&[h(6, 0, 1).unwrap(), 1, bad], |v| v == 1),
+                Err(Refusal::SubDeviceMask(bad))
+            );
+            assert_eq!(s, before);
+        }
+        for bad in [0, 3, 0x1000, u32::MAX] {
+            assert!(Scan::for_subdevice(bad).is_err());
+        }
+    }
+    #[test]
     fn unsupported_subdevice_filters_never_produce_cpu_software_actions() {
         for tert_op in 1..=3 {
             let mut s = Scan::default();
@@ -334,7 +457,10 @@ mod tests {
                 h(6, 0x200, 1).unwrap(),
                 27,
             ];
-            assert_eq!(s.segment(&words, |v| v == 1), Err(Refusal::SubDeviceMask));
+            assert_eq!(
+                s.segment(&words, |v| v == 1),
+                Err(Refusal::SubDeviceMask(tert_op << 16))
+            );
             assert_eq!(s, before, "masked/unexecuted binding must not be committed");
         }
     }

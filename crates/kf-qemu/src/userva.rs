@@ -1102,6 +1102,7 @@ mod tests {
             chid: Some(1),
             flags: 0,
             engine_type: Some(kf_abi::submit::ENGINE_TYPE_GRAPHICS),
+            subdevice_id: Some(1),
             userd: None,
             userd_source: None,
             kernel_client: true,

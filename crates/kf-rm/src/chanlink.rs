@@ -201,6 +201,8 @@ pub struct ChannelAlloc {
     pub flags: u32,
     /// `engineType`, raw, when the layout is pinned.
     pub engine_type: Option<u32>,
+    /// Public per-channel one-hot SET_SUBDEVICE_MASK identity; no GPU ordinal inference.
+    pub subdevice_id: Option<u32>,
     /// The guest kernel's resolved USERD descriptor (`userdMem`).
     pub userd: Option<kf_arch::UserdMem>,
     /// Client-allocated USERD memory handle and logical offset for subdevice0.
@@ -941,8 +943,10 @@ impl ChannelPolicy {
             // Reuse the object seat's validated public constructor decode.
             // Malformed/unaudited params never allocate a native child first.
             let notify_completion = match crate::rmrpc::translate(&self.abi, self.guest_os, cmd) {
-                Ok(crate::rmrpc::Translation::Event(crate::rmgraph::RmEvent::Alloc { facts, .. })) =>
-                    facts.deferred_api_notify?,
+                Ok(crate::rmrpc::Translation::Event(crate::rmgraph::RmEvent::Alloc {
+                    facts,
+                    ..
+                })) => facts.deferred_api_notify?,
                 _ => return None,
             };
             let st = ChanStatement::DeferredApiObject {
@@ -1291,6 +1295,12 @@ impl ChannelPolicy {
             chid: decode_userd_index_chid(f.flags),
             flags: f.flags,
             engine_type,
+            subdevice_id: layout_u32(
+                &kf_abi::generated::matrix::NV_CHANNEL_ALLOC_PARAMS,
+                self.abi.driver_version(),
+                params,
+                "subDeviceId",
+            ),
             userd: self.abi.decode_channel_userd_mem(params).ok().flatten(),
             userd_source: self.abi.decode_channel_userd(params).ok().flatten(),
             // ⊘⊘ P5b: the pid sentinel is reachable from guest userspace (`[measured p5bd]` the
@@ -1326,7 +1336,7 @@ impl ChannelPolicy {
             )
         };
         eprintln!(
-            "kf-rm: chanlink: CHAN-FACTS {:#x}:{:#x} parent={:#x} class={:#x} engine={:x?} flags={:#x} hVASpace={:#x} ctxShare={:#x} vas={:#x}:{:x?} tsg={:x?} device={:#x} kernel={} privilege={:?} internalFlags={:x?} ProcessID={:x?} SubProcessID={:x?} kernel_pid_decl={} hObjectError={:x?} hObjectBuffer={:x?} gpFifoOffset={:#x} gpFifoEntries={} hUserdMemory0={:x?} userd={:x?} hPhysChannelGroup={:x?}",
+            "kf-rm: chanlink: CHAN-FACTS {:#x}:{:#x} parent={:#x} class={:#x} engine={:x?} flags={:#x} hVASpace={:#x} ctxShare={:#x} vas={:#x}:{:x?} tsg={:x?} device={:#x} kernel={} privilege={:?} internalFlags={:x?} ProcessID={:x?} SubProcessID={:x?} kernel_pid_decl={} hObjectError={:x?} hObjectBuffer={:x?} gpFifoOffset={:#x} gpFifoEntries={} hUserdMemory0={:x?} userd={:x?} hPhysChannelGroup={:x?} subDeviceId={:x?}",
             st.client,
             st.handle,
             st.parent,
@@ -1351,7 +1361,8 @@ impl ChannelPolicy {
             st.entries,
             cf("hUserdMemory"),
             st.userd,
-            cf("hPhysChannelGroup")
+            cf("hPhysChannelGroup"),
+            st.subdevice_id
         );
         self.carried += 1;
         self.carry_alloc(ChanStatement::Alloc(st), cmd, h.client, h.handle)
@@ -2501,7 +2512,10 @@ mod tests {
         #[test]
         fn user_ring_exception_never_admits_linux_or_unknown_driver() {
             for f in grid() {
-                let linux = UserWorkFacts { windows: false, ..f };
+                let linux = UserWorkFacts {
+                    windows: false,
+                    ..f
+                };
                 assert!(super::super::windows_user_ring_permit(&linux).is_err());
             }
         }
@@ -2510,13 +2524,35 @@ mod tests {
         fn user_ring_exception_requires_all_declared_user_work_facts() {
             assert!(super::super::windows_user_ring_permit(&dwm()).is_ok());
             for f in [
-                UserWorkFacts { kernel_stamped: false, ..dwm() },
-                UserWorkFacts { uvm_owned: true, ..dwm() },
-                UserWorkFacts { rm_internal: true, ..dwm() },
-                UserWorkFacts { ctx_share_known: false, ..dwm() },
-                UserWorkFacts { process_id: Some(0x350), ..dwm() },
-                UserWorkFacts { process_id: Some(4), system_pid_is_kernel: true, ..dwm() },
-                UserWorkFacts { engine: None, ..dwm() },
+                UserWorkFacts {
+                    kernel_stamped: false,
+                    ..dwm()
+                },
+                UserWorkFacts {
+                    uvm_owned: true,
+                    ..dwm()
+                },
+                UserWorkFacts {
+                    rm_internal: true,
+                    ..dwm()
+                },
+                UserWorkFacts {
+                    ctx_share_known: false,
+                    ..dwm()
+                },
+                UserWorkFacts {
+                    process_id: Some(0x350),
+                    ..dwm()
+                },
+                UserWorkFacts {
+                    process_id: Some(4),
+                    system_pid_is_kernel: true,
+                    ..dwm()
+                },
+                UserWorkFacts {
+                    engine: None,
+                    ..dwm()
+                },
                 UserWorkFacts::default(),
             ] {
                 assert!(super::super::windows_user_ring_permit(&f).is_err(), "{f:?}");
@@ -4059,14 +4095,14 @@ mod tests {
     }
 
     #[test]
-    fn channel_birth_preserves_client_userd_handle_and_logical_offset() {
+    fn channel_birth_preserves_userd_source_and_subdevice_identity() {
         use std::sync::{Arc, Mutex};
         let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).unwrap();
         let seen = Arc::new(Mutex::new(Vec::new()));
         let out = seen.clone();
         let sink: ChanSink = Arc::new(move |st| {
             if let ChanStatement::Alloc(a) = st {
-                out.lock().unwrap().push(a.userd_source);
+                out.lock().unwrap().push((a.userd_source, a.subdevice_id));
             }
             ChanAnswer::Done
         });
@@ -4076,18 +4112,20 @@ mod tests {
             kf_abi::versions::BENCH_DRIVER,
         )
         .unwrap();
-        for (handle, offset) in [(0u32, 0u64), (0xff00_a004, 0x800)] {
+        for (handle, offset, id) in [(0u32, 0u64, 0u32), (0xff00_a004, 0x800, 4u32)] {
             let mut cmd = kernel_channel_alloc(0xc1d0_0013, 0xff0e_0000, 0xff04_0000, 1, 200);
             let params = &mut cmd.payload[32..];
             let h = wire.need("hUserdMemory").unwrap().off();
             let o = wire.need("userdOffset").unwrap().off();
             params[h..h + 4].copy_from_slice(&handle.to_le_bytes());
             params[o..o + 8].copy_from_slice(&offset.to_le_bytes());
+            let i = wire.need("subDeviceId").unwrap().off();
+            params[i..i + 4].copy_from_slice(&id.to_le_bytes());
             let _ = link.respond(&cmd);
         }
         assert_eq!(
             *seen.lock().unwrap(),
-            [Some((0, 0)), Some((0xff00_a004, 0x800))]
+            [(Some((0, 0)), Some(0)), (Some((0xff00_a004, 0x800)), Some(4))]
         );
     }
 

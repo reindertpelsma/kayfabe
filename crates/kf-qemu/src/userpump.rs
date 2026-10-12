@@ -173,7 +173,7 @@ enum PendingAction {
 }
 
 impl Pump {
-    pub(super) fn new(me: &ChanPlane) -> Result<Self, String> {
+    pub(super) fn new(me: &ChanPlane, subdevice_id: u32) -> Result<Self, String> {
         Ok(Self {
             cache: crate::userstore::Cache::new(
                 me.rm,
@@ -185,7 +185,8 @@ impl Pump {
             generation: 1,
             source_admitted: false,
             cursor: 0,
-            scan: Scan::default(),
+            // The native birth authors this same admitted channel identity.
+            scan: Scan::for_subdevice(subdevice_id).map_err(str::to_owned)?,
             fetch: Fetch::new(kf_chan::user_storage::ENTRIES).map_err(str::to_owned)?,
             segment: None,
             guest_get: None,
@@ -1110,6 +1111,53 @@ mod tests {
         );
         assert!(!old.matches(1));
         assert!(old.matches(crate::defapi::NV50_DEFERRED_API_CLASS));
+    }
+    #[test]
+    fn masked_methods_stay_native_and_only_active_triggers_are_staged() {
+        let software = Some(sw(0x51, 1));
+        let scan = Scan::for_subdevice(1).unwrap();
+        let words = [
+            h(6, 0, 1).unwrap(),
+            1,
+            0x10000,
+            h(6, 0x200, 1).unwrap(),
+            27,
+            0x10010,
+            h(6, 0x200, 1).unwrap(),
+            28,
+            0x10000,
+        ];
+        let (patched, rare) = stage_plan(&scan, &software, &words).unwrap();
+        assert!(rare);
+        let mut expected = words;
+        expected[6..8].fill(0);
+        assert_eq!(patched, expected);
+        let mut submitted = scan.clone();
+        let trigger = submitted
+            .segment(&words, |v| software.as_ref().unwrap().matches(v))
+            .unwrap()
+            .unwrap();
+        assert_eq!((trigger.start, trigger.end, trigger.call.data), (6, 8, 28));
+        assert!(
+            submitted
+                .segment(&words[trigger.end..], |v| software
+                    .as_ref()
+                    .unwrap()
+                    .matches(v))
+                .unwrap()
+                .is_none()
+        );
+        // Final inactive state persists; a later stream restores it explicitly.
+        assert!(
+            submitted
+                .segment(&[h(6, 0x200, 1).unwrap(), 29], |v| software
+                    .as_ref()
+                    .unwrap()
+                    .matches(v))
+                .unwrap()
+                .is_none()
+        );
+        assert_eq!(scan, Scan::for_subdevice(1).unwrap());
     }
     #[test]
     fn all_rare_packets_are_nopped_but_the_prefix_scan_stops_at_each_exact_trigger() {

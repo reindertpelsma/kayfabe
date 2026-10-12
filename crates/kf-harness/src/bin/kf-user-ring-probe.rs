@@ -199,7 +199,9 @@ fn padded_storage_prefix(mut words: Vec<u32>) -> Result<Vec<u32>, String> {
     if words.len() > WORDS {
         return Err("source fixture too large".into());
     }
-    words.try_reserve_exact(WORDS - words.len()).map_err(|_| "source fixture allocation")?;
+    words
+        .try_reserve_exact(WORDS - words.len())
+        .map_err(|_| "source fixture allocation")?;
     words.resize(WORDS, 0);
     Ok(words)
 }
@@ -213,6 +215,7 @@ fn run_storage(
     assembled: bool,
     barrier_level: bool,
     large_source: bool,
+    subdevice: bool,
 ) -> Result<(), String> {
     use kf_abi::submit::ENGINE_TYPE_COPY0;
     use kf_chan::user_storage::Storage;
@@ -274,9 +277,13 @@ fn run_storage(
     for off in (0..4096).step_by(4) {
         output.store(0x1000 + off, INITIAL ^ off as u32)?;
     }
-    let chan = rm
-        .birth_channel(space, ENGINE_TYPE_COPY0, storage.spec(0)?)
-        .map_err(|e| format!("birth: {e:?}"))?;
+    let spec = storage.spec(0)?;
+    let chan = if subdevice {
+        rm.birth_user_ring_channel(space, ENGINE_TYPE_COPY0, spec, 1)
+    } else {
+        rm.birth_channel(space, ENGINE_TYPE_COPY0, spec)
+    }
+    .map_err(|e| format!("birth: {e:?}"))?;
     let result = (|| {
         chan.assert_user().map_err(str::to_string)?;
         rm.alloc_ce_object(chan, ENGINE_TYPE_COPY0)
@@ -286,9 +293,22 @@ fn run_storage(
         if large_source {
             preceding = padded_storage_prefix(preceding)?;
         }
+        if subdevice {
+            // The native allocation explicitly authored subDeviceId1 through
+            // the public layout. Prove initial ACTIVE and every excluded bit.
+            let header = method_header_inc(0, fifo::SET_REFERENCE_C56F, 1).ok_or("reference")?;
+            let mut masked = vec![header, 2, 0x10000, header, 99];
+            for bit in 1..12 {
+                masked.extend([0x10000 | (1 << (bit + 4)), header, 99]);
+            }
+            masked.extend([0x1fff0, 0x20000, 0x30000, header, 99, 0x20010, 0x30000]);
+            masked.extend(preceding);
+            masked.push(0x10000); // Final HOST witness must fetch even while inactive.
+            preceding = masked;
+        }
         let witness_offset = if large_source { 128 << 10 } else { 0x1000 };
         let witness = [
-            0,
+            if subdevice { 0x10010 } else { 0 },
             method_header_inc(0, fifo::SET_REFERENCE_C56F, 1).ok_or("reference")?,
             1,
         ];
@@ -345,7 +365,12 @@ fn run_storage(
                 }
                 storage.write_host_witness(2)?;
                 // Final single-engine bench observation; not a runtime receipt.
-                storage.write_gp(3, witness_offset + 4, 8, false)?;
+                storage.write_gp(
+                    3,
+                    witness_offset + if subdevice { 0 } else { 4 },
+                    if subdevice { 12 } else { 8 },
+                    false,
+                )?;
                 4
             } else {
                 storage.write_gp(1, 0x1000, 4 * witness.len() as u64, sync_wait)?;
@@ -353,7 +378,7 @@ fn run_storage(
             }
         };
         println!(
-            "USER_STORAGE_SETUP source_bytes={} barrier_level={barrier_level} sync_wait={sync_wait} control_barrier={control_barrier} class={class:#x} driver={} entries={} ring_gpu_read_only=true page_size=4096 userd_gpu_mapped=false",
+            "USER_STORAGE_SETUP source_bytes={} subdevice={subdevice} barrier_level={barrier_level} sync_wait={sync_wait} control_barrier={control_barrier} class={class:#x} driver={} entries={} ring_gpu_read_only=true page_size=4096 userd_gpu_mapped=false",
             preceding.len() * 4,
             rm.driver_version(),
             kf_chan::user_storage::ENTRIES
@@ -366,15 +391,22 @@ fn run_storage(
         let mut samples = 0;
         let mut max_get = 0;
         let mut early_reference = false;
+        let mut initial_marker_seen = false;
         // Explicit stimulus only: keep the preceding HOST acquire unsatisfied.
         while start.elapsed() < Duration::from_millis(50) {
             max_get = max_get.max(storage.gpu_get()?);
-            early_reference |= storage.gpu_reference()? != 0;
+            let reference = storage.gpu_reference()?;
+            initial_marker_seen |= reference == 2;
+            early_reference |= if subdevice {
+                reference != 0 && reference != 2
+            } else {
+                reference != 0
+            };
             samples += 1;
             std::thread::sleep(Duration::from_millis(1));
         }
         println!(
-            "USER_STORAGE_HELD samples={samples} max_get={max_get} early_reference={early_reference} acquire={} ce_semaphore={}",
+            "USER_STORAGE_HELD samples={samples} max_get={max_get} early_reference={early_reference} initial_marker_seen={initial_marker_seen} acquire={} ce_semaphore={}",
             output.load(0)?,
             output.load(4)?
         );
@@ -425,6 +457,7 @@ fn run_storage(
             || get != published_put
             || samples == 0
             || early_reference
+            || (subdevice && !initial_marker_seen)
             || if control_barrier {
                 max_get == 0 || max_get >= 3
             } else {
@@ -842,13 +875,20 @@ fn main() {
         match args[0].as_str() {
             "engine-witness-control" => run_engine_witness(false),
             "engine-witness-sync" => run_engine_witness(true),
-            "storage-assembled-phased" => run_storage(true, true, true, true, false, false),
-            "storage-control-barrier-large-phased" => run_storage(true, true, true, false, false, true),
-            "storage-control-barrier-phased" => run_storage(true, true, true, false, false, false),
-            "storage-control-barrier-level-phased" => run_storage(true, true, true, false, true, false),
-            "storage-control-barrier" => run_storage(true, true, false, false, false, false),
-            "storage-control" => run_storage(false, false, false, false, false, false),
-            "storage-sync-witness" => run_storage(true, false, false, false, false, false),
+            "storage-assembled-phased" => run_storage(true, true, true, true, false, false, false),
+            "storage-subdevice-phased" => run_storage(true, true, true, false, false, false, true),
+            "storage-control-barrier-large-phased" => {
+                run_storage(true, true, true, false, false, true, false)
+            }
+            "storage-control-barrier-phased" => {
+                run_storage(true, true, true, false, false, false, false)
+            }
+            "storage-control-barrier-level-phased" => {
+                run_storage(true, true, true, false, true, false, false)
+            }
+            "storage-control-barrier" => run_storage(true, true, false, false, false, false, false),
+            "storage-control" => run_storage(false, false, false, false, false, false, false),
+            "storage-sync-witness" => run_storage(true, false, false, false, false, false, false),
             "reference" => run_reference(false, false, false),
             "reference-subroutine" => run_reference(false, false, true),
             "reference-held" => run_reference(true, false, false),

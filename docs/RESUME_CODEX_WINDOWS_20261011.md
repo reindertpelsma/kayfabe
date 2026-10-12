@@ -1,5 +1,30 @@
 # Resume Windows apps and GravityMark Vulkan
 
+## UPDATE 2026-10-12 19:55UTC — Windows1590 stopped before benchmark; mask correction in progress
+
+Last confirmed push3d10c51a7. Exact0578a7ab8 Windows1590 signed in/driver ready,
+then one USER_RING_SCAN SubDeviceMask refusal on host channel4a before the
+benchmark launched. Raw failing mask/header UNMEASURED. ABORTED_PRE_BENCHMARK;
+no app or migration verdict. QGA stop19:35:52UTC/QEMU gone19:35:54/DMA-FQ;
+bounded journal nohostXid. Evidence user-worker/windows-1590. Own disposable
+removed only after protected-image and all-qcow dependency audit; personal retained.
+
+Checkpoint implements public SET/STORE/USE mask semantics, ignoring inactive
+method data for bindings/software actions while preserving native command bytes.
+Native private USER profile explicitly authors the same validated one-hot12bit
+subDeviceId that the scanner uses; guest allocation field comes from existing
+versioned layout, unknown/zero/invalid identities refuse by name. Ordinary Linux
+birth encoding remains unchanged. Never infer this identity from GPU ordinal.
+GPU-free main suite2150PASS plus probe6PASS; allocation decode test preserves0/4.
+Independent source review no blocker. Final exact retest/native oracle pending;
+no Windows compatibility claim. Probe checks initial active state, all excluded
+bits, stored-mask controls and descriptor fetch while inactive. Hypothesis/falsifier
+will precede hardware. Next unused Windows base1600 after exact regression.
+Owner ideas are optional: worker correctness first, fast paths only from measurements.
+No new GravityVkPASS; full matrix, cursor continuity/GET propagation remain open.
+Vast last checked empty19:29UTC. Preserve scan-from-birth diagnostic/defaultOFF.
+
+
 ## UPDATE 2026-10-12 19:28UTC — exact larger-source native/Linux PASS; Windows1590 starting
 
 Last confirmed push0578a7ab8. Exact0578a7ab81aa417f1e9350c871a4d963cdcb7041 native
