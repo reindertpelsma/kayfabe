@@ -1,0 +1,8 @@
+{
+  "revision": "9b65e3c9e52a70b596e6dd1135673ed494bd6554",
+  "binary_sha256": "fe29f5b4bc9876e8b93df0fb396f3021d0b197ab524b2daee57b2e0319656db1",
+  "binary": "/data/kf-user-ring-reference-target-9b65e3c9e/release/kf-user-ring-probe",
+  "uid": 65534,
+  "gid": 65534,
+  "scope": "native C56F USERD reference probe, no VM/migration implementation"
+}

@@ -149,6 +149,29 @@ impl Ledger {
         Ok(())
     }
 
+    /// Model the32-bit wire receipt of a PRIVATE GPU-written reference after an
+    /// authenticated ordering tail. No production adapter calls this method.
+    ///
+    /// Requires: native class/tail semantics validated; private USERD lifetime;
+    /// immutable inspection from birth removes ALL guest SET_REFERENCE writes;
+    /// no command-fetch escape, CPU completion write or guest-writable alias.
+    /// A raw reference from an unfiltered guest channel is NOT authenticated.
+    ///
+    /// The one-empty-slot bound gives <2^31 outstanding receipts even for the
+    /// largest power-of-two u32 ring. Interpret only forward differences that
+    /// fit that window; reject stale/out-of-flight readings without release.
+    /// Native cursor-transfer/source-generation semantics remain independent.
+    ///
+    /// # Errors
+    /// A reference beyond the issued window, or failure to allocate retirements.
+    pub fn complete_reference(&mut self, reference: u32) -> Result<Vec<Retirement>, Refusal> {
+        let delta = u64::from(reference.wrapping_sub(self.completed as u32));
+        if delta > self.issued - self.completed {
+            return Err(Refusal::Completion);
+        }
+        self.complete(self.completed + delta)
+    }
+
     /// Retire only from a REAL ENGINE completion proof for this channel/lifetime.
     /// The model's simulation supplies it. No production proof adapter exists;
     /// guest-written memory, a wake, registration reply or GP_GET cannot supply it.
@@ -173,5 +196,43 @@ impl Ledger {
         // lifetime is valid. The future adapter must pin/revalidate each receipt.
         self.fetched = self.fetched.max(sequence);
         Ok(out)
+    }
+}
+
+#[cfg(test)]
+mod reference_wrap {
+    use super::*;
+
+    #[test]
+    fn wire_wrap_does_not_reuse_a_live_receipt_or_skip_work() {
+        // Test-only seed after a simulated completed prefix. No public API
+        // resets native USERD/counters or assumes a migration resets them.
+        let mut q = Ledger::new(4, 4).unwrap();
+        let base = u64::from(u32::MAX) - 1;
+        q.issued = base;
+        q.completed = base;
+        q.fetched = base;
+        for get in 1..=3 {
+            q.publish(Retirement {
+                generation: 19,
+                guest_get: get,
+            })
+            .unwrap();
+        }
+        assert_eq!(q.complete_reference(2), Err(Refusal::Completion));
+        assert_eq!(q.pending(), 3);
+        for (wire, get) in [(u32::MAX, 1), (0, 2), (1, 3)] {
+            assert_eq!(
+                q.complete_reference(wire).unwrap(),
+                [Retirement {
+                    generation: 19,
+                    guest_get: get
+                }]
+            );
+            assert_eq!(q.complete_reference(wire).unwrap(), []);
+        }
+        assert_eq!(q.completed(), base + 3);
+        assert_eq!(q.available(), 3);
+        assert_eq!(q.complete_reference(u32::MAX), Err(Refusal::Completion));
     }
 }

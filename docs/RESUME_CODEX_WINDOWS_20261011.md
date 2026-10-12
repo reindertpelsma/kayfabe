@@ -1,13 +1,13 @@
 # Resume Windows apps and GravityMark Vulkan
 
-**STATUS: LIVE, 2026-10-12 00:35UTC.** This compact current state supersedes earlier
+**STATUS: LIVE, 2026-10-12 00:48UTC.** This compact current state supersedes earlier
 pending paragraphs in the chronological HANDOFF_FOR_CODEX_20261011.md.
 
 ## Branch and source
 
 Public <https://github.com/reindertpelsma/kayfabe>, branch
 **codex/windows-matrix-20261011**, controller worktree **/data/kf-inval-absent**.
-Last confirmed push **70aa0d666**; this final evidence checkpoint may be newer.
+Last confirmed push **9b65e3c9e**; this final evidence checkpoint may be newer.
 Fetch the branch tip to obtain all reachable source/evidence. Do not edit the
 separate /workspace/kayfabe or Claude worktrees. Do not merge master/integration
 without CI/review/exact-revision hardware requirements.
@@ -60,6 +60,16 @@ Post00:35UTC noQEMU/shared lockfree/DMA-FQ/stop-file absent,129830002688bytesfre
 Personal image retained; no active loop or Vast rental. Latest hardware source
 70aa at /data/kf-user-ring-host-70aa0d666; results under
 $W/codex-user-ring-linux-70aa0d666. Do not replay completed runners.
+
+Latest native reference (exact9b65e3c9e) **immediate and held PASS**: USER C56F,
+read-only commands, unmapped USERD, virtual CE copy then WFI_ALL/SET_REFERENCE.
+Held48 polls show reference0/CE semaphore0 while GP_GET advances; after explicit
+signal real copy/reference arrive. ZeroXid, clean teardown, no personal image.
+[Original facts](../traces/windows_matrix_20261011/gravity-vulkan/user-ring-reference/README.md).
+New unconnected receipt-wrap/parser models pass full kf-chan70lib/all integrations;
+no VM call or Windows app result. Parser rejects unsupported forms; source pins,
+cross-entry packets, native migration cursors, broader completion evidence and
+independent review still gate runtime integration. Latest host job is complete.
 
 ## Hardware is idle; preserve the personal image
 

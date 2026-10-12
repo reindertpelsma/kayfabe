@@ -205,3 +205,27 @@ stop if control fails. Capture exact source/SHA/UID/PID/time/journal/cleanup.
 These two cases only test one class and small CE work/FIFO ordering; even a PASS
 is not a general engine-completion, guest-SET_REFERENCE filtering, sequence-wrap,
 native migration-cursor or backing-lifetime proof. No VM behavior is changed.
+
+## Native reference result and bounded parser, 2026-10-12 00:48UTC
+
+MEASURED exact9b65e3c9e: immediate and held reference cases PASS, real CE copy4096,
+USER/unprivileged, read-only command mapping, unmapped USERD, zeroXid and clean
+teardown. Held case48 polls saw no early reference; GP_GET advanced while blocked.
+After explicit signal, reference/copy/CE semaphore all arrived. Original facts:
+gravity-vulkan/user-ring-reference. This supports the limited C56F mechanism; it
+is not an every-engine/guest-filtering/native-migration proof.
+
+Pure follow-up models, not connected to a VM: Ledger32-bit reference window and
+wrap validation, and user_stream owned snapshot/transactional packet parser.
+Channel-owned object lookup separates hardware0x200 payloads from software calls;
+all guest SET_REFERENCE writes become bookkeeping IR, never host receipts.
+Malformed/unsupported headers, overflowing methods, unknown/unbound objects and
+oversized snapshots fail by name before state commit. Seven parser cases and two
+new reference cases pass with full kf-chan70lib/all integrations. Red/green logs
+are retained. No private GPU mapping or native stream adapter is added.
+
+Next: pin/revalidate source object/mapping generations with the VA ledger; get
+native migration cursor/backing evidence; account for cross-GP-entry packets and
+unsupported forms before deciding supported runtime scope. Actual native32-bit
+reference wrap and all-engine completion behavior remain unmeasured. Independent
+review remains required before wiring these model interfaces into GPU submission.

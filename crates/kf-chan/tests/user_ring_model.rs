@@ -129,3 +129,18 @@ fn exhaustive_small_ring_interleavings_do_not_overwrite_or_retire_early() {
         visit(Ledger::new(entries, 8).unwrap(), 12, vec![], vec![]);
     }
 }
+
+#[test]
+fn reference_observation_is_bounded_by_issued_work_and_does_not_trust_get() {
+    let mut q = Ledger::new(4, 4).unwrap();
+    q.publish(receipt(11, 7)).unwrap();
+    q.publish(receipt(11, 8)).unwrap();
+    q.observe_get(2).unwrap();
+    assert_eq!(q.complete_reference(0).unwrap(), []);
+    assert_eq!(q.complete_reference(3), Err(Refusal::Completion));
+    assert_eq!(q.pending(), 2);
+    assert_eq!(q.complete_reference(1).unwrap(), [receipt(11, 7)]);
+    assert_eq!(q.complete_reference(0), Err(Refusal::Completion));
+    assert_eq!(q.complete_reference(2).unwrap(), [receipt(11, 8)]);
+    assert_eq!(q.complete_reference(2).unwrap(), []);
+}

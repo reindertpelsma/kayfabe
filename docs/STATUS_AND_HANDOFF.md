@@ -1,5 +1,19 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-12 00:48UTC — native USERD reference passes; stream model
+
+Last confirmed push9b65e3c9e. Native immediate/held WFI+SET_REFERENCE cases on
+C56F USER channel PASS, copy4096 correct, zeroXid/clean teardown. During48 held
+polls reference0/CE semaphore0 despite GP_GET advancing; explicit signal then
+produces real reference/copy. No writable private completion GPU mapping.
+Unconnected bounded receipt-wrap and immutable command parser models now pass
+full kf-chan70lib/all integration tests. Guest references/software calls never
+become raw hardware completion receipts. No runtime relay/migration or Windows
+app pass. Linux hardware remains exact70aa9+10/30 PASS; new models GPU-free only.
+Evidence gravity-vulkan/user-ring-reference. Pin/backing/cursor and review gates
+remain open. GPUidle/noQEMU/lockfree/DMA-FQ; personal image retained/unused.
+
+
 ## UPDATE 2026-10-12 00:35UTC — restricted ring model and Linux green
 
 Last confirmed push70aa0d666; private1dc9c0e unchanged. Owner §AI approves only
