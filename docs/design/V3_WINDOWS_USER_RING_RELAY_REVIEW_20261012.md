@@ -109,3 +109,60 @@ those gates add a default-OFF runtime experiment and independent hostile-guest/
 nonblocking review, run exact-revision Linux9/9+gate10/fast30, then a single-variable
 Windows GravityMark run against the same-GPU VFIO183s/image reference. None of
 these later gates is claimed complete by the native permission probe.
+
+## Second native discriminator: registration privilege, before the run
+
+The previous same-configuration deferred-update probe ran uid65534: NOP clean,
+update/update-hold Xid32 even with resources retained. Public deferred_api.c
+stores the registering caller's privilege. A USER GPU-channel stamp is not the
+registering CPU caller's privilege. To obtain a native migration reference, first
+compare **the same existing b081f705a probe/binary and update-hold workload** under
+uid65534 and root, retaining its asserted USER GPU channel. The only controlled
+variable is registering-process UID/privilege. This is privileged reference
+measurement (§AH's measurement tier), never a stock-product host path.
+
+H-PRIV-REFERENCE: a privileged registrant supplies a fault-free reference for the
+same-configuration deferred FIFO update. Falsifier: root also faults, refuses, or
+fails the real GPU tail/resource retention/teardown. If root succeeds and uid65534
+faults, that supports further root-only reference measurement; it does not yet
+prove actual inner execution or cursor transfer, nor identify the exact rejected
+check in the unprivileged case. A same-configuration update is not a migration.
+If root also fails, stop this reference route and compare the public control
+contract; do not change multiple allocation fields to clear walls indefinitely.
+
+**MEASURED 00:16UTC:** H-PRIV-REFERENCE is falsified as a root-UID reference
+route. Exactb081f705a native binary9acb5976 runs update-hold under uid65534 and
+uid0; both actualGPUtail/2s ownership hold/cleanup succeed, both cause one
+PID-attributedXid32 inside the hold. Both channels remain assertedUSER (root
+birth clears CAP_SYS_ADMIN for that alloc). The saved GSP/RM registration
+privilege level and inner failure status are unmeasured: rootUID is not proof
+that the deferred record carried ADMIN. No further configuration sweep or
+privileged product call follows. Evidence: user-ring-p0/privilege-reference.
+
+## Prototype and model results, 00:20UTC
+
+`kf-chan::user_ring::Ledger` is an unconnected accounting prototype. Host slots
+wrap independently of opaque guest-generation/cursor receipts; bounded metadata,
+one-empty-slot backpressure, named invalid fetch/future-completion refusals and
+duplicate completion handling are modeled. Only simulated authenticated engine
+completion returns retirement receipts. GP_GET alone never grants staging reuse.
+No production completion adapter, native migration reset/preserve rule or mapping
+lifetime implementation is supplied. This conservative model is not yet proof
+that the migrated workload can progress.
+
+Failing-first compile logs precede implementation. Full kf-chan tests pass,
+including six new integration models and exhaustive small-ring schedules.
+`kf-rm::chanlink::WindowsUserRingPermit` is an unforgeable Rust construction
+witness over existing declared user-work birth facts, not a GPU mapping or guest
+attestation. Two failing-first/full-suite-green scope tests pin every existing
+fact-grid row with Linux/unknown identity to no permit; kernel/UVM/internal/
+incomplete routes are also refused. It is not called by any runtime birth path.
+
+The separate ordering model finds seven valid late-parse counterexamples and
+zero for immutable inspection from birth over the same schedules (four tests).
+This proves the small scheduling argument, not a full parser/GPU contract.
+Native permission positives both PASS; the negative has attributedXid31
+FAULT_RO_VIOLATION and unchanged bytes. It directly observes GP_GET1/tail0.
+Actual mapping/free/reuse races, native migration cursors, command parser and
+completion adapter remain open. Linux exact-revision hardware regression is the
+next gate; Windows integration is not enabled by these prototype additions.

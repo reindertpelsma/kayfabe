@@ -398,6 +398,28 @@ pub fn windows_user_work(f: &UserWorkFacts) -> Result<(), &'static str> {
     Ok(())
 }
 
+/// Admission witness for §AI's READ-ONLY Windows user-work command mappings.
+/// No mapping or runtime mode is enabled by constructing it. A future birth-time
+/// adapter must require this witness AND hardwire GPU-read-only permissions.
+/// It authorizes neither writable fences nor a kernel T-space/physical operands.
+#[derive(Debug)]
+pub struct WindowsUserRingPermit {
+    _private: (),
+}
+
+/// Evaluate the restricted exception from the existing declared birth facts.
+/// Linux/unknown-driver Passthrough never receives a witness. Driver identity is
+/// a compatibility selector, not attestation: even forged declarations must
+/// remain contained by USER-channel physical denial and actual read-only PTEs.
+/// Must be evaluated before token/schedule, never to convert a live channel.
+///
+/// # Errors
+/// The first missing Windows user-work fact, by name.
+pub fn windows_user_ring_permit(f: &UserWorkFacts) -> Result<WindowsUserRingPermit, &'static str> {
+    windows_user_work(f)?;
+    Ok(WindowsUserRingPermit { _private: () })
+}
+
 /// `engine` (NV2080 space) is a video engine: NVDEC0-7, NVENC0-3 or OFA0/1.
 #[must_use]
 pub fn video_engine(engine: u32) -> bool {
@@ -2453,6 +2475,31 @@ mod tests {
                 process_id: Some(0x3b8),
                 kernel_pid: Some(0x350),
                 system_pid_is_kernel: false,
+            }
+        }
+
+        #[test]
+        fn user_ring_exception_never_admits_linux_or_unknown_driver() {
+            for f in grid() {
+                let linux = UserWorkFacts { windows: false, ..f };
+                assert!(super::super::windows_user_ring_permit(&linux).is_err());
+            }
+        }
+
+        #[test]
+        fn user_ring_exception_requires_all_declared_user_work_facts() {
+            assert!(super::super::windows_user_ring_permit(&dwm()).is_ok());
+            for f in [
+                UserWorkFacts { kernel_stamped: false, ..dwm() },
+                UserWorkFacts { uvm_owned: true, ..dwm() },
+                UserWorkFacts { rm_internal: true, ..dwm() },
+                UserWorkFacts { ctx_share_known: false, ..dwm() },
+                UserWorkFacts { process_id: Some(0x350), ..dwm() },
+                UserWorkFacts { process_id: Some(4), system_pid_is_kernel: true, ..dwm() },
+                UserWorkFacts { engine: None, ..dwm() },
+                UserWorkFacts::default(),
+            ] {
+                assert!(super::super::windows_user_ring_permit(&f).is_err(), "{f:?}");
             }
         }
 

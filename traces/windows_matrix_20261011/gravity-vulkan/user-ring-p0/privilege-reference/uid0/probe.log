@@ -1,0 +1,9 @@
+kf-host: host tier: stock
+DEFERRED_UPDATE driver=595.91.07 mode=update-hold
+kf-host: channel birth h=0xcafe0008 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+DEFERRED_UPDATE registered channel=Channel { tsg: cafe0007, chan: cafe0008, token: 4, born_user: Some(BirthPrivilege { reply_flags: 80 }) } object=0xcafe0009 api=0xcafe000a sw_class_id=0x1 privilege=USER
+DEFERRED_UPDATE GPU_TAIL fence=1 trigger=true elapsed_us=1057
+DEFERRED_UPDATE_HOLD_BEGIN unix_us=1791764169405987
+DEFERRED_UPDATE_HOLD_END unix_us=1791764171406283
+DEFERRED_UPDATE_CLEANUP channel=Ok(Some(())) view=Ok(()) unmap=Ok(()) memory=Ok(())
+DEFERRED_UPDATE_PROBE=PASS

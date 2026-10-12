@@ -1,0 +1,8 @@
+{
+  "revision": "b081f705a7502380d584f37ab7da80e668f5018f",
+  "binary_sha256": "9acb5976725bbc0fd8a57685038840f121cca4b7950097b7f8452544d61c224c",
+  "binary": "/data/kf-fifo-refusal-target-b081f705/release/kf-deferred-update-probe",
+  "workload": "update-hold",
+  "variable": "registrant process UID/GID65534 versus0",
+  "purpose": "privileged reference measurement only; GPU channels must remain USER"
+}

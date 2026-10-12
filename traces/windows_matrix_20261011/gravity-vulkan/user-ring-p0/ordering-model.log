@@ -1,0 +1,6 @@
+{"valid_schedules": 7, "late_parse_counterexamples": 7, "first_counterexample": ["publish", "rewrite", "set_parse", "register", "reply", "fetch"], "birth_snapshot_counterexamples": 0, "scope": "ordering model only; not native migration/parser proof"}
+....
+----------------------------------------------------------------------
+Ran 4 tests in 0.002s
+
+OK
