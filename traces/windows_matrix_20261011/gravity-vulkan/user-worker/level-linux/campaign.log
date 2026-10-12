@@ -1,0 +1,31 @@
+REMOVED_OWN_DISPOSABLE_1560 2680508416
+HYPOTHESIS synthetic witness LEVEL1 retains CONTROL NOP SYNC_WAIT host-consumption ordering.
+FALSIFIER native storage copy/fetch/held-prefix oracle fails or hostXid; witness LEVEL is the only behavioral change in this native storage path.
+NATIVE_WITNESS_START mode=storage-control-barrier-phased at=2026-10-12T20:27:05+02:00
+kf-host: channel birth h=0xcafe000a engine=0x9 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=not-held
+USER_STORAGE_SETUP sync_wait=true control_barrier=true class=0xc56f driver=595.91.07 entries=512 ring_gpu_read_only=true page_size=4096 userd_gpu_mapped=false
+USER_STORAGE_HELD samples=48 max_get=1 early_reference=false acquire=0 ce_semaphore=0
+USER_STORAGE_OBSERVATION finished=true reference=1 copy_matches=true ce_semaphore=1 GP_GET=4 GP_PUT=4 elapsed_us=52870
+USER_STORAGE_CLEANUP result=Ok(()) released=true
+USER_RING_BUFFER_CLEANUP view=Ok(()) unmap=Ok(Some(())) memory=Ok(())
+USER_RING_PROBE=PASS
+NATIVE_WITNESS_START mode=storage-assembled-phased at=2026-10-12T20:27:05+02:00
+USER_STORAGE_SETUP sync_wait=true control_barrier=true class=0xc56f driver=595.91.07 entries=512 ring_gpu_read_only=true page_size=4096 userd_gpu_mapped=false
+USER_STORAGE_HELD samples=48 max_get=1 early_reference=false acquire=0 ce_semaphore=0
+USER_STORAGE_OBSERVATION finished=true reference=1 copy_matches=true ce_semaphore=1 GP_GET=3 GP_PUT=3 elapsed_us=52777
+USER_STORAGE_ASSEMBLED_RECEIPT generation=1 guest_get=1 native_get=3
+USER_STORAGE_CLEANUP result=Ok(()) released=true
+USER_RING_BUFFER_CLEANUP view=Ok(()) unmap=Ok(Some(())) memory=Ok(())
+USER_RING_PROBE=PASS
+USER_MEMORY_ACCESS_LINUX_START=2026-10-12T20:27:06+02:00 source=a38602015d0c295fdbb9a03e2e28fbabf78174ae
+HYPOTHESIS exact source preserves Linux object policy, USER birth/isolation and original fast arms with the shared graph wrapper.
+FALSIFIER any gate, privilege census or fast arm FAIL/CRASH/TIMEOUT/NOTRUN.
+USER_MEMORY_ACCESS_LINUX_EXIT=0 at=2026-10-12T20:31:52+02:00
+DMA-FQ
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/sda2       1.8T  1.6T  105G  94% /
+HYPOTHESIS reviewed exact source preserves the provisioned Linux Cinnamon/Xorg desktop and OpenGL gears smoke.
+FALSIFIER boot/SSH fails, Cinnamon/Xorg absent, renderer is software, gears reports no frames, or guest/host has an unexpected fault. This is not render-hash parity or a relay-fix test.
+LINUX_DESKTOP_SMOKE=PASS_WITH_WARNINGS
+LINUX_DESKTOP_EXIT=0 at=2026-10-12T20:32:44+02:00 source=a38602015d0c295fdbb9a03e2e28fbabf78174ae
+USER_LEVEL_LINUX_EXIT=0

@@ -1,5 +1,27 @@
 # Resume Windows apps and GravityMark Vulkan
 
+## UPDATE 2026-10-12 18:34UTC — exact LEVEL correction green on Linux; Windows1570 launched
+
+Last confirmed pusha38602015. Exacta38602015d0c295fdbb9a03e2e28fbabf78174ae:
+changed native private witness/assembled probes2/2PASS/noXid, held maxGET1/no
+premature reference and actual laterGP_GET=PUT3or4. Linux9/9+gate10PASS,
+USERbirth12/12/refused0, rebuilt QEMU/client/fresh fastguest, fast30/30/crash0/
+NOTRUN0/exit0. Expected five negative-testXid31, no32. NVIDIA Linux desktop/gears
+~59–60FPS PASS_WITH_WARNINGS/startupassertions/fliptimeout, no hostXid; child
+stopped/noQEMU/DMA-FQ. Evidence user-worker/level-linux with exact binary hashes.
+
+Windows1570 now running same source under globalGPUlock, production setup plus
+only defaultOFF relay flag, original600s GravityVk oracle/media. No app PASS yet.
+Only behavior change versus1560 is public LEVEL support/preservation (bounded
+error context added). Cursor-zero migration and old-source continuity remain
+unverified; guest GET/TOP_LEVEL_GET propagation unimplemented. No vCPU lock or
+PB work; unknown/pending floods coalesce in existing atomic-table tests, durable
+worker retry/Free-reuse tests retained. Vast inventoryempty18:28UTC. Personal
+images protected; own completed1560 disk removed after dependency-header audit.
+Host log/data /data/kf-user-level-windows-a38602015.log,
+$W/codex-user-worker-windows-a38602015. Wait for result, stop on named falsifier.
+
+
 ## UPDATE 2026-10-12 18:25UTC — public LEVEL semantics/native match; correction reviewed
 
 Last confirmed push7d00679ae. Native sameGPU/595.91.07/USERuid65534 matched probes

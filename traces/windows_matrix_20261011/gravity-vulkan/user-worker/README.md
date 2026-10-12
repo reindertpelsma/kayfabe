@@ -115,3 +115,24 @@ first actual mapping test RED; full six-crate1921PASS and independent review.
 No guest TOP_LEVEL_GET/GET propagation/full progress claim. Exact native storage,
 Linux and Windows retest still required;1560 cause inferred pending next run.
 See native-level for pinned public source, oracle and before-run falsifier.
+
+## Untrusted doorbell review, 2026-10-12
+
+Doorbell values select only this VM's atomic token table; Unknown/retired absorbs
+without bumping work sequence. Already-RUNG floods coalesce. Existing trap tests
+exercise10000unknown/5000pending rings; cleanup tests cover stale wake/index reuse.
+The active USER route is fixed from birth and shares MMIO/ioeventfd dispatch.
+The vCPU doorbell arm does not take private USER state or Pt locks: atomic token
+state/bitmap plus conditional EFD_NONBLOCK worker signal. Direct Passthrough uses
+only the pre-mapped fenced MMIO store, not an RM ioctl. A try-lock fallback must
+retain durable demand; a failed try-lock cannot drop a final ring. CPU publication
+and channel-owned API/source validation remain distinct; a token/wake grants no
+mapping/host-action authority. Atomic CAS is lock-free, not a wait-free per-thread
+bound, and these tests are not an exhaustive native runtime interleaving proof.
+
+## Exact LEVEL source hardware, 2026-10-12 18:34UTC
+
+a38602015 nativewitness2/2PASS/noXid; Linux9+10/fast30PASS, desktop/gears59–60FPS
+with startupwarnings/no hostXid. Evidence level-linux. Windows1570 launched on
+that exact source, verdict pending. Personal images preserved. Full app matrix
+and compatibility sweep remain open after the required Windows Vulkan PASS.
