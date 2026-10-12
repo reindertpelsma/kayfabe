@@ -13,6 +13,8 @@ use std::sync::{Arc, RwLock, RwLockReadGuard, TryLockError, Weak, atomic::Orderi
 /// Trusted per-worker copy budget, independent of guest PB/ring sizes.
 pub(crate) const MAX_BYTES: usize = 64 << 10;
 const PIECES: usize = 64;
+// Trusted declared-ring metadata cap:8MiB at public4KiB pages, plus one for8-byte alignment.
+const RING_PIECES: usize = 2049;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Refusal {
@@ -43,6 +45,7 @@ pub(crate) struct Snapshot<'a> {
     end: u64,
     ram: &'a RamMap,
     generation: u64,
+    pieces: usize,
 }
 
 impl Snapshot<'_> {
@@ -51,11 +54,10 @@ impl Snapshot<'_> {
     /// The callback MUST NOT perform an RM ioctl, acquire channel/graph locks,
     /// or wait/retry. Channel identity and the VA-manager ordering gate are
     /// separate prerequisites. This does not pin engine operands or complete work.
-    #[allow(dead_code)] // Called by the forthcoming runtime USER publisher.
     pub(crate) fn admit<T>(&self, publish: impl FnOnce() -> T) -> Result<T, Refusal> {
         let rows = self.rows.upgrade().ok_or(Refusal::Changed)?;
         let guard = try_read(&rows)?;
-        if resolve(&guard, self.va, self.end)? != self.spans {
+        if resolve(&guard, self.va, self.end, self.pieces)? != self.spans {
             return Err(Refusal::Changed);
         }
         let _ram_guard = try_read(&self.ram.blocks)?;
@@ -75,53 +77,91 @@ impl Mapping<'_> {
     }
 }
 
-pub(crate) fn mapped<'a>(rows: &PlacedRows, log: &RowsLog, ram: &'a RamMap,
-    generation: u64, va: u64, bytes: u64, store_bound: u64)
-    -> Result<Mapping<'a>, Refusal> {
+pub(crate) fn mapped<'a>(
+    rows: &PlacedRows,
+    log: &RowsLog,
+    ram: &'a RamMap,
+    generation: u64,
+    va: u64,
+    bytes: u64,
+    store_bound: u64,
+) -> Result<Mapping<'a>, Refusal> {
     // Allocation policy, not a die/driver fact: at most2^20 source GP entries.
     if bytes == 0 || bytes > 8 << 20 || va & 7 != 0 {
         return Err(Refusal::Bounds);
     }
-    let end = va.checked_add(bytes).filter(|end| *end < 1 << 40)
+    let end = va
+        .checked_add(bytes)
+        .filter(|end| *end < 1 << 40)
         .ok_or(Refusal::Bounds)?;
     let guard = try_read(rows)?;
     let epoch = log.epoch();
-    let spans = resolve(&guard, va, end)?;
+    let spans = resolve(&guard, va, end, RING_PIECES)?;
     let blocks = try_read(&ram.blocks)?;
     if generation == 0 || ram.generation.load(Ordering::Relaxed) != generation {
         return Err(Refusal::Topology);
     }
-    if blocks.len() > PIECES { return Err(Refusal::Bounds); }
+    if blocks.len() > PIECES {
+        return Err(Refusal::Bounds);
+    }
     let fd = blocks.iter().find_map(|b| b.fd);
     let mut pieces = 0;
     for span in &spans {
         let end = span.off.checked_add(span.len).ok_or(Refusal::Bounds)?;
         if !span.ram {
-            if end > store_bound { return Err(Refusal::Bounds); }
+            if end > store_bound {
+                return Err(Refusal::Bounds);
+            }
             continue;
         }
         let fd = fd.ok_or(Refusal::Topology)?;
         let mut at = span.off;
         while at < end {
-            if pieces == PIECES { return Err(Refusal::Bounds); }
+            if pieces == RING_PIECES {
+                return Err(Refusal::Bounds);
+            }
             pieces += 1;
-            let mut covers = blocks.iter().enumerate().filter(|(_, b)|
-                b.fd == Some(fd) && at >= b.fd_off && b.fd_off
-                    .checked_add(b.mem.len() as u64).is_some_and(|e| at < e));
+            let mut covers = blocks.iter().enumerate().filter(|(_, b)| {
+                b.fd == Some(fd)
+                    && at >= b.fd_off
+                    && b.fd_off
+                        .checked_add(b.mem.len() as u64)
+                        .is_some_and(|e| at < e)
+            });
             let (index, block) = covers.next().ok_or(Refusal::Topology)?;
-            if covers.next().is_some() { return Err(Refusal::Topology); }
-            let until = block.fd_off.checked_add(block.mem.len() as u64)
-                .ok_or(Refusal::Bounds)?.min(end);
-            if blocks.iter().enumerate().any(|(i, other)| i != index
-                && other.fd == Some(fd) && other.fd_off < until
-                && other.fd_off.checked_add(other.mem.len() as u64).is_none_or(|e| at < e)) {
+            if covers.next().is_some() {
+                return Err(Refusal::Topology);
+            }
+            let until = block
+                .fd_off
+                .checked_add(block.mem.len() as u64)
+                .ok_or(Refusal::Bounds)?
+                .min(end);
+            if blocks.iter().enumerate().any(|(i, other)| {
+                i != index
+                    && other.fd == Some(fd)
+                    && other.fd_off < until
+                    && other
+                        .fd_off
+                        .checked_add(other.mem.len() as u64)
+                        .is_none_or(|e| at < e)
+            }) {
                 return Err(Refusal::Topology);
             }
             at = until;
         }
     }
-    Ok(Mapping(Snapshot { bytes: Vec::new(), epoch, rows: Arc::downgrade(rows),
-        spans, va, end, ram, generation }))
+    Ok(Mapping(Snapshot {
+        bytes: Vec::new(),
+        epoch,
+        rows: Arc::downgrade(rows),
+        spans,
+        va,
+        end,
+        ram,
+        generation,
+        pieces: RING_PIECES,
+    }))
 }
 
 fn try_read<T>(lock: &RwLock<T>) -> Result<RwLockReadGuard<'_, T>, Refusal> {
@@ -135,14 +175,15 @@ fn resolve(
     rows: &std::collections::BTreeMap<u64, super::PlacedRow>,
     va: u64,
     end: u64,
+    pieces: usize,
 ) -> Result<Vec<Span>, Refusal> {
     let mut spans = Vec::new();
     spans
-        .try_reserve_exact(PIECES)
+        .try_reserve_exact(pieces)
         .map_err(|_| Refusal::Allocation)?;
     let mut at = va;
     while at < end {
-        if spans.len() == PIECES {
+        if spans.len() == pieces {
             return Err(Refusal::Bounds);
         }
         let (&base, &(len, off, ram, perm)) =
@@ -170,7 +211,6 @@ fn resolve(
 /// Snapshot one bounded span. No row/RAM pointer escapes; errors expose no
 /// partial output. The topology generation comes from this channel's birth,
 /// never refreshed after revocation. This is not a VA-manager submission gate.
-#[allow(dead_code)] // Runtime USER source consumer is the next adapter.
 pub(crate) fn snapshot<'a>(
     rows: &PlacedRows,
     log: &RowsLog,
@@ -186,7 +226,7 @@ pub(crate) fn snapshot<'a>(
     let end = va + bytes as u64;
     let first = try_read(rows)?;
     let epoch = log.epoch();
-    let spans = resolve(&first, va, end)?;
+    let spans = resolve(&first, va, end, PIECES)?;
     drop(first);
     // This is the only stage allowed to arm native CPU views. An epoch change
     // during preparation discards this attempt before copying any source bytes.
@@ -201,7 +241,7 @@ pub(crate) fn snapshot<'a>(
     }
     // Steer can remove a row without updating RowsLog. Re-resolve the whole
     // source as well: an epoch is not the sole authority for backing identity.
-    if resolve(&rows_guard, va, end)? != spans {
+    if resolve(&rows_guard, va, end, PIECES)? != spans {
         return Err(Refusal::Changed);
     }
     let blocks = try_read(&ram.blocks)?;
@@ -270,6 +310,7 @@ pub(crate) fn snapshot<'a>(
         end,
         ram,
         generation,
+        pieces: PIECES,
     })
 }
 
@@ -278,6 +319,135 @@ mod tests {
     use super::*;
     use kf_host::MapPerm;
     use std::sync::atomic::Ordering;
+    #[test]
+    fn full_eight_mib_ring_at_four_kib_grain_is_bounded_and_admitted() {
+        let (ram, _, rows, log, generation) = fixture();
+        rows.write().unwrap().clear();
+        for i in 0..2048 {
+            rows.write().unwrap().insert(
+                0x100000 + i * 4096,
+                (
+                    4096,
+                    i * 4096,
+                    false,
+                    MapPerm {
+                        read_only: true,
+                        ..MapPerm::READ_WRITE
+                    },
+                ),
+            );
+        }
+        let mapping = mapped(&rows, &log, &ram, generation, 0x100000, 8 << 20, 8 << 20).unwrap();
+        mapping.admit(|| ()).unwrap();
+        // Complete span admission still notices a changed last page, even if
+        // the current copied descriptor is at the beginning of the source.
+        rows.write()
+            .unwrap()
+            .get_mut(&(0x100000 + 2047 * 4096))
+            .unwrap()
+            .1 = 0;
+        assert_eq!(mapping.admit(|| ()), Err(Refusal::Changed));
+        assert_eq!(
+            mapped(
+                &rows,
+                &log,
+                &ram,
+                generation,
+                0x100000,
+                (8 << 20) + 8,
+                9 << 20
+            )
+            .err(),
+            Some(Refusal::Bounds)
+        );
+    }
+    #[test]
+    fn maximum_eight_aligned_ring_may_span_2049_four_kib_rows() {
+        let (ram, _, rows, log, generation) = fixture();
+        rows.write().unwrap().clear();
+        for i in 0..RING_PIECES as u64 {
+            rows.write().unwrap().insert(
+                0x100000 + i * 4096,
+                (
+                    4096,
+                    i * 4096,
+                    false,
+                    MapPerm {
+                        read_only: true,
+                        ..MapPerm::READ_WRITE
+                    },
+                ),
+            );
+        }
+        let ring = mapped(&rows, &log, &ram, generation, 0x100008, 8 << 20, 9 << 20).unwrap();
+        ring.admit(|| ()).unwrap();
+    }
+    #[test]
+    fn actual_source_admission_never_reserves_native_credit_on_busy_or_replaced_rows() {
+        use kf_chan::user_scan::Fetch;
+        let (ram, _, rows, log, generation) = fixture();
+        let snapshot = snapshot(&rows, &log, &ram, generation, 0x10000, 8, &mut NoStore).unwrap();
+        let mut fetch = Fetch::new(8).unwrap();
+        let mut writes = 0;
+        {
+            let _writer = rows.write().unwrap();
+            assert_eq!(
+                snapshot.admit(|| {
+                    fetch.publish(Some((1, 1))).unwrap();
+                    writes += 1;
+                }),
+                Err(Refusal::Busy)
+            );
+        }
+        assert_eq!((fetch.issued(), writes), (0, 0));
+        // Successful retry of the SAME live snapshot reserves exactly once.
+        snapshot
+            .admit(|| {
+                fetch.publish(Some((1, 1))).unwrap();
+                writes += 1;
+            })
+            .unwrap();
+        assert_eq!((fetch.issued(), writes), (1, 1));
+        rows.write().unwrap().get_mut(&0x10000).unwrap().1 += 8;
+        assert_eq!(
+            snapshot.admit(|| {
+                fetch.publish(Some((1, 2))).unwrap();
+                writes += 1;
+            }),
+            Err(Refusal::Changed)
+        );
+        assert_eq!((fetch.issued(), writes), (1, 1));
+        assert_eq!(fetch.observe(1).unwrap(), [(1, 1)]);
+    }
+    #[test]
+    fn staged_suffix_keeps_birth_topology_through_put_without_old_source_rows() {
+        let (ram, _, _, _, generation) = fixture();
+        let mut puts = 0;
+        ram.admit_user_generation(generation, || {
+            assert!(ram.blocks.try_write().is_err());
+            puts += 1;
+        })
+        .unwrap();
+        assert_eq!(puts, 1);
+        // A zero-length logical USERD check done before this change cannot
+        // authorize the subsequent suffix PUT against a revoked RAM topology.
+        ram.generation.fetch_add(1, Ordering::Release);
+        assert_eq!(
+            ram.admit_user_generation(generation, || {
+                puts += 1;
+            }),
+            Err(Refusal::Topology)
+        );
+        assert_eq!(puts, 1);
+        let _writer = ram.blocks.write().unwrap();
+        assert_eq!(
+            ram.admit_user_generation(generation, || {
+                puts += 1;
+            }),
+            Err(Refusal::Busy)
+        );
+        assert_eq!(puts, 1);
+    }
     struct NoStore;
     impl Store for NoStore {
         fn prepare(&mut self, spans: &[Span]) -> Result<(), Refusal> {
@@ -425,28 +595,56 @@ mod tests {
     #[test]
     fn complete_ring_mapping_is_checked_without_copying_or_preparing_store_views() {
         let (ram, _, rows, log, generation) = fixture();
-        rows.write().unwrap().insert(0x10000, (0x80000, 0, false, MapPerm::READ_WRITE));
+        rows.write()
+            .unwrap()
+            .insert(0x10000, (0x80000, 0, false, MapPerm::READ_WRITE));
         let source = mapped(&rows, &log, &ram, generation, 0x10000, 0x80000, 0x80000).unwrap();
-        assert_eq!(source.admit(|| {
-            assert!(rows.try_write().is_err());
-            assert!(ram.blocks.try_write().is_err());
-            7
-        }), Ok(7));
-        assert_eq!(mapped(&rows, &log, &ram, generation, 0x10000, 0x80008, 0x100000).err(), Some(Refusal::Missing(0x90000)));
-        assert_eq!(mapped(&rows, &log, &ram, generation, 0x10000, 0x80000, 0x7ffff).err(), Some(Refusal::Bounds));
+        assert_eq!(
+            source.admit(|| {
+                assert!(rows.try_write().is_err());
+                assert!(ram.blocks.try_write().is_err());
+                7
+            }),
+            Ok(7)
+        );
+        assert_eq!(
+            mapped(&rows, &log, &ram, generation, 0x10000, 0x80008, 0x100000).err(),
+            Some(Refusal::Missing(0x90000))
+        );
+        assert_eq!(
+            mapped(&rows, &log, &ram, generation, 0x10000, 0x80000, 0x7ffff).err(),
+            Some(Refusal::Bounds)
+        );
         rows.write().unwrap().clear();
-        assert_eq!(source.admit(|| panic!("revoked ring")), Err(Refusal::Missing(0x10000)));
+        assert_eq!(
+            source.admit(|| panic!("revoked ring")),
+            Err(Refusal::Missing(0x10000))
+        );
     }
     #[test]
     fn ring_mapping_rejects_ram_holes_aliases_revocation_and_guest_sized_work() {
         let (ram, block, rows, log, generation) = fixture();
         assert!(mapped(&rows, &log, &ram, generation, 0x10000, 0x8000, 0).is_ok());
-        rows.write().unwrap().insert(0x10000, (0x10000, 0, true, MapPerm::READ_WRITE));
-        assert_eq!(mapped(&rows, &log, &ram, generation, 0x10000, 0x10000, 0).err(), Some(Refusal::Topology));
-        assert_eq!(mapped(&rows, &log, &ram, generation, 0x10001, 8, 0).err(), Some(Refusal::Bounds));
-        assert_eq!(mapped(&rows, &log, &ram, generation, 0x10000, (8 << 20) + 8, 0).err(), Some(Refusal::Bounds));
+        rows.write()
+            .unwrap()
+            .insert(0x10000, (0x10000, 0, true, MapPerm::READ_WRITE));
+        assert_eq!(
+            mapped(&rows, &log, &ram, generation, 0x10000, 0x10000, 0).err(),
+            Some(Refusal::Topology)
+        );
+        assert_eq!(
+            mapped(&rows, &log, &ram, generation, 0x10001, 8, 0).err(),
+            Some(Refusal::Bounds)
+        );
+        assert_eq!(
+            mapped(&rows, &log, &ram, generation, 0x10000, (8 << 20) + 8, 0).err(),
+            Some(Refusal::Bounds)
+        );
         ram.del(block.gpa);
-        assert_eq!(mapped(&rows, &log, &ram, generation, 0x10000, 8, 0).err(), Some(Refusal::Topology));
+        assert_eq!(
+            mapped(&rows, &log, &ram, generation, 0x10000, 8, 0).err(),
+            Some(Refusal::Topology)
+        );
     }
     struct CheckedStore<'a> {
         rows: &'a PlacedRows,

@@ -4,7 +4,8 @@
 //! Copy reads only the completely prepared views: no native verb or allocation.
 //! A release failure retains the view/cookie and blocks replacement. The owner
 //! must keep this cache on cleanup error, until explicit retry or session close.
-//! No runtime channel owns this adapter yet.
+//! The experimental USER worker retains it until confirmed native cleanup.
+//! Its private publisher mutex may exclude Free; no drainer/vCPU waits on it.
 
 use crate::mem::userread::{Refusal, Store};
 use kf_chan::tmode::Span;

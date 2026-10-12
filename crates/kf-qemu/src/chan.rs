@@ -463,6 +463,8 @@ struct PtChan {
     /// alloc of that class on the channel — (guest handle, host handle). At most one per twin; freed
     /// by host RM with the twin's channel.
     defapi_host: Option<(u32, u32)>,
+    user_defapi: Option<userpump::Software>,
+    user_published: bool,
     /// Late probe's first 5080 lifetime; invalidated at guest object/subtree free.
     peek_defapi: Option<PeekDefapi>,
     /// ★ v3-promote: the guest's `GPU_PROMOTE_CTX` / `GPU_EVICT_CTX` statements for this channel,
@@ -2268,10 +2270,10 @@ pub struct ChanPlane {
     pt: Mutex<HashMap<(u32, u32), PtChan>>,
     /// Exact pending Windows USER births, canceled before live subtree removal.
     user_births: crate::userbirth::Book,
-    user_rings: Mutex<HashMap<u32, Arc<Mutex<userrelay::Record>>>>,
+    user_rings: Mutex<HashMap<u32, Arc<userrelay::Cell>>>,
     // Bounded ownership for every native attempt, including errors whose legacy
     // unwind result is unavailable. These rows never retire on a plain Err.
-    user_birth_holds: Mutex<Vec<(Arc<()>, Arc<Mutex<userrelay::Record>>)>>,
+    user_birth_holds: Mutex<Vec<(Arc<()>, Arc<userrelay::Cell>)>>,
     /// Current live object graph for bounded, exact-lifetime USERD access.
     pub memory_access: Arc<kf_rm::memory_access::Access>,
     /// ★ 2026-10-08 (`V3_USERD_RELAY.md`): relayed-USERD twins, by host token.
@@ -3508,6 +3510,7 @@ impl ChanPlane {
                         }
                         crate::latejoin::schedule_group_once(me.rm, &mut groups_done, *c, enable)
                             .map_err(|e| (NV_ERR_INVALID_STATE, e))?;
+                        if enable { me.user_ring_wake(c.token); }
                     }
                     Ok(format!("{client:#x}:{object:#x} GPFIFO_SCHEDULE enable={enable} on {} twin(s) ({restarted} restarted after STOP)", twins.len()))
                 };
@@ -3671,7 +3674,8 @@ impl ChanPlane {
                 client,
                 parent,
                 handle,
-            } => self.deferred_api_object(client, parent, handle),
+                notify_completion,
+            } => self.deferred_api_object(client, parent, handle, notify_completion),
             ChanStatement::DebuggerExceptionMask {
                 client,
                 object,
@@ -4211,6 +4215,7 @@ impl ChanPlane {
                         }
                     }
                 }
+                if !disable { for (_, chan) in &pt { me.user_ring_wake(chan.token); } }
                 let after = me.relay_snapshots(&pt);
                 let toks: Vec<String> = pt
                     .iter()
@@ -4768,13 +4773,16 @@ impl ChanPlane {
 
     /// ★★ OWNER_RULINGS §U.1: an `NV50_DEFERRED_API_CLASS` alloc — admitted (and numbered) under a
     /// Translated channel, refused `NV_ERR_NOT_SUPPORTED` under a Passthrough twin.
-    fn deferred_api_object(&self, client: u32, parent: u32, handle: u32) -> ChanAnswer {
-        let (passthrough, user_work) = self
+    fn deferred_api_object(&self, client: u32, parent: u32, handle: u32, notify_completion: bool) -> ChanAnswer {
+        let (passthrough, user_work, user_ring) = self
             .pt
             .lock()
             .ok()
-            .and_then(|m| m.get(&(client, parent)).map(|v| (true, v.user_work)))
-            .unwrap_or((false, false));
+            .and_then(|m| m.get(&(client, parent)).map(|v| (true, v.user_work, v.user_ring)))
+            .unwrap_or((false, false, false));
+        if user_ring {
+            return self.user_ring_software_object(client, parent, handle, notify_completion);
+        }
         if passthrough {
             // The guest numbered it anyway: keep the twin's display-SW mirror equal.
             let _ = register_other_sw(&self.pt, (client, parent));
@@ -5230,6 +5238,19 @@ impl ChanPlane {
                 }
             }
         }
+        // Exact USER software lifetimes are invalidated at statement time; host
+        // children remain retained by their native channel until confirmed Free.
+        if let Ok(pt) = self.pt.lock() {
+            for (key, t) in pt.iter() {
+                if let Some(sw) = &t.user_defapi {
+                    if (key.0 == client && sw.guest == object)
+                        || (ChanScope { tsg: t.tsg, parent: t.parent, device: t.device })
+                            .freed_by(*key, client, object) {
+                        sw.live.store(false, Ordering::Release);
+                    }
+                }
+            }
+        }
         cancel_pending_engine_objects(&self.pt, client, object);
         // ★ 2026-10-09: a freed TSG (or client) is no longer scheduled — its handle may come back
         // as a new group, whose first channel must not be scheduled from the old one's state.
@@ -5475,7 +5496,9 @@ impl ChanPlane {
                     // The error context goes AFTER its channel (host RM refuses freeing a context
                     // DMA a live channel names as its error context).
                     if let Some(n) = t.notifier {
-                        me.release_notifier(n);
+                        if t.user_ring && r.is_err() {
+                            me.retain_user_ring_notifier(t.chan.token, &t.allocation, n);
+                        } else { me.release_notifier(n); }
                     }
                     me.engine_live(t.engine, false);
                     // ★ The per-token hardware ledger (`run_fast_guest.sh` gates on it): every ring
@@ -6600,7 +6623,7 @@ impl ChanPlane {
             };
             live.fetch_add(1, Ordering::AcqRel);
             if userrelay::enabled() && a.user_ring_permit.is_some() {
-                return self.birth_user_ring(a, mirror, idx, twin);
+                return self.birth_user_ring(a, mirror, idx, twin, err_at);
             }
             return self.defer(
                 "birth passthrough",
@@ -6700,7 +6723,7 @@ impl ChanPlane {
                             disp_sw: HashMap::new(),
                             sw_ids: crate::dispsw::SwClassIds::default(),
                             dispsw_host_refused: false,
-                            defapi_host: None,
+                            defapi_host: None, user_defapi: None, user_published: false,
                             peek_defapi: None,
                             ctx: CtxBind::default(),
                             user_work: a.user_work,
@@ -7829,6 +7852,9 @@ impl ChanPlane {
         // Translated slot (its ring is the guest's, never pumped), so its liveness is the relay's.
         // [measured, run67 at 8288ff8e] without this the plane judged it untranslatable and never
         // ran a relay step (gets=0).
+        if let Some(record) = self.user_ring_record(ht) {
+            return record.alive(|r| !r.retired && !r.free_attempted && r.dead.is_none());
+        }
         if self.relays.lock().is_ok_and(|m| m.contains_key(&ht)) {
             return true;
         }
@@ -7913,7 +7939,7 @@ mod dispsw_tests {
             disp_sw: disp_sw.iter().copied().collect(),
             sw_ids: crate::dispsw::SwClassIds::default(),
             dispsw_host_refused: false,
-            defapi_host: None,
+            defapi_host: None, user_defapi: None, user_published: false,
             peek_defapi: None,
             ctx: CtxBind::default(),
             user_work: false,

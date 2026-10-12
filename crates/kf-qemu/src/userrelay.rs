@@ -9,10 +9,48 @@
 use super::*;
 
 pub(super) fn enabled() -> bool {
-    // Deliberately not activatable, including by an environment variable.
-    // Birth quota, initialization, notifier and submit/migration admission must
-    // be complete and reviewed before this draft can affect a guest.
-    false
+    // Diagnostic vertical slice, never required for boot and default OFF.
+    // Cursor-zero migration is a run hypothesis, not established RM semantics.
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("KF3_WIN_USER_RING_RELAY").is_ok_and(|v| v == "1"))
+}
+
+/// Durable demand is outside the private publication mutex: a final doorbell
+/// cannot be lost merely because the act thread owns birth/Free metadata.
+pub(super) struct Cell<T = Record> {
+    pub idx: u32,
+    pub retry: AtomicBool,
+    inner: Mutex<T>,
+}
+impl<T> Cell<T> {
+    fn new(idx: u32, value: T) -> Self {
+        Self {
+            idx,
+            retry: AtomicBool::new(false),
+            inner: Mutex::new(value),
+        }
+    }
+    pub fn lock(&self) -> std::sync::LockResult<std::sync::MutexGuard<'_, T>> {
+        self.inner.lock()
+    }
+    pub fn try_lock(&self) -> std::sync::TryLockResult<std::sync::MutexGuard<'_, T>> {
+        self.inner.try_lock()
+    }
+    pub fn enter(&self) -> std::sync::TryLockResult<std::sync::MutexGuard<'_, T>> {
+        self.retry.store(true, Ordering::Release);
+        self.inner.try_lock().inspect_err(|e| {
+            if matches!(e, std::sync::TryLockError::Poisoned(_)) {
+                self.retry.store(false, Ordering::Release);
+            }
+        })
+    }
+    pub fn alive(&self, check: impl FnOnce(&T) -> bool) -> bool {
+        match self.inner.try_lock() {
+            Ok(r) => check(&r),
+            Err(std::sync::TryLockError::WouldBlock) => true,
+            Err(std::sync::TryLockError::Poisoned(_)) => false,
+        }
+    }
 }
 
 /// Kept even after statement-time Free; only confirmed native free retires it.
@@ -28,6 +66,7 @@ pub(super) struct Record {
     pub source: (u64, u32),
     pub vas_key: VasKey,
     pub pump: Option<super::userpump::Pump>,
+    notifier: Option<PtNotifier>,
     pub retired: bool,
     pub free_attempted: bool,
     pub dead: Option<String>,
@@ -44,7 +83,9 @@ struct NeverBorn {
 impl Drop for NeverBorn {
     fn drop(&mut self) {
         if !self.native_attempted {
-            if let Some(q) = &self.quota { let _ = q.release_confirmed(); }
+            if let Some(q) = &self.quota {
+                let _ = q.release_confirmed();
+            }
             self.live.fetch_sub(1, Ordering::AcqRel);
             if let Some(t) = &self.twin {
                 t.user_done();
@@ -61,6 +102,7 @@ struct Birth {
     d: kf_gsp::Deferred,
     count: NeverBorn,
     orphaned: Arc<AtomicBool>,
+    err_at: Option<(u32, u64, kf_arch::UserdMem)>,
 }
 impl Birth {
     fn act(self) -> Act {
@@ -89,9 +131,14 @@ impl Birth {
         // declaration through the current graph and exact resource lifetime.
         let source = (|| {
             if a.class != kf_abi::generated::classes::AMPERE_CHANNEL_GPFIFO_A
-                || a.entries < 2 || !a.entries.is_power_of_two()
-                || a.entries > (1 << 20) || a.gpfifo_va & 7 != 0
-                || u64::from(a.entries).checked_mul(8).and_then(|n| a.gpfifo_va.checked_add(n)).is_none()
+                || a.entries < 2
+                || !a.entries.is_power_of_two()
+                || a.entries > (1 << 20)
+                || a.gpfifo_va & 7 != 0
+                || u64::from(a.entries)
+                    .checked_mul(8)
+                    .and_then(|n| a.gpfifo_va.checked_add(n))
+                    .is_none()
             {
                 return Err("USER_RING_SOURCE_DECLARATION".to_string());
             }
@@ -99,18 +146,19 @@ impl Birth {
             if handle == 0 || offset & 0x1ff != 0 {
                 return Err("USER_RING_USERD_DECLARATION".into());
             }
-            let userd = me.memory_access.lease(a.client, handle, offset, 0x200)
+            let userd = me
+                .memory_access
+                .lease(a.client, handle, offset, 0x200)
                 .map_err(|e| format!("USER_RING_USERD_ACCESS {e:?}"))?;
             let Some(kf_arch::UserdMem::Sysmem { base, .. }) = a.userd else {
                 return Err("USER_RING_USERD_APERTURE_NOT_IMPLEMENTED".into());
             };
-            if !userd.matches_ram_location(base)
-                .map_err(|e| format!("USER_RING_USERD_LOCATION {e:?}"))? {
+            if !userd
+                .matches_ram_location(base)
+                .map_err(|e| format!("USER_RING_USERD_LOCATION {e:?}"))?
+            {
                 return Err("USER_RING_USERD_LOCATION_MISMATCH".into());
             }
-            // Guest USERD initialization needs an exact pending-birth guard.
-            // A memory-object lease alone cannot authorize zeroing a slot after
-            // cancellation and channel-handle reuse. No write in this draft.
             Ok(userd)
         })();
         let userd = match source {
@@ -122,33 +170,84 @@ impl Birth {
                 return Err(fail(format!("{why}; storage cleanup {cleanup:?}")));
             }
         };
-        let spec = match lease.storage.lock().map_err(|_| "USER_RING_STORAGE_POISONED".into())
-            .and_then(|s| s.spec(0)) {
+        let pump = match super::userpump::Pump::new(me) {
+            Ok(pump) => pump,
+            Err(why) => {
+                let cleanup = me.inbox.user_va.release_after_channel_free(lease);
+                let _ = me.inbox.wake.signal();
+                return Err(fail(format!("{why}; never-born cleanup {cleanup:?}")));
+            }
+        };
+        let notifier = self
+            .err_at
+            .and_then(|(obj, off, at)| me.arm_notifier(a.client, a.handle, obj, off, at));
+        let spec = match lease
+            .storage
+            .lock()
+            .map_err(|_| "USER_RING_STORAGE_POISONED".into())
+            .and_then(|s| s.spec(notifier.as_ref().map_or(0, |n| n.ctx)))
+        {
             Ok(spec) => spec,
             Err(why) => {
+                if let Some(n) = notifier {
+                    me.release_notifier(n);
+                }
                 let cleanup = me.inbox.user_va.release_after_channel_free(lease.clone());
                 let _ = me.inbox.wake.signal();
                 return Err(fail(format!("{why}; storage cleanup {cleanup:?}")));
             }
         };
-        let record = Arc::new(Mutex::new(Record {
-            quota: self.count.quota.as_ref().ok_or_else(|| fail("USER_RING_QUOTA_ABSENT".into()))?.clone(),
-            allocation: self.pending.allocation(), key: (a.client, a.handle), idx: self.idx,
-            chan: None, lease: lease.clone(), mirror: self.mirror.clone(), userd,
-            source: (a.gpfifo_va, a.entries), retired: false, free_attempted: false, dead: None,
-            vas_key: VasKey((u64::from(a.vaspace_client) << 32)
-                | u64::from(a.vaspace.ok_or_else(|| fail("USER_RING_NO_VASPACE".into()))?)),
-            // Kept unconnected until publication/retry/5080 admission review.
-            pump: None,
-        }));
+        let record = Arc::new(Cell::new(
+            self.idx,
+            Record {
+                quota: self
+                    .count
+                    .quota
+                    .as_ref()
+                    .ok_or_else(|| fail("USER_RING_QUOTA_ABSENT".into()))?
+                    .clone(),
+                allocation: self.pending.allocation(),
+                key: (a.client, a.handle),
+                idx: self.idx,
+                chan: None,
+                lease: lease.clone(),
+                mirror: self.mirror.clone(),
+                userd,
+                source: (a.gpfifo_va, a.entries),
+                retired: false,
+                free_attempted: false,
+                dead: None,
+                vas_key: VasKey(
+                    (u64::from(a.vaspace_client) << 32)
+                        | u64::from(
+                            a.vaspace
+                                .ok_or_else(|| fail("USER_RING_NO_VASPACE".into()))?,
+                        ),
+                ),
+                pump: Some(pump),
+                notifier,
+            },
+        ));
         let hold = (|| {
-            let mut holds = me.user_birth_holds.lock().map_err(|_| "USER_RING_HOLDS_POISONED")?;
-            if holds.len() >= 512 { return Err("USER_RING_NATIVE_ATTEMPT_BUDGET"); }
-            holds.try_reserve(1).map_err(|_| "USER_RING_NATIVE_ATTEMPT_ALLOCATION")?;
+            let mut holds = me
+                .user_birth_holds
+                .lock()
+                .map_err(|_| "USER_RING_HOLDS_POISONED")?;
+            if holds.len() >= 512 {
+                return Err("USER_RING_NATIVE_ATTEMPT_BUDGET");
+            }
+            holds
+                .try_reserve(1)
+                .map_err(|_| "USER_RING_NATIVE_ATTEMPT_ALLOCATION")?;
             holds.push((self.pending.allocation(), record.clone()));
             Ok(())
         })();
         if let Err(why) = hold {
+            if let Ok(mut r) = record.lock() {
+                if let Some(n) = r.notifier.take() {
+                    me.release_notifier(n);
+                }
+            }
             let cleanup = me.inbox.user_va.release_after_channel_free(lease);
             let _ = me.inbox.wake.signal();
             return Err(fail(format!("{why}; never-born cleanup {cleanup:?}")));
@@ -164,30 +263,54 @@ impl Birth {
         // and USER count until session close if no complete Channel is returned.
         self.count.native_attempted = true;
         let native = match join {
-            Some(tsg) => me.rm.birth_member(tsg, a.engine_type.unwrap_or(0), spec, false,
-                kf_host::channel::PhysicalCeBelt::Deny),
-            None => me.rm.birth_channel(self.mirror.space, a.engine_type.unwrap_or(0), spec),
+            Some(tsg) => me.rm.birth_member(
+                tsg,
+                a.engine_type.unwrap_or(0),
+                spec,
+                false,
+                kf_host::channel::PhysicalCeBelt::Deny,
+            ),
+            None => me
+                .rm
+                .birth_channel(self.mirror.space, a.engine_type.unwrap_or(0), spec),
         };
         let chan = match native {
             Ok(chan) => chan,
             Err(why) => {
-                if let Ok(mut r) = record.lock() { r.dead = Some(format!("NATIVE_BIRTH_UNCERTAIN {why:?}")); }
-                eprintln!("kf3: USER_RING_NATIVE_BIRTH_QUARANTINED {:#x}:{:#x} {why:?}; storage and counts retained, no token handed out", a.client, a.handle);
+                if let Ok(mut r) = record.lock() {
+                    r.dead = Some(format!("NATIVE_BIRTH_UNCERTAIN {why:?}"));
+                }
+                eprintln!(
+                    "kf3: USER_RING_NATIVE_BIRTH_QUARANTINED {:#x}:{:#x} {why:?}; storage and counts retained, no token handed out",
+                    a.client, a.handle
+                );
                 return Err(fail(format!("USER_RING_NATIVE_BIRTH_UNCERTAIN {why:?}")));
             }
         };
-        record.lock().map_err(|_| fail("USER_RING_RECORD_POISONED".into()))?.chan = Some(chan);
+        record
+            .lock()
+            .map_err(|_| fail("USER_RING_RECORD_POISONED".into()))?
+            .chan = Some(chan);
         // Every failure after native birth still has an explicit attempt owner.
         {
-            let mut rings = me.user_rings.lock().map_err(|_| fail("USER_RING_RECORDS_POISONED".into()))?;
+            let mut rings = me
+                .user_rings
+                .lock()
+                .map_err(|_| fail("USER_RING_RECORDS_POISONED".into()))?;
             if rings.contains_key(&chan.token) {
                 return Err(fail("USER_RING_NATIVE_TOKEN_COLLISION_QUARANTINED".into()));
             }
             rings.insert(chan.token, record.clone());
         }
         if let Some(k) = gkey {
-            let mut groups = me.groups.lock().map_err(|_| fail("USER_RING_GROUPS_POISONED".into()))?;
-            groups.entry(k).and_modify(|g| g.1 = g.1.saturating_add(1)).or_insert((chan.tsg, 1));
+            let mut groups = me
+                .groups
+                .lock()
+                .map_err(|_| fail("USER_RING_GROUPS_POISONED".into()))?;
+            groups
+                .entry(k)
+                .and_modify(|g| g.1 = g.1.saturating_add(1))
+                .or_insert((chan.tsg, 1));
         }
         let ready = if self.orphaned.load(Ordering::Acquire) {
             Err("USER_RING_BIRTH_ORPHANED".into())
@@ -197,30 +320,77 @@ impl Birth {
         };
         if let Err(why) = ready {
             let cleanup = me.release_twin(a.client, a.tsg, a.ctx_share, chan);
-            if cleanup.is_ok() { self.count.native_attempted = false; }
+            if cleanup.is_ok() {
+                self.count.native_attempted = false;
+            }
             return Err(fail(format!("{why}; native cleanup {cleanup:?}")));
         }
         let attached = me.user_births.commit(&self.pending, |identity| {
+            // Exact pending birth excludes cancellation/reuse while zeroing the
+            // newly allocated USERD. Bounded CPU access only; no native verb.
+            let mut r = record
+                .try_lock()
+                .map_err(|_| "USER_RING_RECORD_BUSY_AT_COMMIT")?;
+            r.userd
+                .write(0, &[0u8; 0x200])
+                .map_err(|e| format!("USER_RING_INITIAL_USERD {e:?}"))?;
             let mut pt = me.pt.lock().map_err(|_| "USER_RING_PT_POISONED")?;
-            if pt.contains_key(&(a.client, a.handle)) { return Err("USER_RING_LIVE_COLLISION".into()); }
-            // Publish all metadata before making the token visible. Locks here
-            // protect bounded metadata only; no native verb or source read.
-            pt.insert((a.client, a.handle), PtChan {
-                allocation: identity.clone(), chan, idx: self.idx, tsg: a.tsg,
-                ctx_share: a.ctx_share, parent: a.parent, device: a.device,
-                engine: a.engine_type.unwrap_or(0), objects: HashMap::new(),
-                pending_objects: HashMap::new(), disp_sw: HashMap::new(),
-                sw_ids: crate::dispsw::SwClassIds::default(), dispsw_host_refused: false,
-                defapi_host: None, peek_defapi: None, ctx: CtxBind::default(), user_work: true,
-                user_ring: true, live: self.count.live.clone(), twin: self.count.twin.clone(),
-                notifier: None, stopped: false, disabled: false, space: self.mirror.space,
-                rows: self.mirror.rows.clone(), user_regions: self.mirror.user_regions.clone(),
-                ledger: self.mirror.ledger.clone(), falcon_ctx: None,
-                ring_at: (a.gpfifo_va, a.entries, match a.userd {
-                    Some(kf_arch::UserdMem::Sysmem { base, .. }) => Some(base), _ => None }),
-            });
-            if let Err(e) = self.count.quota.as_ref().ok_or("USER_RING_QUOTA_ABSENT")?.attach(chan.token) {
-                pt.remove(&(a.client, a.handle));
+            if pt.contains_key(&(a.client, a.handle)) {
+                return Err("USER_RING_LIVE_COLLISION".into());
+            }
+            pt.insert(
+                (a.client, a.handle),
+                PtChan {
+                    allocation: identity.clone(),
+                    chan,
+                    idx: self.idx,
+                    tsg: a.tsg,
+                    ctx_share: a.ctx_share,
+                    parent: a.parent,
+                    device: a.device,
+                    engine: a.engine_type.unwrap_or(0),
+                    objects: HashMap::new(),
+                    pending_objects: HashMap::new(),
+                    disp_sw: HashMap::new(),
+                    sw_ids: crate::dispsw::SwClassIds::default(),
+                    dispsw_host_refused: false,
+                    defapi_host: None,
+                    user_defapi: None,
+                    user_published: false,
+                    peek_defapi: None,
+                    ctx: CtxBind::default(),
+                    user_work: true,
+                    user_ring: true,
+                    live: self.count.live.clone(),
+                    twin: self.count.twin.clone(),
+                    notifier: r.notifier.take(),
+                    stopped: false,
+                    disabled: false,
+                    space: self.mirror.space,
+                    rows: self.mirror.rows.clone(),
+                    user_regions: self.mirror.user_regions.clone(),
+                    ledger: self.mirror.ledger.clone(),
+                    falcon_ctx: None,
+                    ring_at: (
+                        a.gpfifo_va,
+                        a.entries,
+                        match a.userd {
+                            Some(kf_arch::UserdMem::Sysmem { base, .. }) => Some(base),
+                            _ => None,
+                        },
+                    ),
+                },
+            );
+            if let Err(e) = self
+                .count
+                .quota
+                .as_ref()
+                .ok_or("USER_RING_QUOTA_ABSENT")?
+                .attach(chan.token)
+            {
+                if let Some(mut t) = pt.remove(&(a.client, a.handle)) {
+                    r.notifier = t.notifier.take();
+                }
                 return Err(format!("USER_RING_TOKEN {e:?}"));
             }
             Ok(())
@@ -235,25 +405,52 @@ impl Birth {
         me.pt_births.fetch_add(1, Ordering::Relaxed);
         me.engine_live(a.engine_type.unwrap_or(0), true);
         // No fast-register path: every ring wakes a worker, including first use.
-        Ok(format!("EXPERIMENT KF3_WIN_USER_RING_RELAY chan {:#x}:{:#x} BORN USER private-read-only-ring token {:#x} host {:#x}; OWN VAS; worker-only; source={:#x}x{}",
-            a.client, a.handle, self.idx, chan.token, a.gpfifo_va, a.entries))
+        Ok(format!(
+            "EXPERIMENT KF3_WIN_USER_RING_RELAY chan {:#x}:{:#x} BORN USER private-read-only-ring token {:#x} host {:#x}; OWN VAS; worker-only; source={:#x}x{}",
+            a.client, a.handle, self.idx, chan.token, a.gpfifo_va, a.entries
+        ))
     }
 }
 
 impl ChanPlane {
     /// Statement-time counts have already been acquired by the existing USER
     /// admission. No new route for Linux or a channel without the birth permit.
-    pub(super) fn birth_user_ring(&self, a: ChannelAlloc, mirror: Mirror, idx: u32,
-        twin: Option<Arc<crate::twin::TwinState>>) -> ChanAnswer {
-        let mut count = NeverBorn { live: mirror.live.clone(), twin, native_attempted: false, quota: None };
-        let quota = match super::userquota::NativeQuota::reserve(self.caps.clone(), self.plane, idx) {
+    pub(super) fn birth_user_ring(
+        &self,
+        a: ChannelAlloc,
+        mirror: Mirror,
+        idx: u32,
+        twin: Option<Arc<crate::twin::TwinState>>,
+        err_at: Option<(u32, u64, kf_arch::UserdMem)>,
+    ) -> ChanAnswer {
+        let mut count = NeverBorn {
+            live: mirror.live.clone(),
+            twin,
+            native_attempted: false,
+            quota: None,
+        };
+        let quota = match super::userquota::NativeQuota::reserve(self.caps.clone(), self.plane, idx)
+        {
             Ok(q) => q,
-            Err(why) => return ChanAnswer::Refused { status: NV_ERR_INSUFFICIENT_RESOURCES, why },
+            Err(why) => {
+                return ChanAnswer::Refused {
+                    status: NV_ERR_INSUFFICIENT_RESOURCES,
+                    why,
+                };
+            }
         };
         count.quota = Some(quota);
-        let pending = match self.user_births.allocate(&self.inbox.user_va, &a, mirror.clone()) {
+        let pending = match self
+            .user_births
+            .allocate(&self.inbox.user_va, &a, mirror.clone())
+        {
             Ok(p) => p,
-            Err(why) => return ChanAnswer::Refused { status: NV_ERR_NOT_SUPPORTED, why },
+            Err(why) => {
+                return ChanAnswer::Refused {
+                    status: NV_ERR_NOT_SUPPORTED,
+                    why,
+                };
+            }
         };
         let d = kf_gsp::Deferred::new();
         let orphaned = Arc::new(AtomicBool::new(false));
@@ -269,35 +466,69 @@ impl ChanPlane {
                 let _ = tx.send((undo, kf_gsp::Deferred::new(), "Windows USER ring withdraw"));
             }
         });
-        let birth = Birth { a, mirror, idx, pending, d: d.clone(), count, orphaned };
+        let birth = Birth {
+            a,
+            mirror,
+            idx,
+            pending,
+            d: d.clone(),
+            count,
+            orphaned,
+            err_at,
+        };
         self.defer_cell("Windows USER ring birth", birth.act(), d)
     }
 
     /// Off-drainer/native-free exclusion. Retain the record after any native
     /// failure. Even a failed VA cleanup enqueue leaves Queue's strong pin.
-    pub(super) fn user_ring_record(&self, token: u32) -> Option<Arc<Mutex<Record>>> {
+    pub(super) fn user_ring_record(&self, token: u32) -> Option<Arc<Cell>> {
         self.user_rings.lock().ok()?.get(&token).cloned()
     }
 }
 
 impl ChanPlane {
-    pub(super) fn finish_user_ring_free(&self, token: u32,
-        record: Option<&Arc<Mutex<Record>>>, native_freed: bool) {
+    pub(super) fn finish_user_ring_free(
+        &self,
+        token: u32,
+        record: Option<&Arc<Cell>>,
+        native_freed: bool,
+    ) {
         let Some(record) = record else { return };
-        if !native_freed { return; }
-        let (lease, identity, quota) = {
+        if !native_freed {
+            return;
+        }
+        let (lease, identity, quota, sources_ok, notifier) = {
             let Ok(mut r) = record.lock() else { return };
             r.retired = true;
-            (r.lease.clone(), r.allocation.clone(), r.quota.clone())
+            record.retry.store(false, Ordering::Release);
+            let sources_ok = r.pump.as_mut().is_none_or(|p| match p.release() {
+                Ok(()) => true,
+                Err(why) => {
+                    eprintln!("kf3: {why}; source views retained until session close");
+                    false
+                }
+            });
+            (
+                r.lease.clone(),
+                r.allocation.clone(),
+                r.quota.clone(),
+                sources_ok,
+                r.notifier.take(),
+            )
         };
+        if let Some(n) = notifier {
+            self.release_notifier(n);
+        }
         if let Err(why) = quota.release_confirmed() {
             eprintln!("kf3: USER_RING_QUOTA_RETAINED after confirmed native free: {why}");
         }
         // Queue metadata may contend; no publisher guard is held over it.
         let cleanup = self.inbox.user_va.release_after_channel_free(lease);
         let _ = self.inbox.wake.signal();
-        if cleanup.is_ok() {
-            if let Ok(mut rings) = self.user_rings.lock() { rings.remove(&token); }
+        if cleanup.is_ok() && sources_ok {
+            if let Ok(mut rings) = self.user_rings.lock() {
+                rings.remove(&token);
+            }
             if let Ok(mut holds) = self.user_birth_holds.lock() {
                 holds.retain(|(id, _)| !Arc::ptr_eq(id, &identity));
             }
@@ -306,14 +537,53 @@ impl ChanPlane {
         }
     }
 
-    fn release_never_born_record(&self, record: &Arc<Mutex<Record>>) {
-        let (lease, identity, quota) = {
+    pub(super) fn retain_user_ring_notifier(
+        &self,
+        token: u32,
+        allocation: &Arc<()>,
+        n: PtNotifier,
+    ) {
+        if let Some(record) = self.user_ring_record(token) {
+            if let Ok(mut r) = record.lock() {
+                if Arc::ptr_eq(&r.allocation, allocation) && r.notifier.is_none() {
+                    r.notifier = Some(n);
+                    return;
+                }
+            }
+        }
+        // Unexpected owner loss: keep CPU/RM resources until session close.
+        // Do not attempt native context free without confirmed channel cleanup.
+        std::mem::forget(n);
+        eprintln!(
+            "kf3: USER_RING_NOTIFIER_OWNER_LOST host {token:#x}; retained until session close"
+        );
+    }
+
+    fn release_never_born_record(&self, record: &Arc<Cell>) {
+        let (lease, identity, quota, sources_ok, notifier) = {
             let Ok(mut r) = record.lock() else { return };
             r.retired = true;
-            (r.lease.clone(), r.allocation.clone(), r.quota.clone())
+            record.retry.store(false, Ordering::Release);
+            let sources_ok = r.pump.as_mut().is_none_or(|p| match p.release() {
+                Ok(()) => true,
+                Err(why) => {
+                    eprintln!("kf3: {why}; source views retained until session close");
+                    false
+                }
+            });
+            (
+                r.lease.clone(),
+                r.allocation.clone(),
+                r.quota.clone(),
+                sources_ok,
+                r.notifier.take(),
+            )
         };
+        if let Some(n) = notifier {
+            self.release_notifier(n);
+        }
         let _ = quota.release_confirmed();
-        if self.inbox.user_va.release_after_channel_free(lease).is_ok() {
+        if self.inbox.user_va.release_after_channel_free(lease).is_ok() && sources_ok {
             if let Ok(mut holds) = self.user_birth_holds.lock() {
                 holds.retain(|(id, _)| !Arc::ptr_eq(id, &identity));
             }
@@ -322,33 +592,175 @@ impl ChanPlane {
     }
 
     pub(super) fn retire_user_ring_token(&self, token: u32, identity: &Arc<()>) -> bool {
-        let Some(record) = self.user_ring_record(token) else { return false };
+        let Some(record) = self.user_ring_record(token) else {
+            return false;
+        };
         let quota = {
-            let Ok(r) = record.try_lock() else { return false };
-            if !Arc::ptr_eq(&r.allocation, identity) { return false; }
+            let Ok(r) = record.try_lock() else {
+                return false;
+            };
+            if !Arc::ptr_eq(&r.allocation, identity) {
+                return false;
+            }
             r.quota.clone()
         };
         quota.retire_token()
     }
 
-    fn withdraw_user_ring(&self, key: (u32, u32), identity: &Arc<()>)
-        -> Result<String, (u32, String)> {
+    fn withdraw_user_ring(
+        &self,
+        key: (u32, u32),
+        identity: &Arc<()>,
+    ) -> Result<String, (u32, String)> {
         let t = {
-            let mut pt = self.pt.lock().map_err(|_| (NV_ERR_INVALID_STATE, "USER_RING_PT_POISONED".into()))?;
-            if !pt.get(&key).is_some_and(|t| t.user_ring && Arc::ptr_eq(&t.allocation, identity)) {
+            let mut pt = self
+                .pt
+                .lock()
+                .map_err(|_| (NV_ERR_INVALID_STATE, "USER_RING_PT_POISONED".into()))?;
+            if !pt
+                .get(&key)
+                .is_some_and(|t| t.user_ring && Arc::ptr_eq(&t.allocation, identity))
+            {
                 return Ok("USER_RING_WITHDRAW_ALREADY_GONE".into());
             }
-            pt.remove(&key).ok_or((NV_ERR_INVALID_STATE, "USER_RING_WITHDRAW_GONE".into()))?
+            pt.remove(&key)
+                .ok_or((NV_ERR_INVALID_STATE, "USER_RING_WITHDRAW_GONE".into()))?
         };
         self.retire_user_ring_token(t.chan.token, &t.allocation);
-        if let Some(twin) = &t.twin { twin.user_freeing(); }
+        if let Some(twin) = &t.twin {
+            twin.user_freeing();
+        }
         let native = self.release_twin(key.0, t.tsg, t.ctx_share, t.chan);
         if native.is_ok() {
             t.live.fetch_sub(1, Ordering::AcqRel);
-            if let Some(twin) = &t.twin { twin.user_released(); }
-            if let Some(n) = t.notifier { self.release_notifier(n); }
+            if let Some(twin) = &t.twin {
+                twin.user_released();
+            }
+            if let Some(n) = t.notifier {
+                self.release_notifier(n);
+            }
         }
         self.engine_live(t.engine, false);
-        Ok(format!("USER_RING_WITHDRAW exact {key:x?} host {:#x} {native:?}", t.chan.token))
+        Ok(format!(
+            "USER_RING_WITHDRAW exact {key:x?} host {:#x} {native:?}",
+            t.chan.token
+        ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use kf_core::lifetime::Step;
+    use kf_core::{HostOps, HostSlice, Owner, Plane, Translatable, VmCaps, Vmm};
+    use kf_trap::token::Route;
+    struct State {
+        paused: bool,
+        writes: usize,
+    }
+    struct Host {
+        cell: Cell<State>,
+        metadata: Mutex<()>,
+    }
+    impl HostOps for Host {
+        fn operands_translatable(&self, _: u32, _: u64) -> Translatable {
+            if self.cell.alive(|_| true) {
+                Translatable::Yes
+            } else {
+                Translatable::No
+            }
+        }
+        fn run_translated(&self, _: u32, _: u64) -> bool {
+            let Ok(mut r) = self.cell.enter() else {
+                return false;
+            };
+            let Ok(_metadata) = self.metadata.try_lock() else {
+                return false;
+            };
+            if r.paused {
+                return false;
+            }
+            self.cell.retry.store(false, Ordering::Release);
+            r.writes += 1;
+            true
+        }
+        fn ring_host(&self, _: u32) {
+            panic!("private USER route must use worker");
+        }
+        fn run_emulated(&self, _: u32, _: u64) {
+            panic!("no emulation");
+        }
+        fn apply_register(&self, _: u8, _: u32, _: u64, _: u8) {}
+        fn forge_completion(&self, _: u32) {
+            panic!("no forged completion");
+        }
+        fn refuse_and_poison(&self, _: u32) {
+            panic!("busy is not poison");
+        }
+        fn fault_channel(&self, _: u32) {
+            panic!("record is admitted, including contention");
+        }
+        fn map_guest_slice(&self, _: HostSlice) {}
+        fn teardown_step(&self, _: Step) {}
+    }
+    fn setup(vmm: &Vmm) -> (Plane<'_>, Host) {
+        let plane = Plane::new(vmm, 4, 3);
+        let mut caps = VmCaps::from_declared(2, 8, 8, 8);
+        plane
+            .allocate_channel(&mut caps, 0, Route::Translated, 11, Owner::User)
+            .unwrap();
+        (
+            plane,
+            Host {
+                cell: Cell::new(
+                    0,
+                    State {
+                        paused: false,
+                        writes: 0,
+                    },
+                ),
+                metadata: Mutex::new(()),
+            },
+        )
+    }
+    fn pass(plane: &Plane<'_>, host: &Host) {
+        plane.worker_pass(host, &mut Vec::new(), 64);
+    }
+    #[test]
+    fn plane_user_worker_admission_keeps_final_doorbell_across_record_contention() {
+        let vmm = Vmm::default();
+        let (plane, host) = setup(&vmm);
+        let guard = host.cell.lock().unwrap();
+        plane.ring_internal(0);
+        pass(&plane, &host);
+        assert!(host.cell.retry.load(Ordering::Acquire));
+        drop(guard);
+        // Production worker refresh sees durable demand without another guest ring.
+        if host.cell.retry.load(Ordering::Acquire) {
+            plane.ring_internal(host.cell.idx);
+        }
+        pass(&plane, &host);
+        assert_eq!(host.cell.lock().unwrap().writes, 1);
+        assert!(!host.cell.retry.load(Ordering::Acquire));
+    }
+    #[test]
+    fn plane_final_doorbell_survives_pt_contention_and_paused_channel() {
+        let vmm = Vmm::default();
+        let (plane, host) = setup(&vmm);
+        let guard = host.metadata.lock().unwrap();
+        plane.ring_internal(0);
+        pass(&plane, &host);
+        assert!(host.cell.retry.load(Ordering::Acquire));
+        drop(guard);
+        host.cell.lock().unwrap().paused = true;
+        plane.ring_internal(0);
+        pass(&plane, &host);
+        assert!(host.cell.retry.load(Ordering::Acquire));
+        assert_eq!(host.cell.lock().unwrap().writes, 0);
+        host.cell.lock().unwrap().paused = false;
+        // Successful schedule-enable emits the same internal ring as production.
+        plane.ring_internal(0);
+        pass(&plane, &host);
+        assert_eq!(host.cell.lock().unwrap().writes, 1);
     }
 }

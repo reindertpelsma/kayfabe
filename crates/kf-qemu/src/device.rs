@@ -3278,7 +3278,8 @@ impl Device {
                 let _ = self.chans.nsi_fifo_edge(|v| self.latch_and_deliver(v));
             },
             // The relay's timer: what optional pacing owes goes out even if no edge comes.
-            &|| self.chans.nsi_tick(|v| self.latch_and_deliver(v)),
+            &|| self.chans.nsi_tick(|v| self.latch_and_deliver(v))
+                || self.chans.user_ring_poll_due(),
         );
     }
 }

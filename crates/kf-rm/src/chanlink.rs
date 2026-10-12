@@ -698,6 +698,8 @@ pub enum ChanStatement {
         parent: u32,
         /// The object's handle.
         handle: u32,
+        /// Public optional constructor notification request.
+        notify_completion: bool,
     },
     /// An object was freed (maybe one of ours).
     Free {
@@ -936,10 +938,18 @@ impl ChannelPolicy {
         // ★ OWNER_RULINGS §U.1: class 5080 is Translated-only. The plane admits it (Done → the object
         // seat makes the node) or it is refused here, before any node exists.
         if h.class == kf_abi::generated::classes::NV50_DEFERRED_API_CLASS {
+            // Reuse the object seat's validated public constructor decode.
+            // Malformed/unaudited params never allocate a native child first.
+            let notify_completion = match crate::rmrpc::translate(&self.abi, self.guest_os, cmd) {
+                Ok(crate::rmrpc::Translation::Event(crate::rmgraph::RmEvent::Alloc { facts, .. })) =>
+                    facts.deferred_api_notify?,
+                _ => return None,
+            };
             let st = ChanStatement::DeferredApiObject {
                 client: h.client,
                 parent: h.parent,
                 handle: h.handle,
+                notify_completion,
             };
             return match (self.sink)(st) {
                 ChanAnswer::Done | ChanAnswer::Token(_) => None,
@@ -3974,7 +3984,8 @@ mod tests {
                 [ChanStatement::DeferredApiObject {
                     client: c,
                     parent: ch,
-                    handle: 0xcafe_5080
+                    handle: 0xcafe_5080,
+                    notify_completion: false,
                 }]
             );
         }

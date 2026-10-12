@@ -116,6 +116,20 @@ impl RamMap {
         let generation = self.generation.load(Ordering::Acquire);
         (generation != 0).then_some(generation)
     }
+    /// Retain exact birth topology through bounded CPU publication, including
+    /// already staged suffixes which no longer depend on the old guest rows.
+    pub(crate) fn admit_user_generation<T>(&self, generation: u64,
+        publish: impl FnOnce() -> T) -> Result<T, userread::Refusal> {
+        let _guard = self.blocks.try_read().map_err(|e| match e {
+            std::sync::TryLockError::WouldBlock => userread::Refusal::Busy,
+            std::sync::TryLockError::Poisoned(_) => userread::Refusal::Poisoned,
+        })?;
+        if generation == 0 || self.generation.load(Ordering::Relaxed) != generation {
+            return Err(userread::Refusal::Topology);
+        }
+        Ok(publish())
+    }
+
     // Called with the registration write guard held. Zero is terminal: an exhausted
     // counter can never revive a descriptor from an earlier topology incarnation.
     fn revoke(&self) {
@@ -2145,6 +2159,8 @@ pub struct Inbox {
     walk_waiters: Mutex<Vec<u32>>,
 }
 
+pub(crate) enum UserSplitError { Busy, Refused(&'static str) }
+
 impl Inbox {
     /// An empty inbox.
     ///
@@ -2239,13 +2255,16 @@ impl Inbox {
     /// Later USER publications remain held until the actual VA result arrives;
     /// this path has no writable GPU gate and never trusts guest target handles.
     pub(crate) fn request_user_split(&self, token: u32, key: kf_mem::vasmgr::VasKey)
-        -> Result<u64, &'static str> {
+        -> Result<u64, UserSplitError> {
         let t = self.next_ticket.fetch_update(Ordering::Relaxed, Ordering::Relaxed,
-            |n| n.checked_add(1)).map_err(|_| "USER_RING_SPLIT_SEQUENCE")?;
+            |n| n.checked_add(1)).map_err(|_| UserSplitError::Refused("USER_RING_SPLIT_SEQUENCE"))?;
         {
-            let mut q = self.splits.try_lock().map_err(|_| "USER_RING_SPLIT_BUSY")?;
-            if q.len() >= 512 { return Err("USER_RING_SPLIT_BUDGET"); }
-            q.try_reserve(1).map_err(|_| "USER_RING_SPLIT_ALLOCATION")?;
+            let mut q = self.splits.try_lock().map_err(|e| match e {
+                std::sync::TryLockError::WouldBlock => UserSplitError::Busy,
+                std::sync::TryLockError::Poisoned(_) => UserSplitError::Refused("USER_RING_SPLIT_POISONED"),
+            })?;
+            if q.len() >= 512 { return Err(UserSplitError::Refused("USER_RING_SPLIT_BUDGET")); }
+            q.try_reserve(1).map_err(|_| UserSplitError::Refused("USER_RING_SPLIT_ALLOCATION"))?;
             q.push((t, token, SplitTarget::Space(key)));
         }
         let _ = self.wake.signal();

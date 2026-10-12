@@ -5,9 +5,9 @@
 //! count, a native channel, or a handed-out lease: those belong to the birth
 //! act until native-free/never-born cleanup is confirmed.
 //!
-//! No birth caller is connected yet. The existing Free path cancels matching
-//! pending scopes before removing live channels. Future attachment must use
-//! commit with metadata only, and Free must retain that ordering. Never hold
+//! The opt-in USER birth caller uses commit for exact attachment and bounded
+//! CPU USERD initialization. Free cancels pending scopes before removing live
+//! channels and retains that ordering. Never hold
 //! this registry across a host verb. The production registry signals the VA
 //! worker after allocation and cancellation/orphan drop; it never performs
 //! storage cleanup itself.
@@ -81,9 +81,6 @@ impl<V> Default for Book<V> {
     }
 }
 
-// Allocation/poll/commit are used by the forthcoming Windows birth adapter;
-// only cancel is currently connected to production Free.
-#[allow(dead_code)]
 impl<V> Book<V> {
     /// The installed callback must only signal the nonblocking VA eventfd.
     pub(crate) fn with_wake(wake: impl Fn() + Send + Sync + 'static) -> Self {

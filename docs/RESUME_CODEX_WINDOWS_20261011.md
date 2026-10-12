@@ -1,3 +1,20 @@
+## 2026-10-12 17:28 UTC — disabled worker implementation checkpoint
+
+Current branch `codex/windows-matrix-20261011`; previous pushed checkpoint
+`7675d6b75`. The worker now connects private USER storage, bounded own-VAS
+source admission, immutable deferred-object classification, native descriptor-fetch
+receipts, staged trigger interception and software migration. Diagnostic remains
+default OFF (`KF3_WIN_USER_RING_RELAY=1`); cursor-zero migration is an explicit
+unverified hypothesis. No new hardware compatibility result.
+
+GPU-free six-crate suite passes (see `user-worker/worker-tests.log`). Two actual
+Plane admission tests cover final-doorbell contention and paused/enable retry;
+they use a source-work shim, not native Pump execution. Independent review
+resolved admission, lost wake, notification-constructor and failed-Free notifier
+findings. Remaining review item: permanently cancel pending wakes on cleanup,
+including failed cleanup and stale callbacks. Fix/test that before exact-revision
+Linux regression, then one-variable Windows diagnostic. Vast inventory empty.
+
 # Resume Windows apps and GravityMark Vulkan
 
 ## UPDATE 2026-10-12 16:56UTC — worker integration checkpoint, not activated
