@@ -100,6 +100,8 @@ pub enum Binding {
 pub struct State {
     bindings: [Option<Binding>; 8],
     pending: Option<Packet>,
+    mem_op: [u32; 3],
+    mem_op_seen: u8,
 }
 
 /// Only packet metadata survives a source snapshot. No borrowed guest bytes,
@@ -154,6 +156,9 @@ pub enum Op {
     },
     /// An ordered software split, classified later against the channel registry.
     Software(SwCall),
+    /// VA-manager reconcile/invalidate of this channel's OWN restricted space.
+    /// The guest PDB operand is never forwarded or used to select another space.
+    OwnInvalidate,
     /// A requested native SET_REFERENCE, distinct from CPU bookkeeping. The
     /// submission adapter must author this method on hardware. A later HOST
     /// receipt may attribute its real processing; parsing completes nothing.
@@ -196,7 +201,9 @@ pub enum Refusal {
     },
 }
 
-/// Decode one immutable snapshot; output count <= input words, with no I/O/locks.
+/// Decode one immutable snapshot with no I/O/locks. An authored MEMBAR/L2
+/// operation can expand one datum into four methods; output is bounded by five
+/// times the trusted snapshot budget. Planning applies its own operation cap.
 /// The adapter must execute Software splits serially, not publish later operations
 /// until their VA/action gate lands, and never convert bindings into a raw bypass.
 ///
@@ -212,7 +219,7 @@ pub fn decode(
 
 /// Decode one source fragment, retaining a bounded unfinished packet in `state`.
 /// Every fragment is an owned snapshot with a trusted word budget. Output count
-/// is at most this fragment's word count; a header can claim at most the public
+/// is at most five times this fragment's word count; a header can claim at most the public
 /// C56F field's count, and no allocation depends on unsupplied arguments.
 ///
 /// Returned operations are inspection IR, not work or source retirement. A
@@ -255,7 +262,8 @@ fn decode_fragment(
     let words = &commands.0;
     let mut next = state.clone();
     let mut out = Vec::new();
-    out.try_reserve_exact(words.len())
+    let maximum = words.len().checked_mul(5).ok_or(Refusal::Budget)?;
+    out.try_reserve_exact(maximum)
         .map_err(|_| Refusal::Allocation)?;
     let mut at = 0usize;
     while at < words.len() {
@@ -344,6 +352,25 @@ fn apply(
         out.push(Op::GuestReference(data));
     } else if m < 0x100 {
         match host_method(m) {
+            Some(HostMethod::MemOpA) => {
+                state.mem_op[0] = data;
+                state.mem_op_seen |= 1;
+            }
+            Some(HostMethod::MemOpB) => {
+                state.mem_op[1] = data;
+                state.mem_op_seen |= 2;
+            }
+            Some(HostMethod::MemOpC) => {
+                state.mem_op[2] = data;
+                state.mem_op_seen |= 4;
+            }
+            Some(HostMethod::MemOpD) => {
+                if state.mem_op_seen != 7 {
+                    return Err(Refusal::Method { method: m });
+                }
+                mem_op(out, state, subchannel, data)?;
+                state.mem_op_seen = 0;
+            }
             Some(HostMethod::Refused(_)) | None => {
                 return Err(Refusal::Method { method: m });
             }
@@ -368,6 +395,73 @@ fn apply(
             })),
             None => return Err(Refusal::Unbound { sub: subchannel }),
         }
+    }
+    Ok(())
+}
+
+/// Same public FIFO contract as T-mode, but invalidation has no guest-selected
+/// PDB target and cannot be emitted as native GPU words in a user-space plan.
+fn mem_op(out: &mut Vec<Op>, state: &State, sub: u32, d: u32) -> Result<(), Refusal> {
+    use crate::tmode::{
+        MEM_OP_A_SYSMEMBAR, OP_ACCESS_COUNTER_CLR, OP_MEMBAR, OP_TLB_INVALIDATE,
+        OP_TLB_INVALIDATE_TARGETED, OPS_L2,
+    };
+    let [a, b, c] = state.mem_op;
+    let op = d >> 27;
+    let refuse = || Refusal::Method {
+        method: fifo::MEM_OP_A + 12,
+    };
+    // Every operation adds at most four authored methods plus one typed split.
+    out.try_reserve(5).map_err(|_| Refusal::Allocation)?;
+    let mut emit = |words: &[(u32, u32, u32)]| {
+        out.extend(
+            words
+                .iter()
+                .map(|&(sub, method, data)| Op::Hardware { sub, method, data }),
+        );
+    };
+    if op == OP_MEMBAR {
+        if a != 0 || b != 0 || c > 1 || d & 0x07ff_ffff != 0 {
+            return Err(refuse());
+        }
+        emit(&crate::tmode::membar(sub, c));
+    } else if op == OP_TLB_INVALIDATE || op == OP_TLB_INVALIDATE_TARGETED {
+        // Public clc56f.h145-178 and dev_pbdma.ref4178-4263: this clean
+        // subset serves GPC_ENABLE, REPLAY_NONE, GLOBAL ACK, all page levels
+        // and ALL_TLBS scope only. Replay/cancel is a different operation.
+        let all = c & 1 != 0;
+        let targeted = op == OP_TLB_INVALIDATE_TARGETED;
+        if c & 0x3fe != 0x20
+            || c & 0xc00 == 0x400
+            || (all && (targeted || c & 0xffff_fc00 != 0 || d & 0x07ff_ffff != 0))
+            || a & 0x7ff != 0
+            || (!targeted && (a & 0xffff_f000 != 0 || b != 0))
+        {
+            return Err(refuse());
+        }
+        out.push(Op::OwnInvalidate);
+        // dev_pbdma.ref4161-4166,4278-4291: SYSMEMBAR follows successful
+        // invalidate + GLOBAL ACK, never precedes it. The runtime must prove
+        // that backend contract before marking the typed action done.
+        if a & MEM_OP_A_SYSMEMBAR != 0 {
+            out.extend(
+                crate::tmode::membar(sub, 0)
+                    .iter()
+                    .map(|&(sub, method, data)| Op::Hardware { sub, method, data }),
+            );
+        }
+    } else if OPS_L2.contains(&op) {
+        if a != 0 || b != 0 || c != 0 || d & 0x07ff_ffff != 0 {
+            return Err(refuse());
+        }
+        emit(&[
+            (sub, fifo::MEM_OP_A, 0),
+            (sub, fifo::MEM_OP_A + 4, 0),
+            (sub, fifo::MEM_OP_A + 8, 0),
+            (sub, fifo::MEM_OP_A + 12, op << 27),
+        ]);
+    } else if op != OP_ACCESS_COUNTER_CLR {
+        return Err(refuse());
     }
     Ok(())
 }

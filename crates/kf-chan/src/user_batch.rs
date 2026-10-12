@@ -23,6 +23,8 @@ pub enum Action {
     /// Requires prior HOST consumption and the channel-owned software registry.
     /// This is an action description, never an executed or completed call.
     Software(SwCall),
+    /// CPU worker waits for the VA manager's own-space result; never GPU words.
+    OwnInvalidate,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -57,6 +59,11 @@ pub fn plan(ops: &[Op]) -> Result<Vec<Action>, Refusal> {
             Op::Bind { sub, class } => (sub, 0, class),
             Op::Hardware { sub, method, data } => (sub, method, data),
             Op::GuestReference(value) => (0, fifo::SET_REFERENCE_C56F, value),
+            Op::OwnInvalidate => {
+                flush(&mut actions, &mut words);
+                actions.push(Action::OwnInvalidate);
+                continue;
+            }
             Op::Software(call) => {
                 flush(&mut actions, &mut words);
                 actions.push(Action::Software(call));

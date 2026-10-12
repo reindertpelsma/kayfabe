@@ -606,6 +606,37 @@ mod tests {
     }
 
     #[test]
+    fn worker_admission_retains_exact_graph_until_bounded_publication() {
+        use crate::memory_access::{Access, Refusal, SharedObjects};
+        let (objects, ram, d) = fixture(kf_chip::Family::Ada);
+        let access = Arc::new(Access::default());
+        let mut shared = SharedObjects::new(objects, &access);
+        shared.memory_list(d).unwrap();
+        let lease = access.lease(1, 4, 0x600, 0x200).unwrap();
+        assert_eq!(
+            lease.admit(|| access.lease(1, 4, 0, 4).err()),
+            Ok(Some(Refusal::Busy)),
+            "graph/current authority remains held through the CPU publication callback"
+        );
+        let called = std::cell::Cell::new(false);
+        ram.0.lock().unwrap().0 += 1;
+        assert_eq!(lease.admit(|| called.set(true)), Err(Refusal::Topology));
+        assert!(!called.get());
+        shared
+            .apply(
+                RmEvent::Free {
+                    client: HClient(1),
+                    handle: HObject(4),
+                },
+                &[],
+            )
+            .unwrap();
+        shared.memory_list(d).unwrap();
+        assert_eq!(lease.admit(|| called.set(true)), Err(Refusal::Gone));
+        assert!(!called.get());
+    }
+
+    #[test]
     fn shared_memory_lease_is_bounded_and_chain_reselection_revokes_old_graph() {
         use crate::memory_access::{Access, Refusal, SharedObjects};
         let (objects, ram, d) = fixture(kf_chip::Family::Ada);

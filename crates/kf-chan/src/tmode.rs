@@ -363,13 +363,13 @@ pub struct GrConfig {
 mod gr_tier_tests;
 
 /// `MEM_OP_D_OPERATION` values (`ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:182-193`).
-const OP_MEMBAR: u32 = 5;
-const OP_TLB_INVALIDATE: u32 = 9;
-const OP_TLB_INVALIDATE_TARGETED: u32 = 0xA;
-const OPS_L2: [u32; 6] = [0xD, 0xE, 0xF, 0x10, 0x11, 0x15];
-const OP_ACCESS_COUNTER_CLR: u32 = 0x16;
+pub(crate) const OP_MEMBAR: u32 = 5;
+pub(crate) const OP_TLB_INVALIDATE: u32 = 9;
+pub(crate) const OP_TLB_INVALIDATE_TARGETED: u32 = 0xA;
+pub(crate) const OPS_L2: [u32; 6] = [0xD, 0xE, 0xF, 0x10, 0x11, 0x15];
+pub(crate) const OP_ACCESS_COUNTER_CLR: u32 = 0x16;
 /// `NVC56F_MEM_OP_A_TLB_INVALIDATE_SYSMEMBAR` (11).
-const MEM_OP_A_SYSMEMBAR: u32 = 1 << 11;
+pub(crate) const MEM_OP_A_SYSMEMBAR: u32 = 1 << 11;
 /// `NVC56F_SET_OBJECT_NVCLASS` (15:0).
 const NVCLASS_MASK: u32 = 0xFFFF;
 
@@ -876,7 +876,7 @@ fn mem_op(out: &mut Vec<Ir>, st: &TState, sub: u32, d: u32) -> Result<(), Refusa
     Err(Refusal::MemOp { op })
 }
 
-fn membar(sub: u32, membar_type: u32) -> [(u32, u32, u32); 4] {
+pub(crate) fn membar(sub: u32, membar_type: u32) -> [(u32, u32, u32); 4] {
     [
         (sub, fifo::MEM_OP_A, 0),
         (sub, fifo::MEM_OP_A + 4, 0),

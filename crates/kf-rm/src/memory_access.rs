@@ -5,8 +5,10 @@
 //! MAX_ACCESS and the acquired logical span, serialized with graph mutation and
 //! driver-chain replacement. Worker lock contention returns Busy; no RM verb,
 //! GPU work or completion is executed here. Linux gains no GPU mapping.
-//! Callers must not retain channel/relay metadata guards across Access calls or
-//! retry Busy under them: deferred-API validation can hold graph then channel.
+//! Callers must not retain shared channel metadata guards (e.g. pt) across
+//! Access calls or retry Busy under them: deferred-API validation takes graph
+//! then channel. A private worker-state mutex is allowed only when no graph,
+//! RAM, channel-metadata or drainer path acquires it; Busy immediately unwinds.
 
 use crate::memory_list::{MAX_ACCESS, lookup};
 use crate::rmgraph::{NodeKey, ResourceLifetime, RmEvent};
@@ -122,6 +124,20 @@ impl Lease {
             let matches = descriptor.ram_location(self.offset, length) == Some(base);
             objects.try_read_memory_list(self.key, self.offset, &mut [])?;
             Ok(matches)
+        })
+    }
+
+    /// Keep exact graph/resource authority through a bounded CPU publication.
+    /// Current RAM topology is checked first; the caller must retain its birth
+    /// topology and source guards through publication too. One global order:
+    /// graph/access -> channel metadata -> source rows -> RAM -> private PUT.
+    /// No RM verb, wait/retry, nested Access call or GPU-work completion is
+    /// allowed in the callback. The authored doorbell follows after all guards.
+    /// This checks identity, not channel ownership or cursor/migration semantics.
+    pub fn admit<T>(&self, publish: impl FnOnce() -> T) -> Result<T, Refusal> {
+        self.with_graph(|objects| {
+            objects.try_read_memory_list(self.key, self.offset, &mut [])?;
+            Ok(publish())
         })
     }
 

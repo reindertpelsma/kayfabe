@@ -355,3 +355,131 @@ fn split_reference_header_shaped_data_is_bookkeeping_only() {
     );
     state.finish().unwrap();
 }
+
+#[test]
+fn user_tlb_invalidate_becomes_an_own_space_software_action() {
+    let words = [
+        method_header_inc(0, fifo::MEM_OP_A, 4).unwrap(),
+        0,
+        0,
+        0xffff_f020,
+        (9 << 27) | 0x7ff_ffff,
+    ];
+    let commands = Commands::copy_from(&words, 32).unwrap();
+    let ops = decode(&commands, &mut State::default(), |_| None).unwrap();
+    assert_eq!(ops, [Op::OwnInvalidate]);
+    assert_eq!(
+        kf_chan::user_batch::plan(&ops).unwrap(),
+        [kf_chan::user_batch::Action::OwnInvalidate]
+    );
+}
+
+#[test]
+fn mem_op_fields_persist_across_fragments_but_never_forward_a_pdb() {
+    use kf_chan::user_stream::feed;
+    let mut state = State::default();
+    let a = Commands::copy_from(
+        &[
+            method_header_inc(0, fifo::MEM_OP_A, 4).unwrap(),
+            1 << 11,
+            0,
+            0x12345020,
+        ],
+        32,
+    )
+    .unwrap();
+    assert!(feed(&a, &mut state, |_| None).unwrap().is_empty());
+    let d = Commands::copy_from(&[(0xa << 27) | 7], 32).unwrap();
+    let ops = feed(&d, &mut state, |_| None).unwrap();
+    assert_eq!(ops.first(), Some(&Op::OwnInvalidate));
+    assert_eq!(
+        ops.len(),
+        5,
+        "own-space completion precedes four authored sysmembar methods"
+    );
+    assert!(ops[1..].iter().all(|op| matches!(op, Op::Hardware { .. })));
+    assert!(!state.has_pending());
+}
+
+#[test]
+fn unsupported_replay_ack_scope_and_reserved_pdb_shapes_are_refused() {
+    let base = [0, 0, 0x20, 9 << 27];
+    let mut cases = Vec::new();
+    for replay in 1..=7 {
+        let mut x = base;
+        x[2] |= replay << 2;
+        cases.push(x);
+    }
+    for ack in [0, 0x40, 0x60] {
+        let mut x = base;
+        x[2] = ack;
+        cases.push(x);
+    }
+    for c in [0x22, 0x420, 0x1021, 0x121] {
+        let mut x = base;
+        x[2] = c;
+        cases.push(x);
+    }
+    for a in [1, 0x40, 0x80, 0xc0, 0x1000] {
+        let mut x = base;
+        x[0] = a;
+        cases.push(x);
+    }
+    let mut b = base;
+    b[1] = 1;
+    cases.push(b);
+    let mut targeted_all = base;
+    targeted_all[2] |= 1;
+    targeted_all[3] = 0xa << 27;
+    cases.push(targeted_all);
+    for values in cases {
+        let commands = Commands::copy_from(&packet(0, fifo::MEM_OP_A, &values), 32).unwrap();
+        let mut state = State::default();
+        let before = state.clone();
+        assert!(
+            decode(&commands, &mut state, |_| None).is_err(),
+            "{values:x?}"
+        );
+        assert_eq!(state, before);
+    }
+}
+
+#[test]
+fn mem_op_expansion_ordinary_tail_and_bad_suffix_are_transactional() {
+    use kf_chan::user_stream::feed;
+    let mut state = State::default();
+    feed(
+        &Commands::copy_from(&packet(0, fifo::MEM_OP_A, &[0, 0, 0]), 32).unwrap(),
+        &mut state,
+        |_| None,
+    )
+    .unwrap();
+    let saved = state.clone();
+    let mut words = packet(0, fifo::MEM_OP_A + 12, &[5 << 27]);
+    for i in 0..100 {
+        // Public Immediate form, one input word per output operation.
+        words.push((4 << 29) | (i << 16) | (fifo::SET_REFERENCE_C56F / 4));
+    }
+    let out = feed(
+        &Commands::copy_from(&words, 256).unwrap(),
+        &mut state,
+        |_| None,
+    )
+    .unwrap();
+    assert_eq!(out.len(), 104);
+    assert!(
+        out.len() > words.len(),
+        "the old input-sized output reserve was insufficient"
+    );
+    words.push(1 << 12); // reserved header bit, after valid expanded work
+    let mut state = saved.clone();
+    assert!(
+        feed(
+            &Commands::copy_from(&words, 256).unwrap(),
+            &mut state,
+            |_| None
+        )
+        .is_err()
+    );
+    assert_eq!(state, saved);
+}

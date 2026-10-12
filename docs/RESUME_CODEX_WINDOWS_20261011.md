@@ -1,5 +1,20 @@
 # Resume Windows apps and GravityMark Vulkan
 
+## UPDATE 2026-10-12 11:05UTC — reviewed stream invalidation and guarded admission
+
+Last confirmed push: 3a6a8a8ee. Typed user-stream own-space invalidates now wait
+preceding HOST receipts and block later publications. Review corrected replay
+collapse, pre-invalidate SYSMEMBAR and output expansion allocation; unsupported
+shapes refuse, sysmembar follows action completion. Failing-first and full-suite
+abi/rm/qemu/chan PASS (RM141), independent re-review cleared source. Lease.admit
+retains exact graph authority through bounded publication; runtime still needs
+try-locked channel identity plus continuous source/birth RAM guards. Evidence:
+gravity-vulkan/user-invalidate-admission. No runtime caller/Gravity PASS. GLOBAL
+ACK executor is still a source/measurement gate; host control OK alone is not
+proof. Latest exact Linux hardware remains7f3f9fe16 gates9+10/fast30 PASS.
+Gravity Kayfabe FAIL/TIMEOUT, VFIO179/183s PASS. Matrix/sweep open; personal image
+retained; Vast10:36 empty; master untouched. Next actual relay integration.
+
 ## UPDATE 2026-10-12 10:47UTC — reviewed USERD declaration and owned store views
 
 Last confirmed push: baa9150ef. ChannelAlloc retains the existing public-layout

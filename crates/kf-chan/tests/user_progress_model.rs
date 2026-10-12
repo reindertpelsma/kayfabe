@@ -136,3 +136,45 @@ fn backpressure_wrap_software_and_final_source_progress_share_one_ledger() {
     c.observe_get(1, 4).unwrap();
     assert_eq!(c.take_source_progress(91).unwrap(), source());
 }
+
+#[test]
+fn own_space_invalidate_waits_for_receipts_and_blocks_later_publication() {
+    use kf_chan::user_progress::{Channel, Work};
+    let mut channel = Channel::new(16, 7).unwrap();
+    let source = ConsumedSource {
+        generation: 3,
+        guest_get: 1,
+    };
+    let actions = user_batch::plan(&[
+        Op::GuestReference(1),
+        Op::OwnInvalidate,
+        Op::GuestReference(2),
+    ])
+    .unwrap();
+    channel.start(source, actions, &State::default()).unwrap();
+    let Some(Work::Commands { publication, .. }) = channel.next().unwrap() else {
+        panic!()
+    };
+    assert_eq!(publication.put, 3);
+    assert!(
+        channel.next().unwrap().is_none(),
+        "prior commands are not HOST-consumed"
+    );
+    channel.observe_get(7, 3).unwrap();
+    let Some(Work::OwnInvalidate { ticket }) = channel.next().unwrap() else {
+        panic!()
+    };
+    assert!(
+        channel.next().unwrap().is_none(),
+        "VA-manager result still pending"
+    );
+    assert_eq!(channel.source_progress(), None);
+    channel.software_done(ticket).unwrap();
+    let Some(Work::Commands { publication, .. }) = channel.next().unwrap() else {
+        panic!()
+    };
+    assert_eq!(publication.put, 6);
+    assert_eq!(channel.source_progress(), None);
+    channel.observe_get(7, 6).unwrap();
+    assert_eq!(channel.take_source_progress(3).unwrap(), source);
+}

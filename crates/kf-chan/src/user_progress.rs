@@ -98,14 +98,19 @@ impl Ordered {
     /// the exact ticket; an uncertain I/O result stops/quiesces the channel.
     fn ready_ticket(&self) -> Option<Ticket> {
         if self.issued > self.consumed
-            && matches!(self.actions.get(self.issued - 1), Some(Action::Software(_)))
+            && matches!(
+                self.actions.get(self.issued - 1),
+                Some(Action::Software(_) | Action::OwnInvalidate)
+            )
         {
             return None;
         }
         let kind = match self.actions.get(self.issued)? {
             Action::Commands(_) => Kind::Commands,
-            Action::Software(_) if self.consumed == self.issued => Kind::Software,
-            Action::Software(_) => return None,
+            Action::Software(_) | Action::OwnInvalidate if self.consumed == self.issued => {
+                Kind::Software
+            }
+            Action::Software(_) | Action::OwnInvalidate => return None,
         };
         Some(Ticket {
             native: self.native,
@@ -137,7 +142,7 @@ impl Ordered {
         }
         let actual = match self.actions.get(self.consumed) {
             Some(Action::Commands(_)) => Kind::Commands,
-            Some(Action::Software(_)) => Kind::Software,
+            Some(Action::Software(_) | Action::OwnInvalidate) => Kind::Software,
             None => return Err(Refusal::Order),
         };
         if actual != kind {
@@ -183,6 +188,12 @@ pub enum Work<'a> {
         publication: Publication,
         /// Complete host-authored packets for this bounded private cell.
         words: &'a [u32],
+    },
+    /// Reconcile only this channel's own space after preceding HOST receipts.
+    /// No later work issues until the VA manager's actual successful result.
+    OwnInvalidate {
+        /// Same ordered software receipt discipline, never a guest API handle.
+        ticket: Ticket,
     },
     /// No later work can issue until this channel-owned action really succeeds.
     Software {
@@ -279,6 +290,7 @@ impl Channel {
                 (Action::Commands(words), Some(publication)) => {
                     Work::Commands { publication, words }
                 }
+                (Action::OwnInvalidate, None) => Work::OwnInvalidate { ticket },
                 (Action::Software(call), None) => Work::Software {
                     ticket,
                     call: *call,
