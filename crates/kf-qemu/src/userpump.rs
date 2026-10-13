@@ -182,6 +182,9 @@ struct SegTrace {
 struct Reread {
     due: std::time::Instant,
     delay_ms: u64,
+    /// `Some(scan time, carried-out text at scan)`: a VERIFY re-read of an ordinary VRAM-backed
+    /// segment (counts stale reads); `None`: a straddle re-read.
+    verify: Option<(std::time::Instant, String)>,
     seq: u64,
     va: u64,
     bytes: usize,
@@ -205,6 +208,10 @@ pub(super) struct Trace {
     /// New-work PUT reads with / without a doorbell since the previous new-work PUT read.
     puts_with_db: u64,
     puts_without_db: u64,
+    /// VERIFY re-reads done / found changed bytes / changed the scan's carried-out state or verdict.
+    verified: u64,
+    stale: u64,
+    stale_desync: u64,
 }
 impl Trace {
     fn new() -> Self {
@@ -222,6 +229,9 @@ impl Trace {
             db_prev_put: 0,
             puts_with_db: 0,
             puts_without_db: 0,
+            verified: 0,
+            stale: 0,
+            stale_desync: 0,
         }
     }
     fn note_put(&mut self, doorbells: u64) {
@@ -415,8 +425,15 @@ impl Pump {
     pub(super) fn release(&mut self) -> Result<(), String> {
         if let Some(t) = &self.trace {
             eprintln!(
-                "kf3: USER_RING_TRACE SUMMARY {:x?} segments={} puts_with_doorbell={} puts_without_doorbell={} straddles={}",
-                self.key, t.seq, t.puts_with_db, t.puts_without_db, t.straddles
+                "kf3: USER_RING_TRACE SUMMARY {:x?} segments={} puts_with_doorbell={} puts_without_doorbell={} straddles={} verified={} stale={} stale_desync={}",
+                self.key,
+                t.seq,
+                t.puts_with_db,
+                t.puts_without_db,
+                t.straddles,
+                t.verified,
+                t.stale,
+                t.stale_desync
             );
         }
         if let Some(shadow) = self.shadow.take() {
@@ -486,6 +503,7 @@ impl Pump {
                 t.rereads.push(Reread {
                     due: now + std::time::Duration::from_millis(delay_ms),
                     delay_ms,
+                    verify: None,
                     seq: t.seq,
                     va: d.gpu_va,
                     bytes: d.len_bytes as usize,
@@ -513,6 +531,27 @@ impl Pump {
                 t.db_at_put,
                 t.db_prev_put
             );
+        }
+        // VERIFY: every VRAM-backed segment of at most 1024 words (the first 20000 per channel)
+        // is read again 0.2 and 2 ms after its scan: how often, and for how long, does the scan
+        // read bytes that are not the final ones?
+        if pb.describe().contains("vram")
+            && words.len() <= 1024
+            && t.verified + (t.rereads.len() as u64) < 40_000
+        {
+            let now = std::time::Instant::now();
+            for delay_us in [200u64, 2000] {
+                t.rereads.push(Reread {
+                    due: now + std::time::Duration::from_micros(delay_us),
+                    delay_ms: delay_us,
+                    verify: Some((now, carried_out.clone())),
+                    seq: t.seq,
+                    va: d.gpu_va,
+                    bytes: d.len_bytes as usize,
+                    scan_in: scan_in.clone(),
+                    words: kept.clone(),
+                });
+            }
         }
         while t.history.len() == TRACE_HISTORY
             || (t.history_words + kept.len() > TRACE_HISTORY_WORDS && !t.history.is_empty())
@@ -560,6 +599,9 @@ impl Pump {
                     .collect()
             });
             let Some(fresh) = fresh else {
+                if x.verify.is_some() {
+                    continue;
+                }
                 eprintln!(
                     "kf3: USER_RING_TRACE STRADDLE_REREAD {:#x}:{:#x} seq={} +{}ms unreadable",
                     r.key.0, r.key.1, x.seq, x.delay_ms
@@ -573,6 +615,42 @@ impl Pump {
                 Ok(c) => carried_text(c),
                 Err(i) => format!("refused@{i}"),
             };
+            if let Some((scanned_at, end_at_scan)) = &x.verify {
+                let Some(t) = self.trace.as_mut() else {
+                    continue;
+                };
+                t.verified += 1;
+                if !diffs.is_empty() {
+                    t.stale += 1;
+                    let desync = *end_at_scan != end;
+                    if desync {
+                        t.stale_desync += 1;
+                    }
+                    if t.stale <= 64 || desync && t.stale_desync <= 64 {
+                        eprintln!(
+                            "kf3: USER_RING_TRACE STALE {:#x}:{:#x} seq={} after_us={} words={} changed={} first_diff={:?} last_diff={:?} carried_out_at_scan={end_at_scan} now={end} verified={} stale={} stale_desync={}",
+                            r.key.0,
+                            r.key.1,
+                            x.seq,
+                            now.duration_since(*scanned_at).as_micros(),
+                            x.words.len(),
+                            diffs.len(),
+                            diffs.first(),
+                            diffs.last(),
+                            t.verified,
+                            t.stale,
+                            t.stale_desync
+                        );
+                    }
+                }
+                if t.verified % 5000 == 0 {
+                    eprintln!(
+                        "kf3: USER_RING_TRACE VERIFY {:#x}:{:#x} verified={} stale={} stale_desync={}",
+                        r.key.0, r.key.1, t.verified, t.stale, t.stale_desync
+                    );
+                }
+                continue;
+            }
             eprintln!(
                 "kf3: USER_RING_TRACE STRADDLE_REREAD {:#x}:{:#x} seq={} +{}ms changed={} first_diff={:?} carried_out_now={end}",
                 r.key.0,
