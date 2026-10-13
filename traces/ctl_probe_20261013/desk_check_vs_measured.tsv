@@ -1,0 +1,33 @@
+control	kind	desk_check_q2	desk_expectation_at_probe	measured_size_status	verdict	meaning_for_tier_ruling
+0x2080852a	subdevice	YES (GSS-legacy, forwarded)	OK	1784: OK	MATCH	tier 2: kayfabe can ask at runtime
+0x2080852e	subdevice	YES (GSS-legacy, forwarded)	OK or a size/layout error	528: INVALID_ARGUMENT	NOT CONFIRMED	reaches the parameter check, no verdict on obtainability; layout (request size/content) unknown
+0x2080852f	subdevice	YES (GSS-legacy, forwarded)	OK or a size/layout error	776: INVALID_ARGUMENT	NOT CONFIRMED	as 852e
+0x2080853a	subdevice	YES (GSS-legacy, forwarded)	OK or a size/layout error	1456: INVALID_ARGUMENT	NOT CONFIRMED	as 852e
+0x2080853b	subdevice	YES (GSS-legacy, forwarded)	OK or a size/layout error	15 sizes 4..4096: INVALID_ARGUMENT	NOT CONFIRMED	no accepted size in the ladder (zeroed input may be invalid for this control)
+0x20808524	subdevice	YES (GSS-legacy, forwarded)	OK	4: OK	MATCH	tier 2
+0x20809001	subdevice	YES (GSS-legacy, forwarded)	OK	8: OK	MATCH	tier 2
+0x20809004	subdevice	YES (GSS-legacy, forwarded)	OK or a size/layout error	1544: INVALID_PARAM_STRUCT	NOT CONFIRMED	RM rejects the size: the request size is not the 1544-byte reply size
+0x20809009	subdevice	YES (GSS-legacy, forwarded)	OK	8: OK	MATCH	tier 2
+0x20809064	subdevice	YES (GSS-legacy, forwarded)	OK or a size/layout error	520: INVALID_PARAM_STRUCT	NOT CONFIRMED	RM rejects the size: the request size is not the 520-byte reply size
+0x2080a02f	subdevice	YES (GSS-legacy, forwarded)	OK	1: NOT_SUPPORTED	DIFFERS (see README)	the host GPU answers NOT_SUPPORTED, as the real GPU did in the Windows captures (inventory: 5 calls, 1 B, 0x56): there is no value to obtain
+0x2080a060	subdevice	YES (GSS-legacy, forwarded)	OK	28: OK	MATCH	tier 2
+0x2080a088	subdevice	YES (GSS-legacy, forwarded)	OK	12: OK	MATCH	tier 2
+0x2080a618	subdevice	YES (GSS-legacy, forwarded)	OK or a size/layout error	8620: INVALID_ARGUMENT	NOT CONFIRMED	as 852e
+0x2080a619	subdevice	YES (GSS-legacy, forwarded)	OK or a size/layout error	15 sizes 4..4096: INVALID_ARGUMENT	NOT CONFIRMED	as 853b
+0x2080a630	subdevice	YES (GSS-legacy, forwarded)	OK	1160: OK	MATCH	tier 2
+0x2080a70a	subdevice	YES (GSS-legacy, forwarded)	OK	26: OK	MATCH	tier 2
+0x2080a801	subdevice	YES (GSS-legacy, forwarded)	OK	1028: OK	MATCH	tier 2
+0x2080b201	subdevice	YES (GSS-legacy, forwarded)	OK or a size/layout error	2188: INVALID_ARGUMENT	NOT CONFIRMED	as 852e
+0x00809908	device	YES (GSS-legacy, forwarded)	OK or a size/layout error	16: INVALID_ARGUMENT	NOT CONFIRMED	as 852e
+0x20802806	subdevice	NO (not in any table: NOT_SUPPORTED)	NOT_SUPPORTED	4: NOT_SUPPORTED	MATCH	tier 3 (Windows capture / raw GSP)
+0x20802801	subdevice	NO (PRIVILEGED: INSUFFICIENT_PERMISSIONS)	INSUFFICIENT_PERMISSIONS	4: INSUFFICIENT_PERMISSIONS	MATCH	needs CAP_SYS_ADMIN: group P
+0x20802a12	subdevice	NO (PRIVILEGED: INSUFFICIENT_PERMISSIONS)	INSUFFICIENT_PERMISSIONS	4: INVALID_ARGUMENT; 8: INSUFFICIENT_PERMISSIONS	MATCH	group P (the size check comes before the permission check)
+0x2080121f	subdevice	NO (KERNEL_PRIVILEGED: refused to usermode)	refused	40: INSUFFICIENT_PERMISSIONS (sweep 4..4096 step 4; every other size INVALID_ARGUMENT)	MATCH	group K: refused to a usermode client
+0x20800a2e	subdevice	PARTIAL (INTERNAL: NOT_SUPPORTED to usermode)	NOT_SUPPORTED	96: NOT_SUPPORTED (sweep; every other size INVALID_ARGUMENT)	MATCH	group I
+0x20800a3f	subdevice	NO (INTERNAL: NOT_SUPPORTED to usermode)	NOT_SUPPORTED	256: NOT_SUPPORTED (ladder; 4..128 INVALID_ARGUMENT)	MATCH	group I
+0x20800a80	subdevice	NO (INTERNAL: NOT_SUPPORTED to usermode)	NOT_SUPPORTED	16: NOT_SUPPORTED (ladder; 4..12 INVALID_ARGUMENT)	MATCH	group I
+0x20800a87	subdevice	PARTIAL (INTERNAL: NOT_SUPPORTED to usermode)	NOT_SUPPORTED	1064: NOT_SUPPORTED (sweep; every other size INVALID_ARGUMENT)	MATCH	group I
+0x20800ab8	subdevice	PARTIAL (INTERNAL: NOT_SUPPORTED to usermode)	NOT_SUPPORTED	no size 4..4096 step 4 accepted (all INVALID_ARGUMENT)	NOT CONFIRMED	size unknown (> 4096 or not a multiple of 4)
+0x20800b03	subdevice	PARTIAL (INTERNAL: NOT_SUPPORTED to usermode)	NOT_SUPPORTED	no size 4..4096 step 4 accepted (all INVALID_ARGUMENT)	NOT CONFIRMED	size unknown
+0x20810108	binapi (NV2081)	YES	-	not probed (probe v1 has no NV2081 object)	NOT PROBED	
+0x2081010d	binapi (NV2081)	YES	-	not probed	NOT PROBED	
