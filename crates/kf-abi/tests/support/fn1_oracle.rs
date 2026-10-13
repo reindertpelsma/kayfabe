@@ -167,6 +167,38 @@ fn pair(s: &str) -> (u32, u32) {
     )
 }
 
+/// One cell of the grid for any pair, e.g. a served driver row's own.
+pub fn cell(bin: &Path, model: &str, guest: (u32, u32), host: (u32, u32)) -> GridRow {
+    let out = Command::new(bin)
+        .args([
+            "cell",
+            model,
+            &guest.0.to_string(),
+            &guest.1.to_string(),
+            &host.0.to_string(),
+            &host.1.to_string(),
+        ])
+        .output()
+        .expect("run oracle");
+    assert!(out.status.success());
+    parse_grid_line(String::from_utf8(out.stdout).unwrap().trim())
+}
+
+fn parse_grid_line(l: &str) -> GridRow {
+    let f = |k: &str| {
+        l.split_whitespace()
+            .find_map(|w| w.strip_prefix(k))
+            .unwrap()
+            .to_owned()
+    };
+    GridRow {
+        model: f("model="),
+        guest: pair(&f("guest=")),
+        host: pair(&f("host=")),
+        done: Done::parse(l),
+    }
+}
+
 /// `grid`: every (model, guest pair, host pair) the oracle's pair universe spans.
 pub fn grid(bin: &Path) -> Vec<GridRow> {
     let out = Command::new(bin).arg("grid").output().expect("run oracle");
@@ -174,20 +206,7 @@ pub fn grid(bin: &Path) -> Vec<GridRow> {
     String::from_utf8(out.stdout)
         .unwrap()
         .lines()
-        .map(|l| {
-            let f = |k: &str| {
-                l.split_whitespace()
-                    .find_map(|w| w.strip_prefix(k))
-                    .unwrap()
-                    .to_owned()
-            };
-            GridRow {
-                model: f("model="),
-                guest: pair(&f("guest=")),
-                host: pair(&f("host=")),
-                done: Done::parse(l),
-            }
-        })
+        .map(parse_grid_line)
         .collect()
 }
 

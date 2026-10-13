@@ -67,6 +67,8 @@
  *   fn1_negotiation_oracle grid
  *       one `GRID ...` line per (guest pair, host pair, host model) over a pair universe derived from
  *       the tree's own mapping table.
+ *   fn1_negotiation_oracle cell <model> <gmaj> <gmin> <hmaj> <hmin>
+ *       one `GRID ...` line for a single cell (pairs outside the universe).
  *   fn1_negotiation_oracle drive <guest-major> <guest-minor> <driver> <branch> <cl> [ext-status]
  *       stdout `REQ <hex>` (the request body, hex), stdin `REPLY <rpc_result> <rpc_result_private> <hex>`
  *       (decimal or 0x hex), repeated, then stdout `DONE ...` (the decision).
@@ -406,6 +408,23 @@ static void cmd_grid(void)
             }
 }
 
+/* cell <model> <guest-major> <guest-minor> <host-major> <host-minor>: one GRID row, for pairs outside the
+ * universe (a served driver row's own pair, a Windows guest's pair). */
+static void cmd_cell(int argc, char **argv)
+{
+    if (argc < 7) { fprintf(stderr, "cell <model> <gmaj> <gmin> <hmaj> <hmin>\n"); exit(2); }
+    int m = -1;
+    for (int i = 0; i < M_COUNT; i++)
+        if (!strcmp(argv[2], model_name[i])) m = i;
+    if (m < 0) { fprintf(stderr, "unknown model %s\n", argv[2]); exit(2); }
+    NvU32 gm = (NvU32)strtoul(argv[3], NULL, 0), gn = (NvU32)strtoul(argv[4], NULL, 0);
+    gridhost gh = { (enum model)m, (NvU32)strtoul(argv[5], NULL, 0), (NvU32)strtoul(argv[6], NULL, 0) };
+    outcome o = run_guest(gm, gn, "oracle", "oracle", 1, host_model, &gh);
+    char prefix[160];
+    snprintf(prefix, sizeof prefix, "GRID model=%s guest=%02x.%02x host=%02x.%02x", model_name[m], gm, gn, gh.hmaj, gh.hmin);
+    print_done(prefix, &o);
+}
+
 static void cmd_drive(int argc, char **argv)
 {
     if (argc < 7) { fprintf(stderr, "drive <major> <minor> <driver> <branch> <cl> [ext-status]\n"); exit(2); }
@@ -419,6 +438,7 @@ int main(int argc, char **argv)
 {
     if (argc >= 2 && !strcmp(argv[1], "consts")) { cmd_consts(); return 0; }
     if (argc >= 2 && !strcmp(argv[1], "grid")) { cmd_grid(); return 0; }
+    if (argc >= 2 && !strcmp(argv[1], "cell")) { cmd_cell(argc, argv); return 0; }
     if (argc >= 2 && !strcmp(argv[1], "drive")) { cmd_drive(argc, argv); return 0; }
     fprintf(stderr, "usage: %s consts | grid | drive ...\n", argv[0]);
     return 2;
