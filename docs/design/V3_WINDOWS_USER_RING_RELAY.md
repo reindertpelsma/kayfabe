@@ -1,6 +1,14 @@
 # V3 Windows user-channel ring relay: private GPFIFO + private USERD, with a safe migration path
 
 **STATUS: DESIGN-ONLY, 2026-10-12 (proposal from the owner/coordinator discussion; the §AB.2 amendment in §6 is PROPOSED, not yet a ruling).**
+**Correction, 2026-10-13:** a prepared native deferred relocation at source
+`1a666d783` succeeds on RTX 4070 / 595.91.07 as UID 65534 / CapEff zero, with
+replacement-only GPU marker/USERD GET and matched NOP controls. Thus §1's
+"an unprivileged host twin can never execute it" is falsified for the deferred
+V2 path. Direct-control annotations and earlier same-config Xids do not prove
+that impossibility. Cursor, relay, lifetime and per-driver gates remain open;
+this is not a Windows fix. See [native assessment](V3_NATIVE_FIFO_RELOCATION_20261013.md).
+
 **SUBSEQUENT OWNER CLARIFICATION, 2026-10-12:** native USER privilege and own
 explicitly admitted/refreshed mappings are the access boundary. Ordinary GP
 references may remain unchanged after scan-from-first-submission; stage only

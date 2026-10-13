@@ -3,6 +3,15 @@
 **STATUS: RESEARCH, 2026-10-11.** Native experiment FAIL (host Xid32),
 no production call site. The earlier hardware-pending paragraph below is history.
 
+**Correction, 2026-10-13:** the later fully prepared relocation at source
+`1a666d783` PASSes both as UID 65534 / CapEff zero and as UID 0 on the same
+RTX 4070 / 595.91.07. Matched NOP controls do not move; trigger cases execute a
+replacement-only GPU marker and advance replacement USERD GET, with zero host
+Xids. [Raw evidence](../prepared-native-migration/README.md). This supersedes
+the historical "not currently observed" and native-path-unavailable conclusions
+below. The same-config faults remain measured; their inner cause is unknown.
+Cursor continuity, relay integration and other drivers remain unproved.
+
 At20:17UTC the lifetime discriminator also FAILS natively: NOP clean, update
 and update-hold each cause Xid32 despite rc0 and a GPU tail. The hold fault
 arrives300us after HOLD_BEGIN, about2s before resources are released, ruling

@@ -1,6 +1,30 @@
 # Prepared native USER GP/USERD relocation discriminator
 
-STATUS: RESEARCH, 2026-10-12. Hardware pending; no production caller.
+STATUS: RESEARCH, 2026-10-13. Native NOP/trigger pairs PASS as UID 65534 and
+UID 0; no production caller. The test plan below predates this result.
+
+## Recovered hardware result
+
+Completed 2026-10-12 23:18:02–23:18:19 UTC on RTX 4070 / stock 595.91.07,
+source `1a666d78301d444c4b35b021483db12841ff8980`. Collected 2026-10-13 from
+`172.22.1.20:/var/lib/kf-windows-20261005/codex-prepared-native-1a666d783`.
+Binary SHA256 `d6b1a34479b70d017a6fedcc0c541490904a512b763dfe10e8a9acad6948cbab`.
+
+All four rows in [results.json](result/results.json) PASS: process rc 0,
+cleanup successful, no Xid in each precise attributed journal window. The
+UID 65534 registration log records all four UIDs 65534 and CapEff zero. Both
+trigger cases execute the replacement-only GPU marker 2 and reach replacement
+USERD GET 2. Both NOP controls leave marker/GET zero with identical 128 kicks.
+The pre-run falsifier did not occur. Campaign/build/raw process/health/journal
+logs are retained here; collector EXIT 0 is separate from these four verdicts.
+
+This overturns the unavailable-native-path inference, not the earlier
+same-config fault measurement. Duplicate replacement descriptors do not resolve
+initial GET or 64-entry capacity. No Windows or security-boundary guarantee is
+established. See the [authority assessment and next gates](../../../../docs/design/V3_NATIVE_FIFO_RELOCATION_20261013.md).
+
+## Original test plan
+
 Native caller remains USER; registration UID/effective capability are logged at
 registration, not inferred from channel privilege. Public V2 field layout and
 CPU-RM USERD memory registration, no private-derived interface or constant.

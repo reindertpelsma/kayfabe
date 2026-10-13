@@ -1,5 +1,28 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-13 — resumed; native relocation positive recovered
+
+Working branch `codex/windows-matrix-20261011`, worktree `/data/kf-inval-absent`.
+Previous committed tip `1a666d783`; runtime Windows source remains `d8afb1e3c`.
+The last session completed native relocation after its committed handoff and
+stopped before publishing the result. Recovered raw logs: prepared-native-migration
+under `traces/windows_matrix_20261011/gravity-vulkan/`. RTX 4070 / stock 595.91.07,
+source `1a666d783`, 2026-10-12 23:18:02–19 UTC: UID 65534 (CapEff zero) and UID 0
+NOP/trigger pairs all PASS. Trigger executes replacement-only GPU marker 2 and
+replacement USERD GET 2; matched NOP leaves both zero; all cleanup succeeds and
+precise attributed journals contain zero Xids. This disproves native-unavailable
+inferences; earlier same-config faults remain real with unknown inner cause.
+No product caller, Windows fix, initial cursor rule or cross-VM guarantee follows.
+See `docs/design/V3_NATIVE_FIFO_RELOCATION_20261013.md` for authority assessment
+and next gates. Next discriminator: distinct per-slot markers for initial GET;
+then private USERD/guest relay transition, ownership/lifetimes and exact regressions.
+
+Shadow Windows1620 final: TIMEOUT604s/rc124/no benchmark image, three153,
+zero4101/livekernel/WER/reboot, harnessGSPcycles1, hostXid32/channel4e. Full evidence
+is in `user-worker/shadow/windows-1620`; original600s oracle unchanged. Shadow is
+not a Vulkan fix. Host verified idle/noQEMU/DMA-FQ on resume, no Vast instances.
+Personal Windows image preserved; no host runtime or behavior default changed.
+
 ## UPDATE 2026-10-12 21:01UTC — shadow Windows partial verdicts; prepared native discriminator
 
 Last confirmed push45825cc76; runtime exactd8afb1e3. Shadow1610 Edge H264 playback

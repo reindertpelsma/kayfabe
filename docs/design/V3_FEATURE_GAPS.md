@@ -36,6 +36,15 @@ The console is the host viewer, not the guest's scanout.
 8. **App-matrix rule.** Every app-matrix failure (Linux or Windows lane) becomes a gap row here, named by app (`APP-<name>`), with the
    refusal-ledger lines and TDR counts of its run. Rows are closed by the app passing in the lane, never by a code-level argument.
 
+**Update, 2026-10-13 (APP-gravitymark_vk remains open):** exact `d8afb1e3c`
+shadow Windows1620 finishes TIMEOUT604s/no image/three153/GSPcycles1/Xid32 on
+channel4e; the previous pending result below is superseded. The separate native
+prepared relocation at `1a666d783` passes UID65534/CapEff0 and root NOP/trigger
+pairs with real replacement marker/GET and no Xid. This falsifies an unavailable
+native-path inference, not the Windows app failure. Initial cursor, guest relay
+transition and per-driver capability remain open. See
+[native assessment](V3_NATIVE_FIFO_RELOCATION_20261013.md) and raw evidence.
+
 ## 2. Gap table
 
 Columns: id, title, area, missing/symptom, evidence, approach, test plan (oracle = GPU-free / lane = hardware), effort S/M/L, deps, owner decision.

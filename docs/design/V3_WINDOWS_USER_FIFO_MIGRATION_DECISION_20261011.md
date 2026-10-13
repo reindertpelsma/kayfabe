@@ -5,6 +5,14 @@ patch. The narrow refusal experiment finished TIMEOUT605s/device-lost/hostXid32.
 Its clean-fallback hypothesis is falsified; no migration fix. This note is an implementation
 proposal, not a new owner ruling.
 
+**Correction, 2026-10-13:** the native alternative now has a successful owned
+relocation reference at source `1a666d783`, RTX 4070 / stock 595.91.07, including
+UID 65534 / CapEff zero. Replacement-only GPU marker and USERD GET advance;
+matched NOP controls do not, with no host Xid. The options below predate this
+finding and are no longer exhaustive. Evaluate an authored deferred native
+path before assuming mediation or a host patch is necessary; cursor/relay/
+lifetime/capability gates remain open. [Assessment](V3_NATIVE_FIFO_RELOCATION_20261013.md).
+
 ## What the measurements establish
 
 GravityMark1.89 Vulkan passes183s on the same RTX4070/Windows580.88 under VFIO.
