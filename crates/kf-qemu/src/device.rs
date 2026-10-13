@@ -3492,6 +3492,8 @@ impl Device {
 impl crate::reset::Owners for Device {
     fn reset_drainer_state(&self, epoch: u64) {
         let dropped = self.plane.ring.discard_all();
+        // The Translated pumps stop reading guest rings now, not at their free.
+        let pumps = self.chans.stop_pumps();
         let (phase, held) = match self.gsp.lock() {
             Ok(mut g) => {
                 let phase = g.fsm.phase();
@@ -3523,7 +3525,7 @@ impl crate::reset::Owners for Device {
             return;
         }
         eprintln!(
-            "kf3: device reset #{epoch}: vCPUs out (gate closed); {dropped} queued register write(s) dropped; GSP {phase:?} -> Cold (E11, {held} held repl(ies) dropped, never posted); chain rebuilt; os-event arms, {defapi} deferred-API entr(ies), interrupt tree{} cleared",
+            "kf3: device reset #{epoch}: vCPUs out (gate closed); {dropped} queued register write(s) dropped; {pumps} Translated pump(s) stopped; GSP {phase:?} -> Cold (E11, {held} held repl(ies) dropped, never posted); chain rebuilt; os-event arms, {defapi} deferred-API entr(ies), interrupt tree{} cleared",
             if self.fsp.is_some() { ", FSP EMEM" } else { "" }
         );
     }

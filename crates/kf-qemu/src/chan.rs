@@ -7935,6 +7935,27 @@ impl ChanPlane {
         }
     }
 
+    /// ★ Device reset, stage Drainer (on the drainer, BEFORE the frees are even queued): every
+    /// Translated pump stops at once — its next serve finds the channel unscheduled and does not
+    /// read the guest's ring again, which the next life's firmware may already be reusing. ⊘ Never
+    /// blocks: `try_read`/`try_lock` only; a slot a worker holds right now is stopped by its free.
+    /// Returns how many were stopped.
+    pub fn stop_pumps(&self) -> usize {
+        let Ok(slots) = self.slots.try_read() else {
+            return 0;
+        };
+        let mut n = 0usize;
+        for s in slots.values() {
+            if let Ok(mut g) = s.try_lock()
+                && g.scheduled
+            {
+                g.scheduled = false;
+                n = n.saturating_add(1);
+            }
+        }
+        n
+    }
+
     /// One round of the reset's frees (act thread), then a barrier act behind them.
     fn reset_free_round(&self, epoch: u64, round: u32) -> Result<String, (u32, String)> {
         let clients = self.guest_clients();
