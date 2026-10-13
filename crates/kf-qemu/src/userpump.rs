@@ -914,9 +914,10 @@ impl Pump {
                     .filter(|t| t.user_ring && Arc::ptr_eq(&t.allocation, &r.allocation))
                     .ok_or("USER_RING_ALLOCATION_GONE")?;
                 ring.admit(|| {
-                    // DIAGNOSTIC hypothesis: new guest source starts at0. Same-GPU
-                    // passive reference sees zero; exact trigger semantics still
-                    // require the flag-OFF vertical-slice run. Never reset host GET.
+                    // New source starts at0. Distinct-slot native reference and
+                    // Windows1630's two growth transitions support this path;
+                    // arbitrary seeded cursors remain unmeasured. Never reset
+                    // the private native GET, whose fetch credits continue.
                     r.userd = userrelay::UserdSource::Registered(userd.clone());
                     r.source = (u.gpfifo_va, u.entries);
                     t.ring_at = (u.gpfifo_va, u.entries, None);

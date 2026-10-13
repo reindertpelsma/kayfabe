@@ -1,4 +1,4 @@
-//! Experimental birth-time Windows USER ring ownership (§AI).
+//! Birth-time Windows USER ring ownership (§AI).
 //!
 //! No Linux allocation can enter this route without a WindowsUserRingPermit.
 //! Storage is created by the VA worker; native birth/free runs on the act thread.
@@ -9,11 +9,16 @@
 use super::*;
 
 pub(super) fn enabled() -> bool {
-    // Diagnostic vertical slice, never required for boot and default OFF.
-    // Cursor-zero migration is a run hypothesis, not established RM semantics.
+    // Correctness path for permitted Windows USER work, selected before native
+    // publication. Explicit 0 retains the old route as a diagnostic falsifier.
+    // Linux allocations still cannot acquire a WindowsUserRingPermit.
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| std::env::var("KF3_WIN_USER_RING_RELAY").is_ok_and(|v| v == "1"))
+    *ON.get_or_init(|| relay_enabled(std::env::var("KF3_WIN_USER_RING_RELAY").ok().as_deref()))
         || shadow_enabled()
+}
+
+fn relay_enabled(value: Option<&str>) -> bool {
+    value != Some("0")
 }
 
 pub(super) fn shadow_enabled() -> bool {
@@ -25,8 +30,8 @@ pub(super) fn shadow_enabled() -> bool {
 /// is a valid guest default, not malformed input: author bit 0 on our own
 /// channel and give the scanner that SAME identity. This does not infer the
 /// guest's privileged RAMFC defaults or change ordinary Linux Passthrough.
-/// Native zero/id1 equivalence is measured on 595.91.07; this route remains an
-/// opt-in diagnostic until the Windows workload establishes compatibility.
+/// Native zero/id1 equivalence and the original Windows Vulkan workload are
+/// measured on 595.91.07. Other driver/family compatibility is not implied.
 fn authored_subdevice_id(declared: u32) -> Result<u32, String> {
     let id = if declared == 0 { 1 } else { declared };
     kf_chan::user_scan::Scan::for_subdevice(id)
@@ -581,7 +586,7 @@ impl Birth {
         me.engine_live(a.engine_type.unwrap_or(0), true);
         // No fast-register path: every ring wakes a worker, including first use.
         Ok(format!(
-            "EXPERIMENT KF3_WIN_USER_RING_RELAY chan {:#x}:{:#x} BORN USER private-read-only-ring token {:#x} host {:#x}; OWN VAS; worker-only; source={:#x}x{} declared_subdevice={:x?} native_scan_subdevice={native_id:#x}",
+            "Windows USER ring chan {:#x}:{:#x} BORN USER private-read-only-ring token {:#x} host {:#x}; OWN VAS; worker-only; source={:#x}x{} declared_subdevice={:x?} native_scan_subdevice={native_id:#x}",
             a.client, a.handle, self.idx, chan.token, a.gpfifo_va, a.entries, a.subdevice_id
         ))
     }
@@ -832,6 +837,13 @@ mod tests {
     use kf_core::lifetime::Step;
     use kf_core::{HostOps, HostSlice, Owner, Plane, Translatable, VmCaps, Vmm};
     use kf_trap::token::Route;
+
+    #[test]
+    fn windows_relay_is_the_default_with_an_explicit_negative_control() {
+        assert!(relay_enabled(None));
+        assert!(relay_enabled(Some("1")));
+        assert!(!relay_enabled(Some("0")));
+    }
 
     #[test]
     fn guest_default_authors_the_same_explicit_identity_for_native_and_scan() {
