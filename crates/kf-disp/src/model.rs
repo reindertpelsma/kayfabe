@@ -824,6 +824,67 @@ impl DisplayModel {
         self.notice.take()
     }
 
+    /// ★★ **A guest life ends** (`docs/design/V3_DEVICE_RESET.md`): a device reset, or the guest's
+    /// RM unloading (`UNLOADING_GUEST_DRIVER` without a PM transition — GSP-RM's own unload, after
+    /// which no display object of that RM exists). Everything the guest stated goes — instance
+    /// memory, pushbuffers, channels (each one's port released), queued statements, hotplug /
+    /// preempt / display-event registrations, `PRESERVE_HW` marks, custom EDIDs, the EDID-seen and
+    /// pending-plug masks — and the ports read as a fresh model's. What realize decided stays: the
+    /// layouts, the chip row's facts, the monitors (the host's, not the guest's), the plane's wake,
+    /// the experiment switches, and the counters of the VM's run. Returns the channels dropped.
+    ///
+    /// ⊘ Exhaustive on purpose: a field added later stops this compiling until it is sorted into
+    /// one of the two lists.
+    pub fn reset_life(&mut self) -> usize {
+        let DisplayModel {
+            l: _,
+            ip_version: _,
+            heads: _,
+            windows: _,
+            classes: _,
+            connectors,
+            inst_mem,
+            pushbuffers,
+            channels,
+            statements,
+            statements_dropped: _,
+            display_mode_unverified: _,
+            caps_unverified: _,
+            notice: _,
+            seen: _,
+            ports,
+            waker: _,
+            display_sw_offered: _,
+            imp_enabled: _,
+            hdcp_state: _,
+            hotplug_edid_seen: _,
+            edid_seen,
+            pending_plug,
+            hotplug,
+            preempt,
+            display_events,
+            rmfree_marks,
+            rmfree_spent,
+        } = self;
+        let n = channels.len();
+        for c in connectors.iter_mut() {
+            c.custom_edid = None;
+        }
+        *inst_mem = None;
+        pushbuffers.clear();
+        channels.clear();
+        statements.clear();
+        *edid_seen = 0;
+        *pending_plug = 0;
+        hotplug.clear();
+        preempt.clear();
+        display_events.clear();
+        rmfree_marks.clear();
+        rmfree_spent.clear();
+        ports.reset_life();
+        n
+    }
+
     /// ★ Answer with another driver version's `layouts` (a `ReselectAtFn1` rebuild for the guest's
     /// own version). Everything stated so far is kept; the ports and the plane stay attached.
     pub fn retarget(&mut self, layouts: &'static Layouts) {
@@ -2237,6 +2298,65 @@ mod tests {
                 Statement::ChannelFreed { .. }
             ]
         ));
+    }
+
+    /// ★ Device reset / RM unload: a model that lived a guest life (a channel allocated with its
+    /// pushbuffer, a PUT posted, a hotplug registration, a PRESERVE_HW mark, a custom EDID) answers
+    /// every query of the next life as a fresh model does, and its ports read fresh.
+    #[test]
+    fn a_reset_model_answers_the_next_life_as_a_fresh_one() {
+        let mut m = model();
+        let fresh = model();
+        let s = "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS";
+        let mut q = Params::new(m.layouts(), s, &vec![0; size(&m, s)]).unwrap();
+        q.set("hclass", 0xC67D);
+        q.set("channelInstance", 0);
+        q.set("addressSpace", 1);
+        q.set("physicalAddr", 0x1234_5000);
+        q.set("limit", 0xfff);
+        q.set("valid", 1);
+        assert!(matches!(m.control(CHANNEL_PUSHBUFFER, &q.buf), Some(Ok(_))));
+        let s = "NV50VAIO_CHANNELDMA_ALLOCATION_PARAMETERS";
+        assert!(m.alloc(0xc1d0_0001, 0xc670_0000, 0xc67d_0000, 0xC67D, &vec![0; size(&m, s)]));
+        m.ports.post_put(0, 0x40);
+        assert!(m.register_hotplug(HotplugRegistration {
+            client: 1,
+            event: 10,
+            parent: 5
+        }));
+        m.rmfree_marks.insert((0xc1d0_0001, 0xc670_0000));
+        m.connectors[0].custom_edid = Some(vec![0; 128]);
+        m.edid_seen = 1;
+        m.pending_plug = 0x100;
+        assert_eq!(m.reset_life(), 1);
+        assert!(m.channels.is_empty() && m.pushbuffers.is_empty() && m.inst_mem.is_none());
+        assert!(m.take_statements().is_empty(), "the old life's statements are not the next one's");
+        assert_eq!(m.hotplug_target(), None);
+        assert!(m.rmfree_marks.is_empty() && m.rmfree_spent.is_empty());
+        assert_eq!((m.edid_seen, m.pending_plug), (0, 0));
+        assert!(m.connectors.iter().all(|c| c.custom_edid.is_none()));
+        for chn in 0..kf_disp_ports_channels() {
+            assert_eq!(m.ports.put(chn), fresh.ports.put(chn), "chn {chn}");
+            assert_eq!(m.ports.get(chn), fresh.ports.get(chn), "chn {chn}");
+            assert_eq!(m.ports.generation(chn) % 2, 0, "chn {chn}: not allocated");
+        }
+        let s = "NVC370_CTRL_CMD_GET_CHANNEL_INFO_PARAMS";
+        let mut q = Params::new(m.layouts(), s, &vec![0; size(&m, s)]).unwrap();
+        q.set("channelClass", 0xC67D);
+        let mut f = model();
+        assert_eq!(
+            m.control(cmd(&m, "NVC370_CTRL_CMD_GET_CHANNEL_INFO"), &q.buf),
+            f.control(cmd(&f, "NVC370_CTRL_CMD_GET_CHANNEL_INFO"), &q.buf)
+        );
+        // The next life allocates the core channel again, with a NEW generation (never reused).
+        assert!(m.alloc(0xc1d0_0009, 0xc670_0009, 0xc67d_0009, 0xC67D, &vec![0; size(&m, "NV50VAIO_CHANNELDMA_ALLOCATION_PARAMETERS")]));
+        assert_eq!(m.ports.generation(0) % 2, 1);
+        assert_eq!(m.reset_life(), 1);
+        assert_eq!(m.reset_life(), 0, "reset twice is reset once");
+    }
+
+    fn kf_disp_ports_channels() -> u32 {
+        crate::ports::NUM_CHANNELS as u32
     }
 
     /// ★ 2026-10-03 (B5): `SET_RMFREE_FLAGS` PRESERVE_HW is the DISPLAY OBJECT's

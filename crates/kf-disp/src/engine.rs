@@ -623,6 +623,18 @@ impl Engine {
         }
     }
 
+    /// ★ A guest life ends (`docs/design/V3_DEVICE_RESET.md`): no channel, nothing presented, no
+    /// event ring — the engine [`Engine::new`] builds, with the same vocabulary and the same
+    /// switches (trace, tear gate, core-at-vblank, the method-trace budget already spent). The
+    /// counters are the VM's run and stay.
+    pub fn reset_life(&mut self) {
+        for c in &mut self.chans {
+            *c = None;
+        }
+        self.ring.clear();
+        self.presented = [false; 8];
+    }
+
     /// Enable a bounded method diagnostic before any guest work. It cannot be replenished
     /// after a method or update executes, or by freeing/reallocating a channel.
     pub fn trace_methods(&mut self, budget: u32) {

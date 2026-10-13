@@ -1674,3 +1674,24 @@ fn batched_in_channel_number_order_the_same_writes_leave_the_overlay_flip_unpair
         s.effects
     );
 }
+
+/// ★ A guest life ends (device reset, or the guest's RM unloading): an engine with a lit head and
+/// windows comes back as `Engine::new` builds it — no head armed, no channel — and the next life
+/// lights a head exactly as a fresh engine does.
+#[test]
+fn a_reset_engine_arms_nothing_and_lights_the_next_life_like_a_fresh_one() {
+    let mut e = engine();
+    let _ = lit(&mut e);
+    assert!(e.heads_armed()[0].period_ns > 0);
+    e.reset_life();
+    let fresh = engine();
+    assert_eq!(e.heads_armed(), fresh.heads_armed());
+    assert!(e.heads_armed().iter().all(|h| h.period_ns == 0));
+    let mut f = engine();
+    let _ = lit(&mut e);
+    let _ = lit(&mut f);
+    assert_eq!(e.heads_armed(), f.heads_armed());
+    e.reset_life();
+    e.reset_life();
+    assert_eq!(e.heads_armed(), fresh.heads_armed());
+}

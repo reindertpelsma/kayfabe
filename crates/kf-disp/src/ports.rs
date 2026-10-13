@@ -211,6 +211,31 @@ impl Default for Ports {
 }
 
 impl Ports {
+    /// ★ A guest life ends (`docs/design/V3_DEVICE_RESET.md`): every channel port released (its
+    /// generation moved to the next even value — generations never repeat, so a late publish for an
+    /// old life finds a stale generation), PUT/GET zero, no awaken/semaphore/timing/frame state, no
+    /// lit SOR. The arrival log and its counters are the VM's run and stay.
+    pub fn reset_life(&self) {
+        for c in &self.chans {
+            c.put.store(0, Ordering::Release);
+            c.get.store(0, Ordering::Release);
+            let g = c.life.load(Ordering::Acquire);
+            if g % 2 == 1 {
+                c.life.store(g.wrapping_add(1), Ordering::Release);
+            }
+        }
+        for a in [&self.awaken_win, &self.awaken_other, &self.sem_win] {
+            a.store(0, Ordering::Release);
+        }
+        for h in 0..MAX_HEADS {
+            self.head_timing[h].store(0, Ordering::Release);
+            self.head_timing_en[h].store(0, Ordering::Release);
+            self.frames[h].store(0, Ordering::Release);
+            self.lit_sor[h].store(0, Ordering::Release);
+            self.set_head_timing(h, None);
+        }
+    }
+
     /// ★ **Worker**: publish the SOR head `h` lights (`None` = no display).
     pub fn set_lit_sor(&self, h: usize, sor: Option<u32>) {
         if let Some(a) = self.lit_sor.get(h) {
