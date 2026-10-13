@@ -1,10 +1,14 @@
 # V3 — the device reset: every guest life starts on the device realize left
 
-**STATUS: LIVE (code), 2026-10-13 — GPU-FREE TESTED ONLY; HARDWARE-UNVERIFIED.** Branch
-`claude/device-reset-20261013` (off `integration/prod-candidate-20261013` @ `342d319d9`). Nothing in
-this document has run on a GPU, in QEMU or in a guest. §8 is the hardware plan that has to run before
-any of it is called working. Measured = a GPU-free test here (named in §7); inferred = read from
-source and not executed.
+**STATUS: LIVE (code), 2026-10-13 — PARTLY MEASURED ON HARDWARE (§11: Linux fast guest, binary
+`c9ac4e77`, ABI 27); the bounded wait (ABI 28) and D4 are GPU-free tested only.** Branch
+`claude/device-reset-20261013` (off `integration/prod-candidate-20261013` @ `342d319d9`). §8 is the
+hardware plan. Measured = a GPU-free test here (named in §7) or a hardware run (§11, the coordinator's);
+inferred = read from source and not executed.
+
+⊘ *UPDATED 2026-10-13 (owner follow-up): D2's premise was wrong — QEMU pauses every vCPU around a
+system reset, so the reset now completes, bounded, BEFORE the vCPUs resume (§2, §3 stage 6); D4 is
+implemented (fn 47 frees the dead RM's leftover twins, §3 "Unload"); D1 and D3 are decided (§10).*
 
 ⊘ This supersedes, for kf3, the "no reset path" statements in `V3_FEATURE_GAPS.md` (H15, §3.8) and
 `V3_DISPLAY.md` §4.11.11 item 4; both carry a dated note pointing here.
@@ -37,8 +41,12 @@ releases the store (owner, §40: "a temporarily driverless guest is not a depart
   `qemu_system_reset` (reboot, reset button, triple fault / bugcheck with `-action reboot=reset`,
   QMP `system_reset`) and by a secondary-bus reset of a bridge above it; and **once at machine
   creation**, right after realize.
-- `qemu_system_reset` runs on the main loop after `pause_all_vcpus()` (`system/runstate.c:868`), so
-  no vCPU is inside a trap then. A bridge's bus reset runs on the vCPU that wrote the bridge's
+- ★ `qemu_system_reset` runs on the main loop between `pause_all_vcpus()` and `resume_all_vcpus()`
+  (`system/runstate.c:868-870`: `pause_all_vcpus(); qemu_system_reset(request); resume_all_vcpus();`),
+  so no vCPU is inside a trap then and **no vCPU runs until it returns**: a bounded wait anywhere in
+  the reset tree blocks no running vCPU. `qemu_system_reset` → `pc_machine_reset` →
+  `qemu_devices_reset` → `resettable_reset(root reset container)`: one traversal — every `enter`,
+  then every `hold`, then every `exit` (`hw/core/reset.c:173-177`, `hw/i386/pc.c:1706-1721`). A bridge's bus reset runs on the vCPU that wrote the bridge's
   config space, BQL held, **other vCPUs running** — kf3's BAR0 pieces are lockless, so a vCPU can be
   inside `kf3_bar0_write` at that moment. The design handles that case (§4).
 - The device's Resettable `hold` phase (`rc->phases.hold = kf3_reset_hold`, the e1000 pattern) runs
@@ -51,7 +59,11 @@ releases the store (owner, §40: "a temporarily driverless guest is not a depart
 ## 3. The reset, in order
 
 `kf3_reset_hold` → `kf3_device_reset` → `Device::request_reset`: close the vCPU gate, count the
-request, signal the drainer, return. **Nothing waits under the BQL.** The register drainer drives
+request (and whether it came from a vCPU), signal the drainer, return. Then, in the same traversal,
+`kf3_reset_exit` → `kf3_device_reset_wait` (stage 6) waits on the main loop, bounded, until the reset
+completed. ⊘ *CORRECTED 2026-10-13 (owner): this section said "Nothing waits under the BQL" and let
+QEMU resume the guest at once; with every vCPU paused a bounded wait blocks no vCPU, and it is what
+keeps the old life's channels off the new life's RAM.* The register drainer drives
 `crate::reset::Reset::poll` on every pass while a request is pending (it then applies no privileged
 write, posts no held reply, delivers no RC/hotplug/preempt event, polls with a 1 ms wait instead of
 parking, and keeps servicing the doorbell registry so the act thread's deregistrations are acked).
@@ -66,6 +78,18 @@ polled for a per-epoch acknowledgement (`reset::Ack`):
 | 3 | Release | act thread + display worker | act thread: every guest client still named by any channel-plane table is freed through `ChanPlane::free` — the guest's own client-free path (the teardown order `kf_core::lifetime::ORDER` states: tokens retired, doorbell fast path deregistered, twins/relays/USER rings/groups/debuggers/CUDA limit/encoder sessions released) — behind every act already queued; a barrier act repeats rounds (≤ 400 × 5 ms) while clients reappear or retries are parked, then clears the non-host per-life tables and acks. Display worker (once no copy is in flight): model, ports, engine, scan state, pacer, vblank gate, queued completions **dropped**, boot layer re-armed; acks |
 | 4 | Memory | VA thread | queued walks/splits/held clears dropped (`VaManager::abandon_life`), a walk in flight left to land; only `Retire` statements of the old life applied; inbox split/gate/waiter/cache-op state cleared; Windows private-VA queue served (bounded); invalidate port idle (armed request **abandoned**, never completed); PRAMIN all scratch; every guest VA space retired by `retire_mirror`; our BAR1/BAR2 roots and the boot framebuffer `[0, G)` zeroed on the GPU; K_BAR1/K_BAR2 re-registered with fresh walker slots (`lifetime::Step::ResetWalkerState`), windows back to the boot view (`CpuWindow::reset_to_boot`: scratch first, then each view's aperture; BAR1's seed placed again; Hopper+ doorbell views removed through the same FIFO overlay verb); acks |
 | 5 | Finish | drainer | token sweep (every token word fresh, rung bitmap clear) — **pending while a worker owns a token** (nothing else runs until the sweep is complete); interrupt tree and hotplug word reset **again** (anything latched while the owners finished is the old life's); BAR0 shadow rewritten word by word, only where it differs from the image realize wrote (`piece_image`; never a zero pass the running vCPUs could read), hole pages rebuilt, GSP registers / display static words and events / interrupt read-back republished; stale interrupt counts drained from every vector's eventfd; gate opened |
+| 6 | wait (exit phase) | main loop, BQL, vCPUs paused | `Reset::wait_completed(newest request, reset::WAIT_BOUND = 2 s)`: returns when stages 1-5 completed — the channel plane EMPTY, the memory plane reset, the gate open — so the vCPUs resume on a device as realize left it. Past the bound: one loud line naming the stage (`NOT complete after 2s … the old life's host channels may still run` before Release completed), `waits_timed_out` counted, and the reset completes in the background with the gate closed (the ABI 27 behaviour). On a vCPU thread (a bridge's bus reset; the other vCPUs run) it never waits |
+
+**None of the threads stage 6 waits for needs the BQL** (the main loop holds it): the drainer and
+the act, VA and display threads call into C only through `qemu_bh_schedule` (the BAR1 overlay verb,
+the diagnostic read trap — a schedule, never a wait for the bottom half) and `kvm_vm_ioctl`
+(`KVM_IOEVENTFD` for the doorbell fast path), which takes no QEMU lock: its `accel_ioctl_begin`
+only waits on a memslot inhibit (`accel/accel-blocker.c:43-51`), begun and ended inside one main-loop
+memory commit, never across this wait. The VA thread's BAR1 overlay completions arrive by bottom
+half, but no reset stage waits for them (the reset abandons deferred clears). The display worker's
+frames are taken by the main loop, never waited for by the worker. Everything else they wait on is
+the host GPU or host RM. If a stage does stall (a host ioctl that hangs), the bound — not a lock —
+ends the wait. [inferred: read, not run]
 
 A request during a run restarts at stage 1 with the gate closed (every stage is idempotent); since
 the gate was closed all along, the rerun finds the device pristine and completes at once. Several
@@ -86,7 +110,20 @@ through BAR1 `[0, G)`. Derivation: GSP-RM's own unload destroys every display ob
 after an unload is whatever reaches the scanned surface — the boot framebuffer once BAR1 is physical.
 ⊘ This is the owner's rule, not bare metal's: on bare metal a teardown that never sent
 `PRESERVE_HW` shuts the heads and the screen is black (`V3_DISPLAY.md` §4.11.13 arm (b)). With
-`gop=off` (no boot layer, no seed) nothing changes at unload.
+`gop=off` (no boot layer, no seed) the display is unchanged at unload — owner decision D3: there is
+no boot framebuffer to return to.
+
+**Unload frees the dead RM's twins (owner decision D4, 2026-10-13).** The same fn 47 (no PM
+transition, no GC6 entry — `bar1phys::unload_actions`), whatever `gop`, frees every client the
+channel plane still holds (`ChanPlane::free_dead_clients`): GSP-RM's own unload destroyed every
+object it held, so those twins are dead. Each client is freed through `ChanPlane::free` on the
+drainer, as the statement the guest's own client free would be — host acts on the act thread,
+nothing waits, no completion forged. The set is taken at fn 47 (every birth of the dead RM completed
+before it: its RPCs are synchronous) and nothing sweeps later arrivals, because there is no gate here
+and a reloading guest may already be allocating its next life; the reset's barrier is therefore not
+used. A clean unload has freed everything already and finds nothing. ⊘ The memory plane is NOT
+reset at fn 47 (only BAR1's seed, as B5): a mirror the dead RM never retired stays until a device
+reset — named open item.
 
 ## 4. Device state, owner by owner
 
@@ -109,7 +146,7 @@ excluded. M = covered by a GPU-free test (§7), I = inferred from reading.
 | BAR0 shadow pieces, hole pages | B | rewritten where they differ from `piece_image` (the realize image) + republish | vCPU, drainer, VA, display | gate; publication is drainer-owned | I (fill shared by construction) |
 | token words, rung bitmap, kernel-token set (plane) | B | retired by the frees; swept fresh at Finish (`reset_tokens`) | vCPU ring, workers claim, act retire | gate; BUSY words waited out by the free path | M |
 | `VmCaps` (channel budget) | B counts | released by the frees, **not zeroed**: a count left is a host channel still alive (leak, counted) | act | — | I |
-| Passthrough twins, Translated slots, relays, USER rings, host TSGs, debuggers, CUDA limit, encoder sessions (`ChanPlane`) | B (host objects) | freed through `ChanPlane::free(c, c)` per guest client on the act thread; `LiveCensus` logged | act, drainer (statements), workers (pump) | frees run behind queued acts (a birth in flight lands first, then is freed); the free path stops pumps and waits out BUSY tokens | I (needs a host) |
+| Passthrough twins, Translated slots, relays, USER rings, host TSGs, debuggers, CUDA limit, encoder sessions (`ChanPlane`) | B (host objects) | reset: freed through `ChanPlane::free(c, c)` per guest client on the act thread, `LiveCensus` logged; fn 47 teardown (D4): the same frees issued on the drainer (`free_dead_clients`) | act, drainer (statements), workers (pump) | frees run behind queued acts (a birth in flight lands first, then is freed); the free path stops pumps and waits out BUSY tokens | I (needs a host) |
 | `pt_objs`, `by_obj`, `scopes`, `sw_objs`, `guest_sched`, `rc_queue`, `preempt_done`, `pt_fifo_owed`, ledgers, completion bitset | B | cleared at the barrier | act, drainer, workers | after every free act ran | I |
 | `DbFast` registrations (KVM ioeventfds) | B | deregistered by each twin's free; sites follow QEMU's BAR mapping | act (assign), drainer (ack), main loop (sites) | drainer keeps acking while the reset is pending; deliveries during a reset are absorbed | I |
 | act queue's parked retries | B | barrier waits (≤ 2 s) | act | barrier re-queued with a delay, never a sleep | I |
@@ -148,18 +185,25 @@ registration) makes every reset report `NOT EMPTY`.
 2. **A host free is refused**: the guest's tables are cleared regardless (nothing of the old life is
    routable), the host object leaks and is counted (`NOT EMPTY`, `reset_incomplete`, a KEPT mirror).
 3. **GPU work in flight at the reset** (a crashed guest's channels): it runs until the host's own free
-   preempts and unbinds the channel (stage 3). No completion is written for it. ⚠ **Residual
-   window**: QEMU resumes the guest as soon as the hold phase returns; until stage 3 frees the twins
+   preempts and unbinds the channel (stage 3). No completion is written for it.
+   ⊘ *CORRECTED 2026-10-13 (owner): the text below the line said QEMU resumes the guest as soon as
+   the hold phase returns, leaving a window of milliseconds and an owner decision (D2). Wrong
+   premise: the vCPUs stay paused until the reset tree returns (`system/runstate.c:868-870`), and
+   stage 6 now waits there. For a system reset the window is closed — the vCPUs resume only after
+   the channel plane is EMPTY — unless the 2 s bound passes (then it is said loudly, failure mode 12)
+   or the reset came from a vCPU (a bridge's bus reset: no wait, the window stays).*
+   ~~QEMU resumes the guest as soon as the hold phase returns; until stage 3 frees the twins
    (inferred: milliseconds), a host channel can still read the GPFIFO and write semaphores in guest
    RAM that the next life's firmware is starting to use, and an act or a USERD relay of the old life
-   that runs before its channel's free can still write its relay words there. Real hardware stops DMA at reset. Closing
-   it needs either a blocking host call under the BQL (forbidden) or holding the vCPUs; owner
-   decision D2. [inferred]
+   that runs before its channel's free can still write its relay words there.~~ [inferred]
 4. **Guest BAR0 writes during the reset** are dropped; BAR0 reads come from the shadow and show the
-   old life's values until Finish (reads never exit). Firmware does not touch kf3's BAR0 (kf-gop draws
+   old life's values until Finish (reads never exit). ⊘ *2026-10-13: with stage 6 this applies only
+   to a bus reset from a vCPU or a wait past its bound — after a system reset the vCPUs resume on the
+   finished device.* Firmware does not touch kf3's BAR0 (kf-gop draws
    only through BAR1); the guest driver loads seconds later. [inferred]
 5. **BAR1 `[0, G)` before stage 4** shows the old life's placement (or scratch): firmware drawing in
-   that window goes there and is lost; the seed is placed again at stage 4. [inferred]
+   that window goes there and is lost; the seed is placed again at stage 4. ⊘ *2026-10-13: as 4 —
+   after a system reset no firmware instruction runs before stage 4.* [inferred]
 6. **A guest that resets in a loop**: each run is bounded; lines are bounded (`reset::loud`: the first
    16, then powers of two). [measured: the bound]
 7. **Display copy in flight**: the worker resets after its completion (polled). [inferred]
@@ -177,14 +221,25 @@ registration) makes every reset report `NOT EMPTY`.
    transition during a TDR recovery is unknown (closed driver): if it does, the boot layer shows
    during the recovery — L5 checks it.
 11. **The display worker, the act thread and USERD relays keep running the old life** for the
-   moments before their reset point (failure mode 3's window).
+   moments before their reset point — with every vCPU paused (stage 6), so nothing of the new life
+   is there to be touched; only a vCPU-initiated bus reset or a wait past its bound leaves it open.
+12. **Stage 6 past its bound** (a host free or walk that hangs for 2 s): the main loop stops waiting,
+   says so in one line naming the stage and whether the channels were already freed, and the reset
+   completes in the background with the gate closed (failure modes 1, 3-5 then apply). The VM is
+   never held longer than the bound. [measured: the timeout path, `the_bounded_wait_gives_up_at_its_bound_and_the_reset_completes_later`]
+13. **fn 47 frees while the guest reloads**: the client set AND each free's twins are taken at fn 47
+   on the drainer (statement time), so a next-life twin, born later, is never among them even if it
+   reuses a dead client's handle; the free acts queue in statement order ahead of any next-life
+   birth. [inferred]
 
 ## 7. GPU-free tests (all passing at this branch's head)
 
 Command (disk-saving flags used here because `/data` was full):
 `CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 cargo test -p kf-qemu -p kf-gsp -p kf-core -p kf-trap -p kf-mem -p kf-disp -p kf-rm`.
 
-- `kf-qemu` `reset::tests`: `a_pristine_device_resets_at_once_without_asking_any_owner`,
+- `kf-qemu` `reset::tests`: `the_bounded_wait_returns_once_the_drainer_completed_the_reset`,
+  `the_bounded_wait_gives_up_at_its_bound_and_the_reset_completes_later` (both with the drainer on
+  its own thread), `a_pristine_device_resets_at_once_without_asking_any_owner`,
   `a_stall_report_may_read_the_status_without_deadlocking`,
   `finish_that_is_not_ready_keeps_the_gate_closed_until_it_is`,
   `an_open_gate_admits_and_counts_the_entry_until_it_leaves`,
@@ -202,6 +257,7 @@ Command (disk-saving flags used here because `/data` was full):
   `reset_lines_are_bounded_for_a_guest_that_resets_in_a_loop`,
   `an_ack_is_per_epoch_and_a_late_one_never_satisfies_a_newer_request`.
 - `kf-qemu` `chan::reset_tests::the_reset_barrier_frees_again_waits_for_parked_retries_and_is_bounded`;
+  `bar1phys::tests::a_teardown_frees_the_dead_rms_twins_and_a_pm_transition_touches_nothing` (D4/D3);
   `mem::tests::a_reset_inbox_holds_nothing_of_the_old_life_and_tickets_never_repeat`;
   `display::tests::a_guest_life_that_ends_shows_the_boot_layer_again_from_every_state`.
 - `kf-gsp` `boot::device_reset_from_every_phase`: `every_driver_reaches_its_phase_with_the_live_state_it_claims`,
@@ -243,14 +299,19 @@ Preconditions: `scripts/bench/v3_gates.sh` 9/9 → `build_kf3.sh` at this branch
 states its falsifier; record the result either way.
 
 **L0 — start-up reset (every boot).** Boot the fast guest once.
-Expect `device reset #1 COMPLETE` within the first drainer passes, the heartbeat's `reset[req=1 done=1
-pristine=1 …]`, no stage line (pristine), then a normal boot. *Falsifier:* a stage line at start-up
+Expect `device reset #1 COMPLETE` and `device reset #1 complete before the vCPUs resume (the main loop
+waited N us)`, the heartbeat's `reset[req=1 (main=1 vcpu=0) done=1 pristine=1 waits_timed_out=0 …]`,
+no stage line (pristine), then a normal boot. *Falsifier:* a stage line at start-up
 (something touched the device before the machine reset), a `WAITING at` line, or the guest's GSP
 boot failing where `master` boots.
 
 **L1 — Linux, QMP `system_reset` while Running, ×5.** Fast guest (or the display lane VM with
 `gop=on,display=on`), run a CUDA workload (`cuda_ladder.sh` rung 1) in a loop, then
-`{"execute":"system_reset"}` on the QMP socket; wait for the guest to boot; repeat 5×. Also once with
+`{"execute":"system_reset"}` on the QMP socket; wait for the guest to boot; repeat 5×. ★ ABI 28:
+each full reset must log `complete before the vCPUs resume (the main loop waited N us)` with N well
+under 2 s, the barrier line BEFORE it, and `waits_timed_out=0`; record N (it is the guest's reboot
+pause). *Extra falsifier:* a `NOT complete after 2s` line; a host Xid between the reset and the next
+boot (the old channels must be gone before the guest runs). Also once with
 `system_reset` issued twice within 10 ms (expect one full run and `pristine` +1).
 Expect per reset: `vCPUs out … GSP Running -> Cold (E11, N held …)`, a barrier line with `twins=0
 translated=0 relays=0 … caps=0 db_regs=0` and `EMPTY`, the memory line with `0 KEPT`, `mirrors left 0`,
@@ -265,7 +326,10 @@ on the freed twins in the reset window (count them — failure mode 3).
 (no clean unload). Same expectations as L1; for `reboot` the barrier should report 0 clients freed
 (the guest freed them), for `-f`/sysrq it frees them. *Falsifier:* as L1.
 
-**L3 — Linux driver unload/reload.** `rmmod nvidia_drm nvidia_modeset nvidia_uvm nvidia`, wait,
+**L3 — Linux driver unload/reload.** ★ D4: with a CUDA process killed by `kill -9` just before
+`rmmod` (or the driver unloaded under a held fd where the module allows it), expect at fn 47
+`the guest RM unloaded with N client(s) still holding host objects … freed`, and on a clean unload no
+such line; host `nvidia-smi` channel/memory back to the post-boot baseline after each cycle. `rmmod nvidia_drm nvidia_modeset nvidia_uvm nvidia`, wait,
 `modprobe nvidia` + `nvidia-smi`, ×5, with `gop=on`; run `scripts/bench/display/lane.sh` with
 `unload_hook.sh` (B5 arms). Expect at each fn 47: `display: … life ENDED (its RM unloaded) … boot
 layer is shown again`, the console (QMP `screendump`) showing the text console/efifb content, not
@@ -300,18 +364,48 @@ sequence lock stalled silently (LOW; recovered). The barrier's self-counted park
 and fixed just before (`cda43759`). Open, accepted or the owner's: whole-store scrub (D1), the
 window of failure mode 3 (D2), the gate's per-access cost (failure mode 9), the reload race (10).
 
-## 10. Decisions that belong to the owner
+## 10. Decisions (owner, 2026-10-13)
 
-- **D1 — guest VRAM across a reset.** The reset zeroes only our roots and the boot framebuffer
-  `[0, G)` (as realize did); the rest of the store keeps the previous life's contents (same VM, same
-  tenant; real GPUs keep VRAM across a reset). Scrub the whole store at reset (a GPU memset of fb-mb,
-  inferred tens of ms) or not?
-- **D2 — the DMA window (failure mode 3).** Accept the milliseconds in which an old host channel can
-  still touch guest RAM after QEMU resumes the guest, or stop the vCPUs until stage 3 finishes (a
-  `vm_stop`-style hold — not a blocking call under the BQL, but it delays the guest's restart)?
-- **D3 — unload with `gop=off`.** Unchanged (Preserved/black as B5 measured). Should a driver unload
-  without a boot display also end the display life (black instead of the preserved console)?
-- **D4 — tier B at an unclean driver unload.** `THE_CONSTRAINTS.md` §40 item 2 asks tier B to reset on
-  driver unload "clean or unclean". This branch resets tier B at a device reset, and the display at
-  fn 47; it does NOT free leftover channel twins at fn 47 (a clean unload has freed them; an unclean
-  one sends no fn 47). Free leftovers at fn 47 too?
+- **D1 — guest VRAM across a reset: NOT scrubbed** (decided). It is the same VM's data, and real GPUs
+  keep VRAM across a reset. The reset zeroes only our two roots and the boot framebuffer `[0, G)`,
+  as realize does.
+- **D2 — the DMA window: removed** (resolved by design). Its premise — that QEMU resumes the vCPUs as
+  soon as the hold phase returns — was wrong (`system/runstate.c:868-870`); stage 6 waits, bounded,
+  with every vCPU paused.
+- **D3 — unload with `gop=off`: unchanged** (decided). There is no boot framebuffer to return to; the
+  display stays as B5 measured (a preserved console, or black).
+- **D4 — leftover twins at fn 47: freed** (decided, implemented — §3 "Unload"). The memory plane is
+  still reset only by a device reset (open item: mirrors the dead RM never retired).
+
+## 11. Hardware results so far (the coordinator's runs, 2026-10-13)
+
+Linux fast guest, binary `c9ac4e77` (this branch at ABI 27 — before the bounded wait and D4), host
+stock 595.91.07. `[measured]` unless marked:
+
+- QMP `system_reset` ×5 mid-boot, and ×5 at 9-19.5 s into the arms (concurrent-fuzz, map-stress,
+  ce-client, ce-client-guest-ram, concurrency, guest-ram-pin). Every reset logged `device reset #N`
+  with the vCPUs-out gate line, `GSP Running -> Cold (E11)`, `act device reset: free every guest client`
+  (2 clients early, 3 — a CUDA client among them — late), `channel plane EMPTY after 1 round`, and the
+  memory plane retiring 4 VA spaces and removing 79-87 BAR2 placements.
+- After each reset the guest rebooted; the final boot passed every arm (`FAST_VERDICT=PASS`); the host
+  Xid count was unchanged.
+- Windows LTSC (in progress): a hard reset at the signed-in desktop logged `13 Translated pump(s)
+  stopped` and `GSP Running -> Cold`. Outcome of the restarted desktop: not yet reported.
+- **Two resets per `system_reset`, the odd-numbered one pristine** (`[measured]`: the pattern; the
+  cause is `[inferred]`). The start-up reset is #1 (pristine: nothing has touched the device). Each
+  `system_reset` then shows a full reset (#2, #4, …) followed by a pristine one (#3, #5, …) that
+  completes at once. QEMU's own reset tree resets kf3 once per `qemu_system_reset` (one traversal,
+  §2), so the second request is a SECOND `qemu_system_reset`. The fast guest boots SeaBIOS
+  (`-kernel`, no `-no-reboot`), and SeaBIOS, entered after a reset with its shadowed image already in
+  RAM, takes its resume path and requests a hard reboot ("Attempting a hard reboot") — a second
+  platform reset before the guest touches kf3, hence pristine. (`[read]` the strings "In resume
+  (status=%d)" and "Attempting a hard reboot" are in this machine's SeaBIOS image,
+  `/usr/share/seabios/bios-256k.bin`; that this path is what runs after a QEMU reset is recalled,
+  not read in its source, and the bench's QEMU ships its own SeaBIOS build.) *Falsifiers:* QMP shows ONE `RESET`
+  event per `system_reset` (then the second request has another source); kf3's `reset[… (main=N
+  vcpu=M) …]` counts a vCPU request (a bus reset, not a platform reset; ABI 28 logs the source); a
+  SeaBIOS debug log (`-chardev …,id=seabios -device isa-debugcon,iobase=0x402,chardev=seabios`)
+  without "Attempting a hard reboot" between the two. Either way the pristine reset is correct and
+  free: nothing of a guest life exists to undo.
+- Not yet measured: ABI 28's bounded wait (its `complete before the vCPUs resume` line and the wait
+  time), D4 at an unclean unload, L2-L6.
