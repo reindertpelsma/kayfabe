@@ -277,6 +277,9 @@ pub fn read<R: BufRead>(an: &mut Analyzer, label: &str, mut r: R) -> std::io::Re
                         "header schema is not kayfabe-gsp-text/1".to_string(),
                     );
                 }
+                if matches!(get(&obj, "kf_scrubbed"), Some(Val::Int(1))) {
+                    an.mark_scrubbed();
+                }
                 for k in ["observer", "device"] {
                     if let Some(Val::Str(s)) = get(&obj, k) {
                         an.fact(k, s);

@@ -33,12 +33,12 @@ fn dir_name(d: Dir) -> &'static str {
 #[must_use]
 pub fn controls_tsv(r: &Report) -> String {
     let mut s = String::from(
-        "cmd\tname\trequests\treplies\tpaired\tunanswered\torphan_replies\techo\tserialized\treq_sizes\treply_sizes\tstatuses\trpc_results\tdistinct_replies\togkm\togkm_basis\n",
+        "cmd\tname\trequests\treplies\tpaired\tunanswered\torphan_replies\techo\tserialized\treq_sizes\treply_sizes\tstatuses\trpc_results\tdistinct_replies\tscrubbed\togkm\togkm_basis\n",
     );
     for c in &r.controls {
         let _ = writeln!(
             s,
-            "{:#010x}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+            "{:#010x}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
             c.cmd,
             c.name.as_deref().unwrap_or("-"),
             c.requests,
@@ -53,6 +53,7 @@ pub fn controls_tsv(r: &Report) -> String {
             hist(&c.statuses, true),
             hist(&c.rpc_results, true),
             c.distinct_replies,
+            c.scrubbed,
             c.ogkm.word(),
             c.ogkm.basis(),
         );
@@ -203,7 +204,7 @@ pub fn json(r: &Report) -> String {
         }
         let _ = write!(
             o,
-            "{{\"cmd\":{},\"cmd_hex\":\"{:#010x}\",\"name\":{},\"requests\":{},\"replies\":{},\"paired\":{},\"unanswered\":{},\"orphan_replies\":{},\"echo\":{},\"serialized\":{},\"req_sizes\":{},\"reply_sizes\":{},\"statuses\":{},\"rpc_results\":{},\"distinct_replies\":{},\"ogkm\":\"{}\",\"ogkm_basis\":{}}}",
+            "{{\"cmd\":{},\"cmd_hex\":\"{:#010x}\",\"name\":{},\"requests\":{},\"replies\":{},\"paired\":{},\"unanswered\":{},\"orphan_replies\":{},\"echo\":{},\"serialized\":{},\"req_sizes\":{},\"reply_sizes\":{},\"statuses\":{},\"rpc_results\":{},\"distinct_replies\":{},\"scrubbed\":{},\"ogkm\":\"{}\",\"ogkm_basis\":{}}}",
             c.cmd,
             c.cmd,
             c.name.as_deref().map_or("null".to_string(), esc),
@@ -219,6 +220,7 @@ pub fn json(r: &Report) -> String {
             jhist(&c.statuses),
             jhist(&c.rpc_results),
             c.distinct_replies,
+            c.scrubbed,
             c.ogkm.word(),
             esc(&c.ogkm.basis()),
         );

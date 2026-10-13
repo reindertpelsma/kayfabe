@@ -32,6 +32,10 @@ pub const MAX_PAYLOAD_BYTES: u32 = 1 << 20;
 pub const UNKNOWN_COUNT: u32 = u32::MAX;
 /// Width of the two string fields, including the mandatory terminating NUL.
 pub const STRING_BYTES: usize = 32;
+/// File-header `flags` bit 0: the file was written by `kf-census scrub` (`scrub.rs`). A module
+/// never sets it; a reader that sees it knows that message bodies of controls not on the
+/// allow-list were replaced by the fill pattern `scrub::FILL`. Every other bit must be zero.
+pub const FLAG_SCRUBBED: u32 = 1;
 
 /// One header field: its place in the byte layout.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -61,7 +65,7 @@ pub const FILE_FIELDS: &[FieldSpec] = &[
     fs("version", 8, 4, false),
     fs("header_bytes", 12, 4, false),
     fs("record_header_bytes", 16, 4, false),
-    fs("flags", 20, 4, true),
+    fs("flags", 20, 4, false),
     fs("os_id", 24, 4, false),
     fs("module_version", 28, 4, false),
     fs("pci_vendor_id", 32, 2, false),
@@ -215,6 +219,8 @@ pub struct FileHeader {
     pub driver_version: String,
     /// The ogkm tag the capture will be decoded with (may be empty: the decoder chooses).
     pub decode_tag: String,
+    /// `flags` bit 0 ([`FLAG_SCRUBBED`]): set only by the scrub stage, never by a module.
+    pub scrubbed: bool,
 }
 
 /// One record header.
@@ -371,6 +377,7 @@ impl FileHeader {
         b[8..12].copy_from_slice(&VERSION.to_le_bytes());
         b[12..16].copy_from_slice(&(FILE_HEADER_BYTES as u32).to_le_bytes());
         b[16..20].copy_from_slice(&(RECORD_HEADER_BYTES as u32).to_le_bytes());
+        b[20..24].copy_from_slice(&(if self.scrubbed { FLAG_SCRUBBED } else { 0 }).to_le_bytes());
         b[24..28].copy_from_slice(&self.os.id().to_le_bytes());
         b[28..32].copy_from_slice(&self.module_version.to_le_bytes());
         b[32..34].copy_from_slice(&self.pci_vendor_id.to_le_bytes());
@@ -411,6 +418,10 @@ impl FileHeader {
                 return Err(CaptureError::ReservedNotZero(f.name));
             }
         }
+        let flags = le32(b, 20);
+        if flags & !FLAG_SCRUBBED != 0 {
+            return Err(CaptureError::ReservedNotZero("flags"));
+        }
         let os_id = le32(b, 24);
         Ok(FileHeader {
             os: Os::from_id(os_id).ok_or(CaptureError::UnknownOs(os_id))?,
@@ -422,6 +433,7 @@ impl FileHeader {
             ts_start: le64(b, 48),
             driver_version: get_str(&b[56..88], "driver_version")?,
             decode_tag: get_str(&b[88..120], "decode_tag")?,
+            scrubbed: flags & FLAG_SCRUBBED != 0,
         })
     }
 }

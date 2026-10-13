@@ -181,6 +181,9 @@ pub struct SourceInfo {
     pub records: u64,
     /// Messages decoded.
     pub messages: u64,
+    /// The source says it went through the scrub stage (capture `flags` bit 0, observer header
+    /// `kf_scrubbed`): a control body that is exactly the fill pattern is then a scrubbed body.
+    pub scrubbed: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -209,8 +212,9 @@ struct PairKey {
 
 #[derive(Debug, Default)]
 struct Pending {
-    reqs: VecDeque<Vec<u8>>,
-    reps: VecDeque<Vec<u8>>,
+    // `None` = the body was scrubbed: it takes part in pairing but never in the echo comparison.
+    reqs: VecDeque<Option<Vec<u8>>>,
+    reps: VecDeque<Option<Vec<u8>>>,
 }
 
 #[derive(Debug, Default)]
@@ -225,6 +229,7 @@ struct ControlAcc {
     statuses: BTreeMap<u32, u64>,
     rpc_results: BTreeMap<u32, u64>,
     reply_hashes: HashSet<[u8; 32]>,
+    scrubbed: u64,
 }
 
 /// Per-function counters.
@@ -269,8 +274,12 @@ pub struct ControlRow {
     pub statuses: BTreeMap<u32, u64>,
     /// Reply envelope `rpc_result` histogram.
     pub rpc_results: BTreeMap<u32, u64>,
-    /// Number of distinct reply parameter bodies (sha-256).
+    /// Number of distinct reply parameter bodies (sha-256), scrubbed bodies not counted.
     pub distinct_replies: u64,
+    /// Request and reply messages whose body was scrubbed (the source went through the scrub
+    /// stage and the body is the fill pattern). Such bodies are excluded from `echo` and
+    /// `distinct_replies`; every count, size and status is unaffected.
+    pub scrubbed: u64,
     /// ogkm answer.
     pub ogkm: OgkmStatus,
 }
@@ -415,6 +424,14 @@ impl Analyzer {
             format: format.to_string(),
             ..SourceInfo::default()
         });
+    }
+
+    /// Mark the current source as having gone through the scrub stage.
+    pub fn mark_scrubbed(&mut self) {
+        if let Some(s) = self.sources.last_mut() {
+            s.scrubbed = true;
+        }
+        self.fact("scrubbed", true);
     }
 
     /// Attach a non-board fact to the current source.
@@ -784,7 +801,14 @@ impl Analyzer {
         }
         let n = declared.min(observed);
         let params = payload[req.params_at..req.params_at + n].to_vec();
+        // A scrubbed body is the fill pattern in a source that says it was scrubbed; it is
+        // counted as such and never decoded as if it were the driver's bytes.
+        let scrubbed = self.sources.last().is_some_and(|s| s.scrubbed) && crate::scrub::is_filled(&params);
+        let params: Option<Vec<u8>> = if scrubbed { None } else { Some(params) };
         let acc = self.controls.entry(req.cmd).or_default();
+        if scrubbed {
+            acc.scrubbed += 1;
+        }
         let pk = PairKey {
             source: self.sources.len().saturating_sub(1),
             a: m.a,
@@ -804,7 +828,7 @@ impl Analyzer {
                 *acc.req_sizes.entry(req.params_size).or_default() += 1;
                 if let Some(rep) = pend.reps.pop_front() {
                     acc.paired += 1;
-                    if rep == params {
+                    if rep.is_some() && rep == params {
                         acc.echo += 1;
                     }
                 } else {
@@ -816,10 +840,12 @@ impl Analyzer {
                 *acc.rep_sizes.entry(req.params_size).or_default() += 1;
                 *acc.statuses.entry(status).or_default() += 1;
                 *acc.rpc_results.entry(rpc_result).or_default() += 1;
-                acc.reply_hashes.insert(sha256(&params));
+                if let Some(p) = &params {
+                    acc.reply_hashes.insert(sha256(p));
+                }
                 if let Some(rq) = pend.reqs.pop_front() {
                     acc.paired += 1;
-                    if rq == params {
+                    if rq.is_some() && rq == params {
                         acc.echo += 1;
                     }
                 } else {
@@ -860,6 +886,7 @@ impl Analyzer {
                 statuses: a.statuses,
                 rpc_results: a.rpc_results,
                 distinct_replies: a.reply_hashes.len() as u64,
+                scrubbed: a.scrubbed,
                 ogkm: self.ogkm.control(cmd),
             })
             .collect();

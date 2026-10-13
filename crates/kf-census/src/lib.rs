@@ -11,6 +11,7 @@
 //! | [`analyze`] | decode with `kf-gsp`/`kf-abi`, the oracle, request/reply pairing, per-control census |
 //! | [`ogkm`] | "is this control defined in an ogkm tag" from the matrix and the tier1 search |
 //! | [`report`] | TSV and JSON output (counts and sizes only, never message bytes) |
+//! | [`scrub`] | default-deny rewrite of a capture: keeps headers, replaces message bodies unless the control id is allow-listed |
 //!
 //! Nothing here defines an NVIDIA layout: element framing, the checksum, the envelope and the
 //! control header are the ones `kf-gsp` and `kf-abi` already own, selected by an ogkm tag.
@@ -20,6 +21,7 @@ pub mod capture;
 pub mod observer;
 pub mod ogkm;
 pub mod report;
+pub mod scrub;
 pub mod stream;
 
 use analyze::Analyzer;

@@ -36,6 +36,9 @@ pub fn read<R: Read>(an: &mut Analyzer, label: &str, r: R) -> Result<(), Capture
     let mut rd = Reader::new(r)?;
     let h = rd.header().clone();
     an.begin_source(label, "kfgspcap");
+    if h.scrubbed {
+        an.mark_scrubbed();
+    }
     an.fact("os", format!("{:?}", h.os));
     an.fact("module_version", h.module_version);
     an.fact("pci_vendor_id", format!("{:#06x}", h.pci_vendor_id));
@@ -151,6 +154,34 @@ pub fn read<R: Read>(an: &mut Analyzer, label: &str, r: R) -> Result<(), Capture
     Ok(())
 }
 
+/// How many entries the message starting at `first` (one entry) occupies, read the way the
+/// driver reads it: `elemCount` where the layout has one, else derived from the declared length.
+///
+/// # Errors
+///
+/// `(count, limit)` when the entry does not start a plausible message (count 0, or more entries
+/// than the guest's staging buffer holds); 
+pub(crate) fn message_entries(
+    layout: &kf_gsp::ElementLayout,
+    size_max: u32,
+    first: &[u8],
+    es: usize,
+) -> Result<u32, (u32, u32)> {
+    let count = match peek_elem_count(layout, first) {
+        Ok(Some(n)) => n,
+        _ => match peek_len(layout, first, es as u32, size_max) {
+            Ok(l) => l.elements(),
+            Err(_) => 0,
+        },
+    };
+    let limit = max_elements(es as u32, size_max);
+    if count == 0 || count > limit {
+        Err((count, limit))
+    } else {
+        Ok(count)
+    }
+}
+
 fn bind(an: &mut Analyzer, qs: &mut HashMap<(u16, Dir), Q>, rec: &Record) {
     let hd = rec.header;
     let t = match TxHeader::decode(&rec.payload) {
@@ -251,25 +282,20 @@ fn elements(an: &mut Analyzer, qs: &mut HashMap<(u16, Dir), Q>, rec: &Record) {
         if q.buf.len() < es {
             break;
         }
-        let count = match peek_elem_count(&layout, &q.buf[..es]) {
-            Ok(Some(n)) => n,
-            _ => match peek_len(&layout, &q.buf[..es], es as u32, size_max) {
-                Ok(l) => l.elements(),
-                Err(_) => 0,
-            },
+        let count = match message_entries(&layout, size_max, &q.buf[..es], es) {
+            Ok(n) => n,
+            Err((count, limit)) => {
+                an.anomaly(
+                    AnomalyKind::DesyncEntry,
+                    format!(
+                        "record {} q{} {:?}: entry does not start a message (element count {count}, limit {limit}); dropped one entry",
+                        hd.counter, hd.queue_id, hd.dir
+                    ),
+                );
+                q.buf.drain(..es);
+                continue;
+            }
         };
-        let limit = max_elements(es as u32, size_max);
-        if count == 0 || count > limit {
-            an.anomaly(
-                AnomalyKind::DesyncEntry,
-                format!(
-                    "record {} q{} {:?}: entry does not start a message (element count {count}, limit {limit}); dropped one entry",
-                    hd.counter, hd.queue_id, hd.dir
-                ),
-            );
-            q.buf.drain(..es);
-            continue;
-        }
         let need = count as usize * es;
         if q.buf.len() < need {
             break;
