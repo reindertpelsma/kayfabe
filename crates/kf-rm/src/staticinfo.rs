@@ -523,6 +523,7 @@ impl CommandPolicy for StaticInfoPolicy {
                 want
             );
             return Some(Reply {
+                rpc_result_private: None,
                 rpc_result: NV_ERR_NOT_SUPPORTED,
                 body: Vec::new(),
             });
@@ -537,6 +538,7 @@ impl CommandPolicy for StaticInfoPolicy {
                     self.driver.driver_version()
                 );
                 return Some(Reply {
+                    rpc_result_private: None,
                     rpc_result: NV_ERR_NOT_SUPPORTED,
                     body: Vec::new(),
                 });
@@ -544,6 +546,7 @@ impl CommandPolicy for StaticInfoPolicy {
         };
         match self.body_measured_with(&regions) {
             Ok(body) => Some(Reply {
+                rpc_result_private: None,
                 rpc_result: NV_OK,
                 body,
             }),
@@ -553,6 +556,7 @@ impl CommandPolicy for StaticInfoPolicy {
                     self.driver.driver_version()
                 );
                 Some(Reply {
+                    rpc_result_private: None,
                     rpc_result: NV_ERR_NOT_SUPPORTED,
                     body: Vec::new(),
                 })

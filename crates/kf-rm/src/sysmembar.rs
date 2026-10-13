@@ -93,6 +93,7 @@ impl CommandPolicy for SysmembarPolicy {
         self.held_last = true;
         // ★ The header echoed, `NV_OK`: the control has no `[OUT]` field (paramsSize 0).
         Some(Reply {
+            rpc_result_private: None,
             rpc_result: NV_OK,
             body: cmd.payload.clone(),
         })

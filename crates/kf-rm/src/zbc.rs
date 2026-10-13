@@ -225,6 +225,7 @@ impl CommandPolicy for ZbcPolicy {
             let mut body = cmd.payload.clone();
             body[CONTROL_STATUS_OFF..CONTROL_STATUS_OFF + 4].copy_from_slice(&NV_OK.to_le_bytes());
             return Some(Reply {
+                rpc_result_private: None,
                 rpc_result: NV_OK,
                 body,
             });
@@ -234,6 +235,7 @@ impl CommandPolicy for ZbcPolicy {
         }
         let refuse = |status: u32| {
             Some(Reply {
+                rpc_result_private: None,
                 rpc_result: status,
                 body: Vec::new(),
             })
@@ -254,6 +256,7 @@ impl CommandPolicy for ZbcPolicy {
                     .copy_from_slice(&NV_OK.to_le_bytes());
                 body[req.params_at..req.params_at + p.len()].copy_from_slice(&p);
                 Some(Reply {
+                    rpc_result_private: None,
                     rpc_result: NV_OK,
                     body,
                 })

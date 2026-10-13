@@ -242,6 +242,7 @@ impl CommandPolicy for VfGuestPolicy {
         let set_rc = self.ids.map(|i| i.set_rc_recovery);
         let refuse = |status: u32| {
             Some(Reply {
+                rpc_result_private: None,
                 rpc_result: status,
                 body: Vec::new(),
             })
@@ -271,6 +272,7 @@ impl CommandPolicy for VfGuestPolicy {
                 }
                 body[req.params_at..req.params_at + p.len()].copy_from_slice(&p);
                 Some(Reply {
+                    rpc_result_private: None,
                     rpc_result: NV_OK,
                     body,
                 })

@@ -610,6 +610,7 @@ impl Bridge {
     fn respond(&mut self, objects: &mut dyn RmObjects, cmd: &RpcCommand) -> Reply {
         match self.deliver(objects, cmd) {
             Ok(_) => Reply {
+                rpc_result_private: None,
                 rpc_result: 0, // NV_OK
                 body: cmd.payload.clone(),
             },
@@ -746,6 +747,7 @@ fn refusal_reply(r: BridgeRefusal) -> Reply {
         );
     }
     Reply {
+        rpc_result_private: None,
         rpc_result: r.rpc_result(),
         body: Vec::new(),
     }
@@ -855,6 +857,7 @@ impl ObjectPolicy {
             return None;
         }
         let refuse = |status: u32| Reply {
+            rpc_result_private: None,
             rpc_result: status,
             body: Vec::new(),
         };
@@ -897,6 +900,7 @@ impl ObjectPolicy {
             w.copy_from_slice(&kf_abi::defapi::NV_OK.to_le_bytes());
         }
         Some(Reply {
+            rpc_result_private: None,
             rpc_result: kf_abi::defapi::NV_OK,
             body,
         })

@@ -85,6 +85,7 @@ impl CommandPolicy for DisplayCtrlProbe {
             );
         }
         Some(Reply {
+            rpc_result_private: None,
             rpc_result: NV_OK,
             body,
         })
@@ -191,6 +192,7 @@ impl CommandPolicy for DisplayPrivateProbe {
             );
         }
         Some(Reply {
+            rpc_result_private: None,
             rpc_result: NV_OK,
             body,
         })
@@ -424,6 +426,7 @@ impl CommandPolicy for DisplayTopologyProbe {
             );
         }
         Some(Reply {
+            rpc_result_private: None,
             rpc_result: NV_OK,
             body,
         })

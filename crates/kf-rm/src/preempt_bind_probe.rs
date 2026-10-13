@@ -130,6 +130,7 @@ impl CommandPolicy for PreemptBindProbe {
             );
         }
         Some(Reply {
+            rpc_result_private: None,
             rpc_result: NV_OK,
             body,
         })
@@ -219,6 +220,7 @@ impl CommandPolicy for ZcullBindProbe {
             );
         }
         Some(Reply {
+            rpc_result_private: None,
             rpc_result: NV_OK,
             body,
         })
