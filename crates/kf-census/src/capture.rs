@@ -592,13 +592,26 @@ impl<W: Write> Writer<W> {
         self.push(h, &[])
     }
 
-    /// Write the clean-close record and flush.
+    /// Write the clean-close record and flush. The record carries queue instance 0 and the
+    /// command queue; see [`Writer::end_at`] for a writer that stamps the queue it last saw.
     ///
     /// # Errors
     ///
     /// Write failures.
-    pub fn end(mut self, ts: u64) -> Result<W, CaptureError> {
-        let mut h = Self::base(Kind::End, Dir::Cmd, 0, ts);
+    pub fn end(self, ts: u64) -> Result<W, CaptureError> {
+        self.end_at(ts, 0, Dir::Cmd)
+    }
+
+    /// Like [`Writer::end`], with the `queue_id` and `dir` fields of the End record chosen by
+    /// the caller. The format does not interpret them (the decoder ignores both); the Windows
+    /// capture module stamps the queue pair it was following when it closed, so a byte-exact
+    /// comparison with its output needs this form (`tests/golden.rs`).
+    ///
+    /// # Errors
+    ///
+    /// Write failures.
+    pub fn end_at(mut self, ts: u64, queue_id: u16, dir: Dir) -> Result<W, CaptureError> {
+        let mut h = Self::base(Kind::End, dir, queue_id, ts);
         h.entry_count = self.counter;
         self.push(h, &[])?;
         self.w.flush()?;
