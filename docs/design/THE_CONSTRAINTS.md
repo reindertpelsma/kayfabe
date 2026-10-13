@@ -2574,7 +2574,10 @@ restart — but nothing drives it back.
    (Booter Unload → `BootStep::Teardown` → `enter_halted()`); the unclean one — the guest process
    `kill -9`'d, or an init that failed before `NV_INIT_FLAG_GPU_STATE_LOAD` was set — has no path
    at all, and that is the one that actually fires.
-3. **Model FLR.** `[measured w760]` kayfabe has no function-reset handling, so the guest's own
+3. ⊘ *2026-10-13: kf3 now resets tier B on QEMU's reset of the function (system reset, bus reset; kf3 is a
+   conventional PCI device with no FLR capability) — `V3_DEVICE_RESET.md`, GPU-free tested only. Tier A
+   is untouched by it, as this section requires.*
+   **Model FLR.** `[measured w760]` kayfabe has no function-reset handling, so the guest's own
    documented recovery (*"the GPU is likely in a bad state and may need to be reset"*) is
    unavailable. A real device clears WPR2 on reset; ours must, or a wedged guest can only be
    fixed by destroying the VM.

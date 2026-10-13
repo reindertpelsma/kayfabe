@@ -1710,7 +1710,10 @@ The owner will confirm; until then the build follows these defaults.
    VMM (`firmware/README.md`; CI gate B, the ratchet and the ABI-quarantine firmware arm).
 3. **Firmware for bench lanes:** OVMF only for the display lane; SeaBIOS lanes stay the measured
    baseline. No legacy VGA BIOS for the release (a code-type-0 VBE image is 1–2+ weeks).
-4. **Warm reboot:** kf3 has no reset path (`kf3.c:965-977` at `v3-gop-kf3`): a guest reboot needs a QEMU restart
+4. ⊘ *SUPERSEDED 2026-10-13 (`V3_DEVICE_RESET.md`, branch `claude/device-reset-20261013`, hardware-unverified):
+   kf3 has a reset path (Resettable hold → `kf3_device_reset`), and a driver unload (fn 47 without a
+   PM transition) with `gop=on` now shows the boot layer again (`DisplayPlane::rm_unloaded`).*
+   **Warm reboot:** kf3 has no reset path (`kf3.c:965-977` at `v3-gop-kf3`): a guest reboot needs a QEMU restart
    (`-no-reboot`). Windows Setup's reboots go through restarts (B10).
 5. **No host-RAM backing** for the boot framebuffer (§4.11.2).
 6. ⊘ *2026-10-03 (late, `v3-gop`): with `gop=off` C is no longer even read (§4.11.4's first ⊘ note);
