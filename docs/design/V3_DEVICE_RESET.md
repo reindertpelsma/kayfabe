@@ -202,6 +202,7 @@ Command (disk-saving flags used here because `/data` was full):
 - `kf-core`: `a_reset_plane_routes_nothing_of_the_old_life_and_allocates_like_a_fresh_one`.
 - `kf-mem`: `cpuwin::tests::a_reset_window_is_the_seeded_window_realize_left_and_every_view_is_released`,
   `cpuwin::tests::a_reset_keeps_a_view_whose_scratch_is_refused_and_says_so`,
+  `cpuwin::tests::n_lives_and_resets_leave_exactly_the_seed_armed` (50 lives, host apertures),
   `vasmgr::tests::a_reset_drops_queued_walks_lets_the_one_in_flight_land_and_reslots_the_bar_object`.
 - `kf-disp`: `model::tests::a_reset_model_answers_the_next_life_as_a_fresh_one`,
   `engine::tests::a_reset_engine_arms_nothing_and_lights_the_next_life_like_a_fresh_one`.

@@ -1163,6 +1163,38 @@ mod tests {
         assert_eq!((rep.unmapped, rep.seed), (1, Some(Reseed::NoBootFramebuffer)));
     }
 
+    /// ★ The accounting property over N lives: every life places views of the store and of guest
+    /// RAM at moving offsets and ends in a reset; after each reset the host holds exactly what it
+    /// held after realize — one armed view (the seed) — and arms − releases never grows.
+    #[test]
+    fn n_lives_and_resets_leave_exactly_the_seed_armed() {
+        let r = Rec::default();
+        let w = CpuWindow::new(&r, 256 << 20);
+        w.seed(0, 0, 0x80_0000).unwrap();
+        let held = |r: &Rec| {
+            let ops = r.ops.lock().unwrap();
+            let arms = ops.iter().filter(|o| matches!(o, Op::Arm(..))).count();
+            let rels = ops.iter().filter(|o| matches!(o, Op::Release(..))).count();
+            arms - rels
+        };
+        assert_eq!(held(&r), 1, "after realize: the seed");
+        for life in 0..50u64 {
+            let base = 0x100_0000 + life * 0x1_0000;
+            w.map(&d(0, 0x10_0000, 0x1000, false), true).unwrap();
+            w.invalidate().unwrap();
+            for i in 0..(life % 7 + 1) {
+                w.map(&d(base + i * 0x1000, 0x40_0000 + i * 0x1000, 0x1000, false), true)
+                    .unwrap();
+            }
+            w.map(&d(base + 0x8000, 0x5000_0000, 0x1000, true), true).unwrap();
+            let rep = w.reset_to_boot();
+            assert_eq!(rep.kept, 0, "life {life}");
+            assert_eq!(w.placements(), 0, "life {life}");
+            assert_eq!(held(&r), 1, "life {life}: only the seed stays armed");
+            assert!(w.seeded().is_some());
+        }
+    }
+
     /// ⊘ A placement the host refuses to re-point to scratch is KEPT (releasing its aperture would
     /// leave the guest a view of memory we gave back) and counted; the rest of the reset goes on.
     #[test]
