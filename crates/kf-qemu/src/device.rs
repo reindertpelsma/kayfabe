@@ -2972,15 +2972,31 @@ impl Device {
                         }
                     );
                 }
+                let a = crate::bar1phys::unload_actions(Some(&u), self.gop.is_some());
                 // ★ GSP-RM's own unload returns BAR1 to physical mode on a real card (the same
                 // `kbusStatePreUnload`): the second of the two triggers (`crate::bar1phys`).
-                if u.gives_bar1_up() && self.gop.is_some() {
+                if a.reseed_bar1 {
                     self.mem.inbox.request_bar1_physical();
-                    // ★★ 2026-10-13 (owner requirement, `docs/design/V3_DEVICE_RESET.md` §6): the
-                    // display goes back to the boot framebuffer — GSP-RM's unload ends the display's
-                    // guest life, and BAR1 `[0, G)` reaches store `[0, G)` again from here.
-                    if let Some(dp) = self.display {
-                        dp.rm_unloaded();
+                }
+                // ★★ 2026-10-13 (owner requirement, `docs/design/V3_DEVICE_RESET.md` §3): the
+                // display goes back to the boot framebuffer — GSP-RM's unload ends the display's
+                // guest life, and BAR1 `[0, G)` reaches store `[0, G)` again from here.
+                if a.display_life_end
+                    && let Some(dp) = self.display
+                {
+                    dp.rm_unloaded();
+                }
+                // ★★ Owner decision D4 (2026-10-13): the guest RM is gone, so every channel-plane
+                // client it left is dead — freed now, through the guest's own free path, as the
+                // statements its RM would have sent (never blocks; the host acts run on the act
+                // thread). A clean unload has freed them already: nothing is found.
+                if a.free_twins {
+                    let freed = self.chans.free_dead_clients();
+                    if log && !freed.is_empty() {
+                        eprintln!(
+                            "kf3: GSP fn 47: the guest RM unloaded with {} client(s) still holding host objects {freed:x?} — freed (the twins are dead)",
+                            freed.len()
+                        );
                     }
                 }
             }

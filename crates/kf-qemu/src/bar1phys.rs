@@ -37,6 +37,35 @@ impl Unloading {
     }
 }
 
+/// ★ What the device does at a decoded fn 47 (`docs/design/V3_DEVICE_RESET.md` §3, "Unload").
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct UnloadActions {
+    /// BAR1 `[0, G)` back to the boot framebuffer (B5; `gop=on` only).
+    pub reseed_bar1: bool,
+    /// The display's guest life ends and the boot layer shows again (`gop=on` only; with
+    /// `gop=off` there is no boot framebuffer to return to, and the display stays as B5 measured).
+    pub display_life_end: bool,
+    /// ★ Owner decision D4 (2026-10-13): every guest client the channel plane still holds is freed —
+    /// GSP-RM's own unload destroyed every object it held, so those twins are dead. Only a
+    /// teardown: never a PM transition or a GC6 entry, whose RM state (and channels) survive.
+    pub free_twins: bool,
+}
+
+/// ★ The decision, from the decoded body and whether the boot display is on. A body that does not
+/// decode decides nothing (the caller passes no `Unloading`).
+#[must_use]
+pub fn unload_actions(u: Option<&Unloading>, gop: bool) -> UnloadActions {
+    let Some(u) = u else {
+        return UnloadActions::default();
+    };
+    let teardown = u.gives_bar1_up();
+    UnloadActions {
+        reseed_bar1: teardown && gop,
+        display_life_end: teardown && gop,
+        free_twins: teardown && !u.gc6,
+    }
+}
+
 /// Decode a fn-47 body with the generated layout of the serving version.
 ///
 /// # Errors
@@ -169,6 +198,34 @@ pub fn restore_physical_view<V: kf_mem::cpuwin::ViewOps>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// ★ D4 and the unload display rule: a teardown (no PM transition) frees the dead RM's twins
+    /// whatever the display; the boot display returns only with `gop=on`; a PM transition or a GC6
+    /// entry (RM state survives) and an undecodable body do nothing.
+    #[test]
+    fn a_teardown_frees_the_dead_rms_twins_and_a_pm_transition_touches_nothing() {
+        let u = |pm, gc6| Unloading { pm, gc6, level: 0 };
+        let all = UnloadActions {
+            reseed_bar1: true,
+            display_life_end: true,
+            free_twins: true,
+        };
+        assert_eq!(unload_actions(Some(&u(false, false)), true), all);
+        assert_eq!(
+            unload_actions(Some(&u(false, false)), false),
+            UnloadActions {
+                free_twins: true,
+                ..UnloadActions::default()
+            },
+            "gop=off: no boot framebuffer to return to (D3), the twins are freed all the same"
+        );
+        for gop in [true, false] {
+            assert_eq!(unload_actions(Some(&u(true, false)), gop), UnloadActions::default());
+            assert_eq!(unload_actions(Some(&u(true, true)), gop), UnloadActions::default());
+            assert!(!unload_actions(Some(&u(false, true)), gop).free_twins, "GC6: RM state kept");
+            assert_eq!(unload_actions(None, gop), UnloadActions::default());
+        }
+    }
 
     fn layout() -> &'static kf_abi::matrix::Layout {
         let v = kf_abi::DriverVersion::parse("580.159.04").expect("version");

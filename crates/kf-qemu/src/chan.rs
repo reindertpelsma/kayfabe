@@ -7956,6 +7956,24 @@ impl ChanPlane {
         n
     }
 
+    /// ★★ **The guest RM unloaded** (fn 47, a teardown — owner decision D4, 2026-10-13): every
+    /// client a table of the plane still names belonged to the RM that is gone, so its twins are
+    /// dead. Each is freed through [`ChanPlane::free`] exactly as the guest's own client free is —
+    /// on the DRAINER, as a statement, so its host acts queue in statement order and nothing waits.
+    /// Returns the clients freed (empty after a clean unload).
+    ///
+    /// ⊘ Not the reset's round on the act thread: there is no gate here, and a reloading guest's
+    /// next life may already be queuing births — the set is taken NOW (every birth of the dead RM
+    /// completed before its fn 47 could be sent: its RPCs are synchronous), and no barrier sweeps
+    /// whatever appears later. No completion is forged: the host's own free stops any work.
+    pub fn free_dead_clients(&self) -> Vec<u32> {
+        let clients = self.guest_clients();
+        for c in &clients {
+            let _ = self.free(*c, *c);
+        }
+        clients
+    }
+
     /// One round of the reset's frees (act thread), then a barrier act behind them.
     fn reset_free_round(&self, epoch: u64, round: u32) -> Result<String, (u32, String)> {
         let clients = self.guest_clients();
