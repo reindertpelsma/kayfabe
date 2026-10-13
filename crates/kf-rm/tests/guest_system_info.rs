@@ -202,19 +202,42 @@ fn the_reply_states_our_version_and_reflects_none_of_the_request() {
 }
 
 #[test]
-fn a_guest_speaking_another_version_is_refused_rather_than_agreed_with() {
+fn a_guest_speaking_another_pair_is_steered_to_ours_and_never_agreed_with() {
     let mut p = policy_for(BENCH_DRIVER);
     // The 610 pair, sent to a port bound to 580. An echoing GSP would agree; RM would then
     // select the 610 function table and encode every later message at the wrong offsets.
-    let reply = p
-        .respond(&request(V610_MAJOR, V610_MINOR))
-        .expect("a refusal is still a reply");
-    assert_eq!(reply.rpc_result, kf_abi::NV_ERR_NOT_SUPPORTED);
-    assert!(reply.body.is_empty());
+    //
+    // ★ 2026-10-13: the answer used to be `rpc_result = NV_ERR_NOT_SUPPORTED`, a hard stop that
+    // never lets the guest read the pair we speak. The protocol's own answer is OK in the
+    // envelope, a private status, and OUR pair in the body (ogkm-595.84 rpc.c:8947-8968); the
+    // oracle test `fn1_negotiation_oracle.rs` drives the real guest through it. The load-bearing
+    // half of this test is unchanged: the guest's pair is never agreed with.
+    let req = request(V610_MAJOR, V610_MINOR);
+    let reply = p.respond(&req).expect("a steer is still a reply");
+    assert_eq!(
+        reply.rpc_result, 0,
+        "NV_OK: a non-zero rpc_result ends the handshake unread"
+    );
+    assert_eq!(
+        reply.rpc_result_private,
+        Some(kf_abi::guestsysinfo::NV_VGPU_MSG_RESULT_GUEST_HOST_DRIVER_MISMATCH)
+    );
+    assert_eq!(&reply.body[0..4], &V580_MAJOR.to_le_bytes()[..], "OUR pair");
+    assert_eq!(&reply.body[4..8], &V580_MINOR.to_le_bytes()[..]);
+    // The guest re-sends the buffer it reads this reply from: its identity must survive.
+    assert_eq!(
+        kf_abi::guestsysinfo::decode_guest_driver_version(&reply.body).unwrap(),
+        "580.159.04"
+    );
+    // ... and nothing else of the request does (the other strings were 0xCD with no NUL, the
+    // three lengths stay zero); only the changelist word is carried, for the Windows-twin check.
+    assert!(!reply.body[24..].contains(&0xCD));
+    assert!(reply.body[8..20].iter().all(|b| *b == 0));
+    assert_eq!(&reply.body[20..24], &req.payload[20..24]);
 
     assert_eq!(
         policy_for(BENCH_DRIVER)
-            .agreed_version(&request(V610_MAJOR, V610_MINOR).payload)
+            .agreed_version(&req.payload)
             .expect_err("mismatched"),
         GuestSystemInfoError::VersionMismatch {
             guest: VgxVersion {
@@ -227,6 +250,19 @@ fn a_guest_speaking_another_version_is_refused_rather_than_agreed_with() {
             },
         },
     );
+}
+
+#[test]
+fn a_guest_that_is_not_the_declared_driver_is_still_refused_whatever_its_pair() {
+    // The pair is only negotiated for a guest the driver cross-check accepted: a different
+    // release is a hard refusal (rpc_result), so no pair is ever steered for the wrong layouts.
+    let mut p = policy_for(BENCH_DRIVER);
+    let r = p
+        .respond(&request_as(V580_MAJOR, V580_MINOR, "595.84"))
+        .unwrap();
+    assert_eq!(r.rpc_result, kf_abi::NV_ERR_NOT_SUPPORTED);
+    assert_eq!(r.rpc_result_private, None);
+    assert!(r.body.is_empty());
 }
 
 #[test]

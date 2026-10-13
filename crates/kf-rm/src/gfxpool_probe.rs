@@ -33,6 +33,7 @@ impl CommandPolicy for GfxPoolProbe {
         }
         let fail = |rpc_result| {
             Some(Reply {
+                rpc_result_private: None,
                 rpc_result,
                 body: Vec::new(),
             })
@@ -72,6 +73,7 @@ impl CommandPolicy for GfxPoolProbe {
         body[status..status + 4].copy_from_slice(&0u32.to_le_bytes());
         body[req.params_at..end].copy_from_slice(&output);
         Some(Reply {
+            rpc_result_private: None,
             rpc_result: 0,
             body,
         })

@@ -825,6 +825,7 @@ impl ChannelPolicy {
     fn refusal(status: u32, why: &str, cmd: &RpcCommand) -> Reply {
         eprintln!("kf-rm: channel plane REFUSED ({status:#x}): {why}");
         Reply {
+            rpc_result_private: None,
             rpc_result: status,
             body: cmd.payload.clone(),
         }
@@ -1830,6 +1831,7 @@ impl ChannelPolicy {
             // ★ The [IN] params echoed: the transport copies a non-empty reply over the caller's
             // struct (`ogkm-580: rpc.c:11085-11090`), so a zeroed body would rewrite bEnable.
             ChanAnswer::Done => Some(Reply {
+                rpc_result_private: None,
                 rpc_result: NV_OK,
                 body: cmd.payload.clone(),
             }),
@@ -1838,6 +1840,7 @@ impl ChannelPolicy {
             ChanAnswer::Deferred(d) => {
                 self.pending = Some(d);
                 Some(Reply {
+                    rpc_result_private: None,
                     rpc_result: NV_OK,
                     body: cmd.payload.clone(),
                 })
@@ -1854,6 +1857,7 @@ impl ChannelPolicy {
                 }
                 body[at..at + 4].copy_from_slice(&t.to_le_bytes());
                 Some(Reply {
+                    rpc_result_private: None,
                     rpc_result: NV_OK,
                     body,
                 })
@@ -1940,6 +1944,7 @@ impl ChannelPolicy {
             h.client, h.object
         );
         Some(Reply {
+            rpc_result_private: None,
             rpc_result: NV_OK,
             body: cmd.payload.clone(),
         })

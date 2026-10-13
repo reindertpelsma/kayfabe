@@ -1701,6 +1701,7 @@ fn an_accepted_command_is_acked_explicitly_and_a_refused_one_is_answered_here() 
     assert_eq!(
         policy.respond(&accepted),
         Some(Reply {
+            rpc_result_private: None,
             rpc_result: 0,
             body: accepted.payload.clone(),
         }),
@@ -1709,6 +1710,7 @@ fn an_accepted_command_is_acked_explicitly_and_a_refused_one_is_answered_here() 
     assert_eq!(
         policy.respond(&command(&w::message(999, 1, &[0u8; 8]))),
         Some(Reply {
+            rpc_result_private: None,
             rpc_result: 0x56,
             body: Vec::new(),
         }),
@@ -1721,6 +1723,7 @@ fn an_accepted_command_is_acked_explicitly_and_a_refused_one_is_answered_here() 
     assert_eq!(
         policy.respond(&command(&w::message(999, 1, &[0xff; 64]))),
         Some(Reply {
+            rpc_result_private: None,
             rpc_result: 0x56,
             body: Vec::new(),
         }),
@@ -1765,6 +1768,7 @@ fn a_free_of_an_undeclared_object_is_refused_by_the_graph_and_named_on_the_wire(
     assert_eq!(
         policy.respond(&stray),
         Some(Reply {
+            rpc_result_private: None,
             rpc_result: 0x56,
             body: Vec::new(),
         }),

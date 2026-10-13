@@ -40,15 +40,33 @@
 //! reflected — the rule task #127 imposed, and `kf_gsp::GspFsm::answer` carries the
 //! run behind it (`t126b` at `f2acb89`, a guest-kernel page fault, twice).
 //!
-//! ## ⊘ The down-negotiation branch is NOT built
+//! ## ★★ The down-negotiation branch IS built (2026-10-13, `V3_FN1_NEGOTIATION_ORACLE.md`)
 //!
-//! The protocol has one: a GSP that speaks a different version answers `rpc_result_private
-//! != NV_OK` **with its own pair in the body**, and the guest either retries at that pair
-//! or reports *"the host version is too old"* (`ogkm-580: rpc.c:8765-8801`). That is
-//! strictly more useful than a refusal, and it is not built because nothing has been
-//! observed to need it — this port answers exactly one guest driver version. If a
-//! mismatched guest ever appears, the refusal names it, and *that* is when the branch gets
-//! written against a real observation instead of a reading.
+//! The protocol has one: a host that speaks a different pair answers `rpc_result = NV_OK`,
+//! `rpc_result_private != NV_OK` and **its own pair in the body**; the guest then re-issues the same
+//! buffer once if that pair is at least its minimum, or logs *"the host version is too old"* and
+//! fails with the private status (`ogkm-595.84: src/nvidia/src/kernel/vgpu/rpc.c:8947-8982`). A
+//! non-zero `rpc_result` is a hard stop that never reaches that code (`rpc.c:2008-2025`), which is
+//! what the earlier refusal did: the guest could not learn the pair this port speaks.
+//!
+//! It was written against an ORACLE and not an observation: the guest half of the exchange is
+//! compiled from ogkm (`crates/kf-abi/tests/oracle/`), and `kf-rm/tests/fn1_negotiation_oracle.rs`
+//! drives this port through it for every served row and every pair the tree names.
+//!
+//! ★ The reply NEVER agrees to the guest's pair. It states this port's, so the guest either ends
+//! on the pair the layouts were measured for or fails by name; the guest's pair selects nothing.
+//! ⊘ The guest re-sends the buffer it just read the reply from, so a negotiation reply must carry
+//! the request's `[IN]` identity fields back or the retry arrives with an empty
+//! `guestDriverVersion` and is refused as a different driver. They are re-authored from the decoded
+//! request ([`encode_set_guest_system_info_negotiation_reply`]), not reflected byte-for-byte.
+
+/// `NV_VGPU_MSG_RESULT_GUEST_HOST_DRIVER_MISMATCH` = `NV_ERR_LIB_RM_VERSION_MISMATCH`
+/// (`ogkm-595.84: src/nvidia/inc/kernel/vgpu/rpc_headers.h:116`,
+/// `src/common/sdk/nvidia/inc/nvstatuscodes.h:135`): the private status that tells a guest "the pair in
+/// the body is the host's". The guest keys on `!= NV_OK`, not on this value; the value is the
+/// protocol's own name for the condition and is returned verbatim to the guest's caller when it gives
+/// up. `tests/fn1_negotiation_oracle.rs` pins it against the tree.
+pub const NV_VGPU_MSG_RESULT_GUEST_HOST_DRIVER_MISMATCH: u32 = 0x0000_006A;
 
 /// `sizeof(rpc_set_guest_system_info_v03_00)` — six `NvU32` then three `char[0x100]`
 /// (`ogkm-580:`/`ogkm-610: src/nvidia/generated/g_rpc-structures.h:36-47`, identical at
@@ -262,8 +280,9 @@ pub enum GuestSystemInfoError {
     /// This port has no `VGX_*_VERSION_NUMBER` citation for the guest's driver version, so
     /// it cannot state one. See this module's docs: agreeing anyway is the mirror.
     NoVersionForDriver,
-    /// The guest declared a version this port does not speak. ⚠ The protocol's own answer
-    /// is a down-negotiation, which is not built — see this module's docs.
+    /// The guest declared a pair this port does not speak. The protocol's answer is a
+    /// down-negotiation (a private status plus this port's pair), which `kf-rm` sends — see this
+    /// module's docs.
     VersionMismatch {
         /// What the guest said.
         guest: VgxVersion,
@@ -294,8 +313,8 @@ impl core::fmt::Display for GuestSystemInfoError {
             Self::VersionMismatch { guest, ours } => write!(
                 f,
                 "the guest speaks vGPU RPC {:#x}.{:#x} and this port speaks {:#x}.{:#x}; \
-                 the down-negotiation branch is not built",
-                guest.major, guest.minor, ours.major, ours.minor
+                 the reply names {:#x}.{:#x} and the guest decides whether to retry at it",
+                guest.major, guest.minor, ours.major, ours.minor, ours.major, ours.minor
             ),
             Self::DriverVersionUnterminated => write!(
                 f,
@@ -349,6 +368,43 @@ pub fn encode_set_guest_system_info_reply(ours: VgxVersion) -> Vec<u8> {
     body[VGX_MAJOR_OFF..VGX_MAJOR_OFF + 4].copy_from_slice(&ours.major.to_le_bytes());
     body[VGX_MINOR_OFF..VGX_MINOR_OFF + 4].copy_from_slice(&ours.minor.to_le_bytes());
     body
+}
+
+/// The negotiation reply body: the pair this port speaks, and the request's identity fields
+/// re-authored so the guest's re-issue of the same buffer still identifies the guest.
+///
+/// The changelist is copied as a word and the three buffer lengths stay zero; each of the three strings is
+/// copied only up to its NUL and only when every byte is printable ASCII, else it is left empty
+/// (a hostile string is not repeated, and costs only the guest's own retry). Everything past a
+/// string's NUL stays zero, so nothing the guest did not put before a terminator comes back.
+///
+/// # Errors
+///
+/// [`GuestSystemInfoError::Truncated`].
+pub fn encode_set_guest_system_info_negotiation_reply(
+    ours: VgxVersion,
+    request: &[u8],
+) -> Result<Vec<u8>, GuestSystemInfoError> {
+    if request.len() < SET_GUEST_SYSTEM_INFO_SIZE {
+        return Err(GuestSystemInfoError::Truncated {
+            need: SET_GUEST_SYSTEM_INFO_SIZE,
+            got: request.len(),
+        });
+    }
+    let mut body = encode_set_guest_system_info_reply(ours);
+    // guestClNum (the Windows-twin check reads it); the three buffer lengths stay zero, nothing reads them.
+    body[GUEST_CL_NUM_OFF..GUEST_CL_NUM_OFF + 4]
+        .copy_from_slice(&request[GUEST_CL_NUM_OFF..GUEST_CL_NUM_OFF + 4]);
+    for at in [GUEST_DRIVER_VERSION_OFF, GUEST_VERSION_OFF, GUEST_TITLE_OFF] {
+        let arr = &request[at..at + GUEST_STRING_LEN];
+        let Some(end) = arr.iter().position(|&b| b == 0) else {
+            continue;
+        };
+        if arr[..end].iter().all(|b| (0x20..0x7f).contains(b)) {
+            body[at..at + end].copy_from_slice(&arr[..end]);
+        }
+    }
+    Ok(body)
 }
 
 #[cfg(test)]

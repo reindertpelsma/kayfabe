@@ -35,7 +35,7 @@ static BUILT: OnceLock<Result<PathBuf, String>> = OnceLock::new();
 
 /// The built oracle binary, or `None` (after printing the named skip reason).
 pub fn oracle(test: &str) -> Option<PathBuf> {
-    let built = BUILT.get_or_init(|| build());
+    let built = BUILT.get_or_init(build);
     match built {
         Ok(p) => {
             eprintln!("FN1-ORACLE-GATE: RAN {test}");
@@ -76,7 +76,10 @@ fn build() -> Result<PathBuf, String> {
 
 /// `consts`: the constants the ogkm tree itself defines, as `key -> values`.
 pub fn consts(bin: &Path) -> BTreeMap<String, Vec<String>> {
-    let out = Command::new(bin).arg("consts").output().expect("run oracle");
+    let out = Command::new(bin)
+        .arg("consts")
+        .output()
+        .expect("run oracle");
     assert!(out.status.success());
     let mut m: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for l in String::from_utf8(out.stdout).unwrap().lines() {
@@ -125,8 +128,10 @@ impl Done {
         }
         let num = |k: &str| {
             let v = kv[k];
-            v.strip_prefix("0x")
-                .map_or_else(|| v.parse().unwrap(), |h| u32::from_str_radix(h, 16).unwrap())
+            v.strip_prefix("0x").map_or_else(
+                || v.parse().unwrap(),
+                |h| u32::from_str_radix(h, 16).unwrap(),
+            )
         };
         let agreed = kv["agreed"].split_once('.').map(|(a, b)| {
             (

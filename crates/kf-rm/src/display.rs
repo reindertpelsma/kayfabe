@@ -598,6 +598,7 @@ impl DisplayPolicy {
         }
         let refuse = |status: u32| {
             Some(Reply {
+                rpc_result_private: None,
                 rpc_result: status,
                 body: Vec::new(),
             })
@@ -628,6 +629,7 @@ impl DisplayPolicy {
                     .copy_from_slice(&NV_OK.to_le_bytes());
                 body[req.params_at..req.params_at + p.len()].copy_from_slice(&p);
                 Some(Reply {
+                    rpc_result_private: None,
                     rpc_result: NV_OK,
                     body,
                 })

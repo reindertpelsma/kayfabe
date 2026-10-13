@@ -339,11 +339,31 @@ pub struct Unserviced {
 /// What the caller wants replied to a command.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Reply {
-    /// `rpc_result`, and `rpc_result_private` with it.
+    /// The envelope `rpc_result`. A non-zero value is a HARD STOP for the guest: `_issueRpcAndWait`
+    /// returns it verbatim and nothing else in the reply is read (`ogkm-595.84: rpc.c:2008-2025`).
     pub rpc_result: u32,
+    /// ★ The envelope `rpc_result_private`, when it must differ from `rpc_result`. `None` (every
+    /// reply but one) means "same value", which is what the guest has always been sent. Only fn 1's
+    /// down-negotiation sets it: OK in `rpc_result` and a private status that makes the guest read
+    /// the host's pair out of the body and retry (`ogkm-595.84: rpc.c:8947-8968`).
+    pub rpc_result_private: Option<u32>,
     /// The reply body. **Clamped** to the request's own body length
     /// ([`RpcCommand::reply`]).
     pub body: Vec<u8>,
+}
+
+impl Reply {
+    /// The reply as it goes on the wire for `cmd`: body clamped to the request
+    /// ([`RpcCommand::reply`]), and the private status split from `rpc_result` only when the policy
+    /// asked for it.
+    #[must_use]
+    pub fn on_wire(&self, cmd: &RpcCommand) -> OutgoingRpc {
+        let mut out = cmd.reply(self.rpc_result, &self.body);
+        if let Some(private) = self.rpc_result_private {
+            out.rpc_result_private = private;
+        }
+        out
+    }
 }
 
 /// ★★★ One reply the FSM is holding until the page-table refresh that its command triggered
@@ -757,6 +777,7 @@ impl CommandPolicy for EchoOk {
         // the change: echoing is a thing a caller opts into, in one place, with this
         // type's docs attached — never something a caller gets by not deciding.
         Some(Reply {
+            rpc_result_private: None,
             rpc_result: 0,
             body: cmd.payload.clone(),
         })
@@ -2147,7 +2168,7 @@ impl GspFsm {
         report: &mut ServiceReport,
     ) -> Result<(), GspFault> {
         let full = match policy.respond(whole) {
-            Some(r) => whole.reply(r.rpc_result, &r.body),
+            Some(r) => r.on_wire(whole),
             None => {
                 report.unserviced.push(Unserviced {
                     code: whole.code,
@@ -2257,7 +2278,7 @@ impl GspFsm {
             Some(r) if cmd.function == RpcFunction::RmAlloc => {
                 cmd.reply_alloc(r.rpc_result, &r.body, &self.abi.driver, payload_max)
             }
-            Some(r) => cmd.reply(r.rpc_result, &r.body),
+            Some(r) => r.on_wire(cmd),
             None => {
                 report.unserviced.push(Unserviced {
                     code: cmd.code,

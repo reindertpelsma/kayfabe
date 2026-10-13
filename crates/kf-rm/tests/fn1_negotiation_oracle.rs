@@ -46,11 +46,7 @@ fn served_rows() -> Vec<(DriverVersion, (u32, u32))> {
 }
 
 /// Answer one guest request with the real policy, converted to the wire as the FSM does.
-fn kayfabe_answers(
-    policy: &mut GuestSystemInfoPolicy,
-    seq: &mut u32,
-    req: &[u8],
-) -> HostReply {
+fn kayfabe_answers(policy: &mut GuestSystemInfoPolicy, seq: &mut u32, req: &[u8]) -> HostReply {
     *seq += 1;
     let cmd = RpcCommand {
         function: RpcFunction::SetGuestSystemInfo,
@@ -71,11 +67,14 @@ fn kayfabe_answers(
 
 /// `Reply` -> wire envelope, the way `kf_gsp::GspFsm::answer` does it.
 fn wire(cmd: &RpcCommand, r: &kf_gsp::Reply) -> kf_gsp::OutgoingRpc {
-    cmd.reply(r.rpc_result, &r.body)
+    r.on_wire(cmd)
 }
 
 /// The universe of guest pairs: everything the ogkm tree names, plus every served row's pair.
-fn pair_universe(bin: &std::path::Path, rows: &[(DriverVersion, (u32, u32))]) -> BTreeSet<(u32, u32)> {
+fn pair_universe(
+    bin: &std::path::Path,
+    rows: &[(DriverVersion, (u32, u32))],
+) -> BTreeSet<(u32, u32)> {
     let c = consts(bin);
     let mut u: BTreeSet<(u32, u32)> = rows.iter().map(|(_, p)| *p).collect();
     for m in &c["map"] {
@@ -126,7 +125,10 @@ fn kayfabe_and_the_real_guest_agree_on_every_pair_of_every_served_row() {
             let want = cell(&bin, "steer-to-host", guest_pair, *host_pair).done;
             if guest_pair == *host_pair {
                 exact += 1;
-                assert!(got.accepted(), "exact match must keep working: {driver} {got:?}");
+                assert!(
+                    got.accepted(),
+                    "exact match must keep working: {driver} {got:?}"
+                );
                 assert_eq!(got.issued, 1, "{driver}");
             }
             if got != want {
@@ -144,5 +146,78 @@ fn kayfabe_and_the_real_guest_agree_on_every_pair_of_every_served_row() {
         "{} divergence(s) from the real guest's handshake:\n  {}",
         divergences.len(),
         divergences.join("\n  ")
+    );
+}
+
+/// A Windows build of a served tag is keyed as its Linux twin (`kf_abi::windows_twin`); its VGX pair is
+/// not stated by any tree, so whatever it sends must end the way the oracle says it ends against a host
+/// that serves the twin row's pair — and the retry must still identify it as the twin.
+#[test]
+fn a_windows_twin_with_any_pair_is_steered_to_the_rows_pair_and_identified_on_the_retry() {
+    let Some(bin) = oracle("a_windows_twin_with_any_pair") else {
+        return;
+    };
+    let rows = served_rows();
+    let twin = DriverVersion::parse("580.65.06").unwrap();
+    let host_pair = rows.iter().find(|(v, _)| *v == twin).expect("served").1;
+    let mut checked = 0;
+    for &guest_pair in &pair_universe(&bin, &rows) {
+        let mut policy = GuestSystemInfoPolicy::new(*table_for(twin).unwrap());
+        let mut seq = 0;
+        // The Windows 580.88 identity (`kf_abi::windows_twin`): name, branch, and changelist 0.
+        let (got, seen) = drive(
+            &bin,
+            &Guest {
+                major: guest_pair.0,
+                minor: guest_pair.1,
+                driver: "580.88",
+                branch: "r580_78-7",
+                cl: 0,
+            },
+            |req| kayfabe_answers(&mut policy, &mut seq, req),
+        );
+        let want = cell(&bin, "steer-to-host", guest_pair, host_pair).done;
+        assert_eq!(got, want, "windows twin, guest pair {guest_pair:?}");
+        checked += 1;
+        if guest_pair != host_pair {
+            // The retry is the buffer the reply left behind: the host's pair, the guest's identity.
+            if got.issued == 2 {
+                assert_eq!(
+                    kf_abi::guestsysinfo::decode_guest_driver_version(&seen[1]).unwrap(),
+                    "580.88"
+                );
+            }
+        }
+    }
+    assert!(checked > 20);
+}
+
+/// The guest's own strings are hostile input: whatever it puts in the identity arrays, the host's
+/// reply to a steered request carries only printable ASCII before a NUL, and the exchange still ends the
+/// way the oracle says (the retry is refused by name as a different driver, not answered).
+#[test]
+fn hostile_identity_strings_are_never_repeated_in_a_steer() {
+    use kf_abi::guestsysinfo::{GUEST_TITLE_OFF, GUEST_VERSION_OFF, SET_GUEST_SYSTEM_INFO_SIZE};
+    let driver = DriverVersion::parse("580.65.06").unwrap();
+    let mut policy = GuestSystemInfoPolicy::new(*table_for(driver).unwrap());
+    let mut req = vec![0u8; SET_GUEST_SYSTEM_INFO_SIZE];
+    req[0..4].copy_from_slice(&0x2Eu32.to_le_bytes()); // a pair the 580 row does not speak
+    req[4..8].copy_from_slice(&0x0Du32.to_le_bytes());
+    req[24..24 + 9].copy_from_slice(b"580.65.06");
+    req[GUEST_VERSION_OFF..GUEST_VERSION_OFF + 4].copy_from_slice(b"a\x1b[\x07"[..4].as_ref());
+    req[GUEST_TITLE_OFF..GUEST_TITLE_OFF + 256].fill(b'T'); // no NUL: unterminated
+    let mut seq = 0;
+    let r = kayfabe_answers(&mut policy, &mut seq, &req);
+    assert_eq!(r.rpc_result, 0);
+    assert!(r.rpc_result_private != 0);
+    assert_eq!(
+        &r.body[GUEST_VERSION_OFF..GUEST_VERSION_OFF + 256],
+        &[0u8; 256][..],
+        "a string with a control byte is not repeated"
+    );
+    assert_eq!(
+        &r.body[GUEST_TITLE_OFF..GUEST_TITLE_OFF + 256],
+        &[0u8; 256][..],
+        "an unterminated string is not repeated"
     );
 }

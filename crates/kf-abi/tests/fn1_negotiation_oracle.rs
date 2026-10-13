@@ -37,6 +37,15 @@ fn the_oracle_states_the_tree_it_was_built_from() {
     assert_eq!(c["ogkm_version"], ["595.84"]);
     assert_eq!(c["body_len"][0].parse::<usize>().unwrap(), BODY_LEN);
     assert!(c["map"].len() > 20, "the tree's internal->external table");
+    // The constants kayfabe sends are the tree's, not typed twice.
+    assert_eq!(
+        kf_abi::guestsysinfo::NV_VGPU_MSG_RESULT_GUEST_HOST_DRIVER_MISMATCH,
+        hexnum(&c["result_guest_host_driver_mismatch"][0])
+    );
+    assert_eq!(
+        kf_abi::NV_ERR_NOT_SUPPORTED,
+        hexnum(&c["result_not_supported"][0])
+    );
 }
 
 #[test]
@@ -70,7 +79,11 @@ fn a_host_that_steers_is_followed_once_if_its_pair_is_at_least_the_minimum_in_ei
             // ★ The guest code never compares host with guest: any host pair >= the minimum is followed.
             assert!(r.done.accepted(), "{r:?}");
             assert_eq!(r.done.issued, 2, "retried exactly once: {r:?}");
-            assert_eq!(r.done.agreed, Some(r.host), "agreed = the HOST's pair: {r:?}");
+            assert_eq!(
+                r.done.agreed,
+                Some(r.host),
+                "agreed = the HOST's pair: {r:?}"
+            );
             assert!(r.done.retry_log && !r.done.too_old_log, "{r:?}");
             assert_eq!(r.done.ext_calls, 1, "{r:?}");
             if r.guest < r.host {

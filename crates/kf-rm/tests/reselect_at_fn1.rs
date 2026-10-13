@@ -29,6 +29,7 @@ impl CommandPolicy for Stub {
     fn respond(&mut self, _cmd: &RpcCommand) -> Option<Reply> {
         let s = self.0.to_string();
         Some(Reply {
+            rpc_result_private: None,
             rpc_result: 0,
             body: s.into_bytes(),
         })

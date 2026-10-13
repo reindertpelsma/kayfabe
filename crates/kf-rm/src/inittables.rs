@@ -1770,6 +1770,7 @@ impl InitTablePolicy {
             .copy_from_slice(&u32::try_from(gsz).unwrap_or(u32::MAX).to_le_bytes());
         body.extend_from_slice(&down);
         Some(Reply {
+            rpc_result_private: None,
             rpc_result: reply.rpc_result,
             body,
         })
@@ -1778,6 +1779,7 @@ impl InitTablePolicy {
 
 fn refuse() -> Option<Reply> {
     Some(Reply {
+        rpc_result_private: None,
         rpc_result: NV_ERR_NOT_SUPPORTED,
         body: Vec::new(),
     })
@@ -1941,6 +1943,7 @@ impl CommandPolicy for InitTablePolicy {
             body[CONTROL_STATUS_OFF..CONTROL_STATUS_OFF + 4].copy_from_slice(&NV_OK.to_le_bytes());
             body[req.params_at..req.params_at + ps].copy_from_slice(&params);
             return Some(Reply {
+                rpc_result_private: None,
                 rpc_result: NV_OK,
                 body,
             });
@@ -1963,6 +1966,7 @@ impl CommandPolicy for InitTablePolicy {
                         .copy_from_slice(&NV_OK.to_le_bytes());
                     body[req.params_at..req.params_at + ps].copy_from_slice(&params);
                     return Some(Reply {
+                        rpc_result_private: None,
                         rpc_result: NV_OK,
                         body,
                     });
@@ -1992,6 +1996,7 @@ impl CommandPolicy for InitTablePolicy {
                             .copy_from_slice(&NV_OK.to_le_bytes());
                         body[req.params_at..req.params_at + ps].copy_from_slice(&params);
                         return Some(Reply {
+                            rpc_result_private: None,
                             rpc_result: NV_OK,
                             body,
                         });
@@ -2028,6 +2033,7 @@ impl CommandPolicy for InitTablePolicy {
                             }
                             body[req.params_at..req.params_at + ps].copy_from_slice(&params);
                             Reply {
+                                rpc_result_private: None,
                                 rpc_result: NV_OK,
                                 body,
                             }
@@ -2037,6 +2043,7 @@ impl CommandPolicy for InitTablePolicy {
                                 "kf3: FIFO_GET_LATENCY_BUFFER_SIZE REFUSED (INVALID_ARGUMENT): {why:?}"
                             );
                             Reply {
+                                rpc_result_private: None,
                                 rpc_result: kf_abi::fifoctl::NV_ERR_INVALID_ARGUMENT,
                                 body,
                             }
@@ -3216,6 +3223,7 @@ impl CommandPolicy for InitTablePolicy {
         body[req.params_at..req.params_at + params.len()].copy_from_slice(&params);
 
         Some(Reply {
+            rpc_result_private: None,
             rpc_result: NV_OK,
             body,
         })

@@ -408,6 +408,7 @@ impl GssNative {
                 st.count_forward(h.cmd);
                 self.pending = Some(d);
                 Some(Reply {
+                    rpc_result_private: None,
                     rpc_result: 0,
                     body: cmd.payload.clone(),
                 })
