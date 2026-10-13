@@ -879,3 +879,44 @@ fn the_lists_cover_the_windows_only_control_ids_exactly() {
         assert!(BOARD_DATA_CONTROLS.iter().all(|(b, _)| b != id));
     }
 }
+
+#[test]
+fn a_message_that_never_completes_cannot_make_the_scrub_hold_the_whole_file() {
+    // The command queue starts a two-entry message and never finishes it; the status queue
+    // carries on. Without a bound the scrub would hold every later record. With the bound it
+    // writes them, counts the forced flush, and the stalled message is reduced to its header.
+    let a = abi();
+    let big = Msg {
+        dir: Dir::Cmd,
+        function: a.rpc.codes.gsp_rm_control,
+        rpc_sequence: 0,
+        rpc_result: 0xffff_ffff,
+        payload: control_payload(0x2080_6666, 0, &{
+            let mut p = vec![0u8; 5000];
+            p[8..8 + SERIAL.len()].copy_from_slice(SERIAL);
+            p
+        }),
+    };
+    let enc = common::encode(&[big], &[0]);
+    let mut w = Writer::new(Vec::new(), &header()).unwrap();
+    w.bind(1, Dir::Cmd, 1, &tx_header()).unwrap();
+    w.bind(1, Dir::Status, 1, &tx_header()).unwrap();
+    w.elements(1, Dir::Cmd, 2, 0, 1, &enc[0][..ES]).unwrap();
+    let rep: Vec<Msg> = (0..40)
+        .map(|_| ctl_rep(0x2080_6667, 0, &[1u8; 8]))
+        .collect();
+    let runs = runs_of(&rep, &natural_seqs(&rep));
+    for (i, (_, r)) in runs.iter().enumerate() {
+        w.elements(1, Dir::Status, 3 + i as u64, i as u32, 1, r)
+            .unwrap();
+    }
+    let cap = w.end(100).unwrap();
+    let mut sc = Scrubber::new(abi(), AllowList::empty()).with_buffer_cap(10 * ES);
+    let mut out = Vec::new();
+    scrub::scrub_capture(&mut sc, cap.as_slice(), &mut out).unwrap();
+    assert!(sc.stats.forced_flushes >= 1, "{:?}", sc.stats);
+    assert_eq!(out.len(), cap.len());
+    assert!(!contains(&out, SERIAL));
+    let r = run_capture(&out);
+    assert_eq!(r.messages[1], 40, "every status message survived");
+}

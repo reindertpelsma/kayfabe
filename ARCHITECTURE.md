@@ -90,7 +90,7 @@ The v3 crates (`crates/kf-*`, descriptions condensed from their own `Cargo.toml`
 | `kf-chan` | channels: passthrough birth, Translated execution, VMM-executed emulated channels, completions as host events |
 | `kf-qemu` + `qemu/hw/misc/kf3/` | the `kf3-gpu` device: realize, the plane, the register drainer, the FFI to a small C QOM device |
 | `kf-harness` | the GPU gates `kf-gate1`…`9`: play the guest against the real planes, with no QEMU |
-| `kf-census` | offline tool, never linked into the product: decodes driver-GSP queue captures (the VFIO observer's `gsp.jsonl` and the `KFGSPCAP` capture format of a Windows capture module) with `kf-gsp`/`kf-abi`, checks them with a completeness oracle, and writes the per-control census (`V3_GSP_CAPTURE_FORMAT.md`) |
+| `kf-census` | offline tool, never linked into the product: decodes driver-GSP queue captures (the VFIO observer's `gsp.jsonl` and the `KFGSPCAP` capture format of a Windows capture module) with `kf-gsp`/`kf-abi`, checks them with a completeness oracle, and writes the per-control census; `kf-census scrub` rewrites a capture default-deny (message bodies replaced unless the control id is allow-listed) so a capture can be kept without board data (`V3_GSP_CAPTURE_FORMAT.md`) |
 | `kf-crec`, `kf-trace` | C-trace differential (the `cap1`/`cap1b` replays). Oracle only, never linked into the product |
 | `kf-arch`, `kf-linux-raw`, `kf-util` | vocabulary and the `Arch` traits; the audited raw-OS adapter; generic utilities |
 

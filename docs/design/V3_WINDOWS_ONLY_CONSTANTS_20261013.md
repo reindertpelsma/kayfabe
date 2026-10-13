@@ -86,7 +86,7 @@ All rows were observed on ONE die (RTX 4070 / AD104), ONE Windows driver (580.88
 - Request layouts learned on one die can be **replayed** by a Linux tier-3 module on other dies, but only if the Linux raw-GSP spike works (`V3_CONSTANT_STRATEGY.md` §4 step 1, still unrun). Without it the Windows capture runs on every rented die.
 - **Group C** (host-side asks): kayfabe refuses them at host 595.91.07 because no layout is measured (`HOST-ABI REFUSED` lines). A captured guest-side layout can be tried against the host's unprivileged ioctl on the home host (tier 2) before any rental.
 - **Group D** is behaviour and timing of the display engine, not RM traffic. It needs a head (home display machines, VFIO timing captures, or the forced-connector experiment), not this module.
-- Never collected: UUIDs, serials, VBIOS, MACs or other board data.
+- Never collected: UUIDs, serials, VBIOS, MACs or other board data. *(2026-10-13: enforced offline by `kf-census scrub`, default deny with a per-control allow-list; the 40 rows here are 34 distinct control ids and are classified in `V3_GSP_CAPTURE_FORMAT.md` section 8.3. All 34 were searched over the 221 ogkm tags: 33 are absent from every tag, `0x00730122` is defined only before 555.42.02 as a different control.)*
 
 ## Falsifiers
 

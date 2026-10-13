@@ -65,6 +65,12 @@ pub fn is_filled(body: &[u8]) -> bool {
             .all(|(i, &b)| b == FILL[i % FILL.len()])
 }
 
+/// Capture scrub: the most record bytes held back while a queue's message is incomplete. A
+/// hostile guest can start a message and never finish it while the other queue keeps going;
+/// past this bound every incomplete message is reduced to its header fields and the records
+/// are written ([`Stats::forced_flushes`]).
+pub const DEFAULT_BUFFER_CAP: usize = 256 << 20;
+
 /// The default allow-list: one control id per line (`#` starts a comment).
 pub const DEFAULT_ALLOW_LIST: &str = include_str!("../allow_default.txt");
 
@@ -252,6 +258,8 @@ pub struct Stats {
     /// Capture: entries (or partial messages) dropped to zero because they never formed a
     /// message; records whose payload could not be interpreted.
     pub bytes_zeroed_unframed: u64,
+    /// Capture: times the held-back record bytes exceeded the buffer cap.
+    pub forced_flushes: u64,
     /// Capture: messages that never completed (dropped by the decoder) and were reduced to
     /// their first entry's header fields.
     pub partial_dropped: u64,
@@ -272,6 +280,7 @@ impl Stats {
             && self.truncated.is_none()
             && self.bytes_zeroed_unframed == 0
             && self.partial_dropped == 0
+            && self.forced_flushes == 0
     }
 }
 
@@ -310,6 +319,7 @@ type Key = (u64, u64, Dir);
 pub struct Scrubber {
     abi: GspAbi,
     allow: AllowList,
+    buffer_cap: usize,
     asm: HashMap<Key, Assembler>,
     large: HashMap<Key, Large>,
     /// Counters.
@@ -331,10 +341,18 @@ impl Scrubber {
         Scrubber {
             abi,
             allow,
+            buffer_cap: DEFAULT_BUFFER_CAP,
             asm: HashMap::new(),
             large: HashMap::new(),
             stats: Stats::default(),
         }
+    }
+
+    /// Bound the record bytes a capture scrub may hold back (default [`DEFAULT_BUFFER_CAP`]).
+    #[must_use]
+    pub fn with_buffer_cap(mut self, bytes: usize) -> Scrubber {
+        self.buffer_cap = bytes;
+        self
     }
 
     /// The entry stride an observer message was cut with.
@@ -567,10 +585,13 @@ struct Out<W: Write> {
     w: W,
     slots: VecDeque<Slot>,
     base: u64,
+    /// Payload bytes of the slots not yet written.
+    held: usize,
 }
 
 impl<W: Write> Out<W> {
     fn push(&mut self, header: RecordHeader, payload: Vec<u8>, pending: usize) -> u64 {
+        self.held += payload.len();
         self.slots.push_back(Slot {
             header,
             payload,
@@ -589,6 +610,7 @@ impl<W: Write> Out<W> {
         while self.slots.front().is_some_and(|s| s.pending == 0) {
             if let Some(s) = self.slots.pop_front() {
                 self.base += 1;
+                self.held -= s.payload.len();
                 self.w.write_all(&s.header.encode())?;
                 self.w.write_all(&s.payload)?;
             }
@@ -668,6 +690,7 @@ pub fn scrub_capture<R: Read, W: Write>(sc: &mut Scrubber, r: R, w: W) -> Result
         w,
         slots: VecDeque::new(),
         base: 0,
+        held: 0,
     };
     out.w.write_all(&fh.encode()?)?;
     let mut qs: HashMap<(u16, Dir), Q> = HashMap::new();
@@ -699,6 +722,13 @@ pub fn scrub_capture<R: Read, W: Write>(sc: &mut Scrubber, r: R, w: W) -> Result
             }
         }
         out.flush()?;
+        if out.held > sc.buffer_cap {
+            sc.stats.forced_flushes += 1;
+            for q in qs.values_mut() {
+                drop_partial(sc, &mut out, q);
+            }
+            out.flush()?;
+        }
     }
     for q in qs.values_mut() {
         drop_partial(sc, &mut out, q);
