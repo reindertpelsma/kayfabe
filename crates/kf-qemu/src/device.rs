@@ -3478,8 +3478,8 @@ impl Device {
         if let Some(pieces) = self.pieces.get() {
             for p in pieces {
                 let want = self.piece_image(p.base, p.mem.len());
-                for (i, w) in want.chunks_exact(4).enumerate() {
-                    let v = u32::from_le_bytes([w[0], w[1], w[2], w[3]]);
+                for (i, w) in want.as_chunks::<4>().0.iter().enumerate() {
+                    let v = u32::from_le_bytes(*w);
                     if p.mem.load_u32(i * 4) != Some(v) {
                         p.mem.store_u32(i * 4, v);
                     }
