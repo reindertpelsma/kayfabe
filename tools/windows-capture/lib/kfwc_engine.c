@@ -5,7 +5,7 @@
 #include "kfwc_engine.h"
 #include <string.h>
 
-KFWC_STATIC_ASSERT(kfwc_stats_is_31_words, sizeof(kfwc_stats) == 31 * 8);
+KFWC_STATIC_ASSERT(kfwc_stats_is_33_words, sizeof(kfwc_stats) == 33 * 8);
 
 #define MAX_READ_FAIL 8u
 #define MAX_STALL 8u
@@ -291,6 +291,16 @@ static void do_attach(kfwc_engine *e)
     }
 }
 
+/* A new search life: the next pass starts now and the pause after it is the initial one. */
+static void scan_backoff_restart(kfwc_engine *e)
+{
+    e->scan_pause_until = 0;
+    e->scan_backoff_cur = e->cfg.scan_backoff_initial_ticks;
+    e->stats.scan_backoff_ticks = e->scan_backoff_cur;
+    e->range_idx = 0;
+    e->range_off = 0;
+}
+
 static void do_detach(kfwc_engine *e, kfwc_u32 reason, kfwc_u32 *emitted)
 {
     kfwc_u8 buf[16];
@@ -308,8 +318,7 @@ static void do_detach(kfwc_engine *e, kfwc_u32 reason, kfwc_u32 *emitted)
     e->state = KFWC_ST_SEARCHING;
     e->start_ticks = now_ticks(e);
     e->last_mailbox_ticks = 0;
-    e->range_idx = 0;
-    e->range_off = 0;
+    scan_backoff_restart(e);
     reset_dir(&e->dir[0]);
     reset_dir(&e->dir[1]);
 }
@@ -591,6 +600,16 @@ static int scan_step(kfwc_engine *e)
             e->range_idx = 0;
             e->range_off = 0;
             e->stats.scan_passes++;
+            if (e->cfg.scan_backoff_initial_ticks) {
+                kfwc_u64 now = now_ticks(e);
+                kfwc_u64 cur = e->scan_backoff_cur ? e->scan_backoff_cur : e->cfg.scan_backoff_initial_ticks;
+                kfwc_u64 mx = e->cfg.scan_backoff_max_ticks > e->cfg.scan_backoff_initial_ticks
+                                  ? e->cfg.scan_backoff_max_ticks
+                                  : e->cfg.scan_backoff_initial_ticks;
+                e->scan_pause_until = now + cur;
+                e->scan_backoff_cur = cur > mx / 2 ? mx : cur * 2;
+                e->stats.scan_backoff_ticks = e->scan_backoff_cur;
+            }
             return 0; /* one pass boundary per step at most */
         }
         if (e->plat.ram_range(e->plat.ctx, e->range_idx, &base, &len) || (base & (KFWC_PAGE - 1))) {
@@ -629,10 +648,36 @@ static int scan_step(kfwc_engine *e)
     return 0;
 }
 
+/* The pair (status class, address) the mailbox read gives; a change means the GSP booted, was
+ * suspended or resumed, or the BAR came back. The first sample is a baseline, not a change. */
+static void note_mailbox_signature(kfwc_engine *e, const kfwc_mb_diag *diag)
+{
+    if (e->mb_sig_seen && (e->mb_sig_status != diag->status || e->mb_sig_pa != diag->mailbox_pa)) {
+        e->stats.scan_backoff_resets++;
+        scan_backoff_restart(e);
+    }
+    e->mb_sig_seen = 1;
+    e->mb_sig_status = diag->status;
+    e->mb_sig_pa = diag->mailbox_pa;
+}
+
+static int scan_gate_open(const kfwc_engine *e, kfwc_u64 now)
+{
+    /* A mailbox that reads zero is "not published yet or another boot regime": give the boot
+     * a chance before spending CPU on a scan. Every other status lets the scan start now. */
+    int allowed = !e->cfg.use_mailbox || e->mb_status != KFWC_MB_ZERO ||
+                  now - e->start_ticks >= e->cfg.scan_delay_ticks;
+    return allowed && now >= e->scan_pause_until;
+}
+
+int kfwc_engine_scan_due(kfwc_engine *e)
+{
+    return e->state == KFWC_ST_SEARCHING && e->cfg.use_scan && scan_gate_open(e, now_ticks(e));
+}
+
 static void search_step(kfwc_engine *e)
 {
     kfwc_u64 now = now_ticks(e);
-    int scan_allowed;
     if (e->cfg.use_mailbox &&
         (e->last_mailbox_ticks == 0 || now - e->last_mailbox_ticks >= e->cfg.mailbox_period_ticks)) {
         kfwc_mb_diag diag;
@@ -646,14 +691,11 @@ static void search_step(kfwc_engine *e)
         }
         e->mb_status = diag.status;
         e->stats.mailbox_status = diag.status;
+        note_mailbox_signature(e, &diag);
     }
     if (!e->cfg.use_scan)
         return;
-    /* A mailbox that reads zero is "not published yet or another boot regime": give the boot
-     * a chance before spending CPU on a scan. Every other status lets the scan start now. */
-    scan_allowed = !e->cfg.use_mailbox || e->mb_status != KFWC_MB_ZERO ||
-                   now - e->start_ticks >= e->cfg.scan_delay_ticks;
-    if (scan_allowed)
+    if (scan_gate_open(e, now))
         (void)scan_step(e);
 }
 
@@ -672,6 +714,8 @@ void kfwc_config_defaults(kfwc_config *c, kfwc_u64 tps)
     c->scan_bytes_per_step = 1024u * 1024u;
     c->max_msgs_per_step = 64;
     c->mapping_check_steps = 64;
+    c->scan_backoff_initial_ticks = 5 * tps;
+    c->scan_backoff_max_ticks = 300 * tps;
 }
 
 void kfwc_engine_init(kfwc_engine *e, const kfwc_platform *p, const kfwc_sink *s, const kfwc_config *c)
@@ -684,6 +728,8 @@ void kfwc_engine_init(kfwc_engine *e, const kfwc_platform *p, const kfwc_sink *s
         e->cfg.max_msgs_per_step = 1;
     e->stats.abi = KFWC_ENGINE_ABI;
     e->start_ticks = now_ticks(e);
+    e->scan_backoff_cur = e->cfg.scan_backoff_initial_ticks;
+    e->stats.scan_backoff_ticks = e->scan_backoff_cur;
 }
 
 kfwc_u32 kfwc_engine_step(kfwc_engine *e)

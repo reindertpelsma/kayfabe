@@ -183,6 +183,12 @@ int main(int argc, char **argv)
             req.use_mailbox = 0;
         else if (!strcmp(argv[i], "--no-scan"))
             req.use_scan = 0;
+        else if (!strcmp(argv[i], "--no-backoff"))
+            req.scan_backoff_initial_ms = KFWC_BACKOFF_OFF;
+        else if (!strcmp(argv[i], "--backoff-ms") && i + 2 < argc) {
+            req.scan_backoff_initial_ms = (kfwc_u32)strtoul(argv[++i], NULL, 10);
+            req.scan_backoff_max_ms = (kfwc_u32)strtoul(argv[++i], NULL, 10);
+        }
         else if (!strcmp(argv[i], "--gpu") && i + 1 < argc)
             req.gpu_index = (kfwc_u32)strtoul(argv[++i], NULL, 10);
         else if (!strcmp(argv[i], "--status"))
@@ -196,7 +202,7 @@ int main(int argc, char **argv)
     }
     if ((!outdir && !status_only) || seconds == 0 || seconds > 86400) {
         fprintf(stderr, "usage: kfwc_collect OUTDIR [--seconds N] [--stop-file P] [--decode-tag T] [--layout auto|pre610|610]\n"
-                        "                    [--no-mailbox] [--no-scan] [--gpu N] | --status\n");
+                        "                    [--no-mailbox] [--no-scan] [--no-backoff] [--backoff-ms INITIAL MAX] [--gpu N] | --status\n");
         return 2;
     }
     dev = CreateFileA(KFWC_DEVICE_USER_PATH, GENERIC_READ, 0, NULL, OPEN_EXISTING, 0, NULL);

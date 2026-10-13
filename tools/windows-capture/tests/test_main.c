@@ -960,6 +960,119 @@ static void t_layout_autodetect_and_pin(void)
     hn_free(&h);
 }
 
+/* ---- scan back-off ---------------------------------------------------------------------
+ * Nothing attaches (the region's page table is blanked): every completed pass over RAM pauses
+ * the scan for 1x, 2x, 4x ... the initial value, capped. The pause restarts from the initial
+ * value, and the scan resumes at once, when the mailbox pair changes. A fake tick is one call
+ * of now(), so the test jumps h.m.ticks to move time. */
+static void bo_pass(harness *h, kfwc_u64 want_passes)
+{
+    int guard = 0;
+    while (h->e->stats.scan_passes < want_passes && guard++ < 100)
+        kfwc_engine_step(h->e);
+    CHECK(h->e->stats.scan_passes == want_passes);
+}
+/* the scan is paused: many steps read no RAM at all */
+static int bo_paused(harness *h)
+{
+    kfwc_u64 before = h->m.ram_bytes;
+    int i;
+    for (i = 0; i < 100; i++)
+        kfwc_engine_step(h->e);
+    return h->m.ram_bytes == before;
+}
+
+static void t_scan_backoff(void)
+{
+    harness h;
+    kfwc_u8 saved[4096];
+    kfwc_u8 *tbl;
+    kfwc_u64 pause;
+    hn_init(&h, KFWC_LAYOUT_PRE610, 1, 1);
+    h.m.mailbox0 = h.m.mailbox1 = 0;                  /* boot args never published: only the scan can find it */
+    h.e->cfg.scan_delay_ticks = 0;
+    h.e->cfg.scan_backoff_initial_ticks = 5000;
+    h.e->cfg.scan_backoff_max_ticks = 40000;
+    h.e->scan_backoff_cur = 5000;
+    tbl = fk_ptr(&h.m, 0x200000);
+    memcpy(saved, tbl, 4096);
+    memset(tbl, 0, 4096);                             /* no queue in RAM */
+
+    CHECK(kfwc_engine_scan_due(h.e));
+    bo_pass(&h, 1);
+    CHECK(!kfwc_engine_scan_due(h.e));                /* paused after the first pass */
+    CHECK(h.e->stats.scan_backoff_ticks == 10000);    /* the pause after the NEXT pass */
+    CHECK(bo_paused(&h));                             /* ~500 ticks later, still paused */
+    h.m.ticks += 4000;
+    CHECK(bo_paused(&h));                             /* ~4500 < 5000 */
+    h.m.ticks += 1000;
+    CHECK(kfwc_engine_scan_due(h.e));                 /* >= 5000: the second pass may run */
+    bo_pass(&h, 2);
+    CHECK(h.e->stats.scan_backoff_ticks == 20000);
+    h.m.ticks += 9000;
+    CHECK(bo_paused(&h) && !kfwc_engine_scan_due(h.e)); /* the second pause is 10000, not 5000 */
+    h.m.ticks += 1500;
+    bo_pass(&h, 3);
+    CHECK(h.e->stats.scan_backoff_ticks == 40000);
+    h.m.ticks += 20500;
+    bo_pass(&h, 4);
+    CHECK(h.e->stats.scan_backoff_ticks == 40000);    /* capped */
+    h.m.ticks += 39000;
+    CHECK(bo_paused(&h));                             /* the cap really is the pause (40000), not less */
+    h.m.ticks += 2000;
+    bo_pass(&h, 5);
+    CHECK(h.e->stats.scan_backoff_ticks == 40000);
+    CHECK(h.e->stats.scan_backoff_resets == 0);       /* an unchanged mailbox (zero, read every 10 ms) never resets */
+    CHECK(h.e->state == KFWC_ST_SEARCHING && h.e->stats.mailbox_reads > 100);
+
+    /* a GSP boot changes the mailbox pair: the pause is cancelled, the pass restarts, and the
+     * queue (appearing at the same moment) is found without waiting for the 40000 ticks */
+    CHECK(!kfwc_engine_scan_due(h.e));
+    memcpy(tbl, saved, 4096);
+    h.m.mailbox0 = 0x6F0123u;                         /* junk but different: status BAD_ADDR, address 0x6F0123 */
+    hn_steps(&h, 40);
+    CHECK(h.e->stats.scan_backoff_resets == 1);
+    CHECK(h.e->state == KFWC_ST_ATTACHED && h.e->bind.method == KFWC_METHOD_SCAN);
+    pause = h.e->stats.scan_backoff_ticks;
+    CHECK(pause == 5000);                             /* restarted from the initial value */
+    hn_free(&h);
+
+    /* the very first sample is a baseline, not a change; an unreadable BAR counts as a state */
+    hn_init(&h, KFWC_LAYOUT_PRE610, 1, 1);
+    h.m.mailbox0 = h.m.mailbox1 = 0;
+    h.e->cfg.scan_delay_ticks = 0;
+    h.e->cfg.scan_backoff_initial_ticks = 5000;
+    h.e->cfg.scan_backoff_max_ticks = 40000;
+    h.e->scan_backoff_cur = 5000;
+    memset(fk_ptr(&h.m, 0x200000), 0, 4096);
+    hn_steps(&h, 20);
+    CHECK(h.e->stats.scan_backoff_resets == 0);
+    h.m.regs_ok = 0;                                  /* BAR0 went away: UNREADABLE is a different state */
+    hn_steps(&h, 5);
+    CHECK(h.e->stats.scan_backoff_resets == 1);
+    h.m.regs_ok = 1;                                  /* and back */
+    hn_steps(&h, 5);
+    CHECK(h.e->stats.scan_backoff_resets == 2);
+    hn_free(&h);
+
+    /* disabled (initial == 0): passes repeat back to back, as before */
+    hn_init(&h, KFWC_LAYOUT_PRE610, 1, 1);
+    h.m.mailbox0 = h.m.mailbox1 = 0;
+    h.e->cfg.scan_delay_ticks = 0;
+    h.e->cfg.scan_backoff_initial_ticks = 0;
+    memset(fk_ptr(&h.m, 0x200000), 0, 4096);
+    hn_steps(&h, 100);
+    CHECK(h.e->stats.scan_passes >= 8 && kfwc_engine_scan_due(h.e));
+    hn_free(&h);
+
+    /* default configuration: 5 s, doubling, 300 s cap */
+    {
+        kfwc_config c;
+        kfwc_config_defaults(&c, 10000000);
+        CHECK(c.scan_backoff_initial_ticks == 50000000ull && c.scan_backoff_max_ticks == 3000000000ull);
+    }
+}
+
 static void t_end_record(void)
 {
     harness h;
@@ -1010,6 +1123,7 @@ int main(int argc, char **argv)
         {"read_only_surface", t_read_only_surface},
         {"ram_range_discipline", t_ram_range_discipline},
         {"layout_autodetect_and_pin", t_layout_autodetect_and_pin},
+        {"scan_backoff", t_scan_backoff},
         {"end_record", t_end_record},
     };
     unsigned i, pass = 0, n = (unsigned)(sizeof(tests) / sizeof(tests[0]));

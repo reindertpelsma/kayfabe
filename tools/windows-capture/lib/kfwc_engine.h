@@ -35,7 +35,7 @@
 #include "kfwc_discover.h"
 #include "kfwc_record.h"
 
-#define KFWC_ENGINE_ABI 2u
+#define KFWC_ENGINE_ABI 3u
 #define KFWC_SCAN_CHUNK (1024u * 1024u)
 #define KFWC_MAX_CHAIN 256u
 #define KFWC_EVENT_SLOTS 64u
@@ -55,9 +55,17 @@ typedef struct kfwc_config {
     kfwc_u32 scan_bytes_per_step;   /* 4096..KFWC_SCAN_CHUNK; the rate limit is this per step */
     kfwc_u32 max_msgs_per_step;     /* per direction */
     kfwc_u32 mapping_check_steps;   /* re-verify the page list every N steps (0: every step) */
+    /* Scan back-off. A scan that completes a full pass over RAM without attaching pauses for
+     * scan_backoff_initial_ticks, then twice that after the next pass, ... capped at
+     * scan_backoff_max_ticks. The back-off restarts from the initial value, and the scan resumes
+     * from the beginning at once, when the mailbox pair changes (a GSP boot, a suspend/resume, a
+     * BAR going readable): that is the only event after which a new queue can appear.
+     * scan_backoff_initial_ticks == 0 disables the back-off (passes repeat back to back). */
+    kfwc_u64 scan_backoff_initial_ticks;
+    kfwc_u64 scan_backoff_max_ticks;
 } kfwc_config;
 
-typedef struct kfwc_stats {          /* counters monotonic; 31 x u64 */
+typedef struct kfwc_stats {          /* counters monotonic (scan_backoff_ticks is a level); 33 x u64 */
     kfwc_u64 abi, steps, state, generation;
     kfwc_u64 scan_bytes, scan_passes, scan_candidates, attaches, detaches;
     kfwc_u64 messages[2], payload_bytes;
@@ -66,6 +74,8 @@ typedef struct kfwc_stats {          /* counters monotonic; 31 x u64 */
     kfwc_u64 sink_dropped, sink_loss_pending;
     kfwc_u64 mailbox_reads, mailbox_status, method, layout, records_refused;
     kfwc_u64 seq_gap_messages, lapped_messages, next_counter, events_lost;
+    kfwc_u64 scan_backoff_resets;   /* mailbox pair changed while searching: back-off restarted */
+    kfwc_u64 scan_backoff_ticks;    /* the pause that follows the NEXT completed pass (level, not a counter) */
 } kfwc_stats;
 
 /* Diagnostic events (not part of the capture file; read through the driver's EVENTS ioctl and
@@ -109,6 +119,10 @@ typedef struct kfwc_engine {
     kfwc_u32 counter;               /* next record counter */
     kfwc_u32 ended;
     kfwc_u64 start_ticks, last_mailbox_ticks;
+    kfwc_u64 scan_pause_until;      /* no scan step before this tick (0: none) */
+    kfwc_u64 scan_backoff_cur;      /* pause after the next completed pass */
+    kfwc_u64 mb_sig_pa;             /* last mailbox signature seen while searching */
+    kfwc_u32 mb_sig_status, mb_sig_seen;
     kfwc_u32 range_idx;
     kfwc_u64 range_off;
     kfwc_u32 steps_since_map_check;
@@ -133,6 +147,9 @@ void kfwc_engine_init(kfwc_engine *e, const kfwc_platform *p, const kfwc_sink *s
 kfwc_u32 kfwc_engine_step(kfwc_engine *e);
 /* Clean stop: announces nothing for a clean detach, then writes the END record. */
 void kfwc_engine_stop(kfwc_engine *e);
+/* 1 when the next step would spend its time scanning RAM (searching, scan enabled, past the
+ * mailbox-zero delay and not in a back-off pause); the driver uses it to pick its sleep. */
+int kfwc_engine_scan_due(kfwc_engine *e);
 /* Record the START diagnostic event (done once by the driver after PCI discovery). */
 void kfwc_engine_note_start(kfwc_engine *e, kfwc_u32 pci_device_id, kfwc_u32 reg_mapped);
 /* Copy up to max events out (oldest first) and remove them. Returns the count. */

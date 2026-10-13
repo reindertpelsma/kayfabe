@@ -11,7 +11,7 @@ const char *const kfwc_meta_allowed_keys[] = {
     "loss_unknown", "end", "stats", "steps", "attaches", "detaches", "messages_cmd", "messages_status",
     "lost_messages_exact", "loss_records", "torn_reads", "invalid_elements", "unsupported",
     "read_failures", "resyncs", "sink_dropped", "records_refused", "scan_bytes", "scan_passes",
-    "scan_candidates", "mailbox_reads", "mailbox_status", "method", "layout", "seq_gap_messages",
+    "scan_candidates", "scan_backoff_resets", "scan_backoff_ticks", "mailbox_reads", "mailbox_status", "method", "layout", "seq_gap_messages",
     "lapped_messages", "ring_refused", "ring_high_water", "events", "code", "generation", "data_hex",
     "ticks_per_second", "started_qpc", 0};
 
@@ -71,11 +71,12 @@ size_t kfwc_meta_format(char *out, size_t cap, const kfwc_meta *m)
          (unsigned)m->info.pci_vendor_id, (unsigned)m->info.pci_device_id, (unsigned)m->info.pci_revision_id);
     EMIT(" \"discovery\": {\"method\": %llu, \"layout\": %llu, \"bar0\": %u, \"gpu_count\": %u, "
          "\"mailbox_reads\": %llu, \"mailbox_status\": %llu, \"scan_bytes\": %llu, \"scan_passes\": %llu, "
-         "\"scan_candidates\": %llu},\n",
+         "\"scan_candidates\": %llu, \"scan_backoff_resets\": %llu, \"scan_backoff_ticks\": %llu},\n",
          (unsigned long long)s->method, (unsigned long long)s->layout, (unsigned)m->info.bar_state,
          (unsigned)m->info.gpu_count, (unsigned long long)s->mailbox_reads, (unsigned long long)s->mailbox_status,
          (unsigned long long)s->scan_bytes, (unsigned long long)s->scan_passes,
-         (unsigned long long)s->scan_candidates);
+         (unsigned long long)s->scan_candidates, (unsigned long long)s->scan_backoff_resets,
+         (unsigned long long)s->scan_backoff_ticks);
     EMIT(" \"ring\": {\"bytes\": %u, \"ring_refused\": %llu, \"ring_high_water\": %llu},\n",
          (unsigned)m->info.ring_bytes, (unsigned long long)m->stats.ring_refused,
          (unsigned long long)m->stats.ring_high_water);

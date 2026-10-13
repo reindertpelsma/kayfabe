@@ -13,7 +13,7 @@
 
 #include "../lib/kfwc_engine.h"
 
-#define KFWC_DRIVER_ABI 2u
+#define KFWC_DRIVER_ABI 3u
 #define KFWC_MODULE_VERSION 1u
 
 /* CTL_CODE(FILE_DEVICE_UNKNOWN, fn, METHOD_BUFFERED, FILE_READ_ACCESS), spelled out so that no
@@ -44,6 +44,10 @@ typedef struct kfwc_info {          /* 64 bytes */
 } kfwc_info;
 KFWC_STATIC_ASSERT(kfwc_info_is_64, sizeof(kfwc_info) == 64);
 
+#define KFWC_BACKOFF_OFF 0xFFFFFFFFu
+#define KFWC_BACKOFF_INITIAL_MS_DEFAULT 5000u
+#define KFWC_BACKOFF_MAX_MS_DEFAULT 300000u
+
 typedef struct kfwc_start_req {     /* 48 bytes */
     kfwc_u32 abi;                   /* KFWC_DRIVER_ABI */
     kfwc_u32 use_mailbox, use_scan;
@@ -54,11 +58,12 @@ typedef struct kfwc_start_req {     /* 48 bytes */
     kfwc_u32 scan_delay_ms;         /* mailbox reads zero: wait before scanning (default 5000) */
     kfwc_u32 max_msgs_per_step;     /* 1 .. 256 (default 64) */
     kfwc_u32 gpu_index;             /* which NVIDIA display device when there are several */
-    kfwc_u32 reserved[2];
+    kfwc_u32 scan_backoff_initial_ms; /* pause after the first completed scan pass: 0 = 5000, KFWC_BACKOFF_OFF = none */
+    kfwc_u32 scan_backoff_max_ms;   /* cap of the doubling pause: 0 = 300000 */
 } kfwc_start_req;
 KFWC_STATIC_ASSERT(kfwc_start_req_is_48, sizeof(kfwc_start_req) == 48);
 
-typedef struct kfwc_stats_out {     /* 31 engine words + 8 ring/driver words */
+typedef struct kfwc_stats_out {     /* 33 engine words + 8 ring/driver words */
     kfwc_stats engine;
     kfwc_u64 ring_puts, ring_refused, ring_bytes_in, ring_bytes_out, ring_high_water;
     kfwc_u64 loop_iterations, bar_remaps, pci_scans;

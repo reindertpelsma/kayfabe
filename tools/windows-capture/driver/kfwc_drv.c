@@ -327,8 +327,13 @@ static VOID Worker(PVOID context)
             pci_find_gpus(s);
         }
         n = kfwc_engine_step(s->engine);
-        wait_us = (s->engine->state == KFWC_ST_SEARCHING && s->req.use_scan) ? s->req.scan_period_us
-                                                                              : s->req.poll_us;
+        if (s->engine->state == KFWC_ST_SEARCHING && s->req.use_scan)
+            /* scan steps at the scan cadence; in a back-off pause (or before the scan delay
+             * ends) only the mailbox is read, and the engine reads it every 10 ms at most */
+            wait_us = kfwc_engine_scan_due(s->engine) ? s->req.scan_period_us
+                                                      : (s->req.poll_us > 10000 ? s->req.poll_us : 10000);
+        else
+            wait_us = s->req.poll_us;
         s->loops++;
         ExReleaseFastMutex(&s->lock);
         if (n && ++burst < 16) /* more may be waiting: a bounded burst, then yield */
@@ -361,6 +366,10 @@ static NTSTATUS capture_start(STATE *s, const kfwc_start_req *req)
     if (r.scan_bytes_per_step < 4096) r.scan_bytes_per_step = 4096;
     if (r.scan_bytes_per_step > KFWC_SCAN_CHUNK) r.scan_bytes_per_step = KFWC_SCAN_CHUNK;
     if (r.scan_delay_ms > 600000) r.scan_delay_ms = 600000;
+    if (r.scan_backoff_initial_ms == 0) r.scan_backoff_initial_ms = KFWC_BACKOFF_INITIAL_MS_DEFAULT;
+    if (r.scan_backoff_initial_ms != KFWC_BACKOFF_OFF && r.scan_backoff_initial_ms > 3600000) r.scan_backoff_initial_ms = 3600000;
+    if (r.scan_backoff_max_ms == 0) r.scan_backoff_max_ms = KFWC_BACKOFF_MAX_MS_DEFAULT;
+    if (r.scan_backoff_max_ms > 3600000) r.scan_backoff_max_ms = 3600000;
     if (r.max_msgs_per_step < 1) r.max_msgs_per_step = 1;
     if (r.max_msgs_per_step > 256) r.max_msgs_per_step = 256;
     s->req = r;
@@ -389,6 +398,15 @@ static NTSTATUS capture_start(STATE *s, const kfwc_start_req *req)
     cfg.scan_bytes_per_step = r.scan_bytes_per_step;
     cfg.max_msgs_per_step = r.max_msgs_per_step;
     cfg.scan_delay_ticks = (kfwc_u64)r.scan_delay_ms * (kfwc_u64)s->qpc_freq.QuadPart / 1000u;
+    /* the back-off restarts on a change of the mailbox pair, so without the mailbox there is
+     * nothing to restart it: scan-only mode keeps the passes back to back */
+    if (r.scan_backoff_initial_ms == KFWC_BACKOFF_OFF || !r.use_mailbox) {
+        cfg.scan_backoff_initial_ticks = 0;
+        cfg.scan_backoff_max_ticks = 0;
+    } else {
+        cfg.scan_backoff_initial_ticks = (kfwc_u64)r.scan_backoff_initial_ms * (kfwc_u64)s->qpc_freq.QuadPart / 1000u;
+        cfg.scan_backoff_max_ticks = (kfwc_u64)r.scan_backoff_max_ms * (kfwc_u64)s->qpc_freq.QuadPart / 1000u;
+    }
     kfwc_ring_init(&s->ring, s->ring_mem, RING_BYTES, RING_RESERVE);
     kfwc_engine_init(s->engine, &s->plat, &s->sink, &cfg);
     kfwc_engine_note_start(s->engine, s->gpu_count ? s->gpus[s->gpu_sel].device : 0, 0);

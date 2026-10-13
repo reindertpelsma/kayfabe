@@ -10,7 +10,7 @@
 #   .\install.ps1 -Action Remove                     stop + delete the service (cert and bcd stay)
 #   .\install.ps1 -Action Cleanup -Thumbprint HEX    remove the throwaway certificate
 #
-# UNTESTED: this script has been written on Linux and parsed by nothing. Run -Action Preflight
+# History: first run 2026-10-13 on the LTSC baseline under kayfabe (design doc, section 12a). Run -Action Preflight
 # first and read its output before anything else. See docs/design/V3_WINDOWS_CAPTURE_MODULE.md.
 [CmdletBinding()]
 param(
@@ -88,7 +88,8 @@ if (-not $SignToolPath) {
     $tool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction SilentlyContinue | Sort-Object FullName | Select-Object -Last 1
     if ($tool) { $SignToolPath = $tool.FullName }
 }
-if (-not $SignToolPath -or -not (Test-Path -LiteralPath $SignToolPath)) { throw 'Provide -SignToolPath (signtool.exe from the Windows SDK; the build can also ship one).' }
+$useSigntool = [bool]($SignToolPath -and (Test-Path -LiteralPath $SignToolPath))
+# no signtool (an image without the SDK): Set-AuthenticodeSignature signs PE files too, with the same certificate
 if (Get-Service $service -ErrorAction SilentlyContinue) { throw 'Service already exists. -Action Remove first.' }
 $dest = "$env:SystemRoot\System32\drivers\kfwc.sys"
 Copy-Item -LiteralPath $sys -Destination $dest -Force
@@ -103,10 +104,16 @@ try {
         try { $st.Open([Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite); $st.Add($public) } finally { $st.Close() }
     }
 } finally { $public.Dispose() }
-& $SignToolPath sign /fd SHA256 /sha1 $cert.Thumbprint /sm /s My $dest
-if ($LASTEXITCODE) { throw 'Signing failed.' }
-& $SignToolPath verify /pa /v $dest
-if ($LASTEXITCODE) { throw 'Signature verification failed.' }
+if ($useSigntool) {
+    & $SignToolPath sign /fd SHA256 /sha1 $cert.Thumbprint /sm /s My $dest
+    if ($LASTEXITCODE) { throw 'Signing failed.' }
+    & $SignToolPath verify /pa /v $dest
+    if ($LASTEXITCODE) { throw 'Signature verification failed.' }
+} else {
+    $sig = Set-AuthenticodeSignature -FilePath $dest -Certificate $cert -HashAlgorithm SHA256
+    if ($sig.Status -ne 'Valid') { throw "Signing failed: $($sig.Status) $($sig.StatusMessage)" }
+    Show 'signed with' 'Set-AuthenticodeSignature' ('status ' + $sig.Status)
+}
 & sc.exe create $service type= kernel start= demand binPath= $dest
 if ($LASTEXITCODE) { throw 'sc create failed.' }
 & sc.exe start $service

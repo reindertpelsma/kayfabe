@@ -26,7 +26,7 @@ mkdir -p "$out"
 
 fetch() { # name sha256 dir
     local name=$1 sha=$2 key=$3 archive="$cache/$3.nupkg"
-    [[ -d $cache/$key/c/Include ]] && return 0
+    [[ -f $cache/$key/.extracted-$version ]] && return 0
     mkdir -p "$cache"
     if [[ ! -f $archive ]] || ! echo "$sha  $archive" | sha256sum -c --status; then
         curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 \
@@ -34,16 +34,21 @@ fetch() { # name sha256 dir
         echo "$sha  $archive.tmp" | sha256sum -c --status || { echo "hash mismatch for $name" >&2; exit 1; }
         mv "$archive.tmp" "$archive"
     fi
-    python3 -I - "$archive" "$cache/$key" <<'PYZIP'
+    python3 -I - "$archive" "$cache/$key" "$version" <<'PYZIP'
 import pathlib, sys, zipfile
-archive, dest = sys.argv[1:]
+archive, dest = sys.argv[1:3]
 with zipfile.ZipFile(archive) as z:
     for n in z.namelist():
-        if n.startswith(('c/Include/', 'c/Lib/10.0.28000.0/km/x64/')):
+        # only what the build includes/links: km, shared and ucrt headers, the kernel-mode libs
+        if n.startswith(('c/Include/10.0.28000.0/km/', 'c/Include/10.0.28000.0/shared/',
+                         'c/Include/10.0.28000.0/ucrt/', 'c/Lib/10.0.28000.0/km/x64/')):
             if '..' in pathlib.PurePosixPath(n).parts:
                 raise SystemExit('unsafe archive member')
             z.extract(n, dest)
+pathlib.Path(dest, '.extracted-' + sys.argv[3]).write_text('ok\n')
 PYZIP
+    # the archive is only needed for the extraction (small disks): keep it with KFWC_KEEP_ARCHIVE=1
+    [[ ${KFWC_KEEP_ARCHIVE:-0} = 1 ]] || rm -f "$archive"
 }
 
 if [[ -n ${KFWC_KIT:-} ]]; then
