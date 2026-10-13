@@ -1,0 +1,5 @@
+kf-census: ogkm 580.82.07, 5 sources, 34833 cmd + 35200 status messages, 221 controls
+oracle: FAIL, 2 anomalies
+  observer_loss                 2  e.g. src3: observer driver_stats.dropped = 1
+  missing messages (sum of forward gaps): 0
+pairing: 2 controls with unanswered requests or orphan replies; rpc.sequence non-zero on 0 messages
