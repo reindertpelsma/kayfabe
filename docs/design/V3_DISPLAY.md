@@ -1,5 +1,13 @@
 # V3 display — a virtual NVIDIA display the stock driver drives, scanned out by kayfabe
 
+**STATUS: LIVE, 2026-10-14 — the Linux plane oracle: [`V3_DISPLAY_PLANES_ORACLE.md`](V3_DISPLAY_PLANES_ORACLE.md).**
+A stock-nvidia-drm overlay test reproduced the "plane flip never completes" class and a bare-metal AD104 reference
+was measured with the same binary. Engine: an UPDATE parked only for its vblank is no longer joined by later
+UPDATEs (§4.5's latch model; the 2026-10-10 join rule is removed), and a plane disable raises its AWAKEN through the
+flipped-away entry's FINISHED notifier. Caps page: semi-planar YUV claimed. Console: YUV windows with their own FMT
+matrix, P010-class and packed 4:2:2, bilinear scaling. Differences left (early completion of core-group commits,
+tearing flips paced by §M D1) are listed there.
+
 **STATUS: LIVE, 2026-10-11 — §4.14 (end of §4): layouts observed on hardware, not in the open headers; `0x73011a` answered.**
 The Windows OpenGL ICD queries NV0073 `0x73011a` right after `SYSTEM_GET_ACTIVE`; refusing it (0x56) crashed the ICD, the real GPU answers `NV_OK`.
 Rule recorded with it (owner, 2026-10-11): a trace finds what must be answered, explains behaviour and serves as a TEST ORACLE; it is never data in
