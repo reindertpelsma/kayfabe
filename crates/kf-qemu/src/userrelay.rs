@@ -21,6 +21,19 @@ pub(super) fn shadow_enabled() -> bool {
     *ON.get_or_init(|| std::env::var("KF3_WIN_USER_RING_SHADOW").is_ok_and(|v| v == "1"))
 }
 
+/// Private Windows USER channels use an explicit native mask identity. Zero
+/// is a valid guest default, not malformed input: author bit 0 on our own
+/// channel and give the scanner that SAME identity. This does not infer the
+/// guest's privileged RAMFC defaults or change ordinary Linux Passthrough.
+/// Native zero/id1 equivalence is measured on 595.91.07; this route remains an
+/// opt-in diagnostic until the Windows workload establishes compatibility.
+fn authored_subdevice_id(declared: u32) -> Result<u32, String> {
+    let id = if declared == 0 { 1 } else { declared };
+    kf_chan::user_scan::Scan::for_subdevice(id)
+        .map_err(|why| format!("USER_RING_SUBDEVICE_ID {declared:#x}: {why}"))?;
+    Ok(id)
+}
+
 /// Durable demand is outside the private publication mutex: a final doorbell
 /// cannot be lost merely because the act thread owns birth/Free metadata.
 pub(super) struct Cell<T = Record> {
@@ -283,11 +296,12 @@ impl Birth {
             {
                 return Err("USER_RING_SOURCE_DECLARATION".to_string());
             }
-            let id = a.subdevice_id.ok_or("USER_RING_SUBDEVICE_ID_UNMEASURED")?;
-            if !shadow_enabled() || id != 0 {
-                kf_chan::user_scan::Scan::for_subdevice(id)
-                    .map_err(|why| format!("USER_RING_SUBDEVICE_ID {id:#x}: {why}"))?;
-            }
+            let declared = a.subdevice_id.ok_or("USER_RING_SUBDEVICE_ID_UNMEASURED")?;
+            let native_id = if shadow_enabled() && declared == 0 {
+                0 // Existing opaque diagnostic retains the host default.
+            } else {
+                authored_subdevice_id(declared)?
+            };
             let (handle, offset) = a.userd_source.ok_or("USER_RING_NO_USERD_DECLARATION")?;
             if handle == 0 || offset & 0x1ff != 0 {
                 return Err("USER_RING_USERD_DECLARATION".into());
@@ -296,10 +310,10 @@ impl Birth {
                 return Err("USER_RING_USERD_APERTURE_NOT_IMPLEMENTED".into());
             };
             crate::mem::userdram::Userd::new(me.ram, base, size)
-                .map(UserdSource::Resolved)
+                .map(|source| (UserdSource::Resolved(source), native_id))
                 .map_err(|e| format!("USER_RING_RESOLVED_USERD {e:?}"))
         })();
-        let userd = match source {
+        let (userd, native_id) = match source {
             Ok(u) => u,
             Err(why) => {
                 // Never born: the queue still owns the lease on enqueue failure.
@@ -309,7 +323,7 @@ impl Birth {
             }
         };
         let pump =
-            match super::userpump::Pump::new(me, a.subdevice_id.unwrap_or(0), (a.client, a.handle))
+            match super::userpump::Pump::new(me, native_id, (a.client, a.handle))
             {
                 Ok(pump) => pump,
                 Err(why) => {
@@ -426,13 +440,13 @@ impl Birth {
                 a.engine_type.unwrap_or(0),
                 spec,
                 false,
-                a.subdevice_id.unwrap_or(0),
+                native_id,
             ),
             (None, false) => me.rm.birth_user_ring_channel(
                 self.mirror.space,
                 a.engine_type.unwrap_or(0),
                 spec,
-                a.subdevice_id.unwrap_or(0),
+                native_id,
             ),
         };
         let chan = match native {
@@ -567,8 +581,8 @@ impl Birth {
         me.engine_live(a.engine_type.unwrap_or(0), true);
         // No fast-register path: every ring wakes a worker, including first use.
         Ok(format!(
-            "EXPERIMENT KF3_WIN_USER_RING_RELAY chan {:#x}:{:#x} BORN USER private-read-only-ring token {:#x} host {:#x}; OWN VAS; worker-only; source={:#x}x{}",
-            a.client, a.handle, self.idx, chan.token, a.gpfifo_va, a.entries
+            "EXPERIMENT KF3_WIN_USER_RING_RELAY chan {:#x}:{:#x} BORN USER private-read-only-ring token {:#x} host {:#x}; OWN VAS; worker-only; source={:#x}x{} declared_subdevice={:x?} native_scan_subdevice={native_id:#x}",
+            a.client, a.handle, self.idx, chan.token, a.gpfifo_va, a.entries, a.subdevice_id
         ))
     }
 }
@@ -818,6 +832,18 @@ mod tests {
     use kf_core::lifetime::Step;
     use kf_core::{HostOps, HostSlice, Owner, Plane, Translatable, VmCaps, Vmm};
     use kf_trap::token::Route;
+
+    #[test]
+    fn guest_default_authors_the_same_explicit_identity_for_native_and_scan() {
+        assert_eq!(authored_subdevice_id(0), Ok(1));
+        assert_eq!(authored_subdevice_id(1), Ok(1));
+        for bit in 0..12 {
+            assert_eq!(authored_subdevice_id(1 << bit), Ok(1 << bit));
+        }
+        for invalid in [3, 0x1000, u32::MAX] {
+            assert!(authored_subdevice_id(invalid).is_err());
+        }
+    }
     struct State {
         paused: bool,
         writes: usize,
