@@ -58,8 +58,8 @@ pub struct ScanFormats {
     yuv: Vec<(u32, YuvFormat)>,
 }
 
-/// ★ A semi-planar 8-bit YUV window format the console composes: plane 0 is `Y8`, plane 1 holds
-/// interleaved chroma byte pairs, one pair per `2^sub_x_log2` x `2^sub_y_log2` luma pixels.
+/// ★ A YUV window format the console composes: one chroma pair per `2^sub_x_log2` x `2^sub_y_log2`
+/// luma pixels, stored as [`YuvFormat::layout`] says (the kernel's `layout`, `cuda/display/kf_yuv.cu`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct YuvFormat {
     /// log2 of the horizontal chroma subsampling (4:2:0 and 4:2:2: 1; 4:4:4: 0).
@@ -68,6 +68,38 @@ pub struct YuvFormat {
     pub sub_y_log2: u32,
     /// The chroma pair is V then U (`Y8___V8U8`), else U then V.
     pub vu_first: bool,
+    /// ★ 2026-10-14: the storage — [`YUV_SEMI_PLANAR_8`], [`YUV_SEMI_PLANAR_16`], [`YUV_PACKED_YUYV`],
+    /// [`YUV_PACKED_UYVY`].
+    pub layout: u32,
+}
+
+/// Semi-planar, 8-bit samples: plane 0 `Y8`, plane 1 interleaved chroma byte pairs.
+pub const YUV_SEMI_PLANAR_8: u32 = 0;
+/// Semi-planar, 16-bit little-endian containers with the data MSB-aligned (`Y10___*`, `Y12___*`).
+pub const YUV_SEMI_PLANAR_16: u32 = 1;
+/// Packed 4:2:2 `Y0 C0 Y1 C1` (`Y8_U8__Y8_V8_N422`), one plane.
+pub const YUV_PACKED_YUYV: u32 = 2;
+/// Packed 4:2:2 `C0 Y0 C1 Y1` (`U8_Y8__V8_Y8_N422`), one plane.
+pub const YUV_PACKED_UYVY: u32 = 3;
+
+impl YuvFormat {
+    /// Bytes per luma pixel in plane 0.
+    #[must_use]
+    pub fn luma_bytes(self) -> u64 {
+        match self.layout {
+            YUV_SEMI_PLANAR_8 => 1,
+            _ => 2,
+        }
+    }
+    /// Bytes per chroma pair in plane 1 (0: packed, no plane 1).
+    #[must_use]
+    pub fn chroma_bytes(self) -> u64 {
+        match self.layout {
+            YUV_SEMI_PLANAR_8 => 2,
+            YUV_SEMI_PLANAR_16 => 4,
+            _ => 0,
+        }
+    }
 }
 
 impl ScanFormats {
@@ -93,10 +125,21 @@ impl ScanFormats {
         ];
         // ★ derived from the class's own names, like the RGB table: a family without one simply
         // has no console YUV format (and the window is left out of the console copy, by name)
+        // ★ 2026-10-14 (the Linux plane oracle): plus the 10/12-bit semi-planar formats (P010 ...)
+        // and the packed 4:2:2 ones (YUY2/UYVY) — everything a semi-planar-capable page lets NVKMS
+        // offer (`caps::page`); 3-plane formats stay out (left out by name).
         let yuv_names = [
-            ("SET_PARAMS_FORMAT_Y8___U8V8_N444", 0, 0, false),
-            ("SET_PARAMS_FORMAT_Y8___U8V8_N422", 1, 0, false),
-            ("SET_PARAMS_FORMAT_Y8___V8U8_N420", 1, 1, true),
+            ("SET_PARAMS_FORMAT_Y8___U8V8_N444", 0, 0, false, YUV_SEMI_PLANAR_8),
+            ("SET_PARAMS_FORMAT_Y8___U8V8_N422", 1, 0, false, YUV_SEMI_PLANAR_8),
+            ("SET_PARAMS_FORMAT_Y8___V8U8_N420", 1, 1, true, YUV_SEMI_PLANAR_8),
+            ("SET_PARAMS_FORMAT_Y10___U10V10_N444", 0, 0, false, YUV_SEMI_PLANAR_16),
+            ("SET_PARAMS_FORMAT_Y10___U10V10_N422", 1, 0, false, YUV_SEMI_PLANAR_16),
+            ("SET_PARAMS_FORMAT_Y10___V10U10_N420", 1, 1, true, YUV_SEMI_PLANAR_16),
+            ("SET_PARAMS_FORMAT_Y12___U12V12_N444", 0, 0, false, YUV_SEMI_PLANAR_16),
+            ("SET_PARAMS_FORMAT_Y12___U12V12_N422", 1, 0, false, YUV_SEMI_PLANAR_16),
+            ("SET_PARAMS_FORMAT_Y12___V12U12_N420", 1, 1, true, YUV_SEMI_PLANAR_16),
+            ("SET_PARAMS_FORMAT_Y8_U8__Y8_V8_N422", 1, 0, false, YUV_PACKED_YUYV),
+            ("SET_PARAMS_FORMAT_U8_Y8__V8_Y8_N422", 1, 0, false, YUV_PACKED_UYVY),
         ];
         ScanFormats {
             map: names
@@ -105,13 +148,14 @@ impl ScanFormats {
                 .collect(),
             yuv: yuv_names
                 .iter()
-                .filter_map(|&(n, sx, sy, vu)| {
+                .filter_map(|&(n, sx, sy, vu, layout)| {
                     Some((
                         t.v(win, n)?,
                         YuvFormat {
                             sub_x_log2: sx,
                             sub_y_log2: sy,
                             vu_first: vu,
+                            layout,
                         },
                     ))
                 })
@@ -128,8 +172,8 @@ impl ScanFormats {
             .map(|(_, f, _)| *f)
     }
 
-    /// The console YUV format of `SET_PARAMS.FORMAT` value `v`, if it is one of the semi-planar
-    /// 8-bit formats [`plan_yuv`] composes.
+    /// The console YUV format of `SET_PARAMS.FORMAT` value `v`, if it is one of the YUV formats
+    /// [`plan_yuv`] composes.
     #[must_use]
     pub fn yuv_of(&self, v: u32) -> Option<YuvFormat> {
         self.yuv.iter().find(|(x, _)| *x == v).map(|(_, f)| *f)
@@ -569,12 +613,36 @@ pub struct YuvPlan {
     pub sub_y_log2: u32,
     /// The chroma pair is V then U (after `SWAP_UV`).
     pub vu_first: bool,
+    /// ★ 2026-10-14: the storage ([`YuvFormat::layout`]).
+    pub layout: u32,
+    /// 0 = nearest, 1 = bilinear (chosen when the window scales).
+    pub filter: u32,
+    /// The window's FMT matrix (`Scanout::fmt`), or [`BT709_LIMITED`] when the guest programmed none.
+    pub fmt: [i32; 12],
 }
+
+/// ★ The console's conversion when a YUV window's FMT matrix is all zero (unprogrammed): BT.709,
+/// limited range, in the FMT layout (rows R, G, B over V, Y, U, 1; S4.16 on inputs normalised to
+/// 1 = 65536, an 8-bit sample `s` entering as `s/256`). Derived from the standard's constants, not
+/// a table: Kr = 0.2126, Kb = 0.0722, luma gain 256/219, chroma gain 256/224, black 16/256, chroma
+/// zero 128/256 — e.g. R = 1.168950*Y + 1.799771*V - 0.972947 (NVKMS's own BT.709 row differs from
+/// it in the fifth digit). Console-only (the guest never sees it).
+pub const BT709_LIMITED: [i32; 12] = [
+    117_950, 76_608, 0, -63_763, //
+    -35_062, 76_608, -14_030, 19_758, //
+    0, 76_608, 138_981, -74_279,
+];
 
 /// ★ Plan semi-planar YUV window `s` of a `fw` x `fh` composition. `y_dma` is the luma plane's
 /// context DMA, `c_dma` the chroma plane's (the same when the window names one). Every byte either
 /// plane's kernel can read is bounded against its context DMA here; the destination is clipped to
 /// the frame. `Ok(None)` for a window wholly outside the frame.
+///
+/// ⊘ CORRECTED 2026-10-14 (the paragraph below said BT.709 / nearest / 8-bit semi-planar only): the
+/// console converts with the window's own FMT matrix (`Scanout::fmt`; [`BT709_LIMITED`] only when
+/// that is all zero), composes 8-bit and 16-bit-container semi-planar and packed 4:2:2 windows, and
+/// scales bilinearly when the window scales. What it still does not do: the colour stages after the
+/// FMT matrix (ILUT, CSC, TMO) for a YUV window, and 3-plane formats.
 ///
 /// ⊘ What the console does NOT do (stated, not hidden): it ignores the window's colour pipeline for
 /// a YUV window and converts BT.709 limited range; it scales by nearest neighbour; the window is
@@ -623,7 +691,7 @@ pub fn plan_yuv(
     if s.out_x >= fw || s.out_y >= fh {
         return Ok(None);
     }
-    // the destination: SET_SIZE_OUT (0 = unscaled), clipped to the frame
+    // the destination: SET_SIZE_OUT (0 = unscaled)
     let dw = if s.out_width == 0 {
         s.width
     } else {
@@ -634,9 +702,14 @@ pub fn plan_yuv(
     } else {
         s.out_height
     };
-    let (dw, dh) = (dw.min(fw - s.out_x), dh.min(fh - s.out_y));
+    // ⊘ CORRECTED 2026-10-14: the destination is NOT clipped here any more. Clipping it changed the
+    // scale (the source was squeezed into the visible part); the kernel skips every write outside the
+    // frame (`dx >= fw || dy >= fh`), and the launch covers only the visible rows.
     if dw == 0 || dh == 0 {
         return Ok(None);
+    }
+    if dw > 16_384 || dh > 16_384 {
+        return no(format!("a {dw}x{dh} destination is larger than the kernel's 16384 limit"));
     }
     // the last source column/row the kernel can touch (nearest sampling stays inside the rectangle)
     let x_end = u64::from(s.x) + u64::from(s.width); // luma, exclusive
@@ -697,7 +770,41 @@ pub fn plan_yuv(
         }
     };
     let (y_src, y_extent, y_pitch) =
-        bound("luma", y_dma, s.offset, s.pitch, 1, x_end, y_end).map_err(refuse)?;
+        bound("luma", y_dma, s.offset, s.pitch, f.luma_bytes(), x_end, y_end).map_err(refuse)?;
+    let fmt = if s.fmt == [0; 12] {
+        BT709_LIMITED
+    } else {
+        s.fmt
+    };
+    let filter = u32::from(dw != s.width || dh != s.height);
+    if f.chroma_bytes() == 0 {
+        // packed: the chroma lives in plane 0, in the same rows (no vertical subsampling)
+        return Ok(Some(YuvPlan {
+            window: s.window,
+            y_src,
+            y_extent,
+            c_src: y_src,
+            c_extent: y_extent,
+            block_linear: y_dma.block_linear,
+            y_pitch,
+            c_pitch: y_pitch,
+            block_height_log2: s.block_height_log2,
+            sx0: s.x,
+            sy0: s.y,
+            sw: s.width,
+            sh: s.height,
+            ox: s.out_x,
+            oy: s.out_y,
+            dw,
+            dh,
+            sub_x_log2: f.sub_x_log2,
+            sub_y_log2: f.sub_y_log2,
+            vu_first: f.vu_first != s.swap_uv,
+            layout: f.layout,
+            filter,
+            fmt,
+        }));
+    }
     // ⊘ [measured, run 401, Windows 11 / Edge MPO overlay, 2026-10-10] the guest programs
     // `SET_PLANAR_STORAGE(1)` but leaves `SET_CONTEXT_DMA_ISO(1)` and `SET_OFFSET(1)` at 0: no
     // separate chroma allocation. The console then read the chroma plane from the luma plane's
@@ -717,7 +824,8 @@ pub fn plan_yuv(
         s.offset1
     };
     let (c_src, c_extent, c_pitch) =
-        bound("chroma", c_dma, chroma_off, s.pitch1, 2, cx_end, cy_end).map_err(refuse)?;
+        bound("chroma", c_dma, chroma_off, s.pitch1, f.chroma_bytes(), cx_end, cy_end)
+            .map_err(refuse)?;
     Ok(Some(YuvPlan {
         window: s.window,
         y_src,
@@ -739,25 +847,75 @@ pub fn plan_yuv(
         sub_x_log2: f.sub_x_log2,
         sub_y_log2: f.sub_y_log2,
         vu_first: f.vu_first != s.swap_uv,
+        layout: f.layout,
+        filter,
+        fmt,
     }))
 }
 
-/// ★ The YUV -> RGB arithmetic of the kernel (`kf_yuv.cu`), BT.709 limited range, 8.8 fixed point,
-/// for one pixel: `0xFFRRGGBB`.
-#[must_use]
-pub fn yuv_to_xrgb(y: u8, u: u8, v: u8) -> u32 {
-    let c = 298 * (i32::from(y) - 16);
-    let (d, e) = (i32::from(u) - 128, i32::from(v) - 128);
-    let q = |x: i32| ((x + 128) >> 8).clamp(0, 255) as u32;
-    let r = q(c + 459 * e);
-    let g = q(c - 55 * d - 136 * e);
-    let b = q(c + 541 * d);
-    0xFF00_0000 | (r << 16) | (g << 8) | b
+/// ★ One output channel of FMT matrix row `r` (the kernel's `kf_ch`): `y`/`u`/`v` are 16-bit
+/// samples (8-bit << 8), the matrix S4.16 over V, Y, U, 1; rounded to 8 bits, clamped.
+fn fmt_channel(m: &[i32; 12], r: usize, y: u32, u: u32, v: u32) -> u32 {
+    let acc = i64::from(m[r * 4]) * i64::from(v)
+        + i64::from(m[r * 4 + 1]) * i64::from(y)
+        + i64::from(m[r * 4 + 2]) * i64::from(u)
+        + i64::from(m[r * 4 + 3]) * 65_536;
+    let q = acc * 255 + (1_i64 << 31);
+    if q <= 0 {
+        0
+    } else {
+        ((q >> 32) as u32).min(255)
+    }
 }
 
-/// ★ The kernel's address arithmetic and sampling on the CPU: the REFERENCE for `kf_compose_yuv`.
-/// `ysrc`/`csrc` hold the store bytes from [`YuvPlan::y_src`]/[`YuvPlan::c_src`]; `frame` is the
-/// `fw` x `fh` XRGB staging frame, composed into in place (opaque).
+/// ★ The kernel's colour conversion (`kf_convert`) for one pixel of 16-bit samples: `0xFFRRGGBB`.
+#[must_use]
+pub fn yuv_convert(m: &[i32; 12], y: u32, u: u32, v: u32) -> u32 {
+    0xFF00_0000
+        | (fmt_channel(m, 0, y, u, v) << 16)
+        | (fmt_channel(m, 1, y, u, v) << 8)
+        | fmt_channel(m, 2, y, u, v)
+}
+
+/// ★ 8-bit BT.709 limited range through [`BT709_LIMITED`] — the console's conversion of an
+/// unprogrammed matrix, for one pixel: `0xFFRRGGBB`.
+#[must_use]
+pub fn yuv_to_xrgb(y: u8, u: u8, v: u8) -> u32 {
+    yuv_convert(
+        &BT709_LIMITED,
+        u32::from(y) << 8,
+        u32::from(u) << 8,
+        u32::from(v) << 8,
+    )
+}
+
+/// Bilinear position on one axis (the kernel's `kf_pos`): absolute source position, 16.16.
+fn bl_pos(d: u32, n: u32, s0: u32, len: u32) -> i64 {
+    let p = ((2 * i64::from(d) + 1) * i64::from(len) * 65_536) / (2 * i64::from(n)) - 32_768;
+    let hi = (i64::from(len) - 1) * 65_536;
+    i64::from(s0) * 65_536 + p.clamp(0, hi)
+}
+
+/// The chroma position of luma position `p` under shift `k` (the kernel's `kf_cpos`).
+fn bl_cpos(p: i64, k: u32, s0: u32, len: u32) -> i64 {
+    let c = ((p + 32_768) >> k) - 32_768;
+    let lo = i64::from(s0 >> k) * 65_536;
+    let hi = i64::from((s0 + len - 1) >> k) * 65_536;
+    c.clamp(lo, hi)
+}
+
+/// The kernel's `kf_lerp`.
+fn bl_lerp(v00: u32, v10: u32, v01: u32, v11: u32, fx: u32, fy: u32) -> u32 {
+    let (wx, wy) = (65_536 - u64::from(fx), 65_536 - u64::from(fy));
+    let top = u64::from(v00) * wx + u64::from(v10) * u64::from(fx);
+    let bot = u64::from(v01) * wx + u64::from(v11) * u64::from(fx);
+    ((top * wy + bot * u64::from(fy) + (1 << 31)) >> 32) as u32
+}
+
+/// ★ The kernel's address arithmetic, sampling and conversion on the CPU: the REFERENCE for
+/// `kf_compose_yuv`. `ysrc`/`csrc` hold the store bytes from [`YuvPlan::y_src`]/[`YuvPlan::c_src`]
+/// (the same bytes twice for a packed format); `frame` is the `fw` x `fh` XRGB staging frame,
+/// composed into in place (opaque).
 ///
 /// # Errors
 /// A read outside a plane's extent, or a short frame.
@@ -779,35 +937,100 @@ pub fn yuv_reference(
             y * u64::from(pitch) + x_bytes
         }
     };
-    let get = |buf: &[u8], extent: u64, a: u64| -> Result<u8, Refused> {
+    let get = |buf: &[u8], extent: u64, a: u64| -> Result<u32, Refused> {
         if a >= extent {
             return Err(Refused(format!(
                 "a read at {a:#x} past the plane's {extent:#x}"
             )));
         }
         buf.get(a as usize)
-            .copied()
+            .map(|b| u32::from(*b))
             .ok_or_else(|| Refused("a read past the supplied bytes".into()))
+    };
+    // one 16-bit sample of plane `buf` at byte column `xb`, row `y`
+    let sample = |buf: &[u8], extent: u64, xb: u64, y: u64, pitch: u32, wide: bool| {
+        let o = addr(xb, y, pitch);
+        if wide {
+            Ok(get(buf, extent, o)? | (get(buf, extent, o + 1)? << 8))
+        } else {
+            Ok::<u32, Refused>(get(buf, extent, o)? << 8)
+        }
+    };
+    let luma = |x: u64, y: u64| match l.layout {
+        YUV_SEMI_PLANAR_16 => sample(ysrc, l.y_extent, x * 2, y, l.y_pitch, true),
+        YUV_PACKED_YUYV => sample(ysrc, l.y_extent, x * 2, y, l.y_pitch, false),
+        YUV_PACKED_UYVY => sample(ysrc, l.y_extent, x * 2 + 1, y, l.y_pitch, false),
+        _ => sample(ysrc, l.y_extent, x, y, l.y_pitch, false),
+    };
+    let chroma = |cx: u64, cy: u64| -> Result<(u32, u32), Refused> {
+        Ok(match l.layout {
+            YUV_SEMI_PLANAR_16 => (
+                sample(csrc, l.c_extent, cx * 4, cy, l.c_pitch, true)?,
+                sample(csrc, l.c_extent, cx * 4 + 2, cy, l.c_pitch, true)?,
+            ),
+            YUV_PACKED_YUYV => (
+                sample(ysrc, l.y_extent, cx * 4 + 1, cy, l.y_pitch, false)?,
+                sample(ysrc, l.y_extent, cx * 4 + 3, cy, l.y_pitch, false)?,
+            ),
+            YUV_PACKED_UYVY => (
+                sample(ysrc, l.y_extent, cx * 4, cy, l.y_pitch, false)?,
+                sample(ysrc, l.y_extent, cx * 4 + 2, cy, l.y_pitch, false)?,
+            ),
+            _ => (
+                sample(csrc, l.c_extent, cx * 2, cy, l.c_pitch, false)?,
+                sample(csrc, l.c_extent, cx * 2 + 1, cy, l.c_pitch, false)?,
+            ),
+        })
     };
     for row in 0..l.dh {
         let (dy, ox_row) = (l.oy + row, l.ox);
         if dy >= fh {
             continue;
         }
-        let sy = u64::from(l.sy0) + u64::from(row) * u64::from(l.sh) / u64::from(l.dh);
         for x in 0..l.dw {
             let dx = ox_row + x;
             if dx >= fw {
                 continue;
             }
-            let sx = u64::from(l.sx0) + u64::from(x) * u64::from(l.sw) / u64::from(l.dw);
-            let y = get(ysrc, l.y_extent, addr(sx, sy, l.y_pitch))?;
-            let (cx, cy) = (sx >> l.sub_x_log2, sy >> l.sub_y_log2);
-            let c0 = get(csrc, l.c_extent, addr(cx * 2, cy, l.c_pitch))?;
-            let c1 = get(csrc, l.c_extent, addr(cx * 2 + 1, cy, l.c_pitch))?;
+            let (yv, c0, c1) = if l.filter == 0 {
+                let sy = u64::from(l.sy0) + u64::from(row) * u64::from(l.sh) / u64::from(l.dh);
+                let sx = u64::from(l.sx0) + u64::from(x) * u64::from(l.sw) / u64::from(l.dw);
+                let (c0, c1) = chroma(sx >> l.sub_x_log2, sy >> l.sub_y_log2)?;
+                (luma(sx, sy)?, c0, c1)
+            } else {
+                let (px, py) = (bl_pos(x, l.dw, l.sx0, l.sw), bl_pos(row, l.dh, l.sy0, l.sh));
+                let (x0, y0) = ((px >> 16) as u64, (py >> 16) as u64);
+                let (xe, ye) = (u64::from(l.sx0 + l.sw - 1), u64::from(l.sy0 + l.sh - 1));
+                let (x1, y1) = ((x0 + 1).min(xe), (y0 + 1).min(ye));
+                let (fx, fy) = ((px & 0xffff) as u32, (py & 0xffff) as u32);
+                let yv = bl_lerp(
+                    luma(x0, y0)?,
+                    luma(x1, y0)?,
+                    luma(x0, y1)?,
+                    luma(x1, y1)?,
+                    fx,
+                    fy,
+                );
+                let cpx = bl_cpos(px, l.sub_x_log2, l.sx0, l.sw);
+                let cpy = bl_cpos(py, l.sub_y_log2, l.sy0, l.sh);
+                let (cx0, cy0) = ((cpx >> 16) as u64, (cpy >> 16) as u64);
+                let cxe = u64::from((l.sx0 + l.sw - 1) >> l.sub_x_log2);
+                let cye = u64::from((l.sy0 + l.sh - 1) >> l.sub_y_log2);
+                let (cx1, cy1) = ((cx0 + 1).min(cxe), (cy0 + 1).min(cye));
+                let (cfx, cfy) = ((cpx & 0xffff) as u32, (cpy & 0xffff) as u32);
+                let (a0, a1) = chroma(cx0, cy0)?;
+                let (b0, b1) = chroma(cx1, cy0)?;
+                let (d0, d1) = chroma(cx0, cy1)?;
+                let (e0, e1) = chroma(cx1, cy1)?;
+                (
+                    yv,
+                    bl_lerp(a0, b0, d0, e0, cfx, cfy),
+                    bl_lerp(a1, b1, d1, e1, cfx, cfy),
+                )
+            };
             let (u, v) = if l.vu_first { (c1, c0) } else { (c0, c1) };
             let p = (u64::from(dy) * u64::from(fw) + u64::from(dx)) as usize * 4;
-            frame[p..p + 4].copy_from_slice(&yuv_to_xrgb(y, u, v).to_le_bytes());
+            frame[p..p + 4].copy_from_slice(&yuv_convert(&l.fmt, yv, u, v).to_le_bytes());
         }
     }
     Ok(())
@@ -1513,6 +1736,7 @@ mod tests {
             k2: 0,
             src_factor: 1,
             dst_factor: 0,
+            fmt: [0; 12],
         }
     }
 
@@ -1532,6 +1756,21 @@ mod tests {
         );
         assert!(f.of(0x38).is_none(), "not an RGB console format");
         assert!(f.yuv_of(0xE6).is_none());
+        // ★ 2026-10-14: 16-bit-container semi-planar (P010 = Y10___V10U10_N420, 0x58) and packed
+        // 4:2:2 (YUY2 0x28, UYVY 0x29), by the class's own names; 3-plane (0x3B) stays out
+        let t = crate::class::for_version("580.159.04").unwrap();
+        let v = |n: &str| t.v(0xC67E, n).unwrap();
+        let p010 = f.yuv_of(v("SET_PARAMS_FORMAT_Y10___V10U10_N420")).unwrap();
+        assert_eq!(
+            (p010.layout, p010.sub_x_log2, p010.sub_y_log2, p010.vu_first),
+            (YUV_SEMI_PLANAR_16, 1, 1, true)
+        );
+        assert_eq!((p010.luma_bytes(), p010.chroma_bytes()), (2, 4));
+        let yuy2 = f.yuv_of(v("SET_PARAMS_FORMAT_Y8_U8__Y8_V8_N422")).unwrap();
+        assert_eq!((yuy2.layout, yuy2.sub_y_log2, yuy2.chroma_bytes()), (YUV_PACKED_YUYV, 0, 0));
+        let uyvy = f.yuv_of(v("SET_PARAMS_FORMAT_U8_Y8__V8_Y8_N422")).unwrap();
+        assert_eq!(uyvy.layout, YUV_PACKED_UYVY);
+        assert!(f.yuv_of(v("SET_PARAMS_FORMAT_Y8___U8___V8_N420")).is_none());
         let s = Scanout {
             window: 4,
             head: 0,
@@ -1569,9 +1808,27 @@ mod tests {
                 .unwrap()
                 .vu_first
         );
-        // the destination is clipped to the frame; a window past the frame is none
+        // ⊘ 2026-10-14: the destination keeps its size past the frame edge (the kernel skips the
+        // writes outside the frame; clipping it here squeezed the scale); a window past the frame is none;
+        // it scales (720x1280 -> 1295x986), so it is filtered
         let clipped = plan_yuv(&s, yf, &dma, &dma, 800, 600).unwrap().unwrap();
-        assert_eq!((clipped.dw, clipped.dh), (800 - 22, 600 - 13));
+        assert_eq!((clipped.dw, clipped.dh, clipped.filter), (1295, 986, 1));
+        let unscaled = Scanout {
+            out_width: 0,
+            out_height: 0,
+            ..s
+        };
+        assert_eq!(
+            plan_yuv(&unscaled, yf, &dma, &dma, 1920, 1080)
+                .unwrap()
+                .unwrap()
+                .filter,
+            0
+        );
+        assert!(
+            plan_yuv(&Scanout { out_width: 20_000, ..s }, yf, &dma, &dma, 1920, 1080).is_err(),
+            "a hostile destination size is refused by name"
+        );
         assert_eq!(
             plan_yuv(&Scanout { out_x: 1920, ..s }, yf, &dma, &dma, 1920, 1080),
             Ok(None)

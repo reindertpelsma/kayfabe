@@ -3560,6 +3560,9 @@ fn yuv_layer(l: &kf_disp::scanout::YuvPlan) -> kf_cuda::display::YuvLayer {
         sub_x_log2: l.sub_x_log2,
         sub_y_log2: l.sub_y_log2,
         vu_first: l.vu_first,
+        layout: l.layout,
+        filter: l.filter,
+        fmt: l.fmt,
     }
 }
 
@@ -5522,6 +5525,7 @@ mod tests {
             k2: 0,
             src_factor: 0,
             dst_factor: 0,
+            fmt: [0; 12],
         }
     }
 
@@ -5989,6 +5993,9 @@ mod tests {
             sub_x_log2: 1,
             sub_y_log2: 1,
             vu_first: false,
+            layout: 0,
+            filter: 0,
+            fmt: kf_disp::scanout::BT709_LIMITED,
         };
         let d = |m: &[(u32, u32)]| {
             let m = m.to_vec();

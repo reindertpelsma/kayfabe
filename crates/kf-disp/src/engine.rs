@@ -1784,6 +1784,11 @@ pub struct Scanout {
     pub src_factor: u32,
     /// `DST_COLOR_FACTOR_NO_MATCH_SELECT`.
     pub dst_factor: u32,
+    /// ★ `SET_FMT_COEFFICIENT_C00..C23` — the 3x4 S4.16 matrix NVKMS programs to convert the window's
+    /// input format to the RGB pipe (`nvkms-evo3.c` EvoSetFMTMatrixC5: "In nvdisplay 3 ... a generic
+    /// 3x4 S5.16 coefficient matrix that SW must explicitly configure"), rows R, G, B over the input
+    /// channels (V/Cr, Y, U/Cb, 1), sign-extended. All zero: the class has none, or it is unprogrammed.
+    pub fmt: [i32; 12],
 }
 
 /// ★ What a head shows: its composition space and every enabled window, BACK TO FRONT.
@@ -1823,6 +1828,8 @@ pub struct ScanVocab {
     point_out: (u32, (u8, u8), (u8, u8)),
     /// Core `HEAD_SET_VIEWPORT_SIZE_IN(head)`: base, stride, width, height.
     viewport_in: (u32, u32, (u8, u8), (u8, u8)),
+    /// `SET_FMT_COEFFICIENT_C00` and its `VALUE` field (`None`: the class has no FMT matrix).
+    fmt: Option<(u32, (u8, u8))>,
 }
 
 /// A method's offset and two `(hi, lo)` fields of its data word — e.g. `SET_SIZE`'s `_WIDTH` and
@@ -1904,6 +1911,11 @@ impl ScanVocab {
                     t.f(core, "HEAD_SET_VIEWPORT_SIZE_IN_HEIGHT")?,
                 )
             },
+            // the twelve coefficients are consecutive words from C00 (C00..C03, C10..C13, C20..C23)
+            fmt: t
+                .v(win, "SET_FMT_COEFFICIENT_C00")
+                .zip(t.f(win, "SET_FMT_COEFFICIENT_C00_VALUE"))
+                .filter(|(c00, _)| t.v(win, "SET_FMT_COEFFICIENT_C23") == Some(c00 + 44)),
         })
     }
 }
@@ -1997,6 +2009,14 @@ impl Engine {
                 k2: fld(alpha, sv.comp_alpha.2),
                 src_factor: fld(factor, sv.comp_factor.1),
                 dst_factor: fld(factor, sv.comp_factor.2),
+                fmt: sv.fmt.map_or([0; 12], |(c00, (hi, lo))| {
+                    std::array::from_fn(|i| {
+                        let raw = fld(c.armed(c00 + 4 * i as u32), (hi, lo));
+                        // sign-extend the (hi - lo + 1)-bit two's-complement field
+                        let bits = u32::from(hi - lo) + 1;
+                        ((raw << (32 - bits)) as i32) >> (32 - bits)
+                    })
+                }),
             })
         }
     }

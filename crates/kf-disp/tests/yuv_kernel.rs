@@ -2,11 +2,15 @@
 //! ★ The console's YUV window kernel (`cuda/display/kf_yuv.cu`) RUN ON THE HOST: the same source the
 //! NVPTX back-end compiles (`make_yuv_ptx.sh`), built as plain C with `-DKF_HOST`, driven over every
 //! (CTA, thread) of the launch and compared byte for byte with `kf_disp::scanout::yuv_reference` —
-//! pitch and block-linear planes, 4:2:0 / 4:2:2 / 4:4:4, both chroma orders, an upscale, a downscale,
-//! an odd size, and a destination the frame edge cuts. Plus known-answer tests of the colour
-//! arithmetic (NV12 values with known RGB results).
+//! pitch and block-linear planes, 4:2:0 / 4:2:2 / 4:4:4, both chroma orders, 8-bit and 16-bit
+//! semi-planar, packed YUY2/UYVY, nearest and bilinear scaling (up, down, odd origins), a destination
+//! the frame edge cuts, and arbitrary FMT matrices. Plus known-answer tests of the colour arithmetic
+//! against NVKMS's own FMT tables (`ogkm-595.84: nvidia-modeset/src/nvkms-evo3.c` FMTMatrix).
 
-use kf_disp::scanout::{YuvPlan, yuv_reference, yuv_to_xrgb};
+use kf_disp::scanout::{
+    BT709_LIMITED, YUV_PACKED_UYVY, YUV_PACKED_YUYV, YUV_SEMI_PLANAR_8, YUV_SEMI_PLANAR_16, YuvPlan,
+    yuv_convert, yuv_reference, yuv_to_xrgb,
+};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -14,7 +18,8 @@ fn kernel_source() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../cuda/display/kf_yuv.cu")
 }
 
-/// argv: bl yp cp bh sx0 sy0 sw sh ox oy dw dh fw fh sxl syl vu, then ys, cs, out paths.
+/// argv: 19 numbers (bl yp cp bh sx0 sy0 sw sh ox oy dw dh fw fh sxl syl vu layout filter), 12
+/// matrix words, then ys, cs, out paths.
 const HARNESS: &str = r#"
 #include <stdio.h>
 #include <stdlib.h>
@@ -27,28 +32,29 @@ static unsigned char *slurp(const char *p, size_t *n) {
     unsigned char *b = malloc(*n + 1); if (fread(b, 1, *n, f) != *n) exit(4); fclose(f); return b;
 }
 int main(int argc, char **argv) {
-    if (argc != 21) return 2;
+    if (argc != 35) return 2;
     (void)&kf_yuv_row; (void)&kf_yuv_row_f;
-    /* argv[1..17] numbers, [18] ys, [19] cs, [20] out */
-    unsigned v[17];
-    for (int i = 0; i < 17; i++) v[i] = (unsigned)strtoul(argv[i + 1], 0, 10);
-    size_t yn, cn; unsigned char *ys = slurp(argv[18], &yn), *cs = slurp(argv[19], &cn);
+    unsigned v[19]; int m[12];
+    for (int i = 0; i < 19; i++) v[i] = (unsigned)strtoul(argv[i + 1], 0, 10);
+    for (int i = 0; i < 12; i++) m[i] = (int)strtol(argv[i + 20], 0, 10);
+    size_t yn, cn; unsigned char *ys = slurp(argv[32], &yn), *cs = slurp(argv[33], &cn);
+    kf_yuv_args a = { ys, cs, v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8], v[9], v[10],
+                      v[11], v[12], v[13], v[14], v[15], v[16], v[17], v[18],
+                      { m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8], m[9], m[10], m[11] } };
     unsigned fw = v[12], fh = v[13];
 #ifdef FLOAT_DST
     float *dst = calloc((size_t)fw * fh, 16);
     for (unsigned row = 0; row < v[11]; row++)
         for (unsigned t = 0; t < KF_YUV_THREADS; t++)
-            kf_yuv_row_f(ys, cs, dst, v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8], v[9],
-                         v[10], v[11], fw, fh, v[14], v[15], v[16], row, t);
-    FILE *f = fopen(argv[20], "wb"); fwrite(dst, 16, (size_t)fw * fh, f); fclose(f);
+            kf_yuv_row_f(&a, dst, row, t);
+    FILE *f = fopen(argv[34], "wb"); fwrite(dst, 16, (size_t)fw * fh, f); fclose(f);
     return 0;
 #else
     unsigned int *dst = calloc((size_t)fw * fh, 4);
     for (unsigned row = 0; row < v[11]; row++)
         for (unsigned t = 0; t < KF_YUV_THREADS; t++)
-            kf_yuv_row(ys, cs, dst, v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8], v[9],
-                       v[10], v[11], fw, fh, v[14], v[15], v[16], row, t);
-    FILE *f = fopen(argv[20], "wb"); fwrite(dst, 4, (size_t)fw * fh, f); fclose(f);
+            kf_yuv_row(&a, dst, row, t);
+    FILE *f = fopen(argv[34], "wb"); fwrite(dst, 4, (size_t)fw * fh, f); fclose(f);
     return 0;
 #endif
 }
@@ -88,7 +94,13 @@ fn noise(n: usize, seed: u64) -> Vec<u8> {
 
 #[allow(clippy::too_many_arguments)]
 fn case(exe: &Path, exe_f: &Path, dir: &Path, name: &str, l: &YuvPlan, fw: u32, fh: u32) {
-    let (ys, cs) = (noise(l.y_extent as usize, 1), noise(l.c_extent as usize, 7));
+    let ys = noise(l.y_extent as usize, 1);
+    // a packed format reads its chroma from plane 0: the reference gets the same bytes twice
+    let cs = if l.layout >= YUV_PACKED_YUYV {
+        ys.clone()
+    } else {
+        noise(l.c_extent as usize, 7)
+    };
     let (yp, cp_, op) = (
         dir.join(format!("{name}.y")),
         dir.join(format!("{name}.c")),
@@ -96,7 +108,7 @@ fn case(exe: &Path, exe_f: &Path, dir: &Path, name: &str, l: &YuvPlan, fw: u32, 
     );
     std::fs::write(&yp, &ys).unwrap();
     std::fs::write(&cp_, &cs).unwrap();
-    let args = [
+    let mut args: Vec<String> = [
         u32::from(l.block_linear),
         l.y_pitch,
         l.c_pitch,
@@ -114,9 +126,15 @@ fn case(exe: &Path, exe_f: &Path, dir: &Path, name: &str, l: &YuvPlan, fw: u32, 
         l.sub_x_log2,
         l.sub_y_log2,
         u32::from(l.vu_first),
-    ];
+        l.layout,
+        l.filter,
+    ]
+    .iter()
+    .map(u32::to_string)
+    .collect();
+    args.extend(l.fmt.iter().map(i32::to_string));
     let st = Command::new(exe)
-        .args(args.iter().map(u32::to_string))
+        .args(&args)
         .arg(&yp)
         .arg(&cp_)
         .arg(&op)
@@ -133,7 +151,7 @@ fn case(exe: &Path, exe_f: &Path, dir: &Path, name: &str, l: &YuvPlan, fw: u32, 
     );
     // the FP32 variant (the colour pipeline's frame): the same pixels as value / 255, alpha 1
     let st = Command::new(exe_f)
-        .args(args.iter().map(u32::to_string))
+        .args(&args)
         .arg(&yp)
         .arg(&cp_)
         .arg(&op)
@@ -191,7 +209,31 @@ fn plan(bl: bool, pitch_y: u32, pitch_c: u32, bh: u32) -> YuvPlan {
         sub_x_log2: 1,
         sub_y_log2: 1,
         vu_first: true,
+        layout: YUV_SEMI_PLANAR_8,
+        filter: 0,
+        fmt: BT709_LIMITED,
     }
+}
+
+/// NVKMS's REC601 8-bit limited-range FMT matrix (`nvkms-evo3.c` FMTMatrix row
+/// `FMT_COEFF_TYPE_REC601_YUV_8BPC_LTD_TO_RGB_16BPC_FULL`), sign-extended from 21 bits — a test
+/// oracle (public source), never product data.
+fn sx21(v: u32) -> i32 {
+    ((v << 11) as i32) >> 11
+}
+fn nvkms_601_ltd() -> [i32; 12] {
+    [
+        0x19A29, 0x12B3C, 0, 0x1F2038, 0x1F2F14, 0x12B3C, 0x1F9B52, 0x8819, 0, 0x12B3C, 0x20668,
+        0x1EEA18,
+    ]
+    .map(sx21)
+}
+fn nvkms_709_ltd() -> [i32; 12] {
+    [
+        0x1CCB7, 0x12B3C, 0, 0x1F06F1, 0x1F770C, 0x12B3C, 0x1FC933, 0x4D2D, 0, 0x12B3C, 0x21EDD,
+        0x1EDDDE,
+    ]
+    .map(sx21)
 }
 
 #[test]
@@ -212,13 +254,23 @@ fn the_kernel_body_is_the_reference_for_every_layout_and_scale() {
         fw,
         fh,
     );
-    // upscale and downscale, an offset origin and destination, a destination the frame edge cuts
-    let mut up = plan(false, 128, 128, 0);
-    (up.sx0, up.sy0, up.sw, up.sh, up.ox, up.oy, up.dw, up.dh) = (6, 4, 31, 23, 20, 10, 101, 85);
-    case(&exe, &exe_f, &dir, "upscale", &up, fw, fh);
-    let mut down = plan(false, 128, 128, 0);
-    (down.dw, down.dh, down.ox, down.oy) = (17, 11, 3, 5);
-    case(&exe, &exe_f, &dir, "downscale", &down, fw, fh);
+    // upscale and downscale (nearest and bilinear), an offset origin and destination, a
+    // destination the frame edge cuts
+    for filter in [0, 1] {
+        let mut up = plan(false, 128, 128, 0);
+        (up.sx0, up.sy0, up.sw, up.sh, up.ox, up.oy, up.dw, up.dh) = (6, 4, 31, 23, 20, 10, 101, 85);
+        up.filter = filter;
+        case(&exe, &exe_f, &dir, &format!("upscale{filter}"), &up, fw, fh);
+        let mut down = plan(false, 128, 128, 0);
+        (down.dw, down.dh, down.ox, down.oy) = (17, 11, 3, 5);
+        down.filter = filter;
+        case(&exe, &exe_f, &dir, &format!("downscale{filter}"), &down, fw, fh);
+        // an odd origin with 4:2:0 chroma (the chroma clamp at both ends)
+        let mut odd = plan(false, 128, 128, 0);
+        (odd.sx0, odd.sy0, odd.sw, odd.sh, odd.dw, odd.dh) = (7, 5, 33, 27, 70, 61);
+        odd.filter = filter;
+        case(&exe, &exe_f, &dir, &format!("odd{filter}"), &odd, fw, fh);
+    }
     // 4:2:2, 4:4:4, UV order
     let mut p422 = plan(false, 128, 128, 0);
     (p422.sub_y_log2, p422.vu_first) = (0, false);
@@ -226,17 +278,56 @@ fn the_kernel_body_is_the_reference_for_every_layout_and_scale() {
     let mut p444 = plan(false, 128, 128, 0);
     (p444.sub_x_log2, p444.sub_y_log2) = (0, 0);
     case(&exe, &exe_f, &dir, "p444", &p444, fw, fh);
+    // 16-bit containers (P010-class): luma 2 bytes a pixel, chroma 4 bytes a pair
+    let mut p010 = plan(false, 128, 128, 0);
+    p010.layout = YUV_SEMI_PLANAR_16;
+    case(&exe, &exe_f, &dir, "p010", &p010, fw, fh);
+    p010.filter = 1;
+    (p010.sx0, p010.sw, p010.dw, p010.dh) = (3, 41, 97, 77);
+    case(&exe, &exe_f, &dir, "p010-scaled", &p010, fw, fh);
+    // packed 4:2:2 (one plane), both orders, nearest and bilinear
+    for (name, layout) in [("yuyv", YUV_PACKED_YUYV), ("uyvy", YUV_PACKED_UYVY)] {
+        let mut p = plan(false, 128, 128, 0);
+        (p.layout, p.sub_y_log2, p.vu_first) = (layout, 0, false);
+        case(&exe, &exe_f, &dir, name, &p, fw, fh);
+        (p.sx0, p.sy0, p.sw, p.sh, p.dw, p.dh, p.filter) = (5, 2, 51, 40, 110, 80, 1);
+        case(&exe, &exe_f, &dir, &format!("{name}-scaled"), &p, fw, fh);
+    }
+    // the window's own matrix (NVKMS's BT.601 limited, and a hostile one: huge, negative)
+    let mut m601 = plan(false, 128, 128, 0);
+    m601.fmt = nvkms_601_ltd();
+    case(&exe, &exe_f, &dir, "fmt601", &m601, fw, fh);
+    m601.fmt = [
+        -(1 << 20),
+        (1 << 20) - 1,
+        -(1 << 20),
+        -(1 << 20),
+        (1 << 20) - 1,
+        0,
+        (1 << 20) - 1,
+        (1 << 20) - 1,
+        3,
+        -7,
+        65_536,
+        0,
+    ];
+    case(&exe, &exe_f, &dir, "fmt-extreme", &m601, fw, fh);
     // block-linear, every block height; 128 GOBs-wide enough for 64 luma bytes / 128 chroma bytes
     for bh in 0..=3 {
         let mut p = plan(true, 4, 4, bh);
         (p.sx0, p.sy0, p.sw, p.sh, p.dw, p.dh) = (5, 3, 50, 41, 90, 70);
         case(&exe, &exe_f, &dir, &format!("bl{bh}"), &p, fw, fh);
+        p.filter = 1;
+        case(&exe, &exe_f, &dir, &format!("bl{bh}-bilinear"), &p, fw, fh);
+        p.layout = YUV_SEMI_PLANAR_16;
+        case(&exe, &exe_f, &dir, &format!("bl{bh}-16"), &p, fw, fh);
     }
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// Known answers of the NV12/NV21 arithmetic (BT.709, limited range): black, white, grey, and the
-/// primaries, as the 8.8 fixed-point formula gives them.
+/// Known answers of the conversion: the console's own BT.709 limited matrix (black, white, grey,
+/// the primaries), and NVKMS's FMT matrices through the same arithmetic — what the guest programs is
+/// what the console uses.
 #[test]
 fn yuv_known_values() {
     let px = |y, u, v| yuv_to_xrgb(y, u, v) & 0x00ff_ffff;
@@ -247,7 +338,7 @@ fn yuv_known_values() {
         0x0080_8080,
         "mid grey (126 -> 128 after the 255/219 gain)"
     );
-    // BT.709 red / green / blue at full saturation (integer coefficients: within 2 of the ideal)
+    // BT.709 red / green / blue at full saturation (within 2 of the ideal)
     let near = |got: u32, want: [i32; 3]| {
         let c = [(got >> 16) & 255, (got >> 8) & 255, got & 255].map(|x| x as i32);
         assert!(
@@ -259,4 +350,31 @@ fn yuv_known_values() {
     near(px(173, 42, 26), [0, 255, 0]);
     near(px(32, 240, 118), [0, 0, 255]);
     assert_eq!(yuv_to_xrgb(0, 0, 0) >> 24, 0xff, "opaque");
+    // NVKMS's own matrices: 709 gives the same answers; 601 the 601 ones (red = 81,90,240)
+    let s = |v: u8| u32::from(v) << 8;
+    let n709 = nvkms_709_ltd();
+    near(
+        yuv_convert(&n709, s(63), s(102), s(240)) & 0xff_ffff,
+        [255, 0, 0],
+    );
+    assert_eq!(
+        yuv_convert(&n709, s(235), s(128), s(128)) & 0xff_ffff,
+        0xff_ffff
+    );
+    assert_eq!(yuv_convert(&n709, s(16), s(128), s(128)) & 0xff_ffff, 0);
+    let n601 = nvkms_601_ltd();
+    near(
+        yuv_convert(&n601, s(81), s(90), s(240)) & 0xff_ffff,
+        [255, 0, 0],
+    );
+    near(
+        yuv_convert(&n601, s(145), s(54), s(34)) & 0xff_ffff,
+        [0, 255, 0],
+    );
+    // 10-bit in a 16-bit container: 940 (white) << 6 and 64 (black) << 6
+    assert_eq!(
+        yuv_convert(&n709, 940 << 6, 512 << 6, 512 << 6) & 0xff_ffff,
+        0xff_ffff
+    );
+    assert_eq!(yuv_convert(&n709, 64 << 6, 512 << 6, 512 << 6) & 0xff_ffff, 0);
 }

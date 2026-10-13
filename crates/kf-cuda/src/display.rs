@@ -463,6 +463,13 @@ pub struct YuvLayer {
     pub sub_y_log2: u32,
     /// The chroma pair is V then U.
     pub vu_first: bool,
+    /// ★ 2026-10-14: the storage (`kf_disp::scanout::YUV_SEMI_PLANAR_8` = 0, `_16` = 1, packed
+    /// YUYV = 2, UYVY = 3; a packed layout reads its chroma from the luma plane).
+    pub layout: u32,
+    /// 0 = nearest, 1 = bilinear.
+    pub filter: u32,
+    /// The 3x4 S4.16 FMT matrix (rows R, G, B over V, Y, U, 1).
+    pub fmt: [i32; 12],
 }
 
 impl YuvLayer {
@@ -470,15 +477,24 @@ impl YuvLayer {
     /// and its writes inside the `fw` x `fh` frame.
     fn check(&self, fw: u32, fh: u32) -> Result<(), String> {
         let l = *self;
-        let fits = |a: u32, n: u32, room: u32| u64::from(a) + u64::from(n) <= u64::from(room);
         if l.sw == 0 || l.sh == 0 || l.dw == 0 || l.dh == 0 || l.dw > 16384 || l.dh > 16384 {
             return Err(format!("{l:?} is not a composable rectangle"));
         }
-        if l.sw > 16384 || l.sh > 16384 || l.sub_x_log2 > 1 || l.sub_y_log2 > 1 {
+        if l.sw > 16384 || l.sh > 16384 || l.sub_x_log2 > 1 || l.sub_y_log2 > 1 || l.layout > 3
+            || l.filter > 1
+        {
             return Err(format!("{l:?}: source geometry outside the kernel's range"));
         }
-        if !fits(l.ox, l.dw, fw) || !fits(l.oy, l.dh, fh) {
-            return Err(format!("{l:?} leaves the {fw}x{fh} frame"));
+        // ⊘ 2026-10-14: the destination may extend past the frame (its scale is the window's); the
+        // kernel skips every write outside it, and the launch covers only the visible rows
+        if l.ox >= fw || l.oy >= fh {
+            return Err(format!("{l:?} starts outside the {fw}x{fh} frame"));
+        }
+        // packed: the chroma is in plane 0, in the luma rows
+        if l.layout >= 2
+            && (l.sub_x_log2 != 1 || l.sub_y_log2 != 0 || l.c_src != l.y_src || l.c_pitch != l.y_pitch)
+        {
+            return Err(format!("{l:?}: a packed layout reads one plane"));
         }
         let x_end = u64::from(l.sx0) + u64::from(l.sw);
         let y_end = u64::from(l.sy0) + u64::from(l.sh);
@@ -501,8 +517,13 @@ impl YuvLayer {
                 Ok((ye - 1) * u64::from(pitch) + xe * bpp)
             }
         };
-        if need(l.y_pitch, 1, x_end, y_end)? > l.y_extent
-            || need(l.c_pitch, 2, cx_end, cy_end)? > l.c_extent
+        let (luma_bytes, chroma_bytes) = match l.layout {
+            0 => (1, 2),
+            1 => (2, 4),
+            _ => (2, 0),
+        };
+        if need(l.y_pitch, luma_bytes, x_end, y_end)? > l.y_extent
+            || (chroma_bytes != 0 && need(l.c_pitch, chroma_bytes, cx_end, cy_end)? > l.c_extent)
         {
             return Err(format!(
                 "{l:?}: the planes need more bytes than their extents"
@@ -886,10 +907,11 @@ impl DisplayGpu {
         let ys = self.at(l.y_src, ny, what)?;
         let cs = self.at(l.c_src, nc, what)?;
         let u = |x: u32| x.to_le_bytes().to_vec();
+        // ★ 2026-10-14: `dst` first, then `KF_YUV_PARAMS` (`cuda/display/kf_yuv.cu`)
         let mut params = vec![
+            dst.to_le_bytes().to_vec(),
             ys.to_le_bytes().to_vec(),
             cs.to_le_bytes().to_vec(),
-            dst.to_le_bytes().to_vec(),
             u(u32::from(l.block_linear)),
             u(l.y_pitch),
             u(l.c_pitch),
@@ -907,9 +929,14 @@ impl DisplayGpu {
             u(l.sub_x_log2),
             u(l.sub_y_log2),
             u(u32::from(l.vu_first)),
+            u(l.layout),
+            u(l.filter),
         ];
+        params.extend(l.fmt.iter().map(|c| c.to_le_bytes().to_vec()));
+        // only the rows the frame shows (the kernel guards the columns)
+        let rows = l.dh.min(h.saturating_sub(l.oy));
         self.cu
-            .launch_args(self.stream, f, l.dh, 256, 0, &mut params, what)
+            .launch_args(self.stream, f, rows, 256, 0, &mut params, what)
     }
 
     /// Begin a colour composition, retaining FP16 values in an FP32 container until output.
@@ -1966,8 +1993,8 @@ mod tests {
     }
 
     /// ★ The committed YUV PTX was generated from the committed source (re-run
-    /// `cuda/display/make_yuv_ptx.sh`), declares the parameters the launch passes (3 pointers and 17
-    /// u32), and is ASCII.
+    /// `cuda/display/make_yuv_ptx.sh`), declares the parameters the launch passes (3 pointers, 19
+    /// u32 and the 12 FMT words: 34), and is ASCII.
     #[test]
     fn the_yuv_ptx_was_made_from_the_committed_source_and_matches_its_launch() {
         let src = include_bytes!("../../../cuda/display/kf_yuv.cu");
@@ -1989,7 +2016,7 @@ mod tests {
                 .nth(1)
                 .expect("the entry");
             let params = head.split(')').next().unwrap().split(',').count();
-            assert_eq!(params, 20, "{entry}");
+            assert_eq!(params, 34, "{entry}");
             assert_eq!(
                 head.split(')')
                     .next()
@@ -2024,6 +2051,9 @@ mod tests {
             sub_x_log2: 1,
             sub_y_log2: 1,
             vu_first: true,
+            layout: 0,
+            filter: 0,
+            fmt: [0; 12],
         };
         // luma needs (48-1)*128+64, chroma (24-1)*128+64
         let ok = YuvLayer {
@@ -2031,8 +2061,27 @@ mod tests {
             ..ok
         };
         assert_eq!(ok.check(120, 90), Ok(()));
-        assert!(ok.check(109, 90).is_err(), "right edge");
-        assert!(ok.check(120, 69).is_err(), "bottom edge");
+        // ⊘ 2026-10-14: a destination past the frame edge is drawn clipped (the kernel guards the
+        // writes); one that STARTS outside the frame is refused
+        assert_eq!(ok.check(109, 69), Ok(()), "right and bottom edges cut");
+        assert!(ok.check(10, 90).is_err(), "starts right of the frame");
+        assert!(ok.check(120, 10).is_err(), "starts below the frame");
+        assert!(YuvLayer { layout: 4, ..ok }.check(120, 90).is_err());
+        assert!(YuvLayer { filter: 2, ..ok }.check(120, 90).is_err());
+        // 16-bit containers need twice the luma row
+        assert!(YuvLayer { layout: 1, ..ok }.check(120, 90).is_err());
+        let packed = YuvLayer {
+            layout: 2,
+            sub_y_log2: 0,
+            y_extent: 47 * 128 + 128,
+            c_extent: 47 * 128 + 128,
+            ..ok
+        };
+        assert_eq!(packed.check(120, 90), Ok(()));
+        assert!(
+            YuvLayer { c_pitch: 64, ..packed }.check(120, 90).is_err(),
+            "a packed layout reads one plane"
+        );
         assert!(
             YuvLayer {
                 y_extent: 47 * 128 + 63,
