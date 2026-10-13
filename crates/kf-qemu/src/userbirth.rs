@@ -197,6 +197,14 @@ impl<V> Book<V> {
         Ok(())
     }
 
+    /// ★ Device reset: the guest clients with a USER-ring birth still pending.
+    pub(crate) fn clients(&self) -> Vec<u32> {
+        self.pending
+            .lock()
+            .map(|m| m.keys().map(|k| k.0).collect())
+            .unwrap_or_default()
+    }
+
     /// Statement-time subtree cancellation, before the caller removes live
     /// channels. Taken leases remain owned by their acts; failed commit then
     /// requires confirmed native-free/never-born cleanup by that act.

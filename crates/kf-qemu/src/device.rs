@@ -19,7 +19,7 @@ use kf_chip::bar0::{
     vbios_profile,
 };
 use kf_core::{HostOps, HostSlice, Plane, Step, Translatable, Vmm};
-use kf_gsp::{CommandPolicy, GspFsm, GuestRam, RamRefused};
+use kf_gsp::{GspFsm, GuestRam, RamRefused};
 use kf_linux_raw::{Notifier, PollTimeout, Poller, ReadyTokens};
 use kf_trap::{Action, Class, Route, WriteSemantics};
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
@@ -154,13 +154,28 @@ impl HoleShadow {
         off.checked_sub(self.base)
             .and_then(|r| self.words.get((r / 4) as usize))
     }
+
+    /// ★ Device reset: the page's words as [`HoleShadow::new`] filled them.
+    fn reset(&self, boot: &[BootReg]) {
+        for w in &self.words {
+            w.store(0, Ordering::Release);
+        }
+        for r in boot
+            .iter()
+            .filter(|r| (self.base..self.base + kf_trap::memmap::PAGE).contains(&r.off))
+        {
+            self.words[((r.off - self.base) / 4) as usize].store(r.value, Ordering::Release);
+        }
+    }
 }
 
 /// The GSP side the drainer owns.
 struct Gsp {
     fsm: GspFsm,
     model: std::sync::Arc<dyn GspModel>,
-    policy: Box<dyn CommandPolicy>,
+    /// ★ The served chain behind its fn-1 re-selection — concrete, so a device reset can rebuild it
+    /// ([`kf_rm::ReselectAtFn1::reset_life`]).
+    policy: kf_rm::ReselectAtFn1,
     /// The value last PUBLISHED per BAR0 offset — [`Device::publish`] stores only what changed.
     published: std::collections::HashMap<u64, u64>,
 }
@@ -255,7 +270,7 @@ pub struct Device {
     pub config_words: Vec<ConfigWord>,
     vbios: Vec<u8>,
     worker_efd: &'static Notifier,
-    drainer_efd: &'static Notifier,
+    pub(crate) drainer_efd: &'static Notifier,
     /// ★ P5: the channel plane (the guest kernel's CE channels, Translated).
     pub chans: &'static crate::chan::ChanPlane,
     /// ★ P1+P2 inc B (`docs/design/V3_P1P2_TSPACE.md` §2): the T-space, built once at prewarm
@@ -318,6 +333,11 @@ pub struct Device {
     /// ★ DIAGNOSTIC, default off (`KF3_BAR0_READ_TRACE=1`, [`crate::readtrace`]): the BAR0 access
     /// trace in the VFIO reference's record format. Off: the C device takes none of its paths.
     pub trace: crate::readtrace::AccessTrace,
+    /// ★★ The device reset (`docs/design/V3_DEVICE_RESET.md`): the vCPU gate and the drainer's
+    /// sequence ([`crate::reset`]).
+    pub reset: crate::reset::Reset,
+    /// The VM's deferred-API tables (OWNER_RULINGS §U) — per guest life, cleared by a reset.
+    defapi_reg: std::sync::Arc<kf_rm::defapi::Registry>,
 }
 
 impl Device {
@@ -973,8 +993,7 @@ impl Device {
         } else {
             kf_rm::GuestDriverSource::Defaulted
         };
-        let policy: Box<dyn kf_gsp::CommandPolicy> =
-            Box::new(kf_rm::ReselectAtFn1::new(*table, source, build));
+        let policy = kf_rm::ReselectAtFn1::new(*table, source, build);
         let model: std::sync::Arc<dyn GspModel> = std::sync::Arc::from(
             family
                 .gsp_model(implementation, cfg.fb_mb)
@@ -1190,6 +1209,8 @@ impl Device {
             b5_logged: AtomicU64::new(0),
             fn47_logged: AtomicU64::new(0),
             trace,
+            reset: crate::reset::Reset::default(),
+            defapi_reg,
         })
     }
 
@@ -1222,6 +1243,17 @@ impl Device {
     /// Register a BAR0 shadow piece QEMU allocated (a ROM device's RAM) at BAR0 offset `base`, and
     /// fill it: zeros, the boot registers, the PROM window's VBIOS bytes, the timer PLM.
     pub fn attach_shadow(&self, base: u64, mem: RawRegion) {
+        self.fill_piece(base, mem);
+        if let Ok(mut s) = self.staged.lock() {
+            s.push(Piece { base, mem });
+        }
+    }
+
+    /// What a shadow piece holds before the guest's first access: the boot registers, the PROM
+    /// window's VBIOS bytes and the timer PLM over QEMU's zeroed ROM-device RAM. ONE function for
+    /// realize ([`Device::attach_shadow`]) and the device reset ([`Device::restore_shadow`], which
+    /// zeroes first), so the two cannot differ.
+    fn fill_piece(&self, base: u64, mem: RawRegion) {
         let end = base + mem.len() as u64;
         for r in &self.boot {
             if (base..end).contains(&r.off) {
@@ -1242,9 +1274,6 @@ impl Device {
             if (base..end).contains(&off) {
                 mem.store_u32((off - base) as usize, v);
             }
-        }
-        if let Ok(mut s) = self.staged.lock() {
-            s.push(Piece { base, mem });
         }
     }
 
@@ -1347,6 +1376,16 @@ impl Device {
     /// their auto-increment needs the boot sequence's state, which lives under the GSP lock a vCPU
     /// may not take (named open item, unchanged by w828).
     pub fn bar0_read(&self, off: u64, width: u8) -> u64 {
+        // ★ Device reset: a device in reset answers no read with a side effect — all ones, what a
+        // PCI read of a function that does not respond returns (`docs/design/V3_DEVICE_RESET.md`).
+        let Some(_pass) = self.reset.gate.enter() else {
+            return match width {
+                1 => 0xff,
+                2 => 0xffff,
+                4 => 0xffff_ffff,
+                _ => u64::MAX,
+            };
+        };
         let v = self.bar0_read_served(off, width);
         // ★ DIAGNOSTIC (`KF3_BAR0_TRACE`, default off): one atomic load when off.
         self.chans.bar0trace.note(
@@ -1429,6 +1468,11 @@ impl Device {
     /// back what was written, as hardware does), the plane's trap, and at most one eventfd write
     /// when a waiter is parked. ⊘ Never blocks, never services.
     pub fn bar0_write(&self, off: u64, val: u64, width: u8) {
+        // ★★ Device reset (`docs/design/V3_DEVICE_RESET.md`): one atomic add/subtract; while the
+        // device is in reset the write is dropped (counted) — never queued for the next life.
+        let Some(_pass) = self.reset.gate.enter() else {
+            return;
+        };
         // ★ DIAGNOSTIC (`KF3_BAR0_TRACE`, default off): one atomic load when off. The next RPC's
         // queue-head write closes an open window.
         self.chans.bar0trace.note(
@@ -1956,6 +2000,53 @@ impl Device {
             }
             let _ = self.mem.inbox.wake.drain();
             self.serve_cache_ops(&mut cache_done);
+            // ★★ Device reset, stage Memory (`docs/design/V3_DEVICE_RESET.md` §3): the channel plane
+            // freed every guest client already. The old life's queued walks are dropped at once; a
+            // walk in flight is left to land (the GPU's report into a slot the reset then empties)
+            // — polled, never waited for — and only then is the plane reset. No statement of the
+            // old life is applied but its `Retire`s.
+            if let Some(epoch) = self.mem.inbox.life_reset.owed() {
+                let _ = m.abandon_life();
+                if m.in_flight() {
+                    let _ = m.on_walk_ready(trigger);
+                    let _ = m.take_splits();
+                }
+                if !m.in_flight() {
+                    let _ = m.abandon_life();
+                    let mut statements = 0usize;
+                    for st in self.mem.inbox.take() {
+                        taken += 1;
+                        if matches!(st, kf_rm::barpde::MemStatement::Retire { .. }) {
+                            let _ = crate::mem::apply_statement(
+                                &mut m,
+                                &self.mem,
+                                self.rm,
+                                self.store.handle,
+                                st,
+                                trigger,
+                            );
+                        } else {
+                            statements += 1;
+                        }
+                    }
+                    let splits = self.mem.inbox.reset_life();
+                    let line = crate::mem::reset_memory_life(&mut m, &self.mem, self.rm);
+                    last_seq = None;
+                    armed_seen = None;
+                    cache_done = [0u64; kf_trap::cacheop::CacheOp::COUNT];
+                    bar1_phys = crate::bar1phys::PhysicalViewDue::default();
+                    bar1_view_last = None;
+                    self.publish_trigger();
+                    let _ = self.mem.inbox.settle(taken);
+                    self.mem.inbox.life_reset.done(epoch);
+                    let _ = self.drainer_efd.signal();
+                    eprintln!(
+                        "kf3: mem t={:.3}s device reset #{epoch}: {statements} statement(s) and {splits} split(s) of the old life dropped; {line}",
+                        self.born.elapsed().as_secs_f64()
+                    );
+                }
+                continue;
+            }
             for st in self.mem.inbox.take() {
                 taken += 1;
                 let line = crate::mem::apply_statement(
@@ -2340,6 +2431,30 @@ impl Device {
             if self.dbfast.service_ready(self) > 0 && spin.is_some() {
                 last_delivery = Some(std::time::Instant::now());
             }
+            // ★★ Device reset (`docs/design/V3_DEVICE_RESET.md`): while one is pending the drainer
+            // runs nothing of the guest's (no privileged write, no held reply, no RC/hotplug/preempt
+            // delivery) — it drives the reset's stages, keeps acknowledging the doorbell registry
+            // (the act thread's deregistrations wait for it; deliveries are absorbed), and polls with
+            // a 1 ms wait instead of parking. Every stage is non-blocking.
+            if self.reset.pending() {
+                if let crate::reset::Progress::Completed(e) = self.reset.poll(self) {
+                    eprintln!(
+                        "kf3: device reset #{e} COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: {})",
+                        self.reset.gate.dropped()
+                    );
+                }
+                if self.reset.pending() {
+                    let mut ready = ReadyTokens::new();
+                    let got = poller.wait(&mut ready, PollTimeout::Millis(1));
+                    let _ = self.drainer_efd.drain();
+                    if got.is_ok() {
+                        let _ = self
+                            .dbfast
+                            .on_ready(&ready, std::time::Instant::now(), self);
+                    }
+                }
+                continue;
+            }
             let seen = self.plane.drainer_wake.seen();
             if self.plane.drainer_pass(self, 256) > 0 {
                 if after_timeout {
@@ -2456,6 +2571,15 @@ impl Device {
     /// One line of counters and the GSP phase — for the boot log, never a decision input.
     #[must_use]
     pub fn status_line(&self) -> String {
+        let line = self.status_line_inner();
+        if self.reset.requested() == 0 {
+            line
+        } else {
+            format!("{line} {}", self.reset.status())
+        }
+    }
+
+    fn status_line_inner(&self) -> String {
         let c = &self.counters;
         let o = Ordering::Relaxed;
         let (phase, refusals) = self
@@ -2812,6 +2936,12 @@ impl Device {
                 // `kbusStatePreUnload`): the second of the two triggers (`crate::bar1phys`).
                 if u.gives_bar1_up() && self.gop.is_some() {
                     self.mem.inbox.request_bar1_physical();
+                    // ★★ 2026-10-13 (owner requirement, `docs/design/V3_DEVICE_RESET.md` §6): the
+                    // display goes back to the boot framebuffer — GSP-RM's unload ends the display's
+                    // guest life, and BAR1 `[0, G)` reaches store `[0, G)` again from here.
+                    if let Some(dp) = self.display {
+                        dp.rm_unloaded();
+                    }
                 }
             }
             Err(e) if log => {
@@ -3284,6 +3414,131 @@ impl Device {
     }
 }
 
+impl Device {
+    /// ★★ **QEMU reset the PCI function** (`kf3_device_reset`, the C device's Resettable `hold`
+    /// phase; `docs/design/V3_DEVICE_RESET.md`). Main loop or a vCPU in a bridge's config write,
+    /// BQL held: closes the vCPU gate, counts the request and wakes the drainer — NOTHING else, and
+    /// nothing that waits. The drainer runs the reset ([`crate::reset::Reset::poll`]).
+    pub fn request_reset(&self) -> u64 {
+        let n = self.reset.request();
+        let _ = self.drainer_efd.signal();
+        n
+    }
+
+    /// ★ Device reset, stage Finish: the BAR0 register shadow as realize left it — every shadow
+    /// piece zeroed and refilled exactly as [`Device::attach_shadow`] filled it (boot registers,
+    /// the VBIOS image, the timer PLM), every hole page as built, and then what [`Device::seal_shadow`]
+    /// published (the GSP registers, the display's static words and events) plus the reset
+    /// interrupt tree's read-back. Drainer only (it owns publication); the vCPU gate is closed, so
+    /// no guest write lands in between.
+    fn restore_shadow(&self) {
+        if let Some(pieces) = self.pieces.get() {
+            for p in pieces {
+                let zero = vec![0u8; p.mem.len()];
+                p.mem.write_from(0, &zero);
+                self.fill_piece(p.base, p.mem);
+            }
+        }
+        for h in &self.holes {
+            h.reset(&self.boot);
+        }
+        if let Ok(mut g) = self.gsp.lock() {
+            g.published.clear();
+            self.publish(&mut g);
+        }
+        if let Some(dp) = self.display {
+            for (o, v) in dp.static_words() {
+                self.shadow_store(o, u64::from(v), 4);
+            }
+            dp.publish_events(&|o, v| self.shadow_store(o, u64::from(v), 4));
+        }
+        self.intr
+            .shadow_all(|o, v| self.shadow_store(o, u64::from(v), 4));
+    }
+}
+
+/// ★★ The device's owners of tier-B state, as the reset's coordinator drives them — every method
+/// on the register drainer, none blocking (`docs/design/V3_DEVICE_RESET.md` §3).
+impl crate::reset::Owners for Device {
+    fn reset_drainer_state(&self, epoch: u64) {
+        let dropped = self.plane.ring.discard_all();
+        let (phase, held) = match self.gsp.lock() {
+            Ok(mut g) => {
+                let phase = g.fsm.phase();
+                let held = g.fsm.held_len();
+                // E11: the GSP state machine rebuilt (the system-info cell is the chain's and stays)
+                let _ = g.fsm.device_reset();
+                // a fresh chain for the realize-time table: the object graph, channel/VA/display
+                // rows and sticky guards of the old life go with the old chain
+                g.policy.reset_life();
+                g.published.clear();
+                (phase, held)
+            }
+            Err(_) => (kf_arch::BootPhase::Cold, 0),
+        };
+        if let Ok(mut q) = self.held_stamps.lock() {
+            q.clear();
+        }
+        self.hotplug_pending.store(0, Ordering::Release);
+        self.chain_logs.os_events.clear();
+        let defapi = self.defapi_reg.clear_life();
+        if let Some(st) = &self.gss_native {
+            st.new_boot();
+        }
+        self.intr.reset();
+        if let Some(f) = &self.fsp {
+            f.reset();
+        }
+        eprintln!(
+            "kf3: device reset #{epoch}: vCPUs out (gate closed); {dropped} queued register write(s) dropped; GSP {phase:?} -> Cold (E11, {held} held repl(ies) dropped, never posted); chain rebuilt; os-event arms, {defapi} deferred-API entr(ies), interrupt tree{} cleared",
+            if self.fsp.is_some() { ", FSP EMEM" } else { "" }
+        );
+    }
+
+    fn begin_release(&self, epoch: u64) {
+        self.chans.reset_life(epoch);
+        if let Some(dp) = self.display {
+            dp.request_life_reset(epoch);
+        }
+    }
+
+    fn released(&self, epoch: u64) -> bool {
+        self.chans.life_reset.is_done(epoch)
+            && self.display.is_none_or(|dp| dp.life_reset.is_done(epoch))
+    }
+
+    fn begin_memory(&self, epoch: u64) {
+        self.mem.inbox.life_reset.request(epoch);
+        let _ = self.mem.inbox.wake.signal();
+    }
+
+    fn memory_done(&self, epoch: u64) -> bool {
+        self.mem.inbox.life_reset.is_done(epoch)
+    }
+
+    fn finish(&self, epoch: u64) {
+        let busy = self.plane.reset_tokens();
+        self.restore_shadow();
+        // An interrupt raised for the old life and still counted in a vector's eventfd (QEMU's
+        // msix_reset already released every KVM route) would be injected at the next life's first
+        // unmask: drained here, after everything that could raise one has stopped.
+        let mut stale = 0u64;
+        for l in &self.irq_lines {
+            stale += l.drain().unwrap_or(0);
+        }
+        eprintln!(
+            "kf3: device reset #{epoch}: tokens swept ({busy} still BUSY), register shadow restored and republished, {stale} stale interrupt(s) drained"
+        );
+    }
+
+    fn stalled(&self, stage: crate::reset::Stage, epoch: u64, waited: std::time::Duration) {
+        eprintln!(
+            "kf3: ⚠ device reset #{epoch} WAITING at {stage:?} for {waited:?} — the gate stays closed (a device that cannot reset accepts nothing); {}",
+            self.reset.status()
+        );
+    }
+}
+
 /// ★ P5c: the RC fd's poller tag, past every engine's (`OTHER_TAG_BASE + engine index`).
 const RC_TAG_OFFSET: u64 = 1 << 16;
 
@@ -3327,6 +3582,11 @@ impl GuestRam for Ram<'_> {
 /// ⊘ Only the transport differs from `bar0_write`; nothing here reads a pushbuffer or a cursor.
 impl kf_chan::dbfast::Sink for Device {
     fn deliver(&self, idx: u32, value: u32, _tag: u64) -> Delivered {
+        // ★ Device reset: a doorbell counted in the kernel while the device is in reset is the old
+        // life's — absorbed, exactly as a retired token absorbs it (the trap path is gated too).
+        if self.reset.pending() {
+            return Delivered::Absorbed;
+        }
         let off = u32::try_from(kf_trap::memmap::VF_USERMODE_PAGE + self.plane.doorbell.offset())
             .unwrap_or(u32::MAX);
         let route = self.plane.tokens.get(idx as usize).map(|w| w.load().route);
@@ -3446,7 +3706,7 @@ impl HostOps for Device {
         match g.fsm.mmio_write_with(
             &mut ram,
             g.model.as_ref(),
-            g.policy.as_mut(),
+            &mut g.policy,
             bar,
             u64::from(offset),
             value,
@@ -3461,7 +3721,7 @@ impl HostOps for Device {
             self.counters.serviced.fetch_add(1, Ordering::Relaxed);
             match g
                 .fsm
-                .service_one_deferred_command(&mut ram, g.policy.as_mut())
+                .service_one_deferred_command(&mut ram, &mut g.policy)
             {
                 Ok(r) => {
                     n_cmds += r.commands.len();

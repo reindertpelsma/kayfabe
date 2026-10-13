@@ -1299,6 +1299,19 @@ enum Dark {
 /// screen on bare metal; ten times the longest measured transient is the margin.
 const WINDOWLESS_HOLD: Duration = Duration::from_millis(250);
 
+/// ★ What the console holds when a guest life ends ([`DisplayPlane::rm_unloaded`], a device reset):
+/// nothing the guest left — no preserved scanout — and, if a guest scanout was ever shown, it is
+/// LOST: with the boot display the boot layer is chosen first anyway (`boot_done` goes back to
+/// `false`); without it (`gop=off`) the monitor shows black, the bare-metal answer for a monitor
+/// whose scanout went away, never the old life's last frame.
+fn held_after_life_reset(prev: &Held) -> Held {
+    Held {
+        preserved: None,
+        scanned: prev.scanned,
+        dark: Dark::Unlit,
+    }
+}
+
 /// ★★ Choose what the console shows. The boot layer is chosen BEFORE the window vocabulary's gate
 /// (`console_composition` is `None` without a `ScanVocab`, as on GB20x), so every family shows the
 /// boot picture; it is shown only while no head has ever been armed (`boot_done` is sticky), and
@@ -1674,6 +1687,36 @@ pub struct DisplayPlane {
     /// ★ The worker's `fps[...]` status fragment, the last window's (published with `try_lock`,
     /// read with `try_lock`: a diagnostic never waits).
     fps: Mutex<String>,
+    /// ★ Device reset (`docs/design/V3_DEVICE_RESET.md`): the epoch the display worker has reset its
+    /// per-life state for.
+    pub life_reset: crate::reset::Ack,
+    /// ★ The guest's RM gave the display up (fn 47 without a PM transition: GSP-RM's own unload) —
+    /// how many times; the worker ends the display's life at each ([`DisplayPlane::rm_unloaded`]).
+    unloads: AtomicU64,
+}
+
+impl DisplayPlane {
+    /// ★★ **The guest's RM unloaded** (`UNLOADING_GUEST_DRIVER` without `bInPMTransition`, observed
+    /// on the drainer): the display's guest life is over. GSP-RM's own unload destroys every display
+    /// object it held, so the worker drops the engine's channels and heads, the model's registry and
+    /// what the console held, and — with the boot display (`gop=on`) — shows the BOOT LAYER again:
+    /// store `[0, G)`, which BAR1 `[0, G)` reaches again from the same moment (RM's
+    /// `kbusStatePreUnload` → `kbusTeardownMailbox` put BAR1 back to physical mode,
+    /// `ogkm-580: src/nvidia/src/kernel/gpu/bus/arch/maxwell/kern_bus_gm107.c:746-787`; the
+    /// re-seed is `crate::bar1phys`), so what the firmware console, efifb/simpledrm or Windows'
+    /// basic display adapter draws there is what the monitor shows. Never waits: one counter, one
+    /// wake.
+    pub fn rm_unloaded(&self) {
+        self.unloads.fetch_add(1, Ordering::AcqRel);
+        let _ = self.wake.signal();
+    }
+
+    /// ★ Device reset: ask the worker to end the display's life for `epoch` (acknowledged on
+    /// [`DisplayPlane::life_reset`]).
+    pub fn request_life_reset(&self, epoch: u64) {
+        self.life_reset.request(epoch);
+        let _ = self.wake.signal();
+    }
 }
 
 impl std::fmt::Debug for DisplayPlane {
@@ -1947,6 +1990,8 @@ impl DisplayPlane {
             sdr_color: sdr_color.then_some((t, classes.window, classes.core)),
             cursor_vocab,
             ui_request: AtomicU64::new(0),
+            life_reset: crate::reset::Ack::default(),
+            unloads: AtomicU64::new(0),
             formats,
             boot: None,
             max_fps,
@@ -2511,8 +2556,10 @@ impl Device {
         let mut cursor_seen = [0u32; MAX_HEADS];
         let mut published_get = [u32::MAX; kf_disp::ports::NUM_CHANNELS];
         let mut logged_updates = 0u32;
-        // ★ The boot display: sticky once the guest arms its first head.
+        // ★ The boot display: sticky once the guest arms its first head — until a guest life ends
+        // (`DisplayPlane::rm_unloaded`, a device reset).
         let mut boot_done = false;
+        let mut unloads_seen = dp.unloads.load(Ordering::Acquire);
         // ★ B5 (`V3_DISPLAY.md` §4.11.13): what the console shows when nothing is scanned
         let mut shown_last: Option<u64> = None;
         let mut shown_lines = 0u32;
@@ -2555,6 +2602,48 @@ impl Device {
             let _ = poller.wait(&mut ready, PollTimeout::Millis(ms));
             let _ = dp.wake.drain();
             io.img = None;
+            // ★★ A guest life ended (`docs/design/V3_DEVICE_RESET.md`): a device reset, or the
+            // guest's RM unloading. Once no copy is in flight (its completion wakes this loop), every
+            // per-life piece of the worker goes back to what the loop started with; the queued
+            // completions of the old life are DROPPED — never written, never forged.
+            let owed = dp.life_reset.owed();
+            let unloads = dp.unloads.load(Ordering::Acquire);
+            if (owed.is_some() || unloads != unloads_seen) && scan.inflight.is_none() {
+                unloads_seen = unloads;
+                let channels = dp.model.lock().map_or(0, |mut m| m.reset_life());
+                engine.reset_life();
+                scan.reset_life();
+                held = held_after_life_reset(&held);
+                boot_done = false;
+                windowless_since = None;
+                let dropped = queue.len();
+                queue.clear();
+                gate = crate::vblankgate::VblankGate::default();
+                pacer = Pacer::new(cap);
+                edge_frame = [0u32; MAX_HEADS];
+                cursor_seen = [0u32; MAX_HEADS];
+                published_get = [u32::MAX; kf_disp::ports::NUM_CHANNELS];
+                parked_since.clear();
+                stall_reported.clear();
+                io.inst = None;
+                io.img = None;
+                shown_last = None;
+                eprintln!(
+                    "kf3: display: +{} ms the guest's display life ENDED ({}): {channels} model channel(s), {dropped} queued completion(s) dropped (never written){}",
+                    started.elapsed().as_millis(),
+                    if owed.is_some() { "device reset" } else { "its RM unloaded" },
+                    if dp.boot.is_some() {
+                        " — the boot layer is shown again"
+                    } else {
+                        ""
+                    }
+                );
+                if let Some(e) = owed {
+                    dp.life_reset.done(e);
+                    let _ = self.drainer_efd.signal();
+                }
+                continue;
+            }
             let mut effects: Vec<Effect> = Vec::new();
             let mut gets: Vec<(u32, u32, u32)> = Vec::new();
             // 1. statements (the model's lock, only to take them)
@@ -3846,6 +3935,29 @@ fn fnv_rgb_xrgb8888(bytes: &[u8], stride: usize, width: usize, height: usize) ->
 }
 
 impl ScanState {
+    /// ★ A guest life ends: forget what the old life's windows resolved to and what was composed,
+    /// and want a copy at once (the next pass shows what the new life shows: the boot layer, or
+    /// black). ⊘ Only with no copy in flight (the caller waits for its completion): its frame slot
+    /// and the completions waiting on it are the old life's. Kept: the frames (process-lifetime
+    /// page-locked memory), the GPU-copy rung, the broker refusal, the self-test verdict, a failed
+    /// GPU context (`failed` describes the device's own context, not the guest), the counters.
+    fn reset_life(&mut self) {
+        debug_assert!(self.inflight.is_none());
+        self.barrier = self.started;
+        self.done = self.started;
+        self.want = true;
+        self.active = false;
+        self.idle_at = None;
+        self.last_plan = None;
+        self.latched = LatchedDmas::default();
+        self.colors = ColorDmas::default();
+        self.cursor_mode = CursorMode::default();
+        self.cursor_in_frame = false;
+        self.cursor_posted = None;
+        self.hot = HotTracker::default();
+        self.hot_epoch = None;
+    }
+
     /// ★ §8.16: the check clock of a picture with no armed head — due every `period` while `run`
     /// (late ticks rescheduled as the pacer does), stopped otherwise.
     fn idle_tick(&mut self, now: Instant, period: Duration, run: bool) -> bool {
@@ -5445,6 +5557,63 @@ mod tests {
         );
         assert_eq!(choose_shown(Some(comp), Some(&boot), true, &fresh), armed);
         assert_eq!(choose_shown(None, Some(&boot), true, &fresh), None);
+    }
+
+    /// ★★ 2026-10-13 (owner requirement, `docs/design/V3_DEVICE_RESET.md` §6): when a guest life
+    /// ends — the guest's RM unloads (fn 47 without a PM transition), or the device is reset — the
+    /// console goes back to the BOOT LAYER (store `[0, G)`, what BAR1 `[0, G)` shows again), from
+    /// every state the old life left: an armed scanout lost, a `PRESERVE_HW` scanout, black. Without
+    /// the boot display (`gop=off`) a scanout that was shown is black, never the old life's last
+    /// frame; one that never was stays QEMU's placeholder (no frame). The next life's first armed
+    /// head takes over as on the first boot.
+    #[test]
+    fn a_guest_life_that_ends_shows_the_boot_layer_again_from_every_state() {
+        let boot = boot_scan();
+        let comp = Composition {
+            head: 0,
+            width: 1920,
+            height: 1080,
+            layers: Vec::new(),
+        };
+        let states = [
+            Held::default(),
+            Held {
+                preserved: None,
+                scanned: Some((1280, 720)),
+                dark: Dark::Unlit,
+            },
+            Held {
+                preserved: Some((vec![boot.layer], (1920, 1080))),
+                scanned: Some((1920, 1080)),
+                dark: Dark::Unlit,
+            },
+            Held {
+                preserved: None,
+                scanned: Some((1920, 1080)),
+                dark: Dark::WindowlessBrief,
+            },
+        ];
+        for prev in &states {
+            let held = held_after_life_reset(prev);
+            assert!(held.preserved.is_none(), "{prev:?}: nothing the old life preserved");
+            // gop=on: boot_done goes back to false with the life
+            assert_eq!(
+                choose_shown(None, Some(&boot), false, &held),
+                Some(Shown::Boot(boot.layer, boot.size)),
+                "{prev:?}"
+            );
+            // the next life's first armed head takes over, as on the first boot
+            assert_eq!(
+                choose_shown(Some(comp.clone()), Some(&boot), false, &held),
+                Some(Shown::Armed(comp.clone()))
+            );
+            // gop=off: black if a scanout was ever shown, else no frame (the placeholder)
+            assert_eq!(
+                choose_shown(None, None, false, &held),
+                prev.scanned.map(Shown::Blank),
+                "{prev:?}"
+            );
+        }
     }
 
     /// ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): a head's scanout that WAS shown and is lost is

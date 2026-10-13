@@ -778,6 +778,17 @@ pub enum Target {
 }
 
 impl Target {
+    /// ★ Device reset (`docs/design/V3_DEVICE_RESET.md`): a BAR window back to what realize left
+    /// ([`CpuWindow::reset_to_boot`]; on Hopper+ every BAR1 doorbell view's removal queued first).
+    /// `None` for a GPU mirror — those are retired, never reset in place.
+    pub fn reset_to_boot(&self) -> Option<(kf_mem::cpuwin::WindowReset, usize)> {
+        match self {
+            Target::Window(w) => Some((w.reset_to_boot(), 0)),
+            Target::Bar1(b) => Some(b.reset_to_boot()),
+            Target::Gpu(_) => None,
+        }
+    }
+
     /// ★ The guest CPU window behind a BAR target (BAR2, or BAR1 on either arm) — BAR1's is where the
     /// boot display's seed lives (`kf_mem::cpuwin::CpuWindow::seed`, `docs/design/V3_DISPLAY.md`
     /// §4.11.2). `None` for a host GPU VA space.
@@ -1952,6 +1963,23 @@ impl Bar1Target {
         }
     }
 
+    /// ★ Device reset: every doorbell view live or being installed gets its removal queued (FIFO
+    /// behind any install still queued, so the C device ends with none), the tracker forgets them,
+    /// and the window goes back to its boot view. Returns the window's report and the views removed.
+    /// The main loop's acknowledgements of these removals are drained by the next settle.
+    pub fn reset_to_boot(&self) -> (kf_mem::cpuwin::WindowReset, usize) {
+        let views: Vec<kf_trap::bar1db::Bar1View> = self.db.borrow().views().copied().collect();
+        let mut removed = 0;
+        for v in views {
+            if self.submit(false, v).is_ok() {
+                removed += 1;
+            }
+            self.db.borrow_mut().remove(v.base);
+        }
+        self.dead.borrow_mut().clear();
+        (self.win.reset_to_boot(), removed)
+    }
+
     /// The views currently trapped or being installed (the guest doorbell module's replay set).
     #[must_use]
     pub fn views(&self) -> Vec<kf_trap::bar1db::Bar1View> {
@@ -2160,6 +2188,9 @@ pub struct Inbox {
     walk_busy: std::sync::atomic::AtomicBool,
     /// Guest tokens of Translated channels waiting for a pending walk to land.
     walk_waiters: Mutex<Vec<u32>>,
+    /// ★ Device reset (`docs/design/V3_DEVICE_RESET.md`): the epoch the VA thread has reset the
+    /// memory plane for.
+    pub life_reset: crate::reset::Ack,
 }
 
 pub(crate) enum UserSplitError { Busy, Refused(&'static str) }
@@ -2186,7 +2217,39 @@ impl Inbox {
             bar1_physical: AtomicU64::new(0),
             walk_busy: std::sync::atomic::AtomicBool::new(false),
             walk_waiters: Mutex::new(Vec::new()),
+            life_reset: crate::reset::Ack::default(),
         })
+    }
+
+    /// ★ Device reset, VA thread: forget the old life's split bookkeeping (requested, running,
+    /// finished-untaken; each channel that asked is gone — freed before this runs), its gates
+    /// (dropped unreleased: the ring they guarded is gone), the walk waiters, and the cache-op
+    /// counters (the vCPU cannot move them: the reset gate is closed). Returns the tickets dropped.
+    /// The statement queue is the caller's to drain (it applies the `Retire`s).
+    pub fn reset_life(&self) -> usize {
+        let mut n = 0;
+        if let Ok(mut q) = self.splits.lock() {
+            n += q.len();
+            q.clear();
+        }
+        if let Ok(mut m) = self.split_tokens.lock() {
+            n += m.len();
+            m.clear();
+        }
+        if let Ok(mut m) = self.split_results.lock() {
+            m.clear();
+        }
+        if let Ok(mut m) = self.gates.lock() {
+            m.clear();
+        }
+        if let Ok(mut w) = self.walk_waiters.lock() {
+            w.clear();
+        }
+        for a in self.cache_req.iter().chain(self.cache_done.iter()) {
+            a.store(0, Ordering::Release);
+        }
+        self.walk_busy.store(false, Ordering::Release);
+        n
     }
 
     /// ★ Review fix 2026-10-04 (§3.5) — **a walk the guest asked for has not landed yet**: the VA
@@ -2660,6 +2723,19 @@ impl MemPlane {
         self.ram_obj.get().is_some()
     }
 
+    /// ★ Device reset: PRAMIN back to what realize left — every slot scratch, the window-base word
+    /// zero (the vCPU that moves it is behind the closed reset gate). Every view the old life's
+    /// windows armed is doomed and its aperture returned by the pool's reaper.
+    pub fn reset_pramin(&self) {
+        self.pramin_want.store(0, Ordering::Release);
+        let r = self.pramin.repoint(&[SlotSource::Nothing; SLOTS]);
+        if r.refused > 0 {
+            self.counters
+                .pramin_miss_writes
+                .fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
     /// The PRAMIN plan for a window-base word: what each slot must show.
     fn pramin_plan(&self, raw: u32) -> [SlotSource; SLOTS] {
         let w = self.pramin_reg.decode(raw);
@@ -3057,6 +3133,99 @@ fn retire_association(mirrors: &Mirrors, key: VasKey) -> Result<Mirror, String> 
         .get(&key).cloned().ok_or_else(|| "mirror association missing".to_string())
 }
 
+/// ★★ **Device reset, stage Memory** (`docs/design/V3_DEVICE_RESET.md` §3), on the VA thread, once
+/// no walk is in flight (`VaManager::abandon_life` said so) and after the channel plane freed every
+/// guest client (so no mirror has a live channel). Returns the boot log's line.
+///
+/// 1. The invalidate port reads idle (its armed request abandoned, never completed) and PRAMIN
+///    shows scratch.
+/// 2. Every guest VA-space object is RETIRED through the guest's own path ([`retire_mirror`]: its
+///    rows unmapped, its host space recycled as a spare or freed, its walker slot emptied).
+/// 3. OUR two roots and the boot framebuffer `[0, G)` are zeroed on the GPU, as realize zeroed
+///    them (the guest's BAR PDEs and its last console must not greet the next life).
+/// 4. The BAR1/BAR2 objects are re-registered: a FRESH walker slot each (§9 ResetWalkerState — the
+///    next life's first diff maps everything), their windows back to the boot view (BAR1's seed
+///    placed again), their roots set as realize set them.
+pub fn reset_memory_life(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm) -> String {
+    let abandoned = plane.port.reset();
+    plane.reset_pramin();
+    let mut retired = 0usize;
+    let mut kept = Vec::new();
+    for (key, _, _) in m.table.objects() {
+        if key == K_BAR1 || key == K_BAR2 {
+            continue;
+        }
+        let line = retire_mirror(m, plane, rm, key);
+        if line.contains("KEPT") {
+            kept.push(line);
+        } else {
+            retired += 1;
+        }
+    }
+    let boot = m
+        .table
+        .target(K_BAR1)
+        .and_then(Target::cpu_window)
+        .and_then(CpuWindow::boot_range);
+    let mut zero_refused = Vec::new();
+    {
+        let k = &m.walker().kernel;
+        let root = vec![0u8; kf_chip::bar0::ROOT_PAGE_BYTES as usize];
+        for r in [plane.bar1_root, plane.bar2_root] {
+            if let Err(e) = k.write_store(r, &root) {
+                zero_refused.push(format!("root @{r:#x}: {e}"));
+            }
+        }
+        if let Some((_, store_off, len)) = boot {
+            let chunk = vec![0u8; 1 << 20];
+            let mut at = 0u64;
+            while at < len {
+                let n = (len - at).min(chunk.len() as u64);
+                if let Err(e) = k.write_store(store_off + at, &chunk[..n as usize]) {
+                    zero_refused.push(format!("boot framebuffer @{:#x}: {e}", store_off + at));
+                    break;
+                }
+                at += n;
+            }
+        }
+    }
+    let mut windows = Vec::new();
+    for (key, root) in [(K_BAR1, plane.bar1_root), (K_BAR2, plane.bar2_root)] {
+        let Some(t) = m.remove(key) else {
+            continue;
+        };
+        if let Some((w, views)) = t.reset_to_boot() {
+            windows.push(format!(
+                "{}: {} placement(s) removed, {} kept, {} doorbell view(s) removed, seed {:?}{}",
+                if key == K_BAR1 { "BAR1" } else { "BAR2" },
+                w.unmapped,
+                w.kept,
+                views,
+                w.seed,
+                w.first_refusal.map_or(String::new(), |e| format!(" (refused: {e})"))
+            ));
+        }
+        m.table.insert(key, t);
+        if let Err(e) = m.table.set_root(key, root, PdbAperture::Vidmem) {
+            windows.push(format!("{key:?}: root {root:#x} REFUSED: {e:?}"));
+        }
+    }
+    let mirrors_left = plane.mirrors.lock().map_or(usize::MAX, |mm| mm.len());
+    format!(
+        "device reset: memory plane — invalidate {}, PRAMIN scratch, {retired} VA space(s) retired, {} KEPT{}{}, mirrors left {mirrors_left}; roots and boot framebuffer zeroed{}; {}",
+        if abandoned { "abandoned (armed)" } else { "idle" },
+        kept.len(),
+        if kept.is_empty() { "" } else { ": " },
+        kept.join("; "),
+        if zero_refused.is_empty() {
+            String::new()
+        } else {
+            format!(" (REFUSED: {})", zero_refused.join("; "))
+        },
+        windows.join("; ")
+    )
+}
+
 fn retire_mirror(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm, key: VasKey) -> String {
     // Unknown ownership is never evidence that live-channel/resource count is
     // zero. Preserve target/native VAS on missing/poisoned association.
@@ -3298,6 +3467,42 @@ pub fn apply_statement(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// ★ Device reset: an inbox the old life left with splits requested and running, finished
+    /// results nobody took, walk waiters, cache-op counters mid-flight and the walk flag up, reads
+    /// as a fresh one afterwards — and the next life's first split gets a NEW ticket (tickets never
+    /// repeat, so a result of the old life can never answer the new one).
+    #[test]
+    fn a_reset_inbox_holds_nothing_of_the_old_life_and_tickets_never_repeat() {
+        let i = Inbox::new().expect("eventfd");
+        let fresh = Inbox::new().expect("eventfd");
+        let t1 = i.request_split(0x11, Some(0x1000));
+        let t2 = i.request_split(0x12, None);
+        let taken = i.take_split_requests();
+        assert_eq!(taken.len(), 2);
+        let _ = i.request_split(0x13, None);
+        assert_eq!(i.finish_split(t1, Ok(())), Some(0x11));
+        i.wait_walk(0x14);
+        i.cache_req[0].fetch_add(3, Ordering::Relaxed);
+        i.cache_done[0].fetch_add(1, Ordering::Relaxed);
+        i.set_walk_busy(true);
+        assert!(i.walk_busy());
+        assert_eq!(i.reset_life(), 2, "one queued, one running (t2)");
+        assert!(!i.walk_busy());
+        assert_eq!(i.walk_busy(), fresh.walk_busy());
+        assert!(i.take_walk_waiters().is_empty());
+        assert_eq!(i.split_result(t1), None, "a finished result of the old life is gone");
+        assert_eq!(i.finish_split(t2, Ok(())), None, "nobody waits on the old ticket");
+        let _ = i.split_result(t2);
+        for k in 0..kf_trap::cacheop::CacheOp::COUNT {
+            assert_eq!(i.cache_req[k].load(Ordering::Relaxed), 0);
+            assert_eq!(i.cache_done[k].load(Ordering::Relaxed), 0);
+        }
+        let t4 = i.request_split(0x15, None);
+        assert!(t4 > t2, "tickets never repeat");
+        assert_eq!(i.reset_life(), 1);
+        assert_eq!(i.reset_life(), 0);
+    }
 
     #[test]
     fn missing_or_poisoned_mirror_association_never_means_zero_live() {

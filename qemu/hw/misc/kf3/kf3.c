@@ -1895,6 +1895,28 @@ static void kf3_dev_exit(PCIDevice *pci)
     }
 }
 
+/* ★★ ABI 27 (docs/design/V3_DEVICE_RESET.md): QEMU's reset of this function — a guest reboot, the
+ * reset button, a bugcheck or triple-fault reset, QMP system_reset, a bus reset from the guest, and
+ * the machine's own reset at start-up. The Resettable hold phase (QEMU 10.2 hw/core/resettable.c),
+ * main loop (or a vCPU in a bridge's config write), BQL held, before the bus's own hold phase
+ * (pcibus_reset_hold -> pci_do_device_reset) clears the command register and the BARs and
+ * msix_reset releases every irqfd route. Rust closes its vCPU gate, counts the request, wakes its
+ * register drainer and returns: nothing here waits. Every piece of a guest life — the GSP state
+ * machine, every host channel/VA space/mapping/doorbell registration, the BAR windows, the register
+ * shadow, the interrupt eventfds' stale counts — is reset by the Rust thread that owns it. Nothing
+ * C-side needs resetting: BAR1 doorbell aliases go through the same FIFO verb that placed them,
+ * doorbell sites follow the memory listener (the BARs are unmapped by pci_do_device_reset and
+ * remapped by the guest), and the MSI-X routes are msix_reset's. */
+static void kf3_reset_hold(Object *obj, ResetType type)
+{
+    Kf3State *s = KF3(obj);
+
+    (void)type;
+    if (s->h) {
+        kf3_device_reset(s->h);
+    }
+}
+
 static const Property kf3_properties[] = {
     DEFINE_PROP_UINT32("gpu-minor", Kf3State, gpu_minor, 0),
     DEFINE_PROP_UINT64("fb-mb", Kf3State, fb_mb, 8192),
@@ -1953,8 +1975,10 @@ static void kf3_class_init(ObjectClass *klass, const void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(klass);
     PCIDeviceClass *k = PCI_DEVICE_CLASS(klass);
+    ResettableClass *rc = RESETTABLE_CLASS(klass);
     k->realize = kf3_dev_realize;
     k->exit = kf3_dev_exit;
+    rc->phases.hold = kf3_reset_hold;   /* ★ ABI 27: the device reset */
     k->vendor_id = 0x10de;
     k->device_id = 0xffff;   /* replaced at realize with the host's own */
     k->class_id = PCI_CLASS_DISPLAY_VGA;

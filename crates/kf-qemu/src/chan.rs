@@ -2396,6 +2396,13 @@ pub struct ChanPlane {
     pub rc_wakes: AtomicU64,
     /// ★ EXPERIMENT `x11-dispsw`: the display-SW twins' counters (all zero with the switch off).
     pub dispsw: crate::dispsw::DispSwCounters,
+    /// ★ Device reset (`docs/design/V3_DEVICE_RESET.md`): the epoch whose guest clients the act
+    /// thread has freed ([`ChanPlane::reset_life`]).
+    pub life_reset: crate::reset::Ack,
+    /// Retries the act thread holds parked ([`crate::actq::ActQueue::parked`]), as of its last act.
+    acts_parked: std::sync::atomic::AtomicUsize,
+    /// Device resets that gave up waiting for a parked retry or a refused free (counted, named).
+    pub reset_incomplete: AtomicU64,
 }
 
 /// ★ **What a guest free of `object` takes from a twin that still lives — pure** (review
@@ -2966,6 +2973,9 @@ impl ChanPlane {
             rc_seen: AtomicU64::new(0),
             rc_wakes: AtomicU64::new(0),
             dispsw: crate::dispsw::DispSwCounters::default(),
+            life_reset: crate::reset::Ack::default(),
+            acts_parked: std::sync::atomic::AtomicUsize::new(0),
+            reset_incomplete: AtomicU64::new(0),
             dbfast,
             token_fmt,
         })
@@ -3032,6 +3042,7 @@ impl ChanPlane {
                     {
                         q.delay(when, (a, dd, w));
                     }
+                    self.acts_parked.store(q.parked(), Ordering::Release);
                     let us = u64::try_from(t0.elapsed().as_micros()).unwrap_or(u64::MAX);
                     self.act_worst_us.fetch_max(us, Ordering::Relaxed);
                     self.act_total_us.fetch_add(us, Ordering::Relaxed);
@@ -7894,6 +7905,242 @@ impl ChanPlane {
     /// Stop serving (device teardown).
     pub fn stop(&self) {
         self.stop.store(true, Ordering::Release);
+    }
+
+    /// ★★ **Device reset, stage Release** (`docs/design/V3_DEVICE_RESET.md` §3): free every guest
+    /// client through the plane's OWN free path — the path a guest RM's `GSP_RM_FREE` of a client
+    /// takes (twins, their tokens and doorbell registrations, relays, USER rings, groups, debugger
+    /// sessions, the CUDA limit, encoder sessions), in its order (§9) — and acknowledge `epoch` on
+    /// [`ChanPlane::life_reset`] once nothing of the guest is left.
+    ///
+    /// ⊘ The frees are issued FROM THE ACT THREAD, behind every act already queued: a birth act in
+    /// flight lands first, and its twin is then freed like any other (a free computed on the drainer
+    /// now would miss it). Never blocks the drainer: this queues one act.
+    ///
+    /// ⊘ No completion is forged: a channel with work in flight is stopped by the host's own free
+    /// (preempt + unbind), and nothing is written to guest memory on its behalf.
+    pub fn reset_life(&'static self, epoch: u64) {
+        self.life_reset.request(epoch);
+        let queued = self.defer(
+            "device reset: free every guest client",
+            Box::new(move |me: &ChanPlane| me.reset_free_round(epoch, 0)),
+        );
+        if matches!(queued, ChanAnswer::Refused { .. }) {
+            // No act thread (it never started): nothing was ever born on it.
+            self.reset_nonhost_state();
+            self.life_reset.done(epoch);
+            let _ = self.release.signal();
+        }
+    }
+
+    /// One round of the reset's frees (act thread), then a barrier act behind them.
+    fn reset_free_round(&self, epoch: u64, round: u32) -> Result<String, (u32, String)> {
+        let clients = self.guest_clients();
+        for c in &clients {
+            let _ = self.free(*c, *c);
+        }
+        let _ = self.defer(
+            "device reset: barrier",
+            Box::new(move |me: &ChanPlane| me.reset_barrier(epoch, round)),
+        );
+        Ok(if clients.is_empty() {
+            String::new()
+        } else {
+            format!("device reset epoch {epoch} round {round}: freeing {} guest client(s) {clients:x?}", clients.len())
+        })
+    }
+
+    /// The barrier (act thread): every free act of the round has run. A client born meanwhile, or
+    /// a retry still parked, takes another round (bounded: [`RESET_ROUNDS`] × [`RESET_RETRY`]);
+    /// then the per-life state that holds no host resource is cleared and the epoch acknowledged.
+    fn reset_barrier(&self, epoch: u64, round: u32) -> Result<String, (u32, String)> {
+        let left = self.guest_clients();
+        let parked = self.acts_parked.load(Ordering::Acquire);
+        if (!left.is_empty() || parked > 0) && round < RESET_ROUNDS {
+            if left.is_empty() {
+                // Only parked retries: wait for them, off the queue (the act loop runs everything
+                // else meanwhile), never a sleep.
+                delay_act(
+                    std::time::Instant::now() + RESET_RETRY,
+                    "device reset: barrier",
+                    Box::new(move |me: &ChanPlane| me.reset_barrier(epoch, round + 1)),
+                    kf_gsp::Deferred::new(),
+                );
+                return Err((ACT_REQUEUED, String::new()));
+            }
+            return self.reset_free_round(epoch, round + 1);
+        }
+        let census = self.live_census();
+        let complete = left.is_empty() && census.is_empty();
+        if !complete {
+            self.reset_incomplete.fetch_add(1, Ordering::Relaxed);
+        }
+        self.reset_nonhost_state();
+        self.life_reset.done(epoch);
+        let _ = self.release.signal();
+        Ok(format!(
+            "device reset epoch {epoch}: channel plane {} after {} round(s) — {census}",
+            if complete {
+                "EMPTY"
+            } else {
+                "NOT EMPTY (host frees refused or retries still parked; counted reset_incomplete, the guest's tables are cleared regardless)"
+            },
+            round + 1
+        ))
+    }
+
+    /// Every guest client any table of the plane still names.
+    fn guest_clients(&self) -> Vec<u32> {
+        let mut out = std::collections::BTreeSet::new();
+        if let Ok(m) = self.pt.lock() {
+            out.extend(m.keys().map(|k| k.0));
+        }
+        if let Ok(m) = self.by_obj.lock() {
+            out.extend(m.keys().map(|k| k.0));
+        }
+        if let Ok(m) = self.scopes.lock() {
+            out.extend(m.keys().map(|k| k.0));
+        }
+        if let Ok(m) = self.pt_objs.lock() {
+            out.extend(m.keys().map(|k| k.0));
+        }
+        if let Ok(m) = self.dbg.lock() {
+            out.extend(m.keys().map(|k| k.0));
+        }
+        if let Ok(m) = self.cuda_limit.lock() {
+            out.extend(m.0.iter().map(|k| k.0));
+        }
+        if let Ok(m) = self.enc_sessions.lock() {
+            out.extend(m.iter().filter(|(_, n)| **n > 0).map(|(c, _)| *c));
+        }
+        if let Ok(m) = self.groups.lock() {
+            out.extend(m.keys().map(|k| k.0));
+        }
+        if let Ok(m) = self.sw_objs.lock() {
+            out.extend(m.values().map(|o| o.owner.0));
+        }
+        out.extend(self.user_births.clients());
+        out.into_iter().collect()
+    }
+
+    /// ★ The reset's accounting: what the plane still holds (never a decision input). ⊘ Takes the
+    /// doorbell registry's lock (held across `KVM_IOEVENTFD`): the act thread's, never the drainer's.
+    #[must_use]
+    pub fn live_census(&self) -> LiveCensus {
+        let n = |r: Result<usize, ()>| r.unwrap_or(usize::MAX);
+        LiveCensus {
+            twins: n(self.pt.lock().map(|m| m.len()).map_err(|_| ())),
+            translated: n(self.slots.read().map(|m| m.len()).map_err(|_| ())),
+            relays: n(self.relays.lock().map(|m| m.len()).map_err(|_| ())),
+            user_rings: n(self.user_rings.lock().map(|m| m.len()).map_err(|_| ())),
+            groups: n(self.groups.lock().map(|m| m.len()).map_err(|_| ())),
+            debuggers: n(self.dbg.lock().map(|m| m.len()).map_err(|_| ())),
+            caps_live: self
+                .caps
+                .lock()
+                .map_or(u32::MAX, |c| c.live(kf_core::caps::Twin::Channel)),
+            tokens: self.plane.live_tokens(),
+            doorbell_regs: self.dbfast.live().0,
+        }
+    }
+
+    /// The per-life state that holds no host resource (act thread, at the reset's barrier).
+    fn reset_nonhost_state(&self) {
+        if let Ok(mut m) = self.rc_queue.lock() {
+            m.clear();
+        }
+        if let Ok(mut m) = self.preempt_done.lock() {
+            m.clear();
+        }
+        for w in &self.pt_fifo_owed {
+            w.store(0, Ordering::Release);
+        }
+        for w in self.rung.iter().chain(self.rang.iter()).chain(self.rung_at_us.iter()) {
+            w.store(0, Ordering::Relaxed);
+        }
+        if let Ok(mut m) = self.guest_sched.lock() {
+            *m = crate::latejoin::GuestTsgSched::default();
+        }
+        if let Ok(mut m) = self.sw_objs.lock() {
+            m.clear();
+        }
+        if let Ok(mut m) = self.scopes.lock() {
+            m.clear();
+        }
+        if let Ok(mut m) = self.by_obj.lock() {
+            m.clear();
+        }
+        if let Ok(mut m) = self.pt_objs.lock() {
+            m.clear();
+        }
+        let mut inflight = Vec::new();
+        self.completions.for_each_inflight(|t| inflight.push(t));
+        for t in inflight {
+            self.completions.clear(t);
+        }
+    }
+}
+
+/// ★ Device reset: how many free rounds the act thread runs before it acknowledges anyway.
+const RESET_ROUNDS: u32 = 400;
+/// … and how long a round waits for a parked retry (400 × 5 ms = 2 s).
+const RESET_RETRY: std::time::Duration = std::time::Duration::from_millis(5);
+
+/// ★ What the channel plane still holds — the device reset's accounting (`docs/design/V3_DEVICE_RESET.md`
+/// §5): after a reset every field is 0, after N resets too.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct LiveCensus {
+    /// Passthrough twins (host channels).
+    pub twins: usize,
+    /// Translated slots (host rings).
+    pub translated: usize,
+    /// USERD relays (host objects + CPU views).
+    pub relays: usize,
+    /// Windows USER rings.
+    pub user_rings: usize,
+    /// Host TSGs standing for guest TSGs.
+    pub groups: usize,
+    /// Host debugger sessions.
+    pub debuggers: usize,
+    /// Channel caps held.
+    pub caps_live: u32,
+    /// Token words not fresh.
+    pub tokens: usize,
+    /// Doorbell fast-path registrations (KVM ioeventfds).
+    pub doorbell_regs: usize,
+}
+
+impl LiveCensus {
+    /// Nothing of a guest life is held. (Tokens are swept at the reset's Finish, so they are not
+    /// part of this test.)
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.twins == 0
+            && self.translated == 0
+            && self.relays == 0
+            && self.user_rings == 0
+            && self.groups == 0
+            && self.debuggers == 0
+            && self.caps_live == 0
+            && self.doorbell_regs == 0
+    }
+}
+
+impl core::fmt::Display for LiveCensus {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(
+            f,
+            "twins={} translated={} relays={} user_rings={} groups={} debuggers={} caps={} tokens={} db_regs={}",
+            self.twins,
+            self.translated,
+            self.relays,
+            self.user_rings,
+            self.groups,
+            self.debuggers,
+            self.caps_live,
+            self.tokens,
+            self.doorbell_regs
+        )
     }
 }
 

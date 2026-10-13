@@ -66,7 +66,9 @@ use std::os::unix::ffi::OsStrExt as _;
 /// 23's input/cursor verbs (disjoint surfaces).
 /// 26 (2026-10-11, `claude/gl-icd-crash-20261011`): 25 plus the `channel-budget` property — `kf3_realize` gains
 /// `channel_budget` (channels per runlist; 0 = derive from the host) after `pci_devfn`.
-pub const KF3_ABI: u32 = 26;
+/// 27 (2026-10-13, `claude/device-reset-20261013`, `docs/design/V3_DEVICE_RESET.md`): 26 plus
+/// [`kf3_device_reset`], called from the C device's Resettable `hold` phase.
+pub const KF3_ABI: u32 = 27;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -1072,6 +1074,18 @@ pub unsafe extern "C" fn kf3_option_rom(
         *rom_len = bytes.len() as u64;
     }
     0
+}
+
+/// ★★ ABI 27 (`docs/design/V3_DEVICE_RESET.md`): QEMU reset the PCI function — a guest reboot, the
+/// reset button, a bugcheck or triple-fault reset, QMP `system_reset`, a bus reset. Called from the
+/// C device's Resettable `hold` phase (main loop, or a vCPU writing a bridge's config space; BQL
+/// held): closes the vCPU gate, counts the request and wakes the register drainer, which runs the
+/// reset. Never waits.
+#[unsafe(no_mangle)]
+pub extern "C" fn kf3_device_reset(h: *mut c_void) {
+    if let Some(d) = dev(h) {
+        d.request_reset();
+    }
 }
 
 /// Stop the device's threads (the device itself lives for the process).

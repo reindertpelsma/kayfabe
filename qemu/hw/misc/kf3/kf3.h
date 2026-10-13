@@ -60,7 +60,9 @@
 /* 26 (2026-10-11, claude/gl-icd-crash-20261011): 25 plus the channel-budget property: kf3_realize gains
  * channel_budget (channels per runlist, the count the guest is told AND the enforced twin cap; 0 = derive
  * from the host) after pci_devfn. Rust refuses a value above the host's limit or below the minimum, by name. */
-#define KF3_ABI 26
+/* 27 (2026-10-13, claude/device-reset-20261013, docs/design/V3_DEVICE_RESET.md): 26 plus
+ * kf3_device_reset, called from the device's Resettable hold phase. */
+#define KF3_ABI 27
 #define KF3_BROKER_ON 1u
 #define KF3_BROKER_VRAM_AUTO 0u
 #define KF3_BROKER_VRAM_ON 1u
@@ -248,5 +250,8 @@ int32_t kf3_display_ui_info(void *h, uint32_t head, uint32_t width, uint32_t hei
  * embedded GOP driver wrapped with this device's ids and its KFGP descriptor. 0 and *rom, *rom_len
  * (valid for the process; the device copies them into its ROM BAR), or -1 (gop=0). */
 int32_t kf3_option_rom(void *h, const uint8_t **rom, uint64_t *rom_len);
+/* ★ ABI 27: QEMU reset this function (Resettable hold phase, BQL held). Rust closes its vCPU gate,
+ * counts the request, wakes its register drainer and returns; nothing here waits. */
+void kf3_device_reset(void *h);
 void kf3_unrealize(void *h);
 #endif
