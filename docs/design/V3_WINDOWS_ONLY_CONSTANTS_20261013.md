@@ -167,3 +167,18 @@ kayfabe asks the real host GPU these at start-up so it can answer the guest's CU
 | core update latch timing | 5 | when a core display update takes effect | hardware: three updates one frame apart; kayfabe: within 3 ms (run 93) |
 | head-timing frame edge | 5 | when the head-timing events fire each frame | first interrupt 0.58-16.87 ms after enable |
 | software-runlist object admission (class `0xb297`) | 5 | how kayfabe admits the Windows software-runlist object (graph-only, `maxTSGs=0`) | constants quoted from the flag inventory, not re-read |
+
+## Revised: what really needs a KVM rental (owner, 2026-10-13; from `tier2_compute_host.tsv`, reasons read in ogkm 595.84, not re-measured at 595.91.07)
+
+Rule: a value kayfabe can get as an unprivileged client (no `CAP_SYS_ADMIN`) is tier 2 (runtime, no table, no sweep, container rentals are no better). Only rows that need admin or kernel privilege, whose VALUES are in no ogkm tag, need a KVM rental (real `CAP_SYS_ADMIN`, kernel module) or bare metal. Of the 28 class-3 rows:
+
+| group | rows | what the rental needs | note |
+|---|---|---|---|
+| **P** admin client / privileged object (4) | `0x731369`, `0x20802801`, `0x20802a12`, `0x50700709` (+ `0x50700118`, object alloc privileged, 1) | KVM rental, a root user-space tool with `CAP_SYS_ADMIN`; no kernel module | layout is in ogkm, only the per-die value is missing |
+| **R** raw register reads (2) | display-caps page, head-timing enable base | KVM rental or bare metal, root, BAR0 mapping | the display rows also depend on a head: forced-connector experiment, `display_state` unknown |
+| **K** kernel-only controls (5) | `0x73014b`, `0x7302a2`, `0x2080121f`, CE fault method buffer, gfx pool sizes | KVM rental plus a kernel module issuing the control as a kernel caller | refused to every usermode client, root included |
+| **I** internal controls (8) | GMMU static info, user register access map, `0x20800a3f`, `0x20800a80` fully; `0x20800a2e`, `0x20800a87`, `0x20800ab8`, `0x20800b03` partly | KVM rental plus a kernel module (raw GSP) | only RM itself may issue them; 4 of them have a public unprivileged equivalent for part of the data (tier 2 for that part) |
+| **A** id absent from every open table (7) | `0x730122`, `0x730128`, `0x7302a3`, `0x7302a5`, `0x20802806` (+ 2 probe rows) | nothing the open RM can issue: raw GSP on a KVM rental if the firmware answers them, otherwise Windows capture | may be answered by Windows' own RM and not by the GSP at all |
+| unknown (1) | display model (several controls, flags not walked) | walk the controls first | |
+
+The 17 class-2 layout rows are not in this table: 15 of them are answerable unprivileged per the desk check, so they are tier 2 pending one host probe at 595.91.07.
