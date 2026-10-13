@@ -10,3 +10,7 @@
 First two Windows attempts were flawed harness runs (the driver held the guest-agent socket open and reset during boot); they are not evidence.
 
 **Not measured:** reset while a GPU app is running on Windows; bugcheck reboot; Linux `reboot`/`reboot -f`/sysrq, rmmod cycles with `kill -9` (D4 on hardware), reset races (design note §8 L2-L6); the fast suite 30/30 and the gates on the reset build; whether Windows sends fn 47 without a PM transition during TDR recovery (the disable/enable path does).
+
+## Validation of `bf510bdf` (candidate branch `integration/prod-candidate-2-20261013`), 2026-10-13
+Measured: `v3_gates.sh` 9/9 and gate 10 PASS (`validation/gates_bf510bdf.log`); fast suite 30/30, 0 fail, 0 crash (`validation/fast_suite_bf510bdf_30of30.txt`). The first suite attempt deadlocked because the wrapper held the GPU lock that each arm takes itself (my script error, not a product result); an orphaned lock holder from that attempt was killed. Windows matrix, independent review and the exact-commit real-GPU pass required for master are still open.
+Host scripts in `host_scripts_2/` are the final versions used for these runs (the Windows driver there still carries the single-guest-agent-connection bug in its W3 step, which was verified by hand).
