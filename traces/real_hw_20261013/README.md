@@ -15,3 +15,18 @@
 - The 12 attaches are an artefact of persistence mode being off (each `nvidia-smi` re-initialises the GPU); a steady state would show one attach.
 - `scan_probe.c`/`capture_probe.c` are throwaway validation aids (kcore as the RAM source), not part of the module.
 - The loss-record count is dominated by re-synchronisation after each detach; it is expected, not a defect, but the decoder's "FAIL" verdict will always trip on a capture that spans driver reloads.
+
+## Control probe on the same AD103 (`probe_unpriv.txt`, `probe_admin.txt`), 2026-10-13
+
+`kf-ctl-probe` (branch `claude/ctl-probe-20261013`) sent each listed control with ZEROED input to the real GPU, once as uid 65534 with no capabilities (`CapEff=0x0`: kayfabe's own situation) and once as root with `CAP_SYS_ADMIN` (`CapEff=0x1ffffffffff`, results labelled admin). Linux driver 575.51.03, no Xid logged in either run. Sizes are the reply sizes recorded in the Windows captures.
+
+| result | controls |
+|---|---|
+| **OK unprivileged** (kayfabe can ask the host at runtime, tier 2) | `0x2080852a` (1784 B), `852e` (528), `852f` (776), `853a` (1456), `8524` (4), `9001` (8), `9009` (8), `a060` (28), `a088` (12), `a618` (8620), `a630` (1160), `a70a` (26), `a801` (1028), `b201` (2188) |
+| **INSUFFICIENT_PERMISSIONS unprivileged, OK as root** (genuine `CAP_SYS_ADMIN` rows) | `0x20802806` (4 B), `0x20802801` (4 B), `0x20802a12` (8 B). Note `0x20802806` was listed "absent from every open table"; measured: it exists and is privileged. |
+| **INVALID_PARAM_STRUCT** at the Windows size with zeroed input | `0x20809004` (1544 B), `0x20809064` (520 B). The Linux driver DID issue `0x20809064` with 520-byte requests and got OK, so zeroed input is invalid for these: they need the real request content (replay of a captured request), not a zero probe. |
+| **NOT_SUPPORTED** | `0x2080a02f` (the real GPU also answers 0x56 to it, as in the Windows captures), `0x20800a3f`, `0x20800a80` (after INVALID_ARGUMENT on other sizes) |
+| **INVALID_ARGUMENT at every size tried** (zero input is not enough; real inputs needed) | `0x2080853b`, `a619`, `0x2080121f`, `0x20800a2e`, `a87`, `ab8`, `b03`, `0x00809908` (NV0080) |
+| **not probed in v1** | NV2081 `0x20810108`, `0x2081010d` (needs the binary-API object); NV0073 display controls (needs the display-common object) |
+
+Reading: zero-input probing proves "answerable" but cannot prove "not answerable": every INVALID_* row needs a replay with the captured request. The 14 OK rows are strong evidence for the tier-2 route for the GSS-legacy family on this die/driver (Linux 575.51.03, AD103); the same probe at the host's own 595.91.07 is being run by the host agent and may differ. A probe is one die, one driver: nothing here is a per-die rule.
