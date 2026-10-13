@@ -314,6 +314,17 @@ impl ReselectAtFn1 {
         self.current
     }
 
+    /// ★ Device reset (`docs/design/V3_DEVICE_RESET.md`): a FRESH chain built for the provisional
+    /// (realize-time) table, exactly as [`Self::new`] built it — every link's per-life state (the
+    /// object graph, channel/TSG/VA-space rows, display registry, sticky guards) goes with the old
+    /// chain. The shared state the recipe closes over (logs, census, inboxes, the display model) is
+    /// the device's to reset. The next life's fn 1 re-selects as the first life's did — a guest that
+    /// rebooted into another driver version is served as that version.
+    pub fn reset_life(&mut self) {
+        self.inner = (self.build)(self.provisional);
+        self.current = self.provisional.driver_version();
+    }
+
     /// Decide at fn 1. Returns what happened, for the log and for tests.
     pub fn on_fn1(&mut self, payload: &[u8]) -> Reselection {
         // ★ 2026-10-04 (v3-windows, C2): a Windows build is keyed as the driver-matrix tag whose

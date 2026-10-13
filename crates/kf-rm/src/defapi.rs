@@ -238,6 +238,19 @@ impl Registry {
         }
     }
 
+    /// ★ Device reset (`docs/design/V3_DEVICE_RESET.md`): every 5080 object's table goes — they
+    /// were the previous guest life's, and a handle the next life reuses must find nothing (an old
+    /// registration names guest memory of a life that is gone). Bounds and the counters stay.
+    /// Returns the entries dropped.
+    pub fn clear_life(&self) -> usize {
+        let mut st = self.st();
+        let n = st.total;
+        st.objects.clear();
+        st.per_client.clear();
+        st.total = 0;
+        n
+    }
+
     fn st(&self) -> std::sync::MutexGuard<'_, State> {
         // A poisoned registry is a bug in this module; its state stays consistent per call.
         self.inner
@@ -510,6 +523,25 @@ mod tests {
             &params(handle, cmd, flags),
             |_| false,
         )
+    }
+
+    /// ★ Device reset: the previous life's registrations are gone (a handle the next life reuses
+    /// finds nothing), the bounds hold for the next life exactly as on a fresh registry.
+    #[test]
+    fn a_cleared_registry_holds_nothing_of_the_old_life_and_admits_the_next_one() {
+        let r = Registry::new(Bounds::default());
+        let fresh = Registry::new(Bounds::default());
+        assert_eq!(reg(&r, 0x4000_0002, 0x2080_012d, 0), NV_OK);
+        assert_eq!(reg(&r, 0x4000_0003, 0x2080_012b, 0), NV_OK);
+        assert_eq!(r.stats().0, 2);
+        assert_eq!(r.clear_life(), 2);
+        assert_eq!(r.stats().0, 0);
+        assert_eq!(r.lookup(OBJ, 0x4000_0002), fresh.lookup(OBJ, 0x4000_0002));
+        assert_eq!(r.entries(OBJ), fresh.entries(OBJ));
+        assert_eq!(reg(&r, 0x4000_0002, 0x2080_012d, 0), reg(&fresh, 0x4000_0002, 0x2080_012d, 0));
+        assert_eq!(r.entries(OBJ), fresh.entries(OBJ));
+        assert_eq!(r.clear_life(), 1);
+        assert_eq!(r.clear_life(), 0);
     }
 
     /// Fallback experiment: refuse only the requested inner command, with no saved entry.

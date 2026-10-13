@@ -198,6 +198,12 @@ impl core::fmt::Debug for Stats {
 }
 
 impl Stats {
+    /// ★ Device reset (`docs/design/V3_DEVICE_RESET.md`): [`BOOT_CAP`] is per boot, so a new
+    /// guest life starts with it unspent. The other counters are the VM's and stay.
+    pub fn new_boot(&self) {
+        self.fwd.store(0, Ordering::Relaxed);
+    }
+
     /// Fresh counters.
     #[must_use]
     pub fn new() -> Stats {

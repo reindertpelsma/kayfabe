@@ -153,3 +153,36 @@ fn a_different_pre_fn1_surface_or_an_unmeasured_version_is_refused_by_name() {
     }
     assert_eq!(w.current(), v(580, 159, 4));
 }
+
+/// ★ Device reset (`docs/design/V3_DEVICE_RESET.md`): the chain goes back to the provisional
+/// version with a FRESH build (no state of the old chain survives), and the next life re-selects
+/// on its own fn 1 — to another version, if the guest rebooted into one.
+#[test]
+fn a_reset_chain_is_a_fresh_provisional_build_and_the_next_life_reselects_again() {
+    let (mut w, built) = wrapper(t(580, 159, 4), GuestDriverSource::Defaulted);
+    assert_eq!(answered_as(&mut w, &fn1("580.105.08")), "580.105.08");
+    w.reset_life();
+    assert_eq!(w.current(), v(580, 159, 4));
+    assert_eq!(
+        answered_as(&mut w, &RpcCommand {
+            function: RpcFunction::GspSetSystemInfo,
+            code: 72,
+            sequence: 1,
+            payload: Vec::new(),
+            elements: 1,
+            delivered: Vec::new(),
+        }),
+        "580.159.04",
+        "the fresh provisional chain answers"
+    );
+    assert_eq!(
+        *built.lock().expect("lock"),
+        vec![v(580, 159, 4), v(580, 105, 8), v(580, 159, 4)],
+        "one fresh build per reset"
+    );
+    assert_eq!(answered_as(&mut w, &fn1("580.65.06")), "580.65.06");
+    assert_eq!(w.current(), v(580, 65, 6));
+    w.reset_life();
+    w.reset_life();
+    assert_eq!(w.current(), v(580, 159, 4));
+}
