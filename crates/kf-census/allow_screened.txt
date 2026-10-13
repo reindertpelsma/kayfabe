@@ -1,0 +1,26 @@
+# kf-census scrub --allow-screened: ids observed in the five real captures whose observed
+# bodies pass the structural screen (tier_checks/body_screen.py: no printable-string run, no
+# random-looking 16-byte window, no ROM signature) but whose PURPOSE IS NOT KNOWN. Off by
+# default (owner rule: unknown means off); load with --allow-screened or --allow-list.
+# All are in no ogkm tag (tier-1 NOT_IN_ANY_VERSION). A screen on one die is not a proof.
+
+0x00809908   # NV0080 object control, 16 B
+0x20802806   # 4 B
+0x20808524   # 4 B
+0x2080852a   # 1784 B
+0x2080852e   # 528 B
+0x2080853a   # 1456 B
+0x20809001   # CUDA-runtime init row, 8 B
+0x20809004   # by far the most frequent, 1544 B, 71 distinct replies
+0x20809009   # CUDA-runtime init row, 8 B
+0x2080a02f   # the GPU itself answers 0x56, 1 B
+0x2080a060   # 28 B
+0x2080a088   # 12 B
+0x2080a618   # 8620 B, the largest
+0x2080a630   # 1160 B
+0x2080a70a   # 26 B
+0x2080a801   # 1028 B
+0x2080b201   # 2188 B
+0x20810108   # NV2081 control, 992 B
+0x2081010d   # needed for Windows StartDevice, 0 B observed
+0x007302a5   # display query, 16 B (UUID-sized: kept off by hand), 157 calls, one distinct body
