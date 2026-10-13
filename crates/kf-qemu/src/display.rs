@@ -2560,6 +2560,7 @@ impl Device {
         // (`DisplayPlane::rm_unloaded`, a device reset).
         let mut boot_done = false;
         let mut unloads_seen = dp.unloads.load(Ordering::Acquire);
+        let mut life_ends = 0u64;
         // ★ B5 (`V3_DISPLAY.md` §4.11.13): what the console shows when nothing is scanned
         let mut shown_last: Option<u64> = None;
         let mut shown_lines = 0u32;
@@ -2572,6 +2573,8 @@ impl Device {
                 b.layer.extent, b.size.0, b.size.1, b.layer.pitch
             );
         }
+        self.display_up.store(true, Ordering::Release);
+        let _up = crate::device::Up(&self.display_up);
         while !self.stop.load(Ordering::Acquire) {
             // the deadline: the earliest (capped) vblank, a 2 ms acquire poll, the boot picture's
             // check clock, or 50 ms
@@ -2628,16 +2631,19 @@ impl Device {
                 io.inst = None;
                 io.img = None;
                 shown_last = None;
-                eprintln!(
-                    "kf3: display: +{} ms the guest's display life ENDED ({}): {channels} model channel(s), {dropped} queued completion(s) dropped (never written){}",
-                    started.elapsed().as_millis(),
-                    if owed.is_some() { "device reset" } else { "its RM unloaded" },
-                    if dp.boot.is_some() {
-                        " — the boot layer is shown again"
-                    } else {
-                        ""
-                    }
-                );
+                life_ends += 1;
+                if crate::reset::loud(life_ends) {
+                    eprintln!(
+                        "kf3: display: +{} ms the guest's display life ENDED ({}): {channels} model channel(s), {dropped} queued completion(s) dropped (never written){}",
+                        started.elapsed().as_millis(),
+                        if owed.is_some() { "device reset" } else { "its RM unloaded" },
+                        if dp.boot.is_some() {
+                            " — the boot layer is shown again"
+                        } else {
+                            ""
+                        }
+                    );
+                }
                 if let Some(e) = owed {
                     dp.life_reset.done(e);
                     let _ = self.drainer_efd.signal();

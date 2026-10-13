@@ -7943,7 +7943,7 @@ impl ChanPlane {
             "device reset: barrier",
             Box::new(move |me: &ChanPlane| me.reset_barrier(epoch, round)),
         );
-        Ok(if clients.is_empty() {
+        Ok(if clients.is_empty() || !crate::reset::loud(epoch) {
             String::new()
         } else {
             format!("device reset epoch {epoch} round {round}: freeing {} guest client(s) {clients:x?}", clients.len())
@@ -7978,6 +7978,9 @@ impl ChanPlane {
         self.reset_nonhost_state();
         self.life_reset.done(epoch);
         let _ = self.release.signal();
+        if complete && !crate::reset::loud(epoch) {
+            return Ok(String::new());
+        }
         Ok(format!(
             "device reset epoch {epoch}: channel plane {} after {} round(s) — {census}",
             if complete {

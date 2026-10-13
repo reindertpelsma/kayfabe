@@ -338,6 +338,20 @@ pub struct Device {
     pub reset: crate::reset::Reset,
     /// The VM's deferred-API tables (OWNER_RULINGS §U) — per guest life, cleared by a reset.
     defapi_reg: std::sync::Arc<kf_rm::defapi::Registry>,
+    /// ★ Device reset: the VA thread / the display worker is in its loop (set on entry, cleared on
+    /// every exit). A reset never waits for an owner that is not running: one that never started
+    /// holds nothing of a guest life, and one that stopped has nothing left to reset.
+    pub(crate) va_up: AtomicBool,
+    pub(crate) display_up: AtomicBool,
+}
+
+/// Clears a liveness flag when its loop exits by any path.
+pub(crate) struct Up<'a>(pub(crate) &'a AtomicBool);
+
+impl Drop for Up<'_> {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
+    }
 }
 
 impl Device {
@@ -1211,6 +1225,8 @@ impl Device {
             trace,
             reset: crate::reset::Reset::default(),
             defapi_reg,
+            va_up: AtomicBool::new(false),
+            display_up: AtomicBool::new(false),
         })
     }
 
@@ -1961,6 +1977,8 @@ impl Device {
         let carve = kf_chip::bar0::fb_layout(self.mem.fb_len).map_or(0, |l| l.carve());
         let mut va_busy_from = crate::prof::now_ns();
         let mut cache_done = [0u64; kf_trap::cacheop::CacheOp::COUNT];
+        self.va_up.store(true, Ordering::Release);
+        let _up = Up(&self.va_up);
         while !self.stop.load(Ordering::Acquire) {
             if let Some(line) =
                 crate::tspace::prewarm(&self.tspace, &self.mem, self.rm, self.store.handle, carve)
@@ -2030,6 +2048,14 @@ impl Device {
                         }
                     }
                     let splits = self.mem.inbox.reset_life();
+                    // Windows USER-ring private VA: the channel frees queued their leases' release
+                    // (and cancelled pending allocations); served now, before the mirrors they
+                    // keep live are retired. Bounded: what is left is counted as KEPT below.
+                    let mut served = 0u32;
+                    while self.mem.inbox.user_va.has_work() && served < 4096 {
+                        self.mem.inbox.user_va.serve(&m, self.rm);
+                        served += 1;
+                    }
                     let line = crate::mem::reset_memory_life(&mut m, &self.mem, self.rm);
                     last_seq = None;
                     armed_seen = None;
@@ -2040,10 +2066,12 @@ impl Device {
                     let _ = self.mem.inbox.settle(taken);
                     self.mem.inbox.life_reset.done(epoch);
                     let _ = self.drainer_efd.signal();
-                    eprintln!(
-                        "kf3: mem t={:.3}s device reset #{epoch}: {statements} statement(s) and {splits} split(s) of the old life dropped; {line}",
-                        self.born.elapsed().as_secs_f64()
-                    );
+                    if crate::reset::loud(epoch) {
+                        eprintln!(
+                            "kf3: mem t={:.3}s device reset #{epoch}: {statements} statement(s) and {splits} split(s) of the old life dropped; {line}",
+                            self.born.elapsed().as_secs_f64()
+                        );
+                    }
                 }
                 continue;
             }
@@ -2437,7 +2465,9 @@ impl Device {
             // (the act thread's deregistrations wait for it; deliveries are absorbed), and polls with
             // a 1 ms wait instead of parking. Every stage is non-blocking.
             if self.reset.pending() {
-                if let crate::reset::Progress::Completed(e) = self.reset.poll(self) {
+                if let crate::reset::Progress::Completed(e) = self.reset.poll(self)
+                    && crate::reset::loud(e)
+                {
                     eprintln!(
                         "kf3: device reset #{e} COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: {})",
                         self.reset.gate.dropped()
@@ -3489,6 +3519,9 @@ impl crate::reset::Owners for Device {
         if let Some(f) = &self.fsp {
             f.reset();
         }
+        if !crate::reset::loud(epoch) {
+            return;
+        }
         eprintln!(
             "kf3: device reset #{epoch}: vCPUs out (gate closed); {dropped} queued register write(s) dropped; GSP {phase:?} -> Cold (E11, {held} held repl(ies) dropped, never posted); chain rebuilt; os-event arms, {defapi} deferred-API entr(ies), interrupt tree{} cleared",
             if self.fsp.is_some() { ", FSP EMEM" } else { "" }
@@ -3504,7 +3537,13 @@ impl crate::reset::Owners for Device {
 
     fn released(&self, epoch: u64) -> bool {
         self.chans.life_reset.is_done(epoch)
-            && self.display.is_none_or(|dp| dp.life_reset.is_done(epoch))
+            && self.display.is_none_or(|dp| {
+                if !dp.life_reset.is_done(epoch) && !self.display_up.load(Ordering::Acquire) {
+                    // not running: nothing of a guest life to reset — and nothing owed when it starts
+                    dp.life_reset.done(epoch);
+                }
+                dp.life_reset.is_done(epoch)
+            })
     }
 
     fn begin_memory(&self, epoch: u64) {
@@ -3513,11 +3552,19 @@ impl crate::reset::Owners for Device {
     }
 
     fn memory_done(&self, epoch: u64) -> bool {
+        if !self.mem.inbox.life_reset.is_done(epoch) && !self.va_up.load(Ordering::Acquire) {
+            // not running: nothing of a guest life to reset — and nothing owed when it starts
+            self.mem.inbox.life_reset.done(epoch);
+        }
         self.mem.inbox.life_reset.is_done(epoch)
     }
 
     fn finish(&self, epoch: u64) {
         let busy = self.plane.reset_tokens();
+        // ⊘ Again, now that every owner has stopped: a completion edge or a display event that
+        // latched between the Drainer stage and the owners' acknowledgements is the old life's.
+        self.intr.reset();
+        self.hotplug_pending.store(0, Ordering::Release);
         self.restore_shadow();
         // An interrupt raised for the old life and still counted in a vector's eventfd (QEMU's
         // msix_reset already released every KVM route) would be injected at the next life's first
@@ -3525,6 +3572,9 @@ impl crate::reset::Owners for Device {
         let mut stale = 0u64;
         for l in &self.irq_lines {
             stale += l.drain().unwrap_or(0);
+        }
+        if !crate::reset::loud(epoch) {
+            return;
         }
         eprintln!(
             "kf3: device reset #{epoch}: tokens swept ({busy} still BUSY), register shadow restored and republished, {stale} stale interrupt(s) drained"

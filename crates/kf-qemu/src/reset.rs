@@ -313,6 +313,14 @@ impl Reset {
     }
 }
 
+/// ★ Whether reset number `n` (or the n-th life end) is logged: the first 16, then each power of
+/// two. ⊘ A guest can reset itself in a loop; the drainer may not be made to write a line per reset
+/// (owner: input-serving threads are quiet by default; a full stderr pipe would block them).
+#[must_use]
+pub fn loud(n: u64) -> bool {
+    n <= 16 || n.is_power_of_two()
+}
+
 /// ★ An acknowledgement word: the owning thread stores the epoch it finished; the drainer compares.
 /// Requests are an epoch too, so a late acknowledgement of an older request never satisfies a
 /// newer one.
@@ -381,7 +389,10 @@ mod tests {
         let g = Gate::default();
         let p = g.enter().expect("open");
         g.close();
-        assert!(!g.quiet(), "the entry that started before the close is still inside");
+        assert!(
+            !g.quiet(),
+            "the entry that started before the close is still inside"
+        );
         drop(p);
         assert!(g.quiet());
     }
@@ -423,7 +434,11 @@ mod tests {
             // ⊘ `quiet()` itself may flicker here: a refused entry counts for the nanoseconds between
             // its add and its subtract. What may never happen is a thread INSIDE.
             for _ in 0..10_000 {
-                assert_eq!(inside.load(Ordering::SeqCst), 0, "a vCPU inside a closed, quiet gate");
+                assert_eq!(
+                    inside.load(Ordering::SeqCst),
+                    0,
+                    "a vCPU inside a closed, quiet gate"
+                );
             }
             stop.store(true, Ordering::Relaxed);
             for v in vcpus {
@@ -492,7 +507,11 @@ mod tests {
         }
         fn begin_memory(&self, e: u64) {
             self.note(format!("memory {e}"));
-            assert_eq!(self.live.get(), 0, "memory reset only after the channels are gone");
+            assert_eq!(
+                self.live.get(),
+                0,
+                "memory reset only after the channels are gone"
+            );
             self.memory_asked.set(e);
             self.memory_polls.set(self.delay.get());
         }
@@ -545,7 +564,10 @@ mod tests {
         loop {
             let p = r.poll(&o);
             if let Progress::Pending(s) = p {
-                assert!(r.gate.is_closed(), "the gate opened before the reset finished");
+                assert!(
+                    r.gate.is_closed(),
+                    "the gate opened before the reset finished"
+                );
                 stages.push(s);
                 continue;
             }
@@ -557,7 +579,10 @@ mod tests {
             *o.calls.borrow(),
             ["drainer 1", "release 1", "memory 1", "finish 1"]
         );
-        assert!(stages.windows(2).all(|w| w[0] <= w[1]), "stages never go back: {stages:?}");
+        assert!(
+            stages.windows(2).all(|w| w[0] <= w[1]),
+            "stages never go back: {stages:?}"
+        );
         assert_eq!((o.live.get(), o.dirty.get()), (0, 0));
     }
 
@@ -570,9 +595,15 @@ mod tests {
         for _ in 0..5 {
             assert_eq!(r.poll(&o), Progress::Pending(Stage::Quiesce));
         }
-        assert!(o.calls.borrow().is_empty(), "no state may be reset while a vCPU is inside");
+        assert!(
+            o.calls.borrow().is_empty(),
+            "no state may be reset while a vCPU is inside"
+        );
         drop(p);
-        assert_eq!(run_to_completion(&r, &o).last(), Some(&Progress::Completed(1)));
+        assert_eq!(
+            run_to_completion(&r, &o).last(),
+            Some(&Progress::Completed(1))
+        );
     }
 
     #[test]
@@ -581,11 +612,17 @@ mod tests {
         let o = Fake::default();
         r.request();
         r.request();
-        assert_eq!(run_to_completion(&r, &o).last(), Some(&Progress::Completed(2)));
+        assert_eq!(
+            run_to_completion(&r, &o).last(),
+            Some(&Progress::Completed(2))
+        );
         // Two requests before the first poll are ONE run: the epoch is the newest request.
         assert_eq!(o.calls.borrow().len(), 4);
         r.request();
-        assert_eq!(run_to_completion(&r, &o).last(), Some(&Progress::Completed(3)));
+        assert_eq!(
+            run_to_completion(&r, &o).last(),
+            Some(&Progress::Completed(3))
+        );
         assert_eq!(o.calls.borrow().len(), 8);
         assert!(!r.gate.is_closed());
     }
@@ -618,8 +655,15 @@ mod tests {
             let end = run_to_completion(&r, &o);
             assert_eq!(end.last(), Some(&Progress::Completed(2)), "{stop_at:?}");
             let calls = o.calls.borrow();
-            assert_eq!(calls.last().map(String::as_str), Some("finish 2"), "{stop_at:?}: {calls:?}");
-            assert!(calls.iter().any(|c| c == "drainer 2"), "{stop_at:?}: {calls:?}");
+            assert_eq!(
+                calls.last().map(String::as_str),
+                Some("finish 2"),
+                "{stop_at:?}: {calls:?}"
+            );
+            assert!(
+                calls.iter().any(|c| c == "drainer 2"),
+                "{stop_at:?}: {calls:?}"
+            );
             assert!(!r.gate.is_closed());
         }
     }
@@ -647,7 +691,10 @@ mod tests {
         for _ in 0..100 {
             assert_eq!(r.poll(&o), Progress::Pending(Stage::Release));
         }
-        assert!(r.gate.is_closed(), "fail closed: a device that cannot reset accepts nothing");
+        assert!(
+            r.gate.is_closed(),
+            "fail closed: a device that cannot reset accepts nothing"
+        );
         // Backdate the stage so the stall is reported, once.
         r.run.lock().expect("run").since =
             Some(std::time::Instant::now() - STALL_AFTER - std::time::Duration::from_millis(1));
@@ -667,12 +714,22 @@ mod tests {
         for life in 1..=50u64 {
             o.live_a_life(life);
             r.request();
-            assert_eq!(run_to_completion(&r, &o).last(), Some(&Progress::Completed(life)));
+            assert_eq!(
+                run_to_completion(&r, &o).last(),
+                Some(&Progress::Completed(life))
+            );
             assert_eq!(o.live.get(), 0);
             assert_eq!(o.acquired.get(), o.released_total.get());
             assert_eq!(o.dirty.get(), 0);
         }
         assert_eq!(r.completed(), 50);
+    }
+
+    #[test]
+    fn reset_lines_are_bounded_for_a_guest_that_resets_in_a_loop() {
+        let n = (1..=1_000_000u64).filter(|n| loud(*n)).count();
+        assert!(n <= 16 + 20, "{n} lines for a million resets");
+        assert!(loud(1) && loud(16) && loud(1024) && !loud(17));
     }
 
     #[test]
