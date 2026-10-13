@@ -1,5 +1,28 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-13 09:11UTC — Vulkan PASS; default route verification follows
+
+Source3ee0dd10ac89d62c44d64ac9ca412a685503a5ad / RTX4070 / stock595.91.07 /
+Windows580.88 / run1630: original GravityMark Vulkan PASS181s/rc0, real image,
+timings and GPU proof, two FIFO source growth transitions32768→65536→131072,
+zero guest153/4101/livekernel/WER/reboot/GSPcycles and bounded hostXids.
+The last admission blocker was default subDeviceId0: the private native channel
+and scanner now share an explicitly authored id1. This is host configuration,
+not inferred guest RAMFC defaults. Existing worker mediation supplies the
+consumption-ordered guest FIFO/USERD source transition; no native update caller.
+Exact GPU-free2156PASS, Linux9/9+gate10/USER12/12, rebuilt fast30/30, desktop/gears
+PASS_WITH_WARNINGS (known startup assertions/DRM flip timeout), no desktopXid.
+Evidence: gravity-vulkan/user-worker/authored-default (includes linux/desktop/
+windows-1630). Cleanstop/noQEMU/DMA-FQ; personal Windows chain preserved.
+
+This PASS uses KF3_WIN_USER_RING_RELAY=1. A default-route change is prepared and
+GPU-free2157PASS/0FAIL/3ignored; final hardware/flag-free Windows result pending.
+Next: exact Linux9+10/30/desktop then original H264/D3D12/CUDA/Vulkan oracles on
+fresh default-route Windows. Do not claim default shipping success yet.
+Earlier native capability/cursor references remain useful, but no longer block
+the demonstrated mediated Vulkan path. CrossVM containment/driver-family breadth
+and wider app matrix remain separate open work.
+
 ## UPDATE 2026-10-13 — resumed; native relocation positive recovered
 
 Working branch `codex/windows-matrix-20261011`, worktree `/data/kf-inval-absent`.

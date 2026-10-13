@@ -1,0 +1,20 @@
+INTERACTIVE_START kf3=3ee0dd10 checkout=3ee0dd10 2026-10-13T11:04:28+02:00
+[interactive] session: ubuntu (uid 1000) session 1 type=wayland wayland=wayland-0 x=:0; locked=no
+[interactive] broker: pid 2755843, backend wayland, socket /run/user/1000/nvkvm/display.sock, badf2d707da4 (/opt/nvkvm-broker/nvkvm-display-broker)
+[interactive] QEMU pid 2755856, kf3 3ee0dd10 (/workspace/bench/kf3-bins/3ee0dd10/qemu-system-x86_64)
+
+  ┌──────────────────────────────────────────────────────────────────────────────┐
+  │ kayfabe guest window: "kayfabe guest" on ubuntu's desktop
+  │   pointer      hover = absolute tablet (the guest pointer follows yours)
+  │   CTRL+ALT+G   GRAB: keyboard + pointer locked to the guest, relative mouse (GNOME asks
+  │                once whether to allow inhibiting shortcuts: click Allow);
+  │                press CTRL+ALT+G again to RELEASE (focus loss also releases)
+  │   CTRL+ALT+F   fullscreen on/off
+  │   grub menu    10 s after TianoCore; arrows, e and Enter work in the window
+  │   desktop      Cinnamon logs in by itself as 'ubuntu' (~60-90 s)
+  │   stop         Ctrl-C here, or: /data/kf-memory-access-host-3ee0dd10a/scripts/bench/display/interactive.sh stop  (or close the window: it asks the
+  │                guest to power down)
+  │   guest ssh    ssh -i /workspace/bench/guest_key ubuntu@192.168.77.2
+  │   logs         /var/lib/kf-windows-20261005/codex-linux-desktop-3ee0dd10a/run
+  └──────────────────────────────────────────────────────────────────────────────┘
+INTERACTIVE_EXIT rc=130 2026-10-13T11:05:18+02:00
