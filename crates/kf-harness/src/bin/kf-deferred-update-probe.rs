@@ -1,7 +1,8 @@
 //! Native authored deferred channel-update probe, public ctrl5080 V2 path.
-//! No guest bytes. Same-config update tests trigger permissions/completion only;
-//! this is not proof of USERD migration or a production passthrough fix.
-use kf_abi::submit::{fifo, gp_entry, method_header_inc, USERD_GP_PUT};
+//! No guest bytes. Prepared relocation modes observe replacement GPU markers
+//! and USERD GET; same-config modes alone cannot establish migration success.
+//! No production passthrough fix or driver-independent cursor rule is implied.
+use kf_abi::submit::{USERD_GP_PUT, fifo, gp_entry, method_header_inc};
 use kf_host::{HostRm, MapBacking, MapNode, RingSpec, ViewAccess};
 use kf_linux_raw::{Backing, CachePolicy, DevDir, HostOffset, HostPageSize, VolatileRegion};
 use std::time::{Duration, Instant};
@@ -16,6 +17,7 @@ const NEW_GP: u64 = 0x5000;
 const NEW_USERD: u64 = 0x6000;
 const NEW_PB: u64 = 0x7000;
 const NEW_FENCE: u64 = 0x8010;
+const SLOT_ZERO_FENCE: u64 = 0x8020;
 
 fn main() {
     if let Err(e) = run() {
@@ -36,15 +38,25 @@ fn run() -> Result<(), String> {
     if args.len() != 1
         || !matches!(
             args[0].as_str(),
-            "nop" | "update" | "update-hold" | "migrate" | "migrate-nop"
+            "nop"
+                | "update"
+                | "update-hold"
+                | "migrate"
+                | "migrate-nop"
+                | "migrate-cursors"
+                | "migrate-cursors-nop"
         )
     {
         return Err(
-            "usage: kf-deferred-update-probe nop|update|update-hold|migrate|migrate-nop".into(),
+            "usage: kf-deferred-update-probe nop|update|update-hold|migrate|migrate-nop|migrate-cursors|migrate-cursors-nop".into(),
         );
     }
-    let trigger = !matches!(args[0].as_str(), "nop" | "migrate-nop");
-    let migration = matches!(args[0].as_str(), "migrate" | "migrate-nop");
+    let trigger = !matches!(
+        args[0].as_str(),
+        "nop" | "migrate-nop" | "migrate-cursors-nop"
+    );
+    let cursors = matches!(args[0].as_str(), "migrate-cursors" | "migrate-cursors-nop");
+    let migration = cursors || matches!(args[0].as_str(), "migrate" | "migrate-nop");
     let engine = kf_abi::submit::ENGINE_TYPE_GRAPHICS;
     let dev = DevDir::open(c"/dev").map_err(|e| format!("dev: {e:?}"))?;
     let rm = HostRm::open(&dev, kf_harness::gate_gpu(), &kf_chip::choose_host_classes)
@@ -139,9 +151,10 @@ fn run() -> Result<(), String> {
         )
         .map_err(|e| format!("V2 registration: {e:?}"))?;
         if migration {
-            // Only the replacement ring references this independent GPU-written
-            // marker. Two harmless identical entries accommodate initial GET0
-            // or continuity GET1 without pretending either is established.
+            // Only the replacement ring references these GPU-written markers.
+            // The original fixture duplicates slots to admit GET0 or GET1.
+            // Cursor modes give slot0 an independent marker and slot1 the
+            // original marker2; neither CPU code nor the old ring writes them.
             let mut replacement = Vec::new();
             method(
                 &mut replacement,
@@ -167,17 +180,31 @@ fn run() -> Result<(), String> {
                     .map_err(|e| format!("replacement PB: {e:?}"))?;
             }
             for slot in 0..2 {
-                cpu.store_u32(HostOffset::new(NEW_GP + slot * 8), replacement_gp as u32)
+                let entry = if cursors && slot == 0 {
+                    let mut first = replacement.clone();
+                    // SEM_ADDR_LO/HI and payload in the authored first packet.
+                    first[1] = (va + SLOT_ZERO_FENCE) as u32;
+                    first[2] = ((va + SLOT_ZERO_FENCE) >> 32) as u32;
+                    first[3] = 10;
+                    let first_pb = NEW_PB + 0x100;
+                    for (i, word) in first.iter().enumerate() {
+                        cpu.store_u32(HostOffset::new(first_pb + 4 * i as u64), *word)
+                            .map_err(|e| format!("slot0 PB: {e:?}"))?;
+                    }
+                    gp_entry(va + first_pb, 4 * first.len() as u64).ok_or("slot0 GP")?
+                } else {
+                    replacement_gp
+                };
+                cpu.store_u32(HostOffset::new(NEW_GP + slot * 8), entry as u32)
                     .map_err(|e| format!("replacement GPlo: {e:?}"))?;
-                cpu.store_u32(
-                    HostOffset::new(NEW_GP + slot * 8 + 4),
-                    (replacement_gp >> 32) as u32,
-                )
-                .map_err(|e| format!("replacement GPhi: {e:?}"))?;
+                cpu.store_u32(HostOffset::new(NEW_GP + slot * 8 + 4), (entry >> 32) as u32)
+                    .map_err(|e| format!("replacement GPhi: {e:?}"))?;
             }
             cpu.store_u32(HostOffset::new(NEW_USERD + USERD_GP_PUT), 2)
                 .map_err(|e| format!("replacement PUT: {e:?}"))?;
-            println!("DEFERRED_MIGRATION_PREPARED memory={mem:#x} mapped_va={va:#x} bytes={BYTES} old_gp={GP:#x}/32 old_userd={USERD:#x} new_gp={NEW_GP:#x}/64 new_userd={NEW_USERD:#x} replacement_put=2; registration OK; distinct marker only in replacement PB; no CPU completion");
+            println!(
+                "DEFERRED_MIGRATION_PREPARED memory={mem:#x} mapped_va={va:#x} bytes={BYTES} old_gp={GP:#x}/32 old_userd={USERD:#x} new_gp={NEW_GP:#x}/64 new_userd={NEW_USERD:#x} replacement_put=2; registration OK; distinct marker only in replacement PB; no CPU completion"
+            );
         }
         println!(
             "DEFERRED_UPDATE registered channel={chan:x?} object={object:#x} api={api:#x} sw_class_id={class_id:#x} privilege=USER"
@@ -248,7 +275,9 @@ fn run() -> Result<(), String> {
                     .map_err(|e| format!("replacement doorbell: {e:?}"))?;
                 std::thread::sleep(Duration::from_millis(1));
             }
-            println!("DEFERRED_MIGRATION_MATCHED_STIMULUS post_tail_doorbells=128 interval_ms=1 trigger={trigger}");
+            println!(
+                "DEFERRED_MIGRATION_MATCHED_STIMULUS post_tail_doorbells=128 interval_ms=1 trigger={trigger}"
+            );
         }
         if migration && trigger {
             loop {
@@ -259,11 +288,16 @@ fn run() -> Result<(), String> {
                     .load_u32(HostOffset::new(NEW_USERD + kf_abi::submit::USERD_GP_GET))
                     .map_err(|e| format!("replacement GET: {e:?}"))?;
                 if marker == 2 && get == 2 {
-                    println!("DEFERRED_MIGRATION_NATIVE_EFFECT marker={marker} new_get={get} new_put=2 post_tail_doorbells=128 elapsed_us={}", start.elapsed().as_micros());
+                    println!(
+                        "DEFERRED_MIGRATION_NATIVE_EFFECT marker={marker} new_get={get} new_put=2 post_tail_doorbells=128 elapsed_us={}",
+                        start.elapsed().as_micros()
+                    );
                     break;
                 }
                 if start.elapsed() > Duration::from_secs(10) {
-                    return Err(format!("migration bench deadline marker={marker} new_get={get}; no inner status or completion invented"));
+                    return Err(format!(
+                        "migration bench deadline marker={marker} new_get={get}; no inner status or completion invented"
+                    ));
                 }
                 std::thread::sleep(Duration::from_millis(1));
             }
@@ -296,6 +330,26 @@ fn run() -> Result<(), String> {
             }
             println!("DEFERRED_MIGRATION_NOP_CONTROL replacement_marker=0 replacement_get=0");
         }
+        if cursors {
+            let slot0 = cpu
+                .load_u32(HostOffset::new(SLOT_ZERO_FENCE))
+                .map_err(|e| format!("slot0 marker: {e:?}"))?;
+            let slot1 = cpu
+                .load_u32(HostOffset::new(NEW_FENCE))
+                .map_err(|e| format!("slot1 marker: {e:?}"))?;
+            let get = cpu
+                .load_u32(HostOffset::new(NEW_USERD + kf_abi::submit::USERD_GP_GET))
+                .map_err(|e| format!("cursor GET: {e:?}"))?;
+            let old_get = cpu
+                .load_u32(HostOffset::new(USERD + kf_abi::submit::USERD_GP_GET))
+                .map_err(|e| format!("old cursor GET: {e:?}"))?;
+            if (trigger && !matches!(slot0, 0 | 10)) || (!trigger && slot0 != 0) {
+                return Err(format!("unexpected slot0 marker {slot0} trigger={trigger}"));
+            }
+            println!(
+                "DEFERRED_MIGRATION_CURSOR_OBSERVATION trigger={trigger} slot0={slot0} slot1={slot1} new_get={get} new_put=2 seeded_get=0 old_get={old_get}"
+            );
+        }
         Ok(())
     })();
     // Quiesce/free the owned channel before revoking its memory, even on a failed run.
@@ -304,7 +358,9 @@ fn run() -> Result<(), String> {
         .transpose()
         .map_err(|e| format!("free channel: {e:?}"));
     if let Err(why) = &freed {
-        eprintln!("DEFERRED_UPDATE_CLEANUP retained native memory/mapping/view after uncertain channel free; closing own RM session before releasing CPU view: {why}");
+        eprintln!(
+            "DEFERRED_UPDATE_CLEANUP retained native memory/mapping/view after uncertain channel free; closing own RM session before releasing CPU view: {why}"
+        );
         let why = why.clone();
         drop(rm);
         drop(cpu);
