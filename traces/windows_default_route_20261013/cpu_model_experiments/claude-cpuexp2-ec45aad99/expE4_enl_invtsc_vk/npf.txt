@@ -1,0 +1,12 @@
+faults 67453
+    3317  GPA page 0x00c0b81000
+     278  GPA page 0x38000a002000
+     174  GPA page 0x38000a001000
+      24  GPA page 0x0146844000
+      23  GPA page 0x0109826000
+      23  GPA page 0x0100aed000
+      18  GPA page 0x010a80e000
+      17  GPA page 0x014623e000
+offsets within the top page: [('0x0', 510), ('0x210', 471), ('0x208', 469), ('0x408', 468), ('0x608', 468), ('0x410', 466), ('0x610', 464), ('0x10', 1)]
+known pages: IOAPIC 0xfec00000, HPET 0xfed00000 (main counter at +0xf0, config +0x10, comparator +0x108/+0x100)
+error codes: [('0x100000004', 39976), ('0x100000006', 16039), ('0x100000014', 6263), ('0x100000007', 3337)]
