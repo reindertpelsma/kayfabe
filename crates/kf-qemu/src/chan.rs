@@ -7959,14 +7959,16 @@ impl ChanPlane {
         let left = self.guest_clients();
         let parked = self.acts_parked.load(Ordering::Acquire);
         match reset_barrier_next(left.len(), parked, round) {
-            ResetNext::FreeAgain => return self.reset_free_round(epoch, round + 1),
+            ResetNext::FreeAgain => return self.reset_free_round(epoch, round.saturating_add(1)),
             ResetNext::WaitParked => {
                 // Only parked retries: wait for them, off the queue (the act loop runs everything
                 // else meanwhile), never a sleep.
                 delay_act(
-                    std::time::Instant::now() + RESET_RETRY,
+                    std::time::Instant::now()
+                        .checked_add(RESET_RETRY)
+                        .unwrap_or_else(std::time::Instant::now),
                     "device reset: barrier",
-                    Box::new(move |me: &ChanPlane| me.reset_barrier(epoch, round + 1)),
+                    Box::new(move |me: &ChanPlane| me.reset_barrier(epoch, round.saturating_add(1))),
                     kf_gsp::Deferred::new(),
                 );
                 return Err((ACT_REQUEUED, String::new()));
@@ -7991,7 +7993,7 @@ impl ChanPlane {
             } else {
                 "NOT EMPTY (host frees refused or retries still parked; counted reset_incomplete, the guest's tables are cleared regardless)"
             },
-            round + 1
+            round.saturating_add(1)
         ))
     }
 

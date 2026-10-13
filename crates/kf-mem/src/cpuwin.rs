@@ -508,9 +508,9 @@ impl<V: ViewOps> CpuWindow<V> {
         let mut out = WindowReset::default();
         for va in vas {
             match MapTarget::unmap(self, va, false) {
-                Ok(()) => out.unmapped += 1,
+                Ok(()) => out.unmapped = out.unmapped.saturating_add(1),
                 Err(e) => {
-                    out.kept += 1;
+                    out.kept = out.kept.saturating_add(1);
                     out.first_refusal.get_or_insert(e);
                 }
             }

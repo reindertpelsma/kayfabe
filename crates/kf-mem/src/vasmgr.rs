@@ -1015,8 +1015,8 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         };
         for w in core::mem::take(&mut self.pending) {
             match w {
-                Want::Invalidate(..) => out.invalidates += 1,
-                Want::Root(_) => out.roots += 1,
+                Want::Invalidate(..) => out.invalidates = out.invalidates.saturating_add(1),
+                Want::Root(_) => out.roots = out.roots.saturating_add(1),
                 Want::Split { ticket, .. } => out.split_tickets.push(ticket),
             }
         }

@@ -1969,10 +1969,10 @@ impl Bar1Target {
     /// The main loop's acknowledgements of these removals are drained by the next settle.
     pub fn reset_to_boot(&self) -> (kf_mem::cpuwin::WindowReset, usize) {
         let views: Vec<kf_trap::bar1db::Bar1View> = self.db.borrow().views().copied().collect();
-        let mut removed = 0;
+        let mut removed = 0usize;
         for v in views {
             if self.submit(false, v).is_ok() {
-                removed += 1;
+                removed = removed.saturating_add(1);
             }
             self.db.borrow_mut().remove(v.base);
         }
@@ -2227,13 +2227,13 @@ impl Inbox {
     /// counters (the vCPU cannot move them: the reset gate is closed). Returns the tickets dropped.
     /// The statement queue is the caller's to drain (it applies the `Retire`s).
     pub fn reset_life(&self) -> usize {
-        let mut n = 0;
+        let mut n = 0usize;
         if let Ok(mut q) = self.splits.lock() {
-            n += q.len();
+            n = n.saturating_add(q.len());
             q.clear();
         }
         if let Ok(mut m) = self.split_tokens.lock() {
-            n += m.len();
+            n = n.saturating_add(m.len());
             m.clear();
         }
         if let Ok(mut m) = self.split_results.lock() {
@@ -3159,7 +3159,7 @@ pub fn reset_memory_life(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm)
         if line.contains("KEPT") {
             kept.push(line);
         } else {
-            retired += 1;
+            retired = retired.saturating_add(1);
         }
     }
     let boot = m
@@ -3180,12 +3180,14 @@ pub fn reset_memory_life(m: &mut Manager, plane: &MemPlane, rm: &'static HostRm)
             let chunk = vec![0u8; 1 << 20];
             let mut at = 0u64;
             while at < len {
-                let n = (len - at).min(chunk.len() as u64);
-                if let Err(e) = k.write_store(store_off + at, &chunk[..n as usize]) {
-                    zero_refused.push(format!("boot framebuffer @{:#x}: {e}", store_off + at));
+                let n = len.saturating_sub(at).min(chunk.len() as u64);
+                let off = store_off.saturating_add(at);
+                let bytes = chunk.get(..usize::try_from(n).unwrap_or(0)).unwrap_or(&[]);
+                if let Err(e) = k.write_store(off, bytes) {
+                    zero_refused.push(format!("boot framebuffer @{off:#x}: {e}"));
                     break;
                 }
-                at += n;
+                at = at.saturating_add(n.max(1));
             }
         }
     }
