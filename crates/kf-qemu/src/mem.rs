@@ -2249,6 +2249,9 @@ impl Inbox {
             a.store(0, Ordering::Release);
         }
         self.walk_busy.store(false, Ordering::Release);
+        // The VA thread's BAR1 physical-view notice restarts from 0 with it (the review of
+        // 2026-10-13: a non-zero count read as a fresh request).
+        self.bar1_physical.store(0, Ordering::Release);
         n
     }
 

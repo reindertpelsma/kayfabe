@@ -1433,7 +1433,8 @@ fn a_reset_plane_routes_nothing_of_the_old_life_and_allocates_like_a_fresh_one()
     );
     let _ = p.trap_write(Class::Doorbell, 0, 0, 5, 4);
     assert!(p.live_tokens() > 0);
-    // A worker owns token 5 while the reset sweeps: the sweep waits it out, never pulls it.
+    // A worker owns token 5 while the reset sweeps: the sweep never pulls it and reports it; the
+    // caller (the device's Finish stage) stays pending and sweeps again once the worker released it.
     assert!(matches!(p.tokens[5].claim(), Claim::Won(_)));
     assert_eq!(p.reset_tokens(), 1, "a BUSY token is not swept");
     assert_eq!(p.tokens[5].release(0, REACT_ROUNDS), Release::Idled);

@@ -143,8 +143,9 @@ pub trait Owners {
     fn begin_memory(&self, epoch: u64);
     /// The VA thread has acknowledged `epoch`.
     fn memory_done(&self, epoch: u64) -> bool;
-    /// The last, synchronous step before the gate opens ([`Stage::Finish`]).
-    fn finish(&self, epoch: u64);
+    /// The last, synchronous step before the gate opens ([`Stage::Finish`]). `false`: not yet (a
+    /// worker still owns a token) — nothing was changed, the drainer asks again on its next pass.
+    fn finish(&self, epoch: u64) -> bool;
     /// A stage has waited `waited` for its acknowledgement (bounded logging is the caller's).
     fn stalled(&self, _stage: Stage, _epoch: u64, _waited: std::time::Duration) {}
 }
@@ -179,6 +180,15 @@ pub struct Reset {
     requested: AtomicU64,
     completed: AtomicU64,
     run: Mutex<Run>,
+    /// The stage, mirrored lock-free for [`Reset::stage`] / [`Reset::status`] — callable from
+    /// anywhere, [`Owners::stalled`] included (which runs while `run` is held).
+    stage_now: std::sync::atomic::AtomicU8,
+    /// ★ A guest access was admitted since the last reset began ([`Reset::touched`]). A reset that
+    /// finds none — the machine's own reset at start-up, a reset straight after a reset — has
+    /// nothing of a guest life to undo and completes at once, without waiting for any owner.
+    touched: std::sync::atomic::AtomicBool,
+    /// Resets that found the device pristine (status line).
+    pristine: AtomicU64,
 }
 
 impl Reset {
@@ -207,10 +217,26 @@ impl Reset {
         self.completed.load(Ordering::Acquire)
     }
 
-    /// The stage the drainer is at (status line).
+    /// The stage the drainer is at (status line). Lock-free.
     #[must_use]
     pub fn stage(&self) -> Stage {
-        self.run.lock().map_or(Stage::Idle, |r| r.stage)
+        match self.stage_now.load(Ordering::Acquire) {
+            1 => Stage::Quiesce,
+            2 => Stage::Drainer,
+            3 => Stage::Release,
+            4 => Stage::Memory,
+            5 => Stage::Finish,
+            _ => Stage::Idle,
+        }
+    }
+
+    /// ★ A guest access was admitted (the vCPU path calls this after [`Gate::enter`] succeeded):
+    /// the device is no longer as realize — or the last reset — left it. One relaxed load when set.
+    #[inline]
+    pub fn touched(&self) {
+        if !self.touched.load(Ordering::Relaxed) {
+            self.touched.store(true, Ordering::SeqCst);
+        }
     }
 
     /// ★ The drainer's step. Runs every stage that can complete now and returns where it stopped.
@@ -219,9 +245,11 @@ impl Reset {
         if !self.pending() {
             return Progress::Idle;
         }
-        let Ok(mut r) = self.run.lock() else {
-            return Progress::Pending(Stage::Idle);
-        };
+        // ⊘ A poisoned sequence is still this drainer's: recover it rather than stall forever.
+        let mut r = self
+            .run
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         loop {
             match r.stage {
                 Stage::Idle => {
@@ -235,6 +263,16 @@ impl Reset {
                 Stage::Quiesce => {
                     if !self.gate.quiet() {
                         return self.waiting(&mut r, o);
+                    }
+                    // ⊘ Read only now: every entry admitted before the close has left, so its mark
+                    // is visible. Nothing admitted since the last reset began ⇒ nothing to undo.
+                    if !self.touched.swap(false, Ordering::SeqCst) {
+                        self.pristine.fetch_add(1, Ordering::Relaxed);
+                        self.enter(&mut r, Stage::Finish);
+                        if let Some(p) = self.complete(&mut r) {
+                            return p;
+                        }
+                        continue;
                     }
                     self.enter(&mut r, Stage::Drainer);
                 }
@@ -257,36 +295,53 @@ impl Reset {
                     self.enter(&mut r, Stage::Finish);
                 }
                 Stage::Finish => {
-                    o.finish(r.epoch);
-                    let newest = self.requested.load(Ordering::Acquire);
-                    if newest != r.epoch {
-                        // ⊘ A reset arrived while this one ran: the device it produced may already
-                        // hold the new request's predecessor's state — run the whole sequence again
-                        // (the gate stays closed).
-                        r.epoch = newest;
-                        self.enter(&mut r, Stage::Quiesce);
-                        continue;
+                    if !o.finish(r.epoch) {
+                        return self.waiting(&mut r, o);
                     }
-                    let epoch = r.epoch;
-                    self.enter(&mut r, Stage::Idle);
-                    self.completed.store(epoch, Ordering::Release);
-                    // ⊘ A request racing this open (its close before the open, its count after the
-                    // load) leaves the gate open until the next poll, whose first step closes it
-                    // again: the writes in between are ordered before that request, as writes on a
-                    // running device are.
-                    if self.requested.load(Ordering::Acquire) == epoch {
-                        self.gate.open();
+                    if let Some(p) = self.complete(&mut r) {
+                        return p;
                     }
-                    return Progress::Completed(epoch);
                 }
             }
         }
+    }
+
+    /// The end of a run: restart for a newer request (`None`), or complete and open the gate.
+    fn complete(&self, r: &mut Run) -> Option<Progress> {
+        let newest = self.requested.load(Ordering::Acquire);
+        if newest != r.epoch {
+            // ⊘ A reset arrived while this one ran: run the whole sequence again for it (the gate
+            // stays closed). Nothing was admitted since, so unless the guest got in before the
+            // close, the rerun finds the device pristine and completes at once.
+            r.epoch = newest;
+            self.enter(r, Stage::Quiesce);
+            return None;
+        }
+        let epoch = r.epoch;
+        self.enter(r, Stage::Idle);
+        self.completed.store(epoch, Ordering::Release);
+        // ⊘ A request racing this open (its close before the open, its count after the load) leaves
+        // the gate open until the next poll, whose first step closes it again: the writes in between
+        // are ordered before that request, as writes on a running device are.
+        if self.requested.load(Ordering::Acquire) == epoch {
+            self.gate.open();
+        }
+        Some(Progress::Completed(epoch))
     }
 
     fn enter(&self, r: &mut Run, s: Stage) {
         r.stage = s;
         r.since = Some(std::time::Instant::now());
         r.stall_said = false;
+        let n = match s {
+            Stage::Idle => 0,
+            Stage::Quiesce => 1,
+            Stage::Drainer => 2,
+            Stage::Release => 3,
+            Stage::Memory => 4,
+            Stage::Finish => 5,
+        };
+        self.stage_now.store(n, Ordering::Release);
     }
 
     fn waiting(&self, r: &mut Run, o: &dyn Owners) -> Progress {
@@ -304,9 +359,10 @@ impl Reset {
     #[must_use]
     pub fn status(&self) -> String {
         format!(
-            "reset[req={} done={} stage={:?} dropped={}]",
+            "reset[req={} done={} pristine={} stage={:?} dropped={}]",
             self.requested(),
             self.completed(),
+            self.pristine.load(Ordering::Relaxed),
             self.stage(),
             self.gate.dropped()
         )
@@ -468,6 +524,11 @@ mod tests {
         /// A callback run inside `begin_release` (a request arriving mid-run).
         during_release: RefCell<Option<Box<dyn Fn()>>>,
         stalls: Cell<u32>,
+        /// Polls `finish` answers "not yet" (a worker still owns a token).
+        finish_polls: Cell<u32>,
+        /// The reset whose status a stall report reads (the device's `stalled` does).
+        status_of: RefCell<Option<Arc<Reset>>>,
+        status_seen: RefCell<Option<String>>,
     }
 
     impl Fake {
@@ -523,11 +584,19 @@ mod tests {
             }
             true
         }
-        fn finish(&self, e: u64) {
+        fn finish(&self, e: u64) -> bool {
+            if self.finish_polls.get() > 0 {
+                self.finish_polls.set(self.finish_polls.get() - 1);
+                return false;
+            }
             self.note(format!("finish {e}"));
+            true
         }
         fn stalled(&self, _s: Stage, _e: u64, _w: std::time::Duration) {
             self.stalls.set(self.stalls.get() + 1);
+            if let Some(r) = self.status_of.borrow().as_ref() {
+                *self.status_seen.borrow_mut() = Some(r.status());
+            }
         }
     }
 
@@ -558,6 +627,7 @@ mod tests {
         let o = Fake::default();
         o.delay.set(3);
         o.live_a_life(7);
+        r.touched();
         assert_eq!(r.request(), 1);
         assert!(r.gate.is_closed() && r.pending());
         let mut stages = Vec::new();
@@ -591,6 +661,7 @@ mod tests {
         let r = Reset::default();
         let o = Fake::default();
         let p = r.gate.enter().expect("open");
+        r.touched();
         r.request();
         for _ in 0..5 {
             assert_eq!(r.poll(&o), Progress::Pending(Stage::Quiesce));
@@ -610,6 +681,7 @@ mod tests {
     fn a_reset_immediately_after_a_reset_runs_again_and_covers_both() {
         let r = Reset::default();
         let o = Fake::default();
+        r.touched();
         r.request();
         r.request();
         assert_eq!(
@@ -618,10 +690,19 @@ mod tests {
         );
         // Two requests before the first poll are ONE run: the epoch is the newest request.
         assert_eq!(o.calls.borrow().len(), 4);
+        // A reset straight after it, with no guest access between: nothing to undo, no owner asked.
         r.request();
         assert_eq!(
             run_to_completion(&r, &o).last(),
             Some(&Progress::Completed(3))
+        );
+        assert_eq!(o.calls.borrow().len(), 4);
+        // With a guest access between, the whole sequence again.
+        r.touched();
+        r.request();
+        assert_eq!(
+            run_to_completion(&r, &o).last(),
+            Some(&Progress::Completed(4))
         );
         assert_eq!(o.calls.borrow().len(), 8);
         assert!(!r.gate.is_closed());
@@ -634,6 +715,7 @@ mod tests {
             let r = Arc::new(Reset::default());
             let o = Fake::default();
             o.delay.set(2);
+            r.touched();
             if stop_at == Stage::Quiesce {
                 let p = r.gate.enter().expect("open");
                 r.request();
@@ -654,17 +736,16 @@ mod tests {
             assert!(r.gate.is_closed());
             let end = run_to_completion(&r, &o);
             assert_eq!(end.last(), Some(&Progress::Completed(2)), "{stop_at:?}");
+            for p in &end[..end.len() - 1] {
+                assert!(matches!(p, Progress::Pending(_)), "{stop_at:?}: {end:?}");
+            }
             let calls = o.calls.borrow();
-            assert_eq!(
-                calls.last().map(String::as_str),
-                Some("finish 2"),
-                "{stop_at:?}: {calls:?}"
-            );
-            assert!(
-                calls.iter().any(|c| c == "drainer 2"),
-                "{stop_at:?}: {calls:?}"
-            );
-            assert!(!r.gate.is_closed());
+            // One full run, whose epoch is the request it started for (1, or 2 when both arrived
+            // before the drainer could start); the rerun for request 2 finds the device pristine
+            // (the gate was closed all along) and asks no owner.
+            assert_eq!(calls.len(), 4, "{stop_at:?}: {calls:?}");
+            assert!(calls[3].starts_with("finish"), "{stop_at:?}: {calls:?}");
+            assert!(!r.gate.is_closed() && !r.pending());
         }
     }
 
@@ -676,6 +757,7 @@ mod tests {
         *o.during_release.borrow_mut() = Some(Box::new(move || {
             r2.request();
         }));
+        r.touched();
         r.request();
         let end = run_to_completion(&r, &o);
         assert_eq!(end.last(), Some(&Progress::Completed(2)));
@@ -687,6 +769,7 @@ mod tests {
         let r = Reset::default();
         let o = Fake::default();
         o.delay.set(u32::MAX);
+        r.touched();
         r.request();
         for _ in 0..100 {
             assert_eq!(r.poll(&o), Progress::Pending(Stage::Release));
@@ -713,6 +796,7 @@ mod tests {
         o.delay.set(1);
         for life in 1..=50u64 {
             o.live_a_life(life);
+            r.touched();
             r.request();
             assert_eq!(
                 run_to_completion(&r, &o).last(),
@@ -723,6 +807,68 @@ mod tests {
             assert_eq!(o.dirty.get(), 0);
         }
         assert_eq!(r.completed(), 50);
+    }
+
+    /// ★ The machine's own reset at start-up (and a reset straight after a reset): no guest access
+    /// was admitted, so there is nothing to undo — the gate opens at once and no owner is asked
+    /// (the review of 2026-10-13: waiting for a VA thread busy with a cold prewarm would have kept
+    /// the gate closed for seconds while the guest started).
+    #[test]
+    fn a_pristine_device_resets_at_once_without_asking_any_owner() {
+        let r = Reset::default();
+        let o = Fake::default();
+        o.delay.set(u32::MAX);
+        r.request();
+        assert_eq!(r.poll(&o), Progress::Completed(1));
+        assert!(o.calls.borrow().is_empty());
+        assert!(!r.gate.is_closed() && !r.pending());
+        assert!(r.status().contains("pristine=1"), "{}", r.status());
+        // The first admitted access marks it; the next reset is a full one.
+        let p = r.gate.enter().expect("open");
+        r.touched();
+        drop(p);
+        r.request();
+        assert_eq!(r.poll(&o), Progress::Pending(Stage::Release));
+    }
+
+    /// ★ The review of 2026-10-13 (HIGH): the device's stall report reads the status line, which
+    /// read the stage under the sequence's own lock — held by `poll` while it reports: the drainer
+    /// deadlocked exactly when a stage stalled. The stage is now mirrored lock-free.
+    #[test]
+    fn a_stall_report_may_read_the_status_without_deadlocking() {
+        let r = Arc::new(Reset::default());
+        let o = Fake::default();
+        *o.status_of.borrow_mut() = Some(r.clone());
+        o.delay.set(u32::MAX);
+        r.touched();
+        r.request();
+        assert_eq!(r.poll(&o), Progress::Pending(Stage::Release));
+        r.run.lock().expect("run").since =
+            Some(std::time::Instant::now() - STALL_AFTER - std::time::Duration::from_millis(1));
+        assert_eq!(r.poll(&o), Progress::Pending(Stage::Release));
+        let seen = o.status_seen.borrow().clone().expect("the report read the status");
+        assert!(seen.contains("stage=Release"), "{seen}");
+    }
+
+    /// ★ The review of 2026-10-13 (MEDIUM): Finish waits until no worker owns a token (the sweep
+    /// would leave that word with its old route) — the gate stays closed meanwhile.
+    #[test]
+    fn finish_that_is_not_ready_keeps_the_gate_closed_until_it_is() {
+        let r = Reset::default();
+        let o = Fake::default();
+        o.finish_polls.set(3);
+        r.touched();
+        r.request();
+        for _ in 0..3 {
+            assert_eq!(r.poll(&o), Progress::Pending(Stage::Finish));
+            assert!(r.gate.is_closed());
+        }
+        assert_eq!(r.poll(&o), Progress::Completed(1));
+        assert_eq!(
+            *o.calls.borrow(),
+            ["drainer 1", "release 1", "memory 1", "finish 1"]
+        );
+        assert!(!r.gate.is_closed());
     }
 
     #[test]

@@ -1259,21 +1259,28 @@ impl Device {
     /// Register a BAR0 shadow piece QEMU allocated (a ROM device's RAM) at BAR0 offset `base`, and
     /// fill it: zeros, the boot registers, the PROM window's VBIOS bytes, the timer PLM.
     pub fn attach_shadow(&self, base: u64, mem: RawRegion) {
-        self.fill_piece(base, mem);
+        mem.write_from(0, &self.piece_image(base, mem.len()));
         if let Ok(mut s) = self.staged.lock() {
             s.push(Piece { base, mem });
         }
     }
 
-    /// What a shadow piece holds before the guest's first access: the boot registers, the PROM
-    /// window's VBIOS bytes and the timer PLM over QEMU's zeroed ROM-device RAM. ONE function for
-    /// realize ([`Device::attach_shadow`]) and the device reset ([`Device::restore_shadow`], which
-    /// zeroes first), so the two cannot differ.
-    fn fill_piece(&self, base: u64, mem: RawRegion) {
-        let end = base + mem.len() as u64;
+    /// What a shadow piece of `len` bytes at BAR0 `base` holds before the guest's first access:
+    /// zeros (QEMU's ROM-device RAM), the boot registers, the PROM window's VBIOS bytes and the timer
+    /// PLM. ONE function for realize ([`Device::attach_shadow`]) and the device reset
+    /// ([`Device::restore_shadow`]), so the two cannot differ.
+    fn piece_image(&self, base: u64, len: usize) -> Vec<u8> {
+        let mut img = vec![0u8; len];
+        let end = base + len as u64;
+        let mut put = |off: u64, bytes: &[u8]| {
+            let at = (off - base) as usize;
+            if let Some(dst) = img.get_mut(at..at + bytes.len()) {
+                dst.copy_from_slice(bytes);
+            }
+        };
         for r in &self.boot {
             if (base..end).contains(&r.off) {
-                mem.store_u32((r.off - base) as usize, r.value);
+                put(r.off, &r.value.to_le_bytes());
             }
         }
         if base < PROM_BASE + PROM_BYTES && PROM_BASE < end {
@@ -1282,15 +1289,16 @@ impl Device {
             let img_lo = (lo - PROM_BASE) as usize;
             let img_hi = ((hi - PROM_BASE) as usize).min(self.vbios.len());
             if img_lo < img_hi {
-                mem.write_from((lo - base) as usize, &self.vbios[img_lo..img_hi]);
+                put(lo, &self.vbios[img_lo..img_hi]);
             }
         }
         if let Some((off, v)) = self.plane.timer.plm_shadow() {
             let off = u64::from(off);
             if (base..end).contains(&off) {
-                mem.store_u32((off - base) as usize, v);
+                put(off, &v.to_le_bytes());
             }
         }
+        img
     }
 
     /// Seal the shadow (after every piece is attached) and publish the GSP registers' initial
@@ -1402,6 +1410,7 @@ impl Device {
                 _ => u64::MAX,
             };
         };
+        self.reset.touched();
         let v = self.bar0_read_served(off, width);
         // ★ DIAGNOSTIC (`KF3_BAR0_TRACE`, default off): one atomic load when off.
         self.chans.bar0trace.note(
@@ -1489,6 +1498,7 @@ impl Device {
         let Some(_pass) = self.reset.gate.enter() else {
             return;
         };
+        self.reset.touched();
         // ★ DIAGNOSTIC (`KF3_BAR0_TRACE`, default off): one atomic load when off. The next RPC's
         // queue-head write closes an open window.
         self.chans.bar0trace.note(
@@ -3462,11 +3472,18 @@ impl Device {
     /// interrupt tree's read-back. Drainer only (it owns publication); the vCPU gate is closed, so
     /// no guest write lands in between.
     fn restore_shadow(&self) {
+        // ⊘ Word by word, and only the words that differ (the review of 2026-10-13): the vCPUs run
+        // during a reset and read the shadow without an exit — zeroing a piece and refilling it
+        // would show them a 0 `PMC_BOOT_0` for a moment.
         if let Some(pieces) = self.pieces.get() {
             for p in pieces {
-                let zero = vec![0u8; p.mem.len()];
-                p.mem.write_from(0, &zero);
-                self.fill_piece(p.base, p.mem);
+                let want = self.piece_image(p.base, p.mem.len());
+                for (i, w) in want.chunks_exact(4).enumerate() {
+                    let v = u32::from_le_bytes([w[0], w[1], w[2], w[3]]);
+                    if p.mem.load_u32(i * 4) != Some(v) {
+                        p.mem.store_u32(i * 4, v);
+                    }
+                }
             }
         }
         for h in &self.holes {
@@ -3561,8 +3578,14 @@ impl crate::reset::Owners for Device {
         self.mem.inbox.life_reset.is_done(epoch)
     }
 
-    fn finish(&self, epoch: u64) {
+    fn finish(&self, epoch: u64) -> bool {
+        // ⊘ Not while a worker owns a token (the review of 2026-10-13): its release would put the
+        // word back IDLE with the old route. Nothing below runs until the sweep is complete; the
+        // drainer asks again next pass (a stall is reported after `reset::STALL_AFTER`).
         let busy = self.plane.reset_tokens();
+        if busy > 0 {
+            return false;
+        }
         // ⊘ Again, now that every owner has stopped: a completion edge or a display event that
         // latched between the Drainer stage and the owners' acknowledgements is the old life's.
         self.intr.reset();
@@ -3575,12 +3598,12 @@ impl crate::reset::Owners for Device {
         for l in &self.irq_lines {
             stale += l.drain().unwrap_or(0);
         }
-        if !crate::reset::loud(epoch) {
-            return;
+        if crate::reset::loud(epoch) {
+            eprintln!(
+                "kf3: device reset #{epoch}: tokens swept, register shadow restored and republished, {stale} stale interrupt(s) drained"
+            );
         }
-        eprintln!(
-            "kf3: device reset #{epoch}: tokens swept ({busy} still BUSY), register shadow restored and republished, {stale} stale interrupt(s) drained"
-        );
+        true
     }
 
     fn stalled(&self, stage: crate::reset::Stage, epoch: u64, waited: std::time::Duration) {

@@ -407,7 +407,8 @@ impl<'v> Plane<'v> {
 
     /// ★ Device reset (`docs/design/V3_DEVICE_RESET.md`, stage Finish): every token word back to a
     /// fresh device's ([`TokenWord::reset_fresh`]), the rung bitmap cleared, no kernel ownership.
-    /// Returns how many tokens a worker still owns (`BUSY`): the caller retries on its next pass.
+    /// Returns how many tokens a worker still owns (`BUSY`): the caller retries on its next pass
+    /// and does nothing else meanwhile (the device's Finish stage stays pending).
     ///
     /// ⊘ Runs after every channel was freed through the free path (which retired its token and
     /// released its cap), so on a clean reset every word is already `DEAD` or fresh; this is the

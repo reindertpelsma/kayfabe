@@ -61,14 +61,17 @@ polled for a per-epoch acknowledgement (`reset::Ack`):
 | # | stage | who | what |
 |---|---|---|---|
 | 0 | request | main loop / vCPU, BQL | gate closed, request counted, drainer woken |
-| 1 | Quiesce | drainer | wait (by polling) until no vCPU is between gate entry and exit |
+| 1 | Quiesce | drainer | wait (by polling) until no vCPU is between gate entry and exit; then, if no guest access was admitted since the last reset began (`Reset::touched`: every admitted BAR0 write or read exit marks it), the device is **pristine** — nothing of a guest life exists — and the reset completes here without asking any owner (the machine's start-up reset; a reset straight after a reset) |
 | 2 | Drainer | drainer | privileged ring discarded and poison lifted; every Translated pump stopped (`ChanPlane::stop_pumps`, `try_lock` only); GSP E11; a fresh provisional chain (`ReselectAtFn1::reset_life`); `published` map; held stamps; hotplug word; os-event arms; deferred-API registry; GSS boot cap; CPU interrupt tree; FSP EMEM |
 | 3 | Release | act thread + display worker | act thread: every guest client still named by any channel-plane table is freed through `ChanPlane::free` — the guest's own client-free path (§9 order: tokens retired, doorbell fast path deregistered, twins/relays/USER rings/groups/debuggers/CUDA limit/encoder sessions released) — behind every act already queued; a barrier act repeats rounds (≤ 400 × 5 ms) while clients reappear or retries are parked, then clears the non-host per-life tables and acks. Display worker (once no copy is in flight): model, ports, engine, scan state, pacer, vblank gate, queued completions **dropped**, boot layer re-armed; acks |
 | 4 | Memory | VA thread | queued walks/splits/held clears dropped (`VaManager::abandon_life`), a walk in flight left to land; only `Retire` statements of the old life applied; inbox split/gate/waiter/cache-op state cleared; Windows private-VA queue served (bounded); invalidate port idle (armed request **abandoned**, never completed); PRAMIN all scratch; every guest VA space retired by `retire_mirror`; our BAR1/BAR2 roots and the boot framebuffer `[0, G)` zeroed on the GPU; K_BAR1/K_BAR2 re-registered with fresh walker slots (§9 ResetWalkerState), windows back to the boot view (`CpuWindow::reset_to_boot`: scratch first, then each view's aperture; BAR1's seed placed again; Hopper+ doorbell views removed through the same FIFO overlay verb); acks |
-| 5 | Finish | drainer | token sweep (every token word fresh, rung bitmap clear); interrupt tree and hotplug word reset **again** (anything latched while the owners finished is the old life's); BAR0 shadow refilled by the same function realize used (`fill_piece`), hole pages rebuilt, GSP registers / display static words and events / interrupt read-back republished; stale interrupt counts drained from every vector's eventfd; gate opened |
+| 5 | Finish | drainer | token sweep (every token word fresh, rung bitmap clear) — **pending while a worker owns a token** (nothing else runs until the sweep is complete); interrupt tree and hotplug word reset **again** (anything latched while the owners finished is the old life's); BAR0 shadow rewritten word by word, only where it differs from the image realize wrote (`piece_image`; never a zero pass the running vCPUs could read), hole pages rebuilt, GSP registers / display static words and events / interrupt read-back republished; stale interrupt counts drained from every vector's eventfd; gate opened |
 
-A request during a run restarts at stage 1 with the gate closed (every stage is idempotent); several
-requests before a poll are one run. An owner that is not running (`Device::va_up` / `display_up`,
+A request during a run restarts at stage 1 with the gate closed (every stage is idempotent); since
+the gate was closed all along, the rerun finds the device pristine and completes at once. Several
+requests before a poll are one run. The stage is mirrored in an atomic so the status line and the
+stall report never take the sequence's lock (the review's HIGH finding: they did, and the drainer
+deadlocked exactly when a stage stalled). An owner that is not running (`Device::va_up` / `display_up`,
 set on loop entry, cleared on any exit) is not waited for and its epoch is marked done, so it owes
 nothing when it starts (the start-up reset can run before the display worker's first pass).
 
@@ -103,7 +106,7 @@ excluded. M = covered by a GPU-free test (§7), I = inferred from reading.
 | `gssnative::Stats` (experiment) | B (cap) | `new_boot` (cap only) | act thread | — | I |
 | `CpuIntr` | B | `reset` at stage 2 and Finish, read-back republished | vCPU, workers (latch), display | gate + second reset after every owner acked | M |
 | `FspEmem` (Hopper+) | B | `reset` | vCPU | gate | M |
-| BAR0 shadow pieces, hole pages | B | zero + `fill_piece` (the realize fill) + republish | vCPU, drainer, VA, display | gate; publication is drainer-owned | I (fill shared by construction) |
+| BAR0 shadow pieces, hole pages | B | rewritten where they differ from `piece_image` (the realize image) + republish | vCPU, drainer, VA, display | gate; publication is drainer-owned | I (fill shared by construction) |
 | token words, rung bitmap, kernel-token set (plane) | B | retired by the frees; swept fresh at Finish (`reset_tokens`) | vCPU ring, workers claim, act retire | gate; BUSY words waited out by the free path | M |
 | `VmCaps` (channel budget) | B counts | released by the frees, **not zeroed**: a count left is a host channel still alive (leak, counted) | act | — | I |
 | Passthrough twins, Translated slots, relays, USER rings, host TSGs, debuggers, CUDA limit, encoder sessions (`ChanPlane`) | B (host objects) | freed through `ChanPlane::free(c, c)` per guest client on the act thread; `LiveCensus` logged | act, drainer (statements), workers (pump) | frees run behind queued acts (a birth in flight lands first, then is freed); the free path stops pumps and waits out BUSY tokens | I (needs a host) |
@@ -160,16 +163,31 @@ registration) makes every reset report `NOT EMPTY`.
 6. **A guest that resets in a loop**: each run is bounded; lines are bounded (`reset::loud`: the first
    16, then powers of two). [measured: the bound]
 7. **Display copy in flight**: the worker resets after its completion (polled). [inferred]
-8. **Start-up**: the reset runs once at machine creation (the hold phase); an owner not yet running
-   is not waited for. If the reset path itself is broken, EVERY boot shows it (the gate stays closed
-   or a stage line is missing) — a strong falsifier for §8. [inferred]
+8. **Start-up**: the reset runs once at machine creation (the hold phase). No guest access has been
+   admitted yet, so it is pristine and completes in the drainer's next pass without asking any owner
+   (before this, it waited for the VA thread, which can be inside a cold-box prewarm step for
+   seconds while the guest already runs — the review's MEDIUM finding). ⊘ Consequence: a normal
+   boot no longer exercises the full sequence; only §8's lanes do. [measured: the pristine path]
+9. **The gate's cost**: one SeqCst add and subtract (plus one relaxed load) per trapped BAR0 access,
+   on a cache line every vCPU shares — beside a VM exit (≈µs nested) it is small, but it is real and
+   unmeasured.
+10. **A fast driver reload after an unload** (inferred, small): the display worker ends the display's
+   life after any copy in flight; a reload that allocates display objects within those milliseconds
+   could have them dropped. RM init takes seconds. Whether Windows sends fn 47 without a PM
+   transition during a TDR recovery is unknown (closed driver): if it does, the boot layer shows
+   during the recovery — L5 checks it.
+11. **The display worker, the act thread and USERD relays keep running the old life** for the
+   moments before their reset point (failure mode 3's window).
 
 ## 7. GPU-free tests (all passing at this branch's head)
 
 Command (disk-saving flags used here because `/data` was full):
 `CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 cargo test -p kf-qemu -p kf-gsp -p kf-core -p kf-trap -p kf-mem -p kf-disp -p kf-rm`.
 
-- `kf-qemu` `reset::tests`: `an_open_gate_admits_and_counts_the_entry_until_it_leaves`,
+- `kf-qemu` `reset::tests`: `a_pristine_device_resets_at_once_without_asking_any_owner`,
+  `a_stall_report_may_read_the_status_without_deadlocking`,
+  `finish_that_is_not_ready_keeps_the_gate_closed_until_it_is`,
+  `an_open_gate_admits_and_counts_the_entry_until_it_leaves`,
   `a_closed_gate_drops_the_entry_and_counts_it`,
   `closing_does_not_wait_for_an_entry_in_progress_and_quiet_says_when_it_left`,
   `once_closed_and_quiet_no_vcpu_is_inside_under_contention` (4 vCPU threads × 20 runs),
@@ -225,14 +243,15 @@ Preconditions: `scripts/bench/v3_gates.sh` 9/9 → `build_kf3.sh` at this branch
 states its falsifier; record the result either way.
 
 **L0 — start-up reset (every boot).** Boot the fast guest once.
-Expect `device reset #1: … GSP Cold -> Cold`, `act device reset: barrier: device reset epoch 1:
-channel plane EMPTY`, `device reset #1: memory plane — … 0 VA space(s) retired, 0 KEPT, mirrors left 0`,
-`device reset #1 COMPLETE`, then a normal boot. *Falsifier:* any stage line missing, a `WAITING at`
-line, or the guest's GSP boot failing where `master` boots.
+Expect `device reset #1 COMPLETE` within the first drainer passes, the heartbeat's `reset[req=1 done=1
+pristine=1 …]`, no stage line (pristine), then a normal boot. *Falsifier:* a stage line at start-up
+(something touched the device before the machine reset), a `WAITING at` line, or the guest's GSP
+boot failing where `master` boots.
 
 **L1 — Linux, QMP `system_reset` while Running, ×5.** Fast guest (or the display lane VM with
 `gop=on,display=on`), run a CUDA workload (`cuda_ladder.sh` rung 1) in a loop, then
-`{"execute":"system_reset"}` on the QMP socket; wait for the guest to boot; repeat 5×.
+`{"execute":"system_reset"}` on the QMP socket; wait for the guest to boot; repeat 5×. Also once with
+`system_reset` issued twice within 10 ms (expect one full run and `pristine` +1).
 Expect per reset: `vCPUs out … GSP Running -> Cold (E11, N held …)`, a barrier line with `twins=0
 translated=0 relays=0 … caps=0 db_regs=0` and `EMPTY`, the memory line with `0 KEPT`, `mirrors left 0`,
 `BAR1: … seed Some(Placed …)` (gop=on) / `NoBootFramebuffer` (gop=off), `COMPLETE`; the guest boots
@@ -263,13 +282,25 @@ Adapter picture on the console, Enable, ×3; (d) a bugcheck (`NotMyFault` or `.c
 debugger) with the default auto-reboot, ×2. Expect after each: the desktop and `nvidia-smi` come back
 in the SAME QEMU; for (c) the console shows the basic-display desktop (not black) while disabled; the
 reset lines as in L1. *Falsifiers:* Code 43 / no NVIDIA adapter after a restart; a black console
-while disabled; `NOT EMPTY`/`KEPT`; a TDR or 4101 in the first app run after a reset.
+while disabled; `NOT EMPTY`/`KEPT`; a TDR or 4101 in the first app run after a reset. Also record
+whether any TDR recovery logs `fn 47 … bInPMTransition=false` (failure mode 10).
 
 **L6 — races (stress, Linux).** QMP `system_reset` issued (i) during the GSP boot (within 2 s of the
 driver load), (ii) during a CUDA run with doorbell-ioeventfd on, (iii) twice within 10 ms, (iv) during
 `rmmod`. *Falsifier:* a `WAITING at` line, a hung drainer heartbeat, a second life that fails.
 
-## 9. Decisions that belong to the owner
+## 9. Review (2026-10-13, an independent read of the branch at `74243aab`)
+
+Folded in: the stall report deadlocked the drainer (HIGH; the stage is now an atomic, test
+`a_stall_report_may_read_the_status_without_deadlocking`); the start-up reset waited for a prewarming
+VA thread with the gate closed (MEDIUM; pristine fast path); the shadow restore zeroed before
+refilling (MEDIUM; word-diff rewrite); Finish ignored BUSY tokens (MEDIUM; Finish pending until the
+sweep completes); the BAR1 physical-view counter survived the reset (LOW; zeroed); a poisoned
+sequence lock stalled silently (LOW; recovered). The barrier's self-counted parked act had been found
+and fixed just before (`cda43759`). Open, accepted or the owner's: whole-store scrub (D1), the
+window of failure mode 3 (D2), the gate's per-access cost (failure mode 9), the reload race (10).
+
+## 10. Decisions that belong to the owner
 
 - **D1 — guest VRAM across a reset.** The reset zeroes only our roots and the boot framebuffer
   `[0, G)` (as realize did); the rest of the store keeps the previous life's contents (same VM, same
