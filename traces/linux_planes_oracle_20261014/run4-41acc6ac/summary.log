@@ -1,0 +1,100 @@
+PLANES_START tag=run4 rev=41acc6ac 2026-10-14T00:43:04+02:00
+PLANES_OWNER_QEMU pid=3679796 (never touched)
+PLANES_HOST_MEM_BEFORE Mem:           30719       11215        4907        8329       23275       19504
+PLANES_QEMU pid=3729807
+PLANES_GUEST_UP 2026-10-14T00:43:24+02:00
+PLANES_GUEST_ID 6.8.0-142-generic
+PLANES_GUEST_ID NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+PLANES_GUEST_ID cat: /sys/module/nvidia_drm/parameters/modeset: Permission denied
+PLANES_STOP_DM no-xorg 
+PLANES_BUILD HOST_BUILD_COPIED
+PLANES_KFPLANES_CONNECTOR id=126 type=3 status=1 modes=7 encoders=1
+PLANES_KFPLANES_SETUP card=/dev/dri/card1 connector=126 crtc=60 crtc_index=0 mode=1920x1080@60 clock=148500 frame_us=16667 crtcs=4
+PLANES_KFPLANES_EDID bytes=128 header_ok=1 checksum_ok=1 ext=0
+PLANES_KFPLANES_MODE 1920x1080 60 Hz clock 148500 preferred
+PLANES_KFPLANES_MODE 1680x1050 60 Hz clock 146250
+PLANES_KFPLANES_MODE 1600x900 60 Hz clock 108000
+PLANES_KFPLANES_MODE 1280x1024 60 Hz clock 108000
+PLANES_KFPLANES_MODE 1024x768 60 Hz clock 65000
+PLANES_KFPLANES_MODE 800x600 60 Hz clock 40000
+PLANES_KFPLANES_CRTC_PROPS active=22 mode=23 gamma=28(size 1024) degamma=25(size 1024) ctm=27 out_fence=19 vrr=24
+PLANES_KFPLANES_CONNECTOR_PROP name="HDR_OUTPUT_METADATA" id=0 value=0
+PLANES_KFPLANES_CONNECTOR_PROP name="Colorspace" id=0 value=0
+PLANES_KFPLANES_CONNECTOR_PROP name="max bpc" id=0 value=0
+PLANES_KFPLANES_CONNECTOR_PROP name="content type" id=0 value=0
+PLANES_KFPLANES_CONNECTOR_PROP name="link-status" id=5 value=0
+PLANES_KFPLANES_CONNECTOR_PROP name="non-desktop" id=6 value=0
+PLANES_KFPLANES_CONNECTOR_PROP name="vrr_capable" id=127 value=0
+PLANES_KFPLANES_PLANE id=49 type=primary possible=0x1 mine=1 formats=22: AR15 XR15 RG16 AR24 XR24 AB30 XB30 AB24 XB24 AB4H YUYV UYVY NV42 NV24 NV61 NV16 NV21 NV12 P210 P010 P012 XB4H props: [FB_ID] [CRTC_ID] [SRC_X] [SRC_Y] [SRC_W] [SRC_H] [CRTC_X] [CRTC_Y] [CRTC_W] [CRTC_H] [rotation] [COLOR_ENCODING] [COLOR_RANGE] [IN_FENCE_FD]
+PLANES_KFPLANES_PLANE id=54 type=cursor possible=0x1 mine=1 formats=1: AR24 props: [FB_ID] [CRTC_ID] [SRC_X] [SRC_Y] [SRC_W] [SRC_H] [CRTC_X] [CRTC_Y] [CRTC_W] [CRTC_H] [alpha] [pixel blend mode] [COLOR_ENCODING] [COLOR_RANGE] [IN_FENCE_FD]
+PLANES_KFPLANES_PLANE id=61 type=overlay possible=0x1 mine=1 formats=22: AR15 XR15 RG16 AR24 XR24 AB30 XB30 AB24 XB24 AB4H YUYV UYVY NV42 NV24 NV61 NV16 NV21 NV12 P210 P010 P012 XB4H props: [FB_ID] [CRTC_ID] [SRC_X] [SRC_Y] [SRC_W] [SRC_H] [CRTC_X] [CRTC_Y] [CRTC_W] [CRTC_H] [alpha] [pixel blend mode] [rotation] [COLOR_ENCODING] [COLOR_RANGE] [IN_FENCE_FD]
+PLANES_KFPLANES_PLANE id=68 type=primary possible=0x2 mine=0 formats=22: AR15 XR15 RG16 AR24 XR24 AB30 XB30 AB24 XB24 AB4H YUYV UYVY NV42 NV24 NV61 NV16 NV21 NV12 P210 P010 P012 XB4H props: [FB_ID] [CRTC_ID] [SRC_X] [SRC_Y] [SRC_W] [SRC_H] [CRTC_X] [CRTC_Y] [CRTC_W] [CRTC_H] [rotation] [COLOR_ENCODING] [COLOR_RANGE] [IN_FENCE_FD]
+PLANES_KFPLANES_PLANE id=73 type=cursor possible=0x2 mine=0 formats=1: AR24 props: [FB_ID] [CRTC_ID] [SRC_X] [SRC_Y] [SRC_W] [SRC_H] [CRTC_X] [CRTC_Y] [CRTC_W] [CRTC_H] [alpha] [pixel blend mode] [COLOR_ENCODING] [COLOR_RANGE] [IN_FENCE_FD]
+PLANES_KFPLANES_PLANE id=80 type=overlay possible=0x2 mine=0 formats=22: AR15 XR15 RG16 AR24 XR24 AB30 XB30 AB24 XB24 AB4H YUYV UYVY NV42 NV24 NV61 NV16 NV21 NV12 P210 P010 P012 XB4H props: [FB_ID] [CRTC_ID] [SRC_X] [SRC_Y] [SRC_W] [SRC_H] [CRTC_X] [CRTC_Y] [CRTC_W] [CRTC_H] [alpha] [pixel blend mode] [rotation] [COLOR_ENCODING] [COLOR_RANGE] [IN_FENCE_FD]
+PLANES_KFPLANES_PLANE id=87 type=primary possible=0x4 mine=0 formats=22: AR15 XR15 RG16 AR24 XR24 AB30 XB30 AB24 XB24 AB4H YUYV UYVY NV42 NV24 NV61 NV16 NV21 NV12 P210 P010 P012 XB4H props: [FB_ID] [CRTC_ID] [SRC_X] [SRC_Y] [SRC_W] [SRC_H] [CRTC_X] [CRTC_Y] [CRTC_W] [CRTC_H] [rotation] [COLOR_ENCODING] [COLOR_RANGE] [IN_FENCE_FD]
+PLANES_KFPLANES_PLANE id=92 type=cursor possible=0x4 mine=0 formats=1: AR24 props: [FB_ID] [CRTC_ID] [SRC_X] [SRC_Y] [SRC_W] [SRC_H] [CRTC_X] [CRTC_Y] [CRTC_W] [CRTC_H] [alpha] [pixel blend mode] [COLOR_ENCODING] [COLOR_RANGE] [IN_FENCE_FD]
+PLANES_KFPLANES_PLANE id=99 type=overlay possible=0x4 mine=0 formats=22: AR15 XR15 RG16 AR24 XR24 AB30 XB30 AB24 XB24 AB4H YUYV UYVY NV42 NV24 NV61 NV16 NV21 NV12 P210 P010 P012 XB4H props: [FB_ID] [CRTC_ID] [SRC_X] [SRC_Y] [SRC_W] [SRC_H] [CRTC_X] [CRTC_Y] [CRTC_W] [CRTC_H] [alpha] [pixel blend mode] [rotation] [COLOR_ENCODING] [COLOR_RANGE] [IN_FENCE_FD]
+PLANES_KFPLANES_PLANE id=106 type=primary possible=0x8 mine=0 formats=22: AR15 XR15 RG16 AR24 XR24 AB30 XB30 AB24 XB24 AB4H YUYV UYVY NV42 NV24 NV61 NV16 NV21 NV12 P210 P010 P012 XB4H props: [FB_ID] [CRTC_ID] [SRC_X] [SRC_Y] [SRC_W] [SRC_H] [CRTC_X] [CRTC_Y] [CRTC_W] [CRTC_H] [rotation] [COLOR_ENCODING] [COLOR_RANGE] [IN_FENCE_FD]
+PLANES_KFPLANES_PLANE id=111 type=cursor possible=0x8 mine=0 formats=1: AR24 props: [FB_ID] [CRTC_ID] [SRC_X] [SRC_Y] [SRC_W] [SRC_H] [CRTC_X] [CRTC_Y] [CRTC_W] [CRTC_H] [alpha] [pixel blend mode] [COLOR_ENCODING] [COLOR_RANGE] [IN_FENCE_FD]
+PLANES_KFPLANES_PLANE id=118 type=overlay possible=0x8 mine=0 formats=22: AR15 XR15 RG16 AR24 XR24 AB30 XB30 AB24 XB24 AB4H YUYV UYVY NV42 NV24 NV61 NV16 NV21 NV12 P210 P010 P012 XB4H props: [FB_ID] [CRTC_ID] [SRC_X] [SRC_Y] [SRC_W] [SRC_H] [CRTC_X] [CRTC_Y] [CRTC_W] [CRTC_H] [alpha] [pixel blend mode] [rotation] [COLOR_ENCODING] [COLOR_RANGE] [IN_FENCE_FD]
+PLANES_KFPLANES_SUMMARY planes=12 primary=49 overlays=1 cursor=54 ovl_nv12=1 ovl_p010=1 ovl_yuyv=1 ovl_argb=1
+PLANES_KFPLANES_MODESET rc=0
+PLANES_KFPLANES_RESULT test=vblank-wait waits=60 errors=4 last_err=-95 interval_avg_us=0 min_us=0 max_us=0 frame_us=16667 verdict=FAIL
+PLANES_KFPLANES_RESULT test=vblank-event requested=0 received=0 verdict=FAIL
+PLANES_KFPLANES_RESULT test=primary-flip commits=60 events=60 timeouts=0 errors=0 last_err=0 ebusy=0 lat_avg_us=16660 lat_p95_us=17054 lat_max_us=17099 over1f=0 over2f=0 seq0=59 seq1=0 seq2=0 seqN=0 frame_us=16667 verdict=PASS
+PLANES_KFPLANES_ENABLE test=overlay-argb-only rc=0 event=1
+PLANES_KFPLANES_RESULT test=overlay-argb-only commits=60 events=60 timeouts=0 errors=0 last_err=0 ebusy=0 lat_avg_us=16852 lat_p95_us=17074 lat_max_us=27658 over1f=1 over2f=0 seq0=59 seq1=0 seq2=0 seqN=0 frame_us=16667 verdict=PASS
+PLANES_KFPLANES_DISABLE test=overlay-argb-only rc=0 event=1 lat_us=698
+PLANES_KFPLANES_ENABLE test=overlay-argb-both rc=0 event=1
+PLANES_KFPLANES_RESULT test=overlay-argb-both commits=60 events=60 timeouts=0 errors=0 last_err=0 ebusy=0 lat_avg_us=16806 lat_p95_us=17189 lat_max_us=25642 over1f=1 over2f=0 seq0=59 seq1=0 seq2=0 seqN=0 frame_us=16667 verdict=PASS
+PLANES_KFPLANES_DISABLE test=overlay-argb-both rc=0 event=1 lat_us=703
+PLANES_KFPLANES_ENABLE test=overlay-xrgb-only rc=0 event=1
+PLANES_KFPLANES_RESULT test=overlay-xrgb-only commits=60 events=60 timeouts=0 errors=0 last_err=0 ebusy=0 lat_avg_us=16809 lat_p95_us=17058 lat_max_us=25575 over1f=1 over2f=0 seq0=59 seq1=0 seq2=0 seqN=0 frame_us=16667 verdict=PASS
+PLANES_KFPLANES_DISABLE test=overlay-xrgb-only rc=0 event=1 lat_us=687
+PLANES_KFPLANES_ENABLE test=overlay-nv12-only rc=0 event=1
+PLANES_KFPLANES_RESULT test=overlay-nv12-only commits=60 events=60 timeouts=0 errors=0 last_err=0 ebusy=0 lat_avg_us=16789 lat_p95_us=17231 lat_max_us=24113 over1f=1 over2f=0 seq0=59 seq1=0 seq2=0 seqN=0 frame_us=16667 verdict=PASS
+PLANES_KFPLANES_DISABLE test=overlay-nv12-only rc=0 event=1 lat_us=690
+PLANES_KFPLANES_ENABLE test=overlay-nv12-both rc=0 event=1
+PLANES_KFPLANES_RESULT test=overlay-nv12-both commits=60 events=60 timeouts=0 errors=0 last_err=0 ebusy=0 lat_avg_us=16796 lat_p95_us=17178 lat_max_us=23526 over1f=1 over2f=0 seq0=59 seq1=0 seq2=0 seqN=0 frame_us=16667 verdict=PASS
+PLANES_KFPLANES_DISABLE test=overlay-nv12-both rc=0 event=1 lat_us=705
+PLANES_KFPLANES_ENABLE test=overlay-p010-only rc=0 event=1
+PLANES_KFPLANES_RESULT test=overlay-p010-only commits=60 events=60 timeouts=0 errors=0 last_err=0 ebusy=0 lat_avg_us=16766 lat_p95_us=17063 lat_max_us=22695 over1f=1 over2f=0 seq0=59 seq1=0 seq2=0 seqN=0 frame_us=16667 verdict=PASS
+PLANES_KFPLANES_DISABLE test=overlay-p010-only rc=0 event=1 lat_us=697
+PLANES_KFPLANES_ENABLE test=overlay-yuyv-only rc=0 event=1
+PLANES_KFPLANES_RESULT test=overlay-yuyv-only commits=60 events=60 timeouts=0 errors=0 last_err=0 ebusy=0 lat_avg_us=16827 lat_p95_us=17132 lat_max_us=25523 over1f=1 over2f=0 seq0=59 seq1=0 seq2=0 seqN=0 frame_us=16667 verdict=PASS
+PLANES_KFPLANES_DISABLE test=overlay-yuyv-only rc=0 event=1 lat_us=769
+PLANES_KFPLANES_ENABLE test=overlay-nv12-scaled rc=-22 event=0
+PLANES_KFPLANES_RESULT test=overlay-nv12-scaled verdict=SKIP why="enable commit refused rc=-22"
+PLANES_KFPLANES_DISABLE test=overlay-nv12-scaled rc=-22 event=0 lat_us=-1
+PLANES_KFPLANES_ENABLE test=overlay-argb-scaled rc=-22 event=0
+PLANES_KFPLANES_RESULT test=overlay-argb-scaled verdict=SKIP why="enable commit refused rc=-22"
+PLANES_KFPLANES_DISABLE test=overlay-argb-scaled rc=-22 event=0 lat_us=-1
+PLANES_KFPLANES_ENABLE test=overlay-nv12-toggle rc=0 event=1
+PLANES_KFPLANES_RESULT test=overlay-nv12-toggle commits=30 events=30 timeouts=0 errors=0 last_err=0 ebusy=0 lat_avg_us=8579 lat_p95_us=16794 lat_max_us=23395 over1f=1 over2f=0 seq0=29 seq1=0 seq2=0 seqN=0 frame_us=16667 verdict=PASS
+PLANES_KFPLANES_DISABLE test=overlay-nv12-toggle rc=-22 event=0 lat_us=-1
+PLANES_KFPLANES_ENABLE test=overlay-argb-toggle rc=0 event=1
+PLANES_KFPLANES_RESULT test=overlay-argb-toggle commits=30 events=30 timeouts=0 errors=0 last_err=0 ebusy=0 lat_avg_us=8586 lat_p95_us=16768 lat_max_us=23352 over1f=1 over2f=0 seq0=29 seq1=0 seq2=0 seqN=0 frame_us=16667 verdict=PASS
+PLANES_KFPLANES_DISABLE test=overlay-argb-toggle rc=-22 event=0 lat_us=-1
+PLANES_KFPLANES_RESULT test=overlay-argb-cycle commits=80 events=80 timeouts=0 errors=0 last_err=0 ebusy=0 lat_avg_us=18155 lat_p95_us=32294 lat_max_us=32781 over1f=8 over2f=0 seq0=0 seq1=0 seq2=0 seqN=0 frame_us=16667 verdict=SLOW
+PLANES_KFPLANES_RESULT test=overlay-nv12-cycle commits=80 events=80 timeouts=0 errors=0 last_err=0 ebusy=0 lat_avg_us=18135 lat_p95_us=32389 lat_max_us=32493 over1f=8 over2f=0 seq0=0 seq1=0 seq2=0 seqN=0 frame_us=16667 verdict=SLOW
+PLANES_KFPLANES_RESULT test=cursor-atomic commits=60 events=60 timeouts=0 errors=0 last_err=0 ebusy=0 lat_avg_us=718 lat_p95_us=747 lat_max_us=792 over1f=0 over2f=0 seq0=59 seq1=0 seq2=0 seqN=0 frame_us=16667 verdict=PASS
+PLANES_KFPLANES_RESULT test=gamma-lut commits=30 events=30 timeouts=0 errors=0 last_err=0 ebusy=0 lat_avg_us=714 lat_p95_us=745 lat_max_us=777 over1f=0 over2f=0 seq0=29 seq1=0 seq2=0 seqN=0 frame_us=16667 verdict=PASS
+PLANES_KFPLANES_RESULT test=degamma-lut commits=30 events=30 timeouts=0 errors=0 last_err=0 ebusy=0 lat_avg_us=741 lat_p95_us=766 lat_max_us=780 over1f=0 over2f=0 seq0=29 seq1=0 seq2=0 seqN=0 frame_us=16667 verdict=PASS
+PLANES_KFPLANES_RESULT test=ctm commits=30 events=30 timeouts=0 errors=0 last_err=0 ebusy=0 lat_avg_us=700 lat_p95_us=750 lat_max_us=761 over1f=0 over2f=0 seq0=29 seq1=0 seq2=0 seqN=0 frame_us=16667 verdict=PASS
+PLANES_KFPLANES_RESULT test=primary-async-legacy commits=60 events=60 timeouts=0 errors=0 last_err=0 ebusy=0 lat_avg_us=16672 lat_p95_us=17059 lat_max_us=17151 over1f=0 over2f=0 seq0=0 seq1=0 seq2=0 seqN=0 frame_us=16667 verdict=PASS
+PLANES_KFPLANES_RESULT test=primary-async-atomic commits=60 events=60 timeouts=0 errors=0 last_err=0 ebusy=0 lat_avg_us=16659 lat_p95_us=17063 lat_max_us=17159 over1f=0 over2f=0 seq0=59 seq1=0 seq2=0 seqN=0 frame_us=16667 verdict=PASS
+PLANES_KFPLANES_RESULT test=out-fence commits=30 signalled=30 errors=0 last_err=0 late1f=0 lat_max_us=17013 frame_us=16667 verdict=PASS
+PLANES_KFPLANES_RESULT test=in-fence commits=15 events=15 early=0 timeouts=0 errors=0 last_err=0 after_signal_max_us=10057 frame_us=16667 verdict=PASS
+PLANES_KFPLANES_RESULT test=dpms-cycle cycles=5 ok=5 off_max_us=1644 on_max_us=4264 verdict=PASS
+PLANES_KFPLANES_RESULT test=flip-after-dpms commits=30 events=30 timeouts=0 errors=0 last_err=0 ebusy=0 lat_avg_us=16267 lat_p95_us=17018 lat_max_us=17090 over1f=0 over2f=0 seq0=29 seq1=0 seq2=0 seqN=0 frame_us=16667 verdict=PASS
+PLANES_KFPLANES_DONE
+PLANES_CMP what=rgb size=1920x1080 tol=6 mismatched=0 in_overlay=0 of 230400 max_err=0 verdict=PASS
+PLANES_CMP what=nv12 size=1920x1080 tol=6 mismatched=0 in_overlay=0 of 230400 max_err=0 best_match=709L(err 0) bt709L_err=0 bars=ffffff,feff00,00feff,00ff01,ff00fe,ff0100,0100ff,000000 verdict=PASS
+PLANES_CMP what=nv12-scaled size=1920x1080 tol=6 mismatched=516376 in_overlay=516376 of 518400 max_err=255 best_match=709F(err 196) bt709L_err=216 bars=275f40,375f40,475f40,575f40,675f40,775f40,875f40,975f40 verdict=OVERLAY_DIFF
+PLANES_CMP what=p010 size=1920x1080 tol=6 mismatched=0 in_overlay=0 of 230400 max_err=0 best_match=709L(err 0) bt709L_err=0 bars=ffffff,feff00,00feff,00ff01,ff00fe,ff0100,0100ff,000000 verdict=PASS
+PLANES_CMP what=yuyv size=1920x1080 tol=6 mismatched=0 in_overlay=0 of 230400 max_err=0 best_match=709L(err 0) bt709L_err=0 bars=ffffff,feff00,00feff,00ff01,ff00fe,ff0100,0100ff,000000 verdict=PASS
+PLANES_GUEST_FLIP_EVENT_TIMEOUTS=0 LUT_TIMEOUTS=0 NVASSERT=0 GPU_PROGRESS=0 XID=0
+PLANES_KF3_DISPLAY_FLAGS lines=40 stall=0 exception=0 refused=40
+PLANES_HOST_XID delta=0 (journal since start: 0)
+PLANES_OWNER_ALIVE yes
+PLANES_EXIT rc=0 2026-10-14T00:44:34+02:00

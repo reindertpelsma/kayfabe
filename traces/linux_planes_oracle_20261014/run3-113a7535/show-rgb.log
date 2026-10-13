@@ -1,0 +1,5 @@
+KFPLANES_SETUP card=/dev/dri/card1 connector=126 crtc=60 crtc_index=0 mode=1920x1080@60 clock=148500 frame_us=16667 crtcs=4
+KFPLANES_CRTC_PROPS active=22 mode=23 gamma=28(size 1024) degamma=25(size 1024) ctm=27 out_fence=19 vrr=24
+KFPLANES_SUMMARY planes=12 primary=49 overlays=1 cursor=54 ovl_nv12=1 ovl_p010=1 ovl_yuyv=1 ovl_argb=1
+KFPLANES_MODESET rc=0
+KFPLANES_SHOWING what=rgb rc=0 mode=1920x1080 dst=240,135,640x360

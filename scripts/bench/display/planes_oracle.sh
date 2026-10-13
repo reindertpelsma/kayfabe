@@ -113,7 +113,7 @@ for what in rgb nv12 nv12-scaled p010 yuyv; do
     ( gq "sudo ~/planes/kfplanes show $card $what 8" 40 > "$OUT/show-$what.log" ) &
     sp=$!
     for _ in $(seq 40); do grep -q 'KFPLANES_SHOWING\|KFPLANES_SHOW_FAIL' "$OUT/show-$what.log" 2>/dev/null && break; sleep 0.5; done
-    if grep -q 'KFPLANES_SHOWING' "$OUT/show-$what.log"; then
+    if grep -q 'KFPLANES_SHOWING.* rc=0 ' "$OUT/show-$what.log"; then
         sleep 2
         printf 'screendump %s kf0\n' "$OUT/shot-$what.ppm" | timeout 10 socat - "UNIX-CONNECT:$OUT/qemu.mon" >/dev/null 2>&1
         sleep 2
@@ -128,6 +128,6 @@ done
 
 gq "sudo dmesg | tail -n +$((d0 + 1))" > "$OUT/guest-dmesg.log"
 say "GUEST_FLIP_EVENT_TIMEOUTS=$(grep -c 'Flip event timeout' "$OUT/guest-dmesg.log") LUT_TIMEOUTS=$(grep -c 'LUT notifier timeout' "$OUT/guest-dmesg.log") NVASSERT=$(grep -c -i 'nvAssert\|assert' "$OUT/guest-dmesg.log") GPU_PROGRESS=$(grep -c 'waiting for GPU progress' "$OUT/guest-dmesg.log") XID=$(grep -c 'Xid' "$OUT/guest-dmesg.log")"
-grep -a 'display' "$OUT/qemu.log" | grep -a -E 'STALL|Exception|REFUSED|refused|left out|halt|failed' | head -40 > "$OUT/kf3-display-flags.log"
-say "KF3_DISPLAY_FLAGS lines=$(wc -l < "$OUT/kf3-display-flags.log") stall=$(grep -c STALL "$OUT/kf3-display-flags.log") exception=$(grep -c Exception "$OUT/kf3-display-flags.log") refused=$(grep -c -i refused "$OUT/kf3-display-flags.log")"
+grep -a 'kf3: display' "$OUT/qemu.log" | grep -a -E 'STALL|Exception|REFUSED|left out|halt|failed' | head -200 > "$OUT/kf3-display-flags.log"
+say "KF3_DISPLAY_FLAGS lines=$(wc -l < "$OUT/kf3-display-flags.log") stall=$(grep -c STALL "$OUT/kf3-display-flags.log") exception=$(grep -c Exception "$OUT/kf3-display-flags.log") refused=$(grep -c REFUSED "$OUT/kf3-display-flags.log")"
 exit 0

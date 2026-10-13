@@ -1,0 +1,1 @@
+CMP what=p010 size=1920x1080 tol=6 mismatched=229645 in_overlay=229645 of 230400 max_err=255 best_match=709F(err 198) bt709L_err=218 bars=254a40,2f4a40,3a4a40,454a40,4f4a40,5a4a40,644a40,6f4a40 verdict=OVERLAY_DIFF

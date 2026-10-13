@@ -1,0 +1,2 @@
+HYPOTHESIS H-DISABLE: with 113a7535 (flip-away AWAKEN + semi-planar caps + R2 removed) a plane disable gets its DRM event within a frame as on the AD104 reference; NV12/P010 are offered and their flips complete; DPMS off completes in < 0.2 s.
+FALSIFIER: any KFPLANES_DISABLE event=0, any Flip event timeout in the guest dmesg, any overlay series timeout or STALL interlock report, DPMS off >= 1 s, or an extra event making flips complete early (overlay latency p95 < 8 ms).

@@ -1,0 +1,2 @@
+HYPOTHESIS H-YUV-CONSOLE: with 41acc6ac the console composes NV12, P010 and YUYV overlays as their programmed FMT matrix says (the bars match BT.709 limited within tol 6, overlay mismatches 0); the flip results of run3 hold.
+FALSIFIER: any CMP OVERLAY_DIFF for nv12/p010/yuyv, any flip timeout/STALL, or a guest Flip event timeout.

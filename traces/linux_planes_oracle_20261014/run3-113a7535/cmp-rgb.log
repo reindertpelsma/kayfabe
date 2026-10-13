@@ -1,0 +1,1 @@
+CMP what=rgb size=1920x1080 tol=6 mismatched=0 in_overlay=0 of 230400 max_err=0 verdict=PASS
