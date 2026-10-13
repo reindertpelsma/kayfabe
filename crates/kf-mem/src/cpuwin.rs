@@ -250,6 +250,19 @@ pub enum Reseed {
     },
 }
 
+/// What [`CpuWindow::reset_to_boot`] did.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct WindowReset {
+    /// Placements removed (scratch placed, aperture released).
+    pub unmapped: usize,
+    /// Placements the host refused to re-point to scratch: they stay, counted.
+    pub kept: usize,
+    /// The seed's outcome (`None`: refused, named in `first_refusal`).
+    pub seed: Option<Reseed>,
+    /// The first refusal, by name.
+    pub first_refusal: Option<String>,
+}
+
 /// ★★★ **A guest BAR aperture as a [`MapTarget`]**: guest BAR VA `v` IS window offset `v`
 /// (`[measured cap3 #159733/#159779]`: the BAR2 PTE at `0xfef000` maps VA 0 and the guest's
 /// `kbusVerifyBar2` writes land at BAR3 offset 0; `kern_bus_gm107.c:431` asserts
@@ -478,6 +491,44 @@ impl<V: ViewOps> CpuWindow<V> {
         };
         *self.retired.borrow_mut() = Some(report.clone());
         Ok(Some(report))
+    }
+
+    /// ★★ **Device reset** (`docs/design/V3_DEVICE_RESET.md`): the window back to what realize left
+    /// — every placement of the old life gone (each by [`MapTarget::unmap`]: scratch FIRST, then
+    /// the view's host aperture released), and, on a window that had a seed, the seed placed again
+    /// over the boot framebuffer (a real card's BAR1 is physical after reset: FB `[0, G)` at BAR1
+    /// `[0, G)`). A seed still placed stays placed.
+    ///
+    /// A placement whose re-point to scratch the host refuses STAYS (the guest could still reach
+    /// it; releasing its aperture would leave the guest a mapping of memory we gave back) and is
+    /// counted in [`WindowReset::kept`]; the reset goes on with the rest. VA-manager thread only,
+    /// like every other verb of the window.
+    pub fn reset_to_boot(&self) -> WindowReset {
+        let vas: Vec<u64> = self.placed.borrow().keys().copied().collect();
+        let mut out = WindowReset::default();
+        for va in vas {
+            match MapTarget::unmap(self, va, false) {
+                Ok(()) => out.unmapped += 1,
+                Err(e) => {
+                    out.kept += 1;
+                    out.first_refusal.get_or_insert(e);
+                }
+            }
+        }
+        out.seed = match self.reseed() {
+            Ok(r) => Some(r),
+            Err(e) => {
+                out.first_refusal.get_or_insert(e);
+                None
+            }
+        };
+        out
+    }
+
+    /// Placements the window holds (the reset's accounting; never a decision input).
+    #[must_use]
+    pub fn placements(&self) -> usize {
+        self.placed.borrow().len()
     }
 
     /// The counters.
@@ -1054,6 +1105,80 @@ mod tests {
             perm: kf_host::MapPerm::READ_WRITE,
             leaf: 0,
         }
+    }
+
+    /// ★ Device reset: a BAR1 window that lived a whole guest life (seed retired, guest views of
+    /// the store and of guest RAM placed) comes back as realize left it — no placement, the seed
+    /// shown again — every armed view released exactly once, scratch placed before each release.
+    #[test]
+    fn a_reset_window_is_the_seeded_window_realize_left_and_every_view_is_released() {
+        let r = Rec::default();
+        let w = CpuWindow::new(&r, 256 << 20);
+        w.seed(0, 0, 0x80_0000).unwrap();
+        w.map(&d(0, 0x10_0000, 0x1000, false), true).unwrap();
+        w.invalidate().unwrap(); // the first batch retires the seed
+        w.map(&d(0x2000, 0x40_0000, 0x4000, false), true).unwrap();
+        w.map(&d(0x10_0000, 0x5000_0000, 0x1000, true), true).unwrap();
+        assert!(w.seeded().is_none());
+        assert_eq!(w.placements(), 3);
+        let rep = w.reset_to_boot();
+        assert_eq!(
+            rep,
+            WindowReset {
+                unmapped: 3,
+                kept: 0,
+                seed: Some(Reseed::Placed { life: 2 }),
+                first_refusal: None
+            }
+        );
+        assert_eq!(w.placements(), 0);
+        assert_eq!(w.seeded(), Some((0, 0, 0x80_0000)));
+        // Accounting: every view armed for the guest's life was released; the only view still
+        // armed is the seed.
+        let ops = r.ops.lock().unwrap().clone();
+        let arms = ops.iter().filter(|o| matches!(o, Op::Arm(..))).count();
+        let rels = ops.iter().filter(|o| matches!(o, Op::Release(..))).count();
+        assert_eq!(arms - rels, 1, "{ops:?}");
+        // Scratch before release, for every guest view.
+        for (i, o) in ops.iter().enumerate() {
+            if let Op::Release(v) = o
+                && *v != 0
+            {
+                assert!(
+                    ops[..i].iter().any(|p| matches!(p, Op::Sink(..))),
+                    "release of {v:#x} before any sink: {ops:?}"
+                );
+            }
+        }
+        // The next life behaves like the first: its first change retires the seed.
+        w.map(&d(0, 0x10_0000, 0x1000, false), true).unwrap();
+        w.invalidate().unwrap();
+        assert!(w.seeded().is_none());
+        // Reset twice in a row is one reset; a window that never had a seed only empties.
+        let _ = w.reset_to_boot();
+        assert_eq!(w.reset_to_boot().seed, Some(Reseed::AlreadyShown));
+        let b2 = CpuWindow::new(&r, 32 << 20);
+        b2.map(&d(0, 0x7000, 0x1000, false), true).unwrap();
+        let rep = b2.reset_to_boot();
+        assert_eq!((rep.unmapped, rep.seed), (1, Some(Reseed::NoBootFramebuffer)));
+    }
+
+    /// ⊘ A placement the host refuses to re-point to scratch is KEPT (releasing its aperture would
+    /// leave the guest a view of memory we gave back) and counted; the rest of the reset goes on.
+    #[test]
+    fn a_reset_keeps_a_view_whose_scratch_is_refused_and_says_so() {
+        let r = Rec::default();
+        let w = CpuWindow::new(&r, 32 << 20);
+        w.map(&d(0x1000, 0x9000, 0x1000, false), true).unwrap();
+        r.refuse_sink.store(true, Ordering::Relaxed);
+        let rep = w.reset_to_boot();
+        assert_eq!((rep.unmapped, rep.kept), (0, 1));
+        assert!(rep.first_refusal.is_some());
+        assert!(r.releases().is_empty(), "nothing released while the guest can still see it");
+        r.refuse_sink.store(false, Ordering::Relaxed);
+        let rep = w.reset_to_boot();
+        assert_eq!((rep.unmapped, rep.kept), (1, 0));
+        assert_eq!(r.releases(), vec![0x9000]);
     }
 
     #[test]

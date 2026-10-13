@@ -654,6 +654,21 @@ enum Want {
     },
 }
 
+/// What [`VaManager::abandon_life`] dropped.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Abandoned {
+    /// A walk was in flight and was left to land (call again once it has).
+    pub in_flight: bool,
+    /// Queued invalidates (their trigger is the port's to abandon).
+    pub invalidates: usize,
+    /// Queued root walks.
+    pub roots: usize,
+    /// Applied invalidates held for a target's work.
+    pub awaiting: usize,
+    /// Split tickets, queued or finished-untaken.
+    pub split_tickets: Vec<u64>,
+}
+
 /// The walk in flight and what it answers.
 #[derive(Debug)]
 struct Batch {
@@ -980,6 +995,35 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
     #[must_use]
     pub fn awaiting(&self) -> usize {
         self.awaiting.len()
+    }
+
+    /// ★ **Device reset** (`docs/design/V3_DEVICE_RESET.md`): drop every request of the old life
+    /// that has not been walked — queued invalidates, root walks, splits — and every applied
+    /// invalidate still held for its target, WITHOUT clearing any trigger (the port's armed request
+    /// is abandoned by `InvalidatePort::reset`; nothing is completed on the guest's behalf).
+    /// Returns what was dropped; split tickets (queued, or finished and not yet taken) are returned
+    /// so the caller can answer each channel that waits on one.
+    ///
+    /// ⊘ A walk IN FLIGHT is not touched: its report is the GPU's and lands in a slot the reset
+    /// must still be able to empty. [`Abandoned::in_flight`] says so; the caller lets
+    /// [`Self::on_walk_ready`] collect it (nothing queued is left to submit after it) and calls
+    /// this again — it is bounded, and the VA thread polls, never blocks.
+    pub fn abandon_life(&mut self) -> Abandoned {
+        let mut out = Abandoned {
+            in_flight: self.inflight.is_some(),
+            ..Abandoned::default()
+        };
+        for w in core::mem::take(&mut self.pending) {
+            match w {
+                Want::Invalidate(..) => out.invalidates += 1,
+                Want::Root(_) => out.roots += 1,
+                Want::Split { ticket, .. } => out.split_tickets.push(ticket),
+            }
+        }
+        out.awaiting = core::mem::take(&mut self.awaiting).len();
+        out.split_tickets
+            .extend(core::mem::take(&mut self.splits_done).into_iter().map(|(t, _)| t));
+        out
     }
 
     /// The combined [`Settle`] of `keys`' targets, asking each target once per pass (`seen`).
@@ -3098,6 +3142,52 @@ mod tests {
             ops(&r),
             vec![Op::Map(0x1000, 0x10_0000, 0x1000), Op::Invalidate],
             "diffed against an EMPTY slot"
+        );
+    }
+
+    /// ★ Device reset: queued walks of the old life are dropped without clearing anything, a walk
+    /// in flight is left to land, and a BAR object re-registered with its root (what the device
+    /// does to K_BAR1/K_BAR2) walks its next life from an EMPTY slot — §9's ResetWalkerState: the
+    /// next life's first diff maps everything again instead of reporting "unchanged".
+    #[test]
+    fn a_reset_drops_queued_walks_lets_the_one_in_flight_land_and_reslots_the_bar_object() {
+        let mut r = rig();
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x1000, 0x10_0000, 0x1000, 0)]);
+        settle(&mut r, PDB_A);
+        // One walk in flight, two more queued behind it, one split queued.
+        let q1 = guest_invalidate(&r.port, PDB_A, false);
+        r.m.on_invalidate(q1, r.port.trigger());
+        assert!(r.m.in_flight());
+        let q2 = guest_invalidate(&r.port, PDB_B, false);
+        r.m.on_invalidate(q2, r.port.trigger());
+        r.m.on_split(Some(PDB_A), 77, r.port.trigger());
+        assert!(r.m.pending() >= 2);
+        let a = r.m.abandon_life();
+        assert!(a.in_flight);
+        assert_eq!((a.invalidates, a.split_tickets.clone()), (1, vec![77]));
+        assert_eq!(r.m.pending(), 0);
+        assert!(r.port.reset(), "the armed request is abandoned at the port, not completed");
+        let walks = r.m.walker().submits.len();
+        let out = r.m.on_walk_ready(r.port.trigger());
+        assert_eq!(
+            out.completed,
+            vec![(q1.seq, ClearOutcome::AlreadyIdle)],
+            "the landing walk clears nothing the reset abandoned"
+        );
+        assert_eq!(r.m.walker().submits.len(), walks, "nothing queued was submitted after it");
+        assert!(!r.m.abandon_life().in_flight);
+        // Re-register K_A as the device does with its BAR objects: the next life starts empty.
+        let t = r.m.remove(K_A).expect("K_A");
+        r.m.table.insert(K_A, t);
+        r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem).unwrap();
+        r.ops.borrow_mut().clear();
+        settle(&mut r, PDB_A);
+        assert_eq!(
+            ops(&r),
+            vec![Op::Map(0x1000, 0x10_0000, 0x1000), Op::Invalidate],
+            "diffed against an EMPTY slot, so the unchanged table is mapped again"
         );
     }
 
