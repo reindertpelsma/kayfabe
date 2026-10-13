@@ -1,5 +1,32 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-14 01:00 CEST — Linux plane oracle: overlay completion reproduced and fixed; Win11 resets follow USER-ring refusals
+
+Branch `claude/linux-oracle-planes-20261014` (from prod-candidate-2 `bf510bdf`). Full account:
+`docs/design/V3_DISPLAY_PLANES_ORACLE.md`; evidence `traces/linux_planes_oracle_20261014/`.
+- [measured] A stock nvidia-drm overlay test (`scripts/bench/display/kfplanes.c`) deadlocked bf510bdf's display
+  engine (overlay enable + both-planes flip; core parked for the VM's life). A bare-metal AD104 (vast VM, open
+  580.159.04, forced HDMI, `planes_hw_reference.sh`) completes everything. Fixes, each with an engine test that
+  fails before: `a34d3003` (no join of a vblank-parked UPDATE), `113a7535` (a plane disable raises its AWAKEN via
+  the flipped-away entry: 0.7 ms vs 3 s timeouts; semi-planar YUV in the caps page), `41acc6ac` (console YUV:
+  FMT matrix, P010-class, YUY2/UYVY, bilinear; NV12/P010/YUYV pixel-exact on the console).
+- [measured] The owner's current Win11 resets (runs 2970/2980/2990) have no overlay window at all; 11/13 follow a
+  `USER_RING_REFUSED … USER_RING_SCAN Legacy/SubDeviceMask(data-shaped)/MethodOverflow` and a refused
+  RESET_CHANNEL (0x906f0102). New rows G16/G17; a bounded refusal diagnostic is in `113a7535`. Not fixed.
+- Validation at `edf2759d` (product = 41acc6ac): GPU-free 2986 passed / 0 failed (every kf-* crate); gates 9/9 +
+  gate10 PASS, births 12/12 USER; host-mode fast suite 30/30 (private lock/bench dir, store 4 GiB beside the
+  owner's VM); Linux Cinnamon/Xorg desktop with the broker (`desktop_smoke.sh`, kf3 41acc6ac): NVIDIA renderer,
+  glxgears 60 FPS, **0 guest "Flip event timeout"** (earlier desktop runs: PASS_WITH_WARNINGS on that), host Xid
+  delta 0, one 1 s "ready, waiting for a vblank" STALL report (acquire satisfied; recovered). Evidence
+  `traces/linux_planes_oracle_20261014/validation-edf2759d/`. Windows: not run (the owner's VM untouched); the
+  steps are §7 of the oracle doc.
+- Bench notes: the fast guest must be the host-mode build (`KF_FROM_HOST=1`) — a guest.qcow2 (580.159.04) build
+  boots with `guest-driver` unset and GSP init fails; beside the owner's VM pass `KF3_FB_MB=4096`; never
+  `pkill -f` a pattern that appears in your own ssh command line (it kills the session).
+- Vast: own rental 55821401 (RTX 4070 SUPER, the HW reference) destroyed after use; 55810567 is another
+  session's and was not touched.
+- Left: D-EARLY (core-group commits complete before the vblank; A/B the existing `core_latch_at_vblank`), G16/G17.
+
 ## UPDATE 2026-10-13 09:11UTC — Vulkan PASS; default route verification follows
 
 Source3ee0dd10ac89d62c44d64ac9ca412a685503a5ad / RTX4070 / stock595.91.07 /

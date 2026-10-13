@@ -213,6 +213,14 @@ Build: kf3 for the head of `claude/linux-oracle-planes-20261014` (the revision i
 5. A/B for the MPO question (G02): the same steps with `OverlayTestMode=5` — if the reset count is unchanged, MPO
    is not the trigger in this image (as the owner already observed).
 
+## 7a. Linux validation of the branch [measured, `edf2759d` = product `41acc6ac`]
+
+GPU-free `cargo test --no-fail-fast` over every `kf-*` crate: 2986 passed, 0 failed. `v3_gates.sh`: 9/9 +
+gate10 PASS, 12/12 births USER. Host-mode fast suite: 30/30. Linux desktop with the broker
+(`desktop_smoke.sh`): Cinnamon + Xorg, NVIDIA renderer, glxgears ~60 FPS, 0 guest Flip event timeouts, host Xid
+delta 0; one 1 s "ready, waiting for a vblank" STALL report (acquire satisfied, recovered). Evidence:
+`traces/linux_planes_oracle_20261014/validation-edf2759d/`.
+
 ## 8. What remains
 
 - The Win11 resets of §6 (user-ring scanner refusals, RESET_CHANNEL refused): not display; diagnostic only here.
