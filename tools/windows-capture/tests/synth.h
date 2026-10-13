@@ -455,7 +455,8 @@ static kfwc_u32 sb_violations(const sink_buf *s, kfwc_u32 allow_counter_gaps)
             q[r->h.dir][qi].next = 0xFFFFFFFFu;
         } else if (r->h.kind == KFWC_K_ELEMENTS) {
             if (!q[r->h.dir][qi].bound || r->h.payload_bytes != r->h.entry_count * 4096 ||
-                r->h.first_entry >= q[r->h.dir][qi].ring)
+                r->h.first_entry >= q[r->h.dir][qi].ring ||
+                r->h.first_entry + r->h.entry_count > q[r->h.dir][qi].ring /* a record never crosses the ring end */)
                 bad++;
             else {
                 if (q[r->h.dir][qi].next != 0xFFFFFFFFu && q[r->h.dir][qi].next != r->h.first_entry &&
