@@ -148,7 +148,8 @@ registration) makes every reset report `NOT EMPTY`.
    preempts and unbinds the channel (stage 3). No completion is written for it. ⚠ **Residual
    window**: QEMU resumes the guest as soon as the hold phase returns; until stage 3 frees the twins
    (inferred: milliseconds), a host channel can still read the GPFIFO and write semaphores in guest
-   RAM that the next life's firmware is starting to use. Real hardware stops DMA at reset. Closing
+   RAM that the next life's firmware is starting to use, and an act or a USERD relay of the old life
+   that runs before its channel's free can still write its relay words there. Real hardware stops DMA at reset. Closing
    it needs either a blocking host call under the BQL (forbidden) or holding the vCPUs; owner
    decision D2. [inferred]
 4. **Guest BAR0 writes during the reset** are dropped; BAR0 reads come from the shadow and show the
