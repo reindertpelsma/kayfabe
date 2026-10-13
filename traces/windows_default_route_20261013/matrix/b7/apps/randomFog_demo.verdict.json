@@ -1,0 +1,14 @@
+{
+ "verdict": "PASS",
+ "rc": 0,
+ "secs": 28,
+ "quiet": 0,
+ "note": "",
+ "proof": "cuda-randomfog-readback",
+ "tdr": 0,
+ "wer": 0,
+ "rebooted": false,
+ "gsp_cycles": 0,
+ "restart": "",
+ "guest": "g1"
+}

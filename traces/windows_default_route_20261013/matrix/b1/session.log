@@ -1,0 +1,56 @@
+2026-10-13T09:59:46Z START run_dir=/var/lib/kf-windows-20261005/claude-default-matrix-ec45aad99/b1 vm=broker kf3_rev=ec45aad9 apps=8
+2026-10-13T09:59:46Z MATRIX_START apps=8 (resume skips 0) per_guest=8 max_tdr=99 tier<=3
+2026-10-13T09:59:48Z pre-guest hook rc=0 :00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=identity 2026-10-13T11:59:48+02:00
+2026-10-13T09:59:50Z broker run 1710 rc=0 ['  └────────────────────────────────────────────────────────────────────────────────────────────┘']
+2026-10-13T09:59:50Z [g1] launched; waiting for the guest agent (<= 900s)
+2026-10-13T10:00:06Z [g1] agent answered after 19s
+2026-10-13T10:00:06Z [g1] password set for vast rc=0
+2026-10-13T10:00:57Z [g1] verified sign-in attempt=1 rc=0
+2026-10-13T10:00:59Z [g1] interactive session: VASTWIN\vast
+2026-10-13T10:01:01Z [g1] pushed 26 guest files
+2026-10-13T10:01:01Z [g1] app disk attached (usb-storage)
+2026-10-13T10:01:10Z [g1] setup ok: cd=D: nvidia_adapters=1 NVIDIA GeForce RTX 4070, 580.88, 4096 MiB
+2026-10-13T10:01:13Z [g1] override tool kf_cuda_control.exe sha256=3906f520c10e272215d9d7d79a90ce9a2042581923a4717db90be312ab3a67c8
+2026-10-13T10:01:17Z [g1] override tool kf_dxprobe.exe sha256=3c6ededa77430a18a13321eb72fdca7f60282f8d12ddc147a7e7df1284832c5f
+2026-10-13T10:01:37Z [g1] staged vc_redist (installer, 18s)
+2026-10-13T10:01:42Z [g1] READY boot=2026-10-13T09:59:55.5000000Z user=VASTWIN\vast smi_ok=True
+2026-10-13T10:02:09Z [g1] cup2_ladder: PASS
+2026-10-13T10:02:28Z [g1] cup3_ladder: PASS
+2026-10-13T10:02:43Z [g1] cup8_ladder: PASS
+2026-10-13T10:02:44Z [g1] staged python_embed (python_embed, 0s)
+2026-10-13T10:03:32Z [g1] staged pywheels (wheels, 46s)
+2026-10-13T10:03:34Z [g1] staged cuda_cudart (unzip, 1s)
+2026-10-13T10:03:37Z [g1] staged cuda_cccl (unzip, 1s)
+2026-10-13T10:06:56Z [g1] cupy_asynccopy: TIMEOUT (restart guest: app-timeout)
+2026-10-13T10:07:14Z post-guest hook rc=1 02:00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-13T12:07:14+02:00
+2026-10-13T10:07:14Z [g1] stopped (clean)
+2026-10-13T10:07:14Z [g1] session ended early: app-timeout; 4 apps move to a fresh guest
+2026-10-13T10:07:14Z pre-guest hook rc=1 
+2026-10-13T10:07:14Z [g2] BOOT_FAIL: pre-guest hook failed rc=1
+2026-10-13T10:07:18Z post-guest hook rc=1 02:00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-13T12:07:18+02:00
+2026-10-13T10:07:18Z [g2] stopped (clean)
+2026-10-13T10:07:18Z pre-guest hook rc=1 
+2026-10-13T10:07:18Z [g3] BOOT_FAIL: pre-guest hook failed rc=1
+2026-10-13T10:07:21Z post-guest hook rc=1 02:00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-13T12:07:21+02:00
+2026-10-13T10:07:21Z [g3] stopped (clean)
+2026-10-13T10:07:21Z pre-guest hook rc=1 
+2026-10-13T10:07:21Z [g4] BOOT_FAIL: pre-guest hook failed rc=1
+2026-10-13T10:07:24Z post-guest hook rc=1 02:00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-13T12:07:24+02:00
+2026-10-13T10:07:24Z [g4] stopped (clean)
+2026-10-13T10:07:24Z MATRIX_ABORT 3 consecutive guest boot failures
+2026-10-13T10:07:24Z EXIT rc=3

@@ -1,0 +1,94 @@
+CLAUDE_DEFAULT_MATRIX_START=2026-10-13T11:51:03+02:00
+H-DEFAULT-MATRIX: the flag-free Windows USER relay route does not regress apps that passed before (79 PASS + 8 PASS_WITH_RECOVERY at earlier revisions).
+FALSIFIER: an app that passed before now FAILs/TIMEOUTs with a guest TDR, WER, host Xid or wrong output (staging/proof-only failures are listed separately).
+BATCH 0 base=1700 apps=atomics_t,bandwidthTest_demo,blackscholes_t,blender_cycles,cdp_quicksort,cg_t,cuda_callback,cuda_occupancy at=2026-10-13T11:51:03+02:00
+BATCH_EXIT 0 rc=0 at=2026-10-13T11:59:01+02:00
+[windows] no run1700 guest running
+[windows] run1700 stopped (Xid count now 56)
+IOMMU_SWITCH_START group=11 from=DMA-FQ to=DMA-FQ 2026-10-13T11:59:02+02:00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-13T11:59:04+02:00
+BATCH 1 base=1710 apps=cup2_ladder,cup3_ladder,cup8_ladder,cupy_asynccopy,cupy_cg,cupy_check,cupy_sha256,d3d11va_h264 at=2026-10-13T11:59:04+02:00
+BATCH_EXIT 1 rc=3 at=2026-10-13T12:07:25+02:00
+[windows] no run1710 guest running
+[windows] run1710 stopped (Xid count now 51)
+IOMMU_SWITCH_START group=11 from=DMA-FQ to=DMA-FQ 2026-10-13T12:07:26+02:00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-13T12:07:28+02:00
+BATCH 2 base=1720 apps=d3d12_signal_probe,deviceQuery_demo,driver_status,dxdiag_report,dxgi_adapters,dxprobe_d3d11,dxprobe_d3d12,dxva2_h264 at=2026-10-13T12:07:28+02:00
+BATCH_EXIT 2 rc=0 at=2026-10-13T12:14:06+02:00
+[windows] no run1720 guest running
+[windows] run1720 stopped (Xid count now 51)
+IOMMU_SWITCH_START group=11 from=DMA-FQ to=DMA-FQ 2026-10-13T12:14:07+02:00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-13T12:14:09+02:00
+BATCH 3 base=1730 apps=edge_video_vp9,edge_webgl,edge_webgl_headless,edge_webgpu,fft_t,furmark_gl_bench,furmark_gl_stress,furmark_glinfo at=2026-10-13T12:14:09+02:00
+BATCH_EXIT 3 rc=0 at=2026-10-13T12:24:11+02:00
+[windows] no run1730 guest running
+[windows] run1730 stopped (Xid count now 51)
+IOMMU_SWITCH_START group=11 from=DMA-FQ to=DMA-FQ 2026-10-13T12:24:12+02:00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-13T12:24:14+02:00
+BATCH 4 base=1740 apps=furmark_knot_gl,furmark_vk_bench,furmark_vkinfo,fwt_t,glgears_wgl,gputest_fur,gputest_gi,gputest_pixmark_piano at=2026-10-13T12:24:14+02:00
+BATCH_EXIT 4 rc=0 at=2026-10-13T12:33:05+02:00
+[windows] no run1740 guest running
+[windows] run1740 stopped (Xid count now 46)
+IOMMU_SWITCH_START group=11 from=DMA-FQ to=DMA-FQ 2026-10-13T12:33:06+02:00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-13T12:33:09+02:00
+BATCH 5 base=1750 apps=gputest_plot3d,gputest_tess,gputest_triangle,graphs_t,hashcat,hf_generate,hist_t,llama_cuda_bench at=2026-10-13T12:33:09+02:00
+BATCH_EXIT 5 rc=0 at=2026-10-13T12:44:03+02:00
+[windows] no run1750 guest running
+[windows] run1750 stopped (Xid count now 46)
+IOMMU_SWITCH_START group=11 from=DMA-FQ to=DMA-FQ 2026-10-13T12:44:05+02:00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-13T12:44:07+02:00
+BATCH 6 base=1760 apps=llama_cuda_gen,llama_vulkan_bench,mandelbrot_t,matmul_t,memcpy2d_t,nbody_demo_bench,nbody_t,nvdec_h264 at=2026-10-13T12:44:07+02:00
+BATCH_EXIT 6 rc=0 at=2026-10-13T12:55:17+02:00
+[windows] no run1760 guest running
+[windows] run1760 stopped (Xid count now 46)
+IOMMU_SWITCH_START group=11 from=DMA-FQ to=DMA-FQ 2026-10-13T12:55:18+02:00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-13T12:55:20+02:00
+BATCH 7 base=1770 apps=nvenc_av1,nvenc_h264,nvenc_hevc,nvidia_smi,oceanFFT_demo,opencl_icd,ort_directml,randomFog_demo at=2026-10-13T12:55:20+02:00
+BATCH_EXIT 7 rc=0 at=2026-10-13T13:04:32+02:00
+[windows] no run1770 guest running
+[windows] run1770 stopped (Xid count now 41)
+IOMMU_SWITCH_START group=11 from=DMA-FQ to=DMA-FQ 2026-10-13T13:04:33+02:00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-13T13:04:35+02:00
+BATCH 8 base=1780 apps=reduce_t,rng_t,scan_t,sort_t,stream_created2nd_t,stream_created_t,stream_default_t,stream_nonblocking_t at=2026-10-13T13:04:35+02:00
+BATCH_EXIT 8 rc=0 at=2026-10-13T13:11:52+02:00
+[windows] no run1780 guest running
+[windows] run1780 stopped (Xid count now 41)
+IOMMU_SWITCH_START group=11 from=DMA-FQ to=DMA-FQ 2026-10-13T13:11:53+02:00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-13T13:11:56+02:00
+BATCH 9 base=1790 apps=stream_perthread_t,stream_two_t,streams_t,tc16_t,tcbf16_t,torch_burn,torch_correct,transpose_t at=2026-10-13T13:11:56+02:00
+BATCH_EXIT 9 rc=0 at=2026-10-13T13:22:19+02:00
+[windows] no run1790 guest running
+[windows] run1790 stopped (Xid count now 41)
+IOMMU_SWITCH_START group=11 from=DMA-FQ to=DMA-FQ 2026-10-13T13:22:20+02:00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-13T13:22:22+02:00
+BATCH 10 base=1800 apps=triad_t,vkpeak,vulkan_video_decode,vulkaninfo,zerocopy_t at=2026-10-13T13:22:22+02:00
+BATCH_EXIT 10 rc=0 at=2026-10-13T13:33:16+02:00
+[windows] no run1800 guest running
+[windows] run1800 stopped (Xid count now 39)
+IOMMU_SWITCH_START group=11 from=DMA-FQ to=DMA-FQ 2026-10-13T13:33:17+02:00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-13T13:33:19+02:00
+KERNEL_JOURNAL_XID_RECORDS 10 QUERY_EXIT 0
+CLAUDE_DEFAULT_MATRIX_EXIT=0 at=2026-10-13T13:33:20+02:00
+CLAUDE_DEFAULT_MATRIX_DONE=0 at=2026-10-13T13:33:20+02:00
