@@ -134,9 +134,114 @@ fn scan_refusal_detail(l: &kf_chan::user_scan::Located, words: &[u32], base: usi
     format!(
         " at word {stop}/{} raw={} last_header={last} carried_in={carried} words[{lo}..{hi}]=[{}]",
         words.len(),
-        l.word.map_or_else(|| "end".into(), |w| format!("{w:#010x}")),
+        l.word
+            .map_or_else(|| "end".into(), |w| format!("{w:#010x}")),
         around.join(" ")
     )
+}
+
+/// ★ 2026-10-14 MEASUREMENT ONLY — `KF3_USER_RING_TRACE=<dir>` (default off; never needed to boot,
+/// never changes a decision). When a USER-ring scan refuses, the pump writes one bounded report per
+/// refused channel into `<dir>`: the GP descriptor and its backing, the GP ring around the cursor,
+/// the channel's last [`TRACE_HISTORY`] scanned segments (their words, capped), and three re-reads
+/// of the SAME GP slot and segment 1/20/200 ms later, each rescanned from the same carried state —
+/// which separates "the bytes changed under the scan" (a read-before-written race) from "the
+/// grammar disagrees" (the same bytes refuse again). Guest words go only to that file.
+fn trace_dir() -> Option<&'static std::path::Path> {
+    static DIR: std::sync::OnceLock<Option<std::path::PathBuf>> = std::sync::OnceLock::new();
+    DIR.get_or_init(|| {
+        std::env::var_os("KF3_USER_RING_TRACE")
+            .filter(|v| !v.is_empty() && v != "0")
+            .map(std::path::PathBuf::from)
+    })
+    .as_deref()
+}
+const TRACE_HISTORY: usize = 8;
+const TRACE_WORDS: usize = 16384;
+
+struct SegTrace {
+    seq: u64,
+    at: std::time::Instant,
+    cursor: u32,
+    put: u32,
+    entry: u64,
+    woke: bool,
+    carried_in: String,
+    rare: bool,
+    backing: String,
+    words: Vec<u32>,
+    len: usize,
+}
+
+pub(super) struct Trace {
+    born: std::time::Instant,
+    seq: u64,
+    history: std::collections::VecDeque<SegTrace>,
+    last_wake: Option<std::time::Instant>,
+    woke: bool,
+    reported: bool,
+}
+impl Trace {
+    fn new() -> Self {
+        Self {
+            born: std::time::Instant::now(),
+            seq: 0,
+            history: std::collections::VecDeque::new(),
+            last_wake: None,
+            woke: false,
+            reported: false,
+        }
+    }
+    pub(super) fn wake(&mut self, woke: bool) {
+        self.woke = woke;
+        if woke {
+            self.last_wake = Some(std::time::Instant::now());
+        }
+    }
+}
+fn carried_text(c: Option<(kf_abi::submit::MethodHeader, usize)>) -> String {
+    c.map(|(h, n)| {
+        format!(
+            "{:?} sub{} m{:#x} {}/{}",
+            h.form, h.subchannel, h.method, n, h.arg_words
+        )
+    })
+    .unwrap_or_else(|| "none".into())
+}
+/// Diagnostic: the word positions the scanner reads as packet headers, fed one word at a time
+/// from `scan` (stops at a refusal or END_PB_SEGMENT; at most `cap` headers).
+fn header_chain(
+    scan: &Scan,
+    words: &[u32],
+    sw: impl Fn(u32) -> bool,
+    cap: usize,
+) -> (Vec<(usize, u32)>, Option<usize>) {
+    let mut s = scan.clone();
+    let mut chain = Vec::new();
+    for (i, w) in words.iter().enumerate() {
+        if s.carried().is_none() {
+            if chain.len() < cap {
+                chain.push((i, *w));
+            }
+            if w >> 29 == 7 {
+                return (chain, None);
+            }
+        }
+        if s.segment(&[*w], &sw).is_err() {
+            return (chain, Some(i));
+        }
+    }
+    (chain, None)
+}
+fn words_text(out: &mut String, words: &[u32]) {
+    use std::fmt::Write as _;
+    for (i, chunk) in words.chunks(8).enumerate() {
+        let _ = write!(out, "  {:5}:", i * 8);
+        for w in chunk {
+            let _ = write!(out, " {w:08x}");
+        }
+        out.push('\n');
+    }
 }
 
 /// Native fetch credit and private staging retirement are separate. The first
@@ -185,6 +290,8 @@ pub(super) struct Pump {
     guest_get: Option<(u64, u32)>,
     pub tick: bool,
     again: bool,
+    /// Measurement only ([`trace_dir`]).
+    pub(super) trace: Option<Box<Trace>>,
 }
 
 struct Segment {
@@ -245,6 +352,7 @@ impl Pump {
             guest_get: None,
             tick: false,
             again: false,
+            trace: trace_dir().map(|_| Box::new(Trace::new())),
         })
     }
     pub(super) fn release(&mut self) -> Result<(), String> {
@@ -276,6 +384,223 @@ impl Pump {
             &mut self.cache,
         )
         .map_err(|e| source_error(e, "USER_RING_SOURCE"))
+    }
+
+    /// Measurement only: remember this scanned segment (bounded history, [`trace_dir`]).
+    fn trace_segment(
+        &mut self,
+        put: u32,
+        entry: u64,
+        pb: &Snapshot<'static>,
+        words: &[u32],
+        rare: bool,
+    ) {
+        let carried_in = carried_text(self.scan.carried());
+        let cursor = self.cursor;
+        let Some(t) = self.trace.as_mut() else {
+            return;
+        };
+        t.seq += 1;
+        if t.history.len() == TRACE_HISTORY {
+            t.history.pop_front();
+        }
+        t.history.push_back(SegTrace {
+            seq: t.seq,
+            at: std::time::Instant::now(),
+            cursor,
+            put,
+            entry,
+            woke: t.woke,
+            carried_in,
+            rare,
+            backing: pb.describe(),
+            words: words[..words.len().min(TRACE_WORDS)].to_vec(),
+            len: words.len(),
+        });
+    }
+
+    /// Measurement only ([`trace_dir`]): one bounded report for a refused segment. Runs on the
+    /// worker (never a vCPU or the drainer), once per channel; it sleeps 221 ms in total for the
+    /// three re-reads, which is acceptable only because the flag is a measurement and the channel
+    /// is about to be declared dead anyway. Decides nothing.
+    #[allow(clippy::too_many_arguments)]
+    fn trace_refusal(
+        &mut self,
+        me: &ChanPlane,
+        r: &userrelay::Record,
+        (put, gp_va, entry): (u32, u64, u64),
+        d: kf_abi::submit::GpfifoEntry,
+        pb: &Snapshot<'static>,
+        words: &[u32],
+        software: &Option<Software>,
+        why: &Failure,
+    ) {
+        use std::fmt::Write as _;
+        let Some(dir) = trace_dir() else {
+            return;
+        };
+        if self.trace.as_ref().is_none_or(|t| t.reported) {
+            return;
+        }
+        let sw = |v: u32| software.as_ref().is_some_and(|s| s.matches(v));
+        let entries = r.source.1;
+        let now = std::time::Instant::now();
+        let (born, woke, since_wake) = self
+            .trace
+            .as_ref()
+            .map(|t| {
+                (
+                    now.duration_since(t.born).as_millis(),
+                    t.woke,
+                    t.last_wake.map(|w| now.duration_since(w).as_micros()),
+                )
+            })
+            .unwrap_or_default();
+        let mut out = String::new();
+        let gp_backing = self
+            .snapshot(me, r, gp_va, 8)
+            .map(|s| s.describe())
+            .unwrap_or_else(|e| format!("{e:?}"));
+        let _ = writeln!(
+            out,
+            "USER_RING_TRACE refusal key={:#x}:{:#x} idx={} cursor={} put={put} entries={entries} gp_ring={:#x} gp_va={gp_va:#x} entry={entry:#018x} pb_va={:#x} pb_bytes={} sync_wait={} subroutine={} generation={} fetch_issued={} fetch_fetched={} pump_age_ms={born} woke_by_request={woke} since_last_request_us={since_wake:?}\n  pb_backing=[{}] gp_backing=[{gp_backing}]\nwhy: {why:?}\ncarried_in: {}",
+            r.key.0,
+            r.key.1,
+            r.idx,
+            self.cursor,
+            r.source.0,
+            d.gpu_va,
+            d.len_bytes,
+            d.sync_wait,
+            d.subroutine,
+            self.generation,
+            self.fetch.issued(),
+            self.fetch.fetched(),
+            pb.describe(),
+            carried_text(self.scan.carried()),
+        );
+        let (chain, stop) = header_chain(&self.scan, words, sw, 512);
+        let _ = writeln!(out, "header chain (index:raw) stop={stop:?}:");
+        for c in chain.chunks(8) {
+            let line: Vec<String> = c.iter().map(|(i, w)| format!("{i}:{w:08x}")).collect();
+            let _ = writeln!(out, "  {}", line.join(" "));
+        }
+        // The GP ring around the cursor, as it reads NOW.
+        let _ = writeln!(out, "gp ring now (index: entry):");
+        if entries.is_power_of_two() && entries >= 2 {
+            for k in 0..24u32 {
+                let idx = self
+                    .cursor
+                    .wrapping_add(entries)
+                    .wrapping_sub(16)
+                    .wrapping_add(k)
+                    & (entries - 1);
+                let at = r.source.0 + u64::from(idx) * 8;
+                let e = self
+                    .snapshot(me, r, at, 8)
+                    .ok()
+                    .and_then(|s| s.bytes.as_slice().try_into().ok().map(u64::from_le_bytes));
+                let mark = if idx == self.cursor { " <= cursor" } else { "" };
+                let _ = writeln!(out, "  {idx}: {e:#018x?}{mark}");
+            }
+        }
+        // Re-read the same GP slot, the same segment and USERD PUT later; rescan from the same state.
+        let mut summary = Vec::new();
+        for delay in [1u64, 20, 200] {
+            std::thread::sleep(std::time::Duration::from_millis(delay));
+            let entry2 = self
+                .snapshot(me, r, gp_va, 8)
+                .ok()
+                .and_then(|s| s.bytes.as_slice().try_into().ok().map(u64::from_le_bytes));
+            let mut put2 = [0u8; 4];
+            let put2 = r
+                .userd
+                .read(
+                    me,
+                    r.key,
+                    &r.allocation,
+                    kf_abi::submit::USERD_GP_PUT,
+                    &mut put2,
+                )
+                .ok()
+                .map(|()| u32::from_le_bytes(put2));
+            let words2: Option<Vec<u32>> = self
+                .snapshot(me, r, d.gpu_va, d.len_bytes as usize)
+                .ok()
+                .map(|s| {
+                    s.bytes
+                        .chunks_exact(4)
+                        .map(|w| u32::from_le_bytes([w[0], w[1], w[2], w[3]]))
+                        .collect()
+                });
+            let (changed, first) = words2.as_ref().map_or((None, None), |w2| {
+                let diffs: Vec<usize> = (0..w2.len().min(words.len()))
+                    .filter(|&i| w2[i] != words[i])
+                    .collect();
+                (Some(diffs.len()), diffs.first().copied())
+            });
+            let rescan = words2.as_ref().map(|w2| {
+                self.scan.locate(w2, sw).map_or_else(
+                    || "clean".to_owned(),
+                    |l| format!("{:?}@{}", l.refusal, l.at),
+                )
+            });
+            let line = format!(
+                "reread+{delay}ms entry_same={:?} put={put2:?} words_changed={changed:?} first_diff={first:?} rescan={rescan:?}",
+                entry2.map(|e| e == entry)
+            );
+            let _ = writeln!(out, "{line}");
+            if let (Some(w2), Some(n)) = (&words2, changed) {
+                if n > 0 {
+                    let _ = writeln!(out, "  reread words:");
+                    words_text(&mut out, &w2[..w2.len().min(TRACE_WORDS)]);
+                }
+            }
+            summary.push(format!(
+                "+{delay}ms:changed={}:rescan={}",
+                changed.map_or("?".into(), |n| n.to_string()),
+                rescan.unwrap_or_else(|| "?".into())
+            ));
+        }
+        let _ = writeln!(out, "failing segment words ({}):", words.len());
+        words_text(&mut out, &words[..words.len().min(TRACE_WORDS)]);
+        if let Some(t) = self.trace.as_mut() {
+            let _ = writeln!(out, "history (oldest first, {} segments):", t.history.len());
+            for s in &t.history {
+                let _ = writeln!(
+                    out,
+                    "-- seq={} age_ms={} cursor={} put={} entry={:#018x} woke_by_request={} rare={} carried_in={} backing=[{}] words={}",
+                    s.seq,
+                    now.duration_since(s.at).as_millis(),
+                    s.cursor,
+                    s.put,
+                    s.entry,
+                    s.woke,
+                    s.rare,
+                    s.carried_in,
+                    s.backing,
+                    s.len
+                );
+                words_text(&mut out, &s.words);
+            }
+            t.reported = true;
+        }
+        let name = format!(
+            "user-ring-refusal-{:x}-{:x}-{}.txt",
+            r.key.0, r.key.1, self.cursor
+        );
+        let written = std::fs::create_dir_all(dir)
+            .and_then(|()| std::fs::write(dir.join(&name), out.as_bytes()));
+        eprintln!(
+            "kf3: USER_RING_TRACE {:#x}:{:#x} cursor={} put={put} entry={entry:#018x} pb_va={:#x} bytes={} {} file={name} written={}",
+            r.key.0,
+            r.key.1,
+            self.cursor,
+            d.gpu_va,
+            d.len_bytes,
+            summary.join(" "),
+            written.is_ok()
+        );
     }
 
     fn turn(&mut self, me: &ChanPlane, r: &mut userrelay::Record) -> Turn<bool> {
@@ -425,7 +750,23 @@ impl Pump {
                 ));
             }
             let software = software_snapshot(me, r)?;
-            let (patched, rare) = stage_plan(&self.scan, &software, &words)?;
+            let planned = stage_plan(&self.scan, &software, &words);
+            if self.trace.is_some() {
+                match &planned {
+                    Ok((_, rare)) => self.trace_segment(put, entry, &pb, &words, *rare),
+                    Err(why) => self.trace_refusal(
+                        me,
+                        r,
+                        (put, va, entry),
+                        descriptor,
+                        &pb,
+                        &words,
+                        &software,
+                        why,
+                    ),
+                }
+            }
+            let (patched, rare) = planned?;
             self.segment = Some(Segment {
                 ring,
                 software,
@@ -1117,11 +1458,14 @@ impl ChanPlane {
             return Some(false);
         }
         drop(pt);
-        record.retry.store(false, Ordering::Release);
+        let woke = record.retry.swap(false, Ordering::AcqRel);
         let mut pump = match r.pump.take() {
             Some(p) => p,
             None => return Some(false),
         };
+        if let Some(t) = pump.trace.as_mut() {
+            t.wake(woke);
+        }
         let outcome = pump.turn(self, &mut r);
         r.pump = Some(pump);
         match outcome {

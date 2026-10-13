@@ -52,6 +52,23 @@ pub(crate) struct Snapshot<'a> {
 }
 
 impl Snapshot<'_> {
+    /// Diagnostic text only: the backing pieces this snapshot read (guest RAM or VRAM store, the
+    /// backing offset, the length). Names no guest bytes.
+    pub(crate) fn describe(&self) -> String {
+        let mut out = String::new();
+        for s in self.spans.iter().take(8) {
+            out.push_str(&format!(
+                "{}@{:#x}+{:#x} ",
+                if s.ram { "ram" } else { "vram" },
+                s.off,
+                s.len
+            ));
+        }
+        if self.spans.len() > 8 {
+            out.push_str(&format!("(+{} more)", self.spans.len() - 8));
+        }
+        out
+    }
     /// Revalidate the exact confirmed source span and birth RAM generation,
     /// retaining both guards across one bounded CPU publication transaction.
     /// The callback MUST NOT perform an RM ioctl, acquire channel/graph locks,
@@ -327,7 +344,12 @@ mod tests {
         let bytes = kf_chan::user_storage::GP_OFFSET as usize;
         let ram = RamMap::default();
         let (mem, fd) = crate::raw_unsafe::test_owned_ram(bytes + 4096);
-        ram.add(super::super::RamBlock { gpa: 0x2000, mem, fd: Some(fd), fd_off: 0 });
+        ram.add(super::super::RamBlock {
+            gpa: 0x2000,
+            mem,
+            fd: Some(fd),
+            fd_off: 0,
+        });
         let rows = PlacedRows::default();
         for offset in (0..bytes + 4096).step_by(4096) {
             rows.write().unwrap().insert(
@@ -339,13 +361,29 @@ mod tests {
         assert!(mem.write_from(bytes, &[11, 12, 13, 14]));
         let log = RowsLog::default();
         let generation = ram.generation.load(Ordering::Relaxed);
-        let source = snapshot(&rows, &log, &ram, generation, 0x100004, bytes, &mut NoStore).unwrap();
+        let source =
+            snapshot(&rows, &log, &ram, generation, 0x100004, bytes, &mut NoStore).unwrap();
         assert_eq!(&source.bytes[..4], &[7, 8, 9, 10]);
         assert_eq!(&source.bytes[bytes - 4..], &[11, 12, 13, 14]);
         source.admit(|| ()).unwrap();
-        assert_eq!(snapshot(&rows, &log, &ram, generation, 0x100004, bytes + 1, &mut NoStore).err(), Some(Refusal::Bounds));
+        assert_eq!(
+            snapshot(
+                &rows,
+                &log,
+                &ram,
+                generation,
+                0x100004,
+                bytes + 1,
+                &mut NoStore
+            )
+            .err(),
+            Some(Refusal::Bounds)
+        );
         rows.write().unwrap().remove(&(0x100000 + bytes as u64));
-        assert_eq!(source.admit(|| ()), Err(Refusal::Missing(0x100000 + bytes as u64)));
+        assert_eq!(
+            source.admit(|| ()),
+            Err(Refusal::Missing(0x100000 + bytes as u64))
+        );
         assert!(snapshot(&rows, &log, &ram, generation, 0x100004, bytes, &mut NoStore).is_err());
     }
 
