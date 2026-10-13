@@ -1123,19 +1123,22 @@ impl Engine {
         let live: ChanSet = (0..CHANNELS as u32)
             .filter(|n| self.chans[*n as usize].is_some())
             .fold(0, |m, n| m | bit(n));
-        // ★ 2026-10-10 (runs 400/403): a channel whose UPDATE is already parked for its vblank or
-        // acquire (Stage::Latch) is still a PENDING update in hardware until it latches. A later
-        // UPDATE that names it joins its latch (with the channels it latches with) instead of waiting
-        // for another UPDATE on that channel, which the driver does not send while it waits for the
-        // flip to complete.
-        let latching: ChanSet = (0..CHANNELS as u32)
-            .filter(|n| {
-                matches!(
-                    self.chans[*n as usize].as_ref().map(|c| c.stage),
-                    Some(Stage::Latch { .. })
-                )
-            })
-            .fold(0, |m, n| m | bit(n));
+        // ⊘ SUPERSEDED 2026-10-14 (Linux plane oracle, `V3_DISPLAY_PLANES_ORACLE.md`): the rule of
+        // 2026-10-10 (runs 400/403) — "a channel whose UPDATE is already parked for its vblank or acquire
+        // (Stage::Latch) is still a PENDING update; a later UPDATE that names it joins its latch" — is
+        // removed. Its premise ("window 0's UPDATE names nothing") was an inference; the measured
+        // engine ring of run 411 shows window 0's UPDATE naming window 4. And it MISPAIRS a stock
+        // driver's sequence [measured, Linux nvidia-drm 580.159.04, run planes-run1]: an overlay
+        // ENABLE update (names only its immediate channel) parked for the vblank absorbed the NEXT
+        // flip's primary-window UPDATE (which names the overlay window), so the overlay's own UPDATE of
+        // that flip waited for a primary UPDATE the driver had already sent: every later flip paired
+        // overlay(k) with primary(k+1), and the first flip that changed the pattern (the plane's
+        // disable: core + overlay + its immediate channel) deadlocked the core channel for the VM's
+        // life. An UPDATE parked only for a vblank or an acquire has already passed its interlock
+        // stage (assembly → armed, `V3_DISPLAY.md` §4.5); a later UPDATE that names its channel waits
+        // for that channel's NEXT update, which the channel issues once this one latches (NVKMS
+        // queues flips behind pending ones: `nvkms-hw-flip.c` PreFlipIMP, "even if there are still
+        // pending flips in a base channel").
         for start in 0..CHANNELS as u32 {
             if pending & bit(start) == 0 {
                 continue;
@@ -1164,21 +1167,11 @@ impl Engine {
                         }
                     }
                 }
-                if want & !(pending | latching) != 0 {
+                if want & !pending != 0 {
                     ready = false;
                     break;
                 }
-                // a joined latching channel brings the group it latches with
-                let mut joined = want;
-                for n in 0..CHANNELS as u32 {
-                    if want & latching & bit(n) != 0
-                        && let Some(Stage::Latch { group: g, .. }) =
-                            self.chans[n as usize].as_ref().map(|c| c.stage)
-                    {
-                        joined |= g;
-                    }
-                }
-                let next = group | joined;
+                let next = group | want;
                 if next == group {
                     break;
                 }

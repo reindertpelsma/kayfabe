@@ -412,16 +412,16 @@ fn a_pending_update_that_waits_for_a_channel_latches_with_that_channels_next_upd
     assert!(!e.waiting(1) && !e.waiting(w4) && !e.waiting(i4));
 }
 
-/// ★ 2026-10-10 (runs 400/403, measured: the guest's flip queue declared a TDR 2 s after a present
-/// whose plane 0 completed and whose plane 1 never did; the STALL report named chn 5 waiting for chn 1
-/// and chn 37 while chn 1 was not at an UPDATE). The overlay window 4 re-enabled after being off:
-/// window 0's UPDATE (names nothing) arrived FIRST and was parked for its head's vblank; the overlay's
-/// UPDATE (names window 0 and its immediate channel) arrived 21 us later. Window 0's update is still
-/// PENDING in hardware until that vblank, so the overlay's update joins it and all latch together at
-/// the vblank — it must not wait for a window-0 UPDATE that the driver will never send (it waits for the
-/// overlay's completion).
+/// ⊘ SUPERSEDED 2026-10-14 (`V3_DISPLAY_PLANES_ORACLE.md`). The 2026-10-10 version of this test
+/// (`an_update_naming_a_channel_already_parked_for_the_vblank_joins_its_latch`, runs 400/403) asserted
+/// that an UPDATE naming a channel whose own UPDATE is parked for the vblank JOINS that latch. Its
+/// premise ("window 0's UPDATE names nothing") was inferred; the measured ring of run 411 shows window
+/// 0 naming window 4, and the join rule mispaired the stock Linux driver's overlay enable + flip
+/// (`linux_overlay_enable_then_flip_pairs_each_flip_with_its_own_partner` below). Now: an update parked
+/// only for its vblank has passed its interlock stage; the overlay's UPDATE naming window 0 waits for
+/// window 0's NEXT update and latches with it.
 #[test]
-fn an_update_naming_a_channel_already_parked_for_the_vblank_joins_its_latch() {
+fn an_update_naming_a_channel_parked_only_for_its_vblank_waits_for_that_channels_next_update() {
     let mut e = engine();
     e.alloc(ChannelKind::Core, 0, CLIENT, 1, pb(), 0);
     e.alloc(ChannelKind::Window, 0, CLIENT, 1, pb(), 0);
@@ -467,20 +467,136 @@ fn an_update_naming_a_channel_already_parked_for_the_vblank_joins_its_latch() {
     e.step(i4, &ri.bytes(), ri.put(), &mut all_ok);
     assert!(
         e.waiting(w0) && e.waiting(w4) && e.waiting(i4),
-        "all three wait for the vblank together"
+        "window 0 waits for its vblank, the overlay and its immediate channel for window 0"
     );
+    // the vblank latches window 0's flip ALONE: the overlay never joined it
     let s = e.vblank(0, &mut all_ok);
-    let mut latched: Vec<u32> = s
-        .effects
-        .iter()
-        .filter_map(|x| match x {
-            Effect::Latched { window } => Some(*window),
-            _ => None,
-        })
-        .collect();
-    latched.sort_unstable();
-    assert_eq!(latched, vec![0, 4], "{:?}", s.effects);
+    assert_eq!(latched(&s), vec![0], "{:?}", s.effects);
+    assert!(
+        !e.waiting(w0) && e.waiting(w4) && e.waiting(i4),
+        "{:?}",
+        e.parked()
+    );
+    // window 0's next UPDATE pairs with the waiting overlay update; they latch together
+    r0.m(m(WIN, "UPDATE"), 0);
+    e.step(w0, &r0.bytes(), r0.put(), &mut all_ok);
+    let s = e.vblank(0, &mut all_ok);
+    let mut l = latched(&s);
+    l.sort_unstable();
+    assert_eq!(l, vec![0, 4], "{:?}", s.effects);
     assert!(!e.waiting(w0) && !e.waiting(w4) && !e.waiting(i4));
+}
+
+/// ★ 2026-10-14, the Linux plane oracle (`V3_DISPLAY_PLANES_ORACLE.md`, run planes-run1, stock
+/// nvidia-drm/NVKMS 580.159.04, measured engine ring): the sequence NVKMS pushes when a client enables
+/// an overlay plane in one atomic commit and flips BOTH planes in the next one, before the enable's
+/// vblank. NVKMS (`nvkms-evo3.c` nvEvoUpdateC3) gives every window of an update the same interlock set
+/// (the clique of the update's windows, itself included); the overlay's enable interlocks only with its
+/// immediate channel. Each flip must latch the primary and the overlay of THAT flip together — never
+/// overlay(k) with primary(k+1) — and the plane's disable afterwards (core + overlay + immediate) must
+/// latch, leaving nothing parked. FAILS on the 2026-10-10 join rule: the primary's flip-0 UPDATE joins the
+/// parked enable, the overlay's flip-0 UPDATE waits for a primary UPDATE already consumed, and the
+/// disable deadlocks the core.
+#[test]
+fn linux_overlay_enable_then_flip_pairs_each_flip_with_its_own_partner() {
+    let mut e = engine();
+    let c = lit(&mut e); // head 0 lit; windows 0 (primary) and 1 (overlay) owned by head 0
+    e.alloc(ChannelKind::WindowImm, 1, CLIENT, 1, pb(), 0);
+    let (w0, w1) = (1u32, ChannelKind::Window.channel_number(1));
+    let i1 = ChannelKind::WindowImm.channel_number(1);
+    let both = (1 << 0) | (1 << 1);
+    let (mut r0, mut r1, mut ri) = (Ring::new(), Ring::new(), Ring::new());
+    let mut c = c;
+    // the primary scans a surface
+    r0.m(ma(WIN, "SET_CONTEXT_DMA_ISO", 0), 0x2_0000);
+    r0.m(m(WIN, "SET_WINDOW_INTERLOCK_FLAGS"), 1 << 0);
+    r0.m(m(WIN, "UPDATE"), 0);
+    e.step(w0, &r0.bytes(), r0.put(), &mut all_ok);
+    e.vblank(0, &mut all_ok);
+    assert!(!e.waiting(w0));
+    // commit 1, the overlay ENABLE: its immediate channel first, then the window (names only itself
+    // and its immediate channel)
+    ri.m(
+        m(IMM, "UPDATE"),
+        put(0, fl(IMM, "UPDATE_INTERLOCK_WITH_WINDOW"), 1),
+    );
+    e.step(i1, &ri.bytes(), ri.put(), &mut all_ok);
+    r1.m(ma(WIN, "SET_CONTEXT_DMA_ISO", 0), 0x1_0000);
+    r1.m(m(WIN, "SET_INTERLOCK_FLAGS"), 0);
+    r1.m(m(WIN, "SET_WINDOW_INTERLOCK_FLAGS"), 1 << 1);
+    r1.m(
+        m(WIN, "UPDATE"),
+        put(0, fl(WIN, "UPDATE_INTERLOCK_WITH_WIN_IMM"), 1),
+    );
+    e.step(w1, &r1.bytes(), r1.put(), &mut all_ok);
+    assert!(e.waiting(w1), "the enable waits for the vblank");
+    // flips 1..=6, each pushed before the previous one latched (a nonblocking client): primary then
+    // overlay, both naming both
+    let iso = |w: u32, k: u32| 0x1000_0000 + (w << 8) + k;
+    let iso_m = ma(WIN, "SET_CONTEXT_DMA_ISO", 0);
+    for k in 1..=6u32 {
+        r0.m(iso_m, iso(0, k));
+        r0.m(m(WIN, "SET_WINDOW_INTERLOCK_FLAGS"), both);
+        r0.m(m(WIN, "UPDATE"), 0);
+        e.step(w0, &r0.bytes(), r0.put(), &mut all_ok);
+        r1.m(iso_m, iso(1, k));
+        r1.m(m(WIN, "SET_INTERLOCK_FLAGS"), 0);
+        r1.m(m(WIN, "SET_WINDOW_INTERLOCK_FLAGS"), both);
+        r1.m(m(WIN, "UPDATE"), 0);
+        e.step(w1, &r1.bytes(), r1.put(), &mut all_ok);
+        // vblanks until both windows latched THIS flip (the first one also latches the enable)
+        let mut seen = Vec::new();
+        for _ in 0..3 {
+            let s = e.vblank(0, &mut all_ok);
+            seen.extend(latched(&s));
+            if !e.waiting(w0) && !e.waiting(w1) {
+                break;
+            }
+        }
+        assert!(
+            !e.waiting(w0) && !e.waiting(w1),
+            "flip {k} completed within three vblanks: {:?} / {:?}",
+            e.parked(),
+            seen
+        );
+        assert_eq!(
+            (
+                e.armed(ChannelKind::Window, 0, iso_m),
+                e.armed(ChannelKind::Window, 1, iso_m)
+            ),
+            (Some(iso(0, k)), Some(iso(1, k))),
+            "flip {k}: each window scans this flip's surface (never the previous/next one's)"
+        );
+    }
+    // the plane's disable: core naming the overlay, the immediate channel, then the overlay (no surface)
+    c.m(m(CORE, "SET_WINDOW_INTERLOCK_FLAGS"), 1 << 1);
+    c.m(m(CORE, "UPDATE"), 0);
+    e.step(0, &c.bytes(), c.put(), &mut all_ok);
+    ri.m(
+        m(IMM, "UPDATE"),
+        put(0, fl(IMM, "UPDATE_INTERLOCK_WITH_WINDOW"), 1),
+    );
+    e.step(i1, &ri.bytes(), ri.put(), &mut all_ok);
+    r1.m(iso_m, 0);
+    r1.m(
+        m(WIN, "SET_INTERLOCK_FLAGS"),
+        put(0, fl(WIN, "SET_INTERLOCK_FLAGS_INTERLOCK_WITH_CORE"), 1),
+    );
+    r1.m(m(WIN, "SET_WINDOW_INTERLOCK_FLAGS"), 1 << 1);
+    r1.m(
+        m(WIN, "UPDATE"),
+        put(0, fl(WIN, "UPDATE_INTERLOCK_WITH_WIN_IMM"), 1),
+    );
+    e.step(w1, &r1.bytes(), r1.put(), &mut all_ok);
+    for _ in 0..3 {
+        e.vblank(0, &mut all_ok);
+    }
+    assert!(
+        e.parked().is_empty(),
+        "the disable latched; nothing waits: {:?}",
+        e.parked()
+    );
+    assert_eq!(e.armed(ChannelKind::Window, 1, iso_m), Some(0));
 }
 
 /// ★ A plain non-tearing flip on an active head latches at the head's VBLANK: until then the window
