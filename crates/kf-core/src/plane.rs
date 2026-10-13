@@ -405,6 +405,34 @@ impl<'v> Plane<'v> {
         true
     }
 
+    /// ★ Device reset (`docs/design/V3_DEVICE_RESET.md`, stage Finish): every token word back to a
+    /// fresh device's ([`TokenWord::reset_fresh`]), the rung bitmap cleared, no kernel ownership.
+    /// Returns how many tokens a worker still owns (`BUSY`): the caller retries on its next pass.
+    ///
+    /// ⊘ Runs after every channel was freed through the free path (which retired its token and
+    /// released its cap), so on a clean reset every word is already `DEAD` or fresh; this is the
+    /// sweep that makes "nothing of the old life is routable" true even when a free was refused.
+    /// The vCPU gate is closed, so no doorbell can ring a word while it is swept.
+    pub fn reset_tokens(&self) -> usize {
+        let busy = self.tokens.iter().filter(|w| !w.reset_fresh()).count();
+        if busy == 0 {
+            self.bits.clear();
+            if let Ok(mut k) = self.kernel_tokens.lock() {
+                k.clear();
+            }
+        }
+        busy
+    }
+
+    /// Live (non-fresh) token words — the reset's accounting (never a decision input).
+    #[must_use]
+    pub fn live_tokens(&self) -> usize {
+        self.tokens
+            .iter()
+            .filter(|w| w.load() != TokenWord::new().load())
+            .count()
+    }
+
     fn path(&self) -> TrapPath<'_> {
         TrapPath {
             tokens: &self.tokens,

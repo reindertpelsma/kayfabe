@@ -1407,3 +1407,57 @@ fn a_hostile_guest_past_its_channel_budget_is_refused_by_name_per_runlist() {
     p.allocate_channel(&mut caps, budget, Route::Passthrough, 9999, Owner::User).unwrap();
     assert_eq!(caps.live_on_runlist(0), budget);
 }
+
+// ---- device reset (docs/design/V3_DEVICE_RESET.md) --------------------------------------------
+
+#[test]
+fn a_reset_plane_routes_nothing_of_the_old_life_and_allocates_like_a_fresh_one() {
+    // ★ The security property of the token sweep: after a reset no doorbell value the old life
+    // knew reaches a host channel, whatever state its word was left in (live Passthrough, rung,
+    // retired), and the next life's allocation of the same index behaves as on a fresh device.
+    let vmm = Box::leak(Box::new(plane::Vmm::new()));
+    let p = Plane::new(vmm, 64, 0x3f);
+    let fresh = Plane::new(vmm, 64, 0x3f);
+    let mut caps = crate::caps::VmCaps::from_declared(8, 8, 8, 8);
+    p.allocate_channel(&mut caps, 3, Route::Passthrough, 0xAAA, Owner::Kernel)
+        .expect("alloc");
+    p.allocate_channel(&mut caps, 5, Route::Translated, 0xBBB, Owner::User)
+        .expect("alloc");
+    p.allocate_channel(&mut caps, 7, Route::Passthrough, 0xCCC, Owner::User)
+        .expect("alloc");
+    assert!(p.free_channel(&mut caps, 7), "one already retired by the free path");
+    assert_eq!(
+        p.trap_write(Class::Doorbell, 0, 0, 3, 4),
+        Action::RingHostInline { host_token: 0xAAA },
+        "before the reset the old token rings its host twin"
+    );
+    let _ = p.trap_write(Class::Doorbell, 0, 0, 5, 4);
+    assert!(p.live_tokens() > 0);
+    // A worker owns token 5 while the reset sweeps: the sweep waits it out, never pulls it.
+    assert!(matches!(p.tokens[5].claim(), Claim::Won(_)));
+    assert_eq!(p.reset_tokens(), 1, "a BUSY token is not swept");
+    assert_eq!(p.tokens[5].release(0, REACT_ROUNDS), Release::Idled);
+    assert_eq!(p.reset_tokens(), 0);
+    assert_eq!(p.live_tokens(), 0);
+    for (a, b) in p.tokens.iter().zip(fresh.tokens.iter()) {
+        assert_eq!(a.load(), b.load());
+    }
+    assert!(!p.bits.bit(5));
+    // The old doorbell values route nowhere now.
+    for v in [3u64, 5, 7] {
+        assert_eq!(
+            p.trap_write(Class::Doorbell, 0, 0, v, 4),
+            fresh.trap_write(Class::Doorbell, 0, 0, v, 4),
+            "token {v}"
+        );
+    }
+    let _ = p.reset_tokens();
+    // The next life allocates index 3 exactly as a fresh plane does (fresh word, not DEAD).
+    let mut caps2 = crate::caps::VmCaps::from_declared(8, 8, 8, 8);
+    let mut caps3 = crate::caps::VmCaps::from_declared(8, 8, 8, 8);
+    assert_eq!(
+        p.allocate_channel(&mut caps2, 3, Route::Translated, 0xDDD, Owner::User),
+        fresh.allocate_channel(&mut caps3, 3, Route::Translated, 0xDDD, Owner::User)
+    );
+    assert_eq!(p.tokens[3].load(), fresh.tokens[3].load());
+}
