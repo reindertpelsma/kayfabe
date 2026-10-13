@@ -42,6 +42,8 @@ fx=/tmp/kfwc-fixture.bin
 rm -rf /tmp/kfwc-target-fx
 run make -C "$here" OUT="$OUT" "$OUT/test_kayfabe_roundtrip"
 run "$OUT/test_kayfabe_roundtrip" "$fx" "$OUT/rt"
+step "observer comparison script (validation step 2) against synthetic observer exports"
+run python3 -I "$here/test_compare.py" "$OUT/rt.pre610.kfgspcap" > /dev/null
 
 if [[ -n ${KFWC_CENSUS_BIN:-} ]]; then
     step "the real decoder (kf-census) on the module's output"
