@@ -156,8 +156,12 @@ fn trace_dir() -> Option<&'static std::path::Path> {
     })
     .as_deref()
 }
-const TRACE_HISTORY: usize = 8;
+const TRACE_HISTORY: usize = 64;
 const TRACE_WORDS: usize = 16384;
+/// Per-channel cap on the words the history retains (1 MiB).
+const TRACE_HISTORY_WORDS: usize = 1 << 18;
+/// Per-channel cap on straddle reports (a segment that ENDS inside a packet it started).
+const TRACE_STRADDLES: u32 = 16;
 
 struct SegTrace {
     seq: u64,
@@ -167,19 +171,34 @@ struct SegTrace {
     entry: u64,
     woke: bool,
     carried_in: String,
+    carried_out: String,
     rare: bool,
     backing: String,
     words: Vec<u32>,
     len: usize,
 }
 
+/// A deferred re-read of a straddling segment (no sleeping on the worker).
+struct Reread {
+    due: std::time::Instant,
+    delay_ms: u64,
+    seq: u64,
+    va: u64,
+    bytes: usize,
+    scan_in: Scan,
+    words: Vec<u32>,
+}
+
 pub(super) struct Trace {
     born: std::time::Instant,
     seq: u64,
     history: std::collections::VecDeque<SegTrace>,
+    history_words: usize,
     last_wake: Option<std::time::Instant>,
     woke: bool,
     reported: bool,
+    straddles: u32,
+    rereads: Vec<Reread>,
 }
 impl Trace {
     fn new() -> Self {
@@ -187,9 +206,12 @@ impl Trace {
             born: std::time::Instant::now(),
             seq: 0,
             history: std::collections::VecDeque::new(),
+            history_words: 0,
             last_wake: None,
             woke: false,
             reported: false,
+            straddles: 0,
+            rereads: Vec::new(),
         }
     }
     pub(super) fn wake(&mut self, woke: bool) {
@@ -232,6 +254,22 @@ fn header_chain(
         }
     }
     (chain, None)
+}
+/// Diagnostic: the packet the scan carries out of `words` when started from `scan` (fed one word
+/// at a time, so software triggers do not stop it; END_PB_SEGMENT ends it). `Err(index)` on refusal.
+fn scan_end(
+    scan: &Scan,
+    words: &[u32],
+    sw: impl Fn(u32) -> bool,
+) -> Result<Option<(kf_abi::submit::MethodHeader, usize)>, usize> {
+    let mut s = scan.clone();
+    for (i, w) in words.iter().enumerate() {
+        if s.carried().is_none() && w >> 29 == 7 {
+            return Ok(None);
+        }
+        s.segment(&[*w], &sw).map_err(|_| i)?;
+    }
+    Ok(s.carried())
 }
 fn words_text(out: &mut String, words: &[u32]) {
     use std::fmt::Write as _;
@@ -387,23 +425,76 @@ impl Pump {
     }
 
     /// Measurement only: remember this scanned segment (bounded history, [`trace_dir`]).
+    #[allow(clippy::too_many_arguments)]
     fn trace_segment(
         &mut self,
+        r: &userrelay::Record,
         put: u32,
         entry: u64,
+        d: kf_abi::submit::GpfifoEntry,
         pb: &Snapshot<'static>,
         words: &[u32],
         rare: bool,
+        software: &Option<Software>,
     ) {
-        let carried_in = carried_text(self.scan.carried());
+        let sw = |v: u32| software.as_ref().is_some_and(|s| s.matches(v));
+        let start = self.scan.carried();
+        let end = scan_end(&self.scan, words, sw);
+        let carried_in = carried_text(start);
+        let carried_out = match end {
+            Ok(c) => carried_text(c),
+            Err(i) => format!("refused@{i}"),
+        };
         let cursor = self.cursor;
+        let scan_in = self.scan.clone();
         let Some(t) = self.trace.as_mut() else {
             return;
         };
         t.seq += 1;
-        if t.history.len() == TRACE_HISTORY {
-            t.history.pop_front();
+        let kept = words[..words.len().min(TRACE_WORDS)].to_vec();
+        // A segment that starts at a packet boundary and ENDS inside a packet it started: legal
+        // hardware framing, but the shape a desync leaves behind. Report it with deferred re-reads.
+        if start.is_none() && matches!(end, Ok(Some(_))) && t.straddles < TRACE_STRADDLES {
+            t.straddles += 1;
+            let now = std::time::Instant::now();
+            for delay_ms in [1u64, 20, 200] {
+                t.rereads.push(Reread {
+                    due: now + std::time::Duration::from_millis(delay_ms),
+                    delay_ms,
+                    seq: t.seq,
+                    va: d.gpu_va,
+                    bytes: d.len_bytes as usize,
+                    scan_in: scan_in.clone(),
+                    words: kept.clone(),
+                });
+            }
+            let (chain, _) = header_chain(&scan_in, words, sw, 64);
+            let tail: Vec<String> = chain
+                .iter()
+                .rev()
+                .take(6)
+                .rev()
+                .map(|(i, w)| format!("{i}:{w:08x}"))
+                .collect();
+            eprintln!(
+                "kf3: USER_RING_TRACE STRADDLE {:#x}:{:#x} seq={} cursor={cursor} put={put} entry={entry:#018x} pb_va={:#x} words={} carried_out={carried_out} last_headers=[{}] backing=[{}]",
+                r.key.0,
+                r.key.1,
+                t.seq,
+                d.gpu_va,
+                words.len(),
+                tail.join(" "),
+                pb.describe()
+            );
         }
+        while t.history.len() == TRACE_HISTORY
+            || (t.history_words + kept.len() > TRACE_HISTORY_WORDS && !t.history.is_empty())
+        {
+            if let Some(old) = t.history.pop_front() {
+                t.history_words -= old.words.len();
+            }
+        }
+        t.history_words += kept.len();
         t.history.push_back(SegTrace {
             seq: t.seq,
             at: std::time::Instant::now(),
@@ -412,11 +503,79 @@ impl Pump {
             entry,
             woke: t.woke,
             carried_in,
+            carried_out,
             rare,
             backing: pb.describe(),
-            words: words[..words.len().min(TRACE_WORDS)].to_vec(),
+            words: kept,
             len: words.len(),
         });
+    }
+
+    /// Measurement only: run the straddle re-reads that are due (never sleeps).
+    fn trace_due(&mut self, me: &ChanPlane, r: &userrelay::Record, software: &Option<Software>) {
+        let now = std::time::Instant::now();
+        let due: Vec<Reread> = match self.trace.as_mut() {
+            Some(t) if t.rereads.iter().any(|x| x.due <= now) => {
+                let (due, later) = std::mem::take(&mut t.rereads)
+                    .into_iter()
+                    .partition(|x| x.due <= now);
+                t.rereads = later;
+                due
+            }
+            _ => return,
+        };
+        let sw = |v: u32| software.as_ref().is_some_and(|s| s.matches(v));
+        for x in due {
+            let fresh: Option<Vec<u32>> = self.snapshot(me, r, x.va, x.bytes).ok().map(|s| {
+                s.bytes
+                    .chunks_exact(4)
+                    .map(|w| u32::from_le_bytes([w[0], w[1], w[2], w[3]]))
+                    .collect()
+            });
+            let Some(fresh) = fresh else {
+                eprintln!(
+                    "kf3: USER_RING_TRACE STRADDLE_REREAD {:#x}:{:#x} seq={} +{}ms unreadable",
+                    r.key.0, r.key.1, x.seq, x.delay_ms
+                );
+                continue;
+            };
+            let diffs: Vec<usize> = (0..fresh.len().min(x.words.len()))
+                .filter(|&i| fresh[i] != x.words[i])
+                .collect();
+            let end = match scan_end(&x.scan_in, &fresh, sw) {
+                Ok(c) => carried_text(c),
+                Err(i) => format!("refused@{i}"),
+            };
+            eprintln!(
+                "kf3: USER_RING_TRACE STRADDLE_REREAD {:#x}:{:#x} seq={} +{}ms changed={} first_diff={:?} carried_out_now={end}",
+                r.key.0,
+                r.key.1,
+                x.seq,
+                x.delay_ms,
+                diffs.len(),
+                diffs.first()
+            );
+            if x.delay_ms == 200 {
+                if let Some(dir) = trace_dir() {
+                    let mut out = format!(
+                        "STRADDLE {:#x}:{:#x} seq={} pb_va={:#x} bytes={}\nas scanned:\n",
+                        r.key.0, r.key.1, x.seq, x.va, x.bytes
+                    );
+                    words_text(&mut out, &x.words);
+                    out.push_str("re-read +200ms:\n");
+                    words_text(&mut out, &fresh[..fresh.len().min(TRACE_WORDS)]);
+                    let _ = std::fs::create_dir_all(dir).and_then(|()| {
+                        std::fs::write(
+                            dir.join(format!(
+                                "user-ring-straddle-{:x}-{:x}-{}.txt",
+                                r.key.0, r.key.1, x.seq
+                            )),
+                            out.as_bytes(),
+                        )
+                    });
+                }
+            }
+        }
     }
 
     /// Measurement only ([`trace_dir`]): one bounded report for a refused segment. Runs on the
@@ -569,7 +728,7 @@ impl Pump {
             for s in &t.history {
                 let _ = writeln!(
                     out,
-                    "-- seq={} age_ms={} cursor={} put={} entry={:#018x} woke_by_request={} rare={} carried_in={} backing=[{}] words={}",
+                    "-- seq={} age_ms={} cursor={} put={} entry={:#018x} woke_by_request={} rare={} carried_in={} carried_out={} backing=[{}] words={}",
                     s.seq,
                     now.duration_since(s.at).as_millis(),
                     s.cursor,
@@ -578,6 +737,7 @@ impl Pump {
                     s.woke,
                     s.rare,
                     s.carried_in,
+                    s.carried_out,
                     s.backing,
                     s.len
                 );
@@ -606,6 +766,12 @@ impl Pump {
     fn turn(&mut self, me: &ChanPlane, r: &mut userrelay::Record) -> Turn<bool> {
         self.tick = false;
         self.again = false;
+        if self.trace.as_ref().is_some_and(|t| !t.rereads.is_empty()) {
+            let software = software_snapshot(me, r).ok().flatten();
+            self.trace_due(me, r, &software);
+            // Keep the worker ticking until the deferred re-reads have run.
+            self.tick = true;
+        }
         let native = r.chan.ok_or("USER_RING_NATIVE_ABSENT")?;
         let get = r
             .lease
@@ -639,7 +805,8 @@ impl Pump {
                 self.guest_get = None;
             }
         }
-        self.tick = self.fetch.fetched() != self.fetch.issued();
+        self.tick = self.fetch.fetched() != self.fetch.issued()
+            || self.trace.as_ref().is_some_and(|t| !t.rereads.is_empty());
         if self.segment.is_none() {
             if me.inbox.walk_busy() {
                 me.inbox.wait_walk(r.idx);
@@ -753,7 +920,9 @@ impl Pump {
             let planned = stage_plan(&self.scan, &software, &words);
             if self.trace.is_some() {
                 match &planned {
-                    Ok((_, rare)) => self.trace_segment(put, entry, &pb, &words, *rare),
+                    Ok((_, rare)) => {
+                        self.trace_segment(r, put, entry, descriptor, &pb, &words, *rare, &software)
+                    }
                     Err(why) => self.trace_refusal(
                         me,
                         r,
