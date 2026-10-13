@@ -2,6 +2,15 @@
 
 **STATUS: LIVE, 2026-10-13 (derived mechanically from `tier_checks/merged_classification.tsv`; 40 of 140 inventory rows; review the grouping).** Related: `V3_CONSTANT_STRATEGY.md` §2 (tiers), §4 step 1-3, `V3_CONSTANT_LISTS_20261011.md`.
 
+> **⊘ CORRECTION 2026-10-13 (owner; verified in the host's own module source).** RM's administrator check is `capable(CAP_SYS_ADMIN)`, not uid 0:
+> `os_is_administrator()` returns `NV_IS_SUSER()` (`/usr/src/nvidia-595.91.07/nvidia/os-interface.c:382`), defined as `capable(CAP_SYS_ADMIN)`
+> (`common/inc/nv-linux.h:502`); the two other access rights map to `CAP_PERFMON` and `CAP_SYS_NICE` (`os-interface.c:385-400`). A default Docker container
+> (root without `CAP_SYS_ADMIN`) is therefore **unprivileged** to RM, exactly like kayfabe at runtime. So wherever this page says a measurement is "feasible
+> on a headless rental" as a *privileged* measurement, that holds only on a KVM rental or bare metal with real `CAP_SYS_ADMIN` (read each rental's `CapEff`
+> first); on a container rental it is a tier-2 measurement and kayfabe can obtain the same value itself at runtime (no table, no sweep). The earlier
+> wording came from a desk check and wrongly assumed container root was RM admin. Rows marked `PRIVILEGED`/`KERNEL_PRIVILEGED`/`INTERNAL` stay tier 3 (or tier 4),
+> because kayfabe cannot obtain them either way.
+
 ## What this is
 
 Owner, 2026-10-13: whatever ogkm defines is already known, so measurement only makes sense for GSP/RM traffic ogkm does not expose but that is reachable. These are the inventory rows with `ogkm = NOT_IN_ANY_VERSION`: no layout and no semantics in any of the 221 ogkm tags checked (515.43.04..615.78.08). Measured: the classification TSV. Inferred, not measured: that the open Linux driver never issues them (it cannot, they are not in its source) and that the closed Linux driver might; so "Windows-only" here means "observed only from the Windows 580.88 driver, absent from the open source".
