@@ -18,3 +18,10 @@ USER ring relay and migratable passthrough; the deferred API (`5080` admission, 
 - Windows runs use `on`. A Windows guest on an `off` VM must fail cleanly and by name (counted refusals), never hang or fault.
 - Hostile test: a Linux-profile guest that declares a Windows identity and sends Windows-only allocations is refused with `windows-support=off`.
 - The flag inventory records this property as a profile, and every behaviour flag it replaces is deleted (hardwired or removed), per the flag rules: only debug and measurement trace flags remain.
+
+## Per-driver and per-die differences are derived, not flagged (owner, 2026-10-13)
+Where a behaviour is right for one guest driver or die and wrong for another, it is DERIVED inside kayfabe from the guest's declared state (the driver branch and version from SET_GUEST_SYSTEM_INFO, the host-derived chip facts), so it never needs to appear on a command line. Conditions for a derived switch to be accepted:
+- it changes COMPATIBILITY behaviour only, never a security boundary: a guest controls what it declares, so it must be safe for any declared value (a lie can only change that guest's own compatibility behaviour, never privilege, mapping exposure or another VM);
+- it is a pure function of declared and host-derived facts, covered by GPU-free tests that include unknown and malformed values;
+- a declared state outside the measured set takes the clean fallback (refuse by name, count, claim nothing; §AH), never a neighbour's behaviour;
+- a flag that survives ablation only because two drivers disagree is replaced by such a derivation, and the flag is deleted.
