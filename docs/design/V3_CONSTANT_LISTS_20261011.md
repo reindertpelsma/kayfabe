@@ -69,7 +69,7 @@ without a MUX behaves like a headless reference, which is also useful), and the 
 
 ## Not yet done
 
-- **`0x20808165` is missing from the inventory:** Codex's Windows app matrix (14:16 UTC checkpoint, `codex/windows-matrix-20261011`) shows three NVENC formats failing session creation with one
+- **`0x20808165` was added to the inventory on 2026-10-13 (row `ctl-20808165`, shape unknown; not yet run through the tiers).** Original note: **it was missing from the inventory:** Codex's Windows app matrix (14:16 UTC checkpoint, `codex/windows-matrix-20261011`) shows three NVENC formats failing session creation with one
   refusal of `0x20808165` (`0x56`) per encoder. Add it as a row and run it through the tiers; it is the first app failure tied to a specific control (a first test of the demand filter).
 - The refused-request logging (parameter size and reply bytes for all refused controls) as a measurement flag.
 
