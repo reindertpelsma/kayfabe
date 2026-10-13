@@ -1,0 +1,94 @@
+[
+  {
+    "uid": 65534,
+    "mode": "migrate-cursors-nop",
+    "pid": 2292817,
+    "start": "2026-10-13T01:19:38.723258+00:00",
+    "end": "2026-10-13T01:19:42.898333+00:00",
+    "rc": 0,
+    "journal_rc": 0,
+    "xids": 0,
+    "cleanup": true,
+    "observable_proof": true,
+    "verdict": "PASS",
+    "inner_status": "UNMEASURED",
+    "nop_post_kick_hold_s": 2,
+    "cursor_observation": {
+      "trigger": false,
+      "slot0": 0,
+      "slot1": 0,
+      "new_get": 0,
+      "old_get": 1
+    },
+    "reset_hypothesis": "CONTROL"
+  },
+  {
+    "uid": 65534,
+    "mode": "migrate-cursors",
+    "pid": 2292942,
+    "start": "2026-10-13T01:19:43.014024+00:00",
+    "end": "2026-10-13T01:19:47.192063+00:00",
+    "rc": 0,
+    "journal_rc": 0,
+    "xids": 0,
+    "cleanup": true,
+    "observable_proof": true,
+    "verdict": "PASS",
+    "inner_status": "UNMEASURED",
+    "nop_post_kick_hold_s": 2,
+    "cursor_observation": {
+      "trigger": true,
+      "slot0": 10,
+      "slot1": 2,
+      "new_get": 2,
+      "old_get": 1
+    },
+    "reset_hypothesis": "SUPPORTED_FOR_FIXTURE"
+  },
+  {
+    "uid": 0,
+    "mode": "migrate-cursors-nop",
+    "pid": 2292995,
+    "start": "2026-10-13T01:19:47.307699+00:00",
+    "end": "2026-10-13T01:19:51.486462+00:00",
+    "rc": 0,
+    "journal_rc": 0,
+    "xids": 0,
+    "cleanup": true,
+    "observable_proof": true,
+    "verdict": "PASS",
+    "inner_status": "UNMEASURED",
+    "nop_post_kick_hold_s": 2,
+    "cursor_observation": {
+      "trigger": false,
+      "slot0": 0,
+      "slot1": 0,
+      "new_get": 0,
+      "old_get": 1
+    },
+    "reset_hypothesis": "CONTROL"
+  },
+  {
+    "uid": 0,
+    "mode": "migrate-cursors",
+    "pid": 2293162,
+    "start": "2026-10-13T01:19:51.602379+00:00",
+    "end": "2026-10-13T01:19:55.780078+00:00",
+    "rc": 0,
+    "journal_rc": 0,
+    "xids": 0,
+    "cleanup": true,
+    "observable_proof": true,
+    "verdict": "PASS",
+    "inner_status": "UNMEASURED",
+    "nop_post_kick_hold_s": 2,
+    "cursor_observation": {
+      "trigger": true,
+      "slot0": 10,
+      "slot1": 2,
+      "new_get": 2,
+      "old_get": 1
+    },
+    "reset_hypothesis": "SUPPORTED_FOR_FIXTURE"
+  }
+]

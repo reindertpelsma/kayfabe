@@ -73,3 +73,19 @@ Before choosing a native product path:
 The existing worker/shadow diagnostics stay default off. This finding warrants
 evaluating the authored native alternative before more parser wall-clearing;
 it does not select that alternative or retire the mediated design.
+
+## Follow-up: distinct replacement slots, 2026-10-13
+
+Source `242647766f0b7b9cac643ffcae36e7c5539aec38`, same RTX 4070 / 595.91.07,
+01:19:38–01:19:55 UTC: four fresh UID65534/root NOP/trigger processes PASS,
+successful cleanup, no Xids. Trigger cases write slot 0's independent marker 10
+and slot 1's marker 2, replacement GET 2, old USERD GET 1. NOP cases leave all
+replacement values zero, old GET 1. The pre-run H-RESET falsifier (slot 0 absent
+with slot 1 and GET 2 present) did not occur; start-at-slot-1 is falsified for
+this prepared fixture. [Raw evidence and plan](../../traces/windows_matrix_20261011/gravity-vulkan/prepared-native-migration/cursors/README.md).
+
+This closes the duplicated-slot ambiguity of the original fixture. It does not
+distinguish unconditional reset from honoring a seeded zero, prove nonzero
+seeded cursors, or establish a general rule for in-flight/wrapped Windows
+channels. Guest/private USERD relay switch and retained backing lifetime remain
+the immediate product design gates. There is still no runtime native caller.

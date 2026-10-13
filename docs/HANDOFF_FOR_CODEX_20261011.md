@@ -12,10 +12,15 @@ NOP/trigger pairs all PASS. Trigger executes replacement-only GPU marker 2 and
 replacement USERD GET 2; matched NOP leaves both zero; all cleanup succeeds and
 precise attributed journals contain zero Xids. This disproves native-unavailable
 inferences; earlier same-config faults remain real with unknown inner cause.
-No product caller, Windows fix, initial cursor rule or cross-VM guarantee follows.
-See `docs/design/V3_NATIVE_FIFO_RELOCATION_20261013.md` for authority assessment
-and next gates. Next discriminator: distinct per-slot markers for initial GET;
-then private USERD/guest relay transition, ownership/lifetimes and exact regressions.
+No product caller, Windows fix, general cursor rule or cross-VM guarantee follows.
+Follow-up exact `242647766` on the same host/driver, 2026-10-13 01:19:38–55UTC:
+UID65534/root distinct-slot NOP/trigger pairs 4/4 PASS, no Xid, cleanup successful.
+Trigger fetches replacement slots0 and1 (markers10/2), newGET2, oldGET1; NOP leaves
+replacement0/0/0, oldGET1. This falsifies start-at-slot1 for this fixture, but does
+not distinguish unconditional reset from honoring a seeded zero. Evidence in
+prepared-native-migration/cursors. Next: private USERD/guest relay transition,
+retained backing, arbitrary/in-flight/wrap cursor contracts and exact regressions.
+See `docs/design/V3_NATIVE_FIFO_RELOCATION_20261013.md` for authority assessment.
 
 Shadow Windows1620 final: TIMEOUT604s/rc124/no benchmark image, three153,
 zero4101/livekernel/WER/reboot, harnessGSPcycles1, hostXid32/channel4e. Full evidence

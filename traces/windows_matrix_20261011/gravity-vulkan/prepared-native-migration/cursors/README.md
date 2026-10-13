@@ -1,8 +1,34 @@
 # Replacement-slot cursor discriminator
 
-**STATUS: RESEARCH, 2026-10-13.** Written before the hardware run. No product
-runtime change. Builds only the bench binary after acquiring the shared GPU
-lock and confirming no QEMU and DMA-FQ.
+**STATUS: RESEARCH, 2026-10-13.** Native four-case discriminator PASS. No product
+runtime change. The test plan below was committed before the hardware run.
+
+## Measured result
+
+Source `242647766f0b7b9cac643ffcae36e7c5539aec38`, RTX 4070 / stock 595.91.07,
+2026-10-13 01:19:38–01:19:55 UTC. [Results](result/results.json) and raw process,
+health, precise journal, source/SHA256 and build logs are retained alongside.
+
+| Caller | Mode | Slot 0 marker | Slot 1 marker | Replacement GET | Old GET | Xids |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| UID 65534 / CapEff 0 | NOP | 0 | 0 | 0 | 1 | 0 |
+| UID 65534 / CapEff 0 | Trigger | 10 | 2 | 2 | 1 | 0 |
+| UID 0 | NOP | 0 | 0 | 0 | 1 | 0 |
+| UID 0 | Trigger | 10 | 2 | 2 | 1 | 0 |
+
+All four processes return 0 with successful owned-resource cleanup. The
+H-RESET falsifier did not occur: replacement slot 0 was fetched despite old
+GET 1. The start-at-slot-1 alternative is falsified for this fixture. This does
+not distinguish an unconditional reset to zero from honoring the replacement
+USERD's seeded zero, nor establish arbitrary seeded values or wrap behavior.
+Compile-only `cargo test` passes with zero unit tests; hardware observations,
+rather than that compile check, establish the result. The host was left idle,
+no QEMU, GPU at 9 MiB, IOMMU DMA-FQ, shared lock released. No Vast instance used.
+
+## Original test plan
+
+Build only the bench binary after acquiring the shared GPU lock and confirming
+no QEMU and DMA-FQ.
 
 H-RESET: after relocation, replacement USERD seeded GET 0 causes replacement
 slot 0 then slot 1 to be fetched. **Falsifier:** slot 0's marker stays 0 while

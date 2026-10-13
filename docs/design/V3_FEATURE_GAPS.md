@@ -41,8 +41,8 @@ shadow Windows1620 finishes TIMEOUT604s/no image/three153/GSPcycles1/Xid32 on
 channel4e; the previous pending result below is superseded. The separate native
 prepared relocation at `1a666d783` passes UID65534/CapEff0 and root NOP/trigger
 pairs with real replacement marker/GET and no Xid. This falsifies an unavailable
-native-path inference, not the Windows app failure. Initial cursor, guest relay
-transition and per-driver capability remain open. See
+native-path inference, not the Windows app failure. Distinct-slot follow-up `242647766` passes 4/4, fetching slot0 despite oldGET1;
+general cursor semantics, guest relay transition and per-driver capability remain open. See
 [native assessment](V3_NATIVE_FIFO_RELOCATION_20261013.md) and raw evidence.
 
 ## 2. Gap table
