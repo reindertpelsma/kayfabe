@@ -67,8 +67,11 @@ use std::os::unix::ffi::OsStrExt as _;
 /// 26 (2026-10-11, `claude/gl-icd-crash-20261011`): 25 plus the `channel-budget` property — `kf3_realize` gains
 /// `channel_budget` (channels per runlist; 0 = derive from the host) after `pci_devfn`.
 /// 27 (2026-10-13, `claude/device-reset-20261013`, `docs/design/V3_DEVICE_RESET.md`): 26 plus
-/// [`kf3_device_reset`], called from the C device's Resettable `hold` phase.
-pub const KF3_ABI: u32 = 27;
+/// `kf3_device_reset(h)`, called from the C device's Resettable `hold` phase (built and run as
+/// `c9ac4e77`).
+/// 28 (2026-10-13, same branch): 27's `kf3_device_reset` gains `from_vcpu`, and
+/// [`kf3_device_reset_wait`] (the `exit` phase's bounded wait) joins.
+pub const KF3_ABI: u32 = 28;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -1081,10 +1084,33 @@ pub unsafe extern "C" fn kf3_option_rom(
 /// C device's Resettable `hold` phase (main loop, or a vCPU writing a bridge's config space; BQL
 /// held): closes the vCPU gate, counts the request and wakes the register drainer, which runs the
 /// reset. Never waits.
+///
+/// `from_vcpu`: QEMU asked from a vCPU thread (a bus reset; the other vCPUs run) rather than its
+/// main loop (a system reset with every vCPU paused, or the machine's own reset at creation).
 #[unsafe(no_mangle)]
-pub extern "C" fn kf3_device_reset(h: *mut c_void) {
+pub extern "C" fn kf3_device_reset(h: *mut c_void, from_vcpu: u32) {
     if let Some(d) = dev(h) {
-        d.request_reset();
+        d.request_reset(from_vcpu != 0);
+    }
+}
+
+/// ★★ ABI 28: the Resettable `exit` phase, from QEMU's MAIN LOOP only (never a vCPU): wait, at most
+/// `timeout_ms` (0: [`crate::reset::WAIT_BOUND`], the device's own), until the reset requested in
+/// the `hold` phase completed. 0 = complete (the device is
+/// as realize left it before any vCPU resumes); 1 = the bound passed (said loudly; the reset goes on
+/// with the device closed); -1 = no device.
+#[unsafe(no_mangle)]
+pub extern "C" fn kf3_device_reset_wait(h: *mut c_void, timeout_ms: u32) -> i32 {
+    match dev(h) {
+        Some(d) => match d.wait_reset(if timeout_ms == 0 {
+            crate::reset::WAIT_BOUND
+        } else {
+            std::time::Duration::from_millis(u64::from(timeout_ms))
+        }) {
+            crate::reset::Waited::Done => 0,
+            crate::reset::Waited::TimedOut(_) => 1,
+        },
+        None => -1,
     }
 }
 

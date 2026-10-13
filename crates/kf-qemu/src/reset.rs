@@ -189,6 +189,28 @@ pub struct Reset {
     touched: std::sync::atomic::AtomicBool,
     /// Resets that found the device pristine (status line).
     pristine: AtomicU64,
+    /// Requests by where QEMU asked from: its main loop (a system reset — the vCPUs are paused —
+    /// or the machine's own reset at creation) or a vCPU (a bus reset through a bridge's config
+    /// write, the other vCPUs running). Status line.
+    from_main: AtomicU64,
+    from_vcpu: AtomicU64,
+    /// Bounded waits ([`Reset::wait_completed`]) that hit their bound.
+    waits_timed_out: AtomicU64,
+}
+
+/// ★ How long the main loop waits, with every vCPU paused, for a reset to complete before it lets
+/// QEMU resume them (`docs/design/V3_DEVICE_RESET.md` §3): long enough for the act thread to free a
+/// guest's clients (measured: one round, milliseconds), short enough that a host that never lets go
+/// cannot hold the VM — past it the reset completes asynchronously with the gate closed.
+pub const WAIT_BOUND: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// What a bounded wait for a reset found.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Waited {
+    /// The reset (and every request before it) completed: the device is as realize left it.
+    Done,
+    /// The bound passed with the sequence at this stage; it goes on asynchronously, gate closed.
+    TimedOut(Stage),
 }
 
 impl Reset {
@@ -197,6 +219,33 @@ impl Reset {
     pub fn request(&self) -> u64 {
         self.gate.close();
         self.requested.fetch_add(1, Ordering::SeqCst) + 1
+    }
+
+    /// [`Reset::request`], counting where QEMU asked from (`from_vcpu`: a vCPU thread — a bus
+    /// reset; otherwise its main loop).
+    pub fn request_from(&self, from_vcpu: bool) -> u64 {
+        let c = if from_vcpu { &self.from_vcpu } else { &self.from_main };
+        c.fetch_add(1, Ordering::Relaxed);
+        self.request()
+    }
+
+    /// ★★ **The main loop's bounded wait** (QEMU's Resettable `exit` phase, every vCPU paused by
+    /// `pause_all_vcpus` around `qemu_system_reset`, `system/runstate.c:868-870`): until reset
+    /// `epoch` — and every request before it — completed, or `bound` passed. Never called on a
+    /// vCPU, the drainer or any thread a reset stage runs on; the threads it waits for take no
+    /// QEMU lock (§3 of the design note says why each one cannot need the BQL).
+    pub fn wait_completed(&self, epoch: u64, bound: std::time::Duration) -> Waited {
+        let t0 = std::time::Instant::now();
+        loop {
+            if self.completed() >= epoch {
+                return Waited::Done;
+            }
+            if t0.elapsed() >= bound {
+                self.waits_timed_out.fetch_add(1, Ordering::Relaxed);
+                return Waited::TimedOut(self.stage());
+            }
+            std::thread::sleep(std::time::Duration::from_micros(200));
+        }
     }
 
     /// A reset is requested and not yet completed (one atomic load: the drainer's hot path).
@@ -359,10 +408,13 @@ impl Reset {
     #[must_use]
     pub fn status(&self) -> String {
         format!(
-            "reset[req={} done={} pristine={} stage={:?} dropped={}]",
+            "reset[req={} (main={} vcpu={}) done={} pristine={} waits_timed_out={} stage={:?} dropped={}]",
             self.requested(),
+            self.from_main.load(Ordering::Relaxed),
+            self.from_vcpu.load(Ordering::Relaxed),
             self.completed(),
             self.pristine.load(Ordering::Relaxed),
+            self.waits_timed_out.load(Ordering::Relaxed),
             self.stage(),
             self.gate.dropped()
         )
@@ -869,6 +921,106 @@ mod tests {
             ["drainer 1", "release 1", "memory 1", "finish 1"]
         );
         assert!(!r.gate.is_closed());
+    }
+
+    /// Thread-safe owners for the bounded-wait tests: the drainer runs on its own thread, as in
+    /// the device; `stuck_release` never acknowledges the Release stage.
+    #[derive(Default)]
+    struct SyncOwners {
+        stuck_release: AtomicBool,
+        release_polls: AtomicU64,
+        finished: AtomicU64,
+    }
+
+    impl Owners for SyncOwners {
+        fn reset_drainer_state(&self, _e: u64) {}
+        fn begin_release(&self, _e: u64) {
+            self.release_polls.store(20, Ordering::SeqCst);
+        }
+        fn released(&self, _e: u64) -> bool {
+            if self.stuck_release.load(Ordering::SeqCst) {
+                return false;
+            }
+            // a few drainer passes, as the act thread's frees take
+            let n = self.release_polls.load(Ordering::SeqCst);
+            if n == 0 {
+                return true;
+            }
+            self.release_polls.store(n - 1, Ordering::SeqCst);
+            false
+        }
+        fn begin_memory(&self, _e: u64) {}
+        fn memory_done(&self, _e: u64) -> bool {
+            true
+        }
+        fn finish(&self, _e: u64) -> bool {
+            self.finished.fetch_add(1, Ordering::SeqCst);
+            true
+        }
+    }
+
+    /// A drainer thread: polls every 100 µs until told to stop.
+    fn drainer(
+        r: Arc<Reset>,
+        o: Arc<SyncOwners>,
+        stop: Arc<AtomicBool>,
+    ) -> std::thread::JoinHandle<()> {
+        std::thread::spawn(move || {
+            while !stop.load(Ordering::SeqCst) {
+                let _ = r.poll(&*o);
+                std::thread::sleep(std::time::Duration::from_micros(100));
+            }
+        })
+    }
+
+    /// ★ The main loop's wait (QEMU's exit phase, vCPUs paused): it returns when the drainer
+    /// completed the reset — every stage, the gate open — and the device is as realize left it
+    /// before a single vCPU runs again.
+    #[test]
+    fn the_bounded_wait_returns_once_the_drainer_completed_the_reset() {
+        let r = Arc::new(Reset::default());
+        let o = Arc::new(SyncOwners::default());
+        let stop = Arc::new(AtomicBool::new(false));
+        let d = drainer(r.clone(), o.clone(), stop.clone());
+        r.touched();
+        let e = r.request_from(false);
+        let t0 = std::time::Instant::now();
+        assert_eq!(r.wait_completed(e, WAIT_BOUND), Waited::Done);
+        assert!(t0.elapsed() < WAIT_BOUND);
+        assert!(!r.gate.is_closed(), "the gate is open before the vCPUs resume");
+        assert_eq!(o.finished.load(Ordering::SeqCst), 1);
+        assert!(r.status().contains("main=1 vcpu=0"), "{}", r.status());
+        // A pristine reset (the machine's own at creation) is done at once.
+        let e = r.request_from(false);
+        assert_eq!(r.wait_completed(e, WAIT_BOUND), Waited::Done);
+        assert_eq!(o.finished.load(Ordering::SeqCst), 1, "no owner asked");
+        stop.store(true, Ordering::SeqCst);
+        d.join().expect("drainer");
+    }
+
+    /// ★ The degrade path: an owner that never acknowledges (a host free that hangs) cannot hold
+    /// the VM. The wait returns at its bound naming the stage; the reset goes on asynchronously with
+    /// the gate closed (fail closed) and completes when the owner finally answers.
+    #[test]
+    fn the_bounded_wait_gives_up_at_its_bound_and_the_reset_completes_later() {
+        let r = Arc::new(Reset::default());
+        let o = Arc::new(SyncOwners::default());
+        o.stuck_release.store(true, Ordering::SeqCst);
+        let stop = Arc::new(AtomicBool::new(false));
+        let d = drainer(r.clone(), o.clone(), stop.clone());
+        r.touched();
+        let e = r.request_from(false);
+        let bound = std::time::Duration::from_millis(50);
+        let t0 = std::time::Instant::now();
+        assert_eq!(r.wait_completed(e, bound), Waited::TimedOut(Stage::Release));
+        assert!(t0.elapsed() >= bound && t0.elapsed() < bound * 20);
+        assert!(r.gate.is_closed(), "past the bound the device stays closed");
+        assert!(r.status().contains("waits_timed_out=1"), "{}", r.status());
+        o.stuck_release.store(false, Ordering::SeqCst);
+        assert_eq!(r.wait_completed(e, WAIT_BOUND), Waited::Done);
+        assert!(!r.gate.is_closed());
+        stop.store(true, Ordering::SeqCst);
+        d.join().expect("drainer");
     }
 
     #[test]

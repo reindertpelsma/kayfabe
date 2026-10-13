@@ -3459,10 +3459,43 @@ impl Device {
     /// phase; `docs/design/V3_DEVICE_RESET.md`). Main loop or a vCPU in a bridge's config write,
     /// BQL held: closes the vCPU gate, counts the request and wakes the drainer — NOTHING else, and
     /// nothing that waits. The drainer runs the reset ([`crate::reset::Reset::poll`]).
-    pub fn request_reset(&self) -> u64 {
-        let n = self.reset.request();
+    pub fn request_reset(&self, from_vcpu: bool) -> u64 {
+        let n = self.reset.request_from(from_vcpu);
         let _ = self.drainer_efd.signal();
         n
+    }
+
+    /// ★★ **QEMU's Resettable `exit` phase, from its main loop** (`kf3_device_reset_wait`): every
+    /// vCPU is paused around `qemu_system_reset` (`system/runstate.c:868-870`), so a bounded wait
+    /// here blocks no running vCPU. It waits until the newest reset completed — the act thread freed
+    /// every guest client (the channel plane EMPTY), the VA thread reset the memory plane, the gate
+    /// open — so nothing of the old life runs when the vCPUs resume. None of the threads it waits for
+    /// takes a QEMU lock (`docs/design/V3_DEVICE_RESET.md` §3). Past `bound` it says so loudly and
+    /// returns: the reset completes in the background with the device closed.
+    pub fn wait_reset(&self, bound: std::time::Duration) -> crate::reset::Waited {
+        let e = self.reset.requested();
+        let t0 = std::time::Instant::now();
+        let w = self.reset.wait_completed(e, bound);
+        match w {
+            crate::reset::Waited::Done => {
+                if crate::reset::loud(e) {
+                    eprintln!(
+                        "kf3: device reset #{e} complete before the vCPUs resume (the main loop waited {} us)",
+                        t0.elapsed().as_micros()
+                    );
+                }
+            }
+            crate::reset::Waited::TimedOut(stage) => eprintln!(
+                "kf3: ⚠⚠ device reset #{e} NOT complete after {bound:?} with every vCPU paused (stage {stage:?}: {}) — QEMU resumes the guest now; the reset completes in the background with the device closed (guest writes dropped); {}",
+                if stage > crate::reset::Stage::Release {
+                    "every guest client already freed"
+                } else {
+                    "the old life's host channels may still run on guest memory"
+                },
+                self.reset.status()
+            ),
+        }
+        w
     }
 
     /// ★ Device reset, stage Finish: the BAR0 register shadow as realize left it — every shadow

@@ -61,8 +61,10 @@
  * channel_budget (channels per runlist, the count the guest is told AND the enforced twin cap; 0 = derive
  * from the host) after pci_devfn. Rust refuses a value above the host's limit or below the minimum, by name. */
 /* 27 (2026-10-13, claude/device-reset-20261013, docs/design/V3_DEVICE_RESET.md): 26 plus
- * kf3_device_reset, called from the device's Resettable hold phase. */
-#define KF3_ABI 27
+ * kf3_device_reset(h), called from the device's Resettable hold phase (built as c9ac4e77). */
+/* 28 (2026-10-13, same branch): kf3_device_reset gains from_vcpu, and kf3_device_reset_wait (the
+ * exit phase's bounded wait, main loop only) joins. */
+#define KF3_ABI 28
 #define KF3_BROKER_ON 1u
 #define KF3_BROKER_VRAM_AUTO 0u
 #define KF3_BROKER_VRAM_ON 1u
@@ -250,8 +252,13 @@ int32_t kf3_display_ui_info(void *h, uint32_t head, uint32_t width, uint32_t hei
  * embedded GOP driver wrapped with this device's ids and its KFGP descriptor. 0 and *rom, *rom_len
  * (valid for the process; the device copies them into its ROM BAR), or -1 (gop=0). */
 int32_t kf3_option_rom(void *h, const uint8_t **rom, uint64_t *rom_len);
-/* ★ ABI 27: QEMU reset this function (Resettable hold phase, BQL held). Rust closes its vCPU gate,
- * counts the request, wakes its register drainer and returns; nothing here waits. */
-void kf3_device_reset(void *h);
+/* ★ ABI 28: QEMU reset this function (Resettable hold phase, BQL held). Rust closes its vCPU gate,
+ * counts the request (from_vcpu: asked on a vCPU thread — a bus reset), wakes its register drainer
+ * and returns; nothing here waits. */
+void kf3_device_reset(void *h, uint32_t from_vcpu);
+/* ★ ABI 28: the exit phase, MAIN LOOP ONLY (every vCPU paused around qemu_system_reset): wait at
+ * most timeout_ms (0: the device's own bound) for that reset to complete. 0 complete, 1 bound passed (logged; the reset goes on
+ * with the device closed), -1 no device. */
+int32_t kf3_device_reset_wait(void *h, uint32_t timeout_ms);
 void kf3_unrealize(void *h);
 #endif
