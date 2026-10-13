@@ -1,0 +1,5 @@
+=== gravitymark_d3d12 start=2026-10-13T09:41:29.5780653+00:00 host=VASTWIN session=1 boot=2026-10-13T09:38:46.5000000Z timeout=660
+KFWAIT gravitymark_d3d12 EXITED rc=0
+GM_OK image=866321 bytes
+GM_TIMES lines=33921
+=== end rc=0 secs=183 2026-10-13T09:44:32.5601878+00:00
