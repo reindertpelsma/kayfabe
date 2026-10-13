@@ -175,6 +175,20 @@ impl Trigger {
         }
     }
 
+    /// ★ Device reset (`docs/design/V3_DEVICE_RESET.md`): the armed request, if any, is ABANDONED —
+    /// the trigger reads idle, as a fresh device's does, and the abandonment counts as a
+    /// completion so *issued* and *completed* stay balanced. ⊘ Not a forged completion: the guest
+    /// that armed it is gone, and a late [`Trigger::complete`] for it finds the trigger idle
+    /// ([`ClearOutcome::AlreadyIdle`]). The counters are monotonic and kept. Returns whether one
+    /// was armed.
+    pub fn abandon(&self) -> bool {
+        let was = self.armed_at.swap(0, Ordering::AcqRel);
+        if was != 0 {
+            self.completed.fetch_add(1, Ordering::AcqRel);
+        }
+        was != 0
+    }
+
     /// §5.5: the drainer keeps *issued* and *completed*; doorbell workers fence on **completed**,
     /// and only for the polled class.
     #[inline]

@@ -139,6 +139,21 @@ impl FspEmem {
         self.replies.load(Ordering::Relaxed)
     }
 
+    /// ★ Device reset (`docs/design/V3_DEVICE_RESET.md`): a drained channel again, as
+    /// [`FspEmem::new`] builds it — cursor, header, reply and both queues. The reply counter is the
+    /// status line's and is kept. ⊘ Only while no vCPU can reach the port (the reset gate).
+    pub fn reset(&self) {
+        let z = |a: &AtomicU32| a.store(0, Ordering::Release);
+        z(&self.flags);
+        z(&self.cursor);
+        self.cmd_hdr.iter().for_each(z);
+        self.reply.iter().for_each(z);
+        z(&self.queue_head);
+        z(&self.queue_tail);
+        z(&self.msgq_head);
+        z(&self.msgq_tail);
+    }
+
     /// A 32-bit write. Lock-free.
     pub fn write(&self, off: u64, val: u32) -> FspWrite {
         match off {
@@ -228,6 +243,26 @@ impl FspEmem {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// ★ Device reset: a channel left mid-exchange (cursor moved, a reply posted, queues not
+    /// drained) reads back as a fresh channel's, port for port.
+    #[test]
+    fn a_reset_channel_reads_as_a_fresh_one() {
+        let fresh = FspEmem::new();
+        let f = FspEmem::new();
+        f.write(EMEMC, AINCW);
+        for w in [0xC100_0000, 0x7e | (0x10de << 8) | (0x14 << 24), 1, 2, 3] {
+            f.write(EMEMD, w);
+        }
+        f.write(QUEUE_TAIL, 16);
+        assert!(matches!(f.write(QUEUE_HEAD, 0), FspWrite::Replied { .. }));
+        let ports = [EMEMC, EMEMD, QUEUE_HEAD, QUEUE_TAIL, MSGQ_HEAD, MSGQ_TAIL];
+        assert_ne!(ports.map(|p| f.read(p)), ports.map(|p| fresh.read(p)));
+        f.reset();
+        assert_eq!(ports.map(|p| f.read(p)), ports.map(|p| fresh.read(p)));
+        f.reset();
+        assert_eq!(ports.map(|p| f.read(p)), ports.map(|p| fresh.read(p)));
+    }
 
     /// `_kfspConfigEmemc_GH100`: offset 0 with the named auto-increment flags.
     fn ememc(aincw: bool, aincr: bool) -> u32 {

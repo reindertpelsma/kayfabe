@@ -758,3 +758,45 @@ fn the_timer_hal_is_per_family_and_only_gv100_has_a_priv_level_mask() {
         "GB10B writes no time register at all"
     );
 }
+
+// ---- device reset (docs/design/V3_DEVICE_RESET.md) ------------------------------------------
+
+#[test]
+fn a_reset_ring_drops_the_old_lifes_writes_lifts_the_poison_and_never_rewinds_its_sequence() {
+    // ⊘ §5.4: a full ring poisons the device, and before the reset that was forever — a rebooted
+    // guest inherited a ring that dropped every write. The reset drops the queued writes (they are
+    // the previous life's) and lifts the poison; the sequence stays monotonic, because other paths
+    // fence against `applied_seq` (§5.4) and a rewound number would satisfy a stale fence.
+    let r = PrivRing::new();
+    let w = |v| RegWrite {
+        bar: 0,
+        offset: 0x1000,
+        value: v,
+        width: 4,
+    };
+    for v in 0..crate::ring::CAPACITY as u64 {
+        assert!(matches!(r.push(w(v)), Push::Queued(_)));
+    }
+    assert_eq!(r.push(w(0)), Push::Poisoned);
+    assert!(r.is_poisoned());
+    r.commit(); // one applied before the reset
+    let seq_before = r.applied_seq();
+    assert_eq!(r.discard_all(), crate::ring::CAPACITY as u64 - 1);
+    assert!(!r.is_poisoned());
+    assert_eq!(r.occupancy(), 0);
+    assert!(r.peek().is_none(), "nothing of the old life is applied");
+    assert!(r.applied_seq() >= seq_before, "monotonic");
+    assert_eq!(r.applied_seq(), crate::ring::CAPACITY as u64);
+    // The next life's first write is applied, in order, like a fresh ring's.
+    assert!(matches!(r.push(w(0xabc)), Push::Queued(_)));
+    assert_eq!(r.peek().map(|(_, x)| x), Some(w(0xabc)));
+    r.commit();
+    assert!(r.peek().is_none());
+    // Reset on an empty ring, twice, is harmless.
+    assert_eq!(r.discard_all(), 0);
+    assert_eq!(r.discard_all(), 0);
+    // A full lap after the reset still works (the discarded slots were freed).
+    for v in 0..crate::ring::CAPACITY as u64 {
+        assert!(matches!(r.push(w(v)), Push::Queued(_)), "slot {v}");
+    }
+}
