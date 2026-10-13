@@ -1345,6 +1345,17 @@ impl Engine {
         // (`[measured m1b, 2026-09-30, GA106 / 580.159.04]` the first fbdev modeset:
         // `WARN_ON(nv_flip == NULL)`). Snapshotted before any member of the group — the core among
         // them — is armed.
+        // ⊘ CORRECTED 2026-10-14 (`V3_DISPLAY_PLANES_ORACLE.md`; the paragraph below is superseded in
+        // its conclusion): [measured, bare-metal AD104 under the open 580.159.04 modules, the plane
+        // oracle's reference] a commit that only DISABLES a plane that had a framebuffer gets its
+        // event in 7-17 ms (8/8 plane-disable cycles, 60/60 toggles, DPMS off in 34-55 ms, zero "Flip
+        // event timeout"), where kayfabe raised nothing (every one a 3 s "Flip event timeout"). The new
+        // entry still has no notifier (KAPI, cited below), and RM raises a window's event only from its
+        // AWAKEN interrupt (`kern_disp_0300.c` _kdispHandleAwakenChnMask) — so the AWAKEN comes from the
+        // one notifier the latch does write: the FLIPPED-AWAY entry's FINISHED, in that entry's own
+        // `MODE_WRITE_AWAKEN`. `complete` now raises it there when no new BEGUN raises the channel's
+        // AWAKEN in the same latch (one AWAKEN per channel per latch: nvidia-drm counts events, not
+        // notifiers). The `atomic_remove_fb` timeout of m1c below is therefore kayfabe's, not hardware's.
         // ⊘ The rule's other half is the NEW state's notifier (`complete`): a window flipped to NO
         // surface is programmed with no notifier (`nvkms-evo3.c:3901-3904`, the KAPI sets one only
         // for a non-NULL surface, `nvkms-kapi.c:2956-2970`, `:3175-3189`), so it raises nothing,
@@ -1456,7 +1467,10 @@ impl Engine {
         // (5 TDR cycles in boot) unless N-1 was FINISHED at N's latch.
         let outgoing = (c.kind == ChannelKind::Window).then(|| {
             let notify = Self::notify_of(&v, c, n, Chan::armed, true, false);
-            (Self::release_of(&v, c, n), notify)
+            // the flipped-away entry asked for AWAKEN (its own notifier mode)
+            let awaken_mode = c.armed(v.w_ctxdma_notifier) != 0
+                && fld(c.armed(v.w_notifier_control), v.n_mode) == v.n_mode_awaken;
+            (Self::release_of(&v, c, n), notify, awaken_mode)
         });
         // 1. arm
         let mut changed = Vec::new();
@@ -1491,14 +1505,35 @@ impl Engine {
             }
             ChannelKind::Window => {
                 st.effects.push(Effect::Latched { window: c.instance });
-                // the entry this latch flipped away: its release, its notifier FINISHED — never the new entry's
-                if let Some((release, notify)) = outgoing {
+                // the new entry's own notifier: BEGUN (AWAKEN per its mode, for a previously active window)
+                let begun = Self::notify_of(&v, c, n, Chan::armed, false, was_active);
+                let begun_awakens = matches!(begun, Some(Effect::Notify { awaken: true, .. }));
+                // the entry this latch flipped away: its release, its notifier FINISHED — never the new entry's.
+                // ★ 2026-10-14: its FINISHED raises the channel's AWAKEN (in its own WRITE_AWAKEN mode) when the
+                // window was active and nothing else in this latch raises it — a flip to NO surface (a plane
+                // disable) completes as on hardware [measured, the plane oracle's AD104 reference].
+                if let Some((release, notify, awaken_mode)) = outgoing {
                     st.effects.extend(release);
-                    st.effects.extend(notify);
+                    st.effects.extend(notify.map(|e| match e {
+                        Effect::Notify {
+                            chn,
+                            client,
+                            handle,
+                            offset,
+                            finished,
+                            ..
+                        } => Effect::Notify {
+                            chn,
+                            client,
+                            handle,
+                            offset,
+                            awaken: awaken_mode && was_active && !begun_awakens,
+                            finished,
+                        },
+                        other => other,
+                    }));
                 }
-                // the new entry's own notifier: BEGUN
-                st.effects
-                    .extend(Self::notify_of(&v, c, n, Chan::armed, false, was_active));
+                st.effects.extend(begun);
             }
             ChannelKind::WindowImm | ChannelKind::Cursor => {}
         }
@@ -1534,7 +1569,7 @@ impl Engine {
     }
 
     /// The notifier a window entry asks for, read through `get`: `None` without a notifier context DMA. `finished`:
-    /// the flip-away (FINISHED, never AWAKEN); else the entry's own latch (BEGUN, AWAKEN per its mode if `was_active`).
+    /// the flip-away (FINISHED; `complete` decides its AWAKEN); else the entry's own latch (BEGUN, AWAKEN per its mode if `was_active`).
     fn notify_of(
         v: &Vocab,
         c: &Chan,

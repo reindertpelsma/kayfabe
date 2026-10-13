@@ -1,0 +1,12 @@
+No containers need to be restarted.
+No user sessions are running outdated binaries.
+No VM guests are running outdated hypervisor (qemu) binaries on this host.
+BUILD rc=0 /root/nv/kernel-open/nvidia-drm.ko /root/nv/kernel-open/nvidia-modeset.ko /root/nv/kernel-open/nvidia-peermem.ko /root/nv/kernel-open/nvidia-uvm.ko /root/nv/kernel-open/nvidia.ko 
+modprobe: ERROR: could not insert 'nvidia_modeset': Invalid argument
+modprobe: ERROR: could not insert 'nvidia_drm': Invalid argument
+LOADED NVRM version: NVIDIA UNIX x86_64 Kernel Module  575.51.03  Wed Apr 16 14:22:51 UTC 2025 modeset=cat: /sys/module/nvidia_drm/parameters/modeset: No such file or directory
+OPEN_EXIT 2026-10-13T22:26:02+00:00
+Failed to initialize NVML: Driver/library version mismatch
+NVML library version: 575.51
+00:07.0 VGA compatible controller [0300]: NVIDIA Corporation Device [10de:2783] (rev a1)
+00:08.0 Audio device [0403]: NVIDIA Corporation Device [10de:22bc] (rev a1)

@@ -31,6 +31,29 @@ pub struct Trigger {
     pub call: SwCall,
 }
 
+/// Where a scan stopped ([`Scan::locate`]); diagnostic only.
+#[derive(Clone, Copy, Debug, Default)]
+struct Probe {
+    at: usize,
+    last_header: Option<(usize, u32)>,
+}
+
+/// A refusal located in its segment ([`Scan::locate`]) — for a bounded diagnostic line only. It
+/// names guest words; nothing here authorizes, completes or retires anything.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Located {
+    /// The refusal [`Scan::segment`] returns for the same words.
+    pub refusal: Refusal,
+    /// Word index in the segment where the scan stopped.
+    pub at: usize,
+    /// The word there (absent when the segment ended).
+    pub word: Option<u32>,
+    /// The last packet header decoded in this segment before the stop: (index, raw word).
+    pub last_header: Option<(usize, u32)>,
+    /// A packet carried in from the previous segment: its header and the arguments it had consumed.
+    pub carried: Option<(MethodHeader, usize)>,
+}
+
 /// Named parser refusal; failed calls leave all metadata unchanged.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Refusal {
@@ -77,13 +100,40 @@ impl Scan {
         words: &[u32],
         software: impl Fn(u32) -> bool,
     ) -> Result<Option<Trigger>, Refusal> {
+        self.segment_probed(words, &software, &mut Probe::default())
+    }
+
+    /// Diagnostic only (never a scan result, never a completion): where in `words` the scan that
+    /// [`Scan::segment`] would run from this state refuses, the word there, the last packet header
+    /// before it and the packet carried in from the previous segment. `None` when that scan does not
+    /// refuse. State is not changed. Bounded by `words`.
+    pub fn locate(&self, words: &[u32], software: impl Fn(u32) -> bool) -> Option<Located> {
+        let mut probe = Probe::default();
+        let refusal = self.clone().segment_probed(words, &software, &mut probe).err()?;
+        Some(Located {
+            refusal,
+            at: probe.at,
+            word: words.get(probe.at).copied(),
+            last_header: probe.last_header,
+            carried: self.pending.map(|(h, n)| (h, n)),
+        })
+    }
+
+    fn segment_probed(
+        &mut self,
+        words: &[u32],
+        software: &impl Fn(u32) -> bool,
+        probe: &mut Probe,
+    ) -> Result<Option<Trigger>, Refusal> {
         let mut next = self.clone();
         let mut i = 0;
         let mut packet_start = None;
         while i < words.len() {
+            probe.at = i;
             if next.pending.is_none() {
                 let raw = words[i];
                 let h = method_header_decode(raw).ok_or(Refusal::Header)?;
+                probe.last_header = Some((i, raw));
                 if raw & (1 << 12) != 0
                     && matches!(
                         h.form,
@@ -127,7 +177,7 @@ impl Scan {
                     continue;
                 }
                 if h.form == MethodForm::Immediate {
-                    if let Some(call) = next.datum(h, 0, h.immd, &software)? {
+                    if let Some(call) = next.datum(h, 0, h.immd, software)? {
                         let t = Trigger {
                             start: i - 1,
                             end: i,
@@ -147,7 +197,8 @@ impl Scan {
                 }
             }
             let (h, n) = next.pending.ok_or(Refusal::Header)?;
-            let call = next.datum(h, n, words[i], &software)?;
+            probe.at = i;
+            let call = next.datum(h, n, words[i], software)?;
             i += 1;
             next.pending = (n + 1 < h.arg_words).then_some((h, n + 1));
             if let Some(call) = call {
@@ -370,6 +421,32 @@ mod tests {
         assert_eq!(s.segment(&[bind, 1, 9], |v| v == 1), Err(Refusal::Legacy));
         assert_eq!(s, before);
         assert_eq!(s.segment(&[0, 0], |v| v == 1), Ok(None));
+    }
+    /// The refusal diagnostic names where the scan stopped and what it was in, and changes nothing.
+    #[test]
+    fn locate_names_the_stop_word_the_last_header_and_the_carried_packet() {
+        let mut s = Scan::default();
+        // a packet of 3 arguments started in the previous segment, 1 consumed
+        s.segment(&[h(6, 0x100, 3).unwrap(), 7], |v| v == 1).unwrap();
+        let before = s.clone();
+        let old = (2 << 29) | (2 << 18) | (6 << 13) | 0x1fc;
+        let words = [8, 9, h(1, 0x40, 1).unwrap(), 5, old, 17, 27];
+        let l = s.locate(&words, |v| v == 1).unwrap();
+        assert_eq!(l.refusal, Refusal::Legacy);
+        assert_eq!(l.at, 4);
+        assert_eq!(l.word, Some(old));
+        assert_eq!(l.last_header, Some((4, old)));
+        assert_eq!(l.carried.map(|(hd, n)| (hd.method, hd.arg_words, n)), Some((0x100, 3, 1)));
+        assert_eq!(s, before, "locate never changes the scan state");
+        assert_eq!(s.segment(&words, |v| v == 1), Err(Refusal::Legacy));
+        // a clean segment locates nothing
+        assert!(s.locate(&[8, 9], |v| v == 1).is_none());
+        // a refusal on a DATUM (method overflow) names the datum's index and its header
+        let mut t = Scan::default();
+        let big = h(1, 0x3ffc, 2).unwrap();
+        let l = t.locate(&[big, 1, 2], |v| v == 1).unwrap();
+        assert_eq!((l.refusal, l.at, l.last_header), (Refusal::MethodOverflow, 2, Some((0, big))));
+        assert_eq!(t.segment(&[big, 1, 2], |v| v == 1), Err(Refusal::MethodOverflow));
     }
     #[test]
     fn subdevice_filters_preserve_bindings_and_skip_unexecuted_software_calls() {

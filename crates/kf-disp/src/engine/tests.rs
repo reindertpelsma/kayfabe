@@ -487,6 +487,69 @@ fn an_update_naming_a_channel_parked_only_for_its_vblank_waits_for_that_channels
     assert!(!e.waiting(w0) && !e.waiting(w4) && !e.waiting(i4));
 }
 
+/// ★ 2026-10-14 (`V3_DISPLAY_PLANES_ORACLE.md`, measured on a bare-metal AD104 under the open 580.159.04
+/// modules: a commit that only disables a plane gets its DRM event within a frame; under kayfabe every such
+/// commit timed out after 3 s). A window flipped to NO surface (NVKMS programs the new entry with NO
+/// notifier, `nvkms-evo3.c` EvoFlipC3Common) raises the channel's AWAKEN through the one notifier its latch
+/// writes: the flipped-away entry's FINISHED, in that entry's WRITE_AWAKEN mode. A normal flip still raises
+/// exactly ONE AWAKEN (the new entry's BEGUN), never two. FAILS on the old engine: the disable raised none.
+#[test]
+fn a_plane_disable_raises_one_awaken_through_the_flipped_away_entry() {
+    let mut e = engine();
+    let _ = lit(&mut e);
+    let w1 = ChannelKind::Window.channel_number(1);
+    let mut r = Ring::new();
+    let ctl = |idx: u32| {
+        put(
+            put(0, fl(WIN, "SET_NOTIFIER_CONTROL_OFFSET"), idx),
+            fl(WIN, "SET_NOTIFIER_CONTROL_MODE"),
+            m(WIN, "SET_NOTIFIER_CONTROL_MODE_WRITE_AWAKEN"),
+        )
+    };
+    let flip = |r: &mut Ring, iso: u32, notifier: u32, idx: u32| {
+        r.m(m(WIN, "SET_CONTEXT_DMA_NOTIFIER"), notifier);
+        r.m(m(WIN, "SET_NOTIFIER_CONTROL"), if notifier == 0 { 0 } else { ctl(idx) });
+        r.m(ma(WIN, "SET_CONTEXT_DMA_ISO", 0), iso);
+        r.m(m(WIN, "SET_WINDOW_INTERLOCK_FLAGS"), 1 << 1);
+        r.m(m(WIN, "UPDATE"), 0);
+    };
+    let awakens = |s: &Step| -> Vec<(bool, bool)> {
+        s.effects
+            .iter()
+            .filter_map(|x| match x {
+                Effect::Notify {
+                    chn,
+                    finished,
+                    awaken,
+                    ..
+                } if *chn == w1 => Some((*finished, *awaken)),
+                _ => None,
+            })
+            .collect()
+    };
+    // enable (the window was not active before: nvidia-drm counts no event, none is raised)
+    flip(&mut r, 0x3_0001, 0xA0, 0);
+    e.step(w1, &r.bytes(), r.put(), &mut all_ok);
+    let s = e.vblank(0, &mut all_ok);
+    assert_eq!(awakens(&s), vec![(false, false)], "{:?}", s.effects);
+    // a normal flip: the old entry FINISHED without AWAKEN, the new BEGUN with it — one AWAKEN
+    flip(&mut r, 0x3_0002, 0xA0, 1);
+    e.step(w1, &r.bytes(), r.put(), &mut all_ok);
+    let s = e.vblank(0, &mut all_ok);
+    assert_eq!(awakens(&s), vec![(true, false), (false, true)], "{:?}", s.effects);
+    // the plane's disable: no surface, no notifier — the flipped-away entry's FINISHED raises the AWAKEN
+    flip(&mut r, 0, 0, 0);
+    e.step(w1, &r.bytes(), r.put(), &mut all_ok);
+    let s = e.vblank(0, &mut all_ok);
+    assert_eq!(awakens(&s), vec![(true, true)], "{:?}", s.effects);
+    assert!(!e.waiting(w1));
+    // re-enabled from nothing: the window was not active, so again no AWAKEN
+    flip(&mut r, 0x3_0003, 0xA0, 0);
+    e.step(w1, &r.bytes(), r.put(), &mut all_ok);
+    let s = e.vblank(0, &mut all_ok);
+    assert_eq!(awakens(&s), vec![(false, false)], "{:?}", s.effects);
+}
+
 /// ★ 2026-10-14, the Linux plane oracle (`V3_DISPLAY_PLANES_ORACLE.md`, run planes-run1, stock
 /// nvidia-drm/NVKMS 580.159.04, measured engine ring): the sequence NVKMS pushes when a client enables
 /// an overlay plane in one atomic commit and flips BOTH planes in the next one, before the enable's

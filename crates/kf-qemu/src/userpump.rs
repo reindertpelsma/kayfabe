@@ -76,11 +76,21 @@ fn stage_plan(scan: &Scan, software: &Option<Software>, words: &[u32]) -> Turn<(
     let mut scan = scan.clone();
     let mut at = 0usize;
     let mut rare = false;
+    let sw = |v: u32| software.as_ref().is_some_and(|sw| sw.matches(v));
     while let Some(t) = scan
-        .segment(words.get(at..).ok_or("USER_RING_SCAN_BOUND")?, |v| {
-            software.as_ref().is_some_and(|sw| sw.matches(v))
-        })
-        .map_err(|e| format!("USER_RING_SCAN {e:?}"))?
+        .segment(words.get(at..).ok_or("USER_RING_SCAN_BOUND")?, sw)
+        .map_err(|e| {
+            // ★ 2026-10-14 diagnostic (owner Win11 runs 2980/2990: every reset follows a refusal
+            // whose header looks like data — `Legacy`, `SubDeviceMask(0x107af0e0)`, `MethodOverflow`).
+            // Name WHERE the scan stopped, so the next run tells a parser desync (a packet sized
+            // differently from hardware) from a real legacy/mask packet. Bounded: one line per
+            // refused channel (the relay stops at the refusal), at most 9 words of guest data.
+            let detail = scan
+                .locate(words.get(at..).unwrap_or(&[]), sw)
+                .map(|l| scan_refusal_detail(&l, words, at))
+                .unwrap_or_default();
+            format!("USER_RING_SCAN {e:?}{detail}")
+        })?
     {
         rare = true;
         let start = at.checked_add(t.start).ok_or("USER_RING_SCAN_BOUND")?;
@@ -95,6 +105,40 @@ fn stage_plan(scan: &Scan, software: &Option<Software>, words: &[u32]) -> Turn<(
     }
     Ok((patched, rare))
 }
+/// One bounded line: where in the GP segment (`words`, scanned from `base`) the scan refused, the
+/// word there, the last header, the packet carried in from the previous segment and words
+/// `[stop-4, stop+4]`. Diagnostic text only; guest words are data, never instructions.
+fn scan_refusal_detail(l: &kf_chan::user_scan::Located, words: &[u32], base: usize) -> String {
+    let stop = base.saturating_add(l.at);
+    let lo = stop.saturating_sub(4);
+    let hi = stop.saturating_add(5).min(words.len());
+    let around: Vec<String> = words
+        .get(lo..hi)
+        .unwrap_or(&[])
+        .iter()
+        .map(|w| format!("{w:08x}"))
+        .collect();
+    let last = l
+        .last_header
+        .map(|(i, raw)| format!("{:#x}@{}", raw, base.saturating_add(i)))
+        .unwrap_or_else(|| "none".into());
+    let carried = l
+        .carried
+        .map(|(h, n)| {
+            format!(
+                "{:?} sub{} m{:#x} {}/{}",
+                h.form, h.subchannel, h.method, n, h.arg_words
+            )
+        })
+        .unwrap_or_else(|| "none".into());
+    format!(
+        " at word {stop}/{} raw={} last_header={last} carried_in={carried} words[{lo}..{hi}]=[{}]",
+        words.len(),
+        l.word.map_or_else(|| "end".into(), |w| format!("{w:#010x}")),
+        around.join(" ")
+    )
+}
+
 /// Native fetch credit and private staging retirement are separate. The first
 /// representing descriptor carries the guest ring receipt, including a prefix
 /// of zero bytes; no later suffix publication repeats it.

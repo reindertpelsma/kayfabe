@@ -1,0 +1,72 @@
+PLANES_START tag=run1 rev=bf510bdf 2026-10-14T00:06:46+02:00
+PLANES_OWNER_QEMU pid=3679796 (never touched)
+PLANES_HOST_MEM_BEFORE Mem:           30719       11064        7000        8332       21418       19655
+PLANES_QEMU pid=3688469
+PLANES_GUEST_UP 2026-10-14T00:07:07+02:00
+PLANES_GUEST_ID 6.8.0-142-generic
+PLANES_GUEST_ID NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+PLANES_GUEST_ID cat: /sys/module/nvidia_drm/parameters/modeset: Permission denied
+PLANES_STOP_DM no-xorg 
+PLANES_BUILD HOST_BUILD_COPIED
+PLANES_KFPLANES_CONNECTOR id=126 type=3 status=1 modes=7 encoders=1
+PLANES_KFPLANES_SETUP card=/dev/dri/card1 connector=126 crtc=60 crtc_index=0 mode=1920x1080@60 clock=148500 frame_us=16667 crtcs=4
+PLANES_KFPLANES_EDID bytes=128 header_ok=1 checksum_ok=1 ext=0
+PLANES_KFPLANES_MODE 1920x1080 60 Hz clock 148500 preferred
+PLANES_KFPLANES_MODE 1680x1050 60 Hz clock 146250
+PLANES_KFPLANES_MODE 1600x900 60 Hz clock 108000
+PLANES_KFPLANES_MODE 1280x1024 60 Hz clock 108000
+PLANES_KFPLANES_MODE 1024x768 60 Hz clock 65000
+PLANES_KFPLANES_MODE 800x600 60 Hz clock 40000
+PLANES_KFPLANES_CRTC_PROPS active=22 mode=23 gamma=28(size 1024) degamma=25(size 1024) ctm=27 out_fence=19 vrr=24
+PLANES_KFPLANES_CONNECTOR_PROP name="HDR_OUTPUT_METADATA" id=0 value=0
+PLANES_KFPLANES_CONNECTOR_PROP name="Colorspace" id=0 value=0
+PLANES_KFPLANES_CONNECTOR_PROP name="max bpc" id=0 value=0
+PLANES_KFPLANES_CONNECTOR_PROP name="content type" id=0 value=0
+PLANES_KFPLANES_CONNECTOR_PROP name="link-status" id=5 value=0
+PLANES_KFPLANES_CONNECTOR_PROP name="non-desktop" id=6 value=0
+PLANES_KFPLANES_CONNECTOR_PROP name="vrr_capable" id=127 value=0
+PLANES_KFPLANES_PLANE id=49 type=primary possible=0x1 mine=1 formats=13: AR15 XR15 RG16 AR24 XR24 AB30 XB30 AB24 XB24 AB4H YUYV UYVY XB4H props: [FB_ID] [CRTC_ID] [SRC_X] [SRC_Y] [SRC_W] [SRC_H] [CRTC_X] [CRTC_Y] [CRTC_W] [CRTC_H] [rotation] [COLOR_ENCODING] [COLOR_RANGE] [IN_FENCE_FD]
+PLANES_KFPLANES_PLANE id=54 type=cursor possible=0x1 mine=1 formats=1: AR24 props: [FB_ID] [CRTC_ID] [SRC_X] [SRC_Y] [SRC_W] [SRC_H] [CRTC_X] [CRTC_Y] [CRTC_W] [CRTC_H] [alpha] [pixel blend mode] [COLOR_ENCODING] [COLOR_RANGE] [IN_FENCE_FD]
+PLANES_KFPLANES_PLANE id=61 type=overlay possible=0x1 mine=1 formats=13: AR15 XR15 RG16 AR24 XR24 AB30 XB30 AB24 XB24 AB4H YUYV UYVY XB4H props: [FB_ID] [CRTC_ID] [SRC_X] [SRC_Y] [SRC_W] [SRC_H] [CRTC_X] [CRTC_Y] [CRTC_W] [CRTC_H] [alpha] [pixel blend mode] [rotation] [COLOR_ENCODING] [COLOR_RANGE] [IN_FENCE_FD]
+PLANES_KFPLANES_PLANE id=68 type=primary possible=0x2 mine=0 formats=13: AR15 XR15 RG16 AR24 XR24 AB30 XB30 AB24 XB24 AB4H YUYV UYVY XB4H props: [FB_ID] [CRTC_ID] [SRC_X] [SRC_Y] [SRC_W] [SRC_H] [CRTC_X] [CRTC_Y] [CRTC_W] [CRTC_H] [rotation] [COLOR_ENCODING] [COLOR_RANGE] [IN_FENCE_FD]
+PLANES_KFPLANES_PLANE id=73 type=cursor possible=0x2 mine=0 formats=1: AR24 props: [FB_ID] [CRTC_ID] [SRC_X] [SRC_Y] [SRC_W] [SRC_H] [CRTC_X] [CRTC_Y] [CRTC_W] [CRTC_H] [alpha] [pixel blend mode] [COLOR_ENCODING] [COLOR_RANGE] [IN_FENCE_FD]
+PLANES_KFPLANES_PLANE id=80 type=overlay possible=0x2 mine=0 formats=13: AR15 XR15 RG16 AR24 XR24 AB30 XB30 AB24 XB24 AB4H YUYV UYVY XB4H props: [FB_ID] [CRTC_ID] [SRC_X] [SRC_Y] [SRC_W] [SRC_H] [CRTC_X] [CRTC_Y] [CRTC_W] [CRTC_H] [alpha] [pixel blend mode] [rotation] [COLOR_ENCODING] [COLOR_RANGE] [IN_FENCE_FD]
+PLANES_KFPLANES_PLANE id=87 type=primary possible=0x4 mine=0 formats=13: AR15 XR15 RG16 AR24 XR24 AB30 XB30 AB24 XB24 AB4H YUYV UYVY XB4H props: [FB_ID] [CRTC_ID] [SRC_X] [SRC_Y] [SRC_W] [SRC_H] [CRTC_X] [CRTC_Y] [CRTC_W] [CRTC_H] [rotation] [COLOR_ENCODING] [COLOR_RANGE] [IN_FENCE_FD]
+PLANES_KFPLANES_PLANE id=92 type=cursor possible=0x4 mine=0 formats=1: AR24 props: [FB_ID] [CRTC_ID] [SRC_X] [SRC_Y] [SRC_W] [SRC_H] [CRTC_X] [CRTC_Y] [CRTC_W] [CRTC_H] [alpha] [pixel blend mode] [COLOR_ENCODING] [COLOR_RANGE] [IN_FENCE_FD]
+PLANES_KFPLANES_PLANE id=99 type=overlay possible=0x4 mine=0 formats=13: AR15 XR15 RG16 AR24 XR24 AB30 XB30 AB24 XB24 AB4H YUYV UYVY XB4H props: [FB_ID] [CRTC_ID] [SRC_X] [SRC_Y] [SRC_W] [SRC_H] [CRTC_X] [CRTC_Y] [CRTC_W] [CRTC_H] [alpha] [pixel blend mode] [rotation] [COLOR_ENCODING] [COLOR_RANGE] [IN_FENCE_FD]
+PLANES_KFPLANES_PLANE id=106 type=primary possible=0x8 mine=0 formats=13: AR15 XR15 RG16 AR24 XR24 AB30 XB30 AB24 XB24 AB4H YUYV UYVY XB4H props: [FB_ID] [CRTC_ID] [SRC_X] [SRC_Y] [SRC_W] [SRC_H] [CRTC_X] [CRTC_Y] [CRTC_W] [CRTC_H] [rotation] [COLOR_ENCODING] [COLOR_RANGE] [IN_FENCE_FD]
+PLANES_KFPLANES_PLANE id=111 type=cursor possible=0x8 mine=0 formats=1: AR24 props: [FB_ID] [CRTC_ID] [SRC_X] [SRC_Y] [SRC_W] [SRC_H] [CRTC_X] [CRTC_Y] [CRTC_W] [CRTC_H] [alpha] [pixel blend mode] [COLOR_ENCODING] [COLOR_RANGE] [IN_FENCE_FD]
+PLANES_KFPLANES_PLANE id=118 type=overlay possible=0x8 mine=0 formats=13: AR15 XR15 RG16 AR24 XR24 AB30 XB30 AB24 XB24 AB4H YUYV UYVY XB4H props: [FB_ID] [CRTC_ID] [SRC_X] [SRC_Y] [SRC_W] [SRC_H] [CRTC_X] [CRTC_Y] [CRTC_W] [CRTC_H] [alpha] [pixel blend mode] [rotation] [COLOR_ENCODING] [COLOR_RANGE] [IN_FENCE_FD]
+PLANES_KFPLANES_SUMMARY planes=12 primary=49 overlays=1 cursor=54 ovl_nv12=0 ovl_p010=0 ovl_yuyv=1 ovl_argb=1
+planes_oracle.sh: line 107: 3688469 Killed                     env ${KF_ENV:-} "$Q" "${QARGS[@]}" > "$OUT/qemu.log" 2>&1
+PLANES_KFPLANES_MODESET rc=0
+PLANES_KFPLANES_RESULT test=vblank-wait waits=120 errors=4 last_err=-95 interval_avg_us=0 min_us=0 max_us=0 frame_us=16667 verdict=FAIL
+PLANES_KFPLANES_RESULT test=vblank-event requested=0 received=0 verdict=FAIL
+PLANES_KFPLANES_RESULT test=primary-flip commits=120 events=120 timeouts=0 errors=0 last_err=0 ebusy=0 lat_avg_us=16663 lat_p95_us=16968 lat_max_us=17089 over1f=0 over2f=0 seq1=119 seq2=0 seqN=0 frame_us=16667 verdict=PASS
+PLANES_KFPLANES_ENABLE test=overlay-argb-only rc=0 event=1
+PLANES_KFPLANES_RESULT test=overlay-argb-only commits=120 events=120 timeouts=0 errors=0 last_err=0 ebusy=0 lat_avg_us=16753 lat_p95_us=17041 lat_max_us=27450 over1f=1 over2f=0 seq1=119 seq2=0 seqN=0 frame_us=16667 verdict=SLOW
+PLANES_KFPLANES_DISABLE test=overlay-argb-only rc=0 event=0 lat_us=-1
+PLANES_KFPLANES_ENABLE test=overlay-argb-both rc=0 event=1
+PLANES_KFPLANES_TIMEOUT test=overlay-argb-both i=0 waited_us=250367
+PLANES_KFPLANES_RESULT test=overlay-argb-both commits=120 events=119 timeouts=1 errors=0 last_err=0 ebusy=0 lat_avg_us=16624 lat_p95_us=17089 lat_max_us=17128 over1f=0 over2f=0 seq1=118 seq2=0 seqN=0 frame_us=16667 verdict=FAIL
+PLANES_KFPLANES_DISABLE test=overlay-argb-both rc=0 event=0 lat_us=-1
+PLANES_KFPLANES_ENABLE test=overlay-xrgb-only rc=0 event=1
+PLANES_KFPLANES_TIMEOUT test=overlay-xrgb-only i=0 waited_us=250321
+PLANES_KFPLANES_TIMEOUT test=overlay-xrgb-only i=1 waited_us=250645
+PLANES_KFPLANES_TIMEOUT test=overlay-xrgb-only i=2 waited_us=250438
+PLANES_KFPLANES_TIMEOUT test=overlay-xrgb-only i=3 waited_us=250372
+PLANES_KFPLANES_RESULT test=overlay-xrgb-only commits=4 events=0 timeouts=4 errors=0 last_err=0 ebusy=0 lat_avg_us=0 lat_p95_us=0 lat_max_us=0 over1f=0 over2f=0 seq1=0 seq2=0 seqN=0 frame_us=16667 verdict=FAIL
+PLANES_KFPLANES_DISABLE test=overlay-xrgb-only rc=0 event=0 lat_us=-1
+PLANES_KFPLANES_RESULT test=overlay-nv12-only verdict=SKIP why="overlay plane does not list the format"
+PLANES_KFPLANES_RESULT test=overlay-nv12-both verdict=SKIP why="overlay plane does not list the format"
+PLANES_KFPLANES_RESULT test=overlay-p010-only verdict=SKIP why="overlay plane does not list the format"
+PLANES_SHOW what=rgb sudo: /home/ubuntu/planes/kfplanes: command not found 
+PLANES_SHOW what=nv12 KFPLANES_SETUP card=/dev/dri/card1 connector=126 crtc=60 crtc_index=0 mode=1920x1080@60 clock=148500 frame_us=16667 crtcs=4 KFPLANES_CRTC_PROPS active=22 mode=23 gamma=28(size 1024) degamma=25(size 10
+PLANES_SHOW what=nv12-scaled KFPLANES_SETUP card=/dev/dri/card1 connector=126 crtc=60 crtc_index=0 mode=1920x1080@60 clock=148500 frame_us=16667 crtcs=4 KFPLANES_CRTC_PROPS active=22 mode=23 gamma=28(size 1024) degamma=25(size 10
+PLANES_SHOW what=p010 KFPLANES_SETUP card=/dev/dri/card1 connector=126 crtc=60 crtc_index=0 mode=1920x1080@60 clock=148500 frame_us=16667 crtcs=4 KFPLANES_CRTC_PROPS active=22 mode=23 gamma=28(size 1024) degamma=25(size 10
+PLANES_SHOW what=yuyv KFPLANES_SETUP card=/dev/dri/card1 connector=126 crtc=60 crtc_index=0 mode=1920x1080@60 clock=148500 frame_us=16667 crtcs=4 KFPLANES_CRTC_PROPS active=22 mode=23 gamma=28(size 1024) degamma=25(size 10
+PLANES_GUEST_FLIP_EVENT_TIMEOUTS=16 LUT_TIMEOUTS=0 NVASSERT=0 GPU_PROGRESS=0 XID=0
+PLANES_KF3_DISPLAY_FLAGS lines=40 stall=12 exception=0 refused=28
+PLANES_HOST_XID delta=0 (journal since start: 0)
+PLANES_OWNER_ALIVE yes
+PLANES_EXIT rc=0 2026-10-14T00:20:20+02:00

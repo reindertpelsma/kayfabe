@@ -23,8 +23,11 @@
  * and the test recovers with a blocking commit (which nvidia-drm bounds at 3 s, "Flip event timeout").
  * Result line per test:
  *   KFPLANES_RESULT test=<t> commits= events= timeouts= errors= ebusy= lat_avg_us= lat_p95_us=
- *     lat_max_us= over1f= over2f= seq1= seq2= seqN= frame_us= verdict=PASS|SLOW|FAIL|SKIP why=
- * PASS: every commit got its event, none later than one frame + 2 ms after the commit, and
+ *     lat_max_us= over1f= over2f= seq0= seq1= seq2= seqN= frame_us= verdict=PASS|SLOW|FAIL|SKIP why=
+ * (seq0 counts events whose vblank sequence did not move: nvidia-drm on kernels with
+ * NV_DRM_CRTC_STATE_HAS_NO_VBLANK has no vblank counter, every event carries 0; then only latency grades)
+ * PASS: every commit got its event, at most 5% later than one frame + 2 ms after the commit, none later
+ * than two frames, and
  * consecutive flips advanced the vblank sequence by exactly one (a flip per vblank, as on hardware).
  */
 #define _GNU_SOURCE
@@ -426,7 +429,7 @@ static int commit(drmModeAtomicReq *r, uint32_t flags)
 }
 
 struct stats {
-    const char *name; int n, events, timeouts, errors, ebusy, seq1, seq2, seqn, lat_n, last_err;
+    const char *name; int n, events, timeouts, errors, ebusy, seq0, seq1, seq2, seqn, lat_n, last_err;
     double lat_sum, lat_max, lat[4096]; int over1, over2, have_seq; unsigned last_seq; int stuck;
 };
 
@@ -442,11 +445,13 @@ static void report(struct stats *s, const char *skip)
     if (s->lat_n) { qsort(s->lat, s->lat_n, sizeof(double), cmpd); p95 = s->lat[(int)(s->lat_n * 0.95) < s->lat_n ? (int)(s->lat_n * 0.95) : s->lat_n - 1]; }
     const char *v = "PASS";
     if (s->timeouts || s->errors || s->stuck || s->events < s->n) v = "FAIL";
-    else if (s->over1 || s->seq2 || s->seqn) v = "SLOW";
+    /* the falsifier stated before the runs: SLOW when more than 5% of the events come later than
+     * one frame + 2 ms, any later than two frames, or vblank steps above one (when counted) */
+    else if (s->over2 || s->over1 * 20 > s->events || s->seq2 || s->seqn) v = "SLOW";
     printf("KFPLANES_RESULT test=%s commits=%d events=%d timeouts=%d errors=%d last_err=%d ebusy=%d lat_avg_us=%.0f "
-           "lat_p95_us=%.0f lat_max_us=%.0f over1f=%d over2f=%d seq1=%d seq2=%d seqN=%d frame_us=%.0f verdict=%s\n",
+           "lat_p95_us=%.0f lat_max_us=%.0f over1f=%d over2f=%d seq0=%d seq1=%d seq2=%d seqN=%d frame_us=%.0f verdict=%s\n",
            s->name, s->n, s->events, s->timeouts, s->errors, s->last_err, s->ebusy, s->lat_n ? s->lat_sum / s->lat_n : 0,
-           p95, s->lat_max, s->over1, s->over2, s->seq1, s->seq2, s->seqn, frame_us, v);
+           p95, s->lat_max, s->over1, s->over2, s->seq0, s->seq1, s->seq2, s->seqn, frame_us, v);
     fflush(stdout);
 }
 
@@ -494,7 +499,7 @@ static void series(struct stats *s, int n, build_fn b, void *ctx, uint32_t flags
         if (lat > 2 * frame_us + 2000) s->over2++;
         if (s->have_seq) {
             unsigned d = ev_seq - s->last_seq;
-            if (d <= 1) s->seq1++; else if (d == 2) s->seq2++; else s->seqn++;
+            if (d == 0) s->seq0++; else if (d == 1) s->seq1++; else if (d == 2) s->seq2++; else s->seqn++;
         }
         s->have_seq = 1; s->last_seq = ev_seq;
     }
@@ -635,6 +640,44 @@ static void test_overlay_fmt(const char *name, uint32_t fmt, int n, uint32_t sw,
     int dev = dr ? 0 : wait_ev(c0, 3 * frame_us + 200000);
     printf("KFPLANES_DISABLE test=%s rc=%d event=%d lat_us=%.0f\n", name, dr, dev, dev ? ev_recv_us - t0 : -1.0);
     if (!dr && !dev) { wait_ev(c0, 3500000); recover(); }
+    free_buf(&a); free_buf(&b);
+}
+
+/* the MPO life cycle a desktop compositor drives (and Windows' plane 1 around presents 5212-5215):
+ * enable the overlay, flip BOTH planes `flips` times, disable it — `cycles` times. Every flip is
+ * graded; the disables are counted apart (the issue-#1361 shape: may carry no event). */
+static void test_overlay_cycle(const char *name, uint32_t fmt, int cycles, int flips)
+{
+    struct stats s = { .name = name };
+    if (!noverlay || !has_fmt(overlay[0], fmt)) { report(&s, "no overlay plane with the format"); return; }
+    const struct plane *p = overlay[0];
+    struct buf a, b;
+    if (make_buf(&a, OVL_SRC_W, OVL_SRC_H, fmt, 0, 0) || make_buf(&b, OVL_SRC_W, OVL_SRC_H, fmt, 1, 0)) {
+        report(&s, "fb create failed"); free_buf(&a); free_buf(&b); return;
+    }
+    struct ctx c = { .a = &a, .b = &b, .p = p, .sw = OVL_SRC_W, .sh = OVL_SRC_H, .d = ovl_dst(W, H, 0), .both = 1 };
+    int dis_events = 0, en_fail = 0;
+    for (int k = 0; k < cycles && !s.stuck; k++) {
+        drmModeAtomicReq *r = drmModeAtomicAlloc();
+        plane_on(r, p, b.fb, OVL_SRC_W, OVL_SRC_H, c.d.x, c.d.y, c.d.w, c.d.h);
+        int c0 = ev_count;
+        if (commit(r, DRM_MODE_ATOMIC_NONBLOCK | DRM_MODE_PAGE_FLIP_EVENT) || !wait_ev(c0, 3 * frame_us + 200000)) en_fail++;
+        struct stats one = { .name = name };
+        series(&one, flips, b_overlay, &c, 0);
+        s.n += one.n; s.events += one.events; s.timeouts += one.timeouts; s.errors += one.errors; s.stuck += one.stuck;
+        s.over1 += one.over1; s.over2 += one.over2;
+        for (int i = 0; i < one.lat_n && s.lat_n < 4096; i++) { s.lat[s.lat_n++] = one.lat[i]; s.lat_sum += one.lat[i]; if (one.lat[i] > s.lat_max) s.lat_max = one.lat[i]; }
+        r = drmModeAtomicAlloc();
+        plane_off(r, p);
+        add(r, primary->id, primary->prop[P_FB], pa.fb);
+        c0 = ev_count;
+        if (!commit(r, DRM_MODE_ATOMIC_NONBLOCK | DRM_MODE_PAGE_FLIP_EVENT)) {
+            if (wait_ev(c0, 3 * frame_us + 200000)) dis_events++;
+            else { wait_ev(c0, 3500000); recover(); }
+        }
+    }
+    printf("KFPLANES_CYCLE test=%s cycles=%d enable_failures=%d disable_events=%d\n", name, cycles, en_fail, dis_events);
+    report(&s, NULL);
     free_buf(&a); free_buf(&b);
 }
 
@@ -797,6 +840,10 @@ static int run_all(int n)
     test_overlay_fmt("overlay-argb-scaled", DRM_FORMAT_ARGB8888, n, OVL_SRC_W, OVL_SRC_H, 1, 0, 0);
     /* enable/disable on alternate commits (Windows flipped plane 1 to NO surface and back) */
     test_overlay_fmt("overlay-nv12-toggle", DRM_FORMAT_NV12, n / 2, OVL_SRC_W, OVL_SRC_H, 0, 1, 1);
+    test_overlay_fmt("overlay-argb-toggle", DRM_FORMAT_ARGB8888, n / 2, OVL_SRC_W, OVL_SRC_H, 0, 1, 1);
+    /* the MPO life cycle: enable, flip both, disable */
+    test_overlay_cycle("overlay-argb-cycle", DRM_FORMAT_ARGB8888, 8, 10);
+    test_overlay_cycle("overlay-nv12-cycle", DRM_FORMAT_NV12, 8, 10);
     /* cursor plane (atomic) moving each flip */
     if (cursor && has_fmt(cursor, DRM_FORMAT_ARGB8888)) {
         struct buf cb; struct stats s = { .name = "cursor-atomic" };

@@ -1,0 +1,2 @@
+HYPOTHESIS H-JOIN: the 2026-10-10 Latch-join rule is the cause of the run1 overlay deadlock; with a34d3003 (rule removed) every overlay series (argb/xrgb/yuyv only/both/scaled/toggle/cycle) completes.
+FALSIFIER: any overlay series timeout or STALL report in kf3 log with a34d3003; or the primary-flip series regressing.
