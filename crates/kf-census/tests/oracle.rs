@@ -6,8 +6,8 @@
 mod common;
 
 use common::{
-    ES, Msg, TAG, abi, capture, control_payload, conversation, count, ctl_rep, ctl_req,
-    encode, header, natural_seqs, observer_jsonl, run_capture, run_observer, runs_of, tx_header,
+    ES, Msg, TAG, abi, capture, control_payload, conversation, count, ctl_rep, ctl_req, encode,
+    header, natural_seqs, observer_jsonl, run_capture, run_observer, runs_of, tx_header,
 };
 use kf_abi::DriverVersion;
 use kf_census::analyze::{Analyzer, AnomalyKind};
@@ -466,7 +466,7 @@ fn transport_encoded_stream_round_trips_through_the_capture_format_byte_for_byte
     // 2. the decoder reassembles the same message runs the transport encoded
     type Seen = Rc<RefCell<Vec<(Dir, Vec<u8>)>>>;
     let seen: Seen = Rc::default();
-    let mut an = analyzer_for(TAG, None).unwrap();
+    let mut an = analyzer_for(TAG, &[]).unwrap();
     let sink = Rc::clone(&seen);
     an.set_tap(Box::new(move |d, b| {
         sink.borrow_mut().push((d, b.to_vec()))
@@ -598,7 +598,7 @@ fn an_unmeasured_ogkm_tag_is_refused_not_mapped_to_a_neighbour() {
             minor: 88,
             patch: 0,
         },
-        None,
+        &[],
     );
     assert!(
         err.is_err(),
@@ -607,9 +607,23 @@ fn an_unmeasured_ogkm_tag_is_refused_not_mapped_to_a_neighbour() {
 }
 
 #[test]
+fn several_tier1_tables_are_merged_and_the_first_one_wins() {
+    let a = "id\tverdict\nctl-00730128\tNOT_IN_ANY_VERSION\n";
+    let b = "id\tverdict\nctl-00730128\tDEFINED_580X\nctl-0073011a\tDEFINED_580X\n";
+    let mut an = analyzer_for(TAG, &[a, b]).unwrap();
+    let msgs = [ctl_req(0x0073_0128, &[0; 4]), ctl_req(0x0073_011a, &[0; 4])];
+    let runs = runs_of(&msgs, &natural_seqs(&msgs));
+    stream::read(&mut an, "t", capture(&runs, 4, true).as_slice()).unwrap();
+    let r = an.finish();
+    let word = |c: u32| r.controls.iter().find(|x| x.cmd == c).unwrap().ogkm.word();
+    assert_eq!(word(0x0073_0128), "absent_all_tags");
+    assert_eq!(word(0x0073_011a), "defined");
+}
+
+#[test]
 fn ogkm_status_distinguishes_defined_absent_and_unknown() {
     let tier1 = "id\tverdict\nctl-00730128\tNOT_IN_ANY_VERSION\nctl-0073011d\tPARTIAL\n";
-    let mut an: Analyzer = analyzer_for(TAG, Some(tier1)).unwrap();
+    let mut an: Analyzer = analyzer_for(TAG, &[tier1]).unwrap();
     let msgs = [
         ctl_req(0x0073_0128, &[0; 4]),
         ctl_req(0x0073_011d, &[0; 4]),

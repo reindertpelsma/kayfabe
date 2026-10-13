@@ -16,8 +16,8 @@ mod common;
 
 use common::{ES, Msg, abi, conversation, ctl_rep, ctl_req, natural_seqs, run_capture};
 use kf_census::capture::{Dir, FILE_HEADER_BYTES, Kind, Reader, Writer};
-use kf_census::scrub::{self, AllowList, Scrubber};
 use kf_census::report;
+use kf_census::scrub::{self, AllowList, Scrubber};
 use std::path::PathBuf;
 
 fn golden_dir() -> PathBuf {
@@ -182,14 +182,26 @@ fn the_reference_writer_rewrites_the_golden_byte_for_byte() {
                 w.bind(h.queue_id, h.dir, h.ts, &raw).unwrap();
             }
             Kind::Elements => w
-                .elements(h.queue_id, h.dir, h.ts, h.first_entry, h.entry_count, &rec.payload)
+                .elements(
+                    h.queue_id,
+                    h.dir,
+                    h.ts,
+                    h.first_entry,
+                    h.entry_count,
+                    &rec.payload,
+                )
                 .unwrap(),
             Kind::End => (ts_end, end_q, end_dir) = (h.ts, h.queue_id, h.dir),
-            k => w.loss(k, h.queue_id, h.dir, h.ts, h.first_entry, h.entry_count).unwrap(),
+            k => w
+                .loss(k, h.queue_id, h.dir, h.ts, h.first_entry, h.entry_count)
+                .unwrap(),
         }
     }
     let back = w.end_at(ts_end, end_q, end_dir).unwrap();
-    assert!(back == g, "the reference writer and the module's writer disagree");
+    assert!(
+        back == g,
+        "the reference writer and the module's writer disagree"
+    );
     assert_eq!(&g[..8], b"KFGSPCAP");
     assert_eq!(g.len() % 4, 0);
     assert!(g.len() > FILE_HEADER_BYTES);
@@ -207,12 +219,30 @@ fn the_golden_capture_scrubs_and_the_census_still_agrees() {
     assert_eq!(a.messages, b.messages);
     for (x, y) in a.controls.iter().zip(&b.controls) {
         assert_eq!(
-            (x.cmd, x.requests, x.replies, x.paired, &x.req_sizes, &x.rep_sizes, &x.statuses),
-            (y.cmd, y.requests, y.replies, y.paired, &y.req_sizes, &y.rep_sizes, &y.statuses)
+            (
+                x.cmd,
+                x.requests,
+                x.replies,
+                x.paired,
+                &x.req_sizes,
+                &x.rep_sizes,
+                &x.statuses
+            ),
+            (
+                y.cmd,
+                y.requests,
+                y.replies,
+                y.paired,
+                &y.req_sizes,
+                &y.rep_sizes,
+                &y.statuses
+            )
         );
     }
     // 0x2080a618 and 0x2080852a are not on the default list: scrubbed; 0x20809064 is kept
-    let find = |r: &kf_census::analyze::Report, c: u32| r.controls.iter().find(|x| x.cmd == c).unwrap().clone();
+    let find = |r: &kf_census::analyze::Report, c: u32| {
+        r.controls.iter().find(|x| x.cmd == c).unwrap().clone()
+    };
     assert_eq!(find(&b, 0x2080_a618).scrubbed, 2);
     assert_eq!(find(&b, 0x2080_9064).scrubbed, 0);
     assert_eq!(find(&b, 0x2080_9064).distinct_replies, 1);

@@ -33,11 +33,13 @@ use ogkm::OgkmIndex;
 ///
 /// # Errors
 ///
-/// A description when the tag is not measured.
-pub fn analyzer_for(tag: DriverVersion, tier1_tsv: Option<&str>) -> Result<Analyzer, String> {
+/// A description when the tag is not measured. `tier1_tsv` are the texts of tier-1 tables
+/// (`tier_checks/tier1_ogkm*.tsv`), earlier ones taking precedence.
+pub fn analyzer_for(tag: DriverVersion, tier1_tsv: &[&str]) -> Result<Analyzer, String> {
     let abi = kf_rm::abi::gsp_abi_for(tag).map_err(|e| format!("no ABI for {tag:?}: {e:?}"))?;
     let mut idx = OgkmIndex::for_tag(tag);
-    if let Some(t) = tier1_tsv {
+    for t in tier1_tsv {
+        // The first file that knows an id wins (`load_tier1` never overwrites).
         idx.load_tier1(t);
     }
     Ok(Analyzer::new(abi, tag, idx))

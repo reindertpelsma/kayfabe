@@ -803,7 +803,8 @@ impl Analyzer {
         let params = payload[req.params_at..req.params_at + n].to_vec();
         // A scrubbed body is the fill pattern in a source that says it was scrubbed; it is
         // counted as such and never decoded as if it were the driver's bytes.
-        let scrubbed = self.sources.last().is_some_and(|s| s.scrubbed) && crate::scrub::is_filled(&params);
+        let scrubbed =
+            self.sources.last().is_some_and(|s| s.scrubbed) && crate::scrub::is_filled(&params);
         let params: Option<Vec<u8>> = if scrubbed { None } else { Some(params) };
         let acc = self.controls.entry(req.cmd).or_default();
         if scrubbed {

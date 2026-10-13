@@ -79,23 +79,56 @@ pub const SCREENED_ALLOW_LIST: &str = include_str!("../allow_screened.txt");
 /// Each id was read in the ogkm headers; the evidence and the search that produced the list
 /// are in `docs/design/V3_GSP_CAPTURE_FORMAT.md` section 8.
 pub const BOARD_DATA_CONTROLS: &[(u32, &str)] = &[
-    (0x2080_013f, "GPU_GET_OEM_BOARD_INFO: serialNumber, productPartNumber, memory part ids, build date"),
+    (
+        0x2080_013f,
+        "GPU_GET_OEM_BOARD_INFO: serialNumber, productPartNumber, memory part ids, build date",
+    ),
     (0x2080_014a, "GPU_GET_GID_INFO: the GPU UUID / GID"),
-    (0x2080_014b, "GPU_GET_INFOROM_OBJECT_VERSION: board InfoROM object versions"),
-    (0x2080_0156, "GPU_GET_INFOROM_IMAGE_VERSION: board InfoROM image version"),
-    (0x2080_015a, "GPU_GET_PHYSICAL_BRIDGE_VERSION_INFO: board bridge chip firmware"),
+    (
+        0x2080_014b,
+        "GPU_GET_INFOROM_OBJECT_VERSION: board InfoROM object versions",
+    ),
+    (
+        0x2080_0156,
+        "GPU_GET_INFOROM_IMAGE_VERSION: board InfoROM image version",
+    ),
+    (
+        0x2080_015a,
+        "GPU_GET_PHYSICAL_BRIDGE_VERSION_INFO: board bridge chip firmware",
+    ),
     (0x2080_0169, "GPU_GET_OEM_INFO: OEM info blob"),
     (0x2080_0802, "BIOS_GET_INFO: VBIOS version and OEM version"),
     (0x2080_0803, "BIOS_GET_NBSI: VBIOS NBSI registry strings"),
     (0x2080_0806, "BIOS_GET_NBSI_OBJ: VBIOS NBSI object"),
-    (0x2080_0808, "BIOS_GET_SKU_INFO: board id, chip SKU, project SKU"),
+    (
+        0x2080_0808,
+        "BIOS_GET_SKU_INFO: board id, chip SKU, project SKU",
+    ),
     (0x2080_080e, "BIOS_GET_NBSI_V2: VBIOS NBSI registry strings"),
-    (0x2080_0810, "BIOS_GET_INFO_V2: VBIOS version and OEM version"),
-    (0x2080_1801, "BUS_GET_PCI_INFO: PCI subsystem id (the board vendor and model)"),
-    (0x2080_3039, "NVLINK_SYNC_LINK_MASKS_AND_VBIOS_INFO: VBIOS data"),
-    (0x2080_3088, "NVLINK_GET_LOCAL_DEVICE_INFO: deviceUUID and PCI location"),
-    (0x0073_011d, "SYSTEM_GET_CONNECTOR_TABLE: the board's connector table (from the VBIOS)"),
-    (0x0073_0245, "SPECIFIC_GET_EDID_V2: the attached monitor's EDID (model and serial number)"),
+    (
+        0x2080_0810,
+        "BIOS_GET_INFO_V2: VBIOS version and OEM version",
+    ),
+    (
+        0x2080_1801,
+        "BUS_GET_PCI_INFO: PCI subsystem id (the board vendor and model)",
+    ),
+    (
+        0x2080_3039,
+        "NVLINK_SYNC_LINK_MASKS_AND_VBIOS_INFO: VBIOS data",
+    ),
+    (
+        0x2080_3088,
+        "NVLINK_GET_LOCAL_DEVICE_INFO: deviceUUID and PCI location",
+    ),
+    (
+        0x0073_011d,
+        "SYSTEM_GET_CONNECTOR_TABLE: the board's connector table (from the VBIOS)",
+    ),
+    (
+        0x0073_0245,
+        "SPECIFIC_GET_EDID_V2: the attached monitor's EDID (model and serial number)",
+    ),
 ];
 
 /// A set of control ids whose bodies a scrub keeps.
@@ -143,7 +176,8 @@ impl AllowList {
             if line.is_empty() {
                 continue;
             }
-            let id = parse_id(line).ok_or_else(|| format!("line {}: not a control id: {line:?}", i + 1))?;
+            let id = parse_id(line)
+                .ok_or_else(|| format!("line {}: not a control id: {line:?}", i + 1))?;
             l.insert(id).map_err(|e| format!("line {}: {e}", i + 1))?;
         }
         Ok(l)
@@ -156,7 +190,9 @@ impl AllowList {
     /// The id is on [`BOARD_DATA_CONTROLS`].
     pub fn insert(&mut self, id: u32) -> Result<(), String> {
         if let Some((_, what)) = BOARD_DATA_CONTROLS.iter().find(|(c, _)| *c == id) {
-            return Err(format!("{id:#010x} returns board data ({what}) and can never be allow-listed"));
+            return Err(format!(
+                "{id:#010x} returns board data ({what}) and can never be allow-listed"
+            ));
         }
         self.ids.insert(id);
         Ok(())
@@ -624,11 +660,7 @@ fn drop_partial<W: Write>(sc: &mut Scrubber, out: &mut Out<W>, q: &mut Q) {
 ///
 /// An unreadable file header, or a failed write. A file that ends inside a record is not an
 /// error: the complete records are written, `stats.truncated` says so.
-pub fn scrub_capture<R: Read, W: Write>(
-    sc: &mut Scrubber,
-    r: R,
-    w: W,
-) -> Result<(), CaptureError> {
+pub fn scrub_capture<R: Read, W: Write>(sc: &mut Scrubber, r: R, w: W) -> Result<(), CaptureError> {
     let mut rd = Reader::new(r)?;
     let mut fh = rd.header().clone();
     fh.scrubbed = true;
@@ -653,11 +685,11 @@ pub fn scrub_capture<R: Read, W: Write>(
             Kind::Bind => bind(sc, &mut out, &mut qs, rec),
             Kind::Elements => elements(sc, &mut out, &mut qs, rec),
             k => {
-                if k.is_loss() {
-                    if let Some(q) = qs.get_mut(&(rec.header.queue_id, rec.header.dir)) {
-                        q.after_loss = true;
-                        drop_partial(sc, &mut out, q);
-                    }
+                if k.is_loss()
+                    && let Some(q) = qs.get_mut(&(rec.header.queue_id, rec.header.dir))
+                {
+                    q.after_loss = true;
+                    drop_partial(sc, &mut out, q);
                 }
                 // loss and End records carry no payload; whatever a malformed one carries is dropped
                 let mut payload = rec.payload;
@@ -684,26 +716,27 @@ fn bind<W: Write>(
 ) {
     let hd = rec.header;
     let mut payload = rec.payload;
-    let ok = match TxHeader::decode(&payload) {
-        Ok(t) if payload.len() == TxHeader::BYTES => {
-            if t.msg_size >= 16 && t.msg_count != 0 && t.msg_size <= 1 << 20 {
-                qs.insert(
-                    (hd.queue_id, hd.dir),
-                    Q {
-                        entry_size: t.msg_size as usize,
-                        ring: t.msg_count,
-                        next_entry: None,
-                        after_loss: false,
-                        buf: Vec::new(),
-                        segs: VecDeque::new(),
-                    },
-                );
-                true
-            } else {
-                false
-            }
-        }
-        _ => false,
+    let geometry = TxHeader::decode(&payload).ok().filter(|t| {
+        payload.len() == TxHeader::BYTES
+            && t.msg_size >= 16
+            && t.msg_count != 0
+            && t.msg_size <= 1 << 20
+    });
+    let ok = if let Some(t) = geometry {
+        qs.insert(
+            (hd.queue_id, hd.dir),
+            Q {
+                entry_size: t.msg_size as usize,
+                ring: t.msg_count,
+                next_entry: None,
+                after_loss: false,
+                buf: Vec::new(),
+                segs: VecDeque::new(),
+            },
+        );
+        true
+    } else {
+        false
     };
     if !ok {
         // not a ring header: nothing in it is a geometry worth keeping
@@ -939,7 +972,9 @@ fn unhex(s: &str) -> Option<Vec<u8>> {
         b'a'..=b'f' => Some(c - b'a' + 10),
         _ => None,
     };
-    b.chunks_exact(2)
+    b.as_chunks::<2>()
+        .0
+        .iter()
         .map(|p| Some(nib(p[0])? << 4 | nib(p[1])?))
         .collect()
 }
@@ -999,7 +1034,12 @@ pub fn scrub_observer<R: BufRead, W: Write>(
         match kind {
             "header" if !have_header => {
                 have_header = true;
-                let s = line_out(&obj, HEADER_KEYS, &[("kf_scrubbed", "1".to_string())], &mut sc.stats);
+                let s = line_out(
+                    &obj,
+                    HEADER_KEYS,
+                    &[("kf_scrubbed", "1".to_string())],
+                    &mut sc.stats,
+                );
                 w.write_all(s.as_bytes())?;
             }
             "record" => {
@@ -1009,12 +1049,18 @@ pub fn scrub_observer<R: BufRead, W: Write>(
                         "record line before the header line: refusing to write an unmarked file",
                     ));
                 }
-                let (Some(Val::Str(hex)), Some(Val::Int(generation)), Some(Val::Int(pa)), Some(Val::Int(dir))) = (
+                let (
+                    Some(Val::Str(hex)),
+                    Some(Val::Int(generation)),
+                    Some(Val::Int(pa)),
+                    Some(Val::Int(dir)),
+                ) = (
                     find(&obj, "payload_hex"),
                     find(&obj, "generation"),
                     find(&obj, "table_pa"),
                     find(&obj, "direction"),
-                ) else {
+                )
+                else {
                     sc.stats.lines_dropped += 1;
                     continue;
                 };

@@ -173,7 +173,7 @@ pub fn capture(runs: &[(Dir, Vec<u8>)], chunk: u32, end: bool) -> Vec<u8> {
 }
 
 pub fn run_capture(bytes: &[u8]) -> Report {
-    let mut an = analyzer_for(TAG, None).unwrap();
+    let mut an = analyzer_for(TAG, &[]).unwrap();
     stream::read(&mut an, "fixture", bytes).unwrap();
     an.finish()
 }
@@ -214,7 +214,7 @@ pub fn observer_jsonl(
 }
 
 pub fn run_observer(text: &str) -> Report {
-    let mut an = analyzer_for(TAG, None).unwrap();
+    let mut an = analyzer_for(TAG, &[]).unwrap();
     observer::read(&mut an, "fixture", text.as_bytes()).unwrap();
     an.finish()
 }

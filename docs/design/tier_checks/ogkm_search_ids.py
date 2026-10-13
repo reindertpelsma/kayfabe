@@ -9,7 +9,7 @@ usage: ogkm_search_ids.py IDS.txt OGKM_BARE_REPO OUT_PREFIX [--jobs N]
 
 IDS.txt: one control id per line, hex (0x00730101). Writes, for all tags (`git tag`, sorted by version):
 
-  OUT_PREFIX.defs.tsv   every id with every `#define NV*_CTRL_*CMD* (0x<id>)` found (P3 define scan, all .h files),
+  OUT_PREFIX.defs.tsv   every id with every `#define NV*_CTRL_* (0x<id>)` found (P3 define scan, all .h files),
                         as: id, name, first_tag, last_tag, n_tags, header (path at first_tag), struct, sizes
   OUT_PREFIX.hits.tsv   P1 numeric scan (any spelling, whole tree incl. generated code), non-define hits grouped by
                         (id, path, first_tag, last_tag, n_tags, example line)
@@ -58,7 +58,7 @@ def ranges(tags_present, all_tags):
 
 
 DEF_RE = re.compile(
-    r"^(?P<tag>[^:]+):(?P<path>[^:]+):(?P<line>\d+):\s*#\s*define\s+(?P<name>NV[0-9A-Za-z]*_CTRL_[A-Za-z0-9_]*CMD[A-Za-z0-9_]*)"
+    r"^(?P<tag>[^:]+):(?P<path>[^:]+):(?P<line>\d+):\s*#\s*define\s+(?P<name>NV[0-9A-Za-z]*_CTRL_[A-Za-z0-9_]+)"
     r"\s+\(?\s*\(?\s*(?P<val>0[xX][0-9a-fA-F]+)[uUlL]*\s*\)?"
 )
 FINN_RE = re.compile(r'finn: Evaluated from "[^"]*?\|\s*(?P<msg>[A-Z0-9_]+)_MESSAGE_ID"')
@@ -81,8 +81,8 @@ def main():
     p1 = f"0x0*({hexes})([^0-9a-fA-F]|$)"
 
     def scan(tag):
-        # P3: all define lines naming a CTRL command, any header, any directory
-        d = run(["git", "-C", repo, "grep", "-n", "-I", "-E", r"^\s*#\s*define\s+NV[0-9A-Za-z]*_CTRL_[A-Za-z0-9_]*CMD", tag, "--", "*.h"])
+        # P3: every `#define NV*_CTRL_* (0x...)` line (a command name need not contain CMD: NV0080_CTRL_DMA_SET_DEFAULT_VASPACE), any header
+        d = run(["git", "-C", repo, "grep", "-n", "-I", "-E", r"^\s*#\s*define\s+NV[0-9A-Za-z]*_CTRL_[A-Za-z0-9_]+\s+\(?\s*0[xX]", tag, "--", "*.h"])
         defs = []
         non_literal = 0
         for line in d.splitlines():
@@ -229,7 +229,7 @@ def main():
             alltags = set().union(*by_def[v].values()) if v in by_def else set()
             other = set().union(*by_hit[v].values()) if v in by_hit else set()
             f.write(f"0x{v:08x}\t{len(alltags)}\t{names}\t{len(other)}\t{len(by_hit.get(v, {}))}\t{sum(1 for r in p2rows if re.search(rf'(^|[^0-9a-fA-F])0*({v:x}|{v})([^0-9a-fA-F]|$)', r.split(':', 3)[-1], re.I)) if v in nohit else 0}\n")
-    print(f"non-literal CTRL*CMD define lines (not parsed as 0x literal), summed over tags: {sum(nl.values())}", file=sys.stderr)
+    print(f"done: {len(ids)} ids over {len(tags)} tags", file=sys.stderr)
 
 
 if __name__ == "__main__":

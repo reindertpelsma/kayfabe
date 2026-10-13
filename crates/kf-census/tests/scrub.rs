@@ -138,19 +138,23 @@ fn scrub_obs(text: &str, allow: &AllowList) -> (String, Stats) {
     let mut sc = Scrubber::new(abi(), allow.clone());
     let mut out = Vec::new();
     scrub::scrub_observer(&mut sc, text.as_bytes(), &mut out).expect("scrubs");
-    (String::from_utf8(out).expect("the output is ASCII"), sc.stats)
+    (
+        String::from_utf8(out).expect("the output is ASCII"),
+        sc.stats,
+    )
 }
 
 /// Every message run exactly as the decoder reassembled it.
 fn runs_seen(bytes: &[u8]) -> Vec<(Dir, Vec<u8>)> {
     let seen = Rc::new(RefCell::new(Vec::new()));
-    let mut an: Analyzer = analyzer_for(common::TAG, None).unwrap();
+    let mut an: Analyzer = analyzer_for(common::TAG, &[]).unwrap();
     let s2 = Rc::clone(&seen);
     an.set_tap(Box::new(move |d, b| s2.borrow_mut().push((d, b.to_vec()))));
     stream::read(&mut an, "t", bytes).unwrap();
     let _ = an.finish();
-    let v = seen.borrow().clone();
-    v
+    Rc::try_unwrap(seen)
+        .expect("the tap is dropped with the analyzer")
+        .into_inner()
 }
 
 fn needles() -> Vec<(&'static str, Vec<u8>)> {
@@ -180,15 +184,25 @@ fn nothing_planted_survives_in_a_scrubbed_capture() {
         }
         let (out, st) = scrub_cap(&cap, &AllowList::builtin());
         for (name, n) in needles() {
-            assert!(!contains(&out, &n), "{name} survived the scrub (chunk {chunk})");
+            assert!(
+                !contains(&out, &n),
+                "{name} survived the scrub (chunk {chunk})"
+            );
         }
-        assert_eq!(out.len(), cap.len(), "the scrub keeps every record and its length");
+        assert_eq!(
+            out.len(),
+            cap.len(),
+            "the scrub keeps every record and its length"
+        );
         assert!(st.input_was_clean(), "{st:?}");
         assert!(st.padding_zeroed > 0);
         // and with an allow-list that contains nothing at all
         let (out0, _) = scrub_cap(&cap, &AllowList::empty());
         for (name, n) in needles() {
-            assert!(!contains(&out0, &n), "{name} survived (empty list, chunk {chunk})");
+            assert!(
+                !contains(&out0, &n),
+                "{name} survived (empty list, chunk {chunk})"
+            );
         }
     }
 }
@@ -229,7 +243,10 @@ fn allow_listed_bodies_are_preserved_byte_for_byte() {
     plant(&mut runs);
     let cap = capture(&runs, 3, true);
     let (out, st) = scrub_cap(&cap, &AllowList::builtin());
-    assert!(contains(&out, &allowed_body()), "allow-listed reply body must survive");
+    assert!(
+        contains(&out, &allowed_body()),
+        "allow-listed reply body must survive"
+    );
     // the same body in the observer shape
     let (txt, _) = scrub_obs(&observer_jsonl(&runs, None, None), &AllowList::builtin());
     assert!(contains_hex(&txt, &allowed_body()));
@@ -274,7 +291,14 @@ fn a_scrub_that_allows_everything_changes_nothing_in_a_clean_stream() {
             // the only runs allowed to differ: events (payload never kept) and the GID control
             let function = u32::from_le_bytes(a[hdr + 12..hdr + 16].try_into().unwrap());
             let cmd = u32::from_le_bytes(a[hdr + 32 + 8..hdr + 32 + 12].try_into().unwrap());
-            let diff: Vec<usize> = a.iter().zip(b).enumerate().filter(|(_, (x, y))| x != y).map(|(i, _)| i).take(8).collect();
+            let diff: Vec<usize> = a
+                .iter()
+                .zip(b)
+                .enumerate()
+                .filter(|(_, (x, y))| x != y)
+                .map(|(i, _)| i)
+                .take(8)
+                .collect();
             assert!(
                 function == abi().rpc.codes.post_event
                     || (function == abi().rpc.codes.gsp_rm_control && cmd == GID),
@@ -298,7 +322,11 @@ fn the_census_of_the_scrubbed_file_equals_the_original_in_counts_sizes_and_statu
         for allow in [AllowList::builtin(), AllowList::empty()] {
             let (out, _) = scrub_cap(&cap, &allow);
             let s = run_capture(&out);
-            assert!(s.oracle_ok(), "the scrubbed file passes the oracle: {:?}", s.anomalies);
+            assert!(
+                s.oracle_ok(),
+                "the scrubbed file passes the oracle: {:?}",
+                s.anomalies
+            );
             same_census(&orig, &s, &allow);
         }
     }
@@ -324,12 +352,16 @@ fn same_census(orig: &Report, scrubbed: &Report, allow: &AllowList) {
     let mut hid = 0;
     for (a, b) in orig.controls.iter().zip(&scrubbed.controls) {
         let (mut x, mut y) = (a.clone(), b.clone());
-        assert_eq!(x.scrubbed, 0, "an unscrubbed file never reports scrubbed bodies");
+        assert_eq!(
+            x.scrubbed, 0,
+            "an unscrubbed file never reports scrubbed bodies"
+        );
         if allow.contains(a.cmd) {
             assert_eq!(y.scrubbed, 0, "{:#x} is allow-listed", a.cmd);
         } else {
             assert!(
-                y.scrubbed > 0 || (a.req_sizes.keys().all(|&k| k == 0) && a.rep_sizes.keys().all(|&k| k == 0)),
+                y.scrubbed > 0
+                    || (a.req_sizes.keys().all(|&k| k == 0) && a.rep_sizes.keys().all(|&k| k == 0)),
                 "{:#x}: bodies not marked",
                 a.cmd
             );
@@ -337,15 +369,34 @@ fn same_census(orig: &Report, scrubbed: &Report, allow: &AllowList) {
         }
         // calls, sizes, statuses, pairing: identical
         assert_eq!(
-            (x.requests, x.replies, x.paired, x.unanswered, x.orphan_replies, x.serialized),
-            (y.requests, y.replies, y.paired, y.unanswered, y.orphan_replies, y.serialized),
+            (
+                x.requests,
+                x.replies,
+                x.paired,
+                x.unanswered,
+                x.orphan_replies,
+                x.serialized
+            ),
+            (
+                y.requests,
+                y.replies,
+                y.paired,
+                y.unanswered,
+                y.orphan_replies,
+                y.serialized
+            ),
             "{:#x}",
             a.cmd
         );
         assert_eq!((&x.req_sizes, &x.rep_sizes), (&y.req_sizes, &y.rep_sizes));
         assert_eq!((&x.statuses, &x.rpc_results), (&y.statuses, &y.rpc_results));
         if allow.contains(a.cmd) {
-            assert_eq!((x.echo, x.distinct_replies), (y.echo, y.distinct_replies), "{:#x}", a.cmd);
+            assert_eq!(
+                (x.echo, x.distinct_replies),
+                (y.echo, y.distinct_replies),
+                "{:#x}",
+                a.cmd
+            );
         } else {
             // hidden bodies: never reported as if they were real
             // (an empty reply has nothing to hide and is still a real, distinct empty body)
@@ -372,23 +423,40 @@ fn a_scrubbed_body_is_reported_as_scrubbed_never_decoded_as_zeros() {
     let r = run_capture(&out);
     let tsv = report::controls_tsv(&r);
     let header_line = tsv.lines().next().unwrap();
-    let col = header_line.split('\t').position(|c| c == "scrubbed").expect("scrubbed column");
+    let col = header_line
+        .split('\t')
+        .position(|c| c == "scrubbed")
+        .expect("scrubbed column");
     let row = tsv
         .lines()
         .find(|l| l.starts_with("0x2080852a"))
         .expect("row");
-    assert_eq!(row.split('\t').nth(col), Some("4"), "2 requests + 2 replies: {row}");
+    assert_eq!(
+        row.split('\t').nth(col),
+        Some("4"),
+        "2 requests + 2 replies: {row}"
+    );
     // the conversation's echo control (reply == request) is not an echo once both are hidden
     let c = r.controls.iter().find(|c| c.cmd == 0x0073_0128).unwrap();
     assert_eq!((c.echo, c.scrubbed, c.distinct_replies), (0, 2, 0));
     assert!(report::json(&r).contains("\"scrubbed\":4"));
     assert!(
-        r.sources[0].facts.iter().any(|(k, v)| k == "scrubbed" && v == "true"),
+        r.sources[0]
+            .facts
+            .iter()
+            .any(|(k, v)| k == "scrubbed" && v == "true"),
         "the source says it was scrubbed"
     );
     // the original reports an echo for the same control
     let o = run_capture(&cap);
-    assert_eq!(o.controls.iter().find(|c| c.cmd == 0x0073_0128).unwrap().echo, 1);
+    assert_eq!(
+        o.controls
+            .iter()
+            .find(|c| c.cmd == 0x0073_0128)
+            .unwrap()
+            .echo,
+        1
+    );
 }
 
 #[test]
@@ -398,7 +466,10 @@ fn a_fill_looking_body_in_an_unscrubbed_file_is_a_real_body() {
     scrub::fill(&mut body, 0);
     assert!(is_filled(&body));
     assert_eq!(&body[..8], &FILL);
-    let msgs = vec![ctl_req(0x2080_0001, &[0u8; 4]), ctl_rep(0x2080_0001, 0, &body)];
+    let msgs = vec![
+        ctl_req(0x2080_0001, &[0u8; 4]),
+        ctl_rep(0x2080_0001, 0, &body),
+    ];
     let runs = runs_of(&msgs, &natural_seqs(&msgs));
     let r = run_capture(&capture(&runs, 4, true));
     let c = &r.controls[0];
@@ -406,7 +477,10 @@ fn a_fill_looking_body_in_an_unscrubbed_file_is_a_real_body() {
     // while the same bytes in a file flagged as scrubbed are a scrubbed body
     let (out, _) = scrub_cap(&capture(&runs, 4, true), &AllowList::empty());
     let r = run_capture(&out);
-    assert_eq!((r.controls[0].scrubbed, r.controls[0].distinct_replies), (2, 0));
+    assert_eq!(
+        (r.controls[0].scrubbed, r.controls[0].distinct_replies),
+        (2, 0)
+    );
     // and an empty body is not a scrubbed body
     assert!(!is_filled(&[]));
 }
@@ -464,8 +538,19 @@ fn a_large_control_is_scrubbed_across_its_continuation_records() {
         assert!(st2.continuations.0 >= 1);
         let k = run_capture(&kept);
         assert!(k.oracle_ok());
-        assert_eq!(k.controls.iter().find(|c| c.cmd == 0x2080_7777).unwrap().scrubbed, 0);
-        assert_eq!(runs_seen(&kept), runs_seen(&cap), "allowed means identical, chunk {chunk}");
+        assert_eq!(
+            k.controls
+                .iter()
+                .find(|c| c.cmd == 0x2080_7777)
+                .unwrap()
+                .scrubbed,
+            0
+        );
+        assert_eq!(
+            runs_seen(&kept),
+            runs_seen(&cap),
+            "allowed means identical, chunk {chunk}"
+        );
     }
 }
 
@@ -490,7 +575,11 @@ fn a_message_that_did_not_verify_still_does_not_verify_after_the_scrub() {
             .map(|(k, a)| (k.name(), a.count))
             .collect::<Vec<_>>()
     };
-    assert_eq!(kinds(&orig), kinds(&s), "the scrub does not heal a bad checksum");
+    assert_eq!(
+        kinds(&orig),
+        kinds(&s),
+        "the scrub does not heal a bad checksum"
+    );
     assert!(!contains(&out, &vbios_needle()));
 }
 
@@ -522,7 +611,10 @@ fn entries_that_never_formed_a_message_are_zeroed() {
     let cap = w.end(4).unwrap();
     assert!(contains(&cap, SERIAL));
     let (out, st) = scrub_cap(&cap, &AllowList::empty());
-    assert!(!contains(&out, SERIAL), "the dropped half message must not survive");
+    assert!(
+        !contains(&out, SERIAL),
+        "the dropped half message must not survive"
+    );
     assert_eq!(st.partial_dropped, 1, "{st:?}");
     // the original and the scrubbed file raise the same anomaly kinds
     let (o, s) = (run_capture(&cap), run_capture(&out));
@@ -550,7 +642,10 @@ fn a_capture_cut_inside_a_record_is_scrubbed_up_to_the_cut() {
         assert!(!contains(&out, &n), "{name}");
     }
     let s = run_capture(&out);
-    assert!(s.anomalies.contains_key(&kf_census::analyze::AnomalyKind::EndMissing));
+    assert!(
+        s.anomalies
+            .contains_key(&kf_census::analyze::AnomalyKind::EndMissing)
+    );
 }
 
 #[test]
@@ -561,15 +656,23 @@ fn a_loss_marker_and_the_record_stream_are_kept() {
     for d in [Dir::Cmd, Dir::Status] {
         w.bind(1, d, 1, &tx_header()).unwrap();
     }
-    let cmd: Vec<u8> = runs.iter().filter(|r| r.0 == Dir::Cmd).flat_map(|r| r.1.clone()).collect();
+    let cmd: Vec<u8> = runs
+        .iter()
+        .filter(|r| r.0 == Dir::Cmd)
+        .flat_map(|r| r.1.clone())
+        .collect();
     w.elements(1, Dir::Cmd, 2, 0, 2, &cmd[..2 * ES]).unwrap();
-    w.loss(kf_census::capture::Kind::LossOverflow, 1, Dir::Cmd, 3, 2, 5).unwrap();
+    w.loss(kf_census::capture::Kind::LossOverflow, 1, Dir::Cmd, 3, 2, 5)
+        .unwrap();
     let cap = w.end(4).unwrap();
     let (out, st) = scrub_cap(&cap, &AllowList::builtin());
     assert_eq!(out.len(), cap.len());
     assert!(st.input_was_clean());
     let r = run_capture(&out);
-    assert_eq!(r.anomalies[&kf_census::analyze::AnomalyKind::CaptureLoss].count, 1);
+    assert_eq!(
+        r.anomalies[&kf_census::analyze::AnomalyKind::CaptureLoss].count,
+        1
+    );
     // headers: the scrubbed flag is set, nothing else in the file header changed
     let (h1, h2) = (&cap[..128], &out[..128]);
     assert_eq!(h1[..20], h2[..20]);
@@ -584,7 +687,10 @@ fn the_allow_list_parses_hex_decimal_comments_and_refuses_garbage() {
     let l = AllowList::parse("# c\n0x2080852a  # trailing\n\n2080a02f_bad\n").unwrap_err();
     assert!(l.contains("line 4"), "{l}");
     let l = AllowList::parse("0x2080852a\n 0X2080852E \n1\n").unwrap();
-    assert_eq!(l.ids().collect::<Vec<_>>(), vec![1, 0x2080_852a, 0x2080_852e]);
+    assert_eq!(
+        l.ids().collect::<Vec<_>>(),
+        vec![1, 0x2080_852a, 0x2080_852e]
+    );
     assert!(AllowList::parse("0x12345678901\n").is_err());
 }
 
@@ -628,7 +734,10 @@ fn the_builtin_list_is_the_documented_one() {
         })
         .collect();
     for id in l.ids() {
-        assert!(absent.contains(&id), "{id:#010x} is on the default list but tier 1 does not say NOT_IN_ANY_VERSION");
+        assert!(
+            absent.contains(&id),
+            "{id:#010x} is on the default list but tier 1 does not say NOT_IN_ANY_VERSION"
+        );
         assert!(BOARD_DATA_CONTROLS.iter().all(|(b, _)| *b != id));
     }
 }
@@ -649,19 +758,47 @@ fn the_binary_scrubs_both_formats_and_the_output_is_private_and_decodable() {
     let exe = env!("CARGO_BIN_EXE_kf-census");
     for (input, out) in [(&cap, dir.join("out.kfcap")), (&obs, dir.join("out.jsonl"))] {
         let st = std::process::Command::new(exe)
-            .args(["scrub", "--out", out.to_str().unwrap(), input.to_str().unwrap()])
+            .args([
+                "scrub",
+                "--out",
+                out.to_str().unwrap(),
+                input.to_str().unwrap(),
+            ])
             .output()
             .unwrap();
-        assert_eq!(st.status.code(), Some(0), "{}", String::from_utf8_lossy(&st.stderr));
-        assert_eq!(std::fs::metadata(&out).unwrap().permissions().mode() & 0o777, 0o600);
-        let st = std::process::Command::new(exe).arg(out.to_str().unwrap()).output().unwrap();
-        assert_eq!(st.status.code(), Some(0), "{}", String::from_utf8_lossy(&st.stdout));
+        assert_eq!(
+            st.status.code(),
+            Some(0),
+            "{}",
+            String::from_utf8_lossy(&st.stderr)
+        );
+        assert_eq!(
+            std::fs::metadata(&out).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        let st = std::process::Command::new(exe)
+            .arg(out.to_str().unwrap())
+            .output()
+            .unwrap();
+        assert_eq!(
+            st.status.code(),
+            Some(0),
+            "{}",
+            String::from_utf8_lossy(&st.stdout)
+        );
         let bytes = std::fs::read(&out).unwrap();
         assert!(!contains(&bytes, SERIAL) && !contains(&bytes, UUID_TXT));
     }
     // a deny-listed id on the command line is a usage error and writes nothing useful
     let st = std::process::Command::new(exe)
-        .args(["scrub", "--allow", "0x2080014a", "--out", dir.join("x").to_str().unwrap(), cap.to_str().unwrap()])
+        .args([
+            "scrub",
+            "--allow",
+            "0x2080014a",
+            "--out",
+            dir.join("x").to_str().unwrap(),
+            cap.to_str().unwrap(),
+        ])
         .output()
         .unwrap();
     assert_eq!(st.status.code(), Some(2));
@@ -669,7 +806,15 @@ fn the_binary_scrubs_both_formats_and_the_output_is_private_and_decodable() {
     // an explicit list file and --no-default-allow
     std::fs::write(dir.join("l.txt"), "0x2080852e # extra\n").unwrap();
     let st = std::process::Command::new(exe)
-        .args(["scrub", "--no-default-allow", "--allow-list", dir.join("l.txt").to_str().unwrap(), "--out", dir.join("y").to_str().unwrap(), cap.to_str().unwrap()])
+        .args([
+            "scrub",
+            "--no-default-allow",
+            "--allow-list",
+            dir.join("l.txt").to_str().unwrap(),
+            "--out",
+            dir.join("y").to_str().unwrap(),
+            cap.to_str().unwrap(),
+        ])
         .output()
         .unwrap();
     assert_eq!(st.status.code(), Some(0));
@@ -677,7 +822,12 @@ fn the_binary_scrubs_both_formats_and_the_output_is_private_and_decodable() {
     // a stream that is not a capture at all: exit 2
     std::fs::write(dir.join("junk"), b"not a capture").unwrap();
     let st = std::process::Command::new(exe)
-        .args(["scrub", "--out", dir.join("z").to_str().unwrap(), dir.join("junk").to_str().unwrap()])
+        .args([
+            "scrub",
+            "--out",
+            dir.join("z").to_str().unwrap(),
+            dir.join("junk").to_str().unwrap(),
+        ])
         .output()
         .unwrap();
     assert_eq!(st.status.code(), Some(2));
@@ -691,7 +841,41 @@ fn analyzer_for_scrubbed_input_needs_no_special_flag() {
     let msgs = conversation();
     let runs = runs_of(&msgs, &natural_seqs(&msgs));
     let (out, _) = scrub_cap(&capture(&runs, 4, true), &AllowList::empty());
-    let mut an = analyzer_for(common::TAG, None).unwrap();
+    let mut an = analyzer_for(common::TAG, &[]).unwrap();
     stream::read(&mut an, "s", out.as_slice()).unwrap();
     assert!(an.finish().controls.iter().any(|c| c.scrubbed > 0));
+}
+
+#[test]
+fn the_lists_cover_the_windows_only_control_ids_exactly() {
+    // The 40 rows of V3_WINDOWS_ONLY_CONSTANTS_20261013.md are 34 distinct control ids (4 rows
+    // are not RM controls, 2 repeat another row's id). Every one is either on the default list,
+    // on the screened list (--allow-screened), or deliberately on neither.
+    let neither = [
+        0x2080_852f,
+        0x2080_853b,
+        0x2080_a619,
+        0x2080_a084,
+        0x2080_8163,
+        0x2080_8164,
+    ];
+    let (d, s) = (AllowList::builtin(), AllowList::screened());
+    assert_eq!((d.len(), s.len(), neither.len()), (8, 20, 6));
+    let mut all: Vec<u32> = d.ids().chain(s.ids()).chain(neither).collect();
+    let n = all.len();
+    all.sort_unstable();
+    all.dedup();
+    assert_eq!((n, all.len()), (34, 34), "the three sets are disjoint");
+    let doc = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../docs/design/V3_WINDOWS_ONLY_CONSTANTS_20261013.md"
+    ))
+    .unwrap();
+    for id in &all {
+        assert!(
+            doc.contains(&format!("{id:#010x}")),
+            "{id:#010x} is not in the constants page"
+        );
+        assert!(BOARD_DATA_CONTROLS.iter().all(|(b, _)| b != id));
+    }
 }

@@ -1,7 +1,7 @@
 //! `kf-census`: decode queue captures, run the completeness oracle, write the census.
 //!
 //! ```text
-//! kf-census [--ogkm-tag 580.82.07] [--tier1 docs/design/tier_checks/tier1_ogkm.tsv]
+//! kf-census [--ogkm-tag 580.82.07] [--tier1 docs/design/tier_checks/tier1_ogkm.tsv]...
 //!           [--out PREFIX] INPUT...
 //! ```
 //!
@@ -31,7 +31,7 @@ use std::process::ExitCode;
 
 fn usage() -> ExitCode {
     eprintln!(
-        "usage: kf-census [--ogkm-tag MAJOR.MINOR.PATCH] [--tier1 FILE.tsv] [--out PREFIX] INPUT...\n       kf-census scrub [--ogkm-tag T] [--no-default-allow] [--allow-screened] [--allow-list FILE] [--allow ID]... --out SCRUBBED INPUT"
+        "usage: kf-census [--ogkm-tag MAJOR.MINOR.PATCH] [--tier1 FILE.tsv]... [--out PREFIX] INPUT...\n       kf-census scrub [--ogkm-tag T] [--no-default-allow] [--allow-screened] [--allow-list FILE] [--allow ID]... --out SCRUBBED INPUT"
     );
     ExitCode::from(2)
 }
@@ -114,7 +114,10 @@ fn scrub_main(mut args: impl Iterator<Item = String>) -> ExitCode {
         }
     }
     for i in &ids {
-        match scrub::parse_id(i).ok_or_else(|| format!("not a control id: {i:?}")).and_then(|id| allow.insert(id)) {
+        match scrub::parse_id(i)
+            .ok_or_else(|| format!("not a control id: {i:?}"))
+            .and_then(|id| allow.insert(id))
+        {
             Ok(()) => {}
             Err(e) => {
                 eprintln!("kf-census scrub: --allow {i}: {e}");
@@ -180,7 +183,11 @@ fn scrub_main(mut args: impl Iterator<Item = String>) -> ExitCode {
     );
     println!(
         "  undecodable {}, padding zeroed on {} messages, unframed bytes zeroed {}, lines dropped {}, keys dropped {}",
-        st.undecodable, st.padding_zeroed, st.bytes_zeroed_unframed, st.lines_dropped, st.keys_dropped
+        st.undecodable,
+        st.padding_zeroed,
+        st.bytes_zeroed_unframed,
+        st.lines_dropped,
+        st.keys_dropped
     );
     if let Some(t) = &st.truncated {
         println!("  input ended inside a record ({t}); the rest was not written");
@@ -207,7 +214,7 @@ fn main_census(argv: impl Iterator<Item = String>) -> ExitCode {
         minor: 82,
         patch: 7,
     };
-    let mut tier1: Option<String> = None;
+    let mut tier1: Vec<String> = Vec::new();
     let mut out: Option<String> = None;
     let mut inputs: Vec<String> = Vec::new();
     let mut args = argv;
@@ -217,7 +224,10 @@ fn main_census(argv: impl Iterator<Item = String>) -> ExitCode {
                 Some(t) => tag = t,
                 None => return usage(),
             },
-            "--tier1" => tier1 = args.next(),
+            "--tier1" => match args.next() {
+                Some(f) => tier1.push(f),
+                None => return usage(),
+            },
             "--out" => out = args.next(),
             "-h" | "--help" => return usage(),
             _ => inputs.push(a),
@@ -226,15 +236,20 @@ fn main_census(argv: impl Iterator<Item = String>) -> ExitCode {
     if inputs.is_empty() {
         return usage();
     }
-    let tier1_text = match tier1.as_deref().map(std::fs::read_to_string) {
-        None => None,
-        Some(Ok(t)) => Some(t),
-        Some(Err(e)) => {
-            eprintln!("kf-census: --tier1: {e}");
-            return ExitCode::from(2);
+    let mut tier1_texts: Vec<String> = Vec::new();
+    for f in &tier1 {
+        match std::fs::read_to_string(f) {
+            Ok(t) => tier1_texts.push(t),
+            Err(e) => {
+                eprintln!("kf-census: --tier1 {f}: {e}");
+                return ExitCode::from(2);
+            }
         }
-    };
-    let mut an = match analyzer_for(tag, tier1_text.as_deref()) {
+    }
+    let mut an = match analyzer_for(
+        tag,
+        &tier1_texts.iter().map(String::as_str).collect::<Vec<_>>(),
+    ) {
         Ok(a) => a,
         Err(e) => {
             eprintln!("kf-census: {e}");

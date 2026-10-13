@@ -160,7 +160,7 @@ pub fn read<R: Read>(an: &mut Analyzer, label: &str, r: R) -> Result<(), Capture
 /// # Errors
 ///
 /// `(count, limit)` when the entry does not start a plausible message (count 0, or more entries
-/// than the guest's staging buffer holds); 
+/// than the guest's staging buffer holds);
 pub(crate) fn message_entries(
     layout: &kf_gsp::ElementLayout,
     size_max: u32,
