@@ -199,6 +199,12 @@ pub(super) struct Trace {
     reported: bool,
     straddles: u32,
     rereads: Vec<Reread>,
+    /// Doorbell count read before the PUT read that found new work, and the one before it.
+    db_at_put: u64,
+    db_prev_put: u64,
+    /// New-work PUT reads with / without a doorbell since the previous new-work PUT read.
+    puts_with_db: u64,
+    puts_without_db: u64,
 }
 impl Trace {
     fn new() -> Self {
@@ -212,6 +218,19 @@ impl Trace {
             reported: false,
             straddles: 0,
             rereads: Vec::new(),
+            db_at_put: 0,
+            db_prev_put: 0,
+            puts_with_db: 0,
+            puts_without_db: 0,
+        }
+    }
+    fn note_put(&mut self, doorbells: u64) {
+        self.db_prev_put = self.db_at_put;
+        self.db_at_put = doorbells;
+        if doorbells > self.db_prev_put {
+            self.puts_with_db += 1;
+        } else {
+            self.puts_without_db += 1;
         }
     }
     pub(super) fn wake(&mut self, woke: bool) {
@@ -394,6 +413,12 @@ impl Pump {
         })
     }
     pub(super) fn release(&mut self) -> Result<(), String> {
+        if let Some(t) = &self.trace {
+            eprintln!(
+                "kf3: USER_RING_TRACE SUMMARY {:x?} segments={} puts_with_doorbell={} puts_without_doorbell={} straddles={}",
+                self.key, t.seq, t.puts_with_db, t.puts_without_db, t.straddles
+            );
+        }
         if let Some(shadow) = self.shadow.take() {
             eprintln!(
                 "kf3: USER_RING_SHADOW_SUMMARY {:x?} observation_attempt_counts={:?}; never execution or completion",
@@ -477,14 +502,16 @@ impl Pump {
                 .map(|(i, w)| format!("{i}:{w:08x}"))
                 .collect();
             eprintln!(
-                "kf3: USER_RING_TRACE STRADDLE {:#x}:{:#x} seq={} cursor={cursor} put={put} entry={entry:#018x} pb_va={:#x} words={} carried_out={carried_out} last_headers=[{}] backing=[{}]",
+                "kf3: USER_RING_TRACE STRADDLE {:#x}:{:#x} seq={} cursor={cursor} put={put} entry={entry:#018x} pb_va={:#x} words={} carried_out={carried_out} last_headers=[{}] backing=[{}] db_at_put={} db_prev_put={}",
                 r.key.0,
                 r.key.1,
                 t.seq,
                 d.gpu_va,
                 words.len(),
                 tail.join(" "),
-                pb.describe()
+                pb.describe(),
+                t.db_at_put,
+                t.db_prev_put
             );
         }
         while t.history.len() == TRACE_HISTORY
@@ -615,6 +642,18 @@ impl Pump {
                 )
             })
             .unwrap_or_default();
+        let (db_at, db_prev, pw, pwo) = self
+            .trace
+            .as_ref()
+            .map(|t| {
+                (
+                    t.db_at_put,
+                    t.db_prev_put,
+                    t.puts_with_db,
+                    t.puts_without_db,
+                )
+            })
+            .unwrap_or_default();
         let mut out = String::new();
         let gp_backing = self
             .snapshot(me, r, gp_va, 8)
@@ -622,7 +661,7 @@ impl Pump {
             .unwrap_or_else(|e| format!("{e:?}"));
         let _ = writeln!(
             out,
-            "USER_RING_TRACE refusal key={:#x}:{:#x} idx={} cursor={} put={put} entries={entries} gp_ring={:#x} gp_va={gp_va:#x} entry={entry:#018x} pb_va={:#x} pb_bytes={} sync_wait={} subroutine={} generation={} fetch_issued={} fetch_fetched={} pump_age_ms={born} woke_by_request={woke} since_last_request_us={since_wake:?}\n  pb_backing=[{}] gp_backing=[{gp_backing}]\nwhy: {why:?}\ncarried_in: {}",
+            "USER_RING_TRACE refusal key={:#x}:{:#x} idx={} cursor={} put={put} entries={entries} gp_ring={:#x} gp_va={gp_va:#x} entry={entry:#018x} pb_va={:#x} pb_bytes={} sync_wait={} subroutine={} generation={} fetch_issued={} fetch_fetched={} pump_age_ms={born} woke_by_request={woke} since_last_request_us={since_wake:?} doorbells_at_put_read={db_at} at_previous_new_put={db_prev} now={} puts_with_doorbell={pw} puts_without_doorbell={pwo}\n  pb_backing=[{}] gp_backing=[{gp_backing}]\nwhy: {why:?}\ncarried_in: {}",
             r.key.0,
             r.key.1,
             r.idx,
@@ -635,6 +674,7 @@ impl Pump {
             self.generation,
             self.fetch.issued(),
             self.fetch.fetched(),
+            me.queued(r.idx),
             pb.describe(),
             carried_text(self.scan.carried()),
         );
@@ -705,8 +745,9 @@ impl Pump {
                 )
             });
             let line = format!(
-                "reread+{delay}ms entry_same={:?} put={put2:?} words_changed={changed:?} first_diff={first:?} rescan={rescan:?}",
-                entry2.map(|e| e == entry)
+                "reread+{delay}ms entry_same={:?} put={put2:?} doorbells={} words_changed={changed:?} first_diff={first:?} rescan={rescan:?}",
+                entry2.map(|e| e == entry),
+                me.queued(r.idx)
             );
             let _ = writeln!(out, "{line}");
             if let (Some(w2), Some(n)) = (&words2, changed) {
@@ -716,7 +757,8 @@ impl Pump {
                 }
             }
             summary.push(format!(
-                "+{delay}ms:changed={}:rescan={}",
+                "+{delay}ms:db={}:changed={}:rescan={}",
+                me.queued(r.idx),
                 changed.map_or("?".into(), |n| n.to_string()),
                 rescan.unwrap_or_else(|| "?".into())
             ));
@@ -752,7 +794,7 @@ impl Pump {
         let written = std::fs::create_dir_all(dir)
             .and_then(|()| std::fs::write(dir.join(&name), out.as_bytes()));
         eprintln!(
-            "kf3: USER_RING_TRACE {:#x}:{:#x} cursor={} put={put} entry={entry:#018x} pb_va={:#x} bytes={} {} file={name} written={}",
+            "kf3: USER_RING_TRACE {:#x}:{:#x} cursor={} put={put} entry={entry:#018x} pb_va={:#x} bytes={} db_at_put={db_at} db_prev_put={db_prev} puts_with_db={pw} puts_without_db={pwo} {} file={name} written={}",
             r.key.0,
             r.key.1,
             self.cursor,
@@ -812,6 +854,8 @@ impl Pump {
                 me.inbox.wait_walk(r.idx);
                 return Ok(false);
             }
+            // Doorbells counted BEFORE the PUT read (measurement only today).
+            let doorbells = me.queued(r.idx);
             let mut put = [0u8; 4];
             r.userd
                 .read(
@@ -828,6 +872,9 @@ impl Pump {
             }
             if put == self.cursor {
                 return Ok(false);
+            }
+            if let Some(t) = self.trace.as_mut() {
+                t.note_put(doorbells);
             }
             // Declaration admission only, not a pin. Native never fetches the
             // guest ring; EACH current GP/PB still has fresh exact source guards.

@@ -2339,6 +2339,10 @@ pub struct ChanPlane {
     /// ★ `KF3_MAPLOG` only: per guest token, when its last inline doorbell was rung (µs on the
     /// `kf_mem::maplog` clock; 0 = never, or maplog off).
     rung_at_us: Box<[AtomicU64]>,
+    /// ★ 2026-10-14: per guest token, doorbells on a WORKER-served (Translated) token — the USER
+    /// ring pump's evidence that the guest published (`userpump`). Monotonic; one relaxed atomic
+    /// on the vCPU/drainer, nothing else.
+    queued: Box<[AtomicU64]>,
     /// ★ 2026-10-08 (owner ruling §X, `kf_chan::ptnsi`): host non-stall edges → the guest vectors
     /// of the events this VM's guest armed; never dropped (`KF3_PT_NSI_*`, read once at realize).
     pub nsi: kf_chan::ptnsi::Relay,
@@ -2955,6 +2959,7 @@ impl ChanPlane {
             rung: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
             rang: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
             rung_at_us: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
+            queued: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
             nsi,
             nsi_arms: std::sync::OnceLock::new(),
             nsi_log: std::sync::OnceLock::new(),
@@ -3261,6 +3266,21 @@ impl ChanPlane {
             self.nsi.summary(),
             per.join(" ") + &fifo_refusal_summary
         )
+    }
+
+    /// ★ **vCPU/drainer**: a doorbell on worker-served guest token `idx` (Translated). One relaxed
+    /// atomic. Monotonic for the plane's life, so a pump compares two reads.
+    pub fn note_queued(&self, idx: u32) {
+        if let Some(c) = self.queued.get(idx as usize) {
+            c.fetch_add(1, Ordering::Release);
+        }
+    }
+
+    /// Doorbells counted on guest token `idx` ([`Self::note_queued`]).
+    pub(crate) fn queued(&self, idx: u32) -> u64 {
+        self.queued
+            .get(idx as usize)
+            .map_or(0, |c| c.load(Ordering::Acquire))
     }
 
     /// ★ **vCPU**: a doorbell on guest token `idx` was rung inline; `reached` = the host store

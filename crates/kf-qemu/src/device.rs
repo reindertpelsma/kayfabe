@@ -1670,7 +1670,12 @@ impl Device {
             let _ = self.mem.inbox.wake.signal();
         }
         let off32 = u32::try_from(off).unwrap_or(u32::MAX);
-        match self.plane.trap_write(class, 0, off32, val, width) {
+        let doorbell = matches!(class, Class::Doorbell);
+        let action = self.plane.trap_write(class, 0, off32, val, width);
+        if doorbell {
+            self.note_worker_doorbell(val as u32);
+        }
+        match action {
             Action::RingHostInline { host_token } => {
                 // ★ P5b: a Passthrough token — ONE fenced store into the host's doorbell, and two
                 // relaxed counters for the per-token ledger. Nothing else on the vCPU.
@@ -3714,10 +3719,11 @@ impl kf_chan::dbfast::Sink for Device {
         let off = u32::try_from(kf_trap::memmap::VF_USERMODE_PAGE + self.plane.doorbell.offset())
             .unwrap_or(u32::MAX);
         let route = self.plane.tokens.get(idx as usize).map(|w| w.load().route);
-        match self
+        let action = self
             .plane
-            .trap_write(Class::Doorbell, 0, off, u64::from(value), 4)
-        {
+            .trap_write(Class::Doorbell, 0, off, u64::from(value), 4);
+        self.note_worker_doorbell(value);
+        match action {
             Action::RingHostInline { host_token } => Delivered::Rang {
                 reached: self.rm.doorbell(host_token).is_ok(),
             },
@@ -3728,6 +3734,23 @@ impl kf_chan::dbfast::Sink for Device {
             // Already RUNG (or owned) — the pending ring covers it, exactly as on the trap.
             _ if matches!(route, Some(Route::Translated | Route::Emulated)) => Delivered::Handed,
             _ => Delivered::Absorbed,
+        }
+    }
+}
+
+impl Device {
+    /// ★ 2026-10-14: count a doorbell on a worker-served (Translated) token for the USER ring pump
+    /// (`ChanPlane::note_queued`). Unknown/Passthrough tokens are not counted here (§5: no
+    /// adversary-controlled metric on an unowned token).
+    fn note_worker_doorbell(&self, value: u32) {
+        if let Some(tok) = self.plane.token_index.of_doorbell(value)
+            && self
+                .plane
+                .tokens
+                .get(tok as usize)
+                .is_some_and(|w| w.load().route == Route::Translated)
+        {
+            self.chans.note_queued(tok);
         }
     }
 }
