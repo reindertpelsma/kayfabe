@@ -182,7 +182,8 @@ Command (disk-saving flags used here because `/data` was full):
   `n_reset_cycles_release_everything_every_life_acquired` (50 lives, released == acquired),
   `reset_lines_are_bounded_for_a_guest_that_resets_in_a_loop`,
   `an_ack_is_per_epoch_and_a_late_one_never_satisfies_a_newer_request`.
-- `kf-qemu` `mem::tests::a_reset_inbox_holds_nothing_of_the_old_life_and_tickets_never_repeat`;
+- `kf-qemu` `chan::reset_tests::the_reset_barrier_frees_again_waits_for_parked_retries_and_is_bounded`;
+  `mem::tests::a_reset_inbox_holds_nothing_of_the_old_life_and_tickets_never_repeat`;
   `display::tests::a_guest_life_that_ends_shows_the_boot_layer_again_from_every_state`.
 - `kf-gsp` `boot::device_reset_from_every_phase`: `every_driver_reaches_its_phase_with_the_live_state_it_claims`,
   `a_device_reset_from_every_phase_is_e11_and_a_fresh_device`,

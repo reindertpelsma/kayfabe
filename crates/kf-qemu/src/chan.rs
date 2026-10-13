@@ -3034,6 +3034,8 @@ impl ChanPlane {
             .spawn(move || {
                 let mut q = crate::actq::ActQueue::new(rx);
                 while let Some((act, d, what)) = q.next_act() {
+                    // What is parked BESIDES the act about to run (the reset's barrier reads it).
+                    self.acts_parked.store(q.parked(), Ordering::Release);
                     let t0 = std::time::Instant::now();
                     let r = act(self);
                     // Retries the act parked (a steer waiting for a map in flight to end).
@@ -7956,8 +7958,9 @@ impl ChanPlane {
     fn reset_barrier(&self, epoch: u64, round: u32) -> Result<String, (u32, String)> {
         let left = self.guest_clients();
         let parked = self.acts_parked.load(Ordering::Acquire);
-        if (!left.is_empty() || parked > 0) && round < RESET_ROUNDS {
-            if left.is_empty() {
+        match reset_barrier_next(left.len(), parked, round) {
+            ResetNext::FreeAgain => return self.reset_free_round(epoch, round + 1),
+            ResetNext::WaitParked => {
                 // Only parked retries: wait for them, off the queue (the act loop runs everything
                 // else meanwhile), never a sleep.
                 delay_act(
@@ -7968,7 +7971,7 @@ impl ChanPlane {
                 );
                 return Err((ACT_REQUEUED, String::new()));
             }
-            return self.reset_free_round(epoch, round + 1);
+            ResetNext::Done => {}
         }
         let census = self.live_census();
         let complete = left.is_empty() && census.is_empty();
@@ -8084,6 +8087,31 @@ impl ChanPlane {
     }
 }
 
+/// What the reset's barrier does next.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ResetNext {
+    /// Clients are still named (a birth landed after the round's frees): free them.
+    FreeAgain,
+    /// Only retries are parked: wait for them ([`RESET_RETRY`]).
+    WaitParked,
+    /// Nothing left, or the bound reached: clear and acknowledge.
+    Done,
+}
+
+/// ★ The barrier's decision — `clients` still named, `parked` retries, this `round` — bounded by
+/// [`RESET_ROUNDS`] so a host that never lets go cannot keep the device in reset forever.
+fn reset_barrier_next(clients: usize, parked: usize, round: u32) -> ResetNext {
+    if round >= RESET_ROUNDS {
+        ResetNext::Done
+    } else if clients > 0 {
+        ResetNext::FreeAgain
+    } else if parked > 0 {
+        ResetNext::WaitParked
+    } else {
+        ResetNext::Done
+    }
+}
+
 /// ★ Device reset: how many free rounds the act thread runs before it acknowledges anyway.
 const RESET_ROUNDS: u32 = 400;
 /// … and how long a round waits for a parked retry (400 × 5 ms = 2 s).
@@ -8144,6 +8172,30 @@ impl core::fmt::Display for LiveCensus {
             self.tokens,
             self.doorbell_regs
         )
+    }
+}
+
+#[cfg(test)]
+mod reset_tests {
+    use super::{RESET_ROUNDS, RESET_RETRY, ResetNext, reset_barrier_next};
+
+    /// ★ Device reset: the act thread's barrier frees again while clients are named (a birth that
+    /// was queued behind the round landed), waits while only retries are parked, and is bounded —
+    /// at most `RESET_ROUNDS` × `RESET_RETRY` (2 s) before it acknowledges anyway (the leak is then
+    /// counted, the guest's tables cleared regardless).
+    #[test]
+    fn the_reset_barrier_frees_again_waits_for_parked_retries_and_is_bounded() {
+        assert_eq!(reset_barrier_next(0, 0, 0), ResetNext::Done);
+        assert_eq!(reset_barrier_next(3, 0, 0), ResetNext::FreeAgain);
+        assert_eq!(reset_barrier_next(3, 5, 7), ResetNext::FreeAgain, "clients first");
+        assert_eq!(reset_barrier_next(0, 2, 7), ResetNext::WaitParked);
+        assert_eq!(reset_barrier_next(3, 2, RESET_ROUNDS), ResetNext::Done, "bounded");
+        let mut round = 0;
+        while reset_barrier_next(0, 1, round) == ResetNext::WaitParked {
+            round += 1;
+        }
+        assert_eq!(round, RESET_ROUNDS);
+        assert!(RESET_RETRY * RESET_ROUNDS <= std::time::Duration::from_secs(2));
     }
 }
 
