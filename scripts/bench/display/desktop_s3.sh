@@ -56,25 +56,40 @@ cat /proc/driver/nvidia/params 2>/dev/null | grep -i "Preserve\|DynamicPower\|En
 GUEST
 echo "== before"; timeout 120 "${G[@]}" 'bash -s' < "$ROOT/probe.sh" 2>&1 | sed 's/^/BEFORE /'
 timeout 30 "${G[@]}" 'sudo sh -c "echo 1 > /sys/power/pm_print_times; echo 1 > /sys/power/pm_debug_messages; echo N > /sys/module/printk/parameters/console_suspend; dmesg -n 8; echo 8 > /proc/sys/kernel/printk"' 2>&1 | head -3
-echo "== suspend"; echo "S3_SUSPEND_CMD $(date -Is)"
-timeout 20 "${G[@]}" 'sudo systemctl suspend' > "$ROOT/suspend.out" 2>&1 &
-st=""
-for i in $(seq 1 60); do
-    st=$(mon "info status" | tr -d '\n'); case "$st" in *suspended*) break;; esac; sleep 2
-done
-echo "S3_STATE_AFTER_CMD $st (t=$((i*2))s)"
-sleep 3; mon "system_wakeup"; echo "S3_WAKE_SENT $(date -Is)"
-back=0
-for i in $(seq 1 25); do timeout 8 "${G[@]}" true 2>/dev/null && { back=1; break; }; sleep 3; done
-echo "S3_SSH_BACK=$back after ~$((i*3))s $(date -Is)"
+# ★ 2026-10-14 (docs/design/V3_S3_RESUME.md): S3_CYCLES suspend/wake cycles in one boot (default 1).
+# PASS per cycle: ssh back, nvidia-smi names the GPU, glxgears renders frames, no Xid in the guest.
 Q="$ROOT/run/qemu.log"
-grep -a "calling \|returned \|PM: \|NVRM\|nvidia" "$ROOT/run/serial.log" | tr -d "\000" | tail -40 | cut -c1-200 | sed 's/^/SERIAL /'
-grep -a "GSP phase" "$Q" | tail -6 | cut -c1-90 | sed 's/^/S3_GSP /'
-echo "S3_STATUS $(mon 'info status' | tr -d '\n')"
-if [ "$back" = 1 ]; then
-    echo "== after"; timeout 120 "${G[@]}" 'bash -s' < "$ROOT/probe.sh" 2>&1 | sed 's/^/AFTER /'
-    timeout 40 "${G[@]}" 'sudo dmesg | grep -i "nvrm\|nvidia\|Xid\|timeout" | tail -25' 2>&1 | cut -c1-220 | sed 's/^/DMESG /'
-else
-    top -H -b -n1 | head -14 | tail -8 | cut -c1-100 | sed 's/^/HOSTTOP /'
-fi
-[ "$back" = 1 ]
+pass_all=1
+for cyc in $(seq 1 "${S3_CYCLES:-1}"); do
+    echo "== suspend cycle $cyc"; echo "S3_SUSPEND_CMD cycle=$cyc $(date -Is)"
+    timeout 20 "${G[@]}" 'sudo systemctl suspend' > "$ROOT/suspend-$cyc.out" 2>&1 &
+    st=""
+    for i in $(seq 1 60); do
+        st=$(mon "info status" | tr -d '\n'); case "$st" in *suspended*) break;; esac; sleep 2
+    done
+    echo "S3_STATE_AFTER_CMD cycle=$cyc $st (t=$((i*2))s)"
+    sleep 3; mon "system_wakeup" > /dev/null; echo "S3_WAKE_SENT cycle=$cyc $(date -Is)"
+    back=0
+    for i in $(seq 1 25); do timeout 8 "${G[@]}" true 2>/dev/null && { back=1; break; }; sleep 3; done
+    echo "S3_SSH_BACK=$back cycle=$cyc after ~$((i*3))s $(date -Is)"
+    grep -a "GSP phase\|S3 WAKE\|GSP-RESUME\|PM transition\|device reset #" "$Q" | tail -12 | cut -c1-200 | sed "s/^/S3_KF3 c$cyc /"
+    echo "S3_STATUS cycle=$cyc $(mon 'info status' | tr -d '\n')"
+    if [ "$back" = 1 ]; then
+        timeout 120 "${G[@]}" 'bash -s' < "$ROOT/probe.sh" > "$ROOT/after-$cyc.txt" 2>&1
+        sed "s/^/AFTER c$cyc /" "$ROOT/after-$cyc.txt"
+        timeout 40 "${G[@]}" 'sudo dmesg | grep -i "nvrm\|nvidia\|Xid\|timeout" | tail -25' 2>&1 | cut -c1-220 | sed "s/^/DMESG c$cyc /"
+        xid=$(timeout 20 "${G[@]}" 'sudo dmesg | grep -c "Xid" || true' 2>/dev/null); xid=${xid:-99}
+        gears=$(grep -o 'GEARS [0-9]* frames' "$ROOT/after-$cyc.txt" | awk '{print $2}')
+        smi=$(grep -c "NVIDIA GeForce" "$ROOT/after-$cyc.txt")
+        ok=0; [ "${gears:-0}" -gt 0 ] && [ "$smi" -ge 1 ] && [ "$xid" = 0 ] && ok=1
+        echo "S3_CYCLE_RESULT cycle=$cyc ssh=1 nvidia_smi=$smi gears_frames=${gears:-0} xid=$xid pass=$ok"
+        [ "$ok" = 1 ] || { pass_all=0; break; }
+    else
+        grep -a "calling \|returned \|PM: \|NVRM\|nvidia" "$ROOT/run/serial.log" | tr -d "\000" | tail -40 | cut -c1-200 | sed 's/^/SERIAL /'
+        top -H -b -n1 | head -14 | tail -8 | cut -c1-100 | sed 's/^/HOSTTOP /'
+        echo "S3_CYCLE_RESULT cycle=$cyc ssh=0 pass=0"
+        pass_all=0; break
+    fi
+done
+echo "S3_RESULT pass=$pass_all cycles=${S3_CYCLES:-1} rev=$REV"
+[ "$pass_all" = 1 ]
