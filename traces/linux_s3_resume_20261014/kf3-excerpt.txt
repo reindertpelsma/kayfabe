@@ -1,0 +1,13 @@
+kf3: GSP phase Cold -> ProtectedRegionUp
+kf3: GSP phase ProtectedRegionUp -> Booted
+kf3: GSP phase Booted -> Running
+kf3: GSP REFUSED fn4=0x56 (?) first_seq=1716 — the guest read a non-OK status
+kf3: GSP REFUSED fn71=0x56 (CONTINUATION_RECORD) first_seq=1717 — the guest read a non-OK status
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=1718: bInPMTransition=true bGc6Entering=false newLevel=3 — a PM transition: BAR1 is preserved
+kf3: GSP phase Running -> Suspending
+kf3: GSP phase Suspending -> Halted
+kf3: device reset #2: vCPUs out (gate closed); 0 queued register write(s) dropped; 2 Translated pump(s) stopped; GSP Halted -> Cold (E11, 0 held repl(ies) dropped, never posted); chain rebuilt; os-event arms, 0 deferred-API entr(ies), interrupt tree cleared
+kf3: mem t=36.922s device reset #2: 0 statement(s) and 0 split(s) of the old life dropped; device reset: memory plane — invalidate idle, PRAMIN scratch, 6 VA space(s) retired, 0 KEPT, mirrors left 0; roots and boot framebuffer zeroed; BAR1: 146 placement(s) 
+kf3: device reset #2: tokens swept, register shadow restored and republished, 0 stale interrupt(s) drained
+kf3: device reset #2 COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: 0)
+kf3: device reset #2 complete before the vCPUs resume (the main loop waited 14986 us)

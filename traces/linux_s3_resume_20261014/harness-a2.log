@@ -1,0 +1,21 @@
+S3_START tag=a2 rev=c287af4f 2026-10-14T12:30:38+02:00
+S3_GUEST_UP 2026-10-14T12:30:59+02:00
+== before
+BEFORE CINNAMON 1 XORG 1
+BEFORE 6.8.0-142-generic
+BEFORE NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+BEFORE NVIDIA GeForce RTX 4070, 580.159.04
+BEFORE GEARS 298 frames in 5.0 seconds = 59.502 FPS
+BEFORE PM: freeze mem disk mem_sleep=s2idle [deep]
+BEFORE enabled enabled enabled 
+BEFORE PreserveVideoMemoryAllocations: 0
+BEFORE DynamicPowerManagement: 3
+BEFORE DynamicPowerManagementVideoMemoryThreshold: 200
+BEFORE EnableGpuFirmware: 18
+BEFORE EnableGpuFirmwareLogs: 2
+== suspend
+S3_SUSPEND_CMD 2026-10-14T12:31:10+02:00
+S3_STATE_AFTER_CMD ['VM status: paused (suspended)', '(qemu)'] (t=4s)
+['s\x1b[K\x1b[Dsy\x1b[K\x1b[D\x1b[Dsys\x1b[K\x1b[D\x1b[D\x1b[Dsyst\x1b[K\x1b[D\x1b[D\x1b[D\x1b[Dsyste\x1b[K\x1b[D\x1b[D\x1b[D\x1b[D\x1b[Dsystem\x1b[K\x1b[D\x1b[D\x1b[D\x1b[D\x1b[D\x1b[Dsystem_\x1b[K\x1b[D\x1b[D\x1b[D\x1b[D\x1b[D\x1b[D\x1b[Dsystem_w\x1b[K\x1b[D\x1b[D\x1b[D\x1b[D\x1b[D\x1b[D\x1b[D\x1b[Dsystem_wa\x1b[K\x1b[D\x1b[D\x1b[D\x1b[D\x1b[D\x1b[D\x1b[D\x1b[D\x1b[Dsystem_wak\x1b[K\x1b[D\x1b[D\x1b[D\x1b[D\x1b[D\x1b[D\x1b[D\x1b[D\x1b[D\x1b[Dsystem_wake\x1b[K\x1b[D\x1b[D\x1b[D\x1b[D\x1b[D\x1b[D\x1b[D\x1b[D\x1b[D\x1b[D\x1b[Dsystem_wakeu\x1b[K\x1b[D\x1b[D\x1b[D\x1b[D\x1b[D\x1b[D\x1b[D\x1b[D\x1b[D\x1b[D\x1b[D\x1b[Dsystem_wakeup\x1b[K', '(qemu)']
+S3_WAKE_SENT 2026-10-14T12:31:17+02:00
+S3_EXIT rc=0 2026-10-14T12:35:33+02:00

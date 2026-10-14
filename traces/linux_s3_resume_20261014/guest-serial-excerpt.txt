@@ -1,0 +1,31 @@
+[   16.880454] PM: suspend entry (deep)
+[   17.347460] nvidia 0000:00:02.0: PM: calling pci_pm_suspend+0x0/0x1b0 @ 1918, parent: pci0000:00
+[   17.674854] nvidia 0000:00:02.0: PM: pci_pm_suspend+0x0/0x1b0 returned 0 after 327387 usecs
+[   17.677763] nvidia 0000:00:02.0: PM: calling pci_pm_suspend_late+0x0/0x50 @ 56, parent: pci0000:00
+[   17.677769] nvidia 0000:00:02.0: PM: pci_pm_suspend_late+0x0/0x50 returned 0 after 0 usecs
+[   17.702159] nvidia 0000:00:02.0: PM: calling pci_pm_suspend_noirq+0x0/0x2c0 @ 1921, parent: pci0000:00
+[   17.703786] nvidia 0000:00:02.0: PM: pci_pm_suspend_noirq+0x0/0x2c0 returned 0 after 1623 usecs
+[   23.358309] ACPI: PM: Low-level resume complete
+[   23.383560] nvidia 0000:00:02.0: PM: calling pci_pm_resume_noirq+0x0/0x150 @ 210, parent: pci0000:00
+[   23.391056] nvidia 0000:00:02.0: PM: pci_pm_resume_noirq+0x0/0x150 returned 0 after 7472 usecs
+[   23.414152] nvidia 0000:00:02.0: PM: calling pci_pm_resume_early+0x0/0x30 @ 1926, parent: pci0000:00
+[   23.414164] nvidia 0000:00:02.0: PM: pci_pm_resume_early+0x0/0x30 returned 0 after 5 usecs
+[   23.435668] pci 0000:00:00.0: PM: calling pci_pm_resume+0x0/0x110 @ 1927, parent: pci0000:00
+[   23.435676] virtio-pci 0000:00:01.0: PM: calling pci_pm_resume+0x0/0x110 @ 1918, parent: pci0000:00
+[   23.435705] nvidia 0000:00:02.0: PM: calling pci_pm_resume+0x0/0x110 @ 1924, parent: pci0000:00
+[   23.435735] virtio-pci 0000:00:03.0: PM: calling pci_pm_resume+0x0/0x110 @ 1926, parent: pci0000:00
+[   23.435746] virtio-pci 0000:00:04.0: PM: calling pci_pm_resume+0x0/0x110 @ 211, parent: pci0000:00
+[   23.437735] virtio-pci 0000:00:05.0: PM: calling pci_pm_resume+0x0/0x110 @ 1919, parent: pci0000:00
+[   23.438779] virtio-pci 0000:00:06.0: PM: calling pci_pm_resume+0x0/0x110 @ 1923, parent: pci0000:00
+[   23.438822] pci 0000:00:1f.0: PM: calling pci_pm_resume+0x0/0x110 @ 1922, parent: pci0000:00
+[   23.438823] ahci 0000:00:1f.2: PM: calling pci_pm_resume+0x0/0x110 @ 211, parent: pci0000:00
+[   23.438831] pci 0000:00:1f.3: PM: calling pci_pm_resume+0x0/0x110 @ 1922, parent: pci0000:00
+[   23.531867] NVRM: kgspBootstrap_TU102: Failed to boot GSP.
+[   23.531871] NVRM: gpuPowerManagementResume: GSP boot failed at resume (bootMode 0x1): 0x55
+[   29.628730] NVRM: _kgspLogXid119: ********************************* GSP Timeout **********************************
+[   29.629902] NVRM: _kgspLogXid119: Note: Please also check logs above.
+[   29.631508] NVRM: Xid (PCI:0000:00:02): 119, pid=1924, name=kworker/u12:14, Timeout after 6s of waiting for RPC response from GPU0 GSP! Expected function 103 (GSP_RM_ALLOC) sequence 1719 (0xc770 0x0).
+[   29.974436] NVRM: _kgspLogXid119: ********************************************************************************
+[   35.978746] NVRM: Xid (PCI:0000:00:02): 119, pid=1924, name=kworker/u12:14, Timeout after 6s of waiting for RPC response from GPU0 GSP! Expected function 76 (GSP_RM_CONTROL) sequence 1720 (0x50700709 0x8).
+[   41.986722] NVRM: Xid (PCI:0000:00:02): 119, pid=1924, name=kworker/u12:14, Timeout after 6s of waiting for RPC response from GPU0 GSP! Expected function 10 (FREE) sequence 1721 (0x10012 0x0).
+[   41.999877] NVRM: Xid (PCI:0000:00:02): 154, GPU recovery action changed from 0x0 (None) to 0x1 (GPU Reset Required)
