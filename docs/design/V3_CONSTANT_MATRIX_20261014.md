@@ -169,7 +169,27 @@ measurement, not a reader of the captured row, so it is listed with the other se
 
 ## 5. Measurements tonight, per die
 
-<!-- MEASUREMENTS -->
+### 5.1 AD104 (home host, RTX 4070, host driver 595.91.07) — tier 2, unprivileged (uid 1000, CapEff 0)
+
+Every run had its falsifier written in the evidence header before it ran; the Xid count was taken before and after each run (unchanged by every
+probe; the Xids in the window belong to lane A's `qemu-system-x86` pids). Evidence: `traces/constants_night_20261014/`.
+
+| run | what | result [M] |
+|---|---|---|
+| `host_cudart_probe_595.txt` | libcudart 13.3 (`cudaGetDeviceCount` + two clock attributes) under the nvdiff recorder | 9009/9001/9064/a084/a026 issued and answered NV_OK; cudart's 9064 request is `{0,2,1,0,0,0,4}` (the inference from the GA106 reply holds); 9001/9009/9064 replies equal the GA106 rows; libcuda's own `0x20808162` gets `00` |
+| `gss_rows_probe_595.txt` | `kf-ctl-probe KF_PROBE_GSS_ROWS=1`: exactly kayfabe's realize-time GSS requests | 20 OK; 852e/853a/a618 INVALID_ARGUMENT; a028's background probe refused (zero probe kept, by design) |
+| `probe_8162_595.txt` | `0x20808162`, 1 byte, request `00` | **`00`, not GA106's `01`** — the captured byte was wrong on this die/driver |
+| `probe_853b_595.txt` | `0x2080853b` with the Windows request shape (1832 B, word 1 = 1) | INVALID_ARGUMENT |
+| `kit_ad104_595.txt` | the rental kit's dry run | as above; a001 = `{1,5,2,0x11}` (= GA106) |
+
+### 5.2 Windows request shapes (AD103 kfwc captures of 2026-10-14, read host-side, bodies not kept)
+
+852a/8524/a70a/852e/853a/a618 all-zero; a088 zero in 6 of 12 calls; 9064 `{0,3,1,0,0,0,4,0,0,0,8}` (a third request shape); 852f carries ~80
+non-zero words incl. user-space-address-shaped values; 853b `{0,1}` at 1832 B (issued once; never in the AD104 captures); b201 zero in 1 of 3.
+
+### 5.3 Other dies (rentals)
+
+<!-- RENTALS -->
 
 ## 6. Decisions taken tonight (owner asleep)
 
