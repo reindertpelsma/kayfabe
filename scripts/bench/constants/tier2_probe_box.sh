@@ -12,10 +12,21 @@ here=$(cd "$(dirname "$0")" && pwd)
 echo "BOX_PROBE_START $(date -u +%FT%TZ)"
 nvidia-smi --query-gpu=name,pci.device_id,driver_version --format=csv,noheader 2>&1 | head -4 | sed 's/^/GPU /'
 grep -E '^(CapEff|Uid):' /proc/self/status | tr '\t' ' ' | sed 's/^/PROC /'
+# A container sees the host's device node by the HOST's index (/dev/nvidia3 on a multi-GPU host): use the one visible.
+KF_GATE_GPU=$(ls /dev/nvidia[0-9]* 2>/dev/null | head -1 | sed 's/[^0-9]//g'); export KF_GATE_GPU=${KF_GATE_GPU:-0}
+echo "NODE nvidia$KF_GATE_GPU"
+# run <pattern> <env...> -- <args...>: print the matching lines; if the probe printed none, print why (its first 4 lines,
+# which are the tool's own diagnostics: errno / device-open failures; never RM data).
+run() {
+  pat=$1; shift
+  out=$(env KF_PROBE_I_KNOW=1 "$@" 2>&1)
+  m=$(printf '%s\n' "$out" | grep -E "$pat")
+  if [ -n "$m" ]; then printf '%s\n' "$m"; else echo "PROBE_NO_OUTPUT first_lines:"; printf '%s\n' "$out" | head -4 | cut -c1-200; fi
+}
 echo "== gss rows (exactly kayfabe's realize-time requests)"
-KF_PROBE_I_KNOW=1 KF_PROBE_GSS_ROWS=1 "$here/kf-ctl-probe" 2>&1 | grep -E '^(GSSROW|PROBE_SESSION|PROBE_SUMMARY|PROBE_END|refusing)'
+run '^(GSSROW|PROBE_SESSION|PROBE_SUMMARY|PROBE_END|refusing)' KF_PROBE_GSS_ROWS=1 "$here/kf-ctl-probe"
 echo "== cudart gate replies (measured request shapes)"
-KF_PROBE_I_KNOW=1 KF_PROBE_EXTRA_ONLY=1 KF_PROBE_HEAD=40 "$here/kf-ctl-probe" "$here/cudart_rows.tsv" 2>&1 | grep -E '^(PROBE |PROBE_SUMMARY|PROBE_END)'
+run '^(PROBE |PROBE_SUMMARY|PROBE_END)' KF_PROBE_EXTRA_ONLY=1 KF_PROBE_HEAD=40 "$here/kf-ctl-probe" "$here/cudart_rows.tsv"
 echo "== built-in Windows-only rows (zero requests)"
-KF_PROBE_I_KNOW=1 "$here/kf-ctl-probe" 2>&1 | grep -E '^(PROBE |PROBE_SUMMARY|PROBE_END)'
+run '^(PROBE |PROBE_SUMMARY|PROBE_END)' "$here/kf-ctl-probe"
 echo "BOX_PROBE_END rc=0 $(date -u +%FT%TZ)"
