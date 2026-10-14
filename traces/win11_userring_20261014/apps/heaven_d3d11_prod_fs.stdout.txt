@@ -1,0 +1,92 @@
+Loading "C:/Users/kfadmin/Heaven/heaven_4.0.cfg"...
+Loading "dxgi.dll"...
+Set 1920x1080 fullscreen video mode
+Set 1.00 gamma value
+Unigine engine http://unigine.com/
+Binary: Windows 32bit Visual C++ 1600 Release Feb 13 2013 r11284
+Features: OpenGL Direct3D9 Direct3D11 OpenAL XAudio2 XPad360 Joystick Flash Editor
+App path:  C:/kf/apps/heaven/bin/
+Data path: C:/kf/apps/heaven/data/
+Save path: C:/Users/kfadmin/Heaven/
+
+---- System ----
+System: Windows NT 6.2 (build 9200) 64bit
+CPU: AMD Ryzen 9 7900 12-Core Processor              3699MHz MMX+ SSE SSE2 SSE3 SSSE3 SSE41 SSE42 SSE4A AVX HTT x8
+GPU: NVIDIA GeForce RTX 4070 32.0.15.8088 x1
+System memory: 2047 MB
+Video memory:  4095 MB
+Sync threads:  7
+Async threads: 8
+
+---- MathLib ----
+Set SSE2 simd processor
+
+---- Sound ----
+NULL
+
+---- Render ----
+Direct3D11 desc: NVIDIA GeForce RTX 4070
+Found feature level 11.0
+Found compute shader 11.0
+Maximum texture size:    16384
+Maximum texture units:   16
+Maximum texture renders: 8
+
+---- Physics ----
+Physics: Multi-threaded
+
+---- PathFind ----
+PathFind: Multi-threaded
+
+---- Interpreter ----
+Version: 2.52
+
+Loading "heaven/unigine.cpp" 18ms
+Loading "heaven/locale/unigine.en" dictionary
+Loading "core/materials/default/unigine_post.mat" 23 materials 50 shaders 5ms
+Loading "core/materials/default/unigine_render.mat" 47 materials 2368 shaders 5ms
+Loading "core/materials/default/unigine_mesh.mat" 5 materials 3386 shaders 4ms
+Loading "core/materials/default/unigine_mesh_lut.mat" 2 materials 1062 shaders 1ms
+Loading "core/materials/default/unigine_mesh_paint.mat" 2 materials 1158 shaders 2ms
+Loading "core/materials/default/unigine_mesh_tessellation.mat" 5 materials 3332 shaders 5ms
+Loading "core/materials/default/unigine_mesh_tessellation_paint.mat" 2 materials 2276 shaders 3ms
+Loading "core/materials/default/unigine_mesh_triplanar.mat" 1 material 112 shaders 0ms
+Loading "core/materials/default/unigine_mesh_overlap.mat" 1 material 300 shaders 1ms
+Loading "core/materials/default/unigine_mesh_terrain.mat" 1 material 813 shaders 1ms
+Loading "core/materials/default/unigine_mesh_layer.mat" 1 material 84 shaders 0ms
+Loading "core/materials/default/unigine_mesh_noise.mat" 1 material 106 shaders 1ms
+Loading "core/materials/default/unigine_mesh_stem.mat" 2 materials 2180 shaders 7ms
+Loading "core/materials/default/unigine_mesh_wire.mat" 1 material 45 shaders 0ms
+Loading "core/materials/default/unigine_terrain.mat" 1 material 1980 shaders 2ms
+Loading "core/materials/default/unigine_grass.mat" 2 materials 474 shaders 2ms
+Loading "core/materials/default/unigine_particles.mat" 1 material 109 shaders 1ms
+Loading "core/materials/default/unigine_billboard.mat" 1 material 51 shaders 0ms
+Loading "core/materials/default/unigine_billboards.mat" 2 materials 840 shaders 1ms
+Loading "core/materials/default/unigine_volume.mat" 6 materials 53 shaders 3ms
+Loading "core/materials/default/unigine_gui.mat" 1 material 82 shaders 0ms
+Loading "core/materials/default/unigine_water.mat" 1 material 533 shaders 10ms
+Loading "core/materials/default/unigine_sky.mat" 1 material 21 shaders 9ms
+Loading "core/materials/default/unigine_decal.mat" 1 material 99 shaders 1ms
+Loading "core/properties/unigine.prop" 2 properties 0ms
+Unigine Heaven Benchmark 4.0 (4.0)Unigine~# world_load heaven/heaven
+Loading "heaven/heaven.cpp" 45ms
+Loading "heaven/materials/heaven_base.mat" 7 materials 4ms
+Loading "heaven/materials/heaven_environment.mat" 13 materials 328ms
+Loading "heaven/materials/heaven_ruins.mat" 27 materials 819ms
+Loading "heaven/materials/heaven_buildings.mat" 58 materials 892ms
+Loading "heaven/materials/heaven_props.mat" 10 materials 180ms
+Loading "heaven/materials/heaven_sfx.mat" 11 materials 4ms
+Loading "heaven/materials/heaven_fort.mat" 15 materials 219ms
+Loading "heaven/materials/heaven_airship.mat" 26 materials 1250ms
+Loading "heaven/heaven.world" 7072ms
+Phoronix running
+Phoronix finished
+Time:	261.137
+Frames:	5353
+FPS:	20.4988
+Unigine~# quit
+Unigine~# quit
+Close "dxgi.dll"
+Memory usage: none
+Allocations:  none
+Shutdown

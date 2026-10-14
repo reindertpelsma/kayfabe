@@ -136,6 +136,49 @@ Installers (guest `C:\kf\apps`, downloaded in the guest from the vendors, sha256
 `scripts/bench/windows/kfagent_ogl/heaven.ps1` (`-extern_define PHORONIX,…`: one full pass, then exit) and `gm.ps1`
 (the app matrix's GravityMark arguments).
 
+## 4b. Defect 3 — host Xid 13 (`ESR 0x404000=0x80000010`, class `C9C0`) right after a USER-ring growth migration
+
+[measured, `xid13_migration_trace.txt`, runs at `f163b85e` with `KF3_USER_RING_TRACE` + `KF3_RPC_TRACE`] Heaven D3D11
+(3/3: 20:48, 21:11, 21:17) and Edge (21:44, the owner-observed TDR) fault the same way: the GR engine raises a DISPATCH
+exception on the app's USER-ring twin seconds after `USER_RING_MIGRATED` (32768 → 65536 entries); the guest's
+`RESET_CHANNEL` is refused, TDR, in the first production run a reset cascade and bugcheck 0x116. In both, the
+migration's `FIFO_UPDATE_CHANNEL_INFO` trigger sits inside a front-end atomic sequence on the compute subchannel
+(`clc7c0.h`): `… 8000a01e 8000a009 80002052 (FE_ATOMIC_SEQUENCE_BEGIN) 8001201e (WFI) [2001a080 <handle>] 80002053
+(FE_ATOMIC_SEQUENCE_END)`, and the PBDMA was stuck on the staged one-word suffix (END) that the relay publishes only after
+the action. [read] `0x404000` is the GR DISPATCH trap status (nouveau `gf100_gr_trap_intr`: "DISPATCH"; bits 0-2 named
+there, bit 4 not named in any public source).
+H-D4 (stated before the fix run): the relay leaves an FE atomic sequence OPEN with nothing to fetch while it services the
+trigger (barrier, witness, action), long enough for the channel to be switched out; hardware services the software method
+with the PBDMA stalled on it. Falsifier: with the remainder published in one piece, Heaven D3D11 still faults after the
+migration. Fix `c5d9693f`: for `FIFO_UPDATE_CHANNEL_INFO` only (a source switch with no GPU-visible effect on the segment's
+remaining methods) the whole remainder — prefix, the trigger zero-filled to `DMA_NOP`s, suffix — goes out as one staged copy
+(`gapless_remainder`; test `a_channel_update_trigger_inside_an_atomic_sequence_is_published_without_a_gap` on the measured
+words). Result [measured]: Heaven D3D11 full Phoronix pass 3/3 with 0 host Xid and 0 GSP reset (traced `c5d9693f`, production
+windowed, production fullscreen), the migration logged in each: **H-D4 not falsified**. Whether the bit-4 DISPATCH error is the
+context switch or the gap itself is inferred, not measured. (The event-loop branch's H-gate — reads ahead of processing via
+GP_GET — was a second candidate for the same symptom; these runs still used the GP_GET gate and did not fault.)
+
+| run (production unless noted) | Heaven D3D11 1280x720 | Heaven D3D11 1920x1080 fullscreen | Xid / resets |
+|---|---|---|---|
+| `a8424ae2` | Xid 13 at ~12 s | — | Xid 13, TDR |
+| `c5d9693f` traced | 16.3 fps, 261 s, finished | — | 0 / 0 |
+| `c5d9693f` | **17.0 fps**, 261 s, finished | **20.5 fps**, 261 s, finished | 0 / 0 |
+
+Heaven's earlier early exit (29 s) is gone on both APIs: OpenGL 157/160 fps and D3D11 17/20.5 fps run the full 261 s pass.
+Phoronix mode prints only the average fps (no min/max).
+
+## 4c. Heaven D3D11 fps (H-perf) — numbers only, verdict for the event-loop branch
+
+[measured, `heaven_d3d11_relay_perf_fc8ba3b8.txt`, traced 89 s Heaven D3D11 run at `fc8ba3b8`, ~1190 frames] Heaven's GR
+USER ring: 2 314 629 GP segments relayed (≈26 000/s, ≈1 900 per frame), 2 486 644 relay turns (1.07 per segment), 5 418
+SYNC_WAIT gates (61/s, **≈4.6 per frame**), gate drain avg **284 µs** (max 3.25 ms), 5 592 guest doorbells (63/s; the guest
+rings for 0.24 % of its PUT advances), GSP RPCs ≈11/s (mostly `0x00809908`). Two `kf3-worker` threads at ~50 % CPU each.
+H-perf ("frame rate limited by the 1 ms tick / SYNC_WAIT drain latency") — falsifier branch 2 applies: drains per frame ×
+drain latency ≈ 4.6 × 0.28 ms ≈ 1.3 ms of a 59 ms frame (frame time / drains ≈ 13 ms ≫ 1 ms): **falsified**. What scales
+with the frame time is the per-entry relay cost: ≈1 900 GP segments per frame, each relayed in its own turn (USERD PUT read,
+GP + pushbuffer snapshot, scan, publication and a host doorbell) at ≈30-38 µs each [inferred from the totals]. Batching
+entries per turn and per doorbell is the lever; that code belongs to `claude/userring-eventloop-20261014`.
+
 ## 5. Files
 
 `nvdec_refusal_0c5fedff.txt` (the refused NVDEC segment and the channel's life), `minecraft_xid32_timeline.txt`
