@@ -2317,7 +2317,13 @@ mod tests {
         q.set("valid", 1);
         assert!(matches!(m.control(CHANNEL_PUSHBUFFER, &q.buf), Some(Ok(_))));
         let s = "NV50VAIO_CHANNELDMA_ALLOCATION_PARAMETERS";
-        assert!(m.alloc(0xc1d0_0001, 0xc670_0000, 0xc67d_0000, 0xC67D, &vec![0; size(&m, s)]));
+        assert!(m.alloc(
+            0xc1d0_0001,
+            0xc670_0000,
+            0xc67d_0000,
+            0xC67D,
+            &vec![0; size(&m, s)]
+        ));
         m.ports.post_put(0, 0x40);
         assert!(m.register_hotplug(HotplugRegistration {
             client: 1,
@@ -2330,7 +2336,10 @@ mod tests {
         m.pending_plug = 0x100;
         assert_eq!(m.reset_life(), 1);
         assert!(m.channels.is_empty() && m.pushbuffers.is_empty() && m.inst_mem.is_none());
-        assert!(m.take_statements().is_empty(), "the old life's statements are not the next one's");
+        assert!(
+            m.take_statements().is_empty(),
+            "the old life's statements are not the next one's"
+        );
         assert_eq!(m.hotplug_target(), None);
         assert!(m.rmfree_marks.is_empty() && m.rmfree_spent.is_empty());
         assert_eq!((m.edid_seen, m.pending_plug), (0, 0));
@@ -2349,7 +2358,13 @@ mod tests {
             f.control(cmd(&f, "NVC370_CTRL_CMD_GET_CHANNEL_INFO"), &q.buf)
         );
         // The next life allocates the core channel again, with a NEW generation (never reused).
-        assert!(m.alloc(0xc1d0_0009, 0xc670_0009, 0xc67d_0009, 0xC67D, &vec![0; size(&m, "NV50VAIO_CHANNELDMA_ALLOCATION_PARAMETERS")]));
+        assert!(m.alloc(
+            0xc1d0_0009,
+            0xc670_0009,
+            0xc67d_0009,
+            0xC67D,
+            &vec![0; size(&m, "NV50VAIO_CHANNELDMA_ALLOCATION_PARAMETERS")]
+        ));
         assert_eq!(m.ports.generation(0) % 2, 1);
         assert_eq!(m.reset_life(), 1);
         assert_eq!(m.reset_life(), 0, "reset twice is reset once");
