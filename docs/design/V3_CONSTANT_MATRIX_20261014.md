@@ -1,6 +1,6 @@
 # V3 constant matrix: family x constant class x tier x status
 
-**STATUS: LIVE, 2026-10-14 (night run, lane C; branch `claude/constants-night-20261014`).** Owner asleep: every decision taken tonight is in
+**STATUS: LIVE, 2026-10-14 (night run, lane C, branch `claude/constants-night-20261014`; RESUMED the same day by a second agent on `claude/constants-measure-20261014b`: new sections 5.3.1-5.3.6, decisions D12-D17, section 7 "Resumed pass"; where those contradict the night text below, they win).** Owner asleep: every decision taken tonight is in
 §6 with its reason. Inputs: `V3_CONSTANT_STRATEGY.md` (tiers, §3 table rules), `V3_CONSTANT_LISTS_20261011.md` (140-row inventory classes),
 `V3_WINDOWS_ONLY_CONSTANTS_20261013.md` (the 40 rows no ogkm tag defines), `V3_GSP_CAPTURE_FORMAT.md` / `V3_WINDOWS_CAPTURE_MODULE.md`
 (kfwc, kf-census), the hardware evidence named per row. Labels: **[M]** measured (a command whose output is in the repo), **[R]** read in
@@ -125,6 +125,8 @@ where tonight's commits changed a row. Hardware column at the end of each row gr
 
 ## 3. The 40 "Windows-only" rows after tonight
 
+> **⊘ CORRECTION (resumed pass, 5.3.2).** The `INVALID_ARGUMENT` that a 595.91.07 host gave to 852e/853a/a618/b201 (and 853b, 852f) was the **580-branch request size**, not a changed control: the same host accepts the zero request at the 595-branch size (596 / 15352 / 8632 / 2444 / 14320 `{0,1}` / 844), and the Windows driver sends exactly that size at that branch. `gssreplay` now carries exact-zero rows for every observed size (852a 1716, 852e 528/596/1432, 853a 1456/15352, a618 8236/8620/8632/20000, 853b 14320 `{0,1}`); rows below that say "REFUSED at 595.91.07" are superseded for those controls (852f, b201 stay refused: their requests are not all-zero).
+
 The 40 rows of `V3_WINDOWS_ONLY_CONSTANTS_20261013.md` (no ogkm tag defines them; 34 distinct control ids). Family columns are not split
 here because every measurement so far is Ada (AD104 home host, AD103 rental); the per-die columns of the GA104/GB203 rentals are in §5.
 "kayfabe now" is this branch.
@@ -162,6 +164,7 @@ kf-qemu/kf-harness/kf-census 334/0; every later commit re-ran kf-abi/kf-rm/kf-ho
 | `df45a72cb` | `tools/derive_die_names.sh`: re-derives `DIE_NAMES` from any ogkm tree and diffs (OK at 595.84) |
 | `7788750b9` | `kf-ctl-probe` `KF_PROBE_GSS_ROWS=1` (asks exactly kayfabe's realize-time GSS requests); a028 and a001 measured at 595.91.07 → `MeasuredOpaque` |
 | (next) | `0x20808162`: probe at 595.91.07 answers `00` where the GA106 capture says `01`; exact 1-byte gssreplay row, hostabi `MeasuredOpaque` 595.91.07, table rows GA106/580 = 1 and AD104/595 = 0, the 8162 arm answers from the table; byte-granular table rows |
+| (resumed) | `gssreplay` rows for the 570..610 sizes, `consttab` accepts `x.y` tags + 42 Windows-capture rows (`rm.*`), `kf-ctl-probe` `PROBE_DIE` / `KF_PROBE_ZBC` / `KF_PROBE_SCAN`, tests `gss_exact_zero_rows` (14 sizes + 853b), `windows_rows_vs_authored` |
 | (this doc) | the matrix; `kf-ctl-probe` extra rows with measured request words (`KF_PROBE_EXTRA_ONLY`) |
 
 Also fixed on the way: `kf-abi/tests/truncated_row_reads.rs` was red on the merged tree (`kf-ctl-probe` mentions `0x20800b03`); the probe is a
@@ -189,7 +192,121 @@ non-zero words incl. user-space-address-shaped values; 853b `{0,1}` at 1832 B (i
 
 ### 5.3 Other dies (rentals)
 
-<!-- RENTALS -->
+**Resumed 2026-10-14 daytime (second lane-C agent; branch `claude/constants-measure-20261014b`).** The first agent's Windows rentals produced no
+evidence (destroyed by their timers; no capture came back), so every row below is from this second pass. Evidence: `traces/constants_measure_20261014b/`
+(README = runs and falsifiers; `tier2/` = 45 kit outputs; `ga10*_*/` = census text of the Windows captures; the capture files stay on the host and
+are not in git). Labels as above; **[M]** = a file in that directory shows it.
+
+#### 5.3.1 Windows captures (kfwc under the REAL Windows driver), per (die, Windows driver) -> GSP firmware
+
+`EnableGpuFirmware=1` in both keys + `pnputil /restart-device`, collector started before the restart (mailbox route). Every run attached at `seqNum` 0 on the
+instance the restart created and `kf-census` says PASS (no gap, no parse failure) on it [M]. Driver switching on one box: GSP flag removed and the device
+restarted (GSP unloaded) BEFORE `pnputil /delete-driver ... /uninstall`, then `7zr x <driver>.exe Display.Driver` + `pnputil /add-driver nv_dispi.inf /install`
+(doing it with the GSP loaded left the A4000 in Code 43 across a VM reboot: do not).
+
+| die / board | Windows driver | **GSP firmware** (nvidia-smi) | ogkm decode tag | captures | controls seen | note |
+|---|---|---|---|---|---|---|
+| GA104 RTX A4000 | 596.51 (Windows Update) | **595.76** | 595.84 | C (150 s), E (220 s, 2 restarts) | 179 | WU installed it before `windows-on-vast`'s 580.88 (its setup then exited -436207360) |
+| GA106 RTX 3060 | 572.83 | **570.133.07** | 570.148.08 | C | 199 | |
+| GA106 RTX 3060 | 576.80 | **575.64.01** | 575.64.05 | C | 202 | |
+| GA106 RTX 3060 | 580.88 | **580.65.05** | 580.82.07 | C, E | 179-180 | same package as the AD103/AD104 references |
+| GA106 RTX 3060 | 581.80 | **580.105.07** | 580.178.04 | C | 206 | |
+| GA106 RTX 3060 | 591.74 | **590.52.01** | 590.48.01 | C | 202 | |
+| GA106 RTX 3060 | 596.36 | **595.71.01** | 595.84 | C | 202 | |
+| GA106 RTX 3060 | 610.88 (Windows Update, 32.0.16.1088) | **610.57.01** | 610.57.04 | C, E | 202 | 610 layout: `seqs.py` (580 element layout) does not apply, `kf-census` PASS does |
+
+The Windows -> R-branch placement of the api-boundaries plan (`V3_API_BOUNDARIES_20261014.md` section 6.1: "Windows N.xx belongs to the highest ogkm branch <= N") **holds on
+all eight driver builds** [M]: 572.83 -> 570.133, 576.80 -> 575.64, 580.88 -> 580.65, 581.80 -> 580.105, 591.74 -> 590.52, 596.36 -> 595.71, 596.51 -> 595.76, 610.88 -> 610.57
+(falsifier: a build whose GSP string lies outside the branch; none did).
+
+#### 5.3.2 The Windows-only controls change shape per GSP branch (request size; the request stays all-zero) [M]
+
+Windows capture, GA106 unless marked. `-` = not issued in that capture. Same table for the host side below. (`traces/constants_measure_20261014b/ga106_sizes_by_windows_driver.tsv` has all 216 controls.)
+
+| control | 570.133.07 | 575.64.01 | 580.65.05 / 580.105.07 | 590.52.01 | 595.71.01 / 595.76 (GA104) | 610.57.01 | request body |
+|---|---|---|---|---|---|---|---|
+| `0x2080852a` | **1716** | 1784 | 1784 | 1784 | 1784 | 1784 | all zero |
+| `0x2080852e` | 528 | 528 | 528 | **596** | 596 | **1432** | all zero |
+| `0x2080852f` | 776 | - | - / 776 | **844** | 844 / - | 844 | **not zero**: word 1 = 3, ~84 other non-zero words, 38-39 of them user-pointer-sized (halves `0x7ff6..0x7ffb`) varying per boot: uninitialised memory, not a layout we can ask |
+| `0x2080853a` | 1456 | 1456 | 1456 | 1456 | **15352** | 15352 | all zero |
+| `0x2080853b` | 1832 | - | - / 1832 | - | - / **14320** | - | `{0, 1, 0...}` |
+| `0x2080a618` | **8236** | 8620 | 8620 | 8620 | **8632** | **20000** | all zero |
+| `0x2080b201` | 2188 | 2188 | 2188 | 2188 | **2444** | 2444 | word 0 non-zero in 6 of 8 calls (varying, pointer/handle-like) |
+| `0x2080a630` | 1160 | 1160 | 1160 | 1160 | 1160 | **2340** | non-zero (0xffffffff fills) |
+| `0x20808524`, `0x2080a70a`, `0x2080a088`, `0x20809064`, `0x20809004`, `0x2080a060`, `0x2080a801` | unchanged on every branch | | | | | | as in section 3 |
+
+88 of the 216 controls seen change their request-size set somewhere across 570..610 [M] (ogkm-defined ones included; the generated per-tag tables follow those, the undefined ones only
+through `kf_abi::gssreplay` rows). ⇒ **Wired**: exact-zero rows for every observed (cmd, size) pair above whose request is all zero
+(`gssreplay.rs`: 852a 1716, 852e 596 / 1432, 853a 15352, a618 8236 / 8632 / 20000, 853b 14320 `{0,1}`); the size is part of the question, so a row the host refuses is simply not answered.
+
+**Host side (T2, kit `KF_PROBE_SCAN`: the sizes at which a host accepts the zero request)** [M], 15 (host driver, board) cells in `shapes_by_host_driver.tsv`:
+
+| host driver (boards) | 852e | 853a | a618 | b201 | 852f |
+|---|---|---|---|---|---|
+| 570.86.15 (RTX 3090) | 528 | 1456 | 8236 | 2188 | 776 |
+| 580.105.08 .. 580.178.04 (5060 Ti, 5070 Ti, 5080, A5000, 3060 Ti, 1660S) | 528 | 1456 | 8620 | 2188 | 776 |
+| 590.48.01 (RTX 3060, 4060 Ti) | **596** | 1456 | 8620 | 2188 | **844** |
+| 595.84 / 595.91.07 (4090, 2080 Ti, 4070, 4070 Ti S) | 596 | **15352** | **8632** | **2444** | 844 |
+| 610.43.02 / 615.71.09 (5090, L4) | **1432** | 15352 | none to 16384 (Windows: 20000) | 2444 | 844 |
+
+**F-4 is answered: the host's smallest accepted size equals the size the Windows driver sends at the matching GSP branch in every cell** (6 branches x 5 controls; 610's a618 20000 is beyond
+the scan's 16384 and was not re-scanned). The 595.91.07 `INVALID_ARGUMENT` for 852e/853a/a618/b201 in section 3 was the 580-branch SIZE, not the control: a 595.91.07 host answers the 596-branch sizes `NV_OK`
+(AD104 RTX 4070 and AD103 RTX 4070 Ti SUPER at 595.91.07; L4 AD104 at 595.84; GB203 RTX 5080 at 595.91.07) [M]. Also: the change points are per control, not per branch (590 moved 852e and 852f only; 595 moved 853a, a618, b201), i.e. non-monotone across
+controls: no per-branch rule exists, only a per-(control, branch) table. The 853b request `{0,1}` at 14320 B is accepted by 595.84/595.91.07/610 hosts and answers `{1,1,...}` like the capture [M].
+
+#### 5.3.3 Values the Windows driver's GSP states (decoded; allow-listed controls only)
+
+* **`INTERNAL_GMMU_GET_STATIC_INFO` (0x20800a59)** = `{replayable 0x31000, 0, nonReplayable 0x120c20, 0}` and **`CE_GET_FAULT_METHOD_BUFFER_SIZE` (0x20802a08)** = `0x5000`: GA106 on every branch 570..610 and GA104 at 595 [M] — i.e. **exactly what `authored.rs` states** ("chosen equal to a stock GA106 GSP", now confirmed for two Ampere dies and six branches). The AD104 differs (0x54000/0x220c20, section 5.1) [M]. So D-1 is real only for Ada (and unmeasured Blackwell/Turing): the authored numbers are right for GA10x and wrong for AD104. Rows in the table (`rm.0x20800a59`, `rm.0x20802a08`; consumed by no code, test `windows_rows_vs_authored`).
+* Group P/K/A small controls: **identical on every GA106 branch 570..610** [M]; `0x20802806` `{6}` -> `0` and `0x20802801` `{3}` -> `{2}` and `0x50700118` `{0,1,...}` -> `{0,1,0,0,0,1}` and `0x00731369` `{0, head}` -> `{0, head, 4, 3, 0, 0x10101, ...}` (heads 0..3) are also the same on the GA104 at 595.76; **`0x2080121f` `{4,...}` and `0x50700709` differ per die** (branch-invariant): GA106 `{4, 0x5ec000, 0x464, 0, 0x1000, 0, 0x17b0000, 0, 0x1000}` and `{0, 0x24}`, GA104 `{4, 0xa8b000, 0x464, 0, 0x1000, 0, 0x2a2c000, 0, 0x1000}` and `{0, 0x26}` (looks like memory-size/region data; semantics unread). Rows for `2806/2801/121f/0709` are in the table (GA106 x 5 branches, GA104 x 595).
+* **Not obtained for these two dies**: `0x2080852f` reply and request layout (uninitialised pointers, above); `0x00730122/0x007302a5/0x0073011a` and `0x007302a2` (display-common rows; never issued on a rental with no head); `0x5070020c` (needs a head).
+* `0x0073010c` `SYSTEM_GET_ACTIVE` (28-36 calls per boot): reply = request echoed (no active display) (`traces/vsync_oracle_20261014/`).
+
+#### 5.3.4 Tier-2 across dies and host drivers (container rentals, unprivileged: `CapEff` 0xa80405fb has no CAP_SYS_ADMIN)
+
+45 rentals, 28 host sessions (the others: host driver not in kayfabe's measured matrix (535.183, 560.35, 570.172/.211, 580.159.03, 595.71.05, 590.44) -> refused at R2 by design; or the box's device cgroup denied the node
+(fixed in the kit: the first openable node is used)). The host names the die itself (`PROBE_DIE` = `MC_GET_ARCH_INFO` -> ogkm name) on the later runs: **TU102, TU106, TU116, GA102, GA104, GA106, AD102, AD103, AD104, AD106, GB202, GB203, GB206** [M];
+**never seen**: TU104, GA100 (A100: three boxes, no session), GA107, AD107, GB205, GB207, GH100.
+
+* `0x20808162` (1 byte): **01** on GeForce Turing and GeForce Ampere (TU102/TU106/TU116, RTX 3090 570.86.15, RTX 3080, RTX 3060, RTX 3060 Ti), **00** on RTX A5000, RTX A6000 (Ampere workstation) and on every Ada and Blackwell board [M]. It is a board-class value inside one die (GA102: 3090 and 3080 = 01, A5000 and A6000 = 00).
+* `0x20809001`: `0x03fc007f` on every board except **GB20x = `0x03fc005f`** (GB202 5090, GB203 5070 Ti / 5080, GB206 5060 Ti) and **L4 (AD104 datacenter) = `0x003c0037`**; `0x2080a001` = `{1,5,2,0x11}` except L4 `{1,2,2,0x11}`; `0x20809009` = `{0, 0xd}` everywhere [M].
+  ⚠ **The table key (die, branch) is not a board key** (finding F-6, section 7): the existing row `cudart.0x20809001 AD104/595 = 0x03fc007f` (RTX 4070) is contradicted by the L4 at 595.84 (AD104 too, `0x003c0037`).
+* Admin vs unprivileged on a KVM box with real CAP_SYS_ADMIN (GA104 A4000, host 575.51.03): `0x20802806`, `0x20802801`, `0x20802a12` go from `INSUFFICIENT_PERMISSIONS` to `NV_OK` (replies `0`), everything else identical [M] (group P stays T3).
+
+#### 5.3.5 ZBC default entries (F-1) [M, `KF_PROBE_ZBC=1`, idle rentals]
+
+Ranges 1..30 (Ampere, Ada, Blackwell) or 1..15 (Turing). Colour defaults: **Ampere/Ada/Blackwell** (GA102, GA104, GA106, AD102-AD106, GB202, GB203, GB206; 13 boxes): 3 entries `colorFB` `{0, 0xffffffff, 0x3f800000}` x4, `colorDS` 0, format 0 = what `kf-rm/src/zbc.rs` carries (the GA102 capture): **correct for those families**;
+**Turing** (TU102, TU106, TU116, 3 boxes): format `1, 2, 4` and `colorDS` `{0, 0x3f800000, 0x3f800000}`: **different** from what kayfabe serves a Turing guest. Depth (`0`, `1.0`, format 1) and stencil (`0, 1, 0xff`, format 1) equal everywhere. The host table is GPU-global and shared by every past renter of the board (AD106: 30 colour entries,
+entry 4 = `0xff000000` x4 on two boards = somebody else's) — **reading "the defaults" from the host at realize is unsafe without a rule**; a family-keyed rule is "consistent so far" (3 Turing dies, no mechanism), so per `V3_CONSTANT_STRATEGY.md` section 3 it is a per-die table row, not a rule. Not wired (no behaviour change under lane A's Windows work; impact today none, uncompressed kinds).
+
+
+#### 5.3.6 Compressed per-die table (one row per die; this pass)
+
+"Boot-critical facts" = identity, class set, registers, GSP boot model, static info: **derived (T1) or asked of the host (T2) on every die, no table** (sections 2.1/2.2). Board = the SKU the evidence came from; **(die)** = named by the host's own `MC_GET_ARCH_INFO`, **[pci]** = inferred from the PCI id only.
+"Win" = Windows capture, `(driver -> GSP firmware)`. "Groups" = which of the Windows-only rows are measured for that die: **S** = shapes/sizes (5.3.2), **V** = values (GMMU, CE, P/K/A, 5.3.3), **Z** = ZBC defaults, **G** = gate/8162 board-class values.
+
+| die | boards, host driver (T2) | Win | measured groups | still missing (tier that supplies it) |
+|---|---|---|---|---|
+| TU102 | RTX 2080 Ti, 595.91.07 (die) | - | S(host 595), Z (Turing), G (8162 = 01) | V and Win-S for all branches (T3: no Turing KVM offer, 3 queries) |
+| TU104 | none (Quadro RTX 4000 only at 595.71.05, not a measured host) | - | - | everything but the T1/T2 boot facts (T2 needs a measured host; T3 no offer) |
+| TU106 | RTX 2070 595.84 (die); 2060 580.173.02, 2060S 610.43.02 [pci] | - | S(host 595), Z, G | V, Win-S (T3) |
+| TU116 | GTX 1660 SUPER, 580.178.04 (die) | - | S(host 580), Z, G | V, Win-S other branches (T3) |
+| GA100 | A100 SXM4: 3 rentals, no host session | - | - | refused by name at realize anyway |
+| GA102 | RTX 3090 570.86.15 (die), A5000 580.126.09 (die), 3080 580.173.02, A6000 580.178.04 [pci] | - (3090 KVM: GPU error x3) | S(host 570/580), Z, G (8162 board-class 01/00) | V, Win-S (T3) |
+| GA104 | RTX 3060 Ti 580.173.02 (die); RTX A4000 575.51.03 (KVM, admin + unpriv) | **596.51 -> 595.76** (C, E) | S(595 Win + host 575/580), V (GMMU, CE, P/K/A), Z, G | Win-S at 570..590, 610 (T3; GA106 covers shapes) |
+| GA106 | RTX 3060, 590.48.01 (die) | **572.83 -> 570.133.07; 576.80 -> 575.64.01; 580.88 -> 580.65.05; 581.80 -> 580.105.07; 591.74 -> 590.52.01; 596.36 -> 595.71.01; 610.88 -> 610.57.01** | S (all 7 branches), V (all), Z, G | display-common rows (needs a head: display machine) |
+| GA107 | none | - | - | - |
+| AD102 | RTX 4090 595.84 (die) | (see below) | S(host 595), Z, G | V, Win (T3) |
+| AD103 | RTX 4070 Ti SUPER 595.91.07 (die), 615.71.09 [pci]; RTX 4080 SUPER 595.91.07 [pci] | (AD103 580.88 by the first pass: census text only, `traces/real_windows_20261014/`) | S(host 595 / 610), Z, G | V (T3) |
+| AD104 | RTX 4070 595.91.07 (die), RTX 4500 Ada 580.173.02 (die), L4 595.84 / 615.71.09 (die) | home Windows 580.88 (repo) | S, V (5.1: GMMU 0x54000/0x220c20), Z, G (L4 differs: F-6) | Win other branches (T3) |
+| AD106 | RTX 4060 Ti, 590.48.01 (die) | - | S(host 590), Z, G | V, Win (T3) |
+| AD107 | none | - | - | - |
+| GB202 | RTX 5090, 610.43.02 (die) | **none: two KVM boxes never booted Windows** | S(host 610), Z, G (9001 = 0x03fc005f) | V, Win-S (T3, needs a KVM Blackwell that boots) |
+| GB203 | RTX 5070 Ti 580.126.09 (die), RTX 5080 580.178.04 + 595.91.07 (die) | - | S(host 580, 595), Z, G (9001 = 0x03fc005f) | V, Win (T3) |
+| GB205 | none | - | - | - |
+| GB206 | RTX 5060 Ti, 580.105.08 (die) | - | S(host 580), Z, G | V, Win (T3) |
+| GB207, GH100 | none | - | - | - |
+
+
 
 ## 6. Decisions taken tonight (owner asleep)
 
@@ -206,6 +323,12 @@ non-zero words incl. user-space-address-shaped values; 853b `{0,1}` at 1832 B (i
 | D9 | Hopper/Blackwell `OFFSET_UPPER` width not fixed tonight | code in `kf-chan` (lane A's channel plane); the defect refuses, it never truncates, and no Hopper/GB10x has run; recorded as F-2 |
 | D10 | Host probes were run on the owner host beside lane A's running VM | the night plan allows short host probes; they are unprivileged RM queries kayfabe itself issues at realize; Xid counts were taken before and after each run, and every Xid in the window belongs to a `qemu-system-x86` pid |
 | D11 | Measurement rentals: Windows (kfwc) on GA104 and GB203; no Turing | no Turing KVM offer existed at 02:15 (lane B saw the same); Blackwell under $0.60/h was available |
+| D12 (resumed) | Table rows for Windows-captured statics are keyed `rm.<control>` by (die, GSP-firmware major) and **consumed by no code** | D-1 (authored vs measured GMMU/CE) is an owner decision; the data and the equality test (`windows_rows_vs_authored`) are in so the decision can be taken on evidence |
+| D13 | `measured:` tags accept `x.y` as well as `x.y.z` | a GSP firmware (595.76) and ogkm's own two-part tags (595.84) are two-part |
+| D14 | `gssreplay` gets exact-zero rows for every observed (cmd, size) of 852a/852e/853a/a618 and the `{0,1}` 853b at 14320; no row for 852f, b201, a630 | their requests are not all-zero (852f: uninitialised pointers; b201 word 0 varies); asking a host a different question than the driver asks would be inventing |
+| D15 | The 8162 / 9001 / a001 table rows were NOT extended to more dies | they vary by board class inside one die (8162 GA102: 3090 = 01, A5000 = 00; 9001 and a001 AD104: RTX 4070 vs L4); the host path answers them on every measured host, so more fallback rows could only add wrong answers (F-6) |
+| D16 | ZBC defaults are not changed | Turing differs from what is served (F-1) but the host table is shared and dirty, a family rule is "consistent so far", and the impact today is none |
+| D17 | Windows downgrades on the rental by package (`7zr x` + `pnputil /add-driver`) after removing the GSP flag | `setup.exe` exited -436207360 whenever another build was present or WU raced; the GSP-loaded removal left Code 43 |
 
 ## 7. Open: owner decisions, measurement, reverse engineering
 
@@ -242,6 +365,28 @@ group P (`0x731369`, `0x20802801`, `0x20802a12`, `0x50700709`, `0x50700118`: adm
 buffer, gfx pool sizes: kernel-only), group I (GMMU static, user register access map, `0x20800a3f/a80/a2e/a87/ab8/b03`: internal), group A
 (`0x730122/128/2a3/2a5`, `0x20802806`: absent ids; display ones need a head). Display-state rows need a display machine (§9 of the strategy).
 
+**Resumed pass 2026-10-14 (this branch) — what changed in the list above**
+
+- **F-4 is RESOLVED** (section 5.3.2): not a changed control, a changed `paramsSize` per GSP branch; host and Windows driver agree in every (control, branch) cell. Wired as exact rows; a 595/610 host answers a 595/610 guest.
+- **F-1 (ZBC) has evidence**: Ampere/Ada/Blackwell defaults equal the served ones; **Turing differs** (formats 1/2/4, colorDS non-zero). Not wired (D16). Options for the owner: (a) a per-die table row for the three Turing dies measured; (b) serve Turing an empty table (no defaults) — safe because RM adds entries on demand; (c) leave (impact none today).
+- **D-1 sharpened**: GA106 and GA104 (Windows, six branches) state exactly the authored GMMU/CE numbers; only Ada (AD104: 0x54000/0x220c20) is known to differ. A per-die serving rule would change AD104 only; Blackwell/Turing values are unmeasured (Windows capture on those dies failed or has no offer).
+- **F-6 (new) The table key (die, branch) is too coarse for board-dependent values.** `0x20808162` (GA102: GeForce 01 / workstation 00), `0x20809001` and `0x2080a001` (AD104: RTX 4070 vs L4). The existing AD104/595 rows are therefore right for the GeForce board they were measured on and wrong for an L4. Recommendation: keep them only as the last fallback after the host (as built), add a board class to the key before any new row of this kind, or delete them.
+- **F-7 (new) Hosts outside kayfabe's 30 measured tags are refused at R2**, which is by design, but it made 17 of 45 rentals useless; the sweep script now filters offers by `driver_version`.
+- **F-8 (new) a Windows box on vast gets whatever Windows Update delivers** (596.51 on the A4000 box, 610.88 staged on the GA106 box) before or beside `windows-on-vast`'s 580.88; both packages end up in the DriverStore, so a branch switch is `pnputil /delete-driver` of the active one (see 5.3.1).
+- **GB20x Windows capture not obtained**: two GB202 (RTX 5090) KVM boxes never finished the Windows boot (45 min at the Boot Manager), see the traces README. The Blackwell Windows rows stay MEASURE (T3).
+
+**Reverse engineering (T4) residue — listed, NOT done (private, minimal, last resort)**
+
+| item | why T1/T2/T3 cannot supply it |
+|---|---|
+| `0x2080852f` request layout (844/776 B, word 1 = 3, ~84 non-zero words, ~38 pointer-sized, varying per boot) and what it returns | the request carries uninitialised user-mode memory; no open header; a zero request is accepted by hosts and returns zeros, which is a different question. A host answer to `{4=3, rest 0}` is queued in the kit (`rows_595_shapes.tsv`) as the one T2 probe that could settle it |
+| `0x2080b201` request word 0 (varies per call: handle/pointer-like), `0x2080a630` / `0x2080a801` / `0x2080a060` non-zero request fields | layouts without headers; kayfabe refuses them (correct); a T2 answer needs the layout |
+| the meaning of the GSS-legacy reply fields (852a, 853a, a618, a630, ...) | not needed while the host answers the identical question (T2); needed only if a die/host ever refuses it |
+| `0x2080121f` and `0x50700709` reply semantics | per-die values (memory-size-like); not served by anything today; the host's `FB_GET_INFO` family may derive them (T2 candidate, not tried) |
+| display-common rows (`0x730122/128/2a3/2a5`, `0x5070020c` scan line) | need a lit head: a display machine, not RE |
+
+**Needs measurement (T3) — remaining after this pass**: Windows captures on **Turing (none offered), Blackwell GB203/GB205/GB206/GB207 (no KVM box that booted), GB202 (two failed boots), AD102/AD103/AD106/AD107, GA102**; the host-side T2 table has no TU104, GA100, GA107, AD107, GB205, GB207, GH100.
+
 **Reverse engineering**: none requested or done tonight. The RE list stays empty; the behaviour rows (core latch, frame edge, LOADV, sw-runlist
 admission) go to oracle tests on the owner's display machines first, per `V3_CONSTANT_LISTS_20261011.md` revision.
 
@@ -255,3 +400,4 @@ admission) go to oracle tests on the owner's display machines first, per `V3_CON
 | the cudart 9064 request is `{0,2,1,..,4}` | a libcudart whose 9064 request differs (the guest is then refused, by name: `W349REFUSE … consttab … not the measured question`) |
 | exact-zero rows answer the real driver's question | a Windows boot whose request for one of the seven is non-zero (then not answered: unchanged behaviour), or a reply that changes within a boot (one distinct reply each over three AD103 captures today) |
 | DIE_NAMES is ogkm's | `tools/derive_die_names.sh <ogkm>` printing a difference |
+| H1-H8 (resumed pass) | F-4 size hypothesis, branch-not-die sizes, Windows -> R-branch mapping, ZBC equality, 8162 per die, GMMU = GA106 | see `traces/constants_measure_20261014b/README.md`: H1-H4 not falsified; **H5 (ZBC equal on every die) falsified for Turing; H6 (8162 per die) falsified (it is board-class); H7 (GMMU/CE = GA106) falsified for AD104, holds for GA104/GA106** |
