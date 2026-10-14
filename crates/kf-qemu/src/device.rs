@@ -3743,15 +3743,14 @@ impl Device {
     /// (`ChanPlane::note_queued`). Unknown/Passthrough tokens are not counted here (§5: no
     /// adversary-controlled metric on an unowned token).
     fn note_worker_doorbell(&self, value: u32) {
-        if let Some(tok) = self.plane.token_index.of_doorbell(value)
-            && self
-                .plane
-                .tokens
-                .get(tok as usize)
-                .is_some_and(|w| w.load().route == Route::Translated)
-        {
+        let tok = self.plane.token_index.of_doorbell(value);
+        let route = tok
+            .and_then(|t| self.plane.tokens.get(t as usize))
+            .map(|w| w.load().route);
+        if let (Some(tok), Some(Route::Translated)) = (tok, route) {
             self.chans.note_queued(tok);
         }
+        self.chans.doorbell_census(value, route);
     }
 }
 

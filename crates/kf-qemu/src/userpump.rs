@@ -147,6 +147,10 @@ fn scan_refusal_detail(l: &kf_chan::user_scan::Located, words: &[u32], base: usi
 /// of the SAME GP slot and segment 1/20/200 ms later, each rescanned from the same carried state —
 /// which separates "the bytes changed under the scan" (a read-before-written race) from "the
 /// grammar disagrees" (the same bytes refuse again). Guest words go only to that file.
+/// Whether the measurement trace is on ([`trace_dir`]).
+pub(super) fn tracing() -> bool {
+    trace_dir().is_some()
+}
 fn trace_dir() -> Option<&'static std::path::Path> {
     static DIR: std::sync::OnceLock<Option<std::path::PathBuf>> = std::sync::OnceLock::new();
     DIR.get_or_init(|| {
@@ -645,8 +649,13 @@ impl Pump {
                 }
                 if t.verified % 5000 == 0 {
                     eprintln!(
-                        "kf3: USER_RING_TRACE VERIFY {:#x}:{:#x} verified={} stale={} stale_desync={}",
-                        r.key.0, r.key.1, t.verified, t.stale, t.stale_desync
+                        "kf3: USER_RING_TRACE VERIFY {:#x}:{:#x} verified={} stale={} stale_desync={} doorbell_census={:x?}",
+                        r.key.0,
+                        r.key.1,
+                        t.verified,
+                        t.stale,
+                        t.stale_desync,
+                        me.doorbell_census_now()
                     );
                 }
                 continue;
@@ -872,12 +881,13 @@ impl Pump {
         let written = std::fs::create_dir_all(dir)
             .and_then(|()| std::fs::write(dir.join(&name), out.as_bytes()));
         eprintln!(
-            "kf3: USER_RING_TRACE {:#x}:{:#x} cursor={} put={put} entry={entry:#018x} pb_va={:#x} bytes={} db_at_put={db_at} db_prev_put={db_prev} puts_with_db={pw} puts_without_db={pwo} {} file={name} written={}",
+            "kf3: USER_RING_TRACE {:#x}:{:#x} cursor={} put={put} entry={entry:#018x} pb_va={:#x} bytes={} doorbell_census(translated,passthrough,other,last_other)={:x?} db_at_put={db_at} db_prev_put={db_prev} puts_with_db={pw} puts_without_db={pwo} {} file={name} written={}",
             r.key.0,
             r.key.1,
             self.cursor,
             d.gpu_va,
             d.len_bytes,
+            me.doorbell_census_now(),
             summary.join(" "),
             written.is_ok()
         );

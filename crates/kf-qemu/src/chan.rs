@@ -2343,6 +2343,9 @@ pub struct ChanPlane {
     /// ring pump's evidence that the guest published (`userpump`). Monotonic; one relaxed atomic
     /// on the vCPU/drainer, nothing else.
     queued: Box<[AtomicU64]>,
+    /// `KF3_USER_RING_TRACE` only: every doorbell-class write by route (translated, passthrough,
+    /// other/none) and the last value of an "other" one. Measurement; nothing reads it to decide.
+    db_census: [AtomicU64; 4],
     /// ★ 2026-10-08 (owner ruling §X, `kf_chan::ptnsi`): host non-stall edges → the guest vectors
     /// of the events this VM's guest armed; never dropped (`KF3_PT_NSI_*`, read once at realize).
     pub nsi: kf_chan::ptnsi::Relay,
@@ -2960,6 +2963,7 @@ impl ChanPlane {
             rang: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
             rung_at_us: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
             queued: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
+            db_census: std::array::from_fn(|_| AtomicU64::new(0)),
             nsi,
             nsi_arms: std::sync::OnceLock::new(),
             nsi_log: std::sync::OnceLock::new(),
@@ -3274,6 +3278,26 @@ impl ChanPlane {
         if let Some(c) = self.queued.get(idx as usize) {
             c.fetch_add(1, Ordering::Release);
         }
+    }
+
+    /// `KF3_USER_RING_TRACE` only ([`Self::db_census`]).
+    pub fn doorbell_census(&self, value: u32, route: Option<kf_trap::Route>) {
+        if !userpump::tracing() {
+            return;
+        }
+        let i = match route {
+            Some(kf_trap::Route::Translated) => 0,
+            Some(kf_trap::Route::Passthrough) => 1,
+            _ => {
+                self.db_census[3].store(u64::from(value), Ordering::Relaxed);
+                2
+            }
+        };
+        self.db_census[i].fetch_add(1, Ordering::Relaxed);
+    }
+    /// `(translated, passthrough, other, last other value)`.
+    pub(crate) fn doorbell_census_now(&self) -> [u64; 4] {
+        std::array::from_fn(|i| self.db_census[i].load(Ordering::Relaxed))
     }
 
     /// Doorbells counted on guest token `idx` ([`Self::note_queued`]).
