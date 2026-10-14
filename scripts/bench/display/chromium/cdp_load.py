@@ -127,9 +127,32 @@ def targets():
     return [t for t in json.load(urllib.request.urlopen(base + '/json/list', timeout=5)) if t.get('type') == 'page']
 
 
+opener = None   # electron: the first window, used to window.open() further ones (no Target.createTarget there)
+
+
 def new_tab(url, window=False):
+    if a.kind == 'electron':
+        before = {t['id'] for t in targets()}
+        opener.call('Runtime.evaluate', {'expression': f'window.open({json.dumps(url)},"_blank","width=800,height=450")!==null', 'userGesture': True, 'returnByValue': True})
+        for _ in range(20):
+            new = [t for t in targets() if t['id'] not in before]
+            if new:
+                return new[0]['id']
+            time.sleep(0.5)
+        raise RuntimeError('electron: window.open produced no target')
     r = browser.call('Target.createTarget', {'url': url, 'newWindow': window})
     return r['result']['targetId']
+
+
+def close_tab(tid):
+    if a.kind == 'electron':
+        c = tab_ws(tid)
+        try:
+            c.call('Runtime.evaluate', {'expression': 'window.close()', 'userGesture': True})
+        finally:
+            c.ws.close()
+    else:
+        browser.call('Target.closeTarget', {'targetId': tid})
 
 
 DEEP = r"""(()=>{const out=[];function w(n,d){if(!n||d>40)return;if(n.nodeType===3){const t=n.textContent.trim();if(t)out.push(t)}
@@ -146,9 +169,14 @@ try:
     ev(f'GPUDEVICES {devs} gl_renderer={aux.get("glRenderer")} gl_version={aux.get("glVersion")}')
 except Exception as e:
     ev(f'getInfo failed {e}')
-gt = new_tab('chrome://gpu')
-time.sleep(6)
+if a.kind == 'electron':
+    opener = tab_ws(targets()[0]['id'])
 try:
+  if a.kind == 'electron':
+    raise RuntimeError('chrome://gpu is not reachable from an Electron window; the feature status above stands in')
+  else:
+    gt = new_tab('chrome://gpu')
+    time.sleep(6)
     c = tab_ws(gt)
     r = c.call('Runtime.evaluate', {'expression': DEEP, 'returnByValue': True})
     open(os.path.join(a.outdir, 'gpu_report.txt'), 'w').write(r['result']['result'].get('value', ''))
@@ -157,7 +185,7 @@ try:
 except Exception as e:
     ev(f'gpu report failed {e}')
 try:
-    browser.call('Target.closeTarget', {'targetId': gt})
+    close_tab(gt)
 except Exception:
     pass
 
@@ -233,7 +261,7 @@ def do(action):
         time.sleep(20)
         for i in ids:
             try:
-                browser.call('Target.closeTarget', {'targetId': i})
+                close_tab(i)
             except Exception as e:
                 ev(f'close failed {e}')
             time.sleep(0.5)
