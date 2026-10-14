@@ -1,0 +1,90 @@
+DIE_RUN_START probe 2026-10-14T15:18:47+00:00
+WIN_DIE_START kf3=084a08dd checkout=084a08ddd gpu=NVIDIA GeForce RTX 5060 Ti xid_before=0 2026-10-14T15:18:47+00:00
+[win_die] QEMU 97199 kf3 084a08dd run /root/win/run
+[win_die] QGA answers 2026-10-14T15:20:31+00:00
+PR EVID DEV hw=VEN_10DE&DEV_2D04&SUBSYS_8A061043&REV_A1 status=Error problem=CM_PROB_FAILED_POST_START class=Display name='NVIDIA GeForce RTX 5060 Ti' driverkey={4d36e968-e325-11ce-bfc1-08002be10318}\0002 ver=32.0.15.8088 EnableGpuFirmware=1
+PR EVID VIDEO name='NVIDIA GeForce RTX 5060 Ti' status=Error mode=x refresh= driver=32.0.15.8088
+PR EVID SMI path=C:\Windows\system32\nvidia-smi.exe
+PR SMI NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running. This can also be happening if non-NVIDIA GPU is running as primary display, and NVIDIA GPU is in WDDM mode.
+PR SMI 
+PR SMIQ NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running. This can also be happening if non-NVIDIA GPU is running as primary display, and NVIDIA GPU is in WDDM mode.
+PR SMIQ 
+PR SMIMEM NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running. This can also be happening if non-NVIDIA GPU is running as primary display, and NVIDIA GPU is in WDDM mode.
+PR SMIMEM 
+PR EVID DONE
+[win_die] shot /root/win/run/shots/probe_end.ppm.gz 2026-10-14T15:22:39+00:00
+WIN_DIE_STOP how=qga 2026-10-14T15:22:57+00:00
+DIE_RUN_EXIT probe rc=0 2026-10-14T15:22:57+00:00
+DIE_RUN_START probe 2026-10-14T15:34:25+00:00
+WIN_DIE_START kf3=22b6597b checkout=22b6597b3 gpu=NVIDIA GeForce RTX 5060 Ti xid_before=0 2026-10-14T15:34:25+00:00
+[win_die] QEMU 100131 kf3 22b6597b run /root/win/run
+[win_die] QGA answers 2026-10-14T15:39:52+00:00
+PR EVID DEV hw=VEN_10DE&DEV_2D04&SUBSYS_8A061043&REV_A1 status=Error problem=CM_PROB_FAILED_POST_START class=Display name='NVIDIA GeForce RTX 5060 Ti' driverkey={4d36e968-e325-11ce-bfc1-08002be10318}\0002 ver=32.0.15.8088 EnableGpuFirmware=1
+PR EVID VIDEO name='NVIDIA GeForce RTX 5060 Ti' status=Error mode=x refresh= driver=32.0.15.8088
+PR EVID SMI path=C:\Windows\system32\nvidia-smi.exe
+PR SMI NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running. This can also be happening if non-NVIDIA GPU is running as primary display, and NVIDIA GPU is in WDDM mode.
+PR SMI 
+PR SMIQ NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running. This can also be happening if non-NVIDIA GPU is running as primary display, and NVIDIA GPU is in WDDM mode.
+PR SMIQ 
+PR SMIMEM NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running. This can also be happening if non-NVIDIA GPU is running as primary display, and NVIDIA GPU is in WDDM mode.
+PR SMIMEM 
+PR EVID DONE
+[win_die] shot /root/win/run/shots/probe_end.ppm.gz 2026-10-14T15:42:29+00:00
+WIN_DIE_STOP how=qga 2026-10-14T15:42:48+00:00
+DIE_RUN_EXIT probe rc=0 2026-10-14T15:42:48+00:00
+DIE_RUN_START probe 2026-10-14T15:46:54+00:00
+WIN_DIE_START kf3=202c612e checkout=202c612ed gpu=NVIDIA GeForce RTX 5060 Ti xid_before=0 2026-10-14T15:46:54+00:00
+[win_die] QEMU 104056 kf3 202c612e run /root/win/run
+[win_die] QGA answers 2026-10-14T15:49:09+00:00
+PR EVID DEV hw=VEN_10DE&DEV_2D04&SUBSYS_8A061043&REV_A1 status=Error problem=CM_PROB_FAILED_POST_START class=Display name='NVIDIA GeForce RTX 5060 Ti' driverkey={4d36e968-e325-11ce-bfc1-08002be10318}\0002 ver=32.0.15.8088 EnableGpuFirmware=1
+PR EVID VIDEO name='NVIDIA GeForce RTX 5060 Ti' status=Error mode=x refresh= driver=32.0.15.8088
+PR EVID SMI path=C:\Windows\system32\nvidia-smi.exe
+PR SMI NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running. This can also be happening if non-NVIDIA GPU is running as primary display, and NVIDIA GPU is in WDDM mode.
+PR SMI 
+PR SMIQ NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running. This can also be happening if non-NVIDIA GPU is running as primary display, and NVIDIA GPU is in WDDM mode.
+PR SMIQ 
+PR SMIMEM NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running. This can also be happening if non-NVIDIA GPU is running as primary display, and NVIDIA GPU is in WDDM mode.
+PR SMIMEM 
+PR EVID DONE
+[win_die] shot /root/win/run/shots/probe_end.ppm.gz 2026-10-14T15:51:47+00:00
+WIN_DIE_STOP how=qga 2026-10-14T15:52:37+00:00
+DIE_RUN_EXIT probe rc=0 2026-10-14T15:52:37+00:00
+DIE_RUN_START probe 2026-10-14T15:54:16+00:00
+WIN_DIE_START kf3=202c612e checkout=202c612ed gpu=NVIDIA GeForce RTX 5060 Ti xid_before=0 2026-10-14T15:54:16+00:00
+[win_die] QEMU 106802 kf3 202c612e run /root/win/run
+[win_die] QGA answers 2026-10-14T15:56:38+00:00
+PR EVID DEV hw=VEN_10DE&DEV_2D04&SUBSYS_8A061043&REV_A1 status=Error problem=CM_PROB_FAILED_POST_START class=Display name='NVIDIA GeForce RTX 5060 Ti' driverkey={4d36e968-e325-11ce-bfc1-08002be10318}\0002 ver=32.0.15.8088 EnableGpuFirmware=1
+PR EVID VIDEO name='NVIDIA GeForce RTX 5060 Ti' status=Error mode=x refresh= driver=32.0.15.8088
+PR EVID SMI path=C:\Windows\system32\nvidia-smi.exe
+PR SMI NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running. This can also be happening if non-NVIDIA GPU is running as primary display, and NVIDIA GPU is in WDDM mode.
+PR SMI 
+PR SMIQ NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running. This can also be happening if non-NVIDIA GPU is running as primary display, and NVIDIA GPU is in WDDM mode.
+PR SMIQ 
+PR SMIMEM NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running. This can also be happening if non-NVIDIA GPU is running as primary display, and NVIDIA GPU is in WDDM mode.
+PR SMIMEM 
+PR EVID DONE
+PD DIAG PNP PCI\VEN_10DE&DEV_2D04&SUBSYS_8A061043&REV_A1\3&267A616A&0&30 DEVPKEY_Device_ProblemStatus=0
+PD DIAG PNP PCI\VEN_10DE&DEV_2D04&SUBSYS_8A061043&REV_A1\3&267A616A&0&30 DEVPKEY_Device_LastArrivalDate=10/14/2026 15:54:38
+PD DIAG ERR Service Control Manager id=7031 The OpenSSH SSH Server service terminated unexpectedly. It has done this 1 time(s). The following corrective action will be taken in 0 milliseconds: Restart the service.
+PD DIAG ERR Service Control Manager id=7031 The OpenSSH SSH Server service terminated unexpectedly. It has done this 1 time(s). The following corrective action will be taken in 0 milliseconds: Restart the service.
+PD DIAG DONE
+[win_die] shot /root/win/run/shots/probe_end.ppm.gz 2026-10-14T15:58:51+00:00
+WIN_DIE_STOP how=qga 2026-10-14T15:59:42+00:00
+DIE_RUN_EXIT probe rc=0 2026-10-14T15:59:42+00:00
+DIE_RUN_START probe 2026-10-14T16:00:10+00:00
+WIN_DIE_START kf3=202c612e checkout=202c612ed gpu=NVIDIA GeForce RTX 5060 Ti xid_before=0 2026-10-14T16:00:11+00:00
+[win_die] QEMU 108927 kf3 202c612e run /root/win/run
+[win_die] QGA answers 2026-10-14T16:02:27+00:00
+PR EVID DEV hw=VEN_10DE&DEV_2D04&SUBSYS_8A061043&REV_A1 status=Error problem=CM_PROB_FAILED_POST_START class=Display name='NVIDIA GeForce RTX 5060 Ti' driverkey={4d36e968-e325-11ce-bfc1-08002be10318}\0002 ver=32.0.15.8088 EnableGpuFirmware=1
+PR EVID VIDEO name='NVIDIA GeForce RTX 5060 Ti' status=Error mode=x refresh= driver=32.0.15.8088
+PR EVID SMI path=C:\Windows\system32\nvidia-smi.exe
+PR SMI NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running. This can also be happening if non-NVIDIA GPU is running as primary display, and NVIDIA GPU is in WDDM mode.
+PR SMI 
+PR SMIQ NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running. This can also be happening if non-NVIDIA GPU is running as primary display, and NVIDIA GPU is in WDDM mode.
+PR SMIQ 
+PR SMIMEM NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running. This can also be happening if non-NVIDIA GPU is running as primary display, and NVIDIA GPU is in WDDM mode.
+PR SMIMEM 
+PR EVID DONE
+[win_die] shot /root/win/run/shots/probe_end.ppm.gz 2026-10-14T16:04:14+00:00
+WIN_DIE_STOP how=qga 2026-10-14T16:05:23+00:00
+DIE_RUN_EXIT probe rc=0 2026-10-14T16:05:23+00:00

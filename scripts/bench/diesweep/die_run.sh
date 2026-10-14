@@ -44,6 +44,7 @@ probe)
     bash "$WD" wait-qga "${QGA_WAIT:-1200}" || { bash "$WD" shot probe_noqga; exit 3; }
     sleep "${PROBE_SECONDS:-90}"
     bash "$WD" ps "$HERE/evidence.ps1" 240 | sed 's/^/PR /'
+    [ -n "${PROBE_PS:-}" ] && bash "$WD" ps "$PROBE_PS" 240 | sed 's/^/PD /'
     bash "$WD" shot probe_end
     bash "$WD" stop ;;
 phase2)
