@@ -1,0 +1,8 @@
+== /root/win/run_nocaps/qemu.log
+GSP phase Running -> Suspending: 39
+USER_RING_REFUSED: 3
+USER_RING_SCAN: 3
+REFUSED fn76: 68
+display: STALL: 0
+BLACK:: 0
+HOST-ABI REFUSED: 6

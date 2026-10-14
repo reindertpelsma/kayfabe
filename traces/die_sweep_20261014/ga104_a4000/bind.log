@@ -1,0 +1,33 @@
+DIE_RUN_START bind 2026-10-14T13:08:06+00:00
+WIN_DIE_START kf3=6c6bb92b checkout=6c6bb92bb gpu=NVIDIA RTX A4000 xid_before=0 2026-10-14T13:08:06+00:00
+[win_die] QEMU 95211 kf3 6c6bb92b run /root/win/run
+[win_die] QGA answers 2026-10-14T13:10:02+00:00
+BIND driverstore nv_disp INFs: 1 nv_dispi.inf_amd64_fe5f369669db2f36
+BIND inf nv_dispi.inf_amd64_fe5f369669db2f36\nv_dispi.inf lists DEV_24B0
+BIND pnputil: Microsoft PnP Utility
+BIND pnputil: 
+BIND pnputil: Adding driver package:  nv_dispi.inf
+BIND pnputil: Driver package added successfully. (Already exists in the system)
+BIND pnputil: Published Name:         oem3.inf
+BIND pnputil: Driver package is up-to-date on device: PCI\VEN_10DE&DEV_24B0&SUBSYS_14AD10DE&REV_A1\3&267a616a&0&30
+BIND pnputil: Driver package installed on device: PCI\VEN_10DE&DEV_2786&SUBSYS_40EE1458&REV_A1\3&267a616a&0&30
+BIND pnputil: 
+BIND pnputil: Total driver packages:  1
+BIND pnputil: Added driver packages:  1
+BIND pnputil rc=0
+BIND after status=Error problem=CM_PROB_REINSTALL class=Display name='NVIDIA RTX A4000' driverkey={4d36e968-e325-11ce-bfc1-08002be10318}\0002 inf=oem3.inf ver=32.0.15.8088
+BIND FLAG {4d36e968-e325-11ce-bfc1-08002be10318}\0002 EnableGpuFirmware=1
+BIND DONE
+PB EVID DEV hw=VEN_10DE&DEV_24B0&SUBSYS_14AD10DE&REV_A1 status=Error problem=CM_PROB_REINSTALL class=Display name='NVIDIA RTX A4000' driverkey={4d36e968-e325-11ce-bfc1-08002be10318}\0002 ver=32.0.15.8088 EnableGpuFirmware=1
+PB EVID VIDEO name='NVIDIA RTX A4000' status=Error mode=x refresh= driver=32.0.15.8088
+PB EVID SMI path=C:\Windows\system32\nvidia-smi.exe
+PB SMI NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running. This can also be happening if non-NVIDIA GPU is running as primary display, and NVIDIA GPU is in WDDM mode.
+PB SMI 
+PB SMIQ NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running. This can also be happening if non-NVIDIA GPU is running as primary display, and NVIDIA GPU is in WDDM mode.
+PB SMIQ 
+PB SMIMEM NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running. This can also be happening if non-NVIDIA GPU is running as primary display, and NVIDIA GPU is in WDDM mode.
+PB SMIMEM 
+PB EVID DONE
+[win_die] shot /root/win/run/shots/bind_end.ppm.gz 2026-10-14T13:15:42+00:00
+WIN_DIE_STOP how=UNCLEAN-kill 2026-10-14T13:19:48+00:00
+DIE_RUN_EXIT bind rc=0 2026-10-14T13:19:48+00:00

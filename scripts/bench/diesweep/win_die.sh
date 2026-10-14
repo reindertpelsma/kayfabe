@@ -14,7 +14,7 @@
 # The guest and kf3 arguments are windows_broker.sh's (machine pc, 8 GiB, 8 vCPU, virtio-blk/net, QGA,
 # kf3 fb-mb=4096 bar1-size=128 MiB gop=on) and the owner host's PRODUCTION flag profile of 2026-10-13
 # (host copy windows_broker_claude_inst2.sh, run 2990 at bf510bdf: class-B flags, no measurement flags,
-# no KF3_RPC_TRACE, KF3_TIMER_MAP dropped), with these differences, each forced by the box:
+# no KF3_RPC_TRACE, KF3_TIMER_MAP dropped), with these differences, each forced by the box (WIN_SMP: vCPUs, default 8; WIN_RAM_MB):
 #   - no display broker (no graphical session on a rented VM): kf3 display=on draws into its QEMU
 #     console, which `screendump device=kf0` reads — the same surface the broker window shows;
 #   - no IOMMU-group switch (the rented VM has no IOMMU group to switch);
@@ -49,7 +49,7 @@ start)
     VGA=(); [ "${WIN_STDVGA:-0}" = 1 ] && VGA=(-device VGA,addr=0x9,id=vga0)
     ARGS=(-name kayfabe-diesweep -nodefaults -no-user-config
         -machine pc,accel=kvm,smm=on,memory-backend=ram0
-        -object "memory-backend-memfd,id=ram0,size=${WIN_RAM_MB:-8192}M,share=on" -m "${WIN_RAM_MB:-8192}" -smp 8
+        -object "memory-backend-memfd,id=ram0,size=${WIN_RAM_MB:-8192}M,share=on" -m "${WIN_RAM_MB:-8192}" -smp ${WIN_SMP:-8}
         -cpu "${WIN_CPU:-host,-vmx,hv_relaxed,hv_vapic,hv_spinlocks=0x1fff,hv_vpindex,hv_runtime,hv_time,hv_synic,hv_stimer,hv_tlbflush,hv_ipi,hv_frequencies}"
         -drive "if=pflash,format=raw,unit=0,readonly=on,file=$W/OVMF_CODE_4M.fd"
         -drive "if=pflash,format=raw,unit=1,file=$RUN/OVMF_VARS.fd"
@@ -107,6 +107,7 @@ stop)
         for _ in $(seq 90); do kill -0 "$q" 2>/dev/null || break; sleep 1; done
     fi
     kill -0 "$q" 2>/dev/null && { kill "$q"; sleep 5; kill -9 "$q" 2>/dev/null; how=UNCLEAN-kill; }
+    rm -f "$RUN/qpid"   # a stale pid file once matched a REUSED pid and refused the next start
     echo "WIN_DIE_STOP how=$how $(date -Is)" | tee -a "$RUN/marker.txt"; exit 0 ;;
 status)
     q=$(qpid) && say "QEMU $q" || say "no QEMU"

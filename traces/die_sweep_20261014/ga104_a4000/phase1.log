@@ -1,0 +1,26 @@
+DIE_RUN_START phase1 2026-10-14T12:52:09+00:00
+WIN_DIE_START kf3=6c6bb92b checkout=6c6bb92bb gpu=NVIDIA RTX A4000 xid_before=0 2026-10-14T12:52:09+00:00
+[win_die] QEMU 90851 kf3 6c6bb92b run /root/win/run
+[win_die] QGA answers 2026-10-14T12:56:12+00:00
+[win_die] shot /root/win/run/shots/p1_qga.ppm.gz 2026-10-14T12:56:58+00:00
+P1 EVID DEV hw=VEN_10DE&DEV_24B0&SUBSYS_14AD10DE&REV_A1 status=Error problem=CM_PROB_REINSTALL class= name='Video Controller (VGA Compatible)' driverkey= ver= EnableGpuFirmware=
+P1 EVID SMI path=C:\Windows\system32\nvidia-smi.exe
+P1 SMI NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running. This can also be happening if non-NVIDIA GPU is running as primary display, and NVIDIA GPU is in WDDM mode.
+P1 SMI 
+P1 SMIQ NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running. This can also be happening if non-NVIDIA GPU is running as primary display, and NVIDIA GPU is in WDDM mode.
+P1 SMIQ 
+P1 SMIMEM NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running. This can also be happening if non-NVIDIA GPU is running as primary display, and NVIDIA GPU is in WDDM mode.
+P1 SMIMEM 
+P1 EVID DONE
+HOSTBAR1 p1  BAR1 Memory Usage  Total : 256 MiB  Used : 14 MiB  Free : 242 MiB 
+PHASE1 DEV hw=VEN_10DE&DEV_22BC&SUBSYS_40EE1458&REV_A1 present=False status=Unknown problem=CM_PROB_PHANTOM class=System name='High Definition Audio Controller' driverkey={4d36e97d-e325-11ce-bfc1-08002be10318}\0023 inf=hdaudbus.inf ver=10.0.26100.1150
+PHASE1 DEV hw=VEN_10DE&DEV_24B0&SUBSYS_14AD10DE&REV_A1 present=True status=Error problem=CM_PROB_REINSTALL class= name='Video Controller (VGA Compatible)' driverkey= inf= ver=
+PHASE1 DEV hw=VEN_10DE&DEV_2786&SUBSYS_40EE1458&REV_A1 present=False status=Unknown problem=CM_PROB_PHANTOM class=Display name='NVIDIA GeForce RTX 4070' driverkey={4d36e968-e325-11ce-bfc1-08002be10318}\0001 inf=oem3.inf ver=32.0.15.8088
+PHASE1 FLAG {4d36e968-e325-11ce-bfc1-08002be10318}\0001 EnableGpuFirmware=1
+PHASE1 FLAG service EnableGpuFirmware=1
+PHASE1 AUTOLOGON user=vast set
+PHASE1 STARTUP C:\ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp\kf_diesweep_smi.cmd written
+PHASE1 DONE
+qga-exec: timeout
+WIN_DIE_STOP how=qga 2026-10-14T13:07:30+00:00
+DIE_RUN_EXIT phase1 rc=0 2026-10-14T13:07:30+00:00

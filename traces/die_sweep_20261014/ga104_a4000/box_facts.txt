@@ -1,0 +1,72 @@
+FACTS_START 2026-10-14T12:10:41+00:00
+KERNEL 6.8.0-59-generic
+DRIVER NVRM version: NVIDIA UNIX x86_64 Kernel Module  575.51.03  Wed Apr 16 14:22:51 UTC 2025
+KVM crw-rw---- /dev/kvm nested=Y
+CPU Intel(R) Core(TM) i9-7960X CPU @ 2.80GHz nproc=4 mem_gib=12
+DISK size=86G avail=78G
+PCI 0000:00:07.0 Audio device [0403]: NVIDIA Corporation GA104 High Definition Audio Controller [10de:228b] (rev a1)
+PCIV 0000:00:07.0 	Region 0: Memory at c1080000 (32-bit, non-prefetchable) [size=16K]
+PCIV 0000:00:07.0 		LnkCap:	Port #0, Speed 8GT/s, Width x16, ASPM L0s L1, Exit Latency L0s <512ns, L1 <4us
+PCIV 0000:00:07.0 		LnkSta:	Speed 2.5GT/s (downgraded), Width x8 (downgraded)
+PCIV 0000:00:07.0 	Kernel driver in use: snd_hda_intel
+PCI 0000:00:08.0 VGA compatible controller [0300]: NVIDIA Corporation GA104GL [RTX A4000] [10de:24b0] (rev a1)
+PCIV 0000:00:08.0 	Region 0: Memory at c0000000 (32-bit, non-prefetchable) [size=16M]
+PCIV 0000:00:08.0 	Region 1: Memory at 380000000000 (64-bit, prefetchable) [size=256M]
+PCIV 0000:00:08.0 	Region 3: Memory at 380010000000 (64-bit, prefetchable) [size=32M]
+PCIV 0000:00:08.0 	Region 5: I/O ports at c000 [size=128]
+PCIV 0000:00:08.0 		LnkCap:	Port #0, Speed 8GT/s, Width x16, ASPM L0s L1, Exit Latency L0s <512ns, L1 <4us
+PCIV 0000:00:08.0 		LnkSta:	Speed 2.5GT/s (downgraded), Width x8 (downgraded)
+PCIV 0000:00:08.0 	Kernel driver in use: nvidia
+SMIQ name, pci.device_id, driver_version, memory.total [MiB], pcie.link.gen.max, pcie.link.width.max
+SMIQ NVIDIA RTX A4000, 0x24B010DE, 575.51.03, 16376 MiB, 3, 16
+SMIMEM     FB Memory Usage
+SMIMEM         Total                             : 16376 MiB
+SMIMEM         Reserved                          : 401 MiB
+SMIMEM         Used                              : 1 MiB
+SMIMEM         Free                              : 15975 MiB
+SMIMEM     BAR1 Memory Usage
+SMIMEM         Total                             : 256 MiB
+SMIMEM         Used                              : 2 MiB
+SMIMEM         Free                              : 254 MiB
+SMIMEM     Conf Compute Protected Memory Usage
+SMIMEM         Total                             : 0 MiB
+SMIMEM         Used                              : 0 MiB
+SMIMEM         Free                              : 0 MiB
+SMIMEM 
+FACTS_EXIT 2026-10-14T12:10:41+00:00
+FACTS_START 2026-10-14T13:40:27+00:00
+KERNEL 6.8.0-59-generic
+DRIVER NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  
+KVM crw-rw---- /dev/kvm nested=Y
+CPU Intel(R) Core(TM) i9-7960X CPU @ 2.80GHz nproc=4 mem_gib=12
+DISK size=86G avail=40G
+PCI 0000:00:07.0 Audio device [0403]: NVIDIA Corporation GA104 High Definition Audio Controller [10de:228b] (rev a1)
+PCIV 0000:00:07.0 	Region 0: Memory at c1080000 (32-bit, non-prefetchable) [size=16K]
+PCIV 0000:00:07.0 		LnkCap:	Port #0, Speed 8GT/s, Width x16, ASPM L0s L1, Exit Latency L0s <1us, L1 <4us
+PCIV 0000:00:07.0 		LnkSta:	Speed 8GT/s (ok), Width x8 (downgraded)
+PCIV 0000:00:07.0 	Kernel driver in use: snd_hda_intel
+PCI 0000:00:08.0 VGA compatible controller [0300]: NVIDIA Corporation GA104GL [RTX A4000] [10de:24b0] (rev a1)
+PCIV 0000:00:08.0 	Region 0: Memory at c0000000 (32-bit, non-prefetchable) [size=16M]
+PCIV 0000:00:08.0 	Region 1: Memory at 380000000000 (64-bit, prefetchable) [size=256M]
+PCIV 0000:00:08.0 	Region 3: Memory at 380010000000 (64-bit, prefetchable) [size=32M]
+PCIV 0000:00:08.0 	Region 5: I/O ports at c000 [size=128]
+PCIV 0000:00:08.0 		LnkCap:	Port #0, Speed 8GT/s, Width x16, ASPM L0s L1, Exit Latency L0s <1us, L1 <4us
+PCIV 0000:00:08.0 		LnkSta:	Speed 8GT/s (ok), Width x8 (downgraded)
+PCIV 0000:00:08.0 	Kernel driver in use: nvidia
+SMIQ name, pci.device_id, driver_version, memory.total [MiB], pcie.link.gen.max, pcie.link.width.max
+SMIQ NVIDIA RTX A4000, 0x24B010DE, 595.91.07, 16376 MiB, 3, 16
+SMIMEM     FB Memory Usage
+SMIMEM         Total                                          : 16376 MiB
+SMIMEM         Reserved                                       : 400 MiB
+SMIMEM         Used                                           : 4794 MiB
+SMIMEM         Free                                           : 11183 MiB
+SMIMEM     BAR1 Memory Usage
+SMIMEM         Total                                          : 256 MiB
+SMIMEM         Used                                           : 40 MiB
+SMIMEM         Free                                           : 216 MiB
+SMIMEM     Conf Compute Protected Memory Usage
+SMIMEM         Total                                          : 0 MiB
+SMIMEM         Used                                           : 0 MiB
+SMIMEM         Free                                           : 0 MiB
+SMIMEM 
+FACTS_EXIT 2026-10-14T13:40:27+00:00

@@ -1,0 +1,24 @@
+== /root/win/run/qemu-130806.log
+GSP phase Running -> Suspending: 0
+USER_RING_REFUSED: 0
+USER_RING_SCAN: 0
+REFUSED fn76: 0
+display: STALL: 0
+BLACK:: 0
+HOST-ABI REFUSED: 6
+== /root/win/run/qemu-132927.log
+GSP phase Running -> Suspending: 0
+USER_RING_REFUSED: 0
+USER_RING_SCAN: 0
+REFUSED fn76: 0
+display: STALL: 0
+BLACK:: 0
+HOST-ABI REFUSED: 6
+== /root/win/run/qemu.log
+GSP phase Running -> Suspending: 12
+USER_RING_REFUSED: 0
+USER_RING_SCAN: 0
+REFUSED fn76: 72
+display: STALL: 0
+BLACK:: 0
+HOST-ABI REFUSED: 6
