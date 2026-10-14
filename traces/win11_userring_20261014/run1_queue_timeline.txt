@@ -1,0 +1,65 @@
+MARKS_START 2026-10-14T20:09:26+02:00 pid=472224
+MCL_START host=20:10:48.662 lines=6546
+MC_PLAY host=20:11:41.961 lines=12493
+MC_SP host=20:12:40.601 lines=13517
+MC_WORLD host=20:12:58.489 lines=13975
+MC_INWORLD host=20:14:09.123 lines=30343
+MC_END host=20:20:10.284 lines=111354
+EDGE_START host=20:20:28.932 lines=111792
+EDGE_END host=20:32:33.006 lines=115483
+HEAVEN_D3D11_W host=20:45:02.020 lines=138259 xid=2
+HEAVEN_D3D11_W2 host=20:47:56.645 lines=166072 xid=10 resets=9
+GM_D3D12 host=20:50:23.497 lines=172937 xid=12 resets=10
+GM_VK host=20:53:43.662 lines=174480 xid=12 resets=10
+HEAVEN_GL_W host=20:56:56.763 lines=177304 xid=12 resets=10
+HEAVEN_GL_FS host=21:01:57.345 lines=178769 xid=12 resets=10
+
+## host Xid since launch (journal, precise)
+Oct 14 20:44:09.319364 claude kernel: NVRM: Xid (PCI:0000:01:00): 13, Graphics Exception: ESR 0x404000=0x80000010
+Oct 14 20:44:09.320351 claude kernel: NVRM: Xid (PCI:0000:01:00): 13, pid=472075, name=qemu-system-x86, Graphics Exception: channel 0x00000038, Class 0000c9c0, Offset 00000000, Data 00000000
+Oct 14 20:45:26.530362 claude kernel: NVRM: Xid (PCI:0000:01:00): 13, Graphics Exception: ESR 0x404000=0x80000010
+Oct 14 20:45:26.531352 claude kernel: NVRM: Xid (PCI:0000:01:00): 13, pid=472075, name=qemu-system-x86, Graphics Exception: channel 0x00000045, Class 0000c9c0, Offset 00000000, Data 00000000
+Oct 14 20:45:44.973361 claude kernel: NVRM: Xid (PCI:0000:01:00): 13, Graphics Exception: ESR 0x404000=0x80000010
+Oct 14 20:45:44.974350 claude kernel: NVRM: Xid (PCI:0000:01:00): 13, pid=472075, name=qemu-system-x86, Graphics Exception: channel 0x00000036, Class 0000c9c0, Offset 00000000, Data 00000000
+Oct 14 20:45:58.610361 claude kernel: NVRM: Xid (PCI:0000:01:00): 13, Graphics Exception: ESR 0x404000=0x80000010
+Oct 14 20:45:58.611352 claude kernel: NVRM: Xid (PCI:0000:01:00): 13, pid=472075, name=qemu-system-x86, Graphics Exception: channel 0x0000003e, Class 0000c9c0, Offset 00000000, Data 00000000
+Oct 14 20:46:15.097375 claude kernel: NVRM: Xid (PCI:0000:01:00): 13, Graphics Exception: ESR 0x404000=0x80000010
+Oct 14 20:46:15.097461 claude kernel: NVRM: Xid (PCI:0000:01:00): 13, pid=472075, name=qemu-system-x86, Graphics Exception: channel 0x0000003f, Class 0000c9c0, Offset 00000000, Data 00000000
+Oct 14 20:48:10.258363 claude kernel: NVRM: Xid (PCI:0000:01:00): 13, Graphics Exception: ESR 0x404000=0x80000010
+Oct 14 20:48:10.259352 claude kernel: NVRM: Xid (PCI:0000:01:00): 13, pid=472075, name=qemu-system-x86, Graphics Exception: channel 0x00000063, Class 0000c9c0, Offset 00000000, Data 00000000
+
+## GSP resets (qemu.log line, host time from marks)
+117156 20:36:40.858 
+123682 20:38:16.731 
+127048 20:38:21.776 
+133421 20:44:15.013 
+140245 20:45:30.716 
+143444 20:45:40.807 
+147303 20:45:50.902 
+151346 20:46:06.043 
+155444 20:46:21.186 
+168058 20:48:17.272 
+
+## kernel NVDEC ring retire (first guest life)
+kf3: DOORBELL-LEDGER tok=0x00001805 route=translated emulated=0 forwarded=35 host=0x3002c fast=0
+kf3: chan token 0x1805 (host 0x3002c) RETIRED, forwarded=35 submissions=2 splits=0/0 serves=3 last_put=Some(35) gp_get=Some(35) store_views=1 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert
+kf3: DOORBELL-LEDGER tok=0x00001805 route=translated emulated=0 forwarded=70 host=0x3002c fast=0
+kf3: chan token 0x1805 (host 0x3002c) RETIRED, forwarded=70 submissions=4 splits=0/0 serves=6 last_put=Some(70) gp_get=Some(70) store_views=1 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert
+kf3: DOORBELL-LEDGER tok=0x00001805 route=translated emulated=0 forwarded=35 host=0x3002c fast=0
+kf3: chan token 0x1805 (host 0x3002c) RETIRED, forwarded=35 submissions=2 splits=0/0 serves=4 last_put=Some(35) gp_get=Some(35) store_views=1 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert
+kf3: DOORBELL-LEDGER tok=0x00001805 route=translated emulated=0 forwarded=35 host=0x3002c fast=0
+kf3: chan token 0x1805 (host 0x3002c) RETIRED, forwarded=35 submissions=2 splits=0/0 serves=3 last_put=Some(35) gp_get=Some(35) store_views=1 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert
+kf3: DOORBELL-LEDGER tok=0x00001805 route=translated emulated=0 forwarded=105 host=0x3002c fast=0
+kf3: chan token 0x1805 (host 0x3002c) RETIRED, forwarded=105 submissions=6 splits=0/0 serves=8 last_put=Some(105) gp_get=Some(105) store_views=1 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 in
+kf3: DOORBELL-LEDGER tok=0x00001805 route=translated emulated=0 forwarded=0 host=0x3002c fast=0
+kf3: chan token 0x1805 (host 0x3002c) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds
+kf3: DOORBELL-LEDGER tok=0x00001805 route=translated emulated=0 forwarded=0 host=0x3002d fast=0
+kf3: chan token 0x1805 (host 0x3002d) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds
+kf3: DOORBELL-LEDGER tok=0x00001805 route=translated emulated=0 forwarded=0 host=0x3002d fast=0
+kf3: chan token 0x1805 (host 0x3002d) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds
+kf3: DOORBELL-LEDGER tok=0x00001805 route=translated emulated=0 forwarded=0 host=0x3002d fast=0
+kf3: chan token 0x1805 (host 0x3002d) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds
+kf3: DOORBELL-LEDGER tok=0x00001805 route=translated emulated=0 forwarded=0 host=0x3002d fast=0
+kf3: chan token 0x1805 (host 0x3002d) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds
+
+## guest: bugcheck 0x116 at 18:46 guest time (= 20:46 host): The bugcheck was: 0x00000116 (0xffffc005dc99d010, 0xfffff8046bdf4580, 0x0, 0xd)
