@@ -116,6 +116,25 @@ DMA-FQ launcher, 2026-10-14 20:09-20:32 CEST. Graceful stop of the previous VM v
   H-V1 not falsified. H-V2 (kernel NVDEC channel = synchronisation only) needs the channel's RETIRED line (at VM
   stop): pending.
 - Two `display: STALL … ready, waiting for a vblank` 1 s reports (the known D-EARLY report; recovered, 60 fps).
+- Kernel NVDEC ring retire lines (`run1_queue_timeline.txt`) [measured]: `forwarded=35/70/105`, `dead=None` in every
+  guest life — admitted by the VIDEO tier, no `VideoMethod` refusal: H-V2 not falsified.
+
+**App queue, same VM life / QEMU process, production profile** (`apps/`, `run1_queue_timeline.txt`) [measured]:
+
+| app | result | numbers | resets / host Xid during the app |
+|---|---|---|---|
+| GravityMark 1.89 D3D12, 1280x720, 20k asteroids | **PASS** (TDR before: H-d3d12) | score 8834, 52.9 fps, 167 s | 0 / 0 |
+| GravityMark 1.89 Vulkan, default route, no relay flag | **PASS** | score 3817, 22.8 fps, 167 s | 0 / 0 |
+| Unigine Heaven 4.0 OpenGL windowed 1280x720, full Phoronix pass | **PASS** (early exit before: H-heaven) | 157.1 fps, 260.6 s | 0 / 0 |
+| Unigine Heaven 4.0 OpenGL fullscreen 1920x1080, full pass | **PASS** | 160.1 fps, 260.6 s | 0 / 0 |
+| Unigine Heaven 4.0 D3D11 windowed | **FAIL** at ~12 s | — | 1 GSP reset / host Xid 13 `Graphics Exception: ESR 0x404000=0x80000010` (DISPATCH; bit 4 not named publicly) on Heaven's USER-ring twin, class `C9C0` |
+| Edge + YouTube, continued (autoplay) after the 10 min check | **FAIL** at ~16 min (20:36:31) | — | TDR without any host Xid or kf3 refusal, `RESET_CHANNEL` refused, a reset cascade (8 GSP cycles, Xid 13 DISPATCH on DWM-era channels after the first reset) and bugcheck **0x116** at 20:46; the guest rebooted under the same QEMU and came back to the desktop |
+
+Installers (guest `C:\kf\apps`, downloaded in the guest from the vendors, sha256 checked against
+`scripts/bench/windows/appmatrix/manifest.json`): `GravityMark_1.89.msi` `38e32b47…169c8f` (extracted `msiexec /a`),
+`Unigine_Heaven-4.0.exe` `497865a0…0e5f` (Inno `/VERYSILENT /DIR=C:\kf\apps\heaven`). Runners:
+`scripts/bench/windows/kfagent_ogl/heaven.ps1` (`-extern_define PHORONIX,…`: one full pass, then exit) and `gm.ps1`
+(the app matrix's GravityMark arguments).
 
 ## 5. Files
 

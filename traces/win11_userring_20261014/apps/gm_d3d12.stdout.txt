@@ -1,0 +1,53 @@
+V:      0 us: Windows::main(): started
+M:   9.58 ms: ../data.zip: 313 files
+M:  11.77 ms: Temporal antialiasing
+M:  13.66 ms: Render Statistics
+M:  20.87 ms: Build Date: May 17 2025
+M:  22.77 ms: Build Info: version=20250429; windows; x64; release; d3d12=6; d3d11=2; vk=1; gl=45; cu=1; fusion
+M:  24.62 ms: Build Version: 1.89
+M: 144.22 ms: Name: 
+M: 146.20 ms: System: Microsoft Windows 11 Pro
+M: 148.16 ms: Kernel: 10.0.26200
+M: 150.00 ms: Memory: 7.99 GB
+M: 152.03 ms: Uptime: 3 m 54 s
+M: 153.89 ms: CPU: AMD Ryzen 9 7900 12-Core Processor
+M: 155.97 ms: GPU: NVIDIA GeForce RTX 4070
+M: 156.31 ms: Device: PCI\VEN_10DE&DEV_2786&SUBSYS_40EE1458&REV_A1\3&267A616A&0&30
+M: 156.47 ms: Version: 32.0.15.8088
+M: 156.62 ms: Memory: 4.00 GB
+M: 158.15 ms: Desktop: 1920x1080 1.0
+M: 158.31 ms: Screen 0: 1920x1080 0 0 \\.\DISPLAY1 NVIDIA GeForce RTX 4070
+M: 158.48 ms: Creating 1280x720 Direct3D12 Window
+M:   1.148 s: Using Fetch Mode
+M:   1.362 s: Device: NVIDIA GeForce RTX 4070
+M:   1.363 s: Vendor: Nvidia
+M:   1.363 s: DeviceID: 0x2786
+M:   1.363 s: Video Memory: 3.66 GB
+M:   1.364 s: Creating SceneManager
+M:   2.868 s: Creating RenderManager
+M:   3.935 s: Rasterization Mode
+M:   3.935 s: Creating Scene
+M:   5.497 s: Creating 20,000 Asteroids
+M:   5.594 s: Updating Scene
+M:   5.605 s: GravityMark 1.89 Direct3D12 is Ready in 5.6 s
+M:   5.605 s: Starting 1280x720 Direct3D12 Benchmark
+M:   5.606 s: Close when finished
+M:   5.606 s: Image: C:/kf/apps/out/gm_d3d12.png
+M:   5.606 s: Times: C:/kf/apps/out/gm_d3d12.times.txt
+M:   5.606 s: Count: 1
+M:   5.607 s: Resizing 1280x720 frame
+M:  2:52.671: Benchmark Finished
+M:  2:52.677: Times: C:/kf/apps/out/gm_d3d12.times.txt
+M:  2:52.678: NVIDIA GeForce RTX 4070
+M:  2:52.678: API: Direct3D12
+M:  2:52.678: Platform: Windows
+M:  2:52.678: Resolution: 1280x720
+M:  2:52.678: Antialiasing: Temporal
+M:  2:52.679: Asteroids: 20,000
+M:  2:52.679: Score: 8834
+M:  2:52.679: Time: 167.1 s
+M:  2:52.679: FPS: 52.9
+M:  2:52.933: Image: C:/kf/apps/out/gm_d3d12.png
+M:  2:52.940: Clearing Scene
+M:  2:52.980: GravityMark 1.89 Done
+V:  2:53.515: Windows::main(): finished
