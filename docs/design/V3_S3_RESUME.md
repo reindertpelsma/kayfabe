@@ -3,7 +3,7 @@
 **STATUS: LIVE, 2026-10-14 — MEASURED on the trusted host (RTX 4070, kf3 `559db30c`): the Linux desktop
 guest (ogkm 580.159.04, stock module) survives three S3 suspend/resume cycles in one boot (§6).** Branch
 `claude/s3-resume-20261014`. Evidence: `traces/linux_s3_resume_20261014/` (the failure) and its `fixed/`
-(the passing runs). Windows 11: not run (§7). Measured = a run or a GPU-free test named here; inferred =
+(the passing runs). Windows 11: run 2026-10-14, NOT yet surviving (§7a, correction above §7). Measured = a run or a GPU-free test named here; inferred =
 read from source, not executed.
 
 ## 1. The failure, measured (kf3 `c287af4f`, Linux desktop guest, ogkm 580.159.04)
@@ -159,6 +159,28 @@ Booter Load (`GSP-RESUME … no publish`). H3 holds: every wake reset arrived as
   `V3_DISPLAY_PLANES_ORACLE.md` §tables. `traces/linux_s3_resume_20261014/fixed/validation-559db30c/`
   (its `summary.log` also holds the first fast attempt, NOTRUN: the raw client was built into another
   target dir — a harness slip, rerun).
+
+## 7a. Windows 11 run (2026-10-14, kf3 `0c5fedff`) - correction folded above §7
+
+**STATUS: RESEARCH. Windows 11 does not survive S3 wake yet (0 clean cycles in 7 attempts); the failures are before or
+beside the GSP.** Evidence and per-run table: `traces/win11_s3_20261014/README.md`.
+- [measured] Windows' suspend IS served by this branch's code: fn 47 `bInPMTransition=true newLevel=3`,
+  `Running -> Suspending -> Halted`, no `GSP REFUSED`/`UNSERVICED` after fn 47; every wake is `(S3 WAKE) ... KEPT`.
+  With the Hyper-V timer enlightenments off, the Windows driver's SR-resume Booter Load fired E15 twice
+  (`GSP-RESUME`, `Cold -> Booted -> Running`) and Windows re-programmed the BARs. The GSP falsifier ("GSP REFUSED/UNSERVICED
+  on the unload path") did NOT occur; the 60 s desktop falsifier DID, for the reasons below.
+- [measured] With the production flags (`hv_time,hv_synic,hv_stimer`) the guest never leaves a timer storm after the wake:
+  one-shot synthetic timer re-armed every ~13 us with count = -1404037, 740k HLT exits/s, no BAR restored, no device touched.
+  Without them: (a) resume ok then a self-reset 62 s later (no dump), (b) bugcheck 0x5C HAL_INITIALIZATION_FAILED (0x201)
+  5 s after the wake, (c) three spins on PM1_STS (0x8101) + HPET/PM-timer reads with the screen black (also with `+invtsc`,
+  and with `hpet=off`). The old prime suspect, the `0xefbe0000` carve-out REFUSED leaf, is falsified: it occurs in every
+  normal boot.
+- [inferred] The common factor is the wake's reset of every CPU/timer/ACPI device (`pc_machine_wakeup`) under i440FX + OVMF
+  + Windows 11, not kf3. Not tested: q35, a kernel stack of the wedged guest, a bare-QEMU control (impossible: without a
+  GPU driver Windows disables S3, "Graphics").
+- Hyper-V enlightenments vs S3: dropping `hv_time/synic/stimer` is necessary to get past the storm but not sufficient and
+  costs the TSC page (PM timer/HPET reads exit: ~16k-120k pio/mmio exits/s while waiting). The launcher keeps the
+  production flags until a flag set passes 3/3.
 
 ## 7. Not done / not verified
 

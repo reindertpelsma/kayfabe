@@ -1,5 +1,16 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-14 16:00 CEST - Win11 S3: the GSP side holds, Windows does not survive the wake yet
+
+**Win11 S3 update, 2026-10-14 (kf3 `0c5fedff` = S3 branch + user-ring-scan `c287af4f`, branch `claude/s3-win11-20261014`, `traces/win11_s3_20261014/`, [`V3_S3_RESUME.md`](design/V3_S3_RESUME.md) §7a).**
+The GSP side holds on Windows (fn 47 PM suspend served, `(S3 WAKE) KEPT`, `GSP-RESUME` to `Running` when the guest gets that far,
+no refusals on the unload path) but Windows does NOT survive the wake: with the production `hv_time/synic/stimer` flags it sits in a
+Hyper-V synthetic-timer storm (nothing is touched, black screen); without them it resumed once then reset itself at +62 s, bugchecked
+0x5C HAL_INITIALIZATION_FAILED once, and wedged three times polling PM1_STS + HPET/PM timer. Next: q35 control, a kernel stack/dump of
+the wedged guest, a bare-QEMU S3 control. VM 2990 runs `0c5fedff` with sleep still disabled (interim stays). Also: the Wayland broker
+sends no key repeats because QEMU's PS/2 keyboard has no repeat; `-device usb-kbd,bus=xhci.0,id=kfkbd` next to the usb-tablet
+fixes it (now in `scripts/bench/windows/windows_broker.sh`).
+
 ## UPDATE 2026-10-14 14:40 CEST — ACPI S3 suspend/resume works for the Linux desktop guest (kf3 559db30c)
 
 Branch `claude/s3-resume-20261014` (from the plane-oracle branch). Full account: `docs/design/V3_S3_RESUME.md`;
@@ -19,7 +30,7 @@ evidence `traces/linux_s3_resume_20261014/` (failure) and `fixed/` (passes).
 - Validation at `559db30c`: `S3_CYCLES=3 desktop_s3.sh` 3/3 (ssh, nvidia-smi, glxgears ~60 FPS, 0 Xid, 0 WARNING
   after each wake); unit 3007/0 (every kf-* crate); gates 9/9 + gate10 PASS, births 12/12; fast suite 30/30;
   `desktop_smoke.sh` 0 flip timeouts / 0 Xid; `planes_oracle.sh` rgb/nv12/p010/yuyv PASS, 0 flip timeouts.
-- Not run: Windows 11 S3 (owner; steps in `V3_S3_RESUME.md` §7). Open: FSP families' SR_RESUME, the scheduling
+- Windows 11 S3: run 2026-10-14, not surviving yet (see the update above, `V3_S3_RESUME.md` §7a). Open: FSP families' SR_RESUME, the scheduling
   toggle has no host act, control ids not yet in the driver matrix.
 - Bench: every Linux-guest run now goes through `flock /tmp/claude-linux-guest.lock` (one tap on the host).
 

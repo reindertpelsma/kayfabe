@@ -1,0 +1,8 @@
+VARIANT nohvA cpu=host,-vmx,hv_relaxed,hv_vapic,hv_spinlocks=0x1fff,hv_vpindex,hv_runtime,hv_tlbflush,hv_ipi,hv_frequencies start 2026-10-14T15:23:23+02:00
+ok
+--- cycle 1 2026-10-14T15:23:25+02:00
+status=suspended at 2026-10-14T15:23:42+02:00
+WAKE at 2026-10-14T15:23:42+02:00
+agent back=0 after 602s boot0=2026-10-14T13:20:29.5000000+02:00 boot1=TIMEOUT waiting for guest
+kf3: S3WAKE+1 GSP-RESUME+1 coldresets+0
+TIMEOUT waiting for guest

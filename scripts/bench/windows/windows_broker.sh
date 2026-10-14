@@ -267,7 +267,7 @@ ARGS=(-name "$NAME" -nodefaults -no-user-config
     -drive "file=$RUN/windows.qcow2,if=none,id=disk0,format=qcow2,discard=unmap"
     -device virtio-blk-pci,drive=disk0,addr=0x4,disable-modern=on,bootindex=1
     -global i440FX-pcihost.pci-hole64-size=32G
-    -device qemu-xhci,id=xhci,addr=0x7 -device usb-tablet,bus=xhci.0
+    -device qemu-xhci,id=xhci,addr=0x7 -device usb-tablet,bus=xhci.0 -device usb-kbd,bus=xhci.0,id=kfkbd
     -device "$KF3")
 # ★ 2026-10-09, DIAGNOSTIC (default off; docs/design/V3_BAR0_TRACE_MODE.md): WIN_TRACE=1 records the
 # boot with the VFIO reference's tracer, as win_vm.sh's WINVM_TRACE does — QEMU trace events into

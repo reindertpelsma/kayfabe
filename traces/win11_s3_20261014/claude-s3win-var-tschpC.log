@@ -1,0 +1,9 @@
+VARIANT tschpC cpu=host,-vmx,migratable=off,+invtsc,hv_relaxed,hv_vapic,hv_spinlocks=0x1fff,hv_vpindex,hv_runtime,hv_tlbflush,hv_ipi,hv_frequencies start 2026-10-14T15:41:13+02:00
+graceful shutdown did not end qemu in 60s; SIGTERM 290656
+launched: OWNER_SESSION_READY=2026-10-14T15:42:39+02:00 run=2990 rev=0c5fedff install=win11x64.iso qpid=293212
+qemu cpu arg: host,-vmx,migratable=off,+invtsc,hv_relaxed,hv_vapic,hv_spinlocks=0x1fff,hv_vpindex,hv_runtime,hv_tlbflush,hv_ipi,hv_frequencies
+agent: UP
+ok
+--- cycle 1 2026-10-14T15:44:14+02:00
+status=suspended at 2026-10-14T15:44:27+02:00
+WAKE at 2026-10-14T15:44:27+02:00
