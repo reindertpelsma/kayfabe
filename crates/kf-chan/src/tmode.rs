@@ -242,6 +242,25 @@ pub struct HostSem {
     pub form: HostSemForm,
 }
 
+/// ★ 2026-10-14 — one video-engine semaphore operation, unbound ([`crate::vtables`]): the guest VA
+/// is resolved at bind through the placement rows and emitted by the perimeter
+/// ([`crate::tspace_unsafe::put_video_semaphore`]); the payloads are data, re-emitted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct VideoSem {
+    /// The subchannel (0-4).
+    pub sub: u32,
+    /// The channel's video class (the table the perimeter emits from).
+    pub class: u32,
+    /// The guest VA (`SEMAPHORE_A` `UPPER` and `SEMAPHORE_B`).
+    pub va: u64,
+    /// `SEMAPHORE_C`.
+    pub payload: u32,
+    /// `SET_SEMAPHORE_PAYLOAD_LOWER` / `_UPPER`, once the guest set either.
+    pub payload64: Option<(u32, u32)>,
+    /// `SEMAPHORE_D`, decoded against the class's own fields.
+    pub d: crate::vtables::VideoSemD,
+}
+
 /// ★ The unbound IR (§3.5).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Ir {
@@ -263,6 +282,8 @@ pub enum Ir {
         /// The bytes the engine may write there.
         bytes: u64,
     },
+    /// ★ 2026-10-14 — the VIDEO tier ([`crate::vtables`]): a video-engine semaphore operation.
+    VideoSem(VideoSem),
     /// The guest invalidated a VA space here (a split; `None` = `PDB_ALL`).
     Invalidate {
         /// The named root.
@@ -338,6 +359,12 @@ pub struct TState {
     pub swobj_binds: u64,
     /// ★ GR tier (batch 2): each GR subchannel's last `ADDRESS_UPPER` (held until its lower word).
     pub gr_addr_hi: [u32; 4],
+    /// ★ VIDEO tier: `SEMAPHORE_A` / `_B` / `_C` as last written.
+    video_sem: (u32, u32, u32),
+    /// ★ VIDEO tier: `SET_SEMAPHORE_PAYLOAD_LOWER` / `_UPPER`, once either was written.
+    video_payload64: Option<(u32, u32)>,
+    /// ★ VIDEO tier: video methods admitted over the channel's life (for the log).
+    pub video_methods: u64,
 }
 
 /// ★ Owner rulings 2026-10-07 (`OWNER_RULINGS.md` §S, items 1-4): what a Translated channel's
@@ -356,11 +383,20 @@ pub struct GrConfig {
     /// 72-82`) — its methods become [`Ir::SwMethod`] splits the runner serves (class 5080) or
     /// refuses by name. Takes precedence over `inert_sw_subch`.
     pub deferred_api: bool,
+    /// ★ 2026-10-14 — the VIDEO tier ([`crate::vtables`]): the ring is on a video engine's
+    /// runlist and its host channel holds an object of this video class (0 = not a video ring).
+    /// Subchannels 0-4 then reach that engine: its methods are decoded against the class's
+    /// derived table instead of the copy engine's.
+    pub video: u32,
 }
 
 #[cfg(test)]
 #[path = "tmode_gr_tests.rs"]
 mod gr_tier_tests;
+
+#[cfg(test)]
+#[path = "tmode_video_tests.rs"]
+mod video_tier_tests;
 
 /// `MEM_OP_D_OPERATION` values (`ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:182-193`).
 pub(crate) const OP_MEMBAR: u32 = 5;
@@ -523,6 +559,9 @@ fn one(
             method: m,
         });
     }
+    if st.gr.video != 0 {
+        return video_write(out, st, sub, m, v);
+    }
     let tier = st.tier.ok_or(Refusal::NoCeObject {
         subch: sub,
         method: m,
@@ -590,6 +629,82 @@ fn one(
             out.push(Ir::Launch(Box::new(ce_launch(st, tier, sub, l)?)));
         }
     }
+    Ok(())
+}
+
+/// ★ 2026-10-14 — the VIDEO tier: one method on a hardware subchannel (0-4) of a video ring,
+/// decoded against the channel's video class's DERIVED table ([`crate::vtables`]). Only the
+/// semaphore rows are admitted; every other method the header names is refused by name, an offset
+/// it does not name is unclassified.
+fn video_write(
+    out: &mut Vec<Ir>,
+    st: &mut TState,
+    sub: u32,
+    m: u32,
+    v: u32,
+) -> Result<(), Refusal> {
+    use crate::vtables::{VideoClass, VideoMethod, decode_semaphore_d, video_method};
+    let class = st.gr.video;
+    let vc = VideoClass::of_class(class).ok_or(Refusal::ForeignClass { subch: sub, class })?;
+    let Some(dm) = video_method(vc, m) else {
+        return Err(Refusal::Unclassified {
+            subch: sub,
+            method: m,
+        });
+    };
+    match dm {
+        VideoMethod::Refused(name) => {
+            return Err(Refusal::VideoMethod {
+                class,
+                subch: sub,
+                method: m,
+                name,
+            });
+        }
+        VideoMethod::Nop => {}
+        VideoMethod::SemA => {
+            let bits = vc.upper_bits().unwrap_or(8);
+            if bits < 32 && v >> bits != 0 {
+                return Err(Refusal::FieldValue {
+                    method: m,
+                    word: v,
+                    what: "SEMAPHORE_A beyond its UPPER field",
+                });
+            }
+            st.video_sem.0 = v;
+        }
+        VideoMethod::SemB => st.video_sem.1 = v,
+        VideoMethod::SemC => st.video_sem.2 = v,
+        VideoMethod::PayloadLower => {
+            st.video_payload64 = Some((v, st.video_payload64.map_or(0, |p| p.1)));
+        }
+        VideoMethod::PayloadUpper => {
+            st.video_payload64 = Some((st.video_payload64.map_or(0, |p| p.0), v));
+        }
+        VideoMethod::SemD => {
+            let d = decode_semaphore_d(vc, v).map_err(|what| Refusal::FieldValue {
+                method: m,
+                word: v,
+                what,
+            })?;
+            if st.video_sem.1 & 3 != 0 {
+                return Err(Refusal::FieldValue {
+                    method: m,
+                    word: st.video_sem.1,
+                    what: "SEMAPHORE_B below bit 2",
+                });
+            }
+            out.push(Ir::VideoSem(VideoSem {
+                sub,
+                class,
+                va: (u64::from(st.video_sem.0) << 32) | u64::from(st.video_sem.1),
+                payload: st.video_sem.2,
+                payload64: st.video_payload64,
+                d,
+            }));
+        }
+    }
+    st.video_methods += 1;
     Ok(())
 }
 
@@ -732,6 +847,15 @@ fn host(
                 st.inert_subch |= bit;
                 st.inert_value[(sub & 7) as usize] = class;
                 st.inert_binds += 1;
+                return Ok(());
+            }
+            if st.gr.video != 0 && sub <= 4 {
+                // ★ VIDEO tier: only the ring's own video class binds a hardware subchannel —
+                // authored, the class alone (the host channel holds an object of it from birth).
+                if class != st.gr.video {
+                    return Err(Refusal::ForeignClass { subch: sub, class });
+                }
+                words_ir(out, &[(sub, 0, class)]);
                 return Ok(());
             }
             if is_ce(class) {
@@ -1160,6 +1284,24 @@ pub fn bind(ir: &Ir, rows: &dyn Rows, w: &TWindows, out: &mut Vec<u32>) -> Resul
         }
         Ir::HostSem(h) => {
             bind_host_sem(h, rows, w, out)?;
+            Ok(0)
+        }
+        Ir::VideoSem(s) => {
+            // ★ Validated as a guest VA of this channel's space (one writable row covering the
+            // bytes the operation may write), inside the VM's windows; emitted by the perimeter.
+            let a = sema_addr(s.va, s.d.bytes, true, false, rows, w)?;
+            let mut words = Vec::new();
+            crate::tspace_unsafe::put_video_semaphore(
+                &mut words,
+                s.sub,
+                s.class,
+                a,
+                s.payload,
+                s.payload64,
+                s.d.word,
+            )
+            .map_err(perimeter)?;
+            out.extend(words);
             Ok(0)
         }
         Ir::Launch(l) => bind_launch(l, rows, w, out),

@@ -227,7 +227,12 @@ pub(super) struct Trace {
     /// Idle detector: when the pump last had a turn, and whether an idle stall was reported.
     last_turn: std::time::Instant,
     idle_reported: bool,
+    /// ★ 2026-10-14 (Minecraft Xid 32): what each private-ring descriptor was, by its issue
+    /// sequence (the last [`TRACE_SLOTS`]), so a STALL can name the descriptor the PBDMA stopped at.
+    slots: std::collections::VecDeque<(u64, String)>,
 }
+/// Private-ring descriptors remembered for a STALL dump (twice the private ring).
+const TRACE_SLOTS: usize = 1024;
 impl Trace {
     fn new() -> Self {
         Self {
@@ -251,6 +256,7 @@ impl Trace {
             progress: ((0, 0, 0, 0), std::time::Instant::now(), false),
             last_turn: std::time::Instant::now(),
             idle_reported: false,
+            slots: std::collections::VecDeque::new(),
         }
     }
     fn note_put(&mut self, doorbells: u64) {
@@ -387,6 +393,8 @@ pub(super) struct Pump {
     /// ★ 2026-10-14: keep reading the guest's GP_PUT without a doorbell
     /// ([`kf_chan::user_gate::Poll`]).
     pub(super) poll: kf_chan::user_gate::Poll,
+    /// ★ 2026-10-14: guest SYNC_WAIT entries gated while a packet was open (control witness).
+    sync_carried: u64,
     /// Measurement only ([`trace_dir`]).
     pub(super) trace: Option<Box<Trace>>,
 }
@@ -454,10 +462,17 @@ impl Pump {
             grace_reported: 0,
             grace_was_retrying: false,
             poll: kf_chan::user_gate::Poll::new(std::time::Instant::now()),
+            sync_carried: 0,
             trace: trace_dir().map(|_| Box::new(Trace::new())),
         })
     }
     pub(super) fn release(&mut self) -> Result<(), String> {
+        if self.sync_carried != 0 {
+            eprintln!(
+                "kf3: USER_RING_SYNC_CARRIED SUMMARY {:#x}:{:#x} gated_with_open_packet={}",
+                self.key.0, self.key.1, self.sync_carried
+            );
+        }
         if let Some(t) = &self.trace {
             eprintln!(
                 "kf3: USER_RING_TRACE SUMMARY {:x?} segments={} puts_with_doorbell={} puts_without_doorbell={} straddles={} verified={} stale={} stale_desync={} stale_prefetch={}",
@@ -620,6 +635,23 @@ impl Pump {
         });
     }
 
+    /// Measurement only: name the descriptors the last publication issued (the last `what.len()`
+    /// sequence numbers). `what` runs only with the trace on.
+    fn trace_slots(&mut self, what: impl FnOnce() -> Vec<String>) {
+        let issued = self.fetch.issued();
+        let Some(t) = self.trace.as_mut() else {
+            return;
+        };
+        let what = what();
+        let first = issued.saturating_sub(what.len() as u64);
+        for (i, d) in what.into_iter().enumerate() {
+            if t.slots.len() == TRACE_SLOTS {
+                t.slots.pop_front();
+            }
+            t.slots.push_back((first + i as u64, d));
+        }
+    }
+
     /// Measurement only: report once when this pump has made no progress (cursor, ring
     /// generation, private-ring issue/fetch counts) for 1.5 s while turns keep arriving.
     fn trace_stall(&mut self, me: &ChanPlane, r: &userrelay::Record) {
@@ -678,6 +710,82 @@ impl Pump {
             self.grace.retrying(),
             self.guest_get
         );
+        // ★ 2026-10-14: where the PBDMA stopped — our private USERD as last written back, the
+        // descriptors around the private GP_GET, and the scanned segment holding the PB GET.
+        let userd = r
+            .lease
+            .storage
+            .lock()
+            .ok()
+            .and_then(|s| s.userd_words().ok());
+        let fetched = self.fetch.fetched();
+        if let Some(u) = userd {
+            let pb_get = u64::from(u[17]) | (u64::from(u[24]) << 32);
+            let top = u64::from(u[22]) | (u64::from(u[23]) << 32);
+            eprintln!(
+                "kf3: USER_RING_TRACE STALL_USERD {:#x}:{:#x} pb_get={pb_get:#x} top_level_get={top:#x} pb_put={:#x} gp_get={} gp_put={} ref={:#x} fetched_seq={fetched}",
+                r.key.0,
+                r.key.1,
+                u64::from(u[16]) | (u64::from(u[19]) << 32),
+                u[34],
+                u[35],
+                u[18]
+            );
+            let Some(t) = self.trace.as_ref() else {
+                return;
+            };
+            for (seq, d) in t
+                .slots
+                .iter()
+                .filter(|(q, _)| q + 8 >= fetched && *q <= fetched + 8)
+            {
+                let mark = if *seq == fetched {
+                    " <== private GP_GET"
+                } else {
+                    ""
+                };
+                eprintln!(
+                    "kf3: USER_RING_TRACE STALL_SLOT {:#x}:{:#x} seq={seq} {d}{mark}",
+                    r.key.0, r.key.1
+                );
+            }
+            // The scanned guest segment the PB GET lies in (its words at scan time).
+            let hit = t.history.iter().rev().find_map(|h| {
+                let d = kf_abi::submit::gp_entry_decode_direct_c56f(h.entry)?;
+                (pb_get >= d.gpu_va && pb_get < d.gpu_va + d.len_bytes)
+                    .then(|| (h, d.gpu_va, ((pb_get - d.gpu_va) / 4) as usize))
+            });
+            match hit {
+                Some((h, va, at)) => {
+                    let lo = at.saturating_sub(8);
+                    let hi = (at + 8).min(h.words.len());
+                    let words: Vec<String> = h
+                        .words
+                        .get(lo..hi)
+                        .unwrap_or(&[])
+                        .iter()
+                        .map(|w| format!("{w:08x}"))
+                        .collect();
+                    eprintln!(
+                        "kf3: USER_RING_TRACE STALL_SEGMENT {:#x}:{:#x} seq={} cursor={} entry={:#018x} pb_va={va:#x} words={} carried_in={} carried_out={} rare={} pb_get_word={at} scan_words[{lo}..{hi}]=[{}]",
+                        r.key.0,
+                        r.key.1,
+                        h.seq,
+                        h.cursor,
+                        h.entry,
+                        h.len,
+                        h.carried_in,
+                        h.carried_out,
+                        h.rare,
+                        words.join(" ")
+                    );
+                }
+                None => eprintln!(
+                    "kf3: USER_RING_TRACE STALL_SEGMENT {:#x}:{:#x} pb_get={pb_get:#x} in no remembered guest segment (private staging/witness, or older than the history)",
+                    r.key.0, r.key.1
+                ),
+            }
+        }
     }
 
     /// Measurement only: run the straddle re-reads that are due (never sleeps).
@@ -1211,6 +1319,13 @@ impl Pump {
                         self.tick = true;
                         return Ok(false);
                     }
+                    // ★ 2026-10-14 (Minecraft in-world Xid 32 PBENTRY): a packet the previous
+                    // guest segment opened may continue INTO this SYNC_WAIT entry (public
+                    // dev_pbdma.ref, GP_ENTRY1_SYNC). Then the witness must carry no pushbuffer
+                    // byte, or the PBDMA takes it as the packet's next argument
+                    // (`kf_chan::user_gate::Witness`).
+                    let carried = self.scan.carried();
+                    let kind = kf_chan::user_gate::witness(carried.is_some());
                     self.publish(
                         me,
                         r,
@@ -1222,10 +1337,42 @@ impl Pump {
                             let (barrier, _) = pump.fetch.publish(None).map_err(str::to_owned)?;
                             storage.write_host_barrier(barrier)?;
                             let (witness, put) = pump.fetch.publish(None).map_err(str::to_owned)?;
-                            storage.write_host_witness(witness)?;
+                            match kind {
+                                kf_chan::user_gate::Witness::Bytes => {
+                                    storage.write_host_witness(witness)?;
+                                }
+                                kf_chan::user_gate::Witness::Control => {
+                                    storage.write_host_control_witness(witness)?;
+                                }
+                            }
                             storage.publish_put(put)
                         },
                     )?;
+                    self.trace_slots(|| {
+                        vec![
+                            "host barrier (control NOP, SYNC_WAIT)".into(),
+                            format!(
+                                "host witness {kind:?} open_packet={}",
+                                carried_text(carried)
+                            ),
+                        ]
+                    });
+                    if kind == kf_chan::user_gate::Witness::Control {
+                        // Bounded: one line for each of the first four per channel; the count
+                        // is in the release line.
+                        self.sync_carried += 1;
+                        if self.sync_carried <= 4 {
+                            eprintln!(
+                                "kf3: USER_RING_SYNC_CARRIED {:#x}:{:#x} generation={} cursor={} entry={entry:#018x} open_packet={} (#{}) — control witness, no pushbuffer byte",
+                                r.key.0,
+                                r.key.1,
+                                self.generation,
+                                self.cursor,
+                                carried_text(carried),
+                                self.sync_carried
+                            );
+                        }
+                    }
                     self.source_admitted = true;
                     self.sync.published(self.fetch.issued());
                     self.tick = true;
@@ -1253,6 +1400,10 @@ impl Pump {
                         storage.publish_put(put)
                     },
                 )?;
+                let cursor = self.cursor;
+                self.trace_slots(|| {
+                    vec![format!("guest control cursor={cursor} entry={entry:#018x}")]
+                });
                 self.source_admitted = true;
                 self.cursor = guest_get;
                 self.tick = true;
@@ -1635,6 +1786,15 @@ impl Pump {
                     storage.publish_put(put)
                 },
             )?;
+            let (cursor, entry, n) = (self.cursor, s.entry, s.words.len());
+            let (cin, cout) = (self.scan.carried(), next.carried());
+            self.trace_slots(|| {
+                vec![format!(
+                    "guest segment cursor={cursor} entry={entry:#018x} words={n} carried_in={} carried_out={}",
+                    carried_text(cin),
+                    carried_text(cout)
+                )]
+            });
             self.source_admitted = true;
             self.scan = next;
             self.cursor = s.guest_get;
@@ -1691,6 +1851,18 @@ impl Pump {
                 storage.publish_put(put)
             },
         )?;
+        let (at, entry, staged) = (s.at, s.entry, s.staged);
+        self.trace_slots(|| {
+            let mut v = Vec::new();
+            if bytes != 0 {
+                v.push(format!(
+                    "staged copy entry={entry:#018x} from word {at} bytes={bytes} restaged={staged}"
+                ));
+            }
+            v.push("host barrier (control NOP, SYNC_WAIT)".into());
+            v.push("host witness Bytes (staged)".into());
+            v
+        });
         if !s.staged && s.generation == self.generation {
             self.source_admitted = true;
             self.cursor = s.guest_get;

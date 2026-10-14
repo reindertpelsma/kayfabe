@@ -575,6 +575,27 @@ impl Storage<CpuView> {
             .map_err(|e| format!("USER_STORAGE_WITNESS_WRITE: {e:?}"))
     }
 
+    /// ★ 2026-10-14 — the SYNC_WAIT gate's witness when the guest stream CARRIES a packet into the
+    /// gated entry (`crate::user_gate::Witness::Control`): a CONTROL `NOP` GP entry (`LENGTH` 0,
+    /// `OPCODE_NOP`, `SYNC_PROCEED`; all 64 bits zero). It fetches no pushbuffer byte, so the
+    /// packet the PBDMA is parsing continues untouched into the guest's next segment. It cannot
+    /// begin processing before the barrier's wait finishes (public `dev_pbdma.ref`,
+    /// `NV_PPBDMA_GP_ENTRY1_SYNC`: "no further GP entries will be processed until the wait
+    /// finishes"), and `GP_GET` passes an entry only once it has begun processing
+    /// (`NV_PPBDMA_GP_GET`) — the same proof the byte witness gives, without a byte. It grants no
+    /// pushbuffer-byte credit (nothing staged depends on it).
+    ///
+    /// # Errors
+    /// Invalid slot or retiring/released CPU view.
+    pub fn write_host_control_witness(&self, slot: u32) -> Result<(), String> {
+        if slot >= ENTRIES {
+            return Err("USER_STORAGE_WITNESS_BOUND".into());
+        }
+        self.cpu()?
+            .store_u64(HostOffset::new(GP_OFFSET + u64::from(slot) * 8), 0)
+            .map_err(|e| format!("USER_STORAGE_WITNESS_WRITE: {e:?}"))
+    }
+
     /// Publish a private PUT after commands and GP descriptors are stored. The
     /// native channel's own doorbell is a separate authored host action.
     ///
@@ -603,6 +624,24 @@ impl Storage<CpuView> {
         self.cpu()?
             .load_u32(HostOffset::new(USERD_OFFSET + kf_abi::submit::USERD_GP_GET))
             .map_err(|e| format!("USER_STORAGE_GET_READ: {e:?}"))
+    }
+
+    /// MEASUREMENT ONLY (`KF3_USER_RING_TRACE`): the first 36 words of our own private USERD as the
+    /// hardware last wrote them back (`dev_ram.ref` `NV_RAMUSERD`: `PUT` word 16, `GET` 17, `REF`
+    /// 18, `PUT_HI` 19, `TOP_LEVEL_GET` 22, `_HI` 23, `GET_HI` 24, `GP_GET` 34, `GP_PUT` 35). Never
+    /// a decision input.
+    ///
+    /// # Errors
+    /// Released CPU view/load failure.
+    pub fn userd_words(&self) -> Result<[u32; 36], String> {
+        let cpu = self.cpu()?;
+        let mut out = [0u32; 36];
+        for (i, w) in out.iter_mut().enumerate() {
+            *w = cpu
+                .load_u32(HostOffset::new(USERD_OFFSET + 4 * i as u64))
+                .map_err(|e| format!("USER_STORAGE_USERD_READ: {e:?}"))?;
+        }
+        Ok(out)
     }
 
     /// Actual private hardware Reference; never CPU-authored. Public SET_REF
@@ -854,6 +893,14 @@ mod tests {
             kf_abi::submit::gp_entry(witness, 4).unwrap() | (1 << 41)
         );
         assert_eq!(cpu.load_u32(HostOffset::new(witness - s.va)).unwrap(), 0);
+        // The carried-packet witness is a CONTROL NOP: no pushbuffer byte, no SYNC.
+        s.write_host_control_witness(3).unwrap();
+        assert_eq!(read(3), 0);
+        assert!(matches!(
+            crate::user_stream::inspect_entry(read(3), 4),
+            Ok(crate::user_stream::Source::Nop)
+        ));
+        assert!(s.write_host_control_witness(ENTRIES).is_err());
         assert!(s.write_authored(GP_OFFSET, &[99]).is_err());
         assert!(s.write_gp(3, USERD_OFFSET, 4, false).is_err());
         assert_eq!(

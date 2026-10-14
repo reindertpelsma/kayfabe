@@ -7078,10 +7078,14 @@ impl ChanPlane {
                 } else {
                     None
                 };
+                // ★ 2026-10-14: a kernel video ring decodes subchannels 0-4 against the class of
+                // the video object its host channel holds (`kf_chan::vtables`), never as CE work.
+                let video_class = host.video_context().map_or(0, |(_, class, _)| class);
                 let gr_cfg = kf_chan::tmode::GrConfig {
                     tier: gr_tier,
                     inert_sw_subch: sw_subch_inert(),
                     deferred_api: deferred_api_trigger(),
+                    video: video_class,
                 };
                 let mut chan = {
                     let mut ring = TranslatedRing::new_tmode(a.gpfifo_va, entries, 0);

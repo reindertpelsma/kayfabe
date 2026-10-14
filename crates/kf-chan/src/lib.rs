@@ -35,4 +35,6 @@ pub mod user_gate;
 pub mod user_storage;
 pub mod user_stream;
 pub mod userd_relay;
+pub mod video_generated;
+pub mod vtables;
 pub mod worker;

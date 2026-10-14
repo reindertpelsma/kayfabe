@@ -88,6 +88,39 @@ pub enum Gate {
     Wait,
 }
 
+/// ★ 2026-10-14 (Win11 Minecraft in-world Xid 32 PBENTRY) — **which witness follows the barrier.**
+///
+/// Public `dev_pbdma.ref` (`NV_PPBDMA_GP_ENTRY1_SYNC`): "in the case where the final PB entry of
+/// the preceding PB segment is a method header representing a PB compressed method sequence of
+/// nonzero length — that is, the compressed method sequence is split across PB segments with all
+/// of its method data entries in the PB segment for which SYNC_WAIT is set — then Host is
+/// considered to have finished processing the preceding PB segment once that method header is
+/// read." A packet may therefore cross INTO a guest `SYNC_WAIT` entry, and the PBDMA's parse state
+/// (the open packet and the arguments it still expects) carries across every GP entry in between.
+/// The byte witness ([`Witness::Bytes`]: one zero `DMA_NOP` word) is safe only between packets: with
+/// a packet open it is fetched as that packet's next ARGUMENT, every later guest word shifts by one,
+/// and the packet's last data word is parsed as a header (`NV_PPBDMA_INTR_0_PBENTRY` when it does not
+/// decode, a wrong method when it does). [`Witness::Control`] (a control `NOP` GP entry, no bytes)
+/// gives the same "the barrier's wait has finished" proof without a byte.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Witness {
+    /// A 4-byte zero `DMA_NOP` segment (`LEVEL_SUBROUTINE`) — only at a packet boundary.
+    Bytes,
+    /// A control `NOP` GP entry — no pushbuffer byte; required while a packet is open.
+    Control,
+}
+
+/// The witness to author after the barrier, given whether the relay's scan (which has sized every
+/// packet of every segment published before the gated entry) still carries an open packet.
+#[must_use]
+pub const fn witness(carried: bool) -> Witness {
+    if carried {
+        Witness::Control
+    } else {
+        Witness::Bytes
+    }
+}
+
 /// Per-channel `SYNC_WAIT` state ([`Gate`]).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct SyncGate {
@@ -255,6 +288,128 @@ mod tests {
             reads_of_d_before_witness, 0,
             "D read before the hardware would fetch it"
         );
+    }
+
+    /// A model of what the PBDMA generates from a sequence of pushbuffer segments (one per GP
+    /// entry; a control entry contributes none): packets are parsed ACROSS segment boundaries, as
+    /// the public `dev_pbdma.ref` describes. `Err(i)` = word `i` of the concatenated stream was
+    /// expected to be a header and does not decode (`NV_PPBDMA_INTR_0_PBENTRY`).
+    fn pbdma_methods(segments: &[Vec<u32>]) -> Result<Vec<(u32, u32, u32)>, usize> {
+        use kf_abi::submit::{MethodForm, method_header_decode};
+        let words: Vec<u32> = segments.iter().flatten().copied().collect();
+        let mut out = Vec::new();
+        let mut i = 0;
+        while i < words.len() {
+            let h = method_header_decode(words[i]).ok_or(i)?;
+            i += 1;
+            match h.form {
+                MethodForm::Immediate => out.push((h.subchannel, h.method, h.immd)),
+                MethodForm::EndPbSegment | MethodForm::SubDeviceMask => {}
+                _ => {
+                    for k in 0..h.arg_words {
+                        let Some(&v) = words.get(i) else {
+                            return Ok(out); // still open at the end of what was published
+                        };
+                        let m = match h.form {
+                            MethodForm::NonIncrementing => h.method,
+                            MethodForm::IncrementOnce => h.method + if k > 0 { 4 } else { 0 },
+                            _ => h.method + 4 * k as u32,
+                        };
+                        out.push((h.subchannel, m, v));
+                        i += 1;
+                    }
+                }
+            }
+        }
+        Ok(out)
+    }
+
+    /// The relay over a guest ring of `(SYNC_WAIT, words)` segments: each segment is scanned and
+    /// published as written; before a SYNC_WAIT segment the gate authors a barrier (no bytes) and
+    /// the witness `pick` chooses. Returns the private ring's segments, in GP order.
+    fn relay(ring: &[(bool, Vec<u32>)], pick: impl Fn(bool) -> Witness) -> Vec<Vec<u32>> {
+        let mut scan = Scan::default();
+        let mut fetch = Fetch::new(64).unwrap();
+        let mut gate = SyncGate::default();
+        let mut private = Vec::new();
+        let mut cursor = 0u32;
+        let mut guard = 0;
+        while (cursor as usize) < ring.len() && guard < 100 {
+            guard += 1;
+            let (sync, words) = &ring[cursor as usize];
+            let raw = seg(0x1000 * u64::from(cursor + 1), words.len() as u64, *sync);
+            match gate.entry(raw, 1, cursor, fetch.fetched()) {
+                Gate::PublishBarrier => {
+                    fetch.publish(None).unwrap();
+                    private.push(Vec::new()); // the barrier: a control entry
+                    fetch.publish(None).unwrap();
+                    private.push(match pick(!scan.at_boundary()) {
+                        Witness::Bytes => vec![0], // one zero DMA_NOP word
+                        Witness::Control => Vec::new(),
+                    });
+                    gate.published(fetch.issued());
+                }
+                Gate::Wait => {
+                    let get = (fetch.issued() & 63) as u32;
+                    fetch.observe(get).unwrap();
+                }
+                Gate::Proceed => {
+                    assert_eq!(scan.segment(words, |_| false), Ok(None));
+                    fetch.publish(Some((1, cursor + 1))).unwrap();
+                    private.push(words.clone());
+                    cursor += 1;
+                }
+            }
+        }
+        private
+    }
+
+    /// ★ The Minecraft in-world defect's mechanism, as a model test. Guest ring: segment A ends
+    /// inside an I2M-style inline upload (`INC 1:0x1b0 x3`, one argument present — the measured
+    /// shape, `carried_out=IncrementOnce sub1 m0x1b0 1/1057`), the next entry B carries SYNC_WAIT and
+    /// the remaining arguments (legal: `dev_pbdma.ref`, `GP_ENTRY1_SYNC`). The relay's private ring,
+    /// parsed as the PBDMA parses it, must generate EXACTLY the guest's methods. With the byte
+    /// witness (the relay before this fix) the zero word becomes an argument and B's last data
+    /// word is parsed as a header: PBENTRY.
+    #[test]
+    fn a_packet_carried_into_a_sync_wait_entry_gets_no_witness_byte() {
+        let h = |sub, m, n| kf_abi::submit::method_header_inc(sub, m, n).unwrap();
+        let ring = vec![
+            (false, vec![h(0, 0x100, 1), 0, h(1, 0x1b0, 3), 0x11]),
+            // 0xC000_1234 is DATA here; as a header it is SEC_OP RESERVED6 (does not decode).
+            (true, vec![0x22, 0xC000_1234, h(0, 0x100, 1), 7]),
+            (false, vec![h(0, 0x100, 1), 8]),
+        ];
+        let guest: Vec<Vec<u32>> = ring.iter().map(|(_, w)| w.clone()).collect();
+        let expected = pbdma_methods(&guest).expect("the guest's own stream decodes");
+        assert_eq!(expected.len(), 6);
+
+        // The relay as fixed: the gate sees the open packet and authors a control witness.
+        let fixed = relay(&ring, witness);
+        assert_eq!(pbdma_methods(&fixed), Ok(expected.clone()));
+        assert_eq!(fixed.iter().filter(|s| s.is_empty()).count(), 2);
+
+        // The relay before the fix (a byte witness whatever the parse state): the zero word is
+        // taken as the packet's second argument and B's last data word (stream index 6) is
+        // parsed as a header.
+        let before = relay(&ring, |_| Witness::Bytes);
+        assert_eq!(pbdma_methods(&before), Err(6));
+
+        // At a packet boundary both witnesses generate the guest's methods (the measured gate).
+        let boundary = vec![
+            (false, vec![h(0, 0x100, 1), 0]),
+            (true, vec![h(1, 0x1b0, 2), 0x22, 0x33]),
+        ];
+        let guest: Vec<Vec<u32>> = boundary.iter().map(|(_, w)| w.clone()).collect();
+        let expected = pbdma_methods(&guest).unwrap();
+        assert_eq!(witness(false), Witness::Bytes);
+        assert_eq!(
+            pbdma_methods(&relay(&boundary, witness)),
+            Ok(expected.clone())
+        );
+        let with_byte = relay(&boundary, |_| Witness::Bytes);
+        // the zero word is a DMA_NOP header with no arguments: no method generated
+        assert_eq!(pbdma_methods(&with_byte), Ok(expected));
     }
 
     #[test]

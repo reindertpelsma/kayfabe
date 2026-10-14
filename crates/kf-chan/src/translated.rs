@@ -512,6 +512,19 @@ pub enum Refusal {
         /// The method.
         method: u32,
     },
+    /// ★ 2026-10-14 — the VIDEO tier (`crate::vtables`): a method the video class's public header
+    /// names that the tier does not admit (codec work, a codec operand, a context or monitored-fence
+    /// address) — refused by name.
+    VideoMethod {
+        /// The channel's video class.
+        class: u32,
+        /// The subchannel.
+        subch: u32,
+        /// The method.
+        method: u32,
+        /// Its name in the class header.
+        name: &'static str,
+    },
     /// ★ T-mode (§3.2): a `LAUNCH_DMA` bit the tier's field table does not name, or a named field
     /// with a value the table refuses — never silently cleared.
     LaunchField {
@@ -668,6 +681,7 @@ impl Refusal {
             Refusal::SubDeviceMask { .. } => "subdevice_mask",
             Refusal::Unclassified { .. } => "unclassified",
             Refusal::NoCeObject { .. } => "no_ce_object",
+            Refusal::VideoMethod { .. } => "video_method",
             Refusal::LaunchField { .. } => "launch_field",
             Refusal::HostSemOp { .. } => "host_sem_op",
             Refusal::FieldValue { .. } => "field_value",

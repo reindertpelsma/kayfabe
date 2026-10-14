@@ -512,6 +512,73 @@ pub fn put_gr_address(
     Ok(())
 }
 
+/// ★ 2026-10-14 — the VIDEO tier ([`crate::vtables`]): emit one video-engine semaphore operation on
+/// `sub` — `SEMAPHORE_A` (the window address's upper bits, `UPPER` field width from the class's
+/// own header), `SEMAPHORE_B` (lower 32 bits), the payload `SEMAPHORE_C`, the 64-bit payload
+/// registers when given, then `SEMAPHORE_D` — every offset looked up by NAME in the class's derived
+/// table. The bytes the operation touches are re-derived HERE from the `SEMAPHORE_D` word emitted
+/// (never taken from the caller) and must fit the validated address.
+///
+/// # Errors
+/// [`PerimeterRefusal::Field`] (no derived class, a `SEMAPHORE_D` word the class does not name);
+/// [`PerimeterRefusal::Sem40`] (the address does not fit the class's `UPPER` field or is
+/// unaligned); [`PerimeterRefusal::Footprint`]. Nothing is emitted.
+pub fn put_video_semaphore(
+    out: &mut Vec<u32>,
+    sub: u32,
+    class: u32,
+    a: WindowAddr,
+    payload: u32,
+    payload64: Option<(u32, u32)>,
+    d_word: u32,
+) -> Result<(), PerimeterRefusal> {
+    let c = crate::vtables::VideoClass::of_class(class).ok_or(PerimeterRefusal::Field {
+        what: "video semaphore on a class with no derived table",
+    })?;
+    let d = crate::vtables::decode_semaphore_d(c, d_word)
+        .map_err(|what| PerimeterRefusal::Field { what })?;
+    let bits = c.upper_bits().ok_or(PerimeterRefusal::Field {
+        what: "video class without a SEMAPHORE_A UPPER field",
+    })?;
+    if a.addr >> (32 + bits) != 0 || a.addr & 3 != 0 {
+        return Err(PerimeterRefusal::Sem40 { va: a.addr });
+    }
+    fits("semaphore", d.bytes, a)?;
+    let off = |name: &'static str| {
+        c.offset(name).ok_or(PerimeterRefusal::Field {
+            what: "video class without a semaphore method",
+        })
+    };
+    let (ma, mb, mc, md) = (
+        off("SEMAPHORE_A")?,
+        off("SEMAPHORE_B")?,
+        off("SEMAPHORE_C")?,
+        off("SEMAPHORE_D")?,
+    );
+    let wide = match payload64 {
+        Some(p) => Some((
+            off("SET_SEMAPHORE_PAYLOAD_LOWER")?,
+            off("SET_SEMAPHORE_PAYLOAD_UPPER")?,
+            p,
+        )),
+        None => None,
+    };
+    let upper_mask = if bits >= 32 {
+        u32::MAX
+    } else {
+        (1u32 << bits) - 1
+    };
+    put(out, sub, ma, ((a.addr >> 32) as u32) & upper_mask);
+    put(out, sub, mb, (a.addr & 0xFFFF_FFFF) as u32);
+    put(out, sub, mc, payload);
+    if let Some((lo, hi, (plo, phi))) = wide {
+        put(out, sub, lo, plo);
+        put(out, sub, hi, phi);
+    }
+    put(out, sub, md, d.word);
+    Ok(())
+}
+
 /// `NV906F_SEMAPHOREA` … `_D` (`ogkm-580: src/common/sdk/nvidia/inc/class/cl906f.h:78-81`).
 const HOST_SEMAPHORE_A: u32 = 0x10;
 const HOST_SEMAPHORE_B: u32 = 0x14;
