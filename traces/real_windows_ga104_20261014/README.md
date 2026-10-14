@@ -28,7 +28,8 @@ serial, VBIOS string, MAC or PCI subsystem id is in any file (scripts never prin
    PASS), the same shape as the captures taken here.
 4. **Rentals.** Vast KVM offers on 2026-10-14 02:20: one RTX 3070 (GA104) at $0.17/h, an RTX 5060 Ti (GB206) at
    $0.16-0.22/h (taken by lane B before this lane could rent it), no Turing at all, other Blackwell >= $0.63/h
-   (over the $0.60 limit).
+   (over the $0.60 limit). At 02:44 an RTX 5070 Ti (GB203) appeared at $0.42/h listed (0.488 billed with disk): rented as
+   priority 3 (budget allows; Turing still absent).
 
 ## Falsifiers, stated before the runs
 
@@ -44,6 +45,7 @@ serial, VBIOS string, MAC or PCI subsystem id is in any file (scripts never prin
 
 | die | box | offer | $/h | rented | destroyed | cost |
 |---|---|---|---|---|---|---|
+| GB203 (RTX 5070 Ti, PCI 10de:2c05) | 55838542 | 54462683 | 0.488 (offer listed 0.421) | 02:45 CEST | | |
 | GA104 (RTX 3070) | 55835609 | 55562112 | 0.17 | 02:19 CEST (created *stopped*: lane B rented the same machine's GPU in the same minute; `vastai start` at 02:38 got it) | | |
 
 Box facts [M]: KVM VM, 15 vCPU, 24 GiB RAM, 146 GB root (Linux side before the reinstall), `lspci`: GA104 [GeForce RTX 3070].
