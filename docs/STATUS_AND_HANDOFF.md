@@ -1036,6 +1036,28 @@ implemented. Late conversion and relay-only edits do not solve the observed case
 
 ## 0. Current resumption — start here
 
+**Win11 USER ring, 2026-10-14 (branch `claude/win11-userring-20261014`, evidence `traces/win11_userring_20261014/`).**
+Host-side fixes, GPU-free tests green (kf-chan, kf-qemu 259, kf-disp 150, kf-rm 148); Windows verification pending
+(the VM was the owner's). (a) **Edge/YouTube TDR** [measured cause, `0c5fedff`]: the kernel NVDEC ring had no T-mode
+tier, its first segment (`NVC9B0_SEMAPHORE_A-D`, a release + a non-stall trap) was decoded as CE work and refused
+`NoCeObject` → DEAD → TDR. Fix `1c503f87`: VIDEO tier `kf_chan::vtables`, method space DERIVED from open-gpu-doc
+`classes/video` (`tools/derive_video_methods.py`), semaphores admitted (address authored through rows + perimeter),
+every other named method refused by name. (b) **Minecraft in-world Xid 32 PBENTRY**: [measured] the Xid precedes the
+guest's `RESET_CHANNEL` by ~2 s (journal vs kf3 display clock; `dmesg -T` is ~4 s off here). Leading candidate H1
+[read + inferred]: the SYNC_WAIT gate's 4-byte zero witness is inserted even when a packet is open (legal per
+`dev_pbdma.ref` GP_ENTRY1_SYNC; straddles measured on every channel) → one-word shift → PBENTRY. Fix `1c503f87`:
+control-NOP witness while a packet is open, `USER_RING_SYNC_CARRIED` counted; falsifiers and H2-H4 in the README.
+(c) `GET_RG_SCAN_LINE` `0x5070020c` served live (`a8424ae2`, layout derived). (d) GravityMark Vulkan "relay flag":
+the relay is already default-on (`KF3_WIN_USER_RING_RELAY=0` is only a diagnostic falsifier); verify on Windows.
+**RESET_CHANNEL `0x906f0102` decision: stays refused.** The measured requests are nvlddmkm's engine-reset step inside
+its TDR (kayfabe armed no RC notifier for USER twins: `rc[armed=0]`). The only rule-conforming act is the host's own
+NON_PRIVILEGED `RESET_CHANNEL` (flags `0x10008`, `g_kernel_channel_nvoc.c`) on our twin; what it does to a PRIVATE
+ring/USERD (GP_GET/PUT, PBDMA state) is closed GSP-RM and unmeasured, so the relay cannot know where to resume (a wrong
+resume re-faults or drops a fence → repeated TDRs → bugcheck 0x116, worse than today's recovered adapter reset); an
+NV_OK without the act is a forged recovery. Containment is already VM-bounded. A served form needs: RC notifiers armed
+for USER twins, a forced-fault lane with a VFIO reference of what Windows does after an OK, and a test that the verb
+is authored only for an own twin with a host RC observed, once per RC. Both measured triggers are fixed at source.
+
 **Win11 OpenGL, 2026-10-14 (branch `claude/win11-opengl-20261014`, evidence `traces/win11_opengl_20261014/`).**
 FIXED [measured]: the Minecraft/OpenGL 300 s vsync hang ("Unable to communicate with the display driver, error 2")
 was the frozen GSP-client vblank counter: kf3 now keeps `kHeadVblankCount[head]` in the MAP_SHARED_DATA page

@@ -1,0 +1,19 @@
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: RUNLIST_PREEMPT_COMPLETE posted to 0xc1d00002:0xff0620a0 (eventData 0xffffe50fde72ede0) after the host's disable+preempt returned
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=0
+kf3: act disable channels: 0xc1d00002 DISABLE_CHANNELS(bDisable=true, bOnlyDisableScheduling=false, bRewindGpPut=false) over 1 twin(s) [0xc1d0009e:0xff04002b->host 0x2007e] + 0 Translated ring(s) — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE queued (posted only after this reply); relays before after (267 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: RUNLIST_PREEMPT_COMPLETE posted to 0xc1d00002:0xff0620a0 (eventData 0xffffe50fde741c20) after the host's disable+preempt returned
+kf3: ring REFUSED segment gp 0 va 0x12050f080 (32 words) NoCeObject { subch: 4, method: 576 }; first words: 20050017 20233040 00000001 00000008 00000000 00001003 20050017 20233260 00000001 00000009 00000000 00000001 20050017 202331d0 00000001 0000feed 00000000 00001000 20038090 00000001 2050f060 00000001 200180c1 00000000 200180c1 00030000 2005a017 2050f060 00000001 00000001 00000000 00000000
+kf3: chan token 0x1805 (VasKey(13965662457344034928)) DEAD: ring: Rewrite { gp: 0, why: NoCeObject { subch: 4, method: 576 } }
+kf3: chan token 0x1805 death mirror: own space=0xcafe001b rows=54 log_epoch=54 last row commits (epoch, lo, hi, ms ago)=[(2f, 120524000, 120527000, 1c1afa), (30, 120527000, 120528000, 1c1af5), (31, 120528000, 12052f000, 1c1af2), (32, 12052f000, 120530000, 1c1aed), (33, 120530000, 120534000, 1c1aea), (34, 120534000, 120536000, 1c1aea), (35, 120536000, 120537000, 1c1aea), (36, 120537000, 120538000, 1c1ae5)]; plane's mirror for the key now (same rows, space, rows): Some(Some((true, 3405643803, 54)))
+kf3: display fps[cap=75(unset) h0[armed=60.000 tick=60.89 clamped=0 late_max_us=3332 kms=0.0 tear=0.0 held=1 core_imm=1 vblirq=0.0] copies=0.0 checks=60.8 same=108540 ondemand=2 over=0]
+1862:kf-rm: chanlink: CLASSIFY 0xc1d00018:0xff040003 kernel work -> Translated (the kernel driver's own process)
+1863:kf-rm: chanlink: CHAN-FACTS 0xc1d00018:0xff040003 parent=0xff020000 class=0xc56f engine=Some(13) flags=0x200520 hVASpace=0x0 ctxShare=0x0 vas=0xc1d00002:Some(ff000870) tsg=None device=0xff020000 kernel=true privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) internalFlags=Some(16) ProcessID=Some(32c) SubProcessID=Some(0) kernel_pid_decl=false hObjectError=Some(0) hObjectBuffer=Som
+1867:kf3: act birth translated: chan 0xc1d00018:0xff040003 BORN Translated: token 0x1805 -> host 0x3004a in VasKey(13965662457344034928) gpfifo=0x12050b000x2048 userd=Some(Sysmem { base: 9543968256, size: 512 }) engine=0x13 tsg=None kernel_by=PRIVILEGE=KERNEL ring_va=0xff00400000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=false gp_get_by_engine=false sw_subch_inert=false 
+1869:kf3: chan 0xc1d00018:0xff040003: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0x3004a, software classID Some(1) (OWNER_RULINGS §U.1)
+1874:kf-rm: chanlink: falcon ctx promote 0xc1d00018:0xff040003 engine 0x13 guest ctx buffer VA 0x1203be000+0x1000
+1876:kf3: act promote translated context: 0xc1d00018:0xff040003 GPU_PROMOTE_CTX satisfied by Translated host 0x3004a GR=None VIDEO=Some((cafe004c, c9b0, 13)) entries=0 init_ids=0x0 va_ids=0x0 bound=false — no guest buffer touched (2 us, off the GSP lock)
+1880:kf3: chan 0xc1d00018:0xff040003 GPFIFO_SCHEDULE enable=true (token 0x1805, host 0x3004a)
+111268:kf3: chan token 0x1805 (VasKey(13965662457344034928)) DEAD: ring: Rewrite { gp: 0, why: NoCeObject { subch: 4, method: 576 } }
