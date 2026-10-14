@@ -217,11 +217,22 @@ pub enum GspReg {
     /// — same path, same line, `(0x110c00+(i)*8)` with `__SIZE_1 = 8` at both tags), and the C
     /// artifact hard-codes queue 0 (`C: src/qemu/mode2_regs_ga10x.h:69`).
     GspQueueHead(u8),
+    /// ★★★ 2026-10-14 (die sweep, GB206, Windows 580.88; `docs/design/V3_DIE_SWEEP_20261014.md` §3.1) —
+    /// `NV_PGSP_FALCON_ENGINE` (`0x1103c0`) on the FSP generations: `RESET` (bit 0) and the read-only
+    /// `RESET_STATUS` (10:8, `ASSERTED` = 0, `DEASSERTED` = 2), which `kgspResetHw_GH100` waits on after
+    /// each write (`ogkm-580: kernel_gsp_gh100.c:113-150`: write `RESET_ASSERT`, wait `_ASSERTED`, write
+    /// `RESET_DEASSERT`, wait `_DEASSERTED`; the Blackwell body first waits on the reset PLM
+    /// `NV_PGSP_FALCON_RESET_PRIV_LEVEL_MASK`, `kgspResetHw_GB100`, `kernel_gsp_gb100.c:68-91`). The Windows
+    /// RM runs that reset between the FSP capability query and the clock-boost/COT commands; the Linux RM does
+    /// not (measured: no `0x1103c0` access before the COT). A shadow word that read back the guest's own `0`
+    /// after `RESET_DEASSERT` left `RESET_STATUS` at `ASSERTED` for ever, so the wait timed out. The falcon
+    /// generations (Turing … Ada) have no `RESET_STATUS` here and do not model the register.
+    GspFalconEngine,
 }
 
 impl GspReg {
     /// Every register variant with a fixed identity (the queue heads are indexed separately).
-    pub const FIXED: [GspReg; 20] = [
+    pub const FIXED: [GspReg; 21] = [
         GspReg::GfwBootProgress,
         GspReg::GfwBootPlm,
         GspReg::GspFalconCpuctl,
@@ -242,6 +253,7 @@ impl GspReg {
         GspReg::Sec2FalconDmatrfcmd,
         GspReg::Wpr2AddrLo,
         GspReg::Wpr2AddrHi,
+        GspReg::GspFalconEngine,
     ];
 }
 
@@ -335,6 +347,9 @@ pub struct GspObservation {
     /// The value the guest last wrote to [`GspReg::GspRiscvBcrCtrl`] (`None` = never written:
     /// the register's reset value).
     pub riscv_bcr_ctrl: Option<u32>,
+    /// The value the guest last wrote to [`GspReg::GspFalconEngine`] (`None` = never written: out of reset).
+    /// Its `RESET_STATUS` follows the written `RESET` at once, so the shadow and the FSM's answer agree.
+    pub falcon_engine: Option<u32>,
     /// ★★★ v3-initrace — **where the guest's own FWSEC-FRTS command put the FRTS region**: the
     /// FB offset `frtsRegionOffset4K << 12` read out of the DMEM image the FWSEC that raised WPR2
     /// was loaded from ([`BootStep::FwsecCommand`]). `None`: no such command was read, and the

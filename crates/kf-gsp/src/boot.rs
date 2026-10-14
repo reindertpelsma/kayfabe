@@ -894,6 +894,8 @@ pub struct GspFsm {
     refusals: crate::refusal::RefusalLedger,
     /// ★ w827: the guest's last `NV_PRISCV_RISCV_BCR_CTRL` write ([`GspReg::GspRiscvBcrCtrl`]).
     bcr_ctrl: Option<u32>,
+    /// ★ 2026-10-14: the guest's last `NV_PGSP_FALCON_ENGINE` write ([`GspReg::GspFalconEngine`]).
+    falcon_engine: Option<u32>,
     /// ★ w828: how the life that is running now STOPS after fn-47 — latched from the regime that
     /// STARTED the processor ([`BootStep::StartProcessor`]), because the FSM holds no model
     /// between writes and the doorbell that carries fn-47 is serviced without one.
@@ -1086,6 +1088,7 @@ impl GspFsm {
             held: Vec::new(),
             refusals: crate::refusal::RefusalLedger::new(),
             bcr_ctrl: None,
+            falcon_engine: None,
             after_suspend: AfterSuspend::AwaitsTeardownUcode,
             fw_halted_after_suspend: false,
             abi,
@@ -1176,6 +1179,7 @@ impl GspFsm {
             boot_args_lo: self.mailbox_lo,
             boot_args_hi: self.mailbox_hi,
             riscv_bcr_ctrl: self.bcr_ctrl,
+            falcon_engine: self.falcon_engine,
             frts_offset: if self.phase.wpr2_up() {
                 self.frts_offset
             } else {
@@ -1322,6 +1326,10 @@ impl GspFsm {
         // ★ w827: a register the model answers from what was written (`GspRiscvBcrCtrl`).
         if w.reg == Some(kf_arch::gsp::GspReg::GspRiscvBcrCtrl) {
             self.bcr_ctrl = Some(val as u32);
+        }
+        // ★ 2026-10-14: likewise the GSP reset FSM's register (`GspReg::GspFalconEngine`).
+        if w.reg == Some(kf_arch::gsp::GspReg::GspFalconEngine) {
+            self.falcon_engine = Some(val as u32);
         }
         let ctx = self.boot_context();
         let steps = model
@@ -4361,6 +4369,7 @@ mod device_reset_from_every_phase {
             held,
             refusals,
             bcr_ctrl,
+            falcon_engine,
             after_suspend,
             fw_halted_after_suspend,
             abi: reset_abi,
@@ -4389,6 +4398,7 @@ mod device_reset_from_every_phase {
             held: h0,
             refusals: r0,
             bcr_ctrl: b0,
+            falcon_engine: fe0,
             after_suspend: a0,
             fw_halted_after_suspend: w0,
             abi: abi0,
@@ -4416,6 +4426,7 @@ mod device_reset_from_every_phase {
         assert_eq!(held, h0);
         assert_eq!(refusals, r0);
         assert_eq!(bcr_ctrl, b0);
+        assert_eq!(falcon_engine, fe0);
         assert_eq!(after_suspend, a0);
         assert_eq!(fw_halted_after_suspend, w0);
         assert_eq!(reset_abi, abi0);
