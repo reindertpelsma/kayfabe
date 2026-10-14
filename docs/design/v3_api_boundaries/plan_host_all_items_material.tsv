@@ -1,0 +1,17 @@
+group	tier	first_tag	last_tag	n_tags	strict_subintervals	covered_by	needs	family_items_changed
+0	A	535.309.01	535.309.01	1	1	-	rep=535.309.01	-
+1	A	545.23.06	545.29.06	5	1	-	rep=545.23.08	Ada;Ampere;Hopper
+2	A	550.40.07	550.40.07	1	1	-	rep=550.40.07	Ada;Ampere;Hopper;Turing
+3	A	550.40.53	550.163.01	33	5	-	rep=550.90.07	-
+4	A	555.42.02	555.58.02	5	1	-	rep=555.42.02	-
+5	A	560.28.03	560.35.03	3	1	-	rep=560.28.03	Ada;Ampere;Blackwell;Hopper;Turing
+6	A	565.57.01	565.77	2	1	-	rep=565.57.01	Ada;Blackwell;Hopper
+7	A	570.86.15	570.211.01	25	1	-	rep=570.148.08	Ada;Ampere;Blackwell;Turing
+8	A	575.51.02	575.64.05	6	1	575.51.03@AD103(H1);575.57.08@GA102(H2)	-	Blackwell
+9	A	580.65.06	580.82.09	4	1	580.65.06@GA102(H3)	-	Ada;Ampere;Blackwell;Hopper;Turing
+10	A	580.94.02	580.94.18	9	3	-	rep=580.94.02	Ada;Ampere;Blackwell;Hopper;Turing
+11	A	580.95.05	580.178.04	13	4	580.159.04@GA102(H5);580.159.04@GA106(H6);580.95.05@GA102(H4)	-	Ada;Ampere;Blackwell;Hopper;Turing
+12	A	590.44.01	590.48.01	2	1	-	rep=590.48.01	Ada;Ampere;Blackwell;Hopper;Turing
+13	A	595.44.02	595.104.02	20	4	595.91.07@AD104(H7);595.91.07@AD106(H8)	-	Ada;Ampere;Blackwell;Hopper;Turing
+14	A	610.43.02	610.57.04	3	1	-	rep=610.57.04	Ada;Ampere;Blackwell;Hopper;Turing
+15	A	615.71.09	615.78.08	2	1	-	rep=615.71.09	Ada;Ampere;Blackwell;Hopper;Turing
