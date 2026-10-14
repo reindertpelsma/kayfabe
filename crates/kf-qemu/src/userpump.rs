@@ -1258,7 +1258,13 @@ impl Pump {
                     kf_abi::submit::USERD_GP_PUT,
                     &mut put,
                 )
-                .map_err(|e| access_error(e, "USER_RING_PUT_READ"))?;
+                .map_err(|e| match e {
+                    // The USERD's allocation is no longer the channel's current one: the guest's
+                    // free is retiring this relay (`retire_user_ring_token` cancels the record next).
+                    // Not a refusal -- nothing was read or published; the look-again budget bounds it.
+                    kf_rm::memory_list::AccessError::Gone => Failure::Retry,
+                    e => access_error(e, "USER_RING_PUT_READ"),
+                })?;
             let put = u32::from_le_bytes(put);
             if put >= r.source.1 {
                 return Err("USER_RING_PUT_BOUND".into());

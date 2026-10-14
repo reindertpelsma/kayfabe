@@ -863,8 +863,18 @@ impl ChanPlane {
         let cleanup = self.inbox.user_va.release_after_channel_free(lease);
         let _ = self.inbox.wake.signal();
         if cleanup.is_ok() && sources_ok {
+            let mut last = false;
             if let Ok(mut rings) = self.user_rings.lock() {
                 rings.remove(&token);
+                last = rings.is_empty();
+            }
+            // ★ 2026-10-14: the event loop's counters whenever the last relay goes (bounded: the first
+            // 16 times, then each power of two) -- the device may never see `stop` (a guest power-off).
+            if last {
+                let n = self.relay_reports.fetch_add(1, Ordering::Relaxed) + 1;
+                if n <= 16 || n.is_power_of_two() {
+                    eprintln!("kf3: USER_RING_LOOP SUMMARY (all relays gone, #{n}) {}", self.relay_stats.summary());
+                }
             }
             if let Ok(mut holds) = self.user_birth_holds.lock() {
                 holds.retain(|(id, _)| !Arc::ptr_eq(id, &identity));
