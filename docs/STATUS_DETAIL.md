@@ -1,3 +1,8 @@
+> **UPDATE 2026-10-15 (read first):** section 0 of this page is dated 2026-09-30 and is **history** for everything after that date. The current status, with
+> evidence per line, is in [`../README.md`](../README.md) (what runs, what does not, supported dies) and [`STATUS_AND_HANDOFF.md`](STATUS_AND_HANDOFF.md).
+> GPU-free tests at the 2026-10-15 integration: 3138 passed / 0 failed (22 `kf-*` crates). Since 2026-09-30: Windows 11 runs on the owner host (Minecraft,
+> Heaven, GravityMark, Edge/YouTube NVDEC; matrix `traces/win11_userring_20261014/`), Linux S3 resume, display planes, the event-driven USER-ring relay.
+
 # Status in detail — what runs, what does not, and where it was measured
 
 > **Latest merge bar, 2026-09-30:** exact `afb552ea` passed 1754/0 crate tests, gates 9/9, a kf3
