@@ -1,0 +1,6 @@
+kf-census: ogkm 580.82.07, 1 sources, 9842 cmd + 9867 status messages, 208 controls
+oracle: FAIL, 8 anomalies
+  prefix_missing                2  e.g. src0: rec2 Cmd q(0x1,0x0): first sequence is 5300, not 0
+  capture_loss                  6  e.g. src0: record 1 LossUnknown q1 Cmd at entry 40: unknown number of entries lost
+  missing messages (sum of forward gaps): 10606
+pairing: 0 controls with unanswered requests or orphan replies; rpc.sequence non-zero on 0 messages

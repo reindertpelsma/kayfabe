@@ -1,0 +1,5 @@
+dir	function	name	count	bytes	rpc_results
+cmd	0xa	FREE	13	1248	-
+cmd	0x4c	GSP_RM_CONTROL	156	1367964	-
+status	0xa	FREE	13	1248	0x0:13
+status	0x4c	GSP_RM_CONTROL	156	1367964	0x0:156

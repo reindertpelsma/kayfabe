@@ -1,0 +1,15 @@
+# Standalone (its own empty workspace): this tool is NOT a member of the kayfabe workspace, and
+# nothing under crates/ is modified. It exists to take bytes from kayfabe's OWN transport encoder
+# (kf-gsp: encode_message, TxHeader) and hand them to the C walker's tests.
+[package]
+name = "kfwc-fixture"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "Apache-2.0 OR GPL-2.0-or-later"
+
+[workspace]
+
+[dependencies]
+kf-gsp = { path = "../../../../crates/kf-gsp" }
+kf-abi = { path = "../../../../crates/kf-abi" }

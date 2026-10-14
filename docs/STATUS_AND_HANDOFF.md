@@ -1349,6 +1349,13 @@ Owned reference Vast55385171 retired after evidence backup, exactID absence veri
 IPC WDDM-unsupported; Geekbench packaging gap. Integration/master unchanged;
 no full-matrix or complete Linux parity success claimed. Resume latest detailed handoff.
 
+**TODO, owner-requested, 2026-10-14: Win11 S3 sleep/resume ("the sleep fix").** The owner's Win11 "crash after idle" was ACPI S3: the guest sleeps on its idle timeout and the wake never completes.
+Reproduced on the Linux/ogkm desktop guest [measured]: suspend is clean (fn47 `bInPMTransition=true newLevel=3`, GSP Halted), QEMU's wakeup is a system reset (kf3 device reset, GSP Halted -> Cold), and the guest's
+resume-mode GSP boot (`KGSP_BOOT_MODE_SR_RESUME`, `kgspBootstrap_TU102`) fails with `Failed to boot GSP` / NV_ERR_NOT_READY, then Xid 119. Cause [inferred]: `kf-gsp` resume S6-S8 is unbuilt and the wake reset discards
+the suspended state. Evidence and the repro (`scripts/bench/display/desktop_s3.sh`): branch `claude/s3-resume-20261014`, `traces/linux_s3_resume_20261014/`. Work in flight: an Opus agent on that branch (resume in the FSM +
+device-reset path; Linux S3 x3, gates, fast suite, planes oracle on the stock module). **Interim:** Win11 runs with sleep disabled (`powercfg /change standby-timeout-ac 0`) so Edge/YouTube testing can proceed;
+**undo that when the fix lands and retest Win11 S3** (idle sleep + wake, 3 cycles, no TDR). Also open from the same day: the 1001 ms plane-update "ready, waiting for a vblank" STALL report
+(`traces/linux_planes_oracle_20261014/`), 3-plane / HDR YUV, ILUT/CSC/TMO on YUV windows, the lane-A scanner/RESET_CHANNEL fixes (`claude/user-ring-scan-20261014`) not yet validated on Win11 Edge+YouTube for 15 min.
 
 **Windows app matrix lane built (GPU-free), 2026-10-10 (branch `claude/windows-appmatrix-20261010`, design [`V3_WINDOWS_APP_MATRIX.md`](design/V3_WINDOWS_APP_MATRIX.md), STATUS DESIGN-ONLY).**
 ⊘ *This supersedes the "Windows app-matrix lane is TODO and does not exist" sentence of the next entry:* the inventory (100 Windows apps; all 71 Linux rows mapped or explained),

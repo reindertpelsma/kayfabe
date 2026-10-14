@@ -1,0 +1,17 @@
+F records 11336 {1: 4, 5: 6, 2: 11325, 6: 1} end_off 72387072 len 72387072 last_elements_t=419.9
+   (1, 0, 1, 't=8.114s')
+   (5, 0, 1, 't=8.115s')
+   (1, 1, 1, 't=8.116s')
+   (5, 1, 1, 't=8.116s')
+   (5, 0, 1, 't=138.302s')
+   (5, 1, 1, 't=138.302s')
+   (1, 0, 2, 't=146.650s')
+   (5, 0, 2, 't=146.650s')
+   (1, 1, 2, 't=146.650s')
+   (5, 1, 2, 't=146.651s')
+   (6, 0, 2, 't=420.003s')
+F
+  queue_instance 1 dir cmd messages 2385 first_seq 4678 last_seq 7062 seq_gaps 0 []
+  queue_instance 1 dir status messages 2391 first_seq 4685 last_seq 7075 seq_gaps 0 []
+  queue_instance 2 dir cmd messages 3224 first_seq 3221 last_seq 6444 seq_gaps 0 []
+  queue_instance 2 dir status messages 3226 first_seq 3225 last_seq 6450 seq_gaps 0 []

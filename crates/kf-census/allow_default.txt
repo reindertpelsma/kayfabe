@@ -1,0 +1,20 @@
+# kf-census scrub: the DEFAULT allow-list. Bodies of these controls are kept byte for byte;
+# every other control body is replaced by the fill pattern. One control id per line.
+#
+# Membership rule (docs/design/V3_GSP_CAPTURE_FORMAT.md section 8): the id is in no ogkm tag
+# (tier-1 verdict NOT_IN_ANY_VERSION, so ogkm cannot say what it returns), its purpose is
+# documented from measured behaviour (V3_WINDOWS_ONLY_CONSTANTS_20261013.md), it was observed
+# in the five real captures, and none of its observed bodies trips the structural screen
+# (tier_checks/body_screen.py). Evidence is a screen on ONE die, not a proof for other dies:
+# the owner reviews this list (section 8, decisions).
+#
+# Never listed here: any id in scrub::BOARD_DATA_CONTROLS (those can not be allow-listed).
+
+0x00730122   # per-display query, 8 B, reply is an echo of the request {0, displayId}
+0x00730128   # display query, 20 B, reply {0, 1, 0xff, 0, 0} for an all-zero request
+0x007302a3   # display query, 12 B, kayfabe echoes the request
+0x0073011a   # GET_DISPLAY_MODE, 28 B {displayId, active w/h, total w/h, 0, refresh Hz}
+0x20809064   # GSS-legacy clock-domain listing, 520 B
+0x20801111   # software-runlist submit, 40 B
+0x2080a026   # GSS-legacy cudart max-clock query
+0x2080a028   # GSS-legacy per-domain clock query

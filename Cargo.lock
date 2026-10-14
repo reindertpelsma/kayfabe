@@ -266,6 +266,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "kf-census"
+version = "0.1.0"
+dependencies = [
+ "kf-abi",
+ "kf-gsp",
+ "kf-rm",
+ "kf-util",
+]
+
+[[package]]
 name = "kf-chan"
 version = "0.1.0"
 dependencies = [

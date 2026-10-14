@@ -1,0 +1,1 @@
+records 19780 (bind 6, elements 19767, loss 0/0/6), end yes, file check ok

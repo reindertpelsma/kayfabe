@@ -1,0 +1,14 @@
+23:14:31 guest agent up
+23:14:32 wrote kfwc.sys 44032 bytes
+23:14:32 wrote kfwc_collect.exe 290284 bytes
+23:14:32 wrote SHA256SUMS 158 bytes
+23:14:32 wrote install.ps1 8277 bytes
+23:14:33 hashes in guest:
+9b80361a27e373b8519cecdc39e699e09f827bfd472ec3d15eb8f79d2917a4f1  kfwc.sys
+b7732d2edb0845f9d319d0dd2669474ff7cb7bec1adc54c10f261bd97c427acf  kfwc_collect.exe
+23:14:33 expected:
+9b80361a27e373b8519cecdc39e699e09f827bfd472ec3d15eb8f79d2917a4f1  kfwc.sys
+b7732d2edb0845f9d319d0dd2669474ff7cb7bec1adc54c10f261bd97c427acf  kfwc_collect.exe
+
+23:16:04 PREFLIGHT:
+[TIMED OUT]

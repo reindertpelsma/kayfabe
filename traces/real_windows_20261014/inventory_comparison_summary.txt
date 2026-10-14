@@ -1,0 +1,15 @@
+ref distinct controls 221  real (union of given captures) distinct controls 208
+common 183 only_real 25 only_ref 38
+ref by ogkm class {'defined': 157, 'absent_all_tags': 64}
+real by ogkm class {'defined': 140, 'absent_all_tags': 45, 'unknown': 23}
+common by class {'defined': 139, 'absent_all_tags': 44}
+only_real by class {'unknown': 23, 'defined': 1, 'absent_all_tags': 1}
+only_ref by class {'absent_all_tags': 20, 'defined': 18}
+absent_all_tags ("Windows-only" rows): ref 64  present in real 44  absent in real 20  real-only 1
+common ids whose request size SET differs 0  reply size set differs 0
+  of which real sizes are a subset of ref sizes: req 0 reply 0
+only_real ids ['0x00730404', '0x20800156', '0x208001a4', '0x20801222', '0x20801322', '0x20801344', '0x20801347', '0x20801813', '0x20801819', '0x20801829', '0x20801830', '0x20803083', '0x20803400', '0x20803401', '0x20803404', '0x20808536', '0x2080853b', '0x20808542', '0x20808546', '0x20809038', '0x2080a084', '0x2080a0a4', '0x2080a0f2', '0x2080a63c', '0x90e70113']
+C/census.controls.tsv distinct 206 in ref 183 not in ref 23 windows-only(absent_all_tags) rows present 45
+E/census.controls.tsv distinct 208 in ref 183 not in ref 25 windows-only(absent_all_tags) rows present 45
+F/census.controls.tsv distinct 69 in ref 45 not in ref 24 windows-only(absent_all_tags) rows present 15
+D/census.controls.tsv distinct 4 in ref 4 not in ref 0 windows-only(absent_all_tags) rows present 4

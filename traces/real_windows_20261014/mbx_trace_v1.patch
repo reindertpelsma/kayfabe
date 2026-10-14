@@ -1,0 +1,19 @@
+diff --git a/tools/windows-capture/lib/kfwc_engine.c b/tools/windows-capture/lib/kfwc_engine.c
+index 3b766afb4..38d74a06f 100644
+--- a/tools/windows-capture/lib/kfwc_engine.c
++++ b/tools/windows-capture/lib/kfwc_engine.c
+@@ -654,6 +654,14 @@ static void note_mailbox_signature(kfwc_engine *e, const kfwc_mb_diag *diag)
+ {
+     if (e->mb_sig_seen && (e->mb_sig_status != diag->status || e->mb_sig_pa != diag->mailbox_pa)) {
+         e->stats.scan_backoff_resets++;
++        {   /* DIAGNOSTIC VARIANT (mbx-trace): one event per mailbox signature change; reads only */
++            kfwc_u8 t[24];
++            memset(t, 0, sizeof(t));
++            kfwc_put32(t + 0, diag->status);
++            kfwc_put64(t + 8, diag->mailbox_pa);
++            kfwc_put64(t + 16, now_ticks(e));
++            ev_push(e, 5u, t, sizeof(t));
++        }
+         scan_backoff_restart(e);
+     }
+     e->mb_sig_seen = 1;
