@@ -45,6 +45,12 @@ pub(super) struct Cell<T = Record> {
     pub idx: u32,
     pub retry: AtomicBool,
     canceled: AtomicBool,
+    /// ★ 2026-10-14 (`kf_chan::user_loop`): the relay waits for private-ring progress only a look
+    /// can find (mirrors `Pump::wait`, written under the record lock, read by the spin / backstop
+    /// peeks without it).
+    waiting: AtomicBool,
+    /// Consecutive turns that found a lock / admission busy (`kf_chan::user_loop::may_retry`).
+    contended: AtomicU32,
     inner: Mutex<T>,
 }
 impl<T> Cell<T> {
@@ -53,6 +59,8 @@ impl<T> Cell<T> {
             idx,
             retry: AtomicBool::new(false),
             canceled: AtomicBool::new(false),
+            waiting: AtomicBool::new(false),
+            contended: AtomicU32::new(0),
             inner: Mutex::new(value),
         }
     }
@@ -101,10 +109,33 @@ impl<T> Cell<T> {
     pub fn is_canceled(&self) -> bool {
         self.canceled.load(Ordering::Acquire)
     }
+    /// Consecutive contended turns so far.
+    pub fn contended_run(&self) -> u32 {
+        self.contended.load(Ordering::Acquire)
+    }
+    /// A turn found a lock / admission busy.
+    pub fn contended_note(&self) {
+        let _ = self
+            .contended
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| Some(n.saturating_add(1)));
+    }
+    /// A turn ran without contention (or the holder rang).
+    pub fn contended_clear(&self) {
+        self.contended.store(0, Ordering::Release);
+    }
+    /// See [`Cell::waiting`].
+    pub fn is_waiting(&self) -> bool {
+        !self.is_canceled() && self.waiting.load(Ordering::Acquire)
+    }
+    /// Called with the record held, whenever `Pump::wait` changes.
+    pub fn set_waiting(&self, waiting: bool) {
+        self.waiting.store(waiting, Ordering::Release);
+    }
     /// Called with inner held, before token retirement/native cleanup.
     pub fn cancel(&self) {
         self.canceled.store(true, Ordering::Release);
         self.retry.store(false, Ordering::Release);
+        self.waiting.store(false, Ordering::Release);
     }
     /// Keep the same private exclusion as retirement through idx publication.
     pub fn wake_if(&self, active: impl FnOnce(&T) -> bool, ring: impl FnOnce(u32)) {
@@ -116,9 +147,117 @@ impl<T> Cell<T> {
     }
 }
 
+/// ★ DEBUG ONLY (`KF3_DEBUG_FORCE_MIGRATABLE`, `kf_rm::chanlink::FORCE_MIGRATABLE`): a guest USERD in
+/// the framebuffer -- which for this VMM is the host store object -- read and written through a CPU
+/// view WE armed at birth (the view `ChanPlane::userd_view` makes for a Passthrough twin), so a Linux
+/// guest, whose USERD is never in guest RAM, can drive the USER-ring relay. Four bytes each way,
+/// 4-aligned, inside the 0x200 bytes of the USERD; the view is given back when the last reference
+/// goes (after confirmed native free).
+pub(super) struct StoreUserd {
+    rm: &'static kf_host::HostRm,
+    store: u32,
+    cookie: u64,
+    region: Option<kf_linux_raw::VolatileRegion>,
+    _node: kf_linux_raw::CharDevice,
+    /// The USERD's offset inside the 4 KiB view.
+    at: u64,
+}
+impl StoreUserd {
+    /// Arm the view of the page holding the USERD at store offset `base`.
+    pub(super) fn new(
+        rm: &'static kf_host::HostRm,
+        store: u32,
+        base: u64,
+    ) -> Result<Self, String> {
+        let page = base & !0xFFF;
+        if base & 0x1ff != 0 {
+            return Err("USER_RING_STORE_USERD_ALIGN".into());
+        }
+        let (node, cookie) = rm
+            .arm_cpu_view(
+                kf_host::MapNode::Gpu,
+                store,
+                page,
+                0x1000,
+                kf_host::ViewAccess::ReadWrite,
+            )
+            .map_err(|e| format!("USER_RING_STORE_USERD_VIEW {e:?}"))?;
+        let region = match kf_linux_raw::VolatileRegion::map(
+            kf_linux_raw::Backing::DeviceFile { fd: node.as_fd() },
+            0x1000,
+            kf_linux_raw::CachePolicy::Uncached,
+            kf_linux_raw::HostPageSize::query(),
+        ) {
+            Ok(r) => r,
+            Err(e) => {
+                let _ = rm.release_cpu_view(kf_host::CpuViewRelease {
+                    h_memory: store,
+                    p_linear_address: cookie,
+                });
+                return Err(format!("USER_RING_STORE_USERD_MMAP {e:?}"));
+            }
+        };
+        Ok(Self {
+            rm,
+            store,
+            cookie,
+            region: Some(region),
+            _node: node,
+            at: base - page,
+        })
+    }
+    fn word(&self, offset: u64, len: usize) -> Result<kf_linux_raw::HostOffset, kf_rm::memory_list::AccessError> {
+        use kf_rm::memory_list::AccessError;
+        if len != 4 || offset & 3 != 0 || offset.checked_add(4).is_none_or(|e| e > 0x200) {
+            return Err(AccessError::Bounds);
+        }
+        Ok(kf_linux_raw::HostOffset::new(self.at + offset))
+    }
+    fn read(&self, offset: u64, bytes: &mut [u8]) -> Result<(), kf_rm::memory_list::AccessError> {
+        use kf_rm::memory_list::AccessError;
+        let at = self.word(offset, bytes.len())?;
+        let v = self
+            .region
+            .as_ref()
+            .ok_or(AccessError::Gone)?
+            .load_u32(at)
+            .map_err(|_| AccessError::Gone)?;
+        bytes.copy_from_slice(&v.to_le_bytes());
+        Ok(())
+    }
+    fn write(&self, offset: u64, bytes: &[u8]) -> Result<(), kf_rm::memory_list::AccessError> {
+        use kf_rm::memory_list::AccessError;
+        let at = self.word(offset, bytes.len())?;
+        let v = u32::from_le_bytes(bytes.try_into().map_err(|_| AccessError::Bounds)?);
+        self.region
+            .as_ref()
+            .ok_or(AccessError::Gone)?
+            .store_u32(at, v)
+            .map_err(|_| AccessError::Gone)
+    }
+    fn zero(&self) -> Result<(), kf_rm::memory_list::AccessError> {
+        for w in (0..0x200).step_by(4) {
+            self.write(w, &[0; 4])?;
+        }
+        Ok(())
+    }
+}
+impl Drop for StoreUserd {
+    fn drop(&mut self) {
+        // unmap before giving the view back (the order `ChanPlane::drop_relay` uses)
+        drop(self.region.take());
+        let _ = self.rm.release_cpu_view(kf_host::CpuViewRelease {
+            h_memory: self.store,
+            p_linear_address: self.cookie,
+        });
+    }
+}
+
 /// Kept even after statement-time Free; only confirmed native free retires it.
 #[derive(Clone)]
 pub(super) enum UserdSource {
+    /// ★ DEBUG ONLY: a framebuffer (host store) USERD, [`StoreUserd`].
+    Store(Arc<StoreUserd>),
     /// CPU-RM resolved birth descriptor; its CPU-local handle is not a GSP name.
     Resolved(crate::mem::userdram::Userd),
     /// Later migration carries an independently registered GSP MemoryList name.
@@ -164,6 +303,10 @@ impl UserdSource {
                 let _owner = Self::owner(me, key, allocation)?;
                 source.read(offset, bytes)
             }
+            Self::Store(source) => {
+                let _owner = Self::owner(me, key, allocation)?;
+                source.read(offset, bytes)
+            }
             Self::Registered(source) => {
                 source.read_admitted(offset, bytes, || Self::owner(me, key, allocation))
             }
@@ -182,6 +325,10 @@ impl UserdSource {
                 let _owner = Self::owner(me, key, allocation)?;
                 source.write(offset, bytes)
             }
+            Self::Store(source) => {
+                let _owner = Self::owner(me, key, allocation)?;
+                source.write(offset, bytes)
+            }
             Self::Registered(source) => {
                 source.write_admitted(offset, bytes, || Self::owner(me, key, allocation))
             }
@@ -196,6 +343,7 @@ impl UserdSource {
         check_userd_owner(Some(identity), expected)?;
         match self {
             Self::Resolved(source) => source.write(0, &[0; 0x200]),
+            Self::Store(source) => source.zero(),
             Self::Registered(_) => Err(kf_rm::memory_list::AccessError::Unsupported),
         }
     }
@@ -206,7 +354,7 @@ impl UserdSource {
         publish: impl FnOnce() -> T,
     ) -> Result<T, kf_rm::memory_list::AccessError> {
         match self {
-            Self::Resolved(_) => Ok(publish()),
+            Self::Resolved(_) | Self::Store(_) => Ok(publish()),
             Self::Registered(source) => source.admit(publish),
         }
     }
@@ -311,12 +459,21 @@ impl Birth {
             if handle == 0 || offset & 0x1ff != 0 {
                 return Err("USER_RING_USERD_DECLARATION".into());
             }
-            let Some(kf_arch::UserdMem::Sysmem { base, size }) = a.userd else {
-                return Err("USER_RING_USERD_APERTURE_NOT_IMPLEMENTED".into());
-            };
-            crate::mem::userdram::Userd::new(me.ram, base, size)
-                .map(|source| (UserdSource::Resolved(source), native_id))
-                .map_err(|e| format!("USER_RING_RESOLVED_USERD {e:?}"))
+            match a.userd {
+                Some(kf_arch::UserdMem::Sysmem { base, size }) => {
+                    crate::mem::userdram::Userd::new(me.ram, base, size)
+                        .map(|source| (UserdSource::Resolved(source), native_id))
+                        .map_err(|e| format!("USER_RING_RESOLVED_USERD {e:?}"))
+                }
+                // ★ DEBUG ONLY: only a channel the debug switch made a user ring can be here with a
+                // framebuffer USERD (a Windows permit is never granted for one: the scope decision
+                // of V3_WINDOWS_USER_RING_RELAY.md §10 stands for the production route).
+                Some(kf_arch::UserdMem::Framebuffer { base, .. }) if kf_rm::chanlink::force_migratable_enabled() => {
+                    StoreUserd::new(me.rm, me.store, base)
+                        .map(|view| (UserdSource::Store(Arc::new(view)), native_id))
+                }
+                _ => Err("USER_RING_USERD_APERTURE_NOT_IMPLEMENTED".to_string()),
+            }
         })();
         let (userd, native_id) = match source {
             Ok(u) => u,
@@ -706,8 +863,18 @@ impl ChanPlane {
         let cleanup = self.inbox.user_va.release_after_channel_free(lease);
         let _ = self.inbox.wake.signal();
         if cleanup.is_ok() && sources_ok {
+            let mut last = false;
             if let Ok(mut rings) = self.user_rings.lock() {
                 rings.remove(&token);
+                last = rings.is_empty();
+            }
+            // ★ 2026-10-14: the event loop's counters whenever the last relay goes (bounded: the first
+            // 16 times, then each power of two) -- the device may never see `stop` (a guest power-off).
+            if last {
+                let n = self.relay_reports.fetch_add(1, Ordering::Relaxed) + 1;
+                if n <= 16 || n.is_power_of_two() {
+                    eprintln!("kf3: USER_RING_LOOP SUMMARY (all relays gone, #{n}) {}", self.relay_stats.summary());
+                }
             }
             if let Ok(mut holds) = self.user_birth_holds.lock() {
                 holds.retain(|(id, _)| !Arc::ptr_eq(id, &identity));

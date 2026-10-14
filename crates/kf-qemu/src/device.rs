@@ -1805,7 +1805,7 @@ impl Device {
             .completions
             .for_each_inflight(|t| infl.push(format!("{t:#x}")));
         format!(
-            "kf3: PROBE-DUMP   device t={:.6}: intr {} irq[writes={} raised={} held={} oor={}] nsi[{}] inflight_tokens=[{}] workers[served={} parks={} host_rings={} timeouts_with_work={}] chan[contended={} poisoned={}]",
+            "kf3: PROBE-DUMP   device t={:.6}: intr {} irq[writes={} raised={} held={} oor={}] nsi[{}] inflight_tokens=[{}] workers[served={} parks={} host_rings={} timeouts_with_work={}] chan[contended={} poisoned={}] relay[{}]",
             kf_mem::maplog::t(),
             self.intr.snapshot(),
             ic.writes.load(o),
@@ -1819,7 +1819,8 @@ impl Device {
             ws.host_rings.load(o),
             ws.timeouts_with_work.load(o),
             self.chans.contended.load(o),
-            self.chans.poisoned.load(o)
+            self.chans.poisoned.load(o),
+            self.chans.relay_stats.summary()
         )
     }
 
@@ -3393,6 +3394,12 @@ impl Device {
 
     /// Stop the device's threads.
     pub fn stop(&self) {
+        // ★ 2026-10-14: the USER-ring event loop's bounded counters, one line (always; a backstop
+        // that found work is the bug counter -- `docs/design/V3_USER_RING_EVENT_LOOP_20261014.md` §3.6).
+        let rs = &self.chans.relay_stats;
+        if rs.gates.load(Ordering::Relaxed) + rs.markers.load(Ordering::Relaxed) > 0 {
+            eprintln!("kf3: USER_RING_LOOP SUMMARY {}", rs.summary());
+        }
         self.stop.store(true, Ordering::Release);
         let _ = self.drainer_efd.signal();
         let _ = self.worker_efd.signal();
@@ -3484,7 +3491,7 @@ impl Device {
                 );
             }
         };
-        kf_chan::worker::run(
+        kf_chan::worker::run_with_relay(
             self.plane,
             self,
             &poller,
@@ -3504,6 +3511,10 @@ impl Device {
             // The relay's timer: what optional pacing owes goes out even if no edge comes.
             &|| self.chans.nsi_tick(|v| self.latch_and_deliver(v))
                 || self.chans.user_ring_poll_due(),
+            // ★ 2026-10-14: the USER-ring relays' event hooks (spin / event / safety-net looks) and
+            // their bounded counters (`docs/design/V3_USER_RING_EVENT_LOOP_20261014.md`).
+            &*self.chans,
+            &self.chans.relay_stats,
         );
     }
 }

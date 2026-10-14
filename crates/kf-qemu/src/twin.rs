@@ -308,6 +308,7 @@ mod tests {
             process_id: Some(pid),
             kernel_pid: Some(0x350),
             system_pid_is_kernel: on,
+            force_migratable: false,
         };
         let birth = |st: &TwinState, f: &UserWorkFacts| -> Result<(), TwinRefusal> {
             if windows_user_work(f).is_ok() {

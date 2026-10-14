@@ -95,6 +95,16 @@ _the_witness_runs` replays the measured ring and fails without the gate.
 
 ## 4. Root cause 2 — not reading `GP_PUT` without a doorbell
 
+> ⊘ **CORRECTION 2026-10-14 (owner, `V3_USER_RING_EVENT_LOOP_20261014.md` §2.2).** This section overreads its data and
+> its fix (`Poll`) is withdrawn. `puts_with_doorbell=205 puts_without_doorbell=69971` counts TURNS, and a turn relays ONE
+> GP entry, so it is about 340 entries per doorbell (the guest's batching under the weak doorbell contract), not
+> evidence of submissions without a doorbell; the idle windows of 1.6-3.3 s match the guest's own 2 s timeout detection
+> that began at the Xid-32 hang about 2 s earlier. A lost doorbell cannot be measured reliably, so correctness comes from
+> construction and an exhaustive model: a doorbell makes every `GP_PUT` write before it visible, `GP_PUT` ahead of the last
+> doorbell is normal, and every other wait is announced by an event (the batch marker's interrupt) with a bounded spin and a
+> counted 50 ms safety net. `user_gate::Poll` and the 1 ms refresh are removed in the event-loop commit. The text below is
+> the superseded record.
+
 [measured, `run-e0a6c5ed.lines.txt`] With the gate in, the stall trace showed pumps with no turn for 1.6-55 s
 while the guest's `GP_PUT` was ahead of the cursor (`tick=false pending=false`), 30 times in one boot + Edge run,
 and one adapter reset. The doorbell census: all doorbells arrive on the relay's (Translated) tokens, none lost, but

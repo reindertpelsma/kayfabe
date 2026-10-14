@@ -12,79 +12,51 @@
 //! as a packet header and lost its place for every later segment.
 //!
 //! [`SyncGate`] is the hardware's own rule, authored on the relay's private ring: before reading
-//! anything at or after a guest `SYNC_WAIT` entry, publish a barrier (`SYNC_WAIT` NOP) and a
-//! witness, and read on only once the witness has BEGUN processing (`GP_GET` past it) — the
-//! barrier's wait, i.e. the preceding segment's processing, is then complete. That is the moment
-//! the hardware itself would fetch.
+//! anything at or after a guest `SYNC_WAIT` entry, publish a barrier (`SYNC_WAIT` NOP) and a marker
+//! segment, and read on only once the marker has been PROCESSED -- the barrier's wait, i.e. the
+//! preceding segment's processing, is then complete. That is the moment the hardware itself would
+//! fetch.
 //!
-//! [`Grace`] is defence in depth: a scan refusal of a segment that was never published is retried
-//! (re-read, rescanned) for [`REFUSE_AFTER`] before it is final. Measured after the gate: no
-//! stale reads at all; the grace exists so a visibility window nobody has measured yet costs a
-//! delay, not a dead channel and an adapter reset. Neither grants anything; a refusal after the
-//! grace is exactly the refusal it was before, and hardware USER privilege enforces isolation.
+//! ★ 2026-10-14 (MEASURED, bare metal RTX 4070 / 595.91.07, `kf-syncwait-stress --families
+//! barrier`): the proof is `USERD.REFERENCE` written by a `SET_REFERENCE` method in the marker,
+//! NOT `GP_GET`. With an ACQUIRE stalling entry 0 and a SYNC_WAIT barrier behind it, `GP_GET`
+//! already covered every published entry, the segment behind the barrier had not executed and
+//! `REFERENCE` was still 0 (it became the marker's value when the acquire was satisfied). `GP_GET`
+//! counts entries the PBDMA has POPPED from the GPFIFO, which runs ahead of processing; the gate the
+//! earlier revision built on "`GP_GET` past the witness" let the relay scan pushbuffers the guest had
+//! not yet written (49 of 60 late-bytes plans refused: the scan met the poison). [`Marks`] is that
+//! proof's bookkeeping.
+//!
+//! A SYNC_WAIT entry reached while a method packet is OPEN across it cannot be gated: no witness may
+//! enter an open packet (the original Xid-32 PBENTRY), and a control entry has no CPU-visible effect.
+//! The hardware does not delay such a segment either (public `dev_pbdma.ref`, `GP_ENTRY1_SYNC`: once
+//! the split packet's header is read the preceding segment counts as processed), so the guest's bytes
+//! are there when it publishes; the relay reads it at once and counts it (`carried_ungated`).
+//!
+//! [`Grace`] is defence in depth: a scan refusal of a segment that was never published is re-read and
+//! rescanned a bounded NUMBER of times ([`REFUSE_RETRIES`]) before it is final. Measured after the gate:
+//! no stale reads at all; the retry exists so a visibility window nobody has measured yet costs a few
+//! re-reads, not a dead channel and an adapter reset. It counts re-reads and never consults a clock
+//! (2026-10-14, owner: correctness never depends on timing). Neither grants anything; a refusal after
+//! the retries is exactly the refusal it was before, and hardware USER privilege enforces isolation.
+//!
+//! There is deliberately NO `GP_PUT` poll here any more: see [`SyncGate`] and
+//! `docs/design/V3_USER_RING_EVENT_LOOP_20261014.md` §2.2 (the old `Poll` rested on an overread
+//! measurement) -- a doorbell makes every `GP_PUT` write before it visible, and everything else the
+//! relay waits for is announced by an event (`kf_chan::user_loop`).
 
-use std::time::{Duration, Instant};
-
-/// How long the same unpublished segment must keep refusing before the refusal is final.
-pub const REFUSE_AFTER: Duration = Duration::from_millis(50);
-
-/// After new guest work was last seen, how long the relay keeps polling `GP_PUT` at the worker's
-/// short tick (1 ms) — the window in which a guest that believes its channel is still running
-/// advances `GP_PUT` without a doorbell.
-pub const ACTIVE_POLL: Duration = Duration::from_millis(250);
-/// Beyond that window, the longest a relay goes without reading `GP_PUT` (the worker's park tick,
-/// at most 50 ms, bounds it from above). Far below the guest's 2 s timeout detection.
-pub const IDLE_POLL: Duration = Duration::from_millis(20);
-
-/// ★ 2026-10-14 — **the relay must notice a `GP_PUT` advance that comes without a doorbell.**
-/// Public `dev_pbdma.ref` (`NV_PPBDMA_GP_PUT`): Host synchronizes its `GP_PUT` from
-/// `NV_RAMUSERD_GP_PUT` on its own ("there will be a delay in that synchronization") while the
-/// channel is loaded, so a driver that believes its channel is still running may skip the
-/// doorbell. Measured (Win11 + 580.88): 205 doorbells against ~70 000 new-work `GP_PUT` reads on
-/// one channel, and pumps idle 1.6-3.3 s with the guest's `GP_PUT` ahead of the cursor (no turn,
-/// no doorbell) right before the guest's per-channel recovery (`RESET_CHANNEL`) and the adapter
-/// reset. A relay that reads `GP_PUT` only on a doorbell or while its own ring is in flight leaves
-/// that work unread forever. [`Poll`] keeps reading it: every worker tick for [`ACTIVE_POLL`]
-/// after new work, then at least every [`IDLE_POLL`].
-#[derive(Debug, Clone, Copy)]
-pub struct Poll {
-    work_at: Instant,
-    turn_at: Instant,
-}
-
-impl Poll {
-    /// A new channel (counts as just active).
-    pub fn new(now: Instant) -> Self {
-        Self {
-            work_at: now,
-            turn_at: now,
-        }
-    }
-    /// A turn ran at `now`; `new_work` = it found `GP_PUT` ahead of the cursor.
-    pub fn turned(&mut self, now: Instant, new_work: bool) {
-        self.turn_at = now;
-        if new_work {
-            self.work_at = now;
-        }
-    }
-    /// Inside the active window: keep the worker's short tick.
-    pub fn active(&self, now: Instant) -> bool {
-        now.saturating_duration_since(self.work_at) < ACTIVE_POLL
-    }
-    /// An idle relay is due for a `GP_PUT` read at `now`.
-    pub fn due(&self, now: Instant) -> bool {
-        self.active(now) || now.saturating_duration_since(self.turn_at) >= IDLE_POLL
-    }
-}
+/// How many times the same unpublished segment is re-read and rescanned after its first refusal
+/// before the refusal is final. A COUNT of re-reads, never a duration.
+pub const REFUSE_RETRIES: u32 = 3;
 
 /// What the relay does with the guest entry at its cursor ([`SyncGate::entry`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Gate {
     /// Read and relay it now.
     Proceed,
-    /// Author a barrier + witness on the private ring first, then call [`SyncGate::published`].
+    /// Author a barrier + marker on the private ring first, then call [`SyncGate::published`].
     PublishBarrier,
-    /// The witness has not begun processing yet: read nothing, come back later.
+    /// The marker has not been processed yet: read nothing, come back later.
     Wait,
 }
 
@@ -97,17 +69,19 @@ pub enum Gate {
 /// considered to have finished processing the preceding PB segment once that method header is
 /// read." A packet may therefore cross INTO a guest `SYNC_WAIT` entry, and the PBDMA's parse state
 /// (the open packet and the arguments it still expects) carries across every GP entry in between.
-/// The byte witness ([`Witness::Bytes`]: one zero `DMA_NOP` word) is safe only between packets: with
-/// a packet open it is fetched as that packet's next ARGUMENT, every later guest word shifts by one,
-/// and the packet's last data word is parsed as a header (`NV_PPBDMA_INTR_0_PBENTRY` when it does not
-/// decode, a wrong method when it does). [`Witness::Control`] (a control `NOP` GP entry, no bytes)
-/// gives the same "the barrier's wait has finished" proof without a byte.
+/// A marker segment (words) is safe only between packets: with a packet open it is fetched as that
+/// packet's next ARGUMENTS, every later guest word shifts, and the packet's last data word is parsed
+/// as a header (`NV_PPBDMA_INTR_0_PBENTRY` when it does not decode, a wrong method when it does).
+/// A control entry has no byte but no CPU-visible effect either, so it proves nothing: with a packet
+/// open there is NO witness, and the entry is not gated ([`Witness::None`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Witness {
-    /// A 4-byte zero `DMA_NOP` segment (`LEVEL_SUBROUTINE`) — only at a packet boundary.
-    Bytes,
-    /// A control `NOP` GP entry — no pushbuffer byte; required while a packet is open.
-    Control,
+    /// A private marker segment `[SET_REFERENCE tag|n, NON_STALL_INTERRUPT, 0]`: processing it
+    /// writes `USERD.REFERENCE` ([`Marks`]) and raises the non-stall interrupt the worker's epoll
+    /// watches -- only at a packet boundary.
+    Marker,
+    /// No witness exists (a packet is open across the gated entry): the entry cannot be gated.
+    None,
 }
 
 /// The witness to author after the barrier, given whether the relay's scan (which has sized every
@@ -115,31 +89,104 @@ pub enum Witness {
 #[must_use]
 pub const fn witness(carried: bool) -> Witness {
     if carried {
-        Witness::Control
+        Witness::None
     } else {
-        Witness::Bytes
+        Witness::Marker
+    }
+}
+
+/// The tag in the high half of every marker's `REFERENCE` value. The guest may itself execute
+/// `SET_REFERENCE` on the private channel (its segments are forwarded unchanged), so only a tagged
+/// value counts as a marker; an untagged one is ignored. A guest that forges the tag can only make
+/// the relay read ITS OWN late bytes early (pushbuffer integrity is not a security boundary for USER
+/// channels, OWNER_RULINGS 2026-10-13).
+pub const MARK_TAG: u32 = 0x4B46_0000;
+
+/// Bookkeeping of the relay's reference-bearing markers: `issued` published, `seen` observed
+/// processed. The 16-bit count in the value is extended against `seen` (at most `0x7FFF` markers are
+/// outstanding: the private ring holds 511 entries).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Marks {
+    issued: u64,
+    seen: u64,
+}
+
+impl Marks {
+    /// Markers published so far.
+    #[must_use]
+    pub const fn issued(&self) -> u64 {
+        self.issued
+    }
+    /// Markers observed processed.
+    #[must_use]
+    pub const fn seen(&self) -> u64 {
+        self.seen
+    }
+    /// The `REFERENCE` value marker number `count` writes.
+    #[must_use]
+    pub const fn value(count: u64) -> u32 {
+        MARK_TAG | (count & 0xFFFF) as u32
+    }
+    /// Reserve the next marker before it is published: `(its count, the value it writes)`.
+    ///
+    /// # Errors
+    /// Too many markers outstanding to extend the 16-bit count unambiguously.
+    pub fn issue(&mut self) -> Result<(u64, u32), &'static str> {
+        if self.issued - self.seen >= 0x7FFF {
+            return Err("USER_MARKS_OUTSTANDING");
+        }
+        self.issued += 1;
+        Ok((self.issued, Self::value(self.issued)))
+    }
+    /// The absolute count of markers processed that a `REFERENCE` word implies, WITHOUT recording it.
+    /// An untagged word (the guest's own `SET_REFERENCE`, or none yet) or one that names a marker
+    /// not yet issued implies no progress.
+    #[must_use]
+    pub fn peek(&self, word: u32) -> u64 {
+        if word & 0xFFFF_0000 != MARK_TAG {
+            return self.seen;
+        }
+        let delta = u64::from((word as u16).wrapping_sub(self.seen as u16));
+        if delta <= self.issued - self.seen {
+            self.seen + delta
+        } else {
+            self.seen
+        }
+    }
+    /// Record what [`Marks::peek`] implies; returns the count processed.
+    pub fn observe(&mut self, word: u32) -> u64 {
+        self.seen = self.peek(word);
+        self.seen
     }
 }
 
 /// Per-channel `SYNC_WAIT` state ([`Gate`]).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct SyncGate {
-    /// Private-ring sequence the witness must reach (fetched ≥ it) before reading on.
+    /// Marker count ([`Marks::issued`] after the gate's marker) that must be PROCESSED before reading on.
     witness: Option<u64>,
     /// The guest entry `(ring generation, cursor)` whose wait is already proven.
     cleared: Option<(u64, u32)>,
 }
 
 impl SyncGate {
-    /// The guest entry `raw` sits at `(generation, cursor)`; `fetched` is the private ring's
-    /// current fetch count. Entries without `SYNC_WAIT` (bit 63, `GP_ENTRY1_SYNC`) always proceed.
-    pub fn entry(&mut self, raw: u64, generation: u64, cursor: u32, fetched: u64) -> Gate {
+    /// The guest entry `raw` sits at `(generation, cursor)`; `processed` is the number of gate markers
+    /// the PBDMA has PROCESSED ([`Marks::seen`]) -- never a `GP_GET` count. Entries without
+    /// `SYNC_WAIT` (bit 63, `GP_ENTRY1_SYNC`) always proceed.
+    pub fn entry(&mut self, raw: u64, generation: u64, cursor: u32, processed: u64) -> Gate {
+        // ★ A proven wait belongs to ONE guest entry (public `dev_pbdma.ref`, `GP_ENTRY1_SYNC`: the
+        // hardware waits every time the ring reaches a SYNC_WAIT entry). Once the relay is looking at
+        // another `(generation, cursor)` the proof is spent: a ring lap later the same slot holds a NEW
+        // entry, and a stale marker would wave it through unread-barrier (the model's lap scenario).
+        if self.cleared.is_some_and(|k| k != (generation, cursor)) {
+            self.cleared = None;
+        }
         if raw >> 63 & 1 == 0 || self.cleared == Some((generation, cursor)) {
             return Gate::Proceed;
         }
         match self.witness {
             None => Gate::PublishBarrier,
-            Some(w) if fetched >= w => {
+            Some(w) if processed >= w => {
                 self.witness = None;
                 self.cleared = Some((generation, cursor));
                 Gate::Proceed
@@ -148,9 +195,10 @@ impl SyncGate {
         }
     }
 
-    /// The barrier and witness are on the private ring; `issued` is its issue count after them.
-    pub fn published(&mut self, issued: u64) {
-        self.witness = Some(issued);
+    /// The barrier and marker are on the private ring; `marks_issued` is [`Marks::issued`] after the
+    /// gate's marker.
+    pub fn published(&mut self, marks_issued: u64) {
+        self.witness = Some(marks_issued);
     }
 
     /// Whether a witness is outstanding (the caller keeps its worker ticking).
@@ -159,22 +207,24 @@ impl SyncGate {
     }
 }
 
-/// Bounded retry of a scan refusal ([`REFUSE_AFTER`]).
+/// Bounded retry of a scan refusal ([`REFUSE_RETRIES`] re-reads, no clock).
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Grace {
-    first: Option<(u64, u32, Instant)>,
+    /// `(generation, cursor, refusals so far)` of the entry being retried.
+    first: Option<(u64, u32, u32)>,
 }
 
 impl Grace {
-    /// A scan of the unpublished entry `(generation, cursor)` refused at `now`: `true` = retry
-    /// later (re-read and rescan), `false` = the refusal is final.
-    pub fn refused(&mut self, generation: u64, cursor: u32, now: Instant) -> bool {
-        match self.first {
-            Some((g, c, at)) if g == generation && c == cursor => {
-                now.saturating_duration_since(at) < REFUSE_AFTER
+    /// A scan of the unpublished entry `(generation, cursor)` refused: `true` = re-read and rescan
+    /// (the caller re-turns at once), `false` = the refusal is final.
+    pub fn refused(&mut self, generation: u64, cursor: u32) -> bool {
+        match &mut self.first {
+            Some((g, c, n)) if *g == generation && *c == cursor => {
+                *n += 1;
+                *n <= REFUSE_RETRIES
             }
             _ => {
-                self.first = Some((generation, cursor, now));
+                self.first = Some((generation, cursor, 1));
                 true
             }
         }
@@ -326,11 +376,13 @@ mod tests {
 
     /// The relay over a guest ring of `(SYNC_WAIT, words)` segments: each segment is scanned and
     /// published as written; before a SYNC_WAIT segment the gate authors a barrier (no bytes) and
-    /// the witness `pick` chooses. Returns the private ring's segments, in GP order.
+    /// the witness `pick` chooses ([`Witness::None`] = no gate at all). Returns the private ring's
+    /// segments, in GP order.
     fn relay(ring: &[(bool, Vec<u32>)], pick: impl Fn(bool) -> Witness) -> Vec<Vec<u32>> {
         let mut scan = Scan::default();
         let mut fetch = Fetch::new(64).unwrap();
         let mut gate = SyncGate::default();
+        let mut marks = Marks::default();
         let mut private = Vec::new();
         let mut cursor = 0u32;
         let mut guard = 0;
@@ -338,20 +390,28 @@ mod tests {
             guard += 1;
             let (sync, words) = &ring[cursor as usize];
             let raw = seg(0x1000 * u64::from(cursor + 1), words.len() as u64, *sync);
-            match gate.entry(raw, 1, cursor, fetch.fetched()) {
+            // a SYNC_WAIT entry reached with a packet open has no witness: it is not gated
+            let ungated = *sync && pick(!scan.at_boundary()) == Witness::None;
+            let verdict = if ungated {
+                Gate::Proceed
+            } else {
+                gate.entry(raw, 1, cursor, marks.seen())
+            };
+            match verdict {
                 Gate::PublishBarrier => {
                     fetch.publish(None).unwrap();
                     private.push(Vec::new()); // the barrier: a control entry
                     fetch.publish(None).unwrap();
-                    private.push(match pick(!scan.at_boundary()) {
-                        Witness::Bytes => vec![0], // one zero DMA_NOP word
-                        Witness::Control => Vec::new(),
-                    });
-                    gate.published(fetch.issued());
+                    let (_, value) = marks.issue().unwrap();
+                    // the marker segment: [SET_REFERENCE value, NON_STALL_INTERRUPT 0]
+                    private.push(marker(value));
+                    gate.published(marks.issued());
                 }
                 Gate::Wait => {
+                    // the hardware processes the marker: REFERENCE takes its value
                     let get = (fetch.issued() & 63) as u32;
                     fetch.observe(get).unwrap();
+                    marks.observe(Marks::value(marks.issued()));
                 }
                 Gate::Proceed => {
                     assert_eq!(scan.segment(words, |_| false), Ok(None));
@@ -364,6 +424,17 @@ mod tests {
         private
     }
 
+    /// The batch/gate marker segment as `Storage::write_host_marker` authors it.
+    fn marker(value: u32) -> Vec<u32> {
+        let h = |m| kf_abi::submit::method_header_inc(0, m, 1).unwrap();
+        vec![
+            h(kf_abi::submit::fifo::SET_REFERENCE_C56F),
+            value,
+            h(kf_abi::submit::fifo::NON_STALL_INTERRUPT),
+            0,
+        ]
+    }
+
     /// ★ The Minecraft in-world defect's mechanism, as a model test. Guest ring: segment A ends
     /// inside an I2M-style inline upload (`INC 1:0x1b0 x3`, one argument present — the measured
     /// shape, `carried_out=IncrementOnce sub1 m0x1b0 1/1057`), the next entry B carries SYNC_WAIT and
@@ -372,7 +443,7 @@ mod tests {
     /// witness (the relay before this fix) the zero word becomes an argument and B's last data
     /// word is parsed as a header: PBENTRY.
     #[test]
-    fn a_packet_carried_into_a_sync_wait_entry_gets_no_witness_byte() {
+    fn a_packet_carried_into_a_sync_wait_entry_is_not_gated_and_gets_no_marker() {
         let h = |sub, m, n| kf_abi::submit::method_header_inc(sub, m, n).unwrap();
         let ring = vec![
             (false, vec![h(0, 0x100, 1), 0, h(1, 0x1b0, 3), 0x11]),
@@ -384,32 +455,61 @@ mod tests {
         let expected = pbdma_methods(&guest).expect("the guest's own stream decodes");
         assert_eq!(expected.len(), 6);
 
-        // The relay as fixed: the gate sees the open packet and authors a control witness.
+        // The relay as fixed: the open packet means no witness and no gate -- the private ring is the
+        // guest's segments, byte for byte.
+        assert_eq!(witness(true), Witness::None);
         let fixed = relay(&ring, witness);
+        assert_eq!(fixed, guest);
         assert_eq!(pbdma_methods(&fixed), Ok(expected.clone()));
-        assert_eq!(fixed.iter().filter(|s| s.is_empty()).count(), 2);
 
-        // The relay before the fix (a byte witness whatever the parse state): the zero word is
-        // taken as the packet's second argument and B's last data word (stream index 6) is
-        // parsed as a header.
-        let before = relay(&ring, |_| Witness::Bytes);
-        assert_eq!(pbdma_methods(&before), Err(6));
+        // A marker placed anyway (the relay before the fix put a witness word there whatever the parse
+        // state): its words become the packet's arguments and B's last data word is parsed as a header.
+        let before = relay(&ring, |_| Witness::Marker);
+        assert_ne!(pbdma_methods(&before), Ok(expected));
 
-        // At a packet boundary both witnesses generate the guest's methods (the measured gate).
+        // At a packet boundary the marker gates and generates the guest's methods plus its own two
+        // (SET_REFERENCE, NON_STALL_INTERRUPT).
         let boundary = vec![
             (false, vec![h(0, 0x100, 1), 0]),
             (true, vec![h(1, 0x1b0, 2), 0x22, 0x33]),
         ];
         let guest: Vec<Vec<u32>> = boundary.iter().map(|(_, w)| w.clone()).collect();
         let expected = pbdma_methods(&guest).unwrap();
-        assert_eq!(witness(false), Witness::Bytes);
-        assert_eq!(
-            pbdma_methods(&relay(&boundary, witness)),
-            Ok(expected.clone())
-        );
-        let with_byte = relay(&boundary, |_| Witness::Bytes);
-        // the zero word is a DMA_NOP header with no arguments: no method generated
-        assert_eq!(pbdma_methods(&with_byte), Ok(expected));
+        assert_eq!(witness(false), Witness::Marker);
+        let got = pbdma_methods(&relay(&boundary, witness)).unwrap();
+        let own = |m: &(u32, u32, u32)| {
+            m.0 == 0
+                && (m.1 == kf_abi::submit::fifo::SET_REFERENCE_C56F
+                    || m.1 == kf_abi::submit::fifo::NON_STALL_INTERRUPT)
+        };
+        assert_eq!(got.iter().filter(|m| own(m)).count(), 2);
+        assert_eq!(got.into_iter().filter(|m| !own(m)).collect::<Vec<_>>(), expected);
+    }
+
+    /// The marker words are a tagged reference: only tagged values count, extended against `seen`.
+    #[test]
+    fn marks_count_only_tagged_references_and_extend_the_sixteen_bit_count() {
+        let mut m = Marks::default();
+        assert_eq!(m.observe(0), 0, "no marker issued, no progress");
+        let (c1, v1) = m.issue().unwrap();
+        let (c2, v2) = m.issue().unwrap();
+        assert_eq!((c1, c2, v1, v2), (1, 2, MARK_TAG | 1, MARK_TAG | 2));
+        // the guest's own SET_REFERENCE, whatever its value, proves nothing
+        for word in [0u32, 1, 2, 0x1000, 0xdead_beef, 0x4B47_0001] {
+            assert_eq!(m.peek(word), 0, "untagged {word:#x}");
+        }
+        assert_eq!(m.peek(v1), 1);
+        assert_eq!(m.observe(v2), 2);
+        // a value naming a marker not issued yet implies nothing
+        assert_eq!(m.peek(MARK_TAG | 9), 2);
+        // the 16-bit count wraps without confusion
+        let mut m = Marks::default();
+        for _ in 0..70_000 {
+            let (c, v) = m.issue().unwrap();
+            assert_eq!(m.peek(v), c);
+            m.observe(v);
+        }
+        assert_eq!(m.seen(), 70_000);
     }
 
     #[test]
@@ -442,42 +542,16 @@ mod tests {
         assert_eq!(g.entry(SYNC_NOP, 2, 5, 14), Gate::PublishBarrier);
     }
 
-    /// The measured hang: the relay's ring drained, the guest advanced `GP_PUT` without a
-    /// doorbell. Under the old rule (read only on a doorbell or while in flight) no read is ever
-    /// due; under [`Poll`] one is due within the active window at once and later within
-    /// [`IDLE_POLL`].
     #[test]
-    fn a_drained_relay_still_reads_put_without_a_doorbell() {
-        let t = Instant::now();
-        let mut p = Poll::new(t);
-        p.turned(t, true);
-        // drained at once: still polling at the short tick
-        assert!(p.active(t + Duration::from_millis(100)));
-        assert!(p.due(t + Duration::from_millis(100)));
-        // long idle: a read is due every IDLE_POLL, never later
-        let late = t + Duration::from_secs(5);
-        p.turned(late, false);
-        assert!(!p.active(late));
-        assert!(!p.due(late + Duration::from_millis(5)));
-        assert!(p.due(late + IDLE_POLL));
-        // the guest's timeout detection (2 s) is never reached by the polling gap
-        assert!(IDLE_POLL.max(Duration::from_millis(50)) < Duration::from_secs(2));
-        // new work re-enters the active window
-        p.turned(late + IDLE_POLL, true);
-        assert!(p.active(late + IDLE_POLL + Duration::from_millis(1)));
-    }
-
-    #[test]
-    fn grace_retries_the_same_entry_then_is_final() {
-        let t = Instant::now();
-        let ms = |n: u64| t + Duration::from_millis(n);
+    fn grace_retries_the_same_entry_a_bounded_number_of_times_then_is_final() {
         let mut g = Grace::default();
-        assert!(g.refused(1, 5, t));
-        assert!(g.refused(1, 5, ms(49)));
-        assert!(!g.refused(1, 5, ms(50)));
-        // another entry, or another ring generation, starts its own grace
-        assert!(g.refused(1, 6, ms(60)));
-        assert!(g.refused(2, 6, ms(61)));
+        for _ in 0..REFUSE_RETRIES {
+            assert!(g.refused(1, 5));
+        }
+        assert!(!g.refused(1, 5));
+        // another entry, or another ring generation, starts its own retries
+        assert!(g.refused(1, 6));
+        assert!(g.refused(2, 6));
         g.clear();
         assert!(!g.retrying());
     }

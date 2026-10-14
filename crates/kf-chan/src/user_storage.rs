@@ -26,6 +26,11 @@ pub const MAX_SOURCE_BYTES: u64 = GP_OFFSET;
 pub const USERD_OFFSET: u64 = 0xf0000;
 /// Trusted private GP capacity, independent of the guest ring's changing size.
 pub const ENTRIES: u32 = 512;
+/// The marker cells start this far beyond the descriptor array (after the 4-byte byte witness word,
+/// 16-aligned), inside the read-only mapping and below USERD: `ENTRIES` cells of [`MARKER_CELL`].
+const MARKER_OFFSET: u64 = 0x10;
+/// One marker cell: `[SET_REFERENCE, value, NON_STALL_INTERRUPT, 0]`.
+const MARKER_CELL: u64 = 16;
 /// Trusted per-command-slot staging cell. One descriptor credit remains empty,
 /// so reusing a command slot needs GET beyond its old later witness (see the
 /// user_consumption model). Early commitment of GP0 alone cannot reuse its cell.
@@ -575,8 +580,41 @@ impl Storage<CpuView> {
             .map_err(|e| format!("USER_STORAGE_WITNESS_WRITE: {e:?}"))
     }
 
+    /// ★ 2026-10-14 — **the marker** (`crate::user_loop`, `crate::user_gate::Marks`): a private 16-byte
+    /// segment `[SET_REFERENCE value, NON_STALL_INTERRUPT 0]` in the read-only mapping, one cell per
+    /// ring `slot` (so the value each marker writes is its own and a later marker never rewrites the
+    /// bytes of an earlier one still in flight), entered as a `LEVEL_SUBROUTINE` main entry.
+    ///
+    /// Processing it writes `USERD.REFERENCE = value` (the PROOF that every method before it,
+    /// acquires included, was processed -- measured: `GP_GET` runs ahead of processing and proves
+    /// nothing about that) and raises the engine's non-stall event the worker's epoll already
+    /// watches (the wake). No semaphore, no GPU-written memory: OWNER_RULINGS §AI authorises
+    /// read-only commands only; `USERD` is outside the GPU mapping.
+    ///
+    /// # Errors
+    /// Invalid slot or retiring/released CPU view.
+    pub fn write_host_marker(&self, slot: u32, value: u32) -> Result<(), String> {
+        if slot >= ENTRIES {
+            return Err("USER_STORAGE_MARKER_BOUND".into());
+        }
+        let off = GP_OFFSET + u64::from(ENTRIES) * 8 + MARKER_OFFSET + u64::from(slot) * MARKER_CELL;
+        let va = self.va.checked_add(off).ok_or("USER_STORAGE_MARKER_BOUND")?;
+        let set_ref = kf_abi::submit::method_header_inc(0, kf_abi::submit::fifo::SET_REFERENCE_C56F, 1)
+            .ok_or("USER_STORAGE_MARKER_FORMAT")?;
+        let nsi = kf_abi::submit::method_header_inc(0, kf_abi::submit::fifo::NON_STALL_INTERRUPT, 1)
+            .ok_or("USER_STORAGE_MARKER_FORMAT")?;
+        let entry = kf_abi::submit::gp_entry(va, MARKER_CELL).ok_or("USER_STORAGE_MARKER_FORMAT")? | (1 << 41);
+        let cpu = self.cpu()?;
+        for (i, w) in [set_ref, value, nsi, 0].into_iter().enumerate() {
+            cpu.store_u32(HostOffset::new(off + 4 * i as u64), w)
+                .map_err(|e| format!("USER_STORAGE_MARKER_WRITE: {e:?}"))?;
+        }
+        cpu.store_u64(HostOffset::new(GP_OFFSET + u64::from(slot) * 8), entry)
+            .map_err(|e| format!("USER_STORAGE_MARKER_WRITE: {e:?}"))
+    }
+
     /// ★ 2026-10-14 — the SYNC_WAIT gate's witness when the guest stream CARRIES a packet into the
-    /// gated entry (`crate::user_gate::Witness::Control`): a CONTROL `NOP` GP entry (`LENGTH` 0,
+    /// gated entry (RETIRED 2026-10-14: a control entry proves nothing -- `crate::user_gate::Witness::None`): a CONTROL `NOP` GP entry (`LENGTH` 0,
     /// `OPCODE_NOP`, `SYNC_PROCEED`; all 64 bits zero). It fetches no pushbuffer byte, so the
     /// packet the PBDMA is parsing continues untouched into the guest's next segment. It cannot
     /// begin processing before the barrier's wait finishes (public `dev_pbdma.ref`,
@@ -645,7 +683,10 @@ impl Storage<CpuView> {
     }
 
     /// Actual private hardware Reference; never CPU-authored. Public SET_REF
-    /// waits for the last-targeted engine, not an arbitrary all-engine receipt.
+    /// waits for the last-targeted engine, not an arbitrary all-engine receipt. ★ 2026-10-14: the
+    /// tagged value of the last PROCESSED marker is the SYNC_WAIT gate's proof
+    /// (`crate::user_gate::Marks`) -- not `GP_GET`, which runs ahead of processing; an untagged
+    /// value is the guest's own `SET_REFERENCE` and proves nothing.
     ///
     /// # Errors
     /// Released CPU view/load failure.
