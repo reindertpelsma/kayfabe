@@ -88,7 +88,7 @@ GPU-free tests at this tree: **3138 passed, 0 failed, 12 ignored** across the 22
 ## Supported hardware and drivers
 
 What was actually run. "Measured" means a result with a revision and an evidence directory; the per-die facts are derived from the host at
-runtime (nothing is captured per die), with family rows maintained by hand ([`V3_CONSTANT_STRATEGY.md`](docs/design/V3_CONSTANT_STRATEGY.md)).
+runtime wherever the host can answer (the one captured per-die table still in this tree, the display caps page taken from the AD104, is listed above as a limit), with family rows maintained by hand ([`V3_CONSTANT_STRATEGY.md`](docs/design/V3_CONSTANT_STRATEGY.md)).
 
 | die | Linux guest | Windows 11 guest |
 |---|---|---|
