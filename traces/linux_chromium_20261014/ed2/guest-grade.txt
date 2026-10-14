@@ -1,0 +1,1 @@
+GUEST_DMESG xid=0 nvrm=24 flip_timeout=0 nvassert=12 gsp_timeout=0 dmesg_lines=703

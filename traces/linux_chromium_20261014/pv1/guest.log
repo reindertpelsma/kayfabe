@@ -1,0 +1,59 @@
+crw-rw-rw- 1 root root 195, 254 Oct 14 13:04 /dev/nvidia-modeset
+crw-rw-rw- 1 root root 195,   0 Oct 14 13:04 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Oct 14 13:04 /dev/nvidiactl
+
+/dev/dri/:
+total 0
+drwxr-xr-x   3 root root        100 Oct 14 13:04 .
+drwxr-xr-x  18 root root       4060 Oct 14 13:04 ..
+drwxr-xr-x   2 root root         80 Oct 14 13:04 by-path
+crw-rw----+  1 root video  226,   1 Oct 14 13:04 card1
+crw-rw----+  1 root render 226, 128 Oct 14 13:04 renderD128
+cat: /sys/module/nvidia_drm/parameters/modeset: Permission denied
+== vainfo drm direct
+libva info: VA-API version 1.20.0
+libva info: User environment variable requested driver 'nvidia'
+libva info: Trying to open /usr/lib/x86_64-linux-gnu/dri/nvidia_drv_video.so
+libva info: Found init function __vaDriverInit_1_0
+        12.545864746 [1789-1789] ../src/vabackend.c:1872       __vaDriverInit_1_0 Initialising NVIDIA VA-API Driver: 0x5679634124d0 31
+        12.545874846 [1789-1789] ../src/vabackend.c:1894       __vaDriverInit_1_0 Now have 0 (0 max) instances
+        12.545876886 [1789-1789] ../src/vabackend.c:1919       __vaDriverInit_1_0 Selecting Direct backend
+        12.577487256 [1789-1789] ../src/direct/nv-driver.c: 190            init_nvdriver Initing nvdriver...
+        12.577498636 [1789-1789] ../src/direct/nv-driver.c: 195            init_nvdriver Got dev info: 2 6 1 1
+        12.577521386 [1789-1789] ../src/direct/nv-driver.c:  36          nv_alloc_object nv_alloc_object failed: -1 0
+        12.577525036 [1789-1789] ../src/direct/nv-driver.c: 216            init_nvdriver nv_alloc_object NV01_ROOT_CLIENT failed
+        12.577526626 [1789-1789] ../src/direct/nv-driver.c: 278            init_nvdriver Got error initing
+        12.577532716 [1789-1789] ../src/direct/nv-driver.c:  79            nv_rm_control nv_rm_control failed: -1 0
+libva error: /usr/lib/x86_64-linux-gnu/dri/nvidia_drv_video.so init failed
+libva info: va_openDriver() returns 1
+vaInitialize failed with error code 1 (operation failed),exit
+== vainfo x11 default
+libva info: VA-API version 1.20.0
+libva info: User environment variable requested driver 'nvidia'
+libva info: Trying to open /usr/lib/x86_64-linux-gnu/dri/nvidia_drv_video.so
+libva info: Found init function __vaDriverInit_1_0
+        12.682576686 [1803-1803] ../src/vabackend.c:1872       __vaDriverInit_1_0 Initialising NVIDIA VA-API Driver: 0x5692e9eb4070 10
+        12.682581176 [1803-1803] ../src/vabackend.c:1894       __vaDriverInit_1_0 Now have 0 (0 max) instances
+        12.682583236 [1803-1803] ../src/vabackend.c:1916       __vaDriverInit_1_0 Selecting EGL backend
+        12.706309876 [1803-1803] ../src/export-buf.c: 161       findGPUIndexFromFd Looking for DRM device index: 0
+        12.712055966 [1803-1803] ../src/export-buf.c: 175       findGPUIndexFromFd Found 3 EGL devices
+        12.713955986 [1803-1803] ../src/export-buf.c: 184       findGPUIndexFromFd Got EGL_CUDA_DEVICE_NV value '0' for EGLDevice 0
+        12.713965476 [1803-1803] ../src/export-buf.c: 190       findGPUIndexFromFd Found drmDeviceIndex: 1
+        12.713990906 [1803-1803] ../src/export-buf.c: 229       findGPUIndexFromFd No EGL_CUDA_DEVICE_NV support for EGLDevice 1
+        12.713995266 [1803-1803] ../src/export-buf.c: 232       findGPUIndexFromFd No DRM device file for EGLDevice 2
+        12.713997446 [1803-1803] ../src/export-buf.c: 235       findGPUIndexFromFd No match found, falling back to default device
+        12.717662606 [1803-1803] ../src/export-buf.c: 289         egl_initExporter Driver supports 16-bit surfaces
+libva info: va_openDriver() returns 0
+vainfo: VA-API version: 1.20 (libva 2.12.0)
+vainfo: Driver version: VA-API NVDEC driver [egl backend]
+        12.962970296 [1803-1803] ../src/vabackend.c: 332      doesGPUSupportCodec CUDA ERROR 'no CUDA-capable device is detected' (100)
+
+== ffmpeg cuda decode h264
+
+Parse error, at least 3 arguments were expected, only 1 given in string 'ho "== ffmpeg cuda decode av1"; timeout 60 ffmpeg -hide_banner -loglevel info -hwaccel cuda -i ~/kf/dl/av1.mp4 -f null - 2>&1 | tail -5'
+
+Enter command: <target>|all <time>|-1 <command>[ <argument>]
+
+Parse error, at least 3 arguments were expected, only 1 given in string 'ho "== dmesg delta"; sudo dmesg | diff /tmp/dmesg.before - | grep '^>' | cut -c1-240 | head -30'
+frame=  719 fps=0.0 q=-0.0 size=N/A time=00:00:11.98 bitrate=N/A speed=  22x    [out#0/null @ 0x621eec7612c0] video:562kB audio:0kB subtitle:0kB other streams:0kB global headers:0kB muxing overhead: unknown
+frame= 1200 fps=0.0 q=-0.0 Lsize=N/A time=00:00:19.98 bitrate=N/A speed=23.7x    

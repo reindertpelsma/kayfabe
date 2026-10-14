@@ -1,0 +1,51 @@
+kf-host: host tier: stock
+kf-host: host tier: stock
+kf3: GSP phase Cold -> ProtectedRegionUp
+kf3: GSP phase ProtectedRegionUp -> Booted
+kf3: GSP phase Booted -> Running
+kf3: GSP REFUSED fn76/0x20800a87=0x56 (GSP_RM_CONTROL) first_seq=7 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800afe=0x56 (GSP_RM_CONTROL) first_seq=24 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800aff=0x56 (GSP_RM_CONTROL) first_seq=25 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a80=0x56 (GSP_RM_CONTROL) first_seq=42 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802a0f=0x56 (GSP_RM_CONTROL) first_seq=49 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080017e=0x56 (GSP_RM_CONTROL) first_seq=50 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a30=0x56 (GSP_RM_CONTROL) first_seq=60 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a2e=0x56 (GSP_RM_CONTROL) first_seq=62 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800b03=0x56 (GSP_RM_CONTROL) first_seq=64 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800b05=0x56 (GSP_RM_CONTROL) first_seq=65 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a3f=0x56 (GSP_RM_CONTROL) first_seq=67 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080012b=0x56 (GSP_RM_CONTROL) first_seq=104 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080013f=0x56 (GSP_RM_CONTROL) first_seq=110 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802a12=0x56 (GSP_RM_CONTROL) first_seq=137 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x0073013d=0x56 (GSP_RM_CONTROL) first_seq=221 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802801=0x56 (GSP_RM_CONTROL) first_seq=222 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00730291=0x56 (GSP_RM_CONTROL) first_seq=224 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00730293=0x56 (GSP_RM_CONTROL) first_seq=227 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00731144=0x56 (GSP_RM_CONTROL) first_seq=290 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x0073012c=0x56 (GSP_RM_CONTROL) first_seq=291 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20810103=0x56 (GSP_RM_CONTROL) first_seq=304 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080012f=0x56 (GSP_RM_CONTROL) first_seq=316 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20809019=0x56 (GSP_RM_CONTROL) first_seq=318 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a0a4=0x56 (GSP_RM_CONTROL) first_seq=319 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800153=0x56 (GSP_RM_CONTROL) first_seq=322 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a088=0x56 (GSP_RM_CONTROL) first_seq=324 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20808524=0x56 (GSP_RM_CONTROL) first_seq=325 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080852e=0x56 (GSP_RM_CONTROL) first_seq=402 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20808513=0x56 (GSP_RM_CONTROL) first_seq=403 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20810107=0x56 (GSP_RM_CONTROL) first_seq=504 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a9a=0x56 (GSP_RM_CONTROL) first_seq=546 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20810108=0x56 (GSP_RM_CONTROL) first_seq=885 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800ab8=0x56 (GSP_RM_CONTROL) first_seq=904 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x83de030c=0x56 (GSP_RM_CONTROL) first_seq=1074 — the guest read a non-OK status
+kf3: RC host twin 0x3a (guest chid 0x13, engine 0x1) wrote its notifier: except_type=0xd (Xid 13) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x35 (guest chid 0xe, engine 0x1) wrote its notifier: except_type=0xd (Xid 13) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x37 (guest chid 0x10, engine 0x1) wrote its notifier: except_type=0xd (Xid 13) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x34 (guest chid 0xd, engine 0x1) wrote its notifier: except_type=0xd (Xid 13) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x38 (guest chid 0x11, engine 0x1) wrote its notifier: except_type=0xd (Xid 13) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x36 (guest chid 0xf, engine 0x1) wrote its notifier: except_type=0xd (Xid 13) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x33 (guest chid 0xc, engine 0x1) wrote its notifier: except_type=0xd (Xid 13) — forwarding RC_TRIGGERED
+kf3: RC host twin 0x39 (guest chid 0x12, engine 0x1) wrote its notifier: except_type=0xd (Xid 13) — forwarding RC_TRIGGERED
+kf3: GSP REFUSED fn76/0x20800a9e=0x56 (GSP_RM_CONTROL) first_seq=1215 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a9c=0x56 (GSP_RM_CONTROL) first_seq=1216 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a1e=0x56 (GSP_RM_CONTROL) first_seq=1217 — the guest read a non-OK status
+kf3: display: STALL Window 6 (chn 7) update 0x1 parked 1014 ms: ready, waiting for a vblank or its acquire group/interlock bits 0x80 head Some(3) acquire Some(Acquire { chn: 7, client: 3251634177, handle: 65689, offset: 176, value: 4027383961, wide: false, mode: 0 }) current Some(Ok(4027383961)); every parked channel: [(7, 1, false)]

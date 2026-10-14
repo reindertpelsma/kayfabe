@@ -1,0 +1,66 @@
+14:37:06.753 kf-host: HOST-ABI REFUSED control 0x2080014a: host control 0x2080014a has no row in kf_abi::hostabi::HOST_CONTROLS, and host driver 595.91.07 is outside the interval the host encoders were written for — its layout is unknown
+14:37:06.757 kf-host: HOST-ABI REFUSED control 0x20809064: host control 0x20809064 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 595.91.07 was never measured
+14:37:06.760 kf-host: HOST-ABI REFUSED control 0x2080a028: host control 0x2080a028 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 595.91.07 was never measured
+14:37:06.763 kf-host: HOST-ABI REFUSED control 0x2080a028: host control 0x2080a028 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 595.91.07 was never measured
+14:37:06.766 kf-host: HOST-ABI REFUSED control 0x2080a084: host control 0x2080a084 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 595.91.07 was never measured
+14:37:06.769 kf-host: HOST-ABI REFUSED control 0x2080a026: host control 0x2080a026 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 595.91.07 was never measured
+14:37:06.772 kf3: device reset #1 COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: 0)
+14:37:06.775 kf3: device reset #1 complete before the vCPUs resume (the main loop waited 0 us)
+14:37:24.227 kf3: GSP phase Cold -> ProtectedRegionUp
+14:37:24.237 kf3: GSP phase ProtectedRegionUp -> Booted
+14:37:24.241 kf3: GSP phase Booted -> Running
+14:37:24.244 kf3: GSP REFUSED fn76/0x20800a87=0x56 (GSP_RM_CONTROL) first_seq=7 — the guest read a non-OK status
+14:37:24.247 kf3: GSP REFUSED fn76/0x20800afe=0x56 (GSP_RM_CONTROL) first_seq=24 — the guest read a non-OK status
+14:37:24.251 kf3: GSP REFUSED fn76/0x20800aff=0x56 (GSP_RM_CONTROL) first_seq=25 — the guest read a non-OK status
+14:37:24.258 kf3: GSP REFUSED fn76/0x20800a80=0x56 (GSP_RM_CONTROL) first_seq=42 — the guest read a non-OK status
+14:37:24.264 kf3: GSP REFUSED fn76/0x20802a0f=0x56 (GSP_RM_CONTROL) first_seq=49 — the guest read a non-OK status
+14:37:24.278 kf3: GSP REFUSED fn76/0x2080017e=0x56 (GSP_RM_CONTROL) first_seq=50 — the guest read a non-OK status
+14:37:24.282 kf3: GSP REFUSED fn76/0x20800a30=0x56 (GSP_RM_CONTROL) first_seq=60 — the guest read a non-OK status
+14:37:24.285 kf3: GSP REFUSED fn76/0x20800a2e=0x56 (GSP_RM_CONTROL) first_seq=62 — the guest read a non-OK status
+14:37:24.288 kf3: GSP REFUSED fn76/0x20800b03=0x56 (GSP_RM_CONTROL) first_seq=64 — the guest read a non-OK status
+14:37:24.292 kf3: GSP REFUSED fn76/0x20800b05=0x56 (GSP_RM_CONTROL) first_seq=65 — the guest read a non-OK status
+14:37:24.296 kf3: GSP REFUSED fn76/0x20800a3f=0x56 (GSP_RM_CONTROL) first_seq=67 — the guest read a non-OK status
+14:37:24.395 kf3: mem t=18.076s REFUSED VasKey(13970166078463016970) root 0xefa87000: 1 run(s) not applied: leaf 0x20fc00000+0x10400000 names store 0xefc00000, inside the firmware carve-out at 0xefbe0000 — a twin maps no kayfabe memory (§Q)
+14:37:24.400 kf3: mem t=18.078s REFUSED VasKey(13970166078463016970) root 0xefa87000: 1 run(s) not applied: leaf 0x20fc00000+0x10400000 names store 0xefc00000, inside the firmware carve-out at 0xefbe0000 — a twin maps no kayfabe memory (§Q)
+14:37:24.404 kf3: mem t=18.078s REFUSED VasKey(13970166078463016970) root 0xefa87000: 1 run(s) not applied: leaf 0x20fc00000+0x10400000 names store 0xefc00000, inside the firmware carve-out at 0xefbe0000 — a twin maps no kayfabe memory (§Q)
+14:37:24.457 kf3: GSP REFUSED fn76/0x2080012b=0x56 (GSP_RM_CONTROL) first_seq=104 — the guest read a non-OK status
+14:37:24.480 kf3: GSP REFUSED fn76/0x2080013f=0x56 (GSP_RM_CONTROL) first_seq=110 — the guest read a non-OK status
+14:37:24.484 kf-rm: RPC-REFUSED #1 AllocClassNotPermitted { class: 50031, denial: NotOnAllowlist } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusal census)
+14:37:24.487 kf3: GSP REFUSED fn103/0x0000c36f=0x56 (GSP_RM_ALLOC) first_seq=119 — the guest read a non-OK status
+14:37:24.497 kf-rm: RPC-REFUSED #2 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusal ce
+14:37:24.502 kf3: GSP REFUSED fn103/0x0000402c=0x56 (GSP_RM_ALLOC) first_seq=127 — the guest read a non-OK status
+14:37:24.505 kf3: GSP REFUSED fn76/0x20802a12=0x56 (GSP_RM_CONTROL) first_seq=137 — the guest read a non-OK status
+14:37:24.563 kf3: GSP REFUSED fn76/0x0073013d=0x56 (GSP_RM_CONTROL) first_seq=221 — the guest read a non-OK status
+14:37:24.566 kf3: GSP REFUSED fn76/0x20802801=0x56 (GSP_RM_CONTROL) first_seq=222 — the guest read a non-OK status
+14:37:24.570 kf3: GSP REFUSED fn76/0x00730291=0x56 (GSP_RM_CONTROL) first_seq=224 — the guest read a non-OK status
+14:37:24.574 kf3: GSP REFUSED fn76/0x00730293=0x56 (GSP_RM_CONTROL) first_seq=227 — the guest read a non-OK status
+14:37:24.602 kf3: GSP REFUSED fn76/0x00731144=0x56 (GSP_RM_CONTROL) first_seq=290 — the guest read a non-OK status
+14:37:24.606 kf3: GSP REFUSED fn76/0x0073012c=0x56 (GSP_RM_CONTROL) first_seq=291 — the guest read a non-OK status
+14:37:25.886 kf3: GSP REFUSED fn76/0x20810103=0x56 (GSP_RM_CONTROL) first_seq=304 — the guest read a non-OK status
+14:37:25.904 kf3: GSP REFUSED fn76/0x2080012f=0x56 (GSP_RM_CONTROL) first_seq=316 — the guest read a non-OK status
+14:37:25.907 kf3: GSP REFUSED fn76/0x20809019=0x56 (GSP_RM_CONTROL) first_seq=318 — the guest read a non-OK status
+14:37:25.911 kf3: GSP REFUSED fn76/0x2080a0a4=0x56 (GSP_RM_CONTROL) first_seq=319 — the guest read a non-OK status
+14:37:25.914 kf3: GSP REFUSED fn76/0x20800153=0x56 (GSP_RM_CONTROL) first_seq=322 — the guest read a non-OK status
+14:37:25.917 kf3: GSP REFUSED fn76/0x2080a088=0x56 (GSP_RM_CONTROL) first_seq=324 — the guest read a non-OK status
+14:37:25.920 kf3: GSP REFUSED fn76/0x20808524=0x56 (GSP_RM_CONTROL) first_seq=325 — the guest read a non-OK status
+14:37:25.954 kf3: GSP REFUSED fn76/0x2080852e=0x56 (GSP_RM_CONTROL) first_seq=402 — the guest read a non-OK status
+14:37:25.957 kf3: GSP REFUSED fn76/0x20808513=0x56 (GSP_RM_CONTROL) first_seq=403 — the guest read a non-OK status
+14:37:26.108 kf3: GSP REFUSED fn76/0x20810107=0x56 (GSP_RM_CONTROL) first_seq=504 — the guest read a non-OK status
+14:37:27.099 kf3: GSP REFUSED fn76/0x20800a9a=0x56 (GSP_RM_CONTROL) first_seq=546 — the guest read a non-OK status
+14:37:40.776 kf3: GSP REFUSED fn76/0x2080a0d1=0x56 (GSP_RM_CONTROL) first_seq=1400 — the guest read a non-OK status
+14:37:49.368 kf3: display: STALL Window 6 (chn 7) update 0x1 parked 1013 ms: ready, waiting for a vblank or its acquire group/interlock bits 0x80 head Some(3) acquire Some(Acquire { chn: 7, client: 3251634177, handle: 65689, offset: 176, value: 4027384006, wide: false, mode: 0 }) current Some(Ok(4027384006)); ev
+14:38:16.902 kf3: display: STALL Window 6 (chn 7) update 0x1 parked 1014 ms: ready, waiting for a vblank or its acquire group/interlock bits 0x80 head Some(3) acquire Some(Acquire { chn: 7, client: 3251634177, handle: 65689, offset: 144, value: 4027385657, wide: false, mode: 0 }) current Some(Ok(4027385657)); ev
+14:38:31.535 kf3: display: STALL Window 6 (chn 7) update 0x1 parked 1000 ms: ready, waiting for a vblank or its acquire group/interlock bits 0x80 head Some(3) acquire Some(Acquire { chn: 7, client: 3251634177, handle: 65689, offset: 176, value: 4027386535, wide: false, mode: 0 }) current Some(Ok(4027386535)); ev
+14:38:49.219 kf3: display: STALL Window 6 (chn 7) update 0x1 parked 1014 ms: ready, waiting for a vblank or its acquire group/interlock bits 0x80 head Some(3) acquire Some(Acquire { chn: 7, client: 3251634177, handle: 65689, offset: 160, value: 4027387596, wide: false, mode: 0 }) current Some(Ok(4027387596)); ev
+14:39:35.195 kf3: display: STALL Window 6 (chn 7) update 0x1 parked 1014 ms: ready, waiting for a vblank or its acquire group/interlock bits 0x80 head Some(3) acquire Some(Acquire { chn: 7, client: 3251634177, handle: 65689, offset: 176, value: 4027390354, wide: false, mode: 0 }) current Some(Ok(4027390354)); ev
+14:39:54.618 kf3: display: STALL Window 6 (chn 7) update 0x1 parked 1012 ms: ready, waiting for a vblank or its acquire group/interlock bits 0x80 head Some(3) acquire Some(Acquire { chn: 7, client: 3251634177, handle: 65689, offset: 160, value: 4027391520, wide: false, mode: 0 }) current Some(Ok(4027391520)); ev
+14:40:18.097 kf3: display: STALL Window 6 (chn 7) update 0x1 parked 1001 ms: ready, waiting for a vblank or its acquire group/interlock bits 0x80 head Some(3) acquire Some(Acquire { chn: 7, client: 3251634177, handle: 65689, offset: 176, value: 4027392928, wide: false, mode: 0 }) current Some(Ok(286331153)); eve
+14:40:21.118 kf3: display: STALL Window 6 (chn 7) update 0x1 parked 1012 ms: ready, waiting for a vblank or its acquire group/interlock bits 0x80 head Some(3) acquire Some(Acquire { chn: 7, client: 3251634177, handle: 65689, offset: 144, value: 4027393109, wide: false, mode: 0 }) current Some(Ok(4027393109)); ev
+14:40:24.653 kf3: display: STALL Window 6 (chn 7) update 0x1 parked 1012 ms: ready, waiting for a vblank or its acquire group/interlock bits 0x80 head Some(3) acquire Some(Acquire { chn: 7, client: 3251634177, handle: 65689, offset: 160, value: 4027393320, wide: false, mode: 0 }) current Some(Ok(4027393320)); ev
+14:40:32.219 kf3: display: STALL Window 6 (chn 7) update 0x1 parked 1013 ms: ready, waiting for a vblank or its acquire group/interlock bits 0x80 head Some(3) acquire Some(Acquire { chn: 7, client: 3251634177, handle: 65689, offset: 144, value: 4027393751, wide: false, mode: 0 }) current Some(Ok(4027393751)); ev
+14:40:44.836 kf3: display: STALL Window 6 (chn 7) update 0x1 parked 1013 ms: ready, waiting for a vblank or its acquire group/interlock bits 0x80 head Some(3) acquire Some(Acquire { chn: 7, client: 3251634177, handle: 65689, offset: 176, value: 4027394503, wide: false, mode: 0 }) current Some(Ok(4027394503)); ev
+14:40:58.702 kf3: display: STALL Window 6 (chn 7) update 0x1 parked 1013 ms: ready, waiting for a vblank or its acquire group/interlock bits 0x80 head Some(3) acquire Some(Acquire { chn: 7, client: 3251634177, handle: 65689, offset: 176, value: 4027395334, wide: false, mode: 0 }) current Some(Ok(4027395334)); ev
+14:41:18.869 kf3: display: STALL Window 6 (chn 7) update 0x1 parked 1012 ms: ready, waiting for a vblank or its acquire group/interlock bits 0x80 head Some(3) acquire Some(Acquire { chn: 7, client: 3251634177, handle: 65689, offset: 176, value: 4027396543, wide: false, mode: 0 }) current Some(Ok(4027396543)); ev
+14:41:27.952 kf3: display: STALL Window 6 (chn 7) update 0x1 parked 1012 ms: ready, waiting for a vblank or its acquire group/interlock bits 0x80 head Some(3) acquire Some(Acquire { chn: 7, client: 3251634177, handle: 65689, offset: 144, value: 4027397087, wide: false, mode: 0 }) current Some(Ok(4027397087)); ev
+14:41:33.002 kf3: display: STALL Window 6 (chn 7) update 0x1 parked 1012 ms: ready, waiting for a vblank or its acquire group/interlock bits 0x80 head Some(3) acquire Some(Acquire { chn: 7, client: 3251634177, handle: 65689, offset: 176, value: 4027397389, wide: false, mode: 0 }) current Some(Ok(4027397389)); ev
+14:41:36.785 kf3: display: STALL Window 6 (chn 7) update 0x1 parked 1011 ms: ready, waiting for a vblank or its acquire group/interlock bits 0x80 head Some(3) acquire Some(Acquire { chn: 7, client: 3251634177, handle: 65689, offset: 144, value: 4027397615, wide: false, mode: 0 }) current Some(Ok(4027397615)); ev

@@ -1,0 +1,86 @@
+CINNAMON 1 XORG 1 2026-10-14T12:37:37+00:00
+GLX OpenGL renderer string: NVIDIA GeForce RTX 4070/PCIe/SSE2
+GLX OpenGL version string: 4.6.0 NVIDIA 580.159.04
+RUN kind=chrome name=chrome_vulkan min=11 flags=[--use-angle=vulkan --enable-features=Vulkan,VulkanFromANGLE,DefaultANGLEVulkan --enable-unsafe-webgpu --ignore-gpu-blocklist] hash=[] env=[] extra=[]
+12:37:37 +     0s LAUNCH google-chrome-stable --remote-debugging-port=9222 --remote-allow-origins=* --user-data-dir=/tmp/prof-chrome_vulkan --no-first-run --no-default-browser-check --password-store=basic --window-size=1600,900 --window-position=0,0 --autoplay-policy=no-user-gesture-required --allow-file-access-from-files --use-angle=vulkan --enable-features=Vulkan,VulkanFromANGLE,DefaultANGLEVulkan --enable-unsafe-webgpu --ignore-gpu-blocklist about:blank
+12:37:39 +     1s BROWSER Chrome/155.0.8059.79 Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36
+12:37:39 +     2s FEATURESTATUS {"2d_canvas": "enabled", "direct_rendering_display_compositor": "disabled_off_ok", "gpu_compositing": "enabled", "multiple_raster_threads": "enabled_on", "opengl": "enabled_on", "rasterization": "enabled", "raw_draw": "disabled_off_ok", "skia_graphite": "disabled_off", "trees_in_viz": "disabled_off", "video_decode": "enabled", "video_encode": "disabled_software", "vulkan": "enabled_on", "webgl": "enabled", "webgpu": "enabled", "webgpu_on_vk_via_gl_interop": "disabled_off", "webnn": "disabled_off"}
+12:37:39 +     2s GPUDEVICES [('Google Inc. (NVIDIA)', 'ANGLE (NVIDIA, Vulkan 1.4.312 (NVIDIA NVIDIA GeForce RTX 4070 (0x00002786)), NVIDIA-580.159.4.0)', '580.159.04')] gl_renderer=ANGLE (NVIDIA, Vulkan 1.4.312 (NVIDIA NVIDIA GeForce RTX 4070 (0x00002786)), NVIDIA-580.159.4.0) gl_version=OpenGL ES 3.0 (ANGLE 2.1.28854 git hash: cccf60cde32c)
+12:37:45 +     8s chrome://gpu captured
+12:37:45 +     8s LOAD mix.html#scr=1
+12:37:50 +    13s GPU_PIDS [1828]
+12:37:50 +    13s DMESG_BASE {'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:37:51 +    13s MEDIA kVideoDecoderName=FFmpegVideoDecoder
+12:37:51 +    13s MEDIA kIsPlatformVideoDecoder=false
+12:37:51 +    13s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 4.621661, 'total': 283, 'dropped': 1, 'paused': False, 'fs': False} gpu_pids=[1828] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:38:01 +    23s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 13.755077, 'total': 831, 'dropped': 1, 'paused': False, 'fs': False} gpu_pids=[1828] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:38:11 +    34s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 3.867663, 'total': 1437, 'dropped': 2, 'paused': False, 'fs': False} gpu_pids=[1828] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:38:21 +    44s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 13.995036, 'total': 2045, 'dropped': 2, 'paused': False, 'fs': False} gpu_pids=[1828] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:38:31 +    54s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 4.109891, 'total': 2652, 'dropped': 3, 'paused': False, 'fs': False} gpu_pids=[1828] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:38:41 +    64s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 14.238262, 'total': 3260, 'dropped': 3, 'paused': False, 'fs': False} gpu_pids=[1828] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:38:52 +    74s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 4.352837, 'total': 3866, 'dropped': 4, 'paused': False, 'fs': False} gpu_pids=[1828] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:39:02 +    84s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 14.480139, 'total': 4474, 'dropped': 4, 'paused': False, 'fs': False} gpu_pids=[1828] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:39:12 +    94s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 4.595029, 'total': 5081, 'dropped': 6, 'paused': False, 'fs': False} gpu_pids=[1828] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:39:22 +   104s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 14.72328, 'total': 5689, 'dropped': 6, 'paused': False, 'fs': False} gpu_pids=[1828] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:39:32 +   115s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 4.841918, 'total': 6296, 'dropped': 7, 'paused': False, 'fs': False} gpu_pids=[1828] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:39:42 +   125s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 14.973372, 'total': 6904, 'dropped': 7, 'paused': False, 'fs': False} gpu_pids=[1828] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:39:52 +   135s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 5.088722, 'total': 7511, 'dropped': 8, 'paused': False, 'fs': False} gpu_pids=[1828] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:40:02 +   145s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 15.221824, 'total': 8119, 'dropped': 8, 'paused': False, 'fs': False} gpu_pids=[1828] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:40:04 +   147s ACTION video_vp9
+12:40:13 +   155s MEDIA kVideoDecoderName=VpxVideoDecoder
+12:40:13 +   155s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 7.972505, 'total': 484, 'dropped': 1, 'paused': False, 'fs': False} gpu_pids=[1828] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:40:23 +   165s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 18.107833, 'total': 1092, 'dropped': 1, 'paused': False, 'fs': False} gpu_pids=[1828] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:40:33 +   175s SAMPLE gl=0 c2d=55 css=55 scr=57 vq={'t': 8.240184, 'total': 1700, 'dropped': 2, 'paused': False, 'fs': False} gpu_pids=[1828] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:40:43 +   186s SAMPLE gl=0 c2d=59 css=59 scr=60 vq={'t': 18.392593, 'total': 2309, 'dropped': 3, 'paused': False, 'fs': False} gpu_pids=[1828] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:40:53 +   196s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 8.515009, 'total': 2916, 'dropped': 4, 'paused': False, 'fs': False} gpu_pids=[1828] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:41:03 +   206s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 18.646974, 'total': 3524, 'dropped': 4, 'paused': False, 'fs': False} gpu_pids=[1828] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:41:10 +   213s ACTION video_av1
+12:41:13 +   216s MEDIA kVideoDecoderName=Dav1dVideoDecoder
+12:41:13 +   216s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 2.925275, 'total': 181, 'dropped': 0, 'paused': False, 'fs': False} gpu_pids=[1828] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:41:24 +   226s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 13.050574, 'total': 788, 'dropped': 0, 'paused': False, 'fs': False} gpu_pids=[1828] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:41:34 +   236s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 3.155981, 'total': 1395, 'dropped': 1, 'paused': False, 'fs': False} gpu_pids=[1828] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:41:44 +   246s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 13.283293, 'total': 2003, 'dropped': 1, 'paused': False, 'fs': False} gpu_pids=[1828] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:41:54 +   256s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 3.387479, 'total': 2608, 'dropped': 1, 'paused': False, 'fs': False} gpu_pids=[1828] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:42:04 +   267s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 13.515183, 'total': 3216, 'dropped': 1, 'paused': False, 'fs': False} gpu_pids=[1828] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:42:14 +   277s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 3.619084, 'total': 3823, 'dropped': 2, 'paused': False, 'fs': False} gpu_pids=[1828] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:42:16 +   279s ACTION fullscreen_on
+12:42:24 +   287s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 13.777741, 'total': 4430, 'dropped': 4, 'paused': False, 'fs': True} gpu_pids=[1828] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:42:34 +   297s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 3.884767, 'total': 5038, 'dropped': 4, 'paused': False, 'fs': True} gpu_pids=[1828] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:42:45 +   307s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 14.011635, 'total': 5646, 'dropped': 4, 'paused': False, 'fs': True} gpu_pids=[1828] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:42:55 +   317s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 4.116098, 'total': 6252, 'dropped': 5, 'paused': False, 'fs': True} gpu_pids=[1828] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:43:05 +   327s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 14.243887, 'total': 6860, 'dropped': 5, 'paused': False, 'fs': True} gpu_pids=[1828] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:43:09 +   331s ACTION fullscreen_off
+12:43:15 +   338s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 4.347178, 'total': 7466, 'dropped': 14, 'paused': False, 'fs': False} gpu_pids=[1828] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:43:22 +   345s ACTION churn
+12:45:07 +   449s SAMPLE gl=0 c2d=51 css=51 scr=51 vq={'t': 15.232536, 'total': 14123, 'dropped': 265, 'paused': False, 'fs': False} gpu_pids=[1828] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:45:17 +   459s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 5.341998, 'total': 14726, 'dropped': 266, 'paused': False, 'fs': False} gpu_pids=[1828] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:45:27 +   469s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 15.47013, 'total': 15334, 'dropped': 266, 'paused': False, 'fs': False} gpu_pids=[1828] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:45:34 +   476s ACTION kill_gpu
+12:45:34 +   476s KILL gpu-process [1828]
+12:45:42 +   484s GPU_PIDS after kill [3029]
+12:45:42 +   485s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 10.576522, 'total': 16242, 'dropped': 290, 'paused': False, 'fs': False} gpu_pids=[3029] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:45:52 +   495s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 0.680373, 'total': 16847, 'dropped': 291, 'paused': False, 'fs': False} gpu_pids=[3029] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:46:02 +   505s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 10.809564, 'total': 17454, 'dropped': 291, 'paused': False, 'fs': False} gpu_pids=[3029] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:46:12 +   515s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 0.915153, 'total': 18060, 'dropped': 291, 'paused': False, 'fs': False} gpu_pids=[3029] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:46:22 +   525s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 11.041256, 'total': 18667, 'dropped': 291, 'paused': False, 'fs': False} gpu_pids=[3029] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:46:33 +   535s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 1.147985, 'total': 19274, 'dropped': 291, 'paused': False, 'fs': False} gpu_pids=[3029] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:46:40 +   542s ACTION webgpu
+12:46:45 +   547s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 13.283445, 'total': 20005, 'dropped': 316, 'paused': False, 'fs': False} gpu_pids=[3029] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:46:55 +   557s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 3.391907, 'total': 20609, 'dropped': 317, 'paused': False, 'fs': False} gpu_pids=[3029] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:47:05 +   568s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 13.521238, 'total': 21217, 'dropped': 317, 'paused': False, 'fs': False} gpu_pids=[3029] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:47:15 +   578s SAMPLE gl=0 c2d=57 css=57 scr=57 vq={'t': 3.632516, 'total': 21823, 'dropped': 323, 'paused': False, 'fs': False} gpu_pids=[3029] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:47:25 +   588s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 13.781121, 'total': 22432, 'dropped': 323, 'paused': False, 'fs': False} gpu_pids=[3029] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:47:35 +   598s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 3.889095, 'total': 23039, 'dropped': 325, 'paused': False, 'fs': False} gpu_pids=[3029] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:47:46 +   608s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 14.017182, 'total': 23646, 'dropped': 325, 'paused': False, 'fs': False} gpu_pids=[3029] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:47:56 +   618s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 4.133602, 'total': 24254, 'dropped': 326, 'paused': False, 'fs': False} gpu_pids=[3029] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:48:06 +   628s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 14.260722, 'total': 24861, 'dropped': 326, 'paused': False, 'fs': False} gpu_pids=[3029] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:48:16 +   638s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 4.361224, 'total': 25467, 'dropped': 327, 'paused': False, 'fs': False} gpu_pids=[3029] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:48:26 +   649s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 14.492318, 'total': 26075, 'dropped': 327, 'paused': False, 'fs': False} gpu_pids=[3029] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:48:36 +   659s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 4.596971, 'total': 26681, 'dropped': 327, 'paused': False, 'fs': False} gpu_pids=[3029] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:48:46 +   669s SAMPLE gl=0 c2d=60 css=60 scr=60 vq={'t': 14.727157, 'total': 27289, 'dropped': 328, 'paused': False, 'fs': False} gpu_pids=[3029] err=['no webgl2'] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+12:48:52 +   675s END of load; final sample
+12:48:52 +   675s DMESG_FINAL {'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0} delta_xid=0 delta_nvrm=0
+12:48:53 +   675s TARGET_CRASHES 0 GPU_PIDS_FINAL [3029]
+12:48:53 +   675s CMDLINE 3029 /opt/google/chrome/chrome --type=gpu-process --gpu-recent-crash-count=1 --ozone-platform=x11 --use-angle=vulkan --crashpad-handler-pid=1795 --enable-crash-reporter=, --user-data-dir=/tmp/prof-chrome_vulkan --disable-breakpad --change-stack-guard-on-fork=enable --gpu-preferences=YAAAAAAAAAAgAQAMAAAAAAAAAAAAAGAASAAAAAAAAAACAAAAAgAAAEAAAAAAAAAAAAAAAAAAAAAGAAAAAAAAAAAAAAAAAAAAMAAAAAAAAAAwAAAAAAAA
+12:48:56 +   678s DONE
+CDP_LOAD_RC=0

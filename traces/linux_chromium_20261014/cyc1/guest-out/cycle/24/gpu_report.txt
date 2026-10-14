@@ -1,0 +1,1649 @@
+GPU Internals
+:root {
+    color-scheme: light dark;
+  }
+  * {
+    box-sizing: border-box;
+    user-select: none;
+  }
+
+  body {
+    cursor: default;
+    font-family: sans-serif;
+    margin: 8px;
+    padding: 0;
+  }
+:host{--green:#080;--yellow:#880;--red:#f00;--gray:#888;--bg-yellow:#ff0;display:block;flex:1;overflow:auto;padding:10px}@media (prefers-color-scheme:dark){:host{--green:#0F0;--yellow:#FF0;--red:#f00;--gray:#888;--bg-yellow:#880}}:host *{user-select:text}:host([selected]){display:flex;flex-direction:column}h3,ul{margin-bottom:0;margin-top:0}#content>div,#download-to-file{margin-bottom:1em}.feature-green{color:var(--green)}.feature-yellow{color:var(--yellow)}.feature-red{color:var(--red)}.feature-gray{color:var(--gray)}.bg-yellow{background-color:var(--bg-yellow)}#vulkan-info-value{white-space:pre}#download-to-file{font:inherit;min-height:2em;user-select:none}h4.dawn-info-header{color:var(--yellow);margin-bottom:2px;margin-top:10px}table.info-table{border-collapse:collapse;table-layout:fixed;width:100%}.info-table td{border:1px solid #777;vertical-align:top;overflow-x:auto}.info-table td:nth-child(1){font-weight:bold;width:25%}.info-table td:nth-child(2){font-weight:bold;width:75%}.copy{display:none}
+Download Report to File
+GPU Info
+Graphics Feature Status
+=======================
+*
+Canvas:
+Hardware accelerated
+*
+Direct Rendering Display Compositor:
+Disabled
+*
+Compositing:
+Hardware accelerated
+*
+Multiple Raster Threads:
+Enabled
+*
+OpenGL:
+Enabled
+*
+Rasterization:
+Hardware accelerated
+*
+Raw Draw:
+Disabled
+*
+Skia Graphite:
+Disabled
+*
+TreesInViz:
+Disabled
+*
+Video Decode:
+Hardware accelerated
+*
+Video Encode:
+Software only. Hardware acceleration disabled
+*
+Vulkan:
+Disabled
+*
+WebGL:
+Hardware accelerated
+*
+WebGPU:
+Hardware accelerated
+*
+WebGPU interop:
+Hardware accelerated
+*
+WebNN:
+Disabled
+Version Information
+===================
+Data exported
+:
+2026-10-14T13:43:32.797Z
+Chrome version
+:
+Chrome/155.0.8059.79
+Operating system
+:
+Linux 6.8.0-142-generic
+Software rendering list URL
+:
+https://chromium.googlesource.com/chromium/src/+/a49e2e3d4addfd84e765b52afe230bedb81096db/gpu/config/software_rendering_list.json
+Driver bug list URL
+:
+https://chromium.googlesource.com/chromium/src/+/a49e2e3d4addfd84e765b52afe230bedb81096db/gpu/config/gpu_driver_bug_list.json
+ANGLE commit id
+:
+cccf60cde32c
+2D graphics backend
+:
+Skia/155 29ed1e87a0a50f3d8347e988842d9d59e7573efa
+Command Line
+:
+/usr/bin/google-chrome-stable --remote-debugging-port=9222 --remote-allow-origins=* --user-data-dir=/tmp/prof-cycle24 --no-first-run --no-default-browser-check --password-store=basic --window-size=1600,900 --window-position=0,0 --autoplay-policy=no-user-gesture-required --allow-file-access-from-files --ozone-platform=x11 --flag-switches-begin --flag-switches-end about:blank
+Driver Information
+==================
+Initialization time
+:
+300
+In-process GPU
+:
+false
+Skia Backend
+:
+GaneshGL
+Passthrough Command Decoder
+:
+true
+Sandboxed
+:
+true
+GPU0
+:
+VENDOR= 0x10de [Google Inc. (NVIDIA Corporation)], DEVICE=0x2786 [ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 4070/PCIe/SSE2, OpenGL 4.5.0 NVIDIA 580.159.04)], DRIVER_VENDOR=Nvidia, DRIVER_VERSION=580.159.04 *ACTIVE*
+Optimus
+:
+false
+AMD switchable
+:
+false
+Pixel shader version
+:
+3.00
+Vertex shader version
+:
+3.00
+Max. MSAA samples
+:
+8
+Machine model name
+:
+Machine model version
+:
+GL implementation parts
+:
+(gl=egl-angle,angle=opengl)
+Display type
+:
+ANGLE_OPENGL
+GL_VENDOR
+:
+Google Inc. (NVIDIA Corporation)
+GL_RENDERER
+:
+ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 4070/PCIe/SSE2, OpenGL 4.5.0 NVIDIA 580.159.04)
+GL_VERSION
+:
+OpenGL ES 3.0 (ANGLE 2.1.28854 git hash: cccf60cde32c)
+GL_EXTENSIONS
+:
+GL_AMD_performance_monitor GL_ANGLE_blob_cache GL_ANGLE_client_arrays GL_ANGLE_clip_cull_distance GL_ANGLE_depth_texture GL_ANGLE_framebuffer_blit GL_ANGLE_framebuffer_multisample GL_ANGLE_get_serialized_context_string GL_ANGLE_get_tex_level_parameter GL_ANGLE_instanced_arrays GL_ANGLE_logic_op GL_ANGLE_memory_size GL_ANGLE_multiview_multisample GL_ANGLE_polygon_mode GL_ANGLE_program_binary_readiness_query GL_ANGLE_program_cache_control GL_ANGLE_provoking_vertex GL_ANGLE_renderability_validation GL_ANGLE_request_extension GL_ANGLE_robust_client_memory GL_ANGLE_shader_pixel_local_storage GL_ANGLE_shader_pixel_local_storage_coherent GL_ANGLE_stencil_texturing GL_ANGLE_texture_compression_dxt3 GL_ANGLE_texture_compression_dxt5 GL_ANGLE_texture_multisample GL_ANGLE_texture_rectangle GL_ANGLE_translated_shader_source GL_APPLE_clip_distance GL_ARM_rgba8 GL_CHROMIUM_bind_generates_resource GL_CHROMIUM_bind_uniform_location GL_CHROMIUM_copy_texture GL_CHROMIUM_lose_context GL_EXT_blend_func_extended GL_EXT_blend_minmax GL_EXT_clear_texture GL_EXT_clip_control GL_EXT_clip_cull_distance GL_EXT_color_buffer_float GL_EXT_color_buffer_half_float GL_EXT_compressed_ETC1_RGB8_sub_texture GL_EXT_conservative_depth GL_EXT_debug_label GL_EXT_debug_marker GL_EXT_depth_clamp GL_EXT_discard_framebuffer GL_EXT_disjoint_timer_query GL_EXT_draw_buffers GL_EXT_draw_buffers_indexed GL_EXT_float_blend GL_EXT_frag_depth GL_EXT_instanced_arrays GL_EXT_map_buffer_range GL_EXT_memory_object GL_EXT_memory_object_fd GL_EXT_multisample_compatibility GL_EXT_occlusion_query_boolean GL_EXT_polygon_offset_clamp GL_EXT_read_format_bgra GL_EXT_render_snorm GL_EXT_robustness GL_EXT_sRGB GL_EXT_sRGB_write_control GL_EXT_semaphore GL_EXT_semaphore_fd GL_EXT_shader_texture_lod GL_EXT_shadow_samplers GL_EXT_texture_border_clamp GL_EXT_texture_compression_bptc GL_EXT_texture_compression_dxt1 GL_EXT_texture_compression_rgtc GL_EXT_texture_compression_s3tc_srgb GL_EXT_texture_filter_anisotropic GL_EXT_texture_format_BGRA8888 GL_EXT_texture_mirror_clamp_to_edge GL_EXT_texture_norm16 GL_EXT_texture_rg GL_EXT_texture_sRGB_R8 GL_EXT_texture_sRGB_decode GL_EXT_texture_shadow_lod GL_EXT_texture_storage GL_EXT_texture_type_2_10_10_10_REV GL_EXT_unpack_subimage GL_KHR_blend_equation_advanced GL_KHR_blend_equation_advanced_coherent GL_KHR_debug GL_KHR_parallel_shader_compile GL_KHR_robustness GL_NV_fence GL_NV_framebuffer_blit GL_NV_pack_subimage GL_NV_pixel_buffer_object GL_NV_polygon_mode GL_NV_read_depth GL_NV_read_stencil GL_NV_robustness_video_memory_purge GL_NV_shader_noperspective_interpolation GL_OES_compressed_ETC1_RGB8_texture GL_OES_depth24 GL_OES_depth32 GL_OES_depth_texture GL_OES_draw_buffers_indexed GL_OES_element_index_uint GL_OES_fbo_render_mipmap GL_OES_get_program_binary GL_OES_mapbuffer GL_OES_packed_depth_stencil GL_OES_required_internalformat GL_OES_rgb8_rgba8 GL_OES_sample_variables GL_OES_shader_multisample_interpolation GL_OES_standard_derivatives GL_OES_surfaceless_context GL_OES_texture_3D GL_OES_texture_border_clamp GL_OES_texture_float GL_OES_texture_float_linear GL_OES_texture_half_float GL_OES_texture_half_float_linear GL_OES_texture_npot GL_OES_texture_stencil8 GL_OES_texture_storage_multisample_2d_array GL_OES_vertex_array_object GL_OVR_multiview GL_OVR_multiview2
+Disabled Extensions
+:
+GL_KHR_blend_equation_advanced GL_KHR_blend_equation_advanced_coherent GL_MESA_framebuffer_flip_y
+Disabled WebGL Extensions
+:
+Window system binding vendor
+:
+Google Inc. (NVIDIA Corporation)
+Window system binding version
+:
+1.5 (ANGLE 2.1.28854 git hash: cccf60cde32c)
+Window system binding extensions
+:
+EGL_EXT_create_context_robustness EGL_KHR_create_context EGL_KHR_get_all_proc_addresses EGL_ANGLE_create_context_webgl_compatibility EGL_CHROMIUM_create_context_bind_generates_resource EGL_EXT_pixel_format_float EGL_KHR_surfaceless_context EGL_ANGLE_display_texture_share_group EGL_ANGLE_display_semaphore_share_group EGL_ANGLE_create_context_client_arrays EGL_ANGLE_program_cache_control EGL_ANGLE_robust_resource_initialization EGL_ANGLE_create_context_extensions_enabled EGL_ANDROID_blob_cache EGL_ANDROID_recordable EGL_ANGLE_create_context_backwards_compatible EGL_KHR_create_context_no_error EGL_NOK_texture_from_pixmap EGL_NV_robustness_video_memory_purge EGL_KHR_reusable_sync EGL_ANGLE_context_virtualization EGL_ANGLE_memory_usage_report
+XDG_SESSION_TYPE
+:
+tty
+Ozone platform
+:
+x11
+Direct rendering version
+:
+unknown
+Reset notification strategy
+:
+0x8252
+GPU process crash count
+:
+0
+Driver Bug Workarounds
+======================
+*
+disable_discard_framebuffer
+*
+disable_rgb_to_yuv_conversion
+*
+enable_webgl_timer_query_extensions
+*
+exit_on_context_lost
+*
+force_cube_complete
+*
+init_gl_position_in_vertex_shader
+*
+unpack_overlapping_rows_separately_unpack_buffer
+*
+disabled_extension_GL_KHR_blend_equation_advanced
+*
+disabled_extension_GL_KHR_blend_equation_advanced_coherent
+*
+disabled_extension_GL_MESA_framebuffer_flip_y
+Problems Detected
+=================
+*
+Accelerated video encode has been disabled, either via blocklist, about:flags or the command line.
+Disabled Features:
+video_encode
+*
+Program link fails in NVIDIA Linux if gl_Position is not set
+:
+286468
+(http://crbug.com/286468)
+Applied Workarounds:
+init_gl_position_in_vertex_shader
+*
+NVIDIA fails glReadPixels from incomplete cube map texture
+:
+518889
+(http://crbug.com/518889)
+Applied Workarounds:
+force_cube_complete
+*
+Framebuffer discarding can hurt performance on non-tilers
+:
+570897
+(http://crbug.com/570897)
+Applied Workarounds:
+disable_discard_framebuffer
+*
+Unpacking overlapping rows from unpack buffers is unstable on NVIDIA GL driver
+:
+596774
+(http://crbug.com/596774)
+Applied Workarounds:
+unpack_overlapping_rows_separately_unpack_buffer
+*
+Disable KHR_blend_equation_advanced until cc shaders are updated
+:
+661715
+(http://crbug.com/661715)
+Applied Workarounds:
+disable(GL_KHR_blend_equation_advanced)
+,
+disable(GL_KHR_blend_equation_advanced_coherent)
+*
+Expose WebGL's disjoint_timer_query extensions on platforms with site isolation
+:
+808744
+(http://crbug.com/808744)
+,
+870491
+(http://crbug.com/870491)
+Applied Workarounds:
+enable_webgl_timer_query_extensions
+*
+Some drivers can't recover after OUT_OF_MEM and context lost
+:
+893177
+(http://crbug.com/893177)
+Applied Workarounds:
+exit_on_context_lost
+*
+Disable GL_MESA_framebuffer_flip_y for desktop GL
+:
+964010
+(http://crbug.com/964010)
+Applied Workarounds:
+disable(GL_MESA_framebuffer_flip_y)
+*
+Disable RGB to YUV hardware conversion on NVIDIA Linux
+:
+447709687
+(http://crbug.com/447709687)
+Applied Workarounds:
+disable_rgb_to_yuv_conversion
+ANGLE Features
+==============
+*
+allowCompressedFormats
+(Frontend workarounds)
+:
+Enabled
+*
+allowExtensionDisableAfterNonPpTokens
+(Frontend features)
+:
+Disabled
+*
+alwaysEnableEmulatedMultidrawExtensions
+(Frontend workarounds)
+:
+Disabled
+*
+alwaysRunLinkSubJobsThreaded
+(Frontend features)
+:
+Disabled
+*
+cacheCompiledShader
+(Frontend features)
+:
+Enabled
+*
+clipCullDistanceBrokenWithPassthroughShaders
+(Frontend features)
+:
+Disabled
+*
+compileJobIsThreadSafe
+(Frontend features)
+:
+Disabled
+*
+compressProgramBinaryBlob
+(Frontend features)
+:
+Disabled
+*
+disableAnisotropicFiltering
+(Frontend workarounds)
+:
+Disabled
+*
+disableProgramBinary
+(Frontend features)
+:
+Disabled
+*
+disableProgramCaching
+(Frontend features)
+:
+Disabled
+*
+disableProgramCachingForTransformFeedback
+(Frontend workarounds)
+:
+Disabled
+*
+dumpShaderSource
+(Frontend features)
+:
+Disabled
+*
+dumpTranslatedShaders
+(Frontend features)
+:
+Disabled
+*
+emulatePixelLocalStorage
+(Frontend features)
+:
+Enabled
+*
+enableCaptureLimits
+(Frontend features)
+:
+Disabled
+*
+enableCreateContextBackwardsCompatible
+(Frontend features)
+:
+Enabled
+*
+enableProgramBinaryForCapture
+(Frontend features)
+:
+Disabled
+*
+enableShaderSubstitution
+(Frontend workarounds)
+:
+Disabled
+*
+enableTranslatedShaderSubstitution
+(Frontend workarounds)
+:
+Disabled
+*
+forceDebugContexts
+(Frontend features)
+:
+Disabled
+*
+forceDepthAttachmentInitOnClear
+(Frontend workarounds)
+:
+Disabled
+*
+forceFlushAfterDrawcallUsingShadowmap
+(Frontend workarounds)
+:
+Disabled
+*
+forceGlErrorChecking
+(Frontend features)
+:
+Disabled
+*
+forceInitShaderVariables
+(Frontend features)
+:
+Disabled
+*
+forceMinimumMaxVertexAttributes
+(Frontend features)
+:
+Disabled
+*
+forcePassthroughShaders
+(Frontend features)
+:
+Disabled
+*
+forceRobustResourceInit
+(Frontend features)
+:
+Disabled
+*
+limitMaxBufferBytesTo1MB
+(Frontend features)
+:
+Disabled
+*
+limitMaxTextureBytesTo1MB
+(Frontend features)
+:
+Disabled
+*
+linkJobIsThreadSafe
+(Frontend features)
+:
+Disabled
+*
+loseContextOnOutOfMemory
+(Frontend workarounds)
+:
+Enabled
+*
+loseHardenedContextOnBackendError
+(Frontend workarounds)
+:
+Enabled
+*
+noperspectiveInterpolationBrokenWithPassthroughShaders
+(Frontend features)
+:
+Disabled
+*
+setNeedInitOnInvalidation
+(Frontend features)
+:
+Enabled
+*
+singleThreadedTextureDecompression
+(Frontend workarounds)
+:
+Disabled
+*
+uncurrentEglSurfaceUponSurfaceDestroy
+(Frontend workarounds)
+:
+Disabled
+*
+useIr
+(Frontend features)
+:
+Disabled
+*
+RGBA4IsNotSupportedForColorRendering
+(OpenGL workarounds)
+:
+Disabled
+*
+RGBDXT1TexturesSampleZeroAlpha
+(OpenGL workarounds)
+:
+Disabled
+*
+addAndTrueToLoopCondition
+(OpenGL workarounds)
+:
+Disabled
+*
+adjustSrcDstRegionForBlitFramebuffer
+(OpenGL workarounds)
+:
+Enabled
+*
+allowAstcFormats
+(OpenGL workarounds)
+:
+Enabled
+*
+allowClearForRobustResourceInit
+(OpenGL workarounds)
+:
+Disabled
+*
+allowETCFormats
+(OpenGL workarounds)
+:
+Disabled
+*
+alwaysCallUseProgramAfterLink
+(OpenGL workarounds)
+:
+Enabled
+*
+alwaysUnbindFramebufferTexture2D
+(OpenGL workarounds)
+:
+Enabled
+*
+avoid1BitAlphaTextureFormats
+(OpenGL workarounds)
+:
+Disabled
+*
+avoidBindFragDataLocation
+(OpenGL workarounds)
+:
+Disabled
+*
+avoidComplexExpressionsInStructConstructor
+(OpenGL workarounds)
+:
+Disabled
+*
+bgraTexImageFormatsBroken
+(OpenGL workarounds)
+:
+Disabled
+*
+bindCompleteFramebufferForTimerQueries
+(OpenGL workarounds)
+:
+Disabled
+*
+bindTransformFeedbackBufferBeforeBindBufferRange
+(OpenGL workarounds)
+:
+Disabled
+*
+clampArrayAccess
+(OpenGL workarounds)
+:
+Disabled
+*
+clampFragDepth
+(OpenGL workarounds)
+:
+Enabled
+*
+clampMscRate
+(OpenGL workarounds)
+:
+Disabled
+*
+clampPointSize
+(OpenGL workarounds)
+:
+Enabled
+*
+clearsWithGapsNeedFlush
+(OpenGL workarounds)
+:
+Disabled
+*
+clipSrcRegionForBlitFramebuffer
+(OpenGL workarounds)
+:
+Disabled
+*
+corruptProgramBinaryForTesting
+(OpenGL workarounds)
+:
+Disabled
+*
+decodeEncodeSRGBForGenerateMipmap
+(OpenGL workarounds)
+:
+Disabled
+*
+disableBaseInstanceVertex
+(OpenGL workarounds)
+:
+Enabled
+*
+disableBlendEquationAdvanced
+(OpenGL workarounds)
+:
+Disabled
+*
+disableClearTexImageForRobustInit
+(OpenGL workarounds)
+:
+Disabled
+*
+disableClearTexture
+(OpenGL workarounds)
+:
+Disabled
+*
+disableClipControl
+(OpenGL features)
+:
+Disabled
+*
+disableDrawBuffersIndexed
+(OpenGL workarounds)
+:
+Disabled
+*
+disableGPUSwitchingSupport
+(OpenGL workarounds)
+:
+Disabled
+*
+disableMSAASampleCount1
+(OpenGL workarounds)
+:
+Disabled
+*
+disableMultisampledRenderToTexture
+(OpenGL workarounds)
+:
+Disabled
+*
+disableNativeParallelCompile
+(OpenGL workarounds)
+:
+Disabled
+*
+disablePassthroughShaders
+(OpenGL workarounds)
+:
+Disabled
+*
+disableRenderSnorm
+(OpenGL workarounds)
+:
+Disabled
+*
+disableSemaphoreFd
+(OpenGL workarounds)
+:
+Disabled
+*
+disableSyncControlSupport
+(OpenGL workarounds)
+:
+Disabled
+*
+disableTextureClampToBorder
+(OpenGL workarounds)
+:
+Disabled
+*
+disableTextureMirrorClampToEdge
+(OpenGL workarounds)
+:
+Disabled
+*
+disableTiledRendering
+(OpenGL workarounds)
+:
+Disabled
+*
+disableTimestampQueries
+(OpenGL workarounds)
+:
+Disabled
+*
+doesSRGBClearsOnLinearFramebufferAttachments
+(OpenGL workarounds)
+:
+Disabled
+*
+dontInitializeUninitializedLocals
+(OpenGL workarounds)
+:
+Disabled
+*
+dontInvalidateIncompleteFBOs
+(OpenGL workarounds)
+:
+Disabled
+*
+dontUseLoopsToInitializeVariables
+(OpenGL workarounds)
+:
+Disabled
+*
+emitMaxGlsl400ForTesting
+(OpenGL workarounds)
+:
+Disabled
+*
+emulateAbsIntFunction
+(OpenGL workarounds)
+:
+Disabled
+*
+emulateAtan2Float
+(OpenGL workarounds)
+:
+Enabled
+*
+emulateClipDistanceState
+(OpenGL workarounds)
+:
+Disabled
+*
+emulateClipOrigin
+(OpenGL workarounds)
+:
+Disabled
+*
+emulateCopyTexImage2D
+(OpenGL workarounds)
+:
+Disabled
+*
+emulateCopyTexImage2DFromRenderbuffers
+(OpenGL workarounds)
+:
+Disabled
+*
+emulateImmutableCompressedTexture3D
+(OpenGL workarounds)
+:
+Disabled
+*
+emulateMaxVertexAttribStride
+(OpenGL workarounds)
+:
+Disabled
+*
+emulatePackSkipRowsAndPackSkipPixels
+(OpenGL workarounds)
+:
+Disabled
+*
+emulatePrimitiveRestartFixedIndex
+(OpenGL workarounds)
+:
+Disabled
+*
+emulateRGB10
+(OpenGL workarounds)
+:
+Enabled
+*
+ensureNonEmptyBufferIsBoundForDraw
+(OpenGL features)
+:
+Disabled
+*
+expandFragmentOutputsToVec4
+(OpenGL workarounds)
+:
+Disabled
+*
+explicitFragmentLocations
+(OpenGL workarounds)
+:
+Disabled
+*
+finishBeforeBlitFramebufferMultiAttachment
+(OpenGL workarounds)
+:
+Disabled
+*
+finishDoesNotCauseQueriesToBeAvailable
+(OpenGL workarounds)
+:
+Enabled
+*
+flushBeforeDeleteTextureIfCopiedTo
+(OpenGL workarounds)
+:
+Disabled
+*
+flushBeforeGenerateMipmap
+(OpenGL workarounds)
+:
+Disabled
+*
+flushOnFramebufferChange
+(OpenGL workarounds)
+:
+Disabled
+*
+flushQueriesBeforeDeletingOrUnbindingFbo
+(OpenGL workarounds)
+:
+Disabled
+*
+forceLumaWorkaroundForSameTextureCopyTexImage2D
+(OpenGL workarounds)
+:
+Disabled
+*
+forceMaxCombinedShaderOutputResources
+(OpenGL features)
+:
+Enabled
+*
+initFragmentOutputVariables
+(OpenGL workarounds)
+:
+Disabled
+*
+initializeCurrentVertexAttributes
+(OpenGL workarounds)
+:
+Enabled
+*
+keepBufferShadowCopy
+(OpenGL workarounds)
+:
+Disabled
+*
+limitMax3dArrayTextureSizeTo1024
+(OpenGL workarounds)
+:
+Disabled
+*
+limitMaxBufferSizeTo1gb
+(OpenGL workarounds)
+:
+Disabled
+*
+limitMaxMSAASamplesTo4
+(OpenGL workarounds)
+:
+Disabled
+*
+limitOutputVaryingsTo256AtCompileTime
+(OpenGL workarounds)
+:
+Disabled
+*
+limitWebglMaxTextureSizeTo4096
+(OpenGL workarounds)
+:
+Disabled
+*
+limitWebglMaxTextureSizeTo8192
+(OpenGL workarounds)
+:
+Disabled
+*
+multiviewViaViewportArray
+(OpenGL features)
+:
+Enabled
+*
+packLargeRowLengthSeparatelyPackBuffer
+(OpenGL workarounds)
+:
+Disabled
+*
+packLastRowSeparatelyForPaddingInclusion
+(OpenGL workarounds)
+:
+Enabled
+*
+packOverlappingRowsSeparatelyPackBuffer
+(OpenGL workarounds)
+:
+Enabled
+*
+passHighpToPackUnormSnormBuiltins
+(OpenGL workarounds)
+:
+Disabled
+*
+preAddTexelFetchOffsets
+(OpenGL workarounds)
+:
+Disabled
+*
+preTransformTextureCubeGradDerivatives
+(OpenGL workarounds)
+:
+Disabled
+*
+promotePackedFormatsTo8BitPerChannel
+(OpenGL workarounds)
+:
+Disabled
+*
+queryCounterBitsGeneratesErrors
+(OpenGL workarounds)
+:
+Disabled
+*
+readPixelsUsingImplementationColorReadFormatForNorm16
+(OpenGL workarounds)
+:
+Disabled
+*
+reapplyUBOBindingsAfterUsingBinaryProgram
+(OpenGL workarounds)
+:
+Disabled
+*
+reattachFboDepthStencilOnReallocation
+(OpenGL workarounds)
+:
+Disabled
+*
+reattachTextureToFboAfterLayerIncrease
+(OpenGL workarounds)
+:
+Disabled
+*
+recreateImmutableTextureOnBaseLevelIncrease
+(OpenGL workarounds)
+:
+Disabled
+*
+recreateMipmapLevelsBeforeGenerate
+(OpenGL workarounds)
+:
+Disabled
+*
+recreateTextureOnTexImage3dDepthIncrease
+(OpenGL workarounds)
+:
+Disabled
+*
+removeDynamicIndexingOfSwizzledVector
+(OpenGL workarounds)
+:
+Disabled
+*
+removeInvariantAndCentroidForESSL3
+(OpenGL workarounds)
+:
+Disabled
+*
+resetBaseLevelForASTCImage
+(OpenGL workarounds)
+:
+Disabled
+*
+resetSampleCoverageOnFBOChange
+(OpenGL workarounds)
+:
+Disabled
+*
+resetTexImage2DBaseLevel
+(OpenGL workarounds)
+:
+Disabled
+*
+resetTexStorage2DBaseLevel
+(OpenGL workarounds)
+:
+Disabled
+*
+resyncDepthRangeOnClipControl
+(OpenGL workarounds)
+:
+Disabled
+*
+rewriteRepeatedAssignToSwizzled
+(OpenGL workarounds)
+:
+Enabled
+*
+rewriteRowMajorMatrices
+(OpenGL workarounds)
+:
+Disabled
+*
+roundUp3dTextureSizeToPOTForLimit
+(OpenGL workarounds)
+:
+Disabled
+*
+sanitizeAMDGPURendererString
+(OpenGL workarounds)
+:
+Disabled
+*
+scalarizeVecAndMatConstructorArgs
+(OpenGL workarounds)
+:
+Enabled
+*
+setPrimitiveRestartFixedIndexForDrawArrays
+(OpenGL workarounds)
+:
+Disabled
+*
+setZeroLevelBeforeGenerateMipmap
+(OpenGL workarounds)
+:
+Disabled
+*
+shiftInstancedArrayDataWithOffset
+(OpenGL workarounds)
+:
+Disabled
+*
+splitLevel0PboFullSubImage2D
+(OpenGL workarounds)
+:
+Disabled
+*
+srgbBlendingBroken
+(OpenGL workarounds)
+:
+Disabled
+*
+supportsFragmentShaderInterlockARB
+(OpenGL features)
+:
+Enabled
+*
+supportsFragmentShaderInterlockNV
+(OpenGL features)
+:
+Enabled
+*
+supportsFragmentShaderOrderingINTEL
+(OpenGL features)
+:
+Disabled
+*
+supportsShaderFramebufferFetchEXT
+(OpenGL features)
+:
+Disabled
+*
+supportsShaderFramebufferFetchNonCoherentEXT
+(OpenGL features)
+:
+Disabled
+*
+syncAllVertexArraysToDefault
+(OpenGL workarounds)
+:
+Disabled
+*
+syncDefaultVertexArraysToDefault
+(OpenGL workarounds)
+:
+Disabled
+*
+unbindFBOBeforeSwitchingContext
+(OpenGL workarounds)
+:
+Disabled
+*
+unfoldShortCircuits
+(OpenGL workarounds)
+:
+Disabled
+*
+unpackLastRowSeparatelyForPaddingInclusion
+(OpenGL workarounds)
+:
+Enabled
+*
+unpackOverlappingRowsSeparatelyUnpackBuffer
+(OpenGL workarounds)
+:
+Enabled
+*
+unsizedSRGBReadPixelsDoesntTransform
+(OpenGL workarounds)
+:
+Disabled
+*
+uploadOversizedMipLevelsViaUnpackBuffer
+(OpenGL workarounds)
+:
+Disabled
+*
+uploadTextureDataInChunks
+(OpenGL workarounds)
+:
+Disabled
+*
+useIntermediateTextureForGenerateMipmap
+(OpenGL workarounds)
+:
+Disabled
+*
+useTempForNonZeroBaseLevelGenMipmapUsingCopyImageSubData
+(OpenGL workarounds)
+:
+Disabled
+*
+useTexSubImageForHostTwiddledNpotUploads
+(OpenGL workarounds)
+:
+Disabled
+*
+useUnusedBlocksWithStandardOrSharedLayout
+(OpenGL workarounds)
+:
+Disabled
+*
+validateMaxPerStageUniformBlocksAtCompileTime
+(OpenGL workarounds)
+:
+Disabled
+*
+validateState
+(OpenGL features)
+:
+Disabled
+*
+vertexIDDoesNotIncludeBaseVertex
+(OpenGL workarounds)
+:
+Disabled
+Dawn Info
+=========
+<Unknown GPU>  OpenGLES backend - ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 4070/PCIe/SSE2, OpenGL 4.5.0 NVIDIA 580.159.04) (Compatibility Mode)
+----------------------------------------------------------------------------------------------------------------------------------------------------
+[WebGPU Status]
+---------------
+*
+Available
+[Adapter Supported Features]
+----------------------------
+*
+texture-compression-bc
+*
+float32blendable
+*
+dual-source-blending
+*
+texture-component-swizzle
+*
+dawn-internal-usages
+*
+dawn-native
+*
+implicit-device-synchronization
+*
+transient-attachments
+*
+angle-texture-sharing
+*
+unorm16texture-formats
+*
+dawn-format-capabilities
+*
+unorm16formats-for-external-texture
+*
+dawn-allow-undefined-load-store-op
+[Enabled Toggle Names]
+----------------------
+*
+lazy_clear_resource_on_first_use:
+https://crbug.com/dawn/145
+(https://crbug.com/dawn/145)
+:
+    Clears resource to zero on first usage. This initializes the resource so
+    that no dirty bits from recycled memory is present in the new resource.
+*
+disable_indexed_draw_buffers:
+https://crbug.com/dawn/582
+(https://crbug.com/dawn/582)
+:
+    Disables the use of indexed draw buffer state which is unsupported on some
+    platforms.
+*
+flush_before_client_wait_sync:
+https://crbug.com/dawn/633
+(https://crbug.com/dawn/633)
+:
+    Call glFlush before glClientWaitSync to work around bugs in the latter
+*
+disallow_spirv:
+https://crbug.com/1214923
+(https://crbug.com/1214923)
+:
+    Disallow usage of SPIR-V completely so that only WGSL is used for shader
+    modules. This is useful to prevent a Chromium renderer process from
+    successfully sending SPIR-V code to be compiled in the GPU process.
+*
+use_placeholder_fragment_in_vertex_only_pipeline:
+https://crbug.com/dawn/136
+(https://crbug.com/dawn/136)
+:
+    Use a placeholder empty fragment shader in vertex only render pipeline.
+    This toggle must be enabled for OpenGL ES backend, the Vulkan Backend, and
+    serves as a workaround by default enabled on some Metal devices with Intel
+    GPU to ensure the depth result is correct.
+*
+timestamp_quantization:
+https://crbug.com/dawn/1800
+(https://crbug.com/dawn/1800)
+:
+    Enable timestamp queries quantization to reduce the precision of timers
+    that can be created with timestamp queries.
+*
+use_blit_for_buffer_to_stencil_texture_copy:
+https://crbug.com/dawn/1389
+(https://crbug.com/dawn/1389)
+:
+    Use a blit instead of a copy command to copy buffer data to the stencil
+    aspect of a texture. Works around an issue where stencil writes by copy
+    commands are not visible to a render or compute pass.
+*
+use_blit_for_depth16unorm_texture_to_buffer_copy:
+https://crbug.com/dawn/1782
+(https://crbug.com/dawn/1782)
+:
+    Use a blit instead of a copy command to copy depth aspect of a texture to
+    a buffer.Workaround for OpenGL and OpenGLES.
+*
+use_blit_for_depth32float_texture_to_buffer_copy:
+https://crbug.com/dawn/1782
+(https://crbug.com/dawn/1782)
+:
+    Use a blit instead of a copy command to copy depth aspect of a texture to
+    a buffer.Workaround for OpenGLES.
+*
+use_blit_for_stencil_texture_to_buffer_copy:
+https://crbug.com/dawn/1782
+(https://crbug.com/dawn/1782)
+:
+    Use a blit instead of a copy command to copy stencil aspect of a texture
+    to a buffer.Workaround for OpenGLES.
+*
+use_blit_for_snorm_texture_to_buffer_copy:
+https://crbug.com/dawn/1781
+(https://crbug.com/dawn/1781)
+:
+    Use a blit instead of a copy command to copy snorm texture to a
+    buffer.Workaround for OpenGLES.
+*
+use_blit_for_rgb9e5ufloat_texture_copy:
+https://crbug.com/dawn/2079
+(https://crbug.com/dawn/2079)
+:
+    Use a blit instead of a copy command to copy rgb9e5ufloat texture to a
+    texture or a buffer.Workaround for OpenGLES.
+*
+use_blit_for_rg11b10ufloat_texture_copy:
+https://crbug.com/381214487
+(https://crbug.com/381214487)
+:
+    Use a blit instead of a copy command to copy rg11b10ufloat texture to a
+    texture or a buffer.Workaround for OpenGLES.
+*
+use_blit_for_float_16_texture_copy:
+https://crbug.com/381214487
+(https://crbug.com/381214487)
+:
+    Use a blit instead of a copy command to copy float16 texture to a texture
+    or a buffer.Workaround for OpenGLES.
+*
+use_blit_for_non_rgba_unorm_texture_to_buffer_copy:
+https://issues.chromium.org/issues/556959073
+(https://issues.chromium.org/issues/556959073)
+:
+    Use a blit instead of a copy command to copy non-RGBA unorm textures to a
+    buffer. Workaround for OpenGLES.
+*
+use_blit_for_non_rgba_float_texture_to_buffer_copy:
+https://issues.chromium.org/issues/556959073
+(https://issues.chromium.org/issues/556959073)
+:
+    Use a blit instead of a copy command to copy non-RGBA float textures to a
+    buffer. Workaround for OpenGLES.
+*
+use_blit_for_uint_texture_to_buffer_copy:
+https://issues.chromium.org/issues/556959073
+(https://issues.chromium.org/issues/556959073)
+:
+    Use a blit instead of a copy command to copy uint textures to a buffer.
+    Workaround for OpenGLES.
+*
+use_blit_for_sint_texture_to_buffer_copy:
+https://issues.chromium.org/issues/556959073
+(https://issues.chromium.org/issues/556959073)
+:
+    Use a blit instead of a copy command to copy sint textures to a buffer.
+    Workaround for OpenGLES.
+*
+gl_use_array_length_from_uniform:
+https://crbug.com/dawn/379805731
+(https://crbug.com/dawn/379805731)
+:
+    Use arrayLengthFromUniform transform to replace arrayLength() function
+    calls of dynamic storage buffers.This toggle is only used for workarounds
+    on certain devices. It has no impact on backends which need this transform
+    universally (metal, d3d12)
+*
+use_t2b2t_for_srgb_texture_copy:
+https://crbug.com/dawn/2362
+(https://crbug.com/dawn/2362)
+:
+    Use T2B and B2T copies to emulate a T2T copy between sRGB and non-sRGB
+    textures.Workaround for OpenGLES.
+*
+gl_depth_bias_modifier:
+https://crbug.com/42241017
+(https://crbug.com/42241017)
+:
+    Empirically some GL drivers select n+1 when a depth value lies between 2^n
+    and 2^(n+1), while the WebGPU CTS is expecting n. Scale the depth bias
+    value by multiple 0.5 on certain backends to achieve conformant result.
+*
+enable_integer_range_analysis_in_robustness:
+https://crbug.com/348701956
+(https://crbug.com/348701956)
+:
+    Compute the range of the index with Integer Range Analysis in the
+    robustness transform and skip doing index clamping when the out of bound
+    access cannot happen.
+*
+blob_cache_hash_validation:
+https://crbug.com/429938352
+(https://crbug.com/429938352)
+:
+    Enable hash validation when loading/storing from/to the blob cache
+*
+decompose_uniform_buffers:
+https://crbug.com/448452698
+(https://crbug.com/448452698)
+:
+    Decompose uniform buffers into arrays of vec4<u32> on backends for Vulkan
+    and OpenGL.
+[WebGPU Required Toggles - enabled]
+-----------------------------------
+*
+disallow_spirv:
+https://crbug.com/1214923
+(https://crbug.com/1214923)
+:
+    Disallow usage of SPIR-V completely so that only WGSL is used for shader
+    modules. This is useful to prevent a Chromium renderer process from
+    successfully sending SPIR-V code to be compiled in the GPU process.
+*
+timestamp_quantization:
+https://crbug.com/dawn/1800
+(https://crbug.com/dawn/1800)
+:
+    Enable timestamp queries quantization to reduce the precision of timers
+    that can be created with timestamp queries.
+<CPU>  Vulkan backend - SwiftShader Device (Subzero)
+----------------------------------------------------
+[WebGPU Status]
+---------------
+*
+Blocklisted - crbug.com/40057808: CPU adapters not fully tested or conformant. |
+[Adapter Supported Features]
+----------------------------
+*
+core-features-and-limits
+*
+depth-clip-control
+*
+depth32float-stencil8
+*
+texture-compression-bc
+*
+texture-compression-bc-sliced-3d
+*
+texture-compression-etc2
+*
+texture-compression-astc
+*
+texture-compression-astc-sliced-3d
+*
+timestamp-query
+*
+indirect-first-instance
+*
+rg11b10ufloat-renderable
+*
+bgra8unorm-storage
+*
+float32filterable
+*
+float32blendable
+*
+clip-distances
+*
+subgroups
+*
+texture-component-swizzle
+*
+subgroup-size-control
+*
+dawn-internal-usages
+*
+dawn-multi-planar-formats
+*
+dawn-native
+*
+implicit-device-synchronization
+*
+transient-attachments
+*
+unorm16texture-formats
+*
+adapter-properties-memory-heaps
+*
+adapter-properties-vk
+*
+dawn-format-capabilities
+*
+shared-texture-memory-opaque-fd
+*
+shared-fence-vk-semaphore-opaque-fd
+*
+dawn-load-resolve-texture
+*
+flexible-texture-views
+*
+unorm16formats-for-external-texture
+*
+dawn-allow-undefined-load-store-op
+[Enabled Toggle Names]
+----------------------
+*
+lazy_clear_resource_on_first_use:
+https://crbug.com/dawn/145
+(https://crbug.com/dawn/145)
+:
+    Clears resource to zero on first usage. This initializes the resource so
+    that no dirty bits from recycled memory is present in the new resource.
+*
+use_temporary_buffer_in_texture_to_texture_copy:
+https://crbug.com/dawn/42
+(https://crbug.com/dawn/42)
+:
+    Split texture-to-texture copy into two copies: copy from source texture
+    into a temporary buffer, and copy from the temporary buffer into the
+    destination texture when copying between compressed textures that don't
+    have block-aligned sizes. This workaround is enabled by default on all
+    Vulkan drivers to solve an issue in the Vulkan SPEC about the
+    texture-to-texture copies with compressed formats. See #1005
+    (https://github.com/KhronosGroup/Vulkan-Docs/issues/1005) for more
+    details.
+*
+vulkan_use_d32s8:
+https://crbug.com/dawn/286
+(https://crbug.com/dawn/286)
+:
+    Vulkan mandates support of either D32_FLOAT_S8 or D24_UNORM_S8. When
+    available the backend will use D32S8 (toggle to on) but setting the toggle
+    to off will make it use the D24S8 format when possible.
+*
+vulkan_use_s8:
+https://crbug.com/dawn/666
+(https://crbug.com/dawn/666)
+:
+    Vulkan has a pure stencil8 format but it is not universally available.
+    When this toggle is on, the backend will use S8 for the stencil8 format,
+    otherwise it will fallback to D32S8 or D24S8.
+*
+disallow_spirv:
+https://crbug.com/1214923
+(https://crbug.com/1214923)
+:
+    Disallow usage of SPIR-V completely so that only WGSL is used for shader
+    modules. This is useful to prevent a Chromium renderer process from
+    successfully sending SPIR-V code to be compiled in the GPU process.
+*
+vulkan_use_demote_to_helper_invocation_extension:
+https://crbug.com/42250787
+(https://crbug.com/42250787)
+:
+    Sets the use of the vulkan demote to helper extension
+*
+use_placeholder_fragment_in_vertex_only_pipeline:
+https://crbug.com/dawn/136
+(https://crbug.com/dawn/136)
+:
+    Use a placeholder empty fragment shader in vertex only render pipeline.
+    This toggle must be enabled for OpenGL ES backend, the Vulkan Backend, and
+    serves as a workaround by default enabled on some Metal devices with Intel
+    GPU to ensure the depth result is correct.
+*
+timestamp_quantization:
+https://crbug.com/dawn/1800
+(https://crbug.com/dawn/1800)
+:
+    Enable timestamp queries quantization to reduce the precision of timers
+    that can be created with timestamp queries.
+*
+use_vulkan_zero_initialize_workgroup_memory_extension:
+https://crbug.com/dawn/1302
+(https://crbug.com/dawn/1302)
+:
+    Initialize workgroup memory with OpConstantNull on Vulkan when the Vulkan
+    extension VK_KHR_zero_initialize_workgroup_memory is supported.
+*
+use_vulkan_memory_model:
+https://crbug.com/392606604
+(https://crbug.com/392606604)
+:
+    Use the Vulkan Memory Model if available.
+*
+vulkan_direct_variable_access_transform_handle:
+https://crbug.com/387000529
+(https://crbug.com/387000529)
+:
+    Transform handles using direct variable access.
+*
+enable_integer_range_analysis_in_robustness:
+https://crbug.com/348701956
+(https://crbug.com/348701956)
+:
+    Compute the range of the index with Integer Range Analysis in the
+    robustness transform and skip doing index clamping when the out of bound
+    access cannot happen.
+*
+use_spirv_1_4:
+https://crbug.com/422421915
+(https://crbug.com/422421915)
+:
+    Use SPIR-V 1.4 if available
+*
+blob_cache_hash_validation:
+https://crbug.com/429938352
+(https://crbug.com/429938352)
+:
+    Enable hash validation when loading/storing from/to the blob cache
+*
+decompose_uniform_buffers:
+https://crbug.com/448452698
+(https://crbug.com/448452698)
+:
+    Decompose uniform buffers into arrays of vec4<u32> on backends for Vulkan
+    and OpenGL.
+*
+vulkan_use_dynamic_rendering:
+https://crbug.com/dawn/463893794
+(https://crbug.com/dawn/463893794)
+:
+    Makes use of VK_KHR_dynamic_rendering to implement WebGPU RenderPass.
+*
+enable_spirv_validation:
+https://crbug.com/473526415
+(https://crbug.com/473526415)
+:
+    Enable validation of SPIR-V generated by Tint.
+*
+vulkan_use_create_render_pass_2:
+https://crbug.com/chromium/463893793
+(https://crbug.com/chromium/463893793)
+:
+    Makes use of VK_KHR_create_renderpass2 when creating VkRenderPass objects.
+    Ignored when vulkan_use_dynamic_rendering is enabled.
+*
+vulkan_use_rasterization_order_attachment_access:
+https://crbug.com/42241389
+(https://crbug.com/42241389)
+:
+    Use VK_EXT_rasterization_order_attachment_access when it is available.
+*
+wait_is_thread_safe:
+https://crbug.com/412761228
+(https://crbug.com/412761228)
+:
+    WaitFor* functions are thread-safe and can be called without the
+    device-lock if implicit synchronization is enabled.
+[WebGPU Required Toggles - enabled]
+-----------------------------------
+*
+disallow_spirv:
+https://crbug.com/1214923
+(https://crbug.com/1214923)
+:
+    Disallow usage of SPIR-V completely so that only WGSL is used for shader
+    modules. This is useful to prevent a Chromium renderer process from
+    successfully sending SPIR-V code to be compiled in the GPU process.
+*
+timestamp_quantization:
+https://crbug.com/dawn/1800
+(https://crbug.com/dawn/1800)
+:
+    Enable timestamp queries quantization to reduce the precision of timers
+    that can be created with timestamp queries.
+Compositor Information
+======================
+Tile Update Mode
+:
+One-copy
+Partial Raster
+:
+Enabled
+Display(s) Information
+======================
+Info
+:
+Display[0] bounds=[0,0 1920x1080], workarea=[0,0 1920x1040], scale=1, rotation=0, panel_rotation=0 external detected
+Color space (all)
+:
+{primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}
+Buffer format (all)
+:
+BGRA_8888
+Color volume
+:
+{name:'srgb', r:[0.6400, 0.3300], g:[0.3000, 0.6000], b:[0.1500, 0.0600], w:[0.3127, 0.3290]}
+SDR white level in nits
+:
+203
+HDR relative maximum luminance
+:
+1
+Bits per color component
+:
+8
+Bits per pixel
+:
+24
+Refresh Rate in Hz
+:
+60
+Video Acceleration Information
+==============================
+Decoding
+:
+Encoding
+:
+Vulkan Information
+==================
+Device Performance Information
+==============================
+Diagnostics
+===========
+Driver Information for Hardware GPU
+===================================
+Graphics Feature Status for Hardware GPU
+========================================
+Driver Bug Workarounds for Hardware GPU
+=======================================
+Problems Detected for Hardware GPU
+==================================
+Log Messages
+============
+[16012:16012:1014/134330.366649:WARNING:media/gpu/vaapi/vaapi_wrapper.cc:130] : Should skip nVidia device named: nvidia-drm

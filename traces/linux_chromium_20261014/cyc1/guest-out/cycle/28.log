@@ -1,0 +1,30 @@
+13:47:14 +     0s LAUNCH google-chrome-stable --remote-debugging-port=9222 --remote-allow-origins=* --user-data-dir=/tmp/prof-cycle28 --no-first-run --no-default-browser-check --password-store=basic --window-size=1600,900 --window-position=0,0 --autoplay-policy=no-user-gesture-required --allow-file-access-from-files  about:blank
+13:47:15 +     1s BROWSER Chrome/155.0.8059.79 Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36
+13:47:15 +     1s FEATURESTATUS {"2d_canvas": "enabled", "direct_rendering_display_compositor": "disabled_off_ok", "gpu_compositing": "enabled", "multiple_raster_threads": "enabled_on", "opengl": "enabled_on", "rasterization": "enabled", "raw_draw": "disabled_off_ok", "skia_graphite": "disabled_off", "trees_in_viz": "disabled_off", "video_decode": "enabled", "video_encode": "disabled_software", "vulkan": "disabled_off", "webgl": "enabled", "webgpu": "enabled", "webgpu_on_vk_via_gl_interop": "enabled", "webnn": "disabled_off"}
+13:47:15 +     1s GPUDEVICES [('Google Inc. (NVIDIA Corporation)', 'ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 4070/PCIe/SSE2, OpenGL 4.5.0 NVIDIA 580.159.04)', '580.159.04')] gl_renderer=ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 4070/PCIe/SSE2, OpenGL 4.5.0 NVIDIA 580.159.04) gl_version=OpenGL ES 3.0 (ANGLE 2.1.28854 git hash: cccf60cde32c)
+13:47:21 +     7s chrome://gpu captured
+13:47:21 +     7s LOAD file:///home/ubuntu/kf/pages/mix.html#scr=1
+13:47:26 +    12s GPU_PIDS [18461]
+13:47:26 +    12s DMESG_BASE {'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+13:47:27 +    12s MEDIA kVideoDecoderName=FFmpegVideoDecoder
+13:47:27 +    12s MEDIA kIsPlatformVideoDecoder=false
+13:47:27 +    12s SAMPLE gl=57 c2d=57 css=57 scr=58 vq={'t': 4.552655, 'total': 278, 'dropped': 10, 'paused': False, 'fs': False} gpu_pids=[18461] err=[] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+13:47:33 +    18s ACTION video_vp9
+13:47:35 +    20s ACTION video_av1
+13:47:37 +    22s ACTION fullscreen_on
+13:47:37 +    22s MEDIA kVideoDecoderName=VpxVideoDecoder
+13:47:37 +    22s MEDIA kVideoDecoderName=Dav1dVideoDecoder
+13:47:37 +    22s SAMPLE gl=40 c2d=40 css=40 scr=39 vq={'t': 1.829732, 'total': 113, 'dropped': 6, 'paused': False, 'fs': True} gpu_pids=[18461] err=[] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+13:47:39 +    24s ACTION fullscreen_off
+13:47:39 +    24s ACTION churn
+13:47:51 +    37s SAMPLE gl=58 c2d=58 css=58 scr=58 vq={'t': 16.088991, 'total': 975, 'dropped': 70, 'paused': False, 'fs': False} gpu_pids=[18461] err=[] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+13:47:52 +    38s ACTION kill_gpu
+13:47:52 +    38s KILL gpu-process [18461]
+13:48:00 +    46s GPU_PIDS after kill [18958]
+13:48:00 +    46s ACTION webgpu
+13:48:05 +    51s SAMPLE gl=59 c2d=59 css=59 scr=59 vq={'t': 11.51348, 'total': 698, 'dropped': 22, 'paused': False, 'fs': False} gpu_pids=[18958] err=[] dm={'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0}
+13:48:05 +    51s END of load; final sample
+13:48:05 +    51s DMESG_FINAL {'xid': 0, 'nvrm_lines': 24, 'flip_timeout': 0, 'gsp_timeout': 0} delta_xid=0 delta_nvrm=0
+13:48:05 +    51s TARGET_CRASHES 0 GPU_PIDS_FINAL [18958]
+13:48:05 +    51s CMDLINE 18958 /opt/google/chrome/chrome --type=gpu-process --gpu-recent-crash-count=1 --ozone-platform=x11 --crashpad-handler-pid=18427 --enable-crash-reporter=, --user-data-dir=/tmp/prof-cycle28 --change-stack-guard-on-fork=enable --gpu-preferences=YAAAAAAAAAAgAQAEAAAAAAAAAAAAAGAASAAAAAAAAAABAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAACAAAAAAAAAAAAAAAAAAAAMAAAAAAAAAAwAAAAAAAAAAEAAAAAAAAACAAAAAAAAAAMAAAAAQAAAAAAAAAAAA
+13:48:08 +    54s DONE

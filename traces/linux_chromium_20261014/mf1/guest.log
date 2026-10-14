@@ -1,0 +1,21 @@
+BEFORE 2026-10-14T13:06:36+00:00
+NVIDIA GeForce RTX 4070, 580.159.04
+iteration 0: cuCtxSynchronize -> 719 (0.01s)
+cuCtxCreate: CUresult 719
+cuModuleLoadData: CUresult 201
+cuModuleGetFunction: CUresult 400
+cuLaunchKernel: CUresult 201
+iteration 1: cuCtxSynchronize -> 201 (0.00s)
+cuCtxCreate: CUresult 719
+cuModuleLoadData: CUresult 201
+cuModuleGetFunction: CUresult 400
+cuLaunchKernel: CUresult 201
+iteration 2: cuCtxSynchronize -> 201 (0.00s)
+MMU_FAULT_DONE
+AFTER 2026-10-14T13:06:48+00:00
+NVIDIA GeForce RTX 4070, 580.159.04
+SMI_RC=0
+GEARS 233 frames in 5.0 seconds = 46.578 FPS
+> [   24.539308] NVRM: kgmmuClientShadowFaultBufferUnregister_IMPL: Unregistering non-replayable fault buffer failed (status=0x00000056), proceeding...
+> [   24.539473] NVRM: kgmmuFaultBufferReplayableDestroy_IMPL: Unregistering Replayable Fault buffer failed (status=0x00000056), proceeding...
+> [   24.539694] NVRM: uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
