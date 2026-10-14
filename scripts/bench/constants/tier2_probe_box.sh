@@ -13,7 +13,10 @@ echo "BOX_PROBE_START $(date -u +%FT%TZ)"
 nvidia-smi --query-gpu=name,pci.device_id,driver_version --format=csv,noheader 2>&1 | head -4 | sed 's/^/GPU /'
 grep -E '^(CapEff|Uid):' /proc/self/status | tr '\t' ' ' | sed 's/^/PROC /'
 # A container sees the host's device node by the HOST's index (/dev/nvidia3 on a multi-GPU host): use the one visible.
-KF_GATE_GPU=$(ls /dev/nvidia[0-9]* 2>/dev/null | head -1 | sed 's/[^0-9]//g'); export KF_GATE_GPU=${KF_GATE_GPU:-0}
+# first node this process may actually open (a container can list nodes its device cgroup denies)
+KF_GATE_GPU=0
+for n in /dev/nvidia[0-9]*; do [ -e "$n" ] || continue; if ( : < "$n" ) 2>/dev/null; then KF_GATE_GPU=$(echo "$n" | sed 's/[^0-9]//g'); break; fi; done
+export KF_GATE_GPU
 echo "NODE nvidia$KF_GATE_GPU"
 # run <pattern> <env...> -- <args...>: print the matching lines; if the probe printed none, print why (its first 4 lines,
 # which are the tool's own diagnostics: errno / device-open failures; never RM data).

@@ -22,7 +22,7 @@ const PARAMS_AT: usize = 40;
 
 /// The zero-request rows: the 580 branch's sizes (AD103/GA106 Windows 580.88 captures) and, below them, the 595 branch's
 /// (GA104 Windows 596.51 / GSP 595.76 capture): the same controls, a different `paramsSize` per firmware branch.
-const EXACT: [(u32, usize); 10] = [
+const EXACT: [(u32, usize); 11] = [
     (0x2080_852a, 1784),
     (0x2080_8524, 4),
     (0x2080_a70a, 26),
@@ -33,6 +33,7 @@ const EXACT: [(u32, usize); 10] = [
     (0x2080_852e, 596),
     (0x2080_853a, 15352),
     (0x2080_a618, 8632),
+    (0x2080_852e, 1432),
 ];
 
 /// `0x2080853b` at the 595 branch: 14320 B, request word 1 = 1, the rest zero (the 580 capture issued it once at 1832).

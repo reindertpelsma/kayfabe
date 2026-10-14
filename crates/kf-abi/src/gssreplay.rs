@@ -271,6 +271,17 @@ pub const ROWS: &[Row] = &[
         exact: true,
         inputs: &[(4, 1)],
     },
+    // ★ The 610 branch (`[measured, tier-2 kit on hosts 610.43.02 (RTX 5090 GB202) and 615.71.09 (L4 AD104),
+    // traces/constants_measure_20261014b/tier2/]` the host's smallest accepted zero-request size for 0x2080852e is 1432; 0x2080853a stays 15352,
+    // 0x2080a618 is accepted at no size 4..16384 — the control is gone there). ⚠ Only the HOST side is measured: no Windows
+    // 610 capture exists, so that a 610 guest sends an all-zero request of 1432 B is [I]; if it sends anything else this row
+    // simply does not match (the size and every byte are part of the question).
+    Row {
+        cmd: 0x2080_852e,
+        size: 1432,
+        exact: true,
+        inputs: &[],
+    },
     // ★ Lane C 2026-10-14: `0x20808162` (1 byte, request `00`): the GA106 at 580.159.04 answered
     // `01` (`crate::gsslegacy`), the AD104 at 595.91.07 answers `00` [measured, unprivileged,
     // traces/constants_night_20261014/probe_8162_595.txt] — a captured byte served to every die was
