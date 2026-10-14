@@ -295,12 +295,12 @@ entry 4 = `0xff000000` x4 on two boards = somebody else's) — **reading "the de
 | GA104 | RTX 3060 Ti 580.173.02 (die); RTX A4000 575.51.03 (KVM, admin + unpriv) | **596.51 -> 595.76** (C, E) | S(595 Win + host 575/580), V (GMMU, CE, P/K/A), Z, G | Win-S at 570..590, 610 (T3; GA106 covers shapes) |
 | GA106 | RTX 3060, 590.48.01 (die) | **572.83 -> 570.133.07; 576.80 -> 575.64.01; 580.88 -> 580.65.05; 581.80 -> 580.105.07; 591.74 -> 590.52.01; 596.36 -> 595.71.01; 610.88 -> 610.57.01** | S (all 7 branches), V (all), Z, G | display-common rows (needs a head: display machine) |
 | GA107 | none | - | - | - |
-| AD102 | RTX 4090 595.84 (die) | (see below) | S(host 595), Z, G | V, Win (T3) |
+| AD102 | RTX 4090 595.84 (die) | none: two 4090 KVM boxes never left `loading` (30 min each) | S(host 595), Z, G | V, Win (T3) |
 | AD103 | RTX 4070 Ti SUPER 595.91.07 (die), 615.71.09 [pci]; RTX 4080 SUPER 595.91.07 [pci] | (AD103 580.88 by the first pass: census text only, `traces/real_windows_20261014/`) | S(host 595 / 610), Z, G | V (T3) |
 | AD104 | RTX 4070 595.91.07 (die), RTX 4500 Ada 580.173.02 (die), L4 595.84 / 615.71.09 (die) | home Windows 580.88 (repo) | S, V (5.1: GMMU 0x54000/0x220c20), Z, G (L4 differs: F-6) | Win other branches (T3) |
 | AD106 | RTX 4060 Ti, 590.48.01 (die) | - | S(host 590), Z, G | V, Win (T3) |
 | AD107 | none | - | - | - |
-| GB202 | RTX 5090, 610.43.02 (die) | **none: two KVM boxes never booted Windows** | S(host 610), Z, G (9001 = 0x03fc005f) | V, Win-S (T3, needs a KVM Blackwell that boots) |
+| GB202 | RTX 5090, 610.43.02 (die) | **none: four 5090 KVM boxes (CN, Ontario, India, Korea): one never started, one sat at the Windows Boot Manager 45 min, two stayed `loading` 30 min** | S(host 610), Z, G (9001 = 0x03fc005f) | V, Win-S (T3, needs a KVM Blackwell that boots Windows) |
 | GB203 | RTX 5070 Ti 580.126.09 (die), RTX 5080 580.178.04 + 595.91.07 (die) | - | S(host 580, 595), Z, G (9001 = 0x03fc005f) | V, Win (T3) |
 | GB205 | none | - | - | - |
 | GB206 | RTX 5060 Ti, 580.105.08 (die) | - | S(host 580), Z, G | V, Win (T3) |
@@ -373,7 +373,7 @@ buffer, gfx pool sizes: kernel-only), group I (GMMU static, user register access
 - **F-6 (new) The table key (die, branch) is too coarse for board-dependent values.** `0x20808162` (GA102: GeForce 01 / workstation 00), `0x20809001` and `0x2080a001` (AD104: RTX 4070 vs L4). The existing AD104/595 rows are therefore right for the GeForce board they were measured on and wrong for an L4. Recommendation: keep them only as the last fallback after the host (as built), add a board class to the key before any new row of this kind, or delete them.
 - **F-7 (new) Hosts outside kayfabe's 30 measured tags are refused at R2**, which is by design, but it made 17 of 45 rentals useless; the sweep script now filters offers by `driver_version`.
 - **F-8 (new) a Windows box on vast gets whatever Windows Update delivers** (596.51 on the A4000 box, 610.88 staged on the GA106 box) before or beside `windows-on-vast`'s 580.88; both packages end up in the DriverStore, so a branch switch is `pnputil /delete-driver` of the active one (see 5.3.1).
-- **GB20x Windows capture not obtained**: two GB202 (RTX 5090) KVM boxes never finished the Windows boot (45 min at the Boot Manager), see the traces README. The Blackwell Windows rows stay MEASURE (T3).
+- **GB20x Windows capture not obtained**: four GB202 (RTX 5090) KVM boxes never produced a Windows (one never started, one sat 45 min at the Windows Boot Manager with no SSH, two stayed `loading` 30 min); two AD102 (RTX 4090) boxes stayed `loading` 30 min; see the traces README. The Blackwell Windows rows stay MEASURE (T3).
 
 **Reverse engineering (T4) residue — listed, NOT done (private, minimal, last resort)**
 
@@ -385,7 +385,7 @@ buffer, gfx pool sizes: kernel-only), group I (GMMU static, user register access
 | `0x2080121f` and `0x50700709` reply semantics | per-die values (memory-size-like); not served by anything today; the host's `FB_GET_INFO` family may derive them (T2 candidate, not tried) |
 | display-common rows (`0x730122/128/2a3/2a5`, `0x5070020c` scan line) | need a lit head: a display machine, not RE |
 
-**Needs measurement (T3) — remaining after this pass**: Windows captures on **Turing (none offered), Blackwell GB203/GB205/GB206/GB207 (no KVM box that booted), GB202 (two failed boots), AD102/AD103/AD106/AD107, GA102**; the host-side T2 table has no TU104, GA100, GA107, AD107, GB205, GB207, GH100.
+**Needs measurement (T3) — remaining after this pass**: Windows captures on **Turing (none offered), Blackwell GB202/GB203/GB205/GB206/GB207 (no KVM box that booted), AD102/AD103/AD106/AD107, GA102 (3090 KVM: GPU error)**; the host-side T2 table has no TU104, GA100, GA107, AD107, GB205, GB207, GH100.
 
 **Reverse engineering**: none requested or done tonight. The RE list stays empty; the behaviour rows (core latch, frame edge, LOADV, sw-runlist
 admission) go to oracle tests on the owner's display machines first, per `V3_CONSTANT_LISTS_20261011.md` revision.

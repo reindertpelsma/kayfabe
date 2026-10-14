@@ -65,7 +65,8 @@ package as the AD103 reference), 51.5 GiB RAM. GA106 is the die kayfabe's author
 | 55921418 | GA104 RTX A4000 | WU installed 596.51; GSP on; captures C, E | W1 holds (GSP 595.76); W2 holds on the restart-created instance (seq 0..5179 / 0..5216, 0 gaps); instance 1 (scan-attached) has `prefix_missing` as announced; W3 holds in the strong form (sizes change); W4: GMMU = authored (not AD104's). Then the downgrade attempt to 580.88 with the GSP loaded left the GPU in Code 43 across a VM restart; box destroyed. |
 | 55929605 | GA106 RTX 3060 | 580.88 installed by windows-on-vast; captures C, E | X1 holds (GSP 580.65.05, seq 0, 0 gaps); X2 holds (528/1456/8620/2188 = AD103's); X3 holds (0x31000/0x120c20, 0x5000) |
 | 55944979 | GA106 RTX 3060 | six more Windows builds on one box (see matrix 5.3.1) | all PASS from seq 0; Windows -> R-branch mapping verified on all |
-| 55937420 (CN) , 55936078 | GB202 RTX 5090 | Windows install | CN box never started (image pull 20 min); Ontario box sat at the Windows Boot Manager for 45+ min, no SSH: destroyed |
+| 55936078 (CN), 55937420 (Ontario), 55959272 (India), 55963399 (Korea) | GB202 RTX 5090 | Windows install | CN never started (image pull 20 min); Ontario sat at the Windows Boot Manager 45+ min, no SSH; India and Korea stayed `loading` 30 min: all destroyed |
+| 55958236, 55963396 | AD102 RTX 4090 | Windows install | stayed `loading` 30 min each: destroyed |
 | 55941689, 55959274/292 | GA102 RTX 3090 | Windows install | `GPU error, unable to start instance` (also the AU 3090 earlier); a duplicate create (`success:false` with a `new_contract`) is a vast API quirk, destroyed |
 
 ## Mistakes and traps (so they are not repeated)
