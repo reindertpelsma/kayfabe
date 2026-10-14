@@ -191,6 +191,8 @@ struct Reread {
     verify: Option<(std::time::Instant, String)>,
     seq: u64,
     cursor: u32,
+    /// The scan-time snapshot's backing pieces and rows-log epoch.
+    backing: (String, u64),
     va: u64,
     bytes: usize,
     scan_in: Scan,
@@ -517,6 +519,7 @@ impl Pump {
                     verify: None,
                     seq: t.seq,
                     cursor,
+                    backing: (pb.describe(), pb.epoch),
                     va: d.gpu_va,
                     bytes: d.len_bytes as usize,
                     scan_in: scan_in.clone(),
@@ -559,6 +562,7 @@ impl Pump {
                     verify: Some((now, carried_out.clone())),
                     seq: t.seq,
                     cursor,
+                    backing: (pb.describe(), pb.epoch),
                     va: d.gpu_va,
                     bytes: d.len_bytes as usize,
                     scan_in: scan_in.clone(),
@@ -605,12 +609,16 @@ impl Pump {
         };
         let sw = |v: u32| software.as_ref().is_some_and(|s| s.matches(v));
         for x in due {
+            let mut backing_now = None;
             let fresh: Option<Vec<u32>> = self.snapshot(me, r, x.va, x.bytes).ok().map(|s| {
+                backing_now = Some((s.describe(), s.epoch));
                 s.bytes
                     .chunks_exact(4)
                     .map(|w| u32::from_le_bytes([w[0], w[1], w[2], w[3]]))
                     .collect()
             });
+            let moved = backing_now.as_ref().map(|b| b.0 != x.backing.0);
+            let epoch = backing_now.as_ref().map(|b| (x.backing.1, b.1));
             let Some(fresh) = fresh else {
                 if x.verify.is_some() {
                     continue;
@@ -643,7 +651,7 @@ impl Pump {
                     write_file = t.stale <= 8;
                     if t.stale <= 64 || desync && t.stale_desync <= 64 {
                         eprintln!(
-                            "kf3: USER_RING_TRACE STALE {:#x}:{:#x} seq={} after_us={} words={} changed={} first_diff={:?} last_diff={:?} carried_out_at_scan={end_at_scan} now={end} verified={} stale={} stale_desync={}",
+                            "kf3: USER_RING_TRACE STALE {:#x}:{:#x} seq={} after_us={} words={} changed={} first_diff={:?} last_diff={:?} carried_out_at_scan={end_at_scan} now={end} backing_moved={moved:?} rows_epoch(scan,now)={epoch:?} backing_at_scan=[{}] verified={} stale={} stale_desync={}",
                             r.key.0,
                             r.key.1,
                             x.seq,
@@ -652,6 +660,7 @@ impl Pump {
                             diffs.len(),
                             diffs.first(),
                             diffs.last(),
+                            x.backing.0,
                             t.verified,
                             t.stale,
                             t.stale_desync
@@ -716,7 +725,7 @@ impl Pump {
                 continue;
             }
             eprintln!(
-                "kf3: USER_RING_TRACE STRADDLE_REREAD {:#x}:{:#x} seq={} +{}ms changed={} first_diff={:?} carried_out_now={end}",
+                "kf3: USER_RING_TRACE STRADDLE_REREAD {:#x}:{:#x} seq={} +{}ms changed={} first_diff={:?} carried_out_now={end} backing_moved={moved:?} rows_epoch(scan,now)={epoch:?}",
                 r.key.0,
                 r.key.1,
                 x.seq,
@@ -865,10 +874,17 @@ impl Pump {
                 )
                 .ok()
                 .map(|()| u32::from_le_bytes(put2));
+            let mut backing2 = None;
             let words2: Option<Vec<u32>> = self
                 .snapshot(me, r, d.gpu_va, d.len_bytes as usize)
                 .ok()
                 .map(|s| {
+                    backing2 = Some(format!(
+                        "[{}] epoch {}->{}",
+                        s.describe(),
+                        pb.epoch,
+                        s.epoch
+                    ));
                     s.bytes
                         .chunks_exact(4)
                         .map(|w| u32::from_le_bytes([w[0], w[1], w[2], w[3]]))
@@ -887,7 +903,7 @@ impl Pump {
                 )
             });
             let line = format!(
-                "reread+{delay}ms entry_same={:?} put={put2:?} doorbells={} words_changed={changed:?} first_diff={first:?} rescan={rescan:?}",
+                "reread+{delay}ms entry_same={:?} put={put2:?} doorbells={} words_changed={changed:?} first_diff={first:?} rescan={rescan:?} backing={backing2:?}",
                 entry2.map(|e| e == entry),
                 me.queued(r.idx)
             );
