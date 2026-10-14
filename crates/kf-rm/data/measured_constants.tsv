@@ -74,3 +74,7 @@ rm.0x20802806	GA106	610	4	0x0=0x3	0x0	measured:GA106,610.57.01,2026-10-14	traces
 rm.0x20802801	GA106	610	4	0x0=0x3	0x2	measured:GA106,610.57.01,2026-10-14	traces/constants_measure_20261014b/ga106_610.88/C (Windows kfwc capture, scrubbed bodies; GSP firmware 610.57.01)
 rm.0x2080121f	GA106	610	40	0x0=0x4	0x4 0x5ec000 0x464 0x0 0x1000 0x0 0x17b0000 0x0 0x1000	measured:GA106,610.57.01,2026-10-14	traces/constants_measure_20261014b/ga106_610.88/C (Windows kfwc capture, scrubbed bodies; GSP firmware 610.57.01)
 rm.0x50700709	GA106	610	8	-	0x0 0x24	measured:GA106,610.57.01,2026-10-14	traces/constants_measure_20261014b/ga106_610.88/C (Windows kfwc capture, scrubbed bodies; GSP firmware 610.57.01)
+rm.0x20802801	GA104	595	4	0x0=0x3	0x2	measured:GA104,595.76,2026-10-14	traces/constants_measure_20261014b/ga104_596.51/C (Windows kfwc capture, scrubbed bodies; GSP firmware 595.76)
+rm.0x2080121f	GA104	595	40	0x0=0x4	0x4 0xa8b000 0x464 0x0 0x1000 0x0 0x2a2c000 0x0 0x1000	measured:GA104,595.76,2026-10-14	traces/constants_measure_20261014b/ga104_596.51/C (Windows kfwc capture, scrubbed bodies; GSP firmware 595.76)
+rm.0x50700709	GA104	595	8	-	0x0 0x26	measured:GA104,595.76,2026-10-14	traces/constants_measure_20261014b/ga104_596.51/C (Windows kfwc capture, scrubbed bodies; GSP firmware 595.76)
+rm.0x20802806	GA104	595	4	0x0=0x6	0x0	measured:GA104,595.76,2026-10-14	traces/constants_measure_20261014b/ga104_596.51/C (Windows kfwc capture, scrubbed bodies; GSP firmware 595.76)
