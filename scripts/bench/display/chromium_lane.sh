@@ -72,6 +72,7 @@ CFG=$(env | grep '^CFG_' | sed "s/'/'\\\\''/g; s/^\([^=]*\)=\(.*\)$/export \1='\
 { echo "$CFG"; cat "$GS"; } | timeout "$GT" "${G[@]}" 'bash -s' > "$ROOT/guest.log" 2>&1
 echo "CHROMIUM_GUEST_SCRIPT_RC=$? $(date -Is)"
 tail -40 "$ROOT/guest.log" | cut -c1-240 | sed 's/^/G /'
+mkdir -p "$ROOT/guest-out"; timeout 60 "${G[@]}" 'tar -C ~/out -cf - . 2>/dev/null' | tar -C "$ROOT/guest-out" -xf - 2>/dev/null
 timeout 40 "${G[@]}" 'sudo dmesg' > "$ROOT/dmesg.txt" 2>&1
 echo "GUEST_DMESG xid=$(grep -c 'Xid' "$ROOT/dmesg.txt") nvrm=$(grep -c 'NVRM' "$ROOT/dmesg.txt") flip_timeout=$(grep -c 'Flip event timeout' "$ROOT/dmesg.txt") nvassert=$(grep -ci 'nvAssert' "$ROOT/dmesg.txt") gsp_timeout=$(grep -ci 'GSP.*timeout\|timeout.*GSP' "$ROOT/dmesg.txt") dmesg_lines=$(wc -l < "$ROOT/dmesg.txt")" | tee "$ROOT/guest-grade.txt"
 grep -E 'Xid|NVRM|Flip event|nvAssert|timeout' "$ROOT/dmesg.txt" | tail -15 | cut -c1-200 | sed 's/^/GD /'
