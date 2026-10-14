@@ -31,7 +31,9 @@
 //! never what a result depends on.
 #![allow(clippy::too_many_lines)]
 
-use kf_abi::submit::{ENGINE_TYPE_GRAPHICS, USERD_GP_GET, USERD_GP_PUT, fifo, gp_entry, method_header_inc};
+use kf_abi::submit::{
+    ENGINE_TYPE_GRAPHICS, USERD_GP_GET, USERD_GP_PUT, USERD_REFERENCE_C56F, fifo, gp_entry, method_header_inc,
+};
 use kf_host::{Channel, HostRm, MapNode, MapPerm, RingSpec, VaSpace, ViewAccess};
 use kf_linux_raw::{Backing, CachePolicy, DevDir, HostOffset, HostPageSize, VolatileRegion};
 use std::time::{Duration, Instant};
@@ -664,6 +666,65 @@ fn main() {
         }
     };
 
+    if want("barrier") {
+        // ★ HARDWARE MEASUREMENT (no verdict on the relay): what do GP_GET and the executed work look like
+        // while an ACQUIRE stalls entry 0, behind (a) a LENGTH==0 SYNC_WAIT control entry then a segment,
+        // (b) a segment that itself carries SYNC_WAIT. Shared by the relay's gate proof ("GP_GET past the
+        // witness means the barrier's wait finished"): if the segment behind the barrier EXECUTES while the
+        // acquire is unsatisfied, that proof is false.
+        for variant in ["ctl-then-seg", "sync-seg"] {
+            let r = (|| -> Result<(), String> {
+                let mut ch = Chan::new(&rm, engine, 64)?;
+                let units = [Unit { slot: 0, payload: 0x1000 }];
+                let mut after = Vec::new();
+                units_words(ch.out_va, &units, &mut after)?;
+                // the witness candidate: SET_REFERENCE (a host method that writes USERD.REFERENCE when the
+                // PBDMA PROCESSES it, in order)
+                after.push(hdr(fifo::SET_REFERENCE_C56F, 1)?);
+                after.push(7);
+                let mut first = Vec::new();
+                sem_acquire(&mut first, ch.out_va + GATE_OFF, 1)?;
+                for (i, &w) in first.iter().chain(after.iter()).enumerate() {
+                    ch.ring.store(PB_OFF + 4 * i as u64, w)?;
+                }
+                let g0 = gp_entry(ch.ring_va + PB_OFF, 4 * first.len() as u64).ok_or("gp")?;
+                let g1 = gp_entry(ch.ring_va + PB_OFF + 4 * first.len() as u64, 4 * after.len() as u64).ok_or("gp")?;
+                ch.write_entry(0, g0)?;
+                let n = if variant == "ctl-then-seg" {
+                    ch.write_entry(1, 1 << 63)?;
+                    ch.write_entry(2, g1)?;
+                    3
+                } else {
+                    ch.write_entry(1, g1 | (1 << 63))?;
+                    2
+                };
+                ch.put = n;
+                ch.publish_put(n)?;
+                ch.ring_db()?;
+                let mut samples = Vec::new();
+                for ms in [1u64, 5, 20, 50] {
+                    std::thread::sleep(Duration::from_millis(ms));
+                    samples.push((ms, ch.gp_get()?, ch.slot_count(0)?, ch.userd.load(USERD_REFERENCE_C56F)?));
+                }
+                println!(
+                    "STRESS_BARRIER variant={variant} entries={n} while_the_acquire_is_stalled: (after_ms, GP_GET, unit_executed, USERD.REFERENCE)={samples:?}"
+                );
+                ch.out.store(GATE_OFF, 1)?;
+                std::thread::sleep(Duration::from_millis(20));
+                println!(
+                    "STRESS_BARRIER variant={variant} after_the_gate_opened: GP_GET={} unit_count={} USERD.REFERENCE={}",
+                    ch.gp_get()?,
+                    ch.slot_count(0)?,
+                    ch.userd.load(USERD_REFERENCE_C56F)?
+                );
+                ch.close();
+                Ok(())
+            })();
+            if let Err(e) = r {
+                println!("STRESS_FAMILY_ERROR barrier {variant}: {e}");
+            }
+        }
+    }
     if want("split") {
         // every single cut position of a 3-unit stream, SYNC_WAIT on the second segment or not
         let mut base = Vec::new();

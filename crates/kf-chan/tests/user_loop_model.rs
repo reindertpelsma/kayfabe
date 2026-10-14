@@ -168,6 +168,9 @@ struct Cfg {
     chans: Vec<ChanSpec>,
     /// May timeouts / elapsed time ever fire? (`false` = timers that never fire.)
     timers: bool,
+    /// Does the PBDMA's `GP_GET` run ahead of processing (measured: yes)? `false` is the sequential
+    /// reading the retired gate assumed.
+    prefetch: bool,
     /// Does a completion interrupt reach the worker's epoll? (`false` = lost / never armed.)
     irq: bool,
     /// May the visible `GP_GET` lag the PBDMA's by an arbitrary time?
@@ -192,6 +195,7 @@ impl Cfg {
             m: Mutant::default(),
             chans,
             timers: false,
+            prefetch: true,
             irq: true,
             lag: false,
             spin: 1,
@@ -276,8 +280,17 @@ struct Chan {
     cause: Cause,
     // ---- PBDMA / private ring
     log: Vec<P>,
+    /// The PBDMA's PROCESSING pointer: the next private entry to execute.
     hw_get: usize,
+    /// The entries the PBDMA has POPPED from the GPFIFO: what its `GP_GET` word reports. MEASURED
+    /// (bare metal, RTX 4070, 595.91.07, `kf-syncwait-stress --families barrier`): it runs AHEAD of
+    /// processing -- with an ACQUIRE stalling entry 0 it already read 3 of 3 entries while the segment
+    /// behind a SYNC_WAIT barrier had not executed.
+    popped: usize,
     userd_get: usize,
+    /// `USERD.REFERENCE` as a count of reference-bearing markers PROCESSED (in order, after every
+    /// earlier method including acquires).
+    reference: u64,
     hw_wait: Option<u8>,
     executed: Vec<u8>,
     ev: bool,
@@ -432,7 +445,9 @@ impl Chan {
             cause: Cause::Doorbell,
             log: Vec::new(),
             hw_get: 0,
+            popped: 0,
             userd_get: 0,
+            reference: 0,
             hw_wait: None,
             executed: Vec::new(),
             ev: false,
@@ -615,14 +630,25 @@ fn hw_steps(cfg: &Cfg, w: &World, out: &mut Vec<Step>) {
                 }
             }
             m.hw_get += 1;
+            m.popped = m.popped.max(m.hw_get);
             if !cfg.lag {
-                m.userd_get = m.hw_get;
+                m.userd_get = m.popped;
             }
             out.push(step(format!("hw{c}:begin#{}", ch.hw_get), n));
         }
-        if cfg.lag && ch.userd_get != ch.hw_get {
+        // GP_GET runs ahead of processing (measured): the PBDMA pops GP entries without waiting for
+        // the segments before them to be processed
+        if cfg.prefetch && ch.popped < ch.log.len() {
             let mut n = w.clone();
-            n.ch[c].userd_get = ch.hw_get;
+            n.ch[c].popped = ch.log.len();
+            if !cfg.lag {
+                n.ch[c].userd_get = ch.log.len();
+            }
+            out.push(step(format!("hw{c}:pop to {}", ch.log.len()), n));
+        }
+        if cfg.lag && ch.userd_get != ch.popped {
+            let mut n = w.clone();
+            n.ch[c].userd_get = ch.popped;
             out.push(step(format!("hw{c}:GP_GET visible"), n));
         }
     }
