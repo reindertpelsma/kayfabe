@@ -752,7 +752,7 @@ impl Pump {
             // The scanned guest segment the PB GET lies in (its words at scan time).
             let hit = t.history.iter().rev().find_map(|h| {
                 let d = kf_abi::submit::gp_entry_decode_direct_c56f(h.entry)?;
-                (pb_get >= d.gpu_va && pb_get < d.gpu_va + d.len_bytes)
+                (pb_get >= d.gpu_va && pb_get <= d.gpu_va + d.len_bytes)
                     .then(|| (h, d.gpu_va, ((pb_get - d.gpu_va) / 4) as usize))
             });
             match hit {
@@ -784,6 +784,44 @@ impl Pump {
                     "kf3: USER_RING_TRACE STALL_SEGMENT {:#x}:{:#x} pb_get={pb_get:#x} in no remembered guest segment (private staging/witness, or older than the history)",
                     r.key.0, r.key.1
                 ),
+            }
+            // ★ 2026-10-14 (Heaven D3D11 Xid 13): the last segments the relay scanned, words as
+            // scanned (head and tail, bounded: 8 segments x 56 words, once per stall).
+            for h in t
+                .history
+                .iter()
+                .rev()
+                .take(8)
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev()
+            {
+                let head: Vec<String> = h
+                    .words
+                    .iter()
+                    .take(48)
+                    .map(|w| format!("{w:08x}"))
+                    .collect();
+                let tail: Vec<String> = h
+                    .words
+                    .iter()
+                    .skip(h.words.len().saturating_sub(8).max(48))
+                    .map(|w| format!("{w:08x}"))
+                    .collect();
+                eprintln!(
+                    "kf3: USER_RING_TRACE STALL_HISTORY {:#x}:{:#x} seq={} cursor={} entry={:#018x} words={} carried_in={} carried_out={} rare={} head=[{}] tail=[{}]",
+                    r.key.0,
+                    r.key.1,
+                    h.seq,
+                    h.cursor,
+                    h.entry,
+                    h.len,
+                    h.carried_in,
+                    h.carried_out,
+                    h.rare,
+                    head.join(" "),
+                    tail.join(" ")
+                );
             }
         }
     }
