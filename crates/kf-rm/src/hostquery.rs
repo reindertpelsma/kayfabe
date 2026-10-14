@@ -451,6 +451,11 @@ pub fn query_gss_replay(host: &mut dyn HostControls) -> Vec<kf_abi::gssreplay::A
     for row in kf_abi::gssreplay::ROWS {
         let mut p = row.request();
         match host.control(row.cmd, &mut p) {
+            // ★ Lane C 2026-10-14: an EXACT row (layout unknown, real request measured all-zero)
+            // is asked once, zero only — a background fill would be a different, unmeasured
+            // question to the host. The guest's request must then be all-zero too, so the bytes
+            // the host changed are the whole answer.
+            Ok(()) if row.exact => out.push(kf_abi::gssreplay::Answer::from_host(*row, &p)),
             Ok(()) => {
                 let mut b = row.request_over(kf_abi::gssreplay::PROBE_BACKGROUND);
                 let bg = host.control(row.cmd, &mut b).ok().map(|()| b);

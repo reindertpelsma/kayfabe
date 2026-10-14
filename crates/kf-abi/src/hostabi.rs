@@ -503,6 +503,9 @@ const HOST_595_91_07: DriverVersion = DriverVersion {
     minor: 91,
     patch: 7,
 };
+/// The source tag of the exact-zero Windows-only rows measured at 595.91.07.
+const CTL_PROBE_595_SOURCE: &str = "measured:AD104,595.91.07,2026-10-13; kf-ctl-probe unprivileged (CapEff 0), zero request, \
+     traces/ctl_probe_20261013/probe_pass1.tsv";
 /// The source tag of those rows.
 const GSS_595_SOURCE: &str = "measured:AD104,595.91.07,2026-10-14; unprivileged libcudart 13.3 under nvdiff, \
      traces/constants_night_20261014/host_cudart_probe_595.txt; 0x20809009/0x20809001 also \
@@ -884,6 +887,68 @@ pub static HOST_CONTROLS: &[HostControl] = &[
         cmd: 0x2080_a001,
         params: HostParams::NoHeader {
             source: "kf_abi::gssreplay ROWS (cudart's fallback request {0,0,0,0}, measured on a 580.159.04 host)",
+        },
+    },
+    // ★ Lane C 2026-10-14: the exact-zero Windows-only GSS rows (`crate::gssreplay`, `exact`).
+    // 852a/8524/a70a/a088 answered a zero request NV_OK unprivileged at 595.91.07 (AD104,
+    // traces/ctl_probe_20261013/probe_pass1.tsv); 852e/853a/a618 did NOT (INVALID_ARGUMENT there,
+    // although AD103 at 575.51.03 and the Windows driver's GSP 580.65.05 answer the same zero
+    // request): they are asked only inside the encoded interval and refused by name elsewhere.
+    HostControl {
+        name: "",
+        cmd: 0x2080_852a,
+        params: HostParams::MeasuredOpaque {
+            source: CTL_PROBE_595_SOURCE,
+            versions: &[HOST_595_91_07],
+            size: 1784,
+        },
+    },
+    HostControl {
+        name: "",
+        cmd: 0x2080_8524,
+        params: HostParams::MeasuredOpaque {
+            source: CTL_PROBE_595_SOURCE,
+            versions: &[HOST_595_91_07],
+            size: 4,
+        },
+    },
+    HostControl {
+        name: "",
+        cmd: 0x2080_a70a,
+        params: HostParams::MeasuredOpaque {
+            source: CTL_PROBE_595_SOURCE,
+            versions: &[HOST_595_91_07],
+            size: 26,
+        },
+    },
+    HostControl {
+        name: "",
+        cmd: 0x2080_a088,
+        params: HostParams::MeasuredOpaque {
+            source: CTL_PROBE_595_SOURCE,
+            versions: &[HOST_595_91_07],
+            size: 12,
+        },
+    },
+    HostControl {
+        name: "",
+        cmd: 0x2080_852e,
+        params: HostParams::NoHeader {
+            source: "zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07",
+        },
+    },
+    HostControl {
+        name: "",
+        cmd: 0x2080_853a,
+        params: HostParams::NoHeader {
+            source: "zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07",
+        },
+    },
+    HostControl {
+        name: "",
+        cmd: 0x2080_a618,
+        params: HostParams::NoHeader {
+            source: "zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07",
         },
     },
     HostControl {

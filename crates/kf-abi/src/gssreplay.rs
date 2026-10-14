@@ -98,6 +98,11 @@ pub struct Row {
     pub size: usize,
     /// The input words that select the answer (everything else is zero in the request).
     pub inputs: &'static [(usize, u32)],
+    /// ★ Lane C 2026-10-14: the guest's request must equal [`Row::request`] byte for byte
+    /// (every byte not named in `inputs` zero). For controls whose request layout is unknown but
+    /// whose real-driver request was MEASURED all-zero: no word is guessed to be an input, and any
+    /// non-zero byte makes it a different question.
+    pub exact: bool,
 }
 
 /// ★ Every request this device asks its host at realize.
@@ -106,17 +111,20 @@ pub const ROWS: &[Row] = &[
     Row {
         cmd: GSS_CLOCK_DOMAINS,
         size: 520,
+        exact: false,
         inputs: &[(0, 0), (4, 1), (8, 8)],
     },
     // One-domain clock queries for the two domains the library has been seen to ask.
     Row {
         cmd: GSS_CLOCK_QUERY,
         size: 0x890,
+        exact: false,
         inputs: &[(0, 1), (8, 1), (0x0c, DOMAIN_NVD), (0x20c, DOMAIN_NVD)],
     },
     Row {
         cmd: GSS_CLOCK_QUERY,
         size: 0x890,
+        exact: false,
         inputs: &[(0, 1), (8, 1), (0x0c, DOMAIN_GPC), (0x20c, DOMAIN_GPC)],
     },
     // ★ v3-refusals: cudart's pair, the request words exactly as recorded calls carried them — `a084`
@@ -126,11 +134,13 @@ pub const ROWS: &[Row] = &[
     Row {
         cmd: GSS_CUDART_A084,
         size: 4,
+        exact: false,
         inputs: &[(0, 0)],
     },
     Row {
         cmd: GSS_CUDART_CLOCKS,
         size: 532,
+        exact: false,
         inputs: &[
             (0x00, 0x400),
             (0x08, 0),
@@ -154,16 +164,19 @@ pub const ROWS: &[Row] = &[
     Row {
         cmd: CUDART_GSS_9009,
         size: 8,
+        exact: false,
         inputs: &[(0, 0), (4, 0)],
     },
     Row {
         cmd: CUDART_GSS_9001,
         size: 8,
+        exact: false,
         inputs: &[(0, 0), (4, 0)],
     },
     Row {
         cmd: GSS_CLOCK_DOMAINS,
         size: 520,
+        exact: false,
         inputs: &[(0, 0), (4, 2), (8, 1), (0x18, 4)],
     },
     // cudart's fallback, reached only when `a084`/`a026` fail; the guest's request is `{0,0,0,0}`
@@ -171,7 +184,58 @@ pub const ROWS: &[Row] = &[
     Row {
         cmd: CUDART_GSS_A001,
         size: 16,
+        exact: false,
         inputs: &[(0, 0), (4, 0), (8, 0), (0x0c, 0)],
+    },
+    // ★★ Lane C 2026-10-14 — Windows-only GSS-legacy queries whose real-driver request is MEASURED
+    // all-zero (`[measured AD103 / Windows 580.88, GSP firmware 580.65.05, kfwc capture, 2026-10-14]`
+    // request bodies: 0x2080852a x61, 0x20808524 x3, 0x2080a70a x3, 0x2080852e x55, 0x2080853a x3,
+    // 0x2080a618 x58, 0x2080a088 6 of 12 calls) and that the host answers NV_OK to a zero request
+    // unprivileged (`[measured AD103 / Linux 575.51.03, traces/real_hw_20261013/probe_unpriv.txt]`
+    // all seven; `[measured AD104 / 595.91.07, traces/ctl_probe_20261013/]` 852a, 8524, a70a, a088).
+    // Purpose unknown (no open header): the guest gets the HOST's bytes for the identical question,
+    // never a captured row; any non-zero request byte is a different question (refused as before).
+    Row {
+        cmd: 0x2080_852a,
+        size: 1784,
+        exact: true,
+        inputs: &[],
+    },
+    Row {
+        cmd: 0x2080_8524,
+        size: 4,
+        exact: true,
+        inputs: &[],
+    },
+    Row {
+        cmd: 0x2080_a70a,
+        size: 26,
+        exact: true,
+        inputs: &[],
+    },
+    Row {
+        cmd: 0x2080_a088,
+        size: 12,
+        exact: true,
+        inputs: &[],
+    },
+    Row {
+        cmd: 0x2080_852e,
+        size: 528,
+        exact: true,
+        inputs: &[],
+    },
+    Row {
+        cmd: 0x2080_853a,
+        size: 1456,
+        exact: true,
+        inputs: &[],
+    },
+    Row {
+        cmd: 0x2080_a618,
+        size: 8620,
+        exact: true,
+        inputs: &[],
     },
 ];
 
@@ -216,6 +280,7 @@ impl Row {
                 .inputs
                 .iter()
                 .all(|&(o, v)| params.get(o..o + 4).is_some_and(|w| w == v.to_le_bytes()))
+            && (!self.exact || params == self.request().as_slice())
     }
 }
 
