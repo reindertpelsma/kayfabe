@@ -25,7 +25,7 @@
 //!   (`IHUB_COMMON_CAPC.SUPPORT_SEMI_PLANAR`, Turing's `CAPA.SUPPORT_PLANAR`): the engine executes those
 //!   windows and the console composes them; a real AD104 claims it (the plane oracle, `page()` below).
 
-use crate::class::{ClassTable, put};
+use crate::class::{ClassTable, get, put};
 use crate::regs::Regs;
 
 /// Bytes in the capabilities page (`NV_PDISP_FE_SW` is `0x640000..=0x640FFF`).
@@ -332,6 +332,130 @@ pub fn olut_constructor_probe_page(
     }
     p.words.sort_unstable_by_key(|(off, _)| *off);
     Ok(p)
+}
+
+/// The caps registers of every family, by the header's own names (class prefix dropped). Used to read a
+/// page back field by field (`diff_pages`); the authoring code names the ones it writes itself.
+const CAP_REGISTERS: [&str; 24] = [
+    "SYS_CAP",
+    "SYS_CAPB",
+    "IHUB_COMMON_CAPA",
+    "IHUB_COMMON_CAPB",
+    "IHUB_COMMON_CAPC",
+    "IHUB_COMMON_CAPD",
+    "IHUB_COMMON_CAPE",
+    "IHUB_COMMON_CAPF",
+    "SOR_CAP",
+    "SOR_CLK_CAP",
+    "POSTCOMP_HEAD_HDR_CAPA",
+    "POSTCOMP_HEAD_HDR_CAPB",
+    "POSTCOMP_HEAD_HDR_CAPC",
+    "POSTCOMP_HEAD_HDR_CAPD",
+    "POSTCOMP_HEAD_HDR_CAPE",
+    "POSTCOMP_HEAD_HDR_CAPF",
+    "PRECOMP_WIN_PIPE_HDR_CAPA",
+    "PRECOMP_WIN_PIPE_HDR_CAPB",
+    "PRECOMP_WIN_PIPE_HDR_CAPC",
+    "PRECOMP_WIN_PIPE_HDR_CAPD",
+    "PRECOMP_WIN_PIPE_HDR_CAPE",
+    "PRECOMP_WIN_PIPE_HDR_CAPF",
+    "HEAD_CLK_CAP",
+    "WINDOW_CAP",
+];
+
+/// One field that differs between two pages.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FieldDiff {
+    /// Byte offset of the word in the page.
+    pub offset: u32,
+    /// The register's header name (`PRECOMP_WIN_PIPE_HDR_CAPA`), or `?` for a word no class header names.
+    pub reg: String,
+    /// The register's array index, when it is an array.
+    pub index: Option<u32>,
+    /// The field's header name, `(undefined bits)` for bits no field covers, `word` for an unnamed word.
+    pub field: String,
+    /// The field's value in the first page.
+    pub a: u32,
+    /// The field's value in the second page.
+    pub b: u32,
+}
+
+/// Every named register word of the class: `(byte offset, register, index)`.
+fn register_words(t: &ClassTable, caps: u32) -> Vec<(u32, &'static str, Option<u32>)> {
+    let mut v = Vec::new();
+    for reg in CAP_REGISTERS {
+        let size = t.v(caps, &format!("{reg}__SIZE_1")).unwrap_or(1);
+        if let Some(off) = t.v(caps, reg) {
+            v.push((off, reg, None));
+        } else {
+            for i in 0..size {
+                if let Some(off) = t.a(caps, reg, i) {
+                    v.push((off, reg, Some(i)));
+                }
+            }
+        }
+    }
+    v
+}
+
+/// ★ Compare two pages of one caps class FIELD BY FIELD with the class header's own field names: every
+/// differing field of every named register, bits no field names, and words no header names.
+#[must_use]
+pub fn diff_pages(t: &ClassTable, caps: u32, a: &CapsPage, b: &CapsPage) -> Vec<FieldDiff> {
+    use crate::class::Row;
+    let named = register_words(t, caps);
+    let mut offs: std::collections::BTreeSet<u32> = a.words.iter().map(|(o, _)| *o).collect();
+    offs.extend(b.words.iter().map(|(o, _)| *o));
+    let mut out = Vec::new();
+    for off in offs {
+        let (wa, wb) = (a.word(off), b.word(off));
+        if wa == wb {
+            continue;
+        }
+        let Some((_, reg, index)) = named.iter().find(|(o, _, _)| *o == off) else {
+            out.push(FieldDiff {
+                offset: off,
+                reg: "?".into(),
+                index: None,
+                field: "word".into(),
+                a: wa,
+                b: wb,
+            });
+            continue;
+        };
+        let mut covered = 0_u32;
+        for (name, row) in t.rows_under(caps, &format!("{reg}_")) {
+            let Row::F(hi, lo) = row else { continue };
+            if hi > 31 || lo > hi {
+                continue;
+            }
+            let mask = (u32::MAX >> (31 - u32::from(hi))) & (u32::MAX << u32::from(lo));
+            covered |= mask;
+            let (fa, fb) = (get(wa, (hi, lo)), get(wb, (hi, lo)));
+            if fa != fb {
+                out.push(FieldDiff {
+                    offset: off,
+                    reg: (*reg).into(),
+                    index: *index,
+                    field: name[reg.len() + 1..].into(),
+                    a: fa,
+                    b: fb,
+                });
+            }
+        }
+        let rest = (wa ^ wb) & !covered;
+        if rest != 0 {
+            out.push(FieldDiff {
+                offset: off,
+                reg: (*reg).into(),
+                index: *index,
+                field: "(undefined bits)".into(),
+                a: wa & rest,
+                b: wb & rest,
+            });
+        }
+    }
+    out
 }
 
 /// Author the ordinary capabilities page from the family's generated layout.

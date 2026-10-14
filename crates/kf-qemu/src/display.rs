@@ -274,6 +274,89 @@ fn caps_probe_page(base: u64, caps_class: u32) -> Option<kf_disp::caps::CapsPage
     })
 }
 
+/// ⚠⚠ TEMPORARY bisection probe: which of the measured page's words belong to a named group.
+fn caps_probe_group_of(off: u32) -> Option<&'static str> {
+    Some(match off {
+        0x010 | 0x018 => "ihub",
+        0x008 => "unk08",
+        0x00c => "unk0c",
+        0x048 | 0x058 | 0x068 | 0x078 => "unk48",
+        0x0c0 | 0x0d0 | 0x0e0 | 0x0f0 => "unkc0",
+        0x5e4 => "unk5e4",
+        0x144..=0x15f => "sor",
+        0x5e8..=0x604 => "headclk",
+        0x608..=0x624 => "sorclk",
+        0x680..=0x6ff => "head",
+        0x780..=0x87f => {
+            let w = (off - 0x780) / 0x20;
+            let reg = ((off - 0x780) % 0x20) / 4;
+            match (w % 2, reg) {
+                (0, 0) => "wevenA",
+                (1, 0) => "woddA",
+                (0, _) => "wevenR",
+                _ => "woddR",
+            }
+        }
+        _ => return None,
+    })
+}
+
+/// ⚠⚠ TEMPORARY: the authored page with the words of the named groups (comma list; `win` = the four window
+/// groups, `all` = every group) replaced by the measured AD104 page's (zero where the measured page has none).
+fn caps_probe_groups_page(
+    authored: &kf_disp::caps::CapsPage,
+    groups: &str,
+    caps_class: u32,
+) -> Option<kf_disp::caps::CapsPage> {
+    let measured = caps_probe_page(authored.base, caps_class)?;
+    let want: Vec<&str> = groups.split(',').map(str::trim).collect();
+    let on = |g: &str| {
+        want.contains(&g)
+            || want.contains(&"all")
+            || (want.contains(&"win") && g.starts_with('w'))
+            || (want.contains(&"unk") && g.starts_with("unk"))
+    };
+    let mut words: std::collections::BTreeMap<u32, u32> = authored.words.iter().copied().collect();
+    let mut offs: std::collections::BTreeSet<u32> = words.keys().copied().collect();
+    offs.extend(measured.words.iter().map(|(o, _)| *o));
+    for o in offs {
+        // field-level groups of the window CAPA words: presence bits 0x01ff0000, widths 0x3fff
+        if (0x780..=0x87f).contains(&o) && (o - 0x780) % 0x20 == 0 {
+            let odd = ((o - 0x780) / 0x20) % 2 == 1;
+            let mut mask = 0_u32;
+            if want.contains(&"wApE") && !odd || want.contains(&"wApO") && odd || want.contains(&"wAp") {
+                mask |= 0x01ff_0000;
+            }
+            if want.contains(&"wAw") {
+                mask |= 0x3fff;
+            }
+            if mask != 0 {
+                let a = words.get(&o).copied().unwrap_or(0);
+                let v = (a & !mask) | (measured.word(o) & mask);
+                if v != 0 {
+                    words.insert(o, v);
+                } else {
+                    words.remove(&o);
+                }
+                continue;
+            }
+        }
+        if let Some(g) = caps_probe_group_of(o) {
+            if on(g) {
+                words.remove(&o);
+                let v = measured.word(o);
+                if v != 0 {
+                    words.insert(o, v);
+                }
+            }
+        }
+    }
+    Some(kf_disp::caps::CapsPage {
+        base: authored.base,
+        words: words.into_iter().collect(),
+    })
+}
+
 /// Lines per kind the display write trace prints in a run.
 const DISPLAY_TRACE_CAP_DEFAULT: u32 = 4096;
 
@@ -1981,6 +2064,23 @@ impl DisplayPlane {
             }
         } else {
             caps
+        };
+        // ⚠⚠ TEMPORARY BISECTION PROBE (2026-10-14, claude/display-caps-derive-20261014; removed before the
+        // derived page ships): the authored page with the named GROUPS of the measured AD104 page laid over it.
+        let caps = match std::env::var("KF3_DISPLAY_CAPS_GROUPS") {
+            Ok(g) if !g.is_empty() && !caps_probe_on() => {
+                match caps_probe_groups_page(&caps, &g, row.classes.caps) {
+                    Some(p) => {
+                        eprintln!("kf3: display: BISECT KF3_DISPLAY_CAPS_GROUPS={g} — authored page + those groups of the measured AD104 page ({} words)", p.words.len());
+                        p
+                    }
+                    None => {
+                        eprintln!("kf3: display: BISECT KF3_DISPLAY_CAPS_GROUPS={g} REFUSED (class {:#x}); the authored page stays", row.classes.caps);
+                        caps
+                    }
+                }
+            }
+            _ => caps,
         };
         let layout = Layout::from_regs(&regs)
             .ok_or("display=on: the instance-memory layout is not derived")?;
