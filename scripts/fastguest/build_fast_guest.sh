@@ -316,6 +316,21 @@ mkdir -p "$ROOT/ird"/{bin,dev,proc,sys,tmp}
 cp "$(command -v busybox)" "$ROOT/ird/bin/busybox"
 cp "$CLIENT" "$ROOT/ird/bin/rmladder"
 chmod +x "$ROOT/ird/bin/rmladder"
+# ★ 2026-10-14: `KF_TOOL_BIN=<path>` carries ONE extra static-or-dynamic tool into the initrd as /bin/kftool; the
+# guest runs it INSTEAD of the raw client when the kernel command line says `KF_TOOL=1` (arguments in
+# `KF_TOOL_ARGS`, comma separated). First user: the USER-ring SYNC_WAIT stress (kf-syncwait-stress).
+if [ -n "${KF_TOOL_BIN:-}" ]; then
+    [ -x "$KF_TOOL_BIN" ] || die "KF_TOOL_BIN=$KF_TOOL_BIN is not an executable"
+    cp "$KF_TOOL_BIN" "$ROOT/ird/bin/kftool"
+    chmod +x "$ROOT/ird/bin/kftool"
+    if ldd "$KF_TOOL_BIN" >/dev/null 2>&1 && ! ldd "$KF_TOOL_BIN" | grep -q 'not a dynamic'; then
+        mkdir -p "$ROOT/ird/lib" "$ROOT/ird/lib64"
+        ldd "$KF_TOOL_BIN" | awk '/=>/ {print $3} /ld-linux/ {print $1}' | grep '^/' | sort -u | while read -r so; do
+            d="$ROOT/ird$(dirname "$so")"; mkdir -p "$d"; cp -L "$so" "$d/" 2>/dev/null
+        done
+    fi
+    echo "== extra tool: $KF_TOOL_BIN as /bin/kftool"
+fi
 
 # ⊘ The client is dynamically linked against glibc unless built for musl; carry what it needs.
 if ldd "$CLIENT" >/dev/null 2>&1 && ! ldd "$CLIENT" | grep -q 'not a dynamic'; then
@@ -500,7 +515,12 @@ if [ -n "${KF_CYCLES:-}" ]; then
     echo "FASTGUEST: DONE"
     poweroff -f
 fi
-if [ "$NGPU" -le 1 ]; then
+if [ -n "${KF_TOOL:-}" ] && [ -x /bin/kftool ]; then
+    # ★ 2026-10-14: the extra tool replaces the raw client (see KF_TOOL_BIN above).
+    echo "FASTGUEST: tool kftool ${KF_TOOL_ARGS:-}"
+    /bin/kftool $(echo "${KF_TOOL_ARGS:-}" | tr ',' ' ') 2>&1
+    echo "FASTGUEST: client rc=$? at $(cut -d' ' -f1 /proc/uptime)s"
+elif [ "$NGPU" -le 1 ]; then
     /bin/rmladder --gpu 0 $ARMS 2>&1
     echo "FASTGUEST: client rc=$? at $(cut -d' ' -f1 /proc/uptime)s"
 else
