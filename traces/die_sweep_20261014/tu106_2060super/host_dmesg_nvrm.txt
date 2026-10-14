@@ -1,0 +1,19 @@
+[    6.375511] NVRM: loading NVIDIA UNIX x86_64 Kernel Module  575.51.03  Wed Apr 16 14:22:51 UTC 2025
+[  636.975658] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
+[  701.924561] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
+[ 1140.915429] NVRM:unknown NVRM ioctl command: 0xf0
+[ 1141.637183] NVRM:unknown NVRM ioctl command: 0xf0
+[ 1143.180397] NVRM:unknown NVRM ioctl command: 0xf0
+[ 1143.831524] NVRM:unknown NVRM ioctl command: 0xf0
+[ 1144.517390] NVRM:unknown NVRM ioctl command: 0xf0
+[ 1145.359841] NVRM:unknown NVRM ioctl command: 0xf0
+[ 1145.869233] NVRM:unknown NVRM ioctl command: 0xf0
+[ 1146.403607] NVRM:unknown NVRM ioctl command: 0xf0
+[ 1163.735441] NVRM:unknown NVRM ioctl command: 0xf0
+[ 1163.739001] NVRM: GPU0 virtmemAllocResources: VA Space alloc failed! Status Code: 0x1f Size: 0x100000000 RangeLo: 0x0, RangeHi: 0xffffffff, pageSzLockMask: 0x211000
+[ 1163.739211] NVRM: GPU0 virtmemAllocResources: VA Space alloc failed! Status Code: 0x51 Size: 0x1efc00000 RangeLo: 0x120000000, RangeHi: 0x30fbfffff, pageSzLockMask: 0x211000
+[ 1163.745141] NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+[ 1163.745353] NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+[ 1173.771506] NVRM:unknown NVRM ioctl command: 0xf0
+[ 1271.134498] NVRM:unknown NVRM ioctl command: 0xf0
+[ 1483.060137] NVRM:unknown NVRM ioctl command: 0xf0
