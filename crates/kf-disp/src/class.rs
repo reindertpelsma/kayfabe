@@ -130,6 +130,24 @@ impl ClassTable {
         }
     }
 
+    /// Every row named `NV<class>_<prefix>…`, as `(name without the class prefix, row)`, in name order.
+    /// For tools that decode a register word field by field (the caps page diff).
+    #[must_use]
+    pub fn rows_under(&self, class: u32, prefix: &str) -> Vec<(String, Row)> {
+        let head = format!("NV{class:04X}_");
+        let mut v: Vec<(String, Row)> = self
+            .rows
+            .iter()
+            .filter_map(|(k, r)| {
+                k.strip_prefix(&head)
+                    .filter(|n| n.starts_with(prefix))
+                    .map(|n| (n.to_string(), *r))
+            })
+            .collect();
+        v.sort_by(|a, b| a.0.cmp(&b.0));
+        v
+    }
+
     /// A field of the class-less `NV_DISP_NOTIFIER` family (`__0_STATUS` …).
     #[must_use]
     pub fn notifier_field(&self, name: &str) -> Option<(u8, u8)> {

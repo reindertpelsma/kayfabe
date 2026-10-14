@@ -24,6 +24,7 @@
 //! - [`pace`] — `display-max-fps`: the capped vblank tick, the meter, the non-flip copy rule.
 
 pub mod caps;
+pub mod capsderive;
 pub mod class;
 pub mod color;
 pub mod dispcaps;
