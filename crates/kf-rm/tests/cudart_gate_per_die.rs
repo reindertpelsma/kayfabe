@@ -25,6 +25,8 @@ const GA106: DieId = DieId::new(arch::GA100, 6);
 const AD104: DieId = DieId::new(arch::AD100, 4);
 const TU116: DieId = DieId::new(arch::TU100, 8);
 const GB205: DieId = DieId::new(arch::GB200, 5);
+/// Same family and branch as the GA106 rows: the neighbour a family rule would wrongly serve.
+const GA104: DieId = DieId::new(arch::GA100, 4);
 
 fn policy(die: DieId, gss: Vec<Answer>) -> InitTablePolicy {
     let mut host = ga106::host_facts();
@@ -94,7 +96,7 @@ fn the_measured_die_is_answered_from_its_own_rows() {
 /// are never served to an AD104, TU116 or GB205.
 #[test]
 fn a_neighbour_die_is_refused_not_served_ga106s_bytes() {
-    for die in [AD104, TU116, GB205] {
+    for die in [GA104, AD104, TU116, GB205] {
         let mut p = policy(die, Vec::new());
         for (cmd, req) in [
             (0x2080_9009u32, vec![0u8; 8]),

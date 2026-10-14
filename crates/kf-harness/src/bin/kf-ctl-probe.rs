@@ -133,19 +133,35 @@ fn main() {
         );
         std::process::exit(3);
     }
-    let mut rows: Vec<(String, u32, Vec<u32>)> = BUILTIN
-        .iter()
-        .map(|(k, c, s)| ((*k).to_string(), *c, s.to_vec()))
-        .collect();
+    // ★ Lane C 2026-10-14: `KF_PROBE_EXTRA_ONLY=1` skips the built-in rows; an extra line may carry
+    // a 4th column of request words `off=value,...` (hex) — a measured request shape, never guessed.
+    let extra_only = std::env::var("KF_PROBE_EXTRA_ONLY").as_deref() == Ok("1");
+    type ProbeRow = (String, u32, Vec<u32>, Vec<(usize, u32)>);
+    let mut rows: Vec<ProbeRow> = if extra_only {
+        Vec::new()
+    } else {
+        BUILTIN
+            .iter()
+            .map(|(k, c, s)| ((*k).to_string(), *c, s.to_vec(), Vec::new()))
+            .collect()
+    };
+    let hex = |t: &str| u32::from_str_radix(t.trim().trim_start_matches("0x"), 16);
     if let Some(path) = std::env::args().nth(1) {
         for line in std::fs::read_to_string(&path).unwrap_or_default().lines() {
             let f: Vec<&str> = line.split('\t').collect();
-            if f.len() == 3 {
-                if let (Ok(c), Ok(sz)) = (
-                    u32::from_str_radix(f[1].trim_start_matches("0x"), 16),
-                    f[2].parse::<u32>(),
-                ) {
-                    rows.push((f[0].to_string(), c, vec![sz]));
+            if f.len() == 3 || f.len() == 4 {
+                let inputs: Option<Vec<(usize, u32)>> = match f.get(3) {
+                    None => Some(Vec::new()),
+                    Some(spec) => spec
+                        .split(',')
+                        .map(|kv| {
+                            let (k, v) = kv.split_once('=')?;
+                            Some((hex(k).ok()? as usize, hex(v).ok()?))
+                        })
+                        .collect(),
+                };
+                if let (Ok(c), Ok(sz), Some(inputs)) = (hex(f[1]), f[2].parse::<u32>(), inputs) {
+                    rows.push((f[0].to_string(), c, vec![sz], inputs));
                 }
             }
         }
@@ -194,7 +210,7 @@ fn main() {
         println!("PROBE_END admin_run={admin} mode=gss_rows");
         return;
     }
-    for (kind, cmd, sizes) in rows {
+    for (kind, cmd, sizes, inputs) in rows {
         if EXCLUDED.contains(&cmd) {
             println!("PROBE kind={kind} cmd={cmd:#010x} size=- status=- EXCLUDED (action control)");
             continue;
@@ -212,6 +228,11 @@ fn main() {
         let mut done;
         for size in sizes {
             let mut payload = vec![0u8; size as usize];
+            for &(o, v) in &inputs {
+                if let Some(w) = payload.get_mut(o..o + 4) {
+                    w.copy_from_slice(&v.to_le_bytes());
+                }
+            }
             match rm.raw_control_opaque(object, cmd, &mut payload) {
                 Ok(status) => {
                     let name = status_name(status);
