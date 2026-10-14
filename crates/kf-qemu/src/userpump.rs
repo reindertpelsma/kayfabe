@@ -190,6 +190,7 @@ struct Reread {
     /// segment (counts stale reads); `None`: a straddle re-read.
     verify: Option<(std::time::Instant, String)>,
     seq: u64,
+    cursor: u32,
     va: u64,
     bytes: usize,
     scan_in: Scan,
@@ -515,6 +516,7 @@ impl Pump {
                     delay_ms,
                     verify: None,
                     seq: t.seq,
+                    cursor,
                     va: d.gpu_va,
                     bytes: d.len_bytes as usize,
                     scan_in: scan_in.clone(),
@@ -556,6 +558,7 @@ impl Pump {
                     delay_ms: delay_us,
                     verify: Some((now, carried_out.clone())),
                     seq: t.seq,
+                    cursor,
                     va: d.gpu_va,
                     bytes: d.len_bytes as usize,
                     scan_in: scan_in.clone(),
@@ -630,12 +633,14 @@ impl Pump {
                     continue;
                 };
                 t.verified += 1;
+                let mut write_file = false;
                 if !diffs.is_empty() {
                     t.stale += 1;
                     let desync = *end_at_scan != end;
                     if desync {
                         t.stale_desync += 1;
                     }
+                    write_file = t.stale <= 8;
                     if t.stale <= 64 || desync && t.stale_desync <= 64 {
                         eprintln!(
                             "kf3: USER_RING_TRACE STALE {:#x}:{:#x} seq={} after_us={} words={} changed={} first_diff={:?} last_diff={:?} carried_out_at_scan={end_at_scan} now={end} verified={} stale={} stale_desync={}",
@@ -663,6 +668,50 @@ impl Pump {
                         t.stale_desync,
                         me.doorbell_census_now()
                     );
+                }
+                if write_file && let Some(dir) = trace_dir() {
+                    let mut out = format!(
+                        "STALE {:#x}:{:#x} seq={} entry_cursor={} pump_cursor_now={} after_us={} pb_va={:#x} bytes={} fetch_issued={} fetch_fetched={}\nas scanned:\n",
+                        r.key.0,
+                        r.key.1,
+                        x.seq,
+                        x.cursor,
+                        self.cursor,
+                        now.duration_since(*scanned_at).as_micros(),
+                        x.va,
+                        x.bytes,
+                        self.fetch.issued(),
+                        self.fetch.fetched()
+                    );
+                    words_text(&mut out, &x.words);
+                    out.push_str("re-read:\n");
+                    words_text(&mut out, &fresh);
+                    out.push_str("gp ring now (index: entry):\n");
+                    let entries = r.source.1;
+                    if entries.is_power_of_two() && entries >= 2 {
+                        for k in 0..24u32 {
+                            let idx = x
+                                .cursor
+                                .wrapping_add(entries)
+                                .wrapping_sub(4)
+                                .wrapping_add(k)
+                                & (entries - 1);
+                            let at = r.source.0 + u64::from(idx) * 8;
+                            let e = self.snapshot(me, r, at, 8).ok().and_then(|s| {
+                                s.bytes.as_slice().try_into().ok().map(u64::from_le_bytes)
+                            });
+                            out.push_str(&format!("  {idx}: {e:#018x?}\n"));
+                        }
+                    }
+                    let _ = std::fs::create_dir_all(dir).and_then(|()| {
+                        std::fs::write(
+                            dir.join(format!(
+                                "user-ring-stale-{:x}-{:x}-{}-{}.txt",
+                                r.key.0, r.key.1, x.seq, x.delay_ms
+                            )),
+                            out.as_bytes(),
+                        )
+                    });
                 }
                 continue;
             }
