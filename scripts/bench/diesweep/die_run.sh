@@ -24,6 +24,7 @@ phase1)
     sleep 45
     bash "$WD" shot p1_qga
     bash "$WD" ps "$HERE/evidence.ps1" 240 | sed 's/^/P1 /'
+    nvidia-smi -q -d MEMORY | sed -n '/BAR1 Memory Usage/,/Free/p' | tr -s ' ' | tr '\n' ' ' | sed 's/^/HOSTBAR1 p1 /'; echo
     bash "$WD" ps "$W/secrets/phase1.ps1" 240
     bash "$WD" stop ;;
 phase2)
@@ -33,6 +34,8 @@ phase2)
     while [ "$(date +%s)" -lt "$end" ]; do
         sleep 30; i=$((i + 30)); bash "$WD" shot "p2_t$(printf %04d $i)"
         [ $((i % 90)) = 0 ] && bash "$WD" ps "$HERE/evidence.ps1" 240 | sed "s/^/P2T$i /"
+        # the HOST's BAR1 while the guest runs (the owner's question: does the non-resizable 256 MiB BAR1 matter?)
+        nvidia-smi -q -d MEMORY | sed -n '/BAR1 Memory Usage/,/Free/p' | tr -s ' ' | tr '\n' ' ' | sed "s/^/HOSTBAR1 t=$i /"; echo
     done
     bash "$WD" ps "$HERE/evidence.ps1" 240 | sed 's/^/P2END /'
     bash "$WD" shot p2_final ;;
