@@ -1,0 +1,17 @@
+DESKTOP_SMOKE_START tag=s3s1 rev=559db30c 2026-10-14T14:20:31+02:00
+DESKTOP_CINNAMON 1 XORG 1
+DESKTOP_GLX OpenGL vendor string: NVIDIA Corporation
+DESKTOP_GLX OpenGL renderer string: NVIDIA GeForce RTX 4070/PCIe/SSE2
+DESKTOP_GEARS approximately the same as the monitor refresh rate.
+DESKTOP_GEARS 298 frames in 5.0 seconds = 59.406 FPS
+DESKTOP_GEARS 301 frames in 5.0 seconds = 59.958 FPS
+DESKTOP_GEARS 301 frames in 5.0 seconds = 60.044 FPS
+DESKTOP_VKCUBE not installed
+DESKTOP_GUEST_DMESG flip_timeouts=0 nvassert=12 xid=0
+DESKTOP_GUEST_DONE
+DESKTOP_HOST_XID delta=0
+DESKTOP_KF3 stall=18 exception=0 scanout_refused=0 broker_lines=28
+DESKTOP_BROKER kf3: broker: reclaimed frame slot 0: no RELEASE 1624 ms after its commit, and a newer frame was committed (11 reclaimed so far)
+DESKTOP_BROKER kf3: broker: guest cursor image 256x256 hot 0,0 sent (1 so far)
+DESKTOP_BROKER kf3: broker: reclaimed frame slot 0: no RELEASE 46400 ms after its commit, and a newer frame was committed (12 reclaimed so far)
+DESKTOP_SMOKE_EXIT rc=0 2026-10-14T14:22:15+02:00

@@ -1,5 +1,28 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-14 14:40 CEST — ACPI S3 suspend/resume works for the Linux desktop guest (kf3 559db30c)
+
+Branch `claude/s3-resume-20261014` (from the plane-oracle branch). Full account: `docs/design/V3_S3_RESUME.md`;
+evidence `traces/linux_s3_resume_20261014/` (failure) and `fixed/` (passes).
+- [measured] Root cause, in four layers, each found by the run before it: (1) QEMU's S3 wake resets every device
+  (`RESET_TYPE_WAKEUP`) and kf3 ended the guest life (GSP Cold, chain/twins/VA spaces freed), while the guest's
+  `KGSP_BOOT_MODE_SR_RESUME` runs only Booter Load and expects GSP-RM to restore its queues → `Failed to boot GSP`
+  0x55; (2) the suspend's FBSR save refused (`ALLOC_MEMORY` fn 4 + continuation, answered twice) → no valid save,
+  `gpuStateLoad` failed at resume; (3) `NV_XVE_RESIZE_BAR1_CTRL` read 0 → `kbusRestoreBAR1ResizeSize` failed
+  `gpuStateLoad`; (4) `FIFO_DISABLE_USERMODE_CHANNELS` refused → the Linux suspend's error path unlocked nvidia-uvm's
+  PM lock it never took → every UVM ioctl EAGAIN, `nvidia-smi` hung.
+- Fixes: FSM E14 (wake reset keeps a PM-suspended GSP-RM life) / E15 (resume restores the binding without a
+  publish, sequences continue); kf3 ABI 29 passes the reset type, a kept run skips Release/Memory and keeps
+  tokens; large non-bidirectional fn 4 joined and answered once; `kf_rm::pmsr` (suspend-buffer registration,
+  FREE, FBSR_INIT, scheduling toggle); the XVE resize word; DISABLE_USERMODE_CHANNELS as host DISABLE_CHANNELS
+  over the VM's user twins. Per-life write log (first 512 writes of each logged life).
+- Validation at `559db30c`: `S3_CYCLES=3 desktop_s3.sh` 3/3 (ssh, nvidia-smi, glxgears ~60 FPS, 0 Xid, 0 WARNING
+  after each wake); unit 3007/0 (every kf-* crate); gates 9/9 + gate10 PASS, births 12/12; fast suite 30/30;
+  `desktop_smoke.sh` 0 flip timeouts / 0 Xid; `planes_oracle.sh` rgb/nv12/p010/yuyv PASS, 0 flip timeouts.
+- Not run: Windows 11 S3 (owner; steps in `V3_S3_RESUME.md` §7). Open: FSP families' SR_RESUME, the scheduling
+  toggle has no host act, control ids not yet in the driver matrix.
+- Bench: every Linux-guest run now goes through `flock /tmp/claude-linux-guest.lock` (one tap on the host).
+
 ## UPDATE 2026-10-14 01:00 CEST — Linux plane oracle: overlay completion reproduced and fixed; Win11 resets follow USER-ring refusals
 
 Branch `claude/linux-oracle-planes-20261014` (from prod-candidate-2 `bf510bdf`). Full account:

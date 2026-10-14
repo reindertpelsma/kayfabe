@@ -1,0 +1,34 @@
+PLANES_START tag=s3p1 rev=559db30c 2026-10-14T14:35:11+02:00
+PLANES_KFPLANES_RESULT test=vblank-wait waits=120 errors=4 last_err=-95 interval_avg_us=0 min_us=0 max_us=0 frame_us=16667 verdict=FAIL
+PLANES_KFPLANES_RESULT test=vblank-event requested=0 received=0 verdict=FAIL
+PLANES_KFPLANES_RESULT test=primary-flip commits=120 events=120 timeouts=0 errors=0 last_err=0 ebusy=0 lat_avg_us=16665 lat_p95_us=16899 lat_max_us=16938 over1f=0 over2f=0 seq0=119 seq1=0 seq2=0 seqN=0 frame_us=16667 verdict=PASS
+PLANES_KFPLANES_RESULT test=overlay-argb-only commits=120 events=120 timeouts=0 errors=0 last_err=0 ebusy=0 lat_avg_us=16749 lat_p95_us=16889 lat_max_us=26448 over1f=1 over2f=0 seq0=119 seq1=0 seq2=0 seqN=0 frame_us=16667 verdict=PASS
+PLANES_KFPLANES_RESULT test=overlay-argb-both commits=120 events=120 timeouts=0 errors=0 last_err=0 ebusy=0 lat_avg_us=16740 lat_p95_us=16930 lat_max_us=25498 over1f=1 over2f=0 seq0=119 seq1=0 seq2=0 seqN=0 frame_us=16667 verdict=PASS
+PLANES_KFPLANES_RESULT test=overlay-xrgb-only commits=120 events=120 timeouts=0 errors=0 last_err=0 ebusy=0 lat_avg_us=16738 lat_p95_us=16901 lat_max_us=25454 over1f=1 over2f=0 seq0=119 seq1=0 seq2=0 seqN=0 frame_us=16667 verdict=PASS
+PLANES_KFPLANES_RESULT test=overlay-nv12-only commits=120 events=120 timeouts=0 errors=0 last_err=0 ebusy=0 lat_avg_us=16723 lat_p95_us=16963 lat_max_us=23036 over1f=1 over2f=0 seq0=119 seq1=0 seq2=0 seqN=0 frame_us=16667 verdict=PASS
+PLANES_KFPLANES_RESULT test=overlay-nv12-both commits=120 events=120 timeouts=0 errors=0 last_err=0 ebusy=0 lat_avg_us=16723 lat_p95_us=16936 lat_max_us=23547 over1f=1 over2f=0 seq0=119 seq1=0 seq2=0 seqN=0 frame_us=16667 verdict=PASS
+PLANES_KFPLANES_RESULT test=overlay-p010-only commits=120 events=120 timeouts=0 errors=0 last_err=0 ebusy=0 lat_avg_us=16713 lat_p95_us=16924 lat_max_us=22565 over1f=1 over2f=0 seq0=119 seq1=0 seq2=0 seqN=0 frame_us=16667 verdict=PASS
+PLANES_KFPLANES_RESULT test=overlay-yuyv-only commits=120 events=120 timeouts=0 errors=0 last_err=0 ebusy=0 lat_avg_us=16748 lat_p95_us=16915 lat_max_us=26516 over1f=1 over2f=0 seq0=119 seq1=0 seq2=0 seqN=0 frame_us=16667 verdict=PASS
+PLANES_KFPLANES_RESULT test=overlay-nv12-scaled verdict=SKIP why="enable commit refused rc=-22"
+PLANES_KFPLANES_RESULT test=overlay-argb-scaled verdict=SKIP why="enable commit refused rc=-22"
+PLANES_KFPLANES_RESULT test=overlay-nv12-toggle commits=60 events=60 timeouts=0 errors=0 last_err=0 ebusy=0 lat_avg_us=8461 lat_p95_us=16813 lat_max_us=23411 over1f=1 over2f=0 seq0=59 seq1=0 seq2=0 seqN=0 frame_us=16667 verdict=PASS
+PLANES_KFPLANES_RESULT test=overlay-argb-toggle commits=60 events=60 timeouts=0 errors=0 last_err=0 ebusy=0 lat_avg_us=8483 lat_p95_us=16811 lat_max_us=25368 over1f=1 over2f=0 seq0=59 seq1=0 seq2=0 seqN=0 frame_us=16667 verdict=PASS
+PLANES_KFPLANES_RESULT test=overlay-argb-cycle commits=80 events=80 timeouts=0 errors=0 last_err=0 ebusy=0 lat_avg_us=18157 lat_p95_us=32454 lat_max_us=33453 over1f=8 over2f=0 seq0=0 seq1=0 seq2=0 seqN=0 frame_us=16667 verdict=SLOW
+PLANES_KFPLANES_RESULT test=overlay-nv12-cycle commits=80 events=80 timeouts=0 errors=0 last_err=0 ebusy=0 lat_avg_us=18149 lat_p95_us=32475 lat_max_us=33472 over1f=8 over2f=0 seq0=0 seq1=0 seq2=0 seqN=0 frame_us=16667 verdict=SLOW
+PLANES_KFPLANES_RESULT test=cursor-atomic commits=120 events=120 timeouts=0 errors=0 last_err=0 ebusy=0 lat_avg_us=660 lat_p95_us=755 lat_max_us=867 over1f=0 over2f=0 seq0=119 seq1=0 seq2=0 seqN=0 frame_us=16667 verdict=PASS
+PLANES_KFPLANES_RESULT test=gamma-lut commits=60 events=60 timeouts=0 errors=0 last_err=0 ebusy=0 lat_avg_us=659 lat_p95_us=798 lat_max_us=921 over1f=0 over2f=0 seq0=59 seq1=0 seq2=0 seqN=0 frame_us=16667 verdict=PASS
+PLANES_KFPLANES_RESULT test=degamma-lut commits=60 events=60 timeouts=0 errors=0 last_err=0 ebusy=0 lat_avg_us=674 lat_p95_us=741 lat_max_us=859 over1f=0 over2f=0 seq0=59 seq1=0 seq2=0 seqN=0 frame_us=16667 verdict=PASS
+PLANES_KFPLANES_RESULT test=ctm commits=60 events=60 timeouts=0 errors=0 last_err=0 ebusy=0 lat_avg_us=654 lat_p95_us=731 lat_max_us=804 over1f=0 over2f=0 seq0=59 seq1=0 seq2=0 seqN=0 frame_us=16667 verdict=PASS
+PLANES_KFPLANES_RESULT test=primary-async-legacy commits=120 events=120 timeouts=0 errors=0 last_err=0 ebusy=0 lat_avg_us=16597 lat_p95_us=16873 lat_max_us=16900 over1f=0 over2f=0 seq0=0 seq1=0 seq2=0 seqN=0 frame_us=16667 verdict=PASS
+PLANES_KFPLANES_RESULT test=primary-async-atomic commits=120 events=120 timeouts=0 errors=0 last_err=0 ebusy=0 lat_avg_us=16666 lat_p95_us=16880 lat_max_us=16893 over1f=0 over2f=0 seq0=119 seq1=0 seq2=0 seqN=0 frame_us=16667 verdict=PASS
+PLANES_KFPLANES_RESULT test=out-fence commits=60 signalled=60 errors=0 last_err=0 late1f=0 lat_max_us=17657 frame_us=16667 verdict=PASS
+PLANES_KFPLANES_RESULT test=in-fence commits=30 events=30 early=0 timeouts=0 errors=0 last_err=0 after_signal_max_us=9949 frame_us=16667 verdict=PASS
+PLANES_KFPLANES_RESULT test=dpms-cycle cycles=5 ok=5 off_max_us=1774 on_max_us=4582 verdict=PASS
+PLANES_KFPLANES_RESULT test=flip-after-dpms commits=30 events=30 timeouts=0 errors=0 last_err=0 ebusy=0 lat_avg_us=16228 lat_p95_us=16879 lat_max_us=16909 over1f=0 over2f=0 seq0=29 seq1=0 seq2=0 seqN=0 frame_us=16667 verdict=PASS
+PLANES_CMP what=rgb size=1920x1080 tol=6 mismatched=0 in_overlay=0 of 230400 max_err=0 verdict=PASS
+PLANES_CMP what=nv12 size=1920x1080 tol=6 mismatched=0 in_overlay=0 of 230400 max_err=0 best_match=709L(err 0) bt709L_err=0 bars=ffffff,feff00,00feff,00ff01,ff00fe,ff0100,0100ff,000000 verdict=PASS
+PLANES_CMP what=p010 size=1920x1080 tol=6 mismatched=0 in_overlay=0 of 230400 max_err=0 best_match=709L(err 0) bt709L_err=0 bars=ffffff,feff00,00feff,00ff01,ff00fe,ff0100,0100ff,000000 verdict=PASS
+PLANES_CMP what=yuyv size=1920x1080 tol=6 mismatched=0 in_overlay=0 of 230400 max_err=0 best_match=709L(err 0) bt709L_err=0 bars=ffffff,feff00,00feff,00ff01,ff00fe,ff0100,0100ff,000000 verdict=PASS
+PLANES_KF3_DISPLAY_FLAGS lines=9 stall=9 exception=0 refused=0
+PLANES_HOST_XID delta=0 (journal since start: 0)
+PLANES_EXIT rc=0 2026-10-14T14:37:04+02:00

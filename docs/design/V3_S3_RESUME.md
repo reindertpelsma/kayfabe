@@ -151,8 +151,14 @@ Booter Load (`GSP-RESUME … no publish`). H3 holds: every wake reset arrived as
   WARNINGs, no GSP refusal after the first fn 47. `traces/linux_s3_resume_20261014/fixed/`.
 - GPU-free: `cargo test` over every `kf-*` crate 3007 passed / 0 failed; `v3_gates.sh` 9/9, gate 10 PASS,
   12/12 user births.
-- The fast suite, `desktop_smoke.sh` and `planes_oracle.sh` at this revision: see the status note of the
-  commit that records them (`docs/STATUS_AND_HANDOFF.md`).
+- Fast suite (`KF_DEVICE=kf3`, 180 s budget) **30/30**; `desktop_smoke.sh 559db30c`: NVIDIA renderer,
+  glxgears ~60 FPS, 0 flip timeouts, 0 Xid (guest and host), 18 kf3 display STALL lines (9 at
+  `41acc6ac`, same family, no guest-visible effect); `planes_oracle.sh 559db30c`: rgb/nv12/p010/yuyv
+  PASS (0 mismatched), 0 flip timeouts in every kfplanes test, host Xid delta 0 — the remaining
+  verdicts (vblank-wait/-event FAIL −95, scaled overlays SKIP, the two cycles SLOW) are the baseline of
+  `V3_DISPLAY_PLANES_ORACLE.md` §tables. `traces/linux_s3_resume_20261014/fixed/validation-559db30c/`
+  (its `summary.log` also holds the first fast attempt, NOTRUN: the raw client was built into another
+  target dir — a harness slip, rerun).
 
 ## 7. Not done / not verified
 
