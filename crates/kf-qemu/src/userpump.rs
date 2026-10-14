@@ -361,6 +361,10 @@ pub(super) struct Pump {
     guest_get: Option<(u64, u32)>,
     pub tick: bool,
     again: bool,
+    /// ★ 2026-10-14: which guest entries may be read yet ([`kf_chan::user_settle::Settle`]) and
+    /// the bounded retry of a scan refusal ([`kf_chan::user_settle::Grace`]).
+    settle: kf_chan::user_settle::Settle,
+    grace: kf_chan::user_settle::Grace,
     /// Measurement only ([`trace_dir`]).
     pub(super) trace: Option<Box<Trace>>,
 }
@@ -423,6 +427,8 @@ impl Pump {
             guest_get: None,
             tick: false,
             again: false,
+            settle: kf_chan::user_settle::Settle::new(0),
+            grace: kf_chan::user_settle::Grace::default(),
             trace: trace_dir().map(|_| Box::new(Trace::new())),
         })
     }
@@ -936,6 +942,8 @@ impl Pump {
             }
         }
         self.tick = self.fetch.fetched() != self.fetch.issued()
+            || self.settle.waiting()
+            || self.grace.retrying()
             || self.trace.as_ref().is_some_and(|t| !t.rereads.is_empty());
         if self.segment.is_none() {
             if me.inbox.walk_busy() {
@@ -959,10 +967,26 @@ impl Pump {
                 return Err("USER_RING_PUT_BOUND".into());
             }
             if put == self.cursor {
+                self.settle.reset(self.cursor);
                 return Ok(false);
             }
             if let Some(t) = self.trace.as_mut() {
                 t.note_put(doorbells);
+            }
+            // ★ 2026-10-14 (`kf_chan::user_settle`): a GP_PUT the guest has only just written may
+            // name pushbuffer bytes that are not yet visible here (measured: VRAM pushbuffers
+            // written through write-combined BAR1 read stale for up to ~1 ms). Read an entry only
+            // once its PUT was rung after we read it, or has settled. Doorbells are read AFTER
+            // the PUT read, so a doorbell that may predate the guest's PUT write never counts.
+            let readable = self.settle.observe(
+                self.cursor,
+                put,
+                std::time::Instant::now(),
+                me.queued(r.idx),
+            );
+            if readable == self.cursor {
+                self.tick = true;
+                return Ok(false);
             }
             // Declaration admission only, not a pin. Native never fetches the
             // guest ring; EACH current GP/PB still has fresh exact source guards.
@@ -1052,7 +1076,26 @@ impl Pump {
                 ));
             }
             let software = software_snapshot(me, r)?;
-            let planned = stage_plan(&self.scan, &software, &words);
+            let planned = match stage_plan(&self.scan, &software, &words) {
+                // ★ 2026-10-14: a scan refusal of a segment never published is retried (re-read,
+                // rescanned) for `REFUSE_AFTER` before it is final (`kf_chan::user_settle::Grace`).
+                Err(Failure::Refused(why))
+                    if (why.starts_with("USER_RING_SCAN ")
+                        || why == "USER_RING_TRIGGER_PARTIAL_SUFFIX_UNSUPPORTED")
+                        && self.grace.refused(
+                            self.generation,
+                            self.cursor,
+                            std::time::Instant::now(),
+                        ) =>
+                {
+                    self.tick = true;
+                    return Ok(false);
+                }
+                other => other,
+            };
+            if planned.is_ok() {
+                self.grace.clear();
+            }
             if self.trace.is_some() {
                 match &planned {
                     Ok((_, rare)) => {
@@ -1613,6 +1656,8 @@ impl Pump {
                     self.generation = generation;
                     self.source_admitted = false;
                     self.cursor = 0;
+                    self.settle.reset(0);
+                    self.grace.clear();
                     self.guest_get = None;
                 })
                 .map_err(|e| source_error(e, "USER_RING_MIGRATION_ADMISSION"))
