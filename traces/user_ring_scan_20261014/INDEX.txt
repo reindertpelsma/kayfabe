@@ -1,0 +1,31 @@
+user_ring_scan_20261014 — evidence for docs/design/V3_USER_RING_SCAN_RACE.md
+
+Host 172.22.1.20 (RTX 4070-class Ada, host driver 595.x), owner's Win11 26100 + NVIDIA 580.88 image
+(win11-full-b), run dir /var/lib/kf-windows-20261005/boundary-kayfabe-2990, production flags of
+/data/claude-manual-owner11.sh (+ KF3_USER_RING_TRACE=<dir> where a trace dir is named).
+Each run: boot to the auto-logged-on desktop, then Edge with YouTube (scheduled task kfedge).
+
+run-<rev>.lines.txt  = the USER-ring / reset lines of that run's qemu.log (VERIFY spam left out)
+
+rev       trace dir    what                                   resets refused(scan) RESET_CHANNEL refused
+edf2759d  -            base (owner's run 2990 before)          2      3            yes
+d1d6a928  ringtrace    + refusal report                        1      1            yes
+879043c5  ringtrace2   + 64-segment history, STRADDLE           6      7            yes
+0d728e34  ringtrace3   + doorbell counts                       5      4            yes
+578f52f0  ringtrace4   + VERIFY re-reads                       4      5            yes
+25e57fb9  ringtrace5   + doorbell census                       1      1 (+1 PUT_READ Gone) yes
+9854bbe6  ringtrace6   FIX TRY 1: 1 ms settle + 50 ms grace    0      0            no   (shorter run)
+9fedc8bf  ringtrace7   settle + backing trace                  2      1            yes  (settle insufficient)
+ba165078  ringtrace8   FIX: SYNC_WAIT gate (no settle)         2      0            yes  (stale reads 0)
+e0a6c5ed  ringtrace9   gate + STALL/IDLE_STALL trace           1      0            no line (30 IDLE_STALL)
+50068268  ringtrace10  FIX: gate + GP_PUT polling              see the doc §8
+
+Files:
+  user-ring-refusal-*.txt        KF3_USER_RING_TRACE refusal reports (header, header chain, GP ring
+                                 around the cursor, 1/20/200 ms re-reads, words, history);
+                                 *.head.txt = trimmed to the report head + history index lines
+  user-ring-stale-*.txt          a VERIFY sample: 88 words read as zero, filled 2 ms later, behind an
+                                 unreached SYNC_WAIT NOP (GP ring dump at the end)
+  user-ring-straddle-*.trimmed   a LEGITIMATE straddle: 1057-word inline shader upload split across
+                                 GP entries (the scanner carries it correctly)
+  validation-<rev>-*.log         Linux validation summaries (GPU-free tests, gates, fast suite)

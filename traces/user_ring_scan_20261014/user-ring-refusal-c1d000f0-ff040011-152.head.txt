@@ -1,0 +1,145 @@
+USER_RING_TRACE refusal key=0xc1d000f0:0xff040011 idx=19 cursor=152 put=283 entries=8192 gp_ring=0x1d65e000 gp_va=0x1d65e4c0 entry=0x00066a001d590058 pb_va=0x1d590058 pb_bytes=1640 sync_wait=false subroutine=true generation=1 fetch_issued=152 fetch_fetched=150 pump_age_ms=882 woke_by_request=true since_last_request_us=Some(9) doorbells_at_put_read=352 at_previous_new_put=352 now=352 puts_with_doorbell=5 puts_without_doorbell=157
+  pb_backing=[ram@0x19584b058+0x668 ] gp_backing=[ram@0x16d9844c0+0x8 ]
+why: Refused("USER_RING_SCAN MethodOverflow at word 301/410 raw=0x00000001 last_header=none carried_in=Incrementing sub0 m0x0 3795/8064 words[297..306]=[200581c3 00001040 000002c0 00000240 00000001 00000000 a00281d3 0000007d 00000001]")
+carried_in: Incrementing sub0 m0x0 3795/8064
+header chain (index:raw) stop=Some(301):
+gp ring now (index: entry):
+  136: Some(
+    0x0000280120210198,
+)
+  137: Some(
+    0x00002801202101c0,
+)
+  138: Some(
+    0x0000000000000000,
+)
+  139: Some(
+    0x0000000000000000,
+)
+  140: Some(
+    0x0000000000000000,
+)
+  141: Some(
+    0x0000000000000000,
+)
+  142: Some(
+    0x0000000000000000,
+)
+  143: Some(
+    0x0000000000000000,
+)
+  144: Some(
+    0x0000000000000000,
+)
+  145: Some(
+    0x0000000000000000,
+)
+  146: Some(
+    0x0000000000000000,
+)
+  147: Some(
+    0x0000000000000000,
+)
+  148: Some(
+    0x0000000000000000,
+)
+  149: Some(
+    0x0000000000000000,
+)
+  150: Some(
+    0x00005a001d590000,
+)
+  151: Some(
+    0x8000020000000000,
+)
+  152: Some(
+    0x00066a001d590058,
+) <= cursor
+  153: Some(
+    0x000102001d9f1c00,
+)
+  154: Some(
+    0x0000e2001d9f1d00,
+)
+  155: Some(
+    0x000042001d5906c0,
+)
+  156: Some(
+    0x0000c2001d9f1e00,
+)
+  157: Some(
+    0x000042001d590700,
+)
+  158: Some(
+    0x0000e2001d9f0a00,
+)
+  159: Some(
+    0x000042001d590740,
+)
+reread+1ms entry_same=Some(true) put=Some(283) doorbells=352 words_changed=Some(0) first_diff=None rescan=Some("MethodOverflow@301")
+reread+20ms entry_same=Some(true) put=Some(300) doorbells=353 words_changed=Some(0) first_diff=None rescan=Some("MethodOverflow@301")
+reread+200ms entry_same=Some(true) put=Some(300) doorbells=353 words_changed=Some(0) first_diff=None rescan=Some("MethodOverflow@301")
+-- seq=16 age_ms=73 cursor=31 put=36 entry=0x000162001d681680 woke_by_request=true rare=false carried_in=none carried_out=none backing=[vram@0xbfd680+0x160 ] words=88
+-- seq=17 age_ms=73 cursor=32 put=36 entry=0x008c1a001d5f1340 woke_by_request=true rare=false carried_in=none carried_out=IncrementOnce sub1 m0x1b0 1/1057 backing=[ram@0x1f902e340+0xcc0 ram@0x14a52f000+0x1000 ram@0x1f902f000+0x3000 ram@0x16d710000+0x3f58 ] words=8966
+-- seq=18 age_ms=73 cursor=33 put=36 entry=0x001082001b120000 woke_by_request=true rare=false carried_in=IncrementOnce sub1 m0x1b0 1/1057 carried_out=none backing=[vram@0x1b60000+0x1080 ] words=1056
+-- seq=19 age_ms=73 cursor=34 put=36 entry=0x0003da001d5f9f58 woke_by_request=true rare=false carried_in=none carried_out=none backing=[ram@0x16d713f58+0x3d8 ] words=246
+-- seq=20 age_ms=73 cursor=35 put=36 entry=0x00002801202100a8 woke_by_request=true rare=false carried_in=none carried_out=none backing=[ram@0x1f96640a8+0x28 ] words=10
+-- seq=21 age_ms=58 cursor=36 put=93 entry=0x00002801202100d0 woke_by_request=true rare=false carried_in=none carried_out=none backing=[ram@0x1f96640d0+0x28 ] words=10
+-- seq=22 age_ms=58 cursor=49 put=93 entry=0x00005a001d440000 woke_by_request=true rare=false carried_in=none carried_out=none backing=[ram@0x1ddc75000+0x58 ] words=22
+-- seq=23 age_ms=58 cursor=51 put=93 entry=0x00009a001d440058 woke_by_request=true rare=false carried_in=none carried_out=none backing=[ram@0x1ddc75058+0x98 ] words=38
+-- seq=24 age_ms=57 cursor=53 put=93 entry=0x001166001d4400f0 woke_by_request=true rare=false carried_in=none carried_out=none backing=[ram@0x1ddc750f0+0xf10 ram@0x19237f000+0x254 ] words=1113
+-- seq=25 age_ms=57 cursor=55 put=93 entry=0x00002e001d441254 woke_by_request=true rare=false carried_in=none carried_out=none backing=[ram@0x19237f254+0x2c ] words=11
+-- seq=26 age_ms=57 cursor=56 put=93 entry=0x0001a2001b1fb380 woke_by_request=true rare=false carried_in=none carried_out=none backing=[vram@0x13fe380+0x1a0 ] words=104
+-- seq=27 age_ms=57 cursor=57 put=93 entry=0x000042001d441280 woke_by_request=true rare=false carried_in=none carried_out=none backing=[ram@0x19237f280+0x40 ] words=16
+-- seq=28 age_ms=57 cursor=58 put=93 entry=0x000062001b1fb580 woke_by_request=true rare=false carried_in=none carried_out=none backing=[vram@0x13fe580+0x60 ] words=24
+-- seq=29 age_ms=57 cursor=59 put=93 entry=0x0000e2001b1fb600 woke_by_request=true rare=false carried_in=none carried_out=none backing=[vram@0x13fe600+0xe0 ] words=56
+-- seq=30 age_ms=57 cursor=60 put=93 entry=0x00017e001d4412c0 woke_by_request=true rare=false carried_in=none carried_out=none backing=[ram@0x19237f2c0+0x17c ] words=95
+-- seq=31 age_ms=57 cursor=62 put=93 entry=0x0049f6001d44143c woke_by_request=true rare=false carried_in=none carried_out=none backing=[ram@0x19237f43c+0xbc4 ram@0x1ddc7e000+0x1000 ram@0x1ddc7d000+0x1000 ram@0x1f947d000+0x1000 ram@0x1ddc7c000+0xe30 ] words=4733
+-- seq=32 age_ms=57 cursor=62 put=93 entry=0x0049f6001d44143c woke_by_request=true rare=false carried_in=none carried_out=none backing=[ram@0x19237f43c+0xbc4 ram@0x1ddc7e000+0x1000 ram@0x1ddc7d000+0x1000 ram@0x1f947d000+0x1000 ram@0x1ddc7c000+0xe30 ] words=4733
+-- seq=33 age_ms=57 cursor=64 put=93 entry=0x0001d2001d445e30 woke_by_request=true rare=false carried_in=none carried_out=none backing=[ram@0x1ddc7ce30+0x1d0 ] words=116
+-- seq=34 age_ms=56 cursor=65 put=93 entry=0x0000e2001d9f0a00 woke_by_request=true rare=false carried_in=none carried_out=Incrementing sub0 m0x0 31/8064 backing=[vram@0x2ba4a00+0xe0 ] words=56
+-- seq=35 age_ms=56 cursor=66 put=93 entry=0x001252001d446000 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 31/8064 carried_out=Incrementing sub0 m0x0 1203/8064 backing=[ram@0x1ddc7b000+0x1000 ram@0x1ddc7a000+0x250 ] words=1172
+-- seq=36 age_ms=56 cursor=68 put=93 entry=0x000032001d447250 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 1203/8064 carried_out=Incrementing sub0 m0x0 1215/8064 backing=[ram@0x1ddc7a250+0x30 ] words=12
+-- seq=37 age_ms=56 cursor=69 put=93 entry=0x0000e2001d9f1900 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 1215/8064 carried_out=Incrementing sub0 m0x0 1271/8064 backing=[vram@0x2ba5900+0xe0 ] words=56
+-- seq=38 age_ms=56 cursor=70 put=93 entry=0x000462001d447280 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 1271/8064 carried_out=Incrementing sub0 m0x0 1551/8064 backing=[ram@0x1ddc7a280+0x460 ] words=280
+-- seq=39 age_ms=56 cursor=72 put=93 entry=0x000022001d4476e0 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 1551/8064 carried_out=Incrementing sub0 m0x0 1559/8064 backing=[ram@0x1ddc7a6e0+0x20 ] words=8
+-- seq=40 age_ms=56 cursor=73 put=93 entry=0x0000e2001d9f1a00 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 1559/8064 carried_out=Incrementing sub0 m0x0 1615/8064 backing=[vram@0x2ba5a00+0xe0 ] words=56
+-- seq=41 age_ms=56 cursor=73 put=93 entry=0x0000e2001d9f1a00 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 1559/8064 carried_out=Incrementing sub0 m0x0 1615/8064 backing=[vram@0x2ba5a00+0xe0 ] words=56
+-- seq=42 age_ms=56 cursor=74 put=93 entry=0x000342001d447700 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 1615/8064 carried_out=Incrementing sub0 m0x0 1823/8064 backing=[ram@0x1ddc7a700+0x340 ] words=208
+-- seq=43 age_ms=56 cursor=76 put=93 entry=0x0000c2001d9f1b00 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 1823/8064 carried_out=Incrementing sub0 m0x0 1871/8064 backing=[vram@0x2ba5b00+0xc0 ] words=48
+-- seq=44 age_ms=56 cursor=77 put=93 entry=0x000042001d447a40 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 1871/8064 carried_out=Incrementing sub0 m0x0 1887/8064 backing=[ram@0x1ddc7aa40+0x40 ] words=16
+-- seq=45 age_ms=56 cursor=78 put=93 entry=0x000062001d9f1700 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 1887/8064 carried_out=Incrementing sub0 m0x0 1911/8064 backing=[vram@0x2ba5700+0x60 ] words=24
+-- seq=46 age_ms=55 cursor=79 put=93 entry=0x00021a001d447a80 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 1911/8064 carried_out=Incrementing sub0 m0x0 2045/8064 backing=[ram@0x1ddc7aa80+0x218 ] words=134
+-- seq=47 age_ms=55 cursor=81 put=93 entry=0x00002a001d447c98 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 2045/8064 carried_out=Incrementing sub0 m0x0 2055/8064 backing=[ram@0x1ddc7ac98+0x28 ] words=10
+-- seq=48 age_ms=55 cursor=82 put=93 entry=0x000102001d9f1c00 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 2055/8064 carried_out=Incrementing sub0 m0x0 2119/8064 backing=[vram@0x2ba5c00+0x100 ] words=64
+-- seq=49 age_ms=55 cursor=82 put=120 entry=0x000102001d9f1c00 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 2055/8064 carried_out=Incrementing sub0 m0x0 2119/8064 backing=[vram@0x2ba5c00+0x100 ] words=64
+-- seq=50 age_ms=55 cursor=83 put=120 entry=0x0001a2001d9ed700 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 2119/8064 carried_out=Incrementing sub0 m0x0 2223/8064 backing=[vram@0x2ba1700+0x1a0 ] words=104
+-- seq=51 age_ms=55 cursor=84 put=120 entry=0x000572001d447cc0 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 2223/8064 carried_out=Incrementing sub0 m0x0 2571/8064 backing=[ram@0x1ddc7acc0+0x340 ram@0x1ddc78000+0x230 ] words=348
+-- seq=52 age_ms=55 cursor=86 put=120 entry=0x000012001d448230 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 2571/8064 carried_out=Incrementing sub0 m0x0 2575/8064 backing=[ram@0x1ddc78230+0x10 ] words=4
+-- seq=53 age_ms=55 cursor=87 put=120 entry=0x0000e2001d9f1d00 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 2575/8064 carried_out=Incrementing sub0 m0x0 2631/8064 backing=[vram@0x2ba5d00+0xe0 ] words=56
+-- seq=54 age_ms=55 cursor=88 put=120 entry=0x000342001d448240 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 2631/8064 carried_out=Incrementing sub0 m0x0 2839/8064 backing=[ram@0x1ddc78240+0x340 ] words=208
+-- seq=55 age_ms=55 cursor=90 put=120 entry=0x0000c2001d9f1e00 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 2839/8064 carried_out=Incrementing sub0 m0x0 2887/8064 backing=[vram@0x2ba5e00+0xc0 ] words=48
+-- seq=56 age_ms=55 cursor=91 put=120 entry=0x0000da001d448580 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 2887/8064 carried_out=Incrementing sub0 m0x0 2941/8064 backing=[ram@0x1ddc78580+0xd8 ] words=54
+-- seq=57 age_ms=55 cursor=92 put=120 entry=0x00002801202100f8 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 2941/8064 carried_out=Incrementing sub0 m0x0 2951/8064 backing=[ram@0x1f96640f8+0x28 ] words=10
+-- seq=58 age_ms=54 cursor=93 put=120 entry=0x0000280120210120 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 2951/8064 carried_out=Incrementing sub0 m0x0 2961/8064 backing=[ram@0x1f9664120+0x28 ] words=10
+-- seq=59 age_ms=54 cursor=106 put=120 entry=0x00005a001d540000 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 2961/8064 carried_out=Incrementing sub0 m0x0 2983/8064 backing=[ram@0x1902f3000+0x58 ] words=22
+-- seq=60 age_ms=54 cursor=108 put=120 entry=0x00026a001d540058 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 2983/8064 carried_out=Incrementing sub0 m0x0 3137/8064 backing=[ram@0x1902f3058+0x268 ] words=154
+-- seq=61 age_ms=54 cursor=109 put=120 entry=0x000162001d9ec080 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 3137/8064 carried_out=Incrementing sub0 m0x0 3225/8064 backing=[vram@0x2ba0080+0x160 ] words=88
+-- seq=62 age_ms=54 cursor=110 put=120 entry=0x000042001d5402c0 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 3225/8064 carried_out=Incrementing sub0 m0x0 3241/8064 backing=[ram@0x1902f32c0+0x40 ] words=16
+-- seq=63 age_ms=54 cursor=111 put=120 entry=0x000162001d9ec680 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 3241/8064 carried_out=Incrementing sub0 m0x0 3329/8064 backing=[vram@0x2ba0680+0x160 ] words=88
+-- seq=64 age_ms=54 cursor=112 put=120 entry=0x000042001d540300 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 3329/8064 carried_out=Incrementing sub0 m0x0 3345/8064 backing=[ram@0x1902f3300+0x40 ] words=16
+-- seq=65 age_ms=54 cursor=113 put=120 entry=0x0000e2001d9ed600 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 3345/8064 carried_out=Incrementing sub0 m0x0 3401/8064 backing=[vram@0x2ba1600+0xe0 ] words=56
+-- seq=66 age_ms=54 cursor=114 put=120 entry=0x000042001d540340 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 3401/8064 carried_out=Incrementing sub0 m0x0 3417/8064 backing=[ram@0x1902f3340+0x40 ] words=16
+-- seq=67 age_ms=54 cursor=114 put=120 entry=0x000042001d540340 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 3401/8064 carried_out=Incrementing sub0 m0x0 3417/8064 backing=[ram@0x1902f3340+0x40 ] words=16
+-- seq=68 age_ms=54 cursor=115 put=120 entry=0x0001a2001d9ed380 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 3417/8064 carried_out=Incrementing sub0 m0x0 3521/8064 backing=[vram@0x2ba1380+0x1a0 ] words=104
+-- seq=69 age_ms=53 cursor=115 put=120 entry=0x0001a2001d9ed380 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 3417/8064 carried_out=Incrementing sub0 m0x0 3521/8064 backing=[vram@0x2ba1380+0x1a0 ] words=104
+-- seq=70 age_ms=53 cursor=116 put=120 entry=0x000042001d540380 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 3521/8064 carried_out=Incrementing sub0 m0x0 3537/8064 backing=[ram@0x1902f3380+0x40 ] words=16
+-- seq=71 age_ms=53 cursor=117 put=120 entry=0x000062001d9ed580 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 3537/8064 carried_out=Incrementing sub0 m0x0 3561/8064 backing=[vram@0x2ba1580+0x60 ] words=24
+-- seq=72 age_ms=53 cursor=118 put=120 entry=0x0000ae001d5403c0 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 3561/8064 carried_out=Incrementing sub0 m0x0 3604/8064 backing=[ram@0x1902f33c0+0xac ] words=43
+-- seq=73 age_ms=53 cursor=119 put=120 entry=0x0000280120210148 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 3604/8064 carried_out=Incrementing sub0 m0x0 3614/8064 backing=[ram@0x1f9664148+0x28 ] words=10
+-- seq=74 age_ms=49 cursor=120 put=137 entry=0x0000280120210170 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 3614/8064 carried_out=Incrementing sub0 m0x0 3624/8064 backing=[ram@0x1f9664170+0x28 ] words=10
+-- seq=75 age_ms=49 cursor=133 put=137 entry=0x00005a001d570000 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 3624/8064 carried_out=Incrementing sub0 m0x0 3646/8064 backing=[ram@0x1d9a1b000+0x58 ] words=22
+-- seq=76 age_ms=49 cursor=135 put=137 entry=0x0001ae001d570058 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 3646/8064 carried_out=Incrementing sub0 m0x0 3753/8064 backing=[ram@0x1d9a1b058+0x1ac ] words=107
+-- seq=77 age_ms=49 cursor=136 put=137 entry=0x0000280120210198 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 3753/8064 carried_out=Incrementing sub0 m0x0 3763/8064 backing=[ram@0x1f9664198+0x28 ] words=10
+-- seq=78 age_ms=0 cursor=137 put=283 entry=0x00002801202101c0 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 3763/8064 carried_out=Incrementing sub0 m0x0 3773/8064 backing=[ram@0x1f96641c0+0x28 ] words=10
+-- seq=79 age_ms=0 cursor=150 put=283 entry=0x00005a001d590000 woke_by_request=true rare=false carried_in=Incrementing sub0 m0x0 3773/8064 carried_out=Incrementing sub0 m0x0 3795/8064 backing=[ram@0x19584b000+0x58 ] words=22

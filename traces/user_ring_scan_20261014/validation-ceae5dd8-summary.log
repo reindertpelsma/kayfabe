@@ -1,0 +1,17 @@
+VALIDATE_START rev=ceae5dd8 2026-10-14T02:28:49+02:00
+UNIT rc=0 passed=2990 failed=0 0 failing-tests
+GATES rc=0 V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS V3_GATES_BIRTHS births=12 user=12 refused=0 ok=1 V3_GATES_EXIT pass=9 fail=0 births_ok=1 gate10=PASS 2026-10-14T02:30:04+02:00 
+CLIENT rc=0
+FG rc=1 build_fast_guest: no raw client at /data/kf-ringscan-host/target/release/kayfabe-rm-ladder (cargo build --release -p kayfabe-rm-ladder --bin kayfabe-rm-ladder)
+FAST rc=2 FAST_SUITE_PASS=0 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=30 ARMS=30 FAST_SUITE_RC=2 
+--timer                      NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+--engines                    NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+--doorbell-census            NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+--gpu-info-sweep             NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+--bus-info-sweep             NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+--concurrency                NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+--defer-liveness             NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+--blockage-coverage          NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+--alias-two-vas              NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+--alias-unmap-observe        NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+VALIDATE_EXIT rev=ceae5dd8 2026-10-14T02:30:16+02:00
