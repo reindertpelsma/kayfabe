@@ -1,0 +1,400 @@
+      2  vfio_region_read 0x590, 4) = 0x0
+      1  vfio_region_write 0x8a1d5c, 0x0, 4)
+      1  vfio_region_write 0x8a1d58, 0x6353000, 4)
+      1  vfio_region_read 0xad00bc, 4) = 0xff
+      1  vfio_region_write 0x118df8, 0x18de6ecb, 4)
+      1  vfio_region_write 0x118df4, 0xa53ed921, 4)
+      1  vfio_region_read 0x8f2c00, 4) = 0x0
+      1  vfio_region_read 0x8f2c04, 4) = 0x0
+      1  vfio_region_read 0x8f2c80, 4) = 0x0
+      1  vfio_region_read 0x8f2c84, 4) = 0x0
+      1  vfio_region_write 0x8f2ac0, 0x1000000, 4)
+      1  vfio_region_read 0x8f2ac0, 4) = 0x1000000
+      1  vfio_region_write 0x8f2ac4, 0xc0000000, 4)
+      1  vfio_region_write 0x8f2ac4, 0x1610de7e, 4)
+      1  vfio_region_write 0x8f2ac4, 0x20, 4)
+      1  vfio_region_read 0x8f2ac0, 4) = 0x100000c
+      1  vfio_region_write 0x8f2c04, 0x8, 4)
+      1  vfio_region_write 0x8f2c00, 0x0, 4)
+      1  vfio_region_read 0x8f2c80, 4) = 0x0
+      1  vfio_region_read 0x8f2c84, 4) = 0x10
+      1  vfio_region_read 0x8f2c80, 4) = 0x0
+      1  vfio_region_read 0x8f2c84, 4) = 0x10
+      1  vfio_region_read 0x8f2c80, 4) = 0x0
+      1  vfio_region_read 0x8f2c84, 4) = 0x10
+      1  vfio_region_read 0x8f2c80, 4) = 0x0
+      1  vfio_region_read 0x8f2c84, 4) = 0x10
+      1  vfio_region_write 0x8f2ac0, 0x2000000, 4)
+      1  vfio_region_read 0x8f2ac4, 4) = 0xc0000000
+      1  vfio_region_read 0x8f2ac4, 4) = 0x1510de7e
+      1  vfio_region_read 0x8f2ac4, 4) = 0x0
+      1  vfio_region_read 0x8f2ac4, 4) = 0x16
+      1  vfio_region_read 0x8f2ac4, 4) = 0x0
+      1  vfio_region_read 0x8f2ac0, 4) = 0x2000014
+      1  vfio_region_write 0x8f2c84, 0x0, 4)
+      1  vfio_region_write 0x8f2c80, 0x0, 4)
+      2  vfio_region_write 0x110c00, 0x0, 4)
+      1  vfio_region_read 0xad00bc, 4) = 0xff
+      1  vfio_region_read 0x8f2c00, 4) = 0x8
+      1  vfio_region_read 0x8f2c04, 4) = 0x8
+      1  vfio_region_read 0x8f2c80, 4) = 0x0
+      1  vfio_region_read 0x8f2c84, 4) = 0x0
+      1  vfio_region_write 0x8f2ac0, 0x1000000, 4)
+      1  vfio_region_read 0x8f2ac0, 4) = 0x1000000
+      1  vfio_region_write 0x8f2ac4, 0xc0000000, 4)
+      1  vfio_region_write 0x8f2ac4, 0x2010de7e, 4)
+      1  vfio_region_write 0x8f2ac4, 0x1, 4)
+      1  vfio_region_read 0x8f2ac0, 4) = 0x100000c
+      1  vfio_region_write 0x8f2c04, 0x8, 4)
+      1  vfio_region_write 0x8f2c00, 0x0, 4)
+      1  vfio_region_read 0x8f2c80, 4) = 0x0
+      1  vfio_region_read 0x8f2c84, 4) = 0x10
+      1  vfio_region_read 0x8f2c80, 4) = 0x0
+      1  vfio_region_read 0x8f2c84, 4) = 0x10
+      1  vfio_region_read 0x8f2c80, 4) = 0x0
+      1  vfio_region_read 0x8f2c84, 4) = 0x10
+      1  vfio_region_read 0x8f2c80, 4) = 0x0
+      1  vfio_region_read 0x8f2c84, 4) = 0x10
+      1  vfio_region_write 0x8f2ac0, 0x2000000, 4)
+      1  vfio_region_read 0x8f2ac4, 4) = 0xc0000000
+      1  vfio_region_read 0x8f2ac4, 4) = 0x1510de7e
+      1  vfio_region_read 0x8f2ac4, 4) = 0x0
+      1  vfio_region_read 0x8f2ac4, 4) = 0x20
+      1  vfio_region_read 0x8f2ac4, 4) = 0x0
+      1  vfio_region_read 0x8f2ac0, 4) = 0x2000014
+      1  vfio_region_write 0x8f2c84, 0x0, 4)
+      1  vfio_region_write 0x8f2c80, 0x0, 4)
+      1  vfio_region_read 0x8f2c00, 4) = 0x8
+      1  vfio_region_read 0x8f2c04, 4) = 0x8
+      1  vfio_region_read 0x8f2c80, 4) = 0x0
+      1  vfio_region_read 0x8f2c84, 4) = 0x0
+      1  vfio_region_write 0x8f2ac0, 0x1000000, 4)
+      1  vfio_region_read 0x8f2ac0, 4) = 0x1000000
+      1  vfio_region_write 0x8f2ac4, 0xc0000000, 4)
+      1  vfio_region_write 0x8f2ac4, 0x1410de7e, 4)
+      1  vfio_region_write 0x8f2ac4, 0x35c0002, 4)
+      1  vfio_region_write 0x8f2ac4, 0x1a100000, 4)
+      4  vfio_region_write 0x8f2ac4, 0x0, 4)
+      1  vfio_region_write 0x8f2ac4, 0x1c00000, 4)
+      1  vfio_region_write 0x8f2ac4, 0x0, 4)
+      1  vfio_region_write 0x8f2ac4, 0x100000, 4)
+      1  vfio_region_write 0x8f2ac4, 0x91a2de65, 4)
+      1  vfio_region_write 0x8f2ac4, 0x6b68ff8c, 4)
+      1  vfio_region_write 0x8f2ac4, 0x6ff75b45, 4)
+      1  vfio_region_write 0x8f2ac4, 0x7b0cc525, 4)
+      1  vfio_region_write 0x8f2ac4, 0xedfca6f6, 4)
+      1  vfio_region_write 0x8f2ac4, 0x262cb0c3, 4)
+      1  vfio_region_write 0x8f2ac4, 0x2544d015, 4)
+      1  vfio_region_write 0x8f2ac4, 0x69702125, 4)
+      1  vfio_region_write 0x8f2ac4, 0xc54bd23a, 4)
+      1  vfio_region_write 0x8f2ac4, 0x2ffee6f4, 4)
+      1  vfio_region_write 0x8f2ac4, 0x4a179990, 4)
+      1  vfio_region_write 0x8f2ac4, 0xe75755c1, 4)
+      1  vfio_region_write 0x8f2ac4, 0xd50bd304, 4)
+      1  vfio_region_write 0x8f2ac4, 0x2ccc304b, 4)
+      1  vfio_region_write 0x8f2ac4, 0x44b5031f, 4)
+      1  vfio_region_write 0x8f2ac4, 0x2ee029f6, 4)
+      1  vfio_region_write 0x8f2ac4, 0x6a083480, 4)
+      1  vfio_region_write 0x8f2ac4, 0xa90206b8, 4)
+      1  vfio_region_write 0x8f2ac4, 0x998e29b2, 4)
+      1  vfio_region_write 0x8f2ac4, 0xd66a2b3d, 4)
+      1  vfio_region_write 0x8f2ac4, 0x9779a1d1, 4)
+      1  vfio_region_write 0x8f2ac4, 0xa9b0afcc, 4)
+      1  vfio_region_write 0x8f2ac4, 0xd2082915, 4)
+      1  vfio_region_write 0x8f2ac4, 0x922db061, 4)
+      1  vfio_region_write 0x8f2ac4, 0x1d8b7c4b, 4)
+      1  vfio_region_write 0x8f2ac4, 0x54f97c39, 4)
+      1  vfio_region_write 0x8f2ac4, 0xc9969bbe, 4)
+      1  vfio_region_write 0x8f2ac4, 0xc7cf08ca, 4)
+      1  vfio_region_write 0x8f2ac4, 0x3c0a73dc, 4)
+      1  vfio_region_write 0x8f2ac4, 0xb5e061f6, 4)
+      1  vfio_region_write 0x8f2ac4, 0x1cddca4c, 4)
+      1  vfio_region_write 0x8f2ac4, 0xc4302a14, 4)
+      1  vfio_region_write 0x8f2ac4, 0x8c2e6546, 4)
+      1  vfio_region_write 0x8f2ac4, 0xb004b8f1, 4)
+      1  vfio_region_write 0x8f2ac4, 0x5f37660e, 4)
+      1  vfio_region_write 0x8f2ac4, 0xe0a462d4, 4)
+      1  vfio_region_write 0x8f2ac4, 0x1a, 4)
+     71  vfio_region_write 0x8f2ac4, 0x0, 4)
+      1  vfio_region_write 0x8f2ac4, 0x52ccdb82, 4)
+      1  vfio_region_write 0x8f2ac4, 0x5988e21e, 4)
+      1  vfio_region_write 0x8f2ac4, 0x7ec38c94, 4)
+      1  vfio_region_write 0x8f2ac4, 0x94bce755, 4)
+      1  vfio_region_write 0x8f2ac4, 0x1c7c9734, 4)
+      1  vfio_region_write 0x8f2ac4, 0xdda62683, 4)
+      1  vfio_region_write 0x8f2ac4, 0xf215351c, 4)
+      1  vfio_region_write 0x8f2ac4, 0x811141e8, 4)
+      1  vfio_region_write 0x8f2ac4, 0x8e13b0b3, 4)
+      1  vfio_region_write 0x8f2ac4, 0x6361f348, 4)
+      1  vfio_region_write 0x8f2ac4, 0xc9f4f3a3, 4)
+      1  vfio_region_write 0x8f2ac4, 0x5a881a60, 4)
+      1  vfio_region_write 0x8f2ac4, 0x6e18d39a, 4)
+      1  vfio_region_write 0x8f2ac4, 0x1bf4258c, 4)
+      1  vfio_region_write 0x8f2ac4, 0x13bb1ac2, 4)
+      1  vfio_region_write 0x8f2ac4, 0x8c9ef5d4, 4)
+      1  vfio_region_write 0x8f2ac4, 0x48507336, 4)
+      1  vfio_region_write 0x8f2ac4, 0x5febbb22, 4)
+      1  vfio_region_write 0x8f2ac4, 0x4b91cdb0, 4)
+      1  vfio_region_write 0x8f2ac4, 0x4bf2e701, 4)
+      1  vfio_region_write 0x8f2ac4, 0x8dea75da, 4)
+      1  vfio_region_write 0x8f2ac4, 0x82b33323, 4)
+      1  vfio_region_write 0x8f2ac4, 0xe59c2fc4, 4)
+      1  vfio_region_write 0x8f2ac4, 0x9c33c2f9, 4)
+     72  vfio_region_write 0x8f2ac4, 0x0, 4)
+      1  vfio_region_write 0x8f2ac4, 0xc5e9000, 4)
+      1  vfio_region_write 0x8f2ac4, 0x0, 4)
+      1  vfio_region_read 0x8f2ac0, 4) = 0x1000364
+      1  vfio_region_write 0x8f2c04, 0x360, 4)
+      1  vfio_region_write 0x8f2c00, 0x0, 4)
+      1  vfio_region_read 0x8f2c80, 4) = 0x0
+      1  vfio_region_read 0x8f2c84, 4) = 0x10
+      1  vfio_region_read 0x8f2c80, 4) = 0x0
+      1  vfio_region_read 0x8f2c84, 4) = 0x10
+      1  vfio_region_read 0x8f2c80, 4) = 0x0
+      1  vfio_region_read 0x8f2c84, 4) = 0x10
+      1  vfio_region_read 0x8f2c80, 4) = 0x0
+      1  vfio_region_read 0x8f2c84, 4) = 0x10
+      1  vfio_region_write 0x8f2ac0, 0x2000000, 4)
+      1  vfio_region_read 0x8f2ac4, 4) = 0xc0000000
+      1  vfio_region_read 0x8f2ac4, 4) = 0x1510de7e
+      1  vfio_region_read 0x8f2ac4, 4) = 0x0
+      1  vfio_region_read 0x8f2ac4, 4) = 0x14
+      1  vfio_region_read 0x8f2ac4, 4) = 0x0
+      1  vfio_region_read 0x8f2ac0, 4) = 0x2000014
+      1  vfio_region_write 0x8f2c84, 0x0, 4)
+      1  vfio_region_write 0x8f2c80, 0x0, 4)
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x2400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_read 0x1100f4, 4) = 0x400
+      1  vfio_region_read 0x110040, 4) = 0x0
+      1  vfio_region_write 0x110080, 0x0, 4)
+      1  vfio_region_read 0x111388, 4) = 0x80
+ 130617  vfio_region_read 0x110094, 4) = 0x0
+      1  vfio_region_read 0xad00bc, 4) = 0xff
+      1  vfio_region_read 0x8f2c00, 4) = 0x360
+      1  vfio_region_read 0x8f2c04, 4) = 0x360
+      1  vfio_region_read 0x8f2c80, 4) = 0x0
+      1  vfio_region_read 0x8f2c84, 4) = 0x0
+      1  vfio_region_write 0x8f2ac0, 0x1000000, 4)
+      1  vfio_region_read 0x8f2ac0, 4) = 0x1000000
+      1  vfio_region_write 0x8f2ac4, 0xc0000000, 4)
+      1  vfio_region_write 0x8f2ac4, 0x2010de7e, 4)
+      1  vfio_region_write 0x8f2ac4, 0x1, 4)
+      1  vfio_region_read 0x8f2ac0, 4) = 0x100000c
+      1  vfio_region_write 0x8f2c04, 0x8, 4)
+      1  vfio_region_write 0x8f2c00, 0x0, 4)
+      1  vfio_region_read 0x8f2c80, 4) = 0x0
+      1  vfio_region_read 0x8f2c84, 4) = 0x10
+      1  vfio_region_read 0x8f2c80, 4) = 0x0

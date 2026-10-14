@@ -259,6 +259,9 @@ const HWCFG2_BR_PRIV_LOCKDOWN: u64 = 1 << 13;
 /// `NV_PFALCON_FALCON_DMATRFCMD_IDLE` is `1:1`
 /// (`ogkm-580: turing/tu102/dev_falcon_v4.h:79`); reported `IDLE=TRUE|FULL=FALSE`.
 const DMATRFCMD_IDLE: u64 = 0x2;
+/// ★ 2026-10-14: `NV_PRISCV_RISCV_CPUCTL_STARTCPU` is `0:0`, `_TRUE` = 1 (`ogkm-595.84: hopper/gh100/dev_riscv_pri.h:59-61`;
+/// the register itself, `0x388` from the RISC-V base, is in the 580 `hwref` table). The RM's own start of the GSP's RISC-V core.
+const RISCV_CPUCTL_STARTCPU: u64 = 0x1;
 /// `NV_PRISCV_RISCV_CPUCTL_ACTIVE_STAT` is `7:7`
 /// (`ogkm-580: ampere/ga102/dev_riscv_pri.h:33`, the header GB202's
 /// `kflcnRiscvReadIntrStatus_GA102` binding selects).
@@ -405,7 +408,7 @@ impl BootSequence for FspBoot {
         &self,
         model: &dyn GspModel,
         w: &RegWrite,
-        _ctx: &BootContext,
+        ctx: &BootContext,
         state: &mut ArchBootState,
     ) -> BootSteps {
         let (off, val) = (w.off, w.val);
@@ -472,6 +475,26 @@ impl BootSequence for FspBoot {
             return BootSteps::none();
         };
         match reg {
+            // ★★★ 2026-10-14 (die sweep, GB206 + Windows 580.88; V3_DIE_SWEEP_20261014.md §3.1, hypothesis HB3):
+            // the OTHER boot route of `kgspBootstrap_GH100` — no FSP command at all. When the FSP is not told to
+            // boot the GSP-FMC (`PDB_PROP_KFSP_DISABLE_GSPFMC`, which the Windows RM took after its capability
+            // query), `_kgspBootstrapGspFmc_GH100` (`ogkm-580: kernel_gsp_gh100.c:716-776`) resets the GSP, puts the
+            // `GSP_FMC_BOOT_PARAMS` address in `MAILBOX0/1`, points the BootROM at the FMC through the `BCR_*`
+            // registers and STARTS the RISC-V core with `NV_PRISCV_RISCV_CPUCTL.STARTCPU`. That start is this
+            // route's `StartProcessor`; the address in the mailboxes is the same structure the COT's
+            // `gspBootArgsSysmemOffset` names, so the same three steps follow. ⊘ Only with an address in the
+            // mailboxes: a start with none has nothing to publish and we invent none.
+            GspReg::GspRiscvCpuctl if val & RISCV_CPUCTL_STARTCPU != 0 => {
+                let gpa = u64::from(ctx.obs.boot_args_hi) << 32 | u64::from(ctx.obs.boot_args_lo);
+                if gpa == 0 {
+                    return BootSteps::none();
+                }
+                let mut steps = BootSteps::none();
+                steps.push(BootStep::StartProcessor);
+                steps.push(BootStep::FirmwareLoaded);
+                steps.push(BootStep::PublishBootArgs(gpa));
+                steps
+            }
             GspReg::GspQueueHead(_) => BootSteps::one(BootStep::CommandDoorbell),
             GspReg::GspFalconIrqsclr if model.is_swgen0_clear(val) => {
                 BootSteps::one(BootStep::ClearStatusIrq)
