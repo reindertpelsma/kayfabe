@@ -237,9 +237,15 @@ fn main() {
                 Ok(status) => {
                     let name = status_name(status);
                     *counts.entry(name).or_insert(0) += 1;
+                    // ★ Lane C: `KF_PROBE_HEAD=<n>` widens the printed prefix (at most 64 bytes) for
+                    // replies whose words are known not to carry board data (the cudart gate).
+                    let head_len = std::env::var("KF_PROBE_HEAD")
+                        .ok()
+                        .and_then(|v| v.parse::<usize>().ok())
+                        .map_or(16, |n| n.min(64));
                     let head: String = payload
                         .iter()
-                        .take(16)
+                        .take(head_len)
                         .map(|b| format!("{b:02x}"))
                         .collect();
                     println!(

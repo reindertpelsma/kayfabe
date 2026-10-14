@@ -29,3 +29,4 @@ cudart.0x2080a001	GA106	580	16	0x0=0x0,0x4=0x0,0x8=0x0,0xc=0x0	0x1 0x5 0x2 0x11	
 cudart.0x20802209	*	*	4	-	0x5	rule:ogkm-595.84 src/nvidia/src/kernel/gpu/rc/kernel_rc_watchdog_ctrl.c:30-60 reports RM software state (watchdog INITIALIZED 0x4 | DISABLED 0x1), not a die fact; GA106 580.159.04 bare metal answered 0x5 (cudartinit.rs)	crates/kf-abi/src/cudartinit.rs
 gss.0x20808162	GA106	580	1	0x0=0x0	0x1	measured:GA106,580.159.04,2026-08-09	traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt:85 (in=00 out=01; kf-abi gsslegacy.rs)
 gss.0x20808162	AD104	595	1	0x0=0x0	0x0	measured:AD104,595.91.07,2026-10-14	traces/constants_night_20261014/probe_8162_595.txt (zero request, unprivileged: OK, reply 00)
+cudart.0x2080a001	AD104	595	16	0x0=0x0,0x4=0x0,0x8=0x0,0xc=0x0	0x1 0x5 0x2 0x11	measured:AD104,595.91.07,2026-10-14	traces/constants_night_20261014/kit_ad104_595.txt (zero request, unprivileged)
