@@ -36,6 +36,14 @@ bind)
     bash "$WD" ps "$HERE/evidence.ps1" 240 | sed 's/^/PB /'
     bash "$WD" shot bind_end
     bash "$WD" stop ;;
+probe)
+    # one diagnostic boot of the same overlay (e.g. WIN_FLAGS="KF3_BAR0_TRACE KF3_BAR0_READ_TRACE KF3_RPC_TRACE"); then stop
+    bash "$WD" start || exit 2
+    bash "$WD" wait-qga "${QGA_WAIT:-1200}" || { bash "$WD" shot probe_noqga; exit 3; }
+    sleep "${PROBE_SECONDS:-90}"
+    bash "$WD" ps "$HERE/evidence.ps1" 240 | sed 's/^/PR /'
+    bash "$WD" shot probe_end
+    bash "$WD" stop ;;
 phase2)
     bash "$WD" start || exit 2
     bash "$WD" wait-qga "${QGA_WAIT:-1200}" || { bash "$WD" shot p2_noqga; exit 3; }
