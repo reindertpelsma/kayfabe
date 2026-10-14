@@ -9,7 +9,7 @@
 //!
 //! | request | sent by | without an answer | answered |
 //! |---|---|---|---|
-//! | `ALLOC_MEMORY` (fn 4) of a SYSTEM MemoryList | `memdescSendMemDescToGSP` from `_fbsrInitGsp` (`ogkm-580: fbsr_gm107.c:104-138`, `mem_desc.c:4786-4870`) at every FBSR save | `fbsrBegin` fails after creating its CeUtils, every later FBSR type then asserts `pCeUtils == NULL` (`mem_mgr.c:4122`), no save is valid, and the resume's `memmgrRestorePowerMgmtState` fails `gpuStateLoad` (`kern_mem_sys.c:1134`) — `[measured b1, 44e9b092]` | `NV_OK`; the registration is recorded (client, handle) so its `FREE` is answered |
+//! | `ALLOC_MEMORY` (fn 4) of a SYSTEM MemoryList of more than one page | `memdescSendMemDescToGSP` from `_fbsrInitGsp` (`ogkm-580: fbsr_gm107.c:104-138`, `mem_desc.c:4786-4870`) at every FBSR save — the buffer is a noncontiguous sysmem allocation (`mem_mgr_pwr_mgmt.c:361-367`), so it carries one PTE per page | `fbsrBegin` fails after creating its CeUtils, every later FBSR type then asserts `pCeUtils == NULL` (`mem_mgr.c:4122`), no save is valid, and the resume's `memmgrRestorePowerMgmtState` fails `gpuStateLoad` (`kern_mem_sys.c:1134`) — `[measured b1, 44e9b092]` | `NV_OK`; the registration is recorded (client, handle) so its `FREE` is answered |
 //! | `FREE` (fn 10) of such a registration | the same function, after `FBSR_INIT` (`fbsr_gm107.c:136`) | (a refusal of an object this link accepted) | `NV_OK`, forgotten |
 //! | `INTERNAL_FBSR_INIT` (`0x20800ac2`) | `_fbsrInitGsp` (`fbsr_gm107.c:124-133`) under `NV_ASSERT_OK_OR_RETURN` | the same failure as fn 4 | `NV_OK`; pure `[IN]` params returned as sent |
 //! | `INTERNAL_FIFO_TOGGLE_ACTIVE_CHANNEL_SCHEDULING` (`0x20800ac3`) | `kfifoStateUnload` / `kfifoStateLoad` on a PM transition (`kernel_fifo_init.c:70-120`) | the resume's `kfifoStateLoad` returns the refusal (`NV_CHECK_OK_OR_RETURN`) and `gpuStateLoad` fails — `[measured b1]` refused at suspend (seq 1722) | `NV_OK`; pure `[IN]` |
@@ -30,6 +30,11 @@
 //! ⚠ Control ids are cited from `ogkm-580: src/common/sdk/nvidia/inc/ctrl/ctrl2080/
 //! ctrl2080internal.h:2924, 2946` (the `kf_rm::display` precedent for internal controls); the
 //! MemoryList layout is the version's generated contract (`kf_abi::memory_list`).
+//!
+//! ⊘ A ONE-page list is not claimed: that is the whole domain of the default-off MemoryList
+//! experiment (`kf_abi::memory_list::Cell::decode` admits exactly one PTE), which types such a
+//! registration against guest RAM in the object seat; with the experiment off it is refused, as
+//! before.
 //!
 //! ## Hostile guest
 //!
@@ -56,9 +61,6 @@ pub const MAX_REGISTRATIONS: usize = 64;
 pub struct PmSuspendResumePolicy {
     driver: kf_abi::versions::DriverAbiTable,
     cell: Option<&'static kf_abi::memory_list::Cell>,
-    /// Whether SYSTEM MemoryList registrations are claimed here (not while the default-off
-    /// MemoryList experiment owns them in the object seat).
-    claim_lists: bool,
     registered: BTreeSet<(u32, u32)>,
     /// Registrations accepted / FREEs answered / controls answered (status line, tests).
     pub accepted: u64,
@@ -69,14 +71,12 @@ pub struct PmSuspendResumePolicy {
 }
 
 impl PmSuspendResumePolicy {
-    /// The link for the guest's driver version. `claim_lists = false` leaves `ALLOC_MEMORY` to
-    /// the object seat (the MemoryList experiment).
+    /// The link for the guest's driver version.
     #[must_use]
-    pub fn new(driver: kf_abi::versions::DriverAbiTable, claim_lists: bool) -> Self {
+    pub fn new(driver: kf_abi::versions::DriverAbiTable) -> Self {
         PmSuspendResumePolicy {
             driver,
             cell: kf_abi::memory_list::cell(driver.driver_version()),
-            claim_lists,
             registered: BTreeSet::new(),
             accepted: 0,
             freed: 0,
@@ -93,8 +93,10 @@ impl PmSuspendResumePolicy {
     }
 
     fn register(&mut self, cmd: &RpcCommand) -> Option<Reply> {
-        let cell = self.cell.filter(|_| self.claim_lists)?;
-        let r = cell.registration(&cmd.payload)?;
+        let r = self.cell?.registration(&cmd.payload)?;
+        if r.page_count < 2 {
+            return None;
+        }
         let key = (r.client, r.handle);
         if !self.registered.contains(&key) && self.registered.len() >= MAX_REGISTRATIONS {
             return None;
@@ -213,7 +215,7 @@ mod tests {
     /// `NV_OK` now, and the registration's FREE with it.
     #[test]
     fn the_fbsr_save_protocol_is_answered_and_its_free_matches() {
-        let mut p = PmSuspendResumePolicy::new(abi(), true);
+        let mut p = PmSuspendResumePolicy::new(abi());
         let r = p
             .respond(&cmd(RpcFunction::Other(4), 4, list(0xc1d0_0001, 0xcafe, 9000)))
             .expect("claimed");
@@ -244,7 +246,7 @@ mod tests {
     /// link never accepted, or any list while the MemoryList experiment owns them.
     #[test]
     fn everything_else_falls_through() {
-        let mut p = PmSuspendResumePolicy::new(abi(), true);
+        let mut p = PmSuspendResumePolicy::new(abi());
         let mut fb = list(1, 4, 2);
         fb[12..16].copy_from_slice(&0x82u32.to_le_bytes());
         assert!(p.respond(&cmd(RpcFunction::Other(4), 4, fb)).is_none());
@@ -253,10 +255,10 @@ mod tests {
         assert!(p.respond(&cmd(RpcFunction::Other(4), 4, short)).is_none());
         assert!(p.respond(&control(0x2080_0ac4, &[0; 4])).is_none());
         assert!(p.respond(&free(1, 4)).is_none());
-        let mut off = PmSuspendResumePolicy::new(abi(), false);
         assert!(
-            off.respond(&cmd(RpcFunction::Other(4), 4, list(1, 4, 2)))
-                .is_none()
+            p.respond(&cmd(RpcFunction::Other(4), 4, list(1, 4, 1)))
+                .is_none(),
+            "one page: the MemoryList experiment's domain"
         );
     }
 
@@ -264,20 +266,20 @@ mod tests {
     /// forgets that client's registrations (and is left to the seat).
     #[test]
     fn registrations_are_bounded_and_a_client_free_forgets_them() {
-        let mut p = PmSuspendResumePolicy::new(abi(), true);
+        let mut p = PmSuspendResumePolicy::new(abi());
         for h in 0..MAX_REGISTRATIONS as u32 {
             assert!(
-                p.respond(&cmd(RpcFunction::Other(4), 4, list(1, 0x100 + h, 1)))
+                p.respond(&cmd(RpcFunction::Other(4), 4, list(1, 0x100 + h, 2)))
                     .is_some()
             );
         }
         assert!(
-            p.respond(&cmd(RpcFunction::Other(4), 4, list(1, 0x9999, 1)))
+            p.respond(&cmd(RpcFunction::Other(4), 4, list(1, 0x9999, 2)))
                 .is_none()
         );
         assert!(p.respond(&free(1, 1)).is_none(), "the seat frees the client");
         assert!(
-            p.respond(&cmd(RpcFunction::Other(4), 4, list(1, 0x9999, 1)))
+            p.respond(&cmd(RpcFunction::Other(4), 4, list(1, 0x9999, 2)))
                 .is_some()
         );
     }

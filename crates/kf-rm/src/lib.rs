@@ -581,8 +581,9 @@ pub fn served_chain(
             u8::from(xbar)
         );
     }
-    let memory_list_probe = std::env::var("KF3_MEMORY_LIST_PROBE").as_deref() == Ok("1");
-    if memory_list_probe && let Some(policy) = objects.take() {
+    if std::env::var("KF3_MEMORY_LIST_PROBE").as_deref() == Ok("1")
+        && let Some(policy) = objects.take()
+    {
         objects = Some(policy.with_memory_list_probe());
         eprintln!(
             "kf-rm: EXPERIMENT contiguous SYSRAM descriptors backed by checked guest RAM; no scheduling"
@@ -644,7 +645,7 @@ pub fn served_chain(
         // ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`): the FBSR save's registration of GSP-RM's
         // suspend buffer, its FREE, `FBSR_INIT` and the PM-transition scheduling toggle — answered,
         // nothing on the host (`pmsr.rs`). Ahead of the object seat, which would refuse fn 4.
-        Box::new(pmsr::PmSuspendResumePolicy::new(driver, !memory_list_probe)),
+        Box::new(pmsr::PmSuspendResumePolicy::new(driver)),
         // ★ v3-gfx: the per-VM ZBC table — claims only `0x9096xxxx` controls, answers them from
         // its own state and never forwards (`zbc.rs`).
         Box::new(zbc::ZbcPolicy::new(driver, host.zbc_table_sizes)),
