@@ -40,10 +40,10 @@ Measured and inferred are kept apart below: "measured" = a counter or a log line
 
 ## Result in one paragraph (measured)
 
-**H1 was not falsified.** Across 12 graded runs of Google Chrome 155 and Electron 44 on the Linux desktop guest (X11
-and Wayland, ANGLE-GL and ANGLE-Vulkan, YouTube, 40 launch/kill cycles) about 2 h 20 min of GPU load in total,
+**H1 was not falsified.** Across 11 graded runs of Google Chrome 155 and Electron 44 on the Linux desktop guest (X11
+and Wayland, ANGLE-GL and ANGLE-Vulkan, YouTube, 40 launch/kill cycles) about 2 hours of GPU load in total,
 there was no unplanned GSP unload (`GSP phase Running -> Suspending` count 0 in every run; only the boot sequence
-Cold -> Running), no guest Xid, no `Flip event timeout`, no GSP timeout, no `nvAssert` beyond the boot baseline, no
+Cold -> Running), no guest Xid, no `Flip event timeout`, no GSP timeout, no `nvAssert` beyond the boot baseline (except the BAR1 ones of the Wayland runs, finding 1), no
 host `NVRM: Xid` delta, USER_RING_REFUSED = 0, USER_RING_SCAN = 0, `BLACK:` = 0. The Linux guest does **not** reproduce
 the Windows TDR with Chromium-class GPU use. Four things did show up and are worth the owner's attention (below):
 a BAR1 VA exhaustion on the Wayland path, a display STALL diagnostic that fires in every browser run, the unavailability of
@@ -73,7 +73,7 @@ flip = guest `Flip event timeout`; STALL = distinct `display: STALL Window` epis
 
 Each 11.3-minute run: WebGL2 scene + canvas-2D + 220 CSS animated layers with backdrop-filter + a scrolling 3000-card DOM + a looping
 1080p60 video (H.264, then VP9 at 2.4 min, then AV1 at 3.6 min) + fullscreen video (53 s) + 24 extra tabs/windows (about 100 s) + `kill -9` of the GPU
-process (Chrome restarted it: `--gpu-recent-crash-count=1` afterwards, no tab crash, no context loss that did not recover) + a WebGPU window. Page fps
+process (Chrome restarted it: `--gpu-recent-crash-count=1` afterwards, no tab crash; under Wayland the page stopped painting for a while, finding 6) + a WebGPU window. Page fps
 medians were 60 in every X11 run (minimum 49 during the churn).
 The kill of the GPU process is a user-space crash only: the kernel/RM saw nothing (no Xid), as expected.
 
