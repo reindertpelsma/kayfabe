@@ -318,6 +318,23 @@ impl Fetch {
         self.issued = next;
         Ok((slot, (next & u64::from(self.entries - 1)) as u32))
     }
+    /// The absolute fetch count a hardware GET word implies, WITHOUT consuming any receipt
+    /// ([`Fetch::observe`] is the consuming form). For the worker's spin / event / backstop peek: it
+    /// decides only whether to ring the channel's token, never what was fetched.
+    ///
+    /// # Errors
+    /// A GET outside the ring or beyond what was issued (the same refusals as `observe`).
+    pub fn peek(&self, get: u32) -> Result<u64, &'static str> {
+        if get >= self.entries {
+            return Err("USER_FETCH_GET");
+        }
+        let old = (self.fetched & u64::from(self.entries - 1)) as u32;
+        let delta = get.wrapping_sub(old) & (self.entries - 1);
+        if delta as usize > self.pending.len() {
+            return Err("USER_FETCH_UNISSUED_GET");
+        }
+        Ok(self.fetched + u64::from(delta))
+    }
     /// Fresh ordered hardware GET from this exact private native USERD only.
     pub fn observe(&mut self, get: u32) -> Result<Vec<(u64, u32)>, &'static str> {
         if get >= self.entries {

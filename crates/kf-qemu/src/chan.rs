@@ -2273,6 +2273,8 @@ pub struct ChanPlane {
     /// Exact pending Windows USER births, canceled before live subtree removal.
     user_births: crate::userbirth::Book,
     user_rings: Mutex<HashMap<u32, Arc<userrelay::Cell>>>,
+    /// ★ 2026-10-14 (`kf_chan::user_loop`): the USER-ring relays' bounded production counters.
+    pub relay_stats: kf_chan::user_loop::Stats,
     // Bounded ownership for every native attempt, including errors whose legacy
     // unwind result is unavailable. These rows never retire on a plain Err.
     user_birth_holds: Mutex<Vec<(Arc<()>, Arc<userrelay::Cell>)>>,
@@ -2941,6 +2943,7 @@ impl ChanPlane {
             pt: Mutex::new(HashMap::new()),
             user_births,
             user_rings: Mutex::new(HashMap::new()),
+            relay_stats: kf_chan::user_loop::Stats::default(),
             user_birth_holds: Mutex::new(Vec::new()),
             memory_access: Arc::default(),
             relays: Mutex::new(HashMap::new()),

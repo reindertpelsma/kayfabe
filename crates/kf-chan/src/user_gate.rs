@@ -17,65 +17,21 @@
 //! barrier's wait, i.e. the preceding segment's processing, is then complete. That is the moment
 //! the hardware itself would fetch.
 //!
-//! [`Grace`] is defence in depth: a scan refusal of a segment that was never published is retried
-//! (re-read, rescanned) for [`REFUSE_AFTER`] before it is final. Measured after the gate: no
-//! stale reads at all; the grace exists so a visibility window nobody has measured yet costs a
-//! delay, not a dead channel and an adapter reset. Neither grants anything; a refusal after the
-//! grace is exactly the refusal it was before, and hardware USER privilege enforces isolation.
+//! [`Grace`] is defence in depth: a scan refusal of a segment that was never published is re-read and
+//! rescanned a bounded NUMBER of times ([`REFUSE_RETRIES`]) before it is final. Measured after the gate:
+//! no stale reads at all; the retry exists so a visibility window nobody has measured yet costs a few
+//! re-reads, not a dead channel and an adapter reset. It counts re-reads and never consults a clock
+//! (2026-10-14, owner: correctness never depends on timing). Neither grants anything; a refusal after
+//! the retries is exactly the refusal it was before, and hardware USER privilege enforces isolation.
+//!
+//! There is deliberately NO `GP_PUT` poll here any more: see [`SyncGate`] and
+//! `docs/design/V3_USER_RING_EVENT_LOOP_20261014.md` §2.2 (the old `Poll` rested on an overread
+//! measurement) -- a doorbell makes every `GP_PUT` write before it visible, and everything else the
+//! relay waits for is announced by an event (`kf_chan::user_loop`).
 
-use std::time::{Duration, Instant};
-
-/// How long the same unpublished segment must keep refusing before the refusal is final.
-pub const REFUSE_AFTER: Duration = Duration::from_millis(50);
-
-/// After new guest work was last seen, how long the relay keeps polling `GP_PUT` at the worker's
-/// short tick (1 ms) — the window in which a guest that believes its channel is still running
-/// advances `GP_PUT` without a doorbell.
-pub const ACTIVE_POLL: Duration = Duration::from_millis(250);
-/// Beyond that window, the longest a relay goes without reading `GP_PUT` (the worker's park tick,
-/// at most 50 ms, bounds it from above). Far below the guest's 2 s timeout detection.
-pub const IDLE_POLL: Duration = Duration::from_millis(20);
-
-/// ★ 2026-10-14 — **the relay must notice a `GP_PUT` advance that comes without a doorbell.**
-/// Public `dev_pbdma.ref` (`NV_PPBDMA_GP_PUT`): Host synchronizes its `GP_PUT` from
-/// `NV_RAMUSERD_GP_PUT` on its own ("there will be a delay in that synchronization") while the
-/// channel is loaded, so a driver that believes its channel is still running may skip the
-/// doorbell. Measured (Win11 + 580.88): 205 doorbells against ~70 000 new-work `GP_PUT` reads on
-/// one channel, and pumps idle 1.6-3.3 s with the guest's `GP_PUT` ahead of the cursor (no turn,
-/// no doorbell) right before the guest's per-channel recovery (`RESET_CHANNEL`) and the adapter
-/// reset. A relay that reads `GP_PUT` only on a doorbell or while its own ring is in flight leaves
-/// that work unread forever. [`Poll`] keeps reading it: every worker tick for [`ACTIVE_POLL`]
-/// after new work, then at least every [`IDLE_POLL`].
-#[derive(Debug, Clone, Copy)]
-pub struct Poll {
-    work_at: Instant,
-    turn_at: Instant,
-}
-
-impl Poll {
-    /// A new channel (counts as just active).
-    pub fn new(now: Instant) -> Self {
-        Self {
-            work_at: now,
-            turn_at: now,
-        }
-    }
-    /// A turn ran at `now`; `new_work` = it found `GP_PUT` ahead of the cursor.
-    pub fn turned(&mut self, now: Instant, new_work: bool) {
-        self.turn_at = now;
-        if new_work {
-            self.work_at = now;
-        }
-    }
-    /// Inside the active window: keep the worker's short tick.
-    pub fn active(&self, now: Instant) -> bool {
-        now.saturating_duration_since(self.work_at) < ACTIVE_POLL
-    }
-    /// An idle relay is due for a `GP_PUT` read at `now`.
-    pub fn due(&self, now: Instant) -> bool {
-        self.active(now) || now.saturating_duration_since(self.turn_at) >= IDLE_POLL
-    }
-}
+/// How many times the same unpublished segment is re-read and rescanned after its first refusal
+/// before the refusal is final. A COUNT of re-reads, never a duration.
+pub const REFUSE_RETRIES: u32 = 3;
 
 /// What the relay does with the guest entry at its cursor ([`SyncGate::entry`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -104,9 +60,13 @@ pub enum Gate {
 /// gives the same "the barrier's wait has finished" proof without a byte.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Witness {
-    /// A 4-byte zero `DMA_NOP` segment (`LEVEL_SUBROUTINE`) — only at a packet boundary.
+    /// A private marker segment — only at a packet boundary. Since 2026-10-14 it is the 8-byte
+    /// `[NON_STALL_INTERRUPT, 0]` host method (the batch completion marker of `kf_chan::user_loop`: it
+    /// raises the engine's non-stall event the worker's epoll already watches); before that it was one
+    /// zero `DMA_NOP` word, which proves the same thing and announces nothing.
     Bytes,
-    /// A control `NOP` GP entry — no pushbuffer byte; required while a packet is open.
+    /// A control `NOP` GP entry — no pushbuffer byte, therefore NO interrupt either (the wake for it
+    /// is the worker's bounded spin or its backstop, counted apart); required while a packet is open.
     Control,
 }
 
@@ -134,6 +94,13 @@ impl SyncGate {
     /// The guest entry `raw` sits at `(generation, cursor)`; `fetched` is the private ring's
     /// current fetch count. Entries without `SYNC_WAIT` (bit 63, `GP_ENTRY1_SYNC`) always proceed.
     pub fn entry(&mut self, raw: u64, generation: u64, cursor: u32, fetched: u64) -> Gate {
+        // ★ A proven wait belongs to ONE guest entry (public `dev_pbdma.ref`, `GP_ENTRY1_SYNC`: the
+        // hardware waits every time the ring reaches a SYNC_WAIT entry). Once the relay is looking at
+        // another `(generation, cursor)` the proof is spent: a ring lap later the same slot holds a NEW
+        // entry, and a stale marker would wave it through unread-barrier (the model's lap scenario).
+        if self.cleared.is_some_and(|k| k != (generation, cursor)) {
+            self.cleared = None;
+        }
         if raw >> 63 & 1 == 0 || self.cleared == Some((generation, cursor)) {
             return Gate::Proceed;
         }
@@ -159,22 +126,24 @@ impl SyncGate {
     }
 }
 
-/// Bounded retry of a scan refusal ([`REFUSE_AFTER`]).
+/// Bounded retry of a scan refusal ([`REFUSE_RETRIES`] re-reads, no clock).
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Grace {
-    first: Option<(u64, u32, Instant)>,
+    /// `(generation, cursor, refusals so far)` of the entry being retried.
+    first: Option<(u64, u32, u32)>,
 }
 
 impl Grace {
-    /// A scan of the unpublished entry `(generation, cursor)` refused at `now`: `true` = retry
-    /// later (re-read and rescan), `false` = the refusal is final.
-    pub fn refused(&mut self, generation: u64, cursor: u32, now: Instant) -> bool {
-        match self.first {
-            Some((g, c, at)) if g == generation && c == cursor => {
-                now.saturating_duration_since(at) < REFUSE_AFTER
+    /// A scan of the unpublished entry `(generation, cursor)` refused: `true` = re-read and rescan
+    /// (the caller re-turns at once), `false` = the refusal is final.
+    pub fn refused(&mut self, generation: u64, cursor: u32) -> bool {
+        match &mut self.first {
+            Some((g, c, n)) if *g == generation && *c == cursor => {
+                *n += 1;
+                *n <= REFUSE_RETRIES
             }
             _ => {
-                self.first = Some((generation, cursor, now));
+                self.first = Some((generation, cursor, 1));
                 true
             }
         }
@@ -442,42 +411,16 @@ mod tests {
         assert_eq!(g.entry(SYNC_NOP, 2, 5, 14), Gate::PublishBarrier);
     }
 
-    /// The measured hang: the relay's ring drained, the guest advanced `GP_PUT` without a
-    /// doorbell. Under the old rule (read only on a doorbell or while in flight) no read is ever
-    /// due; under [`Poll`] one is due within the active window at once and later within
-    /// [`IDLE_POLL`].
     #[test]
-    fn a_drained_relay_still_reads_put_without_a_doorbell() {
-        let t = Instant::now();
-        let mut p = Poll::new(t);
-        p.turned(t, true);
-        // drained at once: still polling at the short tick
-        assert!(p.active(t + Duration::from_millis(100)));
-        assert!(p.due(t + Duration::from_millis(100)));
-        // long idle: a read is due every IDLE_POLL, never later
-        let late = t + Duration::from_secs(5);
-        p.turned(late, false);
-        assert!(!p.active(late));
-        assert!(!p.due(late + Duration::from_millis(5)));
-        assert!(p.due(late + IDLE_POLL));
-        // the guest's timeout detection (2 s) is never reached by the polling gap
-        assert!(IDLE_POLL.max(Duration::from_millis(50)) < Duration::from_secs(2));
-        // new work re-enters the active window
-        p.turned(late + IDLE_POLL, true);
-        assert!(p.active(late + IDLE_POLL + Duration::from_millis(1)));
-    }
-
-    #[test]
-    fn grace_retries_the_same_entry_then_is_final() {
-        let t = Instant::now();
-        let ms = |n: u64| t + Duration::from_millis(n);
+    fn grace_retries_the_same_entry_a_bounded_number_of_times_then_is_final() {
         let mut g = Grace::default();
-        assert!(g.refused(1, 5, t));
-        assert!(g.refused(1, 5, ms(49)));
-        assert!(!g.refused(1, 5, ms(50)));
-        // another entry, or another ring generation, starts its own grace
-        assert!(g.refused(1, 6, ms(60)));
-        assert!(g.refused(2, 6, ms(61)));
+        for _ in 0..REFUSE_RETRIES {
+            assert!(g.refused(1, 5));
+        }
+        assert!(!g.refused(1, 5));
+        // another entry, or another ring generation, starts its own retries
+        assert!(g.refused(1, 6));
+        assert!(g.refused(2, 6));
         g.clear();
         assert!(!g.retrying());
     }

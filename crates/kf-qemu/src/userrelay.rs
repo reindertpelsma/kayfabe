@@ -45,6 +45,12 @@ pub(super) struct Cell<T = Record> {
     pub idx: u32,
     pub retry: AtomicBool,
     canceled: AtomicBool,
+    /// ★ 2026-10-14 (`kf_chan::user_loop`): the relay waits for private-ring progress only a look
+    /// can find (mirrors `Pump::wait`, written under the record lock, read by the spin / backstop
+    /// peeks without it).
+    waiting: AtomicBool,
+    /// Consecutive turns that found a lock / admission busy (`kf_chan::user_loop::may_retry`).
+    contended: AtomicU32,
     inner: Mutex<T>,
 }
 impl<T> Cell<T> {
@@ -53,6 +59,8 @@ impl<T> Cell<T> {
             idx,
             retry: AtomicBool::new(false),
             canceled: AtomicBool::new(false),
+            waiting: AtomicBool::new(false),
+            contended: AtomicU32::new(0),
             inner: Mutex::new(value),
         }
     }
@@ -101,10 +109,33 @@ impl<T> Cell<T> {
     pub fn is_canceled(&self) -> bool {
         self.canceled.load(Ordering::Acquire)
     }
+    /// Consecutive contended turns so far.
+    pub fn contended_run(&self) -> u32 {
+        self.contended.load(Ordering::Acquire)
+    }
+    /// A turn found a lock / admission busy.
+    pub fn contended_note(&self) {
+        let _ = self
+            .contended
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| Some(n.saturating_add(1)));
+    }
+    /// A turn ran without contention (or the holder rang).
+    pub fn contended_clear(&self) {
+        self.contended.store(0, Ordering::Release);
+    }
+    /// See [`Cell::waiting`].
+    pub fn is_waiting(&self) -> bool {
+        !self.is_canceled() && self.waiting.load(Ordering::Acquire)
+    }
+    /// Called with the record held, whenever `Pump::wait` changes.
+    pub fn set_waiting(&self, waiting: bool) {
+        self.waiting.store(waiting, Ordering::Release);
+    }
     /// Called with inner held, before token retirement/native cleanup.
     pub fn cancel(&self) {
         self.canceled.store(true, Ordering::Release);
         self.retry.store(false, Ordering::Release);
+        self.waiting.store(false, Ordering::Release);
     }
     /// Keep the same private exclusion as retirement through idx publication.
     pub fn wake_if(&self, active: impl FnOnce(&T) -> bool, ring: impl FnOnce(u32)) {

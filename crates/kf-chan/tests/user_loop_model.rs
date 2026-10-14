@@ -38,6 +38,7 @@
 #![allow(clippy::too_many_lines, clippy::needless_range_loop)]
 
 use kf_chan::user_gate::{Gate, SyncGate, Witness, witness};
+use kf_chan::user_loop::{self as ul, Need, Wait};
 use std::collections::{HashMap, VecDeque};
 use std::hash::{Hash, Hasher};
 
@@ -179,6 +180,8 @@ struct Cfg {
     priv_entries: usize,
     /// How many times may an act-thread lock window block the worker's record lock?
     lock_windows: u8,
+    /// How many times may the pt / USERD admission lock be busy at the guest `GP_GET` write?
+    pt_windows: u8,
     /// Check terminal states (needs a finite graph: timers off or no cycles).
     liveness: bool,
 }
@@ -195,6 +198,7 @@ impl Cfg {
             backstop: false,
             priv_entries: 8,
             lock_windows: 0,
+            pt_windows: 0,
             liveness: true,
         }
     }
@@ -242,15 +246,6 @@ enum P {
     },
     /// Design only: a marker segment that raises the completion interrupt.
     Notify,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-enum Wait {
-    /// The private `GP_GET` must reach this absolute count; `carried` = the witness carries no
-    /// interrupt (a packet was open).
-    Fetched { target: u64, carried: bool },
-    /// Any private-ring progress frees a credit.
-    Credit,
 }
 
 /// Wrapper so the real `SyncGate` (Copy + Debug + Eq, no Hash) can sit in a hashed state.
@@ -303,6 +298,9 @@ struct Chan {
     relayed: Vec<u8>,
     dead: bool,
     lock_held: bool,
+    pt_held: bool,
+    /// Consecutive contended turns (`Cell::contended`, `user_loop::may_retry`).
+    contended_run: u8,
     // ---- Today's policy state (`Pump::tick`, `Cell::retry`, `Poll`)
     tick: bool,
     retry: bool,
@@ -348,6 +346,7 @@ struct World {
     parked: bool,
     efd: bool,
     locks_left: u8,
+    pts_left: u8,
     viol: u32,
 }
 
@@ -360,6 +359,7 @@ const V_ORDER: u32 = 1 << 5;
 const V_PARKED_WITH_WORK: u32 = 1 << 6;
 const V_PUT_BOUND: u32 = 1 << 8;
 const V_BACKSTOP_PUT_AHEAD: u32 = 1 << 10;
+const V_BACKSTOP_CONTENDED: u32 = 1 << 11;
 const V_UNBOUNDED: u32 = 1 << 9;
 
 fn viol_names(v: u32) -> Vec<&'static str> {
@@ -391,6 +391,10 @@ fn viol_names(v: u32) -> Vec<&'static str> {
             "PARKED_WITH_WORK (blocked while a doorbell flag / event was pending)",
         ),
         (V_PUT_BOUND, "PUT_BOUND (hostile GP_PUT refused)"),
+        (
+            V_BACKSTOP_CONTENDED,
+            "BACKSTOP_CONTENDED (counted apart: the safety net re-rang a relay whose lock was busy)",
+        ),
         (
             V_BACKSTOP_PUT_AHEAD,
             "BACKSTOP_PUT_AHEAD (counted apart: GP_PUT was ahead of the cursor with no doorbell)",
@@ -446,6 +450,8 @@ impl Chan {
             relayed: Vec::new(),
             dead: false,
             lock_held: false,
+            pt_held: false,
+            contended_run: 0,
             tick: false,
             retry: false,
             poll_active: false,
@@ -478,6 +484,7 @@ impl World {
             parked: false,
             efd: false,
             locks_left: cfg.lock_windows,
+            pts_left: cfg.pt_windows,
             viol: 0,
         }
     }
@@ -642,6 +649,20 @@ fn env_steps(cfg: &Cfg, w: &World, out: &mut Vec<Step>) {
             out.push(step(format!("env{c}:unlock"), n));
         }
     }
+    // windows of the pt / USERD admission lock: nobody rings on its release
+    for c in 0..w.ch.len() {
+        if !w.ch[c].pt_held && w.pts_left > 0 && w.ch[c].alive() {
+            let mut n = w.clone();
+            n.ch[c].pt_held = true;
+            n.pts_left -= 1;
+            out.push(step(format!("env{c}:pt lock"), n));
+        }
+        if w.ch[c].pt_held {
+            let mut n = w.clone();
+            n.ch[c].pt_held = false;
+            out.push(step(format!("env{c}:pt unlock"), n));
+        }
+    }
     if cfg.timers {
         // time passes: Today's 250 ms active window ends
         if w.ch.iter().any(|c| c.poll_active) {
@@ -685,21 +706,30 @@ fn finish(cfg: &Cfg, n: &mut World, need: Need) {
             ch.tick = ch.issued != ch.fetched
                 || ch.poll_active
                 || ch.gate.0.waiting()
-                || matches!(need, Need::Private(..) | Need::Credit | Need::Lock);
+                || ch.retry
+                || matches!(
+                    need,
+                    Need::Private { .. } | Need::Credit { .. } | Need::Contended
+                );
             if matches!(need, Need::Again) {
                 n.ring(c, Cause::Again);
             }
         }
         Policy::Design => {
             let ch = &mut n.ch[c];
-            ch.waiting = match need {
-                Need::Idle | Need::Again | Need::Lock => None,
-                Need::Private(target, carried) => Some(Wait::Fetched { target, carried }),
-                Need::Credit => Some(Wait::Credit),
-            };
+            ch.waiting = ul::wait_of(need);
             if matches!(need, Need::Again) {
                 n.ring(c, Cause::Again);
             }
+        }
+    }
+    // `user_ring_arm`: contended turns are counted, any other ending clears the run
+    {
+        let ch = &mut n.ch[c];
+        if matches!(need, Need::Contended) {
+            ch.contended_run = ch.contended_run.saturating_add(1);
+        } else if !matches!(need, Need::Idle) || !ch.retry {
+            ch.contended_run = 0;
         }
     }
     // release
@@ -729,17 +759,6 @@ fn finish(cfg: &Cfg, n: &mut World, need: Need) {
     n.spin_left = cfg.spin;
 }
 
-#[derive(Clone, Copy, Debug)]
-enum Need {
-    Idle,
-    Again,
-    /// Wait for the private `GP_GET` to reach `target`; `carried` = no interrupt will announce it.
-    Private(u64, bool),
-    Credit,
-    /// The record lock was busy; the holder owns the wake (Design) / the tick does (Today).
-    Lock,
-}
-
 /// Design: a wait the worker cannot satisfy right now; publish the batch's marker out of the
 /// reserved slot first when a packet boundary allows it, so SOME interrupt will announce progress.
 fn credit_wait(cfg: &Cfg, n: &mut World) {
@@ -747,13 +766,79 @@ fn credit_wait(cfg: &Cfg, n: &mut World) {
     let entries = cfg.priv_entries;
     if cfg.policy == Policy::Design && !cfg.m.no_notify {
         let ch = &mut n.ch[c];
-        if ch.unnotified && !ch.open && ch.avail(entries) >= 1 {
-            ch.publish(P::Notify, None);
+        if ch.unnotified {
+            if !ch.open && ch.avail(entries) >= 1 {
+                ch.publish(P::Notify, None);
+                ch.marker_event = true;
+            } else {
+                ch.marker_event = false; // no marker possible: the wake is the spin / the safety net
+            }
             ch.unnotified = false;
-            ch.marker_event = true;
         }
     }
-    finish(cfg, n, Need::Credit);
+    let carried = !n.ch[c].marker_event;
+    finish(cfg, n, Need::Credit { carried });
+}
+
+/// Production `ChanPlane::user_ring_peek_one` (`userpump.rs`): look at one relay's not-yet-fd
+/// state and ring it if its wait is satisfied, if its lock was busy, or if demand is pending.
+/// The classification of what a BACKSTOP look finds is `kf_chan::user_loop::found`.
+fn peek(n: &mut World, c: usize, why: ul::Peek, spin: u8) -> bool {
+    let ch = &n.ch[c];
+    if !ch.alive() {
+        return false;
+    }
+    let backstop = why == ul::Peek::Backstop;
+    let demand = ch.retry;
+    if !demand && ch.waiting.is_none() && !backstop {
+        return false;
+    }
+    let cause = match why {
+        ul::Peek::Spin => Cause::Spin,
+        ul::Peek::Event => Cause::Completion,
+        ul::Peek::Backstop => Cause::Backstop,
+    };
+    // a relay that keeps finding a busy lock is re-rung by the spin / event looks only a bounded
+    // number of times in a row; the safety net always may (`user_loop::may_retry`)
+    let retry_ok = backstop || u32::from(ch.contended_run) < u32::from(spin);
+    if ch.lock_held {
+        // `try_lock` failed: ring, the turn handles the contention itself
+        if retry_ok {
+            n.ring(c, cause);
+            return true;
+        }
+        return false;
+    }
+    if let Some(w) = ch.waiting {
+        if w.satisfied(ch.userd_get as u64, ch.fetched)
+            && (retry_ok || !matches!(w, Wait::Contended))
+        {
+            if backstop {
+                n.viol |= match ul::found(w) {
+                    ul::Found::Work => V_BACKSTOP_FOUND_WORK,
+                    ul::Found::Carried => V_BACKSTOP_CARRIED,
+                    ul::Found::Contended => V_BACKSTOP_CONTENDED,
+                };
+            }
+            n.ch[c].waiting = None;
+            n.ring(c, cause);
+            return true;
+        }
+    } else if backstop && ch.put[ch.src] != ch.cursor {
+        // GP_PUT ahead of the cursor with no doorbell is NORMAL (the guest is between its PUT write
+        // and its ring); relaying it is harmless and counted apart.
+        n.viol |= V_BACKSTOP_PUT_AHEAD;
+        n.ring(c, cause);
+        return true;
+    }
+    if demand && retry_ok {
+        if backstop {
+            n.viol |= V_BACKSTOP_CONTENDED;
+        }
+        n.ring(c, cause);
+        return true;
+    }
+    false
 }
 
 fn worker_steps(cfg: &Cfg, w: &World, out: &mut Vec<Step>) {
@@ -778,8 +863,11 @@ fn worker_steps(cfg: &Cfg, w: &World, out: &mut Vec<Step>) {
                 n.pc = Pc::T(T0);
                 out.push(step(format!("w:claim c{c} ({:?})", w.ch[c].cause), n));
             } else if design
-                && w.spin_left > 0
-                && w.ch.iter().any(|c| c.alive() && c.waiting.is_some())
+                && ul::idle(
+                    w.ch.iter()
+                        .any(|c| c.alive() && (c.waiting.is_some() || c.retry)),
+                    u32::from(w.spin_left),
+                ) == ul::Idle::Spin
             {
                 n.pc = Pc::Spin;
                 out.push(step("w:to spin", n));
@@ -794,19 +882,7 @@ fn worker_steps(cfg: &Cfg, w: &World, out: &mut Vec<Step>) {
             n.spin_left -= 1;
             let mut any = false;
             for c in 0..n.ch.len() {
-                if !n.ch[c].alive() {
-                    continue;
-                }
-                let sat = match n.ch[c].waiting {
-                    Some(Wait::Fetched { target, .. }) => n.ch[c].userd_get as u64 >= target,
-                    Some(Wait::Credit) => n.ch[c].userd_get as u64 > n.ch[c].fetched,
-                    None => false,
-                };
-                if sat {
-                    n.ch[c].waiting = None;
-                    n.ring(c, Cause::Spin);
-                    any = true;
-                }
+                any |= peek(&mut n, c, ul::Peek::Spin, cfg.spin);
             }
             if any {
                 n.spin_left = cfg.spin;
@@ -853,35 +929,7 @@ fn worker_steps(cfg: &Cfg, w: &World, out: &mut Vec<Step>) {
                 n.parked = false;
                 n.efd = false;
                 for c in 0..n.ch.len() {
-                    if !n.ch[c].alive() {
-                        continue;
-                    }
-                    let ch = &n.ch[c];
-                    let sat = match ch.waiting {
-                        Some(Wait::Fetched { target, carried })
-                            if ch.userd_get as u64 >= target =>
-                        {
-                            Some(carried)
-                        }
-                        Some(Wait::Credit) if ch.userd_get as u64 > ch.fetched => Some(false),
-                        _ => None,
-                    };
-                    let ahead = ch.put[ch.src] != ch.cursor;
-                    if let Some(carried) = sat {
-                        n.viol |= if carried {
-                            V_BACKSTOP_CARRIED
-                        } else {
-                            V_BACKSTOP_FOUND_WORK
-                        };
-                        n.ch[c].waiting = None;
-                        n.ring(c, Cause::Backstop);
-                    } else if ahead && n.ch[c].waiting.is_none() {
-                        // GP_PUT ahead of the cursor with no doorbell yet is NORMAL (the guest is
-                        // between its PUT write and its ring); relaying it is harmless and counted
-                        // apart, as information about guests that skip doorbells.
-                        n.viol |= V_BACKSTOP_PUT_AHEAD;
-                        n.ring(c, Cause::Backstop);
-                    }
+                    peek(&mut n, c, ul::Peek::Backstop, cfg.spin);
                 }
                 n.pc = Pc::Top0;
                 out.push(step("w:wake(backstop)", n));
@@ -902,30 +950,15 @@ fn worker_steps(cfg: &Cfg, w: &World, out: &mut Vec<Step>) {
             out.push(step("w:tick refresh", n));
         }
         Pc::Event => {
-            // Design: clear the event BEFORE peeking, then ring whoever is satisfied.
+            // Design: clear the event BEFORE peeking (`dispatch` ran `on_other` first), then look at
+            // every relay (production: any engine event peeks them all).
             let mut n = w.clone();
-            let mut any_ev = false;
-            let mut progressed = false;
-            for c in 0..n.ch.len() {
-                if n.ch[c].ev {
-                    n.ch[c].ev = false;
-                    any_ev = true;
-                    let sat = match n.ch[c].waiting {
-                        Some(Wait::Fetched { target, .. }) => n.ch[c].userd_get as u64 >= target,
-                        Some(Wait::Credit) => n.ch[c].userd_get as u64 > n.ch[c].fetched,
-                        None => false,
-                    };
-                    if sat {
-                        n.ch[c].waiting = None;
-                        n.ring(c, Cause::Completion);
-                        progressed = true;
-                    }
-                }
+            for c in &mut n.ch {
+                c.ev = false;
             }
-            // (an event with no satisfied wait is legal: every marker raises one, only the last
-            // matters. The production counter `event_without_progress` makes it visible.)
-            let _ = progressed;
-            let _ = any_ev;
+            for c in 0..n.ch.len() {
+                peek(&mut n, c, ul::Peek::Event, cfg.spin);
+            }
             n.spin_left = cfg.spin;
             n.pc = Pc::Top0;
             out.push(step("w:handle event", n));
@@ -954,8 +987,10 @@ fn turn_step(cfg: &Cfg, w: &World, stage: u8, out: &mut Vec<Step>) {
         }
         T0B => {
             if ch.lock_held {
-                // `Some(false)`: retry stays set; the wake is the holder's (Design) / the tick's (Today)
-                finish(cfg, &mut n, Need::Lock);
+                // `Some(false)`: `retry` stays set -- the durable demand. Who rings: the holder's
+                // completion (`user_ring_wake`, Design), the look at pending demand (spin /
+                // safety net, Design), the tick (Today).
+                finish(cfg, &mut n, Need::Idle);
                 out.push(step("w:T0 record busy", n));
             } else {
                 n.ch[c].retry = false; // `record.retry.swap(false)`
@@ -981,9 +1016,9 @@ fn turn_step(cfg: &Cfg, w: &World, stage: u8, out: &mut Vec<Step>) {
         }
         T1B => {
             // userpump.rs:1207 the guest's GP_GET write; `AccessError::Busy` -> tick, return
-            if ch.lock_held {
-                n.ch[c].retry = true;
-                finish(cfg, &mut n, Need::Lock);
+            if ch.pt_held {
+                // `AccessError::Busy` from the USERD admission / pt lock: nothing announces its release
+                finish(cfg, &mut n, Need::Contended);
                 out.push(step("w:T1b GP_GET write busy", n));
             } else {
                 let (_, get) = ch.wb.unwrap();
@@ -1010,14 +1045,28 @@ fn turn_step(cfg: &Cfg, w: &World, stage: u8, out: &mut Vec<Step>) {
                         n.ch[c].unnotified = false;
                         n.ch[c].marker_event = false;
                         let t = ch.issued;
-                        finish(cfg, &mut n, Need::Private(t, true));
+                        finish(
+                            cfg,
+                            &mut n,
+                            Need::Private {
+                                target: t,
+                                carried: true,
+                            },
+                        );
                         out.push(step("w:T2 idle, packet open: no marker possible", n));
                     } else if ch.avail(entries) >= 1 {
                         n.ch[c].publish(P::Notify, None);
                         n.ch[c].unnotified = false;
                         n.ch[c].marker_event = true;
                         let t = n.ch[c].issued;
-                        finish(cfg, &mut n, Need::Private(t, false));
+                        finish(
+                            cfg,
+                            &mut n,
+                            Need::Private {
+                                target: t,
+                                carried: false,
+                            },
+                        );
                         out.push(step("w:T2 idle: publish marker", n));
                     } else {
                         credit_wait(cfg, &mut n);
@@ -1026,7 +1075,14 @@ fn turn_step(cfg: &Cfg, w: &World, stage: u8, out: &mut Vec<Step>) {
                 } else if design && ch.fetched < ch.issued {
                     // published work in flight: the guest's GP_GET write-back needs its progress
                     let t = ch.issued;
-                    finish(cfg, &mut n, Need::Private(t, !ch.marker_event));
+                    finish(
+                        cfg,
+                        &mut n,
+                        Need::Private {
+                            target: t,
+                            carried: !ch.marker_event,
+                        },
+                    );
                     out.push(step("w:T2 idle (work in flight)", n));
                 } else {
                     finish(cfg, &mut n, Need::Idle);
@@ -1063,7 +1119,14 @@ fn turn_step(cfg: &Cfg, w: &World, stage: u8, out: &mut Vec<Step>) {
                 Gate::Wait => {
                     // the witness is the last thing published; its interrupt (if any) was fixed then
                     let t = ch.issued;
-                    finish(cfg, &mut n, Need::Private(t, !ch.marker_event));
+                    finish(
+                        cfg,
+                        &mut n,
+                        Need::Private {
+                            target: t,
+                            carried: !ch.marker_event,
+                        },
+                    );
                     out.push(step("w:T4 gate: wait", n));
                 }
                 Gate::PublishBarrier => {
@@ -1091,7 +1154,14 @@ fn turn_step(cfg: &Cfg, w: &World, stage: u8, out: &mut Vec<Step>) {
                         m.unnotified = false;
                         m.marker_event = kind == Witness::Bytes;
                         let t = m.issued;
-                        finish(cfg, &mut n, Need::Private(t, kind == Witness::Control));
+                        finish(
+                            cfg,
+                            &mut n,
+                            Need::Private {
+                                target: t,
+                                carried: kind == Witness::Control,
+                            },
+                        );
                         out.push(step(format!("w:T4 gate: barrier+witness {kind:?}"), n));
                     }
                 }
@@ -1592,7 +1662,7 @@ fn run_contract(
     name_prefix: &str,
     allow: u32,
     mut tweak: impl FnMut(&mut Cfg),
-) -> Vec<String> {
+) -> Vec<(&'static str, String)> {
     let mut failures = Vec::new();
     for (name, chans) in contract_scenarios() {
         let mut cfg = Cfg::new(policy, chans);
@@ -1602,26 +1672,57 @@ fn run_contract(
             eprintln!("{name_prefix}/{name}: {} states", e.states);
         }
         if r.is_err() {
-            failures.push(report(&format!("{name_prefix}/{name}"), &r));
+            failures.push((name, report(&format!("{name_prefix}/{name}"), &r)));
         }
     }
     failures
 }
 
-/// ★ RULE 1: correctness must not depend on timing. With timers that never fire (no tick, no park
-/// timeout, no backstop), every doorbell-covered entry is relayed, nothing is read early, nothing
-/// is dropped or replayed. TODAY: FAILS (the gate/credit/lock waits are polled by the 1 ms tick).
-#[test]
-fn today_a_relay_is_live_without_any_timer() {
-    let f = run_contract(Policy::Today, "today/no-timers", V_TIMER_TURN, |c| {
-        c.timers = false;
-        c.priv_entries = 8;
-    });
+fn no_failures(f: &[(&'static str, String)]) {
     assert!(
         f.is_empty(),
         "{} scenario(s) fail:\n{}",
         f.len(),
-        f.join("\n")
+        f.iter()
+            .map(|(_, r)| r.as_str())
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+}
+
+/// The RETIRED loop (`Policy::Today`: `worker.rs` park/`TICK_TAG` refresh, `Pump::tick`, `Poll`,
+/// as committed at 77eaf7620) is rejected by the same checker, exactly at the scenarios whose
+/// waits it polled: `failing` names them, `why` is the violation each one reports.
+fn rejected(f: &[(&'static str, String)], failing: &[&str], why: &str) {
+    let got: Vec<&str> = f.iter().map(|(n, _)| *n).collect();
+    assert_eq!(
+        got, failing,
+        "the retired loop is rejected at exactly these scenarios"
+    );
+    for (n, r) in f {
+        assert!(r.contains(why), "{n}: expected {why:?} in\n{r}");
+    }
+}
+
+/// ★ RULE 1: correctness must not depend on timing. With timers that never fire (no tick, no park
+/// timeout, no backstop), every doorbell-covered entry is relayed, nothing is read early, nothing
+/// is dropped or replayed. The retired loop FAILED this at 77eaf7620 (the gate/credit/lock waits
+/// and the guest `GP_GET` write-back were polled by the 1 ms tick): the checker still rejects it.
+#[test]
+fn the_retired_loop_deadlocks_without_timers_exactly_where_it_polled() {
+    let f = run_contract(Policy::Today, "retired/no-timers", V_TIMER_TURN, |c| {
+        c.timers = false;
+        c.priv_entries = 8;
+    });
+    rejected(
+        &f,
+        &[
+            "gate_late_pushbuffer",
+            "zero_length_entries",
+            "ring_wrap",
+            "migration_behind_gate",
+        ],
+        "DEADLOCK",
     );
 }
 
@@ -1633,29 +1734,34 @@ fn design_a_relay_is_live_without_any_timer() {
         c.timers = false;
         c.spin = 1;
     });
-    assert!(
-        f.is_empty(),
-        "{} scenario(s) fail:\n{}",
-        f.len(),
-        f.join("\n")
-    );
+    no_failures(&f);
 }
 
-/// ★ RULE 2: no turn is caused by a timer. With time allowed to pass, Today's `TICK_TAG` refresh
-/// rings a pump nobody rang (the 1 ms poll, the 250 ms active window, the 20 ms idle poll).
-/// TODAY: FAILS. DESIGN: its only timer is the backstop, and with delivered interrupts it never
-/// finds work.
+/// ★ RULE 2: no turn is caused by a timer. With time allowed to pass, the retired loop's `TICK_TAG`
+/// refresh rang a pump nobody rang (the 1 ms poll, the 250 ms active window, the 20 ms idle poll)
+/// in EVERY scenario. The design's only timer is the backstop, and with delivered interrupts it
+/// never finds work.
 #[test]
-fn today_b_no_turn_is_caused_by_a_timer() {
-    let f = run_contract(Policy::Today, "today/timers", 0, |c| {
+fn the_retired_loop_ran_turns_nobody_rang_when_time_passed() {
+    let f = run_contract(Policy::Today, "retired/timers", 0, |c| {
         c.timers = true;
         c.liveness = false;
     });
-    assert!(
-        f.is_empty(),
-        "{} scenario(s) fail:\n{}",
-        f.len(),
-        f.join("\n")
+    rejected(
+        &f,
+        &[
+            "put_then_ring",
+            "batched_one_ring",
+            "put_ahead_of_ring",
+            "coalesced_rings",
+            "gate_late_pushbuffer",
+            "zero_length_entries",
+            "ring_wrap",
+            "migration",
+            "migration_behind_gate",
+            "two_channels_one_gated_forever",
+        ],
+        "TIMER_TURN",
     );
 }
 
@@ -1666,18 +1772,13 @@ fn design_b_no_turn_is_caused_by_a_timer_and_the_backstop_finds_nothing() {
         c.backstop = true;
         c.liveness = false;
     });
-    assert!(
-        f.is_empty(),
-        "{} scenario(s) fail:\n{}",
-        f.len(),
-        f.join("\n")
-    );
+    no_failures(&f);
 }
 
 /// ★ A SYNC_WAIT gate that is drained while doorbells keep landing, with the pushbuffer written
 /// late: never read before the drain (STALE_READ) -- on its own, Today passes this safety half.
 #[test]
-fn today_safety_a_pushbuffer_behind_a_sync_wait_is_never_read_early() {
+fn the_retired_loop_never_read_a_pushbuffer_early() {
     let mut cfg = Cfg::new(Policy::Today, s_gate_late_pb());
     cfg.timers = true; // so Today can make progress at all; only the safety bits are asserted
     cfg.liveness = false;
@@ -1751,12 +1852,7 @@ fn design_never_depends_on_the_spin() {
         c.timers = false;
         c.spin = 0;
     });
-    assert!(
-        f.is_empty(),
-        "{} scenario(s) fail:\n{}",
-        f.len(),
-        f.join("\n")
-    );
+    no_failures(&f);
 }
 
 /// Private-ring credit shortage (3 credits): the relay waits for hardware progress by an event.
@@ -1766,44 +1862,71 @@ fn design_credit_waits_are_event_driven() {
         c.priv_entries = 4;
         c.timers = false;
     });
-    assert!(
-        f.is_empty(),
-        "{} scenario(s) fail:\n{}",
-        f.len(),
-        f.join("\n")
-    );
+    no_failures(&f);
 }
 #[test]
-fn today_credit_waits_are_event_driven() {
-    let f = run_contract(Policy::Today, "today/priv=4", V_TIMER_TURN, |c| {
+fn the_retired_loop_polled_private_ring_credit_too() {
+    let f = run_contract(Policy::Today, "retired/priv=4", V_TIMER_TURN, |c| {
         c.priv_entries = 4;
         c.timers = false;
     });
-    assert!(
-        f.is_empty(),
-        "{} scenario(s) fail:\n{}",
-        f.len(),
-        f.join("\n")
+    rejected(
+        &f,
+        &[
+            "gate_late_pushbuffer",
+            "zero_length_entries",
+            "ring_wrap",
+            "migration",
+            "migration_behind_gate",
+        ],
+        "DEADLOCK",
     );
 }
 
 /// A busy record lock (the act thread birthing/freeing/migrating) defers the turn; whoever holds it
-/// wakes the worker on release. Today: the deferred doorbell waits for the tick.
+/// wakes the worker on release. The retired loop: the deferred doorbell waited for the tick.
 #[test]
-fn today_a_turn_deferred_by_a_busy_lock_is_resumed_by_an_event() {
+fn the_retired_loop_waited_for_the_tick_after_a_busy_record_lock() {
     let mut cfg = Cfg::new(Policy::Today, s_batched());
     cfg.lock_windows = 1;
     cfg.timers = false;
-    holds("today/lock", &cfg, 0);
+    finds("retired/lock", &cfg, 0, &["DEADLOCK"]);
 }
 #[test]
 fn design_a_turn_deferred_by_a_busy_lock_is_resumed_by_an_event() {
     let mut cfg = Cfg::new(Policy::Design, s_batched());
     cfg.lock_windows = 1;
     cfg.timers = false;
+    cfg.spin = 0; // the holder's wake alone (the spin is only a latency optimisation)
     holds("design/lock", &cfg, 0);
     cfg.m.no_lock_wake = true;
     finds("design/lock/mutant", &cfg, 0, &["DEADLOCK"]);
+    // with the spin the durable demand (`Cell::retry`) is looked at and rung even without the wake
+    cfg.spin = 1;
+    holds("design/lock/spin", &cfg, 0);
+}
+
+/// The pt / USERD admission lock is busy at the guest's `GP_GET` write-back and nothing announces
+/// its release: the relay waits `Wait::Contended` -- satisfied by looking again -- so liveness
+/// needs the bounded spin to coincide with the release or else the safety net, whose firing is the
+/// separate `BACKSTOP_CONTENDED` counter. Documented, counted, and the only place left where a
+/// release is not an event.
+#[test]
+fn design_pt_admission_contention_is_spin_then_the_counted_backstop() {
+    let mut cfg = Cfg::new(Policy::Design, s_batched());
+    cfg.pt_windows = 1;
+    cfg.timers = false;
+    cfg.spin = 1;
+    finds("design/pt/no-backstop", &cfg, 0, &["DEADLOCK"]);
+    cfg.timers = true;
+    cfg.backstop = true;
+    holds("design/pt/backstop", &cfg, V_BACKSTOP_CONTENDED);
+    finds(
+        "design/pt/counter-reached",
+        &cfg,
+        0,
+        &["BACKSTOP_CONTENDED"],
+    );
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -1855,12 +1978,12 @@ fn mutant_no_completion_event_is_found() {
     finds("mutant/no_notify", &cfg, 0, &["DEADLOCK"]);
 }
 
-/// ★ EXPECTED TO FAIL TODAY, in the PRODUCTION primitive (`SyncGate::cleared` is never forgotten,
+/// ★ FAILED at 77eaf7620, in the PRODUCTION primitive (`SyncGate::cleared` is never forgotten,
 /// see `user_gate_rules.rs`): the design's loop uses the real `SyncGate`, so it reads the late
 /// pushbuffer of the lap-later SYNC_WAIT entry before the drain. Safety only (timers allowed so
 /// liveness is not the subject).
 #[test]
-fn design_a_sync_wait_in_the_same_slot_one_lap_later_is_not_read_early_fails_today() {
+fn design_a_sync_wait_in_the_same_slot_one_lap_later_is_not_read_early() {
     let mut cfg = Cfg::new(Policy::Design, s_lap_sync());
     cfg.timers = false;
     holds("design/lap-sync", &cfg, 0);
@@ -1956,7 +2079,7 @@ fn retire_in_gate(policy: Policy) {
     );
 }
 #[test]
-fn today_a_gate_pending_when_the_channel_is_retired_leaves_nothing_armed() {
+fn the_retired_loop_left_nothing_armed_for_a_channel_retired_in_a_gate() {
     retire_in_gate(Policy::Today);
 }
 #[test]
@@ -2005,8 +2128,16 @@ fn stuck_gate(policy: Policy, backstop: bool) {
     );
 }
 #[test]
-fn today_a_channel_stuck_in_a_gate_costs_no_wakeups() {
-    stuck_gate(Policy::Today, false);
+fn the_retired_loop_polled_a_gate_nobody_releases_forever() {
+    let mut cfg = Cfg::new(Policy::Today, s_two_channels_one_gated_forever());
+    cfg.timers = true;
+    cfg.liveness = false;
+    finds(
+        "retired/stuck-gate",
+        &cfg,
+        V_BACKSTOP_FOUND_WORK | V_BACKSTOP_CARRIED,
+        &["TIMER_TURN"],
+    );
 }
 #[test]
 fn design_a_channel_stuck_in_a_gate_costs_no_wakeups_beyond_the_backstop() {
@@ -2056,12 +2187,13 @@ fn migration_executes_each_entry_exactly_once_in_order() {
 }
 
 #[test]
-fn today_migration_is_live_without_timers() {
-    for scenario in [s_migration(), s_migration_gated()] {
-        let mut cfg = Cfg::new(Policy::Today, scenario);
-        cfg.timers = false;
-        holds("today/migration", &cfg, 0);
-    }
+fn the_retired_loop_migrated_without_timers_only_when_no_gate_was_involved() {
+    let mut cfg = Cfg::new(Policy::Today, s_migration());
+    cfg.timers = false;
+    holds("retired/migration", &cfg, 0);
+    let mut cfg = Cfg::new(Policy::Today, s_migration_gated());
+    cfg.timers = false;
+    finds("retired/migration-gated", &cfg, 0, &["DEADLOCK"]);
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -2110,4 +2242,20 @@ fn the_design_exploration_reaches_every_race_it_claims_to_cover() {
             .contains("w:T4 gate: barrier+witness Control")
     );
     assert!(carried.labels.contains("w:wake(backstop)"));
+}
+
+/// `GP_PUT` ahead of the LAST doorbell is normal and nothing is owed for it: with no timer the
+/// worker parks with that entry unrelayed (it is not covered by any ring); the safety net MAY relay
+/// it, and that is the separate, informational `BACKSTOP_PUT_AHEAD` counter -- never an error.
+#[test]
+fn put_ahead_of_the_last_doorbell_is_optional_and_the_backstop_counts_it_apart() {
+    let mut cfg = Cfg::new(Policy::Design, s_put_ahead_unrung());
+    cfg.timers = false;
+    holds("design/put-ahead-unrung", &cfg, 0);
+    cfg.timers = true;
+    cfg.backstop = true;
+    holds("design/put-ahead-unrung/backstop", &cfg, V_BACKSTOP_PUT_AHEAD);
+    // the explorer's blanket allowance is for the PUT_AHEAD bit only; prove it is reachable
+    let r = explore(&cfg, 0).expect("holds");
+    assert!(r.labels.contains("w:wake(backstop)"));
 }

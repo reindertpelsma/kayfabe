@@ -13,14 +13,13 @@
 //! * the owner's rule: correctness never depends on a clock. A refusal's finality may not wait for
 //!   time to pass.
 //!
-//! The tests named `..._fails_today` ...  are EXPECTED to fail against the code at 77eaf7620 (each
-//! says why); the others pin behaviour that must keep holding.
+//! (At 77eaf7620 three of these failed and are marked; each
+//! says why; the others pin behaviour that must keep holding.)
 #![allow(clippy::too_many_lines)]
 
 use kf_abi::submit::{MethodForm, method_header_decode, method_header_inc, method_header_non_inc};
-use kf_chan::user_gate::{Gate, Grace, SyncGate, Witness, witness};
+use kf_chan::user_gate::{Gate, Grace, REFUSE_RETRIES, SyncGate, Witness, witness};
 use kf_chan::user_scan::{Fetch, Scan};
-use std::time::{Duration, Instant};
 
 const SYNC: u64 = 1 << 63;
 fn plain() -> u64 {
@@ -33,14 +32,14 @@ fn sync_seg() -> u64 {
 // ------------------------------------------------------------------------------------------------
 // the gate across a ring lap
 
-/// ★ EXPECTED TO FAIL TODAY (a production defect found while writing the model): `SyncGate::cleared`
+/// ★ FAILED at 77eaf7620 (a production defect found while writing the model): `SyncGate::cleared`
 /// remembers "the entry at (generation, cursor) was already waited for" so a RETRIED turn does not
 /// publish a second barrier -- but it is never forgotten when the cursor moves on. After one full
 /// lap of non-SYNC_WAIT entries the ring reaches the same `(generation, cursor)` with a NEW entry
 /// that carries SYNC_WAIT, and the gate waves it through: the relay reads a pushbuffer the hardware
 /// has not fetched yet (the original `Legacy`/`MethodOverflow` stale-read, one lap later).
 #[test]
-fn a_sync_wait_entry_one_ring_lap_later_is_gated_again_fails_today() {
+fn a_sync_wait_entry_one_ring_lap_later_is_gated_again() {
     const ENTRIES: u32 = 8;
     let mut g = SyncGate::default();
     assert_eq!(g.entry(sync_seg(), 1, 5, 0), Gate::PublishBarrier);
@@ -107,41 +106,31 @@ fn a_new_ring_generation_is_gated_afresh() {
 // ------------------------------------------------------------------------------------------------
 // refusal finality without a clock
 
-/// ★ EXPECTED TO FAIL TODAY: `Grace` keeps retrying a refused scan for 50 ms of WALL CLOCK; with
-/// the clock frozen (timers that never fire) a refusal is never final and the channel retries
-/// forever. The owner's rule: no timer may carry correctness. A refusal of a segment that is not
-/// behind an unreached SYNC_WAIT is deterministic (the bytes were written before the GP entry,
-/// the GP entry before `GP_PUT`, `GP_PUT` before the doorbell; behind a SYNC_WAIT the gate has
-/// waited for the drain), so finality must be reached by counting RE-READS, never by waiting.
+/// Refusal finality is a COUNT of re-reads and needs no clock. (At 77eaf7620 `Grace::refused` took an
+/// `Instant` and retried for 50 ms of wall clock, so with the clock frozen a refusal was never final:
+/// this test could not even be written without a clock. The owner's rule: no timer carries
+/// correctness.) A refusal of a segment that is not behind an unreached SYNC_WAIT is deterministic
+/// (the bytes are written before the GP entry, the GP entry before `GP_PUT`, `GP_PUT` before the
+/// doorbell; behind a SYNC_WAIT the gate has waited for the drain).
 #[test]
-fn a_refusal_becomes_final_without_any_time_passing_fails_today() {
-    let t = Instant::now();
+fn a_refusal_becomes_final_after_a_bounded_number_of_rereads_without_any_clock() {
     let mut g = Grace::default();
-    let mut final_after = None;
-    for i in 0..64 {
-        if !g.refused(1, 5, t) {
-            final_after = Some(i);
-            break;
-        }
+    let mut retried = 0;
+    while g.refused(1, 5) {
+        retried += 1;
+        assert!(retried <= 64, "the refusal is never final");
     }
-    assert!(
-        final_after.is_some(),
-        "64 re-reads of the same refused entry at the same instant and the refusal is still not final: \
-         its finality is a function of the clock"
-    );
+    assert_eq!(retried, REFUSE_RETRIES);
 }
 
-/// The converse that must keep holding: a refusal is retried at least once (the defence in depth
-/// the measured 15/19 changed-under-the-scan refusals motivated), and a different entry restarts it.
+/// A refusal is retried at least once (the defence in depth the measured 15/19 changed-under-the-scan
+/// refusals motivated), and a different entry restarts it.
 #[test]
 fn a_refusal_is_retried_at_least_once_and_a_different_entry_restarts_it() {
-    let t = Instant::now();
     let mut g = Grace::default();
-    assert!(g.refused(1, 5, t), "first refusal is retried");
-    assert!(
-        g.refused(1, 6, t + Duration::from_secs(60)),
-        "another entry starts its own retry"
-    );
+    assert!(g.refused(1, 5), "first refusal is retried");
+    assert!(g.refused(1, 6), "another entry starts its own retry");
+    assert!(g.refused(2, 6), "another ring generation too");
     g.clear();
     assert!(!g.retrying());
 }
@@ -222,7 +211,7 @@ fn relay(ring: &[E], ring_entries: u32, pick: impl Fn(bool) -> Witness) -> Vec<V
                 private.push(Vec::new());
                 fetch.publish(None).unwrap();
                 private.push(match pick(!scan.at_boundary()) {
-                    Witness::Bytes => vec![0],
+                    Witness::Bytes => marker(),
                     Witness::Control => Vec::new(),
                 });
                 gate.published(fetch.issued());
@@ -250,6 +239,22 @@ fn relay(ring: &[E], ring_entries: u32, pick: impl Fn(bool) -> Witness) -> Vec<V
         }
     }
     private
+}
+
+/// The batch marker segment (`UserStorage::write_host_marker`): `NON_STALL_INTERRUPT`, data 0.
+fn marker() -> Vec<u32> {
+    vec![
+        method_header_inc(0, kf_abi::submit::fifo::NON_STALL_INTERRUPT, 1).unwrap(),
+        0,
+    ]
+}
+/// What the PBDMA generates from the private ring, minus the host's own marker method.
+fn guest_methods(private: &[Vec<u32>]) -> Result<Vec<(u32, u32, u32)>, usize> {
+    methods(private).map(|m| {
+        m.into_iter()
+            .filter(|m| !(m.0 == 0 && m.1 == kf_abi::submit::fifo::NON_STALL_INTERRUPT))
+            .collect()
+    })
 }
 
 struct Rng(u64);
@@ -317,7 +322,7 @@ fn check(name: &str, ring: &[E], ring_entries: u32) {
         .unwrap_or_else(|at| panic!("{name}: the guest's own stream does not decode at {at}"));
     let private = relay(ring, ring_entries, witness);
     assert_eq!(
-        methods(&private).as_ref(),
+        guest_methods(&private).as_ref(),
         Ok(&expected),
         "{name}: the PBDMA generates something other than the guest's methods (ring {ring:?}, private {private:?})"
     );
@@ -398,12 +403,12 @@ fn random_splits_with_control_entries_and_ring_wrap_generate_the_guests_methods(
     }
 }
 
-/// ★ EXPECTED TO FAIL TODAY through the gate defect above: with a small ring the SAME slot is a
+/// ★ FAILED at 77eaf7620 through the gate defect above: with a small ring the SAME slot is a
 /// SYNC_WAIT entry twice, a lap apart, with non-SYNC_WAIT entries between. The relay must gate
 /// both: the second one, waved through, would be scanned before the hardware fetches it (in the
 /// loop model: a stale read; here: no barrier is authored for it).
 #[test]
-fn the_same_slot_gated_twice_a_lap_apart_authors_two_barriers_fails_today() {
+fn the_same_slot_gated_twice_a_lap_apart_authors_two_barriers() {
     let ring: Vec<E> = vec![
         E::Seg(vec![method_header_inc(0, 0x100, 1).unwrap(), 1], false),
         E::Seg(vec![method_header_inc(0, 0x104, 1).unwrap(), 2], true), // slot 1, SYNC_WAIT
@@ -415,7 +420,7 @@ fn the_same_slot_gated_twice_a_lap_apart_authors_two_barriers_fails_today() {
     let private = relay(&ring, 4, witness);
     let empties = private
         .iter()
-        .filter(|s| s.is_empty() || **s == vec![0])
+        .filter(|s| s.is_empty() || **s == marker())
         .count();
     // two gated entries -> two (barrier, witness) pairs = four marker entries
     assert_eq!(empties, 4, "private ring: {private:?}");

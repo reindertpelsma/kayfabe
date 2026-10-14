@@ -26,6 +26,9 @@ pub const MAX_SOURCE_BYTES: u64 = GP_OFFSET;
 pub const USERD_OFFSET: u64 = 0xf0000;
 /// Trusted private GP capacity, independent of the guest ring's changing size.
 pub const ENTRIES: u32 = 512;
+/// The batch marker's two words sit this far beyond the descriptor array (after the 4-byte byte
+/// witness word, 8-aligned), inside the read-only mapping and below USERD.
+const MARKER_OFFSET: u64 = 8;
 /// Trusted per-command-slot staging cell. One descriptor credit remains empty,
 /// so reusing a command slot needs GET beyond its old later witness (see the
 /// user_consumption model). Early commitment of GP0 alone cannot reuse its cell.
@@ -573,6 +576,35 @@ impl Storage<CpuView> {
         self.cpu()?
             .store_u64(HostOffset::new(GP_OFFSET + u64::from(slot) * 8), entry)
             .map_err(|e| format!("USER_STORAGE_WITNESS_WRITE: {e:?}"))
+    }
+
+    /// ★ 2026-10-14 — **the batch completion marker** (`crate::user_loop`): an 8-byte private segment
+    /// `[NON_STALL_INTERRUPT (INC, count 1, subchannel 0), 0]` in the read-only mapping, just beyond the
+    /// byte witness word, entered as a `LEVEL_SUBROUTINE` main entry. It is the same proof the byte
+    /// witness gives (`GP_GET` passing it means every earlier entry began processing) and, being a host
+    /// method at a packet boundary, it raises the engine's non-stall event the worker's epoll already
+    /// watches -- the event that replaces the 1 ms tick. No semaphore, no GPU-written memory: OWNER_RULINGS
+    /// §AI authorises read-only commands only. The two words are stable constants; re-storing them for
+    /// each marker is idempotent and the PBDMA never sees a different value.
+    ///
+    /// # Errors
+    /// Invalid slot or retiring/released CPU view.
+    pub fn write_host_marker(&self, slot: u32) -> Result<(), String> {
+        if slot >= ENTRIES {
+            return Err("USER_STORAGE_MARKER_BOUND".into());
+        }
+        let off = GP_OFFSET + u64::from(ENTRIES) * 8 + MARKER_OFFSET;
+        let va = self.va.checked_add(off).ok_or("USER_STORAGE_MARKER_BOUND")?;
+        let header = kf_abi::submit::method_header_inc(0, kf_abi::submit::fifo::NON_STALL_INTERRUPT, 1)
+            .ok_or("USER_STORAGE_MARKER_FORMAT")?;
+        let entry = kf_abi::submit::gp_entry(va, 8).ok_or("USER_STORAGE_MARKER_FORMAT")? | (1 << 41);
+        let cpu = self.cpu()?;
+        cpu.store_u32(HostOffset::new(off), header)
+            .map_err(|e| format!("USER_STORAGE_MARKER_WRITE: {e:?}"))?;
+        cpu.store_u32(HostOffset::new(off + 4), 0)
+            .map_err(|e| format!("USER_STORAGE_MARKER_WRITE: {e:?}"))?;
+        cpu.store_u64(HostOffset::new(GP_OFFSET + u64::from(slot) * 8), entry)
+            .map_err(|e| format!("USER_STORAGE_MARKER_WRITE: {e:?}"))
     }
 
     /// ★ 2026-10-14 — the SYNC_WAIT gate's witness when the guest stream CARRIES a packet into the

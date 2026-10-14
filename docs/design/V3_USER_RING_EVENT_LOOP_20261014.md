@@ -1,5 +1,6 @@
-**STATUS: DESIGN-ONLY, 2026-10-14** (tests-first commit; the fix and its Linux validation follow on branch
-`claude/userring-eventloop-20261014`, and this line becomes LIVE when the worker loop below is in the code).
+**STATUS: LIVE in the code, 2026-10-14** (branch `claude/userring-eventloop-20261014`: tests-first commit `95a9ad422`, then the
+fix; GPU-free results in §5-§6, Linux hardware validation in §8). Written DESIGN-ONLY first; §2 and §5 keep the
+state of the code BEFORE the fix (77eaf7620) as the record of what the tests found.
 Labels: **[measured]** = a run or a test result named here; **[read]** = public hardware text (`dev_pbdma.ref`,
 `dev_ram.ref`, ogkm 580) or kayfabe code; **[inferred]** = reasoning, never evidence.
 
@@ -104,7 +105,8 @@ The durable demand flags that exist already stay: the token's RUNG/BUSY_RUNG wor
 |---|---|---|
 | doorbell eventfd (`worker_efd`) | existing | claim, turn (flag cleared before `GP_PUT` is read) |
 | host engine non-stall event (`OTHER_TAG_BASE+i`) | existing fd, new handler | clear, then peek every relay's `waiting` (`GP_GET`); ring the satisfied |
-| lock release | the holder of a busy record rings the token if `retry` is set | `Cell::retry` is already set BEFORE `try_lock` |
+| lock release (the act thread's long holds: birth, the 5080 object) | the act's completion rings (`user_ring_wake`, existing) | durable demand `Cell::retry`, set BEFORE `try_lock` |
+| a busy lock / admission nobody announces (`pt`, USERD admission) | none exists | `Wait::Contended`: re-rung by the spin / event looks at most `CONTENTION_RETRIES` times in a row (`user_loop::may_retry`), then only by the backstop, which counts it (`backstop_contended`) |
 | walk done | existing (`wait_walk`) | unchanged |
 | backstop | `epoll_wait` timeout | §3.6 |
 
@@ -120,7 +122,8 @@ pushbuffer → publish → `Again`. It ends with one of:
 - `Private{target, carried}` — wait for the private `GP_GET` to pass `target` (a draining gate witness, or
   work in flight whose progress frees the guest's ring through the `GP_GET` write-back).
 - `Credit` — the private ring is full: wait for any private progress.
-- `Lock` — the record lock was busy: nothing is armed here; the holder rings on release.
+- `Contended` — a lock or admission was busy (`AccessError::Busy`, `Failure::Retry`, a failed `record.enter()` /
+  `pt.try_lock()`): the relay looks again, a bounded number of times, then only the backstop does.
 
 The gate keeps the real `SyncGate`. A doorbell that arrives while the gate drains sets RUNG as always; its
 turn finds `Gate::Wait` and ends in `Private` again, and when the witness is fetched the completion rings the
@@ -165,11 +168,14 @@ was visible). The model proves the backstop is NEVER what completes a gate when 
 
 ### 3.7 Counters (bounded in production; per-event detail only behind `KF3_USER_RING_TRACE`)
 
-Wake source (doorbell / completion / spin / backstop / lock release), the four backstop counters above,
-`carried_gates`, `credit_waits`, `lock_deferrals`, and a SYNC_WAIT drain latency histogram (16 log2 buckets of
-microseconds, gate published → witness fetched). One summary line at release.
+`kf_chan::user_loop::Stats` (fixed atomics, no per-event allocation): wake source (`wake_doorbell` /
+`wake_event` / `wake_spin` / `wake_backstop`), the four backstop counters above plus `backstop_contended`,
+`gates`, `carried_gates`, `credit_waits`, `contended` (turns), `markers`, and a SYNC_WAIT drain latency
+histogram (16 log2 buckets of microseconds, gate published → witness fetched). One `USER_RING_LOOP SUMMARY`
+line at device stop, the same text in the `PROBE-DUMP` device line (`relay[...]`), per-event detail only
+behind `KF3_USER_RING_TRACE`. The per-channel `USER_RING_SYNC_CARRIED` lines stay.
 
-## 4. The tests (this commit): files, scenarios, what each asserts
+## 4. The tests: files, scenarios, what each asserts
 
 ### 4.1 `crates/kf-chan/tests/user_loop_model.rs` — the exhaustive interleaving model
 
@@ -213,7 +219,7 @@ cursor wraps: the private ring, parsed like the PBDMA, generates exactly the gue
 own rules: a retried turn publishes one barrier; a length-0 SYNC_WAIT is gated; a new ring generation is gated
 afresh; refusal finality needs no clock.
 
-## 5. Results at 77eaf7620 (measured: `cargo test -p kf-chan --test user_loop_model --test user_gate_rules --release`, ~25 s)
+## 5. Results at 77eaf7620 (tests-first commit `95a9ad422`; measured: `cargo test -p kf-chan --test user_loop_model --test user_gate_rules --release`, ~25 s)
 
 `user_loop_model`: 32 tests, **25 pass, 7 fail**. `user_gate_rules`: 9 tests, **6 pass, 3 fail**.
 
@@ -234,6 +240,18 @@ afresh; refusal finality needs no clock.
 The Today failures are one class: **every wait other than the doorbell is a tick**. Scenarios without a wait
 (`put_then_ring`, `batched`, `put_ahead`, `coalesced`, plain migration with a 8-entry private ring) pass without
 timers, which also says the doorbell path itself (token word, `try_park`) is right.
+
+### 5.0 After the fix (this branch)
+
+[measured, host, `cargo test -p kf-chan --release`] `user_loop_model`: 34 tests, 34 pass (the six `today_*` tests became
+`the_retired_loop_*`: they now assert that the checker still REJECTS the retired loop, at exactly the scenarios in the
+table above); `user_gate_rules`: 9/9; `kf_chan::user_loop`: 8 unit tests. The model's Design policy now calls the
+production decision functions (`user_loop::{idle, wait_of, found, may_retry}`, `Wait::satisfied`) and the real
+`SyncGate`; the turn remains a transliteration (§6). Fixed: `SyncGate` forgets a proven wait when the relay looks at
+another entry (§5.1); `Grace` counts re-reads (`REFUSE_RETRIES`, §5.2); `Poll`, `tick`, the 1 ms refresh and
+`user_ring_poll_due` are gone from production (the refresh survives behind `KF3_USER_RING_TRACE` for the trace's
+deferred re-reads only); the private-ring batch marker, the engine-event / spin / backstop looks and the counters of §3
+are in `userpump.rs`, `worker.rs` (`run_with_relay`) and `user_loop.rs`.
 
 ### 5.1 Production defect: `SyncGate::cleared` is never forgotten
 
@@ -279,10 +297,11 @@ keep the bounded re-read count; this document implements the re-read count.
   served reset. Ring-size changes in the model are by `UseNew` (same size); the 32768→65536 growth only changes the
   bound the pump checks (`put >= r.source.1`).
 
-## 7. Plan
+## 7. Plan (steps 2 and 3 of the task)
 
-2. The fix: extract `Need`/`Wait` and the park policy into `kf_chan::user_loop` (pure, used by the pump and by
-   the model), replace the tick/`Poll`/`Grace` clock, add the marker, the engine-event handler, the lock-release wake, the
-   counters; fix `SyncGate` and `Grace`. 3. Linux validation behind `KF3_DEBUG_FORCE_MIGRATABLE=1` (debug only, refused in
-   the production profile) with a guest SYNC_WAIT stress tool, the fast suite 30/30 both ways, desktop smoke, S3 cycles,
-   gates 9/9 + gate10.
+2. DONE (§5.0). 3. Linux validation behind `KF3_DEBUG_FORCE_MIGRATABLE=1` (debug only, refused in the production profile)
+   with a guest SYNC_WAIT stress tool, the fast suite 30/30 both ways, desktop smoke, S3 cycles, gates 9/9 + gate10 (§8).
+
+## 8. Linux validation
+
+(filled in by the validation runs)
