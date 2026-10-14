@@ -34,7 +34,7 @@ table → **T4** reverse engineering, private, minimal, never in the repo.
   PROVENANCE) is 31 host controls, 2 family rules, 4 authored, 2 advertised, 0 unsourced. Linux guests passed the bar on TU116, GA106, GA104,
   GA102, AD106, AD104, GB203, GB205 with no per-die table (§2 evidence).
 - **What was still CAPTURED and served to every die** (the list this night started from, §2.3): libcudart's init gate (GA106 rows) — **fixed tonight**
-  (host first, then the published table per die, else refused); still open: `0x20808162` = 1 (GA106), ZBC default entries (GA102), and several
+  (host first, then the published table per die, else refused); and `0x20808162` (GA106's byte 1 was wrong on the AD104 at 595, which answers 0 [M]) — **fixed tonight** too; still open: ZBC default entries (GA102), and several
   AUTHORED numbers that were *chosen* equal to a GA106 (`GMMU_STATIC`, `CE_FAULT_METHOD_BUFFER_SIZE`, stall vectors, compression page, BAR0-size
   fallback). Authored values are allowed (we are the GSP), but where a real per-die value exists it is now being measured (§5).
 - **The constant table exists** (`kf_rm::consttab`, `crates/kf-rm/data/measured_constants.tsv`): exact (die, branch) rows, mechanism-tagged
@@ -96,7 +96,7 @@ where tonight's commits changed a row. Hardware column at the end of each row gr
 | encoder session `8163/8164` | HOST state (acquire/release on the host's own slot) | T2 | `chanlink.rs` |
 | Windows-only exact-zero queries `852a/8524/a70a/a088/852e/853a/a618` | **HOST** (new tonight; refused where the host refuses, e.g. 852e/853a/a618 at 595.91.07) | T2 | `gssreplay.rs` exact rows |
 | `0x20808159` | echo of the request (behaviour measured on GA106 only) | T1 [I elsewhere] | `kf-abi/src/gsslegacy.rs:187` |
-| `0x20808162` | **CAPTURED**: constant 1 on every die (GA106/580.159.04) | defect → T2 candidate | `gsslegacy.rs:123,188` |
+| `0x20808162` | **HOST** (exact 1-byte row) → TABLE (GA106/580 = 1, AD104/595 = 0) → REFUSED. Was CAPTURED (GA106's 1 on every die) until tonight, and **wrong on the AD104 at 595.91.07, which answers 0** [M] | T2 → T3 | `gssreplay.rs`, `measured_constants.tsv`, `inittables.rs` 8162 arm |
 | other Windows-only rows | REFUSED (counted) or probe-flag answers; §3 | T2/T3 | `V3_WINDOWS_ONLY_CONSTANTS_20261013.md` |
 
 ### 2.4 Driver axes
@@ -161,6 +161,7 @@ kf-qemu/kf-harness/kf-census 334/0; every later commit re-ran kf-abi/kf-rm/kf-ho
 | `527a125de` | corrections folded above `V3_CONSTANT_STRATEGY.md`, `V3_WINDOWS_ONLY_CONSTANTS_20261013.md`, `V3_DRIVER_MATRIX.md` |
 | `df45a72cb` | `tools/derive_die_names.sh`: re-derives `DIE_NAMES` from any ogkm tree and diffs (OK at 595.84) |
 | `7788750b9` | `kf-ctl-probe` `KF_PROBE_GSS_ROWS=1` (asks exactly kayfabe's realize-time GSS requests); a028 and a001 measured at 595.91.07 → `MeasuredOpaque` |
+| (next) | `0x20808162`: probe at 595.91.07 answers `00` where the GA106 capture says `01`; exact 1-byte gssreplay row, hostabi `MeasuredOpaque` 595.91.07, table rows GA106/580 = 1 and AD104/595 = 0, the 8162 arm answers from the table; byte-granular table rows |
 | (this doc) | the matrix; `kf-ctl-probe` extra rows with measured request words (`KF_PROBE_EXTRA_ONLY`) |
 
 Also fixed on the way: `kf-abi/tests/truncated_row_reads.rs` was red on the merged tree (`kf-ctl-probe` mentions `0x20800b03`); the probe is a
@@ -199,7 +200,7 @@ measurement, not a reader of the captured row, so it is listed with the other se
   driver, `kf-ctl-probe KF_PROBE_GSS_ROWS=1`).
 - **D-3 Are the seven exact-zero Windows rows wanted** (they change what the Windows guest sees, toward the real GPU: the real GPU answers them)? Default
   taken: yes, because it is the VFIO-reference behaviour; revert by deleting the rows if a Windows A/B regresses.
-- **D-4 `0x20808162` = 1 (GA106 capture, every die).** Move to the host path (probe it per host driver) or to the table per die.
+- ~~D-4 `0x20808162`~~: done tonight (host path + table per die), because a measurement showed the captured byte wrong on the AD104.
 
 **Fixes found (not done tonight)**
 

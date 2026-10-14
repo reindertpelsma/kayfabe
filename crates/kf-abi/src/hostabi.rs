@@ -941,6 +941,16 @@ pub static HOST_CONTROLS: &[HostControl] = &[
     },
     HostControl {
         name: "",
+        cmd: 0x2080_8162,
+        params: HostParams::MeasuredOpaque {
+            source: "measured:AD104,595.91.07,2026-10-14; kf-ctl-probe unprivileged, zero 1-byte request -> OK, \
+                     traces/constants_night_20261014/probe_8162_595.txt",
+            versions: &[HOST_595_91_07],
+            size: 1,
+        },
+    },
+    HostControl {
+        name: "",
         cmd: 0x2080_852e,
         params: HostParams::NoHeader {
             source: "zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07",

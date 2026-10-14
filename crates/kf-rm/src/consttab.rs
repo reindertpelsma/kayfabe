@@ -106,19 +106,18 @@ impl Row {
     #[must_use]
     pub fn request_matches(&self, request: &[u8]) -> bool {
         request.len() == self.size
-            && self
-                .inputs
-                .iter()
-                .all(|&(o, v)| request.get(o..o + 4).is_some_and(|w| w == v.to_le_bytes()))
+            && self.inputs.iter().all(|&(o, v)| {
+                // a request shorter than a word (a 1-byte bool) compares only its own bytes
+                let n = self.size.saturating_sub(o).min(4);
+                request.get(o..o + n) == Some(&v.to_le_bytes()[..n])
+            })
     }
 
     /// The reply body: `words` little-endian, then the measured zero tail to `size`.
     #[must_use]
     pub fn body(&self) -> Vec<u8> {
-        let mut b = vec![0u8; self.size];
-        for (i, w) in self.words.iter().enumerate() {
-            b[i * 4..i * 4 + 4].copy_from_slice(&w.to_le_bytes());
-        }
+        let mut b: Vec<u8> = self.words.iter().flat_map(|w| w.to_le_bytes()).collect();
+        b.resize(self.size, 0);
         b
     }
 }
@@ -340,10 +339,16 @@ pub fn parse(tsv: &str) -> Result<Vec<Row>, String> {
                         .split_once('=')
                         .ok_or_else(|| format!("line {ln}: input {kv:?} is not off=value"))?;
                     let o = usize::try_from(parse_u(k)?).map_err(|_| "offset".to_string())?;
-                    if o % 4 != 0 || o + 4 > size {
+                    if o % 4 != 0 || o >= size {
                         return Err(format!("line {ln}: input offset {o:#x} outside {size} B"));
                     }
-                    Ok((o, parse_u32(v)?))
+                    let v = parse_u32(v)?;
+                    if v.to_le_bytes().iter().skip(size - o).any(|&b| b != 0) {
+                        return Err(format!(
+                            "line {ln}: input {v:#x} at {o:#x} does not fit {size} B"
+                        ));
+                    }
+                    Ok((o, v))
                 })
                 .collect::<Result<Vec<_>, String>>()?
         };
@@ -352,7 +357,16 @@ pub fn parse(tsv: &str) -> Result<Vec<Row>, String> {
             .map(parse_u32)
             .collect::<Result<Vec<_>, String>>()
             .map_err(|e| format!("line {ln}: {e}"))?;
-        if words.is_empty() || words.len() * 4 > size {
+        // A reply shorter than a word (e.g. a 1-byte bool) is written as one word whose bytes past
+        // `size` must be zero: the last word may be cut, never a non-zero byte.
+        let fits = !words.is_empty()
+            && (words.len() - 1) * 4 < size
+            && words
+                .iter()
+                .flat_map(|w| w.to_le_bytes())
+                .skip(size)
+                .all(|b| b == 0);
+        if !fits {
             return Err(format!(
                 "line {ln}: {} words do not fit {size} B",
                 words.len()
@@ -485,6 +499,12 @@ pub fn answer(key: &str, die: DieId, branch: u16, request: &[u8]) -> Result<Vec<
         });
     }
     Ok(row.body())
+}
+
+/// The table key of a GSS-legacy control served from the table (not a cudart-init one).
+#[must_use]
+pub fn gss_key(cmd: u32) -> String {
+    format!("gss.{cmd:#010x}")
 }
 
 /// The table key of a cudart-init control.
@@ -664,6 +684,31 @@ mod tests {
             answer(&k, AD104, 595, &cudart[..516]),
             Err(Refusal::OtherRequest { .. })
         ));
+    }
+
+    /// ★ A 1-byte reply, and the first per-die difference the table holds: `0x20808162` is `1` on
+    /// the GA106 at 580 and `0` on the AD104 at 595 [measured].
+    #[test]
+    fn byte_rows_and_the_8162_difference() {
+        let k = gss_key(0x2080_8162);
+        assert_eq!(answer(&k, GA106, 580, &[0]).expect("GA106"), vec![1]);
+        assert!(matches!(
+            answer(&k, GA106, 580, &[1]),
+            Err(Refusal::OtherRequest { .. })
+        ));
+        assert_eq!(answer(&k, AD104, 595, &[0]).expect("AD104"), vec![0]);
+        assert!(matches!(
+            answer(&k, GA104, 580, &[0]),
+            Err(Refusal::Unmeasured { .. })
+        ));
+        let cut = format!(
+            "{}k\tGA106\t580\t1\t-\t0x101\tmeasured:GA106,580.159.04,2026-08-09\tx\n",
+            hdr()
+        );
+        assert!(
+            parse(&cut).unwrap_err().contains("do not fit"),
+            "a cut byte must be zero"
+        );
     }
 
     /// The table reproduces the GA106 rows `kf_abi::cudartinit` carried (the old oracle).

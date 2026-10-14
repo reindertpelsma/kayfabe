@@ -1,0 +1,12 @@
+# kf-ctl-probe KF_PROBE_EXTRA_ONLY=1, one row: subdevice 0x20808162, 1 byte, request 00 (the request the GA106 trace records:
+# traces/real_ga106/cuinit_ioctl_trace_real_ga106.txt:85 in=00 out=01). Home host AD104, 595.91.07, user ubuntu (CapEff 0),
+# 2026-10-14, lane C. Binary sha256 bb5eba20f830680a0a2111bf0bedab5cb6c14ca11411de71336d175c652dd9fe (this branch).
+# Falsifier stated before the run: "kayfabe's GA106 constant (01) is what this die answers" is falsified by a reply other than 01.
+# Result: FALSIFIED — the AD104 at 595.91.07 answers NV_OK with 00. The GA106 byte served to every die was wrong here [M].
+# dmesg Xid count 22 before and 22 after.
+PROBE_START pid=3997056 uid=Uid: 1000 1000 1000 1000 CapEff=0x0 cap_sys_admin=false
+kf-host: host tier: stock
+PROBE_SESSION driver=595.91.07
+PROBE kind=subdevice cmd=0x20808162 size=1 status=0x0 OK reply_head=00
+PROBE_SUMMARY OK=1
+PROBE_END admin_run=false

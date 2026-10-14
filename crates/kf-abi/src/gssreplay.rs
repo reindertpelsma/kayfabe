@@ -237,6 +237,16 @@ pub const ROWS: &[Row] = &[
         exact: true,
         inputs: &[],
     },
+    // ★ Lane C 2026-10-14: `0x20808162` (1 byte, request `00`): the GA106 at 580.159.04 answered
+    // `01` (`crate::gsslegacy`), the AD104 at 595.91.07 answers `00` [measured, unprivileged,
+    // traces/constants_night_20261014/probe_8162_595.txt] — a captured byte served to every die was
+    // wrong there. Asked of the host at realize instead.
+    Row {
+        cmd: 0x2080_8162,
+        size: 1,
+        exact: true,
+        inputs: &[],
+    },
 ];
 
 /// `0x20809009` — cudart init gate (GSS-legacy, 8 B).
