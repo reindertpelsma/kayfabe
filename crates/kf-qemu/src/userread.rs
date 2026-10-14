@@ -339,11 +339,12 @@ mod tests {
     use super::*;
     use kf_host::MapPerm;
     use std::sync::atomic::Ordering;
-    /// 2026-10-15 profile of the relay worker under `kf-syncwait-stress --families flood` (perf, 14 s):
-    /// `RawVec::finish_grow` + `malloc` were about 18 % of a worker thread, because every row
-    /// resolution reserved the WHOLE span budget (`PIECES`, hundreds of 32-byte spans) up front --
-    /// six times per relayed entry (two per snapshot, one per publication guard). The budget is a
-    /// BOUND, not an allocation size: a source that needs one span must hold one span.
+    /// 2026-10-15: every row resolution reserved the WHOLE span budget (`PIECES`, hundreds of 32-byte
+    /// spans) up front -- six times per relayed entry (two per snapshot, one per publication guard).
+    /// The budget is a BOUND, not an allocation size: a source that needs one span holds one span.
+    /// [measured] about 100 ns per snapshot (1.31 -> 1.22 us for the 8-byte GP read, 1.64 -> 1.60 us for
+    /// the pushbuffer); the rest of the snapshot is not this allocation (a perf stack attributed
+    /// `RawVec::finish_grow` to a hash lookup: frame pointers are absent, so call chains are guesses).
     #[test]
     fn resolving_a_small_source_reserves_what_it_needs_and_the_bound_still_holds() {
         let rows = PlacedRows::default();
