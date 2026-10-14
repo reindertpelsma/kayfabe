@@ -24,3 +24,14 @@ i.e. a different GSP branch. That is a bonus for F-4 (595-branch request shapes)
 | W2 | the mailbox route attaches from `seqNum` 0 on this die and driver | `prefix_missing`, first `seqNum` != 0, `seq_gap` or `parse_failure` on the mailbox-attached instance (`kf-census`) |
 | W3 | F-4: the controls 852e/853a/a618/852f/853b/b201 changed between firmware branches (host 595.91.07 answers them INVALID_ARGUMENT to the 580-branch requests) | the 596.51 driver sends the same all-zero requests as 580.88 does: then the branch explanation is wrong and the 595.91.07 refusal is a host-driver property |
 | W4 | GA104 and AD104 GMMU static info differ (`0x20800a59`); kayfabe's authored GA106-equal fault-buffer sizes are not the GA104's | the GA104 reply equals the authored/AD104 values |
+
+## Windows run on GA106 (RTX 3060, vast KVM VM, Windows 11 LTSC 26100, NVIDIA 580.88)
+
+Box: vast contract 55929605 (own id), PCI device 0x2504 = GA106, driver 580.88 (`32.0.15.8088`, installed by `windows-on-vast`; the same
+package as the AD103 reference), 51.5 GiB RAM. GA106 is the die kayfabe's authored/captured constants were taken from.
+
+| # | hypothesis | falsifier (written before the run) |
+|---|---|---|
+| X1 | with `EnableGpuFirmware=1` the 580.88 driver runs GA106 on GSP 580.65.05 and the mailbox route attaches from `seqNum` 0 | `nvidia-smi -q` GSP version `N/A`, or `prefix_missing` / `seq_gap` on the mailbox-attached instance |
+| X2 | GA106 request sizes equal the AD103 580.88 sizes (852e 528, 853a 1456, a618 8620, 853b 1832, b201 2188) | any of them differs (then the size is die-dependent, not branch-dependent, and W3's reading is wrong) |
+| X3 | `INTERNAL_GMMU_GET_STATIC_INFO` = 0x31000 / 0x120c20 and `CE_GET_FAULT_METHOD_BUFFER_SIZE` = 0x5000 (kayfabe's authored numbers were "chosen equal to a stock GA106 GSP") | either differs |

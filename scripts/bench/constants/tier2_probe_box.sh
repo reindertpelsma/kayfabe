@@ -24,9 +24,20 @@ run() {
   if [ -n "$m" ]; then printf '%s\n' "$m"; else echo "PROBE_NO_OUTPUT first_lines:"; printf '%s\n' "$out" | head -4 | cut -c1-200; fi
 }
 echo "== gss rows (exactly kayfabe's realize-time requests)"
-run '^(GSSROW|PROBE_SESSION|PROBE_SUMMARY|PROBE_END|refusing)' KF_PROBE_GSS_ROWS=1 "$here/kf-ctl-probe"
+run '^(GSSROW|PROBE_SESSION|PROBE_DIE|PROBE_SUMMARY|PROBE_END|refusing)' KF_PROBE_GSS_ROWS=1 "$here/kf-ctl-probe"
 echo "== cudart gate replies (measured request shapes)"
 run '^(PROBE |PROBE_SUMMARY|PROBE_END)' KF_PROBE_EXTRA_ONLY=1 KF_PROBE_HEAD=40 "$here/kf-ctl-probe" "$here/cudart_rows.tsv"
 echo "== built-in Windows-only rows (zero requests)"
 run '^(PROBE |PROBE_SUMMARY|PROBE_END)' "$here/kf-ctl-probe"
+echo "== 595-branch request sizes (Windows 596.51 / GSP 595.76 capture; zero requests)"
+run '^(PROBE |PROBE_SUMMARY|PROBE_END)' KF_PROBE_EXTRA_ONLY=1 KF_PROBE_HEAD=16 "$here/kf-ctl-probe" "$here/rows_595_shapes.tsv"
+echo "== ZBC clear table (idle rental: the occupied entries are the defaults physical RM installs)"
+run '^(ZBC|PROBE_END)' KF_PROBE_ZBC=1 "$here/kf-ctl-probe"
+# Diagnostics when the host RM session could not open (box facts only: device nodes and the process's confinement).
+if ! KF_PROBE_I_KNOW=1 KF_PROBE_GSS_ROWS=1 "$here/kf-ctl-probe" 2>&1 | grep -q '^PROBE_SESSION'; then
+  echo "DIAG nodes:"; ls -ln /dev/nvidia* 2>&1 | head -12
+  echo "DIAG open nvidia$KF_GATE_GPU: $( (: < /dev/nvidia$KF_GATE_GPU) 2>&1 | head -1 )"
+  grep -E '^(Seccomp|NoNewPrivs):' /proc/self/status | tr '\t' ' ' | sed 's/^/DIAG /'
+  echo "DIAG cgroup devices: $(cat /sys/fs/cgroup/devices.list 2>/dev/null | head -3 | tr '\n' ';')"
+fi
 echo "BOX_PROBE_END rc=0 $(date -u +%FT%TZ)"

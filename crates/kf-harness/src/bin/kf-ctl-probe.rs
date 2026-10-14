@@ -171,6 +171,16 @@ fn main() {
         .map_err(|e| e.to_string())
         .expect("host RM session");
     println!("PROBE_SESSION driver={}", rm.driver_version());
+    // ★ Lane C 2026-10-14 (resumed): the die as the HOST states it (`MC_GET_ARCH_INFO`, the same two words kayfabe derives
+    // `DieId` from at realize), so a rental's evidence names the die by the host's own answer, not by a PCI-id table.
+    {
+        let (arch, imp, _) = rm.arch_info();
+        let die = kf_chip::die::DieId::new(arch, imp);
+        println!(
+            "PROBE_DIE arch={arch:#x} impl={imp:#x} die={}",
+            die.name().unwrap_or("unnamed")
+        );
+    }
     let mut counts: std::collections::BTreeMap<&'static str, u32> =
         std::collections::BTreeMap::new();
     // ★ Lane C 2026-10-14: `KF_PROBE_GSS_ROWS=1` asks exactly what kayfabe asks at realize — every
@@ -208,6 +218,58 @@ fn main() {
             println!("PROBE_SUMMARY {name}={n}");
         }
         println!("PROBE_END admin_run={admin} mode=gss_rows");
+        return;
+    }
+    // ★ Lane C 2026-10-14 (resumed): `KF_PROBE_ZBC=1` — the ZBC clear table of the host GPU, read-only and unprivileged:
+    // `GET_ZBC_CLEAR_TABLE_SIZE` then `GET_ZBC_CLEAR_TABLE_ENTRY` for every index of each of the three tables, on a
+    // `GF100_ZBC_CLEAR` object allocated under the subdevice exactly as kayfabe's own `rmfacts` does at realize. On an idle
+    // rental the occupied entries are the defaults physical RM installs (`kf-rm/src/zbc.rs` carries a GA102 capture of
+    // them to every die: matrix F-1). The table is GPU-global, so on a shared host this would also show other processes'
+    // entries: run it only on a box nothing else uses. Values are clear colours/depths/stencils: no board data.
+    if std::env::var("KF_PROBE_ZBC").as_deref() == Ok("1") {
+        use kf_abi::zbc as z;
+        let sub = rm.subdevice_handle();
+        let want = rm.mint();
+        let obj = match rm.raw_alloc(sub, want, 0x9096, None, &mut []) {
+            Ok(h) => h,
+            Err(e) => {
+                println!("ZBC alloc_error={e:?}");
+                println!("PROBE_END admin_run={admin} mode=zbc");
+                return;
+            }
+        };
+        for t in z::TableType::ALL {
+            let mut p = vec![0u8; z::GET_SIZE_PARAMS_SIZE];
+            z::put(&mut p, 2, t.wire());
+            match rm.raw_control_opaque(obj, z::GET_ZBC_CLEAR_TABLE_SIZE, &mut p) {
+                Ok(status) if status == 0 => {
+                    let (start, end) = (z::word(&p, 0).unwrap_or(0), z::word(&p, 1).unwrap_or(0));
+                    println!("ZBC table={} size start={start} end={end}", t.wire());
+                    for idx in start..=end.min(start + 63) {
+                        let mut e = vec![0u8; z::GET_ENTRY_PARAMS_SIZE];
+                        z::put(&mut e, 11, idx); // index
+                        z::put(&mut e, 13, t.wire()); // tableType
+                        match rm.raw_control_opaque(obj, z::GET_ZBC_CLEAR_TABLE_ENTRY, &mut e) {
+                            Ok(0) => {
+                                let w: Vec<String> = (0..10).map(|i| format!("{:08x}", z::word(&e, i).unwrap_or(0))).collect();
+                                println!(
+                                    "ZBC table={} index={idx} valid={} format={} value={}",
+                                    t.wire(),
+                                    z::word(&e, 12).unwrap_or(0),
+                                    z::word(&e, 10).unwrap_or(0),
+                                    w.join(" ")
+                                );
+                            }
+                            Ok(st) => println!("ZBC table={} index={idx} status={st:#x} {}", t.wire(), status_name(st)),
+                            Err(er) => println!("ZBC table={} index={idx} ioctl_error={er:?}", t.wire()),
+                        }
+                    }
+                }
+                Ok(st) => println!("ZBC table={} size status={st:#x} {}", t.wire(), status_name(st)),
+                Err(er) => println!("ZBC table={} size ioctl_error={er:?}", t.wire()),
+            }
+        }
+        println!("PROBE_END admin_run={admin} mode=zbc");
         return;
     }
     for (kind, cmd, sizes, inputs) in rows {

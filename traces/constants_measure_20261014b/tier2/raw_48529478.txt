@@ -1,0 +1,24 @@
+BOX_PROBE_START 2026-10-14T12:55:57Z
+GPU NVIDIA GeForce RTX 3060, 0x250310DE, 590.48.01
+PROC Uid: 0 0 0 0
+PROC CapEff: 00000000a80405fb
+NODE nvidia0
+== gss rows (exactly kayfabe's realize-time requests)
+PROBE_NO_OUTPUT first_lines:
+PROBE_START pid=467 uid=Uid: 0 0 0 0 CapEff=0xa80405fb cap_sys_admin=false
+
+thread 'main' (467) panicked at crates/kf-harness/src/bin/kf-ctl-probe.rs:172:10:
+host RM session: "RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { call: \"openat\", errno: Some(1) }"
+== cudart gate replies (measured request shapes)
+PROBE_NO_OUTPUT first_lines:
+PROBE_START pid=474 uid=Uid: 0 0 0 0 CapEff=0xa80405fb cap_sys_admin=false
+
+thread 'main' (474) panicked at crates/kf-harness/src/bin/kf-ctl-probe.rs:172:10:
+host RM session: "RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { call: \"openat\", errno: Some(1) }"
+== built-in Windows-only rows (zero requests)
+PROBE_NO_OUTPUT first_lines:
+PROBE_START pid=481 uid=Uid: 0 0 0 0 CapEff=0xa80405fb cap_sys_admin=false
+
+thread 'main' (481) panicked at crates/kf-harness/src/bin/kf-ctl-probe.rs:172:10:
+host RM session: "RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { call: \"openat\", errno: Some(1) }"
+BOX_PROBE_END rc=0 2026-10-14T12:55:58Z

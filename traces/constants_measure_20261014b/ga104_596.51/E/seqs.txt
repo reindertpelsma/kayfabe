@@ -1,0 +1,7 @@
+E
+  queue_instance 1 dir cmd messages 538 first_seq 5937 last_seq 6474 seq_gaps 0 []
+  queue_instance 1 dir status messages 541 first_seq 5974 last_seq 6514 seq_gaps 0 []
+  queue_instance 2 dir cmd messages 5585 first_seq 0 last_seq 5584 seq_gaps 0 []
+  queue_instance 2 dir status messages 5625 first_seq 0 last_seq 5624 seq_gaps 0 []
+  queue_instance 3 dir cmd messages 5094 first_seq 0 last_seq 5093 seq_gaps 0 []
+  queue_instance 3 dir status messages 5131 first_seq 0 last_seq 5130 seq_gaps 0 []
