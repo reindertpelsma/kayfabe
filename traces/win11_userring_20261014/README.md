@@ -202,6 +202,24 @@ real time); later runs prove playback by two screenshots differing in the video 
 The one-command matrix is `scripts/bench/windows/regress_matrix.sh` (per-app guest reboot to capture the event loop's
 `USER_RING_LOOP SUMMARY`, dated Markdown table).
 
+## 4e. Baseline matrix on `eb9f2aa3` (partial: stopped at the owner's request, 2026-10-15 00:20)
+
+`matrix-eb9f2aa3-20261014-2321.md` (runner `scripts/bench/windows/regress_matrix.sh`, production profile, one QEMU process
+pid 668092, guest reboot after each app): Heaven D3D11 windowed **18.0** / fullscreen **21.2** fps, Heaven OpenGL windowed
+**271.5** / fullscreen **29.9** fps, GravityMark D3D12 **134.2** fps (score 22418), Vulkan **95.9** fps (score 16016),
+Minecraft 6 min in-world: all PASS (0 host Xid, 0 GSP reset, 0 guest nvlddmkm events). `backstop_found(work=0)` in every
+`USER_RING_LOOP SUMMARY`. NOT RUN in this matrix: idle 30 min. **Edge + YouTube: FAIL** — playback confirmed at start
+(two screenshots differ), then at ≈00:15:57 (+3230 s of this QEMU, 7.3 min into Edge) the guest's `RESET_CHANNEL` was refused
+(TDR), the guest RM unloaded and came back; **no host Xid** [measured from the production log; the reset channel is not
+named without the RPC trace]. The step was aborted at 00:20 when the VM went to the owner. This is the event-loop branch's
+H-gate falsifier for the Edge TDR: it still happens on a build containing `375b8fd7` [measured].
+Heaven OpenGL fullscreen 29.9 fps vs 160.1 on `a8424ae2` [measured from the logs, no guest touched]: a real change in the
+present path, not a measurement artefact and not a half-rate mode: during the run the head is armed at 60.000 Hz and ticks
+59.9 vblanks/s (`display fps[… armed=60.000 tick=59.9 kms=59.9 tear=29.9 held=… ]`), and the app's flips are now IMMEDIATE
+(`tear=29.9`/s; every `display fps` line of the `a8424ae2` run has `tear=0.0`). Same resolution (1920x1080), same arguments
+(`heaven.ps1 -Fs 1`, QUALITY_HIGH, TESSELLATION_NORMAL). Inferred: an immediate flip completes one vblank after the frame
+before it, so a flip-throttled app renders every other vblank; why the guest now chooses immediate flips is not known.
+
 ## 5. Files
 
 `nvdec_refusal_0c5fedff.txt` (the refused NVDEC segment and the channel's life), `minecraft_xid32_timeline.txt`
