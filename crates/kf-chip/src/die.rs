@@ -5,6 +5,7 @@
 //! The names below are ogkm's own `NV2080_CTRL_MC_ARCH_INFO_IMPLEMENTATION_*` defines
 //! (`ogkm-595.84: src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080mc.h:94-150`), tier 1 of the
 //! constants ruling (§AF/§AH): nothing here is measured or hand-chosen.
+//! `tools/derive_die_names.sh <ogkm-root>` re-derives the table from any ogkm tag and diffs it.
 //!
 //! The die is the KEY of the published measured table (`kf_rm::consttab`): a measured row is
 //! served only to the die it was measured on (`docs/design/V3_CONSTANT_STRATEGY.md` §3, "never a
