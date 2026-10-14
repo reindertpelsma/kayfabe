@@ -1,5 +1,15 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-15 - H01 display caps page derived per die; the captured AD104 table is gone (branch `claude/display-caps-derive-20261014`)
+
+[measured, host AD104, Windows 580.88, probe bisection in `V3_DISPLAY_CAPS_DERIVATION_20261014.md` §3] The Windows display needs exactly two facts
+of the 101 differing caps words: the main-layer windows' `SCLR_PRESENT` and the unnamed word `0x00c` (= `0x100`); no header names it, no
+unprivileged host control carries the page (display object alloc is privileged), so `0x00c` is a T3 per-(die, branch) row
+(`kf-disp/data/caps_measured.tsv`, reader `tools/read_display_caps_page.py`). `kf_disp::capsderive` derives the page; `KF3_DISPLAY_CAPS_PROBE` is removed.
+GPU-free tests green. Open: final-binary Windows boot (paused for the owner's SolidWorks run), Linux regression retest (the page now claims
+a main-layer scaler with zero limits), `0x00c` of AD106/AD103/GA104 (they fall back to the authored page + notice until measured: owner decision).
+
+
 ## UPDATE 2026-10-14 16:00 CEST - Win11 S3: the GSP side holds, Windows does not survive the wake yet
 
 **Win11 S3 update, 2026-10-14 (kf3 `0c5fedff` = S3 branch + user-ring-scan `c287af4f`, branch `claude/s3-win11-20261014`, `traces/win11_s3_20261014/`, [`V3_S3_RESUME.md`](design/V3_S3_RESUME.md) §7a).**

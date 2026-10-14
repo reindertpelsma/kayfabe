@@ -1,0 +1,317 @@
+##### h0_authored
+EXP_START h0_authored drop=[KF3_DISPLAY_CAPS_PROBE] add=[] bin=probe1 2026-10-14T22:31:43+02:00
+== counts
+GSP phase Running -> Suspending: 10
+USER_RING_REFUSED: 0
+display: STALL: 0
+life ENDED: 12
+== display
+kf3: display: the guest armed its first head at +10763 ms — the boot layer is retired after 1 boot frame(s)
+kf3: display: +10763 ms the console shows no new frame: no armed head has scanned a window yet — the boot layer's last frame stays (no black at the handoff) (core channel allocated)
+kf3: display: +15636 ms the guest's display life ENDED (its RM unloaded): 0 model channel(s), 0 queued completion(s) dropped (never written) — the boot layer is shown again
+kf3: display: the guest armed its first head at +16898 ms — the boot layer is retired after 2 boot frame(s)
+kf3: display: +16898 ms the console shows no new frame: no armed head has scanned a window yet — the boot layer's last frame stays (no black at the handoff) (core channel allocated)
+kf3: display: +21782 ms the guest's display life ENDED (its RM unloaded): 0 model channel(s), 0 queued completion(s) dropped (never written) — the boot layer is shown again
+kf3: display: the guest armed its first head at +23084 ms — the boot layer is retired after 3 boot frame(s)
+disp: disp[writes=3245 puts=488 methods=103795 updates=76 notifies=76 releases=0 vblanks=5189 irqs=578 exceptions=0 refused=0 scanouts=66 scanout_
+groups: WIN_KF3_DISPLAY=display=on,gop=on WIN_STDVGA=0 
+##### e1_win
+EXP_START e1_win drop=[KF3_DISPLAY_CAPS_PROBE] add=[KF3_DISPLAY_CAPS_GROUPS=win] bin=probe1 2026-10-14T22:35:01+02:00
+== counts
+GSP phase Running -> Suspending: 0
+USER_RING_REFUSED: 0
+display: STALL: 0
+life ENDED: 0
+== display
+kf3: display: BISECT KF3_DISPLAY_CAPS_GROUPS=win — authored page + those groups of the measured AD104 page (59 words)
+== windows initialised (channels allocated: Window)
+8
+EXP_DONE e1_win 2026-10-14T22:43:43+02:00
+disp: disp[writes=67 puts=35 methods=5338 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=5 scanout_refused=0 sca
+groups: KF3_DISPLAY_CAPS_GROUPS=win WIN_KF3_DISPLAY=display=on,gop=on WIN_STDVGA=0 
+##### e1b_win
+EXP_START e1b_win drop=[KF3_DISPLAY_CAPS_PROBE] add=[KF3_DISPLAY_CAPS_GROUPS=win] bin=probe1 2026-10-14T22:44:42+02:00
+== counts
+GSP phase Running -> Suspending: 0
+USER_RING_REFUSED: 0
+display: STALL: 0
+life ENDED: 0
+== display
+kf3: display: BISECT KF3_DISPLAY_CAPS_GROUPS=win — authored page + those groups of the measured AD104 page (59 words)
+== windows initialised (channels allocated: Window)
+8
+EXP_DONE e1b_win 2026-10-14T22:55:20+02:00
+disp: disp[writes=67 puts=35 methods=5338 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=8 scanout_refused=0 sca
+groups: KF3_DISPLAY_CAPS_GROUPS=win WIN_KF3_DISPLAY=display=on,gop=on WIN_STDVGA=0 
+##### e2_win_head
+EXP_START e2_win_head drop=[KF3_DISPLAY_CAPS_PROBE] add=[KF3_DISPLAY_CAPS_GROUPS=win,head] bin=probe1 2026-10-14T22:55:26+02:00
+== counts
+GSP phase Running -> Suspending: 0
+USER_RING_REFUSED: 0
+display: STALL: 0
+life ENDED: 0
+== display
+kf3: display: BISECT KF3_DISPLAY_CAPS_GROUPS=win,head — authored page + those groups of the measured AD104 page (79 words)
+== windows initialised (channels allocated: Window)
+8
+EXP_DONE e2_win_head 2026-10-14T23:04:40+02:00
+disp: disp[writes=67 puts=35 methods=5338 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=6 scanout_refused=0 sca
+groups: KF3_DISPLAY_CAPS_GROUPS=win,head WIN_KF3_DISPLAY=display=on,gop=on WIN_STDVGA=0 
+##### e3_win_ihub
+EXP_START e3_win_ihub drop=[KF3_DISPLAY_CAPS_PROBE] add=[KF3_DISPLAY_CAPS_GROUPS=win,ihub] bin=probe1 2026-10-14T23:04:40+02:00
+== counts
+GSP phase Running -> Suspending: 0
+USER_RING_REFUSED: 0
+display: STALL: 0
+life ENDED: 0
+== display
+kf3: display: BISECT KF3_DISPLAY_CAPS_GROUPS=win,ihub — authored page + those groups of the measured AD104 page (60 words)
+== windows initialised (channels allocated: Window)
+8
+EXP_DONE e3_win_ihub 2026-10-14T23:13:54+02:00
+disp: disp[writes=67 puts=35 methods=5338 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=6 scanout_refused=0 sca
+groups: KF3_DISPLAY_CAPS_GROUPS=win,ihub WIN_KF3_DISPLAY=display=on,gop=on WIN_STDVGA=0 
+##### e4_win_unk
+EXP_START e4_win_unk drop=[KF3_DISPLAY_CAPS_PROBE] add=[KF3_DISPLAY_CAPS_GROUPS=win,unk] bin=probe1 2026-10-14T23:16:24+02:00
+== counts
+GSP phase Running -> Suspending: 0
+USER_RING_REFUSED: 0
+display: STALL: 0
+life ENDED: 0
+== display
+kf3: display: BISECT KF3_DISPLAY_CAPS_GROUPS=win,unk — authored page + those groups of the measured AD104 page (70 words)
+kf3: display: the guest armed its first head at +11169 ms — the boot layer is retired after 1 boot frame(s)
+kf3: display: +11169 ms the console shows no new frame: no armed head has scanned a window yet — the boot layer's last frame stays (no black at the handoff) (core channel allocated)
+kf3: display: +11203 ms the console shows head 0 1920x1080: [window 0 iso 0xff1d1002+0x0 1920x1080 pitch 120 fmt 0xcf] (core channel allocated)
+kf3: display: 1 updates completed, 5597 methods
+kf3: display: 2 updates completed, 5599 methods
+kf3: display: 3 updates completed, 5622 methods
+disp: disp[writes=6662 puts=2868 methods=14002 updates=1122 notifies=1119 releases=555 vblanks=7755 irqs=2486 exceptions=0 refused=0 scanouts=561 
+groups: KF3_DISPLAY_CAPS_GROUPS=win,unk WIN_KF3_DISPLAY=display=on,gop=on WIN_STDVGA=0 
+##### e5_win_sor_clk
+EXP_START e5_win_sor_clk drop=[KF3_DISPLAY_CAPS_PROBE] add=[KF3_DISPLAY_CAPS_GROUPS=win,sor,sorclk,headclk] bin=probe1 2026-10-14T23:18:51+02:00
+== counts
+GSP phase Running -> Suspending: 0
+USER_RING_REFUSED: 0
+display: STALL: 0
+life ENDED: 0
+== display
+kf3: display: BISECT KF3_DISPLAY_CAPS_GROUPS=win,sor,sorclk,headclk — authored page + those groups of the measured AD104 page (67 words)
+== windows initialised (channels allocated: Window)
+8
+EXP_DONE e5_win_sor_clk 2026-10-14T23:23:33+02:00
+disp: disp[writes=67 puts=35 methods=5338 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=4 scanout_refused=0 sca
+groups: KF3_DISPLAY_CAPS_GROUPS=win,sor,sorclk,headclk WIN_KF3_DISPLAY=display=on,gop=on WIN_STDVGA=0 
+##### e6_all
+EXP_START e6_all drop=[KF3_DISPLAY_CAPS_PROBE] add=[KF3_DISPLAY_CAPS_GROUPS=all] bin=probe1 2026-10-14T23:13:58+02:00
+== counts
+GSP phase Running -> Suspending: 0
+USER_RING_REFUSED: 0
+display: STALL: 0
+life ENDED: 0
+== display
+kf3: display: BISECT KF3_DISPLAY_CAPS_GROUPS=all — authored page + those groups of the measured AD104 page (99 words)
+kf3: display: the guest armed its first head at +11293 ms — the boot layer is retired after 1 boot frame(s)
+kf3: display: +11293 ms the console shows no new frame: no armed head has scanned a window yet — the boot layer's last frame stays (no black at the handoff) (core channel allocated)
+kf3: display: +11327 ms the console shows head 0 1920x1080: [window 0 iso 0xff1d1002+0x0 1920x1080 pitch 120 fmt 0xcf] (core channel allocated)
+kf3: display: 1 updates completed, 5597 methods
+kf3: display: 2 updates completed, 5599 methods
+kf3: display: 3 updates completed, 5622 methods
+disp: disp[writes=6303 puts=2744 methods=13204 updates=1074 notifies=1071 releases=531 vblanks=7748 irqs=2254 exceptions=0 refused=0 scanouts=537 
+groups: KF3_DISPLAY_CAPS_GROUPS=all WIN_KF3_DISPLAY=display=on,gop=on WIN_STDVGA=0 
+##### e7_all_but_win
+EXP_START e7_all_but_win drop=[KF3_DISPLAY_CAPS_PROBE] add=[KF3_DISPLAY_CAPS_GROUPS=ihub,unk,sor,headclk,sorclk,head] bin=probe1 2026-10-14T23:23:34+02:00
+== counts
+GSP phase Running -> Suspending: 10
+USER_RING_REFUSED: 0
+display: STALL: 0
+life ENDED: 11
+== display
+kf3: display: BISECT KF3_DISPLAY_CAPS_GROUPS=ihub,unk,sor,headclk,sorclk,head — authored page + those groups of the measured AD104 page (83 words)
+kf3: display: the guest armed its first head at +10833 ms — the boot layer is retired after 1 boot frame(s)
+kf3: display: +10833 ms the console shows no new frame: no armed head has scanned a window yet — the boot layer's last frame stays (no black at the handoff) (core channel allocated)
+kf3: display: +15639 ms the guest's display life ENDED (its RM unloaded): 0 model channel(s), 0 queued completion(s) dropped (never written) — the boot layer is shown again
+kf3: display: the guest armed its first head at +17081 ms — the boot layer is retired after 2 boot frame(s)
+kf3: display: +17081 ms the console shows no new frame: no armed head has scanned a window yet — the boot layer's last frame stays (no black at the handoff) (core channel allocated)
+kf3: display: +26321 ms the guest's display life ENDED (its RM unloaded): 0 model channel(s), 0 queued completion(s) dropped (never written) — the boot layer is shown again
+disp: disp[writes=3936 puts=488 methods=103795 updates=76 notifies=76 releases=0 vblanks=8227 irqs=674 exceptions=0 refused=0 scanouts=12 scanout_
+groups: KF3_DISPLAY_CAPS_GROUPS=ihub,unk,sor,headclk,sorclk,head WIN_KF3_DISPLAY=display=on,gop=on WIN_STDVGA=0 
+##### e8_win_unk8
+EXP_START e8_win_unk8 drop=[KF3_DISPLAY_CAPS_PROBE] add=[KF3_DISPLAY_CAPS_GROUPS=win,unk8] bin=probe2 2026-10-14T23:26:29+02:00
+== counts
+GSP phase Running -> Suspending: 0
+USER_RING_REFUSED: 0
+display: STALL: 0
+life ENDED: 0
+== display
+kf3: display: BISECT KF3_DISPLAY_CAPS_GROUPS=win,unk8 — authored page + those groups of the measured AD104 page (61 words)
+kf3: display: the guest armed its first head at +11003 ms — the boot layer is retired after 1 boot frame(s)
+kf3: display: +11003 ms the console shows no new frame: no armed head has scanned a window yet — the boot layer's last frame stays (no black at the handoff) (core channel allocated)
+kf3: display: +11037 ms the console shows head 0 1920x1080: [window 0 iso 0xff1d1002+0x0 1920x1080 pitch 120 fmt 0xcf] (core channel allocated)
+kf3: display: 1 updates completed, 5597 methods
+kf3: display: 2 updates completed, 5599 methods
+kf3: display: 3 updates completed, 5622 methods
+disp: disp[writes=6097 puts=2848 methods=14104 updates=1114 notifies=1111 releases=551 vblanks=7651 irqs=2076 exceptions=0 refused=0 scanouts=556 
+groups: KF3_DISPLAY_CAPS_GROUPS=win,unk8 WIN_KF3_DISPLAY=display=on,gop=on WIN_STDVGA=0 
+##### e9_win_unk48
+EXP_START e9_win_unk48 drop=[KF3_DISPLAY_CAPS_PROBE] add=[KF3_DISPLAY_CAPS_GROUPS=win,unk48] bin=probe2 2026-10-14T23:28:55+02:00
+== counts
+GSP phase Running -> Suspending: 0
+USER_RING_REFUSED: 0
+display: STALL: 0
+life ENDED: 0
+== display
+kf3: display: BISECT KF3_DISPLAY_CAPS_GROUPS=win,unk48 — authored page + those groups of the measured AD104 page (63 words)
+== windows initialised (channels allocated: Window)
+8
+EXP_DONE e9_win_unk48 2026-10-14T23:33:36+02:00
+disp: disp[writes=67 puts=35 methods=5338 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=4 scanout_refused=0 sca
+groups: KF3_DISPLAY_CAPS_GROUPS=win,unk48 WIN_KF3_DISPLAY=display=on,gop=on WIN_STDVGA=0 
+##### e16_win_unk08
+EXP_START e16_win_unk08 drop=[KF3_DISPLAY_CAPS_PROBE] add=[KF3_DISPLAY_CAPS_GROUPS=win,unk08] bin=probe3 2026-10-14T23:34:33+02:00
+== counts
+GSP phase Running -> Suspending: 0
+USER_RING_REFUSED: 0
+display: STALL: 0
+life ENDED: 0
+== display
+kf3: display: BISECT KF3_DISPLAY_CAPS_GROUPS=win,unk08 — authored page + those groups of the measured AD104 page (60 words)
+== windows initialised (channels allocated: Window)
+8
+EXP_DONE e16_win_unk08 2026-10-14T23:39:09+02:00
+disp: disp[writes=67 puts=35 methods=5338 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=4 scanout_refused=0 sca
+groups: KF3_DISPLAY_CAPS_GROUPS=win,unk08 WIN_KF3_DISPLAY=display=on,gop=on WIN_STDVGA=0 
+##### e17b_win_unk0c
+EXP_START e17b_win_unk0c drop=[KF3_DISPLAY_CAPS_PROBE] add=[KF3_DISPLAY_CAPS_GROUPS=win,unk0c] bin=probe3 2026-10-15T00:16:46+02:00
+== counts
+GSP phase Running -> Suspending: 0
+USER_RING_REFUSED: 0
+display: STALL: 0
+life ENDED: 0
+== display
+kf3: display: BISECT KF3_DISPLAY_CAPS_GROUPS=win,unk0c — authored page + those groups of the measured AD104 page (60 words)
+kf3: display: the guest armed its first head at +8360 ms — the boot layer is retired after 1 boot frame(s)
+kf3: display: +8360 ms the console shows no new frame: no armed head has scanned a window yet — the boot layer's last frame stays (no black at the handoff) (core channel allocated)
+kf3: display: +8394 ms the console shows head 0 1920x1080: [window 0 iso 0xff1d1002+0x0 1920x1080 pitch 120 fmt 0xcf] (core channel allocated)
+kf3: display: 1 updates completed, 5597 methods
+kf3: display: 2 updates completed, 5599 methods
+kf3: display: 3 updates completed, 5622 methods
+disp: disp[writes=4919 puts=2401 methods=12604 updates=938 notifies=935 releases=463 vblanks=6119 irqs=1756 exceptions=0 refused=0 scanouts=468 sc
+groups: KF3_DISPLAY_CAPS_GROUPS=win,unk0c WIN_KF3_DISPLAY=display=on,gop=on WIN_STDVGA=0 
+##### e18b_u8_wA
+EXP_START e18b_u8_wA drop=[KF3_DISPLAY_CAPS_PROBE] add=[KF3_DISPLAY_CAPS_GROUPS=unk08,unk0c,wevenA,woddA] bin=probe3 2026-10-15T00:18:42+02:00
+== counts
+GSP phase Running -> Suspending: 0
+USER_RING_REFUSED: 0
+display: STALL: 0
+life ENDED: 0
+== display
+kf3: display: BISECT KF3_DISPLAY_CAPS_GROUPS=unk08,unk0c,wevenA,woddA — authored page + those groups of the measured AD104 page (45 words)
+kf3: display: the guest armed its first head at +8837 ms — the boot layer is retired after 1 boot frame(s)
+kf3: display: +8838 ms the console shows no new frame: no armed head has scanned a window yet — the boot layer's last frame stays (no black at the handoff) (core channel allocated)
+kf3: display: +8871 ms the console shows head 0 1920x1080: [window 0 iso 0xff1d1002+0x0 1920x1080 pitch 120 fmt 0xcf] (core channel allocated)
+kf3: display: 1 updates completed, 5597 methods
+kf3: display: 2 updates completed, 5599 methods
+kf3: display: 3 updates completed, 5622 methods
+disp: disp[writes=4681 puts=2299 methods=12392 updates=898 notifies=895 releases=443 vblanks=5970 irqs=1581 exceptions=0 refused=0 scanouts=448 sc
+groups: KF3_DISPLAY_CAPS_GROUPS=unk08,unk0c,wevenA,woddA WIN_KF3_DISPLAY=display=on,gop=on WIN_STDVGA=0 
+##### e19b_u8_wR
+EXP_START e19b_u8_wR drop=[KF3_DISPLAY_CAPS_PROBE] add=[KF3_DISPLAY_CAPS_GROUPS=unk08,unk0c,wevenR,woddR] bin=probe3 2026-10-15T00:20:37+02:00
+== counts
+GSP phase Running -> Suspending: 1
+USER_RING_REFUSED: 0
+display: STALL: 0
+life ENDED: 1
+== display
+kf3: display: BISECT KF3_DISPLAY_CAPS_GROUPS=unk08,unk0c,wevenR,woddR — authored page + those groups of the measured AD104 page (61 words)
+kf3: display: +8936 ms the guest's display life ENDED (its RM unloaded): 0 model channel(s), 0 queued completion(s) dropped (never written) — the boot layer is shown again
+== windows initialised (channels allocated: Window)
+8
+EXP_DONE e19b_u8_wR 2026-10-15T00:22:34+02:00
+disp: disp[writes=0 puts=0 methods=0 updates=0 notifies=0 releases=0 vblanks=0 irqs=0 exceptions=0 refused=0 scanouts=5 scanout_refused=0 scanout_
+groups: KF3_DISPLAY_CAPS_GROUPS=unk08,unk0c,wevenR,woddR WIN_KF3_DISPLAY=display=on,gop=on WIN_STDVGA=0 
+##### e20_u0c_wA
+EXP_START e20_u0c_wA drop=[KF3_DISPLAY_CAPS_PROBE] add=[KF3_DISPLAY_CAPS_GROUPS=unk0c,wevenA,woddA] bin=probe3 2026-10-15T00:22:35+02:00
+== counts
+GSP phase Running -> Suspending: 0
+USER_RING_REFUSED: 0
+display: STALL: 0
+life ENDED: 0
+== display
+kf3: display: BISECT KF3_DISPLAY_CAPS_GROUPS=unk0c,wevenA,woddA — authored page + those groups of the measured AD104 page (44 words)
+kf3: display: the guest armed its first head at +8432 ms — the boot layer is retired after 1 boot frame(s)
+kf3: display: +8432 ms the console shows no new frame: no armed head has scanned a window yet — the boot layer's last frame stays (no black at the handoff) (core channel allocated)
+kf3: display: +8466 ms the console shows head 0 1920x1080: [window 0 iso 0xff1d1002+0x0 1920x1080 pitch 120 fmt 0xcf] (core channel allocated)
+kf3: display: 1 updates completed, 5597 methods
+kf3: display: 2 updates completed, 5599 methods
+kf3: display: 3 updates completed, 5622 methods
+disp: disp[writes=5287 puts=2603 methods=13240 updates=1018 notifies=1015 releases=503 vblanks=5995 irqs=1703 exceptions=0 refused=0 scanouts=508 
+groups: KF3_DISPLAY_CAPS_GROUPS=unk0c,wevenA,woddA WIN_KF3_DISPLAY=display=on,gop=on WIN_STDVGA=0 
+##### f3_u0c_wAp
+EXP_START f3_u0c_wAp drop=[KF3_DISPLAY_CAPS_PROBE] add=[KF3_DISPLAY_CAPS_GROUPS=unk0c,wAp] bin=probe4 2026-10-15T00:24:31+02:00
+== counts
+GSP phase Running -> Suspending: 0
+USER_RING_REFUSED: 0
+display: STALL: 0
+life ENDED: 0
+== display
+kf3: display: BISECT KF3_DISPLAY_CAPS_GROUPS=unk0c,wAp — authored page + those groups of the measured AD104 page (44 words)
+kf3: display: the guest armed its first head at +7771 ms — the boot layer is retired after 1 boot frame(s)
+kf3: display: +7771 ms the console shows no new frame: no armed head has scanned a window yet — the boot layer's last frame stays (no black at the handoff) (core channel allocated)
+kf3: display: +7821 ms the console shows head 0 1920x1080: [window 0 iso 0xff1d1002+0x0 1920x1080 pitch 120 fmt 0xcf] (core channel allocated)
+kf3: display: 1 updates completed, 5597 methods
+kf3: display: 2 updates completed, 5599 methods
+kf3: display: 3 updates completed, 5622 methods
+disp: disp[writes=5574 puts=2701 methods=13700 updates=1056 notifies=1053 releases=522 vblanks=5794 irqs=1820 exceptions=0 refused=0 scanouts=527 
+groups: KF3_DISPLAY_CAPS_GROUPS=unk0c,wAp WIN_KF3_DISPLAY=display=on,gop=on WIN_STDVGA=0 
+##### f4_u0c_wAw
+EXP_START f4_u0c_wAw drop=[KF3_DISPLAY_CAPS_PROBE] add=[KF3_DISPLAY_CAPS_GROUPS=unk0c,wAw] bin=probe4 2026-10-15T00:26:22+02:00
+== counts
+GSP phase Running -> Suspending: 2
+USER_RING_REFUSED: 0
+display: STALL: 0
+life ENDED: 4
+== display
+kf3: display: BISECT KF3_DISPLAY_CAPS_GROUPS=unk0c,wAw — authored page + those groups of the measured AD104 page (44 words)
+kf3: display: the guest armed its first head at +8513 ms — the boot layer is retired after 1 boot frame(s)
+kf3: display: +8513 ms the console shows no new frame: no armed head has scanned a window yet — the boot layer's last frame stays (no black at the handoff) (core channel allocated)
+kf3: display: +13639 ms the guest's display life ENDED (its RM unloaded): 0 model channel(s), 0 queued completion(s) dropped (never written) — the boot layer is shown again
+kf3: display: the guest armed its first head at +14501 ms — the boot layer is retired after 2 boot frame(s)
+kf3: display: +14501 ms the console shows no new frame: no armed head has scanned a window yet — the boot layer's last frame stays (no black at the handoff) (core channel allocated)
+kf3: display: +34170 ms the guest's display life ENDED (device reset): 21 model channel(s), 0 queued completion(s) dropped (never written) — the boot layer is shown again
+disp: disp[writes=427 puts=162 methods=34512 updates=24 notifies=24 releases=0 vblanks=2601 irqs=1990 exceptions=0 refused=0 scanouts=7 scanout_re
+groups: KF3_DISPLAY_CAPS_GROUPS=unk0c,wAw WIN_KF3_DISPLAY=display=on,gop=on WIN_STDVGA=0 
+##### f5_u0c_wApE
+EXP_START f5_u0c_wApE drop=[KF3_DISPLAY_CAPS_PROBE] add=[KF3_DISPLAY_CAPS_GROUPS=unk0c,wApE] bin=probe4 2026-10-15T00:28:43+02:00
+== counts
+GSP phase Running -> Suspending: 0
+USER_RING_REFUSED: 0
+display: STALL: 0
+life ENDED: 0
+== display
+kf3: display: BISECT KF3_DISPLAY_CAPS_GROUPS=unk0c,wApE — authored page + those groups of the measured AD104 page (44 words)
+kf3: display: the guest armed its first head at +8853 ms — the boot layer is retired after 1 boot frame(s)
+kf3: display: +8853 ms the console shows no new frame: no armed head has scanned a window yet — the boot layer's last frame stays (no black at the handoff) (core channel allocated)
+kf3: display: +8887 ms the console shows head 0 1920x1080: [window 0 iso 0xff1d1002+0x0 1920x1080 pitch 120 fmt 0xcf] (core channel allocated)
+kf3: display: 1 updates completed, 9357 methods
+kf3: display: 2 updates completed, 9359 methods
+kf3: display: 3 updates completed, 9382 methods
+disp: disp[writes=5404 puts=2697 methods=17068 updates=1052 notifies=1049 releases=520 vblanks=5847 irqs=1806 exceptions=0 refused=0 scanouts=526 
+groups: KF3_DISPLAY_CAPS_GROUPS=unk0c,wApE WIN_KF3_DISPLAY=display=on,gop=on WIN_STDVGA=0 
+##### f6_u0c_wApO
+EXP_START f6_u0c_wApO drop=[KF3_DISPLAY_CAPS_PROBE] add=[KF3_DISPLAY_CAPS_GROUPS=unk0c,wApO] bin=probe4 2026-10-15T00:30:35+02:00
+== counts
+GSP phase Running -> Suspending: 10
+USER_RING_REFUSED: 0
+display: STALL: 0
+life ENDED: 12
+== display
+kf3: display: BISECT KF3_DISPLAY_CAPS_GROUPS=unk0c,wApO — authored page + those groups of the measured AD104 page (44 words)
+kf3: display: the guest armed its first head at +8424 ms — the boot layer is retired after 1 boot frame(s)
+kf3: display: +8424 ms the console shows no new frame: no armed head has scanned a window yet — the boot layer's last frame stays (no black at the handoff) (core channel allocated)
+kf3: display: +13457 ms the guest's display life ENDED (its RM unloaded): 0 model channel(s), 0 queued completion(s) dropped (never written) — the boot layer is shown again
+kf3: display: the guest armed its first head at +14420 ms — the boot layer is retired after 2 boot frame(s)
+kf3: display: +14420 ms the console shows no new frame: no armed head has scanned a window yet — the boot layer's last frame stays (no black at the handoff) (core channel allocated)
+kf3: display: +20279 ms the guest's display life ENDED (its RM unloaded): 0 model channel(s), 0 queued completion(s) dropped (never written) — the boot layer is shown again
+disp: disp[writes=3173 puts=392 methods=58675 updates=76 notifies=76 releases=0 vblanks=5515 irqs=533 exceptions=0 refused=0 scanouts=27 scanout_r
+groups: KF3_DISPLAY_CAPS_GROUPS=unk0c,wApO WIN_KF3_DISPLAY=display=on,gop=on WIN_STDVGA=0 
