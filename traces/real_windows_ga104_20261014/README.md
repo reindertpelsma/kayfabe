@@ -30,11 +30,24 @@ serial, VBIOS string, MAC or PCI subsystem id is in any file (scripts never prin
    $0.16-0.22/h (taken by lane B before this lane could rent it), no Turing at all, other Blackwell >= $0.63/h
    (over the $0.60 limit).
 
+## Falsifiers, stated before the runs
+
+| # | hypothesis | falsifier |
+|---|---|---|
+| G1 | The Windows 580.88 GeForce driver runs GA104 on GSP when `EnableGpuFirmware=1` is in both keys and the adapter is restarted | `nvidia-smi -q` GSP Firmware `N/A` after the restart, or the collector attaches to nothing |
+| G2 | The mailbox route gives a complete capture from `seqNum` 0 on this die too | first `seqNum` != 0, `prefix_missing`, `seq_gap` or `parse_failure` in `kf-census` on the mailbox-attached instance |
+| G3 | `INTERNAL_GMMU_GET_STATIC_INFO` is byte-identical to AD103 (Ampere and Ada share the page-table format) [I before the run] | reply bytes differ |
+| G4 | The class list (`GPU_GET_CLASSLIST_V2`) differs from AD103 (Ampere has its own 3D/compute class ids) [I before the run] | reply bytes equal |
+| G5 | The 27 static-info rows that are stable across AD103 boots are die-specific in at least the GR rows (`KGR_GET_INFO`, `GET_CONTEXT_BUFFERS_INFO`) | those replies are byte-identical to AD103 |
+
 ## Boxes
 
 | die | box | offer | $/h | rented | destroyed | cost |
 |---|---|---|---|---|---|---|
-| GA104 (RTX 3070) | 55835609 | 55562112 | 0.17 | 02:19 CEST | | |
+| GA104 (RTX 3070) | 55835609 | 55562112 | 0.17 | 02:19 CEST (created *stopped*: lane B rented the same machine's GPU in the same minute; `vastai start` at 02:38 got it) | | |
+
+Box facts [M]: KVM VM, 15 vCPU, 24 GiB RAM, 146 GB root (Linux side before the reinstall), `lspci`: GA104 [GeForce RTX 3070].
+windows-on-vast `install.sh` as the on-start script (image `vastai/kvm:ubuntu_cli_22.04-2025-05-16`, disk 150).
 
 ## Files
 
