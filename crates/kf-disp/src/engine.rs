@@ -2070,6 +2070,10 @@ pub struct CursorVocab {
     /// `HEAD_SET_CONTROL_CURSOR_FORMAT_A8R8G8B8` — the only format NVKMS programs
     /// (`ogkm-580: src/nvidia-modeset/src/nvkms-evo3.c:6517-6524`).
     a8r8g8b8: u32,
+    /// `HEAD_SET_CONTROL_CURSOR_FORMAT_A1R5G5B5` — the class's other cursor format
+    /// (`ogkm-580: clc37d.h:836`, the same value `0xE9` in every family's header); resolved from
+    /// the derived table like the first, `None` where a table lacks it.
+    a1r5g5b5: Option<u32>,
     /// Core `HEAD_SET_CONTROL_CURSOR_COMPOSITION(head)`: base, head stride.
     comp: (u32, u32),
     k1: (u8, u8),
@@ -2103,6 +2107,7 @@ impl CursorVocab {
             hot_x: f("HEAD_SET_CONTROL_CURSOR_HOT_SPOT_X")?,
             hot_y: f("HEAD_SET_CONTROL_CURSOR_HOT_SPOT_Y")?,
             a8r8g8b8: t.v(core, "HEAD_SET_CONTROL_CURSOR_FORMAT_A8R8G8B8")?,
+            a1r5g5b5: t.v(core, "HEAD_SET_CONTROL_CURSOR_FORMAT_A1R5G5B5"),
             comp: a("HEAD_SET_CONTROL_CURSOR_COMPOSITION")?,
             k1: f("HEAD_SET_CONTROL_CURSOR_COMPOSITION_K1")?,
             cursor_factor: f("HEAD_SET_CONTROL_CURSOR_COMPOSITION_CURSOR_COLOR_FACTOR_SELECT")?,
@@ -2133,6 +2138,10 @@ pub struct CursorScan {
     pub size: u32,
     /// `FORMAT` is `A8R8G8B8`.
     pub argb8888: bool,
+    /// `FORMAT` is `A1R5G5B5` (1-bit alpha, 5-5-5 colour; 16 bits a pixel).
+    pub a1r5g5b5: bool,
+    /// `FORMAT` as programmed (the field's raw value), for the log of a format kf does not know.
+    pub format: u32,
     /// `HOT_SPOT_X` / `_Y` inside the image (NVKMS programs 0, `nvkms-evo3.c:6568-6569`).
     pub hot_x: u32,
     /// Hot spot row.
@@ -2182,6 +2191,8 @@ impl Engine {
             offset: u64::from(core.armed(at(cv.offset)?)) << 8,
             size: 32 << fld(ctl, cv.size).min(3),
             argb8888: fld(ctl, cv.format) == cv.a8r8g8b8,
+            a1r5g5b5: cv.a1r5g5b5 == Some(fld(ctl, cv.format)),
+            format: fld(ctl, cv.format),
             hot_x: fld(ctl, cv.hot_x),
             hot_y: fld(ctl, cv.hot_y),
             x: signed(fld(point, px)),

@@ -3821,6 +3821,33 @@ const FRAME_MAX: usize = kf_disp::scanout::MAX_PIXELS as usize * 4;
 /// ★ §O, the worker's first cursor decision (GPU-free): whether this frame composes the head's
 /// cursor — always without a cursor-capable broker (`want` is `None`: nothing was read) and under
 /// grab; in hover only a cursor the host cannot show ([`CursorMode::composes`]).
+/// ★ Measurement only: `KF3_DEBUG_CURSOR=1` logs every distinct (by content) cursor the host path or
+/// the composer refuses — format, composition word, size, hot spot, pitch, the first 64 bytes in hex
+/// and a text rendering of the image read as `A1R5G5B5` — and `KF3_DEBUG_CURSOR=/some/dir` also
+/// writes the surface bytes there. Never required to boot; off it costs one atomic load.
+fn debug_cursor_env() -> Option<&'static str> {
+    static V: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+    V.get_or_init(|| {
+        std::env::var("KF3_DEBUG_CURSOR")
+            .ok()
+            .filter(|v| !v.is_empty() && v != "0")
+    })
+    .as_deref()
+}
+
+/// Bookkeeping of the debug dump: the contents already dumped (at most [`CursorDebug::DISTINCT`]) and
+/// when the surface was last copied (at most one copy per [`CursorDebug::EVERY_MS`]).
+#[derive(Default)]
+struct CursorDebug {
+    seen: Vec<u64>,
+    last: Option<Instant>,
+}
+
+impl CursorDebug {
+    const DISTINCT: usize = 16;
+    const EVERY_MS: u128 = 200;
+}
+
 fn cursor_composed(mode: CursorMode, want: Option<&CursorWant>) -> bool {
     want.is_none_or(|w| mode.composes(w))
 }
@@ -3897,6 +3924,8 @@ struct ScanState {
     /// … the cursor composition word's line (once per change, §8.12's open alpha question;
     /// bounded, `kf_disp::scanout::CompositionLog`) …
     cursor_comp: kf_disp::scanout::CompositionLog,
+    /// … the `KF3_DEBUG_CURSOR` dump's bookkeeping (measurement only) …
+    cursor_debug: CursorDebug,
     /// … and the hot spot NVKMS does not program, derived from the injected pointer.
     hot: HotTracker,
     /// The worker's clock for [`HotTracker`] (its first use).
@@ -4401,6 +4430,50 @@ impl ScanState {
         }
     }
 
+    /// ★ Measurement only ([`debug_cursor_env`]): copy the start of the refused cursor's surface
+    /// (the GPU copies; at most 64 KiB, wholly inside the context DMA, at most every 200 ms) and log
+    /// it once per distinct content, at most 16 contents.
+    fn debug_cursor(&mut self, io: &mut Io<'_>, cs: &kf_disp::engine::CursorScan, who: &str) {
+        let Some(env) = debug_cursor_env() else {
+            return;
+        };
+        let d = &mut self.cursor_debug;
+        if d.seen.len() >= CursorDebug::DISTINCT
+            || d.last
+                .is_some_and(|t| t.elapsed().as_millis() < CursorDebug::EVERY_MS)
+        {
+            return;
+        }
+        d.last = Some(Instant::now());
+        let Ok(dma) = io.resolve(cs.client, cs.handle, 0) else {
+            return;
+        };
+        let (Some((src, extent)), Some(gpu)) = (
+            kf_disp::scanout::cursor_debug_span(cs, &dma),
+            io.gpu.as_ref(),
+        ) else {
+            return;
+        };
+        let mut raw = vec![0u8; usize::try_from(extent).unwrap_or(0)];
+        if gpu.read_store(src, &mut raw).is_err() {
+            return;
+        }
+        let key = kf_disp::scanout::fnv1a(&raw) ^ u64::from(cs.format) ^ (u64::from(cs.mode) << 40);
+        if self.cursor_debug.seen.contains(&key) {
+            return;
+        }
+        self.cursor_debug.seen.push(key);
+        for line in kf_disp::scanout::cursor_debug_text(cs, &raw, true) {
+            eprintln!("kf3: display: DEBUG cursor ({who}) {line}");
+        }
+        if env.starts_with('/') {
+            let f = format!("{env}/cursor-{key:016x}.bin");
+            if let Err(e) = std::fs::write(&f, &raw) {
+                eprintln!("kf3: display: DEBUG cursor: writing {f}: {e}");
+            }
+        }
+    }
+
     fn refuse(&mut self, dp: &DisplayPlane, why: &str) {
         self.note_refusal(&dp.counters, why);
     }
@@ -4504,6 +4577,7 @@ impl ScanState {
                     .fetch_add(1, Ordering::Relaxed);
                 self.cursor_refusals += 1;
                 let n = self.cursor_refusals;
+                self.debug_cursor(io, cs, "host");
                 if n <= 4 || n.is_multiple_of(256) {
                     eprintln!(
                         "kf3: display: host cursor REFUSED: {e} — composed into the frame instead, \
@@ -4721,12 +4795,18 @@ impl ScanState {
         }
         self.cursor_in_frame = compose.is_some();
         // ★ 3d: the head's cursor, last — the top layer (its context DMA is the core channel's)
+        let mut expand = None;
         if let Some(cs) = compose {
-            let planned = io
-                .resolve(cs.client, cs.handle, 0)
-                .and_then(|dma| kf_disp::scanout::plan_cursor(cs, &dma, w, h).map_err(|r| r.0));
+            let planned = io.resolve(cs.client, cs.handle, 0).and_then(|dma| {
+                let p = kf_disp::scanout::plan_cursor_any(cs, &dma, w, h).map_err(|r| r.0);
+                if p.is_err() {
+                    self.debug_cursor(io, cs, "scanout");
+                }
+                p
+            });
             match planned {
-                Ok(Some(l)) => layers.push(l),
+                Ok(Some(kf_disp::scanout::CursorPlan::Layer(l))) => layers.push(l),
+                Ok(Some(kf_disp::scanout::CursorPlan::Expand(x))) => expand = Some(x),
                 Ok(None) => {}
                 Err(e) => self.refuse(dp, &format!("cursor: {e}")),
             }
@@ -4735,6 +4815,26 @@ impl ScanState {
             self.finish(dp, n, req);
             return;
         };
+        // ★ an A1R5G5B5 cursor: the GPU copies the (bounded, inside-the-context-DMA) image into a
+        // buffer kf owns, the CPU expands that copy to 32 bits, and the kernel composes the
+        // expansion from a device buffer kf owns — never guest memory read by the CPU
+        let cursor_px = expand.and_then(|x| {
+            let up = (|| -> Result<kf_disp::scanout::LayerPlan, String> {
+                let mut raw = vec![0u8; usize::try_from(x.extent()).map_err(|e| e.to_string())?];
+                gpu.read_store(x.src(), &mut raw)
+                    .map_err(|e| format!("copying the cursor image: {e}"))?;
+                let (l, px) = x.expand(&raw).map_err(|r| r.0)?;
+                gpu.cursor_upload(&px).map_err(|e| e.to_string())?;
+                Ok(l)
+            })();
+            match up {
+                Ok(l) => Some(l),
+                Err(e) => {
+                    self.refuse(dp, &format!("cursor: {e}"));
+                    None
+                }
+            }
+        });
         // ★ the YUV windows: composed after the RGB layers and before the cursor. Without the
         // kernel, or for a window the kernel's own bounds refuse, the window is left out of the
         // console copy by name (console-only); a real CUDA error still fails the copy.
@@ -4837,6 +4937,11 @@ impl ScanState {
                         .iter()
                         .try_for_each(|l| gpu.compose_layer(&compose_layer(l), w, h))
                 })
+                .and_then(|()| {
+                    cursor_px
+                        .as_ref()
+                        .map_or(Ok(()), |l| gpu.compose_cursor(&compose_layer(l), w, h))
+                })
                 .map_err(|e| format!("SDR composition {w}x{h}: {e}"))
         } else {
             gpu.compose_begin(w, h)
@@ -4855,6 +4960,12 @@ impl ScanState {
                     layers[n_rgb..].iter().try_for_each(|l| {
                         gpu.compose_layer(&compose_layer(l), w, h)
                             .map_err(|e| format!("window {}: {e}", l.window))
+                    })
+                })
+                .and_then(|()| {
+                    cursor_px.as_ref().map_or(Ok(()), |l| {
+                        gpu.compose_cursor(&compose_layer(l), w, h)
+                            .map_err(|e| format!("cursor: {e}"))
                     })
                 })
         };

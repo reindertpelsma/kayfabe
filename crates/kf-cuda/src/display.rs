@@ -279,7 +279,16 @@ pub struct DisplayGpu {
     /// ★ 2026-10-08 (`V3_DISPLAY.md` §8.18): recorded with every completion signal, so a copy whose
     /// signal is late can be asked "still queued, or failed?" without blocking.
     signal_event: EventHandle,
+    /// ★ The expanded cursor (an `A1R5G5B5` image the VMM converted to 32 bits): two slots of
+    /// [`CURSOR_PX_MAX`] bytes the VMM owns, the one the next copy writes, and the address of the
+    /// one the last upload filled. Two, because the previous frame's kernel may still read the
+    /// other.
+    cursor_px: Option<([CUdeviceptr; 2], usize)>,
+    cursor_at: Option<(CUdeviceptr, usize)>,
 }
+
+/// The most an expanded cursor image takes: 256 x 256 pixels of 4 bytes.
+pub const CURSOR_PX_MAX: usize = 256 * 256 * 4;
 
 /// ★ One page-locked host frame buffer the display console reads (M2). Its address crosses to the
 /// QEMU console as an integer; this crate writes it only through the GPU copy engine.
@@ -628,6 +637,8 @@ impl DisplayGpu {
             color_event,
             color_recorded: false,
             color_snapshots: [None; 65],
+            cursor_px: None,
+            cursor_at: None,
             signal_event,
         })
     }
@@ -848,6 +859,58 @@ impl DisplayGpu {
         l.check(w, h).map_err(|e| refused(what, e))?;
         let n = usize::try_from(l.extent).map_err(|_| refused(what, format!("{l:?}")))?;
         let src = self.at(l.src, n, what)?;
+        self.launch_compose(src, l, w, h, what)
+    }
+
+    /// ★ Put the expanded cursor image `px` (tight 32-bit pixels, at most [`CURSOR_PX_MAX`] bytes)
+    /// into a buffer the VMM owns, for [`Self::compose_cursor`]. Synthetic data the VMM built from
+    /// its own copy of the guest's image; nothing here reads guest memory.
+    ///
+    /// # Errors
+    /// Refused by name when `px` is empty or larger than the slot; the CUDA error otherwise.
+    pub fn cursor_upload(&mut self, px: &[u8]) -> Result<(), CudaError> {
+        let what = "DisplayGpu::cursor_upload";
+        if px.is_empty() || px.len() > CURSOR_PX_MAX {
+            return Err(refused(what, format!("a {}-byte cursor image", px.len())));
+        }
+        let ([a, b], next) = match self.cursor_px {
+            Some(c) => c,
+            None => (
+                [
+                    self.cu
+                        .mem_alloc_zeroed(CURSOR_PX_MAX, "cuMemAlloc(display cursor)")?,
+                    self.cu
+                        .mem_alloc_zeroed(CURSOR_PX_MAX, "cuMemAlloc(display cursor)")?,
+                ],
+                0,
+            ),
+        };
+        self.cursor_px = Some(([a, b], 1 - next));
+        let dst = [a, b][next];
+        self.cu
+            .memcpy_h2d(dst, px, "cuMemcpyHtoD(display cursor)")?;
+        self.cursor_at = Some((dst, px.len()));
+        Ok(())
+    }
+
+    /// ★ Queue the cursor layer `l` (its `src` 0) over the pixels [`Self::cursor_upload`] put in
+    /// place, onto the composition begun by [`Self::compose_begin`].
+    ///
+    /// # Errors
+    /// Refused by name when nothing was uploaded, or `l` reads past what was; as
+    /// [`Self::compose_layer`] otherwise.
+    pub fn compose_cursor(&self, l: &ComposeLayer, w: u32, h: u32) -> Result<(), CudaError> {
+        let what = "DisplayGpu::compose_cursor";
+        l.check(w, h).map_err(|e| refused(what, e))?;
+        let Some((src, len)) = self.cursor_at else {
+            return Err(refused(what, "no cursor image was uploaded".into()));
+        };
+        if l.src != 0 || l.block_linear || l.extent > len as u64 {
+            return Err(refused(
+                what,
+                format!("{l:?} reads past the {len}-byte cursor image"),
+            ));
+        }
         self.launch_compose(src, l, w, h, what)
     }
 
@@ -1773,6 +1836,10 @@ impl Drop for DisplayGpu {
         }
         if let Some((p, _)) = self.color_status.take() {
             self.cu.mem_free(p);
+        }
+        if let Some(([a, b], _)) = self.cursor_px.take() {
+            self.cu.mem_free(a);
+            self.cu.mem_free(b);
         }
         self.cu.ctx_destroy(self.ctx);
     }
