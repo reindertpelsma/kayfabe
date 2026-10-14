@@ -44,7 +44,9 @@ start)
     fi
     rm -f "$RUN/qmp.sock" "$RUN/qga.sock"
     [ -e "$RUN/qemu.log" ] && mv "$RUN/qemu.log" "$RUN/qemu-$(date +%H%M%S).log"
-    KF3="kf3-gpu,fb-mb=${WIN_FB_MB:-4096},bar1-size=134217728,bar2-size=33554432,display=on,gop=on,guest-driver=580.65.06,bus=pci.0,addr=0x6,id=kf0"
+    # WIN_KF3_DISPLAY="display=off" + WIN_STDVGA=1: GB20x, whose kf3 display plane is refused at realize (doc §3)
+    KF3="kf3-gpu,fb-mb=${WIN_FB_MB:-4096},bar1-size=134217728,bar2-size=33554432,${WIN_KF3_DISPLAY:-display=on,gop=on},guest-driver=580.65.06,bus=pci.0,addr=0x6,id=kf0"
+    VGA=(); [ "${WIN_STDVGA:-0}" = 1 ] && VGA=(-device VGA,addr=0x9,id=vga0)
     ARGS=(-name kayfabe-diesweep -nodefaults -no-user-config
         -machine pc,accel=kvm,smm=on,memory-backend=ram0
         -object "memory-backend-memfd,id=ram0,size=${WIN_RAM_MB:-8192}M,share=on" -m "${WIN_RAM_MB:-8192}" -smp 8
@@ -52,7 +54,7 @@ start)
         -drive "if=pflash,format=raw,unit=0,readonly=on,file=$W/OVMF_CODE_4M.fd"
         -drive "if=pflash,format=raw,unit=1,file=$RUN/OVMF_VARS.fd"
         -rtc base=utc,driftfix=slew -global kvm-pit.lost_tick_policy=discard
-        -display none
+        "${VGA[@]}" -display none
         -qmp "unix:$RUN/qmp.sock,server=on,wait=off"
         -serial "file:$RUN/serial.log" -monitor none -action reboot=reset,panic=none
         -netdev "user,id=n0,restrict=${WIN_NET_RESTRICT:-on}"
@@ -68,7 +70,7 @@ start)
     FLAGS="KF3_WIN_USER_CHANNELS_PASSTHROUGH KF3_WIN_TWIN_DEFAPI_OBJECT KF3_KERNEL_GR_CE KF3_KERNEL_GR_WORK KF3_TRANSLATED_CE_RELAY KF3_DEFERRED_API KF3_PREEMPT_BIND_PROBE KF3_DISPLAY_IMP_ENABLE KF3_DISPLAY_CTRL_PROBE KF3_ZCULL_BIND_PROBE KF3_SW_RUNLIST_HOST_OWNED KF3_ASYNC_PREEMPT KF3_GFX_POOL_PROBE KF3_SW_RUNLIST_PROBE KF3_MEMORY_LIST_PROBE KF3_DISPLAY_SDR_COLOR KF3_DISPLAY_CAPS_PROBE KF3_DISPLAY_LUT_MIRROR KF3_DISPLAY_ILUT_OFFSET_256 ${WIN_FLAGS:-}"
     while IFS= read -r name; do unset "$name"; done < <(compgen -e | sed -n '/^KF3_/p')
     ENV=(); for f in $FLAGS; do case $f in *=*) ENV+=("$f") ;; *) ENV+=("$f=1") ;; esac; done
-    printf '%s\n' "${ENV[@]}" > "$RUN/flags.txt"; printf '%q ' "$QBIN" "${ARGS[@]}" > "$RUN/argv.txt"
+    printf '%s\n' "${ENV[@]}" "WIN_KF3_DISPLAY=${WIN_KF3_DISPLAY:-display=on,gop=on}" "WIN_STDVGA=${WIN_STDVGA:-0}" > "$RUN/flags.txt"; printf '%q ' "$QBIN" "${ARGS[@]}" > "$RUN/argv.txt"
     echo "WIN_DIE_START kf3=$REV checkout=$(git -C "$K" rev-parse --short=9 HEAD) gpu=$(nvidia-smi --query-gpu=name --format=csv,noheader) xid_before=$(dmesg | grep -c 'NVRM: Xid') $(date -Is)" | tee -a "$RUN/marker.txt"
     env "${ENV[@]}" setsid "$QBIN" "${ARGS[@]}" > "$RUN/qemu.log" 2>&1 < /dev/null &
     QPID=$!; echo "$QPID" > "$RUN/qpid"
@@ -88,7 +90,7 @@ ps)
     timeout "${3:-300}" python3 "$QMP" "$RUN/qga.sock" qga-exec powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand "$enc"; exit $? ;;
 shot)
     n=${2:-shot}
-    python3 "$QMP" "$RUN/qmp.sock" cmd screendump "{\"filename\":\"$RUN/shots/$n.ppm\",\"device\":\"kf0\"}" > /dev/null \
+    python3 "$QMP" "$RUN/qmp.sock" cmd screendump "{\"filename\":\"$RUN/shots/$n.ppm\",\"device\":\"${WIN_SHOT_DEV:-kf0}\"}" > /dev/null \
         && gzip -f "$RUN/shots/$n.ppm" && say "shot $RUN/shots/$n.ppm.gz $(date -Is)" || die "screendump failed"
     exit 0 ;;
 stop)

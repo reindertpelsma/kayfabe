@@ -27,6 +27,15 @@ phase1)
     nvidia-smi -q -d MEMORY | sed -n '/BAR1 Memory Usage/,/Free/p' | tr -s ' ' | tr '\n' ' ' | sed 's/^/HOSTBAR1 p1 /'; echo
     bash "$WD" ps "$W/secrets/phase1.ps1" 240
     bash "$WD" stop ;;
+bind)
+    # a new die whose device PnP left driverless (GB206: CM_PROB_REINSTALL): bind the image's own package, flag the new key
+    bash "$WD" start || exit 2
+    bash "$WD" wait-qga "${QGA_WAIT:-1200}" || { bash "$WD" shot bind_noqga; exit 3; }
+    sleep 30
+    bash "$WD" ps "$HERE/drvbind.ps1" 400
+    bash "$WD" ps "$HERE/evidence.ps1" 240 | sed 's/^/PB /'
+    bash "$WD" shot bind_end
+    bash "$WD" stop ;;
 phase2)
     bash "$WD" start || exit 2
     bash "$WD" wait-qga "${QGA_WAIT:-1200}" || { bash "$WD" shot p2_noqga; exit 3; }
