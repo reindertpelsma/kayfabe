@@ -25,6 +25,8 @@ ap.add_argument('--outdir', required=True)
 ap.add_argument('--flags', default='')
 ap.add_argument('--no-webgpu', action='store_true')
 ap.add_argument('--skip-fullscreen', action='store_true')
+ap.add_argument('--page', default='', help='load this URL in the main tab instead of mix.html (e.g. a YouTube watch page)')
+ap.add_argument('--kill9', action='store_true', help='end by SIGKILL of the whole browser instead of SIGTERM')
 ap.add_argument('--port', type=int, default=9222)
 ap.add_argument('--hash', default='scr=1', help='extra mix.html hash parameters, e.g. glN=1500')
 a = ap.parse_args()
@@ -190,7 +192,7 @@ except Exception:
     pass
 
 # ---------------- main page
-mixurl = f'file://{KF}/pages/mix.html#{a.hash}'
+mixurl = a.page or f'file://{KF}/pages/mix.html#{a.hash}'
 mix_id = None
 for t in targets():
     if t['url'] in ('about:blank', '') or t['url'].startswith('file://'):
@@ -204,7 +206,7 @@ mixc.call('Runtime.enable')
 mixc.call('Media.enable')
 seen_dec = set()
 mixc.call('Page.navigate', {'url': mixurl})
-ev(f'LOAD mix.html#{a.hash}')
+ev(f'LOAD {mixurl}')
 time.sleep(5)
 
 
@@ -242,7 +244,7 @@ def do(action):
     elif action == 'video_av1':
         ev_js(mixc, "window.__video('av1')")
     elif action == 'fullscreen_on':
-        ev_js(mixc, "document.getElementById('v')&&document.getElementById('v').requestFullscreen().then(()=>'fs').catch(e=>'fserr '+e)", gesture=True)
+        ev_js(mixc, "(document.getElementById('v')||document.querySelector('video'))&&(document.getElementById('v')||document.querySelector('video')).requestFullscreen().then(()=>'fs').catch(e=>'fserr '+e)", gesture=True)
         # also tell the OS-level window to take it (kiosk-like); CDP fullscreen is via the Fullscreen API
     elif action == 'fullscreen_off':
         ev_js(mixc, "document.fullscreenElement&&document.exitFullscreen()", gesture=True)
@@ -317,6 +319,9 @@ while time.time() - T0 - 0 < total + 20:
                 do(act)
             except Exception as e:
                 ev(f'ACTION {act} failed: {e}')
+    if a.page and 'youtube' in a.page and 'yt' not in done:
+        done.add('yt')
+        ev_js(mixc, "(()=>{const p=document.getElementById('movie_player');if(p&&p.setPlaybackQualityRange){p.setPlaybackQualityRange('hd2160');}const b=document.querySelector('.ytp-ad-skip-button');b&&b.click();return 'yt'})()")
     if time.time() - last_sample >= 10:
         last_sample = time.time()
         try:
@@ -346,9 +351,9 @@ ev(f'TARGET_CRASHES {len(crashes)} GPU_PIDS_FINAL {gpu_pids()}')
 for p in sh('pgrep -af "[g]pu-recent-crash-count"').splitlines()[:2]:
     ev('CMDLINE ' + p[:400])
 try:
-    os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+    os.killpg(os.getpgid(proc.pid), signal.SIGKILL if a.kill9 else signal.SIGTERM)
 except Exception:
     pass
 time.sleep(3)
-sh('pkill -f "remote-debugging-port=%d"' % a.port)
+sh('pkill %s -f "remote-debugging-port=%d"' % ('-9' if a.kill9 else '', a.port))
 ev('DONE')
