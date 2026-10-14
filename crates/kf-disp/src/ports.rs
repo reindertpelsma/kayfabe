@@ -27,6 +27,68 @@ pub const NUM_CHANNELS: usize = 81;
 /// The most heads any family's register file indexes (`NV_PDISP_*_HEAD_TIMING__SIZE_1`).
 pub const MAX_HEADS: usize = 8;
 
+/// Windows whose `GET_LINE` the scan-line publisher keeps live.
+pub const MAX_WINDOWS: usize = 32;
+
+/// ★ A head's raster, as its LIVE scan position needs it (core `GET_RG_SCAN_LINE(h)`, window
+/// `GET_LINE`): the line the active region starts at (`HEAD_SET_RASTER_BLANK_END.Y`), the line the
+/// vertical blank starts at (`HEAD_SET_RASTER_BLANK_START.Y`), the full raster height
+/// (`HEAD_SET_RASTER_SIZE.HEIGHT`) and the frame period. All from the core channel's ARMED words.
+///
+/// `[measured run 2990, e821bf3a, 2026-10-14, BAR0 read trace]` the Windows driver reads
+/// `GET_RG_SCAN_LINE(0)` (`0x680220`) and window 0's `GET_LINE` (`0x690208`) once per vblank
+/// interrupt and once per `D3DKMTGetScanLine`; kf3 answered a constant 0 (never in the blank), where
+/// the hardware answers a live raster position (`[measured VFIO reference, 2026-10-08]` `0x10011`:
+/// VBLANK set, line 17).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ScanGeom {
+    /// First active line (`BLANK_END.Y`).
+    pub blank_end_y: u32,
+    /// First blanking line after the active region (`BLANK_START.Y`).
+    pub blank_start_y: u32,
+    /// Lines per frame, blanking included (`RASTER_SIZE.HEIGHT`).
+    pub total_h: u32,
+    /// Frame period in nanoseconds.
+    pub period_ns: u64,
+}
+
+impl ScanGeom {
+    /// The raster line and whether it lies in the vertical blank, `since_edge_ns` after a frame
+    /// edge. A frame edge is the start of the vertical blank (the vblank interrupt), so the line
+    /// there is `blank_start_y`; it advances by `total_h` lines per period and wraps (the raster runs
+    /// on between edges, as the hardware's does). `None` for a raster that cannot be one.
+    #[must_use]
+    pub fn position(&self, since_edge_ns: u64) -> Option<(u32, bool)> {
+        if self.total_h == 0
+            || self.period_ns == 0
+            || self.blank_start_y > self.total_h
+            || self.blank_end_y > self.blank_start_y
+        {
+            return None;
+        }
+        let t = since_edge_ns.checked_rem(self.period_ns)?;
+        let lines = u128::from(t)
+            .checked_mul(u128::from(self.total_h))?
+            .checked_div(u128::from(self.period_ns))?;
+        let line = u128::from(self.blank_start_y)
+            .checked_add(lines)?
+            .checked_rem(u128::from(self.total_h))?;
+        let line = u32::try_from(line).ok()?;
+        Some((line, line >= self.blank_start_y || line < self.blank_end_y))
+    }
+}
+
+/// One head's [`ScanGeom`] and its last frame edge (a sequence lock, one writer per word).
+#[derive(Debug, Default)]
+struct ScanSlot {
+    seq: AtomicU32,
+    /// `blank_end_y | blank_start_y << 16 | total_h << 32`; 0 = no raster.
+    geom: AtomicU64,
+    period_ns: AtomicU64,
+    /// [`Ports::now_ns`] at the last frame edge; 0 = none yet.
+    edge_ns: AtomicU64,
+}
+
 /// One channel number's posted PUT, published GET and allocation generation.
 #[derive(Debug, Default)]
 pub struct ChanPort {
@@ -183,6 +245,12 @@ pub struct Ports {
     lit_sor: [AtomicU32; MAX_HEADS],
     /// Per head: the ARMED mode while the head's raster runs ([`HeadTiming`]).
     timing: [TimingSlot; MAX_HEADS],
+    /// Per head: the raster for the live scan position, and the last frame edge ([`ScanGeom`]).
+    scan: [ScanSlot; MAX_HEADS],
+    /// Per window: the head that owns it in the ARMED core state, plus one (0 = none).
+    win_head: [AtomicU32; MAX_WINDOWS],
+    /// The clock [`Ports::now_ns`] counts from.
+    epoch: std::time::Instant,
     /// PUT writes posted by vCPUs (boot-log counter).
     pub puts_posted: AtomicU64,
     /// The PUT writes in arrival order (see [`PutLog`]).
@@ -203,6 +271,9 @@ impl Default for Ports {
             frames: core::array::from_fn(|_| AtomicU32::new(0)),
             lit_sor: core::array::from_fn(|_| AtomicU32::new(0)),
             timing: core::array::from_fn(|_| TimingSlot::default()),
+            scan: core::array::from_fn(|_| ScanSlot::default()),
+            win_head: core::array::from_fn(|_| AtomicU32::new(0)),
+            epoch: std::time::Instant::now(),
             puts_posted: AtomicU64::new(0),
             put_log: PutLog::default(),
             w1c_writes: AtomicU64::new(0),
@@ -233,7 +304,102 @@ impl Ports {
             self.frames[h].store(0, Ordering::Release);
             self.lit_sor[h].store(0, Ordering::Release);
             self.set_head_timing(h, None);
+            self.set_scan_geom(h, None);
         }
+        for w in &self.win_head {
+            w.store(0, Ordering::Release);
+        }
+    }
+
+    /// Nanoseconds since this `Ports` was made (never 0 after the first nanosecond) — the clock of
+    /// the frame edges and of every scan position.
+    #[must_use]
+    pub fn now_ns(&self) -> u64 {
+        u64::try_from(self.epoch.elapsed().as_nanos())
+            .unwrap_or(u64::MAX)
+            .max(1)
+    }
+
+    /// ★ **Worker** (the only writer): publish head `h`'s raster for its live scan position
+    /// (`None` = the raster is not running). A dimension past 16 bits publishes none.
+    pub fn set_scan_geom(&self, h: usize, g: Option<ScanGeom>) {
+        let Some(slot) = self.scan.get(h) else {
+            return;
+        };
+        let packed = g.and_then(|g| {
+            let w = |v: u32| u16::try_from(v).ok().map(u64::from);
+            let geom = w(g.blank_end_y)? | w(g.blank_start_y)? << 16 | w(g.total_h)? << 32;
+            (g.total_h != 0 && g.period_ns != 0).then_some((geom, g.period_ns))
+        });
+        let (geom, period) = packed.unwrap_or((0, 0));
+        slot.seq.fetch_add(1, Ordering::AcqRel);
+        slot.geom.store(geom, Ordering::Release);
+        slot.period_ns.store(period, Ordering::Release);
+        if geom == 0 {
+            slot.edge_ns.store(0, Ordering::Release);
+        }
+        slot.seq.fetch_add(1, Ordering::Release);
+    }
+
+    /// Head `h`'s raster for its scan position, if one runs. Never blocks (gives up on a collision).
+    #[must_use]
+    pub fn scan_geom(&self, h: usize) -> Option<ScanGeom> {
+        let slot = self.scan.get(h)?;
+        for _ in 0..8 {
+            let s1 = slot.seq.load(Ordering::Acquire);
+            if s1 % 2 == 1 {
+                core::hint::spin_loop();
+                continue;
+            }
+            let geom = slot.geom.load(Ordering::Acquire);
+            let period_ns = slot.period_ns.load(Ordering::Acquire);
+            if slot.seq.load(Ordering::Acquire) != s1 {
+                continue;
+            }
+            let f = |sh: u32| ((geom >> sh) & 0xffff) as u32;
+            return (geom != 0).then(|| ScanGeom {
+                blank_end_y: f(0),
+                blank_start_y: f(16),
+                total_h: f(32),
+                period_ns,
+            });
+        }
+        None
+    }
+
+    /// ★ **Worker**: head `h` reached a frame edge (the start of its vertical blank) at `at_ns`
+    /// ([`Ports::now_ns`]).
+    pub fn note_frame_edge_at(&self, h: usize, at_ns: u64) {
+        if let Some(slot) = self.scan.get(h) {
+            slot.edge_ns.store(at_ns.max(1), Ordering::Release);
+        }
+    }
+
+    /// Head `h`'s scan position at `now_ns`: `None` until its raster runs and has had a frame edge.
+    #[must_use]
+    pub fn scan_position_at(&self, h: usize, now_ns: u64) -> Option<(u32, bool)> {
+        let edge = self.scan.get(h)?.edge_ns.load(Ordering::Acquire);
+        if edge == 0 {
+            return None;
+        }
+        self.scan_geom(h)?.position(now_ns.saturating_sub(edge))
+    }
+
+    /// ★ **Worker**: publish the head window `w` belongs to in the ARMED core state.
+    pub fn set_window_head(&self, w: usize, h: Option<u32>) {
+        if let Some(a) = self.win_head.get(w) {
+            a.store(h.map_or(0, |h| h.saturating_add(1)), Ordering::Release);
+        }
+    }
+
+    /// The head window `w` belongs to, if any.
+    #[must_use]
+    pub fn window_head(&self, w: usize) -> Option<u32> {
+        self.win_head
+            .get(w)
+            .map(|a| a.load(Ordering::Acquire))
+            .filter(|v| *v != 0)
+            .map(|v| v - 1)
     }
 
     /// ★ **Worker**: publish the SOR head `h` lights (`None` = no display).
@@ -564,5 +730,103 @@ mod tests {
         p.raise(EventReg::SemWin, 1);
         assert_eq!(p.rm_ctrl_disp(8, None), 0, "no WinSem bit on Turing");
         assert_eq!(p.rm_ctrl_disp(8, Some(9)), 1 << 9);
+    }
+}
+
+#[cfg(test)]
+mod scan_tests {
+    use super::*;
+
+    /// CEA-861 1080p60 as NVIDIA's raster counts it: sync 5 + back porch 36 = active from line 41,
+    /// 1080 active lines, 1125 total, 16.667 ms.
+    const G: ScanGeom = ScanGeom {
+        blank_end_y: 41,
+        blank_start_y: 1121,
+        total_h: 1125,
+        period_ns: 16_666_667,
+    };
+
+    #[test]
+    fn a_frame_edge_is_the_start_of_the_vertical_blank() {
+        assert_eq!(G.position(0), Some((1121, true)));
+        // the time of the k-th line after the edge
+        let at = |k: u64| (k * G.period_ns).div_ceil(u64::from(G.total_h));
+        // 4 lines later the raster wraps to line 0, still in the blank
+        assert_eq!(G.position(at(4)), Some((0, true)));
+        // line 40 is the last blank line, line 41 the first active one
+        assert_eq!(G.position(at(44)), Some((40, true)));
+        assert_eq!(G.position(at(45)), Some((41, false)));
+    }
+
+    #[test]
+    fn the_position_moves_and_wraps_with_the_period() {
+        let mid = G.position(G.period_ns / 2).unwrap();
+        assert!(!mid.1 && mid.0 > 41 && mid.0 < 1121, "{mid:?}");
+        assert_eq!(G.position(G.period_ns), G.position(0));
+        assert_eq!(G.position(3 * G.period_ns + 123), G.position(123));
+        // the blank is visited once per frame: 45 of 1125 lines
+        let n = 10_000u64;
+        let inb = (0..n)
+            .filter(|i| G.position(i * G.period_ns / n).unwrap().1)
+            .count() as u64;
+        assert!((390..=410).contains(&inb), "{inb}");
+    }
+
+    #[test]
+    fn a_raster_that_cannot_be_one_has_no_position() {
+        for g in [
+            ScanGeom { total_h: 0, ..G },
+            ScanGeom { period_ns: 0, ..G },
+            ScanGeom {
+                blank_start_y: 1126,
+                ..G
+            },
+            ScanGeom {
+                blank_end_y: 1122,
+                ..G
+            },
+        ] {
+            assert_eq!(g.position(5), None, "{g:?}");
+        }
+    }
+
+    #[test]
+    fn ports_publish_geometry_edges_and_window_heads() {
+        let p = Ports::default();
+        assert_eq!(p.scan_position_at(0, 100), None, "no raster");
+        p.set_scan_geom(0, Some(G));
+        assert_eq!(p.scan_geom(0), Some(G));
+        assert_eq!(p.scan_position_at(0, 100), None, "no frame edge yet");
+        p.note_frame_edge_at(0, 1_000);
+        assert_eq!(p.scan_position_at(0, 1_000), Some((1121, true)));
+        assert_eq!(
+            p.scan_position_at(0, 1_000 + G.period_ns / 2),
+            G.position(G.period_ns / 2)
+        );
+        // a guest life ends: no raster, no edge, no window owner
+        p.set_window_head(3, Some(0));
+        assert_eq!(p.window_head(3), Some(0));
+        p.reset_life();
+        assert_eq!(
+            (
+                p.scan_geom(0),
+                p.scan_position_at(0, 2_000),
+                p.window_head(3)
+            ),
+            (None, None, None)
+        );
+        // a dimension past 16 bits publishes nothing; out-of-range heads are ignored
+        p.set_scan_geom(
+            1,
+            Some(ScanGeom {
+                total_h: 70_000,
+                ..G
+            }),
+        );
+        assert_eq!(p.scan_geom(1), None);
+        p.set_scan_geom(MAX_HEADS, Some(G));
+        p.note_frame_edge_at(MAX_HEADS, 5);
+        assert_eq!(p.scan_position_at(MAX_HEADS, 6), None);
+        assert!(p.now_ns() >= 1);
     }
 }

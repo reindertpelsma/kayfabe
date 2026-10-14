@@ -52,6 +52,13 @@ use std::time::{Duration, Instant};
 /// Heads any family's register file indexes.
 const MAX_HEADS: usize = kf_disp::ports::MAX_HEADS;
 
+/// How often [`Device::scanline_loop`] republishes a running raster's position: 250 us, shorter than
+/// any vertical blank of a mode this display drives (1080p60 0.67 ms, 1440p144 ~0.3 ms), so a guest
+/// polling once per frame sees the blank.
+const SCAN_LINE_STEP: Duration = Duration::from_micros(250);
+/// …and how often it looks for a running raster when none runs.
+const SCAN_LINE_IDLE: Duration = Duration::from_millis(20);
+
 /// ★ 2026-10-08 EXPERIMENT (H-loadv; `KF3_DISPLAY_LOADV=1`, default off): bit 0 of
 /// `NV_PDISP_FE_EVT_STAT_HEAD_TIMING(h)`. ⚠ NOT in ogkm's published `dev_disp.h` (v03_00 names only
 /// LAST_DATA 1:1, VBLANK 2:2, RG_LINE_A 5:5, RG_LINE_B 6:6), so it is named here by hand, from:
@@ -320,6 +327,13 @@ fn frame_edge_out(
     if let Some((lb, ls)) = dp.map.loadv {
         store(lb + h as u64 * ls, f);
     }
+    // ★ 2026-10-14: the raster is at the start of its vertical blank now — the scan-line words read
+    // so (VBLANK, line BLANK_START.Y) before the interrupt the guest reads them in.
+    let now = dp.ports.now_ns();
+    dp.ports.note_frame_edge_at(h, now);
+    for (o, v) in dp.map.scan_words(&dp.ports, now, Some(h)) {
+        store(o, v);
+    }
     let irq = frame_edge(&dp.ports, &dp.map, h, loadv);
     if wtrace && irq != 0 && trace_slot(traced, display_trace_cap()) {
         eprintln!(
@@ -378,6 +392,12 @@ pub struct RegMap {
     core_head_state: Option<CoreHeadState>,
     rg_dpca: (u64, u64, (u8, u8)),
     loadv: Option<(u64, u64)>,
+    /// ★ The core's `GET_RG_SCAN_LINE(h)` (offset in the core user area, stride, the LINE and VBLANK
+    /// fields) — a LIVE raster position on the hardware ([`kf_disp::ports::ScanGeom`]).
+    rg_scan_line: Option<(u64, u64, (u8, u8), (u8, u8))>,
+    /// ★ The window channel's `GET_LINE` (offset in a window's user area, the LINE field): the line
+    /// of the raster of the head the window belongs to.
+    win_get_line: Option<(u64, (u8, u8))>,
     /// H-blankstate: the core's `SET_GET_BLANKING_CTRL(h)` (offset in the core user area, stride)
     /// and its BLANK read-back value; `None` when the class table lacks the names.
     blanking: Option<(u64, u64, u32)>,
@@ -502,6 +522,18 @@ impl RegMap {
             );
             Some((b, s, w))
         });
+        let rg_scan_line = arr("GET_RG_SCAN_LINE").and_then(|(b, s)| {
+            Some((
+                b,
+                s,
+                t.f(core, "GET_RG_SCAN_LINE_LINE")?,
+                t.f(core, "GET_RG_SCAN_LINE_VBLANK")?,
+            ))
+        });
+        let win_get_line = t
+            .v(row.classes.window, "GET_LINE")
+            .zip(t.f(row.classes.window, "GET_LINE_LINE"))
+            .map(|(o, f)| (u64::from(o), f));
         Ok(RegMap {
             lo,
             hi,
@@ -563,7 +595,50 @@ impl RegMap {
             loadv: a2("NV_PDISP_POSTCOMP_HEAD_LOADV_COUNTER").ok(),
             blanking,
             min_frame_idle,
+            rg_scan_line,
+            win_get_line,
         })
+    }
+
+    /// ★ The live scan-line words at `now_ns` as `(BAR0 offset, value)`: every running head's core
+    /// `GET_RG_SCAN_LINE(h)` (LINE, VBLANK) and every owned window's `GET_LINE` (its head's LINE);
+    /// `only` limits both to one head. Empty for a head with no running raster or no frame edge yet
+    /// (its words keep their last value), and for a class table without the words.
+    #[must_use]
+    pub fn scan_words(&self, ports: &Ports, now_ns: u64, only: Option<usize>) -> Vec<(u64, u32)> {
+        let mut pos = [None; MAX_HEADS];
+        for (h, p) in pos.iter_mut().enumerate().take(self.heads as usize) {
+            if only.is_none_or(|o| o == h) {
+                *p = ports.scan_position_at(h, now_ns);
+            }
+        }
+        let mut out = Vec::new();
+        if let Some((b, s, lf, vf)) = self.rg_scan_line {
+            for (h, p) in pos.iter().enumerate() {
+                if let Some((line, vblank)) = *p {
+                    let w = kf_disp::class::put(
+                        kf_disp::class::put(0, lf, line),
+                        vf,
+                        u32::from(vblank),
+                    );
+                    out.push((self.core_assy + b + h as u64 * s, w));
+                }
+            }
+        }
+        if let Some((o, lf)) = self.win_get_line {
+            for w in 0..self.windows {
+                let Some(h) = ports.window_head(w as usize) else {
+                    continue;
+                };
+                if let Some(Some((line, _))) = pos.get(h as usize) {
+                    out.push((
+                        self.user_base(ChannelKind::Window, w) + o,
+                        kf_disp::class::put(0, lf, *line),
+                    ));
+                }
+            }
+        }
+        out
     }
 
     /// ★ The words a new core life publishes under the H-blankstate / H-armeddefault experiments,
@@ -2384,6 +2459,34 @@ impl Io<'_> {
 }
 
 impl Device {
+    /// ★ **The live scan-line publisher** — its own thread (`kf3-scanline`), never a vCPU, never the
+    /// drainer, no lock. BAR0 reads do not trap, so a raster position the guest polls (`GET_RG_SCAN_LINE`,
+    /// window `GET_LINE`; `D3DKMTGetScanLine`, the vblank path of the Windows driver) is a shadow word
+    /// this thread rewrites every [`SCAN_LINE_STEP`] while a head's raster runs (every frame edge also
+    /// writes it, before its interrupt). `[measured run 2990, 2026-10-14]` with the words constant 0 an
+    /// OpenGL application with vsync on (Minecraft, swap interval 1) hung 300 s and the ICD aborted
+    /// ("Unable to communicate with the display driver", error 2).
+    pub fn scanline_loop(&self) {
+        let Some(dp) = self.display else { return };
+        if dp.map.rg_scan_line.is_none() && dp.map.win_get_line.is_none() {
+            eprintln!(
+                "kf3: display: no GET_RG_SCAN_LINE / GET_LINE in the class table — no live scan line"
+            );
+            return;
+        }
+        while !self.stop.load(Ordering::Acquire) {
+            let words = dp.map.scan_words(&dp.ports, dp.ports.now_ns(), None);
+            for (o, v) in &words {
+                self.shadow_store(*o, u64::from(*v), 4);
+            }
+            std::thread::sleep(if words.is_empty() {
+                SCAN_LINE_IDLE
+            } else {
+                SCAN_LINE_STEP
+            });
+        }
+    }
+
     /// ★★★ **The display worker** — its own thread; see the module docs. ⊘ Never a vCPU, never the
     /// drainer, and it holds the model's lock only to take statements.
     pub fn display_loop(&self) {
@@ -2636,7 +2739,11 @@ impl Device {
                     eprintln!(
                         "kf3: display: +{} ms the guest's display life ENDED ({}): {channels} model channel(s), {dropped} queued completion(s) dropped (never written){}",
                         started.elapsed().as_millis(),
-                        if owed.is_some() { "device reset" } else { "its RM unloaded" },
+                        if owed.is_some() {
+                            "device reset"
+                        } else {
+                            "its RM unloaded"
+                        },
                         if dp.boot.is_some() {
                             " — the boot layer is shown again"
                         } else {
@@ -3171,6 +3278,13 @@ impl Device {
                         // and its armed mode (`0x73011a`)
                         for (h, t) in engine.head_timings().into_iter().enumerate() {
                             dp.ports.set_head_timing(h, t);
+                        }
+                        // and the raster its live scan line follows, and the head of every window
+                        for (h, g) in engine.head_scan_geoms().into_iter().enumerate() {
+                            dp.ports.set_scan_geom(h, g);
+                        }
+                        for (w, h) in engine.window_heads().into_iter().enumerate() {
+                            dp.ports.set_window_head(w, h);
                         }
                     }
                     Effect::Notify {
@@ -5291,6 +5405,73 @@ mod tests {
         assert_eq!(authored.word(0x780), authored.word(0x7a0));
     }
 
+    /// ★ 2026-10-14 — THE SCAN LINE IS LIVE. The words the Windows driver reads per vblank and per
+    /// `D3DKMTGetScanLine` (`[measured run 2990, BAR0 read trace]` `0x680220` = core
+    /// `GET_RG_SCAN_LINE(0)`, `0x690208` = window 0 `GET_LINE`) are derived at those offsets on Ada and
+    /// Ampere; a frame edge reads VBLANK at line `BLANK_START.Y`, the raster then moves and leaves the
+    /// blank, a window follows its head's line, and nothing is published before a raster runs.
+    #[test]
+    fn the_scan_line_words_are_live_at_the_derived_offsets() {
+        use kf_disp::ports::ScanGeom;
+        let g = ScanGeom {
+            blank_end_y: 41,
+            blank_start_y: 1121,
+            total_h: 1125,
+            period_ns: 16_666_667,
+        };
+        for (ver, ip, row) in [
+            ("580.65.06", 0x0404_0000, &kf_chip::display::ADA),
+            ("580.159.04", 0x0401_0000, &kf_chip::display::AMPERE),
+        ] {
+            let r = Regs::for_ip(ver, ip).unwrap();
+            let t = kf_disp::class::for_version(ver).unwrap();
+            let m = RegMap::resolve(&r, t, row).expect("register map");
+            let p = Ports::default();
+            assert!(
+                m.scan_words(&p, 10, None).is_empty(),
+                "{ver}: no raster, no words"
+            );
+            p.set_scan_geom(0, Some(g));
+            assert!(
+                m.scan_words(&p, 10, None).is_empty(),
+                "{ver}: no frame edge yet"
+            );
+            p.note_frame_edge_at(0, 1_000);
+            p.set_window_head(0, Some(0));
+            let at_edge = m.scan_words(&p, 1_000, None);
+            assert_eq!(
+                at_edge,
+                vec![(0x0068_0220, 0x0001_0461), (0x0069_0208, 0x461)],
+                "{ver}"
+            );
+            let mid = m.scan_words(&p, 1_000 + g.period_ns / 2, None);
+            let core = mid.iter().find(|(o, _)| *o == 0x0068_0220).unwrap().1;
+            assert_eq!(
+                core & 0x0001_0000,
+                0,
+                "{ver}: mid-frame is not in the blank"
+            );
+            assert!((41..1121).contains(&(core & 0xffff)), "{ver}: {core:#x}");
+            assert_eq!(
+                mid.iter().find(|(o, _)| *o == 0x0069_0208).unwrap().1,
+                core & 0xffff
+            );
+            // another head's edge leaves head 0's words out of a per-head publication
+            assert!(m.scan_words(&p, 5_000, Some(1)).is_empty());
+            // a window with no owner gets no word
+            p.set_window_head(0, None);
+            assert_eq!(
+                m.scan_words(&p, 1_000, None),
+                vec![(0x0068_0220, 0x0001_0461)]
+            );
+            assert_eq!(
+                m.classify(0x0068_0220),
+                DispWrite::Plain,
+                "{ver}: core user area"
+            );
+        }
+    }
+
     /// ⚠ H-blankstate / H-armeddefault (default off): a new core life publishes nothing extra with
     /// both off; under the experiments, the hardware's measured read-backs at the derived offsets —
     /// on Ada (the 580.88 guest's C77D core, the guest-driver row `580.65.06`) `0x680240 + 4h` reads
@@ -5605,7 +5786,10 @@ mod tests {
         ];
         for prev in &states {
             let held = held_after_life_reset(prev);
-            assert!(held.preserved.is_none(), "{prev:?}: nothing the old life preserved");
+            assert!(
+                held.preserved.is_none(),
+                "{prev:?}: nothing the old life preserved"
+            );
             // gop=on: boot_done goes back to false with the life
             assert_eq!(
                 choose_shown(None, Some(&boot), false, &held),

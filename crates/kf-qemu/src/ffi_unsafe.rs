@@ -244,6 +244,16 @@ pub unsafe extern "C" fn kf3_realize(
                 write_err(err, err_len, "could not start the display worker thread");
                 return -1;
             }
+            // ★ 2026-10-14: the live scan-line publisher (`display=on` only).
+            if d.display.is_some()
+                && std::thread::Builder::new()
+                    .name("kf3-scanline".into())
+                    .spawn(move || d.scanline_loop())
+                    .is_err()
+            {
+                write_err(err, err_len, "could not start the scan-line thread");
+                return -1;
+            }
             // ★ P4: the VA-manager thread — the one owner of the GPU walker.
             if std::thread::Builder::new()
                 .name("kf3-vamgr".into())

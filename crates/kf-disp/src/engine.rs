@@ -1698,6 +1698,35 @@ impl Engine {
             .collect()
     }
 
+    /// ★ Per head, the raster its LIVE scan position follows (`None` when its raster does not run):
+    /// `BLANK_END.Y`, `BLANK_START.Y`, `RASTER_SIZE.HEIGHT` and the frame period, from the core
+    /// channel's armed words only ([`crate::ports::ScanGeom`]).
+    #[must_use]
+    pub fn head_scan_geoms(&self) -> Vec<Option<crate::ports::ScanGeom>> {
+        let v = &self.vocab;
+        let modes = self.heads_armed();
+        (0..self.heads)
+            .map(|h| {
+                let core = self.chans[0].as_ref()?;
+                let m = modes.iter().find(|m| m.head == h && m.period_ns > 0)?;
+                let be = core.armed(v.c_blank_end.0 + h * v.c_blank_end.1);
+                let bs = core.armed(v.c_blank_start.0 + h * v.c_blank_start.1);
+                Some(crate::ports::ScanGeom {
+                    blank_end_y: fld(be, v.c_blank_y),
+                    blank_start_y: fld(bs, v.c_blank_y),
+                    total_h: m.raster.1,
+                    period_ns: m.period_ns,
+                })
+            })
+            .collect()
+    }
+
+    /// Per window, the head that owns it in the ARMED core state (`None`: no owner, or no core).
+    #[must_use]
+    pub fn window_heads(&self) -> Vec<Option<u32>> {
+        (0..self.windows).map(|w| self.owner_head(w)).collect()
+    }
+
     /// ★ Per head, the SOR it lights: the lowest SOR whose ARMED `SOR_SET_CONTROL.OWNER_MASK` names
     /// the head, while the head's raster runs — what `NV0073_CTRL_CMD_SYSTEM_GET_ACTIVE` reports
     /// (as the connector on that SOR). `None` for an idle head or one no SOR drives.
