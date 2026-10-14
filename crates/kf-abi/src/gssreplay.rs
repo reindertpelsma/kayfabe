@@ -98,6 +98,11 @@ pub struct Row {
     pub size: usize,
     /// The input words that select the answer (everything else is zero in the request).
     pub inputs: &'static [(usize, u32)],
+    /// ★ Lane C 2026-10-14: the guest's request must equal [`Row::request`] byte for byte
+    /// (every byte not named in `inputs` zero). For controls whose request layout is unknown but
+    /// whose real-driver request was MEASURED all-zero: no word is guessed to be an input, and any
+    /// non-zero byte makes it a different question.
+    pub exact: bool,
 }
 
 /// ★ Every request this device asks its host at realize.
@@ -106,17 +111,20 @@ pub const ROWS: &[Row] = &[
     Row {
         cmd: GSS_CLOCK_DOMAINS,
         size: 520,
+        exact: false,
         inputs: &[(0, 0), (4, 1), (8, 8)],
     },
     // One-domain clock queries for the two domains the library has been seen to ask.
     Row {
         cmd: GSS_CLOCK_QUERY,
         size: 0x890,
+        exact: false,
         inputs: &[(0, 1), (8, 1), (0x0c, DOMAIN_NVD), (0x20c, DOMAIN_NVD)],
     },
     Row {
         cmd: GSS_CLOCK_QUERY,
         size: 0x890,
+        exact: false,
         inputs: &[(0, 1), (8, 1), (0x0c, DOMAIN_GPC), (0x20c, DOMAIN_GPC)],
     },
     // ★ v3-refusals: cudart's pair, the request words exactly as recorded calls carried them — `a084`
@@ -126,11 +134,13 @@ pub const ROWS: &[Row] = &[
     Row {
         cmd: GSS_CUDART_A084,
         size: 4,
+        exact: false,
         inputs: &[(0, 0)],
     },
     Row {
         cmd: GSS_CUDART_CLOCKS,
         size: 532,
+        exact: false,
         inputs: &[
             (0x00, 0x400),
             (0x08, 0),
@@ -145,7 +155,106 @@ pub const ROWS: &[Row] = &[
             (0x30, 0),
         ],
     },
+    // ★★ Lane C 2026-10-14 — cudart's init gate asked of the HOST (tier 2) instead of served from
+    // one GA106 capture to every die (`crate::cudartinit` rows → `kf_rm::consttab`, now the
+    // fallback). `[measured AD104 / 595.91.07, 2026-10-14, unprivileged libcudart 13.3 under the
+    // nvdiff recorder, traces/constants_night_20261014/]` cudart's own requests: `0x20809009` and
+    // `0x20809001` all zero (8 B), `0x20809064` `{0, 2, 1, 0, 0, 0, 4, 0…}` (520 B) — every word
+    // named here; the host answered each `NV_OK` with exactly the GA106 rows' values.
+    Row {
+        cmd: CUDART_GSS_9009,
+        size: 8,
+        exact: false,
+        inputs: &[(0, 0), (4, 0)],
+    },
+    Row {
+        cmd: CUDART_GSS_9001,
+        size: 8,
+        exact: false,
+        inputs: &[(0, 0), (4, 0)],
+    },
+    Row {
+        cmd: GSS_CLOCK_DOMAINS,
+        size: 520,
+        exact: false,
+        inputs: &[(0, 0), (4, 2), (8, 1), (0x18, 4)],
+    },
+    // cudart's fallback, reached only when `a084`/`a026` fail; the guest's request is `{0,0,0,0}`
+    // (`[measured GA106 / 580.159.04, 2026-08-20]`, `crate::cudartinit::CUDART_INIT_0XA001`).
+    Row {
+        cmd: CUDART_GSS_A001,
+        size: 16,
+        exact: false,
+        inputs: &[(0, 0), (4, 0), (8, 0), (0x0c, 0)],
+    },
+    // ★★ Lane C 2026-10-14 — Windows-only GSS-legacy queries whose real-driver request is MEASURED
+    // all-zero (`[measured AD103 / Windows 580.88, GSP firmware 580.65.05, kfwc capture, 2026-10-14]`
+    // request bodies: 0x2080852a x61, 0x20808524 x3, 0x2080a70a x3, 0x2080852e x55, 0x2080853a x3,
+    // 0x2080a618 x58, 0x2080a088 6 of 12 calls) and that the host answers NV_OK to a zero request
+    // unprivileged (`[measured AD103 / Linux 575.51.03, traces/real_hw_20261013/probe_unpriv.txt]`
+    // all seven; `[measured AD104 / 595.91.07, traces/ctl_probe_20261013/]` 852a, 8524, a70a, a088).
+    // Purpose unknown (no open header): the guest gets the HOST's bytes for the identical question,
+    // never a captured row; any non-zero request byte is a different question (refused as before).
+    Row {
+        cmd: 0x2080_852a,
+        size: 1784,
+        exact: true,
+        inputs: &[],
+    },
+    Row {
+        cmd: 0x2080_8524,
+        size: 4,
+        exact: true,
+        inputs: &[],
+    },
+    Row {
+        cmd: 0x2080_a70a,
+        size: 26,
+        exact: true,
+        inputs: &[],
+    },
+    Row {
+        cmd: 0x2080_a088,
+        size: 12,
+        exact: true,
+        inputs: &[],
+    },
+    Row {
+        cmd: 0x2080_852e,
+        size: 528,
+        exact: true,
+        inputs: &[],
+    },
+    Row {
+        cmd: 0x2080_853a,
+        size: 1456,
+        exact: true,
+        inputs: &[],
+    },
+    Row {
+        cmd: 0x2080_a618,
+        size: 8620,
+        exact: true,
+        inputs: &[],
+    },
+    // ★ Lane C 2026-10-14: `0x20808162` (1 byte, request `00`): the GA106 at 580.159.04 answered
+    // `01` (`crate::gsslegacy`), the AD104 at 595.91.07 answers `00` [measured, unprivileged,
+    // traces/constants_night_20261014/probe_8162_595.txt] — a captured byte served to every die was
+    // wrong there. Asked of the host at realize instead.
+    Row {
+        cmd: 0x2080_8162,
+        size: 1,
+        exact: true,
+        inputs: &[],
+    },
 ];
+
+/// `0x20809009` — cudart init gate (GSS-legacy, 8 B).
+pub const CUDART_GSS_9009: u32 = 0x2080_9009;
+/// `0x20809001` — cudart init gate (GSS-legacy, 8 B).
+pub const CUDART_GSS_9001: u32 = 0x2080_9001;
+/// `0x2080a001` — cudart's clock fallback (GSS-legacy, 16 B).
+pub const CUDART_GSS_A001: u32 = 0x2080_a001;
 
 impl Row {
     /// The request buffer: zero, with the input words set.
@@ -181,6 +290,7 @@ impl Row {
                 .inputs
                 .iter()
                 .all(|&(o, v)| params.get(o..o + 4).is_some_and(|w| w == v.to_le_bytes()))
+            && (!self.exact || params == self.request().as_slice())
     }
 }
 

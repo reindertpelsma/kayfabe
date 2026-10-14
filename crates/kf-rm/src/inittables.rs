@@ -3071,9 +3071,29 @@ impl CommandPolicy for InitTablePolicy {
             | WantedTable::CudartInit9001
             | WantedTable::CudartInit9064
             | WantedTable::CudartInit9A001 => {
-                match kf_abi::cudartinit::answer_cudart_init(req.cmd, want.params_size()) {
+                // ★★ Lane C 2026-10-14: no longer one GA106 capture served to every die. The
+                // host's own answer to the identical request was tried above (`gssreplay`,
+                // tier 2); only when the host did not answer does the PUBLISHED table answer,
+                // and only with a row measured on THIS die at THIS guest branch (or a row whose
+                // tag states a mechanism). Anything else is refused by name and counted
+                // (`crate::consttab`, `docs/design/V3_CONSTANT_MATRIX_20261014.md`).
+                let at = req.params_at;
+                let request = &cmd.payload[at..at + want.params_size()];
+                match crate::consttab::answer(
+                    &crate::consttab::cudart_key(req.cmd),
+                    self.host.die,
+                    self.driver.driver_version().major,
+                    request,
+                ) {
                     Ok(p) => p,
-                    Err(e) => return refuse_named(req.cmd, &e),
+                    Err(e) => {
+                        eprintln!(
+                            "W349REFUSE cmd={:#010x} why=consttab {e} (refusals so far: {})",
+                            req.cmd,
+                            crate::consttab::refusal_count()
+                        );
+                        return refuse();
+                    }
                 }
             }
             // ★★★ The SPLICE arm: keep the guest's own request and overwrite only the words
@@ -3109,7 +3129,7 @@ impl CommandPolicy for InitTablePolicy {
                     None => return refuse(),
                 }
             }
-            WantedTable::GssLegacy8159 | WantedTable::GssLegacy8162 => {
+            WantedTable::GssLegacy8159 => {
                 let at = req.params_at;
                 match kf_abi::gsslegacy::answer_gss_legacy(
                     req.cmd,
@@ -3117,6 +3137,28 @@ impl CommandPolicy for InitTablePolicy {
                 ) {
                     Ok(p) => p,
                     Err(e) => return refuse_named(req.cmd, &e),
+                }
+            }
+            // ★ Lane C 2026-10-14: `0x20808162` writes a byte the guest did not send, and that byte
+            // differs per die (GA106/580: 1, AD104/595: 0 [measured]). The host's answer was tried
+            // above (`gssreplay` exact row); otherwise the published table, per die; else refused.
+            WantedTable::GssLegacy8162 => {
+                let at = req.params_at;
+                match crate::consttab::answer(
+                    &crate::consttab::gss_key(req.cmd),
+                    self.host.die,
+                    self.driver.driver_version().major,
+                    &cmd.payload[at..at + want.params_size()],
+                ) {
+                    Ok(p) => p,
+                    Err(e) => {
+                        eprintln!(
+                            "W349REFUSE cmd={:#010x} why=consttab {e} (refusals so far: {})",
+                            req.cmd,
+                            crate::consttab::refusal_count()
+                        );
+                        return refuse();
+                    }
                 }
             }
             // ★★ The one arm whose value is an ARGUMENT rather than a capture, and the flag

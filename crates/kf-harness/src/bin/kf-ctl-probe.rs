@@ -26,7 +26,9 @@ use kf_linux_raw::DevDir;
 
 /// (kind, cmd, sizes to try). Sizes are the reply sizes the real GPU returned in the five
 /// observer captures (inventory `M:` notes); a control with no recorded size gets a ladder.
-const LADDER: &[u32] = &[4, 8, 12, 16, 20, 24, 28, 32, 64, 128, 256, 512, 1024, 2048, 4096];
+const LADDER: &[u32] = &[
+    4, 8, 12, 16, 20, 24, 28, 32, 64, 128, 256, 512, 1024, 2048, 4096,
+];
 const BUILTIN: &[(&str, u32, &[u32])] = &[
     ("subdevice", 0x2080_852a, &[1784]),
     ("subdevice", 0x2080_852e, &[528]),
@@ -116,7 +118,10 @@ fn main() {
         // SAFETY-free: read the uid from /proc instead of libc
         std::fs::read_to_string("/proc/self/status")
             .ok()
-            .and_then(|t| t.lines().find(|l| l.starts_with("Uid:")).map(str::to_string))
+            .and_then(|t| t
+                .lines()
+                .find(|l| l.starts_with("Uid:"))
+                .map(str::to_string))
             .unwrap_or_default()
             .replace('\t', " "),
         caps.map_or("unknown".into(), |c| format!("{c:#x}")),
@@ -128,19 +133,35 @@ fn main() {
         );
         std::process::exit(3);
     }
-    let mut rows: Vec<(String, u32, Vec<u32>)> = BUILTIN
-        .iter()
-        .map(|(k, c, s)| ((*k).to_string(), *c, s.to_vec()))
-        .collect();
+    // ★ Lane C 2026-10-14: `KF_PROBE_EXTRA_ONLY=1` skips the built-in rows; an extra line may carry
+    // a 4th column of request words `off=value,...` (hex) — a measured request shape, never guessed.
+    let extra_only = std::env::var("KF_PROBE_EXTRA_ONLY").as_deref() == Ok("1");
+    type ProbeRow = (String, u32, Vec<u32>, Vec<(usize, u32)>);
+    let mut rows: Vec<ProbeRow> = if extra_only {
+        Vec::new()
+    } else {
+        BUILTIN
+            .iter()
+            .map(|(k, c, s)| ((*k).to_string(), *c, s.to_vec(), Vec::new()))
+            .collect()
+    };
+    let hex = |t: &str| u32::from_str_radix(t.trim().trim_start_matches("0x"), 16);
     if let Some(path) = std::env::args().nth(1) {
         for line in std::fs::read_to_string(&path).unwrap_or_default().lines() {
             let f: Vec<&str> = line.split('\t').collect();
-            if f.len() == 3 {
-                if let (Ok(c), Ok(sz)) = (
-                    u32::from_str_radix(f[1].trim_start_matches("0x"), 16),
-                    f[2].parse::<u32>(),
-                ) {
-                    rows.push((f[0].to_string(), c, vec![sz]));
+            if f.len() == 3 || f.len() == 4 {
+                let inputs: Option<Vec<(usize, u32)>> = match f.get(3) {
+                    None => Some(Vec::new()),
+                    Some(spec) => spec
+                        .split(',')
+                        .map(|kv| {
+                            let (k, v) = kv.split_once('=')?;
+                            Some((hex(k).ok()? as usize, hex(v).ok()?))
+                        })
+                        .collect(),
+                };
+                if let (Ok(c), Ok(sz), Some(inputs)) = (hex(f[1]), f[2].parse::<u32>(), inputs) {
+                    rows.push((f[0].to_string(), c, vec![sz], inputs));
                 }
             }
         }
@@ -150,8 +171,46 @@ fn main() {
         .map_err(|e| e.to_string())
         .expect("host RM session");
     println!("PROBE_SESSION driver={}", rm.driver_version());
-    let mut counts: std::collections::BTreeMap<&'static str, u32> = std::collections::BTreeMap::new();
-    for (kind, cmd, sizes) in rows {
+    let mut counts: std::collections::BTreeMap<&'static str, u32> =
+        std::collections::BTreeMap::new();
+    // ★ Lane C 2026-10-14: `KF_PROBE_GSS_ROWS=1` asks exactly what kayfabe asks at realize — every
+    // `kf_abi::gssreplay::ROWS` request (zero background; plus the 0xa5 background for non-exact
+    // rows, as `kf_rm::hostquery::query_gss_replay` does) — and prints RM's status and how many
+    // bytes the host changed. Reply bytes are not printed (unknown layouts; nothing board-specific
+    // leaves the host). Decides, per host driver, which rows kayfabe can be answered at runtime.
+    if std::env::var("KF_PROBE_GSS_ROWS").as_deref() == Ok("1") {
+        let sub = rm.subdevice_handle();
+        for row in kf_abi::gssreplay::ROWS {
+            let mut probes = vec![("zero", row.request(), row.request())];
+            if !row.exact {
+                let bg = row.request_over(kf_abi::gssreplay::PROBE_BACKGROUND);
+                probes.push(("bg", bg.clone(), bg));
+            }
+            for (label, mut payload, sent) in probes {
+                match rm.raw_control_opaque(sub, row.cmd, &mut payload) {
+                    Ok(status) => {
+                        let name = status_name(status);
+                        *counts.entry(name).or_insert(0) += 1;
+                        let changed = payload.iter().zip(&sent).filter(|(a, b)| a != b).count();
+                        println!(
+                            "GSSROW cmd={:#010x} size={} exact={} inputs={:x?} probe={label} status={status:#x} {name} changed_bytes={changed}",
+                            row.cmd, row.size, row.exact, row.inputs
+                        );
+                    }
+                    Err(e) => println!(
+                        "GSSROW cmd={:#010x} size={} probe={label} ioctl_error={e:?}",
+                        row.cmd, row.size
+                    ),
+                }
+            }
+        }
+        for (name, n) in counts {
+            println!("PROBE_SUMMARY {name}={n}");
+        }
+        println!("PROBE_END admin_run={admin} mode=gss_rows");
+        return;
+    }
+    for (kind, cmd, sizes, inputs) in rows {
         if EXCLUDED.contains(&cmd) {
             println!("PROBE kind={kind} cmd={cmd:#010x} size=- status=- EXCLUDED (action control)");
             continue;
@@ -160,21 +219,42 @@ fn main() {
             "device" => rm.device_handle(),
             "subdevice" => rm.subdevice_handle(),
             other => {
-                println!("PROBE kind={other} cmd={cmd:#010x} size=- status=- NOT_PROBED (no object of this kind in v1)");
+                println!(
+                    "PROBE kind={other} cmd={cmd:#010x} size=- status=- NOT_PROBED (no object of this kind in v1)"
+                );
                 continue;
             }
         };
         let mut done;
         for size in sizes {
             let mut payload = vec![0u8; size as usize];
+            for &(o, v) in &inputs {
+                if let Some(w) = payload.get_mut(o..o + 4) {
+                    w.copy_from_slice(&v.to_le_bytes());
+                }
+            }
             match rm.raw_control_opaque(object, cmd, &mut payload) {
                 Ok(status) => {
                     let name = status_name(status);
                     *counts.entry(name).or_insert(0) += 1;
-                    let head: String = payload.iter().take(16).map(|b| format!("{b:02x}")).collect();
+                    // ★ Lane C: `KF_PROBE_HEAD=<n>` widens the printed prefix (at most 64 bytes) for
+                    // replies whose words are known not to carry board data (the cudart gate).
+                    let head_len = std::env::var("KF_PROBE_HEAD")
+                        .ok()
+                        .and_then(|v| v.parse::<usize>().ok())
+                        .map_or(16, |n| n.min(64));
+                    let head: String = payload
+                        .iter()
+                        .take(head_len)
+                        .map(|b| format!("{b:02x}"))
+                        .collect();
                     println!(
                         "PROBE kind={kind} cmd={cmd:#010x} size={size} status={status:#x} {name}{}",
-                        if status == NV_OK { format!(" reply_head={head}") } else { String::new() }
+                        if status == NV_OK {
+                            format!(" reply_head={head}")
+                        } else {
+                            String::new()
+                        }
                     );
                     // keep laddering only while RM says the SIZE is wrong
                     done = status != 0x3a && status != 0x1f && status != 0x02;

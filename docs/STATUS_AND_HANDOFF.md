@@ -1,5 +1,22 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-14 (night run, lane C) — constants: published table, host-first GSS rows, per-family matrix
+
+Branch `claude/constants-night-20261014` (base `integration/prod-candidate-2-20261013` `bf510bdf4` + the kfwc/census/ctl-probe/inventory
+evidence branches). **Not merged; GPU-free only** (kf-abi/kf-rm/kf-chip/kf-host 1486/0 at the first code commit, later commits re-run green;
+kf-qemu/kf-harness/kf-census 334/0); no Linux gate or Windows run on this branch yet. Read `docs/design/V3_CONSTANT_MATRIX_20261014.md`.
+- **New:** `kf_rm::consttab` + `crates/kf-rm/data/measured_constants.tsv` — the published, source-tagged table of §AF, keyed by the host die
+  (`kf_chip::DieId` from `MC_GET_ARCH_INFO`, ogkm names) and the guest branch; a neighbour die's row is never served (mutation-checked).
+- **Fixed CAPTURED-to-every-die values:** libcudart's init gate (GA106 rows) and `0x20808162` (GA106's `01`; the AD104 at 595.91.07 answers
+  `00`, and libcuda there sees `00` [M]). Order now: host answer to the identical request (tier 2) → table row for this die → refused, counted.
+- **Host 595.91.07:** every GSS row kayfabe asks at realize (cudart gate, cudart/NVENC clocks, 8162) answers an unprivileged client [M]
+  (`traces/constants_night_20261014/`); the "GSS … not served" lines on the owner host should be gone. Seven Windows-only GSS queries whose real
+  request is all-zero are now answered with the host's bytes (852e/853a/a618 stay refused at 595.91.07: INVALID_ARGUMENT there).
+- **Behaviour change to validate before merge:** Windows guests now get host answers for `0x2080852a/8524/a70a/a088` and `0x20808162 = 00` on the
+  owner host (both are what the real GPU answers). Run the Linux gates + a Win11/LTSC boot on this branch before integrating; revert the exact rows
+  if a Windows A/B regresses (matrix §7 D-3).
+- Measurement rentals (kfwc under stock Windows 580.88, GA104 and GB203): see the matrix §5.
+
 ## UPDATE 2026-10-13 09:11UTC — Vulkan PASS; default route verification follows
 
 Source3ee0dd10ac89d62c44d64ac9ca412a685503a5ad / RTX4070 / stock595.91.07 /
