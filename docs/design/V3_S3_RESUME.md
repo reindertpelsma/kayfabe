@@ -83,6 +83,30 @@ Hostile guest: nothing the guest controls reaches the host; the resume reads one
 a geometry validated at the original bind; a guest can only make kf3 keep its OWN life across a
 wake, which a cold reset still ends.
 
+## 4b. The guest's FBSR save, served (added after run b1)
+
+`[measured b1, kf3 44e9b092]` with §4 alone the GSP resume worked (`GSP-RESUME … stat_seq=1740
+cmd_seq=1741`, `Cold -> Booted -> Running`, the guest past `kgspBootstrap`), and the next wall was the
+suspend's video-memory save, which had been failing all along: `_fbsrInitGsp` registers GSP-RM's
+suspend buffer with `ALLOC_MEMORY` (fn 4, a PTE list longer than one message, so a head plus a
+`CONTINUATION_RECORD`) and kf3 refused both fragments **separately** (`REFUSED fn4=0x56`, `REFUSED
+fn71=0x56`; the guest: `Unexpected RPC event … CONTINUATION_RECORD`); `fbsrBegin` failed after creating
+its CeUtils, every later FBSR type asserted `pCeUtils == NULL` (`mem_mgr.c:4122`), no save was valid,
+and at resume `memmgrRestorePowerMgmtState` (*"Calling Resume on an active GPU or the previous Suspend
+call might have failed"*) failed `gpuStateLoad` — `nvidia-smi` and glxgears dead after the wake, 0 Xid.
+Also refused during the suspend: `INTERNAL_FIFO_TOGGLE_ACTIVE_CHANNEL_SCHEDULING` (`0x20800ac3`),
+whose resume-side refusal `kfifoStateLoad` returns (`kernel_fifo_init.c:70-93`).
+
+- `kf-gsp` (`large.rs`, `boot.rs`): a large `ALLOC_MEMORY` is joined like a large control (its length
+  from the version's generated MemoryList contract, `kf_abi::memory_list::Cell::declared_len`), and,
+  being `bBidirectional = NV_FALSE` (`_issuePteDescRpc`), answered with ONE reply at the head carrying
+  only the status (`rpc.c:2133-2210`).
+- `kf-rm` (`pmsr.rs`): the SYSTEM MemoryList registration, its FREE, `INTERNAL_FBSR_INIT`
+  (`0x20800ac2`) and the scheduling toggle are answered `NV_OK` with no host action — the reasons
+  and what they do not claim are in the module's docs.
+- *Falsifier (H4):* with these answered, the guest still prints the `pCeUtils == NULL` asserts or
+  *"Calling Resume on an active GPU"*, or `gpuStateLoad` fails at resume.
+
 ## 5. Instrumentation
 
 The first 512 privileged writes of every logged device life are logged (`kf3: w#N bar0 @off = v

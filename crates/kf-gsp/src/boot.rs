@@ -2321,12 +2321,21 @@ impl GspFsm {
     /// maxRpcSize)`, `rpc.c:2061`). ⊘ Both conditions: a short message that under-carries its
     /// params is NOT a head — holding it would wait for continuations that never come.
     fn large_head_declared(&self, cmd: &RpcCommand) -> Option<usize> {
-        if cmd.function != RpcFunction::RmControl {
-            return None;
-        }
-        let w = self.abi.driver.rm_control_wire();
-        let size = cmd.payload.get(w.params_size_off..w.params_size_off + 4)?;
-        let declared = w.params_off + u32::from_le_bytes(size.try_into().ok()?) as usize;
+        let declared = if cmd.function == RpcFunction::RmControl {
+            let w = self.abi.driver.rm_control_wire();
+            let size = cmd.payload.get(w.params_size_off..w.params_size_off + 4)?;
+            w.params_off + u32::from_le_bytes(size.try_into().ok()?) as usize
+        } else {
+            // ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`): an `ALLOC_MEMORY` whose PTE list
+            // outgrew one message — the suspend buffer GSP-RM's heap is saved into
+            // (`_fbsrInitGsp`, `ogkm-580: fbsr_gm107.c:104-138`). The layout is the version's
+            // generated MemoryList contract; no contract, no join.
+            let cell = kf_abi::memory_list::cell(self.abi.driver.driver_version())?;
+            if cmd.function != RpcFunction::Other(cell.function()) {
+                return None;
+            }
+            cell.declared_len(&cmd.payload)?
+        };
         let max_rpc =
             (self.abi.element_size_max as usize).saturating_sub(self.abi.element.hdr_size());
         (declared > cmd.payload.len() && cmd.payload.len() + crate::large::RPC_HEADER == max_rpc)
@@ -2354,8 +2363,15 @@ impl GspFsm {
                 whole.reply(NV_ERR_NOT_SUPPORTED, &[])
             }
         };
-        let replies =
-            crate::large::split_reply(&full, fragments, self.abi.rpc.codes.continuation_record);
+        let replies = if crate::large::bidirectional(whole.function) {
+            crate::large::split_reply(&full, fragments, self.abi.rpc.codes.continuation_record)
+        } else {
+            // ★ 2026-10-14: one reply, at the head, carrying only the status the guest reads.
+            vec![OutgoingRpc {
+                payload: Vec::new(),
+                ..full.clone()
+            }]
+        };
         let QueueState::Bound(binding) = &self.queue else {
             return Err(GspFault::QueueNotBound);
         };
@@ -5031,6 +5047,64 @@ mod device_reset_from_every_phase {
                     .is_ok(),
                 "Cold after the wake: E12, zero reads"
             );
+        }
+
+        /// The status reply at `slot`: `(function, sequence, rpc_result, payload_len)`.
+        fn reply_at(d: &mut Dev, slot: u64) -> (u32, u32, u32, usize) {
+            let abi = d.fsm.abi;
+            let mut first = vec![0u8; ELEM as usize];
+            d.ram
+                .read(REGION + STAT_OFF + ELEM + slot * ELEM, &mut first)
+                .expect("mapped");
+            let len = peek_len(&abi.element, &first, ELEM as u32, abi.element_size_max)
+                .expect("a reply");
+            let seq = peek_seq_num(&abi.element, &first).expect("seq");
+            let m = decode_message(&abi.element, &first, len, seq, &abi.driver).expect("decodes");
+            (
+                m.envelope.function,
+                m.envelope.sequence,
+                m.envelope.rpc_result,
+                m.envelope.payload_len,
+            )
+        }
+
+        /// ★★ The suspend buffer's registration (`ALLOC_MEMORY`, a PTE list longer than one
+        /// message, `_issuePteDescRpc` with `bBidirectional = NV_FALSE`) is joined and answered
+        /// ONCE, at its head — `[measured b1, 44e9b092]` it was answered twice (a refusal of the
+        /// head and one of the continuation), and the guest logged `Unexpected RPC event …
+        /// CONTINUATION_RECORD`.
+        #[test]
+        fn a_large_alloc_memory_is_joined_and_answered_once_at_its_head() {
+            let mut d = Dev::life(fresh(None), AfterSuspend::AwaitsTeardownUcode);
+            d.start_with_frts();
+            d.firmware_loaded();
+            d.publish();
+            d.run();
+            d.guest_drains_status();
+            let abi = d.fsm.abi;
+            let cell = kf_abi::memory_list::cell(abi.driver.driver_version()).expect("contract");
+            let head_len =
+                abi.element_size_max as usize - abi.element.hdr_size() - crate::large::RPC_HEADER;
+            let pages = head_len / 8 + 10;
+            let mut body = vec![0u8; 56 + pages * 8];
+            for (off, v) in [(0usize, 1u32), (4, 2), (8, 0x77), (12, 0x81), (40, pages as u32)] {
+                body[off..off + 4].copy_from_slice(&v.to_le_bytes());
+            }
+            assert_eq!(cell.declared_len(&body[..head_len]), Some(body.len()));
+            let head_seq = 100 + d.guest_seq;
+            d.send(4, body[..head_len].to_vec());
+            d.send(abi.rpc.codes.continuation_record, body[head_len..].to_vec());
+            let wp = stat_wp(&mut d);
+            let out = d.ring();
+            assert!(out.contains("Ok"), "{out}");
+            assert_eq!(stat_wp(&mut d), (wp + 1) % COUNT as u32, "exactly one reply");
+            assert_eq!(reply_at(&mut d, u64::from(wp)), (4, head_seq, 0, 0));
+            // the stream goes on: the next command is answered at its own sequence
+            d.guest_drains_status();
+            let next_seq = 100 + d.guest_seq;
+            d.send(abi.rpc.codes.free, vec![0; 16]);
+            d.ring();
+            assert_eq!(reply_at(&mut d, u64::from((wp + 1) % COUNT as u32)).1, next_seq);
         }
 
         /// The FSP regime's firmware halts itself at fn 47 (E13); the device decodes the body

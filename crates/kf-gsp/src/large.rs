@@ -146,8 +146,9 @@ impl Assembler {
         self.open.is_some()
     }
 
-    /// Classify `cmd`. `declared` is the whole message's payload length when `cmd` is a
-    /// `GSP_RM_CONTROL` head (`params_off + paramsSize` from its control header), else `None`.
+    /// Classify `cmd`. `declared` is the whole message's payload length when `cmd` is the head
+    /// of a large message — a `GSP_RM_CONTROL` (`params_off + paramsSize` from its control
+    /// header) or, since 2026-10-14, an `ALLOC_MEMORY` (its PTE list) — else `None`.
     pub fn step(&mut self, cmd: &RpcCommand, declared: Option<usize>) -> Step {
         match (&self.open, cmd.function) {
             (Some(open), RpcFunction::ContinuationRecord) => {
@@ -188,7 +189,9 @@ impl Assembler {
                     by: cmd.code,
                 })
             }
-            (None, RpcFunction::RmControl) => match declared {
+            // ★ 2026-10-14: any head the FSM declared a length for — a `GSP_RM_CONTROL`
+            // (bidirectional) or an `ALLOC_MEMORY` PTE list (`_issuePteDescRpc`, one reply).
+            (None, _) if declared.is_some() => match declared {
                 Some(d) if d > cmd.payload.len() => {
                     if d > MAX_LARGE_PAYLOAD {
                         self.staged = Some(None);
@@ -233,6 +236,17 @@ impl Assembler {
         self.open = None;
         self.staged = None;
     }
+}
+
+/// ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`): whether the guest waits for a reply fragment
+/// per request fragment. Only `GSP_RM_CONTROL` goes through `_issueRpcAndWaitLarge` with
+/// `bBidirectional = NV_TRUE` (`ogkm-580: rpc.c:11030-11060`); a PTE list
+/// (`_issuePteDescRpc`, `rpc.c:2252-2300`) passes `NV_FALSE`, and the guest then waits for ONE
+/// reply at the head's `(function, sequence)` and reads only its `rpc_result` (`rpc.c:2133-2160,
+/// 2200-2210`) — a continuation reply would be an unexpected event.
+#[must_use]
+pub fn bidirectional(head: RpcFunction) -> bool {
+    head == RpcFunction::RmControl
 }
 
 /// ★★ Split the answer to a joined command at the request's own boundaries: the head reply is as
@@ -286,6 +300,30 @@ mod tests {
             elements: 1,
             delivered: Vec::new(),
         }
+    }
+
+    /// ★ 2026-10-14: a non-control head with a declared length is joined too.
+    #[test]
+    fn an_alloc_memory_head_with_a_declared_length_is_joined() {
+        let mut a = Assembler::default();
+        let head = cmd(RpcFunction::Other(4), 4, 7, vec![1; 16]);
+        assert_eq!(a.step(&head, Some(24)), Step::Held);
+        a.commit();
+        let tail = cmd(RpcFunction::ContinuationRecord, CONT, 8, vec![2; 8]);
+        match a.step(&tail, None) {
+            Step::Complete { whole, fragments } => {
+                assert_eq!(whole.function, RpcFunction::Other(4));
+                assert_eq!(whole.sequence, 7);
+                assert_eq!(whole.payload.len(), 24);
+                assert_eq!(fragments.len(), 2);
+            }
+            s => panic!("{s:?}"),
+        }
+        assert!(!bidirectional(RpcFunction::Other(4)));
+        assert!(bidirectional(RpcFunction::RmControl));
+        // without a declared length a non-control is never held
+        let mut b = Assembler::default();
+        assert_eq!(b.step(&head, None), Step::NotLarge);
     }
 
     /// Fragment a message the way `_issueRpcLarge` does: the head is `max_rpc - 32` payload
