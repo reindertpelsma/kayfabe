@@ -860,6 +860,12 @@ fn peek(n: &mut World, c: usize, why: ul::Peek, spin: u8) -> bool {
         return false;
     }
     if let Some(w) = ch.waiting {
+        let pops = (ch.userd_get as u64) > ch.fetched;
+        if !w.satisfied(ch.ref_visible, ch.userd_get as u64) && pops && matches!(w, Wait::Marker { .. }) {
+            // still draining, but pops the guest's GP_GET has not shown yet: write them back
+            n.ring(c, cause);
+            return true;
+        }
         if w.satisfied(ch.ref_visible, ch.userd_get as u64)
             && (retry_ok || !matches!(w, Wait::Contended))
         {
@@ -2233,9 +2239,22 @@ fn ring_full_and_empty_are_distinguishable_at_the_wrap_point() {
 
 #[test]
 fn migration_executes_each_entry_exactly_once_in_order() {
-    for scenario in [s_migration(), s_migration_gated()] {
+    for (gated, scenario) in [(false, s_migration()), (true, s_migration_gated())] {
         for lag in [false, true] {
-            let mut cfg = Cfg::new(Policy::Design, scenario.clone());
+            if gated && lag {
+                continue; // the gated migration with a lagging GP_GET/REFERENCE exceeds the explorer's bound
+            }
+            // (the lagging variant runs a smaller migration: timers + backstop multiply the states)
+            let scenario = if lag {
+                vec![spec(
+                    vec![Push(seg(1)), Push(trigger(2)), SetPut, Ring, UseNew, Push(seg(3)), SetPut, Ring],
+                    vec![1, 2, 3],
+                    3,
+                )]
+            } else {
+                scenario.clone()
+            };
+            let mut cfg = Cfg::new(Policy::Design, scenario);
             cfg.timers = lag;
             cfg.backstop = lag;
             cfg.lag = lag;
@@ -2331,4 +2350,56 @@ fn design_credit_waits_with_a_shallow_pop_window_are_event_driven() {
         c.spin = 0;
     });
     no_failures(&f);
+}
+
+/// KNOWN LIMITATION, pinned: the guest-visible `GP_GET` is the RELAY's write-back of the entries it has
+/// relayed, and a gated entry is relayed only after its gate. A guest whose GPFIFO is FULL behind its own
+/// gated entry -- it needs `GP_GET` past that entry to push, and releases the gate only after pushing --
+/// therefore deadlocks, by construction, with or without timers; on the hardware `GP_GET` passes the
+/// gated entry at once (it runs ahead of processing, measured). It takes a ring full of entries behind a
+/// gate (32767 outstanding on a 32768-entry Windows ring), so it is rare, but it is a fidelity gap of the
+/// relay, not of the loop. (A bound on how far past a gate the relay may forward bare GP entries is the
+/// fix to design; none is attempted here.)
+#[test]
+fn a_guest_with_a_full_ring_behind_its_own_gate_deadlocks_by_construction() {
+    let chans = vec![spec(
+        vec![
+            Push(seg(1).acq(0)),
+            Push(seg(2).sync().late()),
+            Push(seg(3)),
+            SetPut,
+            Ring,
+            Push(seg(4)), // needs GP_GET >= 1: entry 1 was relayed and written back
+            Push(seg(5)), // needs GP_GET >= 2: entry 2 is gated -- and the gate opens only below
+            SetPut,
+            Ring,
+            Fill(2),
+            Release(0),
+        ],
+        vec![1, 2, 3, 4, 5],
+        5,
+    )];
+    let mut cfg = Cfg::new(Policy::Design, chans);
+    cfg.timers = false;
+    finds("design/full-ring-behind-own-gate", &cfg, 0, &["DEADLOCK"]);
+    // the control: the same script without the fifth push (nothing waits for GP_GET past the gate)
+    let chans = vec![spec(
+        vec![
+            Push(seg(1).acq(0)),
+            Push(seg(2).sync().late()),
+            Push(seg(3)),
+            SetPut,
+            Ring,
+            Push(seg(4)),
+            SetPut,
+            Ring,
+            Fill(2),
+            Release(0),
+        ],
+        vec![1, 2, 3, 4],
+        4,
+    )];
+    let mut cfg = Cfg::new(Policy::Design, chans);
+    cfg.timers = false;
+    holds("design/full-ring-control", &cfg, 0);
 }

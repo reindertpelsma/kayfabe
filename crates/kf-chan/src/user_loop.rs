@@ -200,6 +200,9 @@ pub struct Stats {
     pub credit_waits: AtomicU64,
     /// Turns deferred by a busy lock / admission.
     pub contended: AtomicU64,
+    /// Looks that re-rang a relay only to write the guest's `GP_GET` back while a marker was still
+    /// outstanding (pops carry no event; spin / safety net / unrelated events find them).
+    pub pop_writebacks: AtomicU64,
     /// Batch markers published.
     pub markers: AtomicU64,
     /// SYNC_WAIT drain latency (gate published -> witness fetched), log2 buckets of microseconds.
@@ -222,7 +225,7 @@ impl Stats {
         let g = |c: &AtomicU64| c.load(Ordering::Relaxed);
         let drain: Vec<u64> = self.drain.iter().map(g).collect();
         format!(
-            "wakes(doorbell={} event={} spin={} backstop={}) backstop_found(work={} carried={} contended={} put_ahead={}) event_without_progress={} gates={} carried_ungated={} credit_waits={} contended_turns={} markers={} drain_us_log2={drain:?}",
+            "wakes(doorbell={} event={} spin={} backstop={}) backstop_found(work={} carried={} contended={} put_ahead={}) event_without_progress={} gates={} carried_ungated={} credit_waits={} contended_turns={} pop_writebacks={} markers={} drain_us_log2={drain:?}",
             g(&self.wake_doorbell),
             g(&self.wake_event),
             g(&self.wake_spin),
@@ -236,6 +239,7 @@ impl Stats {
             g(&self.carried_ungated),
             g(&self.credit_waits),
             g(&self.contended),
+            g(&self.pop_writebacks),
             g(&self.markers),
         )
     }

@@ -2546,10 +2546,15 @@ impl ChanPlane {
         if let Some(w) = p.wait {
             // The private words: `GP_GET` (entries popped) and the tagged `REFERENCE` (markers
             // processed) are the proofs; the interrupt is only the hint.
+            let mut pops = false;
             let satisfied = match r.lease.storage.try_lock() {
                 Ok(storage) => match (storage.gpu_get(), storage.gpu_reference()) {
                     (Ok(get), Ok(reference)) => match p.fetch.peek(get) {
-                        Ok(popped) => w.satisfied(p.marks.peek(reference), popped),
+                        Ok(popped) => {
+                            // pops the guest's `GP_GET` write-back has not shown yet (they carry no event)
+                            pops = popped > p.fetch.fetched();
+                            w.satisfied(p.marks.peek(reference), popped)
+                        }
                         // outside the ring / beyond what was issued: the turn refuses it by name
                         Err(_) => true,
                     },
@@ -2557,6 +2562,14 @@ impl ChanPlane {
                 },
                 Err(_) => true,
             };
+            if !satisfied && pops && matches!(w, kf_chan::user_loop::Wait::Marker { .. }) {
+                // A gate (or batch) is still draining, but the PBDMA has popped more entries than the
+                // guest's `GP_GET` shows. The wait stays; the turn only writes the guest's `GP_GET` back
+                // (a guest blocked on a full ring behind its OWN gate would otherwise wait for the
+                // marker, which waits for the guest).
+                Stats::bump(&self.relay_stats.pop_writebacks);
+                return ring(self);
+            }
             if satisfied && (retry_ok || !matches!(w, kf_chan::user_loop::Wait::Contended)) {
                 if backstop {
                     let (counter, name) = match found(w) {
