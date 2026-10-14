@@ -2362,6 +2362,10 @@ pub struct ChanPlane {
     /// `DISABLE_CHANNELS` whose HOST disable+preempt returned — posted by the drainer as
     /// `RUNLIST_PREEMPT_COMPLETE` ([`ChanPlane::take_preempt_done`]). Bounded.
     preempt_done: Mutex<Vec<(u32, u64)>>,
+    /// ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`): the twins `DISABLE_USERMODE_CHANNELS(bDisable)`
+    /// disabled on the host — exactly those its `bDisable=FALSE` re-enables (a twin the guest
+    /// disabled itself with `DISABLE_CHANNELS` is neither taken nor given back).
+    usermode_off: Mutex<Vec<(u32, u32)>>,
     /// Twins born with the guest's notifier armed as their host error context.
     pub rc_armed: AtomicU64,
     /// Twins whose declared notifier could NOT be armed (named at birth) — their faults are silent.
@@ -2963,6 +2967,7 @@ impl ChanPlane {
             rc_ev,
             rc_queue: Mutex::new(Vec::new()),
             preempt_done: Mutex::new(Vec::new()),
+            usermode_off: Mutex::new(Vec::new()),
             rc_armed: AtomicU64::new(0),
             rc_unarmed: AtomicU64::new(0),
             heap_out: AtomicU64::new(0),
@@ -4004,6 +4009,9 @@ impl ChanPlane {
                 list.as_slice(),
                 preempt_event,
             ),
+            ChanStatement::DisableUsermode { client, disable } => {
+                self.disable_usermode(client, disable)
+            }
             ChanStatement::Preempt {
                 client,
                 object,
@@ -4101,6 +4109,87 @@ impl ChanPlane {
     /// guest's (the guest's cursor is in its USERD, which the pump reads).
     /// ⊘ A list naming a channel the plane does not own is refused whole (nothing is half-done);
     /// a list naming none of ours is not ours.
+    /// ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`) — **`DISABLE_USERMODE_CHANNELS`, as the host's
+    /// `DISABLE_CHANNELS` over this VM's user twins.** RM's promise is "disable or enable scheduling
+    /// of all usermode channels" (`ctrl2080fifo.h:832-841`); this VM's usermode channels are its
+    /// passthrough twins (the RM-internal kernel channels — CeUtils, the FBSR copies — are Translated
+    /// rings this verb does not name). `bDisable`: every twin the guest has not disabled itself is
+    /// disabled on the host and remembered; `bDisable=FALSE`: exactly the remembered twins that
+    /// still exist are re-enabled. Unprivileged host verbs on our own channels, as an act; the reply
+    /// waits for it. No twin: vacuously done.
+    fn disable_usermode(&self, client: u32, disable: bool) -> ChanAnswer {
+        let list: Vec<(u32, u32)> = if disable {
+            let Ok(m) = self.pt.lock() else {
+                return ChanAnswer::Refused {
+                    status: NV_ERR_INVALID_STATE,
+                    why: "twins poisoned".into(),
+                };
+            };
+            let keys: Vec<(u32, u32)> = m
+                .iter()
+                .filter(|(_, v)| !v.disabled)
+                .map(|(k, _)| *k)
+                .collect();
+            drop(m);
+            if let Ok(mut off) = self.usermode_off.lock() {
+                off.clone_from(&keys);
+            }
+            keys
+        } else {
+            let taken = self
+                .usermode_off
+                .lock()
+                .map(|mut off| std::mem::take(&mut *off))
+                .unwrap_or_default();
+            let Ok(m) = self.pt.lock() else {
+                return ChanAnswer::Refused {
+                    status: NV_ERR_INVALID_STATE,
+                    why: "twins poisoned".into(),
+                };
+            };
+            taken
+                .into_iter()
+                .filter(|k| m.get(k).is_some_and(|v| !v.disabled))
+                .collect()
+        };
+        // ⊘ Bounded: a guest can send this in a loop.
+        static SAID: AtomicU64 = AtomicU64::new(0);
+        if SAID.fetch_add(1, Ordering::Relaxed) < 64 {
+            eprintln!(
+                "kf3: chan DISABLE_USERMODE_CHANNELS bDisable={disable} from {client:#x}: {} user twin(s) {}",
+                list.len(),
+                if disable { "disabled on the host" } else { "re-enabled on the host" }
+            );
+        }
+        let hosts: Vec<kf_host::Channel> = match self.pt.lock() {
+            Ok(m) => list.iter().filter_map(|k| m.get(k).map(|v| v.chan)).collect(),
+            Err(_) => Vec::new(),
+        };
+        if hosts.is_empty() {
+            return ChanAnswer::Done;
+        }
+        self.defer(
+            "disable usermode channels",
+            Box::new(move |me: &ChanPlane| {
+                me.rm
+                    .disable_channels(&hosts, disable, false, false)
+                    .map_err(|e| {
+                        (
+                            NV_ERR_INVALID_STATE,
+                            format!(
+                                "host DISABLE_CHANNELS(bDisable={disable}) over {} user twin(s): {e:?}",
+                                hosts.len()
+                            ),
+                        )
+                    })?;
+                Ok(format!(
+                    "DISABLE_USERMODE_CHANNELS bDisable={disable}: {} twin(s)",
+                    hosts.len()
+                ))
+            }),
+        )
+    }
+
     fn disable_channels(
         &self,
         client: u32,
@@ -8097,6 +8186,9 @@ impl ChanPlane {
             m.clear();
         }
         if let Ok(mut m) = self.preempt_done.lock() {
+            m.clear();
+        }
+        if let Ok(mut m) = self.usermode_off.lock() {
             m.clear();
         }
         for w in &self.pt_fifo_owed {

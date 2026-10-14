@@ -14,6 +14,10 @@
 //! | `INTERNAL_FBSR_INIT` (`0x20800ac2`) | `_fbsrInitGsp` (`fbsr_gm107.c:124-133`) under `NV_ASSERT_OK_OR_RETURN` | the same failure as fn 4 | `NV_OK`; pure `[IN]` params returned as sent |
 //! | `INTERNAL_FIFO_TOGGLE_ACTIVE_CHANNEL_SCHEDULING` (`0x20800ac3`) | `kfifoStateUnload` / `kfifoStateLoad` on a PM transition (`kernel_fifo_init.c:70-120`) | the resume's `kfifoStateLoad` returns the refusal (`NV_CHECK_OK_OR_RETURN`) and `gpuStateLoad` fails — `[measured b1]` refused at suspend (seq 1722) | `NV_OK`; pure `[IN]` |
 //!
+//! ★ The fifth request of the Linux suspend, `FIFO_DISABLE_USERMODE_CHANNELS` (`0x20801117`), is a
+//! channel-plane verb and is served there (`kf_rm::chanlink::DISABLE_USERMODE_CHANNELS`): the host
+//! disables this VM's user twins and re-enables them at resume.
+//!
 //! ## ⊘ What the answers do NOT claim
 //!
 //! - **The buffer is not written.** GSP-RM would save its heap into it; this device's GSP-RM

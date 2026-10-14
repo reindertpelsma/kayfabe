@@ -51,6 +51,11 @@ pub const EVICT_CTX: u32 = 0x2080_012c;
 const EVICT_CTX_PARAMS_SIZE: usize = 20;
 /// `NVA06F_CTRL_CMD_STOP_CHANNEL` (`ogkm-580: ctrla06fgpfifo.h:237`) — `{bImmediate}`.
 pub const STOP_CHANNEL: u32 = kf_abi::submit::NVA06F_CTRL_CMD_STOP_CHANNEL;
+/// ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`): `NV2080_CTRL_CMD_FIFO_DISABLE_USERMODE_CHANNELS`
+/// (`ogkm-580: ctrl2080fifo.h:843`, params `{NvBool bDisable}` at `:847-849`) — ROUTE_TO_PHYSICAL
+/// (export flags `0x40`, `g_subdevice_nvoc.c:5050-5063`), sent by the Linux driver's suspend and
+/// resume (`rm_stop_user_channels` / `rm_restart_user_channels`, `osapi.c:2671-2725`).
+pub const DISABLE_USERMODE_CHANNELS: u32 = 0x2080_1117;
 /// `NV2080_CTRL_CMD_FIFO_DISABLE_CHANNELS` (`ogkm-580: ctrl2080fifo.h:339`).
 pub const DISABLE_CHANNELS: u32 = kf_abi::submit::NV2080_CTRL_CMD_FIFO_DISABLE_CHANNELS;
 /// `NVA06C_CTRL_CMD_PREEMPT` (`ogkm-580: ctrla06c.h:203`).
@@ -640,6 +645,14 @@ pub enum ChanStatement {
         /// `eventData` once the HOST's disable+preempt completed (vfio-10: the GSP posts it so).
         /// `None` for the synchronous form.
         preempt_event: Option<u64>,
+    },
+    /// ★ 2026-10-14: `NV2080_CTRL_CMD_FIFO_DISABLE_USERMODE_CHANNELS` on the subdevice — "disable or
+    /// enable scheduling of all usermode channels" (`ctrl2080fifo.h:832-841`), this VM's.
+    DisableUsermode {
+        /// `hClient` of the call.
+        client: u32,
+        /// `bDisable`.
+        disable: bool,
     },
     /// ★★★ v3-chanctl: `NVA06C_CTRL_CMD_PREEMPT` (`0xa06c0105`) on a channel group — ROUTE_TO_PHYSICAL
     /// with no CPU-RM body (`g_kernel_channel_group_api_nvoc.c:273`), so the whole verb is ours.
@@ -1814,6 +1827,26 @@ impl ChannelPolicy {
                     client: h.client,
                     object: h.object,
                     wait: p.wait,
+                }
+            }
+            DISABLE_USERMODE_CHANNELS => {
+                // ★ 2026-10-14: `[measured b2-b6]` refused, the Linux suspend's
+                // `nv_preempt_user_channels` failed and its error path released nvidia-uvm's PM lock
+                // it never took (`nv.c:4759-4810` → `uvm_resume`, `uvm_global.c:360-400`): every
+                // UVM ioctl then answered EAGAIN for the rest of the boot (nvidia-smi spun on it).
+                if params.len() != 1 {
+                    return Some(Self::refusal(
+                        NV_ERR_INVALID_ARGUMENT,
+                        &format!(
+                            "DISABLE_USERMODE_CHANNELS params are {} bytes, not 1",
+                            params.len()
+                        ),
+                        cmd,
+                    ));
+                }
+                ChanStatement::DisableUsermode {
+                    client: h.client,
+                    disable: params[0] != 0,
                 }
             }
             DISABLE_CHANNELS => {
@@ -3738,6 +3771,24 @@ mod tests {
                 object: 0xcafe_0010,
                 wait: true
             })
+        );
+        // ★ 2026-10-14: DISABLE_USERMODE_CHANNELS reaches the plane with its one byte decoded; any
+        // other params size is refused by name.
+        for (byte, disable) in [(1u8, true), (0, false)] {
+            let r = link
+                .respond(&ctl(c, 0x5c00_0002, DISABLE_USERMODE_CHANNELS, &[byte]))
+                .expect("answered");
+            assert_eq!(r.rpc_result, NV_OK);
+            assert_eq!(
+                seen.lock().unwrap().last().copied(),
+                Some(ChanStatement::DisableUsermode { client: c, disable })
+            );
+        }
+        assert_eq!(
+            link.respond(&ctl(c, 0x5c00_0002, DISABLE_USERMODE_CHANNELS, &[1, 0, 0, 0]))
+                .expect("refused")
+                .rpc_result,
+            NV_ERR_INVALID_ARGUMENT
         );
         let d = |list: Vec<(u32, u32)>, ev: u64| {
             let mut b = kf_abi::submit::DisableChannels {
