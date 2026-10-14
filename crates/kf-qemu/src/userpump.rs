@@ -222,6 +222,14 @@ pub(super) struct Trace {
     stale: u64,
     stale_desync: u64,
     stale_prefetch: u64,
+    /// ★ 2026-10-14 (H-perf, measurement only): turns, SYNC_WAIT gates published, gate drains
+    /// (barrier published → read on), their summed and longest latency, and Wait turns in between.
+    turns: u64,
+    gates: u64,
+    gate_waits: u64,
+    gate_since: Option<std::time::Instant>,
+    gate_ns: u128,
+    gate_max_ns: u128,
     /// Stall detector: last progress marker, when it last changed, and whether reported.
     progress: ((u64, u32, u64, u64), std::time::Instant, bool),
     /// Idle detector: when the pump last had a turn, and whether an idle stall was reported.
@@ -253,6 +261,12 @@ impl Trace {
             stale: 0,
             stale_desync: 0,
             stale_prefetch: 0,
+            turns: 0,
+            gates: 0,
+            gate_waits: 0,
+            gate_since: None,
+            gate_ns: 0,
+            gate_max_ns: 0,
             progress: ((0, 0, 0, 0), std::time::Instant::now(), false),
             last_turn: std::time::Instant::now(),
             idle_reported: false,
@@ -502,8 +516,17 @@ impl Pump {
         }
         if let Some(t) = &self.trace {
             eprintln!(
-                "kf3: USER_RING_TRACE SUMMARY {:x?} segments={} puts_with_doorbell={} puts_without_doorbell={} straddles={} verified={} stale={} stale_desync={} stale_prefetch={}",
+                "kf3: USER_RING_TRACE SUMMARY {:x?} life_ms={} turns={} gates={} gate_wait_turns={} gate_drain_avg_us={} gate_drain_max_us={} segments={} puts_with_doorbell={} puts_without_doorbell={} straddles={} verified={} stale={} stale_desync={} stale_prefetch={}",
                 self.key,
+                t.born.elapsed().as_millis(),
+                t.turns,
+                t.gates,
+                t.gate_waits,
+                t.gate_ns
+                    .checked_div(u128::from(t.gates.max(1)))
+                    .unwrap_or(0)
+                    / 1000,
+                t.gate_max_ns / 1000,
                 t.seq,
                 t.puts_with_db,
                 t.puts_without_db,
@@ -1235,6 +1258,9 @@ impl Pump {
     fn turn(&mut self, me: &ChanPlane, r: &mut userrelay::Record) -> Turn<bool> {
         self.tick = false;
         self.again = false;
+        if let Some(t) = self.trace.as_mut() {
+            t.turns += 1;
+        }
         if self.trace.as_ref().is_some_and(|t| !t.rereads.is_empty()) {
             let software = software_snapshot(me, r).ok().flatten();
             self.trace_due(me, r, &software);
@@ -1374,12 +1400,27 @@ impl Pump {
                 .sync
                 .entry(entry, self.generation, self.cursor, self.fetch.fetched())
             {
-                kf_chan::user_gate::Gate::Proceed => {}
+                kf_chan::user_gate::Gate::Proceed => {
+                    if let Some(t) = self.trace.as_mut()
+                        && let Some(at) = t.gate_since.take()
+                    {
+                        let ns = at.elapsed().as_nanos();
+                        t.gate_ns += ns;
+                        t.gate_max_ns = t.gate_max_ns.max(ns);
+                    }
+                }
                 kf_chan::user_gate::Gate::Wait => {
+                    if let Some(t) = self.trace.as_mut() {
+                        t.gate_waits += 1;
+                    }
                     self.tick = true;
                     return Ok(false);
                 }
                 kf_chan::user_gate::Gate::PublishBarrier => {
+                    if let Some(t) = self.trace.as_mut() {
+                        t.gates += 1;
+                        t.gate_since = Some(std::time::Instant::now());
+                    }
                     if self.fetch.available() < 2 {
                         self.tick = true;
                         return Ok(false);
