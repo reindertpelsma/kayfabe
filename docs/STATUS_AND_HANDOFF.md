@@ -1036,6 +1036,20 @@ implemented. Late conversion and relay-only edits do not solve the observed case
 
 ## 0. Current resumption — start here
 
+**TODO, owner-requested, 2026-10-14: Windows app-matrix failures (fix, or keep queued here).** Branch `claude/win11-opengl-20261014`.
+(1) GravityMark **Vulkan** passes only with a user-ring relay flag; the default-route result is pending (evidence on
+`origin/claude/default-route-evidence-20261013`): hardwire the needed behaviour so the flag disappears (H-relay).
+(2) GravityMark **D3D12** fails (TDR, 3x nvlddmkm 153, no image); candidate shared with the Minecraft in-world defect
+(Xid 32 PBDMA PBENTRY on a USER-ring twin, guest RESET_CHANNEL `0x906f0102` refused 0x56, then TDR) (H-d3d12).
+(3) **OpenGL**: gears and FurMark pass; Unigine **Heaven exits early** (H-heaven: the frozen vblank counter, fixed
+below — retest). (4) **Vblank counter / scan line** (the OpenGL branch's open work): DONE on this branch —
+`GET_VBLANK_COUNTER` via the MAP_SHARED_DATA page (`d86fea1f`, fixed the vsync hang: `kf_glvsync --swap 1` and
+Minecraft vsync on), live `GET_RG_SCAN_LINE`/`GET_LINE` (`af2b87fd`); still open: `NV5070_CTRL_CMD_GET_RG_SCAN_LINE`
+(`0x5070020c`) is refused NOT_SUPPORTED, so `D3DKMTGetScanLine` reads line 0 / never in vblank.
+(5) **Minecraft in-world** (vsync on or off): Xid 32 PBENTRY on javaw's GR user-ring twin a few seconds after a world
+loads, then RESET_CHANNEL refused and a TDR (2/2 reproduced, `traces/win11_opengl_20261014/`).
+
+
 **Windows/Codex current resume point:** [RESUME_CODEX_WINDOWS_20261011.md](RESUME_CODEX_WINDOWS_20261011.md), branch `codex/windows-matrix-20261011`. Owner session is stopped; preserve its convenience disk chain described there.
 
 ## Latest checkpoint, 2026-10-11 22:54 UTC
