@@ -3739,10 +3739,14 @@ impl kf_chan::dbfast::Sink for Device {
 }
 
 impl Device {
-    /// ★ 2026-10-14: count a doorbell on a worker-served (Translated) token for the USER ring pump
-    /// (`ChanPlane::note_queued`). Unknown/Passthrough tokens are not counted here (§5: no
-    /// adversary-controlled metric on an unowned token).
+    /// ★ 2026-10-14, `KF3_USER_RING_TRACE` only: count a doorbell on a worker-served (Translated)
+    /// token for the USER ring trace (`ChanPlane::note_queued`, `doorbell_census`). With the trace
+    /// off this is one cached flag load on the doorbell path.
     fn note_worker_doorbell(&self, value: u32) {
+        // Measurement only (`KF3_USER_RING_TRACE`): nothing decides on these counts.
+        if !self.chans.user_ring_tracing() {
+            return;
+        }
         let tok = self.plane.token_index.of_doorbell(value);
         let route = tok
             .and_then(|t| self.plane.tokens.get(t as usize))

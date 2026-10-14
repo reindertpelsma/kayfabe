@@ -2339,9 +2339,8 @@ pub struct ChanPlane {
     /// ★ `KF3_MAPLOG` only: per guest token, when its last inline doorbell was rung (µs on the
     /// `kf_mem::maplog` clock; 0 = never, or maplog off).
     rung_at_us: Box<[AtomicU64]>,
-    /// ★ 2026-10-14: per guest token, doorbells on a WORKER-served (Translated) token — the USER
-    /// ring pump's evidence that the guest published (`userpump`). Monotonic; one relaxed atomic
-    /// on the vCPU/drainer, nothing else.
+    /// ★ 2026-10-14, `KF3_USER_RING_TRACE` only: per guest token, doorbells on a WORKER-served
+    /// (Translated) token, for the USER ring trace (`userpump`). Monotonic; nothing decides on it.
     queued: Box<[AtomicU64]>,
     /// `KF3_USER_RING_TRACE` only: every doorbell-class write by route (translated, passthrough,
     /// other/none) and the last value of an "other" one. Measurement; nothing reads it to decide.
@@ -3278,6 +3277,11 @@ impl ChanPlane {
         if let Some(c) = self.queued.get(idx as usize) {
             c.fetch_add(1, Ordering::Release);
         }
+    }
+
+    /// Whether the USER ring measurement trace is on (`KF3_USER_RING_TRACE`).
+    pub fn user_ring_tracing(&self) -> bool {
+        userpump::tracing()
     }
 
     /// `KF3_USER_RING_TRACE` only ([`Self::db_census`]).
