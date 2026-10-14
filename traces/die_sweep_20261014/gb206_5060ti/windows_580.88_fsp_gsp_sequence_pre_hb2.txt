@@ -1,0 +1,59 @@
+      2  vfio_region_read 0x590, 4) = 0x0
+      1  vfio_region_write 0x8a1d5c, 0x2, 4)
+      1  vfio_region_write 0x8a1d58, 0x3fc19000, 4)
+      1  vfio_region_read 0xad00bc, 4) = 0xff
+      1  vfio_region_write 0x118df8, 0x18de6e82, 4)
+      1  vfio_region_write 0x118df4, 0x3863b739, 4)
+      1  vfio_region_read 0x8f2c00, 4) = 0x0
+      1  vfio_region_read 0x8f2c04, 4) = 0x0
+      1  vfio_region_write 0x8f2ac0, 0x1000000, 4)
+      1  vfio_region_read 0x8f2ac0, 4) = 0x1000000
+      1  vfio_region_write 0x8f2ac4, 0xc0000000, 4)
+      1  vfio_region_write 0x8f2ac4, 0x1610de7e, 4)
+      1  vfio_region_write 0x8f2ac4, 0x20, 4)
+      1  vfio_region_read 0x8f2ac0, 4) = 0x100000c
+      1  vfio_region_write 0x8f2c04, 0x8, 4)
+      1  vfio_region_write 0x8f2c00, 0x0, 4)
+      1  vfio_region_read 0x8f2c80, 4) = 0x0
+      1  vfio_region_read 0x8f2c84, 4) = 0x10
+      1  vfio_region_read 0x8f2c80, 4) = 0x0
+      1  vfio_region_read 0x8f2c84, 4) = 0x10
+      1  vfio_region_read 0x8f2c80, 4) = 0x0
+      1  vfio_region_read 0x8f2c84, 4) = 0x10
+      1  vfio_region_read 0x8f2c80, 4) = 0x0
+      1  vfio_region_read 0x8f2c84, 4) = 0x10
+      1  vfio_region_write 0x8f2ac0, 0x2000000, 4)
+      1  vfio_region_read 0x8f2ac4, 4) = 0xc0000000
+      1  vfio_region_read 0x8f2ac4, 4) = 0x1510de7e
+      1  vfio_region_read 0x8f2ac4, 4) = 0x0
+      1  vfio_region_read 0x8f2ac4, 4) = 0x16
+      1  vfio_region_read 0x8f2ac4, 4) = 0x0
+      1  vfio_region_read 0x8f2ac0, 4) = 0x2000014
+      1  vfio_region_write 0x8f2c84, 0x0, 4)
+      1  vfio_region_write 0x8f2c80, 0x0, 4)
+      2  vfio_region_write 0x110c00, 0x0, 4)
+  11238  vfio_region_read 0x1103c4, 4) = 0x0
+      1  vfio_region_read 0x1103c0, 4) = 0x0
+      1  vfio_region_write 0x1103c0, 0x1, 4)
+      2  vfio_region_read 0x1103c0, 4) = 0x1
+      1  vfio_region_write 0x1103c0, 0x0, 4)
+      2  vfio_region_read 0x1103c0, 4) = 0x0
+  10158  vfio_region_read 0x1103c4, 4) = 0x0
+      1  vfio_region_read 0x1103c0, 4) = 0x0
+      1  vfio_region_write 0x1103c0, 0x1, 4)
+      2  vfio_region_read 0x1103c0, 4) = 0x1
+      1  vfio_region_write 0x1103c0, 0x0, 4)
+      2  vfio_region_read 0x1103c0, 4) = 0x0
+  10518  vfio_region_read 0x1103c4, 4) = 0x0
+      1  vfio_region_read 0x1103c0, 4) = 0x0
+      1  vfio_region_write 0x1103c0, 0x1, 4)
+      2  vfio_region_read 0x1103c0, 4) = 0x1
+      1  vfio_region_write 0x1103c0, 0x0, 4)
+      2  vfio_region_read 0x1103c0, 4) = 0x0
+  10751  vfio_region_read 0x1103c4, 4) = 0x0
+      1  vfio_region_read 0x1103c0, 4) = 0x0
+      1  vfio_region_write 0x1103c0, 0x1, 4)
+      2  vfio_region_read 0x1103c0, 4) = 0x1
+      1  vfio_region_write 0x1103c0, 0x0, 4)
+      2  vfio_region_read 0x1103c0, 4) = 0x0
+      1  vfio_region_read 0x110094, 4) = 0x0

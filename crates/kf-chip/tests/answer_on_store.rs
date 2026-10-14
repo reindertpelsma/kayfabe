@@ -17,7 +17,7 @@ const STAGES: [BootPhase; 6] = [
 ];
 
 /// Every observation a write could leave behind, for a register whose written value the FSM
-/// records (`BCR_CTRL`) or does not (everything else).
+/// records (`BCR_CTRL`, and since 2026-10-14 `NV_PGSP_FALCON_ENGINE`) or does not (everything else).
 fn observations(reg: GspReg, written: u64) -> Vec<GspObservation> {
     let mut v = Vec::new();
     for stage in STAGES {
@@ -28,12 +28,19 @@ fn observations(reg: GspReg, written: u64) -> Vec<GspObservation> {
             } else {
                 None
             };
+            #[allow(clippy::cast_possible_truncation)]
+            let engine = if reg == GspReg::GspFalconEngine {
+                Some(written as u32)
+            } else {
+                None
+            };
             v.push(GspObservation {
                 stage,
                 wpr2_up: stage.wpr2_up(),
                 riscv_active: stage.wpr2_up(),
                 suspended,
                 riscv_bcr_ctrl: bcr,
+                falcon_engine: engine,
                 ..GspObservation::default()
             });
         }

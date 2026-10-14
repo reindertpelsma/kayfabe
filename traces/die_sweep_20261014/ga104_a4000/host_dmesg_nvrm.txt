@@ -1,0 +1,29 @@
+[    4.941123] NVRM: loading NVIDIA UNIX x86_64 Kernel Module  575.51.03  Wed Apr 16 14:22:51 UTC 2025
+[  725.115864] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
+[  788.916324] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
+[  789.467093] NVRM: GPU0 nvCheckOkFailedNoLog: Check failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from _memdescAllocInternal(pMemDesc) @ mem_desc.c:1336
+[ 1961.420014] NVRM:unknown NVRM ioctl command: 0xf0
+[ 1962.128604] NVRM:unknown NVRM ioctl command: 0xf0
+[ 1963.617654] NVRM:unknown NVRM ioctl command: 0xf0
+[ 1964.030206] NVRM:unknown NVRM ioctl command: 0xf0
+[ 1964.529467] NVRM:unknown NVRM ioctl command: 0xf0
+[ 1965.172368] NVRM:unknown NVRM ioctl command: 0xf0
+[ 1965.542057] NVRM:unknown NVRM ioctl command: 0xf0
+[ 1965.916996] NVRM:unknown NVRM ioctl command: 0xf0
+[ 1974.818412] NVRM:unknown NVRM ioctl command: 0xf0
+[ 1974.821797] NVRM: GPU0 virtmemAllocResources: VA Space alloc failed! Status Code: 0x1f Size: 0x100000000 RangeLo: 0x0, RangeHi: 0xffffffff, pageSzLockMask: 0x211000
+[ 1974.821871] NVRM: GPU0 virtmemAllocResources: VA Space alloc failed! Status Code: 0x51 Size: 0x1efc00000 RangeLo: 0x120000000, RangeHi: 0x30fbfffff, pageSzLockMask: 0x211000
+[ 1974.827012] NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+[ 1974.827106] NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
+[ 2629.649826] NVRM:unknown NVRM ioctl command: 0xf0
+[ 3586.801541] NVRM:unknown NVRM ioctl command: 0xf0
+[ 4867.843521] NVRM:unknown NVRM ioctl command: 0xf0
+[ 5283.384801] NVRM: GPU0 virtmemAllocResources: VA Space alloc failed! Status Code: 0x51 Size: 0x80000 RangeLo: 0xb0000, RangeHi: 0x12ffff, pageSzLockMask: 0x11000
+[ 5303.482275] NVRM: GPU0 virtmemAllocResources: VA Space alloc failed! Status Code: 0x51 Size: 0x80000 RangeLo: 0xb0000, RangeHi: 0x12ffff, pageSzLockMask: 0x11000
+[ 5335.669181] NVRM: GPU0 virtmemAllocResources: VA Space alloc failed! Status Code: 0x51 Size: 0x80000 RangeLo: 0xb0000, RangeHi: 0x12ffff, pageSzLockMask: 0x11000
+[ 5408.744999] NVRM: GPU0 virtmemAllocResources: VA Space alloc failed! Status Code: 0x51 Size: 0x80000 RangeLo: 0xb0000, RangeHi: 0x12ffff, pageSzLockMask: 0x11000
+[ 5436.442840] NVRM: GPU0 virtmemAllocResources: VA Space alloc failed! Status Code: 0x51 Size: 0x80000 RangeLo: 0xb0000, RangeHi: 0x12ffff, pageSzLockMask: 0x11000
+[ 5457.956837] NVRM: GPU0 virtmemAllocResources: VA Space alloc failed! Status Code: 0x51 Size: 0x80000 RangeLo: 0xb0000, RangeHi: 0x12ffff, pageSzLockMask: 0x11000
+[ 5485.700045] NVRM: GPU0 virtmemAllocResources: VA Space alloc failed! Status Code: 0x51 Size: 0x80000 RangeLo: 0xb0000, RangeHi: 0x12ffff, pageSzLockMask: 0x11000
+[ 5506.262034] NVRM: GPU0 virtmemAllocResources: VA Space alloc failed! Status Code: 0x51 Size: 0x80000 RangeLo: 0xb0000, RangeHi: 0x12ffff, pageSzLockMask: 0x11000
+[ 5531.152638] NVRM: GPU0 virtmemAllocResources: VA Space alloc failed! Status Code: 0x51 Size: 0x80000 RangeLo: 0xb0000, RangeHi: 0x12ffff, pageSzLockMask: 0x11000

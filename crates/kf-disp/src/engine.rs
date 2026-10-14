@@ -65,35 +65,30 @@ pub struct PbLoc {
 pub enum Effect {
     /// Publish these core ARMED words — `(method offset, value)` — in the user area's ARMED half.
     CoreArmed(Vec<(u32, u32)>),
-    /// Write a 16-byte NVDisplay notifier at `offset` of context DMA `handle` (bound to channel number
-    /// `chn` by `client`) — status FINISHED if `finished`, else BEGUN — then raise AWAKEN for `chn` if
-    /// `awaken`.
+    /// Write a 16-byte NVDisplay notifier at `at` (for a context DMA: bound to channel number `chn` by
+    /// `client`) — status FINISHED if `finished`, else BEGUN — then raise AWAKEN for `chn` if `awaken`.
     Notify {
         /// Channel number.
         chn: u32,
-        /// The channel's client (the hash key).
+        /// The channel's client (the hash key of a context DMA).
         client: u32,
-        /// Context DMA handle.
-        handle: u32,
-        /// Byte offset in the context DMA.
-        offset: u64,
+        /// Where the notifier lives.
+        at: Place,
         /// `MODE_WRITE_AWAKEN`.
         awaken: bool,
         /// FINISHED: the core's completion notifier, or a window entry FLIPPED AWAY by the next latch.
         /// `false`: a window flip's own notifier at its latch (BEGUN).
         finished: bool,
     },
-    /// Release a semaphore: write `value` (32 or 64 bits) at `offset` of context DMA `handle`, then
-    /// raise the window's semaphore event if `awaken`.
+    /// Release a semaphore: write `value` (32 or 64 bits) at `at`, then raise the window's semaphore
+    /// event if `awaken`.
     Release {
         /// Channel number.
         chn: u32,
         /// The channel's client.
         client: u32,
-        /// Context DMA handle.
-        handle: u32,
-        /// Byte offset.
-        offset: u64,
+        /// Where the semaphore lives.
+        at: Place,
         /// Value.
         value: u64,
         /// 64-bit payload.
@@ -122,6 +117,61 @@ pub enum Effect {
     },
 }
 
+/// The aperture of a surface address (`..._SET_SURFACE_ADDRESS_LO_*_TARGET`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Aperture {
+    /// `TARGET_IOVA`: an address in the display's own IOMMU space. NVKMS selects it only for an SoC
+    /// display (`ogkm-595.84: nvkms-evo4.c:63-77`); a discrete GPU has none, so the plane refuses it.
+    Iova,
+    /// `TARGET_PHYSICAL_NVM`: framebuffer (video memory) offset.
+    Vidmem,
+    /// `TARGET_PHYSICAL_PCI` and `TARGET_PHYSICAL_PCI_COHERENT`: guest system memory (coherence is
+    /// invisible to an emulated display).
+    Sysmem,
+}
+
+/// ★ Where the display reads or writes a notifier or a semaphore. The family decides how the guest
+/// names it (`derived class table`, never assumed): pre-Blackwell classes (C3x–C7x) name a **context
+/// DMA** the guest bound and a 16-byte offset in it; Blackwell's classes (`NVCA7D`/`NVCA7E`) have no
+/// context DMAs — the **address is in the method** (`SET_SURFACE_ADDRESS_HI/LO_*`, `ENABLE`, `TARGET`),
+/// and the control word carries no offset.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Place {
+    /// Context DMA `handle` (bound to the channel by its client) and a byte offset into it.
+    CtxDma {
+        /// Context DMA handle.
+        handle: u32,
+        /// Byte offset in the context DMA.
+        offset: u64,
+    },
+    /// A surface address: aperture and the 16-byte-aligned byte address in it.
+    Addr {
+        /// The aperture.
+        aperture: Aperture,
+        /// Byte address (framebuffer offset, or guest physical address).
+        addr: u64,
+    },
+}
+
+impl Place {
+    /// A `(key, offset)` pair for the plane's diagnostic ring: the handle and offset of a context DMA,
+    /// or the aperture marker `0xFFFF_FF0n` and the address of a surface address.
+    #[must_use]
+    pub fn diag(&self) -> (u32, u64) {
+        match *self {
+            Place::CtxDma { handle, offset } => (handle, offset),
+            Place::Addr { aperture, addr } => (
+                match aperture {
+                    Aperture::Iova => 0xFFFF_FF00,
+                    Aperture::Vidmem => 0xFFFF_FF01,
+                    Aperture::Sysmem => 0xFFFF_FF02,
+                },
+                addr,
+            ),
+        }
+    }
+}
+
 /// An acquire the plane must evaluate against guest memory before a flip may latch.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Acquire {
@@ -129,10 +179,8 @@ pub struct Acquire {
     pub chn: u32,
     /// The channel's client.
     pub client: u32,
-    /// Context DMA handle.
-    pub handle: u32,
-    /// Byte offset.
-    pub offset: u64,
+    /// Where the semaphore lives.
+    pub at: Place,
     /// The value awaited.
     pub value: u64,
     /// 64-bit payload.
@@ -177,6 +225,102 @@ pub struct HeadMode {
     pub raster: (u32, u32),
 }
 
+/// ★ How one family's class names the memory of a notifier or semaphore — decided by which methods the
+/// DERIVED class table has, never by a family constant. Every offset and field is resolved at construction.
+#[derive(Debug, Clone, Copy)]
+enum Naming {
+    /// `SET_CONTEXT_DMA_*` (a handle; 0 = none) plus the control word's `OFFSET` field (16-byte units).
+    CtxDma { method: u32, offset: (u8, u8) },
+    /// `SET_SURFACE_ADDRESS_HI_*` / `_LO_*`: the address is in the methods; `ENABLE` = 0 means none.
+    Surface {
+        hi: u32,
+        lo: u32,
+        addr_lo: (u8, u8),
+        target: (u8, u8),
+        enable: (u8, u8),
+        /// `TARGET_IOVA`, `_PHYSICAL_NVM`, `_PHYSICAL_PCI`, `_PHYSICAL_PCI_COHERENT`.
+        tgt: [u32; 4],
+    },
+}
+
+impl Naming {
+    /// Resolve the naming of `what` (`NOTIFIER`, `SEMAPHORE`, `ACQ_SEMAPHORE`) in class `cl`; `control` is
+    /// the control method's name stem for the context-DMA form's `OFFSET` field.
+    fn resolve(t: &ClassTable, cl: u32, what: &str, control: &str) -> Result<Naming, Unresolved> {
+        let miss = |n: String| Unresolved(format!("NV{cl:04X}_{n}"));
+        if let Some(method) = t.v(cl, &format!("SET_CONTEXT_DMA_{what}")) {
+            let offset = t
+                .f(cl, &format!("{control}_OFFSET"))
+                .ok_or_else(|| miss(format!("{control}_OFFSET")))?;
+            return Ok(Naming::CtxDma { method, offset });
+        }
+        // no context DMA in this class: the surface-address form, all of it or a named miss
+        let hi_n = format!("SET_SURFACE_ADDRESS_HI_{what}");
+        let lo_n = format!("SET_SURFACE_ADDRESS_LO_{what}");
+        let m = |n: &str| t.v(cl, n).ok_or_else(|| miss(n.to_string()));
+        let fl = |n: &str| {
+            t.f(cl, &format!("{lo_n}_{n}"))
+                .ok_or_else(|| miss(format!("{lo_n}_{n}")))
+        };
+        let tv = |n: &str| m(&format!("{lo_n}_TARGET_{n}"));
+        Ok(Naming::Surface {
+            hi: m(&hi_n)?,
+            lo: m(&lo_n)?,
+            addr_lo: fl("ADDRESS_LO")?,
+            target: fl("TARGET")?,
+            enable: fl("ENABLE")?,
+            tgt: [
+                tv("IOVA")?,
+                tv("PHYSICAL_NVM")?,
+                tv("PHYSICAL_PCI")?,
+                tv("PHYSICAL_PCI_COHERENT")?,
+            ],
+        })
+    }
+
+    /// Where the guest pointed it, read through `get` (a method's data word), or `None` when it named
+    /// nothing (handle 0 / `ENABLE` clear). `ctl` is the control word (its `OFFSET`, for a context DMA).
+    fn place(&self, ctl: u32, get: impl Fn(u32) -> u32) -> Option<Place> {
+        match *self {
+            Naming::CtxDma { method, offset } => {
+                let handle = get(method);
+                (handle != 0).then(|| Place::CtxDma {
+                    handle,
+                    offset: u64::from(fld(ctl, offset)) * 16,
+                })
+            }
+            Naming::Surface {
+                hi,
+                lo,
+                addr_lo,
+                target,
+                enable,
+                tgt,
+            } => {
+                let lo_w = get(lo);
+                if fld(lo_w, enable) == 0 {
+                    return None;
+                }
+                // ADDRESS_LO is bits 31:4 (16-byte units): the address keeps those bits in place
+                let (h, l) = addr_lo;
+                let mask = (u64::MAX >> (63 - u32::from(h))) & (u64::MAX << l);
+                let addr = u64::from(get(hi)) << 32 | (u64::from(lo_w) & mask);
+                let t = fld(lo_w, target);
+                let aperture = if t == tgt[0] {
+                    Aperture::Iova
+                } else if t == tgt[1] {
+                    Aperture::Vidmem
+                } else {
+                    // PCI and PCI_COHERENT: the table has no other value in a 2-bit field
+                    debug_assert!(t == tgt[2] || t == tgt[3]);
+                    Aperture::Sysmem
+                };
+                Some(Place::Addr { aperture, addr })
+            }
+        }
+    }
+}
+
 /// ★ The per-family method vocabulary the engine interprets — every offset and field RESOLVED from
 /// the derived class table at construction, so a missing name refuses the engine up front instead
 /// of reading as method 0 at run time.
@@ -186,7 +330,7 @@ pub struct Vocab {
     other_space: u32,
     // core
     c_update: u32,
-    c_ctxdma_notifier: u32,
+    c_notifier: Naming,
     c_notifier_control: u32,
     c_interlock: u32,
     c_window_interlock: u32,
@@ -209,13 +353,12 @@ pub struct Vocab {
     // notifier control fields (core and window share the layout; the window has no NOTIFY field)
     n_mode: (u8, u8),
     n_mode_awaken: u32,
-    n_offset: (u8, u8),
     n_notify: (u8, u8),
     // window
     w_color_inline: Vec<InlineMethod>,
     w_update: u32,
     w_update_ilk_winim: (u8, u8),
-    w_ctxdma_notifier: u32,
+    w_notifier: Naming,
     w_notifier_control: u32,
     w_interlock: u32,
     w_ilk_core: (u8, u8),
@@ -224,16 +367,14 @@ pub struct Vocab {
     w_present: u32,
     w_present_begin: (u8, u8),
     w_present_non_tearing: u32,
-    w_ctxdma_sem: u32,
+    w_sem: Naming,
     w_sem_control: u32,
-    w_sem_offset: (u8, u8),
     w_sem_payload: (u8, u8),
     w_sem_rel_mode: (u8, u8),
     w_sem_release: u32,
     w_sem_release_hi: Option<u32>,
-    w_ctxdma_acq: u32,
+    w_acq: Naming,
     w_acq_control: u32,
-    w_acq_offset: (u8, u8),
     w_acq_payload: (u8, u8),
     w_acq_mode: (u8, u8),
     w_acq_value: u32,
@@ -298,7 +439,7 @@ impl Vocab {
             core_space: u32::try_from(armed - assy).map_err(|_| miss("core method space"))?,
             other_space: u32::try_from(win_stride / 2).map_err(|_| miss("window method space"))?,
             c_update: v(core, "UPDATE")?,
-            c_ctxdma_notifier: v(core, "SET_CONTEXT_DMA_NOTIFIER")?,
+            c_notifier: Naming::resolve(t, core, "NOTIFIER", "SET_NOTIFIER_CONTROL")?,
             c_notifier_control: v(core, "SET_NOTIFIER_CONTROL")?,
             c_interlock: v(core, "SET_INTERLOCK_FLAGS")?,
             c_window_interlock: v(core, "SET_WINDOW_INTERLOCK_FLAGS")?,
@@ -321,27 +462,40 @@ impl Vocab {
             c_ilk_cursor0: fa0(core, "SET_INTERLOCK_FLAGS_INTERLOCK_WITH_CURSOR")?,
             n_mode: f(core, "SET_NOTIFIER_CONTROL_MODE")?,
             n_mode_awaken: v(core, "SET_NOTIFIER_CONTROL_MODE_WRITE_AWAKEN")?,
-            n_offset: f(core, "SET_NOTIFIER_CONTROL_OFFSET")?,
             n_notify: f(core, "SET_NOTIFIER_CONTROL_NOTIFY")?,
+            // The inline CSC LUT tables (`SET_CSC<stage>LUT_ENTRY` / `_SEGMENT_SIZE`) exist in C5x/C6x
+            // windows; GB20x's window has neither (its CSC LUTs are programmed by `CONTROL` + a surface).
+            // Both methods of a stage are present or both absent in the derived table; one without the
+            // other is a refusal naming it.
             w_color_inline: (0..2)
-                .flat_map(|stage| [true, false].map(move |entry| (stage, entry)))
-                .map(|(stage, entry)| {
-                    let name = format!(
-                        "SET_CSC{stage}LUT_{}",
-                        if entry { "ENTRY" } else { "SEGMENT_SIZE" }
-                    );
-                    Ok((
-                        v(c.window, &name)?,
-                        stage,
-                        entry,
-                        f(c.window, &format!("{name}_IDX"))?,
-                        f(c.window, &format!("{name}_VALUE"))?,
-                    ))
+                .map(|stage| {
+                    let e = format!("SET_CSC{stage}LUT_ENTRY");
+                    let sz = format!("SET_CSC{stage}LUT_SEGMENT_SIZE");
+                    match (t.v(win, &e), t.v(win, &sz)) {
+                        (None, None) => Ok(Vec::new()),
+                        (Some(_), Some(_)) => [(e, true), (sz, false)]
+                            .into_iter()
+                            .map(|(name, entry)| {
+                                Ok((
+                                    v(win, &name)?,
+                                    stage,
+                                    entry,
+                                    f(win, &format!("{name}_IDX"))?,
+                                    f(win, &format!("{name}_VALUE"))?,
+                                ))
+                            })
+                            .collect::<Result<Vec<_>, Unresolved>>(),
+                        (Some(_), None) => Err(miss(&format!("NV{win:04X}_{sz}"))),
+                        (None, Some(_)) => Err(miss(&format!("NV{win:04X}_{e}"))),
+                    }
                 })
-                .collect::<Result<_, Unresolved>>()?,
+                .collect::<Result<Vec<_>, Unresolved>>()?
+                .into_iter()
+                .flatten()
+                .collect(),
             w_update: v(win, "UPDATE")?,
             w_update_ilk_winim: f(win, "UPDATE_INTERLOCK_WITH_WIN_IMM")?,
-            w_ctxdma_notifier: v(win, "SET_CONTEXT_DMA_NOTIFIER")?,
+            w_notifier: Naming::resolve(t, win, "NOTIFIER", "SET_NOTIFIER_CONTROL")?,
             w_notifier_control: v(win, "SET_NOTIFIER_CONTROL")?,
             w_interlock: v(win, "SET_INTERLOCK_FLAGS")?,
             w_ilk_core: f(win, "SET_INTERLOCK_FLAGS_INTERLOCK_WITH_CORE")?,
@@ -350,16 +504,14 @@ impl Vocab {
             w_present: v(win, "SET_PRESENT_CONTROL")?,
             w_present_begin: f(win, "SET_PRESENT_CONTROL_BEGIN_MODE")?,
             w_present_non_tearing: v(win, "SET_PRESENT_CONTROL_BEGIN_MODE_NON_TEARING")?,
-            w_ctxdma_sem: v(win, "SET_CONTEXT_DMA_SEMAPHORE")?,
+            w_sem: Naming::resolve(t, win, "SEMAPHORE", "SET_SEMAPHORE_CONTROL")?,
             w_sem_control: v(win, "SET_SEMAPHORE_CONTROL")?,
-            w_sem_offset: f(win, "SET_SEMAPHORE_CONTROL_OFFSET")?,
             w_sem_payload: f(win, "SET_SEMAPHORE_CONTROL_PAYLOAD_SIZE")?,
             w_sem_rel_mode: f(win, "SET_SEMAPHORE_CONTROL_REL_MODE")?,
             w_sem_release: v(win, "SET_SEMAPHORE_RELEASE")?,
             w_sem_release_hi: t.v(win, "SET_SEMAPHORE_RELEASE_HI"),
-            w_ctxdma_acq: v(win, "SET_CONTEXT_DMA_ACQ_SEMAPHORE")?,
+            w_acq: Naming::resolve(t, win, "ACQ_SEMAPHORE", "SET_ACQ_SEMAPHORE_CONTROL")?,
             w_acq_control: v(win, "SET_ACQ_SEMAPHORE_CONTROL")?,
-            w_acq_offset: f(win, "SET_ACQ_SEMAPHORE_CONTROL_OFFSET")?,
             w_acq_payload: f(win, "SET_ACQ_SEMAPHORE_CONTROL_PAYLOAD_SIZE")?,
             w_acq_mode: f(win, "SET_ACQ_SEMAPHORE_CONTROL_ACQ_MODE")?,
             w_acq_value: v(win, "SET_ACQ_SEMAPHORE_VALUE")?,
@@ -1426,18 +1578,14 @@ impl Engine {
             return None;
         }
         let v = &self.vocab;
-        let handle = c.a(v.w_ctxdma_acq);
-        if handle == 0 {
-            return None;
-        }
         let ctl = c.a(v.w_acq_control);
+        let at = v.w_acq.place(ctl, |m| c.a(m))?;
         let wide = fld(ctl, v.w_acq_payload) == 1;
         let hi = v.w_acq_value_hi.map_or(0, |m| c.a(m));
         Some(Acquire {
             chn: n,
             client: c.client,
-            handle,
-            offset: u64::from(fld(ctl, v.w_acq_offset)) * 16,
+            at,
             value: if wide {
                 u64::from(hi) << 32 | u64::from(c.a(v.w_acq_value))
             } else {
@@ -1491,13 +1639,13 @@ impl Engine {
                     st.effects.push(Effect::CoreArmed(changed));
                 }
                 let ctl = c.armed(v.c_notifier_control);
-                let handle = c.armed(v.c_ctxdma_notifier);
-                if fld(ctl, v.n_notify) == 1 && handle != 0 {
+                if fld(ctl, v.n_notify) == 1
+                    && let Some(at) = v.c_notifier.place(ctl, |m| c.armed(m))
+                {
                     st.effects.push(Effect::Notify {
                         chn: n,
                         client: c.client,
-                        handle,
-                        offset: u64::from(fld(ctl, v.n_offset)) * 16,
+                        at,
                         awaken: fld(ctl, v.n_mode) == v.n_mode_awaken,
                         finished: true,
                     });
@@ -1549,19 +1697,15 @@ impl Engine {
 
     /// The release a window's ARMED entry asks for: `None` without a semaphore context DMA.
     fn release_of(v: &Vocab, c: &Chan, n: u32) -> Option<Effect> {
-        let sem = c.armed(v.w_ctxdma_sem);
-        if sem == 0 {
-            return None;
-        }
         let ctl = c.armed(v.w_sem_control);
+        let at = v.w_sem.place(ctl, |m| c.armed(m))?;
         let wide = fld(ctl, v.w_sem_payload) == 1;
         let hi = v.w_sem_release_hi.map_or(0, |m| c.armed(m));
         let lo = u64::from(c.armed(v.w_sem_release));
         Some(Effect::Release {
             chn: n,
             client: c.client,
-            handle: sem,
-            offset: u64::from(fld(ctl, v.w_sem_offset)) * 16,
+            at,
             value: if wide { u64::from(hi) << 32 | lo } else { lo },
             wide,
             awaken: fld(ctl, v.w_sem_rel_mode) == 1,
@@ -1578,16 +1722,12 @@ impl Engine {
         finished: bool,
         was_active: bool,
     ) -> Option<Effect> {
-        let handle = get(c, v.w_ctxdma_notifier);
-        if handle == 0 {
-            return None;
-        }
         let ctl = get(c, v.w_notifier_control);
+        let at = v.w_notifier.place(ctl, |m| get(c, m))?;
         Some(Effect::Notify {
             chn: n,
             client: c.client,
-            handle,
-            offset: u64::from(fld(ctl, v.n_offset)) * 16,
+            at,
             awaken: !finished && was_active && fld(ctl, v.n_mode) == v.n_mode_awaken,
             finished,
         })

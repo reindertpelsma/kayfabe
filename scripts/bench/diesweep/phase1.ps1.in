@@ -1,0 +1,62 @@
+# SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
+# phase1.ps1.in — first boot of the LTSC baseline on a NEW die (die sweep, 2026-10-14). Run as SYSTEM via QGA.
+# 1. census of every NVIDIA PCI function the guest sees (status, problem code, driver key, INF);
+# 2. EnableGpuFirmware=1 in the class key of EVERY NVIDIA display function and in Services\nvlddmkm
+#    (a new die is a new PCI device id, so PnP binds a NEW device instance with a NEW class key that
+#    the baseline never flagged; the service key alone is not enough — V3_WINDOWS11_STOCK_INSTALL_20261013);
+# 3. autologon for the image's throwaway lab account `vast` with a per-box random password
+#    (@PW@ is substituted on the box from /root/win/secrets; never committed, never printed);
+# 4. an all-users Startup command that shows nvidia-smi in the signed-in desktop session.
+# The caller shuts the guest down afterwards and boots the same overlay in a NEW QEMU process
+# (an in-guest reboot keeps the NVIDIA device at Code 43 — windows_broker.sh, run62).
+$ErrorActionPreference = 'Continue'
+function Say([string]$s) { Write-Output "PHASE1 $s" }
+Say "os=$((Get-CimInstance Win32_OperatingSystem).Caption) build=$([Environment]::OSVersion.Version)"
+$devs = @(Get-PnpDevice | Where-Object { $_.InstanceId -like 'PCI\VEN_10DE*' })
+foreach ($d in $devs) {
+    $id = $d.InstanceId
+    $k = (Get-PnpDeviceProperty -InstanceId $id -KeyName DEVPKEY_Device_Driver -ErrorAction SilentlyContinue).Data
+    $inf = (Get-PnpDeviceProperty -InstanceId $id -KeyName DEVPKEY_Device_DriverInfPath -ErrorAction SilentlyContinue).Data
+    $ver = (Get-PnpDeviceProperty -InstanceId $id -KeyName DEVPKEY_Device_DriverVersion -ErrorAction SilentlyContinue).Data
+    $hw = ($id -split '\\')[1]
+    Say "DEV hw=$hw present=$($d.Present) status=$($d.Status) problem=$($d.Problem) class=$($d.Class) name='$($d.FriendlyName)' driverkey=$k inf=$inf ver=$ver"
+    if ($k -and $d.Class -eq 'Display') {
+        $ck = "HKLM:\SYSTEM\CurrentControlSet\Control\Class\$k"
+        New-ItemProperty -Path $ck -Name EnableGpuFirmware -PropertyType DWord -Value 1 -Force | Out-Null
+        Say "FLAG $k EnableGpuFirmware=$((Get-ItemProperty -Path $ck -Name EnableGpuFirmware -ErrorAction SilentlyContinue).EnableGpuFirmware)"
+    }
+}
+$sk = 'HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm'
+if (-not (Test-Path $sk)) { New-Item -Path $sk -Force | Out-Null }
+New-ItemProperty -Path $sk -Name EnableGpuFirmware -PropertyType DWord -Value 1 -Force | Out-Null
+Say "FLAG service EnableGpuFirmware=$((Get-ItemProperty -Path $sk -Name EnableGpuFirmware).EnableGpuFirmware)"
+
+$u = 'vast'; $pw = '@PW@'
+if (Get-LocalUser -Name $u -ErrorAction SilentlyContinue) {
+    Set-LocalUser -Name $u -Password (ConvertTo-SecureString $pw -AsPlainText -Force)
+} else {
+    New-LocalUser -Name $u -Password (ConvertTo-SecureString $pw -AsPlainText -Force) -PasswordNeverExpires | Out-Null
+    Add-LocalGroupMember -Group Administrators -Member $u
+}
+$wl = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
+Set-ItemProperty $wl AutoAdminLogon '1'; Set-ItemProperty $wl DefaultUserName $u
+Set-ItemProperty $wl DefaultPassword $pw; Set-ItemProperty $wl DefaultDomainName '.'
+Remove-ItemProperty $wl AutoLogonCount -ErrorAction SilentlyContinue
+$pl = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\PasswordLess\Device'
+if (-not (Test-Path $pl)) { New-Item -Path $pl -Force | Out-Null }
+Set-ItemProperty $pl DevicePasswordLessBuildVersion 0 -Type DWord
+Say "AUTOLOGON user=$u set"
+
+$su = 'C:\ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp\kf_diesweep_smi.cmd'
+@'
+@echo off
+title kayfabe die sweep - nvidia-smi in the guest
+mode con: cols=120 lines=48
+timeout /t 25 /nobreak >nul
+nvidia-smi
+nvidia-smi --query-gpu=name,pci.device_id,driver_version,driver_model.current,memory.total --format=csv
+nvidia-smi -q -d MEMORY | findstr /i /c:"BAR1" /c:"Total" /c:"FB Memory"
+cmd /k
+'@ | Set-Content -Path $su -Encoding Ascii
+Say "STARTUP $su written"
+Say "DONE"

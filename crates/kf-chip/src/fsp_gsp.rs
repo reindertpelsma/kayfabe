@@ -55,6 +55,30 @@ const FALCON_HWCFG2: u64 = 0x0f4;
 const FALCON_CPUCTL: u64 = 0x100;
 /// `NV_PFALCON_FALCON_DMATRFCMD` (`ogkm-580: turing/tu102/dev_falcon_v4.h:76`).
 const FALCON_DMATRFCMD: u64 = 0x118;
+/// `NV_PGSP_FALCON_ENGINE` (`0x1103c0`, `ogkm-580: hopper/gh100/dev_gsp.h`, `blackwell/gb100/dev_gsp.h:33`) —
+/// falcon-relative `0x3c0`. `RESET` is bit 0 (`ASSERT` = 1, `DEASSERT` = 0); `RESET_STATUS` is the read-only
+/// field 10:8 (`ASSERTED` = 0, `DEASSERTED` = 2). `kgspResetHw_GH100` writes each `RESET` value and spins until
+/// `RESET_STATUS` follows it (`ogkm-580: kernel_gsp_gh100.c:113-150`).
+const FALCON_ENGINE: u64 = 0x3c0;
+/// `NV_PGSP_FALCON_ENGINE_RESET` (bit 0).
+const ENGINE_RESET: u64 = 1;
+/// `NV_PGSP_FALCON_ENGINE_RESET_STATUS_DEASSERTED` (`0x2`) in its field (10:8).
+const ENGINE_STATUS_DEASSERTED: u64 = 0x2 << 8;
+/// `NV_PGSP_FALCON_ENGINE_RESET_STATUS_ASSERTED` (`0x0`) in its field (10:8).
+const ENGINE_STATUS_ASSERTED: u64 = 0;
+
+/// The word `NV_PGSP_FALCON_ENGINE` reads after the guest wrote `written`: `RESET` as written and the
+/// `RESET_STATUS` it ends in (`ASSERT` -> `ASSERTED`, `DEASSERT` -> `DEASSERTED`). The emulated GSP has nothing
+/// behind it to reset before its boot command, so the FSM completes at once and keeps no intermediate state.
+fn engine_answer(written: u64) -> u64 {
+    let reset = written & ENGINE_RESET;
+    reset
+        | if reset == 1 {
+            ENGINE_STATUS_ASSERTED
+        } else {
+            ENGINE_STATUS_DEASSERTED
+        }
+}
 
 /// `NV_PGSP_QUEUE_HEAD(0)`, stride 8 — `0x00110c00+(i)*8` in a **Blackwell** header
 /// (`ogkm-580: blackwell/gb20b/dev_gsp.h:33`). GB202 writes it on every RPC send because
@@ -235,6 +259,9 @@ const HWCFG2_BR_PRIV_LOCKDOWN: u64 = 1 << 13;
 /// `NV_PFALCON_FALCON_DMATRFCMD_IDLE` is `1:1`
 /// (`ogkm-580: turing/tu102/dev_falcon_v4.h:79`); reported `IDLE=TRUE|FULL=FALSE`.
 const DMATRFCMD_IDLE: u64 = 0x2;
+/// ★ 2026-10-14: `NV_PRISCV_RISCV_CPUCTL_STARTCPU` is `0:0`, `_TRUE` = 1 (`ogkm-595.84: hopper/gh100/dev_riscv_pri.h:59-61`;
+/// the register itself, `0x388` from the RISC-V base, is in the 580 `hwref` table). The RM's own start of the GSP's RISC-V core.
+const RISCV_CPUCTL_STARTCPU: u64 = 0x1;
 /// `NV_PRISCV_RISCV_CPUCTL_ACTIVE_STAT` is `7:7`
 /// (`ogkm-580: ampere/ga102/dev_riscv_pri.h:33`, the header GB202's
 /// `kflcnRiscvReadIntrStatus_GA102` binding selects).
@@ -381,7 +408,7 @@ impl BootSequence for FspBoot {
         &self,
         model: &dyn GspModel,
         w: &RegWrite,
-        _ctx: &BootContext,
+        ctx: &BootContext,
         state: &mut ArchBootState,
     ) -> BootSteps {
         let (off, val) = (w.off, w.val);
@@ -448,6 +475,26 @@ impl BootSequence for FspBoot {
             return BootSteps::none();
         };
         match reg {
+            // ★★★ 2026-10-14 (die sweep, GB206 + Windows 580.88; V3_DIE_SWEEP_20261014.md §3.1, hypothesis HB3):
+            // the OTHER boot route of `kgspBootstrap_GH100` — no FSP command at all. When the FSP is not told to
+            // boot the GSP-FMC (`PDB_PROP_KFSP_DISABLE_GSPFMC`, which the Windows RM took after its capability
+            // query), `_kgspBootstrapGspFmc_GH100` (`ogkm-580: kernel_gsp_gh100.c:716-776`) resets the GSP, puts the
+            // `GSP_FMC_BOOT_PARAMS` address in `MAILBOX0/1`, points the BootROM at the FMC through the `BCR_*`
+            // registers and STARTS the RISC-V core with `NV_PRISCV_RISCV_CPUCTL.STARTCPU`. That start is this
+            // route's `StartProcessor`; the address in the mailboxes is the same structure the COT's
+            // `gspBootArgsSysmemOffset` names, so the same three steps follow. ⊘ Only with an address in the
+            // mailboxes: a start with none has nothing to publish and we invent none.
+            GspReg::GspRiscvCpuctl if val & RISCV_CPUCTL_STARTCPU != 0 => {
+                let gpa = u64::from(ctx.obs.boot_args_hi) << 32 | u64::from(ctx.obs.boot_args_lo);
+                if gpa == 0 {
+                    return BootSteps::none();
+                }
+                let mut steps = BootSteps::none();
+                steps.push(BootStep::StartProcessor);
+                steps.push(BootStep::FirmwareLoaded);
+                steps.push(BootStep::PublishBootArgs(gpa));
+                steps
+            }
             GspReg::GspQueueHead(_) => BootSteps::one(BootStep::CommandDoorbell),
             GspReg::GspFalconIrqsclr if model.is_swgen0_clear(val) => {
                 BootSteps::one(BootStep::ClearStatusIrq)
@@ -575,6 +622,7 @@ impl FspGspModel {
                 QUEUE_HEAD0 + u64::from(i) * 8
             }
             GspReg::GspQueueHead(_) => return None,
+            GspReg::GspFalconEngine => PGSP + FALCON_ENGINE,
             // ── the absences, each sourced in the module docs ──
             GspReg::GfwBootProgress
             | GspReg::GfwBootPlm
@@ -623,6 +671,7 @@ impl GspModel for FspGspModel {
                 (PGSP, FALCON_HWCFG2) => GspReg::GspFalconHwcfg2,
                 (PGSP, FALCON_CPUCTL) => GspReg::GspFalconCpuctl,
                 (PGSP, FALCON_DMATRFCMD) => GspReg::GspFalconDmatrfcmd,
+                (PGSP, FALCON_ENGINE) => GspReg::GspFalconEngine,
                 _ => return None,
             },
         })
@@ -727,6 +776,11 @@ impl GspModel for FspGspModel {
             }
             // Write-only from our side.
             GspReg::GspQueueHead(_) => 0,
+            // ★ 2026-10-14: the GSP core is out of reset until the guest writes `RESET_ASSERT`
+            // (`answer_on_store` answers each write with the status that follows it).
+            GspReg::GspFalconEngine => obs
+                .falcon_engine
+                .map_or(ENGINE_STATUS_DEASSERTED, |w| engine_answer(u64::from(w))),
             // MISS = FAULT. This generation has no such register; a defaulted zero would
             // be a guess, and the FSM raises `RegisterUnserviceable` instead.
             GspReg::GfwBootProgress
@@ -744,6 +798,10 @@ impl GspModel for FspGspModel {
             GspReg::GspFalconDmatrfcmd => Some(DMATRFCMD_IDLE),
             #[allow(clippy::cast_possible_truncation)]
             GspReg::GspRiscvBcrCtrl => Some(u64::from(written as u32) | BCR_CTRL_VALID),
+            // ★ 2026-10-14: the reset FSM completes at once — what the guest wrote in `RESET`, and the
+            // `RESET_STATUS` it ends in (`ASSERT` -> `ASSERTED`, `DEASSERT` -> `DEASSERTED`). The emulated GSP
+            // has nothing behind it to reset before its boot command, so no FSM state is kept here.
+            GspReg::GspFalconEngine => Some(engine_answer(written)),
             _ => None,
         }
     }
@@ -833,6 +891,36 @@ mod hwref_check {
             assert_eq!(
                 GSP_RISCV_BCR_CTRL,
                 riscv + val(g, "NV_PRISCV_RISCV_BCR_CTRL"),
+                "{g:?}"
+            );
+        }
+        // ★ 2026-10-14: the reset handshake's register and field encodings, per die group.
+        for g in SERVED {
+            assert_eq!(
+                PGSP + FALCON_ENGINE,
+                val(g, "NV_PGSP_FALCON_ENGINE"),
+                "{g:?}"
+            );
+            assert_eq!(range(g, "NV_PGSP_FALCON_ENGINE_RESET"), (0, 0), "{g:?}");
+            assert_eq!(
+                val(g, "NV_PGSP_FALCON_ENGINE_RESET_ASSERT"),
+                ENGINE_RESET,
+                "{g:?}"
+            );
+            assert_eq!(val(g, "NV_PGSP_FALCON_ENGINE_RESET_DEASSERT"), 0, "{g:?}");
+            assert_eq!(
+                range(g, "NV_PGSP_FALCON_ENGINE_RESET_STATUS"),
+                (10, 8),
+                "{g:?}"
+            );
+            assert_eq!(
+                val(g, "NV_PGSP_FALCON_ENGINE_RESET_STATUS_ASSERTED") << 8,
+                ENGINE_STATUS_ASSERTED,
+                "{g:?}"
+            );
+            assert_eq!(
+                val(g, "NV_PGSP_FALCON_ENGINE_RESET_STATUS_DEASSERTED") << 8,
+                ENGINE_STATUS_DEASSERTED,
                 "{g:?}"
             );
         }

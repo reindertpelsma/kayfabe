@@ -1,0 +1,82 @@
+# life 1 of the Windows RM: lines 1..1817 of qemu.log (KF3_RPC_TRACE probe, kf3 202c612e)
+## RmAlloc classes in order (class result)
+class=0x0000 result=0x0;class=0x0080 result=0x0;class=0x2080 result=0x0;class=0x2081 result=0x0;class=0x0000 result=0x0;class=0x0080 result=0x0;class=0x2080 result=0x0;class=0x0073 result=0x0;class=0x0000 result=0x0;class=0x0080 result=0x0;class=0x2080 result=0x0;class=0x007e result=0x0;class=0x0000 result=0x0;class=0x0080 result=0x0;class=0x2080 result=0x0;class=0x0000 result=0x0;class=0x0080 result=0x0;class=0x2080 result=0x0;class=0x0000 result=0x0;class=0x0080 result=0x0;class=0x2080 result=0x0;class=0x90f1 result=0x0;class=0xca6f result=0x0;class=0xce97 result=0x0;class=0x0000 result=0x0;class=0x0080 result=0x0;class=0x2080 result=0x0;class=0x90f1 result=0x0;class=0xca6f result=0x0;class=0xcab5 result=0x0;class=0x007e result=0x0;class=0xcbcb result=0x56;class=0x0073 result=0x0;class=0xc372 result=0x0;class=0xb297 result=0x0;class=0xb297 result=0x0;class=0xb297 result=0x0;class=0xb297 result=0x0;class=0x0004 result=0x0;class=0x0000 result=0x0;class=0x0080 result=0x0;class=0x2080 result=0x0;class=0x0070 result=0x0;class=0x90f1 result=0x0;class=0x0070 result=0x0;class=0xca70 result=0x0;class=0xca7d result=0x0;class=0xca7e result=0x0;class=0xca7e result=0x0;class=0xca7e result=0x0;class=0xca7e result=0x0;class=0xca7e result=0x0;class=0xca7e result=0x0;class=0xca7e result=0x0;class=0xca7e result=0x0;class=0xca7b result=0x0;class=0xca7b result=0x0;class=0xca7b result=0x0;class=0xca7b result=0x0;class=0xca7b result=0x0;class=0xca7b result=0x0;class=0xca7b result=0x0;class=0xca7b result=0x0;class=0xca7a result=0x0;class=0xca7a result=0x0;class=0xca7a result=0x0;class=0xca7a result=0x0;
+## non-OK / unserviced RPCs in order
+fn=76 RmControl cmd=0x20800a87 client=0x0 result=none
+fn=76 RmControl cmd=0x20800afe client=0x0 result=none
+fn=76 RmControl cmd=0x20800aff client=0x0 result=none
+fn=76 RmControl cmd=0x20800aaf client=0x0 result=none
+fn=76 RmControl cmd=0x00800292 client=0x0 result=none
+fn=76 RmControl cmd=0x20800a80 client=0x0 result=none
+fn=76 RmControl cmd=0x20800a89 client=0x0 result=none
+fn=76 RmControl cmd=0x20800a80 client=0x0 result=none
+fn=76 RmControl cmd=0x20802a0f client=0x0 result=none
+fn=76 RmControl cmd=0x20800ab2 client=0x0 result=none
+fn=76 RmControl cmd=0x2080017e client=0x0 result=none
+fn=76 RmControl cmd=0x20800a30 client=0xc1e00006 result=none
+fn=76 RmControl cmd=0x20800a2e client=0xc1e00006 result=none
+fn=76 RmControl cmd=0x20800b03 client=0xc1e00006 result=none
+fn=76 RmControl cmd=0x20800b05 client=0xc1e00006 result=none
+fn=76 RmControl cmd=0x20800a3f client=0xc1e00006 result=none
+fn=76 RmControl cmd=0x2080013f client=0x0 result=none
+fn=76 RmControl cmd=0x20809004 client=0xc1d00002 result=none
+fn=76 RmControl cmd=0x00801306 client=0xc1d00002 result=none
+fn=76 RmControl cmd=0x20810108 client=0xc1d00002 result=none
+fn=76 RmControl cmd=0x20800ab8 client=0x0 result=none
+fn=76 RmControl cmd=0x20800173 client=0xc1d00002 result=none
+fn=76 RmControl cmd=0x20802a12 client=0xc1d00002 result=none
+fn=76 RmControl cmd=0x20802a12 client=0xc1d00002 result=none
+fn=76 RmControl cmd=0x20802a12 client=0xc1d00002 result=none
+fn=76 RmControl cmd=0x20800160 client=0xc1d00002 result=none
+fn=103 RmAlloc class=0xcbcb client=0xc1d00002 result=0x56
+fn=76 RmControl cmd=0x20802801 client=0xc1d00002 result=none
+fn=76 RmControl cmd=0x2080012f client=0xc1d00002 result=none
+fn=76 RmControl cmd=0x20802806 client=0xc1d00002 result=none
+fn=76 RmControl cmd=0x2080205b client=0xc1d00002 result=none
+fn=76 RmControl cmd=0x2080a060 client=0xc1d00002 result=none
+fn=76 RmControl cmd=0x20802068 client=0xc1d00002 result=none
+fn=76 RmControl cmd=0x00800106 client=0xc1d00002 result=none
+fn=76 RmControl cmd=0x2080a70a client=0xc1d00002 result=none
+fn=76 RmControl cmd=0x2080a801 client=0xc1d00002 result=none
+fn=76 RmControl cmd=0x20802a12 client=0xc1d00002 result=none
+fn=76 RmControl cmd=0x20802a12 client=0xc1d00002 result=none
+fn=76 RmControl cmd=0x20802a12 client=0xc1d00002 result=none
+fn=76 RmControl cmd=0x2080a02f client=0xc1d00002 result=none
+fn=76 RmControl cmd=0x208081ea client=0xc1d00002 result=none
+fn=76 RmControl cmd=0x20808524 client=0xc1d00002 result=none
+fn=76 RmControl cmd=0x00730285 client=0xc1d00002 result=none
+fn=76 RmControl cmd=0x00730285 client=0xc1d00002 result=none
+fn=76 RmControl cmd=0x00730285 client=0xc1d00002 result=none
+fn=76 RmControl cmd=0x00730285 client=0xc1d00002 result=none
+fn=76 RmControl cmd=0x00730285 client=0xc1d00002 result=none
+fn=76 RmControl cmd=0x20800a3a client=0x0 result=none
+fn=76 RmControl cmd=0x20801110 client=0xc1d00002 result=none
+fn=76 RmControl cmd=0x2080080b client=0xc1d00002 result=none
+fn=76 RmControl cmd=0x20800ab4 client=0x0 result=none
+fn=76 RmControl cmd=0x20800afe client=0x0 result=none
+## tail: the last 25 RPCs before the unload
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x50700117 client=0xc1d00002 object=0xff1fe100 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801111 client=0xc1d00002 object=0xff030000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a38 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20801111 client=0xc1d00002 object=0xff030000 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a6c client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800ab4 client=0x0 object=0x0 result=none
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730151 client=0xc1e00003 object=0xcaf00002 params=0000000000000000000000000000000000000000000000000000000000000000000000000
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a38 client=0x0 object=0x0 result=0x0
+kf-rm: rpc-trace fn=70 UpdateBarPde seq=0  result=0x0
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800afe client=0x0 object=0x0 result=none
+kf-rm: rpc-trace fn=47 UnloadingGuestDriver seq=0  result=0x0

@@ -1,0 +1,32 @@
+# Linux fast guest, arm --timer, GB206 (RTX 5060 Ti), guest driver 580.159.04, kf3 084a08dd (display plane change only; no GSP-model change) and 202c612e (HB2+HB3): both FAIL the same way
+# fast_suite at 202c612e: FAST_SUITE not completed (first arms --timer, --engines, --doorbell-census all FAIL raw client rc=1 at 35 s; stopped)
+# the suite out so far (202c612e)
+FAST_SUITE_STARTED=2026-10-14T16:12:26+00:00 arms=30 budget=180s
+rev=63a00f1f8
+ARM                          VERDICT   secs  why
+--timer                      FAIL      35s   raw client rc=1
+FAST_CELL_ARM arm=timer verdict=FAIL secs=35 client_ms=17780
+--engines                    FAIL      35s   raw client rc=1
+FAST_CELL_ARM arm=engines verdict=FAIL secs=35 client_ms=16890
+--doorbell-census            FAIL      35s   raw client rc=1
+FAST_CELL_ARM arm=doorbell-census verdict=FAIL secs=35 client_ms=16919
+--gpu-info-sweep             FAIL      34s   raw client rc=1
+FAST_CELL_ARM arm=gpu-info-sweep verdict=FAIL secs=34 client_ms=16880
+--bus-info-sweep             FAIL      33s   raw client rc=1
+# --- guest serial (kf3 202c612e, arm --timer):
+[   10.791946] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+[   16.609727] NVRM: GspStatusQueueInit: msgqRxLink failed: -7, nvStatus 0x00000065, retries: 4225704
+[   16.614614] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call timed out [NV_ERR_TIMEOUT] (0x00000065) returned from GspStatusQueueInit(pGpu, &pKernelGsp->pRpc->pMessageQueueInfo) @ kernel_gsp_gh100.c:977
+[   20.629709] NVRM: GspStatusQueueInit: msgqRxLink failed: -7, nvStatus 0x00000065, retries: 4732850
+[   20.634339] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call timed out [NV_ERR_TIMEOUT] (0x00000065) returned from GspStatusQueueInit(pGpu, &pKernelGsp->pRpc->pMessageQueueInfo) @ kernel_gsp_gh100.c:977
+[   24.649715] NVRM: GspStatusQueueInit: msgqRxLink failed: -7, nvStatus 0x00000065, retries: 4432171
+[   24.654642] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call timed out [NV_ERR_TIMEOUT] (0x00000065) returned from GspStatusQueueInit(pGpu, &pKernelGsp->pRpc->pMessageQueueInfo) @ kernel_gsp_gh100.c:977
+[   28.670713] NVRM: GspStatusQueueInit: msgqRxLink failed: -7, nvStatus 0x00000065, retries: 4304306
+[   28.675700] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call timed out [NV_ERR_TIMEOUT] (0x00000065) returned from GspStatusQueueInit(pGpu, &pKernelGsp->pRpc->pMessageQueueInfo) @ kernel_gsp_gh100.c:977
+[   28.685134] NVRM: kgspInitRm_IMPL: Max GSP-RM boot attempts exceeded: 4/4
+[   28.688790] NVRM: RmInitAdapter: Cannot initialize GSP firmware RM
+[   28.693906] NVRM: iovaspaceDestruct_IMPL: 1 left-over mappings in IOVAS 0x3
+[   28.697592] NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x62:0x65:2028)
+[   28.705166] NVRM: GPU 0000:00:03.0: rm_init_adapter failed, device minor number 0
+FAIL  RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { call: "openat", errno: Some(5) }
+FASTGUEST: client rc=1 at 28.63s

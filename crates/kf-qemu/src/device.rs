@@ -417,7 +417,9 @@ impl Device {
                     channels_per_runlist: budget.per_runlist,
                 };
             }
-            None => return Err("channel budget: host facts are shared before the budget is set".into()),
+            None => {
+                return Err("channel budget: host facts are shared before the budget is set".into());
+            }
         }
         eprintln!(
             "kf3: channel budget {} per runlist ({:?}; derived default {}, host limit {}; the count the guest is told AND the enforced cap, refused by name past it — property channel-budget, docs/design/V3_CHANNEL_BUDGET.md)",
@@ -957,16 +959,14 @@ impl Device {
                 let mut objects = kf_rm::rmrpc::ObjectPolicy::over(
                     &t,
                     kf_abi::GuestOs::Linux,
-                    Box::new(
-                        kf_rm::memory_access::SharedObjects::new(
-                            kf_rm::rmrpc::GraphObjects::new(family)
-                                .with_guest_ram(std::sync::Arc::new(crate::mem::MemoryListRam(ram)))
-                                .with_guest_framebuffer(memory_list_fb.clone())
-                                .with_deferred_api(defapi_reg.clone())
-                                .with_fifo_update_filter(fifo_update_filter.clone()),
-                            &memory_access,
-                        ),
-                    ),
+                    Box::new(kf_rm::memory_access::SharedObjects::new(
+                        kf_rm::rmrpc::GraphObjects::new(family)
+                            .with_guest_ram(std::sync::Arc::new(crate::mem::MemoryListRam(ram)))
+                            .with_guest_framebuffer(memory_list_fb.clone())
+                            .with_deferred_api(defapi_reg.clone())
+                            .with_fifo_update_filter(fifo_update_filter.clone()),
+                        &memory_access,
+                    )),
                     kf_rm::rmrpc::ReasmLimits::default(),
                 );
                 // ★ EXPERIMENT `KF3_GSS_NATIVE`: the SAME counters across a chain rebuild.
@@ -2318,7 +2318,8 @@ impl Device {
             // Existing invalidates/reconciliation have priority. One private
             // resource request and one4KiB initialization step per idle turn;
             // never drain a queue of uncached1MiB clears ahead of a trigger.
-            if !m.in_flight() && m.pending() == 0
+            if !m.in_flight()
+                && m.pending() == 0
                 && self.mem.inbox.all_settled()
                 && !self.mem.inbox.walk_busy()
                 && self.mem.port.armed_request().is_none()
@@ -3964,10 +3965,7 @@ impl HostOps for Device {
         }
         while g.fsm.pending_command_doorbells() > 0 {
             self.counters.serviced.fetch_add(1, Ordering::Relaxed);
-            match g
-                .fsm
-                .service_one_deferred_command(&mut ram, &mut g.policy)
-            {
+            match g.fsm.service_one_deferred_command(&mut ram, &mut g.policy) {
                 Ok(r) => {
                     n_cmds += r.commands.len();
                     if self.log_report(&r) {

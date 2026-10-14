@@ -967,7 +967,11 @@ mod tests {
         r.run.lock().expect("run").since =
             Some(std::time::Instant::now() - STALL_AFTER - std::time::Duration::from_millis(1));
         assert_eq!(r.poll(&o), Progress::Pending(Stage::Release));
-        let seen = o.status_seen.borrow().clone().expect("the report read the status");
+        let seen = o
+            .status_seen
+            .borrow()
+            .clone()
+            .expect("the report read the status");
         assert!(seen.contains("stage=Release"), "{seen}");
     }
 
@@ -1058,7 +1062,10 @@ mod tests {
         let t0 = std::time::Instant::now();
         assert_eq!(r.wait_completed(e, WAIT_BOUND), Waited::Done);
         assert!(t0.elapsed() < WAIT_BOUND);
-        assert!(!r.gate.is_closed(), "the gate is open before the vCPUs resume");
+        assert!(
+            !r.gate.is_closed(),
+            "the gate is open before the vCPUs resume"
+        );
         assert_eq!(o.finished.load(Ordering::SeqCst), 1);
         assert!(r.status().contains("main=1 vcpu=0"), "{}", r.status());
         // A pristine reset (the machine's own at creation) is done at once.

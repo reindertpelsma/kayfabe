@@ -484,16 +484,14 @@ impl Birth {
                 return Err(fail(format!("{why}; storage cleanup {cleanup:?}")));
             }
         };
-        let pump =
-            match super::userpump::Pump::new(me, native_id, (a.client, a.handle))
-            {
-                Ok(pump) => pump,
-                Err(why) => {
-                    let cleanup = me.inbox.user_va.release_after_channel_free(lease);
-                    let _ = me.inbox.wake.signal();
-                    return Err(fail(format!("{why}; never-born cleanup {cleanup:?}")));
-                }
-            };
+        let pump = match super::userpump::Pump::new(me, native_id, (a.client, a.handle)) {
+            Ok(pump) => pump,
+            Err(why) => {
+                let cleanup = me.inbox.user_va.release_after_channel_free(lease);
+                let _ = me.inbox.wake.signal();
+                return Err(fail(format!("{why}; never-born cleanup {cleanup:?}")));
+            }
+        };
         let notifier = self
             .err_at
             .and_then(|(obj, off, at)| me.arm_notifier(a.client, a.handle, obj, off, at));
