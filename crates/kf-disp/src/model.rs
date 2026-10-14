@@ -116,7 +116,12 @@ const NAMED_CONTROLS: &[(&str, &str)] = &[
         "NV0073_CTRL_CMD_SYSTEM_GET_HEAD_ROUTING_MAP",
         "head_routing",
     ),
-    ("NV0073_CTRL_CMD_SYSTEM_MAP_SHARED_DATA", "echo"),
+    // ★ 2026-10-14: the display SHARED DATA page — kernel RM's per-head vblank counters
+    // (`KernelDisplaySharedMem.kHeadVblankCount[]`, ogkm `kern_disp.c:557-627`), which physical RM
+    // updates and a GSP client's `NV0073_CTRL_CMD_SYSTEM_GET_VBLANK_COUNTER` READS
+    // (`disp_common_kern_ctrl_minimal.c:401-410`). Stated to the worker, which counts each head's
+    // vblanks into it (see `Statement::SharedData`).
+    ("NV0073_CTRL_CMD_SYSTEM_MAP_SHARED_DATA", "map_shared"),
     (
         "NV0073_CTRL_CMD_SYSTEM_GET_INTERNAL_DISPLAYS",
         "internal_displays",
@@ -457,6 +462,10 @@ pub enum Statement {
         /// The generation the shared ports minted for this life.
         life: u32,
     },
+    /// ★ `NV0073_CTRL_CMD_SYSTEM_MAP_SHARED_DATA`: kernel RM's display shared-data page (`None`: unmapped).
+    /// Its first words are `kHeadVblankCount[OBJ_MAX_HEADS]` (u32 each, ogkm `g_kern_disp_nvoc.h:72-75`):
+    /// physical RM's count of each head's vblanks, which a GSP client's `GET_VBLANK_COUNTER` returns.
+    SharedData(Option<InstMem>),
     /// A display channel was freed.
     ChannelFreed {
         /// Kind.
@@ -1223,6 +1232,16 @@ impl DisplayModel {
                 p.set("numHeads", u64::from(self.heads));
                 p.set("i2cPort", u64::from(NO_I2C_PORT));
                 p.set("numDispChannels", u64::from(NUM_DISP_CHANNELS));
+                Ok(p.buf)
+            }
+            "map_shared" => {
+                let p = self.view("NV0073_CTRL_CMD_SYSTEM_MAP_SHARED_DATA_PARAMS", params)?;
+                let page = (p.get("bMap").unwrap_or(0) != 0).then(|| InstMem {
+                    phys: p.get("memDescInfo.base").unwrap_or(0),
+                    size: p.get("memDescInfo.size").unwrap_or(0),
+                    addr_space: p.get("memDescInfo.addressSpace").unwrap_or(0) as u32,
+                });
+                self.state(Statement::SharedData(page));
                 Ok(p.buf)
             }
             "inst_mem" => {
@@ -2017,6 +2036,31 @@ mod tests {
             m.control(cmd(&m, "NV0073_CTRL_CMD_SPECIFIC_GET_EDID_V2"), &q.buf),
             Some(Err(NV_ERR_INVALID_ARGUMENT))
         );
+    }
+
+    /// ★ 2026-10-14: `MAP_SHARED_DATA` states the display shared-data page to the worker (which
+    /// keeps each head's vblank count in it): bMap 1 -> the page as kernel RM described it (FB base,
+    /// size, address space), bMap 0 -> unmapped; the reply is the request.
+    #[test]
+    fn map_shared_data_states_the_vblank_count_page() {
+        let mut m = model();
+        let s = "NV0073_CTRL_CMD_SYSTEM_MAP_SHARED_DATA_PARAMS";
+        let c = cmd(&m, "NV0073_CTRL_CMD_SYSTEM_MAP_SHARED_DATA");
+        let mut q = Params::new(m.layouts(), s, &vec![0; size(&m, s)]).unwrap();
+        q.set("memDescInfo.base", 0xe9f0_0000);
+        q.set("memDescInfo.size", 32);
+        q.set("memDescInfo.addressSpace", 2);
+        q.set("bMap", 1);
+        let r = m.control(c, &q.buf).unwrap().unwrap();
+        assert_eq!(r, q.buf);
+        let st = m.take_statements();
+        assert!(
+            st.iter().any(|x| *x == Statement::SharedData(Some(InstMem { phys: 0xe9f0_0000, size: 32, addr_space: 2 }))),
+            "{st:?}"
+        );
+        q.set("bMap", 0);
+        let _ = m.control(c, &q.buf).unwrap().unwrap();
+        assert!(m.take_statements().contains(&Statement::SharedData(None)));
     }
 
     /// ★ `SYSTEM_GET_ACTIVE` reports what the engine's ARMED state lights (the worker publishes it

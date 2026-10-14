@@ -346,6 +346,44 @@ fn frame_edge_out(
     irq
 }
 
+/// ★ 2026-10-14 — **THE VBLANK COUNTER A GSP CLIENT READS.** On a GSP system kernel RM answers
+/// `NV0073_CTRL_CMD_SYSTEM_GET_VBLANK_COUNTER` (normal latency) from `kHeadVblankCount[head]` in the
+/// display shared-data page it handed physical RM (`MAP_SHARED_DATA`; ogkm
+/// `disp_common_kern_ctrl_minimal.c:401-410`, `kern_disp.c:557-627`), and physical RM keeps it. kf3 is
+/// physical RM here and never wrote it: the count stayed 0. `[measured run 2990, 2026-10-14]` an OpenGL
+/// application with swap interval 1 (`kf_glvsync --swap 1`, Minecraft) never completed its second
+/// SwapBuffers; the ICD gave up after 300 s ("Unable to communicate with the display driver", error 2).
+/// Writes head `h`'s count (u32, little-endian, at `4*h`, `g_kern_disp_nvoc.h:72-75`) into the page,
+/// bounded by the size the guest stated; FB pages through the store, sysmem through guest RAM.
+fn write_vblank_count(io: &Io<'_>, page: kf_disp::model::InstMem, h: usize, n: u32) -> Result<(), String> {
+    let off = (h as u64).checked_mul(4).ok_or("head")?;
+    if off.checked_add(4).is_none_or(|e| e > page.size) {
+        return Err(format!("head {h}'s count is past the {:#x}-byte page", page.size));
+    }
+    let at = page.phys.checked_add(off).ok_or("address")?;
+    let bytes = n.to_le_bytes();
+    match page.addr_space {
+        2 => io
+            .gpu
+            .as_ref()
+            .ok_or("no display GPU context")?
+            .write_store(at, &bytes)
+            .map_err(|e| e.to_string()),
+        1 => {
+            let b = io
+                .dev
+                .ram
+                .block_for(at, 4)
+                .ok_or_else(|| format!("{at:#x} is not guest RAM"))?;
+            b.mem
+                .write_from((at - b.gpa) as usize, &bytes)
+                .then_some(())
+                .ok_or_else(|| "guest RAM write refused".to_string())
+        }
+        s => Err(format!("address space {s}")),
+    }
+}
+
 /// `NV_PDISP_FE_CORE_HEAD_STATE(i)`: base, stride, the `OPERATING_MODE` field `(hi, lo)`, and its
 /// `AWAKE` and `SLEEP` values.
 type CoreHeadState = (u64, u64, (u8, u8), u32, u32);
@@ -2589,6 +2627,9 @@ impl Device {
             dp.map.heads, dp.map.windows
         );
         let store = |o: u64, v: u32| self.shadow_store(o, u64::from(v), 4);
+        // ★ the display shared-data page (`Statement::SharedData`) and each head's vblank count in it
+        let mut shared_data: Option<kf_disp::model::InstMem> = None;
+        let mut vblank_counts = [0u32; MAX_HEADS];
         let mut io = Io {
             dev: self,
             dp,
@@ -2768,6 +2809,10 @@ impl Device {
             for s in st {
                 eprintln!("kf3: display: {s:?}");
                 match s {
+                    Statement::SharedData(page) => {
+                        shared_data = page;
+                        vblank_counts = [0; MAX_HEADS];
+                    }
                     Statement::InstMem(im) => {
                         io.inst = Some(im);
                         // a new instance memory voids every resolution made from the old one
@@ -3431,6 +3476,13 @@ impl Device {
                 std::sync::atomic::fence(Ordering::SeqCst);
             }
             for h in due {
+                if let Some(page) = shared_data {
+                    vblank_counts[h] = vblank_counts[h].wrapping_add(1);
+                    if let Err(e) = write_vblank_count(&io, page, h, vblank_counts[h]) {
+                        io.refuse(&format!("display shared data: {e}"));
+                        shared_data = None;
+                    }
+                }
                 let irq =
                     frame_edge_out(dp, &store, h, edge_frame[h], loadv, wtrace, &vsync_traced);
                 raised |= irq != 0;
