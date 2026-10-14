@@ -36,21 +36,22 @@ pub enum Need {
     Idle,
     /// Progress was made: ring the token again (bounded by `REACT_ROUNDS`).
     Again,
-    /// Wait until the private `GP_GET` reaches absolute fetch count `target` (a draining SYNC_WAIT
-    /// gate's witness, or in-flight work whose progress frees the guest's ring). `carried` = the
-    /// marker that ends it carries no interrupt (a packet was open).
-    Private {
-        /// Absolute private fetch count to reach.
+    /// Wait until `target` reference-bearing markers were PROCESSED (the tagged `USERD.REFERENCE`
+    /// count reaches it). A SYNC_WAIT gate's proof that the segment before the barrier -- its
+    /// acquires included -- is done, and the wake for everything a batch marker announces (the
+    /// guest's `GP_GET` write-back, the private ring's free slots: processing implies the pops).
+    /// NOT `GP_GET`: measured on hardware, `GP_GET` runs ahead of processing. The marker raises the
+    /// non-stall interrupt that announces it.
+    Marker {
+        /// Absolute count of reference-bearing markers to be processed.
         target: u64,
-        /// The wake for it is the spin or the backstop, not an interrupt.
-        carried: bool,
     },
-    /// The private ring is full: any private progress frees a credit. `carried` = no marker could
-    /// be published behind the work (a packet was open or no slot was left), so no interrupt will
-    /// announce the progress.
-    Credit {
-        /// The wake for it is the spin or the backstop, not an interrupt.
-        carried: bool,
+    /// Wait until the PBDMA has POPPED `target` private entries (`GP_GET`), with NO marker behind
+    /// the work (a packet was open, or no slot was left): no interrupt announces it, the spin and
+    /// the safety net are the wake.
+    Popped {
+        /// Absolute count of private entries to be popped.
+        target: u64,
     },
     /// A lock or admission was busy (`try_lock` failed, a retry was asked): nothing to wait on
     /// except looking again.
@@ -60,17 +61,15 @@ pub enum Need {
 /// What a parked relay is waiting for ([`Need`] minus the cases that wait for nothing).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Wait {
-    /// See [`Need::Private`].
-    Fetched {
-        /// Absolute private fetch count to reach.
+    /// See [`Need::Marker`].
+    Marker {
+        /// Absolute count of reference-bearing markers to be processed.
         target: u64,
-        /// The wake for it is the spin or the backstop, not an interrupt.
-        carried: bool,
     },
-    /// See [`Need::Credit`].
-    Credit {
-        /// The wake for it is the spin or the backstop, not an interrupt.
-        carried: bool,
+    /// See [`Need::Popped`].
+    Popped {
+        /// Absolute count of private entries to be popped.
+        target: u64,
     },
     /// See [`Need::Contended`]: satisfied by looking again.
     Contended,
@@ -81,30 +80,28 @@ pub enum Wait {
 pub const fn wait_of(need: Need) -> Option<Wait> {
     match need {
         Need::Idle | Need::Again => None,
-        Need::Private { target, carried } => Some(Wait::Fetched { target, carried }),
-        Need::Credit { carried } => Some(Wait::Credit { carried }),
+        Need::Marker { target } => Some(Wait::Marker { target }),
+        Need::Popped { target } => Some(Wait::Popped { target }),
         Need::Contended => Some(Wait::Contended),
     }
 }
 
 impl Wait {
-    /// Whether the wait is over. `observed` = the absolute fetch count the private `GP_GET` word
-    /// implies right now (`Fetch::peek`), `fetched` = what the relay has already accounted.
+    /// Whether the wait is over. `marks` = the absolute count of gate/batch markers PROCESSED (the
+    /// tagged `USERD.REFERENCE`, `Marks::peek`), `popped` = the absolute count of private entries
+    /// the PBDMA has popped (`USERD.GP_GET`, `Fetch::peek`).
     #[must_use]
-    pub const fn satisfied(self, observed: u64, fetched: u64) -> bool {
+    pub const fn satisfied(self, marks: u64, popped: u64) -> bool {
         match self {
-            Self::Fetched { target, .. } => observed >= target,
-            Self::Credit { .. } => observed > fetched,
+            Self::Marker { target } => marks >= target,
+            Self::Popped { target } => popped >= target,
             Self::Contended => true,
         }
     }
-    /// Whether no interrupt will announce this wait.
+    /// Whether no interrupt will announce this wait (only the spin and the safety net wake it).
     #[must_use]
     pub const fn carried(self) -> bool {
-        matches!(
-            self,
-            Self::Fetched { carried: true, .. } | Self::Credit { carried: true }
-        )
+        matches!(self, Self::Popped { .. })
     }
 }
 
@@ -141,9 +138,9 @@ pub enum Found {
 #[must_use]
 pub const fn found(wait: Wait) -> Found {
     match wait {
-        Wait::Fetched { carried: true, .. } | Wait::Credit { carried: true } => Found::Carried,
+        Wait::Popped { .. } => Found::Carried,
         Wait::Contended => Found::Contended,
-        Wait::Fetched { .. } | Wait::Credit { .. } => Found::Work,
+        Wait::Marker { .. } => Found::Work,
     }
 }
 
@@ -193,10 +190,12 @@ pub struct Stats {
     /// Events after which no wait was satisfied (an interrupt before `GP_GET` was visible, or one
     /// of several markers).
     pub event_without_progress: AtomicU64,
-    /// SYNC_WAIT gates authored.
+    /// SYNC_WAIT gates authored (barrier + marker).
     pub gates: AtomicU64,
-    /// ... of them with a control witness (a packet was open).
-    pub carried_gates: AtomicU64,
+    /// SYNC_WAIT entries read WITHOUT a gate because a method packet was open across them (no
+    /// witness can be placed inside an open packet; the hardware does not delay such a segment
+    /// either, public `dev_pbdma.ref` `GP_ENTRY1_SYNC`).
+    pub carried_ungated: AtomicU64,
     /// Turns that ended waiting for private-ring credit.
     pub credit_waits: AtomicU64,
     /// Turns deferred by a busy lock / admission.
@@ -223,7 +222,7 @@ impl Stats {
         let g = |c: &AtomicU64| c.load(Ordering::Relaxed);
         let drain: Vec<u64> = self.drain.iter().map(g).collect();
         format!(
-            "wakes(doorbell={} event={} spin={} backstop={}) backstop_found(work={} carried={} contended={} put_ahead={}) event_without_progress={} gates={} carried_gates={} credit_waits={} contended_turns={} markers={} drain_us_log2={drain:?}",
+            "wakes(doorbell={} event={} spin={} backstop={}) backstop_found(work={} carried={} contended={} put_ahead={}) event_without_progress={} gates={} carried_ungated={} credit_waits={} contended_turns={} markers={} drain_us_log2={drain:?}",
             g(&self.wake_doorbell),
             g(&self.wake_event),
             g(&self.wake_spin),
@@ -234,7 +233,7 @@ impl Stats {
             g(&self.backstop_put_ahead),
             g(&self.event_without_progress),
             g(&self.gates),
-            g(&self.carried_gates),
+            g(&self.carried_ungated),
             g(&self.credit_waits),
             g(&self.contended),
             g(&self.markers),
@@ -247,26 +246,24 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_fetched_wait_is_over_at_its_target_and_not_before() {
-        let w = Wait::Fetched {
-            target: 7,
-            carried: false,
-        };
-        assert!(!w.satisfied(6, 3));
-        assert!(w.satisfied(7, 3));
-        assert!(w.satisfied(9, 3));
+    fn a_marker_wait_is_over_when_enough_markers_were_processed_whatever_get_says() {
+        let w = Wait::Marker { target: 3 };
+        // GP_GET runs ahead of processing: an advanced pop count proves nothing about the gate
+        assert!(!w.satisfied(2, 1000));
+        assert!(w.satisfied(3, 0));
+        assert!(w.satisfied(4, 0));
     }
 
     #[test]
-    fn a_credit_wait_is_over_at_any_private_progress() {
-        let w = Wait::Credit { carried: false };
-        assert!(!w.satisfied(5, 5));
-        assert!(w.satisfied(6, 5));
+    fn a_popped_wait_is_over_at_its_target_pop_count() {
+        let w = Wait::Popped { target: 7 };
+        assert!(!w.satisfied(100, 6));
+        assert!(w.satisfied(0, 7));
     }
 
     #[test]
     fn a_contended_wait_is_over_by_looking_again() {
-        assert!(Wait::Contended.satisfied(0, 100));
+        assert!(Wait::Contended.satisfied(0, 0));
     }
 
     #[test]
@@ -282,52 +279,19 @@ mod tests {
     fn needs_map_to_waits() {
         assert_eq!(wait_of(Need::Idle), None);
         assert_eq!(wait_of(Need::Again), None);
-        assert_eq!(
-            wait_of(Need::Credit { carried: false }),
-            Some(Wait::Credit { carried: false })
-        );
         assert_eq!(wait_of(Need::Contended), Some(Wait::Contended));
-        assert_eq!(
-            wait_of(Need::Private {
-                target: 3,
-                carried: true
-            }),
-            Some(Wait::Fetched {
-                target: 3,
-                carried: true
-            })
-        );
-        assert!(
-            Wait::Fetched {
-                target: 1,
-                carried: true
-            }
-            .carried()
-        );
-        assert!(!Wait::Credit { carried: false }.carried());
-        assert!(Wait::Credit { carried: true }.carried());
+        assert_eq!(wait_of(Need::Marker { target: 3 }), Some(Wait::Marker { target: 3 }));
+        assert_eq!(wait_of(Need::Popped { target: 3 }), Some(Wait::Popped { target: 3 }));
+        assert!(Wait::Popped { target: 1 }.carried());
+        assert!(!Wait::Marker { target: 1 }.carried());
     }
 
     /// The backstop's classification is the model's: only a satisfied wait an interrupt should have
     /// announced is a bug.
     #[test]
     fn only_an_announced_wait_found_by_the_backstop_is_work() {
-        assert_eq!(
-            found(Wait::Fetched {
-                target: 1,
-                carried: true
-            }),
-            Found::Carried
-        );
-        assert_eq!(
-            found(Wait::Fetched {
-                target: 1,
-                carried: false
-            }),
-            Found::Work
-        );
-        assert_eq!(found(Wait::Credit { carried: false }), Found::Work);
-        assert_eq!(found(Wait::Credit { carried: true }), Found::Carried);
+        assert_eq!(found(Wait::Popped { target: 1 }), Found::Carried);
+        assert_eq!(found(Wait::Marker { target: 1 }), Found::Work);
         assert_eq!(found(Wait::Contended), Found::Contended);
     }
 

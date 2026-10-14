@@ -18,7 +18,7 @@
 #![allow(clippy::too_many_lines)]
 
 use kf_abi::submit::{MethodForm, method_header_decode, method_header_inc, method_header_non_inc};
-use kf_chan::user_gate::{Gate, Grace, REFUSE_RETRIES, SyncGate, Witness, witness};
+use kf_chan::user_gate::{Gate, Grace, Marks, REFUSE_RETRIES, SyncGate, Witness, witness};
 use kf_chan::user_scan::{Fetch, Scan};
 
 const SYNC: u64 = 1 << 63;
@@ -183,6 +183,7 @@ fn relay(ring: &[E], ring_entries: u32, pick: impl Fn(bool) -> Witness) -> Vec<V
     let mut scan = Scan::default();
     let mut fetch = Fetch::new(64).unwrap();
     let mut gate = SyncGate::default();
+    let mut marks = Marks::default();
     let mut private = Vec::new();
     let mut n = 0usize;
     let mut guard = 0;
@@ -205,20 +206,27 @@ fn relay(ring: &[E], ring_entries: u32, pick: impl Fn(bool) -> Witness) -> Vec<V
         // the generation stays 1: the ring wraps within one generation, which is exactly the
         // situation a stale `cleared` marker bites in
         let _ = lap;
-        match gate.entry(raw, 1, cursor, fetch.fetched()) {
+        // a SYNC_WAIT entry reached with a packet open has no witness and is not gated
+        let ungated = sync && pick(!scan.at_boundary()) == Witness::None;
+        let verdict = if ungated {
+            Gate::Proceed
+        } else {
+            gate.entry(raw, 1, cursor, marks.seen())
+        };
+        match verdict {
             Gate::PublishBarrier => {
                 fetch.publish(None).unwrap();
                 private.push(Vec::new());
                 fetch.publish(None).unwrap();
-                private.push(match pick(!scan.at_boundary()) {
-                    Witness::Bytes => marker(),
-                    Witness::Control => Vec::new(),
-                });
-                gate.published(fetch.issued());
+                let (_, value) = marks.issue().unwrap();
+                private.push(marker(value));
+                gate.published(marks.issued());
             }
             Gate::Wait => {
+                // the hardware processes the marker: REFERENCE takes its value
                 let get = (fetch.issued() & 63) as u32;
                 fetch.observe(get).unwrap();
+                marks.observe(Marks::value(marks.issued()));
             }
             Gate::Proceed => {
                 if let Some(w) = words {
@@ -242,17 +250,28 @@ fn relay(ring: &[E], ring_entries: u32, pick: impl Fn(bool) -> Witness) -> Vec<V
 }
 
 /// The batch marker segment (`UserStorage::write_host_marker`): `NON_STALL_INTERRUPT`, data 0.
-fn marker() -> Vec<u32> {
+fn marker(value: u32) -> Vec<u32> {
     vec![
+        method_header_inc(0, kf_abi::submit::fifo::SET_REFERENCE_C56F, 1).unwrap(),
+        value,
         method_header_inc(0, kf_abi::submit::fifo::NON_STALL_INTERRUPT, 1).unwrap(),
         0,
     ]
+}
+fn is_marker(seg: &[u32]) -> bool {
+    seg.len() == 4
+        && seg[0] == method_header_inc(0, kf_abi::submit::fifo::SET_REFERENCE_C56F, 1).unwrap()
+        && seg[1] >> 16 == kf_chan::user_gate::MARK_TAG >> 16
 }
 /// What the PBDMA generates from the private ring, minus the host's own marker method.
 fn guest_methods(private: &[Vec<u32>]) -> Result<Vec<(u32, u32, u32)>, usize> {
     methods(private).map(|m| {
         m.into_iter()
-            .filter(|m| !(m.0 == 0 && m.1 == kf_abi::submit::fifo::NON_STALL_INTERRUPT))
+            .filter(|m| {
+                !(m.0 == 0
+                    && (m.1 == kf_abi::submit::fifo::NON_STALL_INTERRUPT
+                        || m.1 == kf_abi::submit::fifo::SET_REFERENCE_C56F))
+            })
             .collect()
     })
 }
@@ -420,7 +439,7 @@ fn the_same_slot_gated_twice_a_lap_apart_authors_two_barriers() {
     let private = relay(&ring, 4, witness);
     let empties = private
         .iter()
-        .filter(|s| s.is_empty() || **s == marker())
+        .filter(|s| s.is_empty() || is_marker(s))
         .count();
     // two gated entries -> two (barrier, witness) pairs = four marker entries
     assert_eq!(empties, 4, "private ring: {private:?}");

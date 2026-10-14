@@ -148,6 +148,8 @@ struct Mutant {
     no_lock_wake: bool,
     /// The worker parks without ever arming a completion interrupt.
     no_notify: bool,
+    /// The RETIRED proof: the gate's marker is "processed" when `GP_GET` has popped past it.
+    get_proof: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -171,6 +173,10 @@ struct Cfg {
     /// Does the PBDMA's `GP_GET` run ahead of processing (measured: yes)? `false` is the sequential
     /// reading the retired gate assumed.
     prefetch: bool,
+    /// How many entries `GP_GET` may run ahead of processing (measured >= 3; the limit is unknown):
+    /// `usize::MAX` = every published entry at once, small values make the private ring's credit
+    /// waits reachable.
+    pop_depth: usize,
     /// Does a completion interrupt reach the worker's epoll? (`false` = lost / never armed.)
     irq: bool,
     /// May the visible `GP_GET` lag the PBDMA's by an arbitrary time?
@@ -196,6 +202,7 @@ impl Cfg {
             chans,
             timers: false,
             prefetch: true,
+            pop_depth: usize::MAX,
             irq: true,
             lag: false,
             spin: 1,
@@ -306,6 +313,13 @@ struct Chan {
     wb: Option<(u8, u32)>,
     open: bool,
     unnotified: bool,
+    /// Reference-bearing markers published / observed processed by the relay.
+    refs_issued: u64,
+    ref_seen: u64,
+    /// The marker count the outstanding gate waits for.
+    gate_target: u64,
+    /// `USERD.REFERENCE` as the CPU sees it (follows `reference`; lags like `GP_GET` if `lag`).
+    ref_visible: u64,
     /// The most recent marker the relay published carries a completion interrupt.
     marker_event: bool,
     relayed: Vec<u8>,
@@ -461,6 +475,10 @@ impl Chan {
             wb: None,
             open: false,
             unnotified: false,
+            refs_issued: 0,
+            ref_seen: 0,
+            gate_target: 0,
+            ref_visible: 0,
             marker_event: false,
             relayed: Vec::new(),
             dead: false,
@@ -616,14 +634,24 @@ fn hw_steps(cfg: &Cfg, w: &World, out: &mut Vec<Step>) {
                 P::Barrier => m.hw_wait = None,
                 P::Witness { bytes } => {
                     m.hw_wait = None;
-                    // Today's byte witness is a zero DMA_NOP word: no interrupt. Only the design's
-                    // witness/marker carries the non-stall interrupt method.
-                    if bytes && cfg.irq && cfg.policy == Policy::Design {
-                        m.ev = true;
+                    // Today's byte witness is a zero DMA_NOP word: no reference, no interrupt. Only the
+                    // design's marker writes USERD.REFERENCE and carries the non-stall interrupt method.
+                    if bytes && cfg.policy == Policy::Design {
+                        m.reference += 1;
+                        if !cfg.lag {
+                            m.ref_visible = m.reference;
+                        }
+                        if cfg.irq {
+                            m.ev = true;
+                        }
                     }
                 }
                 P::Notify => {
                     m.hw_wait = None;
+                    m.reference += 1;
+                    if !cfg.lag {
+                        m.ref_visible = m.reference;
+                    }
                     if cfg.irq {
                         m.ev = true;
                     }
@@ -636,20 +664,11 @@ fn hw_steps(cfg: &Cfg, w: &World, out: &mut Vec<Step>) {
             }
             out.push(step(format!("hw{c}:begin#{}", ch.hw_get), n));
         }
-        // GP_GET runs ahead of processing (measured): the PBDMA pops GP entries without waiting for
-        // the segments before them to be processed
-        if cfg.prefetch && ch.popped < ch.log.len() {
-            let mut n = w.clone();
-            n.ch[c].popped = ch.log.len();
-            if !cfg.lag {
-                n.ch[c].userd_get = ch.log.len();
-            }
-            out.push(step(format!("hw{c}:pop to {}", ch.log.len()), n));
-        }
-        if cfg.lag && ch.userd_get != ch.popped {
+        if cfg.lag && (ch.userd_get != ch.popped || ch.ref_visible != ch.reference) {
             let mut n = w.clone();
             n.ch[c].userd_get = ch.popped;
-            out.push(step(format!("hw{c}:GP_GET visible"), n));
+            n.ch[c].ref_visible = ch.reference;
+            out.push(step(format!("hw{c}:GP_GET/REFERENCE visible"), n));
         }
     }
 }
@@ -735,7 +754,7 @@ fn finish(cfg: &Cfg, n: &mut World, need: Need) {
                 || ch.retry
                 || matches!(
                     need,
-                    Need::Private { .. } | Need::Credit { .. } | Need::Contended
+                    Need::Marker { .. } | Need::Popped { .. } | Need::Contended
                 );
             if matches!(need, Need::Again) {
                 n.ring(c, Cause::Again);
@@ -795,6 +814,7 @@ fn credit_wait(cfg: &Cfg, n: &mut World) {
         if ch.unnotified {
             if !ch.open && ch.avail(entries) >= 1 {
                 ch.publish(P::Notify, None);
+                ch.refs_issued += 1;
                 ch.marker_event = true;
             } else {
                 ch.marker_event = false; // no marker possible: the wake is the spin / the safety net
@@ -802,8 +822,12 @@ fn credit_wait(cfg: &Cfg, n: &mut World) {
             ch.unnotified = false;
         }
     }
-    let carried = !n.ch[c].marker_event;
-    finish(cfg, n, Need::Credit { carried });
+    let need = if n.ch[c].marker_event {
+        Need::Marker { target: n.ch[c].refs_issued }
+    } else {
+        Need::Popped { target: n.ch[c].fetched + 1 }
+    };
+    finish(cfg, n, need);
 }
 
 /// Production `ChanPlane::user_ring_peek_one` (`userpump.rs`): look at one relay's not-yet-fd
@@ -836,7 +860,7 @@ fn peek(n: &mut World, c: usize, why: ul::Peek, spin: u8) -> bool {
         return false;
     }
     if let Some(w) = ch.waiting {
-        if w.satisfied(ch.userd_get as u64, ch.fetched)
+        if w.satisfied(ch.ref_visible, ch.userd_get as u64)
             && (retry_ok || !matches!(w, Wait::Contended))
         {
             if backstop {
@@ -1025,7 +1049,10 @@ fn turn_step(cfg: &Cfg, w: &World, stage: u8, out: &mut Vec<Step>) {
             }
         }
         T1 => {
-            // observe the private GP_GET (userpump.rs:1198)
+            // observe the private GP_GET and REFERENCE (userpump.rs: the turn's first read)
+            if design {
+                n.ch[c].ref_seen = ch.ref_seen.max(ch.ref_visible);
+            }
             let ug = ch.userd_get as u64;
             let delta = (ug - ch.fetched) as usize;
             let m = &mut n.ch[c];
@@ -1071,44 +1098,28 @@ fn turn_step(cfg: &Cfg, w: &World, stage: u8, out: &mut Vec<Step>) {
                         n.ch[c].unnotified = false;
                         n.ch[c].marker_event = false;
                         let t = ch.issued;
-                        finish(
-                            cfg,
-                            &mut n,
-                            Need::Private {
-                                target: t,
-                                carried: true,
-                            },
-                        );
+                        finish(cfg, &mut n, Need::Popped { target: t });
                         out.push(step("w:T2 idle, packet open: no marker possible", n));
                     } else if ch.avail(entries) >= 1 {
                         n.ch[c].publish(P::Notify, None);
+                        n.ch[c].refs_issued += 1;
                         n.ch[c].unnotified = false;
                         n.ch[c].marker_event = true;
-                        let t = n.ch[c].issued;
-                        finish(
-                            cfg,
-                            &mut n,
-                            Need::Private {
-                                target: t,
-                                carried: false,
-                            },
-                        );
+                        let t = n.ch[c].refs_issued;
+                        finish(cfg, &mut n, Need::Marker { target: t });
                         out.push(step("w:T2 idle: publish marker", n));
                     } else {
                         credit_wait(cfg, &mut n);
                         out.push(step("w:T2 idle: no credit for the marker", n));
                     }
                 } else if design && ch.fetched < ch.issued {
-                    // published work in flight: the guest's GP_GET write-back needs its progress
-                    let t = ch.issued;
-                    finish(
-                        cfg,
-                        &mut n,
-                        Need::Private {
-                            target: t,
-                            carried: !ch.marker_event,
-                        },
-                    );
+                    // published work in flight: the last marker's processing frees the guest's ring
+                    let need = if ch.marker_event {
+                        Need::Marker { target: ch.refs_issued }
+                    } else {
+                        Need::Popped { target: ch.issued }
+                    };
+                    finish(cfg, &mut n, need);
                     out.push(step("w:T2 idle (work in flight)", n));
                 } else {
                     finish(cfg, &mut n, Need::Idle);
@@ -1130,11 +1141,16 @@ fn turn_step(cfg: &Cfg, w: &World, stage: u8, out: &mut Vec<Step>) {
                 ..nop(ZERO_ID)
             });
             let raw = if e.sync { 1u64 << 63 } else { 0 };
+            // The proof the gate waits on. Design: markers PROCESSED (USERD.REFERENCE). Today: GP_GET
+            // (`fetch.fetched()`), the retired proof -- and the `get_proof` mutant of the design.
+            let proof = if design && !cfg.m.get_proof { ch.ref_seen } else { ch.fetched };
+            // a SYNC_WAIT entry behind an open packet cannot be gated (no witness fits): Design reads it at once
+            let ungated = design && e.sync && ch.open && !cfg.m.bytes_witness;
             let mut gate = ch.gate.0;
-            let verdict = if cfg.m.no_gate {
+            let verdict = if cfg.m.no_gate || ungated {
                 Gate::Proceed
             } else {
-                gate.entry(raw, u64::from(ch.gener), ch.cursor, ch.fetched)
+                gate.entry(raw, u64::from(ch.gener), ch.cursor, proof)
             };
             n.ch[c].gate = Gt(gate);
             match verdict {
@@ -1143,16 +1159,9 @@ fn turn_step(cfg: &Cfg, w: &World, stage: u8, out: &mut Vec<Step>) {
                     out.push(step("w:T4 gate: proceed", n));
                 }
                 Gate::Wait => {
-                    // the witness is the last thing published; its interrupt (if any) was fixed then
-                    let t = ch.issued;
-                    finish(
-                        cfg,
-                        &mut n,
-                        Need::Private {
-                            target: t,
-                            carried: !ch.marker_event,
-                        },
-                    );
+                    // the marker's processing writes the reference; its interrupt announces it
+                    let t = ch.gate_target;
+                    finish(cfg, &mut n, Need::Marker { target: t });
                     out.push(step("w:T4 gate: wait", n));
                 }
                 Gate::PublishBarrier => {
@@ -1160,35 +1169,25 @@ fn turn_step(cfg: &Cfg, w: &World, stage: u8, out: &mut Vec<Step>) {
                         credit_wait(cfg, &mut n);
                         out.push(step("w:T4 gate: no credit for barrier", n));
                     } else {
-                        let kind = if cfg.m.bytes_witness {
-                            Witness::Bytes
-                        } else {
-                            witness(ch.open)
-                        };
-                        if kind == Witness::Bytes && ch.open {
+                        if ch.open {
+                            // only reachable by the `bytes_witness` mutant: a marker inside an open packet
                             n.viol |= V_BYTES_IN_OPEN_PACKET;
                         }
                         let m = &mut n.ch[c];
                         m.publish(P::Barrier, None);
-                        m.publish(
-                            P::Witness {
-                                bytes: kind == Witness::Bytes,
-                            },
-                            None,
-                        );
-                        m.gate.0.published(m.issued);
+                        m.publish(P::Witness { bytes: true }, None);
+                        m.refs_issued += 1;
+                        m.gate.0.published(if cfg.policy == Policy::Design && !cfg.m.get_proof {
+                            m.refs_issued
+                        } else {
+                            m.issued
+                        });
+                        m.gate_target = m.refs_issued;
                         m.unnotified = false;
-                        m.marker_event = kind == Witness::Bytes;
-                        let t = m.issued;
-                        finish(
-                            cfg,
-                            &mut n,
-                            Need::Private {
-                                target: t,
-                                carried: kind == Witness::Control,
-                            },
-                        );
-                        out.push(step(format!("w:T4 gate: barrier+witness {kind:?}"), n));
+                        m.marker_event = true;
+                        let t = if cfg.policy == Policy::Design { m.gate_target } else { m.issued };
+                        finish(cfg, &mut n, Need::Marker { target: t });
+                        out.push(step("w:T4 gate: barrier+marker", n));
                     }
                 }
             }
@@ -1247,12 +1246,33 @@ fn turn_step(cfg: &Cfg, w: &World, stage: u8, out: &mut Vec<Step>) {
     }
 }
 
+/// ★ MEASURED (bare metal, RTX 4070 / 595.91.07): `GP_GET` runs AHEAD of processing -- with an ACQUIRE
+/// stalling entry 0 it already covered all three published entries. The model takes the worst case:
+/// every published entry is popped at once (its visibility to the CPU still lags if `lag`).
+fn normalize(cfg: &Cfg, w: &mut World) {
+    if !cfg.prefetch {
+        return;
+    }
+    for ch in &mut w.ch {
+        let to = ch.log.len().min(ch.hw_get.saturating_add(cfg.pop_depth));
+        if ch.popped < to {
+            ch.popped = to;
+            if !cfg.lag {
+                ch.userd_get = ch.popped;
+            }
+        }
+    }
+}
+
 fn successors(cfg: &Cfg, w: &World) -> Vec<Step> {
     let mut out = Vec::new();
     guest_steps(cfg, w, &mut out);
     hw_steps(cfg, w, &mut out);
     env_steps(cfg, w, &mut out);
     worker_steps(cfg, w, &mut out);
+    for s in &mut out {
+        normalize(cfg, &mut s.w);
+    }
     out.retain(|s| s.w != *w);
     out
 }
@@ -1719,15 +1739,16 @@ fn no_failures(f: &[(&'static str, String)]) {
 /// The RETIRED loop (`Policy::Today`: `worker.rs` park/`TICK_TAG` refresh, `Pump::tick`, `Poll`,
 /// as committed at 77eaf7620) is rejected by the same checker, exactly at the scenarios whose
 /// waits it polled: `failing` names them, `why` is the violation each one reports.
-fn rejected(f: &[(&'static str, String)], failing: &[&str], why: &str) {
-    let got: Vec<&str> = f.iter().map(|(n, _)| *n).collect();
-    assert_eq!(
-        got, failing,
-        "the retired loop is rejected at exactly these scenarios"
-    );
-    for (n, r) in f {
-        assert!(r.contains(why), "{n}: expected {why:?} in\n{r}");
-    }
+fn rejected(f: &[(&'static str, String)], failing: &[(&str, &str)]) {
+    let got: Vec<(&str, &str)> = f
+        .iter()
+        .map(|(n, r)| {
+            let why = failing.iter().find(|(m, _)| m == n).map_or("", |(_, w)| *w);
+            assert!(why.is_empty() || r.contains(why), "{n}: expected {why:?} in\n{r}");
+            (*n, why)
+        })
+        .collect();
+    assert_eq!(got, failing, "the retired loop is rejected at exactly these scenarios");
 }
 
 /// ★ RULE 1: correctness must not depend on timing. With timers that never fire (no tick, no park
@@ -1740,15 +1761,17 @@ fn the_retired_loop_deadlocks_without_timers_exactly_where_it_polled() {
         c.timers = false;
         c.priv_entries = 8;
     });
+    // With GP_GET running ahead of processing (measured), the retired GP_GET gate proof fails on the
+    // late pushbuffers (STALE_READ) before liveness is the question; the scenarios without late bytes
+    // still show the tick-polled wait (DEADLOCK).
     rejected(
         &f,
         &[
-            "gate_late_pushbuffer",
-            "zero_length_entries",
-            "ring_wrap",
-            "migration_behind_gate",
+            ("gate_late_pushbuffer", "STALE_READ"),
+            ("zero_length_entries", "DEADLOCK"),
+            ("migration_behind_gate", "STALE_READ"),
+            ("two_channels_one_gated_forever", "STALE_READ"),
         ],
-        "DEADLOCK",
     );
 }
 
@@ -1776,18 +1799,17 @@ fn the_retired_loop_ran_turns_nobody_rang_when_time_passed() {
     rejected(
         &f,
         &[
-            "put_then_ring",
-            "batched_one_ring",
-            "put_ahead_of_ring",
-            "coalesced_rings",
-            "gate_late_pushbuffer",
-            "zero_length_entries",
-            "ring_wrap",
-            "migration",
-            "migration_behind_gate",
-            "two_channels_one_gated_forever",
+            ("put_then_ring", "TIMER_TURN"),
+            ("batched_one_ring", "TIMER_TURN"),
+            ("put_ahead_of_ring", "TIMER_TURN"),
+            ("coalesced_rings", "TIMER_TURN"),
+            ("gate_late_pushbuffer", "TIMER_TURN"),
+            ("zero_length_entries", "TIMER_TURN"),
+            ("ring_wrap", "TIMER_TURN"),
+            ("migration", "TIMER_TURN"),
+            ("migration_behind_gate", "TIMER_TURN"),
+            ("two_channels_one_gated_forever", "TIMER_TURN"),
         ],
-        "TIMER_TURN",
     );
 }
 
@@ -1801,37 +1823,57 @@ fn design_b_no_turn_is_caused_by_a_timer_and_the_backstop_finds_nothing() {
     no_failures(&f);
 }
 
-/// ★ A SYNC_WAIT gate that is drained while doorbells keep landing, with the pushbuffer written
-/// late: never read before the drain (STALE_READ) -- on its own, Today passes this safety half.
+/// ★ THE MEASURED DEFECT as a model result. The retired gate proved "the barrier's wait finished" by
+/// `GP_GET` passing the witness. On the hardware `GP_GET` runs AHEAD of processing (`kf-syncwait-stress
+/// --families barrier`: with an ACQUIRE stalling entry 0, `GP_GET` covered all 3 entries, the segment
+/// behind the barrier had not executed and `USERD.REFERENCE` was 0), so the relay read pushbuffers the
+/// guest had not yet written.
 #[test]
-fn the_retired_loop_never_read_a_pushbuffer_early() {
+fn the_retired_gp_get_proof_read_a_pushbuffer_before_the_drain() {
     let mut cfg = Cfg::new(Policy::Today, s_gate_late_pb());
-    cfg.timers = true; // so Today can make progress at all; only the safety bits are asserted
+    cfg.timers = true; // so the retired loop can make progress at all; only the safety bits matter
     cfg.liveness = false;
-    holds("today/gate-safety", &cfg, V_TIMER_TURN);
+    finds("retired/gp-get-proof", &cfg, V_TIMER_TURN, &["STALE_READ"]);
+    // the same proof inside the design (a mutant) is found too
+    let mut cfg = Cfg::new(Policy::Design, s_gate_late_pb());
+    cfg.m.get_proof = true;
+    cfg.liveness = false;
+    finds("design/gp-get-proof-mutant", &cfg, 0, &["STALE_READ"]);
+    // ... and with a sequential GP_GET (the reading the retired gate assumed) it was fine
+    let mut cfg = Cfg::new(Policy::Design, s_gate_late_pb());
+    cfg.m.get_proof = true;
+    cfg.prefetch = false;
+    cfg.liveness = false;
+    holds("design/gp-get-proof-sequential-get", &cfg, 0);
 }
 
-/// ★ Packet open across the gated entry: the relay's witness carries no byte (and, as designed, no
-/// interrupt: the wake comes from the spin or the backstop and is counted separately).
+/// ★ Packet open across a SYNC_WAIT entry: no witness fits inside the packet and a control entry proves
+/// nothing, so the entry is not gated -- the relay reads it at once. With the bytes present (the
+/// hardware does not delay such a segment either) that is correct and needs no wake at all.
 #[test]
-fn design_carried_gate_needs_the_backstop_and_counts_it_separately() {
-    // without any timer the control-witness gate completes only if the spin happens to see it
-    let mut cfg = Cfg::new(Policy::Design, s_gate_carried());
+fn design_a_sync_wait_behind_an_open_packet_is_read_ungated_and_needs_no_wake() {
+    let chans = vec![spec(
+        vec![Push(seg(1).acq(0).open()), Push(seg(2).sync()), SetPut, Ring, Release(0)],
+        vec![1, 2],
+        2,
+    )];
+    let mut cfg = Cfg::new(Policy::Design, chans);
     cfg.timers = false;
-    cfg.spin = 2;
-    finds("design/carried/no-backstop", &cfg, 0, &["DEADLOCK"]);
-    // with the backstop the channel completes, and the firing is the loud, separate counter
-    cfg.timers = true;
-    cfg.backstop = true;
-    cfg.liveness = true;
-    holds("design/carried/backstop", &cfg, V_BACKSTOP_CARRIED);
-    // ... and the counter is genuinely reachable (the test above is not vacuous)
-    finds(
-        "design/carried/counter-reached",
-        &cfg,
-        0,
-        &["BACKSTOP_CARRIED"],
-    );
+    cfg.spin = 0;
+    holds("design/carried-ungated", &cfg, 0);
+}
+
+/// The DOCUMENTED LIMITATION: if the guest writes the bytes of such an entry LATE the relay reads them
+/// early (no proof exists inside an open packet). Pinned so that it is a known, named gap -- the
+/// counter `carried_ungated` shows whether it is ever reached -- and not a silent one.
+#[test]
+fn design_a_sync_wait_behind_an_open_packet_cannot_protect_late_bytes() {
+    let mut cfg = Cfg::new(Policy::Design, s_gate_carried());
+    cfg.liveness = false;
+    finds("design/carried-late", &cfg, 0, &["STALE_READ"]);
+    // the mutant that puts a marker inside the open packet is the original Xid-32 PBENTRY
+    cfg.m.bytes_witness = true;
+    finds("design/carried-marker-in-packet", &cfg, 0, &["BYTES_IN_OPEN_PACKET", "STALE_READ"]);
 }
 
 /// ★ A lost / never-armed interrupt: progress comes only from the backstop, and every firing that
@@ -1899,13 +1941,11 @@ fn the_retired_loop_polled_private_ring_credit_too() {
     rejected(
         &f,
         &[
-            "gate_late_pushbuffer",
-            "zero_length_entries",
-            "ring_wrap",
-            "migration",
-            "migration_behind_gate",
+            ("gate_late_pushbuffer", "STALE_READ"),
+            ("zero_length_entries", "DEADLOCK"),
+            ("migration_behind_gate", "STALE_READ"),
+            ("two_channels_one_gated_forever", "STALE_READ"),
         ],
-        "DEADLOCK",
     );
 }
 
@@ -2101,7 +2141,7 @@ fn retire_in_gate(policy: Policy) {
     holds(
         &format!("{policy:?}/retire-in-gate"),
         &cfg,
-        V_TIMER_TURN | V_BACKSTOP_FOUND_WORK | V_BACKSTOP_CARRIED,
+        V_TIMER_TURN | V_STALE | V_BACKSTOP_FOUND_WORK | V_BACKSTOP_CARRIED,
     );
 }
 #[test]
@@ -2135,7 +2175,7 @@ fn retire_in_gate_without_timers_terminates_for_both_policies() {
         ];
         let mut cfg = Cfg::new(policy, chans);
         cfg.timers = false;
-        holds(&format!("{policy:?}/retire-no-timers"), &cfg, V_TIMER_TURN);
+        holds(&format!("{policy:?}/retire-no-timers"), &cfg, V_TIMER_TURN | V_STALE);
     }
 }
 
@@ -2175,7 +2215,7 @@ fn a_stuck_gate_does_not_starve_a_neighbouring_channel() {
     for policy in [Policy::Today, Policy::Design] {
         let mut cfg = Cfg::new(policy, s_two_channels_one_gated_forever());
         cfg.timers = false;
-        holds(&format!("{policy:?}/neighbour"), &cfg, V_TIMER_TURN);
+        holds(&format!("{policy:?}/neighbour"), &cfg, V_TIMER_TURN | V_STALE);
     }
 }
 
@@ -2219,7 +2259,7 @@ fn the_retired_loop_migrated_without_timers_only_when_no_gate_was_involved() {
     holds("retired/migration", &cfg, 0);
     let mut cfg = Cfg::new(Policy::Today, s_migration_gated());
     cfg.timers = false;
-    finds("retired/migration-gated", &cfg, 0, &["DEADLOCK"]);
+    finds("retired/migration-gated", &cfg, 0, &["DEADLOCK", "STALE_READ"]);
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -2229,10 +2269,11 @@ fn the_retired_loop_migrated_without_timers_only_when_no_gate_was_involved() {
 fn the_design_exploration_reaches_every_race_it_claims_to_cover() {
     let mut all: std::collections::HashSet<String> = std::collections::HashSet::new();
     for (_, chans) in contract_scenarios() {
-        for (pe, locks) in [(8usize, 0u8), (4, 1)] {
+        for (pe, locks, depth) in [(8usize, 0u8, usize::MAX), (4, 1, 1)] {
             let mut cfg = Cfg::new(Policy::Design, chans.clone());
             cfg.priv_entries = pe;
             cfg.lock_windows = locks;
+            cfg.pop_depth = depth;
             cfg.timers = false;
             all.extend(explore(&cfg, 0).expect("design holds").labels);
         }
@@ -2244,30 +2285,23 @@ fn the_design_exploration_reaches_every_race_it_claims_to_cover() {
         "w:wake(event)",                  // completion-interrupt wake
         "w:spin peek",                    // the bounded spin
         "w:T4 gate: wait",                // a turn that finds the gate still draining
-        "w:T4 gate: barrier+witness Bytes",
-        "w:T4 gate: barrier+witness Control", // s_gate_carried is exercised below
+        "w:T4 gate: barrier+marker",
         "w:T5 no credit",                     // private-ring credit shortage
         "w:T2 idle: publish marker",          // the batch's completion marker
         "w:T0 record busy",                   // the act thread holds the record
         "w:T1b write guest GP_GET",           // the guest's GP_GET write-back
         "env0:unlock",
     ] {
-        if needle == "w:T4 gate: barrier+witness Control" {
-            continue; // covered by the carried scenario, checked next
-        }
         assert!(all.contains(needle), "never reached: {needle:?}");
     }
-    let mut cfg = Cfg::new(Policy::Design, s_gate_carried());
+    // the backstop wake itself is reached (a lost interrupt)
+    let mut cfg = Cfg::new(Policy::Design, s_gate_late_pb());
+    cfg.irq = false;
     cfg.timers = true;
     cfg.backstop = true;
     cfg.liveness = false;
-    let carried = explore(&cfg, V_BACKSTOP_CARRIED).expect("carried holds with the backstop");
-    assert!(
-        carried
-            .labels
-            .contains("w:T4 gate: barrier+witness Control")
-    );
-    assert!(carried.labels.contains("w:wake(backstop)"));
+    let lost = explore(&cfg, V_BACKSTOP_FOUND_WORK).expect("a lost interrupt is covered");
+    assert!(lost.labels.contains("w:wake(backstop)"));
 }
 
 /// `GP_PUT` ahead of the LAST doorbell is normal and nothing is owed for it: with no timer the
@@ -2284,4 +2318,17 @@ fn put_ahead_of_the_last_doorbell_is_optional_and_the_backstop_counts_it_apart()
     // the explorer's blanket allowance is for the PUT_AHEAD bit only; prove it is reachable
     let r = explore(&cfg, 0).expect("holds");
     assert!(r.labels.contains("w:wake(backstop)"));
+}
+
+/// Private-ring credit waits when `GP_GET` may NOT run far ahead of processing (depth 1, 3 credits):
+/// the relay's wait for free slots is announced by its markers' interrupts, not by a tick.
+#[test]
+fn design_credit_waits_with_a_shallow_pop_window_are_event_driven() {
+    let f = run_contract(Policy::Design, "design/priv=4/depth=1", 0, |c| {
+        c.priv_entries = 4;
+        c.pop_depth = 1;
+        c.timers = false;
+        c.spin = 0;
+    });
+    no_failures(&f);
 }

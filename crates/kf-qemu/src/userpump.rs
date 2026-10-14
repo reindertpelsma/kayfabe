@@ -391,6 +391,11 @@ pub(super) struct Pump {
     marker_event: bool,
     /// Measurement only: when the outstanding SYNC_WAIT gate was authored.
     gate_at: Option<std::time::Instant>,
+    /// ★ 2026-10-14 (measured: `GP_GET` runs ahead of processing): the reference-bearing markers
+    /// published and observed PROCESSED (`USERD.REFERENCE`, tagged) -- the gate's proof.
+    marks: kf_chan::user_gate::Marks,
+    /// The marker count the outstanding SYNC_WAIT gate waits for.
+    gate_target: u64,
     again: bool,
     /// ★ 2026-10-14 — `GP_ENTRY1_SYNC_WAIT` ([`kf_chan::user_gate::SyncGate`]): nothing at or
     /// after a guest SYNC_WAIT entry is READ before the hardware itself would fetch it.
@@ -467,6 +472,8 @@ impl Pump {
             unnotified: false,
             marker_event: false,
             gate_at: None,
+            marks: kf_chan::user_gate::Marks::default(),
+            gate_target: 0,
             again: false,
             sync: kf_chan::user_gate::SyncGate::default(),
             grace: kf_chan::user_gate::Grace::default(),
@@ -479,7 +486,7 @@ impl Pump {
     pub(super) fn release(&mut self) -> Result<(), String> {
         if self.sync_carried != 0 {
             eprintln!(
-                "kf3: USER_RING_SYNC_CARRIED SUMMARY {:#x}:{:#x} gated_with_open_packet={}",
+                "kf3: USER_RING_SYNC_CARRIED SUMMARY {:#x}:{:#x} sync_wait_entries_behind_an_open_packet_read_ungated={}",
                 self.key.0, self.key.1, self.sync_carried
             );
         }
@@ -1209,12 +1216,15 @@ impl Pump {
             self.trace_stall(me, r);
         }
         let native = r.chan.ok_or("USER_RING_NATIVE_ABSENT")?;
-        let get = r
-            .lease
-            .storage
-            .lock()
-            .map_err(|_| "USER_RING_STORAGE_POISONED")?
-            .gpu_get()?;
+        let (get, reference) = {
+            let storage = r
+                .lease
+                .storage
+                .lock()
+                .map_err(|_| "USER_RING_STORAGE_POISONED")?;
+            (storage.gpu_get()?, storage.gpu_reference()?)
+        };
+        self.marks.observe(reference);
         for (generation, get) in self.fetch.observe(get).map_err(str::to_owned)? {
             if generation == self.generation {
                 self.guest_get = Some((generation, get));
@@ -1327,23 +1337,47 @@ impl Pump {
             // touching anything at or after a SYNC_WAIT entry, author the same wait on our own
             // ring (barrier NOP + witness, exactly as staged segments do) and read on only once
             // the witness has begun processing — i.e. once the hardware itself would fetch.
-            match self
-                .sync
-                .entry(entry, self.generation, self.cursor, self.fetch.fetched())
-            {
+            // ★ 2026-10-14 (MEASURED, `kf-syncwait-stress --families barrier`): the proof that the
+            // barrier's wait finished is the marker's `USERD.REFERENCE` write, NOT `GP_GET` -- the
+            // PBDMA pops GP entries ahead of processing (with an acquire stalling entry 0 `GP_GET`
+            // already covered all three entries and the segment behind the barrier had not run).
+            // A SYNC_WAIT entry reached with a packet OPEN across it has no witness (no byte may
+            // enter an open packet) and the hardware does not delay it either (the split packet's
+            // header counts the preceding segment as processed): it is read at once and counted.
+            let verdict = if entry >> 63 & 1 == 1 && self.scan.carried().is_some() {
+                Stats::bump(&me.relay_stats.carried_ungated);
+                if self.sync_carried < 4 {
+                    self.sync_carried += 1;
+                    eprintln!(
+                        "kf3: USER_RING_SYNC_CARRIED {:#x}:{:#x} generation={} cursor={} entry={entry:#018x} open_packet={} (#{}) — a SYNC_WAIT entry behind an open packet cannot be gated (no witness fits inside a packet); read at once",
+                        r.key.0,
+                        r.key.1,
+                        self.generation,
+                        self.cursor,
+                        carried_text(self.scan.carried()),
+                        self.sync_carried
+                    );
+                } else {
+                    self.sync_carried = self.sync_carried.saturating_add(1);
+                }
+                kf_chan::user_gate::Gate::Proceed
+            } else {
+                self.sync
+                    .entry(entry, self.generation, self.cursor, self.marks.seen())
+            };
+            match verdict {
                 kf_chan::user_gate::Gate::Proceed => {
-                    // Measurement only: the SYNC_WAIT drain latency (gate authored -> witness fetched).
+                    // Measurement only: the SYNC_WAIT drain latency (gate authored -> marker processed).
                     if let Some(at) = self.gate_at.take() {
-                        me.relay_stats
-                            .record_drain(u64::try_from(at.elapsed().as_micros()).unwrap_or(u64::MAX));
+                        me.relay_stats.record_drain(
+                            u64::try_from(at.elapsed().as_micros()).unwrap_or(u64::MAX),
+                        );
                     }
                 }
                 kf_chan::user_gate::Gate::Wait => {
-                    // The witness (and the marker's interrupt, if it carries one) is the wake; a
-                    // control witness has none -> the spin / the safety net (`carried`).
-                    self.need = Need::Private {
-                        target: self.fetch.issued(),
-                        carried: !self.marker_event,
+                    // The marker's interrupt announces it (its processing writes the reference).
+                    self.need = Need::Marker {
+                        target: self.gate_target,
                     };
                     return Ok(false);
                 }
@@ -1351,13 +1385,8 @@ impl Pump {
                     if self.fetch.available() < 2 {
                         return self.credit_wait(me, r);
                     }
-                    // ★ 2026-10-14 (Minecraft in-world Xid 32 PBENTRY): a packet the previous
-                    // guest segment opened may continue INTO this SYNC_WAIT entry (public
-                    // dev_pbdma.ref, GP_ENTRY1_SYNC). Then the witness must carry no pushbuffer
-                    // byte, or the PBDMA takes it as the packet's next argument
-                    // (`kf_chan::user_gate::Witness`).
-                    let carried = self.scan.carried();
-                    let kind = kf_chan::user_gate::witness(carried.is_some());
+                    // the barrier, then the marker (a packet is not open: the branch above)
+                    let mut count = 0;
                     self.publish(
                         me,
                         r,
@@ -1368,59 +1397,28 @@ impl Pump {
                         |pump, storage| {
                             let (barrier, _) = pump.fetch.publish(None).map_err(str::to_owned)?;
                             storage.write_host_barrier(barrier)?;
-                            let (witness, put) = pump.fetch.publish(None).map_err(str::to_owned)?;
-                            match kind {
-                                kf_chan::user_gate::Witness::Bytes => {
-                                    // the batch marker: proves the same thing and raises the
-                                    // engine's non-stall event the worker's epoll watches
-                                    storage.write_host_marker(witness)?;
-                                }
-                                kf_chan::user_gate::Witness::Control => {
-                                    storage.write_host_control_witness(witness)?;
-                                }
-                            }
+                            let (slot, put) = pump.fetch.publish(None).map_err(str::to_owned)?;
+                            let (n, value) = pump.marks.issue().map_err(str::to_owned)?;
+                            count = n;
+                            storage.write_host_marker(slot, value)?;
                             storage.publish_put(put)
                         },
                     )?;
                     self.trace_slots(|| {
                         vec![
                             "host barrier (control NOP, SYNC_WAIT)".into(),
-                            format!(
-                                "host witness {kind:?} open_packet={}",
-                                carried_text(carried)
-                            ),
+                            format!("host marker #{count} (SET_REFERENCE + NON_STALL_INTERRUPT)"),
                         ]
                     });
-                    if kind == kf_chan::user_gate::Witness::Control {
-                        // Bounded: one line for each of the first four per channel; the count
-                        // is in the release line.
-                        self.sync_carried += 1;
-                        if self.sync_carried <= 4 {
-                            eprintln!(
-                                "kf3: USER_RING_SYNC_CARRIED {:#x}:{:#x} generation={} cursor={} entry={entry:#018x} open_packet={} (#{}) — control witness, no pushbuffer byte",
-                                r.key.0,
-                                r.key.1,
-                                self.generation,
-                                self.cursor,
-                                carried_text(carried),
-                                self.sync_carried
-                            );
-                        }
-                    }
                     self.source_admitted = true;
-                    self.sync.published(self.fetch.issued());
-                    // the witness is this batch's marker
+                    self.sync.published(count);
+                    self.gate_target = count;
+                    // the marker is this batch's marker too
                     self.unnotified = false;
-                    self.marker_event = kind == kf_chan::user_gate::Witness::Bytes;
+                    self.marker_event = true;
                     self.gate_at = Some(std::time::Instant::now());
                     Stats::bump(&me.relay_stats.gates);
-                    if kind == kf_chan::user_gate::Witness::Control {
-                        Stats::bump(&me.relay_stats.carried_gates);
-                    }
-                    self.need = Need::Private {
-                        target: self.fetch.issued(),
-                        carried: kind == kf_chan::user_gate::Witness::Control,
-                    };
+                    self.need = Need::Marker { target: count };
                     return Ok(true);
                 }
             }
@@ -1563,7 +1561,8 @@ impl Pump {
     fn publish_marker(&mut self, me: &ChanPlane, r: &userrelay::Record) -> Turn<()> {
         self.publish(me, r, None, None, None, None, |pump, storage| {
             let (slot, put) = pump.fetch.publish(None).map_err(str::to_owned)?;
-            storage.write_host_marker(slot)?;
+            let (_, value) = pump.marks.issue().map_err(str::to_owned)?;
+            storage.write_host_marker(slot, value)?;
             storage.publish_put(put)
         })?;
         self.unnotified = false;
@@ -1574,7 +1573,9 @@ impl Pump {
 
     /// The turn found `GP_PUT == cursor`. End the batch: a marker behind unannounced work when a
     /// packet boundary allows it (a packet the scan carries open owns the next dword -- no byte may
-    /// enter), else say what the relay waits for.
+    /// enter), and wait for that marker to be PROCESSED: its interrupt is the wake, its reference
+    /// the proof, and processing implies the pops the guest's `GP_GET` write-back needs. With no
+    /// marker possible the relay waits for the pops themselves (spin / safety net).
     fn end_batch(&mut self, me: &ChanPlane, r: &userrelay::Record) -> Turn<bool> {
         use kf_chan::user_loop::Need;
         if self.unnotified {
@@ -1582,29 +1583,34 @@ impl Pump {
                 // no marker is possible: the wake for this work is the spin or the safety net
                 self.unnotified = false;
                 self.marker_event = false;
-                self.need = Need::Private {
+                self.need = Need::Popped {
                     target: self.fetch.issued(),
-                    carried: true,
                 };
                 return Ok(false);
             }
             if self.fetch.available() >= 1 {
                 self.publish_marker(me, r)?;
-                self.need = Need::Private {
-                    target: self.fetch.issued(),
-                    carried: false,
+                self.need = Need::Marker {
+                    target: self.marks.issued(),
                 };
                 return Ok(true);
             }
-            self.need = Need::Credit { carried: true };
+            self.need = Need::Popped {
+                target: self.fetch.fetched() + 1,
+            };
             return Ok(false);
         }
         if self.fetch.fetched() < self.fetch.issued() {
-            // published work in flight: its progress frees the guest's ring (the `GP_GET`
-            // write-back) -- the last marker announces it
-            self.need = Need::Private {
-                target: self.fetch.issued(),
-                carried: !self.marker_event,
+            // published work in flight: the last marker's processing frees the guest's ring (the
+            // `GP_GET` write-back)
+            self.need = if self.marker_event {
+                Need::Marker {
+                    target: self.marks.issued(),
+                }
+            } else {
+                Need::Popped {
+                    target: self.fetch.issued(),
+                }
             };
         }
         Ok(false)
@@ -1613,19 +1619,28 @@ impl Pump {
     /// The private ring has no credit for what the turn wants to publish. Put a marker behind the
     /// unannounced work out of the reserved slot first, so SOME interrupt announces progress.
     fn credit_need(&mut self, me: &ChanPlane, r: &userrelay::Record) -> Turn<()> {
-        let mut carried = !self.marker_event;
+        use kf_chan::user_loop::Need;
+        let mut marker = self.marker_event;
         if self.unnotified {
             if self.scan.carried().is_none() && self.fetch.available() >= 1 {
                 self.publish_marker(me, r)?;
-                carried = false;
+                marker = true;
             } else {
                 self.unnotified = false;
                 self.marker_event = false;
-                carried = true;
+                marker = false;
             }
         }
         Stats::bump(&me.relay_stats.credit_waits);
-        self.need = kf_chan::user_loop::Need::Credit { carried };
+        self.need = if marker {
+            Need::Marker {
+                target: self.marks.issued(),
+            }
+        } else {
+            Need::Popped {
+                target: self.fetch.fetched() + 1,
+            }
+        };
         Ok(())
     }
 
@@ -1647,7 +1662,9 @@ impl Pump {
     ) -> Turn<bool> {
         use super::usershadow::Class;
         if self.fetch.available() == 0 {
-            self.need = kf_chan::user_loop::Need::Credit { carried: true };
+            self.need = kf_chan::user_loop::Need::Popped {
+                target: self.fetch.fetched() + 1,
+            };
             return Ok(false);
         }
         let mut shadow = self.shadow.take().ok_or("USER_RING_SHADOW_ABSENT")?;
@@ -1852,14 +1869,12 @@ impl Pump {
         s: &mut Segment,
     ) -> Turn<(bool, bool)> {
         if let Some(mut wait) = s.wait.take() {
-            if self.fetch.fetched() < wait.witness {
+            if self.marks.seen() < wait.witness {
                 let target = wait.witness;
                 s.wait = Some(wait);
-                // the staged witness is a batch marker: its interrupt is the wake
-                self.need = kf_chan::user_loop::Need::Private {
-                    target,
-                    carried: false,
-                };
+                // the staged witness is a marker: its processing writes the reference, its
+                // interrupt is the wake
+                self.need = kf_chan::user_loop::Need::Marker { target };
                 return Ok((false, false));
             }
             if let Some(trigger) = wait.trigger {
@@ -1975,7 +1990,8 @@ impl Pump {
                 let (barrier, _) = pump.fetch.publish(source).map_err(str::to_owned)?;
                 storage.write_host_barrier(barrier)?;
                 let (witness, put) = pump.fetch.publish(None).map_err(str::to_owned)?;
-                storage.write_host_marker(witness)?;
+                let (_, value) = pump.marks.issue().map_err(str::to_owned)?;
+                storage.write_host_marker(witness, value)?;
                 storage.publish_put(put)
             },
         )?;
@@ -1998,7 +2014,7 @@ impl Pump {
         s.staged = true;
         self.scan = next;
         s.wait = Some(Wait {
-            witness: self.fetch.issued(),
+            witness: self.marks.issued(),
             trigger,
             action: None,
         });
@@ -2458,7 +2474,7 @@ impl ChanPlane {
                 record.contended_note();
                 Stats::bump(&self.relay_stats.contended);
             }
-            Need::Idle | Need::Private { .. } | Need::Credit { .. } => record.contended_clear(),
+            Need::Idle | Need::Marker { .. } | Need::Popped { .. } => record.contended_clear(),
         }
     }
 
@@ -2493,7 +2509,11 @@ impl ChanPlane {
         rang
     }
 
-    fn user_ring_peek_one(&self, record: &Arc<userrelay::Cell>, why: kf_chan::user_loop::Peek) -> bool {
+    fn user_ring_peek_one(
+        &self,
+        record: &Arc<userrelay::Cell>,
+        why: kf_chan::user_loop::Peek,
+    ) -> bool {
         use kf_chan::user_loop::{Found, Peek, found};
         if record.is_canceled() {
             return false;
@@ -2524,24 +2544,29 @@ impl ChanPlane {
             return false;
         };
         if let Some(w) = p.wait {
-            // The private GP_GET word: the proof (the interrupt is only the hint).
+            // The private words: `GP_GET` (entries popped) and the tagged `REFERENCE` (markers
+            // processed) are the proofs; the interrupt is only the hint.
             let satisfied = match r.lease.storage.try_lock() {
-                Ok(storage) => match storage.gpu_get() {
-                    Ok(get) => match p.fetch.peek(get) {
-                        Ok(observed) => w.satisfied(observed, p.fetch.fetched()),
+                Ok(storage) => match (storage.gpu_get(), storage.gpu_reference()) {
+                    (Ok(get), Ok(reference)) => match p.fetch.peek(get) {
+                        Ok(popped) => w.satisfied(p.marks.peek(reference), popped),
                         // outside the ring / beyond what was issued: the turn refuses it by name
                         Err(_) => true,
                     },
-                    Err(_) => true,
+                    _ => true,
                 },
                 Err(_) => true,
             };
             if satisfied && (retry_ok || !matches!(w, kf_chan::user_loop::Wait::Contended)) {
                 if backstop {
                     let (counter, name) = match found(w) {
-                        Found::Work => (&self.relay_stats.backstop_found_work, "BACKSTOP_FOUND_WORK"),
+                        Found::Work => {
+                            (&self.relay_stats.backstop_found_work, "BACKSTOP_FOUND_WORK")
+                        }
                         Found::Carried => (&self.relay_stats.backstop_carried, "BACKSTOP_CARRIED"),
-                        Found::Contended => (&self.relay_stats.backstop_contended, "BACKSTOP_CONTENDED"),
+                        Found::Contended => {
+                            (&self.relay_stats.backstop_contended, "BACKSTOP_CONTENDED")
+                        }
                     };
                     let n = counter.fetch_add(1, Ordering::Relaxed) + 1;
                     if matches!(found(w), Found::Work) && (n <= 8 || n.is_power_of_two()) {
@@ -2562,7 +2587,13 @@ impl ChanPlane {
             // Information only: GP_PUT ahead of the cursor with no doorbell.
             let mut put = [0u8; 4];
             if r.userd
-                .read(self, r.key, &r.allocation, kf_abi::submit::USERD_GP_PUT, &mut put)
+                .read(
+                    self,
+                    r.key,
+                    &r.allocation,
+                    kf_abi::submit::USERD_GP_PUT,
+                    &mut put,
+                )
                 .is_ok()
                 && u32::from_le_bytes(put) != p.cursor
             {
