@@ -1,0 +1,17 @@
+DESKTOP_SMOKE_START tag=ringscan1 rev=50068268 2026-10-14T02:55:28+02:00
+DESKTOP_CINNAMON 1 XORG 1
+DESKTOP_GLX OpenGL vendor string: NVIDIA Corporation
+DESKTOP_GLX OpenGL renderer string: NVIDIA GeForce RTX 4070/PCIe/SSE2
+DESKTOP_GEARS approximately the same as the monitor refresh rate.
+DESKTOP_GEARS 300 frames in 5.0 seconds = 59.919 FPS
+DESKTOP_GEARS 301 frames in 5.0 seconds = 60.005 FPS
+DESKTOP_GEARS 300 frames in 5.0 seconds = 59.993 FPS
+DESKTOP_VKCUBE not installed
+DESKTOP_GUEST_DMESG flip_timeouts=0 nvassert=12 xid=0
+DESKTOP_GUEST_DONE
+DESKTOP_HOST_XID delta=0
+DESKTOP_KF3 stall=0 exception=0 scanout_refused=0 broker_lines=28
+DESKTOP_BROKER kf3: broker: guest cursor image 256x256 hot 0,0 sent (1 so far)
+DESKTOP_BROKER kf3: broker: reclaimed frame slot 1: no RELEASE 2126 ms after its commit, and a newer frame was committed (11 reclaimed so far)
+DESKTOP_BROKER kf3: broker: reclaimed frame slot 1: no RELEASE 45466 ms after its commit, and a newer frame was committed (12 reclaimed so far)
+DESKTOP_SMOKE_EXIT rc=0 2026-10-14T02:57:16+02:00
