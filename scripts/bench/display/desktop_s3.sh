@@ -96,4 +96,6 @@ for cyc in $(seq 1 "${S3_CYCLES:-1}"); do
     fi
 done
 echo "S3_RESULT pass=$pass_all cycles=${S3_CYCLES:-1} rev=$REV"
+# S3_HOLD=<s>: keep the guest up that long before the stop, for a look inside (diagnostic runs only)
+[ -n "${S3_HOLD:-}" ] && { echo "S3_HOLDING ${S3_HOLD}s $(date -Is)"; sleep "$S3_HOLD"; }
 [ "$pass_all" = 1 ]
