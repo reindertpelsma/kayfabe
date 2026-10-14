@@ -147,9 +147,117 @@ impl<T> Cell<T> {
     }
 }
 
+/// ★ DEBUG ONLY (`KF3_DEBUG_FORCE_MIGRATABLE`, `kf_rm::chanlink::FORCE_MIGRATABLE`): a guest USERD in
+/// the framebuffer -- which for this VMM is the host store object -- read and written through a CPU
+/// view WE armed at birth (the view `ChanPlane::userd_view` makes for a Passthrough twin), so a Linux
+/// guest, whose USERD is never in guest RAM, can drive the USER-ring relay. Four bytes each way,
+/// 4-aligned, inside the 0x200 bytes of the USERD; the view is given back when the last reference
+/// goes (after confirmed native free).
+pub(super) struct StoreUserd {
+    rm: &'static kf_host::HostRm,
+    store: u32,
+    cookie: u64,
+    region: Option<kf_linux_raw::VolatileRegion>,
+    _node: kf_linux_raw::CharDevice,
+    /// The USERD's offset inside the 4 KiB view.
+    at: u64,
+}
+impl StoreUserd {
+    /// Arm the view of the page holding the USERD at store offset `base`.
+    pub(super) fn new(
+        rm: &'static kf_host::HostRm,
+        store: u32,
+        base: u64,
+    ) -> Result<Self, String> {
+        let page = base & !0xFFF;
+        if base & 0x1ff != 0 {
+            return Err("USER_RING_STORE_USERD_ALIGN".into());
+        }
+        let (node, cookie) = rm
+            .arm_cpu_view(
+                kf_host::MapNode::Gpu,
+                store,
+                page,
+                0x1000,
+                kf_host::ViewAccess::ReadWrite,
+            )
+            .map_err(|e| format!("USER_RING_STORE_USERD_VIEW {e:?}"))?;
+        let region = match kf_linux_raw::VolatileRegion::map(
+            kf_linux_raw::Backing::DeviceFile { fd: node.as_fd() },
+            0x1000,
+            kf_linux_raw::CachePolicy::Uncached,
+            kf_linux_raw::HostPageSize::query(),
+        ) {
+            Ok(r) => r,
+            Err(e) => {
+                let _ = rm.release_cpu_view(kf_host::CpuViewRelease {
+                    h_memory: store,
+                    p_linear_address: cookie,
+                });
+                return Err(format!("USER_RING_STORE_USERD_MMAP {e:?}"));
+            }
+        };
+        Ok(Self {
+            rm,
+            store,
+            cookie,
+            region: Some(region),
+            _node: node,
+            at: base - page,
+        })
+    }
+    fn word(&self, offset: u64, len: usize) -> Result<kf_linux_raw::HostOffset, kf_rm::memory_list::AccessError> {
+        use kf_rm::memory_list::AccessError;
+        if len != 4 || offset & 3 != 0 || offset.checked_add(4).is_none_or(|e| e > 0x200) {
+            return Err(AccessError::Bounds);
+        }
+        Ok(kf_linux_raw::HostOffset::new(self.at + offset))
+    }
+    fn read(&self, offset: u64, bytes: &mut [u8]) -> Result<(), kf_rm::memory_list::AccessError> {
+        use kf_rm::memory_list::AccessError;
+        let at = self.word(offset, bytes.len())?;
+        let v = self
+            .region
+            .as_ref()
+            .ok_or(AccessError::Gone)?
+            .load_u32(at)
+            .map_err(|_| AccessError::Gone)?;
+        bytes.copy_from_slice(&v.to_le_bytes());
+        Ok(())
+    }
+    fn write(&self, offset: u64, bytes: &[u8]) -> Result<(), kf_rm::memory_list::AccessError> {
+        use kf_rm::memory_list::AccessError;
+        let at = self.word(offset, bytes.len())?;
+        let v = u32::from_le_bytes(bytes.try_into().map_err(|_| AccessError::Bounds)?);
+        self.region
+            .as_ref()
+            .ok_or(AccessError::Gone)?
+            .store_u32(at, v)
+            .map_err(|_| AccessError::Gone)
+    }
+    fn zero(&self) -> Result<(), kf_rm::memory_list::AccessError> {
+        for w in (0..0x200).step_by(4) {
+            self.write(w, &[0; 4])?;
+        }
+        Ok(())
+    }
+}
+impl Drop for StoreUserd {
+    fn drop(&mut self) {
+        // unmap before giving the view back (the order `ChanPlane::drop_relay` uses)
+        drop(self.region.take());
+        let _ = self.rm.release_cpu_view(kf_host::CpuViewRelease {
+            h_memory: self.store,
+            p_linear_address: self.cookie,
+        });
+    }
+}
+
 /// Kept even after statement-time Free; only confirmed native free retires it.
 #[derive(Clone)]
 pub(super) enum UserdSource {
+    /// ★ DEBUG ONLY: a framebuffer (host store) USERD, [`StoreUserd`].
+    Store(Arc<StoreUserd>),
     /// CPU-RM resolved birth descriptor; its CPU-local handle is not a GSP name.
     Resolved(crate::mem::userdram::Userd),
     /// Later migration carries an independently registered GSP MemoryList name.
@@ -195,6 +303,10 @@ impl UserdSource {
                 let _owner = Self::owner(me, key, allocation)?;
                 source.read(offset, bytes)
             }
+            Self::Store(source) => {
+                let _owner = Self::owner(me, key, allocation)?;
+                source.read(offset, bytes)
+            }
             Self::Registered(source) => {
                 source.read_admitted(offset, bytes, || Self::owner(me, key, allocation))
             }
@@ -213,6 +325,10 @@ impl UserdSource {
                 let _owner = Self::owner(me, key, allocation)?;
                 source.write(offset, bytes)
             }
+            Self::Store(source) => {
+                let _owner = Self::owner(me, key, allocation)?;
+                source.write(offset, bytes)
+            }
             Self::Registered(source) => {
                 source.write_admitted(offset, bytes, || Self::owner(me, key, allocation))
             }
@@ -227,6 +343,7 @@ impl UserdSource {
         check_userd_owner(Some(identity), expected)?;
         match self {
             Self::Resolved(source) => source.write(0, &[0; 0x200]),
+            Self::Store(source) => source.zero(),
             Self::Registered(_) => Err(kf_rm::memory_list::AccessError::Unsupported),
         }
     }
@@ -237,7 +354,7 @@ impl UserdSource {
         publish: impl FnOnce() -> T,
     ) -> Result<T, kf_rm::memory_list::AccessError> {
         match self {
-            Self::Resolved(_) => Ok(publish()),
+            Self::Resolved(_) | Self::Store(_) => Ok(publish()),
             Self::Registered(source) => source.admit(publish),
         }
     }
@@ -342,12 +459,21 @@ impl Birth {
             if handle == 0 || offset & 0x1ff != 0 {
                 return Err("USER_RING_USERD_DECLARATION".into());
             }
-            let Some(kf_arch::UserdMem::Sysmem { base, size }) = a.userd else {
-                return Err("USER_RING_USERD_APERTURE_NOT_IMPLEMENTED".into());
-            };
-            crate::mem::userdram::Userd::new(me.ram, base, size)
-                .map(|source| (UserdSource::Resolved(source), native_id))
-                .map_err(|e| format!("USER_RING_RESOLVED_USERD {e:?}"))
+            match a.userd {
+                Some(kf_arch::UserdMem::Sysmem { base, size }) => {
+                    crate::mem::userdram::Userd::new(me.ram, base, size)
+                        .map(|source| (UserdSource::Resolved(source), native_id))
+                        .map_err(|e| format!("USER_RING_RESOLVED_USERD {e:?}"))
+                }
+                // ★ DEBUG ONLY: only a channel the debug switch made a user ring can be here with a
+                // framebuffer USERD (a Windows permit is never granted for one: the scope decision
+                // of V3_WINDOWS_USER_RING_RELAY.md §10 stands for the production route).
+                Some(kf_arch::UserdMem::Framebuffer { base, .. }) if kf_rm::chanlink::force_migratable_enabled() => {
+                    StoreUserd::new(me.rm, me.store, base)
+                        .map(|view| (UserdSource::Store(Arc::new(view)), native_id))
+                }
+                _ => Err("USER_RING_USERD_APERTURE_NOT_IMPLEMENTED".to_string()),
+            }
         })();
         let (userd, native_id) = match source {
             Ok(u) => u,

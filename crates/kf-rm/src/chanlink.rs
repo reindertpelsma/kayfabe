@@ -303,6 +303,56 @@ pub struct UserWorkFacts {
     /// channel declaring it then keeps the Translated route (the stricter one). `false` = the rule
     /// is byte for byte what it was.
     pub system_pid_is_kernel: bool,
+    /// ★ DEBUG ONLY (2026-10-14, [`FORCE_MIGRATABLE`]): classify this guest's USER channels as
+    /// migratable user rings whatever the guest OS, so a Linux guest exercises the Windows USER-ring
+    /// relay. `false` outside the debug profile; never set for a guest that declared Windows.
+    pub force_migratable: bool,
+}
+
+/// ★ DEBUG ONLY (2026-10-14): `KF3_DEBUG_FORCE_MIGRATABLE=1` makes every USER channel of the guest
+/// (not guest-kernel, not UVM-owned, not RM-internal; GR, copy or video engine) a migratable user
+/// ring -- the route the Windows USER channels take -- so the Linux guest exercises the USER-ring
+/// relay (`docs/design/V3_USER_RING_EVENT_LOOP_20261014.md` §8). Kernel and UVM channels keep their
+/// route (their physical operands need translation). Honoured ONLY with [`DEBUG_PROFILE`] set:
+/// without it the switch is REFUSED (one loud line) and ignored, so the production profile (which
+/// carries no `KF3_*` variable at all) can never be changed by a stray export. Never honoured for a
+/// guest that declared the Windows driver.
+pub const FORCE_MIGRATABLE: &str = "KF3_DEBUG_FORCE_MIGRATABLE";
+/// The debug-profile acknowledgement [`FORCE_MIGRATABLE`] requires (`KF3_DEBUG=1`).
+pub const DEBUG_PROFILE: &str = "KF3_DEBUG";
+
+/// Whether [`FORCE_MIGRATABLE`] is requested AND allowed by the environment given. Pure, for tests.
+#[must_use]
+pub fn force_migratable_allowed(force: Option<&str>, debug: Option<&str>) -> (bool, Option<&'static str>) {
+    match (force, debug) {
+        (Some("1"), Some("1")) => (true, None),
+        (Some("1"), _) => (
+            false,
+            Some("KF3_DEBUG_FORCE_MIGRATABLE=1 REFUSED: it is a debug-profile switch and needs KF3_DEBUG=1; the production profile cannot enable it"),
+        ),
+        _ => (false, None),
+    }
+}
+
+/// ★ DEBUG ONLY: [`FORCE_MIGRATABLE`] as the environment says it, read once; a refusal is logged once.
+#[must_use]
+pub fn force_migratable_enabled() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| {
+        let (on, why) = force_migratable_allowed(
+            std::env::var(FORCE_MIGRATABLE).ok().as_deref(),
+            std::env::var(DEBUG_PROFILE).ok().as_deref(),
+        );
+        if let Some(why) = why {
+            eprintln!("kf-rm: chanlink: {why}");
+        }
+        if on {
+            eprintln!(
+                "kf-rm: chanlink: ⚠ DEBUG PROFILE: KF3_DEBUG_FORCE_MIGRATABLE=1 -- this guest's USER channels (GR/copy/video; never kernel, UVM or RM-internal) take the migratable USER-ring relay; for the relay's validation only"
+            );
+        }
+        on
+    })
 }
 
 /// ★ The Windows System process id. No user code runs in it, and the kernel driver's reset and
@@ -430,8 +480,39 @@ pub struct WindowsUserRingPermit {
 /// # Errors
 /// The first missing Windows user-work fact, by name.
 pub fn windows_user_ring_permit(f: &UserWorkFacts) -> Result<WindowsUserRingPermit, &'static str> {
-    windows_user_work(f)?;
+    if f.force_migratable {
+        forced_user_ring(f)?;
+    } else {
+        windows_user_work(f)?;
+    }
     Ok(WindowsUserRingPermit { _private: () })
+}
+
+/// ★ DEBUG ONLY ([`FORCE_MIGRATABLE`]): is this a USER channel the debug switch makes a migratable
+/// user ring? Not the Windows criterion (a Linux channel has no kernel stamp, no subcontext rule, no
+/// kernel-driver process): the channel must simply be the guest's USER work on an engine the relay
+/// supports. A guest-kernel, UVM-owned or RM-internal channel keeps its route.
+///
+/// # Errors
+/// The first fact that keeps the channel off the forced route, by name.
+pub fn forced_user_ring(f: &UserWorkFacts) -> Result<(), &'static str> {
+    if f.kernel_stamped {
+        return Err("a guest-kernel channel keeps the Translated route");
+    }
+    if f.uvm_owned {
+        return Err("a UVM-owned channel needs address translation");
+    }
+    if f.rm_internal {
+        return Err("an RM-internal client");
+    }
+    let engine = f.engine.ok_or("no engine type")?;
+    if engine != kf_abi::submit::ENGINE_TYPE_GRAPHICS
+        && kf_abi::submit::copy_index_of_engine_type(engine).is_none()
+        && !video_engine(engine)
+    {
+        return Err("not a graphics, copy or video engine");
+    }
+    Ok(())
 }
 
 /// `engine` (NV2080 space) is a video engine: NVDEC0-7, NVENC0-3 or OFA0/1.
@@ -820,6 +901,8 @@ pub struct ChannelPolicy {
     windows_kernel_pid: Option<u32>,
     /// ★ EXPERIMENT `KF3_WIN_KERNEL_PID4` ([`kernel_pid4_enabled`], read once).
     system_pid_is_kernel: bool,
+    /// ★ DEBUG ONLY ([`FORCE_MIGRATABLE`], read once, refused without [`DEBUG_PROFILE`]).
+    force_migratable: bool,
 }
 
 /// ★ 2026-10-08: the flag of [`windows_user_work`].
@@ -855,6 +938,7 @@ impl ChannelPolicy {
             windows_identity: false,
             windows_kernel_pid: None,
             system_pid_is_kernel: kernel_pid4_enabled(),
+            force_migratable: force_migratable_enabled(),
         }
     }
 
@@ -1271,6 +1355,8 @@ impl ChannelPolicy {
             process_id,
             kernel_pid: self.windows_kernel_pid,
             system_pid_is_kernel: self.system_pid_is_kernel,
+            // never for a guest that declared the Windows driver (its route is the Windows one)
+            force_migratable: self.force_migratable && !self.windows_identity,
         };
         let user_work = windows_user_work(&user_facts);
         if self.user_work_flag && kernel_stamped {
@@ -2544,6 +2630,7 @@ mod tests {
                 process_id: Some(0x3b8),
                 kernel_pid: Some(0x350),
                 system_pid_is_kernel: false,
+                force_migratable: false,
             }
         }
 
@@ -2894,6 +2981,7 @@ mod tests {
                                     process_id: pid,
                                     kernel_pid,
                                     system_pid_is_kernel: false,
+                                    force_migratable: false,
                                 });
                             }
                         }
@@ -4259,5 +4347,58 @@ mod tests {
         assert!(is_rm_internal_client(0xc1e0_0006));
         assert!(!is_rm_internal_client(0xc1d0_0006), "the user base");
         assert!(!is_rm_internal_client(0xe000_0001), "a VF client");
+    }
+}
+
+#[cfg(test)]
+mod forced_tests {
+    use super::*;
+
+    fn linux_user(engine: u32) -> UserWorkFacts {
+        UserWorkFacts {
+            force_migratable: true,
+            engine: Some(engine),
+            ..Default::default()
+        }
+    }
+
+    /// The debug switch is honoured only with the debug-profile acknowledgement; without it it is
+    /// refused by name; absent, nothing happens.
+    #[test]
+    fn force_migratable_needs_the_debug_profile() {
+        assert_eq!(force_migratable_allowed(None, None), (false, None));
+        assert_eq!(force_migratable_allowed(None, Some("1")), (false, None));
+        assert_eq!(force_migratable_allowed(Some("0"), Some("1")), (false, None));
+        assert_eq!(force_migratable_allowed(Some("1"), Some("1")), (true, None));
+        for debug in [None, Some("0"), Some("")] {
+            let (on, why) = force_migratable_allowed(Some("1"), debug);
+            assert!(!on);
+            assert!(why.is_some_and(|w| w.contains("REFUSED")));
+        }
+    }
+
+    /// A Linux USER channel on GR, copy or video gets the forced permit; a kernel-stamped, UVM-owned
+    /// or RM-internal one, or an unsupported engine, does not; and without the switch a Linux channel
+    /// still gets none.
+    #[test]
+    fn a_forced_permit_is_for_user_channels_on_supported_engines_only() {
+        let gr = kf_abi::submit::ENGINE_TYPE_GRAPHICS;
+        let ce = kf_abi::submit::engine_type_copy(0).unwrap();
+        for e in [gr, ce] {
+            assert!(windows_user_ring_permit(&linux_user(e)).is_ok());
+        }
+        for f in [
+            UserWorkFacts { kernel_stamped: true, ..linux_user(gr) },
+            UserWorkFacts { uvm_owned: true, ..linux_user(gr) },
+            UserWorkFacts { rm_internal: true, ..linux_user(gr) },
+            UserWorkFacts { engine: None, ..linux_user(gr) },
+            linux_user(0x7f), // not a graphics, copy or video engine
+        ] {
+            assert!(windows_user_ring_permit(&f).is_err(), "{f:?}");
+        }
+        let off = UserWorkFacts { force_migratable: false, ..linux_user(gr) };
+        assert!(windows_user_ring_permit(&off).is_err(), "no switch, no Windows identity: no permit");
+        // forcing never reclassifies a channel as Windows user work (the Passthrough conversion)
+        assert!(windows_user_work(&linux_user(gr)).is_err());
     }
 }
