@@ -272,6 +272,37 @@ fn main() {
         println!("PROBE_END admin_run={admin} mode=zbc");
         return;
     }
+    // ★ Lane C 2026-10-14 (resumed): `KF_PROBE_SCAN=0xCMD,0xCMD:LO:HI` — which `paramsSize` does this host accept for a control?
+    // The Windows-only GSS-legacy controls have no open header, and their size changes between firmware branches (580: 852e 528,
+    // 595: 596). A zero request of every size LO..=HI step 4 (default 4..=16384) is sent to the SUBDEVICE and the sizes whose
+    // status is not INVALID_ARGUMENT/INVALID_PARAM_STRUCT are printed with their status and the number of non-zero reply
+    // words. Zero requests only (the real Windows requests are all-zero for these controls); unprivileged; reply bytes are not printed.
+    if let Ok(spec) = std::env::var("KF_PROBE_SCAN") {
+        let sub = rm.subdevice_handle();
+        for item in spec.split(',').filter(|x| !x.is_empty()) {
+            let mut it = item.split(':');
+            let cmd = it.next().and_then(|c| u32::from_str_radix(c.trim_start_matches("0x"), 16).ok());
+            let lo: usize = it.next().and_then(|x| x.parse().ok()).unwrap_or(4);
+            let hi: usize = it.next().and_then(|x| x.parse().ok()).unwrap_or(16384);
+            let Some(cmd) = cmd else { println!("SCAN bad_spec={item}"); continue };
+            let mut hits = 0;
+            let mut size = lo;
+            while size <= hi {
+                let mut payload = vec![0u8; size];
+                if let Ok(status) = rm.raw_control_opaque(sub, cmd, &mut payload) {
+                    if status != 0x1f && status != 0x3a {
+                        let nz = payload.chunks(4).filter(|w| w.iter().any(|b| *b != 0)).count();
+                        println!("SCAN cmd={cmd:#010x} size={size} status={status:#x} {} nonzero_words={nz}", status_name(status));
+                        hits += 1;
+                    }
+                }
+                size += 4;
+            }
+            println!("SCAN cmd={cmd:#010x} range={lo}..={hi} accepted_sizes={hits}");
+        }
+        println!("PROBE_END admin_run={admin} mode=scan");
+        return;
+    }
     for (kind, cmd, sizes, inputs) in rows {
         if EXCLUDED.contains(&cmd) {
             println!("PROBE kind={kind} cmd={cmd:#010x} size=- status=- EXCLUDED (action control)");

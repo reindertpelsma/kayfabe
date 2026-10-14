@@ -237,6 +237,40 @@ pub const ROWS: &[Row] = &[
         exact: true,
         inputs: &[],
     },
+    // ★★ Lane C 2026-10-14 (resumed, daytime) — the SAME controls at the 595 firmware branch. Their paramsSize changed with
+    // the branch (the request stays all-zero): `[measured GA104 / Windows 596.51, GSP firmware 595.76, kfwc capture,
+    // 2026-10-14, traces/constants_measure_20261014b/ga104_596.51/]` 0x2080852e 596 (was 528), 0x2080853a 15352 (was 1456),
+    // 0x2080a618 8632 (was 8620), 0x2080853b 14320 with request word 1 = 1 (the AD103 580.88 capture issued it once at 1832);
+    // 0x2080852a, 0x20808524, 0x2080a70a, 0x2080a088 are unchanged. A host answers a zero request only at the size of its own
+    // branch (`[measured, traces/constants_measure_20261014b/tier2/]` 580.x hosts: 528/1456/8620 NV_OK and 596/15352/8632
+    // INVALID_ARGUMENT; 595.84 / 595.91.07 hosts: the reverse) — that is F-4 of the matrix: the INVALID_ARGUMENT at 595.91.07 was
+    // the 580-branch SIZE, not the control. The size is part of the question (`Row::matches`), so a row whose size the host
+    // refuses is simply not answered, and a guest of either branch gets the host's bytes for ITS size or a refusal, never
+    // another branch's row.
+    Row {
+        cmd: 0x2080_852e,
+        size: 596,
+        exact: true,
+        inputs: &[],
+    },
+    Row {
+        cmd: 0x2080_853a,
+        size: 15352,
+        exact: true,
+        inputs: &[],
+    },
+    Row {
+        cmd: 0x2080_a618,
+        size: 8632,
+        exact: true,
+        inputs: &[],
+    },
+    Row {
+        cmd: 0x2080_853b,
+        size: 14320,
+        exact: true,
+        inputs: &[(4, 1)],
+    },
     // ★ Lane C 2026-10-14: `0x20808162` (1 byte, request `00`): the GA106 at 580.159.04 answered
     // `01` (`crate::gsslegacy`), the AD104 at 595.91.07 answers `00` [measured, unprivileged,
     // traces/constants_night_20261014/probe_8162_595.txt] — a captured byte served to every die was

@@ -203,8 +203,9 @@ fn parse_source(s: &str) -> Result<SourceTag, String> {
             return Err(format!("measured tag {s:?} is not <DIE>,<driver>,<date>"));
         };
         let dv: Vec<&str> = driver.split('.').collect();
-        if dv.len() != 3 || dv.iter().any(|p| p.parse::<u16>().is_err()) {
-            return Err(format!("measured tag driver {driver:?} is not x.y.z"));
+        // x.y.z (a Linux driver, 580.159.04) or x.y (ogkm's own two-part tags and a GSP firmware, 595.84, 595.76)
+        if !(2..=3).contains(&dv.len()) || dv.iter().any(|p| p.parse::<u16>().is_err()) {
+            return Err(format!("measured tag driver {driver:?} is not x.y.z or x.y"));
         }
         let d: Vec<&str> = date.split('-').collect();
         if d.len() != 3

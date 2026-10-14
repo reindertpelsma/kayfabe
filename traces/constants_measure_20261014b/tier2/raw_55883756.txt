@@ -1,0 +1,58 @@
+BOX_PROBE_START 2026-10-14T14:02:47Z
+GPU NVIDIA GeForce RTX 2060, 0x1F0310DE, 580.178.04
+PROC Uid: 0 0 0 0
+PROC CapEff: 00000000a80405fb
+NODE nvidia0
+== gss rows (exactly kayfabe's realize-time requests)
+PROBE_NO_OUTPUT first_lines:
+PROBE_START pid=430 uid=Uid: 0 0 0 0 CapEff=0xa80405fb cap_sys_admin=false
+
+thread 'main' (430) panicked at crates/kf-harness/src/bin/kf-ctl-probe.rs:172:10:
+host RM session: "RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { call: \"openat\", errno: Some(1) }"
+== cudart gate replies (measured request shapes)
+PROBE_NO_OUTPUT first_lines:
+PROBE_START pid=437 uid=Uid: 0 0 0 0 CapEff=0xa80405fb cap_sys_admin=false
+
+thread 'main' (437) panicked at crates/kf-harness/src/bin/kf-ctl-probe.rs:172:10:
+host RM session: "RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { call: \"openat\", errno: Some(1) }"
+== built-in Windows-only rows (zero requests)
+PROBE_NO_OUTPUT first_lines:
+PROBE_START pid=444 uid=Uid: 0 0 0 0 CapEff=0xa80405fb cap_sys_admin=false
+
+thread 'main' (444) panicked at crates/kf-harness/src/bin/kf-ctl-probe.rs:172:10:
+host RM session: "RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { call: \"openat\", errno: Some(1) }"
+== 595-branch request sizes (Windows 596.51 / GSP 595.76 capture; zero requests)
+PROBE_NO_OUTPUT first_lines:
+PROBE_START pid=451 uid=Uid: 0 0 0 0 CapEff=0xa80405fb cap_sys_admin=false
+
+thread 'main' (451) panicked at crates/kf-harness/src/bin/kf-ctl-probe.rs:172:10:
+host RM session: "RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { call: \"openat\", errno: Some(1) }"
+== ZBC clear table (idle rental: the occupied entries are the defaults physical RM installs)
+PROBE_NO_OUTPUT first_lines:
+PROBE_START pid=458 uid=Uid: 0 0 0 0 CapEff=0xa80405fb cap_sys_admin=false
+
+thread 'main' (458) panicked at crates/kf-harness/src/bin/kf-ctl-probe.rs:172:10:
+host RM session: "RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { call: \"openat\", errno: Some(1) }"
+== accepted paramsSize per Windows-only control (zero requests, 4..16384 step 4)
+PROBE_NO_OUTPUT first_lines:
+PROBE_START pid=465 uid=Uid: 0 0 0 0 CapEff=0xa80405fb cap_sys_admin=false
+
+thread 'main' (465) panicked at crates/kf-harness/src/bin/kf-ctl-probe.rs:172:10:
+host RM session: "RM bring-up failed at R1 openat(nvidia<gpu>): Syscall { call: \"openat\", errno: Some(1) }"
+DIAG nodes:
+crw-rw-rw- 1 0 0 195, 254 Oct 14 14:02 /dev/nvidia-modeset
+crw-rw-rw- 1 0 0 509,   0 Oct 14 14:02 /dev/nvidia-uvm
+crw-rw-rw- 1 0 0 509,   1 Oct 14 14:02 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 0 0 195,   0 Oct 14 14:02 /dev/nvidia0
+crw-rw-rw- 1 0 0 195,   1 Oct 14 14:02 /dev/nvidia1
+crw-rw-rw- 1 0 0 195, 255 Oct 14 14:02 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+cr-------- 1 0 0 234, 1 Oct 14 14:02 nvidia-cap1
+cr--r--r-- 1 0 0 234, 2 Oct 14 14:02 nvidia-cap2
+DIAG open nvidia0: /root/kit/tier2_probe_box.sh: 41: cannot open /dev/nvidia0: Operation not permitted
+DIAG NoNewPrivs: 0
+DIAG Seccomp: 2
+DIAG cgroup devices: 
+BOX_PROBE_END rc=0 2026-10-14T14:02:47Z

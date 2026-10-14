@@ -20,7 +20,9 @@ use kf_rm::inittables::InitTablePolicy;
 
 const PARAMS_AT: usize = 40;
 
-const EXACT: [(u32, usize); 7] = [
+/// The zero-request rows: the 580 branch's sizes (AD103/GA106 Windows 580.88 captures) and, below them, the 595 branch's
+/// (GA104 Windows 596.51 / GSP 595.76 capture): the same controls, a different `paramsSize` per firmware branch.
+const EXACT: [(u32, usize); 10] = [
     (0x2080_852a, 1784),
     (0x2080_8524, 4),
     (0x2080_a70a, 26),
@@ -28,7 +30,13 @@ const EXACT: [(u32, usize); 7] = [
     (0x2080_852e, 528),
     (0x2080_853a, 1456),
     (0x2080_a618, 8620),
+    (0x2080_852e, 596),
+    (0x2080_853a, 15352),
+    (0x2080_a618, 8632),
 ];
+
+/// `0x2080853b` at the 595 branch: 14320 B, request word 1 = 1, the rest zero (the 580 capture issued it once at 1832).
+const R853B: (u32, usize) = (0x2080_853b, 14320);
 
 /// A host that answers every exact row with a recognisable pattern and records each request.
 struct Recorder {
@@ -45,7 +53,10 @@ fn pattern(cmd: u32, len: usize) -> Vec<u8> {
 impl HostControls for Recorder {
     fn control(&mut self, cmd: u32, params: &mut [u8]) -> Result<(), HostRefusal> {
         self.asked.push((cmd, params.to_vec()));
-        if Some(cmd) == self.refuse || !EXACT.iter().any(|(c, _)| *c == cmd) {
+        if Some(cmd) == self.refuse
+            || !(EXACT.iter().any(|(c, n)| *c == cmd && *n == params.len())
+                || (cmd, params.len()) == R853B)
+        {
             return Err(HostRefusal {
                 status: Some(0x56),
                 detail: "not this test's row".into(),
@@ -88,10 +99,15 @@ fn every_exact_row_is_in_rows_with_its_measured_size() {
     for (cmd, size) in EXACT {
         let r = ROWS
             .iter()
-            .find(|r| r.cmd == cmd)
-            .unwrap_or_else(|| panic!("{cmd:#x} row"));
-        assert!(r.exact && r.inputs.is_empty() && r.size == size, "{cmd:#x}");
+            .find(|r| r.cmd == cmd && r.size == size)
+            .unwrap_or_else(|| panic!("{cmd:#x}/{size} row"));
+        assert!(r.exact && r.inputs.is_empty(), "{cmd:#x}/{size}");
     }
+    let r = ROWS
+        .iter()
+        .find(|r| r.cmd == R853B.0 && r.size == R853B.1)
+        .expect("853b row");
+    assert!(r.exact && r.inputs == [(4, 1)], "853b asks {{0, 1}} and nothing else");
 }
 
 #[test]
@@ -105,20 +121,33 @@ fn the_host_is_asked_once_with_zeros_only() {
         let asks: Vec<&Vec<u8>> = h
             .asked
             .iter()
-            .filter(|(c, _)| *c == cmd)
+            .filter(|(c, p)| *c == cmd && p.len() == size)
             .map(|(_, p)| p)
             .collect();
         assert_eq!(
             asks.len(),
             1,
-            "{cmd:#x}: asked exactly once (no background probe)"
+            "{cmd:#x}/{size}: asked exactly once (no background probe)"
         );
         assert!(
             asks[0].len() == size && asks[0].iter().all(|&b| b == 0),
             "{cmd:#x}: zero request"
         );
-        assert!(answers.iter().any(|a| a.row.cmd == cmd), "{cmd:#x} kept");
+        assert!(
+            answers.iter().any(|a| a.row.cmd == cmd && a.row.size == size),
+            "{cmd:#x}/{size} kept"
+        );
     }
+    // 853b: asked once, the request is word 1 = 1 and zeros.
+    let asks: Vec<&Vec<u8>> = h
+        .asked
+        .iter()
+        .filter(|(c, p)| *c == R853B.0 && p.len() == R853B.1)
+        .map(|(_, p)| p)
+        .collect();
+    assert_eq!(asks.len(), 1);
+    assert_eq!(&asks[0][4..8], &1u32.to_le_bytes());
+    assert!(asks[0].iter().enumerate().all(|(i, &b)| (4..8).contains(&i) || b == 0));
 }
 
 #[test]
@@ -163,5 +192,27 @@ fn a_refused_row_is_not_answered() {
     assert!(
         r.is_none_or(|r| r.rpc_result != 0),
         "never a constant where the host gave nothing"
+    );
+}
+
+#[test]
+fn the_595_853b_request_is_answered_only_when_word_one_is_one() {
+    let mut h = Recorder {
+        asked: Vec::new(),
+        refuse: None,
+    };
+    let answers = query_gss_replay(&mut h);
+    let mut p = policy(answers);
+    let (cmd, size) = R853B;
+    let mut real = vec![0u8; size];
+    real[4..8].copy_from_slice(&1u32.to_le_bytes());
+    let r = p.respond(&control(cmd, &real)).expect("answered");
+    assert_eq!(r.rpc_result, 0);
+    assert_eq!(&r.body[PARAMS_AT..PARAMS_AT + size], &pattern(cmd, size)[..]);
+    // The all-zero request of the same size is another question.
+    let r = p.respond(&control(cmd, &vec![0u8; size]));
+    assert!(
+        r.is_none_or(|r| r.rpc_result != 0 || r.body[PARAMS_AT..] != pattern(cmd, size)[..]),
+        "word 1 = 0 is not the measured question"
     );
 }

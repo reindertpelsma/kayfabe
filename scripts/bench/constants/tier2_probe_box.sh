@@ -33,6 +33,8 @@ echo "== 595-branch request sizes (Windows 596.51 / GSP 595.76 capture; zero req
 run '^(PROBE |PROBE_SUMMARY|PROBE_END)' KF_PROBE_EXTRA_ONLY=1 KF_PROBE_HEAD=16 "$here/kf-ctl-probe" "$here/rows_595_shapes.tsv"
 echo "== ZBC clear table (idle rental: the occupied entries are the defaults physical RM installs)"
 run '^(ZBC|PROBE_END)' KF_PROBE_ZBC=1 "$here/kf-ctl-probe"
+echo "== accepted paramsSize per Windows-only control (zero requests, 4..16384 step 4)"
+run '^(SCAN|PROBE_END)' KF_PROBE_SCAN=0x2080852e,0x2080853a,0x2080a618,0x2080b201,0x2080852f "$here/kf-ctl-probe"
 # Diagnostics when the host RM session could not open (box facts only: device nodes and the process's confinement).
 if ! KF_PROBE_I_KNOW=1 KF_PROBE_GSS_ROWS=1 "$here/kf-ctl-probe" 2>&1 | grep -q '^PROBE_SESSION'; then
   echo "DIAG nodes:"; ls -ln /dev/nvidia* 2>&1 | head -12
