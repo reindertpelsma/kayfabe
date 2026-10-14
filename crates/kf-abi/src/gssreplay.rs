@@ -145,7 +145,42 @@ pub const ROWS: &[Row] = &[
             (0x30, 0),
         ],
     },
+    // ★★ Lane C 2026-10-14 — cudart's init gate asked of the HOST (tier 2) instead of served from
+    // one GA106 capture to every die (`crate::cudartinit` rows → `kf_rm::consttab`, now the
+    // fallback). `[measured AD104 / 595.91.07, 2026-10-14, unprivileged libcudart 13.3 under the
+    // nvdiff recorder, traces/constants_night_20261014/]` cudart's own requests: `0x20809009` and
+    // `0x20809001` all zero (8 B), `0x20809064` `{0, 2, 1, 0, 0, 0, 4, 0…}` (520 B) — every word
+    // named here; the host answered each `NV_OK` with exactly the GA106 rows' values.
+    Row {
+        cmd: CUDART_GSS_9009,
+        size: 8,
+        inputs: &[(0, 0), (4, 0)],
+    },
+    Row {
+        cmd: CUDART_GSS_9001,
+        size: 8,
+        inputs: &[(0, 0), (4, 0)],
+    },
+    Row {
+        cmd: GSS_CLOCK_DOMAINS,
+        size: 520,
+        inputs: &[(0, 0), (4, 2), (8, 1), (0x18, 4)],
+    },
+    // cudart's fallback, reached only when `a084`/`a026` fail; the guest's request is `{0,0,0,0}`
+    // (`[measured GA106 / 580.159.04, 2026-08-20]`, `crate::cudartinit::CUDART_INIT_0XA001`).
+    Row {
+        cmd: CUDART_GSS_A001,
+        size: 16,
+        inputs: &[(0, 0), (4, 0), (8, 0), (0x0c, 0)],
+    },
 ];
+
+/// `0x20809009` — cudart init gate (GSS-legacy, 8 B).
+pub const CUDART_GSS_9009: u32 = 0x2080_9009;
+/// `0x20809001` — cudart init gate (GSS-legacy, 8 B).
+pub const CUDART_GSS_9001: u32 = 0x2080_9001;
+/// `0x2080a001` — cudart's clock fallback (GSS-legacy, 16 B).
+pub const CUDART_GSS_A001: u32 = 0x2080_a001;
 
 impl Row {
     /// The request buffer: zero, with the input words set.

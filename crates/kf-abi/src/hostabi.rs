@@ -497,6 +497,17 @@ pub struct HostControl {
 
 use crate::generated::matrix as hm;
 
+/// ★ Lane C 2026-10-14: the host the GSS-legacy cudart/clock rows were measured on.
+const HOST_595_91_07: DriverVersion = DriverVersion {
+    major: 595,
+    minor: 91,
+    patch: 7,
+};
+/// The source tag of those rows.
+const GSS_595_SOURCE: &str = "measured:AD104,595.91.07,2026-10-14; unprivileged libcudart 13.3 under nvdiff, \
+     traces/constants_night_20261014/host_cudart_probe_595.txt; 0x20809009/0x20809001 also \
+     traces/ctl_probe_20261013/probe_pass1.tsv";
+
 macro_rules! hc {
     ($name:literal, $cmd:literal, $s:ident) => {
         HostControl {
@@ -809,11 +820,20 @@ pub static HOST_CONTROLS: &[HostControl] = &[
         NVC36F_CTRL_CMD_GPFIFO_GET_WORK_SUBMIT_TOKEN_PARAMS
     ),
     // GSS-legacy (bit 15; no open header) — `crate::gssreplay`.
+    // ★ Lane C 2026-10-14: `0x20809064`, `0x2080a084`, `0x2080a026` (and the new cudart rows
+    // `0x20809009`, `0x20809001`) are MEASURED at host 595.91.07 on the AD104: an unprivileged
+    // libcudart 13.3 asked them with the requests `crate::gssreplay::ROWS` names and the host
+    // answered `NV_OK` at these sizes (traces/constants_night_20261014/host_cudart_probe_595.txt;
+    // `0x20809009`/`0x20809001` also by kf-ctl-probe, traces/ctl_probe_20261013/). The interval the
+    // encoders were written for keeps its old contract. `0x2080a028` (the encoder's per-domain
+    // query) and `0x2080a001` (cudart's fallback) were NOT asked at 595.91.07 and stay NoHeader.
     HostControl {
         name: "",
         cmd: 0x2080_9064,
-        params: HostParams::NoHeader {
-            source: "kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)",
+        params: HostParams::MeasuredOpaque {
+            source: GSS_595_SOURCE,
+            versions: &[HOST_595_91_07],
+            size: 520,
         },
     },
     HostControl {
@@ -826,15 +846,44 @@ pub static HOST_CONTROLS: &[HostControl] = &[
     HostControl {
         name: "",
         cmd: 0x2080_a084,
-        params: HostParams::NoHeader {
-            source: "kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)",
+        params: HostParams::MeasuredOpaque {
+            source: GSS_595_SOURCE,
+            versions: &[HOST_595_91_07],
+            size: 4,
         },
     },
     HostControl {
         name: "",
         cmd: 0x2080_a026,
+        params: HostParams::MeasuredOpaque {
+            source: GSS_595_SOURCE,
+            versions: &[HOST_595_91_07],
+            size: 532,
+        },
+    },
+    HostControl {
+        name: "",
+        cmd: 0x2080_9009,
+        params: HostParams::MeasuredOpaque {
+            source: GSS_595_SOURCE,
+            versions: &[HOST_595_91_07],
+            size: 8,
+        },
+    },
+    HostControl {
+        name: "",
+        cmd: 0x2080_9001,
+        params: HostParams::MeasuredOpaque {
+            source: GSS_595_SOURCE,
+            versions: &[HOST_595_91_07],
+            size: 8,
+        },
+    },
+    HostControl {
+        name: "",
+        cmd: 0x2080_a001,
         params: HostParams::NoHeader {
-            source: "kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)",
+            source: "kf_abi::gssreplay ROWS (cudart's fallback request {0,0,0,0}, measured on a 580.159.04 host)",
         },
     },
     HostControl {
@@ -1026,11 +1075,13 @@ mod tests {
             host("575.57.08").control_carry(0x2080_a026),
             Err(HostAbiError::NoHeader { .. })
         ));
-        assert!(
+        // ★ Lane C 2026-10-14: a measured opaque row is size-checked inside the interval too.
+        assert_eq!(
             host("580.126.09")
                 .control_carry(0x2080_a026)
                 .expect("interval")
-                .is_none()
+                .map(|c| c.host_size()),
+            Some(532)
         );
     }
 
@@ -1072,7 +1123,34 @@ mod tests {
                 );
             }
         }
-        for cmd in [0x2080_9064, 0x2080_a028, 0x2080_a084, 0x2080_a026] {
+        // ★ Lane C 2026-10-14: the cudart/clock GSS rows measured at 595.91.07 are carried there
+        // at their measured size; the two that were not asked there stay refused by name.
+        for (cmd, size) in [
+            (0x2080_9064, 520),
+            (0x2080_a084, 4),
+            (0x2080_a026, 532),
+            (0x2080_9009, 8),
+            (0x2080_9001, 8),
+        ] {
+            assert_eq!(
+                host("595.91.07")
+                    .control_carry(cmd)
+                    .expect("measured at 595.91.07")
+                    .map(|c| c.host_size()),
+                Some(size),
+                "{cmd:#x}"
+            );
+            for version in ["575.57.08", "595.84", "610.43.02"] {
+                assert!(
+                    matches!(
+                        host(version).control_carry(cmd),
+                        Err(HostAbiError::NoHeader { .. })
+                    ),
+                    "{cmd:#x} at {version}: an unmeasured host is refused"
+                );
+            }
+        }
+        for cmd in [0x2080_a028, 0x2080_a001] {
             assert!(matches!(
                 host("595.91.07").control_carry(cmd),
                 Err(HostAbiError::NoHeader { .. })

@@ -1,0 +1,29 @@
+# kayfabe published constant table (owner rulings §AF/§AH; docs/design/V3_CONSTANT_STRATEGY.md §1-§3; V3_PROVENANCE.md §1).
+# STATUS: LIVE, 2026-10-14. Loaded by crates/kf-rm/src/consttab.rs; every rule below is enforced by its tests.
+#
+# One row = one value a guest can see that is neither derived (ogkm, kayfabe state) nor answered by the host at runtime.
+# A row is a FALLBACK: kayfabe asks the host first (tier 2); the table answers only when the host did not.
+# Columns (TAB-separated):
+#   key       the constant (namespace.cmd for RM controls)
+#   die       ogkm die name (kf_chip::die::DIE_NAMES) or * (any die: only with a mechanism tag, never measured:)
+#   branch    driver branch (major) the value was measured at, or * (only with a mechanism tag)
+#   size      the reply size in bytes (the measured paramsSize; the tail after `words` is MEASURED zero)
+#   inputs    request words that must match for the row to apply: off=value,... (byte offsets, hex), or - (no input)
+#   words     reply u32 words, hex, little-endian, from offset 0
+#   source    measured:<DIE>,<driver>,<YYYY-MM-DD> | ogkm:<tag> <file:line> ... | rule:<mechanism> | authored:<why>. Never blob.
+#   evidence  repo path of the evidence (no board data: no UUID, serial, VBIOS, MAC)
+#
+# Lookup: exact (die, branch); then (die, *); then (*, branch); then (*, *). A neighbour die's row is never served:
+# an unmeasured (die, branch) is refused by name and counted (the clean fallback, §AE).
+#
+key	die	branch	size	inputs	words	source	evidence
+cudart.0x20809009	GA106	580	8	0x0=0x0,0x4=0x0	0x0 0xd	measured:GA106,580.159.04,2026-08-20	crates/kf-abi/src/cudartinit.rs (nvdiff, bare metal, bench 48097794)
+cudart.0x20809009	AD103	575	8	0x0=0x0,0x4=0x0	0x0 0xd	measured:AD103,575.51.03,2026-10-13	traces/real_hw_20261013/probe_unpriv.txt (zero request, unprivileged)
+cudart.0x20809009	AD104	595	8	0x0=0x0,0x4=0x0	0x0 0xd	measured:AD104,595.91.07,2026-10-14	traces/constants_night_20261014/host_cudart_probe_595.txt (cudart 13.3 request, unprivileged)
+cudart.0x20809001	GA106	580	8	0x0=0x0,0x4=0x0	0x03fc007f 0x0	measured:GA106,580.159.04,2026-08-20	crates/kf-abi/src/cudartinit.rs (nvdiff, bare metal, bench 48097794)
+cudart.0x20809001	AD103	575	8	0x0=0x0,0x4=0x0	0x03fc007f 0x0	measured:AD103,575.51.03,2026-10-13	traces/real_hw_20261013/probe_unpriv.txt (zero request, unprivileged)
+cudart.0x20809001	AD104	595	8	0x0=0x0,0x4=0x0	0x03fc007f 0x0	measured:AD104,595.91.07,2026-10-14	traces/constants_night_20261014/host_cudart_probe_595.txt (cudart 13.3 request, unprivileged)
+cudart.0x20809064	GA106	580	520	0x0=0x0,0x4=0x2,0x8=0x1,0x18=0x4	0x0 0x2 0x1 0x1 0x1 0x64 0x4 0x10 0x1 0x64	measured:GA106,580.159.04,2026-08-20	crates/kf-abi/src/cudartinit.rs (reply measured; the request words are the AD104 measurement's, inputs inferred equal on GA106)
+cudart.0x20809064	AD104	595	520	0x0=0x0,0x4=0x2,0x8=0x1,0x18=0x4	0x0 0x2 0x1 0x1 0x1 0x64 0x4 0x10 0x1 0x64	measured:AD104,595.91.07,2026-10-14	traces/constants_night_20261014/host_cudart_probe_595.txt (cudart 13.3 request and reply, unprivileged)
+cudart.0x2080a001	GA106	580	16	0x0=0x0,0x4=0x0,0x8=0x0,0xc=0x0	0x1 0x5 0x2 0x11	measured:GA106,580.159.04,2026-08-20	crates/kf-abi/src/cudartinit.rs (host driven into the fallback branch; guest request byte-identical)
+cudart.0x20802209	*	*	4	-	0x5	rule:ogkm-595.84 src/nvidia/src/kernel/gpu/rc/kernel_rc_watchdog_ctrl.c:30-60 reports RM software state (watchdog INITIALIZED 0x4 | DISABLED 0x1), not a die fact; GA106 580.159.04 bare metal answered 0x5 (cudartinit.rs)	crates/kf-abi/src/cudartinit.rs
