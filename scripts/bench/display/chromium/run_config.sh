@@ -8,5 +8,5 @@ mkdir -p ~/out/$CFG_NAME
 [ -n "${CFG_ENV:-}" ] && export $CFG_ENV
 echo "RUN kind=$CFG_KIND name=$CFG_NAME min=$CFG_MIN flags=[$CFG_FLAGS] hash=[${CFG_HASH:-}] env=[${CFG_ENV:-}] extra=[${CFG_EXTRA:-}]"
 python3 ~/kf/cdp_load.py --kind "$CFG_KIND" --name "$CFG_NAME" --minutes "${CFG_MIN:-11}" --outdir ~/out/$CFG_NAME \
-    --flags "${CFG_FLAGS:-}" --hash "${CFG_HASH:-}" ${CFG_EXTRA:-}
+    --flags "${CFG_FLAGS:-}" ${CFG_HASH:+--hash "$CFG_HASH"} ${CFG_EXTRA:-}
 echo "CDP_LOAD_RC=$?"
