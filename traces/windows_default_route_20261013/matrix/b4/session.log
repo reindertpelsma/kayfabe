@@ -1,0 +1,38 @@
+2026-10-13T10:24:55Z START run_dir=/var/lib/kf-windows-20261005/claude-default-matrix-ec45aad99/b4 vm=broker kf3_rev=ec45aad9 apps=8
+2026-10-13T10:24:55Z MATRIX_START apps=8 (resume skips 0) per_guest=8 max_tdr=99 tier<=3
+2026-10-13T10:24:58Z pre-guest hook rc=0 :00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=identity 2026-10-13T12:24:58+02:00
+2026-10-13T10:24:59Z broker run 1740 rc=0 ['  └────────────────────────────────────────────────────────────────────────────────────────────┘']
+2026-10-13T10:24:59Z [g1] launched; waiting for the guest agent (<= 900s)
+2026-10-13T10:25:16Z [g1] agent answered after 20s
+2026-10-13T10:25:16Z [g1] password set for vast rc=0
+2026-10-13T10:26:06Z [g1] verified sign-in attempt=1 rc=0
+2026-10-13T10:26:08Z [g1] interactive session: VASTWIN\vast
+2026-10-13T10:26:10Z [g1] pushed 26 guest files
+2026-10-13T10:26:10Z [g1] app disk attached (usb-storage)
+2026-10-13T10:26:17Z [g1] setup ok: cd=D: nvidia_adapters=1 NVIDIA GeForce RTX 4070, 580.88, 4096 MiB
+2026-10-13T10:26:20Z [g1] override tool kf_cuda_control.exe sha256=3906f520c10e272215d9d7d79a90ce9a2042581923a4717db90be312ab3a67c8
+2026-10-13T10:26:23Z [g1] override tool kf_dxprobe.exe sha256=3c6ededa77430a18a13321eb72fdca7f60282f8d12ddc147a7e7df1284832c5f
+2026-10-13T10:26:37Z [g1] staged vc_redist (installer, 12s)
+2026-10-13T10:26:41Z [g1] READY boot=2026-10-13T10:25:05.5000000Z user=VASTWIN\vast smi_ok=True
+2026-10-13T10:26:43Z [g1] staged furmark2 (unzip, 0s)
+2026-10-13T10:27:23Z [g1] furmark_knot_gl: PASS
+2026-10-13T10:28:01Z [g1] furmark_vk_bench: PASS
+2026-10-13T10:28:17Z [g1] furmark_vkinfo: PASS
+2026-10-13T10:28:18Z [g1] staged python_embed (python_embed, 0s)
+2026-10-13T10:29:10Z [g1] staged pywheels (wheels, 51s)
+2026-10-13T10:30:41Z [g1] fwt_t: PASS
+2026-10-13T10:31:12Z [g1] glgears_wgl: PASS
+2026-10-13T10:31:13Z [g1] staged gputest (unzip, 0s)
+2026-10-13T10:31:44Z [g1] gputest_fur: PASS
+2026-10-13T10:32:16Z [g1] gputest_gi: PASS
+2026-10-13T10:32:46Z [g1] gputest_pixmark_piano: PASS
+2026-10-13T10:33:05Z post-guest hook rc=0 02:00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-13T12:33:05+02:00
+2026-10-13T10:33:05Z [g1] stopped (clean)
+2026-10-13T10:33:05Z MATRIX_DONE batched: 8 pass / 8
+2026-10-13T10:33:05Z EXIT rc=0

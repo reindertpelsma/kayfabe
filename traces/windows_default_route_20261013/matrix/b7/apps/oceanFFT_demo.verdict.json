@@ -1,0 +1,14 @@
+{
+ "verdict": "PASS",
+ "rc": 0,
+ "secs": 33,
+ "quiet": 1,
+ "note": "",
+ "proof": "cuda-oceanfft-readback",
+ "tdr": 0,
+ "wer": 0,
+ "rebooted": false,
+ "gsp_cycles": 0,
+ "restart": "",
+ "guest": "g1"
+}

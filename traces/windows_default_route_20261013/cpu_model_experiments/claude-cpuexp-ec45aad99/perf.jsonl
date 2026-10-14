@@ -1,0 +1,2 @@
+{"label": "expE1_enl_vk", "run": 2400, "app": "gravitymark_vk", "frames": 17942, "secs": 167.0, "avg_fps": 107.4, "med_ms": 9.01, "p99_ms": 13.09}
+{"label": "expE2_enl_d3d12_cupy", "run": 2410, "app": "gravitymark_d3d12", "frames": 15022, "secs": 167.0, "avg_fps": 89.9, "med_ms": 2.24, "p99_ms": 29.77}

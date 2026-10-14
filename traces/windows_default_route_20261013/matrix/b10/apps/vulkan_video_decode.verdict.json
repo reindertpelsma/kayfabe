@@ -1,0 +1,14 @@
+{
+ "verdict": "PASS",
+ "rc": 0,
+ "secs": 114,
+ "quiet": 1,
+ "note": "",
+ "proof": "pdh:videodecode",
+ "tdr": 3,
+ "wer": 0,
+ "rebooted": false,
+ "gsp_cycles": 1,
+ "restart": "",
+ "guest": "g1"
+}

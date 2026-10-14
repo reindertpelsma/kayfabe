@@ -1,0 +1,47 @@
+kf3: device reset #1 COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: 0)
+kf3: device reset #1 complete before the vCPUs resume (the main loop waited 0 us)
+kf3: device reset #2: vCPUs out (gate closed); 0 queued register write(s) dropped; 2 Translated pump(s) stopped; GSP Running -> Cold (E11, 0 held repl(ies) dropped, never posted); chain rebuilt; os-event arms, 0 deferred-API entr(ies), interrupt tree cleared
+kf3: act device reset: free every guest client: device reset epoch 2 round 0: freeing 2 guest client(s) [c1e00006, c1e00007] (15 us, off the GSP lock)
+kf3: act device reset: barrier: device reset epoch 2: channel plane EMPTY after 1 round(s) — twins=0 translated=0 relays=0 user_rings=0 groups=0 debuggers=0 caps=0 tokens=2 db_regs=0 (1031 us, off the GSP lock)
+kf3: mem t=13.487s device reset #2: 0 statement(s) and 0 split(s) of the old life dropped; device reset: memory plane — invalidate idle, PRAMIN scratch, 4 VA space(s) retired, 0 KEPT, mirrors left 0; roots and boot framebuffer zeroed; BAR1: 1 placement(s) removed, 0 kept, 0 doorbell view(s) remove
+kf3: device reset #2: tokens swept, register shadow restored and republished, 0 stale interrupt(s) drained
+kf3: device reset #2 COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: 0)
+kf3: device reset #2 complete before the vCPUs resume (the main loop waited 1134773 us)
+kf3: device reset #3 COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: 0)
+kf3: device reset #3 complete before the vCPUs resume (the main loop waited 0 us)
+kf3: device reset #4: vCPUs out (gate closed); 0 queued register write(s) dropped; 2 Translated pump(s) stopped; GSP Running -> Cold (E11, 0 held repl(ies) dropped, never posted); chain rebuilt; os-event arms, 0 deferred-API entr(ies), interrupt tree cleared
+kf3: act device reset: free every guest client: device reset epoch 4 round 0: freeing 3 guest client(s) [c1d0000b, c1e00006, c1e00007] (28 us, off the GSP lock)
+kf3: act device reset: barrier: device reset epoch 4: channel plane EMPTY after 1 round(s) — twins=0 translated=0 relays=0 user_rings=0 groups=0 debuggers=0 caps=0 tokens=3 db_regs=0 (536 us, off the GSP lock)
+kf3: mem t=29.198s device reset #4: 0 statement(s) and 0 split(s) of the old life dropped; device reset: memory plane — invalidate idle, PRAMIN scratch, 4 VA space(s) retired, 0 KEPT, mirrors left 0; roots and boot framebuffer zeroed; BAR1: 2 placement(s) removed, 0 kept, 0 doorbell view(s) remove
+kf3: device reset #4: tokens swept, register shadow restored and republished, 0 stale interrupt(s) drained
+kf3: device reset #4 COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: 0)
+kf3: device reset #4 complete before the vCPUs resume (the main loop waited 1190877 us)
+kf3: device reset #5 COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: 0)
+kf3: device reset #5 complete before the vCPUs resume (the main loop waited 0 us)
+kf3: device reset #6: vCPUs out (gate closed); 0 queued register write(s) dropped; 2 Translated pump(s) stopped; GSP Running -> Cold (E11, 0 held repl(ies) dropped, never posted); chain rebuilt; os-event arms, 0 deferred-API entr(ies), interrupt tree cleared
+kf3: act device reset: free every guest client: device reset epoch 6 round 0: freeing 3 guest client(s) [c1d0000b, c1e00006, c1e00007] (13 us, off the GSP lock)
+kf3: act device reset: barrier: device reset epoch 6: channel plane EMPTY after 1 round(s) — twins=0 translated=0 relays=0 user_rings=0 groups=0 debuggers=0 caps=0 tokens=3 db_regs=0 (431 us, off the GSP lock)
+kf3: mem t=47.370s device reset #6: 0 statement(s) and 0 split(s) of the old life dropped; device reset: memory plane — invalidate idle, PRAMIN scratch, 4 VA space(s) retired, 0 KEPT, mirrors left 0; roots and boot framebuffer zeroed; BAR1: 2 placement(s) removed, 0 kept, 0 doorbell view(s) remove
+kf3: device reset #6: tokens swept, register shadow restored and republished, 0 stale interrupt(s) drained
+kf3: device reset #6 COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: 0)
+kf3: device reset #6 complete before the vCPUs resume (the main loop waited 649218 us)
+kf3: device reset #7 COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: 0)
+kf3: device reset #7 complete before the vCPUs resume (the main loop waited 0 us)
+kf3: device reset #8: vCPUs out (gate closed); 0 queued register write(s) dropped; 2 Translated pump(s) stopped; GSP Running -> Cold (E11, 0 held repl(ies) dropped, never posted); chain rebuilt; os-event arms, 0 deferred-API entr(ies), interrupt tree cleared
+kf3: act device reset: free every guest client: device reset epoch 8 round 0: freeing 3 guest client(s) [c1d0000b, c1e00006, c1e00007] (19 us, off the GSP lock)
+kf3: act device reset: barrier: device reset epoch 8: channel plane EMPTY after 1 round(s) — twins=0 translated=0 relays=0 user_rings=0 groups=0 debuggers=0 caps=0 tokens=3 db_regs=0 (467 us, off the GSP lock)
+kf3: mem t=67.614s device reset #8: 0 statement(s) and 0 split(s) of the old life dropped; device reset: memory plane — invalidate idle, PRAMIN scratch, 4 VA space(s) retired, 0 KEPT, mirrors left 0; roots and boot framebuffer zeroed; BAR1: 2 placement(s) removed, 0 kept, 0 doorbell view(s) remove
+kf3: device reset #8: tokens swept, register shadow restored and republished, 0 stale interrupt(s) drained
+kf3: device reset #8 COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: 0)
+kf3: device reset #8 complete before the vCPUs resume (the main loop waited 221910 us)
+kf3: device reset #9 COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: 0)
+kf3: device reset #9 complete before the vCPUs resume (the main loop waited 0 us)
+kf3: device reset #10: vCPUs out (gate closed); 0 queued register write(s) dropped; 2 Translated pump(s) stopped; GSP Running -> Cold (E11, 0 held repl(ies) dropped, never posted); chain rebuilt; os-event arms, 0 deferred-API entr(ies), interrupt tree cleared
+kf3: act device reset: free every guest client: device reset epoch 10 round 0: freeing 3 guest client(s) [c1d0000b, c1e00006, c1e00007] (16 us, off the GSP lock)
+kf3: act device reset: barrier: device reset epoch 10: channel plane EMPTY after 1 round(s) — twins=0 translated=0 relays=0 user_rings=0 groups=0 debuggers=0 caps=0 tokens=3 db_regs=0 (453 us, off the GSP lock)
+kf3: mem t=89.667s device reset #10: 0 statement(s) and 0 split(s) of the old life dropped; device reset: memory plane — invalidate idle, PRAMIN scratch, 4 VA space(s) retired, 0 KEPT, mirrors left 0; roots and boot framebuffer zeroed; BAR1: 2 placement(s) removed, 0 kept, 0 doorbell view(s) remov
+kf3: device reset #10: tokens swept, register shadow restored and republished, 0 stale interrupt(s) drained
+kf3: device reset #10 COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: 0)
+kf3: device reset #10 complete before the vCPUs resume (the main loop waited 34243 us)
+kf3: device reset #11 COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: 0)
+kf3: device reset #11 complete before the vCPUs resume (the main loop waited 0 us)

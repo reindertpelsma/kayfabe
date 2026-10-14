@@ -1,0 +1,92 @@
+kf3: device reset #1 COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: 0)
+kf3: device reset #1 complete before the vCPUs resume (the main loop waited 0 us)
+kf3: GSP phase Cold -> ProtectedRegionUp
+kf3: GSP phase ProtectedRegionUp -> Booted
+kf3: GSP phase Booted -> Running
+kf3: mem t=34.110s the guest wrote NV_PBUS_BAR1_BLOCK = 0x0 (MODE PHYSICAL) at GSP phase Running
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=0: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+kf3: GSP phase Running -> Suspending
+kf3: display: +34115 ms the guest's display life ENDED (its RM unloaded): 0 model channel(s), 0 queued completion(s) dropped (never written) — the boot layer is shown again
+kf3: GSP phase Suspending -> Halted
+kf3: GSP phase Halted -> ProtectedRegionUp
+kf3: GSP phase ProtectedRegionUp -> Booted
+kf3: GSP phase Booted -> Running
+kf3: device reset #2: vCPUs out (gate closed); 0 queued register write(s) dropped; 13 Translated pump(s) stopped; GSP Running -> Cold (E11, 0 held repl(ies) dropped, never posted); chain rebuilt; os-event arms, 0 deferred-API entr(ies), interrupt tree cleared
+kf3: display: +60946 ms the guest's display life ENDED (device reset): 21 model channel(s), 0 queued completion(s) dropped (never written) — the boot layer is shown again
+kf3: act device reset: free every guest client: device reset epoch 2 round 0: freeing 14 guest client(s) [c1d00071, c1d00073, c1d00074, c1d00076, c1d00077, c1d00078, c1d00079, c1d0007a, c1d0007b, c1d0007c, c1d0007d, c1d00081, c1d00083, c1e00068] (29 us, off the GSP lock)
+kf3: act device reset: barrier: device reset epoch 2: channel plane EMPTY after 1 round(s) — twins=0 translated=0 relays=0 user_rings=0 groups=0 debuggers=0 caps=0 tokens=50 db_regs=0 (857 us, off the GSP lock)
+kf3: mem t=61.043s device reset #2: 0 statement(s) and 0 split(s) of the old life dropped; device reset: memory plane — invalidate idle, PRAMIN scratch, 12 VA space(s) retired, 0 KEPT, mirrors left 0; roots and boot framebuffer zeroed; BAR1: 57 placement(s) removed, 0 kept, 0 doorbell view(s) remo
+kf3: device reset #2: tokens swept, register shadow restored and republished, 0 stale interrupt(s) drained
+kf3: device reset #2 COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: 0)
+kf3: device reset #2 complete before the vCPUs resume (the main loop waited 30324 us)
+kf3: GSP phase Cold -> ProtectedRegionUp
+kf3: GSP phase ProtectedRegionUp -> Booted
+kf3: GSP phase Booted -> Running
+kf3: device reset #3: vCPUs out (gate closed); 0 queued register write(s) dropped; 13 Translated pump(s) stopped; GSP Running -> Cold (E11, 0 held repl(ies) dropped, never posted); chain rebuilt; os-event arms, 0 deferred-API entr(ies), interrupt tree cleared
+kf3: display: +137280 ms the guest's display life ENDED (device reset): 21 model channel(s), 0 queued completion(s) dropped (never written) — the boot layer is shown again
+kf3: act device reset: free every guest client: device reset epoch 3 round 0: freeing 32 guest client(s) [c1d00013, c1d00015, c1d00016, c1d00018, c1d00019, c1d0001a, c1d0001b, c1d0001c, c1d0001d, c1d00020, c1d00023, c1d00024, c1d00027, c1d0002a, c1d0002b, c1d0002f, c1d00030, c1d00031, c1d00033, c1d0
+kf3: act device reset: barrier: device reset epoch 3: channel plane EMPTY after 1 round(s) — twins=0 translated=0 relays=0 user_rings=0 groups=0 debuggers=0 caps=0 tokens=35 db_regs=0 (433 us, off the GSP lock)
+kf3: mem t=137.525s device reset #3: 0 statement(s) and 0 split(s) of the old life dropped; device reset: memory plane — invalidate idle, PRAMIN scratch, 10 VA space(s) retired, 0 KEPT, mirrors left 0; roots and boot framebuffer zeroed; BAR1: 57 placement(s) removed, 0 kept, 0 doorbell view(s) rem
+kf3: device reset #3: tokens swept, register shadow restored and republished, 0 stale interrupt(s) drained
+kf3: device reset #3 COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: 0)
+kf3: device reset #3 complete before the vCPUs resume (the main loop waited 205606 us)
+kf3: GSP phase Cold -> ProtectedRegionUp
+kf3: GSP phase ProtectedRegionUp -> Booted
+kf3: GSP phase Booted -> Running
+kf3: device reset #4: vCPUs out (gate closed); 0 queued register write(s) dropped; 13 Translated pump(s) stopped; GSP Running -> Cold (E11, 0 held repl(ies) dropped, never posted); chain rebuilt; os-event arms, 0 deferred-API entr(ies), interrupt tree cleared
+kf3: display: +213960 ms the guest's display life ENDED (device reset): 21 model channel(s), 0 queued completion(s) dropped (never written) — the boot layer is shown again
+kf3: act device reset: free every guest client: device reset epoch 4 round 0: freeing 32 guest client(s) [c1d00013, c1d00015, c1d00016, c1d00018, c1d00019, c1d0001a, c1d0001b, c1d0001c, c1d0001d, c1d00020, c1d00023, c1d00024, c1d00027, c1d0002a, c1d0002e, c1d0002f, c1d00030, c1d00031, c1d00033, c1d0
+kf3: act device reset: barrier: device reset epoch 4: channel plane EMPTY after 1 round(s) — twins=0 translated=0 relays=0 user_rings=0 groups=0 debuggers=0 caps=0 tokens=35 db_regs=0 (456 us, off the GSP lock)
+kf3: mem t=214.212s device reset #4: 0 statement(s) and 0 split(s) of the old life dropped; device reset: memory plane — invalidate idle, PRAMIN scratch, 10 VA space(s) retired, 0 KEPT, mirrors left 0; roots and boot framebuffer zeroed; BAR1: 57 placement(s) removed, 0 kept, 0 doorbell view(s) rem
+kf3: device reset #4: tokens swept, register shadow restored and republished, 0 stale interrupt(s) drained
+kf3: device reset #4 COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: 0)
+kf3: device reset #4 complete before the vCPUs resume (the main loop waited 203259 us)
+kf3: GSP phase Cold -> ProtectedRegionUp
+kf3: GSP phase ProtectedRegionUp -> Booted
+kf3: GSP phase Booted -> Running
+kf3: mem t=247.016s the guest wrote NV_PBUS_BAR1_BLOCK = 0x0 (MODE PHYSICAL) at GSP phase Running
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=0: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+kf3: GSP phase Running -> Suspending
+kf3: display: +247020 ms the guest's display life ENDED (its RM unloaded): 0 model channel(s), 0 queued completion(s) dropped (never written) — the boot layer is shown again
+kf3: GSP phase Suspending -> Halted
+kf3: GSP phase Halted -> ProtectedRegionUp
+kf3: GSP phase ProtectedRegionUp -> Booted
+kf3: GSP phase Booted -> Running
+kf3: mem t=272.284s the guest wrote NV_PBUS_BAR1_BLOCK = 0x0 (MODE PHYSICAL) at GSP phase Running
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=0: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+kf3: GSP phase Running -> Suspending
+kf3: display: +272294 ms the guest's display life ENDED (its RM unloaded): 0 model channel(s), 0 queued completion(s) dropped (never written) — the boot layer is shown again
+kf3: GSP phase Suspending -> Halted
+kf3: GSP phase Halted -> ProtectedRegionUp
+kf3: GSP phase ProtectedRegionUp -> Booted
+kf3: GSP phase Booted -> Running
+kf3: mem t=298.437s the guest wrote NV_PBUS_BAR1_BLOCK = 0x0 (MODE PHYSICAL) at GSP phase Running
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=0: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+kf3: GSP phase Running -> Suspending
+kf3: display: +298441 ms the guest's display life ENDED (its RM unloaded): 0 model channel(s), 0 queued completion(s) dropped (never written) — the boot layer is shown again
+kf3: GSP phase Suspending -> Halted
+kf3: GSP phase Halted -> ProtectedRegionUp
+kf3: GSP phase ProtectedRegionUp -> Booted
+kf3: GSP phase Booted -> Running
+kf3: mem t=329.476s the guest wrote NV_PBUS_BAR1_BLOCK = 0x0 (MODE PHYSICAL) at GSP phase Running
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=0: bInPMTransition=false bGc6Entering=false newLevel=64 — the guest's RM gives BAR1 up
+kf3: display: +329473 ms the guest's display life ENDED (its RM unloaded): 21 model channel(s), 0 queued completion(s) dropped (never written) — the boot layer is shown again
+kf3: GSP fn 47: the guest RM unloaded with 19 client(s) still holding host objects [c1d00013, c1d00015, c1d00016, c1d00018, c1d00019, c1d0001a, c1d0001b, c1d0001c, c1d0001d, c1d00020, c1d00023, c1d00024, c1d00088, c1d0008e, c1d00090, c1d00091, c1d00092, c1d00093, c1d00095] — freed (the twins are d
+kf3: GSP phase Running -> Suspending
+kf3: GSP phase Suspending -> Halted
+kf3: device reset #5: vCPUs out (gate closed); 0 queued register write(s) dropped; 0 Translated pump(s) stopped; GSP Halted -> Cold (E11, 0 held repl(ies) dropped, never posted); chain rebuilt; os-event arms, 0 deferred-API entr(ies), interrupt tree cleared
+kf3: display: +329481 ms the guest's display life ENDED (device reset): 0 model channel(s), 0 queued completion(s) dropped (never written) — the boot layer is shown again
+kf3: act device reset: barrier: device reset epoch 5: channel plane EMPTY after 1 round(s) — twins=0 translated=0 relays=0 user_rings=0 groups=0 debuggers=0 caps=0 tokens=26 db_regs=0 (460 us, off the GSP lock)
+kf3: mem t=329.606s device reset #5: 0 statement(s) and 0 split(s) of the old life dropped; device reset: memory plane — invalidate idle, PRAMIN scratch, 6 VA space(s) retired, 0 KEPT, mirrors left 0; roots and boot framebuffer zeroed; BAR1: 56 placement(s) removed, 0 kept, 0 doorbell view(s) remo
+kf3: device reset #5: tokens swept, register shadow restored and republished, 0 stale interrupt(s) drained
+kf3: device reset #5 COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: 0)
+kf3: device reset #5 complete before the vCPUs resume (the main loop waited 93965 us)
+kf3: GSP phase Cold -> ProtectedRegionUp
+kf3: GSP phase ProtectedRegionUp -> Booted
+kf3: GSP phase Booted -> Running
+kf3: mem t=733.229s the guest wrote NV_PBUS_BAR1_BLOCK = 0x0 (MODE PHYSICAL) at GSP phase Running
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=0: bInPMTransition=false bGc6Entering=false newLevel=64 — the guest's RM gives BAR1 up
+kf3: display: +733226 ms the guest's display life ENDED (its RM unloaded): 21 model channel(s), 0 queued completion(s) dropped (never written) — the boot layer is shown again
+kf3: GSP fn 47: the guest RM unloaded with 21 client(s) still holding host objects [c1d00013, c1d00015, c1d00016, c1d00018, c1d00019, c1d0001a, c1d0001b, c1d0001c, c1d0001d, c1d00020, c1d00023, c1d00024, c1d00027, c1d0002a, c1d0002f, c1d00030, c1d00031, c1d00032, c1d00035, c1d00036, c1d00037] — fr
+kf3: GSP phase Running -> Suspending
+kf3: GSP phase Suspending -> Halted
