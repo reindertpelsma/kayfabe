@@ -9,7 +9,7 @@ canvas,video{width:800px;height:450px;display:block}
 @keyframes mv{from{transform:translate(0,0) rotate(0) scale(1);opacity:.4}to{transform:translate(var(--dx),var(--dy)) rotate(360deg) scale(1.6);opacity:1}}
 #css .blur{position:absolute;inset:60px;backdrop-filter:blur(10px) saturate(1.5);background:rgba(255,255,255,.08);animation:pulse 4s linear infinite}
 @keyframes pulse{50%{inset:100px 200px}}
-#scr{width:800px;height:450px;overflow:auto}
+#scr{width:400px;height:450px;overflow:auto}
 #scr .card{height:90px;margin:6px;padding:8px;border-radius:10px;background:linear-gradient(90deg,#235,#456);box-shadow:0 2px 8px #000;display:flex;gap:8px}
 #scr img{width:70px;height:70px;border-radius:6px}
 #st{position:fixed;right:4px;bottom:4px;background:#000a;padding:2px 6px;z-index:9}
@@ -99,7 +99,7 @@ function startScroll(){
  const h=document.createElement('div');h.id='scr';const cv=document.createElement('canvas');cv.width=cv.height=70;const cx=cv.getContext('2d');
  const imgs=[];for(let k=0;k<20;k++){cx.fillStyle=`hsl(${k*18},70%,50%)`;cx.fillRect(0,0,70,70);cx.fillStyle='#fff';cx.fillText(k,30,40);imgs.push(cv.toDataURL())}
  for(let i=0;i<3000;i++){const c=document.createElement('div');c.className='card';c.innerHTML=`<img src="${imgs[i%20]}"><div>Card ${i}<br>lorem ipsum dolor sit amet ${i*7919%1000}</div>`;h.appendChild(c)}
- document.getElementById('css').appendChild(h);h.style.cssText='position:absolute;left:0;top:0;opacity:.9';
+ document.getElementById('css').appendChild(h);h.style.cssText='position:absolute;left:400px;top:0';
  const fc=fpsCounter('scr');let dir=1;(function f(){h.scrollTop+=dir*18;if(h.scrollTop>=h.scrollHeight-460)dir=-1;if(h.scrollTop<=0)dir=1;fc();requestAnimationFrame(f)})();
 }
 // ---- video: h264 / vp9 / av1 looped, local file

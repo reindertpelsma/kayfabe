@@ -26,7 +26,7 @@ ap.add_argument('--flags', default='')
 ap.add_argument('--no-webgpu', action='store_true')
 ap.add_argument('--skip-fullscreen', action='store_true')
 ap.add_argument('--port', type=int, default=9222)
-ap.add_argument('--hash', default='', help='extra mix.html hash parameters, e.g. glN=1500')
+ap.add_argument('--hash', default='scr=1', help='extra mix.html hash parameters, e.g. glN=1500')
 a = ap.parse_args()
 os.makedirs(a.outdir, exist_ok=True)
 KF = os.path.expanduser('~/kf')
@@ -56,7 +56,7 @@ def dmesg_counts():
 
 
 def gpu_pids():
-    return sorted(int(p) for p in sh('pgrep -f "type=gpu-process"').split())
+    return sorted(int(p) for p in sh('pgrep -f "[t]ype=gpu-process"').split())
 
 
 # ---------------- launch
@@ -173,6 +173,8 @@ if mix_id is None:
 mixc = tab_ws(mix_id)
 mixc.call('Page.enable')
 mixc.call('Runtime.enable')
+mixc.call('Media.enable')
+seen_dec = set()
 mixc.call('Page.navigate', {'url': mixurl})
 ev(f'LOAD mix.html#{a.hash}')
 time.sleep(5)
@@ -264,6 +266,13 @@ def sample():
     s['gpu_pids'] = gpu_pids()
     s['dmesg'] = dmesg_counts()
     for m in drain_events(browser) + drain_events(mixc):
+        if m.get('method') == 'Media.playerPropertiesChanged':
+            for pr in m['params'].get('properties', []):
+                if pr.get('name') in ('kVideoDecoderName', 'kIsPlatformVideoDecoder', 'kVideoCodec'):
+                    key = (pr['name'], pr.get('value'))
+                    if key not in seen_dec:
+                        seen_dec.add(key)
+                        ev(f'MEDIA {pr["name"]}={pr.get("value")}')
         if m.get('method') in ('Inspector.targetCrashed', 'Target.targetCrashed'):
             crashes.append(m)
             ev(f'TARGET_CRASHED {json.dumps(m)[:200]}')
@@ -306,7 +315,7 @@ except Exception as e:
 fin = dmesg_counts()
 ev(f'DMESG_FINAL {fin} delta_xid={fin["xid"]-base_dm["xid"]} delta_nvrm={fin["nvrm_lines"]-base_dm["nvrm_lines"]}')
 ev(f'TARGET_CRASHES {len(crashes)} GPU_PIDS_FINAL {gpu_pids()}')
-for p in sh('pgrep -af "gpu-recent-crash-count"').splitlines()[:2]:
+for p in sh('pgrep -af "[g]pu-recent-crash-count"').splitlines()[:2]:
     ev('CMDLINE ' + p[:400])
 try:
     os.killpg(os.getpgid(proc.pid), signal.SIGTERM)

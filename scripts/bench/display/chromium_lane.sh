@@ -36,6 +36,9 @@ env PATH="$WRAP:$PATH" KF_INTERACTIVE_DIR="$ROOT" KF_RUN_DIR="$ROOT/run" KF_IMG=
     KF3_REV="$REV" KF_LOCK="$ROOT/private.lock" KF_RAM_MB=${KF_RAM_MB:-6144} KF_FB_MB=${KF_FB_MB:-4096} \
     KF_SMP=${KF_SMP:-6} bash "$HERE/interactive.sh" > "$ROOT/launcher.log" 2>&1 < /dev/null &
 launcher=$!
+# timestamped copy of the interesting kf3 log lines (the log itself has no wall times)
+setsid bash -c "tail -n0 -F '$ROOT/run/qemu.log' 2>/dev/null | grep -a --line-buffered -E 'STALL Window|GSP phase|REFUSED|USER_RING|BLACK:|Exception|device reset|S3 ' | while IFS= read -r l; do printf '%s %s\\n' \"\$(date +%T.%N | cut -c1-12)\" \"\${l:0:300}\"; done > '$ROOT/kf3-events.txt'" > /dev/null 2>&1 < /dev/null &
+evpid=$!
 G=(ssh -i /workspace/bench/guest_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
    -o LogLevel=ERROR -o ConnectTimeout=5 -o ServerAliveInterval=15 -o ServerAliveCountMax=8 ubuntu@192.168.77.2)
 Q="$ROOT/run/qemu.log"
@@ -47,6 +50,7 @@ grade_host() {
 }
 finish() {
     rc=$?
+    kill -- -"$evpid" 2>/dev/null
     grade_host | tee "$ROOT/host-grade.txt"
     env PATH="$WRAP:$PATH" KF_INTERACTIVE_DIR="$ROOT" bash "$HERE/interactive.sh" stop > "$ROOT/stop.log" 2>&1 < /dev/null
     for _ in $(seq 40); do kill -0 "$launcher" 2>/dev/null || break; sleep 1; done
