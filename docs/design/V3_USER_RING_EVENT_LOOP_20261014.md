@@ -548,7 +548,7 @@ guards the owner asked to keep. [inferred] the next lever is the fixed cost insi
 `PIECES`-sized span vector per resolution, a block scan per piece), not a guard: a profile on the Windows build will say.
 
 **Validation of the batching (Linux guest, relay forced by `KF3_DEBUG=1 KF3_DEBUG_FORCE_MIGRATABLE=1`, kf3 `edcaaca6` unless noted; the card was shared with
-the owner VM 2990 and another agent\x27s VM, so the framebuffer store was 1024 MiB instead of 4096 and absolute rates are noisy):**
+the owner VM 2990 and another agent's VM, so the framebuffer store was 1024 MiB instead of 4096 and absolute rates are noisy):**
 
 | check | result [measured] |
 |---|---|
@@ -557,7 +557,7 @@ the owner VM 2990 and another agent\x27s VM, so the framebuffer store was 1024 M
 | desktop smoke (Cinnamon, gears) | 0 flip timeouts, 0 Xid, 59.5-60 FPS, relay on / off / old build alike; the `display: STALL` lines (9-18) appear on the old build and with the relay off too: the 1 GiB store beside two other VMs, not the relay |
 | S3 suspend/resume x3 | on 3/3, off 3/3 (`edcaaca6`) |
 | unit | kf-chan, kf-qemu, kf-rm, kf-trap, kf-harness: 1 440 passed, 0 failed (release) |
-| `v3_gates.sh` | **7/9, gate10 PASS, births 12/12 USER.** gate5 and gate6 fail (`semaphore never reached`) on bare metal with no kayfabe code in the path, and the same two fail with the previous build\x27s binaries run now (they passed 9/9 at 22:19 on an idle card): the card is busy with two other VMs. Inconclusive, not attributable to this change; to be re-run on an idle card |
+| `v3_gates.sh` | **7/9, gate10 PASS, births 12/12 USER.** gate5 and gate6 fail (`semaphore never reached`) on bare metal with no kayfabe code in the path, and the same two fail with the previous build's binaries run now (they passed 9/9 at 22:19 on an idle card): the card is busy with two other VMs. Inconclusive, not attributable to this change; to be re-run on an idle card |
 
 **Where the rest of the per-entry cost is [measured, partly misread]:** a `perf record -g` of the relay worker threads (45 k samples) was dominated by
 `turn_body` (everything inlined) and attributed 18 % to `RawVec::finish_grow`/`malloc` under a `hash_one::<&(u32,u32)>` frame; the build has no frame
