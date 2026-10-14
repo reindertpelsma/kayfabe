@@ -47,7 +47,7 @@ Hypotheses (stated before each run) and verdicts:
   the bare QEMU control (same flags, no kf3) could not be run. Next control candidates: q35 instead of i440FX (the Linux
   guest's machine), identifying the PM1_STS/timer spin (kernel stack: a crash dump of the wedged VM), RTC/`-rtc clock=host`,
   QEMU patch keeping the TSC / `RESET_TYPE_WAKEUP` CPU reset.
-- Linux sanity of `0c5fedff` (`desktop_s3.sh` x3, `desktop_smoke.sh`): see `linux-sanity.txt` if present.
+- Linux sanity of `0c5fedff` (measured, under the flock): `S3_CYCLES=3 desktop_s3.sh` 3/3 PASS (ssh, nvidia-smi, glxgears 302/301/302 frames, 0 Xid); `desktop_smoke.sh` PASS (NVIDIA renderer, ~60 FPS, 0 flip timeouts, 0 Xid, host Xid delta 0); `linux-sanity.txt`.
 - VM 2990 left running on `0c5fedff` with the production CPU flags and standby-timeout 0; guest `recoveryenabled No`
   (bcdedit) so killed boots do not enter Automatic Repair.
 
