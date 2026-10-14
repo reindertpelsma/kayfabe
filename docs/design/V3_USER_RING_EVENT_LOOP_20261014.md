@@ -130,17 +130,42 @@ turn finds `Gate::Wait` and ends in `Private` again, and when the witness is fet
 token so `GP_PUT` is re-read before reading on (the "pending" flag of the principles is the level state
 `waiting` plus the fresh `GP_PUT` read at every turn start).
 
-### 3.3 The batch marker (the completion interrupt)
+### 3.3 The marker: proof AND wake (CORRECTED 2026-10-14 by a hardware measurement)
 
-Each batch the relay publishes ends with a marker: a private segment `[NON_STALL_INTERRUPT, 0]` (the public
-C56F host method, no semaphore memory), published when the turn finds `GP_PUT == cursor` with unmarked work
-and the scan is at a packet boundary; the gate's byte witness becomes the same marker. One private slot is
-kept in reserve so a full ring can still publish its marker before waiting on credit. The marker raises the
-engine's non-stall event, which is already in the worker's epoll set; the peek of `GP_GET` is the proof, the
-interrupt only the wake. **The owner's text says "private semaphore release + non-stall trap"; a GPU-written
-semaphore needs a writable mapping in the restricted user space, which `user_ring.rs` and OWNER_RULINGS §AI
-do not authorise (read-only commands and staging only). The marker therefore carries the interrupt alone.**
-With an open packet the witness is the length-0 control entry: no byte, no interrupt, `carried = true`.
+> **[measured] `GP_GET` is not a gate proof.** `kf-syncwait-stress --families barrier` on bare metal (RTX 4070 /
+> 595.91.07): an ACQUIRE stalls entry 0; entries `[acquire segment][LENGTH-0 SYNC_WAIT][segment]` are published.
+> While the acquire is unsatisfied `GP_GET` is already 3 (all entries; with the other shape, 2 of 2), the segment
+> behind the barrier has NOT executed and `USERD.REFERENCE` is 0; when the gate opens the segment runs and
+> `REFERENCE` becomes the `SET_REFERENCE` value. `GP_GET` counts entries the PBDMA has POPPED from the GPFIFO and
+> runs ahead of processing. The gate that the previous revision (and this document's first version) built on
+> "`GP_GET` past the witness means the barrier's wait finished" was therefore unsound: through the relay with the
+> debug switch the `late` stress family failed 49 of 60 plans, the scan meeting the POISON the guest had not yet
+> replaced and refusing the channel. This is the failure `V3_USER_RING_SCAN_RACE.md` §3 set out to fix; the earlier
+> "0 stale reads in ~100 000 segments" measured Windows traffic whose bytes arrived before the relay looked.
+
+The proof is a processed method with a CPU-visible effect: the **marker**, a private 16-byte segment per ring slot,
+`[SET_REFERENCE tag|n, NON_STALL_INTERRUPT, 0]` (public C56F host methods; no semaphore memory, which would need a
+writable mapping the restricted space does not authorise, OWNER_RULINGS §AI). Processing it writes `USERD.REFERENCE`
+(in order, after every earlier method, acquires included) and raises the engine's non-stall event the worker's epoll
+already watches. `user_gate::Marks` keeps `issued`/`seen` counts; only a value carrying the tag `0x4B46` in the high
+half counts (the guest's forwarded segments may themselves execute `SET_REFERENCE` on the private channel; untagged
+values are ignored, and a guest that forges the tag only reads its own late bytes early). Where the marker goes:
+
+- **gate**: barrier (LENGTH-0 SYNC_WAIT) then marker; the gated entry is read when `Marks::seen >= target`;
+- **batch**: when a turn finds `GP_PUT == cursor` with unmarked work and the scan is at a packet boundary, a marker
+  ends the batch; the relay waits for it (`Wait::Marker`): its processing implies the pops the guest's `GP_GET`
+  write-back needs, and its interrupt is the wake. One private slot is kept in reserve so a full ring can still
+  publish its marker before waiting on credit.
+- **open packet**: a SYNC_WAIT entry reached with a method packet open across it **cannot be gated**: no witness may
+  enter an open packet (the original Xid-32 PBENTRY) and a control entry proves nothing. The hardware does not delay such a
+  segment either (`GP_ENTRY1_SYNC`: once the split packet's header is read the preceding segment counts as processed), so
+  its bytes are there when the guest publishes; the relay reads it at once and counts it (`carried_ungated`). A guest that
+  writes such an entry's bytes late is NOT protected (`design_a_sync_wait_behind_an_open_packet_cannot_protect_late_bytes`).
+  **This departs from the owner's text** ("use the length-0 control entry ... the wake comes from the spin of the `GP_GET`
+  word"): there is no honest wake for a proof that does not exist.
+
+Pops carry no event: while a marker is outstanding the worker's looks (spin, any engine event, the safety net) also ring a
+relay whose pops outran the guest's `GP_GET` so the write-back happens (`pop_writebacks`).
 
 ### 3.4 The spin
 
@@ -241,6 +266,17 @@ The Today failures are one class: **every wait other than the doorbell is a tick
 (`put_then_ring`, `batched`, `put_ahead`, `coalesced`, plain migration with a 8-entry private ring) pass without
 timers, which also says the doorbell path itself (token word, `try_park`) is right.
 
+### 5.00 The redesign after the hardware measurement (§3.3) -- model results
+
+The model's hardware gained `GP_GET` prefetch (entries popped at once) and `USERD.REFERENCE`; the first design (proof
+by `GP_GET`) then FAILED 21 tests with `STALE_READ` (commit `GP_GET runs ahead`, failing-first); after the redesign the 37
+model tests pass, including: the `GP_GET` proof as a mutant is found (`STALE_READ`), a sequential `GP_GET` would have
+made it correct, credit waits with a shallow pop window (depth 1) are event-driven. Known limitations pinned as tests:
+a SYNC_WAIT behind an open packet cannot protect late bytes; a guest whose GPFIFO is FULL behind its own gated entry
+deadlocks (the guest-visible `GP_GET` is the relay's write-back and a gated entry is relayed only after its gate, while on
+the hardware `GP_GET` passes it at once) -- it takes a full ring, 32767 entries on a 32768-entry ring, but it is a
+fidelity gap.
+
 ### 5.0 After the fix (this branch)
 
 [measured, host, `cargo test -p kf-chan --release`] `user_loop_model`: 34 tests, 34 pass (the six `today_*` tests became
@@ -302,6 +338,60 @@ keep the bounded re-read count; this document implements the re-read count.
 2. DONE (§5.0). 3. Linux validation behind `KF3_DEBUG_FORCE_MIGRATABLE=1` (debug only, refused in the production profile)
    with a guest SYNC_WAIT stress tool, the fast suite 30/30 both ways, desktop smoke, S3 cycles, gates 9/9 + gate10 (§8).
 
-## 8. Linux validation
+## 8. Linux validation (measured; kf3 `1d845d50`, host RTX 4070 / 595.91.07, fast guest = the host's kernel and driver, every Linux-guest run under `flock /tmp/claude-linux-guest.lock`, beside the owner's VM 2990 which was not touched)
 
-(filled in by the validation runs)
+**The debug switch** `KF3_DEBUG=1 KF3_DEBUG_FORCE_MIGRATABLE=1` (`kf_rm::chanlink`): every USER channel of the guest on a graphics, copy or video
+engine (not guest-kernel, not UVM-owned, not RM-internal) takes the migratable USER-ring relay, with its framebuffer USERD read and
+written through the same CPU view a Passthrough twin uses (`userrelay::StoreUserd`). Off by default; without `KF3_DEBUG=1` it is REFUSED by
+name (one line) and ignored; never for a guest that declared Windows. A kernel or UVM channel keeps its route (its physical operands need
+translation), so "all channels" means all USER channels.
+
+**The stress tool** `kf-syncwait-stress` (`crates/kf-harness`, run in the fast guest through `KF_TOOL_BIN`/`KF_TOOL=1`): own channels, own
+GPFIFO/USERD/pushbuffers (framebuffer), host-method streams only (release, reduction-add, acquire), exactly-once check per unit
+(value and `count == 1`: a drop or a replay is visible). Families: `split` (every cut of a 3-unit stream x SYNC_WAIT, 82), `random` (cuts,
+SYNC_WAIT masks, LENGTH-0 control entries first/middle/last/back to back, four doorbell modes, 150), `late` (pushbuffers POISONed until the
+CPU writes them behind a semaphore-gated SYNC_WAIT, 1-3 gates, optional control entry at the boundary, 60), `wrap` (8-entry ring lapped,
+200), `storm` (40 extra doorbells, 30), `conc` (three channels, 120), `rate`, `barrier` (the hardware measurement of §3.3).
+
+| run | switch | result |
+|---|---|---|
+| bare metal (host, uid 65534), all families | - | 642/642 plans PASS; `barrier`: GP_GET already covers all entries while the acquire stalls, REFERENCE 0 -> 7 on the gate (§3.3) |
+| fast guest, plain Passthrough (control), `final-off` | off | 642/642 PASS |
+| fast guest, relay, rev `025a34fa` (the GP_GET proof) | on | `late` 11/60: **49 channels refused** `USER_RING_SCAN Header ... raw=0xc0001234` (the scan met the POISON) |
+| fast guest, relay, rev `375b8fd7` and `1d845d50` (the REFERENCE proof) | on | **642/642 PASS**, 0 `USER_RING_REFUSED`, `backstop_found_work = 0` |
+| fast suite, 30 arms (`fastoff`, `faston`) | off / on | **30/30 and 30/30**, 0 refusals over the 30 QEMU logs (`faston`: up to 3 841 doorbells, 779 markers per arm) |
+| desktop smoke (Cinnamon/Xorg, glxinfo NVIDIA, glxgears 20 s) | off / on | both PASS: 0 guest "Flip event timeout", host Xid delta 0, guest Xid 0, 58.8-60.0 FPS; `on`: 11 user-ring births, 0 refusals (`nvassert=12` is the known startup count) |
+| `desktop_s3.sh`, `S3_CYCLES=3` | off / on | **3/3 and 3/3** |
+| `v3_gates.sh` | - | 9/9 + gate10 PASS, births 12/12 USER |
+| unit (every `kf-*` crate, release) | - | 2 958 passed; `kf-mem` `the_aggregate_extent_of_the_batches_of_a_space_is_capped` failed once under parallel load and passes alone (kf-mem untouched) |
+
+### 8.1 Before / after: the relay's drain path (`--families rate`, guest, relay forced, same hardware; the owner's Windows question)
+
+400-800 plans of 4 entries / 4 units, SYNC_WAIT on 3 of the 4 entries per plan, spin-polled completion; ring -> last unit.
+
+| | old tick loop (`77eaf7620` + only the debug switch, kf3 `4f45d551`) | event loop (`1d845d50`) | bare metal (no relay) |
+|---|---|---|---|
+| gateable SYNC_WAITs (boundary cuts) | p50 **4 000 us**, p99 4 100 us, **288 plans/s** | p50 **60 us**, p99 131 us, **13 800 - 14 500 plans/s** | p50 4 us, 110 000 plans/s |
+| SYNC_WAIT behind an open packet (the Minecraft shape) | p50 **4 050 us**, 273 plans/s | p50 **39 - 44 us**, p99 69 - 142 us, **19 400 - 20 600 plans/s** | p50 4 us, 109 000 plans/s |
+
+About 50x lower latency and 50-75x the batch rate. The old loop paid about one 1 ms tick per gate (3 gates = ~4 ms); the new one pays
+no tick: an ungated open-packet entry costs nothing extra, a gateable one waits for its marker's interrupt or the spin.
+Measured counters of the new run: SYNC_WAIT drain latency (gate authored -> marker processed) log2 buckets of microseconds
+`[.., 4-8 us: 1 968, 8-16 us: 400, 16-32: 21, ..]` (of 2 400 gates); wake sources over the run `doorbell 5 402, event 7 048, spin 3 799,
+backstop 28`; `backstop_found(work) = 0`; `event_without_progress 16`; `pop_writebacks 479`. In the 30-arm `faston` suite: `markers` up to 779,
+`backstop` 15-441 wakes per arm with `backstop_found = 0`. **For the Windows agent**: the Minecraft trace's 25 153 SYNC_WAIT-with-open-packet
+entries in 6 minutes were each a barrier + control witness waiting on the 1 ms tick; they are now read at once (`carried_ungated`); gateable
+ones wait ~10 us. Whether this moves Heaven's 13-23 FPS is a Windows measurement (hypothesis of the coordinator: unverified here); this
+table bounds the relay's share per SYNC_WAIT at <= 4 ms per 3 gates before and ~0.1 ms after.
+
+### 8.2 What was found while validating (all fixed unless stated)
+
+1. **The gate proved the wrong thing** (§3.3): `GP_GET` runs ahead of processing. Found by the stress tool through the relay (49/60 refusals), pinned by a
+   bare-metal measurement, fixed by the tagged `USERD.REFERENCE` marker. The Windows runs had not shown it because their bytes arrived before the relay looked.
+2. `SyncGate::cleared` (§5.1) and `Grace` (§5.2), as found by the tests-first step.
+3. `USER_RING_PUT_READ: Gone` at a channel's free (a refusal log line and a poison count for a retiring relay) is now a retry.
+4. **Open, by design**: a SYNC_WAIT entry behind an open packet is not gated (late bytes there are unprotected); a guest with a full GPFIFO behind its own gated entry
+   deadlocks (§5.00); the guest-visible `GP_GET` lags a draining gate by the next look (spin / any engine event / the 50 ms safety net).
+5. **Not measured**: Windows (the coordinator schedules it); the staged-trigger path (`segment_turn` rare packets, Windows migration) now waits on markers
+   too but no Linux traffic reaches it; GP_GET/REFERENCE visibility lag after an interrupt is modelled, not observed (`event_without_progress`
+   is 12-205 per run, spurious or early events, never a stalled wait: `backstop_found(work)` stayed 0).
