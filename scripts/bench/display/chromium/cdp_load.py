@@ -27,6 +27,7 @@ ap.add_argument('--no-webgpu', action='store_true')
 ap.add_argument('--skip-fullscreen', action='store_true')
 ap.add_argument('--page', default='', help='load this URL in the main tab instead of mix.html (e.g. a YouTube watch page)')
 ap.add_argument('--kill9', action='store_true', help='end by SIGKILL of the whole browser instead of SIGTERM')
+ap.add_argument('--churn', type=int, default=24, help='extra tabs/windows opened in the churn phase')
 ap.add_argument('--port', type=int, default=9222)
 ap.add_argument('--hash', default='scr=1', help='extra mix.html hash parameters, e.g. glN=1500')
 a = ap.parse_args()
@@ -250,7 +251,7 @@ def do(action):
         ev_js(mixc, "document.fullscreenElement&&document.exitFullscreen()", gesture=True)
     elif action == 'churn':
         ids = []
-        for i in range(24):
+        for i in range(a.churn):
             kind = i % 3
             if kind == 0:
                 u = f'file://{KF}/pages/mix.html#c2d=0&css=0&vid=none&glN=300'
@@ -259,8 +260,8 @@ def do(action):
             else:
                 u = f'file://{KF}/pages/mix.html#gl=0&c2d=0&css=0&vid=h264'
             ids.append(new_tab(u, window=(i % 4 == 0)))
-            time.sleep(3)
-        time.sleep(20)
+            time.sleep(3 if a.churn >= 12 else 1)
+        time.sleep(20 if a.churn >= 12 else 3)
         for i in ids:
             try:
                 close_tab(i)
