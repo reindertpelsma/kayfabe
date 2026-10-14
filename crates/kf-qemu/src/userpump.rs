@@ -1833,6 +1833,42 @@ impl Pump {
             .generation
             .checked_add(1)
             .ok_or("USER_RING_SOURCE_SEQUENCE")?;
+        if self.trace.is_some() {
+            // Measurement only: the OLD ring at the switch (our cursor, the guest's PUT/GET, the
+            // entries around our cursor), to compare with the new ring's first entries.
+            let mut word = |off: u64| {
+                let mut b = [0u8; 4];
+                r.userd
+                    .read(me, r.key, &r.allocation, off, &mut b)
+                    .ok()
+                    .map(|()| u32::from_le_bytes(b))
+            };
+            let (put, get) = (
+                word(kf_abi::submit::USERD_GP_PUT),
+                word(kf_abi::submit::USERD_GP_GET),
+            );
+            let entries = r.source.1;
+            let mut around = Vec::new();
+            if entries.is_power_of_two() && entries >= 2 {
+                for k in 0..12u32 {
+                    let idx = self
+                        .cursor
+                        .wrapping_add(entries)
+                        .wrapping_sub(4)
+                        .wrapping_add(k)
+                        & (entries - 1);
+                    let e = self
+                        .snapshot(me, r, r.source.0 + u64::from(idx) * 8, 8)
+                        .ok()
+                        .and_then(|s| s.bytes.as_slice().try_into().ok().map(u64::from_le_bytes));
+                    around.push((idx, e));
+                }
+            }
+            eprintln!(
+                "kf3: USER_RING_TRACE MIGRATING {:#x}:{:#x} old ring {:#x}x{} our_cursor={} guest put={put:?} get={get:?} entries_around_cursor={around:x?}",
+                r.key.0, r.key.1, r.source.0, entries, self.cursor
+            );
+        }
         let userd = me
             .memory_access
             .lease(u.client, u.userd_memory, u.userd_offset, 0x200)
@@ -1893,7 +1929,7 @@ impl Pump {
                 word(kf_abi::submit::USERD_GP_GET),
             );
             let mut first = Vec::new();
-            for i in 0..8u64 {
+            for i in 0..16u64 {
                 first.push(
                     self.snapshot(me, r, u.gpfifo_va + i * 8, 8)
                         .ok()
