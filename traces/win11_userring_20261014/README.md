@@ -98,7 +98,24 @@ forced-fault lane).
 
 ## 4. Windows verification
 
-Pending: the VM is the owner's (SolidWorks install) until the coordinator relays it is free.
+**Run 1** (`run1_a8424ae2_summary.txt`): VM 2990 on kf3 `a8424ae2`, production profile (no `KF3_` measurement flag),
+DMA-FQ launcher, 2026-10-14 20:09-20:32 CEST. Graceful stop of the previous VM via kfagent first.
+- Minecraft Launcher (Store app) → Play → Java 26.3 title screen → Singleplayer → existing world, 6 min in-world
+  walking (QMP keys) [measured]: **0 host Xid** (journal), 0 GSP reset, 0 `USER_RING_REFUSED`/`SCAN`, no new guest
+  nvlddmkm/dxgkrnl event, no new LiveKernelReports dump (the 81 WER 1001 `LiveKernelEvent 141` entries are the queue
+  re-reporting 2026-10-13/14 dumps: every one attaches a `WATCHDOG-*` file dated before this run).
+- **H1 not falsified, and the hazard is pervasive** [measured]: javaw's GR USER ring gated
+  **25 153** guest SYNC_WAIT entries with an OPEN packet in those 6 minutes (`USER_RING_SYNC_CARRIED SUMMARY
+  … gated_with_open_packet=25153`), the first four at world load (`IncrementOnce sub0 m0x3870 4/29`: a packet whose
+  header and 4 arguments end one segment and whose remaining 25 arguments are in the SYNC_WAIT segment — exactly
+  the manual's case). Each was a one-word stream shift under the old witness. Before the fix the same scenario failed
+  3/3 within seconds of the world loading; after it, 0 Xid in 6 min [the causal link is inferred from the mechanism
+  plus the before/after; the old binary was not re-run].
+- Edge + YouTube (Big Buck Bunny 4K60, 10:34 played to the credits, hardware decode: a user NVDEC twin with a
+  `0xC9B0` object) [measured]: 0 host Xid, 0 GSP reset, 0 `ring REFUSED`/`DEAD`, no guest nvlddmkm/dxgkrnl event.
+  H-V1 not falsified. H-V2 (kernel NVDEC channel = synchronisation only) needs the channel's RETIRED line (at VM
+  stop): pending.
+- Two `display: STALL … ready, waiting for a vblank` 1 s reports (the known D-EARLY report; recovered, 60 fps).
 
 ## 5. Files
 
