@@ -8,3 +8,8 @@ subdevice	0x2080853b	1832	4=1
 subdevice	0x2080b201	2444
 subdevice	0x2080852f	844
 subdevice	0x2080852f	776
+subdevice	0x2080852a	1716
+subdevice	0x2080a618	8236
+subdevice	0x2080a618	20000
+subdevice	0x2080852f	844	4=3
+subdevice	0x2080852f	776	4=3

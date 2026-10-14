@@ -1,0 +1,3 @@
+E
+  queue_instance 1 dir cmd messages 30 first_seq 4294967295 last_seq 4294967295 seq_gaps 29 [(4294967295, 4294967295), (4294967295, 0), (0, 0)]
+  queue_instance 1 dir status messages 30 first_seq 0 last_seq 0 seq_gaps 29 [(0, 0), (0, 0), (0, 0)]

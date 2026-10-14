@@ -271,9 +271,31 @@ pub const ROWS: &[Row] = &[
         exact: true,
         inputs: &[(4, 1)],
     },
+    // ★ Windows captures of the SAME die (GA106, RTX 3060) under six Windows drivers, 2026-10-14
+    // (`traces/constants_measure_20261014b/ga106_*`; the GSP firmware string of each is in its `cell.json`/README): the request
+    // of 852a/852e/853a/a618 is all-zero in every one and only the size moves — 852a 1716 under GSP 570.133.07 (1784 from
+    // 575.64.01), a618 8236 under 570.133.07 (8620 575..590, 8632 595.71.01, 20000 610.57.01). Rows for the sizes not above:
+    Row {
+        cmd: 0x2080_852a,
+        size: 1716,
+        exact: true,
+        inputs: &[],
+    },
+    Row {
+        cmd: 0x2080_a618,
+        size: 8236,
+        exact: true,
+        inputs: &[],
+    },
+    Row {
+        cmd: 0x2080_a618,
+        size: 20000,
+        exact: true,
+        inputs: &[],
+    },
     // ★ The 610 branch (`[measured, tier-2 kit on hosts 610.43.02 (RTX 5090 GB202) and 615.71.09 (L4 AD104),
     // traces/constants_measure_20261014b/tier2/]` the host's smallest accepted zero-request size for 0x2080852e is 1432; 0x2080853a stays 15352,
-    // 0x2080a618 is accepted at no size 4..16384 — the control is gone there). ⚠ Only the HOST side is measured: no Windows
+    // 0x2080a618 is accepted at no size 4..16384 — its 610 size is 20000, outside that scan range, see the Windows 610.88 capture above). ⚠ Only the HOST side is measured: no Windows
     // 610 capture exists, so that a 610 guest sends an all-zero request of 1432 B is [I]; if it sends anything else this row
     // simply does not match (the size and every byte are part of the question).
     Row {
