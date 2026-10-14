@@ -404,7 +404,7 @@ table bounds the relay's share per SYNC_WAIT at <= 4 ms per 3 gates before and ~
    too but no Linux traffic reaches it; GP_GET/REFERENCE visibility lag after an interrupt is modelled, not observed (`event_without_progress`
    is 12-205 per run, spurious or early events, never a stalled wait: `backstop_found(work)` stayed 0).
 
-## 9. Batching: one turn per segment is structural (second task, 2026-10-14; STATUS: tests-first, fix follows)
+## 9. Batching: one turn per segment was structural (second task, 2026-10-14; STATUS: LIVE in the code, results in 9.5)
 
 Trigger: the Windows agent's Heaven D3D11 trace (`traces/win11_userring_20261014/README.md` §4c, run `fc8ba3b8`): 2 314 629 GP segments relayed
 (about 26 000/s, about 1 900 per frame), 2 486 644 relay turns (1.07 per segment), 5 592 guest doorbells (63/s), two `kf3-worker` threads at about
@@ -513,3 +513,36 @@ nothing for a CE to copy on the common path, and a CE staging copy would not rem
 dominant (small-segment) case. The histogram that decides (always-on counters in `USER_RING_LOOP SUMMARY`): `segment_words_log2` (relayed segments by
 pushbuffer length, bucket i = 2^i..2^(i+1)-1 words), `words_total`, `put_delta_entries_log2` (entries ahead of the cursor at each PUT read),
 `entries_per_turn_log2`. On `flood` all 28 800 segments are 14 words (bucket 3). The Heaven distribution is for the Windows agent to take on this build.
+
+### 9.5 Results (edcaaca6: tests-first `7476ef69f`, fix `edcaaca67`; Linux guest, relay forced, host RTX 4070 / 595.91.07, GPU shared with two other VMs)
+
+**GPU-free [measured]:** `cargo test -p kf-chan` 143 lib + the integration tests, the model file 47 tests (the five batching tests that failed at
+24e7a297 pass; the chained, deferred-doorbell model also passes every pre-existing contract, gate, lap, migration, retire, neighbour and
+mutant test; two mutant/limitation tests needed `chain = 0` or a different scenario because batching removes the interleaving that exposed them,
+see the test comments), `cargo test -p kf-qemu --lib` 259.
+
+**What changed in the code (fewest edits; no guard, timer or queue touched):** `user_loop::{CHAIN_MAX = 16, chain_more}`; `Pump::turn` loops
+`turn_body` inside one claim while the turn published and asked for another (`again`) and needs no turn of its own (`segment`, `shadow`); the
+first iteration observes `GP_GET`/`REFERENCE` and writes the guest's `GP_GET` back, the `GP_PUT` read is cached for the claim (keyed by source
+generation), `publish` only marks the host doorbell owed and `Pump::ring_owed` rings it once on every way out of the chain (errors included).
+Counters and the stage timers are the measurement of 9.1.
+
+**`kf-syncwait-stress --families flood` back to back, old (`639acf57`, counters only) vs new (`edcaaca6`), same guest, alternating rounds**
+(segments/s; noisy: one new-build 'each' round fell to 57 k while another VM was busy):
+
+| variant | old r1 / r2 | new r1 / r2 |
+|---|---|---|
+| each (PUT + doorbell per entry) | 79 k / 108 k | 103 k / 57 k |
+| put-ahead (PUT per entry, one doorbell) | 111 k / 111 k | 154 k / 147 k |
+| end (one PUT, one doorbell) | 113 k / 111 k | 163 k / 153 k |
+
+The relay's own counters, one pair of runs (28 800 segments each): turns 32 262 -> **11 390** (1.12 -> **0.40** per segment), host doorbells 30 821 ->
+**9 361** (1.07 -> **0.33**), `GP_PUT` reads 32 262 -> 11 390, `GP_GET` write-backs 26 375 -> **7 070**, entries per turn `[1: 28 800]` ->
+`[1: 6 413, 2-3: 1 268, 4-7: 52, 8-15: 26, 16: 1 202]` (the guest's PUT was one entry ahead in 8 159 of the turns: no backlog to take; where
+a backlog existed the chain reached its bound). Markers rose 2 021 -> 8 159 (a faster relay catches up with the guest more often, and each catch-up
+ends in the batch marker the owner's rule asks for) at 0.42 us each.
+
+Per entry now [measured]: about 4.5 us in a turn (12.5 us per 2.8 entries), down from 5.8: the observation (1.2 us), PUT read (0.7), write-back and
+doorbell are amortised; what is left is the two snapshots (3.0 us), the publication (0.42) and the scan (0.09) -- the per-entry exact source
+guards the owner asked to keep. [inferred] the next lever is the fixed cost inside `userread::snapshot`/`Snapshot::admit` (two row resolutions, a
+`PIECES`-sized span vector per resolution, a block scan per piece), not a guard: a profile on the Windows build will say.
