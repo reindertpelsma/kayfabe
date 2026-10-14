@@ -207,12 +207,96 @@ pub struct Stats {
     pub markers: AtomicU64,
     /// SYNC_WAIT drain latency (gate published -> witness fetched), log2 buckets of microseconds.
     pub drain: [AtomicU64; DRAIN_BUCKETS],
+    // ---- 2026-10-14 flow counters (what one turn costs: how many turns, entries, publications, host
+    // doorbells). Always on: relaxed atomics, no clock.
+    /// Relay turns run (`Pump::turn`).
+    pub turns: AtomicU64,
+    /// Guest GP entries relayed (segments and control entries published to the private ring).
+    pub segments: AtomicU64,
+    /// Private-ring publications (`Pump::publish`: one PUT store each).
+    pub publications: AtomicU64,
+    /// Host doorbells rung for the private ring.
+    pub host_doorbells: AtomicU64,
+    /// Guest `GP_PUT` reads.
+    pub put_reads: AtomicU64,
+    /// Guest-visible `GP_GET` write-backs.
+    pub get_writebacks: AtomicU64,
+    /// Turns by the number of guest entries they relayed: bucket 0 = none, then log2 (1, 2-3, 4-7, ...).
+    pub per_turn: [AtomicU64; TURN_BUCKETS],
+    // ---- measurement only: per-stage cost, collected ONLY with `KF3_USER_RING_STAGES=1`.
+    pub stage_ns: [AtomicU64; STAGES.len()],
+    pub stage_n: [AtomicU64; STAGES.len()],
+}
+
+/// Buckets of [`Stats::per_turn`].
+pub const TURN_BUCKETS: usize = 10;
+
+/// The stages of one served relay turn, as timed by [`Stats::stage`] (measurement only).
+pub const STAGES: [&str; 12] = [
+    "serve_total",
+    "turn_total",
+    "observe",
+    "get_writeback",
+    "put_read",
+    "gp_snapshot",
+    "gate",
+    "pb_snapshot",
+    "scan",
+    "publish_total",
+    "host_doorbell",
+    "marker",
+];
+/// Index into [`STAGES`].
+pub mod stage {
+    pub const SERVE: usize = 0;
+    pub const TURN: usize = 1;
+    pub const OBSERVE: usize = 2;
+    pub const GET_WRITEBACK: usize = 3;
+    pub const PUT_READ: usize = 4;
+    pub const GP_SNAPSHOT: usize = 5;
+    pub const GATE: usize = 6;
+    pub const PB_SNAPSHOT: usize = 7;
+    pub const SCAN: usize = 8;
+    pub const PUBLISH: usize = 9;
+    pub const DOORBELL: usize = 10;
+    pub const MARKER: usize = 11;
+}
+
+/// Whether the per-stage timers run (`KF3_USER_RING_STAGES=1`, read once). Measurement only: never
+/// required, off by default.
+#[must_use]
+pub fn stages_enabled() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("KF3_USER_RING_STAGES").is_some_and(|v| v == "1"))
 }
 
 impl Stats {
     /// Bump a counter.
     pub fn bump(c: &AtomicU64) {
         c.fetch_add(1, Ordering::Relaxed);
+    }
+    /// Start a stage timer: `None` (no clock read) unless [`stages_enabled`].
+    #[must_use]
+    pub fn t0(&self) -> Option<std::time::Instant> {
+        stages_enabled().then(std::time::Instant::now)
+    }
+    /// End a stage timer started by [`Stats::t0`].
+    pub fn stage(&self, which: usize, t0: Option<std::time::Instant>) {
+        if let Some(t) = t0 {
+            let ns = u64::try_from(t.elapsed().as_nanos()).unwrap_or(u64::MAX);
+            self.stage_ns[which].fetch_add(ns, Ordering::Relaxed);
+            self.stage_n[which].fetch_add(1, Ordering::Relaxed);
+        }
+    }
+    /// One turn ended having relayed `entries` guest entries.
+    pub fn record_turn(&self, entries: u32) {
+        let i = if entries == 0 {
+            0
+        } else {
+            (u32::BITS - entries.leading_zeros()) as usize
+        };
+        self.per_turn[i.min(TURN_BUCKETS - 1)].fetch_add(1, Ordering::Relaxed);
+        self.segments.fetch_add(u64::from(entries), Ordering::Relaxed);
     }
     /// Record one drain latency.
     pub fn record_drain(&self, micros: u64) {
@@ -224,8 +308,18 @@ impl Stats {
     pub fn summary(&self) -> String {
         let g = |c: &AtomicU64| c.load(Ordering::Relaxed);
         let drain: Vec<u64> = self.drain.iter().map(g).collect();
+        let per_turn: Vec<u64> = self.per_turn.iter().map(g).collect();
+        let mut stages = String::new();
+        if self.stage_n.iter().any(|n| g(n) != 0) {
+            stages.push_str(" stages_ns_per_call(");
+            for (i, name) in STAGES.iter().enumerate() {
+                let n = g(&self.stage_n[i]).max(1);
+                stages.push_str(&format!("{name}={}x{} ", g(&self.stage_ns[i]) / n, g(&self.stage_n[i])));
+            }
+            stages.push(')');
+        }
         format!(
-            "wakes(doorbell={} event={} spin={} backstop={}) backstop_found(work={} carried={} contended={} put_ahead={}) event_without_progress={} gates={} carried_ungated={} credit_waits={} contended_turns={} pop_writebacks={} markers={} drain_us_log2={drain:?}",
+            "wakes(doorbell={} event={} spin={} backstop={}) backstop_found(work={} carried={} contended={} put_ahead={}) event_without_progress={} gates={} carried_ungated={} credit_waits={} contended_turns={} pop_writebacks={} markers={} drain_us_log2={drain:?} flow(turns={} segments={} publications={} host_doorbells={} put_reads={} get_writebacks={} entries_per_turn_log2={per_turn:?}){stages}",
             g(&self.wake_doorbell),
             g(&self.wake_event),
             g(&self.wake_spin),
@@ -241,6 +335,12 @@ impl Stats {
             g(&self.contended),
             g(&self.pop_writebacks),
             g(&self.markers),
+            g(&self.turns),
+            g(&self.segments),
+            g(&self.publications),
+            g(&self.host_doorbells),
+            g(&self.put_reads),
+            g(&self.get_writebacks),
         )
     }
 }

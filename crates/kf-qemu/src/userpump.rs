@@ -407,6 +407,8 @@ pub(super) struct Pump {
     grace_was_retrying: bool,
     /// ★ 2026-10-14: guest SYNC_WAIT entries gated while a packet was open (control witness).
     sync_carried: u64,
+    /// Guest GP entries relayed by the turn in progress (`Stats::record_turn`).
+    seg_turn: u32,
     /// Measurement only ([`trace_dir`]).
     pub(super) trace: Option<Box<Trace>>,
 }
@@ -424,6 +426,8 @@ struct Segment {
     guest_get: u32,
     rare: bool,
     staged: bool,
+    /// Counted once in `Stats` (a staged segment is published in several steps).
+    rare_counted: bool,
     wait: Option<Wait>,
 }
 struct Wait {
@@ -472,6 +476,7 @@ impl Pump {
             unnotified: false,
             marker_event: false,
             gate_at: None,
+            seg_turn: 0,
             marks: kf_chan::user_gate::Marks::default(),
             gate_target: 0,
             again: false,
@@ -1191,7 +1196,12 @@ impl Pump {
         use kf_chan::user_loop::Need;
         self.need = Need::Idle;
         self.again = false;
+        self.seg_turn = 0;
+        let t0 = me.relay_stats.t0();
+        Stats::bump(&me.relay_stats.turns);
         let out = self.turn_body(me, r);
+        me.relay_stats.stage(kf_chan::user_loop::stage::TURN, t0);
+        me.relay_stats.record_turn(self.seg_turn);
         match &out {
             Ok(_) if self.again => self.need = Need::Again,
             Err(Failure::Retry) => self.need = Need::Contended,
@@ -1216,6 +1226,7 @@ impl Pump {
             self.trace_stall(me, r);
         }
         let native = r.chan.ok_or("USER_RING_NATIVE_ABSENT")?;
+        let t_obs = me.relay_stats.t0();
         let (get, reference) = {
             let storage = r
                 .lease
@@ -1224,6 +1235,7 @@ impl Pump {
                 .map_err(|_| "USER_RING_STORAGE_POISONED")?;
             (storage.gpu_get()?, storage.gpu_reference()?)
         };
+        me.relay_stats.stage(kf_chan::user_loop::stage::OBSERVE, t_obs);
         self.marks.observe(reference);
         for (generation, get) in self.fetch.observe(get).map_err(str::to_owned)? {
             if generation == self.generation {
@@ -1233,13 +1245,19 @@ impl Pump {
         if let Some((generation, get)) = self.guest_get {
             if generation == self.generation {
                 // Logical memory access revalidates Free/reuse and RAM topology.
-                match r.userd.write(
+                let t_wb = me.relay_stats.t0();
+                let wrote = r.userd.write(
                     me,
                     r.key,
                     &r.allocation,
                     kf_abi::submit::USERD_GP_GET,
                     &get.to_le_bytes(),
-                ) {
+                );
+                if wrote.is_ok() {
+                    me.relay_stats.stage(kf_chan::user_loop::stage::GET_WRITEBACK, t_wb);
+                    Stats::bump(&me.relay_stats.get_writebacks);
+                }
+                match wrote {
                     Ok(()) => self.guest_get = None,
                     Err(kf_rm::memory_list::AccessError::Busy) => {
                         // an admission lock is busy: look again (spin, then the safety net)
@@ -1260,6 +1278,8 @@ impl Pump {
             // Doorbells counted BEFORE the PUT read (measurement only today).
             let doorbells = me.queued(r.idx);
             let mut put = [0u8; 4];
+            let t_put = me.relay_stats.t0();
+            Stats::bump(&me.relay_stats.put_reads);
             r.userd
                 .read(
                     me,
@@ -1275,6 +1295,7 @@ impl Pump {
                     kf_rm::memory_list::AccessError::Gone => Failure::Retry,
                     e => access_error(e, "USER_RING_PUT_READ"),
                 })?;
+            me.relay_stats.stage(kf_chan::user_loop::stage::PUT_READ, t_put);
             let put = u32::from_le_bytes(put);
             if put >= r.source.1 {
                 return Err("USER_RING_PUT_BOUND".into());
@@ -1307,7 +1328,9 @@ impl Pump {
                 .checked_mul(8)
                 .and_then(|off| r.source.0.checked_add(off))
                 .ok_or("USER_RING_GP_ADDRESS")?;
+            let t_gp = me.relay_stats.t0();
             let source = self.snapshot(me, r, va, 8)?;
+            me.relay_stats.stage(kf_chan::user_loop::stage::GP_SNAPSHOT, t_gp);
             let entry = u64::from_le_bytes(
                 source
                     .bytes
@@ -1344,6 +1367,7 @@ impl Pump {
             // A SYNC_WAIT entry reached with a packet OPEN across it has no witness (no byte may
             // enter an open packet) and the hardware does not delay it either (the split packet's
             // header counts the preceding segment as processed): it is read at once and counted.
+            let t_gate = me.relay_stats.t0();
             let verdict = if entry >> 63 & 1 == 1 && self.scan.carried().is_some() {
                 Stats::bump(&me.relay_stats.carried_ungated);
                 if self.sync_carried < 4 {
@@ -1365,6 +1389,7 @@ impl Pump {
                 self.sync
                     .entry(entry, self.generation, self.cursor, self.marks.seen())
             };
+            me.relay_stats.stage(kf_chan::user_loop::stage::GATE, t_gate);
             match verdict {
                 kf_chan::user_gate::Gate::Proceed => {
                     // Measurement only: the SYNC_WAIT drain latency (gate authored -> marker processed).
@@ -1451,17 +1476,20 @@ impl Pump {
                 self.cursor = guest_get;
                 self.unnotified = true;
                 self.again = true;
+                self.seg_turn += 1;
                 return Ok(true);
             }
             let kf_chan::user_stream::Source::Segment(descriptor) = descriptor else {
                 return Err("USER_RING_GP_FORMAT".into());
             };
+            let t_pb = me.relay_stats.t0();
             let pb = self.snapshot(
                 me,
                 r,
                 descriptor.gpu_va,
                 usize::try_from(descriptor.len_bytes).map_err(|_| "USER_RING_PB_SIZE")?,
             )?;
+            me.relay_stats.stage(kf_chan::user_loop::stage::PB_SNAPSHOT, t_pb);
             let mut words = Vec::new();
             words
                 .try_reserve_exact(pb.bytes.len() / 4)
@@ -1473,7 +1501,10 @@ impl Pump {
             }
             let software = software_snapshot(me, r)?;
             self.grace_was_retrying = self.grace.retrying();
-            let planned = match stage_plan(&self.scan, &software, &words) {
+            let t_scan = me.relay_stats.t0();
+            let planned = stage_plan(&self.scan, &software, &words);
+            me.relay_stats.stage(kf_chan::user_loop::stage::SCAN, t_scan);
+            let planned = match planned {
                 // ★ 2026-10-14: a scan refusal of a segment never published is re-read and rescanned
                 // `REFUSE_RETRIES` times -- a COUNT, never a clock -- before it is final
                 // (`kf_chan::user_gate::Grace`); the re-read is an immediate re-turn.
@@ -1531,6 +1562,7 @@ impl Pump {
                 guest_get,
                 rare,
                 staged: false,
+                rare_counted: false,
                 wait: None,
             });
         }
@@ -1559,6 +1591,13 @@ impl Pump {
     /// proof every earlier entry began processing; its interrupt (the engine's non-stall event, in the
     /// worker's epoll) is the wake. No guest source is involved, so no source guard is taken.
     fn publish_marker(&mut self, me: &ChanPlane, r: &userrelay::Record) -> Turn<()> {
+        let t_marker = me.relay_stats.t0();
+        let out = self.publish_marker_body(me, r);
+        me.relay_stats.stage(kf_chan::user_loop::stage::MARKER, t_marker);
+        out
+    }
+
+    fn publish_marker_body(&mut self, me: &ChanPlane, r: &userrelay::Record) -> Turn<()> {
         self.publish(me, r, None, None, None, None, |pump, storage| {
             let (slot, put) = pump.fetch.publish(None).map_err(str::to_owned)?;
             let (_, value) = pump.marks.issue().map_err(str::to_owned)?;
@@ -1797,6 +1836,7 @@ impl Pump {
             me.inbox.wait_walk(r.idx);
             return Err(Failure::Retry);
         }
+        let t_pub = me.relay_stats.t0();
         let userd = r.userd.clone();
         userd
             .admit(|| -> Turn<()> {
@@ -1856,9 +1896,16 @@ impl Pump {
                 }
             })
             .map_err(|e| access_error(e, "USER_RING_USERD_ADMISSION"))??;
-        me.rm
+        Stats::bump(&me.relay_stats.publications);
+        let t_bell = me.relay_stats.t0();
+        Stats::bump(&me.relay_stats.host_doorbells);
+        let rung = me
+            .rm
             .doorbell(r.chan.ok_or("USER_RING_NATIVE_ABSENT")?.token)
-            .map_err(|e| format!("USER_RING_DOORBELL_UNCERTAIN {e:?}").into())
+            .map_err(|e| format!("USER_RING_DOORBELL_UNCERTAIN {e:?}").into());
+        me.relay_stats.stage(kf_chan::user_loop::stage::DOORBELL, t_bell);
+        me.relay_stats.stage(kf_chan::user_loop::stage::PUBLISH, t_pub);
+        rung
     }
 
     fn segment_turn(
@@ -1941,6 +1988,7 @@ impl Pump {
             self.scan = next;
             self.cursor = s.guest_get;
             self.unnotified = true;
+            self.seg_turn += 1;
             return Ok((true, true));
         }
         let end = trigger.map_or(s.words.len(), |t| s.at.saturating_add(t.start));
@@ -2012,6 +2060,10 @@ impl Pump {
             self.cursor = s.guest_get;
         }
         s.staged = true;
+        if !s.rare_counted {
+            s.rare_counted = true;
+            self.seg_turn += 1;
+        }
         self.scan = next;
         s.wait = Some(Wait {
             witness: self.marks.issued(),
@@ -2369,6 +2421,7 @@ impl ChanPlane {
     }
 
     pub(super) fn user_ring_serve(&self, ht: u32) -> Option<bool> {
+        let t_serve = self.relay_stats.t0();
         let record = self.user_ring_record(ht)?;
         let Ok(mut r) = record.enter() else {
             // the act thread holds the record: `retry` stays set (its completion rings; the spin
@@ -2420,6 +2473,7 @@ impl ChanPlane {
         }
         let outcome = pump.turn(self, &mut r);
         r.pump = Some(pump);
+        self.relay_stats.stage(kf_chan::user_loop::stage::SERVE, t_serve);
         match outcome {
             Ok(submitted) => {
                 self.user_ring_arm(&record, &mut r);
