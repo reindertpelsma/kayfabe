@@ -21,6 +21,7 @@ fn facts(arch: u32) -> Bar0Facts {
         revision: 0xA1,
         fb_mb: 8192,
         pcie_link_caps: pcie_link_caps(PcieGen::Gen4, 16).unwrap(),
+        bar1_bytes: 128 << 20,
     }
 }
 

@@ -1616,7 +1616,8 @@ impl Engine {
         let outgoing = (c.kind == ChannelKind::Window).then(|| {
             let notify = Self::notify_of(&v, c, n, Chan::armed, true, false);
             // the flipped-away entry asked for AWAKEN (its own notifier mode)
-            let awaken_mode = c.armed(v.w_ctxdma_notifier) != 0
+            // (the die sweep names a notifier by a placed address, not by a context DMA: placed == `notify` is Some)
+            let awaken_mode = notify.is_some()
                 && fld(c.armed(v.w_notifier_control), v.n_mode) == v.n_mode_awaken;
             (Self::release_of(&v, c, n), notify, awaken_mode)
         });
@@ -1666,15 +1667,13 @@ impl Engine {
                         Effect::Notify {
                             chn,
                             client,
-                            handle,
-                            offset,
+                            at,
                             finished,
                             ..
                         } => Effect::Notify {
                             chn,
                             client,
-                            handle,
-                            offset,
+                            at,
                             awaken: awaken_mode && was_active && !begun_awakens,
                             finished,
                         },
