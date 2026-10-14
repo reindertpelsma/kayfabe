@@ -222,6 +222,11 @@ pub(super) struct Trace {
     stale: u64,
     stale_desync: u64,
     stale_prefetch: u64,
+    /// Stall detector: last progress marker, when it last changed, and whether reported.
+    progress: ((u64, u32, u64, u64), std::time::Instant, bool),
+    /// Idle detector: when the pump last had a turn, and whether an idle stall was reported.
+    last_turn: std::time::Instant,
+    idle_reported: bool,
 }
 impl Trace {
     fn new() -> Self {
@@ -243,6 +248,9 @@ impl Trace {
             stale: 0,
             stale_desync: 0,
             stale_prefetch: 0,
+            progress: ((0, 0, 0, 0), std::time::Instant::now(), false),
+            last_turn: std::time::Instant::now(),
+            idle_reported: false,
         }
     }
     fn note_put(&mut self, doorbells: u64) {
@@ -606,6 +614,66 @@ impl Pump {
             words: kept,
             len: words.len(),
         });
+    }
+
+    /// Measurement only: report once when this pump has made no progress (cursor, ring
+    /// generation, private-ring issue/fetch counts) for 1.5 s while turns keep arriving.
+    fn trace_stall(&mut self, me: &ChanPlane, r: &userrelay::Record) {
+        let marker = (
+            self.generation,
+            self.cursor,
+            self.fetch.issued(),
+            self.fetch.fetched(),
+        );
+        let now = std::time::Instant::now();
+        let Some(t) = self.trace.as_mut() else {
+            return;
+        };
+        if t.progress.0 != marker {
+            t.progress = (marker, now, false);
+            return;
+        }
+        if t.progress.2 || now.duration_since(t.progress.1) < std::time::Duration::from_millis(1500)
+        {
+            return;
+        }
+        t.progress.2 = true;
+        let mut b = [0u8; 4];
+        let put = r
+            .userd
+            .read(
+                me,
+                r.key,
+                &r.allocation,
+                kf_abi::submit::USERD_GP_PUT,
+                &mut b,
+            )
+            .ok()
+            .map(|()| u32::from_le_bytes(b));
+        let native_get = r.lease.storage.lock().ok().and_then(|s| s.gpu_get().ok());
+        let segment = self.segment.as_ref().map(|s| {
+            format!(
+                "at={}/{} staged={} rare={} wait_witness={:?} wait_trigger={}",
+                s.at,
+                s.words.len(),
+                s.staged,
+                s.rare,
+                s.wait.as_ref().map(|w| w.witness),
+                s.wait.as_ref().is_some_and(|w| w.trigger.is_some())
+            )
+        });
+        eprintln!(
+            "kf3: USER_RING_TRACE STALL {:#x}:{:#x} no progress 1.5 s: generation={} cursor={} guest_put={put:?} fetch_issued={} fetch_fetched={} native_get={native_get:?} sync={:?} grace_retrying={} segment={segment:?} guest_get_pending={:?}",
+            r.key.0,
+            r.key.1,
+            self.generation,
+            self.cursor,
+            self.fetch.issued(),
+            self.fetch.fetched(),
+            self.sync,
+            self.grace.retrying(),
+            self.guest_get
+        );
     }
 
     /// Measurement only: run the straddle re-reads that are due (never sleeps).
@@ -995,6 +1063,13 @@ impl Pump {
             self.trace_due(me, r, &software);
             // Keep the worker ticking until the deferred re-reads have run.
             self.tick = true;
+        }
+        if let Some(t) = self.trace.as_mut() {
+            t.last_turn = std::time::Instant::now();
+            t.idle_reported = false;
+        }
+        if self.trace.is_some() {
+            self.trace_stall(me, r);
         }
         let native = r.chan.ok_or("USER_RING_NATIVE_ABSENT")?;
         let get = r
@@ -1794,6 +1869,36 @@ impl Pump {
             "kf3: USER_RING_MIGRATED {:#x}:{:#x} source={:#x}x{} generation={generation}; private native ring/USERD unchanged; no host migration verb",
             r.key.0, r.key.1, u.gpfifo_va, u.entries
         );
+        if self.trace.is_some() {
+            // Measurement only: what the guest's NEW ring holds at the switch.
+            let mut word = |off: u64| {
+                let mut b = [0u8; 4];
+                r.userd
+                    .read(me, r.key, &r.allocation, off, &mut b)
+                    .ok()
+                    .map(|()| u32::from_le_bytes(b))
+            };
+            let (put, get) = (
+                word(kf_abi::submit::USERD_GP_PUT),
+                word(kf_abi::submit::USERD_GP_GET),
+            );
+            let mut first = Vec::new();
+            for i in 0..8u64 {
+                first.push(
+                    self.snapshot(me, r, u.gpfifo_va + i * 8, 8)
+                        .ok()
+                        .and_then(|s| s.bytes.as_slice().try_into().ok().map(u64::from_le_bytes)),
+                );
+            }
+            eprintln!(
+                "kf3: USER_RING_TRACE MIGRATED {:#x}:{:#x} new USERD put={put:?} get={get:?} first_entries={first:x?} fetch_issued={} fetch_fetched={} sync_waiting={}",
+                r.key.0,
+                r.key.1,
+                self.fetch.issued(),
+                self.fetch.fetched(),
+                self.sync.waiting()
+            );
+        }
         Ok(())
     }
 }
@@ -2014,6 +2119,54 @@ impl ChanPlane {
             );
             if signaled {
                 let _ = self.wake.signal();
+            }
+            if tracing() {
+                if let Ok(mut r) = record.try_lock() {
+                    self.trace_idle(&mut r);
+                }
+            }
+        }
+    }
+
+    /// Measurement only: a pump that has had no turn for 1.5 s while the guest's PUT names
+    /// entries it has not read (no doorbell, no tick) — reported once per episode.
+    fn trace_idle(&self, r: &mut userrelay::Record) {
+        if r.retired || r.free_attempted || r.dead.is_some() {
+            return;
+        }
+        let Some(p) = r.pump.as_ref() else {
+            return;
+        };
+        let Some(t) = p.trace.as_ref() else {
+            return;
+        };
+        if t.idle_reported || t.last_turn.elapsed() < std::time::Duration::from_millis(1500) {
+            return;
+        }
+        let mut b = [0u8; 4];
+        let put = r
+            .userd
+            .read(
+                self,
+                r.key,
+                &r.allocation,
+                kf_abi::submit::USERD_GP_PUT,
+                &mut b,
+            )
+            .ok()
+            .map(|()| u32::from_le_bytes(b));
+        let cursor = p.cursor;
+        if put.is_some_and(|put| put != cursor) {
+            eprintln!(
+                "kf3: USER_RING_TRACE IDLE_STALL {:#x}:{:#x} no turn for {} ms while guest PUT={put:?} != cursor={cursor} (tick={} pending={})",
+                r.key.0,
+                r.key.1,
+                t.last_turn.elapsed().as_millis(),
+                p.tick,
+                false
+            );
+            if let Some(t) = r.pump.as_mut().and_then(|p| p.trace.as_mut()) {
+                t.idle_reported = true;
             }
         }
     }
