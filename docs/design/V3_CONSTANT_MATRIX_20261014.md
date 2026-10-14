@@ -204,8 +204,11 @@ measurement, not a reader of the captured row, so it is listed with the other se
 
 **Fixes found (not done tonight)**
 
-- **F-1 ZBC default entries are a GA102 capture** served to every die (`kf-rm/src/zbc.rs:20-27,89-90`): derive from the host's ZBC table
-  (`GET_ZBC_CLEAR_TABLE_ENTRY` on kayfabe's own ZBC object, T2) or table them per die.
+- **F-1 ZBC default entries are a GA102 capture** served to every die (`kf-rm/src/zbc.rs:20-27,89-90`). No ogkm mechanism (physical RM installs
+  them; nothing in the 595.84 tree). Impact today: none [R] — every host-twin mapping is an uncompressed kind, so no ROP ever resolves a ZBC index
+  (`zbc.rs` module docs); it re-opens with compression. Route then: read the host's own entries (`GET_ZBC_CLEAR_TABLE_ENTRY` on kayfabe's ZBC
+  object, T2) — but the host table is GPU-global and other host processes add entries, so "which slots are the defaults" needs a rule first; or
+  table them per die. Not changed tonight.
 - **F-2 `OFFSET_UPPER` width**: Hopper 3D (`clcb97.h` 24:0) and Blackwell compute (`clcdc0.h` 24:0) are 25 bits in ogkm 595.84; kayfabe re-authors 8
   bits on every family (`kf-chan/src/grtables.rs`); a family row by ogkm header, T1.
 - **F-3 Register offsets**: GB10x and GB20x each have 7 hand literals that disagree with the generated header (`V3_HW_BOUNDARY_INVENTORY.md`).
