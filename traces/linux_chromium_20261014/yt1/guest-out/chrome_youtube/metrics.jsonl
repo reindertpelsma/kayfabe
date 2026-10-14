@@ -1,0 +1,56 @@
+{"t": 13, "mix": {}, "vq": null, "gpu_pids": [1830], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 23, "mix": {}, "vq": null, "gpu_pids": [1830], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 33, "mix": {}, "vq": null, "gpu_pids": [1830], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 44, "mix": {}, "vq": null, "gpu_pids": [1830], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 54, "mix": {}, "vq": null, "gpu_pids": [1830], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 64, "mix": {}, "vq": null, "gpu_pids": [1830], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 74, "mix": {}, "vq": null, "gpu_pids": [1830], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 84, "mix": {}, "vq": null, "gpu_pids": [1830], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 94, "mix": {}, "vq": null, "gpu_pids": [1830], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 104, "mix": {}, "vq": null, "gpu_pids": [1830], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 114, "mix": {}, "vq": null, "gpu_pids": [1830], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 125, "mix": {}, "vq": null, "gpu_pids": [1830], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 135, "mix": {}, "vq": null, "gpu_pids": [1830], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 145, "mix": {}, "vq": null, "gpu_pids": [1830], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 155, "mix": {}, "vq": null, "gpu_pids": [1830], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 165, "mix": {}, "vq": null, "gpu_pids": [1830], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 175, "mix": {}, "vq": null, "gpu_pids": [1830], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 185, "mix": {}, "vq": null, "gpu_pids": [1830], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 196, "mix": {}, "vq": null, "gpu_pids": [1830], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 206, "mix": {}, "vq": null, "gpu_pids": [1830], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 216, "mix": {}, "vq": null, "gpu_pids": [1830], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 226, "mix": {}, "vq": null, "gpu_pids": [1830], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 236, "mix": {}, "vq": null, "gpu_pids": [1830], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 246, "mix": {}, "vq": null, "gpu_pids": [1830], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 256, "mix": {}, "vq": null, "gpu_pids": [1830], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 266, "mix": {}, "vq": null, "gpu_pids": [1830], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 277, "mix": {}, "vq": null, "gpu_pids": [1830], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 287, "mix": {}, "vq": null, "gpu_pids": [1830], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 297, "mix": {}, "vq": null, "gpu_pids": [1830], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 307, "mix": {}, "vq": null, "gpu_pids": [1830], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 317, "mix": {}, "vq": null, "gpu_pids": [1830], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 327, "mix": {}, "vq": null, "gpu_pids": [1830], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 337, "mix": {}, "vq": null, "gpu_pids": [1830], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 449, "mix": {}, "vq": null, "gpu_pids": [1830], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 459, "mix": {}, "vq": null, "gpu_pids": [1830], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 470, "mix": {}, "vq": null, "gpu_pids": [1830], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 485, "mix": {}, "vq": null, "gpu_pids": [3164], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 495, "mix": {}, "vq": null, "gpu_pids": [3164], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 505, "mix": {}, "vq": null, "gpu_pids": [3164], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 515, "mix": {}, "vq": null, "gpu_pids": [3164], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 525, "mix": {}, "vq": null, "gpu_pids": [3164], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 535, "mix": {}, "vq": null, "gpu_pids": [3164], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 548, "mix": {}, "vq": null, "wgpu": {"frames": 0, "err": ["no adapter"], "adapter": null}, "gpu_pids": [3164], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 558, "mix": {}, "vq": null, "wgpu": {"frames": 0, "err": ["no adapter"], "adapter": null}, "gpu_pids": [3164], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 568, "mix": {}, "vq": null, "wgpu": {"frames": 0, "err": ["no adapter"], "adapter": null}, "gpu_pids": [3164], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 578, "mix": {}, "vq": null, "wgpu": {"frames": 0, "err": ["no adapter"], "adapter": null}, "gpu_pids": [3164], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 588, "mix": {}, "vq": null, "wgpu": {"frames": 0, "err": ["no adapter"], "adapter": null}, "gpu_pids": [3164], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 598, "mix": {}, "vq": null, "wgpu": {"frames": 0, "err": ["no adapter"], "adapter": null}, "gpu_pids": [3164], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 608, "mix": {}, "vq": null, "wgpu": {"frames": 0, "err": ["no adapter"], "adapter": null}, "gpu_pids": [3164], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 619, "mix": {}, "vq": null, "wgpu": {"frames": 0, "err": ["no adapter"], "adapter": null}, "gpu_pids": [3164], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 629, "mix": {}, "vq": null, "wgpu": {"frames": 0, "err": ["no adapter"], "adapter": null}, "gpu_pids": [3164], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 639, "mix": {}, "vq": null, "wgpu": {"frames": 0, "err": ["no adapter"], "adapter": null}, "gpu_pids": [3164], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 649, "mix": {}, "vq": null, "wgpu": {"frames": 0, "err": ["no adapter"], "adapter": null}, "gpu_pids": [3164], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 659, "mix": {}, "vq": null, "wgpu": {"frames": 0, "err": ["no adapter"], "adapter": null}, "gpu_pids": [3164], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 669, "mix": {}, "vq": null, "wgpu": {"frames": 0, "err": ["no adapter"], "adapter": null}, "gpu_pids": [3164], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}
+{"t": 674, "mix": {}, "vq": null, "wgpu": {"frames": 0, "err": ["no adapter"], "adapter": null}, "gpu_pids": [3164], "dmesg": {"xid": 0, "nvrm_lines": 24, "flip_timeout": 0, "gsp_timeout": 0}}

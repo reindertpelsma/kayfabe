@@ -1,0 +1,2450 @@
+GPU Internals
+:root {
+    user-select: none;
+
+  body {
+    cursor: default;
+    font-family: sans-serif;
+    margin: 8px;
+    padding: 0;
+Download Report to File
+GPU Info
+Graphics Feature Status
+=======================
+Canvas:
+Hardware accelerated
+Direct Rendering Display Compositor:
+Disabled
+Compositing:
+Hardware accelerated
+Multiple Raster Threads:
+Enabled
+OpenGL:
+Enabled
+Rasterization:
+Hardware accelerated
+Raw Draw:
+Disabled
+Skia Graphite:
+Disabled
+TreesInViz:
+Disabled
+Video Decode:
+Hardware accelerated
+Video Encode:
+Software only. Hardware acceleration disabled
+Vulkan:
+Disabled
+WebGL:
+Hardware accelerated
+WebGPU:
+Hardware accelerated
+WebGPU interop:
+Hardware accelerated
+WebNN:
+Disabled
+Version Information
+===================
+Data exported
+:
+2026-10-14T14:46:25.378Z
+Chrome version
+:
+Chrome/155.0.8059.79
+Operating system
+:
+Linux 6.8.0-142-generic
+Software rendering list URL
+:
+https://chromium.googlesource.com/chromium/src/+/a49e2e3d4addfd84e765b52afe230bedb81096db/gpu/config/software_rendering_list.json
+Driver bug list URL
+:
+https://chromium.googlesource.com/chromium/src/+/a49e2e3d4addfd84e765b52afe230bedb81096db/gpu/config/gpu_driver_bug_list.json
+ANGLE commit id
+:
+cccf60cde32c
+2D graphics backend
+:
+Skia/155 29ed1e87a0a50f3d8347e988842d9d59e7573efa
+Command Line
+:
+/usr/bin/google-chrome-stable --remote-debugging-port=9222 --remote-allow-origins=* --user-data-dir=/tmp/prof-chrome_wayland --no-first-run --no-default-browser-check --password-store=basic --window-size=1600,900 --window-position=0,0 --autoplay-policy=no-user-gesture-required --allow-file-access-from-files --ozone-platform=wayland --flag-switches-begin --flag-switches-end --render-node-override=/dev/dri/renderD128 about:blank
+Driver Information
+==================
+Initialization time
+:
+630
+In-process GPU
+:
+false
+Skia Backend
+:
+GaneshGL
+Passthrough Command Decoder
+:
+true
+Sandboxed
+:
+true
+GPU0
+:
+VENDOR= 0x10de [Google Inc. (NVIDIA Corporation)], DEVICE=0x2786 [ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 4070/PCIe/SSE2, OpenGL ES 3.2 NVIDIA 580.159.04)], DRIVER_VENDOR=Nvidia, DRIVER_VERSION=580.159.04 *ACTIVE*
+Optimus
+:
+false
+AMD switchable
+:
+false
+Pixel shader version
+:
+3.00
+Vertex shader version
+:
+3.00
+Max. MSAA samples
+:
+8
+Machine model name
+:
+Machine model version
+:
+GL implementation parts
+:
+(gl=egl-angle,angle=opengl)
+Display type
+:
+ANGLE_OPENGL
+GL_VENDOR
+:
+Google Inc. (NVIDIA Corporation)
+GL_RENDERER
+:
+ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 4070/PCIe/SSE2, OpenGL ES 3.2 NVIDIA 580.159.04)
+GL_VERSION
+:
+OpenGL ES 3.0 (ANGLE 2.1.28854 git hash: cccf60cde32c)
+GL_EXTENSIONS
+:
+GL_AMD_performance_monitor GL_ANGLE_blob_cache GL_ANGLE_client_arrays GL_ANGLE_clip_cull_distance GL_ANGLE_compressed_texture_etc GL_ANGLE_depth_texture GL_ANGLE_framebuffer_blit GL_ANGLE_framebuffer_multisample GL_ANGLE_get_serialized_context_string GL_ANGLE_get_tex_level_parameter GL_ANGLE_instanced_arrays GL_ANGLE_memory_size GL_ANGLE_polygon_mode GL_ANGLE_program_binary_readiness_query GL_ANGLE_program_cache_control GL_ANGLE_renderability_validation GL_ANGLE_request_extension GL_ANGLE_robust_client_memory GL_ANGLE_shader_pixel_local_storage GL_ANGLE_stencil_texturing GL_ANGLE_texture_compression_dxt3 GL_ANGLE_texture_compression_dxt5 GL_ANGLE_texture_multisample GL_ANGLE_translated_shader_source GL_ARM_rgba8 GL_CHROMIUM_bind_generates_resource GL_CHROMIUM_bind_uniform_location GL_CHROMIUM_copy_texture GL_CHROMIUM_lose_context GL_EXT_EGL_image_array GL_EXT_EGL_image_external_wrap_modes GL_EXT_blend_func_extended GL_EXT_blend_minmax GL_EXT_clear_texture GL_EXT_clip_control GL_EXT_clip_cull_distance GL_EXT_color_buffer_float GL_EXT_color_buffer_half_float GL_EXT_compressed_ETC1_RGB8_sub_texture GL_EXT_conservative_depth GL_EXT_debug_label GL_EXT_debug_marker GL_EXT_depth_clamp GL_EXT_discard_framebuffer GL_EXT_disjoint_timer_query GL_EXT_draw_buffers_indexed GL_EXT_float_blend GL_EXT_frag_depth GL_EXT_instanced_arrays GL_EXT_map_buffer_range GL_EXT_memory_object GL_EXT_memory_object_fd GL_EXT_multisample_compatibility GL_EXT_multisampled_render_to_texture GL_EXT_multisampled_render_to_texture2 GL_EXT_occlusion_query_boolean GL_EXT_polygon_offset_clamp GL_EXT_read_format_bgra GL_EXT_render_snorm GL_EXT_robustness GL_EXT_sRGB GL_EXT_sRGB_write_control GL_EXT_semaphore GL_EXT_semaphore_fd GL_EXT_shader_texture_lod GL_EXT_shadow_samplers GL_EXT_texture_border_clamp GL_EXT_texture_compression_bptc GL_EXT_texture_compression_dxt1 GL_EXT_texture_compression_rgtc GL_EXT_texture_compression_s3tc_srgb GL_EXT_texture_filter_anisotropic GL_EXT_texture_format_BGRA8888 GL_EXT_texture_mirror_clamp_to_edge GL_EXT_texture_norm16 GL_EXT_texture_rg GL_EXT_texture_sRGB_R8 GL_EXT_texture_sRGB_decode GL_EXT_texture_shadow_lod GL_EXT_texture_storage GL_EXT_unpack_subimage GL_KHR_blend_equation_advanced GL_KHR_blend_equation_advanced_coherent GL_KHR_debug GL_KHR_parallel_shader_compile GL_KHR_robustness GL_KHR_texture_compression_astc_hdr GL_KHR_texture_compression_astc_ldr GL_KHR_texture_compression_astc_sliced_3d GL_NV_fence GL_NV_framebuffer_blit GL_NV_pack_subimage GL_NV_pixel_buffer_object GL_NV_polygon_mode GL_NV_read_depth GL_NV_read_stencil GL_NV_robustness_video_memory_purge GL_NV_shader_noperspective_interpolation GL_OES_EGL_image GL_OES_EGL_image_external GL_OES_EGL_image_external_essl3 GL_OES_EGL_sync GL_OES_compressed_ETC1_RGB8_texture GL_OES_depth24 GL_OES_depth32 GL_OES_depth_texture GL_OES_draw_buffers_indexed GL_OES_element_index_uint GL_OES_fbo_render_mipmap GL_OES_get_program_binary GL_OES_mapbuffer GL_OES_packed_depth_stencil GL_OES_rgb8_rgba8 GL_OES_sample_variables GL_OES_shader_multisample_interpolation GL_OES_standard_derivatives GL_OES_surfaceless_context GL_OES_texture_3D GL_OES_texture_border_clamp GL_OES_texture_float GL_OES_texture_float_linear GL_OES_texture_half_float GL_OES_texture_half_float_linear GL_OES_texture_npot GL_OES_texture_stencil8 GL_OES_texture_storage_multisample_2d_array GL_OES_vertex_array_object
+Disabled Extensions
+:
+GL_KHR_blend_equation_advanced GL_KHR_blend_equation_advanced_coherent
+Disabled WebGL Extensions
+:
+Window system binding vendor
+:
+Google Inc. (NVIDIA Corporation)
+Window system binding version
+:
+1.5 (ANGLE 2.1.28854 git hash: cccf60cde32c)
+Window system binding extensions
+:
+EGL_EXT_create_context_robustness EGL_KHR_create_context EGL_KHR_image EGL_KHR_image_base EGL_KHR_gl_colorspace EGL_KHR_gl_texture_2D_image EGL_KHR_gl_texture_cubemap_image EGL_KHR_gl_texture_3D_image EGL_KHR_gl_renderbuffer_image EGL_KHR_get_all_proc_addresses EGL_KHR_fence_sync EGL_KHR_wait_sync EGL_ANGLE_create_context_webgl_compatibility EGL_CHROMIUM_create_context_bind_generates_resource EGL_KHR_swap_buffers_with_damage EGL_EXT_pixel_format_float EGL_KHR_surfaceless_context EGL_ANGLE_display_texture_share_group EGL_ANGLE_display_semaphore_share_group EGL_ANGLE_create_context_client_arrays EGL_ANGLE_program_cache_control EGL_ANGLE_robust_resource_initialization EGL_ANGLE_create_context_extensions_enabled EGL_ANDROID_blob_cache EGL_ANDROID_recordable EGL_ANDROID_native_fence_sync EGL_ANGLE_create_context_backwards_compatible EGL_KHR_no_config_context EGL_KHR_create_context_no_error EGL_EXT_image_dma_buf_import EGL_EXT_image_dma_buf_import_modifiers EGL_NV_robustness_video_memory_purge EGL_KHR_reusable_sync EGL_ANGLE_external_context_and_surface EGL_EXT_buffer_age EGL_ANGLE_context_virtualization EGL_ANGLE_memory_usage_report EGL_ANGLE_create_context_passthrough_shaders
+XDG_SESSION_TYPE
+:
+tty
+Interfaces exposed by the Wayland compositor
+:
+wl_compositor:5 wl_subcompositor:1 wp_viewporter:1 zxdg_output_manager_v1:2 wp_presentation:1 wp_single_pixel_buffer_manager_v1:1 wp_tearing_control_manager_v1:1 zwp_relative_pointer_manager_v1:1 zwp_pointer_constraints_v1:1 zwp_input_timestamps_manager_v1:1 weston_capture_v1:1 wl_data_device_manager:3 wl_shm:1 wl_eglstream_display:1 wl_seat:7 zwp_linux_explicit_synchronization_v1:2 wl_output:4 zwp_input_panel_v1:1 zwp_input_method_v1:1 zwp_text_input_manager_v1:1 xdg_wm_base:5 weston_desktop_shell:1 zwp_linux_dmabuf_v1:4 wl_drm:2
+Ozone platform
+:
+wayland
+Direct rendering version
+:
+unknown
+Reset notification strategy
+:
+0x8252
+GPU process crash count
+:
+0
+Driver Bug Workarounds
+======================
+disable_discard_framebuffer
+disable_rgb_to_yuv_conversion
+enable_webgl_timer_query_extensions
+exit_on_context_lost
+force_cube_complete
+init_gl_position_in_vertex_shader
+unpack_overlapping_rows_separately_unpack_buffer
+disabled_extension_GL_KHR_blend_equation_advanced
+disabled_extension_GL_KHR_blend_equation_advanced_coherent
+Problems Detected
+=================
+Accelerated video encode has been disabled, either via blocklist, about:flags or the command line.
+Disabled Features:
+video_encode
+Program link fails in NVIDIA Linux if gl_Position is not set
+:
+286468
+(http://crbug.com/286468)
+Applied Workarounds:
+init_gl_position_in_vertex_shader
+NVIDIA fails glReadPixels from incomplete cube map texture
+:
+518889
+(http://crbug.com/518889)
+Applied Workarounds:
+force_cube_complete
+Framebuffer discarding not useful on NVIDIA Kepler architecture and later
+:
+601753
+(http://crbug.com/601753)
+Applied Workarounds:
+disable_discard_framebuffer
+Unpacking overlapping rows from unpack buffers is unstable on NVIDIA GL driver
+:
+596774
+(http://crbug.com/596774)
+Applied Workarounds:
+unpack_overlapping_rows_separately_unpack_buffer
+Disable KHR_blend_equation_advanced until cc shaders are updated
+:
+661715
+(http://crbug.com/661715)
+Applied Workarounds:
+disable(GL_KHR_blend_equation_advanced)
+,
+disable(GL_KHR_blend_equation_advanced_coherent)
+Expose WebGL's disjoint_timer_query extensions on platforms with site isolation
+:
+808744
+(http://crbug.com/808744)
+,
+870491
+(http://crbug.com/870491)
+Applied Workarounds:
+enable_webgl_timer_query_extensions
+Some drivers can't recover after OUT_OF_MEM and context lost
+:
+893177
+(http://crbug.com/893177)
+Applied Workarounds:
+exit_on_context_lost
+Disable RGB to YUV hardware conversion on NVIDIA Linux
+:
+447709687
+(http://crbug.com/447709687)
+Applied Workarounds:
+disable_rgb_to_yuv_conversion
+ANGLE Features
+==============
+allowCompressedFormats
+(Frontend workarounds)
+:
+Enabled
+allowExtensionDisableAfterNonPpTokens
+(Frontend features)
+:
+Disabled
+alwaysEnableEmulatedMultidrawExtensions
+(Frontend workarounds)
+:
+Disabled
+alwaysRunLinkSubJobsThreaded
+(Frontend features)
+:
+Disabled
+cacheCompiledShader
+(Frontend features)
+:
+Enabled
+clipCullDistanceBrokenWithPassthroughShaders
+(Frontend features)
+:
+Disabled
+compileJobIsThreadSafe
+(Frontend features)
+:
+Disabled
+compressProgramBinaryBlob
+(Frontend features)
+:
+Disabled
+disableAnisotropicFiltering
+(Frontend workarounds)
+:
+Disabled
+disableProgramBinary
+(Frontend features)
+:
+Disabled
+disableProgramCaching
+(Frontend features)
+:
+Disabled
+disableProgramCachingForTransformFeedback
+(Frontend workarounds)
+:
+Disabled
+dumpShaderSource
+(Frontend features)
+:
+Disabled
+dumpTranslatedShaders
+(Frontend features)
+:
+Disabled
+emulatePixelLocalStorage
+(Frontend features)
+:
+Enabled
+enableCaptureLimits
+(Frontend features)
+:
+Disabled
+enableCreateContextBackwardsCompatible
+(Frontend features)
+:
+Enabled
+enableProgramBinaryForCapture
+(Frontend features)
+:
+Disabled
+enableShaderSubstitution
+(Frontend workarounds)
+:
+Disabled
+enableTranslatedShaderSubstitution
+(Frontend workarounds)
+:
+Disabled
+forceDebugContexts
+(Frontend features)
+:
+Disabled
+forceDepthAttachmentInitOnClear
+(Frontend workarounds)
+:
+Disabled
+forceFlushAfterDrawcallUsingShadowmap
+(Frontend workarounds)
+:
+Disabled
+forceGlErrorChecking
+(Frontend features)
+:
+Disabled
+forceInitShaderVariables
+(Frontend features)
+:
+Disabled
+forceMinimumMaxVertexAttributes
+(Frontend features)
+:
+Disabled
+forcePassthroughShaders
+(Frontend features)
+:
+Disabled
+forceRobustResourceInit
+(Frontend features)
+:
+Disabled
+limitMaxBufferBytesTo1MB
+(Frontend features)
+:
+Disabled
+limitMaxTextureBytesTo1MB
+(Frontend features)
+:
+Disabled
+linkJobIsThreadSafe
+(Frontend features)
+:
+Disabled
+loseContextOnOutOfMemory
+(Frontend workarounds)
+:
+Enabled
+loseHardenedContextOnBackendError
+(Frontend workarounds)
+:
+Enabled
+noperspectiveInterpolationBrokenWithPassthroughShaders
+(Frontend features)
+:
+Disabled
+setNeedInitOnInvalidation
+(Frontend features)
+:
+Enabled
+singleThreadedTextureDecompression
+(Frontend workarounds)
+:
+Disabled
+uncurrentEglSurfaceUponSurfaceDestroy
+(Frontend workarounds)
+:
+Disabled
+useIr
+(Frontend features)
+:
+Disabled
+RGBA4IsNotSupportedForColorRendering
+(OpenGL workarounds)
+:
+Disabled
+RGBDXT1TexturesSampleZeroAlpha
+(OpenGL workarounds)
+:
+Disabled
+addAndTrueToLoopCondition
+(OpenGL workarounds)
+:
+Disabled
+adjustSrcDstRegionForBlitFramebuffer
+(OpenGL workarounds)
+:
+Enabled
+allowAstcFormats
+(OpenGL workarounds)
+:
+Enabled
+allowClearForRobustResourceInit
+(OpenGL workarounds)
+:
+Disabled
+allowETCFormats
+(OpenGL workarounds)
+:
+Disabled
+alwaysCallUseProgramAfterLink
+(OpenGL workarounds)
+:
+Enabled
+alwaysUnbindFramebufferTexture2D
+(OpenGL workarounds)
+:
+Enabled
+avoid1BitAlphaTextureFormats
+(OpenGL workarounds)
+:
+Disabled
+avoidBindFragDataLocation
+(OpenGL workarounds)
+:
+Disabled
+avoidComplexExpressionsInStructConstructor
+(OpenGL workarounds)
+:
+Disabled
+bgraTexImageFormatsBroken
+(OpenGL workarounds)
+:
+Disabled
+bindCompleteFramebufferForTimerQueries
+(OpenGL workarounds)
+:
+Disabled
+bindTransformFeedbackBufferBeforeBindBufferRange
+(OpenGL workarounds)
+:
+Disabled
+clampArrayAccess
+(OpenGL workarounds)
+:
+Disabled
+clampFragDepth
+(OpenGL workarounds)
+:
+Enabled
+clampMscRate
+(OpenGL workarounds)
+:
+Enabled
+clampPointSize
+(OpenGL workarounds)
+:
+Enabled
+clearsWithGapsNeedFlush
+(OpenGL workarounds)
+:
+Disabled
+clipSrcRegionForBlitFramebuffer
+(OpenGL workarounds)
+:
+Disabled
+corruptProgramBinaryForTesting
+(OpenGL workarounds)
+:
+Disabled
+decodeEncodeSRGBForGenerateMipmap
+(OpenGL workarounds)
+:
+Disabled
+disableBaseInstanceVertex
+(OpenGL workarounds)
+:
+Enabled
+disableBlendEquationAdvanced
+(OpenGL workarounds)
+:
+Disabled
+disableClearTexImageForRobustInit
+(OpenGL workarounds)
+:
+Disabled
+disableClearTexture
+(OpenGL workarounds)
+:
+Disabled
+disableClipControl
+(OpenGL features)
+:
+Disabled
+disableDrawBuffersIndexed
+(OpenGL workarounds)
+:
+Disabled
+disableGPUSwitchingSupport
+(OpenGL workarounds)
+:
+Disabled
+disableMSAASampleCount1
+(OpenGL workarounds)
+:
+Disabled
+disableMultisampledRenderToTexture
+(OpenGL workarounds)
+:
+Disabled
+disableNativeParallelCompile
+(OpenGL workarounds)
+:
+Disabled
+disablePassthroughShaders
+(OpenGL workarounds)
+:
+Disabled
+disableRenderSnorm
+(OpenGL workarounds)
+:
+Disabled
+disableSemaphoreFd
+(OpenGL workarounds)
+:
+Disabled
+disableSyncControlSupport
+(OpenGL workarounds)
+:
+Disabled
+disableTextureClampToBorder
+(OpenGL workarounds)
+:
+Disabled
+disableTextureMirrorClampToEdge
+(OpenGL workarounds)
+:
+Disabled
+disableTiledRendering
+(OpenGL workarounds)
+:
+Disabled
+disableTimestampQueries
+(OpenGL workarounds)
+:
+Disabled
+doesSRGBClearsOnLinearFramebufferAttachments
+(OpenGL workarounds)
+:
+Disabled
+dontInitializeUninitializedLocals
+(OpenGL workarounds)
+:
+Disabled
+dontInvalidateIncompleteFBOs
+(OpenGL workarounds)
+:
+Disabled
+dontUseLoopsToInitializeVariables
+(OpenGL workarounds)
+:
+Disabled
+emitMaxGlsl400ForTesting
+(OpenGL workarounds)
+:
+Disabled
+emulateAbsIntFunction
+(OpenGL workarounds)
+:
+Disabled
+emulateAtan2Float
+(OpenGL workarounds)
+:
+Enabled
+emulateClipDistanceState
+(OpenGL workarounds)
+:
+Disabled
+emulateClipOrigin
+(OpenGL workarounds)
+:
+Disabled
+emulateCopyTexImage2D
+(OpenGL workarounds)
+:
+Disabled
+emulateCopyTexImage2DFromRenderbuffers
+(OpenGL workarounds)
+:
+Disabled
+emulateImmutableCompressedTexture3D
+(OpenGL workarounds)
+:
+Disabled
+emulateMaxVertexAttribStride
+(OpenGL workarounds)
+:
+Disabled
+emulatePackSkipRowsAndPackSkipPixels
+(OpenGL workarounds)
+:
+Disabled
+emulatePrimitiveRestartFixedIndex
+(OpenGL workarounds)
+:
+Disabled
+emulateRGB10
+(OpenGL workarounds)
+:
+Disabled
+ensureNonEmptyBufferIsBoundForDraw
+(OpenGL features)
+:
+Disabled
+expandFragmentOutputsToVec4
+(OpenGL workarounds)
+:
+Disabled
+explicitFragmentLocations
+(OpenGL workarounds)
+:
+Disabled
+finishBeforeBlitFramebufferMultiAttachment
+(OpenGL workarounds)
+:
+Disabled
+finishDoesNotCauseQueriesToBeAvailable
+(OpenGL workarounds)
+:
+Disabled
+flushBeforeDeleteTextureIfCopiedTo
+(OpenGL workarounds)
+:
+Disabled
+flushBeforeGenerateMipmap
+(OpenGL workarounds)
+:
+Disabled
+flushOnFramebufferChange
+(OpenGL workarounds)
+:
+Disabled
+flushQueriesBeforeDeletingOrUnbindingFbo
+(OpenGL workarounds)
+:
+Disabled
+forceLumaWorkaroundForSameTextureCopyTexImage2D
+(OpenGL workarounds)
+:
+Disabled
+forceMaxCombinedShaderOutputResources
+(OpenGL features)
+:
+Enabled
+initFragmentOutputVariables
+(OpenGL workarounds)
+:
+Disabled
+initializeCurrentVertexAttributes
+(OpenGL workarounds)
+:
+Enabled
+keepBufferShadowCopy
+(OpenGL workarounds)
+:
+Disabled
+limitMax3dArrayTextureSizeTo1024
+(OpenGL workarounds)
+:
+Disabled
+limitMaxBufferSizeTo1gb
+(OpenGL workarounds)
+:
+Disabled
+limitMaxMSAASamplesTo4
+(OpenGL workarounds)
+:
+Disabled
+limitOutputVaryingsTo256AtCompileTime
+(OpenGL workarounds)
+:
+Disabled
+limitWebglMaxTextureSizeTo4096
+(OpenGL workarounds)
+:
+Disabled
+limitWebglMaxTextureSizeTo8192
+(OpenGL workarounds)
+:
+Disabled
+multiviewViaViewportArray
+(OpenGL features)
+:
+Disabled
+packLargeRowLengthSeparatelyPackBuffer
+(OpenGL workarounds)
+:
+Disabled
+packLastRowSeparatelyForPaddingInclusion
+(OpenGL workarounds)
+:
+Enabled
+packOverlappingRowsSeparatelyPackBuffer
+(OpenGL workarounds)
+:
+Enabled
+passHighpToPackUnormSnormBuiltins
+(OpenGL workarounds)
+:
+Disabled
+preAddTexelFetchOffsets
+(OpenGL workarounds)
+:
+Disabled
+preTransformTextureCubeGradDerivatives
+(OpenGL workarounds)
+:
+Disabled
+promotePackedFormatsTo8BitPerChannel
+(OpenGL workarounds)
+:
+Disabled
+queryCounterBitsGeneratesErrors
+(OpenGL workarounds)
+:
+Disabled
+readPixelsUsingImplementationColorReadFormatForNorm16
+(OpenGL workarounds)
+:
+Enabled
+reapplyUBOBindingsAfterUsingBinaryProgram
+(OpenGL workarounds)
+:
+Disabled
+reattachFboDepthStencilOnReallocation
+(OpenGL workarounds)
+:
+Disabled
+reattachTextureToFboAfterLayerIncrease
+(OpenGL workarounds)
+:
+Disabled
+recreateImmutableTextureOnBaseLevelIncrease
+(OpenGL workarounds)
+:
+Disabled
+recreateMipmapLevelsBeforeGenerate
+(OpenGL workarounds)
+:
+Disabled
+recreateTextureOnTexImage3dDepthIncrease
+(OpenGL workarounds)
+:
+Disabled
+removeDynamicIndexingOfSwizzledVector
+(OpenGL workarounds)
+:
+Disabled
+removeInvariantAndCentroidForESSL3
+(OpenGL workarounds)
+:
+Disabled
+resetBaseLevelForASTCImage
+(OpenGL workarounds)
+:
+Disabled
+resetSampleCoverageOnFBOChange
+(OpenGL workarounds)
+:
+Disabled
+resetTexImage2DBaseLevel
+(OpenGL workarounds)
+:
+Disabled
+resetTexStorage2DBaseLevel
+(OpenGL workarounds)
+:
+Disabled
+resyncDepthRangeOnClipControl
+(OpenGL workarounds)
+:
+Disabled
+rewriteRepeatedAssignToSwizzled
+(OpenGL workarounds)
+:
+Enabled
+rewriteRowMajorMatrices
+(OpenGL workarounds)
+:
+Disabled
+roundUp3dTextureSizeToPOTForLimit
+(OpenGL workarounds)
+:
+Disabled
+sanitizeAMDGPURendererString
+(OpenGL workarounds)
+:
+Disabled
+scalarizeVecAndMatConstructorArgs
+(OpenGL workarounds)
+:
+Enabled
+setPrimitiveRestartFixedIndexForDrawArrays
+(OpenGL workarounds)
+:
+Disabled
+setZeroLevelBeforeGenerateMipmap
+(OpenGL workarounds)
+:
+Disabled
+shiftInstancedArrayDataWithOffset
+(OpenGL workarounds)
+:
+Disabled
+splitLevel0PboFullSubImage2D
+(OpenGL workarounds)
+:
+Disabled
+srgbBlendingBroken
+(OpenGL workarounds)
+:
+Disabled
+supportsFragmentShaderInterlockARB
+(OpenGL features)
+:
+Disabled
+supportsFragmentShaderInterlockNV
+(OpenGL features)
+:
+Disabled
+supportsFragmentShaderOrderingINTEL
+(OpenGL features)
+:
+Disabled
+supportsShaderFramebufferFetchEXT
+(OpenGL features)
+:
+Disabled
+supportsShaderFramebufferFetchNonCoherentEXT
+(OpenGL features)
+:
+Disabled
+syncAllVertexArraysToDefault
+(OpenGL workarounds)
+:
+Disabled
+syncDefaultVertexArraysToDefault
+(OpenGL workarounds)
+:
+Disabled
+unbindFBOBeforeSwitchingContext
+(OpenGL workarounds)
+:
+Disabled
+unfoldShortCircuits
+(OpenGL workarounds)
+:
+Disabled
+unpackLastRowSeparatelyForPaddingInclusion
+(OpenGL workarounds)
+:
+Enabled
+unpackOverlappingRowsSeparatelyUnpackBuffer
+(OpenGL workarounds)
+:
+Enabled
+unsizedSRGBReadPixelsDoesntTransform
+(OpenGL workarounds)
+:
+Disabled
+uploadOversizedMipLevelsViaUnpackBuffer
+(OpenGL workarounds)
+:
+Disabled
+uploadTextureDataInChunks
+(OpenGL workarounds)
+:
+Disabled
+useIntermediateTextureForGenerateMipmap
+(OpenGL workarounds)
+:
+Disabled
+useTempForNonZeroBaseLevelGenMipmapUsingCopyImageSubData
+(OpenGL workarounds)
+:
+Disabled
+useTexSubImageForHostTwiddledNpotUploads
+(OpenGL workarounds)
+:
+Disabled
+useUnusedBlocksWithStandardOrSharedLayout
+(OpenGL workarounds)
+:
+Disabled
+validateMaxPerStageUniformBlocksAtCompileTime
+(OpenGL workarounds)
+:
+Disabled
+validateState
+(OpenGL features)
+:
+Disabled
+vertexIDDoesNotIncludeBaseVertex
+(OpenGL workarounds)
+:
+Disabled
+Dawn Info
+=========
+<Unknown GPU>  OpenGLES backend - ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 4070/PCIe/SSE2, OpenGL ES 3.2 NVIDIA 580.159.04) (Compatibility Mode)
+-----------------------------------------------------------------------------------------------------------------------------------------------------
+[WebGPU Status]
+---------------
+Available
+[Adapter Supported Features]
+----------------------------
+texture-compression-bc
+texture-compression-etc2
+texture-compression-astc
+texture-compression-astc-sliced-3d
+float32blendable
+dual-source-blending
+texture-component-swizzle
+dawn-internal-usages
+dawn-native
+implicit-device-synchronization
+transient-attachments
+msaa-render-to-single-sampled
+angle-texture-sharing
+unorm16texture-formats
+dawn-format-capabilities
+shared-fence-sync-fd
+shared-fence-egl-sync
+unorm16formats-for-external-texture
+dawn-allow-undefined-load-store-op
+[Enabled Toggle Names]
+----------------------
+lazy_clear_resource_on_first_use:
+https://crbug.com/dawn/145
+(https://crbug.com/dawn/145)
+:
+    Clears resource to zero on first usage. This initializes the resource so
+    that no dirty bits from recycled memory is present in the new resource.
+disable_indexed_draw_buffers:
+https://crbug.com/dawn/582
+(https://crbug.com/dawn/582)
+:
+    Disables the use of indexed draw buffer state which is unsupported on some
+    platforms.
+flush_before_client_wait_sync:
+https://crbug.com/dawn/633
+(https://crbug.com/dawn/633)
+:
+    Call glFlush before glClientWaitSync to work around bugs in the latter
+disallow_spirv:
+https://crbug.com/1214923
+(https://crbug.com/1214923)
+:
+    Disallow usage of SPIR-V completely so that only WGSL is used for shader
+    modules. This is useful to prevent a Chromium renderer process from
+    successfully sending SPIR-V code to be compiled in the GPU process.
+use_placeholder_fragment_in_vertex_only_pipeline:
+https://crbug.com/dawn/136
+(https://crbug.com/dawn/136)
+:
+    Use a placeholder empty fragment shader in vertex only render pipeline.
+    This toggle must be enabled for OpenGL ES backend, the Vulkan Backend, and
+    serves as a workaround by default enabled on some Metal devices with Intel
+    GPU to ensure the depth result is correct.
+timestamp_quantization:
+https://crbug.com/dawn/1800
+(https://crbug.com/dawn/1800)
+:
+    Enable timestamp queries quantization to reduce the precision of timers
+    that can be created with timestamp queries.
+use_blit_for_buffer_to_stencil_texture_copy:
+https://crbug.com/dawn/1389
+(https://crbug.com/dawn/1389)
+:
+    Use a blit instead of a copy command to copy buffer data to the stencil
+    aspect of a texture. Works around an issue where stencil writes by copy
+    commands are not visible to a render or compute pass.
+use_blit_for_depth16unorm_texture_to_buffer_copy:
+https://crbug.com/dawn/1782
+(https://crbug.com/dawn/1782)
+:
+    Use a blit instead of a copy command to copy depth aspect of a texture to
+    a buffer.Workaround for OpenGL and OpenGLES.
+use_blit_for_depth32float_texture_to_buffer_copy:
+https://crbug.com/dawn/1782
+(https://crbug.com/dawn/1782)
+:
+    Use a blit instead of a copy command to copy depth aspect of a texture to
+    a buffer.Workaround for OpenGLES.
+use_blit_for_stencil_texture_to_buffer_copy:
+https://crbug.com/dawn/1782
+(https://crbug.com/dawn/1782)
+:
+    Use a blit instead of a copy command to copy stencil aspect of a texture
+    to a buffer.Workaround for OpenGLES.
+use_blit_for_snorm_texture_to_buffer_copy:
+https://crbug.com/dawn/1781
+(https://crbug.com/dawn/1781)
+:
+    Use a blit instead of a copy command to copy snorm texture to a
+    buffer.Workaround for OpenGLES.
+use_blit_for_rgb9e5ufloat_texture_copy:
+https://crbug.com/dawn/2079
+(https://crbug.com/dawn/2079)
+:
+    Use a blit instead of a copy command to copy rgb9e5ufloat texture to a
+    texture or a buffer.Workaround for OpenGLES.
+use_blit_for_rg11b10ufloat_texture_copy:
+https://crbug.com/381214487
+(https://crbug.com/381214487)
+:
+    Use a blit instead of a copy command to copy rg11b10ufloat texture to a
+    texture or a buffer.Workaround for OpenGLES.
+use_blit_for_float_16_texture_copy:
+https://crbug.com/381214487
+(https://crbug.com/381214487)
+:
+    Use a blit instead of a copy command to copy float16 texture to a texture
+    or a buffer.Workaround for OpenGLES.
+use_blit_for_non_rgba_unorm_texture_to_buffer_copy:
+https://issues.chromium.org/issues/556959073
+(https://issues.chromium.org/issues/556959073)
+:
+    Use a blit instead of a copy command to copy non-RGBA unorm textures to a
+    buffer. Workaround for OpenGLES.
+use_blit_for_non_rgba_float_texture_to_buffer_copy:
+https://issues.chromium.org/issues/556959073
+(https://issues.chromium.org/issues/556959073)
+:
+    Use a blit instead of a copy command to copy non-RGBA float textures to a
+    buffer. Workaround for OpenGLES.
+use_blit_for_uint_texture_to_buffer_copy:
+https://issues.chromium.org/issues/556959073
+(https://issues.chromium.org/issues/556959073)
+:
+    Use a blit instead of a copy command to copy uint textures to a buffer.
+    Workaround for OpenGLES.
+use_blit_for_sint_texture_to_buffer_copy:
+https://issues.chromium.org/issues/556959073
+(https://issues.chromium.org/issues/556959073)
+:
+    Use a blit instead of a copy command to copy sint textures to a buffer.
+    Workaround for OpenGLES.
+gl_use_array_length_from_uniform:
+https://crbug.com/dawn/379805731
+(https://crbug.com/dawn/379805731)
+:
+    Use arrayLengthFromUniform transform to replace arrayLength() function
+    calls of dynamic storage buffers.This toggle is only used for workarounds
+    on certain devices. It has no impact on backends which need this transform
+    universally (metal, d3d12)
+use_t2b2t_for_srgb_texture_copy:
+https://crbug.com/dawn/2362
+(https://crbug.com/dawn/2362)
+:
+    Use T2B and B2T copies to emulate a T2T copy between sRGB and non-sRGB
+    textures.Workaround for OpenGLES.
+enable_integer_range_analysis_in_robustness:
+https://crbug.com/348701956
+(https://crbug.com/348701956)
+:
+    Compute the range of the index with Integer Range Analysis in the
+    robustness transform and skip doing index clamping when the out of bound
+    access cannot happen.
+blob_cache_hash_validation:
+https://crbug.com/429938352
+(https://crbug.com/429938352)
+:
+    Enable hash validation when loading/storing from/to the blob cache
+decompose_uniform_buffers:
+https://crbug.com/448452698
+(https://crbug.com/448452698)
+:
+    Decompose uniform buffers into arrays of vec4<u32> on backends for Vulkan
+    and OpenGL.
+[WebGPU Required Toggles - enabled]
+-----------------------------------
+disallow_spirv:
+https://crbug.com/1214923
+(https://crbug.com/1214923)
+:
+    Disallow usage of SPIR-V completely so that only WGSL is used for shader
+    modules. This is useful to prevent a Chromium renderer process from
+    successfully sending SPIR-V code to be compiled in the GPU process.
+timestamp_quantization:
+https://crbug.com/dawn/1800
+(https://crbug.com/dawn/1800)
+:
+    Enable timestamp queries quantization to reduce the precision of timers
+    that can be created with timestamp queries.
+<CPU>  Vulkan backend - SwiftShader Device (Subzero)
+----------------------------------------------------
+[WebGPU Status]
+---------------
+Blocklisted - crbug.com/40057808: CPU adapters not fully tested or conformant. |
+[Adapter Supported Features]
+----------------------------
+core-features-and-limits
+depth-clip-control
+depth32float-stencil8
+texture-compression-bc
+texture-compression-bc-sliced-3d
+texture-compression-etc2
+texture-compression-astc
+texture-compression-astc-sliced-3d
+timestamp-query
+indirect-first-instance
+rg11b10ufloat-renderable
+bgra8unorm-storage
+float32filterable
+float32blendable
+clip-distances
+subgroups
+texture-component-swizzle
+subgroup-size-control
+dawn-internal-usages
+dawn-multi-planar-formats
+dawn-native
+implicit-device-synchronization
+transient-attachments
+unorm16texture-formats
+adapter-properties-memory-heaps
+adapter-properties-vk
+dawn-format-capabilities
+shared-texture-memory-opaque-fd
+shared-fence-vk-semaphore-opaque-fd
+dawn-load-resolve-texture
+flexible-texture-views
+unorm16formats-for-external-texture
+dawn-allow-undefined-load-store-op
+[Enabled Toggle Names]
+----------------------
+lazy_clear_resource_on_first_use:
+https://crbug.com/dawn/145
+(https://crbug.com/dawn/145)
+:
+    Clears resource to zero on first usage. This initializes the resource so
+    that no dirty bits from recycled memory is present in the new resource.
+use_temporary_buffer_in_texture_to_texture_copy:
+https://crbug.com/dawn/42
+(https://crbug.com/dawn/42)
+:
+    Split texture-to-texture copy into two copies: copy from source texture
+    into a temporary buffer, and copy from the temporary buffer into the
+    destination texture when copying between compressed textures that don't
+    have block-aligned sizes. This workaround is enabled by default on all
+    Vulkan drivers to solve an issue in the Vulkan SPEC about the
+    texture-to-texture copies with compressed formats. See #1005
+    (https://github.com/KhronosGroup/Vulkan-Docs/issues/1005) for more
+    details.
+vulkan_use_d32s8:
+https://crbug.com/dawn/286
+(https://crbug.com/dawn/286)
+:
+    Vulkan mandates support of either D32_FLOAT_S8 or D24_UNORM_S8. When
+    available the backend will use D32S8 (toggle to on) but setting the toggle
+    to off will make it use the D24S8 format when possible.
+vulkan_use_s8:
+https://crbug.com/dawn/666
+(https://crbug.com/dawn/666)
+:
+    Vulkan has a pure stencil8 format but it is not universally available.
+    When this toggle is on, the backend will use S8 for the stencil8 format,
+    otherwise it will fallback to D32S8 or D24S8.
+disallow_spirv:
+https://crbug.com/1214923
+(https://crbug.com/1214923)
+:
+    Disallow usage of SPIR-V completely so that only WGSL is used for shader
+    modules. This is useful to prevent a Chromium renderer process from
+    successfully sending SPIR-V code to be compiled in the GPU process.
+vulkan_use_demote_to_helper_invocation_extension:
+https://crbug.com/42250787
+(https://crbug.com/42250787)
+:
+    Sets the use of the vulkan demote to helper extension
+use_placeholder_fragment_in_vertex_only_pipeline:
+https://crbug.com/dawn/136
+(https://crbug.com/dawn/136)
+:
+    Use a placeholder empty fragment shader in vertex only render pipeline.
+    This toggle must be enabled for OpenGL ES backend, the Vulkan Backend, and
+    serves as a workaround by default enabled on some Metal devices with Intel
+    GPU to ensure the depth result is correct.
+timestamp_quantization:
+https://crbug.com/dawn/1800
+(https://crbug.com/dawn/1800)
+:
+    Enable timestamp queries quantization to reduce the precision of timers
+    that can be created with timestamp queries.
+use_vulkan_zero_initialize_workgroup_memory_extension:
+https://crbug.com/dawn/1302
+(https://crbug.com/dawn/1302)
+:
+    Initialize workgroup memory with OpConstantNull on Vulkan when the Vulkan
+    extension VK_KHR_zero_initialize_workgroup_memory is supported.
+use_vulkan_memory_model:
+https://crbug.com/392606604
+(https://crbug.com/392606604)
+:
+    Use the Vulkan Memory Model if available.
+vulkan_direct_variable_access_transform_handle:
+https://crbug.com/387000529
+(https://crbug.com/387000529)
+:
+    Transform handles using direct variable access.
+enable_integer_range_analysis_in_robustness:
+https://crbug.com/348701956
+(https://crbug.com/348701956)
+:
+    Compute the range of the index with Integer Range Analysis in the
+    robustness transform and skip doing index clamping when the out of bound
+    access cannot happen.
+use_spirv_1_4:
+https://crbug.com/422421915
+(https://crbug.com/422421915)
+:
+    Use SPIR-V 1.4 if available
+blob_cache_hash_validation:
+https://crbug.com/429938352
+(https://crbug.com/429938352)
+:
+    Enable hash validation when loading/storing from/to the blob cache
+decompose_uniform_buffers:
+https://crbug.com/448452698
+(https://crbug.com/448452698)
+:
+    Decompose uniform buffers into arrays of vec4<u32> on backends for Vulkan
+    and OpenGL.
+vulkan_use_dynamic_rendering:
+https://crbug.com/dawn/463893794
+(https://crbug.com/dawn/463893794)
+:
+    Makes use of VK_KHR_dynamic_rendering to implement WebGPU RenderPass.
+enable_spirv_validation:
+https://crbug.com/473526415
+(https://crbug.com/473526415)
+:
+    Enable validation of SPIR-V generated by Tint.
+vulkan_use_create_render_pass_2:
+https://crbug.com/chromium/463893793
+(https://crbug.com/chromium/463893793)
+:
+    Makes use of VK_KHR_create_renderpass2 when creating VkRenderPass objects.
+    Ignored when vulkan_use_dynamic_rendering is enabled.
+vulkan_use_rasterization_order_attachment_access:
+https://crbug.com/42241389
+(https://crbug.com/42241389)
+:
+    Use VK_EXT_rasterization_order_attachment_access when it is available.
+wait_is_thread_safe:
+https://crbug.com/412761228
+(https://crbug.com/412761228)
+:
+    WaitFor* functions are thread-safe and can be called without the
+    device-lock if implicit synchronization is enabled.
+[WebGPU Required Toggles - enabled]
+-----------------------------------
+disallow_spirv:
+https://crbug.com/1214923
+(https://crbug.com/1214923)
+:
+    Disallow usage of SPIR-V completely so that only WGSL is used for shader
+    modules. This is useful to prevent a Chromium renderer process from
+    successfully sending SPIR-V code to be compiled in the GPU process.
+timestamp_quantization:
+https://crbug.com/dawn/1800
+(https://crbug.com/dawn/1800)
+:
+    Enable timestamp queries quantization to reduce the precision of timers
+    that can be created with timestamp queries.
+<Discrete GPU>  Vulkan backend - NVIDIA GeForce RTX 4070
+--------------------------------------------------------
+[WebGPU Status]
+---------------
+Available
+[Adapter Supported Features]
+----------------------------
+core-features-and-limits
+depth-clip-control
+depth32float-stencil8
+texture-compression-bc
+texture-compression-bc-sliced-3d
+timestamp-query
+indirect-first-instance
+rg11b10ufloat-renderable
+bgra8unorm-storage
+float32filterable
+float32blendable
+clip-distances
+dual-source-blending
+subgroups
+texture-formats-tier1
+texture-formats-tier2
+primitive-index
+texture-component-swizzle
+subgroup-size-control
+dawn-internal-usages
+dawn-multi-planar-formats
+dawn-native
+implicit-device-synchronization
+transient-attachments
+unorm16texture-formats
+adapter-properties-memory-heaps
+adapter-properties-vk
+dawn-format-capabilities
+dawn-drm-format-capabilities
+shared-texture-memory-dma-buf
+shared-texture-memory-opaque-fd
+shared-fence-vk-semaphore-opaque-fd
+shared-fence-sync-fd
+dawn-load-resolve-texture
+flexible-texture-views
+unorm16formats-for-external-texture
+adapter-properties-drm
+dawn-allow-undefined-load-store-op
+[Enabled Toggle Names]
+----------------------
+lazy_clear_resource_on_first_use:
+https://crbug.com/dawn/145
+(https://crbug.com/dawn/145)
+:
+    Clears resource to zero on first usage. This initializes the resource so
+    that no dirty bits from recycled memory is present in the new resource.
+use_temporary_buffer_in_texture_to_texture_copy:
+https://crbug.com/dawn/42
+(https://crbug.com/dawn/42)
+:
+    Split texture-to-texture copy into two copies: copy from source texture
+    into a temporary buffer, and copy from the temporary buffer into the
+    destination texture when copying between compressed textures that don't
+    have block-aligned sizes. This workaround is enabled by default on all
+    Vulkan drivers to solve an issue in the Vulkan SPEC about the
+    texture-to-texture copies with compressed formats. See #1005
+    (https://github.com/KhronosGroup/Vulkan-Docs/issues/1005) for more
+    details.
+vulkan_use_d32s8:
+https://crbug.com/dawn/286
+(https://crbug.com/dawn/286)
+:
+    Vulkan mandates support of either D32_FLOAT_S8 or D24_UNORM_S8. When
+    available the backend will use D32S8 (toggle to on) but setting the toggle
+    to off will make it use the D24S8 format when possible.
+vulkan_use_s8:
+https://crbug.com/dawn/666
+(https://crbug.com/dawn/666)
+:
+    Vulkan has a pure stencil8 format but it is not universally available.
+    When this toggle is on, the backend will use S8 for the stencil8 format,
+    otherwise it will fallback to D32S8 or D24S8.
+disallow_spirv:
+https://crbug.com/1214923
+(https://crbug.com/1214923)
+:
+    Disallow usage of SPIR-V completely so that only WGSL is used for shader
+    modules. This is useful to prevent a Chromium renderer process from
+    successfully sending SPIR-V code to be compiled in the GPU process.
+vulkan_use_demote_to_helper_invocation_extension:
+https://crbug.com/42250787
+(https://crbug.com/42250787)
+:
+    Sets the use of the vulkan demote to helper extension
+use_placeholder_fragment_in_vertex_only_pipeline:
+https://crbug.com/dawn/136
+(https://crbug.com/dawn/136)
+:
+    Use a placeholder empty fragment shader in vertex only render pipeline.
+    This toggle must be enabled for OpenGL ES backend, the Vulkan Backend, and
+    serves as a workaround by default enabled on some Metal devices with Intel
+    GPU to ensure the depth result is correct.
+timestamp_quantization:
+https://crbug.com/dawn/1800
+(https://crbug.com/dawn/1800)
+:
+    Enable timestamp queries quantization to reduce the precision of timers
+    that can be created with timestamp queries.
+use_vulkan_zero_initialize_workgroup_memory_extension:
+https://crbug.com/dawn/1302
+(https://crbug.com/dawn/1302)
+:
+    Initialize workgroup memory with OpConstantNull on Vulkan when the Vulkan
+    extension VK_KHR_zero_initialize_workgroup_memory is supported.
+vulkan_use_image_robust_access_2:
+https://crbug.com/tint/1890
+(https://crbug.com/tint/1890)
+:
+    Disable Tint robustness transform on textures when VK_EXT_robustness2 is
+    supported and robustImageAccess2 == VK_TRUE.
+vulkan_use_buffer_robust_access_2:
+https://crbug.com/tint/1890
+(https://crbug.com/tint/1890)
+:
+    Disable index clamping on the runtime-sized arrays on buffers in Tint
+    robustness transform when VK_EXT_robustness2 is supported and
+    robustBufferAccess2 == VK_TRUE.
+use_vulkan_memory_model:
+https://crbug.com/392606604
+(https://crbug.com/392606604)
+:
+    Use the Vulkan Memory Model if available.
+enable_integer_range_analysis_in_robustness:
+https://crbug.com/348701956
+(https://crbug.com/348701956)
+:
+    Compute the range of the index with Integer Range Analysis in the
+    robustness transform and skip doing index clamping when the out of bound
+    access cannot happen.
+use_spirv_1_4:
+https://crbug.com/422421915
+(https://crbug.com/422421915)
+:
+    Use SPIR-V 1.4 if available
+blob_cache_hash_validation:
+https://crbug.com/429938352
+(https://crbug.com/429938352)
+:
+    Enable hash validation when loading/storing from/to the blob cache
+decompose_uniform_buffers:
+https://crbug.com/448452698
+(https://crbug.com/448452698)
+:
+    Decompose uniform buffers into arrays of vec4<u32> on backends for Vulkan
+    and OpenGL.
+vulkan_use_dynamic_rendering:
+https://crbug.com/dawn/463893794
+(https://crbug.com/dawn/463893794)
+:
+    Makes use of VK_KHR_dynamic_rendering to implement WebGPU RenderPass.
+enable_spirv_validation:
+https://crbug.com/473526415
+(https://crbug.com/473526415)
+:
+    Enable validation of SPIR-V generated by Tint.
+vulkan_use_create_render_pass_2:
+https://crbug.com/chromium/463893793
+(https://crbug.com/chromium/463893793)
+:
+    Makes use of VK_KHR_create_renderpass2 when creating VkRenderPass objects.
+    Ignored when vulkan_use_dynamic_rendering is enabled.
+use_spirv_reconvergence_mode:
+https://crbug.com/379673383
+(https://crbug.com/379673383)
+:
+    Use SPIR-V reconvergence execution mode if supported by the device.
+wait_is_thread_safe:
+https://crbug.com/412761228
+(https://crbug.com/412761228)
+:
+    WaitFor* functions are thread-safe and can be called without the
+    device-lock if implicit synchronization is enabled.
+[WebGPU Required Toggles - enabled]
+-----------------------------------
+disallow_spirv:
+https://crbug.com/1214923
+(https://crbug.com/1214923)
+:
+    Disallow usage of SPIR-V completely so that only WGSL is used for shader
+    modules. This is useful to prevent a Chromium renderer process from
+    successfully sending SPIR-V code to be compiled in the GPU process.
+timestamp_quantization:
+https://crbug.com/dawn/1800
+(https://crbug.com/dawn/1800)
+:
+    Enable timestamp queries quantization to reduce the precision of timers
+    that can be created with timestamp queries.
+Compositor Information
+======================
+Tile Update Mode
+:
+One-copy
+Partial Raster
+:
+Enabled
+Display(s) Information
+======================
+Info
+:
+Display[19] bounds=[0,0 1650x950], workarea=[0,0 1650x950], scale=1, rotation=0, panel_rotation=0 external detected
+Color space (all)
+:
+Buffer format (all)
+:
+RGBA_8888
+Color volume
+:
+SDR white level in nits
+:
+203
+HDR relative maximum luminance
+:
+1
+Bits per color component
+:
+8
+Bits per pixel
+:
+24
+Video Acceleration Information
+==============================
+Decoding
+:
+Encoding
+:
+Vulkan Information
+==================
+info
+:
+  "apiVersion": "1.3.275",
+  "usedApiVersion": "1.1.0",
+  "instanceExtensions": {
+    "VK_KHR_device_group_creation": 1,
+    "VK_KHR_display": 23,
+    "VK_KHR_external_fence_capabilities": 1,
+    "VK_KHR_external_memory_capabilities": 1,
+    "VK_KHR_external_semaphore_capabilities": 1,
+    "VK_KHR_get_display_properties2": 1,
+    "VK_KHR_get_physical_device_properties2": 2,
+    "VK_KHR_get_surface_capabilities2": 1,
+    "VK_KHR_surface": 25,
+    "VK_KHR_surface_protected_capabilities": 1,
+    "VK_KHR_wayland_surface": 6,
+    "VK_KHR_xcb_surface": 6,
+    "VK_KHR_xlib_surface": 6,
+    "VK_EXT_acquire_drm_display": 1,
+    "VK_EXT_acquire_xlib_display": 1,
+    "VK_EXT_debug_report": 10,
+    "VK_EXT_debug_utils": 2,
+    "VK_EXT_direct_mode_display": 1,
+    "VK_EXT_display_surface_counter": 1,
+    "VK_EXT_surface_maintenance1": 1,
+    "VK_EXT_swapchain_colorspace": 5,
+    "VK_EXT_headless_surface": 1,
+    "VK_KHR_portability_enumeration": 1,
+    "VK_LUNARG_direct_driver_loading": 1
+  "enabledInstanceExtensions": [
+    "VK_KHR_external_memory_capabilities",
+    "VK_KHR_external_semaphore_capabilities",
+    "VK_EXT_debug_report"
+  ],
+  "instanceLayers": [
+      "layerName": "VK_LAYER_NV_optimus",
+      "specVersion": 4211000,
+      "implementationVersion": "0.0.1",
+      "description": "NVIDIA Optimus layer"
+      "layerName": "VK_LAYER_NV_present",
+      "specVersion": 4211000,
+      "implementationVersion": "0.0.1",
+      "description": "NVIDIA GR2608 layer"
+      "layerName": "VK_LAYER_MESA_device_select",
+      "specVersion": 4210991,
+      "implementationVersion": "0.0.1",
+      "description": "Linux device selection layer"
+      "layerName": "VK_LAYER_MESA_overlay",
+      "specVersion": 4210991,
+      "implementationVersion": "0.0.1",
+      "description": "Mesa Overlay layer"
+      "layerName": "VK_LAYER_INTEL_nullhw",
+      "specVersion": 4198473,
+      "implementationVersion": "0.0.1",
+      "description": "INTEL NULL HW"
+  ],
+  "physicalDevices": [
+      "properties": {
+        "apiVersion": "1.4.312",
+        "driverVersion": "-444.636.256",
+        "vendorID": 4318,
+        "deviceID": 10118,
+        "deviceType": 2,
+        "deviceName": "NVIDIA GeForce RTX 4070",
+        "pipelineCacheUUID": "cedf3493-140e-0a9e-21d7-7b2a841f977a",
+        "limits": {
+          "maxImageDimension1D": 32768,
+          "maxImageDimension2D": 32768,
+          "maxImageDimension3D": 16384,
+          "maxImageDimensionCube": 32768,
+          "maxImageArrayLayers": 2048,
+          "maxTexelBufferElements": 134217728,
+          "maxUniformBufferRange": 65536,
+          "maxStorageBufferRange": 4294967295,
+          "maxPushConstantsSize": 256,
+          "maxMemoryAllocationCount": 4294967295,
+          "maxSamplerAllocationCount": 4000,
+          "bufferImageGranularity": 1,
+          "sparseAddressSpaceSize": 1,
+          "maxBoundDescriptorSets": 32,
+          "maxPerStageDescriptorSamplers": 1048576,
+          "maxPerStageDescriptorUniformBuffers": 1048576,
+          "maxPerStageDescriptorStorageBuffers": 1048576,
+          "maxPerStageDescriptorSampledImages": 1048576,
+          "maxPerStageDescriptorStorageImages": 1048576,
+          "maxPerStageDescriptorInputAttachments": 1048576,
+          "maxPerStageResources": 4294967295,
+          "maxDescriptorSetSamplers": 1048576,
+          "maxDescriptorSetUniformBuffers": 1048576,
+          "maxDescriptorSetUniformBuffersDynamic": 15,
+          "maxDescriptorSetStorageBuffers": 1048576,
+          "maxDescriptorSetStorageBuffersDynamic": 16,
+          "maxDescriptorSetSampledImages": 1048576,
+          "maxDescriptorSetStorageImages": 1048576,
+          "maxDescriptorSetInputAttachments": 1048576,
+          "maxVertexInputAttributes": 32,
+          "maxVertexInputBindings": 32,
+          "maxVertexInputAttributeOffset": 2047,
+          "maxVertexInputBindingStride": 2048,
+          "maxVertexOutputComponents": 128,
+          "maxTessellationGenerationLevel": 64,
+          "maxTessellationPatchSize": 32,
+          "maxTessellationControlPerVertexInputComponents": 128,
+          "maxTessellationControlPerVertexOutputComponents": 128,
+          "maxTessellationControlPerPatchOutputComponents": 120,
+          "maxTessellationControlTotalOutputComponents": 4216,
+          "maxTessellationEvaluationInputComponents": 128,
+          "maxTessellationEvaluationOutputComponents": 128,
+          "maxGeometryShaderInvocations": 32,
+          "maxGeometryInputComponents": 128,
+          "maxGeometryOutputComponents": 128,
+          "maxGeometryOutputVertices": 1024,
+          "maxGeometryTotalOutputComponents": 1024,
+          "maxFragmentInputComponents": 128,
+          "maxFragmentOutputAttachments": 8,
+          "maxFragmentDualSrcAttachments": 1,
+          "maxFragmentCombinedOutputResources": 4294967295,
+          "maxComputeSharedMemorySize": 49152,
+          "maxComputeWorkGroupCount": [
+            2147483647,
+            65535,
+            65535
+          ],
+          "maxComputeWorkGroupInvocations": 1024,
+          "maxComputeWorkGroupSize": [
+            1024,
+            1024,
+            64
+          ],
+          "subPixelPrecisionBits": 8,
+          "subTexelPrecisionBits": 8,
+          "mipmapPrecisionBits": 8,
+          "maxDrawIndexedIndexValue": 4294967295,
+          "maxDrawIndirectCount": 4294967295,
+          "maxSamplerLodBias": 15,
+          "maxSamplerAnisotropy": 16,
+          "maxViewports": 16,
+          "maxViewportDimensions": [
+            32768,
+            32768
+          ],
+          "viewportBoundsRange": [
+            -65536,
+            65536
+          ],
+          "viewportSubPixelBits": 8,
+          "minMemoryMapAlignment": 64,
+          "minTexelBufferOffsetAlignment": 1,
+          "minUniformBufferOffsetAlignment": 1,
+          "minStorageBufferOffsetAlignment": 1,
+          "minTexelOffset": -8,
+          "maxTexelOffset": 7,
+          "minTexelGatherOffset": -32,
+          "maxTexelGatherOffset": 31,
+          "minInterpolationOffset": -0.5,
+          "maxInterpolationOffset": 0.4375,
+          "subPixelInterpolationOffsetBits": 4,
+          "maxFramebufferWidth": 32768,
+          "maxFramebufferHeight": 32768,
+          "maxFramebufferLayers": 2048,
+          "framebufferColorSampleCounts": 15,
+          "framebufferDepthSampleCounts": 15,
+          "framebufferStencilSampleCounts": 31,
+          "framebufferNoAttachmentsSampleCounts": 31,
+          "maxColorAttachments": 8,
+          "sampledImageColorSampleCounts": 15,
+          "sampledImageIntegerSampleCounts": 15,
+          "sampledImageDepthSampleCounts": 15,
+          "sampledImageStencilSampleCounts": 31,
+          "storageImageSampleCounts": 15,
+          "maxSampleMaskWords": 1,
+          "timestampComputeAndGraphics": true,
+          "timestampPeriod": 1,
+          "maxClipDistances": 8,
+          "maxCullDistances": 8,
+          "maxCombinedClipAndCullDistances": 8,
+          "discreteQueuePriorities": 2,
+          "pointSizeRange": [
+            1,
+            2047.9375
+          ],
+          "lineWidthRange": [
+            1,
+            64
+          ],
+          "pointSizeGranularity": 0.0625,
+          "lineWidthGranularity": 0.0625,
+          "strictLines": true,
+          "standardSampleLocations": true,
+          "optimalBufferCopyOffsetAlignment": 1,
+          "optimalBufferCopyRowPitchAlignment": 1,
+          "nonCoherentAtomSize": 1
+        "sparseProperties": {
+          "residencyStandard2DBlockShape": true,
+          "residencyStandard2DMultisampleBlockShape": true,
+          "residencyStandard3DBlockShape": true,
+          "residencyAlignedMipSize": false,
+          "residencyNonResidentStrict": true
+      "extensions": {
+        "VK_KHR_16bit_storage": 1,
+        "VK_KHR_8bit_storage": 1,
+        "VK_KHR_acceleration_structure": 13,
+        "VK_KHR_bind_memory2": 1,
+        "VK_KHR_buffer_device_address": 1,
+        "VK_KHR_calibrated_timestamps": 1,
+        "VK_KHR_compute_shader_derivatives": 1,
+        "VK_KHR_cooperative_matrix": 2,
+        "VK_KHR_copy_commands2": 1,
+        "VK_KHR_create_renderpass2": 1,
+        "VK_KHR_dedicated_allocation": 3,
+        "VK_KHR_deferred_host_operations": 4,
+        "VK_KHR_depth_clamp_zero_one": 1,
+        "VK_KHR_depth_stencil_resolve": 1,
+        "VK_KHR_descriptor_update_template": 1,
+        "VK_KHR_device_group": 4,
+        "VK_KHR_draw_indirect_count": 1,
+        "VK_KHR_driver_properties": 1,
+        "VK_KHR_dynamic_rendering": 1,
+        "VK_KHR_dynamic_rendering_local_read": 1,
+        "VK_KHR_external_fence": 1,
+        "VK_KHR_external_fence_fd": 1,
+        "VK_KHR_external_memory": 1,
+        "VK_KHR_external_memory_fd": 1,
+        "VK_KHR_external_semaphore": 1,
+        "VK_KHR_external_semaphore_fd": 1,
+        "VK_KHR_format_feature_flags2": 2,
+        "VK_KHR_fragment_shader_barycentric": 1,
+        "VK_KHR_fragment_shading_rate": 2,
+        "VK_KHR_get_memory_requirements2": 1,
+        "VK_KHR_global_priority": 1,
+        "VK_KHR_image_format_list": 1,
+        "VK_KHR_imageless_framebuffer": 1,
+        "VK_KHR_incremental_present": 2,
+        "VK_KHR_index_type_uint8": 1,
+        "VK_KHR_line_rasterization": 1,
+        "VK_KHR_load_store_op_none": 1,
+        "VK_KHR_maintenance1": 2,
+        "VK_KHR_maintenance2": 1,
+        "VK_KHR_maintenance3": 1,
+        "VK_KHR_maintenance4": 2,
+        "VK_KHR_maintenance5": 1,
+        "VK_KHR_maintenance6": 1,
+        "VK_KHR_maintenance7": 1,
+        "VK_KHR_maintenance8": 1,
+        "VK_KHR_map_memory2": 1,
+        "VK_KHR_multiview": 1,
+        "VK_KHR_pipeline_binary": 1,
+        "VK_KHR_pipeline_executable_properties": 1,
+        "VK_KHR_pipeline_library": 1,
+        "VK_KHR_present_id": 1,
+        "VK_KHR_present_wait": 1,
+        "VK_KHR_push_descriptor": 2,
+        "VK_KHR_ray_query": 1,
+        "VK_KHR_ray_tracing_maintenance1": 1,
+        "VK_KHR_ray_tracing_pipeline": 1,
+        "VK_KHR_ray_tracing_position_fetch": 1,
+        "VK_KHR_relaxed_block_layout": 1,
+        "VK_KHR_sampler_mirror_clamp_to_edge": 3,
+        "VK_KHR_sampler_ycbcr_conversion": 14,
+        "VK_KHR_separate_depth_stencil_layouts": 1,
+        "VK_KHR_shader_atomic_int64": 1,
+        "VK_KHR_shader_bfloat16": 1,
+        "VK_KHR_shader_clock": 1,
+        "VK_KHR_shader_draw_parameters": 1,
+        "VK_KHR_shader_expect_assume": 1,
+        "VK_KHR_shader_float16_int8": 1,
+        "VK_KHR_shader_float_controls": 4,
+        "VK_KHR_shader_float_controls2": 1,
+        "VK_KHR_shader_integer_dot_product": 1,
+        "VK_KHR_shader_maximal_reconvergence": 1,
+        "VK_KHR_shader_non_semantic_info": 1,
+        "VK_KHR_shader_quad_control": 1,
+        "VK_KHR_shader_relaxed_extended_instruction": 1,
+        "VK_KHR_shader_subgroup_extended_types": 1,
+        "VK_KHR_shader_subgroup_rotate": 2,
+        "VK_KHR_shader_subgroup_uniform_control_flow": 1,
+        "VK_KHR_shader_terminate_invocation": 1,
+        "VK_KHR_shared_presentable_image": 1,
+        "VK_KHR_spirv_1_4": 1,
+        "VK_KHR_storage_buffer_storage_class": 1,
+        "VK_KHR_swapchain": 70,
+        "VK_KHR_swapchain_mutable_format": 1,
+        "VK_KHR_synchronization2": 1,
+        "VK_KHR_timeline_semaphore": 2,
+        "VK_KHR_uniform_buffer_standard_layout": 1,
+        "VK_KHR_variable_pointers": 1,
+        "VK_KHR_vertex_attribute_divisor": 1,
+        "VK_KHR_video_decode_av1": 1,
+        "VK_KHR_video_decode_h264": 9,
+        "VK_KHR_video_decode_h265": 8,
+        "VK_KHR_video_decode_queue": 8,
+        "VK_KHR_video_decode_vp9": 1,
+        "VK_KHR_video_encode_av1": 1,
+        "VK_KHR_video_encode_h264": 14,
+        "VK_KHR_video_encode_h265": 14,
+        "VK_KHR_video_encode_quantization_map": 2,
+        "VK_KHR_video_encode_queue": 12,
+        "VK_KHR_video_maintenance1": 1,
+        "VK_KHR_video_maintenance2": 1,
+        "VK_KHR_video_queue": 8,
+        "VK_KHR_vulkan_memory_model": 3,
+        "VK_KHR_workgroup_memory_explicit_layout": 1,
+        "VK_KHR_zero_initialize_workgroup_memory": 1,
+        "VK_EXT_4444_formats": 1,
+        "VK_EXT_attachment_feedback_loop_dynamic_state": 1,
+        "VK_EXT_attachment_feedback_loop_layout": 2,
+        "VK_EXT_blend_operation_advanced": 2,
+        "VK_EXT_border_color_swizzle": 1,
+        "VK_EXT_buffer_device_address": 2,
+        "VK_EXT_calibrated_timestamps": 2,
+        "VK_EXT_color_write_enable": 1,
+        "VK_EXT_conditional_rendering": 2,
+        "VK_EXT_conservative_rasterization": 1,
+        "VK_EXT_custom_border_color": 12,
+        "VK_EXT_depth_bias_control": 1,
+        "VK_EXT_depth_clamp_control": 1,
+        "VK_EXT_depth_clamp_zero_one": 1,
+        "VK_EXT_depth_clip_control": 1,
+        "VK_EXT_depth_clip_enable": 1,
+        "VK_EXT_depth_range_unrestricted": 1,
+        "VK_EXT_descriptor_buffer": 1,
+        "VK_EXT_descriptor_indexing": 2,
+        "VK_EXT_device_address_binding_report": 1,
+        "VK_EXT_device_fault": 2,
+        "VK_EXT_device_generated_commands": 1,
+        "VK_EXT_discard_rectangles": 2,
+        "VK_EXT_display_control": 1,
+        "VK_EXT_dynamic_rendering_unused_attachments": 1,
+        "VK_EXT_extended_dynamic_state": 1,
+        "VK_EXT_extended_dynamic_state2": 1,
+        "VK_EXT_extended_dynamic_state3": 2,
+        "VK_EXT_external_memory_dma_buf": 1,
+        "VK_EXT_external_memory_host": 1,
+        "VK_EXT_fragment_shader_interlock": 1,
+        "VK_EXT_global_priority": 2,
+        "VK_EXT_global_priority_query": 1,
+        "VK_EXT_graphics_pipeline_library": 1,
+        "VK_EXT_host_image_copy": 1,
+        "VK_EXT_host_query_reset": 1,
+        "VK_EXT_image_2d_view_of_3d": 1,
+        "VK_EXT_image_drm_format_modifier": 2,
+        "VK_EXT_image_robustness": 1,
+        "VK_EXT_image_sliced_view_of_3d": 1,
+        "VK_EXT_image_view_min_lod": 1,
+        "VK_EXT_index_type_uint8": 1,
+        "VK_EXT_inline_uniform_block": 1,
+        "VK_EXT_legacy_vertex_attributes": 1,
+        "VK_EXT_line_rasterization": 1,
+        "VK_EXT_load_store_op_none": 1,
+        "VK_EXT_map_memory_placed": 1,
+        "VK_EXT_memory_budget": 1,
+        "VK_EXT_memory_priority": 1,
+        "VK_EXT_mesh_shader": 1,
+        "VK_EXT_multi_draw": 1,
+        "VK_EXT_mutable_descriptor_type": 1,
+        "VK_EXT_nested_command_buffer": 1,
+        "VK_EXT_non_seamless_cube_map": 1,
+        "VK_EXT_opacity_micromap": 2,
+        "VK_EXT_pageable_device_local_memory": 1,
+        "VK_EXT_pci_bus_info": 2,
+        "VK_EXT_physical_device_drm": 1,
+        "VK_EXT_pipeline_creation_cache_control": 3,
+        "VK_EXT_pipeline_creation_feedback": 1,
+        "VK_EXT_pipeline_library_group_handles": 1,
+        "VK_EXT_pipeline_robustness": 1,
+        "VK_EXT_post_depth_coverage": 1,
+        "VK_EXT_present_mode_fifo_latest_ready": 1,
+        "VK_EXT_primitive_topology_list_restart": 1,
+        "VK_EXT_primitives_generated_query": 1,
+        "VK_EXT_private_data": 1,
+        "VK_EXT_provoking_vertex": 1,
+        "VK_EXT_queue_family_foreign": 1,
+        "VK_EXT_robustness2": 1,
+        "VK_EXT_sample_locations": 1,
+        "VK_EXT_sampler_filter_minmax": 2,
+        "VK_EXT_scalar_block_layout": 1,
+        "VK_EXT_separate_stencil_usage": 1,
+        "VK_EXT_shader_atomic_float": 1,
+        "VK_EXT_shader_demote_to_helper_invocation": 1,
+        "VK_EXT_shader_image_atomic_int64": 1,
+        "VK_EXT_shader_module_identifier": 1,
+        "VK_EXT_shader_object": 1,
+        "VK_EXT_shader_replicated_composites": 1,
+        "VK_EXT_shader_subgroup_ballot": 1,
+        "VK_EXT_shader_subgroup_vote": 1,
+        "VK_EXT_shader_viewport_index_layer": 1,
+        "VK_EXT_subgroup_size_control": 2,
+        "VK_EXT_swapchain_maintenance1": 1,
+        "VK_EXT_texel_buffer_alignment": 1,
+        "VK_EXT_tooling_info": 1,
+        "VK_EXT_transform_feedback": 1,
+        "VK_EXT_vertex_attribute_divisor": 3,
+        "VK_EXT_vertex_attribute_robustness": 1,
+        "VK_EXT_vertex_input_dynamic_state": 2,
+        "VK_EXT_ycbcr_2plane_444_formats": 1,
+        "VK_EXT_ycbcr_image_arrays": 1,
+        "VK_NV_clip_space_w_scaling": 1,
+        "VK_NV_cluster_acceleration_structure": 2,
+        "VK_NV_compute_shader_derivatives": 1,
+        "VK_NV_cooperative_matrix": 1,
+        "VK_NV_cooperative_matrix2": 1,
+        "VK_NV_cooperative_vector": 4,
+        "VK_NV_copy_memory_indirect": 1,
+        "VK_NV_corner_sampled_image": 2,
+        "VK_NV_coverage_reduction_mode": 1,
+        "VK_NV_cuda_kernel_launch": 2,
+        "VK_NV_dedicated_allocation": 1,
+        "VK_NV_dedicated_allocation_image_aliasing": 1,
+        "VK_NV_descriptor_pool_overallocation": 1,
+        "VK_NV_device_diagnostic_checkpoints": 2,
+        "VK_NV_device_diagnostics_config": 2,
+        "VK_NV_device_generated_commands": 3,
+        "VK_NV_device_generated_commands_compute": 2,
+        "VK_NV_disk_cache_utils": 1,
+        "VK_NV_extended_sparse_address_space": 1,
+        "VK_NV_fill_rectangle": 1,
+        "VK_NV_fragment_coverage_to_color": 1,
+        "VK_NV_fragment_shader_barycentric": 1,
+        "VK_NV_fragment_shading_rate_enums": 1,
+        "VK_NV_framebuffer_mixed_samples": 1,
+        "VK_NV_geometry_shader_passthrough": 1,
+        "VK_NV_inherited_viewport_scissor": 1,
+        "VK_NV_internal_nvpresent": 1,
+        "VK_NV_linear_color_attachment": 1,
+        "VK_NV_low_latency": 1,
+        "VK_NV_low_latency2": 2,
+        "VK_NV_memory_decompression": 1,
+        "VK_NV_mesh_shader": 1,
+        "VK_NV_optical_flow": 1,
+        "VK_NV_partitioned_acceleration_structure": 1,
+        "VK_NV_present_metering": 1,
+        "VK_NV_raw_access_chains": 1,
+        "VK_NV_ray_tracing": 3,
+        "VK_NV_ray_tracing_invocation_reorder": 1,
+        "VK_NV_ray_tracing_motion_blur": 1,
+        "VK_NV_representative_fragment_test": 2,
+        "VK_NV_sample_mask_override_coverage": 1,
+        "VK_NV_scissor_exclusive": 2,
+        "VK_NV_shader_atomic_float16_vector": 1,
+        "VK_NV_shader_image_footprint": 2,
+        "VK_NV_shader_sm_builtins": 1,
+        "VK_NV_shader_subgroup_partitioned": 1,
+        "VK_NV_shading_rate_image": 3,
+        "VK_NV_viewport_array2": 1,
+        "VK_NV_viewport_swizzle": 1,
+        "VK_NVX_binary_import": 2,
+        "VK_NVX_image_view_handle": 3,
+        "VK_NVX_multiview_per_view_attributes": 1,
+        "VK_AMD_buffer_marker": 1,
+        "VK_GOOGLE_hlsl_functionality1": 1,
+        "VK_GOOGLE_user_type": 1
+      "features": {
+        "robustBufferAccess": true,
+        "fullDrawIndexUint32": true,
+        "imageCubeArray": true,
+        "independentBlend": true,
+        "geometryShader": true,
+        "tessellationShader": true,
+        "sampleRateShading": true,
+        "dualSrcBlend": true,
+        "logicOp": true,
+        "multiDrawIndirect": true,
+        "drawIndirectFirstInstance": true,
+        "depthClamp": true,
+        "depthBiasClamp": true,
+        "fillModeNonSolid": true,
+        "depthBounds": true,
+        "wideLines": true,
+        "largePoints": true,
+        "alphaToOne": true,
+        "multiViewport": true,
+        "samplerAnisotropy": true,
+        "textureCompressionETC2": false,
+        "textureCompressionASTCLDR": false,
+        "textureCompressionBC": true,
+        "occlusionQueryPrecise": true,
+        "pipelineStatisticsQuery": true,
+        "vertexPipelineStoresAndAtomics": true,
+        "fragmentStoresAndAtomics": true,
+        "shaderTessellationAndGeometryPointSize": true,
+        "shaderImageGatherExtended": true,
+        "shaderStorageImageExtendedFormats": true,
+        "shaderStorageImageMultisample": true,
+        "shaderStorageImageReadWithoutFormat": true,
+        "shaderStorageImageWriteWithoutFormat": true,
+        "shaderUniformBufferArrayDynamicIndexing": true,
+        "shaderSampledImageArrayDynamicIndexing": true,
+        "shaderStorageBufferArrayDynamicIndexing": true,
+        "shaderStorageImageArrayDynamicIndexing": true,
+        "shaderClipDistance": true,
+        "shaderCullDistance": true,
+        "shaderFloat64": true,
+        "shaderInt64": true,
+        "shaderInt16": true,
+        "shaderResourceResidency": true,
+        "shaderResourceMinLod": true,
+        "sparseBinding": true,
+        "sparseResidencyBuffer": true,
+        "sparseResidencyImage2D": true,
+        "sparseResidencyImage3D": true,
+        "sparseResidency2Samples": true,
+        "sparseResidency4Samples": true,
+        "sparseResidency8Samples": true,
+        "sparseResidency16Samples": true,
+        "sparseResidencyAliased": true,
+        "variableMultisampleRate": true,
+        "inheritedQueries": true
+      "featureSamplerYcbcrConversion": true,
+      "featureProtectedMemory": false,
+      "queueFamilies": [
+          "queueFlags": 15,
+          "queueCount": 16,
+          "timestampValidBits": 64,
+          "minImageTransferGranularity": {
+            "width": 1,
+            "height": 1,
+            "depth": 1
+          "queueFlags": 12,
+          "queueCount": 2,
+          "timestampValidBits": 64,
+          "minImageTransferGranularity": {
+            "width": 1,
+            "height": 1,
+            "depth": 1
+          "queueFlags": 14,
+          "queueCount": 8,
+          "timestampValidBits": 64,
+          "minImageTransferGranularity": {
+            "width": 1,
+            "height": 1,
+            "depth": 1
+          "queueFlags": 44,
+          "queueCount": 1,
+          "timestampValidBits": 32,
+          "minImageTransferGranularity": {
+            "width": 1,
+            "height": 1,
+            "depth": 1
+          "queueFlags": 76,
+          "queueCount": 1,
+          "timestampValidBits": 32,
+          "minImageTransferGranularity": {
+            "width": 1,
+            "height": 1,
+            "depth": 1
+          "queueFlags": 268,
+          "queueCount": 1,
+          "timestampValidBits": 64,
+          "minImageTransferGranularity": {
+            "width": 1,
+            "height": 1,
+            "depth": 1
+      ]
+      "properties": {
+        "apiVersion": "1.4.318",
+        "driverVersion": "25.2.8",
+        "vendorID": 65541,
+        "deviceID": 0,
+        "deviceType": 4,
+        "deviceName": "llvmpipe (LLVM 20.1.2, 256 bits)",
+        "pipelineCacheUUID": "32352e32-2e38-2d30-7562-756e7475302e",
+        "limits": {
+          "maxImageDimension1D": 16384,
+          "maxImageDimension2D": 16384,
+          "maxImageDimension3D": 4096,
+          "maxImageDimensionCube": 32768,
+          "maxImageArrayLayers": 2048,
+          "maxTexelBufferElements": 134217728,
+          "maxUniformBufferRange": 65536,
+          "maxStorageBufferRange": 134217728,
+          "maxPushConstantsSize": 256,
+          "maxMemoryAllocationCount": 4294967295,
+          "maxSamplerAllocationCount": 32768,
+          "bufferImageGranularity": 1,
+          "sparseAddressSpaceSize": 1,
+          "maxBoundDescriptorSets": 8,
+          "maxPerStageDescriptorSamplers": 1000000,
+          "maxPerStageDescriptorUniformBuffers": 1000000,
+          "maxPerStageDescriptorStorageBuffers": 1000000,
+          "maxPerStageDescriptorSampledImages": 1000000,
+          "maxPerStageDescriptorStorageImages": 1000000,
+          "maxPerStageDescriptorInputAttachments": 1000000,
+          "maxPerStageResources": 1000000,
+          "maxDescriptorSetSamplers": 1000000,
+          "maxDescriptorSetUniformBuffers": 1000000,
+          "maxDescriptorSetUniformBuffersDynamic": 500000,
+          "maxDescriptorSetStorageBuffers": 1000000,
+          "maxDescriptorSetStorageBuffersDynamic": 500000,
+          "maxDescriptorSetSampledImages": 1000000,
+          "maxDescriptorSetStorageImages": 1000000,
+          "maxDescriptorSetInputAttachments": 1000000,
+          "maxVertexInputAttributes": 32,
+          "maxVertexInputBindings": 32,
+          "maxVertexInputAttributeOffset": 2047,
+          "maxVertexInputBindingStride": 2048,
+          "maxVertexOutputComponents": 128,
+          "maxTessellationGenerationLevel": 64,
+          "maxTessellationPatchSize": 32,
+          "maxTessellationControlPerVertexInputComponents": 128,
+          "maxTessellationControlPerVertexOutputComponents": 128,
+          "maxTessellationControlPerPatchOutputComponents": 128,
+          "maxTessellationControlTotalOutputComponents": 4096,
+          "maxTessellationEvaluationInputComponents": 128,
+          "maxTessellationEvaluationOutputComponents": 128,
+          "maxGeometryShaderInvocations": 32,
+          "maxGeometryInputComponents": 64,
+          "maxGeometryOutputComponents": 128,
+          "maxGeometryOutputVertices": 1024,
+          "maxGeometryTotalOutputComponents": 1024,
+          "maxFragmentInputComponents": 128,
+          "maxFragmentOutputAttachments": 8,
+          "maxFragmentDualSrcAttachments": 2,
+          "maxFragmentCombinedOutputResources": 104,
+          "maxComputeSharedMemorySize": 32768,
+          "maxComputeWorkGroupCount": [
+            65535,
+            65535,
+            65535
+          ],
+          "maxComputeWorkGroupInvocations": 1024,
+          "maxComputeWorkGroupSize": [
+            1024,
+            1024,
+            1024
+          ],
+          "subPixelPrecisionBits": 8,
+          "subTexelPrecisionBits": 8,
+          "mipmapPrecisionBits": 6,
+          "maxDrawIndexedIndexValue": 4294967295,
+          "maxDrawIndirectCount": 4294967295,
+          "maxSamplerLodBias": 16,
+          "maxSamplerAnisotropy": 16,
+          "maxViewports": 16,
+          "maxViewportDimensions": [
+            16384,
+            16384
+          ],
+          "viewportBoundsRange": [
+            -32768,
+            32768
+          ],
+          "viewportSubPixelBits": 0,
+          "minMemoryMapAlignment": 64,
+          "minTexelBufferOffsetAlignment": 1,
+          "minUniformBufferOffsetAlignment": 1,
+          "minStorageBufferOffsetAlignment": 1,
+          "minTexelOffset": -32,
+          "maxTexelOffset": 31,
+          "minTexelGatherOffset": -32,
+          "maxTexelGatherOffset": 31,
+          "minInterpolationOffset": -2,
+          "maxInterpolationOffset": 2,
+          "subPixelInterpolationOffsetBits": 8,
+          "maxFramebufferWidth": 16384,
+          "maxFramebufferHeight": 16384,
+          "maxFramebufferLayers": 2048,
+          "framebufferColorSampleCounts": 5,
+          "framebufferDepthSampleCounts": 5,
+          "framebufferStencilSampleCounts": 5,
+          "framebufferNoAttachmentsSampleCounts": 5,
+          "maxColorAttachments": 8,
+          "sampledImageColorSampleCounts": 5,
+          "sampledImageIntegerSampleCounts": 5,
+          "sampledImageDepthSampleCounts": 5,
+          "sampledImageStencilSampleCounts": 5,
+          "storageImageSampleCounts": 5,
+          "maxSampleMaskWords": 1,
+          "timestampComputeAndGraphics": true,
+          "timestampPeriod": 1,
+          "maxClipDistances": 8,
+          "maxCullDistances": 8,
+          "maxCombinedClipAndCullDistances": 8,
+          "discreteQueuePriorities": 2,
+          "pointSizeRange": [
+            0,
+            256
+          ],
+          "lineWidthRange": [
+            1,
+            255
+          ],
+          "pointSizeGranularity": 0.125,
+          "lineWidthGranularity": 0.0078125,
+          "strictLines": true,
+          "standardSampleLocations": true,
+          "optimalBufferCopyOffsetAlignment": 1,
+          "optimalBufferCopyRowPitchAlignment": 1,
+          "nonCoherentAtomSize": 1
+        "sparseProperties": {
+          "residencyStandard2DBlockShape": true,
+          "residencyStandard2DMultisampleBlockShape": true,
+          "residencyStandard3DBlockShape": true,
+          "residencyAlignedMipSize": false,
+          "residencyNonResidentStrict": false
+      "extensions": {
+        "VK_KHR_8bit_storage": 1,
+        "VK_KHR_16bit_storage": 1,
+        "VK_KHR_acceleration_structure": 13,
+        "VK_KHR_bind_memory2": 1,
+        "VK_KHR_buffer_device_address": 1,
+        "VK_KHR_compute_shader_derivatives": 1,
+        "VK_KHR_copy_commands2": 1,
+        "VK_KHR_create_renderpass2": 1,
+        "VK_KHR_dedicated_allocation": 3,
+        "VK_KHR_deferred_host_operations": 4,
+        "VK_KHR_depth_stencil_resolve": 1,
+        "VK_KHR_descriptor_update_template": 1,
+        "VK_KHR_device_group": 4,
+        "VK_KHR_draw_indirect_count": 1,
+        "VK_KHR_driver_properties": 1,
+        "VK_KHR_dynamic_rendering": 1,
+        "VK_KHR_dynamic_rendering_local_read": 1,
+        "VK_KHR_external_fence": 1,
+        "VK_KHR_external_memory": 1,
+        "VK_KHR_external_memory_fd": 1,
+        "VK_KHR_external_semaphore": 1,
+        "VK_KHR_format_feature_flags2": 2,
+        "VK_KHR_get_memory_requirements2": 1,
+        "VK_KHR_global_priority": 1,
+        "VK_KHR_image_format_list": 1,
+        "VK_KHR_imageless_framebuffer": 1,
+        "VK_KHR_incremental_present": 2,
+        "VK_KHR_index_type_uint8": 1,
+        "VK_KHR_line_rasterization": 1,
+        "VK_KHR_load_store_op_none": 1,
+        "VK_KHR_maintenance1": 2,
+        "VK_KHR_maintenance2": 1,
+        "VK_KHR_maintenance3": 1,
+        "VK_KHR_maintenance4": 2,
+        "VK_KHR_maintenance5": 1,
+        "VK_KHR_maintenance6": 1,
+        "VK_KHR_maintenance7": 1,
+        "VK_KHR_maintenance8": 1,
+        "VK_KHR_map_memory2": 1,
+        "VK_KHR_multiview": 1,
+        "VK_KHR_pipeline_library": 1,
+        "VK_KHR_push_descriptor": 2,
+        "VK_KHR_ray_query": 1,
+        "VK_KHR_ray_tracing_maintenance1": 1,
+        "VK_KHR_ray_tracing_pipeline": 1,
+        "VK_KHR_ray_tracing_position_fetch": 1,
+        "VK_KHR_relaxed_block_layout": 1,
+        "VK_KHR_sampler_mirror_clamp_to_edge": 3,
+        "VK_KHR_sampler_ycbcr_conversion": 14,
+        "VK_KHR_separate_depth_stencil_layouts": 1,
+        "VK_KHR_shader_atomic_int64": 1,
+        "VK_KHR_shader_clock": 1,
+        "VK_KHR_shader_draw_parameters": 1,
+        "VK_KHR_shader_expect_assume": 1,
+        "VK_KHR_shader_float16_int8": 1,
+        "VK_KHR_shader_float_controls": 4,
+        "VK_KHR_shader_float_controls2": 1,
+        "VK_KHR_shader_integer_dot_product": 1,
+        "VK_KHR_shader_maximal_reconvergence": 1,
+        "VK_KHR_shader_non_semantic_info": 1,
+        "VK_KHR_shader_quad_control": 1,
+        "VK_KHR_shader_relaxed_extended_instruction": 1,
+        "VK_KHR_shader_subgroup_extended_types": 1,
+        "VK_KHR_shader_subgroup_rotate": 2,
+        "VK_KHR_shader_terminate_invocation": 1,
+        "VK_KHR_spirv_1_4": 1,
+        "VK_KHR_storage_buffer_storage_class": 1,
+        "VK_KHR_swapchain": 70,
+        "VK_KHR_swapchain_mutable_format": 1,
+        "VK_KHR_synchronization2": 1,
+        "VK_KHR_timeline_semaphore": 2,
+        "VK_KHR_uniform_buffer_standard_layout": 1,
+        "VK_KHR_variable_pointers": 1,
+        "VK_KHR_vertex_attribute_divisor": 1,
+        "VK_KHR_vulkan_memory_model": 3,
+        "VK_KHR_workgroup_memory_explicit_layout": 1,
+        "VK_KHR_zero_initialize_workgroup_memory": 1,
+        "VK_EXT_4444_formats": 1,
+        "VK_EXT_attachment_feedback_loop_dynamic_state": 1,
+        "VK_EXT_attachment_feedback_loop_layout": 2,
+        "VK_EXT_border_color_swizzle": 1,
+        "VK_EXT_calibrated_timestamps": 2,
+        "VK_EXT_color_write_enable": 1,
+        "VK_EXT_conditional_rendering": 2,
+        "VK_EXT_custom_border_color": 12,
+        "VK_EXT_depth_bias_control": 1,
+        "VK_EXT_depth_clip_control": 1,
+        "VK_EXT_depth_clip_enable": 1,
+        "VK_EXT_depth_range_unrestricted": 1,
+        "VK_EXT_descriptor_buffer": 1,
+        "VK_EXT_descriptor_indexing": 2,
+        "VK_EXT_device_generated_commands": 1,
+        "VK_EXT_dynamic_rendering_unused_attachments": 1,
+        "VK_EXT_extended_dynamic_state": 1,
+        "VK_EXT_extended_dynamic_state2": 1,
+        "VK_EXT_extended_dynamic_state3": 2,
+        "VK_EXT_external_memory_dma_buf": 1,
+        "VK_EXT_external_memory_host": 1,
+        "VK_EXT_fragment_shader_interlock": 1,
+        "VK_EXT_graphics_pipeline_library": 1,
+        "VK_EXT_hdr_metadata": 3,
+        "VK_EXT_host_image_copy": 1,
+        "VK_EXT_host_query_reset": 1,
+        "VK_EXT_image_2d_view_of_3d": 1,
+        "VK_EXT_image_robustness": 1,
+        "VK_EXT_image_sliced_view_of_3d": 1,
+        "VK_EXT_index_type_uint8": 1,
+        "VK_EXT_inline_uniform_block": 1,
+        "VK_EXT_legacy_vertex_attributes": 1,
+        "VK_EXT_line_rasterization": 1,
+        "VK_EXT_load_store_op_none": 1,
+        "VK_EXT_memory_budget": 1,
+        "VK_EXT_memory_priority": 1,
+        "VK_EXT_mesh_shader": 1,
+        "VK_EXT_multi_draw": 1,
+        "VK_EXT_multisampled_render_to_single_sampled": 1,
+        "VK_EXT_mutable_descriptor_type": 1,
+        "VK_EXT_nested_command_buffer": 1,
+        "VK_EXT_non_seamless_cube_map": 1,
+        "VK_EXT_pageable_device_local_memory": 1,
+        "VK_EXT_pipeline_creation_cache_control": 3,
+        "VK_EXT_pipeline_creation_feedback": 1,
+        "VK_EXT_pipeline_library_group_handles": 1,
+        "VK_EXT_pipeline_protected_access": 1,
+        "VK_EXT_pipeline_robustness": 1,
+        "VK_EXT_post_depth_coverage": 1,
+        "VK_EXT_primitive_topology_list_restart": 1,
+        "VK_EXT_primitives_generated_query": 1,
+        "VK_EXT_private_data": 1,
+        "VK_EXT_provoking_vertex": 1,
+        "VK_EXT_queue_family_foreign": 1,
+        "VK_EXT_rasterization_order_attachment_access": 1,
+        "VK_EXT_robustness2": 1,
+        "VK_EXT_sampler_filter_minmax": 2,
+        "VK_EXT_scalar_block_layout": 1,
+        "VK_EXT_separate_stencil_usage": 1,
+        "VK_EXT_shader_atomic_float": 1,
+        "VK_EXT_shader_atomic_float2": 1,
+        "VK_EXT_shader_demote_to_helper_invocation": 1,
+        "VK_EXT_shader_image_atomic_int64": 1,
+        "VK_EXT_shader_object": 1,
+        "VK_EXT_shader_replicated_composites": 1,
+        "VK_EXT_shader_stencil_export": 1,
+        "VK_EXT_shader_subgroup_ballot": 1,
+        "VK_EXT_shader_subgroup_vote": 1,
+        "VK_EXT_shader_viewport_index_layer": 1,
+        "VK_EXT_subgroup_size_control": 2,
+        "VK_EXT_swapchain_maintenance1": 1,
+        "VK_EXT_texel_buffer_alignment": 1,
+        "VK_EXT_tooling_info": 1,
+        "VK_EXT_transform_feedback": 1,
+        "VK_EXT_vertex_attribute_divisor": 3,
+        "VK_EXT_vertex_input_dynamic_state": 2,
+        "VK_EXT_ycbcr_2plane_444_formats": 1,
+        "VK_EXT_ycbcr_image_arrays": 1,
+        "VK_EXT_zero_initialize_device_memory": 1,
+        "VK_AMDX_shader_enqueue": 2,
+        "VK_ANDROID_external_memory_android_hardware_buffer": 5,
+        "VK_ARM_rasterization_order_attachment_access": 1,
+        "VK_GOOGLE_decorate_string": 1,
+        "VK_GOOGLE_hlsl_functionality1": 1
+      "features": {
+        "robustBufferAccess": true,
+        "fullDrawIndexUint32": true,
+        "imageCubeArray": true,
+        "independentBlend": true,
+        "geometryShader": true,
+        "tessellationShader": true,
+        "sampleRateShading": true,
+        "dualSrcBlend": true,
+        "logicOp": true,
+        "multiDrawIndirect": true,
+        "drawIndirectFirstInstance": true,
+        "depthClamp": true,
+        "depthBiasClamp": true,
+        "fillModeNonSolid": true,
+        "depthBounds": false,
+        "wideLines": true,
+        "largePoints": true,
+        "alphaToOne": true,
+        "multiViewport": true,
+        "samplerAnisotropy": true,
+        "textureCompressionETC2": false,
+        "textureCompressionASTCLDR": false,
+        "textureCompressionBC": true,
+        "occlusionQueryPrecise": true,
+        "pipelineStatisticsQuery": true,
+        "vertexPipelineStoresAndAtomics": true,
+        "fragmentStoresAndAtomics": true,
+        "shaderTessellationAndGeometryPointSize": true,
+        "shaderImageGatherExtended": true,
+        "shaderStorageImageExtendedFormats": true,
+        "shaderStorageImageMultisample": true,
+        "shaderStorageImageReadWithoutFormat": true,
+        "shaderStorageImageWriteWithoutFormat": true,
+        "shaderUniformBufferArrayDynamicIndexing": true,
+        "shaderSampledImageArrayDynamicIndexing": true,
+        "shaderStorageBufferArrayDynamicIndexing": true,
+        "shaderStorageImageArrayDynamicIndexing": true,
+        "shaderClipDistance": true,
+        "shaderCullDistance": true,
+        "shaderFloat64": true,
+        "shaderInt64": true,
+        "shaderInt16": true,
+        "shaderResourceResidency": true,
+        "shaderResourceMinLod": true,
+        "sparseBinding": true,
+        "sparseResidencyBuffer": true,
+        "sparseResidencyImage2D": true,
+        "sparseResidencyImage3D": true,
+        "sparseResidency2Samples": false,
+        "sparseResidency4Samples": false,
+        "sparseResidency8Samples": false,
+        "sparseResidency16Samples": false,
+        "sparseResidencyAliased": true,
+        "variableMultisampleRate": false,
+        "inheritedQueries": false
+      "featureSamplerYcbcrConversion": true,
+      "featureProtectedMemory": false,
+      "queueFamilies": [
+          "queueFlags": 15,
+          "queueCount": 1,
+          "timestampValidBits": 64,
+          "minImageTransferGranularity": {
+            "width": 1,
+            "height": 1,
+            "depth": 1
+      ]
+  ]
+Device Performance Information
+==============================
+Diagnostics
+===========
+Driver Information for Hardware GPU
+===================================
+Graphics Feature Status for Hardware GPU
+========================================
+Driver Bug Workarounds for Hardware GPU
+=======================================
+Problems Detected for Hardware GPU
+==================================
+Log Messages
+============
+[1827:1827:1014/144622.882454:WARNING:media/gpu/vaapi/vaapi_wrapper.cc:130] : Should skip nVidia device named: nvidia-drm
+[1827:1827:1014/144622.884899:ERROR:ui/ozone/platform/wayland/gpu/wayland_surface_factory.cc:249] : '--ozone-platform=wayland' is not compatible with Vulkan. Consider switching to '--ozone-platform=x11' or disabling Vulkan

@@ -1,0 +1,23 @@
+fatal: not a git repository (or any of the parent directories): .git
+INTERACTIVE_START kf3=c287af4f checkout= 2026-10-14T16:32:50+02:00
+[interactive] session: ubuntu (uid 1000) session 131372 type=wayland wayland=wayland-0 x=:0; locked=no
+[interactive] broker: pid 350760, backend wayland, socket /run/user/1000/nvkvm/display.sock, badf2d707da4 (/opt/nvkvm-broker/nvkvm-display-broker)
+[interactive] QEMU pid 350803, kf3 c287af4f (/workspace/bench/kf3-bins/c287af4f/qemu-system-x86_64)
+
+  ┌──────────────────────────────────────────────────────────────────────────────┐
+  │ kayfabe guest window: "kayfabe guest" on ubuntu's desktop
+  │   pointer      hover = absolute tablet (the guest pointer follows yours)
+  │   CTRL+ALT+G   GRAB: keyboard + pointer locked to the guest, relative mouse (GNOME asks
+  │                once whether to allow inhibiting shortcuts: click Allow);
+  │                press CTRL+ALT+G again to RELEASE (focus loss also releases)
+  │   CTRL+ALT+F   fullscreen on/off
+  │   grub menu    10 s after TianoCore; arrows, e and Enter work in the window
+  │   desktop      Cinnamon logs in by itself as 'ubuntu' (~60-90 s)
+  │   stop         Ctrl-C here, or: /data/claude-chromium/scripts/bench/display/interactive.sh stop  (or close the window: it asks the
+  │                guest to power down)
+  │   guest ssh    ssh -i /workspace/bench/guest_key ubuntu@192.168.77.2
+  │   logs         /var/lib/kf-windows-20261005/claude-chromium-wl2/run
+  └──────────────────────────────────────────────────────────────────────────────┘
+/data/claude-chromium/scripts/bench/display/interactive.sh: line 341: 350803 Killed                     "$QBIN" "${QARGS[@]}" > "$RUN/qemu.log" 2>&1
+[interactive] QEMU exited rc=137 (log /var/lib/kf-windows-20261005/claude-chromium-wl2/run/qemu.log)
+INTERACTIVE_EXIT rc=137 2026-10-14T16:45:49+02:00

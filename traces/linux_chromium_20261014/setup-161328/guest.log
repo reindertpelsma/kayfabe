@@ -1,0 +1,51 @@
++ sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq weston
++ tail -5
+No containers need to be restarted.
+
+No user sessions are running outdated binaries.
+
+No VM guests are running outdated hypervisor (qemu) binaries on this host.
++ weston --version
+weston 13.0.0
++ ls /usr/lib/x86_64-linux-gnu/weston
++ head
+desktop-shell.so
+fullscreen-shell.so
+hmi-controller.so
+ivi-shell.so
+kiosk-shell.so
+libexec_weston.so
+libexec_weston.so.0
+libexec_weston.so.0.0.0
+screen-share.so
+systemd-notify.so
++ ls /usr/lib/x86_64-linux-gnu/libweston-13
++ head
+color-lcms.so
+drm-backend.so
+gl-renderer.so
+headless-backend.so
+pipewire-backend.so
+pipewire-plugin.so
+rdp-backend.so
+remoting-plugin.so
+vnc-backend.so
+wayland-backend.so
++ dpkg -l
++ grep -E 'egl-wayland|libnvidia-egl'
++ awk '{print $2,$3}'
++ ls /usr/lib/x86_64-linux-gnu
++ grep -E 'egl-wayland|nvidia-egl|libnvidia-vulkan|libEGL_nvidia'
+libEGL_nvidia.so.0
+libEGL_nvidia.so.580.159.04
+libnvidia-egl-gbm.so.1
+libnvidia-egl-gbm.so.1.1.3
+libnvidia-egl-wayland.so.1
+libnvidia-egl-wayland.so.1.1.20
+libnvidia-egl-xcb.so.1
+libnvidia-egl-xcb.so.1.0.5
+libnvidia-egl-xlib.so.1
+libnvidia-egl-xlib.so.1.0.5
+libnvidia-eglcore.so.580.159.04
+SETUP2_DONE
++ echo SETUP2_DONE

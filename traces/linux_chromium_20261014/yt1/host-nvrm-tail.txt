@@ -1,0 +1,40 @@
+Oct 14 14:14:37 claude kernel: NVRM:unknown NVRM ioctl command: 0xf0
+Oct 14 14:15:14 claude kernel: NVRM:unknown NVRM ioctl command: 0xf0
+Oct 14 14:15:22 claude kernel: NVRM:unknown NVRM ioctl command: 0xf0
+Oct 14 14:15:22 claude kernel: NVRM:unknown NVRM ioctl command: 0xf0
+Oct 14 14:20:33 claude kernel: NVRM:unknown NVRM ioctl command: 0xf0
+Oct 14 14:20:33 claude kernel: NVRM:unknown NVRM ioctl command: 0xf0
+Oct 14 14:22:17 claude kernel: NVRM:unknown NVRM ioctl command: 0xf0
+Oct 14 14:22:17 claude kernel: NVRM:unknown NVRM ioctl command: 0xf0
+Oct 14 14:35:11 claude kernel: NVRM:unknown NVRM ioctl command: 0xf0
+Oct 14 14:37:06 claude kernel: NVRM:unknown NVRM ioctl command: 0xf0
+Oct 14 14:37:06 claude kernel: NVRM:unknown NVRM ioctl command: 0xf0
+Oct 14 14:44:49 claude kernel: NVRM:unknown NVRM ioctl command: 0xf0
+Oct 14 14:44:50 claude kernel: NVRM:unknown NVRM ioctl command: 0xf0
+Oct 14 14:50:01 claude kernel: NVRM:unknown NVRM ioctl command: 0xf0
+Oct 14 14:50:01 claude kernel: NVRM:unknown NVRM ioctl command: 0xf0
+Oct 14 15:02:54 claude kernel: NVRM:unknown NVRM ioctl command: 0xf0
+Oct 14 15:02:55 claude kernel: NVRM:unknown NVRM ioctl command: 0xf0
+Oct 14 15:04:32 claude kernel: NVRM:unknown NVRM ioctl command: 0xf0
+Oct 14 15:04:32 claude kernel: NVRM:unknown NVRM ioctl command: 0xf0
+Oct 14 15:06:05 claude kernel: NVRM:unknown NVRM ioctl command: 0xf0
+Oct 14 15:06:05 claude kernel: NVRM:unknown NVRM ioctl command: 0xf0
+Oct 14 15:06:38 claude kernel: NVRM: Xid (PCI:0000:01:00): 13, Graphics SM Warp Exception on (GPC 1, TPC 0, SM 0): Out Of Range Address
+Oct 14 15:06:38 claude kernel: NVRM: Xid (PCI:0000:01:00): 13, Graphics Exception: ESR 0x50c730=0x100000e 0x50c734=0x0 0x50c728=0xf81eb60 0x50c72c=0x1174
+Oct 14 15:06:38 claude kernel: NVRM: Xid (PCI:0000:01:00): 13, pid=275131, name=qemu-system-x86, Graphics Exception: channel 0x00000033, Class 0000c9c0, Offset 00000000, Data 00000000
+Oct 14 15:07:22 claude kernel: NVRM:unknown NVRM ioctl command: 0xf0
+Oct 14 15:07:22 claude kernel: NVRM:unknown NVRM ioctl command: 0xf0
+Oct 14 15:08:04 claude kernel: NVRM:unknown NVRM ioctl command: 0xf0
+Oct 14 15:08:05 claude kernel: NVRM:unknown NVRM ioctl command: 0xf0
+Oct 14 15:11:11 claude kernel: NVRM:unknown NVRM ioctl command: 0xf0
+Oct 14 15:11:11 claude kernel: NVRM:unknown NVRM ioctl command: 0xf0
+Oct 14 15:21:34 claude kernel: NVRM:unknown NVRM ioctl command: 0xf0
+Oct 14 15:21:34 claude kernel: NVRM:unknown NVRM ioctl command: 0xf0
+Oct 14 15:36:05 claude kernel: NVRM:unknown NVRM ioctl command: 0xf0
+Oct 14 15:36:06 claude kernel: NVRM:unknown NVRM ioctl command: 0xf0
+Oct 14 15:42:39 claude kernel: NVRM:unknown NVRM ioctl command: 0xf0
+Oct 14 15:42:39 claude kernel: NVRM:unknown NVRM ioctl command: 0xf0
+Oct 14 15:47:32 claude kernel: NVRM:unknown NVRM ioctl command: 0xf0
+Oct 14 15:47:32 claude kernel: NVRM:unknown NVRM ioctl command: 0xf0
+Oct 14 16:00:32 claude kernel: NVRM:unknown NVRM ioctl command: 0xf0
+Oct 14 16:00:32 claude kernel: NVRM:unknown NVRM ioctl command: 0xf0

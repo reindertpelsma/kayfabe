@@ -1,0 +1,65 @@
+Date: 2026-10-14 UTC
+[14:19:42.856] weston 13.0.0
+               https://wayland.freedesktop.org
+               Bug reports to: https://gitlab.freedesktop.org/wayland/weston/issues/
+               Build: 13.0.0
+[14:19:42.856] Command line: weston --backend=x11-backend.so --width=1650 --height=950 --socket=wl-kf
+[14:19:42.856] OS: Linux, 6.8.0-142-generic, #142-Ubuntu SMP PREEMPT_DYNAMIC Wed Sep  2 14:24:27 UTC 2026, x86_64
+[14:19:42.856] Flight recorder: enabled
+[14:19:42.856] Starting with no config file.
+[14:19:42.856] Output repaint window is 7 ms maximum.
+[14:19:42.857] Loading module '/usr/lib/x86_64-linux-gnu/libweston-13/x11-backend.so'
+[14:19:42.860] Loading module '/usr/lib/x86_64-linux-gnu/libweston-13/gl-renderer.so'
+[14:19:42.906] Using rendering device: /dev/dri/renderD128
+[14:19:42.906] EGL version: 1.5
+[14:19:42.906] EGL vendor: NVIDIA
+[14:19:42.906] EGL client APIs: OpenGL_ES OpenGL
+[14:19:42.906] EGL features:
+               EGL Wayland extension: yes
+               context priority: yes
+               buffer age: yes
+               partial update: yes
+               swap buffers with damage: yes
+               configless context: yes
+               surfaceless context: yes
+               dmabuf support: modifiers
+[14:19:43.034] GL version: OpenGL ES 3.2 NVIDIA 580.159.04
+[14:19:43.034] GLSL version: OpenGL ES GLSL ES 3.20
+[14:19:43.034] GL vendor: NVIDIA Corporation
+[14:19:43.034] GL renderer: NVIDIA GeForce RTX 4070/PCIe/SSE2
+[14:19:43.122] GL ES 3.2 - renderer features:
+               read-back format: ARGB8888
+               glReadPixels supports y-flip: no
+               wl_shm 10 bpc formats: yes
+               wl_shm 16 bpc formats: yes
+               wl_shm half-float formats: no
+               internal R and RG formats: yes
+               OES_EGL_image_external: yes
+[14:19:43.122] Using GL renderer
+[14:19:43.124] Registered plugin API 'weston_windowed_output_api_v2' of size 16
+[14:19:43.124] Color manager: no-op
+[14:19:43.124] Output 'screen0' attempts EOTF mode: SDR
+[14:19:43.124] Output 'screen0' using color profile: stock sRGB color profile
+[14:19:43.125] Chosen EGL config details: id:  40 rgba: 8 8 8 0 buf: 24 dep:  0 stcl: 0 int: 0-8 type: win|pix|pbf vis_id: 0x2b
+[14:19:43.149] x11 output 1650x950, window id 41943046
+[14:19:43.149] Output 'screen0' enabled with head(s) screen0
+[14:19:43.149] Compositor capabilities:
+               arbitrary surface rotation: yes
+               screen capture uses y-flip: yes
+               cursor planes: no
+               arbitrary resolutions: no
+               view mask clipping: yes
+               explicit sync: yes
+               color operations: no
+               presentation clock: CLOCK_MONOTONIC_RAW, id 4
+               presentation clock resolution: 0.000000001 s
+[14:19:43.150] Loading module '/usr/lib/x86_64-linux-gnu/weston/desktop-shell.so'
+[14:19:43.150] launching '/usr/libexec/weston-keyboard'
+[14:19:43.152] launching '/usr/libexec/weston-desktop-shell'
+could not load cursor 'dnd-move'
+could not load cursor 'dnd-copy'
+could not load cursor 'dnd-none'
+could not load cursor 'dnd-move'
+could not load cursor 'dnd-copy'
+could not load cursor 'dnd-none'
+[14:31:06.616] caught signal 15
