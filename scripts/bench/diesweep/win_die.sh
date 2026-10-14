@@ -71,6 +71,8 @@ start)
     # records also need KF3_BAR0_READ_TRACE=1 in WIN_FLAGS)
     [ "${WIN_TRACE:-0}" = 1 ] && ARGS+=(-msg timestamp=on -trace "events=$K/scripts/bench/trace-events-vfio-reference.txt,file=$RUN/trace.log")
     FLAGS="KF3_WIN_USER_CHANNELS_PASSTHROUGH KF3_WIN_TWIN_DEFAPI_OBJECT KF3_KERNEL_GR_CE KF3_KERNEL_GR_WORK KF3_TRANSLATED_CE_RELAY KF3_DEFERRED_API KF3_PREEMPT_BIND_PROBE KF3_DISPLAY_IMP_ENABLE KF3_DISPLAY_CTRL_PROBE KF3_ZCULL_BIND_PROBE KF3_SW_RUNLIST_HOST_OWNED KF3_ASYNC_PREEMPT KF3_GFX_POOL_PROBE KF3_SW_RUNLIST_PROBE KF3_MEMORY_LIST_PROBE KF3_DISPLAY_SDR_COLOR KF3_DISPLAY_CAPS_PROBE KF3_DISPLAY_LUT_MIRROR KF3_DISPLAY_ILUT_OFFSET_256 ${WIN_FLAGS:-}"
+    # WIN_FLAGS_DROP="KF3_X KF3_Y": remove flags from the production profile (an ablation: does this die need it?)
+    for d in ${WIN_FLAGS_DROP:-}; do FLAGS=$(printf '%s\n' $FLAGS | grep -vx "$d" | tr '\n' ' '); done
     while IFS= read -r name; do unset "$name"; done < <(compgen -e | sed -n '/^KF3_/p')
     ENV=(); for f in $FLAGS; do case $f in *=*) ENV+=("$f") ;; *) ENV+=("$f=1") ;; esac; done
     printf '%s\n' "${ENV[@]}" "WIN_KF3_DISPLAY=${WIN_KF3_DISPLAY:-display=on,gop=on}" "WIN_STDVGA=${WIN_STDVGA:-0}" > "$RUN/flags.txt"; printf '%q ' "$QBIN" "${ARGS[@]}" > "$RUN/argv.txt"

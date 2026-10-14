@@ -1,0 +1,299 @@
+DIE_RUN_START phase2 2026-10-14T12:16:05+00:00
+WIN_DIE_START kf3=b0de7572 checkout=b0de75724 gpu=NVIDIA GeForce RTX 4060 Ti xid_before=0 2026-10-14T12:16:05+00:00
+[win_die] QEMU 122075 kf3 b0de7572 run /root/win/run
+[win_die] QGA answers 2026-10-14T12:17:49+00:00
+[win_die] shot /root/win/run/shots/p2_t0030.ppm.gz 2026-10-14T12:18:19+00:00
+HOSTBAR1 t=30  BAR1 Memory Usage  Total : 256 MiB  Used : 51 MiB  Free : 205 MiB 
+[win_die] shot /root/win/run/shots/p2_t0060.ppm.gz 2026-10-14T12:18:50+00:00
+HOSTBAR1 t=60  BAR1 Memory Usage  Total : 256 MiB  Used : 49 MiB  Free : 207 MiB 
+[win_die] shot /root/win/run/shots/p2_t0090.ppm.gz 2026-10-14T12:19:20+00:00
+P2T90 EVID DEV hw=VEN_10DE&DEV_2803&SUBSYS_51741462&REV_A1 status=OK problem=CM_PROB_NONE class=Display name='NVIDIA GeForce RTX 4060 Ti' driverkey={4d36e968-e325-11ce-bfc1-08002be10318}\0002 ver=32.0.15.8088 EnableGpuFirmware=1
+P2T90 EVID VIDEO name='NVIDIA GeForce RTX 4060 Ti' status=OK mode=1920x1080 refresh=60 driver=32.0.15.8088
+P2T90 EVID SMI path=C:\Windows\system32\nvidia-smi.exe
+P2T90 SMI Wed Oct 14 12:19:24 2026       
+P2T90 SMI +-----------------------------------------------------------------------------------------+
+P2T90 SMI | NVIDIA-SMI 580.88                 Driver Version: 580.88         CUDA Version: 13.0     |
+P2T90 SMI +-----------------------------------------+------------------------+----------------------+
+P2T90 SMI | GPU  Name                  Driver-Model | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+P2T90 SMI | Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+P2T90 SMI |                                         |                        |               MIG M. |
+P2T90 SMI |=========================================+========================+======================|
+P2T90 SMI |   0  NVIDIA GeForce RTX 4060 Ti   WDDM  |   00000000:00:06.0  On |                  N/A |
+P2T90 SMI | N/A    0C  N/A             N/A  /  N/A  |     289MiB /   4096MiB |     N/A      Default |
+P2T90 SMI |                                         |                        |                  N/A |
+P2T90 SMI +-----------------------------------------+------------------------+----------------------+
+P2T90 SMI 
+P2T90 SMI +-----------------------------------------------------------------------------------------+
+P2T90 SMI | Processes:                                                                              |
+P2T90 SMI |  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+P2T90 SMI |        ID   ID                                                               Usage      |
+P2T90 SMI |=========================================================================================|
+P2T90 SMI |    0   N/A  N/A            1304    C+G   C:\Windows\System32\dwm.exe           N/A      |
+P2T90 SMI |    0   N/A  N/A            5984    C+G   ...indows\System32\ShellHost.exe      N/A      |
+P2T90 SMI |    0   N/A  N/A            5996    C+G   C:\Windows\explorer.exe               N/A      |
+P2T90 SMI |    0   N/A  N/A            7028    C+G   ..._cw5n1h2txyewy\SearchHost.exe      N/A      |
+P2T90 SMI |    0   N/A  N/A            7052    C+G   ...y\StartMenuExperienceHost.exe      N/A      |
+P2T90 SMI +-----------------------------------------------------------------------------------------+
+P2T90 SMIQ name, pci.device_id, driver_version, driver_model.current, memory.total [MiB], memory.used [MiB], pcie.link.gen.current, pcie.link.width.current
+P2T90 SMIQ NVIDIA GeForce RTX 4060 Ti, 0x280310DE, 580.88, WDDM, 4096 MiB, 289 MiB, 4, [Unknown Error]
+P2T90 SMIMEM 
+P2T90 SMIMEM ==============NVSMI LOG==============
+P2T90 SMIMEM 
+P2T90 SMIMEM Timestamp                                 : Wed Oct 14 12:19:24 2026
+P2T90 SMIMEM Driver Version                            : 580.88
+P2T90 SMIMEM CUDA Version                              : 13.0
+P2T90 SMIMEM 
+P2T90 SMIMEM Attached GPUs                             : 1
+P2T90 SMIMEM GPU 00000000:00:06.0
+P2T90 SMIMEM     FB Memory Usage
+P2T90 SMIMEM         Total                             : 4096 MiB
+P2T90 SMIMEM         Reserved                          : 339 MiB
+P2T90 SMIMEM         Used                              : 289 MiB
+P2T90 SMIMEM         Free                              : 3469 MiB
+P2T90 SMIMEM     BAR1 Memory Usage
+P2T90 SMIMEM         Total                             : 128 MiB
+P2T90 SMIMEM         Used                              : 100 MiB
+P2T90 SMIMEM         Free                              : 28 MiB
+P2T90 SMIMEM     Conf Compute Protected Memory Usage
+P2T90 SMIMEM         Total                             : N/A
+P2T90 SMIMEM         Used                              : N/A
+P2T90 SMIMEM         Free                              : N/A
+P2T90 SMIMEM 
+P2T90 EVID DONE
+HOSTBAR1 t=90  BAR1 Memory Usage  Total : 256 MiB  Used : 49 MiB  Free : 207 MiB 
+[win_die] shot /root/win/run/shots/p2_t0120.ppm.gz 2026-10-14T12:19:57+00:00
+HOSTBAR1 t=120  BAR1 Memory Usage  Total : 256 MiB  Used : 49 MiB  Free : 207 MiB 
+[win_die] shot /root/win/run/shots/p2_t0150.ppm.gz 2026-10-14T12:20:28+00:00
+HOSTBAR1 t=150  BAR1 Memory Usage  Total : 256 MiB  Used : 49 MiB  Free : 207 MiB 
+[win_die] shot /root/win/run/shots/p2_t0180.ppm.gz 2026-10-14T12:20:58+00:00
+P2T180 EVID DEV hw=VEN_10DE&DEV_2803&SUBSYS_51741462&REV_A1 status=OK problem=CM_PROB_NONE class=Display name='NVIDIA GeForce RTX 4060 Ti' driverkey={4d36e968-e325-11ce-bfc1-08002be10318}\0002 ver=32.0.15.8088 EnableGpuFirmware=1
+P2T180 EVID VIDEO name='NVIDIA GeForce RTX 4060 Ti' status=OK mode=1920x1080 refresh=60 driver=32.0.15.8088
+P2T180 EVID SMI path=C:\Windows\system32\nvidia-smi.exe
+P2T180 SMI Wed Oct 14 12:21:01 2026       
+P2T180 SMI +-----------------------------------------------------------------------------------------+
+P2T180 SMI | NVIDIA-SMI 580.88                 Driver Version: 580.88         CUDA Version: 13.0     |
+P2T180 SMI +-----------------------------------------+------------------------+----------------------+
+P2T180 SMI | GPU  Name                  Driver-Model | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+P2T180 SMI | Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+P2T180 SMI |                                         |                        |               MIG M. |
+P2T180 SMI |=========================================+========================+======================|
+P2T180 SMI |   0  NVIDIA GeForce RTX 4060 Ti   WDDM  |   00000000:00:06.0  On |                  N/A |
+P2T180 SMI | N/A    0C  N/A             N/A  /  N/A  |     289MiB /   4096MiB |     N/A      Default |
+P2T180 SMI |                                         |                        |                  N/A |
+P2T180 SMI +-----------------------------------------+------------------------+----------------------+
+P2T180 SMI 
+P2T180 SMI +-----------------------------------------------------------------------------------------+
+P2T180 SMI | Processes:                                                                              |
+P2T180 SMI |  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+P2T180 SMI |        ID   ID                                                               Usage      |
+P2T180 SMI |=========================================================================================|
+P2T180 SMI |    0   N/A  N/A            1304    C+G   C:\Windows\System32\dwm.exe           N/A      |
+P2T180 SMI |    0   N/A  N/A            5984    C+G   ...indows\System32\ShellHost.exe      N/A      |
+P2T180 SMI |    0   N/A  N/A            5996    C+G   C:\Windows\explorer.exe               N/A      |
+P2T180 SMI |    0   N/A  N/A            7028    C+G   ..._cw5n1h2txyewy\SearchHost.exe      N/A      |
+P2T180 SMI |    0   N/A  N/A            7052    C+G   ...y\StartMenuExperienceHost.exe      N/A      |
+P2T180 SMI +-----------------------------------------------------------------------------------------+
+P2T180 SMIQ name, pci.device_id, driver_version, driver_model.current, memory.total [MiB], memory.used [MiB], pcie.link.gen.current, pcie.link.width.current
+P2T180 SMIQ NVIDIA GeForce RTX 4060 Ti, 0x280310DE, 580.88, WDDM, 4096 MiB, 289 MiB, 4, [Unknown Error]
+P2T180 SMIMEM 
+P2T180 SMIMEM ==============NVSMI LOG==============
+P2T180 SMIMEM 
+P2T180 SMIMEM Timestamp                                 : Wed Oct 14 12:21:01 2026
+P2T180 SMIMEM Driver Version                            : 580.88
+P2T180 SMIMEM CUDA Version                              : 13.0
+P2T180 SMIMEM 
+P2T180 SMIMEM Attached GPUs                             : 1
+P2T180 SMIMEM GPU 00000000:00:06.0
+P2T180 SMIMEM     FB Memory Usage
+P2T180 SMIMEM         Total                             : 4096 MiB
+P2T180 SMIMEM         Reserved                          : 339 MiB
+P2T180 SMIMEM         Used                              : 289 MiB
+P2T180 SMIMEM         Free                              : 3469 MiB
+P2T180 SMIMEM     BAR1 Memory Usage
+P2T180 SMIMEM         Total                             : 128 MiB
+P2T180 SMIMEM         Used                              : 100 MiB
+P2T180 SMIMEM         Free                              : 28 MiB
+P2T180 SMIMEM     Conf Compute Protected Memory Usage
+P2T180 SMIMEM         Total                             : N/A
+P2T180 SMIMEM         Used                              : N/A
+P2T180 SMIMEM         Free                              : N/A
+P2T180 SMIMEM 
+P2T180 EVID DONE
+HOSTBAR1 t=180  BAR1 Memory Usage  Total : 256 MiB  Used : 49 MiB  Free : 207 MiB 
+[win_die] shot /root/win/run/shots/p2_t0210.ppm.gz 2026-10-14T12:21:33+00:00
+HOSTBAR1 t=210  BAR1 Memory Usage  Total : 256 MiB  Used : 48 MiB  Free : 208 MiB 
+[win_die] shot /root/win/run/shots/p2_t0240.ppm.gz 2026-10-14T12:22:04+00:00
+HOSTBAR1 t=240  BAR1 Memory Usage  Total : 256 MiB  Used : 48 MiB  Free : 208 MiB 
+[win_die] shot /root/win/run/shots/p2_t0270.ppm.gz 2026-10-14T12:22:34+00:00
+P2T270 EVID DEV hw=VEN_10DE&DEV_2803&SUBSYS_51741462&REV_A1 status=OK problem=CM_PROB_NONE class=Display name='NVIDIA GeForce RTX 4060 Ti' driverkey={4d36e968-e325-11ce-bfc1-08002be10318}\0002 ver=32.0.15.8088 EnableGpuFirmware=1
+P2T270 EVID VIDEO name='NVIDIA GeForce RTX 4060 Ti' status=OK mode=1920x1080 refresh=60 driver=32.0.15.8088
+P2T270 EVID SMI path=C:\Windows\system32\nvidia-smi.exe
+P2T270 SMI Wed Oct 14 12:22:37 2026       
+P2T270 SMI +-----------------------------------------------------------------------------------------+
+P2T270 SMI | NVIDIA-SMI 580.88                 Driver Version: 580.88         CUDA Version: 13.0     |
+P2T270 SMI +-----------------------------------------+------------------------+----------------------+
+P2T270 SMI | GPU  Name                  Driver-Model | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+P2T270 SMI | Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+P2T270 SMI |                                         |                        |               MIG M. |
+P2T270 SMI |=========================================+========================+======================|
+P2T270 SMI |   0  NVIDIA GeForce RTX 4060 Ti   WDDM  |   00000000:00:06.0  On |                  N/A |
+P2T270 SMI | N/A    0C  N/A             N/A  /  N/A  |     289MiB /   4096MiB |     N/A      Default |
+P2T270 SMI |                                         |                        |                  N/A |
+P2T270 SMI +-----------------------------------------+------------------------+----------------------+
+P2T270 SMI 
+P2T270 SMI +-----------------------------------------------------------------------------------------+
+P2T270 SMI | Processes:                                                                              |
+P2T270 SMI |  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+P2T270 SMI |        ID   ID                                                               Usage      |
+P2T270 SMI |=========================================================================================|
+P2T270 SMI |    0   N/A  N/A            1304    C+G   C:\Windows\System32\dwm.exe           N/A      |
+P2T270 SMI |    0   N/A  N/A            5984    C+G   ...indows\System32\ShellHost.exe      N/A      |
+P2T270 SMI |    0   N/A  N/A            5996    C+G   C:\Windows\explorer.exe               N/A      |
+P2T270 SMI |    0   N/A  N/A            7028    C+G   ..._cw5n1h2txyewy\SearchHost.exe      N/A      |
+P2T270 SMI |    0   N/A  N/A            7052    C+G   ...y\StartMenuExperienceHost.exe      N/A      |
+P2T270 SMI +-----------------------------------------------------------------------------------------+
+P2T270 SMIQ name, pci.device_id, driver_version, driver_model.current, memory.total [MiB], memory.used [MiB], pcie.link.gen.current, pcie.link.width.current
+P2T270 SMIQ NVIDIA GeForce RTX 4060 Ti, 0x280310DE, 580.88, WDDM, 4096 MiB, 289 MiB, 4, [Unknown Error]
+P2T270 SMIMEM 
+P2T270 SMIMEM ==============NVSMI LOG==============
+P2T270 SMIMEM 
+P2T270 SMIMEM Timestamp                                 : Wed Oct 14 12:22:38 2026
+P2T270 SMIMEM Driver Version                            : 580.88
+P2T270 SMIMEM CUDA Version                              : 13.0
+P2T270 SMIMEM 
+P2T270 SMIMEM Attached GPUs                             : 1
+P2T270 SMIMEM GPU 00000000:00:06.0
+P2T270 SMIMEM     FB Memory Usage
+P2T270 SMIMEM         Total                             : 4096 MiB
+P2T270 SMIMEM         Reserved                          : 339 MiB
+P2T270 SMIMEM         Used                              : 289 MiB
+P2T270 SMIMEM         Free                              : 3469 MiB
+P2T270 SMIMEM     BAR1 Memory Usage
+P2T270 SMIMEM         Total                             : 128 MiB
+P2T270 SMIMEM         Used                              : 100 MiB
+P2T270 SMIMEM         Free                              : 28 MiB
+P2T270 SMIMEM     Conf Compute Protected Memory Usage
+P2T270 SMIMEM         Total                             : N/A
+P2T270 SMIMEM         Used                              : N/A
+P2T270 SMIMEM         Free                              : N/A
+P2T270 SMIMEM 
+P2T270 EVID DONE
+HOSTBAR1 t=270  BAR1 Memory Usage  Total : 256 MiB  Used : 48 MiB  Free : 208 MiB 
+[win_die] shot /root/win/run/shots/p2_t0300.ppm.gz 2026-10-14T12:23:10+00:00
+HOSTBAR1 t=300  BAR1 Memory Usage  Total : 256 MiB  Used : 48 MiB  Free : 208 MiB 
+[win_die] shot /root/win/run/shots/p2_t0330.ppm.gz 2026-10-14T12:23:41+00:00
+HOSTBAR1 t=330  BAR1 Memory Usage  Total : 256 MiB  Used : 48 MiB  Free : 208 MiB 
+[win_die] shot /root/win/run/shots/p2_t0360.ppm.gz 2026-10-14T12:24:11+00:00
+P2T360 EVID DEV hw=VEN_10DE&DEV_2803&SUBSYS_51741462&REV_A1 status=OK problem=CM_PROB_NONE class=Display name='NVIDIA GeForce RTX 4060 Ti' driverkey={4d36e968-e325-11ce-bfc1-08002be10318}\0002 ver=32.0.15.8088 EnableGpuFirmware=1
+P2T360 EVID VIDEO name='NVIDIA GeForce RTX 4060 Ti' status=OK mode=1920x1080 refresh=60 driver=32.0.15.8088
+P2T360 EVID SMI path=C:\Windows\system32\nvidia-smi.exe
+P2T360 SMI Wed Oct 14 12:24:14 2026       
+P2T360 SMI +-----------------------------------------------------------------------------------------+
+P2T360 SMI | NVIDIA-SMI 580.88                 Driver Version: 580.88         CUDA Version: 13.0     |
+P2T360 SMI +-----------------------------------------+------------------------+----------------------+
+P2T360 SMI | GPU  Name                  Driver-Model | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+P2T360 SMI | Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+P2T360 SMI |                                         |                        |               MIG M. |
+P2T360 SMI |=========================================+========================+======================|
+P2T360 SMI |   0  NVIDIA GeForce RTX 4060 Ti   WDDM  |   00000000:00:06.0  On |                  N/A |
+P2T360 SMI | N/A    0C  N/A             N/A  /  N/A  |     289MiB /   4096MiB |     N/A      Default |
+P2T360 SMI |                                         |                        |                  N/A |
+P2T360 SMI +-----------------------------------------+------------------------+----------------------+
+P2T360 SMI 
+P2T360 SMI +-----------------------------------------------------------------------------------------+
+P2T360 SMI | Processes:                                                                              |
+P2T360 SMI |  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+P2T360 SMI |        ID   ID                                                               Usage      |
+P2T360 SMI |=========================================================================================|
+P2T360 SMI |    0   N/A  N/A            1304    C+G   C:\Windows\System32\dwm.exe           N/A      |
+P2T360 SMI |    0   N/A  N/A            5984    C+G   ...indows\System32\ShellHost.exe      N/A      |
+P2T360 SMI |    0   N/A  N/A            5996    C+G   C:\Windows\explorer.exe               N/A      |
+P2T360 SMI |    0   N/A  N/A            7028    C+G   ..._cw5n1h2txyewy\SearchHost.exe      N/A      |
+P2T360 SMI |    0   N/A  N/A            7052    C+G   ...y\StartMenuExperienceHost.exe      N/A      |
+P2T360 SMI +-----------------------------------------------------------------------------------------+
+P2T360 SMIQ name, pci.device_id, driver_version, driver_model.current, memory.total [MiB], memory.used [MiB], pcie.link.gen.current, pcie.link.width.current
+P2T360 SMIQ NVIDIA GeForce RTX 4060 Ti, 0x280310DE, 580.88, WDDM, 4096 MiB, 289 MiB, 4, [Unknown Error]
+P2T360 SMIMEM 
+P2T360 SMIMEM ==============NVSMI LOG==============
+P2T360 SMIMEM 
+P2T360 SMIMEM Timestamp                                 : Wed Oct 14 12:24:14 2026
+P2T360 SMIMEM Driver Version                            : 580.88
+P2T360 SMIMEM CUDA Version                              : 13.0
+P2T360 SMIMEM 
+P2T360 SMIMEM Attached GPUs                             : 1
+P2T360 SMIMEM GPU 00000000:00:06.0
+P2T360 SMIMEM     FB Memory Usage
+P2T360 SMIMEM         Total                             : 4096 MiB
+P2T360 SMIMEM         Reserved                          : 339 MiB
+P2T360 SMIMEM         Used                              : 289 MiB
+P2T360 SMIMEM         Free                              : 3469 MiB
+P2T360 SMIMEM     BAR1 Memory Usage
+P2T360 SMIMEM         Total                             : 128 MiB
+P2T360 SMIMEM         Used                              : 100 MiB
+P2T360 SMIMEM         Free                              : 28 MiB
+P2T360 SMIMEM     Conf Compute Protected Memory Usage
+P2T360 SMIMEM         Total                             : N/A
+P2T360 SMIMEM         Used                              : N/A
+P2T360 SMIMEM         Free                              : N/A
+P2T360 SMIMEM 
+P2T360 EVID DONE
+HOSTBAR1 t=360  BAR1 Memory Usage  Total : 256 MiB  Used : 48 MiB  Free : 208 MiB 
+[win_die] shot /root/win/run/shots/p2_t0390.ppm.gz 2026-10-14T12:24:46+00:00
+HOSTBAR1 t=390  BAR1 Memory Usage  Total : 256 MiB  Used : 48 MiB  Free : 208 MiB 
+[win_die] shot /root/win/run/shots/p2_t0420.ppm.gz 2026-10-14T12:25:17+00:00
+HOSTBAR1 t=420  BAR1 Memory Usage  Total : 256 MiB  Used : 48 MiB  Free : 208 MiB 
+P2END EVID DEV hw=VEN_10DE&DEV_2803&SUBSYS_51741462&REV_A1 status=OK problem=CM_PROB_NONE class=Display name='NVIDIA GeForce RTX 4060 Ti' driverkey={4d36e968-e325-11ce-bfc1-08002be10318}\0002 ver=32.0.15.8088 EnableGpuFirmware=1
+P2END EVID VIDEO name='NVIDIA GeForce RTX 4060 Ti' status=OK mode=1920x1080 refresh=60 driver=32.0.15.8088
+P2END EVID SMI path=C:\Windows\system32\nvidia-smi.exe
+P2END SMI Wed Oct 14 12:25:19 2026       
+P2END SMI +-----------------------------------------------------------------------------------------+
+P2END SMI | NVIDIA-SMI 580.88                 Driver Version: 580.88         CUDA Version: 13.0     |
+P2END SMI +-----------------------------------------+------------------------+----------------------+
+P2END SMI | GPU  Name                  Driver-Model | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+P2END SMI | Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+P2END SMI |                                         |                        |               MIG M. |
+P2END SMI |=========================================+========================+======================|
+P2END SMI |   0  NVIDIA GeForce RTX 4060 Ti   WDDM  |   00000000:00:06.0  On |                  N/A |
+P2END SMI | N/A    0C  N/A             N/A  /  N/A  |     289MiB /   4096MiB |     N/A      Default |
+P2END SMI |                                         |                        |                  N/A |
+P2END SMI +-----------------------------------------+------------------------+----------------------+
+P2END SMI 
+P2END SMI +-----------------------------------------------------------------------------------------+
+P2END SMI | Processes:                                                                              |
+P2END SMI |  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+P2END SMI |        ID   ID                                                               Usage      |
+P2END SMI |=========================================================================================|
+P2END SMI |    0   N/A  N/A            1304    C+G   C:\Windows\System32\dwm.exe           N/A      |
+P2END SMI |    0   N/A  N/A            5984    C+G   ...indows\System32\ShellHost.exe      N/A      |
+P2END SMI |    0   N/A  N/A            5996    C+G   C:\Windows\explorer.exe               N/A      |
+P2END SMI |    0   N/A  N/A            7028    C+G   ..._cw5n1h2txyewy\SearchHost.exe      N/A      |
+P2END SMI |    0   N/A  N/A            7052    C+G   ...y\StartMenuExperienceHost.exe      N/A      |
+P2END SMI +-----------------------------------------------------------------------------------------+
+P2END SMIQ name, pci.device_id, driver_version, driver_model.current, memory.total [MiB], memory.used [MiB], pcie.link.gen.current, pcie.link.width.current
+P2END SMIQ NVIDIA GeForce RTX 4060 Ti, 0x280310DE, 580.88, WDDM, 4096 MiB, 289 MiB, 4, [Unknown Error]
+P2END SMIMEM 
+P2END SMIMEM ==============NVSMI LOG==============
+P2END SMIMEM 
+P2END SMIMEM Timestamp                                 : Wed Oct 14 12:25:19 2026
+P2END SMIMEM Driver Version                            : 580.88
+P2END SMIMEM CUDA Version                              : 13.0
+P2END SMIMEM 
+P2END SMIMEM Attached GPUs                             : 1
+P2END SMIMEM GPU 00000000:00:06.0
+P2END SMIMEM     FB Memory Usage
+P2END SMIMEM         Total                             : 4096 MiB
+P2END SMIMEM         Reserved                          : 339 MiB
+P2END SMIMEM         Used                              : 289 MiB
+P2END SMIMEM         Free                              : 3469 MiB
+P2END SMIMEM     BAR1 Memory Usage
+P2END SMIMEM         Total                             : 128 MiB
+P2END SMIMEM         Used                              : 100 MiB
+P2END SMIMEM         Free                              : 28 MiB
+P2END SMIMEM     Conf Compute Protected Memory Usage
+P2END SMIMEM         Total                             : N/A
+P2END SMIMEM         Used                              : N/A
+P2END SMIMEM         Free                              : N/A
+P2END SMIMEM 
+P2END EVID DONE
+[win_die] shot /root/win/run/shots/p2_final.ppm.gz 2026-10-14T12:25:22+00:00
+DIE_RUN_EXIT phase2 rc=0 2026-10-14T12:25:22+00:00
