@@ -1,0 +1,17 @@
+interval	first_tag	last_tag	n_tags	branches	changed_at_start	start_categories	start_kinds	family_items_changed	covered_by	needs	layout_only_tags
+0	535.309.01	535.309.01	1	535	0		-	-	-	rep=535.309.01 (interval 535.309.01..535.309.01)	535.309.01
+1	545.23.06	545.29.06	5	545	15	allocstruct=1;ctrl=12;gsp=1;rpcfn=1	ADD=3;CHANGE=8;REMOVE=2;STRUCT=13;VIS=1	Ada;Ampere;Hopper	-	rep=545.23.08 (interval 545.23.06..545.29.06)	545.23.08
+2	550.40.07	550.40.07	1	550	228	allocstruct=1;classdef=1;classhdr=2;ctrl=14;gsp=5;rpcfn=205	ADD=20;CHANGE=212;STRUCT=8	Ada;Ampere;Hopper;Turing	-	rep=550.40.07 (interval 550.40.07..550.40.07)	550.40.07
+3	550.40.53	550.163.01	33	550	4	ctrl=4	CHANGE=2;STRUCT=4	-	-	rep=550.90.07 (interval 550.40.53..550.163.01)	550.54.14;550.90.07
+4	555.42.02	555.58.02	5	555	21	ctrl=18;gsp=2;rpcfn=1	ADD=12;CHANGE=10;REMOVE=1;STRUCT=9	-	-	rep=555.42.02 (interval 555.42.02..555.58.02)	555.42.02
+5	560.28.03	560.35.03	3	560	32	classdef=9;classhdr=12;ctrl=8;gsp=1;rpcfn=2	ADD=25;CHANGE=9;STRUCT=4	Ada;Ampere;Blackwell;Hopper;Turing	-	rep=560.28.03 (interval 560.28.03..560.35.03)	560.28.03
+6	565.57.01	565.77	2	565	14	allocstruct=1;ctrl=9;gsp=3;rpcfn=1	ADD=4;CHANGE=7;REMOVE=1;STRUCT=10	Ada;Blackwell;Hopper	-	rep=565.57.01 (interval 565.57.01..565.77)	565.57.01
+7	570.86.15	570.86.16	2	570	80	allocstruct=1;classdef=24;classhdr=35;ctrl=8;gsp=4;rpcfn=8	ADD=60;CHANGE=19;STRUCT=5;VIS=1	Ada;Ampere;Blackwell;Turing	-	rep=570.86.15 (interval 570.86.15..570.86.16)	570.86.15
+8	570.123.01	570.211.01	23	570	3	gsp=1;rpcfn=2	ADD=3;CHANGE=3	-	-	rep=570.148.08 (interval 570.123.01..570.211.01)	570.124.06;570.148.08
+9	575.51.02	575.64.05	6	575	34	classdef=7;classhdr=10;ctrl=11;gsp=4;rpcfn=2	ADD=19;CHANGE=13;REMOVE=2;STRUCT=10;VIS=1	Blackwell	-	rep=575.64.05 (interval 575.51.02..575.64.05)	575.51.02;575.51.03;575.57.08;575.64.05
+10	580.65.06	580.82.09	4	580	163	allocstruct=2;classdef=68;classhdr=67;ctrl=24;gsp=1;rpcfn=1	ADD=138;CHANGE=11;STRUCT=17;VIS=7	Ada;Ampere;Blackwell;Hopper;Turing	580.88@AD103(W2);580.88@AD104(W1);580.88@GA106(W3)	-	580.65.06;580.82.07
+11	580.94.02	580.178.04	22	580	3	classhdr=1;ctrl=2	CHANGE=2;STRUCT=2	-	-	rep=580.178.04 (interval 580.94.02..580.178.04)	580.94.02;580.95.05;580.105.08;580.126.09;580.159.04;580.173.02;580.178.04
+12	590.44.01	590.48.01	2	590	17	classdef=1;classhdr=3;ctrl=11;gsp=2	ADD=5;CHANGE=7;REMOVE=10;STRUCT=8;VIS=1	Ada;Ampere;Blackwell;Hopper;Turing	-	rep=590.48.01 (interval 590.44.01..590.48.01)	590.48.01
+13	595.44.02	595.104.02	20	595	28	classdef=1;classhdr=6;ctrl=10;gsp=11	ADD=9;CHANGE=14;REMOVE=11;STRUCT=10	Ada;Ampere;Blackwell;Hopper;Turing	596.51@GA104(W4)	-	595.84;595.91.07
+14	610.43.02	610.57.04	3	610	61	allocstruct=4;classdef=13;classhdr=13;ctrl=13;gsp=17;rpcfn=1	ADD=44;CHANGE=11;STRUCT=15	Ada;Ampere;Blackwell;Hopper;Turing	-	rep=610.57.04 (interval 610.43.02..610.57.04)	610.43.02;610.57.04
+15	615.71.09	615.78.08	2	615	43	allocstruct=1;classdef=2;classhdr=12;ctrl=10;gsp=16;rpcfn=2	ADD=13;CHANGE=22;REMOVE=11;STRUCT=9;VIS=1	Ada;Ampere;Blackwell;Hopper;Turing	-	rep=615.71.09 (interval 615.71.09..615.78.08)	615.71.09

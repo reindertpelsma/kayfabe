@@ -1,0 +1,264 @@
+{
+ "branch580_vs_595_ctrl_items": [
+  "ctrl:0x0000013a",
+  "ctrl:0x00730280",
+  "ctrl:0x00730282",
+  "ctrl:0x00800106",
+  "ctrl:0x00801b02",
+  "ctrl:0x20800110",
+  "ctrl:0x2080012f",
+  "ctrl:0x20800a00",
+  "ctrl:0x20800a26",
+  "ctrl:0x20800a2a",
+  "ctrl:0x20800a30",
+  "ctrl:0x20800a87",
+  "ctrl:0x20800aff",
+  "ctrl:0x20801228",
+  "ctrl:0x20801320",
+  "ctrl:0x20801344",
+  "ctrl:0x20802a0f",
+  "ctrl:0x20803002",
+  "ctrl:0x20803083",
+  "ctrl:0x208081ea",
+  "ctrl:0x50700117",
+  "ctrl:0x50700118",
+  "ctrl:0x5070020d",
+  "ctrl:0x50700709",
+  "ctrl:0xc3700202"
+ ],
+ "branch580_vs_595_disjoint_sigs": {
+  "chipclasses": 59,
+  "classdef": 4,
+  "classhdr": 13,
+  "ctrl": 25,
+  "ctrlall": 26,
+  "gsp": 99,
+  "mcarch": 1
+ },
+ "diff_580_159_04_vs_595_91_07": {
+  "chipclasses": 59,
+  "classdef": 4,
+  "classhdr": 13,
+  "ctrl": 26,
+  "ctrlall": 28,
+  "gsp": 99,
+  "mcarch": 1
+ },
+ "diff_items_allocstruct": [],
+ "diff_items_classdef_core": [
+  "classdef:KERNEL_WATCHDOG",
+  "classdef:NV01_MEMORY_FLA",
+  "classdef:NVA083_GRID_DISPLAYLESS",
+  "classdef:NV_MEMORY_EXTENDED_USER"
+ ],
+ "diff_items_ctrl": [
+  "ctrl:0x0000013a",
+  "ctrl:0x00730280",
+  "ctrl:0x00730282",
+  "ctrl:0x00800106",
+  "ctrl:0x00801306",
+  "ctrl:0x00801b02",
+  "ctrl:0x20800110",
+  "ctrl:0x2080012f",
+  "ctrl:0x20800a00",
+  "ctrl:0x20800a26",
+  "ctrl:0x20800a2a",
+  "ctrl:0x20800a30",
+  "ctrl:0x20800a87",
+  "ctrl:0x20800aff",
+  "ctrl:0x20801228",
+  "ctrl:0x20801320",
+  "ctrl:0x20801344",
+  "ctrl:0x20802a0f",
+  "ctrl:0x20803002",
+  "ctrl:0x20803083",
+  "ctrl:0x208081ea",
+  "ctrl:0x50700117",
+  "ctrl:0x50700118",
+  "ctrl:0x5070020d",
+  "ctrl:0x50700709",
+  "ctrl:0xc3700202"
+ ],
+ "diff_items_gsp_n": 99,
+ "diff_items_gsp_referenced": [
+  "gsp:g_rpc-structures.h:struct:rpc_run_cpu_sequencer_v",
+  "gsp:gsp_init_args.h:def:WPR_ALIGNMENT",
+  "gsp:gsp_init_args.h:struct:GSP_ARGUMENTS_CACHED",
+  "gsp:gsp_init_args.h:struct:MESSAGE_QUEUE_INIT_ARGUMENTS",
+  "gsp:gsp_static_config.h:struct:GspStaticConfigInfo",
+  "gsp:gsp_static_config.h:struct:GspSystemInfo",
+  "gsp:gspifpub.h:struct:GSP_FMC_BOOT_PARAMS",
+  "gsp:message_queue.h:struct:MESSAGE_QUEUE_INFO",
+  "gsp:message_queue_priv.h:def:GSP_MSG_QUEUE_ALIGN",
+  "gsp:message_queue_priv.h:def:GSP_MSG_QUEUE_ELEMENT_ALIGN",
+  "gsp:message_queue_priv.h:def:GSP_MSG_QUEUE_ELEMENT_HDR_SIZE",
+  "gsp:message_queue_priv.h:def:GSP_MSG_QUEUE_ELEMENT_SIZE_MAX",
+  "gsp:message_queue_priv.h:def:GSP_MSG_QUEUE_ELEMENT_SIZE_MIN",
+  "gsp:message_queue_priv.h:def:GSP_MSG_QUEUE_HEADER_ALIGN",
+  "gsp:message_queue_priv.h:def:GSP_MSG_QUEUE_HEADER_SIZE",
+  "gsp:message_queue_priv.h:def:GSP_MSG_QUEUE_RPC_SIZE_MAX",
+  "gsp:message_queue_priv.h:struct:MESSAGE_QUEUE_INFO",
+  "gsp:message_queue_priv.h:struct:_message_queue_info"
+ ],
+ "diff_items_rpcfn": [],
+ "f4_controls": {
+  "0x2080852e": {
+   "defined_in_any_tag": false,
+   "sig_by_tag_distinct": [
+    "ABSENT"
+   ]
+  },
+  "0x2080852f": {
+   "defined_in_any_tag": false,
+   "sig_by_tag_distinct": [
+    "ABSENT"
+   ]
+  },
+  "0x2080853a": {
+   "defined_in_any_tag": false,
+   "sig_by_tag_distinct": [
+    "ABSENT"
+   ]
+  },
+  "0x2080853b": {
+   "defined_in_any_tag": false,
+   "sig_by_tag_distinct": [
+    "ABSENT"
+   ]
+  },
+  "0x2080a618": {
+   "defined_in_any_tag": false,
+   "sig_by_tag_distinct": [
+    "ABSENT"
+   ]
+  },
+  "0x2080b201": {
+   "defined_in_any_tag": false,
+   "sig_by_tag_distinct": [
+    "ABSENT"
+   ]
+  }
+ },
+ "ref_controls": {
+  "0x20800102": {
+   "sig_tags_sample": {
+    "580.159.04": "5e349df6e9b5",
+    "580.65.06": "5e349df6e9b5",
+    "595.44.02": "5e349df6e9b5",
+    "595.84": "5e349df6e9b5",
+    "595.91.07": "5e349df6e9b5",
+    "610.43.02": "d392b0a41f6c"
+   }
+  },
+  "0x20800a3f": {
+   "sig_tags_sample": {
+    "580.159.04": "ce248b8638db",
+    "580.65.06": "ce248b8638db",
+    "595.44.02": "ce248b8638db",
+    "595.84": "ce248b8638db",
+    "595.91.07": "ce248b8638db",
+    "610.43.02": "ce248b8638db"
+   }
+  },
+  "0x20800a59": {
+   "sig_tags_sample": {
+    "580.159.04": "2d1a159729a5",
+    "580.65.06": "2d1a159729a5",
+    "595.44.02": "2d1a159729a5",
+    "595.84": "2d1a159729a5",
+    "595.91.07": "2d1a159729a5",
+    "610.43.02": "2d1a159729a5"
+   }
+  },
+  "0x20800b03": {
+   "sig_tags_sample": {
+    "580.159.04": "5d70acf1cf81",
+    "580.65.06": "5d70acf1cf81",
+    "595.44.02": "5d70acf1cf81",
+    "595.84": "5d70acf1cf81",
+    "595.91.07": "5d70acf1cf81",
+    "610.43.02": "5d70acf1cf81"
+   }
+  },
+  "0x20802209": {
+   "sig_tags_sample": {
+    "580.159.04": "50895275c5e9",
+    "580.65.06": "50895275c5e9",
+    "595.44.02": "50895275c5e9",
+    "595.84": "50895275c5e9",
+    "595.91.07": "50895275c5e9",
+    "610.43.02": "50895275c5e9"
+   }
+  },
+  "0x20802806": {
+   "sig_tags_sample": {
+    "580.159.04": "ABSENT",
+    "580.65.06": "ABSENT",
+    "595.44.02": "ABSENT",
+    "595.84": "ABSENT",
+    "595.91.07": "ABSENT",
+    "610.43.02": "ABSENT"
+   }
+  },
+  "0x20808162": {
+   "sig_tags_sample": {
+    "580.159.04": "ABSENT",
+    "580.65.06": "ABSENT",
+    "595.44.02": "ABSENT",
+    "595.84": "ABSENT",
+    "595.91.07": "ABSENT",
+    "610.43.02": "ABSENT"
+   }
+  },
+  "0x20809001": {
+   "sig_tags_sample": {
+    "580.159.04": "ABSENT",
+    "580.65.06": "ABSENT",
+    "595.44.02": "ABSENT",
+    "595.84": "ABSENT",
+    "595.91.07": "ABSENT",
+    "610.43.02": "ABSENT"
+   }
+  },
+  "0x20809009": {
+   "sig_tags_sample": {
+    "580.159.04": "ABSENT",
+    "580.65.06": "ABSENT",
+    "595.44.02": "ABSENT",
+    "595.84": "ABSENT",
+    "595.91.07": "ABSENT",
+    "610.43.02": "ABSENT"
+   }
+  },
+  "0x20809064": {
+   "sig_tags_sample": {
+    "580.159.04": "ABSENT",
+    "580.65.06": "ABSENT",
+    "595.44.02": "ABSENT",
+    "595.84": "ABSENT",
+    "595.91.07": "ABSENT",
+    "610.43.02": "ABSENT"
+   }
+  },
+  "0x2080a001": {
+   "sig_tags_sample": {
+    "580.159.04": "ABSENT",
+    "580.65.06": "ABSENT",
+    "595.44.02": "ABSENT",
+    "595.84": "ABSENT",
+    "595.91.07": "ABSENT",
+    "610.43.02": "ABSENT"
+   }
+  },
+  "0x2080a084": {
+   "sig_tags_sample": {
+    "580.159.04": "ABSENT",
+    "580.65.06": "ABSENT",
+    "595.44.02": "ABSENT",
+    "595.84": "ABSENT",
+    "595.91.07": "ABSENT",
+    "610.43.02": "ABSENT"
+   }
+  }
+ }
+}

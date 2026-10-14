@@ -1,0 +1,44 @@
+interval	first_tag	last_tag	n_tags	branches	changed_at_start	start_categories	start_kinds	family_items_changed	covered_by	needs	layout_only_tags
+0	535.309.01	535.309.01	1	535	0		-	-	-	rep=535.309.01 (interval 535.309.01..535.309.01)	535.309.01
+1	545.23.06	545.29.06	5	545	27	allocstruct=1;classhdr=3;ctrl=17;gsp=4;rpcfn=2	ADD=3;CHANGE=8;REMOVE=2;STRUCT=13;VIS=1	Ada;Ampere;Hopper	-	rep=545.23.08 (interval 545.23.06..545.29.06)	545.23.08
+2	550.40.07	550.40.07	1	550	240	allocstruct=1;classdef=1;classhdr=5;ctrl=15;gsp=9;rpcfn=209	ADD=20;CHANGE=212;STRUCT=8	Ada;Ampere;Hopper;Turing	-	rep=550.40.07 (interval 550.40.07..550.40.07)	550.40.07
+3	550.40.53	550.40.63	5	550	6	classhdr=1;ctrl=4;gsp=1	CHANGE=2;STRUCT=4	-	-	rep=550.40.63 (interval 550.40.53..550.40.63)	-
+4	550.40.65	550.40.85	12	550	3	classhdr=2;gsp=1	CHANGE=3	-	-	rep=550.40.85 (interval 550.40.65..550.40.85)	-
+5	550.54.14	550.76	4	550	3	classhdr=2;gsp=1	CHANGE=3	-	-	rep=550.54.14 (interval 550.54.14..550.76)	550.54.14
+6	550.78	550.78	1	550	1	classhdr=1	CHANGE=1	-	-	rep=550.78 (interval 550.78..550.78)	-
+7	550.90.07	550.107.02	4	550	2	classhdr=1;gsp=1	CHANGE=2	-	-	rep=550.90.07 (interval 550.90.07..550.107.02)	550.90.07
+8	550.120	550.144.03	6	550	2	gsp=2	CHANGE=2	-	-	rep=550.144.03 (interval 550.120..550.144.03)	-
+9	550.163.01	550.163.01	1	550	2	ctrl=2	STRUCT=2	-	-	rep=550.163.01 (interval 550.163.01..550.163.01)	-
+10	555.42.02	555.58.02	5	555	32	classhdr=2;ctrl=21;gsp=7;rpcfn=2	ADD=12;CHANGE=10;REMOVE=1;STRUCT=9	-	-	rep=555.42.02 (interval 555.42.02..555.58.02)	555.42.02
+11	560.28.03	560.28.03	1	560	38	classdef=9;classhdr=15;ctrl=8;gsp=2;rpcfn=4	ADD=25;CHANGE=9;STRUCT=4	Ada;Ampere;Blackwell;Hopper;Turing	-	rep=560.28.03 (interval 560.28.03..560.28.03)	560.28.03
+12	560.31.02	560.35.03	2	560	1	gsp=1	CHANGE=1	-	-	rep=560.35.03 (interval 560.31.02..560.35.03)	-
+13	565.57.01	565.77	2	565	22	allocstruct=1;classhdr=2;ctrl=11;gsp=6;rpcfn=2	ADD=4;CHANGE=7;REMOVE=1;STRUCT=10	Ada;Blackwell;Hopper	-	rep=565.57.01 (interval 565.57.01..565.77)	565.57.01
+14	570.86.15	570.86.16	2	570	85	allocstruct=2;classdef=24;classhdr=36;ctrl=8;gsp=6;rpcfn=9	ADD=60;CHANGE=19;STRUCT=5;VIS=1	Ada;Ampere;Blackwell;Turing	-	rep=570.86.15 (interval 570.86.15..570.86.16)	570.86.15
+15	570.123.01	570.123.06	2	570	6	gsp=2;rpcfn=4	ADD=3;CHANGE=3	-	-	rep=570.123.06 (interval 570.123.01..570.123.06)	-
+16	570.123.07	570.123.19	6	570	2	rpcfn=2	ADD=1;CHANGE=1	-	-	rep=570.123.19 (interval 570.123.07..570.123.19)	-
+17	570.124.04	570.124.06	2	570	2	rpcfn=2	CHANGE=1;REMOVE=1	-	-	rep=570.124.06 (interval 570.124.04..570.124.06)	570.124.06
+18	570.133.07	570.158.01	6	570	2	rpcfn=2	ADD=1;CHANGE=1	-	-	rep=570.148.08 (interval 570.133.07..570.158.01)	570.148.08
+19	570.169	570.169	1	570	1	gsp=1	CHANGE=1	-	-	rep=570.169 (interval 570.169..570.169)	-
+20	570.172.08	570.181	2	570	1	gsp=1	CHANGE=1	-	-	rep=570.181 (interval 570.172.08..570.181)	-
+21	570.190	570.211.01	4	570	1	gsp=1	CHANGE=1	-	-	rep=570.211.01 (interval 570.190..570.211.01)	-
+22	575.51.02	575.64.05	6	575	45	classdef=7;classhdr=14;ctrl=14;gsp=6;rpcfn=4	ADD=19;CHANGE=13;REMOVE=2;STRUCT=10;VIS=1	Blackwell	-	rep=575.64.05 (interval 575.51.02..575.64.05)	575.51.02;575.51.03;575.57.08;575.64.05
+23	580.65.06	580.65.06	1	580	173	allocstruct=2;classdef=70;classhdr=71;ctrl=26;gsp=2;rpcfn=2	ADD=138;CHANGE=11;STRUCT=17;VIS=7	Ada;Ampere;Blackwell;Hopper;Turing	580.88@AD103(W2);580.88@AD104(W1);580.88@GA106(W3)	-	580.65.06
+24	580.76.05	580.82.09	3	580	1	gsp=1	CHANGE=1	-	-	rep=580.82.07 (interval 580.76.05..580.82.09)	580.82.07
+25	580.94.02	580.94.03	2	580	4	classhdr=1;ctrl=2;gsp=1	CHANGE=2;STRUCT=2	-	-	rep=580.94.02 (interval 580.94.02..580.94.03)	580.94.02
+26	580.94.06	580.94.13	4	580	2	ctrl=1;gsp=1	ADD=1;CHANGE=1	-	-	rep=580.94.13 (interval 580.94.06..580.94.13)	-
+27	580.94.16	580.94.18	3	580	4	classdef=2;classhdr=2	ADD=4	Ada;Ampere;Blackwell;Hopper;Turing	-	rep=580.94.18 (interval 580.94.16..580.94.18)	-
+28	580.95.05	580.95.05	1	580	6	classdef=2;classhdr=2;ctrl=1;gsp=1	CHANGE=1;REMOVE=5	Ada;Ampere;Blackwell;Hopper;Turing	-	rep=580.95.05 (interval 580.95.05..580.95.05)	580.95.05
+29	580.105.08	580.119.02	2	580	2	ctrl=1;gsp=1	ADD=1;CHANGE=1	-	-	rep=580.105.08 (interval 580.105.08..580.119.02)	580.105.08
+30	580.126.09	580.126.20	4	580	4	classdef=2;classhdr=2	ADD=4	Ada;Ampere;Blackwell;Hopper;Turing	-	rep=580.126.09 (interval 580.126.09..580.126.20)	580.126.09
+31	580.142	580.142	1	580	4	gsp=2;rpcfn=2	ADD=3;CHANGE=1	Ada;Ampere;Blackwell;Hopper;Turing	-	rep=580.142 (interval 580.142..580.142)	-
+32	580.159.03	580.178.04	5	580	1	classhdr=1	CHANGE=1	-	-	rep=580.178.04 (interval 580.159.03..580.178.04)	580.159.04;580.173.02;580.178.04
+33	590.44.01	590.48.01	2	590	31	classdef=4;classhdr=8;ctrl=12;gsp=5;rpcfn=2	ADD=5;CHANGE=7;REMOVE=10;STRUCT=8;VIS=1	Ada;Ampere;Blackwell;Hopper;Turing	-	rep=590.48.01 (interval 590.44.01..590.48.01)	590.48.01
+34	595.44.02	595.44.05	3	595	44	classdef=4;classhdr=9;ctrl=10;gsp=19;rpcfn=2	ADD=9;CHANGE=14;REMOVE=11;STRUCT=10	Ada;Ampere;Blackwell;Hopper;Turing	-	rep=595.44.05 (interval 595.44.02..595.44.05)	-
+35	595.44.06	595.44.13	7	595	1	classhdr=1	CHANGE=1	-	-	rep=595.44.13 (interval 595.44.06..595.44.13)	-
+36	595.44.14	595.44.15	2	595	1	ctrl=1	STRUCT=1	-	-	rep=595.44.15 (interval 595.44.14..595.44.15)	-
+37	595.45.04	595.58.03	2	595	2	classhdr=1;ctrl=1	CHANGE=1;STRUCT=1	-	-	rep=595.58.03 (interval 595.45.04..595.58.03)	-
+38	595.71.05	595.84	3	595	1	classhdr=1	CHANGE=1	-	596.51@GA104(W4)	-	595.84
+39	595.91.07	595.104.02	3	595	1	ctrl=1	STRUCT=1	-	-	rep=595.91.07 (interval 595.91.07..595.104.02)	595.91.07
+40	610.43.02	610.43.03	2	610	70	allocstruct=5;classdef=13;classhdr=13;ctrl=15;gsp=22;rpcfn=2	ADD=44;CHANGE=11;STRUCT=15	Ada;Ampere;Blackwell;Hopper;Turing	-	rep=610.43.02 (interval 610.43.02..610.43.03)	610.43.02
+41	610.57.04	610.57.04	1	610	1	ctrl=1	STRUCT=1	-	-	rep=610.57.04 (interval 610.57.04..610.57.04)	610.57.04
+42	615.71.09	615.78.08	2	615	56	allocstruct=1;classdef=2;classhdr=13;ctrl=10;gsp=27;rpcfn=3	ADD=13;CHANGE=22;REMOVE=11;STRUCT=9;VIS=1	Ada;Ampere;Blackwell;Hopper;Turing	-	rep=615.71.09 (interval 615.71.09..615.78.08)	615.71.09
