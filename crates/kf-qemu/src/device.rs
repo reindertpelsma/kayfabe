@@ -1676,7 +1676,12 @@ impl Device {
             let _ = self.mem.inbox.wake.signal();
         }
         let off32 = u32::try_from(off).unwrap_or(u32::MAX);
-        match self.plane.trap_write(class, 0, off32, val, width) {
+        let doorbell = matches!(class, Class::Doorbell);
+        let action = self.plane.trap_write(class, 0, off32, val, width);
+        if doorbell {
+            self.note_worker_doorbell(val as u32);
+        }
+        match action {
             Action::RingHostInline { host_token } => {
                 // ★ P5b: a Passthrough token — ONE fenced store into the host's doorbell, and two
                 // relaxed counters for the per-token ledger. Nothing else on the vCPU.
@@ -3793,10 +3798,11 @@ impl kf_chan::dbfast::Sink for Device {
         let off = u32::try_from(kf_trap::memmap::VF_USERMODE_PAGE + self.plane.doorbell.offset())
             .unwrap_or(u32::MAX);
         let route = self.plane.tokens.get(idx as usize).map(|w| w.load().route);
-        match self
+        let action = self
             .plane
-            .trap_write(Class::Doorbell, 0, off, u64::from(value), 4)
-        {
+            .trap_write(Class::Doorbell, 0, off, u64::from(value), 4);
+        self.note_worker_doorbell(value);
+        match action {
             Action::RingHostInline { host_token } => Delivered::Rang {
                 reached: self.rm.doorbell(host_token).is_ok(),
             },
@@ -3808,6 +3814,26 @@ impl kf_chan::dbfast::Sink for Device {
             _ if matches!(route, Some(Route::Translated | Route::Emulated)) => Delivered::Handed,
             _ => Delivered::Absorbed,
         }
+    }
+}
+
+impl Device {
+    /// ★ 2026-10-14, `KF3_USER_RING_TRACE` only: count a doorbell on a worker-served (Translated)
+    /// token for the USER ring trace (`ChanPlane::note_queued`, `doorbell_census`). With the trace
+    /// off this is one cached flag load on the doorbell path.
+    fn note_worker_doorbell(&self, value: u32) {
+        // Measurement only (`KF3_USER_RING_TRACE`): nothing decides on these counts.
+        if !self.chans.user_ring_tracing() {
+            return;
+        }
+        let tok = self.plane.token_index.of_doorbell(value);
+        let route = tok
+            .and_then(|t| self.plane.tokens.get(t as usize))
+            .map(|w| w.load().route);
+        if let (Some(tok), Some(Route::Translated)) = (tok, route) {
+            self.chans.note_queued(tok);
+        }
+        self.chans.doorbell_census(value, route);
     }
 }
 

@@ -183,6 +183,13 @@ resets over two boots, 11 refusals (7 Legacy, 3 SubDeviceMask, 1 MethodOverflow)
 data-shaped (e.g. `SubDeviceMask(0x107af0e0)`, `SubDeviceMask(0x0053004f)`). Run 2950 (ec45aad9, same image, 41
 min): 0 USER-ring births, 0 resets [measured]; what the owner did in it is unknown.
 
+★ ANSWERED 2026-10-14 (`V3_USER_RING_SCAN_RACE.md`): **H-DESYNC is falsified** — the refused words are data
+the relay read too early, not packets it sized wrongly: the guest fills pushbuffers behind a `SYNC_WAIT` entry the
+GPU has not reached, and the relay scanned them as soon as `GP_PUT` named them (15 of 19 traced refusals rescan
+clean 1 ms later; the other 4 carry a packet from an earlier stale read). A second cause, the relay not reading a
+`GP_PUT` advanced without a doorbell, produced the remaining resets. Both fixed on `claude/user-ring-scan-20261014`.
+H-ESCALATE stays consistent but unacted (G17). The two hypotheses below are kept as written.
+
 Hypotheses (not tested here; for the user-ring owner):
 - **H-DESYNC:** the scanner's packet sizing drifts from the hardware's (a header it sizes differently, or a
   snapshot that is not the bytes the GPU fetches), so it reads data as headers. Falsifier: the new diagnostic line
@@ -223,7 +230,8 @@ delta 0; one 1 s "ready, waiting for a vblank" STALL report (acquire satisfied, 
 
 ## 8. What remains
 
-- The Win11 resets of §6 (user-ring scanner refusals, RESET_CHANNEL refused): not display; diagnostic only here.
+- ★ 2026-10-14: answered and fixed in `V3_USER_RING_SCAN_RACE.md` (G16); G17 analysed there. ~~The Win11 resets
+  of §6 (user-ring scanner refusals, RESET_CHANNEL refused): not display; diagnostic only here.~~
 - D-EARLY (core-group latch timing), §4.1.
 - The console still ignores the colour stages after the FMT matrix (ILUT/CSC/TMO) for YUV windows; 3-plane YUV is
   left out by name; HDR/PQ YUV (L04) is not qualified.

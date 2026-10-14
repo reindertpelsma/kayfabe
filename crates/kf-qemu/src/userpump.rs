@@ -134,9 +134,200 @@ fn scan_refusal_detail(l: &kf_chan::user_scan::Located, words: &[u32], base: usi
     format!(
         " at word {stop}/{} raw={} last_header={last} carried_in={carried} words[{lo}..{hi}]=[{}]",
         words.len(),
-        l.word.map_or_else(|| "end".into(), |w| format!("{w:#010x}")),
+        l.word
+            .map_or_else(|| "end".into(), |w| format!("{w:#010x}")),
         around.join(" ")
     )
+}
+
+/// ★ 2026-10-14 MEASUREMENT ONLY — `KF3_USER_RING_TRACE=<dir>` (default off; never needed to boot,
+/// never changes a decision). When a USER-ring scan refuses, the pump writes one bounded report per
+/// refused channel into `<dir>`: the GP descriptor and its backing, the GP ring around the cursor,
+/// the channel's last [`TRACE_HISTORY`] scanned segments (their words, capped), and three re-reads
+/// of the SAME GP slot and segment 1/20/200 ms later, each rescanned from the same carried state —
+/// which separates "the bytes changed under the scan" (a read-before-written race) from "the
+/// grammar disagrees" (the same bytes refuse again). Guest words go only to that file.
+/// Whether the measurement trace is on ([`trace_dir`]).
+pub(super) fn tracing() -> bool {
+    trace_dir().is_some()
+}
+fn trace_dir() -> Option<&'static std::path::Path> {
+    static DIR: std::sync::OnceLock<Option<std::path::PathBuf>> = std::sync::OnceLock::new();
+    DIR.get_or_init(|| {
+        std::env::var_os("KF3_USER_RING_TRACE")
+            .filter(|v| !v.is_empty() && v != "0")
+            .map(std::path::PathBuf::from)
+    })
+    .as_deref()
+}
+const TRACE_HISTORY: usize = 64;
+const TRACE_WORDS: usize = 16384;
+/// Per-channel cap on the words the history retains (1 MiB).
+const TRACE_HISTORY_WORDS: usize = 1 << 18;
+/// Per-channel cap on straddle reports (a segment that ENDS inside a packet it started).
+const TRACE_STRADDLES: u32 = 16;
+
+struct SegTrace {
+    seq: u64,
+    at: std::time::Instant,
+    cursor: u32,
+    put: u32,
+    entry: u64,
+    woke: bool,
+    carried_in: String,
+    carried_out: String,
+    rare: bool,
+    backing: String,
+    words: Vec<u32>,
+    len: usize,
+}
+
+/// A deferred re-read of a straddling segment (no sleeping on the worker).
+struct Reread {
+    due: std::time::Instant,
+    delay_ms: u64,
+    /// `Some(scan time, carried-out text at scan)`: a VERIFY re-read of an ordinary VRAM-backed
+    /// segment (counts stale reads); `None`: a straddle re-read.
+    verify: Option<(std::time::Instant, String)>,
+    seq: u64,
+    cursor: u32,
+    /// The scan-time snapshot's backing pieces and rows-log epoch.
+    backing: (String, u64),
+    /// Private-ring sequence this segment's descriptor got (issued count at scan time).
+    seq_at_scan: u64,
+    va: u64,
+    bytes: usize,
+    scan_in: Scan,
+    words: Vec<u32>,
+}
+
+pub(super) struct Trace {
+    born: std::time::Instant,
+    seq: u64,
+    history: std::collections::VecDeque<SegTrace>,
+    history_words: usize,
+    last_wake: Option<std::time::Instant>,
+    woke: bool,
+    reported: bool,
+    straddles: u32,
+    rereads: Vec<Reread>,
+    /// Doorbell count read before the PUT read that found new work, and the one before it.
+    db_at_put: u64,
+    db_prev_put: u64,
+    /// New-work PUT reads with / without a doorbell since the previous new-work PUT read.
+    puts_with_db: u64,
+    puts_without_db: u64,
+    /// VERIFY re-reads done / found changed bytes / changed the scan's carried-out state or verdict.
+    verified: u64,
+    stale: u64,
+    stale_desync: u64,
+    stale_prefetch: u64,
+    /// Stall detector: last progress marker, when it last changed, and whether reported.
+    progress: ((u64, u32, u64, u64), std::time::Instant, bool),
+    /// Idle detector: when the pump last had a turn, and whether an idle stall was reported.
+    last_turn: std::time::Instant,
+    idle_reported: bool,
+}
+impl Trace {
+    fn new() -> Self {
+        Self {
+            born: std::time::Instant::now(),
+            seq: 0,
+            history: std::collections::VecDeque::new(),
+            history_words: 0,
+            last_wake: None,
+            woke: false,
+            reported: false,
+            straddles: 0,
+            rereads: Vec::new(),
+            db_at_put: 0,
+            db_prev_put: 0,
+            puts_with_db: 0,
+            puts_without_db: 0,
+            verified: 0,
+            stale: 0,
+            stale_desync: 0,
+            stale_prefetch: 0,
+            progress: ((0, 0, 0, 0), std::time::Instant::now(), false),
+            last_turn: std::time::Instant::now(),
+            idle_reported: false,
+        }
+    }
+    fn note_put(&mut self, doorbells: u64) {
+        self.db_prev_put = self.db_at_put;
+        self.db_at_put = doorbells;
+        if doorbells > self.db_prev_put {
+            self.puts_with_db += 1;
+        } else {
+            self.puts_without_db += 1;
+        }
+    }
+    pub(super) fn wake(&mut self, woke: bool) {
+        self.woke = woke;
+        if woke {
+            self.last_wake = Some(std::time::Instant::now());
+        }
+    }
+}
+fn carried_text(c: Option<(kf_abi::submit::MethodHeader, usize)>) -> String {
+    c.map(|(h, n)| {
+        format!(
+            "{:?} sub{} m{:#x} {}/{}",
+            h.form, h.subchannel, h.method, n, h.arg_words
+        )
+    })
+    .unwrap_or_else(|| "none".into())
+}
+/// Diagnostic: the word positions the scanner reads as packet headers, fed one word at a time
+/// from `scan` (stops at a refusal or END_PB_SEGMENT; at most `cap` headers).
+fn header_chain(
+    scan: &Scan,
+    words: &[u32],
+    sw: impl Fn(u32) -> bool,
+    cap: usize,
+) -> (Vec<(usize, u32)>, Option<usize>) {
+    let mut s = scan.clone();
+    let mut chain = Vec::new();
+    for (i, w) in words.iter().enumerate() {
+        if s.carried().is_none() {
+            if chain.len() < cap {
+                chain.push((i, *w));
+            }
+            if w >> 29 == 7 {
+                return (chain, None);
+            }
+        }
+        if s.segment(&[*w], &sw).is_err() {
+            return (chain, Some(i));
+        }
+    }
+    (chain, None)
+}
+/// Diagnostic: the packet the scan carries out of `words` when started from `scan` (fed one word
+/// at a time, so software triggers do not stop it; END_PB_SEGMENT ends it). `Err(index)` on refusal.
+fn scan_end(
+    scan: &Scan,
+    words: &[u32],
+    sw: impl Fn(u32) -> bool,
+) -> Result<Option<(kf_abi::submit::MethodHeader, usize)>, usize> {
+    let mut s = scan.clone();
+    for (i, w) in words.iter().enumerate() {
+        if s.carried().is_none() && w >> 29 == 7 {
+            return Ok(None);
+        }
+        s.segment(&[*w], &sw).map_err(|_| i)?;
+    }
+    Ok(s.carried())
+}
+fn words_text(out: &mut String, words: &[u32]) {
+    use std::fmt::Write as _;
+    for (i, chunk) in words.chunks(8).enumerate() {
+        let _ = write!(out, "  {:5}:", i * 8);
+        for w in chunk {
+            let _ = write!(out, " {w:08x}");
+        }
+        out.push('\n');
+    }
 }
 
 /// Native fetch credit and private staging retirement are separate. The first
@@ -185,6 +376,19 @@ pub(super) struct Pump {
     guest_get: Option<(u64, u32)>,
     pub tick: bool,
     again: bool,
+    /// ★ 2026-10-14 — `GP_ENTRY1_SYNC_WAIT` ([`kf_chan::user_gate::SyncGate`]): nothing at or
+    /// after a guest SYNC_WAIT entry is READ before the hardware itself would fetch it.
+    sync: kf_chan::user_gate::SyncGate,
+    /// ★ 2026-10-14: the bounded retry of a scan refusal ([`kf_chan::user_gate::Grace`]), and how
+    /// many retries this channel has reported (the first few only).
+    grace: kf_chan::user_gate::Grace,
+    grace_reported: u32,
+    grace_was_retrying: bool,
+    /// ★ 2026-10-14: keep reading the guest's GP_PUT without a doorbell
+    /// ([`kf_chan::user_gate::Poll`]).
+    pub(super) poll: kf_chan::user_gate::Poll,
+    /// Measurement only ([`trace_dir`]).
+    pub(super) trace: Option<Box<Trace>>,
 }
 
 struct Segment {
@@ -245,9 +449,29 @@ impl Pump {
             guest_get: None,
             tick: false,
             again: false,
+            sync: kf_chan::user_gate::SyncGate::default(),
+            grace: kf_chan::user_gate::Grace::default(),
+            grace_reported: 0,
+            grace_was_retrying: false,
+            poll: kf_chan::user_gate::Poll::new(std::time::Instant::now()),
+            trace: trace_dir().map(|_| Box::new(Trace::new())),
         })
     }
     pub(super) fn release(&mut self) -> Result<(), String> {
+        if let Some(t) = &self.trace {
+            eprintln!(
+                "kf3: USER_RING_TRACE SUMMARY {:x?} segments={} puts_with_doorbell={} puts_without_doorbell={} straddles={} verified={} stale={} stale_desync={} stale_prefetch={}",
+                self.key,
+                t.seq,
+                t.puts_with_db,
+                t.puts_without_db,
+                t.straddles,
+                t.verified,
+                t.stale,
+                t.stale_desync,
+                t.stale_prefetch
+            );
+        }
         if let Some(shadow) = self.shadow.take() {
             eprintln!(
                 "kf3: USER_RING_SHADOW_SUMMARY {:x?} observation_attempt_counts={:?}; never execution or completion",
@@ -278,9 +502,579 @@ impl Pump {
         .map_err(|e| source_error(e, "USER_RING_SOURCE"))
     }
 
+    /// Measurement only: remember this scanned segment (bounded history, [`trace_dir`]).
+    #[allow(clippy::too_many_arguments)]
+    fn trace_segment(
+        &mut self,
+        r: &userrelay::Record,
+        put: u32,
+        entry: u64,
+        d: kf_abi::submit::GpfifoEntry,
+        pb: &Snapshot<'static>,
+        words: &[u32],
+        rare: bool,
+        software: &Option<Software>,
+    ) {
+        let sw = |v: u32| software.as_ref().is_some_and(|s| s.matches(v));
+        let start = self.scan.carried();
+        let end = scan_end(&self.scan, words, sw);
+        let carried_in = carried_text(start);
+        let carried_out = match end {
+            Ok(c) => carried_text(c),
+            Err(i) => format!("refused@{i}"),
+        };
+        let cursor = self.cursor;
+        let issued_now = self.fetch.issued();
+        let scan_in = self.scan.clone();
+        let Some(t) = self.trace.as_mut() else {
+            return;
+        };
+        t.seq += 1;
+        let kept = words[..words.len().min(TRACE_WORDS)].to_vec();
+        // A segment that starts at a packet boundary and ENDS inside a packet it started: legal
+        // hardware framing, but the shape a desync leaves behind. Report it with deferred re-reads.
+        if start.is_none() && matches!(end, Ok(Some(_))) && t.straddles < TRACE_STRADDLES {
+            t.straddles += 1;
+            let now = std::time::Instant::now();
+            for delay_ms in [1u64, 20, 200] {
+                t.rereads.push(Reread {
+                    due: now + std::time::Duration::from_millis(delay_ms),
+                    delay_ms,
+                    verify: None,
+                    seq: t.seq,
+                    cursor,
+                    backing: (pb.describe(), pb.epoch),
+                    seq_at_scan: issued_now,
+                    va: d.gpu_va,
+                    bytes: d.len_bytes as usize,
+                    scan_in: scan_in.clone(),
+                    words: kept.clone(),
+                });
+            }
+            let (chain, _) = header_chain(&scan_in, words, sw, 64);
+            let tail: Vec<String> = chain
+                .iter()
+                .rev()
+                .take(6)
+                .rev()
+                .map(|(i, w)| format!("{i}:{w:08x}"))
+                .collect();
+            eprintln!(
+                "kf3: USER_RING_TRACE STRADDLE {:#x}:{:#x} seq={} cursor={cursor} put={put} entry={entry:#018x} pb_va={:#x} words={} carried_out={carried_out} last_headers=[{}] backing=[{}] db_at_put={} db_prev_put={}",
+                r.key.0,
+                r.key.1,
+                t.seq,
+                d.gpu_va,
+                words.len(),
+                tail.join(" "),
+                pb.describe(),
+                t.db_at_put,
+                t.db_prev_put
+            );
+        }
+        // VERIFY: every VRAM-backed segment of at most 1024 words (the first 20000 per channel)
+        // is read again 0.2 and 2 ms after its scan: how often, and for how long, does the scan
+        // read bytes that are not the final ones?
+        if pb.describe().contains("vram")
+            && words.len() <= 1024
+            && t.verified + (t.rereads.len() as u64) < 40_000
+        {
+            let now = std::time::Instant::now();
+            for delay_us in [200u64, 2000] {
+                t.rereads.push(Reread {
+                    due: now + std::time::Duration::from_micros(delay_us),
+                    delay_ms: delay_us,
+                    verify: Some((now, carried_out.clone())),
+                    seq: t.seq,
+                    cursor,
+                    backing: (pb.describe(), pb.epoch),
+                    seq_at_scan: issued_now,
+                    va: d.gpu_va,
+                    bytes: d.len_bytes as usize,
+                    scan_in: scan_in.clone(),
+                    words: kept.clone(),
+                });
+            }
+        }
+        while t.history.len() == TRACE_HISTORY
+            || (t.history_words + kept.len() > TRACE_HISTORY_WORDS && !t.history.is_empty())
+        {
+            if let Some(old) = t.history.pop_front() {
+                t.history_words -= old.words.len();
+            }
+        }
+        t.history_words += kept.len();
+        t.history.push_back(SegTrace {
+            seq: t.seq,
+            at: std::time::Instant::now(),
+            cursor,
+            put,
+            entry,
+            woke: t.woke,
+            carried_in,
+            carried_out,
+            rare,
+            backing: pb.describe(),
+            words: kept,
+            len: words.len(),
+        });
+    }
+
+    /// Measurement only: report once when this pump has made no progress (cursor, ring
+    /// generation, private-ring issue/fetch counts) for 1.5 s while turns keep arriving.
+    fn trace_stall(&mut self, me: &ChanPlane, r: &userrelay::Record) {
+        let marker = (
+            self.generation,
+            self.cursor,
+            self.fetch.issued(),
+            self.fetch.fetched(),
+        );
+        let now = std::time::Instant::now();
+        let Some(t) = self.trace.as_mut() else {
+            return;
+        };
+        if t.progress.0 != marker {
+            t.progress = (marker, now, false);
+            return;
+        }
+        if t.progress.2 || now.duration_since(t.progress.1) < std::time::Duration::from_millis(1500)
+        {
+            return;
+        }
+        t.progress.2 = true;
+        let mut b = [0u8; 4];
+        let put = r
+            .userd
+            .read(
+                me,
+                r.key,
+                &r.allocation,
+                kf_abi::submit::USERD_GP_PUT,
+                &mut b,
+            )
+            .ok()
+            .map(|()| u32::from_le_bytes(b));
+        let native_get = r.lease.storage.lock().ok().and_then(|s| s.gpu_get().ok());
+        let segment = self.segment.as_ref().map(|s| {
+            format!(
+                "at={}/{} staged={} rare={} wait_witness={:?} wait_trigger={}",
+                s.at,
+                s.words.len(),
+                s.staged,
+                s.rare,
+                s.wait.as_ref().map(|w| w.witness),
+                s.wait.as_ref().is_some_and(|w| w.trigger.is_some())
+            )
+        });
+        eprintln!(
+            "kf3: USER_RING_TRACE STALL {:#x}:{:#x} no progress 1.5 s: generation={} cursor={} guest_put={put:?} fetch_issued={} fetch_fetched={} native_get={native_get:?} sync={:?} grace_retrying={} segment={segment:?} guest_get_pending={:?}",
+            r.key.0,
+            r.key.1,
+            self.generation,
+            self.cursor,
+            self.fetch.issued(),
+            self.fetch.fetched(),
+            self.sync,
+            self.grace.retrying(),
+            self.guest_get
+        );
+    }
+
+    /// Measurement only: run the straddle re-reads that are due (never sleeps).
+    fn trace_due(&mut self, me: &ChanPlane, r: &userrelay::Record, software: &Option<Software>) {
+        let now = std::time::Instant::now();
+        let due: Vec<Reread> = match self.trace.as_mut() {
+            Some(t) if t.rereads.iter().any(|x| x.due <= now) => {
+                let (due, later) = std::mem::take(&mut t.rereads)
+                    .into_iter()
+                    .partition(|x| x.due <= now);
+                t.rereads = later;
+                due
+            }
+            _ => return,
+        };
+        let sw = |v: u32| software.as_ref().is_some_and(|s| s.matches(v));
+        for x in due {
+            let mut backing_now = None;
+            let fresh: Option<Vec<u32>> = self.snapshot(me, r, x.va, x.bytes).ok().map(|s| {
+                backing_now = Some((s.describe(), s.epoch));
+                s.bytes
+                    .chunks_exact(4)
+                    .map(|w| u32::from_le_bytes([w[0], w[1], w[2], w[3]]))
+                    .collect()
+            });
+            let moved = backing_now.as_ref().map(|b| b.0 != x.backing.0);
+            let epoch = backing_now.as_ref().map(|b| (x.backing.1, b.1));
+            let Some(fresh) = fresh else {
+                if x.verify.is_some() {
+                    continue;
+                }
+                eprintln!(
+                    "kf3: USER_RING_TRACE STRADDLE_REREAD {:#x}:{:#x} seq={} +{}ms unreadable",
+                    r.key.0, r.key.1, x.seq, x.delay_ms
+                );
+                continue;
+            };
+            let diffs: Vec<usize> = (0..fresh.len().min(x.words.len()))
+                .filter(|&i| fresh[i] != x.words[i])
+                .collect();
+            let end = match scan_end(&x.scan_in, &fresh, sw) {
+                Ok(c) => carried_text(c),
+                Err(i) => format!("refused@{i}"),
+            };
+            if let Some((scanned_at, end_at_scan)) = &x.verify {
+                let Some(t) = self.trace.as_mut() else {
+                    continue;
+                };
+                t.verified += 1;
+                let mut write_file = false;
+                if !diffs.is_empty() {
+                    // Before the GPU began this entry: the GPU will execute the NEW bytes, the
+                    // scan saw the old ones — a real mismatch. After: possibly a legitimate reuse.
+                    let prefetch = self.fetch.fetched() <= x.seq_at_scan;
+                    if prefetch {
+                        t.stale_prefetch += 1;
+                    }
+                    t.stale += 1;
+                    let desync = *end_at_scan != end;
+                    if desync {
+                        t.stale_desync += 1;
+                    }
+                    write_file = t.stale <= 8;
+                    if t.stale <= 64 || desync && t.stale_desync <= 64 {
+                        eprintln!(
+                            "kf3: USER_RING_TRACE STALE {:#x}:{:#x} seq={} after_us={} words={} changed={} first_diff={:?} last_diff={:?} carried_out_at_scan={end_at_scan} now={end} backing_moved={moved:?} rows_epoch(scan,now)={epoch:?} backing_at_scan=[{}] prefetch={} verified={} stale={} stale_desync={} stale_prefetch={}",
+                            r.key.0,
+                            r.key.1,
+                            x.seq,
+                            now.duration_since(*scanned_at).as_micros(),
+                            x.words.len(),
+                            diffs.len(),
+                            diffs.first(),
+                            diffs.last(),
+                            x.backing.0,
+                            prefetch,
+                            t.verified,
+                            t.stale,
+                            t.stale_desync,
+                            t.stale_prefetch
+                        );
+                    }
+                }
+                if t.verified % 5000 == 0 {
+                    eprintln!(
+                        "kf3: USER_RING_TRACE VERIFY {:#x}:{:#x} verified={} stale={} stale_desync={} stale_prefetch={} doorbell_census={:x?}",
+                        r.key.0,
+                        r.key.1,
+                        t.verified,
+                        t.stale,
+                        t.stale_desync,
+                        t.stale_prefetch,
+                        me.doorbell_census_now()
+                    );
+                }
+                if write_file && let Some(dir) = trace_dir() {
+                    let mut out = format!(
+                        "STALE {:#x}:{:#x} seq={} entry_cursor={} pump_cursor_now={} after_us={} pb_va={:#x} bytes={} fetch_issued={} fetch_fetched={}\nas scanned:\n",
+                        r.key.0,
+                        r.key.1,
+                        x.seq,
+                        x.cursor,
+                        self.cursor,
+                        now.duration_since(*scanned_at).as_micros(),
+                        x.va,
+                        x.bytes,
+                        self.fetch.issued(),
+                        self.fetch.fetched()
+                    );
+                    words_text(&mut out, &x.words);
+                    out.push_str("re-read:\n");
+                    words_text(&mut out, &fresh);
+                    out.push_str("gp ring now (index: entry):\n");
+                    let entries = r.source.1;
+                    if entries.is_power_of_two() && entries >= 2 {
+                        for k in 0..24u32 {
+                            let idx = x
+                                .cursor
+                                .wrapping_add(entries)
+                                .wrapping_sub(4)
+                                .wrapping_add(k)
+                                & (entries - 1);
+                            let at = r.source.0 + u64::from(idx) * 8;
+                            let e = self.snapshot(me, r, at, 8).ok().and_then(|s| {
+                                s.bytes.as_slice().try_into().ok().map(u64::from_le_bytes)
+                            });
+                            out.push_str(&format!("  {idx}: {e:#018x?}\n"));
+                        }
+                    }
+                    let _ = std::fs::create_dir_all(dir).and_then(|()| {
+                        std::fs::write(
+                            dir.join(format!(
+                                "user-ring-stale-{:x}-{:x}-{}-{}.txt",
+                                r.key.0, r.key.1, x.seq, x.delay_ms
+                            )),
+                            out.as_bytes(),
+                        )
+                    });
+                }
+                continue;
+            }
+            eprintln!(
+                "kf3: USER_RING_TRACE STRADDLE_REREAD {:#x}:{:#x} seq={} +{}ms changed={} first_diff={:?} carried_out_now={end} backing_moved={moved:?} rows_epoch(scan,now)={epoch:?}",
+                r.key.0,
+                r.key.1,
+                x.seq,
+                x.delay_ms,
+                diffs.len(),
+                diffs.first()
+            );
+            if x.delay_ms == 200 {
+                if let Some(dir) = trace_dir() {
+                    let mut out = format!(
+                        "STRADDLE {:#x}:{:#x} seq={} pb_va={:#x} bytes={}\nas scanned:\n",
+                        r.key.0, r.key.1, x.seq, x.va, x.bytes
+                    );
+                    words_text(&mut out, &x.words);
+                    out.push_str("re-read +200ms:\n");
+                    words_text(&mut out, &fresh[..fresh.len().min(TRACE_WORDS)]);
+                    let _ = std::fs::create_dir_all(dir).and_then(|()| {
+                        std::fs::write(
+                            dir.join(format!(
+                                "user-ring-straddle-{:x}-{:x}-{}.txt",
+                                r.key.0, r.key.1, x.seq
+                            )),
+                            out.as_bytes(),
+                        )
+                    });
+                }
+            }
+        }
+    }
+
+    /// Measurement only ([`trace_dir`]): one bounded report for a refused segment. Runs on the
+    /// worker (never a vCPU or the drainer), once per channel; it sleeps 221 ms in total for the
+    /// three re-reads, which is acceptable only because the flag is a measurement and the channel
+    /// is about to be declared dead anyway. Decides nothing.
+    #[allow(clippy::too_many_arguments)]
+    fn trace_refusal(
+        &mut self,
+        me: &ChanPlane,
+        r: &userrelay::Record,
+        (put, gp_va, entry): (u32, u64, u64),
+        d: kf_abi::submit::GpfifoEntry,
+        pb: &Snapshot<'static>,
+        words: &[u32],
+        software: &Option<Software>,
+        why: &Failure,
+    ) {
+        use std::fmt::Write as _;
+        let Some(dir) = trace_dir() else {
+            return;
+        };
+        if self.trace.as_ref().is_none_or(|t| t.reported) {
+            return;
+        }
+        let sw = |v: u32| software.as_ref().is_some_and(|s| s.matches(v));
+        let entries = r.source.1;
+        let now = std::time::Instant::now();
+        let (born, woke, since_wake) = self
+            .trace
+            .as_ref()
+            .map(|t| {
+                (
+                    now.duration_since(t.born).as_millis(),
+                    t.woke,
+                    t.last_wake.map(|w| now.duration_since(w).as_micros()),
+                )
+            })
+            .unwrap_or_default();
+        let (db_at, db_prev, pw, pwo) = self
+            .trace
+            .as_ref()
+            .map(|t| {
+                (
+                    t.db_at_put,
+                    t.db_prev_put,
+                    t.puts_with_db,
+                    t.puts_without_db,
+                )
+            })
+            .unwrap_or_default();
+        let mut out = String::new();
+        let gp_backing = self
+            .snapshot(me, r, gp_va, 8)
+            .map(|s| s.describe())
+            .unwrap_or_else(|e| format!("{e:?}"));
+        let _ = writeln!(
+            out,
+            "USER_RING_TRACE refusal key={:#x}:{:#x} idx={} cursor={} put={put} entries={entries} gp_ring={:#x} gp_va={gp_va:#x} entry={entry:#018x} pb_va={:#x} pb_bytes={} sync_wait={} subroutine={} generation={} fetch_issued={} fetch_fetched={} pump_age_ms={born} woke_by_request={woke} since_last_request_us={since_wake:?} doorbells_at_put_read={db_at} at_previous_new_put={db_prev} now={} puts_with_doorbell={pw} puts_without_doorbell={pwo}\n  pb_backing=[{}] gp_backing=[{gp_backing}]\nwhy: {why:?}\ncarried_in: {}",
+            r.key.0,
+            r.key.1,
+            r.idx,
+            self.cursor,
+            r.source.0,
+            d.gpu_va,
+            d.len_bytes,
+            d.sync_wait,
+            d.subroutine,
+            self.generation,
+            self.fetch.issued(),
+            self.fetch.fetched(),
+            me.queued(r.idx),
+            pb.describe(),
+            carried_text(self.scan.carried()),
+        );
+        let (chain, stop) = header_chain(&self.scan, words, sw, 512);
+        let _ = writeln!(out, "header chain (index:raw) stop={stop:?}:");
+        for c in chain.chunks(8) {
+            let line: Vec<String> = c.iter().map(|(i, w)| format!("{i}:{w:08x}")).collect();
+            let _ = writeln!(out, "  {}", line.join(" "));
+        }
+        // The GP ring around the cursor, as it reads NOW.
+        let _ = writeln!(out, "gp ring now (index: entry):");
+        if entries.is_power_of_two() && entries >= 2 {
+            for k in 0..24u32 {
+                let idx = self
+                    .cursor
+                    .wrapping_add(entries)
+                    .wrapping_sub(16)
+                    .wrapping_add(k)
+                    & (entries - 1);
+                let at = r.source.0 + u64::from(idx) * 8;
+                let e = self
+                    .snapshot(me, r, at, 8)
+                    .ok()
+                    .and_then(|s| s.bytes.as_slice().try_into().ok().map(u64::from_le_bytes));
+                let mark = if idx == self.cursor { " <= cursor" } else { "" };
+                let _ = writeln!(out, "  {idx}: {e:#018x?}{mark}");
+            }
+        }
+        // Re-read the same GP slot, the same segment and USERD PUT later; rescan from the same state.
+        let mut summary = Vec::new();
+        for delay in [1u64, 20, 200] {
+            std::thread::sleep(std::time::Duration::from_millis(delay));
+            let entry2 = self
+                .snapshot(me, r, gp_va, 8)
+                .ok()
+                .and_then(|s| s.bytes.as_slice().try_into().ok().map(u64::from_le_bytes));
+            let mut put2 = [0u8; 4];
+            let put2 = r
+                .userd
+                .read(
+                    me,
+                    r.key,
+                    &r.allocation,
+                    kf_abi::submit::USERD_GP_PUT,
+                    &mut put2,
+                )
+                .ok()
+                .map(|()| u32::from_le_bytes(put2));
+            let mut backing2 = None;
+            let words2: Option<Vec<u32>> = self
+                .snapshot(me, r, d.gpu_va, d.len_bytes as usize)
+                .ok()
+                .map(|s| {
+                    backing2 = Some(format!(
+                        "[{}] epoch {}->{}",
+                        s.describe(),
+                        pb.epoch,
+                        s.epoch
+                    ));
+                    s.bytes
+                        .chunks_exact(4)
+                        .map(|w| u32::from_le_bytes([w[0], w[1], w[2], w[3]]))
+                        .collect()
+                });
+            let (changed, first) = words2.as_ref().map_or((None, None), |w2| {
+                let diffs: Vec<usize> = (0..w2.len().min(words.len()))
+                    .filter(|&i| w2[i] != words[i])
+                    .collect();
+                (Some(diffs.len()), diffs.first().copied())
+            });
+            let rescan = words2.as_ref().map(|w2| {
+                self.scan.locate(w2, sw).map_or_else(
+                    || "clean".to_owned(),
+                    |l| format!("{:?}@{}", l.refusal, l.at),
+                )
+            });
+            let line = format!(
+                "reread+{delay}ms entry_same={:?} put={put2:?} doorbells={} words_changed={changed:?} first_diff={first:?} rescan={rescan:?} backing={backing2:?}",
+                entry2.map(|e| e == entry),
+                me.queued(r.idx)
+            );
+            let _ = writeln!(out, "{line}");
+            if let (Some(w2), Some(n)) = (&words2, changed) {
+                if n > 0 {
+                    let _ = writeln!(out, "  reread words:");
+                    words_text(&mut out, &w2[..w2.len().min(TRACE_WORDS)]);
+                }
+            }
+            summary.push(format!(
+                "+{delay}ms:db={}:changed={}:rescan={}",
+                me.queued(r.idx),
+                changed.map_or("?".into(), |n| n.to_string()),
+                rescan.unwrap_or_else(|| "?".into())
+            ));
+        }
+        let _ = writeln!(out, "failing segment words ({}):", words.len());
+        words_text(&mut out, &words[..words.len().min(TRACE_WORDS)]);
+        if let Some(t) = self.trace.as_mut() {
+            let _ = writeln!(out, "history (oldest first, {} segments):", t.history.len());
+            for s in &t.history {
+                let _ = writeln!(
+                    out,
+                    "-- seq={} age_ms={} cursor={} put={} entry={:#018x} woke_by_request={} rare={} carried_in={} carried_out={} backing=[{}] words={}",
+                    s.seq,
+                    now.duration_since(s.at).as_millis(),
+                    s.cursor,
+                    s.put,
+                    s.entry,
+                    s.woke,
+                    s.rare,
+                    s.carried_in,
+                    s.carried_out,
+                    s.backing,
+                    s.len
+                );
+                words_text(&mut out, &s.words);
+            }
+            t.reported = true;
+        }
+        let name = format!(
+            "user-ring-refusal-{:x}-{:x}-{}.txt",
+            r.key.0, r.key.1, self.cursor
+        );
+        let written = std::fs::create_dir_all(dir)
+            .and_then(|()| std::fs::write(dir.join(&name), out.as_bytes()));
+        eprintln!(
+            "kf3: USER_RING_TRACE {:#x}:{:#x} cursor={} put={put} entry={entry:#018x} pb_va={:#x} bytes={} doorbell_census(translated,passthrough,other,last_other)={:x?} db_at_put={db_at} db_prev_put={db_prev} puts_with_db={pw} puts_without_db={pwo} {} file={name} written={}",
+            r.key.0,
+            r.key.1,
+            self.cursor,
+            d.gpu_va,
+            d.len_bytes,
+            me.doorbell_census_now(),
+            summary.join(" "),
+            written.is_ok()
+        );
+    }
+
     fn turn(&mut self, me: &ChanPlane, r: &mut userrelay::Record) -> Turn<bool> {
         self.tick = false;
         self.again = false;
+        if self.trace.as_ref().is_some_and(|t| !t.rereads.is_empty()) {
+            let software = software_snapshot(me, r).ok().flatten();
+            self.trace_due(me, r, &software);
+            // Keep the worker ticking until the deferred re-reads have run.
+            self.tick = true;
+        }
+        if let Some(t) = self.trace.as_mut() {
+            t.last_turn = std::time::Instant::now();
+            t.idle_reported = false;
+        }
+        if self.trace.is_some() {
+            self.trace_stall(me, r);
+        }
         let native = r.chan.ok_or("USER_RING_NATIVE_ABSENT")?;
         let get = r
             .lease
@@ -314,12 +1108,22 @@ impl Pump {
                 self.guest_get = None;
             }
         }
-        self.tick = self.fetch.fetched() != self.fetch.issued();
+        let now = std::time::Instant::now();
+        if self.segment.is_some() {
+            self.poll.turned(now, true);
+        }
+        self.tick = self.fetch.fetched() != self.fetch.issued()
+            || self.poll.active(now)
+            || self.sync.waiting()
+            || self.grace.retrying()
+            || self.trace.as_ref().is_some_and(|t| !t.rereads.is_empty());
         if self.segment.is_none() {
             if me.inbox.walk_busy() {
                 me.inbox.wait_walk(r.idx);
                 return Ok(false);
             }
+            // Doorbells counted BEFORE the PUT read (measurement only today).
+            let doorbells = me.queued(r.idx);
             let mut put = [0u8; 4];
             r.userd
                 .read(
@@ -334,8 +1138,12 @@ impl Pump {
             if put >= r.source.1 {
                 return Err("USER_RING_PUT_BOUND".into());
             }
+            self.poll.turned(now, put != self.cursor);
             if put == self.cursor {
                 return Ok(false);
+            }
+            if let Some(t) = self.trace.as_mut() {
+                t.note_put(doorbells);
             }
             // Declaration admission only, not a pin. Native never fetches the
             // guest ring; EACH current GP/PB still has fresh exact source guards.
@@ -379,6 +1187,51 @@ impl Pump {
                 })?;
             let guest_get =
                 self.cursor.checked_add(1).ok_or("USER_RING_CURSOR")? & (r.source.1 - 1);
+            // ★★ 2026-10-14 — GP_ENTRY1_SYNC_WAIT (public dev_pbdma.ref "NV_PPBDMA_GP_ENTRY1_SYNC":
+            // Host does not begin fetching this entry's segment — and, for a LENGTH-0 entry, any
+            // later one — until the preceding segment has been PROCESSED). A guest may therefore
+            // publish entries behind a SYNC_WAIT whose pushbuffers it fills only later, gated by a
+            // semaphore acquire in the preceding segment (measured, Win11 + 580.88: every scan
+            // refusal and stale read sat behind an unfetched SYNC_WAIT NOP; the bytes were filled
+            // within ms). Reading them early scans bytes the GPU will never fetch. So: before
+            // touching anything at or after a SYNC_WAIT entry, author the same wait on our own
+            // ring (barrier NOP + witness, exactly as staged segments do) and read on only once
+            // the witness has begun processing — i.e. once the hardware itself would fetch.
+            match self
+                .sync
+                .entry(entry, self.generation, self.cursor, self.fetch.fetched())
+            {
+                kf_chan::user_gate::Gate::Proceed => {}
+                kf_chan::user_gate::Gate::Wait => {
+                    self.tick = true;
+                    return Ok(false);
+                }
+                kf_chan::user_gate::Gate::PublishBarrier => {
+                    if self.fetch.available() < 2 {
+                        self.tick = true;
+                        return Ok(false);
+                    }
+                    self.publish(
+                        me,
+                        r,
+                        None,
+                        ring.as_ref(),
+                        Some(&source),
+                        None,
+                        |pump, storage| {
+                            let (barrier, _) = pump.fetch.publish(None).map_err(str::to_owned)?;
+                            storage.write_host_barrier(barrier)?;
+                            let (witness, put) = pump.fetch.publish(None).map_err(str::to_owned)?;
+                            storage.write_host_witness(witness)?;
+                            storage.publish_put(put)
+                        },
+                    )?;
+                    self.source_admitted = true;
+                    self.sync.published(self.fetch.issued());
+                    self.tick = true;
+                    return Ok(true);
+                }
+            }
             if matches!(descriptor, kf_chan::user_stream::Source::Nop) {
                 if self.fetch.available() == 0 {
                     self.tick = true;
@@ -425,7 +1278,55 @@ impl Pump {
                 ));
             }
             let software = software_snapshot(me, r)?;
-            let (patched, rare) = stage_plan(&self.scan, &software, &words)?;
+            self.grace_was_retrying = self.grace.retrying();
+            let planned = match stage_plan(&self.scan, &software, &words) {
+                // ★ 2026-10-14: a scan refusal of a segment never published is retried (re-read,
+                // rescanned) for `REFUSE_AFTER` before it is final (`kf_chan::user_gate::Grace`).
+                Err(Failure::Refused(why))
+                    if (why.starts_with("USER_RING_SCAN ")
+                        || why == "USER_RING_TRIGGER_PARTIAL_SUFFIX_UNSUPPORTED")
+                        && self.grace.refused(
+                            self.generation,
+                            self.cursor,
+                            std::time::Instant::now(),
+                        ) =>
+                {
+                    if self.grace_reported < 4 && !self.grace_was_retrying {
+                        self.grace_reported += 1;
+                        eprintln!(
+                            "kf3: USER_RING_SCAN_RETRY {:#x}:{:#x} cursor={} (re-read and rescan for up to {:?} before refusing): {why}",
+                            r.key.0,
+                            r.key.1,
+                            self.cursor,
+                            kf_chan::user_gate::REFUSE_AFTER
+                        );
+                    }
+                    self.tick = true;
+                    return Ok(false);
+                }
+                other => other,
+            };
+            if planned.is_ok() {
+                self.grace.clear();
+            }
+            if self.trace.is_some() {
+                match &planned {
+                    Ok((_, rare)) => {
+                        self.trace_segment(r, put, entry, descriptor, &pb, &words, *rare, &software)
+                    }
+                    Err(why) => self.trace_refusal(
+                        me,
+                        r,
+                        (put, va, entry),
+                        descriptor,
+                        &pb,
+                        &words,
+                        &software,
+                        why,
+                    ),
+                }
+            }
+            let (patched, rare) = planned?;
             self.segment = Some(Segment {
                 ring,
                 software,
@@ -932,6 +1833,42 @@ impl Pump {
             .generation
             .checked_add(1)
             .ok_or("USER_RING_SOURCE_SEQUENCE")?;
+        if self.trace.is_some() {
+            // Measurement only: the OLD ring at the switch (our cursor, the guest's PUT/GET, the
+            // entries around our cursor), to compare with the new ring's first entries.
+            let mut word = |off: u64| {
+                let mut b = [0u8; 4];
+                r.userd
+                    .read(me, r.key, &r.allocation, off, &mut b)
+                    .ok()
+                    .map(|()| u32::from_le_bytes(b))
+            };
+            let (put, get) = (
+                word(kf_abi::submit::USERD_GP_PUT),
+                word(kf_abi::submit::USERD_GP_GET),
+            );
+            let entries = r.source.1;
+            let mut around = Vec::new();
+            if entries.is_power_of_two() && entries >= 2 {
+                for k in 0..12u32 {
+                    let idx = self
+                        .cursor
+                        .wrapping_add(entries)
+                        .wrapping_sub(4)
+                        .wrapping_add(k)
+                        & (entries - 1);
+                    let e = self
+                        .snapshot(me, r, r.source.0 + u64::from(idx) * 8, 8)
+                        .ok()
+                        .and_then(|s| s.bytes.as_slice().try_into().ok().map(u64::from_le_bytes));
+                    around.push((idx, e));
+                }
+            }
+            eprintln!(
+                "kf3: USER_RING_TRACE MIGRATING {:#x}:{:#x} old ring {:#x}x{} our_cursor={} guest put={put:?} get={get:?} entries_around_cursor={around:x?}",
+                r.key.0, r.key.1, r.source.0, entries, self.cursor
+            );
+        }
         let userd = me
             .memory_access
             .lease(u.client, u.userd_memory, u.userd_offset, 0x200)
@@ -968,6 +1905,7 @@ impl Pump {
                     self.generation = generation;
                     self.source_admitted = false;
                     self.cursor = 0;
+                    self.grace.clear();
                     self.guest_get = None;
                 })
                 .map_err(|e| source_error(e, "USER_RING_MIGRATION_ADMISSION"))
@@ -977,6 +1915,36 @@ impl Pump {
             "kf3: USER_RING_MIGRATED {:#x}:{:#x} source={:#x}x{} generation={generation}; private native ring/USERD unchanged; no host migration verb",
             r.key.0, r.key.1, u.gpfifo_va, u.entries
         );
+        if self.trace.is_some() {
+            // Measurement only: what the guest's NEW ring holds at the switch.
+            let mut word = |off: u64| {
+                let mut b = [0u8; 4];
+                r.userd
+                    .read(me, r.key, &r.allocation, off, &mut b)
+                    .ok()
+                    .map(|()| u32::from_le_bytes(b))
+            };
+            let (put, get) = (
+                word(kf_abi::submit::USERD_GP_PUT),
+                word(kf_abi::submit::USERD_GP_GET),
+            );
+            let mut first = Vec::new();
+            for i in 0..16u64 {
+                first.push(
+                    self.snapshot(me, r, u.gpfifo_va + i * 8, 8)
+                        .ok()
+                        .and_then(|s| s.bytes.as_slice().try_into().ok().map(u64::from_le_bytes)),
+                );
+            }
+            eprintln!(
+                "kf3: USER_RING_TRACE MIGRATED {:#x}:{:#x} new USERD put={put:?} get={get:?} first_entries={first:x?} fetch_issued={} fetch_fetched={} sync_waiting={}",
+                r.key.0,
+                r.key.1,
+                self.fetch.issued(),
+                self.fetch.fetched(),
+                self.sync.waiting()
+            );
+        }
         Ok(())
     }
 }
@@ -1117,11 +2085,14 @@ impl ChanPlane {
             return Some(false);
         }
         drop(pt);
-        record.retry.store(false, Ordering::Release);
+        let woke = record.retry.swap(false, Ordering::AcqRel);
         let mut pump = match r.pump.take() {
             Some(p) => p,
             None => return Some(false),
         };
+        if let Some(t) = pump.trace.as_mut() {
+            t.wake(woke);
+        }
         let outcome = pump.turn(self, &mut r);
         r.pump = Some(pump);
         match outcome {
@@ -1181,6 +2152,9 @@ impl ChanPlane {
         let Ok(rings) = self.user_rings.try_lock() else {
             return;
         };
+        // ★ 2026-10-14: an idle relay is still due a GP_PUT read every `IDLE_POLL` — the guest
+        // may advance GP_PUT without a doorbell (`kf_chan::user_gate::Poll`).
+        let now = std::time::Instant::now();
         for record in rings.values() {
             let mut signaled = false;
             record.wake_if(
@@ -1188,12 +2162,61 @@ impl ChanPlane {
                     !r.retired
                         && !r.free_attempted
                         && r.dead.is_none()
-                        && (record.pending() || r.pump.as_ref().is_some_and(|p| p.tick))
+                        && (record.pending()
+                            || r.pump.as_ref().is_some_and(|p| p.tick || p.poll.due(now)))
                 },
                 |idx| signaled = self.plane.ring_internal(idx),
             );
             if signaled {
                 let _ = self.wake.signal();
+            }
+            if tracing() {
+                if let Ok(mut r) = record.try_lock() {
+                    self.trace_idle(&mut r);
+                }
+            }
+        }
+    }
+
+    /// Measurement only: a pump that has had no turn for 1.5 s while the guest's PUT names
+    /// entries it has not read (no doorbell, no tick) — reported once per episode.
+    fn trace_idle(&self, r: &mut userrelay::Record) {
+        if r.retired || r.free_attempted || r.dead.is_some() {
+            return;
+        }
+        let Some(p) = r.pump.as_ref() else {
+            return;
+        };
+        let Some(t) = p.trace.as_ref() else {
+            return;
+        };
+        if t.idle_reported || t.last_turn.elapsed() < std::time::Duration::from_millis(1500) {
+            return;
+        }
+        let mut b = [0u8; 4];
+        let put = r
+            .userd
+            .read(
+                self,
+                r.key,
+                &r.allocation,
+                kf_abi::submit::USERD_GP_PUT,
+                &mut b,
+            )
+            .ok()
+            .map(|()| u32::from_le_bytes(b));
+        let cursor = p.cursor;
+        if put.is_some_and(|put| put != cursor) {
+            eprintln!(
+                "kf3: USER_RING_TRACE IDLE_STALL {:#x}:{:#x} no turn for {} ms while guest PUT={put:?} != cursor={cursor} (tick={} pending={})",
+                r.key.0,
+                r.key.1,
+                t.last_turn.elapsed().as_millis(),
+                p.tick,
+                false
+            );
+            if let Some(t) = r.pump.as_mut().and_then(|p| p.trace.as_mut()) {
+                t.idle_reported = true;
             }
         }
     }

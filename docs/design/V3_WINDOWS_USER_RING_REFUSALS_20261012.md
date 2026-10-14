@@ -1,5 +1,10 @@
 # Windows USER worker refusals and observation plan
 
+★ 2026-10-14 (`V3_USER_RING_SCAN_RACE.md`): the `user_scan Header / Legacy / MethodOverflow / SubDeviceMask`
+refusals of the Win11 + 580.88 runs were early reads, not framing the scanner lacks — the relay read pushbuffers
+behind an unreached `GP_ENTRY1_SYNC_WAIT` (now gated, `kf_chan::user_gate::SyncGate`), and a relay that stopped
+reading `GP_PUT` without a doorbell left work unread (now polled, `Poll`). The table below is unchanged.
+
 **STATUS: RESEARCH, 2026-10-12.** Source auditedb50774a7a. DefaultOFF diagnostic;
 not a Windows compatibility result. Windows1600 exposes an unsupported zero-ID
 admission assumption, not a GPU fault. No more Windows boots until this audit

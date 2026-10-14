@@ -1,0 +1,7 @@
+kf3: USER_RING_REFUSED 0xc1d0003e:0xff040016 host 0x3f: USER_RING_SCAN Header at word 24/88 raw=0x9bbfdb34 last_header=0x9bbfdb34@24 carried_in=none words[20..29]=[00000000 00000000 00000000 00000000 9bbfdb34 00000203 9bbfddc4 00000203 9bbfdb30]; no completion/reuse credit
+kf3: USER_RING_REFUSED 0xc1d0006f:0xff040023 host 0x4c: USER_RING_SCAN Legacy at word 32/64 raw=0x18c00000 last_header=0x18c00000@32 carried_in=none words[28..37]=[00000000 00000000 00000000 00000000 18c00000 318c0300 80000e6a e0000000 00000000]; no completion/reuse credit
+kf3: GSP REFUSED fn76/0x906f0102=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP phase Running -> Suspending
+kf3: USER_RING_REFUSED 0xc1d0004d:0xff04001c host 0x45: USER_RING_SCAN MethodOverflow at word 218/1104 raw=0xff000000 last_header=none carried_in=Incrementing sub0 m0x100 3814/6176 words[214..223]=[ff000000 ff000000 ff000000 ff000000 ff000000 ff000000 ff000000 ff000000 ff000000]; no completion/reuse credit
+kf3: GSP REFUSED fn76/0x906f0102=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP phase Running -> Suspending

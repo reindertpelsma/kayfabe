@@ -92,6 +92,11 @@ impl Scan {
     pub fn at_boundary(&self) -> bool {
         self.pending.is_none()
     }
+    /// Diagnostic only: the packet carried into the next segment (its header and the
+    /// arguments it has consumed). Grants nothing.
+    pub fn carried(&self) -> Option<(MethodHeader, usize)> {
+        self.pending
+    }
     /// Scan at most the supplied bounded segment. State commits transactionally;
     /// return at the first trigger, with state AFTER that packet only. Ordinary
     /// methods remain unchanged and gain no CPU-authored privilege.
@@ -109,7 +114,10 @@ impl Scan {
     /// refuse. State is not changed. Bounded by `words`.
     pub fn locate(&self, words: &[u32], software: impl Fn(u32) -> bool) -> Option<Located> {
         let mut probe = Probe::default();
-        let refusal = self.clone().segment_probed(words, &software, &mut probe).err()?;
+        let refusal = self
+            .clone()
+            .segment_probed(words, &software, &mut probe)
+            .err()?;
         Some(Located {
             refusal,
             at: probe.at,
@@ -427,7 +435,8 @@ mod tests {
     fn locate_names_the_stop_word_the_last_header_and_the_carried_packet() {
         let mut s = Scan::default();
         // a packet of 3 arguments started in the previous segment, 1 consumed
-        s.segment(&[h(6, 0x100, 3).unwrap(), 7], |v| v == 1).unwrap();
+        s.segment(&[h(6, 0x100, 3).unwrap(), 7], |v| v == 1)
+            .unwrap();
         let before = s.clone();
         let old = (2 << 29) | (2 << 18) | (6 << 13) | 0x1fc;
         let words = [8, 9, h(1, 0x40, 1).unwrap(), 5, old, 17, 27];
@@ -436,7 +445,10 @@ mod tests {
         assert_eq!(l.at, 4);
         assert_eq!(l.word, Some(old));
         assert_eq!(l.last_header, Some((4, old)));
-        assert_eq!(l.carried.map(|(hd, n)| (hd.method, hd.arg_words, n)), Some((0x100, 3, 1)));
+        assert_eq!(
+            l.carried.map(|(hd, n)| (hd.method, hd.arg_words, n)),
+            Some((0x100, 3, 1))
+        );
         assert_eq!(s, before, "locate never changes the scan state");
         assert_eq!(s.segment(&words, |v| v == 1), Err(Refusal::Legacy));
         // a clean segment locates nothing
@@ -445,8 +457,14 @@ mod tests {
         let mut t = Scan::default();
         let big = h(1, 0x3ffc, 2).unwrap();
         let l = t.locate(&[big, 1, 2], |v| v == 1).unwrap();
-        assert_eq!((l.refusal, l.at, l.last_header), (Refusal::MethodOverflow, 2, Some((0, big))));
-        assert_eq!(t.segment(&[big, 1, 2], |v| v == 1), Err(Refusal::MethodOverflow));
+        assert_eq!(
+            (l.refusal, l.at, l.last_header),
+            (Refusal::MethodOverflow, 2, Some((0, big)))
+        );
+        assert_eq!(
+            t.segment(&[big, 1, 2], |v| v == 1),
+            Err(Refusal::MethodOverflow)
+        );
     }
     #[test]
     fn subdevice_filters_preserve_bindings_and_skip_unexecuted_software_calls() {

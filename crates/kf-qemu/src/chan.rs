@@ -2339,6 +2339,12 @@ pub struct ChanPlane {
     /// ★ `KF3_MAPLOG` only: per guest token, when its last inline doorbell was rung (µs on the
     /// `kf_mem::maplog` clock; 0 = never, or maplog off).
     rung_at_us: Box<[AtomicU64]>,
+    /// ★ 2026-10-14, `KF3_USER_RING_TRACE` only: per guest token, doorbells on a WORKER-served
+    /// (Translated) token, for the USER ring trace (`userpump`). Monotonic; nothing decides on it.
+    queued: Box<[AtomicU64]>,
+    /// `KF3_USER_RING_TRACE` only: every doorbell-class write by route (translated, passthrough,
+    /// other/none) and the last value of an "other" one. Measurement; nothing reads it to decide.
+    db_census: [AtomicU64; 4],
     /// ★ 2026-10-08 (owner ruling §X, `kf_chan::ptnsi`): host non-stall edges → the guest vectors
     /// of the events this VM's guest armed; never dropped (`KF3_PT_NSI_*`, read once at realize).
     pub nsi: kf_chan::ptnsi::Relay,
@@ -2959,6 +2965,8 @@ impl ChanPlane {
             rung: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
             rang: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
             rung_at_us: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
+            queued: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
+            db_census: std::array::from_fn(|_| AtomicU64::new(0)),
             nsi,
             nsi_arms: std::sync::OnceLock::new(),
             nsi_log: std::sync::OnceLock::new(),
@@ -3266,6 +3274,46 @@ impl ChanPlane {
             self.nsi.summary(),
             per.join(" ") + &fifo_refusal_summary
         )
+    }
+
+    /// ★ **vCPU/drainer**: a doorbell on worker-served guest token `idx` (Translated). One relaxed
+    /// atomic. Monotonic for the plane's life, so a pump compares two reads.
+    pub fn note_queued(&self, idx: u32) {
+        if let Some(c) = self.queued.get(idx as usize) {
+            c.fetch_add(1, Ordering::Release);
+        }
+    }
+
+    /// Whether the USER ring measurement trace is on (`KF3_USER_RING_TRACE`).
+    pub fn user_ring_tracing(&self) -> bool {
+        userpump::tracing()
+    }
+
+    /// `KF3_USER_RING_TRACE` only ([`Self::db_census`]).
+    pub fn doorbell_census(&self, value: u32, route: Option<kf_trap::Route>) {
+        if !userpump::tracing() {
+            return;
+        }
+        let i = match route {
+            Some(kf_trap::Route::Translated) => 0,
+            Some(kf_trap::Route::Passthrough) => 1,
+            _ => {
+                self.db_census[3].store(u64::from(value), Ordering::Relaxed);
+                2
+            }
+        };
+        self.db_census[i].fetch_add(1, Ordering::Relaxed);
+    }
+    /// `(translated, passthrough, other, last other value)`.
+    pub(crate) fn doorbell_census_now(&self) -> [u64; 4] {
+        std::array::from_fn(|i| self.db_census[i].load(Ordering::Relaxed))
+    }
+
+    /// Doorbells counted on guest token `idx` ([`Self::note_queued`]).
+    pub(crate) fn queued(&self, idx: u32) -> u64 {
+        self.queued
+            .get(idx as usize)
+            .map_or(0, |c| c.load(Ordering::Acquire))
     }
 
     /// ★ **vCPU**: a doorbell on guest token `idx` was rung inline; `reached` = the host store

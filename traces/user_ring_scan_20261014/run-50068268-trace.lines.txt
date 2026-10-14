@@ -1,0 +1,61 @@
+kf3: USER_RING_TRACE VERIFY 0xc1d0002f:0xff04000f verified=5000 stale=0 stale_desync=0 stale_prefetch=0 doorbell_census=[81e, 0, 0, 0]
+kf3: USER_RING_TRACE VERIFY 0xc1d00036:0xff040013 verified=5000 stale=0 stale_desync=0 stale_prefetch=0 doorbell_census=[10d0, 0, 0, 0]
+kf3: USER_RING_TRACE VERIFY 0xc1d0002f:0xff04000f verified=10000 stale=0 stale_desync=0 stale_prefetch=0 doorbell_census=[110c, 0, 0, 0]
+kf3: USER_RING_TRACE SUMMARY (c1d00036, ff040013) segments=5625 puts_with_doorbell=181 puts_without_doorbell=9325 straddles=1 verified=5275 stale=0 stale_desync=0 stale_prefetch=0
+kf3: USER_RING_TRACE SUMMARY (c1d00037, ff040014) segments=76 puts_with_doorbell=19 puts_without_doorbell=324 straddles=0 verified=0 stale=0 stale_desync=0 stale_prefetch=0
+kf3: USER_RING_TRACE VERIFY 0xc1d0002f:0xff04000f verified=15000 stale=0 stale_desync=0 stale_prefetch=0 doorbell_census=[149f, 0, 0, 0]
+kf3: USER_RING_TRACE SUMMARY (c1d0005e, ff040022) segments=0 puts_with_doorbell=0 puts_without_doorbell=0 straddles=0 verified=0 stale=0 stale_desync=0 stale_prefetch=0
+kf3: USER_RING_TRACE SUMMARY (c1d0005d, ff040021) segments=19 puts_with_doorbell=1 puts_without_doorbell=49 straddles=1 verified=10 stale=0 stale_desync=0 stale_prefetch=0
+kf3: USER_RING_TRACE VERIFY 0xc1d0002f:0xff04000f verified=20000 stale=0 stale_desync=0 stale_prefetch=0 doorbell_census=[1c0e, 0, 0, 0]
+kf3: USER_RING_TRACE SUMMARY (c1d00065, ff040023) segments=37 puts_with_doorbell=2 puts_without_doorbell=85 straddles=1 verified=28 stale=0 stale_desync=0 stale_prefetch=0
+kf3: USER_RING_TRACE SUMMARY (c1d00066, ff040024) segments=3 puts_with_doorbell=1 puts_without_doorbell=15 straddles=0 verified=0 stale=0 stale_desync=0 stale_prefetch=0
+kf3: USER_RING_TRACE VERIFY 0xc1d00063:0xff040021 verified=5000 stale=0 stale_desync=0 stale_prefetch=0 doorbell_census=[2693, 0, 0, 0]
+kf3: USER_RING_TRACE SUMMARY (c1d0006c, ff040028) segments=0 puts_with_doorbell=0 puts_without_doorbell=0 straddles=0 verified=0 stale=0 stale_desync=0 stale_prefetch=0
+kf3: USER_RING_TRACE SUMMARY (c1d00073, ff04002d) segments=177 puts_with_doorbell=5 puts_without_doorbell=247 straddles=0 verified=322 stale=0 stale_desync=0 stale_prefetch=0
+kf3: USER_RING_TRACE SUMMARY (c1d00071, ff04002b) segments=0 puts_with_doorbell=0 puts_without_doorbell=0 straddles=0 verified=0 stale=0 stale_desync=0 stale_prefetch=0
+kf3: USER_RING_TRACE SUMMARY (c1d00070, ff04002a) segments=0 puts_with_doorbell=0 puts_without_doorbell=0 straddles=0 verified=0 stale=0 stale_desync=0 stale_prefetch=0
+kf3: USER_RING_TRACE SUMMARY (c1d00069, ff040024) segments=35 puts_with_doorbell=2 puts_without_doorbell=81 straddles=1 verified=17 stale=0 stale_desync=0 stale_prefetch=0
+kf3: USER_RING_TRACE SUMMARY (c1d0006b, ff040027) segments=4 puts_with_doorbell=1 puts_without_doorbell=16 straddles=0 verified=0 stale=0 stale_desync=0 stale_prefetch=0
+kf3: USER_RING_TRACE SUMMARY (c1d00079, ff040028) segments=34 puts_with_doorbell=2 puts_without_doorbell=83 straddles=1 verified=22 stale=0 stale_desync=0 stale_prefetch=0
+kf3: USER_RING_TRACE SUMMARY (c1d0007a, ff04002a) segments=3 puts_with_doorbell=1 puts_without_doorbell=15 straddles=0 verified=0 stale=0 stale_desync=0 stale_prefetch=0
+kf3: USER_RING_TRACE SUMMARY (c1d00078, ff040027) segments=6 puts_with_doorbell=1 puts_without_doorbell=22 straddles=1 verified=0 stale=0 stale_desync=0 stale_prefetch=0
+kf3: USER_RING_TRACE SUMMARY (c1d00078, ff0e0102) segments=3 puts_with_doorbell=1 puts_without_doorbell=15 straddles=0 verified=0 stale=0 stale_desync=0 stale_prefetch=0
+kf3: USER_RING_TRACE SUMMARY (c1d00078, ff0e0103) segments=3 puts_with_doorbell=1 puts_without_doorbell=17 straddles=0 verified=0 stale=0 stale_desync=0 stale_prefetch=0
+kf3: USER_RING_TRACE SUMMARY (c1d00078, ff0e0104) segments=0 puts_with_doorbell=0 puts_without_doorbell=0 straddles=0 verified=0 stale=0 stale_desync=0 stale_prefetch=0
+kf3: USER_RING_TRACE SUMMARY (c1d0007d, ff04002b) segments=0 puts_with_doorbell=0 puts_without_doorbell=0 straddles=0 verified=0 stale=0 stale_desync=0 stale_prefetch=0
+kf3: USER_RING_TRACE SUMMARY (c1d00080, ff040032) segments=177 puts_with_doorbell=4 puts_without_doorbell=206 straddles=0 verified=322 stale=0 stale_desync=0 stale_prefetch=0
+kf3: USER_RING_TRACE SUMMARY (c1d0007f, ff040031) segments=0 puts_with_doorbell=0 puts_without_doorbell=0 straddles=0 verified=0 stale=0 stale_desync=0 stale_prefetch=0
+kf3: USER_RING_TRACE SUMMARY (c1d0007e, ff04002d) segments=0 puts_with_doorbell=0 puts_without_doorbell=0 straddles=0 verified=0 stale=0 stale_desync=0 stale_prefetch=0
+kf3: USER_RING_TRACE SUMMARY (c1d0007b, ff040028) segments=33 puts_with_doorbell=2 puts_without_doorbell=80 straddles=1 verified=22 stale=0 stale_desync=0 stale_prefetch=0
+kf3: USER_RING_TRACE SUMMARY (c1d0007c, ff04002a) segments=3 puts_with_doorbell=1 puts_without_doorbell=15 straddles=0 verified=0 stale=0 stale_desync=0 stale_prefetch=0
+kf3: USER_RING_TRACE VERIFY 0xc1d00063:0xff040021 verified=10000 stale=0 stale_desync=0 stale_prefetch=0 doorbell_census=[326f, 0, 0, 0]
+kf3: USER_RING_TRACE VERIFY 0xc1d00063:0xff040021 verified=15000 stale=0 stale_desync=0 stale_prefetch=0 doorbell_census=[34d2, 0, 0, 0]
+kf3: USER_RING_TRACE VERIFY 0xc1d00063:0xff040021 verified=20000 stale=0 stale_desync=0 stale_prefetch=0 doorbell_census=[35bf, 0, 0, 0]
+kf3: USER_RING_TRACE VERIFY 0xc1d00063:0xff040021 verified=25000 stale=0 stale_desync=0 stale_prefetch=0 doorbell_census=[368a, 0, 0, 0]
+kf3: USER_RING_TRACE VERIFY 0xc1d00063:0xff040021 verified=30000 stale=0 stale_desync=0 stale_prefetch=0 doorbell_census=[3715, 0, 0, 0]
+kf3: USER_RING_TRACE VERIFY 0xc1d00063:0xff040021 verified=35000 stale=0 stale_desync=0 stale_prefetch=0 doorbell_census=[374d, 0, 0, 0]
+kf3: USER_RING_TRACE SUMMARY (c1d00086, ff040027) segments=34 puts_with_doorbell=2 puts_without_doorbell=82 straddles=1 verified=22 stale=0 stale_desync=0 stale_prefetch=0
+kf3: USER_RING_TRACE SUMMARY (c1d00087, ff040028) segments=3 puts_with_doorbell=1 puts_without_doorbell=15 straddles=0 verified=0 stale=0 stale_desync=0 stale_prefetch=0
+kf3: USER_RING_TRACE SUMMARY (c1d0008b, ff04002b) segments=0 puts_with_doorbell=0 puts_without_doorbell=0 straddles=0 verified=0 stale=0 stale_desync=0 stale_prefetch=0
+kf3: USER_RING_TRACE SUMMARY (c1d0008a, ff04002a) segments=0 puts_with_doorbell=0 puts_without_doorbell=0 straddles=0 verified=0 stale=0 stale_desync=0 stale_prefetch=0
+kf3: USER_RING_TRACE SUMMARY (c1d00088, ff040027) segments=0 puts_with_doorbell=0 puts_without_doorbell=0 straddles=0 verified=0 stale=0 stale_desync=0 stale_prefetch=0
+kf3: USER_RING_TRACE SUMMARY (c1d00089, ff040028) segments=3 puts_with_doorbell=1 puts_without_doorbell=15 straddles=0 verified=0 stale=0 stale_desync=0 stale_prefetch=0
+kf3: USER_RING_TRACE SUMMARY (c1d0008f, ff040027) segments=35 puts_with_doorbell=2 puts_without_doorbell=82 straddles=1 verified=22 stale=0 stale_desync=0 stale_prefetch=0
+kf3: USER_RING_TRACE SUMMARY (c1d00090, ff040028) segments=3 puts_with_doorbell=1 puts_without_doorbell=15 straddles=0 verified=0 stale=0 stale_desync=0 stale_prefetch=0
+kf3: USER_RING_TRACE SUMMARY (c1d00094, ff04002b) segments=0 puts_with_doorbell=0 puts_without_doorbell=0 straddles=0 verified=0 stale=0 stale_desync=0 stale_prefetch=0
+kf3: USER_RING_TRACE SUMMARY (c1d00093, ff04002a) segments=0 puts_with_doorbell=0 puts_without_doorbell=0 straddles=0 verified=0 stale=0 stale_desync=0 stale_prefetch=0
+kf3: USER_RING_TRACE SUMMARY (c1d00091, ff040027) segments=0 puts_with_doorbell=0 puts_without_doorbell=0 straddles=0 verified=0 stale=0 stale_desync=0 stale_prefetch=0
+kf3: USER_RING_TRACE SUMMARY (c1d00092, ff040028) segments=3 puts_with_doorbell=1 puts_without_doorbell=15 straddles=0 verified=0 stale=0 stale_desync=0 stale_prefetch=0
+kf3: USER_RING_TRACE VERIFY 0xc1d00063:0xff040021 verified=40000 stale=0 stale_desync=0 stale_prefetch=0 doorbell_census=[4447, 0, 0, 0]
+kf3: USER_RING_TRACE VERIFY 0xc1d0002f:0xff04000f verified=25000 stale=0 stale_desync=0 stale_prefetch=0 doorbell_census=[44ad, 0, 0, 0]
+kf3: USER_RING_TRACE VERIFY 0xc1d0002f:0xff04000f verified=30000 stale=0 stale_desync=0 stale_prefetch=0 doorbell_census=[48af, 0, 0, 0]
+kf3: USER_RING_TRACE VERIFY 0xc1d00067:0xff040025 verified=5000 stale=0 stale_desync=0 stale_prefetch=0 doorbell_census=[5202, 0, 0, 0]
+kf3: USER_RING_TRACE VERIFY 0xc1d00067:0xff040025 verified=10000 stale=0 stale_desync=0 stale_prefetch=0 doorbell_census=[5571, 0, 0, 0]
+kf3: USER_RING_TRACE VERIFY 0xc1d0002f:0xff04000f verified=35000 stale=0 stale_desync=0 stale_prefetch=0 doorbell_census=[5733, 0, 0, 0]
+kf3: USER_RING_TRACE VERIFY 0xc1d00067:0xff040025 verified=15000 stale=0 stale_desync=0 stale_prefetch=0 doorbell_census=[58e1, 0, 0, 0]
+kf3: USER_RING_TRACE VERIFY 0xc1d00067:0xff040025 verified=20000 stale=0 stale_desync=0 stale_prefetch=0 doorbell_census=[5bd5, 0, 0, 0]
+kf3: USER_RING_TRACE VERIFY 0xc1d00067:0xff040025 verified=25000 stale=0 stale_desync=0 stale_prefetch=0 doorbell_census=[5ec4, 0, 0, 0]
+kf3: USER_RING_TRACE VERIFY 0xc1d0002f:0xff04000f verified=40000 stale=0 stale_desync=0 stale_prefetch=0 doorbell_census=[6051, 0, 0, 0]
+kf3: USER_RING_TRACE VERIFY 0xc1d00067:0xff040025 verified=30000 stale=0 stale_desync=0 stale_prefetch=0 doorbell_census=[61ec, 0, 0, 0]
+kf3: USER_RING_TRACE VERIFY 0xc1d00067:0xff040025 verified=35000 stale=0 stale_desync=0 stale_prefetch=0 doorbell_census=[6502, 0, 0, 0]
+kf3: USER_RING_TRACE VERIFY 0xc1d00067:0xff040025 verified=40000 stale=0 stale_desync=0 stale_prefetch=0 doorbell_census=[6808, 0, 0, 0]

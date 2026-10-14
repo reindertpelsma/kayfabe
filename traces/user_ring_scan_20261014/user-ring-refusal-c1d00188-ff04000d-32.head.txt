@@ -1,0 +1,96 @@
+USER_RING_TRACE refusal key=0xc1d00188:0xff04000d idx=15 cursor=32 put=36 entries=8192 gp_ring=0x145e4000 gp_va=0x145e4100 entry=0x008c1a001bbd4340 pb_va=0x1bbd4340 pb_bytes=35864 sync_wait=false subroutine=true generation=1 fetch_issued=32 fetch_fetched=31 pump_age_ms=366 woke_by_request=true since_last_request_us=Some(57)
+  pb_backing=[ram@0x1daf53340+0x8c18 ] gp_backing=[ram@0x1cda70100+0x8 ]
+why: Refused("USER_RING_SCAN MethodOverflow at word 2913/8966 raw=0x08000f66 last_header=none carried_in=Incrementing sub0 m0xc00 415/4492 words[2909..2918]=[06080a24 00800400 078e0207 000fc800 08000f66 100004ff 0c9e0f02 000fc200 07008f66]")
+carried_in: Incrementing sub0 m0xc00 415/4492
+header chain (index:raw) stop=Some(2913):
+gp ring now (index: entry):
+  16: Some(
+    0x007d9e001bbc103c,
+)
+  17: Some(
+    0x8000020000000000,
+)
+  18: Some(
+    0x0001b6001bbc8dd8,
+)
+  19: Some(
+    0x8000020000000000,
+)
+  20: Some(
+    0x0001b6001bbc8f8c,
+)
+  21: Some(
+    0x8000020000000000,
+)
+  22: Some(
+    0x0001b6001bbc9140,
+)
+  23: Some(
+    0x8000020000000000,
+)
+  24: Some(
+    0x0001b6001bbc92f4,
+)
+  25: Some(
+    0x8000020000000000,
+)
+  26: Some(
+    0x00ae9a001bbc94a8,
+)
+  27: Some(
+    0x000162001453b080,
+)
+  28: Some(
+    0x000162001453b380,
+)
+  29: Some(
+    0x000162001453b500,
+)
+  30: Some(
+    0x000162001453b200,
+)
+  31: Some(
+    0x000162001453b680,
+)
+  32: Some(
+    0x008c1a001bbd4340,
+) <= cursor
+  33: Some(
+    0x001082001bd90000,
+)
+  34: Some(
+    0x0003da001bbdcf58,
+)
+  35: Some(
+    0x00002801200c40a8,
+)
+  36: Some(
+    0x0000000000000000,
+)
+  37: Some(
+    0x0000000000000000,
+)
+  38: Some(
+    0x0000000000000000,
+)
+  39: Some(
+    0x0000000000000000,
+)
+reread+1ms entry_same=Some(true) put=Some(36) words_changed=Some(0) first_diff=None rescan=Some("MethodOverflow@2913")
+reread+20ms entry_same=Some(true) put=Some(36) words_changed=Some(0) first_diff=None rescan=Some("MethodOverflow@2913")
+reread+200ms entry_same=Some(true) put=Some(36) words_changed=Some(0) first_diff=None rescan=Some("MethodOverflow@2913")
+-- seq=1 age_ms=1 cursor=0 put=36 entry=0x00002801200c4080 woke_by_request=true rare=false carried_in=none carried_out=none backing=[ram@0x1f96b1080+0x28 ] words=10
+-- seq=2 age_ms=1 cursor=14 put=36 entry=0x00003e001bbc1000 woke_by_request=true rare=false carried_in=none carried_out=none backing=[ram@0x1ccf40000+0x3c ] words=15
+-- seq=3 age_ms=1 cursor=16 put=36 entry=0x007d9e001bbc103c woke_by_request=true rare=false carried_in=none carried_out=none backing=[ram@0x1ccf4003c+0x7d9c ] words=8039
+-- seq=4 age_ms=1 cursor=16 put=36 entry=0x007d9e001bbc103c woke_by_request=true rare=false carried_in=none carried_out=none backing=[ram@0x1ccf4003c+0x7d9c ] words=8039
+-- seq=5 age_ms=1 cursor=18 put=36 entry=0x0001b6001bbc8dd8 woke_by_request=true rare=false carried_in=none carried_out=none backing=[ram@0x1ccf47dd8+0x1b4 ] words=109
+-- seq=6 age_ms=1 cursor=20 put=36 entry=0x0001b6001bbc8f8c woke_by_request=true rare=false carried_in=none carried_out=none backing=[ram@0x1ccf47f8c+0x1b4 ] words=109
+-- seq=7 age_ms=1 cursor=22 put=36 entry=0x0001b6001bbc9140 woke_by_request=true rare=false carried_in=none carried_out=none backing=[ram@0x1ccf48140+0x1b4 ] words=109
+-- seq=8 age_ms=1 cursor=24 put=36 entry=0x0001b6001bbc92f4 woke_by_request=true rare=false carried_in=none carried_out=none backing=[ram@0x1ccf482f4+0x1b4 ] words=109
+-- seq=9 age_ms=1 cursor=26 put=36 entry=0x00ae9a001bbc94a8 woke_by_request=true rare=false carried_in=none carried_out=none backing=[ram@0x1ccf484a8+0x7b58 ram@0x1daf50000+0x3340 ] words=11174
+-- seq=10 age_ms=0 cursor=26 put=36 entry=0x00ae9a001bbc94a8 woke_by_request=true rare=false carried_in=none carried_out=none backing=[ram@0x1ccf484a8+0x7b58 ram@0x1daf50000+0x3340 ] words=11174
+-- seq=11 age_ms=0 cursor=27 put=36 entry=0x000162001453b080 woke_by_request=true rare=false carried_in=none carried_out=Incrementing sub0 m0xc00 63/4492 backing=[vram@0x63b080+0x160 ] words=88
+-- seq=12 age_ms=0 cursor=28 put=36 entry=0x000162001453b380 woke_by_request=true rare=false carried_in=Incrementing sub0 m0xc00 63/4492 carried_out=Incrementing sub0 m0xc00 151/4492 backing=[vram@0x63b380+0x160 ] words=88
+-- seq=13 age_ms=0 cursor=29 put=36 entry=0x000162001453b500 woke_by_request=true rare=false carried_in=Incrementing sub0 m0xc00 151/4492 carried_out=Incrementing sub0 m0xc00 239/4492 backing=[vram@0x63b500+0x160 ] words=88
+-- seq=14 age_ms=0 cursor=30 put=36 entry=0x000162001453b200 woke_by_request=true rare=false carried_in=Incrementing sub0 m0xc00 239/4492 carried_out=Incrementing sub0 m0xc00 327/4492 backing=[vram@0x63b200+0x160 ] words=88
+-- seq=15 age_ms=0 cursor=31 put=36 entry=0x000162001453b680 woke_by_request=true rare=false carried_in=Incrementing sub0 m0xc00 327/4492 carried_out=Incrementing sub0 m0xc00 415/4492 backing=[vram@0x63b680+0x160 ] words=88
