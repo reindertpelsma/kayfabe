@@ -1,0 +1,118 @@
+<!doctype html><meta charset=utf-8><title>kf chromium mix</title>
+<style>
+body{margin:0;background:#111;color:#ddd;font:12px sans-serif;overflow:hidden}
+#grid{display:grid;grid-template-columns:800px 800px;grid-template-rows:450px 450px}
+.cell{position:relative;overflow:hidden;width:800px;height:450px}
+canvas,video{width:800px;height:450px;display:block}
+#css div.b{position:absolute;width:40px;height:40px;border-radius:8px;will-change:transform,opacity;
+ animation:mv 3s ease-in-out infinite alternate;box-shadow:0 4px 12px rgba(0,0,0,.6)}
+@keyframes mv{from{transform:translate(0,0) rotate(0) scale(1);opacity:.4}to{transform:translate(var(--dx),var(--dy)) rotate(360deg) scale(1.6);opacity:1}}
+#css .blur{position:absolute;inset:60px;backdrop-filter:blur(10px) saturate(1.5);background:rgba(255,255,255,.08);animation:pulse 4s linear infinite}
+@keyframes pulse{50%{inset:100px 200px}}
+#scr{width:800px;height:450px;overflow:auto}
+#scr .card{height:90px;margin:6px;padding:8px;border-radius:10px;background:linear-gradient(90deg,#235,#456);box-shadow:0 2px 8px #000;display:flex;gap:8px}
+#scr img{width:70px;height:70px;border-radius:6px}
+#st{position:fixed;right:4px;bottom:4px;background:#000a;padding:2px 6px;z-index:9}
+</style>
+<div id=grid>
+ <div class=cell id=glc><canvas id=gl width=1600 height=900></canvas></div>
+ <div class=cell><canvas id=c2d width=800 height=450></canvas></div>
+ <div class=cell id=css></div>
+ <div class=cell id=vc></div>
+</div>
+<div id=st></div>
+<script>
+const P=new URLSearchParams(location.hash.slice(1));const S=window.__stats={gl:0,c2d:0,css:0,scr:0,err:[],vid:{}};
+const on=k=>P.get(k)!=='0';
+function fpsCounter(name){let n=0,t0=performance.now();return()=>{n++;const t=performance.now();if(t-t0>=2000){S[name]=Math.round(n*1000/(t-t0));n=0;t0=t}}}
+// ---- WebGL2: instanced lit cubes, MSAA FBO + blur post pass + per-frame texture upload from a canvas
+function startGL(){
+ const c=document.getElementById('gl');const gl=c.getContext('webgl2',{antialias:true,powerPreference:'high-performance'});
+ if(!gl){S.err.push('no webgl2');return}
+ S.glrenderer=(()=>{const e=gl.getExtension('WEBGL_debug_renderer_info');return e?gl.getParameter(e.UNMASKED_RENDERER_WEBGL):'?'})();
+ const sh=(t,s)=>{const o=gl.createShader(t);gl.shaderSource(o,s);gl.compileShader(o);if(!gl.getShaderParameter(o,gl.COMPILE_STATUS))S.err.push(gl.getShaderInfoLog(o));return o};
+ const pr=(v,f)=>{const p=gl.createProgram();gl.attachShader(p,sh(gl.VERTEX_SHADER,v));gl.attachShader(p,sh(gl.FRAGMENT_SHADER,f));gl.linkProgram(p);if(!gl.getProgramParameter(p,gl.LINK_STATUS))S.err.push(gl.getProgramInfoLog(p));return p};
+ const p1=pr(`#version 300 es
+ layout(location=0) in vec3 pos;layout(location=1) in vec3 nrm;layout(location=2) in vec4 inst;
+ uniform float t;uniform mat4 vp;out vec3 n;out vec3 w;out vec2 uv;
+ void main(){float a=t+inst.w*6.28;mat2 r=mat2(cos(a),-sin(a),sin(a),cos(a));vec3 p=pos*.6;p.xz=r*p.xz;vec3 nn=nrm;nn.xz=r*nn.xz;
+ vec3 q=p+inst.xyz+vec3(0.,sin(t*2.+inst.w*40.)*.8,0.);n=nn;w=q;uv=pos.xy+.5;gl_Position=vp*vec4(q,1.);}`,
+ `#version 300 es
+ precision highp float;in vec3 n;in vec3 w;in vec2 uv;uniform sampler2D tex;uniform float t;out vec4 o;
+ void main(){vec3 L=normalize(vec3(sin(t),1.,cos(t)));float d=max(dot(normalize(n),L),0.);vec3 c=texture(tex,uv).rgb*(.2+.9*d);
+ float s=0.;for(int i=0;i<24;i++){s+=sin(w.x*float(i)+t)*cos(w.z*float(i)-t);}c+=vec3(s*.01);o=vec4(c,1.);}`);
+ const p2=pr(`#version 300 es
+ const vec2 v[3]=vec2[3](vec2(-1,-1),vec2(3,-1),vec2(-1,3));out vec2 uv;void main(){gl_Position=vec4(v[gl_VertexID],0,1);uv=gl_Position.xy*.5+.5;}`,
+ `#version 300 es
+ precision highp float;in vec2 uv;uniform sampler2D src;uniform vec2 px;out vec4 o;
+ void main(){vec4 s=vec4(0.);for(int i=-8;i<=8;i++)for(int j=-2;j<=2;j++)s+=texture(src,uv+vec2(float(i),float(j))*px*2.);o=s/85.*1.4;}`);
+ const cube=[];const nrm=[];const F=[[0,0,1],[0,0,-1],[0,1,0],[0,-1,0],[1,0,0],[-1,0,0]];
+ for(const f of F){const u=[f[1]?1:0,f[1]?0:1,0],a=[0,0,0];const t1=Math.abs(f[1])?[1,0,0]:[0,1,0];const t2=[f[1]*t1[2]-f[2]*t1[1],f[2]*t1[0]-f[0]*t1[2],f[0]*t1[1]-f[1]*t1[0]];
+  const q=[[-1,-1],[1,-1],[1,1],[-1,-1],[1,1],[-1,1]];for(const[x,y]of q){for(let k=0;k<3;k++){cube.push((f[k]+t1[k]*x+t2[k]*y)*.5);nrm.push(f[k])}}}
+ const vao=gl.createVertexArray();gl.bindVertexArray(vao);
+ const b1=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b1);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(cube),gl.STATIC_DRAW);gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,3,gl.FLOAT,false,0,0);
+ const b2=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b2);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(nrm),gl.STATIC_DRAW);gl.enableVertexAttribArray(1);gl.vertexAttribPointer(1,3,gl.FLOAT,false,0,0);
+ const N=+(P.get('glN')||3000);const inst=new Float32Array(N*4);for(let i=0;i<N;i++){inst[i*4]=(Math.random()-.5)*40;inst[i*4+1]=(Math.random()-.5)*20;inst[i*4+2]=-Math.random()*50-5;inst[i*4+3]=Math.random()}
+ const b3=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b3);gl.bufferData(gl.ARRAY_BUFFER,inst,gl.DYNAMIC_DRAW);gl.enableVertexAttribArray(2);gl.vertexAttribPointer(2,4,gl.FLOAT,false,0,0);gl.vertexAttribDivisor(2,1);
+ const W=c.width,H=c.height;
+ const rb=gl.createRenderbuffer();gl.bindRenderbuffer(gl.RENDERBUFFER,rb);gl.renderbufferStorageMultisample(gl.RENDERBUFFER,4,gl.RGBA8,W,H);
+ const rd=gl.createRenderbuffer();gl.bindRenderbuffer(gl.RENDERBUFFER,rd);gl.renderbufferStorageMultisample(gl.RENDERBUFFER,4,gl.DEPTH_COMPONENT24,W,H);
+ const fm=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,fm);gl.framebufferRenderbuffer(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.RENDERBUFFER,rb);gl.framebufferRenderbuffer(gl.FRAMEBUFFER,gl.DEPTH_ATTACHMENT,gl.RENDERBUFFER,rd);
+ const rt=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,rt);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,W,H,0,gl.RGBA,gl.UNSIGNED_BYTE,null);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+ const fr=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,fr);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,rt,0);
+ const tx=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,tx);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+ const src=document.createElement('canvas');src.width=src.height=256;const sx=src.getContext('2d');
+ const vpm=(()=>{const f=1/Math.tan(.6),a=W/H,n=.1,fa=100;return new Float32Array([f/a,0,0,0,0,f,0,0,0,0,(fa+n)/(n-fa),-1,0,0,2*fa*n/(n-fa),0])})();
+ const fc=fpsCounter('gl');let fno=0;
+ function frame(){const t=performance.now()/1000;fno++;
+  sx.fillStyle=`hsl(${(t*60)%360},70%,50%)`;sx.fillRect(0,0,256,256);sx.fillStyle='#fff';sx.fillText('kf '+fno,20,128);
+  gl.bindTexture(gl.TEXTURE_2D,tx);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,src);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,fm);gl.viewport(0,0,W,H);gl.enable(gl.DEPTH_TEST);gl.clearColor(.05,.05,.1,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+  gl.useProgram(p1);gl.uniform1f(gl.getUniformLocation(p1,'t'),t);gl.uniformMatrix4fv(gl.getUniformLocation(p1,'vp'),false,vpm);gl.uniform1i(gl.getUniformLocation(p1,'tex'),0);
+  gl.bindVertexArray(vao);gl.drawArraysInstanced(gl.TRIANGLES,0,36,N);
+  gl.bindFramebuffer(gl.READ_FRAMEBUFFER,fm);gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER,fr);gl.blitFramebuffer(0,0,W,H,0,0,W,H,gl.COLOR_BUFFER_BIT,gl.NEAREST);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.disable(gl.DEPTH_TEST);gl.useProgram(p2);gl.bindTexture(gl.TEXTURE_2D,rt);
+  gl.uniform1i(gl.getUniformLocation(p2,'src'),0);gl.uniform2f(gl.getUniformLocation(p2,'px'),1/W,1/H);gl.drawArrays(gl.TRIANGLES,0,3);
+  if(fno%120==0){const px=new Uint8Array(4);gl.readPixels(W/2,H/2,1,1,gl.RGBA,gl.UNSIGNED_BYTE,px)} // sync point
+  if(gl.isContextLost())S.err.push('glctxlost');fc();requestAnimationFrame(frame)}
+ c.addEventListener('webglcontextlost',e=>{S.err.push('webglcontextlost@'+Math.round(performance.now()/1000));e.preventDefault()});
+ c.addEventListener('webglcontextrestored',()=>{S.err.push('webglcontextrestored');location.reload()});
+ requestAnimationFrame(frame);
+}
+// ---- Canvas 2D: gradients, text, shadow blur, filter blur
+function startC2D(){
+ const c=document.getElementById('c2d');const x=c.getContext('2d');const fc=fpsCounter('c2d');const B=[];for(let i=0;i<250;i++)B.push({x:Math.random()*800,y:Math.random()*450,vx:Math.random()*4-2,vy:Math.random()*4-2,r:10+Math.random()*30,h:Math.random()*360});
+ function f(){x.fillStyle='rgba(10,10,20,.3)';x.fillRect(0,0,800,450);
+  for(const b of B){b.x+=b.vx;b.y+=b.vy;if(b.x<0||b.x>800)b.vx*=-1;if(b.y<0||b.y>450)b.vy*=-1;
+   const g=x.createRadialGradient(b.x,b.y,0,b.x,b.y,b.r);g.addColorStop(0,`hsla(${b.h},90%,60%,.9)`);g.addColorStop(1,`hsla(${b.h},90%,30%,0)`);x.fillStyle=g;x.beginPath();x.arc(b.x,b.y,b.r,0,7);x.fill();}
+  x.save();x.shadowColor='#0ff';x.shadowBlur=14;x.fillStyle='#fff';x.font='28px sans-serif';x.fillText('kayfabe canvas2d '+(performance.now()/1000|0),30,60);x.restore();
+  x.save();x.filter='blur(3px)';x.drawImage(c,0,0,400,225,400,225,400,225);x.restore();
+  fc();requestAnimationFrame(f)}
+ requestAnimationFrame(f)}
+// ---- CSS animations + backdrop-filter + a scrolling heavy DOM
+function startCSS(){
+ const el=document.getElementById('css');for(let i=0;i<220;i++){const d=document.createElement('div');d.className='b';d.style.cssText=`left:${Math.random()*760}px;top:${Math.random()*410}px;background:hsl(${i*7},80%,55%);--dx:${Math.random()*200-100}px;--dy:${Math.random()*200-100}px;animation-delay:${-Math.random()*3}s`;el.appendChild(d)}
+ const bl=document.createElement('div');bl.className='blur';el.appendChild(bl);
+ const fc=fpsCounter('css');(function f(){fc();requestAnimationFrame(f)})();
+}
+function startScroll(){
+ const h=document.createElement('div');h.id='scr';const cv=document.createElement('canvas');cv.width=cv.height=70;const cx=cv.getContext('2d');
+ const imgs=[];for(let k=0;k<20;k++){cx.fillStyle=`hsl(${k*18},70%,50%)`;cx.fillRect(0,0,70,70);cx.fillStyle='#fff';cx.fillText(k,30,40);imgs.push(cv.toDataURL())}
+ for(let i=0;i<3000;i++){const c=document.createElement('div');c.className='card';c.innerHTML=`<img src="${imgs[i%20]}"><div>Card ${i}<br>lorem ipsum dolor sit amet ${i*7919%1000}</div>`;h.appendChild(c)}
+ document.getElementById('css').appendChild(h);h.style.cssText='position:absolute;left:0;top:0;opacity:.9';
+ const fc=fpsCounter('scr');let dir=1;(function f(){h.scrollTop+=dir*18;if(h.scrollTop>=h.scrollHeight-460)dir=-1;if(h.scrollTop<=0)dir=1;fc();requestAnimationFrame(f)})();
+}
+// ---- video: h264 / vp9 / av1 looped, local file
+function startVideo(kind){
+ const vc=document.getElementById('vc');vc.innerHTML='';if(kind==='none')return;
+ const v=document.createElement('video');v.id='v';v.muted=true;v.loop=true;v.autoplay=true;v.playsInline=true;
+ const f={h264:'h264.mp4',vp9:'vp9.webm',av1:'av1.mp4'}[kind];v.src=(P.get('media')||'file:///home/ubuntu/kf/dl/')+f;
+ v.addEventListener('error',()=>S.err.push('video error '+kind+' '+(v.error&&v.error.message)));vc.appendChild(v);v.play().catch(e=>S.err.push('play '+e));
+ S.vkind=kind;
+}
+window.__video=startVideo;
+window.__vq=()=>{const v=document.getElementById('v');if(!v)return null;const q=v.getVideoPlaybackQuality();return{t:v.currentTime,total:q.totalVideoFrames,dropped:q.droppedVideoFrames,paused:v.paused,fs:!!document.fullscreenElement}};
+if(on('gl'))startGL();if(on('c2d'))startC2D();if(on('css'))startCSS();if(P.get('scr')==='1')startScroll();
+startVideo(P.get('vid')||'h264');
+setInterval(()=>{document.getElementById('st').textContent=JSON.stringify({gl:S.gl,c2d:S.c2d,css:S.css,scr:S.scr,v:S.vkind})},1000);
+</script>
