@@ -342,6 +342,31 @@ fn words_text(out: &mut String, words: &[u32]) {
 fn source_receipt(staged: bool, first: bool, generation: u64, get: u32) -> Option<(u64, u32)> {
     (!staged && first).then_some((generation, get))
 }
+/// ★ 2026-10-14 (Win11 Heaven D3D11 and Edge: host Xid 13 `ESR 0x404000=0x80000010` right after a USER
+/// ring's growth migration) — the measured triggers of `FIFO_UPDATE_CHANNEL_INFO` sit INSIDE a front-end
+/// atomic sequence (`NVC7C0_FE_ATOMIC_SEQUENCE_BEGIN` 0x148 … `_END` 0x14c on the compute subchannel,
+/// `clc7c0.h`): `… 80002052 8001201e [2001a080 <handle>] 80002053`. Staging the prefix, waiting for its
+/// witness, running the action and only then publishing the one-word suffix left the channel with an
+/// OPEN atomic sequence and nothing to fetch for the whole action — long enough to be switched out —
+/// where hardware services the software method with the PBDMA stalled on the method. The source
+/// switch has no GPU-visible effect on the segment's remaining methods, so for this action alone the
+/// whole remainder (the trigger zero-filled to `DMA_NOP`s by [`stage_plan`]) is published as ONE staged
+/// copy: prefix, NOPs, suffix, contiguous. `Some((end, scan after the remainder))` when the remainder
+/// after `trigger` holds no further trigger and ends at a packet boundary; `None` keeps the split.
+fn gapless_remainder(
+    scan_after_trigger: &Scan,
+    words: &[u32],
+    at: usize,
+    trigger: Trigger,
+    sw: impl Fn(u32) -> bool,
+) -> Option<(usize, Scan)> {
+    let after = at.checked_add(trigger.end)?;
+    let mut tail = scan_after_trigger.clone();
+    match tail.segment(words.get(after..)?, sw) {
+        Ok(None) if tail.at_boundary() => Some((words.len(), tail)),
+        _ => None,
+    }
+}
 fn suffix_after_trigger(at: usize, trigger: Trigger, words: usize) -> Turn<(usize, bool)> {
     let next = at
         .checked_add(trigger.end)
@@ -418,6 +443,8 @@ struct Wait {
     witness: u64,
     trigger: Option<Trigger>,
     action: Option<PendingAction>,
+    /// ★ The trigger's suffix was published with its prefix ([`gapless_remainder`]).
+    gapless: bool,
 }
 enum PendingAction {
     Invalidate {
@@ -1787,6 +1814,11 @@ impl Pump {
                         return Err(e);
                     }
                 }
+                if wait.gapless {
+                    // The suffix went out with the prefix: the segment is done.
+                    s.at = s.words.len();
+                    return Ok((false, true));
+                }
                 let (at, finished) = suffix_after_trigger(s.at, trigger, s.words.len())?;
                 s.at = at;
                 // The prefix witness already retired every published byte. A
@@ -1839,7 +1871,18 @@ impl Pump {
             self.tick = true;
             return Ok((true, true));
         }
-        let end = trigger.map_or(s.words.len(), |t| s.at.saturating_add(t.start));
+        let mut end = trigger.map_or(s.words.len(), |t| s.at.saturating_add(t.start));
+        let mut gapless = false;
+        if let Some(t) = trigger
+            && self.trigger_is_channel_update(me, r, t.call)
+            && let Some((all, tail)) = gapless_remainder(&next, &s.words, s.at, t, |v| {
+                s.software.as_ref().is_some_and(|sw| sw.matches(v))
+            })
+        {
+            end = all;
+            next = tail;
+            gapless = true;
+        }
         let bytes = end
             .checked_sub(s.at)
             .and_then(|n| n.checked_mul(4))
@@ -1911,8 +1954,34 @@ impl Pump {
             witness: self.fetch.issued(),
             trigger,
             action: None,
+            gapless,
         });
         Ok((true, false))
+    }
+
+    /// Whether `call` names this channel's registered `FIFO_UPDATE_CHANNEL_INFO` (a peek: the
+    /// registry counts a lookup, nothing else; the action itself still runs through [`Self::software`]).
+    fn trigger_is_channel_update(
+        &self,
+        me: &ChanPlane,
+        r: &userrelay::Record,
+        call: kf_chan::tmode::SwCall,
+    ) -> bool {
+        let Some(reg) = me.defapi_reg.get() else {
+            return false;
+        };
+        let Ok(Some(sw)) = software_snapshot(me, r) else {
+            return false;
+        };
+        if !sw.matches(call.value) {
+            return false;
+        }
+        let key = kf_rm::defapi::ObjKey {
+            client: r.key.0,
+            object: sw.guest,
+        };
+        reg.lookup(key, call.data)
+            .is_ok_and(|e| matches!(e.decoded, kf_abi::defapi::Bundle::UpdateChannelInfo(_)))
     }
 
     fn software(
@@ -2536,6 +2605,53 @@ mod tests {
         assert!(!old.matches(1));
         assert!(old.matches(crate::defapi::NV50_DEFERRED_API_CLASS));
     }
+    /// ★ 2026-10-14: the measured migration trigger (Edge, run 2990 at f163b85e: the last 8 words of a
+    /// 56-word segment) sits inside an FE atomic sequence on the compute subchannel. The gapless remainder
+    /// is the whole segment: BEGIN, WFI, the trigger as two DMA_NOPs, END — no split between BEGIN and END.
+    /// Before this, the staged prefix ended at the trigger and END followed only after the action.
+    #[test]
+    fn a_channel_update_trigger_inside_an_atomic_sequence_is_published_without_a_gap() {
+        let software = Some(sw(0x51, 5));
+        let words = [
+            0x0000_0286,
+            0x8000_a01e,
+            0x8000_a009,
+            0x8000_2052,
+            0x8001_201e,
+            0x2001_a080,
+            0x4000_00a1,
+            0x8000_2053,
+        ];
+        let words: Vec<u32> = std::iter::once(h(5, 0, 1).unwrap())
+            .chain(std::iter::once(5))
+            .chain(words.iter().skip(1).copied())
+            .collect();
+        let scan = Scan::for_subdevice(1).unwrap();
+        let matches = |v: u32| software.as_ref().unwrap().matches(v);
+        let (patched, rare) = stage_plan(&scan, &software, &words).unwrap();
+        assert!(rare);
+        let mut next = scan.clone();
+        let t = next.segment(&words, matches).unwrap().unwrap();
+        assert_eq!((t.start, t.end), (6, 8), "the trigger packet");
+        // Before: the staged prefix ends at the trigger, END (index 8) only after the action.
+        assert_eq!(&patched[..t.start], &words[..6]);
+        let (end, after) = gapless_remainder(&next, &words, 0, t, matches).expect("gapless");
+        assert_eq!(end, words.len());
+        assert!(after.at_boundary());
+        // One staged copy: BEGIN (0x148 on sub1) … two DMA_NOPs … END (0x14c on sub1), contiguous.
+        assert_eq!(
+            &patched[..end],
+            &[&words[..6], &[0, 0][..], &words[8..]].concat()[..]
+        );
+        assert!(patched[..end].contains(&0x8000_2052) && patched[..end].contains(&0x8000_2053));
+        // A second trigger in the remainder keeps the split.
+        let mut two = words.clone();
+        two.extend([h(5, 0x200, 1).unwrap(), 7]);
+        let mut n2 = scan.clone();
+        let t2 = n2.segment(&two, matches).unwrap().unwrap();
+        assert!(gapless_remainder(&n2, &two, 0, t2, matches).is_none());
+    }
+
     #[test]
     fn masked_methods_stay_native_and_only_active_triggers_are_staged() {
         let software = Some(sw(0x51, 1));
