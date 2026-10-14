@@ -1419,6 +1419,7 @@ fn a_head_cursor_is_scanned_from_the_core_and_its_pio_point() {
         (cs.handle, cs.offset, cs.size, cs.argb8888),
         (0xcafe, 0x2000, 64, true)
     );
+    assert_eq!((cs.a1r5g5b5, cs.format), (false, 0xCF));
     assert_eq!((cs.x, cs.y), (-5, 40), "the point is signed");
     assert_eq!(
         (cs.k1, cs.cursor_factor, cs.viewport_factor, cs.mode),
@@ -1428,6 +1429,108 @@ fn a_head_cursor_is_scanned_from_the_core_and_its_pio_point() {
     assert_eq!((cs.client, cs.head), (CLIENT, 1));
     assert_eq!(e.cursor_scan(&cv, 0), None, "head 0 has no cursor");
     assert_eq!(e.cursor_scan(&cv, 9), None, "no such head");
+}
+
+/// ★ 2026-10-15: a head whose cursor format is `A1R5G5B5` with `MODE_XOR` (what a guest's inverting
+/// pointer would program) is scanned as that, the raw format kept; an unknown format is neither.
+#[test]
+fn an_a1r5g5b5_xor_cursor_is_scanned_as_one() {
+    let k = 0xC67A;
+    let cv = CursorVocab::resolve(t(), CORE, k).expect("GA10x cursor vocabulary");
+    for (fmt, a8, a1, raw) in [
+        ("HEAD_SET_CONTROL_CURSOR_FORMAT_A1R5G5B5", false, true, 0xE9),
+        ("HEAD_SET_CONTROL_CURSOR_FORMAT_A8R8G8B8", true, false, 0xCF),
+    ] {
+        let mut e = engine();
+        e.alloc(ChannelKind::Core, 0, CLIENT, 1, pb(), 0);
+        e.alloc(ChannelKind::Cursor, 1, CLIENT, 1, None, 0);
+        let mut ctl = put(0, fl(CORE, "HEAD_SET_CONTROL_CURSOR_ENABLE"), 1);
+        ctl = put(
+            ctl,
+            fl(CORE, "HEAD_SET_CONTROL_CURSOR_FORMAT"),
+            m(CORE, fmt),
+        );
+        ctl = put(
+            ctl,
+            fl(CORE, "HEAD_SET_CONTROL_CURSOR_SIZE"),
+            m(CORE, "HEAD_SET_CONTROL_CURSOR_SIZE_W32_H32"),
+        );
+        let comp = put(
+            0,
+            fl(CORE, "HEAD_SET_CONTROL_CURSOR_COMPOSITION_MODE"),
+            m(CORE, "HEAD_SET_CONTROL_CURSOR_COMPOSITION_MODE_XOR"),
+        );
+        let a2 = |n: &str| t().a2(CORE, n, 1, 0).unwrap_or_else(|| panic!("{n}(1, 0)"));
+        let mut c = Ring::new();
+        modeset(&mut c, 1, 2);
+        c.m(a2("HEAD_SET_CONTEXT_DMA_CURSOR"), 0xcafe)
+            .m(a2("HEAD_SET_OFFSET_CURSOR"), 0x20)
+            .m(ma(CORE, "HEAD_SET_CONTROL_CURSOR", 1), ctl)
+            .m(ma(CORE, "HEAD_SET_CONTROL_CURSOR_COMPOSITION", 1), comp)
+            .m(m(CORE, "UPDATE"), 0);
+        e.step(0, &c.bytes(), c.put(), &mut all_ok);
+        let cs = e.cursor_scan(&cv, 1).expect("enabled");
+        assert_eq!(
+            (cs.argb8888, cs.a1r5g5b5, cs.format, cs.size, cs.mode),
+            (a8, a1, raw, 32, 1)
+        );
+    }
+}
+
+/// ★ 2026-10-15: the cursor vocabulary kf plans from — the two formats and the two composition modes —
+/// is the class table's (derived from ogkm's headers by `tools/derive_display_classes.sh`) in every
+/// cursor-capable class of both table versions, and where ogkm's headers are present (`KF_OGKM_CLASS_DIR`,
+/// default the host's `/data/claude-ogkm-580` checkout) the headers themselves say the same.
+#[test]
+fn the_cursor_format_vocabulary_is_the_headers() {
+    let want = [
+        ("HEAD_SET_CONTROL_CURSOR_FORMAT_A1R5G5B5", 0xE9),
+        ("HEAD_SET_CONTROL_CURSOR_FORMAT_A8R8G8B8", 0xCF),
+        ("HEAD_SET_CONTROL_CURSOR_COMPOSITION_MODE_BLEND", 0),
+        ("HEAD_SET_CONTROL_CURSOR_COMPOSITION_MODE_XOR", 1),
+    ];
+    let classes = [
+        0xC37Du32, 0xC57D, 0xC67D, 0xC77D, 0xC97D, 0xCA7D, 0xCB7D, 0xCC7D,
+    ];
+    for ver in ["580.159.04", "580.65.06"] {
+        let tab = class::for_version(ver).unwrap();
+        let mut have = 0;
+        for c in classes {
+            if tab.v(c, want[0].0).is_none() && tab.v(c, want[1].0).is_none() {
+                continue; // a class without a cursor format row
+            }
+            have += 1;
+            for (n, v) in want {
+                assert_eq!(tab.v(c, n), Some(v), "{ver} NV{c:04X}_{n}");
+            }
+        }
+        assert!(
+            have >= 4,
+            "{ver}: only {have} cursor-capable classes in the table"
+        );
+    }
+    let dir = std::env::var("KF_OGKM_CLASS_DIR")
+        .unwrap_or_else(|_| "/data/claude-ogkm-580/src/common/sdk/nvidia/inc/class".into());
+    let mut read = 0;
+    for c in classes {
+        let Ok(h) = std::fs::read_to_string(format!("{dir}/cl{c:x}.h")) else {
+            continue;
+        };
+        read += 1;
+        for (n, v) in want {
+            let line = h
+                .lines()
+                .find(|l| l.starts_with(&format!("#define NV{c:04X}_{n} ")))
+                .unwrap_or_else(|| panic!("NV{c:04X}_{n} is not in the header"));
+            let val = line.rsplit('(').next().unwrap().trim_end_matches(')');
+            assert_eq!(
+                u32::from_str_radix(val.trim_start_matches("0x"), 16).unwrap(),
+                v,
+                "{line}"
+            );
+        }
+    }
+    eprintln!("cursor vocabulary checked against {read} ogkm class headers in {dir}");
 }
 
 /// A window flip: `SET_PRESENT_CONTROL.BEGIN_MODE` = `mode` (0 non-tearing, 1 immediate — what
