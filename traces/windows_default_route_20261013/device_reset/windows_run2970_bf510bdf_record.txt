@@ -1,0 +1,53 @@
+18:25:40 CHECK PASS initial boot reaches the guest agent 
+18:25:41 gpu: code=0 NVIDIA GeForce RTX 4070 32.0.15.8088
+18:25:42 bcdedit: The operation completed successfully. The operation completed successfully.
+18:25:43 boot0 2026-10-13T16:25:32
+18:25:57 CHECK PASS W1.1 signed in before reset 
+18:25:57 W1.1: kayfabe phase=Running
+18:26:28 W1.1: QMP system_reset (phase before=Running, boot=2026-10-13T16:25:32)
+18:26:28 {'return': {}}
+18:26:39 CHECK PASS W1.1 real reboot + guest agent after hard reset new boot 2026-10-13T16:26:28
+18:26:40 W1.1 gpu: code=0 NVIDIA GeForce RTX 4070 32.0.15.8088
+18:26:40 CHECK PASS W1.1 NVIDIA adapter Code 0 after hard reset code=0 NVIDIA GeForce RTX 4070 32.0.15.8088
+18:26:40    kf3: device reset #2: vCPUs out (gate closed); 0 queued register write(s) dropped; 13 Translated pump(s) stopped; GSP Running -> Cold (E11, 0 held repl(ies) dropped, never posted); chain rebuilt; os-e
+18:27:14 CHECK PASS W1.2 signed in before reset 
+18:27:14 W1.2: kayfabe phase=Running
+18:27:45 W1.2: QMP system_reset (phase before=Running, boot=2026-10-13T16:26:28)
+18:27:45 {'return': {}}
+18:27:55 CHECK PASS W1.2 real reboot + guest agent after hard reset new boot 2026-10-13T16:27:44
+18:27:56 W1.2 gpu: code=0 NVIDIA GeForce RTX 4070 32.0.15.8088
+18:27:56 CHECK PASS W1.2 NVIDIA adapter Code 0 after hard reset code=0 NVIDIA GeForce RTX 4070 32.0.15.8088
+18:27:56    kf3: device reset #3: vCPUs out (gate closed); 0 queued register write(s) dropped; 13 Translated pump(s) stopped; GSP Running -> Cold (E11, 0 held repl(ies) dropped, never posted); chain rebuilt; os-e
+18:28:30 CHECK PASS W1.3 signed in before reset 
+18:28:30 W1.3: kayfabe phase=Running
+18:29:01 W1.3: QMP system_reset (phase before=Running, boot=2026-10-13T16:27:44)
+18:29:02 {'return': {}}
+18:29:12 CHECK PASS W1.3 real reboot + guest agent after hard reset new boot 2026-10-13T16:29:00
+18:29:13 W1.3 gpu: code=0 NVIDIA GeForce RTX 4070 32.0.15.8088
+18:29:13 CHECK PASS W1.3 NVIDIA adapter Code 0 after hard reset code=0 NVIDIA GeForce RTX 4070 32.0.15.8088
+18:29:13    kf3: device reset #4: vCPUs out (gate closed); 0 queued register write(s) dropped; 13 Translated pump(s) stopped; GSP Running -> Cold (E11, 0 held repl(ies) dropped, never posted); chain rebuilt; os-e
+18:29:35 W2.1 disable: disabled phase=Halted
+18:29:44 W2.1 enable: enabled
+18:29:57 W2.1 gpu: code=0 NVIDIA GeForce RTX 4070 32.0.15.8088 phase=Running
+18:29:57 CHECK PASS W2.1 adapter Code 0 after disable/enable code=0 NVIDIA GeForce RTX 4070 32.0.15.8088
+18:29:58    kf3: GSP phase Cold -> ProtectedRegionUp
+
+18:29:58    kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=0: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+
+18:30:00 W2.2 disable: disabled phase=Running
+18:30:10 W2.2 enable: enabled
+18:30:24 W2.2 gpu: code=0 NVIDIA GeForce RTX 4070 32.0.15.8088 phase=Running
+18:30:24 CHECK PASS W2.2 adapter Code 0 after disable/enable code=0 NVIDIA GeForce RTX 4070 32.0.15.8088
+18:30:24    kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=0: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+
+18:30:24    kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=0: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+
+18:30:26 W2.3 disable: disabled phase=Running
+18:30:36 W2.3 enable: enabled
+18:30:49 W2.3 gpu: code=0 NVIDIA GeForce RTX 4070 32.0.15.8088 phase=Running
+18:30:49 CHECK PASS W2.3 adapter Code 0 after disable/enable code=0 NVIDIA GeForce RTX 4070 32.0.15.8088
+18:30:49    kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=0: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+
+18:30:49    kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=0: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+
+18:30:49 W3: Restart-Computer

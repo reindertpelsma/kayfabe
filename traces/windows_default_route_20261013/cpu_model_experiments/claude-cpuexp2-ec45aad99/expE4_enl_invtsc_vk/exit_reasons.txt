@@ -1,0 +1,6 @@
+2418645 reason EXIT_INTR
+ 356249 reason EXIT_NPF
+ 117859 reason EXIT_MSR
+  53008 reason EXIT_HLT
+   5908 reason EXIT_VMMCALL
+   5003 reason EXIT_IOIO

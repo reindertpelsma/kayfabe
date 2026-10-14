@@ -1,0 +1,35 @@
+[run_windows_apps 2026-10-13T09:38:36Z] START run=/var/lib/kf-windows-20261005/claude-vulkan-default-windows-ec45aad99/relay kf3=ec45aad9 iso=/var/lib/kf-windows-20261005/codex-supplement-20261011/full-image-a61af1c3/kfapps_supplement.img xid_before=56 gpu=NVIDIA GeForce RTX 4070, 595.91.07
+2026-10-13T09:38:36Z START run_dir=/var/lib/kf-windows-20261005/claude-vulkan-default-windows-ec45aad99/relay vm=broker kf3_rev=ec45aad9 apps=4
+2026-10-13T09:38:36Z MATRIX_START apps=4 (resume skips 0) per_guest=4 max_tdr=99 tier<=3
+2026-10-13T09:38:38Z pre-guest hook rc=0 :00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=identity 2026-10-13T11:38:38+02:00
+2026-10-13T09:38:40Z broker run 1660 rc=0 ['  └────────────────────────────────────────────────────────────────────────────────────────────┘']
+2026-10-13T09:38:40Z [g1] launched; waiting for the guest agent (<= 900s)
+2026-10-13T09:38:56Z [g1] agent answered after 20s
+2026-10-13T09:38:56Z [g1] password set for vast rc=0
+2026-10-13T09:39:42Z [g1] verified sign-in attempt=1 rc=0
+2026-10-13T09:39:44Z [g1] interactive session: VASTWIN\vast
+2026-10-13T09:39:45Z [g1] pushed 26 guest files
+2026-10-13T09:39:45Z [g1] app disk attached (usb-storage)
+2026-10-13T09:39:51Z [g1] setup ok: cd=D: nvidia_adapters=1 NVIDIA GeForce RTX 4070, 580.88, 4096 MiB
+2026-10-13T09:39:53Z [g1] override tool kf_cuda_control.exe sha256=3906f520c10e272215d9d7d79a90ce9a2042581923a4717db90be312ab3a67c8
+2026-10-13T09:39:56Z [g1] override tool kf_dxprobe.exe sha256=3c6ededa77430a18a13321eb72fdca7f60282f8d12ddc147a7e7df1284832c5f
+2026-10-13T09:40:11Z [g1] staged vc_redist (installer, 13s)
+2026-10-13T09:40:18Z [g1] READY boot=2026-10-13T09:38:46.5000000Z user=VASTWIN\vast smi_ok=True
+2026-10-13T09:40:21Z [g1] staged ffmpeg (unzip, 2s)
+2026-10-13T09:41:17Z [g1] edge_video_h264: PASS
+2026-10-13T09:41:25Z [g1] staged gravitymark (msi_admin, 6s)
+2026-10-13T09:44:41Z [g1] gravitymark_d3d12: FAIL
+2026-10-13T09:44:43Z [g1] staged cuda_demo_suite (unzip, 0s)
+2026-10-13T09:44:58Z [g1] vectorAdd_demo: PASS
+2026-10-13T09:48:10Z [g1] gravitymark_vk: PASS
+2026-10-13T09:48:29Z post-guest hook rc=0 02:00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-13T11:48:29+02:00
+2026-10-13T09:48:29Z [g1] stopped (clean)
+2026-10-13T09:48:29Z MATRIX_DONE batched: 3 pass / 4
+2026-10-13T09:48:29Z EXIT rc=0
+[run_windows_apps 2026-10-13T09:48:29Z] EXIT rc=0 host_xid_delta=0 summary=/var/lib/kf-windows-20261005/claude-vulkan-default-windows-ec45aad99/relay/summary.md

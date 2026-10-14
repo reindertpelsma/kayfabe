@@ -1,0 +1,7 @@
+
+ Performance counter stats for 'system wide':
+
+        16,068,325      kvm:kvm_exit                                                          
+
+      20.002393410 seconds time elapsed
+

@@ -1,0 +1,24 @@
+BOX_PROBE_START 2026-10-14T12:34:29Z
+GPU Quadro RTX 4000, 0x1EB110DE, 595.71.05
+PROC Uid: 0 0 0 0
+PROC CapEff: 00000000a80405fb
+NODE nvidia0
+== gss rows (exactly kayfabe's realize-time requests)
+PROBE_NO_OUTPUT first_lines:
+PROBE_START pid=430 uid=Uid: 0 0 0 0 CapEff=0xa80405fb cap_sys_admin=false
+
+thread 'main' (430) panicked at crates/kf-harness/src/bin/kf-ctl-probe.rs:172:10:
+host RM session: "RM bring-up failed at R2 host driver version: host driver 595.71.05 is not a measured tag of the driver matrix; kayfabe carries host structs only between measured layouts (tools/driv
+== cudart gate replies (measured request shapes)
+PROBE_NO_OUTPUT first_lines:
+PROBE_START pid=437 uid=Uid: 0 0 0 0 CapEff=0xa80405fb cap_sys_admin=false
+
+thread 'main' (437) panicked at crates/kf-harness/src/bin/kf-ctl-probe.rs:172:10:
+host RM session: "RM bring-up failed at R2 host driver version: host driver 595.71.05 is not a measured tag of the driver matrix; kayfabe carries host structs only between measured layouts (tools/driv
+== built-in Windows-only rows (zero requests)
+PROBE_NO_OUTPUT first_lines:
+PROBE_START pid=444 uid=Uid: 0 0 0 0 CapEff=0xa80405fb cap_sys_admin=false
+
+thread 'main' (444) panicked at crates/kf-harness/src/bin/kf-ctl-probe.rs:172:10:
+host RM session: "RM bring-up failed at R2 host driver version: host driver 595.71.05 is not a measured tag of the driver matrix; kayfabe carries host structs only between measured layouts (tools/driv
+BOX_PROBE_END rc=0 2026-10-14T12:34:29Z

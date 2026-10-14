@@ -1,0 +1,26 @@
+START 2026-10-13T17:57:06+02:00 rev=c9ac4e77 resets=5 xid0=16 owner_qemu=
+17:57:19 boot 1 ready; sending system_reset #1 (owner qemu alive=None)
+17:57:19 {'return': {}}
+17:57:34 boot 2 ready; sending system_reset #2 (owner qemu alive=None)
+17:57:34 {'return': {}}
+17:57:51 boot 3 ready; sending system_reset #3 (owner qemu alive=None)
+17:57:51 {'return': {}}
+17:58:11 boot 4 ready; sending system_reset #4 (owner qemu alive=None)
+17:58:11 {'return': {}}
+17:58:33 boot 5 ready; sending system_reset #5 (owner qemu alive=None)
+17:58:33 {'return': {}}
+17:58:33 all 5 resets sent; waiting for boot 6 to finish
+END 2026-10-13T17:58:57+02:00 run_rc=0 xid0=16 xid1=16 owner_alive=no
+boots seen: 0
+    FASTGUEST: root is a real mount (switch_root done) — the isolate sandbox can pivot_root
+    FASTGUEST: insmod nvidia.ko ok
+    FASTGUEST: insmod nvidia-uvm.ko ok
+    FASTGUEST: insmod wmi.ko ok
+    FASTGUEST: insmod video.ko ok
+    FASTGUEST: insmod nvidia-modeset.ko ok
+    FASTGUEST: nodes /dev/nvidia-caps/nvidia-cap1 /dev/nvidia-uvm /dev/nvidia-uvm-tools /dev/nvidia0 /dev/nvidiactl  /dev/nvidia-caps: nvidia-cap1 
+    FASTGUEST: ready 1.84s
+    FASTGUEST: arms --concurrent-fuzz --map-stress --ce-client --ce-client-guest-ram --concurrency --guest-ram-pin --probe-launch-dma  deadline 596s (budget 600s, 1s already spent booting)
+    FASTGUEST: client rc=0 at 22.71s
+    FASTGUEST: DONE
+FAST_VERDICT=PASS (110s)

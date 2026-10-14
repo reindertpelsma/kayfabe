@@ -1,0 +1,10 @@
+2026-10-13T12:43:35Z START run_dir=/var/lib/kf-windows-20261005/claude-cpuexp-ec45aad99/expE3_base_cupy vm=broker kf3_rev=ec45aad9 apps=1
+2026-10-13T12:43:35Z MATRIX_START apps=1 (resume skips 0) per_guest=8 max_tdr=99 tier<=3
+2026-10-13T12:43:35Z pre-guest hook rc=2 m=identity to=identity 2026-10-13T14:43:35+02:00 (gdm untouched)
+REFUSED: /dev/nvidia* open by:  3025736 3025736 3025736
+2026-10-13T12:43:35Z [g1] BOOT_FAIL: pre-guest hook failed rc=2
+2026-10-13T12:43:36Z post-guest hook rc=2 rom=identity to=DMA-FQ 2026-10-13T14:43:36+02:00 (gdm untouched)
+REFUSED: /dev/nvidia* open by:  3025736 3025736 3025736
+2026-10-13T12:43:36Z [g1] stopped (clean)
+2026-10-13T12:43:36Z MATRIX_DONE batched: 0 pass / 1
+2026-10-13T12:43:36Z EXIT rc=0
