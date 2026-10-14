@@ -361,6 +361,8 @@ struct Chan<'a> {
     put: u32,
     ring_va: u64,
     out_va: u64,
+    /// Completion poll interval (0 = spin with yield: the `rate` family measures microseconds).
+    poll: Duration,
 }
 
 impl<'a> Chan<'a> {
@@ -386,7 +388,7 @@ impl<'a> Chan<'a> {
             .map_err(|e| format!("birth: {e:?}"))?;
         chan.assert_user().map_err(str::to_string)?;
         rm.schedule(chan).map_err(|e| format!("schedule: {e:?}"))?;
-        Ok(Self { rm, space, ring, out, userd, chan, entries, put: 0, ring_va, out_va })
+        Ok(Self { rm, space, ring, out, userd, chan, entries, put: 0, ring_va, out_va, poll: Duration::from_micros(300) })
     }
 
     fn close(self) {
@@ -526,11 +528,17 @@ impl<'a> Chan<'a> {
                     self.put % self.entries
                 ));
             }
-            std::thread::sleep(Duration::from_micros(300));
+            if self.poll.is_zero() {
+                std::thread::yield_now();
+            } else {
+                std::thread::sleep(self.poll);
+            }
         }
         let latency = t0.elapsed().as_micros() as u64;
         // settle, then exactness: value, count == 1 (no drop, no replay)
-        std::thread::sleep(Duration::from_millis(10));
+        if !self.poll.is_zero() {
+            std::thread::sleep(Duration::from_millis(10));
+        }
         for k in 0..plan.units {
             let (v, c) = (self.slot_value(k)?, self.slot_count(k)?);
             if v != 0x1000 + k as u32 && v != 0x2000 + k as u32 {
@@ -666,6 +674,46 @@ fn main() {
         }
     };
 
+    if want("rate") {
+        // ★ Batch-rate / latency family (before-after comparison of the relay's drain path): N plans of 4
+        // units back to back, SYNC_WAIT on every segment but the first, cut (a) at packet BOUNDARIES (every
+        // SYNC_WAIT is gateable) or (b) INSIDE packets (every SYNC_WAIT is behind an open packet: the
+        // Minecraft shape). Completion is spin-polled; the tally's latency is ring -> last unit, per plan.
+        for (variant, open) in [("boundary", false), ("open-packet", true)] {
+            let n = 400 * scale;
+            let mut t = Tally::default();
+            let r = (|| -> Result<(), String> {
+                let mut ch = Chan::new(&rm, engine, 64)?;
+                ch.poll = Duration::ZERO;
+                let t0 = Instant::now();
+                for i in 0..n {
+                    let units: Vec<Unit> = (0..4).map(|k| Unit { slot: k, payload: 0x1000 + k as u32 }).collect();
+                    let mut words = Vec::new();
+                    units_words(ch.out_va, &units, &mut words)?;
+                    // each unit is 14 words: boundary cuts at 14/28/42; open cuts 3 words into the next unit
+                    let cuts: Vec<usize> = if open { vec![17, 31, 45] } else { vec![14, 28, 42] };
+                    let ents: Vec<Ent> = cut_into(words.len(), &cuts)
+                        .into_iter()
+                        .enumerate()
+                        .map(|(k, (from, to))| Ent::Seg { from, to, sync: k > 0 })
+                        .collect();
+                    let p = Plan { name: format!("rate-{variant}#{i}"), words, units: 4, ents, mode: Doorbell::End, late: Vec::new(), settle_ms: 0 };
+                    let r = ch.run(&p, timeout);
+                    t.record(&p, r);
+                }
+                let secs = t0.elapsed().as_secs_f64();
+                println!("STRESS_RATE variant={variant} plans={n} entries_per_plan=4 sync_waits_per_plan=3 plans_per_s={:.0}", n as f64 / secs);
+                ch.close();
+                Ok(())
+            })();
+            if let Err(e) = r {
+                println!("STRESS_FAMILY_ERROR rate {variant} {e}");
+                t.fail += 1;
+            }
+            t.report(&format!("rate-{variant}"));
+            total_fail += t.fail;
+        }
+    }
     if want("barrier") {
         // ★ HARDWARE MEASUREMENT (no verdict on the relay): what do GP_GET and the executed work look like
         // while an ACQUIRE stalls entry 0, behind (a) a LENGTH==0 SYNC_WAIT control entry then a segment,
