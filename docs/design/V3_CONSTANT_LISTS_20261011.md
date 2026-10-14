@@ -6,6 +6,15 @@ Inputs: `v3_constant_inventory.tsv` (140 rows, one die, one Windows driver 580.8
 `tier_checks/tier2_compute_host.tsv` (computability, unprivileged host ioctl, privileged measurement, Vast). Output: `tier_checks/merged_classification.tsv`.
 Strategy and tier order: `V3_CONSTANT_STRATEGY.md`, owner rulings §AF-§AH. MEASURED = found in a source file or capture; INFERRED = an agent's reading.
 
+> **⊘ CORRECTION 2026-10-13 (owner; verified in the host's own module source).** RM's administrator check is `capable(CAP_SYS_ADMIN)`, not uid 0:
+> `os_is_administrator()` returns `NV_IS_SUSER()` (`/usr/src/nvidia-595.91.07/nvidia/os-interface.c:382`), defined as `capable(CAP_SYS_ADMIN)`
+> (`common/inc/nv-linux.h:502`); the two other access rights map to `CAP_PERFMON` and `CAP_SYS_NICE` (`os-interface.c:385-400`). A default Docker container
+> (root without `CAP_SYS_ADMIN`) is therefore **unprivileged** to RM, exactly like kayfabe at runtime. So wherever this page says a measurement is "feasible
+> on a headless rental" as a *privileged* measurement, that holds only on a KVM rental or bare metal with real `CAP_SYS_ADMIN` (read each rental's `CapEff`
+> first); on a container rental it is a tier-2 measurement and kayfabe can obtain the same value itself at runtime (no table, no sweep). The earlier
+> wording came from a desk check and wrongly assumed container root was RM admin. Rows marked `PRIVILEGED`/`KERNEL_PRIVILEGED`/`INTERNAL` stay tier 3 (or tier 4),
+> because kayfabe cannot obtain them either way.
+
 ## Rule used to classify (mechanical)
 
 - **ALLOWED-FAMILY** (11): hand-maintained family rows, policy.

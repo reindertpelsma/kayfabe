@@ -1,0 +1,16 @@
+[package]
+name = "kf-census"
+description = "GPU-free decoder and completeness oracle for driver<->GSP message-queue streams: reads the VFIO observer's gsp.jsonl and the KFGSPCAP capture format (docs/design/V3_GSP_CAPTURE_FORMAT.md), decodes with kf-gsp/kf-abi, checks sequence continuity and parse completeness, and writes a per-control census (TSV + JSON). No unsafe, no dependencies outside the workspace."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+kf-abi.workspace = true
+kf-gsp.workspace = true
+kf-util.workspace = true
+# `gsp_abi_for(version)`: the one assembly of element layout + function ids + driver table.
+kf-rm.workspace = true
+
+[lints]
+workspace = true

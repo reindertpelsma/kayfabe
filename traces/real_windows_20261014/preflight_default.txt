@@ -1,0 +1,8 @@
+windows build                26100          Microsoft Windows 11 Enterprise LTSC Evaluation
+secure boot                  off            
+testsigning                  off            bcdedit /set {current} testsigning on needs Secure Boot off
+VBS / HVCI                   0 / 0          2 running = VBS on; 2 in services = HVCI (test signing still loads, see doc)
+nvidia gpu                   DEV_2705       driver 32.0.15.8088, status OK
+gsp                          (see nvidia-smi -q) GSP Firmware Version must not be N/A for queues to exist
+free disk C: (MiB)           116663         a capture of a boot is tens of MiB
+RAM (MiB)                    51554          the RAM scan fallback reads all of it once per pass

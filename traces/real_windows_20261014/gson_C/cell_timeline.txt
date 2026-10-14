@@ -1,0 +1,11 @@
+discovery {'method': 1, 'layout': 1, 'bar0': 3, 'gpu_count': 1, 'mailbox_reads': 1801, 'mailbox_status': 0, 'scan_bytes': 3007315968, 'scan_passes': 0, 'scan_candidates': 0, 'scan_backoff_resets': 5, 'scan_backoff_ticks': 17897725}
+stats {'steps': 85404, 'attaches': 1, 'detaches': 1, 'messages_cmd': 4331, 'messages_status': 4337, 'lost_messages_exact': 0, 'seq_gap_messages': 0, 'lapped_messages': 0, 'loss_records': 0, 'torn_reads': 0, 'invalid_elements': 0, 'unsupported': 0, 'read_failures': 0, 'resyncs': 2, 'sink_dropped': 0, 'records_refused': 0}
+capture {'records': 8699, 'end_seen': 1, 'file_ok': 1, 'by_kind': {'bind': 2, 'elements': 8696, 'loss_overflow': 0, 'loss_unreadable': 0, 'loss_unknown': 0, 'end': 1}}
+ev 1 gen 0 030000000000000001000000010000000000000005270000000000000000000000000000000000000000000000000000
+ev5 gen 0 mb_status ZERO pa 0x0 t=0.000
+ev5 gen 0 mb_status BAD_ADDR pa 0xfe t=20.982
+ev5 gen 0 mb_status UNREADABLE pa 0x0 t=21.475
+ev5 gen 0 mb_status BAD_ADDR pa 0xfe t=22.087
+ev5 gen 0 mb_status ZERO pa 0x0 t=22.483
+ev 2 gen 1 01000000000000008100000000000400000004000010000001000000000000000010160601000000008067d60c000000
+ev 3 gen 1 0400000000000000dc210000000000000000000000000000000000000000000000000000000000000000000000000000

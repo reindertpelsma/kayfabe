@@ -1,0 +1,26 @@
+23:40:46 guest agent up; observer file exists: True
+23:41:14 INSTALL:
+igned with                  Set-AuthenticodeSignature status Valid
+[SC] CreateService SUCCESS
+
+SERVICE_NAME: KayfabeWinCapture 
+        TYPE               : 1  KERNEL_DRIVER  
+        STATE              : 4  RUNNING 
+                                (STOPPABLE, NOT_PAUSABLE, IGNORES_SHUTDOWN)
+        WIN32_EXIT_CODE    : 0  (0x0)
+        SERVICE_EXIT_CODE  : 0  (0x0)
+        CHECKPOINT         : 0x0
+        WAIT_HINT          : 0x0
+        PID                : 0
+        FLAGS              : 
+Loaded. Certificate thumbprint (keep for -Action Cleanup): 42EA0906059DAE716CC581150139D803BBBDEFEC
+Next: kfwc_collect.exe C:\traces\run1 --seconds 600   (the folder must exist and be empty)
+23:41:19 START D (scan only): create rc 0
+23:42:32 D: FORCED RESTART: 
+23:42:43 D: gpu=code=0 NVIDIA GeForce RTX 4070 32.0.15.8088 resets=1
+23:43:39 D: gone=True
+23:43:40 capD out: records 1447 (bind 4, elements 1436, loss 0/0/6), end yes, file check ok
+23:43:40 fetched capD capture.kfgspcap 6600160 bytes
+23:43:40 fetched capD cell.json 1917 bytes
+23:43:54 E: gpu after disable: code=22 NVIDIA GeForce RTX 4070 32.0.15.8088
+23:43:56 START E (default back-off 5 s doubling to 300 s): create rc 0

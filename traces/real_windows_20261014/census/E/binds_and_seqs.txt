@@ -1,0 +1,21 @@
+E records 19780 {1: 6, 5: 6, 2: 19767, 6: 1} end_off 95984064 len 95984064 last_elements_t=239.1
+   (1, 0, 1, 't=20.214s')
+   (5, 0, 1, 't=20.214s')
+   (1, 1, 1, 't=20.215s')
+   (5, 1, 1, 't=20.215s')
+   (5, 0, 1, 't=21.313s')
+   (5, 1, 1, 't=21.313s')
+   (1, 0, 2, 't=22.489s')
+   (1, 1, 2, 't=22.709s')
+   (5, 0, 2, 't=112.434s')
+   (5, 1, 2, 't=112.434s')
+   (1, 0, 3, 't=113.549s')
+   (1, 1, 3, 't=113.768s')
+   (6, 0, 3, 't=240.002s')
+E
+  queue_instance 1 dir cmd messages 545 first_seq 5300 last_seq 5844 seq_gaps 0 []
+  queue_instance 1 dir status messages 551 first_seq 5306 last_seq 5856 seq_gaps 0 []
+  queue_instance 2 dir cmd messages 4992 first_seq 0 last_seq 4991 seq_gaps 0 []
+  queue_instance 2 dir status messages 5004 first_seq 0 last_seq 5003 seq_gaps 0 []
+  queue_instance 3 dir cmd messages 4305 first_seq 0 last_seq 4304 seq_gaps 0 []
+  queue_instance 3 dir status messages 4312 first_seq 0 last_seq 4311 seq_gaps 0 []

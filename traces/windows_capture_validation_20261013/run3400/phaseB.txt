@@ -1,0 +1,71 @@
+23:22:16 guest agent up; observer file exists: True
+23:27:39 signed in: False ; resets so far 0
+23:27:40 bcdedit: | Windows Boot Loader | ------------------- | identifier              {current} | device                  partition=C: | path                    \Windows\system32\winload.efi | description             Windows 11 | locale                  en-us | inherit                 {bootloadersettings} | testsig
+23:27:41 gpu: code=0 NVIDIA GeForce RTX 4070 32.0.15.8088
+23:27:42 nvidia-smi: NVIDIA GeForce RTX 4070, 580.88
+23:27:44 INSTALL:
+signed with                  Set-AuthenticodeSignature status Valid
+[SC] CreateService SUCCESS
+
+SERVICE_NAME: KayfabeWinCapture 
+        TYPE               : 1  KERNEL_DRIVER  
+        STATE              : 4  RUNNING 
+                                (STOPPABLE, NOT_PAUSABLE, IGNORES_SHUTDOWN)
+        WIN32_EXIT_CODE    : 0  (0x0)
+        SERVICE_EXIT_CODE  : 0  (0x0)
+        CHECKPOINT         : 0x0
+        WAIT_HINT          : 0x0
+        PID                : 0
+        FLAGS              : 
+Loaded. Certificate thumbprint (keep for -Action Cleanup): 8D83EC50210EBA38426DE057B8A615749470004D
+Next: kfwc_collect.exe C:\traces\run1 --seconds 600   (the folder must exist and be empty)
+23:27:45 sc query:
+SERVICE_NAME: KayfabeWinCapture 
+        TYPE               : 1  KERNEL_DRIVER  
+        STATE              : 4  RUNNING 
+                                (STOPPABLE, NOT_PAUSABLE, IGNORES_SHUTDOWN)
+        WIN32_EXIT_CODE    : 0  (0x0)
+        SERVICE_EXIT_CODE  : 0  (0x0)
+        CHECKPOINT         : 0x0
+        WAIT_HINT          : 0x0
+23:27:46 codeintegrity (last 5): 3116 Signature information for Code Integrity policy ID {2678656c-05ef-481f-bc5b-ebd8c991502d}.
+3099 Refreshed and activated Code Integrity policy {2678656c-05ef-481f-bc5b-ebd8c991502d} VerifiedAndReputableDesktopEvaluationFlightSupplemental. id 22512.1000.211129. Status 0x0
+3116 Signature information for Code Integrity policy ID {1939ed82-bfd5-4d32-b58e-d31d3c49715a}.
+3099 Refreshed and activated Code Integrity policy {1939ed82-bfd5-4d32-b58e-d31d3c49715a} VerifiedAndReputableDesktopEvaluationTestSupplemental. id 22549.1000.220201. Status 0x0
+3116 Signature information for Code Integrity policy ID {d2bda982-ccf6-4344-ac5b-0b44427b6816}.
+23:27:55 status: {"driver_abi":3,"running":0}
+23:28:27 BASELINE System-process CPU over 30s with the driver loaded and idle: 0.219 s
+23:28:29 nvidia instance id present: True
+23:30:00 START collector A: [TIMED OUT]
+23:30:26 t+25 status: [stderr] kfwc_collect.exe : cannot open the device: Win32 5 (elevated prompt? driver started?)
+At line:1 char:1
++ & C:\kfwc\kfwc_collect.exe --status 2>&1
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (cannot open the...river started?):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+23:30:27 normal work nvidia-smi: [N/A], 0 MHz, 0
+23:30:33 normal work nvidia-smi: [N/A], 0 MHz, 0
+23:30:39 normal work nvidia-smi: [N/A], 0 MHz, 0
+23:30:58 FORCED RESTART pnputil /restart-device (resets before 0): Microsoft PnP Utility
+
+Restarting device:         PCI\VEN_10DE&DEV_2786&SUBSYS_<redacted>&REV_A1\<instance>
+Device restarted successfully.
+23:31:25 after restart: gpu=code=0 NVIDIA GeForce RTX 4070 32.0.15.8088 resets now 1
+23:31:26 normal work nvidia-smi: [N/A], 0 MHz
+23:31:32 normal work nvidia-smi: [N/A], 0 MHz
+23:31:38 normal work nvidia-smi: [N/A], 0 MHz
+23:31:46 collector A out: records 3756 (bind 4, elements 3747, loss 0/0/4), end yes, file check ok
+23:31:48 capA files: capture.kfgspcap 17069696 ; cell.json 1926
+23:31:48 fetched capA capture.kfgspcap 17069696 bytes
+23:31:48 fetched capA cell.json 1926 bytes
+23:32:02 gpu after disable: code=22 NVIDIA GeForce RTX 4070 32.0.15.8088
+23:35:04 capB: System-process CPU delta 26.641 s over 90 s wall (baseline idle rate 0.0073 s/s)
+23:35:05 capB out: records 1 (bind 0, elements 0, loss 0/0/0), end yes, file check ok
+23:35:05 fetched capB capture.kfgspcap 160 bytes
+23:35:05 fetched capB cell.json 1341 bytes
+23:36:20 capC: System-process CPU delta 11.641 s over 12 s wall (baseline idle rate 0.0073 s/s)
+23:36:21 capC out: records 1 (bind 0, elements 0, loss 0/0/0), end yes, file check ok
+23:36:21 fetched capC capture.kfgspcap 160 bytes
+23:36:21 fetched capC cell.json 1332 bytes
+23:36:51 gpu after enable: code=0 NVIDIA GeForce RTX 4070 32.0.15.8088
+23:36:51 PHASE B DONE resets=4

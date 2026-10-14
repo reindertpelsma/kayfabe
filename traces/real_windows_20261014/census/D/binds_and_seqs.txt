@@ -1,0 +1,9 @@
+D records 350 {1: 2, 5: 2, 2: 345, 6: 1} end_off 3312768 len 3312768 last_elements_t=59.1
+   (1, 0, 1, 't=25.576s')
+   (5, 0, 1, 't=25.576s')
+   (1, 1, 1, 't=25.577s')
+   (5, 1, 1, 't=25.577s')
+   (6, 0, 1, 't=60.000s')
+D
+  queue_instance 1 dir cmd messages 169 first_seq 4852 last_seq 5020 seq_gaps 0 []
+  queue_instance 1 dir status messages 169 first_seq 4858 last_seq 5026 seq_gaps 0 []

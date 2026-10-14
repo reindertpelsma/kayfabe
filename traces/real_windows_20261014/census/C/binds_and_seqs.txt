@@ -1,0 +1,7 @@
+C records 8699 {1: 2, 2: 8696, 6: 1} end_off 43597856 len 43597856 last_elements_t=149.1
+   (1, 0, 1, 't=22.624s')
+   (1, 1, 1, 't=22.843s')
+   (6, 0, 1, 't=150.000s')
+C
+  queue_instance 1 dir cmd messages 4331 first_seq 0 last_seq 4330 seq_gaps 0 []
+  queue_instance 1 dir status messages 4337 first_seq 0 last_seq 4336 seq_gaps 0 []

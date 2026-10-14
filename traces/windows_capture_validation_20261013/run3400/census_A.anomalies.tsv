@@ -1,0 +1,5 @@
+kind	count	first_example
+prefix_missing	2	src0: rec2 Cmd q(0x1,0x0): first sequence is 1328, not 0
+parse_failure	8	src0: rec217 Status q(0x1,0x0): continuation record with no open large message: 0
+control_extra_bytes	206	src0: rec67 Status cmd 0x0: declares 0 param bytes, message carries 2188
+capture_loss	4	src0: record 1 LossUnknown q1 Cmd at entry 58: unknown number of entries lost

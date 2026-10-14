@@ -1,0 +1,1 @@
+records 350 (bind 2, elements 345, loss 0/0/2), end yes, file check ok

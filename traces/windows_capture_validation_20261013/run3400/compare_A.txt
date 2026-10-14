@@ -1,0 +1,10 @@
+module_messages=3743
+observer_messages=22354
+matched=3742
+module_only=1
+byte_conflicts=0
+module_loss_records=4
+pass=False
+queue_id 1 -> observer generation 1: {'observer_generation': 1, 'messages': 1522, 'matched': 1521, 'module_only': 1, 'byte_conflicts': 0}
+queue_id 2 -> observer generation 2: {'observer_generation': 2, 'messages': 2221, 'matched': 2221, 'module_only': 0, 'byte_conflicts': 0}
+DIFFERENCE {'kind': 'module_only', 'queue_id': 1, 'dir': 1, 'seq': 2089, 'index': 1521, 'bytes': 88, 'after_last_matched_message_of_its_queue': True}
