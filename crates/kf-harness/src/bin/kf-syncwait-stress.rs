@@ -714,6 +714,41 @@ fn main() {
             total_fail += t.fail;
         }
     }
+    if want("flood") {
+        // ★ Per-segment cost family (the Windows Heaven shape: many small plain segments, no SYNC_WAIT):
+        // plans of 48 units, ONE SEGMENT PER UNIT, back to back; the guest's doorbell pattern varies
+        // (every entry / PUT after each entry but one bell / one PUT and one bell). Reports segments per
+        // second; the relay's own counters (turns, entries per turn, host doorbells, stages) are in the
+        // `USER_RING_LOOP SUMMARY` line.
+        for (variant, mode) in [("each", Doorbell::Each), ("put-ahead", Doorbell::PutAhead), ("end", Doorbell::End)] {
+            let n = 100 * scale;
+            let mut t = Tally::default();
+            let r = (|| -> Result<(), String> {
+                let mut ch = Chan::new(&rm, engine, 128)?;
+                ch.poll = Duration::ZERO;
+                let t0 = Instant::now();
+                for i in 0..n {
+                    let units: Vec<Unit> = (0..48).map(|k| Unit { slot: k, payload: 0x1000 + k as u32 }).collect();
+                    let mut words = Vec::new();
+                    units_words(ch.out_va, &units, &mut words)?;
+                    let ents: Vec<Ent> = (0..48).map(|k| Ent::Seg { from: 14 * k, to: 14 * (k + 1), sync: false }).collect();
+                    let p = Plan { name: format!("flood-{variant}#{i}"), words, units: 48, ents, mode, late: Vec::new(), settle_ms: 0 };
+                    let r = ch.run(&p, timeout);
+                    t.record(&p, r);
+                }
+                let secs = t0.elapsed().as_secs_f64();
+                println!("STRESS_FLOOD variant={variant} plans={n} segments_per_plan=48 segments_per_s={:.0}", (n * 48) as f64 / secs);
+                ch.close();
+                Ok(())
+            })();
+            if let Err(e) = r {
+                println!("STRESS_FAMILY_ERROR flood {variant} {e}");
+                t.fail += 1;
+            }
+            t.report(&format!("flood-{variant}"));
+            total_fail += t.fail;
+        }
+    }
     if want("barrier") {
         // ★ HARDWARE MEASUREMENT (no verdict on the relay): what do GP_GET and the executed work look like
         // while an ACQUIRE stalls entry 0, behind (a) a LENGTH==0 SYNC_WAIT control entry then a segment,

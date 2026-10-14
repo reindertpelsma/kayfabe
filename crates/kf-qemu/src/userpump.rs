@@ -1303,6 +1303,7 @@ impl Pump {
             if put == self.cursor {
                 return self.end_batch(me, r);
             }
+            me.relay_stats.record_delta(put.wrapping_sub(self.cursor) & (r.source.1 - 1));
             if let Some(t) = self.trace.as_mut() {
                 t.note_put(doorbells);
             }
@@ -1490,6 +1491,7 @@ impl Pump {
                 usize::try_from(descriptor.len_bytes).map_err(|_| "USER_RING_PB_SIZE")?,
             )?;
             me.relay_stats.stage(kf_chan::user_loop::stage::PB_SNAPSHOT, t_pb);
+            me.relay_stats.record_segment(pb.bytes.len() / 4);
             let mut words = Vec::new();
             words
                 .try_reserve_exact(pb.bytes.len() / 4)

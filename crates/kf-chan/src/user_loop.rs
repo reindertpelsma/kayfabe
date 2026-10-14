@@ -223,13 +223,21 @@ pub struct Stats {
     pub get_writebacks: AtomicU64,
     /// Turns by the number of guest entries they relayed: bucket 0 = none, then log2 (1, 2-3, 4-7, ...).
     pub per_turn: [AtomicU64; TURN_BUCKETS],
+    /// Relayed GP segments by pushbuffer length in words: log2 buckets (bucket 0 = 1 word, 1 = 2-3, ...).
+    pub seg_words: [AtomicU64; WORD_BUCKETS],
+    /// Total pushbuffer words relayed.
+    pub words_total: AtomicU64,
+    /// Guest `GP_PUT` deltas seen at a turn's PUT read, by entries ahead of the cursor: log2 buckets.
+    pub delta_entries: [AtomicU64; TURN_BUCKETS],
     // ---- measurement only: per-stage cost, collected ONLY with `KF3_USER_RING_STAGES=1`.
     pub stage_ns: [AtomicU64; STAGES.len()],
     pub stage_n: [AtomicU64; STAGES.len()],
 }
 
-/// Buckets of [`Stats::per_turn`].
+/// Buckets of [`Stats::per_turn`] and [`Stats::delta_entries`].
 pub const TURN_BUCKETS: usize = 10;
+/// Buckets of [`Stats::seg_words`] (1 word .. 2^19 words and above).
+pub const WORD_BUCKETS: usize = 20;
 
 /// The stages of one served relay turn, as timed by [`Stats::stage`] (measurement only).
 pub const STAGES: [&str; 12] = [
@@ -288,6 +296,18 @@ impl Stats {
             self.stage_n[which].fetch_add(1, Ordering::Relaxed);
         }
     }
+    /// A relayed GP segment of `words` pushbuffer words.
+    pub fn record_segment(&self, words: usize) {
+        let w = u64::try_from(words).unwrap_or(u64::MAX).max(1);
+        let i = (u64::BITS - w.leading_zeros() - 1) as usize;
+        self.seg_words[i.min(WORD_BUCKETS - 1)].fetch_add(1, Ordering::Relaxed);
+        self.words_total.fetch_add(w, Ordering::Relaxed);
+    }
+    /// A turn saw `GP_PUT` this many entries ahead of its cursor.
+    pub fn record_delta(&self, entries: u32) {
+        let i = (u32::BITS - entries.max(1).leading_zeros() - 1) as usize;
+        self.delta_entries[i.min(TURN_BUCKETS - 1)].fetch_add(1, Ordering::Relaxed);
+    }
     /// One turn ended having relayed `entries` guest entries.
     pub fn record_turn(&self, entries: u32) {
         let i = if entries == 0 {
@@ -309,6 +329,8 @@ impl Stats {
         let g = |c: &AtomicU64| c.load(Ordering::Relaxed);
         let drain: Vec<u64> = self.drain.iter().map(g).collect();
         let per_turn: Vec<u64> = self.per_turn.iter().map(g).collect();
+        let seg_words: Vec<u64> = self.seg_words.iter().map(g).collect();
+        let delta: Vec<u64> = self.delta_entries.iter().map(g).collect();
         let mut stages = String::new();
         if self.stage_n.iter().any(|n| g(n) != 0) {
             stages.push_str(" stages_ns_per_call(");
@@ -319,7 +341,7 @@ impl Stats {
             stages.push(')');
         }
         format!(
-            "wakes(doorbell={} event={} spin={} backstop={}) backstop_found(work={} carried={} contended={} put_ahead={}) event_without_progress={} gates={} carried_ungated={} credit_waits={} contended_turns={} pop_writebacks={} markers={} drain_us_log2={drain:?} flow(turns={} segments={} publications={} host_doorbells={} put_reads={} get_writebacks={} entries_per_turn_log2={per_turn:?}){stages}",
+            "wakes(doorbell={} event={} spin={} backstop={}) backstop_found(work={} carried={} contended={} put_ahead={}) event_without_progress={} gates={} carried_ungated={} credit_waits={} contended_turns={} pop_writebacks={} markers={} drain_us_log2={drain:?} flow(turns={} segments={} publications={} host_doorbells={} put_reads={} get_writebacks={} entries_per_turn_log2={per_turn:?} put_delta_entries_log2={delta:?} segment_words_log2={seg_words:?} words_total={}){stages}",
             g(&self.wake_doorbell),
             g(&self.wake_event),
             g(&self.wake_spin),
@@ -341,6 +363,7 @@ impl Stats {
             g(&self.host_doorbells),
             g(&self.put_reads),
             g(&self.get_writebacks),
+            g(&self.words_total),
         )
     }
 }
