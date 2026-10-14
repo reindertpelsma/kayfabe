@@ -173,6 +173,12 @@ const NAMED_CONTROLS: &[(&str, &str)] = &[
     // §S) and every SET/RESET stays refused NOT_SUPPORTED. [measured] vfio-10 RPC 2645: GET of
     // index 1 on head 0 (the real GPU answered TRUE: it runs IMP).
     ("NV5070_CTRL_CMD_IMP_SET_GET_PARAMETER", "imp_param"),
+    // ★ 2026-10-14 (Win11 queue item: `D3DKMTGetScanLine` read line 0 / never in the blank; the
+    // control was refused NOT_SUPPORTED, `traces/win11_opengl_20261014/guest_probe_results.txt`).
+    // `GET_RG_SCAN_LINE` (`ctrl5070rg.h:361-391`, layout derived): the raster generator's current
+    // line and VBLANK state — the same live raster position the core's `GET_RG_SCAN_LINE(h)` word
+    // answers (`crate::ports::Ports::scan_position_at`), read from atomics, no lock.
+    ("NV5070_CTRL_CMD_GET_RG_SCAN_LINE", "rg_scan_line"),
     // ★ 2026-10-07 (Windows run29): `SYSTEM_GET_HOTPLUG_STATE` (`ctrl0073system.h:476-528`, flags
     // 0x48 ROUTE_TO_PHYSICAL). Lid open (a desktop monitor). `hotplugAfterEdidMask` lists every
     // display of this device: [measured] vfio-10 RPC 2917 answered every supported display (0x7f00)
@@ -1160,6 +1166,32 @@ impl DisplayModel {
                     Err(NV_ERR_INVALID_ARGUMENT)
                 }
             }
+            "rg_scan_line" => {
+                let mut p = self.view("NV5070_CTRL_CMD_GET_RG_SCAN_LINE_PARAMS", params)?;
+                if p.get("base.subdeviceIndex").unwrap_or(u64::MAX) != 0 {
+                    return Err(NV_ERR_INVALID_ARGUMENT);
+                }
+                let head = p.get("head").unwrap_or(u64::MAX);
+                if head >= u64::from(self.heads) {
+                    return Err(NV_ERR_INVALID_ARGUMENT);
+                }
+                // A head with no running raster (or no frame edge yet) reads as the core's
+                // GET_RG_SCAN_LINE word does before its first edge: line 0, not in the blank.
+                let (line, vblank) = usize::try_from(head)
+                    .ok()
+                    .and_then(|h| self.ports.scan_position_at(h, self.ports.now_ns()))
+                    .unwrap_or((0, false));
+                p.set("scanLine", u64::from(line));
+                p.set(
+                    "inVblank",
+                    if vblank {
+                        k("NV5070_CTRL_CMD_GET_RG_SCAN_LINE_IN_VBLANK_YES")?
+                    } else {
+                        k("NV5070_CTRL_CMD_GET_RG_SCAN_LINE_IN_VBLANK_NO")?
+                    },
+                );
+                Ok(p.buf)
+            }
             "imp_param" => {
                 let mut p = self.view("NV5070_CTRL_IMP_SET_GET_PARAMETER_PARAMS", params)?;
                 let get = k("NV5070_CTRL_IMP_SET_GET_PARAMETER_OPERATION_GET")?;
@@ -2055,7 +2087,12 @@ mod tests {
         assert_eq!(r, q.buf);
         let st = m.take_statements();
         assert!(
-            st.iter().any(|x| *x == Statement::SharedData(Some(InstMem { phys: 0xe9f0_0000, size: 32, addr_space: 2 }))),
+            st.iter().any(|x| *x
+                == Statement::SharedData(Some(InstMem {
+                    phys: 0xe9f0_0000,
+                    size: 32,
+                    addr_space: 2
+                }))),
             "{st:?}"
         );
         q.set("bMap", 0);
@@ -2361,7 +2398,13 @@ mod tests {
         q.set("valid", 1);
         assert!(matches!(m.control(CHANNEL_PUSHBUFFER, &q.buf), Some(Ok(_))));
         let s = "NV50VAIO_CHANNELDMA_ALLOCATION_PARAMETERS";
-        assert!(m.alloc(0xc1d0_0001, 0xc670_0000, 0xc67d_0000, 0xC67D, &vec![0; size(&m, s)]));
+        assert!(m.alloc(
+            0xc1d0_0001,
+            0xc670_0000,
+            0xc67d_0000,
+            0xC67D,
+            &vec![0; size(&m, s)]
+        ));
         m.ports.post_put(0, 0x40);
         assert!(m.register_hotplug(HotplugRegistration {
             client: 1,
@@ -2374,7 +2417,10 @@ mod tests {
         m.pending_plug = 0x100;
         assert_eq!(m.reset_life(), 1);
         assert!(m.channels.is_empty() && m.pushbuffers.is_empty() && m.inst_mem.is_none());
-        assert!(m.take_statements().is_empty(), "the old life's statements are not the next one's");
+        assert!(
+            m.take_statements().is_empty(),
+            "the old life's statements are not the next one's"
+        );
         assert_eq!(m.hotplug_target(), None);
         assert!(m.rmfree_marks.is_empty() && m.rmfree_spent.is_empty());
         assert_eq!((m.edid_seen, m.pending_plug), (0, 0));
@@ -2393,7 +2439,13 @@ mod tests {
             f.control(cmd(&f, "NVC370_CTRL_CMD_GET_CHANNEL_INFO"), &q.buf)
         );
         // The next life allocates the core channel again, with a NEW generation (never reused).
-        assert!(m.alloc(0xc1d0_0009, 0xc670_0009, 0xc67d_0009, 0xC67D, &vec![0; size(&m, "NV50VAIO_CHANNELDMA_ALLOCATION_PARAMETERS")]));
+        assert!(m.alloc(
+            0xc1d0_0009,
+            0xc670_0009,
+            0xc67d_0009,
+            0xC67D,
+            &vec![0; size(&m, "NV50VAIO_CHANNELDMA_ALLOCATION_PARAMETERS")]
+        ));
         assert_eq!(m.ports.generation(0) % 2, 1);
         assert_eq!(m.reset_life(), 1);
         assert_eq!(m.reset_life(), 0, "reset twice is reset once");
@@ -2537,7 +2589,8 @@ mod tests {
         // INTERNAL_DISPLAY_ACPI_SUBSYSTEM_ACTIVATED and INTERNAL_DISPLAY_PRE/POST_MODESET.
         // 47 → 48 on 2026-10-11: NV0073 `0x73011a` (the display's current mode, GL ICD; observed id).
         // 48 → 49 on 2026-10-11: NV0073 `DFP_ASSIGN_SOR` (0x731152; the crossbar the derived caps claim).
-        assert_eq!(set.len(), 49);
+        // 49 → 50 on 2026-10-14: NV5070 `GET_RG_SCAN_LINE` (D3DKMTGetScanLine).
+        assert_eq!(set.len(), 50);
         let distinct: std::collections::BTreeSet<u32> = set.iter().copied().collect();
         assert_eq!(distinct.len(), set.len(), "no id twice");
         assert!(set.iter().all(|c| m.claims(*c)));
@@ -2725,6 +2778,70 @@ mod tests {
         assert_eq!(m.retire_hotplug(3, 31), 1, "the event's own FREE");
         assert_eq!(m.retire_all_hotplug(), MAX_HOTPLUG_REGISTRATIONS - 1);
         assert_eq!(m.hotplug_target(), None);
+    }
+
+    /// ★ 2026-10-14: `GET_RG_SCAN_LINE` answers the live raster position of the head it names
+    /// (the core word's), line 0 / not in the blank before a raster runs, and refuses a head the
+    /// display does not have, another subdevice or a short struct — both derived driver versions.
+    #[test]
+    fn get_rg_scan_line_answers_the_live_raster_position() {
+        for v in ["580.65.06", "580.159.04"] {
+            let mut m = DisplayModel::new(
+                &kf_chip::display::AMPERE,
+                vec![Monitor::default_1080p()],
+                crate::layout::for_version(v).expect("layouts"),
+            );
+            let words = |w: &[u32]| -> Vec<u8> { w.iter().flat_map(|x| x.to_le_bytes()).collect() };
+            let c = cmd(&m, "NV5070_CTRL_CMD_GET_RG_SCAN_LINE");
+            assert_eq!(c, 0x5070_020c, "{v}");
+            // no raster yet
+            assert_eq!(
+                m.control(c, &words(&[0, 0, 7, 7])),
+                Some(Ok(words(&[0, 0, 0, 0])))
+            );
+            // a 1125-line raster at 60 Hz whose blank starts at line 1121 and ends at 41
+            let g = crate::ports::ScanGeom {
+                blank_end_y: 41,
+                blank_start_y: 1121,
+                total_h: 1125,
+                period_ns: 16_666_667,
+            };
+            m.ports.set_scan_geom(0, Some(g));
+            // the ports' clock must be past half a frame for the second probe's edge
+            std::thread::sleep(std::time::Duration::from_millis(10));
+            let now = m.ports.now_ns();
+            m.ports.note_frame_edge_at(0, now);
+            let Some(Ok(r)) = m.control(c, &words(&[0, 0, 0, 0])) else {
+                panic!("{v}: refused")
+            };
+            let line = u32::from_le_bytes(r[8..12].try_into().unwrap());
+            let vbl = u32::from_le_bytes(r[12..16].try_into().unwrap());
+            // within a few lines of the edge: in the blank (1121..1125 or 0..41)
+            assert!(line >= 1121 || line < 41, "{v}: line {line}");
+            assert_eq!(vbl, 1, "{v}");
+            // half a frame later the raster is in the active region
+            m.ports
+                .note_frame_edge_at(0, now.saturating_sub(g.period_ns / 2));
+            let Some(Ok(r)) = m.control(c, &words(&[0, 0, 0, 0])) else {
+                panic!("{v}: refused")
+            };
+            let line = u32::from_le_bytes(r[8..12].try_into().unwrap());
+            assert!((41..1121).contains(&line), "{v}: line {line}");
+            assert_eq!(u32::from_le_bytes(r[12..16].try_into().unwrap()), 0);
+            // hostile: a head the display does not have, another subdevice, a short struct
+            assert_eq!(
+                m.control(c, &words(&[0, m.heads, 0, 0])),
+                Some(Err(NV_ERR_INVALID_ARGUMENT))
+            );
+            assert_eq!(
+                m.control(c, &words(&[1, 0, 0, 0])),
+                Some(Err(NV_ERR_INVALID_ARGUMENT))
+            );
+            assert_eq!(
+                m.control(c, &words(&[0, 0])),
+                Some(Err(NV_ERR_INVALID_ARGUMENT))
+            );
+        }
     }
 
     /// ★ 2026-10-07 (Windows run29): the VFIO shapes of IMP_SET_GET_PARAMETER (vfio-10 2645),
