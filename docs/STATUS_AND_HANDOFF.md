@@ -1,5 +1,19 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-14 (daytime, lane C resumed) — Windows captures under 8 driver builds, F-4 answered, per-host-driver shape table
+
+Branch `claude/constants-measure-20261014b` (= constants-measure + constants-night). GPU-free tests green (`kf-abi`, `kf-rm`). Evidence
+`traces/constants_measure_20261014b/`; text in `docs/design/V3_CONSTANT_MATRIX_20261014.md` 5.3 and 7.
+- kfwc under the REAL Windows driver: GA106 at 572.83 / 576.80 / 580.88 / 581.80 / 591.74 / 596.36 / 610.88 (GSP 570.133.07 .. 610.57.01) and GA104
+  at 596.51 (GSP 595.76); every run attaches at seq 0; the Windows -> R-branch placement of the api-boundaries plan holds on all eight builds.
+- **F-4 answered:** the six "changed" GSS controls changed `paramsSize` per GSP branch (the request stays all-zero); a host accepts exactly the
+  size the Windows driver sends at its branch (15 host cells). `gssreplay` has exact rows for every observed size (behaviour change for 570..610
+  guests only: they were refused before). The 595.91.07 `INVALID_ARGUMENT` was the 580-branch size.
+- Findings for the owner: ZBC Turing defaults differ from the served ones (F-1); `0x20808162`/`0x20809001`/`0x2080a001` vary by board class inside
+  one die (F-6: the (die, branch) table key is too coarse for them); GMMU static / CE fault buffer equal the authored numbers on GA104/GA106 (D-1).
+- Not obtained: any Windows capture on Blackwell/Ada(AD102)/Turing (see traces README), the vsync oracle (the GL apps did not exist).
+- Vast: all boxes of this lane destroyed (see the report); the per-instance key of one create was printed once in a terminal, never stored.
+
 ## UPDATE 2026-10-14 (night run, lane C) — constants: published table, host-first GSS rows, per-family matrix
 
 Branch `claude/constants-night-20261014` (base `integration/prod-candidate-2-20261013` `bf510bdf4` + the kfwc/census/ctl-probe/inventory
