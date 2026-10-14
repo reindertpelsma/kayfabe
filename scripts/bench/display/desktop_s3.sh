@@ -47,7 +47,7 @@ export DISPLAY=:0 XAUTHORITY=/home/ubuntu/.Xauthority
 for _ in $(seq 1 40); do pgrep -x cinnamon >/dev/null && break; sleep 2; done
 echo "CINNAMON $(pgrep -c -x cinnamon) XORG $(pgrep -c -x Xorg)"
 uname -r; cat /proc/driver/nvidia/version | head -1
-nvidia-smi --query-gpu=name,driver_version --format=csv,noheader
+timeout 30 nvidia-smi --query-gpu=name,driver_version --format=csv,noheader; echo "SMI_RC $?"
 timeout 10 stdbuf -oL glxgears > /tmp/g.log 2>&1; tail -1 /tmp/g.log | sed 's/^/GEARS /'
 echo "PM: $(cat /sys/power/state) mem_sleep=$(cat /sys/power/mem_sleep)"
 systemctl is-enabled nvidia-suspend nvidia-resume nvidia-hibernate 2>&1 | tr '\n' ' '; echo
@@ -82,6 +82,10 @@ for cyc in $(seq 1 "${S3_CYCLES:-1}"); do
         gears=$(grep -o 'GEARS [0-9]* frames' "$ROOT/after-$cyc.txt" | awk '{print $2}')
         smi=$(grep -c "NVIDIA GeForce" "$ROOT/after-$cyc.txt")
         ok=0; [ "${gears:-0}" -gt 0 ] && [ "$smi" -ge 1 ] && [ "$xid" = 0 ] && ok=1
+        if [ "$ok" != 1 ]; then
+            # what the guest is stuck in: blocked tasks, their kernel stacks, the newest kernel lines
+            timeout 60 "${G[@]}" 'sudo sh -c "ps -eo pid,stat,wchan:32,etime,cmd | grep -E \" D|nvidia|Xorg|glxgears\" | grep -v grep | head -20; for p in \$(pgrep -f \"nvidia-smi|glxgears|nvidia-persist\"); do echo == \$p; cat /proc/\$p/stack; done; systemctl --no-pager status nvidia-suspend nvidia-resume 2>&1 | grep -E \"Active|exited|failed\"; dmesg | tail -40"' 2>&1 | cut -c1-200 | sed "s/^/DIAG c$cyc /"
+        fi
         echo "S3_CYCLE_RESULT cycle=$cyc ssh=1 nvidia_smi=$smi gears_frames=${gears:-0} xid=$xid pass=$ok"
         [ "$ok" = 1 ] || { pass_all=0; break; }
     else
