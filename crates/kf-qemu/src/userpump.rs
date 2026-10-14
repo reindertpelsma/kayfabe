@@ -368,13 +368,14 @@ pub(super) struct Pump {
     guest_get: Option<(u64, u32)>,
     pub tick: bool,
     again: bool,
-    /// ★ 2026-10-14 — `GP_ENTRY1_SYNC_WAIT`: the private ring sequence of the authored barrier's
-    /// witness that must be fetched before the guest's SYNC_WAIT entry at the cursor (and anything
-    /// after it) may be READ, and the entry `(generation, cursor)` whose wait is already proven.
-    sync_witness: Option<u64>,
-    sync_cleared: Option<(u64, u32)>,
-    /// ★ 2026-10-14: the bounded retry of a scan refusal ([`kf_chan::user_settle::Grace`]).
-    grace: kf_chan::user_settle::Grace,
+    /// ★ 2026-10-14 — `GP_ENTRY1_SYNC_WAIT` ([`kf_chan::user_gate::SyncGate`]): nothing at or
+    /// after a guest SYNC_WAIT entry is READ before the hardware itself would fetch it.
+    sync: kf_chan::user_gate::SyncGate,
+    /// ★ 2026-10-14: the bounded retry of a scan refusal ([`kf_chan::user_gate::Grace`]), and how
+    /// many retries this channel has reported (the first few only).
+    grace: kf_chan::user_gate::Grace,
+    grace_reported: u32,
+    grace_was_retrying: bool,
     /// Measurement only ([`trace_dir`]).
     pub(super) trace: Option<Box<Trace>>,
 }
@@ -437,9 +438,10 @@ impl Pump {
             guest_get: None,
             tick: false,
             again: false,
-            sync_witness: None,
-            sync_cleared: None,
-            grace: kf_chan::user_settle::Grace::default(),
+            sync: kf_chan::user_gate::SyncGate::default(),
+            grace: kf_chan::user_gate::Grace::default(),
+            grace_reported: 0,
+            grace_was_retrying: false,
             trace: trace_dir().map(|_| Box::new(Trace::new())),
         })
     }
@@ -1028,6 +1030,7 @@ impl Pump {
             }
         }
         self.tick = self.fetch.fetched() != self.fetch.issued()
+            || self.sync.waiting()
             || self.grace.retrying()
             || self.trace.as_ref().is_some_and(|t| !t.rereads.is_empty());
         if self.segment.is_none() {
@@ -1109,43 +1112,39 @@ impl Pump {
             // touching anything at or after a SYNC_WAIT entry, author the same wait on our own
             // ring (barrier NOP + witness, exactly as staged segments do) and read on only once
             // the witness has begun processing — i.e. once the hardware itself would fetch.
-            if entry >> 63 & 1 == 1 && self.sync_cleared != Some((self.generation, self.cursor)) {
-                match self.sync_witness {
-                    Some(w) if self.fetch.fetched() >= w => {
-                        self.sync_witness = None;
-                        self.sync_cleared = Some((self.generation, self.cursor));
-                    }
-                    Some(_) => {
+            match self
+                .sync
+                .entry(entry, self.generation, self.cursor, self.fetch.fetched())
+            {
+                kf_chan::user_gate::Gate::Proceed => {}
+                kf_chan::user_gate::Gate::Wait => {
+                    self.tick = true;
+                    return Ok(false);
+                }
+                kf_chan::user_gate::Gate::PublishBarrier => {
+                    if self.fetch.available() < 2 {
                         self.tick = true;
                         return Ok(false);
                     }
-                    None => {
-                        if self.fetch.available() < 2 {
-                            self.tick = true;
-                            return Ok(false);
-                        }
-                        self.publish(
-                            me,
-                            r,
-                            None,
-                            ring.as_ref(),
-                            Some(&source),
-                            None,
-                            |pump, storage| {
-                                let (barrier, _) =
-                                    pump.fetch.publish(None).map_err(str::to_owned)?;
-                                storage.write_host_barrier(barrier)?;
-                                let (witness, put) =
-                                    pump.fetch.publish(None).map_err(str::to_owned)?;
-                                storage.write_host_witness(witness)?;
-                                storage.publish_put(put)
-                            },
-                        )?;
-                        self.source_admitted = true;
-                        self.sync_witness = Some(self.fetch.issued());
-                        self.tick = true;
-                        return Ok(true);
-                    }
+                    self.publish(
+                        me,
+                        r,
+                        None,
+                        ring.as_ref(),
+                        Some(&source),
+                        None,
+                        |pump, storage| {
+                            let (barrier, _) = pump.fetch.publish(None).map_err(str::to_owned)?;
+                            storage.write_host_barrier(barrier)?;
+                            let (witness, put) = pump.fetch.publish(None).map_err(str::to_owned)?;
+                            storage.write_host_witness(witness)?;
+                            storage.publish_put(put)
+                        },
+                    )?;
+                    self.source_admitted = true;
+                    self.sync.published(self.fetch.issued());
+                    self.tick = true;
+                    return Ok(true);
                 }
             }
             if matches!(descriptor, kf_chan::user_stream::Source::Nop) {
@@ -1194,9 +1193,10 @@ impl Pump {
                 ));
             }
             let software = software_snapshot(me, r)?;
+            self.grace_was_retrying = self.grace.retrying();
             let planned = match stage_plan(&self.scan, &software, &words) {
                 // ★ 2026-10-14: a scan refusal of a segment never published is retried (re-read,
-                // rescanned) for `REFUSE_AFTER` before it is final (`kf_chan::user_settle::Grace`).
+                // rescanned) for `REFUSE_AFTER` before it is final (`kf_chan::user_gate::Grace`).
                 Err(Failure::Refused(why))
                     if (why.starts_with("USER_RING_SCAN ")
                         || why == "USER_RING_TRIGGER_PARTIAL_SUFFIX_UNSUPPORTED")
@@ -1206,6 +1206,16 @@ impl Pump {
                             std::time::Instant::now(),
                         ) =>
                 {
+                    if self.grace_reported < 4 && !self.grace_was_retrying {
+                        self.grace_reported += 1;
+                        eprintln!(
+                            "kf3: USER_RING_SCAN_RETRY {:#x}:{:#x} cursor={} (re-read and rescan for up to {:?} before refusing): {why}",
+                            r.key.0,
+                            r.key.1,
+                            self.cursor,
+                            kf_chan::user_gate::REFUSE_AFTER
+                        );
+                    }
                     self.tick = true;
                     return Ok(false);
                 }

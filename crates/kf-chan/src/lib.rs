@@ -31,7 +31,7 @@ pub mod user_consumption;
 pub mod user_progress;
 pub mod user_ring;
 pub mod user_scan;
-pub mod user_settle;
+pub mod user_gate;
 pub mod user_storage;
 pub mod user_stream;
 pub mod userd_relay;
