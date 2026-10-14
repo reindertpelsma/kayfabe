@@ -179,6 +179,29 @@ with the frame time is the per-entry relay cost: ≈1 900 GP segments per frame,
 GP + pushbuffer snapshot, scan, publication and a host doorbell) at ≈30-38 µs each [inferred from the totals]. Batching
 entries per turn and per doorbell is the lever; that code belongs to `claude/userring-eventloop-20261014`.
 
+## 4d. On the event loop (merge of `claude/userring-eventloop-20261014` 520d6c6b, kf3 `eb9f2aa3`), production
+
+[measured, `marks-run8.log`, one VM life, apps back to back, 2026-10-14 22:53-23:19] 0 host Xid, 0 GSP resets in all six.
+
+| app | before (`c5d9693f` / `a8424ae2`) | event loop `eb9f2aa3` |
+|---|---|---|
+| Heaven D3D11 windowed 1280x720 | 17.0 fps | **20.7 fps** (261 s pass) |
+| Heaven D3D11 fullscreen 1920x1080 | 20.5 fps | **21.5 fps** |
+| Heaven OpenGL windowed | 157.1 fps | **252.7 fps** |
+| Heaven OpenGL fullscreen | 160.1 fps | **30.0 fps** — a regression; the overlay reads exactly 30 (every other vblank) [measured]; cause not investigated |
+| GravityMark D3D12 | 52.9 fps, score 8834 | **121.7 fps, score 20346** |
+| GravityMark Vulkan (default route) | 22.8 fps, score 3817 | **84.2 fps, score 14060** |
+
+H-gate (the event-loop branch's "Xid 13 / Edge TDR come from reading ahead through GP_GET"): not separable from this
+branch's gapless fix — Heaven D3D11 already ran 0-Xid on `c5d9693f` (old gate, gapless staging), and runs 0-Xid here. Edge:
+a 32 min production run on `fc8ba3b8` (old gate + gapless) had 0 Xid / 0 reset but Edge did not migrate its ring in that
+window (the 21:44 fault followed Edge's migration 24 min in), so it neither confirms nor refutes either fix for Edge.
+Edge playback evidence (owner's question): the 10:34 film was shown playing at 20:21 (opening, frame changes between two
+screenshots 5 s apart) and at its end credits at 20:31; on `f163b85e` it was still mid-film 20 min in (playback slower than
+real time); later runs prove playback by two screenshots differing in the video area.
+The one-command matrix is `scripts/bench/windows/regress_matrix.sh` (per-app guest reboot to capture the event loop's
+`USER_RING_LOOP SUMMARY`, dated Markdown table).
+
 ## 5. Files
 
 `nvdec_refusal_0c5fedff.txt` (the refused NVDEC segment and the channel's life), `minecraft_xid32_timeline.txt`
