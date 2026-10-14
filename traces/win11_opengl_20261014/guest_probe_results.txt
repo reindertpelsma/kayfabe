@@ -1,0 +1,96 @@
+=== gears1
+KFGL vendor NVIDIA Corporation
+KFGL renderer NVIDIA GeForce RTX 4070/PCIe/SSE2
+KFGL version 4.6.0 NVIDIA 580.88
+KFGL pixel 64,128,191,255
+KFGL gears frames=57781 secs=60.0 fps=963.0 glerr=0x0
+KFGL RESULT OK
+KFGL gears frames=57781 secs=60.0 fps=963.0 glerr=0x0
+KFGL RESULT OK
+=== gears2
+KFGL vendor NVIDIA Corporation
+KFGL renderer NVIDIA GeForce RTX 4070/PCIe/SSE2
+KFGL version 4.6.0 NVIDIA 580.88
+KFGL pixel 64,128,191,255
+KFGL gears frames=56323 secs=20.0 fps=2816.2 glerr=0x0
+KFGL RESULT OK
+KFGL gears frames=56323 secs=20.0 fps=2816.2 glerr=0x0
+KFGL RESULT OK
+=== vbl1
+VBL open r=0 hAdapter=1073741824 luid=0:25063 src=0 at 14:49:58.620
+VBL waiting #1 at 14:49:58.706
+VBL waiting #2 at 14:49:58.732
+VBL waiting #3 at 14:49:58.740
+VBL #30 r=0 t_ms=510 max_gap_ms=29
+VBL #60 r=0 t_ms=1010 max_gap_ms=29
+VBL #120 r=0 t_ms=2010 max_gap_ms=29
+VBL DONE n=120 ms=2012 hz=59.6 max_gap_ms=29
+=== scan1
+SCAN open r=0 src=0 at 15:00:59.318
+SCAN DONE n=400 ms=6505 distinct_scanlines=1 in_vblank=0 errors=0  top=0:400 at 15:01:05.891
+SCAN open r=0 src=0 at 15:00:59.318
+SCAN DONE n=400 ms=6505 distinct_scanlines=1 in_vblank=0 errors=0  top=0:400 at 15:01:05.891
+=== scan2
+SCAN open r=0 src=0 at 15:13:51.462
+SCAN DONE n=50 ms=1628 distinct_scanlines=1 in_vblank=0 errors=0  top=0:50 at 15:13:53.191
+SCAN open r=0 src=0 at 15:13:51.462
+SCAN DONE n=50 ms=1628 distinct_scanlines=1 in_vblank=0 errors=0  top=0:50 at 15:13:53.191
+=== scan3
+SCAN open r=0 src=0 at 15:26:45.523
+SCAN DONE n=200 ms=3231 distinct_scanlines=1 in_vblank=0 errors=0  top=0:200 at 15:26:48.818
+SCAN open r=0 src=0 at 15:26:45.523
+SCAN DONE n=200 ms=3231 distinct_scanlines=1 in_vblank=0 errors=0  top=0:200 at 15:26:48.818
+=== vs1
+KFVS renderer NVIDIA GeForce RTX 4070/PCIe/SSE2
+KFVS version 4.6.0 NVIDIA 580.88
+KFVS mode windowed 800x600
+KFVS swap_interval set=1 ok=1 get=1
+KFVS STALL frame=1 no_frame_for_ms=2003
+KFVS HANG frame=1 no_frame_for_ms=20039
+KFVS HANG frame=1 no_frame_for_ms=20039
+KFVS RESULT FAIL hang
+=== vs2
+KFVS renderer NVIDIA GeForce RTX 4070/PCIe/SSE2
+KFVS version 4.6.0 NVIDIA 580.88
+KFVS mode windowed 800x600
+KFVS swap_interval set=1 ok=1 get=1
+KFVS STALL frame=1 no_frame_for_ms=2001
+KFVS HANG frame=1 no_frame_for_ms=20037
+KFVS HANG frame=1 no_frame_for_ms=20037
+KFVS RESULT FAIL hang
+=== vs3
+KFVS renderer NVIDIA GeForce RTX 4070/PCIe/SSE2
+KFVS version 4.6.0 NVIDIA 580.88
+KFVS mode windowed 800x600
+KFVS swap_interval set=1 ok=1 get=1
+KFVS STALL frame=1 no_frame_for_ms=2002
+KFVS HANG frame=1 no_frame_for_ms=15028
+KFVS HANG frame=1 no_frame_for_ms=15028
+KFVS RESULT FAIL hang
+=== vs4
+KFVS renderer NVIDIA GeForce RTX 4070/PCIe/SSE2
+KFVS version 4.6.0 NVIDIA 580.88
+KFVS mode windowed 800x600
+KFVS swap_interval set=1 ok=1 get=1
+KFVS sec t=1 frames=60 fps=60 max_gap_ms=49
+KFVS sec t=2 frames=120 fps=60 max_gap_ms=18
+KFVS done frames=1800 secs=30.0 fps=59.9 glerr=0x0
+KFVS RESULT OK
+=== vs5
+KFVS renderer NVIDIA GeForce RTX 4070/PCIe/SSE2
+KFVS version 4.6.0 NVIDIA 580.88
+KFVS mode fullscreen 1536x864
+KFVS swap_interval set=1 ok=1 get=1
+KFVS sec t=1 frames=62 fps=62 max_gap_ms=18
+KFVS sec t=2 frames=123 fps=61 max_gap_ms=18
+KFVS done frames=1802 secs=30.0 fps=60.0 glerr=0x0
+KFVS RESULT OK
+=== vs6
+KFVS renderer NVIDIA GeForce RTX 4070/PCIe/SSE2
+KFVS version 4.6.0 NVIDIA 580.88
+KFVS mode windowed 800x600
+KFVS swap_interval set=1 ok=1 get=1
+KFVS sec t=1 frames=62 fps=62 max_gap_ms=23
+KFVS sec t=2 frames=122 fps=60 max_gap_ms=18
+KFVS done frames=1202 secs=20.0 fps=60.0 glerr=0x0
+KFVS RESULT OK

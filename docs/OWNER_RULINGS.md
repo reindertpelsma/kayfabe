@@ -1034,8 +1034,18 @@ designated anyway. That prevents a guest-wide crash."*
   `refuse_mask=0x400`, then a TDR 0x117 after the guest polled `MMU_INVALIDATE`'s trigger bit
   forever); runs 221/190/181 refused one map (`0xb0000+0x80000: Other(19313)`).
 - Opt-out for A/B: `KF3_INVALIDATE_CLEAR_OVER_ABSENT=0`.
-- **Second half (open):** whether misaligned leaves are valid despite the misalignment and should be
-  accepted (owner: yes, if the content is valid) — needs the leaves seen first.
+- ★ **PROPOSED AMENDMENT for the owner (2026-10-14, `claude/win11-opengl-20261014`, NOT yet ruled) — answer to
+  the second half: the misaligned 512 MiB "leaves" are not valid leaves; they are stale reads of recycled
+  tables.** `[measured run 2990, e821bf3a, KF3_WALK_REFUSAL_DUMP, traces/win11_opengl_20261014/walkdump_excerpt.txt]`
+  space `0xece42000`: PD2[5] = `0x0dcbee22` (a vidmem PDE) pointed at `0xdcbee000`, whose entries are 4 KiB PTEs
+  (kind 6, valid, consecutive pages `0xdab2000, 0xdab3000, ...` and sysmem pages) — a page table, read as PD1;
+  the pages they name are all-zero data pages (not PD0 tables: the coordinator's H1 is falsified), and 200 ms later
+  the guest had repointed PD2[5] to a new PD1 table `0xdcbe3000` whose slots are empty (`0x20`) (H2, genuine
+  leaves, falsified). Every burst on 0c5fedff/e821bf3a followed a process exit or an adapter reset. ogkm's own
+  rule for a leaf-capable PD1 (`gmmuFmtEntryIsPte`: PTE VALID bit 0; Ada uses `kgmmuFmtInitLevels_GA10X`, PD1
+  holds 512 MiB PTEs, VER2) is the walker's, so the decode is right; the refusal-as-absence (above) is the
+  correct and harmless outcome, and no leaf support is proposed. Open, small: the burst repeats one log line per
+  invalidate (count it instead).
 
 
 ## AB. The T-space is hardwired; only guest leaves in a Passthrough space; whole guest RAM only for privileged channels (2026-10-10)

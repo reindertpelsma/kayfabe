@@ -1036,6 +1036,17 @@ implemented. Late conversion and relay-only edits do not solve the observed case
 
 ## 0. Current resumption — start here
 
+**Win11 OpenGL, 2026-10-14 (branch `claude/win11-opengl-20261014`, evidence `traces/win11_opengl_20261014/`).**
+FIXED [measured]: the Minecraft/OpenGL 300 s vsync hang ("Unable to communicate with the display driver, error 2")
+was the frozen GSP-client vblank counter: kf3 now keeps `kHeadVblankCount[head]` in the MAP_SHARED_DATA page
+(`d86fea1f`); `kf_glvsync --swap 1` hang -> 60 fps, Minecraft vsync on loads. Also live core GET_RG_SCAN_LINE /
+window GET_LINE (`af2b87fd`, fidelity). Walk "misaligned leaves": proposed AA amendment (stale reads of recycled
+tables, not leaves). OPEN [measured]: (a) Minecraft in-world Xid 32 PBENTRY on javaw's USER-ring twin ->
+RESET_CHANNEL refused -> TDR (3/3); (b) Edge/YouTube: kernel NVDEC translated channel refused `NoCeObject subch 4
+method 0x240` on its first segment -> DEAD -> TDR (pre-existing on 0c5fedff); (c) `0x5070020c` GetScanLine control
+refused. VM 2990 left on `d86fea1f`, production profile.
+
+
 **TODO, owner-requested, 2026-10-14: Windows app-matrix failures (fix, or keep queued here).** Branch `claude/win11-opengl-20261014`.
 (1) GravityMark **Vulkan** passes only with a user-ring relay flag; the default-route result is pending (evidence on
 `origin/claude/default-route-evidence-20261013`): hardwire the needed behaviour so the flag disappears (H-relay).

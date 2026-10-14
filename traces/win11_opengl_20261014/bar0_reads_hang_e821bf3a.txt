@@ -1,0 +1,16 @@
+# e821bf3a BAR0 read trace (bar1 512 MiB), Minecraft vsync hang window (trace lines 563165..674389): reads by offset
+  27832 0x611ec0
+   6958 0x611c30
+   3624 0x611c00
+   1209 0x680220
+   1208 0x690208
+   1208 0x612078
+   1208 0x611d80
+   1208 0x611c0c
+   1208 0x611c08
+   1208 0x611c04
+   1208 0x611800
+      1 0x690aec
+      1 0x690a2c
+# values read at 0x680220 (core GET_RG_SCAN_LINE(0))
+   1209 0x0
