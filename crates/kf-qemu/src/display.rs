@@ -35,7 +35,9 @@ use kf_broker::{
     CursorImage, CursorMode, CursorPoint, CursorWant, FrameCursors, HotTracker, ShownFrame,
 };
 use kf_cuda::display::{ComposeLayer, DisplayGpu, Frame};
-use kf_disp::engine::{Acquire, Composition, Effect, Engine, PbLoc, ScanVocab, Vocab};
+use kf_disp::engine::{
+    Acquire, Aperture, Composition, Effect, Engine, PbLoc, Place, ScanVocab, Vocab,
+};
 use kf_disp::inst::{CtxDma, Layout, Target};
 use kf_disp::model::{ChannelKind, Statement, Waker};
 use kf_disp::pace::{HeadCounts, Meter, NonFlip, Pacer, Sent};
@@ -2273,6 +2275,42 @@ impl Io<'_> {
             .map_err(|m| format!("context DMA {handle:#x} on channel {chn}: {m:?}"))
     }
 
+    /// ★ A notifier's or semaphore's memory as a bounded context DMA plus an offset. A context-DMA place is
+    /// the guest's bound object (resolved through instance memory, as ever). A surface address (Blackwell's
+    /// classes have no context DMAs) is bounded to `len` bytes at the address the method stated, in guest
+    /// system memory or the framebuffer store — both of which refuse an access outside them by name; the
+    /// IOVA aperture belongs to an SoC display's IOMMU and a discrete GPU's display has none.
+    fn at(&mut self, client: u32, chn: u32, p: Place, len: u64) -> Result<(CtxDma, u64), String> {
+        match p {
+            Place::CtxDma { handle, offset } => Ok((self.resolve(client, handle, chn)?, offset)),
+            Place::Addr { aperture, addr } => {
+                let target = match aperture {
+                    Aperture::Vidmem => Target::Vidmem,
+                    Aperture::Sysmem => Target::Sysmem,
+                    Aperture::Iova => {
+                        return Err(format!(
+                            "surface address {addr:#x} on channel {chn}: TARGET_IOVA (no display IOMMU on a discrete GPU)"
+                        ));
+                    }
+                };
+                let limit = len
+                    .checked_sub(1)
+                    .and_then(|l| addr.checked_add(l))
+                    .ok_or_else(|| format!("surface address {addr:#x} +{len:#x} wraps"))?;
+                Ok((
+                    CtxDma {
+                        target,
+                        base: addr,
+                        limit,
+                        block_linear: false,
+                        writable: true,
+                    },
+                    0,
+                ))
+            }
+        }
+    }
+
     fn read(&self, dma: CtxDma, off: u64, buf: &mut [u8]) -> Result<(), String> {
         let at = dma
             .span(off, buf.len() as u64)
@@ -2328,7 +2366,8 @@ impl Io<'_> {
 
     /// Does acquire `a` hold against guest memory now?
     fn acquired(&mut self, a: &Acquire) -> bool {
-        let dma = match self.resolve(a.client, a.handle, a.chn) {
+        let n = if a.wide { 8 } else { 4 };
+        let (dma, off) = match self.at(a.client, a.chn, a.at, n as u64) {
             Ok(d) => d,
             Err(e) => {
                 self.refuse(&format!("acquire: {e}"));
@@ -2336,8 +2375,7 @@ impl Io<'_> {
             }
         };
         let mut b = [0u8; 8];
-        let n = if a.wide { 8 } else { 4 };
-        if let Err(e) = self.read(dma, a.offset, &mut b[..n]) {
+        if let Err(e) = self.read(dma, off, &mut b[..n]) {
             self.refuse(&format!("acquire read: {e}"));
             return false;
         }
@@ -2346,10 +2384,10 @@ impl Io<'_> {
 
     /// The semaphore value an acquire reads now (diagnostic: `Err` text when it cannot be read).
     fn peek_acquire(&mut self, a: &Acquire) -> Result<u64, String> {
-        let dma = self.resolve(a.client, a.handle, a.chn)?;
-        let mut b = [0u8; 8];
         let n = if a.wide { 8 } else { 4 };
-        self.read(dma, a.offset, &mut b[..n])?;
+        let (dma, off) = self.at(a.client, a.chn, a.at, n as u64)?;
+        let mut b = [0u8; 8];
+        self.read(dma, off, &mut b[..n])?;
         Ok(u64::from_le_bytes(b))
     }
 
@@ -2636,7 +2674,11 @@ impl Device {
                     eprintln!(
                         "kf3: display: +{} ms the guest's display life ENDED ({}): {channels} model channel(s), {dropped} queued completion(s) dropped (never written){}",
                         started.elapsed().as_millis(),
-                        if owed.is_some() { "device reset" } else { "its RM unloaded" },
+                        if owed.is_some() {
+                            "device reset"
+                        } else {
+                            "its RM unloaded"
+                        },
                         if dp.boot.is_some() {
                             " — the boot layer is shown again"
                         } else {
@@ -3176,24 +3218,24 @@ impl Device {
                     Effect::Notify {
                         chn,
                         client,
-                        handle,
-                        offset,
+                        at,
                         awaken,
                         finished,
                     } => {
+                        let (handle, offset) = at.diag();
                         let status = if finished {
                             io.notifier_finished
                         } else {
                             io.notifier_begun
                         };
-                        let r = io.resolve(client, handle, chn).and_then(|dma| {
+                        let r = io.at(client, chn, at, 16).and_then(|(dma, base)| {
                             let ts = self.rm.gpu_time_ns().unwrap_or(0);
                             let mut n = [0u8; 16];
                             n[8..12].copy_from_slice(&(ts as u32).to_le_bytes());
                             n[12..16].copy_from_slice(&((ts >> 32) as u32).to_le_bytes());
                             // the timestamp words first, the status word (what the guest polls) last
-                            io.write(dma, offset + 4, &n[4..16])?;
-                            io.write(dma, offset, &status.to_le_bytes())
+                            io.write(dma, base + 4, &n[4..16])?;
+                            io.write(dma, base, &status.to_le_bytes())
                         });
                         fx_seq += 1;
                         if fx_ring.len() >= 192 {
@@ -3236,16 +3278,18 @@ impl Device {
                     Effect::Release {
                         chn,
                         client,
-                        handle,
-                        offset,
+                        at,
                         value,
                         wide,
                         awaken,
                     } => {
-                        let r = io.resolve(client, handle, chn).and_then(|dma| {
-                            let b = value.to_le_bytes();
-                            io.write(dma, offset, if wide { &b[..] } else { &b[..4] })
-                        });
+                        let (handle, offset) = at.diag();
+                        let r = io.at(client, chn, at, if wide { 8 } else { 4 }).and_then(
+                            |(dma, base)| {
+                                let b = value.to_le_bytes();
+                                io.write(dma, base, if wide { &b[..] } else { &b[..4] })
+                            },
+                        );
                         fx_seq += 1;
                         if fx_ring.len() >= 192 {
                             fx_ring.pop_front();
@@ -5026,6 +5070,49 @@ impl ScanState {
 mod tests {
     use super::*;
 
+    /// ★ 2026-10-14 (die sweep): every piece of the GPU-free realize path resolves for every display row except
+    /// the one known gap (Turing's semaphore model, `kf_disp` `every_family_row_resolves_its_vocabulary`). The GB206
+    /// run found `display=on` refused at realize because no test resolved the vocabulary for GB20x; the register map
+    /// and layout are checked here for all four rows so the next refusal is a test failure, not a rented box.
+    #[test]
+    fn the_gpu_free_realize_path_resolves_for_every_row() {
+        for version in ["580.65.06", "580.159.04"] {
+            let t = kf_disp::class::for_version(version).unwrap();
+            for row in kf_chip::display::ALL {
+                let regs = Regs::for_ip(version, row.ip_version).unwrap();
+                RegMap::resolve(&regs, t, row)
+                    .unwrap_or_else(|e| panic!("{version} {}: {e}", row.chips));
+                assert!(
+                    Layout::from_regs(&regs).is_some(),
+                    "{version} {}",
+                    row.chips
+                );
+                let classes = kf_disp::model::Classes::of(row);
+                let vocab = Vocab::resolve(t, &classes, &regs);
+                assert_eq!(
+                    vocab.is_ok(),
+                    !row.chips.starts_with("TU"),
+                    "{version} {}",
+                    row.chips
+                );
+                assert!(
+                    t.notifier_field("__0_STATUS").is_some()
+                        && t.notifier_value("__0_STATUS_FINISHED").is_some()
+                        && t.notifier_value("__0_STATUS_BEGUN").is_some(),
+                    "{version}"
+                );
+                // GB20x windows name surfaces by address: no scanout vocabulary yet, the boot layer shows
+                assert_eq!(
+                    ScanVocab::resolve(t, classes.window, classes.window_imm, classes.core)
+                        .is_none(),
+                    row.chips.starts_with("GB2"),
+                    "{version} {}",
+                    row.chips
+                );
+            }
+        }
+    }
+
     /// ★ §8.18, the interleaving of runs e1-a…d (2026-10-08): the first copy is queued at +0.3 s,
     /// host RM spends 3.53 s registering the guest-RAM memfd, the copy's signal comes after that.
     /// At every point of that wait the copy is NOT lost (the old rule gave it up at 2 s for good);
@@ -5601,7 +5688,10 @@ mod tests {
         ];
         for prev in &states {
             let held = held_after_life_reset(prev);
-            assert!(held.preserved.is_none(), "{prev:?}: nothing the old life preserved");
+            assert!(
+                held.preserved.is_none(),
+                "{prev:?}: nothing the old life preserved"
+            );
             // gop=on: boot_done goes back to false with the life
             assert_eq!(
                 choose_shown(None, Some(&boot), false, &held),

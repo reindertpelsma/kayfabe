@@ -311,18 +311,27 @@ mod tests {
         for in_ram in [true, false] {
             let ram = RamMap::default();
             let (mem, fd) = crate::raw_unsafe::test_owned_ram(bytes + 4096);
-            ram.add(RamBlock { gpa: 0x2000, mem, fd: Some(fd), fd_off: 0 });
+            ram.add(RamBlock {
+                gpa: 0x2000,
+                mem,
+                fd: Some(fd),
+                fd_off: 0,
+            });
             assert!(mem.write_from(4, &[7]));
             assert!(mem.write_from(bytes + 3, &[11]));
             let generation = ram.try_generation().unwrap();
             let rows = PlacedRows::default();
             for offset in (0..bytes + 4096).step_by(4096) {
-                rows.write().unwrap().insert(0x100000 + offset as u64,
-                    (4096, offset as u64, in_ram, kf_host::MapPerm::READ_WRITE));
+                rows.write().unwrap().insert(
+                    0x100000 + offset as u64,
+                    (4096, offset as u64, in_ram, kf_host::MapPerm::READ_WRITE),
+                );
             }
             let mut cache = Cache::create(Fake::default(), bytes as u64 + BYTES).unwrap();
             let log = RowsLog::default();
-            let source = userread::snapshot(&rows, &log, &ram, generation, 0x100004, bytes, &mut cache).unwrap();
+            let source =
+                userread::snapshot(&rows, &log, &ram, generation, 0x100004, bytes, &mut cache)
+                    .unwrap();
             assert_eq!(source.bytes.len(), bytes);
             if in_ram {
                 assert!(cache.host.events.borrow().is_empty());
@@ -333,7 +342,10 @@ mod tests {
             }
             source.admit(|| ()).unwrap();
             rows.write().unwrap().remove(&(0x100000 + bytes as u64));
-            assert_eq!(source.admit(|| ()), Err(Refusal::Missing(0x100000 + bytes as u64)));
+            assert_eq!(
+                source.admit(|| ()),
+                Err(Refusal::Missing(0x100000 + bytes as u64))
+            );
             cache.release().unwrap();
         }
     }
