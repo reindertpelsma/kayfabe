@@ -164,6 +164,28 @@ pub const fn idle(waiting: bool, spin_left: u32) -> Idle {
     }
 }
 
+/// ★ 2026-10-14 (batching, `docs/design/V3_USER_RING_EVENT_LOOP_20261014.md` §9). The most guest
+/// entries ONE claim of a relay's token may relay before it yields (a COUNT, never a time): the
+/// neighbour channels on the shared worker and the vCPU path stay responsive, and a hostile
+/// `GP_PUT` cannot hold the worker. `kf_trap::REACT_ROUNDS` bounds the re-claims on top of it.
+pub const CHAIN_MAX: u32 = 8;
+
+/// May the turn that just relayed an entry go on to the next covered entry inside the SAME claim
+/// (no token release, no re-claim, no second `GP_PUT` read, one host doorbell at the end)?
+///
+/// * `relayed`: entries this claim has relayed so far;
+/// * `again`: the turn published and asked for another turn (more covered entries, or the batch's
+///   marker still to be published);
+/// * `split`: the turn ended in something that needs its own turn -- a SYNC_WAIT gate, a staged
+///   (rare) segment, a migration, a credit shortage, a refusal retry.
+///
+/// TODAY'S CODE (one segment per turn, the structural cut that gives 1.07 turns per segment): never.
+#[must_use]
+pub const fn chain_more(relayed: u32, again: bool, split: bool) -> bool {
+    let _ = (relayed, again, split);
+    false
+}
+
 /// log2 buckets of microseconds: bucket `i` holds `[2^i, 2^(i+1))` us (bucket 0 also 0 us), the
 /// last one everything above. Bounded, lock-free.
 pub const DRAIN_BUCKETS: usize = 16;
@@ -371,6 +393,17 @@ impl Stats {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A claim relays the covered entries one after another, up to [`CHAIN_MAX`], and stops at
+    /// anything that needs its own turn. FAILS at 24e7a297 (`chain_more` is the one-segment cut).
+    #[test]
+    fn a_claim_continues_through_covered_entries_up_to_the_bound() {
+        assert!(chain_more(1, true, false), "the next covered entry is relayed in the same claim");
+        assert!(chain_more(CHAIN_MAX - 1, true, false));
+        assert!(!chain_more(CHAIN_MAX, true, false), "bounded by a count");
+        assert!(!chain_more(1, false, false), "the turn asked for nothing more: the batch ended");
+        assert!(!chain_more(1, true, true), "a gate / staged segment / migration splits the batch");
+    }
 
     #[test]
     fn a_marker_wait_is_over_when_enough_markers_were_processed_whatever_get_says() {
