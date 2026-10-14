@@ -168,7 +168,7 @@ pub const fn idle(waiting: bool, spin_left: u32) -> Idle {
 /// entries ONE claim of a relay's token may relay before it yields (a COUNT, never a time): the
 /// neighbour channels on the shared worker and the vCPU path stay responsive, and a hostile
 /// `GP_PUT` cannot hold the worker. `kf_trap::REACT_ROUNDS` bounds the re-claims on top of it.
-pub const CHAIN_MAX: u32 = 8;
+pub const CHAIN_MAX: u32 = 16;
 
 /// May the turn that just relayed an entry go on to the next covered entry inside the SAME claim
 /// (no token release, no re-claim, no second `GP_PUT` read, one host doorbell at the end)?
@@ -179,11 +179,11 @@ pub const CHAIN_MAX: u32 = 8;
 /// * `split`: the turn ended in something that needs its own turn -- a SYNC_WAIT gate, a staged
 ///   (rare) segment, a migration, a credit shortage, a refusal retry.
 ///
-/// TODAY'S CODE (one segment per turn, the structural cut that gives 1.07 turns per segment): never.
+/// (24e7a297 and before: never -- one segment per turn, the structural cut that gave 1.07 turns and
+/// 1.05 host doorbells per segment.)
 #[must_use]
 pub const fn chain_more(relayed: u32, again: bool, split: bool) -> bool {
-    let _ = (relayed, again, split);
-    false
+    again && !split && relayed < CHAIN_MAX
 }
 
 /// log2 buckets of microseconds: bucket `i` holds `[2^i, 2^(i+1))` us (bucket 0 also 0 us), the

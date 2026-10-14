@@ -409,6 +409,18 @@ pub(super) struct Pump {
     sync_carried: u64,
     /// Guest GP entries relayed by the turn in progress (`Stats::record_turn`).
     seg_turn: u32,
+    /// ★ 2026-10-14 batching (doc §9): the host doorbell this claim owes for what it published. Rung
+    /// ONCE at the end of the chain (`Pump::ring_owed`), never per publication.
+    owed: bool,
+    /// The `GP_PUT` this claim read (with the source generation it applies to): later iterations of
+    /// the chain reuse it. The token's flag was cleared before the read, so a doorbell that lands
+    /// after it makes the claim run again; a stale value only means fewer entries now.
+    chain_put: Option<(u64, u32)>,
+    /// This iteration is not the first of the claim: the `GP_GET`/`REFERENCE` observation and the
+    /// guest `GP_GET` write-back were done by the first.
+    chained: bool,
+    /// The iteration just run needs a turn of its own (a staged segment, a shadow observation).
+    split: bool,
     /// Measurement only ([`trace_dir`]).
     pub(super) trace: Option<Box<Trace>>,
 }
@@ -477,6 +489,10 @@ impl Pump {
             marker_event: false,
             gate_at: None,
             seg_turn: 0,
+            owed: false,
+            chain_put: None,
+            chained: false,
+            split: false,
             marks: kf_chan::user_gate::Marks::default(),
             gate_target: 0,
             again: false,
@@ -1197,9 +1213,44 @@ impl Pump {
         self.need = Need::Idle;
         self.again = false;
         self.seg_turn = 0;
+        self.chain_put = None;
+        self.chained = false;
+        self.owed = false;
         let t0 = me.relay_stats.t0();
         Stats::bump(&me.relay_stats.turns);
-        let out = self.turn_body(me, r);
+        // ★ 2026-10-14 batching (doc §9): one CLAIM relays the covered entries one after another
+        // (`user_loop::chain_more`: bounded by a count; a gate, a staged segment, a migration, a credit
+        // shortage or a retry ends the chain) and rings the host doorbell ONCE at its end.
+        let mut out;
+        let mut submitted = false;
+        let mut iterations = 0u32;
+        loop {
+            self.split = false;
+            out = self.turn_body(me, r);
+            iterations += 1;
+            if let Ok(s) = &out {
+                submitted |= *s;
+            }
+            let split = self.split || self.segment.is_some() || self.shadow.is_some();
+            if !(out.is_ok()
+                && kf_chan::user_loop::chain_more(iterations, self.again && !split, split))
+            {
+                break;
+            }
+            self.chained = true;
+            self.again = false;
+        }
+        if out.is_ok() {
+            out = Ok(submitted);
+        }
+        // whatever the chain ended with, the doorbell for what it published is rung (an error
+        // already in hand wins over a doorbell error)
+        let rung = self.ring_owed(me, r);
+        if out.is_ok() {
+            if let Err(e) = rung {
+                out = Err(e);
+            }
+        }
         me.relay_stats.stage(kf_chan::user_loop::stage::TURN, t0);
         me.relay_stats.record_turn(self.seg_turn);
         match &out {
@@ -1226,48 +1277,50 @@ impl Pump {
             self.trace_stall(me, r);
         }
         let native = r.chan.ok_or("USER_RING_NATIVE_ABSENT")?;
-        let t_obs = me.relay_stats.t0();
-        let (get, reference) = {
-            let storage = r
-                .lease
-                .storage
-                .lock()
-                .map_err(|_| "USER_RING_STORAGE_POISONED")?;
-            (storage.gpu_get()?, storage.gpu_reference()?)
-        };
-        me.relay_stats.stage(kf_chan::user_loop::stage::OBSERVE, t_obs);
-        self.marks.observe(reference);
-        for (generation, get) in self.fetch.observe(get).map_err(str::to_owned)? {
-            if generation == self.generation {
-                self.guest_get = Some((generation, get));
+        if !self.chained {
+            let t_obs = me.relay_stats.t0();
+            let (get, reference) = {
+                let storage = r
+                    .lease
+                    .storage
+                    .lock()
+                    .map_err(|_| "USER_RING_STORAGE_POISONED")?;
+                (storage.gpu_get()?, storage.gpu_reference()?)
+            };
+            me.relay_stats.stage(kf_chan::user_loop::stage::OBSERVE, t_obs);
+            self.marks.observe(reference);
+            for (generation, get) in self.fetch.observe(get).map_err(str::to_owned)? {
+                if generation == self.generation {
+                    self.guest_get = Some((generation, get));
+                }
             }
-        }
-        if let Some((generation, get)) = self.guest_get {
-            if generation == self.generation {
-                // Logical memory access revalidates Free/reuse and RAM topology.
-                let t_wb = me.relay_stats.t0();
-                let wrote = r.userd.write(
-                    me,
-                    r.key,
-                    &r.allocation,
-                    kf_abi::submit::USERD_GP_GET,
-                    &get.to_le_bytes(),
-                );
-                if wrote.is_ok() {
-                    me.relay_stats.stage(kf_chan::user_loop::stage::GET_WRITEBACK, t_wb);
-                    Stats::bump(&me.relay_stats.get_writebacks);
-                }
-                match wrote {
-                    Ok(()) => self.guest_get = None,
-                    Err(kf_rm::memory_list::AccessError::Busy) => {
-                        // an admission lock is busy: look again (spin, then the safety net)
-                        self.need = Need::Contended;
-                        return Ok(false);
+            if let Some((generation, get)) = self.guest_get {
+                if generation == self.generation {
+                    // Logical memory access revalidates Free/reuse and RAM topology.
+                    let t_wb = me.relay_stats.t0();
+                    let wrote = r.userd.write(
+                        me,
+                        r.key,
+                        &r.allocation,
+                        kf_abi::submit::USERD_GP_GET,
+                        &get.to_le_bytes(),
+                    );
+                    if wrote.is_ok() {
+                        me.relay_stats.stage(kf_chan::user_loop::stage::GET_WRITEBACK, t_wb);
+                        Stats::bump(&me.relay_stats.get_writebacks);
                     }
-                    Err(e) => return Err(format!("USER_RING_GET_WRITE {e:?}").into()),
+                    match wrote {
+                        Ok(()) => self.guest_get = None,
+                        Err(kf_rm::memory_list::AccessError::Busy) => {
+                            // an admission lock is busy: look again (spin, then the safety net)
+                            self.need = Need::Contended;
+                            return Ok(false);
+                        }
+                        Err(e) => return Err(format!("USER_RING_GET_WRITE {e:?}").into()),
+                    }
+                } else {
+                    self.guest_get = None;
                 }
-            } else {
-                self.guest_get = None;
             }
         }
         if self.segment.is_none() {
@@ -1277,26 +1330,36 @@ impl Pump {
             }
             // Doorbells counted BEFORE the PUT read (measurement only today).
             let doorbells = me.queued(r.idx);
-            let mut put = [0u8; 4];
-            let t_put = me.relay_stats.t0();
-            Stats::bump(&me.relay_stats.put_reads);
-            r.userd
-                .read(
-                    me,
-                    r.key,
-                    &r.allocation,
-                    kf_abi::submit::USERD_GP_PUT,
-                    &mut put,
-                )
-                .map_err(|e| match e {
-                    // The USERD's allocation is no longer the channel's current one: the guest's
-                    // free is retiring this relay (`retire_user_ring_token` cancels the record next).
-                    // Not a refusal -- nothing was read or published; the look-again budget bounds it.
-                    kf_rm::memory_list::AccessError::Gone => Failure::Retry,
-                    e => access_error(e, "USER_RING_PUT_READ"),
-                })?;
-            me.relay_stats.stage(kf_chan::user_loop::stage::PUT_READ, t_put);
-            let put = u32::from_le_bytes(put);
+            let put = match self.chain_put {
+                Some((generation, put)) if generation == self.generation => put,
+                _ => {
+                    let mut put = [0u8; 4];
+                    let t_put = me.relay_stats.t0();
+                    Stats::bump(&me.relay_stats.put_reads);
+                    r.userd
+                        .read(
+                            me,
+                            r.key,
+                            &r.allocation,
+                            kf_abi::submit::USERD_GP_PUT,
+                            &mut put,
+                        )
+                        .map_err(|e| match e {
+                            // The USERD's allocation is no longer the channel's current one: the
+                            // guest's free is retiring this relay (`retire_user_ring_token` cancels
+                            // the record next). Not a refusal -- nothing was read or published; the
+                            // look-again budget bounds it.
+                            kf_rm::memory_list::AccessError::Gone => Failure::Retry,
+                            e => access_error(e, "USER_RING_PUT_READ"),
+                        })?;
+                    me.relay_stats.stage(kf_chan::user_loop::stage::PUT_READ, t_put);
+                    let put = u32::from_le_bytes(put);
+                    if put < r.source.1 {
+                        self.chain_put = Some((self.generation, put));
+                    }
+                    put
+                }
+            };
             if put >= r.source.1 {
                 return Err("USER_RING_PUT_BOUND".into());
             }
@@ -1899,6 +1962,20 @@ impl Pump {
             })
             .map_err(|e| access_error(e, "USER_RING_USERD_ADMISSION"))??;
         Stats::bump(&me.relay_stats.publications);
+        // ★ 2026-10-14 batching: the PUT store is committed; the host doorbell for it (and for every
+        // publication the claim makes after it) is rung ONCE, at the end of the chain.
+        self.owed = true;
+        me.relay_stats.stage(kf_chan::user_loop::stage::PUBLISH, t_pub);
+        Ok(())
+    }
+
+    /// Ring the host doorbell this claim owes for what it published (`publish` only stores the PUT).
+    /// Called by `turn` on every way out of a chain: published work is never left without its bell.
+    fn ring_owed(&mut self, me: &ChanPlane, r: &userrelay::Record) -> Turn<()> {
+        if !self.owed {
+            return Ok(());
+        }
+        self.owed = false;
         let t_bell = me.relay_stats.t0();
         Stats::bump(&me.relay_stats.host_doorbells);
         let rung = me
@@ -1906,7 +1983,6 @@ impl Pump {
             .doorbell(r.chan.ok_or("USER_RING_NATIVE_ABSENT")?.token)
             .map_err(|e| format!("USER_RING_DOORBELL_UNCERTAIN {e:?}").into());
         me.relay_stats.stage(kf_chan::user_loop::stage::DOORBELL, t_bell);
-        me.relay_stats.stage(kf_chan::user_loop::stage::PUBLISH, t_pub);
         rung
     }
 

@@ -200,11 +200,25 @@ struct Cfg {
     metrics: bool,
     /// Defer the private ring's host doorbell to the end of the claim's chain: ONE doorbell per
     /// batch instead of one per publication. `false` = the code at 24e7a297 (a doorbell per
-    /// publication).
+    /// publication). Design only.
     defer_bell: bool,
     /// Extra entries one turn may relay after its first, inside the same claim (`ul::chain_more`;
-    /// `ul::CHAIN_MAX - 1` in production). `0` = the code at 24e7a297 (one entry per turn).
+    /// `ul::CHAIN_MAX - 1` in production). `0` = the code at 24e7a297 (one entry per turn). Design only.
     chain: u8,
+}
+impl Cfg {
+    /// The private ring's host doorbell is deferred to the end of the chain.
+    fn defers(&self) -> bool {
+        self.policy == Policy::Design && self.defer_bell
+    }
+    /// Entries one turn may relay beyond its first.
+    fn chain_len(&self) -> u8 {
+        if self.policy == Policy::Design {
+            self.chain
+        } else {
+            0
+        }
+    }
 }
 impl Cfg {
     fn new(policy: Policy, chans: Vec<ChanSpec>) -> Self {
@@ -224,8 +238,8 @@ impl Cfg {
             pt_windows: 0,
             liveness: true,
             metrics: false,
-            defer_bell: false,
-            chain: 0,
+            defer_bell: true,
+            chain: 2,
         }
     }
 }
@@ -348,6 +362,10 @@ struct Chan {
     pubs: u8,
     /// Host doorbells rung.
     bells: u8,
+    /// The private-ring entries the PBDMA can see: those published before the last host doorbell.
+    hw_vis: usize,
+    /// The `GP_PUT` this claim read (the chain reuses it).
+    put_cache: Option<u32>,
     /// Relay turns run.
     turns: u8,
     /// Guest entries the turn in progress has relayed, and the most any turn relayed.
@@ -517,6 +535,8 @@ impl Chan {
             contended_run: 0,
             pubs: 0,
             bells: 0,
+            hw_vis: 0,
+            put_cache: None,
             turns: 0,
             turn_entries: 0,
             max_turn_entries: 0,
@@ -644,12 +664,18 @@ fn guest_steps(cfg: &Cfg, w: &World, out: &mut Vec<Step>) {
     }
 }
 
+/// The private-ring entries the PBDMA may begin: with a deferred doorbell only those published before
+/// the last host doorbell (the PUT store alone does not start it).
+fn vis(cfg: &Cfg, ch: &Chan) -> usize {
+    if cfg.defers() { ch.hw_vis } else { ch.log.len() }
+}
+
 fn hw_steps(cfg: &Cfg, w: &World, out: &mut Vec<Step>) {
     for c in 0..w.ch.len() {
         let ch = &w.ch[c];
         // the next entry may begin only when the segment before it is processed (its acquire done)
         let blocked = ch.hw_wait.is_some_and(|s| ch.sem & (1 << s) == 0);
-        if ch.hw_get < ch.log.len() && !blocked {
+        if ch.hw_get < vis(cfg, ch) && !blocked {
             let mut n = w.clone();
             let m = &mut n.ch[c];
             match m.log[ch.hw_get] {
@@ -815,13 +841,18 @@ fn finish(cfg: &Cfg, n: &mut World, need: Need) {
     }
     // host doorbells (metrics): the code at 24e7a297 rings one per publication, the batching design one
     // per chain, at its end (the turn that ends the chain rings it, whatever it ends with)
-    if cfg.metrics {
+    {
         let ch = &mut n.ch[c];
-        ch.bells = ch
-            .bells
-            .saturating_add(if cfg.defer_bell { u8::from(ch.pubs > 0) } else { ch.pubs });
+        let rung = if cfg.defers() { u8::from(ch.pubs > 0) } else { ch.pubs };
+        if cfg.metrics {
+            ch.bells = ch.bells.saturating_add(rung);
+        }
+        if rung > 0 && !cfg.m.no_final_bell {
+            ch.hw_vis = ch.log.len();
+        }
+        ch.pubs = 0;
+        ch.put_cache = None;
     }
-    n.ch[c].pubs = 0;
     // release
     let ch = &mut n.ch[c];
     match ch.tok {
@@ -1103,8 +1134,8 @@ fn turn_step(cfg: &Cfg, w: &World, stage: u8, out: &mut Vec<Step>) {
             // observe the private GP_GET and REFERENCE (userpump.rs: the turn's first read)
             if cfg.metrics {
                 n.ch[c].turns = ch.turns.saturating_add(1);
-                n.ch[c].turn_entries = 0;
             }
+            n.ch[c].turn_entries = 0;
             if design {
                 n.ch[c].ref_seen = ch.ref_seen.max(ch.ref_visible);
             }
@@ -1137,8 +1168,14 @@ fn turn_step(cfg: &Cfg, w: &World, stage: u8, out: &mut Vec<Step>) {
             }
         }
         T2 => {
-            // userpump.rs:1262 read GP_PUT -- AFTER the claim cleared the flag
-            let put = ch.put[ch.src];
+            // userpump.rs:1262 read GP_PUT -- AFTER the claim cleared the flag; a chain reuses the value
+            let put = match ch.put_cache {
+                Some(p) if cfg.chain_len() > 0 => p,
+                _ => ch.put[ch.src],
+            };
+            if cfg.chain_len() > 0 && (put as usize) < R {
+                n.ch[c].put_cache = Some(put);
+            }
             if put as usize >= R {
                 // USER_RING_PUT_BOUND: a bounded refusal; the record is cancelled, nothing re-arms
                 n.viol |= V_PUT_BOUND;
@@ -1281,12 +1318,12 @@ fn turn_step(cfg: &Cfg, w: &World, stage: u8, out: &mut Vec<Step>) {
             }
             let m = &mut n.ch[c];
             m.unnotified = true;
+            m.turn_entries = m.turn_entries.saturating_add(1);
             if cfg.metrics {
-                m.turn_entries = m.turn_entries.saturating_add(1);
                 m.max_turn_entries = m.max_turn_entries.max(m.turn_entries);
-                if u32::from(m.turn_entries) > u32::from(cfg.chain) + 1 {
-                    n.viol |= V_CHAIN_BOUND;
-                }
+            }
+            if u32::from(m.turn_entries) > u32::from(cfg.chain_len()) + 1 {
+                n.viol |= V_CHAIN_BOUND;
             }
             let m = &mut n.ch[c];
             if e.id != ZERO_ID {
@@ -1302,8 +1339,18 @@ fn turn_step(cfg: &Cfg, w: &World, stage: u8, out: &mut Vec<Step>) {
             } else {
                 m.cursor = next;
             }
-            finish(cfg, &mut n, Need::Again);
-            out.push(step(format!("w:T5 published {}", e.id), n));
+            // ★ batching: the claim goes on to the next covered entry (`ul::chain_more`: bounded by a
+            // count, a trigger -- the migration -- ends it) with NO release, observation, write-back or
+            // PUT re-read; the chain's last turn publishes the marker and rings the doorbell once
+            let split = e.kind == Kind::Trigger;
+            let relayed = u32::from(n.ch[c].turn_entries);
+            if cfg.chain_len() > 0 && ul::chain_more(relayed, true, split) && relayed <= u32::from(cfg.chain_len()) {
+                n.pc = Pc::T(T2);
+                out.push(step("w:T5 chained next entry", n));
+            } else {
+                finish(cfg, &mut n, Need::Again);
+                out.push(step(format!("w:T5 published {}", e.id), n));
+            }
         }
         _ => unreachable!(),
     }
@@ -1317,7 +1364,7 @@ fn normalize(cfg: &Cfg, w: &mut World) {
         return;
     }
     for ch in &mut w.ch {
-        let to = ch.log.len().min(ch.hw_get.saturating_add(cfg.pop_depth));
+        let to = vis(cfg, ch).min(ch.hw_get.saturating_add(cfg.pop_depth));
         if ch.popped < to {
             ch.popped = to;
             if !cfg.lag {
@@ -2057,7 +2104,10 @@ fn design_a_turn_deferred_by_a_busy_lock_is_resumed_by_an_event() {
 /// release is not an event.
 #[test]
 fn design_pt_admission_contention_is_spin_then_the_counted_backstop() {
+    // one entry per turn (`chain = 0`): the busy write-back stands between two turns' entries. (A chain
+    // relays the three covered entries before the write-back is due: `..._batching` below.)
     let mut cfg = Cfg::new(Policy::Design, s_batched());
+    cfg.chain = 0;
     cfg.pt_windows = 1;
     cfg.timers = false;
     cfg.spin = 1;
@@ -2071,6 +2121,34 @@ fn design_pt_admission_contention_is_spin_then_the_counted_backstop() {
         0,
         &["BACKSTOP_CONTENDED"],
     );
+}
+
+/// The same with batching, where the guest WAITS for the write-back (a ring of more entries than slots
+/// needs `GP_GET` past the relayed ones before it can push): the busy admission lock at the write-back
+/// still needs the spin or the counted safety net.
+#[test]
+fn design_pt_admission_contention_with_batching_is_spin_then_the_counted_backstop() {
+    let chans = vec![spec(
+        vec![
+            Push(seg(1)),
+            Push(seg(2)),
+            Push(seg(3)),
+            SetPut,
+            Ring,
+            Push(seg(4)), // needs the write-back of the first entries
+            SetPut,
+            Ring,
+        ],
+        vec![1, 2, 3, 4],
+        4,
+    )];
+    let mut cfg = Cfg::new(Policy::Design, chans);
+    cfg.pt_windows = 1;
+    cfg.timers = false;
+    cfg.spin = 1;
+    finds("design/pt/batching/no-backstop", &cfg, 0, &["DEADLOCK"]);
+    // (the safety net's side of it -- it wakes the relay and counts `BACKSTOP_CONTENDED` -- is the
+    // `chain = 0` test above; with a chain the same exploration exceeds the 3M-state budget)
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -2091,7 +2169,15 @@ fn mutant_lost_wakeup_is_found() {
 fn mutant_a_ring_during_a_turn_is_lost_is_found() {
     let mut cfg = Cfg::new(Policy::Design, s_coalesce());
     cfg.m.drop_busy_rung = true;
+    cfg.chain = 0; // one entry per turn
     finds("mutant/drop_busy_rung", &cfg, 0, &["DEADLOCK"]);
+    // with batching: the chain reads GP_PUT once, so the ring that lands after it is the ONLY way the
+    // later entry is found -- unless the marker's completion event happens to look (no interrupt here)
+    let mut cfg = Cfg::new(Policy::Design, s_coalesce());
+    cfg.m.drop_busy_rung = true;
+    cfg.irq = false;
+    cfg.spin = 0; // no look at the not-yet-fd words either: the doorbell is the only wake
+    finds("mutant/drop_busy_rung/batching", &cfg, 0, &["DEADLOCK"]);
 }
 #[test]
 fn mutant_byte_witness_inside_an_open_packet_is_found() {
@@ -2496,7 +2582,7 @@ fn batching(chans: Vec<ChanSpec>) -> Cfg {
     let mut cfg = Cfg::new(Policy::Design, chans);
     cfg.metrics = true;
     cfg.defer_bell = true;
-    cfg.chain = 2; // up to 3 entries per turn (R = 4 leaves 3 usable ring slots)
+    cfg.chain = 3; // up to 4 entries per turn: R = 4 leaves 3 usable ring slots, plus the marker
     cfg.timers = false;
     cfg.spin = 0;
     cfg
