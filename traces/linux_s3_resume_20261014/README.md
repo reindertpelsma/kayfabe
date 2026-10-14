@@ -14,6 +14,10 @@ wake with the QEMU monitor's `system_wakeup`, `pm_print_times` on, console not s
 - The Windows 11 guest (run 2990, pc machine) shows the same host-side signature after its S3 sleep: `bInPMTransition=true newLevel=3`,
   Halted, then Cold after the wakeup, no BAR0 write traffic, all vCPUs busy.
 
+⊘ *ANSWERED 2026-10-14: the inference below was right as far as it went (the FSM resume, E14/E15) and
+three more walls followed it — the FBSR save's fn 4, the BAR1 resize word, DISABLE_USERMODE_CHANNELS;
+see `docs/design/V3_S3_RESUME.md` §4-§6 and `fixed/` for the passing runs at kf3 `559db30c`.*
+
 ## Inferred (not measured)
 - The cause is the unbuilt GSP resume: `crates/kf-gsp/Cargo.toml` says "reboot/resume S6-S8 not" built and `boot.rs` notes the
   CORE_RESUME mailbox pair arrives while the phase is `Halted`, which the E6 publish guard (`ProtectedRegionUp | Booted`) refuses.

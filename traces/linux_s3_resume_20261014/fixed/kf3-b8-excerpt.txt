@@ -1,0 +1,101 @@
+kf-host: HOST-ABI REFUSED control 0x2080014a: host control 0x2080014a has no row in kf_abi::hostabi::HOST_CONTROLS, and host driver 595.91.07 is outside the interval the host encoders were written for — its layout is unknown
+kf-host: HOST-ABI REFUSED control 0x20809064: host control 0x20809064 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 595.91.07 was never measured
+kf-host: HOST-ABI REFUSED control 0x2080a028: host control 0x2080a028 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 595.91.07 was never measured
+kf-host: HOST-ABI REFUSED control 0x2080a028: host control 0x2080a028 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 595.91.07 was never measured
+kf-host: HOST-ABI REFUSED control 0x2080a084: host control 0x2080a084 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 595.91.07 was never measured
+kf-host: HOST-ABI REFUSED control 0x2080a026: host control 0x2080a026 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 595.91.07 was never measured
+kf3: device reset #1 COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: 0)
+kf3: device reset #1 complete before the vCPUs resume (the main loop waited 0 us)
+kf3: GSP phase Cold -> ProtectedRegionUp
+kf3: GSP phase ProtectedRegionUp -> Booted
+kf3: GSP phase Booted -> Running
+kf3: GSP REFUSED fn76/0x20800a87=0x56 (GSP_RM_CONTROL) first_seq=7 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800afe=0x56 (GSP_RM_CONTROL) first_seq=24 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800aff=0x56 (GSP_RM_CONTROL) first_seq=25 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a80=0x56 (GSP_RM_CONTROL) first_seq=42 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802a0f=0x56 (GSP_RM_CONTROL) first_seq=49 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080017e=0x56 (GSP_RM_CONTROL) first_seq=50 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a30=0x56 (GSP_RM_CONTROL) first_seq=60 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a2e=0x56 (GSP_RM_CONTROL) first_seq=62 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800b03=0x56 (GSP_RM_CONTROL) first_seq=64 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800b05=0x56 (GSP_RM_CONTROL) first_seq=65 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a3f=0x56 (GSP_RM_CONTROL) first_seq=67 — the guest read a non-OK status
+kf3: mem t=17.803s REFUSED VasKey(13970166078463016970) root 0xefa87000: 1 run(s) not applied: leaf 0x20fc00000+0x10400000 names store 0xefc00000, inside the firmware carve-out at 0xefbe0000 — a twin maps no kayfabe memory (§Q)
+kf3: mem t=17.805s REFUSED VasKey(13970166078463016970) root 0xefa87000: 1 run(s) not applied: leaf 0x20fc00000+0x10400000 names store 0xefc00000, inside the firmware carve-out at 0xefbe0000 — a twin maps no kayfabe memory (§Q)
+kf3: mem t=17.805s REFUSED VasKey(13970166078463016970) root 0xefa87000: 1 run(s) not applied: leaf 0x20fc00000+0x10400000 names store 0xefc00000, inside the firmware carve-out at 0xefbe0000 — a twin maps no kayfabe memory (§Q)
+kf3: GSP REFUSED fn76/0x2080012b=0x56 (GSP_RM_CONTROL) first_seq=104 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080013f=0x56 (GSP_RM_CONTROL) first_seq=110 — the guest read a non-OK status
+kf-rm: RPC-REFUSED #1 AllocClassNotPermitted { class: 50031, denial: NotOnAllowlist } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refus
+kf3: GSP REFUSED fn103/0x0000c36f=0x56 (GSP_RM_ALLOC) first_seq=119 — the guest read a non-OK status
+kf-rm: RPC-REFUSED #2 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing 
+kf3: GSP REFUSED fn103/0x0000402c=0x56 (GSP_RM_ALLOC) first_seq=127 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802a12=0x56 (GSP_RM_CONTROL) first_seq=137 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x0073013d=0x56 (GSP_RM_CONTROL) first_seq=221 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802801=0x56 (GSP_RM_CONTROL) first_seq=222 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00730291=0x56 (GSP_RM_CONTROL) first_seq=224 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00730293=0x56 (GSP_RM_CONTROL) first_seq=227 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00731144=0x56 (GSP_RM_CONTROL) first_seq=290 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x0073012c=0x56 (GSP_RM_CONTROL) first_seq=291 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20810103=0x56 (GSP_RM_CONTROL) first_seq=304 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080012f=0x56 (GSP_RM_CONTROL) first_seq=316 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20809019=0x56 (GSP_RM_CONTROL) first_seq=318 — the guest read a non-OK status
+kf-gsp: large RPC fn 76 seq 319 joined from 2 fragment(s), 67436 bytes, answered in 2 replies (rpc_result 0x56)
+kf3: GSP REFUSED fn76/0x2080a0a4=0x56 (GSP_RM_CONTROL) first_seq=319 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800153=0x56 (GSP_RM_CONTROL) first_seq=322 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a088=0x56 (GSP_RM_CONTROL) first_seq=324 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20808524=0x56 (GSP_RM_CONTROL) first_seq=325 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080852e=0x56 (GSP_RM_CONTROL) first_seq=402 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20808513=0x56 (GSP_RM_CONTROL) first_seq=403 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20810107=0x56 (GSP_RM_CONTROL) first_seq=504 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a9a=0x56 (GSP_RM_CONTROL) first_seq=546 — the guest read a non-OK status
+kf3: chan DISABLE_USERMODE_CHANNELS bDisable=true from 0xc1d0000b: 4 user twin(s) disabled on the host
+kf3: act disable usermode channels: DISABLE_USERMODE_CHANNELS bDisable=true: 4 twin(s) (475 us, off the GSP lock)
+kf-rm: pmsr: ALLOC_MEMORY SYSTEM list client=0xc1e00004 handle=0xcaf00010 pages=15136 — registered, not read (GSP-RM's suspend buffer; this device keeps its state in the VMM)
+kf-gsp: large RPC fn 4 seq 1672 joined from 2 fragment(s), 121144 bytes, answered in 1 replies (rpc_result 0x0)
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=1682: bInPMTransition=true bGc6Entering=false newLevel=3 — a PM transition: BAR1 is preserved
+kf3: GSP fn 47 is a PM transition: the GSP-RM state is kept for a resume (phase Suspending)
+kf3: GSP phase Running -> Suspending
+kf3: GSP phase Suspending -> Halted
+kf3: device reset #2 (S3 WAKE): GSP Halted -> Cold (E14): the PM-suspended GSP-RM life is KEPT — queues and sequence numbers, the chain's objects, host twins, address spaces, display; 0 queued register write(s) dropped; interrupt tree reset
+kf3: device reset #2: tokens KEPT (the life's channels), register shadow restored and republished, 0 stale interrupt(s) drained
+kf3: device reset #2 COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: 0)
+kf3: device reset #2 complete before the vCPUs resume (the main loop waited 0 us)
+kayfabe: GSP-RESUME the saved binding restored (no publish): stat_seq=1683 cmd_seq=1685 cmd_read_ptr=56 peer_stat_read=26
+kf3: GSP phase Cold -> Booted
+kf3: GSP phase Booted -> Running
+kf3: chan DISABLE_USERMODE_CHANNELS bDisable=false from 0xc1d0000b: 4 user twin(s) re-enabled on the host
+kf3: act disable usermode channels: DISABLE_USERMODE_CHANNELS bDisable=false: 4 twin(s) (324 us, off the GSP lock)
+kf3: chan DISABLE_USERMODE_CHANNELS bDisable=true from 0xc1d0000b: 4 user twin(s) disabled on the host
+kf3: act disable usermode channels: DISABLE_USERMODE_CHANNELS bDisable=true: 4 twin(s) (480 us, off the GSP lock)
+kf-rm: pmsr: ALLOC_MEMORY SYSTEM list client=0xc1e00004 handle=0xcaf00019 pages=15136 — registered, not read (GSP-RM's suspend buffer; this device keeps its state in the VMM)
+kf-gsp: large RPC fn 4 seq 2633 joined from 2 fragment(s), 121144 bytes, answered in 1 replies (rpc_result 0x0)
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=2643: bInPMTransition=true bGc6Entering=false newLevel=3 — a PM transition: BAR1 is preserved
+kf3: GSP fn 47 is a PM transition: the GSP-RM state is kept for a resume (phase Suspending)
+kf3: GSP phase Running -> Suspending
+kf3: GSP phase Suspending -> Halted
+kf3: device reset #3 (S3 WAKE): GSP Halted -> Cold (E14): the PM-suspended GSP-RM life is KEPT — queues and sequence numbers, the chain's objects, host twins, address spaces, display; 0 queued register write(s) dropped; interrupt tree reset
+kf3: device reset #3: tokens KEPT (the life's channels), register shadow restored and republished, 0 stale interrupt(s) drained
+kf3: device reset #3 COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: 0)
+kf3: device reset #3 complete before the vCPUs resume (the main loop waited 0 us)
+kayfabe: GSP-RESUME the saved binding restored (no publish): stat_seq=2644 cmd_seq=2646 cmd_read_ptr=37 peer_stat_read=42
+kf3: GSP phase Cold -> Booted
+kf3: GSP phase Booted -> Running
+kf3: chan DISABLE_USERMODE_CHANNELS bDisable=false from 0xc1d0000b: 4 user twin(s) re-enabled on the host
+kf3: act disable usermode channels: DISABLE_USERMODE_CHANNELS bDisable=false: 4 twin(s) (325 us, off the GSP lock)
+kf3: chan DISABLE_USERMODE_CHANNELS bDisable=true from 0xc1d0000b: 4 user twin(s) disabled on the host
+kf3: act disable usermode channels: DISABLE_USERMODE_CHANNELS bDisable=true: 4 twin(s) (508 us, off the GSP lock)
+kf-rm: pmsr: ALLOC_MEMORY SYSTEM list client=0xc1e00004 handle=0xcaf00022 pages=15136 — registered, not read (GSP-RM's suspend buffer; this device keeps its state in the VMM)
+kf-gsp: large RPC fn 4 seq 3633 joined from 2 fragment(s), 121144 bytes, answered in 1 replies (rpc_result 0x0)
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=3643: bInPMTransition=true bGc6Entering=false newLevel=3 — a PM transition: BAR1 is preserved
+kf3: GSP fn 47 is a PM transition: the GSP-RM state is kept for a resume (phase Suspending)
+kf3: GSP phase Running -> Suspending
+kf3: GSP phase Suspending -> Halted
+kf3: device reset #4 (S3 WAKE): GSP Halted -> Cold (E14): the PM-suspended GSP-RM life is KEPT — queues and sequence numbers, the chain's objects, host twins, address spaces, display; 0 queued register write(s) dropped; interrupt tree reset
+kf3: device reset #4: tokens KEPT (the life's channels), register shadow restored and republished, 0 stale interrupt(s) drained
+kf3: device reset #4 COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: 0)
+kf3: device reset #4 complete before the vCPUs resume (the main loop waited 0 us)
+kayfabe: GSP-RESUME the saved binding restored (no publish): stat_seq=3644 cmd_seq=3646 cmd_read_ptr=57 peer_stat_read=34
+kf3: GSP phase Cold -> Booted
+kf3: GSP phase Booted -> Running
+kf3: chan DISABLE_USERMODE_CHANNELS bDisable=false from 0xc1d0000b: 4 user twin(s) re-enabled on the host
+kf3: act disable usermode channels: DISABLE_USERMODE_CHANNELS bDisable=false: 4 twin(s) (323 us, off the GSP lock)

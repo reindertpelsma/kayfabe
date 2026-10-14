@@ -1,8 +1,10 @@
 # V3 — ACPI S3 suspend/resume of a kf3 guest
 
-**STATUS: DESIGN + CODE, 2026-10-14 — GPU-free tested; hardware result in §6 (pending at the time of
-writing).** Branch `claude/s3-resume-20261014`. Evidence of the failure: `traces/linux_s3_resume_20261014/`.
-Measured = a run or a GPU-free test named here; inferred = read from source, not executed.
+**STATUS: LIVE, 2026-10-14 — MEASURED on the trusted host (RTX 4070, kf3 `559db30c`): the Linux desktop
+guest (ogkm 580.159.04, stock module) survives three S3 suspend/resume cycles in one boot (§6).** Branch
+`claude/s3-resume-20261014`. Evidence: `traces/linux_s3_resume_20261014/` (the failure) and its `fixed/`
+(the passing runs). Windows 11: not run (§7). Measured = a run or a GPU-free test named here; inferred =
+read from source, not executed.
 
 ## 1. The failure, measured (kf3 `c287af4f`, Linux desktop guest, ogkm 580.159.04)
 
@@ -113,6 +115,60 @@ The first 512 privileged writes of every logged device life are logged (`kf3: w#
 phase=…`), restarted at each logged reset — the resume's SEC2/GSP traffic is in `qemu.log` after the
 `(S3 WAKE)` line. `kayfabe: GSP-RESUME …` names the restored cursors and sequences.
 
-## 6. Results
+## 4c. Walls after b2 (each found by the run before it, batched where the source showed them)
 
-Pending (filled in by the run that measures it).
+- `[measured b2, 91afc335]` the FBSR save now valid (no `pCeUtils` asserts, no *"Calling Resume on an
+  active GPU"* — H4's falsifier not hit). Next: at resume `kbusRestoreBAR1ResizeSize_WAR_BUG_3249028_GA100`
+  asserted `bar1ResizeSizeIndex >= NV_XVE_RESIZE_BAR1_CTRL_BAR_SIZE_MIN` and failed `gpuStateLoad`
+  (`kern_bus_ga100.c:1501`, `kern_bus_gm107.c:551`): the BAR0 XVE mirror served 0 for
+  `NV_XVE_RESIZE_BAR1_CTRL`, which RM caches at load. ⇒ `kf_chip::bar0` serves it on GA100…AD107 as
+  this device's own BAR1 size in the Resizable-BAR encoding (`log2(bytes) - 20`, field `12:8`, offsets and
+  bounds from the hwref table — four rows added to `hwref-580.159.04.tsv` by `tools/derive_hwref.sh`).
+  Hopper/Blackwell read the config space's Resizable-BAR capability, absent here, which clears the WAR.
+- `[measured b3/b5, 89362cbe]` `gpuStateLoad` completed (the remaining asserts are the boot's own,
+  identical before the suspend); glxgears rendered 302 frames after the wake, but `nvidia-smi` hung.
+  `[measured b6]` strace: it spun on `UVM_INITIALIZE` → `EAGAIN`. `[read]` cause: kf3 refused
+  `NV2080_CTRL_CMD_FIFO_DISABLE_USERMODE_CHANNELS` (`0x20801117`, ROUTE_TO_PHYSICAL), so the procfs
+  suspend's `nv_preempt_user_channels` failed (the WARNs at `nv.c:4472/4759`), and that error path calls
+  `nv_uvm_resume()` without a prior `nv_uvm_suspend()` (`nv.c:4759-4810`) — `uvm_resume` releases
+  `pm.lock` it never took (`uvm_global.c:360-400`), after which every UVM ioctl's `down_read_trylock`
+  fails (`uvm.c:1058-1060`). ⇒ served in the channel plane (`ChanStatement::DisableUsermode`): the host
+  disables this VM's user twins (host `DISABLE_CHANNELS`, unprivileged, our own channels, an act) and
+  re-enables exactly those at resume.
+
+## 5b. What the guest sees across the wake (from the per-life write log, run b1)
+
+H1 holds: after `device reset #2 (S3 WAKE)` the guest's writes are SEC2 Booter Load and `FALCON_OS`
+with the phase `Cold`; no GSP falcon STARTCPU and no boot-args mailbox pair occur, and E15 fires on the
+Booter Load (`GSP-RESUME … no publish`). H3 holds: every wake reset arrived as `RESET_TYPE_WAKEUP`
+(`(S3 WAKE)` lines, b1-b8). H2 was not ablated (inferred, see §3).
+
+## 6. Results (kf3 `559db30c`, trusted host, RTX 4070, host driver 595.91.07)
+
+- `desktop_s3.sh 559db30c b7` (1 cycle) PASS; `S3_CYCLES=3 desktop_s3.sh 559db30c b8` **3/3 PASS** in one
+  boot: each wake `(S3 WAKE) … KEPT`, `GSP-RESUME` with continuing sequence numbers (stat 1683 → 2644 → 3644),
+  ssh back in ~3 s, `nvidia-smi` names the RTX 4070, glxgears 301/302/301 frames in 5 s, 0 Xid, 0 kernel
+  WARNINGs, no GSP refusal after the first fn 47. `traces/linux_s3_resume_20261014/fixed/`.
+- GPU-free: `cargo test` over every `kf-*` crate 3007 passed / 0 failed; `v3_gates.sh` 9/9, gate 10 PASS,
+  12/12 user births.
+- The fast suite, `desktop_smoke.sh` and `planes_oracle.sh` at this revision: see the status note of the
+  commit that records them (`docs/STATUS_AND_HANDOFF.md`).
+
+## 7. Not done / not verified
+
+- **Windows 11.** Not run (owner). The host-side signature before the fix was identical (README of the
+  failure trace). What should now hold: the wake reset is `(S3 WAKE) … KEPT` if the Windows driver's fn 47
+  says `bInPMTransition=true`, and its SR_RESUME Booter Load fires E15. Untested Windows-specific parts:
+  its FBSR path (WDDM FBSR types) and whether it sends controls this branch does not serve.
+  **Retest:** boot run 2990's VM on this branch's binary, `powercfg /hibernate off`, sleep from the Start
+  menu (or `rundll32 powrprof.dll,SetSuspendState 0,1,0`), wait for QMP `info status` = suspended,
+  `system_wakeup`, then check kf3's log for `(S3 WAKE)`, `GSP-RESUME`, any `GSP REFUSED`/`UNSERVICED`
+  after the fn 47, and the desktop/`nvidia-smi` in the guest.
+- FSP families (Hopper/Blackwell): the FSM keeps their PM life (E13 + E14 are unit-tested), but their
+  `FspBoot` sequence emits no `FirmwareResume`; their SR_RESUME (`kgspBootstrap_GH100`) is unbuilt.
+- `FIFO_TOGGLE_ACTIVE_CHANNEL_SCHEDULING` is answered without a host act (`pmsr.rs` says why);
+  `[inferred]` that nothing runs between its two calls.
+- The control ids in `pmsr.rs` and `chanlink::DISABLE_USERMODE_CHANNELS` are cited from the 580.159.04
+  header, not yet in the driver matrix (`tools/drivermatrix/consumed.txt`, needs a regen).
+- A cold `system_reset` of a VM while it is S3-suspended ends the kept life (unit-tested in
+  `reset.rs`), not run on hardware.
