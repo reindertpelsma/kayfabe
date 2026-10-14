@@ -13,6 +13,13 @@ whether the properties a box step owes held on that run.
             carve (KF3_NEGCTL_CARVE), twin (KF3_NEGCTL_TWIN), oversize (KF3_NEGCTL_TSPACE_OVERSIZE),
             window (KF3_NEGCTL_TWIN_WINDOW: WINDOWS=NONE must FAIL on it)
 
+⊘ 2026-10-10 (OWNER_RULINGS.md §AB): KF3_TSPACE is deleted and the T-space is hardwired. Every
+log from a build after that date is a T-space run (the plain invocation). --default, --census and
+--windows describe arms that no longer exist (KF3_TSPACE unset / =0); they are kept only to read
+logs from older builds, and --default FAILS on a new log by design. --negctl shadow has nothing to
+control (the shadow ran only beside the deleted legacy rewriter; KF3_TSHADOW now turns on the
+census only). The known positive for WINDOWS=NONE is --negctl window (KF3_NEGCTL_TWIN_WINDOW, kept).
+
 ⚠ Every T-space and census run must end with the guest driver UNLOADED (rmmod nvidia_uvm
 nvidia_drm nvidia_modeset nvidia, or a clean shutdown) before the log is taken: TSPACE-RETIRE,
 TCENSUS and TSHADOW lines are printed when a Translated channel is FREED, and CeUtils' channels

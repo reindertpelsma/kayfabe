@@ -1,0 +1,21 @@
+=== oceanFFT_qa_diagnostic start=2026-10-11T07:49:43.8291599-07:00 host=DESKTOP-JR70RMQ session=0 boot=2026-10-11T14:31:59.5000000Z timeout=120
+NOTE: The CUDA Samples are not meant for performance measurements. Results may vary when GPU Boost is enabled.
+
+C:\kfapps\cuda_demo\demo_suite\oceanFFT.exe Starting...
+
+MapSMtoCores for SM 8.9 is undefined.  Default to use 128 Cores/SM
+MapSMtoArchName for SM 8.9 is undefined.  Default to use Ampere
+GPU Device 0: "Ampere" with compute capability 8.9
+
+Compute capability 8.9
+sdkDumpBin: <spatialDomain.bin>
+> compareBin2Bin <float> nelements=65536, epsilon=0.10, threshold=0.15
+   src_file <spatialDomain.bin>, size=262144 bytes
+   ref_file <./ref_spatialDomain.bin>, size=262144 bytes
+  OK
+sdkDumpBin: <slopeShading.bin>
+> compareBin2Bin <float> nelements=131072, epsilon=0.10, threshold=0.15
+   src_file <slopeShading.bin>, size=524288 bytes
+   ref_file <./ref_slopeShading.bin>, size=524288 bytes
+  OK
+=== end rc=0 secs=3 2026-10-11T07:49:46.7230953-07:00

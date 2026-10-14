@@ -1,0 +1,12 @@
+{
+ "verdict": "PASS",
+ "rc": 0,
+ "secs": 18,
+ "quiet": 2,
+ "note": "",
+ "proof": "out",
+ "tdr": 0,
+ "wer": 0,
+ "rebooted": false,
+ "run": "t1b"
+}

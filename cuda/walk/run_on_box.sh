@@ -36,6 +36,7 @@ ssh "$HOST" "cd $REMOTE/cuda/walk && nohup sh -c '
   rc_cneg=0  # check-closure-negative retired 2026-09-25 (superseded delta)
   make check-coalesce-negative; rc_coal=\$?
   make check-seam-negative; rc_sneg=\$?
+  make check-sample-negative; rc_samp=\$?
   make check-ver3-sketch; rc_v3=\$?
   # The Xid instrument, NAMED rather than assumed: dmesg is not readable inside a
   # vast CUDA container, so an empty grep over it is evidence of nothing.
@@ -45,7 +46,7 @@ ssh "$HOST" "cd $REMOTE/cuda/walk && nohup sh -c '
     echo DMESG=UNREADABLE__absence_of_Xid_lines_here_is_NOT_evidence
   fi
   nvidia-smi -L >/dev/null 2>&1 && echo SMI=responsive || echo SMI=UNRESPONSIVE
-  echo \"INV=\$rc_inv BUILD=\$rc_build PTX=\$rc_ptx NEG=\$rc_neg CNEG=\$rc_cneg COAL=\$rc_coal SNEG=\$rc_sneg VER3=\$rc_v3\"
+  echo \"INV=\$rc_inv BUILD=\$rc_build PTX=\$rc_ptx NEG=\$rc_neg CNEG=\$rc_cneg COAL=\$rc_coal SNEG=\$rc_sneg SAMP=\$rc_samp VER3=\$rc_v3\"
   # ⊘ rc_inv was computed and NEVER folded in: check-invariants could FAIL while the
   # run reported EXIT=0. A check that reports is not a check that gates (w760i).
   if [ \$rc -eq 0 ] && [ \$rc_inv -ne 0 ]; then rc=8; fi
@@ -54,6 +55,7 @@ ssh "$HOST" "cd $REMOTE/cuda/walk && nohup sh -c '
   if [ \$rc -eq 0 ] && [ \$rc_coal -ne 0 ]; then rc=13; fi
   if [ \$rc -eq 0 ] && [ \$rc_sneg -ne 0 ]; then rc=11; fi
   if [ \$rc -eq 0 ] && [ \$rc_v3 -ne 0 ]; then rc=12; fi
+  if [ \$rc -eq 0 ] && [ \$rc_samp -ne 0 ]; then rc=14; fi
   echo \"EXIT=\$rc\"
 ' > $REMOTE/out.log 2>&1 &" || exit 1
 

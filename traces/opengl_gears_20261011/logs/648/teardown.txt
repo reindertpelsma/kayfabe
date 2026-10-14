@@ -1,0 +1,5 @@
+IOMMU=DMA-FQ
+DRIVER=nvidia
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/sda2       1.8T  1.6T  104G  95% /
+SHUTDOWN_DRIVER_UNLOADS=1

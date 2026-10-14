@@ -1,0 +1,59 @@
+{
+ "quiet": 1,
+ "end_utc": "2026-10-10T16:50:58.2820340Z",
+ "start_utc": "2026-10-10T16:50:53.8570571Z",
+ "rc": 0,
+ "secs": 4,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4060 Ti status=OK code=0"
+ ],
+ "digests": [],
+ "session": 1,
+ "out_files": [],
+ "boot_utc_start": "2026-10-10T15:50:57.5000000Z",
+ "log_tail": [
+  "=== furmark_vkinfo start=2026-10-10T09:50:53.8570571-07:00 host=DESKTOP-397P3NI session=1 boot=2026-10-10T15:50:57.5000000Z timeout=90",
+  "[ Vulkan info ]",
+  "- # of devices: 1",
+  "- [device 0]",
+  " - name: NVIDIA GeForce RTX 4060 Ti",
+  " - deviceID: 10DE-2803 (4318-10243)",
+  " - API version: 1.4.329",
+  " - NVIDIA driver: 595.97.0.0",
+  "",
+  "KFNOTE furmark info modes print the info and exit 1 by design (measured on native NVIDIA)",
+  "=== end rc=0 secs=4 2026-10-10T09:50:58.2820340-07:00"
+ ],
+ "pdh": {
+  "pids": [
+   "4164",
+   "9644",
+   "9884"
+  ],
+  "nv": {},
+  "samples": 2,
+  "other": {},
+  "nvidia_luids": "0_6040"
+ },
+ "timed_out": false,
+ "token": "g1-furmark_vkinfo-1791651040",
+ "boot_utc_end": "2026-10-10T15:50:57.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "furmark_vkinfo",
+ "smi": {
+  "samples": 0,
+  "mem_used_base_mb": 125,
+  "util_max": 0,
+  "mem_used_max_mb": 125
+ }
+}

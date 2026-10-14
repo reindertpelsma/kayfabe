@@ -1,0 +1,43 @@
+=== llama_cuda_gen start=2026-10-11T17:22:31.1187520+00:00 host=VASTWIN session=0 boot=2026-10-11T17:19:23.5000000Z timeout=600
+Available devices:
+  CUDA0: NVIDIA GeForce RTX 4070 (3835 MiB, 3033 MiB free)
+0.00.290.249 I llama_completion: llama backend init
+0.00.290.269 I llama_completion: load the model and apply lora adapter, if any
+0.03.253.124 W load: control-looking token: 128247 '</s>' was not control-type; this is probably a bug in the model. its type will be overridden
+0.05.039.748 I cmn          init: llama threadpool init, n_threads = 8
+0.05.444.738 I llama_completion: chat template is available, enabling conversation mode (disable it with -no-cnv)
+0.05.444.753 W *** User-specified prompt will pre-start conversation, did you mean to set --system-prompt (-sys) instead?
+0.05.444.937 I llama_completion: chat template example:
+<|im_start|>system
+You are a helpful assistant<|im_end|>
+<|im_start|>user
+Hello<|im_end|>
+<|im_start|>assistant
+Hi there<|im_end|>
+<|im_start|>user
+How are you?<|im_end|>
+<|im_start|>assistant
+
+0.05.444.945 I 
+0.05.444.987 I system_info: n_threads = 8 (n_threads_batch = 8) / 8 | CUDA : ARCHS = 500,610,700,750,800,860,890,900 | USE_GRAPHS = 1 | FA_QUANTS = q4_0-q4_0,q8_0-q8_0,f16-f16,bf16-bf16 | CPU : SSE3 = 1 | SSSE3 = 1 | AVX = 1 | AVX2 = 1 | F16C = 1 | FMA = 1 | BMI2 = 1 | AVX512 = 1 | AVX512_VBMI = 1 | AVX512_VNNI = 1 | AVX512_BF16 = 1 | LLAMAFILE = 1 | OPENMP = 1 | REPACK = 1 | 
+0.05.444.994 I 
+0.05.445.189 I llama_completion: interactive mode on.
+0.05.445.204 I sampler seed: 4294967295
+0.05.445.221 I sampler params: 
+	repeat_last_n = 64, repeat_penalty = 1.000, frequency_penalty = 0.000, presence_penalty = 0.000
+	dry_multiplier = 0.000, dry_base = 1.750, dry_allowed_length = 2, dry_penalty_last_n = 64
+	top_k = 40, top_p = 0.950, min_p = 0.050, xtc_probability = 0.000, xtc_threshold = 0.100, typical_p = 1.000, top_n_sigma = -1.000, temp = 0.000
+	mirostat = 0, mirostat_lr = 0.100, mirostat_ent = 5.000, adaptive_target = -1.000, adaptive_decay = 0.900
+0.05.445.251 I sampler chain: logits -> ?penalties -> ?dry -> ?top-n-sigma -> top-k -> ?typical -> top-p -> min-p -> ?xtc -> temp-ext -> greedy 
+0.05.445.259 I generate: n_ctx = 26880, n_batch = 2048, n_predict = 64, n_keep = 0
+0.05.445.266 I 
+0.05.445.273 I == Running in interactive mode. ==
+0.05.445.283 I  - Press Ctrl+C to interject at any time.
+0.05.445.290 I  - Press Return to return control to the AI.
+ - To return control without starting a new line, end your input with '/'.
+ - If you want to submit another line, end your input with '\'.
+0.05.445.300 I  - Not using system message. To change it, set a different value via -sys PROMPT
+0.05.445.309 I 
+GEN The sky appears blue because the Earth's atmosphere scatters sunlight in all directions, with shorter blue wavelengths being scattered more than longer red wavelengths. This results in blue light being scattered towards
+OUTSHA llama_cpp ab35161a94bc34ab
+=== end rc=0 secs=81 2026-10-11T17:23:52.2710316+00:00

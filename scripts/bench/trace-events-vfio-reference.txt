@@ -1,0 +1,17 @@
+vfio_msi_interrupt
+vfio_intx_interrupt
+vfio_msix_vector_do_use
+vfio_msix_vector_release
+vfio_msix_enable
+vfio_msix_disable
+vfio_msi_enable
+vfio_msi_disable
+vfio_intx_enable
+vfio_intx_disable
+vfio_msix_early_setup
+vfio_msi_setup
+vfio_pci_reset
+vfio_pci_reset_flr
+vfio_pci_hot_reset_result
+vfio_region_read
+vfio_region_write

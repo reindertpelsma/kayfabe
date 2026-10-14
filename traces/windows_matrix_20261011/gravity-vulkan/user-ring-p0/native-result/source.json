@@ -1,0 +1,8 @@
+{
+  "revision": "91bf09a80f4934c54f333a958adfcde8fcfb5a68",
+  "binary_sha256": "e158896acc417bf1892a5694fcb49bd73a807a3482cbb9accd864b148623f69c",
+  "binary": "/data/kf-fifo-refusal-target-b081f705/release/kf-user-ring-probe",
+  "uid": 65534,
+  "gid": 65534,
+  "scope": "native permission probe, no VM/migration implementation"
+}

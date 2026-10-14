@@ -1,0 +1,8 @@
+eb758cf4767058549892704035c33e6cd317c67ff370ee39328fad2fbab175c9  /var/lib/kf-windows-20261005/readtrace/kf3-bins/02afce90/qemu-system-x86_64
+KF3_BUILT /var/lib/kf-windows-20261005/readtrace/kf3-bins/02afce90/qemu-system-x86_64 rev=02afce90 mtime=2026-10-11 11:52:50.814444916 +0200 (shared build dir /var/lib/kf-windows-20261005/readtrace/qemu-build-kf3)
+POSTCHECK_START rev=02afce90 2026-10-11T11:56:46+02:00
+TSPACE_LOGS_PASS=30 2026-10-11T11:56:47+02:00
+POSTCHECK_DONE 2026-10-11T11:59:37+02:00
+POSTCHECK_EXIT rc=0 2026-10-11T11:59:37+02:00
+7.0.0-34-generic
+NVIDIA GeForce RTX 4070, 595.91.07

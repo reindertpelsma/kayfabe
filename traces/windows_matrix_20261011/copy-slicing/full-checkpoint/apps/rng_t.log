@@ -1,0 +1,8 @@
+=== rng_t start=2026-10-11T13:34:24.2891663+00:00 host=VASTWIN session=0 boot=2026-10-11T13:31:52.5000000Z timeout=120
+KFDEV NVIDIA GeForce RTX 4070
+[eq] device NVIDIA GeForce RTX 4070 torch 2.8.0+cu126
+CHECK rng_reproducible ok
+CHECK rng_uniform_moments ok mean=0.50022 std=0.28862
+CHECK rng_normal_moments ok
+WINEQ_DONE rng
+=== end rc=0 secs=75 2026-10-11T13:35:39.2778206+00:00

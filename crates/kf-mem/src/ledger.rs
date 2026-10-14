@@ -26,6 +26,8 @@ pub struct Desired {
     /// (`crate::apply::PermPolicy::host_perm`). ⊘ Dropping them mapped every guest read-only leaf
     /// read-write.
     pub perm: kf_host::MapPerm,
+    /// ★ 2026-10-09: the guest leaf size in bytes (`crate::apply::DiffRun::leaf`; 0 = unknown).
+    pub leaf: u64,
 }
 
 /// A walked leaf's aperture, as the walk kernel reports it (`KFWR_RF_AP_*`, `cuda/walk/kf_walk.h:92-97`).
@@ -93,6 +95,7 @@ pub fn desired_from_leaves(
                     ram: false,
                     kind: 0,
                     perm: kf_host::MapPerm::READ_WRITE,
+                    leaf: 0,
                 })
                 .ok_or(LeafRefusal::OutsideStore { va, gpga: at, len }),
             AP_SYS_COHERENT | AP_SYS_NONCOHERENT => ram_offset(at, len)
@@ -103,6 +106,7 @@ pub fn desired_from_leaves(
                     ram: true,
                     kind: 0,
                     perm: kf_host::MapPerm::READ_WRITE,
+                    leaf: 0,
                 })
                 .ok_or(LeafRefusal::NotGuestRam { va, gpa: at, len }),
             _ => Err(LeafRefusal::Aperture { va, ap }),
@@ -320,6 +324,33 @@ pub trait MapTarget {
     fn gpu_space(&self) -> bool {
         false
     }
+
+    /// ★ Review fix 2026-10-10 (findings 1, 3): what this target holds of OURS inside `[va, end)`
+    /// ([`OwnView`]) — so the apply keeps (no host call) only pages a mapping of ours really
+    /// covers, and never keeps part of a mapping host RM cannot split exactly. ⊘ Default `None`:
+    /// the target keeps no such ledger and the apply keeps what the diff names. A wrapping target
+    /// must FORWARD this.
+    fn own_view(&self, va: u64, end: u64) -> Option<OwnView> {
+        let _ = (va, end);
+        None
+    }
+
+    /// ★ Review item 4 (2026-10-10): a new refresh (one walker entry) begins — the target renews
+    /// the per-refresh host-call budget it keeps for placing rows ([`crate::batch::BatchedVas::
+    /// begin_refresh`]). Default: nothing to renew. A wrapping target must FORWARD this.
+    fn begin_refresh(&self) {}
+}
+
+/// ★ Review fix 2026-10-10 — [`MapTarget::own_view`]'s answer.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct OwnView {
+    /// Bytes of `[va, end)` a mapping of ours covers, `(start, end)`, sorted, merged.
+    pub owned: Vec<(u64, u64)>,
+    /// Our mappings intersecting `[va, end)` that host RM cannot split exactly (no VA-reserving
+    /// `hDma` holds them), each WHOLE `(start, end)`. ★ D1 (2026-10-10): EMPTY by construction —
+    /// outside a reservation every mapping of ours is one 4 KiB page, or sits in a micro
+    /// reservation (`V3_BATCHED_MAP.md` §8.8); kept as the apply's last-resort signal.
+    pub rigid: Vec<(u64, u64)>,
 }
 
 /// What a target that cannot batch answers [`MapTarget::map_batch`] / [`MapTarget::unmap_range`].
@@ -337,8 +368,8 @@ pub fn clip_leaves(leaves: &[(u64, u64, u64, u8)], extent: u64) -> (Vec<(u64, u6
         if va >= extent {
             cut = cut.saturating_add(len);
         } else if end > extent {
-            cut = cut.saturating_add(end - extent);
-            out.push((va, at, extent - va, ap));
+            cut = cut.saturating_add(end.saturating_sub(extent));
+            out.push((va, at, extent.saturating_sub(va), ap));
         } else {
             out.push((va, at, len, ap));
         }
@@ -374,6 +405,21 @@ impl HostVas<'_> {
         rows: &[Desired],
         defer: bool,
     ) -> Result<u32, String> {
+        self.map_scattered_through(None, ram_fd, rows, defer)
+    }
+
+    /// ★ 2026-10-09: [`HostVas::map_scattered`] mapped THROUGH the reservation `through` when
+    /// given (`crate::batch` micro reservations; `kf_host::HostRm::map_scattered_through`).
+    ///
+    /// # Errors
+    /// As [`HostVas::map_scattered`].
+    pub fn map_scattered_through(
+        &self,
+        through: Option<u32>,
+        ram_fd: std::os::fd::BorrowedFd<'_>,
+        rows: &[Desired],
+        defer: bool,
+    ) -> Result<u32, String> {
         let first = rows.first().ok_or("empty batch")?;
         let mut next = first.va;
         let mut pieces: Vec<(u64, u64)> = Vec::with_capacity(rows.len());
@@ -389,23 +435,41 @@ impl HostVas<'_> {
             next = d.va.checked_add(d.len).ok_or("batch VA overflows")?;
             // Coalesce pieces that are also file-contiguous: fewer mappings to stitch.
             match pieces.last_mut() {
-                Some((o, l)) if o.checked_add(*l) == Some(d.off) => *l += d.len,
+                Some((o, l))
+                    if o.checked_add(*l) == Some(d.off) && l.checked_add(d.len).is_some() =>
+                {
+                    *l = l.saturating_add(d.len);
+                }
                 _ => pieces.push((d.off, d.len)),
             }
         }
         self.rm
-            .map_scattered(
-                self.space, ram_fd, &pieces, first.va, defer, first.kind, first.perm,
+            .map_scattered_through(
+                self.space, through, ram_fd, &pieces, first.va, defer, first.kind, first.perm,
             )
             .map_err(|e| {
                 format!(
                     "batch {:#x}+{:#x} ({} rows, {} pieces): {e:?}",
                     first.va,
-                    next - first.va,
+                    next.saturating_sub(first.va),
                     rows.len(),
                     pieces.len()
                 )
             })
+    }
+
+    /// ★ 2026-10-09: unmap the ONE committed row `[va, va+len)` — every piece of it. A row that
+    /// straddles a reservation edge of the twin space was MAPPED as one map per `hDma`
+    /// (`kf_host::VaSpace::dma_pieces`; `[measured, run 225]` Windows' `0xb0000+0x80000` and
+    /// `0xff000+0x2000`), so the whole-mapping unmap keyed by `va` alone ([`MapTarget::unmap`])
+    /// would leave the later pieces mapped. `len` must be the length the row was mapped with.
+    ///
+    /// # Errors
+    /// The host's refusal of the first refused piece, by name.
+    pub fn unmap_row(&self, va: u64, len: u64, defer: bool) -> Result<(), String> {
+        self.rm
+            .unmap_row(self.space, va, len, defer)
+            .map_err(|e| format!("unmap {va:#x}+{len:#x}: {e:?}"))
     }
 }
 

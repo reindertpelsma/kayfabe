@@ -706,11 +706,10 @@ impl HostRing {
     /// # Errors
     /// `Ok(Err(Busy))` when there is no free space until a completion; `Err` for a store failure.
     pub fn push(&mut self, words: &[u32]) -> Result<Result<(), Busy>, String> {
-        // No codec or CE execution is admitted on the experimental video ring.
-        // Its private fence remains authored here, never supplied by the guest.
-        if self.video_context.is_some() && !words.is_empty() {
-            return Err("video ring: codec/CE submission is not implemented".into());
-        }
+        // ★ 2026-10-14: a video ring takes the T-mode VIDEO tier's output (`crate::vtables`):
+        // authored semaphore rows and host methods only. No codec or CE execution reaches it —
+        // the decoder refuses `EXECUTE`, every codec operand and every CE method by name — and
+        // its private fence remains authored here, never supplied by the guest.
         self.push_inner(words, TAIL_BYTES)
     }
 
@@ -1597,9 +1596,10 @@ impl TranslatedChannel {
                     });
                     let (pieces, rest, unresolved) = match r {
                         Ok(crate::tmode::Pushed::All { pieces }) => (pieces, None, None),
-                        Ok(crate::tmode::Pushed::Busy { rest, pieces }) => {
-                            (pieces, Some(rest), None)
-                        }
+                        Ok(
+                            crate::tmode::Pushed::Busy { rest, pieces }
+                            | crate::tmode::Pushed::Yield { rest, pieces },
+                        ) => (pieces, Some(rest), None),
                         Ok(crate::tmode::Pushed::Unresolved { rest, pieces, why }) => {
                             (pieces, Some(rest), Some(why))
                         }

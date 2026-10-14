@@ -131,6 +131,17 @@ impl RungBitmap {
         out.len()
     }
 
+    /// ★ Device reset (`docs/design/V3_DEVICE_RESET.md`): no bit, no summary, the scan starting at
+    /// 0 — a fresh bitmap. ⊘ Only once no token can be published (every channel retired, the vCPU
+    /// gate closed); a stale bit left behind would at worst make a worker claim a fresh token and
+    /// find it not rung, which is why this is hygiene rather than the safety mechanism.
+    pub fn clear(&self) {
+        for w in self.summary.iter().chain(self.words.iter()) {
+            w.store(0, Ordering::Release);
+        }
+        self.next_start.store(0, Ordering::Relaxed);
+    }
+
     /// Read-only inspection of a summary bit (tests and census; never a decision input).
     #[must_use]
     pub fn summary_bit(&self, token: u32) -> bool {

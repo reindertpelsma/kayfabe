@@ -1,0 +1,2 @@
+WINDOWS_START kf3=4b14d74f run=/var/lib/kf-windows-20261005/boundary-kayfabe-70 checkout=c8ea8fd2 xid_before=95 2026-10-08T16:55:37+02:00
+WINDOWS_EXIT stop=acpi 2026-10-08T16:58:47+02:00 xid=95

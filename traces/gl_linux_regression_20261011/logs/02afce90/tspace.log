@@ -1,0 +1,270 @@
+LOG=/var/lib/kf-windows-20261005/codex-gl-regression-20261011-02afce90/bench/fast_codexglreview_alias-two-vas_qemu.log
+T-TSPACE-BUILD PASS: fb ends 0x30fbe0000, ram ends 0x38fbe0000, line 34, first BORN Translated 733, build_us=33782
+BORN-TRANSLATED PASS: 2 Translated births
+WINDOWS=NONE PASS: 5 mirrors, 3 spares, 0 with a window
+COUNTERS PASS: tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] carve_gpu=0 carve_kernel=0 carve_cpu=0 inca[strict=yes counted=0 heap_out=0 rows_inexact=0]
+STALE-BIND PASS: stale 0 of 16 over 2 retires (unload the guest driver first: retire lines print at free)
+NO-DEAD PASS: 0 Translated channels died: []
+P0-EVIDENCE PASS: 3 USER host births for 3 channel births, 0 privileged (--p0-pending scopes a build without P0)
+VERDICT: PASS
+LOG=/var/lib/kf-windows-20261005/codex-gl-regression-20261011-02afce90/bench/fast_codexglreview_alias-unmap-observe_qemu.log
+T-TSPACE-BUILD PASS: fb ends 0x30fbe0000, ram ends 0x38fbe0000, line 34, first BORN Translated 733, build_us=33110
+BORN-TRANSLATED PASS: 2 Translated births
+WINDOWS=NONE PASS: 5 mirrors, 3 spares, 0 with a window
+COUNTERS PASS: tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] carve_gpu=0 carve_kernel=0 carve_cpu=0 inca[strict=yes counted=0 heap_out=0 rows_inexact=0]
+STALE-BIND PASS: stale 0 of 18 over 2 retires (unload the guest driver first: retire lines print at free)
+NO-DEAD PASS: 0 Translated channels died: []
+P0-EVIDENCE PASS: 3 USER host births for 3 channel births, 0 privileged (--p0-pending scopes a build without P0)
+VERDICT: PASS
+LOG=/var/lib/kf-windows-20261005/codex-gl-regression-20261011-02afce90/bench/fast_codexglreview_atomics-probe_qemu.log
+T-TSPACE-BUILD PASS: fb ends 0x30fbe0000, ram ends 0x38fbe0000, line 34, first BORN Translated 733, build_us=32885
+BORN-TRANSLATED PASS: 2 Translated births
+WINDOWS=NONE PASS: 4 mirrors, 3 spares, 0 with a window
+COUNTERS PASS: tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] carve_gpu=0 carve_kernel=0 carve_cpu=0 inca[strict=yes counted=0 heap_out=0 rows_inexact=0]
+STALE-BIND PASS: stale 0 of 6 over 2 retires (unload the guest driver first: retire lines print at free)
+NO-DEAD PASS: 0 Translated channels died: []
+P0-EVIDENCE PASS: 2 USER host births for 2 channel births, 0 privileged (--p0-pending scopes a build without P0)
+VERDICT: PASS
+LOG=/var/lib/kf-windows-20261005/codex-gl-regression-20261011-02afce90/bench/fast_codexglreview_bar1-crossing_qemu.log
+T-TSPACE-BUILD PASS: fb ends 0x30fbe0000, ram ends 0x38fbe0000, line 34, first BORN Translated 733, build_us=33015
+BORN-TRANSLATED PASS: 2 Translated births
+WINDOWS=NONE PASS: 4 mirrors, 3 spares, 0 with a window
+COUNTERS PASS: tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] carve_gpu=0 carve_kernel=0 carve_cpu=0 inca[strict=yes counted=0 heap_out=0 rows_inexact=0]
+STALE-BIND PASS: stale 0 of 8 over 2 retires (unload the guest driver first: retire lines print at free)
+NO-DEAD PASS: 0 Translated channels died: []
+P0-EVIDENCE PASS: 2 USER host births for 2 channel births, 0 privileged (--p0-pending scopes a build without P0)
+VERDICT: PASS
+LOG=/var/lib/kf-windows-20261005/codex-gl-regression-20261011-02afce90/bench/fast_codexglreview_blockage-coverage_qemu.log
+T-TSPACE-BUILD PASS: fb ends 0x30fbe0000, ram ends 0x38fbe0000, line 34, first BORN Translated 733, build_us=32920
+BORN-TRANSLATED PASS: 2 Translated births
+WINDOWS=NONE PASS: 6 mirrors, 3 spares, 0 with a window
+COUNTERS PASS: tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] carve_gpu=0 carve_kernel=4 carve_cpu=1 inca[strict=yes counted=0 heap_out=0 rows_inexact=0]
+STALE-BIND PASS: stale 0 of 26 over 2 retires (unload the guest driver first: retire lines print at free)
+NO-DEAD PASS: 0 Translated channels died: []
+P0-EVIDENCE PASS: 4 USER host births for 4 channel births, 0 privileged (--p0-pending scopes a build without P0)
+VERDICT: PASS
+LOG=/var/lib/kf-windows-20261005/codex-gl-regression-20261011-02afce90/bench/fast_codexglreview_bus-info-sweep_qemu.log
+T-TSPACE-BUILD PASS: fb ends 0x30fbe0000, ram ends 0x38fbe0000, line 34, first BORN Translated 733, build_us=32855
+BORN-TRANSLATED PASS: 2 Translated births
+WINDOWS=NONE PASS: 4 mirrors, 3 spares, 0 with a window
+COUNTERS PASS: tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] carve_gpu=0 carve_kernel=4 carve_cpu=1 inca[strict=yes counted=0 heap_out=0 rows_inexact=0]
+STALE-BIND PASS: stale 0 of 6 over 2 retires (unload the guest driver first: retire lines print at free)
+NO-DEAD PASS: 0 Translated channels died: []
+P0-EVIDENCE PASS: 2 USER host births for 2 channel births, 0 privileged (--p0-pending scopes a build without P0)
+VERDICT: PASS
+LOG=/var/lib/kf-windows-20261005/codex-gl-regression-20261011-02afce90/bench/fast_codexglreview_ce-client-guest-ram_qemu.log
+T-TSPACE-BUILD PASS: fb ends 0x30fbe0000, ram ends 0x38fbe0000, line 34, first BORN Translated 733, build_us=32997
+BORN-TRANSLATED PASS: 2 Translated births
+WINDOWS=NONE PASS: 6 mirrors, 3 spares, 0 with a window
+COUNTERS PASS: tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] carve_gpu=0 carve_kernel=4 carve_cpu=1 inca[strict=yes counted=0 heap_out=0 rows_inexact=0]
+STALE-BIND PASS: stale 0 of 20 over 2 retires (unload the guest driver first: retire lines print at free)
+NO-DEAD PASS: 0 Translated channels died: []
+P0-EVIDENCE PASS: 3 USER host births for 3 channel births, 0 privileged (--p0-pending scopes a build without P0)
+VERDICT: PASS
+LOG=/var/lib/kf-windows-20261005/codex-gl-regression-20261011-02afce90/bench/fast_codexglreview_ce-client_qemu.log
+T-TSPACE-BUILD PASS: fb ends 0x30fbe0000, ram ends 0x38fbe0000, line 34, first BORN Translated 733, build_us=32982
+BORN-TRANSLATED PASS: 2 Translated births
+WINDOWS=NONE PASS: 6 mirrors, 3 spares, 0 with a window
+COUNTERS PASS: tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] carve_gpu=0 carve_kernel=0 carve_cpu=0 inca[strict=yes counted=0 heap_out=0 rows_inexact=0]
+STALE-BIND PASS: stale 0 of 22 over 2 retires (unload the guest driver first: retire lines print at free)
+NO-DEAD PASS: 0 Translated channels died: []
+P0-EVIDENCE PASS: 3 USER host births for 3 channel births, 0 privileged (--p0-pending scopes a build without P0)
+VERDICT: PASS
+LOG=/var/lib/kf-windows-20261005/codex-gl-regression-20261011-02afce90/bench/fast_codexglreview_concurrency_qemu.log
+T-TSPACE-BUILD PASS: fb ends 0x30fbe0000, ram ends 0x38fbe0000, line 34, first BORN Translated 733, build_us=32833
+BORN-TRANSLATED PASS: 2 Translated births
+WINDOWS=NONE PASS: 2411 mirrors, 3 spares, 0 with a window
+COUNTERS PASS: tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] carve_gpu=0 carve_kernel=4 carve_cpu=1 inca[strict=yes counted=0 heap_out=0 rows_inexact=0]
+STALE-BIND PASS: stale 0 of 1784 over 2 retires (unload the guest driver first: retire lines print at free)
+NO-DEAD PASS: 0 Translated channels died: []
+P0-EVIDENCE PASS: 6 USER host births for 6 channel births, 0 privileged (--p0-pending scopes a build without P0)
+VERDICT: PASS
+LOG=/var/lib/kf-windows-20261005/codex-gl-regression-20261011-02afce90/bench/fast_codexglreview_concurrent-fuzz_qemu.log
+T-TSPACE-BUILD PASS: fb ends 0x30fbe0000, ram ends 0x38fbe0000, line 34, first BORN Translated 733, build_us=32918
+BORN-TRANSLATED PASS: 2 Translated births
+WINDOWS=NONE PASS: 6 mirrors, 3 spares, 0 with a window
+COUNTERS PASS: tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] carve_gpu=0 carve_kernel=4 carve_cpu=1 inca[strict=yes counted=0 heap_out=0 rows_inexact=0]
+STALE-BIND PASS: stale 0 of 1004 over 2 retires (unload the guest driver first: retire lines print at free)
+NO-DEAD PASS: 0 Translated channels died: []
+P0-EVIDENCE PASS: 27 USER host births for 27 channel births, 0 privileged (--p0-pending scopes a build without P0)
+VERDICT: PASS
+LOG=/var/lib/kf-windows-20261005/codex-gl-regression-20261011-02afce90/bench/fast_codexglreview_cross-client-leak_qemu.log
+T-TSPACE-BUILD PASS: fb ends 0x30fbe0000, ram ends 0x38fbe0000, line 34, first BORN Translated 733, build_us=33537
+BORN-TRANSLATED PASS: 2 Translated births
+WINDOWS=NONE PASS: 6 mirrors, 3 spares, 0 with a window
+COUNTERS PASS: tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] carve_gpu=0 carve_kernel=4 carve_cpu=1 inca[strict=yes counted=0 heap_out=0 rows_inexact=0]
+STALE-BIND PASS: stale 0 of 24 over 2 retires (unload the guest driver first: retire lines print at free)
+NO-DEAD PASS: 0 Translated channels died: []
+P0-EVIDENCE PASS: 4 USER host births for 4 channel births, 0 privileged (--p0-pending scopes a build without P0)
+VERDICT: PASS
+LOG=/var/lib/kf-windows-20261005/codex-gl-regression-20261011-02afce90/bench/fast_codexglreview_defer-liveness_qemu.log
+T-TSPACE-BUILD PASS: fb ends 0x30fbe0000, ram ends 0x38fbe0000, line 34, first BORN Translated 733, build_us=33945
+BORN-TRANSLATED PASS: 2 Translated births
+WINDOWS=NONE PASS: 7 mirrors, 3 spares, 0 with a window
+COUNTERS PASS: tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] carve_gpu=0 carve_kernel=4 carve_cpu=1 inca[strict=yes counted=0 heap_out=0 rows_inexact=0]
+STALE-BIND PASS: stale 0 of 72 over 2 retires (unload the guest driver first: retire lines print at free)
+NO-DEAD PASS: 0 Translated channels died: []
+P0-EVIDENCE PASS: 11 USER host births for 11 channel births, 0 privileged (--p0-pending scopes a build without P0)
+VERDICT: PASS
+LOG=/var/lib/kf-windows-20261005/codex-gl-regression-20261011-02afce90/bench/fast_codexglreview_dictated-ring-negative_qemu.log
+T-TSPACE-BUILD PASS: fb ends 0x30fbe0000, ram ends 0x38fbe0000, line 34, first BORN Translated 733, build_us=40776
+BORN-TRANSLATED PASS: 2 Translated births
+WINDOWS=NONE PASS: 6 mirrors, 3 spares, 0 with a window
+COUNTERS PASS: tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] carve_gpu=0 carve_kernel=0 carve_cpu=0 inca[strict=yes counted=0 heap_out=0 rows_inexact=0]
+STALE-BIND PASS: stale 0 of 14 over 2 retires (unload the guest driver first: retire lines print at free)
+NO-DEAD PASS: 0 Translated channels died: []
+P0-EVIDENCE PASS: 2 USER host births for 2 channel births, 0 privileged (--p0-pending scopes a build without P0)
+VERDICT: PASS
+LOG=/var/lib/kf-windows-20261005/codex-gl-regression-20261011-02afce90/bench/fast_codexglreview_dictated-ring_qemu.log
+T-TSPACE-BUILD PASS: fb ends 0x30fbe0000, ram ends 0x38fbe0000, line 34, first BORN Translated 733, build_us=32938
+BORN-TRANSLATED PASS: 2 Translated births
+WINDOWS=NONE PASS: 5 mirrors, 3 spares, 0 with a window
+COUNTERS PASS: tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] carve_gpu=0 carve_kernel=0 carve_cpu=0 inca[strict=yes counted=0 heap_out=0 rows_inexact=0]
+STALE-BIND PASS: stale 0 of 14 over 2 retires (unload the guest driver first: retire lines print at free)
+NO-DEAD PASS: 0 Translated channels died: []
+P0-EVIDENCE PASS: 3 USER host births for 3 channel births, 0 privileged (--p0-pending scopes a build without P0)
+VERDICT: PASS
+LOG=/var/lib/kf-windows-20261005/codex-gl-regression-20261011-02afce90/bench/fast_codexglreview_doorbell-census_qemu.log
+T-TSPACE-BUILD PASS: fb ends 0x30fbe0000, ram ends 0x38fbe0000, line 34, first BORN Translated 733, build_us=32708
+BORN-TRANSLATED PASS: 2 Translated births
+WINDOWS=NONE PASS: 22 mirrors, 3 spares, 0 with a window
+COUNTERS PASS: tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] carve_gpu=0 carve_kernel=0 carve_cpu=0 inca[strict=yes counted=0 heap_out=0 rows_inexact=0]
+STALE-BIND PASS: stale 0 of 132 over 2 retires (unload the guest driver first: retire lines print at free)
+NO-DEAD PASS: 0 Translated channels died: []
+P0-EVIDENCE PASS: 20 USER host births for 14 channel births, 0 privileged (--p0-pending scopes a build without P0)
+VERDICT: PASS
+LOG=/var/lib/kf-windows-20261005/codex-gl-regression-20261011-02afce90/bench/fast_codexglreview_engines_qemu.log
+T-TSPACE-BUILD PASS: fb ends 0x30fbe0000, ram ends 0x38fbe0000, line 34, first BORN Translated 733, build_us=32856
+BORN-TRANSLATED PASS: 2 Translated births
+WINDOWS=NONE PASS: 19 mirrors, 3 spares, 0 with a window
+COUNTERS PASS: tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] carve_gpu=0 carve_kernel=0 carve_cpu=0 inca[strict=yes counted=0 heap_out=0 rows_inexact=0]
+STALE-BIND PASS: stale 0 of 74 over 2 retires (unload the guest driver first: retire lines print at free)
+NO-DEAD PASS: 0 Translated channels died: []
+P0-EVIDENCE PASS: 14 USER host births for 11 channel births, 0 privileged (--p0-pending scopes a build without P0)
+VERDICT: PASS
+LOG=/var/lib/kf-windows-20261005/codex-gl-regression-20261011-02afce90/bench/fast_codexglreview_executor-vas_qemu.log
+T-TSPACE-BUILD PASS: fb ends 0x30fbe0000, ram ends 0x38fbe0000, line 34, first BORN Translated 733, build_us=33290
+BORN-TRANSLATED PASS: 2 Translated births
+WINDOWS=NONE PASS: 6 mirrors, 3 spares, 0 with a window
+COUNTERS PASS: tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] carve_gpu=0 carve_kernel=0 carve_cpu=0 inca[strict=yes counted=0 heap_out=0 rows_inexact=0]
+STALE-BIND PASS: stale 0 of 22 over 2 retires (unload the guest driver first: retire lines print at free)
+NO-DEAD PASS: 0 Translated channels died: []
+P0-EVIDENCE PASS: 3 USER host births for 3 channel births, 0 privileged (--p0-pending scopes a build without P0)
+VERDICT: PASS
+LOG=/var/lib/kf-windows-20261005/codex-gl-regression-20261011-02afce90/bench/fast_codexglreview_gpga-reserve-probe_qemu.log
+T-TSPACE-BUILD PASS: fb ends 0x30fbe0000, ram ends 0x38fbe0000, line 34, first BORN Translated 733, build_us=33420
+BORN-TRANSLATED PASS: 2 Translated births
+WINDOWS=NONE PASS: 4 mirrors, 3 spares, 0 with a window
+COUNTERS PASS: tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] carve_gpu=0 carve_kernel=4 carve_cpu=1 inca[strict=yes counted=0 heap_out=0 rows_inexact=0]
+STALE-BIND PASS: stale 0 of 19 over 2 retires (unload the guest driver first: retire lines print at free)
+NO-DEAD PASS: 0 Translated channels died: []
+P0-EVIDENCE PASS: 2 USER host births for 2 channel births, 0 privileged (--p0-pending scopes a build without P0)
+VERDICT: PASS
+LOG=/var/lib/kf-windows-20261005/codex-gl-regression-20261011-02afce90/bench/fast_codexglreview_gpu-info-sweep_qemu.log
+T-TSPACE-BUILD PASS: fb ends 0x30fbe0000, ram ends 0x38fbe0000, line 34, first BORN Translated 733, build_us=33056
+BORN-TRANSLATED PASS: 2 Translated births
+WINDOWS=NONE PASS: 4 mirrors, 3 spares, 0 with a window
+COUNTERS PASS: tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] carve_gpu=0 carve_kernel=0 carve_cpu=0 inca[strict=yes counted=0 heap_out=0 rows_inexact=0]
+STALE-BIND PASS: stale 0 of 6 over 2 retires (unload the guest driver first: retire lines print at free)
+NO-DEAD PASS: 0 Translated channels died: []
+P0-EVIDENCE PASS: 2 USER host births for 2 channel births, 0 privileged (--p0-pending scopes a build without P0)
+VERDICT: PASS
+LOG=/var/lib/kf-windows-20261005/codex-gl-regression-20261011-02afce90/bench/fast_codexglreview_guest-ram-pin_qemu.log
+T-TSPACE-BUILD PASS: fb ends 0x30fbe0000, ram ends 0x38fbe0000, line 34, first BORN Translated 733, build_us=33401
+BORN-TRANSLATED PASS: 2 Translated births
+WINDOWS=NONE PASS: 6 mirrors, 3 spares, 0 with a window
+COUNTERS PASS: tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] carve_gpu=0 carve_kernel=4 carve_cpu=1 inca[strict=yes counted=0 heap_out=0 rows_inexact=0]
+STALE-BIND PASS: stale 0 of 10 over 2 retires (unload the guest driver first: retire lines print at free)
+NO-DEAD PASS: 0 Translated channels died: []
+P0-EVIDENCE PASS: 2 USER host births for 2 channel births, 0 privileged (--p0-pending scopes a build without P0)
+VERDICT: PASS
+LOG=/var/lib/kf-windows-20261005/codex-gl-regression-20261011-02afce90/bench/fast_codexglreview_guest-ring-channel_qemu.log
+T-TSPACE-BUILD PASS: fb ends 0x30fbe0000, ram ends 0x38fbe0000, line 34, first BORN Translated 733, build_us=32948
+BORN-TRANSLATED PASS: 2 Translated births
+WINDOWS=NONE PASS: 5 mirrors, 3 spares, 0 with a window
+COUNTERS PASS: tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] carve_gpu=0 carve_kernel=0 carve_cpu=0 inca[strict=yes counted=0 heap_out=0 rows_inexact=0]
+STALE-BIND PASS: stale 0 of 18 over 2 retires (unload the guest driver first: retire lines print at free)
+NO-DEAD PASS: 0 Translated channels died: []
+P0-EVIDENCE PASS: 4 USER host births for 4 channel births, 0 privileged (--p0-pending scopes a build without P0)
+VERDICT: PASS
+LOG=/var/lib/kf-windows-20261005/codex-gl-regression-20261011-02afce90/bench/fast_codexglreview_late-map-race_qemu.log
+T-TSPACE-BUILD PASS: fb ends 0x30fbe0000, ram ends 0x38fbe0000, line 34, first BORN Translated 733, build_us=33110
+BORN-TRANSLATED PASS: 2 Translated births
+WINDOWS=NONE PASS: 6 mirrors, 3 spares, 0 with a window
+COUNTERS PASS: tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] carve_gpu=0 carve_kernel=0 carve_cpu=0 inca[strict=yes counted=0 heap_out=0 rows_inexact=0]
+STALE-BIND PASS: stale 0 of 26 over 2 retires (unload the guest driver first: retire lines print at free)
+NO-DEAD PASS: 0 Translated channels died: []
+P0-EVIDENCE PASS: 4 USER host births for 4 channel births, 0 privileged (--p0-pending scopes a build without P0)
+VERDICT: PASS
+LOG=/var/lib/kf-windows-20261005/codex-gl-regression-20261011-02afce90/bench/fast_codexglreview_map-propagation_qemu.log
+T-TSPACE-BUILD PASS: fb ends 0x30fbe0000, ram ends 0x38fbe0000, line 34, first BORN Translated 733, build_us=33313
+BORN-TRANSLATED PASS: 2 Translated births
+WINDOWS=NONE PASS: 5 mirrors, 3 spares, 0 with a window
+COUNTERS PASS: tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] carve_gpu=0 carve_kernel=0 carve_cpu=0 inca[strict=yes counted=0 heap_out=0 rows_inexact=0]
+STALE-BIND PASS: stale 0 of 18 over 2 retires (unload the guest driver first: retire lines print at free)
+NO-DEAD PASS: 0 Translated channels died: []
+P0-EVIDENCE PASS: 2 USER host births for 2 channel births, 0 privileged (--p0-pending scopes a build without P0)
+VERDICT: PASS
+LOG=/var/lib/kf-windows-20261005/codex-gl-regression-20261011-02afce90/bench/fast_codexglreview_map-stress_qemu.log
+T-TSPACE-BUILD PASS: fb ends 0x30fbe0000, ram ends 0x38fbe0000, line 34, first BORN Translated 733, build_us=32707
+BORN-TRANSLATED PASS: 2 Translated births
+WINDOWS=NONE PASS: 5 mirrors, 3 spares, 0 with a window
+COUNTERS PASS: tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] carve_gpu=0 carve_kernel=0 carve_cpu=0 inca[strict=yes counted=0 heap_out=0 rows_inexact=0]
+STALE-BIND PASS: stale 0 of 198 over 2 retires (unload the guest driver first: retire lines print at free)
+NO-DEAD PASS: 0 Translated channels died: []
+P0-EVIDENCE PASS: 3 USER host births for 3 channel births, 0 privileged (--p0-pending scopes a build without P0)
+VERDICT: PASS
+LOG=/var/lib/kf-windows-20261005/codex-gl-regression-20261011-02afce90/bench/fast_codexglreview_missing-page-fault_qemu.log
+T-TSPACE-BUILD PASS: fb ends 0x30fbe0000, ram ends 0x38fbe0000, line 34, first BORN Translated 733, build_us=33192
+BORN-TRANSLATED PASS: 2 Translated births
+WINDOWS=NONE PASS: 6 mirrors, 3 spares, 0 with a window
+COUNTERS PASS: tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] carve_gpu=0 carve_kernel=4 carve_cpu=1 inca[strict=yes counted=0 heap_out=0 rows_inexact=0]
+STALE-BIND PASS: stale 0 of 22 over 2 retires (unload the guest driver first: retire lines print at free)
+NO-DEAD PASS: 0 Translated channels died: []
+P0-EVIDENCE PASS: 4 USER host births for 4 channel births, 0 privileged (--p0-pending scopes a build without P0)
+VERDICT: PASS
+LOG=/var/lib/kf-windows-20261005/codex-gl-regression-20261011-02afce90/bench/fast_codexglreview_pce-mask-probe_qemu.log
+T-TSPACE-BUILD PASS: fb ends 0x30fbe0000, ram ends 0x38fbe0000, line 34, first BORN Translated 733, build_us=32962
+BORN-TRANSLATED PASS: 2 Translated births
+WINDOWS=NONE PASS: 4 mirrors, 3 spares, 0 with a window
+COUNTERS PASS: tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] carve_gpu=0 carve_kernel=0 carve_cpu=0 inca[strict=yes counted=0 heap_out=0 rows_inexact=0]
+STALE-BIND PASS: stale 0 of 6 over 2 retires (unload the guest driver first: retire lines print at free)
+NO-DEAD PASS: 0 Translated channels died: []
+P0-EVIDENCE PASS: 2 USER host births for 2 channel births, 0 privileged (--p0-pending scopes a build without P0)
+VERDICT: PASS
+LOG=/var/lib/kf-windows-20261005/codex-gl-regression-20261011-02afce90/bench/fast_codexglreview_rpc-mixed-allocs_qemu.log
+T-TSPACE-BUILD PASS: fb ends 0x30fbe0000, ram ends 0x38fbe0000, line 34, first BORN Translated 733, build_us=34375
+BORN-TRANSLATED PASS: 2 Translated births
+WINDOWS=NONE PASS: 5 mirrors, 3 spares, 0 with a window
+COUNTERS PASS: tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] carve_gpu=0 carve_kernel=4 carve_cpu=1 inca[strict=yes counted=0 heap_out=0 rows_inexact=0]
+STALE-BIND PASS: stale 0 of 30 over 2 retires (unload the guest driver first: retire lines print at free)
+NO-DEAD PASS: 0 Translated channels died: []
+P0-EVIDENCE PASS: 3 USER host births for 3 channel births, 0 privileged (--p0-pending scopes a build without P0)
+VERDICT: PASS
+LOG=/var/lib/kf-windows-20261005/codex-gl-regression-20261011-02afce90/bench/fast_codexglreview_timer_qemu.log
+T-TSPACE-BUILD PASS: fb ends 0x30fbe0000, ram ends 0x38fbe0000, line 34, first BORN Translated 733, build_us=32827
+BORN-TRANSLATED PASS: 2 Translated births
+WINDOWS=NONE PASS: 4 mirrors, 3 spares, 0 with a window
+COUNTERS PASS: tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] carve_gpu=0 carve_kernel=0 carve_cpu=0 inca[strict=yes counted=0 heap_out=0 rows_inexact=0]
+STALE-BIND PASS: stale 0 of 6 over 2 retires (unload the guest driver first: retire lines print at free)
+NO-DEAD PASS: 0 Translated channels died: []
+P0-EVIDENCE PASS: 2 USER host births for 2 channel births, 0 privileged (--p0-pending scopes a build without P0)
+VERDICT: PASS
+LOG=/var/lib/kf-windows-20261005/codex-gl-regression-20261011-02afce90/bench/fast_codexglreview_uvm-invalidate_qemu.log
+T-TSPACE-BUILD PASS: fb ends 0x30fbe0000, ram ends 0x38fbe0000, line 34, first BORN Translated 733, build_us=33015
+BORN-TRANSLATED PASS: 6 Translated births
+WINDOWS=NONE PASS: 6 mirrors, 3 spares, 0 with a window
+COUNTERS PASS: tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] carve_gpu=0 carve_kernel=0 carve_cpu=0 inca[strict=yes counted=0 heap_out=0 rows_inexact=0]
+STALE-BIND PASS: stale 0 of 44 over 6 retires (unload the guest driver first: retire lines print at free)
+NO-DEAD PASS: 0 Translated channels died: []
+P0-EVIDENCE PASS: 6 USER host births for 6 channel births, 0 privileged (--p0-pending scopes a build without P0)
+VERDICT: PASS
+LOG=/var/lib/kf-windows-20261005/codex-gl-regression-20261011-02afce90/bench/fast_codexglreview_uvm-mean_qemu.log
+T-TSPACE-BUILD PASS: fb ends 0x30fbe0000, ram ends 0x38fbe0000, line 34, first BORN Translated 733, build_us=32861
+BORN-TRANSLATED PASS: 6 Translated births
+WINDOWS=NONE PASS: 7 mirrors, 3 spares, 0 with a window
+COUNTERS PASS: tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] carve_gpu=0 carve_kernel=0 carve_cpu=0 inca[strict=yes counted=0 heap_out=0 rows_inexact=0]
+STALE-BIND PASS: stale 0 of 298 over 6 retires (unload the guest driver first: retire lines print at free)
+NO-DEAD PASS: 0 Translated channels died: []
+P0-EVIDENCE PASS: 13 USER host births for 13 channel births, 0 privileged (--p0-pending scopes a build without P0)
+VERDICT: PASS

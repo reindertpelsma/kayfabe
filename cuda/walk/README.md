@@ -240,6 +240,32 @@ the pages were never persisted anywhere in this tree. `cap1b` is a hermetic emul
 so the *physical addresses* are the emulator's FB layout; the **entry encodings are the real
 driver's**, and that is what is under test. `kf_real_tables.py`'s header states the rest.
 
+## ★★★ Refusal samples (ABI 6, 2026-10-09) — what a count and a mask cannot say
+
+**STATUS: LIVE, observation only.** Run 223 (a real Windows guest) reported one walk with
+`refusals=103 refuse_mask=0x400` (`KFWR_R_MISALIGNED_LEAF`); nothing in the report said whether those
+leaves were valid-but-misaligned or garbage. `KfReportHeader` now ends with `sample_count`,
+`sample_total` and `KfRefusalSample samples[KF_REFUSAL_SAMPLES=8]` (header 64 → 392 bytes;
+`KF_ABI_VERSION` 5 → 6): for the first 8 refusals **that name a guest entry** in a walk, `{va, raw entry
+as read, level, decoded gpga, required alignment (page size / table size), refusal bit, walk entry}`.
+`kf-cuda` prints one `kf3: walk refusal sample:` line per sample, the first 32 per process.
+
+- **No behaviour change.** Nothing reads a sample. `make` runs `hostile/refusal_samples_*`, which pin
+  the exact raw entries, the cap, the serial and parallel walks, and — via
+  `KF_PROBE_NO_SAMPLES` — that the same fixture reports byte-identical runs, counts and masks against the
+  pre-ABI-6 kernel. `make check-sample-negative` shows `KF_BREAK_SAMPLE_RAW` failing them.
+- **One read per guest word (§39(a)).** The parallel walk's tables are read once into shared memory and the
+  sample is written from that copy (a directory-level leaf carries its raw word in `KfEnt::addr2`, its
+  level in `KfEnt::has`); the serial walk samples the register the decision used. `check_samples()` runs on
+  every validated report, racing cases included: a leaf sample's `gpga` must equal the decode of its own
+  `raw`, and a MISALIGNED one must be misaligned by the size it carries.
+- **Bounded and race-free.** A slot is drawn with `atomicAdd(&nsample)` and written only for a ticket
+  below the cap; no loop; `kf_diff_emit` clamps the count again. Which 8 arrive first is a race.
+- **Not sampled:** refusals that name no guest entry (`RUN_CAP`, `BUDGET`, `PDB_CAP`, `FRONTIER_CAP`,
+  `BAD_SLOT`), and — in the serial test walk only — directory-entry refusals. `level` is the format
+  descriptor's `dir[]` index, or `KF_SAMPLE_LVL_BIG` / `_SMALL` for the two leaf tables; nothing here is
+  per family.
+
 ## ★★★★★ The C↔Rust report seam — `crates/kayfabe-mmu/tests/walk_report_seam.rs`
 
 ⊘ Until w725, `grep -rn "ReportHeader\|kf_report" crates/ --include=*.rs` returned **nothing**.

@@ -1,0 +1,79 @@
+Source: boundary-kayfabe-1284/qemu.log
+Product/harness72741e2b; lines numbered; selected capacity/death sequence, not proof of complete reboot causality.
+9825: kf3: mem large apply VasKey(13965663127358933072): 25600 maps + 0 unmaps in 165 ms — 8 map verb(s) (8 batch(es) carrying 25600 runs), 0 unmap verb(s) (0 range(s) carrying 0 runs), 0 fallback(s)
+9826: kf3: mem large apply VasKey(13965663127358933072): 25600 maps + 0 unmaps in 189 ms — 8 map verb(s) (8 batch(es) carrying 25600 runs), 0 unmap verb(s) (0 range(s) carrying 0 runs), 0 fallback(s)
+9827: kf3: mem large apply VasKey(13965663127358933072): 25600 maps + 0 unmaps in 207 ms — 8 map verb(s) (8 batch(es) carrying 25600 runs), 0 unmap verb(s) (0 range(s) carrying 0 runs), 0 fallback(s)
+9828: kf3: GSP rpc RmControl seq=0
+9829: W343GSSCENSUS cmd=0x20809004 params_size=1544 params_at=40 payload_len=1584
+9830: kf3: GSP rpc RmControl seq=0
+9831: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+9832: kf3: GSP rpc RmControl seq=0
+9833: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+9834: kf-rm: chanlink: client 0xc1d000ba root: kernel=false internal=false
+9835: kf3: GSP rpc RmAlloc seq=0
+9836: kf3: GSP rpc RmAlloc seq=0
+9837: kf3: GSP rpc RmAlloc seq=0
+9838: kf-rm: chanlink: client 0xc1d000bb root: kernel=false internal=false
+9839: kf3: GSP rpc RmAlloc seq=0
+9840: kf3: GSP rpc RmAlloc seq=0
+9841: kf3: GSP rpc RmAlloc seq=0
+9842: kf3: GSP rpc RmAlloc seq=0
+9843: kf-rm: chanlink: FERMI_VASPACE_A 0xc1d000ba:0xff000850 under 0xff020000 (device default for it: 0xff000850) VAS-FACTS index=Some(0) flags=Some(5) bigPageSize=Some(10000) vaBase(lo32)=Some(0) vaSize(lo32)=Some(20000000)
+9844: kf-rm: chanlink: VAS-DECL 0xc1d000ba:0xff000850 vaBase=0x100000000 vaSize=0x120000000 end=Some(220000000) shared_management=true
+9845: kf3: GSP rpc RmAlloc seq=0
+9847: kf3: mem large apply VasKey(13965663127358933072): 32768 maps + 0 unmaps in 214 ms — 8 map verb(s) (8 batch(es) carrying 32768 runs), 0 unmap verb(s) (0 range(s) carrying 0 runs), 0 fallback(s)
+9849: kf3: walk capacity: re-walk (needs s38:665758); walk pool 1048576 runs, slot pool 2097152 runs (1371648 free), max per space 1048576, slots held 15, grows 14, retries 27, ceilings 0, largest slot 662528, largest walk 662528
+9850: kf3: walk capacity ceiling: slot pool exhausted: slot 38 grows 662528 → 998912 runs, 1371648 free (largest 983808) of 2097152
+9851: kf3: walk report carried refusals=1 refuse_mask=0x10 pdbs=[ef9fb000] runs=0
+9852: kf3: mem t=333.579s split ticket 7935 REFUSED: split Some(ef9fb000): VasKey(13965663127358933072) did not apply
+9853: kf3: mem t=333.579s REFUSED VasKey(13965663127358933072) root 0xef9fb000: slot 38 is full and nothing can be retired — raise WalkCfg::runs_per_pdb
+9854: kf3: chan token 0x80c (VasKey(13965662590488021072)) DEAD: split: split walk (pdb Some(ef9fb000)): split Some(ef9fb000): VasKey(13965663127358933072) did not apply
+9855: kf3: chan token 0x80c death mirror: own space=0xcafe006a rows=106 log_epoch=92882 last row commits (epoch, lo, hi, ms ago)=[(16acb, 100605d0000, 100605e0000, 1330), (16acc, 100605e0000, 100605f0000, 1330), (16acd, 100605f0000, 10060600000, 1330), (16ace, 1009b200000, 1009b400000, 1330), (16acf, 60400000, 60600000, 132b), (16ad0, 10060400000, 10060600000, 132b), (16ad1, 9b200000, 9b400000, 132b), (16ad2, 1009b200000, 1009b400000, 132b)]; plane's mirror for the key now (same rows, space, rows): Some(Some((true, 3405643882, 106)))
+9856: kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+9857: kf3: GSP rpc RmControl seq=0
+9858: kf3: VasKey(13965663247618017360) mirror space=0xcafe0591: windows=none rings=none (recycled)
+9859: kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+9860: kf-rm: chanlink: Device 0xc1d000ba:0xff020000 default VA space set to 0xff000850 (SET_DEFAULT_VASPACE)
+9861: kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+9862: kf3: GSP rpc RmControl seq=0
+9863: kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+9864: kf3: GSP rpc RmAlloc seq=0
+9865: kf3: GSP rpc RmAlloc seq=0
+9866: kf3: GSP rpc RmAlloc seq=0
+9867: kf3: GSP rpc RmControl seq=0
+9868: W343GSSCENSUS cmd=0x20809004 params_size=1544 params_at=40 payload_len=1584
+9869: kf3: GSP rpc RmControl seq=0
+9870: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+9871: kf3: GSP rpc RmControl seq=0
+9872: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+9873: kf-rm: chanlink: client 0xc1d000bc root: kernel=false internal=false
+9874: kf3: GSP rpc RmAlloc seq=0
+9875: kf3: GSP rpc RmAlloc seq=0
+9876: kf3: GSP rpc RmAlloc seq=0
+9877: kf3: GSP rpc RmControl seq=0
+9878: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+9879: kf3: GSP rpc RmAlloc seq=0
+9880: kf3: GSP rpc RmControl seq=0
+9881: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+9882: kf3: GSP rpc RmControl seq=0
+9883: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+9884: kf3: GSP rpc RmControl seq=0
+9885: W343GSSCENSUS cmd=0x2080a097 params_size=1168 params_at=40 payload_len=1208
+9886: kf3: GSP rpc RmControl seq=0
+9887: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+9888: kf3: GSP rpc RmControl seq=0
+9889: kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 0 }
+9890: kf3: GSP rpc Free seq=0
+9891: kf3: GSP rpc Free seq=0
+9892: kf3: GSP rpc Free seq=0
+9893: kf3: GSP rpc Free seq=0
+9894: kf3: kernel channel host 0x10033 REFUSED-AND-POISONED (§7)
+9895: kf3: kernel channel host 0x10033 REFUSED-AND-POISONED (§7)
+9896: kf3: kernel channel host 0x10033 REFUSED-AND-POISONED (§7)
+9897: kf3: kernel channel host 0x10033 REFUSED-AND-POISONED (§7)
+9898: kf3: kernel channel host 0x10033 REFUSED-AND-POISONED (§7)
+9899: kf3: kernel channel host 0x10033 REFUSED-AND-POISONED (§7)
+9900: kf3: kernel channel host 0x10033 REFUSED-AND-POISONED (§7)
+9901: kf3: kernel channel host 0x10033 REFUSED-AND-POISONED (§7)
+
+qemu.log sha256=72daed3a6d0cc7b77d7aba8eba0fa25feb294c67d91b04c052e5af9af520e37f

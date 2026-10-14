@@ -1,0 +1,33 @@
+KFOVL start scenario=recreate duration_ms=22000 fps=30 format=bgra mode=comp flags=none video=1280x720 require_overlay_within_ms=1200000
+KFOVL adapter_enum 0 "NVIDIA GeForce RTX 4090" vendor=0x10de flags=0x0
+KFOVL adapter_enum 1 "Microsoft Basic Render Driver" vendor=0x1414 flags=0x2
+KFOVL adapter "NVIDIA GeForce RTX 4090" vendor=0x10de device=0x2684 dedicated_mb=24142
+KFOVL device feature_level=0xb100
+KFOVL output left=0 top=0 right=1024 bottom=768 attached=1
+KFOVL overlay_support nv12 hr=0x00000000 flags=0x0 direct=0 scaling=0
+KFOVL overlay_support yuy2 hr=0x00000000 flags=0x0 direct=0 scaling=0
+KFOVL overlay_support p010 hr=0x00000000 flags=0x0 direct=0 scaling=0
+KFOVL hwcomp IDXGIOutput6::CheckHardwareCompositionSupport hr=0x00000000 flags=0x0 fullscreen=0 windowed=0 cursor_stretched=0
+KFOVL format_support nv12 hr=0x00000000 d3d11_format_support=0xfa82c320 render_target=1 texture2d=1 display=0
+KFOVL format_support yuy2 hr=0x00000000 d3d11_format_support=0x3a820320 render_target=0 texture2d=1 display=0
+KFOVL format_support p010 hr=0x00000000 d3d11_format_support=0x3a82c320 render_target=1 texture2d=1 display=0
+KFOVL swapchain bgra 1280x720 flags=0x0 composition
+KFOVL event t=2000ms sc_resize
+KFOVL event t=4001ms sc_recreate
+KFOVL swapchain bgra 1280x720 flags=0x0 composition
+KFOVL event t=6000ms sc_resize
+KFOVL event t=8000ms sc_recreate
+KFOVL swapchain bgra 1920x1080 flags=0x0 composition
+KFOVL event t=10000ms sc_resize
+KFOVL event t=12001ms sc_recreate
+KFOVL swapchain bgra 640x360 flags=0x0 composition
+KFOVL event t=14000ms sc_resize
+KFOVL event t=16001ms sc_recreate
+KFOVL swapchain bgra 854x480 flags=0x0 composition
+KFOVL event t=18001ms sc_resize
+KFOVL event t=20001ms sc_recreate
+KFOVL swapchain bgra 960x544 flags=0x0 composition
+KFOVL JSON {"program":"kf_overlayprobe","version":1,"scenario":"recreate","verdict":"FAIL","result":"NEVER_OVERLAY","code":2,"reason":"overlay never reached","adapter":{"name":"NVIDIA GeForce RTX 4090","vendor":4318,"device":9860,"dedicated_mb":24142},"overlay_support":{"checked":true,"chosen_format_flags":0,"direct":false,"scaling":false,"formats":{"nv12":{"hr":0,"flags":0,"direct":false,"scaling":false},"yuy2":{"hr":0,"flags":0,"direct":false,"scaling":false},"p010":{"hr":0,"flags":0,"direct":false,"scaling":false}}},"config":{"format":"bgra","mode":"comp","flags":"none","swapchain_flags":"0x0","video_w":1280,"video_h":720,"fps":30,"duration_ms":22000,"require_overlay_within_ms":1200000,"tolerate":0,"grace_extra_ms":0},"frames_presented":660,"expected_frames":660,"occluded_presents":0,"stats_errors":11,"last_stats_hr":2289696779,"swapchains_created":6,"worst_present_ms":1.794,"avg_present_ms":0.069,"worst_frame_gap_ms":36.708,"first_overlay_ms":-1,"non_overlay_outside_grace":0,"final_overlay":false,"mode_totals":{"composed":0,"overlay":0,"none":649,"composition_failure":0,"stats_error":11},"per_second":[{"s":0,"composed":0,"overlay":0,"none":29,"composition_failure":0,"stats_error":1},{"s":1,"composed":0,"overlay":0,"none":30,"composition_failure":0,"stats_error":0},{"s":2,"composed":0,"overlay":0,"none":29,"composition_failure":0,"stats_error":1},{"s":3,"composed":0,"overlay":0,"none":30,"composition_failure":0,"stats_error":0},{"s":4,"composed":0,"overlay":0,"none":29,"composition_failure":0,"stats_error":1},{"s":5,"composed":0,"overlay":0,"none":30,"composition_failure":0,"stats_error":0},{"s":6,"composed":0,"overlay":0,"none":29,"composition_failure":0,"stats_error":1},{"s":7,"composed":0,"overlay":0,"none":30,"composition_failure":0,"stats_error":0},{"s":8,"composed":0,"overlay":0,"none":29,"composition_failure":0,"stats_error":1},{"s":9,"composed":0,"overlay":0,"none":30,"composition_failure":0,"stats_error":0},{"s":10,"composed":0,"overlay":0,"none":29,"composition_failure":0,"stats_error":1},{"s":11,"composed":0,"overlay":0,"none":30,"composition_failure":0,"stats_error":0},{"s":12,"composed":0,"overlay":0,"none":29,"composition_failure":0,"stats_error":1},{"s":13,"composed":0,"overlay":0,"none":30,"composition_failure":0,"stats_error":0},{"s":14,"composed":0,"overlay":0,"none":29,"composition_failure":0,"stats_error":1},{"s":15,"composed":0,"overlay":0,"none":30,"composition_failure":0,"stats_error":0},{"s":16,"composed":0,"overlay":0,"none":29,"composition_failure":0,"stats_error":1},{"s":17,"composed":0,"overlay":0,"none":30,"composition_failure":0,"stats_error":0},{"s":18,"composed":0,"overlay":0,"none":29,"composition_failure":0,"stats_error":1},{"s":19,"composed":0,"overlay":0,"none":30,"composition_failure":0,"stats_error":0},{"s":20,"composed":0,"overlay":0,"none":29,"composition_failure":0,"stats_error":1},{"s":21,"composed":0,"overlay":0,"none":30,"composition_failure":0,"stats_error":0}],"transitions_total":21,"transitions":[{"t_ms":37,"from":"stats_error","to":"none"},{"t_ms":2002,"from":"none","to":"stats_error"},{"t_ms":2036,"from":"stats_error","to":"none"},{"t_ms":4004,"from":"none","to":"stats_error"},{"t_ms":4035,"from":"stats_error","to":"none"},{"t_ms":6002,"from":"none","to":"stats_error"},{"t_ms":6035,"from":"stats_error","to":"none"},{"t_ms":8004,"from":"none","to":"stats_error"},{"t_ms":8037,"from":"stats_error","to":"none"},{"t_ms":10003,"from":"none","to":"stats_error"},{"t_ms":10036,"from":"stats_error","to":"none"},{"t_ms":12004,"from":"none","to":"stats_error"},{"t_ms":12035,"from":"stats_error","to":"none"},{"t_ms":14003,"from":"none","to":"stats_error"},{"t_ms":14036,"from":"stats_error","to":"none"},{"t_ms":16004,"from":"none","to":"stats_error"},{"t_ms":16036,"from":"stats_error","to":"none"},{"t_ms":18006,"from":"none","to":"stats_error"},{"t_ms":18038,"from":"stats_error","to":"none"},{"t_ms":20004,"from":"none","to":"stats_error"},{"t_ms":20036,"from":"stats_error","to":"none"}],"events":[{"t_ms":2000,"name":"sc_resize"},{"t_ms":4001,"name":"sc_recreate"},{"t_ms":6000,"name":"sc_resize"},{"t_ms":8000,"name":"sc_recreate"},{"t_ms":10000,"name":"sc_resize"},{"t_ms":12001,"name":"sc_recreate"},{"t_ms":14000,"name":"sc_resize"},{"t_ms":16001,"name":"sc_recreate"},{"t_ms":18001,"name":"sc_resize"},{"t_ms":20001,"name":"sc_recreate"}],"note":"IDXGIOutput6::CheckHardwareCompositionSupport hr=0x00000000 flags=0x0"}
+KFOVL summary frames=660 first_overlay_ms=-1 overlay=0 composed=0 none=649 worst_present_ms=1.79 transitions=21
+KFOVL RESULT NEVER_OVERLAY overlay never reached (code=2)
+EXITCODE 2 

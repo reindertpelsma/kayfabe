@@ -1,0 +1,57 @@
+V:      0 us: Windows::main(): started
+M:   8.36 ms: ../data.zip: 313 files
+M:  10.66 ms: Temporal antialiasing
+M:  12.03 ms: Render Statistics
+M:  16.29 ms: Build Date: May 17 2025
+M:  17.75 ms: Build Info: version=20250429; windows; x64; release; d3d12=6; d3d11=2; vk=1; gl=45; cu=1; fusion
+M:  19.05 ms: Build Version: 1.89
+M: 119.09 ms: Name: 
+M: 121.74 ms: System: Microsoft Windows 11 Pro
+M: 123.06 ms: Kernel: 10.0.26200
+M: 124.40 ms: Memory: 7.99 GB
+M: 125.71 ms: Uptime: 7 m 14 s
+M: 126.98 ms: CPU: AMD Ryzen 9 7900 12-Core Processor
+M: 128.34 ms: GPU: NVIDIA GeForce RTX 4070
+M: 128.71 ms: Device: PCI\VEN_10DE&DEV_2786&SUBSYS_40EE1458&REV_A1\3&267A616A&0&30
+M: 128.84 ms: Version: 32.0.15.8088
+M: 128.96 ms: Memory: 4.00 GB
+M: 130.55 ms: Desktop: 1920x1080 1.0
+M: 130.72 ms: Screen 0: 1920x1080 0 0 \\.\DISPLAY1 NVIDIA GeForce RTX 4070
+M: 130.90 ms: Creating 1280x720 Vulkan Window
+M:   2.349 s: Using Fetch Mode
+M:   2.776 s: Device: NVIDIA GeForce RTX 4070
+M:   2.776 s: Vendor: Nvidia
+M:   2.776 s: Version: 4.68.352.0
+M:   2.777 s: DeviceID: 0x2786
+M:   2.777 s: Group Memory: 48.00 KB
+M:   2.777 s: Video Memory: 3.74 GB
+M:   2.777 s: Max Uniform Size: 64.00 KB
+M:   2.777 s: Max Storage Size: 4.00 GB
+M:   2.777 s: Creating SceneManager
+M:   3.800 s: Creating RenderManager
+M:   4.642 s: Rasterization Mode
+M:   4.642 s: Creating Scene
+M:   5.964 s: Creating 20,000 Asteroids
+M:   6.026 s: Updating Scene
+M:   6.038 s: GravityMark 1.89 Vulkan is Ready in 6.0 s
+M:   6.039 s: Starting 1280x720 Vulkan Benchmark
+M:   6.039 s: Close when finished
+M:   6.039 s: Image: C:/kf/apps/out/gm_vk.png
+M:   6.039 s: Times: C:/kf/apps/out/gm_vk.times.txt
+M:   6.039 s: Count: 1
+M:   6.040 s: Resizing 1280x720 frame
+M:  2:53.126: Benchmark Finished
+M:  2:53.133: Times: C:/kf/apps/out/gm_vk.times.txt
+M:  2:53.133: NVIDIA GeForce RTX 4070
+M:  2:53.134: API: Vulkan
+M:  2:53.134: Platform: Windows
+M:  2:53.134: Resolution: 1280x720
+M:  2:53.134: Antialiasing: Temporal
+M:  2:53.134: Asteroids: 20,000
+M:  2:53.135: Score: 3817
+M:  2:53.135: Time: 167.1 s
+M:  2:53.135: FPS: 22.8
+M:  2:53.634: Image: C:/kf/apps/out/gm_vk.png
+M:  2:53.662: Clearing Scene
+M:  2:53.739: GravityMark 1.89 Done
+V:  2:54.771: Windows::main(): finished

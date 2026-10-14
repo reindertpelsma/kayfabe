@@ -1,0 +1,6 @@
+=== furmark_glinfo start=2026-10-10T09:50:03.6672181-07:00 host=DESKTOP-397P3NI session=1 boot=2026-10-10T15:50:57.5000000Z timeout=90
+[ OpenGL info ]
+GL_RENDERER: NVIDIA GeForce RTX 4060 Ti/PCIe/SSE2
+
+KFNOTE furmark info modes print the info and exit 1 by design (measured on native NVIDIA)
+=== end rc=0 secs=7 2026-10-10T09:50:10.2399627-07:00

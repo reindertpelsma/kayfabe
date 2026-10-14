@@ -1,0 +1,25 @@
+FASTGUEST: arms --ce-interrupt --probe-launch-dma  deadline 175s (budget 180s, 2s already spent booting)
+REV_UNDER_TEST=eca43847
+info  R35 CE interrupt    = GPU 0, euid 0 — non-stall events armed through RAW RM IOCTLS ONLY (ALLOC_OS_EVENT, NV01_EVENT_OS_EVENT, EVENT_SET_NOTIFICATION), polled with epoll. No libcuda is loaded by this process
+info  R35 the bar         = per interrupt leg 50 of 50: a file of the leg's positive set (its engine's own notifier or the host's default one) readable within 2000 ms, the semaphore holding the payload, every copied word verified; every file OUTSIDE the set silent; the no-interrupt control silent; the quiet window silent. ⊘ A wake is a WAKE: the semaphore is read after it
+info  R35 notifier map    = CE0=23 CE1=24 CE2=25 CE3=26 CE4=27 CE5=28 CE6=29 CE7=30 CE8=31 CE9=32 FIFO_EVENT_MTHD=35 GR0=12 (indices read from the driver matrix at the host's version); copy-engine class 0xc7b5
+info  R35 armed           = 12 of 12 notifiers armed [CE0,CE1,CE2,CE3,CE4,CE5,CE6,CE7,CE8,CE9,FIFO_EVENT_MTHD,GR0]
+★      R35 quiet window      = nothing submitted: readable files = none (after 1 window(s), 300 ms of waiting; patience 60000 ms)
+info  R35 channel source  = RM REFUSED a non-stall event whose source is the CHANNEL with status 0x1f (NV_ERR_INVALID_ARGUMENT is 0x1f): the engine non-stall lists hang off the SUBDEVICE (event_notification.c:688-703), so the events above use it
+★      R35 leg ce-launch-interrupt@COPY0        = positive any of [CE0,FIFO_EVENT_MTHD,GR0]: readable 50/50 (it landed on: FIFO_EVENT_MTHD,GR0), wake_us min 490 median 539 p90 653 max 756 (n=50); semaphore at the wake 50/50, by the bound 50/50; data verified 50/50; files OUTSIDE the set that fired: none; stale-before 0/50; repeat reports 0
+R35_LATENCIES_US leg=ce-launch-interrupt@COPY0 669,545,616,493,492,620,529,753,756,708,518,536,536,645,534,576,539,535,546,533,532,534,541,706,549,550,533,600,538,640,534,533,618,490,599,544,652,543,653,536,532,540,534,550,539,531,519,537,543,537
+R35_LANDED_PER_TOKEN leg=ce-launch-interrupt@COPY0 FIFO_EVENT_MTHD=50/50 GR0=50/50
+★      R35 leg host-non-stall-interrupt@COPY0   = positive any of [FIFO_EVENT_MTHD,GR0]: readable 50/50 (it landed on: FIFO_EVENT_MTHD,GR0), wake_us min 494 median 538 p90 631 max 732 (n=50); semaphore at the wake 50/50, by the bound 50/50, host fence 50/50; data verified 50/50; files OUTSIDE the set that fired: none; stale-before 0/50; repeat reports 0
+R35_LATENCIES_US leg=host-non-stall-interrupt@COPY0 532,546,533,550,539,531,541,529,544,539,527,541,534,581,536,631,535,526,544,544,587,537,637,536,536,507,495,506,535,520,553,532,617,536,542,546,547,576,536,536,541,540,643,494,732,519,680,536,677,530
+R35_LANDED_PER_TOKEN leg=host-non-stall-interrupt@COPY0 FIFO_EVENT_MTHD=50/50 GR0=50/50
+★      R35 leg no-interrupt-control@COPY0       = positive (none expected): readable 0/10 (it landed on: none), no wake; semaphore at the wake 0/10, by the bound 10/10; data verified 10/10; files OUTSIDE the set that fired: none; stale-before 0/10; repeat reports 0
+R35_LATENCIES_US leg=no-interrupt-control@COPY0 
+R35_LANDED_PER_TOKEN leg=no-interrupt-control@COPY0 
+★      R35 leg ce-launch-interrupt@COPY2        = positive any of [CE2,FIFO_EVENT_MTHD]: readable 50/50 (it landed on: CE2,FIFO_EVENT_MTHD), wake_us min 400 median 497 p90 553 max 593 (n=50); semaphore at the wake 50/50, by the bound 50/50; data verified 50/50; files OUTSIDE the set that fired: none; stale-before 0/50; repeat reports 0
+R35_LATENCIES_US leg=ce-launch-interrupt@COPY2 503,524,501,593,505,402,553,403,495,523,495,486,410,504,488,503,497,482,497,493,570,496,491,505,498,478,498,488,581,497,493,510,497,480,400,499,486,496,497,570,498,520,511,491,500,496,476,577,496,493
+R35_LANDED_PER_TOKEN leg=ce-launch-interrupt@COPY2 CE2=50/50 FIFO_EVENT_MTHD=50/50
+★      R35 leg no-interrupt-control@COPY2       = positive (none expected): readable 0/10 (it landed on: none), no wake; semaphore at the wake 0/10, by the bound 10/10; data verified 10/10; files OUTSIDE the set that fired: none; stale-before 0/10; repeat reports 0
+R35_LATENCIES_US leg=no-interrupt-control@COPY2 
+R35_LANDED_PER_TOKEN leg=no-interrupt-control@COPY2 
+R35_OUTCOME=(P)
+FASTGUEST: client rc=0 at 8.85s

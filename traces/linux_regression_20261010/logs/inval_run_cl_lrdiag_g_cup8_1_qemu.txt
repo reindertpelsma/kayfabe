@@ -1,0 +1,18 @@
+kf3: PROBE on — completion probe, overdue after 1000 ms (KF3_COMPLETION_PROBE)
+kf3: INVAL-LAT t=100213.490 guest-visible arm->idle n=0 sum_ms=0.0 avg_us=0.0 p50_us=0.0 p90_us=0.0 p99_us=0.0 max_us=0.0 slow_over_12ms=0 rearms_while_busy=0
+kf3: INVAL-LAT t=100215.491 guest-visible arm->idle n=0 sum_ms=0.0 avg_us=0.0 p50_us=0.0 p90_us=0.0 p99_us=0.0 max_us=0.0 slow_over_12ms=0 rearms_while_busy=0
+kf3: INVAL-SLOW t=100216.682 utc_ms=1791667737613 guest-visible arm->idle 91.5 ms; VA thread: walk in flight=false pending wants=0 all_settled=true away since its previous publish 91.4 ms
+kf3: INVAL-LAT t=100217.491 guest-visible arm->idle n=94 sum_ms=110.7 avg_us=1178.1 p50_us=196.6 p90_us=229.4 p99_us=100663.3 max_us=91466.2 slow_over_12ms=1 rearms_while_busy=0
+kf3: INVAL-LAT t=100219.492 guest-visible arm->idle n=94 sum_ms=110.7 avg_us=1178.1 p50_us=196.6 p90_us=229.4 p99_us=100663.3 max_us=91466.2 slow_over_12ms=1 rearms_while_busy=0
+kf3: INVAL-SLOW t=100219.837 utc_ms=1791667740769 guest-visible arm->idle 30.8 ms; VA thread: walk in flight=false pending wants=0 all_settled=true away since its previous publish 30.8 ms
+kf3: INVAL-PENDING t=100220.592 utc_ms=1791667741524 guest-visible busy for 22.4 ms (still armed)
+kf3: INVAL-SLOW t=100220.661 utc_ms=1791667741593 guest-visible arm->idle 91.4 ms; VA thread: walk in flight=false pending wants=0 all_settled=true away since its previous publish 91.4 ms
+kf3: INVAL-SLOW t=100220.870 utc_ms=1791667741802 guest-visible arm->idle 31.1 ms; VA thread: walk in flight=false pending wants=0 all_settled=true away since its previous publish 31.0 ms
+kf3: INVAL-LAT t=100221.493 guest-visible arm->idle n=212 sum_ms=287.0 avg_us=1353.7 p50_us=196.6 p90_us=262.1 p99_us=33554.4 max_us=91466.2 slow_over_12ms=4 rearms_while_busy=0
+kf3: INVAL-LAT t=100223.494 guest-visible arm->idle n=262 sum_ms=296.1 avg_us=1130.3 p50_us=196.6 p90_us=262.1 p99_us=33554.4 max_us=91466.2 slow_over_12ms=4 rearms_while_busy=0
+kf3: INVAL-SLOW t=100223.577 utc_ms=1791667744509 guest-visible arm->idle 94.6 ms; VA thread: walk in flight=false pending wants=0 all_settled=true away since its previous publish 94.6 ms
+kf3: INVAL-PENDING t=100224.194 utc_ms=1791667745125 guest-visible busy for 18.4 ms (still armed)
+kf3: INVAL-SLOW t=100224.208 utc_ms=1791667745139 guest-visible arm->idle 32.4 ms; VA thread: walk in flight=false pending wants=0 all_settled=true away since its previous publish 32.3 ms
+kf3: INVAL-LAT t=100225.494 guest-visible arm->idle n=423 sum_ms=452.5 avg_us=1069.8 p50_us=196.6 p90_us=262.1 p99_us=33554.4 max_us=94574.3 slow_over_12ms=6 rearms_while_busy=0
+kf3: INVAL-LAT t=100227.495 guest-visible arm->idle n=423 sum_ms=452.5 avg_us=1069.8 p50_us=196.6 p90_us=262.1 p99_us=33554.4 max_us=94574.3 slow_over_12ms=6 rearms_while_busy=0
+kf3: INVAL-LAT t=100229.496 guest-visible arm->idle n=423 sum_ms=452.5 avg_us=1069.8 p50_us=196.6 p90_us=262.1 p99_us=33554.4 max_us=94574.3 slow_over_12ms=6 rearms_while_busy=0

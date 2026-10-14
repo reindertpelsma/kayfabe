@@ -1,0 +1,4 @@
+kf3: USER_RING_TRACE 0xc1d00048:0xff04001a cursor=164 put=253 entry=0x00114200144d5d80 pb_va=0x144d5d80 bytes=4416 +1ms:changed=0:rescan=MethodOverflow@1013 +20ms:changed=0:rescan=MethodOverflow@1013 +200ms:changed=0:rescan=MethodOverflow@1013 file=user-ring-refusal-c1d00048-ff04001a-164.txt written=true
+kf3: USER_RING_REFUSED 0xc1d00048:0xff04001a host 0x43: USER_RING_SCAN MethodOverflow at word 1013/1104 raw=0x00000000 last_header=none carried_in=Incrementing sub0 m0x100 3019/6176 words[1009..1018]=[00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000]; no completion/reuse credit
+kf3: GSP REFUSED fn76/0x906f0102=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP phase Running -> Suspending

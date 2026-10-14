@@ -1,0 +1,6 @@
+=== cg_t start=2026-10-11T13:29:35.8384718+00:00 host=VASTWIN session=0 boot=2026-10-11T13:24:26.5000000Z timeout=120
+KFDEV NVIDIA GeForce RTX 4070
+[eq] device NVIDIA GeForce RTX 4070 torch 2.8.0+cu126
+CHECK cg_residual ok iters=28 relres=2.24e-12
+WINEQ_DONE cg
+=== end rc=0 secs=5 2026-10-11T13:29:41.2950586+00:00

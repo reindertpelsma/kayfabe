@@ -1,0 +1,75 @@
+{
+ "quiet": 1,
+ "end_utc": "2026-10-11T14:43:26.8310105Z",
+ "start_utc": "2026-10-11T14:43:13.8186056Z",
+ "rc": 0,
+ "secs": 13,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4070 status=OK code=0"
+ ],
+ "digests": [],
+ "session": 1,
+ "out_files": [
+  "C:\\kf\\out\\edge_webgl_headless\\edge_result.json 326"
+ ],
+ "boot_utc_start": "2026-10-11T14:40:49.5000000Z",
+ "log_tail": [
+  "=== edge_webgl_headless start=2026-10-11T14:43:13.8186056+00:00 host=VASTWIN session=1 boot=2026-10-11T14:40:49.5000000Z timeout=150",
+  "KFEDGE {\"page\":\"webgl\",\"ok\":true,\"api\":\"webgl2\",\"vendor\":\"Google Inc. (NVIDIA)\",\"renderer\":\"ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 (0x00002786) Direct3D11 vs_5_0 ps_5_0, D3D11)\",\"version\":\"WebGL 2.0 (OpenGL ES 3.0 Chromium)\",\"pixel\":[64,127,191,255],\"pixel_ok\":true,\"frames\":483,\"secs\":8,\"fps\":60.375,\"glerr\":0,\"software\":false}",
+  "=== end rc=0 secs=13 2026-10-11T14:43:26.8310105+00:00"
+ ],
+ "pdh": {
+  "pids": [
+   "1340",
+   "5004",
+   "3136",
+   "4068",
+   "10196",
+   "3016",
+   "1804",
+   "4052",
+   "6728",
+   "5836",
+   "4732",
+   "9716",
+   "7744",
+   "8284",
+   "8800",
+   "9876",
+   "4084"
+  ],
+  "nv": {
+   "copy": 0.005462000317590491,
+   "3d": 0,
+   "videoencode": 0,
+   "videodecode": 0,
+   "vr": 0,
+   "legacyoverlay": 0,
+   "ofa_0": 0
+  },
+  "samples": 6,
+  "other": {},
+  "nvidia_luids": "0_60ce"
+ },
+ "timed_out": false,
+ "token": "g11-edge_webgl_headless-1791729788",
+ "boot_utc_end": "2026-10-11T14:40:49.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "edge_webgl_headless",
+ "smi": {
+  "samples": 0,
+  "mem_used_base_mb": null,
+  "util_max": 0,
+  "mem_used_max_mb": 0
+ }
+}

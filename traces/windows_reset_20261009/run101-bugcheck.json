@@ -1,0 +1,25 @@
+{
+  "schema": "kayfabe-bugcheck-recovery/1",
+  "run": 101,
+  "disk_access": "read-only NBD and NTFS; supervisor stopped",
+  "pagefile": {
+    "valid": true,
+    "signature": "PAGEDU64",
+    "major": 15,
+    "build": 26100,
+    "machine": "0x8664",
+    "processors": 8,
+    "bugcheck_code": "0x116",
+    "parameters": [
+      "0xffff9e8f3b17a010",
+      "0xfffff807224d4930",
+      "0xffffffffc000009a",
+      "0x4"
+    ]
+  },
+  "minidump": null,
+  "evtx_copied": [
+    "System.evtx"
+  ],
+  "cleanup_verified": true
+}

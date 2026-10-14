@@ -1,0 +1,5 @@
+Bare-metal reference for the plane oracle: a rented vast KVM VM (RTX 4070 SUPER, AD104 10de:2783, VFIO-assigned, no monitor),
+kernel 6.8.0-59. The image's preinstalled 575.51.03 modules were unloaded and the OPEN 580.159.04 kernel modules (built from the
+official .run's kernel-open/, its GSP firmware installed) were loaded by hand; summary.log HW_DRIVER names the driver every run used.
+driver-and-box.txt shows the first, failed scripted load (a 575 module reloaded under it) before that manual load.
+Connector: HDMI-A-1 forced on (sysfs status=on) with drm.edid_firmware = the kayfabe guest's own EDID (kf.bin, 1920x1080@60).

@@ -12,6 +12,7 @@
 pub mod birth;
 pub mod channel;
 pub mod event;
+pub mod tier;
 pub mod timer;
 pub use channel::{Channel, MapBacking, MapPerm, RingSpec, ScatterError, VaSpace};
 pub use event::EventFd;
@@ -483,6 +484,9 @@ pub struct HostRm {
     card: CardInfo,
     /// The RM device instance `GET_ID_INFO_V2` returned for [`HostRm::card`]'s `gpuId`.
     device_instance: u32,
+    /// ★ H0: what the host `nvidia.ko` reports about the kayfabe patch tier (`tier.rs`). Logged at
+    /// bring-up; read by no behaviour yet.
+    tier: tier::HostTier,
 }
 
 impl HostRm {
@@ -525,6 +529,12 @@ impl HostRm {
                 detail,
             })?;
 
+        // R2b — the patch-tier probe (H0): one extra escape that only a patched `nvidia.ko` knows.
+        // A stock module answers EINVAL (and logs one line); any failure is `Absent`/`Broken` and
+        // counts as stock. Never a gate, never a flag. The result is a log line and a capability
+        // bit that no behaviour reads yet (`V3_H5_USERD_DMA_PATCH.md` §7).
+        let tier = tier::probe_and_log(&ctl);
+
         // R3 — bind the device node to the control session. Required, and the failure
         // without it is `0x23 INVALID_CLIENT` rather than anything that names a binding.
         let mut reg = [0u8; 4];
@@ -565,6 +575,7 @@ impl HostRm {
             arch_info: (0, 0, 0),
             card: CardInfo::default(),
             device_instance: 0,
+            tier,
             objects: Mutex::new(Objects {
                 next: FIRST_HANDLE,
                 parents: BTreeMap::new(),
@@ -805,6 +816,13 @@ impl HostRm {
         self.card
     }
 
+    /// ★ H0: the host patch tier this session probed at bring-up (stock unless the host
+    /// `nvidia.ko` is the kayfabe-patched build). Informational: no behaviour reads it yet.
+    #[must_use]
+    pub fn host_tier(&self) -> &tier::HostTier {
+        &self.tier
+    }
+
     /// The RM device instance our `NV01_DEVICE_0` was allocated with (resolved, not assumed).
     #[must_use]
     pub fn device_instance(&self) -> u32 {
@@ -908,7 +926,7 @@ impl HostRm {
             Some(HostParams::Renamed { before, after }) => {
                 (before.name, self.abi.carry_renamed(before, after))
             }
-            Some(HostParams::NoHeader { .. }) => {
+            Some(HostParams::NoHeader { .. } | HostParams::MeasuredOpaque { .. }) => {
                 eprintln!("kf-host: HOST-ABI REFUSED {what}: allocation params with no header");
                 return Err(RmError::Other(HOST_ABI_REFUSED));
             }
@@ -1135,12 +1153,60 @@ impl HostRm {
                 payload.copy_from_slice(&back);
                 Ok(())
             }
+            Some(kf_abi::hostabi::Carry::Same { size })
+                if payload.len() != size
+                    && kf_abi::hostabi::host_control(cmd).is_some_and(|row| {
+                        matches!(
+                            row.params,
+                            kf_abi::hostabi::HostParams::MeasuredOpaque { .. }
+                        )
+                    }) =>
+            {
+                let err = kf_abi::hostabi::HostAbiError::Size {
+                    strukt: kf_abi::hostabi::host_control(cmd).map_or("host control", |r| r.name),
+                    want: size,
+                    got: payload.len(),
+                };
+                Err(abi_refused(&format!("control {cmd:#010x}"), &err))
+            }
             _ => self.raw_control_exact(object, cmd, payload),
         }
     }
 
     /// The control ioctl with `payload` exactly as given (already at the host's layout).
     fn raw_control_exact(&self, object: u32, cmd: u32, payload: &mut [u8]) -> Result<(), RmError> {
+        status_check(self.raw_control_status(object, cmd, payload)?)
+    }
+
+    /// ★ EXPERIMENT `KF3_GSS_NATIVE` (`docs/design/V3_GSS_NATIVE.md`): one `NV_ESC_RM_CONTROL` whose
+    /// `payload` is an OPAQUE byte string kayfabe does not interpret (a GSS-legacy control: no
+    /// public header, params in the GUEST driver's layout) — carried to the host UNCHANGED, with no
+    /// [`kf_abi::hostabi::HostAbi::control_carry`] decision (that gate protects layouts kayfabe's own
+    /// encoders write; here nothing is encoded). `payload` is exactly the declared `paramsSize`
+    /// bytes, so the kernel can neither read nor write more.
+    ///
+    /// Returns the HOST's `NV_STATUS` exactly as RM wrote it (`Ok(0)` = success; `payload` then holds
+    /// the host's reply), unmapped: the caller hands it to the guest. `Err` is only a failure to ask
+    /// (an ioctl error, an unbuildable request), never an RM answer.
+    ///
+    /// # Errors
+    /// [`RmError`] when the ioctl itself failed.
+    pub fn raw_control_opaque(
+        &self,
+        object: u32,
+        cmd: u32,
+        payload: &mut [u8],
+    ) -> Result<u32, RmError> {
+        self.raw_control_status(object, cmd, payload)
+    }
+
+    /// The control ioctl with `payload` exactly as given; the RM status it wrote, unmapped.
+    fn raw_control_status(
+        &self,
+        object: u32,
+        cmd: u32,
+        payload: &mut [u8],
+    ) -> Result<u32, RmError> {
         let mut arg = [0u8; Nvos54Parameters::SIZE];
         Nvos54Parameters {
             h_client: self.client.raw(),
@@ -1163,7 +1229,7 @@ impl HostRm {
             .ioctl(req, &mut arg, &mut patches)
             .map_err(|e| ioctl_error(&e))?;
         let out = Nvos54Parameters::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
-        status_check(out.status)
+        Ok(out.status)
     }
 
     /// ★★★★★ **The ONE place an `NVOS46` is built** — every GPU map in v3 goes through

@@ -1,0 +1,774 @@
+warning: missing documentation for a function
+    --> crates/kf-util/src/lock.rs:1150:5
+     |
+1150 |     pub fn note_wait(rank: LockRank, d: Duration) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a function
+    --> crates/kf-util/src/lock.rs:1432:5
+     |
+1432 |     pub fn note_hold(rank: LockRank, d: Duration) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/kf-util/src/lockwitness.rs:193:5
+    |
+193 |     pub fn is_vcpu() -> bool {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `kf-util` (lib) generated 3 warnings
+warning: missing documentation for a method
+   --> crates/kf-arch/src/gsp.rs:814:5
+    |
+814 | /     fn on_read(
+815 | |         &self,
+816 | |         _model: &dyn GspModel,
+817 | |         _bar: u8,
+...   |
+820 | |         _state: &ArchBootState,
+821 | |     ) -> Option<u64> {
+    | |____________________^
+    |
+    = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a method
+   --> crates/kf-arch/src/gsp.rs:943:5
+    |
+943 |     fn libos_region_layout(&self) -> LibosRegionLayout;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `kf-arch` (lib) generated 2 warnings
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:90:18
+   |
+90 |     NoChannels { engine: u32 },
+   |                  ^^^^^^^^^^^
+   |
+   = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:92:20
+   |
+92 |     BelowMinimum { asked: u32 },
+   |                    ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:94:18
+   |
+94 |     AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },
+   |                  ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:94:30
+   |
+94 |     AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },
+   |                              ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:94:42
+   |
+94 |     AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },
+   |                                          ^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:94:55
+   |
+94 |     AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },
+   |                                                       ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:94:67
+   |
+94 |     AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },
+   |                                                                   ^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:96:19
+   |
+96 |     HostTooFull { derived: u32, engine: u32, total: u32, in_use: u32 },
+   |                   ^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:96:33
+   |
+96 |     HostTooFull { derived: u32, engine: u32, total: u32, in_use: u32 },
+   |                                 ^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:96:46
+   |
+96 |     HostTooFull { derived: u32, engine: u32, total: u32, in_use: u32 },
+   |                                              ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:96:58
+   |
+96 |     HostTooFull { derived: u32, engine: u32, total: u32, in_use: u32 },
+   |                                                          ^^^^^^^^^^^
+
+warning: `kf-abi` (lib) generated 11 warnings
+   Compiling kf-abi v0.1.0 (/data/kf-inval-absent/crates/kf-abi)
+warning: `kf-abi` (lib test) generated 11 warnings (11 duplicates)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.86s
+     Running unittests src/lib.rs (target/debug/deps/kf_abi-413a8a8a1d10cd12)
+
+running 467 tests
+test bringup::tests::a_short_buffer_is_refused_with_the_exact_variant ... ok
+test bringup::tests::encoding_leaves_declared_padding_untouched ... ok
+test bringup::tests::card_info_layout_matches_the_c_header ... ok
+test bringup::tests::nvos02_flags_encode_a_value_into_their_field ... ok
+test bringup::tests::gpu_id_info_v2_request_and_reply ... ok
+test bringup::tests::nvos02_with_fd_round_trips_every_declared_field ... ok
+test bringup::tests::the_frontend_and_rm_escape_spaces_do_not_collide ... ok
+test bringup::tests::the_vaspace_parameters_encode_at_the_declared_offsets ... ok
+test bringup::tests::the_pointer_field_offset_is_where_the_encoder_puts_p_memory ... ok
+test businfo::tests::a_hostile_or_absurd_list_size_is_refused_before_it_indexes_anything ... ok
+test businfo::tests::a_kernel_answered_index_is_refused_by_name_not_transcribed_from_the_trace ... ok
+test businfo::tests::a_short_params_buffer_never_decodes ... ok
+test businfo::tests::a_zero_link_caps_word_is_refused_rather_than_read_as_gen1 ... ok
+test businfo::tests::every_generation_encodes_to_a_speed_calculate_pcie_link_rate_accepts ... ok
+test businfo::tests::one_part_answered_two_words_and_only_the_live_link_field_moved ... ok
+test businfo::tests::a_zero_word_decodes_to_gen1_everywhere_and_not_to_unstated ... ok
+test businfo::tests::an_out_of_range_index_is_refused_as_out_of_range_and_not_as_unmeasured ... ok
+test businfo::tests::the_measured_link_caps_word_decodes_to_the_parts_real_link ... ok
+test businfo::tests::the_params_struct_is_the_one_on_the_wire ... ok
+test businfo::tests::the_single_entry_rpc_is_answered_and_the_reply_is_the_request_edited ... ok
+test c2cinfo::tests::a_part_with_c2c_is_refused_rather_than_told_it_has_none ... ok
+test c2cinfo::tests::a_part_without_c2c_reports_every_link_field_zero ... ok
+test businfo::tests::the_served_word_is_derived_from_one_field_and_is_not_the_measured_word ... ok
+test c2cinfo::tests::the_size_is_the_structs_arithmetic_and_not_a_captured_literal ... ok
+test capability::tests::a_deliberately_refused_row_says_why ... ok
+test capability::tests::a_class_added_at_a_boundary_is_denied_one_patch_below_it ... ok
+test capability::tests::an_unknown_alloc_class_is_denied_by_default ... ok
+test capability::tests::admitting_gt200_debugger_does_not_reach_a_single_denied_control ... ok
+test capability::tests::an_unknown_control_is_denied_by_default ... ok
+test capability::tests::deny_beats_the_rule_based_passthrough ... ok
+test capability::tests::each_boundarys_resolved_delta_is_materialised ... ok
+test capability::tests::each_origin_is_represented ... ok
+test capability::tests::every_boundarys_rows_are_sorted_and_unique ... ok
+test capability::tests::every_listed_class_is_the_reason_it_is_permitted ... ok
+test capability::tests::every_listed_control_is_the_reason_it_is_permitted ... ok
+test capability::tests::exactly_one_control_row_is_an_upstream_placeholder ... ok
+test capability::tests::every_row_carries_a_name ... ok
+test capability::tests::no_boundary_repeats_a_shared_or_duplicated_row ... ok
+test capability::tests::the_555_boundary_deletes_a_control_the_550_guest_still_has ... ok
+test capability::tests::no_denied_id_is_a_boundary_specific_control ... ok
+test capability::tests::the_575_boundary_replaces_two_dram_encryption_commands ... ok
+test capability::tests::the_c_rows_dropped_as_rule_covered_are_still_permitted ... ok
+test capability::tests::the_boundary_list_is_the_whole_universe ... ok
+test capability::tests::the_decoded_classes_keep_their_decoders ... ok
+test capability::tests::the_founding_rows_are_present_by_name ... ok
+test capability::tests::the_gss_legacy_rule_passes_half_the_command_space ... ok
+test capability::tests::the_page_directory_controls_survive_the_gate ... ok
+test capability::tests::the_ported_surface_is_the_reviewed_size ... ok
+test capability::tests::the_permitted_and_denied_sets_are_disjoint_and_each_id_appears_once ... ok
+test cecaps::tests::a_ga106_hosts_answer_equals_the_ga10x_oracle ... ok
+test capability::tests::every_class_this_port_decodes_is_permitted ... ok
+test cecaps::tests::a_non_copy_engine_type_is_refused ... ok
+test cecaps::tests::a_short_buffer_is_refused_rather_than_padded ... ok
+test cecaps::tests::a_short_caps_v2_request_is_refused ... ok
+test capability::tests::the_shared_base_holds_only_what_every_boundary_shares ... ok
+test cecaps::tests::absent_ces_carry_no_caps ... ok
+test cecaps::tests::an_lce_the_host_does_not_mark_present_refuses ... ok
+test cecaps::tests::an_unadvertised_engine_is_refused_not_zeroed ... ok
+test cecaps::tests::cc_secure_and_decomp_are_clear_on_ga10x ... ok
+test cecaps::tests::every_named_cap_is_a_distinct_bit ... ok
+test cecaps::tests::ga106_geometry_reproduces_the_real_reply_byte_for_byte ... ok
+test cecaps::tests::kernel_or_bits_on_the_host_are_not_served ... ok
+test cecaps::tests::grce_is_the_only_per_ce_difference ... ok
+test cecaps::tests::instance_past_the_array_refuses ... ok
+test cecaps::tests::present_is_the_engine_list_and_not_the_allowed_lce_mask ... ok
+test cecaps::tests::the_caps_v2_struct_layout_is_the_headers ... ok
+test cecaps::tests::no_copy_engines_refuses ... ok
+test cecaps::tests::the_copy9_to_copy10_gap_is_refused ... ok
+test cecaps::tests::the_grce_set_is_the_hosts_not_a_ga10x_mask ... ok
+test cecaps::tests::the_per_engine_replies_are_the_measured_words ... ok
+test cecaps::tests::the_in_word_is_echoed_and_the_out_half_is_written ... ok
+test cecaps::tests::the_per_engine_reply_is_the_whole_tables_own_row ... ok
+test cecaps::tests::the_struct_layout_is_the_headers ... ok
+test cepce::tests::a_non_copy_engine_is_refused ... ok
+test cepce::tests::a_short_request_is_refused ... ok
+test cepce::tests::an_advertised_engine_with_no_stated_mask_is_refused ... ok
+test cecaps::tests::the_three_kernel_or_able_bits_are_clear_on_every_present_ce ... ok
+test cepce::tests::every_advertised_lce_shares_its_pce ... ok
+test cepce::tests::lce4_is_refused_the_way_hardware_refuses_it ... ok
+test cepce::tests::the_four_measured_masks_come_back ... ok
+test cepce::tests::the_gap_between_copy9_and_copy10_is_not_a_copy_engine ... ok
+test cepce::tests::the_grce_pair_is_not_a_pce_grouping ... ok
+test chanbudget::tests::a_full_host_refuses_the_default_by_name ... ok
+test chanbudget::tests::a_request_inside_the_limits_is_taken_exactly ... ok
+test chanbudget::tests::default_is_free_minus_the_hosts_reserve_on_the_tightest_runlist ... ok
+test chanbudget::tests::over_the_limit_and_under_the_minimum_are_refused_never_clamped ... ok
+test chanbudget::tests::request_and_reply_layouts ... ok
+test cudartinit::tests::a_size_that_is_not_the_measured_one_is_refused_rather_than_padded ... ok
+test cudartinit::tests::a_spliced_row_preserves_every_word_rm_did_not_write ... ok
+test cudartinit::tests::each_rows_word_list_fits_inside_its_measured_size ... ok
+test cudartinit::tests::a_spliced_row_refuses_a_length_that_is_not_the_measured_one ... ok
+test cudartinit::tests::every_served_row_is_exactly_what_the_hardware_answered ... ok
+test cudartinit::tests::the_fallback_row_is_what_the_host_answered_in_the_same_failing_state ... ok
+test cudartinit::tests::the_host_splice_reproduces_the_ga106_oracle_and_refuses_another_question ... ok
+test cudartinit::tests::the_two_innocent_ids_are_not_served ... ok
+test cudartinit::tests::three_of_the_four_carry_the_gss_legacy_bit_and_one_does_not ... ok
+test defapi::tests::the_handle_namespace_rules_match_the_measured_f7a_refusals ... ok
+test defapi::tests::flags_sizes_and_hostile_shapes ... ok
+test defapi::tests::the_vfio_registrations_decode_to_the_virtual_context_init_and_promote ... ok
+test defapi::tests::the_v1_params_are_the_584_bytes_the_real_gsp_received ... ok
+test drmnv::tests::the_block_linear_modifier_matches_drm_fourcc ... ok
+test drmnv::tests::the_encoders_place_every_field_at_its_offset ... ok
+test drmnv::tests::the_ioctl_numbers_are_the_drm_iowr_of_the_measured_sizes ... ok
+test eventnotify::nonstall_slot_tests::a_nonstall_registration_resolves_and_anything_else_does_not ... ok
+test eventnotify::nonstall_slot_tests::the_named_slot_helpers_match_the_row_names ... ok
+test eventnotify::nonstall_slot_tests::the_nonstall_flag_is_pinned_to_every_measured_tag ... ok
+test eventnotify::probe_default_tests::probe_parse_is_strict_and_refuses_junk ... ok
+test eventnotify::probe_default_tests::the_notifier_probe_is_off_by_default_and_35_is_not_silent ... ok
+test faultbuffer::tests::a_hostile_size_is_capped_at_the_vendors_own_bound ... ok
+test faultbuffer::tests::a_partial_page_still_counts_as_one ... ok
+test drmnv::tests::every_transcribed_item_is_one_the_probe_prints ... ok
+test faultbuffer::tests::a_zero_or_oversize_access_cntr_geometry_is_illegal ... ok
+test faultbuffer::tests::an_unknown_buffer_type_stays_unknown ... ok
+test faultbuffer::tests::only_the_declared_pages_are_recorded ... ok
+test faultbuffer::tests::short_shadow_params_are_a_named_refusal ... ok
+test faultbuffer::tests::short_params_are_a_named_refusal ... ok
+test faultbuffer::tests::the_access_cntr_layout_and_its_own_bound ... ok
+test faultbuffer::tests::the_metadata_pages_are_counted_even_though_they_are_always_zero_here ... ok
+test faultbuffer::tests::the_registration_our_advertised_size_implies ... ok
+test faultbuffer::tests::the_shadow_layout_is_the_one_the_guest_sends ... ok
+test faultbuffer::tests::the_layout_is_the_one_the_guest_sends ... ok
+test faultbuffer::tests::the_stock_non_replayable_registration_decodes ... ok
+test faultbuffer::tests::the_shadow_vendor_bound_counts_both_terms ... ok
+test faultbuffer::tests::the_three_unbuilt_halves_stay_three ... ok
+test faultbuffer::tests::the_two_unbuilt_halves_name_two_different_gaps ... ok
+test faultbuffer::tests::the_vendor_bound_is_the_one_cpu_rm_checks ... ok
+test fbinfo::tests::an_l2_that_does_not_fit_the_reply_is_refused_rather_than_truncated ... ok
+test faultbuffer::tests::the_unbuilt_half_names_the_failure_mode ... ok
+test fbinfo::tests::an_odd_ltc_count_is_refused_rather_than_rounded ... ok
+test fbinfo::tests::an_unstated_row_refuses_rather_than_defaults ... ok
+test fbinfo::tests::ga106_projections_match_real_hardware ... ok
+test drmnv::tests::the_rung_is_offered_only_at_tags_measured_equal_to_the_transcription ... ok
+test fbinfo::tests::kernel_answered_indices_are_refused_by_name ... ok
+test fbinfo::tests::lts_count_is_not_the_product_of_the_static_configs_two_fields ... ok
+test fbinfo::tests::lts_count_is_the_l2_size_in_slices_and_not_a_literal ... ok
+test fbinfo::tests::one_unmeasured_entry_refuses_the_whole_request ... ok
+test fbinfo::tests::the_bus_width_relation_holds_for_every_ampere_ltc_count_rm_enumerates ... ok
+test fbinfo::tests::the_guests_own_count_is_not_taken_on_trust ... ok
+test fbinfo::tests::the_index_bound_is_index_max_not_the_array_length ... ok
+test fbinfo::tests::the_second_wall_request_is_answered_byte_for_byte ... ok
+test fbinfo::tests::the_wall_request_is_answered_byte_for_byte ... ok
+test fecstrace::tests::the_580_65_06_layout_is_the_measured_one ... ok
+test fbinfo::tests::the_tail_past_the_declared_entries_is_left_alone ... ok
+test fifoctl::tests::both_controls_are_measured_at_the_guest_contracts ... ok
+test fifoctl::tests::the_answer_is_the_host_row_for_the_guests_engine ... ok
+test fmbpromote::tests::a_realistic_ga106_promotion_decodes_field_for_field ... ok
+test fmbpromote::tests::a_sized_buffer_at_address_zero_is_refused ... ok
+test fifoctl::tests::the_timeslice_request_decodes ... ok
+test fmbpromote::tests::a_wild_runqueue_count_is_refused_by_name_and_never_clamped ... ok
+test fmbpromote::tests::a_zero_size_record_is_the_destroy_form_not_a_malformed_one ... ok
+test fmbpromote::tests::every_short_length_is_refused_and_the_exact_length_is_not ... ok
+test fmbpromote::tests::slots_past_the_declared_count_are_not_echoed ... ok
+test fmbpromote::tests::bar2_addr_is_indexed_out_of_its_own_array ... ok
+test fmbpromote::tests::the_address_space_is_swept_over_the_whole_enum ... ok
+test fmbpromote::tests::the_id_and_the_bounds_are_the_headers ... ok
+test fmbpromote::tests::the_runqueue_count_is_swept_across_its_bound ... ok
+test fmbpromote::tests::the_second_runqueue_is_validated_as_well_as_the_first ... ok
+test fmbpromote::tests::the_reply_is_the_requests_own_bytes ... ok
+test fmbpromote::tests::zero_runqueues_is_legal_and_empty ... ok
+test fmbsize::tests::a_short_body_is_not_read_as_a_smaller_number ... ok
+test fmbsize::tests::the_reply_is_the_four_bytes_the_real_ga106_put_on_the_wire ... ok
+test fmbsize::tests::the_round_trip_holds_for_every_plausible_size ... ok
+test fmbsize::tests::zero_is_refused_on_both_sides_because_zero_is_the_bug ... ok
+test gfxpool::tests::hostile_lengths_and_counts_are_refused ... ok
+test gfxpool::tests::query_codec_matches_every_measured_driver_but_never_an_unmeasured_neighbor ... ok
+test gfxpool::tests::valid_queries_replace_output_poison_and_bound_storage ... ok
+test gpuatomics::tests::every_captype_but_sysmem_is_refused ... ok
+test gpuatomics::tests::libcuda_all_zero_request_reproduces_the_committed_reply ... ok
+test gpuatomics::tests::a_longer_buffer_is_answered_over_the_struct_only ... ok
+test gpuatomics::tests::none_supported_denies_all_thirteen ... ok
+test gpuatomics::tests::params_size_is_the_wire_size ... ok
+test gpuatomics::tests::round_trip_over_a_non_zero_table ... ok
+test gpuatomics::tests::short_params_are_refused ... ok
+test gpuatomics::tests::sysmem_is_answered_and_padding_survives ... ok
+test gpuatomics::tests::the_r18_seed_refuses_on_the_captype_not_the_length ... ok
+test gpuinfo::tests::a_hostile_or_absurd_list_size_is_refused_before_it_indexes_anything ... ok
+test gpuinfo::tests::a_short_params_buffer_never_decodes ... ok
+test gpuinfo::tests::an_out_of_range_index_and_a_foreign_group_are_each_named ... ok
+test gpuinfo::tests::the_forward_bit_is_cleared_in_the_reply_and_the_test_would_see_it_if_not ... ok
+test gpuinfo::tests::the_forward_marker_is_the_sdk_s_own_reserved_bit ... ok
+test gpuinfo::tests::the_per_chip_identity_indices_are_refused_by_name_and_never_invented ... ok
+test gpuinfo::tests::an_entry_the_guest_kernel_already_answered_is_not_overwritten ... ok
+test gpuinfo::tests::the_recorded_ga106_rpc_pair_is_reproduced_byte_for_byte ... ok
+test gpuinfo::tests::the_tail_past_the_declared_count_is_returned_verbatim ... ok
+test grfsinfo::tests::a_bad_query_count_fails_the_whole_call ... ok
+test grfsinfo::tests::a_short_buffer_is_refused_rather_than_padded ... ok
+test grfsinfo::tests::an_out_of_range_gpc_is_a_per_query_fault_not_a_call_fault ... ok
+test grfsinfo::tests::a_floorswept_hosts_own_answers_are_served ... ok
+test grfsinfo::tests::mig_only_types_refuse_per_query_and_unmodelled_types_refuse_the_call ... ok
+test grfsinfo::tests::the_gpc_map_is_the_rows_not_the_nth_set_bit ... ok
+test grfsinfo::tests::libcudas_three_queries_reproduce_the_real_reply ... ok
+test grfsinfo::tests::the_struct_layout_is_the_headers ... ok
+test grinfo::tests::a_disagreement_with_the_gr_static_geometry_is_refused_and_names_the_index ... ok
+test grfsinfo::tests::the_tail_past_num_queries_is_left_alone ... ok
+test grinfo::tests::a_zero_veid_step_size_is_served_where_no_reader_multiplies_by_it ... ok
+test grinfo::tests::a_zero_max_subcontext_count_is_refused_by_name ... ok
+test grinfo::tests::every_entry_carries_its_own_position_as_its_index ... ok
+test grinfo::tests::params_size_is_the_size_hardware_answered ... ok
+test grinfo::tests::the_ga106_row_agrees_with_the_ga106_gr_static_geometry ... ok
+test grinfo::tests::the_other_two_load_bearing_zeros_are_refused_by_name ... ok
+test grinfo::tests::the_seven_other_engine_rows_are_zero ... ok
+test grstatic::sm_issue_rate_tests::the_hosts_nine_selects_are_engine_zero_and_nothing_else ... ok
+test gspfeatures::tests::a_hostile_guest_string_is_refused_at_the_boundary ... ok
+test gspfeatures::tests::a_short_body_is_refused_rather_than_zero_extended ... ok
+test gspfeatures::tests::a_third_boolean_value_is_refused ... ok
+test gspfeatures::tests::an_over_long_version_is_refused_rather_than_truncated ... ok
+test gspfeatures::tests::an_unnameable_feature_bit_is_refused_rather_than_dropped ... ok
+test gspfeatures::tests::the_abi_table_is_the_exact_measured_version_and_the_wire_stays_the_source ... ok
+test gspfeatures::tests::the_encoder_reproduces_the_real_ga106_reply_byte_for_byte ... ok
+test gspfeatures::tests::an_unterminated_version_array_is_refused ... ok
+test gspfeatures::tests::the_guests_own_fn1_string_is_what_hardware_reports ... ok
+test gspfeatures::tests::the_offsets_are_the_ones_hardware_wrote_and_not_a_padded_guess ... ok
+test gspfeatures::tests::the_round_trip_holds_and_names_every_field ... ok
+test gspstaticinfo::tests::a_name_that_rm_could_not_read_back_as_a_c_string_is_unconstructible ... ok
+test gspstaticinfo::tests::a_shape_this_port_has_never_seen_on_a_wire_is_refused_by_name ... ok
+test gspstaticinfo::tests::a_table_that_does_not_span_the_advertised_fb_is_refused ... ok
+test gspstaticinfo::tests::all_three_name_arrays_are_written_and_nul_padded ... ok
+test gspstaticinfo::tests::an_all_zero_uuid_cannot_be_constructed ... ok
+test gspstaticinfo::tests::an_inverted_region_is_refused ... ok
+test gspstaticinfo::tests::derive_is_stable_and_seed_sensitive ... ok
+test gspstaticinfo::tests::an_empty_table_is_refused_rather_than_encoded ... ok
+test gspstaticinfo::tests::more_regions_than_the_array_holds_is_refused ... ok
+test gspstaticinfo::tests::overlapping_regions_are_refused ... ok
+test gspstaticinfo::tests::text_form_refuses_all_zero ... ok
+test gspstaticinfo::tests::the_570_layout_puts_the_same_facts_at_its_own_offsets ... ok
+test gspstaticinfo::tests::the_610_layout_encodes_without_the_unicode_array ... ok
+test gspstaticinfo::tests::the_body_is_the_whole_struct_and_zero_outside_what_we_state ... ok
+test gspstaticinfo::tests::the_measured_encoder_is_the_bench_encoder_at_every_580_tag ... ok
+test gspstaticinfo::tests::text_form_round_trips_and_accepts_every_spelling ... ok
+test gspstaticinfo::tests::text_form_refuses_everything_else ... ok
+test gsslegacy::tests::the_answer_is_the_request_which_is_what_hardware_returned ... ok
+test gspstaticinfo::tests::the_offsets_are_the_ones_the_580_struct_produces ... ok
+test gsslegacy::tests::a_buffer_that_is_not_the_measured_length_is_refused ... ok
+test gsslegacy::tests::the_id_really_is_gss_legacy_and_not_privileged ... ok
+test gsslegacy::tests::the_identity_is_not_the_same_as_returning_zeros ... ok
+test gsslegacy::tests::the_rule_does_not_become_an_answer ... ok
+test gsslegacy::tests_8162::the_second_id_ignores_what_the_guest_sent ... ok
+test gsslegacy::tests_8162::the_second_id_returns_the_byte_hardware_wrote_and_it_is_not_an_echo ... ok
+test gsslegacy::tests_8162::the_served_set_is_exactly_two_and_each_has_its_own_rule ... ok
+test gssreplay::tests::the_cudart_precursor_is_answered_with_nothing_written ... ok
+test gssreplay::tests::a_background_that_changes_the_answer_falls_back_to_the_zero_probe ... ok
+test gssreplay::tests::the_cudart_clock_query_is_answered_whole_fields_from_two_probes ... ok
+test gssreplay::tests::the_listing_request_is_the_encoders ... ok
+test guest_os::tests::an_unknown_guest_os_name_refuses_rather_than_defaulting_to_linux ... ok
+test guest_os::tests::a_zero_process_id_is_a_user_client_today_and_that_is_wrong_on_t234d ... ok
+test gssreplay::tests::the_nvd_clock_query_is_answered_with_exactly_what_the_host_wrote ... ok
+test guest_os::tests::every_profile_name_round_trips ... ok
+test guest_os::tests::only_the_kernel_sentinel_decodes_to_a_kernel_client_on_linux ... ok
+test guest_os::tests::the_configuration_default_is_linux ... ok
+test guest_os::tests::the_windows_refusal_is_about_the_profile_and_not_about_the_inputs ... ok
+test guest_os::tests::windows_refuses_every_process_id_rather_than_classifying_one ... ok
+test guestsysinfo::identity_tests::a_windows_twin_is_keyed_as_its_linux_tag_and_a_tag_as_itself ... ok
+test guestsysinfo::identity_tests::the_identity_decodes_every_field_and_escapes_the_strings ... ok
+test host_driver::tests::a_rendered_version_matches_the_string_the_driver_prints ... ok
+test host_driver::tests::a_major_with_no_transcribed_delta_refuses_without_inventing_one ... ok
+test host_driver::tests::the_benchs_own_host_driver_is_accepted ... ok
+test host_driver::tests::an_unread_or_unparsable_version_never_means_580 ... ok
+test host_driver::tests::the_nvos46_floor_splits_the_580_line ... ok
+test host_driver::tests::the_other_vendored_tree_is_refused_by_name ... ok
+test hostabi::tests::a_smaller_host_classlist_reply_carries_back ... ok
+test hostabi::tests::an_unlisted_control_is_refused_outside_the_encoded_interval ... ok
+test hostabi::tests::an_unmeasured_host_is_refused_by_name ... ok
+test hostabi::tests::encoder_session_contract_is_exact_and_bounded ... ok
+test hostabi::tests::channel_alloc_params_carry_to_610 ... ok
+test hostabi::tests::gpfifo_schedule_skip_enable_is_unexpressible_below_575 ... ok
+test hostabi::tests::msenc_caps_is_carried_on_early_580_hosts ... ok
+test hostabi::tests::host_control_ids_are_unique ... ok
+test hostabi::tests::nvos46_carries_to_a_575_host_and_refuses_a_kind_override ... ok
+test hostabi::tests::the_bench_host_passes_every_struct_through ... ok
+test hostabi::tests::the_display_sw_readback_is_carried_at_595_and_580 ... ok
+test hoststub::tests::the_bisect_control_is_generated_for_windows_580_88_only ... ok
+test hostabi::tests::the_per_map_pte_kind_arrives_with_580_65_06 ... ok
+test hoststub::tests::the_generated_ids_compose_from_their_parts_and_are_unique ... ok
+test inittables::tests::a_base_index_off_the_paging_stride_is_refused ... ok
+test inittables::tests::a_row_over_the_pbdma_bound_is_refused ... ok
+test inittables::tests::a_name_with_no_room_for_its_terminator_is_refused ... ok
+test inittables::tests::an_intr_table_over_the_bound_is_refused ... ok
+test inittables::tests::paging_reports_more_and_then_stops ... ok
+test inittables::tests::params_sizes_are_the_sizes_rm_allocates ... ok
+test inittables::tests::the_subtree_map_lands_past_the_alignment_hole ... ok
+test l2evict::tests::a_bit_the_sdk_does_not_name_is_refused ... ok
+test l2evict::tests::every_subset_of_the_named_bits_decodes_including_the_empty_one ... ok
+test l2evict::tests::short_params_are_refused_rather_than_padded ... ok
+test l2evict::tests::the_control_id_is_the_one_the_capture_carries ... ok
+test l2evict::tests::the_known_flag_set_is_the_six_the_sdk_names ... ok
+test l2evict::tests::the_reply_is_four_zeros_and_carries_no_byte_of_the_request ... ok
+test l2evict::tests::the_value_kbusverifybar2_sends_on_a_ga106_decodes ... ok
+test matrix::tests::a_narrowed_scalar_that_does_not_fit_is_refused ... ok
+test matrix::tests::a_version_between_measured_tags_is_refused_by_name ... ok
+test matrix::tests::a_shrinking_array_refuses_a_dropped_element_with_data_unless_declared_truncatable ... ok
+test matrix::tests::measured_is_strictly_ascending ... ok
+test matrix::tests::transcode_carries_fields_by_name_across_layouts ... ok
+test mcintr::tests::a_params_image_that_is_not_four_bytes_is_refused ... ok
+test mcintr::tests::engines_is_echoed_never_zeroed ... ok
+test memory_list::tests::memory_list_all_named_contracts_decode_independent_c_specimen ... ok
+test memory_list::tests::memory_list_framebuffer_specimen_requires_audited_class_and_vidmem_location ... ok
+test matrix::tests::every_table_tiles_the_measured_tags ... ok
+test memory_list::tests::memory_list_lengths_flags_descriptor_and_pointer_arithmetic_refuse ... ok
+test memory_list::tests::memory_list_source_cache_mapping_values_and_adjusted_extent ... ok
+test notifier::engine_wire_tests::a_short_params_block_reads_as_unknown_and_never_as_an_error ... ok
+test notifier::engine_wire_tests::a_userd_descriptor_carries_its_aperture_on_the_value ... ok
+test notifier::engine_wire_tests::an_unrecognised_engine_code_is_unknown_and_never_other ... ok
+test notifier::engine_wire_tests::engine_offsets_agree_with_the_userd_wire ... ok
+test notifier::engine_wire_tests::userd_mem_is_where_the_notifier_wire_says_it_is ... ok
+test notifier::engine_wire_tests::the_decoder_reads_back_what_the_580_encoder_wrote ... ok
+test notifier::tests::a_non_sysmem_or_short_notifier_is_unreachable_not_absent ... ok
+test notifier::tests::a_zero_status_reads_as_no_error ... ok
+test notifier::tests::both_pinned_boundaries_find_the_same_notifier ... ok
+test notifier::tests::short_params_decline_the_notifier_without_refusing_the_channel ... ok
+test notifier::tests::the_notifier_type_decides_before_the_address_does ... ok
+test notifier::tests::the_record_matches_nvnotification_and_notification_alike ... ok
+test oracle::tests::a_full_row_is_evidence_and_0x20800a2a_is_one ... ok
+test oracle::tests::a_field_inside_the_kept_prefix_is_captured_and_one_past_it_is_not ... ok
+test oracle::tests::a_reliance_that_reaches_one_byte_past_the_capture_is_refused ... ok
+test oracle::tests::a_truncated_row_is_refused_by_name_and_carries_its_usable_prefix ... ok
+test oracle::tests::all_sixteen_truncated_rows_are_refused_and_none_is_a_zero_trim ... ok
+test oracle::tests::an_inconsistent_row_describes_no_reply ... ok
+test oracle::tests::every_empty_capture_row_is_refused_by_name_unless_no_body_exists ... ok
+test oracle::tests::nothing_this_port_relies_on_reaches_past_what_the_recorder_kept ... ok
+test oracle::tests::the_eleven_are_all_here_and_the_share_is_stated ... ok
+test oracle::tests::the_refusal_is_not_the_only_witness_that_zeros_would_have_been_wrong ... ok
+test postevent::tests::a_list_post_refuses_an_index_at_or_above_maxcount ... ok
+test postevent::tests::the_encoded_body_is_the_c_artifacts_body ... ok
+test postevent::tests::the_hotplug_list_post_carries_its_data_at_the_flexible_arrays_offset ... ok
+test rc::tests::a_short_buffer_is_a_named_refusal ... ok
+test rc::tests::only_gr_has_an_honest_engine_route ... ok
+test rc::tests::fields_land_at_the_generated_offsets ... ok
+test smcmode::tests::a_short_body_is_refused_rather_than_zero_extended ... ok
+test smcmode::tests::an_unknown_code_point_is_named_not_clamped ... ok
+test smcmode::tests::the_reply_is_the_four_bytes_the_real_ga106_put_on_the_wire ... ok
+test smcmode::tests::the_round_trip_holds_for_every_declared_mode ... ok
+test smcmode::tests::zero_is_a_named_meaning_and_the_type_is_what_says_so ... ok
+test submit::chanctl_shape_tests::disable_channels_round_trips_at_the_header_offsets ... ok
+test submit::chanctl_shape_tests::preempt_round_trips ... ok
+test submit::dma_pde_info_tests::an_unfilled_block_is_not_a_page_table ... ok
+test submit::dma_pde_info_tests::encode_places_the_join_key_and_the_address ... ok
+test submit::dma_pde_info_tests::the_layout_matches_what_the_compiler_says ... ok
+test submit::dma_pte_info_tests::a_block_with_no_page_size_is_never_a_mapping ... ok
+test submit::dma_pte_info_tests::a_short_reply_is_refused_rather_than_zero_extended ... ok
+test submit::dma_pte_info_tests::encode_places_the_join_key_and_the_address ... ok
+test submit::dma_pte_info_tests::the_layout_matches_what_the_compiler_says ... ok
+test submit::non_inc_header::matches_cudas_recorded_inline_header ... ok
+test submit::nvos34_tests::a_short_image_is_refused_in_both_directions ... ok
+test submit::nvos34_tests::the_size_is_the_sdk_struct_not_an_fd_wrapper ... ok
+test submit::nvos34_tests::the_unmap_parameters_sit_where_the_sdk_puts_them ... ok
+test submit::tests::a_bind_params_image_shorter_than_its_struct_is_refused ... ok
+test submit::tests::a_carry_between_the_words_is_retried_rather_than_returned ... ok
+test submit::tests::a_control_entry_is_classified_and_the_extended_base_decodes ... ok
+test submit::tests::a_counter_that_never_settles_refuses_rather_than_guessing ... ok
+test submit::tests::a_failed_register_read_propagates_instead_of_reading_as_zero ... ok
+test submit::tests::a_semaphore_acquire_and_release_do_not_encode_alike ... ok
+test submit::tests::a_short_buffer_is_truncated_and_not_a_partial_encode ... ok
+test submit::tests::a_short_ce_alloc_image_is_refused ... ok
+test submit::tests::a_zero_length_gpfifo_entry_is_refused_and_not_read_as_an_address ... ok
+test submit::tests::a_stable_counter_is_sampled_in_one_round ... ok
+test submit::tests::an_all_zero_word_is_a_nop_that_consumes_no_arguments ... ok
+test submit::tests::channel_alloc_params_land_at_the_580_offsets ... ok
+test submit::tests::compose_masks_the_high_word_to_its_29_significant_bits ... ok
+test submit::tests::engine_type_is_at_128_which_is_the_580_offset_and_not_the_610_one ... ok
+test submit::tests::engine_type_copy_refuses_past_the_macro_s_first_arm ... ok
+test submit::tests::every_enumerated_sec_op_but_reserved6_has_a_size ... ok
+test submit::tests::gp_entry_decode_reports_level_and_sync_without_disturbing_the_length ... ok
+test submit::tests::gp_entry_places_address_and_length_in_their_fields ... ok
+test submit::tests::gp_entry_refuses_every_value_it_cannot_represent ... ok
+test submit::tests::gp_entry_round_trips_through_our_own_encoder_only ... ok
+test submit::tests::memory_allocation_params_land_at_the_580_offsets ... ok
+test submit::tests::memory_list_allocation_params_land_at_the_580_offsets ... ok
+test submit::tests::memory_params_refuse_a_buffer_that_would_encode_a_shorter_request ... ok
+test submit::tests::method_header_decode_reads_back_what_method_header_inc_wrote ... ok
+test submit::tests::method_header_shifts_the_byte_offset_into_a_dword_index ... ok
+test submit::tests::method_header_refuses_every_value_it_cannot_represent ... ok
+test submit::tests::nvos33_round_trips_and_keeps_a_negative_descriptor_negative ... ok
+test submit::tests::schedule_params_are_three_bytes_and_encode_by_position ... ok
+test submit::tests::the_bind_refusals_are_answers_the_code_produces_and_never_the_unclaimed_signature ... ok
+test submit::tests::the_ce_alloc_params_carry_the_engine_ordinal_at_plus_four ... ok
+test submit::tests::the_ce_alloc_params_round_trip ... ok
+test submit::tests::the_channel_side_bind_is_a_fourth_distinct_command ... ok
+test submit::tests::the_copy_engine_address_methods_are_four_consecutive_dwords ... ok
+test submit::tests::the_declared_copy_engine_follows_rms_own_two_versions ... ok
+test submit::tests::the_display_slot_attribute_sets_are_nvos32_fields ... ok
+test submit::tests::the_documented_status_list_is_a_strict_subset_of_what_the_code_produces ... ok
+test submit::tests::the_doorbell_offset_is_inside_the_usermode_window ... ok
+test submit::tests::the_fifo_semaphore_methods_are_five_consecutive_dwords ... ok
+test submit::tests::the_immediate_form_consumes_no_argument_words ... ok
+test submit::tests::the_measured_ga106_bind_request_decodes_to_copy2_and_echoes_back ... ok
+test submit::tests::the_tsg_controls_are_three_distinct_commands ... ok
+test submit::tests::the_surface_phys_attr_reply_decodes_at_the_580_offsets ... ok
+test submit::tests::the_two_engine_type_spaces_collide_and_the_conversion_does_not ... ok
+test submit::tests::the_usermode_timer_mirror_shares_a_page_with_the_doorbell_but_ptimer_does_not ... ok
+test submit::tests::the_two_undefined_header_encodings_are_refused_and_not_sized ... ok
+test submit::tests::the_vidmem_attribute_is_a_field_value_and_not_a_bit_mask ... ok
+test submit::tests::userd_cursor_offsets_match_the_c_artifact_s_measured_pair ... ok
+test submit::tests::userd_is_large_enough_for_both_cursors ... ok
+test tests::driver_versions_parse_strictly_and_print_as_the_driver_spells_them ... ok
+test tests::only_bit_one_declares_serialized_params ... ok
+test timer::tests::timer_layout_is_measured_at_every_tag_and_unmeasured_refuses ... ok
+test vbios::tests::a_mapper_that_straddles_the_end_of_dmem_is_refused ... ok
+test hostabi::tests::every_host_control_id_is_the_measured_one ... ok
+test vbios::tests::a_v2_descriptor_with_a_secure_part_larger_than_the_code_is_refused_by_the_transcription ... ok
+test vbios::tests::a_table_with_no_dmemmapper_entry_is_the_failure_the_guest_reported ... ok
+test vbios::tests::an_interface_offset_outside_dmem_is_refused ... ok
+test vbios::tests::all_three_appids_must_be_broken_before_fwsec_is_lost ... ok
+test vbios::tests::an_unknown_device_id_is_a_fault_not_a_fallback ... ok
+test capability::tests::every_control_this_port_models_is_permitted ... ok
+test vbios::tests::a_v2_profile_builds_an_image_the_turing_parser_accepts ... ok
+test vbios::tests::fwsec_is_found_under_both_debug_and_prod ... ok
+test vbios::tests::every_shipped_profile_carries_a_walkable_interface_table ... ok
+test vbios::tests::every_shipped_profile_builds_and_parses ... ok
+test vbios::tests::refuses_a_command_buffer_that_ends_outside_dmem ... ok
+test vbios::tests::exactly_one_bit_header_candidate ... ok
+test vbios::tests::refuses_a_mapper_that_leaves_dmem ... ok
+test vbios::tests::one_interface_entry_is_too_few ... ok
+test vbios::tests::refuses_a_mapper_that_overlaps_its_own_interface_table ... ok
+test vbios::tests::refuses_a_profile_with_no_signatures ... ok
+test vbios::tests::refuses_a_signature_outside_the_ucode ... ok
+test vbios::tests::refuses_a_command_buffer_too_small_for_a_fwsec_command ... ok
+test vbios::tests::refuses_an_image_over_the_1mb_cap ... ok
+test vbios::tests::refuses_an_interface_table_that_leaves_dmem ... ok
+test vbios::tests::refuses_a_signature_that_overlaps_the_command_buffer ... ok
+test vbios::tests::rejects_a_cleared_last_image_bit ... ok
+test vbios::tests::rejects_a_broken_bit_header_checksum ... ok
+test vbios::tests::rejects_a_corrupt_bit_header_id ... ok
+test vbios::tests::rejects_a_corrupt_pcir_signature ... ok
+test vbios::tests::rejects_a_corrupt_falcon_data_token_id ... ok
+test vbios::tests::refuses_a_descriptor_too_large_for_the_16_bit_size_field ... ok
+test vbios::tests::rejects_a_corrupt_rom_signature ... ok
+test vbios::tests::rejects_a_descriptor_with_no_version_flag ... ok
+test vbios::tests::rejects_a_pkc_offset_that_overruns_the_signature ... ok
+test vbios::tests::rejects_a_descriptor_size_below_the_v3_minimum ... ok
+test vbios::tests::rejects_an_image_length_that_truncates_the_ucode ... ok
+test vbios::tests::rejects_an_imem_size_larger_than_the_ucode ... ok
+test vbios::tests::rejects_a_wrong_ucode_table_version ... ok
+test vbios::tests::the_build_is_deterministic ... ok
+test vbios::tests::the_rom_signature_is_the_first_two_bytes ... ok
+test vbios::tests::the_dmem_payload_carries_an_interface_table_the_driver_can_walk ... ok
+test vbios::tests::the_same_table_serves_the_sb_command ... ok
+test vbios::tests::the_shipped_profile_builds_an_image_the_driver_parser_accepts ... ok
+test versions::tests::a_measured_layout_with_no_encoding_is_refused_by_name ... ok
+test versions::tests::alloc_param_size_reports_only_the_triple_confirmed_class ... ok
+test versions::tests::an_unmeasured_version_is_refused_by_name_never_the_nearest_table ... ok
+test versions::tests::below_the_oldest_capability_row_is_refused_by_name ... ok
+test versions::tests::static_info_is_encoded_only_where_the_layout_equals_the_benchs ... ok
+test versions::tests::the_bench_driver_resolves_to_the_64_byte_nvos46 ... ok
+test versions::tests::the_caps_rows_are_strictly_ascending ... ok
+test versions::tests::the_channel_alloc_wires_are_measured_not_boundary_rows ... ok
+test versions::tests::the_nvos46_shape_is_read_from_the_measured_layout ... ok
+test vbios::tests::the_single_image_declares_base_not_ext ... ok
+test versions::tests::the_vgx_pair_is_measured_per_tag ... ok
+test videocaps::tests::msenc_ignores_the_instance_and_keeps_the_guests_padding ... ok
+test versions::tests::the_rm_control_header_follows_the_measured_boundary_at_575 ... ok
+test videocaps::tests::the_measured_bsp_table_is_served_for_its_instance_only ... ok
+test view::tests::every_aperture_encoding_decodes_to_its_own_variant ... ok
+test view::tests::rpc_payload_len_refuses_every_impossible_declaration ... ok
+test view::tests::is_sysmem_matches_the_c_emulators_predicate_on_all_four_encodings ... ok
+test view::the_pdb_aperture_must_not_fold_into_a_default::an_undefined_aperture_is_unknown_and_never_vidmem ... ok
+test view::the_pdb_aperture_must_not_fold_into_a_default::each_defined_aperture_maps_to_its_own_domain_value ... ok
+test view::the_pdb_aperture_must_not_fold_into_a_default::the_wire_bits_decode_through_one_function ... ok
+test windows_twin::tests::a_wrong_branch_a_wrong_changelist_and_a_different_snapshot_are_refused_by_name ... ok
+test windows_twin::tests::the_observed_windows_580_88_identity_is_linux_580_65_06 ... ok
+test windows_twin::tests::every_row_is_a_matrix_tag_and_twin_names_are_unique ... ok
+test wire::tests::errors_render_their_numbers ... ok
+test wire::tests::le_readers_are_exact_and_bounded ... ok
+test vbios::tests::the_ucode_payload_sits_immediately_after_the_signatures ... ok
+test wire::tests::le_readers_do_not_wrap_at_usize_max ... ok
+test wire::tests::struct_layout_offset_of_names_the_field ... ok
+test zbc::tests::sizes_are_the_structs_the_umd_sends ... ok
+test wire::tests::le_readers_refuse_one_byte_past_the_end ... ok
+
+test result: ok. 467 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/capability_policy_550.rs (target/debug/deps/capability_policy_550-2dd188e85d43f279)
+
+running 4 tests
+test deferred_api_controls_are_admitted_exactly_where_the_class_is ... ok
+test timer_allocation_does_not_authorize_timer_controls ... ok
+test legacy_shared_groups_match_each_versions_compiled_headers ... ok
+test pre_535_extension_policies_change_only_by_the_audited_software_constructors ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/driver_matrix.rs (target/debug/deps/driver_matrix-b40483c43bce223e)
+
+running 10 tests
+test a_non_contiguous_subtree_mask_is_refused_only_where_the_guest_has_start_end ... ok
+test mc_engine_idx_is_measured_at_every_tag ... ok
+test the_bench_driver_is_measured ... ok
+test the_measured_tag_list_is_the_tsvs ... ok
+test the_page_directory_rpcs_embed_the_control_struct_at_every_tag ... ok
+test intr_table_engine_indices_are_carried_by_name_to_every_tag ... ok
+test the_video_caps_layout_resolves_across_the_610_rename ... ok
+test every_tsv_row_is_what_the_rust_tables_answer ... ok
+test the_reviewed_controls_carry_a_ga10x_body_to_every_measured_version ... ok
+test every_consumed_struct_round_trips_through_every_measured_layout ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.08s
+
+     Running tests/fixed_map_page_size.rs (target/debug/deps/fixed_map_page_size-7001f5991b6216b9)
+
+running 8 tests
+test a_big_aligned_base_with_a_ragged_length_still_pins_the_small_page_table ... ok
+test a_big_aligned_request_leaves_the_page_size_to_rm ... ok
+test a_page_aligned_request_is_accepted_and_silently_relocated ... ok
+test a_slice_at_a_small_aligned_offset_must_take_the_small_page_flag ... ok
+test every_ring_va_w744_measured_unhonoured_now_asks_for_the_small_page_table ... ok
+test the_predicate_is_exactly_big_page_alignment_of_all_three_terms ... ok
+test the_store_slice_flag_is_the_only_one_that_survives_an_unknown_reservation_base ... ok
+test the_store_slice_page_pin_follows_the_reservations_actual_shape ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/gr_static_info.rs (target/debug/deps/gr_static_info-dd847c0d017a03a9)
+
+running 19 tests
+test a_3060ti_publishes_its_own_non_contiguous_mask ... ok
+test a_mask_that_disagrees_with_its_count_is_refused_by_every_encoder ... ok
+test a_present_context_buffer_with_zero_alignment_is_refused ... ok
+test a_tpc_row_naming_a_nonexistent_gpc_is_refused ... ok
+test a_profile_with_no_gpcs_cannot_encode_the_zero_gpc_mask_shortcut ... ok
+test a_zero_fecs_record_size_is_refused ... ok
+test a_real_ga106_whose_logical_order_is_not_physical_is_reproduced_byte_for_byte ... ok
+test absent_and_empty_are_different_context_buffers ... ok
+test context_buffers_info_matches_the_real_ga106_reply ... ok
+test fecs_record_size_matches_the_real_ga106_reply ... ok
+test floorsweeping_masks_match_the_real_ga106_reply ... ok
+test gr_caps_matches_the_real_ga106_reply ... ok
+test num_sm_and_num_tpc_sit_after_the_full_240_entry_array ... ok
+test an_ad102_with_a_fused_gpc0_is_placed_as_its_own_gsp_placed_it ... ok
+test global_sm_order_matches_the_real_ga106_reply_over_the_captured_prefix ... ok
+test pdb_properties_match_the_real_ga106_reply ... ok
+test physical_ids_and_per_gpc_tpc_rows_are_refused_by_name ... ok
+test only_engine_zero_is_described_in_every_reply ... ok
+test tpc_rows_that_do_not_add_up_to_the_gpc_counts_are_refused ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/gvaspace_pdes.rs (target/debug/deps/gvaspace_pdes-92edab1747608a9d)
+
+running 8 tests
+test an_unrepresentable_upper_bound_is_refused_rather_than_wrapped ... ok
+test every_oracle_byte_this_file_reads_is_inside_what_the_recorder_kept ... ok
+test a_publication_that_contradicts_its_own_abi_is_refused ... ok
+test the_real_ga106_publication_decodes_and_round_trips_byte_for_byte ... ok
+test the_server_context_only_form_decodes_and_is_not_a_root ... ok
+test the_struct_size_is_derived_from_the_level_bound ... ok
+test the_upper_bound_is_the_last_address_not_the_end ... ok
+test the_publication_carries_the_split_vas_range_ogkm_names ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/initctrl_census.rs (target/debug/deps/initctrl_census-d5574358a26acc0c)
+
+running 6 tests
+test a_rows_declared_dlen_matches_the_bytes_its_array_actually_holds ... ok
+test dlen_is_not_a_trailing_zero_trim_and_the_census_is_where_that_is_checked ... ok
+test every_truncated_row_in_the_c_header_is_in_truncated_rows_byte_for_byte ... ok
+test the_census_header_agrees_with_its_own_rows_and_with_the_pinned_totals ... ok
+test the_predicate_classifies_every_row_the_way_the_census_does ... ok
+test the_two_defect_lists_are_disjoint_and_cover_the_censuss_defective_rows ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/invariant_classes.rs (target/debug/deps/invariant_classes-5b3f9d1047cb9d81)
+
+running 2 tests
+test each_role_alias_is_the_class_its_documentation_names ... ok
+test the_invariant_set_is_exactly_the_three_that_were_sourced ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/mean_wire.rs (target/debug/deps/mean_wire-3b38fbf3074be05a)
+
+running 27 tests
+test a_hostile_rpc_length_is_refused_with_its_numbers ... ok
+test a_short_rpc_alloc_body_is_refused_at_every_length ... ok
+test a_short_rpc_control_body_is_refused_at_every_length ... ok
+test a_realistic_event_stream_decodes_and_the_skewed_event_in_the_middle_is_refused ... ok
+test a_wellformed_rpc_envelope_yields_the_exact_payload ... ok
+test a_wrong_rpc_signature_is_refused_by_value ... ok
+test an_undersized_rpc_buffer_is_truncated_not_a_signature_error ... ok
+test decode_free_applies_verbatim_to_an_rpc_free_body ... ok
+test each_versions_encoder_is_round_tripped_by_its_own_table_and_misread_by_the_other ... ok
+test encode_then_decode_is_the_identity_with_distinguishable_field_values ... ok
+test encode_into_leaves_padding_and_the_tail_untouched ... ok
+test exactly_the_two_client_root_classes_are_client_roots ... ok
+test hostile_all_ones_decodes_to_the_literal_values ... ok
+test the_alloc_shape_comes_from_the_ioctl_size_and_nothing_else ... ok
+test table_decoders_refuse_short_at_every_length_and_report_the_versions_size ... ok
+test the_client_kind_seam_works_from_the_prefix_and_refuses_seven_bytes ... ok
+test the_control_table_names_exactly_the_commands_it_can_argue_for ... ok
+test the_copy_engine_inverse_is_exact_across_both_blocks_and_the_gap_between_them ... ok
+test the_rpc_control_body_offsets_agree_with_the_c_artifacts_independent_transcription ... ok
+test the_rpc_alloc_body_offsets_agree_with_the_c_artifacts_independent_transcription ... ok
+test the_same_bytes_decode_differently_under_the_two_tables ... ok
+test every_decoder_refuses_short_and_accepts_long_at_every_length ... ok
+test the_stream_runs_under_both_tables_with_the_skew_case_mirrored ... ok
+test the_writeback_lands_at_the_versions_status_offset_and_touches_nothing_else ... ok
+test the_writeback_refuses_a_buffer_short_for_its_own_version ... ok
+test the_versioned_writeback_refuses_every_short_length_without_writing_a_byte ... ok
+test every_encoder_refuses_short_writes_nothing_and_lays_down_exactly_these_bytes ... ok
+
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/oracle_layout.rs (target/debug/deps/oracle_layout-adbbb1f63fe2c39b)
+
+running 23 tests
+test class_ids_match_the_headers ... ok
+test deferred_api_optional_params_match_public_c_compiler ... ok
+test every_generated_struct_is_covered_by_an_oracle_assertion ... ok
+test nv0080_alloc_params_match_nvproxys_field_layout ... ok
+test nv_esc_numbers_match_ogkm_and_stay_in_the_byte_range ... ok
+test nvos46_the_three_oracles_disagree_and_here_is_exactly_how ... ok
+test nvos_frontend_structs_match_nvproxys_field_layout ... ok
+test rpc_constants_match_the_c_emulators_literals ... ok
+test set_page_directory_prefix_matches_the_c_emulators_snoop_offsets ... ok
+test sizes_match_the_c_artifacts_abi_parity_expectations ... ok
+test the_610_transport_words_are_assembled_from_the_drivers_own_bit_fields ... ok
+test the_c_artifacts_bufferid_bug_does_not_reproduce ... ok
+test nv0000_alloc_params_has_only_its_prefix_corroborated ... ok
+test the_generators_layout_equals_rustcs_for_every_generated_struct ... ok
+test the_bench_driver_declares_no_queue_geometry_and_the_table_supplies_it ... ok
+test the_channel_alloc_prefix_stops_where_the_two_trees_stop_agreeing ... ok
+test the_gsp_element_wire_boundary_is_610_not_570 ... ok
+test the_post_event_body_has_the_padding_hole_a_hand_encoder_would_miss ... ok
+test the_promote_ctx_prefix_is_pinned_against_rustc_and_the_c_artifact ... ok
+test the_rc_triggered_event_has_two_padding_holes_a_hand_encoder_would_miss ... ok
+test the_rpc_envelope_is_32_bytes_and_the_c_emulator_says_36_in_one_place ... ok
+test the_transcribed_layout_equals_rustcs ... ok
+test the_tsg_and_ctxshare_params_agree_between_the_two_vendored_trees ... ok
+
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/real_ga106_bodies.rs (target/debug/deps/real_ga106_bodies-cf42776ed7e16133)
+
+running 4 tests
+test every_claimed_hardware_body_is_the_body_in_the_trace ... ok
+test the_entry_that_ended_run_fmb1_is_read_out_of_the_trace_and_is_not_zero ... ok
+test the_trace_carries_every_row_this_rung_measured ... ok
+test the_gr_info_reply_is_byte_identical_to_the_real_ga106 ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/truncated_row_reads.rs (target/debug/deps/truncated_row_reads-0a652423f663dd14)
+
+running 4 tests
+test no_declared_reliance_reaches_past_the_captured_prefix ... ok
+test every_declared_site_exists_and_names_the_control_it_claims_to_argue_about ... ok
+test the_set_of_truncated_rows_this_tree_references_is_exactly_the_set_it_argues_about ... ok
+test every_citation_to_a_census_rows_line_names_the_control_that_line_carries ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.86s
+
+   Doc-tests kf_abi
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

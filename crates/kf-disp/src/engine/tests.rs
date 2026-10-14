@@ -257,6 +257,7 @@ fn a_core_update_arms_then_notifies() {
                 handle: 0xcafe_0001,
                 offset: 32,
                 awaken: true,
+                finished: true,
             },
         ] => {
             assert!(
@@ -354,6 +355,313 @@ fn an_interlocked_group_waits_for_every_member() {
     assert_eq!(h[1].period_ns, 0);
 }
 
+/// ★ 2026-10-10 (run 293, measured): a ONE-SIDED interlock. The overlay window 4 interlocks with window 0 and with
+/// its immediate channel; window 0's own UPDATE names nothing. Window 0's update must latch TOGETHER with the waiting
+/// overlay update (and its immediate channel), never alone ahead of it — alone, the overlay starves.
+#[test]
+fn a_pending_update_that_waits_for_a_channel_latches_with_that_channels_next_update() {
+    let mut e = engine();
+    e.alloc(ChannelKind::Window, 0, CLIENT, 1, pb(), 0);
+    e.alloc(ChannelKind::Window, 4, CLIENT, 1, pb(), 0);
+    e.alloc(ChannelKind::WindowImm, 4, CLIENT, 1, pb(), 0);
+    let w4 = ChannelKind::Window.channel_number(4);
+    let i4 = ChannelKind::WindowImm.channel_number(4);
+    let mut w = Ring::new();
+    w.m(m(WIN, "SET_WINDOW_INTERLOCK_FLAGS"), 1 << 0);
+    w.m(
+        m(WIN, "UPDATE"),
+        put(0, fl(WIN, "UPDATE_INTERLOCK_WITH_WIN_IMM"), 1),
+    );
+    assert!(
+        e.step(w4, &w.bytes(), w.put(), &mut all_ok)
+            .effects
+            .is_empty()
+    );
+    let mut i = Ring::new();
+    i.m(
+        m(IMM, "UPDATE"),
+        put(0, fl(IMM, "UPDATE_INTERLOCK_WITH_WINDOW"), 1),
+    );
+    assert!(
+        e.step(i4, &i.bytes(), i.put(), &mut all_ok)
+            .effects
+            .is_empty()
+    );
+    assert!(
+        e.waiting(w4) && e.waiting(i4),
+        "the overlay waits for window 0"
+    );
+    // window 0's update, interlocked with nothing
+    let mut z = Ring::new();
+    z.m(m(WIN, "UPDATE"), 0);
+    let s = e.step(1, &z.bytes(), z.put(), &mut all_ok);
+    let latched: Vec<u32> = s
+        .effects
+        .iter()
+        .filter_map(|x| match x {
+            Effect::Latched { window } => Some(*window),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        latched,
+        vec![0, 4],
+        "window 0 latches WITH the overlay: {:?}",
+        s.effects
+    );
+    assert!(!e.waiting(1) && !e.waiting(w4) && !e.waiting(i4));
+}
+
+/// ⊘ SUPERSEDED 2026-10-14 (`V3_DISPLAY_PLANES_ORACLE.md`). The 2026-10-10 version of this test
+/// (`an_update_naming_a_channel_already_parked_for_the_vblank_joins_its_latch`, runs 400/403) asserted
+/// that an UPDATE naming a channel whose own UPDATE is parked for the vblank JOINS that latch. Its
+/// premise ("window 0's UPDATE names nothing") was inferred; the measured ring of run 411 shows window
+/// 0 naming window 4, and the join rule mispaired the stock Linux driver's overlay enable + flip
+/// (`linux_overlay_enable_then_flip_pairs_each_flip_with_its_own_partner` below). Now: an update parked
+/// only for its vblank has passed its interlock stage; the overlay's UPDATE naming window 0 waits for
+/// window 0's NEXT update and latches with it.
+#[test]
+fn an_update_naming_a_channel_parked_only_for_its_vblank_waits_for_that_channels_next_update() {
+    let mut e = engine();
+    e.alloc(ChannelKind::Core, 0, CLIENT, 1, pb(), 0);
+    e.alloc(ChannelKind::Window, 0, CLIENT, 1, pb(), 0);
+    e.alloc(ChannelKind::Window, 4, CLIENT, 1, pb(), 0);
+    e.alloc(ChannelKind::WindowImm, 4, CLIENT, 1, pb(), 0);
+    let (w0, w4) = (1, ChannelKind::Window.channel_number(4));
+    let i4 = ChannelKind::WindowImm.channel_number(4);
+    // head 0 lit, windows 0 and 4 owned by it
+    let mut c = Ring::new();
+    modeset(&mut c, 0, 0);
+    c.m(ma(CORE, "WINDOW_SET_CONTROL", 4), 0);
+    c.m(m(CORE, "UPDATE"), 0);
+    e.step(0, &c.bytes(), c.put(), &mut all_ok);
+    // both windows scan a surface (each channel's ring keeps growing: GET follows PUT)
+    let (mut r0, mut r4, mut ri) = (Ring::new(), Ring::new(), Ring::new());
+    for (w, n, r) in [(0u32, w0, &mut r0), (4, w4, &mut r4)] {
+        r.m(ma(WIN, "SET_CONTEXT_DMA_ISO", 0), 0x1_0001 + w);
+        r.m(m(WIN, "SET_WINDOW_INTERLOCK_FLAGS"), 0);
+        r.m(m(WIN, "UPDATE"), 0);
+        e.step(n, &r.bytes(), r.put(), &mut all_ok);
+        e.vblank(0, &mut all_ok);
+    }
+    // window 0's flip first: parked for head 0's vblank
+    r0.m(m(WIN, "UPDATE"), 0);
+    let s = e.step(w0, &r0.bytes(), r0.put(), &mut all_ok);
+    assert!(
+        s.effects.is_empty(),
+        "parked for the vblank: {:?}",
+        s.effects
+    );
+    assert!(e.waiting(w0));
+    // 21 us later: the overlay's flip, naming window 0 and its immediate channel
+    r4.m(m(WIN, "SET_WINDOW_INTERLOCK_FLAGS"), 1 << 0);
+    r4.m(
+        m(WIN, "UPDATE"),
+        put(0, fl(WIN, "UPDATE_INTERLOCK_WITH_WIN_IMM"), 1),
+    );
+    e.step(w4, &r4.bytes(), r4.put(), &mut all_ok);
+    ri.m(
+        m(IMM, "UPDATE"),
+        put(0, fl(IMM, "UPDATE_INTERLOCK_WITH_WINDOW"), 1),
+    );
+    e.step(i4, &ri.bytes(), ri.put(), &mut all_ok);
+    assert!(
+        e.waiting(w0) && e.waiting(w4) && e.waiting(i4),
+        "window 0 waits for its vblank, the overlay and its immediate channel for window 0"
+    );
+    // the vblank latches window 0's flip ALONE: the overlay never joined it
+    let s = e.vblank(0, &mut all_ok);
+    assert_eq!(latched(&s), vec![0], "{:?}", s.effects);
+    assert!(
+        !e.waiting(w0) && e.waiting(w4) && e.waiting(i4),
+        "{:?}",
+        e.parked()
+    );
+    // window 0's next UPDATE pairs with the waiting overlay update; they latch together
+    r0.m(m(WIN, "UPDATE"), 0);
+    e.step(w0, &r0.bytes(), r0.put(), &mut all_ok);
+    let s = e.vblank(0, &mut all_ok);
+    let mut l = latched(&s);
+    l.sort_unstable();
+    assert_eq!(l, vec![0, 4], "{:?}", s.effects);
+    assert!(!e.waiting(w0) && !e.waiting(w4) && !e.waiting(i4));
+}
+
+/// ★ 2026-10-14 (`V3_DISPLAY_PLANES_ORACLE.md`, measured on a bare-metal AD104 under the open 580.159.04
+/// modules: a commit that only disables a plane gets its DRM event within a frame; under kayfabe every such
+/// commit timed out after 3 s). A window flipped to NO surface (NVKMS programs the new entry with NO
+/// notifier, `nvkms-evo3.c` EvoFlipC3Common) raises the channel's AWAKEN through the one notifier its latch
+/// writes: the flipped-away entry's FINISHED, in that entry's WRITE_AWAKEN mode. A normal flip still raises
+/// exactly ONE AWAKEN (the new entry's BEGUN), never two. FAILS on the old engine: the disable raised none.
+#[test]
+fn a_plane_disable_raises_one_awaken_through_the_flipped_away_entry() {
+    let mut e = engine();
+    let _ = lit(&mut e);
+    let w1 = ChannelKind::Window.channel_number(1);
+    let mut r = Ring::new();
+    let ctl = |idx: u32| {
+        put(
+            put(0, fl(WIN, "SET_NOTIFIER_CONTROL_OFFSET"), idx),
+            fl(WIN, "SET_NOTIFIER_CONTROL_MODE"),
+            m(WIN, "SET_NOTIFIER_CONTROL_MODE_WRITE_AWAKEN"),
+        )
+    };
+    let flip = |r: &mut Ring, iso: u32, notifier: u32, idx: u32| {
+        r.m(m(WIN, "SET_CONTEXT_DMA_NOTIFIER"), notifier);
+        r.m(m(WIN, "SET_NOTIFIER_CONTROL"), if notifier == 0 { 0 } else { ctl(idx) });
+        r.m(ma(WIN, "SET_CONTEXT_DMA_ISO", 0), iso);
+        r.m(m(WIN, "SET_WINDOW_INTERLOCK_FLAGS"), 1 << 1);
+        r.m(m(WIN, "UPDATE"), 0);
+    };
+    let awakens = |s: &Step| -> Vec<(bool, bool)> {
+        s.effects
+            .iter()
+            .filter_map(|x| match x {
+                Effect::Notify {
+                    chn,
+                    finished,
+                    awaken,
+                    ..
+                } if *chn == w1 => Some((*finished, *awaken)),
+                _ => None,
+            })
+            .collect()
+    };
+    // enable (the window was not active before: nvidia-drm counts no event, none is raised)
+    flip(&mut r, 0x3_0001, 0xA0, 0);
+    e.step(w1, &r.bytes(), r.put(), &mut all_ok);
+    let s = e.vblank(0, &mut all_ok);
+    assert_eq!(awakens(&s), vec![(false, false)], "{:?}", s.effects);
+    // a normal flip: the old entry FINISHED without AWAKEN, the new BEGUN with it — one AWAKEN
+    flip(&mut r, 0x3_0002, 0xA0, 1);
+    e.step(w1, &r.bytes(), r.put(), &mut all_ok);
+    let s = e.vblank(0, &mut all_ok);
+    assert_eq!(awakens(&s), vec![(true, false), (false, true)], "{:?}", s.effects);
+    // the plane's disable: no surface, no notifier — the flipped-away entry's FINISHED raises the AWAKEN
+    flip(&mut r, 0, 0, 0);
+    e.step(w1, &r.bytes(), r.put(), &mut all_ok);
+    let s = e.vblank(0, &mut all_ok);
+    assert_eq!(awakens(&s), vec![(true, true)], "{:?}", s.effects);
+    assert!(!e.waiting(w1));
+    // re-enabled from nothing: the window was not active, so again no AWAKEN
+    flip(&mut r, 0x3_0003, 0xA0, 0);
+    e.step(w1, &r.bytes(), r.put(), &mut all_ok);
+    let s = e.vblank(0, &mut all_ok);
+    assert_eq!(awakens(&s), vec![(false, false)], "{:?}", s.effects);
+}
+
+/// ★ 2026-10-14, the Linux plane oracle (`V3_DISPLAY_PLANES_ORACLE.md`, run planes-run1, stock
+/// nvidia-drm/NVKMS 580.159.04, measured engine ring): the sequence NVKMS pushes when a client enables
+/// an overlay plane in one atomic commit and flips BOTH planes in the next one, before the enable's
+/// vblank. NVKMS (`nvkms-evo3.c` nvEvoUpdateC3) gives every window of an update the same interlock set
+/// (the clique of the update's windows, itself included); the overlay's enable interlocks only with its
+/// immediate channel. Each flip must latch the primary and the overlay of THAT flip together — never
+/// overlay(k) with primary(k+1) — and the plane's disable afterwards (core + overlay + immediate) must
+/// latch, leaving nothing parked. FAILS on the 2026-10-10 join rule: the primary's flip-0 UPDATE joins the
+/// parked enable, the overlay's flip-0 UPDATE waits for a primary UPDATE already consumed, and the
+/// disable deadlocks the core.
+#[test]
+fn linux_overlay_enable_then_flip_pairs_each_flip_with_its_own_partner() {
+    let mut e = engine();
+    let c = lit(&mut e); // head 0 lit; windows 0 (primary) and 1 (overlay) owned by head 0
+    e.alloc(ChannelKind::WindowImm, 1, CLIENT, 1, pb(), 0);
+    let (w0, w1) = (1u32, ChannelKind::Window.channel_number(1));
+    let i1 = ChannelKind::WindowImm.channel_number(1);
+    let both = (1 << 0) | (1 << 1);
+    let (mut r0, mut r1, mut ri) = (Ring::new(), Ring::new(), Ring::new());
+    let mut c = c;
+    // the primary scans a surface
+    r0.m(ma(WIN, "SET_CONTEXT_DMA_ISO", 0), 0x2_0000);
+    r0.m(m(WIN, "SET_WINDOW_INTERLOCK_FLAGS"), 1 << 0);
+    r0.m(m(WIN, "UPDATE"), 0);
+    e.step(w0, &r0.bytes(), r0.put(), &mut all_ok);
+    e.vblank(0, &mut all_ok);
+    assert!(!e.waiting(w0));
+    // commit 1, the overlay ENABLE: its immediate channel first, then the window (names only itself
+    // and its immediate channel)
+    ri.m(
+        m(IMM, "UPDATE"),
+        put(0, fl(IMM, "UPDATE_INTERLOCK_WITH_WINDOW"), 1),
+    );
+    e.step(i1, &ri.bytes(), ri.put(), &mut all_ok);
+    r1.m(ma(WIN, "SET_CONTEXT_DMA_ISO", 0), 0x1_0000);
+    r1.m(m(WIN, "SET_INTERLOCK_FLAGS"), 0);
+    r1.m(m(WIN, "SET_WINDOW_INTERLOCK_FLAGS"), 1 << 1);
+    r1.m(
+        m(WIN, "UPDATE"),
+        put(0, fl(WIN, "UPDATE_INTERLOCK_WITH_WIN_IMM"), 1),
+    );
+    e.step(w1, &r1.bytes(), r1.put(), &mut all_ok);
+    assert!(e.waiting(w1), "the enable waits for the vblank");
+    // flips 1..=6, each pushed before the previous one latched (a nonblocking client): primary then
+    // overlay, both naming both
+    let iso = |w: u32, k: u32| 0x1000_0000 + (w << 8) + k;
+    let iso_m = ma(WIN, "SET_CONTEXT_DMA_ISO", 0);
+    for k in 1..=6u32 {
+        r0.m(iso_m, iso(0, k));
+        r0.m(m(WIN, "SET_WINDOW_INTERLOCK_FLAGS"), both);
+        r0.m(m(WIN, "UPDATE"), 0);
+        e.step(w0, &r0.bytes(), r0.put(), &mut all_ok);
+        r1.m(iso_m, iso(1, k));
+        r1.m(m(WIN, "SET_INTERLOCK_FLAGS"), 0);
+        r1.m(m(WIN, "SET_WINDOW_INTERLOCK_FLAGS"), both);
+        r1.m(m(WIN, "UPDATE"), 0);
+        e.step(w1, &r1.bytes(), r1.put(), &mut all_ok);
+        // vblanks until both windows latched THIS flip (the first one also latches the enable)
+        let mut seen = Vec::new();
+        for _ in 0..3 {
+            let s = e.vblank(0, &mut all_ok);
+            seen.extend(latched(&s));
+            if !e.waiting(w0) && !e.waiting(w1) {
+                break;
+            }
+        }
+        assert!(
+            !e.waiting(w0) && !e.waiting(w1),
+            "flip {k} completed within three vblanks: {:?} / {:?}",
+            e.parked(),
+            seen
+        );
+        assert_eq!(
+            (
+                e.armed(ChannelKind::Window, 0, iso_m),
+                e.armed(ChannelKind::Window, 1, iso_m)
+            ),
+            (Some(iso(0, k)), Some(iso(1, k))),
+            "flip {k}: each window scans this flip's surface (never the previous/next one's)"
+        );
+    }
+    // the plane's disable: core naming the overlay, the immediate channel, then the overlay (no surface)
+    c.m(m(CORE, "SET_WINDOW_INTERLOCK_FLAGS"), 1 << 1);
+    c.m(m(CORE, "UPDATE"), 0);
+    e.step(0, &c.bytes(), c.put(), &mut all_ok);
+    ri.m(
+        m(IMM, "UPDATE"),
+        put(0, fl(IMM, "UPDATE_INTERLOCK_WITH_WINDOW"), 1),
+    );
+    e.step(i1, &ri.bytes(), ri.put(), &mut all_ok);
+    r1.m(iso_m, 0);
+    r1.m(
+        m(WIN, "SET_INTERLOCK_FLAGS"),
+        put(0, fl(WIN, "SET_INTERLOCK_FLAGS_INTERLOCK_WITH_CORE"), 1),
+    );
+    r1.m(m(WIN, "SET_WINDOW_INTERLOCK_FLAGS"), 1 << 1);
+    r1.m(
+        m(WIN, "UPDATE"),
+        put(0, fl(WIN, "UPDATE_INTERLOCK_WITH_WIN_IMM"), 1),
+    );
+    e.step(w1, &r1.bytes(), r1.put(), &mut all_ok);
+    for _ in 0..3 {
+        e.vblank(0, &mut all_ok);
+    }
+    assert!(
+        e.parked().is_empty(),
+        "the disable latched; nothing waits: {:?}",
+        e.parked()
+    );
+    assert_eq!(e.armed(ChannelKind::Window, 1, iso_m), Some(0));
+}
+
 /// ★ A plain non-tearing flip on an active head latches at the head's VBLANK: until then the window
 /// is busy with GET before its UPDATE, and the flip's notifier is NOT written.
 #[test]
@@ -366,6 +674,7 @@ fn a_non_tearing_flip_waits_for_vblank_and_its_acquire() {
     c.m(m(CORE, "UPDATE"), 0);
     e.step(0, &c.bytes(), c.put(), &mut all_ok);
     let mut w = Ring::new();
+    w.m(ma(WIN, "SET_CONTEXT_DMA_ISO", 0), 0x1_0001);
     w.m(m(WIN, "SET_CONTEXT_DMA_NOTIFIER"), 0xcafe_00f0);
     w.m(
         m(WIN, "SET_NOTIFIER_CONTROL"),
@@ -409,17 +718,11 @@ fn a_non_tearing_flip_waits_for_vblank_and_its_acquire() {
         "another head's vblank latches nothing"
     );
     let s = e.vblank(0, &mut |a: &Acquire| a.satisfied_by(sem));
-    // the window had no surface before this flip: the notifier is written, the flip EVENT is not
+    // the window had no surface before this flip: the notifier is written, the flip EVENT is not; and
+    // its RELEASE is NOT written now — only when this entry is flipped away (the next latch)
     match s.effects.as_slice() {
         [
             Effect::Latched { window: 0 },
-            Effect::Release {
-                handle: 0xcafe_0b00,
-                offset: 64,
-                value: 0xd00d_d00d,
-                wide: false,
-                ..
-            },
             Effect::Notify {
                 chn: 1,
                 handle: 0xcafe_00f0,
@@ -431,6 +734,98 @@ fn a_non_tearing_flip_waits_for_vblank_and_its_acquire() {
         other => panic!("{other:?}"),
     }
     assert!(s.gets.contains(&(1, 1, w.put())));
+    // the next flip (slot 5, value 0xbeef) flips the first away: ITS release (slot 4, 0xd00dd00d) is written now
+    let w2 = &mut w;
+    w2.m(
+        m(WIN, "SET_SEMAPHORE_CONTROL"),
+        put(0, fl(WIN, "SET_SEMAPHORE_CONTROL_OFFSET"), 5),
+    );
+    w2.m(m(WIN, "SET_SEMAPHORE_RELEASE"), 0xbeef);
+    w2.m(m(WIN, "UPDATE"), 0);
+    let s = e.step(1, &w2.bytes(), w2.put(), &mut all_ok);
+    assert!(s.effects.is_empty(), "parked for vblank: {:?}", s.effects);
+    let s = e.vblank(0, &mut |a: &Acquire| a.satisfied_by(sem));
+    match s.effects.as_slice() {
+        [
+            Effect::Latched { window: 0 },
+            Effect::Release {
+                handle: 0xcafe_0b00,
+                offset: 64,
+                value: 0xd00d_d00d,
+                wide: false,
+                ..
+            },
+            // the outgoing entry's notifier FINISHED (its flip-away), then the incoming one's (BEGUN)
+            Effect::Notify {
+                chn: 1,
+                offset: 16,
+                finished: true,
+                ..
+            },
+            Effect::Notify {
+                chn: 1,
+                offset: 16,
+                finished: false,
+                ..
+            },
+        ] => {}
+        other => panic!("the outgoing entry's release, not the incoming one's: {other:?}"),
+    }
+}
+
+/// ★ A window's second latch writes the FIRST entry's notifier slot
+/// FINISHED (its flip-away) before the new entry's own notifier; the first latch writes only its own.
+#[test]
+fn a_flip_away_writes_the_outgoing_notifier_finished_and_the_new_one_begun() {
+    let mut e = engine();
+    e.alloc(ChannelKind::Core, 0, CLIENT, 1, pb(), 0);
+    e.alloc(ChannelKind::Window, 0, CLIENT, 1, pb(), 0);
+    let mut c = Ring::new();
+    modeset(&mut c, 0, 0);
+    c.m(m(CORE, "UPDATE"), 0);
+    e.step(0, &c.bytes(), c.put(), &mut all_ok);
+    let mut w = Ring::new();
+    w.m(ma(WIN, "SET_CONTEXT_DMA_ISO", 0), 0x1_0001);
+    w.m(m(WIN, "SET_CONTEXT_DMA_NOTIFIER"), 0xcafe_00f0);
+    w.m(
+        m(WIN, "SET_NOTIFIER_CONTROL"),
+        put(0, fl(WIN, "SET_NOTIFIER_CONTROL_OFFSET"), 1),
+    );
+    w.m(m(WIN, "UPDATE"), 0);
+    e.step(1, &w.bytes(), w.put(), &mut all_ok);
+    match e.vblank(0, &mut all_ok).effects.as_slice() {
+        [
+            Effect::Latched { window: 0 },
+            Effect::Notify {
+                offset: 16,
+                finished: false,
+                ..
+            },
+        ] => {}
+        other => panic!("{other:?}"),
+    }
+    w.m(
+        m(WIN, "SET_NOTIFIER_CONTROL"),
+        put(0, fl(WIN, "SET_NOTIFIER_CONTROL_OFFSET"), 2),
+    );
+    w.m(m(WIN, "UPDATE"), 0);
+    e.step(1, &w.bytes(), w.put(), &mut all_ok);
+    match e.vblank(0, &mut all_ok).effects.as_slice() {
+        [
+            Effect::Latched { window: 0 },
+            Effect::Notify {
+                offset: 16,
+                finished: true,
+                ..
+            },
+            Effect::Notify {
+                offset: 32,
+                finished: false,
+                ..
+            },
+        ] => {}
+        other => panic!("{other:?}"),
+    }
 }
 
 /// A window on an INACTIVE head (no raster armed) latches at once; so does an immediate flip.
@@ -757,6 +1152,148 @@ fn a_running_head_lights_the_sor_that_names_it() {
     assert_eq!(e.lit_sors(), vec![None; 4], "detached");
 }
 
+/// A head's full CEA mode as NVKMS programs it: raster size (totals), blank end/start (the visible
+/// area lies between them) and the pixel clock.
+fn full_mode(r: &mut Ring, head: u32, t: &crate::edid::Timing) {
+    let xy = |x: &str, y: &str, vx: u32, vy: u32| put(put(0, fl(CORE, x), vx), fl(CORE, y), vy);
+    r.m(
+        ma(CORE, "HEAD_SET_RASTER_SIZE", head),
+        xy(
+            "HEAD_SET_RASTER_SIZE_WIDTH",
+            "HEAD_SET_RASTER_SIZE_HEIGHT",
+            t.h_total(),
+            t.v_total(),
+        ),
+    );
+    let (bex, bey) = (t.h_sync + t.h_back - 1, t.v_sync + t.v_back - 1);
+    r.m(
+        ma(CORE, "HEAD_SET_RASTER_BLANK_END", head),
+        xy(
+            "HEAD_SET_RASTER_BLANK_END_X",
+            "HEAD_SET_RASTER_BLANK_END_Y",
+            bex,
+            bey,
+        ),
+    );
+    r.m(
+        ma(CORE, "HEAD_SET_RASTER_BLANK_START", head),
+        xy(
+            "HEAD_SET_RASTER_BLANK_START_X",
+            "HEAD_SET_RASTER_BLANK_START_Y",
+            bex + t.h_active,
+            bey + t.v_active,
+        ),
+    );
+    r.m(
+        ma(CORE, "HEAD_SET_PIXEL_CLOCK_FREQUENCY", head),
+        t.pixel_khz * 1000,
+    );
+}
+
+/// ★ `0x73011a`'s source: after the UPDATE the head reports the mode the guest programmed, the visible
+/// raster from the blank interval and the totals from the raster size (1080p60 and 720p60), and a
+/// head with no raster reports none.
+#[test]
+fn an_armed_head_reports_its_programmed_mode() {
+    use crate::ports::HeadTiming;
+    let mut e = engine();
+    e.alloc(ChannelKind::Core, 0, CLIENT, 1, pb(), 0);
+    assert_eq!(e.head_timings(), vec![None; 4], "nothing at boot");
+    let t1080 = crate::edid::Timing::cea_1080p60();
+    let t720 = crate::edid::Timing {
+        h_active: 1280,
+        h_front: 110,
+        h_sync: 40,
+        h_back: 220,
+        v_active: 720,
+        v_front: 5,
+        v_sync: 5,
+        v_back: 20,
+        pixel_khz: 74_250,
+        h_pos: true,
+        v_pos: true,
+    };
+    let mut c = Ring::new();
+    full_mode(&mut c, 2, &t1080);
+    full_mode(&mut c, 0, &t720);
+    c.m(m(CORE, "UPDATE"), 0);
+    e.step(0, &c.bytes(), c.put(), &mut all_ok);
+    assert_eq!(
+        e.head_timings(),
+        vec![
+            Some(HeadTiming {
+                active: (1280, 720),
+                total: (1650, 750),
+                pclk_hz: 74_250_000
+            }),
+            None,
+            Some(HeadTiming {
+                active: (1920, 1080),
+                total: (2200, 1125),
+                pclk_hz: 148_500_000
+            }),
+            None
+        ]
+    );
+}
+
+/// ★ Oracle (observed on the real RTX 4070, Windows 580.88, 2026-10-11): the guest programs a mode
+/// through the core channel, the worker publishes the armed state, and `0x73011a` answers the observed
+/// layout for 1920x1080@60 and 1280x720@60 from it, nothing else.
+#[test]
+fn display_mode_control_follows_the_core_channels_programmed_mode_end_to_end() {
+    use crate::model::{DisplayModel, GET_DISPLAY_MODE, GET_DISPLAY_MODE_SIZE};
+    let mut dm = DisplayModel::new(
+        &kf_chip::display::AMPERE,
+        vec![crate::edid::Monitor::default_1080p()],
+        crate::layout::for_version("580.65.06").unwrap(),
+    );
+    let mut e = engine();
+    e.alloc(ChannelKind::Core, 0, CLIENT, 1, pb(), 0);
+    let owner = put(0, fl(CORE, "SOR_SET_CONTROL_OWNER_MASK"), 1);
+    let t720 = crate::edid::Timing {
+        h_active: 1280,
+        h_front: 110,
+        h_sync: 40,
+        h_back: 220,
+        v_active: 720,
+        v_front: 5,
+        v_sync: 5,
+        v_back: 20,
+        pixel_khz: 74_250,
+        h_pos: true,
+        v_pos: true,
+    };
+    let mut c = Ring::new();
+    for (t, want) in [
+        (
+            crate::edid::Timing::cea_1080p60(),
+            [0x100u32, 0x780, 0x438, 0x898, 0x465, 0, 0x3c],
+        ),
+        (t720, [0x100, 0x500, 0x2d0, 0x672, 0x2ee, 0, 0x3c]),
+    ] {
+        // head 0 on SOR 0 (connector 0, display id 0x100)
+        c.m(ma(CORE, "SOR_SET_CONTROL", 0), owner);
+        full_mode(&mut c, 0, &t);
+        c.m(m(CORE, "UPDATE"), 0);
+        e.step(0, &c.bytes(), c.put(), &mut all_ok);
+        for (h, sor) in e.lit_sors().into_iter().enumerate() {
+            dm.ports.set_lit_sor(h, sor);
+        }
+        for (h, t) in e.head_timings().into_iter().enumerate() {
+            dm.ports.set_head_timing(h, t);
+        }
+        let mut q = vec![0u8; GET_DISPLAY_MODE_SIZE];
+        q[0..4].copy_from_slice(&0x100u32.to_le_bytes());
+        let r = dm.control(GET_DISPLAY_MODE, &q).unwrap().unwrap();
+        let got: Vec<u32> = r
+            .chunks(4)
+            .map(|w| u32::from_le_bytes(w.try_into().unwrap()))
+            .collect();
+        assert_eq!(got, want);
+    }
+}
+
 /// ★ M3: a head shows EVERY enabled window it owns, back to front by `DEPTH` (smaller is closer to
 /// the front), each where its window-immediate `SET_POINT_OUT` puts it, inside the head's
 /// `VIEWPORT_SIZE_IN` — weston puts its clients on the overlay window
@@ -896,6 +1433,8 @@ fn a_head_cursor_is_scanned_from_the_core_and_its_pio_point() {
 /// A window flip: `SET_PRESENT_CONTROL.BEGIN_MODE` = `mode` (0 non-tearing, 1 immediate — what
 /// nvidia-drm's async flips program), interlocked with the windows in `with`, then `UPDATE`.
 fn flip(r: &mut Ring, mode: u32, with: u32) {
+    // a flip shows a surface (an UPDATE with none anywhere is not a flip: `group_ready`)
+    r.m(ma(WIN, "SET_CONTEXT_DMA_ISO", 0), 0x1_0001);
     r.m(
         m(WIN, "SET_PRESENT_CONTROL"),
         put(0, fl(WIN, "SET_PRESENT_CONTROL_BEGIN_MODE"), mode),
@@ -1103,4 +1642,235 @@ fn indexed_color_table_overflow_stops_before_update() {
             .any(|e| matches!(e, Effect::Exception { .. }))
     );
     assert_eq!(e.updates, 0);
+}
+
+/// ⚠ H-corelatch (`Engine::core_latch_at_vblank`, default off): once a head is active, a core
+/// UPDATE latches — and states its notifier — at that head's next vblank, not at once; with no
+/// active head (the first modeset) it still latches at once. Off, every core update is immediate.
+#[test]
+fn a_core_update_on_an_active_head_waits_for_the_vblank_only_under_the_experiment() {
+    for on in [false, true] {
+        let mut e = engine();
+        e.core_latch_at_vblank = on;
+        e.alloc(ChannelKind::Core, 0, CLIENT, 1, pb(), 0);
+        let mut r = Ring::new();
+        modeset(&mut r, 0, 0);
+        r.m(m(CORE, "UPDATE"), 0);
+        let s = e.step(0, &r.bytes(), r.put(), &mut all_ok);
+        assert!(
+            s.effects.iter().any(|x| matches!(x, Effect::CoreArmed(_))),
+            "no active head yet: the modeset latches at once (on={on})"
+        );
+        assert!(
+            e.heads_armed()
+                .iter()
+                .any(|h| h.head == 0 && h.period_ns > 0)
+        );
+        core_notifier(&mut r, 0xcafe_0001, 2);
+        r.m(m(CORE, "UPDATE"), 0);
+        let s = e.step(0, &r.bytes(), r.put(), &mut all_ok);
+        let notified = |s: &Step| s.effects.iter().any(|x| matches!(x, Effect::Notify { .. }));
+        if on {
+            assert!(!notified(&s), "parked for head 0's vblank");
+            assert!(
+                e.vblank(1, &mut all_ok).effects.is_empty(),
+                "another head's tick"
+            );
+            assert!(
+                notified(&e.vblank(0, &mut all_ok)),
+                "head 0's tick latches it"
+            );
+        } else {
+            assert!(notified(&s), "default: at once");
+        }
+    }
+}
+
+/// ★ 2026-10-11 (overlay stall H1, runs 408-416; `traces/windows_playback_tdr_20261010/README.md`): the Windows
+/// driver's enable sequence for the overlay plane (window 4), as kicked in REAL TIME (PUT writes of run 416, µs
+/// apart): core UPDATE; core UPDATE naming window 4 and window 4's ownership; window 4 UPDATE naming the core (A);
+/// window 4 UPDATE naming nothing (B, no surface yet); window 0's UPDATE naming window 4; window 0's immediate
+/// channel; window 4's immediate channel naming window 4; window 4's flip C naming window 0 and its immediate
+/// channel. Each channel's fetch is independent and the hardware sees the writes in the order they were made, so
+/// A and B are gone (latched) before window 0's UPDATE arrives, and window 0's and the immediate channel's UPDATEs
+/// wait for C and latch with it at the vblank.
+struct Overlay {
+    e: Engine,
+    c: Ring,
+    r0: Ring,
+    r4: Ring,
+    i0: Ring,
+    i4: Ring,
+    marks: Vec<(u32, u32)>,
+}
+
+const W0: u32 = 1;
+const I0: u32 = 33;
+
+fn overlay_sequence() -> Overlay {
+    let mut e = engine();
+    e.alloc(ChannelKind::Core, 0, CLIENT, 1, pb(), 0);
+    e.alloc(ChannelKind::Window, 0, CLIENT, 1, pb(), 0);
+    e.alloc(ChannelKind::Window, 4, CLIENT, 1, pb(), 0);
+    e.alloc(ChannelKind::WindowImm, 0, CLIENT, 1, pb(), 0);
+    e.alloc(ChannelKind::WindowImm, 4, CLIENT, 1, pb(), 0);
+    let mut c = Ring::new();
+    modeset(&mut c, 0, 0);
+    c.m(m(CORE, "UPDATE"), 0);
+    e.step(0, &c.bytes(), c.put(), &mut all_ok);
+    // window 0 scans a surface (its ring keeps growing)
+    let mut r0 = Ring::new();
+    r0.m(ma(WIN, "SET_CONTEXT_DMA_ISO", 0), 0x1_0001);
+    r0.m(m(WIN, "SET_WINDOW_INTERLOCK_FLAGS"), 0);
+    r0.m(m(WIN, "UPDATE"), 0);
+    e.step(W0, &r0.bytes(), r0.put(), &mut all_ok);
+    e.vblank(0, &mut all_ok);
+    Overlay {
+        e,
+        c,
+        r0,
+        r4: Ring::new(),
+        i0: Ring::new(),
+        i4: Ring::new(),
+        marks: Vec::new(),
+    }
+}
+
+impl Overlay {
+    /// Record the ring writes in the order the guest made them: `(channel, PUT)` after each batch.
+    fn kick(&mut self, chn: u32) {
+        let put = match chn {
+            0 => self.c.put(),
+            W0 => self.r0.put(),
+            I0 => self.i0.put(),
+            5 => self.r4.put(),
+            _ => self.i4.put(),
+        };
+        self.marks.push((chn, put));
+    }
+
+    fn build(&mut self) {
+        let w4 = ChannelKind::Window.channel_number(4);
+        // core UPDATE (alone), then the core naming window 4, owning it for head 0
+        self.c.m(m(CORE, "UPDATE"), 0);
+        self.kick(0);
+        self.c.m(ma(CORE, "WINDOW_SET_CONTROL", 4), 0);
+        self.c.m(m(CORE, "SET_WINDOW_INTERLOCK_FLAGS"), 1 << 4);
+        self.c.m(m(CORE, "UPDATE"), 0);
+        self.kick(0);
+        // A: window 4 UPDATE naming the core
+        self.r4.m(
+            m(WIN, "SET_INTERLOCK_FLAGS"),
+            put(0, fl(WIN, "SET_INTERLOCK_FLAGS_INTERLOCK_WITH_CORE"), 1),
+        );
+        self.r4.m(m(WIN, "UPDATE"), 0);
+        self.kick(w4);
+        // B: window 4 UPDATE naming nothing (no surface yet)
+        self.r4.m(m(WIN, "SET_INTERLOCK_FLAGS"), 0);
+        self.r4.m(m(WIN, "UPDATE"), 0);
+        self.kick(w4);
+        // window 0's UPDATE naming window 4, and its immediate channel
+        self.r0.m(m(WIN, "SET_WINDOW_INTERLOCK_FLAGS"), 1 << 4);
+        self.r0.m(m(WIN, "UPDATE"), 0);
+        self.i0.m(m(IMM, "UPDATE"), 0);
+        self.kick(I0);
+        self.kick(W0);
+        // window 4's immediate channel, naming window 4
+        self.i4.m(
+            m(IMM, "UPDATE"),
+            put(0, fl(IMM, "UPDATE_INTERLOCK_WITH_WINDOW"), 1),
+        );
+        self.kick(ChannelKind::WindowImm.channel_number(4));
+        // C: window 4's first flip, naming window 0 and its immediate channel
+        self.r4.m(ma(WIN, "SET_CONTEXT_DMA_ISO", 0), 0x1_0002);
+        self.r4.m(m(WIN, "SET_WINDOW_INTERLOCK_FLAGS"), 1 << 0);
+        self.r4.m(
+            m(WIN, "UPDATE"),
+            put(0, fl(WIN, "UPDATE_INTERLOCK_WITH_WIN_IMM"), 1),
+        );
+        self.r4.m(m(WIN, "SET_WINDOW_INTERLOCK_FLAGS"), 0);
+        self.kick(w4);
+    }
+
+    fn ring_of(&self, chn: u32) -> &Ring {
+        match chn {
+            0 => &self.c,
+            W0 => &self.r0,
+            I0 => &self.i0,
+            5 => &self.r4,
+            _ => &self.i4,
+        }
+    }
+}
+
+/// In ARRIVAL order the overlay's first flip finds its partners: window 4's flip waits for the vblank WITH window 0's
+/// UPDATE and its immediate channel's, and all three latch together there.
+#[test]
+fn the_overlay_enable_sequence_pairs_in_arrival_order() {
+    let mut o = overlay_sequence();
+    o.build();
+    let w4 = ChannelKind::Window.channel_number(4);
+    let marks = o.marks.clone();
+    for (chn, put) in marks {
+        let bytes = o.ring_of(chn).bytes();
+        o.e.step(chn, &bytes, put, &mut all_ok);
+    }
+    assert!(
+        o.e.waiting(w4) && o.e.waiting(W0),
+        "window 4's flip and window 0's UPDATE wait for the vblank together: {:?}",
+        o.e.parked()
+    );
+    let s = o.e.vblank(0, &mut all_ok);
+    let mut l = latched(&s);
+    l.sort_unstable();
+    assert_eq!(l, vec![0, 4], "{:?}", s.effects);
+    assert!(
+        !o.e.waiting(w4),
+        "window 4's flip latched with window 0's: {:?}",
+        o.e.parked()
+    );
+}
+
+/// The same writes applied the way the display worker did before 2026-10-11 — every channel whose PUT moved, in CHANNEL
+/// NUMBER order, each to its LATEST PUT — pair differently: window 0's UPDATE joins window 4's earlier A, the immediate
+/// channel's joins B, and flip C is left naming two channels that will not UPDATE again until the next present, which
+/// the guest never submits (it is waiting for this one). This is the stall H1 of runs 408-416.
+#[test]
+fn batched_in_channel_number_order_the_same_writes_leave_the_overlay_flip_unpaired() {
+    let mut o = overlay_sequence();
+    o.build();
+    let w4 = ChannelKind::Window.channel_number(4);
+    for chn in [0, W0, w4, I0, ChannelKind::WindowImm.channel_number(4)] {
+        let bytes = o.ring_of(chn).bytes();
+        let put = o.ring_of(chn).put();
+        o.e.step(chn, &bytes, put, &mut all_ok);
+    }
+    let s = o.e.vblank(0, &mut all_ok);
+    assert!(
+        o.e.waiting(w4),
+        "window 4's flip C is parked with no partner: {:?} / {:?}",
+        o.e.parked(),
+        s.effects
+    );
+}
+
+/// ★ A guest life ends (device reset, or the guest's RM unloading): an engine with a lit head and
+/// windows comes back as `Engine::new` builds it — no head armed, no channel — and the next life
+/// lights a head exactly as a fresh engine does.
+#[test]
+fn a_reset_engine_arms_nothing_and_lights_the_next_life_like_a_fresh_one() {
+    let mut e = engine();
+    let _ = lit(&mut e);
+    assert!(e.heads_armed()[0].period_ns > 0);
+    e.reset_life();
+    let fresh = engine();
+    assert_eq!(e.heads_armed(), fresh.heads_armed());
+    assert!(e.heads_armed().iter().all(|h| h.period_ns == 0));
+    let mut f = engine();
+    let _ = lit(&mut e);
+    let _ = lit(&mut f);
+    assert_eq!(e.heads_armed(), f.heads_armed());
+    e.reset_life();
+    e.reset_life();
+    assert_eq!(e.heads_armed(), fresh.heads_armed());
 }

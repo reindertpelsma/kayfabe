@@ -1,0 +1,9 @@
+=== furmark_gl_stress start=2026-10-11T19:36:15.8134598+00:00 host=VASTWIN session=1 boot=2026-10-11T19:34:23.5000000Z timeout=180
+KFWAIT furmark_gl_stress EXITED rc=0
+FM_LOGFILE _furmark_logkf_43a7559c90bc49a697becee4840a2ab6.txt
+FM_LOG (19:36:17:680)	[GpuMonitor]   - name: NVIDIA GeForce RTX 4070
+FM_LOG (19:36:17:680)	[GpuMonitor]   - name: NVIDIA GeForce RTX 4070
+FM_LOG (19:36:18:469)	GL_RENDERER: NVIDIA GeForce RTX 4070/PCIe/SSE2
+FM_LOG (19:36:18:469)	GL_VENDOR: NVIDIA Corporation
+FM_LOG (19:36:18:469)	GL_VERSION: 3.2.0 NVIDIA 580.88
+=== end rc=0 secs=64 2026-10-11T19:37:20.0814730+00:00

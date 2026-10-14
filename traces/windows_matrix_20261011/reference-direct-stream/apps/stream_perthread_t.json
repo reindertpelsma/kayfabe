@@ -1,0 +1,54 @@
+{
+ "quiet": 6,
+ "end_utc": "2026-10-11T17:05:30.0427966Z",
+ "start_utc": "2026-10-11T17:05:23.1298132Z",
+ "rc": 0,
+ "secs": 7,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4090 status=OK code=0"
+ ],
+ "digests": [],
+ "session": 0,
+ "out_files": [],
+ "boot_utc_start": "2026-10-11T14:31:59.5000000Z",
+ "log_tail": [
+  "=== stream_perthread_t start=2026-10-11T10:05:23.1298132-07:00 host=DESKTOP-JR70RMQ session=0 boot=2026-10-11T14:31:59.5000000Z timeout=120",
+  "STREAM_STAGE cupy_import elapsed_s=3.172000",
+  "KFDEV NVIDIA GeForce RTX 4090 cupy 14.2.0",
+  "CHECK stream_perthread ok elements=1048576 stream=2",
+  "STREAM_PROBE_DONE perthread rc=0",
+  "=== end rc=0 secs=7 2026-10-11T10:05:30.0427966-07:00"
+ ],
+ "pdh": {
+  "pids": [
+   "3140",
+   "2104",
+   "4760"
+  ],
+  "nv": {},
+  "samples": 3,
+  "other": {},
+  "nvidia_luids": "0_5f8e"
+ },
+ "timed_out": false,
+ "token": "g1-stream_perthread_t-1791738298",
+ "boot_utc_end": "2026-10-11T14:31:59.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "stream_perthread_t",
+ "smi": {
+  "samples": 1,
+  "mem_used_base_mb": 168,
+  "util_max": 0,
+  "mem_used_max_mb": 168
+ }
+}

@@ -7,6 +7,7 @@
 //!
 //! The `unsafe` surface is two files: [`raw_unsafe`] (memory QEMU owns) and [`ffi_unsafe`].
 
+pub mod actq;
 pub mod bar0trace;
 pub mod bar1phys;
 pub mod broker;
@@ -16,14 +17,23 @@ pub mod defapi;
 pub mod device;
 pub mod display;
 pub mod dispsw;
+pub mod exposure;
+pub mod failclosed;
 pub mod ffi_unsafe;
 pub mod gop;
 pub mod gpucopy;
 pub mod gpuuid;
 pub mod hostfacts;
+pub mod latejoin;
 pub mod mem;
 pub mod prof;
 pub mod raw_unsafe;
+pub mod readtrace;
+pub mod reset;
 pub mod rmfacts;
 pub mod tspace;
 pub mod twin;
+pub(crate) mod userbirth;
+pub(crate) mod userstore;
+pub mod userva;
+pub mod vblankgate;

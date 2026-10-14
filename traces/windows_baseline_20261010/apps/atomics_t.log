@@ -1,0 +1,6 @@
+=== atomics_t start=2026-10-10T08:59:35.9580964-07:00 host=DESKTOP-397P3NI session=0 boot=2026-10-10T15:50:57.5000000Z timeout=120
+KFDEV NVIDIA GeForce RTX 4060 Ti
+[eq] device NVIDIA GeForce RTX 4060 Ti torch 2.8.0+cu126
+CHECK atomic_add_collisions_exact ok
+WINEQ_DONE atomics
+=== end rc=0 secs=18 2026-10-10T08:59:53.6772666-07:00

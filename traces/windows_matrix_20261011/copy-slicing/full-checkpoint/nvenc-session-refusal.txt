@@ -1,0 +1,9 @@
+Candidate0f9c01f9 run866; filtered own QEMU protocol diagnostics; correlation only.
+W343GSSCENSUS cmd=0x20808165 params_size=1 params_at=40 payload_len=41
+kf3: GSP REFUSED fn76/0x20808165=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: act encoder session REFUSED (0x40): 0xc1d00002 host NVENC session acquire: Other(19314) (28 us)
+W343GSSCENSUS cmd=0x20808165 params_size=1 params_at=40 payload_len=41
+kf3: act encoder session REFUSED (0x40): 0xc1d00002 host NVENC session acquire: Other(19314) (27 us)
+W343GSSCENSUS cmd=0x20808165 params_size=1 params_at=40 payload_len=41
+kf3: act encoder session REFUSED (0x40): 0xc1d00002 host NVENC session acquire: Other(19314) (26 us)
+LAST_REFUSAL_COUNT ['fn76/0x20808165=0x56x3']

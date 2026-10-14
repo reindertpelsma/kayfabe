@@ -1,0 +1,12 @@
+=== torch_correct start=2026-10-10T08:37:17.0491535-07:00 host=DESKTOP-397P3NI session=0 boot=2026-10-10T13:30:47.5000000Z timeout=300
+[tc] device NVIDIA GeForce RTX 4060 Ti torch 2.8.0+cu126
+CHECK matmul_fp32 ok maxerr=6.48e-05
+CHECK matmul_fp16 ok relerr=3.88e-04
+CHECK conv2d_cudnn ok maxerr=3.05e-05
+CHECK cnn_train_step ok maxerr=1.49e-08
+DIGEST cnn_train_step 763c693a5a53f948
+CHECK htod_dtoh_1GiB ok 
+CHECK sort_cumsum ok 
+CHECK multi_stream ok 
+TORCH_CORRECT_DONE
+=== end rc=0 secs=11 2026-10-10T08:37:28.2471821-07:00

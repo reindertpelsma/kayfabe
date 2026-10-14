@@ -240,6 +240,16 @@ impl InvalidatePort {
         Some(InvalidateRequest { seq, inval })
     }
 
+    /// ★ Device reset (`docs/design/V3_DEVICE_RESET.md`): the three registers read as a fresh
+    /// port's — latches zero, the trigger idle ([`Trigger::abandon`]). Returns whether a request
+    /// was armed. ⊘ Only while no vCPU can write the port (the device's reset gate).
+    pub fn reset(&self) -> bool {
+        self.pdb_lo.apply(WriteSemantics::Plain, 0);
+        self.pdb_hi.apply(WriteSemantics::Plain, 0);
+        self.word.apply(WriteSemantics::Plain, 0);
+        self.trigger.abandon()
+    }
+
     /// vCPU, a read at BAR0 `offset` (served from the shadow page in production). `None` when
     /// the offset is not one of the three.
     #[must_use]
@@ -265,6 +275,34 @@ impl InvalidatePort {
 mod tests {
     use super::*;
     use crate::shadow::ClearOutcome;
+
+    /// ★ Device reset: a port left armed (the guest rebooted mid-invalidate) reads as a fresh
+    /// port's, a late completion of the abandoned request clears nothing, and the next life's
+    /// first invalidate arms and completes normally.
+    #[test]
+    fn a_reset_port_reads_idle_and_a_late_completion_of_the_old_request_is_harmless() {
+        let regs = InvalidateRegs::from_usermode_base(0x00BB_0000).expect("regs");
+        let fresh = InvalidatePort::new(regs);
+        let p = InvalidatePort::new(regs);
+        assert_eq!(p.write(regs.pdb, 0x1234_5000), PortWrite::Latched);
+        assert_eq!(p.write(regs.upper_pdb, 0x7), PortWrite::Latched);
+        let PortWrite::Publish(old) = p.write(regs.trigger, TRIGGER_BIT | 0x5) else {
+            panic!("armed");
+        };
+        let all = [regs.pdb, regs.upper_pdb, regs.trigger];
+        assert_ne!(all.map(|o| p.read(o)), all.map(|o| fresh.read(o)));
+        assert!(p.reset());
+        assert_eq!(all.map(|o| p.read(o)), all.map(|o| fresh.read(o)));
+        assert_eq!(p.armed_request(), None);
+        assert_eq!(p.trigger().issued(), p.trigger().completed(), "balanced");
+        assert_eq!(p.trigger().complete(old.seq), ClearOutcome::AlreadyIdle);
+        assert!(!p.reset(), "nothing armed the second time");
+        let PortWrite::Publish(new) = p.write(regs.trigger, TRIGGER_BIT) else {
+            panic!("armed");
+        };
+        assert_ne!(new.seq, old.seq, "the sequence never rewinds");
+        assert_eq!(p.trigger().complete(new.seq), ClearOutcome::Cleared);
+    }
 
     /// A usermode base of `0xBB_0000` puts the trigger at `0xB8_30B0` — the `bar0+0xb830b0` the
     /// old tree measured on GA106 (`kayfabe-device/src/mmuinval.rs`, w462).

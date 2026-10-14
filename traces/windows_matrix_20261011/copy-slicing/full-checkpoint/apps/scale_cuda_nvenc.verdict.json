@@ -1,0 +1,14 @@
+{
+ "verdict": "FAIL",
+ "rc": -22,
+ "secs": 41,
+ "quiet": 0,
+ "note": "rc=-22,no-gpu-proof | [h264_nvenc @ 00000190862922c0] OpenEncodeSessionEx failed: incompatible client key (21): (no details)",
+ "proof": "none:pdh:VideoEncode|VideoDecode,smi",
+ "tdr": 3,
+ "wer": 0,
+ "rebooted": false,
+ "gsp_cycles": 1,
+ "restart": "tdr-budget:3>=3",
+ "guest": "g11"
+}

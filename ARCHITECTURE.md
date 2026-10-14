@@ -1,6 +1,9 @@
 # kayfabe architecture — v3 on one page
 
-**STATUS: LIVE, 2026-09-26, at `master` `74dc3113`.** This page is a map. The design authority is
+**STATUS: LIVE, 2026-09-26, at `master` `74dc3113`; crate table refreshed 2026-10-15 (integration of `claude/win11-userring-20261014`).**
+⊘ *Correction 2026-10-15:* the crate table below lacked `kf-disp`, `kf-broker`, `kf-oprom` and `kf-gop-image` (added), and the guest is no longer only
+Linux 580.159.04: the stock Windows 11 driver 580.88 runs too (see `README.md`). Guest USER channels on Windows may take a relayed USER ring
+(`docs/design/V3_USER_RING_EVENT_LOOP_20261014.md`, `docs/design/V3_WINDOWS_USER_RING_RELAY.md`); the three channel kinds below are unchanged. This page is a map. The design authority is
 [`docs/design/THE_ARCHITECTURE_v3.md`](docs/design/THE_ARCHITECTURE_v3.md) (its argued-from-scratch
 statement is [`docs/design/THE_DESIGN.md`](docs/design/THE_DESIGN.md)), and the build
 decisions are in [`docs/design/V3_BUILD.md`](docs/design/V3_BUILD.md). Where this page and those
@@ -89,7 +92,11 @@ The v3 crates (`crates/kf-*`, descriptions condensed from their own `Cargo.toml`
 | `kf-cuda` | the walk kernel, in-process: a `dlopen`'d CUDA driver-API binding and the committed PTX |
 | `kf-chan` | channels: passthrough birth, Translated execution, VMM-executed emulated channels, completions as host events |
 | `kf-qemu` + `qemu/hw/misc/kf3/` | the `kf3-gpu` device: realize, the plane, the register drainer, the FFI to a small C QOM device |
+| `kf-disp` | the display plane: a virtual NVDisplay the stock driver drives (EDID, display-channel decoder, head/window state, vblank, scanout). Emulated channels only |
+| `kf-broker` | the display-broker relay (connection machine, shared frame ring, input handed to the VMM); VMM-agnostic, safe code |
+| `kf-oprom`, `kf-gop-image` | the boot-display option ROM container, and the build script that compiles and embeds the boot-display GOP driver (`firmware/kf-gop`; no compiled binary is committed) |
 | `kf-harness` | the GPU gates `kf-gate1`…`9`: play the guest against the real planes, with no QEMU |
+| `kf-census` | offline tool, never linked into the product: decodes driver-GSP queue captures (the VFIO observer's `gsp.jsonl` and the `KFGSPCAP` capture format of a Windows capture module) with `kf-gsp`/`kf-abi`, checks them with a completeness oracle, and writes the per-control census; `kf-census scrub` rewrites a capture default-deny (message bodies replaced unless the control id is allow-listed) so a capture can be kept without board data (`V3_GSP_CAPTURE_FORMAT.md`) |
 | `kf-crec`, `kf-trace` | C-trace differential (the `cap1`/`cap1b` replays). Oracle only, never linked into the product |
 | `kf-arch`, `kf-linux-raw`, `kf-util` | vocabulary and the `Arch` traits; the audited raw-OS adapter; generic utilities |
 

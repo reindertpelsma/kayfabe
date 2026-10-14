@@ -1,0 +1,70 @@
+# cuda/walk refusal samples (ABI 6): box run, RTX 3060, driver 550.120, nvcc 12.2.140 (disposable vast instance)
+# source: new = git archive 858bddf2 cuda/walk ; base = git archive c7d83a5f cuda/walk (the parent, pre-ABI-6)
+# The "Welcome to vast.ai" ssh banner lines were removed; nothing else was edited.
+START3 2026-10-09T19:37:17Z
+S39(a) ok: 9 live-GPGA load sites, all distinct offsets -- no double fetch
+S39(c) ok: both emit chokepoints bound the leaf BEFORE they coalesce
+S39(e) ok: refusals are propagated before any early return
+INV=0
+BUILD_NEW=0
+SUITE_NEW_1=0
+==== 76 passed, 0 failed ====
+SUITE_NEW_2=0
+==== 76 passed, 0 failed ====
+SUITE_NEW_3=0
+==== 76 passed, 0 failed ====
+jit ok: PTX-only binary
+.target sm_75
+PTX=0
+neg ok: bounds_window_respected fails without the check (rc=1)
+neg ok: pointer_past_end fails without the check (rc=1)
+neg ok: leaf_past_end fails without the check (rc=1)
+neg ok: the control case still passes on the unbroken binary
+coal ok: no leaf coalescer breaks correctness/coalesce_one_run (rc=1)
+coal ok: no leaf coalescer breaks diff/grow_then_shrink too (rc=1)
+coal ok: no task-boundary join breaks correctness/one_run_across_page_tables (rc=1), on:
+coal ok: the control cases still pass on the unbroken binary
+seam ok: addr_local.lo off by one breaks the decode (rc=1), on:
+seam ok: dir[3].va_lo off by one breaks the walk (rc=1), on:
+seam ok: an abi_version skew is refused AT LAUNCH (rc=1), on:
+seam ok: the control passes on the real descriptor
+sample ok: a corrupted raw entry fails the sample cases (rc=1), on:
+    ! hostile/refusal_samples_parallel:1707  s.raw == it->second.raw  -- 33554947 != 33554945 (0x2000203 != 0x2000201)
+sample ok: the control sample cases pass on the unbroken binary
+SAMPLE_NEG=0
+ver3 ok: the SKETCH is well formed (geometry only -- it has never decoded a table)
+PROBE_NEW_BUILD=0
+PROBE_OLD_BUILD=1
+PROBE_OLD_RUN=0
+PROBE_NEW_RUN=0
+  10 /root/probe_new.txt
+  10 /root/probe_old.txt
+  20 total
+PROBE_IDENTICAL
+/root/probe_old.out:sizeof: header=64 pdb=32 run=32
+/root/probe_new.out:sizeof: header=392 pdb=32 run=32
+EXIT3=done
+# --- run2 (baseline suite on the pre-ABI-6 kernel, c7d83a5f) ---
+START2 2026-10-09T19:35:19Z
+# (next line: the NEW kernel at the earlier commit 0adcd861, same 76; the OLD-kernel probe build failed in that run and is redone in run3 above)
+==== 76 passed, 0 failed ====
+BUILD_OLD=0
+SUITE_OLD=0
+==== 73 passed, 0 failed ====
+# --- probe output (new kernel) ---
+PROBE serial=0 runs=3 refusals=14 mask=0x400 flags=0x84 entries=1860
+PROBE   run va=0x80c0e0a00000 gpga=0x300000 len=0x1000 flags=0x0 op=1 pdb=0
+PROBE   run va=0x80c0e0e00000 gpga=0x400000 len=0x10000 flags=0x100 op=1 pdb=0
+PROBE   run va=0x80c0e1200000 gpga=0x600000 len=0x200000 flags=0x200 op=1 pdb=0
+PROBE   pdb0 first=0 n=3 vflags=0x20 r2=0x300000400
+PROBE serial=1 runs=3 refusals=14 mask=0x400 flags=0x84 entries=1860
+PROBE   run va=0x80c0e0a00000 gpga=0x300000 len=0x1000 flags=0x0 op=1 pdb=0
+PROBE   run va=0x80c0e0e00000 gpga=0x400000 len=0x10000 flags=0x100 op=1 pdb=0
+PROBE   run va=0x80c0e1200000 gpga=0x600000 len=0x200000 flags=0x200 op=1 pdb=0
+PROBE   pdb0 first=0 n=3 vflags=0x20 r2=0x300000400
+# --- new suite, refusal sample cases ---
+device: NVIDIA GeForce RTX 3060  sm_86  driver-jit-from-PTX
+sizeof: header=392 pdb=32 run=32
+pass hostile/refusal_samples_parallel
+pass hostile/refusal_samples_serial
+pass hostile/refusal_samples_other_kinds

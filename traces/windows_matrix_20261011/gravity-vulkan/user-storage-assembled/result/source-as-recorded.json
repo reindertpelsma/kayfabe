@@ -1,0 +1,9 @@
+{
+  "revision": "3d261eb2a1c92dc258d4fa911891c1cdf76f7df7",
+  "binary": "/var/lib/kf-windows-20261005/codex-user-assembled-build-3d261eb2a/kf-user-ring-probe",
+  "binary_sha256": "916b96d8976aff38c3dac88d56ce30c4ad81b48b46fd67a9debb0a40c6c5b674",
+  "uid": 65534,
+  "gid": 65534,
+  "scope": "native phased storage/control barrier; no VM",
+  "mode": "storage-assembled-phased"
+}

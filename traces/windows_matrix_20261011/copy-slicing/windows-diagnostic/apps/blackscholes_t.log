@@ -1,0 +1,6 @@
+=== blackscholes_t start=2026-10-11T13:18:15.0189743+00:00 host=VASTWIN session=0 boot=2026-10-11T13:13:31.5000000Z timeout=120
+KFDEV NVIDIA GeForce RTX 4070
+[eq] device NVIDIA GeForce RTX 4070 torch 2.8.0+cu126
+CHECK blackscholes_call ok relerr=9.73e-08
+WINEQ_DONE blackscholes
+=== end rc=0 secs=5 2026-10-11T13:18:19.6292766+00:00

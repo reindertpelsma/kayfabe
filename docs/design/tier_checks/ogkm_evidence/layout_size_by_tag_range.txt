@@ -1,0 +1,223 @@
+## NV0073_CTRL_CMD_DFP_ASSIGN_SOR present in 221
+   id=0x731152 params=~_PARAMS hash=733735d175 size=80 nf=10 :: 515.43.04..615.78.08 (n=221)
+## NV0073_CTRL_CMD_DFP_GET_INFO present in 221
+   id=0x731140 params=~_PARAMS hash=d9796582ba size=12 nf=3 :: 515.43.04..530.41.03 (n=49)
+   id=0x731140 params=~_PARAMS hash=97368d7d48 size=16 nf=4 :: 535.43.02..535.309.01 (n=39)
+   id=0x731140 params=~_PARAMS hash=6057180180 size=16 nf=4 :: 545.23.06..615.78.08 (n=133)
+## NV0073_CTRL_CMD_DFP_SET_ELD_AUDIO_CAPS present in 221
+   id=0x731144 params=NV0073_CTRL_DFP_SET_ELD_AUDIO_CAP_PARAMS hash=8c00a9ffb7 size=120 nf=7 :: 515.43.04..615.78.08 (n=221)
+## NV0073_CTRL_CMD_DP_GET_CAPS present in 221
+   id=0x731369 params=NV0073_CTRL_CMD_DP_GET_CAPS_PARAMS hash=8789225ce1 size=52 nf=21 :: 515.43.04..520.61.07 (n=20)
+   id=0x731369 params=NV0073_CTRL_CMD_DP_GET_CAPS_PARAMS hash=f63fc53442 size=52 nf=20 :: 525.47.04..530.41.03 (n=29)
+   id=0x731369 params=NV0073_CTRL_CMD_DP_GET_CAPS_PARAMS hash=a3691e8e13 size=56 nf=14 :: 535.43.02..535.309.01 (n=39)
+   id=0x731369 params=NV0073_CTRL_CMD_DP_GET_CAPS_PARAMS hash=b5f972a361 size=56 nf=14 :: 545.23.06..550.163.01 (n=39)
+   id=0x731369 params=NV0073_CTRL_CMD_DP_GET_CAPS_PARAMS hash=1bd9d3b4e7 size=60 nf=16 :: 555.42.02..565.77 (n=10)
+   id=0x731369 params=NV0073_CTRL_CMD_DP_GET_CAPS_PARAMS hash=bac96adfc0 size=64 nf=17 :: 570.86.15..570.211.01 (n=25)
+   id=0x731369 params=NV0073_CTRL_CMD_DP_GET_CAPS_PARAMS hash=0cdfcc150c size=60 nf=17 :: 575.51.02..575.64.05 (n=6)
+   id=0x731369 params=NV0073_CTRL_CMD_DP_GET_CAPS_PARAMS hash=46997f8dd7 size=60 nf=18 :: 580.65.06..595.104.02 (n=48)
+   id=0x731369 params=NV0073_CTRL_CMD_DP_GET_CAPS_PARAMS hash=94cd3b1c3a size=64 nf=19 :: 610.43.02..610.57.04 (n=3)
+   id=0x731369 params=NV0073_CTRL_CMD_DP_GET_CAPS_PARAMS hash=01b74fb44d size=64 nf=20 :: 615.71.09..615.78.08 (n=2)
+## NV0073_CTRL_CMD_SPECIFIC_GET_ACPI_DOD_DISPLAY_PORT_ATTACHMENT present in 201
+   id=0x730285 params=NV0073_CTRL_GET_ACPI_DOD_DISPLAY_PORT_ATTACHMENT_PARAMS hash=ce8f1c2949 size=12 nf=3 :: 525.47.04..615.78.08 (n=201)
+## NV0073_CTRL_CMD_SPECIFIC_GET_CONNECTOR_DATA present in 221
+   id=0x730250 params=~_PARAMS hash=97c21f09d5 size=72 nf=10 :: 515.43.04..615.78.08 (n=221)
+## NV0073_CTRL_CMD_SPECIFIC_GET_EDID_V2 present in 221
+   id=0x730245 params=~_PARAMS hash=dccda6d4ae size=2064 nf=5 :: 515.43.04..615.78.08 (n=221)
+## NV0073_CTRL_CMD_SPECIFIC_GET_HDCP_STATE present in 27
+   id=0x730280 params=~_PARAMS hash=d9796582ba size=12 nf=3 :: 590.44.01..615.78.08 (n=27)
+## NV0073_CTRL_CMD_SPECIFIC_GET_HDMI_GPU_CAPS present in 221
+   id=0x7302a2 params=~_PARAMS hash=6d96c921cf size=8 nf=2 :: 515.43.04..615.78.08 (n=221)
+## NV0073_CTRL_CMD_SPECIFIC_GET_HDMI_SCDC_DATA present in 221
+   id=0x7302a6 params=~_PARAMS hash=3650a58225 size=12 nf=4 :: 515.43.04..615.78.08 (n=221)
+## NV0073_CTRL_CMD_SPECIFIC_GET_PCLK_LIMIT present in 221
+   id=0x73028a params=~_PARAMS hash=e7d2635d28 size=20 nf=5 :: 515.43.04..615.78.08 (n=221)
+## NV0073_CTRL_CMD_SPECIFIC_HDCP_CTRL present in 27
+   id=0x730282 params=~_PARAMS hash=3250e2c022 size=2608 nf=35 :: 590.44.01..615.78.08 (n=27)
+## NV0073_CTRL_CMD_SPECIFIC_OR_GET_INFO present in 221
+   id=0x73028b params=~_PARAMS hash=b0fe259d91 size=56 nf=13 :: 515.43.04..615.78.08 (n=221)
+## NV0073_CTRL_CMD_SPECIFIC_SET_HDMI_ENABLE present in 221
+   id=0x730273 params=~_PARAMS hash=450d446deb size=12 nf=3 :: 515.43.04..615.78.08 (n=221)
+## NV0073_CTRL_CMD_SPECIFIC_SET_HDMI_SINK_CAPS present in 221
+   id=0x730293 params=~_PARAMS hash=255cdf86ae size=12 nf=3 :: 515.43.04..615.78.08 (n=221)
+## NV0073_CTRL_CMD_SPECIFIC_SET_OD_PACKET present in 221
+   id=0x730288 params=~_PARAMS hash=839d21d338 size=60 nf=7 :: 515.43.04..615.78.08 (n=221)
+## NV0073_CTRL_CMD_SYSTEM_CHECK_SIDEBAND_I2C_SUPPORT present in 221
+   id=0x73019c params=NV0073_CTRL_CMD_SYSTEM_CHECK_SIDEBAND_I2C_SUPPORT_PARAMS hash=73c1b49815 size=8 nf=2 :: 515.43.04..550.163.01 (n=127)
+   id=0x73014b params=NV0073_CTRL_CMD_SYSTEM_CHECK_SIDEBAND_I2C_SUPPORT_PARAMS hash=73c1b49815 size=8 nf=2 :: 555.42.02..615.78.08 (n=94)
+## NV0073_CTRL_CMD_SYSTEM_GET_ACTIVE present in 221
+   id=0x730126 params=~_PARAMS hash=8c7aee9fd8 size=16 nf=4 :: 515.43.04..550.163.01 (n=127)
+   id=0x73010c params=~_PARAMS hash=8c7aee9fd8 size=16 nf=4 :: 555.42.02..610.57.04 (n=92)
+   id=0x73010c params=~_PARAMS hash=81ee94cdce size=20 nf=5 :: 615.71.09..615.78.08 (n=2)
+## NV0073_CTRL_CMD_SYSTEM_GET_CAPS_V2 present in 221
+   id=0x730138 params=~_PARAMS hash=10b6390c0a size=2 nf=1 :: 515.43.04..550.163.01 (n=127)
+   id=0x730101 params=~_PARAMS hash=10b6390c0a size=2 nf=1 :: 555.42.02..615.78.08 (n=94)
+## NV0073_CTRL_CMD_SYSTEM_GET_CONNECTOR_TABLE present in 174
+   id=0x730165 params=~_PARAMS hash=82377b7a03 size=272 nf=5 :: 530.30.02..550.163.01 (n=80)
+   id=0x73011d params=~_PARAMS hash=82377b7a03 size=272 nf=5 :: 555.42.02..615.78.08 (n=94)
+## NV0073_CTRL_CMD_SYSTEM_GET_CONNECT_STATE present in 221
+   id=0x730122 params=~_PARAMS hash=70db0d0770 size=16 nf=4 :: 515.43.04..550.163.01 (n=127)
+   id=0x730108 params=~_PARAMS hash=70db0d0770 size=16 nf=4 :: 555.42.02..615.78.08 (n=94)
+## NV0073_CTRL_CMD_SYSTEM_GET_HOTPLUG_CONFIG present in 221
+   id=0x730123 params=NV0073_CTRL_SYSTEM_GET_SET_HOTPLUG_CONFIG_PARAMS hash=3d5f3ae76b size=24 nf=6 :: 515.43.04..550.163.01 (n=127)
+   id=0x730109 params=NV0073_CTRL_SYSTEM_GET_SET_HOTPLUG_CONFIG_PARAMS hash=3d5f3ae76b size=24 nf=6 :: 555.42.02..615.78.08 (n=94)
+## NV0073_CTRL_CMD_SYSTEM_GET_HOTPLUG_STATE present in 174
+   id=0x730124 params=~_PARAMS hash=13a66f2c5d size=12 nf=3 :: 530.30.02..550.163.01 (n=80)
+   id=0x73010a params=~_PARAMS hash=13a66f2c5d size=12 nf=3 :: 555.42.02..615.78.08 (n=94)
+## NV0073_CTRL_CMD_SYSTEM_GET_NUM_HEADS present in 221
+   id=0x730102 params=~_PARAMS hash=7f45c01420 size=12 nf=3 :: 515.43.04..615.78.08 (n=221)
+## NV0073_CTRL_CMD_SYSTEM_GET_SUPPORTED present in 221
+   id=0x730120 params=~_PARAMS hash=e320f40a2c size=12 nf=3 :: 515.43.04..550.163.01 (n=127)
+   id=0x730107 params=~_PARAMS hash=e320f40a2c size=12 nf=3 :: 555.42.02..615.78.08 (n=94)
+## NV0073_CTRL_CMD_SYSTEM_GET_VBLANK_COUNTER present in 221
+   id=0x730109 params=~_PARAMS hash=1c8ea2534f size=12 nf=3 :: 515.43.04..550.163.01 (n=127)
+   id=0x730105 params=~_PARAMS hash=1c8ea2534f size=12 nf=3 :: 555.42.02..555.58 (n=4)
+   id=0x730105 params=~_PARAMS hash=6ab6133906 size=16 nf=4 :: 555.58.02..615.78.08 (n=90)
+## NV0073_CTRL_CMD_SYSTEM_GET_VBLANK_ENABLE present in 221
+   id=0x73010a params=~_PARAMS hash=a7e338e36e size=12 nf=3 :: 515.43.04..550.163.01 (n=127)
+   id=0x730106 params=~_PARAMS hash=a7e338e36e size=12 nf=3 :: 555.42.02..615.78.08 (n=94)
+## NV0073_CTRL_CMD_SYSTEM_QUERY_DISPLAY_IDS_WITH_MUX present in 221
+   id=0x730190 params=NV0073_CTRL_CMD_SYSTEM_QUERY_DISPLAY_IDS_WITH_MUX_PARAMS hash=205138413e size=8 nf=2 :: 515.43.04..550.163.01 (n=127)
+   id=0x73013d params=NV0073_CTRL_CMD_SYSTEM_QUERY_DISPLAY_IDS_WITH_MUX_PARAMS hash=205138413e size=8 nf=2 :: 555.42.02..615.78.08 (n=94)
+## NV0073_CTRL_CMD_SYSTEM_VRR_DISPLAY_INFO present in 172
+   id=0x730185 params=~_PARAMS hash=f60d6ca7be size=12 nf=3 :: 535.43.02..550.163.01 (n=78)
+   id=0x73012c params=~_PARAMS hash=f60d6ca7be size=12 nf=3 :: 555.42.02..615.78.08 (n=94)
+## NV0080_CTRL_CMD_BIF_GET_PCIE_POWER_CONTROL_MASK present in 174
+   id=0x800106 params=NV0080_CTRL_CMD_BIF_GET_PCIE_POWER_CONTROL_MASK_PARAMS hash=9cae144d9a size=12 nf=3 :: 530.30.02..615.78.08 (n=174)
+## NV0080_CTRL_CMD_FB_GET_COMPBIT_STORE_INFO present in 221
+   id=0x801306 params=~_PARAMS hash=661958aab7 size=72 nf=13 :: 515.43.04..535.309.01 (n=88)
+   id=0x801306 params=~_PARAMS hash=9faf3d0277 size=80 nf=14 :: 545.23.06..595.44.13,595.45.04..595.84,610.43.02..610.43.03 (n=125)
+   id=0x801306 params=~_PARAMS hash=c1c8935dd2 size=88 nf=15 :: 595.44.14..595.44.15,595.91.07..595.104.02,610.57.04..615.78.08 (n=8)
+## NV0080_CTRL_CMD_GPU_GET_CLASSLIST_V2 present in 221
+   id=0x800292 params=~_PARAMS hash=55b44cccb8 size=468 nf=2 :: 515.43.04..520.61.07 (n=20)
+   id=0x800292 params=~_PARAMS hash=55b44cccb8 size=644 nf=2 :: 525.47.04..545.29.06 (n=73)
+   id=0x800292 params=~_PARAMS hash=55b44cccb8 size=700 nf=2 :: 550.40.07..550.163.01 (n=34)
+   id=0x800292 params=~_PARAMS hash=55b44cccb8 size=404 nf=2 :: 555.42.02..575.64.05 (n=41)
+   id=0x800292 params=~_PARAMS hash=55b44cccb8 size=804 nf=2 :: 580.65.06..615.78.08 (n=53)
+## NV2080_CTRL_CMD_BIOS_GET_UEFI_SUPPORT present in 221
+   id=0x2080080b params=~_PARAMS hash=9857e2a42f size=8 nf=2 :: 515.43.04..615.78.08 (n=221)
+## NV2080_CTRL_CMD_BUS_GET_INFO_V2 present in 221
+   id=0x20801823 params=~_PARAMS hash=1a3e267ae0 size=420 nf=2 :: 515.43.04..615.78.08 (n=221)
+## NV2080_CTRL_CMD_CE_GET_FAULT_METHOD_BUFFER_SIZE present in 221
+   id=0x20802a08 params=~_PARAMS hash=f5702f39e0 size=4 nf=1 :: 515.43.04..615.78.08 (n=221)
+## NV2080_CTRL_CMD_CE_IS_DECOMP_LCE_ENABLED present in 86
+   id=0x20802a12 params=~_PARAMS hash=dee5f69ec1 size=8 nf=2 :: 565.57.01..615.78.08 (n=86)
+## NV2080_CTRL_CMD_FIFO_CONFIG_CTXSW_TIMEOUT present in 46
+   id=0x20801110 params=~_PARAMS hash=324c8dc12d size=8 nf=2 :: 580.94.06..580.94.18,580.105.08..615.78.08 (n=46)
+## NV2080_CTRL_CMD_GET_RC_RECOVERY present in 221
+   id=0x2080220e params=- hash=None size=None nf=None :: 515.43.04..525.147.05 (n=47)
+   id=0x2080220e params=~_PARAMS hash=None size=4 nf=None :: 530.30.02..615.78.08 (n=174)
+## NV2080_CTRL_CMD_GPU_GET_GID_INFO present in 221
+   id=0x2080014a params=~_PARAMS hash=92d8a6afbd size=268 nf=4 :: 515.43.04..615.78.08 (n=221)
+## NV2080_CTRL_CMD_GPU_GET_OEM_BOARD_INFO present in 221
+   id=0x2080013f params=~_PARAMS hash=c2bb89979c size=116 nf=10 :: 515.43.04..525.147.05 (n=47)
+   id=0x2080013f params=~_PARAMS hash=6a357467f9 size=136 nf=11 :: 530.30.02..615.78.08 (n=174)
+## NV2080_CTRL_CMD_GPU_GET_VMMU_SEGMENT_SIZE present in 221
+   id=0x2080017e params=~_PARAMS hash=a4d2ba02b6 size=8 nf=1 :: 515.43.04..615.78.08 (n=221)
+## NV2080_CTRL_CMD_GPU_GET_VPR_CAPS present in 221
+   id=0x20800160 params=~_PARAMS hash=c67dfc8df0 size=16 nf=2 :: 515.43.04..615.78.08 (n=221)
+## NV2080_CTRL_CMD_GPU_QUERY_ECC_STATUS present in 221
+   id=0x2080012f params=~_PARAMS hash=f1ff9c650d size=904 nf=5 :: 515.43.04..515.105.01 (n=17)
+   id=0x2080012f params=~_PARAMS hash=f1ff9c650d size=984 nf=5 :: 520.56.06..535.309.01 (n=71)
+   id=0x2080012f params=~_PARAMS hash=f1ff9c650d size=1024 nf=5 :: 545.23.06..550.163.01 (n=39)
+   id=0x2080012f params=~_PARAMS hash=f1ff9c650d size=1224 nf=5 :: 555.42.02..555.58.02 (n=5)
+   id=0x2080012f params=~_PARAMS hash=f1ff9c650d size=1264 nf=5 :: 560.28.03..560.35.03 (n=3)
+   id=0x2080012f params=~_PARAMS hash=f1ff9c650d size=1464 nf=5 :: 565.57.01..580.178.04 (n=59)
+   id=0x2080012f params=~_PARAMS hash=f1ff9c650d size=1664 nf=5 :: 590.44.01..615.78.08 (n=27)
+## NV2080_CTRL_CMD_GPU_QUERY_FUNCTION_STATUS present in 221
+   id=0x20800173 params=NV2080_CTRL_CMD_GPU_QUERY_FUNCTION_STATUS_PARAMS hash=b65d296f2b size=12 nf=3 :: 515.43.04..615.78.08 (n=221)
+## NV2080_CTRL_CMD_GR_CTXSW_PREEMPTION_BIND present in 221
+   id=0x20801211 params=- hash=None size=None nf=None :: 515.43.04..525.147.05 (n=47)
+   id=0x20801211 params=~_PARAMS hash=fb0c31836e size=104 nf=7 :: 530.30.02..560.35.03 (n=88)
+   id=0x20801211 params=~_PARAMS hash=fb0c31836e size=112 nf=7 :: 565.57.01..615.78.08 (n=86)
+## NV2080_CTRL_CMD_GR_CTXSW_ZCULL_BIND present in 221
+   id=0x20801208 params=- hash=None size=None nf=None :: 515.43.04..525.147.05 (n=47)
+   id=0x20801208 params=~_PARAMS hash=6fe5e0d03a size=24 nf=4 :: 530.30.02..615.78.08 (n=174)
+## NV2080_CTRL_CMD_GR_GFX_POOL_INITIALIZE present in 221
+   id=0x20801220 params=- hash=None size=None nf=None :: 515.43.04..525.147.05 (n=47)
+   id=0x20801220 params=~_PARAMS hash=4529dd3201 size=16 nf=2 :: 530.30.02..535.309.01 (n=41)
+   id=0x20801220 params=~_PARAMS hash=3f0047242c size=16 nf=4 :: 545.23.06..615.78.08 (n=133)
+## NV2080_CTRL_CMD_GR_GFX_POOL_QUERY_SIZE present in 221
+   id=0x2080121f params=- hash=None size=None nf=None :: 515.43.04..525.147.05 (n=47)
+   id=0x2080121f params=~_PARAMS hash=6e65844552 size=40 nf=6 :: 530.30.02..615.78.08 (n=174)
+## NV2080_CTRL_CMD_GR_GFX_POOL_REMOVE_SLOTS present in 221
+   id=0x20801222 params=- hash=None size=None nf=None :: 515.43.04..525.147.05 (n=47)
+   id=0x20801222 params=~_PARAMS hash=5ebda8dfa2 size=272 nf=4 :: 530.30.02..535.309.01 (n=41)
+   id=0x20801222 params=~_PARAMS hash=a7d247c5d4 size=276 nf=6 :: 545.23.06..615.78.08 (n=133)
+## NV2080_CTRL_CMD_INTERNAL_BIF_GET_STATIC_INFO present in 221
+   id=0x20800aac params=~_PARAMS hash=07447453e7 size=16 nf=3 :: 515.43.04..535.309.01 (n=88)
+   id=0x20800aac params=~_PARAMS hash=1ba3e38fdb size=16 nf=5 :: 545.23.06..565.77 (n=49)
+   id=0x20800aac params=~_PARAMS hash=056d291451 size=4 nf=4 :: 570.86.15..615.78.08 (n=84)
+## NV2080_CTRL_CMD_INTERNAL_CE_GET_PCE_CONFIG_FOR_LCE_TYPE present in 89
+   id=0x20802a0f params=~_PARAMS hash=07de895681 size=24 nf=6 :: 560.28.03..580.82.09 (n=40)
+   id=0x20802a0f params=~_PARAMS hash=c181e2faab size=28 nf=7 :: 580.94.02..595.104.02 (n=44)
+   id=0x20802a0f params=~_PARAMS hash=558eaa9649 size=32 nf=8 :: 610.43.02..615.78.08 (n=5)
+## NV2080_CTRL_CMD_INTERNAL_CONF_COMPUTE_GET_STATIC_INFO present in 172
+   id=0x20800af3 params=~_PARAMS hash=e954bcc26e size=2 nf=2 :: 535.43.02..615.78.08 (n=172)
+## NV2080_CTRL_CMD_INTERNAL_GET_ENABLED_SEC2_CLASSES present in 128
+   id=0x20800aaf params=NV2080_CTRL_CMD_INTERNAL_GET_ENABLED_SEC2_CLASSES_PARAMS hash=74e405998d size=3 nf=3 :: 550.40.07..615.78.08 (n=128)
+## NV2080_CTRL_CMD_INTERNAL_GET_PCIE_P2P_CAPS present in 221
+   id=0x20800ab8 params=~_PARAMS hash=5a86e79dd8 size=3 nf=3 :: 515.43.04..610.57.04 (n=219)
+   id=0x20800ab8 params=~_PARAMS hash=d5df9e0ee3 size=4 nf=4 :: 615.71.09..615.78.08 (n=2)
+## NV2080_CTRL_CMD_INTERNAL_GMMU_GET_STATIC_INFO present in 221
+   id=0x20800a59 params=~_PARAMS hash=e43829eb2e size=8 nf=2 :: 515.43.04..530.41.03 (n=49)
+   id=0x20800a59 params=~_PARAMS hash=e1ce091cac size=16 nf=4 :: 535.43.02..615.78.08 (n=172)
+## NV2080_CTRL_CMD_INTERNAL_GR_GET_FECS_TRACE_HW_ENABLE present in 221
+   id=0x20800a38 params=~_PARAMS hash=None size=24 nf=None :: 515.43.04..615.78.08 (n=221)
+## NV2080_CTRL_CMD_INTERNAL_GR_SET_FECS_TRACE_WR_OFFSET present in 221
+   id=0x20800a3a params=~_PARAMS hash=None size=24 nf=None :: 515.43.04..615.78.08 (n=221)
+## NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA present in 133
+   id=0x20800afe params=~_PARAMS hash=caab199469 size=8 nf=1 :: 545.23.06..570.211.01 (n=74)
+   id=0x20800afe params=~_PARAMS hash=5752093901 size=16 nf=2 :: 575.51.02..615.78.08 (n=59)
+## NV2080_CTRL_CMD_INTERNAL_NVLINK_GET_NVLINK_DEVICE_INFO present in 84
+   id=0x20800a87 params=~_PARAMS hash=220ff5078a size=1056 nf=6 :: 570.86.15..570.211.01 (n=25)
+   id=0x20800a87 params=~_PARAMS hash=240599bdec size=1056 nf=7 :: 575.51.02..580.178.04 (n=32)
+   id=0x20800a87 params=~_PARAMS hash=ce1724219a size=1064 nf=7 :: 590.44.01..595.104.02 (n=22)
+   id=0x20800a87 params=~_PARAMS hash=4fbbbcdf2a size=1088 nf=10 :: 610.43.02..610.57.04 (n=3)
+   id=0x20800a87 params=~_PARAMS hash=309a5a4430 size=1072 nf=9 :: 615.71.09..615.78.08 (n=2)
+## NV2080_CTRL_CMD_INTERNAL_PERF_BOOST_SET_2X present in 221
+   id=0x20800a9a params=NV2080_CTRL_INTERNAL_PERF_BOOST_SET_PARAMS_2X hash=da930ceae2 size=8 nf=2 :: 515.43.04..615.78.08 (n=221)
+## NV2080_CTRL_CMD_INTERNAL_PERF_GPU_BOOST_SYNC_GET_INFO present in 221
+   id=0x20800a80 params=~_PARAMS hash=2de67eec08 size=16 nf=3 :: 515.43.04..615.78.08 (n=221)
+## NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_FECS_RECORD_SIZE present in 221
+   id=0x20800a3d params=NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_FECS_RECORD_SIZE_PARAMS hash=None size=32 nf=None :: 515.43.04..615.78.08 (n=221)
+## NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_FECS_TRACE_DEFINES present in 221
+   id=0x20800a3f params=- hash=None size=None nf=None :: 515.43.04..525.147.05 (n=47)
+   id=0x20800a3f params=~_PARAMS hash=None size=256 nf=None :: 530.30.02..615.78.08 (n=174)
+## NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_PPC_MASKS present in 221
+   id=0x20800a30 params=- hash=None size=None nf=None :: 515.43.04..525.147.05 (n=47)
+   id=0x20800a30 params=~_PARAMS hash=None size=384 nf=None :: 530.30.02..575.64.05 (n=121)
+   id=0x20800a30 params=~_PARAMS hash=None size=512 nf=None :: 580.65.06..590.48.01 (n=28)
+   id=0x20800a30 params=~_PARAMS hash=None size=1024 nf=None :: 595.44.02..595.104.02 (n=20)
+   id=0x20800a30 params=~_PARAMS hash=None size=2048 nf=None :: 610.43.02..615.78.08 (n=5)
+## NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_ROP_INFO present in 221
+   id=0x20800a2e params=- hash=None size=None nf=None :: 515.43.04..525.147.05 (n=47)
+   id=0x20800a2e params=~_PARAMS hash=None size=96 nf=None :: 530.30.02..615.78.08 (n=174)
+## NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_SM_ISSUE_RATE_MODIFIER_V2 present in 59
+   id=0x20800b03 params=~_PARAMS hash=None size=16352 nf=None :: 575.51.02..615.78.08 (n=59)
+## NV2080_CTRL_CMD_INTERNAL_STATIC_KGR_GET_SM_ISSUE_THROTTLE_CTRL present in 53
+   id=0x20800b05 params=~_PARAMS hash=None size=16352 nf=None :: 580.65.06..615.78.08 (n=53)
+## NV2080_CTRL_CMD_INTERNAL_USER_SHARED_DATA_SET_DATA_POLL present in 133
+   id=0x20800aff params=~_PARAMS hash=e7123d85ee size=8 nf=1 :: 545.23.06..565.77 (n=49)
+   id=0x20800aff params=~_PARAMS hash=55cef94e24 size=16 nf=2 :: 570.86.15..580.178.04 (n=57)
+   id=0x20800aff params=~_PARAMS hash=c0a14791aa size=16 nf=2 :: 590.44.01..615.78.08 (n=27)
+## NV2080_CTRL_CMD_LPWR_DIFR_CTRL present in 201
+   id=0x20802801 params=NV2080_CTRL_CMD_LPWR_DIFR_CTRL_PARAMS hash=48dcf12da5 size=4 nf=1 :: 525.47.04..615.78.08 (n=201)
+## NV2080_CTRL_CMD_PERF_GET_CURRENT_PSTATE present in 128
+   id=0x20802068 params=~_PARAMS hash=3e93d3f20c size=4 nf=1 :: 550.40.07..615.78.08 (n=128)
+## NV2080_CTRL_CMD_PERF_GET_POWERSTATE present in 128
+   id=0x2080205a params=~_PARAMS hash=490aa03283 size=4 nf=1 :: 550.40.07..615.78.08 (n=128)
+## NV2080_CTRL_CMD_PERF_SET_POWERSTATE present in 201
+   id=0x2080205b params=~_PARAMS hash=490aa03283 size=4 nf=1 :: 525.47.04..615.78.08 (n=201)
+## NV2080_CTRL_CMD_RC_GET_WATCHDOG_INFO present in 221
+   id=0x20802209 params=~_PARAMS hash=a3e78702ae size=4 nf=1 :: 515.43.04..615.78.08 (n=221)
+## NV2080_CTRL_CMD_RUSD_GET_SUPPORTED_FEATURES present in 59
+   id=0x208081ea params=~_PARAMS hash=138f474850 size=4 nf=1 :: 575.51.02..580.178.04 (n=32)
+   id=0x208001ea params=~_PARAMS hash=138f474850 size=4 nf=1 :: 590.44.01..615.78.08 (n=27)
+## NV2080_CTRL_CMD_SET_RC_RECOVERY present in 221
+   id=0x2080220d params=- hash=None size=None nf=None :: 515.43.04..525.147.05 (n=47)
+   id=0x2080220d params=~_PARAMS hash=None size=4 nf=None :: 530.30.02..615.78.08 (n=174)
+## NV5070_CTRL_CMD_IMP_SET_GET_PARAMETER present in 221
+   id=0x50700118 params=~_PARAMS hash=a1f0a4b124 size=24 nf=6 :: 515.43.04..615.78.08 (n=221)
+## NV5070_CTRL_CMD_SYSTEM_GET_CAPS_V2 present in 221
+   id=0x50700709 params=~_PARAMS hash=eb19d0c7d2 size=8 nf=2 :: 515.43.04..615.78.08 (n=221)
+ERRS 0

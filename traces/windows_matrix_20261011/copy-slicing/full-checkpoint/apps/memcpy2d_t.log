@@ -1,0 +1,7 @@
+=== memcpy2d_t start=2026-10-11T13:51:08.9103487+00:00 host=VASTWIN session=0 boot=2026-10-11T13:46:04.5000000Z timeout=120
+KFDEV NVIDIA GeForce RTX 4070
+[eq] device NVIDIA GeForce RTX 4070 torch 2.8.0+cu126
+CHECK strided_h2d_d2h ok
+CHECK strided_scatter ok
+WINEQ_DONE memcpy2d
+=== end rc=0 secs=15 2026-10-11T13:51:24.2528977+00:00

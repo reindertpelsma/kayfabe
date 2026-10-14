@@ -1,0 +1,6 @@
+=== gputest_gi start=2026-10-11T14:21:26.8485809+00:00 host=VASTWIN session=1 boot=2026-10-11T14:15:46.5000000Z timeout=100
+KFWAIT gputest_gi EXITED rc=0
+GPUTEST 2026/10/11@14:21:28(0000000002) < > GpuTest: Cross Platform Graphics Benchmark Utility
+GPUTEST 2026/10/11@14:21:28(0000000026) < > GiMark - OpenGL - Renderer model: NVIDIA GeForce RTX 4070/PCIe/SSE2
+GPUTEST 2026/10/11@14:21:42(0000000031) < > [Benchmark_Score] - module: GiMark - Score: 2876 points (1280x720 windowed, duration:10000 ms).
+=== end rc=0 secs=17 2026-10-11T14:21:43.8421016+00:00

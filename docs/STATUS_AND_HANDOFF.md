@@ -1,5 +1,1030 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-14 22:30 CEST - USER-ring relay is an event loop; the SYNC_WAIT gate was unsound (GP_GET) and is fixed
+
+Branch `claude/userring-eventloop-20261014` (from `claude/win11-userring-20261014` `77eaf762`), full account `docs/design/V3_USER_RING_EVENT_LOOP_20261014.md`.
+- [measured] **`GP_GET` runs ahead of processing** (bare metal 595.91.07: an acquire stalls entry 0, GP_GET already covers all entries, the segment behind a SYNC_WAIT barrier
+  has not run, `USERD.REFERENCE` is 0). The relay's gate (barrier + witness, "GP_GET past it") therefore did not gate: the new `kf-syncwait-stress` tool made the relay refuse
+  49/60 late-bytes plans. Fixed: markers `[SET_REFERENCE tag|n, NON_STALL_INTERRUPT]`, proof = tagged REFERENCE. A SYNC_WAIT behind an open packet is not gated (no witness
+  can enter a packet) and is read at once; late bytes there are unprotected (counter `carried_ungated`). Windows: the Minecraft 25k SYNC_WAIT-with-open-packet entries no longer wait a tick.
+- Loop: no tick, no `Poll` (its comment overread the data: 69 971 "puts without doorbell" were relayed ENTRIES, ~340 per doorbell), doorbell eventfd + engine non-stall events +
+  bounded spin (64) + a 50 ms safety net whose findings are counters (`USER_RING_LOOP SUMMARY`); `SyncGate::cleared` lap bug and `Grace` clock fixed.
+- Tests: `kf-chan/tests/user_loop_model.rs` (exhaustive interleaving model, 37), `user_gate_rules.rs` (118k exhaustive splits + 4k random against a PBDMA parse model, 9).
+- Validation (kf3 `1d845d50`, Linux): fast suite 30/30 off and on, desktop smoke + S3x3 both ways, gates 9/9 + gate10, stress 642/642 (relay) and 642/642 (control).
+  Debug-only `KF3_DEBUG=1 KF3_DEBUG_FORCE_MIGRATABLE=1` puts the Linux guest's USER channels on the relay. Drain path: ~4 ms -> ~60 us per three SYNC_WAITs (288 -> 14 000 plans/s).
+- Windows: not run (VM 2990 untouched). Open: full GPFIFO behind the guest's own gate deadlocks; staged-trigger path now marker-based but unexercised on Linux.
+
+## UPDATE 2026-10-14 16:00 CEST - Win11 S3: the GSP side holds, Windows does not survive the wake yet
+
+**Win11 S3 update, 2026-10-14 (kf3 `0c5fedff` = S3 branch + user-ring-scan `c287af4f`, branch `claude/s3-win11-20261014`, `traces/win11_s3_20261014/`, [`V3_S3_RESUME.md`](design/V3_S3_RESUME.md) §7a).**
+The GSP side holds on Windows (fn 47 PM suspend served, `(S3 WAKE) KEPT`, `GSP-RESUME` to `Running` when the guest gets that far,
+no refusals on the unload path) but Windows does NOT survive the wake: with the production `hv_time/synic/stimer` flags it sits in a
+Hyper-V synthetic-timer storm (nothing is touched, black screen); without them it resumed once then reset itself at +62 s, bugchecked
+0x5C HAL_INITIALIZATION_FAILED once, and wedged three times polling PM1_STS + HPET/PM timer. Next: q35 control, a kernel stack/dump of
+the wedged guest, a bare-QEMU S3 control. VM 2990 runs `0c5fedff` with sleep still disabled (interim stays). Also: the Wayland broker
+sends no key repeats because QEMU's PS/2 keyboard has no repeat; `-device usb-kbd,bus=xhci.0,id=kfkbd` next to the usb-tablet
+fixes it (now in `scripts/bench/windows/windows_broker.sh`).
+
+## UPDATE 2026-10-14 14:40 CEST — ACPI S3 suspend/resume works for the Linux desktop guest (kf3 559db30c)
+
+Branch `claude/s3-resume-20261014` (from the plane-oracle branch). Full account: `docs/design/V3_S3_RESUME.md`;
+evidence `traces/linux_s3_resume_20261014/` (failure) and `fixed/` (passes).
+- [measured] Root cause, in four layers, each found by the run before it: (1) QEMU's S3 wake resets every device
+  (`RESET_TYPE_WAKEUP`) and kf3 ended the guest life (GSP Cold, chain/twins/VA spaces freed), while the guest's
+  `KGSP_BOOT_MODE_SR_RESUME` runs only Booter Load and expects GSP-RM to restore its queues → `Failed to boot GSP`
+  0x55; (2) the suspend's FBSR save refused (`ALLOC_MEMORY` fn 4 + continuation, answered twice) → no valid save,
+  `gpuStateLoad` failed at resume; (3) `NV_XVE_RESIZE_BAR1_CTRL` read 0 → `kbusRestoreBAR1ResizeSize` failed
+  `gpuStateLoad`; (4) `FIFO_DISABLE_USERMODE_CHANNELS` refused → the Linux suspend's error path unlocked nvidia-uvm's
+  PM lock it never took → every UVM ioctl EAGAIN, `nvidia-smi` hung.
+- Fixes: FSM E14 (wake reset keeps a PM-suspended GSP-RM life) / E15 (resume restores the binding without a
+  publish, sequences continue); kf3 ABI 29 passes the reset type, a kept run skips Release/Memory and keeps
+  tokens; large non-bidirectional fn 4 joined and answered once; `kf_rm::pmsr` (suspend-buffer registration,
+  FREE, FBSR_INIT, scheduling toggle); the XVE resize word; DISABLE_USERMODE_CHANNELS as host DISABLE_CHANNELS
+  over the VM's user twins. Per-life write log (first 512 writes of each logged life).
+- Validation at `559db30c`: `S3_CYCLES=3 desktop_s3.sh` 3/3 (ssh, nvidia-smi, glxgears ~60 FPS, 0 Xid, 0 WARNING
+  after each wake); unit 3007/0 (every kf-* crate); gates 9/9 + gate10 PASS, births 12/12; fast suite 30/30;
+  `desktop_smoke.sh` 0 flip timeouts / 0 Xid; `planes_oracle.sh` rgb/nv12/p010/yuyv PASS, 0 flip timeouts.
+- Windows 11 S3: run 2026-10-14, not surviving yet (see the update above, `V3_S3_RESUME.md` §7a). Open: FSP families' SR_RESUME, the scheduling
+  toggle has no host act, control ids not yet in the driver matrix.
+- Bench: every Linux-guest run now goes through `flock /tmp/claude-linux-guest.lock` (one tap on the host).
+
+## UPDATE 2026-10-14 01:00 CEST — Linux plane oracle: overlay completion reproduced and fixed; Win11 resets follow USER-ring refusals
+
+Branch `claude/linux-oracle-planes-20261014` (from prod-candidate-2 `bf510bdf`). Full account:
+`docs/design/V3_DISPLAY_PLANES_ORACLE.md`; evidence `traces/linux_planes_oracle_20261014/`.
+- [measured] A stock nvidia-drm overlay test (`scripts/bench/display/kfplanes.c`) deadlocked bf510bdf's display
+  engine (overlay enable + both-planes flip; core parked for the VM's life). A bare-metal AD104 (vast VM, open
+  580.159.04, forced HDMI, `planes_hw_reference.sh`) completes everything. Fixes, each with an engine test that
+  fails before: `a34d3003` (no join of a vblank-parked UPDATE), `113a7535` (a plane disable raises its AWAKEN via
+  the flipped-away entry: 0.7 ms vs 3 s timeouts; semi-planar YUV in the caps page), `41acc6ac` (console YUV:
+  FMT matrix, P010-class, YUY2/UYVY, bilinear; NV12/P010/YUYV pixel-exact on the console).
+- [measured] The owner's current Win11 resets (runs 2970/2980/2990) have no overlay window at all; 11/13 follow a
+  `USER_RING_REFUSED … USER_RING_SCAN Legacy/SubDeviceMask(data-shaped)/MethodOverflow` and a refused
+  RESET_CHANNEL (0x906f0102). New rows G16/G17; a bounded refusal diagnostic is in `113a7535`. Not fixed.
+- Validation at `edf2759d` (product = 41acc6ac): GPU-free 2986 passed / 0 failed (every kf-* crate); gates 9/9 +
+  gate10 PASS, births 12/12 USER; host-mode fast suite 30/30 (private lock/bench dir, store 4 GiB beside the
+  owner's VM); Linux Cinnamon/Xorg desktop with the broker (`desktop_smoke.sh`, kf3 41acc6ac): NVIDIA renderer,
+  glxgears 60 FPS, **0 guest "Flip event timeout"** (earlier desktop runs: PASS_WITH_WARNINGS on that), host Xid
+  delta 0, one 1 s "ready, waiting for a vblank" STALL report (acquire satisfied; recovered). Evidence
+  `traces/linux_planes_oracle_20261014/validation-edf2759d/`. Windows: not run (the owner's VM untouched); the
+  steps are §7 of the oracle doc.
+- Bench notes: the fast guest must be the host-mode build (`KF_FROM_HOST=1`) — a guest.qcow2 (580.159.04) build
+  boots with `guest-driver` unset and GSP init fails; beside the owner's VM pass `KF3_FB_MB=4096`; never
+  `pkill -f` a pattern that appears in your own ssh command line (it kills the session).
+- Vast: own rental 55821401 (RTX 4070 SUPER, the HW reference) destroyed after use; 55810567 is another
+  session's and was not touched.
+- Left: D-EARLY (core-group commits complete before the vblank; A/B the existing `core_latch_at_vblank`), G16/G17.
+
+## UPDATE 2026-10-13 09:11UTC — Vulkan PASS; default route verification follows
+
+Source3ee0dd10ac89d62c44d64ac9ca412a685503a5ad / RTX4070 / stock595.91.07 /
+Windows580.88 / run1630: original GravityMark Vulkan PASS181s/rc0, real image,
+timings and GPU proof, two FIFO source growth transitions32768→65536→131072,
+zero guest153/4101/livekernel/WER/reboot/GSPcycles and bounded hostXids.
+The last admission blocker was default subDeviceId0: the private native channel
+and scanner now share an explicitly authored id1. This is host configuration,
+not inferred guest RAMFC defaults. Existing worker mediation supplies the
+consumption-ordered guest FIFO/USERD source transition; no native update caller.
+Exact GPU-free2156PASS, Linux9/9+gate10/USER12/12, rebuilt fast30/30, desktop/gears
+PASS_WITH_WARNINGS (known startup assertions/DRM flip timeout), no desktopXid.
+Evidence: gravity-vulkan/user-worker/authored-default (includes linux/desktop/
+windows-1630). Cleanstop/noQEMU/DMA-FQ; personal Windows chain preserved.
+
+This PASS uses KF3_WIN_USER_RING_RELAY=1. A default-route change is prepared and
+GPU-free2157PASS/0FAIL/3ignored; final hardware/flag-free Windows result pending.
+Next: exact Linux9+10/30/desktop then original H264/D3D12/CUDA/Vulkan oracles on
+fresh default-route Windows. Do not claim default shipping success yet.
+Earlier native capability/cursor references remain useful, but no longer block
+the demonstrated mediated Vulkan path. CrossVM containment/driver-family breadth
+and wider app matrix remain separate open work.
+
+## UPDATE 2026-10-13 — resumed; native relocation positive recovered
+
+Working branch `codex/windows-matrix-20261011`, worktree `/data/kf-inval-absent`.
+Previous committed tip `1a666d783`; runtime Windows source remains `d8afb1e3c`.
+The last session completed native relocation after its committed handoff and
+stopped before publishing the result. Recovered raw logs: prepared-native-migration
+under `traces/windows_matrix_20261011/gravity-vulkan/`. RTX 4070 / stock 595.91.07,
+source `1a666d783`, 2026-10-12 23:18:02–19 UTC: UID 65534 (CapEff zero) and UID 0
+NOP/trigger pairs all PASS. Trigger executes replacement-only GPU marker 2 and
+replacement USERD GET 2; matched NOP leaves both zero; all cleanup succeeds and
+precise attributed journals contain zero Xids. This disproves native-unavailable
+inferences; earlier same-config faults remain real with unknown inner cause.
+No product caller, Windows fix, general cursor rule or cross-VM guarantee follows.
+Follow-up exact `242647766` on the same host/driver, 2026-10-13 01:19:38–55UTC:
+UID65534/root distinct-slot NOP/trigger pairs 4/4 PASS, no Xid, cleanup successful.
+Trigger fetches replacement slots0 and1 (markers10/2), newGET2, oldGET1; NOP leaves
+replacement0/0/0, oldGET1. This falsifies start-at-slot1 for this fixture, but does
+not distinguish unconditional reset from honoring a seeded zero. Evidence in
+prepared-native-migration/cursors. Next: private USERD/guest relay transition,
+retained backing, arbitrary/in-flight/wrap cursor contracts and exact regressions.
+See `docs/design/V3_NATIVE_FIFO_RELOCATION_20261013.md` for authority assessment.
+
+Shadow Windows1620 final: TIMEOUT604s/rc124/no benchmark image, three153,
+zero4101/livekernel/WER/reboot, harnessGSPcycles1, hostXid32/channel4e. Full evidence
+is in `user-worker/shadow/windows-1620`; original600s oracle unchanged. Shadow is
+not a Vulkan fix. Host verified idle/noQEMU/DMA-FQ on resume, no Vast instances.
+Personal Windows image preserved; no host runtime or behavior default changed.
+
+## UPDATE 2026-10-12 21:01UTC — shadow Windows partial verdicts; prepared native discriminator
+
+Last confirmed push45825cc76; runtime exactd8afb1e3. Shadow1610 Edge H264 playback
+PASS40s/457frames/real video-decode; three153, zero4101/livekernel/WER/reboot/hostXid.
+Harness's153-inclusive tdr-budget caused restart, not an independently measured
+141/4101 TDR. Shadow1611 GravityD3D12 FAILrc1/19s/noimage/noGPUproof/three153,
+zero4101/livekernel/WER/reboot/hostXid. g3 Vulkan BOOT_FAIL due diskguard beforeapp.
+Owncompleted images+eightold own successful kernel/initrd copies safely reclaimed
+11.1GB afterprotected/allqcow audit; personal retained. Same-source1620 Vulkan
+original600s oracle in progress; hostXid32/channel4e20:52:32UTC. Final app verdict
+pending. Raw1610/1611 and partial mutable corpus in user-worker/shadow/windows-1610-1611.
+Coverage limited: early failedpublication/softwareidentity retries lose history;
+UnknownSuffix is not permission to claim all later scanner cases measured.
+
+Bench-only prepared-native-migration probe now grows/relocates GP and moves USERD
+within owned live64KiB, separate newPB GPU marker2/newGET2 provides actualrelocation
+observable. NOP/trigger matched128posttail kicks; two-second resourceshold; UID/
+CapEff recorded atregistration. Independent review corrected stimulus+uncertain
+free cleanup; no source blocker after corrections. Compile-only cargo test0unit
+tests PASS, no native result yet. Run uid65534 thenuid0 pairs only AFTER1620 frees
+GPU; no host build during timedguest. Product binary unchanged. Negative inner
+status remainsunknown; positive requires security/capability assessment beforeuse.
+M1-M3 crossVM containment remainsopen; no corresponding guarantee or newVkPASS.
+
+
+## UPDATE 2026-10-12 20:40UTC — shadow checkpoint pushed; exact Linux fast PASS
+
+Last confirmed pushd8afb1e3ca9440580c227ee218ce0d1b3d06a7ef. On dedicated1.20,
+exact source9/9+gate10/USERbirth12/12/refused0 and rebuilt fast30/30/crash0/
+NOTRUN0 PASS. Linux NVIDIA580.159.04 Cinnamon/Xorg/gears PASS_WITH_WARNINGS (known startup
+assertions/DRM flip timeout); no desktop hostXid, clean stop/noQEMU/DMA-FQ20:39:38UTC.
+One locked campaign automatically starts shadow Windows1610 afterwards: desktop,
+EdgeH264, GravityD3D12, GravityVk, defaultOFFshadow1 only/originalproduction19flags.
+Root$W/codex-user-shadow-d8afb1e3c; log/data/kf-user-shadow-d8afb1e3c.log;
+Windows$W/codex-user-shadow-windows-d8afb1e3c. Windows1610 starting; no Windows verdict yet.
+
+Coordinator addendum assessed: RCscope source cannot prove crossVM availability;
+no such claim is relied on. M1-M3 remain open before crossVM guarantee. Native
+update test used live owned mapped same-config ring/USERD with successful V2
+registration, but neither a prepared relocation nor a privileged positiveinner
+reference. RCnestedstatus remains opaque; Xid32 is not permission evidence.
+Correction folded into native-deferred-update README. No new security finding
+or native capability established; per-driver positive capability evidence is
+required before an alternative is adopted. Avoid another unsupported negative
+inference. Vastinventory empty20:35UTC; personal image retained.
+
+
+## UPDATE 2026-10-12 20:33UTC — bounded shadow diagnostic and native zero discriminator
+
+Last confirmed push16a1b6a78; working branch codex/windows-matrix-20261011.
+Native exact16a host595.91.07 uid65534 USER/C7B5 zero/id1 fixtures bothPASS:
+initial marker/all11 excludedbits/STORE USE/native GET/copy/reference, no hostXid.
+Evidence user-worker/default-zero-native. This is not guest580.88 default-mask parity.
+
+Default-OFF KF3_WIN_USER_RING_SHADOW implemented: private USERD/ring relays original
+GP descriptors; bounded scanner observes only, no CPU deferred actions, PB staging
+or witnesses. It preserves existing native USER/own refreshed VAS/source/credit
+checks; zero declaration uses ordinary host native birth. Parser bit1 for zero is
+an explicit observation hypothesis. Lost history stops further CPU PB reads.
+Any failed publication discards parser history while retaining quota/attempt counts.
+Independent review found two blockers, reproduced failing-first and corrected;
+re-review has no source blocker for exclusive single-VM diagnostic. Changed-crate
+kf-chan/kf-qemu tests PASS; final eight-crate run2155PASS plus probe6PASS. Extra linux-raw run has
+three environment failures because controller /dev/null is regular (157PASS/3FAIL,
+serial retry also fails); not represented as green. Exact hardware regression pending.
+
+RCscope source now available/read; shared engine/otherVM recovery remains unproved.
+Shadow is not a migration fix and no new GravityVkPASS claimed. Next unused base1610:
+after exact Linux9+10/fast30/desktop, one shadow boot with Edge video, GravityMark
+D3D12 and Vulkan, original oracles/production19flags/media; desktop implicit. Time-box
+further full mediation cycles using measured refusal classes. Personal1380 image
+preserved; completed own1600 disposable removed after all-qcow/protected audit.
+Matrix, migration cursor semantics, vidmem USERD and compatibility sweep remain open.
+
+
+## UPDATE 2026-10-12 20:10UTC —1600 pre-benchmark zero-ID refusal; batching audit
+
+Last confirmed push71c608bc3; product testedb50774a7a. Windows1600 signedin/NVIDIA
+ready, but multiple USERwork births declare subDeviceId0 and newadmission refuses.
+ABORTED_ADMISSION_PRE_BENCHMARK/no app or migration verdict. CleanACPI stop/
+noQEMU/DMA-FQ20:03:46UTC/no boundedhostXid. Personal retained; raw evidence
+user-worker/windows-1600. Zero is not justified as malformed: public595.84
+UVM/watchdog allocation code intentionally leaves0, CPU->GSP copiesunchanged.
+Its effective mask initialization is absent frompublicsource. Nativeexplicitid1
+PASS doesnot establishzero equivalence. No productnormalization implemented.
+
+Owner relays coordinator batchingideas (not hardinstructions). Refusal taxonomy
+now in docs/design/V3_WINDOWS_USER_RING_REFUSALS_20261012.md +runtime labelinventory;
+shadow design remains unimplemented, mustretain ownership/credit checks and report
+lostparse suffix asunknown. RCscope branchmissing onorigin at20:04UTC; sharedengine/
+otherVM effectunverified. Historicallogs are partialcorpus, notfullpushbuffers.
+BeforeanotherWindowsboot, native matchedzero/id1 discriminator (probe6localPASS),
+no productcodechange. Newnative results pending. CurrentrelaydefaultOFF.
+Fullmatrix/drivercompat remainopen; no newGravityVkPASS. LastVastempty19:29UTC.
+
+
+## UPDATE 2026-10-12 20:02UTC — exact mask native/Linux PASS; Windows1600 starting
+
+Last confirmed pushb50774a7a. Exactb50774a7a5343cf10af849db1445b577e9b21b3f:
+GPU-free2156PASS/source review no blocker; nativeuid65534 base/mask2/2PASS,
+initialACTIVE/all11excludedbits/STORE/USE/nativefetch/copy/reference verified,
+nohostXid. Linux9/9+gate10/USERbirth12/12/refused0, rebuiltfastguest30/30/
+crash0/NOTRUN0/exit0. Five expected negativeXid31/no32. Linux NVIDIA580.159.04
+Cinnamon/Xorg/gears PASS_WITH_WARNINGS (known shared-data assertions/DRMfliptimeout),
+nohostXid. Stopped20:01:03UTC/noQEMU/DMA-FQ. Evidence user-worker/mask-linux.
+
+Windows1600 starting with exactsame source, original600s GravityVkoracle/media,
+production19flags+only defaultOFFrelay experiment. Hypothesis/falsifier recorded
+beforelaunch; masksemantics/identity is sole behavior change relative1590.
+Hostlog /data/kf-user-mask-windows-b50774a7a.log, root$W/codex-user-worker-windows-b50774a7a.
+No new app/migration verdict yet. Own old1540 completed disposable removed after
+all-qcow/protectedaudit to keepdiskabove100GiB; personal image retained.
+Windows1590 is ABORTED_PRE_BENCHMARK, notappFAIL; no boundedhostXid.
+GuestGP_GET propagation exists; exact migrationcursor/TOP_LEVEL_GET semantics
+remainunproven. Fullmatrix/flagdefaultcleanup/drivercompatibility remainopen.
+Ownerideas optional: worker correctness first, optimizefrommeasuredcost later.
+Vastlastchecked empty19:29UTC. Branch codex/windows-matrix-20261011.
+
+
+## UPDATE 2026-10-12 19:55UTC — Windows1590 stopped before benchmark; mask correction in progress
+
+Last confirmed push3d10c51a7. Exact0578a7ab8 Windows1590 signed in/driver ready,
+then one USER_RING_SCAN SubDeviceMask refusal on host channel4a before the
+benchmark launched. Raw failing mask/header UNMEASURED. ABORTED_PRE_BENCHMARK;
+no app or migration verdict. QGA stop19:35:52UTC/QEMU gone19:35:54/DMA-FQ;
+bounded journal nohostXid. Evidence user-worker/windows-1590. Own disposable
+removed only after protected-image and all-qcow dependency audit; personal retained.
+
+Checkpoint implements public SET/STORE/USE mask semantics, ignoring inactive
+method data for bindings/software actions while preserving native command bytes.
+Native private USER profile explicitly authors the same validated one-hot12bit
+subDeviceId that the scanner uses; guest allocation field comes from existing
+versioned layout, unknown/zero/invalid identities refuse by name. Ordinary Linux
+birth encoding remains unchanged. Never infer this identity from GPU ordinal.
+GPU-free main suite2150PASS plus probe6PASS; allocation decode test preserves0/4.
+Independent source review no blocker. Final exact retest/native oracle pending;
+no Windows compatibility claim. Probe checks initial active state, all excluded
+bits, stored-mask controls and descriptor fetch while inactive. Hypothesis/falsifier
+will precede hardware. Next unused Windows base1600 after exact regression.
+Owner ideas are optional: worker correctness first, fast paths only from measurements.
+No new GravityVkPASS; full matrix, cursor continuity/GET propagation remain open.
+Vast last checked empty19:29UTC. Preserve scan-from-birth diagnostic/defaultOFF.
+
+
+## UPDATE 2026-10-12 19:28UTC — exact larger-source native/Linux PASS; Windows1590 starting
+
+Last confirmed push0578a7ab8. Exact0578a7ab81aa417f1e9350c871a4d963cdcb7041 native
+base/100KiB padded-barrier2/2PASS (heldmaxGET1/noearlyref/finalGET4/copy/reference),
+nohostXid. Linux9/9+gate10PASS/USERbirth12/12/refused0, rebuilt QEMU/client/fresh
+fastguest30/30/crash0/NOTRUN0/exit0. Five expected negativeXid31, no32. Linux
+NVIDIA580.159.04 desktop/Cinnamon/Xorg/gears PASS_WITH_WARNINGS (known startup
+shared-data assertions/DRMfliptimeout), nohostXid. Stopped19:27:18UTC/noQEMU/DMA-FQ.
+Evidence user-worker/source-budget-linux. No forced Linux relay test claimed.
+
+Windows1590 starting under globalGPUlock using same exact source/production
+setup+only defaultOFF relay flag, original600s GravityVk oracle/media unchanged.
+Host log/data /data/kf-user-span-windows-0578a7ab8.log and
+$W/codex-user-worker-windows-0578a7ab8. No Windows app verdict yet.
+Owner clarifies the suggested fast switching variants are ideas, not required
+implementation: prioritize the worker correctness slice, optimize from measured
+cost after functional progress. Current scan-from-birth worker remains diagnostic;
+vidmem source, migration cursor semantics/GET propagation and full matrix remain
+open. Personal image chain preserved. Last confirmed Vast inventoryempty18:28UTC.
+
+
+## UPDATE 2026-10-12 19:20UTC — source budget locally green/reviewed; exact hardware next
+
+Last confirmed pushbdfe801e0. Full GPU-free2152PASS/0failed (1875 main six-crate,
+271 kf-mem/trap, probe6); real Cache/RAM fixtures corrected and now pass.
+Independent review no runtime blocker. Private staging is populated before shared
+publication guards; exact source/channel/topology admission still precedes PUT.
+225 pieces and16CPUviews are explicit bounded policies; excess fragmentation
+clean-refuses. Larger snapshot guard latency remains unmeasured.
+Windows1580 full evidence captured in user-worker/windows-1580, ABORTED_PRE_BENCHMARK,
+no app verdict/no boundedhostXid; own disposable removed after all-qcow dependency
+and protected-image audit. Personal retained; noQEMU/DMA-FQ,110.9GBavailable.
+Next exact source native base/100KiB barrier probes, Linux9+10/fast30/desktop,
+then Windows1590 (unused) on unchanged original oracle. No new GravityVkPASS.
+
+
+## UPDATE 2026-10-12 19:18UTC — checkpoint; Windows1580 buffer-budget refusal
+
+Last confirmed push4ec9f9a24. Exact4ec9f9a24 native synchronized-NOP probes2/2PASS,
+Linux9/9+gate10, fast30/30, desktop/gears~59–60FPS PASS_WITH_WARNINGS. Evidence
+user-worker/nop-linux. Windows1580 signed in but desktop channels refused GP_FORMAT
+Budget on~100KiB buffers before GravityMark: ABORTED_PRE_BENCHMARK, no app verdict.
+Stopped ACPI18:57:49UTC/gone18:57:51UTC/DMA-FQ; bounded journal nohostXid.
+Personal images preserved. Windows raw evidence capture is next.
+
+This checkpoint raises the trusted source budget to existing896KiB staging space,
+with225 page pieces and16 cached64KiB CPU views (1MiB quota); arbitrary fragmented
+store spans exceeding that view quota still clean-refuse. Actual storage/read
+regressions failed first; actual Cache test now also reproduced Bounds after a
+fixture compile correction. Complete retest/review and exact hardware are PENDING.
+Do not call this checkpoint green. New100KiB native padded-barrier probe added.
+
+Census of five retained diagnostic campaigns:301/301 user-work channels allocated
+5080;213/213 with logged forwards allocated it first;88 have no forward evidence.
+Only3 channels successfully registered bundles. See user-worker/object-order.
+Current diagnostic still scans from birth on workers, Sysmem-only. Owner proposes
+initial inspection then fast forwarding until later deferred registration. Binding
+identity can potentially derive from own single-object metadata; not an absolute
+blocker. Re-entry still needs justified packet-boundary/state recovery. No fast
+switch implementation or latency claim yet. GravityVk, full matrix, compatibility
+axis and migration/source continuity remain open; no new Windows appPASS.
+
+
+## UPDATE 2026-10-12 18:44UTC — Windows1570 identifies synchronized NOP; correction locally green
+
+Last confirmed push43780e21e. Exact a38602015 Windows1570 admits USER workers
+but refuses measured entry0x8000020000000000 (LENGTH0/NOP/SYNC_WAIT/LEVEL1)
+on several desktop channels. ABORTED_STARTUP; no GravityMark/migration verdict.
+Intentional harness143; ACPI/QGA failed and QEMU stopped UNCLEAN18:42:27UTC,
+gone18:42:31UTC/DMA-FQ/no bounded hostXid/count59 unchanged. Personal retained.
+Full evidence user-worker/windows-1570 supersedes the pending1570 entry below.
+
+This checkpoint accepts only public CONTROL NOP with optional SYNC/LEVEL and
+unused operand, preserving raw descriptor through native hardware. Other controls/
+reserved forms still refuse. Actual storage regression failed first; six-crate
+1922PASS/0fail plus probe5PASS; independent review no blocker. Native matched
+barrier LEVEL probe hypothesis/falsifier recorded before run in1570 README.
+Next exact native probe + Linux9+10/fast30/desktop, then Windows1580. No new appPASS.
+
+Owner requests no PB inspection while deferred API is absent, reverse fast-path
+switch when none can execute, and source USERD access for sysmem and vidmem.
+Current diagnostic still scans on workers from birth and admits Sysmem only.
+CPU exclusion is separate from retained GPU packet/binding state: try-lock alone
+cannot reconstruct an opaque prefix. Existing user_scan tests cover hardware
+packet continuation/binding; object allocation before firstPUT remains admission
+point. Optimize later without folding it into this single NOP acceptance retry.
+Migration cursor-zero, old-source PUT continuity, guest GET/TOP_LEVEL_GET,
+forced Linux relay diagnostic and full matrix/compatibility axis remain open.
+
+
+## UPDATE 2026-10-12 18:34UTC — exact LEVEL correction green on Linux; Windows1570 launched
+
+Last confirmed pusha38602015. Exacta38602015d0c295fdbb9a03e2e28fbabf78174ae:
+changed native private witness/assembled probes2/2PASS/noXid, held maxGET1/no
+premature reference and actual laterGP_GET=PUT3or4. Linux9/9+gate10PASS,
+USERbirth12/12/refused0, rebuilt QEMU/client/fresh fastguest, fast30/30/crash0/
+NOTRUN0/exit0. Expected five negative-testXid31, no32. NVIDIA Linux desktop/gears
+~59–60FPS PASS_WITH_WARNINGS/startupassertions/fliptimeout, no hostXid; child
+stopped/noQEMU/DMA-FQ. Evidence user-worker/level-linux with exact binary hashes.
+
+Windows1570 now running same source under globalGPUlock, production setup plus
+only defaultOFF relay flag, original600s GravityVk oracle/media. No app PASS yet.
+Only behavior change versus1560 is public LEVEL support/preservation (bounded
+error context added). Cursor-zero migration and old-source continuity remain
+unverified; guest GET/TOP_LEVEL_GET propagation unimplemented. No vCPU lock or
+PB work; unknown/pending floods coalesce in existing atomic-table tests, durable
+worker retry/Free-reuse tests retained. Vast inventoryempty18:28UTC. Personal
+images protected; own completed1560 disk removed after dependency-header audit.
+Host log/data /data/kf-user-level-windows-a38602015.log,
+$W/codex-user-worker-windows-a38602015. Wait for result, stop on named falsifier.
+
+
+## UPDATE 2026-10-12 18:25UTC — public LEVEL semantics/native match; correction reviewed
+
+Last confirmed push7d00679ae. Native sameGPU/595.91.07/USERuid65534 matched probes
+at exact7d00679ae: reference versus firstGP LEVEL1 and split-held versus firstGP
+LEVEL1/MAIN continuation allPASS, real copy/reference/GP_GET=PUT, no earlyref or
+hostXid. Public manual defines LEVEL as TOP_LEVEL_GET monitoring, not nested
+execution. Evidence user-worker/native-level, pinned source/link/lines.
+
+This containing commit removes only LEVEL1 refusal, preserves it on ordinary
+rawGP and staged prefixes/suffixes, marks private witnesses LEVEL1; no receipt,
+privilege, lifetime or span relaxation. Failing-first actualCPUstorage test RED;
+full six-crate1921PASS/0failed, independent source review no blocker. Private
+witness change is not covered by old native measurements: next exact native
+storage recheck, Linux9+10/fast30/desktop, Windows1570 retry.1560 raw offending
+entry absent, so its cause is still inferred; new bounded refusal context helps.
+No guest TOP_LEVEL_GET/GET propagation or full progress compatibility claim.
+Worker flag defaultOFF; migration/source-zero remains diagnostic hypothesis.
+
+
+## UPDATE 2026-10-12 18:17UTC — Windows1560 reaches worker; GP format falsifier
+
+Last confirmed pushe6d858593; exact hardware source6ff5aaf29. Windows1560 admits
+private USER births and native5080 children, then clean-refuses GP_FORMAT Entry
+on desktop channels before sign-in/GravityMark. ABORTED_STARTUP/no app verdict.
+Stopped ACPI18:11:46UTC/noQEMU18:11:51UTC/DMA-FQ, no hostXid. Personal retained.
+Evidence user-worker/windows-1560. Earlier USERD handle mismatch resolved.
+
+Candidate, not proven: LEVEL_SUBROUTINE rejected by strict prototype decoder;
+existing1510 migration sample and1361 snapshots contain LEVEL1.1560 raw entry
+not logged. This checkpoint adds bounded refusal context, leaves acceptance
+unchanged, and adds native matched LEVEL0/LEVEL1 reference probe modes with
+GPU-free construction test. Native hypothesis/falsifier in windows-1560 README.
+Next native matched probe + exact Linux regression then Windows context retry.
+No new app PASS; migration/source-cursor semantics still unverified.
+
+
+## UPDATE 2026-10-12 18:09UTC — corrected source Linux passes; Windows1560 launched
+
+Last confirmed push6ff5aaf29. Exact6ff5aaf293e9fc04ac8780983f26dc04d0f3b735
+Linux9/9+gate10, USERbirth12/12/refused0, rebuilt QEMU/client/fresh fastguest,
+fast30/30/crash0/NOTRUN0/exit0. Five expected negative-test Xid31; no32.
+Linux NVIDIA580.159.04 RTX4070 Cinnamon/Xorg/gears59–60FPS PASS_WITH_WARNINGS:
+startup assertions/flip-timeout warnings; no hostXid. Disposable stopped,
+noQEMU/DMA-FQ. Evidence user-worker/resolved-userd-linux includes binary SHA,
+full fast scoreboard, hostXid window, desktop log and own1550 disk cleanup audit.
+
+Windows1560 launched under global GPU lock on exact6ff5aaf29, unchanged production
+setup +only KF3_WIN_USER_RING_RELAY=1 and original600s GravityVk oracle/media.
+Result pending; no new Windows PASS or migration-semantic claim. Same-GPU VFIO
+reference183sPASS. Exact initial USERD correction passed GPU-free1919 and review;
+registration/doorbell review found no new race, but preservation of arbitrary
+old-source PUT across source-swap remains unverified cursor/reset semantics.
+Host log /data/kf-userd-resolved-windows-6ff5aaf29.log; root
+$W/codex-user-worker-windows-6ff5aaf29. Personal image retained; no other GPU job.
+
+
+## UPDATE 2026-10-12 18:07UTC — Windows USER worker diagnostic and admission correction
+
+Branch codex/windows-matrix-20261011, pushed6ff5aaf29. Worker runtime is now
+connected but defaultOFF, not the disabled draft below. Exact30c887c86 Linux
+9+10/fast30PASS; desktop/gears59–60FPS with known startup warnings/no hostXid.
+Windows1550 ABORTED_ADMISSION at CPU-local USERD handle/GSP MemoryList mismatch;
+no app/migration verdict, ACPI stop/no hostXid/personal images untouched.
+Corrected initial Sysmem source uses resolved descriptor, bounded512 bytes and
+exact channel/RAM guards; migrated source retains MemoryList lease. Reviewed
+six-crate1919PASS/0failed. Exact6ff5aaf29 hardware Linux gates9+10PASS; fast/desktop
+and Windows relay retry pending. Source-zero migration remains a hypothesis.
+
+Candidate USER routes are worker-owned from birth; first5080 alloc competes with
+firstPUT under shared Pt admission, late opaque history is not converted. No PB
+reads on vCPU. Normal Linux Passthrough unchanged; optional Linux forced-relay
+experiment authorized by owner if Windows fails, but not implemented. Current
+accessor Sysmem-only. See docs/RESUME_CODEX_WINDOWS_20261011.md and evidence
+traces/windows_matrix_20261011/gravity-vulkan/user-worker. Master untouched.
+
+
+## UPDATE 2026-10-12 16:56UTC — worker integration checkpoint, not activated
+
+Last confirmed push1d35bd9df; this checkpoint's revision is its containing commit
+on codex/windows-matrix-20261011. Whole-ring mapping admission now checks complete
+confirmed spans with bounded row/RAM traversal without copying a guest-sized ring;
+9 userread tests PASS (including two new whole-ring tests), exit0. Added a compiling
+worker integration draft and an own-space VA split request. Runtime enabled()
+remains false and Record.pump remains None. No new hardware or Windows result.
+
+OPEN BEFORE ACTIVATION: typed transient retry before publication, exact software
+object/classID admission and metadata snapshot, source/notifier cleanup wiring,
+exact pending-birth USERD initialization, whole-ring initial admission, and review
+of rare-segment witness/retirement ordering. Migration cursor-zero is an unverified
+diagnostic hypothesis, not measured semantics. Drainer retirement now try-locks
+Record; worker source preparation must never make the drainer wait for native RM.
+Existing hardware baseline4df9c0095 gates9+10/fast30 remains the last verified one.
+GravityMark Vulkan still FAIL/TIMEOUT on kayfabe versus same-GPU VFIO PASS.
+
+
+## UPDATE 2026-10-12 15:28UTC — reviewed USER scan/accessor tests; baseline VM runs
+
+Previous confirmed push4df9c0095. New unconnected USER scanner/fetch ledger and
+private-ring descriptor accessor:19 scanner tests +3 production CPU-mapping
+accessor tests. Header-only fragment failing-first found/fixed an OOB panic;
+independent review found/fixed Legacy sizing ambiguity, sub-device filtering,
+modern reserved framing and hardware-subchannel false triggers. Final review
+cleared GPU-free primitive scope. Full trap/core/abi/rm/chan/qemu1899 PASS/0fail.
+Evidence gravity-vulkan/user-scan. Runtime userrelay::enabled() remains false;
+source admission/native ordering/software migration integration still open.
+
+Exact4df9c0095 hardware on172.22.1.20: gates9/9+gate10, USERbirths12/12,
+fast30/30/crash0/NOTRUN0/exit0. Five Xid31 match deliberate negative arms; no32.
+Linux desktop disposable child: Cinnamon/Xorg + NVIDIA580.159.04 RTX4070 gears
+~60FPS, no hostXid; guest startup flip timeout and shared-data assertions mean
+PASS_WITH_WARNINGS smoke, not a clean desktop/render-parity gate. Runner's first
+PASS missed those warnings; oracle corrected and executed original retained.
+No QEMU remains, group11DMA-FQ; personal Windows images preserved.
+
+Latest owner accepts native USER/own restricted VAS as authority, ordinary GP
+pointer forwarding plus scan-from-first-submission, and trigger-only staging;
+CPU scan is not proof of GPU execution/completion. Runtime host actions still
+need independent exact registration/ownership validation. Linux Passthrough
+host mappings remain forbidden. No new Windows/Gravity PASS; matrix and driver
+sweep open. Estimated3–5hours to first Windows relay experiment, not a guarantee.
+Branch codex/windows-matrix-20261011; master untouched.
+
+
+## UPDATE 2026-10-12 12:36UTC — reviewed three-mode CPU dispatch; runtime still off
+
+Previous confirmed push93dd13847; this checkpoint's source revision is its
+containing commit on codex/windows-matrix-20261011 (/data/kf-inval-absent).
+Owner's latest three-mode policy folded above superseded worker-only wording in
+§AI, relay design and original P0 review. Architecture rationale/evidence:
+docs/design/V3_WINDOWS_USER_RING_RELAY_ARCHITECTURE_REVIEW_20261012.md.
+
+Unconnected kf-trap companion-u64 prototype: fixed-cost atomics; full32 host token;
+25-bit generation refuses exhaustion; bounded four-GP delta; exclusive publication;
+durable pending; exact retirement/native-cleanup reuse gate. Direct Linux cannot
+convert to inspection; contended Direct gets an opaque-token drain. No PB read,
+lock, mapping or syscall in this module. Runtime wake adapter must publish the
+existing durable token bitmap and conditionally signal nonblocking eventfd.
+
+13 dispatch tests PASS (seven finite Loom programs, actual shared implementation,
+no preemption/permutation/time cap). Two intentional broken cutover guards RED;
+restored full trap/core/abi/rm/chan/qemu suite1877 PASS/0failed/exit0. Independent
+review found/fixed Direct last-ring drain and idle Worker requeue; final re-review
+no blocker in unconnected CPU scope, NOT runtime activation. Metadata must be
+resolved against post-claim generation; delayed callbacks can cross Free/reuse.
+Evidence gravity-vulkan/user-relay-dispatch.
+
+CPU handoff and native parser continuity remain separate. Fresh handoff excludes
+old CPU claimants and requires never-published history; any opaque native PUT
+keeps NativeHandoffPending. Public FIFO packet-fragment/TSG binding evidence
+prevents assuming GET==PUT is a parser boundary. Run1361 5080 allocation log8315
+precedes schedule8365/first forward8437, so selecting inspection there is a
+candidate for this app, not a universal guarantee. Late object allocation remains
+gated. Deferred notification source review establishes no repeatable CPU ack gate.
+
+Runtime userrelay::enabled() remains false. Notifier/USERD init, guarded source
+views, actual GP copy/worker submit, 5080 admission/migration and shared MMIO/
+ioeventfd integration remain open. No new GPU/Windows run. Gravity Kayfabe still
+FAIL/TIMEOUT versus same-GPU VFIO179/183s PASS; exact Linux hardware remains
+7f3f9fe16 gates9+10/fast30 PASS. Personal image retained. Vast last CLI empty;
+no rental. Matrix/driver sweep open; master untouched. Next integrate fresh
+5080 selection and submit only after remaining admission/order gates close.
+
+## UPDATE 2026-10-12 12:18UTC — reviewed native-attempt quota; three dispatch modes
+
+Last confirmed push debb10bc1. New native quota ticket reserves actual advertised
+runlist budget BEFORE native allocation, retains across guest token Free and
+uncertain native cleanup, transfers one charge at publication and releases only
+on never-attempted or confirmed native cleanup. Six tests, old early-release
+RED regression and deterministic retirement/ownership interleaving test; full
+core/qemu/rm/chan PASS. Independent review found/fixed missing caps-lock exclusion
+between retirement CAS and replacement ownership, then cleared quota scope.
+Evidence gravity-vulkan/user-native-quota. Runtime enabled() is still false.
+Notifier, initialization, source/submit/migration and native cutover remain open.
+
+Owner now explicitly directs three lock-free dispatch modes: direct host token;
+bounded pre-mapped USERD/GP-pointer copy + native doorbell (large delta worker);
+always worker for Translated/Emulated/registered migration. No PB inspection or
+mapping/native syscall on vCPU; only conditional nonblocking worker eventfd wake.
+MMIO and ioeventfd must share dispatch semantics. Model actual atomic transitions
+and Free/reuse/cutover/wrap, with independent architecture review. Existing token
+word is FULL (3state+2route+32hosttoken+27stamp). Prefer separate companion atomic
+control word for a prototype; don't truncate host token/stamp or conflate Emulated
+completion with translated work. No inline path is implemented or enabled yet.
+
+Late conversion is being reassessed rather than assuming inspection-from-birth
+is the only possible design. Registration-reply timing alone and a mere table
+flip do not account for prior native PB or reconstruct packet/binding state.
+Public manual explicitly permits headers/arguments across GP entries, so a zero
+witness cannot be blindly appended to an opaque partial packet. Three-mode CPU
+atomic safety and native stream cutover are separate gates, neither claimed.
+
+No new GPU/Windows job. Gravity Kayfabe FAIL/TIMEOUT; same-GPU VFIO179/183s PASS.
+Latest exact Linux hardware7f3f9fe16 gates9+10/fast30 PASS. Personal image retained.
+Host idle/DMA-FQ/stopabsent/117323956224 bytes free; Vast CLI11:58 [], no rentals.
+Matrix/driver sweep open; master untouched. Continue on codex/windows-matrix-20261011.
+
+
+## UPDATE 2026-10-12 11:50UTC — disabled runtime birth checkpoint; bounded doorbell steering
+
+Last confirmed push: 99dec1260. New Windows USER birth adapter is a draft and
+`userrelay::enabled()` is unconditionally false: no environment variable can
+activate it. Exact pending birth and native cleanup ownership are integrated,
+but per-runlist quota must be reserved BEFORE native allocation and retained
+through uncertain cleanup. USERD initialization, notifier, submission and migration
+are still open. Review found a stale USERD initialization write (removed) and
+rewind lookup race (resolution now uses one locked snapshot). Guest-driven birth
+structural test now includes chan.rs's private userrelay child. GPU-free suite is
+being rerun after those fixes; earlier full run caught that structural allowlist.
+
+Owner steering: no pushbuffer inspection on a vCPU; at most a few bounded ring
+reads/writes. Reassess pointer-only forwarding with a separate proven migration
+mechanism. Public deferred completion notifications are being checked; no exact
+cursor/notification proof yet, and no claim that A-lite works. Worker-prepared
+publication remains a candidate. Existing §AI worker-only runtime remains in
+force while this is investigated; no new inline path implemented.
+
+No new GPU job or Windows result. Gravity Kayfabe FAIL/TIMEOUT; same-GPU VFIO
+PASS179/183s. Latest exact Linux hardware7f3f9fe16 gates9+10/fast30 PASS, no hardware
+claim for this draft. Personal Windows image retained. Matrix/driver sweep open;
+master untouched. Branch codex/windows-matrix-20261011, /data/kf-inval-absent.
+
+
+## UPDATE 2026-10-12 11:21UTC — exact deferred registration cleanup
+
+Last confirmed push ab61d724a. Both production deferred completion/refusal sites
+now retain exact registration identity; remove/re-register and object recreation
+cannot let a delayed completion delete replacements or flush their waiting table.
+Failing-first reuse regression, two focused tests and full abi/rm/qemu/chan PASS;
+independent review cleared this scope. Evidence gravity-vulkan/deferred-registration-identity.
+Source review REJECTED own-PDB query/native USER FIFO invalidate candidate: query
+is kernel-only in ordinary native GSP mode; FIFO invalidate requires privileged
+channel authentication. No such probe/escalation attempted. GLOBAL_ACK action
+stays disconnected; this does not establish GravityMark uses that USER MEM_OP.
+No new Windows run/Gravity PASS; runtime birth/submit/migration remains open.
+Latest exact Linux hardware7f3f9fe16 gates9+10/fast30 PASS. Same-GPU VFIO179/183s
+PASS; matrix/sweep open; personal image retained; master untouched.
+
+
+## UPDATE 2026-10-12 11:05UTC — reviewed stream invalidation and guarded admission
+
+Last confirmed push: 3a6a8a8ee. Typed user-stream own-space invalidates now wait
+preceding HOST receipts and block later publications. Review corrected replay
+collapse, pre-invalidate SYSMEMBAR and output expansion allocation; unsupported
+shapes refuse, sysmembar follows action completion. Failing-first and full-suite
+abi/rm/qemu/chan PASS (RM141), independent re-review cleared source. Lease.admit
+retains exact graph authority through bounded publication; runtime still needs
+try-locked channel identity plus continuous source/birth RAM guards. Evidence:
+gravity-vulkan/user-invalidate-admission. No runtime caller/Gravity PASS. GLOBAL
+ACK executor is still a source/measurement gate; host control OK alone is not
+proof. Latest exact Linux hardware remains7f3f9fe16 gates9+10/fast30 PASS.
+Gravity Kayfabe FAIL/TIMEOUT, VFIO179/183s PASS. Matrix/sweep open; personal image
+retained; Vast10:36 empty; master untouched. Next actual relay integration.
+
+## UPDATE 2026-10-12 10:47UTC — reviewed USERD declaration and owned store views
+
+Last confirmed push: baa9150ef. ChannelAlloc retains the existing public-layout
+USERD memory handle/offset; exact live logical allocation checks the physical
+USERD location and RAM topology. New bounded owned store views prepare outside
+source guards, copy without native calls and retain failed cleanup ownership.
+Independent review caught/corrected read-only mmap protection, then no blocker.
+Full abi/rm/qemu/chan PASS (RM140, QEMU195). Evidence: user-source-adapters under
+gravity-vulkan. No runtime relay caller yet; next stream invalidate mediation,
+Windows birth/submit/migration and exact Linux/Windows tests. Latest exact Linux
+hardware PASS remains 7f3f9fe16, gates9+10/fast30. Gravity Kayfabe FAIL/TIMEOUT,
+VFIO179/183s PASS. Matrix/sweep open; personal image retained; Vast10:36 empty.
+
+## UPDATE 2026-10-12 10:36UTC — reviewed source snapshots, GPU-free PASS
+
+Last confirmed push: eb968e209. Bounded immutable command snapshots now check
+complete confirmed spans and birth RAM topology before copying and publication.
+Independent review cleared unlogged row changes and partial RAM aliases; seven
+new tests and full abi/rm/qemu/chan suite PASS (QEMU lib191, RM lib138). Evidence:
+gravity-vulkan/user-source-snapshot. This helper has no runtime caller yet.
+Exact 7f3f9fe16 Linux9/9 + gate10 + fast30/30 remains the latest hardware PASS.
+Next: production source views, Windows birth/stream and ordered migration, then
+exact Linux and Gravity. Gravity Kayfabe FAIL/TIMEOUT; same-GPU VFIO PASS179/183s.
+Matrix and driver sweep remain open. Host10:36 idle/DMA-FQ/lockfree/stopabsent,
+117343203328 bytes free; personal image retained. Vast10:36 CLI:[], no instances
+to retire. Master untouched.
+
+## UPDATE 2026-10-12 05:27UTC — exact 7f3f9fe16 Linux regression PASS
+
+Last confirmed push: 7f3f9fe16. Exact full source
+7f3f9fe16c6d97513c0c9406ddcdf011efca5937 passed gates9/9, gate10, USER
+births12/12/refused0 and original fast30/30, crashes0/NOTRUN0/exit0 on the trusted
+RTX4070/595.91.07. Fresh Linux guest and rebuilt private QEMU/client; full text
+and binary hashes: gravity-vulkan/user-memory-access/linux-result. Five Xid31
+match negative-test addresses; no Xid32 (not a zero-Xid claim). NoQEMU/DMA-FQ/
+lockfree/stopabsent/>100GiBfree afterward. Personal Windows original retained.
+Source snapshot adapter is under review; no Windows relay/migration wired yet.
+Gravity Kayfabe FAIL/TIMEOUT, same-GPU VFIO PASS179/183s. Matrix and driver sweep
+remain open. Vast CLI05:15UTC empty, nothing to retire; master untouched.
+
+
+## UPDATE 2026-10-12 05:17UTC — reviewed live USERD memory authority
+
+Last confirmed push: 407d5385d. Shared live graph adapter now provides bounded,
+nonblocking RAM-backed MemoryList leases with exact graph/resource/topology
+lifetimes. Independent review caught and cleared alias-back resurrection and
+RAM topology blocking; both have failing-first tests. Full GPU-free abi/rm/qemu/
+chan PASS (QEMU lib184, RM lib138). Original client allocations only; aliases
+refused by this worker adapter. No new Linux GPU mapping. No runtime relay or
+migration consumer yet; Gravity Kayfabe still FAIL/TIMEOUT, VFIO PASS179/183s.
+Next: exact Linux9+10/30 on this committed wrapper, then source/VA adapter and
+Windows birth/stream/migration. Evidence: gravity-vulkan/user-memory-access.
+Personal image retained, no QEMU, DMA-FQ,111GiB free at last check. Vast CLI
+05:15UTC:[], nothing to retire; owner authorizes any unused account instance.
+Matrix/driver sweep remain open. Master untouched.
+
+
+## UPDATE 2026-10-12 05:01UTC — exact pending Windows birth/Free adapter
+
+Last confirmed push854533ec1. Bounded weak pending Birth identity binds the
+Windows permit, channel/subtree scope and VA reply. Poll/commit reject reused
+handles; commit needs successful handout and metadata-only exact attachment.
+Production Free cancels scopes before live removal. Orphan Drop cancels only
+before handout and signals VA eventfd; Taken remains act-owned through confirmed
+native cleanup. No runtime allocate/poll/commit caller yet. Full GPU-free
+abi/rm/qemu/chan PASS, userva16/16; independent review found no source blocker.
+Evidence gravity-vulkan/pending-user-birth. Next shared USERD object lifetime and
+immutable source/VA adapter, then migration and exact Linux/Windows. Public
+Windows580.88 identity canonicalizes to audited580.65.06; no guessed driver cell.
+Gravity Kayfabe still FAIL/TIMEOUT, VFIO PASS179/183s; matrix/sweep open.
+Prior exactcec428397 Linux9+10/fast30 PASS, no hardware claim for latest source.
+Personal image untouched; Vast04:42UTC empty; master untouched.
+
+
+## UPDATE 2026-10-12 04:50UTC — reviewed VA birth cancellation, GPU-free PASS
+
+Last confirmed push6c255beb2. New Pending/Ready/Taken/Canceled reply state
+serializes cancellation against handout. VA worker releases only never-handed-out
+storage; Taken requires confirmed native free or never-born explicit cleanup.
+Failed cleanup retains pin/exclusion/storage after one automatic attempt, no
+retry spin. Canceled request churn preserves bounded initialization fairness.
+Full GPU-free abi/rm/qemu/chan PASS, userva12/12. Independent review found/corrected
+error-path second cleanup and starvation, then no source blocker. Evidence in
+gravity-vulkan/user-birth-cancel. No VM birth/migration caller or Gravity PASS;
+next exact pending birth/subtree identity and USERD/source ownership adapters.
+Prior exactcec428397 Linux9+10/fast30 PASS, no hardware claim for this new change.
+Gravity Kayfabe FAIL/TIMEOUT, VFIO PASS179/183s; matrix/sweep remain open.
+Personal image untouched. Vast API04:42UTC:[], nothing to retire; master untouched.
+
+
+## UPDATE 2026-10-12 04:37UTC — exact cec428397 Linux9+10/30 PASS; typed migration decoder
+
+Last confirmed pushcec428397. On exactcec4283976009f2662e3f6812e810959911144c4,
+trusted RTX4070/595.91.07: gates9/9+gate10 PASS, births12/12 USER/refused0,
+rebuilt revision-private QEMU/rawclient/fresh fast guest, original fast30/30 PASS,
+zero crashes/NOTRUN, EXIT0. Full text/hash evidence in gravity-vulkan/user-lifecycle/
+linux-result. Five Xid31 match negative-test addresses; no Xid32, not zero-Xid claim.
+NoQEMU/DMA-FQ/lockfree/stopabsent/>100GiBfree; personal image unchanged0444/28240642048.
+New reviewed typed FIFO_UPDATE decoder uses existing public generated layouts,
+checks widths/full struct spans, and refuses missing/short layout locally. Current
+trigger still explicitly REFUSED: no VM relay/migration wired. Full GPU-free abi,
+rm,qemu,chan tests pass; new decoder has no exact hardware claim yet. Next: pending
+Windows birth/VA-source lifetime adapter and ordered migration, then exact Linux
+and Gravity. Gravity Kayfabe FAIL/TIMEOUT; native VFIO PASS179/183s. Matrix and
+compatibility sweep remain open; Vast lastchecked04:11UTC:[], master untouched.
+
+
+## UPDATE 2026-10-12 04:28UTC — reviewed exact object lifetimes; Linux regression next
+
+Last confirmed push1373317ce. Production EngineObj now retains exact channel AND
+pending child allocation identity through parked steer/native allocation/attachment;
+guest Free cancels pending child identity, and an orphan undo withdraws only the
+exact kept allocation once. Exact validated class retained for future user parser.
+Bounded64 weak pending map prunes failed/dropped acts, never reuses live identity.
+Independent review corrected the same-channel child Free/reuse gap then found no
+remaining source blocker. Full GPU-free kf-chan/kf-qemu/kf-rm pass; qemu lib173/173.
+Evidence/hypothesis/falsifier: gravity-vulkan/user-lifecycle. Next exact Linux gates
+9+10/build/rawclient/fast30 serial; NOT_RUN at checkpoint. Still no mediated Windows
+relay or migration wired, no Gravity Kayfabe PASS (VFIO reference PASS179/183s).
+Personal image retained; GPU idle/DMA-FQ/lockfree. Vast rechecked04:11UTC:[];
+nothing to retire. Full matrix and driver sweep remain open; master untouched.
+
+
+## UPDATE 2026-10-12 04:15UTC — reviewed ordered source progress, GPU-free only
+
+Last confirmed push9f7cdd81f. New user_progress::Channel enforces one active
+immutable source plan per native allocation through command receipts/software
+success and once-only generation-checked source retirement. Reservation precedes
+issuance; Full/clean pre-I/O refusal cannot skip actions. Pending parser fragments
+cannot retire as empty/no-op plans. Independent review found/corrected both
+cross-plan software and empty-prefix holes, then no remaining model blocker.
+Full GPU-free kf-chan/kf-qemu/kf-rm tests passed; filtered evidence in gravity-vulkan/
+user-progress. No runtime caller or Windows migration yet. Next: birth cancellation,
+source/VA lifetime adapter and actual software migration; exact Linux9+10/30 then
+one-variable Gravity run. Kayfabe Gravity FAIL/TIMEOUT; same-GPU VFIO PASS179/183s.
+Personal Windows image retained. Vast API rechecked04:11UTC:[]; nothing to retire.
+Matrix and driver compatibility sweep remain open. Master untouched.
+
+
+## UPDATE 2026-10-12 04:00UTC — composed native submission PASS
+
+Last confirmed push3d261eb2a. Native exact3d261eb2afe3938e72d80c069ead77f812b0a0b8
+USER C56F/uid65534 PASS: immutable parser/planner17ops/34words -> private
+Storage.write_publication -> real4096-byte copy/ref1/CEsem1/GET3PUT3 and exact
+HOST-consumption receipt(gen1,get1),52810us. Prepare61us/clear256,max47us/map67us;
+bounded hostXid0 and clean native teardown. Evidence user-storage-assembled/result.
+Metadata full-hash typo preserved/corrected after941 staged-source-file checks;
+actual tested source is3d261eb2a. No runtime wiring or Windows migration claim.
+Next: multi-cell/software final-source receipt model, birth identity/cancellation,
+source/VA gate and measured migration semantics; then exact Linux9+10/30/Windows.
+Gravity kayfabe still FAIL/TIMEOUT, same-GPU VFIO PASS179/183s. Personal image
+unchanged0444/28240642048bytes, noQEMU/DMA-FQ/lockfree/stop absent,119615680512
+bytesfree. Vast rechecked04:00UTC:[]; nothing to retire. Matrix/sweep remain open.
+
+
+## UPDATE 2026-10-12 03:57UTC — composed submission prototype; native probe next
+
+Last confirmed push742fb91aa. Bounded user_batch plans complete public packets
+in private cells, separates software actions and authors real SET_REFERENCE;
+no CPU reference completion. Full GPU-free kf-chan/harness tests pass. Independent
+review clears only the exactly-one-cell native composed probe; its pre-run
+hypothesis/falsifier is in gravity-vulkan/user-storage-assembled/README.md.
+NOT_RUN at checkpoint. Multi-cell+software final-source retirement model and
+live birth/source/SYNC_WAIT/VA-lifetime adapter gates remain pending. No VM wiring.
+Cross-slot reanalysis of existing reviewed VFIO samples: raw future-slot GET/PUT
+0/0 before second registration, then lower progressing cursors while old slot
+stops15705. Supports reset hypothesis, not exact initial/ownership/retirement
+proof; no product constant/rule added. Original strict association remains intact.
+Gravity kayfabe still FAIL/TIMEOUT, native VFIO PASS179/183s; full matrix/driver
+sweep incomplete. Personal image retained, no unused Vast instance at last check.
+
+
+## UPDATE 2026-10-12 03:39UTC — phased native storage PASS
+
+Last confirmed push7135568d3. Native exact7135568d3 USER C56F/uid65534 on
+RTX4070/595.91.07 PASS: prepare66us,256 clear pieces/max115us, RO-map78us;
+real4096-byte CE copy/reference1/sem1/GET4PUT4 at52899us after explicit held
+stimulus. Bounded hostXid0; successful channel/storage/fixture teardown, no kill.
+Evidence gravity-vulkan/user-storage-phased/result (text only, hashes).
+Hypothesis falsifier not observed in this run; not worst-case latency proof.
+GPU-free full kf-chan/kf-qemu/kf-rm suite and final qemu lib169/169 pass.
+No VM relay wiring yet, so Gravity kayfabe still FAIL/TIMEOUT, VFIO PASS179/183s.
+Next: birth identity/cancellation/free ownership adapter, source/VA epoch gate,
+and validated cursor migration; exact Linux9+10/30 before Windows claim.
+Personal image unchanged0444/28240642048bytes; noQEMU/DMA-FQ/lockfree/stop absent,
+120306757632bytes free. Vast last checked02:54UTC:[]; no instance to retire.
+Full Windows matrix and driver compatibility sweep remain queued.
+
+
+## UPDATE 2026-10-12 03:36UTC — ownership review gates and native timing probe
+
+Last confirmed push265bab71e. GPU-free kf-chan/kf-qemu/kf-rm suite passed;
+final kf-qemu lib169/169 after full-context-span correction. Six userva tests
+cover retained constructor cleanup/pins, retryable release, duplicate old release
+against reused VA, stale native-handle/mirror identity, bounded exclusions and
+parked steer ownership. Every channel shares its mirror's steer admission,
+including mixed Windows channel kinds; Linux still owns no private GPU mappings.
+Parked falcon retries refuse changed (VA,len); full row/context union is protected.
+One request OR one4KiB clear/map phase per idle VA turn, alternating for fairness.
+Independent review found no source blocker for the isolated native timing probe.
+Hypothesis/falsifier recorded in gravity-vulkan/user-storage-phased/README.md;
+probe NOT_RUN at checkpoint. Still no VM birth wiring/software migration or
+Gravity kayfabe PASS; exact Linux hardware regression remains pending. Personal
+Windows chain retained; GPU idle/DMA-FQ/noQEMU. Full matrix/driver sweep queued.
+
+
+## UPDATE 2026-10-12 03:26UTC — bounded private-VA ownership checkpoint (not wired)
+
+Last confirmed push cf45eedfb, branch codex/windows-matrix-20261011,
+worktree /data/kf-inval-absent. Added a Windows birth permit, bounded VA-worker
+allocation queue and shared private-span exclusions. Initialization clears at
+most4KiB per turn and maps only after all bytes are cleared; allocation, clearing
+and mapping run on separate VA turns after invalidate reconciliation. Retained
+cleanup failures keep their VAS pin and exclusion. Missing/poisoned retirement
+association now refuses before host VAS free. Linux Passthrough cannot request
+a private lease. These primitives are NOT connected to channel birth yet.
+GPU-free cargo test -p kf-chan -p kf-qemu -p kf-rm passed before the final small
+ownership-helper extraction; exact checkpoint recheck follows. Independent review
+still requires falcon-steer admission coordination, queue cleanup/reuse tests,
+and measured native phase latency before runtime wiring. No new hardware run.
+Gravity kayfabe remains FAIL/TIMEOUT; same-GPU VFIO PASS179/183s. No matrix or
+compatibility-axis completion claim. Personal Windows chain retained. Vast last
+checked02:54UTC:[]; no instances to retire. Next: finish those review gates,
+connect the restricted Windows relay, exact Linux9+10/30 and Gravity validation.
+
+
+## UPDATE 2026-10-12 02:57UTC — native HOST-consumption barrier PASS
+
+Last confirmed push **6e60662d1**, codex/windows-matrix-20261011,
+/data/kf-inval-absent. Native exact6e606 USER C56F/uid65534 CONTROL NOP WAIT +
+following nonempty witness PASS52781us: held48 samples maxGET1/ref0/CEsem0,
+then explicit release real4096-copy/ref1/sem1/GET4/PUT4. Zero bounded hostXid,
+clean teardown. Evidence gravity-vulkan/user-control-barrier/result. Bounded
+consumption model (7 integration tests plus internal sequence exhaustion) and
+storage writers/native fixture independently reviewed with no blocker. Separate
+GP-descriptor and command-byte receipts; never engine-operand retirement.
+Earlier native HOST-acquire discriminator inconclusive; engine-held C997 fixture
+FAIL/Xid69 unsupported ACQUIRE, not a kayfabe app failure. Do not repeat enum
+variants. All evidence published. New storage/model still unconnected to VM
+birth; Windows relay/shared VA exclusion/software migration remain next work.
+Gravity kayfabe remains FAIL/TIMEOUT; same-GPU VFIO PASS179/183s. Linux hardware
+claim exact70aa9+10/30 only. No full matrix or driver-sweep completion claim.
+Personal Windows chain retained. GPU idle/noQEMU/DMA-FQ/lockfree/stop absent;
+Vast API rechecked02:54UTC:[]; owner permits all unused account instances retired.
+
+
+## UPDATE 2026-10-12 02:18UTC — native packet continuation PASS; retirement correction
+
+Last confirmed push **ed5c3ec08**, branch codex/windows-matrix-20261011,
+worktree /data/kf-inval-absent. Exacted5 native C56F USER continuation probes:
+unsplit2267us, split2254us, split-held52682us, all PASS with correct real CE
+copy/reference/semaphore, expected GET/PUT, no Xid, clean teardown. Evidence:
+traces/windows_matrix_20261011/gravity-vulkan/user-ring-continuation/result.
+This closes only the tested final-reference-packet MAIN-entry continuation gate.
+
+Public NVIDIA FIFO manual correction: GP_GET commits a descriptor at processing
+start, not engine completion; SYNC_WAIT waits preceding HOST processing, not GPU
+engine completion. SET_REFERENCE itself waits the targeted engine; WFI_ALL is
+all classes of that engine, not all engines. The CE-only tail proof cannot
+justify arbitrary mixed-engine per-batch tails. Do not wire Ledger reference
+retirement to an arbitrary user stream. Need separate GP-slot and PB-byte
+consumption attribution, e.g. a validated HOST-processing witness/cursor.
+inspect_entry now refuses PB spans ending exactly2^40 (PUT cannot represent end).
+
+Private RO command storage is being developed, still unconnected to VM birth.
+Independent review identified uncertain-map cleanup and retiring-state blockers;
+addressing both with one exclusive reservation/map, explicit4KiB RO mapping,
+whole-owned-range cleanup after uncertain outcomes, retained ownership on failure,
+and publication disabled before teardown. Linux Passthrough unchanged. Full
+GPU-free kf-chan/kf-host tests pass; second independent review pending. No native
+storage-helper or new kayfabe Windows run yet; Gravity remains FAIL/TIMEOUT.
+Native reference Gravity remains PASS179s. Personal Windows image preserved.
+Vast API last checked01:41UTC:[]; owner authorizes retiring any unused instance.
+Next: reviewed storage/native HOST-consumption probe, bounded shared VA/source
+ownership and stream-position migration, exact Linux9+10/30 then Gravity. Full
+Windows matrix and driver compatibility sweep remain queued after the fix.
+
+
+## UPDATE 2026-10-12 01:48UTC — reviewed native cursor reference; continuation parser
+
+Last confirmed push **c28d1bf61**, branch codex/windows-matrix-20261011,
+worktree /data/kf-inval-absent. Native same-GPU Gravity Vulkan **PASS179s**
+(the previous reference was183s), image/timings, zero guest153/4101/WER/reboot
+and bounded hostXid0. Reviewed sampler EXIT0:14973-record hashed/footer-valid
+export; strict GSP18724 records, no declared gaps/drops but300s-limited capture.
+First associated new-slot cursors already progressed (35/949 and58526/58549);
+exact initial/reset/old-source retirement remains UNMEASURED. Do not infer a
+zero-reset rule from the earlier request-only incomplete collector. Evidence:
+traces/windows_matrix_20261011/gravity-vulkan/vfio-userd-cursors/reviewed-result.
+Trusted GPU now idle/NVIDIA restored/DMA-FQ/noQEMU/lockfree/stop absent,
+115960332288bytesfree. Personal Windows chain preserved. Vast API rechecked:
+no instances; owner authorizes retiring any unused instance in this account.
+
+Unconnected user_stream parser now retains constant-size bounded packet metadata
+across immutable GP-entry snapshots; no source bytes/pins/completions created.
+Independent review found no reproducible control/reference/state-commit defect;
+additional continuation rollback/reference-data/state-equality tests added.
+Native GP continuation and VA-manager reservations/source lifetimes/real ordered
+completion/software migration adapters still gate wiring. Linux hardware claim
+remains exact70aa9+10/30; Gravity on kayfabe remains FAIL/TIMEOUT. Next priority:
+complete native/parser boundary validation and build the restricted Windows relay,
+then exact Linux gates and one-variable Gravity run. After the fix, finish the
+full Windows matrix, then driver compatibility/derivation sweep. No stock-default
+or full-matrix completion claim.
+
+
+## UPDATE 2026-10-12 01:15UTC — native allocation reference PASS; Windows scope clarified
+
+Last confirmed pushf3a670f20 (this evidence checkpoint may be newer). Native
+reference source5a407dcd8/retry harnessf15da21bc Gravity Vulkan PASS183s, image
+and timings, zero guest153/4101/WER/reboot and bounded hostXid0. Strict passive
+export validates18923 records, all65 observedC56F alloc params complete. Four
+successful FIFO registrations request32768→65536→131072→262144→524288 entries,
+new GP ring addresses and SYSTEM USERD handles/slots. Registration is not GPU
+execution; cursor continuity/backing retirement remain unmeasured. Evidence:
+gravity-vulkan/vfio-ring-p0. DirectGP parser guards now fullGPU-free kf-abi/
+kf-chan green; VM runtime unchanged. Linux hardware remains exact70aa9+10/30.
+Owner permits necessary Windows-specific mapping exception, keeps Linux host
+mapping prohibition; sysmem USERD alone is not an admission discriminator.
+After Gravity fix: finish full Windows app matrix, then compatibility driver
+sweep and derivation checks. Vast checked through API01:12UTC: no instances.
+Trusted GPUidle/noQEMU/lockfree/DMA-FQ/stopabsent,123491311616bytesfree;
+personal Windows chain preserved. Next native cursor sampling; no app fix yet.
+
+
+## UPDATE 2026-10-12 00:48UTC — native USERD reference passes; stream model
+
+Last confirmed push9b65e3c9e. Native immediate/held WFI+SET_REFERENCE cases on
+C56F USER channel PASS, copy4096 correct, zeroXid/clean teardown. During48 held
+polls reference0/CE semaphore0 despite GP_GET advancing; explicit signal then
+produces real reference/copy. No writable private completion GPU mapping.
+Unconnected bounded receipt-wrap and immutable command parser models now pass
+full kf-chan70lib/all integration tests. Guest references/software calls never
+become raw hardware completion receipts. No runtime relay/migration or Windows
+app pass. Linux hardware remains exact70aa9+10/30 PASS; new models GPU-free only.
+Evidence gravity-vulkan/user-ring-reference. Pin/backing/cursor and review gates
+remain open. GPUidle/noQEMU/lockfree/DMA-FQ; personal image retained/unused.
+
+
+## UPDATE 2026-10-12 00:35UTC — restricted ring model and Linux green
+
+Last confirmed push70aa0d666; private1dc9c0e unchanged. Owner §AI approves only
+GPU-read-only private commands/staging for declared Windows user-work, workers,
+immutable inspection from birth; Linux Passthrough still forbids host mappings.
+No runtime relay/migration built. Exact70aa GPU-free kf-chan/kf-rm suites PASS;
+Linux gates9/9+gate10/fast30 PASS, USER births12/12. Initial fast NOT_RUN was a
+runner path/directory failure, retained with successful same-binary retry.
+Native unprivileged read-only fetch PASS and FIFO write denied with RO fault;
+GP_GET1/tail0 shows fetch is not completion. Completion/ownership/native cursor
+gates remain open. No new Windows app PASS; Gravity Vulkan remains unresolved.
+Evidence: gravity-vulkan/user-ring-p0. Post00:35UTC noQEMU/lockfree/DMA-FQ,
+129830002688bytesfree; personal image unused/preserved, no queued job or rental.
+Use compact RESUME_CODEX_WINDOWS_20261011.md and restricted design review.
+
+
+## UPDATE 2026-10-11 23:16UTC — refusal experiment final; GPU idle
+
+Last confirmed public pusha4e7d3be5; private1dc9c0e unchanged. Exactb081f705a
+Linux9/9+gate10/fast30 PASS. Windows1540 **TIMEOUT605s/rc124**, no benchmark
+image/timings, device-lost dialog, refusal counter1, hostXid32/channel4e at
+23:02:37UTC (~19.7s after app start). Final kernel query0/Xid1. Guest153/4101/WER0,
+no reboot, **per-appGSPcycles0**; full boot's single Running→Suspending is later
+ACPI shutdown. Clean NOT_SUPPORTED fallback FALSIFIED; no alternate status run,
+no migration/default/privileged-host change. Exact later faulting method remains
+unmeasured. Complete facts/QEMU gzip/flags/marker/screenshots published under
+gravity-vulkan/registration-refusal/result; source gzip hash/size verified.
+
+Campaign recording EXIT0 at23:13:01UTC means completed, not application PASS.
+ACPI stop; post23:13:44 noQEMU, shared lock free, group11DMA-FQ, stop-file absent,
+122.6GiB free. Personal1380 original0444, baseline and personal writable child
+retained. No active loop/queue. Compact resume rewritten around final state;
+[design decision](design/V3_WINDOWS_USER_FIFO_MIGRATION_DECISION_20261011.md)
+compares stock restricted mediation from birth, optional H8, unsupported scope.
+No implementation of either proposal. Canonical104 matrix unchanged.
+
+
+## UPDATE 2026-10-11 22:59UTC — exact refusal source Linux green; Windows1540 starts
+
+Last confirmed public pushb081f705a; private1dc9c0e unchanged. Exactb081f705a
+Linux gates9/9+gate10 PASS, USER births12/12, fast30/30 PASS, zeroFAIL/CRASH/NOTRUN.
+Windows1540 narrow registration refusal starts22:58:25UTC; no app result yet.
+Shared lock parent579162/campaign579163; root
+/var/lib/kf-windows-20261005/codex-fifo-refusal-20261011-b081f705 and log
+/var/lib/kf-windows-20261005/codex-fifo-refusal-campaign.log. Personal1380 retained;
+only completed own1490/1495/1510 test disks reclaimed after dependency checks.
+Read registration-refusal/README.md and original logs for exact evidence/guard.
+
+
+> **2026-10-10 evening, Windows integration phase: resume from `docs/HANDOFF_WINDOWS_20261010.md`** (branches, fixes with measured causes, open items, traps, how to resume).
+
 **STATUS: LIVE, 2026-10-08 — §0.0 below is the resume point.** ⊘ *The 2026-09-30 paragraph that follows is history:* **(2026-09-30)** Master = the code of **`afb552ea`** (`v3-mc23`: CUDA dynamic parallelism +
 the guest-RAM-object race fix + everything below), which passed the full merge bar (§0 first entry), plus
 evidence and documentation. The single entry point for resuming work without any chat history. Decisions
@@ -7,9 +1032,511 @@ live in `docs/OWNER_RULINGS.md` (doorbell refinements of 2026-09-30 in §D); per
 docs named below. ⊘ When this file and a design doc disagree, the design doc's dated STATUS wins — then
 fix this file. Entries below the first are dated history.
 
+## Decision resolved — restricted Windows FIFO model, 2026-10-12
+
+Owner §AI approves the restricted birth-time/read-only model. Completion and
+source-lifetime evidence still gate runtime wiring. The former alternatives below
+are history, not a pending request.
+
+### Earlier alternatives, 2026-10-11
+
+[Concrete design options and recommendation](design/V3_WINDOWS_USER_FIFO_MIGRATION_DECISION_20261011.md).
+Run1540 narrow NOT_SUPPORTED registration refusal reaches counter1 but still
+hostXid32/channel4e and a Vulkan device-lost dialog; final TIMEOUT605s, no output. Guest153/4101/WER0, no reboot/per-appGSPcycles0; ACPI stop.
+No clean fallback demonstrated. Choose priority: restricted mediated user
+channels at birth for stock hosts; optional validated H8 host tier; or explicitly
+unsupported migration while other app gaps proceed. No migration/host patch
+implemented. Late conversion and relay-only edits do not solve the observed case.
+
 ## 0. Current resumption — start here
 
+**Win11 USER ring, 2026-10-14 (branch `claude/win11-userring-20261014`, evidence `traces/win11_userring_20261014/`).**
+Host-side fixes, GPU-free tests green (kf-chan, kf-qemu 259, kf-disp 150, kf-rm 148); Windows verification pending
+(the VM was the owner's). (a) **Edge/YouTube TDR** [measured cause, `0c5fedff`]: the kernel NVDEC ring had no T-mode
+tier, its first segment (`NVC9B0_SEMAPHORE_A-D`, a release + a non-stall trap) was decoded as CE work and refused
+`NoCeObject` → DEAD → TDR. Fix `1c503f87`: VIDEO tier `kf_chan::vtables`, method space DERIVED from open-gpu-doc
+`classes/video` (`tools/derive_video_methods.py`), semaphores admitted (address authored through rows + perimeter),
+every other named method refused by name. (b) **Minecraft in-world Xid 32 PBENTRY**: [measured] the Xid precedes the
+guest's `RESET_CHANNEL` by ~2 s (journal vs kf3 display clock; `dmesg -T` is ~4 s off here). Leading candidate H1
+[read + inferred]: the SYNC_WAIT gate's 4-byte zero witness is inserted even when a packet is open (legal per
+`dev_pbdma.ref` GP_ENTRY1_SYNC; straddles measured on every channel) → one-word shift → PBENTRY. Fix `1c503f87`:
+control-NOP witness while a packet is open, `USER_RING_SYNC_CARRIED` counted; falsifiers and H2-H4 in the README.
+(c) `GET_RG_SCAN_LINE` `0x5070020c` served live (`a8424ae2`, layout derived). (d) GravityMark Vulkan "relay flag":
+the relay is already default-on (`KF3_WIN_USER_RING_RELAY=0` is only a diagnostic falsifier); verify on Windows.
+**RESET_CHANNEL `0x906f0102` decision: stays refused.** The measured requests are nvlddmkm's engine-reset step inside
+its TDR (kayfabe armed no RC notifier for USER twins: `rc[armed=0]`). The only rule-conforming act is the host's own
+NON_PRIVILEGED `RESET_CHANNEL` (flags `0x10008`, `g_kernel_channel_nvoc.c`) on our twin; what it does to a PRIVATE
+ring/USERD (GP_GET/PUT, PBDMA state) is closed GSP-RM and unmeasured, so the relay cannot know where to resume (a wrong
+resume re-faults or drops a fence → repeated TDRs → bugcheck 0x116, worse than today's recovered adapter reset); an
+NV_OK without the act is a forged recovery. Containment is already VM-bounded. A served form needs: RC notifiers armed
+for USER twins, a forced-fault lane with a VFIO reference of what Windows does after an OK, and a test that the verb
+is authored only for an own twin with a host RC observed, once per RC. Both measured triggers are fixed at source.
+
+**Win11 OpenGL, 2026-10-14 (branch `claude/win11-opengl-20261014`, evidence `traces/win11_opengl_20261014/`).**
+FIXED [measured]: the Minecraft/OpenGL 300 s vsync hang ("Unable to communicate with the display driver, error 2")
+was the frozen GSP-client vblank counter: kf3 now keeps `kHeadVblankCount[head]` in the MAP_SHARED_DATA page
+(`d86fea1f`); `kf_glvsync --swap 1` hang -> 60 fps, Minecraft vsync on loads. Also live core GET_RG_SCAN_LINE /
+window GET_LINE (`af2b87fd`, fidelity). Walk "misaligned leaves": proposed AA amendment (stale reads of recycled
+tables, not leaves). OPEN [measured]: (a) Minecraft in-world Xid 32 PBENTRY on javaw's USER-ring twin ->
+RESET_CHANNEL refused -> TDR (3/3); (b) Edge/YouTube: kernel NVDEC translated channel refused `NoCeObject subch 4
+method 0x240` on its first segment -> DEAD -> TDR (pre-existing on 0c5fedff); (c) `0x5070020c` GetScanLine control
+refused. VM 2990 left on `d86fea1f`, production profile.
+
+
+**TODO, owner-requested, 2026-10-14: Windows app-matrix failures (fix, or keep queued here).** Branch `claude/win11-opengl-20261014`.
+(1) GravityMark **Vulkan** passes only with a user-ring relay flag; the default-route result is pending (evidence on
+`origin/claude/default-route-evidence-20261013`): hardwire the needed behaviour so the flag disappears (H-relay).
+(2) GravityMark **D3D12** fails (TDR, 3x nvlddmkm 153, no image); candidate shared with the Minecraft in-world defect
+(Xid 32 PBDMA PBENTRY on a USER-ring twin, guest RESET_CHANNEL `0x906f0102` refused 0x56, then TDR) (H-d3d12).
+(3) **OpenGL**: gears and FurMark pass; Unigine **Heaven exits early** (H-heaven: the frozen vblank counter, fixed
+below — retest). (4) **Vblank counter / scan line** (the OpenGL branch's open work): DONE on this branch —
+`GET_VBLANK_COUNTER` via the MAP_SHARED_DATA page (`d86fea1f`, fixed the vsync hang: `kf_glvsync --swap 1` and
+Minecraft vsync on), live `GET_RG_SCAN_LINE`/`GET_LINE` (`af2b87fd`); still open: `NV5070_CTRL_CMD_GET_RG_SCAN_LINE`
+(`0x5070020c`) is refused NOT_SUPPORTED, so `D3DKMTGetScanLine` reads line 0 / never in vblank.
+(5) **Minecraft in-world** (vsync on or off): Xid 32 PBENTRY on javaw's GR user-ring twin a few seconds after a world
+loads, then RESET_CHANNEL refused and a TDR (2/2 reproduced, `traces/win11_opengl_20261014/`).
+
+
+**Windows/Codex current resume point:** [RESUME_CODEX_WINDOWS_20261011.md](RESUME_CODEX_WINDOWS_20261011.md), branch `codex/windows-matrix-20261011`. Owner session is stopped; preserve its convenience disk chain described there.
+
+## Latest checkpoint, 2026-10-11 22:54 UTC
+
+Last confirmed push0e8d4ba62; private1dc9c0e unchanged. Prepared a default-OFF
+`KF3_WIN_REFUSE_PT_FIFO_UPDATE` experiment: NOT_SUPPORTED only for the inner
+FIFO-update registration on live Passthrough user-work parents, after normal
+validation. 5080/other APIs/default behavior unchanged; deliberate divergence
+from native OK. Full kf-rm tests and kf-qemu161 pass. No hardware result yet.
+Prior exact89 campaign completed with Linux9+10/30 PASS, Gravity control/probe
+FAIL/TIMEOUT/Xid32; matching submitted migration candidate captured. Formal
+GPU execution remains unmeasured. Manual1380 lacks the same observed signature;
+personal image chain retained. Next job needs lock/disk headroom;108GiB free.
+See compact resume and gravity-vulkan/registration-refusal/README.md.
+
+## Latest checkpoint, 2026-10-11 22:29 UTC
+
+Last confirmed public push8358dabab, private1dc9c0e. Exact89 Linux9+10/30 PASS;
+Windows1490 gears/vector/CUP8 PASS, TorchFAIL/new hard ceiling/reboot.
+Matched Gravity control1495 FAIL772s/unresponsive/Xid32, UNCLEAN-kill;
+probe1510 TIMEOUT602s/three153/per-appGSPcycle1/Xid32, acpi stop.
+Probe captures GP[4b63] subch6/method200 payload4000002c matching registered
+FIFO-update API on Passthrough token27/host4e. Bundle grows32768→65536 and
+relocatesFIFO/USERD. Earlier binding/GPU actual execution unmeasured; sample is
+not formal H1 falsification. Translated-only implementation guard NOT satisfied;
+late registration also cannot safely convert a token-used/scheduled twin.
+No migration/product fix/privileged host operation added. Full original logs,
+public-layout decode, marker-authoritative shutdowns in late-fifo-89e8ddf8.
+Campaign finished; verify noQEMU/DMA-FQ/lock before next job. Personal1380chain
+retained. Owner options/next decision in final evidence README and compact resume.
+
+## Latest checkpoint, 2026-10-11 22:01 UTC
+
+Last confirmed public push05271adf3 (Windows1490 smoke + capacity failure), private
+1dc9c0e. Fresh same-source control1495 reproduces hostXid32/channel4e intr00800000
+at21:55:37UTC and GSPcycle1. Original600s final oracle pending; probe1510 follows.
+Fault target c1d0007a:ff040025 remains Passthrough/Windows-user-work; FIFO update
+API4000002d on its ff1fe010 object registers0. Default-off sampler records no late
+candidate in control. Saved live host journal query0/Xid1 and selected sequence
+in gravity-vulkan/late-fifo-89e8ddf8/control-live-observation. No translated-only
+migration justified; actual software trigger/initiating cause still unmeasured.
+No walk capacity ceiling in that prefix; keep separate from smoke1490TorchFAIL.
+
+## Latest checkpoint, 2026-10-11 21:55 UTC
+
+Last confirmed public pushee8764481 (exact89 Linux9+10/30 green), private1dc9c0e.
+Windows1490 exact89: gears/vectorAdd/CUP8 PASS, torch_ai_bench FAIL411s with
+unexpected guest reboot/GSPcycle1; precise-window kernel journal Xid0/query0.
+The no-capacity-refusal hypothesis is FALSIFIED: slot48 needs1049632 rows versus
+hard walk ceiling1048576, split9194 TRUNCATED/refuse_mask0x10. This differs from
+optional-headroom exhaustion fixed earlier; no full Torch fix claimed. Pool
+itself has2^20 walk rows, so removing per-space guard alone is invalid. Complete
+reboot cause/bugcheck code unmeasured. Final log/original oracle/launch metadata
+published in gravity-vulkan/late-fifo-89e8ddf8/smoke-result. Matrix104 counts not
+changed by this confirming FAIL. Gravity1495control/1510probe continue; no fix
+or actual software trigger claimed yet. Personal1380chain retained untouched.
+
+## Latest checkpoint, 2026-10-11 21:43 UTC
+
+Last confirmed public push1b2d3fb22 (saved owner image, takeover/runners), private
+1dc9c0e. Exact product89e8ddf8 Linux gates9/9+gate10 and fast30/30 PASS, zero
+FAIL/CRASH/NOTRUN in the corrected suite. Original fast runner precondition
+NOTRUN/exit1 retained separately. Per-revision binary SHA and build/client/
+fastguest/fast logs published in gravity-vulkan/late-fifo-89e8ddf8/linux-result.
+Windows1490 smoke starting, then matched Gravity1495control/1510probe. No new
+Windows verdict yet; Vulkan unfixed. Owner personal1380chain remains preserved.
+
+## Latest checkpoint, 2026-10-11 21:39 UTC
+
+Last confirmed public push89e8ddf8b, private1dc9c0e. Owner released172.22.1.20;
+manual1380 stopped UNCLEAN-kill21:33:57 after failed ACPI/QGA shutdown. Installed
+image + backing chain retained; writable personal child/firmware/KEEP.json in
+owner-state/manual1380. qcow2 check0 is not NTFS shutdown proof. User explicitly
+calls it convenience only; no VM disk/credentials in Git or on Vast.
+Owner-reported Minecraft/GPU freeze recorded separately, matching workload and
+Windows reference unmeasured. Guest three153, no queried Display4101; no new
+hostXid. No canonical104 matrix counts changed.
+
+Old allocator queue cancelled before running, combined into exact89 campaign.
+Linux gates9/9+gate10 PASS, build/client/fastguest succeeded; initial fast suite
+NOTRUN due missing runner output directory, exit1 preserved. Corrected archived
+resume runner started21:38UTC under shared GPUlock; fast30 pending, then fresh
+Windows1490 allocator smoke,1495 Gravity control,1510 opt-in late peek probe.
+Probe is observation only, no migration/native registration or Vulkan fix.
+See compact resume for paths/PID/decision guards. Personal1380chain never tested.
+
+## Latest checkpoint, 2026-10-11 21:19 UTC
+
+Last confirmed public pusha7719952a, private1dc9c0e. Reviewed late diagnostic
+source passes161 GPU-free tests. This follow-up moves lifetime publication to
+admission before queuing, covering hostile Free even before the allocation act
+starts; later objects cannot replace the pending flag. Independent re-review
+found no blockers; final161/161 PASS. Mode stays opt-in, candidate capture only.
+No GPU work was performed; manual1380 remains reserved for the owner. Linux
+hardware regression and matched GravityMark control/probe remain pending.
+See RESUME_CODEX_WINDOWS_20261011.md and gravity-vulkan/h1-channel-audit.
+
+## Latest checkpoint, 2026-10-11 21:16 UTC
+
+Last confirmed public pushff1e3cd7e (offline H1 audit), private1dc9c0e.
+This source checkpoint adds only an opt-in late measurement mode:
+KF3_RELAY_PB_PEEK=after-fifo-update. It samples after registration using the
+existing hard bounds, tracks 5080 allocation lifetime through concurrent free,
+and never migrates/registers/executes guest bundles. Independent review found
+and resolved lifetime and diagnostic multi-datum decoding gaps. Three new tests
+failed first, final kf-qemu lib161/161 PASS. Probe still cannot prove GPU execution
+or alone falsify H1; earlier binding and timing/coverage gaps are documented.
+No hardware validation or GravityMark fix claimed. Protect owner manual1380;
+after owner ends it, allow queued allocator job and honor the shared GPU lock.
+Then exact-revision Linux gates9+10/fast30, fresh matched Gravity control/probe.
+Resume doc and gravity-vulkan/h1-channel-audit contain the full decision guard.
+
+## Latest checkpoint, 2026-10-11 21:07 UTC
+
+Last confirmed public push249e4e248, private1dc9c0e; this commit publishes the
+next offline audit. Owner is trying manual1380 and will notify when done.
+No GPU job, QGA access or owner-session change during this audit.
+
+Run1361 fault channel4e is Passthrough/user-work; schedule and over4096 relay
+submissions precede FIFO-update registration. Three registering channels audited:
+two Translated register no FIFO update, one Passthrough registers it. VFIO also
+registers after scheduling. Actual0x200 trigger remains UNMEASURED, so H1 is
+inconclusive and the Translated-only implementation guard is not met.
+Registration-time conversion before token/schedule does not fit this workload.
+Public595.84/595.91.07 source clears PBDMA interrupt before this update, contrary
+to the plan's wording. Audit script, compiler-derived public layout, input hashes
+and selected original log lines are in gravity-vulkan/h1-channel-audit.
+No product migration, privileged host call or new hardware result is claimed.
+Next: bounded post-registration trigger evidence, after owner's session ends.
+
+## Latest checkpoint, 2026-10-11 20:23 UTC
+
+Last confirmed public push fc6f85b4a; private1dc9c0e. Owner explicitly reaffirms
+that the solution must follow v3: authored unprivileged host operations,
+validated ownership/lifetime, real GPU ordering/completion, no blocking vCPU.
+Native deferred registration is not permission to execute a privileged action.
+No production deferred-update caller or Vulkan fix was added.
+
+Native uid65534 USER discriminator: NOP clean; update and update-hold each
+Xid32 despite rc0/GPU tail. HOLD_BEGIN20:17:17.639216UTC, Xid17.639516UTC,
+HOLD_END19.639287UTC: fault300us into ownership hold falsifies early cleanup
+for this native case. Root read-only diagnostic queries return counts0/1/2,
+97-byte records, privately backed up. Exact public schema leaves nested fields
+opaque, so no inner status/faulting method/VA is claimed. Permissions remain
+a public-source hypothesis, not a measured cause. GravityMark's exact trigger
+still needs measurement; identical Xid bits alone do not identify it.
+
+Exact3252 Linux gates9/9+gate10/fast30 and both normal Windows controls1390/
+1460 PASS gears/vectorAdd/CUP8, zero recorded guest recovery/GSP and precise
+hostXid. Captured PDISP caps-page ablation1400 BOOT_FAIL/Code43; aborted1401
+before app execution, unclean shutdown recorded, DMA-FQ restored, hostXid0.
+This is separate from system GET_CAPS_V2 feature bits. No caps default promoted.
+
+Manual1380 READY20:17:45UTC, product3252a087, NVIDIA Code0, vast account,
+autologon disabled, no input/apps automated, no expiry. Owner notified with
+credentials; password stays solely in trusted host secrets file. GPU lock
+parent209237 remains held throughout the VM. Do not start hardware tests or
+another QGA client in this session. Stop request, only when owner wants it:
+/tmp/kf-stop-codex-manual-1380. Allocator65530 validation still waits for its
+actual exit. Remaining19 behavior flags are explicit; no zero-flag boot claim.
+
+Canonical104:79cleanPASS,8PASS_WITH_RECOVERY,11FAIL,6TIMEOUT; Linux59/65,
+mixed revisions explicit. Same-GPU VFIO GravityVK PASS183s remains strongest
+reference. Public/private results pushed separately; raw RAM/disks excluded.
+Open: Vulkan causal method and valid v3 fix, remaining Windows failures,
+derived caps/defaults, allocator hardware validation after owner session.
+
+## Latest checkpoint, 2026-10-11 20:02 UTC
+
+Last confirmed public push428ad66d7; this checkpoint records later evidence.
+Same-GPU RTX4070 VFIO GravityMark Vulkan PASS183s/rc0: image864279bytes,
+118694timing lines, NVIDIA3D98.43%/copy44.80%, guest153/4101/WER/reboot0.
+Original600s workload/oracle. Reference physical12GiB versus kayfabe-declared4GiB
+explicit; reference measured peak2247MiB. GSPcycles unmeasured: observer has
+21837 records, generations1/2, no reported missing records, incomplete header;
+whole-boot generations are not app recovery counts. Kayfabe1361 remains
+TIMEOUT603s/hostXid32/GSPcycle1. No Vulkan fix or common causal method claimed.
+
+Reference captures2successful50800104 registrations, inner20801116 channel-info
+update. This deferred operation changes GPFIFO/USERD channel metadata; it is
+separate from mapping/unmapping batches with a final invalidate. Registration
+stores an API handle; the5080software method triggers execution. Public source
+classifies FIFO update non-stalling, clearing PBDMA interrupt before execution;
+a later GPU tail alone therefore does not validate asynchronous action success.
+Native update currently faults while NOP does not. Next native discriminator
+retains resources2s after real GPU tail before cleanup; a fault during the hold
+rules out early cleanup for that native case. All channels USER/uid65534. Global
+RC journal query as uid65534 refused0x1b INSUFFICIENT_PERMISSIONS; no empty-journal
+claim. Separate root diagnostic read is queued, supplies no implementation data.
+
+Native diagnostic now runs before manual VM creation, under the original serial
+lock, after production controls; it cannot touch an already-ready owner VM.
+The old queued native waiter was canceled before lock acquisition. Manual source
+remains frozen under a copied path; no automation/expiry in the actual session.
+Manual1380 NOT READY. Allocator65530 validation still waits for its actual exit.
+
+Exact3252 Linux gates9/9+gate10, build/raw client/fast30/30 completed successfully,
+USER birth checks pass. Windows timer-default control1390: gears/vectorAdd/CUP8
+allPASS, zero guest events/GSP and precise-window hostXid0. Display-capability
+ablation1400 has BOOT_FAIL/no NVIDIA adapter; subsequent requested rows still
+running, no default promotion or zero-flag boot claim. Final production control
+follows. No active runner was edited.
+
+FurMark stress1370 cleanPASS with fresh renderer evidence is now folded into
+canonical checkpoint:104executed,79cleanPASS,8PASS_WITH_RECOVERY,11FAIL,6TIMEOUT;
+Linux counterpart parity59/65. Mixed product/harness revisions remain explicit.
+Public observer/benchmark artifacts backed up; password-input traces and guest
+RAM/disk excluded. Full private dump stays trusted-host only and regeneratable.
+
+## Latest checkpoint, 2026-10-11 19:39 UTC
+
+Last confirmed public push fd54eef40. Canonical matrix remains104/104 executed:
+78cleanPASS,8PASS_WITH_RECOVERY,12FAIL,6TIMEOUT; Linux parity58/65, mixed
+revisions explicit. Additional FurMark OpenGL stress1370 passes using fresh
+renderer-output evidence, zero guest recovery records; canonical integration
+pending evidence review. Same-GPU RTX4070 VFIO GravityMark Vulkan reference
+started19:37:51UTC, original600s workload/oracle, guest580.88; result pending.
+
+Diagnostic1361 Vulkan TIMEOUT603s: hostXid32 at19:09:06.062454UTC,
+PID302124/channel0x4e, first guest153 about28.576s after app start, three153,
+no4101/live-kernel/WER/reboot, oneGSPcycle. Mid-run screenshot shows asteroid
+rendering468.3FPS before failure. Diagnostic1360 nbody rc0/29s but FAIL for
+missing GPU proof; survival alone is not a pass. Neither replaces canonical.
+PT snapshot hypothesis INCONCLUSIVE: only free-time captures, no stall capture
+and zero decoded segments; global capture budget and segment window missed
+needed fault-channel coverage. Zero refusal/held counters do not prove all
+PT/PD mappings or lifetime/invalidate synchronization correct.
+
+Private1362 hardware-hang breakpoint hit after hostXid32. Guest CPUs paused
+about33s for a trusted-host dump and resumed; original app deadline retained,
+final TIMEOUT. This confirms the later hang path, not the initiating GPU cause.
+Raw memory and closed-image diagnostic notes remain private; no implementation
+interface or constant is sourced from them. Bounded public-header RC journal
+reader builds; not hardware-tested before VFIO detached the host driver.
+Read-only journal may expose earlier fault details; absent/denied records are
+inconclusive. No production caller, GPU work, or watchdog/history modification.
+
+Frozen3252 Linux regression, boot-default controls and manual1380 follow VFIO;
+manual NOT READY. No auto-input will run in the manual session. Capacity65530
+hardware validation still waits for that session to exit. Public and private
+scripts/evidence are backed up separately; regeneratable RAM dump stays on
+trusted host, excluded from Git and Vast. GravityMark Vulkan fix remains open.
+
+**2026-10-11 19:10 UTC, Codex Windows campaign:** last confirmed push773e818e5.
+Latest combined104/104:78cleanPASS,8PASS_WITH_RECOVERY,12FAIL,6TIMEOUT;
+Linux parity58/65, mixed revisions explicit. Direct stream1350 cleanPASS;
+CUDAclpeak1310 TIMEOUT1504s/hostXid109, no guest driver/recovery records.
+Native unprivileged deferred update faults with Xid32 while same-binary NOP
+is clean; hypothesis failed, no production caller. Precise journal endpoint
+fix prevents missing current-second faults. Native video FIFO positive control
+fails, no notification implementation admitted. Vulkan snapshot1361 active;
+private hang diagnosis follows. Event153 alone is not TDR proof. Manual1380
+and exact3252 regression queued; allocator65530 validation waits for manual exit.
+[Detailed handoff](HANDOFF_FOR_CODEX_20261011.md).
+
+**2026-10-11 18:43 UTC, Codex Windows campaign:** last confirmed pushc30b7f679.
+Run1288 final Vulkan TIMEOUT611s with device-lost/hostXid32/GSPcycle1; cause
+still unmeasured. Canonical103/104:77cleanPASS,8PASS_WITH_RECOVERY,12FAIL,
+6TIMEOUT,1pending; Linux parity57/65. Native unprivileged authored deferred
+channel-update probe queued; 66GPU-free host testsPASS, no product caller.
+CUDAclpeak1310 active; owner manual1380 still queued. Compatibility axes/source
+tiers follow integration's V3_CONSTANT_STRATEGY; reference measurements do not
+establish unmeasured dies/branches. [Detailed handoff](HANDOFF_FOR_CODEX_20261011.md).
+
+**2026-10-11 18:21 UTC, Codex Windows campaign:** last confirmed push8d46a807.
+Run1288 GravityMarkVK device-lost/submit/present dialog confirmed after owner
+report; hostXid32/channel0x4e at18:17:10UTC, GSPcycle1. Specific method/cause
+unmeasured; stock timeout does not establish same error. Original600s verdict
+pending. Canonical102/104 executed:77cleanPASS,8PASS_WITH_RECOVERY,12FAIL,
+5TIMEOUT,2pending; Linux parity57/65. Existing serial queues unchanged, manual
+1380 not ready. [Detailed handoff](HANDOFF_FOR_CODEX_20261011.md).
+
+**2026-10-11 18:07 UTC, Codex Windows campaign (`codex/windows-matrix-20261011`):**
+Last confirmed push65530e6a fixes false walk-slot capacity refusal under optional
+headroom pressure,421GPU-free testsPASS/3ignored; hardware pending. Run1284 AI
+rebooted (FAIL450s, GSPcycle1) after capacity refusal/channel death. Complete
+causality unproven; exact diff demand inferred upper bound, not a captured fact.
+Latest candidate100/104 executed:77cleanPASS,8PASS_WITH_RECOVERY,10FAIL,5TIMEOUT,
+4pending; Linux parity57/65. Fresh GravityD3D12/OpenGL also fail with recovery,
+GL hostXid32. Coverage and existing probes remain serial. Frozen3252 timer-default
+Linux/control campaign32315 precedes owner manual1380, still queued, no automatic
+input/login/apps or expiry. New capacity validation80736 waits for personal VM
+exit before locking/building/running1480+; cannot interrupt it. Reference580.88
+complete103PASS/1GravityVKTIMEOUT, owned Vast retired/evidence backed up. Other
+boot defaults still open, captured/placeholder replies not promoted. Integration
+and master unchanged. No full-green or zero-flag Windows claim. Resume detailed
+[handoff](HANDOFF_FOR_CODEX_20261011.md) and [evidence](../traces/windows_matrix_20261011/README.md).
+
+**2026-10-11 17:52 UTC, Codex Windows campaign (`codex/windows-matrix-20261011`):**
+[Current evidence and run instructions](../traces/windows_matrix_20261011/README.md).
+Last confirmed push3252a087: native timer mapping default,906 GPU-free testsPASS;
+new hardware validation queued. Previous exact product72741e2b passes Linux gates9/9+10 and
+fast30/30, all births USER. Windows gears/vectorAdd/CUP8 pass cleanly; managed
+still times out at translated SYNC_WAIT. Native authored video semaphore/tail
+passes; notification experiment is queued, production kernel video still refuses.
+Combined canonical97/104 executed:77cleanPASS,8PASS_WITH_RECOVERY,7FAIL,5TIMEOUT,
+7pending. Per-row mixed product/harness revisions are explicit in current TSVs.
+Linux counterparts57/65 all clean. Normal-launch FurMark1270 now passes without
+recovery/Xid; old failure unroot-caused. Fresh nbodyGUI times out with host Xid32
+and one GSPcycle. ValleyOpenGL also TIMEOUT/Xid32; vkcube renders but fails
+GPU activity proof. FurMarkstress also proof-only FAIL; fresh logfile collection
+bench0c5fa450 queued, product unchanged. Stock counterparts PASS; bounded nbody snapshot queued. Ordinary Edge launch only proves welcome-window survival;
+owner-observed black recycle remains open. Main lane MPOoff, eight overlay rows separate.
+Matching stock580.88 reference complete104/104 across batches: latest103PASS,
+GravityMarkVKTIMEOUT, zero recorded guest driver/reset events in passing rows;
+native GSPcycles UNMEASURED. Different GPU(RTX4090) from candidate(RTX4070).
+Corrected direct CuPy stream reference passes; candidate fresh retry queued.
+Owner manual1380 queued after verified3252 regressions/controls, no automatic
+input/sign-in/apps or diagnostics. Other required boot defaults remain under audit.
+Owned reference Vast55385171 retired after evidence backup, exactID absence verified.
+IPC WDDM-unsupported; Geekbench packaging gap. Integration/master unchanged;
+no full-matrix or complete Linux parity success claimed. Resume latest detailed handoff.
+
+**TODO, owner-requested, 2026-10-14: Win11 S3 sleep/resume ("the sleep fix").** The owner's Win11 "crash after idle" was ACPI S3: the guest sleeps on its idle timeout and the wake never completes.
+Reproduced on the Linux/ogkm desktop guest [measured]: suspend is clean (fn47 `bInPMTransition=true newLevel=3`, GSP Halted), QEMU's wakeup is a system reset (kf3 device reset, GSP Halted -> Cold), and the guest's
+resume-mode GSP boot (`KGSP_BOOT_MODE_SR_RESUME`, `kgspBootstrap_TU102`) fails with `Failed to boot GSP` / NV_ERR_NOT_READY, then Xid 119. Cause [inferred]: `kf-gsp` resume S6-S8 is unbuilt and the wake reset discards
+the suspended state. Evidence and the repro (`scripts/bench/display/desktop_s3.sh`): branch `claude/s3-resume-20261014`, `traces/linux_s3_resume_20261014/`. Work in flight: an Opus agent on that branch (resume in the FSM +
+device-reset path; Linux S3 x3, gates, fast suite, planes oracle on the stock module). **Interim:** Win11 runs with sleep disabled (`powercfg /change standby-timeout-ac 0`) so Edge/YouTube testing can proceed;
+**undo that when the fix lands and retest Win11 S3** (idle sleep + wake, 3 cycles, no TDR). Also open from the same day: the 1001 ms plane-update "ready, waiting for a vblank" STALL report
+(`traces/linux_planes_oracle_20261014/`), 3-plane / HDR YUV, ILUT/CSC/TMO on YUV windows, the lane-A scanner/RESET_CHANNEL fixes (`claude/user-ring-scan-20261014`) not yet validated on Win11 Edge+YouTube for 15 min.
+
+**Windows app matrix lane built (GPU-free), 2026-10-10 (branch `claude/windows-appmatrix-20261010`, design [`V3_WINDOWS_APP_MATRIX.md`](design/V3_WINDOWS_APP_MATRIX.md), STATUS DESIGN-ONLY).**
+⊘ *This supersedes the "Windows app-matrix lane is TODO and does not exist" sentence of the next entry:* the inventory (100 Windows apps; all 71 Linux rows mapped or explained),
+a 6.8 GB read-only app disk (`/var/lib/kf-windows-20261005/appmatrix/image/kfapps.iso`, 44 sha256-pinned downloads, no guest internet needed), the QGA driver
+(`scripts/bench/windows/appmatrix/run_windows_apps.sh`: detached supervised apps, TDR/WER/GSP-cycle accounting, fresh-guest recovery, phase-2 isolation, the Linux
+`APPRES` vocabulary) and a mock guest with 66 unit tests exist. **Nothing has run on a Windows guest**; the design doc's §5 gives the exact steps once the desktop stays
+up and §6 the untested list (start with the USB CD-ROM hot-plug and `kf_guest_setup.ps1`). Open owner decision: a VFIO Windows arm as the per-app baseline (§7).
+
+**Host patch tier plan and an owner requirement on the Windows app matrix, 2026-10-10 (docs only, branch `claude/host-patch-list-20261010`).**
+(1) The owner policy of 2026-10-10 is binding: the STOCK install works with no kernel patch; a patched host kernel/driver is an
+optional better tier, and the owner now plans to implement it. Every candidate (in-kernel doorbell, mdev shim, b3 nvidia-uvm,
+host-owned UVM, the USERD-in-sysmem address-size fix, exact partial unmap, scatter-map verb), with its stock fallback, runtime
+probe, security bound, performance label (reasoned vs measured), validation plan, order, stock-path guarantees and the DKMS /
+version-pin / signing / unload story, is in `docs/design/V3_HOST_PATCH_LIST.md`. Recommended first patch: the in-kernel doorbell as a
+separate kayfabe module (no `nvidia.ko` rebuild), behind a bare-metal wake-to-ring measurement that can drop it. `[measured, 2026-10-10]`
+the b3 patch (written for 580.159.04) passes `patch --dry-run` against an ogkm 595.84 tree (textual only; the trusted host runs
+595.91.07 and no hardware re-run exists). (2) **Owner requirement: the app matrix must eventually also run on Windows guests.** A
+Windows app-matrix lane is TODO and does not exist. It needs: an app inventory (none yet; `docs/design/V3_APP_MATRIX.md` is Linux
+only: 61/65 apps + 6/6 probes at `6692e621`), Windows builds or binaries of the CUDA apps and probes (only `scripts/bench/windows/cuda/build_cup_win.sh`
+exists), a runner with per-app timeouts and a pass/fail oracle compatible with `scripts/apps/apps_matrix.sh` / `summarize.py`, a
+non-interactive way to start the guest and sign in (the scripted sign-in harness exists **host-only** at
+`/var/lib/kf-windows-20261005/winprod`, not in the repo), a host-native baseline per app, and TDR resilience (the guest still TDRs
+today, so each app needs a recovery and result-collection path through QGA, `scripts/bench/windows/qga_run_ps.py`). It is gated on the
+Windows desktop staying up; it is not a merge-bar item yet.
+
+**Windows reset after the first flips, 2026-10-09 (branch `claude/windows-reset-20261009` = `claude/display-reply-diff-20261008`
++ `claude/kf3-read-trace-20261008` + `claude/passthrough-nsi-nogate-20261008`; [record](../traces/windows_reset_20261009/README.md);
+4 hardware boots, runs 100-103, RTX 4070).** ⊘ The trace-mode ruling of the read-trace branch is renumbered **§Y** in
+`OWNER_RULINGS.md` (§X is the non-stall ruling); KF3 ABI 25 = the trace verbs + the input-sink verbs. `[measured, runs 98-103,
+2026-10-09]` (1) Runs 98/99's "reset ~19.6 s after driver start" is TDR + bugcheck **0x116**: kf3 refused Windows' mirrored
+DIRECT10 colour program (`ILUT/OLUT_CONTROL 0x4050a`, MIRROR=1; ILUT offset in 256-byte units) and halted its display engine;
+fixed behind `KF3_DISPLAY_LUT_MIRROR=1 KF3_DISPLAY_ILUT_OFFSET_256=1` (default off; GPU-free test with the measured program):
+flips then run at 60 Hz and Windows draws its lock screen through kf3 (frame in the record). (2) The guest still TDRs (0x116,
+runs 100-103): in runs 101/103 the D3D process's Passthrough GR/CE twins take **host Xid 31 (FAULT_PTE at `0x4034000`/`0x4036000`)**
+after kf3 applies page-table walks that UNMAP other rows of the same 2 MiB region (H-pde, stated, not run); in runs 100/102
+there is no Xid and the new **stall snapshot** (`KF3_PT_STALL_SNAPSHOT=1`, default off) shows every twin `GPGet == GPPut` with its
+fences in guest memory. Falsified: the armed-rule non-stall relay as the fix (run 102), H-flipdone (run 103: every flip's
+release/notify published Ok in its latch's millisecond). (3) Every TDR recovery then fails at the T-space rule because the
+recovery's own copy channel (`ProcessID=4`) is classified user work — owner decision proposed in the record §11 (no policy
+changed). Host left at DMA-FQ, `nvidia` bound, lock released.
+
+**kf3 BAR0 trace mode with the VFIO reference's own tracer, 2026-10-09 (branch `claude/kf3-read-trace-20261008` from
+`claude/display-reply-diff-20261008`; owner ruling `OWNER_RULINGS.md` §X; design `docs/design/V3_BAR0_TRACE_MODE.md`;
+[record](../traces/kf3_read_trace_20261009/README.md)).** Default off. `KF3_BAR0_READ_TRACE=1` makes kf3's selected BAR0
+reads exit (display range + `KF3_READ_TRACE_RANGES`, or `all`) and records reads, writes and MSIs through QEMU's own
+`vfio_region_read`/`vfio_region_write`/`vfio_msi_interrupt` trace events; `x-gsp-observer=` on `kf3-gpu` attaches the GSP
+observer, now one device-agnostic helper shared with vfio-pci (`tools/vfio-gsp-observer`). Caps on records and bytes with a
+drop counter. `[measured, runs rtoff/rton/rtcap/rtobs at 9cebeea9, RTX 4070, 2026-10-09]` off 30/30 with `read_exits` 0 as
+before; on (all ranges) 30/30, +12 % client time; a 4 MiB cap held; the VFIO analysers read kf3's outputs unchanged. For
+the Windows display trace: env and `win_vm.sh` switches in the design doc §7; the bench QEMU tree with the shared observer
+is `/var/lib/kf-windows-20261005/readtrace/qemu-10.2.4` (the older `/var/lib/kf-windows-20261005/qemu-10.2.4` has the
+VFIO-only observer, so a kf3 built there refuses `x-gsp-observer` by name). Not run yet: Windows.
+
+**Display reply diff, 2026-10-09 (GPU-free; branch `claude/display-reply-diff-20261008` from `claude/windows-flip-vsync-20261008`;
+[record](../traces/display_reply_diff_20261008/README.md)).** Every display RPC reply and display register read-back the
+Windows KMD sees on the real RTX 4070 before its first window PUT (VFIO DVI reference boot3), diffed field by field against
+kf3's (bodies by replaying the hardware requests through kf's display link: `cargo run -p kf-rm --example display_replay`).
+From the modeset to the DDI both guests send the same RPCs and the same modeset pushbuffer sizes; the differences are ranked
+in the record's §2/§5. Five default-off flags for ONE batched boot (record §6): `KF3_DISPLAY_PRIVATE_PROBE`,
+`KF3_DISPLAY_HOTPLUG_EDID_SEEN`, `KF3_DISPLAY_BLANK_STATE`, `KF3_DISPLAY_ARMED_DEFAULTS` (new) + `KF3_DISPLAY_HDCP_STATE`;
+prediction: a window-0 PUT after the modeset (`puts` > 39). Not yet implemented, next if falsified: an HDMI_A-in-DVI-mode
+connector (H-hdmi) and the crossbar / `DFP_ASSIGN_SOR` path (H-xbar). ⊘ The record's §0 (ordered stream alignment,
+boot3 vs run 93) corrects "same decisions until the DDI": the first display WRITE that differs is at driver start
+(11.0746 s: the hardware KMD initialises only windows 0/2/4/6, kf3's guest all eight, with different push sizes), right
+after it read the caps page (101 of 1024 words differ, incl. even/odd window caps) and the firmware's ARMED state. **Runs 97-99
+(2026-10-09, RTX 4070, record §7-§11):** the reply/read-back batch (commit-time controls, hotplug mask, blank/armed defaults)
+is falsified (run 97, `puts=39`); the real GPU's caps page (`KF3_DISPLAY_CAPS_PROBE`, a captured table: probe only) is
+sufficient on its own (run 99) — Windows then initialises windows 0/2/4/6 like the hardware and programs and flips window 0
+after the modeset (`puts=63` at the marker, ~18 s of flips and VSyncs). Next wall: the display re-initialises ~19.6 s after
+driver start and the guest stops answering QGA (D3D11/D3D12/nvidia-smi probes could not run). Owner question: author the
+deciding caps fields (per-field bisection first) — the captured page cannot ship.
+
+**Windows flip / vsync, 2026-10-08 (branch `claude/windows-flip-vsync-20261008` = `claude/windows-pass-20261008` + the
+Passthrough completion-interrupt commits; runs 93-96; [record](../traces/windows_flip_vsync_20261008/README.md)).**
+`[measured, runs 93-96 at 68673e6e/2c77140b/5f0e3b37/61b95494, RTX 4070, 2026-10-08]` kf3 already raises LAST_DATA at
+every frame edge while enabled (now one tested function), so H-flip's premise does not hold; the first divergence is
+earlier: **Windows never programs a window into kf3's display after the modeset** (display PUT count 39 from the modeset to
+the TDR in every boot), so no flip can be retired by a VSync. Falsified as the cause: EVT_STAT LOADV (`KF3_DISPLAY_LOADV`),
+the refused GET_HDCP_STATE (`KF3_DISPLAY_HDCP_STATE`), instant core-update completion (`KF3_DISPLAY_CORE_AT_VBLANK`); all
+three stay default-off experiments. `KF3_DISPLAY_WRITE_TRACE` (diagnostic) logs every guest display write. Next candidates
+and the owner question (a display-aperture read trap) are in the record's §9.
+
+**Windows with NVIDIA, 2026-10-08 fourth session, runs 60-72 (branch `claude/windows-display-20261008`; record: `traces/windows_code43_walls_20261007/README.md`
+"Stop (fourth session, ~17:15)").** `[measured, runs 67-72, 2026-10-08]` with `KF3_WIN_USER_CHANNELS_PASSTHROUGH` (classification + USERD relay,
+`docs/design/V3_USERD_RELAY.md`) and the diagnostic `KF3_TWIN_VA_BASE=10000`, the compositor's per-process channel runs on an unprivileged host twin
+(all its work consumed, no Xid) and Windows reports a 1920x1080@60 mode; D3D devices created by a test process RC their twins (Xid 32, PBDMA DEVICE)
+and the guest TDRs; no window surface is presented yet. Next: the D3D twins' RC (subchannel bindings vs binds answered without binding), a real rule
+for the twin space's VA start, the window surface.
+
+**Windows user work as Passthrough (OWNER_RULINGS §V), 2026-10-08 fourth session, runs 60-64 (branch `claude/windows-display-20261008`;
+[record](../traces/windows_code43_walls_20261007/README.md#loop-2026-10-08-fourth-session-windows-user-work-as-passthrough-owner_rulings-v)).**
+`[measured, runs 60/61/64 at 3a578d50/883f878e/ac3456ac, 2026-10-08]`: every Windows channel is PRIVILEGE=KERNEL and `PRIVILEGED_CHANNEL`; the kernel
+driver's 13 channels declare no context share and the driver's own `ProcessID`, the compositor/D3D channels a `FERMI_CONTEXT_SHARE_A` and their own
+process — `kf_rm::chanlink::windows_user_work` (flag `KF3_WIN_USER_CHANNELS_PASSTHROUGH`, default off) classifies by both and was right on every
+channel. Kernel channels measurably use physical operands (29 `DST_TYPE=PHYSICAL` launches on one display-side CE, run64); the one user-work segment
+seen (10 words) had none (sample too small). **Wall:** a Passthrough twin cannot adopt Windows' USERD (guest system memory; host IOMMU `DMA-FQ` gives
+IOVA `0x7ff9...`, wider than a USERD: host RM `NV_ERR_INVALID_ADDRESS`); `RMInstLoc` in the guest registry does not move it. Next: a USERD relay
+(kayfabe-owned USERD, GP_PUT/GP_GET copied, ring/push buffers unparsed) or a host IOMMU identity domain; decisions listed in the record.
+`windows_broker.sh` runs instances side by side and stops cleanly.
+
+**Windows display loop, 2026-10-08 third session (branch `claude/windows-display-20261008` from `ac5d086f`, runs 54-58;
+[record](../traces/windows_code43_walls_20261007/README.md#loop-2026-10-08-third-session-branch-claudewindows-display-20261008-windows-on-screen-and-the-d3d-wall)).**
+New launcher `scripts/bench/windows/windows_broker.sh` (Windows in a second broker window, its own socket/title; `desktop`, `autologon`,
+`nvidia disable|enable`, `reboot`, `stop`). `[measured, runs 54-58 at a88764b3/03932e9f/40230e23, 2026-10-08]`: kf3 `gop=on` without the std VGA shows
+OVMF and Windows' boot in the window; the 7 FB indices are served (AdapterRAM/qwMemorySize now 4 GiB, was 0); H-preempt-bind is FALSIFIED as the
+cause of `0x8876017c` (binds answered, same HRESULT), the create then stops at a cross-client `ZCULL_BIND` and the software-runlist submit; display
+probes (IMP_ENABLE TRUE + six echoed NV0073 controls) start mode validation, and with the GR refusals also answered (run57, labelled experiment) the
+NVIDIA driver **commits 1920x1080@60** (head armed, CCD configuration stored) — then the desktop's first 3D segment dies in the rewriter (subchannel 0
+never bound in the ring), TDR, bugcheck 0x116. Owner decision needed: WDDM user work runs on guest-KERNEL channels (options a/b/c, recommendation (c),
+draft ruling in the record). A visible interactive desktop exists today only as the **Basic Display fallback** (run58: NVIDIA disabled, software
+rendering on kf3's GOP framebuffer). Two kf3 VMs share the GPU without Xid, but the Linux guest's 8 GiB store leaves no room for a 2-4 GiB Windows store.
+
 ### 0.0 ★ RESUME HERE — 2026-10-07
+
+**BRANCH `claude/passthrough-nsi-nogate-20261008` (off `claude/passthrough-interrupt-20261008` 96336228), 2026-10-08/09 — owner ruling §X: the non-stall relay wakes every VM whose guest ARMED the event, never drops an edge. Verified, NOT merged.** ⊘ *An independent review of `1f083ac4` found it not mergeable (the guest kernel's non-stall callbacks, classes 0x78/0x7e, were never counted as armed, a regression); fixed at `cd0fab8d`, so every claim before that revision is about the earlier binary.*
+- Re-review of `7519cd89` (mergeable; small items) fixed at `53f298d6`/`d00c9f2b` (the code tip). GPU-free at `d00c9f2b` on the trusted host: `cargo test` kf-chan, kf-host, kf-rm, kf-abi, kf-qemu, kf-harness 1526 passed / 0 failed, kayfabe-isolate-host 120/120; `scripts/ci_gates.sh` 14 clean; clippy and claims new=0; rustfmt clean. Hardware at `d00c9f2b`: guest `--ce-interrupt` PASS (legs as bare metal, controls 0/10), 30-arm suite 30/30, overflow counts 0 (INDEX.txt, CONFIRM). Earlier GPU-free at `e8d9a5a8` (crates = `eca43847`): 1525/0.
+- Hardware at `eca43847` (RTX 4070, 595.91.07, `traces/passthrough_nsi_nogate_20261008/INDEX.txt`, RE-VERIFY): guest `--ce-interrupt` PASS with every leg landing as on bare metal, controls 0/10; 30-arm suite 30/30; two guest-kernel non-stall registrations reach kf3 and arm `FIFO_EVENT_MTHD` (233 of 264 FIFO edges raised, against 138 of 269 before the fix); with a 5 s wait before power-off every arm returns to 0.
+- Earlier, at `15a400b5`/`b831b364`: pacing at 50 ms alone lost no completion (late raises 99/49/148), and beside a noisy neighbour VM every interrupt leg of both guests completed while their controls saw each other's edges (the accepted residual). Not re-run after the fix (pacer and vector choice unchanged).
+- GRCE hypothesis: its falsifier did not happen (bare metal: a COPY0 copy's interrupt lands on GR0 and `FIFO_EVENT_MTHD` 50/50, CE0 0/50).
+Open: no VM-reset hook exists in kf3 (arms are cleared at fn 1, the guest RM's start). PLAUSIBLE, unverified: if a Windows KMD re-sends fn 1 within one RM life while it still holds events, `clear()` leaves those events unarmed until they are registered again (lost wakes); Linux cannot do this (`kgspInitRm` runs only from `RmInitAdapter`). Windows' use of the kernel-callback classes is unverified; the owner decides whether this branch lands. Design: `docs/design/the_three_channel_kinds.md` §1.2; residuals in `docs/FAQ.md`.
 
 **MASTER, 2026-10-09 (night of 2026-10-08) — promoted a second time: master is the code of `3f4904ca` plus docs.** The standing merge approval was met for the exact code commit `3f4904ca` (candidate 2 = the first promotion plus the input traits, the physical-operand oracle, and the broker scripts):
 - **Merge bar, `mcbox5` (vast box, RTX 3060, driver 580.159.04, 2026-10-08):** 2419 tests / 0 failed, v3 gates 9/9, bare-metal suite 30/30, fast guest suite 30/30, birth census OK. **CUDA ladder and apps at the same commit (`mcl4_guest`, `mcapps4`):** all four ladder rungs PASS; guest 67/71 = 61/65 apps + 6/6 probes, the same four UVM failures as the baseline (`UnifiedMemoryStreams`, `UnifiedMemoryPerf`, `conjugateGradientUM`, `attach_verify`).

@@ -504,6 +504,15 @@ impl ChannelAllocParams {
     /// `alignof`.
     pub const ALIGN: usize = 8;
 
+    /// Author public NV_CHANNEL_ALLOC_PARAMS.subDeviceId: a one-hot bitmask
+    /// matching SET_SUBDEVICE_MASK (ogkm595.84 alloc/alloc_channel.h:319–320).
+    /// Offset136 is the bench layout; HostAbi carries this field by name.
+    /// Ordinary channel allocation continues to leave it zero.
+    pub fn encode_with_subdevice_id(&self, bytes: &mut [u8], id: u32) -> Result<(), AbiError> {
+        self.encode_into(bytes)?;
+        put(bytes, Self::C_NAME, Self::SIZE, 136, &id.to_le_bytes())
+    }
+
     /// Encode into a little-endian image of at least [`Self::SIZE`] bytes. Every byte
     /// this struct does not name is left as found — so the caller must supply a
     /// **zeroed** buffer, which is what the reserved tail requires.
@@ -1983,6 +1992,11 @@ pub const USERD_GP_GET: u64 = 34 * 4;
 /// release-fence seam `kayfabe_linux_raw::VolatileRegion` names in its own docs.
 pub const USERD_GP_PUT: u64 = 35 * 4;
 
+/// `Nvc56fControl.Reference`, GPU-written read-only reference value at byte0x48.
+/// NVIDIA public595.84 `src/common/sdk/nvidia/inc/class/clc56f.h:52`.
+/// This layout alone does not prove engine completion or apply to other classes.
+pub const USERD_REFERENCE_C56F: u64 = 0x48;
+
 /// `NVC56F_GP_ENTRY__SIZE` —
 /// `ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:267`.
 pub const GP_ENTRY_SIZE: u64 = 8;
@@ -2058,8 +2072,9 @@ pub struct GpfifoEntry {
     pub gpu_va: u64,
     /// Their length in **bytes** (`GP_ENTRY1_LENGTH` is in dwords).
     pub len_bytes: u64,
-    /// `GP_ENTRY1_LEVEL == _SUBROUTINE` — a nested pushbuffer segment rather than a
-    /// top-level one. Carried, not acted on: it still names method words.
+    /// `GP_ENTRY1_LEVEL == _SUBROUTINE`: suppress TOP_LEVEL_GET progress updates.
+    /// Monitoring classification, not a call/return or parser context.
+    /// Public open-gpu-doc9fdf5c40 dev_pbdma.ref.txt:224-232.
     pub subroutine: bool,
     /// `GP_ENTRY1_SYNC == _WAIT` — the host must drain before fetching this entry.
     pub sync_wait: bool,
@@ -2092,6 +2107,21 @@ pub const fn gp_entry_decode(entry: u64) -> Option<GpfifoEntry> {
         subroutine: (entry1 >> 9) & 1 == 1,
         sync_wait: (entry1 >> 31) & 1 == 1,
     })
+}
+
+/// Restricted direct C56F segment: reject conditional FETCH, reserved entry0
+/// bit1/entry1 bit8. LEVEL is monitoring classification and is preserved.
+/// Public595.84 clc56f.h:266-284 enumerates
+/// these fields (bit8 has no C56F definition; older classes used it for PRIV).
+/// SYNC_WAIT is preserved for an adapter to honor explicitly, never discarded.
+/// This validates framing only, not ownership, span bounds or a source lifetime.
+#[must_use]
+pub const fn gp_entry_decode_direct_c56f(entry: u64) -> Option<GpfifoEntry> {
+    let unsupported = (1_u64 << 0) | (1_u64 << 1) | (1_u64 << 40);
+    if entry & unsupported != 0 {
+        return None;
+    }
+    gp_entry_decode(entry)
 }
 
 /// `GP_ENTRY1_OPCODE` values of a control entry (`LENGTH == 0`) —
@@ -2544,6 +2574,13 @@ pub const SET_OBJECT: u32 = 0x0000_0000;
 /// is the bar this port is trying to clear: *"SEM LANDED — host doorbell+schedule+USERD
 /// mechanics GOOD"*.
 pub mod fifo {
+    /// `NVC56F_SET_REFERENCE` — public595.84 `class/clc56f.h:204`.
+    /// Do not assume support on Hopper: public RM watchdog uses a different tail.
+    pub const SET_REFERENCE_C56F: u32 = 0x50;
+    /// `NVC56F_WFI` — public595.84 `class/clc56f.h:247`.
+    pub const WFI_C56F: u32 = 0x78;
+    /// `NVC56F_WFI_SCOPE_ALL` — public595.84 `class/clc56f.h:251`.
+    pub const WFI_SCOPE_ALL_C56F: u32 = 1;
     /// `NVC56F_SEM_ADDR_LO` @ `0x5c` — semaphore address bits `31:2`
     /// (`ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:206-207`).
     pub const SEM_ADDR_LO: u32 = 0x0000_005C;

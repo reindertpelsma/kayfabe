@@ -1,0 +1,102 @@
+{
+ "quiet": 4,
+ "end_utc": "2026-10-11T18:13:42.7795916Z",
+ "start_utc": "2026-10-11T18:07:53.0136660Z",
+ "rc": -1073741819,
+ "secs": 350,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4070 status=OK code=0"
+ ],
+ "digests": [],
+ "session": 0,
+ "out_files": [],
+ "boot_utc_start": "2026-10-11T18:02:35.5000000Z",
+ "log_tail": [
+  "      write ST : 165 GB/s",
+  "      write MT : 149 MB/s",
+  "      copy ST  : 234 GB/s",
+  "      copy MT  : 1.10 TB/s",
+  "",
+  "    Memory latency (pointer-chase)",
+  "      L1       : 1.02 ns",
+  "      L2       : 3.20 ns",
+  "      L3       : 12.0 ns",
+  "      DRAM     : 133 ns",
+  "      DRAM linear : 1.61 ns",
+  "      DRAM x8     : 17.4 ns",
+  "      DRAM x32    : 7.29 ns",
+  "      TLB miss    : 21.8 ns",
+  "",
+  "    Atomic fetch-add latency",
+  "      uncontended ST : 1.36 ns",
+  "      contended MT   : 6.49 ns",
+  "",
+  "    Branch mispredict penalty",
+  "      predicted : 0.25 ns",
+  "      random    : 2.21 ns",
+  "      penalty   : 3.94 ns",
+  "",
+  "    Store-to-load forwarding",
+  "      st->ld ST : 0.19 ns",
+  "",
+  "LiteRT: LiteRT library (libLiteRt) not found",
+  "Backend: ONNX",
+  "  Device 0: DirectML",
+  "    Driver version   : 1.17.1",
+  "    Execution provider: DmlExecutionProvider",
+  "    Type             : GPU",
+  "    ONNX Runtime     : 1.17.1",
+  "",
+  "    ONNX MatMul peak",
+  "      fp32     : 13.4 TFLOPS",
+  "      fp16     : 93.8 TFLOPS",
+  "      int8_qdq : 12.6 TOPS",
+  "=== end rc=-1073741819 secs=350 2026-10-11T18:13:42.7795916+00:00"
+ ],
+ "pdh": {
+  "pids": [
+   "4280",
+   "4532",
+   "9848",
+   "9864",
+   "9348"
+  ],
+  "nv": {
+   "copy": 0.11819484920024313,
+   "3d": 0,
+   "videoencode": 0,
+   "videodecode": 0,
+   "vr": 0,
+   "legacyoverlay": 0,
+   "ofa_0": 0
+  },
+  "samples": 158,
+  "other": {},
+  "nvidia_luids": "0_61e7"
+ },
+ "timed_out": false,
+ "token": "g8-clpeak_ocl-1791742069",
+ "boot_utc_end": "2026-10-11T18:02:35.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 3,
+  "other_nvlddmkm": 0,
+  "lines": [
+   "2026-10-11T18:13:25.8829037Z nvlddmkm/153 ",
+   "2026-10-11T18:13:25.4745415Z nvlddmkm/153 ",
+   "2026-10-11T18:13:23.1622744Z nvlddmkm/153 "
+  ],
+  "live_kernel": 0
+ },
+ "app": "clpeak_ocl",
+ "smi": {
+  "samples": 0,
+  "mem_used_base_mb": null,
+  "util_max": 0,
+  "mem_used_max_mb": 0
+ }
+}

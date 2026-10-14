@@ -1,0 +1,96 @@
+id	path	tags	n_tags	example
+0x00730101	src/nvidia/generated/g_disp_objs_nvoc.c	555.42.02..615.78.08	94	555.42.02:2703: /*methodId=*/   0x730101u,
+0x00730101	src/nvidia/generated/g_disp_objs_nvoc.h	555.42.02..575.64.05	41	555.42.02:1613: NV_STATUS (*__dispcmnCtrlCmdSystemGetCapsV2__)(struct DispCommon * /*this*/, NV0073_CTRL_SYSTEM_GET_CAPS_V2_PARAMS *);  // exported (id=0x730101)
+0x00730102	src/nvidia/generated/g_disp_objs_nvoc.c	515.43.04..615.78.08	221	515.43.04:2458: /*methodId=*/   0x730102u,
+0x00730102	src/nvidia/generated/g_disp_objs_nvoc.h	555.42.02..575.64.05	41	555.42.02:1614: NV_STATUS (*__dispcmnCtrlCmdSystemGetNumHeads__)(struct DispCommon * /*this*/, NV0073_CTRL_SYSTEM_GET_NUM_HEADS_PARAMS *);  // exported (id=0x730102)
+0x00730108	src/nvidia/generated/g_disp_objs_nvoc.c	515.43.04..615.78.08	221	515.43.04:2473: /*methodId=*/   0x730108u,
+0x00730108	src/nvidia/generated/g_disp_objs_nvoc.h	555.42.02..575.64.05	41	555.42.02:1617: NV_STATUS (*__dispcmnCtrlCmdSystemGetConnectState__)(struct DispCommon * /*this*/, NV0073_CTRL_SYSTEM_GET_CONNECT_STATE_PARAMS *);  // exported (id=0x730108)
+0x0073010b	src/nvidia/generated/g_disp_objs_nvoc.c	555.42.02..615.78.08	94	555.42.02:2838: /*methodId=*/   0x73010bu,
+0x0073010b	src/nvidia/generated/g_disp_objs_nvoc.h	555.42.02..575.64.05	41	555.42.02:1620: NV_STATUS (*__dispcmnCtrlCmdSystemGetHeadRoutingMap__)(struct DispCommon * /*this*/, NV0073_CTRL_SYSTEM_GET_HEAD_ROUTING_MAP_PARAMS *);  // exported (id=0x73010
+0x0073010c	src/nvidia/generated/g_disp_objs_nvoc.c	555.42.02..615.78.08	94	555.42.02:2853: /*methodId=*/   0x73010cu,
+0x0073010c	src/nvidia/generated/g_disp_objs_nvoc.h	555.42.02..575.64.05	41	555.42.02:1621: NV_STATUS (*__dispcmnCtrlCmdSystemGetActive__)(struct DispCommon * /*this*/, NV0073_CTRL_SYSTEM_GET_ACTIVE_PARAMS *);  // exported (id=0x73010c)
+0x00730116	src/nvidia/generated/g_disp_objs_nvoc.c	555.42.02..615.78.08	94	555.42.02:2883: /*methodId=*/   0x730116u,
+0x00730116	src/nvidia/generated/g_disp_objs_nvoc.h	555.42.02..575.64.05	41	555.42.02:1575: NV_STATUS (*__dispcmnCtrlCmdSystemGetInternalDisplays__)(struct DispCommon * /*this*/, NV0073_CTRL_SYSTEM_GET_INTERNAL_DISPLAYS_PARAMS *);  // exported (id=0x73
+0x00730122	src/nvidia/generated/g_disp_objs_nvoc.c	515.43.04..550.163.01	127	515.43.04:2533: /*methodId=*/   0x730122u,
+0x00730240	src/nvidia/generated/g_disp_objs_nvoc.c	515.43.04..615.78.08	221	515.43.04:2803: /*methodId=*/   0x730240u,
+0x00730240	src/nvidia/generated/g_disp_objs_nvoc.h	555.42.02..575.64.05	41	555.42.02:1631: NV_STATUS (*__dispcmnCtrlCmdSpecificGetType__)(struct DispCommon * /*this*/, NV0073_CTRL_SPECIFIC_GET_TYPE_PARAMS *);  // exported (id=0x730240)
+0x00730273	src/nvidia/generated/g_disp_objs_nvoc.c	515.43.04..615.78.08	221	515.43.04:2878: /*methodId=*/   0x730273u,
+0x00730273	src/nvidia/generated/g_disp_objs_nvoc.h	555.42.02..575.64.05	41	555.42.02:1636: NV_STATUS (*__dispcmnCtrlCmdSpecificSetHdmiEnable__)(struct DispCommon * /*this*/, NV0073_CTRL_SPECIFIC_SET_HDMI_ENABLE_PARAMS *);  // exported (id=0x730273)
+0x00730287	src/nvidia/generated/g_disp_objs_nvoc.c	515.43.04..615.78.08	221	515.43.04:2908: /*methodId=*/   0x730287u,
+0x00730287	src/nvidia/generated/g_disp_objs_nvoc.h	555.42.02..575.64.05	41	555.42.02:1638: NV_STATUS (*__dispcmnCtrlCmdSpecificGetAllHeadMask__)(struct DispCommon * /*this*/, NV0073_CTRL_SPECIFIC_GET_ALL_HEAD_MASK_PARAMS *);  // exported (id=0x730287)
+0x007302a4	src/nvidia/generated/g_disp_objs_nvoc.c	515.43.04..615.78.08	221	515.43.04:3058: /*methodId=*/   0x7302a4u,
+0x007302a4	src/nvidia/generated/g_disp_objs_nvoc.h	555.42.02..575.64.05	41	555.42.02:1587: NV_STATUS (*__dispcmnCtrlCmdSpecificDisplayChange__)(struct DispCommon * /*this*/, NV0073_CTRL_SPECIFIC_DISPLAY_CHANGE_PARAMS *);  // exported (id=0x7302a4)
+0x00731142	src/nvidia/generated/g_disp_objs_nvoc.c	515.43.04..615.78.08	221	515.43.04:3193: /*methodId=*/   0x731142u,
+0x00731142	src/nvidia/generated/g_disp_objs_nvoc.h	555.42.02..575.64.05	41	555.42.02:1661: NV_STATUS (*__dispcmnCtrlCmdDfpGetDisplayportDongleInfo__)(struct DispCommon * /*this*/, NV0073_CTRL_DFP_GET_DISPLAYPORT_DONGLE_INFO_PARAMS *);  // exported (id
+0x00731144	src/nvidia/generated/g_disp_objs_nvoc.c	515.43.04..615.78.08	221	515.43.04:3208: /*methodId=*/   0x731144u,
+0x00731144	src/nvidia/generated/g_disp_objs_nvoc.h	555.42.02..575.64.05	41	555.42.02:1662: NV_STATUS (*__dispcmnCtrlCmdDfpSetEldAudioCaps__)(struct DispCommon * /*this*/, NV0073_CTRL_DFP_SET_ELD_AUDIO_CAP_PARAMS *);  // exported (id=0x731144)
+0x00731152	src/nvidia/generated/g_disp_objs_nvoc.c	515.43.04..615.78.08	221	515.43.04:3268: /*methodId=*/   0x731152u,
+0x00731152	src/nvidia/generated/g_disp_objs_nvoc.h	555.42.02..575.64.05	41	555.42.02:1665: NV_STATUS (*__dispcmnCtrlCmdDfpAssignSor__)(struct DispCommon * /*this*/, NV0073_CTRL_DFP_ASSIGN_SOR_PARAMS *);  // exported (id=0x731152)
+0x00731341	src/nvidia/generated/g_disp_objs_nvoc.c	515.43.04..615.78.08	221	515.43.04:3433: /*methodId=*/   0x731341u,
+0x00731341	src/nvidia/generated/g_disp_objs_nvoc.h	555.42.02..575.64.05	41	555.42.02:1672: NV_STATUS (*__dispcmnCtrlCmdDpAuxchCtrl__)(struct DispCommon * /*this*/, NV0073_CTRL_DP_AUXCH_CTRL_PARAMS *);  // exported (id=0x731341)
+0x00731365	src/nvidia/generated/g_disp_objs_nvoc.c	515.43.04..615.78.08	221	515.43.04:3703: /*methodId=*/   0x731365u,
+0x00731365	src/nvidia/generated/g_disp_objs_nvoc.h	555.42.02..575.64.05	41	555.42.02:1688: NV_STATUS (*__dispcmnCtrlCmdDpSetManualDisplayPort__)(struct DispCommon * /*this*/, NV0073_CTRL_CMD_DP_SET_MANUAL_DISPLAYPORT_PARAMS *);  // exported (id=0x7313
+0x00800294	src/nvidia/generated/g_device_nvoc.c	515.43.04..615.78.08	221	515.43.04:393: /*methodId=*/   0x800294u,
+0x00800294	src/nvidia/generated/g_device_nvoc.h	555.42.02..615.78.08	94	555.42.02:162: NV_STATUS (*__deviceCtrlCmdGpuGetBrandCaps__)(struct Device * /*this*/, NV0080_CTRL_GPU_GET_BRAND_CAPS_PARAMS *);  // halified (2 hals) exported (id=0x800294) b
+0x00801812	src/nvidia/generated/g_device_nvoc.c	515.43.04..615.78.08	221	515.43.04:888: /*methodId=*/   0x801812u,
+0x00801812	src/nvidia/generated/g_device_nvoc.h	555.42.02..575.64.05	41	555.42.02:126: NV_STATUS (*__deviceCtrlCmdDmaSetDefaultVASpace__)(struct Device * /*this*/, NV0080_CTRL_DMA_SET_DEFAULT_VASPACE_PARAMS *);  // exported (id=0x801812)
+0x00802004	src/nvidia/generated/g_device_nvoc.c	515.43.04..615.78.08	221	515.43.04:1008: /*methodId=*/   0x802004u,
+0x00802004	src/nvidia/generated/g_device_nvoc.h	555.42.02..575.64.05	41	555.42.02:151: NV_STATUS (*__deviceCtrlCmdInternalPerfCudaLimitDisable__)(struct Device * /*this*/);  // exported (id=0x802004)
+0x00802009	src/nvidia/generated/g_device_nvoc.c	515.43.04..615.78.08	221	515.43.04:1038: /*methodId=*/   0x802009u,
+0x00802009	src/nvidia/generated/g_device_nvoc.h	555.42.02..575.64.05	41	555.42.02:150: NV_STATUS (*__deviceCtrlCmdInternalPerfCudaLimitSetControl__)(struct Device * /*this*/, NV0080_CTRL_PERF_CUDA_LIMIT_CONTROL_PARAMS *);  // exported (id=0x802009
+0x0080200a	src/nvidia/generated/g_device_nvoc.c	575.51.02..615.78.08	59	575.51.02:1053: /*methodId=*/   0x80200au,
+0x0080200a	src/nvidia/generated/g_device_nvoc.h	575.51.02..575.64.05	6	575.51.02:142: NV_STATUS (*__deviceCtrlCmdFbSetZbcReferenced__)(struct Device * /*this*/, NV0080_CTRL_INTERNAL_MEMSYS_SET_ZBC_REFERENCED_PARAMS *);  // exported (id=0x80200a)
+0x2080014b	src/nvidia/generated/g_subdevice_nvoc.c	515.43.04..615.78.08	221	515.43.04:686: /*methodId=*/   0x2080014bu,
+0x2080014b	src/nvidia/generated/g_subdevice_nvoc.h	555.42.02..575.64.05	41	555.42.02:427: NV_STATUS (*__subdeviceCtrlCmdGpuGetInforomObjectVersion__)(struct Subdevice * /*this*/, NV2080_CTRL_GPU_GET_INFOROM_OBJECT_VERSION_PARAMS *);  // exported (id=
+0x20800157	src/nvidia/generated/g_subdevice_nvoc.c	515.43.04..615.78.08	221	515.43.04:791: /*methodId=*/   0x20800157u,
+0x20800157	src/nvidia/generated/g_subdevice_nvoc.h	555.42.02..575.64.05	41	555.42.02:428: NV_STATUS (*__subdeviceCtrlCmdGpuQueryInforomEccSupport__)(struct Subdevice * /*this*/);  // exported (id=0x20800157)
+0x2080015f	src/nvidia/generated/g_subdevice_nvoc.c	515.43.04..615.78.08	221	515.43.04:836: /*methodId=*/   0x2080015fu,
+0x2080015f	src/nvidia/generated/g_subdevice_nvoc.h	555.42.02..615.78.08	94	555.42.02:446: NV_STATUS (*__subdeviceCtrlCmdGpuQueryScrubberStatus__)(struct Subdevice * /*this*/, NV2080_CTRL_GPU_QUERY_SCRUBBER_STATUS_PARAMS *);  // halified (2 hals) expo
+0x20800a01	src/nvidia/generated/g_subdevice_nvoc.c	515.43.04..615.78.08	221	515.43.04:1616: /*methodId=*/   0x20800a01u,
+0x20800a01	src/nvidia/generated/g_subdevice_nvoc.h	555.42.02..575.64.05	41	555.42.02:555: NV_STATUS (*__subdeviceCtrlCmdDisplayGetStaticInfo__)(struct Subdevice * /*this*/, NV2080_CTRL_INTERNAL_DISPLAY_GET_STATIC_INFO_PARAMS *);  // exported (id=0x20
+0x20800a37	src/nvidia/generated/g_subdevice_nvoc.c	550.40.53..615.78.08	127	550.40.53:2168: /*methodId=*/   0x20800a37u,
+0x20800a37	src/nvidia/generated/g_subdevice_nvoc.h	555.42.02..575.64.05	41	555.42.02:389: NV_STATUS (*__subdeviceCtrlCmdGrInternalSetFecsTraceHwEnable__)(struct Subdevice * /*this*/, NV2080_CTRL_INTERNAL_GR_SET_FECS_TRACE_HW_ENABLE_PARAMS *);  // exp
+0x20800a39	src/nvidia/generated/g_subdevice_nvoc.c	550.40.53..615.78.08	127	550.40.53:2198: /*methodId=*/   0x20800a39u,
+0x20800a39	src/nvidia/generated/g_subdevice_nvoc.h	555.42.02..575.64.05	41	555.42.02:391: NV_STATUS (*__subdeviceCtrlCmdGrInternalSetFecsTraceRdOffset__)(struct Subdevice * /*this*/, NV2080_CTRL_INTERNAL_GR_SET_FECS_TRACE_RD_OFFSET_PARAMS *);  // exp
+0x20800a49	src/nvidia/generated/g_subdevice_nvoc.c	515.43.04..615.78.08	221	515.43.04:1976: /*methodId=*/   0x20800a49u,
+0x20800a49	src/nvidia/generated/g_subdevice_nvoc.h	555.42.02..575.64.05	41	555.42.02:557: NV_STATUS (*__subdeviceCtrlCmdDisplayWriteInstMem__)(struct Subdevice * /*this*/, NV2080_CTRL_INTERNAL_DISPLAY_WRITE_INST_MEM_PARAMS *);  // exported (id=0x2080
+0x20800a4b	src/nvidia/generated/g_subdevice_nvoc.c	515.43.04..615.78.08	221	515.43.04:2006: /*methodId=*/   0x20800a4bu,
+0x20800a4b	src/nvidia/generated/g_subdevice_nvoc.h	555.42.02..575.64.05	41	555.42.02:554: NV_STATUS (*__subdeviceCtrlCmdDisplayGetIpVersion__)(struct Subdevice * /*this*/, NV2080_CTRL_INTERNAL_DISPLAY_GET_IP_VERSION_PARAMS *);  // exported (id=0x2080
+0x20800a58	src/nvidia/generated/g_subdevice_nvoc.c	515.43.04..615.78.08	221	515.43.04:2126: /*methodId=*/   0x20800a58u,
+0x20800a58	src/nvidia/generated/g_subdevice_nvoc.h	555.42.02..575.64.05	41	555.42.02:556: NV_STATUS (*__subdeviceCtrlCmdDisplaySetChannelPushbuffer__)(struct Subdevice * /*this*/, NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS *);  // exporte
+0x20800a70	src/nvidia/generated/g_subdevice_nvoc.c	515.43.04..615.78.08	221	515.43.04:2381: /*methodId=*/   0x20800a70u,
+0x20800a70	src/nvidia/generated/g_subdevice_nvoc.h	555.42.02..575.64.05	41	555.42.02:581: NV_STATUS (*__subdeviceCtrlCmdInternalBusFlushWithSysmembar__)(struct Subdevice * /*this*/);  // exported (id=0x20800a70)
+0x20800a9f	src/nvidia/generated/g_subdevice_nvoc.c	525.47.04..615.78.08	201	525.47.04:2850: /*methodId=*/   0x20800a9fu,
+0x20800a9f	src/nvidia/generated/g_subdevice_nvoc.h	555.42.02..575.64.05	41	555.42.02:593: NV_STATUS (*__subdeviceCtrlCmdInternalGmmuCopyReservedSplitGVASpacePdesServer__)(struct Subdevice * /*this*/, NV2080_CTRL_INTERNAL_GMMU_COPY_RESERVED_SPLIT_GVAS
+0x20800ac6	src/nvidia/generated/g_subdevice_nvoc.c	525.47.04..615.78.08	201	525.47.04:3240: /*methodId=*/   0x20800ac6u,
+0x20800ac6	src/nvidia/generated/g_subdevice_nvoc.h	555.42.02..575.64.05	41	555.42.02:640: NV_STATUS (*__subdeviceCtrlCmdInternalPostInitBrightcStateLoad__)(struct Subdevice * /*this*/, NV2080_CTRL_INTERNAL_INIT_BRIGHTC_STATE_LOAD_PARAMS *);  // expor
+0x20800adf	src/nvidia/generated/g_subdevice_nvoc.c	535.43.02..615.78.08	172	535.43.02:3713: /*methodId=*/   0x20800adfu,
+0x20800adf	src/nvidia/generated/g_subdevice_nvoc.h	555.42.02..575.64.05	41	555.42.02:641: NV_STATUS (*__subdeviceCtrlCmdInternalSetStaticEdidData__)(struct Subdevice * /*this*/, NV2080_CTRL_CMD_INTERNAL_SET_STATIC_EDID_DATA_PARAMS *);  // exported (i
+0x20800af0	src/nvidia/generated/g_subdevice_nvoc.c	535.43.02..615.78.08	172	535.43.02:3728: /*methodId=*/   0x20800af0u,
+0x20800af0	src/nvidia/generated/g_subdevice_nvoc.h	555.42.02..575.64.05	41	555.42.02:567: NV_STATUS (*__subdeviceCtrlCmdInternalDisplayAcpiSubsytemActivated__)(struct Subdevice * /*this*/);  // exported (id=0x20800af0)
+0x20800af1	src/nvidia/generated/g_subdevice_nvoc.c	535.43.02..615.78.08	172	535.43.02:3743: /*methodId=*/   0x20800af1u,
+0x20800af1	src/nvidia/generated/g_subdevice_nvoc.h	555.42.02..575.64.05	41	555.42.02:568: NV_STATUS (*__subdeviceCtrlCmdInternalDisplayPreModeSet__)(struct Subdevice * /*this*/);  // exported (id=0x20800af1)
+0x20800af2	src/nvidia/generated/g_subdevice_nvoc.c	535.43.02..615.78.08	172	535.43.02:3758: /*methodId=*/   0x20800af2u,
+0x20800af2	src/nvidia/generated/g_subdevice_nvoc.h	555.42.02..575.64.05	41	555.42.02:569: NV_STATUS (*__subdeviceCtrlCmdInternalDisplayPostModeSet__)(struct Subdevice * /*this*/);  // exported (id=0x20800af2)
+0x20801221	src/nvidia/generated/g_subdevice_nvoc.c	515.43.04..615.78.08	221	515.43.04:3401: /*methodId=*/   0x20801221u,
+0x20801221	src/nvidia/generated/g_subdevice_nvoc.h	555.42.02..575.64.05	41	555.42.02:362: NV_STATUS (*__subdeviceCtrlCmdKGrGfxPoolAddSlots__)(struct Subdevice * /*this*/, NV2080_CTRL_GR_GFX_POOL_ADD_SLOTS_PARAMS *);  // exported (id=0x20801221)
+0x20801357	src/nvidia/generated/g_subdevice_nvoc.c	570.86.15..615.78.08	84	570.86.15:6113: /*methodId=*/   0x20801357u,
+0x20801357	src/nvidia/generated/g_subdevice_nvoc.h	570.86.15..575.64.05	31	570.86.15:313: NV_STATUS (*__subdeviceCtrlCmdFbGetStatus__)(struct Subdevice * /*this*/, NV2080_CTRL_FB_GET_STATUS_PARAMS *);  // exported (id=0x20801357)
+0x20802a06	src/nvidia/generated/g_subdevice_nvoc.c	515.43.04..615.78.08	221	515.43.04:5021: /*methodId=*/   0x20802a06u,
+0x20802a06	src/nvidia/generated/g_subdevice_nvoc.h	555.42.02..575.64.05	41	555.42.02:596: NV_STATUS (*__subdeviceCtrlCmdCeUpdateClassDB__)(struct Subdevice * /*this*/, NV2080_CTRL_CE_UPDATE_CLASS_DB_PARAMS *);  // exported (id=0x20802a06)
+0x20802a0d	src/nvidia/generated/g_subdevice_nvoc.c	560.28.03..615.78.08	89	560.28.03:6863: /*methodId=*/   0x20802a0du,
+0x20802a0d	src/nvidia/generated/g_subdevice_nvoc.h	560.28.03..575.64.05	36	560.28.03:560: NV_STATUS (*__subdeviceCtrlCmdCeUpdatePceLceMappingsV2__)(struct Subdevice * /*this*/, NV2080_CTRL_CE_UPDATE_PCE_LCE_MAPPINGS_V2_PARAMS *);  // exported (id=0x2
+0x50700117	src/nvidia/generated/g_disp_objs_nvoc.c	515.43.04..615.78.08	221	515.43.04:615: /*methodId=*/   0x50700117u,
+0x50700117	src/nvidia/generated/g_disp_objs_nvoc.h	555.42.02..575.64.05	41	555.42.02:440: NV_STATUS (*__dispobjCtrlCmdSetRmFreeFlags__)(struct DispObject * /*this*/, NV5070_CTRL_SET_RMFREE_FLAGS_PARAMS *);  // exported (id=0x50700117)
+0x90960101	src/nvidia/generated/g_zbc_api_nvoc.c	515.43.04..615.78.08	221	515.43.04:198: /*methodId=*/   0x90960101u,
+0x90960101	src/nvidia/generated/g_zbc_api_nvoc.h	555.42.02..575.64.05	41	555.42.02:81: NV_STATUS (*__zbcapiCtrlCmdSetZbcColorClear__)(struct ZbcApi * /*this*/, NV9096_CTRL_SET_ZBC_COLOR_CLEAR_PARAMS *);  // exported (id=0x90960101)
+0x90960106	src/nvidia/generated/g_zbc_api_nvoc.c	515.43.04..615.78.08	221	515.43.04:273: /*methodId=*/   0x90960106u,
+0x90960106	src/nvidia/generated/g_zbc_api_nvoc.h	555.42.02..615.78.08	94	555.42.02:86: NV_STATUS (*__zbcapiCtrlCmdGetZbcClearTableSize__)(struct ZbcApi * /*this*/, NV9096_CTRL_GET_ZBC_CLEAR_TABLE_SIZE_PARAMS *);  // halified (2 hals) exported (id=
+0x90960107	src/nvidia/generated/g_zbc_api_nvoc.c	515.43.04..615.78.08	221	515.43.04:288: /*methodId=*/   0x90960107u,
+0x90960107	src/nvidia/generated/g_zbc_api_nvoc.h	555.42.02..575.64.05	41	555.42.02:87: NV_STATUS (*__zbcapiCtrlCmdGetZbcClearTableEntry__)(struct ZbcApi * /*this*/, NV9096_CTRL_GET_ZBC_CLEAR_TABLE_ENTRY_PARAMS *);  // exported (id=0x90960107)
+0xc3700104	src/nvidia/generated/g_disp_objs_nvoc.c	515.43.04..615.78.08	221	515.43.04:1577: /*methodId=*/   0xc3700104u,
+0xc3700104	src/nvidia/generated/g_disp_objs_nvoc.h	555.42.02..575.64.05	41	555.42.02:955: NV_STATUS (*__nvdispapiCtrlCmdGetChannelInfo__)(struct NvDispApi * /*this*/, NVC370_CTRL_CMD_GET_CHANNEL_INFO_PARAMS *);  // exported (id=0xc3700104)
+0xc3700201	src/nvidia/generated/g_disp_objs_nvoc.c	515.43.04..615.78.08	221	515.43.04:1592: /*methodId=*/   0xc3700201u,
+0xc3700201	src/nvidia/generated/g_disp_objs_nvoc.h	555.42.02..575.64.05	41	555.42.02:957: NV_STATUS (*__nvdispapiCtrlCmdGetLockpinsCaps__)(struct NvDispApi * /*this*/, NVC370_CTRL_GET_LOCKPINS_CAPS_PARAMS *);  // exported (id=0xc3700201)
+0xc3720101	src/nvidia/generated/g_disp_objs_nvoc.c	515.43.04..615.78.08	221	515.43.04:2024: /*methodId=*/   0xc3720101u,
+0xc3720101	src/nvidia/generated/g_disp_objs_nvoc.h	555.42.02..575.64.05	41	555.42.02:1277: NV_STATUS (*__dispswobjCtrlCmdIsModePossible__)(struct DispSwObj * /*this*/, NVC372_CTRL_IS_MODE_POSSIBLE_PARAMS *);  // exported (id=0xc3720101)

@@ -1,0 +1,17 @@
+S3_START tag=m1 rev=0c5fedff 2026-10-14T16:14:57+02:00
+S3_CYCLE_RESULT cycle=1 ssh=1 nvidia_smi=1 gears_frames=302 xid=0 pass=1
+S3_CYCLE_RESULT cycle=2 ssh=1 nvidia_smi=1 gears_frames=301 xid=0 pass=1
+S3_CYCLE_RESULT cycle=3 ssh=1 nvidia_smi=1 gears_frames=302 xid=0 pass=1
+S3_RESULT pass=1 cycles=3 rev=0c5fedff
+S3_EXIT rc=0 2026-10-14T16:17:32+02:00
+DESKTOP_SMOKE_START tag=m1 rev=0c5fedff 2026-10-14T16:17:32+02:00
+DESKTOP_GLX OpenGL vendor string: NVIDIA Corporation
+DESKTOP_GLX OpenGL renderer string: NVIDIA GeForce RTX 4070/PCIe/SSE2
+DESKTOP_GEARS approximately the same as the monitor refresh rate.
+DESKTOP_GEARS 301 frames in 5.0 seconds = 60.168 FPS
+DESKTOP_GEARS 300 frames in 5.0 seconds = 60.000 FPS
+DESKTOP_GEARS 300 frames in 5.0 seconds = 60.000 FPS
+DESKTOP_GUEST_DMESG flip_timeouts=0 nvassert=12 xid=0
+DESKTOP_HOST_XID delta=0
+DESKTOP_KF3 stall=9 exception=0 scanout_refused=0 broker_lines=30
+DESKTOP_SMOKE_EXIT rc=0 2026-10-14T16:19:09+02:00

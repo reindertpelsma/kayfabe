@@ -1,0 +1,75 @@
+=== hashcat start=2026-10-10T10:02:34.3413496-07:00 host=DESKTOP-397P3NI session=0 boot=2026-10-10T15:50:57.5000000Z timeout=300
+KFUNTIL hashcat matched /Status\.+: Cracked/ and did not exit within 15 s: killed
+hashcat (v7.1.2) starting
+
+Initializing bridges. Please be patient...Initialized bridgesInitializing backend runtimes. Please be patient...Initialized backend runtimesInitializing backend devices. Please be patient...Initialized backend devicesCUDA API (CUDA 13.2)
+====================
+* Device #01: NVIDIA GeForce RTX 4060 Ti, 15235/16379 MB, 34MCU
+
+OpenCL API (OpenCL 3.0 CUDA 13.2.73) - Platform #1 [NVIDIA Corporation]
+=======================================================================
+* Device #02: NVIDIA GeForce RTX 4060 Ti, skipped
+
+Minimum password length supported by kernel: 0
+Maximum password length supported by kernel: 55
+
+Sorting hashes. Please be patient...Sorted hashesRemoving duplicate hashes. Please be patient...Removed duplicate hashesSorting salts. Please be patient...Sorted saltsGenerating bitmap tables...Generated bitmap tablesHashes: 1 digests; 1 unique digests, 1 unique salts
+Bitmaps: 16 bits, 65536 entries, 0x0000ffff mask, 262144 bytes, 5/13 rotates
+
+Optimizers applied:
+* Optimized-Kernel
+* Zero-Byte
+* Precompute-Init
+* Meet-In-The-Middle
+* Early-Skip
+* Not-Salted
+* Not-Iterated
+* Single-Hash
+* Single-Salt
+* Brute-Force
+* Raw-Hash
+
+Watchdog: Temperature abort trigger set to 90c
+
+Initializing bridge salts. Please be patient...Initialized bridge saltsInitializing device kernels and memory. Please be patient...Initializing backend runtime for device #1. Please be patient...Initialized backend runtime for device #1Host memory allocated for this attack: 4934 MB (47881 MB free)
+
+Initialized device kernels and memoryStarting self-test. Please be patient...Finished self-testStarting autotune. Please be patient...Finished autotune
+                                                          
+The wordlist or mask that you are using is too small.
+This means that hashcat cannot use the full parallel power of your device(s).
+Hashcat is expecting at least 940032 base words but only got 48.6% of that.
+Unless you supply more work, your cracking speed will drop.
+For tips on supplying more work, see: https://hashcat.net/faq/morework
+
+
+                                                          
+[s]tatus [p]ause [b]ypass [c]heckpoint [f]inish [q]uit => 
+                                                          
+Approaching final keyspace - workload adjusted.
+
+[s]tatus [p]ause [b]ypass [c]heckpoint [f]inish [q]uit => 
+                                                          
+e4726719b68b205913167f0975d977ee:kayfab
+
+                                                          
+
+Session..........: hashcat
+Status...........: Cracked
+Hash.Mode........: 0 (MD5)
+Hash.Target......: e4726719b68b205913167f0975d977ee
+Time.Started.....: Sat Oct 10 10:02:40 2026 (0 secs)
+Time.Estimated...: Sat Oct 10 10:02:40 2026 (0 secs)
+Kernel.Feature...: Optimized Kernel (password length 0-55 bytes)
+Guess.Mask.......: ?l?l?l?l?l?l [6]
+Guess.Queue......: 1/1 (100.00%)
+Speed.#01........: 24716.3 MH/s (6.13ms) @ Accel:27 Loops:512 Thr:1024 Vec:8
+Recovered........: 1/1 (100.00%) Digests (total), 1/1 (100.00%) Digests (new)
+Progress.........: 233971712/308915776 (75.74%)
+Rejected.........: 0/233971712 (0.00%)
+Restore.Point....: 0/456976 (0.00%)
+Restore.Sub.#01..: Salt:0 Amplifier:0-512 Iteration:0-512
+Candidate.Engine.: Device Generator
+Candidates.#01...: sanier -> ezqfqx
+Hardware.Mon.#01.: Temp: 57c Fan:  0% Util: 98% Core:2640MHz Mem:8751MHz Bus:8
+
+=== end rc=0 secs=22 2026-10-10T10:02:56.7321853-07:00

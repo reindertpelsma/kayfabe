@@ -1,0 +1,9 @@
+=== cupy_check start=2026-10-11T16:01:12.3715540+00:00 host=VASTWIN session=0 boot=2026-10-11T15:55:06.5000000Z timeout=300
+KFDEV NVIDIA GeForce RTX 4070
+CHECK cupy_matmul ok
+CHECK cupy_reduce ok
+CHECK cupy_nvrtc_kernel ok
+CHECK cupy_fft ok
+CHECK cupy_random ok
+CUPY_DONE
+=== end rc=0 secs=9 2026-10-11T16:01:21.7481638+00:00

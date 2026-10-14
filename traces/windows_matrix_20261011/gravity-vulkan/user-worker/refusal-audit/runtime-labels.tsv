@@ -1,0 +1,112 @@
+source	line	name	category	invariant
+crates/kf-qemu/src/userpump.rs	74	USER_RING_SCAN_ALLOC	d	trusted allocation or count budget
+crates/kf-qemu/src/userpump.rs	80	USER_RING_SCAN_BOUND	a,b,c	unambiguous software trigger framing and immutable segment split/order; CPU bounds remain mandatory
+crates/kf-qemu/src/userpump.rs	83	USER_RING_SCAN	a,b,c	unambiguous software trigger framing and immutable segment split/order; CPU bounds remain mandatory
+crates/kf-qemu/src/userpump.rs	86	USER_RING_SCAN_BOUND	a,b,c	unambiguous software trigger framing and immutable segment split/order; CPU bounds remain mandatory
+crates/kf-qemu/src/userpump.rs	87	USER_RING_SCAN_BOUND	a,b,c	unambiguous software trigger framing and immutable segment split/order; CPU bounds remain mandatory
+crates/kf-qemu/src/userpump.rs	90	USER_RING_SCAN_BOUND	a,b,c	unambiguous software trigger framing and immutable segment split/order; CPU bounds remain mandatory
+crates/kf-qemu/src/userpump.rs	94	USER_RING_TRIGGER_PARTIAL_SUFFIX_UNSUPPORTED	a,b,c	unambiguous software trigger framing and immutable segment split/order; CPU bounds remain mandatory
+crates/kf-qemu/src/userpump.rs	108	USER_RING_SUFFIX_BOUND	a,b,c	unambiguous software trigger framing and immutable segment split/order; CPU bounds remain mandatory
+crates/kf-qemu/src/userpump.rs	113	USER_RING_PT_POISONED	a,c	exact native/allocation lifetime or inconsistent/uncertain publication; retain resources rather than forge success
+crates/kf-qemu/src/userpump.rs	117	USER_RING_ALLOCATION_GONE	a,c	exact native/allocation lifetime or inconsistent/uncertain publication; retain resources rather than forge success
+crates/kf-qemu/src/userpump.rs	122	USER_RING_SOFTWARE_OBJECT_GONE	a,b	only channel-owned registered software actions may authorize host CPU/RM work; supported admission/dispatch subset
+crates/kf-qemu/src/userpump.rs	183	USER_RING_CACHE	a,d	bounded owned CPU source-view cache setup; propagate typed cache failure
+crates/kf-qemu/src/userpump.rs	184	USER_RING_RAM_TOPOLOGY	a,c	bounded owned CPU source/USERD access and live mapping/RAM admission before publication; no stale reuse credit
+crates/kf-qemu/src/userpump.rs	200	USER_RING_SOURCE_CLEANUP	a,c	bounded owned CPU source/USERD access and live mapping/RAM admission before publication; no stale reuse credit
+crates/kf-qemu/src/userpump.rs	219	USER_RING_SOURCE	a,c	bounded owned CPU source/USERD access and live mapping/RAM admission before publication; no stale reuse credit
+crates/kf-qemu/src/userpump.rs	225	USER_RING_NATIVE_ABSENT	a,c	exact native/allocation lifetime or inconsistent/uncertain publication; retain resources rather than forge success
+crates/kf-qemu/src/userpump.rs	230	USER_RING_STORAGE_POISONED	a,c	exact native/allocation lifetime or inconsistent/uncertain publication; retain resources rather than forge success
+crates/kf-qemu/src/userpump.rs	252	USER_RING_GET_WRITE	a,c	owned live source/USERD access and mapping admission; no stale cursor or reuse authority
+crates/kf-qemu/src/userpump.rs	273	USER_RING_PUT_READ	a,c	owned live source/USERD access and mapping admission; no stale cursor or reuse authority
+crates/kf-qemu/src/userpump.rs	276	USER_RING_PUT_BOUND	a,c,d	bounded CPU arithmetic/index and source/native cursor attribution
+crates/kf-qemu/src/userpump.rs	296	USER_RING_WHOLE_RING	a,c	bounded owned CPU source/USERD access and live mapping/RAM admission before publication; no stale reuse credit
+crates/kf-qemu/src/userpump.rs	302	USER_RING_GP_ADDRESS	a,c,d	bounded CPU arithmetic/index and source/native cursor attribution
+crates/kf-qemu/src/userpump.rs	309	USER_RING_GP_SNAPSHOT_SIZE	a,c,d	bounded CPU arithmetic/index and source/native cursor attribution
+crates/kf-qemu/src/userpump.rs	314	USER_RING_GP_FORMAT	b,c,d	direct/NOP framing for trigger inspection and native fetch attribution; byte budget is resource policy (enum table separates cases)
+crates/kf-qemu/src/userpump.rs	319	USER_RING_CURSOR	a,c,d	bounded CPU arithmetic/index and source/native cursor attribution
+crates/kf-qemu/src/userpump.rs	348	USER_RING_GP_FORMAT	b,c,d	direct/NOP framing for trigger inspection and native fetch attribution; byte budget is resource policy (enum table separates cases)
+crates/kf-qemu/src/userpump.rs	354	USER_RING_PB_SIZE	a,c	bounded owned CPU source/USERD access and live mapping/RAM admission before publication; no stale reuse credit
+crates/kf-qemu/src/userpump.rs	359	USER_RING_SCAN_ALLOC	d	trusted allocation or count budget
+crates/kf-qemu/src/userpump.rs	362	USER_RING_WORD	a,b,c	unambiguous software trigger framing and immutable segment split/order; CPU bounds remain mandatory
+crates/kf-qemu/src/userpump.rs	383	USER_RING_SEGMENT_ABSENT	a,c	exact native/allocation lifetime or inconsistent/uncertain publication; retain resources rather than forge success
+crates/kf-qemu/src/userpump.rs	425	USER_RING_PT_POISONED	a,c	exact native/allocation lifetime or inconsistent/uncertain publication; retain resources rather than forge success
+crates/kf-qemu/src/userpump.rs	429	USER_RING_ALLOCATION_GONE	a,c	exact native/allocation lifetime or inconsistent/uncertain publication; retain resources rather than forge success
+crates/kf-qemu/src/userpump.rs	435	USER_RING_SOFTWARE_OBJECT_GONE	a,b	only channel-owned registered software actions may authorize host CPU/RM work; supported admission/dispatch subset
+crates/kf-qemu/src/userpump.rs	445	USER_RING_PUBLICATION_STOPPED	a,c	exact native/allocation lifetime or inconsistent/uncertain publication; retain resources rather than forge success
+crates/kf-qemu/src/userpump.rs	447	USER_RING_STORAGE_POISONED	a,c	exact native/allocation lifetime or inconsistent/uncertain publication; retain resources rather than forge success
+crates/kf-qemu/src/userpump.rs	456	USER_RING_PUBLICATION_TOPOLOGY	a,c	bounded owned CPU source/USERD access and live mapping/RAM admission before publication; no stale reuse credit
+crates/kf-qemu/src/userpump.rs	463	USER_RING_PB_ADMISSION	a,c	bounded owned CPU source/USERD access and live mapping/RAM admission before publication; no stale reuse credit
+crates/kf-qemu/src/userpump.rs	468	USER_RING_GP_ADMISSION	a,c	bounded owned CPU source/USERD access and live mapping/RAM admission before publication; no stale reuse credit
+crates/kf-qemu/src/userpump.rs	475	USER_RING_WHOLE_RING_ADMISSION	a,c	bounded owned CPU source/USERD access and live mapping/RAM admission before publication; no stale reuse credit
+crates/kf-qemu/src/userpump.rs	480	USER_RING_USERD_ADMISSION	a,c	bounded owned CPU source/USERD access and live mapping/RAM admission before publication; no stale reuse credit
+crates/kf-qemu/src/userpump.rs	482	USER_RING_NATIVE_ABSENT	a,c	exact native/allocation lifetime or inconsistent/uncertain publication; retain resources rather than forge success
+crates/kf-qemu/src/userpump.rs	483	USER_RING_DOORBELL_UNCERTAIN	a,c	exact native/allocation lifetime or inconsistent/uncertain publication; retain resources rather than forge success
+crates/kf-qemu/src/userpump.rs	523	USER_RING_SCAN_BOUND	a,b,c	unambiguous software trigger framing and immutable segment split/order; CPU bounds remain mandatory
+crates/kf-qemu/src/userpump.rs	526	USER_RING_SCAN	a,b,c	unambiguous software trigger framing and immutable segment split/order; CPU bounds remain mandatory
+crates/kf-qemu/src/userpump.rs	557	USER_RING_PREFIX_BOUND	a,b,c	unambiguous software trigger framing and immutable segment split/order; CPU bounds remain mandatory
+crates/kf-qemu/src/userpump.rs	567	USER_RING_STORAGE_POISONED	a,c	exact native/allocation lifetime or inconsistent/uncertain publication; retain resources rather than forge success
+crates/kf-qemu/src/userpump.rs	589	USER_RING_PREFIX_BOUND	a,b,c	unambiguous software trigger framing and immutable segment split/order; CPU bounds remain mandatory
+crates/kf-qemu/src/userpump.rs	624	USER_RING_REGISTRY_ABSENT	a,b	only channel-owned registered software actions may authorize host CPU/RM work; supported admission/dispatch subset
+crates/kf-qemu/src/userpump.rs	651	USER_RING_SOFTWARE_OBJECT_GONE	a,b	only channel-owned registered software actions may authorize host CPU/RM work; supported admission/dispatch subset
+crates/kf-qemu/src/userpump.rs	659	USER_RING_UNREGISTERED_API	a,b	only channel-owned registered software actions may authorize host CPU/RM work; supported admission/dispatch subset
+crates/kf-qemu/src/userpump.rs	694	USER_RING_PT_POISONED	a,c	exact native/allocation lifetime or inconsistent/uncertain publication; retain resources rather than forge success
+crates/kf-qemu/src/userpump.rs	702	USER_RING_CONTEXT_FOREIGN_TARGET	a,b	only channel-owned registered software actions may authorize host CPU/RM work; supported admission/dispatch subset
+crates/kf-qemu/src/userpump.rs	716	USER_RING_DEFERRED_UNSUPPORTED	a,b	only channel-owned registered software actions may authorize host CPU/RM work; supported admission/dispatch subset
+crates/kf-qemu/src/userpump.rs	739	USER_RING_MIGRATION_DECLARATION	a,b,d	owned memory/channel plus public alignment/entries/length bounds; supported migration shape
+crates/kf-qemu/src/userpump.rs	744	USER_RING_SOURCE_SEQUENCE	c,d	host generation cannot wrap into a live source receipt
+crates/kf-qemu/src/userpump.rs	748	USER_RING_MIGRATION_USERD	a,c	bounded owned CPU source/USERD access and live mapping/RAM admission before publication; no stale reuse credit
+crates/kf-qemu/src/userpump.rs	758	USER_RING_MIGRATION_RING	a,c	owned live source/USERD access and mapping admission; no stale cursor or reuse authority
+crates/kf-qemu/src/userpump.rs	765	USER_RING_PT_POISONED	a,c	exact native/allocation lifetime or inconsistent/uncertain publication; retain resources rather than forge success
+crates/kf-qemu/src/userpump.rs	769	USER_RING_ALLOCATION_GONE	a,c	exact native/allocation lifetime or inconsistent/uncertain publication; retain resources rather than forge success
+crates/kf-qemu/src/userpump.rs	782	USER_RING_MIGRATION_ADMISSION	a,c	owned live source/USERD access and mapping admission; no stale cursor or reuse authority
+crates/kf-qemu/src/userpump.rs	784	USER_RING_MIGRATION_USERD_ADMISSION	a,c	bounded owned CPU source/USERD access and live mapping/RAM admission before publication; no stale reuse credit
+crates/kf-qemu/src/userpump.rs	803	USER_RING_PT_POISONED	a,c	exact native/allocation lifetime or inconsistent/uncertain publication; retain resources rather than forge success
+crates/kf-qemu/src/userpump.rs	807	USER_RING_ALLOCATION_GONE	a,c	exact native/allocation lifetime or inconsistent/uncertain publication; retain resources rather than forge success
+crates/kf-qemu/src/userpump.rs	809	USER_RING_SW_NUMBER_EXHAUSTED	d	trusted allocation or count budget
+crates/kf-qemu/src/userpump.rs	811	USER_RING_DEFERRED_NOTIFICATION_UNSUPPORTED	a,b	only channel-owned registered software actions may authorize host CPU/RM work; supported admission/dispatch subset
+crates/kf-qemu/src/userpump.rs	814	USER_RING_LATE_SOFTWARE_OBJECT_UNSUPPORTED	a,b	only channel-owned registered software actions may authorize host CPU/RM work; supported admission/dispatch subset
+crates/kf-qemu/src/userpump.rs	817	USER_RING_FIRST_SOFTWARE_OBJECT_ONLY	a,b	only channel-owned registered software actions may authorize host CPU/RM work; supported admission/dispatch subset
+crates/kf-qemu/src/userpump.rs	846	USER_RING_RECORD_GONE	a,c	exact native/allocation lifetime or inconsistent/uncertain publication; retain resources rather than forge success
+crates/kf-qemu/src/userpump.rs	850	USER_RING_RECORD_POISONED	a,c	exact native/allocation lifetime or inconsistent/uncertain publication; retain resources rather than forge success
+crates/kf-qemu/src/userpump.rs	856	USER_RING_SW_ADMISSION_GONE	a,b	only channel-owned registered software actions may authorize host CPU/RM work; supported admission/dispatch subset
+crates/kf-qemu/src/userpump.rs	868	USER_RING_SW_ALLOCATION_GONE	a,b	only channel-owned registered software actions may authorize host CPU/RM work; supported admission/dispatch subset
+crates/kf-qemu/src/userpump.rs	874	USER_RING_NATIVE_5080	a,b	only channel-owned registered software actions may authorize host CPU/RM work; supported admission/dispatch subset
+crates/kf-qemu/src/userpump.rs	876	USER_RING_PT_POISONED	a,c	exact native/allocation lifetime or inconsistent/uncertain publication; retain resources rather than forge success
+crates/kf-qemu/src/userpump.rs	879	USER_RING_SW_ALLOCATION_GONE_AFTER_NATIVE_ALLOC	a,b	only channel-owned registered software actions may authorize host CPU/RM work; supported admission/dispatch subset
+crates/kf-qemu/src/userpump.rs	882	USER_RING_ALLOCATION_GONE	a,c	exact native/allocation lifetime or inconsistent/uncertain publication; retain resources rather than forge success
+crates/kf-qemu/src/userpump.rs	889	USER_RING_5080	a,b	only channel-owned registered software actions may authorize host CPU/RM work; supported admission/dispatch subset
+crates/kf-qemu/src/userpump.rs	910	USER_RING_PT_POISONED	a,c	exact native/allocation lifetime or inconsistent/uncertain publication; retain resources rather than forge success
+crates/kf-qemu/src/userpump.rs	1050	USER_RING_CONTEXT_ALLOCATION_GONE	a,c	exact native/allocation lifetime or inconsistent/uncertain publication; retain resources rather than forge success
+crates/kf-qemu/src/userpump.rs	1074	USER_RING_CONTEXT_ACT_UNAVAILABLE	a,b	only channel-owned registered software actions may authorize host CPU/RM work; supported admission/dispatch subset
+crates/kf-qemu/src/userrelay.rs	248	USER_RING_BIRTH_ORPHANED	a,c	exact native/allocation lifetime or inconsistent/uncertain publication; retain resources rather than forge success
+crates/kf-qemu/src/userrelay.rs	258	USER_RING_WAIT_VA_STORAGE	c	pending VA-manager ownership; retry is not completion
+crates/kf-qemu/src/userrelay.rs	278	USER_RING_SOURCE_DECLARATION	a,b,d	owned memory/channel plus public alignment/entries/length bounds; supported migration shape
+crates/kf-qemu/src/userrelay.rs	280	USER_RING_SUBDEVICE_ID_UNMEASURED	b	scanner cannot interpret filtered software calls without a matching native configuration
+crates/kf-qemu/src/userrelay.rs	282	USER_RING_SUBDEVICE_ID	e	zero rejection is unsupported by public ordinary RM callers; effective zero mask unresolved
+crates/kf-qemu/src/userrelay.rs	283	USER_RING_NO_USERD_DECLARATION	a,c	bounded owned CPU source/USERD access and live mapping/RAM admission before publication; no stale reuse credit
+crates/kf-qemu/src/userrelay.rs	285	USER_RING_USERD_DECLARATION	a,c	bounded owned CPU source/USERD access and live mapping/RAM admission before publication; no stale reuse credit
+crates/kf-qemu/src/userrelay.rs	288	USER_RING_USERD_APERTURE_NOT_IMPLEMENTED	a,c	bounded owned CPU source/USERD access and live mapping/RAM admission before publication; no stale reuse credit
+crates/kf-qemu/src/userrelay.rs	292	USER_RING_RESOLVED_USERD	a,c	bounded owned CPU source/USERD access and live mapping/RAM admission before publication; no stale reuse credit
+crates/kf-qemu/src/userrelay.rs	317	USER_RING_STORAGE_POISONED	a,c	exact native/allocation lifetime or inconsistent/uncertain publication; retain resources rather than forge success
+crates/kf-qemu/src/userrelay.rs	337	USER_RING_QUOTA_ABSENT	a,c	exact native/allocation lifetime or inconsistent/uncertain publication; retain resources rather than forge success
+crates/kf-qemu/src/userrelay.rs	354	USER_RING_NO_VASPACE	a,c	bounded owned CPU source/USERD access and live mapping/RAM admission before publication; no stale reuse credit
+crates/kf-qemu/src/userrelay.rs	365	USER_RING_HOLDS_POISONED	a,c	exact native/allocation lifetime or inconsistent/uncertain publication; retain resources rather than forge success
+crates/kf-qemu/src/userrelay.rs	367	USER_RING_NATIVE_ATTEMPT_BUDGET	d	trusted allocation or count budget
+crates/kf-qemu/src/userrelay.rs	371	USER_RING_NATIVE_ATTEMPT_ALLOCATION	d	trusted allocation or count budget
+crates/kf-qemu/src/userrelay.rs	387	USER_RING_BIRTH_ORPHANED	a,c	exact native/allocation lifetime or inconsistent/uncertain publication; retain resources rather than forge success
+crates/kf-qemu/src/userrelay.rs	420	USER_RING_NATIVE_BIRTH_UNCERTAIN	a,c	exact native/allocation lifetime or inconsistent/uncertain publication; retain resources rather than forge success
+crates/kf-qemu/src/userrelay.rs	425	USER_RING_RECORD_POISONED	a,c	exact native/allocation lifetime or inconsistent/uncertain publication; retain resources rather than forge success
+crates/kf-qemu/src/userrelay.rs	432	USER_RING_RECORDS_POISONED	a,c	exact native/allocation lifetime or inconsistent/uncertain publication; retain resources rather than forge success
+crates/kf-qemu/src/userrelay.rs	434	USER_RING_NATIVE_TOKEN_COLLISION_QUARANTINED	a,c	exact native/allocation lifetime or inconsistent/uncertain publication; retain resources rather than forge success
+crates/kf-qemu/src/userrelay.rs	442	USER_RING_GROUPS_POISONED	a,c	exact native/allocation lifetime or inconsistent/uncertain publication; retain resources rather than forge success
+crates/kf-qemu/src/userrelay.rs	449	USER_RING_BIRTH_ORPHANED	a,c	exact native/allocation lifetime or inconsistent/uncertain publication; retain resources rather than forge success
+crates/kf-qemu/src/userrelay.rs	466	USER_RING_RECORD_BUSY_AT_COMMIT	a,c	exact native/allocation lifetime or inconsistent/uncertain publication; retain resources rather than forge success
+crates/kf-qemu/src/userrelay.rs	469	USER_RING_INITIAL_USERD	a,c	bounded owned CPU source/USERD access and live mapping/RAM admission before publication; no stale reuse credit
+crates/kf-qemu/src/userrelay.rs	470	USER_RING_PT_POISONED	a,c	exact native/allocation lifetime or inconsistent/uncertain publication; retain resources rather than forge success
+crates/kf-qemu/src/userrelay.rs	472	USER_RING_LIVE_COLLISION	a,c	exact native/allocation lifetime or inconsistent/uncertain publication; retain resources rather than forge success
+crates/kf-qemu/src/userrelay.rs	521	USER_RING_QUOTA_ABSENT	a,c	exact native/allocation lifetime or inconsistent/uncertain publication; retain resources rather than forge success
+crates/kf-qemu/src/userrelay.rs	527	USER_RING_TOKEN	a,c	exact native/allocation lifetime or inconsistent/uncertain publication; retain resources rather than forge success
+crates/kf-qemu/src/userrelay.rs	753	USER_RING_PT_POISONED	a,c	exact native/allocation lifetime or inconsistent/uncertain publication; retain resources rather than forge success
+crates/kf-qemu/src/userrelay.rs	758	USER_RING_WITHDRAW_ALREADY_GONE	a,c	exact native/allocation lifetime or inconsistent/uncertain publication; retain resources rather than forge success
+crates/kf-qemu/src/userrelay.rs	761	USER_RING_WITHDRAW_GONE	a,c	exact native/allocation lifetime or inconsistent/uncertain publication; retain resources rather than forge success
+crates/kf-qemu/src/userrelay.rs	781	USER_RING_WITHDRAW	a,c	exact native/allocation lifetime or inconsistent/uncertain publication; retain resources rather than forge success

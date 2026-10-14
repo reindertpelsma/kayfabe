@@ -410,6 +410,7 @@ impl CommandPolicy for StickyAnswerGuard {
         if reply.body.len() < wire.params_off {
             self.malformed = self.malformed.saturating_add(1);
             return Some(Reply {
+                rpc_result_private: None,
                 rpc_result: kf_abi::NV_ERR_NOT_SUPPORTED,
                 body: Vec::new(),
             });

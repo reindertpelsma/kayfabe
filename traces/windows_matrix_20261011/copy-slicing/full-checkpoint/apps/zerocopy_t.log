@@ -1,0 +1,7 @@
+=== zerocopy_t start=2026-10-11T13:52:14.2694734+00:00 host=VASTWIN session=0 boot=2026-10-11T13:46:04.5000000Z timeout=120
+KFDEV NVIDIA GeForce RTX 4070
+[eq] device NVIDIA GeForce RTX 4070 torch 2.8.0+cu126
+CHECK pinned_h2d ok
+CHECK pinned_d2h ok
+WINEQ_DONE zerocopy
+=== end rc=0 secs=5 2026-10-11T13:52:19.2103944+00:00

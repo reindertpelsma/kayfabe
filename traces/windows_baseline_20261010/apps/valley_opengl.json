@@ -1,0 +1,60 @@
+{
+ "quiet": 48,
+ "end_utc": "2026-10-11T01:39:04.0436459Z",
+ "start_utc": "2026-10-11T01:38:14.8207907Z",
+ "rc": 0,
+ "secs": 49,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4060 Ti status=OK code=0"
+ ],
+ "digests": [],
+ "session": 1,
+ "out_files": [],
+ "boot_utc_start": "2026-10-11T00:42:27.5000000Z",
+ "log_tail": [
+  "=== valley_opengl start=2026-10-10T18:38:14.8207907-07:00 host=DESKTOP-397P3NI session=1 boot=2026-10-11T00:42:27.5000000Z timeout=150",
+  "KFSURVIVE valley_opengl ALIVE_AT 45 s",
+  "=== end rc=0 secs=49 2026-10-10T18:39:04.0436459-07:00"
+ ],
+ "pdh": {
+  "pids": [
+   "1468",
+   "8232",
+   "8644"
+  ],
+  "nv": {
+   "security": 0,
+   "3d": 42.56977480828208,
+   "vr": 0,
+   "videodecode": 0,
+   "copy": 0,
+   "ofa_0": 0,
+   "legacyoverlay": 0,
+   "videoencode": 0
+  },
+  "samples": 22,
+  "other": {},
+  "nvidia_luids": "0_6bdf"
+ },
+ "timed_out": false,
+ "token": "g1-valley_opengl-1791657482",
+ "boot_utc_end": "2026-10-11T00:42:27.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "valley_opengl",
+ "smi": {
+  "samples": 9,
+  "mem_used_base_mb": 133,
+  "util_max": 46,
+  "mem_used_max_mb": 497
+ }
+}

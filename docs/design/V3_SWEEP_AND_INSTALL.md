@@ -399,7 +399,7 @@ are the runner's `T_*` defaults (`scripts/drivermatrix/sweep.sh:120-126`).
 | 2 | control | every box but Blackwell | bare `cup2` + gates on the template's preinstalled closed 575.51.03, between the box-and-tree phase and the driver phase (§1.2); not counted. n/a on Blackwell, where that driver cannot initialise the GPU (`nvkvm-pv:scripts/sweep_matrix.py:175-178`). | ~2 min (estimate) | 30 min |
 | 3 | host swap | each non-reference host | open module and exact version, on content (`provision_host_driver.sh:152-165`); `.run` sha256 pin | part of ~37 min per host (hostwalk2.log, 2026-09-26: 21:25:32 → 23:17:54 for three full hosts plus three failed swaps) | `T_SWAP` 2400 s |
 | 4 | bare metal | every host | `cuda_ladder.sh host`: all four rungs on the reference host, `cup2` elsewhere. PASS iff every planned rung reads `verdict=PASS`. Otherwise the host's units are `UNTESTED(host-cuda-broken)`: never charged to kayfabe and never a pass (`OWNER_RULINGS.md:32-33`). | 9 s for four rungs (2026-09-30) | `T_BARE` 1800 s |
-| 5 | gates | every host | `scripts/bench/v3_gates.sh`: PASS iff `V3_GATES_SUMMARY pass=9 fail=0` | 40–61 s (2026-09-30) | `T_GATES` 3600 s |
+| 5 | gates | every host | `scripts/bench/v3_gates.sh`: PASS iff `V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS` (2026-10-10: `gate10=FALLBACK` = host RM refused micro reservations — passes, loudly; `gate10=FAIL` fails) | 40–61 s (2026-09-30) | `T_GATES` 3600 s |
 | 6 | bare 30-arm suite | 580.x hosts in `[580.65.06, 581)` only (grader limit) | PASS iff `BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30` (`scripts/bench/box/merge_check.sh:49-50`); otherwise the host's thin rows are `UNTESTED(host-cuda-broken)` | 177 s of arm time (mc23, 2026-09-30) | 1800 s |
 | 7 | canary | every host with thin rows | one `--timer` arm, graded as a planned unit (PASS or FAIL, §1.8). A canary that is not PASS leaves that host's thin rows `UNTESTED(canary-skipped)` (`V3_DRIVER_MATRIX.md:398-405`). | ~3 min (estimate) | `T_CANARY` 1200 s |
 | 8 | thin 30-arm | 580.x guests | `fast_suite.sh` at budget 180. PASS iff 30/30 with no failed, crashed or unrun arm, over the arm list pinned in `plan.json` (§1.8) | 10.4–18 min wall (2026-09-30) | `T_THIN` 10800 s |
@@ -523,7 +523,7 @@ them is under **Attempts** below, and every attempt stays in the ledger.
 | lane | PASS iff | otherwise |
 |---|---|---|
 | bare metal (4) | every planned rung reads `verdict=PASS` | the host's units are `UNTESTED(host-cuda-broken)` |
-| gates (5) | `V3_GATES_SUMMARY pass=9 fail=0`, the merge bar's line (`scripts/bench/box/merge_check.sh:43`) | FAIL; INCOMPLETE when no summary line exists |
+| gates (5) | `V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS` (or `gate10=FALLBACK`, reported), the merge bar's line (`scripts/bench/box/merge_check.sh:43`) | FAIL; INCOMPLETE when no summary line exists |
 | bare suite (6) | `BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30` (`merge_check.sh:50`) | the host's thin rows are `UNTESTED(host-cuda-broken)` |
 | canary (7) | `verdict=PASS`, p = n = 1 | FAIL, or INCOMPLETE on `NO_RESULT`; either way the host's thin rows are `UNTESTED(canary-skipped)` |
 | thin (8) | `FAST_SUITE_PASS` = `ARMS` = 30 with `FAST_SUITE_FAIL`, `FAST_SUITE_CRASH` and `NOTRUN` all 0 (the merge bar's line, `merge_check.sh:55`), and the sha256 of the arm names that ran equal to the arm-list hash in `plan.json` | FAIL if any arm failed, crashed or timed out, or if the hash differs; INCOMPLETE on `NO_RESULT` or an arm that never ran |

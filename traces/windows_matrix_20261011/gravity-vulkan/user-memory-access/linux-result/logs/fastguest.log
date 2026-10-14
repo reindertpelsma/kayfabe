@@ -1,0 +1,11 @@
+== HOST MODE: kernel 7.0.0-34-generic, modules from /lib/modules/7.0.0-34-generic
+== modules taken from the host (with closure): 5
+==   nvidia.ko
+==   nvidia-uvm.ko
+==   wmi.ko
+==   video.ko
+==   nvidia-modeset.ko
+== firmware taken from the host: 280 file(s)
+== built: /var/lib/kf-windows-20261005/codex-memory-access-linux-7f3f9fe16/fastguest/vmlinuz  17M
+== built: /var/lib/kf-windows-20261005/codex-memory-access-linux-7f3f9fe16/fastguest/initrd.cpio.gz  361M
+== kernel release: 7.0.0-34-generic

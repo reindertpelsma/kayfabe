@@ -1,0 +1,4 @@
+=== stream_perthread_t start=2026-10-11T15:52:24.9610506+00:00 host=VASTWIN session=0 boot=2026-10-11T15:48:58.5000000Z timeout=120
+KFDEV NVIDIA GeForce RTX 4070
+[eq] device NVIDIA GeForce RTX 4070 torch 2.8.0+cu126
+=== end rc=124 secs=121 2026-10-11T15:54:26.4520777+00:00

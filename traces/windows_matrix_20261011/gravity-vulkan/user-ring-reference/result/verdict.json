@@ -1,0 +1,61 @@
+[
+  {
+    "mode": "reference",
+    "verdict": "PASS",
+    "pid": 706151,
+    "start_utc": "2026-10-12 00:39:14.416818 UTC",
+    "process_end_utc": "2026-10-12 00:39:14.455260 UTC",
+    "end_utc": "2026-10-12 00:39:16.455599 UTC",
+    "rc": 0,
+    "killed": false,
+    "journal_query_exit": 0,
+    "journal_stderr": "",
+    "xid_records": 0,
+    "pid_attributed_xids": 0,
+    "asserted_user_channel": true,
+    "cleanup_ok": true,
+    "observation": {
+      "finished": true,
+      "reference": 1,
+      "copy_matches": true,
+      "ce_semaphore": 1,
+      "gp_get": 1,
+      "gp_put": 1,
+      "elapsed_us": 2205
+    },
+    "held_observation": null
+  },
+  {
+    "mode": "reference-held",
+    "verdict": "PASS",
+    "pid": 706230,
+    "start_utc": "2026-10-12 00:39:16.467701 UTC",
+    "process_end_utc": "2026-10-12 00:39:16.531446 UTC",
+    "end_utc": "2026-10-12 00:39:18.531886 UTC",
+    "rc": 0,
+    "killed": false,
+    "journal_query_exit": 0,
+    "journal_stderr": "",
+    "xid_records": 0,
+    "pid_attributed_xids": 0,
+    "asserted_user_channel": true,
+    "cleanup_ok": true,
+    "observation": {
+      "finished": true,
+      "reference": 1,
+      "copy_matches": true,
+      "ce_semaphore": 1,
+      "gp_get": 1,
+      "gp_put": 1,
+      "elapsed_us": 52847
+    },
+    "held_observation": {
+      "samples": 48,
+      "early_reference": false,
+      "fetched": true,
+      "acquire": 0,
+      "reference": 0,
+      "ce_semaphore": 0
+    }
+  }
+]

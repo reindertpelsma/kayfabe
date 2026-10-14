@@ -1,0 +1,5 @@
+PROBE whoami nt authority\system session 0
+PROBE 23:10:52.5169450 CreateDXGIFactory1 0x00000000
+PROBE 23:10:52.5169450 no NVIDIA adapter
+
+[rc=0]

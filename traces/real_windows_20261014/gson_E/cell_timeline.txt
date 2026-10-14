@@ -1,0 +1,25 @@
+discovery {'method': 1, 'layout': 1, 'bar0': 3, 'gpu_count': 1, 'mailbox_reads': 21267, 'mailbox_status': 0, 'scan_bytes': 3691425792, 'scan_passes': 0, 'scan_candidates': 3, 'scan_backoff_resets': 5, 'scan_backoff_ticks': 17897725}
+stats {'steps': 96797, 'attaches': 3, 'detaches': 3, 'messages_cmd': 9842, 'messages_status': 9867, 'lost_messages_exact': 0, 'seq_gap_messages': 0, 'lapped_messages': 0, 'loss_records': 6, 'torn_reads': 0, 'invalid_elements': 0, 'unsupported': 0, 'read_failures': 0, 'resyncs': 6, 'sink_dropped': 0, 'records_refused': 0}
+capture {'records': 19780, 'end_seen': 1, 'file_ok': 1, 'by_kind': {'bind': 6, 'elements': 19767, 'loss_overflow': 0, 'loss_unreadable': 0, 'loss_unknown': 6, 'end': 1}}
+ev 1 gen 0 030000000000000001000000010000000000000005270000000000000000000000000000000000000000000000000000
+ev5 gen 0 mb_status ZERO pa 0x0 t=0.000
+ev 2 gen 1 020000000000000081000000000004000000040000100000010000000100000000101606010000000000000000000000
+ev 4 gen 1 020000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+ev6 gen 1 readfail 0 pair 0x0 t=20.189
+ev6 gen 1 readfail 1 pair 0xffffffffffffffff t=21.232
+ev 3 gen 1 010000000000000048040000000000000000000000000000000000000000000000000000000000000000000000000000
+ev5 gen 1 mb_status UNREADABLE pa 0x0 t=21.288
+ev5 gen 1 mb_status ZERO pa 0x0 t=21.976
+ev 2 gen 2 010000000000000081000000000004000000040000100000010000000000000000c0040601000000008067d60c000000
+ev6 gen 2 readfail 0 pair 0xcd6678000 t=22.463
+ev6 gen 2 readfail 0 pair 0x0 t=22.617
+ev6 gen 2 readfail 0 pair 0xc00000000 t=23.038
+ev6 gen 2 readfail 0 pair 0x0 t=23.049
+ev6 gen 2 readfail 1 pair 0xffffffffffffffff t=112.375
+ev 3 gen 2 0100000000000000542b0000000000000000000000000000000000000000000000000000000000000000000000000000
+ev5 gen 2 mb_status UNREADABLE pa 0x0 t=112.408
+ev5 gen 2 mb_status ZERO pa 0x0 t=113.042
+ev 2 gen 3 010000000000000081000000000004000000040000100000010000000000000000700f0601000000008067d60c000000
+ev6 gen 3 readfail 0 pair 0xcd6678000 t=113.523
+ev6 gen 3 readfail 0 pair 0x0 t=113.679
+ev 3 gen 3 0400000000000000fd4c0000000000000000000000000000000000000000000000000000000000000000000000000000

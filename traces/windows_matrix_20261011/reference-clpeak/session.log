@@ -1,0 +1,16 @@
+2026-10-11T13:05:19Z START run_dir=/data/kf-native-reference-20261011/clpeak-cuda vm=native apps=1
+2026-10-11T13:05:19Z MATRIX_START apps=1 (resume skips 0) per_guest=1000 max_tdr=1000 tier<=1
+2026-10-11T13:05:21Z [g1] launched; waiting for the guest agent (<= 900s)
+2026-10-11T13:05:22Z [g1] agent answered after 3s
+2026-10-11T13:05:22Z [g1] no KF_GUEST_PW: assuming autologon
+2026-10-11T13:05:26Z [g1] interactive session: DESKTOP-JR70RMQ\vast
+2026-10-11T13:06:15Z [g1] pushed 23 guest files
+2026-10-11T13:06:19Z [g1] app disk attached (KFMOUNT D:)
+2026-10-11T13:06:27Z [g1] setup ok: cd=D: nvidia_adapters=1 NVIDIA GeForce RTX 4090, 580.88, 24564 MiB
+2026-10-11T13:06:31Z [g1] staged vc_redist (cached, 0s)
+2026-10-11T13:06:38Z [g1] READY boot=2026-10-11T12:38:54.5000000Z user=DESKTOP-JR70RMQ\vast smi_ok=True
+2026-10-11T13:06:42Z [g1] staged clpeak_cuda (unzip, 0s)
+2026-10-11T13:22:24Z [g1] clpeak_cuda: PASS
+2026-10-11T13:22:24Z [g1] stopped (noop (native box stays up))
+2026-10-11T13:22:24Z MATRIX_DONE batched: 1 pass / 1
+2026-10-11T13:22:24Z EXIT rc=0

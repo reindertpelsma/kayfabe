@@ -1,0 +1,154 @@
+kf3: VasKey(13970166077300801602) root 0xefba4000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13970166077300801602) root 0xefba4000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13970166077300801602) root 0xefba4000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13970166077300801602) root 0xefba4000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13970166077300801602) root 0xefba4000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13970166077300801602) root 0xefba4000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13965662457344034928) root 0xefa61000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13965662457344034928) root 0xefa61000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13965662457344034928) root 0xefa61000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13965662457344034928) root 0xefa61000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13965662457344034928) root 0xefa61000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13965662457344034928) root 0xefa61000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13965662590488021072) root 0xefa38000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13965662590488021072) root 0xefa38000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13965662590488021072) root 0xefa38000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13965662590488021072) root 0xefa38000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13965662590488021072) root 0xefa38000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13965662590488021072) root 0xefa38000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13965662590488021072) root 0xefa38000: 5 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: maplog t=243542.971908 STATEMENT pagedir VasKey(13965662607667890256) root=0xefa26000 First
+kf3: maplog t=243542.984903 walk#2217 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x120002000 len=0x10000 at=0xea5d0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=243542.985519 walk#2218 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x120012000 len=0x1000 at=0xea5c0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=243542.986068 walk#2219 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x120013000 len=0x2000 at=0xea5e0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=243542.986604 walk#2220 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x120015000 len=0x20000 at=0xea5f0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=243542.987199 walk#2221 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x120035000 len=0x8f000 at=0xea610000 ap=0 kind=0x0 ack=1
+kf3: maplog t=243542.987853 walk#2222 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x1200c4000 len=0x18000 at=0x239505000 ap=3 kind=0x0 ack=1
+kf3: maplog t=243542.987853 walk#2222 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x1200dc000 len=0x5000 at=0x239522000 ap=3 kind=0x0 ack=1
+kf3: maplog t=243542.987853 walk#2222 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x1200e1000 len=0x16000 at=0x2394ef000 ap=3 kind=0x0 ack=1
+kf3: maplog t=243542.987853 walk#2222 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x1200f7000 len=0x18000 at=0x2394d7000 ap=3 kind=0x0 ack=1
+kf3: act birth passthrough: chan 0xc1d00027:0xff04000c BORN Passthrough: token 0xe -> host 0x64 in VasKey(13965662607667890256) gpfifo=0x1200c4000x32768 userd=Ram { ram: 3405643793, off: 8477523968 } engine=0x1 declared_kernel_pid=false PRIVILEGE=KERNEL WINDOWS-USER-WORK (§V, ProcessID/subcontext) 
+kf3: maplog t=243542.993327 walk#2224 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x12010f000 len=0x10000 at=0x23974f000 ap=2 kind=0x0 ack=0
+kf3: VasKey(13965662607667890256) root 0xefa26000: 1 privileged run(s) (0x10000 bytes) withheld — a user twin
+kf3: maplog t=243542.994020 walk#2226 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x12010f000 len=0x10000 at=0x23974f000 ap=2 kind=0x0 ack=0
+kf3: maplog t=243542.994020 walk#2226 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x12011f000 len=0x11d000 at=0xece49000 ap=0 kind=0x0 ack=0
+kf3: VasKey(13965662607667890256) root 0xefa26000: 2 privileged run(s) (0x12d000 bytes) withheld — a user twin
+kf3: maplog t=243542.994330 walk#2227 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x12010f000 len=0x10000 at=0x23974f000 ap=2 kind=0x0 ack=0
+kf3: maplog t=243542.994330 walk#2227 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x12011f000 len=0x11d000 at=0xece49000 ap=0 kind=0x0 ack=0
+kf3: maplog t=243542.994330 walk#2227 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x12023c000 len=0x5000 at=0xefa14000 ap=0 kind=0x0 ack=1
+kf3: VasKey(13965662607667890256) root 0xefa26000: 2 privileged run(s) (0x12d000 bytes) withheld — a user twin
+kf3: maplog t=243542.995042 walk#2229 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x12010f000 len=0x10000 at=0x23974f000 ap=2 kind=0x0 ack=0
+kf3: maplog t=243542.995042 walk#2229 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x12011f000 len=0x11d000 at=0xece49000 ap=0 kind=0x0 ack=0
+kf3: maplog t=243542.995042 walk#2229 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x120250000 len=0x80000 at=0xed1a0000 ap=0 kind=0x0 ack=1
+kf3: VasKey(13965662607667890256) root 0xefa26000: 2 privileged run(s) (0x12d000 bytes) withheld — a user twin
+kf3: maplog t=243542.997105 walk#2230 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x12010f000 len=0x10000 at=0x23974f000 ap=2 kind=0x0 ack=0
+kf3: maplog t=243542.997105 walk#2230 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x12011f000 len=0x11d000 at=0xece49000 ap=0 kind=0x0 ack=0
+kf3: maplog t=243542.997105 walk#2230 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x120241000 len=0x3000 at=0xefa65000 ap=0 kind=0x0 ack=0
+kf3: VasKey(13965662607667890256) root 0xefa26000: 3 privileged run(s) (0x130000 bytes) withheld — a user twin
+kf3: maplog t=243543.003250 walk#2250 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x12010f000 len=0x10000 at=0x23974f000 ap=2 kind=0x0 ack=0
+kf3: maplog t=243543.003250 walk#2250 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x12011f000 len=0x11d000 at=0xece49000 ap=0 kind=0x0 ack=0
+kf3: maplog t=243543.003250 walk#2250 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x120241000 len=0x3000 at=0xefa65000 ap=0 kind=0x0 ack=0
+kf3: maplog t=243543.003250 walk#2250 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x124000000 len=0x25f0000 at=0xed2a0000 ap=0 kind=0x0 ack=0
+kf3: VasKey(13965662607667890256) root 0xefa26000: 4 privileged run(s) (0x2720000 bytes) withheld — a user twin
+kf3: maplog t=243543.003698 walk#2251 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x12010f000 len=0x10000 at=0x23974f000 ap=2 kind=0x0 ack=0
+kf3: maplog t=243543.003698 walk#2251 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x12011f000 len=0x11d000 at=0xece49000 ap=0 kind=0x0 ack=0
+kf3: maplog t=243543.003698 walk#2251 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x120241000 len=0x3000 at=0xefa65000 ap=0 kind=0x0 ack=0
+kf3: maplog t=243543.003698 walk#2251 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x1202d0000 len=0x20000 at=0xef890000 ap=0 kind=0x0 ack=0
+kf3: maplog t=243543.003698 walk#2251 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x124000000 len=0x25f0000 at=0xed2a0000 ap=0 kind=0x0 ack=0
+kf3: VasKey(13965662607667890256) root 0xefa26000: 5 privileged run(s) (0x2740000 bytes) withheld — a user twin
+kf3: maplog t=243543.004111 walk#2252 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x12010f000 len=0x10000 at=0x23974f000 ap=2 kind=0x0 ack=0
+kf3: maplog t=243543.004111 walk#2252 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x12011f000 len=0x11d000 at=0xece49000 ap=0 kind=0x0 ack=0
+kf3: maplog t=243543.004111 walk#2252 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x120241000 len=0x3000 at=0xefa65000 ap=0 kind=0x0 ack=0
+kf3: maplog t=243543.004111 walk#2252 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x1202d0000 len=0xa0000 at=0xef890000 ap=0 kind=0x0 ack=0
+kf3: maplog t=243543.004111 walk#2252 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x124000000 len=0x25f0000 at=0xed2a0000 ap=0 kind=0x0 ack=0
+kf3: VasKey(13965662607667890256) root 0xefa26000: 5 privileged run(s) (0x27c0000 bytes) withheld — a user twin
+kf3: maplog t=243543.009166 walk#2253 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x12010f000 len=0x10000 at=0x23974f000 ap=2 kind=0x0 ack=0
+kf3: maplog t=243543.009166 walk#2253 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x12011f000 len=0x11d000 at=0xece49000 ap=0 kind=0x0 ack=0
+kf3: maplog t=243543.009166 walk#2253 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x120241000 len=0x3000 at=0xefa65000 ap=0 kind=0x0 ack=0
+kf3: maplog t=243543.009166 walk#2253 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x120244000 len=0x1000 at=0x2394cb000 ap=2 kind=0x0 ack=1
+kf3: maplog t=243543.009166 walk#2253 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x1202d0000 len=0xa0000 at=0xef890000 ap=0 kind=0x0 ack=0
+kf3: maplog t=243543.009166 walk#2253 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x124000000 len=0x25f0000 at=0xed2a0000 ap=0 kind=0x0 ack=0
+kf3: VasKey(13965662607667890256) root 0xefa26000: 5 privileged run(s) (0x27c0000 bytes) withheld — a user twin
+kf3: display: the guest armed its first head at +11221 ms — the boot layer is retired after 161 boot frame(s)
+kf3: maplog t=243543.021922 walk#2256 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x12010f000 len=0x10000 at=0x23974f000 ap=2 kind=0x0 ack=0
+kf3: maplog t=243543.021922 walk#2256 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x12011f000 len=0x11d000 at=0xece49000 ap=0 kind=0x0 ack=0
+kf3: maplog t=243543.021922 walk#2256 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x120241000 len=0x3000 at=0xefa65000 ap=0 kind=0x0 ack=0
+kf3: maplog t=243543.021922 walk#2256 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x1202d0000 len=0xa0000 at=0xef890000 ap=0 kind=0x0 ack=0
+kf3: maplog t=243543.021922 walk#2256 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x124000000 len=0x25f0000 at=0xed2a0000 ap=0 kind=0x0 ack=0
+kf3: VasKey(13965662607667890256) root 0xefa26000: 5 privileged run(s) (0x27c0000 bytes) withheld — a user twin
+kf3: maplog t=243543.022509 walk#2257 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x12010f000 len=0x10000 at=0x23974f000 ap=2 kind=0x0 ack=0
+kf3: maplog t=243543.022509 walk#2257 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x12011f000 len=0x11d000 at=0xece49000 ap=0 kind=0x0 ack=0
+kf3: maplog t=243543.022509 walk#2257 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x120241000 len=0x3000 at=0xefa65000 ap=0 kind=0x0 ack=0
+kf3: maplog t=243543.022509 walk#2257 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x1202d0000 len=0xa0000 at=0xef890000 ap=0 kind=0x0 ack=0
+kf3: maplog t=243543.022509 walk#2257 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x124000000 len=0x25f0000 at=0xed2a0000 ap=0 kind=0x0 ack=0
+kf3: VasKey(13965662607667890256) root 0xefa26000: 5 privileged run(s) (0x27c0000 bytes) withheld — a user twin
+kf3: maplog t=243543.024841 walk#2258 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x12010f000 len=0x10000 at=0x23974f000 ap=2 kind=0x0 ack=0
+kf3: maplog t=243543.024841 walk#2258 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x12011f000 len=0x11d000 at=0xece49000 ap=0 kind=0x0 ack=0
+kf3: maplog t=243543.024841 walk#2258 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x120241000 len=0x3000 at=0xefa65000 ap=0 kind=0x0 ack=0
+kf3: maplog t=243543.024841 walk#2258 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x1202d0000 len=0xa0000 at=0xef890000 ap=0 kind=0x0 ack=0
+kf3: maplog t=243543.024841 walk#2258 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x124000000 len=0x25f0000 at=0xed2a0000 ap=0 kind=0x0 ack=0
+kf3: VasKey(13965662607667890256) root 0xefa26000: 5 privileged run(s) (0x27c0000 bytes) withheld — a user twin
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x10000 len=0x6000 at=0x21f19f000 ap=3 kind=0x6 ack=0
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x16000 len=0x1000 at=0x239426000 ap=2 kind=0x6 ack=0
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0xa70000 len=0x80000 at=0x224900000 ap=2 kind=0x6 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0xaf0000 len=0x70000 at=0x224990000 ap=2 kind=0x6 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0xb60000 len=0x10000 at=0x204950000 ap=2 kind=0x6 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0xb70000 len=0xa0000 at=0x204800000 ap=2 kind=0x6 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0xc10000 len=0x600000 at=0x114600000 ap=2 kind=0x6 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x1210000 len=0x1000 at=0x135d86000 ap=2 kind=0x6 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x1211000 len=0x1000 at=0x135d85000 ap=2 kind=0x6 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x1212000 len=0x1000 at=0x135d84000 ap=2 kind=0x6 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x1213000 len=0x1000 at=0x239483000 ap=2 kind=0x6 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x1214000 len=0x1000 at=0x239482000 ap=2 kind=0x6 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x1215000 len=0x1000 at=0x239481000 ap=2 kind=0x6 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x1216000 len=0x1000 at=0x138180000 ap=2 kind=0x6 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x1217000 len=0x1000 at=0x237b7f000 ap=2 kind=0x6 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x1218000 len=0x1000 at=0x135d7e000 ap=2 kind=0x6 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x1219000 len=0x40000 at=0x2048c0000 ap=2 kind=0x6 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x12010f000 len=0x10000 at=0x23974f000 ap=2 kind=0x0 ack=0
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x12011f000 len=0x11d000 at=0xece49000 ap=0 kind=0x0 ack=0
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x120241000 len=0x3000 at=0xefa65000 ap=0 kind=0x0 ack=0
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x10000010000 len=0x6000 at=0x21f19f000 ap=3 kind=0x6 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x10000016000 len=0x1000 at=0x239426000 ap=2 kind=0x6 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x10000a70000 len=0x80000 at=0x224900000 ap=2 kind=0x6 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x10000af0000 len=0x70000 at=0x224990000 ap=2 kind=0x6 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x10000b60000 len=0x10000 at=0x204950000 ap=2 kind=0x6 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x10000b70000 len=0xa0000 at=0x204800000 ap=2 kind=0x6 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x10000c10000 len=0x600000 at=0x114600000 ap=2 kind=0x6 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x10001210000 len=0x1000 at=0x135d86000 ap=2 kind=0x6 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x10001211000 len=0x1000 at=0x135d85000 ap=2 kind=0x6 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x10001212000 len=0x1000 at=0x135d84000 ap=2 kind=0x6 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x10001213000 len=0x1000 at=0x239483000 ap=2 kind=0x6 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x10001214000 len=0x1000 at=0x239482000 ap=2 kind=0x6 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x10001215000 len=0x1000 at=0x239481000 ap=2 kind=0x6 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x10001216000 len=0x1000 at=0x138180000 ap=2 kind=0x6 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x10001217000 len=0x1000 at=0x237b7f000 ap=2 kind=0x6 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x10001218000 len=0x1000 at=0x135d7e000 ap=2 kind=0x6 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x10001219000 len=0x40000 at=0x2048c0000 ap=2 kind=0x6 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x10120002000 len=0x10000 at=0xea5d0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x10120012000 len=0x1000 at=0xea5c0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x10120013000 len=0x2000 at=0xea5e0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x10120015000 len=0xaf000 at=0xea5f0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x101200c4000 len=0x18000 at=0x239505000 ap=3 kind=0x0 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x101200dc000 len=0x5000 at=0x239522000 ap=3 kind=0x0 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x101200e1000 len=0x16000 at=0x2394ef000 ap=3 kind=0x0 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x101200f7000 len=0x18000 at=0x2394d7000 ap=3 kind=0x0 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x1012010f000 len=0x10000 at=0x23974f000 ap=2 kind=0x0 ack=0
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x1012011f000 len=0x11d000 at=0xece49000 ap=0 kind=0x0 ack=0
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x1012023c000 len=0x5000 at=0xefa14000 ap=0 kind=0x0 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x10120241000 len=0x3000 at=0xefa65000 ap=0 kind=0x0 ack=0
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x10120244000 len=0x1000 at=0x2394cb000 ap=2 kind=0x0 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0xa00000 len=0x70000 at=0xc00000 ap=0 kind=0x6 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x1202d0000 len=0xa0000 at=0xef890000 ap=0 kind=0x0 ack=0
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x124000000 len=0x25f0000 at=0xed2a0000 ap=0 kind=0x0 ack=0
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x10000a00000 len=0x70000 at=0xc00000 ap=0 kind=0x6 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x10120250000 len=0x80000 at=0xed1a0000 ap=0 kind=0x0 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x101202d0000 len=0xa0000 at=0xef890000 ap=0 kind=0x0 ack=0
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x10124000000 len=0x25f0000 at=0xed2a0000 ap=0 kind=0x0 ack=0
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x200000 len=0x800000 at=0x400000 ap=0 kind=0x6 ack=1
+kf3: maplog t=243543.033468 walk#2265 VasKey(13965662607667890256) root 0xefa26000 MAP va=0x10000200000 len=0x800000 at=0x400000 ap=0 kind=0x6 ack=1
+kf3: VasKey(13965662607667890256) root 0xefa26000: 10 privileged run(s) (0x4f80000 bytes) withheld — a user twin
+kf3: mem t=11.247s REFUSED VasKey(13965662607667890256) root 0xefa26000: 2 run(s) not applied: map 0x10000+0x6000: Other(31)
+kf3: chan token 0xe (host 0x64) USERD relay: GP_PUT 0x2 forwarded and rung (#1) — no GP entry or push-buffer word read
+kf3: chan token 0xe (host 0x64) USERD relay: GP_PUT 0x3 forwarded and rung (#2) — no GP entry or push-buffer word read
+kf3: chan token 0xe (host 0x64) USERD relay released: forwarded=2 refused=0 gets=2 last_put=3 guest[GP_PUT=Some(3) GP_GET=Some(1)] host[GP_PUT=Some(3) GP_GET=Some(1)]

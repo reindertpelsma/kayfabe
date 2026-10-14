@@ -1,0 +1,49 @@
+# Delegated decisions, 2026-10-10
+
+**STATUS: LIVE, 2026-10-10.** The owner left the open decisions of the integration phase to the
+coordinator ("you decide what is best so it is at least correct in all cases"). They are decided
+here with the reasoning. The owner may overturn any of them; each says what that would cost.
+The rule used for all of them: the STOCK install (no host kernel patch) must be correct in every
+case; a patched host is an optional better tier (`design/V3_HOST_PATCH_LIST.md`).
+
+| # | Question | Decision | Why | Status |
+|---|---|---|---|---|
+| D1 | A split big leaf outside reservations: 4 KiB grain or a micro reservation per row | Both, in this order: a micro reservation sized to the row when host RM accepts it; otherwise 4 KiB grain (one host mapping per 4 KiB page). Never re-make a kept mapping. | The owner invariant is that an unchanged VA is never unmapped during a refresh. 4 KiB grain depends on no RM partial-unmap semantics, so it is the always-correct floor; the reservation keeps big PTEs and costs 2 calls per row. | implemented on `claude/batched-map-decisions-20261010` (see its report) |
+| D2 | Act-thread ledger locks vs the no-stall rule | Accept, on conditions: no ledger lock is held across a host call, a syscall, logging or an allocation proportional to n; critical sections are bounded and chunked; a test asserts the bound. | The alternative, a steer request answered by the VA thread, makes the act thread wait on the VA thread, which is strictly worse. | same branch |
+| D3 | `KF3_BATCH_MICRO_RESERVE` default | On. A refused reservation falls back to D1's 4 KiB floor. The reserve probe becomes a gate. | Without it a row above 2^20 pieces is refused by name (a correctness hole). The probe passed at 6fafcc6e (measured); the unexplained `nv01-control` mismatch concerns the NV01 path we avoid, so it does not block this. Re-measure on `459da55d` and on every driver version. | same branch; gate not yet run |
+| D4 | Which class-B behaviour flags to hardwire next | All class-B flags that the production profile needs, in the inventory §9 order, but only after the TDR fix lands (it may change the set) and the Linux regression passes. Flags that carry a captured table (`KF3_DISPLAY_CAPS_PROBE`, `KF3_GFX_POOL_PROBE`, the `KF3_DISPLAY_CTRL_PROBE` echo) are re-derived from ogkm / host controls first; they are never hardwired as written. Windows-only behaviour is keyed on the guest's own declared state, not a flag. | `V3_FLAG_INVENTORY.md` rules + derive-never-capture. | not started |
+| D5 | Fixed broker (`/opt/nvkvm-broker-next`, 9b5f64b) as the `interactive.sh` default | Yes, after `broker_lane.sh` passes and the owner has had the Linux desktop on it. | It carries bug fixes (branch `kf-broker-fixes-20261008`); the old broker stays reachable by an explicit path. | waiting for the Linux retest |
+| D6 | `claude/vfio-refusal-ablation-20261009` | Stays unmerged (diagnostic only; conflicts on `tools/vfio-gsp-observer`). The branch is kept as the archive. | Merging adds a conflicting old tool to the product tree for no product value. | closed |
+| D7 | H5 scope (what the `OWNER_RULINGS.md` §AB.2 'USERD exception' covers) | The exception covers ONLY a host-side DMA address-size constraint on the memory a guest declares as USERD (the 40-bit USERD pointer field of the runlist entry). It maps nothing into any GPU VA space; Passthrough spaces still hold only guest-PT-leaf mappings. Preferred implementation: option (a), a per-allocation 40-bit constraint for USERD memory (narrow); option (b), capping the whole device mask at 40 bits, only if (a) cannot be located. Relaxing the software size check is forbidden (it truncates the pointer). | The patch list shows the check mirrors a 40-bit hardware field, so the fix must make the DMA address fit; (a) has the smaller blast radius. Detected at runtime by the capability query; stock path stays the USERD relay. | decided; patch written and build-only verified at 595.91.07 (`design/V3_H5_USERD_DMA_PATCH.md`, `tools/host_patches/h5_userd_dma/`); (a) located, built per OS-descriptor allocation, not USERD-recognised in the kernel (§2.3 there); never loaded; the kayfabe behaviour is not enabled |
+
+## Standing follow-ups the owner asked for
+
+- **Host kernel patch tier**: the optional enhancements (exact partial unmap, in-kernel doorbell,
+  USERD-in-sysmem fix, uvm managed memory, mdev shim) are to be implemented as a host kernel module
+  patch. Plan: `design/V3_HOST_PATCH_LIST.md`.
+- **Windows app matrix**: the app matrix must eventually also run on Windows guests. A Windows lane
+  needs a working Windows run first (the TDR hunt, branch `claude/tdr-hunt-20261010`), an app
+  inventory, and the scripted sign-in harness brought into git.
+- **Models**: `OWNER_RULINGS.md` §AC.
+
+## WARNING: integration at `aeda9ffd`..`d44f70cd` carries a known-bad D1-D3 implementation
+
+The first batched-map decisions code (merged as `aeda9ffd`) failed two independent reviews and, on
+hardware, produced host Xid 31 FAULT_PTE (7 in 3 Windows runs, 272-274; e.g. CE3 reads at VA
+0x04036000), against 0 in the 12 runs before it and 0 in run 275 on the fixed code (measured, TDR
+hunt README). Do not validate or benchmark integration heads in this range. The fix is on
+`claude/batched-map-decisions-20261010` and is merged into integration only after a review passes.
+
+**Resolved 2026-10-10:** integration is at `11b67100` (the batched-map decisions code after four
+independent reviews; the fourth said MERGE-OK for integration, with residuals being fixed in a
+follow-up). The warning above applies to heads from `aeda9ffd` up to, not including, `11b67100`.
+Not yet run on hardware: gates 9/9 + gate 10, fast suite 30/30, Windows production profile.
+
+## D8 (owner, 2026-10-11): the raw RM client is not ported to Windows
+
+The 30-arm raw client (`kayfabe-rm-ladder`, used by `scripts/fastguest/`) talks to the Linux RM device interface directly (`/dev/nvidiactl`
+ioctls). Windows offers no equivalent to a user-mode program (RM is reached only through the kernel-mode driver), so it is not ported and
+will not be (a signed kernel driver would be needed). Coverage on Windows is by: the stock driver's own behaviour (boot, sign-in, Edge,
+video), the CUDA probes (`cup2/cup3/cup8`), the D3D/Vulkan/OpenGL probes (`kf_dxprobe`, `kf_glgears`, `kf_overlayprobe`), the Windows app
+matrix, and the guest event log + kayfabe's own refusal counters. The RM-emulation arms themselves are OS-independent GSP RPC logic and keep
+running in the Linux guest and host lanes (fast suite 30/30, ladder). Hostile-guest tests that need raw RM calls stay Linux-only.

@@ -1,0 +1,2 @@
+HYPOTHESIS H-PLANE-LINUX: kf3 bf510bdf completes every Linux nvidia-drm overlay flip (RGB/YUV, plane-only, combined, scaled, toggled) within one frame like the primary.
+FALSIFIER: an overlay series with a timeout, or >5% events later than one frame+2ms, or vblank-sequence steps >1, while primary-flip passes in the same run.

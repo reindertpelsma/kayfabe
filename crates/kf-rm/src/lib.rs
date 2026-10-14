@@ -19,10 +19,12 @@ pub mod census;
 pub mod chanlink;
 pub mod defapi;
 pub mod display;
+pub mod display_ctrl_probe;
 pub mod faultbuffer;
 pub mod fecstrace;
 mod gfxpool_probe;
 pub mod gpuuid;
+pub mod gssnative;
 pub mod guestsysinfo;
 pub mod hostfacts;
 pub mod hostquery;
@@ -30,7 +32,10 @@ pub mod hoststub;
 pub mod inert;
 pub mod inittables;
 pub mod memory_list;
+pub mod memory_access;
 pub mod osevent;
+pub mod pmsr;
+pub mod preempt_bind_probe;
 pub mod rmgraph;
 pub mod rmrpc;
 pub mod rpc;
@@ -310,6 +315,17 @@ impl ReselectAtFn1 {
         self.current
     }
 
+    /// ★ Device reset (`docs/design/V3_DEVICE_RESET.md`): a FRESH chain built for the provisional
+    /// (realize-time) table, exactly as [`Self::new`] built it — every link's per-life state (the
+    /// object graph, channel/TSG/VA-space rows, display registry, sticky guards) goes with the old
+    /// chain. The shared state the recipe closes over (logs, census, inboxes, the display model) is
+    /// the device's to reset. The next life's fn 1 re-selects as the first life's did — a guest that
+    /// rebooted into another driver version is served as that version.
+    pub fn reset_life(&mut self) {
+        self.inner = (self.build)(self.provisional);
+        self.current = self.provisional.driver_version();
+    }
+
     /// Decide at fn 1. Returns what happened, for the log and for tests.
     pub fn on_fn1(&mut self, payload: &[u8]) -> Reselection {
         // ★ 2026-10-04 (v3-windows, C2): a Windows build is keyed as the driver-matrix tag whose
@@ -473,7 +489,8 @@ pub fn served_chain(
         console,
     } = links;
     let mut static_info = staticinfo::StaticInfoPolicy::new(board.clone(), driver)
-        .with_engine_caps(authored::engine_caps(&host.engines));
+        .with_engine_caps(authored::engine_caps(&host.engines))
+        .with_gr_caps(host.gr_static.caps);
     if let Some(seat) = console {
         static_info = static_info.with_console(seat);
     }
@@ -510,6 +527,60 @@ pub fn served_chain(
             sw_runlist_host::FLAG
         );
     }
+    // ⚠ PROBE (default off): H-preempt-bind, 2026-10-08 — `preempt_bind_probe.rs`. Answers
+    // `GR_CTXSW_PREEMPTION_BIND` NV_OK with nothing sent to the host; never a shipped behaviour.
+    if preempt_bind_probe::enabled() {
+        chain.push(Box::new(preempt_bind_probe::PreemptBindProbe::new(driver)));
+        eprintln!(
+            "kf-rm: PROBE {}=1: GR_CTXSW_PREEMPTION_BIND answered NV_OK, NOTHING bound on the host (H-preempt-bind probe, not a shipped behaviour)",
+            preempt_bind_probe::FLAG
+        );
+    }
+    if preempt_bind_probe::zcull_enabled() {
+        chain.push(Box::new(preempt_bind_probe::ZcullBindProbe::new(driver)));
+        eprintln!(
+            "kf-rm: PROBE {}=1: a cross-client GR_CTXSW_ZCULL_BIND answered NV_OK, NOTHING bound on the host (probe, not a shipped behaviour)",
+            preempt_bind_probe::ZCULL_FLAG
+        );
+    }
+    // ⚠ PROBE (default off): H-modeset, 2026-10-08 — `display_ctrl_probe.rs`.
+    if display_ctrl_probe::enabled() {
+        chain.push(Box::new(display_ctrl_probe::DisplayCtrlProbe::new(driver)));
+        eprintln!(
+            "kf-rm: PROBE {}=1: six NV0073 controls answered NV_OK with the request echoed (H-modeset probe, not a shipped behaviour)",
+            display_ctrl_probe::FLAG
+        );
+    }
+    // ⚠ PROBE (default off): H-commit, 2026-10-08 — the two unnamed commit-time controls
+    // (`display_ctrl_probe::DisplayPrivateProbe`, `traces/display_reply_diff_20261008/`).
+    if display_ctrl_probe::private_enabled() {
+        chain.push(Box::new(display_ctrl_probe::DisplayPrivateProbe::new(
+            driver,
+        )));
+        eprintln!(
+            "kf-rm: PROBE {}=1: NV0073 0x00730122 / 0x00730128 answered with the real GPU's measured reply (H-commit probe, not a shipped behaviour)",
+            display_ctrl_probe::PRIVATE_FLAG
+        );
+    }
+    // ⚠ PROBE (default off): H-hdmi / H-xbar, 2026-10-09 — the connector identity and HDMI path,
+    // the crossbar caps and `DFP_ASSIGN_SOR` (`display_ctrl_probe::DisplayTopologyProbe`). Ahead of
+    // the display link, so its identity answers replace the model's while the probe is on.
+    let (hdmi, xbar) = (
+        display_ctrl_probe::hdmi_enabled(),
+        display_ctrl_probe::xbar_enabled(),
+    );
+    if hdmi || xbar {
+        chain.push(Box::new(display_ctrl_probe::DisplayTopologyProbe::new(
+            driver, hdmi, xbar,
+        )));
+        eprintln!(
+            "kf-rm: PROBE {}={} {}={}: connector identity / HDMI path and crossbar caps / DFP_ASSIGN_SOR answered with the real GPU's measured replies (H-hdmi / H-xbar probe, not a shipped behaviour)",
+            display_ctrl_probe::HDMI_FLAG,
+            u8::from(hdmi),
+            display_ctrl_probe::XBAR_FLAG,
+            u8::from(xbar)
+        );
+    }
     if std::env::var("KF3_MEMORY_LIST_PROBE").as_deref() == Ok("1")
         && let Some(policy) = objects.take()
     {
@@ -527,7 +598,7 @@ pub fn served_chain(
         eprintln!(
             "kf-rm: EXPERIMENT virtual GfxP pool sizing enabled; lifecycle is not implemented"
         );
-        chain.push(Box::new(gfxpool_probe::GfxPoolProbe { driver }));
+        chain.push(Box::new(gfxpool_probe::GfxPoolProbe { driver, served: 0 }));
     }
     // ★ v3-display: the display link claims only its own controls, so its place is a matter of
     // which link answers first; it goes first so no other link's refusal can shadow it.
@@ -570,7 +641,11 @@ pub fn served_chain(
         )));
         chain.push(Box::new(barpde::BarPdePolicy::new(sink)));
     }
-    chain.extend::<[Box<dyn kf_gsp::CommandPolicy>; 8]>([
+    chain.extend::<[Box<dyn kf_gsp::CommandPolicy>; 9]>([
+        // ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`): the FBSR save's registration of GSP-RM's
+        // suspend buffer, its FREE, `FBSR_INIT` and the PM-transition scheduling toggle — answered,
+        // nothing on the host (`pmsr.rs`). Ahead of the object seat, which would refuse fn 4.
+        Box::new(pmsr::PmSuspendResumePolicy::new(driver)),
         // ★ v3-gfx: the per-VM ZBC table — claims only `0x9096xxxx` controls, answers them from
         // its own state and never forwards (`zbc.rs`).
         Box::new(zbc::ZbcPolicy::new(driver, host.zbc_table_sizes)),

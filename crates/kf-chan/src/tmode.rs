@@ -37,9 +37,12 @@ use kf_abi::submit::{MethodForm, ce, fifo, method_header_decode, method_header_i
 use kf_host::MapPerm;
 
 /// At most this many pieces per launch (§3.4); a launch that would need more is refused by name.
-pub const MAX_PIECES: usize = 64;
+pub const MAX_PIECES: usize = 4096;
 /// The output cap per pushed piece (§3.5): far below the host ring's half-pushbuffer limit.
 pub const CHUNK_BYTES: usize = 64 << 10;
+/// Maximum operand bytes resolved for one submitted part of a single-line copy.
+/// At 4 KiB mapping granularity the union of both sides has at most 258 spans.
+pub const COPY_SLICE_BYTES: u64 = 512 << 10;
 
 /// One resolved span of a guest VA range: its backing (`ram` = the guest memfd, else the store),
 /// the backing offset, the bytes, and the guest leaf's permission.
@@ -239,6 +242,25 @@ pub struct HostSem {
     pub form: HostSemForm,
 }
 
+/// ★ 2026-10-14 — one video-engine semaphore operation, unbound ([`crate::vtables`]): the guest VA
+/// is resolved at bind through the placement rows and emitted by the perimeter
+/// ([`crate::tspace_unsafe::put_video_semaphore`]); the payloads are data, re-emitted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct VideoSem {
+    /// The subchannel (0-4).
+    pub sub: u32,
+    /// The channel's video class (the table the perimeter emits from).
+    pub class: u32,
+    /// The guest VA (`SEMAPHORE_A` `UPPER` and `SEMAPHORE_B`).
+    pub va: u64,
+    /// `SEMAPHORE_C`.
+    pub payload: u32,
+    /// `SET_SEMAPHORE_PAYLOAD_LOWER` / `_UPPER`, once the guest set either.
+    pub payload64: Option<(u32, u32)>,
+    /// `SEMAPHORE_D`, decoded against the class's own fields.
+    pub d: crate::vtables::VideoSemD,
+}
+
 /// ★ The unbound IR (§3.5).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Ir {
@@ -260,6 +282,8 @@ pub enum Ir {
         /// The bytes the engine may write there.
         bytes: u64,
     },
+    /// ★ 2026-10-14 — the VIDEO tier ([`crate::vtables`]): a video-engine semaphore operation.
+    VideoSem(VideoSem),
     /// The guest invalidated a VA space here (a split; `None` = `PDB_ALL`).
     Invalidate {
         /// The named root.
@@ -335,6 +359,12 @@ pub struct TState {
     pub swobj_binds: u64,
     /// ★ GR tier (batch 2): each GR subchannel's last `ADDRESS_UPPER` (held until its lower word).
     pub gr_addr_hi: [u32; 4],
+    /// ★ VIDEO tier: `SEMAPHORE_A` / `_B` / `_C` as last written.
+    video_sem: (u32, u32, u32),
+    /// ★ VIDEO tier: `SET_SEMAPHORE_PAYLOAD_LOWER` / `_UPPER`, once either was written.
+    video_payload64: Option<(u32, u32)>,
+    /// ★ VIDEO tier: video methods admitted over the channel's life (for the log).
+    pub video_methods: u64,
 }
 
 /// ★ Owner rulings 2026-10-07 (`OWNER_RULINGS.md` §S, items 1-4): what a Translated channel's
@@ -353,20 +383,29 @@ pub struct GrConfig {
     /// 72-82`) — its methods become [`Ir::SwMethod`] splits the runner serves (class 5080) or
     /// refuses by name. Takes precedence over `inert_sw_subch`.
     pub deferred_api: bool,
+    /// ★ 2026-10-14 — the VIDEO tier ([`crate::vtables`]): the ring is on a video engine's
+    /// runlist and its host channel holds an object of this video class (0 = not a video ring).
+    /// Subchannels 0-4 then reach that engine: its methods are decoded against the class's
+    /// derived table instead of the copy engine's.
+    pub video: u32,
 }
 
 #[cfg(test)]
 #[path = "tmode_gr_tests.rs"]
 mod gr_tier_tests;
 
+#[cfg(test)]
+#[path = "tmode_video_tests.rs"]
+mod video_tier_tests;
+
 /// `MEM_OP_D_OPERATION` values (`ogkm-580: src/common/sdk/nvidia/inc/class/clc56f.h:182-193`).
-const OP_MEMBAR: u32 = 5;
-const OP_TLB_INVALIDATE: u32 = 9;
-const OP_TLB_INVALIDATE_TARGETED: u32 = 0xA;
-const OPS_L2: [u32; 6] = [0xD, 0xE, 0xF, 0x10, 0x11, 0x15];
-const OP_ACCESS_COUNTER_CLR: u32 = 0x16;
+pub(crate) const OP_MEMBAR: u32 = 5;
+pub(crate) const OP_TLB_INVALIDATE: u32 = 9;
+pub(crate) const OP_TLB_INVALIDATE_TARGETED: u32 = 0xA;
+pub(crate) const OPS_L2: [u32; 6] = [0xD, 0xE, 0xF, 0x10, 0x11, 0x15];
+pub(crate) const OP_ACCESS_COUNTER_CLR: u32 = 0x16;
 /// `NVC56F_MEM_OP_A_TLB_INVALIDATE_SYSMEMBAR` (11).
-const MEM_OP_A_SYSMEMBAR: u32 = 1 << 11;
+pub(crate) const MEM_OP_A_SYSMEMBAR: u32 = 1 << 11;
 /// `NVC56F_SET_OBJECT_NVCLASS` (15:0).
 const NVCLASS_MASK: u32 = 0xFFFF;
 
@@ -465,6 +504,12 @@ fn one(
             SubKind::Ce
         };
         c.method(st.tier.map_or(0, tier_class), kind, m);
+        // ★ 2026-10-08 (owner question, run64): the T-mode path never recorded the LAUNCH_DMA words,
+        // so a census could not say whether a channel named a PHYSICAL operand (`SRC_TYPE` bit 12,
+        // `DST_TYPE` bit 13). Count-only, as every census entry.
+        if kind == SubKind::Ce && m == ce::LAUNCH_DMA {
+            c.launch(st.tier.map_or(0, tier_class), v);
+        }
     }
     if m < 0x100 {
         let Some(hm) = host_method(m) else {
@@ -513,6 +558,9 @@ fn one(
             subch: sub,
             method: m,
         });
+    }
+    if st.gr.video != 0 {
+        return video_write(out, st, sub, m, v);
     }
     let tier = st.tier.ok_or(Refusal::NoCeObject {
         subch: sub,
@@ -581,6 +629,82 @@ fn one(
             out.push(Ir::Launch(Box::new(ce_launch(st, tier, sub, l)?)));
         }
     }
+    Ok(())
+}
+
+/// ★ 2026-10-14 — the VIDEO tier: one method on a hardware subchannel (0-4) of a video ring,
+/// decoded against the channel's video class's DERIVED table ([`crate::vtables`]). Only the
+/// semaphore rows are admitted; every other method the header names is refused by name, an offset
+/// it does not name is unclassified.
+fn video_write(
+    out: &mut Vec<Ir>,
+    st: &mut TState,
+    sub: u32,
+    m: u32,
+    v: u32,
+) -> Result<(), Refusal> {
+    use crate::vtables::{VideoClass, VideoMethod, decode_semaphore_d, video_method};
+    let class = st.gr.video;
+    let vc = VideoClass::of_class(class).ok_or(Refusal::ForeignClass { subch: sub, class })?;
+    let Some(dm) = video_method(vc, m) else {
+        return Err(Refusal::Unclassified {
+            subch: sub,
+            method: m,
+        });
+    };
+    match dm {
+        VideoMethod::Refused(name) => {
+            return Err(Refusal::VideoMethod {
+                class,
+                subch: sub,
+                method: m,
+                name,
+            });
+        }
+        VideoMethod::Nop => {}
+        VideoMethod::SemA => {
+            let bits = vc.upper_bits().unwrap_or(8);
+            if bits < 32 && v >> bits != 0 {
+                return Err(Refusal::FieldValue {
+                    method: m,
+                    word: v,
+                    what: "SEMAPHORE_A beyond its UPPER field",
+                });
+            }
+            st.video_sem.0 = v;
+        }
+        VideoMethod::SemB => st.video_sem.1 = v,
+        VideoMethod::SemC => st.video_sem.2 = v,
+        VideoMethod::PayloadLower => {
+            st.video_payload64 = Some((v, st.video_payload64.map_or(0, |p| p.1)));
+        }
+        VideoMethod::PayloadUpper => {
+            st.video_payload64 = Some((st.video_payload64.map_or(0, |p| p.0), v));
+        }
+        VideoMethod::SemD => {
+            let d = decode_semaphore_d(vc, v).map_err(|what| Refusal::FieldValue {
+                method: m,
+                word: v,
+                what,
+            })?;
+            if st.video_sem.1 & 3 != 0 {
+                return Err(Refusal::FieldValue {
+                    method: m,
+                    word: st.video_sem.1,
+                    what: "SEMAPHORE_B below bit 2",
+                });
+            }
+            out.push(Ir::VideoSem(VideoSem {
+                sub,
+                class,
+                va: (u64::from(st.video_sem.0) << 32) | u64::from(st.video_sem.1),
+                payload: st.video_sem.2,
+                payload64: st.video_payload64,
+                d,
+            }));
+        }
+    }
+    st.video_methods += 1;
     Ok(())
 }
 
@@ -725,6 +849,15 @@ fn host(
                 st.inert_binds += 1;
                 return Ok(());
             }
+            if st.gr.video != 0 && sub <= 4 {
+                // ★ VIDEO tier: only the ring's own video class binds a hardware subchannel —
+                // authored, the class alone (the host channel holds an object of it from birth).
+                if class != st.gr.video {
+                    return Err(Refusal::ForeignClass { subch: sub, class });
+                }
+                words_ir(out, &[(sub, 0, class)]);
+                return Ok(());
+            }
             if is_ce(class) {
                 let tier =
                     Tier::of_ce_class(class).ok_or(Refusal::ForeignClass { subch: sub, class })?;
@@ -867,7 +1000,7 @@ fn mem_op(out: &mut Vec<Ir>, st: &TState, sub: u32, d: u32) -> Result<(), Refusa
     Err(Refusal::MemOp { op })
 }
 
-fn membar(sub: u32, membar_type: u32) -> [(u32, u32, u32); 4] {
+pub(crate) fn membar(sub: u32, membar_type: u32) -> [(u32, u32, u32); 4] {
     [
         (sub, fifo::MEM_OP_A, 0),
         (sub, fifo::MEM_OP_A + 4, 0),
@@ -1151,6 +1284,24 @@ pub fn bind(ir: &Ir, rows: &dyn Rows, w: &TWindows, out: &mut Vec<u32>) -> Resul
         }
         Ir::HostSem(h) => {
             bind_host_sem(h, rows, w, out)?;
+            Ok(0)
+        }
+        Ir::VideoSem(s) => {
+            // ★ Validated as a guest VA of this channel's space (one writable row covering the
+            // bytes the operation may write), inside the VM's windows; emitted by the perimeter.
+            let a = sema_addr(s.va, s.d.bytes, true, false, rows, w)?;
+            let mut words = Vec::new();
+            crate::tspace_unsafe::put_video_semaphore(
+                &mut words,
+                s.sub,
+                s.class,
+                a,
+                s.payload,
+                s.payload64,
+                s.d.word,
+            )
+            .map_err(perimeter)?;
+            out.extend(words);
             Ok(0)
         }
         Ir::Launch(l) => bind_launch(l, rows, w, out),
@@ -1642,6 +1793,14 @@ pub enum Pushed {
         /// Pushes made before the ring filled.
         pieces: usize,
     },
+    /// A large copy made bounded progress. Its remaining bytes stay unbound,
+    /// and the runner yields before resolving the next part.
+    Yield {
+        /// Remaining items; the first is the unsubmitted tail of the copy.
+        rest: Vec<Ir>,
+        /// Pushes made.
+        pieces: usize,
+    },
     /// ★ Review fix 2026-10-04 (§3.5): an item's virtual operand had NO placement row at bind —
     /// `rest` (that item on) was NOT pushed and stays UNBOUND; everything before it was. The
     /// runner WAITS (a walk pending on the space, or a host acquire ahead of it whose release
@@ -1684,6 +1843,56 @@ pub enum PushError {
     Host(String),
 }
 
+/// Split geometry before resolving rows. Completion/interrupt/flush belongs
+/// only to the tail; its NON_PIPELINED transfer orders it after earlier parts.
+fn slice_launch(l: &CeLaunch) -> Result<Option<(Ir, Ir)>, Refusal> {
+    if l.launch.multi_line || l.launch.transfer == 0 {
+        return Ok(None);
+    }
+    let elem = l.elem.0.max(l.elem.1).max(1);
+    let count = COPY_SLICE_BYTES / elem;
+    let total = u64::from(l.regs.line_len);
+    if total <= count {
+        return Ok(None);
+    }
+    let mut head = l.clone();
+    let mut tail = l.clone();
+    head.regs.line_len = u32::try_from(count).map_err(|_| Refusal::ExtentOverflow)?;
+    tail.regs.line_len -= head.regs.line_len;
+    let split_side = |side: Option<(Operand, u64)>, size: u64| {
+        let Some((op, bytes)) = side else {
+            return Ok((None, None));
+        };
+        let used = count.checked_mul(size).ok_or(Refusal::ExtentOverflow)?;
+        let remaining = bytes.checked_sub(used).ok_or(Refusal::ExtentOverflow)?;
+        let next = match op {
+            Operand::Virtual(va) => {
+                Operand::Virtual(va.checked_add(used).ok_or(Refusal::ExtentOverflow)?)
+            }
+            Operand::Physical(t, at) => {
+                Operand::Physical(t, at.checked_add(used).ok_or(Refusal::ExtentOverflow)?)
+            }
+        };
+        Ok::<_, Refusal>((Some((op, used)), Some((next, remaining))))
+    };
+    (head.src, tail.src) = split_side(l.src, l.elem.0)?;
+    (head.dst, tail.dst) = split_side(l.dst, l.elem.1)?;
+    head.sema = None;
+    head.launch.sema = 0;
+    head.launch.intr = 0;
+    head.launch.flush = false;
+    head.launch.flush_gl = false;
+    head.launch.reduction_enable = false;
+    head.launch.reduction = 0;
+    head.launch.reduction_unsigned = false;
+    head.launch.payload_two_word = false;
+    tail.launch.transfer = 2;
+    Ok(Some((
+        Ir::Launch(Box::new(head)),
+        Ir::Launch(Box::new(tail)),
+    )))
+}
+
 /// ★★ **Bind at submit** (§3.5): bind `items` one at a time against `rows` AS THEY ARE NOW, cut the
 /// output into pieces of at most [`CHUNK_BYTES`], and hand each piece to `push` (`Ok(true)` = taken,
 /// `Ok(false)` = the ring is full). A piece the ring refuses is NOT kept bound: its items are
@@ -1707,7 +1916,12 @@ pub fn push_bound(
     while i < items.len() {
         let mut words = Vec::new();
         let mut r = Vec::new();
-        match bind_rec(&items[i], rows, w, &mut words, &mut r) {
+        let split = match &items[i] {
+            Ir::Launch(l) => slice_launch(l).map_err(PushError::Refused)?,
+            _ => None,
+        };
+        let item = split.as_ref().map_or(&items[i], |(head, _)| head);
+        match bind_rec(item, rows, w, &mut words, &mut r) {
             Ok(_) => {}
             Err(why @ Refusal::VirtualUnresolved { .. }) => {
                 // ★ Push what is bound before it; hand the rest back UNBOUND (§3.5).
@@ -1743,6 +1957,19 @@ pub fn push_bound(
         }
         cur.extend(words);
         cur_rec.extend(r);
+        if let Some((_, tail)) = split {
+            if !push(&cur).map_err(PushError::Host)? {
+                return Ok(Pushed::Busy {
+                    rest: items[cur_first..].to_vec(),
+                    pieces,
+                });
+            }
+            pieces += 1;
+            rec.append(&mut cur_rec);
+            let mut rest = items[i..].to_vec();
+            rest[0] = tail;
+            return Ok(Pushed::Yield { rest, pieces });
+        }
         i += 1;
     }
     if !cur.is_empty() {

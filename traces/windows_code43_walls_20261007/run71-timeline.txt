@@ -1,0 +1,83 @@
+kf-rm: chanlink: CLASSIFY 0xc1e00007:0xbaba0045 kernel work -> Translated (an RM-internal client)
+kf-rm: chanlink: CLASSIFY 0xc1e00008:0x2 kernel work -> Translated (an RM-internal client)
+kf-rm: chanlink: CLASSIFY 0xc1d00013:0xff040000 kernel work -> Translated (the kernel driver's own process)
+kf-rm: chanlink: CLASSIFY 0xc1d00015:0xff040001 kernel work -> Translated (no context share (the kernel driver's own channels declare none))
+kf-rm: chanlink: CLASSIFY 0xc1d00016:0xff040002 kernel work -> Translated (the kernel driver's own process)
+kf-rm: chanlink: CLASSIFY 0xc1d00018:0xff040003 kernel work -> Translated (not a graphics or copy engine)
+kf-rm: chanlink: CLASSIFY 0xc1d00019:0xff040004 kernel work -> Translated (the kernel driver's own process)
+kf-rm: chanlink: CLASSIFY 0xc1d0001a:0xff040005 kernel work -> Translated (not a graphics or copy engine)
+kf-rm: chanlink: CLASSIFY 0xc1d0001b:0xff040006 kernel work -> Translated (not a graphics or copy engine)
+kf-rm: chanlink: CLASSIFY 0xc1d0001c:0xff040007 kernel work -> Translated (not a graphics or copy engine)
+kf-rm: chanlink: CLASSIFY 0xc1d0001d:0xff040008 kernel work -> Translated (not a graphics or copy engine)
+kf-rm: chanlink: CLASSIFY 0xc1d00020:0xff040009 kernel work -> Translated (the kernel driver's own process)
+kf-rm: chanlink: CLASSIFY 0xc1d00023:0xff04000a kernel work -> Translated (the kernel driver's own process)
+kf-rm: chanlink: CLASSIFY 0xc1d00024:0xff04000b kernel work -> Translated (no context share (the kernel driver's own channels declare none))
+kf-rm: chanlink: CLASSIFY 0xc1d00027:0xff04000c USER WORK -> Passthrough (subcontext and a process other than the kernel driver's)
+kf3: act birth passthrough: chan 0xc1d00027:0xff04000c BORN Passthrough: token 0xe -> host 0x64 in VasKey(13965662607667890256) gpfifo=0x1200c4000x32768 userd=Ram { ram: 3405643793, off: 8480092160 } engine=0x1 declared_kernel_pid=false PRIVILEGE=KERNEL WINDOWS-USER-WORK (§V, ProcessID/subcontext) 
+kf3: display: the guest armed its first head at +11714 ms — the boot layer is retired after 173 boot frame(s)
+kf3: display: 1 updates completed, 8589 methods
+kf3: display: 2 updates completed, 8591 methods
+kf3: display: 3 updates completed, 8614 methods
+kf3: display: 4 updates completed, 8617 methods
+kf3: display: 5 updates completed, 8620 methods
+kf3: chan token 0xe (host 0x64) USERD relay: GP_PUT 0x2 forwarded and rung (#1) — no GP entry or push-buffer word read
+kf3: chan token 0xe (host 0x64) USERD relay: GP_PUT 0x3 forwarded and rung (#2) — no GP entry or push-buffer word read
+kf3: chan token 0xe (host 0x64) USERD relay: GP_PUT 0x5 forwarded and rung (#3) — no GP entry or push-buffer word read
+kf3: chan token 0xe (host 0x64) USERD relay: GP_PUT 0x6 forwarded and rung (#4) — no GP entry or push-buffer word read
+kf3: chan token 0xe (host 0x64) USERD relay: GP_PUT 0x9 forwarded and rung (#5) — no GP entry or push-buffer word read
+kf3: chan token 0xe (host 0x64) USERD relay: GP_PUT 0xc forwarded and rung (#6) — no GP entry or push-buffer word read
+kf3: chan token 0xe (host 0x64) USERD relay: GP_PUT 0xf forwarded and rung (#7) — no GP entry or push-buffer word read
+kf3: chan token 0xe (host 0x64) USERD relay: GP_PUT 0x11 forwarded and rung (#8) — no GP entry or push-buffer word read
+kf3: chan token 0xe (host 0x64) USERD relay: GP_PUT 0x1e forwarded and rung (#16) — no GP entry or push-buffer word read
+kf3: chan token 0xe (host 0x64) USERD relay: GP_PUT 0x42 forwarded and rung (#32) — no GP entry or push-buffer word read
+kf3: chan token 0xe (host 0x64) USERD relay: GP_PUT 0x81 forwarded and rung (#64) — no GP entry or push-buffer word read
+kf-rm: chanlink: CLASSIFY 0xc1d0002a:0xff04000d USER WORK -> Passthrough (subcontext and a process other than the kernel driver's)
+kf3: act birth passthrough: chan 0xc1d0002a:0xff04000d BORN Passthrough: token 0xf -> host 0x65 in VasKey(13965662620552792144) gpfifo=0x4000000x8192 userd=Ram { ram: 3405643793, off: 8480083968 } engine=0x1 declared_kernel_pid=false PRIVILEGE=KERNEL WINDOWS-USER-WORK (§V, ProcessID/subcontext) rc=
+kf-rm: chanlink: CLASSIFY 0xc1d0002d:0xff04000e USER WORK -> Passthrough (subcontext and a process other than the kernel driver's)
+kf3: act birth passthrough: chan 0xc1d0002d:0xff04000e BORN Passthrough: token 0x1010 -> host 0x20066 in VasKey(13965662620552792144) gpfifo=0x4036000x8192 userd=Ram { ram: 3405643793, off: 8480084480 } engine=0xc declared_kernel_pid=false PRIVILEGE=KERNEL WINDOWS-USER-WORK (§V, ProcessID/subcontex
+kf3: chan token 0xf (host 0x65) USERD relay: GP_PUT 0x24 forwarded and rung (#1) — no GP entry or push-buffer word read
+kf-rm: chanlink: CLASSIFY 0xc1d0002f:0xff04000f USER WORK -> Passthrough (subcontext and a process other than the kernel driver's)
+kf3: act birth passthrough: chan 0xc1d0002f:0xff04000f BORN Passthrough: token 0x11 -> host 0x67 in VasKey(13965662620552792144) gpfifo=0x14533000x8192 userd=Ram { ram: 3405643793, off: 8479866880 } engine=0x1 declared_kernel_pid=false PRIVILEGE=KERNEL WINDOWS-USER-WORK (§V, ProcessID/subcontext) r
+kf-rm: chanlink: CLASSIFY 0xc1d00030:0xff040010 USER WORK -> Passthrough (subcontext and a process other than the kernel driver's)
+kf3: act birth passthrough: chan 0xc1d00030:0xff040010 BORN Passthrough: token 0x1012 -> host 0x20068 in VasKey(13965662620552792144) gpfifo=0x145ea000x8192 userd=Ram { ram: 3405643793, off: 8479867392 } engine=0xc declared_kernel_pid=false PRIVILEGE=KERNEL WINDOWS-USER-WORK (§V, ProcessID/subconte
+kf3: chan token 0x11 (host 0x67) USERD relay: GP_PUT 0x24 forwarded and rung (#1) — no GP entry or push-buffer word read
+kf3: chan token 0x1012 (host 0x20068) USERD relay: GP_PUT 0x10 forwarded and rung (#1) — no GP entry or push-buffer word read
+kf3: chan token 0x11 (host 0x67) USERD relay: GP_PUT 0x50 forwarded and rung (#2) — no GP entry or push-buffer word read
+kf-rm: chanlink: CLASSIFY 0xc1d00031:0xff040011 USER WORK -> Passthrough (subcontext and a process other than the kernel driver's)
+kf3: act birth passthrough: chan 0xc1d00031:0xff040011 BORN Passthrough: token 0x13 -> host 0x69 in VasKey(13965662620552792144) gpfifo=0x14de4000x8192 userd=Ram { ram: 3405643793, off: 8480026624 } engine=0x1 declared_kernel_pid=false PRIVILEGE=KERNEL WINDOWS-USER-WORK (§V, ProcessID/subcontext) r
+kf-rm: chanlink: CLASSIFY 0xc1d00033:0xff040012 USER WORK -> Passthrough (subcontext and a process other than the kernel driver's)
+kf3: act birth passthrough: chan 0xc1d00033:0xff040012 BORN Passthrough: token 0x1014 -> host 0x2006a in VasKey(13965662620552792144) gpfifo=0x15161000x8192 userd=Ram { ram: 3405643793, off: 8480027136 } engine=0xc declared_kernel_pid=false PRIVILEGE=KERNEL WINDOWS-USER-WORK (§V, ProcessID/subconte
+kf3: chan token 0x13 (host 0x69) USERD relay: GP_PUT 0x24 forwarded and rung (#1) — no GP entry or push-buffer word read
+kf3: chan token 0x1014 (host 0x2006a) USERD relay: GP_PUT 0x10 forwarded and rung (#1) — no GP entry or push-buffer word read
+kf3: chan token 0x13 (host 0x69) USERD relay: GP_PUT 0x3e forwarded and rung (#2) — no GP entry or push-buffer word read
+kf-rm: chanlink: CLASSIFY 0xc1d00036:0xff040013 USER WORK -> Passthrough (subcontext and a process other than the kernel driver's)
+kf3: act birth passthrough: chan 0xc1d00036:0xff040013 BORN Passthrough: token 0x15 -> host 0x6b in VasKey(13965662672092399696) gpfifo=0x4000000x8192 userd=Ram { ram: 3405643793, off: 8479641600 } engine=0x1 declared_kernel_pid=false PRIVILEGE=KERNEL WINDOWS-USER-WORK (§V, ProcessID/subcontext) rc
+kf-rm: chanlink: CLASSIFY 0xc1d00037:0xff040014 USER WORK -> Passthrough (subcontext and a process other than the kernel driver's)
+kf3: act birth passthrough: chan 0xc1d00037:0xff040014 BORN Passthrough: token 0x1016 -> host 0x2006c in VasKey(13965662672092399696) gpfifo=0x4036000x8192 userd=Ram { ram: 3405643793, off: 8479642112 } engine=0xc declared_kernel_pid=false PRIVILEGE=KERNEL WINDOWS-USER-WORK (§V, ProcessID/subcontex
+kf3: chan token 0x15 (host 0x6b) USERD relay: GP_PUT 0x24 forwarded and rung (#1) — no GP entry or push-buffer word read
+kf3: chan token 0x1016 (host 0x2006c) USERD relay: GP_PUT 0x10 forwarded and rung (#1) — no GP entry or push-buffer word read
+kf3: chan token 0x15 (host 0x6b) USERD relay: GP_PUT 0x5d forwarded and rung (#2) — no GP entry or push-buffer word read
+kf3: chan token 0x15 (host 0x6b) USERD relay: GP_PUT 0x78 forwarded and rung (#3) — no GP entry or push-buffer word read
+kf3: chan token 0x1016 (host 0x2006c) USERD relay: GP_PUT 0x21 forwarded and rung (#2) — no GP entry or push-buffer word read
+kf3: chan token 0x1016 (host 0x2006c) USERD relay: GP_PUT 0x32 forwarded and rung (#3) — no GP entry or push-buffer word read
+kf3: chan token 0x1016 (host 0x2006c) USERD relay: GP_PUT 0x43 forwarded and rung (#4) — no GP entry or push-buffer word read
+kf3: chan token 0x1016 (host 0x2006c) USERD relay: GP_PUT 0x54 forwarded and rung (#5) — no GP entry or push-buffer word read
+kf3: display: 6 updates completed, 8627 methods
+kf3: display: 7 updates completed, 8636 methods
+kf3: chan token 0xe (host 0x64) USERD relay released: forwarded=98 refused=0 gets=151 last_put=192 guest[GP_PUT=Some(c0) GP_GET=Some(bd)] host[GP_PUT=Some(c0) GP_GET=Some(c0)]
+kf3: chan token 0xf (host 0x65) USERD relay released: forwarded=1 refused=0 gets=1 last_put=36 guest[GP_PUT=Some(24) GP_GET=Some(0)] host[GP_PUT=Some(24) GP_GET=Some(24)]
+kf3: chan token 0x1010 (host 0x20066) USERD relay released: forwarded=0 refused=0 gets=0 last_put=0 guest[GP_PUT=Some(0) GP_GET=Some(0)] host[GP_PUT=Some(0) GP_GET=Some(0)]
+kf3: chan token 0x11 (host 0x67) USERD relay released: forwarded=2 refused=0 gets=2 last_put=80 guest[GP_PUT=Some(50) GP_GET=Some(24)] host[GP_PUT=Some(50) GP_GET=Some(24)]
+kf3: chan token 0x1012 (host 0x20068) USERD relay released: forwarded=1 refused=0 gets=1 last_put=16 guest[GP_PUT=Some(10) GP_GET=Some(0)] host[GP_PUT=Some(10) GP_GET=Some(10)]
+kf3: chan token 0x13 (host 0x69) USERD relay released: forwarded=2 refused=0 gets=2 last_put=62 guest[GP_PUT=Some(3e) GP_GET=Some(24)] host[GP_PUT=Some(3e) GP_GET=Some(24)]
+kf3: chan token 0x1014 (host 0x2006a) USERD relay released: forwarded=1 refused=0 gets=1 last_put=16 guest[GP_PUT=Some(10) GP_GET=Some(0)] host[GP_PUT=Some(10) GP_GET=Some(10)]
+kf3: chan token 0x15 (host 0x6b) USERD relay released: forwarded=3 refused=0 gets=3 last_put=120 guest[GP_PUT=Some(78) GP_GET=Some(24)] host[GP_PUT=Some(78) GP_GET=Some(24)]
+kf3: chan token 0x1016 (host 0x2006c) USERD relay released: forwarded=5 refused=0 gets=5 last_put=84 guest[GP_PUT=Some(54) GP_GET=Some(10)] host[GP_PUT=Some(54) GP_GET=Some(10)]
+kf-rm: chanlink: CLASSIFY 0xc1e0003e:0xbaba0045 kernel work -> Translated (an RM-internal client)
+kf-rm: chanlink: CLASSIFY 0xc1e0003f:0x2 kernel work -> Translated (an RM-internal client)
+kf-rm: chanlink: CLASSIFY 0xc1d00048:0xff040000 USER WORK -> Passthrough (subcontext and a process other than the kernel driver's)
+kf3: act birth passthrough: chan 0xc1d00048:0xff040000 BORN Passthrough: token 0x802 -> host 0x10058 in VasKey(13965662693567236208) gpfifo=0x12024b000x16384 userd=Ram { ram: 3405643793, off: 8481300480 } engine=0xb declared_kernel_pid=false PRIVILEGE=KERNEL WINDOWS-USER-WORK (§V, ProcessID/subcont
+kf-rm: chanlink: CLASSIFY 0xc1d0004a:0xff040001 kernel work -> Translated (no context share (the kernel driver's own channels declare none))
+kf3: chan 0xc1d0004a:0xff040001 birth REFUSED: twin state: VA space VasKey(13965662693567236208) (KernelInUserSpace(1)) — a Translated channel never runs in a space a user channel runs in (V3_P1P2_TSPACE.md §4.2) (decl ChannelAlloc { client: c1d0004a, parent: ff0e0000, handle: ff040001, class: c5
+kf-rm: chanlink: CLASSIFY 0xc1d0004d:0xff040002 USER WORK -> Passthrough (subcontext and a process other than the kernel driver's)
+kf3: act birth passthrough: chan 0xc1d0004d:0xff040002 BORN Passthrough: token 0x803 -> host 0x10059 in VasKey(13965662770876647504) gpfifo=0x1200c4000x4096 userd=Ram { ram: 3405643793, off: 8481099776 } engine=0xb declared_kernel_pid=false PRIVILEGE=KERNEL WINDOWS-USER-WORK (§V, ProcessID/subconte

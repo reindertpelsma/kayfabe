@@ -32,6 +32,14 @@
 //!
 //! ## What an invalidate that cannot be honoured does
 //!
+//! ★★ **Corrected 2026-10-09 (owner, `OWNER_RULINGS.md` §AA).** Where the failure is only ABSENCE
+//! (a refused map, a walk-refused leaf) the invalidate IS cleared, as hardware does: an MMU
+//! invalidate has no error channel, a bad leaf faults when the GPU USES it, and a withheld clear
+//! made the guest poll the trigger forever with its locks held (`[measured run 223]`:
+//! `inval=3138 cleared=3137`, then TDR 0x117 — a guest-wide crash from one unmappable range). The
+//! refusal stays counted and named; only a refused UNMAP or a refused invalidate still holds the
+//! clear (below). ⊘ The text that follows is the SUPERSEDED rule for the absence case.
+//!
 //! It is **not cleared**, and it is counted and named ([`VaStats::unreconciled`],
 //! [`VaStats::refusals`]). The guest then times out (§5.5's tripwire: an overdue trigger is a
 //! fault, not a slow path). Clearing it would tell the guest a mapping is live that is not —
@@ -46,6 +54,14 @@ use crate::apply::{Applied, ApplyCfg, DiffRun, apply_entry};
 use crate::ledger::{MapTarget, Settle};
 use kf_cuda::WalkEntry;
 use kf_trap::{ClearOutcome, InvalidateRequest, PdbAperture, Trigger};
+
+/// ★ Owner ruling 2026-10-09 (`OWNER_RULINGS.md` §AA): an invalidate completes although the guest's
+/// tables hold leaves we cannot map (hardware completes it too; a bad leaf faults when USED).
+/// ON by default; `KF3_INVALIDATE_CLEAR_OVER_ABSENT=0` restores the 2026-09-25 withheld clear (A/B).
+fn clear_over_absent() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("KF3_INVALIDATE_CLEAR_OVER_ABSENT").map_or(true, |v| v != "0"))
+}
 use std::collections::{BTreeMap, BTreeSet};
 
 /// The most objects one walk may carry — the walk kernel's entries (`KF_MAX_PDB`).
@@ -388,6 +404,26 @@ impl Walker for GpuWalker {
         let Some(c) = got? else {
             return Ok(None);
         };
+        // ★ MEASUREMENT ONLY (KF3_WALK_REFUSAL_DUMP): what a sampled refusal's entry and its
+        // neighbours are, read from the store the walk read (bounded; changes no decision).
+        if crate::refusal_dump::enabled() {
+            let fmt = *self.kernel.format();
+            let kernel = &self.kernel;
+            let mut read = |off: u64, buf: &mut [u8]| kernel.read_store(off, buf).is_ok();
+            for line in crate::refusal_dump::rewatch(&fmt, &mut read) {
+                eprintln!("{line}");
+            }
+            let r = &c.report;
+            let pdb_of = |e: u16| r.pdbs.get(usize::from(e)).map(|p| p.pdb);
+            for line in crate::refusal_dump::dump_report(
+                &fmt,
+                r.header.refusal_samples(),
+                &pdb_of,
+                &mut read,
+            ) {
+                eprintln!("{line}");
+            }
+        }
         let r = &c.report;
         r.validate()
             .map_err(|e| format!("walk report refused: {e}"))?;
@@ -463,7 +499,12 @@ impl Walker for GpuWalker {
             .map(|p| {
                 // `validate` proved every slice lies inside the run array.
                 let first = p.first_run as usize;
-                let runs = r.runs[first..first + p.run_count as usize]
+                // (Never out of range after `validate`; if it ever were, an empty slice — the entry's
+                // runs are then simply absent — beats a panic on the VA thread.)
+                let runs = r
+                    .runs
+                    .get(first..first.saturating_add(p.run_count as usize))
+                    .unwrap_or_default()
                     .iter()
                     .map(|m| self.perm.diff_run(m))
                     .collect();
@@ -512,30 +553,34 @@ fn run_census(runs: &[kf_cuda::abi::KfMapRun]) -> String {
     let mut lens: BTreeMap<u64, usize> = BTreeMap::new();
     let mut gib: BTreeMap<u64, (usize, u64, u64)> = BTreeMap::new();
     for m in runs {
-        *ap.entry(m.aperture()).or_default() += 1;
-        *lens.entry(m.len).or_default() += 1;
+        let a = ap.entry(m.aperture()).or_default();
+        *a = a.saturating_add(1);
+        let l = lens.entry(m.len).or_default();
+        *l = l.saturating_add(1);
         let g = gib.entry(m.va >> 30).or_insert((0, u64::MAX, 0));
-        g.0 += 1;
+        g.0 = g.0.saturating_add(1);
         g.1 = g.1.min(m.gpga);
         g.2 = g.2.max(m.gpga);
     }
     // ★ Why neighbours did NOT coalesce: VA-contiguous pairs, split by address or only by flags.
     let (mut va_contig, mut flag_split, mut xor) = (0usize, 0usize, 0u32);
     for w in runs.windows(2) {
-        if w[0].va + w[0].len == w[1].va {
-            va_contig += 1;
-            if w[0].gpga + w[0].len == w[1].gpga && w[0].aperture() == w[1].aperture() {
-                flag_split += 1;
-                xor |= w[0].flags ^ w[1].flags;
+        let [a, b] = w else { continue };
+        if a.va.checked_add(a.len) == Some(b.va) {
+            va_contig = va_contig.saturating_add(1);
+            if a.gpga.checked_add(a.len) == Some(b.gpga) && a.aperture() == b.aperture() {
+                flag_split = flag_split.saturating_add(1);
+                xor |= a.flags ^ b.flags;
             }
         }
     }
     let mut flags: BTreeMap<u32, usize> = BTreeMap::new();
     for m in runs {
-        *flags.entry(m.flags).or_default() += 1;
+        let f = flags.entry(m.flags).or_default();
+        *f = f.saturating_add(1);
     }
     let mut top_lens: Vec<(u64, usize)> = lens.into_iter().collect();
-    top_lens.sort_by(|a, b| b.1.cmp(&a.1));
+    top_lens.sort_by_key(|&(_, n)| std::cmp::Reverse(n));
     top_lens.truncate(6);
     let gib: Vec<String> = gib
         .iter()
@@ -629,6 +674,21 @@ enum Want {
     },
 }
 
+/// What [`VaManager::abandon_life`] dropped.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Abandoned {
+    /// A walk was in flight and was left to land (call again once it has).
+    pub in_flight: bool,
+    /// Queued invalidates (their trigger is the port's to abandon).
+    pub invalidates: usize,
+    /// Queued root walks.
+    pub roots: usize,
+    /// Applied invalidates held for a target's work.
+    pub awaiting: usize,
+    /// Split tickets, queued or finished-untaken.
+    pub split_tickets: Vec<u64>,
+}
+
 /// The walk in flight and what it answers.
 #[derive(Debug)]
 struct Batch {
@@ -666,6 +726,12 @@ pub struct VaStats {
     pub range_unmaps: u64,
     /// Batches / ranges the target refused (their runs then went one by one).
     pub batch_fallbacks: u64,
+    /// ★ Review fix 2026-10-10: unchanged pages whose `NV01` host mapping had to be re-made (the
+    /// guest split a big leaf and changed part of it — `V3_BATCHED_MAP.md` §8.7), and runs
+    /// acknowledged FAILED only because a linked run failed (commit consistency).
+    pub remade_unchanged_pages: u64,
+    /// See [`VaStats::remade_unchanged_pages`].
+    pub linked_failed: u64,
     /// Host TLB invalidates issued (ONE per space per applied diff that changed anything).
     pub host_invalidates: u64,
     /// Triggers cleared by us.
@@ -677,6 +743,9 @@ pub struct VaStats {
     /// ★ Invalidates naming a PDB no object carries (counted; the trigger is cleared — we hold
     /// nothing for it).
     pub named_missed: u64,
+    /// ★ `KF3_INVALIDATE_CLEAR_OVER_ABSENT`: invalidates cleared although a space they named had
+    /// leaves refused by ABSENCE only (counted, named; default off).
+    pub cleared_over_absent: u64,
     /// ★ Invalidates NOT cleared because a space they named could not be reconciled.
     pub unreconciled: u64,
     /// The first 16 refusals, verbatim.
@@ -708,6 +777,9 @@ pub struct VaStats {
     pub no_slot: u64,
     /// ★ Spaces failed because their walk refused leaves (owner ruling 2026-09-25).
     pub walk_refused_spaces: u64,
+    /// ★ Review 2 item 5: runs refused for the refresh's host-call budget (absent until the guest's
+    /// next walk of the space; no follow-up walk — review 3 item 1).
+    pub budget_refused_runs: u64,
     /// ★ v3-mapfix: `MEM_OP` splits completed over a space left UNSETTLED — its walk ran and its
     /// diff applied except for refused MAPs / walk-refused leaves, which stay absent (and stay a
     /// difference the next diff retries). The channel proceeds; see [`VaManager::on_walk_ready`].
@@ -730,6 +802,9 @@ pub struct VaStats {
     pub carve_kernel: u64,
     /// ★ P1+P2 inc A: the same on the guest kernel's CPU views (BAR1/BAR2) — count-only.
     pub carve_cpu: u64,
+    /// ★ 2026-10-10: carve-out bytes left absent from runs straddling the carve-out base
+    /// ([`crate::apply::Applied::carve_clipped_bytes`]).
+    pub carve_clipped_bytes: u64,
     /// ★ v3-cdp: SKED-reflected pages the host already held (not ours).
     pub sked_held: u64,
 }
@@ -789,9 +864,9 @@ impl VaStats {
     }
     fn outcome(&mut self, o: ClearOutcome) {
         match o {
-            ClearOutcome::Cleared => self.cleared += 1,
-            ClearOutcome::Superseded => self.superseded += 1,
-            ClearOutcome::AlreadyIdle => self.already_idle += 1,
+            ClearOutcome::Cleared => self.cleared = self.cleared.saturating_add(1),
+            ClearOutcome::Superseded => self.superseded = self.superseded.saturating_add(1),
+            ClearOutcome::AlreadyIdle => self.already_idle = self.already_idle.saturating_add(1),
         }
     }
 }
@@ -821,6 +896,8 @@ pub struct VaManager<W: Walker, T: MapTarget> {
     inflight: Option<Batch>,
     /// ★ P6: finished splits, `(ticket, outcome)`, until [`VaManager::take_splits`].
     splits_done: Vec<(u64, Result<(), String>)>,
+    /// Owner ruling 2026-10-09: complete over absent leaves (read at construction; tests set it).
+    clear_absent: bool,
     /// ★ Ruling 2026-09-26 (5): invalidates whose runs all applied but whose target's work is not
     /// live yet ([`Settle::Pending`]) — cleared by [`VaManager::on_targets`], never waited for.
     awaiting: Vec<(InvalidateRequest, Vec<VasKey>, std::time::Instant)>,
@@ -856,6 +933,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             pending: Vec::new(),
             inflight: None,
             splits_done: Vec::new(),
+            clear_absent: clear_over_absent(),
             awaiting: Vec::new(),
             page_grain: SMALL_PAGE,
             usermode: None,
@@ -912,6 +990,11 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
     }
 
     /// The walker, mutably (harnesses: e.g. writing the tables the next walk reads).
+    /// `KF3_INVALIDATE_CLEAR_OVER_ABSENT`, settable (tests, the device).
+    pub fn set_clear_over_absent(&mut self, on: bool) {
+        self.clear_absent = on;
+    }
+
     pub fn walker_mut(&mut self) -> &mut W {
         &mut self.walker
     }
@@ -932,6 +1015,35 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
     #[must_use]
     pub fn awaiting(&self) -> usize {
         self.awaiting.len()
+    }
+
+    /// ★ **Device reset** (`docs/design/V3_DEVICE_RESET.md`): drop every request of the old life
+    /// that has not been walked — queued invalidates, root walks, splits — and every applied
+    /// invalidate still held for its target, WITHOUT clearing any trigger (the port's armed request
+    /// is abandoned by `InvalidatePort::reset`; nothing is completed on the guest's behalf).
+    /// Returns what was dropped; split tickets (queued, or finished and not yet taken) are returned
+    /// so the caller can answer each channel that waits on one.
+    ///
+    /// ⊘ A walk IN FLIGHT is not touched: its report is the GPU's and lands in a slot the reset
+    /// must still be able to empty. [`Abandoned::in_flight`] says so; the caller lets
+    /// [`Self::on_walk_ready`] collect it (nothing queued is left to submit after it) and calls
+    /// this again — it is bounded, and the VA thread polls, never blocks.
+    pub fn abandon_life(&mut self) -> Abandoned {
+        let mut out = Abandoned {
+            in_flight: self.inflight.is_some(),
+            ..Abandoned::default()
+        };
+        for w in core::mem::take(&mut self.pending) {
+            match w {
+                Want::Invalidate(..) => out.invalidates = out.invalidates.saturating_add(1),
+                Want::Root(_) => out.roots = out.roots.saturating_add(1),
+                Want::Split { ticket, .. } => out.split_tickets.push(ticket),
+            }
+        }
+        out.awaiting = core::mem::take(&mut self.awaiting).len();
+        out.split_tickets
+            .extend(core::mem::take(&mut self.splits_done).into_iter().map(|(t, _)| t));
+        out
     }
 
     /// The combined [`Settle`] of `keys`' targets, asking each target once per pass (`seen`).
@@ -979,8 +1091,8 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         self.stats.outcome(o);
         let ns = ns_since(at);
         let tm = &mut self.stats.timing;
-        tm.invals += 1;
-        tm.inval_ns += ns;
+        tm.invals = tm.invals.saturating_add(1);
+        tm.inval_ns = tm.inval_ns.saturating_add(ns);
         tm.inval_ns_max = tm.inval_ns_max.max(ns);
         out.completed.push((r.seq, o));
     }
@@ -1001,7 +1113,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 Settle::Live => self.complete_invalidate(r, at, trigger, &mut out),
                 Settle::Pending => self.awaiting.push((r, keys, at)),
                 Settle::Failed(e) => {
-                    self.stats.unreconciled += 1;
+                    self.stats.unreconciled = self.stats.unreconciled.saturating_add(1);
                     self.stats.refuse(format!(
                         "invalidate seq {}: target work failed after apply: {e}",
                         r.seq
@@ -1071,7 +1183,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                     .map_or("none".to_string(), |b| format!("#{}", b.id))
             );
         }
-        self.stats.splits += 1;
+        self.stats.splits = self.stats.splits.saturating_add(1);
         self.pending.push(Want::Split {
             pdb,
             ticket,
@@ -1096,7 +1208,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 maplog_want(&w)
             );
         }
-        self.stats.splits += 1;
+        self.stats.splits = self.stats.splits.saturating_add(1);
         self.pending.push(w);
         self.pump(trigger);
     }
@@ -1134,7 +1246,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             wants: Vec::with_capacity(wants.len()),
             walked: BTreeMap::new(),
             submitted: std::time::Instant::now(),
-            id: self.stats.walks_submitted + 1,
+            id: self.stats.walks_submitted.saturating_add(1),
         };
         let mut vacuous: Vec<u64> = Vec::new();
         let mut no_slot: Vec<VasKey> = Vec::new();
@@ -1157,7 +1269,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             {
                 // Nothing of ours is under that root: nothing can be stale.
                 if pdb.is_some() {
-                    self.stats.split_missed += 1;
+                    self.stats.split_missed = self.stats.split_missed.saturating_add(1);
                 }
                 self.splits_done.push((ticket, Ok(())));
                 continue;
@@ -1166,7 +1278,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 && keys.is_empty()
             {
                 if !r.inval.all_pdb {
-                    self.stats.named_missed += 1;
+                    self.stats.named_missed = self.stats.named_missed.saturating_add(1);
                 }
                 vacuous.push(r.seq);
                 continue;
@@ -1197,7 +1309,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             self.stats.outcome(trigger.complete(seq));
         }
         for k in no_slot {
-            self.stats.no_slot += 1;
+            self.stats.no_slot = self.stats.no_slot.saturating_add(1);
             self.stats.refuse(format!(
                 "{k:?}: no walker slot left — its mappings cannot be diffed"
             ));
@@ -1231,7 +1343,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         self.stats.submit_ns_max = self.stats.submit_ns_max.max(ns);
         match r {
             Ok(()) => {
-                self.stats.walks_submitted += 1;
+                self.stats.walks_submitted = self.stats.walks_submitted.saturating_add(1);
                 batch.submitted = std::time::Instant::now();
                 if crate::maplog::on() {
                     eprintln!(
@@ -1244,7 +1356,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 self.inflight = Some(batch);
             }
             Err(e) => {
-                self.stats.walks_refused += 1;
+                self.stats.walks_refused = self.stats.walks_refused.saturating_add(1);
                 self.refuse_batch(&batch, format!("walk submit: {e}"));
             }
         }
@@ -1271,7 +1383,9 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
     fn refuse_batch(&mut self, batch: &Batch, why: String) {
         for (w, _, _) in &batch.wants {
             match w {
-                Want::Invalidate(..) => self.stats.unreconciled += 1,
+                Want::Invalidate(..) => {
+                    self.stats.unreconciled = self.stats.unreconciled.saturating_add(1)
+                }
                 Want::Split { ticket, .. } => self.splits_done.push((*ticket, Err(why.clone()))),
                 Want::Root(_) => {}
             }
@@ -1291,7 +1405,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             Ok(None) => return out,
             Ok(Some(d)) => d,
             Err(e) => {
-                self.stats.walks_refused += 1;
+                self.stats.walks_refused = self.stats.walks_refused.saturating_add(1);
                 // ★ Name WHAT was walked: a refused report is about the batch, and a batch can
                 // carry objects the refusing want never named (ALL_PDB, or several objects under
                 // one root). Without this the refusal names only the root that asked.
@@ -1302,7 +1416,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 if let Some(b) = self.inflight.take() {
                     for (w, _, _) in &b.wants {
                         if let Want::Invalidate(r, _) = w {
-                            self.stats.unreconciled += 1;
+                            self.stats.unreconciled = self.stats.unreconciled.saturating_add(1);
                             out.unreconciled.push(r.seq);
                         }
                         if let Want::Split { ticket, .. } = w {
@@ -1320,11 +1434,11 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
         let Some(batch) = self.inflight.take() else {
             return out;
         };
-        self.stats.walks_reconciled += 1;
+        self.stats.walks_reconciled = self.stats.walks_reconciled.saturating_add(1);
         let tm = &mut self.stats.timing;
-        tm.walks += 1;
-        tm.walk_ns += ns_since(batch.submitted);
-        tm.gpu_us += done.gpu_us;
+        tm.walks = tm.walks.saturating_add(1);
+        tm.walk_ns = tm.walk_ns.saturating_add(ns_since(batch.submitted));
+        tm.gpu_us = tm.gpu_us.saturating_add(done.gpu_us);
         tm.leaves_last = done.nrun as u64;
         let by_slot: BTreeMap<u32, &EntryDiff> = done.entries.iter().map(|e| (e.slot, e)).collect();
         // ★ One verdict per report run; anything not applied below stays FAILED (0): the next
@@ -1407,11 +1521,11 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                     );
                 }
             }
-            self.stats.timing.apply_ns += apply_ns;
+            self.stats.timing.apply_ns = self.stats.timing.apply_ns.saturating_add(apply_ns);
             // ★ w829: the host-map cost of a large diff (a fragmented CUDA space is ~10^4 runs,
             // each ONE host map call on the guest-RAM object) — named, it is the next budget.
             // ★ V3_BATCHED_MAP: runs vs the verbs they cost (a batch / a range is ONE verb).
-            if a.mapped + a.unmapped >= 1000 {
+            if a.mapped.saturating_add(a.unmapped) >= 1000 {
                 eprintln!(
                     "kf3: mem large apply {key:?}: {} maps + {} unmaps in {} ms — {} map verb(s) ({} batch(es) carrying {} runs), {} unmap verb(s) ({} range(s) carrying {} runs), {} fallback(s){}",
                     a.mapped,
@@ -1433,32 +1547,79 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 eprintln!("kf3: mem batch fallback {key:?}: {w}");
             }
             for (i, &c) in a.codes.iter().enumerate() {
-                if let Some(slot) = codes.get_mut(e.first + i) {
+                if let Some(slot) = codes.get_mut(e.first.saturating_add(i)) {
                     *slot = c;
                 }
             }
-            self.stats.timing.host_calls +=
-                (a.map_calls + a.unmap_calls) as u64 + u64::from(a.invalidated);
-            self.stats.batches += a.batches as u64;
-            self.stats.batched_runs += a.batched_runs as u64;
-            self.stats.range_unmaps += a.range_unmaps as u64;
-            self.stats.batch_fallbacks += a.batch_fallbacks as u64;
-            self.stats.mapped += a.mapped as u64;
-            self.stats.unmapped += a.unmapped as u64;
-            self.stats.host_invalidates += u64::from(a.invalidated);
-            self.stats.held += a.held as u64;
-            self.stats.vmm_overlaps += a.vmm_overlaps as u64;
-            self.stats.usermode_trapped += a.usermode_trapped as u64;
-            self.stats.usermode_unmirrored += a.usermode_unmirrored as u64;
-            self.stats.clipped_bytes += a.clipped_bytes;
-            self.stats.priv_withheld += a.priv_withheld as u64;
-            self.stats.priv_withheld_bytes += a.priv_withheld_bytes;
-            self.stats.priv_mirrored += a.priv_mirrored as u64;
-            self.stats.sked_placed += a.sked_placed as u64;
-            self.stats.sked_held += a.sked_held as u64;
-            self.stats.carve_gpu += a.carve_gpu as u64;
-            self.stats.carve_kernel += a.carve_kernel as u64;
-            self.stats.carve_cpu += a.carve_cpu as u64;
+            self.stats.timing.host_calls = self.stats.timing.host_calls.saturating_add(
+                (a.map_calls.saturating_add(a.unmap_calls) as u64)
+                    .saturating_add(u64::from(a.invalidated)),
+            );
+            self.stats.batches = self.stats.batches.saturating_add(a.batches as u64);
+            self.stats.batched_runs = self
+                .stats
+                .batched_runs
+                .saturating_add(a.batched_runs as u64);
+            self.stats.range_unmaps = self
+                .stats
+                .range_unmaps
+                .saturating_add(a.range_unmaps as u64);
+            self.stats.batch_fallbacks = self
+                .stats
+                .batch_fallbacks
+                .saturating_add(a.batch_fallbacks as u64);
+            self.stats.remade_unchanged_pages = self
+                .stats
+                .remade_unchanged_pages
+                .saturating_add(a.remade_unchanged_pages);
+            self.stats.linked_failed = self
+                .stats
+                .linked_failed
+                .saturating_add(a.linked_failed as u64);
+            self.stats.mapped = self.stats.mapped.saturating_add(a.mapped as u64);
+            self.stats.unmapped = self.stats.unmapped.saturating_add(a.unmapped as u64);
+            self.stats.host_invalidates = self
+                .stats
+                .host_invalidates
+                .saturating_add(u64::from(a.invalidated));
+            self.stats.held = self.stats.held.saturating_add(a.held as u64);
+            self.stats.vmm_overlaps = self
+                .stats
+                .vmm_overlaps
+                .saturating_add(a.vmm_overlaps as u64);
+            self.stats.usermode_trapped = self
+                .stats
+                .usermode_trapped
+                .saturating_add(a.usermode_trapped as u64);
+            self.stats.usermode_unmirrored = self
+                .stats
+                .usermode_unmirrored
+                .saturating_add(a.usermode_unmirrored as u64);
+            self.stats.clipped_bytes = self.stats.clipped_bytes.saturating_add(a.clipped_bytes);
+            self.stats.priv_withheld = self
+                .stats
+                .priv_withheld
+                .saturating_add(a.priv_withheld as u64);
+            self.stats.priv_withheld_bytes = self
+                .stats
+                .priv_withheld_bytes
+                .saturating_add(a.priv_withheld_bytes);
+            self.stats.priv_mirrored = self
+                .stats
+                .priv_mirrored
+                .saturating_add(a.priv_mirrored as u64);
+            self.stats.sked_placed = self.stats.sked_placed.saturating_add(a.sked_placed as u64);
+            self.stats.sked_held = self.stats.sked_held.saturating_add(a.sked_held as u64);
+            self.stats.carve_gpu = self.stats.carve_gpu.saturating_add(a.carve_gpu as u64);
+            self.stats.carve_kernel = self
+                .stats
+                .carve_kernel
+                .saturating_add(a.carve_kernel as u64);
+            self.stats.carve_cpu = self.stats.carve_cpu.saturating_add(a.carve_cpu as u64);
+            self.stats.carve_clipped_bytes = self
+                .stats
+                .carve_clipped_bytes
+                .saturating_add(a.carve_clipped_bytes);
             if a.priv_mirrored > 0 {
                 static MIRRORED: std::sync::atomic::AtomicU32 =
                     std::sync::atomic::AtomicU32::new(0);
@@ -1479,6 +1640,20 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                     );
                 }
             }
+            if a.budget_refused > 0 {
+                // ★ Review 3 item 1: counted and named, NOTHING more. The refused run is acked FAILED
+                // = absence (§AA: the invalidate is cleared over it); it stays a difference the
+                // guest's next walk of the space retries with a fresh budget. A "follow-up walk
+                // while the refresh made progress" was tried and DELETED: `mapped > 0` ignored rows
+                // the apply took down again, so a run whose rows fit a budget alone but not together
+                // (carve-clip split rows) re-queued for ever on the VA thread, which serves every
+                // space (`[measured, model, review 3, 2026-10-10]` mapped 1, taken_down 1, budget_refused 1,
+                // ~131 k host calls per walk, walk after walk).
+                self.stats.budget_refused_runs = self
+                    .stats
+                    .budget_refused_runs
+                    .saturating_add(a.budget_refused as u64);
+            }
             if a.refused > 0 {
                 failed.insert(key);
                 if a.refusals_are_absence() {
@@ -1495,16 +1670,16 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 // name so its invalidate is not cleared over leaves nobody mapped.
                 failed.insert(key);
                 absent_only.insert(key);
-                self.stats.walk_refused_spaces += 1;
+                self.stats.walk_refused_spaces = self.stats.walk_refused_spaces.saturating_add(1);
                 self.stats.refuse(format!(
                     "{key:?} root {walked_root:#x}: the walk REFUSED leaves (refuse_mask={:#x}) — absent, not mapped",
                     e.refused
                 ));
             } else if e.partial {
-                self.stats.partial += 1;
+                self.stats.partial = self.stats.partial.saturating_add(1);
                 partial.insert(key);
             } else {
-                self.stats.spaces_reconciled += 1;
+                self.stats.spaces_reconciled = self.stats.spaces_reconciled.saturating_add(1);
             }
             out.applied.push((key, a));
         }
@@ -1550,7 +1725,7 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                         .push((*ticket, Err(format!("split {pdb:x?}: {k:?} did not apply")))),
                     (None, _) if again => requeue.push((*w, *at)),
                     (None, Some(k)) => {
-                        self.stats.splits_unsettled += 1;
+                        self.stats.splits_unsettled = self.stats.splits_unsettled.saturating_add(1);
                         if self.stats.splits_unsettled <= 64 {
                             eprintln!(
                                 "kf-mem: split {pdb:x?} (ticket {ticket}) completed over UNSETTLED {k:?} — its refused leaves are absent on the host (a GPU access faults on that space's twin); the channel proceeds, the next diff retries them"
@@ -1568,8 +1743,20 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 }
                 continue;
             };
-            if bad.is_some() {
-                self.stats.unreconciled += 1;
+            // ★ Owner ruling 2026-10-09 (§AA; supersedes 2026-09-25's "not cleared over leaves nobody
+            // mapped", opt-out `KF3_INVALIDATE_CLEAR_OVER_ABSENT=0`): the clear is NOT withheld when
+            // every failed space failed only by ABSENCE (a refused map or a walk-refused leaf, never
+            // an unmap or an invalidate refusal) and none is re-walking. A GPU access to an absent
+            // leaf faults on that space's twin (as the split already does, v3-mapfix); the withheld
+            // clear instead left the guest polling the trigger forever with its locks held
+            // (`[measured run 223]`: one uncleared MMU_INVALIDATE, TDR 0x117).
+            let absent_ok = bad.is_some()
+                && self.clear_absent
+                && keys.iter().all(|k| {
+                    !failed.contains(k) || (absent_only.contains(k) && !rewalk.contains(k))
+                });
+            if bad.is_some() && !absent_ok {
+                self.stats.unreconciled = self.stats.unreconciled.saturating_add(1);
                 out.unreconciled.push(r.seq);
             } else if again {
                 // ★ Its maps were withheld (slot capacity): the unmaps landed, walk again now.
@@ -1578,14 +1765,24 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 // ★ Ruling 2026-09-26 (5): a target whose accepted work is still in flight (the
                 // BAR1 doorbell overlay) defers THIS clear only — the guest keeps polling, which is
                 // legal; [`VaManager::on_targets`] clears it when the work is live.
+                if absent_ok {
+                    self.stats.cleared_over_absent =
+                        self.stats.cleared_over_absent.saturating_add(1);
+                    if self.stats.cleared_over_absent <= 64 {
+                        eprintln!(
+                            "kf3: mem invalidate seq {} CLEARED OVER ABSENCE ({:?}): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT",
+                            r.seq, bad
+                        );
+                    }
+                }
                 match self.settle_keys(keys, &mut settled) {
                     Settle::Live => self.complete_invalidate(*r, *at, trigger, &mut out),
                     Settle::Pending => {
-                        self.stats.deferred_clears += 1;
+                        self.stats.deferred_clears = self.stats.deferred_clears.saturating_add(1);
                         self.awaiting.push((*r, keys.clone(), *at));
                     }
                     Settle::Failed(e) => {
-                        self.stats.unreconciled += 1;
+                        self.stats.unreconciled = self.stats.unreconciled.saturating_add(1);
                         self.stats.refuse(format!(
                             "invalidate seq {}: target work failed after apply: {e}",
                             r.seq
@@ -1815,6 +2012,8 @@ mod tests {
         perms: Rc<RefCell<Vec<(u64, kf_host::MapPerm)>>>,
         port: Arc<InvalidatePort>,
         refuse_map_at: RefCell<Option<u64>>,
+        /// The next n maps at VA 0x1000_0000 are refused for the refresh's host-call budget.
+        budget_refusals: std::cell::Cell<u32>,
         refuse_unmap_at: RefCell<Option<u64>>,
         held_at: Option<u64>,
         reserved: Vec<(u64, u64)>,
@@ -1832,6 +2031,14 @@ mod tests {
             self.user_twin.get()
         }
         fn map(&self, d: &Desired, _defer: bool) -> Result<Mapped, String> {
+            if d.va == 0x1000_0000 && self.budget_refusals.get() > 0 {
+                self.budget_refusals.set(self.budget_refusals.get() - 1);
+                return Err(format!(
+                    "map {:#x}: {}",
+                    d.va,
+                    crate::batch::REFRESH_BUDGET_EXHAUSTED
+                ));
+            }
             if *self.refuse_map_at.borrow() == Some(d.va) {
                 return Err(format!("map {:#x}: refused (fake)", d.va));
             }
@@ -1886,6 +2093,7 @@ mod tests {
             perms: r.perms.clone(),
             port: r.port.clone(),
             refuse_map_at: RefCell::new(None),
+            budget_refusals: std::cell::Cell::new(0),
             refuse_unmap_at: RefCell::new(None),
             held_at,
             reserved,
@@ -2502,6 +2710,8 @@ mod tests {
     #[test]
     fn a_refused_map_is_retried_by_the_next_invalidate_and_nothing_else_is() {
         let mut r = rig();
+        // The 2026-09-25 withheld clear, via the opt-out (the default completes: OWNER_RULINGS §AA).
+        r.m.set_clear_over_absent(false);
         let h = host(&r, None, Vec::new());
         *h.refuse_map_at.borrow_mut() = Some(0x1000_0000);
         r.m.table.insert(K_A, h);
@@ -2536,9 +2746,87 @@ mod tests {
         );
     }
 
+    /// ★ Review 2 item 5 / review 3 item 1 — a run refused for the refresh's host-call budget is
+    /// LOUD (counted by name) and the invalidate is cleared over its absence (§AA); it is retried by
+    /// the guest's NEXT walk of the space with a fresh budget, and by NOTHING else: no follow-up walk
+    /// is queued (one livelocked the VA thread, `rv3_budget_refusal_progress_is_illusory`).
+    #[test]
+    fn a_budget_refused_run_is_absent_loud_and_not_walked_again_by_itself() {
+        let mut r = rig();
+        let h = host(&r, None, Vec::new());
+        h.budget_refusals.set(1);
+        r.m.table.insert(K_A, h);
+        r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem).unwrap();
+        r.tables.borrow_mut().insert(
+            PDB_A,
+            vec![
+                (0x1000_0000, 0x0200_0000, 0x1000, 0),
+                (0x2000_0000, 0x0300_0000, 0x1000, 0),
+            ],
+        );
+        let out = settle(&mut r, PDB_A);
+        assert_eq!(
+            out.completed.len(),
+            1,
+            "the invalidate is cleared over absence"
+        );
+        assert!(!busy(&r.port));
+        assert_eq!(r.m.stats.budget_refused_runs, 1, "counted by name");
+        assert_eq!(
+            ops(&r),
+            vec![Op::Map(0x2000_0000, 0x0300_0000, 0x1000), Op::Invalidate],
+            "the other run landed; the refused one is absent"
+        );
+        // Nothing walks the space again by itself.
+        let walks = r.m.walker().submits.len();
+        r.m.on_walk_ready(r.port.trigger());
+        assert_eq!(r.m.walker().submits.len(), walks, "no follow-up walk");
+        // The guest's next invalidate retries it with a fresh budget.
+        r.ops.borrow_mut().clear();
+        let out = settle(&mut r, PDB_A);
+        assert_eq!(out.completed.len(), 1);
+        assert_eq!(
+            ops(&r),
+            vec![Op::Map(0x1000_0000, 0x0200_0000, 0x1000), Op::Invalidate],
+            "only the refused run, again"
+        );
+    }
+
+    /// A run that can NEVER fit the budget is refused by every walk, quietly bounded: each walk is
+    /// one refresh, the invalidate is cleared, the VA thread is not re-queued.
+    #[test]
+    fn a_budget_refusal_that_never_fits_costs_one_walk_per_guest_invalidate() {
+        let mut r = rig();
+        let h = host(&r, None, Vec::new());
+        h.budget_refusals.set(u32::MAX);
+        r.m.table.insert(K_A, h);
+        r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem).unwrap();
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0)]);
+        for n in 1..=3u64 {
+            let out = settle(&mut r, PDB_A);
+            assert_eq!(out.completed.len(), 1);
+            assert_eq!(r.m.stats.budget_refused_runs, n);
+        }
+        assert!(
+            r.ops
+                .borrow()
+                .iter()
+                .all(|(o, _)| !matches!(o, Op::Map(..)))
+        );
+        assert_eq!(
+            r.m.walker().submits.len(),
+            3,
+            "one walk per invalidate, none of its own"
+        );
+    }
+
     #[test]
     fn a_leaf_outside_the_store_is_refused_and_the_trigger_stays_armed() {
         let mut r = rig();
+        // The 2026-09-25 withheld clear, via the opt-out (the default completes: OWNER_RULINGS §AA).
+        r.m.set_clear_over_absent(false);
         r.tables
             .borrow_mut()
             .insert(PDB_A, vec![(0x1000_0000, STORE - 0x1000, 0x2000, 0)]);
@@ -2739,6 +3027,8 @@ mod tests {
     #[test]
     fn a_leaf_over_a_vmm_placement_is_refused_before_the_host_is_asked() {
         let mut r = rig();
+        // The 2026-09-25 withheld clear, via the opt-out (the default completes: OWNER_RULINGS §AA).
+        r.m.set_clear_over_absent(false);
         let h = host(&r, None, vec![(0xFF_0000_0000, 0x100_0000_0000)]);
         r.m.table.insert(K_A, h);
         r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem).unwrap();
@@ -2792,6 +3082,8 @@ mod tests {
     #[test]
     fn coverage_is_whole_guest_pages_never_rounded_past_them() {
         let mut r = rig();
+        // The 2026-09-25 withheld clear, via the opt-out (the default completes: OWNER_RULINGS §AA).
+        r.m.set_clear_over_absent(false);
         r.tables
             .borrow_mut()
             .insert(PDB_A, vec![(0x1000_1000, 0x0300_0000, 0x10, 0)]);
@@ -2799,6 +3091,7 @@ mod tests {
         assert_eq!(out.unreconciled.len(), 1);
         assert!(r.ops.borrow().is_empty());
         let mut r = rig();
+        r.m.set_clear_over_absent(false);
         r.tables
             .borrow_mut()
             .insert(PDB_A, vec![(0x1000_1000, 0x0200_1000, 0x1000, 0)]);
@@ -2930,12 +3223,67 @@ mod tests {
         );
     }
 
+    /// ★ Device reset: queued walks of the old life are dropped without clearing anything, a walk
+    /// in flight is left to land, and a BAR object re-registered with its root (what the device
+    /// does to K_BAR1/K_BAR2) walks its next life from an EMPTY slot — §9's ResetWalkerState: the
+    /// next life's first diff maps everything again instead of reporting "unchanged".
+    #[test]
+    fn a_reset_drops_queued_walks_lets_the_one_in_flight_land_and_reslots_the_bar_object() {
+        let mut r = rig();
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x1000, 0x10_0000, 0x1000, 0)]);
+        settle(&mut r, PDB_A);
+        // One walk in flight, two more queued behind it, one split queued.
+        let q1 = guest_invalidate(&r.port, PDB_A, false);
+        r.m.on_invalidate(q1, r.port.trigger());
+        assert!(r.m.in_flight());
+        let q2 = guest_invalidate(&r.port, PDB_B, false);
+        r.m.on_invalidate(q2, r.port.trigger());
+        r.m.on_split(Some(PDB_A), 77, r.port.trigger());
+        assert!(r.m.pending() >= 2);
+        let a = r.m.abandon_life();
+        assert!(a.in_flight);
+        assert_eq!((a.invalidates, a.split_tickets.clone()), (1, vec![77]));
+        assert_eq!(r.m.pending(), 0);
+        assert!(
+            r.port.reset(),
+            "the armed request is abandoned at the port, not completed"
+        );
+        let walks = r.m.walker().submits.len();
+        let out = r.m.on_walk_ready(r.port.trigger());
+        assert_eq!(
+            out.completed,
+            vec![(q1.seq, ClearOutcome::AlreadyIdle)],
+            "the landing walk clears nothing the reset abandoned"
+        );
+        assert_eq!(
+            r.m.walker().submits.len(),
+            walks,
+            "nothing queued was submitted after it"
+        );
+        assert!(!r.m.abandon_life().in_flight);
+        // Re-register K_A as the device does with its BAR objects: the next life starts empty.
+        let t = r.m.remove(K_A).expect("K_A");
+        r.m.table.insert(K_A, t);
+        r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem).unwrap();
+        r.ops.borrow_mut().clear();
+        settle(&mut r, PDB_A);
+        assert_eq!(
+            ops(&r),
+            vec![Op::Map(0x1000, 0x10_0000, 0x1000), Op::Invalidate],
+            "diffed against an EMPTY slot, so the unchanged table is mapped again"
+        );
+    }
+
     /// ★ Owner ruling 2026-09-25: a walk that REFUSED leaves in a space fails that space by name
     /// (its invalidate stays armed) — while what the walk did describe is still applied (the
     /// failure is scoped to the refused leaves, which are absent, never "unmapped").
     #[test]
     fn a_walk_refusal_fails_the_space_by_name_and_applies_the_rest() {
         let mut r = rig();
+        // The 2026-09-25 withheld clear, via the opt-out (the default completes: OWNER_RULINGS §AA).
+        r.m.set_clear_over_absent(false);
         r.tables
             .borrow_mut()
             .insert(PDB_A, vec![(0x1000, 0x10_0000, 0x1000, 0)]);
@@ -2961,6 +3309,119 @@ mod tests {
         let out = settle(&mut r, PDB_A);
         assert_eq!(out.completed.len(), 1);
         assert!(ops(&r).is_empty());
+    }
+
+    /// ★ Owner ruling 2026-10-09: a space that failed ONLY by absence (a
+    /// walk-refused leaf) no longer holds its invalidate armed forever; what the walk described is
+    /// applied, the invalidate completes, and the refusal stays counted and named.
+    #[test]
+    fn clear_over_absence_completes_the_invalidate_by_default() {
+        let mut r = rig();
+        assert!(r.m.clear_absent, "on by default");
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x1000, 0x10_0000, 0x1000, 0)]);
+        r.m.walker_mut().refuse_in = Some(PDB_A);
+        let out = settle(&mut r, PDB_A);
+        assert!(out.unreconciled.is_empty(), "not left armed");
+        assert_eq!(out.completed.len(), 1, "the invalidate completes");
+        assert!(!busy(&r.port), "the trigger is cleared");
+        assert_eq!(
+            ops(&r),
+            vec![Op::Map(0x1000, 0x10_0000, 0x1000), Op::Invalidate],
+            "the described leaf is applied"
+        );
+        assert_eq!(r.m.stats.cleared_over_absent, 1);
+        assert_eq!(
+            r.m.stats.walk_refused_spaces, 1,
+            "the refusal is still counted by name"
+        );
+        assert!(
+            r.m.stats
+                .refusals
+                .iter()
+                .any(|x| x.contains("REFUSED leaves"))
+        );
+    }
+
+    /// ★ Owner ruling 2026-10-09: a host-REFUSED map is absence too — the invalidate completes, the
+    /// refusal is named, and commit-on-ack still re-emits ONLY the refused map on the next diff.
+    #[test]
+    fn a_refused_map_completes_the_invalidate_and_is_retried_by_the_next_one() {
+        let mut r = rig();
+        let h = host(&r, None, Vec::new());
+        *h.refuse_map_at.borrow_mut() = Some(0x1000_0000);
+        r.m.table.insert(K_A, h);
+        r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem).unwrap();
+        r.tables.borrow_mut().insert(
+            PDB_A,
+            vec![
+                (0x1000_0000, 0x0200_0000, 0x1000, 0),
+                (0x2000_0000, 0x0300_0000, 0x1000, 0),
+            ],
+        );
+        let out = settle(&mut r, PDB_A);
+        assert!(out.unreconciled.is_empty());
+        assert_eq!(
+            out.completed.len(),
+            1,
+            "completed, last, after the maps that could land"
+        );
+        assert!(!busy(&r.port));
+        assert_eq!(r.m.stats.cleared_over_absent, 1);
+        assert!(
+            r.m.stats.refusals[0].contains("refused (fake)"),
+            "still named"
+        );
+        // The next invalidate re-emits only what failed.
+        if let Some(t) = r.m.table.target(K_A) {
+            *t.refuse_map_at.borrow_mut() = None;
+        }
+        r.ops.borrow_mut().clear();
+        let _ = settle(&mut r, PDB_A);
+        assert_eq!(
+            ops(&r),
+            vec![Op::Map(0x1000_0000, 0x0200_0000, 0x1000), Op::Invalidate],
+            "only the refused map, again"
+        );
+    }
+
+    /// ★ A refused UNMAP is NOT absence (the host may still hold a placement the guest dropped): the
+    /// clear is still withheld even with the default on.
+    #[test]
+    fn a_refused_unmap_still_holds_the_clear_by_default() {
+        let mut r = rig();
+        assert!(r.m.clear_absent);
+        let h = host(&r, None, Vec::new());
+        r.m.table.insert(K_A, h);
+        r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem).unwrap();
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0)]);
+        let _ = settle(&mut r, PDB_A);
+        r.tables.borrow_mut().insert(PDB_A, vec![]);
+        if let Some(t) = r.m.table.target(K_A) {
+            *t.refuse_unmap_at.borrow_mut() = Some(0x1000_0000);
+        }
+        let out = settle(&mut r, PDB_A);
+        assert_eq!(out.unreconciled.len(), 1);
+        assert!(busy(&r.port), "a refused unmap holds the clear");
+        assert_eq!(r.m.stats.cleared_over_absent, 0);
+    }
+
+    /// The opt-out (`KF3_INVALIDATE_CLEAR_OVER_ABSENT=0`) restores the 2026-09-25 withheld clear.
+    #[test]
+    fn clear_over_absence_can_be_switched_off() {
+        let mut r = rig();
+        r.m.set_clear_over_absent(false);
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x1000, 0x10_0000, 0x1000, 0)]);
+        r.m.walker_mut().refuse_in = Some(PDB_A);
+        let out = settle(&mut r, PDB_A);
+        assert_eq!(out.unreconciled.len(), 1);
+        assert!(busy(&r.port));
+        assert_eq!(r.m.stats.cleared_over_absent, 0);
     }
 
     /// Past the walker's slots, an object is refused by name — never walked against a guess.

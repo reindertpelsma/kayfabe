@@ -63,10 +63,12 @@
 //! `paramsSize=0x18`), not libcuda's, so reading one word of it is not a read of user
 //! memory either.
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
-use kf_abi::generated::classes::NV01_EVENT_OS_EVENT;
+use kf_abi::generated::classes::{
+    NV01_EVENT_KERNEL_CALLBACK, NV01_EVENT_KERNEL_CALLBACK_EX, NV01_EVENT_OS_EVENT,
+};
 use kf_abi::postevent::PostEvent;
 use kf_abi::versions::DriverAbiTable;
 use kf_gsp::{CommandObserver, RpcCommand, RpcFunction};
@@ -131,13 +133,147 @@ impl OsEventRegistration {
     }
 }
 
+/// ★★★ **The guest's non-stall subscriptions, by slot** (2026-10-08, owner ruling §X) — read
+/// lock-free by the device's interrupt plane on every host non-stall edge.
+///
+/// A slot (`kf_abi::eventnotify::nonstall_slot`) is "the guest has a live event with
+/// `NV01_EVENT_NONSTALL_INTR` on this notifier": the guest CPU-RM's own subscription, which it
+/// walks when the device raises the engine's vector (`ogkm-595.84: event_notification.c:688-737`).
+/// Counted up on the registration, down on the `FREE` that retires it, and cleared when the
+/// guest's RM starts again (fn 1, [`OsEventLog::clear`]).
+///
+/// ★ Every event class counts, not only userspace's `NV01_EVENT_OS_EVENT`: the guest KERNEL's
+/// own non-stall waiters are `NV01_EVENT_KERNEL_CALLBACK_EX` / `NV01_EVENT_KERNEL_CALLBACK` and
+/// reach this device as the same alloc RPC (`ogkm-595.84: event_api.c:149-171`): CeUtils' channel
+/// (`mem_utils.c:1905-1906`, `FIFO_EVENT_MTHD`), semaphore-surface waiters (`sem_surf.c:477-497`),
+/// nvkms (`nvkms-rm.c:4274-4290`). Those are counted here only, never in the `POST_EVENT` registry
+/// (a kernel callback is not a wakeup this device posts). Windows' KMD use of them is unverified;
+/// the rule is generic.
+///
+/// ⊘ **Errs towards waking, never towards silence.** A registration the bounded table could not
+/// remember ([`OS_EVENT_MAX`]) makes its slot STICKY (armed for the rest of the VM's life): its
+/// retire could never be seen, and a missed wake is a correctness bug while a spurious one is
+/// harmless (the guest's waiter re-checks its semaphore). An alloc the object model later
+/// refused is still counted here (the observer cannot see the answer): spurious wakes only.
+#[derive(Debug)]
+pub struct NonstallArms {
+    counts: [AtomicU32; kf_abi::eventnotify::NONSTALL_SLOTS],
+    sticky: AtomicU64,
+    /// Non-stall registrations of the guest kernel's callback classes seen (`0x78`/`0x7e`).
+    pub kernel_registered: AtomicU64,
+    /// Times the guest's RM started again (fn 1) and the subscriptions were cleared.
+    pub clears: AtomicU64,
+}
+
+impl Default for NonstallArms {
+    fn default() -> NonstallArms {
+        NonstallArms {
+            counts: std::array::from_fn(|_| AtomicU32::new(0)),
+            sticky: AtomicU64::new(0),
+            kernel_registered: AtomicU64::new(0),
+            clears: AtomicU64::new(0),
+        }
+    }
+}
+
+impl NonstallArms {
+    /// Whether the guest has a live (or sticky) non-stall subscription on `slot`. Two relaxed
+    /// loads; an out-of-range slot is never armed.
+    #[must_use]
+    pub fn armed(&self, slot: usize) -> bool {
+        self.counts
+            .get(slot)
+            .is_some_and(|c| c.load(Ordering::Relaxed) > 0)
+            || (slot < 64 && self.sticky.load(Ordering::Relaxed) & (1 << slot) != 0)
+    }
+
+    /// Live subscriptions on `slot` (for the report).
+    #[must_use]
+    pub fn count(&self, slot: usize) -> u32 {
+        self.counts
+            .get(slot)
+            .map_or(0, |c| c.load(Ordering::Relaxed))
+    }
+
+    /// The sticky slots, as a bit mask (for the report).
+    #[must_use]
+    pub fn sticky(&self) -> u64 {
+        self.sticky.load(Ordering::Relaxed)
+    }
+
+    fn up(&self, slot: usize) {
+        if let Some(c) = self.counts.get(slot) {
+            c.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    /// ⊘ Two locks write these counters ([`OsEventLog`]'s `live` rows and its `kernel` rows), so
+    /// writers DO race each other: `down` is an atomic compare-exchange decrement (stopping
+    /// at 0), like `up`, never a load-then-store that could lose a concurrent `up`. Readers
+    /// stay lock-free.
+    fn down(&self, slot: usize) {
+        if let Some(c) = self.counts.get(slot) {
+            let mut v = c.load(Ordering::Relaxed);
+            while v > 0 {
+                match c.compare_exchange_weak(v, v - 1, Ordering::Relaxed, Ordering::Relaxed) {
+                    Ok(_) => break,
+                    Err(now) => v = now,
+                }
+            }
+        }
+    }
+
+    /// ★ Move one subscription from `old` to `new`: `up(new)` FIRST, then `down(old)`. With
+    /// `old == new` the other order lets a lock-free reader see the count pass through 0 and
+    /// judge an armed slot NotArmed (a lost wake); this order can only show one too many (a
+    /// spurious wake, harmless).
+    fn shift(&self, old: Option<usize>, new: Option<usize>) {
+        if let Some(n) = new {
+            self.up(n);
+        }
+        if let Some(o) = old {
+            self.down(o);
+        }
+    }
+
+    fn stick(&self, slot: usize) {
+        if slot < 64 {
+            self.sticky.fetch_or(1 << slot, Ordering::Relaxed);
+        }
+    }
+
+    /// Every count and sticky bit back to zero — called with BOTH row locks held
+    /// ([`OsEventLog::clear`]), so no `up`/`down` runs concurrently.
+    fn zero(&self) {
+        for c in &self.counts {
+            c.store(0, Ordering::Relaxed);
+        }
+        self.sticky.store(0, Ordering::Relaxed);
+    }
+}
+
+/// How many non-stall registrations of the guest kernel's callback classes this device will
+/// remember (for their `FREE`). Past it a registration's slot STICKS ([`NonstallArms`]).
+pub const KERNEL_NONSTALL_MAX: usize = 64;
+
+/// One remembered kernel-callback non-stall registration: `(hClient, hEvent, slot)`.
+type KernelRow = (u32, u32, usize);
+
+/// One remembered registration and its non-stall subscription slot, if any.
+type Row = (OsEventRegistration, Option<usize>);
+
 /// The shared registry. Cloneable so the plane and the chain link hold the same one.
 #[derive(Debug, Clone, Default)]
 pub struct OsEventLog {
-    live: Arc<Mutex<Vec<OsEventRegistration>>>,
+    live: Arc<Mutex<Vec<Row>>>,
+    /// The guest kernel's non-stall callback registrations — arms only, never posted to.
+    kernel: Arc<Mutex<Vec<KernelRow>>>,
+    nonstall: Arc<NonstallArms>,
     registered: Arc<AtomicU64>,
     retired: Arc<AtomicU64>,
     overflowed: Arc<AtomicU64>,
+    /// Kernel-callback registrations refused because [`KERNEL_NONSTALL_MAX`] was reached.
+    kernel_overflowed: Arc<AtomicU64>,
     malformed: Arc<AtomicU64>,
     posted: Arc<AtomicU64>,
     batches: Arc<AtomicU64>,
@@ -161,20 +297,91 @@ impl OsEventLog {
     ///
     /// Returns whether a new row was added.
     pub fn register(&self, reg: OsEventRegistration) -> bool {
+        self.register_slot(reg, None)
+    }
+
+    /// [`OsEventLog::register`], and count it on the guest's non-stall subscription `slot`
+    /// ([`NonstallArms`]) — `None` for a registration that is not a non-stall one.
+    ///
+    /// ★ A pair already registered with a DIFFERENT notifier (the guest reused the handle pair
+    /// after a `FREE` this device did not see) REPLACES the row and moves its arm to the new slot:
+    /// keeping the old slot would leave the new subscription unarmed, a lost wake. Returns `true`
+    /// for a replacement too.
+    pub fn register_slot(&self, reg: OsEventRegistration, slot: Option<usize>) -> bool {
         let mut live = self.live.lock().unwrap_or_else(|e| e.into_inner());
-        if live
-            .iter()
-            .any(|r| r.client == reg.client && r.event == reg.event)
+        if let Some(row) = live
+            .iter_mut()
+            .find(|(r, _)| r.client == reg.client && r.event == reg.event)
         {
-            return false;
+            if row.0 == reg && row.1 == slot {
+                return false;
+            }
+            self.nonstall.shift(row.1, slot);
+            *row = (reg, slot);
+            return true;
         }
         if live.len() >= OS_EVENT_MAX {
             self.overflowed.fetch_add(1, Ordering::Relaxed);
+            // ⊘ Not remembered, so its FREE can never be seen: the slot stays armed for good
+            // (a spurious wake is harmless, a missed one is not — [`NonstallArms`]).
+            if let Some(s) = slot {
+                self.nonstall.stick(s);
+            }
             return false;
         }
-        live.push(reg);
+        if let Some(s) = slot {
+            self.nonstall.up(s);
+        }
+        live.push((reg, slot));
         self.registered.fetch_add(1, Ordering::Relaxed);
         true
+    }
+
+    /// ★ A non-stall registration of the guest KERNEL's callback classes (`0x78`/`0x7e`) on
+    /// `slot`: counted in [`NonstallArms`] only (never posted to), retired by the same `FREE`s as
+    /// every row ([`OsEventLog::retire`]). Dedup and replacement as [`OsEventLog::register_slot`].
+    pub fn register_kernel_nonstall(&self, client: u32, event: u32, slot: usize) {
+        let mut rows = self.kernel.lock().unwrap_or_else(|e| e.into_inner());
+        self.nonstall
+            .kernel_registered
+            .fetch_add(1, Ordering::Relaxed);
+        if let Some(row) = rows.iter_mut().find(|r| r.0 == client && r.1 == event) {
+            if row.2 != slot {
+                self.nonstall.shift(Some(row.2), Some(slot));
+                row.2 = slot;
+            }
+            return;
+        }
+        if rows.len() >= KERNEL_NONSTALL_MAX {
+            self.kernel_overflowed.fetch_add(1, Ordering::Relaxed);
+            self.nonstall.stick(slot);
+            return;
+        }
+        self.nonstall.up(slot);
+        rows.push((client, event, slot));
+    }
+
+    /// ★ The guest's RM started again (fn 1, `SET_GUEST_SYSTEM_INFO`): every registration of the
+    /// previous RM life is dead. Drop all rows and zero every non-stall arm (a reused handle pair
+    /// must not inherit an old slot, and a stale arm must not outlive its RM).
+    ///
+    /// ⚠ PLAUSIBLE, unverified: a guest driver that re-sent fn 1 within ONE RM life while holding
+    /// events (a Windows KMD path not ruled out) would leave them unarmed here until registered
+    /// again. Linux cannot: `kgspInitRm` runs only from `RmInitAdapter`.
+    pub fn clear(&self) {
+        let mut live = self.live.lock().unwrap_or_else(|e| e.into_inner());
+        let mut rows = self.kernel.lock().unwrap_or_else(|e| e.into_inner());
+        live.clear();
+        rows.clear();
+        self.nonstall.zero();
+        self.nonstall.clears.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// ★ The guest's non-stall subscriptions — the same counters the registry keeps, shared
+    /// (`Arc`), read lock-free by the device's interrupt plane.
+    #[must_use]
+    pub fn nonstall_arms(&self) -> Arc<NonstallArms> {
+        Arc::clone(&self.nonstall)
     }
 
     /// ★★★ Retire every row the guest's `FREE` killed. See this module's header for what
@@ -199,15 +406,30 @@ impl OsEventLog {
     pub fn retire(&self, client: u32, handle: u32) -> usize {
         let mut live = self.live.lock().unwrap_or_else(|e| e.into_inner());
         let before = live.len();
-        live.retain(|r| {
+        let nonstall = &self.nonstall;
+        live.retain(|(r, slot)| {
             let this_event = r.client == client && r.event == handle;
             let this_client_root = client == handle && r.client == handle;
-            !(this_event || this_client_root)
+            let drop = this_event || this_client_root;
+            if drop && let Some(s) = slot {
+                nonstall.down(*s);
+            }
+            !drop
         });
         let dropped = before - live.len();
         if dropped > 0 {
             self.retired.fetch_add(dropped as u64, Ordering::Relaxed);
         }
+        drop(live);
+        // The kernel's callback registrations die by the same two FREE shapes.
+        let mut rows = self.kernel.lock().unwrap_or_else(|e| e.into_inner());
+        rows.retain(|&(c, e, slot)| {
+            let gone = (c == client && e == handle) || (client == handle && c == handle);
+            if gone {
+                nonstall.down(slot);
+            }
+            !gone
+        });
         dropped
     }
 
@@ -233,7 +455,7 @@ impl OsEventLog {
     pub fn find(&self, client: u32, event: u32) -> Option<OsEventRegistration> {
         let live = self.live.lock().unwrap_or_else(|e| e.into_inner());
         live.iter()
-            .copied()
+            .map(|(r, _)| *r)
             .find(|r| r.client == client && r.event == event)
     }
 
@@ -241,7 +463,7 @@ impl OsEventLog {
     #[must_use]
     pub fn live(&self) -> Vec<OsEventRegistration> {
         let live = self.live.lock().unwrap_or_else(|e| e.into_inner());
-        live.clone()
+        live.iter().map(|(r, _)| *r).collect()
     }
 
     /// How many distinct `(hClient, hEvent)` pairs have ever been registered.
@@ -256,13 +478,22 @@ impl OsEventLog {
         self.retired.load(Ordering::Relaxed)
     }
 
-    /// How many registrations were refused because the table was full.
+    /// How many `NV01_EVENT_OS_EVENT` registrations were refused because the live table
+    /// ([`OS_EVENT_MAX`]) was full (the kernel-callback table's own count:
+    /// [`OsEventLog::kernel_overflowed`]).
     ///
     /// ★ Its healthy value is zero, and a non-zero one is not a tuning signal — it means
     /// this device is knowingly not waking someone.
     #[must_use]
     pub fn overflowed(&self) -> u64 {
         self.overflowed.load(Ordering::Relaxed)
+    }
+
+    /// How many guest-kernel non-stall callback registrations were refused because
+    /// [`KERNEL_NONSTALL_MAX`] was reached (their slot sticks). Healthy value: zero.
+    #[must_use]
+    pub fn kernel_overflowed(&self) -> u64 {
+        self.kernel_overflowed.load(Ordering::Relaxed)
     }
 
     /// How many `NV01_EVENT_OS_EVENT` allocs arrived whose params this port could not read.
@@ -379,7 +610,9 @@ impl CommandObserver for OsEventRecorder {
                 let Ok(h) = self.driver.decode_rpc_alloc(body) else {
                     return;
                 };
-                if h.class != NV01_EVENT_OS_EVENT {
+                let kernel_callback = h.class == NV01_EVENT_KERNEL_CALLBACK
+                    || h.class == NV01_EVENT_KERNEL_CALLBACK_EX;
+                if h.class != NV01_EVENT_OS_EVENT && !kernel_callback {
                     return;
                 }
                 // ⚠ `paramsSize` is the guest's assertion about its own message, so it is
@@ -405,11 +638,25 @@ impl CommandObserver for OsEventRecorder {
                     self.log.note_malformed();
                     return;
                 };
-                self.log.register(OsEventRegistration {
-                    client: h.client,
-                    event: h.handle,
-                    notify_index,
-                });
+                // ★ 2026-10-08 (§X): a NON-STALL registration is the guest's subscription to an
+                // engine's (or the host's) non-stall edges, resolved at the guest's version.
+                let slot =
+                    kf_abi::eventnotify::nonstall_slot(self.driver.driver_version(), notify_index);
+                if kernel_callback {
+                    // The guest kernel's own waiter: an arm, never a POST_EVENT row.
+                    if let Some(s) = slot {
+                        self.log.register_kernel_nonstall(h.client, h.handle, s);
+                    }
+                    return;
+                }
+                self.log.register_slot(
+                    OsEventRegistration {
+                        client: h.client,
+                        event: h.handle,
+                        notify_index,
+                    },
+                    slot,
+                );
             }
             // ★★★ The retire path. `rpc_free_v03_00` IS `NVOS00_PARAMETERS`
             // (`hRoot = hClient`, `hObjectOld = hObject`), which is why the ordinary free
@@ -418,6 +665,8 @@ impl CommandObserver for OsEventRecorder {
             // ⊘ It does NOT gate on "was this handle one of ours": the guest frees far more
             // than events, and `retire` is a no-op for a handle that names no row. Gating
             // would mean holding a second copy of the object model here.
+            // ★ 2026-10-08 (§X): the guest's RM (re)starts — every earlier registration is dead.
+            RpcFunction::SetGuestSystemInfo => self.log.clear(),
             RpcFunction::Free => {
                 let Ok(f) = self.driver.decode_free(&cmd.payload) else {
                     return;
@@ -639,6 +888,280 @@ mod tests {
         let left = log.live();
         assert_eq!(left.len(), 1);
         assert_eq!(left[0].client, 0xc1d0_000d, "the other client is untouched");
+    }
+
+    /// ★ 2026-10-08 (§X): a NON-STALL registration arms its slot, its `FREE` disarms it; a stall
+    /// registration on the same index arms nothing.
+    #[test]
+    fn a_nonstall_registration_arms_its_slot_until_freed() {
+        use kf_abi::eventnotify::{NONSTALL_SLOT_FIFO_EVENT_MTHD, NV01_EVENT_NONSTALL_INTR};
+        let log = OsEventLog::new();
+        let arms = log.nonstall_arms();
+        let mut rec = recorder(&log);
+        let mut params = [0u8; NV0005_ALLOC_PARAMETERS_SIZE];
+        params[NOTIFY_INDEX_AT..NOTIFY_INDEX_AT + 4].copy_from_slice(&35u32.to_le_bytes());
+        observe(
+            &mut rec,
+            RpcFunction::RmAlloc,
+            alloc_rpc(0xc1d0_000c, 0x5c00_0079, NV01_EVENT_OS_EVENT, &params),
+        );
+        assert!(!arms.armed(NONSTALL_SLOT_FIFO_EVENT_MTHD), "a stall event");
+        params[NOTIFY_INDEX_AT..NOTIFY_INDEX_AT + 4]
+            .copy_from_slice(&(35u32 | NV01_EVENT_NONSTALL_INTR).to_le_bytes());
+        for ev in [0x5c00_007a, 0x5c00_007b] {
+            observe(
+                &mut rec,
+                RpcFunction::RmAlloc,
+                alloc_rpc(0xc1d0_000c, ev, NV01_EVENT_OS_EVENT, &params),
+            );
+        }
+        assert_eq!(arms.count(NONSTALL_SLOT_FIFO_EVENT_MTHD), 2);
+        assert_eq!(log.retire(0xc1d0_000c, 0x5c00_007a), 1);
+        assert!(
+            arms.armed(NONSTALL_SLOT_FIFO_EVENT_MTHD),
+            "one subscription left"
+        );
+        assert_eq!(log.retire(0xc1d0_000c, 0xc1d0_000c), 2, "the root free");
+        assert!(!arms.armed(NONSTALL_SLOT_FIFO_EVENT_MTHD));
+        assert!(!arms.armed(usize::MAX), "a hostile slot is never armed");
+    }
+
+    fn nonstall_params(notify_index: u32) -> [u8; NV0005_ALLOC_PARAMETERS_SIZE] {
+        let mut params = [0u8; NV0005_ALLOC_PARAMETERS_SIZE];
+        params[NOTIFY_INDEX_AT..NOTIFY_INDEX_AT + 4].copy_from_slice(&notify_index.to_le_bytes());
+        params
+    }
+
+    fn free_rpc(client: u32, handle: u32) -> Vec<u8> {
+        let mut free = vec![0u8; 16];
+        free[0..4].copy_from_slice(&client.to_le_bytes());
+        free[8..12].copy_from_slice(&handle.to_le_bytes());
+        free
+    }
+
+    /// ★ The review's finding 1: the guest KERNEL's non-stall waiters (`NV01_EVENT_KERNEL_CALLBACK_EX`
+    /// for CeUtils and semaphore surfaces, `NV01_EVENT_KERNEL_CALLBACK`) arm their slot — and are
+    /// never put in the POST_EVENT registry — and their FREE (event or client root) disarms it.
+    #[test]
+    fn a_kernel_callback_nonstall_registration_arms_its_slot_until_freed() {
+        use kf_abi::eventnotify::{
+            NONSTALL_SLOT_FIFO_EVENT_MTHD, NV01_EVENT_NONSTALL_INTR, nonstall_slot_ce,
+        };
+        let ce2 = 25u32; // NV2080_NOTIFIERS_CE2 at the bench driver
+        assert_eq!(
+            kf_abi::eventnotify::nonstall_slot(
+                kf_abi::versions::BENCH_DRIVER,
+                ce2 | NV01_EVENT_NONSTALL_INTR
+            ),
+            nonstall_slot_ce(2)
+        );
+        let log = OsEventLog::new();
+        let arms = log.nonstall_arms();
+        let mut rec = recorder(&log);
+        let fifo = NONSTALL_SLOT_FIFO_EVENT_MTHD;
+        // 0x7e, CeUtils' shape: FIFO_EVENT_MTHD | NONSTALL (mem_utils.c:1905-1906).
+        observe(
+            &mut rec,
+            RpcFunction::RmAlloc,
+            alloc_rpc(
+                0xc1e0_0001,
+                0x5c00_0001,
+                NV01_EVENT_KERNEL_CALLBACK_EX,
+                &nonstall_params(35 | NV01_EVENT_NONSTALL_INTR),
+            ),
+        );
+        // 0x78 on CE2, in another client.
+        observe(
+            &mut rec,
+            RpcFunction::RmAlloc,
+            alloc_rpc(
+                0xc1e0_0002,
+                0x5c00_0002,
+                NV01_EVENT_KERNEL_CALLBACK,
+                &nonstall_params(ce2 | NV01_EVENT_NONSTALL_INTR),
+            ),
+        );
+        // A kernel callback WITHOUT the non-stall flag arms nothing.
+        observe(
+            &mut rec,
+            RpcFunction::RmAlloc,
+            alloc_rpc(
+                0xc1e0_0001,
+                0x5c00_0003,
+                NV01_EVENT_KERNEL_CALLBACK_EX,
+                &nonstall_params(35),
+            ),
+        );
+        assert!(
+            arms.armed(fifo),
+            "the kernel's FIFO_EVENT_MTHD waiter is armed"
+        );
+        assert!(arms.armed(nonstall_slot_ce(2).unwrap()));
+        assert_eq!(arms.count(fifo), 1);
+        assert_eq!(arms.kernel_registered.load(Ordering::Relaxed), 2);
+        assert_eq!(log.live(), vec![], "never a POST_EVENT row");
+        // FREE(hClient, hParent, hEvent) retires the 0x7e …
+        observe(
+            &mut rec,
+            RpcFunction::Free,
+            free_rpc(0xc1e0_0001, 0x5c00_0001),
+        );
+        assert_eq!(arms.count(fifo), 0, "freed: back to 0");
+        // … and FREE(hClient, NULL, hClient) — the client root — the 0x78.
+        observe(
+            &mut rec,
+            RpcFunction::Free,
+            free_rpc(0xc1e0_0002, 0xc1e0_0002),
+        );
+        assert!(
+            !arms.armed(nonstall_slot_ce(2).unwrap()),
+            "freed: back to 0"
+        );
+    }
+
+    /// ★ The review's finding 2: a reused `(hClient, hEvent)` on ANOTHER notifier moves the arm
+    /// (the old slot is disarmed, the new one armed) in both tables.
+    #[test]
+    fn a_reused_pair_on_another_notifier_moves_its_arm() {
+        let log = OsEventLog::new();
+        let arms = log.nonstall_arms();
+        let reg = |notify_index| OsEventRegistration {
+            client: 7,
+            event: 0x70,
+            notify_index,
+        };
+        assert!(log.register_slot(reg(35), Some(0)));
+        assert!(!log.register_slot(reg(35), Some(0)), "identical: a no-op");
+        assert_eq!(arms.count(0), 1);
+        assert!(log.register_slot(reg(25), Some(4)), "replaced");
+        assert_eq!((arms.count(0), arms.count(4)), (0, 1));
+        assert_eq!(log.live(), vec![reg(25)]);
+        assert!(log.register_slot(reg(0), None), "now not a non-stall event");
+        assert_eq!(arms.count(4), 0);
+        // The kernel table likewise.
+        log.register_kernel_nonstall(9, 0x90, 0);
+        log.register_kernel_nonstall(9, 0x90, 1);
+        assert_eq!((arms.count(0), arms.count(1)), (0, 1));
+        assert_eq!(
+            log.retire(9, 0x90),
+            0,
+            "kernel rows are not POST_EVENT rows"
+        );
+        assert_eq!(arms.count(1), 0);
+    }
+
+    /// ★ The review's finding 2, second half: fn 1 (the guest's RM starting again) drops every
+    /// row and every arm, sticky included — seen by the observer, in RPC order.
+    #[test]
+    fn the_guest_rm_starting_again_clears_every_registration_and_arm() {
+        let log = OsEventLog::new();
+        let arms = log.nonstall_arms();
+        let mut rec = recorder(&log);
+        log.register_slot(
+            OsEventRegistration {
+                client: 1,
+                event: 2,
+                notify_index: 35,
+            },
+            Some(0),
+        );
+        log.register_kernel_nonstall(3, 4, 5);
+        for i in 0..KERNEL_NONSTALL_MAX as u32 + 1 {
+            log.register_kernel_nonstall(10, 0x100 + i, 6);
+        }
+        assert_eq!(arms.sticky(), 1 << 6, "the overflow stuck");
+        observe(&mut rec, RpcFunction::SetGuestSystemInfo, vec![0u8; 8]);
+        assert_eq!(log.live(), vec![]);
+        for s in 0..kf_abi::eventnotify::NONSTALL_SLOTS {
+            assert!(!arms.armed(s), "slot {s} still armed after fn 1");
+        }
+        assert_eq!(arms.clears.load(Ordering::Relaxed), 1);
+        // A registration after fn 1 arms again.
+        log.register_kernel_nonstall(3, 4, 5);
+        assert!(arms.armed(5));
+    }
+
+    /// ★ A replaced row moving within ONE slot never shows that slot unarmed to a lock-free reader
+    /// (`up` before `down`), and the two row locks' writers never lose a count (`down` is one
+    /// atomic RMW).
+    #[test]
+    fn a_same_slot_replacement_never_shows_the_slot_unarmed() {
+        use std::sync::atomic::AtomicBool;
+        let log = OsEventLog::new();
+        let arms = log.nonstall_arms();
+        let a = OsEventRegistration {
+            client: 1,
+            event: 2,
+            notify_index: 35,
+        };
+        let b = OsEventRegistration {
+            notify_index: 36,
+            ..a
+        };
+        assert!(log.register_slot(a, Some(4)));
+        let stop = Arc::new(AtomicBool::new(false));
+        let reader = {
+            let (arms, stop) = (Arc::clone(&arms), Arc::clone(&stop));
+            std::thread::spawn(move || {
+                let mut unarmed = 0u64;
+                while !stop.load(Ordering::Relaxed) {
+                    if !arms.armed(4) {
+                        unarmed += 1;
+                    }
+                }
+                unarmed
+            })
+        };
+        // A kernel writer on the same slot, under the other lock, at the same time.
+        let kernel = {
+            let log = log.clone();
+            std::thread::spawn(move || {
+                for i in 0..20_000u32 {
+                    log.register_kernel_nonstall(7, 0x500 + (i % 8), 4);
+                    log.retire(7, 0x500 + (i % 8));
+                }
+            })
+        };
+        for i in 0..20_000 {
+            assert!(log.register_slot(if i % 2 == 0 { b } else { a }, Some(4)));
+        }
+        kernel.join().unwrap();
+        stop.store(true, Ordering::Relaxed);
+        assert_eq!(reader.join().unwrap(), 0, "a reader saw the slot unarmed");
+        assert_eq!(
+            arms.count(4),
+            1,
+            "no count lost or leaked across the two locks"
+        );
+        assert_eq!(log.retire(1, 2), 1);
+        assert!(!arms.armed(4));
+    }
+
+    /// ⊘ A non-stall registration past the bound is not remembered — so its slot sticks armed
+    /// (a missed wake is the bug; a spurious one is not).
+    #[test]
+    fn an_overflowed_nonstall_registration_sticks_its_slot() {
+        let log = OsEventLog::new();
+        for i in 0..OS_EVENT_MAX as u32 {
+            log.register(OsEventRegistration {
+                client: 1,
+                event: 0x1000 + i,
+                notify_index: 0,
+            });
+        }
+        let reg = OsEventRegistration {
+            client: 1,
+            event: 0x9000,
+            notify_index: 0,
+        };
+        assert!(!log.register_slot(reg, Some(3)));
+        assert!(log.nonstall_arms().armed(3));
+        assert_eq!(log.nonstall_arms().sticky(), 1 << 3);
+        assert_eq!(log.retire(1, 1), OS_EVENT_MAX);
+        assert!(
+            log.nonstall_arms().armed(3),
+            "still armed: its free was never seen"
+        );
     }
 
     /// The table refuses to remember past its bound, and says so — it never evicts.

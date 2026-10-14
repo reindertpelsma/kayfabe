@@ -1,0 +1,6 @@
+=== gputest_triangle start=2026-10-11T14:14:56.7695236+00:00 host=VASTWIN session=1 boot=2026-10-11T14:08:38.5000000Z timeout=98
+KFWAIT gputest_triangle EXITED rc=0
+GPUTEST 2026/10/11@14:14:58(0000000002) < > GpuTest: Cross Platform Graphics Benchmark Utility
+GPUTEST 2026/10/11@14:14:59(0000000026) < > Triangle - OpenGL - Renderer model: NVIDIA GeForce RTX 4070/PCIe/SSE2
+GPUTEST 2026/10/11@14:15:11(0000000030) < > [Benchmark_Score] - module: Triangle - Score: 15466 points (1280x720 windowed, duration:8000 ms).
+=== end rc=0 secs=16 2026-10-11T14:15:12.8033364+00:00

@@ -32,6 +32,8 @@
 # Environment: WINVM_ROOT (/workspace/winvm), WINVM_NAME (kfwin), BENCH (/workspace/bench: kf3
 # binaries per revision), WINVM_QEMU (override the binary), WINVM_SSH_PORT (2224),
 # WINVM_SSH_BIND (127.0.0.1), WINVM_RAM_MB (8192), WINVM_SMP (8), WINVM_KF3_FB_MB (8192).
+# DIAGNOSTIC, default off (2026-10-09): WINVM_TRACE=1 [WINVM_GSP_OBSERVER=1] with KF3_BAR0_READ_TRACE=1
+# records each boot with the VFIO reference's tracer (docs/design/V3_BAR0_TRACE_MODE.md).
 #
 # ⊘ NO SECRETS IN THIS FILE OR THE REPO. Everything secret is generated on the host into the VM
 # directory (0700/0600) and never leaves it: the Windows password, the harness ssh key, the swtpm
@@ -716,7 +718,20 @@ cmd_run() {
     n=$((n + 1))
     dm0=$(dmesg 2>/dev/null | wc -l || echo 0)
     nvidia-smi -q > "$VM/logs/${tag}_b${n}_host_smi_before.txt" 2>&1 || true
-    vm_start "$tag" "$n" -serial "file:$VM/logs/${tag}_b${n}_serial.log"
+    # ★ 2026-10-09, DIAGNOSTIC (default off; docs/design/V3_BAR0_TRACE_MODE.md, OWNER_RULINGS §X):
+    # WINVM_TRACE=1 records this boot with the VFIO reference's tracer — QEMU's trace events from
+    # scripts/bench/trace-events-vfio-reference.txt into logs/<tag>_b<n>_trace.log (kf3's BAR0
+    # records need KF3_BAR0_READ_TRACE=1 in the environment too) and, with WINVM_GSP_OBSERVER=1, the
+    # shared GSP observer into logs/<tag>_b<n>_gsp.jsonl (a fresh file per boot, as it requires).
+    local tracea=()
+    if [ "${WINVM_TRACE:-0}" = 1 ]; then
+      tracea=(-trace "events=$REPO/scripts/bench/trace-events-vfio-reference.txt,file=$VM/logs/${tag}_b${n}_trace.log")
+      [ "${WINVM_GSP_OBSERVER:-0}" = 1 ] && [ "$kf3" = 1 ] && \
+        tracea+=(-global "kf3-gpu.x-gsp-observer=$VM/logs/${tag}_b${n}_gsp.jsonl"
+                 -global "kf3-gpu.x-gsp-observer-seconds=${WINVM_GSP_OBSERVER_SECONDS:-3600}")
+      log "WINVM_TRACE boot=$n KF3_BAR0_READ_TRACE=${KF3_BAR0_READ_TRACE:-unset} ranges=${KF3_READ_TRACE_RANGES:-display} observer=${WINVM_GSP_OBSERVER:-0}"
+    fi
+    vm_start "$tag" "$n" -serial "file:$VM/logs/${tag}_b${n}_serial.log" "${tracea[@]}"
     vm_wait 0
     reason=$BOOT_REASON
     dmesg 2>/dev/null | tail -n "+$((dm0 + 1))" > "$VM/logs/${tag}_b${n}_host_dmesg.txt" || true

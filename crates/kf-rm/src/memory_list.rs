@@ -20,6 +20,23 @@ pub struct RamSpan {
 /// Maximum copied bytes per future CPU access; independent of guest descriptor size.
 pub const MAX_ACCESS: usize = 4096;
 
+/// Checked worker-access status; contention must never be confused with revocation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AccessError {
+    /// Another bounded metadata/copy operation owns the lock.
+    Busy,
+    /// Handle, parent, graph or resource lifetime no longer matches.
+    Gone,
+    /// Bytes exceed the registered/acquired logical span or access cap.
+    Bounds,
+    /// RAM authority refused the registered topology generation.
+    Topology,
+    /// A metadata lock was poisoned; fail closed.
+    Poisoned,
+    /// Authority supplies no nonblocking worker implementation.
+    Unsupported,
+}
+
 /// Trusted RAM authority supplied by the VMM. Registration never touches contents.
 /// Implementations must validate writable real RAM, revoke generations on topology
 /// changes, and hold the registration guard across every bounded copy. A generation
@@ -31,6 +48,27 @@ pub trait GuestRamAuthority: core::fmt::Debug + Send + Sync {
     fn read(&self, span: RamSpan, generation: u64, offset: u64, bytes: &mut [u8]) -> bool;
     /// Write a bounded offset in the same currently registered span/generation.
     fn write(&self, span: RamSpan, generation: u64, offset: u64, bytes: &[u8]) -> bool;
+    /// Worker read must use nonblocking topology admission and hold that guard
+    /// through the bounded copy. No fallback to the legacy blocking read.
+    fn try_read(
+        &self,
+        _span: RamSpan,
+        _generation: u64,
+        _offset: u64,
+        _bytes: &mut [u8],
+    ) -> Result<(), AccessError> {
+        Err(AccessError::Unsupported)
+    }
+    /// Nonblocking counterpart of try_read; temporary contention returns Busy.
+    fn try_write(
+        &self,
+        _span: RamSpan,
+        _generation: u64,
+        _offset: u64,
+        _bytes: &[u8],
+    ) -> Result<(), AccessError> {
+        Err(AccessError::Unsupported)
+    }
 }
 
 /// A registered descriptor; only this module can mint its facts after RAM validation.
@@ -51,7 +89,13 @@ impl RegisteredMemory {
             length: self.declaration.span,
         }
     }
-    fn access(self, offset: u64, bytes: usize) -> Option<u64> {
+    /// Derived physical byte address of a checked logical subspan; no pointer.
+    pub(crate) fn ram_location(self, offset: u64, bytes: usize) -> Option<u64> {
+        self.declaration
+            .page_base
+            .checked_add(self.access(offset, bytes)?)
+    }
+    pub(crate) fn access(self, offset: u64, bytes: usize) -> Option<u64> {
         if bytes > MAX_ACCESS || offset.checked_add(bytes as u64)? > self.declaration.length {
             return None;
         }
@@ -134,7 +178,7 @@ pub(crate) fn allocate(
     Ok(event)
 }
 
-fn lookup(graph: &RmGraph, key: NodeKey) -> Option<RegisteredMemory> {
+pub(crate) fn lookup(graph: &RmGraph, key: NodeKey) -> Option<RegisteredMemory> {
     let n = graph.node(key)?;
     if n.kind != ObjectKind::GuestMemoryList {
         return None;
@@ -187,6 +231,30 @@ pub(crate) fn write(
     ram.write(d.span(), d.generation, at, bytes)
 }
 
+pub(crate) fn try_read(
+    graph: &RmGraph,
+    ram: Option<&Arc<dyn GuestRamAuthority>>,
+    key: NodeKey,
+    offset: u64,
+    bytes: &mut [u8],
+) -> Result<(), AccessError> {
+    let (ram, d) = ram.zip(lookup(graph, key)).ok_or(AccessError::Gone)?;
+    let at = d.access(offset, bytes.len()).ok_or(AccessError::Bounds)?;
+    ram.try_read(d.span(), d.generation, at, bytes)
+}
+
+pub(crate) fn try_write(
+    graph: &RmGraph,
+    ram: Option<&Arc<dyn GuestRamAuthority>>,
+    key: NodeKey,
+    offset: u64,
+    bytes: &[u8],
+) -> Result<(), AccessError> {
+    let (ram, d) = ram.zip(lookup(graph, key)).ok_or(AccessError::Gone)?;
+    let at = d.access(offset, bytes.len()).ok_or(AccessError::Bounds)?;
+    ram.try_write(d.span(), d.generation, at, bytes)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -195,7 +263,65 @@ mod tests {
     use std::sync::Mutex;
     #[derive(Debug)]
     struct Ram(Mutex<(u64, Vec<u8>, usize)>);
+    impl Ram {
+        fn try_access(
+            &self,
+            s: RamSpan,
+            generation: u64,
+            offset: u64,
+            bytes: usize,
+            copy: impl FnOnce(&mut [u8]),
+        ) -> Result<(), AccessError> {
+            let mut g = self.0.try_lock().map_err(|e| match e {
+                std::sync::TryLockError::WouldBlock => AccessError::Busy,
+                std::sync::TryLockError::Poisoned(_) => AccessError::Poisoned,
+            })?;
+            if generation == 0 || g.0 != generation {
+                return Err(AccessError::Topology);
+            }
+            if bytes > MAX_ACCESS
+                || offset
+                    .checked_add(bytes as u64)
+                    .is_none_or(|e| e > s.length)
+            {
+                return Err(AccessError::Bounds);
+            }
+            let at = s
+                .base
+                .checked_sub(0x2000)
+                .and_then(|v| v.checked_add(offset))
+                .and_then(|v| usize::try_from(v).ok())
+                .ok_or(AccessError::Topology)?;
+            g.2 += 1;
+            let end = at.checked_add(bytes).ok_or(AccessError::Bounds)?;
+            let slice = g.1.get_mut(at..end).ok_or(AccessError::Topology)?;
+            copy(slice);
+            Ok(())
+        }
+    }
     impl GuestRamAuthority for Ram {
+        fn try_read(
+            &self,
+            s: RamSpan,
+            generation: u64,
+            offset: u64,
+            bytes: &mut [u8],
+        ) -> Result<(), AccessError> {
+            self.try_access(s, generation, offset, bytes.len(), |s| {
+                bytes.copy_from_slice(s)
+            })
+        }
+        fn try_write(
+            &self,
+            s: RamSpan,
+            generation: u64,
+            offset: u64,
+            bytes: &[u8],
+        ) -> Result<(), AccessError> {
+            self.try_access(s, generation, offset, bytes.len(), |s| {
+                s.copy_from_slice(bytes)
+            })
+        }
         fn validate(&self, s: RamSpan) -> Option<u64> {
             let g = self.0.lock().unwrap();
             (s.base >= 0x2000
@@ -405,6 +531,250 @@ mod tests {
             objects.memory_list(d).is_err(),
             "no silent topology rebind on retry"
         );
+    }
+
+    #[test]
+    fn shared_memory_lease_rejects_same_handle_reallocation_and_topology_change() {
+        use crate::memory_access::{Access, Refusal, SharedObjects};
+        let (objects, ram, d) = fixture(kf_chip::Family::Ada);
+        let access = Arc::new(Access::default());
+        let mut shared = SharedObjects::new(objects, &access);
+        shared.memory_list(d).unwrap();
+        let old = access.lease(1, 4, 0x600, 0x200).unwrap();
+        assert_eq!(
+            ram.0.lock().unwrap().2,
+            0,
+            "registration/acquire reads no contents"
+        );
+        old.write(0, &[1, 2, 3, 4]).unwrap();
+        let mut out = [0; 4];
+        old.read(0, &mut out).unwrap();
+        assert_eq!(out, [1, 2, 3, 4]);
+        let topology_writer = ram.0.lock().unwrap();
+        assert_eq!(old.read(0, &mut out), Err(Refusal::Busy));
+        assert_eq!(old.write(0, &[9]), Err(Refusal::Busy));
+        drop(topology_writer);
+        shared
+            .apply(
+                RmEvent::Free {
+                    client: HClient(1),
+                    handle: HObject(4),
+                },
+                &[],
+            )
+            .unwrap();
+        shared.memory_list(d).unwrap();
+        assert_eq!(old.read(0, &mut out), Err(Refusal::Gone));
+        assert_eq!(old.write(0, &[9]), Err(Refusal::Gone));
+        let new = access.lease(1, 4, 0x600, 0x200).unwrap();
+        new.write(0, &[8]).unwrap();
+        ram.0.lock().unwrap().0 += 1;
+        assert_eq!(new.read(0, &mut out), Err(Refusal::Topology));
+        assert_eq!(new.write(0, &[9]), Err(Refusal::Topology));
+    }
+
+    #[test]
+    fn worker_userd_location_is_derived_from_the_live_logical_descriptor() {
+        use crate::memory_access::{Access, Refusal, SharedObjects};
+        let (objects, ram, mut d) = fixture(kf_chip::Family::Ada);
+        d.adjustment = 0x20;
+        d.length -= 0x20;
+        let access = Arc::new(Access::default());
+        let mut shared = SharedObjects::new(objects, &access);
+        shared.memory_list(d).unwrap();
+        let lease = access.lease(1, 4, 0x600, 0x200).unwrap();
+        let base = d.page_base + 0x620;
+        assert_eq!(lease.matches_ram_location(base), Ok(true));
+        assert_eq!(lease.matches_ram_location(base + 1), Ok(false));
+        assert_eq!(lease.matches_ram_location(u64::MAX), Ok(false));
+        let writer = ram.0.lock().unwrap();
+        assert_eq!(lease.matches_ram_location(base), Err(Refusal::Busy));
+        drop(writer);
+        ram.0.lock().unwrap().0 += 1;
+        assert_eq!(lease.matches_ram_location(base), Err(Refusal::Topology));
+        shared
+            .apply(
+                RmEvent::Free {
+                    client: HClient(1),
+                    handle: HObject(4),
+                },
+                &[],
+            )
+            .unwrap();
+        shared.memory_list(d).unwrap();
+        assert_eq!(lease.matches_ram_location(base), Err(Refusal::Gone));
+    }
+
+    #[test]
+    fn worker_admission_retains_exact_graph_until_bounded_publication() {
+        use crate::memory_access::{Access, Refusal, SharedObjects};
+        let (objects, ram, d) = fixture(kf_chip::Family::Ada);
+        let access = Arc::new(Access::default());
+        let mut shared = SharedObjects::new(objects, &access);
+        shared.memory_list(d).unwrap();
+        let lease = access.lease(1, 4, 0x600, 0x200).unwrap();
+        assert_eq!(
+            lease.admit(|| access.lease(1, 4, 0, 4).err()),
+            Ok(Some(Refusal::Busy)),
+            "graph/current authority remains held through the CPU publication callback"
+        );
+        let called = std::cell::Cell::new(false);
+        ram.0.lock().unwrap().0 += 1;
+        assert_eq!(lease.admit(|| called.set(true)), Err(Refusal::Topology));
+        assert!(!called.get());
+        shared
+            .apply(
+                RmEvent::Free {
+                    client: HClient(1),
+                    handle: HObject(4),
+                },
+                &[],
+            )
+            .unwrap();
+        shared.memory_list(d).unwrap();
+        assert_eq!(lease.admit(|| called.set(true)), Err(Refusal::Gone));
+        assert!(!called.get());
+    }
+
+    #[test]
+    fn migrated_userd_copy_admits_channel_after_graph_and_refuses_stale_owner() {
+        use crate::memory_access::{Access, Refusal, SharedObjects};
+        let (objects, ram, d) = fixture(kf_chip::Family::Ada);
+        let access = Arc::new(Access::default());
+        let mut shared = SharedObjects::new(objects, &access);
+        shared.memory_list(d).unwrap();
+        let lease = access.lease(1, 4, 0x600, 0x200).unwrap();
+        let owner = Mutex::new(());
+        let guard = owner.lock().unwrap();
+        let before = ram.0.lock().unwrap().2;
+        assert_eq!(
+            lease.write_admitted(0, &[9], || {
+                assert_eq!(access.lease(1, 4, 0, 1).err(), Some(Refusal::Busy));
+                owner.try_lock().map_err(|_| Refusal::Busy)
+            }),
+            Err(Refusal::Busy)
+        );
+        assert_eq!(ram.0.lock().unwrap().2, before, "no RAM copy without owner");
+        drop(guard);
+        lease
+            .write_admitted(0, &[7], || owner.try_lock().map_err(|_| Refusal::Busy))
+            .unwrap();
+        let mut out = [0];
+        lease
+            .read_admitted(0, &mut out, || owner.try_lock().map_err(|_| Refusal::Busy))
+            .unwrap();
+        assert_eq!(out, [7]);
+        assert_eq!(
+            lease.write_admitted(0, &[9], || Err::<(), _>(Refusal::Gone)),
+            Err(Refusal::Gone)
+        );
+        lease.read(0, &mut out).unwrap();
+        assert_eq!(out, [7], "stale channel must not write into live memory");
+    }
+
+    #[test]
+    fn shared_memory_lease_is_bounded_and_chain_reselection_revokes_old_graph() {
+        use crate::memory_access::{Access, Refusal, SharedObjects};
+        let (objects, ram, d) = fixture(kf_chip::Family::Ada);
+        let access = Arc::new(Access::default());
+        let mut shared = SharedObjects::new(objects, &access);
+        shared.memory_list(d).unwrap();
+        assert!(access.lease(2, 4, 0, 4).is_err());
+        for (at, n) in [
+            (0, 0),
+            (u64::MAX, 4),
+            (d.length - 1, 2),
+            (0, MAX_ACCESS as u64 + 1),
+        ] {
+            assert_eq!(access.lease(1, 4, at, n).err(), Some(Refusal::Bounds));
+        }
+        let old = access.lease(1, 4, 0x600, 0x200).unwrap();
+        assert_eq!(old.write(0x1ff, &[1, 2]), Err(Refusal::Bounds));
+        assert_eq!(old.write(u64::MAX, &[1]), Err(Refusal::Bounds));
+        assert_eq!(ram.0.lock().unwrap().2, 0);
+        let (replacement, _, d) = fixture(kf_chip::Family::Ada);
+        let mut replacement = SharedObjects::new(replacement, &access);
+        replacement.memory_list(d).unwrap();
+        assert_eq!(
+            old.write(0, &[1]),
+            Err(Refusal::Gone),
+            "old graph still strongly owned"
+        );
+        access
+            .lease(1, 4, 0x600, 0x200)
+            .unwrap()
+            .write(0, &[2])
+            .unwrap();
+        drop(replacement);
+        assert!(access.lease(1, 4, 0, 4).is_err());
+        assert_eq!(old.write(0, &[1]), Err(Refusal::Gone));
+    }
+
+    #[test]
+    fn shared_memory_lease_parent_free_and_reuse_do_not_restore_access() {
+        use crate::memory_access::{Access, Refusal, SharedObjects};
+        for parent in [2, 3] {
+            for freed in [1, 2, parent, 4] {
+                let (objects, _, mut d) = fixture(kf_chip::Family::Ada);
+                d.parent = parent;
+                let access = Arc::new(Access::default());
+                let mut shared = SharedObjects::new(objects, &access);
+                shared.memory_list(d).unwrap();
+                let lease = access.lease(1, 4, 0, 4).unwrap();
+                shared
+                    .apply(
+                        RmEvent::Free {
+                            client: HClient(1),
+                            handle: HObject(freed),
+                        },
+                        &[],
+                    )
+                    .unwrap();
+                assert_eq!(lease.write(0, &[1]), Err(Refusal::Gone));
+            }
+        }
+    }
+
+    #[test]
+    fn shared_userd_lease_cannot_revive_through_alias_back_to_original_handle() {
+        use crate::memory_access::{Access, Refusal, SharedObjects};
+        let (objects, _, d) = fixture(kf_chip::Family::Ada);
+        let access = Arc::new(Access::default());
+        let mut shared = SharedObjects::new(objects, &access);
+        shared.memory_list(d).unwrap();
+        let old = access.lease(1, 4, 0, 4).unwrap();
+        shared
+            .apply(
+                RmEvent::Dup {
+                    src: key(1, 4),
+                    dst: key(1, 5),
+                },
+                &[],
+            )
+            .unwrap();
+        shared
+            .apply(
+                RmEvent::Free {
+                    client: HClient(1),
+                    handle: HObject(4),
+                },
+                &[],
+            )
+            .unwrap();
+        shared
+            .apply(
+                RmEvent::Dup {
+                    src: key(1, 5),
+                    dst: key(1, 4),
+                },
+                &[],
+            )
+            .unwrap();
+        assert_eq!(old.write(0, &[9]), Err(Refusal::Gone));
+        // This initial adapter deliberately requires an original client allocation;
+        // no guessed handle-incarnation semantics for aliased USERD descriptors.
+        assert_eq!(access.lease(1, 4, 0, 4).err(), Some(Refusal::Gone));
+        assert_eq!(access.lease(1, 5, 0, 4).err(), Some(Refusal::Gone));
     }
     #[test]
     fn memory_list_wrong_parent_alias_range_and_other_class_leave_graph_unchanged() {

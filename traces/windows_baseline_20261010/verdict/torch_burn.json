@@ -1,0 +1,12 @@
+{
+ "verdict": "PASS",
+ "rc": 0,
+ "secs": 67,
+ "quiet": 2,
+ "note": "warn:[burn] t=10s iters=805 errors=0",
+ "proof": "out,pdh:3d,smi",
+ "tdr": 0,
+ "wer": 0,
+ "rebooted": false,
+ "run": "t1b"
+}

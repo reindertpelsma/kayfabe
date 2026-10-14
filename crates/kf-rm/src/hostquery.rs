@@ -1136,7 +1136,101 @@ pub fn query_zbc_table_sizes(
 }
 
 /// ★ v3-gfx: the extra `FB_GET_INFO_V2` indices [`HostFacts::forwarded_fb_extra`] carries.
-pub const FORWARDED_FB_EXTRA_INDICES: [u32; 5] = [0x04, 0x14, 0x37, 0x2b, 0x38];
+/// ★ 2026-10-08 (Windows 580.88, run53): plus the seven indices of Windows' one boot-time request that
+/// were refused (`[measured, run53 at 80169b57, 2026-10-08]` the request is exactly the 19 indices of
+/// vfio-8/9/10). Each row's reasons are in [`FB_EXTRA_EXPOSURE`].
+pub const FORWARDED_FB_EXTRA_INDICES: [u32; 12] = [
+    0x04, 0x14, 0x37, 0x2b, 0x38, 0x01, 0x02, 0x0c, 0x1c, 0x21, 0x25, 0x35,
+];
+
+/// ★ 2026-10-08 — the exposure table of [`FORWARDED_FB_EXTRA_INDICES`] (owner rule: a query with no
+/// params, or with limited params that can be checked, may carry the host's answer to the guest; no
+/// tenant-visible host-wide quantity; the VRAM size stays the single store size). Columns: index,
+/// ogkm name (`ctrl2080fb.h`), what the word is, why passing the host's word is safe. The request
+/// param is one index per row, checked against this list; the answer is one opaque `u32` per index
+/// from the host's own unprivileged `FB_GET_INFO_V2` (`0x20801303`, flags NON_PRIVILEGED).
+/// `[measured, vfio-8/9/10 reference]` values on the RTX 4070 in `vfio8-9-10-fb-bus-info.txt`.
+pub const FB_EXTRA_EXPOSURE: [(u32, &str, &str, &str); 12] = [
+    (
+        0x04,
+        "PARTITION_COUNT",
+        "FB partitions",
+        "die configuration, constant per die",
+    ),
+    (
+        0x14,
+        "PARTITION_MASK_0",
+        "FB partition mask",
+        "die configuration (floor-sweep)",
+    ),
+    (
+        0x37,
+        "PARTITION_MASK_1",
+        "FB partition mask, upper",
+        "die configuration",
+    ),
+    (
+        0x2b,
+        "LTC_MASK_0",
+        "L2 slice mask",
+        "die configuration (floor-sweep)",
+    ),
+    (
+        0x38,
+        "LTC_MASK_1",
+        "L2 slice mask, upper",
+        "die configuration",
+    ),
+    (
+        0x01,
+        "COMPRESSION_SIZE",
+        "compressible-memory capacity",
+        "a capacity, not a usage; the 4070 answers 0xffff0000 (the u32 saturated, <= the 4 GiB store's own bound), so it states no host FB size: OWNER CHECK if a die answers an unsaturated value",
+    ),
+    (
+        0x02,
+        "DRAM_PAGE_STRIDE",
+        "DRAM page stride",
+        "memory-controller configuration, constant per die",
+    ),
+    (
+        0x0c,
+        "RAM_CFG",
+        "RAM strap configuration",
+        "board configuration, constant per board",
+    ),
+    (
+        0x1c,
+        "MEMORYINFO_VENDOR_ID",
+        "DRAM vendor id",
+        "board configuration (which DRAM vendor), constant per board",
+    ),
+    (
+        0x21,
+        "TRAINIG_2T",
+        "DRAM 2T training mode",
+        "memory-controller configuration, constant per board",
+    ),
+    (
+        0x25,
+        "PSEUDO_CHANNEL_MODE",
+        "HBM pseudo-channel mode",
+        "memory-controller configuration (0 on GDDR)",
+    ),
+    (
+        0x35,
+        "ECC_STATUS_SIZE",
+        "size of the ECC status record",
+        "a structure size, not ECC state or counts",
+    ),
+];
+
+/// The `FB_GET_INFO_V2` indices that state a size, a usage or a placement of FB or BAR1
+/// (`ctrl2080fb.h`): never served from the host — the VM's FB is the single store.
+pub const FB_TENANT_VISIBLE_INDICES: [u32; 20] = [
+    0x05, 0x07, 0x08, 0x09, 0x0a, 0x10, 0x11, 0x12, 0x13, 0x15, 0x16, 0x1d, 0x1e, 0x1f, 0x20, 0x26,
+    0x27, 0x29, 0x33, 0x34,
+];
 
 /// ★ v3-gfx: `forwarded_fb_extra` — each of [`FORWARDED_FB_EXTRA_INDICES`] asked ALONE (one refused index
 /// must not take the others with it); a refused index is simply absent.
@@ -1916,5 +2010,54 @@ pub fn query_host_facts(
             fifo_latency,
         }),
         _ => Err(HostFactsRefused { refusals }),
+    }
+}
+
+#[cfg(test)]
+mod fb_exposure_tests {
+    use super::*;
+
+    /// ★ 2026-10-08: every forwarded extra index has exactly one exposure row, and no row is a
+    /// size, usage or placement of FB/BAR1 (the VM's FB is the single store).
+    #[test]
+    fn every_forwarded_fb_extra_index_has_one_exposure_row_and_none_is_tenant_visible() {
+        let rows: Vec<u32> = FB_EXTRA_EXPOSURE.iter().map(|r| r.0).collect();
+        assert_eq!(rows, FORWARDED_FB_EXTRA_INDICES.to_vec());
+        for idx in FORWARDED_FB_EXTRA_INDICES {
+            assert!(
+                !FB_TENANT_VISIBLE_INDICES.contains(&idx),
+                "{idx:#x} is a size/usage index"
+            );
+            assert!(
+                !FORWARDED_FB_INFO_INDICES.contains(&idx),
+                "{idx:#x} is already forwarded"
+            );
+            assert!(idx <= kf_abi::fbinfo::FB_INFO_INDEX_MAX);
+        }
+        let mut sorted = FORWARDED_FB_EXTRA_INDICES.to_vec();
+        sorted.sort_unstable();
+        sorted.dedup();
+        assert_eq!(
+            sorted.len(),
+            FORWARDED_FB_EXTRA_INDICES.len(),
+            "no duplicate"
+        );
+    }
+
+    /// ★ 2026-10-08: the forwarded sets cover Windows 580.88's one boot-time request
+    /// (`[measured, run53 at 80169b57, 2026-10-08]` = vfio-8/9/10's 19 indices).
+    #[test]
+    fn the_forwarded_sets_cover_windows_58088s_fb_request() {
+        const WINDOWS_58088: [u32; 19] = [
+            0x01, 0x02, 0x04, 0x0b, 0x0c, 0x0d, 0x14, 0x19, 0x1a, 0x1b, 0x1c, 0x21, 0x22, 0x23,
+            0x25, 0x2b, 0x35, 0x37, 0x38,
+        ];
+        for idx in WINDOWS_58088 {
+            assert!(
+                FORWARDED_FB_INFO_INDICES.contains(&idx)
+                    || FORWARDED_FB_EXTRA_INDICES.contains(&idx),
+                "{idx:#x} not forwarded"
+            );
+        }
     }
 }

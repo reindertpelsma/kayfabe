@@ -1,0 +1,21 @@
+2026-10-11T14:47:31Z START run_dir=/data/kf-native-reference-20261011/cuda-demo-qa-refs vm=native apps=2
+2026-10-11T14:47:31Z MATRIX_START apps=2 (resume skips 0) per_guest=1000 max_tdr=1000 tier<=3
+2026-10-11T14:47:33Z [g1] launched; waiting for the guest agent (<= 900s)
+2026-10-11T14:47:35Z [g1] agent answered after 3s
+2026-10-11T14:47:35Z [g1] no KF_GUEST_PW: assuming autologon
+2026-10-11T14:47:38Z [g1] interactive session: DESKTOP-JR70RMQ\vast
+2026-10-11T14:48:34Z [g1] pushed 25 guest files
+2026-10-11T14:48:39Z [g1] app disk attached (KFMOUNT D:)
+2026-10-11T14:48:48Z [g1] setup ok: cd=D: nvidia_adapters=1 NVIDIA GeForce RTX 4090, 580.88, 24564 MiB
+2026-10-11T14:48:57Z [g1] override tool kf_cuda_control.exe sha256=3906f520c10e272215d9d7d79a90ce9a2042581923a4717db90be312ab3a67c8
+2026-10-11T14:49:07Z [g1] override tool kf_dxprobe.exe sha256=3c6ededa77430a18a13321eb72fdca7f60282f8d12ddc147a7e7df1284832c5f
+2026-10-11T14:49:10Z [g1] staged vc_redist (cached, 0s)
+2026-10-11T14:49:18Z [g1] READY boot=2026-10-11T14:31:59.5000000Z user=DESKTOP-JR70RMQ\vast smi_ok=True
+2026-10-11T14:49:22Z [g1] staged cuda_demo_suite (cached, 0s)
+2026-10-11T14:49:25Z [g1] staged python_embed (cached, 0s)
+2026-10-11T14:49:29Z [g1] staged pywheels (cached, 0s)
+2026-10-11T14:50:21Z [g1] oceanFFT_qa_diagnostic: FAIL
+2026-10-11T14:51:12Z [g1] randomFog_qa_diagnostic: FAIL
+2026-10-11T14:51:12Z [g1] stopped (noop (native box stays up))
+2026-10-11T14:51:12Z MATRIX_DONE batched: 0 pass / 2
+2026-10-11T14:51:12Z EXIT rc=0

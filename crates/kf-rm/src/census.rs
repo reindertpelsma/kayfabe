@@ -345,8 +345,22 @@ fn trace_line(
         RpcFunction::RmControl => control.map_or_else(
             || "cmd=undecodable".to_owned(),
             |q| {
+                // ★ 2026-10-11: the first 96 reply bytes of an NV0073 display-common control (and of FB_GET_GPU_CACHE_INFO / GPU_QUERY_ECC_STATUS), so a
+                // run's answers can be read against a reference capture (log only, bounded).
+                let params =
+                    (q.cmd >> 16 == 0x0073 || q.cmd == 0x2080_1315 || q.cmd == 0x2080_012f)
+                        .then(|| {
+                            let end = q.params_at.checked_add((q.params_size as usize).min(96))?;
+                            let b = reply?.body.get(q.params_at..end)?;
+                            Some(format!(
+                                " params={}",
+                                b.iter().map(|x| format!("{x:02x}")).collect::<String>()
+                            ))
+                        })
+                        .flatten()
+                        .unwrap_or_default();
                 format!(
-                    "cmd={:#010x} client={:#x} object={:#x}",
+                    "cmd={:#010x} client={:#x} object={:#x}{params}",
                     q.cmd, q.client, q.object
                 )
             },

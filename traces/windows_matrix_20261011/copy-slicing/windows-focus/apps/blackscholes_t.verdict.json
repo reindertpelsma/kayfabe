@@ -1,0 +1,14 @@
+{
+ "verdict": "TIMEOUT",
+ "rc": 124,
+ "secs": 132,
+ "quiet": 130,
+ "note": "timeout",
+ "proof": "-",
+ "tdr": 0,
+ "wer": 0,
+ "rebooted": false,
+ "gsp_cycles": 0,
+ "restart": "",
+ "guest": "g1"
+}

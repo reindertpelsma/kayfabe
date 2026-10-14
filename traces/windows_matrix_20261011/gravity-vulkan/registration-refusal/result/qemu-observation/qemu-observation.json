@@ -1,0 +1,41 @@
+{
+  "captured_utc": "2026-10-11T23:13:44.636864+00:00",
+  "source": "/var/lib/kf-windows-20261005/boundary-kayfabe-1540/qemu.log",
+  "snapshot_bytes": 4247648,
+  "source_size_at_open": 4247648,
+  "prefix_sha256": "10c39f89c51c88ffd3967dd8c368773a32be369d7a47365347e824590c542d1e",
+  "line_count": 20347,
+  "counts": {
+    "RELAY-PEEK ARMED": 0,
+    "SW-SUBCH METHOD": 0,
+    "method 0x200 ": 17,
+    "CHANGED after its doorbell": 0,
+    "RELAY-PEEK BUDGET exhausted": 0,
+    "KF3_WIN_REFUSE_PT_FIFO_UPDATE": 1,
+    "fifo_update_registration_refused=": 305,
+    "walk capacity ceiling": 0,
+    "slot pool exhausted": 0,
+    "OverDeclaredCap": 0,
+    "birth_refused": 409,
+    "HELD-BY-HOST": 0,
+    "REFUSED": 88,
+    "GSP phase Running -> Suspending": 1,
+    "cmd=0x20801116": 2
+  },
+  "counter_maxima": {
+    "birth_refused_cap": 0,
+    "unreconciled": 0,
+    "held": 0,
+    "named_missed": 0,
+    "invalidate_boot_max_us": 51373,
+    "fifo_update_registration_refused": 1
+  },
+  "selected_count": 576,
+  "selected_written": 576,
+  "selected_truncated": false,
+  "candidate_methods_0x200": [],
+  "armed_registrations": [],
+  "public_layout_source": "NVIDIA/open-gpu-kernel-modules tag 580.65.06",
+  "public_layout_sha256": "5b08639139bde6b5e54ec6eb8779aaaddd7e38ebed3966bf52eca971cdb3878f",
+  "limits": "Guest-byte sample after forwarding, not GPU fetch/execution proof. Earlier object bindings/Legacy/arming/post-doorbell races remain. Boot-wide invalidate maxima do not identify the fault-time latency."
+}

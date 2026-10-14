@@ -1,0 +1,9 @@
+=== ort_directml start=2026-10-11T09:51:03.9131930-07:00 host=DESKTOP-JR70RMQ session=0 boot=2026-10-11T14:31:59.5000000Z timeout=240
+KFDEV NVIDIA GeForce RTX 4090
+ORT_PROVIDERS ['DmlExecutionProvider', 'CPUExecutionProvider']
+ORT_DML_DEVICE index 0 of [(0, 'NVIDIA GeForce RTX 4090'), (1, 'Microsoft Basic Render Driver')]
+ORT_SESSION_PROVIDERS ['DmlExecutionProvider', 'CPUExecutionProvider']
+CHECK dml_provider_active ok
+CHECK dml_matches_cpu ok
+ORT_DML_DONE
+=== end rc=0 secs=9 2026-10-11T09:51:12.7919192-07:00

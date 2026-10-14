@@ -1,0 +1,11 @@
+=== furmark_vkinfo start=2026-10-11T13:48:16.3681147+00:00 host=VASTWIN session=1 boot=2026-10-11T13:46:04.5000000Z timeout=90
+[ Vulkan info ]
+- # of devices: 1
+- [device 0]
+ - name: NVIDIA GeForce RTX 4070
+ - deviceID: 10DE-2786 (4318-10118)
+ - API version: 1.4.312
+ - NVIDIA driver: 580.88.0.0
+
+KFNOTE furmark info modes print the info and exit 1 by design (measured on native NVIDIA)
+=== end rc=0 secs=5 2026-10-11T13:48:21.1714231+00:00

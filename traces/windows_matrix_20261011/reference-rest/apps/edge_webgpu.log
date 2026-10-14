@@ -1,0 +1,3 @@
+=== edge_webgpu start=2026-10-11T09:35:25.9073797-07:00 host=DESKTOP-JR70RMQ session=1 boot=2026-10-11T14:31:59.5000000Z timeout=150
+KFEDGE {"page":"webgpu","ok":true,"vendor":"nvidia","architecture":"lovelace","description":"","device_name":"","fallback":false,"frames":608,"bad":0,"secs":12.01}
+=== end rc=0 secs=21 2026-10-11T09:35:47.1401863-07:00

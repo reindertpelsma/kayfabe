@@ -1,0 +1,7 @@
+=== stream_two_t start=2026-10-11T13:42:02.7384106+00:00 host=VASTWIN session=0 boot=2026-10-11T13:39:00.5000000Z timeout=120
+KFDEV NVIDIA GeForce RTX 4070
+[eq] device NVIDIA GeForce RTX 4070 torch 2.8.0+cu126
+CHECK two_streams_second ok
+CHECK stream_two ok
+STREAM_PROBE_DONE two rc=0
+=== end rc=0 secs=70 2026-10-11T13:43:12.4918748+00:00

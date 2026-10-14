@@ -1,0 +1,7 @@
+utc now: 2026-10-10T23:39:59.1420143Z
+ADAPTER NVIDIA GeForce RTX 4070 code=43 status=Error
+EDGE_PROCS 0
+EXPLORER 
+DWM 1
+EV_nvlddmkm153 0
+EV_dxgkrnl141_4101 0

@@ -1,0 +1,22 @@
+=== cupy_check start=2026-10-11T14:37:06.0170367+00:00 host=VASTWIN session=0 boot=2026-10-11T14:30:46.5000000Z timeout=300
+KFDEV NVIDIA GeForce RTX 4070
+CHECK cupy_matmul ok
+CHECK cupy_reduce ok
+Traceback (most recent call last):
+  File "C:\kf\py\kf_runpy.py", line 22, in <module>
+    runpy.run_path(script, run_name="__main__")
+  File "<frozen runpy>", line 287, in run_path
+  File "<frozen runpy>", line 98, in _run_module_code
+  File "<frozen runpy>", line 88, in _run_code
+  File "C:\kf\py\cupy_check.py", line 11, in <module>
+    chk("cupy_nvrtc_kernel", np.allclose(cp.asnumpy(k(cp.asarray(x))), x * x + 1.0))
+                                                    ^^^^^^^^^^^^^^^^
+  File "cupy/_core/_kernel.pyx", line 932, in cupy._core._kernel.ElementwiseKernel.__call__
+  File "cupy/_core/_kernel.pyx", line 957, in cupy._core._kernel.ElementwiseKernel._get_elementwise_kernel
+  File "cupy/_util.pyx", line 67, in cupy._util.memoize.decorator.ret
+  File "cupy/_core/_kernel.pyx", line 740, in cupy._core._kernel._get_elementwise_kernel
+  File "cupy/_core/_kernel.pyx", line 112, in cupy._core._kernel._get_simple_elementwise_kernel_from_code
+  File "cupy/_core/core.pyx", line 2637, in cupy._core.core.compile_with_cache
+  File "cupy/_core/core.pyx", line 2599, in cupy._core.core.assemble_cupy_compiler_options
+RuntimeError: Failed to find CUDA headers. Please install CUDA toolkit headers (e.g., pip install cupy-cuda12x[ctk]) or specify CUDA_PATH environment variable.
+=== end rc=1 secs=126 2026-10-11T14:39:11.7769170+00:00

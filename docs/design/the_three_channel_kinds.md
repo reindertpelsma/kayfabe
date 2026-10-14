@@ -1,6 +1,10 @@
 # The three channel kinds — passthrough, translated, emulated
 
-**STATUS: DESIGN, 2026-09-19 (w803). Owner ruling. Not yet implemented.**
+**STATUS: LIVE, 2026-10-09.** The three kinds are implemented in v3 (`ARCHITECTURE.md`, *channel kinds*;
+`kf-chan`), and §1.1 and §1.2 carry their own LIVE status lines. ⊘ *Superseded status line, kept as
+history: "DESIGN, 2026-09-19 (w803). Owner ruling. Not yet implemented."* — the text below §1.2 is
+that 2026-09-19 design ruling; where it and the code disagree, `ARCHITECTURE.md` and
+`docs/STATUS_DETAIL.md` say what was built.
 
 > **Owner:** *"I think for the second case `SRC/DST_TYPE = PHYSICAL` we can create a new
 > channel type beyond emulated and passthrough. Named virtual."* … *"emulated remains for
@@ -52,6 +56,59 @@ adopted USERD, so `GP_GET` tracks the engine by construction and a doorbell is a
 **relayed** variant kayfabe owns that property and must reproduce it: the guest's `GP_GET` has to follow
 the engine's progress whether or not another doorbell comes (`KF3_RELAY_GET_REFRESH`). Say "relayed
 Passthrough" for it, never plain "Passthrough", when `GP_GET`, USERD or the doorbell path is the subject.
+
+### 1.2 Passthrough completion interrupts: every VM that armed the event is woken (2026-10-08, owner)
+
+**STATUS: LIVE, 2026-10-09 — `kf_chan::ptnsi`, owner ruling §X; branch
+`claude/passthrough-nsi-nogate-20261008`.**
+
+⊘ **CORRECTION 2026-10-09 (independent review of `1f083ac4`; fixed at `cd0fab8d`, measured at `eca43847`).**
+"Armed" below is too narrow. A guest event is armed on a notifier if EITHER a live guest
+`NV01_EVENT_OS_EVENT` OR a live guest-kernel callback event (`NV01_EVENT_KERNEL_CALLBACK_EX` `0x7e` /
+`NV01_EVENT_KERNEL_CALLBACK` `0x78`: CeUtils, semaphore surfaces, nvkms) carries `NV01_EVENT_NONSTALL_INTR`
+on that notifier (`kf_rm::osevent::OsEventLog::register_kernel_nonstall`; both retired by the same `FREE`s,
+all cleared at fn 1). The `15a400b5`/`b831b364` measurements cited below were taken BEFORE that fix: those
+binaries dropped the guest kernel's non-stall edges as NotArmed (a regression against master's live-twin
+rule), and the legs passed because the raw client's own OS events were armed. Re-measured at `eca43847`
+(`traces/passthrough_nsi_nogate_20261008/INDEX.txt`, RE-VERIFY): every leg 50/50, controls 0/10, 30/30, two
+guest-kernel registrations armed `FIFO_EVENT_MTHD` (233 of 264 FIFO edges raised, against 138 of 269 before).
+The pacing and noisy-neighbour runs were not repeated after the fix.
+
+⊘ *This supersedes the doorbell gate of
+`claude/passthrough-interrupt-20261008` (96336228: an edge raised only with a live twin AND a doorbell
+counted since the last edge, 1 s afterglow). That gate trusted a guest-controlled signal and could drop a
+completion that landed after the afterglow.* A Passthrough twin's completion interrupt is raised by the
+host GPU and serviced by the host RM; what reaches kayfabe is a GPU-wide host notifier with no identity
+(`FIFO_EVENT_MTHD`, or the engine's own notifier). kayfabe now does what RM does for its own clients: a
+host edge is forwarded to **every VM whose guest armed that event** (a live guest
+`NV01_EVENT_OS_EVENT` with `NV01_EVENT_NONSTALL_INTR` on that notifier, recorded by the host from the
+guest's alloc RPC, `kf_rm::osevent::NonstallArms`). An engine edge raises that engine's vector; a
+`FIFO_EVENT_MTHD` edge raises a vector whose guest service fires the guest's own `FIFO_EVENT_MTHD` (every
+engine's does) and, if one exists, that no armed engine is announced on, else GR0's
+(`kf_chan::ptnsi::host_notify_vector`; GR0's alone made the guest see a GR0 wake for every COPY2 copy,
+which bare metal never shows). An edge
+is never dropped: by default every armed edge raises at once; an optional pacing knob
+(`KF3_PT_NSI_MIN_INTERVAL_US`, default off) only delays, with a pending flag per vector raised by the
+worker's tick even if no further edge comes. The guest's leaf pending bit is a level held until the guest's
+write-1-to-clear, and the guest clears before it services, so merged raises cannot lose a wake.
+`KF3_PT_NSI_RELAY=0` (FIFO edges counted, not raised) stays the falsifier mode. `[measured 2026-10-08, RTX
+4070, kf3 15a400b5/b831b364 — BEFORE the kernel-callback fix, see the correction above,
+traces/passthrough_nsi_nogate_20261008/]` the guest's `--ce-interrupt` legs land
+exactly as on bare metal (all 50/50, controls 0/10), the 30-arm suite passes 30/30, pacing at 50 ms alone
+loses no completion (tick-delivered late raises 99/49/148), and beside a noisy neighbour VM every interrupt
+leg of both guests completes while their controls see each other's edges (the residual below).
+
+**Residual, accepted (owner, 2026-10-08).** (1) *Minor denial of service:* one tenant's non-stall work makes
+every other VM that armed the same event wake more often (a spurious interrupt; the guest's waiter re-checks
+its semaphore and sleeps again). This is RM's own semantics on bare metal, where every registered client on
+an engine is woken, and the alternative, filtering by a guess about whose work it was, loses completions.
+(2) *Timing visibility:* a guest that armed an engine's event learns, by when its interrupts arrive, that
+some tenant used that engine class (for `FIFO_EVENT_MTHD`: some host-driven engine), at the rate it is used.
+It learns nothing about which tenant, or what the work was. `[measured 2026-10-08,
+traces/rawclient_ce_interrupt_20261008/bare_tenant_noise_*]` this is already visible to any unprivileged
+host process today: with a Windows desktop VM on the same GPU, the raw client's quiet window (nothing
+submitted) was never clean, CE3 and `FIFO_EVENT_MTHD` readable in 200 of 200 windows. A guest that armed
+nothing is never woken.
 
 ## 2. Why CeUtils forced the third kind — measured in ogkm, not inferred
 

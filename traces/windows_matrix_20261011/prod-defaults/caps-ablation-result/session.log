@@ -1,0 +1,34 @@
+2026-10-11T19:56:37Z START run_dir=/var/lib/kf-windows-20261005/codex-prod-caps-ablation-20261011-3252a087 vm=broker kf3_rev=3252a087 apps=3
+2026-10-11T19:56:37Z MATRIX_START apps=3 (resume skips 0) per_guest=3 max_tdr=3 tier<=3
+2026-10-11T19:56:40Z pre-guest hook rc=0 :00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=identity 2026-10-11T21:56:40+02:00
+2026-10-11T19:56:41Z broker run 1400 rc=0 ['  └────────────────────────────────────────────────────────────────────────────────────────────┘']
+2026-10-11T19:56:41Z [g1] launched; waiting for the guest agent (<= 900s)
+2026-10-11T19:57:11Z [g1] agent answered after 33s
+2026-10-11T19:57:12Z [g1] password set for vast rc=0
+2026-10-11T19:58:02Z [g1] verified sign-in attempt=1 rc=1
+2026-10-11T19:58:29Z [g1] verified sign-in attempt=2 rc=0
+2026-10-11T19:58:31Z [g1] interactive session: VASTWIN\vast
+2026-10-11T19:58:33Z [g1] pushed 26 guest files
+2026-10-11T19:58:33Z [g1] app disk attached (usb-storage)
+2026-10-11T19:58:44Z [g1] setup attempt 1 not ok: cd=D: nvidia_adapters=0 notes=[]
+2026-10-11T19:59:09Z [g1] setup attempt 2 not ok: cd=D: nvidia_adapters=0 notes=[]
+2026-10-11T19:59:32Z [g1] setup attempt 3 not ok: cd=D: nvidia_adapters=0 notes=[]
+2026-10-11T19:59:52Z [g1] BOOT_FAIL: guest setup failed (app disk missing or no NVIDIA adapter)
+2026-10-11T20:00:15Z post-guest hook rc=0 A GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-11T22:00:14+02:00
+RECLAIM_STOPPED_OVERLAY 1400 5097361408
+2026-10-11T20:00:15Z [g1] stopped (clean)
+2026-10-11T20:00:17Z pre-guest hook rc=0 :00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=identity 2026-10-11T22:00:17+02:00
+2026-10-11T20:00:18Z broker run 1401 rc=0 ['  └────────────────────────────────────────────────────────────────────────────────────────────┘']
+2026-10-11T20:00:18Z [g2] launched; waiting for the guest agent (<= 900s)
+2026-10-11T20:00:34Z [g2] agent answered after 19s
+2026-10-11T20:00:35Z [g2] password set for vast rc=0
+2026-10-11T20:01:33Z [g2] verified sign-in attempt=1 rc=1
+2026-10-11T20:02:04Z [g2] verified sign-in attempt=2 rc=1
+2026-10-11T20:02:34Z [g2] verified sign-in attempt=3 rc=1

@@ -1,0 +1,507 @@
+=== clpeak_cuda start=2026-10-11T06:06:54.9478664-07:00 host=DESKTOP-JR70RMQ session=0 boot=2026-10-11T12:38:54.5000000Z timeout=1500
+Backend: CUDA
+  Device 0: NVIDIA GeForce RTX 4090
+    Driver version   : 13.0
+    Arch             : sm_89
+    Toolkit          : 13.4
+    SMs              : 128
+    VRAM             : 24563 MB
+
+    Single-precision compute
+      float    : 81.8 TFLOPS
+
+    Half-precision compute
+      half     : 89.2 TFLOPS
+      half2    : 89.3 TFLOPS
+
+    Double-precision compute
+      double   : 1.41 TFLOPS
+
+    Mixed-precision compute fp16xfp16+fp32
+      mp       : 80.7 TFLOPS
+
+    BF16 compute bf16xbf16+fp32
+      bf16     : 81.1 TFLOPS
+
+    Integer compute (32-bit IMAD)
+      int      : 44.5 TOPS
+
+    INT8 dot-product compute (__dp4a)
+      int8_dp  : 178 TOPS
+      int8_dp2 : 178 TOPS
+      int8_dp4 : 178 TOPS
+      int8_dp8 : 178 TOPS
+
+    Tensor cores (WMMA / mma.sync)
+      fp16     : 180 TFLOPS
+      fp16 f16acc : 354 TFLOPS
+      bf16        : 180 TFLOPS
+      tf32        : 90.2 TFLOPS
+      fp64        : 1.24 TFLOPS
+      fp8_e4m3    : 356 TFLOPS
+      fp8_e5m2    : 359 TFLOPS
+      fp8_e4m3 f16acc : 703 TFLOPS
+      fp8_e4m3 2:4    : 713 TFLOPS
+      int8            : 718 TOPS
+      int8 k32        : 698 TOPS
+      int8 2:4        : 1.41 POPS
+      int4            : 1.32 POPS
+
+    cuBLASLt GEMM peak
+      fp32     : 48.7 TFLOPS
+      fp64     : 1.24 TFLOPS
+      tf32     : 88.2 TFLOPS
+      fp16     : 242 TFLOPS
+      bf16     : 171 TFLOPS
+      fp8_e4m3 : 345 TFLOPS
+      fp8_e5m2 : 348 TFLOPS
+      int8     : 558 TOPS
+
+    Global memory bandwidth
+      float    : 870 GB/s
+      float2   : 898 GB/s
+      float4   : 914 GB/s
+
+    Local memory bandwidth
+      float    : 17.5 TB/s
+      float2   : 31.7 TB/s
+      float4   : 37.0 TB/s
+
+    Image memory bandwidth
+      float4   : 905 GB/s
+
+    Transfer bandwidth
+      h2d_pinned : 26.2 GB/s
+      d2h_pinned : 26.2 GB/s
+
+    Kernel launch latency
+      roundtrip : 91.8 us
+
+Backend: Vulkan
+  Device 0: NVIDIA GeForce RTX 4090
+    Driver version   : 580.352.0
+    API version      : 1.4.312
+    VRAM             : 24142 MB
+    Compute units    : 128
+
+    Single-precision compute
+      float    : 84.0 TFLOPS
+      float2   : 84.0 TFLOPS
+      float4   : 84.4 TFLOPS
+
+    Half-precision compute fp16xfp16+fp16
+      half     : 88.4 TFLOPS
+      half2    : 88.9 TFLOPS
+      half4    : 88.2 TFLOPS
+
+    Double-precision compute
+      double   : 1.40 TFLOPS
+      double2  : 1.39 TFLOPS
+      double4  : 1.36 TFLOPS
+
+    Mixed-precision compute fp16xfp16+fp32
+      mp       : 84.0 TFLOPS
+      mp2      : 84.1 TFLOPS
+      mp4      : 85.3 TFLOPS
+
+    BF16 compute bf16xbf16+fp32
+      bf16     : 80.2 TFLOPS
+      bf16_2   : 82.2 TFLOPS
+      bf16_4   : 83.8 TFLOPS
+
+    Integer compute int32
+      int      : 44.6 TOPS
+      int2     : 44.5 TOPS
+      int4     : 44.3 TOPS
+
+    INT8 dot-product compute
+      int8_dp  : 40.3 TOPS
+      int8_dp2 : 41.0 TOPS
+      int8_dp4 : 40.8 TOPS
+
+    Cooperative matrix
+      fp16     : 179 TFLOPS
+      fp16 f16acc : 352 TFLOPS
+      bf16        : 179 TFLOPS
+      int8        : 711 TOPS
+
+    Global memory bandwidth
+      float    : 894 GB/s
+      float2   : 922 GB/s
+      float4   : 939 GB/s
+
+    Local memory bandwidth
+      float    : 16.9 TB/s
+      float2   : 30.8 TB/s
+      float4   : 35.7 TB/s
+
+    Image memory bandwidth
+      float4   : 931 GB/s
+
+    Transfer bandwidth
+      h2d      : 26.3 GB/s
+      d2h      : 4.68 GB/s
+
+    Kernel launch latency
+      dispatch : 42.8 us
+      roundtrip : 259 us
+
+Backend: OpenCL
+  Platform 0: NVIDIA CUDA
+    Device 0: NVIDIA GeForce RTX 4090
+      Driver version   : 580.88
+      Compute units    : 128
+      Clock frequency  : 2520 MHz
+Failed to read file: C:\WINDOWS\TEMP\dep-7fc74d.d
+Failed to read file: C:\WINDOWS\TEMP\dep-c9978a.d
+Failed to read file: C:\WINDOWS\TEMP\dep-209134.d
+
+      Single-precision compute
+        float    : 82.7 TFLOPS
+        float2   : 83.2 TFLOPS
+        float4   : 85.1 TFLOPS
+        float8   : 85.1 TFLOPS
+        float16  : 84.4 TFLOPS
+
+      Double-precision compute
+        double   : 1.41 TFLOPS
+        double2  : 1.40 TFLOPS
+        double4  : 1.40 TFLOPS
+        double8  : 1.39 TFLOPS
+        double16 : 1.38 TFLOPS
+
+      Integer compute
+        int      : 44.3 TOPS
+        int2     : 44.2 TOPS
+        int4     : 44.1 TOPS
+        int8     : 44.2 TOPS
+        int16    : 44.3 TOPS
+
+      Integer compute Fast 24bit
+        int      : 44.2 TOPS
+        int2     : 44.2 TOPS
+        int4     : 44.2 TOPS
+        int8     : 44.1 TOPS
+        int16    : 43.6 TOPS
+
+      Integer char (8bit) compute
+        char     : 39.4 TOPS
+        char2    : 38.8 TOPS
+        char4    : 38.4 TOPS
+        char8    : 40.0 TOPS
+        char16   : 37.1 TOPS
+
+      Integer short (16bit) compute
+        short    : 38.5 TOPS
+        short2   : 38.6 TOPS
+        short4   : 38.4 TOPS
+        short8   : 36.3 TOPS
+        short16  : 36.7 TOPS
+
+      Global memory bandwidth
+        float    : 870 GB/s
+        float2   : 899 GB/s
+        float4   : 914 GB/s
+        float8   : 926 GB/s
+        float16  : 936 GB/s
+
+      Local memory bandwidth
+        float    : 18.9 TB/s
+        float2   : 33.7 TB/s
+        float4   : 37.5 TB/s
+        float8   : 21.1 TB/s
+
+      Image memory bandwidth
+        float4   : 905 GB/s
+
+      Transfer bandwidth
+        h2d_pinned : 26.2 GB/s
+        d2h_pinned : 26.1 GB/s
+
+      Kernel launch latency
+        dispatch : 46.0 us
+        roundtrip : 464 us
+
+Backend: CPU
+  Device 0: AMD EPYC 7502 32-Core Processor
+    Vendor           : AuthenticAMD
+    ISA              : AVX2+FMA
+    Cores            : 4 threads / 4 cores
+    L1d              : 256 KB (64 KB x 4)
+    L2               : 2 MB (512 KB x 4)
+    L3               : 64 MB (16 MB x 4)
+    RAM              : 100.7 GB
+
+    Single-precision compute [SSE2]
+      float ST : 39.3 GFLOPS
+      float MT : 7.41 GFLOPS
+
+    Single-precision compute [AVX2+FMA]
+      float ST : 60.4 GFLOPS
+      float MT : 257 GFLOPS
+
+    Double-precision compute [SSE2]
+      double ST : 25.4 GFLOPS
+      double MT : 63.8 GFLOPS
+
+    Double-precision compute [AVX2+FMA]
+      double ST : 50.3 GFLOPS
+      double MT : 7.60 GFLOPS
+
+    Divide and square-root throughput [SSE2]
+      fdiv fp32 ST : 2.93 GFLOPS
+      fdiv fp32 MT : 10.7 GFLOPS
+      fdiv fp64 ST : 1.11 GFLOPS
+      fdiv fp64 MT : 3.15 GFLOPS
+      fsqrt fp32 ST : 2.32 GFLOPS
+      fsqrt fp32 MT : 5.67 GFLOPS
+      fsqrt fp64 ST : 748 MFLOPS
+      fsqrt fp64 MT : 598 MFLOPS
+
+    Divide and square-root throughput [AVX2]
+      fdiv fp32 ST : 6.76 GFLOPS
+      fdiv fp32 MT : 18.1 GFLOPS
+      fdiv fp64 ST : 2.55 GFLOPS
+      fdiv fp64 MT : 6.47 GFLOPS
+      fsqrt fp32 ST : 4.64 GFLOPS
+      fsqrt fp32 MT : 3.64 GFLOPS
+      fsqrt fp64 ST : 1.36 GFLOPS
+      fsqrt fp64 MT : 5.81 GFLOPS
+
+    Integer compute [SSE2]
+      int ST   : 5.60 GOPS
+      int MT   : 24.6 GOPS
+
+    Integer compute [SSE4.2]
+      int ST   : 10.7 GOPS
+      int MT   : 39.7 GOPS
+
+    Integer compute [AVX2+FMA]
+      int ST   : 23.3 GOPS
+      int MT   : 69.1 GOPS
+
+    Integer divide compute u64
+      u64 ST   : 75.5 MOPS
+      u64 MT   : 298 MOPS
+
+    AES-128 encrypt [AES-NI]
+      aes ST   : 6.31 GB/s
+      aes MT   : 30.2 GB/s
+
+    SHA-256 hash [SHA-NI]
+      sha256 ST : 2.27 GB/s
+      sha256 MT : 3.47 GB/s
+
+    CRC32-C checksum [SSE4.2]
+      crc32c ST : 25.3 GB/s
+      crc32c MT : 63.0 GB/s
+
+    String scan [SSE2]
+      byte_scan ST : 34.5 GB/s
+      byte_scan MT : 98.0 GB/s
+
+    String scan [SSE4.2 PCMPISTRI]
+      byte_scan ST : 17.4 GB/s
+      byte_scan MT : 86.9 GB/s
+
+    String scan [AVX2]
+      byte_scan ST : 81.5 GB/s
+      byte_scan MT : 62.6 GB/s
+
+    UTF-8 validate [SSSE3]
+      utf8 ST  : 3.45 GB/s
+      utf8 MT  : 644 MB/s
+
+    UTF-8 validate [AVX2]
+      utf8 ST  : 14.1 GB/s
+      utf8 MT  : 33.5 GB/s
+
+    DRAM bandwidth
+      read     : 33.2 GB/s
+      copy     : 96.7 GB/s
+      triad    : 9.58 GB/s
+
+    Cache bandwidth (read)
+      L1 ST    : 182 GB/s
+      L1 MT    : 707 GB/s
+      L2 ST    : 82.6 GB/s
+      L2 MT    : 395 GB/s
+      L3 ST    : 60.4 GB/s
+      L3 MT    : 277 GB/s
+
+    L1 bandwidth (write / copy)
+      write ST : 102 GB/s
+      write MT : 1.30 GB/s
+      copy ST  : 182 GB/s
+      copy MT  : 731 MB/s
+
+    Memory latency (pointer-chase)
+      L1       : 1.57 ns
+      L2       : 4.69 ns
+      L3       : 14.7 ns
+      DRAM     : 157 ns
+      DRAM linear : 5.55 ns
+      DRAM x8     : 18.8 ns
+      DRAM x32    : 9.46 ns
+      TLB miss    : 26.1 ns
+
+    Atomic fetch-add latency
+      uncontended ST : 764 ns
+      contended MT   : 357 us
+
+    Branch mispredict penalty
+      predicted : 0.37 ns
+      random    : 4.16 ns
+      penalty   : 7.59 ns
+
+    Store-to-load forwarding
+      st->ld ST : 2.50 ns
+
+LiteRT: LiteRT library (libLiteRt) not found
+Backend: ONNX
+  Device 0: DirectML
+    Driver version   : 1.17.1
+    Execution provider: DmlExecutionProvider
+    Type             : GPU
+    ONNX Runtime     : 1.17.1
+
+    ONNX MatMul peak
+      fp32     : 38.3 TFLOPS
+      fp16     : 269 TFLOPS
+      int8_qdq : 35.7 TOPS
+      int8_qdq_conv1x1 : 41.1 TOPS
+
+    ONNX convolution peak
+      fp32_conv3x3s2 : 31.5 TFLOPS
+      fp32_conv1x1   : 18.4 TFLOPS
+      fp32_depthwise3x3 : 763 GFLOPS
+      fp16_conv3x3s2    : 64.7 TFLOPS
+      fp16_conv1x1      : 21.0 TFLOPS
+      fp16_depthwise3x3 : 816 GFLOPS
+
+    ONNX MatMul numeric error
+      fp32     : 0.39 ppm
+      fp16     : 1663 ppm
+      int8_qdq : 9463 ppm
+
+    Transformer block, prefill
+      fp16_s64 : 10.4 TFLOPS
+      fp16_s512 : 62.4 TFLOPS
+      fp16_s2048 : 82.1 TFLOPS
+      fp32_s512  : 25.7 TFLOPS
+      int8_qdq_s512 : 23.2 TOPS
+
+    Transformer block, decode
+      fp16_kv2048 : 192 GB/s
+      int8_qdq_kv2048 : 74.4 GB/s
+      fp32_kv2048     : 278 GB/s
+
+    Transformer block latency
+      fp16_prefill_s512 : 864 us
+      fp16_decode_kv512 : 734 us
+      fp16_decode_kv2048 : 615 us
+      fp16_decode_kv8192 : 704 us
+      int8_qdq_prefill_s512 : 2.33 ms
+      int8_qdq_decode_kv2048 : 906 us
+      fp32_prefill_s512      : 2.10 ms
+      fp32_decode_kv2048     : 848 us
+
+    ONNX activation throughput
+      silu_8mb : 765 GB/s
+      silu_32mb : 567 GB/s
+      silu_128mb : 816 GB/s
+      softmax_8mb : 169 GB/s
+      softmax_32mb : 661 GB/s
+      softmax_128mb : 451 GB/s
+      layernorm_8mb : 431 GB/s
+      layernorm_32mb : 138 GB/s
+      layernorm_128mb : 656 GB/s
+
+    ONNX resident-tensor bandwidth
+      8mb      : 377 GB/s
+      32mb     : 101 GB/s
+      128mb    : 702 GB/s
+
+    ONNX host transfer bandwidth
+      h2d      : 6.83 GB/s
+      roundtrip : 4.19 GB/s
+      d2h       : 2.92 GB/s
+
+    ONNX dispatch latency
+      trivial_op : 455 us
+      matmul_256 : 545 us
+      session_create : 358 ms
+
+  Device 1: ONNX Runtime CPU
+    Driver version   : 1.17.1
+    Execution provider: CPUExecutionProvider
+    Type             : CPU
+    ONNX Runtime     : 1.17.1
+
+    ONNX MatMul peak
+      fp32     : 335 GFLOPS
+      fp16     : 304 GFLOPS
+      int8_qdq : 364 GOPS
+      int8_qdq_conv1x1 : 295 GOPS
+
+    ONNX convolution peak
+      fp32_conv3x3s2 : 314 GFLOPS
+      fp32_conv1x1   : 162 GFLOPS
+      fp32_depthwise3x3 : 20.0 GFLOPS
+      fp16_conv3x3s2    : 166 GFLOPS
+      fp16_conv1x1      : 149 GFLOPS
+      fp16_depthwise3x3 : 8.26 GFLOPS
+
+    ONNX MatMul numeric error
+      fp32     : 0.00 ppm
+      fp16     : 207 ppm
+      int8_qdq : 180163 ppm
+
+    Transformer block, prefill
+      fp16_s64 : 77.1 GFLOPS
+      fp16_s512 : 170 GFLOPS
+      fp16_s2048 : 236 GFLOPS
+      fp32_s512  : 326 GFLOPS
+      int8_qdq_s512 : 207 GOPS
+
+    Transformer block, decode
+      fp16_kv2048 : 1.84 GB/s
+      int8_qdq_kv2048 : 3.51 GB/s
+      fp32_kv2048     : 29.2 GB/s
+
+    Transformer block latency
+      fp16_prefill_s512 : 317 ms
+      fp16_decode_kv512 : 54.4 ms
+      fp16_decode_kv2048 : 64.1 ms
+      fp16_decode_kv8192 : 90.7 ms
+      int8_qdq_prefill_s512 : 261 ms
+      int8_qdq_decode_kv2048 : 19.2 ms
+      fp32_prefill_s512      : 165 ms
+      fp32_decode_kv2048     : 8.09 ms
+
+    ONNX activation throughput
+      silu_8mb : 7.74 GB/s
+      silu_32mb : 9.40 GB/s
+      silu_128mb : 18.6 GB/s
+      softmax_8mb : 1.26 GB/s
+      softmax_32mb : 7.22 GB/s
+      softmax_128mb : 44.6 GB/s
+      layernorm_8mb : 6.98 GB/s
+      layernorm_32mb : 4.00 GB/s
+      layernorm_128mb : 12.0 GB/s
+
+    ONNX resident-tensor bandwidth
+      8mb      : 126 GB/s
+      32mb     : 67.3 GB/s
+      128mb    : 25.7 GB/s
+      512mb    : 56.7 GB/s
+
+    ONNX host transfer bandwidth
+      roundtrip : 1.02 GB/s
+
+    ONNX dispatch latency
+      trivial_op : 53.8 us
+      matmul_256 : 518 us
+      session_create : 6.34 ms
+
+=== end rc=0 secs=906 2026-10-11T06:22:01.4192961-07:00

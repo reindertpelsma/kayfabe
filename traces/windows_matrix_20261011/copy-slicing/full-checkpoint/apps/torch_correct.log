@@ -1,0 +1,13 @@
+=== torch_correct start=2026-10-11T14:48:52.2249804+00:00 host=VASTWIN session=0 boot=2026-10-11T14:46:12.5000000Z timeout=300
+KFDEV NVIDIA GeForce RTX 4070
+[tc] device NVIDIA GeForce RTX 4070 torch 2.8.0+cu126
+CHECK matmul_fp32 ok maxerr=6.87e-05
+CHECK matmul_fp16 ok relerr=3.88e-04
+CHECK conv2d_cudnn ok maxerr=3.43e-05
+CHECK cnn_train_step ok maxerr=1.49e-08
+DIGEST cnn_train_step 763c693a5a53f948
+CHECK htod_dtoh_1GiB ok 
+CHECK sort_cumsum ok 
+CHECK multi_stream ok 
+TORCH_CORRECT_DONE
+=== end rc=0 secs=102 2026-10-11T14:50:34.0860011+00:00

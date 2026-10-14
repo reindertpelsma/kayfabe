@@ -1,0 +1,8 @@
+=== glgears_wgl start=2026-10-11T13:15:14.0053119+00:00 host=VASTWIN session=1 boot=2026-10-11T13:13:31.5000000Z timeout=90
+KFGL vendor NVIDIA Corporation
+KFGL renderer NVIDIA GeForce RTX 4070/PCIe/SSE2
+KFGL version 4.6.0 NVIDIA 580.88
+KFGL pixel 64,128,191,255
+KFGL gears frames=16019 secs=10.0 fps=1601.9 glerr=0x0
+KFGL RESULT OK
+=== end rc=0 secs=15 2026-10-11T13:15:28.9397404+00:00

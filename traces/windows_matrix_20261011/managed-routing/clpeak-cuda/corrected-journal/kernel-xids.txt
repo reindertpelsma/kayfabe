@@ -1,0 +1,1 @@
+2026-10-11T18:30:02.373448+00:00 claude kernel: NVRM: Xid (PCI:0000:01:00): 109, pid=255534, name=qemu-system-x86, channel 0x0000004a, errorString CTX SWITCH TIMEOUT, Info 0x9c02e

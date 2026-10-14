@@ -56,7 +56,9 @@ is frozen (see *Layout*).
 
 - **Correctness before cost.** A wrong hypothesis or a week spent on something irrelevant costs far more
   than tokens. Never downgrade a model for work whose wrong answer would redirect the effort.
-- **Models by risk.** Owner, 2026-10-08: the gap between Sonnet 5.5 and Opus 5.5 is small, so **Sonnet 5.5
+- **Models by risk (updated 2026-10-10: Sonnet 5.5 for everything; Opus 5.5 ONLY when Sonnet fails or is stuck
+  after a stated time-box, to save weekly usage; Haiku 5.5 is to be tried on mechanical lanes after the CLI
+  upgrade).** Earlier ruling, owner, 2026-10-08: the gap between Sonnet 5.5 and Opus 5.5 is small, so **Sonnet 5.5
   is the default for agents and Opus 5.5 is the strongest tier** (what Fable was). Opus 5.5 runs hypothesis
   work, decoding unknown semantics, root-cause hunts, security review and anything that feeds an owner
   decision, and whatever a wrong answer would redirect for a week. Sonnet 5.5 runs the rest, including

@@ -15914,6 +15914,11 @@ impl HostRmBackend {
     }
 }
 
+// ★ 2026-10-08 — `--ce-interrupt`: a completion delivered BY INTERRUPT (OS-event registration on a
+// registered GPU node file, the interrupt-raising pushbuffer shapes, the timed wait, the grading).
+// Additions only: nothing above changes for any other arm.
+pub mod osevent;
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,0 +1,217 @@
+warning: missing documentation for a function
+    --> crates/kf-util/src/lock.rs:1150:5
+     |
+1150 |     pub fn note_wait(rank: LockRank, d: Duration) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a function
+    --> crates/kf-util/src/lock.rs:1432:5
+     |
+1432 |     pub fn note_hold(rank: LockRank, d: Duration) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/kf-util/src/lockwitness.rs:193:5
+    |
+193 |     pub fn is_vcpu() -> bool {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `kf-util` (lib) generated 3 warnings
+warning: missing documentation for a method
+   --> crates/kf-arch/src/gsp.rs:814:5
+    |
+814 | /     fn on_read(
+815 | |         &self,
+816 | |         _model: &dyn GspModel,
+817 | |         _bar: u8,
+...   |
+820 | |         _state: &ArchBootState,
+821 | |     ) -> Option<u64> {
+    | |____________________^
+    |
+    = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a method
+   --> crates/kf-arch/src/gsp.rs:943:5
+    |
+943 |     fn libos_region_layout(&self) -> LibosRegionLayout;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `kf-arch` (lib) generated 2 warnings
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:90:18
+   |
+90 |     NoChannels { engine: u32 },
+   |                  ^^^^^^^^^^^
+   |
+   = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:92:20
+   |
+92 |     BelowMinimum { asked: u32 },
+   |                    ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:94:18
+   |
+94 |     AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },
+   |                  ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:94:30
+   |
+94 |     AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },
+   |                              ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:94:42
+   |
+94 |     AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },
+   |                                          ^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:94:55
+   |
+94 |     AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },
+   |                                                       ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:94:67
+   |
+94 |     AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },
+   |                                                                   ^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:96:19
+   |
+96 |     HostTooFull { derived: u32, engine: u32, total: u32, in_use: u32 },
+   |                   ^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:96:33
+   |
+96 |     HostTooFull { derived: u32, engine: u32, total: u32, in_use: u32 },
+   |                                 ^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:96:46
+   |
+96 |     HostTooFull { derived: u32, engine: u32, total: u32, in_use: u32 },
+   |                                              ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:96:58
+   |
+96 |     HostTooFull { derived: u32, engine: u32, total: u32, in_use: u32 },
+   |                                                          ^^^^^^^^^^^
+
+warning: `kf-abi` (lib) generated 11 warnings
+warning: missing documentation for a method
+    --> crates/kf-linux-raw/src/mapping_unsafe.rs:1196:5
+     |
+1196 |     pub fn load_u32(&self, offset: HostOffset) -> Result<u32, RawError> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: `kf-linux-raw` (lib) generated 1 warning
+   Compiling kf-host v0.1.0 (/data/kf-inval-absent/crates/kf-host)
+warning: function `host_version_gate` is never used
+   --> crates/kf-host/src/lib.rs:307:4
+    |
+307 | fn host_version_gate(reported: Option<&str>) -> Result<String, String> {
+    |    ^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `kf-host` (lib) generated 1 warning
+warning: `kf-host` (lib test) generated 1 warning (1 duplicate)
+    Finished `test` profile [unoptimized] target(s) in 0.65s
+     Running unittests src/lib.rs (/data/kf-encoder-probe-target/debug/deps/kf_host-5adeab944ece19b6)
+
+running 60 tests
+test birth::tests::a_bracket_that_cannot_clear_issues_nothing ... ok
+test birth::tests::a_privileged_reply_is_refused_and_the_channel_freed ... ok
+test birth::tests::a_request_asking_for_privilege_is_refused ... ok
+test birth::tests::an_alloc_error_is_returned_and_frees_nothing ... ok
+CAP-GATE: RAN kf-host live_cap_born_user_issues_without_cap_sys_admin (CAP_SYS_ADMIN was in the effective set: the real capset ran)
+test birth::tests::a_channel_class_is_refused_outside_the_birth_path ... ok
+test birth::tests::the_alloc_runs_without_cap_sys_admin_on_a_root_thread ... ok
+test birth::tests::the_channel_class_universe_is_derived_and_complete ... ok
+test birth::tests::the_negative_control_skips_the_bracket_and_the_reply_check_still_refuses ... ok
+test birth::tests::live_cap_born_user_issues_without_cap_sys_admin ... ok
+test channel::deferred_update_probe_tests::authored_registration_uses_the_measured_host_header_and_zero_flags ... ok
+test channel::disp_sw_tests::the_authored_disp_sw_params_are_head_0_mask_0_caps_0_at_every_tag ... ok
+test channel::disp_sw_tests::the_class_id_is_read_from_nvclass_only_for_a_disp_sw_reply ... ok
+test channel::deferred_update_probe_tests::malformed_rings_and_unmeasured_versions_refuse_before_host_io ... ok
+test channel::perm_tests::every_map_snoops_the_cpu_cache_and_changes_nothing_else ... ok
+test channel::perm_tests::each_permission_sets_exactly_its_nvos46_field ... ok
+test channel::privilege_tests::a_non_user_internal_level_is_refused ... ok
+test channel::privilege_tests::a_privileged_reply_is_refused_by_name ... ok
+test channel::privilege_tests::a_user_reply_passes_with_any_other_flag ... ok
+test channel::privilege_tests::the_birth_request_never_asks_for_privilege ... ok
+test channel::privilege_tests::the_check_refuses_what_it_cannot_judge ... ok
+test channel::privilege_tests::the_constants_are_the_header_fields ... ok
+test channel::privilege_tests::the_gr_tier_assertion_admits_only_a_user_birth_stamp ... ok
+test channel::reaper_tests::a_stalled_reaper_never_blocks_the_caller_and_loses_nothing ... ok
+test channel::split_row_tests::a_failing_rollback_still_returns_the_maps_error ... ok
+test channel::split_row_tests::a_refused_piece_unmap_does_not_stop_the_others_and_is_reported ... ok
+test channel::split_row_tests::a_refused_second_map_rolls_the_first_back ... ok
+test channel::split_row_tests::a_refused_first_map_leaves_nothing_to_roll_back ... ok
+test channel::split_row_tests::a_refused_third_piece_rolls_back_the_two_before_it_newest_first ... ok
+test channel::split_row_tests::a_row_inside_one_object_is_one_unchanged_map ... ok
+test channel::split_row_tests::a_row_ending_or_starting_exactly_on_an_edge_is_one_piece ... ok
+test channel::reaper_tests::a_spawned_reaper_runs_every_value ... ok
+test channel::split_row_tests::a_row_inside_one_reservation_is_one_piece ... ok
+test channel::split_row_tests::a_row_spanning_a_reservation_entirely_has_three_pieces ... ok
+test channel::split_row_tests::a_straddling_map_issues_two_maps_of_the_same_object_at_the_right_offsets ... ok
+test channel::split_row_tests::an_unreserved_slot_is_the_range_and_an_absent_range_is_refused_by_name ... ok
+test channel::split_row_tests::below_the_floor_wrap_and_zero_length_keep_their_names ... ok
+test channel::split_row_tests::hostile_rows_are_refused_before_any_host_call ... ok
+test channel::split_row_tests::only_a_range_inside_one_reservation_splits_safely ... ok
+test channel::split_row_tests::the_piece_count_is_bounded_by_the_reservations ... ok
+test channel::split_row_tests::the_rows_windows_mapped_across_the_1_mib_edge_split_in_two ... ok
+test channel::split_row_tests::two_adjacent_reservations_split_at_their_shared_edge ... ok
+test channel::twin_va_start_tests::null_page_wrapped_and_straddling_rows_are_refused_by_name ... ok
+test channel::twin_va_start_tests::the_refusal_codes_are_unique_in_kf_host ... ok
+test channel::twin_va_start_tests::the_start_is_host_default_unless_windows_user_twins_are_enabled ... ok
+test channel::split_row_tests::unmapping_a_straddling_row_unmaps_every_piece ... ok
+test channel::twin_va_start_tests::windows_low_rows_map_through_the_low_reservation ... ok
+test display_slot_tests::only_a_recorded_display_slot_of_a_sane_size_is_exported ... ok
+test kernel_mapping_tests::the_kernel_mapping_bit_is_cleared_whatever_the_caller_sets ... ok
+test tier::tests::a_feature_in_another_abi_is_not_usable ... ok
+test tier::tests::constants_equal_the_patch_header ... ok
+test tier::tests::patched_but_disabled_is_present_with_an_empty_mask ... ok
+test tier::tests::other_errno_and_no_errno_are_broken_and_count_as_stock ... ok
+test tier::tests::patched_host_with_h5_is_present_and_usable ... ok
+test tier::tests::request_is_all_zero_and_the_escape_numbers_match_the_patch ... ok
+test tier::tests::stock_host_is_absent_on_einval_and_enotty ... ok
+test tier::tests::the_capability_bit_has_no_behavioural_consumer_yet ... ok
+test tier::tests::unexpected_abi_or_nonzero_reserved_is_broken ... ok
+test tier::tests::unknown_feature_bits_are_ignored_not_acted_on ... ok
+test channel::split_row_tests::pieces_always_partition_the_row ... ok
+test kernel_mapping_tests::only_the_one_builder_can_name_the_kernel_mapping_bit ... ok
+
+test result: ok. 60 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/channel_birth_bound.rs (/data/kf-encoder-probe-target/debug/deps/channel_birth_bound-ec82ed9cb82165c3)
+
+running 6 tests
+test every_alloc_request_is_admitted_first ... ok
+test born_user_brackets_the_call_and_checks_the_reply ... ok
+test the_scanner_catches_a_planted_unadmitted_alloc ... ok
+test the_birth_token_is_made_only_by_born_user ... ok
+test birth_member_is_the_one_caller_and_uses_the_live_thread ... ok
+test only_the_oracle_names_the_belt_off_and_the_passthrough_birth_names_deny ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+
+   Doc-tests kf_host
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

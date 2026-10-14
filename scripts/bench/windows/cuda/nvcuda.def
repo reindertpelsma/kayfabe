@@ -20,3 +20,15 @@ EXPORTS
   cuModuleGetFunction
   cuLaunchKernel
   cuGetErrorString
+  cuStreamCreate
+  cuStreamSynchronize
+  cuStreamDestroy_v2
+  cuMemAllocHost_v2
+  cuMemFreeHost
+  cuMemFree_v2
+  cuMemcpyDtoHAsync_v2
+  cuLaunchHostFunc
+  cuOccupancyMaxPotentialBlockSize
+  cuOccupancyMaxActiveBlocksPerMultiprocessor
+  cuModuleUnload
+  cuCtxDestroy_v2

@@ -1,0 +1,6 @@
+{
+  "source": "/var/lib/kf-windows-20261005/boundary-kayfabe-1250/qemu.log",
+  "source_sha256": "13a9bf55b6cc8331e0928507e5dd40f5a2d97e7a275d623353a51c8c82812d94",
+  "extract_lines": 4421,
+  "limit": "first512 GP entries /64 SW methods per twin; exhausted budget is inconclusive"
+}

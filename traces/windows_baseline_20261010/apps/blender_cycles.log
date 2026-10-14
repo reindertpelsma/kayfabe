@@ -1,0 +1,8 @@
+=== blender_cycles start=2026-10-10T06:50:52.6493147-07:00 host=DESKTOP-397P3NI session=0 boot=2026-10-10T13:30:47.5000000Z timeout=900
+Fra:1 Mem:43.03M (Peak 58.85M) | Time:00:02.68 | Mem:359.14M, Peak:359.14M | Scene, ViewLayer | Finished
+Saved: 'C:\kf\out\blender_cycles\blender_CUDA.png'
+BLENDER_OK CUDA gpu=NVIDIA GeForce RTX 4060 Ti mean=0.6405
+Fra:1 Mem:41.83M (Peak 57.65M) | Time:00:07.31 | Mem:359.02M, Peak:359.02M | Scene, ViewLayer | Finished
+Saved: 'C:\kf\out\blender_cycles\blender_OPTIX.png'
+BLENDER_OK OPTIX gpu=NVIDIA GeForce RTX 4060 Ti mean=0.6405
+=== end rc=0 secs=34 2026-10-10T06:51:26.6839390-07:00

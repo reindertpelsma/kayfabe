@@ -1,0 +1,2 @@
+Initial suite: 76 tests, 75 PASS, one generated-document staleness failure.
+Regenerated gen_doc.py, reran inventory/document tests: 11 PASS.

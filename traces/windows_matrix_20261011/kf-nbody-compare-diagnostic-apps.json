@@ -1,0 +1,40 @@
+{
+ "schema": 1,
+ "generator": "gen_apps.py",
+ "prelude": "$ErrorActionPreference = 'Continue'\n. C:\\kf\\kf_apphelpers.ps1\n$K = 'C:\\kfapps'; $CD = '@@CD@@'; $OUT = 'C:\\kf\\out\\@@ID@@'\n$PY = \"$K\\py\\python.exe\"; $TL = \"$K\\py\\Lib\\site-packages\\torch\\lib\"\nNew-Item -ItemType Directory -Force -Path $OUT | Out-Null\n$env:CUPY_CACHE_DIR = 'C:\\kf\\cupy_cache'; $env:KF_TORCH_LIB = $TL; $env:CUDA_PATH = \"$K\\cuda_cudart\"\n$env:KF_CUDA_INCLUDE = \"$K\\cuda_cudart\\include;$K\\cuda_cccl\\include\"\n$PYA = @('-X', 'utf8', '-X', 'pycache_prefix=C:\\kf\\pycache')\n",
+ "apps": [
+  {
+   "id": "nbody_compare_diagnostic",
+   "category": "cuda-demo",
+   "linux": [],
+   "pkgs": [
+    "cuda_demo_suite",
+    "vc_redist"
+   ],
+   "session": "service",
+   "tier": 1,
+   "timeout_s": 120,
+   "expect_s": 15,
+   "rx": "^  OK$",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [
+    "pdh:Cuda|Compute|3D|Copy"
+   ],
+   "difficulty": "medium",
+   "why": "sustained cuBLAS/cuDNN/cuFFT work, 1-4 GiB allocations and many launches per second: stresses the twin/USERD relay and the completion path for minutes; the recorded Windows runs reset the GPU (TDR) every 1-4 minutes and run 263 ended in a 0x116 bugcheck (traces/windows_prod_20261010; tdr-hunt README)",
+   "ps": "$d = \"$K\\cuda_demo\\demo_suite\"\nInvoke-KfExe -Exe \"$d\\nbody.exe\" -ArgList @('-compare', '-numbodies=4096') -Cwd $d\nexit $global:KfRc\n",
+   "kill_names": [],
+   "screenshot_s": null,
+   "note": "-benchmark should not open a window in the sample; if it does, move to session=interactive",
+   "digest": false,
+   "smi": true,
+   "nvidia_only": true,
+   "cmd": "nbody.exe -benchmark -numbodies=32768"
+  }
+ ],
+ "linux_map": {},
+ "no_equivalent": {
+  "simpleIPC": "CUDA IPC (cudaIpcGetMemHandle) is not supported on WDDM Windows (TCC/Linux only)",
+  "geekbench_gpu": "Geekbench needs the internet to upload results (the Linux pass string is 'Uploading results'); the lane forbids guest internet at run time"
+ }
+}

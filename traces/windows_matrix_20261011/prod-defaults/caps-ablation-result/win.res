@@ -1,0 +1,1 @@
+APPRES side=win app=glgears_wgl verdict=BOOT_FAIL rc=- secs=0 quiet=- note=guest-did-not-start:guest setup failed (app disk missing or no NVIDIA adapter) boot=g1 guest_tdr=0 wer=0 gsp_cycles=- proof=- tier=1 cat=opengl

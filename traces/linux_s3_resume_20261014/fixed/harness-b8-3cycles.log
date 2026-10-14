@@ -1,0 +1,114 @@
+S3_START tag=b8 rev=559db30c 2026-10-14T13:46:30+02:00
+S3_GUEST_UP 2026-10-14T13:46:52+02:00
+== before
+BEFORE CINNAMON 1 XORG 1
+BEFORE 6.8.0-142-generic
+BEFORE NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+BEFORE NVIDIA GeForce RTX 4070, 580.159.04
+BEFORE SMI_RC 0
+BEFORE GEARS 297 frames in 5.0 seconds = 59.380 FPS
+BEFORE PM: freeze mem disk mem_sleep=s2idle [deep]
+BEFORE enabled enabled enabled 
+BEFORE PreserveVideoMemoryAllocations: 0
+BEFORE DynamicPowerManagement: 3
+BEFORE DynamicPowerManagementVideoMemoryThreshold: 200
+BEFORE EnableGpuFirmware: 18
+BEFORE EnableGpuFirmwareLogs: 2
+== suspend cycle 1
+S3_SUSPEND_CMD cycle=1 2026-10-14T13:47:05+02:00
+S3_STATE_AFTER_CMD cycle=1 ['VM status: paused (suspended)', '(qemu)'] (t=4s)
+S3_WAKE_SENT cycle=1 2026-10-14T13:47:12+02:00
+S3_SSH_BACK=1 cycle=1 after ~3s 2026-10-14T13:47:13+02:00
+S3_KF3 c1 kf3: GSP phase Booted -> Running
+S3_KF3 c1 kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=1682: bInPMTransition=true bGc6Entering=false newLevel=3 — a PM transition: BAR1 is preserved
+S3_KF3 c1 kf3: GSP fn 47 is a PM transition: the GSP-RM state is kept for a resume (phase Suspending)
+S3_KF3 c1 kf3: GSP phase Running -> Suspending
+S3_KF3 c1 kf3: GSP phase Suspending -> Halted
+S3_KF3 c1 kf3: device reset #2 (S3 WAKE): GSP Halted -> Cold (E14): the PM-suspended GSP-RM life is KEPT — queues and sequence numbers, the chain's objects, host twins, address spaces, display; 0 queued regis
+S3_KF3 c1 kf3: device reset #2: tokens KEPT (the life's channels), register shadow restored and republished, 0 stale interrupt(s) drained
+S3_KF3 c1 kf3: device reset #2 COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: 0)
+S3_KF3 c1 kf3: device reset #2 complete before the vCPUs resume (the main loop waited 0 us)
+S3_KF3 c1 kayfabe: GSP-RESUME the saved binding restored (no publish): stat_seq=1683 cmd_seq=1685 cmd_read_ptr=56 peer_stat_read=26
+S3_KF3 c1 kf3: GSP phase Cold -> Booted
+S3_KF3 c1 kf3: GSP phase Booted -> Running
+S3_STATUS cycle=1 ['VM status: running', '(qemu)']
+AFTER c1 CINNAMON 1 XORG 1
+AFTER c1 6.8.0-142-generic
+AFTER c1 NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+AFTER c1 NVIDIA GeForce RTX 4070, 580.159.04
+AFTER c1 SMI_RC 0
+AFTER c1 GEARS 301 frames in 5.0 seconds = 60.102 FPS
+AFTER c1 PM: freeze mem disk mem_sleep=s2idle [deep]
+AFTER c1 enabled enabled enabled 
+AFTER c1 PreserveVideoMemoryAllocations: 0
+AFTER c1 DynamicPowerManagement: 3
+AFTER c1 DynamicPowerManagementVideoMemoryThreshold: 200
+AFTER c1 EnableGpuFirmware: 18
+AFTER c1 EnableGpuFirmwareLogs: 2
+S3_CYCLE_RESULT cycle=1 ssh=1 nvidia_smi=1 gears_frames=301 xid=0 pass=1
+== suspend cycle 2
+S3_SUSPEND_CMD cycle=2 2026-10-14T13:47:24+02:00
+S3_STATE_AFTER_CMD cycle=2 ['VM status: paused (suspended)', '(qemu)'] (t=4s)
+S3_WAKE_SENT cycle=2 2026-10-14T13:47:32+02:00
+S3_SSH_BACK=1 cycle=2 after ~3s 2026-10-14T13:47:32+02:00
+S3_KF3 c2 kf3: GSP phase Booted -> Running
+S3_KF3 c2 kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=2643: bInPMTransition=true bGc6Entering=false newLevel=3 — a PM transition: BAR1 is preserved
+S3_KF3 c2 kf3: GSP fn 47 is a PM transition: the GSP-RM state is kept for a resume (phase Suspending)
+S3_KF3 c2 kf3: GSP phase Running -> Suspending
+S3_KF3 c2 kf3: GSP phase Suspending -> Halted
+S3_KF3 c2 kf3: device reset #3 (S3 WAKE): GSP Halted -> Cold (E14): the PM-suspended GSP-RM life is KEPT — queues and sequence numbers, the chain's objects, host twins, address spaces, display; 0 queued regis
+S3_KF3 c2 kf3: device reset #3: tokens KEPT (the life's channels), register shadow restored and republished, 0 stale interrupt(s) drained
+S3_KF3 c2 kf3: device reset #3 COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: 0)
+S3_KF3 c2 kf3: device reset #3 complete before the vCPUs resume (the main loop waited 0 us)
+S3_KF3 c2 kayfabe: GSP-RESUME the saved binding restored (no publish): stat_seq=2644 cmd_seq=2646 cmd_read_ptr=37 peer_stat_read=42
+S3_KF3 c2 kf3: GSP phase Cold -> Booted
+S3_KF3 c2 kf3: GSP phase Booted -> Running
+S3_STATUS cycle=2 ['VM status: running', '(qemu)']
+AFTER c2 CINNAMON 1 XORG 1
+AFTER c2 6.8.0-142-generic
+AFTER c2 NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+AFTER c2 NVIDIA GeForce RTX 4070, 580.159.04
+AFTER c2 SMI_RC 0
+AFTER c2 GEARS 302 frames in 5.0 seconds = 60.299 FPS
+AFTER c2 PM: freeze mem disk mem_sleep=s2idle [deep]
+AFTER c2 enabled enabled enabled 
+AFTER c2 PreserveVideoMemoryAllocations: 0
+AFTER c2 DynamicPowerManagement: 3
+AFTER c2 DynamicPowerManagementVideoMemoryThreshold: 200
+AFTER c2 EnableGpuFirmware: 18
+AFTER c2 EnableGpuFirmwareLogs: 2
+S3_CYCLE_RESULT cycle=2 ssh=1 nvidia_smi=1 gears_frames=302 xid=0 pass=1
+== suspend cycle 3
+S3_SUSPEND_CMD cycle=3 2026-10-14T13:47:44+02:00
+S3_STATE_AFTER_CMD cycle=3 ['VM status: paused (suspended)', '(qemu)'] (t=4s)
+S3_WAKE_SENT cycle=3 2026-10-14T13:47:51+02:00
+S3_SSH_BACK=1 cycle=3 after ~3s 2026-10-14T13:47:52+02:00
+S3_KF3 c3 kf3: GSP phase Booted -> Running
+S3_KF3 c3 kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=3643: bInPMTransition=true bGc6Entering=false newLevel=3 — a PM transition: BAR1 is preserved
+S3_KF3 c3 kf3: GSP fn 47 is a PM transition: the GSP-RM state is kept for a resume (phase Suspending)
+S3_KF3 c3 kf3: GSP phase Running -> Suspending
+S3_KF3 c3 kf3: GSP phase Suspending -> Halted
+S3_KF3 c3 kf3: device reset #4 (S3 WAKE): GSP Halted -> Cold (E14): the PM-suspended GSP-RM life is KEPT — queues and sequence numbers, the chain's objects, host twins, address spaces, display; 0 queued regis
+S3_KF3 c3 kf3: device reset #4: tokens KEPT (the life's channels), register shadow restored and republished, 0 stale interrupt(s) drained
+S3_KF3 c3 kf3: device reset #4 COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: 0)
+S3_KF3 c3 kf3: device reset #4 complete before the vCPUs resume (the main loop waited 0 us)
+S3_KF3 c3 kayfabe: GSP-RESUME the saved binding restored (no publish): stat_seq=3644 cmd_seq=3646 cmd_read_ptr=57 peer_stat_read=34
+S3_KF3 c3 kf3: GSP phase Cold -> Booted
+S3_KF3 c3 kf3: GSP phase Booted -> Running
+S3_STATUS cycle=3 ['VM status: running', '(qemu)']
+AFTER c3 CINNAMON 1 XORG 1
+AFTER c3 6.8.0-142-generic
+AFTER c3 NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+AFTER c3 NVIDIA GeForce RTX 4070, 580.159.04
+AFTER c3 SMI_RC 0
+AFTER c3 GEARS 301 frames in 5.0 seconds = 60.073 FPS
+AFTER c3 PM: freeze mem disk mem_sleep=s2idle [deep]
+AFTER c3 enabled enabled enabled 
+AFTER c3 PreserveVideoMemoryAllocations: 0
+AFTER c3 DynamicPowerManagement: 3
+AFTER c3 DynamicPowerManagementVideoMemoryThreshold: 200
+AFTER c3 EnableGpuFirmware: 18
+AFTER c3 EnableGpuFirmwareLogs: 2
+S3_CYCLE_RESULT cycle=3 ssh=1 nvidia_smi=1 gears_frames=301 xid=0 pass=1
+S3_RESULT pass=1 cycles=3 rev=559db30c
+S3_EXIT rc=0 2026-10-14T13:49:05+02:00

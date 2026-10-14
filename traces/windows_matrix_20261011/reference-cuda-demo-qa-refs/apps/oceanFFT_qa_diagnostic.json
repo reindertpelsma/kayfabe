@@ -1,0 +1,73 @@
+{
+ "quiet": 2,
+ "end_utc": "2026-10-11T14:49:46.7230953Z",
+ "start_utc": "2026-10-11T14:49:43.8291599Z",
+ "rc": 0,
+ "secs": 3,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4090 status=OK code=0"
+ ],
+ "digests": [],
+ "session": 0,
+ "out_files": [
+  "C:\\kf\\out\\oceanFFT_qa_diagnostic\\ref_slopeShading.bin 524288",
+  "C:\\kf\\out\\oceanFFT_qa_diagnostic\\ref_spatialDomain.bin 262144",
+  "C:\\kf\\out\\oceanFFT_qa_diagnostic\\slopeShading.bin 524288",
+  "C:\\kf\\out\\oceanFFT_qa_diagnostic\\spatialDomain.bin 262144"
+ ],
+ "boot_utc_start": "2026-10-11T14:31:59.5000000Z",
+ "log_tail": [
+  "=== oceanFFT_qa_diagnostic start=2026-10-11T07:49:43.8291599-07:00 host=DESKTOP-JR70RMQ session=0 boot=2026-10-11T14:31:59.5000000Z timeout=120",
+  "NOTE: The CUDA Samples are not meant for performance measurements. Results may vary when GPU Boost is enabled.",
+  "",
+  "C:\\kfapps\\cuda_demo\\demo_suite\\oceanFFT.exe Starting...",
+  "",
+  "MapSMtoCores for SM 8.9 is undefined.  Default to use 128 Cores/SM",
+  "MapSMtoArchName for SM 8.9 is undefined.  Default to use Ampere",
+  "GPU Device 0: \"Ampere\" with compute capability 8.9",
+  "",
+  "Compute capability 8.9",
+  "sdkDumpBin: <spatialDomain.bin>",
+  "> compareBin2Bin <float> nelements=65536, epsilon=0.10, threshold=0.15",
+  "   src_file <spatialDomain.bin>, size=262144 bytes",
+  "   ref_file <./ref_spatialDomain.bin>, size=262144 bytes",
+  "  OK",
+  "sdkDumpBin: <slopeShading.bin>",
+  "> compareBin2Bin <float> nelements=131072, epsilon=0.10, threshold=0.15",
+  "   src_file <slopeShading.bin>, size=524288 bytes",
+  "   ref_file <./ref_slopeShading.bin>, size=524288 bytes",
+  "  OK",
+  "=== end rc=0 secs=3 2026-10-11T07:49:46.7230953-07:00"
+ ],
+ "pdh": {
+  "pids": [
+   "4276",
+   "2464"
+  ],
+  "nv": {},
+  "samples": 1,
+  "other": {},
+  "nvidia_luids": "0_5f8e"
+ },
+ "timed_out": false,
+ "token": "g1-oceanFFT_qa_diagnostic-1791730158",
+ "boot_utc_end": "2026-10-11T14:31:59.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "oceanFFT_qa_diagnostic",
+ "smi": {
+  "samples": 1,
+  "mem_used_base_mb": 155,
+  "util_max": 0,
+  "mem_used_max_mb": 155
+ }
+}

@@ -1,0 +1,13 @@
+{
+  "source_revision": "d6dd9c951b49127e175a828f8f5f3517dff14e1f",
+  "product": "stock NVIDIA Windows driver 580.88",
+  "gpu": "RTX 4090",
+  "owned_vast_instance": 55385171,
+  "app_disk_sha256": "183c13aa6b2c3c20475f7e1c5eed9979ca973056886d2b519c013386ba4da652",
+  "tool_sha256": {
+    "kf_cuda_control.exe": "3906f520c10e272215d9d7d79a90ce9a2042581923a4717db90be312ab3a67c8",
+    "kf_dxprobe.exe": "3c6ededa77430a18a13321eb72fdca7f60282f8d12ddc147a7e7df1284832c5f"
+  },
+  "inventory_sha256": "eb5bc0dd751d3a666504cd1a1eab796800983a7dcd2e1fcf0904e78b8de85dc3",
+  "started_utc": "2026-10-11T12:40:03Z"
+}

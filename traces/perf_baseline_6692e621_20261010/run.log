@@ -1,0 +1,43 @@
+[perf_compare 2026-10-10T00:41:43+02:00] START rev=6692e621 lanes=bare,fast,ladder_host,ladder_guest,exit reps=3 bin=/var/lib/kf-windows-20261005/kf3-bins/6692e621/qemu-system-x86_64
+[perf_compare 2026-10-10T00:41:43+02:00] LANE_START bare
+[perf_compare 2026-10-10T00:42:40+02:00] bare r1 rc=0 BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30
+[perf_compare 2026-10-10T00:43:35+02:00] bare r2 rc=0 BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30
+[perf_compare 2026-10-10T00:44:31+02:00] bare r3 rc=0 BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30
+[perf_compare 2026-10-10T00:44:31+02:00] LANE_EXIT bare
+[perf_compare 2026-10-10T00:44:31+02:00] LANE_START fast
+[perf_compare 2026-10-10T00:47:52+02:00] fast r1 rc=0 FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+[perf_compare 2026-10-10T00:51:12+02:00] fast r2 rc=0 FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+[perf_compare 2026-10-10T00:54:33+02:00] fast r3 rc=0 FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+[perf_compare 2026-10-10T00:54:33+02:00] LANE_EXIT fast
+[perf_compare 2026-10-10T00:54:33+02:00] LANE_START ladder_host
+[perf_compare 2026-10-10T00:54:40+02:00] ladder_host rc=0
+[perf_compare 2026-10-10T00:54:40+02:00] LANE_EXIT ladder_host
+[perf_compare 2026-10-10T00:54:40+02:00] LANE_START ladder_guest
+[perf_compare 2026-10-10T00:55:08+02:00] ladder_guest r1 cup2 rc=0 CL_ROW mode=guest rung=cup2 rep=1 verdict=PASS boot_rc=0 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]  trapped=1211
+[perf_compare 2026-10-10T00:55:37+02:00] ladder_guest r1 cup3 rc=0 CL_ROW mode=guest rung=cup3 rep=1 verdict=PASS boot_rc=0 graded=[CUP3_VAL=43]  trapped=12117 ledger=[0x00000802:e0f2 0x0
+[perf_compare 2026-10-10T00:56:08+02:00] ladder_guest r1 cup8 rc=0 CL_ROW mode=guest rung=cup8 rep=1 verdict=PASS boot_rc=0 graded=[CUP8_BAD=0 CUP8_MAXERR=0] CUP8_WALL_S=1 trapped=12249 l
+[perf_compare 2026-10-10T00:56:43+02:00] ladder_guest r1 cup8bench rc=0 CL_ROW mode=guest rung=cup8bench rep=1 verdict=PASS boot_rc=0 graded=[GUEST_BENCH_TOTAL_BAD=0 GUEST_BENCH_VERDICT=PASS (
+[perf_compare 2026-10-10T00:57:11+02:00] ladder_guest r2 cup2 rc=0 CL_ROW mode=guest rung=cup2 rep=1 verdict=PASS boot_rc=0 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]  trapped=1212
+[perf_compare 2026-10-10T00:57:43+02:00] ladder_guest r2 cup3 rc=0 CL_ROW mode=guest rung=cup3 rep=1 verdict=PASS boot_rc=0 graded=[CUP3_VAL=43]  trapped=12123 ledger=[0x00000802:e0f2 0x0
+[perf_compare 2026-10-10T00:58:13+02:00] ladder_guest r2 cup8 rc=0 CL_ROW mode=guest rung=cup8 rep=1 verdict=PASS boot_rc=0 graded=[CUP8_BAD=0 CUP8_MAXERR=0] CUP8_WALL_S=1 trapped=12250 l
+[perf_compare 2026-10-10T00:58:49+02:00] ladder_guest r2 cup8bench rc=0 CL_ROW mode=guest rung=cup8bench rep=1 verdict=PASS boot_rc=0 graded=[GUEST_BENCH_TOTAL_BAD=0 GUEST_BENCH_VERDICT=PASS (
+[perf_compare 2026-10-10T00:59:17+02:00] ladder_guest r3 cup2 rc=0 CL_ROW mode=guest rung=cup2 rep=1 verdict=PASS boot_rc=0 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]  trapped=1210
+[perf_compare 2026-10-10T00:59:46+02:00] ladder_guest r3 cup3 rc=0 CL_ROW mode=guest rung=cup3 rep=1 verdict=PASS boot_rc=0 graded=[CUP3_VAL=43]  trapped=12116 ledger=[0x00000802:e0f2 0x0
+[perf_compare 2026-10-10T01:00:17+02:00] ladder_guest r3 cup8 rc=0 CL_ROW mode=guest rung=cup8 rep=1 verdict=PASS boot_rc=0 graded=[CUP8_BAD=0 CUP8_MAXERR=0] CUP8_WALL_S=1 trapped=12249 l
+[perf_compare 2026-10-10T01:00:52+02:00] ladder_guest r3 cup8bench rc=0 CL_ROW mode=guest rung=cup8bench rep=1 verdict=PASS boot_rc=0 graded=[GUEST_BENCH_TOTAL_BAD=0 GUEST_BENCH_VERDICT=PASS (
+[perf_compare 2026-10-10T01:00:52+02:00] LANE_EXIT ladder_guest
+[perf_compare 2026-10-10T01:00:52+02:00] LANE_START exit
+[perf_compare 2026-10-10T01:01:25+02:00] exit off r1 rc=0
+[perf_compare 2026-10-10T01:01:55+02:00] exit on r1 rc=0
+[perf_compare 2026-10-10T01:02:28+02:00] exit off r2 rc=0
+[perf_compare 2026-10-10T01:02:59+02:00] exit on r2 rc=0
+[perf_compare 2026-10-10T01:03:32+02:00] exit off r3 rc=0
+[perf_compare 2026-10-10T01:04:02+02:00] exit on r3 rc=0
+[perf_compare 2026-10-10T01:04:02+02:00] LANE_EXIT exit
+[perf_compare 2026-10-10T01:04:02+02:00] NOT_IN_THIS_HARNESS apps (needs a provisioned guest and host; see the report's 'could not be run')
+[perf_compare 2026-10-10T01:04:02+02:00] NOT_IN_THIS_HARNESS llm (needs a provisioned guest and host; see the report's 'could not be run')
+[perf_compare 2026-10-10T01:04:02+02:00] NOT_IN_THIS_HARNESS gfx (needs a provisioned guest and host; see the report's 'could not be run')
+[perf_compare 2026-10-10T01:04:02+02:00] NOT_IN_THIS_HARNESS video (needs a provisioned guest and host; see the report's 'could not be run')
+extract: 741 values -> /var/lib/kf-windows-20261005/perf-baseline/6692e621/metrics.tsv
+summary: 215 metrics -> /var/lib/kf-windows-20261005/perf-baseline/6692e621/summary.tsv, summary.md
+[perf_compare 2026-10-10T01:04:02+02:00] EXIT

@@ -290,6 +290,17 @@ impl CpuIntr {
     pub fn shadow_all(&self, put: impl FnMut(u64, u32)) {
         self.shadow(Reg::Trigger, put);
     }
+
+    /// ★ Device reset (`docs/design/V3_DEVICE_RESET.md`): nothing pending, nothing enabled — the
+    /// tree [`CpuIntr::new`] builds. The caller republishes [`CpuIntr::shadow_all`]. ⊘ Called only
+    /// while no vCPU and no worker can latch (the device's reset gate is closed and quiet, and
+    /// every channel is gone): a latch racing it would survive into the next life.
+    pub fn reset(&self) {
+        for w in self.leaf.iter().chain(self.leaf_en.iter()) {
+            w.store(0, Ordering::Release);
+        }
+        self.top_en.store(0, Ordering::Release);
+    }
 }
 
 #[cfg(test)]
@@ -297,6 +308,35 @@ mod tests {
     use super::*;
 
     const UM: u64 = 0x00BB_0000;
+
+    /// ★ Device reset: a tree with pending, enabled and masked vectors comes back as the tree a
+    /// fresh device has — register for register — and a vector latched in the old life does not
+    /// fire when the next life enables it.
+    #[test]
+    fn a_reset_tree_is_the_fresh_tree_and_an_old_latch_never_fires_in_the_next_life() {
+        let fresh = CpuIntr::new(kf_chip::Family::Ampere, UM).unwrap();
+        let t = CpuIntr::new(kf_chip::Family::Ampere, UM).unwrap();
+        assert_eq!(t.write(Reg::TopEnSet, 0xff), Raise::None);
+        assert_eq!(t.write(Reg::LeafEnSet(0), 1 << 3), Raise::None);
+        assert_eq!(t.latch(3), Raise::Message);
+        assert_eq!(t.latch(70), Raise::None, "a masked leaf stays pending");
+        assert_ne!(t.snapshot(), fresh.snapshot());
+        t.reset();
+        assert_eq!(t.snapshot(), fresh.snapshot());
+        let mut a = Vec::new();
+        let mut b = Vec::new();
+        t.shadow_all(|o, v| a.push((o, v)));
+        fresh.shadow_all(|o, v| b.push((o, v)));
+        assert_eq!(a, b, "the published read-back is the fresh one");
+        // The next life enables the leaf the old life left pending: nothing is sent.
+        assert_eq!(t.write(Reg::TopEnSet, 0xff), Raise::None);
+        assert_eq!(t.write(Reg::LeafEnSet(2), 1 << (70 % 32)), Raise::None);
+        assert_eq!(t.read(Reg::Leaf(2)), 0);
+        // Reset twice is reset once.
+        t.reset();
+        t.reset();
+        assert_eq!(t.snapshot(), fresh.snapshot());
+    }
 
     /// `_osVerifyInterrupts` on GA10x, register for register (`os_sanity.c:182-249`).
     #[test]

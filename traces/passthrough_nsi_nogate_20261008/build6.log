@@ -1,0 +1,20 @@
+BUILD_START 2026-10-09T00:23:31+02:00 rev=d00c9f2b
+== raw-client tests
+603 |         ABI_DECODE_FAILED, ABI_ENCODE_FAILED, CharDevice, IMPOSSIBLE_CONVERSION,
+test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 95 filtered out; finished in 0.04s
+== raw client
+    Finished `release` profile [optimized] target(s) in 2.72s
+0d6e477060cd0f86
+== kf3
+build_kf3 rc=0
+KF3_BUILT /var/lib/kf-windows-20261005/kf3-bins/d00c9f2b/qemu-system-x86_64 rev=d00c9f2b mtime=2026-10-09 00:23:45.326151984 +0200 (shared build dir /var/lib/kf-windows-20261005/qemu-build-kf3)
+== initrd
+initrd rc=0
+== built: /var/lib/kf-nsi-20261008/fastguest-d00c9f2b/initrd.cpio.gz  361M
+== kernel release: 7.0.0-34-generic
+total 385808
+drwxr-xr-x  2 root root      4096 Oct  9 00:23 .
+drwxr-xr-x 13 root root      4096 Oct  9 00:23 ..
+-rw-r--r--  1 root root 377752776 Oct  9 00:24 initrd.cpio.gz
+-rw-------  1 root root  17303944 Oct  9 00:23 vmlinuz
+BUILD_DONE 2026-10-09T00:24:03+02:00 rev=d00c9f2b

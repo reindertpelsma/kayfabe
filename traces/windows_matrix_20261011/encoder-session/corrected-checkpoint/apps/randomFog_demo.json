@@ -1,0 +1,101 @@
+{
+ "quiet": 25,
+ "end_utc": "2026-10-11T15:45:26.5041498Z",
+ "start_utc": "2026-10-11T15:44:55.8935549Z",
+ "rc": 0,
+ "secs": 31,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4070 status=OK code=0"
+ ],
+ "digests": [],
+ "session": 1,
+ "out_files": [
+  "C:\\kf\\out\\randomFog_demo\\randomFog.bin 4800000",
+  "C:\\kf\\out\\randomFog_demo\\ref_randomFog.bin 4800000"
+ ],
+ "boot_utc_start": "2026-10-11T15:41:14.5000000Z",
+ "log_tail": [
+  "Random number visualization",
+  "",
+  "On creation, randomFog generates 200,000 random coordinates in spherical coordinate space (radius, angle rho, angle theta) with curand's XORWOW algorithm. The coordinates are normalized for a uniform distribution through the sphere.",
+  "",
+  "The X axis is drawn with blue in the negative direction and yellow positive.",
+  "The Y axis is drawn with green in the negative direction and magenta positive.",
+  "The Z axis is drawn with red in the negative direction and cyan positive.",
+  "",
+  "The following keys can be used to control the output:",
+  "",
+  "\ts         Generate a new set of random numbers and display as spherical coordinates (Sphere)",
+  "\te         Generate a new set of random numbers and display on a spherical surface (shEll)",
+  "\tb         Generate a new set of random numbers and display as cartesian coordinates (cuBe/Box)",
+  "\tp         Generate a new set of random numbers and display on a cartesian plane (Plane)",
+  "",
+  "\ti,l,j     Rotate the negative Z-axis up, right, down and left respectively",
+  "\ta         Toggle auto-rotation",
+  "\tt         Toggle 10x zoom",
+  "\tz         Toggle axes display",
+  "",
+  "\tx         Select XORWOW generator (default)",
+  "\tc         Select Sobol' generator",
+  "\tv         Select scrambled Sobol' generator",
+  "\tr         Reset XORWOW (i.e. reset to initial seed) and regenerate",
+  "\t]         Increment the number of Sobol' dimensions and regenerate",
+  "\t[         Reset the number of Sobol' dimensions to 1 and regenerate",
+  "",
+  "\t+         Increment the number of displayed points by 8,000 (up to maximum 200,000)",
+  "\t-         Decrement the number of displayed points by 8,000 (down to minimum 8,000)",
+  "",
+  "\tq/[ESC]   Quit the application.",
+  "",
+  "",
+  "CheckRender::dumpBin: <randomFog.bin>",
+  "> compareBin2Bin <float> nelements=1200000, epsilon=0.25, threshold=0.35",
+  "   src_file <randomFog.bin>",
+  "   ref_file <./ref_randomFog.bin>",
+  "  OK",
+  "KFSURVIVE randomFog ALIVE_AT 25 s",
+  "=== end rc=0 secs=31 2026-10-11T15:45:26.5041498+00:00"
+ ],
+ "pdh": {
+  "pids": [
+   "8908",
+   "5312",
+   "2004",
+   "1576",
+   "8652"
+  ],
+  "nv": {
+   "copy": 0,
+   "3d": 0,
+   "videoencode": 0,
+   "videodecode": 0,
+   "vr": 0,
+   "legacyoverlay": 0,
+   "ofa_0": 0
+  },
+  "samples": 14,
+  "other": {},
+  "nvidia_luids": "0_5f0a"
+ },
+ "timed_out": false,
+ "token": "g1-randomFog_demo-1791733490",
+ "boot_utc_end": "2026-10-11T15:41:14.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "randomFog_demo",
+ "smi": {
+  "samples": 0,
+  "mem_used_base_mb": null,
+  "util_max": 0,
+  "mem_used_max_mb": 0
+ }
+}

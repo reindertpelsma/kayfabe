@@ -1,0 +1,6 @@
+=== stream_created_t start=2026-10-11T09:55:09.2119653-07:00 host=DESKTOP-JR70RMQ session=0 boot=2026-10-11T14:31:59.5000000Z timeout=120
+KFDEV NVIDIA GeForce RTX 4090
+[eq] device NVIDIA GeForce RTX 4090 torch 2.8.0+cu126
+CHECK stream_created ok
+STREAM_PROBE_DONE created rc=0
+=== end rc=0 secs=6 2026-10-11T09:55:15.5208568-07:00

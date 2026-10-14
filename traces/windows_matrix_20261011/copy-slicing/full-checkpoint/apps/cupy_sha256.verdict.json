@@ -1,0 +1,14 @@
+{
+ "verdict": "FAIL",
+ "rc": 1,
+ "secs": 142,
+ "quiet": 0,
+ "note": "rc=1,success-string-missing | RuntimeError: Failed to find CUDA headers. Please install CUDA toolkit headers (e.g., pip install cupy-cuda12x[ctk]) or specify CUDA_PATH environment variable.",
+ "proof": "out",
+ "tdr": 0,
+ "wer": 0,
+ "rebooted": false,
+ "gsp_cycles": 0,
+ "restart": "",
+ "guest": "g6"
+}

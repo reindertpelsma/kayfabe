@@ -1,0 +1,5 @@
+=== furmark_knot_gl start=2026-10-11T14:32:47.2750334+00:00 host=VASTWIN session=1 boot=2026-10-11T14:30:46.5000000Z timeout=135
+KFWAIT furmark_knot_gl EXITED rc=0
+FM_SCORE date,demo,platform,vendor,renderer,api_version,width,height,fullscreen,antialiasing,duration,max_gpu_temp,score,avg_fps,min_fps,max_fps
+FM_SCORE 2026.10.11@14:33:10,furmark-knot-gl,Windows 64-bit,NVIDIA Corporation,NVIDIA GeForce RTX 4070/PCIe/SSE2,OpenGL 3.2.0 NVIDIA 580.88,1280,720,NO,Off,15002,-1,1590,105,92,108
+=== end rc=0 secs=25 2026-10-11T14:33:12.5003875+00:00

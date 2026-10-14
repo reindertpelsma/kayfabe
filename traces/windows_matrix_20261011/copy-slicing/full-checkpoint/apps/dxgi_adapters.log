@@ -1,0 +1,5 @@
+=== dxgi_adapters start=2026-10-11T13:22:25.8864160+00:00 host=VASTWIN session=0 boot=2026-10-11T13:20:18.5000000Z timeout=60
+ADAPTER index=0 vendor=4318 name=NVIDIA GeForce RTX 4070 luid=00000000_00005f0a dedicated_mb=3747 software=False
+ADAPTER index=1 vendor=5140 name=Microsoft Basic Render Driver luid=00000000_0000695a dedicated_mb=0 software=True
+DXGI_OK NVIDIA hardware adapter present
+=== end rc=0 secs=3 2026-10-11T13:22:28.6932251+00:00

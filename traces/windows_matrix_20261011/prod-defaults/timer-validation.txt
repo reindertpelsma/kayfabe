@@ -1,0 +1,4 @@
+GPU-free: cargo test -p kf-qemu -p kf-host -p kf-abi -p kf-trap, CARGO_PROFILE_DEV_DEBUG=0
+906 tests PASS.
+Existing ABI layout and memory-map timer-boundary tests included.
+Hardware pending. Whole-tree cargo fmt check reports pre-existing formatting differences; unrelated files unchanged.

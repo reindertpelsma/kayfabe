@@ -93,6 +93,7 @@ impl CommandPolicy for HostStubPolicy {
             );
         }
         Some(Reply {
+            rpc_result_private: None,
             rpc_result: NV_OK,
             body,
         })

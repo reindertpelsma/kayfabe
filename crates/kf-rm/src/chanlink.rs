@@ -51,6 +51,11 @@ pub const EVICT_CTX: u32 = 0x2080_012c;
 const EVICT_CTX_PARAMS_SIZE: usize = 20;
 /// `NVA06F_CTRL_CMD_STOP_CHANNEL` (`ogkm-580: ctrla06fgpfifo.h:237`) — `{bImmediate}`.
 pub const STOP_CHANNEL: u32 = kf_abi::submit::NVA06F_CTRL_CMD_STOP_CHANNEL;
+/// ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`): `NV2080_CTRL_CMD_FIFO_DISABLE_USERMODE_CHANNELS`
+/// (`ogkm-580: ctrl2080fifo.h:843`, params `{NvBool bDisable}` at `:847-849`) — ROUTE_TO_PHYSICAL
+/// (export flags `0x40`, `g_subdevice_nvoc.c:5050-5063`), sent by the Linux driver's suspend and
+/// resume (`rm_stop_user_channels` / `rm_restart_user_channels`, `osapi.c:2671-2725`).
+pub const DISABLE_USERMODE_CHANNELS: u32 = 0x2080_1117;
 /// `NV2080_CTRL_CMD_FIFO_DISABLE_CHANNELS` (`ogkm-580: ctrl2080fifo.h:339`).
 pub const DISABLE_CHANNELS: u32 = kf_abi::submit::NV2080_CTRL_CMD_FIFO_DISABLE_CHANNELS;
 /// `NVA06C_CTRL_CMD_PREEMPT` (`ogkm-580: ctrla06c.h:203`).
@@ -201,8 +206,14 @@ pub struct ChannelAlloc {
     pub flags: u32,
     /// `engineType`, raw, when the layout is pinned.
     pub engine_type: Option<u32>,
+    /// Public per-channel one-hot SET_SUBDEVICE_MASK identity; no GPU ordinal inference.
+    pub subdevice_id: Option<u32>,
     /// The guest kernel's resolved USERD descriptor (`userdMem`).
     pub userd: Option<kf_arch::UserdMem>,
+    /// Client-allocated USERD memory handle and logical offset for subdevice0.
+    /// Decoded independently of the already-resolved physical descriptor above;
+    /// None means unavailable layout/short params, Some((0, _)) an explicit zero.
+    pub userd_source: Option<(u32, u64)>,
     /// ★★★ A guest-KERNEL channel (§7's policy, and the Translated route) — **PROPOSED Q7 rule**
     /// (`V3_P5_PORT_MAP.md` Q7, pending the owner): the guest's CPU-RM stamped
     /// `internalFlags.PRIVILEGE = KERNEL` on the alloc ([`kf_abi::notifier::ChannelPrivilege`]:
@@ -231,6 +242,286 @@ pub struct ChannelAlloc {
     /// ★ P5c: the error notifier the guest kernel resolved for it (`errorNotifierMem`) — where a
     /// GSP writes the channel's robust-channel record (`kernel_channel.c:548-590`).
     pub error_notifier: Option<kf_arch::fault::ErrorNotifier>,
+    /// ★ 2026-10-08: `ProcessID` as declared (generated layout; `None` when unmeasured or short).
+    pub process_id: Option<u32>,
+    /// ★★ 2026-10-08 (OWNER_RULINGS §V; `KF3_WIN_USER_CHANNELS_PASSTHROUGH`, default off): a Windows
+    /// guest-KERNEL-stamped channel classified at birth as per-process USER work
+    /// ([`windows_user_work`]) — the plane births it as a Passthrough twin (never inspected,
+    /// unprivileged host channel, the VM's own VA space) instead of Translated. Decided once, from
+    /// the alloc's facts; it never changes over the channel's life.
+    pub user_work: bool,
+    /// Birth-time admission for the restricted read-only Windows user ring.
+    /// No other route can manufacture this witness from USERD placement alone.
+    pub user_ring_permit: Option<WindowsUserRingPermit>,
+}
+
+/// ★ 2026-10-08: `KF3_ASYNC_PREEMPT=1` (default off) serves `DISABLE_CHANNELS` with a
+/// `pRunlistPreemptEvent` ([`async_preempt_admitted`]).
+fn async_preempt_enabled() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("KF3_ASYNC_PREEMPT").is_some_and(|v| v == "1"))
+}
+
+/// ★ 2026-10-08 — may a `DISABLE_CHANNELS` carrying `pRunlistPreemptEvent = ev` reach the plane?
+/// The synchronous form (`ev == 0`) always may; the asynchronous one only with the switch on AND
+/// as a DISABLE (`bDisable`): a preempt-complete is posted only for a host disable+preempt that
+/// really ran (RM itself preempts only on disable, `kernel_fifo_ctrl.c:720-760`).
+#[must_use]
+pub fn async_preempt_admitted(enabled: bool, ev: u64, disable: bool) -> bool {
+    ev == 0 || (enabled && disable)
+}
+
+/// ★★ 2026-10-08 — the facts [`windows_user_work`] decides from, all known at the channel's alloc.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct UserWorkFacts {
+    /// `KF3_WIN_USER_CHANNELS_PASSTHROUGH=1`.
+    pub flag: bool,
+    /// The guest declared the Windows build of its driver (fn 1, the host-stub cell's identity).
+    pub windows: bool,
+    /// The channel is guest-KERNEL by [`kernel_channel`] (only such a channel is reclassified).
+    pub kernel_stamped: bool,
+    /// RM's decoded `internalFlags.UVM_OWNED`. Kernel UVM channels can issue physical
+    /// migration copies even when their ProcessID names the CUDA application.
+    /// This flag alone never supplies guest-kernel privilege.
+    pub uvm_owned: bool,
+    /// The client is one of the guest RM's own internal clients.
+    pub rm_internal: bool,
+    /// `engineType` (resolved).
+    pub engine: Option<u32>,
+    /// `hContextShare` as declared.
+    pub ctx_share: u32,
+    /// The context share names a `FERMI_CONTEXT_SHARE_A` this link saw allocated in the client.
+    pub ctx_share_known: bool,
+    /// `ProcessID` as declared.
+    pub process_id: Option<u32>,
+    /// `ProcessID` of the guest's FIRST guest-kernel channel outside the RM-internal clients (the
+    /// kernel driver's own system context; `[measured, run60 at 3a578d50, 2026-10-08]` 0x350 on all
+    /// eleven of its kernel channels).
+    pub kernel_pid: Option<u32>,
+    /// ★ EXPERIMENT `KF3_WIN_KERNEL_PID4` (default off, `docs/design/V3_RECOVERY_WALL.md`): the
+    /// Windows System process ([`WINDOWS_SYSTEM_PID`]) is ALSO the kernel driver's process. A
+    /// channel declaring it then keeps the Translated route (the stricter one). `false` = the rule
+    /// is byte for byte what it was.
+    pub system_pid_is_kernel: bool,
+    /// ★ DEBUG ONLY (2026-10-14, [`FORCE_MIGRATABLE`]): classify this guest's USER channels as
+    /// migratable user rings whatever the guest OS, so a Linux guest exercises the Windows USER-ring
+    /// relay. `false` outside the debug profile; never set for a guest that declared Windows.
+    pub force_migratable: bool,
+}
+
+/// ★ DEBUG ONLY (2026-10-14): `KF3_DEBUG_FORCE_MIGRATABLE=1` makes every USER channel of the guest
+/// (not guest-kernel, not UVM-owned, not RM-internal; GR, copy or video engine) a migratable user
+/// ring -- the route the Windows USER channels take -- so the Linux guest exercises the USER-ring
+/// relay (`docs/design/V3_USER_RING_EVENT_LOOP_20261014.md` §8). Kernel and UVM channels keep their
+/// route (their physical operands need translation). Honoured ONLY with [`DEBUG_PROFILE`] set:
+/// without it the switch is REFUSED (one loud line) and ignored, so the production profile (which
+/// carries no `KF3_*` variable at all) can never be changed by a stray export. Never honoured for a
+/// guest that declared the Windows driver.
+pub const FORCE_MIGRATABLE: &str = "KF3_DEBUG_FORCE_MIGRATABLE";
+/// The debug-profile acknowledgement [`FORCE_MIGRATABLE`] requires (`KF3_DEBUG=1`).
+pub const DEBUG_PROFILE: &str = "KF3_DEBUG";
+
+/// Whether [`FORCE_MIGRATABLE`] is requested AND allowed by the environment given. Pure, for tests.
+#[must_use]
+pub fn force_migratable_allowed(force: Option<&str>, debug: Option<&str>) -> (bool, Option<&'static str>) {
+    match (force, debug) {
+        (Some("1"), Some("1")) => (true, None),
+        (Some("1"), _) => (
+            false,
+            Some("KF3_DEBUG_FORCE_MIGRATABLE=1 REFUSED: it is a debug-profile switch and needs KF3_DEBUG=1; the production profile cannot enable it"),
+        ),
+        _ => (false, None),
+    }
+}
+
+/// ★ DEBUG ONLY: [`FORCE_MIGRATABLE`] as the environment says it, read once; a refusal is logged once.
+#[must_use]
+pub fn force_migratable_enabled() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| {
+        let (on, why) = force_migratable_allowed(
+            std::env::var(FORCE_MIGRATABLE).ok().as_deref(),
+            std::env::var(DEBUG_PROFILE).ok().as_deref(),
+        );
+        if let Some(why) = why {
+            eprintln!("kf-rm: chanlink: {why}");
+        }
+        if on {
+            eprintln!(
+                "kf-rm: chanlink: ⚠ DEBUG PROFILE: KF3_DEBUG_FORCE_MIGRATABLE=1 -- this guest's USER channels (GR/copy/video; never kernel, UVM or RM-internal) take the migratable USER-ring relay; for the relay's validation only"
+            );
+        }
+        on
+    })
+}
+
+/// ★ The Windows System process id. No user code runs in it, and the kernel driver's reset and
+/// recovery paths (`[measured, runs 100-103, 113]` the post-TDR restart) run in it.
+pub const WINDOWS_SYSTEM_PID: u32 = 4;
+
+/// ★ HARDWIRED 2026-10-10 (a flag needed for correctness is removed and its behaviour built in;
+/// `KF3_WIN_KERNEL_PID4` is gone). A channel declaring the Windows System process
+/// ([`WINDOWS_SYSTEM_PID`]) is the kernel driver's own and keeps the Translated route. `[measured,
+/// runs 245 and 262 vs run 260, 2026-10-10]` without it the post-TDR restart channel was judged
+/// user work and the second restart channel of the same VA space was refused `KernelInUserSpace`
+/// (RmAlloc 0x40, StartDevice 0xC000009A, bugcheck 0x116 — `V3_RECOVERY_WALL.md`); with it the
+/// guest survived the TDR resets. It can only keep a channel Translated, never move one to
+/// Passthrough, so it widens nothing for the guest.
+#[must_use]
+pub fn kernel_pid4_enabled() -> bool {
+    true
+}
+
+/// ★★ 2026-10-08 (OWNER_RULINGS §V, the owner: "If you do not need to translate, then a translated can
+/// become passthrough, if you know at channel creation"): is this Windows channel per-process USER
+/// work? `Ok(())` = yes (Passthrough); `Err(why)` = no, the channel keeps the route it had.
+///
+/// Correction 2026-10-11: a KERNEL-stamped UVM-owned channel keeps Translated
+/// before the process rule below. Its physical migration copies need authored
+/// operands even when the allocating application's PID is declared. UVM_OWNED
+/// alone is not privilege; the existing [`kernel_channel`] proof is required.
+///
+/// The criterion, from `[measured, run60 at 3a578d50, 2026-10-08]` (every channel of one boot,
+/// `run60-chan-vas-facts.txt`): Windows stamps EVERY channel `PRIVILEGE=KERNEL`; the kernel driver's
+/// own channels (paging CE, kernel GR, video, and the two display-side GR/CE pairs) declare
+/// `hContextShare = 0` and `ProcessID = 0x350`; the desktop compositor's and the D3D clients'
+/// graphics channels declare a `FERMI_CONTEXT_SHARE_A` (a subcontext) and their own process id
+/// (`0x3b8`, `0x554`, `0x54c`). Both facts must say "user": a channel with a subcontext in the kernel
+/// driver's process, or one in another process without a subcontext, stays Translated.
+///
+/// ⊘ Not a security boundary, and it does not need to be: the facts are guest-kernel bytes, but a
+/// MISCLASSIFIED channel only loses the Translated route's inspection. A Passthrough twin is an
+/// asserted-USER host channel whose VA space holds only this VM's memory, so it cannot name another
+/// VM's or the host's memory; a physical operand on it is refused by the hardware (`[measured]`
+/// copy engine: `traces/phys_operand_oracle_20261008/`, Xid 32, the channel RC'd — fail closed).
+///
+/// # Errors
+/// The first fact that keeps the channel off the Passthrough route, by name.
+pub fn windows_user_work(f: &UserWorkFacts) -> Result<(), &'static str> {
+    if !f.flag {
+        return Err("flag off");
+    }
+    if !f.windows {
+        return Err("no Windows driver identity declared");
+    }
+    if !f.kernel_stamped {
+        return Err("not guest-kernel (already Passthrough)");
+    }
+    // Run1261 (2026-10-11): managed allocation creates KERNEL+UVM_OWNED COPY2
+    // channels under the application's PID, in a separate UVM VA space. The old
+    // process-only rule made them Passthrough; physical LAUNCH_DMA 0x3185 then
+    // correctly failed on the USER host channel (Xid32). Preserve translation
+    // at birth for this declared kernel work; never grant the host privilege.
+    // UVM_OWNED without KERNEL has already been excluded above.
+    if f.uvm_owned {
+        return Err("guest-kernel UVM-owned work requires address translation");
+    }
+    if f.rm_internal {
+        return Err("an RM-internal client");
+    }
+    let engine = f.engine.ok_or("no engine type")?;
+    if engine != kf_abi::submit::ENGINE_TYPE_GRAPHICS
+        && kf_abi::submit::copy_index_of_engine_type(engine).is_none()
+        && !video_engine(engine)
+    {
+        return Err("not a graphics, copy or video engine");
+    }
+    // ★ A subcontext (context share) exists only for graphics: a copy or video engine has none, so
+    // such a channel is judged by its process alone. ★ 2026-10-10 (video): `[measured, Windows runs
+    // 295 and 384, RTX 4070]` Edge's video decode creates an NVDEC0 channel (engine 0x13, class c56f,
+    // no context share) under its own `ProcessID` (0x1db0) in its per-process VA space, which already
+    // holds six user channels; kept Translated, it was refused there by the twin-state rule
+    // (`KernelInUserSpace`), the guest's RmAlloc failed (0x40), and every such refusal was followed by a
+    // TDR (4 of 4). A guest USER video channel is a passthrough twin exactly like a GR/CE twin
+    // (`docs/design/V3_VIDEO_ENGINES.md` §2), and video methods have no physical-aperture operand
+    // (OWNER_RULINGS, 2026-10-08 evidence), so the VA space contains it. `[measured, run70 at 4b14d74f, 2026-10-08]` a D3D device
+    // creates a graphics channel WITH a context share and a copy channel (engine 0xc) WITHOUT one, both
+    // under the process's own `ProcessID` (0x14c0) in the same per-process VA space; the copy channel,
+    // kept Translated, was refused there by the twin-state rule and the device creation failed.
+    // `[measured, run60]` every kernel-driver copy channel declares the kernel driver's process.
+    let graphics = engine == kf_abi::submit::ENGINE_TYPE_GRAPHICS;
+    if graphics && f.ctx_share == 0 {
+        return Err("no context share (the kernel driver's own channels declare none)");
+    }
+    if graphics && !f.ctx_share_known {
+        return Err("the context share was never allocated in this client");
+    }
+    let pid = f.process_id.ok_or("no ProcessID")?;
+    let kpid = f
+        .kernel_pid
+        .ok_or("the kernel driver's process id is not known yet")?;
+    if pid == kpid {
+        return Err("the kernel driver's own process");
+    }
+    // ★ EXPERIMENT `KF3_WIN_KERNEL_PID4`: a restart after a TDR runs in the System process, not in
+    // the process the first start learned. This test only ever keeps a channel on the Translated
+    // route (`Err`); it never moves one to Passthrough.
+    if f.system_pid_is_kernel && pid == WINDOWS_SYSTEM_PID {
+        return Err("the Windows System process (EXPERIMENT KF3_WIN_KERNEL_PID4)");
+    }
+    Ok(())
+}
+
+/// Admission witness for §AI's READ-ONLY Windows user-work command mappings.
+/// No mapping or runtime mode is enabled by constructing it. A future birth-time
+/// adapter must require this witness AND hardwire GPU-read-only permissions.
+/// It authorizes neither writable fences nor a kernel T-space/physical operands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WindowsUserRingPermit {
+    _private: (),
+}
+
+/// Evaluate the restricted exception from the existing declared birth facts.
+/// Linux/unknown-driver Passthrough never receives a witness. Driver identity is
+/// a compatibility selector, not attestation: even forged declarations must
+/// remain contained by USER-channel physical denial and actual read-only PTEs.
+/// Must be evaluated before token/schedule, never to convert a live channel.
+///
+/// # Errors
+/// The first missing Windows user-work fact, by name.
+pub fn windows_user_ring_permit(f: &UserWorkFacts) -> Result<WindowsUserRingPermit, &'static str> {
+    if f.force_migratable {
+        forced_user_ring(f)?;
+    } else {
+        windows_user_work(f)?;
+    }
+    Ok(WindowsUserRingPermit { _private: () })
+}
+
+/// ★ DEBUG ONLY ([`FORCE_MIGRATABLE`]): is this a USER channel the debug switch makes a migratable
+/// user ring? Not the Windows criterion (a Linux channel has no kernel stamp, no subcontext rule, no
+/// kernel-driver process): the channel must simply be the guest's USER work on an engine the relay
+/// supports. A guest-kernel, UVM-owned or RM-internal channel keeps its route.
+///
+/// # Errors
+/// The first fact that keeps the channel off the forced route, by name.
+pub fn forced_user_ring(f: &UserWorkFacts) -> Result<(), &'static str> {
+    if f.kernel_stamped {
+        return Err("a guest-kernel channel keeps the Translated route");
+    }
+    if f.uvm_owned {
+        return Err("a UVM-owned channel needs address translation");
+    }
+    if f.rm_internal {
+        return Err("an RM-internal client");
+    }
+    let engine = f.engine.ok_or("no engine type")?;
+    if engine != kf_abi::submit::ENGINE_TYPE_GRAPHICS
+        && kf_abi::submit::copy_index_of_engine_type(engine).is_none()
+        && !video_engine(engine)
+    {
+        return Err("not a graphics, copy or video engine");
+    }
+    Ok(())
+}
+
+/// `engine` (NV2080 space) is a video engine: NVDEC0-7, NVENC0-3 or OFA0/1.
+#[must_use]
+pub fn video_engine(engine: u32) -> bool {
+    kf_abi::submit::nvdec_index_of_engine_type(engine).is_some()
+        || kf_abi::submit::nvenc_index_of_engine_type(engine).is_some()
+        || engine == kf_abi::submit::NV2080_ENGINE_TYPE_OFA0
+        || engine == kf_abi::submit::NV2080_ENGINE_TYPE_OFA1
 }
 
 /// A statement for the channel plane.
@@ -430,6 +721,19 @@ pub enum ChanStatement {
         rewind_gp_put: bool,
         /// `(hClient, hChannel)` entries.
         list: ChanList,
+        /// ★ 2026-10-08 (`KF3_ASYNC_PREEMPT`, default off): `pRunlistPreemptEvent` — an opaque
+        /// guest-kernel value, never dereferenced; echoed back as the `RUNLIST_PREEMPT_COMPLETE`
+        /// `eventData` once the HOST's disable+preempt completed (vfio-10: the GSP posts it so).
+        /// `None` for the synchronous form.
+        preempt_event: Option<u64>,
+    },
+    /// ★ 2026-10-14: `NV2080_CTRL_CMD_FIFO_DISABLE_USERMODE_CHANNELS` on the subdevice — "disable or
+    /// enable scheduling of all usermode channels" (`ctrl2080fifo.h:832-841`), this VM's.
+    DisableUsermode {
+        /// `hClient` of the call.
+        client: u32,
+        /// `bDisable`.
+        disable: bool,
     },
     /// ★★★ v3-chanctl: `NVA06C_CTRL_CMD_PREEMPT` (`0xa06c0105`) on a channel group — ROUTE_TO_PHYSICAL
     /// with no CPU-RM body (`g_kernel_channel_group_api_nvoc.c:273`), so the whole verb is ours.
@@ -490,6 +794,8 @@ pub enum ChanStatement {
         parent: u32,
         /// The object's handle.
         handle: u32,
+        /// Public optional constructor notification request.
+        notify_completion: bool,
     },
     /// An object was freed (maybe one of ours).
     Free {
@@ -587,7 +893,20 @@ pub struct ChannelPolicy {
     /// [`ChanStatement::DisplaySw`] ([`Self::with_display_sw_twins`]); `false` (the default) leaves
     /// them graph nodes, byte for byte as before.
     display_sw_twins: bool,
+    /// ★ 2026-10-08: `KF3_WIN_USER_CHANNELS_PASSTHROUGH=1` (read once at construction).
+    user_work_flag: bool,
+    /// ★ 2026-10-08: the guest declared the Windows build of its driver (fn 1).
+    windows_identity: bool,
+    /// ★ 2026-10-08: `ProcessID` of the first guest-kernel, non-internal channel ([`UserWorkFacts`]).
+    windows_kernel_pid: Option<u32>,
+    /// ★ EXPERIMENT `KF3_WIN_KERNEL_PID4` ([`kernel_pid4_enabled`], read once).
+    system_pid_is_kernel: bool,
+    /// ★ DEBUG ONLY ([`FORCE_MIGRATABLE`], read once, refused without [`DEBUG_PROFILE`]).
+    force_migratable: bool,
 }
+
+/// ★ 2026-10-08: the flag of [`windows_user_work`].
+pub const USER_WORK_FLAG: &str = "KF3_WIN_USER_CHANNELS_PASSTHROUGH";
 
 impl ChannelPolicy {
     /// A link for one guest driver's wire.
@@ -615,7 +934,28 @@ impl ChannelPolicy {
             carried: 0,
             refused: 0,
             display_sw_twins: false,
+            user_work_flag: std::env::var(USER_WORK_FLAG).as_deref() == Ok("1"),
+            windows_identity: false,
+            windows_kernel_pid: None,
+            system_pid_is_kernel: kernel_pid4_enabled(),
+            force_migratable: force_migratable_enabled(),
         }
+    }
+
+    /// ★ EXPERIMENT `KF3_WIN_KERNEL_PID4`, set explicitly (tests; [`ChannelPolicy::new`] reads
+    /// [`kernel_pid4_enabled`], always on, is the default).
+    #[must_use]
+    pub fn with_kernel_pid4(mut self, on: bool) -> ChannelPolicy {
+        self.system_pid_is_kernel = on;
+        self
+    }
+
+    /// ★ 2026-10-08: the flag of [`windows_user_work`], set explicitly (tests; the device reads
+    /// [`USER_WORK_FLAG`] at construction).
+    #[must_use]
+    pub fn with_user_work_flag(mut self, on: bool) -> ChannelPolicy {
+        self.user_work_flag = on;
+        self
     }
 
     /// ★ EXPERIMENT `x11-dispsw` (default off; owner question 2026-10-03 item 2, option A): every
@@ -633,6 +973,7 @@ impl ChannelPolicy {
     fn refusal(status: u32, why: &str, cmd: &RpcCommand) -> Reply {
         eprintln!("kf-rm: channel plane REFUSED ({status:#x}): {why}");
         Reply {
+            rpc_result_private: None,
             rpc_result: status,
             body: cmd.payload.clone(),
         }
@@ -697,10 +1038,20 @@ impl ChannelPolicy {
         // ★ OWNER_RULINGS §U.1: class 5080 is Translated-only. The plane admits it (Done → the object
         // seat makes the node) or it is refused here, before any node exists.
         if h.class == kf_abi::generated::classes::NV50_DEFERRED_API_CLASS {
+            // Reuse the object seat's validated public constructor decode.
+            // Malformed/unaudited params never allocate a native child first.
+            let notify_completion = match crate::rmrpc::translate(&self.abi, self.guest_os, cmd) {
+                Ok(crate::rmrpc::Translation::Event(crate::rmgraph::RmEvent::Alloc {
+                    facts,
+                    ..
+                })) => facts.deferred_api_notify?,
+                _ => return None,
+            };
             let st = ChanStatement::DeferredApiObject {
                 client: h.client,
                 parent: h.parent,
                 handle: h.handle,
+                notify_completion,
             };
             return match (self.sink)(st) {
                 ChanAnswer::Done | ChanAnswer::Token(_) => None,
@@ -708,7 +1059,15 @@ impl ChannelPolicy {
                     self.refused += 1;
                     Some(Self::refusal(status, &why, cmd))
                 }
-                ChanAnswer::NotOurs | ChanAnswer::Deferred(_) => {
+                // ⚠ 2026-10-08 (EXPERIMENT `KF3_WIN_TWIN_DEFAPI_OBJECT`, default off): the plane
+                // authors a host object on a Windows user-work twin as an act — held exactly like an
+                // engine object's alloc ([`Self::settle_alloc`]). `[measured, run74 at 082117df]`
+                // without this arm the act ran but the guest read `0x56`.
+                ChanAnswer::Deferred(d) => {
+                    self.pending = Some(d);
+                    None
+                }
+                ChanAnswer::NotOurs => {
                     self.refused += 1;
                     Some(Self::refusal(
                         NV_ERR_NOT_SUPPORTED,
@@ -838,10 +1197,56 @@ impl ChannelPolicy {
                     .vas_under
                     .entry((h.client, h.parent))
                     .or_insert(h.handle);
+                // ★ 2026-10-08 (Windows user-work classification, diagnostic): the declared index,
+                // flags and size, read through the generated layout (logged, never acted on).
+                let vp = crate::rmrpc::alloc_params_window(&self.abi, body);
+                let vf = |path: &'static str| {
+                    vp.and_then(|p| {
+                        layout_u32(
+                            &kf_abi::generated::matrix::NV_VASPACE_ALLOCATION_PARAMETERS,
+                            self.abi.driver_version(),
+                            p,
+                            path,
+                        )
+                    })
+                };
                 eprintln!(
-                    "kf-rm: chanlink: FERMI_VASPACE_A {:#x}:{:#x} under {:#x} (device default for it: {first:#x})",
-                    h.client, h.handle, h.parent
+                    "kf-rm: chanlink: FERMI_VASPACE_A {:#x}:{:#x} under {:#x} (device default for it: {first:#x}) VAS-FACTS index={:x?} flags={:x?} bigPageSize={:x?} vaBase(lo32)={:x?} vaSize(lo32)={:x?}",
+                    h.client,
+                    h.handle,
+                    h.parent,
+                    vf("index"),
+                    vf("flags"),
+                    vf("bigPageSize"),
+                    vf("vaBase"),
+                    vf("vaSize")
                 );
+                // ★ 2026-10-08 (task A): the full 64-bit declaration, checked and named (logged only;
+                // no twin space takes its start or size from it — `kf_host::channel::TWIN_VA_FLOOR`).
+                let v64 = |path: &'static str| {
+                    vp.and_then(|p| {
+                        layout_u64(
+                            &kf_abi::generated::matrix::NV_VASPACE_ALLOCATION_PARAMETERS,
+                            self.abi.driver_version(),
+                            p,
+                            path,
+                        )
+                    })
+                };
+                if let (Some(flags), Some(base), Some(size)) =
+                    (vf("flags"), v64("vaBase"), v64("vaSize"))
+                {
+                    match vas_declaration(flags, base, size) {
+                        Ok(d) => eprintln!(
+                            "kf-rm: chanlink: VAS-DECL {:#x}:{:#x} vaBase={base:#x} vaSize={size:#x} end={:x?} shared_management={}",
+                            h.client, h.handle, d.end, d.shared_management
+                        ),
+                        Err(why) => eprintln!(
+                            "kf-rm: chanlink: VAS-DECL {:#x}:{:#x} REFUSED (named, logged only): {why:?}",
+                            h.client, h.handle
+                        ),
+                    }
+                }
                 return None;
             }
             Some(AllocParams::Tsg) => {
@@ -924,6 +1329,51 @@ impl ChannelPolicy {
             e => e,
         };
         let privilege = self.abi.decode_channel_privilege(params).ok().flatten();
+        let process_id = layout_u32(
+            &kf_abi::generated::matrix::NV_CHANNEL_ALLOC_PARAMS,
+            self.abi.driver_version(),
+            params,
+            "ProcessID",
+        );
+        let kernel_stamped = kernel_channel(h.client, privilege);
+        if kernel_stamped && !is_rm_internal_client(h.client) && self.windows_kernel_pid.is_none() {
+            self.windows_kernel_pid = process_id;
+        }
+        let user_facts = UserWorkFacts {
+            flag: self.user_work_flag,
+            windows: self.windows_identity,
+            kernel_stamped,
+            uvm_owned: privilege.is_some_and(|p| p.uvm_owned),
+            rm_internal: is_rm_internal_client(h.client),
+            engine: match self.abi.decode_channel_engine_type(params).ok().flatten() {
+                Some(0) | None => tsg.map(|t| t.2).filter(|e| *e != 0),
+                e => e,
+            },
+            ctx_share: f.h_ctx_share,
+            ctx_share_known: f.h_ctx_share != 0
+                && self.ctxshares.contains_key(&(h.client, f.h_ctx_share)),
+            process_id,
+            kernel_pid: self.windows_kernel_pid,
+            system_pid_is_kernel: self.system_pid_is_kernel,
+            // never for a guest that declared the Windows driver (its route is the Windows one)
+            force_migratable: self.force_migratable && !self.windows_identity,
+        };
+        let user_work = windows_user_work(&user_facts);
+        if self.user_work_flag && kernel_stamped {
+            eprintln!(
+                "kf-rm: chanlink: CLASSIFY {:#x}:{:#x} {} ({})",
+                h.client,
+                h.handle,
+                if user_work.is_ok() {
+                    "USER WORK -> Passthrough"
+                } else {
+                    "kernel work -> Translated"
+                },
+                user_work
+                    .err()
+                    .unwrap_or("subcontext and a process other than the kernel driver's")
+            );
+        }
         // ★ v3-gfx: a dup'd VA space is the ORIGINAL object (`DUP_OBJECT` aliases, it does not copy).
         let (vaspace_client, vaspace) = match vaspace {
             Some((c, v)) => {
@@ -945,7 +1395,14 @@ impl ChannelPolicy {
             chid: decode_userd_index_chid(f.flags),
             flags: f.flags,
             engine_type,
+            subdevice_id: layout_u32(
+                &kf_abi::generated::matrix::NV_CHANNEL_ALLOC_PARAMS,
+                self.abi.driver_version(),
+                params,
+                "subDeviceId",
+            ),
             userd: self.abi.decode_channel_userd_mem(params).ok().flatten(),
+            userd_source: self.abi.decode_channel_userd(params).ok().flatten(),
             // ⊘⊘ P5b: the pid sentinel is reachable from guest userspace (`[measured p5bd]` the
             // raw client's sandboxed-isolate client `0xc1d0000c` declared `KERNEL_PID`), so it is
             // recorded (`declared_kernel_pid`), never trusted. ★ P6 (Q7, PROPOSED): the route's
@@ -964,7 +1421,49 @@ impl ChannelPolicy {
                 .decode_channel_error_notifier(params)
                 .ok()
                 .flatten(),
+            process_id,
+            user_work: user_work.is_ok(),
+            user_ring_permit: windows_user_ring_permit(&user_facts).ok(),
         };
+        // ★ 2026-10-08 (Windows user-work classification, diagnostic): the declared process ids and
+        // raw internal flags beside the facts the route uses — logged for the criterion's evidence.
+        let cf = |path: &'static str| {
+            layout_u32(
+                &kf_abi::generated::matrix::NV_CHANNEL_ALLOC_PARAMS,
+                self.abi.driver_version(),
+                params,
+                path,
+            )
+        };
+        eprintln!(
+            "kf-rm: chanlink: CHAN-FACTS {:#x}:{:#x} parent={:#x} class={:#x} engine={:x?} flags={:#x} hVASpace={:#x} ctxShare={:#x} vas={:#x}:{:x?} tsg={:x?} device={:#x} kernel={} privilege={:?} internalFlags={:x?} ProcessID={:x?} SubProcessID={:x?} kernel_pid_decl={} hObjectError={:x?} hObjectBuffer={:x?} gpFifoOffset={:#x} gpFifoEntries={} hUserdMemory0={:x?} userd={:x?} hPhysChannelGroup={:x?} subDeviceId={:x?}",
+            st.client,
+            st.handle,
+            st.parent,
+            st.class,
+            st.engine_type,
+            st.flags,
+            st.h_vaspace,
+            st.ctx_share,
+            st.vaspace_client,
+            st.vaspace,
+            st.tsg,
+            st.device,
+            st.kernel_client,
+            st.privilege,
+            cf("internalFlags"),
+            cf("ProcessID"),
+            cf("SubProcessID"),
+            st.declared_kernel_pid,
+            cf("hObjectError"),
+            cf("hObjectBuffer"),
+            st.gpfifo_va,
+            st.entries,
+            cf("hUserdMemory"),
+            st.userd,
+            cf("hPhysChannelGroup"),
+            st.subdevice_id
+        );
         self.carried += 1;
         self.carry_alloc(ChanStatement::Alloc(st), cmd, h.client, h.handle)
     }
@@ -1416,6 +1915,26 @@ impl ChannelPolicy {
                     wait: p.wait,
                 }
             }
+            DISABLE_USERMODE_CHANNELS => {
+                // ★ 2026-10-14: `[measured b2-b6]` refused, the Linux suspend's
+                // `nv_preempt_user_channels` failed and its error path released nvidia-uvm's PM lock
+                // it never took (`nv.c:4759-4810` → `uvm_resume`, `uvm_global.c:360-400`): every
+                // UVM ioctl then answered EAGAIN for the rest of the boot (nvidia-smi spun on it).
+                if params.len() != 1 {
+                    return Some(Self::refusal(
+                        NV_ERR_INVALID_ARGUMENT,
+                        &format!(
+                            "DISABLE_USERMODE_CHANNELS params are {} bytes, not 1",
+                            params.len()
+                        ),
+                        cmd,
+                    ));
+                }
+                ChanStatement::DisableUsermode {
+                    client: h.client,
+                    disable: params[0] != 0,
+                }
+            }
             DISABLE_CHANNELS => {
                 let d = match kf_abi::submit::DisableChannels::decode(params) {
                     Ok(d) => d,
@@ -1430,7 +1949,18 @@ impl ChannelPolicy {
                 // ⊘ `pRunlistPreemptEvent` is a KEVENT pointer in the GUEST kernel's address space
                 // (kernel callers only, `kernel_fifo_ctrl.c:720-725`): nothing on the host can
                 // signal it, so the asynchronous form is refused by name, never dropped.
-                if d.runlist_preempt_event != 0 {
+                // ★ 2026-10-08 (`KF3_ASYNC_PREEMPT=1`, default off; OWNER_RULINGS §S applied to
+                // RUNLIST_PREEMPT_COMPLETE): served as the synchronous host disable+preempt of the
+                // VM's own twins, and the completion is posted to the guest's RM as
+                // RUNLIST_PREEMPT_COMPLETE with the value as eventData — the GSP's own shape
+                // (vfio-10 RPC 3307/3308) — only after the host verb returned. The value is never
+                // dereferenced. [measured, runs 78/79] the refusal is followed by the TDR exactly
+                // TdrDelay later.
+                if !async_preempt_admitted(
+                    async_preempt_enabled(),
+                    d.runlist_preempt_event,
+                    d.disable,
+                ) {
                     return Some(Self::refusal(
                         NV_ERR_INVALID_ARGUMENT,
                         "DISABLE_CHANNELS with a pRunlistPreemptEvent (async preempt) is not served",
@@ -1441,7 +1971,20 @@ impl ChannelPolicy {
                 // in-tree caller lists channels of the calling client (`nv_gpu_ops.c:957-981`,
                 // `RES_GET_CLIENT_HANDLE` of channels iterated from that very client), and one
                 // guest process must never stop another's twin.
-                if let Some((c, ch)) = d.list.iter().find(|(c, _)| *c != h.client) {
+                // ★ 2026-10-08 (`KF3_ASYNC_PREEMPT`, run82 at 54b12063): the ASYNC form is the guest
+                // KERNEL's own scheduler (CPU-RM admits `pRunlistPreemptEvent` from kernel clients
+                // only, `kernel_fifo_ctrl.c:725-730`), and Windows' kernel client names the
+                // per-process clients' channel groups — physical RM resolves every entry's own
+                // `hClient` (`kernel_fifo_ctrl.c:870-890`). Those are this VM's clients and twins;
+                // VM-to-VM isolation is the host's, inside one VM it is the guest kernel's (§V).
+                // [measured, run83 at 10bfb7a0] the kernel then RE-ENABLES those groups with the
+                // synchronous form (bDisable=0, no event); refusing it left them disabled and the
+                // next work on them TDR'd — so the re-enable is admitted the same way (switch on).
+                let cross_client_ok =
+                    d.runlist_preempt_event != 0 || (async_preempt_enabled() && !d.disable);
+                if !cross_client_ok
+                    && let Some((c, ch)) = d.list.iter().find(|(c, _)| *c != h.client)
+                {
                     return Some(Self::refusal(
                         NV_ERR_INSUFFICIENT_PERMISSIONS,
                         &format!(
@@ -1457,6 +2000,8 @@ impl ChannelPolicy {
                     only_scheduling: d.only_disable_scheduling,
                     rewind_gp_put: d.rewind_gp_put,
                     list: ChanList::new(&d.list)?,
+                    preempt_event: (d.runlist_preempt_event != 0)
+                        .then_some(d.runlist_preempt_event),
                 }
             }
             _ => return None,
@@ -1477,6 +2022,7 @@ impl ChannelPolicy {
             // ★ The [IN] params echoed: the transport copies a non-empty reply over the caller's
             // struct (`ogkm-580: rpc.c:11085-11090`), so a zeroed body would rewrite bEnable.
             ChanAnswer::Done => Some(Reply {
+                rpc_result_private: None,
                 rpc_result: NV_OK,
                 body: cmd.payload.clone(),
             }),
@@ -1485,6 +2031,7 @@ impl ChannelPolicy {
             ChanAnswer::Deferred(d) => {
                 self.pending = Some(d);
                 Some(Reply {
+                    rpc_result_private: None,
                     rpc_result: NV_OK,
                     body: cmd.payload.clone(),
                 })
@@ -1501,6 +2048,7 @@ impl ChannelPolicy {
                 }
                 body[at..at + 4].copy_from_slice(&t.to_le_bytes());
                 Some(Reply {
+                    rpc_result_private: None,
                     rpc_result: NV_OK,
                     body,
                 })
@@ -1587,6 +2135,7 @@ impl ChannelPolicy {
             h.client, h.object
         );
         Some(Reply {
+            rpc_result_private: None,
             rpc_result: NV_OK,
             body: cmd.payload.clone(),
         })
@@ -1910,13 +2459,641 @@ impl CommandPolicy for ChannelPolicy {
             RpcFunction::RmControl => self.on_control(cmd),
             RpcFunction::Free => self.on_free(cmd),
             RpcFunction::DupObject => self.on_dup(cmd),
+            RpcFunction::SetGuestSystemInfo => {
+                // ★ 2026-10-08: every declaration replaces the previous one (as the host stub does).
+                self.windows_identity = kf_abi::hoststub::cell(self.abi.driver_version())
+                    .is_some_and(|c| c.matches_identity(&cmd.payload));
+                None
+            }
             _ => None,
         }
     }
 }
 
+/// ★ 2026-10-08: a `u32` field of a generated params layout at `version`, or `None` (unmeasured
+/// layout, missing field, short params).
+fn layout_u32(
+    runs: &'static kf_abi::matrix::StructRuns,
+    version: kf_abi::DriverVersion,
+    params: &[u8],
+    path: &'static str,
+) -> Option<u32> {
+    let l = kf_abi::matrix::Resolved::of(runs, version).ok()?;
+    let off = l.need(path).ok()?.off();
+    let b = params.get(off..off.checked_add(4)?)?;
+    Some(u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+}
+
+/// ★ 2026-10-08 (task A): a `u64` field of a generated params layout, as [`layout_u32`].
+fn layout_u64(
+    runs: &'static kf_abi::matrix::StructRuns,
+    version: kf_abi::DriverVersion,
+    params: &[u8],
+    path: &'static str,
+) -> Option<u64> {
+    let l = kf_abi::matrix::Resolved::of(runs, version).ok()?;
+    let off = l.need(path).ok()?.off();
+    let b = params.get(off..off.checked_add(8)?)?;
+    Some(u64::from_le_bytes(b.try_into().ok()?))
+}
+
+/// `NV_VASPACE_ALLOCATION_FLAGS_SHARED_MANAGEMENT` (`nvos.h:3162`, `BIT(2)`).
+pub const VASPACE_FLAGS_SHARED_MANAGEMENT: u32 = 1 << 2;
+/// The GMMU's VA ceiling on every family kayfabe serves (`NVBIT64(virtAddrBitHi + 1)`, 49 bits:
+/// `gpu_vaspace.c:1107`; the MMU format's root covers bits 48:47).
+pub const GMMU_VA_CEILING: u64 = 1 << 49;
+
+/// ★ 2026-10-08 (task A) — what a guest's `FERMI_VASPACE_A` DECLARES, checked. Diagnostic only: the
+/// twin's host space never takes its start or size from it (`kf_host::channel::TWIN_VA_FLOOR`), so
+/// a declaration can only be logged and named; the guest's own RM performs the same overflow check
+/// AFTER its RPC (`vaspace_api.c:351-362`), so the RPC carries whatever a hostile guest wrote.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct VasDeclaration {
+    /// `vaBase` as declared (0 = "RM picks").
+    pub va_base: u64,
+    /// `vaBase + vaSize` (exclusive), or `None` when `vaSize` is 0 ("RM's default size").
+    pub end: Option<u64>,
+    /// The OS hooks PDEs beneath RM's root (Windows process spaces): page tables may map below
+    /// `va_base` and below RM's own start.
+    pub shared_management: bool,
+}
+
+/// Why a declaration is refused (named; never clamped).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VasDeclRefusal {
+    /// `vaBase + vaSize` does not fit in 64 bits.
+    Wraps {
+        /// The declared `vaBase`.
+        va_base: u64,
+        /// The declared `vaSize`.
+        va_size: u64,
+    },
+    /// The declared range reaches past the GMMU's VA ceiling ([`GMMU_VA_CEILING`]).
+    BeyondGmmu {
+        /// The declared range's exclusive end (or `vaBase` when no size was declared).
+        end: u64,
+    },
+}
+
+/// Check a guest's declared VA space (`flags`, `vaBase`, `vaSize`).
+///
+/// # Errors
+/// [`VasDeclRefusal`], by name.
+pub fn vas_declaration(
+    flags: u32,
+    va_base: u64,
+    va_size: u64,
+) -> Result<VasDeclaration, VasDeclRefusal> {
+    let end = if va_size == 0 {
+        None
+    } else {
+        let end = va_base
+            .checked_add(va_size)
+            .ok_or(VasDeclRefusal::Wraps { va_base, va_size })?;
+        if end > GMMU_VA_CEILING {
+            return Err(VasDeclRefusal::BeyondGmmu { end });
+        }
+        Some(end)
+    };
+    if va_size == 0 && va_base >= GMMU_VA_CEILING {
+        return Err(VasDeclRefusal::BeyondGmmu { end: va_base });
+    }
+    Ok(VasDeclaration {
+        va_base,
+        end,
+        shared_management: flags & VASPACE_FLAGS_SHARED_MANAGEMENT != 0,
+    })
+}
+
 #[cfg(test)]
 mod tests {
+
+    /// ★ 2026-10-08 (task A): the declarations Windows made in runs 70-72, and hostile ones.
+    mod vas_decl {
+        use super::super::{GMMU_VA_CEILING, VasDeclRefusal, vas_declaration};
+
+        #[test]
+        fn windows_process_spaces_declare_shared_management() {
+            // `[measured, run70 at 4b14d74f]` flags 0x5, vaBase 0x20000000 (lo32), vaSize 0x40000000.
+            let d = vas_declaration(0x5, 0x2000_0000, 0x4000_0000).expect("ok");
+            assert!(d.shared_management);
+            assert_eq!(d.end, Some(0x6000_0000));
+            // A kernel-driver space: flags 0, nothing declared.
+            let k = vas_declaration(0, 0, 0).expect("ok");
+            assert!(!k.shared_management);
+            assert_eq!(k.end, None);
+        }
+
+        #[test]
+        fn wrapped_and_huge_declarations_are_refused_by_name() {
+            assert_eq!(
+                vas_declaration(0x5, u64::MAX - 0xfff, 0x2000),
+                Err(VasDeclRefusal::Wraps {
+                    va_base: u64::MAX - 0xfff,
+                    va_size: 0x2000
+                })
+            );
+            assert_eq!(
+                vas_declaration(0x5, 0, GMMU_VA_CEILING + 0x1000),
+                Err(VasDeclRefusal::BeyondGmmu {
+                    end: GMMU_VA_CEILING + 0x1000
+                })
+            );
+            assert_eq!(
+                vas_declaration(0, GMMU_VA_CEILING, 0),
+                Err(VasDeclRefusal::BeyondGmmu {
+                    end: GMMU_VA_CEILING
+                })
+            );
+            // Exactly the ceiling is accepted.
+            assert!(vas_declaration(0x5, 0, GMMU_VA_CEILING).is_ok());
+        }
+    }
+
+    /// ★ 2026-10-08: [`super::windows_user_work`] over the channels of `[measured, run60 at 3a578d50]`
+    /// and hostile variants of them.
+    mod user_work {
+        use super::super::{UserWorkFacts, windows_user_work};
+        const GR: u32 = kf_abi::submit::ENGINE_TYPE_GRAPHICS;
+        const CE0: u32 = 0xb;
+
+        fn dwm() -> UserWorkFacts {
+            UserWorkFacts {
+                flag: true,
+                windows: true,
+                kernel_stamped: true,
+                uvm_owned: false,
+                rm_internal: false,
+                engine: Some(GR),
+                ctx_share: 0xff0e_0200,
+                ctx_share_known: true,
+                process_id: Some(0x3b8),
+                kernel_pid: Some(0x350),
+                system_pid_is_kernel: false,
+                force_migratable: false,
+            }
+        }
+
+        #[test]
+        fn user_ring_exception_never_admits_linux_or_unknown_driver() {
+            for f in grid() {
+                let linux = UserWorkFacts {
+                    windows: false,
+                    ..f
+                };
+                assert!(super::super::windows_user_ring_permit(&linux).is_err());
+            }
+        }
+
+        #[test]
+        fn user_ring_exception_requires_all_declared_user_work_facts() {
+            assert!(super::super::windows_user_ring_permit(&dwm()).is_ok());
+            for f in [
+                UserWorkFacts {
+                    kernel_stamped: false,
+                    ..dwm()
+                },
+                UserWorkFacts {
+                    uvm_owned: true,
+                    ..dwm()
+                },
+                UserWorkFacts {
+                    rm_internal: true,
+                    ..dwm()
+                },
+                UserWorkFacts {
+                    ctx_share_known: false,
+                    ..dwm()
+                },
+                UserWorkFacts {
+                    process_id: Some(0x350),
+                    ..dwm()
+                },
+                UserWorkFacts {
+                    process_id: Some(4),
+                    system_pid_is_kernel: true,
+                    ..dwm()
+                },
+                UserWorkFacts {
+                    engine: None,
+                    ..dwm()
+                },
+                UserWorkFacts::default(),
+            ] {
+                assert!(super::super::windows_user_ring_permit(&f).is_err(), "{f:?}");
+            }
+        }
+
+        #[test]
+        fn run60s_compositor_and_d3d_channels_are_user_work() {
+            for pid in [0x3b8, 0x554, 0x54c] {
+                let f = UserWorkFacts {
+                    process_id: Some(pid),
+                    ..dwm()
+                };
+                assert_eq!(windows_user_work(&f), Ok(()), "{pid:#x}");
+            }
+            let ce = UserWorkFacts {
+                engine: Some(CE0),
+                ..dwm()
+            };
+            assert_eq!(windows_user_work(&ce), Ok(()));
+        }
+
+        #[test]
+        fn run60s_kernel_driver_channels_stay_translated() {
+            // paging CE, kernel GR, video, and the display-side GR/CE pair: no subcontext, pid 0x350
+            for engine in [CE0, GR, 0x13, 0x1c, 0x33] {
+                let f = UserWorkFacts {
+                    engine: Some(engine),
+                    ctx_share: 0,
+                    ctx_share_known: false,
+                    process_id: Some(0x350),
+                    ..dwm()
+                };
+                assert!(windows_user_work(&f).is_err(), "{engine:#x}");
+            }
+        }
+
+        #[test]
+        fn kernel_uvm_migration_work_keeps_translation_in_an_application_process() {
+            // Run1261's UVM client: KERNEL+UVM_OWNED, COPY2, no subcontext,
+            // application's PID. The physical copy must not reach a USER host
+            // ring unchanged merely because its PID differs from the driver.
+            let migration = UserWorkFacts {
+                uvm_owned: true,
+                engine: Some(CE0),
+                ctx_share: 0,
+                ctx_share_known: false,
+                ..dwm()
+            };
+            assert_eq!(
+                windows_user_work(&migration),
+                Err("guest-kernel UVM-owned work requires address translation")
+            );
+            assert_eq!(
+                windows_user_work(&UserWorkFacts {
+                    uvm_owned: false,
+                    ..migration
+                }),
+                Ok(())
+            );
+
+            // UVM_OWNED is not a substitute for the KERNEL privilege stamp.
+            let user_uvm = kf_abi::notifier::ChannelPrivilege::from_internal_flags(0x81);
+            assert!(user_uvm.uvm_owned);
+            assert!(!super::super::kernel_channel(0xc1d0_00b2, Some(user_uvm)));
+            for facts in grid() {
+                assert!(
+                    windows_user_work(&UserWorkFacts {
+                        uvm_owned: true,
+                        ..facts
+                    })
+                    .is_err()
+                );
+            }
+        }
+
+        #[test]
+        fn a_user_processes_video_channel_is_judged_by_its_process_alone() {
+            // [measured, run 295] NVDEC0 (0x13), no context share, ProcessID 0x1db0 (Edge's decode)
+            for engine in [0x13, 0x14, 0x1b, 0x1c, 0x33, 0x3e] {
+                let v = UserWorkFacts {
+                    engine: Some(engine),
+                    ctx_share: 0,
+                    ctx_share_known: false,
+                    process_id: Some(0x1db0),
+                    kernel_pid: Some(0x350),
+                    ..dwm()
+                };
+                assert_eq!(windows_user_work(&v), Ok(()), "{engine:#x}");
+                // the kernel driver's own video channel, and the System process's, stay Translated
+                for pid in [0x350, super::WINDOWS_SYSTEM_PID] {
+                    let k = UserWorkFacts {
+                        process_id: Some(pid),
+                        system_pid_is_kernel: true,
+                        ..v
+                    };
+                    assert!(windows_user_work(&k).is_err(), "{engine:#x} pid {pid:#x}");
+                }
+            }
+            // a non-video, non-GR/CE engine (SEC2) is never user work
+            let sec2 = UserWorkFacts {
+                engine: Some(0x26),
+                ctx_share: 0,
+                ctx_share_known: false,
+                process_id: Some(0x1db0),
+                ..dwm()
+            };
+            assert!(windows_user_work(&sec2).is_err());
+        }
+
+        #[test]
+        fn a_d3d_copy_channel_is_judged_by_its_process_alone() {
+            // [measured, run70 at 4b14d74f, 2026-10-08] engine 0xc, no context share, ProcessID 0x14c0
+            let ce = UserWorkFacts {
+                engine: Some(0xc),
+                ctx_share: 0,
+                ctx_share_known: false,
+                process_id: Some(0x14c0),
+                kernel_pid: Some(0x34c),
+                ..dwm()
+            };
+            assert_eq!(windows_user_work(&ce), Ok(()));
+            let kernel_ce = UserWorkFacts {
+                process_id: Some(0x34c),
+                ..ce
+            };
+            assert_eq!(
+                windows_user_work(&kernel_ce),
+                Err("the kernel driver's own process")
+            );
+        }
+
+        #[test]
+        fn one_fact_alone_never_reclassifies() {
+            // a subcontext in the kernel driver's own process
+            let a = UserWorkFacts {
+                process_id: Some(0x350),
+                ..dwm()
+            };
+            assert_eq!(
+                windows_user_work(&a),
+                Err("the kernel driver's own process")
+            );
+            // another process without a subcontext
+            let b = UserWorkFacts {
+                ctx_share: 0,
+                ctx_share_known: false,
+                ..dwm()
+            };
+            assert!(windows_user_work(&b).is_err());
+        }
+
+        #[test]
+        fn hostile_or_incomplete_facts_keep_the_translated_route() {
+            let cases: [(UserWorkFacts, &str); 9] = [
+                (
+                    UserWorkFacts {
+                        flag: false,
+                        ..dwm()
+                    },
+                    "flag off",
+                ),
+                (
+                    UserWorkFacts {
+                        windows: false,
+                        ..dwm()
+                    },
+                    "no Windows driver identity declared",
+                ),
+                (
+                    UserWorkFacts {
+                        kernel_stamped: false,
+                        ..dwm()
+                    },
+                    "not guest-kernel (already Passthrough)",
+                ),
+                (
+                    UserWorkFacts {
+                        rm_internal: true,
+                        ..dwm()
+                    },
+                    "an RM-internal client",
+                ),
+                (
+                    UserWorkFacts {
+                        engine: None,
+                        ..dwm()
+                    },
+                    "no engine type",
+                ),
+                (
+                    UserWorkFacts {
+                        engine: Some(0x26),
+                        ..dwm()
+                    },
+                    "not a graphics, copy or video engine",
+                ),
+                (
+                    UserWorkFacts {
+                        ctx_share_known: false,
+                        ..dwm()
+                    },
+                    "the context share was never allocated in this client",
+                ),
+                (
+                    UserWorkFacts {
+                        process_id: None,
+                        ..dwm()
+                    },
+                    "no ProcessID",
+                ),
+                (
+                    UserWorkFacts {
+                        kernel_pid: None,
+                        ..dwm()
+                    },
+                    "the kernel driver's process id is not known yet",
+                ),
+            ];
+            for (f, why) in cases {
+                assert_eq!(windows_user_work(&f), Err(why), "{f:?}");
+            }
+        }
+
+        /// The rule exactly as it was before `KF3_WIN_KERNEL_PID4` (copied, not called): the oracle
+        /// the flag-off table is compared with.
+        fn rule_before_kernel_pid4(f: &UserWorkFacts) -> Result<(), &'static str> {
+            if !f.flag {
+                return Err("flag off");
+            }
+            if !f.windows {
+                return Err("no Windows driver identity declared");
+            }
+            if !f.kernel_stamped {
+                return Err("not guest-kernel (already Passthrough)");
+            }
+            if f.rm_internal {
+                return Err("an RM-internal client");
+            }
+            let engine = f.engine.ok_or("no engine type")?;
+            if engine != GR
+                && kf_abi::submit::copy_index_of_engine_type(engine).is_none()
+                && !super::video_engine(engine)
+            {
+                return Err("not a graphics, copy or video engine");
+            }
+            if engine == GR && f.ctx_share == 0 {
+                return Err("no context share (the kernel driver's own channels declare none)");
+            }
+            if engine == GR && !f.ctx_share_known {
+                return Err("the context share was never allocated in this client");
+            }
+            let pid = f.process_id.ok_or("no ProcessID")?;
+            let kpid = f
+                .kernel_pid
+                .ok_or("the kernel driver's process id is not known yet")?;
+            if pid == kpid {
+                return Err("the kernel driver's own process");
+            }
+            Ok(())
+        }
+
+        /// Every combination of the facts the rule reads, over a table of process ids.
+        fn grid() -> Vec<UserWorkFacts> {
+            let pids = [
+                None,
+                Some(0),
+                Some(4),
+                Some(5),
+                Some(0x350),
+                Some(0x34c),
+                Some(0x3b8),
+                Some(0x14c0),
+                Some(u32::MAX),
+            ];
+            let kpids = [None, Some(0x350), Some(4)];
+            let engines = [None, Some(GR), Some(CE0), Some(0xc), Some(0x13), Some(0x1c)];
+            let mut v = Vec::new();
+            for pid in pids {
+                for kernel_pid in kpids {
+                    for engine in engines {
+                        for (ctx_share, ctx_share_known) in
+                            [(0, false), (0xff0e_0200, true), (0xff0e_0200, false)]
+                        {
+                            for (flag, windows, kernel_stamped, rm_internal) in [
+                                (true, true, true, false),
+                                (false, true, true, false),
+                                (true, false, true, false),
+                                (true, true, false, false),
+                                (true, true, true, true),
+                            ] {
+                                v.push(UserWorkFacts {
+                                    flag,
+                                    windows,
+                                    kernel_stamped,
+                                    uvm_owned: false,
+                                    rm_internal,
+                                    engine,
+                                    ctx_share,
+                                    ctx_share_known,
+                                    process_id: pid,
+                                    kernel_pid,
+                                    system_pid_is_kernel: false,
+                                    force_migratable: false,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+            v
+        }
+
+        /// `KF3_WIN_KERNEL_PID4` OFF: the classification of every fact combination is the old
+        /// rule's, pid 4 included (the defect the experiment exists for: a pid-4 copy channel is
+        /// USER work).
+        #[test]
+        fn kernel_pid4_off_changes_nothing() {
+            for f in grid() {
+                assert_eq!(windows_user_work(&f), rule_before_kernel_pid4(&f), "{f:?}");
+            }
+            // [measured, run 113, qemu.log line 63706] the post-TDR restart's copy channel.
+            let restart_ce = UserWorkFacts {
+                engine: Some(CE0),
+                ctx_share: 0,
+                ctx_share_known: false,
+                process_id: Some(4),
+                kernel_pid: Some(0x350),
+                ..dwm()
+            };
+            assert_eq!(
+                windows_user_work(&restart_ce),
+                Ok(()),
+                "flag off: USER work, as before"
+            );
+        }
+
+        /// ON: only a declared pid 4 changes, and only to Translated; every other pid is
+        /// classified as with the flag off.
+        #[test]
+        fn kernel_pid4_on_moves_only_pid4_and_only_to_translated() {
+            let mut changed = 0;
+            for f in grid() {
+                let on = UserWorkFacts {
+                    system_pid_is_kernel: true,
+                    ..f
+                };
+                let (was, now) = (windows_user_work(&f), windows_user_work(&on));
+                if f.process_id == Some(4) {
+                    if was.is_err() {
+                        assert_eq!(now, was, "{f:?}");
+                    } else {
+                        changed += 1;
+                        assert_eq!(
+                            now,
+                            Err("the Windows System process (EXPERIMENT KF3_WIN_KERNEL_PID4)")
+                        );
+                    }
+                } else {
+                    assert_eq!(now, was, "a pid other than 4 is judged as before: {f:?}");
+                }
+                // The safety property, over the whole grid: Passthrough with the flag on implies
+                // Passthrough with it off (the flag cannot move a channel to the less strict route).
+                if now.is_ok() {
+                    assert!(was.is_ok(), "{f:?}");
+                }
+            }
+            assert!(changed > 0, "the grid holds pid-4 channels the flag moves");
+        }
+
+        /// The run-113 restart channels through the rule, flag on: the copy channel (pid 4, no
+        /// subcontext) and the GR channel (pid 4, no subcontext) are both Translated, so the pair
+        /// can share a VA space; the compositor's and D3D clients' channels are still user work.
+        #[test]
+        fn run113s_restart_channels_are_translated_with_kernel_pid4() {
+            let on = |f: UserWorkFacts| {
+                windows_user_work(&UserWorkFacts {
+                    system_pid_is_kernel: true,
+                    ..f
+                })
+            };
+            let ce = UserWorkFacts {
+                engine: Some(CE0),
+                ctx_share: 0,
+                ctx_share_known: false,
+                process_id: Some(4),
+                kernel_pid: Some(0x350),
+                ..dwm()
+            };
+            let gr = UserWorkFacts {
+                engine: Some(GR),
+                ..ce
+            };
+            assert!(on(ce).is_err());
+            assert!(on(gr).is_err());
+            for pid in [0x3b8, 0x554, 0x54c] {
+                assert_eq!(
+                    on(UserWorkFacts {
+                        process_id: Some(pid),
+                        ..dwm()
+                    }),
+                    Ok(())
+                );
+            }
+        }
+
+        #[test]
+        fn the_decision_is_a_pure_function_of_the_alloc_facts() {
+            // Decided once at the alloc: the same facts give the same route, every time (the plane
+            // keeps it in the twin for the channel's life; nothing re-asks).
+            let f = dwm();
+            assert_eq!(windows_user_work(&f), windows_user_work(&f));
+            assert_eq!(UserWorkFacts::default(), UserWorkFacts::default());
+            assert!(windows_user_work(&UserWorkFacts::default()).is_err());
+        }
+    }
 
     fn device_declaration(
         client: u32,
@@ -2683,6 +3860,24 @@ mod tests {
                 wait: true
             })
         );
+        // ★ 2026-10-14: DISABLE_USERMODE_CHANNELS reaches the plane with its one byte decoded; any
+        // other params size is refused by name.
+        for (byte, disable) in [(1u8, true), (0, false)] {
+            let r = link
+                .respond(&ctl(c, 0x5c00_0002, DISABLE_USERMODE_CHANNELS, &[byte]))
+                .expect("answered");
+            assert_eq!(r.rpc_result, NV_OK);
+            assert_eq!(
+                seen.lock().unwrap().last().copied(),
+                Some(ChanStatement::DisableUsermode { client: c, disable })
+            );
+        }
+        assert_eq!(
+            link.respond(&ctl(c, 0x5c00_0002, DISABLE_USERMODE_CHANNELS, &[1, 0, 0, 0]))
+                .expect("refused")
+                .rpc_result,
+            NV_ERR_INVALID_ARGUMENT
+        );
         let d = |list: Vec<(u32, u32)>, ev: u64| {
             let mut b = kf_abi::submit::DisableChannels {
                 disable: true,
@@ -2703,7 +3898,7 @@ mod tests {
         assert_eq!(r.rpc_result, NV_OK);
         assert!(matches!(
             seen.lock().unwrap().last().copied(),
-            Some(ChanStatement::DisableChannels { client, disable: true, only_scheduling: false, rewind_gp_put: false, list }) if client == c && list.as_slice() == [(c, ch)]
+            Some(ChanStatement::DisableChannels { client, disable: true, only_scheduling: false, rewind_gp_put: false, list, preempt_event: None }) if client == c && list.as_slice() == [(c, ch)]
         ));
         assert_eq!(seen.lock().unwrap().len(), n + 1);
         let r = link
@@ -2735,6 +3930,29 @@ mod tests {
             n + 1,
             "neither refusal reached the plane"
         );
+    }
+
+    /// ★ 2026-10-08 (`KF3_ASYNC_PREEMPT`): the asynchronous DISABLE_CHANNELS reaches the plane only
+    /// with the switch on and as a disable; the synchronous form is unchanged either way.
+    #[test]
+    fn an_async_preempt_needs_the_switch_and_a_disable() {
+        assert!(super::async_preempt_admitted(false, 0, true));
+        assert!(super::async_preempt_admitted(false, 0, false));
+        assert!(!super::async_preempt_admitted(
+            false,
+            0xffff_8000_0000_1000,
+            true
+        ));
+        assert!(super::async_preempt_admitted(
+            true,
+            0xffff_8000_0000_1000,
+            true
+        ));
+        assert!(!super::async_preempt_admitted(
+            true,
+            0xffff_8000_0000_1000,
+            false
+        ));
     }
 
     /// ★ EXPERIMENT `x11-dispsw`. OFF (the default): a `GF100_DISP_SW` alloc reaches no plane — the
@@ -2946,10 +4164,182 @@ mod tests {
                 [ChanStatement::DeferredApiObject {
                     client: c,
                     parent: ch,
-                    handle: 0xcafe_5080
+                    handle: 0xcafe_5080,
+                    notify_completion: false,
                 }]
             );
         }
+    }
+
+    /// ⚠ EXPERIMENT `KF3_WIN_TWIN_DEFAPI_OBJECT` (`[measured, run74 at 082117df]`): when the plane
+    /// answers a 5080 alloc with an act, the reply is HELD for that act (as an engine object's is) —
+    /// not turned into `NOT_SUPPORTED`.
+    #[test]
+    fn a_deferred_5080_answer_holds_the_reply() {
+        let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).expect("bench");
+        let sink: ChanSink = std::sync::Arc::new(|_| ChanAnswer::Deferred(kf_gsp::Deferred::new()));
+        let mut link = ChannelPolicy::new(abi, kf_abi::GuestOs::Windows, sink);
+        let payload: Vec<u8> = [0xc1d0_0027u32, 0xff04_000c, 0xff1f_e010, 0x5080, 0, 0, 0, 0]
+            .into_iter()
+            .flat_map(u32::to_le_bytes)
+            .collect();
+        let cmd = RpcCommand {
+            function: RpcFunction::RmAlloc,
+            code: 0x67,
+            sequence: 1,
+            payload,
+            elements: 1,
+            delivered: Vec::new(),
+        };
+        assert_eq!(
+            link.respond(&cmd),
+            None,
+            "no refusal: the object seat builds the reply"
+        );
+        assert!(link.defers(&cmd).is_some(), "the reply waits for the act");
+    }
+
+    /// A kernel-stamped Windows `NV_CHANNEL_ALLOC_PARAMS` alloc (`class 0xc56f`) of `client:handle`
+    /// under `parent`, declaring `ProcessID = pid`, `engineType = engine`, no context share and no
+    /// VA space of its own (the shape of the kernel driver's own channels,
+    /// `[measured, run 113]`).
+    fn kernel_channel_alloc(
+        client: u32,
+        parent: u32,
+        handle: u32,
+        engine: u32,
+        pid: u32,
+    ) -> RpcCommand {
+        use kf_abi::generated::matrix::NV_CHANNEL_ALLOC_PARAMS;
+        let v = kf_abi::versions::BENCH_DRIVER;
+        let l = kf_abi::matrix::Resolved::of(&NV_CHANNEL_ALLOC_PARAMS, v).expect("measured");
+        let mut params = vec![0u8; l.size()];
+        for (path, val) in [
+            ("ProcessID", pid),
+            ("engineType", engine),
+            ("internalFlags", 0x16),
+            ("gpFifoEntries", 4096),
+        ] {
+            let off = l.need(path).expect("field").off();
+            params[off..off + 4].copy_from_slice(&val.to_le_bytes());
+        }
+        let mut payload: Vec<u8> = [client, parent, handle, 0xc56f, 0, params.len() as u32, 0, 0]
+            .into_iter()
+            .flat_map(u32::to_le_bytes)
+            .collect();
+        payload.extend(params);
+        RpcCommand {
+            function: RpcFunction::RmAlloc,
+            code: 103,
+            sequence: 1,
+            payload,
+            elements: 1,
+            delivered: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn channel_birth_preserves_userd_source_and_subdevice_identity() {
+        use std::sync::{Arc, Mutex};
+        let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).unwrap();
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let out = seen.clone();
+        let sink: ChanSink = Arc::new(move |st| {
+            if let ChanStatement::Alloc(a) = st {
+                out.lock().unwrap().push((a.userd_source, a.subdevice_id));
+            }
+            ChanAnswer::Done
+        });
+        let mut link = ChannelPolicy::new(abi, kf_abi::GuestOs::Windows, sink);
+        let wire = kf_abi::matrix::Resolved::of(
+            &kf_abi::generated::matrix::NV_CHANNEL_ALLOC_PARAMS,
+            kf_abi::versions::BENCH_DRIVER,
+        )
+        .unwrap();
+        for (handle, offset, id) in [(0u32, 0u64, 0u32), (0xff00_a004, 0x800, 4u32)] {
+            let mut cmd = kernel_channel_alloc(0xc1d0_0013, 0xff0e_0000, 0xff04_0000, 1, 200);
+            let params = &mut cmd.payload[32..];
+            let h = wire.need("hUserdMemory").unwrap().off();
+            let o = wire.need("userdOffset").unwrap().off();
+            params[h..h + 4].copy_from_slice(&handle.to_le_bytes());
+            params[o..o + 8].copy_from_slice(&offset.to_le_bytes());
+            let i = wire.need("subDeviceId").unwrap().off();
+            params[i..i + 4].copy_from_slice(&id.to_le_bytes());
+            let _ = link.respond(&cmd);
+        }
+        assert_eq!(
+            *seen.lock().unwrap(),
+            [(Some((0, 0)), Some(0)), (Some((0xff00_a004, 0x800)), Some(4))]
+        );
+    }
+
+    /// ★ EXPERIMENT `KF3_WIN_KERNEL_PID4`, end to end through the link on the run-113 sequence: the
+    /// first start's kernel channel teaches pid `0x350`; the restart's copy channel declares pid 4.
+    /// Off, the link classifies it USER work (the Passthrough twin that made the GR channel born
+    /// next to it `KernelInUserSpace`); on, it keeps the Translated route. A channel in any other
+    /// process is classified as before. The classification is read from the pid the alloc
+    /// declares; the host adds no other fact.
+    #[test]
+    fn the_link_routes_a_pid4_channel_by_the_flag() {
+        use std::sync::{Arc, Mutex};
+        let abi = *kf_abi::versions::table_for(kf_abi::versions::BENCH_DRIVER).expect("bench");
+        let run = |pid4: bool| -> Vec<(u32, bool)> {
+            let seen: Arc<Mutex<Vec<(u32, bool)>>> = Arc::default();
+            let s2 = seen.clone();
+            let sink: ChanSink = Arc::new(move |st| {
+                if let ChanStatement::Alloc(a) = st {
+                    s2.lock()
+                        .unwrap()
+                        .push((a.process_id.unwrap_or(u32::MAX), a.user_work));
+                }
+                ChanAnswer::Done
+            });
+            let mut link = ChannelPolicy::new(abi, kf_abi::GuestOs::Windows, sink)
+                .with_user_work_flag(true)
+                .with_kernel_pid4(pid4);
+            link.windows_identity = true;
+            // first start: the kernel driver's own copy channel (pid 0x350) teaches the pid; then
+            // the restart (System process, pid 4: a copy and a GR channel), then user processes
+            for (i, (engine, pid)) in [(0xb, 0x350), (0xb, 4), (0x1, 4), (0xb, 0x554), (0xb, 0x3b8)]
+                .into_iter()
+                .enumerate()
+            {
+                let h = 0xff04_0000 + i as u32;
+                let _ = link.respond(&kernel_channel_alloc(
+                    0xc1d0_0013,
+                    0xff0e_0000,
+                    h,
+                    engine,
+                    pid,
+                ));
+            }
+            let guard = seen.lock().unwrap();
+            guard.clone()
+        };
+        let off = run(false);
+        assert_eq!(
+            off,
+            vec![
+                (0x350, false),
+                (4, true),  // the defect: the System process's copy channel is USER work
+                (4, false), // GR without a subcontext stays kernel work
+                (0x554, true),
+                (0x3b8, true)
+            ],
+            "flag off: the classification is the one run 113 measured"
+        );
+        let on = run(true);
+        assert_eq!(
+            on,
+            vec![
+                (0x350, false),
+                (4, false),
+                (4, false),
+                (0x554, true),
+                (0x3b8, true)
+            ],
+            "flag on: only pid 4 moves, to Translated"
+        );
     }
 
     #[test]
@@ -2957,5 +4347,58 @@ mod tests {
         assert!(is_rm_internal_client(0xc1e0_0006));
         assert!(!is_rm_internal_client(0xc1d0_0006), "the user base");
         assert!(!is_rm_internal_client(0xe000_0001), "a VF client");
+    }
+}
+
+#[cfg(test)]
+mod forced_tests {
+    use super::*;
+
+    fn linux_user(engine: u32) -> UserWorkFacts {
+        UserWorkFacts {
+            force_migratable: true,
+            engine: Some(engine),
+            ..Default::default()
+        }
+    }
+
+    /// The debug switch is honoured only with the debug-profile acknowledgement; without it it is
+    /// refused by name; absent, nothing happens.
+    #[test]
+    fn force_migratable_needs_the_debug_profile() {
+        assert_eq!(force_migratable_allowed(None, None), (false, None));
+        assert_eq!(force_migratable_allowed(None, Some("1")), (false, None));
+        assert_eq!(force_migratable_allowed(Some("0"), Some("1")), (false, None));
+        assert_eq!(force_migratable_allowed(Some("1"), Some("1")), (true, None));
+        for debug in [None, Some("0"), Some("")] {
+            let (on, why) = force_migratable_allowed(Some("1"), debug);
+            assert!(!on);
+            assert!(why.is_some_and(|w| w.contains("REFUSED")));
+        }
+    }
+
+    /// A Linux USER channel on GR, copy or video gets the forced permit; a kernel-stamped, UVM-owned
+    /// or RM-internal one, or an unsupported engine, does not; and without the switch a Linux channel
+    /// still gets none.
+    #[test]
+    fn a_forced_permit_is_for_user_channels_on_supported_engines_only() {
+        let gr = kf_abi::submit::ENGINE_TYPE_GRAPHICS;
+        let ce = kf_abi::submit::engine_type_copy(0).unwrap();
+        for e in [gr, ce] {
+            assert!(windows_user_ring_permit(&linux_user(e)).is_ok());
+        }
+        for f in [
+            UserWorkFacts { kernel_stamped: true, ..linux_user(gr) },
+            UserWorkFacts { uvm_owned: true, ..linux_user(gr) },
+            UserWorkFacts { rm_internal: true, ..linux_user(gr) },
+            UserWorkFacts { engine: None, ..linux_user(gr) },
+            linux_user(0x7f), // not a graphics, copy or video engine
+        ] {
+            assert!(windows_user_ring_permit(&f).is_err(), "{f:?}");
+        }
+        let off = UserWorkFacts { force_migratable: false, ..linux_user(gr) };
+        assert!(windows_user_ring_permit(&off).is_err(), "no switch, no Windows identity: no permit");
+        // forcing never reclassifies a channel as Windows user work (the Passthrough conversion)
+        assert!(windows_user_work(&linux_user(gr)).is_err());
     }
 }

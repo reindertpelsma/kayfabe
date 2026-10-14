@@ -1,0 +1,4 @@
+USER_ENGINE_WITNESS_START 2026-10-12 02:33:31.015103 UTC source 47509a6896e68c63b2ed37fefd33dad7761655d7
+USER_ENGINE_WITNESS_CASE_START engine-witness-sync pid 836688 2026-10-12 02:33:31.015153 UTC
+USER_ENGINE_WITNESS_CASE_END {"mode": "engine-witness-sync", "verdict": "FAIL", "pid": 836688, "start_utc": "2026-10-12 02:33:31.015153 UTC", "process_end_utc": "2026-10-12 02:33:34.082904 UTC", "end_utc": "2026-10-12 02:33:36.083271 UTC", "rc": 1, "killed": false, "journal_query_exit": 0, "journal_stderr": "", "xid_records": 1, "pid_attributed_xids": 1, "asserted_user_channel": true, "cleanup_ok": true, "observation": {"finished": false, "reference": 0, "engine_release": 0, "host_marker": 1, "gp_get": 2, "elapsed_us": 3000118}, "held_observation": null}
+USER_ENGINE_WITNESS_EXIT recording complete 2026-10-12 02:33:36.095842 UTC

@@ -1,0 +1,4 @@
+2026-10-11T13:59:44+00:00 claude kernel: NVRM: Xid (PCI:0000:01:00): 32, pid=4098321, name=qemu-system-x86, channel 0x01000053 intr1 00000004 HCE_DBG0 00000300 HCE_DBG1 00003185
+2026-10-11T14:26:53+00:00 claude kernel: NVRM: Xid (PCI:0000:01:00): 32, pid=4135094, name=qemu-system-x86, channel 0x0000004a intr 00800000
+2026-10-11T15:02:31+00:00 claude kernel: NVRM: Xid (PCI:0000:01:00): 32, pid=4177637, name=qemu-system-x86, channel 0x0000004a intr 00800000
+2026-10-11T15:05:56+00:00 claude kernel: NVRM: Xid (PCI:0000:01:00): 32, pid=4183068, name=qemu-system-x86, channel 0x0000004a intr 00800000

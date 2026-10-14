@@ -1,0 +1,10 @@
+HYPOTHESIS source-zero migration at the intercepted USER stream position preserves the original GravityMark Vulkan workload.
+FALSIFIER clean refusal, lost progress, wrong output, device loss, hostXid32 or guest141/4101.
+ONE_VARIABLE only KF3_WIN_USER_RING_RELAY=1; unchanged production flags and original600s oracle/media.
+SUCCESS normal benchmark exit, original image/timings/GPU activity, zero recovery; same-GPU VFIO reference183s.
+[windows] run1560 stopped (Xid count now 56)
+IOMMU_SWITCH_START group=11 from=identity to=DMA-FQ 2026-10-12T20:11:47+02:00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-12T20:11:50+02:00
+USER_WORKER_WINDOWS_EXIT=143 at=2026-10-12T20:11:50+02:00 source=6ff5aaf293e9fc04ac8780983f26dc04d0f3b735 (harness status; app verdict separate)

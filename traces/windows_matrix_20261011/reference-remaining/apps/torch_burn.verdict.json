@@ -1,0 +1,14 @@
+{
+ "verdict": "PASS",
+ "rc": 0,
+ "secs": 67,
+ "quiet": 2,
+ "note": "warn:[burn] t=10s iters=3601 errors=0",
+ "proof": "out,smi",
+ "tdr": 0,
+ "wer": 0,
+ "rebooted": false,
+ "gsp_cycles": "-",
+ "restart": "",
+ "guest": "g1"
+}

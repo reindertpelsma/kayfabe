@@ -1,0 +1,67 @@
+=== d3d11va_h264 start=2026-10-10T09:39:45.6243163-07:00 host=DESKTOP-397P3NI session=0 boot=2026-10-10T15:50:57.5000000Z timeout=180
+Input #0, lavfi, from 'testsrc=size=1280x720:rate=30:duration=20':
+  Duration: N/A, start: 0.000000, bitrate: N/A
+  Stream #0:0: Video: wrapped_avframe, rgb24, 1280x720 [SAR 1:1 DAR 16:9], 30 fps, 30 tbr, 30 tbn
+Stream mapping:
+  Stream #0:0 -> #0:0 (wrapped_avframe (native) -> h264 (libx264))
+Press [q] to stop, [?] for help
+[libx264 @ 000002723ed34700] using SAR=1/1
+[libx264 @ 000002723ed34700] using cpu capabilities: MMX2 SSE2Fast SSSE3 SSE4.2 AVX FMA3 BMI2 AVX2
+[libx264 @ 000002723ed34700] profile High, level 3.1, 4:2:0, 8-bit
+[libx264 @ 000002723ed34700] 264 - core 165 - H.264/MPEG-4 AVC codec - Copyleft 2003-2025 - http://www.videolan.org/x264.html - options: cabac=1 ref=3 deblock=1:0:0 analyse=0x3:0x113 me=hex subme=7 psy=1 psy_rd=1.00:0.00 mixed_ref=1 me_range=16 chroma_me=1 trellis=1 8x8dct=1 cqm=0 deadzone=21,11 fast_pskip=1 chroma_qp_offset=-2 threads=6 lookahead_threads=1 sliced_threads=0 nr=0 decimate=1 interlaced=0 bluray_compat=0 constrained_intra=0 bframes=3 b_pyramid=2 b_adapt=1 b_bias=0 direct=1 weightb=1 open_gop=0 weightp=2 keyint=250 keyint_min=25 scenecut=40 intra_refresh=0 rc_lookahead=40 rc=crf mbtree=1 crf=23.0 qcomp=0.60 qpmin=0 qpmax=69 qpstep=4 ip_ratio=1.40 aq=1:1.00
+Output #0, mp4, to 'C:\kf\out\d3d11va_h264\x264.mp4':
+  Metadata:
+    encoder         : Lavf62.12.103
+  Stream #0:0: Video: h264 (avc1 / 0x31637661), yuv420p(tv, progressive), 1280x720 [SAR 1:1 DAR 16:9], q=2-31, 30 fps, 15360 tbn
+    Metadata:
+      encoder         : Lavc62.28.103 libx264
+    Side data:
+      CPB properties: bitrate max/min/avg: 0/0/0 buffer size: 0 vbv_delay: N/A
+[out#0/mp4 @ 000002723ecdbe00] video:275KiB audio:0KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: 2.860478%
+frame=  600 fps= 95 q=-1.0 Lsize=     283KiB time=00:00:19.93 bitrate= 116.3kbits/s speed=3.16x elapsed=0:00:06.30    
+[libx264 @ 000002723ed34700] frame I:3     Avg QP:11.52  size:  8775
+[libx264 @ 000002723ed34700] frame P:151   Avg QP:15.14  size:   869
+[libx264 @ 000002723ed34700] frame B:446   Avg QP:16.64  size:   277
+[libx264 @ 000002723ed34700] consecutive B-frames:  0.8%  0.0%  0.5% 98.7%
+[libx264 @ 000002723ed34700] mb I  I16..4: 75.0% 20.2%  4.8%
+[libx264 @ 000002723ed34700] mb P  I16..4:  4.2%  0.5%  0.2%  P16..4:  4.6%  0.2%  0.0%  0.0%  0.0%    skip:90.3%
+[libx264 @ 000002723ed34700] mb B  I16..4:  0.6%  0.0%  0.0%  B16..8:  3.0%  0.1%  0.0%  direct: 0.3%  skip:96.0%  L0:46.9% L1:51.9% BI: 1.2%
+[libx264 @ 000002723ed34700] 8x8 transform intra:10.7% inter:67.2%
+[libx264 @ 000002723ed34700] coded y,uvDC,uvAC intra: 2.3% 20.8% 10.2% inter: 0.0% 1.1% 0.0%
+[libx264 @ 000002723ed34700] i16 v,h,dc,p: 84% 11%  1%  4%
+[libx264 @ 000002723ed34700] i8 v,h,dc,ddl,ddr,vr,hd,vl,hu: 33% 20% 47%  0%  0%  0%  0%  0%  0%
+[libx264 @ 000002723ed34700] i4 v,h,dc,ddl,ddr,vr,hd,vl,hu: 19% 52% 26%  1%  0%  1%  0%  1%  0%
+[libx264 @ 000002723ed34700] i8c dc,h,v,p: 31% 15% 45%  9%
+[libx264 @ 000002723ed34700] Weighted P-Frames: Y:0.0% UV:0.0%
+[libx264 @ 000002723ed34700] ref P L0: 70.9%  0.7% 22.8%  5.6%
+[libx264 @ 000002723ed34700] ref B L0: 84.9% 12.4%  2.7%
+[libx264 @ 000002723ed34700] ref B L1: 92.9%  7.1%
+[libx264 @ 000002723ed34700] kb/s:112.45
+Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'C:\kf\out\d3d11va_h264\x264.mp4':
+  Metadata:
+    major_brand     : isom
+    minor_version   : 512
+    compatible_brands: isomiso2avc1mp41
+    encoder         : Lavf62.12.103
+  Duration: 00:00:20.00, start: 0.000000, bitrate: 115 kb/s
+  Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(progressive), 1280x720 [SAR 1:1 DAR 16:9], 112 kb/s, 30 fps, 30 tbr, 15360 tbn (default)
+    Metadata:
+      handler_name    : VideoHandler
+      encoder         : Lavc62.28.103 libx264
+Stream mapping:
+  Stream #0:0 -> #0:0 (h264 (native) -> wrapped_avframe (native))
+Press [q] to stop, [?] for help
+Output #0, null, to 'pipe:':
+  Metadata:
+    major_brand     : isom
+    minor_version   : 512
+    compatible_brands: isomiso2avc1mp41
+    encoder         : Lavf62.12.103
+  Stream #0:0(und): Video: wrapped_avframe, d3d11(progressive), 1280x720 [SAR 1:1 DAR 16:9], q=2-31, 200 kb/s, 30 fps, 30 tbn (default)
+    Metadata:
+      encoder         : Lavc62.28.103 wrapped_avframe
+      handler_name    : VideoHandler
+[out#0/null @ 000002463e1acd40] video:7453KiB audio:0KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: unknown
+frame=18000 fps=982 q=-0.0 Lsize=N/A time=00:10:00.00 bitrate=N/A speed=32.7x elapsed=0:00:18.33    
+frame= 18000 
+=== end rc=0 secs=30 2026-10-10T09:40:15.2994817-07:00

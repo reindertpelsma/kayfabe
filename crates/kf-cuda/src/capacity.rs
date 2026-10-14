@@ -302,8 +302,9 @@ impl Capacity {
     }
 
     /// ★ Entry-level verdict: slot `s`'s diff needed `need` committed placements (placements +
-    /// maps) and its region holds fewer. Grows the region (at 1.5×, capped) and returns the move
-    /// the device must make before the next walk; `Ok(None)` when it already fits.
+    /// maps) and its region holds fewer. Prefers 1.5× growth, capped, but accepts exactly the
+    /// rounded demand when the extra headroom does not fit. Returns the move the device must
+    /// make before the next walk; `Ok(None)` when it already fits.
     ///
     /// # Errors
     /// The ceiling (one space, or the pool), by name.
@@ -322,14 +323,22 @@ impl Capacity {
                 self.max_cap
             ));
         }
-        let cap = grain(u64::from(need) + u64::from(need) / 2, self.slot_default)
+        let preferred = grain(u64::from(need) + u64::from(need) / 2, self.slot_default)
             .min(u64::from(self.max_cap)) as u32;
+        let required =
+            grain(u64::from(need), self.slot_default).min(u64::from(self.max_cap)) as u32;
         // ⊘ Allocate the new region BEFORE releasing the old one: the copy reads the old region,
-        // so the two must not overlap.
-        let Some(to) = self.slots.alloc(cap) else {
+        // so the two must not overlap. Growth headroom is an optimization, not a capacity
+        // requirement: a free region holding the actual demand is sufficient. Failed alloc
+        // leaves the pool untouched, so both attempts retain the source until a move exists.
+        let Some(to) = self
+            .slots
+            .alloc(preferred)
+            .or_else(|| self.slots.alloc(required))
+        else {
             self.stats.ceilings += 1;
             return Err(format!(
-                "slot pool exhausted: slot {s} grows {} → {cap} runs, {} free (largest {}) of {}",
+                "slot pool exhausted: slot {s} grows {} → {required} required runs ({preferred} preferred), {} free (largest {}) of {}",
                 old.cap,
                 self.slots.free_runs(),
                 self.slots.largest_free(),
@@ -339,9 +348,9 @@ impl Capacity {
         self.slots.release(old);
         self.region[i] = Some(to);
         let h = &mut self.hint[i];
-        *h = (*h).max(cap);
+        *h = (*h).max(to.cap);
         self.stats.grows += 1;
-        self.stats.largest_slot = self.stats.largest_slot.max(cap);
+        self.stats.largest_slot = self.stats.largest_slot.max(to.cap);
         Ok(Some(Move {
             slot: s,
             from: old,
@@ -475,6 +484,67 @@ mod tests {
         let _ = c.walk_needed(1, 40_000);
         let e = c.plan(&[0, 1]).expect_err("walk pool");
         assert!(e.contains("walk pool exhausted"), "{e}");
+    }
+
+    /// Windows run1284: demand fits a disjoint free region, but 1.5× headroom does not.
+    /// This constructs its free counts and the largest demand consistent with logged growth;
+    /// neither the allocation offsets nor the exact diff demand were measured.
+    /// The pool size, per-space ceiling and non-overlapping device-copy contract stay fixed.
+    #[test]
+    fn fragmented_pool_accepts_required_growth_without_optional_headroom() {
+        let mut c = Capacity::new(128, 1 << 20, 2 << 20, 1 << 20, 1024).expect("config");
+        let other = c.slots.alloc(62_976).expect("other live slots");
+        let hole = c.slots.alloc(387_840).expect("temporary region");
+        let old = c.slots.alloc(662_528).expect("slot before growth");
+        c.region[0] = Some(old);
+        c.region[1] = Some(other);
+        c.slots.release(hole);
+        assert_eq!(c.slot_pool_free(), 1_371_648);
+        assert_eq!(c.slots.largest_free(), 983_808);
+
+        let m = c
+            .slot_needed(0, 665_941)
+            .expect("demand fits")
+            .expect("move");
+        assert_eq!(m.from, old);
+        assert_eq!(m.to.cap, 666_112);
+        assert!(m.to.off >= old.off + old.cap);
+        assert_eq!(c.slot_region(1), Some(other));
+        assert_eq!(
+            c.slot_pool_free() + u64::from(m.to.cap + other.cap),
+            2 << 20
+        );
+        let lay = c.plan(&[0]).expect("walk fits the unchanged pool");
+        assert!(lay.walk_cap[0] >= m.to.cap);
+        assert_eq!(c.stats.ceilings, 0);
+
+        c.release(0);
+        c.release(1);
+        assert_eq!(
+            c.slots.free,
+            vec![Region {
+                off: 0,
+                cap: 2 << 20
+            }]
+        );
+    }
+
+    #[test]
+    fn required_growth_that_does_not_fit_preserves_source_and_pool() {
+        let mut c = Capacity::new(8, 4096, 4096, 4096, 1024).expect("config");
+        c.plan(&[0, 1, 2]).expect("three live regions");
+        let old = c.slot_region(0);
+        let free = c.slots.free.clone();
+        let hint = c.hint[0];
+        let e = c
+            .slot_needed(0, 2048)
+            .expect_err("no disjoint required region");
+        assert!(e.contains("2048 required runs"), "{e}");
+        assert_eq!(c.slot_region(0), old);
+        assert_eq!(c.slots.free, free);
+        assert_eq!(c.hint[0], hint);
+        assert_eq!(c.stats.grows, 0);
+        assert_eq!(c.stats.ceilings, 1);
     }
 
     /// ★ Teardown releases exactly what the object owned: the region returns, coalesced, and a

@@ -1,6 +1,6 @@
 # Owner rulings — the decisions that govern kayfabe v3 work
 
-**STATUS: LIVE, 2026-10-07 (§S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
+**STATUS: LIVE, 2026-10-07 (§S added, then the BAR0-trace exception and the `PERF_GET_POWERSTATE` confirmation; earlier rulings dated in place); §T added 2026-10-08 (filtered recovered directives); §X added 2026-10-08 (non-stall interrupts); §Y added 2026-10-09 (diagnostic BAR0 trace mode, numbered §X on its branch, the VFIO tracer); §AB added 2026-10-10 (T-space hardwired, privilege rules for mappings).** Every ruling the owner made in the 2026-09-25 … 09-30 working sessions,
 with its date, so work can resume from the repository alone. The architecture itself is in
 `docs/design/THE_V3_PLAN.md` and `THE_CONSTRAINTS.md`; this file records *decisions* on top of it.
 Where a ruling was later refined, the refinement is listed under it. A ruling's date is part of its
@@ -953,3 +953,308 @@ All owner statements of 2026-10-08, in the order the open-decision list was give
   regeneratable"; the archive copy remains); `/workspace/nvidia-gpu-passthrough` is backed up to
   `/mnt/windows-work/archive/`.
 - **Models:** Sonnet 5.5 by default, Opus 5.5 as the strongest tier (`CLAUDE.md`, *Models by risk*).
+
+## Y. A diagnostic BAR0 trace mode with the VFIO reference's own tracer (2026-10-09)
+
+⊘ Numbered **§X** on `claude/kf3-read-trace-20261008` (and in its code comments and `V3_BAR0_TRACE_MODE.md`); renumbered
+§Y at the merge into `claude/windows-reset-20261009` (2026-10-09), because §X is the non-stall ruling of 2026-10-08.
+
+**STATUS: LIVE, 2026-10-09.** Owner rulings of 2026-10-09, relayed by the coordinator. A second,
+broader exception to "only BAR0 writes trap" (`AGENTS.md`, Rules; `design/THE_CONSTRAINTS.md`) than
+§S's scoped window; it does not replace §S.
+1. **What is allowed.** For diagnostics, kf3's BAR0 **reads may exit** (trap) to the VMM and be
+   logged; boot slowness does not matter.
+2. **Default off.** In every default, production and performance configuration the BAR0 mapping, the
+   exit behaviour and the code path stay exactly as before: "only BAR0 writes trap; nothing blocks on
+   a vCPU" stays the default. The mode is an explicit, loudly reported diagnostic exception, like the
+   existing probe flags.
+3. **The same tracer as the VFIO reference** (owner emphasis, same day: "using THE SAME tracer is the
+   most valuable thing"; "inject the same PCIe tracer used for VFIO into kayfabe's device, so both
+   give the same responses in the same formats"). Not a parallel look-alike: the observer is made a
+   device-agnostic helper that both the patched vfio-pci and kf3 call, with the same properties and
+   output, so the `scripts/bench/windows` harnesses and analysers work unchanged for both.
+4. **Hostile guest bytes.** The trace has a hard cap on log volume (bytes and records), a drop counter
+   reported at the end, and never grows memory or disk without bound per guest action.
+
+Implemented (branch `claude/kf3-read-trace-20261008`, `docs/design/V3_BAR0_TRACE_MODE.md`): the
+environment switch `KF3_BAR0_READ_TRACE=1` (ranges, caps: `crates/kf-qemu/src/readtrace.rs`), QEMU's
+own `vfio_region_read`/`vfio_region_write`/`vfio_msi_interrupt` trace events called by `kf3.c`, and the
+shared GSP observer (`tools/vfio-gsp-observer`, `gsp_observer_*`) behind kf3's `x-gsp-observer`
+property.
+## X. Non-stall interrupts wake every VM that armed the event; an edge is never dropped (2026-10-08)
+
+Two owner statements on the same day; the second supersedes the gate/bucket part of the first.
+
+- **First (2026-10-08):** remove the doorbell requirement from the Passthrough non-stall relay
+  (`kf_chan::ptnsi`, branch `claude/passthrough-interrupt-20261008`): doorbells are guest-controlled and a
+  weak boundary (the guest can ring to open the gate; the doorbell hook is slated to be replaced), and the
+  1 s afterglow could lose completions. The host notifiers are GPU-wide anyway: RM delivers an engine's
+  non-stall edge to every client registered on it, whoever's work it was. ⊘ *Superseded the same day:*
+  this statement also asked for a live-twin condition and a per-vector token bucket; see the next item.
+- **Second, binding (2026-10-08): follow NVIDIA — an interrupt wakes everyone.** Losing an interrupt for
+  relevant work is a correctness bug; a cross-tenant wake is only a minor denial of service. So:
+  - forward every host `FIFO_EVENT_MTHD` edge and every engine-notifier edge to every VM whose guest has
+    **armed** that event (its own non-stall subscription, a host-recorded fact), not "has a live twin",
+    not a doorbell, not outstanding work;
+  - **invariant: an edge may be delayed, never dropped.** No dropping token bucket. Default: no pacing.
+    Any pacing knob is env-tunable, default off, and loss-free (a pending flag per VM and vector, and a
+    guaranteed trailing raise by a timer even if no further edge arrives);
+  - keep the hostile-index refusal and the armed-event check, and `KF3_PT_NSI_RELAY=0` as the falsifier
+    mode; counters: raised, coalesced-and-later-raised, no-armed-event;
+  - the accepted residuals are written down: a tenant can make other guests wake more often (minor DoS,
+    accepted, it is RM's own semantics) and a guest learns, by timing, that some tenant used an engine
+    class it armed. Where: `docs/design/the_three_channel_kinds.md` §1.2 and `docs/FAQ.md`.
+
+## AA. An MMU invalidate completes over table errors, as hardware does (2026-10-09)
+
+**STATUS: LIVE.** Owner, 2026-10-09: *"we need to do as real hardware, if there is an error in the
+tables we just complete anyways, not withhold it. On real hardware, if it hits misaligned leaves, it
+just faults; if the driver would fix it, it has to do a new invalidate through the 3 channels v3
+designated anyway. That prevents a guest-wide crash."*
+
+- An invalidate whose spaces failed **only by absence** (a refused map, a walk-refused leaf) is
+  **cleared**; the refusal stays counted and named (`absent_cleared`, bounded log). A GPU access to an
+  absent leaf faults on that space's twin.
+- ⊘ **Supersedes** the 2026-09-25 line "its invalidate is not cleared over leaves nobody mapped"
+  (`crates/kf-mem/src/vasmgr.rs`, module comment, corrected in place).
+- ⊘ **Not covered, still held:** a refused UNMAP (a placement the guest dropped may still be live on
+  the host) and a refused invalidate — those are kayfabe's own failures, not errors in the guest's
+  tables. Confirm with the owner whether they should also complete.
+- ★ **Correction to the evidence below (2026-10-09, run 225, real GPU): the refused map was a kayfabe
+  defect, not an error in the guest's tables, and is now fixed in the host verbs.** The refusal
+  `Other(19313)` is `VA_STRADDLES_RESERVATION`: Windows maps rows that CROSS the 1 MiB edge of the
+  twin space's low reservation (`0xb0000+0x80000`, `0xff000+0x2000`), a FIXED
+  `NV_ESC_RM_MAP_MEMORY_DMA` names ONE `hDma`, and kayfabe refused instead of mapping. The GPU then
+  used the unmapped VA and faulted (host Xid 31, `FAULT_PTE` at `0xff000` / `0xb0000`); the Windows
+  driver died. `HostRm::map_kind`, `unmap_row` and `unmap_range` now SPLIT such a row at the
+  reservation edges (`VaSpace::dma_pieces`): one map per `hDma` of the same memory object, all or
+  nothing. "Cleared over absence" is therefore not the answer for these rows; they are mapped.
+  Unit-tested only; the hardware verdict is the next Windows run.
+- Evidence: run 223 (`inval=3138 cleared=3137 unreconciled=1`, walk refused leaves
+  `refuse_mask=0x400`, then a TDR 0x117 after the guest polled `MMU_INVALIDATE`'s trigger bit
+  forever); runs 221/190/181 refused one map (`0xb0000+0x80000: Other(19313)`).
+- Opt-out for A/B: `KF3_INVALIDATE_CLEAR_OVER_ABSENT=0`.
+- ★ **PROPOSED AMENDMENT for the owner (2026-10-14, `claude/win11-opengl-20261014`, NOT yet ruled) — answer to
+  the second half: the misaligned 512 MiB "leaves" are not valid leaves; they are stale reads of recycled
+  tables.** `[measured run 2990, e821bf3a, KF3_WALK_REFUSAL_DUMP, traces/win11_opengl_20261014/walkdump_excerpt.txt]`
+  space `0xece42000`: PD2[5] = `0x0dcbee22` (a vidmem PDE) pointed at `0xdcbee000`, whose entries are 4 KiB PTEs
+  (kind 6, valid, consecutive pages `0xdab2000, 0xdab3000, ...` and sysmem pages) — a page table, read as PD1;
+  the pages they name are all-zero data pages (not PD0 tables: the coordinator's H1 is falsified), and 200 ms later
+  the guest had repointed PD2[5] to a new PD1 table `0xdcbe3000` whose slots are empty (`0x20`) (H2, genuine
+  leaves, falsified). Every burst on 0c5fedff/e821bf3a followed a process exit or an adapter reset. ogkm's own
+  rule for a leaf-capable PD1 (`gmmuFmtEntryIsPte`: PTE VALID bit 0; Ada uses `kgmmuFmtInitLevels_GA10X`, PD1
+  holds 512 MiB PTEs, VER2) is the walker's, so the decode is right; the refusal-as-absence (above) is the
+  correct and harmless outcome, and no leaf support is proposed. Open, small: the burst repeats one log line per
+  invalidate (count it instead).
+
+
+## AB. The T-space is hardwired; only guest leaves in a Passthrough space; whole guest RAM only for privileged channels (2026-10-10)
+
+**STATUS: LIVE, 2026-10-10.** Binding owner rulings, relayed by the coordinator. They follow the
+window-exposure review (`design/V3_WINDOW_EXPOSURE_REVIEW.md`) and complete §Q's address model.
+Implemented on `claude/hardwire-tspace-20261010` (GPU-free tests only; the hardware gate is in
+`design/V3_TSPACE_HARDWIRED.md` §5).
+
+**2026-10-12 amendment:** §AI permits only GPU-read-only private command rings
+and staging for declared Windows user-work under its restrictions. Linux
+Passthrough's prohibition remains. This supersedes the absolute wording in
+AB.2/AB.3 only for that narrow exception; no writable private fence is included.
+
+1. **Delete `KF3_TSPACE`; hardwire the T-space behaviour.** Every Translated channel runs in the
+   T-space, which is built at prewarm. With no T-space, a Translated birth is refused by name; there
+   is never a fallback to a mirror window or a mirror ring.
+2. **In a PASSTHROUGH space nothing kayfabe- or host-owned may be mapped.** Every VA mapping
+   there comes from the guest's page-table leaves, and only that. The only future exception is the
+   not-yet-implemented sysmem-USERD address-size fix, and it must stay absent until it is ruled on.
+   This applies to every mirrored space (twins, prewarmed spares, recycled spares). The legacy P5
+   windows and ring region are deleted. A carve-out leaf is refused in every GPU mirror.
+3. **Only TRANSLATED channels may have host-owned mappings** (windows, rings), and they live in a
+   T-space that no Passthrough channel can ever use.
+4. **Only PRIVILEGED (guest-kernel) channels may have the ENTIRE guest RAM mapped.** An
+   unprivileged Translated channel gets nothing wider than what its own validated operands need.
+   - As built: the T-space's windows and rings need a `kf_qemu::tspace::Privileged` witness, made
+     only from the alloc's facts (`kernel_client && !user_work`). An unprivileged Translated birth
+     is refused by name. No route produces one today.
+   - Not built: the per-operand space such a channel would need.
+- **Also the same day (coordinator, owner instruction):** keep every measurement, diagnostic and
+  control flag (`KF3_BAR0_TRACE`, `KF3_MAPLOG`, `KF3_RPC_TRACE`, the display traces, `KF3_TCENSUS`,
+  `KF3_PT_STALL_SNAPSHOT`, the GSP observer, the `KF3_NEGCTL_*` controls, …). Remove or hardwire
+  only behaviour flags. Renaming to `KF3_DIAG_*` is a separate step that has not been asked for.
+- Supersedes: §Q's "(Audit S1-21 records where the code departs from this today)" for the window
+  half. The `KF3_TSPACE` / `KF3_INCA_REFUSE` "default off until box step 1" rollout in
+  `design/V3_P1P2_TSPACE.md` §8 (corrected there). The `KF3_TSPACE` row of
+  `design/V3_FLAG_INVENTORY.md` (its follow-up note is `design/V3_TSPACE_HARDWIRED.md`).
+
+## §AC. Models, 2026-10-10
+
+**STATUS: LIVE, 2026-10-10.** Owner: for the 5.5 generation Sonnet 5.5 is the default for everything;
+Opus 5.5 only when Sonnet fails (use less Opus, weekly usage). Haiku 5.5 is to be tried after the CLI
+upgrade, on mechanical lanes only (evidence collection, formatting, running a script, grep sweeps).
+Supersedes the "Opus runs hypothesis work" half of `CLAUDE.md` *Models by risk*; correctness still
+beats cost: a lane that fails on Sonnet is rerun on Opus, never accepted.
+
+## §AD. An invalidate is never left incomplete for long, 2026-10-10
+
+**STATUS: LIVE, 2026-10-10 (owner, in the Windows TDR session).** No MMU invalidate may stay marked
+incomplete for longer than about a dozen milliseconds. A guest thread polls the trigger bit while
+holding driver locks (run 223 was exactly that hang), and a suspended scheduler or a recovery waits
+behind it, so the latency of the clear is part of the guest's own latency, not a background detail.
+Consequences recorded by the coordinator (not yet implemented, measured first):
+- The trigger-to-clear latency of every invalidate is measured and reported (distribution, max, count
+  above 12 ms) in every run's status line and in the Windows and Linux lanes.
+- Work that would exceed the bound (large rows at 4 KiB grain, budgeted refreshes, a map queued behind a
+  long steer) must not hold the invalidate: it either completes within the bound or the design must
+  make the host mapping ahead of the invalidate (the guest writes its PTEs before it triggers, so the
+  mirror has the time between the PTE writes and the trigger). Clearing over a mapping that is not
+  yet in place is only allowed under §AA (absence), never silently.
+- `V3_BATCHED_MAP.md` §8.8 worst cases (a refresh budget of 2^21 grain calls, about 45 s of VA thread
+  by the document's own estimate) violate this rule and need a latency-bounded design.
+
+## §AE. No heuristics; a fallback is a clean mode, 2026-10-10
+
+**STATUS: LIVE, 2026-10-10 (owner, Windows TDR session).** Avoid heuristics: no cap, threshold or knob whose only
+justification is that it makes a symptom go away, because it can break other things and stays forever. A fallback must be a
+CLEAN MODE: a complete, named configuration with a defined contract and its own tests, like the virtual scanout on Linux (a
+whole alternative display path, not a tweak to the real one). Where a feature cannot yet be done right, the stock path stays
+correct without it and the feature is added later (post-release if apps run without it, see the priority rule: anything that
+prevents apps from running first). Consequences: the "fewer usable windows per head" idea for overlays is a diagnostic only;
+the product answer is to fix the overlay flip completion, or to define a real single-plane display profile as a clean mode
+with a derived, named capability, never an ad hoc cap. Priority rule recorded with it (owner, same day, his words): "I would focus on
+anything that prevents apps from running. Anything that also works without, just like the virtual scanout on Linux and
+decent perf, I tend to do post release." So: anything that prevents apps from running comes first; features that apps
+work fine without (the owner's example is the simple virtual scanout Linux guests already use instead of the full display
+engine) and performance beyond "decent" are post-release. Console fidelity (YUV overlay rendering on the console, z-order,
+HDR on the console) falls under "works without".
+
+## §AF. Per-die constants: guaranteed coverage, a published table, reuse of existing reverse engineering, 2026-10-11
+
+**STATUS: LIVE, 2026-10-11 (owner statements in the Windows/OpenGL session; recorded by the coordinator, wording to be confirmed by the owner).**
+- **Goal:** kayfabe must not support only the dies we could trace. The owner wants guaranteed, whole constant tables across a wide product
+  range (the reference is `nvkvm-pv`'s breadth), because a project that only works on a few dies will not be adopted. A per-die trace taken
+  by us, die after die, is not an acceptable coverage plan (one trace per die is a burden even for a few constants).
+- **Order of sources for any per-die constant or layout:** (1) computed from kayfabe's own state or the class tables; (2) NVIDIA's open
+  headers/docs (ogkm, open GPU docs) and every other open-source project that already carries it, **combinable**, pinned and licence-checked
+  (nouveau, nova, envytools, gVisor nvproxy, ...): reusing existing community reverse engineering is preferred over doing our own, because
+  those projects already span many dies and have users; (3) the host's own RM queried at runtime; (4) only for constants that remain, and
+  only if the owner decides so after a legal/provenance check: reverse engineering of the GSP firmware or other blobs **to extract constants,
+  not interfaces**, clean-room (a spec of facts is written; the implementation uses the spec), with the result **published as a table and
+  treated as the truth**. The build and any derivation script must NEVER contain or require a decompile step: people compiling fetch the open
+  repos and the published table.
+- **Refinement (owner, later the same day): a combination of sources, with data that never comes from a blob.** The table is built from
+  (a) NVIDIA's open repos and docs (ogkm, open GPU docs), (b) open-source projects that already carry the legal/provenance burden (nouveau,
+  nova, envytools, gVisor nvproxy, ...), and (c) a **fleet of measurements on real GPUs rented on vast** (many GPU types), published as the table
+  and treated as the truth. **Reverse engineering of the GSP firmware or blobs is used only to find issues and to confirm that the table and the
+  behaviour are right** (verification), NOT as a data source, so no interface, layout or constant is derived from a blob. Every table entry
+  carries a source tag (`ogkm`, `nvidia-doc`, `nouveau`, `nova`, `measured:<die>,<driver>,<date>`, ...); an entry tagged `blob` is refused by CI.
+  This supersedes the "last resort: reverse engineering for constants" item above. Measured entries exclude anything board- or user-specific
+  (UUIDs, serials, VBIOS/PROM contents, MACs).
+- **Display is required** (owner): people want display, so a render-only/headless Windows mode is at most a fallback or experiment, not the answer.
+- Our own traces remain valuable to find what must be answered and as test oracles for the die we own; they are not the coverage source.
+- Supersedes for this question the diagnosis-only wording in §S/`feedback_reverse_engineering_boundary` only to the extent stated above:
+  reverse engineering to extract constants is allowed in the last resort; interface extraction and decompilation inside the repo are not.
+
+## §AG. Reverse engineering stays small and private; the provenance policy is public, 2026-10-11
+
+**STATUS: LIVE, 2026-10-11 (owner statements; recorded by the coordinator, wording to be confirmed by the owner).**
+- Reverse engineering (decompiling, tracing a closed binary) is allowed for **interoperability, diagnosis and verification**, kept **small**,
+  and its output **is never made public** (private repository `reindertpelsma/kayfabe-private`). Reason (owner): this prevents the largest risk,
+  spreading annotated IP. It helped the project and is not use of leaked sources (owner).
+- The provenance **policy** itself is public, for transparency: `docs/design/V3_PROVENANCE.md`. It states rules, sources and checks, never what was
+  analysed or found, and it must not claim a clean-room process (the same people and agents did diagnosis and implementation).
+- Consequence for data: constants and interfaces come only from the sources in §AF; a diagnosis finding is turned into a behaviour-level
+  verification item and confirmed from those sources or by measurement before code depends on it.
+- To do: one lawyer review of the provenance page and of the overall reverse-engineering position before the public release; a sweep of the full
+  git history for analysis material and closed-binary offsets (release gate).
+
+## §AH. Per-die constants: the tier order and the per-die default, 2026-10-11
+
+**STATUS: LIVE, 2026-10-11 (owner statements; recorded by the coordinator, wording to be confirmed by the owner).**
+- **Tier order** for any value that is not derived: (1) derive/compute (ogkm incl. generated and Windows-specific code, from ANY ogkm version, nouveau/nova, other open
+  projects, kayfabe state); (2) unprivileged host ioctl at startup; (3) **privileged measurement in a sweep** (root script, kernel module, hardware
+  access) before any reverse engineering; (4) reverse engineering, only for the residue. An item moves down a tier only with a written reason.
+- **Unknown things are not assumed to be per family** (owner): the default is measured per die and per firmware/driver branch; a family rule needs
+  every measured die to agree plus a mechanism; an unmeasured die or branch gets the clean fallback, never a neighbour's row.
+- The strategy, plan and unverified assumptions: `docs/design/V3_CONSTANT_STRATEGY.md`.
+- Agreed additions (owner, 2026-10-11): demand filter before the tiers, delegation to the host driver where safe, a supported driver set, and an opt-in
+  report of refused controls (`V3_CONSTANT_STRATEGY.md` §7).
+
+## §AI. Windows user-work ring exception; Linux Passthrough unchanged, 2026-10-12
+
+**Owner diagnostic authorization, 2026-10-12:** after the Windows experiment,
+"you may also do a linux run with a flag to force the 'migratable passthrough'
+even if linux doesn't need it" because ogkm is easier to debug. This permits an
+explicit opt-in Linux lab experiment, not a change to normal Linux Passthrough.
+Keep the native USER/own-VAS permissions and physical-operand prohibition.
+Current diagnostic source accessor is Sysmem-only: either construct a suitable
+Linux test allocation or explicitly implement/test vidmem access before claiming
+ordinary Linux desktop channels exercise it. No such forced run has occurred yet.
+
+
+**Subsequent owner clarification, 2026-10-12 (USER authority):** native USER
+privileges and the channel's own explicitly admitted, refreshed GPU mappings
+are the access boundary. Do not map all guest VRAM into an unprivileged channel.
+Host-owned ring/staging addresses grant no extra execution authority; correct
+userspace follows its mapping and synchronization contract. A malicious mutation
+of its own ordinary commands is not, by itself, a reason to snapshot every
+pushbuffer. Evaluate scan-from-first-submission with ordinary GP references
+unchanged and staging only for intercepted triggers. This supersedes the blanket
+immutable-copy requirement below; it does not waive independent validation of
+host software actions or establish that native RC/reset stays contained. Actual
+ordering, lifetime and containment still require tests. No PB parsing on a vCPU;
+Linux Passthrough still forbids host-owned GPU mappings.
+
+**Latest owner clarification, 2026-10-12 (three-mode dispatch):** the owner
+requests direct native-token forwarding; bounded pre-mapped USERD/GP-descriptor
+copy with a worker fallback for large deltas; and always-worker dispatch for
+Translated, Emulated or migration-capable channels. No pushbuffer inspection on
+a vCPU, no mapping/native ioctl there, and only a conditional nonblocking worker
+wake syscall. MMIO and ioeventfd must use the same dispatch semantics. Review
+atomic interleavings rather than assuming lock-free means race-free. This
+supersedes the worker-only/inspection-from-birth requirement below to that extent;
+the Linux host-mapping prohibition and Windows read-only mapping scope remain.
+
+**Implementation interpretation, not a new owner ruling:** copying ordinary
+user GP pointers does not require CPU interpretation of their pushbuffers while
+the native channel remains USER, physical operands remain forbidden and its own
+restricted GPU address space protects host resources. Once software migration is
+possible, worker inspection must cover its parser history before accepting it;
+the later owner clarification above permits trigger-only staging. The atomic
+switch must exclude old CPU publishers; if any opaque native stream was already
+published, native parser/binding/ordering continuity is a separate proof gate.
+Holding a registration reply or observing empty GET/PUT does not close that gate.
+A never-published channel may switch after all prior CPU claimants have exited.
+See [architecture review](design/V3_WINDOWS_USER_RING_RELAY_ARCHITECTURE_REVIEW_20261012.md).
+
+**Owner clarification, 2026-10-12:** "no host owned maps should remain for linux
+ guests, but can be lifted for windows if its the only thing fixing the migration
+ linux doesn't use". The owner also authorizes necessary Windows-specific rule
+ changes, with an afterwards report of what changed and why. This preserves the
+ Linux prohibition; it does not require a broader mapping exception. The current
+ implementation target remains the read-only command mappings below, because
+ the native reference mechanism works without a GPU-writable private fence.
+
+USERD sysmem placement is a useful routing fact, not the sole admission rule:
+allocation requests and declared OS identity are guest-controlled. Keep explicit
+Windows user-work scope plus ownership/permissions checks; those checks must
+remain safe even if a different OS declares that identity. An observed Linux
+layout is not proof that Linux cannot request another layout.
+
+**STATUS: LIVE, 2026-10-12 (owner approval in the Codex session).** Asked about a
+revision of V3_WINDOWS_USER_RING_RELAY.md permitting only GPU-read-only private
+command rings/staging for declared Windows user-work in its own restricted space,
+worker-only submission and command inspection from birth, the owner answered:
+"yes approve, as long as linux passthrough forbids host owned mappings".
+
+- The exception to §AB.2/AB.3 is limited to those GPU-read-only command mappings.
+  Linux Passthrough continues to forbid host-owned mappings. Kernel Translated
+  spaces and the physical-operand prohibition remain unchanged.
+- Reserved addresses prevent collisions; GPU PTE permissions must enforce write
+  protection. The guest may read these mappings: do not put host secrets there.
+  No writable private fence/gate, whole-GPGA mapping or privileged host channel
+  is authorized by this exception.
+- Submission remains on workers; no inline copy or new BAR1/BAR2 trap. Inspect
+  immutable command copies from birth; a held registration reply does not drain
+  previously submitted work or prevent hostile prepublication.
+- This authorizes development of the revised design, not a compatibility claim.
+  Native cursor, lifetime and ordering semantics still require evidence, bounded
+  models, independent review and exact-revision Linux/Windows hardware tests.

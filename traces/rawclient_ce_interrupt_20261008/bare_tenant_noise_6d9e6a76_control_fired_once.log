@@ -1,0 +1,23 @@
+info  RMLADDER ARGV     = [--ce-interrupt]
+ok    R2 version         = "595.91.07"
+ok    R4 hClient         = 0xc1d0001d
+ok    R6 hSubdevice      = 0xcafe0002
+REV_UNDER_TEST=6d9e6a76
+info  R35 CE interrupt    = GPU 0, euid 0 — non-stall events armed through RAW RM IOCTLS ONLY (ALLOC_OS_EVENT, NV01_EVENT_OS_EVENT, EVENT_SET_NOTIFICATION), polled with epoll. No libcuda is loaded by this process
+info  R35 the bar         = per interrupt leg 50 of 50: a file of the leg's positive set (its engine's own notifier or the host's default one) readable within 2000 ms, the semaphore holding the payload, every copied word verified; every file OUTSIDE the set silent; the no-interrupt control silent; the quiet window silent. ⊘ A wake is a WAKE: the semaphore is read after it
+info  R35 notifier map    = CE0=23 CE1=24 CE2=25 CE3=26 CE4=27 CE5=28 CE6=29 CE7=30 CE8=31 CE9=32 FIFO_EVENT_MTHD=35 (indices read from the driver matrix at the host's version); copy-engine class 0xc7b5
+★      R35 quiet window      = nothing submitted: readable files = none (after 1 window(s), 300 ms of waiting; patience 60000 ms)
+info  R35 channel source  = RM REFUSED a non-stall event whose source is the CHANNEL with status 0x1f (NV_ERR_INVALID_ARGUMENT is 0x1f): the engine non-stall lists hang off the SUBDEVICE (event_notification.c:688-703), so the events above use it
+★      R35 leg ce-launch-interrupt@COPY0        = positive any of [CE0,FIFO_EVENT_MTHD]: readable 50/50 (it landed on: FIFO_EVENT_MTHD), wake_us min 45 median 81 p90 94 max 104 (n=50); semaphore at the wake 50/50, by the bound 50/50; data verified 50/50; files OUTSIDE the set that fired: none; stale-before 0/50; repeat reports 0
+R35_LATENCIES_US leg=ce-launch-interrupt@COPY0 104,78,85,45,84,91,90,83,79,85,78,93,97,80,83,80,96,83,91,78,80,78,94,77,82,87,79,92,83,78,88,83,80,78,79,82,80,77,94,80,79,51,82,68,95,79,81,79,94,77
+★      R35 leg host-non-stall-interrupt@COPY0   = positive any of [FIFO_EVENT_MTHD]: readable 50/50 (it landed on: FIFO_EVENT_MTHD), wake_us min 37 median 84 p90 278 max 1745 (n=50); semaphore at the wake 50/50, by the bound 50/50, host fence 50/50; data verified 50/50; files OUTSIDE the set that fired: none; stale-before 0/50; repeat reports 0
+R35_LATENCIES_US leg=host-non-stall-interrupt@COPY0 95,73,70,83,79,94,84,92,80,84,79,71,37,228,78,271,80,905,75,268,84,273,83,272,80,304,76,266,475,84,272,78,273,82,289,80,273,82,276,79,1745,82,276,80,273,81,278,70,267,55
+FAIL   R35 leg no-interrupt-control@COPY0       = positive (none expected): readable 0/10 (it landed on: none), no wake; semaphore at the wake 0/10, by the bound 10/10; data verified 10/10; files OUTSIDE the set that fired: FIFO_EVENT_MTHD; stale-before 0/10; repeat reports 0
+R35_LATENCIES_US leg=no-interrupt-control@COPY0 
+★      R35 leg ce-launch-interrupt@COPY2        = positive any of [CE2,FIFO_EVENT_MTHD]: readable 50/50 (it landed on: CE2,FIFO_EVENT_MTHD), wake_us min 50 median 76 p90 80 max 88 (n=50); semaphore at the wake 50/50, by the bound 50/50; data verified 50/50; files OUTSIDE the set that fired: none; stale-before 0/50; repeat reports 4
+R35_LATENCIES_US leg=ce-launch-interrupt@COPY2 86,75,75,75,78,80,74,77,79,75,72,78,79,74,76,68,78,77,75,73,70,87,76,78,78,62,77,75,77,74,71,77,79,77,75,72,88,77,74,75,76,74,75,63,77,82,50,80,77,74
+★      R35 leg no-interrupt-control@COPY2       = positive (none expected): readable 0/10 (it landed on: none), no wake; semaphore at the wake 0/10, by the bound 10/10; data verified 10/10; files OUTSIDE the set that fired: none; stale-before 0/10; repeat reports 0
+R35_LATENCIES_US leg=no-interrupt-control@COPY2 
+FAIL  R35 no-interrupt-control@COPY0: NEGATIVE CONTROL FIRED in 1 iterations (tokens FIFO_EVENT_MTHD)
+R35_OUTCOME=(F)
+done — CE interrupt only (WITH FAILED EVIDENCE)

@@ -1,0 +1,974 @@
+{
+  "protected": [
+    "/var/lib/kf-windows-20261005/boundary-kayfabe-1380/windows.qcow2",
+    "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+    "/var/lib/kf-windows-20261005/owner-state/manual1380/resume.qcow2"
+  ],
+  "removed": [
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-1610/windows.qcow2",
+      "allocated": 4141834240
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-1611/windows.qcow2",
+      "allocated": 3818680320
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/codex-memory-access-linux-0578a7ab8/fastguest/initrd.cpio.gz",
+      "allocated": 377761792
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/codex-memory-access-linux-0578a7ab8/fastguest/vmlinuz",
+      "allocated": 17305600
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/codex-memory-access-linux-30c887c86/fastguest/initrd.cpio.gz",
+      "allocated": 377761792
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/codex-memory-access-linux-30c887c86/fastguest/vmlinuz",
+      "allocated": 17305600
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/codex-memory-access-linux-4df9c0095/fastguest/initrd.cpio.gz",
+      "allocated": 377761792
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/codex-memory-access-linux-4df9c0095/fastguest/vmlinuz",
+      "allocated": 17305600
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/codex-memory-access-linux-4ec9f9a24/fastguest/initrd.cpio.gz",
+      "allocated": 377761792
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/codex-memory-access-linux-4ec9f9a24/fastguest/vmlinuz",
+      "allocated": 17305600
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/codex-memory-access-linux-6ff5aaf29/fastguest/initrd.cpio.gz",
+      "allocated": 377761792
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/codex-memory-access-linux-6ff5aaf29/fastguest/vmlinuz",
+      "allocated": 17305600
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/codex-memory-access-linux-7f3f9fe16/fastguest/initrd.cpio.gz",
+      "allocated": 377761792
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/codex-memory-access-linux-7f3f9fe16/fastguest/vmlinuz",
+      "allocated": 17305600
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/codex-memory-access-linux-a38602015/fastguest/initrd.cpio.gz",
+      "allocated": 377761792
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/codex-memory-access-linux-a38602015/fastguest/vmlinuz",
+      "allocated": 17305600
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/codex-memory-access-linux-b50774a7a/fastguest/initrd.cpio.gz",
+      "allocated": 377757696
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/codex-memory-access-linux-b50774a7a/fastguest/vmlinuz",
+      "allocated": 17305600
+    }
+  ],
+  "checked_headers": 178,
+  "headers": [
+    {
+      "path": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "parent": null,
+      "allocated": 22333235200
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/baseline-a/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 117579776
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-1380/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 27955179520
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-1610/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 4141834240
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-1611/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 3818680320
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-284/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 3470868480
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-285/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 3525656576
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-286/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 47849472
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-287/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 4960096256
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-288/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 5321584640
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-289/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 2305097728
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-290/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 3278004224
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-292/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 5720719360
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-293/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 5848711168
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-296/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 7527960576
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-381/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 8273772544
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-382/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 6009176064
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-385/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 7090163712
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-401/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 8900612096
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-402/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 7310974976
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-408/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 5647347712
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-409/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 5020971008
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-410/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 3008905216
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-411/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 5360005120
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-413/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 5546393600
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-414/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 5514158080
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-415/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 5151338496
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-416/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 5123137536
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-417/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 9707024384
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-418/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 5619916800
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-500/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 5201936384
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-54-refused-nomem/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 200704
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-54-refused-nomem-2048/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 200704
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-600/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 2828763136
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-601/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 2599243776
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-602/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 2590605312
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-603/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 2612822016
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-604/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 2945216512
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-605/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 2825621504
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-61-refused-nomem/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 200704
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-610/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 1898041344
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-612/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 200704
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-613/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 2495680512
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-614/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 1467514880
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-615/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 1966485504
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-620/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 2495418368
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-621/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 1395236864
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-630/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 2470060032
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-631/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 2484154368
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-640/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 3195281408
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-641/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 2967265280
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-650/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 10427412480
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-67-refused-nomem/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 200704
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-vfio-1/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 22749184
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-vfio-10/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 112336896
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-vfio-2/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 61349888
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-vfio-3/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 200704
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-vfio-4/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 200704
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-vfio-5/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 113582080
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-vfio-6/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 112533504
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-vfio-7/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 111943680
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-vfio-8/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 113385472
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-vfio-9/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 112271360
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/broker-interactive/desktop.qcow2",
+      "parent": "/workspace/bench/guest.qcow2",
+      "allocated": 7010729984
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/codex-linux-desktop-0578a7ab8/desktop.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/broker-interactive/desktop.qcow2",
+      "allocated": 28712960
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/codex-linux-desktop-30c887c86/desktop.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/broker-interactive/desktop.qcow2",
+      "allocated": 33562624
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/codex-linux-desktop-4df9c0095/desktop.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/broker-interactive/desktop.qcow2",
+      "allocated": 29040640
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/codex-linux-desktop-4ec9f9a24/desktop.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/broker-interactive/desktop.qcow2",
+      "allocated": 27533312
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/codex-linux-desktop-6ff5aaf29/desktop.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/broker-interactive/desktop.qcow2",
+      "allocated": 28712960
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/codex-linux-desktop-a38602015/desktop.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/broker-interactive/desktop.qcow2",
+      "allocated": 29106176
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/codex-linux-desktop-b50774a7a/desktop.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/broker-interactive/desktop.qcow2",
+      "allocated": 32776192
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/codex-linux-desktop-d8afb1e3c/desktop.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/broker-interactive/desktop.qcow2",
+      "allocated": 27467776
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/codex-vfio-gl-20261011/disk/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 2411012096
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/codex-vfio-gravity-20261011/vfio/disk/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 3053522944
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/codex-vfio-ring-p0-20261012/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.aarch64.iso.qcow2",
+      "parent": null,
+      "allocated": 12288
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/codex-vfio-ring-p0-20261012/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.arm.iso.qcow2",
+      "parent": null,
+      "allocated": 12288
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/codex-vfio-ring-p0-20261012/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.i386.iso.qcow2",
+      "parent": null,
+      "allocated": 16384
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/codex-vfio-ring-p0-20261012/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.loongarch64.iso.qcow2",
+      "parent": null,
+      "allocated": 16384
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/codex-vfio-ring-p0-20261012/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.riscv64.iso.qcow2",
+      "parent": null,
+      "allocated": 20480
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/codex-vfio-ring-p0-20261012/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.x86_64.iso.qcow2",
+      "parent": null,
+      "allocated": 16384
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/codex-vfio-ring-p0-20261012/qemu-10.2.4/tests/lcitool/libvirt-ci/tests/data/install/image/images/in/cache/fedora-rawhide.qcow2",
+      "parent": null,
+      "allocated": 0
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/codex-vfio-ring-p0-20261012/qemu-10.2.4/tests/qemu-iotests/150.out.qcow2",
+      "parent": null,
+      "allocated": 4096
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/codex-vfio-ring-p0-20261012/qemu-10.2.4/tests/qemu-iotests/178.out.qcow2",
+      "parent": null,
+      "allocated": 8192
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/fixfs/qemu-src/tests/data/uefi-boot-images/bios-tables-test.aarch64.iso.qcow2",
+      "parent": null,
+      "allocated": 12288
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/fixfs/qemu-src/tests/data/uefi-boot-images/bios-tables-test.arm.iso.qcow2",
+      "parent": null,
+      "allocated": 12288
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/fixfs/qemu-src/tests/data/uefi-boot-images/bios-tables-test.i386.iso.qcow2",
+      "parent": null,
+      "allocated": 16384
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/fixfs/qemu-src/tests/data/uefi-boot-images/bios-tables-test.loongarch64.iso.qcow2",
+      "parent": null,
+      "allocated": 16384
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/fixfs/qemu-src/tests/data/uefi-boot-images/bios-tables-test.riscv64.iso.qcow2",
+      "parent": null,
+      "allocated": 20480
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/fixfs/qemu-src/tests/data/uefi-boot-images/bios-tables-test.x86_64.iso.qcow2",
+      "parent": null,
+      "allocated": 16384
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/fixfs/qemu-src/tests/lcitool/libvirt-ci/tests/data/install/image/images/in/cache/fedora-rawhide.qcow2",
+      "parent": null,
+      "allocated": 0
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/fixfs/qemu-src/tests/qemu-iotests/150.out.qcow2",
+      "parent": null,
+      "allocated": 4096
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/fixfs/qemu-src/tests/qemu-iotests/178.out.qcow2",
+      "parent": null,
+      "allocated": 8192
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/irqflood-qemu/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.aarch64.iso.qcow2",
+      "parent": null,
+      "allocated": 12288
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/irqflood-qemu/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.arm.iso.qcow2",
+      "parent": null,
+      "allocated": 12288
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/irqflood-qemu/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.i386.iso.qcow2",
+      "parent": null,
+      "allocated": 16384
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/irqflood-qemu/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.loongarch64.iso.qcow2",
+      "parent": null,
+      "allocated": 16384
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/irqflood-qemu/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.riscv64.iso.qcow2",
+      "parent": null,
+      "allocated": 20480
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/irqflood-qemu/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.x86_64.iso.qcow2",
+      "parent": null,
+      "allocated": 16384
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/irqflood-qemu/qemu-10.2.4/tests/lcitool/libvirt-ci/tests/data/install/image/images/in/cache/fedora-rawhide.qcow2",
+      "parent": null,
+      "allocated": 0
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/irqflood-qemu/qemu-10.2.4/tests/qemu-iotests/150.out.qcow2",
+      "parent": null,
+      "allocated": 4096
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/irqflood-qemu/qemu-10.2.4/tests/qemu-iotests/178.out.qcow2",
+      "parent": null,
+      "allocated": 8192
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/owner-state/manual1380/resume.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/boundary-kayfabe-1380/windows.qcow2",
+      "allocated": 200704
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/owner-state/windows-run501-owner-session.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 20360355840
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/perf-qemu/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.aarch64.iso.qcow2",
+      "parent": null,
+      "allocated": 12288
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/perf-qemu/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.arm.iso.qcow2",
+      "parent": null,
+      "allocated": 12288
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/perf-qemu/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.i386.iso.qcow2",
+      "parent": null,
+      "allocated": 16384
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/perf-qemu/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.loongarch64.iso.qcow2",
+      "parent": null,
+      "allocated": 16384
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/perf-qemu/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.riscv64.iso.qcow2",
+      "parent": null,
+      "allocated": 20480
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/perf-qemu/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.x86_64.iso.qcow2",
+      "parent": null,
+      "allocated": 16384
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/perf-qemu/qemu-10.2.4/tests/lcitool/libvirt-ci/tests/data/install/image/images/in/cache/fedora-rawhide.qcow2",
+      "parent": null,
+      "allocated": 0
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/perf-qemu/qemu-10.2.4/tests/qemu-iotests/150.out.qcow2",
+      "parent": null,
+      "allocated": 4096
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/perf-qemu/qemu-10.2.4/tests/qemu-iotests/178.out.qcow2",
+      "parent": null,
+      "allocated": 8192
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/probe-b/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 124133376
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/probe-c/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 113451008
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/probe-d/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 125902848
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/probe-e/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 12074278912
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/probe-f/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 111747072
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/probe-g/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 113057792
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/probe-h/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 112140288
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/probe-i/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 112861184
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/probe-j/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 254156800
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/probe-k/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 112271360
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/probe-l/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 237445120
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/probe-m/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 1111306240
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/probe-m-new/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 11732525056
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/probe-n/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 12429365248
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/probe-olut/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 11767234560
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.aarch64.iso.qcow2",
+      "parent": null,
+      "allocated": 12288
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.arm.iso.qcow2",
+      "parent": null,
+      "allocated": 12288
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.i386.iso.qcow2",
+      "parent": null,
+      "allocated": 16384
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.loongarch64.iso.qcow2",
+      "parent": null,
+      "allocated": 16384
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.riscv64.iso.qcow2",
+      "parent": null,
+      "allocated": 20480
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.x86_64.iso.qcow2",
+      "parent": null,
+      "allocated": 16384
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/qemu-10.2.4/tests/lcitool/libvirt-ci/tests/data/install/image/images/in/cache/fedora-rawhide.qcow2",
+      "parent": null,
+      "allocated": 0
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/qemu-10.2.4/tests/qemu-iotests/150.out.qcow2",
+      "parent": null,
+      "allocated": 4096
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/qemu-10.2.4/tests/qemu-iotests/178.out.qcow2",
+      "parent": null,
+      "allocated": 8192
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/readtrace/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.aarch64.iso.qcow2",
+      "parent": null,
+      "allocated": 12288
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/readtrace/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.arm.iso.qcow2",
+      "parent": null,
+      "allocated": 12288
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/readtrace/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.i386.iso.qcow2",
+      "parent": null,
+      "allocated": 16384
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/readtrace/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.loongarch64.iso.qcow2",
+      "parent": null,
+      "allocated": 16384
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/readtrace/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.riscv64.iso.qcow2",
+      "parent": null,
+      "allocated": 20480
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/readtrace/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.x86_64.iso.qcow2",
+      "parent": null,
+      "allocated": 16384
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/readtrace/qemu-10.2.4/tests/lcitool/libvirt-ci/tests/data/install/image/images/in/cache/fedora-rawhide.qcow2",
+      "parent": null,
+      "allocated": 0
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/readtrace/qemu-10.2.4/tests/qemu-iotests/150.out.qcow2",
+      "parent": null,
+      "allocated": 4096
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/readtrace/qemu-10.2.4/tests/qemu-iotests/178.out.qcow2",
+      "parent": null,
+      "allocated": 8192
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/val-qemu/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.aarch64.iso.qcow2",
+      "parent": null,
+      "allocated": 12288
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/val-qemu/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.arm.iso.qcow2",
+      "parent": null,
+      "allocated": 12288
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/val-qemu/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.i386.iso.qcow2",
+      "parent": null,
+      "allocated": 16384
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/val-qemu/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.loongarch64.iso.qcow2",
+      "parent": null,
+      "allocated": 16384
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/val-qemu/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.riscv64.iso.qcow2",
+      "parent": null,
+      "allocated": 20480
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/val-qemu/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.x86_64.iso.qcow2",
+      "parent": null,
+      "allocated": 16384
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/val-qemu/qemu-10.2.4/tests/lcitool/libvirt-ci/tests/data/install/image/images/in/cache/fedora-rawhide.qcow2",
+      "parent": null,
+      "allocated": 0
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/val-qemu/qemu-10.2.4/tests/qemu-iotests/150.out.qcow2",
+      "parent": null,
+      "allocated": 4096
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/val-qemu/qemu-10.2.4/tests/qemu-iotests/178.out.qcow2",
+      "parent": null,
+      "allocated": 8192
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/vfio-ablation-20261009/runs/session-20261009T141621/t1/disk/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 1793888256
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/vfio-ablation-20261009/runs/session-20261009T144023/probe2/disk/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 1912905728
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/vfio-ablation-20261009/runs/session-20261009T145159/idle1/disk/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 12970000384
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/vfio-ablation-20261009/src/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.aarch64.iso.qcow2",
+      "parent": null,
+      "allocated": 12288
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/vfio-ablation-20261009/src/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.arm.iso.qcow2",
+      "parent": null,
+      "allocated": 12288
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/vfio-ablation-20261009/src/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.i386.iso.qcow2",
+      "parent": null,
+      "allocated": 16384
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/vfio-ablation-20261009/src/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.loongarch64.iso.qcow2",
+      "parent": null,
+      "allocated": 16384
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/vfio-ablation-20261009/src/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.riscv64.iso.qcow2",
+      "parent": null,
+      "allocated": 20480
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/vfio-ablation-20261009/src/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.x86_64.iso.qcow2",
+      "parent": null,
+      "allocated": 16384
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/vfio-ablation-20261009/src/qemu-10.2.4/tests/lcitool/libvirt-ci/tests/data/install/image/images/in/cache/fedora-rawhide.qcow2",
+      "parent": null,
+      "allocated": 0
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/vfio-ablation-20261009/src/qemu-10.2.4/tests/qemu-iotests/150.out.qcow2",
+      "parent": null,
+      "allocated": 4096
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/vfio-ablation-20261009/src/qemu-10.2.4/tests/qemu-iotests/178.out.qcow2",
+      "parent": null,
+      "allocated": 8192
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/vfio-dvi-20261008/disk/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 2985398272
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/vfio-gl-20261011/disk/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 16702091264
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/win-qemu/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.aarch64.iso.qcow2",
+      "parent": null,
+      "allocated": 12288
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/win-qemu/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.arm.iso.qcow2",
+      "parent": null,
+      "allocated": 12288
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/win-qemu/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.i386.iso.qcow2",
+      "parent": null,
+      "allocated": 16384
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/win-qemu/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.loongarch64.iso.qcow2",
+      "parent": null,
+      "allocated": 16384
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/win-qemu/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.riscv64.iso.qcow2",
+      "parent": null,
+      "allocated": 20480
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/win-qemu/qemu-10.2.4/tests/data/uefi-boot-images/bios-tables-test.x86_64.iso.qcow2",
+      "parent": null,
+      "allocated": 16384
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/win-qemu/qemu-10.2.4/tests/lcitool/libvirt-ci/tests/data/install/image/images/in/cache/fedora-rawhide.qcow2",
+      "parent": null,
+      "allocated": 0
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/win-qemu/qemu-10.2.4/tests/qemu-iotests/150.out.qcow2",
+      "parent": null,
+      "allocated": 4096
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/win-qemu/qemu-10.2.4/tests/qemu-iotests/178.out.qcow2",
+      "parent": null,
+      "allocated": 8192
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/windows-desktop/windows.qcow2",
+      "parent": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+      "allocated": 13031571456
+    }
+  ]
+}

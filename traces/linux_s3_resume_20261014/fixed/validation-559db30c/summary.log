@@ -1,0 +1,22 @@
+VALIDATE_START rev=559db30c 2026-10-14T13:49:35+02:00
+UNIT rc=0 passed=3007 failed=0 0 failing-tests
+GATES rc=0 V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS V3_GATES_BIRTHS births=12 user=12 refused=0 ok=1 V3_GATES_EXIT pass=9 fail=0 births_ok=1 gate10=PASS 2026-10-14T13:50:40+02:00 
+CLIENT rc=0
+FG rc=1 build_fast_guest: no raw client at /data/kf-s3-host/target/release/kayfabe-rm-ladder (cargo build --release -p kayfabe-rm-ladder --bin kayfabe-rm-ladder)
+FAST rc=2 FAST_SUITE_PASS=0 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=30 ARMS=30 FAST_SUITE_RC=2 
+--timer                      NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+--engines                    NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+--doorbell-census            NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+--gpu-info-sweep             NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+--bus-info-sweep             NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+--concurrency                NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+--defer-liveness             NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+--blockage-coverage          NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+--alias-two-vas              NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+--alias-unmap-observe        NOTRUN    -s    no FAST_VERDICT line — a precondition refused before the arm ran
+VALIDATE_EXIT rev=559db30c 2026-10-14T13:55:42+02:00
+VALIDATE_START rev=559db30c 2026-10-14T13:55:48+02:00
+CLIENT rc=0
+FG rc=0 == kernel release: 7.0.0-34-generic
+FAST rc=0 FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30 FAST_SUITE_RC=0 
+VALIDATE_EXIT rev=559db30c 2026-10-14T14:15:19+02:00

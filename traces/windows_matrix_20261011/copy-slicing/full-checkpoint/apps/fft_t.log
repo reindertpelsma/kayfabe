@@ -1,0 +1,7 @@
+=== fft_t start=2026-10-11T13:29:53.4181182+00:00 host=VASTWIN session=0 boot=2026-10-11T13:24:26.5000000Z timeout=120
+KFDEV NVIDIA GeForce RTX 4070
+[eq] device NVIDIA GeForce RTX 4070 torch 2.8.0+cu126
+CHECK fft_forward ok relerr=3.00e-07
+CHECK fft_roundtrip ok relerr=3.53e-07
+WINEQ_DONE fft
+=== end rc=0 secs=3 2026-10-11T13:29:56.8427689+00:00

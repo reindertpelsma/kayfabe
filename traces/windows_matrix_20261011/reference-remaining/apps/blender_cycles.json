@@ -1,0 +1,69 @@
+{
+ "quiet": 6,
+ "end_utc": "2026-10-11T15:46:41.4059279Z",
+ "start_utc": "2026-10-11T15:46:21.4933008Z",
+ "rc": 0,
+ "secs": 20,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4090 status=OK code=0"
+ ],
+ "digests": [],
+ "session": 0,
+ "out_files": [
+  "C:\\kf\\out\\blender_cycles\\blender_CUDA.png 532612",
+  "C:\\kf\\out\\blender_cycles\\blender_OPTIX.png 532354"
+ ],
+ "boot_utc_start": "2026-10-11T14:31:59.5000000Z",
+ "log_tail": [
+  "=== blender_cycles start=2026-10-11T08:46:21.4933008-07:00 host=DESKTOP-JR70RMQ session=0 boot=2026-10-11T14:31:59.5000000Z timeout=900",
+  "Fra:1 Mem:51.03M (Peak 66.85M) | Time:00:01.18 | Mem:1039.15M, Peak:1039.15M | Scene, ViewLayer | Finished",
+  "Saved: 'C:\\kf\\out\\blender_cycles\\blender_CUDA.png'",
+  "BLENDER_OK CUDA gpu=NVIDIA GeForce RTX 4090 mean=0.6405",
+  "Fra:1 Mem:49.83M (Peak 65.65M) | Time:00:03.38 | Mem:1039.02M, Peak:1039.02M | Scene, ViewLayer | Finished",
+  "Saved: 'C:\\kf\\out\\blender_cycles\\blender_OPTIX.png'",
+  "BLENDER_OK OPTIX gpu=NVIDIA GeForce RTX 4090 mean=0.6405",
+  "=== end rc=0 secs=20 2026-10-11T08:46:41.4059279-07:00"
+ ],
+ "pdh": {
+  "pids": [
+   "2940",
+   "5788",
+   "2136",
+   "7856"
+  ],
+  "nv": {
+   "security": 0,
+   "3d": 0,
+   "vr": 0,
+   "videodecode": 0,
+   "copy": 0,
+   "ofa_0": 0,
+   "legacyoverlay": 0,
+   "videoencode": 0
+  },
+  "samples": 9,
+  "other": {},
+  "nvidia_luids": "0_5f8e"
+ },
+ "timed_out": false,
+ "token": "g1-blender_cycles-1791733553",
+ "boot_utc_end": "2026-10-11T14:31:59.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "blender_cycles",
+ "smi": {
+  "samples": 3,
+  "mem_used_base_mb": 163,
+  "util_max": 0,
+  "mem_used_max_mb": 163
+ }
+}

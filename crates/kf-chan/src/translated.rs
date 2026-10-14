@@ -163,8 +163,10 @@ pub struct CeState {
     /// inc A refuses by name — a [`REFUSED_METHODS`] write, a `SubDeviceMask` header, a GP control
     /// entry other than `NOP` and a family's extended base. ⊘ `false` (the default path until box
     /// step 1 shows the counts at 0 on each measured family): each is COUNTED in [`CeState::inca`]
-    /// and handled exactly as before inc A — forwarded, pushed raw, skipped. The device sets it from
-    /// `KF3_INCA_REFUSE=1` or `KF3_TSPACE=1` (T-mode refuses them in its own decoder regardless).
+    /// and handled exactly as before inc A — forwarded, pushed raw, skipped. ★ 2026-10-10
+    /// (`OWNER_RULINGS.md` §AB): kf3 always sets it (`KF3_INCA_REFUSE` and `KF3_TSPACE` are
+    /// deleted; T-mode refuses them in its own decoder regardless); `false` is reached only by
+    /// tests.
     pub strict: bool,
     /// ★ P1+P2 inc A, the count-only arm: what [`CeState::strict`] would have refused.
     pub inca: IncACounts,
@@ -510,6 +512,19 @@ pub enum Refusal {
         /// The method.
         method: u32,
     },
+    /// ★ 2026-10-14 — the VIDEO tier (`crate::vtables`): a method the video class's public header
+    /// names that the tier does not admit (codec work, a codec operand, a context or monitored-fence
+    /// address) — refused by name.
+    VideoMethod {
+        /// The channel's video class.
+        class: u32,
+        /// The subchannel.
+        subch: u32,
+        /// The method.
+        method: u32,
+        /// Its name in the class header.
+        name: &'static str,
+    },
     /// ★ T-mode (§3.2): a `LAUNCH_DMA` bit the tier's field table does not name, or a named field
     /// with a value the table refuses — never silently cleared.
     LaunchField {
@@ -666,6 +681,7 @@ impl Refusal {
             Refusal::SubDeviceMask { .. } => "subdevice_mask",
             Refusal::Unclassified { .. } => "unclassified",
             Refusal::NoCeObject { .. } => "no_ce_object",
+            Refusal::VideoMethod { .. } => "video_method",
             Refusal::LaunchField { .. } => "launch_field",
             Refusal::HostSemOp { .. } => "host_sem_op",
             Refusal::FieldValue { .. } => "field_value",

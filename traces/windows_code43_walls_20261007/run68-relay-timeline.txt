@@ -1,0 +1,100 @@
+kf3: VasKey(13970166077300801602) mirror space=0xcafe001d: windows=none rings=none (recycled)
+kf-rm: chanlink: CLASSIFY 0xc1e00007:0xbaba0045 kernel work -> Translated (an RM-internal client)
+kf3: VasKey(13970166077300801602) root 0xefba4000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13970166077300801602) root 0xefba4000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13970166077300801602) root 0xefba4000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13970166077300801602) root 0xefba4000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13970166077300801602) root 0xefba4000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13970166077300801602) root 0xefba4000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13970166078463016970) mirror space=0xcafe001d: windows=none rings=none (recycled)
+kf-rm: chanlink: CLASSIFY 0xc1e00008:0x2 kernel work -> Translated (an RM-internal client)
+kf3: DBCPL off=0xbb0090 value=0x10001 cpl=0 rip=0xfffff8007bcda1c9
+kf3: DBCPL off=0xbb0090 value=0x10001 cpl=0 rip=0xfffff8007bcda1c9
+kf3: VasKey(13965662457344034928) mirror space=0xcafe0019: windows=none rings=none (recycled)
+kf-rm: chanlink: CLASSIFY 0xc1d00013:0xff040000 kernel work -> Translated (no context share (the kernel driver's own channels declare none))
+kf-rm: chanlink: CLASSIFY 0xc1d00015:0xff040001 kernel work -> Translated (no context share (the kernel driver's own channels declare none))
+kf3: VasKey(13965662457344034928) root 0xefa61000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13965662457344034928) root 0xefa61000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13965662457344034928) root 0xefa61000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13965662457344034928) root 0xefa61000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13965662457344034928) root 0xefa61000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13965662457344034928) root 0xefa61000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13965662457344034896) mirror space=0xcafe0015: windows=none rings=none (recycled)
+kf3: VasKey(13965662457344034896) mirror space=0xcafe0015: windows=none rings=none (recycled)
+kf-rm: chanlink: CLASSIFY 0xc1d00016:0xff040002 kernel work -> Translated (no context share (the kernel driver's own channels declare none))
+kf-rm: chanlink: CLASSIFY 0xc1d00018:0xff040003 kernel work -> Translated (not a graphics or copy engine)
+kf-rm: chanlink: CLASSIFY 0xc1d00019:0xff040004 kernel work -> Translated (no context share (the kernel driver's own channels declare none))
+kf-rm: chanlink: CLASSIFY 0xc1d0001a:0xff040005 kernel work -> Translated (not a graphics or copy engine)
+kf-rm: chanlink: CLASSIFY 0xc1d0001b:0xff040006 kernel work -> Translated (not a graphics or copy engine)
+kf-rm: chanlink: CLASSIFY 0xc1d0001c:0xff040007 kernel work -> Translated (not a graphics or copy engine)
+kf-rm: chanlink: CLASSIFY 0xc1d0001d:0xff040008 kernel work -> Translated (not a graphics or copy engine)
+kf3: DBCPL off=0xbb0090 value=0x10002 cpl=0 rip=0xfffff8007c28ea3d
+kf3: DBCPL off=0xbb0090 value=0x3 cpl=0 rip=0xfffff8007c28ea3d
+kf3: VasKey(13965662577603119184) mirror space=0xcafe0015: windows=none rings=none (recycled)
+kf-rm: chanlink: CLASSIFY 0xc1d00020:0xff040009 kernel work -> Translated (no context share (the kernel driver's own channels declare none))
+kf3: VasKey(13965662590488021072) mirror space=0xcafe0062: windows=none rings=none (1237 us: vaspace 1234 ram_obj 0)
+kf-rm: chanlink: CLASSIFY 0xc1d00023:0xff04000a kernel work -> Translated (no context share (the kernel driver's own channels declare none))
+kf3: DBCPL off=0xbb0090 value=0x1000c cpl=0 rip=0xfffff8007c28ea3d
+kf-rm: chanlink: CLASSIFY 0xc1d00024:0xff04000b kernel work -> Translated (no context share (the kernel driver's own channels declare none))
+kf3: VasKey(13965662590488021072) root 0xefa38000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13965662590488021072) root 0xefa38000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13965662590488021072) root 0xefa38000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13965662590488021072) root 0xefa38000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13965662590488021072) root 0xefa38000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13965662590488021072) root 0xefa38000: 1 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: DBCPL off=0xbb0090 value=0xd cpl=0 rip=0xfffff8007c28ea3d
+kf3: DBCPL off=0xbb0090 value=0x1000c cpl=0 rip=0xfffff8007c28ea3d
+kf3: VasKey(13965662590488021072) root 0xefa38000: 5 privileged run(s) mirrored — a guest-kernel space or CPU window
+kf3: VasKey(13965662607667890256) mirror space=0xcafe0079: windows=none rings=none (1424 us: vaspace 1421 ram_obj 0)
+kf3: DBCPL off=0xbb0090 value=0x1000c cpl=0 rip=0xfffff8007c28dc5c
+kf3: DBCPL off=0xbb0090 value=0x1000c cpl=0 rip=0xfffff8007c28ea3d
+kf3: DBCPL off=0xbb0090 value=0x1000c cpl=0 rip=0xfffff8007c28dc5c
+kf3: DBCPL off=0xbb0090 value=0x1000c cpl=0 rip=0xfffff8007c28ea3d
+kf3: DBCPL off=0xbb0090 value=0x1000c cpl=0 rip=0xfffff8007c28dc5c
+kf3: DBCPL off=0xbb0090 value=0x1000c cpl=0 rip=0xfffff8007c28ea3d
+kf-rm: chanlink: CLASSIFY 0xc1d00027:0xff04000c USER WORK -> Passthrough (subcontext and a process other than the kernel driver's)
+kf3: act birth passthrough: chan 0xc1d00027:0xff04000c BORN Passthrough: token 0xe -> host 0x44 in VasKey(13965662607667890256) gpfifo=0x1200c4000x32768 userd=Ram { ram: 3405643793, off: 8479801344 } engine=0x1 declared_kernel_pid=false PRIVILEGE=KERNEL WINDOWS-USER-WORK (§V, ProcessID/subcontext) rc=none fast=off (USERD relay: doorbells go to a worker) (1708 us, off the GSP lock)
+kf3: chan 0xc1d00027:0xff04000c: NV50_DEFERRED_API 0xff1fe010 ADMITTED as a guest-graph object on a Windows user-work Passthrough twin (never triggered by kayfabe; §V)
+kf3: act engine object: 0xc1d00027:0xff1fe034 class 0xc7b5 (DmaCopy) on twin host 0x44 -> host object 0xcafe0081 (204 us, off the GSP lock)
+kf3: VasKey(13965662607667890256) root 0xefa26000: 1 privileged run(s) (0x10000 bytes) withheld — a user twin
+kf3: VasKey(13965662607667890256) root 0xefa26000: 2 privileged run(s) (0x12d000 bytes) withheld — a user twin
+kf3: VasKey(13965662607667890256) root 0xefa26000: 2 privileged run(s) (0x12d000 bytes) withheld — a user twin
+kf3: VasKey(13965662607667890256) root 0xefa26000: 2 privileged run(s) (0x12d000 bytes) withheld — a user twin
+kf3: act promote ctx: chan 0xc1d00027:0xff04000c GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x44 (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=4 init_ids=0x5 va_ids=0xa05 bound=true — not forwarded, no guest byte touched (3 us, off the GSP lock)
+kf3: act engine object: 0xc1d00027:0xff1fe01a class 0xa140 (InlineToMemory) on twin host 0x44 -> host object 0xcafe0082 (1095 us, off the GSP lock)
+kf3: VasKey(13965662607667890256) root 0xefa26000: 3 privileged run(s) (0x130000 bytes) withheld — a user twin
+kf3: VasKey(13965662607667890256) root 0xefa26000: 4 privileged run(s) (0x2720000 bytes) withheld — a user twin
+kf3: VasKey(13965662607667890256) root 0xefa26000: 5 privileged run(s) (0x2740000 bytes) withheld — a user twin
+kf3: VasKey(13965662607667890256) root 0xefa26000: 5 privileged run(s) (0x27c0000 bytes) withheld — a user twin
+kf3: act promote ctx: chan 0xc1d00027:0xff04000c GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x44 (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=4 init_ids=0x0 va_ids=0x78 bound=true — not forwarded, no guest byte touched (1 us, off the GSP lock)
+kf3: act engine object: 0xc1d00027:0xff1fe02c class 0x902d (TwoD) on twin host 0x44 -> host object 0xcafe0083 (553 us, off the GSP lock)
+kf3: act engine object: 0xc1d00027:0xff1fe026 class 0xc997 (ThreeD) on twin host 0x44 -> host object 0xcafe0084 (467 us, off the GSP lock)
+kf3: act engine object: 0xc1d00027:0xff1fe032 class 0xc9c0 (Compute) on twin host 0x44 -> host object 0xcafe0085 (463 us, off the GSP lock)
+kf3: VasKey(13965662607667890256) root 0xefa26000: 5 privileged run(s) (0x27c0000 bytes) withheld — a user twin
+kf3: display: the guest armed its first head at +25012 ms — the boot layer is retired after 639 boot frame(s)
+kf3: display: head 0 ACTIVE raster 2200x1125 period 16666666 ns (raster 16666666 ns, cap 75 Hz)
+kf3: DBCPL off=0xbb0090 value=0x1000c cpl=0 rip=0xfffff8007c28dc5c
+kf3: DBCPL off=0xbb0090 value=0x1000c cpl=0 rip=0xfffff8007c28ea3d
+kf3: DBCPL off=0xbb0090 value=0x1000c cpl=0 rip=0xfffff8007c28dc5c
+kf3: DBCPL off=0xbb0090 value=0x1000c cpl=0 rip=0xfffff8007c28ea3d
+kf3: DBCPL off=0xbb0090 value=0x1000c cpl=0 rip=0xfffff8007c28dc5c
+kf3: DBCPL off=0xbb0090 value=0x1000c cpl=0 rip=0xfffff8007c28ea3d
+kf3: VasKey(13965662607667890256) root 0xefa26000: 5 privileged run(s) (0x27c0000 bytes) withheld — a user twin
+kf3: VasKey(13965662607667890256) root 0xefa26000: 5 privileged run(s) (0x27c0000 bytes) withheld — a user twin
+kf3: DBCPL off=0xbb0090 value=0x1000c cpl=0 rip=0xfffff8007c28dc5c
+kf3: DBCPL off=0xbb0090 value=0x1000c cpl=0 rip=0xfffff8007c28ea3d
+kf3: DBCPL off=0xbb0090 value=0x1000c cpl=0 rip=0xfffff8007c28dc5c
+kf3: DBCPL off=0xbb0090 value=0x1000c cpl=0 rip=0xfffff8007c28ea3d
+kf3: maplog t=243139.736284 NSI host CE2 wake #kf3: DBCPL off=0xbb0090 value=0x1000c cpl=0 rip=0xfffff8007c28dc5c
+kf3: maplog t=243139kf3: DBCPL off=0xbb0090 value=0x1000c cpl=0 rip=0xfffff8007c28ea3d
+kf3: DBCPL off=0xbb0090 value=0x1000c cpl=0 rip=0xfffff8007c28dc5c
+kf3: DBCPL off=0xbb0090 value=0x1000c cpl=0 rip=0xfffff8007c28ea3d
+kf3: DBCPL off=0xbb0090 value=0x1000c cpl=0 rip=0xfffff8007c28dc5c
+kf3: maplog t=243139.736902kf3: DBCPL off=0xbb0090 value=0x1000c cpl=0 rip=0xfffff8007c28ea3d
+kf3: VasKey(13965662607667890256) root 0xefa26000: 5 privileged run(s) (0x27c0000 bytes) withheld — a user twin
+kf3: VasKey(13965662607667890256) root 0xefa26000: 10 privileged run(s) (0x4f80000 bytes) withheld — a user twin
+kf3: DBCPL off=0xbb0090 value=0xe cpl=0 rip=0xfffff8007c28dc5c
+kf3: DBCPL off=0xbb0090 value=0xe cpl=0 rip=0xfffff8007c28dc5c
+kf3: DBCPL off=0xbb0090 value=0xe cpl=0 rip=0xfffff8007c28dc5c
+kf3: chan token 0xe (host 0x44) USERD relay: GP_PUT 0x3 forwarded and rung (#1) — no GP entry or push-buffer word read
+kf3: chan token 0xe (host 0x44) USERD relay released: forwarded=1 refused=0 gets=2 last_put=3 guest[GP_PUT=Some(3) GP_GET=Some(1)] host[GP_PUT=Some(3) GP_GET=Some(1)]

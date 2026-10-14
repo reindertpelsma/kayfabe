@@ -1,0 +1,8 @@
+{
+  "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-1320/qemu.log",
+  "sha256": "4209d899b50f47c442b69884f1d878311bab22ce096002a0e25ab1e08c04cbd7",
+  "bytes": 3561380,
+  "filter": "exclude periodic family summaries; KERNEL+UVM_OWNED OR SyncWait OR token0x82c OR REFUSED-AND-POISONED",
+  "matched_lines": 21,
+  "product": "72741e2bf6f8ede05e830d9b1267202f070f4542"
+}

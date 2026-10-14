@@ -1,0 +1,44 @@
+Source boundary-kayfabe-1288/qemu.log, product72741e2b. Snapshot UTC=2026-10-11T18:21:50.206914+00:00
+Filtered phase/hardware-channel records; no method identified.
+244: kf3: GSP phase Cold -> ProtectedRegionUp
+644: kf3: GSP phase ProtectedRegionUp -> Booted
+648: kf3: GSP phase Booted -> Running
+7804: kf3: act birth passthrough: chan 0xc1d0007a:0xff040025 BORN Passthrough: token 0x27 -> host 0x4e in VasKey(13965662942675339344) gpfifo=0x6b20000x32768 userd=Ram { ram: 3405643793, off: 8478042112 } engine=0x1 declared_kernel_pid=false PRIVILEGE=KERNEL WINDOWS-USER-WORK (§V, ProcessID/subcontext) rc=none late_joiner_schedule=Some(GuestNotScheduled) fast=off (USERD relay: doorbells go to a worker) (1926 us, off the GSP lock)
+7808: kf3: act deferred-API twin object: EXPERIMENT KF3_WIN_TWIN_DEFAPI_OBJECT: 0xc1d0007a:0xff1fe010 NV50_DEFERRED_API on Windows user-work twin host 0x4e -> host object 0xcafe0617 (authored, no params, NOTHING registered: a 0x200 on it fails closed) (217 us, off the GSP lock)
+7812: kf3: act engine object: 0xc1d0007a:0xff1fe034 class 0xc7b5 (DmaCopy) on twin host 0x4e -> host object 0xcafe0618 (214 us, off the GSP lock)
+7820: kf3: act promote ctx: chan 0xc1d0007a:0xff040025 GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x4e (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=3 init_ids=0x4 va_ids=0xa04 bound=true — not forwarded, no guest byte touched (3 us, off the GSP lock)
+7824: kf3: act engine object: 0xc1d0007a:0xff1fe01a class 0xa140 (InlineToMemory) on twin host 0x4e -> host object 0xcafe0619 (1088 us, off the GSP lock)
+7832: kf3: act promote ctx: chan 0xc1d0007a:0xff040025 GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x4e (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=4 init_ids=0x0 va_ids=0x78 bound=true — not forwarded, no guest byte touched (1 us, off the GSP lock)
+7836: kf3: act engine object: 0xc1d0007a:0xff1fe02c class 0x902d (TwoD) on twin host 0x4e -> host object 0xcafe061a (824 us, off the GSP lock)
+7843: kf3: act engine object: 0xc1d0007a:0xff1fe026 class 0xc997 (ThreeD) on twin host 0x4e -> host object 0xcafe061b (479 us, off the GSP lock)
+7850: kf3: act engine object: 0xc1d0007a:0xff1fe032 class 0xc9c0 (Compute) on twin host 0x4e -> host object 0xcafe061c (527 us, off the GSP lock)
+7930: kf3: chan token 0x27 (host 0x4e) USERD relay: GP_PUT 0x10 forwarded and rung (#1) — no GP entry or push-buffer word read
+7994: kf3: chan token 0x27 (host 0x4e) USERD relay: GP_PUT 0x20 forwarded and rung (#2) — no GP entry or push-buffer word read
+8017: kf3: chan token 0x27 (host 0x4e) USERD relay: GP_PUT 0x32 forwarded and rung (#3) — no GP entry or push-buffer word read
+8249: kf3: chan token 0x27 (host 0x4e) USERD relay: GP_PUT 0x42 forwarded and rung (#4) — no GP entry or push-buffer word read
+8255: kf3: chan token 0x27 (host 0x4e) USERD relay: GP_PUT 0x54 forwarded and rung (#5) — no GP entry or push-buffer word read
+8324: kf3: chan token 0x27 (host 0x4e) USERD relay: GP_PUT 0x7a forwarded and rung (#6) — no GP entry or push-buffer word read
+8326: kf3: chan token 0x27 (host 0x4e) USERD relay: GP_PUT 0x7b forwarded and rung (#7) — no GP entry or push-buffer word read
+8330: kf3: chan token 0x27 (host 0x4e) USERD relay: GP_PUT 0x99 forwarded and rung (#8) — no GP entry or push-buffer word read
+8332: kf3: chan token 0x27 (host 0x4e) USERD relay: GP_PUT 0x114 forwarded and rung (#16) — no GP entry or push-buffer word read
+8416: kf3: chan token 0x27 (host 0x4e) USERD relay: GP_PUT 0x20b forwarded and rung (#32) — no GP entry or push-buffer word read
+8427: kf3: chan token 0x27 (host 0x4e) USERD relay: GP_PUT 0x3cf forwarded and rung (#64) — no GP entry or push-buffer word read
+8438: kf3: chan token 0x27 (host 0x4e) USERD relay: GP_PUT 0x26ff forwarded and rung (#128) — no GP entry or push-buffer word read
+8440: kf3: chan token 0x27 (host 0x4e) USERD relay: GP_PUT 0x1fd5 forwarded and rung (#256) — no GP entry or push-buffer word read
+8445: kf3: chan token 0x27 (host 0x4e) USERD relay: GP_PUT 0x1165 forwarded and rung (#512) — no GP entry or push-buffer word read
+8447: kf3: chan token 0x27 (host 0x4e) USERD relay: GP_PUT 0x74a6 forwarded and rung (#1024) — no GP entry or push-buffer word read
+8453: kf3: chan token 0x27 (host 0x4e) USERD relay: GP_PUT 0x39fd forwarded and rung (#2048) — no GP entry or push-buffer word read
+8527: kf3: chan token 0x27 (host 0x4e) USERD relay: GP_PUT 0x3be7 forwarded and rung (#4096) — no GP entry or push-buffer word read
+8553: kf3: chan token 0x27 (host 0x4e) USERD relay: GP_PUT 0x3be7 forwarded and rung (#8192) — no GP entry or push-buffer word read
+8653: kf3: chan token 0x27 (host 0x4e) USERD relay: GP_PUT 0x3be7 forwarded and rung (#16384) — no GP entry or push-buffer word read
+8839: kf3: chan token 0x27 (host 0x4e) USERD relay: GP_PUT 0x3be7 forwarded and rung (#32768) — no GP entry or push-buffer word read
+10194: kf3: chan token 0x27 (host 0x4e) USERD relay released: forwarded=59604 refused=0 gets=59610 last_put=868 guest[GP_PUT=Some(364) GP_GET=Some(364)] host[GP_PUT=Some(364) GP_GET=Some(364)]
+10196: kf3: act free: 0xc1d0007a:0xff040025: passthrough 0xc1d0007a:0xff040025 token 0x27 host 0x4e objects=0 ctx=CtxBind { initialized: 4, va_bound: 2684, bound: true, promotes: 4, evicts: 0 } freed (1286 us, off the GSP lock)
+10688: kf3: mem t=183.566s the guest wrote NV_PBUS_BAR1_BLOCK = 0x0 (MODE PHYSICAL) at GSP phase Running
+10710: kf3: GSP phase Running -> Suspending
+10712: kf3: GSP phase Suspending -> Halted
+10717: kf3: GSP phase Halted -> ProtectedRegionUp
+10723: kf3: GSP phase ProtectedRegionUp -> Booted
+10727: kf3: GSP phase Booted -> Running
+
+sha256 of uncompressed saved snapshot=1435e061b00d139ce56218332cf457537bdff49472272a2d06801efc8d4c2743

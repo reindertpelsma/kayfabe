@@ -1,0 +1,13 @@
+kf-host: host tier: stock
+DEFERRED_UPDATE driver=595.91.07 mode=migrate
+kf-host: channel birth h=0xcafe0008 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+DEFERRED_UPDATE_REGISTRATION_CALLER Uid:	0	0	0	0; CapEff:	000001ffffffffff
+DEFERRED_MIGRATION_PREPARED memory=0xcafe0006 mapped_va=0x120000000 bytes=65536 old_gp=0x1000/32 old_userd=0x2000 new_gp=0x5000/64 new_userd=0x6000 replacement_put=2; registration OK; distinct marker only in replacement PB; no CPU completion
+DEFERRED_UPDATE registered channel=Channel { tsg: cafe0007, chan: cafe0008, token: 4, born_user: Some(BirthPrivilege { reply_flags: 80 }) } object=0xcafe0009 api=0xcafe000a sw_class_id=0x1 privilege=USER
+DEFERRED_UPDATE GPU_TAIL fence=1 trigger=true elapsed_us=1064
+DEFERRED_MIGRATION_MATCHED_STIMULUS post_tail_doorbells=128 interval_ms=1 trigger=true
+DEFERRED_MIGRATION_NATIVE_EFFECT marker=2 new_get=2 new_put=2 post_tail_doorbells=128 elapsed_us=136021
+DEFERRED_UPDATE_HOLD_BEGIN unix_us=1791847095741039
+DEFERRED_UPDATE_HOLD_END unix_us=1791847097741180
+DEFERRED_UPDATE_CLEANUP channel=Ok(Some(())) view=Ok(()) unmap=Ok(()) memory=Ok(())
+DEFERRED_UPDATE_PROBE=PASS

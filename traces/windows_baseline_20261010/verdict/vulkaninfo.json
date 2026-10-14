@@ -1,0 +1,12 @@
+{
+ "verdict": "PASS",
+ "rc": 0,
+ "secs": 4,
+ "quiet": 1,
+ "note": "warn:WARNING: [Loader Message] Code 0 : windows_read_data_files_in_registry: Registry lookup failed to get layer manifest files.",
+ "proof": "out",
+ "tdr": 0,
+ "wer": 0,
+ "rebooted": false,
+ "run": "t1a"
+}

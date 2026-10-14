@@ -1,0 +1,63 @@
+{
+ "quiet": 1,
+ "end_utc": "2026-10-11T16:39:27.9353743Z",
+ "start_utc": "2026-10-11T16:39:07.8346866Z",
+ "rc": 0,
+ "secs": 20,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4090 status=OK code=0"
+ ],
+ "digests": [],
+ "session": 1,
+ "out_files": [],
+ "boot_utc_start": "2026-10-11T14:31:59.5000000Z",
+ "log_tail": [
+  "=== gputest_fur start=2026-10-11T09:39:07.8346866-07:00 host=DESKTOP-JR70RMQ session=1 boot=2026-10-11T14:31:59.5000000Z timeout=100",
+  "KFWAIT gputest_fur EXITED rc=0",
+  "GPUTEST 2026/10/11@09:39:10(0000000002) < > GpuTest: Cross Platform Graphics Benchmark Utility",
+  "GPUTEST 2026/10/11@09:39:11(0000000027) < > FurMark - OpenGL - Renderer model: NVIDIA GeForce RTX 4090/PCIe/SSE2",
+  "GPUTEST 2026/10/11@09:39:25(0000000032) < > [Benchmark_Score] - module: FurMark - Score: 6190 points (1028x720 windowed, duration:10000 ms).",
+  "=== end rc=0 secs=20 2026-10-11T09:39:27.9353743-07:00"
+ ],
+ "pdh": {
+  "pids": [
+   "4968",
+   "6680",
+   "6000"
+  ],
+  "nv": {
+   "security": 0,
+   "3d": 22.325184243197548,
+   "vr": 0,
+   "videodecode": 0,
+   "copy": 0,
+   "ofa_0": 0,
+   "legacyoverlay": 0,
+   "videoencode": 0
+  },
+  "samples": 9,
+  "other": {},
+  "nvidia_luids": "0_5f8e"
+ },
+ "timed_out": false,
+ "token": "g1-gputest_fur-1791736729",
+ "boot_utc_end": "2026-10-11T14:31:59.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "gputest_fur",
+ "smi": {
+  "samples": 4,
+  "mem_used_base_mb": 170,
+  "util_max": 45,
+  "mem_used_max_mb": 219
+ }
+}

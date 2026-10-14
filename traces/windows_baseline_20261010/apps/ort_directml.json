@@ -1,0 +1,56 @@
+{
+ "quiet": 2,
+ "end_utc": "2026-10-10T15:23:08.3043452Z",
+ "start_utc": "2026-10-10T15:22:59.1263589Z",
+ "rc": 0,
+ "secs": 9,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4060 Ti status=OK code=0"
+ ],
+ "digests": [],
+ "session": 0,
+ "out_files": [],
+ "boot_utc_start": "2026-10-10T13:30:47.5000000Z",
+ "log_tail": [
+  "=== ort_directml start=2026-10-10T08:22:59.1263589-07:00 host=DESKTOP-397P3NI session=0 boot=2026-10-10T13:30:47.5000000Z timeout=240",
+  "ORT_PROVIDERS ['DmlExecutionProvider', 'CPUExecutionProvider']",
+  "ORT_DML_DEVICE index 0 of [(0, 'NVIDIA GeForce RTX 4060 Ti'), (1, 'Microsoft Basic Render Driver')]",
+  "ORT_SESSION_PROVIDERS ['DmlExecutionProvider', 'CPUExecutionProvider']",
+  "CHECK dml_provider_active ok",
+  "CHECK dml_matches_cpu ok",
+  "ORT_DML_DONE",
+  "=== end rc=0 secs=9 2026-10-10T08:23:08.3043452-07:00"
+ ],
+ "pdh": {
+  "pids": [
+   "4128",
+   "7948",
+   "5312"
+  ],
+  "nv": {},
+  "samples": 4,
+  "other": {},
+  "nvidia_luids": "0_5ecc"
+ },
+ "timed_out": false,
+ "token": "g1-ort_directml-1791645765",
+ "boot_utc_end": "2026-10-10T13:30:47.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "ort_directml",
+ "smi": {
+  "samples": 2,
+  "mem_used_base_mb": 131,
+  "util_max": 0,
+  "mem_used_max_mb": 131
+ }
+}

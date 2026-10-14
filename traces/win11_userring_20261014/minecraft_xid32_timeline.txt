@@ -1,0 +1,40 @@
+== qemu-2990-e821-full.log
+164953:kf3: USER_RING_MIGRATED 0xc1d000af:0xff040023 source=0xd160000x65536 generation=2; private native ring/USERD unchanged; no host migration verb
+165016:kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x906f0102 client=0xc1d000af object=0xff040023 result=none
+165019:kf3: GSP REFUSED fn76/0x906f0102=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+165020:kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x906f0102 client=0xc1d000af object=0xff040023 result=none
+165023:kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x906f0102 client=0xc1d000af object=0xff040023 result=none
+165026:kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x906f0102 client=0xc1d000af object=0xff040023 result=none
+165469:kf3: family=Ada phase=Running trapped=2802801 applied=79021 refused=0 serviced=78150 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81410 mem[inval=5103 walks=14477/14477 cleared=5103 superseded=0 named_missed=0 unreconciled=0 absent_cleared=23 mapped=29198 unmapped=23627 clipped=
+167292:kf3: GSP phase Running -> Suspending
+169300:kf3: family=Ada phase=Running trapped=2863081 applied=81320 refused=0 serviced=79506 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb830b0 mem[inval=7991 walks=17231/17232 cleared=7990 superseded=0 named_missed=155 unreconciled=0 absent_cleared=26 mapped=30155 unmapped=24533 clippe
+169865:kf3: family=Ada phase=Running trapped=2871323 applied=81489 refused=0 serviced=79673 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81608 mem[inval=8207 walks=17595/17595 cleared=8207 superseded=0 named_missed=155 unreconciled=0 absent_cleared=26 mapped=30674 unmapped=24663 clippe
+169867:kf3: family=Ada phase=Running trapped=2871335 applied=81489 refused=0 serviced=79673 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81608 mem[inval=8207 walks=17595/17595 cleared=8207 superseded=0 named_missed=155 unreconciled=0 absent_cleared=26 mapped=30674 unmapped=24663 clippe
+171374:kf3: family=Ada phase=Running trapped=2897816 applied=81964 refused=0 serviced=80132 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110c00 mem[inval=8499 walks=18704/18705 cleared=8499 superseded=0 named_missed=155 unreconciled=0 absent_cleared=26 mapped=56636 unmapped=32697 clippe
+rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0]
+== qemu-2990-d86f-full.log
+45617:kf3: USER_RING_MIGRATED 0xc1d00093:0xff040023 source=0xd360000x65536 generation=2; private native ring/USERD unchanged; no host migration verb
+51332:kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x906f0102 client=0xc1d00093 object=0xff040023 result=none
+51335:kf3: GSP REFUSED fn76/0x906f0102=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+51336:kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x906f0102 client=0xc1d00093 object=0xff040023 result=none
+51339:kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x906f0102 client=0xc1d00093 object=0xff040023 result=none
+51342:kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x906f0102 client=0xc1d00093 object=0xff040023 result=none
+53830:kf3: GSP phase Running -> Suspending
+54131:kf3: family=Ada phase=Running trapped=1462199 applied=25002 refused=0 serviced=23116 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb830b0 mem[inval=5379 walks=12571/12571 cleared=5379 superseded=0 named_missed=155 unreconciled=0 absent_cleared=12 mapped=22931 unmapped=16165 clipped
+56436:kf3: family=Ada phase=Running trapped=1514028 applied=25764 refused=0 serviced=23876 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81608 mem[inval=7778 walks=15045/15045 cleared=7778 superseded=0 named_missed=155 unreconciled=0 absent_cleared=12 mapped=23644 unmapped=16417 clipped
+56831:kf3: family=Ada phase=Running trapped=1521272 applied=25884 refused=0 serviced=23988 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81608 mem[inval=7881 walks=15369/15370 cleared=7881 superseded=0 named_missed=155 unreconciled=0 absent_cleared=12 mapped=32464 unmapped=16567 clipped
+58434:kf3: family=Ada phase=Running trapped=1573226 applied=26405 refused=0 serviced=24483 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x110c00 mem[inval=8181 walks=17268/17268 cleared=8181 superseded=0 named_missed=155 unreconciled=0 absent_cleared=12 mapped=55245 unmapped=29821 clipped
+59064:kf3: family=Ada phase=Running trapped=1608990 applied=26613 refused=0 serviced=24691 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x690000 mem[inval=8263 walks=18374/18374 cleared=8263 superseded=0 named_missed=155 unreconciled=0 absent_cleared=12 mapped=69593 unmapped=41611 clipped
+rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0]
+== marks (host time -> qemu.log line)
+marks-2990-e821.log:14:GEARS_END/MC_START host=16:58:41.886 lines=12441
+marks-2990-e821.log:82:MC2_NOVSYNC_START host=17:04:05.600 lines=161837
+marks-2990-e821.log:89:17:04:40.388 lines=165004
+marks-2990-e821.log:90:17:04:45.424 lines=167567
+marks-2990-d86f.log:31:MC5_START host=17:37:27.375 lines=42439
+marks-2990-d86f.log:49:MC5_SP host=17:38:52.147 lines=48737
+marks-2990-d86f.log:53:17:39:11.378 lines=50041
+marks-2990-d86f.log:54:MC5_WORLD host=17:39:12.944 lines=50770
+marks-2990-d86f.log:55:17:39:16.410 lines=51248
+marks-2990-d86f.log:56:17:39:21.441 lines=53834
+marks-2990-d86f.log:57:17:39:26.470 lines=57570

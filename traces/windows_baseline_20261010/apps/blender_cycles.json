@@ -1,0 +1,69 @@
+{
+ "quiet": 0,
+ "end_utc": "2026-10-10T13:51:26.6839390Z",
+ "start_utc": "2026-10-10T13:50:52.6493147Z",
+ "rc": 0,
+ "secs": 34,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4060 Ti status=OK code=0"
+ ],
+ "digests": [],
+ "session": 0,
+ "out_files": [
+  "C:\\kf\\out\\blender_cycles\\blender_CUDA.png 532554",
+  "C:\\kf\\out\\blender_cycles\\blender_OPTIX.png 532513"
+ ],
+ "boot_utc_start": "2026-10-10T13:30:47.5000000Z",
+ "log_tail": [
+  "=== blender_cycles start=2026-10-10T06:50:52.6493147-07:00 host=DESKTOP-397P3NI session=0 boot=2026-10-10T13:30:47.5000000Z timeout=900",
+  "Fra:1 Mem:43.03M (Peak 58.85M) | Time:00:02.68 | Mem:359.14M, Peak:359.14M | Scene, ViewLayer | Finished",
+  "Saved: 'C:\\kf\\out\\blender_cycles\\blender_CUDA.png'",
+  "BLENDER_OK CUDA gpu=NVIDIA GeForce RTX 4060 Ti mean=0.6405",
+  "Fra:1 Mem:41.83M (Peak 57.65M) | Time:00:07.31 | Mem:359.02M, Peak:359.02M | Scene, ViewLayer | Finished",
+  "Saved: 'C:\\kf\\out\\blender_cycles\\blender_OPTIX.png'",
+  "BLENDER_OK OPTIX gpu=NVIDIA GeForce RTX 4060 Ti mean=0.6405",
+  "=== end rc=0 secs=34 2026-10-10T06:51:26.6839390-07:00"
+ ],
+ "pdh": {
+  "pids": [
+   "5060",
+   "3412",
+   "5532",
+   "1588"
+  ],
+  "nv": {
+   "security": 0,
+   "3d": 0,
+   "vr": 0,
+   "videodecode": 0,
+   "copy": 0,
+   "ofa_0": 0,
+   "legacyoverlay": 0,
+   "videoencode": 0
+  },
+  "samples": 15,
+  "other": {},
+  "nvidia_luids": "0_5ecc"
+ },
+ "timed_out": false,
+ "token": "g1-blender_cycles-1791640228",
+ "boot_utc_end": "2026-10-10T13:30:47.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "blender_cycles",
+ "smi": {
+  "samples": 6,
+  "mem_used_base_mb": 122,
+  "util_max": 34,
+  "mem_used_max_mb": 951
+ }
+}

@@ -1,0 +1,5 @@
+=== stream_default_t start=2026-10-10T08:29:14.2712804-07:00 host=DESKTOP-397P3NI session=0 boot=2026-10-10T13:30:47.5000000Z timeout=120
+[eq] device NVIDIA GeForce RTX 4060 Ti torch 2.8.0+cu126
+CHECK stream_default ok
+STREAM_PROBE_DONE default rc=0
+=== end rc=0 secs=7 2026-10-10T08:29:20.8585631-07:00

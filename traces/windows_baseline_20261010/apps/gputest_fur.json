@@ -1,0 +1,63 @@
+{
+ "quiet": 1,
+ "end_utc": "2026-10-10T14:43:54.3639262Z",
+ "start_utc": "2026-10-10T14:43:33.7548111Z",
+ "rc": 0,
+ "secs": 21,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4060 Ti status=OK code=0"
+ ],
+ "digests": [],
+ "session": 1,
+ "out_files": [],
+ "boot_utc_start": "2026-10-10T13:30:47.5000000Z",
+ "log_tail": [
+  "=== gputest_fur start=2026-10-10T07:43:33.7548111-07:00 host=DESKTOP-397P3NI session=1 boot=2026-10-10T13:30:47.5000000Z timeout=100",
+  "KFWAIT gputest_fur EXITED rc=0",
+  "GPUTEST 2026/10/10@07:43:36(0000000002) < > GpuTest: Cross Platform Graphics Benchmark Utility",
+  "GPUTEST 2026/10/10@07:43:37(0000000027) < > FurMark - OpenGL - Renderer model: NVIDIA GeForce RTX 4060 Ti/PCIe/SSE2",
+  "GPUTEST 2026/10/10@07:43:51(0000000032) < > [Benchmark_Score] - module: FurMark - Score: 5297 points (1028x720 windowed, duration:10000 ms).",
+  "=== end rc=0 secs=21 2026-10-10T07:43:54.3639262-07:00"
+ ],
+ "pdh": {
+  "pids": [
+   "9456",
+   "8412",
+   "8444"
+  ],
+  "nv": {
+   "security": 0,
+   "3d": 49.04902253991229,
+   "vr": 0,
+   "videodecode": 0,
+   "copy": 0,
+   "ofa_0": 0,
+   "legacyoverlay": 0,
+   "videoencode": 0
+  },
+  "samples": 9,
+  "other": {},
+  "nvidia_luids": "0_5ecc"
+ },
+ "timed_out": false,
+ "token": "g1-gputest_fur-1791643395",
+ "boot_utc_end": "2026-10-10T13:30:47.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "gputest_fur",
+ "smi": {
+  "samples": 4,
+  "mem_used_base_mb": 131,
+  "util_max": 68,
+  "mem_used_max_mb": 176
+ }
+}

@@ -1,0 +1,17 @@
+SCH build 26100
+SCH reg GraphicsDrivers\HwSchMode = absent
+SCH reg GraphicsDrivers\HwSchModeApplicationOverride = absent
+SCH reg GraphicsDrivers\TdrLevel = absent
+SCH reg GraphicsDrivers\TdrDelay = absent
+SCH reg GraphicsDrivers\DisableUserModeSubmission = absent
+SCH reg GraphicsDrivers\EnableUserModeSubmission = absent
+SCH reg GraphicsDrivers\UserModeSubmission = absent
+SCH key FeatureSetUsage :: AdapterMPO_3=1; WddmVersion_Max=3200; WddmVersion_Min=3200; DisplayMultiMon=1
+SCH nvkey 0001 HwSchMode = absent
+SCH nvkey 0001 FeatureControl = 4
+SCH nvkey 0001 EnableMsHybrid = absent
+SCH nvkey 0001 RMInstLoc = absent
+SCH adapter 'Microsoft Basic Display Adapter' Unknown CM_PROB_PHANTOM
+SCH adapter 'NVIDIA GeForce RTX 4070' Error CM_PROB_FAILED_POST_START
+
+[rc=0]

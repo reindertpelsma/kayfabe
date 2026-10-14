@@ -43,6 +43,7 @@ pub const PAGE: u64 = 0x1000;
 #[must_use]
 pub fn page_cover(base: u64, len: u64) -> (u64, u64) {
     let start = base & !(PAGE - 1);
-    let end = (base + len).div_ceil(PAGE) * PAGE;
-    (start, end - start)
+    // Saturating: a hostile `base + len` that wraps answers a range host RM will refuse, never a panic.
+    let end = base.saturating_add(len).div_ceil(PAGE).saturating_mul(PAGE);
+    (start, end.saturating_sub(start))
 }

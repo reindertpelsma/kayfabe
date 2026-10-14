@@ -1,0 +1,8 @@
+[Wed Oct 14 15:06:42 2026] NVRM: Xid (PCI:0000:01:00): 13, Graphics SM Warp Exception on (GPC 1, TPC 0, SM 0): Out Of Range Address
+[Wed Oct 14 15:06:42 2026] NVRM: Xid (PCI:0000:01:00): 13, Graphics Exception: ESR 0x50c730=0x100000e 0x50c734=0x0 0x50c728=0xf81eb60 0x50c72c=0x1174
+[Wed Oct 14 15:06:42 2026] NVRM: Xid (PCI:0000:01:00): 13, pid=275131, name=qemu-system-x86, Graphics Exception: channel 0x00000033, Class 0000c9c0, Offset 00000000, Data 00000000
+[Wed Oct 14 17:04:45 2026] NVRM: Xid (PCI:0000:01:00): 32, pid=375802, name=qemu-system-x86, channel 0x00000008 intr0 00040000
+[Wed Oct 14 17:04:45 2026] NVRM: Xid (PCI:0000:01:00): 32, pid=375802, name=qemu-system-x86, channel 0x00000008 intr0 00040000
+[Wed Oct 14 17:39:21 2026] NVRM: Xid (PCI:0000:01:00): 32, pid=409016, name=qemu-system-x86, channel 0x0000004c intr0 00040000
+[Wed Oct 14 17:39:21 2026] NVRM: Xid (PCI:0000:01:00): 32, pid=409016, name=qemu-system-x86, channel 0x0000004c intr0 00040000
+[Wed Oct 14 17:42:11 2026] NVRM: Xid (PCI:0000:01:00): 32, pid=411284, name=qemu-system-x86, channel 0x0000004c intr 00800000

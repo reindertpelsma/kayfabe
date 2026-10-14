@@ -41,6 +41,51 @@ pub enum Translatable {
     /// The operand names something nothing binds, and no amount of waiting changes it.
     No,
 }
+
+#[cfg(test)]
+mod retirement_interleaving {
+    use super::*;
+    use std::sync::{Arc, Mutex, TryLockError, mpsc};
+
+    #[test]
+    fn replacement_cannot_publish_between_retirement_and_ownership_removal() {
+        let vmm = Vmm::default();
+        let plane = Arc::new(Plane::new(&vmm, 4, 3));
+        let caps = Arc::new(Mutex::new(VmCaps::from_declared(2, 8, 8, 8)));
+        plane.allocate_channel(&mut caps.lock().unwrap(), 0,
+            Route::Translated, 11, Owner::User).unwrap();
+        let (at_gap, gap) = mpsc::channel();
+        let (resume, continue_retirement) = mpsc::channel();
+        std::thread::scope(|scope| {
+            let p = plane.clone();
+            let c = caps.clone();
+            let old = scope.spawn(move || {
+                let _caps = c.lock().unwrap();
+                assert!(p.retire_token_and_ownership(0, || {
+                    // Pause at the real gap found by review: the token is Dead,
+                    // but the old kernel ownership cleanup has not happened.
+                    at_gap.send(()).unwrap();
+                    continue_retirement.recv().unwrap();
+                }));
+            });
+            gap.recv().unwrap();
+            assert!(matches!(caps.try_lock(), Err(TryLockError::WouldBlock)));
+            let p = plane.clone();
+            let c = caps.clone();
+            let new = scope.spawn(move || {
+                p.allocate_channel(&mut c.lock().unwrap(), 0,
+                    Route::Translated, 22, Owner::Kernel).unwrap();
+            });
+            resume.send(()).unwrap();
+            old.join().unwrap();
+            new.join().unwrap();
+        });
+        assert_eq!(plane.tokens[0].load().host_token, 22);
+        assert_eq!(plane.owner_of(0), Owner::Kernel);
+        // Old native resources remain charged until their external owner frees.
+        assert_eq!(caps.lock().unwrap().live_on_runlist(0), 2);
+    }
+}
 use crate::completion::Completion;
 use crate::leaf::{GuestRamLayout, HostSlice, LeafRefusal};
 use crate::lifetime::{Step, Teardown, TeardownError, WalkerState};
@@ -292,14 +337,16 @@ impl<'v> Plane<'v> {
                 asked: tok,
             });
         }
-        caps.acquire(Twin::Channel)?;
+        // ★ 2026-10-11: per RUNLIST, against the budget the guest was told (`kf_abi::chanbudget`).
+        let runlist = self.token_index.runlist_of(idx as u32);
+        caps.acquire_channel(runlist)?;
         // ⊘⊘ `[fable S3]` the return value is the point: a failed allocate leaves the OLD route
         // and host_token in place, and ignoring it serves the new channel's rings on the old
         // channel's twin.
         let ok = self.tokens[idx].allocate(route, host_token)
             || self.tokens[idx].allocate_fresh(route, host_token);
         if !ok {
-            caps.release(Twin::Channel);
+            caps.release_channel(runlist);
             return Err(Refusal::OverDeclaredCap {
                 twin: Twin::Channel,
                 cap: 0,
@@ -325,6 +372,24 @@ impl<'v> Plane<'v> {
     /// released, so a guest that allocated and freed more than its cap over its life was refused
     /// forever.
     pub fn free_channel(&self, caps: &mut VmCaps, tok: u32) -> bool {
+        if !self.retire_channel_token(caps, tok) {
+            return false;
+        }
+        caps.release_channel(self.token_index.runlist_of(self.token_index.clamp(tok)));
+        true
+    }
+
+    /// Retire a token whose native channel quota has an external lifetime owner.
+    /// This changes no quota: that owner retains its charge until native cleanup
+    /// is confirmed, including when guest Free precedes an uncertain host free.
+    /// Ordinary channels use [`Self::free_channel`]. Never called on a vCPU.
+    /// The caller must hold the same caps lock as allocation through this whole
+    /// operation, including ownership-marker removal after token retirement.
+    pub fn retire_channel_token(&self, _caps: &mut VmCaps, tok: u32) -> bool {
+        self.retire_token_and_ownership(tok, || {})
+    }
+
+    fn retire_token_and_ownership(&self, tok: u32, after_retire: impl FnOnce()) -> bool {
         let idx = self.token_index.clamp(tok) as usize;
         let Some(w) = self.tokens.get(idx) else {
             return false;
@@ -333,11 +398,40 @@ impl<'v> Plane<'v> {
         if !w.retire() {
             return false;
         }
+        after_retire();
         if let Ok(mut k) = self.kernel_tokens.lock() {
             k.retain(|t| *t != tok);
         }
-        caps.release(Twin::Channel);
         true
+    }
+
+    /// ★ Device reset (`docs/design/V3_DEVICE_RESET.md`, stage Finish): every token word back to a
+    /// fresh device's ([`TokenWord::reset_fresh`]), the rung bitmap cleared, no kernel ownership.
+    /// Returns how many tokens a worker still owns (`BUSY`): the caller retries on its next pass
+    /// and does nothing else meanwhile (the device's Finish stage stays pending).
+    ///
+    /// ⊘ Runs after every channel was freed through the free path (which retired its token and
+    /// released its cap), so on a clean reset every word is already `DEAD` or fresh; this is the
+    /// sweep that makes "nothing of the old life is routable" true even when a free was refused.
+    /// The vCPU gate is closed, so no doorbell can ring a word while it is swept.
+    pub fn reset_tokens(&self) -> usize {
+        let busy = self.tokens.iter().filter(|w| !w.reset_fresh()).count();
+        if busy == 0 {
+            self.bits.clear();
+            if let Ok(mut k) = self.kernel_tokens.lock() {
+                k.clear();
+            }
+        }
+        busy
+    }
+
+    /// Live (non-fresh) token words — the reset's accounting (never a decision input).
+    #[must_use]
+    pub fn live_tokens(&self) -> usize {
+        self.tokens
+            .iter()
+            .filter(|w| w.load() != TokenWord::new().load())
+            .count()
     }
 
     fn path(&self) -> TrapPath<'_> {

@@ -1,0 +1,1 @@
+2026-10-12T00:16:05.371365+00:00 claude kernel: NVRM: Xid (PCI:0000:01:00): 32, pid=672449, name=kf-deferred-upd, channel 0x00000004 intr 00800000

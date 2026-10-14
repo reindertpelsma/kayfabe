@@ -1,0 +1,7 @@
+{
+  "qemu_pgrep_exit": 1,
+  "iommu_group11": "DMA-FQ",
+  "free_bytes": 122276106240,
+  "stop_present": false,
+  "lock_check_exit": 0
+}

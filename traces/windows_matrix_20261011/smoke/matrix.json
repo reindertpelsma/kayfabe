@@ -1,0 +1,36 @@
+{
+ "started_utc": "2026-10-11T11:55:56Z",
+ "args": {
+  "run_dir": "/var/lib/kf-windows-20261005/codex-matrix-smoke-20261011",
+  "apps": "nvidia_smi,deviceQuery_demo,glgears_wgl,matmul_t",
+  "tier": 1,
+  "category": "",
+  "exclude": "",
+  "manifest": "/data/kf-winmatrix-host/scripts/bench/windows/appmatrix/manifest.json",
+  "apps_json": "/data/kf-winmatrix-host/scripts/bench/windows/appmatrix/apps.json",
+  "iso": "/var/lib/kf-windows-20261005/appmatrix/image/kfapps_exfat.img",
+  "image_manifest": "/var/lib/kf-windows-20261005/appmatrix/image/manifest.json",
+  "vm": "broker",
+  "broker": "/var/lib/kf-windows-20261005/kayfabe-win-6fafcc6e/scripts/bench/windows/windows_broker_prod3.sh",
+  "w_dir": "/var/lib/kf-windows-20261005",
+  "kf3_rev": "2c917f3e",
+  "run_base": 650,
+  "pre_guest_cmd": "bash /var/lib/kf-windows-20261005/pti-iommu_nogdm.sh identity",
+  "post_guest_cmd": "bash /var/lib/kf-windows-20261005/pti-iommu_nogdm.sh DMA-FQ",
+  "per_guest": 4,
+  "max_tdr": 3,
+  "no_isolate": true,
+  "resume": false,
+  "list": false,
+  "mock_scenario": "",
+  "fast": false
+ },
+ "image_identity": "b67d6a2a8629278d5ef7000e7765577038ab546a54344eb09500d6b08c7ee6b8",
+ "apps": [
+  "nvidia_smi",
+  "deviceQuery_demo",
+  "glgears_wgl",
+  "matmul_t"
+ ],
+ "host": "claude"
+}

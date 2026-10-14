@@ -95,6 +95,9 @@
  * structural: no descriptor can make a loop run longer than this. */
 #define KF_MAX_ENT 512u
 #define KF_PS_NONE 0xFFu
+/* ABI 6: a refusal sample's `level` names a leaf TABLE as one past the directory slots. */
+static_assert(KF_SAMPLE_LVL_BIG == KF_DIRS && KF_SAMPLE_LVL_SMALL == KF_DIRS + 1u,
+              "KF_SAMPLE_LVL_* in kf_walk.h must follow KF_DIRS");
 
 /* value = ((raw >> lo) & ((1<<bits)-1)) << shift */
 struct KfField { uint8_t lo, bits, shift, pad; };
@@ -195,6 +198,13 @@ struct KfDev {
      * diff that could not fit its slot (PARTIAL/OVERFLOW), placements + maps. The host sizes
      * the next walk / grows the slot from it (KfLayout). */
     uint32_t need[KF_MAX_PDB];
+    /* ★ ABI 6 — REFUSAL SAMPLES (observation only; see KfRefusalSample in kf_walk.h). `nsample`
+     * is an atomic ticket counter: the thread that draws ticket i < KF_REFUSAL_SAMPLES owns
+     * `sample[i]` and nobody else writes it, so there is no write race. Zeroed by kf_begin_kernel;
+     * read by kf_diff_emit, a later kernel, so every sample write has completed. */
+    unsigned int nsample;
+    unsigned int sample_pad;     /* explicit: KfRefusalSample is 8-aligned */
+    KfRefusalSample sample[KF_REFUSAL_SAMPLES];
 };
 
 /* ⚠ Scratch: `scratch` holds 4 * runs_per_pdb runs PER ENTRY (the diff: the
@@ -225,6 +235,27 @@ struct KfArgs {
     KfMapRun *rrun;
     const KfLayout *lay;         /* ★ w829: per-entry and per-slot capacity (host-managed) */
 };
+
+/* ★ ABI 6 — record one refusal sample. OBSERVATION ONLY: it reads nothing from guest memory and
+ * changes no decision. Every argument is a value the caller already holds in a register (the raw
+ * entry is the ONE copy the caller read; this function never dereferences the GPGA window).
+ * Bounded: the ticket is drawn atomically and the write happens only for a ticket below the cap
+ * (the index clamp), so any number of threads, any number of offers, write at most
+ * KF_REFUSAL_SAMPLES distinct slots exactly once each. No loop. `d == NULL` samples nothing. */
+__device__ __forceinline__ void kf_sample(KfDev *d, uint32_t entry, uint32_t bit, uint32_t level,
+                                          uint64_t va, uint64_t raw, uint64_t gpga, uint64_t ps_bytes)
+{
+    if (d == NULL) return;
+    const unsigned int i = atomicAdd(&d->nsample, 1u);
+    if (i >= KF_REFUSAL_SAMPLES) return;
+    KfRefusalSample s;
+    s.va = va; s.raw = raw; s.gpga = gpga; s.ps_bytes = ps_bytes;
+#ifdef KF_BREAK_SAMPLE_RAW
+    s.raw = raw ^ 0x2ull;   /* known-positive: a sample that does not carry the entry as read */
+#endif
+    s.bit = bit; s.level = (uint16_t)level; s.entry = (uint16_t)entry;
+    d->sample[i] = s;
+}
 
 /* ── decode, entirely off the descriptor ─────────────────────────────────────── */
 __device__ __forceinline__ uint64_t kf_field(uint64_t raw, uint32_t lo, uint32_t bits, uint32_t sh)
@@ -419,6 +450,7 @@ struct KfCtx {
     uint32_t have;
     KfMapRun run;
     uint16_t pdb_index;
+    KfDev *sdev;          /* ★ ABI 6: where refusal samples go (NULL = none) */
 };
 
 /* I2: the bounds check, and the single dereference it guards. */
@@ -490,10 +522,19 @@ __device__ __forceinline__ void kf_flush(KfCtx &c)
  * not aligned to its own page size. See KFWR_R_MISALIGNED_LEAF. A 4 KiB leaf can
  * never trip it (the field's granularity IS 4 KiB), so this costs nothing on the
  * ordinary path and closes the whole class at one site. */
-__device__ __forceinline__ void kf_emit(KfCtx &c, uint64_t va, uint64_t gpga, uint64_t len, uint32_t flags)
+__device__ __forceinline__ void kf_emit(KfCtx &c, uint64_t va, uint64_t gpga, uint64_t len, uint32_t flags,
+                                        uint64_t raw, uint32_t level)
 {
     if (c.stop) return;
-    if (gpga & (kf_ps_bytes_of(*c.fmt, flags) - 1ull)) { c.refuse |= KFWR_R_MISALIGNED_LEAF; c.refusals++; return; }
+    {   /* `raw` and `gpga` are the caller's single copies (register values); the alignment test,
+         * the sample and every later decision read those, never the guest's memory again. */
+        const uint64_t psb = kf_ps_bytes_of(*c.fmt, flags);
+        if (gpga & (psb - 1ull)) {
+            c.refuse |= KFWR_R_MISALIGNED_LEAF; c.refusals++;
+            kf_sample(c.sdev, c.pdb_index, KFWR_R_MISALIGNED_LEAF, level, va, raw, gpga, psb);
+            return;
+        }
+    }
 #ifndef KF_BREAK_BOUNDS
     /* §39(c) THE CONTAINMENT CHECK. `gpga` and `len` are already COPIES in
      * registers -- `gpga` came out of kf_win_load into a local and `len` is a
@@ -507,8 +548,12 @@ __device__ __forceinline__ void kf_emit(KfCtx &c, uint64_t va, uint64_t gpga, ui
      * meaning for a single-GPU guest and is refused here. */
     {
         uint32_t ap = (flags >> KFWR_RF_AP_SHIFT) & KFWR_RF_AP_MASK;
-        if (ap == KFWR_AP_PEER) { c.refuse |= KFWR_R_LEAF_OOB; c.refusals++; return; }
-        if (ap == KFWR_AP_VIDMEM && (gpga > c.w.span || len > c.w.span - gpga)) { c.refuse |= KFWR_R_LEAF_OOB; c.refusals++; return; }
+        if (ap == KFWR_AP_PEER ||
+            (ap == KFWR_AP_VIDMEM && (gpga > c.w.span || len > c.w.span - gpga))) {
+            c.refuse |= KFWR_R_LEAF_OOB; c.refusals++;
+            kf_sample(c.sdev, c.pdb_index, KFWR_R_LEAF_OOB, level, va, raw, gpga, len);
+            return;
+        }
     }
 #endif
 #ifndef KF_BREAK_COALESCE
@@ -549,7 +594,7 @@ __device__ __forceinline__ uint32_t kf_dir_step(KfCtx &c, uint32_t k, uint64_t t
     if (!kf_load64(c, tbl + (uint64_t)idx * L.entry_bytes, &raw)) return KF_STEP_SKIP;
     if (L.leaf_ps != KF_PS_NONE && kf_valid(F, raw)) {
         kf_emit(c, va, kf_addr(F, raw, kf_ap_raw(F, raw)),
-                1ull << F.ps_log2[L.leaf_ps], kf_leaf_flags(F, raw, L.leaf_ps));
+                1ull << F.ps_log2[L.leaf_ps], kf_leaf_flags(F, raw, L.leaf_ps), raw, k);
         return KF_STEP_SKIP;
     }
     uint32_t apc = kf_ap_raw(F, raw);
@@ -625,7 +670,8 @@ __device__ void kf_walk_one(KfCtx &c, uint64_t pdb)
                          * asks it in. */
                         if (D.leaf_ps != KF_PS_NONE && kf_valid(F, lo16)) {
                             kf_emit(c, va4, kf_addr(F, lo16, kf_ap_raw(F, lo16)),
-                                    1ull << F.ps_log2[D.leaf_ps], kf_leaf_flags(F, lo16, D.leaf_ps));
+                                    1ull << F.ps_log2[D.leaf_ps], kf_leaf_flags(F, lo16, D.leaf_ps),
+                                    lo16, KF_DIRS - 1u);
                             continue;
                         }
                         uint32_t aps = kf_ap_raw(F, hi16);   /* SMALL half, HIGH word */
@@ -690,7 +736,7 @@ __device__ void kf_walk_one(KfCtx &c, uint64_t pdb)
                                         kf_emit(c, va4 | ((uint64_t)bb << F.big_va_lo),
                                                 kf_addr(F, e, kf_ap_raw(F, e)),
                                                 1ull << F.ps_log2[F.big_ps],
-                                                kf_leaf_flags(F, e, F.big_ps));
+                                                kf_leaf_flags(F, e, F.big_ps), e, KF_SAMPLE_LVL_BIG);
                                     else if (kf_slot_sparse(F, e)) c.sparse++;
                                 }
                             }
@@ -705,7 +751,7 @@ __device__ void kf_walk_one(KfCtx &c, uint64_t pdb)
                                         kf_emit(c, va4 | ((uint64_t)s << F.small_va_lo),
                                                 kf_addr(F, e, kf_ap_raw(F, e)),
                                                 1ull << F.ps_log2[F.small_ps],
-                                                kf_leaf_flags(F, e, F.small_ps));
+                                                kf_leaf_flags(F, e, F.small_ps), e, KF_SAMPLE_LVL_SMALL);
                                     else if (kf_slot_sparse(F, e)) c.sparse++;
                                 }
                             }
@@ -729,6 +775,7 @@ __global__ void kf_begin_kernel(KfArgs a)
     d->walk_trunc = 0u;
     d->walk_abort = 0u;
     d->sparse_slots = 0u;
+    d->nsample = 0u;
     for (uint32_t i = 0u; i < KF_MAX_PDB; i++) d->entry_refuse[i] = 0u;
     if (a.ack == NULL) return;
     /* After kf_commit_kernel (a kernel boundary orders them): record what was
@@ -767,6 +814,7 @@ __global__ void kf_walk_kernel(KfArgs a)
     c.cap = a.lay->walk_cap[t];
     c.n = 0u; c.have = 0u;
     c.pdb_index = (uint16_t)t;
+    c.sdev = d;
     memset(&c.run, 0, sizeof(c.run));
 
     kf_walk_one(c, pdb);
@@ -1179,6 +1227,7 @@ __global__ void kf_diff_emit(KfArgs a)
         if (trunc) { atomicOr(&d->refuse_mask, KFWR_R_RUN_CAP); atomicAdd(&d->refusals, 1u); }
         if (d->refusals) flags |= KFWR_HF_REFUSED;
         KfReportHeader h;
+        memset(&h, 0, sizeof(h));
         h.magic = KFWR_MAGIC;
         h.version = (uint16_t)KFWR_VERSION;
         h.flags = (uint16_t)flags;
@@ -1193,6 +1242,15 @@ __global__ void kf_diff_emit(KfArgs a)
         h.refuse_mask = d->refuse_mask;
         h.sparse_slots = d->sparse_slots;
         for (uint32_t i = 0; i < 4u; i++) h.ps_log2[i] = a.fmt.ps_log2[i];
+        /* ★ ABI 6: the samples the walk kernels (earlier launches) recorded. The count is clamped
+         * HERE as well, so a corrupt ticket counter can never make the host read past the array. */
+        {
+            const uint32_t ns = d->nsample;
+            h.sample_total = ns;
+            h.sample_count = ns < KF_REFUSAL_SAMPLES ? ns : KF_REFUSAL_SAMPLES;
+            for (uint32_t i = 0; i < KF_REFUSAL_SAMPLES; i++)
+                if (i < h.sample_count) h.samples[i] = d->sample[i];
+        }
         *a.hdr = h;
     }
     if (t >= np) return;
@@ -1582,12 +1640,14 @@ static const char *kf_format_check(const KfFormat &F)
 struct KfEnt {
     uint64_t va;      /* VA base of this subtree / of this leaf */
     uint64_t addr;    /* table address, or a leaf's GPGA        */
-    uint64_t addr2;   /* the BIG leaf table (KF_ENT_DUAL only)  */
+    uint64_t addr2;   /* the BIG leaf table (KF_ENT_DUAL); the leaf's RAW entry (KF_ENT_LEAF, ABI 6:
+                       * the one shared-memory copy, carried only so a refusal can be sampled) */
     uint32_t flags;   /* a leaf's decoded flags                 */
     uint32_t len_log2;/* a leaf's size, log2                    */
     uint16_t pdb;
     uint8_t  kind;
-    uint8_t  has;     /* bit0 small table present, bit1 big     */
+    uint8_t  has;     /* bit0 small table present, bit1 big (DUAL); the directory index of the leaf
+                       * (KF_ENT_LEAF, ABI 6: a sample's `level`) */
 };
 
 /* What one task contributed, so the boundary join can be decided without
@@ -1624,6 +1684,7 @@ struct KfRunAcc {
     uint32_t got_first, skip;
     uint16_t pdb_index;
     uint32_t refuse, refusals;
+    KfDev *sdev;                   /* ★ ABI 6: refusal samples go here; NULL on the writing pass */
 };
 
 __device__ __forceinline__ void kf_acc_init(KfRunAcc &c, const KfFormat *f, uint64_t span,
@@ -1631,6 +1692,7 @@ __device__ __forceinline__ void kf_acc_init(KfRunAcc &c, const KfFormat *f, uint
 {
     c.fmt = f; c.span = span; c.out = out; c.cap = cap; c.n = 0u; c.have = 0u; c.overflow = 0u;
     c.got_first = 0u; c.skip = 0u; c.pdb_index = pi; c.refuse = 0u; c.refusals = 0u;
+    c.sdev = NULL;
     memset(&c.run, 0, sizeof(c.run));
     memset(&c.first, 0, sizeof(c.first));
     memset(&c.last, 0, sizeof(c.last));
@@ -1651,10 +1713,17 @@ __device__ __forceinline__ void kf_acc_flush(KfRunAcc &c)
 }
 
 __device__ __forceinline__ void kf_acc_emit(KfRunAcc &c, uint64_t va, uint64_t gpga,
-                                            uint64_t len, uint32_t flags)
+                                            uint64_t len, uint32_t flags,
+                                            uint64_t raw, uint32_t level)
 {
-    if (gpga & (kf_ps_bytes_of(*c.fmt, flags) - 1ull)) {
-        c.refuse |= KFWR_R_MISALIGNED_LEAF; c.refusals++; return;
+    {   /* `raw`/`gpga` are the caller's single copies; see kf_emit. Only the COUNTING pass has
+         * `sdev` set, so a refusal is sampled once, not once per sweep. */
+        const uint64_t psb = kf_ps_bytes_of(*c.fmt, flags);
+        if (gpga & (psb - 1ull)) {
+            c.refuse |= KFWR_R_MISALIGNED_LEAF; c.refusals++;
+            kf_sample(c.sdev, c.pdb_index, KFWR_R_MISALIGNED_LEAF, level, va, raw, gpga, psb);
+            return;
+        }
     }
 #ifndef KF_BREAK_BOUNDS
     /* §39(c), the parallel half of the same chokepoint. */
@@ -1662,7 +1731,9 @@ __device__ __forceinline__ void kf_acc_emit(KfRunAcc &c, uint64_t va, uint64_t g
         uint32_t ap = (flags >> KFWR_RF_AP_SHIFT) & KFWR_RF_AP_MASK;
         if (ap == KFWR_AP_PEER ||
             (ap == KFWR_AP_VIDMEM && (gpga > c.span || len > c.span - gpga))) {
-            c.refuse |= KFWR_R_LEAF_OOB; c.refusals++; return;
+            c.refuse |= KFWR_R_LEAF_OOB; c.refusals++;
+            kf_sample(c.sdev, c.pdb_index, KFWR_R_LEAF_OOB, level, va, raw, gpga, len);
+            return;
         }
     }
 #endif
@@ -1688,6 +1759,14 @@ __device__ __forceinline__ void kf_par_refuse_in(KfDev *d, unsigned int bit, uin
 {
     kf_par_refuse(d, bit);
     if (entry < KF_MAX_PDB) atomicOr(&d->entry_refuse[entry], bit);
+}
+
+/* ★ ABI 6: the same, plus a refusal sample (the entry's single shared-memory copy, `raw`). */
+__device__ __forceinline__ void kf_par_refuse_samp(KfDev *d, unsigned int bit, uint32_t entry, uint32_t level,
+                                                   uint64_t va, uint64_t raw, uint64_t gpga, uint64_t ps_bytes)
+{
+    kf_par_refuse_in(d, bit, entry);
+    kf_sample(d, entry, bit, level, va, raw, gpga, ps_bytes);
 }
 
 /* ⊘ ABORT, not TRUNCATED. Running out of RUN slots truncates the report but the
@@ -1762,6 +1841,8 @@ __device__ __forceinline__ bool kf_par_decode_slot(const KfArgs &a, uint32_t lev
         ch.flags = kf_leaf_flags(F, lo16, L.leaf_ps);
         ch.len_log2 = F.ps_log2[L.leaf_ps];
         ch.kind = KF_ENT_LEAF;
+        ch.addr2 = lo16;                 /* ABI 6: the raw entry as read (single shared copy) */
+        ch.has = (uint8_t)level;         /* ABI 6: ... and its level, for a refusal sample */
         return true;
     }
     if (!dual) {
@@ -1770,14 +1851,16 @@ __device__ __forceinline__ bool kf_par_decode_slot(const KfArgs &a, uint32_t lev
             if (census && kf_slot_sparse(F, lo16)) atomicAdd(&d->sparse_slots, 1u);
             return false;
         }
-        if (F.pde_ap_map[apc] != KFWR_AP_VIDMEM) {
-            if (census) kf_par_refuse_in(d, KFWR_R_FOREIGN_AP, e.pdb);
-            return false;
-        }
         const uint64_t cb = (uint64_t)F.dir[level + 1u].entries * F.dir[level + 1u].entry_bytes;
         const uint64_t nx = kf_addr(F, lo16, apc);   /* 0 is a table: KF_PDE_ADDR_ZERO_IS_A_TABLE */
+        const uint64_t cva = e.va | ((uint64_t)i << L.va_lo);
+        if (F.pde_ap_map[apc] != KFWR_AP_VIDMEM) {
+            if (census) kf_par_refuse_samp(d, KFWR_R_FOREIGN_AP, e.pdb, level, cva, lo16, nx, cb);
+            return false;
+        }
         if (!kf_win_table_ok(a.win, nx, cb, cb)) {
-            if (census) kf_par_refuse_in(d, (nx & (cb - 1ull)) ? KFWR_R_UNALIGNED : KFWR_R_OOB, e.pdb);
+            if (census) kf_par_refuse_samp(d, (nx & (cb - 1ull)) ? KFWR_R_UNALIGNED : KFWR_R_OOB, e.pdb,
+                                           level, cva, lo16, nx, cb);
             return false;
         }
         ch.va = e.va | ((uint64_t)i << L.va_lo);
@@ -1792,20 +1875,29 @@ __device__ __forceinline__ bool kf_par_decode_slot(const KfArgs &a, uint32_t lev
     const uint32_t aps = kf_ap_raw(F, hi16), apb = kf_ap_raw(F, lo16);
     uint8_t has = 0u;
     uint64_t pts = 0ull, ptb = 0ull;
+    const uint64_t dva = e.va | ((uint64_t)i << L.va_lo);
     if (kf_dir_present(F, hi16, aps, false)) {
-        if (F.pde_ap_map[aps] != KFWR_AP_VIDMEM) { if (census) kf_par_refuse_in(d, KFWR_R_FOREIGN_AP, e.pdb); }
+        if (F.pde_ap_map[aps] != KFWR_AP_VIDMEM) {
+            if (census) kf_par_refuse_samp(d, KFWR_R_FOREIGN_AP, e.pdb, level, dva, hi16,
+                                           kf_addr(F, hi16, aps), sb);
+        }
         else {
             pts = kf_addr(F, hi16, aps);   /* 0 is a table: KF_PDE_ADDR_ZERO_IS_A_TABLE */
             if (kf_win_table_ok(a.win, pts, sb, sb)) has |= 1u;
-            else if (census) kf_par_refuse_in(d, (pts & (sb - 1ull)) ? KFWR_R_UNALIGNED : KFWR_R_OOB, e.pdb);
+            else if (census) kf_par_refuse_samp(d, (pts & (sb - 1ull)) ? KFWR_R_UNALIGNED : KFWR_R_OOB, e.pdb,
+                                                level, dva, hi16, pts, sb);
         }
     } else if (census && kf_slot_sparse(F, hi16)) atomicAdd(&d->sparse_slots, 1u);
     if (kf_dir_present(F, lo16, apb, L.leaf_ps != KF_PS_NONE)) {
-        if (F.pde_ap_map[apb] != KFWR_AP_VIDMEM) { if (census) kf_par_refuse_in(d, KFWR_R_FOREIGN_AP, e.pdb); }
+        if (F.pde_ap_map[apb] != KFWR_AP_VIDMEM) {
+            if (census) kf_par_refuse_samp(d, KFWR_R_FOREIGN_AP, e.pdb, level, dva, lo16,
+                                           kf_big_addr(F, lo16, apb), bb);
+        }
         else {
             ptb = kf_big_addr(F, lo16, apb);   /* 0 is a table: KF_PDE_ADDR_ZERO_IS_A_TABLE */
             if (kf_win_table_ok(a.win, ptb, bb, bb)) has |= 2u;
-            else if (census) kf_par_refuse_in(d, (ptb & (bb - 1ull)) ? KFWR_R_UNALIGNED : KFWR_R_OOB, e.pdb);
+            else if (census) kf_par_refuse_samp(d, (ptb & (bb - 1ull)) ? KFWR_R_UNALIGNED : KFWR_R_OOB, e.pdb,
+                                                level, dva, lo16, ptb, bb);
         }
     } else if (kf_slot_sparse(F, lo16)) {
         /* An INVALID, sparse big half vetoes the small table (see the serial walk). */
@@ -1982,7 +2074,8 @@ __device__ __forceinline__ void kf_par_chunks(const KfArgs &a, const KfEnt &t,
             slot_owned = kf_big_pte_owns_slot(F, e);
             if (kf_valid(F, e))
                 kf_acc_emit(c, t.va | ((uint64_t)bb << F.big_va_lo), kf_addr(F, e, kf_ap_raw(F, e)),
-                            1ull << F.ps_log2[F.big_ps], kf_leaf_flags(F, e, F.big_ps));
+                            1ull << F.ps_log2[F.big_ps], kf_leaf_flags(F, e, F.big_ps),
+                            e, KF_SAMPLE_LVL_BIG);
             else if (census && kf_slot_sparse(F, e)) atomicAdd(&a.dev->sparse_slots, 1u);
         }
         if ((t.has & 1u) && !slot_owned) {
@@ -1992,7 +2085,8 @@ __device__ __forceinline__ void kf_par_chunks(const KfArgs &a, const KfEnt &t,
                 const uint64_t e = ssmall[si];
                 if (kf_valid(F, e))
                     kf_acc_emit(c, t.va | ((uint64_t)si << F.small_va_lo), kf_addr(F, e, kf_ap_raw(F, e)),
-                                1ull << F.ps_log2[F.small_ps], kf_leaf_flags(F, e, F.small_ps));
+                                1ull << F.ps_log2[F.small_ps], kf_leaf_flags(F, e, F.small_ps),
+                                e, KF_SAMPLE_LVL_SMALL);
                 else if (census && kf_slot_sparse(F, e)) atomicAdd(&a.dev->sparse_slots, 1u);
             }
         }
@@ -2041,7 +2135,8 @@ __device__ __forceinline__ void kf_par_leaf_one(const KfArgs &a, const KfEnt *ta
         if (lane == 0u) {
             KfRunAcc c;
             kf_acc_init(c, &F, a.win.span, NULL, 0u, t.pdb);
-            kf_acc_emit(c, t.va, t.addr, 1ull << t.len_log2, t.flags);
+            c.sdev = d;                  /* ABI 6: this is the counting pass: it samples */
+            kf_acc_emit(c, t.va, t.addr, 1ull << t.len_log2, t.flags, t.addr2, t.has);
             kf_acc_flush(c);
             /* §39(e): above the stagecap return below. That return would drop this
              * leaf's refusal on the floor and report only FRONTIER_CAP. */
@@ -2081,6 +2176,7 @@ __device__ __forceinline__ void kf_par_leaf_one(const KfArgs &a, const KfEnt *ta
 
     KfRunAcc c;
     kf_acc_init(c, &F, a.win.span, NULL, 0u, t.pdb);
+    c.sdev = d;                          /* ABI 6: the COUNTING pass samples; the writing pass does not */
     if (b0 < nb) kf_par_chunks(a, t, ssmall, sbig, c, b0, b1, 1u);
 
     /* Does this lane's first run continue the previous lane's last? */
@@ -2581,6 +2677,7 @@ extern "C" int kf_validate_report(const KfReportHeader *h, const KfPdbEntry *p,
     }
     if (h->magic != KFWR_MAGIC)             { msg = "magic"; rc = -1; goto out; }
     if (h->version != KFWR_VERSION)         { msg = "version"; rc = -2; goto out; }
+    if (h->sample_count > KF_REFUSAL_SAMPLES) { msg = "sample_count"; rc = -17; goto out; }  /* ABI 6 */
     if (h->run_count > h->run_capacity)     { msg = "run_count > run_capacity"; rc = -3; goto out; }
     if (h->pdb_count > h->pdb_capacity)     { msg = "pdb_count > pdb_capacity"; rc = -4; goto out; }
     for (uint32_t i = 0; i < h->pdb_count; i++) {

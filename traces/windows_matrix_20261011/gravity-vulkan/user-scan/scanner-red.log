@@ -1,0 +1,29 @@
+
+test user_scan::tests::failed_scan_does_not_change_binding_state ... ok
+test user_scan::tests::hardware_packet_continuation_is_not_mistaken_for_a_trigger ... ok
+test user_scan::tests::receipts_pair_wrap_and_source_generations_without_completion_claims ... ok
+test user_scan::tests::header_only_segment_retains_hardware_continuation_without_reading_past_end ... FAILED
+test user_scan::tests::software_packet_split_at_header_is_refused_without_committing_state ... FAILED
+test user_scan::tests::triggers_require_this_channels_software_binding ... ok
+
+failures:
+
+---- user_scan::tests::header_only_segment_retains_hardware_continuation_without_reading_past_end stdout ----
+
+thread 'user_scan::tests::header_only_segment_retains_hardware_continuation_without_reading_past_end' (684613) panicked at crates/kf-chan/src/user_scan.rs:51:41:
+index out of bounds: the len is 1 but the index is 1
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- user_scan::tests::software_packet_split_at_header_is_refused_without_committing_state stdout ----
+
+thread 'user_scan::tests::software_packet_split_at_header_is_refused_without_committing_state' (684615) panicked at crates/kf-chan/src/user_scan.rs:51:41:
+index out of bounds: the len is 1 but the index is 1
+
+
+failures:
+    user_scan::tests::header_only_segment_retains_hardware_continuation_without_reading_past_end
+    user_scan::tests::software_packet_split_at_header_is_refused_without_committing_state
+
+test result: FAILED. 4 passed; 2 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p kf-chan --lib`

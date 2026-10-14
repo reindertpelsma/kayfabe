@@ -1,0 +1,11 @@
+=== dxdiag_report start=2026-10-11T17:32:06.6669183+00:00 host=VASTWIN session=0 boot=2026-10-11T17:29:30.5000000Z timeout=180
+DXDIAG Card name: NVIDIA GeForce RTX 4070
+DXDIAG Chip type: NVIDIA GeForce RTX 4070
+DXDIAG Display Memory: 7839 MB
+DXDIAG Driver Version: 32.0.15.8088
+DXDIAG DDI Version: 12
+DXDIAG Feature Levels: 12_2,12_1,12_0,11_1,11_0,10_1,10_0,9_3,9_2,9_1,1_0_CORE
+DXDIAG Driver Model: WDDM 3.2
+DXDIAG Driver Version:
+DXDIAG_OK
+=== end rc=0 secs=22 2026-10-11T17:32:28.6552566+00:00

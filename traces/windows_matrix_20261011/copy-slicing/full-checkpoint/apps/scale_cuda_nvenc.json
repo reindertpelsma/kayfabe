@@ -1,0 +1,104 @@
+{
+ "quiet": 0,
+ "end_utc": "2026-10-11T14:45:31.0661517Z",
+ "start_utc": "2026-10-11T14:44:50.2754128Z",
+ "rc": -22,
+ "secs": 41,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4070 status=OK code=0"
+ ],
+ "digests": [],
+ "session": 0,
+ "out_files": [
+  "C:\\kf\\out\\scale_cuda_nvenc\\scaled.mp4 0",
+  "C:\\kf\\out\\scale_cuda_nvenc\\x264.mp4 291920"
+ ],
+ "boot_utc_start": "2026-10-11T14:40:49.5000000Z",
+ "log_tail": [
+  "[libx264 @ 0000020f3144dbc0] coded y,uvDC,uvAC intra: 2.3% 21.2% 10.2% inter: 0.0% 1.2% 0.0%",
+  "[libx264 @ 0000020f3144dbc0] i16 v,h,dc,p: 84% 11%  1%  4%",
+  "[libx264 @ 0000020f3144dbc0] i8 v,h,dc,ddl,ddr,vr,hd,vl,hu: 40% 25% 35%  0%  0%  0%  0%  0%  0%",
+  "[libx264 @ 0000020f3144dbc0] i4 v,h,dc,ddl,ddr,vr,hd,vl,hu: 19% 51% 27%  1%  0%  1%  0%  1%  0%",
+  "[libx264 @ 0000020f3144dbc0] i8c dc,h,v,p: 31% 14% 45%  9%",
+  "[libx264 @ 0000020f3144dbc0] Weighted P-Frames: Y:0.0% UV:0.0%",
+  "[libx264 @ 0000020f3144dbc0] ref P L0: 71.2%  0.7% 22.8%  5.3%",
+  "[libx264 @ 0000020f3144dbc0] ref B L0: 85.5% 11.7%  2.7%",
+  "[libx264 @ 0000020f3144dbc0] ref B L1: 93.5%  6.5%",
+  "[libx264 @ 0000020f3144dbc0] kb/s:113.27",
+  "Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'C:\\kf\\out\\scale_cuda_nvenc\\x264.mp4':",
+  "  Metadata:",
+  "    major_brand     : isom",
+  "    minor_version   : 512",
+  "    compatible_brands: isomiso2avc1mp41",
+  "    encoder         : Lavf62.12.103",
+  "  Duration: 00:00:20.00, start: 0.000000, bitrate: 116 kb/s",
+  "  Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(progressive), 1280x720 [SAR 1:1 DAR 16:9], 113 kb/s, 30 fps, 30 tbr, 15360 tbn (default)",
+  "    Metadata:",
+  "      handler_name    : VideoHandler",
+  "      encoder         : Lavc62.28.103 libx264",
+  "Stream mapping:",
+  "  Stream #0:0 -> #0:0 (h264 (native) -> h264 (h264_nvenc))",
+  "Press [q] to stop, [?] for help",
+  "[h264_nvenc @ 00000190862922c0] OpenEncodeSessionEx failed: incompatible client key (21): (no details)",
+  "[vost#0:0/h264_nvenc @ 0000019086292040] [enc:h264_nvenc @ 0000019085975280] Error while opening encoder - maybe incorrect parameters such as bit_rate, rate, width or height.",
+  "[vf#0:0 @ 00000190862a1840] Error sending frames to consumers: Invalid argument",
+  "[vf#0:0 @ 00000190862a1840] Task finished with error code: -22 (Invalid argument)",
+  "[vf#0:0 @ 00000190862a1840] Terminating thread with return code -22 (Invalid argument)",
+  "[vost#0:0/h264_nvenc @ 0000019086292040] [enc:h264_nvenc @ 0000019085975280] Could not open encoder before EOF",
+  "[vost#0:0/h264_nvenc @ 0000019086292040] Task finished with error code: -22 (Invalid argument)",
+  "[vost#0:0/h264_nvenc @ 0000019086292040] Terminating thread with return code -22 (Invalid argument)",
+  "[out#0/mp4 @ 000001908591bbc0] Nothing was written into output file, because at least one of its streams received no packets.",
+  "frame=    0 fps=0.0 q=0.0 Lsize=       0KiB time=N/A bitrate=N/A speed=N/A elapsed=0:00:04.80    ",
+  "Conversion failed!",
+  "frame=  ",
+  "[stderr]",
+  "[mov,mp4,m4a,3gp,3g2,mj2 @ 0000020f49685c00] moov atom not found",
+  "C:\\kf\\out\\scale_cuda_nvenc\\scaled.mp4: Invalid data found when processing input",
+  "=== end rc=-22 secs=41 2026-10-11T14:45:31.0661517+00:00"
+ ],
+ "pdh": {
+  "pids": [
+   "2128",
+   "6976",
+   "7432",
+   "9396"
+  ],
+  "nv": {
+   "copy": 0,
+   "3d": 0,
+   "videoencode": 0,
+   "videodecode": 0,
+   "vr": 0,
+   "legacyoverlay": 0,
+   "ofa_0": 0
+  },
+  "samples": 13,
+  "other": {},
+  "nvidia_luids": "0_60ce"
+ },
+ "timed_out": false,
+ "token": "g11-scale_cuda_nvenc-1791729884",
+ "boot_utc_end": "2026-10-11T14:40:49.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 3,
+  "other_nvlddmkm": 0,
+  "lines": [
+   "2026-10-11T14:45:16.5428053Z nvlddmkm/153 ",
+   "2026-10-11T14:45:16.1900311Z nvlddmkm/153 ",
+   "2026-10-11T14:45:15.5894017Z nvlddmkm/153 "
+  ],
+  "live_kernel": 0
+ },
+ "app": "scale_cuda_nvenc",
+ "smi": {
+  "samples": 0,
+  "mem_used_base_mb": null,
+  "util_max": 0,
+  "mem_used_max_mb": 0
+ }
+}

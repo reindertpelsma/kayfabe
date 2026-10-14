@@ -1,0 +1,64 @@
+{
+ "quiet": 0,
+ "end_utc": "2026-10-11T22:26:24.5728573Z",
+ "start_utc": "2026-10-11T22:16:22.1446142Z",
+ "rc": 124,
+ "secs": 602,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4070 status=OK code=0"
+ ],
+ "digests": [],
+ "session": 1,
+ "out_files": [],
+ "boot_utc_start": "2026-10-11T22:14:31.5000000Z",
+ "log_tail": [
+  "=== gravitymark_vk start=2026-10-11T22:16:22.1446142+00:00 host=VASTWIN session=1 boot=2026-10-11T22:14:31.5000000Z timeout=660",
+  "KFWAIT gravitymark_vk STILL_RUNNING_AFTER 600 s",
+  "GM_FAIL no benchmark image",
+  "=== end rc=124 secs=602 2026-10-11T22:26:24.5728573+00:00"
+ ],
+ "pdh": {
+  "pids": [
+   "1400",
+   "9748",
+   "3560"
+  ],
+  "nv": {
+   "copy": 15.755265071504903,
+   "3d": 0,
+   "videoencode": 0,
+   "videodecode": 0,
+   "vr": 0,
+   "legacyoverlay": 0,
+   "ofa_0": 0
+  },
+  "samples": 281,
+  "other": {},
+  "nvidia_luids": "0_612a"
+ },
+ "timed_out": false,
+ "token": "g1-gravitymark_vk-1791756969",
+ "boot_utc_end": "2026-10-11T22:14:31.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 3,
+  "other_nvlddmkm": 0,
+  "lines": [
+   "2026-10-11T22:17:29.8682305Z nvlddmkm/153 ",
+   "2026-10-11T22:17:28.2076049Z nvlddmkm/153 ",
+   "2026-10-11T22:17:27.2082742Z nvlddmkm/153 "
+  ],
+  "live_kernel": 0
+ },
+ "app": "gravitymark_vk",
+ "smi": {
+  "samples": 0,
+  "mem_used_base_mb": null,
+  "util_max": 0,
+  "mem_used_max_mb": 0
+ }
+}

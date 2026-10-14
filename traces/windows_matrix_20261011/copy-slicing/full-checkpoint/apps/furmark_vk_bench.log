@@ -1,0 +1,5 @@
+=== furmark_vk_bench start=2026-10-11T14:33:29.3762637+00:00 host=VASTWIN session=1 boot=2026-10-11T14:30:46.5000000Z timeout=135
+KFWAIT furmark_vk_bench EXITED rc=0
+FM_SCORE date,demo,platform,vendor,renderer,api_version,width,height,fullscreen,antialiasing,duration,max_gpu_temp,score,avg_fps,min_fps,max_fps
+FM_SCORE 2026.10.11@14:33:55,furmark-vk,Windows 64-bit,NVIDIA,NVIDIA GeForce RTX 4070,Vulkan 1.4.312,1280,720,NO,Off,15001,-1,4031,267,240,272
+=== end rc=0 secs=28 2026-10-11T14:33:57.5548809+00:00

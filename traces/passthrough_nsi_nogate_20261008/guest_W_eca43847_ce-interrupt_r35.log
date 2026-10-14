@@ -1,0 +1,27 @@
+[    0.034274] Kernel command line: console=ttyS0 console=hvc0 panic=1 loglevel=6 KF_POWEROFF_DELAY_S=5 KF_ARMS=--ce-interrupt,--probe-launch-dma KF_IOCTL_TRACE=ring KF_BUDGET_S=180
+FASTGUEST: arms --ce-interrupt --probe-launch-dma  deadline 175s (budget 180s, 2s already spent booting)
+REV_UNDER_TEST=eca43847
+info  R35 CE interrupt    = GPU 0, euid 0 — non-stall events armed through RAW RM IOCTLS ONLY (ALLOC_OS_EVENT, NV01_EVENT_OS_EVENT, EVENT_SET_NOTIFICATION), polled with epoll. No libcuda is loaded by this process
+info  R35 the bar         = per interrupt leg 50 of 50: a file of the leg's positive set (its engine's own notifier or the host's default one) readable within 2000 ms, the semaphore holding the payload, every copied word verified; every file OUTSIDE the set silent; the no-interrupt control silent; the quiet window silent. ⊘ A wake is a WAKE: the semaphore is read after it
+info  R35 notifier map    = CE0=23 CE1=24 CE2=25 CE3=26 CE4=27 CE5=28 CE6=29 CE7=30 CE8=31 CE9=32 FIFO_EVENT_MTHD=35 GR0=12 (indices read from the driver matrix at the host's version); copy-engine class 0xc7b5
+info  R35 armed           = 12 of 12 notifiers armed [CE0,CE1,CE2,CE3,CE4,CE5,CE6,CE7,CE8,CE9,FIFO_EVENT_MTHD,GR0]
+★      R35 quiet window      = nothing submitted: readable files = none (after 1 window(s), 300 ms of waiting; patience 60000 ms)
+info  R35 channel source  = RM REFUSED a non-stall event whose source is the CHANNEL with status 0x1f (NV_ERR_INVALID_ARGUMENT is 0x1f): the engine non-stall lists hang off the SUBDEVICE (event_notification.c:688-703), so the events above use it
+★      R35 leg ce-launch-interrupt@COPY0        = positive any of [CE0,FIFO_EVENT_MTHD,GR0]: readable 50/50 (it landed on: FIFO_EVENT_MTHD,GR0), wake_us min 510 median 552 p90 676 max 834 (n=50); semaphore at the wake 50/50, by the bound 50/50; data verified 50/50; files OUTSIDE the set that fired: none; stale-before 0/50; repeat reports 38
+R35_LATENCIES_US leg=ce-launch-interrupt@COPY0 651,590,537,627,537,571,553,585,551,567,834,740,709,601,552,743,552,535,561,553,634,554,603,556,705,540,676,534,562,532,531,614,536,546,518,524,556,535,549,510,523,556,537,544,515,521,547,539,551,515
+R35_LANDED_PER_TOKEN leg=ce-launch-interrupt@COPY0 FIFO_EVENT_MTHD=50/50 GR0=50/50
+★      R35 leg host-non-stall-interrupt@COPY0   = positive any of [FIFO_EVENT_MTHD,GR0]: readable 50/50 (it landed on: FIFO_EVENT_MTHD,GR0), wake_us min 523 median 558 p90 639 max 737 (n=50); semaphore at the wake 50/50, by the bound 50/50, host fence 50/50; data verified 50/50; files OUTSIDE the set that fired: none; stale-before 0/50; repeat reports 47
+R35_LATENCIES_US leg=host-non-stall-interrupt@COPY0 523,574,560,639,554,558,555,559,543,528,576,556,699,556,737,546,652,547,630,556,562,559,598,531,534,597,547,630,558,557,559,593,536,548,571,548,655,547,639,546,656,526,584,555,565,532,526,613,546,638
+R35_LANDED_PER_TOKEN leg=host-non-stall-interrupt@COPY0 FIFO_EVENT_MTHD=50/50 GR0=50/50
+★      R35 leg no-interrupt-control@COPY0       = positive (none expected): readable 0/10 (it landed on: none), no wake; semaphore at the wake 0/10, by the bound 10/10; data verified 10/10; files OUTSIDE the set that fired: none; stale-before 0/10; repeat reports 0
+R35_LATENCIES_US leg=no-interrupt-control@COPY0 
+R35_LANDED_PER_TOKEN leg=no-interrupt-control@COPY0 
+★      R35 leg ce-launch-interrupt@COPY2        = positive any of [CE2,FIFO_EVENT_MTHD]: readable 50/50 (it landed on: CE2,FIFO_EVENT_MTHD), wake_us min 471 median 504 p90 638 max 667 (n=50); semaphore at the wake 50/50, by the bound 50/50; data verified 50/50; files OUTSIDE the set that fired: none; stale-before 0/50; repeat reports 40
+R35_LATENCIES_US leg=ce-launch-interrupt@COPY2 522,511,524,538,637,497,498,482,514,662,511,507,482,482,638,493,493,479,498,663,507,494,482,497,637,510,489,481,497,641,509,491,483,471,667,504,507,501,500,609,497,537,563,497,554,504,514,498,472,644
+R35_LANDED_PER_TOKEN leg=ce-launch-interrupt@COPY2 CE2=50/50 FIFO_EVENT_MTHD=50/50
+★      R35 leg no-interrupt-control@COPY2       = positive (none expected): readable 0/10 (it landed on: none), no wake; semaphore at the wake 0/10, by the bound 10/10; data verified 10/10; files OUTSIDE the set that fired: none; stale-before 0/10; repeat reports 0
+R35_LATENCIES_US leg=no-interrupt-control@COPY2 
+R35_LANDED_PER_TOKEN leg=no-interrupt-control@COPY2 
+R35_OUTCOME=(P)
+FASTGUEST: client rc=0 at 8.98s
+FASTGUEST: waiting 5s before poweroff (KF_POWEROFF_DELAY_S)

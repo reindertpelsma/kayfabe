@@ -1,0 +1,15 @@
+NSI_START 2026-10-09T00:04:12+02:00 rev=eca43847 steps=guest guestwait src=eca43847 qemu=0 9 MiB, 0 %
+== STEP guest start 2026-10-09T00:04:12+02:00 qemu=0
+--ce-interrupt               PASS      10s   10s
+FAST_CELL_ARM arm=ce-interrupt verdict=PASS secs=10 client_ms=6729
+
+FAST_SUITE_PASS=2 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=2
+FAST_SUITE_RC=0
+== STEP guest exit 2026-10-09T00:04:29+02:00 qemu=0
+== STEP guestwait start 2026-10-09T00:04:29+02:00 qemu=0
+FAST_CELL_ARM arm=ce-interrupt verdict=PASS secs=15 client_ms=6740
+
+FAST_SUITE_PASS=1 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=1
+FAST_SUITE_RC=0
+== STEP guestwait exit 2026-10-09T00:04:45+02:00 qemu=0
+NSI_DONE 2026-10-09T00:04:45+02:00

@@ -11,6 +11,14 @@
 //!
 //! ⊘ **No O(placements) work here.** Everything below is proportional to the DIFF.
 
+// Indexing: every `x[i]` in this module indexes a per-run vector (`codes`, `rows`, `failed`, `kept`,
+// `placed`, ...) built in `apply_entry` with exactly `runs.len()` elements, by a run index produced by
+// enumerating the same `runs` (or a position `partition_point`/`position` returned over the same
+// slice) — never by a guest value. The guest values (VA, length, GPA, leaf size, aperture) are
+// only ever added/subtracted with `checked_*`/`saturating_*` (the lint below stays on for those),
+// and `sim::fuzz::hostile_rows_never_panic_…` drives hostile rows through every path.
+#![allow(clippy::indexing_slicing)]
+
 use crate::ledger::{Desired, MapTarget, Mapped, SkedRow, UsermodeRow, desired_from_leaves};
 use kf_chip::sked::MessageLeaf;
 use kf_chip::usermode::{UsermodeLeaf, UsermodeMmio};
@@ -42,6 +50,12 @@ pub struct DiffRun {
     /// so a user twin WITHHOLDS the leaf ([`MapTarget::withholds_privileged`]) rather than map it
     /// where an unprivileged channel could reach it.
     pub privileged: bool,
+    /// ★ 2026-10-09: the guest LEAF size of the run's pages (`KfMapRun::page_size`: 4 KiB, 64 KiB,
+    /// 2 MiB, 512 MiB), in bytes; 0 = unknown (treated as the family grain). Outside a
+    /// VA-reserving `hDma` the host maps ONE mapping per leaf — the smallest unit the guest can
+    /// change independently — so every later change is a whole-mapping unmap
+    /// (`crate::batch::BatchedVas` rule 2).
+    pub leaf: u64,
 }
 
 /// How one entry's runs are turned into host rows.
@@ -64,10 +78,11 @@ pub struct ApplyCfg<'a> {
     /// ([`Applied::carve_gpu`], [`Applied::carve_cpu`]) and, on a GPU target with
     /// [`ApplyCfg::carve_refuse`], refused. `store_bytes` (the default) disables both.
     pub carve: u64,
-    /// ★ P1+P2 inc A2: refuse — not only count — a leaf into the carve-out on a GPU target a guest
-    /// non-kernel channel may run in ([`carve_reached`]). ON with `KF3_TSPACE=1` (review fix
-    /// 2026-10-04); OFF on the default path until a count-only A/B on each measured family shows
-    /// the counter at 0 (§4.3).
+    /// ★ P1+P2 inc A2: refuse — not only count — a leaf into the carve-out on a GPU target
+    /// ([`carve_reached`]). ★ 2026-10-10 (§AB): kf3 sets it ON always (`KF3_TSPACE` is hardwired;
+    /// OFF only under its positive control `KF3_NEGCTL_CARVE`), and it now covers guest-KERNEL
+    /// spaces too. ⊘ The text it supersedes: "a GPU target a guest non-kernel channel may run in
+    /// … ON with `KF3_TSPACE=1`; OFF on the default path until a count-only A/B".
     pub carve_refuse: bool,
 }
 
@@ -135,17 +150,49 @@ pub struct Applied {
     /// Batches / ranges the target refused whose runs then went one by one (not refusals: every
     /// run still got its own verdict).
     pub batch_fallbacks: usize,
+    /// ★ 2026-10-09: runs (UNMAP or MAP) wholly satisfied by UNCHANGED pages — no host call at all
+    /// (a page the diff names with the same mapping is never unmapped nor re-mapped).
+    pub kept_runs: usize,
     /// The first such fallback's reason.
     pub first_batch_fallback: Option<String>,
     /// ★ P1+P2 inc A (§4.3): vidmem/SKED map runs into the firmware carve-out on a GPU target
     /// ([`MapTarget::gpu_space`]) a guest non-kernel channel may run in (it withholds privileged
     /// leaves) — counted, and refused only with [`ApplyCfg::carve_refuse`].
     pub carve_gpu: usize,
-    /// ★ Review fix 2026-10-04: the same on a guest-KERNEL GPU space — counted only, never refused
-    /// ([`carve_reached`]).
+    /// ★ Review fix 2026-10-04: the same on a guest-KERNEL GPU space, counted apart. ⊘ Corrected
+    /// 2026-10-10 (§AB): refused too under [`ApplyCfg::carve_refuse`] (was "counted only, never
+    /// refused") ([`carve_reached`]).
     pub carve_kernel: usize,
     /// ★ P1+P2 inc A (§4.3): the same on a CPU view (the guest kernel's BAR1/BAR2) — count-only.
     pub carve_cpu: usize,
+    /// ★ 2026-10-10: carve-out bytes left ABSENT from runs that straddle the carve-out base (the
+    /// run's part below it is placed and the run acknowledged — [`prepare_row`]).
+    pub carve_clipped_bytes: u64,
+    /// ★ Review fix 2026-10-10 (findings 1, 2): runs acknowledged FAILED only because a LINKED run
+    /// failed — a MAP sharing kept pages with a failed UNMAP, or overlapping one that stays
+    /// committed; an UNMAP whose kept pages a failed MAP was to carry. Counted in `refused` too.
+    /// (The walker's slot must never hold two placements over one VA, and must keep every page we
+    /// keep mapped: [`apply_entry`], "commit consistency".)
+    pub linked_failed: usize,
+    /// ★ D1 (2026-10-10, `V3_BATCHED_MAP.md` §8.8): **a guard that must stay 0.** Pages whose guest
+    /// translation did NOT change but whose host mapping had to be re-made — a mapping outside
+    /// every VA-reserving `hDma` that a changed part of the same placement would SPLIT, which host
+    /// RM cannot do exactly. Since D1 every such mapping is one 4 KiB page or sits in a micro
+    /// reservation, so this cannot happen; the re-make stays as a declared last resort and the
+    /// property tests assert 0.
+    /// ⊘ The text this corrects (review fix 2026-10-10, finding 3): *"The one remaining transient of
+    /// an unchanged VA; §8.7 names the owner decision"* — the owner's invariant (no unmap-then-remap
+    /// of kept pages) was met by placing differently, not by re-making.
+    pub remade_unchanged_pages: u64,
+    /// The VA intervals of [`Applied::remade_unchanged_pages`], `(start, end)`.
+    pub remade: Vec<(u64, u64)>,
+    /// ★ Review 2 item 5: runs refused for the refresh's host-call budget
+    /// ([`crate::batch::REFRESH_BUDGET_EXHAUSTED`]) — counted in `refused` too. Absent until the
+    /// guest's next walk of the space (fresh budget); ⊘ the VA manager no longer walks the space
+    /// again by itself (that follow-up walk livelocked: `V3_BATCHED_MAP.md` §8.8.13.1).
+    pub budget_refused: usize,
+    /// ★ Review fix 2026-10-10: new pieces of a FAILED map run taken down again (never a kept page).
+    pub taken_down: usize,
 }
 
 impl Applied {
@@ -159,15 +206,18 @@ impl Applied {
     }
 
     fn refuse(&mut self, i: usize, why: String) {
+        if why.contains(crate::batch::REFRESH_BUDGET_EXHAUSTED) {
+            self.budget_refused = self.budget_refused.saturating_add(1);
+        }
         self.codes[i] = KFWR_ACK_FAILED;
-        self.refused += 1;
+        self.refused = self.refused.saturating_add(1);
         self.first_refusal.get_or_insert(why);
     }
 
     /// ★★★ v3-roperm: withhold a privileged map run from a user twin, by name (bounded log).
     fn withhold_privileged(&mut self, i: usize, r: &DiffRun) {
         self.codes[i] = KFWR_ACK_FAILED;
-        self.priv_withheld += 1;
+        self.priv_withheld = self.priv_withheld.saturating_add(1);
         self.priv_withheld_bytes = self.priv_withheld_bytes.saturating_add(r.len);
         static LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
         if LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 64 {
@@ -181,7 +231,7 @@ impl Applied {
     fn fallback(&mut self, why: String) {
         // A target that does not batch at all is not a fallback — it is the per-run path.
         if why != crate::ledger::NOT_BATCHED {
-            self.batch_fallbacks += 1;
+            self.batch_fallbacks = self.batch_fallbacks.saturating_add(1);
             self.first_batch_fallback.get_or_insert(why);
         }
     }
@@ -204,8 +254,8 @@ fn contiguous_groups(
     let mut out = Vec::new();
     let mut start = 0;
     for k in 1..=items.len() {
-        let breaks = k == items.len() || k - start >= cap || {
-            let (va, len) = span(items[k - 1]);
+        let breaks = k == items.len() || k.saturating_sub(start) >= cap || {
+            let (va, len) = span(items[k.saturating_sub(1)]);
             va.checked_add(len) != Some(span(items[k]).0) || !compatible(items[start], items[k])
         };
         if breaks {
@@ -310,7 +360,21 @@ impl PermPolicy {
             kind: m.kind(),
             perm: self.host_perm(m.flags),
             privileged: m.flags & kf_cuda::abi::KFWR_RF_PRIVILEGE != 0,
+            leaf: leaf_bytes(m.page_size()),
         }
+    }
+}
+
+/// ★ 2026-10-09: a walk run's page-size code (`kf_cuda::abi::PS_*`) as bytes; 0 for an unknown
+/// code (the caller then treats the run as made of family-grain leaves).
+#[must_use]
+pub const fn leaf_bytes(code: u8) -> u64 {
+    match code {
+        kf_cuda::abi::PS_4K => 0x1000,
+        kf_cuda::abi::PS_64K => 0x1_0000,
+        kf_cuda::abi::PS_2M => 0x20_0000,
+        kf_cuda::abi::PS_512M => 0x2000_0000,
+        _ => 0,
     }
 }
 
@@ -320,12 +384,32 @@ impl PermPolicy {
 /// channel created non-kernel may run in — a twin that withholds privileged leaves
 /// ([`MapTarget::withholds_privileged`]: `User(n)` or `Unclassified`).
 ///
-/// ★ Review fix 2026-10-04 (HIGH): with `KF3_TSPACE=1` the device turns refusal ON, so a twin an
-/// unprivileged guest channel runs in never maps kayfabe's declared firmware region. A guest-KERNEL
-/// space is only counted ([`Applied::carve_kernel`]): under T-mode no channel runs in one
-/// (passthrough births are refused there, Translated work runs in the T-space) and CeUtils'
-/// `VIRTUAL_MODE` FB alias lives in one — refusing it there could fail `RmInitAdapter` for no
-/// isolation gain (§4.3, UNVERIFIED whether the alias reaches the carve-out).
+/// ⊘ **Corrected 2026-10-10 (later the same day; fix of the 6fafcc6e fast-suite regression), above
+/// the text it corrects:** "refused" means the carve-out BYTES only. [`prepare_row`] refuses a run
+/// that STARTS in the carve-out; a run that straddles its base is clipped there (its part below is
+/// guest VRAM and is placed, the rest stays absent; [`Applied::carve_clipped_bytes`]). The
+/// "Unmeasured" below is now measured `[RTX 4070, 595.91.07, kf3 @ 7acb811b and 6fafcc6e]`: the
+/// guest RM's flat FB alias in a guest-KERNEL space covers the whole store, as two runs:
+/// `0x120000000+0x1efc00000` of 2 MiB leaves naming store 0 (straddles the base by `0x20000`) and
+/// `0x30fc00000+0x10400000` naming store `0x1efc00000` (wholly inside). Refusing the first whole
+/// killed the guest RM's kernel CE channel (`tspace bind: virtual_unresolved` at `0x30fb55000`,
+/// store `0x1efb55000`) — fast suite 0/30. With the clip: 30/30, the second run still refused.
+///
+/// ⊘ **Corrected 2026-10-10 (`OWNER_RULINGS.md` §AB; `V3_WINDOW_EXPOSURE_REVIEW.md` row 6), above
+/// the 2026-10-04 text it supersedes:** under [`ApplyCfg::carve_refuse`] (hardwired ON in kf3 with
+/// the T-space) a carve-out leaf is REFUSED on EVERY host GPU space, a guest-KERNEL space included
+/// (still counted apart in [`Applied::carve_kernel`]). A mirror never maps kayfabe memory (§Q, §AB
+/// rule 2): no channel runs in a guest-kernel mirror, so a refusal there costs no work, and a
+/// refused leaf is absent, which an invalidate completes over (§AA). ⚠ Unmeasured: whether the
+/// guest RM's CeUtils `VIRTUAL_MODE` FB alias reaches the carve-out (the reason the kernel arm was
+/// count-only); the Linux fast suite and the Windows boot verify it.
+///
+/// ⊘ SUPERSEDED 2026-10-10 (above): *Review fix 2026-10-04 (HIGH): with `KF3_TSPACE=1` the device
+/// turns refusal ON, so a twin an unprivileged guest channel runs in never maps kayfabe's declared
+/// firmware region. A guest-KERNEL space is only counted ([`Applied::carve_kernel`]): under T-mode
+/// no channel runs in one (passthrough births are refused there, Translated work runs in the
+/// T-space) and CeUtils' `VIRTUAL_MODE` FB alias lives in one — refusing it there could fail
+/// `RmInitAdapter` for no isolation gain (§4.3, UNVERIFIED whether the alias reaches the carve-out).*
 fn carve_reached(
     target: &dyn MapTarget,
     off: u64,
@@ -337,92 +421,551 @@ fn carve_reached(
         return false;
     }
     if !target.gpu_space() {
-        out.carve_cpu += 1;
+        out.carve_cpu = out.carve_cpu.saturating_add(1);
         false
     } else if target.withholds_privileged() {
-        out.carve_gpu += 1;
+        out.carve_gpu = out.carve_gpu.saturating_add(1);
         cfg.carve_refuse
     } else {
-        out.carve_kernel += 1;
-        false
+        out.carve_kernel = out.carve_kernel.saturating_add(1);
+        cfg.carve_refuse
+    }
+}
+
+/// ★★★ 2026-10-09 — **a page the diff names but does not change.** The walker unmaps WHOLE
+/// committed placements and maps the pieces of the walk in the gaps (`kf_walk.cu`, "THE DIFF
+/// AGAINST THE COMMITTED PLACEMENTS"), and its UNMAP run IS the committed placement (same `at`,
+/// same flags). So a one-page change inside a 16-page row arrives as UNMAP(16 pages) + MAP(5) +
+/// MAP(1, new) + MAP(10): fifteen pages whose guest mapping did not change. The owner's rule
+/// (2026-10-09): *every VA whose guest mapping is unchanged stays accessible at all times* — so on
+/// a GPU target those pages get NO host call at all: neither unmapped nor re-mapped.
+///
+/// ★ Review fix 2026-10-10 (finding 3; owner rule: an IDENTICAL TRANSLATION is unchanged, whatever
+/// the leaf size): unchanged ⇔ the UNMAP and the MAP name the same aperture, kind, permissions and
+/// privilege, and the same linear backing over their overlap. ⊘ The text this corrects: *"… and
+/// LEAF SIZE … (A leaf-size change is a change of the guest's mapping: its host mappings are
+/// re-made.)"* — sixteen 4 KiB leaves re-expressed as one 64 KiB leaf over the same pages (or back)
+/// transiently unmapped all sixteen VAs, in a reservation too (`[model]`
+/// `sim::adversarial::a_leaf_size_change_with_identical_translation_transiently_unmaps`). Now the
+/// host keeps its mappings and only the walker's table changes: its UNMAP (old page-size class)
+/// and MAP (new class) are both acknowledged APPLIED with no host call — the walker's own commit
+/// (`kf_cuda::diffmodel::commit`) moves the placement between classes. Where keeping would leave a
+/// mapping host RM cannot split under a later change, [`keep_only_what_stays_exact`] decides.
+fn same_mapping(u: &DiffRun, m: &DiffRun) -> bool {
+    u.ap == m.ap
+        && u.kind == m.kind
+        && u.perm == m.perm
+        && u.privileged == m.privileged
+        && u.at.wrapping_sub(u.va) == m.at.wrapping_sub(m.va)
+}
+
+/// ★ Review fix 2026-10-10: one kept interval — UNMAP run `u` and MAP run `m` name the same
+/// mapping ([`same_mapping`]) over `[s, e)`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Kept {
+    u: usize,
+    m: usize,
+    s: u64,
+    e: u64,
+}
+
+/// Whether `r` is a plain memory run (a usermode view or a SKED page keeps its own verbs).
+fn plain_run(r: &DiffRun, cfg: &ApplyCfg<'_>) -> bool {
+    cfg.usermode
+        .and_then(|u| u.classify(r.ap, r.kind, r.at, r.len))
+        .is_none()
+        && kf_chip::sked::message_leaf(r.ap, r.kind) != Some(MessageLeaf::SkedReflected)
+}
+
+/// The MAP runs of `runs`, sorted by VA (they are disjoint: one leaf per walked VA).
+fn maps_by_va(runs: &[DiffRun], keep: impl Fn(usize) -> bool) -> Vec<usize> {
+    let mut maps: Vec<usize> = (0..runs.len())
+        .filter(|&i| !runs[i].unmap && keep(i))
+        .collect();
+    maps.sort_by_key(|&i| runs[i].va);
+    maps
+}
+
+/// The MAP runs (indices into `maps`' runs) overlapping `[va, end)`.
+fn maps_over<'m>(
+    runs: &[DiffRun],
+    maps: &'m [usize],
+    va: u64,
+    end: u64,
+) -> impl Iterator<Item = usize> + 'm {
+    let first = maps.partition_point(|&m| runs[m].va.saturating_add(runs[m].len) <= va);
+    let count = maps[first..]
+        .iter()
+        .take_while(|&&m| runs[m].va < end)
+        .count();
+    maps[first..first.saturating_add(count)].iter().copied()
+}
+
+/// The UNCHANGED intervals ([`same_mapping`]) between this entry's UNMAP and MAP runs — for an
+/// UNMAP run the part that must NOT be unmapped, for a MAP run the part that must NOT be mapped.
+/// Only plain memory runs take part. O((U + M) log M).
+fn unchanged_pairs(runs: &[DiffRun], cfg: &ApplyCfg<'_>, withhold_privileged: bool) -> Vec<Kept> {
+    let maps = maps_by_va(runs, |i| {
+        plain_run(&runs[i], cfg) && !(runs[i].privileged && withhold_privileged)
+    });
+    let mut out = Vec::new();
+    for (u, ur) in runs.iter().enumerate() {
+        if !ur.unmap || ur.held || !plain_run(ur, cfg) {
+            continue;
+        }
+        let u_end = ur.va.saturating_add(ur.len);
+        for m in maps_over(runs, &maps, ur.va, u_end) {
+            let mr = &runs[m];
+            let (s, e) = (ur.va.max(mr.va), u_end.min(mr.va.saturating_add(mr.len)));
+            if s < e && same_mapping(ur, mr) {
+                out.push(Kept { u, m, s, e });
+            }
+        }
+    }
+    out
+}
+
+/// Per run, its kept intervals, sorted and merged.
+fn kept_by_run<'k>(pairs: impl IntoIterator<Item = &'k Kept>, n: usize) -> Vec<Vec<(u64, u64)>> {
+    let mut k: Vec<Vec<(u64, u64)>> = vec![Vec::new(); n];
+    for p in pairs {
+        k[p.u].push((p.s, p.e));
+        k[p.m].push((p.s, p.e));
+    }
+    for v in &mut k {
+        v.sort_unstable();
+        let mut merged: Vec<(u64, u64)> = Vec::with_capacity(v.len());
+        for &(s, e) in v.iter() {
+            match merged.last_mut() {
+                Some(last) if s <= last.1 => last.1 = last.1.max(e),
+                _ => merged.push((s, e)),
+            }
+        }
+        *v = merged;
+    }
+    k
+}
+
+/// ★★ Review fix 2026-10-10 (findings 1, 3) — **keep only what stays exact.** On a target that
+/// keeps a ledger of its own mappings ([`MapTarget::own_view`]), a kept interval survives only
+/// where:
+/// 1. **a mapping of OURS covers it** — a page the walker still lists but whose host mapping is
+///    gone (host RM answered an error AFTER acting, a take-down) is mapped again as a new piece,
+///    never "kept" absent;
+/// 2. ★ D1 (2026-10-10): **UNREACHABLE since D1, kept as a declared last resort.** Every mapping of
+///    ours outside a VA-reserving `hDma` is one 4 KiB page or inside a micro reservation, so
+///    `OwnView::rigid` is empty (`BatchedVas::rigid_seen` counts any violation; tests assert 0).
+///    ⊘ The text below is the pre-D1 description of what this rule did.
+///    **it does not hold PART of a rigid mapping** — one host RM cannot split exactly (no
+///    VA-reserving `hDma` holds it, `crate::batch::BatchedVas` rule 2). A rigid mapping inside
+///    this placement that carries kept pages AND changed pages of it (the guest split a big leaf
+///    and changed part of it), or the kept pages of two different MAP runs (a later change of one
+///    would have to split it), is RE-MADE whole: unmapped with the changed pieces, its kept pages
+///    mapped again as new pieces of their MAP runs. That is the one remaining case in which an
+///    UNCHANGED VA is transiently unmapped — no exact alternative exists in the `NV01` range
+///    (RM frees the whole VA block on a partial unmap; it refuses a second map over a mapped VA),
+///    and the alternative, refusing the unmap, holds the guest's invalidate forever (§AA does not
+///    cover a refused unmap). Counted in [`Applied::remade_unchanged_pages`] and named;
+///    `V3_BATCHED_MAP.md` §8.7 names the owner decision that would make it exact (4 KiB-grain
+///    placement in the `NV01` range, or micro reservations for every row there).
+///
+/// A rigid mapping that reaches OUTSIDE this placement is left alone (re-making it would touch a
+/// placement the diff does not name); a changed piece that would split it is refused by the target
+/// (`SPLIT_OUTSIDE_RESERVATION`) and the run stays a difference. Returns the intervals un-kept for
+/// rule 2, so an UNMAP that fails before any host call keeps its rigid mappings whole.
+fn keep_only_what_stays_exact(
+    target: &dyn MapTarget,
+    runs: &[DiffRun],
+    pairs: &mut Vec<Kept>,
+) -> Vec<Kept> {
+    let mut by_u: std::collections::BTreeMap<usize, Vec<Kept>> = std::collections::BTreeMap::new();
+    for p in pairs.drain(..) {
+        by_u.entry(p.u).or_default().push(p);
+    }
+    let mut remade = Vec::new();
+    for (u, mut ps) in by_u {
+        let r = &runs[u];
+        let end = r.va.saturating_add(r.len);
+        if let Some(view) = target.own_view(r.va, end) {
+            ps = ps
+                .iter()
+                .flat_map(|p| {
+                    view.owned.iter().filter_map(move |&(os, oe)| {
+                        let (s, e) = (p.s.max(os), p.e.min(oe));
+                        (s < e).then_some(Kept { s, e, ..*p })
+                    })
+                })
+                .collect();
+            for &(xs, xe) in &view.rigid {
+                if xs < r.va || xe > end {
+                    continue;
+                }
+                let inside: Vec<&Kept> = ps.iter().filter(|p| p.s < xe && xs < p.e).collect();
+                let whole_in_one = matches!(inside.as_slice(), [p] if p.s <= xs && p.e >= xe);
+                if inside.is_empty() || whole_in_one {
+                    continue;
+                }
+                let mut next = Vec::with_capacity(ps.len().saturating_add(1));
+                for p in ps {
+                    if p.s < xe && xs < p.e {
+                        remade.push(Kept {
+                            s: p.s.max(xs),
+                            e: p.e.min(xe),
+                            ..p
+                        });
+                        if p.s < xs {
+                            next.push(Kept { e: xs, ..p });
+                        }
+                        if p.e > xe {
+                            next.push(Kept { s: xe, ..p });
+                        }
+                    } else {
+                        next.push(p);
+                    }
+                }
+                ps = next;
+            }
+        }
+        pairs.extend(ps);
+    }
+    remade
+}
+
+/// ★★ Review fix 2026-10-10 (findings 1, 2) — **commit consistency.** The walker commits WHOLE
+/// runs (`kf_cuda::diffmodel::commit`): an APPLIED UNMAP leaves its slot, an APPLIED/HELD MAP
+/// enters it, a FAILED run leaves the slot as it was. Two rules keep that slot equal to what the
+/// host holds:
+/// - (a) a MAP that overlaps an UNMAP which stays committed (FAILED) fails too — else the slot
+///   holds two placements over one VA, and the next refresh unmaps the old one WHOLE, the kept
+///   pages with it (finding 1: `[model]` a refused sub-range unmap, and a > 512 MiB `NV01` row);
+/// - (b) an UNMAP whose kept pages a FAILED MAP was to carry fails too — the kept pages stay
+///   mapped (never taken down for a neighbour's refusal, finding 2), so their placement stays
+///   committed.
+///
+/// `links` are the kept intervals (and the re-made ones: their pages are carried the same way);
+/// `over[u]` the MAP runs overlapping UNMAP `u`. Iterated to a fixpoint; returns the runs it newly
+/// failed, each with its reason.
+fn fail_linked(
+    runs: &[DiffRun],
+    links: &[Kept],
+    over: &[Vec<usize>],
+    failed: &mut [bool],
+) -> Vec<(usize, String)> {
+    let mut newly = Vec::new();
+    let mut work: Vec<usize> = (0..runs.len()).filter(|&i| failed[i]).collect();
+    while let Some(i) = work.pop() {
+        let next: Vec<(usize, String)> = if runs[i].unmap {
+            over[i]
+                .iter()
+                .map(|&m| {
+                    (
+                        m,
+                        format!(
+                            "map {:#x}+{:#x}: overlaps the placement {:#x}+{:#x}, which stays committed (its unmap did not land) — refused with it, so the walker never holds two placements over one VA",
+                            runs[m].va, runs[m].len, runs[i].va, runs[i].len
+                        ),
+                    )
+                })
+                .collect()
+        } else {
+            links
+                .iter()
+                .filter(|p| p.m == i)
+                .map(|p| {
+                    (
+                        p.u,
+                        format!(
+                            "unmap {:#x}+{:#x}: its unchanged pages {:#x}..{:#x} were to be carried by the map {:#x}+{:#x}, which failed — the placement stays committed and those pages stay mapped",
+                            runs[p.u].va, runs[p.u].len, p.s, p.e, runs[i].va, runs[i].len
+                        ),
+                    )
+                })
+                .collect()
+        };
+        for (j, why) in next {
+            if !failed[j] {
+                failed[j] = true;
+                work.push(j);
+                newly.push((j, why));
+            }
+        }
+    }
+    newly
+}
+
+/// `[lo, hi)` minus the sorted, disjoint `kept` intervals.
+fn subtract(lo: u64, hi: u64, kept: &[(u64, u64)]) -> Vec<(u64, u64)> {
+    let mut out = Vec::new();
+    let mut cur = lo;
+    for &(s, e) in kept {
+        if s > cur {
+            out.push((cur, s.min(hi)));
+        }
+        cur = cur.max(e);
+    }
+    if cur < hi {
+        out.push((cur, hi));
+    }
+    out.retain(|&(s, e)| s < e);
+    out
+}
+
+impl Applied {
+    /// ★ Review fix 2026-10-10: refuse run `i` once (a run with several failing pieces is ONE
+    /// refused run); a later reason is dropped.
+    fn refuse_once(&mut self, i: usize, why: String) {
+        if self.codes[i] != KFWR_ACK_FAILED {
+            self.refuse(i, why);
+        }
     }
 }
 
 /// ★★★★★ **Apply `runs` (one entry's diff) through `target`.** Unmaps first (a held placement
 /// is retired without a host call), then maps, then ONE invalidate if anything changed.
 ///
+/// ★★★ 2026-10-09 (GPU targets): only what CHANGED reaches the host. A page an UNMAP and a MAP
+/// of this entry name with the same mapping ([`same_mapping`]) is neither unmapped nor re-mapped
+/// — never transiently unmapped; the changed sub-ranges are unmapped by exact range over OUR
+/// placements (`crate::batch::BatchedVas::unmap_range`) and only the new pieces are mapped. A
+/// target that cannot unmap a sub-range answers by name and that run is refused.
+///
+/// ★★ Review fix 2026-10-10 — **the verdicts keep the walker's slot equal to the host**
+/// ([`fail_linked`]): every MAP run's rows are checked BEFORE any host call, and a run that fails
+/// fails the runs linked to it (a refused leaf never takes its unchanged neighbours down, finding
+/// 2; a refused unmap never leaves overlapping placements, finding 1). The changed pieces of an
+/// UNMAP that fails that way are still unmapped (what the guest changed must not stay reachable:
+/// absence, as §AA), its kept pages stay; a FAILED map run's NEW pieces that were placed are taken
+/// down again — never a kept page. On a GPU target a refused range falls back to one range per
+/// changed piece, so every run gets its own verdict. ⊘ The text this corrects (2026-10-09): *"A MAP
+/// run whose new piece fails takes its kept part down too (named) so the ledger never holds what
+/// the walker did not commit"* — that unmapped unchanged pages for a neighbour's refusal.
+///
 /// A map is not attempted — and is acknowledged FAILED, so the next diff retries it — when it
 /// cannot become a host row (outside the store, not guest RAM, not whole pages), when it overlaps
 /// one of OUR VMM placements (a guest VA may never alias a VMM address), or when it overlaps a
-/// placement whose unmap was just refused (the two would overlap on the host). A walked piece
-/// wholly above a CPU window's extent has no CPU address: it is satisfied as HELD (nothing of
-/// ours placed); one crossing the extent is placed up to it.
+/// placement whose unmap failed (the two would overlap on the host). A walked piece wholly above a
+/// CPU window's extent has no CPU address: it is satisfied as HELD (nothing of ours placed); one
+/// crossing the extent is placed up to it.
+#[allow(clippy::too_many_lines)]
 pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>) -> Applied {
+    // ★ Review item 4: one walker entry is one refresh — the target's per-refresh host-call budget.
+    target.begin_refresh();
+    let n = runs.len();
     let mut out = Applied {
-        codes: vec![KFWR_ACK_APPLIED; runs.len()],
+        codes: vec![KFWR_ACK_APPLIED; n],
         ..Applied::default()
     };
-    let mut failed_unmaps: Vec<(u64, u64)> = Vec::new();
-    // ★ `V3_BATCHED_MAP.md` §4: VA-adjacent unmaps go as ONE range (the union of exactly the
-    // placements being removed, nothing else); a refused range falls back to one call per run,
-    // so every run still gets its own verdict.
-    let mut unmaps: Vec<usize> = Vec::new();
-    for (i, r) in runs.iter().enumerate().filter(|(_, r)| r.unmap) {
-        if r.held {
-            out.held_retired += 1;
-        } else {
-            unmaps.push(i);
+    let net = target.gpu_space();
+    let withhold_privileged = target.withholds_privileged();
+    let mut pairs = if net {
+        unchanged_pairs(runs, cfg, withhold_privileged)
+    } else {
+        Vec::new()
+    };
+    let remade = if net {
+        keep_only_what_stays_exact(target, runs, &mut pairs)
+    } else {
+        Vec::new()
+    };
+    let links: Vec<Kept> = pairs.iter().chain(&remade).copied().collect();
+    let kept = kept_by_run(&pairs, n);
+    // Every MAP run overlapping each UNMAP run (rule (a) of `fail_linked`).
+    let all_maps = maps_by_va(runs, |_| true);
+    let over: Vec<Vec<usize>> = runs
+        .iter()
+        .map(|r| {
+            if r.unmap && !r.held {
+                maps_over(runs, &all_maps, r.va, r.va.saturating_add(r.len)).collect()
+            } else {
+                Vec::new()
+            }
+        })
+        .collect();
+    let mut failed = vec![false; n];
+    let link_fail = |out: &mut Applied, failed: &mut [bool]| {
+        for (j, why) in fail_linked(runs, &links, &over, failed) {
+            out.linked_failed = out.linked_failed.saturating_add(1);
+            out.refuse_once(j, why);
+        }
+    };
+
+    // ── 1. Every plain MAP run's host rows, checked before ANY host call.
+    let extent = target.va_extent();
+    let reserved = target.reserved();
+    let mut rows: Vec<Vec<Desired>> = vec![Vec::new(); n];
+    for (i, r0) in runs.iter().enumerate().filter(|(_, r)| !r.unmap) {
+        if !plain_run(r0, cfg) {
+            continue; // usermode views and SKED pages: step 3
+        }
+        // ★★★ v3-roperm: a PRIVILEGED memory leaf never reaches a user twin (guest-internal
+        // isolation: an unprivileged guest channel must not reach what the guest kernel marked
+        // privileged, and the host cannot express the bit). Withheld, counted, named.
+        if r0.privileged {
+            if withhold_privileged {
+                out.withhold_privileged(i, r0);
+                failed[i] = true;
+                continue;
+            }
+            out.priv_mirrored = out.priv_mirrored.saturating_add(1);
+        }
+        // ★ 2026-10-09: only the NEW pieces of the run reach the host; the unchanged part is
+        // already ours (a kept remnant of the placement this entry unmaps).
+        let new = subtract(r0.va, r0.va.saturating_add(r0.len), &kept[i]);
+        if new.is_empty() {
+            out.kept_runs = out.kept_runs.saturating_add(1);
+            continue;
+        }
+        for (s, e) in new {
+            let r = DiffRun {
+                va: s,
+                len: e.saturating_sub(s),
+                at: r0.at.wrapping_add(s.saturating_sub(r0.va)),
+                ..*r0
+            };
+            match prepare_row(target, &r, i, cfg, extent, &reserved, &[], &mut out) {
+                Some((d, true)) => rows[i].extend(split_at_leaf(d)),
+                Some((d, false)) => rows[i].push(d),
+                None if out.codes[i] == KFWR_ACK_FAILED => {
+                    failed[i] = true;
+                    rows[i].clear();
+                    break;
+                }
+                None => {} // satisfied above a CPU window's extent
+            }
         }
     }
-    unmaps.sort_by_key(|&i| runs[i].va);
+    link_fail(&mut out, &mut failed);
+
+    // ── 2. Unmaps: the CHANGED pieces of every UNMAP run. An UNMAP already failed by a link keeps
+    // its rigid mappings whole (its placement stays committed), but its changed pieces still go.
+    // ★ `V3_BATCHED_MAP.md` §4: VA-adjacent pieces go as ONE range (the union of exactly the
+    // placements being removed); a refused range falls back piece by piece (GPU) or run by run.
+    let mut pieces: Vec<(usize, u64, u64)> = Vec::new();
+    for (i, r) in runs.iter().enumerate().filter(|(_, r)| r.unmap) {
+        if r.held {
+            out.held_retired = out.held_retired.saturating_add(1);
+            continue;
+        }
+        let keep_whole: Vec<(u64, u64)>;
+        let k = if failed[i] && remade.iter().any(|p| p.u == i) {
+            keep_whole =
+                kept_by_run(pairs.iter().chain(&remade).filter(|p| p.u == i), n).swap_remove(i);
+            &keep_whole
+        } else {
+            &kept[i]
+        };
+        let changed = subtract(r.va, r.va.saturating_add(r.len), k);
+        if changed.is_empty() {
+            out.kept_runs = out.kept_runs.saturating_add(1);
+        }
+        pieces.extend(
+            changed
+                .into_iter()
+                .map(|(s, e)| (i, s, e.saturating_sub(s))),
+        );
+    }
+    // Re-made pages (rule 2 of `keep_only_what_stays_exact`) of UNMAPs that will run.
+    for p in remade.iter().filter(|p| !failed[p.u]) {
+        out.remade_unchanged_pages = out
+            .remade_unchanged_pages
+            .saturating_add(p.e.saturating_sub(p.s) / crate::batch::BATCH_PAGE);
+        out.remade.push((p.s, p.e));
+    }
+    if out.remade_unchanged_pages > 0 {
+        static LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        if LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 32 {
+            eprintln!(
+                "kf-mem: {} UNCHANGED page(s) re-made: a mapping outside every VA-reserving hDma holds them and a changed part of the same placement — host RM cannot split it exactly (V3_BATCHED_MAP.md §8.7)",
+                out.remade_unchanged_pages
+            );
+        }
+    }
+    pieces.sort_by_key(|&(_, va, _)| va);
+    let idx: Vec<usize> = (0..pieces.len()).collect();
     for group in contiguous_groups(
-        &unmaps,
-        |i| (runs[i].va, runs[i].len),
+        &idx,
+        |k| (pieces[k].1, pieces[k].2),
         |_, _| true,
         usize::MAX,
     ) {
-        if group.len() >= 2 {
-            let (va, end) = (
-                runs[group[0]].va,
-                runs[group[group.len() - 1]].va + runs[group[group.len() - 1]].len,
-            );
-            out.unmap_calls += 1;
-            match target.unmap_range(va, end - va, true) {
+        let runs_in = |g: &[usize]| {
+            let mut v: Vec<usize> = g.iter().map(|&k| pieces[k].0).collect();
+            v.dedup();
+            v.len()
+        };
+        let mut group_err: Option<String> = None;
+        if group.len() >= 2 || net {
+            let va = pieces[group[0]].1;
+            let last = group.last().map_or(pieces[group[0]], |&l| pieces[l]);
+            let end = last.1.saturating_add(last.2);
+            out.unmap_calls = out.unmap_calls.saturating_add(1);
+            match target.unmap_range(va, end.saturating_sub(va), true) {
                 Ok(()) => {
-                    out.unmapped += group.len();
-                    out.range_unmaps += 1;
-                    out.range_unmapped_runs += group.len();
+                    out.unmapped = out.unmapped.saturating_add(runs_in(group));
+                    out.range_unmaps = out.range_unmaps.saturating_add(1);
+                    out.range_unmapped_runs =
+                        out.range_unmapped_runs.saturating_add(runs_in(group));
                     continue;
                 }
-                Err(e) => out.fallback(e),
+                Err(e) => {
+                    out.fallback(e.clone());
+                    group_err = Some(e);
+                }
             }
         }
-        for &i in group {
+        for &k in group {
+            let (i, va, len) = pieces[k];
             let r = &runs[i];
-            out.unmap_calls += 1;
-            match target.unmap(r.va, true) {
-                Ok(()) => out.unmapped += 1,
+            let res = if net {
+                // ★ Review fix 2026-10-10: every changed piece by its own exact range (a lone piece
+                // was just tried as its group), so every run gets its own verdict.
+                match (&group_err, group.len()) {
+                    (Some(e), 1) => Err(e.clone()),
+                    _ => {
+                        out.unmap_calls = out.unmap_calls.saturating_add(1);
+                        target.unmap_range(va, len, true)
+                    }
+                }
+            } else if va != r.va || len != r.len {
+                Err("a sub-range of a placement and the target could not unmap it by range".into())
+            } else {
+                out.unmap_calls = out.unmap_calls.saturating_add(1);
+                target.unmap(r.va, true)
+            };
+            match res {
+                Ok(()) => out.unmapped = out.unmapped.saturating_add(1),
                 Err(e) => {
-                    failed_unmaps.push((r.va, r.va.saturating_add(r.len)));
-                    out.unmap_refused += 1;
-                    out.refuse(i, format!("{e} (len {:#x})", r.len));
+                    out.unmap_refused = out.unmap_refused.saturating_add(1);
+                    failed[i] = true;
+                    out.refuse_once(i, format!("unmap {va:#x}+{len:#x}: {e}"));
                 }
             }
         }
     }
-    let extent = target.va_extent();
-    let reserved = target.reserved();
-    let withhold_privileged = target.withholds_privileged();
-    let mut pending: Vec<(usize, Desired)> = Vec::new();
-    for (i, r) in runs.iter().enumerate().filter(|(_, r)| !r.unmap) {
+    link_fail(&mut out, &mut failed);
+    let failed_unmaps: Vec<(u64, u64)> = runs
+        .iter()
+        .enumerate()
+        .filter(|&(i, r)| r.unmap && failed[i])
+        .map(|(_, r)| (r.va, r.va.saturating_add(r.len)))
+        .collect();
+
+    // ── 3. Usermode views and SKED pages (their own verbs), then the plain rows.
+    // Per MAP run: pieces placed (ours), a piece held by the host.
+    let mut placed: Vec<Vec<(u64, u64)>> = vec![Vec::new(); n];
+    let mut held_any = vec![false; n];
+    for (i, r0) in runs.iter().enumerate().filter(|(_, r)| !r.unmap) {
+        if failed[i] || plain_run(r0, cfg) {
+            continue;
+        }
         // ★★★ Hopper+ internal MMIO FIRST: a usermode-page view is never a memory row.
         if let Some(leaf) = cfg
             .usermode
-            .and_then(|u| u.classify(r.ap, r.kind, r.at, r.len))
+            .and_then(|u| u.classify(r0.ap, r0.kind, r0.at, r0.len))
         {
             apply_usermode(
                 target,
-                r,
+                r0,
                 leaf,
                 extent,
                 &reserved,
@@ -430,111 +973,33 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
                 i,
                 &mut out,
             );
-            continue;
-        }
-        // ★★★ v3-cdp: a SKED-reflected page is never a memory row either — it is placed as a
-        // message-kind mapping (`V3_CDP.md`). ⊘ Only that case is diverted: a SYS_COH message leaf
-        // on a family with no usermode MMIO (Turing … Ada: no producer is known) keeps its
-        // pre-existing path, unchanged.
-        if kf_chip::sked::message_leaf(r.ap, r.kind) == Some(MessageLeaf::SkedReflected) {
+        } else {
+            // ★★★ v3-cdp: a SKED-reflected page is never a memory row either — it is placed as a
+            // message-kind mapping (`V3_CDP.md`). ⊘ Only that case is diverted: a SYS_COH message
+            // leaf on a family with no usermode MMIO (Turing … Ada: no producer is known) keeps its
+            // pre-existing path, unchanged.
             let at = SkedAt {
                 extent,
                 reserved: &reserved,
                 failed_unmaps: &failed_unmaps,
                 withhold_privileged,
             };
-            apply_sked(target, r, cfg, &at, i, &mut out);
-            continue;
-        }
-        // ★★★ v3-roperm: a PRIVILEGED memory leaf never reaches a user twin (guest-internal
-        // isolation: an unprivileged guest channel must not reach what the guest kernel marked
-        // privileged, and the host cannot express the bit). Withheld, counted, named.
-        if r.privileged {
-            if withhold_privileged {
-                out.withhold_privileged(i, r);
-                continue;
-            }
-            out.priv_mirrored += 1;
-        }
-        let mut d =
-            match desired_from_leaves([(r.va, r.at, r.len, r.ap)], cfg.store_bytes, cfg.ram_offset)
-            {
-                // ★ v3-gfx: the host maps it with the guest's kind, uncompressed (`Desired::kind`).
-                // ★★★ v3-roperm: and with the guest leaf's permissions (`Desired::perm`).
-                Ok(v) if v.len() == 1 => Desired {
-                    kind: host_pte_kind(r.kind, v[0].ram, cfg.per_map_kind),
-                    perm: r.perm,
-                    ..v[0]
-                },
-                Ok(_) => {
-                    out.refuse(i, format!("map {:#x}: no row", r.va));
-                    continue;
-                }
-                Err(e) => {
-                    out.refuse(i, format!("leaf refused: {e:?}"));
-                    continue;
-                }
-            };
-        if !d.ram && carve_reached(target, d.off, d.len, cfg, &mut out) {
-            out.refuse(
-                i,
-                format!(
-                    "leaf {:#x}+{:#x} names store {:#x}, inside the firmware carve-out at {:#x} — a twin maps no kayfabe memory (§Q)",
-                    d.va, d.len, d.off, cfg.carve
-                ),
-            );
-            continue;
-        }
-        if !whole_pages(&d, cfg.grain) {
-            out.refuse(
-                i,
-                format!(
-                    "leaf {:#x}+{:#x} (backing {:#x}) is not whole {:#x}-byte pages: a sub-page row would leave a hole",
-                    d.va, d.len, d.off, cfg.grain
-                ),
-            );
-            continue;
-        }
-        if let Some(ext) = extent {
-            if d.va >= ext {
-                out.clipped_bytes += d.len;
-                out.codes[i] = KFWR_ACK_HELD;
-                continue;
-            }
-            let end = d.va.saturating_add(d.len);
-            if end > ext {
-                out.clipped_bytes += end - ext;
-                d.len = ext - d.va;
+            if let Some(p) = apply_sked(target, r0, cfg, &at, i, &mut out) {
+                placed[i].push(p);
             }
         }
-        let end = d.va.saturating_add(d.len);
-        if let Some(&(a, b)) = reserved.iter().find(|&&(a, b)| d.va < b && a < end) {
-            out.vmm_overlaps += 1;
-            out.refuse(
-                i,
-                format!(
-                    "leaf {:#x}+{:#x} overlaps OUR placement [{a:#x}, {b:#x}) — a guest VA may never alias a VMM address; this leaf alone is refused (Q11)",
-                    d.va, d.len
-                ),
-            );
-            continue;
-        }
-        if failed_unmaps.iter().any(|&(a, b)| d.va < b && a < end) {
-            out.refuse(
-                i,
-                format!(
-                    "map {:#x}+{:#x}: over a placement whose unmap was refused",
-                    d.va, d.len
-                ),
-            );
-            continue;
-        }
-        pending.push((i, d));
+        failed[i] = out.codes[i] == KFWR_ACK_FAILED;
     }
     // ★ `V3_BATCHED_MAP.md` §3: VA-contiguous guest-RAM rows of one kind go as ONE batched
     // placement; a refused batch placed nothing, so its rows go one by one and each gets its own
     // verdict (HELD included). ★★★ v3-roperm: and of ONE permission set — one host map carries
     // one, so a batch across a RO/RW boundary would widen the RO rows (or narrow the RW ones).
+    let mut pending: Vec<(usize, Desired)> = runs
+        .iter()
+        .enumerate()
+        .filter(|&(i, r)| !r.unmap && !failed[i])
+        .flat_map(|(i, _)| rows[i].iter().map(move |&d| (i, d)))
+        .collect();
     pending.sort_by_key(|&(_, d)| d.va);
     let idx: Vec<usize> = (0..pending.len()).collect();
     let same = |a: usize, b: usize| {
@@ -551,12 +1016,15 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
     ) {
         if group.len() >= 2 && pending[group[0]].1.ram {
             let rows: Vec<Desired> = group.iter().map(|&k| pending[k].1).collect();
-            out.map_calls += 1;
+            out.map_calls = out.map_calls.saturating_add(1);
             match target.map_batch(&rows, true) {
                 Ok(()) => {
-                    out.mapped += rows.len();
-                    out.batches += 1;
-                    out.batched_runs += rows.len();
+                    out.mapped = out.mapped.saturating_add(rows.len());
+                    out.batches = out.batches.saturating_add(1);
+                    out.batched_runs = out.batched_runs.saturating_add(rows.len());
+                    for &k in group {
+                        placed[pending[k].0].push((pending[k].1.va, pending[k].1.len));
+                    }
                     continue;
                 }
                 Err(e) => out.fallback(e),
@@ -564,17 +1032,20 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
         }
         for &k in group {
             let (i, d) = pending[k];
-            out.map_calls += 1;
+            out.map_calls = out.map_calls.saturating_add(1);
             match target.map(&d, true) {
-                Ok(Mapped::Placed) => out.mapped += 1,
+                Ok(Mapped::Placed) => {
+                    out.mapped = out.mapped.saturating_add(1);
+                    placed[i].push((d.va, d.len));
+                }
                 Ok(Mapped::HeldByHost) => {
                     // Rare (a host-RM placement in the twin's VAS at the guest's VA): named per leaf.
                     eprintln!(
                         "kf3: mem leaf {:#x}+{:#x} HELD BY HOST (host RM placed its own buffer there)",
                         d.va, d.len
                     );
-                    out.held += 1;
-                    out.codes[i] = KFWR_ACK_HELD;
+                    out.held = out.held.saturating_add(1);
+                    held_any[i] = true;
                     // ★ v3-gfx: name WHERE (bounded) — a held row is a guest VA host RM already owns.
                     static HELD_LOGGED: std::sync::atomic::AtomicU32 =
                         std::sync::atomic::AtomicU32::new(0);
@@ -585,23 +1056,220 @@ pub fn apply_entry(target: &dyn MapTarget, runs: &[DiffRun], cfg: &ApplyCfg<'_>)
                         );
                     }
                 }
-                Err(e) => out.refuse(i, e),
+                Err(e) => {
+                    failed[i] = true;
+                    out.refuse_once(i, e);
+                }
             }
         }
     }
-    if out.mapped + out.unmapped + out.usermode_trapped + out.sked_placed > 0 {
+    link_fail(&mut out, &mut failed);
+
+    // ── 4. Verdicts of the MAP runs. A FAILED run's NEW pieces that were placed go again (the
+    // walker re-emits the run; the ledger must hold nothing it does not commit) — never a kept
+    // page. HELD only when nothing of the run is ours (no piece placed, nothing kept).
+    for (i, r) in runs.iter().enumerate().filter(|(_, r)| !r.unmap) {
+        if failed[i] {
+            for &(s, len) in &placed[i] {
+                out.unmap_calls = out.unmap_calls.saturating_add(1);
+                out.taken_down = out.taken_down.saturating_add(1);
+                if let Err(why) = target.unmap_range(s, len, true) {
+                    out.first_refusal.get_or_insert(format!(
+                        "map {:#x}: refused, and taking down its new piece {s:#x}+{len:#x} was refused too: {why}",
+                        r.va
+                    ));
+                }
+            }
+        } else if held_any[i] && placed[i].is_empty() && kept[i].is_empty() {
+            out.codes[i] = KFWR_ACK_HELD;
+        }
+    }
+    if out
+        .mapped
+        .saturating_add(out.unmapped)
+        .saturating_add(out.taken_down)
+        .saturating_add(out.usermode_trapped)
+        .saturating_add(out.sked_placed)
+        > 0
+    {
         match target.invalidate() {
             Ok(()) => out.invalidated = true,
             Err(e) => {
                 // ⊘ The rows landed (their verdicts stand — the host holds them); the space is
                 // not settled until an invalidate succeeds, so the caller must not clear.
-                out.refused += 1;
+                out.refused = out.refused.saturating_add(1);
                 out.invalidate_refused = true;
                 out.first_refusal.get_or_insert(e);
             }
         }
     }
     out
+}
+
+/// One MAP run (or a new piece of one) → the host row, or its refusal recorded on run `i`.
+#[allow(clippy::too_many_arguments)]
+fn prepare_row(
+    target: &dyn MapTarget,
+    r: &DiffRun,
+    i: usize,
+    cfg: &ApplyCfg<'_>,
+    extent: Option<u64>,
+    reserved: &[(u64, u64)],
+    failed_unmaps: &[(u64, u64)],
+    out: &mut Applied,
+) -> Option<(Desired, bool)> {
+    let mut d =
+        match desired_from_leaves([(r.va, r.at, r.len, r.ap)], cfg.store_bytes, cfg.ram_offset) {
+            // ★ v3-gfx: the host maps it with the guest's kind, uncompressed (`Desired::kind`).
+            // ★★★ v3-roperm: and with the guest leaf's permissions (`Desired::perm`).
+            // ★ 2026-10-09: and its leaf size (one host mapping per leaf outside a reservation).
+            Ok(v) if v.len() == 1 => Desired {
+                kind: host_pte_kind(r.kind, v[0].ram, cfg.per_map_kind),
+                perm: r.perm,
+                leaf: r.leaf,
+                ..v[0]
+            },
+            Ok(_) => {
+                out.refuse(i, format!("map {:#x}: no row", r.va));
+                return None;
+            }
+            Err(e) => {
+                out.refuse(i, format!("leaf refused: {e:?}"));
+                return None;
+            }
+        };
+    // ★ Review addendum (hostile guest): neither the VA range nor the backing range of a row may
+    // wrap — a sysmem leaf's backing offset comes from the VMM's layout closure, unchecked by
+    // `desired_from_leaves`. Refused by name before any arithmetic on the row.
+    if d.va.checked_add(d.len).is_none() || d.off.checked_add(d.len).is_none() {
+        out.refuse(
+            i,
+            format!(
+                "leaf {:#x}+{:#x} (backing {:#x}) wraps the address space — refused",
+                d.va, d.len, d.off
+            ),
+        );
+        return None;
+    }
+    // ★★★ 2026-10-10 (fix of the 6fafcc6e fast-suite regression; see
+    // `tests::a_run_straddling_the_carve_out_maps_all_but_the_carve_bytes`): only the carve-out
+    // BYTES are refused. A run that starts inside the carve-out is refused whole, as before; a run
+    // that STRADDLES its base (the guest RM's flat FB alias, whose last 2 MiB leaf overhangs it) is
+    // clipped at the base: the part below is guest VRAM the guest mapped and is placed, the part at
+    // and above is never mapped (absent: a GPU access there faults on OUR space). ⊘ Refusing the
+    // whole run unmapped every VRAM byte of the alias and killed the guest RM's kernel CE channel.
+    let mut carve_clipped = false;
+    if !d.ram && carve_reached(target, d.off, d.len, cfg, out) {
+        if d.off >= cfg.carve {
+            out.refuse(
+                i,
+                format!(
+                    "leaf {:#x}+{:#x} names store {:#x}, inside the firmware carve-out at {:#x} — a twin maps no kayfabe memory (§Q)",
+                    d.va, d.len, d.off, cfg.carve
+                ),
+            );
+            return None;
+        }
+        let below = cfg.carve.saturating_sub(d.off);
+        out.carve_clipped_bytes = out
+            .carve_clipped_bytes
+            .saturating_add(d.len.saturating_sub(below));
+        static CLIPPED_LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        if CLIPPED_LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 16 {
+            eprintln!(
+                "kf-mem: leaf {:#x}+{:#x} (store {:#x}) CLIPPED at the firmware carve-out {:#x}: {:#x}+{:#x} placed, {:#x}+{:#x} left absent (§Q)",
+                d.va,
+                d.len,
+                d.off,
+                cfg.carve,
+                d.va,
+                below,
+                d.va.saturating_add(below),
+                d.len.saturating_sub(below)
+            );
+        }
+        d.len = below;
+        carve_clipped = true;
+    }
+    if !whole_pages(&d, cfg.grain) {
+        out.refuse(
+            i,
+            format!(
+                "leaf {:#x}+{:#x} (backing {:#x}) is not whole {:#x}-byte pages: a sub-page row would leave a hole",
+                d.va, d.len, d.off, cfg.grain
+            ),
+        );
+        return None;
+    }
+    if let Some(ext) = extent {
+        if d.va >= ext {
+            out.clipped_bytes = out.clipped_bytes.saturating_add(d.len);
+            out.codes[i] = KFWR_ACK_HELD;
+            return None;
+        }
+        let end = d.va.saturating_add(d.len);
+        if end > ext {
+            out.clipped_bytes = out.clipped_bytes.saturating_add(end.saturating_sub(ext));
+            d.len = ext.saturating_sub(d.va);
+        }
+    }
+    let end = d.va.saturating_add(d.len);
+    if let Some(&(a, b)) = reserved.iter().find(|&&(a, b)| d.va < b && a < end) {
+        out.vmm_overlaps = out.vmm_overlaps.saturating_add(1);
+        out.refuse(
+            i,
+            format!(
+                "leaf {:#x}+{:#x} overlaps OUR placement [{a:#x}, {b:#x}) — a guest VA may never alias a VMM address; this leaf alone is refused (Q11)",
+                d.va, d.len
+            ),
+        );
+        return None;
+    }
+    if failed_unmaps.iter().any(|&(a, b)| d.va < b && a < end) {
+        out.refuse(
+            i,
+            format!(
+                "map {:#x}+{:#x}: over a placement whose unmap was refused",
+                d.va, d.len
+            ),
+        );
+        return None;
+    }
+    Some((d, carve_clipped))
+}
+
+/// ★ 2026-10-10: a row clipped at the carve-out ends inside a guest leaf. Its whole leaves stay ONE
+/// row (placed by `crate::batch::BatchedVas` through ONE micro reservation, D1 2026-10-10 — ⊘ it
+/// was "one host mapping per leaf, the leaf being the host unit"), and the cut leaf's lower part
+/// becomes its own row with the largest leaf its edges allow — never the 4 KiB fallback over the
+/// WHOLE row, which past `MAX_LEAF_PIECES` grains could not be placed at all without a reservation.
+fn split_at_leaf(d: Desired) -> Vec<Desired> {
+    let end = d.va.saturating_add(d.len);
+    if !d.leaf.is_power_of_two() || end.is_multiple_of(d.leaf) {
+        return vec![d];
+    }
+    let cut = end & !d.leaf.saturating_sub(1);
+    let tail_leaf = |s: u64| 1u64.unbounded_shl((s | end).trailing_zeros()).min(d.leaf);
+    if cut <= d.va {
+        return vec![Desired {
+            leaf: tail_leaf(d.va),
+            ..d
+        }];
+    }
+    vec![
+        Desired {
+            len: cut.saturating_sub(d.va),
+            ..d
+        },
+        Desired {
+            va: cut,
+            len: end.saturating_sub(cut),
+            // `check_row`-style: d.off + len cannot wrap (prepare_row refused it), cut - d.va < len.
+            off: d.off.saturating_add(cut.saturating_sub(d.va)),
+            leaf: tail_leaf(cut),
+            ..d
+        },
+    ]
 }
 
 /// What [`apply_sked`] checks a row against — the entry's own bounds.
@@ -622,15 +1290,15 @@ fn apply_sked(
     at: &SkedAt<'_>,
     i: usize,
     out: &mut Applied,
-) {
+) -> Option<(u64, u64)> {
     // ★★★ v3-roperm: the same policy as a memory leaf — a user twin never gets a leaf the guest
     // kernel marked privileged.
     if r.privileged {
         if at.withhold_privileged {
             out.withhold_privileged(i, r);
-            return;
+            return None;
         }
-        out.priv_mirrored += 1;
+        out.priv_mirrored = out.priv_mirrored.saturating_add(1);
     }
     // The hardware ignores the address. A VIDEO leaf keeps the guest's own (bounded by the store
     // like any vidmem row); a SYSTEM_NON_COHERENT one names the store's first page, so the host PTE
@@ -655,7 +1323,7 @@ fn apply_sked(
                 s.va, s.len, s.off, cfg.grain
             ),
         );
-        return;
+        return None;
     }
     if carve_reached(target, s.off, s.len, cfg, out) {
         out.refuse(
@@ -665,7 +1333,7 @@ fn apply_sked(
                 s.va, s.len, s.off, cfg.carve
             ),
         );
-        return;
+        return None;
     }
     if s.off.checked_add(s.len).is_none_or(|e| e > cfg.store_bytes) {
         out.refuse(
@@ -675,23 +1343,23 @@ fn apply_sked(
                 s.va, s.len, s.off
             ),
         );
-        return;
+        return None;
     }
     if let Some(ext) = at.extent {
         if s.va >= ext {
-            out.clipped_bytes += s.len;
+            out.clipped_bytes = out.clipped_bytes.saturating_add(s.len);
             out.codes[i] = KFWR_ACK_HELD;
-            return;
+            return None;
         }
         let end = s.va.saturating_add(s.len);
         if end > ext {
-            out.clipped_bytes += end - ext;
-            s.len = ext - s.va;
+            out.clipped_bytes = out.clipped_bytes.saturating_add(end.saturating_sub(ext));
+            s.len = ext.saturating_sub(s.va);
         }
     }
     let end = s.va.saturating_add(s.len);
     if let Some(&(a, b)) = at.reserved.iter().find(|&&(a, b)| s.va < b && a < end) {
-        out.vmm_overlaps += 1;
+        out.vmm_overlaps = out.vmm_overlaps.saturating_add(1);
         out.refuse(
             i,
             format!(
@@ -699,7 +1367,7 @@ fn apply_sked(
                 s.va, s.len
             ),
         );
-        return;
+        return None;
     }
     if at.failed_unmaps.iter().any(|&(a, b)| s.va < b && a < end) {
         out.refuse(
@@ -709,12 +1377,12 @@ fn apply_sked(
                 s.va, s.len
             ),
         );
-        return;
+        return None;
     }
-    out.map_calls += 1;
+    out.map_calls = out.map_calls.saturating_add(1);
     match target.map_sked(&s, true) {
         Ok(Mapped::Placed) => {
-            out.sked_placed += 1;
+            out.sked_placed = out.sked_placed.saturating_add(1);
             static LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
             if LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 64 {
                 eprintln!(
@@ -722,17 +1390,22 @@ fn apply_sked(
                     s.va, s.len, r.ap, r.at
                 );
             }
+            Some((s.va, s.len))
         }
         Ok(Mapped::HeldByHost) => {
-            out.held += 1;
-            out.sked_held += 1;
+            out.held = out.held.saturating_add(1);
+            out.sked_held = out.sked_held.saturating_add(1);
             out.codes[i] = KFWR_ACK_HELD;
             eprintln!(
                 "kf-mem: SKED-reflected leaf {:#x}+{:#x} HELD BY HOST (host RM already maps that VA)",
                 s.va, s.len
             );
+            None
         }
-        Err(e) => out.refuse(i, e),
+        Err(e) => {
+            out.refuse(i, e);
+            None
+        }
     }
 }
 
@@ -790,19 +1463,19 @@ fn apply_usermode(
     }
     if let Some(ext) = extent {
         if u.va >= ext {
-            out.clipped_bytes += u.len;
+            out.clipped_bytes = out.clipped_bytes.saturating_add(u.len);
             out.codes[i] = KFWR_ACK_HELD;
             return;
         }
         let end = u.va.saturating_add(u.len);
         if end > ext {
-            out.clipped_bytes += end - ext;
-            u.len = ext - u.va;
+            out.clipped_bytes = out.clipped_bytes.saturating_add(end.saturating_sub(ext));
+            u.len = ext.saturating_sub(u.va);
         }
     }
     let end = u.va.saturating_add(u.len);
     if let Some(&(a, b)) = reserved.iter().find(|&&(a, b)| u.va < b && a < end) {
-        out.vmm_overlaps += 1;
+        out.vmm_overlaps = out.vmm_overlaps.saturating_add(1);
         out.refuse(
             i,
             format!(
@@ -823,9 +1496,9 @@ fn apply_usermode(
         return;
     }
     match target.map_usermode(&u) {
-        Ok(Mapped::Placed) => out.usermode_trapped += 1,
+        Ok(Mapped::Placed) => out.usermode_trapped = out.usermode_trapped.saturating_add(1),
         Ok(Mapped::HeldByHost) => {
-            out.usermode_unmirrored += 1;
+            out.usermode_unmirrored = out.usermode_unmirrored.saturating_add(1);
             out.codes[i] = KFWR_ACK_HELD;
             static LOGGED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
             if LOGGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 16 {
@@ -997,6 +1670,7 @@ mod tests {
             kind: 0,
             perm: kf_host::MapPerm::READ_WRITE,
             privileged: false,
+            leaf: 0,
         }
     }
     fn u(va: u64, len: u64) -> DiffRun {
@@ -1010,6 +1684,7 @@ mod tests {
             kind: 0,
             perm: kf_host::MapPerm::READ_WRITE,
             privileged: false,
+            leaf: 0,
         }
     }
 
@@ -1293,6 +1968,7 @@ mod tests {
             kind: 0,
             perm: MapPerm::READ_WRITE,
             privileged: false,
+            leaf: 0x1000,
         };
         let atomic_on = PermPolicy {
             carry_atomic_disable: true,
@@ -1331,6 +2007,7 @@ mod tests {
                             volatile: true
                         },
                         privileged: true,
+                        leaf: leaf_bytes(ps),
                         ..plain
                     },
                     "ap {ap} kind {kind:#x} ps {ps} {policy:?}"
@@ -1370,6 +2047,11 @@ mod tests {
                 },
                 16..=23 => DiffRun {
                     kind: 1 << (bit - 16),
+                    ..plain
+                },
+                // ★ 2026-10-09: the page-size code is the leaf size (bits 8..11).
+                8..=11 => DiffRun {
+                    leaf: leaf_bytes(1 << (bit - 8)),
                     ..plain
                 },
                 31 => DiffRun {
@@ -1672,6 +2354,7 @@ mod tests {
             kind: 0x0F,
             perm: kf_host::MapPerm::READ_WRITE,
             privileged: false,
+            leaf: 0,
         }
     }
     fn hopper() -> ApplyCfg<'static> {
@@ -1825,7 +2508,7 @@ mod tests {
                     (KFWR_ACK_APPLIED, 1, 0),
                     "count-only {at:#x} sked={sked}"
                 );
-                // GPU target, refusal (inc A2; ON under KF3_TSPACE=1): refused by name, never placed.
+                // GPU target, refusal (inc A2; always ON in kf3 since 2026-10-10): refused, never placed.
                 let t = twin();
                 let a = apply_entry(&t, std::slice::from_ref(&leaf), &cfg_with(true));
                 assert_eq!(
@@ -1854,19 +2537,35 @@ mod tests {
                     (0, 1, 0),
                     "cpu view {at:#x} sked={sked}"
                 );
-                // ★ A guest-KERNEL GPU space (it mirrors privileged leaves): counted apart, mapped
-                // even in refusal mode — no guest non-kernel channel runs there (review fix
-                // 2026-10-04, `carve_reached`).
-                let t = Rec {
+                // ★ A guest-KERNEL GPU space (it mirrors privileged leaves): counted apart, and
+                // (corrected 2026-10-10, §AB; `carve_reached`) REFUSED in refusal mode too — a
+                // mirror never maps kayfabe memory; count-only mode still maps it.
+                let kernel = || Rec {
                     gpu: true,
                     withhold_priv: false,
                     ..Rec::default()
                 };
+                let t = kernel();
                 let a = apply_entry(&t, std::slice::from_ref(&leaf), &cfg_with(true));
                 assert_eq!(
                     (a.codes[0], a.carve_gpu, a.carve_kernel, a.refused),
-                    (KFWR_ACK_APPLIED, 0, 1, 0),
+                    (KFWR_ACK_FAILED, 0, 1, 1),
                     "kernel space {at:#x} sked={sked}"
+                );
+                assert!(
+                    t.ops
+                        .borrow()
+                        .iter()
+                        .all(|o| !o.starts_with("map") && !o.starts_with("sked")),
+                    "nothing placed in a kernel space: {:?}",
+                    t.ops.borrow()
+                );
+                let t = kernel();
+                let a = apply_entry(&t, std::slice::from_ref(&leaf), &cfg_with(false));
+                assert_eq!(
+                    (a.codes[0], a.carve_kernel, a.refused),
+                    (KFWR_ACK_APPLIED, 1, 0),
+                    "kernel space, count-only {at:#x} sked={sked}"
                 );
             }
         }
@@ -1899,6 +2598,84 @@ mod tests {
         };
         let a = apply_entry(&t, &[ram], &cfg_with(true));
         assert_eq!((a.codes[0], a.carve_gpu), (KFWR_ACK_APPLIED, 0));
+    }
+
+    /// ★★★ REGRESSION 2026-10-10 (`integration/windows-20261010` @ 6fafcc6e, fast suite 0/30 on the
+    /// RTX 4070 host): the measured shape. The guest RM's flat FB alias in a guest-KERNEL space is
+    /// ONE run `0x120000000+0x1efc00000` of 2 MiB leaves naming store `0x0` (8 GiB store, carve-out
+    /// at `0x1efbe0000` = `8 GiB - FW_CARVE_OUT_BYTES`): the run's last leaf straddles the carve-out
+    /// base by `0x20000`. (Measured on the fixed build: a second run `0x30fc00000+0x10400000` names
+    /// store `0x1efc00000`, so the alias covers the WHOLE store; that run lies wholly in the
+    /// carve-out and stays refused. Why the guest's runs break at `0x1efc00000` is not measured.)
+    /// Refusing the WHOLE
+    /// run left the kernel CE channel's ring at VA `0x30fb55000` (store `0x1efb55000`, BELOW the
+    /// carve-out) unresolved: `tspace bind: virtual_unresolved`, `REFUSED-AND-POISONED`, guest
+    /// `memmgrMemSet … NV_ERR_TIMEOUT`. The carve-out bytes — and only they — stay absent, on a
+    /// kernel space and on a user twin alike; the rest of the run is placed and acknowledged.
+    #[test]
+    fn a_run_straddling_the_carve_out_maps_all_but_the_carve_bytes() {
+        const STORE: u64 = 0x2_0000_0000;
+        const CARVE: u64 = STORE - 0x1042_0000;
+        const VA: u64 = 0x1_2000_0000;
+        const LEN: u64 = 0x1_efc0_0000;
+        const RING_VA: u64 = 0x3_0fb5_5000;
+        assert_eq!(CARVE, 0x1_efbe_0000, "the log's carve-out base");
+        assert!((VA..VA + LEN).contains(&RING_VA) && RING_VA - VA < CARVE);
+        let cfg_on = ApplyCfg {
+            store_bytes: STORE,
+            carve: CARVE,
+            carve_refuse: true,
+            ..cfg()
+        };
+        let run = DiffRun {
+            leaf: 0x20_0000,
+            ..m(VA, 0, LEN)
+        };
+        for user_twin in [false, true] {
+            let t = Rec {
+                gpu: true,
+                withhold_priv: user_twin,
+                ..Rec::default()
+            };
+            let a = apply_entry(&t, &[run], &cfg_on);
+            assert_eq!(
+                (a.codes[0], a.refused, a.first_refusal.as_deref()),
+                (KFWR_ACK_APPLIED, 0, None),
+                "user_twin={user_twin}"
+            );
+            assert_eq!(
+                a.carve_clipped_bytes, 0x2_0000,
+                "exactly the overhang left absent"
+            );
+            // Counted as a carve-out run on its own target kind, as before.
+            assert_eq!(
+                (a.carve_kernel, a.carve_gpu),
+                if user_twin { (0, 1) } else { (1, 0) }
+            );
+            // Whole 2 MiB leaves up to the straddling one, then that leaf's part below the
+            // carve-out (which holds the ring); nothing at or above the carve-out.
+            assert_eq!(
+                *t.ops.borrow(),
+                vec![
+                    format!("map {VA:#x}+{:#x}", 0x1_efa0_0000u64),
+                    format!("map {:#x}+{:#x}", VA + 0x1_efa0_0000, 0x1e_0000),
+                    "inval".to_string(),
+                ],
+                "user_twin={user_twin}"
+            );
+        }
+        // A run wholly inside the carve-out is still refused (FAILED), never placed.
+        let t = Rec {
+            gpu: true,
+            ..Rec::default()
+        };
+        let inside = DiffRun {
+            leaf: 0x20_0000,
+            ..m(0x4_0000_0000, CARVE, 0x2_0000)
+        };
+        let a = apply_entry(&t, &[inside], &cfg_on);
+        assert_eq!((a.codes[0], a.refused), (KFWR_ACK_FAILED, 1));
+        assert!(t.ops.borrow().iter().all(|o| !o.starts_with("map")));
     }
 
     // ★★★ v3-cdp (`V3_CDP.md`). The leaf the walker reported in a kf3 guest for libcuda's

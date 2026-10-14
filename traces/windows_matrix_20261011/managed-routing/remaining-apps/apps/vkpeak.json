@@ -1,0 +1,84 @@
+{
+ "quiet": 1,
+ "end_utc": "2026-10-11T17:40:37.1458943Z",
+ "start_utc": "2026-10-11T17:38:39.9214429Z",
+ "rc": 0,
+ "secs": 117,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4070 status=OK code=0"
+ ],
+ "digests": [],
+ "session": 0,
+ "out_files": [],
+ "boot_utc_start": "2026-10-11T17:35:58.5000000Z",
+ "log_tail": [
+  "=== vkpeak start=2026-10-11T17:38:39.9214429+00:00 host=VASTWIN session=0 boot=2026-10-11T17:35:58.5000000Z timeout=600",
+  "device       = NVIDIA GeForce RTX 4070",
+  "driver       = NVIDIA / 580.88",
+  "System.Management.Automation.RemoteException",
+  "fp32-scalar  = 22306.40 GFLOPS",
+  "fp32-vec4    = 22150.05 GFLOPS",
+  "fp16-scalar  = 33122.16 GFLOPS",
+  "fp16-vec4    = 24304.91 GFLOPS",
+  "fp16-matrix  = 133361.70 GFLOPS",
+  "fp64-scalar  = 522.98 GFLOPS",
+  "fp64-vec4    = 521.04 GFLOPS",
+  "int32-scalar = 16691.02 GIOPS",
+  "int32-vec4   = 16677.49 GIOPS",
+  "int16-scalar = 13935.16 GIOPS",
+  "int16-vec4   = 12192.69 GIOPS",
+  "int64-scalar = 5073.03 GIOPS",
+  "int64-vec4   = 4011.56 GIOPS",
+  "int8-dotprod = 16086.28 GIOPS",
+  "int8-matrix  = 264573.75 GIOPS",
+  "bf16-dotprod = 0.00 GFLOPS",
+  "bf16-matrix  = 66431.01 GFLOPS",
+  "fp8-matrix   = 0.00 GFLOPS",
+  "bf8-matrix   = 0.00 GFLOPS",
+  "copy-h2h     = 15.82 GBPS",
+  "copy-h2d     = 16.10 GBPS",
+  "copy-d2h     = 16.22 GBPS",
+  "copy-d2d     = 174.98 GBPS",
+  "=== end rc=0 secs=117 2026-10-11T17:40:37.1458943+00:00"
+ ],
+ "pdh": {
+  "pids": [
+   "2300",
+   "4136",
+   "7964"
+  ],
+  "nv": {
+   "copy": 0.21308045226805908,
+   "3d": 0,
+   "videoencode": 0,
+   "videodecode": 0,
+   "vr": 0,
+   "legacyoverlay": 0,
+   "ofa_0": 0
+  },
+  "samples": 46,
+  "other": {},
+  "nvidia_luids": "0_5f75"
+ },
+ "timed_out": false,
+ "token": "g4-vkpeak-1791740315",
+ "boot_utc_end": "2026-10-11T17:35:58.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "vkpeak",
+ "smi": {
+  "samples": 0,
+  "mem_used_base_mb": null,
+  "util_max": 0,
+  "mem_used_max_mb": 0
+ }
+}

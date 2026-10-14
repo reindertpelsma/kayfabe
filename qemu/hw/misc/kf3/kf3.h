@@ -45,6 +45,9 @@
  * diagnostic BAR0-read trap exception). */
 /* 22 (2026-10-08, claude/gpu-uuid-per-vm-20261008): ABI 21 plus the per-VM GPU UUID. kf3_realize
  * gains gpu_uuid and vm_id (nullable strings) and pci_devfn after gop_efi. */
+/* 24 (2026-10-09, claude/kf3-read-trace-20261008): ABI 22 plus the default-off BAR0 trace mode
+ * (KF3_BAR0_READ_TRACE; OWNER_RULINGS.md sec. X): kf3_trace_mode, kf3_trace_piece, kf3_trace_admit,
+ * kf3_trace_name, kf3_trace_report. 23 is another branch's (0da871c1, the input/cursor shim). */
 /* ★ 23 (2026-10-08, claude/input-sink-trait-20261008; OWNER_RULINGS.md sec. V,
  * docs/design/V3_DISPLAY.md sec. 8.20): ABI 22 with the broker's input and the console cursor
  * behind kf-broker's VMM-neutral InputSink/CursorSink. This device no longer interprets events:
@@ -52,7 +55,18 @@
  * calls from inside kf3_broker_ready and kf3_display_cursor_apply. Gone: Kf3BrokerEvent and
  * KF3_BROKER_* kinds, Kf3Cursor and KF3_CURSOR_DEFINE/MOUSE, kf3_display_cursor,
  * kf3_display_cursor_pixels, kf3_display_cursor_done, and kf3_broker_ready's event array. */
-#define KF3_ABI 23
+/* 25 (2026-10-09, merge of both at claude/windows-reset-20261009): 24's trace verbs AND 23's
+ * input/cursor verbs; the two surfaces are disjoint. */
+/* 26 (2026-10-11, claude/gl-icd-crash-20261011): 25 plus the channel-budget property: kf3_realize gains
+ * channel_budget (channels per runlist, the count the guest is told AND the enforced twin cap; 0 = derive
+ * from the host) after pci_devfn. Rust refuses a value above the host's limit or below the minimum, by name. */
+/* 27 (2026-10-13, claude/device-reset-20261013, docs/design/V3_DEVICE_RESET.md): 26 plus
+ * kf3_device_reset(h), called from the device's Resettable hold phase (built as c9ac4e77). */
+/* 28 (2026-10-13, same branch): kf3_device_reset gains from_vcpu, and kf3_device_reset_wait (the
+ * exit phase's bounded wait, main loop only) joins. */
+/* 29 (2026-10-14, claude/s3-resume-20261014, docs/design/V3_S3_RESUME.md): kf3_device_reset gains
+ * wake (the reset type is RESET_TYPE_WAKEUP: the S3 resume's device reset). */
+#define KF3_ABI 29
 #define KF3_BROKER_ON 1u
 #define KF3_BROKER_VRAM_AUTO 0u
 #define KF3_BROKER_VRAM_ON 1u
@@ -155,7 +169,7 @@ int32_t kf3_realize(uint32_t gpu_minor, uint64_t fb_mb, uint64_t bar1_bytes, uin
                     const char *guest_driver, uint32_t display, uint32_t gop, uint32_t x11_dispsw,
                     uint32_t display_broker,
                     uint32_t display_max_fps, const char *gop_efi,
-                    const char *gpu_uuid, const char *vm_id, uint32_t pci_devfn, void **out,
+                    const char *gpu_uuid, const char *vm_id, uint32_t pci_devfn, uint32_t channel_budget, void **out,
                     char *err, size_t err_len);
 int32_t kf3_identity(void *h, Kf3Identity *out);
 /* ★ ABI 7: config-space words the guest reads by config cycle (Hopper+ PCIe link caps). */
@@ -186,6 +200,17 @@ void kf3_bar1_usermode_write(void *h, uint64_t vf_rel, uint64_t val, uint32_t wi
  * main-loop bottom half. Rust calls it only from the register drainer, only with the flag on. */
 typedef void (*Kf3ReadTrapFn)(void *opaque, uint32_t on);
 int32_t kf3_set_read_trap(void *h, Kf3ReadTrapFn f, void *opaque);
+/* ★ ABI 24, DIAGNOSTIC (KF3_BAR0_READ_TRACE, default off; crates/kf-qemu/src/readtrace.rs): the BAR0
+ * trace mode. kf3_trace_mode: 1 on, 0 off (then NONE of the trace paths exist: ROMD on, irqfd MSI,
+ * no trace call), -1 bad handle. kf3_trace_piece: 1 when a shadow piece's reads must exit.
+ * kf3_trace_admit (lock-free; vCPU or main loop): kind 0 read / 1 write (a offset, b width,
+ * c value), 2 MSI (a vector, b data, c address); 1 = write the record, 0 = unselected or capped.
+ * kf3_trace_name: the device name in the records; kf3_trace_report: the exit report line. */
+int32_t kf3_trace_mode(void *h);
+uint32_t kf3_trace_piece(void *h, uint64_t base, uint64_t len);
+uint32_t kf3_trace_admit(void *h, uint32_t kind, uint64_t a, uint64_t b, uint64_t c);
+void kf3_trace_name(void *h, char *buf, size_t len);
+void kf3_trace_report(void *h, char *buf, size_t len);
 /* ★ ABI 10 (v3-display2's 9): the newest display frame, for the console's gfx_update (main thread);
  * -1 = none yet. */
 int32_t kf3_display_frame(void *h, Kf3Frame *out);
@@ -229,5 +254,14 @@ int32_t kf3_display_ui_info(void *h, uint32_t head, uint32_t width, uint32_t hei
  * embedded GOP driver wrapped with this device's ids and its KFGP descriptor. 0 and *rom, *rom_len
  * (valid for the process; the device copies them into its ROM BAR), or -1 (gop=0). */
 int32_t kf3_option_rom(void *h, const uint8_t **rom, uint64_t *rom_len);
+/* ★ ABI 28: QEMU reset this function (Resettable hold phase, BQL held). Rust closes its vCPU gate,
+ * counts the request (from_vcpu: asked on a vCPU thread — a bus reset), wakes its register drainer
+ * and returns; nothing here waits. ★ ABI 29: wake — the reset type is RESET_TYPE_WAKEUP (the S3
+ * resume); a PM-suspended guest life survives it, every other reset ends the life. */
+void kf3_device_reset(void *h, uint32_t from_vcpu, uint32_t wake);
+/* ★ ABI 28: the exit phase, MAIN LOOP ONLY (every vCPU paused around qemu_system_reset): wait at
+ * most timeout_ms (0: the device's own bound) for that reset to complete. 0 complete, 1 bound passed (logged; the reset goes on
+ * with the device closed), -1 no device. */
+int32_t kf3_device_reset_wait(void *h, uint32_t timeout_ms);
 void kf3_unrealize(void *h);
 #endif

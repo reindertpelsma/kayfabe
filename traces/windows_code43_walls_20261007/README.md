@@ -3115,3 +3115,975 @@ exposure table: the reply carries no field, only the status; the request carries
 host-authored bind; (3) one Windows run with the probe (`video_memory_probe.ps1`), comparing the last request before the Free storm. Independent and cheap: serve the 7 missing
 FB indices (all `hardware config`, vfio values in `vfio8-9-10-fb-bus-info.txt`) through `FORWARDED_FB_EXTRA_INDICES` (hostquery.rs, one array) with the validation test; it
 tests the `qwMemorySize` 0 / NVML N/A symptom, not the budget. Not done: either change.
+
+# Loop 2026-10-08 (third session), branch `claude/windows-display-20261008`: Windows on screen, and the D3D wall
+
+(Continues at run 54, from `integration/master-candidate-20261008` at `ac5d086f`. Owner goal for the day: Windows reports a real
+display, visible and interactive in a second broker window on the trusted host's desktop, beside the Linux demo guest. Conventions as
+in the second session: `[measured, runN at <rev>, <date>]` versus `[inferred]`; every hypothesis states its falsifier before the run.)
+
+**Launcher.** `scripts/bench/windows/windows_broker.sh` (new): the runs 47-53 guest and kf3 properties, plus kf3
+`display-broker=/run/user/1000/nvkvm/windows.sock,display-broker-uid=1000` (its own window, title "kayfabe Windows"), and by default
+`gop=on` with **no** QEMU std VGA (run53 had `-device VGA,addr=0x9` and no GOP on kf3), PS/2 keyboard+mouse and a USB tablet. It does
+not take `/tmp/kayfabe-fastguest.lock` (the Linux guest of `interactive.sh` holds it): two kf3 VMs share the RTX 4070 for the first
+time, so host `dmesg` Xid lines are counted before and after every run. The audited runner is not used (it takes the lock); its
+environment (`KF3_RPC_TRACE=1` and the flag list) is reproduced and recorded in each run's `command.json`.
+
+## Run54 setup (one boot, three questions batched): display on the GOP and the broker, H-preempt-bind probe, the 7 FB indices
+
+Binary `kf3-bins/a88764b3` (this branch: `ac5d086f` + the FB indices + the default-off probe), flags as run53 plus
+`KF3_PREEMPT_BIND_PROBE=1`. Guest probes through QGA as in run53 (`display_probe.ps1`, `video_memory_probe.ps1`), QMP `screendump`
+of `kf0` at each stage.
+
+**H-gop (display, inferred):** with kf3 the only display device and its GOP on, the window shows OVMF/TianoCore and the Windows boot
+logo (firmware framebuffer), and Windows' Basic Display driver keeps that framebuffer until nvlddmkm starts. *Falsifier:* the window
+stays black (no frame) through the firmware stage, or Windows does not reach QGA within 5 min (then gop=on is itself a wall).
+
+**H-scanout (display, inferred):** the run53 console said "no head has scanned a window" because nvlddmkm never committed a mode:
+`[measured, run53 at 80169b57, 2026-10-08]` the core channel received 810 methods, all setup and LUT loads, and no `UPDATE`
+(`0x200`); the window channels received only CSC0/CSC1 LUT methods (`0x4a4/0x4a8/0x584/0x588`), no surface. The refused NV0073
+controls (`SET_OD_PACKET` x8, `GET_ACPI_DOD_DISPLAY_PORT_ATTACHMENT` x5, `GET_CONNECTOR_TABLE`, `GET_HOTPLUG_CONFIG`,
+`DP_GET_CAPS`, `VRR_DISPLAY_INFO`, private `0x730128/0x7302a3/0x730280`) are the candidates. *This run only measures:* whether a core
+`UPDATE` arrives once the NVIDIA adapter is the POST adapter, and the order of refusals before it. *Falsifier of "the GOP topology
+alone lets nvlddmkm modeset":* no core `UPDATE` and the same refusals.
+
+**H-preempt-bind (probe):** refusing `GR_CTXSW_PREEMPTION_BIND` (`0x20801211`) makes D3D device creation fail `0x8876017c`.
+*Falsifier (fixed before the run):* with the probe answering the bind `NV_OK` (nothing bound on the host), `D3D11CreateDevice` and
+`D3D12CreateDevice` on the NVIDIA adapter still return `0x8876017c` and the probe's `PROBE KF3_PREEMPT_BIND_PROBE` lines show the
+binds answered (if no bind arrives at all, the hypothesis is untested, not falsified).
+
+**H-fb7:** the 7 FB indices answered from the host's own `FB_GET_INFO_V2` make Windows' boot-time request succeed (no
+`W349REFUSE-LIST` line for `0x20801303`). *Falsifier:* the refusal line again (the host refused one of the seven), or the request
+answered but `AdapterRAM`/`qwMemorySize` still 0 and NVML FB still `N/A` (then those symptoms do not come from this control; recorded
+either way, not a pass criterion).
+
+### Run54 (display/concurrency check only, store 1024 MiB beside the Linux guest — NOT interpreted for D3D) and run55 (alone, store 4096 MiB as run53) — results
+
+`[measured, run54/run55 at a88764b3, 2026-10-08]` (records in `/var/lib/kf-windows-20261005/boundary-kayfabe-54` and `-55` on the trusted host;
+committed extracts listed below):
+- **Two kf3 VMs on one GPU, store sizes.** Beside the Linux guest (kf3 `4bc62999`, `fb-mb=8192`, host VRAM 9.5 of 12 GiB used), kf3 refused the
+  Windows device at realize: `store of 4096 MiB refused: NoMemory`, and again at 2048 MiB (host free VRAM 2326 MiB). At **1024 MiB** it booted
+  (run54): the two VMs ran together for 3 min 20 s with **no new host Xid** (86 before and after), Windows reached QGA and LogonUI. Run54 is a
+  boot/display check only; the D3D probe was not run on it (the store is a confounder of an out-of-video-memory error). The Linux guest was then
+  stopped by the coordinator (owner permission) and every interpreted run below uses run53's 4096 MiB, alone on the GPU.
+- **H-gop: SUPPORTED.** The broker window and kf3's console show OVMF/TianoCore on kf3's GOP and Windows' boot spinner (QMP screendump of `kf0`,
+  [run54 t0000](run54-screendump-t0000.png)). The image then freezes on that frame: kf3 logs `boot display seed ... retired at the first change`
+  and the console keeps showing the BOOT layer. Windows lists no Basic Display adapter any more (the std VGA is gone; its old instance is
+  `CM_PROB_PHANTOM`), the NVIDIA adapter is Code 0. *The run53 "Basic Display adapter Code 10" was the QEMU std VGA (1234:1111) in the runs 1-53
+  template, never driven because Windows' POST adapter path does not start BasicDisplay on it (inferred from the OVMF GOP being on that VGA in
+  run53 and Code 10 = CM_PROB_FAILED_START; not decoded further). "display not initialised" in run53 = no kf3 GOP and no NVIDIA scanout.*
+- **The glitch the owner photographed** (a dotted yellow/green/red line about 100 rows down, plus a white speck): it is **in kf3's console surface**
+  (the screendump, i.e. the guest framebuffer at store offset 0 as kf3 scans it), not a broker presentation artefact. The speck is a frozen frame of
+  Windows' boot spinner; the dotted rows are non-pixel data written into FB offset 0 after the boot layer stopped tracking (`[inferred]`: Windows
+  RM places page-directory data at FB 0 — runs 43/44 measured a directory level there — which the frozen boot layer then shows as pixels). GOP mode
+  1920x1080, pitch 7680.
+- **H-scanout's measurement:** still **no core `UPDATE`** and **no `NVC372 IS_MODE_POSSIBLE` (0xc3720101)** in run54 or run55: the bounded method
+  diagnostic again holds exactly 8330 display methods (core 810: setup and output LUTs; windows: CSC0/CSC1 LUT entries only), the same count as
+  run53. LogonUI and dwm run in session 1 (so Windows has an interactive console session that wants a display); `Win32_VideoController` reports no
+  mode. VFIO reference (vfio-10, `gsp_ctrl_scan.py`): before its first `IS_MODE_POSSIBLE` (RPC 2649) the real GSP answers `IMP_SET_GET_PARAMETER`
+  GET IMP_ENABLE with TRUE (RPC 2648); kf-disp answers FALSE. And six `NV0073` controls the real GSP answers status 0 are refused here
+  (`0x730109` GET_HOTPLUG_CONFIG, `0x73012c` VRR_DISPLAY_INFO, `0x73013d` QUERY_DISPLAY_IDS_WITH_MUX, `0x73014b` CHECK_SIDEBAND_I2C_SUPPORT,
+  `0x731369` DP_GET_CAPS, private `0x7302a3`) plus `0x73011d` GET_CONNECTOR_TABLE and private `0x730128`/`0x730280` with non-trivial replies.
+  `SET_OD_PACKET` (`0x730288`, x8) and `GET_ACPI_DOD_DISPLAY_PORT_ATTACHMENT` (`0x730285`) are refused by the real GSP as well (`0x1f`/`0x56`),
+  so they are not candidates.
+- **H-fb7: SUPPORTED (list part and symptom).** No `W349REFUSE-LIST` for `0x20801303` in run54/55 (the host answered all seven indices); and
+  **`Win32_VideoController.AdapterRAM` 4293918720 and the class key's `qwMemorySize` 4294967296** (run53: 0 and 0) — the NVIDIA driver's own memory
+  size now equals the 4096 MiB store. (Run54 at 1024 MiB: AdapterRAM 1073741824.) `BUS_GET_INFO_V2` index 24 is still refused (not in scope).
+- **H-preempt-bind: FALSIFIED as the cause of `0x8876017c`.** Run55 (4096 MiB, alone): the probe answered 16 binds (`flags=0x2 gfxp=1`, then
+  `flags=0x1 cilp=1`, per create), and `D3D12CreateDevice` (11_0 to 12_2) and `D3D11CreateDevice` on the NVIDIA adapter **still return
+  `0x8876017c`**; Basic Render control 0; Budget 3185 MB as run53. The wall MOVED inside the create, though: after the two answered binds
+  each create now sends `GR_CTXSW_ZCULL_BIND` (`0x20801208`) — refused `0x1b` by kayfabe's channel plane ("ZCULL_BIND names client 0xc1d00040
+  from client 0xc1d00002": the KMD's kernel client binds the UMD client's channel) — and then **two software-runlist submits `0x20801111`,
+  refused**, then the Free of everything. vfio-10 answers all three (ZCULL_BIND once, `0x20801111` 13 times, status 0).
+  [probe output](run55-probe-output.txt), [RM window](run55-probe-window.log).
+
+## Run56 setup (alone, 4096 MiB): H-modeset probes
+
+Binary `kf3-bins/03932e9f` (run55's code plus two default-off display probes), flags as run55 plus `KF3_DISPLAY_IMP_ENABLE=1` (IMP_ENABLE
+answered TRUE, vfio-10's answer) and `KF3_DISPLAY_CTRL_PROBE=1` (the six NV0073 controls above answered `NV_OK` with the request echoed; for four
+the echo equals vfio-10's reply, for GET_HOTPLUG_CONFIG and DP_GET_CAPS it is all-zero).
+**H-modeset (inferred):** nvlddmkm does not commit a mode because one of these answers stops it before mode validation. *Prediction:*
+`0xc3720101` IS_MODE_POSSIBLE requests, a core `UPDATE` (`method=0x200` on `kind=Core`), a window surface, and a frame in the broker window.
+*Falsifier (fixed now):* no `0xc3720101` and no core `UPDATE` in 10 min of guest uptime with LogonUI running. If it holds, the two probes are
+bisected later and the real answers designed; if it falsifies, the next candidates are GET_CONNECTOR_TABLE and the private `0x730128`/`0x730280`.
+
+### Run56 result: mode validation now runs (28 `IS_MODE_POSSIBLE`), still no commit; dxgkrnl stores no configuration for the kayfabe monitor
+
+Binary `kf3-bins/03932e9f`, 4096 MiB alone, flags as run55 plus `KF3_DISPLAY_IMP_ENABLE=1` and `KF3_DISPLAY_CTRL_PROBE=1`; started 13:55:52 CEST,
+stopped by ACPI at 14:00 (Xid 86 before and after). [command](run56-command.json), [trace](run56-qemu.log.gz), [dxgkrnl probe](run56-dxgk-probe.txt),
+[session probe](run56-session-probe.txt), [screendump](run56-screendump-t0240.png).
+
+`[measured, run56 at 03932e9f, 2026-10-08]`:
+- The six echoed controls are asked and answered; IMP_ENABLE answered TRUE. **`NVC372 IS_MODE_POSSIBLE` now arrives: 28 requests, all answered
+  "possible"** (run53-55: none). Before them Windows asks `SPECIFIC_GET_HDMI_GPU_CAPS` (`0x7302a2`) and `GET_HDMI_SCDC_DATA` (`0x7302a6`) and the
+  private `0x730128` twice — all refused; after them a user-mode client (`0xc1d00038`, NVIDIA's display container, inferred) asks
+  `SPECIFIC_GET_HDCP_STATE` (`0x730280`, identified from ogkm 610's header) — refused.
+- **Still no core `UPDATE`**, the method diagnostic again holds exactly 8330 methods, the window still shows the frozen boot frame, LogonUI/dwm run in
+  session 1 and `Win32_VideoController` reports no mode.
+- **dxgkrnl's CCD database** (`GraphicsDrivers\Connectivity`) holds `KFB00011_27_07EA_83` with only a `SetId` (no `Recent`/`Internal`/`eXtend`), and
+  `GraphicsDrivers\Configuration` holds **no entry for it** — the VFIO boots stored `AOC2790...` with 3840x2160. So dxgkrnl never committed a topology
+  with the kayfabe monitor.
+- In the same window the GR-channel creates of the desktop session itself fail the same way as the D3D probe's: **15 refused `0x20801111`
+  software-runlist submits and 3 refused cross-client `ZCULL_BIND`** after IS_MODE_POSSIBLE began (dwm/LogonUI creating their D3D devices).
+
+**Falsifier outcome (H-modeset).** Partly supported: the probes moved the display wall (mode validation runs), but the predicted `UPDATE` and frame did not
+come. *Inferred, next hypothesis* **H-dwm**: the desktop compositor cannot create its D3D device on the NVIDIA adapter (the same `0x8876017c` wall), so
+dxgkrnl never commits a path for the monitor; the D3D wall and the display wall are one wall. Its known last two refusals are the software-runlist
+submit `0x20801111` (owner decision pending since run43: `KF3_SW_RUNLIST_HOST_OWNED`, option (b)) and the cross-client `ZCULL_BIND`.
+
+## Run57 setup (alone, 4096 MiB): the two GR-create refusals answered (labelled experiment + probe)
+
+Binary `kf3-bins/40230e23` (run56's code plus the default-off `KF3_ZCULL_BIND_PROBE`, which answers only a cross-client ZCULL_BIND `NV_OK`, nothing
+bound on the host). Flags as run56 plus `KF3_ZCULL_BIND_PROBE=1` and **`KF3_SW_RUNLIST_HOST_OWNED=1`** (task B, option (b), AWAITING OWNER
+CONFIRMATION — run here as a labelled experiment exactly as in run46: submits answered `NV_OK` and ignored, kernel channels scheduled at birth by
+kayfabe; never a shipped default).
+**H-dwm / H-create (inferred):** with the binds, the ZCULL_BIND and the runlist submit answered, the D3D device creation passes the point where it
+freed everything. *Falsifiers (fixed now):* (a) `D3D11CreateDevice`/`D3D12CreateDevice` on the NVIDIA adapter still `0x8876017c` with the same last
+requests answered → the remaining cause is elsewhere (next: the refused GSS controls in the create window, `0x20809004`/`0x2080b201`, or user-mode
+state); (b) for the display: no core `UPDATE` and no configuration for `KFB0001` in the CCD database within 10 min → H-dwm falsified for the display.
+Recorded either way: TDR/bugcheck (run46 saw 0x116 with the runlist flag before the deferred API existed), `DEAD` channels, host Xid.
+
+### Run57 result: the NVIDIA driver commits a mode (head 0 armed, 1920x1080@60) — then DWM's first 3D work dies in the rewriter, TDR, bugcheck 0x116
+
+Binary `kf3-bins/40230e23`, 4096 MiB alone, flags as run56 plus `KF3_ZCULL_BIND_PROBE=1` and `KF3_SW_RUNLIST_HOST_OWNED=1` (labelled
+experiment); started 14:00:52 CEST, Xid 86 before and after (every 20 s sample). [command](run57-command.json), [trace](run57-qemu.log.gz),
+[timeline](run57-display-gr-timeline.txt), [dxgkrnl probe](run57-dxgk-probe.txt), [session probe, second boot](run57-session-probe-boot2.txt).
+
+`[measured, run57 at 40230e23, 2026-10-08]`:
+- The runlist submits are answered (`SW-RUNLIST HOST-OWNED` x6) and the desktop's GR channel `0xc1d00027:0xff04000c` (token `0xe`, host `0x44`,
+  `PRIVILEGE=KERNEL`, GR tier, objects 5080/c7b5/a140/902d/c997/c9c0) is born and scheduled.
+- **H-dwm: SUPPORTED for the commit.** `the guest armed its first head at +25095 ms`, **`head 0 ACTIVE raster 2200x1125 period 16666666 ns`**
+  (1920x1080 at 60 Hz), 7 core `UPDATE`s, IS_MODE_POSSIBLE x31; and dxgkrnl's CCD database now holds a **Configuration for `KFB0001` at
+  1920x1080** (`MSNILKFB00011_27_07EA_83_...`, `Recent`/`Internal` set) — none existed in runs 53-56. The window kept the boot frame (`no armed
+  head has scanned a window yet`): no window surface was presented before the next event.
+- **The next wall:** the desktop channel's first segment (gp 0, 10 words) starts `200406c0 00000001 20244000 00000001 10000004 ...` — method
+  `0x1b00` (3D `SET_REPORT_SEMAPHORE_A..D`, a semaphore release) on **subchannel 0 with no `SET_OBJECT` in the ring** — and the rewriter kills
+  the channel: `DEAD: ring: Rewrite { gp: 0, why: NoCeObject { subch: 0, method: 6912 } }`. The display channels are then freed, the guest
+  bugchecks **0x116 (VIDEO_TDR_FAILURE)** and reboots (the launcher's `-action reboot=reset`); on the second boot the NVIDIA adapter is
+  `CM_PROB_FAILED_POST_START` (Code 43). No host Xid.
+- The D3D probe could not be run (the guest crashed ~35 s after the commit); D3D create success is therefore NOT measured.
+
+**Inferred (not tested).** Windows' kernel GR channel binds its subchannels with `SET_OBJECT` (run32: 0 = c997, 1 = c9c0, 4 = c7b5, 5 = 5080) and
+then runs INITIALIZE_CTX / PROMOTE_CTX for each new channel (§U); a channel created afterwards starts using subchannel 0 without its own
+`SET_OBJECT`, so its bindings come from the context image Windows promoted. Under ruling B those commands are "satisfied by the twin's own host
+context", which carries no such binding — the rewriter (and the host engine) see subchannel 0 unbound.
+
+## Stop: an owner decision is needed — WDDM's user work runs on guest-KERNEL channels (2026-10-08, after run57)
+
+**What.** Every Windows channel, including the ones that carry the desktop's and the D3D user-mode driver's command buffers, is allocated by the
+kernel driver with `PRIVILEGE=KERNEL` (WDDM's model), so kayfabe makes it Translated and re-authors its pushbuffer from per-class allowlists
+(§S, guest-kernel GR work: "re-author from an allowlist ... never copies guest pushbuffer words ... native first"). The first desktop segment needs
+(1) subchannel bindings that Windows expects from its promoted context image, and (2) the whole 3D (and compute) method vocabulary a compositor
+and every D3D application emit. The allowlist today covers the observed 2D/I2M/CE methods and one 3D semaphore release.
+
+**Evidence.** Run57 above (head armed, CCD configuration stored, the channel's death at gp 0, bugcheck 0x116); runs 54-56 (no commit while the
+creates were refused); run32 (the kernel channel's own SET_OBJECTs).
+
+**Options.**
+- (a) **Translated, full allowlists.** Re-author every 3D/compute method Windows emits, class by class, each set validated on the native oracle;
+  plus host-authored `SET_OBJECT`s for the subchannels the promoted context would have bound (from the classes the guest allocated on that
+  channel, which kayfabe knows — authored, not forwarded). Safe by construction; large (the 3D class alone has hundreds of methods; every new game
+  can find a new one), and every unlisted method is a TDR.
+- (b) **WDDM user-work channels as Passthrough on unprivileged host USER channels.** The guest's bytes run unmodified on a host channel that is
+  USER-privileged (asserted at birth, as today for Linux user channels): privileged methods fault on the host engine instead of being filtered
+  by kayfabe; VA identity within the VM's own space. This is how Linux user channels already run. It needs a ruling because these channels are
+  guest-KERNEL ones (Q7 classifies them kernel) and because the deferred API (§U) is Translated-only today.
+- (c) **Hybrid:** keep the KMD's own kernel channels (paging, the kernel GR/CE channels) Translated; run the per-process user-work TSGs
+  (identified by their owning client and `GPU_PROMOTE_CTX` target, not by guest bytes) as (b).
+
+**Recommendation:** (c). It keeps the guest-kernel work under re-authoring, and gives D3D the path that already runs Linux user work. Before any
+code: a native-oracle check that a USER host channel running a 3D segment that starts with host-authored SET_OBJECTs behaves (no Xid), then one
+Windows run with the probes of run57.
+
+**Other decisions this loop produced (owner):** the six NV0073 answers and IMP_ENABLE=TRUE of `KF3_DISPLAY_CTRL_PROBE`/`KF3_DISPLAY_IMP_ENABLE`
+should become real answers (§S.2: virtual-monitor features are implemented; HDCP answers "absent"), designed from `kf_disp::model` with ogkm layouts;
+`GR_CTXSW_PREEMPTION_BIND` and the cross-client `ZCULL_BIND` need the real host-authored bind (or a ruling that preemption/zcull buffers are
+host-owned); `0x20801111` (task B) is now shown to be on the desktop's path. Draft for OWNER_RULINGS: below, not inserted.
+
+## Run58 (display only, labelled fallback): a visible, interactive Windows 11 desktop in the broker window — Microsoft Basic Display on kf3's GOP framebuffer, NVIDIA driver disabled
+
+Binary `kf3-bins/40230e23`, 4096 MiB alone, `windows_broker.sh desktop` (persistent overlay `/var/lib/kf-windows-20261005/windows-desktop`
+of the same baseline; default flag list, **no probes**), started 14:06:09 CEST. Steps: `autologon` (local account `kf`, password generated on
+the host, 0600, not committed), `nvidia disable` (pnputil: the NVIDIA adapter `CM_PROB_DISABLED`), `reboot`.
+[command](run58-desktop-command.json), [first logon](run58-desktop-screendump-t0000.png), [desktop](run58-desktop-screendump-t0090.png),
+[after input](run58-desktop-screendump-after-input.png), [NVIDIA disable](run58-nvidia-disable.txt), [broker log tail](run58-broker-log-tail.txt).
+
+`[measured, run58 at 40230e23, 2026-10-08]`:
+- After the reboot the window shows OVMF, then Windows' first-logon screens ("Getting things ready for you.", "Almost there."), then the
+  **Windows 11 desktop at 1920x1080** with Start menu, taskbar and clock, about 90 s after the reboot. `quser`: `kf console Active`.
+- Input through QEMU's input layer (the path the broker's relay feeds): a QMP `esc` key closed the Start menu, and an absolute pointer event
+  moved the cursor to the screen centre (USB tablet; PS/2 keyboard). The broker relay itself was not exercised by a person in this run.
+- The broker presents the frames (`Present: COPY - the compositor is compositing it`, host refresh 59.996 Hz); kf3: `copies` on demand when
+  the frame changes (`checks` ~60/s). No host Xid (86 throughout).
+- What it is, plainly: Windows' **Microsoft Basic Display** driver drawing (software rendering) into the firmware framebuffer kf3's GOP set up
+  (BAR1 `[0, 0x7f0000)` seeded to store 0); kf3 scans that out as its boot layer. **No NVIDIA driver, no GPU acceleration, no D3D on the GPU.**
+  It shows the display, broker and input path end to end; it is not "the NVIDIA adapter reporting a display".
+
+**Why "display not initialised" and "Basic Display Code 10" in run53, now explained.** Runs 1-53 had the QEMU std VGA (1234:1111) as the
+firmware display and kf3 without GOP; Windows' Basic Display instance on that VGA never started (Code 10), and kf3's console had neither a GOP
+frame nor an NVIDIA scanout. With kf3 `gop=on` and no std VGA, the firmware and Basic Display draw on kf3 (runs 54-58), and nvlddmkm's own
+scanout needs the GR walls of runs 55-57.
+
+## Draft for `docs/OWNER_RULINGS.md` (NOT inserted; for the owner to accept, change or reject)
+
+> **V. Windows user work on WDDM's kernel channels (draft, 2026-10-08).** Windows allocates every channel from its kernel driver with
+> `PRIVILEGE=KERNEL`, including the per-process channels that carry the D3D user-mode driver's and the compositor's command buffers. kayfabe
+> classifies them kernel (§Q, Q7) and re-authors them from allowlists (§S guest-kernel GR work). Decision: (a) keep all Translated and grow the
+> allowlists to the full 3D/compute vocabulary, with host-authored `SET_OBJECT`s for the subchannels Windows binds through its promoted context;
+> (b) run them as Passthrough on asserted-USER host channels (the GPU enforces privilege; VA identity inside the VM's own space); (c) hybrid —
+> the KMD's own kernel channels (paging, kernel GR/CE) stay Translated, per-process user-work TSGs (identified by the owning client and the
+> `GPU_PROMOTE_CTX` target, never by guest bytes) run as (b). Recommendation (c), after a native-oracle check. Also needed with it:
+> `GR_CTXSW_PREEMPTION_BIND` and the KMD's cross-client `GR_CTXSW_ZCULL_BIND` as real host-authored binds on the twin (or a ruling that these
+> buffers are host-owned and the controls are answered `NV_OK` with nothing bound), and task B (`0x20801111`) confirmed.
+
+## Run59 (goal checks, alone, 4096 MiB): nvidia-smi now reports FB memory; D3D still `0x8876017c`
+
+Binary `kf3-bins/40230e23`, flags as run56 (preempt-bind probe and the two display probes; NO runlist flag, NO ZCULL probe, so no crash),
+started 14:19:07 CEST, stopped by ACPI, Xid 86 before and after. [command](run59-command.json), [nvidia-smi and adapters](run59-smi-probe.txt),
+[D3D/video-memory probe](run59-probe-output.txt), [trace](run59-qemu.log.gz).
+
+`[measured, run59 at 40230e23, 2026-10-08]`: NVIDIA adapter Status OK, Code 0. `nvidia-smi` exit 0: `NVIDIA GeForce RTX 4070, 580.88,
+memory.total 4096 MiB, memory.used 0 MiB, memory.free 3748 MiB, pstate [N/A], utilization.gpu [N/A], temperature 0, display_active Disabled`;
+`-q -d MEMORY`: FB 4096/0/3748 MiB, BAR1 128/100/28 MiB. **The FB fields were `N/A` in runs 48-53**: serving the 7 FB indices (run54 onward)
+is what changed between those runs and this one (inferred link; the FB-index change is the only change on the memory path).
+`D3D11CreateDevice`/`D3D12CreateDevice` on the NVIDIA adapter: `0x8876017c` (as runs 50-56); Basic Render control 0.
+
+## Two kf3 VMs on one GPU (owner question), and the state left running
+
+`[measured, 2026-10-08]` run54 (Windows 1024 MiB store beside the Linux guest's 8192 MiB, 3 min 20 s) and the final state (the Linux demo
+`interactive.sh` with kf3 `4bc62999` restarted at 14:20:24, then the Windows desktop overlay at 1024 MiB from 14:22:33): both VMs run, both broker
+windows are fed, the host's NVRM Xid count stays 86 across every sample. Store sizes larger than the free VRAM are refused at realize by name
+(4096 and 2048 MiB beside the Linux guest). One host-side oddity, recorded: at host uptime 233343 s (about 14:01:30 CEST, during run57's TDR,
+Windows alone on the GPU) the host driver logged `nvAssertFailedNoLog: rangeLo <= rangeHi @ gpu_vaspace.c:1363` and
+`dmaAllocMapping_GM107: can't alloc VA space for mapping` (twice); no Xid, the GPU stayed usable (runs 58-59 and the Linux guest ran after it).
+Which kayfabe mapping asked for it was not traced (inferred: a teardown-time mapping of the dying channel).
+
+**Left running (2026-10-08 14:30 CEST):** the Linux demo (`interactive.sh`, window "kayfabe guest") and the Windows desktop overlay (`windows_broker.sh
+desktop`, `WIN_FB_MB=1024`, window "kayfabe Windows", NVIDIA disabled in that overlay, autologon `kf` verified over two reboots after the
+`DevicePasswordLessBuildVersion` fix). Stop Windows: `scripts/bench/windows/windows_broker.sh stop` (as root on the host; the Linux guest is not
+touched). Back to the NVIDIA driver in the overlay: `windows_broker.sh nvidia enable` then `reboot` (the screen then stays on the boot frame, runs 54-56).
+
+# Loop 2026-10-08 (fourth session): Windows user work as Passthrough (OWNER_RULINGS §V)
+
+Owner, 2026-10-08 (relayed): *"If you do not need to translate, then a translated can become passthrough, if you know at channel
+creation. I hope you can get windows with nvidia to work."* Branch merged with `integration/master-candidate-20261008` at `58df3556`.
+`windows_broker.sh` now runs instances side by side (`desktop` and `run N`, each with its own window "kayfabe Windows run N"), and `stop`
+is clean (ACPI, then QGA, kill only as a last resort and never for the desktop overlay without `WIN_FORCE_KILL=1`).
+
+## Run60 (diagnostic, alone, 4096 MiB): the channel facts, and the runlist-submit bisect
+
+Binary `kf3-bins/3a578d50` (adds the `CHAN-FACTS`/`VAS-FACTS` log lines, nothing acted on), flags as run57 MINUS `KF3_SW_RUNLIST_HOST_OWNED`
+(ZCULL, preempt and display probes on). Started 15:41:22 CEST, ACPI stop at 15:42:47, Xid 93 before and after (7 Xids arrived on the host
+between 14:30 and 15:41 from other work; none in this run). [facts](run60-chan-vas-facts.txt), [trace](run60-qemu.log.gz),
+[command](run60-command.json).
+
+`[measured, run60 at 3a578d50, 2026-10-08]`, every channel of the boot:
+- **All** Windows channels carry `internalFlags` PRIVILEGE=KERNEL (`0x16`), RM-internal ones included — privilege cannot tell user work.
+- The kernel driver's channels (paging CE `0xc1d00013`, kernel GR `0xc1d00015`, CEs, video `0x13/0x1c/0x33`, and two display-side pairs
+  `0xc1d00020` CE, `0xc1d00023/24` CE+GR): **`hContextShare = 0` and `ProcessID = 0x350`**, all eleven.
+- The desktop's and D3D clients' graphics channels (`0xc1d00027`, `0x2b`, `0x30`, `0x33`, `0x36`, `0x37`, `0x3b`, re-created while their
+  creates fail): **`hContextShare = 0xff0e0200`** (a `FERMI_CONTEXT_SHARE_A`, class `0x9067`, under the TSG) **and their own `ProcessID`**
+  (`0x3b8`, `0x554`, `0x54c`). Each lives in its own VA space owned by a per-process client.
+- *Bisect:* with the ZCULL bind answered but the software-runlist submit (`0x20801111`) refused, no head is armed and the D3D/compositor
+  channels are re-created again and again (16 refused submits): **the submit refusal is (part of) the create wall** (run57 had both answered
+  and committed a mode). `KF3_SW_RUNLIST_HOST_OWNED` (owner: "stays off and undecided", §W) is therefore used below as a labelled experiment.
+
+**The criterion (`kf_rm::chanlink::windows_user_work`), stated with its falsifiers.** A Windows guest-kernel GR or CE channel is per-process
+USER work iff it declares a context share the guest allocated **and** a `ProcessID` different from the kernel driver's (the `ProcessID` of the
+guest's first guest-kernel, non-internal channel). Both facts must agree. *Falsifiers:* (1) a channel so classified emits a physical operand
+or a privileged method (it is RC'd on its unprivileged host twin — a named host Xid / RC record, the channel dies; never silent); (2) a kernel
+driver channel (paging, kernel GR, video, display-side) logs `USER WORK`; (3) a D3D/compositor channel logs `kernel work`.
+*Cost of a misclassification:* a user channel kept Translated hits the rewriter (as in run57, fail closed); a kernel channel made Passthrough
+runs on an asserted-USER host channel in a VA space holding only this VM's memory — it cannot reach another VM or the host (unprivileged
+channel, bounded VAS); a physical operand is refused by the copy engine (`traces/phys_operand_oracle_20261008/`; GR classes are still being
+measured by the oracle, not claimed here; criterion first applied in run61 at 883f878e, 2026-10-08). The flag `KF3_WIN_USER_CHANNELS_PASSTHROUGH` (default off) also admits Windows' per-channel 5080
+as a guest-graph object on such a twin (never triggered by kayfabe) and resolves deferred INITIALIZE/PROMOTE/EVICT that target such a twin
+(ruling B; EVICT = host channel off the runlist).
+
+## Run61 setup (alone, 4096 MiB): Windows user work as Passthrough
+
+Binary built from this branch at the commit that adds this text; flags as run57 (incl. `KF3_SW_RUNLIST_HOST_OWNED=1`, labelled experiment) plus
+`KF3_WIN_USER_CHANNELS_PASSTHROUGH=1`. **H-pt:** with the compositor's and D3D clients' channels Passthrough, D3D device creation on the NVIDIA
+adapter succeeds and the compositor's first segment runs. *Falsifiers (fixed now):* `D3D11CreateDevice`/`D3D12CreateDevice` still `0x8876017c`;
+or the first Passthrough GR segment is RC'd on the host (host Xid / RC record) — then the subchannel bindings Windows expects from its
+promoted context are the wall (run57's inference), and kayfabe must author them; or any classification falsifier above.
+
+### Run61 result: the classification holds; every user-work Passthrough birth is refused by host RM — Windows' USERD is in guest SYSTEM memory, at an IOVA too wide for a USERD
+
+Binary `kf3-bins/883f878e`, 4096 MiB alone (the Linux demo stopped for VRAM: a first attempt beside it was refused `NoMemory` at realize,
+`boundary-kayfabe-61-refused-nomem`), flags as run57 plus `KF3_WIN_USER_CHANNELS_PASSTHROUGH=1`; started 15:53:01 CEST, Xid 93 before and
+after. [classification and births](run61-classify-births.txt), [host NVRM lines](run61-host-nvrm.txt), [trace](run61-qemu.log.gz).
+
+`[measured, run61 at 883f878e, 2026-10-08]`:
+- `CLASSIFY`: all 13 kernel-driver channels (and the two RM-internal ones) `kernel work -> Translated` with the expected reason; all 8
+  compositor/D3D channels (`0xc1d00027`, `2e`, `31`, `34`, `37`, `3a`, `3b`, `3e`) `USER WORK -> Passthrough`. **No classification falsifier
+  fired.**
+- Every user-work birth: `act birth passthrough REFUSED (0x1a): birth: Other(30)`; host dmesg: `kchannelCreateUserdMemDesc_GV100: physical
+  addr size of userdAddrHi=0x00007ff9, userAddrLo=0x007cb4d8 is incorrect!` → `NV_ERR_INVALID_ADDRESS` (`kernel_channel_gv100.c:211-219`).
+  The guest's USERD for these channels is a 512-byte slot of the guest RM's USERD pool in guest SYSTEM memory (`Sysmem { base: 0x2396... }`,
+  consecutive slots, the same pool the kernel channels use); the Passthrough twin adopts it through kayfabe's guest-RAM OS descriptor, and the
+  host's IOMMU (domain type `DMA-FQ` for the GPU's group) gives that page a DMA address of `0x7ff9_f969_b000`, wider than a USERD may be.
+  Linux guests never met this: their user channels' USERD is in video memory.
+- The D3D creates therefore failed as before (the channel alloc returns an error); H-pt is **not tested** (the channel never ran).
+
+### Run62 result (guest-side knob, no effect): `RMInstLoc = 0x30000` (USERD in video memory) does not move Windows' USERD
+
+Same binary and flags. First boot: the `RMInstLoc` DWORD set to `0x30000` (`nvrm_registry.h:209-213`, USERD = VID) in the NVIDIA adapter's
+class key `...\0001` and the `nvlddmkm` service keys ([values](run62-instloc.txt)). `[measured, run62 at 883f878e, 2026-10-08]`: an in-guest
+reboot inside the same QEMU process brought the NVIDIA adapter back at **Code 43** (`CM_PROB_FAILED_POST_START`; GSP `Running -> Suspending ->
+Halted` right after boot — the same as run57's second boot: an in-process guest reboot is not a clean second boot on kf3 today); a second boot in
+a NEW QEMU process on the same disk (`windows_broker.sh WIN_REUSE=1`) started the driver normally, and **all 12 Windows-RM USERDs were still in
+system memory** (two RM-internal ones in FB, as before); the user-work births were refused as in run61 ([births](run62-boot2-classify-births.txt)).
+So either the Windows RM does not read `RMInstLoc` from those keys or the USERD pool ignores it; not pursued further.
+
+### Runs 63-64 (census): what the kernel-driver channels and the one user-work segment contain
+
+Run63 `883f878e`, run64 `ac3456ac` (adds `LAUNCH_DMA` words to the count-only Translated census); both with the user-work flag OFF (all channels
+Translated, as run57), the runlist experiment on and `KF3_TCENSUS=1`; each reached the mode commit (`head armed` at +12.6 s in run63) and the
+same death of the compositor's channel at gp 0, then the guest's TDR bugcheck; both stopped (run63 by the launcher's last-resort kill after 300 s
+without an ACPI or agent shutdown: the guest was at its post-bugcheck Code-43 boot; fresh overlays, nothing kept). Xid 93 throughout.
+[run63 census](run63-census-births.txt), [run64 census and facts](run64-census-births-facts.txt), traces `run63-qemu.log.gz`, `run64-qemu.log.gz`.
+
+## The owner's question: how does Windows keep a user-mode driver from emitting physical operands, if every channel is kernel-privileged?
+
+Reported only from what the traces show (coordinator's decode of run60 `CHAN-FACTS`, checked against `alloc_channel.h`: `NVOS04_FLAGS`
+bit 5 `PRIVILEGED_CHANNEL` is set on EVERY Windows channel, `0x201620`/`0x80201620` for the per-process ones; bit 7
+`DENY_PHYSICAL_MODE_CE` on none; `internalFlags` privilege level 2 = kernel on all).
+
+| | kernel-driver channels (13) | per-process user-work channels (compositor, D3D) |
+|---|---|---|
+| process / subcontext | `ProcessID` = the kernel driver's (0x350 run60, 0x34c run64), `hContextShare` 0 | own `ProcessID` (0x3b8, 0x554, 0x54c run60; 0x3b4 run64), a `FERMI_CONTEXT_SHARE_A` |
+| GPFIFO ring | a VA in the kernel driver's VA space (`0xc1d00002:0xff000870`, e.g. `0x12024b000`) or in two display-side spaces (`0xc1d0001e/21`) | a VA in the process's own VA space (`0xc1d00025:0xff000850`, ring `0x1200c4000`, 32768 entries) |
+| USERD | a 512-byte slot of the guest RM's USERD pool, guest system memory (two RM-internal channels: FB) | the same pool, the next slots (guest system memory) |
+| push-buffer seen | kernel GR / CE segments in the kernel VA space (runs 31-57) | ONE segment of ONE channel: gp 0 at `0x120104080` in the process's VA space, 10 words, two 3D `SET_REPORT_SEMAPHORE` releases on subchannel 0 |
+| physical operands counted | **run64: the display-side CE `0xc1d00023` (token `0x80c`, kernel `ProcessID`, no subcontext): 49 `LAUNCH_DMA`, 29 with `DST_TYPE = PHYSICAL`** (`0x2186` x18, `0x2586` x11); the others semaphore-only (`0xc` x8, `0x4c` x11) or virtual (`0x4000586` x1) | **0 in the one segment seen** — far too small a sample to claim absence |
+
+What the traces can NOT show: who has a CPU mapping of a ring, push buffer or USERD slot (Windows maps memory for the CPU inside the guest; no
+RPC carries it), and therefore whether a process can write its own ring or push buffers. `[inferred, WDDM's model, not measured]`: per-process
+command buffers are built by the user-mode driver in the process's GPU VA space and submitted by the kernel driver.
+
+What each outcome means: the kernel-driver channels DO use physical operands ([measured, run64 at ac3456ac, 2026-10-08]) — they are kernel work in effect and stay Translated
+(the criterion keeps every one of them there). For the per-process channels the evidence is not enough to call their content virtual-only; the
+Passthrough classification's soundness rests on the host side instead: the twin is an asserted-USER host channel in a VA space holding only
+this VM's memory, so a physical operand on it is refused by the hardware (copy engine: measured by the oracle, Xid 32 + RC; graphics classes:
+pending the oracle) — on bare metal those channels are `PRIVILEGED_CHANNEL`, under kayfabe they would not be. Whether Windows' user work ever
+NEEDS a physical operand (then it would fail closed under Passthrough) is open; a larger sample needs the channels to run.
+
+## Stop (fourth session, 2026-10-08 ~16:20): the next wall is USERD; decisions waiting
+
+**What moved:** a two-fact criterion ([measured, runs 60/61/64 at 3a578d50/883f878e/ac3456ac, 2026-10-08]) separates the kernel driver's channels from per-process user work at channel creation (runs 60,
+61, 64 agree); the software-runlist submit is shown to be on the compositor's path (run60 bisect). **The wall:** a Passthrough twin cannot adopt
+a Windows USERD (guest system memory, IOVA `0x7ff9...` on this host), so no user-work channel is born; the subchannel-binding question of run57
+is therefore not reached.
+
+**Options for the USERD wall (no code yet):** (i) *USERD relay*: the twin gets a kayfabe-owned video-memory USERD; kayfabe copies the guest's
+`GP_PUT` to it at each doorbell (no longer a pure inline doorbell: a worker, as Translated channels have) and the engine's `GP_GET` back to the
+guest's slot — 4 bytes each way, never a push-buffer word; the ring and push buffers stay the guest's, unparsed. A worker-owned ring would also
+let kayfabe author the subchannel bindings (`SET_OBJECT` of the classes the guest allocated on the channel, `cla06fsubch.h`: 3D 0, compute 1,
+I2M 2, 2D 3, copy 4) before the guest's first entry. (ii) *Host IOMMU identity domain for the GPU* (DMA address = physical, below the USERD
+limit on a 32 GiB host): a host-level change that needs the GPU's driver rebound or a host reboot — the owner's desktop runs on this GPU.
+Recommendation: (i), designed with its doorbell and completion path written down first.
+
+**Decisions needed:** (1) the owner's soundness question, with the table above; (2) `KF3_SW_RUNLIST_HOST_OWNED` (still "undecided", now
+on the D3D/compositor path in run60 at 3a578d50, 2026-10-08); (3) USERD relay (i) vs IOMMU identity (ii); (4) the preemption/ZCULL binds on twins (probes only).
+
+### Runs 65-66: do the per-process channels look like user-mode-submission channels? (coordinator's follow-up questions)
+
+Run65 `ad626617`, run66 `6eaa251e` (run66 adds `DBCPL`: for each write to the usermode doorbell `NOTIFY_CHANNEL_PENDING` — BAR0 `0xBB0090`
+on Ada, `kf_trap::memmap::VF_USERMODE_PAGE + 0x90`; run65's diagnostic watched Turing's `0x810090` and saw nothing — the writing vCPU's
+privilege level (CS.RPL, `KVM_GET_SREGS`) and RIP, default-off `KF3_DOORBELL_CPL`); both with run57's flags (user work Translated) and the
+census. Started 16:22:22 / 16:25:18 CEST, Xid 93 throughout; run65 stopped by ACPI, run66 by the guest agent's shutdown.
+[run65 scheduling probe](run65-sched-probe.txt), [run65 channel facts](run65-chan-facts.txt), [run66 doorbells, facts and census](run66-dbcpl-facts.txt),
+trace `run66-qemu.log.gz`.
+
+`[measured, run66 at 6eaa251e, 2026-10-08]`, per question:
+1. *Usermode doorbell object allocated by a per-process client?* No `VOLTA_USERMODE_A`-family alloc (`0xc361`..`0xc761`) reaches the GSP
+   from any client in runs 64-66 — the guest's CPU-RM constructs that class without an RPC (`[inferred]` from its absence for kernel clients
+   too, who certainly ring doorbells), so the RPC trace cannot answer this; CPU mappings of USERD/doorbells never cross to the host.
+2. *Who writes the doorbells?* **All 32 doorbell writes come from guest ring 0 (`cpl=0`), from three kernel addresses
+   (`0xfffff80722a5ea3d`, `0xfffff80722a5dc5c`, `0xfffff807224aa1c9`): the kernel GR channel (token `0x3`), the display-side GR channel (`0xd`),
+   the kernel-driver CE channels (`0x1000c` x24, `0x10001` x2, `0x10002`), and the compositor's per-process channel (`0xe`) x3 from the same
+   kernel RIP `0xfffff80722a5dc5c` as a kernel CE channel.** No doorbell from user mode in this guest.
+3. *Scheduling mode* `[measured, run65 at ad626617]`: build 26100; `GraphicsDrivers\HwSchMode` absent (the OS default applies; what that default
+   is on this adapter was not read — `dxdiag` was not run before the guest's TDR), no user-mode-submission key under `GraphicsDrivers`;
+   `FeatureSetUsage` WddmVersion 3200; NVIDIA key `FeatureControl = 4`.
+4. *Alloc fields, per-process vs kernel* (run66 `CHAN-FACTS`, all 15 channels): identical except `flags` (only the `USERD_INDEX` bits = chid
+   differ; bit 5 `PRIVILEGED_CHANNEL` set on all, bit 7 `DENY_PHYSICAL_MODE_CE` on none), `gpFifoEntries` (32768 for the compositor's channel;
+   2048-16384 kernel), `hContextShare`/`ProcessID` (the classification facts) and the VA space. `hObjectError = hObjectBuffer = 0` and
+   `hPhysChannelGroup = 0` everywhere; every channel names an `hUserdMemory` object of its own client and its USERD resolves into the guest RM's
+   one system-memory pool (512-byte slots, `internalFlags = 0x16` on all).
+
+**What this says about the Passthrough classification.** The per-process channels do NOT look like user-mode-submission channels in this guest:
+their doorbell is rung by the kernel driver, from kernel code, exactly as for its own channels `[measured, run66 at 6eaa251e, 2026-10-08]`; who writes their GP entries is not
+visible, but with a kernel-mode doorbell the kernel driver submitting on the process's behalf is the consistent reading `[inferred: WDDM's
+kernel-mode submission]`. So "user-written ring + doorbell = the Linux user channel shape" is **not** established. What does hold `[measured]`:
+the per-process channels run in the process's own VA space with a subcontext, and the one segment seen was virtual-only. The classification's
+safety therefore rests on the host twin (asserted-USER, the VM's memory only, physical operands refused by hardware — copy engine measured,
+graphics pending the oracle), not on Windows' submission model; its functional risk is a kernel-inserted physical or privileged entry on such a
+channel, which would RC the twin (fail closed, named).
+
+### P4.5 gap recorded: an in-guest reboot inside one QEMU process is not a clean second boot for Windows
+
+`[measured, run57 at 40230e23 and run62 at 883f878e, 2026-10-08]` After a guest reboot that stays in the same QEMU process (the launcher's
+`-action reboot=reset`; run57 after its bugcheck 0x116, run62 after a plain `Restart-Computer`), the NVIDIA adapter comes back at **Code 43**
+(`CM_PROB_FAILED_POST_START`), the GSP going `Running -> Suspending -> Halted` right after its boot; a second boot of the same disk in a NEW
+QEMU process (run62, `WIN_REUSE=1`) starts the driver normally. This is a kf3 teardown/re-init gap on guest reset (P4.5), not a Windows wall;
+until it is fixed, Windows runs use a fresh QEMU per boot (`windows_broker.sh stop N` then `WIN_REUSE=1 ... run N`).
+
+## Run67 setup (alone, 4096 MiB): the USERD relay (`docs/design/V3_USERD_RELAY.md`)
+
+Binary `kf3-bins/8288ff8e` (this branch with the relay), flags as run61 (`KF3_WIN_USER_CHANNELS_PASSTHROUGH=1`, the runlist experiment and the
+probes) plus `KF3_TCENSUS=1`. **H-relay:** the user-work twins are born over kayfabe's USERD and their doorbells reach the host through the relay.
+*Falsifiers:* a `birth passthrough REFUSED` for a user-work channel, or no `USERD relay: GP_PUT ... forwarded` line once the compositor runs.
+**H-pt (from run61):** D3D device creation succeeds and the compositor's first segment runs on the twin. *Falsifiers:* `0x8876017c` again; or the
+twin RC'd (host Xid / RC record) on its first segment — then the subchannel bindings are the wall (authored next, from the guest's own class
+allocations on that channel).
+
+### Runs 67-68 result: the USERD relay works — the compositor's channel is born Passthrough and its first submission reaches the engine; the twin then takes Xid 31 (PBDMA fault at VA 0x13000) after host RM could not map part of its GR context
+
+Run67 `8288ff8e` (16:40:48 CEST; the Linux demo, restarted at 16:38 by another agent's finished input-sink chain, stopped first for VRAM),
+run68 `d67e9290` (16:44:10; adds the fix below and `KF3_DOORBELL_CPL`); flags as the run67 setup. [run67 timeline](run67-relay-births.txt),
+[run68 timeline](run68-relay-timeline.txt), [run68 host NVRM lines](run68-host-nvrm.txt), traces `run67-qemu.log.gz`, `run68-qemu.log.gz`.
+
+`[measured, run67 at 8288ff8e and run68 at d67e9290, 2026-10-08]`:
+- **H-relay: SUPPORTED.** `chan 0xc1d00027:0xff04000c BORN Passthrough: token 0xe -> host 0x44 ... WINDOWS-USER-WORK` with the relay (both runs;
+  run61's `NV_ERR_INVALID_ADDRESS` is gone). Windows then allocates the copy, I2M, 2D, 3D and compute objects on the twin, sends two direct
+  `GPU_PROMOTE_CTX` (satisfied by the twin, ruling B), sets its timeslice, schedules it, and the head is armed (1920x1080@60).
+- Run67: no relay step ever ran (`gets=0`): the plane's worker judged the twin "not translatable" (`ChanPlane::alive` knew only Translated
+  slots), so the guest's doorbells were absorbed; Windows reset the channel (`NV906F RESET_CHANNEL` x4, refused) and freed it. Fixed in run68
+  (a relayed twin is alive).
+- Run68: the three doorbells of token `0xe` (`cpl=0`, kernel RIP, as in run66) reach the relay: **`USERD relay: GP_PUT 0x3 forwarded and rung`**,
+  and the engine fetched (`host GP_GET = 1` at release, written back to the guest's slot). Then the host logs **`Xid 31 ... channel 0x44 ... MMU
+  Fault: ENGINE GR0_PBDMA0 HUBCLIENT_ESC faulted @ 0x0_00013000, FAULT_PDE, VIRT_READ`** — the twin is RC'd, contained to it (fail closed; no
+  other channel, VM or the host desktop affected; Xid 93 → 94). The guest then resets the channel (75 `RESET_CHANNEL`) and the screen keeps the boot
+  frame ([last screendump](run68-screendump-last.png)).
+- Seven seconds before the fault, while the twin's engine objects (its GR context) were being created, host RM logged **`dmaAllocMapping_GM107:
+  can't alloc VA space for mapping`** (`rangeLo <= rangeHi @ gpu_vaspace.c:1363`) twice — the same pair at run67's twin birth (16:41:01) —
+  i.e. host RM could not place part of the twin's GR context in the twin's host VA space (the mirror of the process's VA space).
+- The mirror withholds the guest's PRIVILEGED mappings from a user twin (by design): **10 privileged runs, 0x4f80000 bytes, in the compositor's
+  process VA space** were withheld (`[measured]`: Windows maps kernel-privileged buffers inside a process's GPU VA space — part of the owner's
+  question; what they hold is not decoded).
+
+**Inferred (not tested), the next wall:** the PBDMA/ESC fault at a low VA with no PDE follows host RM's failure to map a context buffer of the
+twin's GR context in its host space (`VA 0x13000` lies inside the range Windows itself promoted for this channel's context, `0x11000 +
+0xdc300`, run53's decode — a coincidence or the same layout; not established). Candidates, to separate in the next run: (a) the host VA space
+built for a Windows process mirror leaves host RM no hole for its own context placements (the reserved guest ranges `GUEST_VA_RANGES` plus
+Windows' own layout), (b) the withheld privileged runs include something the PBDMA reads. Recorded host-side evidence to read first: which RM
+allocation failed (an NVRM debug print or the twin's context-buffer VAs).
+
+**Stop (time box, 2026-10-08 ~16:50).** The D3D/compositor wall moved: the per-process channel is born on an unprivileged host twin, its doorbells
+are relayed and its first entry is fetched by the engine. D3D11/12 device creation was not re-probed (the guest's compositor TDRs first);
+not claimed.
+
+## Run69 setup (diagnostic, alone, 4096 MiB): is the host VA space's guest-range reservation what leaves host RM no room?
+
+Same binary and flags as run68 plus `KF3_NO_GUEST_VA_RESERVE=1` (an existing kf-host switch: host twin spaces are made WITHOUT the
+`GUEST_VA_RANGES` reservations, so host RM may place its own buffers anywhere; a guest row that then collides is named `HeldByHost`).
+`[measured, run68 at d67e9290]` the guest's mappings in the compositor's space start at `0x1_2000_2000`; the fault was at `0x13000`, a VA no guest
+row maps, so the faulting read is host RM's own (inferred). **H-room:** the reservation leaves host RM no VA for part of the twin's GR context.
+*Falsifier:* `can't alloc VA space for mapping` again at the twin's birth, or the same Xid 31 at a low VA.
+
+### Run69 result: H-room FALSIFIED — and the real cause found in the mirror log: Windows maps the process space from VA `0x10000`, below host RM's VA-space start
+
+`[measured, run69 at d67e9290, 2026-10-08]` ([mirror and relay lines](run69-relay-mirror.txt), [host NVRM](run69-host-nvrm.txt), trace
+`run69-qemu.log.gz`): without the guest-range reservations the same pair (`can't alloc VA space` x2) and the same `Xid 31 ... GR0_PBDMA0
+HUBCLIENT_ESC faulted @ 0x0_00013000, FAULT_PDE` occur; the relay forwarded `GP_PUT` 2 then 3 and the engine fetched entry 0. The mirror's MAP
+rows for the compositor's space include **`MAP va=0x10000 len=0x6000 at=0x21f19f000 ap=3`** (system memory) — so `0x13000` IS a guest
+mapping, one the host space could not take: host RM starts every VA space at `vaStartMin = 1 MiB` unless `vaBase` is given
+(`ogkm-595.84: gpu_vaspace.c:1105,1156-1161`, `g_gpu_vaspace_nvoc.h:781-785`), the mirror's FIXED map at `0x10000` is refused
+(`rangeLo <= rangeHi`, `gpu_vaspace.c:1363`) — those are the two NVRM asserts — and the PBDMA's read of `0x13000` finds no PDE `[inferred: the
+read is the guest's own entry or semaphore there; not decoded]`.
+
+## Run70 setup: the twin spaces start at 64 KiB (`KF3_TWIN_VA_BASE=10000`, diagnostic)
+
+Binary `kf3-bins/4b14d74f` (adds the `KF3_TWIN_VA_BASE` switch for guest-mirror spaces and `vaBase` in `VAS-FACTS`), flags as run68 plus
+`KF3_TWIN_VA_BASE=10000`. **H-vabase:** with the host space starting at 64 KiB the mirror maps `0x10000`, no `can't alloc` assert, and the
+twin's PBDMA does not fault there. *Falsifiers:* the asserts or the `0x13000` fault again; a new `HeldByHost` collision (host RM placing its
+own buffers below 1 MiB where the guest maps) is recorded if it appears.
+
+### Run70 result: H-vabase SUPPORTED — the compositor's channel RUNS on its unprivileged host twin (no fault, no Xid); Windows reports a 1920x1080@60 mode; D3D creation from session 0 still fails, now at its copy channel
+
+Binary `kf3-bins/4b14d74f`, `KF3_TWIN_VA_BASE=10000`, flags as run68; started 16:55:37 CEST, ACPI stop 16:58:47, Xid 95 before and after.
+[timeline](run70-timeline.txt), [D3D probe](run70-probe-output.txt), [session probe](run70-session-probe.txt), trace `run70-qemu.log.gz`.
+
+`[measured, run70 at 4b14d74f, 2026-10-08]`:
+- No `can't alloc VA space` assert and **no Xid**: the compositor's twin (token `0xe`, host `0x64`) runs — the relay forwarded `GP_PUT` 2, 3, 5,
+  6, 9, 0xc, 0xe, 0xf ... 0x1d (#16) ... 0x38 (#32) and on: the engine executes the compositor's work on an unprivileged host channel, never
+  parsed by kayfabe.
+- The head is armed (1080p60) and the display engine completed core updates (`5 updates completed, 8620 methods`); **`Win32_VideoController`
+  reports `Mode=1920x1080@60`** (runs 53-59: no mode), NVIDIA Code 0, LogonUI and dwm in session 1, no TDR at 115 s of uptime. The window
+  channels still carry only CSC LUT methods — no window surface is presented yet, so the broker window keeps the boot frame.
+- `D3D11CreateDevice`/`D3D12CreateDevice` (the probe, session 0): still `0x8876017c`. Each create now births its graphics channel Passthrough
+  and then a **copy channel (engine `0xc`) with no context share under the process's own `ProcessID` (0x14c0)** in the same VA space, which the
+  classifier kept Translated (its graphics-only subcontext check) and which the T-space rule then refused (`a Translated channel never runs in a
+  space a user channel runs in`) — fail closed, the create torn down.
+- Fixed for run71 (`2959ed5f`): a copy channel has no subcontext, so it is judged by its process alone (GPU-free tests updated). The
+  `VAS-FACTS` now show the Windows process spaces' `vaBase`: `0` or `0x20000000`, `vaSize` `0x20000000`-`0x40000000` (lo32), flags `0x5`.
+
+### Runs 71-72 result: the compositor's work runs to completion on its twin; every D3D device the probe creates RCs its twins (Xid 32, PBDMA `DEVICE`); TDR follows
+
+Run71 `2959ed5f` (16:59:27 CEST), run72 `8de8ef26` (17:03:31; adds the default-off `KF3_RELAY_PB_PEEK` diagnostic, the one place a relayed
+twin's guest words are READ — logged, never executed or forwarded by kayfabe), flags as run70. Xid 95 → 102 (run71) → 109 (run72), every one on a
+twin of the probe's D3D devices. [run71 timeline](run71-timeline.txt), [run71 Xids](run71-host-xid.txt), [run72 timeline](run72-timeline.txt),
+[run72 peek](run72-relay-peek.txt), [run72 Xids](run72-host-xid.txt), traces `run71-qemu.log.gz`, `run72-qemu.log.gz`.
+
+`[measured, runs 71-72 at 2959ed5f/8de8ef26, 2026-10-08]`:
+- The copy channel of a D3D device is now born Passthrough too (`engine=0xc`, relayed). Each probe create births a GR + CE twin pair.
+- **The compositor's twin runs its work to completion:** run71's release line `forwarded=98 ... host[GP_PUT=0xc0 GP_GET=0xc0]` (the engine consumed
+  every entry Windows submitted; the guest's own `GP_GET=0xbd` lagged by 3 — the relay's documented staleness), no Xid on it; host non-stall
+  interrupts on GR0 are raised to the guest (1001 in run72).
+- **Every twin of the probe's D3D devices takes `Xid 32 ... intr 00800000`** — PBDMA `INTR_0` bit 23, `DEVICE` (`[inferred]` from the
+  register's layout as nouveau names it: a method the engine refused, e.g. one on a subchannel with no object) — on its first submission
+  (GR twins `0x65/67/69/6b`, CE twins `0x02000066..6c`); then Windows TDRs and bugchecks 0x116 (run71 second boot: Code 43, the P4.5 gap).
+  D3D11/12 creation therefore still fails (run71 probe output stops after `D3DKMTCreateDevice`).
+- Peeked first submissions (run72): the compositor and the probe's GR channels start with the SAME 10-word segment (two 3D
+  `SET_REPORT_SEMAPHORE_A-D` on subchannel 0, no `SET_OBJECT`) — on the compositor's twin it runs, on the probe's it is followed by an RC; the
+  probe's first `GP_PUT` is `0x24` with entries 1-35 all zero (control NOPs), the compositor's 2-3 real entries. The compositor's GP[1] is a
+  32-word segment at **VA 0x13000** (the low region of run69): copy-engine and 3D methods. The CE twins' first segment: CE semaphore and
+  `LAUNCH_DMA 0x8` (semaphore only). Why one twin accepts the subchannel-0 methods and the other refuses them is not established.
+- **Physical operands in per-process push buffers** (the owner's question): 19 peeked user-work segments (284 words, compositor + probe):
+  10 `LAUNCH_DMA` (`0x686` x4, `0x8` x3, `0x10` x3), **0 with `SRC_TYPE` or `DST_TYPE` = PHYSICAL** `[measured, run72]` — still a small sample.
+
+## Stop (fourth session, ~17:15 CEST): where Windows-with-NVIDIA stands, and what is next
+
+**What moved this session** (flags all default-off; one labelled experiment):
+1. Classification at channel creation (`windows_user_work`): per-process work = the process's own `ProcessID` (≠ the kernel driver's) and, for
+   graphics, a context share; right on every channel of runs 60-72.
+2. USERD relay (`V3_USERD_RELAY.md`): a per-process twin is born Passthrough over kayfabe's own USERD; doorbells relayed by a worker.
+3. Host VA space start: a Windows process space maps from VA `0x10000`; with the twin spaces starting at 64 KiB (`KF3_TWIN_VA_BASE=10000`,
+   diagnostic) the compositor's twin runs (run70) and consumes all its work (run71), with no Xid; Windows reports **1920x1080@60**.
+
+**The walls now** `[measured, runs 70-72 at 4b14d74f/2959ed5f/8de8ef26, 2026-10-08]`: (a) every twin of a D3D device the probe creates RCs on its first submission (`Xid 32`, PBDMA `DEVICE`), the
+guest TDRs and bugchecks; the compositor's twin with the same first segment does not — cause not established (candidates to separate next: the
+subchannel bindings Windows does not send — `SET_OBJECT` never appears in the peeked streams, and the copy twins' first segment uses
+subchannel 4 bare; the cross-client ZCULL/preemption binds the probe answers without binding). (b) No window surface is presented yet (the
+display's window channels carry only LUT methods), so the broker window keeps the boot frame. (c) `KF3_TWIN_VA_BASE` is a diagnostic: the real
+rule must start a twin space where the guest's own space starts (a `SHARED_MANAGEMENT` space whose external PDEs the kernel driver fills below
+RM's default start), without letting host RM place its own buffers into the guest's low range. (d) An in-guest reboot is not a clean second
+boot (P4.5).
+
+**Decisions waiting (owner):** the soundness question (tables in this record: kernel channels use physical operands; 19 per-process segments
+showed none; doorbells all from ring 0); `KF3_SW_RUNLIST_HOST_OWNED` (on the compositor's path, still a labelled experiment); whether kayfabe may
+author `SET_OBJECT` bindings for a Passthrough twin (it would need a kayfabe-owned ring in front of the guest's entries — a design change to
+"Passthrough never reads a GP entry").
+
+# Loop 2026-10-08 (fifth session), branch `claude/windows-walls-20261008`: the VA-start rule, and why the D3D twins are RC'd
+
+Started from the fourth session's stop (above) at `1a142d0a`.
+
+## Before any boot: what NVIDIA's own documentation says the Xid 32 `intr 00800000` is (no run)
+
+`[documented, NVIDIA open-gpu-doc, Ampere GA100 dev_pbdma.ref / dev_ram.ref]` (Ada's Host is not separately documented there):
+- `NV_PPBDMA_INTR_0_DEVICE` is bit 23 (`0x00800000`): *"indicates a SW-class method. More specifically, it indicates that the
+  method's subchannel specified a SW engine or a non-existent engine. Note the subchannel-to-engine mapping is fixed, and that it
+  is not possible to specify a non-existent engine."*
+- dev_ram.ref: *"Methods on subchannels 0-4 are handled by the primary engine served by the runlist, except that subchannel 4
+  targets GRCOPY0 and GRCOPY1 on the graphics runlist."* *"Subchannels 5-7 are for software methods. Any methods on these
+  subchannels (including SetObject methods) are kicked back to software ... using the NV_PPBDMA_INTR_*_DEVICE interrupt."*
+- dev_pbdma.ref, `NV_UDMA_OBJECT`: *"SetObject is not required by any engine."*
+
+What this does to the three candidate causes (`[inferred from the documentation]`, to be checked by run73):
+- **H-subch** (a missing `SET_OBJECT` on subchannels 0-4): a method on 0-4 cannot raise `DEVICE` (fixed mapping, SetObject not
+  required), so authoring `SET_OBJECT` bindings for the guest's classes cannot cure this Xid. Not built; the flag the coordinator
+  allowed is not needed unless run73 shows a `DEVICE` RC with no software-subchannel method in the stream.
+- **H-bind** (ZCULL / preemption binds missing): would surface as graphics-engine exceptions or context-switch errors, not as a
+  PBDMA `DEVICE` interrupt.
+- **H-va** (a mapping the segment touches is missing): would surface as an MMU fault (Xid 31), not Xid 32. `[measured, runs 71-72
+  at 2959ed5f/8de8ef26]` the probe twins took Xid 32 only.
+- **H-sw** (new): the D3D twins' streams carry a method on a SOFTWARE subchannel (5-7) — which Windows' own RM services on bare
+  metal (its kernel channels do exactly that: `[measured, run72]` "DEFERRED-API trigger ... subch 5 ... method 0x200" on the kernel
+  GR channel) but which host RM, on an unprivileged twin with no such object, answers with an RC.
+- Re-read of run72's peek: it logged only GP entries 0..0xb of each twin, but the D3D twins were rung with `GP_PUT = 0x24` (GR) and
+  `0x10` (CE), and their host `GP_GET` reached `0x24` / `0x10` before the RC. So entries `0xc..0x23` (GR) and `0xc..0xf` (CE) were
+  executed and NEVER seen; the fourth session's "entries 1-35 all zero" covered 1-0xb only.
+
+## Run73 setup (alone, 4096 MiB): the VA-start rule (task A) and the full peek of the D3D twins (task B)
+
+Binary `kf3-bins/3f23995a` (this branch: `MirrorVaStart`, `VAS-DECL`, relay peek v2), flags as run72 MINUS `KF3_TWIN_VA_BASE`
+(removed; the rule is on under `KF3_WIN_USER_CHANNELS_PASSTHROUGH=1`). Probes as run71/72 (`video_memory_probe.ps1`,
+`d3d12_signal_probe.ps1`, `display_probe.ps1`), QMP screendumps.
+
+- **H-rule** (task A): with the twin spaces started at 64 KiB and `[64 KiB, 1 MiB)` reserved for guest rows, the compositor's twin
+  runs as in runs 70-72 and Windows reports 1920x1080@60, with no diagnostic env var. *Falsifiers:* an NVRM `can't alloc VA space
+  for mapping` at a twin's birth; an Xid 31 on the compositor's twin; a `HeldByHost` (`held>0`) for a row below 1 MiB. Recorded
+  either way: whether host RM accepts the `[64 KiB, 1 MiB)` reservation (else the log says `NOT reserved`).
+- **H-sw** (task B): every D3D twin that takes `Xid 32 intr 00800000` has at least one `SW-SUBCH METHOD` line (subchannel 5-7) among
+  the entries it consumed. *Falsifier:* an RC'd twin whose peek covers every entry up to its host `GP_GET` and shows no
+  software-subchannel method → H-sw is false, and the PBDMA executed bytes kayfabe's view of the guest does not show (next step:
+  compare the host mapping of the ring and segments against the guest rows).
+- **H-late**: entries read as zero were written after the doorbell. *Falsifier:* no `CHANGED after its doorbell` line.
+
+### Run73 result: H-rule holds; H-sw holds for every D3D copy twin — they bind `NV50_DEFERRED_API` to software subchannel 5 and are RC'd there; the D3D graphics twins' software method lies past the 512 words scanned
+
+Binary `kf3-bins/3f23995a`, alone, 4096 MiB, flags as run72 minus `KF3_TWIN_VA_BASE`; started 17:42:25 CEST, ACPI stop 17:44:48, Xid 109 →
+116 (all 7 on this run's twins). [timeline](run73-timeline.txt), [peek](run73-relay-peek.txt), [host Xids](run73-host-xid.txt),
+[probe](run73-d3d12-probe.txt), [command](run73-command.json), trace `run73-qemu.log.gz`.
+
+`[measured, run73 at 3f23995a, 2026-10-08]`:
+- **H-rule (task A): holds.** No `can't alloc VA space` assert, no Xid 31, `held=0`, no `NOT reserved` line (host RM accepted the
+  `[64 KiB, 1 MiB)` reservation); the compositor's twin is born (token `0xe`, host `0x44`) and relayed, the head is armed at +10.7 s. Its low
+  rows map through the reservation (`MAP va=0x10000 len=0x3000 ... ack=1`, `va=0x13000 len=0x3000 ... ack=1`). `VAS-DECL` (64-bit):
+  the compositor's space declares `vaBase=0x1_0000_0000 vaSize=0x1_2000_0000 shared_management=true` — its page tables map `0x10000`,
+  4 GiB BELOW the declared base: the declaration describes RM's allocator window, not the page tables' reach (the rule's premise).
+- **H-sw: holds for the copy twins.** Each D3D device's copy twin (tokens `0x1012`, `0x1014`, `0x1016`) consumes GP[0xe], a SUBROUTINE
+  segment whose word 6-7 is `2001a000 00005080` = `SET_OBJECT` on **subchannel 5**, data `0x5080` (`NV50_DEFERRED_API`), then
+  host-semaphore and CE methods; each of those twins takes `Xid 32 ... intr 00800000` (`0x02000048`, `0x0200004a`, `0x0200004c`).
+  The compositor's twin's streams (`token 0xe`, 168 segments peeked) use subchannels 0 and 4 only — no software subchannel: that is
+  the difference between the twin that runs and the twins that die.
+- **H-sw for the graphics twins: not shown yet.** The four D3D graphics twins (`0x45/47/49/4b`) take the same Xid; their peeked
+  segments carry no software-subchannel method in the first 512 words scanned, but three of them are 8039-11174 words long (GP[0x10],
+  GP[0x1a], GP[0x20] of token `0xf`): the scan bound, not the stream, ended the search. Run74 scans whole segments (16384 words).
+- **H-late: falsified.** No `CHANGED after its doorbell`: the 13 zero GP entries (1..0xd) are real NOP control entries in every D3D
+  ring; the D3D devices' real work starts at GP[0xe] in SUBROUTINE segments (`level=1`), with `sync=1` NOP entries between them.
+- Unrequested: Windows created these D3D devices by itself at boot (no probe was run before them); the guest then TDR'd, came back at
+  Code 43 (the P4.5 gap) and the probe found no NVIDIA adapter. Screen: 640x480 after the in-process reboot.
+- Fixed after the run: the two new refusal codes were `0x4B72`/`0x4B73`, already `HOST_ABI_REFUSED`/`PRIVILEGED_CHANNEL_REFUSED`
+  (`kf-host/src/lib.rs`); now `0x4B77`/`0x4B78`, with a uniqueness test.
+
+**Verdict on the coordinator's hypotheses** (`[documented]` + `[measured, run73 at 3f23995a, 2026-10-08]`): **H-subch** (missing `SET_OBJECT` on 0-4) — not the
+cause: the twins die on a `SET_OBJECT` that IS present, on a SOFTWARE subchannel; NVIDIA's documentation rules out a `DEVICE`
+interrupt from a missing binding on 0-4. **H-bind** — not the cause (the Xid is a PBDMA software-method interrupt, and the copy twins
+have no ZCULL/preemption state). **H-va** — not the cause (no MMU fault; the low rows map). **H-sw** — the cause for the copy twins.
+
+## Run74 setup (alone, 4096 MiB): a host `NV50_DEFERRED_API` on each Windows user-work twin (labelled experiment)
+
+Binary `kf3-bins/082117df`, flags as run73 plus `KF3_WIN_TWIN_DEFAPI_OBJECT=1` (EXPERIMENT, default off; OWNER_RULINGS §U.1 says the
+class is Translated-only — an owner decision is pending). When the guest allocates `NV50_DEFERRED_API` on a Windows user-work twin,
+kayfabe authors ONE host object of that class under the twin's host channel (no params; nothing registered on it), so the guest's
+`SET_OBJECT(0x5080)` on its software subchannel finds an object of that class (RM matches a software `SET_OBJECT` by class or by
+software classID, `kernel_channel.c:3433-3436`). A later `0x200` trigger finds nothing registered and fails closed.
+- **H-defapi-obj:** the copy twins pass GP[0xe] without an RC. *Falsifiers:* a copy twin that carries the host object still takes
+  `Xid 32 intr 00800000`; or the host refuses the authored alloc (logged by name).
+- **H-sw-gr:** the graphics twins' RC follows a software-subchannel method somewhere in their whole segments. *Falsifier:* an RC'd
+  graphics twin whose peek covers every consumed segment in full and shows no `SW-SUBCH` line.
+- Recorded either way: every `SW-SUBCH` method beyond the bind (a `0x200` trigger would be the next wall: nothing is registered on the
+  host object), D3D11/D3D12 creation (`d3d12_signal_probe.ps1`), and the display's window-channel methods.
+
+### Run74 result (the experiment's first binary): the host objects were made, but the guest read `0x56` for its 5080 alloc
+
+Binary `kf3-bins/082117df`, flags as the run74 setup; 17:49:54-17:54:03 CEST, Xid 116 → 116. [timeline](run74-timeline.txt), [marker](run74-marker.txt).
+`[measured, run74 at 082117df, 2026-10-08]` the act authored the host `NV50_DEFERRED_API` on each user-work twin, but the channel link turned
+the plane's `Deferred` answer into `NOT_SUPPORTED` (`GSP REFUSED fn103/0x00005080=0x56`): every per-process channel was born, never rung
+(`forwarded=0`) and freed — the run60 create loop. Not a test of H-defapi-obj. Fixed (`3e5d7f64`, test
+`a_deferred_5080_answer_holds_the_reply`): the reply is held for the act, as an engine object's is. Run75 never started its QEMU (the
+launcher was killed by a closed pipe in the operator's command; nothing ran).
+
+### Run76 result: H-defapi-obj HOLDS — no D3D twin is RC'd; H-sw-gr holds; the guest then TDRs anyway (bugcheck 0x116, recovery failed `0xc000009a`), cause not yet found
+
+Binary `kf3-bins/f649d2c3`, flags as the run74 setup; started 17:58:10 CEST, ACPI stop 18:00:40, **Xid 116 → 116 (none)**.
+[timeline](run76-timeline.txt), [software-subchannel methods](run76-sw-subch.txt), [D3D twin peeks](run76-peek-d3d.txt), [guest
+crash events](run76-crash.txt), [probe](run76-d3d12-probe.txt), [command](run76-command.json), trace `run76-qemu.log.gz`.
+
+`[measured, run76 at f649d2c3, 2026-10-08]`:
+- **H-defapi-obj: holds.** 11 host `NV50_DEFERRED_API` objects authored (one per user-work twin, `cafe0087..cafe0168`). The copy twins
+  pass their `SET_OBJECT(0x5080)` on subchannel 5 and run to their last entry (token `0x1016`: `GP_PUT 0x10 → 0x54`, five doorbells,
+  host `GP_GET = 0x54`); **no host Xid at all** in the run (runs 71-73: 7 per boot).
+- **H-sw-gr: holds.** The scan over whole segments finds the graphics twins' bind: `SW-SUBCH METHOD GP[0x10] word 7502 subch 5 method 0x0
+  data 0x5080` on tokens `0xf`, `0x11`, `0x13`, `0x15` — the same `SET_OBJECT(NV50_DEFERRED_API)` on software subchannel 5, 7502 words
+  into the device's first big segment (past run73's 512-word bound). With the host object they too run on: token `0x15` consumed
+  `GP_PUT 0x24 → 0x190` (ten doorbells, host `GP_GET = 0x190`). No `0x200` trigger appears in any peeked D3D stream (7 software
+  methods, all the bind) — so "nothing registered on the host object" was never exercised.
+- **Then the guest TDRs.** Windows' System log: `BugCheck 0x116 (VIDEO_TDR_FAILURE) (…, …, 0xffffffffc000009a, 4)` — a GPU timeout was
+  detected and its recovery failed with `STATUS_INSUFFICIENT_RESOURCES`; the driver unloads (`UnloadingGuestDriver`), the in-process reboot
+  comes back at Code 43 (P4.5) and the probe sees no NVIDIA adapter. Which engine/fence timed out is not in kayfabe's log (no Xid, no
+  refusal of a channel the D3D devices use). One unserviced control right before the teardown: `0x007302a5` (NV0073, in no OGKM header,
+  refused since run30). The relay's guest `GP_GET` lags at release (token `0x15`: guest `0x17f`, host `0x190`) — the documented staleness.
+- **Display (task C):** the head is armed at +9.6 s; the window channels still carry only `0x584/0x588/0x4a4/0x4a8` (CSC/LUT
+  methods, 15040 of them) — no surface, no present. D3D11/D3D12 creation could not be probed (the adapter was gone by then).
+
+**Inferred, not measured (candidates for the TDR, to separate next):** (a) a completion the guest never sees: the D3D work's fences are
+semaphore releases the engine writes into guest memory, but WDDM learns of them through the completion interrupt — if the non-stall
+event of the engine a D3D copy twin runs on (`engine 0xc`, COPY3) is not relayed to the guest's vector, the fence looks stuck —
+`[measured, run76]` host non-stall wakes: GR0 3757 (1025 raised to the guest), CE3 393 (7 raised), CE2 976 (0 raised); what
+`raised=false` means for each is not decoded here; (b) a stale guest `GP_GET` read as "no progress"; (c) the unserviced `0x007302a5`.
+
+## Stop (fifth session, ~18:05 CEST): where Windows-with-NVIDIA stands
+
+**What moved** (all default-off; flags named):
+1. **Task A, the real VA-start rule** (`kf_host::channel::MirrorVaStart`, on with `KF3_WIN_USER_CHANNELS_PASSTHROUGH`): twin spaces start
+   at one 64 KiB big page with `[64 KiB, 1 MiB)` reserved for guest rows; NULL-page and wrapping rows refused by name; the guest's
+   declaration is checked and logged (`VAS-DECL`) but never sets the base. `KF3_TWIN_VA_BASE` is gone. `[measured, runs 73/76 at 3f23995a/f649d2c3, 2026-10-08]` it works.
+2. **Task B, why the D3D twins were RC'd:** every D3D device channel (graphics and copy) binds `NV50_DEFERRED_API` to SOFTWARE
+   subchannel 5 (`SET_OBJECT` data `0x5080`); host RM, with no such object on the unprivileged twin, answers with Xid 32 / PBDMA
+   `DEVICE`. The compositor's channel never uses a software subchannel, which is why it ran. H-subch, H-bind and H-va are not the cause.
+3. **The experiment `KF3_WIN_TWIN_DEFAPI_OBJECT`** (owner decision pending, §U.1): one host `NV50_DEFERRED_API` per user-work twin, authored
+   from the guest's own alloc, nothing registered — removes every Xid (run76).
+
+**The wall now:** a TDR after the D3D work runs (bugcheck 0x116, recovery fails `0xc000009a`); no window surface yet.
+
+**Decisions waiting (owner):** (1) `KF3_WIN_TWIN_DEFAPI_OBJECT` against §U.1 ("5080 is Translated-only"): the twin is unprivileged with a
+VM-only space (§U.3's conditions), the host object has nothing registered and no `0x200` was seen on a D3D channel — accept as the
+Windows user-work rule, or keep it an experiment; (2) `KF3_SW_RUNLIST_HOST_OWNED` (unchanged, still on the path); (3) whether a `0x200`
+on such a twin, if one ever appears, may be served by host registrations authored from the guest's `DEFERRED_API` controls (§U.4).
+
+**Left running (2026-10-08 18:07 CEST):** the Linux demo (`interactive.sh`, kf3 `4bc62999`, window "kayfabe guest") and the Windows desktop
+overlay (`windows_broker.sh desktop`, kf3 `40230e23`, 1024 MiB store, window "kayfabe Windows"): the Basic Display desktop, logged in, at
+1920x1080 (NVIDIA disabled — with NVIDIA enabled the guest still TDRs, run76). Host Xid count 116, unchanged since run73.
+
+# Loop 2026-10-08 (sixth session), branch `claude/windows-timeout-20261008`: why the guest times out after the twins ran their work
+
+Started from the fifth session's stop at `6626c536`. Every boot below: alone on the GPU (both demos stopped cleanly first), store 4096 MiB,
+flags as run76 (`KF3_WIN_USER_CHANNELS_PASSTHROUGH`, `KF3_WIN_TWIN_DEFAPI_OBJECT`, `KF3_SW_RUNLIST_HOST_OWNED`, the probes, `KF3_RELAY_PB_PEEK`)
+plus the one named variable. Host Xid count 116 before and after every run (no Xid in this session).
+
+## Re-read of run76 before any boot: the copy-engine interrupts were not dropped (H-ce-intr as framed: falsified)
+
+`[measured, run76 at f649d2c3, 2026-10-08]` (its status line `nsi=[GR0:3438/963raised CE2:974/924raised CE3:393/7raised]` and the
+`NSI host` lines): the fifth session's "CE2 976 wakes, none raised" read the per-wake `raised=false` of the maplog line, but CE2 is the
+host engine of the Translated kernel rings and its completions are raised through the Translated CE relay (`NSI RELAY ... CE2 vector 1`,
+924 of 974). CE3's 386 unraised wakes all precede the first CE3 twin; **from the first Passthrough birth to the first free there is no
+unraised wake on GR0 or CE3** (every one raised). The per-engine counters now name the reason a wake is not raised (`nolive`, `novec`).
+Linux oracle (owner's order, second witness): `scripts/bench/probes/ce_blocksync.c` (driver API, `CU_CTX_SCHED_BLOCKING_SYNC`, a
+blocking-sync event; 64 MiB copies and a 5 ms spin so libcuda really sleeps). *Falsifier stated first:* a median wait >= 200 ms
+(slice-bound) in the guest. `[measured, kf3 4bc62999 Linux demo guest and bare metal 595.91.07, 2026-10-08]` bare metal: `ce_h2d_big`
+2535 us (cpu 2 %), `ce_d2h_big` 2580 us, `gr_spin` 5036 us; kf3 guest: 2608 us (cpu 4 %), 2665 us, 5118 us; 30/30 waits each, data ok.
+The copy-engine completion awaited by interrupt works in a kf3 Linux guest. ⊘ Not done: the raw-client arm the owner asked for first
+(an OS event on a CE channel's non-stall notifier + LAUNCH_DMA interrupt) — the frozen raw client has no OS-event plumbing; open work.
+
+## Run77/78 (H-getget): the relay's GP_GET refreshed on every host wake and the worker tick (`KF3_RELAY_GET_REFRESH`, default off)
+
+*Falsifier:* the TDR (bugcheck 0x116) still occurs while every relay shows guest `GP_GET` == host `GP_GET` at release. Run76's release
+lines had shown guest `GP_GET = 0` on the twins rung once (host `0x24`/`0x10`).
+- Run77 (`492fb3f0`): INVALID — the refresh's lock made the step's `try_lock` consume a doorbell (the compositor's guest `GP_PUT 0x12`
+  never forwarded, host stuck at `0xf`); fixed in `42b332b3` (the step waits for the lock; the refresh skips a held relay).
+- Run78 (`42b332b3`): `[measured, run78 at 42b332b3, 2026-10-08]` every relay at release has guest `GP_PUT`/`GP_GET` equal to the host's,
+  and every peeked one-word fence release was written by the engine (`FENCE-AT-RELEASE ... the engine wrote it`, new diagnostic). The
+  guest still bugchecks 0x116 (`0xc000009a`). **H-getget falsified as the cause.** [timeline](run78-timeline.txt)
+- A kernel dump (WinDbg in the guest, public symbols): the bugcheck is `dxgkrnl!TdrResetFromTimeout -> ADAPTER_RENDER::Reset ->
+  TdrBugcheckOnTimeout` at 27 s of uptime; `TDR_RECOVERY_CONTEXT` is not in the public PDB (raw words kept out of this record).
+
+## Run79 (same disk, guest `TdrDelay = TdrDdiDelay = 30`): the timeout scales with TdrDelay — and starts at a refused async preempt
+
+> ⊘ **Corrected 2026-10-08 (seventh session, runs 85-88, below):** the preempt is NOT what times out. `[measured, run85 and
+> run88 at 256e510f, 2026-10-08]` boots with no `DISABLE_CHANNELS` at all TDR the same way, and a boot that served every
+> preempt with each `RUNLIST_PREEMPT_COMPLETE` after its reply (run86) TDRs at TdrDelay too. The coincidence in time is
+> real (the scheduler's preempt and the stall both start at the same D3D device's first work); the causation below is not.
+
+`[measured, runs 78/79 at 42b332b3/a99aaefe, 2026-10-08]` ([timing](run77-84-preempt-timing.txt), [run79 timeline](run79-timeline.txt)):
+in both boots the guest's kernel client issues `NV2080_CTRL_CMD_FIFO_DISABLE_CHANNELS` with a `pRunlistPreemptEvent` (the scheduler's
+asynchronous preempt) and kayfabe refused it (`0x1f`); the teardown follows **3.5 s** later with the default TdrDelay and **31.4 s** later
+with TdrDelay 30, and the guest's diagnostic snapshot (`NV0073 SYSTEM_GET_CONNECT_STATE`, the refused `0x007302a5`, `NVC370
+GET_CHANNEL_INFO`) comes 2.1 s (run78) and 18.4 s (run79) after it. All GPU work had completed (fences written, `GP_GET` current). **H-preempt:** the
+TDR is the preemption request that never completes — the GSP answers it with `RUNLIST_PREEMPT_COMPLETE` (139, eventData = the pointer;
+vfio-10 RPC 3307/3308), which kayfabe armed silently and never posted. The display enabled vblank (`LAST_DATA`) three times briefly and
+the window channels still carry only LUT methods (not the cause; recorded). `0x007302a5`: in no OGKM header, issued 6 times per boot
+from early on, refused by name, not on the TDR's path (kept refused; no derivable answer).
+
+## Runs 82-84: the async preempt served, `RUNLIST_PREEMPT_COMPLETE` posted from the host's completion (`KF3_ASYNC_PREEMPT`, default off)
+
+> ⊘ **Corrected 2026-10-08 (seventh session, runs 85-88, below), above the text it corrects:** "H-preempt holds" and "the
+> teardown follows 3.5 s after the re-enable" are timing, not cause — the TDR occurs with no preempt at all (run85, run88)
+> and with every preempt and re-enable served in the GSP's own order (run86). Run83's survival is not explained by the
+> refused re-enable as such (open). Also: in run84 the first preempt's event reached the guest BEFORE its reply (vfio-10:
+> reply first, always) — fixed in `256e510f`, not the cause.
+
+OWNER_RULINGS §S (139): *"serve it only as a real unprivileged preempt of the VM's own channel group, and post the completion only
+from the host's real completion."* The async form is carried to the plane as the same host `DISABLE_CHANNELS` over the twins as the
+synchronous form; when that host verb returns, the drainer posts a LIST `POST_EVENT` (index 139, eventData = the guest's value, never
+dereferenced) to the caller's live registration for 139 (recorded at the event alloc; retired with the hotplug ones). *Falsifier:* the
+TDR at the same delay with the completion posted.
+- Run82 (`54b12063`): the preempt names the D3D process's channel GROUP of another client (`0xc1d00031:0xff0e0000`) and the
+  cross-client rule refused it — TDR as before. Fixed (`10bfb7a0`): the kernel-only async form may name this VM's other clients (physical
+  RM resolves each entry's own `hClient`), and a group handle resolves to its twins.
+- Run83 (`10bfb7a0`): `[measured, run83 at 10bfb7a0, 2026-10-08]` both async preempts served, `RUNLIST_PREEMPT_COMPLETE posted to
+  0xc1d00002:0xff0620a0` (the same hEvent as vfio-10) right after the host verb; the kernel's cross-client RE-ENABLE was refused; **no TDR:
+  the NVIDIA adapter at `Status OK`, Code 0, 1920x1080 for ~130 s** (runs 76-82 each tore down within ~35 s of the head being armed). The D3D probe then hung
+  and the guest bugchecked 0x116 during it.
+- Run84 (`4d733007`, re-enable admitted too): `[measured, run84 at 4d733007, 2026-10-08]` preempts and re-enables all served, both
+  completions posted — and the teardown follows 3.5 s after the re-enable. **H-preempt holds for run79→83 (the refused preempt was the
+  TDR's start); after a served re-enable a further timeout remains, cause not established.** Candidates (inferred, untested): the
+  preempted twin is not rescheduled on the host after `DISABLE_CHANNELS(bDisable=0)` (the guest's later `GPFIFO_SCHEDULE`/runlist
+  submit is answered by the `KF3_SW_RUNLIST_HOST_OWNED` experiment, which does not touch the twin), or the resubmitted packets need a
+  completion the guest no longer gets after a preempt. D3D11/D3D12 creation: not shown to work (run83's probe hung). The owner's window
+  showed the boot frame / the armed 1080p head with no presented surface in these runs (window channels: LUT methods only).
+
+## Decisions and recommendations (sixth session)
+
+- **`KF3_WIN_TWIN_DEFAPI_OBJECT` — RECOMMENDED, pending the owner** (coordinator's decision, recorded in OWNER_RULINGS style, not
+  inserted there): part of the Windows user-work Passthrough set, default off. It meets the owner's rule for an unprivileged-origin
+  deferred-API channel (§U.3): the twin is asserted USER, in a VA space holding only this VM's memory, no physical operands (refused by
+  hardware), and the host object has nothing registered (a `0x200` on it fails closed). Runs 76-84: no Xid.
+- **`KF3_ASYNC_PREEMPT` (new, default off)** implements §S's 139 rule; the cross-client entries it admits (the guest kernel naming its own
+  processes' groups, and their re-enable) need the owner's confirmation that "inside one VM, isolation is the guest kernel's" (§V wording)
+  covers DISABLE_CHANNELS too.
+- **`KF3_RELAY_GET_REFRESH` (new, default off)**: correct but not the cause; keep as the relay's fidelity fix (GP_GET current between doorbells).
+- Open: the raw-client CE interrupt arm (owner's step 1), the after-re-enable timeout (run84), the in-process reboot gap (P4.5).
+
+**Left running (2026-10-08 ~19:20 CEST):** the Linux demo (`interactive.sh`, kf3 `4bc62999`) and the Windows desktop overlay
+(`windows_broker.sh desktop`, kf3 `40230e23`, 1024 MiB store, NVIDIA disabled, Basic Display). Host Xid count 116.
+
+# Loop 2026-10-08 (seventh session), branch `claude/windows-reenable-20261008`: why the guest times out after the re-enable
+
+Started from the sixth session's stop at `dcca0331`. Binary `kf3-bins/256e510f` for runs 85-88: the run84 flag set
+(`KF3_PREEMPT_BIND_PROBE KF3_DISPLAY_IMP_ENABLE KF3_DISPLAY_CTRL_PROBE KF3_ZCULL_BIND_PROBE KF3_SW_RUNLIST_HOST_OWNED
+KF3_WIN_USER_CHANNELS_PASSTHROUGH KF3_TCENSUS KF3_RELAY_PB_PEEK KF3_WIN_TWIN_DEFAPI_OBJECT KF3_RELAY_GET_REFRESH
+KF3_ASYNC_PREEMPT` plus the launcher's), alone on the GPU (both demos stopped cleanly), store 4096 MiB. Runs 86-88 are later
+boots of run85's own disk in new QEMU processes (`WIN_REUSE=1`, run79's method), each with one guest-side setting changed
+through QGA in the boot before. Host Xid count 116 before and after every boot. [marker](run85-88-marker.txt),
+[run88 command](run88-command.json), traces `run85..88-qemu.log.gz`, guest DxgKrnl ETW extracts `run86-etw-*`, `run87-etw.txt.gz`,
+`run88-etw.txt.gz` (tools: `scripts/bench/windows/dxg_etw_arm.ps1`, `dxg_etw_stop.ps1`, `dxg_sched_unfinished.py`).
+
+## Before any boot: two differences between run83 (survived) and run84 (TDR), and the VFIO reference
+
+- `[measured, run84 at 4d733007, 2026-10-08]` the FIRST async preempt's `RUNLIST_PREEMPT_COMPLETE` reached the guest BEFORE
+  its control's reply (the act queues the completion when the host verb returns, before its deferred reply settles; a
+  drainer pass in between posted it). Run83: reply first, both times. `[measured, vfio-10 gsp.jsonl, 2026-10-05 capture]`
+  the GSP answers reply-then-event every time (RPCs 6628-6633 and 8100-8126), and after the re-enable (6634-6637) it posts
+  no further event in that window: **H-event2 falsified** for the GSP message stream (no second event exists to wait for).
+- **H-ctx:** `[measured, run84]` no deferred-API trigger names the re-enabled groups' channels after the re-enable (the
+  only triggers are InitializeCtx/PromoteCtx for the next new device, chid 21): nothing was asked, so H-ctx is not supported.
+- **H-pending-completion (twins):** `[measured, run84]` every relay at release has guest GP_PUT = GP_GET = the host's, and
+  every peeked last fence release was written by the engine; run83 instead left token 0x13's later work unexecuted
+  (GP_PUT 0x4e..0x92 forwarded, GP_GET never moved: the twin stayed disabled) — and survived.
+- Fixed (`256e510f`, default-off path): the drainer takes queued completions only under the GSP lock with no reply held
+  (`preempt_posts_ready`), so the event follows its reply. The disable/enable act now names each twin and logs each relay's
+  cursors before/after the host verb. `KF3_ASYNC_PREEMPT_REENABLE_NOACT` (diagnostic, default off, never shipped) exists for the
+  coordinator's no-act bisect; it was NOT run (run85 made it moot, below). GPU-free tests: `preempt_order_tests` (6).
+
+## Run85 (fresh disk, H-order): falsifier — the TDR within ~3.5 s of a served re-enable with every event after its reply
+
+`[measured, run85 at 256e510f, 2026-10-08]` this boot issued **no `DISABLE_CHANNELS` at all** (no preempt, no re-enable), and
+the guest still tore down and bugchecked 0x116 (`…, 0xffffffffc000009a, 4`) about 20 s after boot — the same pattern as
+runs 78/84 (token 0x13 work, then `0x00730108`/`0x007302a5`, then the frees). **The preempt/re-enable is not necessary for
+the timeout: H-runlist and the re-enable act as the cause are falsified; the coordinator's no-act bisect would test a path
+the failure does not need.**
+
+## Run86 (same disk, TdrDelay = TdrDdiDelay = 30, boot-time DxgKrnl ETW, all keywords)
+
+`[measured, run86 at 256e510f, 2026-10-08]` both async preempts served, each `RUNLIST_PREEMPT_COMPLETE` posted after its reply
+(the act line, then the reply, then the post), relays idle at the preempt (`host 0x49: guest PUT=GET=0x3e = host`; CE `0x10`);
+both re-enables served; teardown ~31.5 s after the D3D device's first work. **H-order falsified as the cause** (the fix
+stays: it is the GSP's order). The ETW trace (all keywords) ended at the same D3D device's birth.
+
+## Run87 (same disk, ETW Base keyword only, flushed every second)
+
+`[measured, run87 at 256e510f, 2026-10-08]` at the trace's end every DMA packet (609 started, 609 stopped) and every queue
+packet (1656/1656) had completed; 670 `AttemptPreemption`, all misses (556 `PreemptionAttemptMissAlreadyRunning`, 114
+`MissNoCommand`). The DxgKrnl stream again stops at the new D3D device's first work (19:49:11 guest UTC, the host saw token
+0x1016 born then) although the session ran 19 s longer. Whether dxgkrnl's scheduler itself goes silent then or the trace
+loses its tail is not established (inferred either way).
+
+## Run88 (same disk, TdrDelay = 30, TdrDdiDelay = 5, ETW Base + Profiler): DDI timeout or GPU-scheduler timeout?
+
+Falsifier stated first: a DDI timeout (a thread held in the KMD) tears down ≈ 5 s + recovery after the stall; a scheduler
+timeout ≈ 30 s + recovery. `[measured, run88 at 256e510f, 2026-10-08]` last D3D work 254847.16 (host s), token 0x13/0x11 work
+at +0.9 s, `0x00730108` at +15.6 s, **teardown at +30.2 s: a TdrDelay (GPU-scheduler) timeout, not a DDI timeout (H-ddi
+falsified).** The only DDI entered and never left at the trace end is `DxgkCddTerminateThread` (CDD's thread routine). No
+preempt in this boot either. All twin relays consistent and every last fence written at release, as in runs 84-86.
+
+## Where it stands (seventh session)
+
+- **`[measured, runs 85-89 at 256e510f/5f3c17b4, 2026-10-08]`:** the timeout is the GPU scheduler's (TdrDelay-scaled), it starts at the first work of a D3D device created
+  at boot (clients `0x34..0x37`: GR twin token 0x15 + CE twin 0x1016), it needs no preempt, and no twin is behind: every
+  twin's GP_GET equals its GP_PUT and every peeked fence was written.
+- **Inferred, untested (candidates):** (a) a packet dxgkrnl submits after token 0x13's GP[0x91] — a 64-bit host
+  `SEM_EXECUTE` release (payload 0x91, VA 0x14dad000: a monitored fence) — never reaches a ring kayfabe relays (run83
+  never ran that work and never timed out); (b) a present/flip that waits on that fence and needs the display to complete
+  it (the window channels carry only LUT methods; `vblirq=0.0` in the display status); (c) the refused
+  `NV2080_CTRL_CMD_INTERNAL_PERF_BOOST_SET_2X` (0x20800a9a; vfio-10 answers it OK) — weak, run83 refused it too.
+- D3D11/12 creation: not shown (the guest TDRs before a probe can run). The owner's window: boot frame / armed 1080p
+  head, no presented surface.
+
+## Run89 (owner's control, fresh disk): the USERD relay removed — the twins ADOPT the guest's sysmem USERD under an identity IOMMU
+
+Owner decision 2026-10-08 (relayed by the coordinator). *Falsifier stated first:* "with the relay removed the TDR does not
+occur" is falsified if the guest still bugchecks 0x116 within the same window. Binary `kf3-bins/5f3c17b4` (adds
+`KF3_USERD_RELAY_OFF=1`, CONTROL, default off: a Windows user-work twin is born over the guest's own sysmem USERD, as any
+Passthrough twin), flags as runs 85-88 plus that one; default TdrDelay. [command](run89-command.json), [marker](run89-marker.txt),
+trace `run89-qemu.log.gz`.
+
+Procedure (host 172.22.1.20, logs [identity](run89-iommu-identity.log), [restore](run89-iommu-restore.log)): both demos stopped
+cleanly; GPU group 11 (`0000:01:00.0` nvidia + `0000:01:00.1` snd_hda_intel), type `DMA-FQ`; `systemctl stop gdm`
+(+ nvidia-persistenced), `rmmod nvidia_drm nvidia_modeset nvidia_uvm nvidia`, audio function unbound, `echo identity >
+/sys/kernel/iommu_groups/11/type` (accepted at runtime, no reboot), audio rebound, modules reloaded, gdm restarted (owner
+autologin), `nvidia-smi` healthy. After the run the same procedure wrote `DMA-FQ` back (the first attempt found `nvidia_uvm`
+still referenced for a moment after QEMU exited and changed nothing; the retry 20 s later succeeded). **The group is back at
+`DMA-FQ`.**
+
+`[measured, run89 at 5f3c17b4, 2026-10-08]`: every user-work twin was born with `userd=Ram {…}` (adopted, the guest's own
+page), **zero `USERD relay` lines**, no new `kchannelCreateUserdMemDesc_GV100 … physical addr size … incorrect` in dmesg
+(the last one is at 240790 s, before this session). The async preempts and re-enables were served (255281.52-.54 host s), and
+the teardown followed at 255284.90 (+3.4 s) — **bugcheck 0x116 (`…, 0xffffffffc000009a, 4`), the same window. The relay is
+exonerated: the timeout does not depend on it.** No Xid (the launcher's count read 115 after the run: dmesg's ring rotated;
+no Xid line is newer than this session's start).
+
+# Loop 2026-10-08 (eighth session), branch `claude/windows-pass-20261008`: where the guest stalls (stopped early for the VFIO DVI reference)
+
+> ★ **IOMMU STATE LEFT BEHIND (owner directive, binding for this loop): the RTX 4070's group (group 11:
+> `0000:01:00.0` + `0000:01:00.1`) is in `identity` mode since 2026-10-08 20:58:28 CEST**
+> ([log](run90-iommu-identity.log); `iommu_type.sh identity` on the host, runtime switch, no reboot). It was NOT
+> restored. **To revert:** stop both demos and every QEMU, then on the host `bash /var/lib/kf-windows-20261005/iommu_type.sh DMA-FQ`
+> (stops gdm, unloads nvidia_drm/modeset/uvm/nvidia, unbinds the audio function, writes `DMA-FQ` to
+> `/sys/kernel/iommu_groups/<n>/type` with `n = readlink /sys/bus/pci/devices/0000:01:00.0/iommu_group`, rebinds, reloads,
+> restarts gdm). A host reboot or a module reload that rebuilds the default domain may put it back to `DMA-FQ`: check
+> `/sys/kernel/iommu_groups/11/type` before any identity-dependent run (run89's procedure, above).
+
+Started from the seventh session's stop at `6f91a53d` (code-identical to `5f3c17b4` apart from rustfmt, so the runs use
+`kf3-bins/5f3c17b4`), flags exactly run89's (`KF3_USERD_RELAY_OFF=1`, adopted guest USERD, identity IOMMU). Stopped
+after ~1 h by the coordinator (the GPU goes to vfio-pci for a like-for-like VFIO reference with a DVI-D monitor).
+
+## Re-read before any boot (no run): what the host logs already say about the stall (runs 88/89)
+
+- `[measured, run88 at 256e510f, 2026-10-08]` the teardown at 254877.285 is **30.13 s after** the D3D device's last
+  rings (token 0x15 GP_PUT 0x142 and token 0x1016 GP_PUT 0x54, both at 254847.155): with TdrDelay 30 the timed object is
+  work submitted at that instant. After token 0x13 (GP_PUT 0x93) and 0x11 (0xb9) at 254848.022 **the guest rings no
+  doorbell and sends no RPC for 14.8 s** (only `0x00730108` at 254862.81, then the frees): the guest is silent, not busy.
+- `[measured, run88]` every ring of the D3D device's copy twin 0x1016 (5) has exactly one host CE3 non-stall wake, raised
+  to the guest (CE3 1324 wakes, 7 raised, the rest `nolive`); GR0 wakes for 0x15 all raised. Doorbell ledger (runs 88/89):
+  every Passthrough ring reached the host (`rung = forwarded = trap`).
+- `[measured, run88 relay peek]` **the user-work twins' streams carry no interrupt request**: no host `NON_STALL_INTERRUPT`
+  header in any peeked segment of tokens 0xe/0xf/0x11/0x13/0x15/0x1016; the KMD's own tail segment (`level=0`) on the
+  copy twin is a one-word release (fence N at `0x1200eb000`) plus a four-word release (`0x1200eb000 + 0x10·N`) with
+  `LAUNCH_DMA` 0x8/0x10 (INTERRUPT_TYPE NONE); on the GR twin two `SET_REPORT_SEMAPHORE` releases (D = `0x10000004`,
+  `0x4`: AWAKEN_ENABLE clear). The paging channel 0x80c, by contrast, has 615 `LAUNCH_DMA 0x4c` (NON_BLOCKING
+  interrupt) for 614 paging DMA packets.
+- `[measured, run88 ETW]` **every DMA-packet event (Start/Stop/Info, 614 each) is a `CLIENT_PAGING_BUFFER`**; the render
+  contexts have QueuePacket events only (render, wait, signal, MMIO-flip) and no DmaPacket events. *Inferred (untested):*
+  hardware-accelerated GPU scheduling (HAGS) is ON in the guest (no `HwSchMode` value in the registry — Windows 11
+  26100's default — and the render work bypasses the DMA-packet path), so user-work completion is tracked by
+  progress/monitored fences the KMD must notice, not by DMA-completed interrupts. Candidate (inferred, untested): the
+  KMD learns of user-work completion through something kayfabe does not reproduce (an interrupt real hardware raises,
+  or the HAGS runlist submits that `KF3_SW_RUNLIST_HOST_OWNED` answers and ignores).
+- `[inferred, clock alignment ±0.1 s assumed]` run88's ETW trace ends at guest 17:59:44.244 UTC; the host saw 0x15 born at
+  17:59:44.228 and the guest's last rings at 17:59:45.655, so the trace lost at least ~1.4 s of events before the stall:
+  H-tail (the trace's end is an NTFS/flush artefact of the bugcheck, not dxgkrnl going silent) is supported, not proven.
+- Display (coordinator's lead b): `vblirq` counts only ticks with the **VBLANK** bit enabled; Windows enables
+  **LAST_DATA** (`0x2`), and the display worker raises the display vector on every tick whose enabled pending bits are
+  non-zero (`display.rs` steps 4 and 8). `vblirq=0.0` is therefore a counter-labelling artefact, not evidence that no vsync
+  interrupt was raised; run88's ETW holds 3 `VSyncInterrupt` events, one per brief enable. Not tested further.
+- The coordinator's DP/SOR cluster: kayfabe's head is DVI-D/TMDS by design (`V3_DISPLAY.md` §4.2), so the DP/AUX/audio
+  controls are expected to be absent (coordinator's own correction).
+
+## Run90 (fresh disk, identity, run89 flags, `5f3c17b4`): the run89 pattern reproduces; the in-stall ETW stop did not happen
+
+Tooling: `scripts/bench/windows/winpass_cycle.sh` (launch, QGA steps, stop) with `dxg_etw_stop_now.ps1` (stop the boot-time
+DxgKrnl session DURING the stall and keep its file), `dxg_etw_decode_kept.ps1`, `tdr_off_etw_arm.ps1`, `hags_status.ps1`.
+[command](run90-command.json), [marker](run90-marker.txt), [harness log](run90-winpass.log), traces `run90-boot{1,2,3}-qemu.log.gz`.
+- Boot 1 (fresh) and boot 2 (`WIN_REUSE=1`): `[measured, run90 at 5f3c17b4, 2026-10-08]` the same course as run89 —
+  Passthrough twins 0xe..0x15 and 0x1016 born with `userd=Ram` (adopted), zero `USERD relay` lines, then all 9
+  Passthrough twins freed (TDR teardown) and the kernel channels reborn; host Xid count unchanged (60). The bugcheck
+  code was not read this time. Boot 2's QGA armed the boot-time DxgKrnl ETW session (Base keyword) and TdrDelay =
+  TdrDdiDelay = 30 for the next boot; `hags_status.ps1` (dxdiag) did not finish before the bugcheck.
+- Boot 3 (the measurement, `WIN_REUSE=1`): INVALID — after two unclean stops (a guest stopped at a bugcheck answers
+  neither ACPI nor QGA, so the launcher killed QEMU after 300 s twice) Windows never started the NVIDIA driver (kf3
+  phase `Cold` throughout, no RPC) and the VM powered itself off after ~70 s (inferred: Windows recovery after
+  consecutive failed boots). **Nothing about the stall was measured in boot 3.**
+- Harness bug found and fixed in the committed script: a broker window started inside `flock` inherited the GPU lock's fd
+  and held `/tmp/kayfabe-fastguest.lock` after QEMU was gone (it blocked another agent ~10 min; killed 21:42 CEST). Use
+  `flock -o`.
+
+## Where it stands, and the next runs (not done: stopped for the VFIO reference)
+
+- **Not shown:** D3D11/D3D12 creation, a draw, a stable NVIDIA desktop. The owner's window shows the boot frame / the
+  armed 1080p head with no presented surface (runs 88-90); the persistent desktop overlay (Basic Display, NVIDIA
+  disabled) was restarted at 21:43 CEST (`KF3_REV=40230e23 WIN_FB_MB=1024 windows_broker.sh desktop`).
+- **Next, one variable each (falsifier first):**
+  1. *H-tail / the hung object* — fresh disk; boot 1 runs `tdr_off_etw_arm.ps1` through QGA before its TDR (QGA answered
+     at +14 s in run90); boot 2 then holds the stall with `TdrLevel = 0` (no teardown, no bugcheck, no unclean stop), and
+     QGA stops the ETW session in the stall (`dxg_etw_stop_now.ps1`), decodes it (`dxg_etw_decode_kept.ps1`) and reads
+     `hags_status.ps1`. Falsifier of H-tail: a trace stopped in the stall still ends at the D3D device's first work.
+     The decoded tail names the queue packet / wait / signal that never completes and its fence.
+  2. *H-hags* — the same disk with `HwSchMode = 2→1` (HAGS off, `hwsch_off.ps1` via `ps:`), nothing else changed.
+     Falsifier: the stall at the D3D device's first work persists with HAGS off. If HAGS off passes, the HAGS
+     completion path (fences/interrupts/runlist submits) is the wall, and the VFIO DVI reference's MSI deliveries per
+     vector around the first D3D work name what real hardware raises there.

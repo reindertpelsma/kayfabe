@@ -1,0 +1,63 @@
+{
+ "quiet": 0,
+ "end_utc": "2026-10-11T16:43:50.6309166Z",
+ "start_utc": "2026-10-11T16:43:34.4602516Z",
+ "rc": 0,
+ "secs": 16,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4090 status=OK code=0"
+ ],
+ "digests": [],
+ "session": 1,
+ "out_files": [],
+ "boot_utc_start": "2026-10-11T14:31:59.5000000Z",
+ "log_tail": [
+  "=== gputest_triangle start=2026-10-11T09:43:34.4602516-07:00 host=DESKTOP-JR70RMQ session=1 boot=2026-10-11T14:31:59.5000000Z timeout=98",
+  "KFWAIT gputest_triangle EXITED rc=0",
+  "GPUTEST 2026/10/11@09:43:36(0000000002) < > GpuTest: Cross Platform Graphics Benchmark Utility",
+  "GPUTEST 2026/10/11@09:43:37(0000000027) < > Triangle - OpenGL - Renderer model: NVIDIA GeForce RTX 4090/PCIe/SSE2",
+  "GPUTEST 2026/10/11@09:43:49(0000000031) < > [Benchmark_Score] - module: Triangle - Score: 18523 points (1028x720 windowed, duration:8000 ms).",
+  "=== end rc=0 secs=16 2026-10-11T09:43:50.6309166-07:00"
+ ],
+ "pdh": {
+  "pids": [
+   "5372",
+   "3868",
+   "8648"
+  ],
+  "nv": {
+   "security": 0,
+   "3d": 1.800025928417776,
+   "vr": 0,
+   "videodecode": 0,
+   "copy": 0,
+   "ofa_0": 0,
+   "legacyoverlay": 0,
+   "videoencode": 0
+  },
+  "samples": 7,
+  "other": {},
+  "nvidia_luids": "0_5f8e"
+ },
+ "timed_out": false,
+ "token": "g1-gputest_triangle-1791737000",
+ "boot_utc_end": "2026-10-11T14:31:59.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "gputest_triangle",
+ "smi": {
+  "samples": 3,
+  "mem_used_base_mb": 170,
+  "util_max": 12,
+  "mem_used_max_mb": 197
+ }
+}

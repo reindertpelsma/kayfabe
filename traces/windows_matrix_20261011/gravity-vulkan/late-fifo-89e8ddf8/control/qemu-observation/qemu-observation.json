@@ -1,0 +1,38 @@
+{
+  "captured_utc": "2026-10-11T22:29:57.756931+00:00",
+  "source": "/var/lib/kf-windows-20261005/boundary-kayfabe-1495/qemu.log",
+  "snapshot_bytes": 5161356,
+  "source_size_at_open": 5161356,
+  "prefix_sha256": "cf2dd9ad11e5b1c5eb50ffe54789ab00694fe0abf52628d2ca3ad5432ac1acb3",
+  "line_count": 14136,
+  "counts": {
+    "RELAY-PEEK ARMED": 0,
+    "SW-SUBCH METHOD": 0,
+    "method 0x200 ": 17,
+    "CHANGED after its doorbell": 0,
+    "RELAY-PEEK BUDGET exhausted": 0,
+    "walk capacity ceiling": 0,
+    "slot pool exhausted": 0,
+    "OverDeclaredCap": 0,
+    "birth_refused": 593,
+    "HELD-BY-HOST": 0,
+    "REFUSED": 104,
+    "GSP phase Running -> Suspending": 1,
+    "cmd=0x20801116": 1
+  },
+  "counter_maxima": {
+    "birth_refused_cap": 0,
+    "unreconciled": 0,
+    "held": 0,
+    "named_missed": 152,
+    "invalidate_boot_max_us": 115329
+  },
+  "selected_count": 299,
+  "selected_written": 299,
+  "selected_truncated": false,
+  "candidate_methods_0x200": [],
+  "armed_registrations": [],
+  "public_layout_source": "NVIDIA/open-gpu-kernel-modules tag 580.65.06",
+  "public_layout_sha256": "5b08639139bde6b5e54ec6eb8779aaaddd7e38ebed3966bf52eca971cdb3878f",
+  "limits": "Guest-byte sample after forwarding, not GPU fetch/execution proof. Earlier object bindings/Legacy/arming/post-doorbell races remain. Boot-wide invalidate maxima do not identify the fault-time latency."
+}

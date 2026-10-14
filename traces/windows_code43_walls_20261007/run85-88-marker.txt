@@ -1,0 +1,15 @@
+WINDOWS_START kf3=256e510f run=/var/lib/kf-windows-20261005/boundary-kayfabe-85 checkout=256e510f xid_before=116 2026-10-08T19:37:17+02:00
+WINDOWS_EXIT stop=acpi 2026-10-08T19:39:19+02:00 xid=116
+WINDOWS_EXIT qemu-gone 2026-10-08T19:39:23+02:00 xid_after=116
+WINDOWS_START kf3=256e510f run=/var/lib/kf-windows-20261005/boundary-kayfabe-85 checkout=256e510f xid_before=116 2026-10-08T19:39:29+02:00
+WINDOWS_EXIT stop=acpi 2026-10-08T19:48:47+02:00 xid=116
+WINDOWS_EXIT qemu-gone 2026-10-08T19:48:50+02:00 xid_after=116
+WINDOWS_START kf3=256e510f run=/var/lib/kf-windows-20261005/boundary-kayfabe-85 checkout=256e510f xid_before=116 2026-10-08T19:48:55+02:00
+WINDOWS_EXIT stop=UNCLEAN-kill 2026-10-08T19:58:23+02:00 xid=116
+WINDOWS_EXIT qemu-gone 2026-10-08T19:58:27+02:00 xid_after=116
+WINDOWS_START kf3=256e510f run=/var/lib/kf-windows-20261005/boundary-kayfabe-85 checkout=256e510f xid_before=116 2026-10-08T19:58:36+02:00
+WINDOWS_EXIT stop=acpi 2026-10-08T19:59:05+02:00 xid=116
+WINDOWS_EXIT qemu-gone 2026-10-08T19:59:07+02:00 xid_after=116
+WINDOWS_START kf3=256e510f run=/var/lib/kf-windows-20261005/boundary-kayfabe-85 checkout=256e510f xid_before=116 2026-10-08T19:59:14+02:00
+WINDOWS_EXIT qemu-gone 2026-10-08T20:02:00+02:00 xid_after=116
+WINDOWS_EXIT stop=acpi 2026-10-08T20:02:00+02:00 xid=116

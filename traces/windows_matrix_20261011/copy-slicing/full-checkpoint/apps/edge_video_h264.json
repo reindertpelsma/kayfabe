@@ -1,0 +1,76 @@
+{
+ "quiet": 1,
+ "end_utc": "2026-10-11T14:55:46.1473631Z",
+ "start_utc": "2026-10-11T14:55:17.6099283Z",
+ "rc": 0,
+ "secs": 29,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4070 status=OK code=0"
+ ],
+ "digests": [],
+ "session": 1,
+ "out_files": [
+  "C:\\kf\\out\\edge_video_h264\\edge_result.json 247"
+ ],
+ "boot_utc_start": "2026-10-11T14:53:26.5000000Z",
+ "log_tail": [
+  "=== edge_video_h264 start=2026-10-11T14:55:17.6099283+00:00 host=VASTWIN session=1 boot=2026-10-11T14:53:26.5000000Z timeout=180",
+  "KFEDGE {\"page\":\"video\",\"src\":\"/media/t_h264.mp4\",\"ok\":true,\"can_play\":\"probably\",\"mc_supported\":true,\"mc_smooth\":true,\"mc_power_efficient\":true,\"wall_s\":15.002,\"played_s\":15.002,\"total_frames\":456,\"dropped_frames\":3,\"decoded_w\":1280,\"decoded_h\":720}",
+  "=== end rc=0 secs=29 2026-10-11T14:55:46.1473631+00:00"
+ ],
+ "pdh": {
+  "pids": [
+   "5312",
+   "7708",
+   "4112",
+   "8484",
+   "8660",
+   "3108",
+   "2420",
+   "10132",
+   "3608",
+   "5952",
+   "7896",
+   "6936",
+   "2228",
+   "9152",
+   "5320",
+   "8868",
+   "8696",
+   "9984"
+  ],
+  "nv": {
+   "copy": 0.002747884576900446,
+   "3d": 0,
+   "videoencode": 0,
+   "videodecode": 2.311783354567272,
+   "vr": 0,
+   "legacyoverlay": 0,
+   "ofa_0": 0
+  },
+  "samples": 13,
+  "other": {},
+  "nvidia_luids": "0_609e"
+ },
+ "timed_out": false,
+ "token": "g13-edge_video_h264-1791730506",
+ "boot_utc_end": "2026-10-11T14:53:26.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "edge_video_h264",
+ "smi": {
+  "samples": 0,
+  "mem_used_base_mb": null,
+  "util_max": 0,
+  "mem_used_max_mb": 0
+ }
+}

@@ -1,0 +1,28 @@
+=== vkpeak start=2026-10-11T08:47:19.3575433-07:00 host=DESKTOP-JR70RMQ session=0 boot=2026-10-11T14:31:59.5000000Z timeout=600
+device       = NVIDIA GeForce RTX 4090
+driver       = NVIDIA / 580.88
+System.Management.Automation.RemoteException
+fp32-scalar  = 59911.47 GFLOPS
+fp32-vec4    = 58577.94 GFLOPS
+fp16-scalar  = 89341.82 GFLOPS
+fp16-vec4    = 65249.55 GFLOPS
+fp16-matrix  = 357924.86 GFLOPS
+fp64-scalar  = 1407.23 GFLOPS
+fp64-vec4    = 1402.99 GFLOPS
+int32-scalar = 44699.12 GIOPS
+int32-vec4   = 44567.87 GIOPS
+int16-scalar = 37466.90 GIOPS
+int16-vec4   = 32778.56 GIOPS
+int64-scalar = 13657.17 GIOPS
+int64-vec4   = 10751.80 GIOPS
+int8-dotprod = 42331.11 GIOPS
+int8-matrix  = 714706.77 GIOPS
+bf16-dotprod = 0.00 GFLOPS
+bf16-matrix  = 179841.59 GFLOPS
+fp8-matrix   = 0.00 GFLOPS
+bf8-matrix   = 0.00 GFLOPS
+copy-h2h     = 15.76 GBPS
+copy-h2d     = 15.66 GBPS
+copy-d2h     = 16.97 GBPS
+copy-d2d     = 451.06 GBPS
+=== end rc=0 secs=127 2026-10-11T08:49:26.7756294-07:00

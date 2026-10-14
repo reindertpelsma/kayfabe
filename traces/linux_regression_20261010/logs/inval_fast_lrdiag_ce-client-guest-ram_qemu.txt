@@ -1,0 +1,15 @@
+kf3: PROBE on — completion probe, overdue after 1000 ms (KF3_COMPLETION_PROBE)
+kf3: INVAL-LAT t=100189.490 guest-visible arm->idle n=0 sum_ms=0.0 avg_us=0.0 p50_us=0.0 p90_us=0.0 p99_us=0.0 max_us=0.0 slow_over_12ms=0 rearms_while_busy=0
+kf3: INVAL-PENDING t=100190.390 utc_ms=1791667711322 guest-visible busy for 34.2 ms (still armed)
+kf3: INVAL-SLOW t=100190.447 utc_ms=1791667711378 guest-visible arm->idle 90.6 ms; VA thread: walk in flight=false pending wants=0 all_settled=true away since its previous publish 90.6 ms
+kf3: INVAL-LAT t=100191.490 guest-visible arm->idle n=3133 sum_ms=633.9 avg_us=202.3 p50_us=196.6 p90_us=196.6 p99_us=229.4 max_us=90642.9 slow_over_12ms=1 rearms_while_busy=0
+kf3: INVAL-LAT t=100193.491 guest-visible arm->idle n=8318 sum_ms=1756.8 avg_us=211.2 p50_us=229.4 p90_us=262.1 p99_us=262.1 max_us=90642.9 slow_over_12ms=1 rearms_while_busy=0
+kf3: INVAL-LAT t=100195.491 guest-visible arm->idle n=13800 sum_ms=3030.9 avg_us=219.6 p50_us=229.4 p90_us=262.1 p99_us=262.1 max_us=90642.9 slow_over_12ms=1 rearms_while_busy=0
+kf3: INVAL-LAT t=100197.491 guest-visible arm->idle n=18842 sum_ms=4364.7 avg_us=231.6 p50_us=229.4 p90_us=327.7 p99_us=327.7 max_us=90642.9 slow_over_12ms=1 rearms_while_busy=0
+kf3: INVAL-LAT t=100199.491 guest-visible arm->idle n=23441 sum_ms=5750.5 avg_us=245.3 p50_us=262.1 p90_us=327.7 p99_us=327.7 max_us=90642.9 slow_over_12ms=1 rearms_while_busy=0
+kf3: INVAL-LAT t=100201.491 guest-visible arm->idle n=27771 sum_ms=7169.1 avg_us=258.2 p50_us=262.1 p90_us=327.7 p99_us=393.2 max_us=90642.9 slow_over_12ms=1 rearms_while_busy=0
+kf3: INVAL-LAT t=100203.491 guest-visible arm->idle n=32381 sum_ms=8574.3 avg_us=264.8 p50_us=327.7 p90_us=327.7 p99_us=393.2 max_us=90642.9 slow_over_12ms=1 rearms_while_busy=0
+kf3: INVAL-LAT t=100205.492 guest-visible arm->idle n=37372 sum_ms=9930.1 avg_us=265.7 p50_us=327.7 p90_us=327.7 p99_us=393.2 max_us=90642.9 slow_over_12ms=1 rearms_while_busy=0
+kf3: INVAL-LAT t=100207.492 guest-visible arm->idle n=42871 sum_ms=11225.4 avg_us=261.8 p50_us=262.1 p90_us=327.7 p99_us=393.2 max_us=90642.9 slow_over_12ms=1 rearms_while_busy=0
+kf3: INVAL-LAT t=100209.492 guest-visible arm->idle n=49083 sum_ms=12424.1 avg_us=253.1 p50_us=262.1 p90_us=327.7 p99_us=393.2 max_us=90642.9 slow_over_12ms=1 rearms_while_busy=0
+kf3: INVAL-SLOW t=100210.414 utc_ms=1791667731346 guest-visible arm->idle 29.5 ms; VA thread: walk in flight=false pending wants=0 all_settled=true away since its previous publish 29.5 ms

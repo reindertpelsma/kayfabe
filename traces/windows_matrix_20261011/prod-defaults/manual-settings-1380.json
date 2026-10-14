@@ -1,0 +1,13 @@
+{
+  "username": "vast",
+  "apps_started": false,
+  "input_sent": false,
+  "autologon": "0",
+  "nvidia": [
+    {
+      "code": 0,
+      "name": "NVIDIA GeForce RTX 4070",
+      "driver": "32.0.15.8088"
+    }
+  ]
+}

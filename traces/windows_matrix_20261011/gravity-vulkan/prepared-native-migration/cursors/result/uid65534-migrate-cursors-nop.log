@@ -1,0 +1,14 @@
+kf-host: host tier: stock
+DEFERRED_UPDATE driver=595.91.07 mode=migrate-cursors-nop
+kf-host: channel birth h=0xcafe0008 engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=not-held
+DEFERRED_UPDATE_REGISTRATION_CALLER Uid:	65534	65534	65534	65534; CapEff:	0000000000000000
+DEFERRED_MIGRATION_PREPARED memory=0xcafe0006 mapped_va=0x120000000 bytes=65536 old_gp=0x1000/32 old_userd=0x2000 new_gp=0x5000/64 new_userd=0x6000 replacement_put=2; registration OK; distinct marker only in replacement PB; no CPU completion
+DEFERRED_UPDATE registered channel=Channel { tsg: cafe0007, chan: cafe0008, token: 4, born_user: Some(BirthPrivilege { reply_flags: 80 }) } object=0xcafe0009 api=0xcafe000a sw_class_id=0x1 privilege=USER
+DEFERRED_UPDATE GPU_TAIL fence=1 trigger=false elapsed_us=1301
+DEFERRED_MIGRATION_MATCHED_STIMULUS post_tail_doorbells=128 interval_ms=1 trigger=false
+DEFERRED_UPDATE_HOLD_BEGIN unix_us=1791854378873776
+DEFERRED_UPDATE_HOLD_END unix_us=1791854380873830
+DEFERRED_MIGRATION_NOP_CONTROL replacement_marker=0 replacement_get=0
+DEFERRED_MIGRATION_CURSOR_OBSERVATION trigger=false slot0=0 slot1=0 new_get=0 new_put=2 seeded_get=0 old_get=1
+DEFERRED_UPDATE_CLEANUP channel=Ok(Some(())) view=Ok(()) unmap=Ok(()) memory=Ok(())
+DEFERRED_UPDATE_PROBE=PASS

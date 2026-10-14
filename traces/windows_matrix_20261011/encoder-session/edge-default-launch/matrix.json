@@ -1,0 +1,34 @@
+{
+ "started_utc": "2026-10-11T16:05:52Z",
+ "args": {
+  "run_dir": "/var/lib/kf-windows-20261005/codex-recovery-diagnostics-20261011-a61af1c3/edge",
+  "apps": "edge_default_launch_diagnostic",
+  "tier": 3,
+  "category": "",
+  "exclude": "",
+  "manifest": "/data/kf-encoder-host/scripts/bench/windows/appmatrix/manifest.json",
+  "apps_json": "/tmp/kf-edge-default-launch-diagnostic.json",
+  "iso": "/var/lib/kf-windows-20261005/codex-supplement-20261011/full-image-a61af1c3/kfapps_supplement.img",
+  "override_dir": "/var/lib/kf-windows-20261005/codex-matrix-focus-tools-20261011",
+  "image_manifest": "/var/lib/kf-windows-20261005/codex-supplement-20261011/full-image-a61af1c3/manifest.json",
+  "vm": "broker",
+  "broker": "/var/lib/kf-windows-20261005/kayfabe-win-6fafcc6e/scripts/bench/windows/windows_broker_prod3.sh",
+  "w_dir": "/var/lib/kf-windows-20261005",
+  "kf3_rev": "a61af1c3",
+  "run_base": 1260,
+  "pre_guest_cmd": "test $(df -B1 --output=avail /var/lib | tail -1) -gt 107374182400 && bash /var/lib/kf-windows-20261005/pti-iommu_nogdm.sh identity",
+  "post_guest_cmd": "bash /var/lib/kf-windows-20261005/pti-iommu_nogdm.sh DMA-FQ",
+  "per_guest": 1,
+  "max_tdr": 3,
+  "no_isolate": true,
+  "resume": false,
+  "list": false,
+  "mock_scenario": "",
+  "fast": false
+ },
+ "image_identity": "f5d28f726680218377c79dc62ece49af0257dd61791c6d1b828a377d3b768254",
+ "apps": [
+  "edge_default_launch_diagnostic"
+ ],
+ "host": "claude"
+}

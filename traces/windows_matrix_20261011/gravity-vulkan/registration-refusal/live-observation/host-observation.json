@@ -1,0 +1,7 @@
+{
+  "start": "2026-10-11 23:01:27 UTC",
+  "end": "2026-10-11T23:07:33.641361+00:00",
+  "journal_query_rc": 0,
+  "xids": 1,
+  "limits": "Live prefix, not final app oracle. Missing sampler records are not zero refused-handle triggers."
+}

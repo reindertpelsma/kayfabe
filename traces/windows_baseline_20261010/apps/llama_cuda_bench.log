@@ -1,0 +1,13 @@
+=== llama_cuda_bench start=2026-10-10T08:07:24.2328112-07:00 host=DESKTOP-397P3NI session=0 boot=2026-10-10T13:30:47.5000000Z timeout=900
+ggml_cuda_init: found 1 CUDA devices (Total VRAM: 16379 MiB):
+  Device 0: NVIDIA GeForce RTX 4060 Ti, compute capability 8.9, VMM: yes, VRAM: 16379 MiB
+load_backend: loaded CUDA backend from C:\kfapps\llama_cuda\ggml-cuda.dll
+load_backend: loaded RPC backend from C:\kfapps\llama_cuda\ggml-rpc.dll
+load_backend: loaded CPU backend from C:\kfapps\llama_cuda\ggml-cpu-haswell.dll
+| model                          |       size |     params | backend    | ngl |            test |                  t/s |
+| ------------------------------ | ---------: | ---------: | ---------- | --: | --------------: | -------------------: |
+| qwen2 1.5B Q4_K - Medium       |   1.04 GiB |     1.78 B | CUDA       |  99 |           pp512 |   11274.71 Â± 1567.30 |
+| qwen2 1.5B Q4_K - Medium       |   1.04 GiB |     1.78 B | CUDA       |  99 |            tg64 |       163.50 Â± 17.96 |
+
+build: f2918cabb (11541)
+=== end rc=0 secs=81 2026-10-10T08:08:45.7055831-07:00

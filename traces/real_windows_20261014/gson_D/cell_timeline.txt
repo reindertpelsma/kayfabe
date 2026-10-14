@@ -1,0 +1,8 @@
+discovery {'method': 2, 'layout': 1, 'bar0': 3, 'gpu_count': 1, 'mailbox_reads': 2072, 'mailbox_status': 2, 'scan_bytes': 3326521344, 'scan_passes': 0, 'scan_candidates': 3, 'scan_backoff_resets': 1, 'scan_backoff_ticks': 17897725}
+stats {'steps': 25340, 'attaches': 1, 'detaches': 1, 'messages_cmd': 169, 'messages_status': 169, 'lost_messages_exact': 0, 'seq_gap_messages': 0, 'lapped_messages': 0, 'loss_records': 2, 'torn_reads': 0, 'invalid_elements': 0, 'unsupported': 0, 'read_failures': 0, 'resyncs': 2, 'sink_dropped': 0, 'records_refused': 0}
+capture {'records': 350, 'end_seen': 1, 'file_ok': 1, 'by_kind': {'bind': 2, 'elements': 345, 'loss_overflow': 0, 'loss_unreadable': 0, 'loss_unknown': 2, 'end': 1}}
+ev 1 gen 0 030000000000000001000000010000000000000005270000000000000000000000000000000000000000000000000000
+ev5 gen 0 mb_status ZERO pa 0x0 t=0.000
+ev 2 gen 1 020000000000000081000000000004000000040000100000010000000100000000101606010000000000000000000000
+ev 4 gen 1 020000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+ev 3 gen 1 040000000000000052010000000000000000000000000000000000000000000000000000000000000000000000000000

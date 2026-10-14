@@ -1,0 +1,14 @@
+{
+ "verdict": "FAIL",
+ "rc": 1,
+ "secs": 3,
+ "quiet": 2,
+ "note": "rc=1,no-gpu-proof | compareBin2Bin <float> unable to find <ref_randomFog.bin> in <C:\\kfapps\\cuda_demo\\demo_suite\\randomFog.exe>",
+ "proof": "none:pdh:Cuda|Compute|3D|Copy",
+ "tdr": 0,
+ "wer": 0,
+ "rebooted": false,
+ "gsp_cycles": "-",
+ "restart": "",
+ "guest": "g1"
+}

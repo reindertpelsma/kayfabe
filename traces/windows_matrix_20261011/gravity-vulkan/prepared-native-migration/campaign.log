@@ -1,0 +1,8 @@
+HYPOTHESIS a fully prepared owned replacement GP/USERD can execute through V2 on this host; previous same-config Xid does not establish permission rejection.
+FALSIFIER native marker2/newGET2 absent, registration refusal, cleanup failure or hostXid. Any negative still has UNKNOWN inner status. ONE VARIABLE per pair: 5080 NOP vs API trigger; matched128 post-tail doorbells. UID pairs are separately attributed.
+{"uid": 65534, "mode": "migrate-nop", "pid": 2172639, "start": "2026-10-12T23:18:02.712827+00:00", "end": "2026-10-12T23:18:06.888828+00:00", "rc": 0, "journal_rc": 0, "xids": 0, "cleanup": true, "observable_proof": true, "verdict": "PASS", "inner_status": "UNMEASURED", "nop_post_kick_hold_s": 2}
+{"uid": 65534, "mode": "migrate", "pid": 2172691, "start": "2026-10-12T23:18:07.004286+00:00", "end": "2026-10-12T23:18:11.182462+00:00", "rc": 0, "journal_rc": 0, "xids": 0, "cleanup": true, "observable_proof": true, "verdict": "PASS", "inner_status": "UNMEASURED", "nop_post_kick_hold_s": 2}
+{"uid": 0, "mode": "migrate-nop", "pid": 2172820, "start": "2026-10-12T23:18:11.297860+00:00", "end": "2026-10-12T23:18:15.475913+00:00", "rc": 0, "journal_rc": 0, "xids": 0, "cleanup": true, "observable_proof": true, "verdict": "PASS", "inner_status": "UNMEASURED", "nop_post_kick_hold_s": 2}
+{"uid": 0, "mode": "migrate", "pid": 2172872, "start": "2026-10-12T23:18:15.591640+00:00", "end": "2026-10-12T23:18:19.769408+00:00", "rc": 0, "journal_rc": 0, "xids": 0, "cleanup": true, "observable_proof": true, "verdict": "PASS", "inner_status": "UNMEASURED", "nop_post_kick_hold_s": 2}
+COLLECTION_EXIT=0 (per-mode verdicts separate)
+PREPARED_NATIVE_EXIT=0

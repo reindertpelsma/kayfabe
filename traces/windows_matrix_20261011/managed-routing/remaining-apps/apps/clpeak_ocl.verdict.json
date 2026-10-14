@@ -1,0 +1,14 @@
+{
+ "verdict": "FAIL",
+ "rc": -1073741819,
+ "secs": 350,
+ "quiet": 4,
+ "note": "rc=-1073741819 | Failed to read file: C:\\Windows\\TEMP\\dep-eb4b8e.d",
+ "proof": "out",
+ "tdr": 3,
+ "wer": 0,
+ "rebooted": false,
+ "gsp_cycles": 1,
+ "restart": "tdr-budget:3>=3",
+ "guest": "g8"
+}

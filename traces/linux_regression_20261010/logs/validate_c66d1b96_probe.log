@@ -1,0 +1,230 @@
+=== boot_capture tag=lr_validate2 at 2026-10-10T23:38:15+02:00 ===
+=== source revision: c66d1b96 ===
+=== qemu binary: -rwxr-xr-x 1 root root 94108912 Oct 10 21:20 /var/lib/kf-windows-20261005/kf3-bins/c66d1b96/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /var/lib/kf-windows-20261005/kayfabe-linuxreg/scripts/bench/boot_nvkvm.sh  sha256=82f88b7bb676717a
+    used: /var/lib/kf-windows-20261005/kayfabe-linuxreg/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Sat Oct 10 21:38:16 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 595.84                 Driver Version: 595.84         CUDA Version: 13.2     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 4070        Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /   8192MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Oct 10 21:38 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Oct 10 21:38 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Oct 10 21:38 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Oct 10 21:38 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Oct 10 21:38 .
+drwxr-xr-x 18 root root   4000 Oct 10 21:38 ..
+cr--------  1 root root 240, 1 Oct 10 21:38 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Oct 10 21:38 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2064384  0
+nvidia              14807040  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /var/lib/kf-windows-20261005/lr-c66d1b96/validate_hook.sh at 2026-10-10T23:38:17+02:00 ===
+VALIDATE_START 2026-10-10T23:38:17+02:00 src_md5=c18e37631281557d9b8a946a944a19d6 kayfabe_rev=c66d1b96
+--- guest tooling
+6.8.0-142-generic
+NVIDIA GeForce RTX 4070, 595.84
+/usr/bin/gcc
+/usr/bin/cc
+/usr/bin/python3
+libEGL_nvidia.so.0
+libEGL_nvidia.so.595.84
+libGLX_nvidia.so.0
+libGLX_nvidia.so.595.84
+VALIDATE_RC=1
+=============================================================================
+ nvkvm guest validation suite
+=============================================================================
+ host       : Linux 6.8.0-142-generic x86_64
+ date       : 2026-10-10T21:38:17Z
+ workdir    : /tmp/nvkvm-validate.M4Folo
+ compiler   : cc
+CHECKPOINT|2026-10-10T21:38:17Z|section:1. guest bring-up
+
+== 1. guest bring-up ==
+  PASS guest_module               nvidia size=14807040 refcnt=1
+  FAIL dev_nodes                  missing/bad: nvidia-modeset(absent) present: nvidia0(195:0) nvidiactl(195:255) nvidia-uvm(237:0) nvidia-uvm-tools(237:1)
+CHECKPOINT|2026-10-10T21:38:17Z|shell:nvidia_smi_banner
+CHECKPOINT|2026-10-10T21:38:18Z|shell:nvidia_smi_query_name
+CHECKPOINT|2026-10-10T21:38:19Z|shell:nvidia_smi_query_driver
+  PASS nvidia_smi_gpu             NVIDIA GeForce RTX 4070
+  PASS nvidia_smi_driver          595.84
+  PASS nvidia_smi_cuda            13.2
+  SKIP abi_profile                no nvkvm abi/driver line in dmesg (dmesg restricted, or module quiet)
+CHECKPOINT|2026-10-10T21:38:20Z|section:2. CUDA (driver API, compute)
+
+== 2. CUDA (driver API, compute) ==
+ cuda_probe: compiled here
+CHECKPOINT|2026-10-10T21:38:21Z|probe:cuda_probe
+  PASS cuda_libcuda               /lib/x86_64-linux-gnu/libcuda.so.1
+  PASS cuda_init                  rc=0
+  PASS cuda_driver_version        CUDA 13.2 (raw 13020)
+  PASS cuda_device_count          1
+  PASS cuda_device_name           NVIDIA GeForce RTX 4070
+  PASS cuda_compute_cap           sm_89
+  PASS cuda_ctx_create            rc=0 ctx=0x5ce967fa6dc0
+  PASS cuda_htod_dtoh_8mib        8 MiB round trip byte-exact (8388608/8388608 bytes verified)
+  PASS cuda_memset_d8             0xA5 and 0x00 over 8 MiB, all 8388608 bytes verified by readback
+  PASS cuda_ptx_jit               cuModuleLoadData(PTX .version 7.5/.target sm_60) rc=0
+  PASS cuda_kernel_launch         vec_add<<<4096,256>>> all 1048576 elements == 3*i (e.g. c[1048575]=3145725)
+  PASS cuda_matmul                256x256 fp32 vs CPU ref: all 65536 elements within tol, max|delta|=0 (C[0][0]=103.0000 ref=103.0000)
+  PASS cuda_managed_alloc         3 x 4194304 bytes, MANAGED_MEMORY=1 (a=0x76b3a6000000 b=0x76b3a6400000 c=0x76b3a6800000)
+  FAIL cuda_managed_coherence     vec_add over managed memory: launch rc=0 (CUDA_SUCCESS) sync rc=719 (CUDA_ERROR_LAUNCH_FAILED)
+CHECKPOINT|2026-10-10T21:38:22Z|section:3. Vulkan (enumeration + compute dispatch)
+
+== 3. Vulkan (enumeration + compute dispatch) ==
+ vk_probe: compiled here
+CHECKPOINT|2026-10-10T21:38:22Z|probe:vk_probe
+  SKIP vk_loader                  dlopen(libvulkan.so.1): libvulkan.so: cannot open shared object file: No such file or directory -- install libvulkan1 in the guest
+  SKIP vk_instance                no Vulkan loader
+  SKIP vk_physical_device         no Vulkan loader
+  SKIP vk_device_is_nvidia        no Vulkan loader
+  SKIP vk_compute_dispatch        no Vulkan loader
+  SKIP vk_device_rt_extensions    tests/repro/vk_device_extensions.c not present
+CHECKPOINT|2026-10-10T21:38:23Z|section:4. OpenGL (offscreen EGL, no X/Wayland)
+
+== 4. OpenGL (offscreen EGL, no X/Wayland) ==
+ gl_probe: compiled here
+CHECKPOINT|2026-10-10T21:38:23Z|probe:gl_probe
+  PASS egl_loader                 /lib/x86_64-linux-gnu/libEGL.so.1
+  PASS egl_context                EGL_EXT_platform_device dev 0/1, EGL 1.5
+  PASS gl_renderer                GL_RENDERER='NVIDIA GeForce RTX 4070/PCIe/SSE2' GL_VENDOR='NVIDIA Corporation' GL_VERSION='OpenGL ES 3.2 NVIDIA 595.84'
+  PASS gl_renderer_is_nvidia      NVIDIA GeForce RTX 4070/PCIe/SSE2
+  PASS gl_draw_pixel_check        64x64 FBO: inside(16,16)=RGBA(255,127,0,255)==triangle, outside(48,48)=RGBA(0,0,0,255)==clear
+
+=============================================================================
+ RESULTS
+=============================================================================
+ STAT  CHECK                       OBSERVED VALUE
+ ----  --------------------------  --------------------------------------
+ PASS  guest_module                nvidia size=14807040 refcnt=1
+ FAIL  dev_nodes                   missing/bad: nvidia-modeset(absent) present: nvidia0(195:0) nvidiactl(195:255) nvidia-uvm(237:0) nvidia-uvm-tools(237:1)
+ PASS  nvidia_smi_gpu              NVIDIA GeForce RTX 4070
+ PASS  nvidia_smi_driver           595.84
+ PASS  nvidia_smi_cuda             13.2
+ SKIP  abi_profile                 no nvkvm abi/driver line in dmesg (dmesg restricted, or module quiet)
+ PASS  cuda_libcuda                /lib/x86_64-linux-gnu/libcuda.so.1
+ PASS  cuda_init                   rc=0
+ PASS  cuda_driver_version         CUDA 13.2 (raw 13020)
+ PASS  cuda_device_count           1
+ PASS  cuda_device_name            NVIDIA GeForce RTX 4070
+ PASS  cuda_compute_cap            sm_89
+ PASS  cuda_ctx_create             rc=0 ctx=0x5ce967fa6dc0
+ PASS  cuda_htod_dtoh_8mib         8 MiB round trip byte-exact (8388608/8388608 bytes verified)
+ PASS  cuda_memset_d8              0xA5 and 0x00 over 8 MiB, all 8388608 bytes verified by readback
+ PASS  cuda_ptx_jit                cuModuleLoadData(PTX .version 7.5/.target sm_60) rc=0
+ PASS  cuda_kernel_launch          vec_add<<<4096,256>>> all 1048576 elements == 3*i (e.g. c[1048575]=3145725)
+ PASS  cuda_matmul                 256x256 fp32 vs CPU ref: all 65536 elements within tol, max|delta|=0 (C[0][0]=103.0000 ref=103.0000)
+ PASS  cuda_managed_alloc          3 x 4194304 bytes, MANAGED_MEMORY=1 (a=0x76b3a6000000 b=0x76b3a6400000 c=0x76b3a6800000)
+ FAIL  cuda_managed_coherence      vec_add over managed memory: launch rc=0 (CUDA_SUCCESS) sync rc=719 (CUDA_ERROR_LAUNCH_FAILED)
+ SKIP  vk_loader                   dlopen(libvulkan.so.1): libvulkan.so: cannot open shared object file: No such file or directory -- install libvulkan1 in the guest
+ SKIP  vk_instance                 no Vulkan loader
+ SKIP  vk_physical_device          no Vulkan loader
+ SKIP  vk_device_is_nvidia         no Vulkan loader
+ SKIP  vk_compute_dispatch         no Vulkan loader
+ SKIP  vk_device_rt_extensions     tests/repro/vk_device_extensions.c not present
+ PASS  egl_loader                  /lib/x86_64-linux-gnu/libEGL.so.1
+ PASS  egl_context                 EGL_EXT_platform_device dev 0/1, EGL 1.5
+ PASS  gl_renderer                 GL_RENDERER='NVIDIA GeForce RTX 4070/PCIe/SSE2' GL_VENDOR='NVIDIA Corporation' GL_VERSION='OpenGL ES 3.2 NVIDIA 595.84'
+ PASS  gl_renderer_is_nvidia       NVIDIA GeForce RTX 4070/PCIe/SSE2
+ PASS  gl_draw_pixel_check         64x64 FBO: inside(16,16)=RGBA(255,127,0,255)==triangle, outside(48,48)=RGBA(0,0,0,255)==clear
+CHECKPOINT|2026-10-10T21:38:24Z|section:host-memory registration invariants
+
+== host-memory registration invariants ==
+  SKIP host_register_private_rw   tests/repro/private_register_write.c not present
+  SKIP host_register_shared_coherent tests/repro/shared_view_desync.c not present
+  SKIP host_register_then_fork    tests/repro/register_then_fork.c not present
+  SKIP host_register_cow_fork     tests/repro/cow_after_fork.c not present
+  SKIP host_register_two_process_share tests/repro/fork_both_register.c not present
+
+ TOTAL 36   PASS 22   FAIL 2   SKIP 12   UNTESTED 0
+ UNEXPECTED SKIPS: abi_profile vk_loader vk_instance vk_physical_device vk_device_is_nvidia vk_compute_dispatch vk_device_rt_extensions host_register_private_rw host_register_shared_coherent host_register_then_fork host_register_cow_fork host_register_two_process_share
+   (a skipped check is NOT a pass. Declare it with --allow-skip <name> only
+    if you have decided it is out of scope for this run.)
+ json     : /tmp/validate.json
+
+ VERDICT: FAIL (2 check(s) failed)
+--- json
+{
+  "gpu": "NVIDIA GeForce RTX 4070",
+  "driver": "595.84",
+  "cuda": "13.2",
+  "pass": 22, "fail": 2, "skip": 12, "untested": 0, "total": 36,
+  "checks": [
+    {"name": "guest_module", "status": "PASS", "detail": "nvidia size=14807040 refcnt=1"},
+    {"name": "dev_nodes", "status": "FAIL", "detail": "missing/bad: nvidia-modeset(absent) present: nvidia0(195:0) nvidiactl(195:255) nvidia-uvm(237:0) nvidia-uvm-tools(237:1)"},
+    {"name": "nvidia_smi_gpu", "status": "PASS", "detail": "NVIDIA GeForce RTX 4070"},
+    {"name": "nvidia_smi_driver", "status": "PASS", "detail": "595.84"},
+    {"name": "nvidia_smi_cuda", "status": "PASS", "detail": "13.2"},
+    {"name": "abi_profile", "status": "SKIP", "detail": "no nvkvm abi/driver line in dmesg (dmesg restricted, or module quiet)"},
+    {"name": "cuda_libcuda", "status": "PASS", "detail": "/lib/x86_64-linux-gnu/libcuda.so.1"},
+    {"name": "cuda_init", "status": "PASS", "detail": "rc=0"},
+    {"name": "cuda_driver_version", "status": "PASS", "detail": "CUDA 13.2 (raw 13020)"},
+    {"name": "cuda_device_count", "status": "PASS", "detail": "1"},
+    {"name": "cuda_device_name", "status": "PASS", "detail": "NVIDIA GeForce RTX 4070"},
+    {"name": "cuda_compute_cap", "status": "PASS", "detail": "sm_89"},
+    {"name": "cuda_ctx_create", "status": "PASS", "detail": "rc=0 ctx=0x5ce967fa6dc0"},
+    {"name": "cuda_htod_dtoh_8mib", "status": "PASS", "detail": "8 MiB round trip byte-exact (8388608/8388608 bytes verified)"},
+    {"name": "cuda_memset_d8", "status": "PASS", "detail": "0xA5 and 0x00 over 8 MiB, all 8388608 bytes verified by readback"},
+    {"name": "cuda_ptx_jit", "status": "PASS", "detail": "cuModuleLoadData(PTX .version 7.5/.target sm_60) rc=0"},
+    {"name": "cuda_kernel_launch", "status": "PASS", "detail": "vec_add<<<4096,256>>> all 1048576 elements == 3*i (e.g. c[1048575]=3145725)"},
+    {"name": "cuda_matmul", "status": "PASS", "detail": "256x256 fp32 vs CPU ref: all 65536 elements within tol, max|delta|=0 (C[0][0]=103.0000 ref=103.0000)"},
+    {"name": "cuda_managed_alloc", "status": "PASS", "detail": "3 x 4194304 bytes, MANAGED_MEMORY=1 (a=0x76b3a6000000 b=0x76b3a6400000 c=0x76b3a6800000)"},
+    {"name": "cuda_managed_coherence", "status": "FAIL", "detail": "vec_add over managed memory: launch rc=0 (CUDA_SUCCESS) sync rc=719 (CUDA_ERROR_LAUNCH_FAILED)"},
+    {"name": "vk_loader", "status": "SKIP", "detail": "dlopen(libvulkan.so.1): libvulkan.so: cannot open shared object file: No such file or directory -- install libvulkan1 in the guest"},
+    {"name": "vk_instance", "status": "SKIP", "detail": "no Vulkan loader"},
+    {"name": "vk_physical_device", "status": "SKIP", "detail": "no Vulkan loader"},
+    {"name": "vk_device_is_nvidia", "status": "SKIP", "detail": "no Vulkan loader"},
+    {"name": "vk_compute_dispatch", "status": "SKIP", "detail": "no Vulkan loader"},
+    {"name": "vk_device_rt_extensions", "status": "SKIP", "detail": "tests/repro/vk_device_extensions.c not present"},
+    {"name": "egl_loader", "status": "PASS", "detail": "/lib/x86_64-linux-gnu/libEGL.so.1"},
+    {"name": "egl_context", "status": "PASS", "detail": "EGL_EXT_platform_device dev 0/1, EGL 1.5"},
+    {"name": "gl_renderer", "status": "PASS", "detail": "GL_RENDERER='NVIDIA GeForce RTX 4070/PCIe/SSE2' GL_VENDOR='NVIDIA Corporation' GL_VERSION='OpenGL ES 3.2 NVIDIA 595.84'"},
+    {"name": "gl_renderer_is_nvidia", "status": "PASS", "detail": "NVIDIA GeForce RTX 4070/PCIe/SSE2"},
+    {"name": "gl_draw_pixel_check", "status": "PASS", "detail": "64x64 FBO: inside(16,16)=RGBA(255,127,0,255)==triangle, outside(48,48)=RGBA(0,0,0,255)==clear"},
+    {"name": "host_register_private_rw", "status": "SKIP", "detail": "tests/repro/private_register_write.c not present"},
+    {"name": "host_register_shared_coherent", "status": "SKIP", "detail": "tests/repro/shared_view_desync.c not present"},
+    {"name": "host_register_then_fork", "status": "SKIP", "detail": "tests/repro/register_then_fork.c not present"},
+    {"name": "host_register_cow_fork", "status": "SKIP", "detail": "tests/repro/cow_after_fork.c not present"},
+    {"name": "host_register_two_process_share", "status": "SKIP", "detail": "tests/repro/fork_both_register.c not present"}
+  ]
+}
+VALIDATE_END 2026-10-10T23:38:25+02:00
+HOOK_RC=0
+=== GUEST dmesg AFTER the workload (phase 3b captured 33 lines BEFORE it) ===
+GUEST_DMESG_AFTER_LINES=165
+GUEST_DMESG_AFTER_NVRM=161
+GUEST_DMESG_WORKLOAD_DELTA=132
+=== HOST dmesg delta for this boot (watermark 2388 → 2388) ===
+HOST_DMESG_LINES=0
+HOST_DMESG_NVRM=0
+0
+HOST_DMESG_XID=0
+0

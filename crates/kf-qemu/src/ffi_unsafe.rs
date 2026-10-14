@@ -50,6 +50,10 @@ use std::os::unix::ffi::OsStrExt as _;
 /// 22 (2026-10-08, `claude/gpu-uuid-per-vm-20261008`): ABI 21 plus the per-VM GPU UUID —
 /// [`kf3_realize`] gains `gpu_uuid`, `vm_id` (both nullable strings) and `pci_devfn` after
 /// `gop_efi`.
+/// 24 (2026-10-09, `claude/kf3-read-trace-20261008`): ABI 22 plus the default-off BAR0 trace
+/// mode's verbs ([`kf3_trace_mode`], [`kf3_trace_piece`], [`kf3_trace_admit`], [`kf3_trace_name`],
+/// [`kf3_trace_report`]; `crate::readtrace`). 23 is `0da871c1`'s thin input/cursor shim (another
+/// branch), so this surface takes the next number.
 /// ★ 23 (2026-10-08, `claude/input-sink-trait-20261008`, `OWNER_RULINGS.md` §V,
 /// `docs/design/V3_DISPLAY.md` §8.20): ABI 22 with the broker's input and the console cursor
 /// behind kf-broker's VMM-neutral `InputSink`/`CursorSink` — [`kf3_broker_start`] gains `ops`
@@ -58,7 +62,16 @@ use std::os::unix::ffi::OsStrExt as _;
 /// `kf3_display_cursor_pixels` and `kf3_display_cursor_done`; `Kf3BrokerEvent` and `Kf3Cursor`
 /// give way to [`Kf3Pointer`] and [`Kf3InputOps`]. A branch that took 23 meanwhile takes a new
 /// number at its merge.
-pub const KF3_ABI: u32 = 23;
+/// 25 (2026-10-09, the merge of both at `claude/windows-reset-20261009`): 24's trace verbs AND
+/// 23's input/cursor verbs (disjoint surfaces).
+/// 26 (2026-10-11, `claude/gl-icd-crash-20261011`): 25 plus the `channel-budget` property — `kf3_realize` gains
+/// `channel_budget` (channels per runlist; 0 = derive from the host) after `pci_devfn`.
+/// 27 (2026-10-13, `claude/device-reset-20261013`, `docs/design/V3_DEVICE_RESET.md`): 26 plus
+/// `kf3_device_reset(h)`, called from the C device's Resettable `hold` phase (built and run as
+/// `c9ac4e77`).
+/// 28 (2026-10-13, same branch): 27's `kf3_device_reset` gains `from_vcpu`, and
+/// [`kf3_device_reset_wait`] (the `exit` phase's bounded wait) joins.
+pub const KF3_ABI: u32 = 29;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -143,6 +156,7 @@ pub unsafe extern "C" fn kf3_realize(
     gpu_uuid: *const c_char,
     vm_id: *const c_char,
     pci_devfn: u32,
+    channel_budget: u32,
     out: *mut *mut c_void,
     err: *mut c_char,
     err_len: usize,
@@ -184,7 +198,10 @@ pub unsafe extern "C" fn kf3_realize(
         gpu_uuid,
         vm_id,
         pci_devfn,
+        channel_budget,
     };
+    // ★ Review addendum: a panic on any service thread stops the VM, visibly (`failclosed`).
+    crate::failclosed::install();
     match Device::realize(&cfg) {
         Ok(d) => {
             let d: &'static Device = Box::leak(Box::new(d));
@@ -225,6 +242,16 @@ pub unsafe extern "C" fn kf3_realize(
                     .is_err()
             {
                 write_err(err, err_len, "could not start the display worker thread");
+                return -1;
+            }
+            // ★ 2026-10-14: the live scan-line publisher (`display=on` only).
+            if d.display.is_some()
+                && std::thread::Builder::new()
+                    .name("kf3-scanline".into())
+                    .spawn(move || d.scanline_loop())
+                    .is_err()
+            {
+                write_err(err, err_len, "could not start the scan-line thread");
                 return -1;
             }
             // ★ P4: the VA-manager thread — the one owner of the GPU walker.
@@ -577,6 +604,55 @@ pub unsafe extern "C" fn kf3_set_read_trap(
         0
     } else {
         -1
+    }
+}
+
+/// ★ ABI 24, DIAGNOSTIC (`KF3_BAR0_READ_TRACE`, default off; [`crate::readtrace`]): 1 when the
+/// BAR0 trace mode is on, 0 when it is off (the C device then takes none of its paths: ROMD on,
+/// irqfd MSI, no trace call), -1 on a bad handle.
+#[unsafe(no_mangle)]
+pub extern "C" fn kf3_trace_mode(h: *mut c_void) -> i32 {
+    dev(h).map_or(-1, |d| i32::from(d.trace.on()))
+}
+
+/// ★ ABI 24 (trace mode only): 1 when the shadow piece `[base, base + len)` must serve its reads
+/// by exit (it overlaps a selected read range), else 0. Always 0 with the mode off.
+#[unsafe(no_mangle)]
+pub extern "C" fn kf3_trace_piece(h: *mut c_void, base: u64, len: u64) -> u32 {
+    dev(h).map_or(0, |d| u32::from(d.trace.piece_traps(base, len)))
+}
+
+/// ★ ABI 24 (trace mode only; vCPU or main loop, lock-free): may the C device write this record?
+/// `kind` 0 read / 1 write: `a` offset, `b` width, `c` value; 2 MSI: `a` vector, `b` data, `c`
+/// address. 1 = write it; 0 = not selected, over a cap (counted as dropped), or the mode is off.
+#[unsafe(no_mangle)]
+pub extern "C" fn kf3_trace_admit(h: *mut c_void, kind: u32, a: u64, b: u64, c: u64) -> u32 {
+    match (dev(h), crate::readtrace::Kind::from_abi(kind)) {
+        (Some(d), Some(k)) => u32::from(d.trace.admit(k, a, b, c)),
+        _ => 0,
+    }
+}
+
+/// ★ ABI 24: the device name the trace records carry (the host GPU's PCI address unless
+/// `KF3_TRACE_NAME` overrides it), NUL-terminated into `buf`.
+///
+/// # Safety
+/// `buf` is null or writable for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kf3_trace_name(h: *mut c_void, buf: *mut c_char, len: usize) {
+    if let Some(d) = dev(h) {
+        write_err(buf, len, d.trace.name());
+    }
+}
+
+/// ★ ABI 24: the trace's exit report (records, bytes, drops, cap hit), NUL-terminated into `buf`.
+///
+/// # Safety
+/// `buf` is null or writable for `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kf3_trace_report(h: *mut c_void, buf: *mut c_char, len: usize) {
+    if let Some(d) = dev(h) {
+        write_err(buf, len, &d.trace.report());
     }
 }
 
@@ -1011,6 +1087,45 @@ pub unsafe extern "C" fn kf3_option_rom(
         *rom_len = bytes.len() as u64;
     }
     0
+}
+
+/// ★★ ABI 27 (`docs/design/V3_DEVICE_RESET.md`): QEMU reset the PCI function — a guest reboot, the
+/// reset button, a bugcheck or triple-fault reset, QMP `system_reset`, a bus reset. Called from the
+/// C device's Resettable `hold` phase (main loop, or a vCPU writing a bridge's config space; BQL
+/// held): closes the vCPU gate, counts the request and wakes the register drainer, which runs the
+/// reset. Never waits.
+///
+/// `from_vcpu`: QEMU asked from a vCPU thread (a bus reset; the other vCPUs run) rather than its
+/// main loop (a system reset with every vCPU paused, or the machine's own reset at creation).
+///
+/// ★ ABI 29 (2026-10-14, `docs/design/V3_S3_RESUME.md`): `wake` — QEMU's reset type is
+/// `RESET_TYPE_WAKEUP`, the S3 resume's device reset (`hw/i386/pc.c:1723-1727`). A wake of a life
+/// whose GSP-RM state a PM-transition suspend saved keeps that life; every other reset ends it.
+#[unsafe(no_mangle)]
+pub extern "C" fn kf3_device_reset(h: *mut c_void, from_vcpu: u32, wake: u32) {
+    if let Some(d) = dev(h) {
+        d.request_reset(from_vcpu != 0, wake != 0);
+    }
+}
+
+/// ★★ ABI 28: the Resettable `exit` phase, from QEMU's MAIN LOOP only (never a vCPU): wait, at most
+/// `timeout_ms` (0: [`crate::reset::WAIT_BOUND`], the device's own), until the reset requested in
+/// the `hold` phase completed. 0 = complete (the device is
+/// as realize left it before any vCPU resumes); 1 = the bound passed (said loudly; the reset goes on
+/// with the device closed); -1 = no device.
+#[unsafe(no_mangle)]
+pub extern "C" fn kf3_device_reset_wait(h: *mut c_void, timeout_ms: u32) -> i32 {
+    match dev(h) {
+        Some(d) => match d.wait_reset(if timeout_ms == 0 {
+            crate::reset::WAIT_BOUND
+        } else {
+            std::time::Duration::from_millis(u64::from(timeout_ms))
+        }) {
+            crate::reset::Waited::Done => 0,
+            crate::reset::Waited::TimedOut(_) => 1,
+        },
+        None => -1,
+    }
 }
 
 /// Stop the device's threads (the device itself lives for the process).

@@ -24,9 +24,9 @@
 //! only in `Kernel` — so a privileged leaf is never placed in a space a user channel can run in,
 //! and no lock is added to the VA thread's path.
 //!
-//! ⚠ T-mode only (`KF3_TSPACE=1`). On the default path a Translated birth still marks the space
-//! kernel unconditionally ([`TwinState::force_kernel`]) and passthrough births do not count —
-//! today's behaviour, unchanged.
+//! ★ Always on since 2026-10-10 (`OWNER_RULINGS.md` §AB: `KF3_TSPACE` deleted). ⊘ The default
+//! path's unconditional flip (`force_kernel`: a Translated birth marked the space kernel with no
+//! refusal, passthrough births uncounted) is deleted with it.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -139,12 +139,6 @@ impl TwinState {
                 }
             })?;
         Ok(prev & KERNEL == 0)
-    }
-
-    /// The default path's unconditional flip (today's `kernel_vas.swap(true)`): returns whether the
-    /// space was already kernel.
-    pub fn force_kernel(&self) -> bool {
-        self.0.fetch_or(KERNEL, Ordering::AcqRel) & KERNEL != 0
     }
 }
 
@@ -293,10 +287,55 @@ mod tests {
             Err(TwinRefusal::KernelWhileUsersFree(1))
         );
         assert!(TwinState::for_kernel(true).is_kernel());
-        // The default path's flip.
-        let legacy = TwinState::default();
-        assert_eq!(legacy.try_user(), Ok(()));
-        assert!(!legacy.force_kernel(), "today's flip ignores live users");
-        assert!(legacy.is_kernel());
+    }
+
+    /// ★ EXPERIMENT `KF3_WIN_KERNEL_PID4` against the T-space rule, on the run-113 restart
+    /// (`[measured, qemu.log 63705-63783]`): a pid-4 copy channel, then a pid-4 GR channel, born in
+    /// one VA space. The route is the one `kf_rm::chanlink::windows_user_work` gives each channel
+    /// (`passthrough = user work`); the twin state is the plane's own.
+    #[test]
+    fn a_pid4_restart_pair_shares_a_space_only_with_kernel_pid4() {
+        use kf_rm::chanlink::{UserWorkFacts, windows_user_work};
+        let facts = |engine: u32, pid: u32, on: bool| UserWorkFacts {
+            flag: true,
+            windows: true,
+            kernel_stamped: true,
+            uvm_owned: false,
+            rm_internal: false,
+            engine: Some(engine),
+            ctx_share: 0,
+            ctx_share_known: false,
+            process_id: Some(pid),
+            kernel_pid: Some(0x350),
+            system_pid_is_kernel: on,
+            force_migratable: false,
+        };
+        let birth = |st: &TwinState, f: &UserWorkFacts| -> Result<(), TwinRefusal> {
+            if windows_user_work(f).is_ok() {
+                st.try_user()
+            } else {
+                st.try_kernel().map(|_| ())
+            }
+        };
+        // Off: the copy channel is user work (Passthrough), the GR channel is refused (run 113).
+        let off = TwinState::default();
+        assert_eq!(birth(&off, &facts(0xb, 4, false)), Ok(()));
+        assert_eq!(
+            birth(&off, &facts(kf_abi::submit::ENGINE_TYPE_GRAPHICS, 4, false)),
+            Err(TwinRefusal::KernelInUserSpace(1))
+        );
+        // On: both follow the kernel route and share the space.
+        let on = TwinState::default();
+        assert_eq!(birth(&on, &facts(0xb, 4, true)), Ok(()));
+        assert_eq!(
+            birth(&on, &facts(kf_abi::submit::ENGINE_TYPE_GRAPHICS, 4, true)),
+            Ok(())
+        );
+        assert!(on.is_kernel());
+        // A user process's channel (any other pid) still cannot join that kernel space.
+        assert_eq!(
+            birth(&on, &facts(0xb, 0x554, true)),
+            Err(TwinRefusal::UserInKernelSpace)
+        );
     }
 }

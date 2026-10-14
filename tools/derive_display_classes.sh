@@ -17,6 +17,8 @@
 #
 # usage: tools/derive_display_classes.sh [path-to-ogkm] > crates/kf-disp/data/classes-<version>.tsv
 set -euo pipefail
+# the committed TSVs are in C-locale `sort` order (a UTF-8 locale orders `_` differently)
+export LC_ALL=C
 OG=${1:-/workspace/nvidia-gpu-passthrough/research_clones/ogkm-580.159.04}
 INC="$OG/src/common/sdk/nvidia/inc"
 VER=$(sed -n 's/^NVIDIA_VERSION = //p' "$OG/version.mk")
@@ -33,7 +35,7 @@ SOR_CLK_CAP PRECOMP_WIN_PIPE_HDR_CAP POSTCOMP_HEAD_HDR_CAP IHUB_COMMON_CAP WINDO
 SET_CONTEXT_DMA_ILUT SET_ILUT_CONTROL SET_CONTEXT_DMA_TMO SET_TMO_CONTROL SET_TMO_LOW_INTENSITY_
 SET_TMO_MEDIUM_INTENSITY_ SET_TMO_HIGH_INTENSITY_ HEAD_SET_OLUT_CONTROL HEAD_SET_OLUT_FP_NORM_SCALE
 HEAD_SET_CONTEXT_DMA_OLUT HEAD_SET_OFFSET_OLUT HEAD_SET_SURFACE_ADDRESS_HI_OLUT HEAD_SET_SURFACE_ADDRESS_LO_OLUT
-HEAD_SET_OCSC SET_FMT_COEFFICIENT SET_CSC'
+HEAD_SET_OCSC SET_FMT_COEFFICIENT SET_CSC SET_GET_BLANKING_CTRL HEAD_SET_MIN_FRAME_IDLE'
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 { echo '#include "nvtypes.h"'; for c in $CLASSES; do echo "#include \"class/cl$c.h\""; done; } > "$tmp/all.h"
 gcc -E -dM -I"$INC" "$tmp/all.h" > "$tmp/macros"

@@ -33,12 +33,16 @@
 
 use crate::class::{ClassTable, get as fld};
 use crate::model::{ChannelKind, Classes};
+use crate::ports::HeadTiming;
 use crate::pushbuf::{self, DecodeError, Located};
 use crate::regs::Regs;
 use std::collections::VecDeque;
 
 /// Channel numbers (`NV_PDISP_CHN_NUM_*`).
 pub const CHANNELS: usize = crate::ports::NUM_CHANNELS;
+/// How many events [`Engine::recent_events`] keeps.
+pub const RING_EVENTS: usize = 512;
+
 /// ★ Hostile guest: the most decoded-but-unapplied writes a channel may hold (a 4 KiB ring holds at
 /// most 1023; the rest is a PUT that ignored GET).
 pub const MAX_QUEUE: usize = 4096;
@@ -61,8 +65,9 @@ pub struct PbLoc {
 pub enum Effect {
     /// Publish these core ARMED words — `(method offset, value)` — in the user area's ARMED half.
     CoreArmed(Vec<(u32, u32)>),
-    /// Write a 16-byte NVDisplay notifier `FINISHED` at `offset` of context DMA `handle` (bound to
-    /// channel number `chn` by `client`), then raise AWAKEN for `chn` if `awaken`.
+    /// Write a 16-byte NVDisplay notifier at `offset` of context DMA `handle` (bound to channel number
+    /// `chn` by `client`) — status FINISHED if `finished`, else BEGUN — then raise AWAKEN for `chn` if
+    /// `awaken`.
     Notify {
         /// Channel number.
         chn: u32,
@@ -74,6 +79,9 @@ pub enum Effect {
         offset: u64,
         /// `MODE_WRITE_AWAKEN`.
         awaken: bool,
+        /// FINISHED: the core's completion notifier, or a window entry FLIPPED AWAY by the next latch.
+        /// `false`: a window flip's own notifier at its latch (BEGUN).
+        finished: bool,
     },
     /// Release a semaphore: write `value` (32 or 64 bits) at `offset` of context DMA `handle`, then
     /// raise the window's semaphore event if `awaken`.
@@ -191,6 +199,10 @@ pub struct Vocab {
     c_raster_size: (u32, u32),
     c_raster_w: (u8, u8),
     c_raster_h: (u8, u8),
+    c_blank_end: (u32, u32),
+    c_blank_start: (u32, u32),
+    c_blank_x: (u8, u8),
+    c_blank_y: (u8, u8),
     c_sor_control: (u32, u32),
     c_sor_owner: (u8, u8),
     c_ilk_cursor0: (u8, u8),
@@ -299,6 +311,11 @@ impl Vocab {
             c_raster_size: arr(core, "HEAD_SET_RASTER_SIZE")?,
             c_raster_w: f(core, "HEAD_SET_RASTER_SIZE_WIDTH")?,
             c_raster_h: f(core, "HEAD_SET_RASTER_SIZE_HEIGHT")?,
+            c_blank_end: arr(core, "HEAD_SET_RASTER_BLANK_END")?,
+            c_blank_start: arr(core, "HEAD_SET_RASTER_BLANK_START")?,
+            // the END and START words share one layout (X in 14:0, Y in 30:16)
+            c_blank_x: f(core, "HEAD_SET_RASTER_BLANK_END_X")?,
+            c_blank_y: f(core, "HEAD_SET_RASTER_BLANK_END_Y")?,
             c_sor_control: arr(core, "SOR_SET_CONTROL")?,
             c_sor_owner: f(core, "SOR_SET_CONTROL_OWNER_MASK")?,
             c_ilk_cursor0: fa0(core, "SET_INTERLOCK_FLAGS_INTERLOCK_WITH_CURSOR")?,
@@ -391,6 +408,57 @@ fn bit(chn: u32) -> ChanSet {
     } else {
         0
     }
+}
+
+/// ★ One entry of the engine's always-on ring of recent interlock-relevant events
+/// ([`Engine::recent_events`]): what the STALL report prints to name a deadlock.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RingEvent {
+    /// A channel stopped at its `UPDATE` (`update` data word) naming `ilk` as the channels it waits for.
+    Update {
+        /// Channel.
+        chn: u32,
+        /// The UPDATE data word.
+        update: u32,
+        /// The interlock set it named.
+        ilk: u128,
+    },
+    /// A write to an interlock-flags method (`SET_INTERLOCK_FLAGS` or `SET_WINDOW_INTERLOCK_FLAGS`).
+    Flags {
+        /// Channel.
+        chn: u32,
+        /// 0 = `SET_INTERLOCK_FLAGS`, 1 = `SET_WINDOW_INTERLOCK_FLAGS`.
+        window_flags: bool,
+        /// Data written.
+        data: u32,
+    },
+    /// A group latched (the members, as bits).
+    Latch {
+        /// Members.
+        group: u128,
+    },
+}
+
+/// ★ One channel parked at an `UPDATE` ([`Engine::parked`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Parked {
+    /// The channel number.
+    pub chn: u32,
+    /// Its kind and instance (the window index for a window).
+    pub kind: ChannelKind,
+    /// See `kind`.
+    pub instance: u32,
+    /// The UPDATE data word.
+    pub update: u32,
+    /// Waiting for the other members of its interlock group (else latched-pending: a vblank or an
+    /// acquire).
+    pub waiting_for_interlock: bool,
+    /// The channels it waits for (interlock) or the group that latches together, as bits.
+    pub set: u128,
+    /// The head whose vblank it waits for (`None`: only an acquire).
+    pub head: Option<u32>,
+    /// The semaphore acquire its window must satisfy before the latch.
+    pub acquire: Option<Acquire>,
 }
 
 /// Where a pending update stands.
@@ -510,11 +578,20 @@ pub struct Engine {
     pub trace: bool,
     method_trace_remaining: u32,
     method_trace_configured: bool,
+    /// ★ Always-on ring of the last [`RING_EVENTS`] interlock-relevant events (see [`RingEvent`]).
+    ring: VecDeque<(u64, RingEvent)>,
+    ring_seq: u64,
     /// ★ D1 (`OWNER_RULINGS.md` §M, 2026-10-04): a TEARING (immediate) flip on an active head that
     /// already presented since the head's last tick waits for the next one, so async flips count
     /// against the cap too. In kayfabe a flip copies a finished buffer, so it never tears; the gate
     /// is about rate only. On by default.
     pub tear_gate: bool,
+    /// ⚠ EXPERIMENT (default `false`, 2026-10-08, H-corelatch; `KF3_DISPLAY_CORE_AT_VBLANK=1`): an
+    /// update group that includes the CORE latches at the next vblank of an active head, as the
+    /// hardware's does, instead of at once. `[measured, VFIO DVI reference boot3, RTX 4070,
+    /// 2026-10-08]` Windows' modeset core PUTs come one per frame (12.520125, 12.535982, 12.552647 s:
+    /// it waits a frame for each), while under kf3 the same PUTs complete within 3 ms (run 93).
+    pub core_latch_at_vblank: bool,
     /// Per head: a window of it latched since its last tick (the gate's state).
     presented: [bool; 8],
     /// Per head: presents by path.
@@ -537,10 +614,25 @@ impl Engine {
             trace: false,
             method_trace_remaining: 0,
             method_trace_configured: false,
+            ring: VecDeque::new(),
+            ring_seq: 0,
             tear_gate: true,
+            core_latch_at_vblank: false,
             presented: [false; 8],
             pace: [PaceCounts::default(); 8],
         }
+    }
+
+    /// ★ A guest life ends (`docs/design/V3_DEVICE_RESET.md`): no channel, nothing presented, no
+    /// event ring — the engine [`Engine::new`] builds, with the same vocabulary and the same
+    /// switches (trace, tear gate, core-at-vblank, the method-trace budget already spent). The
+    /// counters are the VM's run and stay.
+    pub fn reset_life(&mut self) {
+        for c in &mut self.chans {
+            *c = None;
+        }
+        self.ring.clear();
+        self.presented = [false; 8];
     }
 
     /// Enable a bounded method diagnostic before any guest work. It cannot be replenished
@@ -745,6 +837,73 @@ impl Engine {
             .collect()
     }
 
+    fn note(&mut self, e: RingEvent) {
+        ring_push(&mut self.ring, &mut self.ring_seq, e);
+    }
+
+    /// ★ The recent interlock-relevant events, oldest first, with their sequence numbers.
+    #[must_use]
+    pub fn recent_events(&self) -> Vec<(u64, RingEvent)> {
+        self.ring.iter().copied().collect()
+    }
+
+    /// ★ Every channel parked at an `UPDATE` (for its interlock group, or for a vblank/an acquire),
+    /// as plain data for the display thread's stall report: `(channel, window or kind, stage,
+    /// group bits, head, the acquire it must satisfy)`. Read-only; never decides anything.
+    #[must_use]
+    pub fn parked(&self) -> Vec<Parked> {
+        let mut out = Vec::new();
+        for (n, c) in self.chans.iter().enumerate() {
+            let Some(c) = c else { continue };
+            let n = n as u32;
+            match c.stage {
+                Stage::Running => {}
+                Stage::Interlock { update, ilk } => out.push(Parked {
+                    chn: n,
+                    kind: c.kind,
+                    instance: c.instance,
+                    update,
+                    waiting_for_interlock: true,
+                    set: ilk,
+                    head: None,
+                    acquire: None,
+                }),
+                Stage::Latch {
+                    update,
+                    head,
+                    group,
+                } => out.push(Parked {
+                    chn: n,
+                    kind: c.kind,
+                    instance: c.instance,
+                    update,
+                    waiting_for_interlock: false,
+                    set: group,
+                    head,
+                    acquire: self.acquire_of(n),
+                }),
+            }
+        }
+        out
+    }
+
+    /// ★ Diagnostic: channel `chn`'s decode state `(decoded, get, queued writes, halted, stage name)`.
+    #[must_use]
+    pub fn chan_state(&self, chn: u32) -> Option<(u32, u32, usize, bool, &'static str)> {
+        let c = self.chans.get(chn as usize)?.as_ref()?;
+        Some((
+            c.decoded,
+            c.get,
+            c.queue.len(),
+            c.halted,
+            match c.stage {
+                Stage::Running => "running",
+                Stage::Interlock { .. } => "interlock",
+                Stage::Latch { .. } => "latch",
+            },
+        ))
+    }
+
     /// Is any update waiting for an acquire without a vblank to re-check it?
     #[must_use]
     pub fn acquire_pending(&self) -> bool {
@@ -869,6 +1028,15 @@ impl Engine {
                     ilk,
                 };
                 c.get = l.header;
+                ring_push(
+                    &mut self.ring,
+                    &mut self.ring_seq,
+                    RingEvent::Update {
+                        chn: n,
+                        update: l.write.data,
+                        ilk,
+                    },
+                );
                 if self.trace {
                     st.effects.push(Effect::Trace(format!(
                         "chn {n} UPDATE {:#x} at {:#x} waits for {ilk:#x}",
@@ -912,6 +1080,19 @@ impl Engine {
                     }
                 }
             }
+            if c.kind == ChannelKind::Window
+                && (m == vocab.w_interlock || m == vocab.w_window_interlock)
+            {
+                ring_push(
+                    &mut self.ring,
+                    &mut self.ring_seq,
+                    RingEvent::Flags {
+                        chn: n,
+                        window_flags: m == vocab.w_window_interlock,
+                        data: l.write.data,
+                    },
+                );
+            }
             c.assy[(m / 4) as usize] = l.write.data;
             self.methods += 1;
             c.queue.pop_front();
@@ -942,21 +1123,48 @@ impl Engine {
         let live: ChanSet = (0..CHANNELS as u32)
             .filter(|n| self.chans[*n as usize].is_some())
             .fold(0, |m, n| m | bit(n));
+        // ⊘ SUPERSEDED 2026-10-14 (Linux plane oracle, `V3_DISPLAY_PLANES_ORACLE.md`): the rule of
+        // 2026-10-10 (runs 400/403) — "a channel whose UPDATE is already parked for its vblank or acquire
+        // (Stage::Latch) is still a PENDING update; a later UPDATE that names it joins its latch" — is
+        // removed. Its premise ("window 0's UPDATE names nothing") was an inference; the measured
+        // engine ring of run 411 shows window 0's UPDATE naming window 4. And it MISPAIRS a stock
+        // driver's sequence [measured, Linux nvidia-drm 580.159.04, run planes-run1]: an overlay
+        // ENABLE update (names only its immediate channel) parked for the vblank absorbed the NEXT
+        // flip's primary-window UPDATE (which names the overlay window), so the overlay's own UPDATE of
+        // that flip waited for a primary UPDATE the driver had already sent: every later flip paired
+        // overlay(k) with primary(k+1), and the first flip that changed the pattern (the plane's
+        // disable: core + overlay + its immediate channel) deadlocked the core channel for the VM's
+        // life. An UPDATE parked only for a vblank or an acquire has already passed its interlock
+        // stage (assembly → armed, `V3_DISPLAY.md` §4.5); a later UPDATE that names its channel waits
+        // for that channel's NEXT update, which the channel issues once this one latches (NVKMS
+        // queues flips behind pending ones: `nvkms-hw-flip.c` PreFlipIMP, "even if there are still
+        // pending flips in a base channel").
         for start in 0..CHANNELS as u32 {
             if pending & bit(start) == 0 {
                 continue;
             }
-            // the closure of `start` over interlock edges, among pending channels
+            // the closure of `start` over interlock edges IN BOTH DIRECTIONS, among pending channels:
+            // what a member waits for, and every pending update that waits for a member.
+            // ★ 2026-10-10 (Windows TDR hunt, run 293, measured): an overlay window's UPDATE interlocked
+            // with window 0 and its immediate channel, while window 0's own UPDATEs named nothing; with
+            // forward edges only, window 0 latched alone at every vblank (54 times) and the overlay
+            // update starved until the TDR. An interlocked UPDATE waits for an UPDATE on each channel
+            // it names, and is latched TOGETHER with it (`ogkm-595.84:
+            // nvidia-modeset/src/nvkms-evo3.c:2829-2837`), so a pending update another pending update
+            // waits for cannot latch without it.
             let mut group = bit(start);
             let mut ready = true;
             loop {
                 let mut want = 0;
                 for n in 0..CHANNELS as u32 {
-                    if group & bit(n) != 0
-                        && let Some(Stage::Interlock { ilk, .. }) =
-                            self.chans[n as usize].as_ref().map(|c| c.stage)
+                    if let Some(Stage::Interlock { ilk, .. }) =
+                        self.chans[n as usize].as_ref().map(|c| c.stage)
                     {
-                        want |= ilk & live;
+                        if group & bit(n) != 0 {
+                            want |= ilk & live;
+                        } else if ilk & group != 0 {
+                            want |= bit(n);
+                        }
                     }
                 }
                 if want & !pending != 0 {
@@ -1005,6 +1213,17 @@ impl Engine {
             else {
                 continue;
             };
+            // ★ 2026-10-11 (overlay stall H1, runs 408-416): a window that scans no surface before the update AND
+            // names none in it has nothing to tear — its UPDATE is not a flip and has no vblank to wait for.
+            // Windows' enable sequence for the overlay plane kicks such an UPDATE (window 4 owned by the head,
+            // no surface yet) microseconds before the UPDATEs of window 0 and window 4's immediate channel that
+            // belong to the plane's FIRST flip; held for the vblank it absorbed those two (they name window 4
+            // and joined the parked latch), and the first flip then waited for UPDATEs the driver sends only
+            // after that flip completes. [inferred from the guest's behaviour on hardware and in the one
+            // traced run that did not stall, 414; a run decides]
+            if c.a(self.vocab.w_iso0) == 0 && c.armed(self.vocab.w_iso0) == 0 {
+                continue;
+            }
             if self.tearing(c) {
                 tear_head = Some(tear_head.unwrap_or(h));
             } else {
@@ -1015,7 +1234,10 @@ impl Engine {
         let gated = tear_head
             .filter(|h| self.tear_gate && vblank_head.is_none() && self.presented[*h as usize]);
         let park = if has_core {
-            None
+            // ⚠ H-corelatch: the first active head's next vblank (none active: at once, as before)
+            self.core_latch_at_vblank
+                .then(|| heads.iter().find(|m| m.period_ns > 0).map(|m| m.head))
+                .flatten()
         } else {
             vblank_head.or(gated)
         };
@@ -1025,7 +1247,7 @@ impl Engine {
         let set = group.iter().fold(0, |m, n| m | bit(*n));
         for &n in group {
             if let Some(c) = self.chans[n as usize].as_mut()
-                && let Stage::Interlock { update, .. } = c.stage
+                && let Stage::Interlock { update, .. } | Stage::Latch { update, .. } = c.stage
             {
                 c.stage = Stage::Latch {
                     update,
@@ -1112,6 +1334,9 @@ impl Engine {
                 return;
             }
         }
+        self.note(RingEvent::Latch {
+            group: members.iter().fold(0u128, |m, n| m | bit(*n)),
+        });
         let heads_before = self.heads_armed();
         // ★ A window's flip raises its FLIP event (AWAKEN) only if the window was scanning a surface on
         // an active head BEFORE this update: nvidia-drm queues events only for "planes which were
@@ -1120,6 +1345,17 @@ impl Engine {
         // (`[measured m1b, 2026-09-30, GA106 / 580.159.04]` the first fbdev modeset:
         // `WARN_ON(nv_flip == NULL)`). Snapshotted before any member of the group — the core among
         // them — is armed.
+        // ⊘ CORRECTED 2026-10-14 (`V3_DISPLAY_PLANES_ORACLE.md`; the paragraph below is superseded in
+        // its conclusion): [measured, bare-metal AD104 under the open 580.159.04 modules, the plane
+        // oracle's reference] a commit that only DISABLES a plane that had a framebuffer gets its
+        // event in 7-17 ms (8/8 plane-disable cycles, 60/60 toggles, DPMS off in 34-55 ms, zero "Flip
+        // event timeout"), where kayfabe raised nothing (every one a 3 s "Flip event timeout"). The new
+        // entry still has no notifier (KAPI, cited below), and RM raises a window's event only from its
+        // AWAKEN interrupt (`kern_disp_0300.c` _kdispHandleAwakenChnMask) — so the AWAKEN comes from the
+        // one notifier the latch does write: the FLIPPED-AWAY entry's FINISHED, in that entry's own
+        // `MODE_WRITE_AWAKEN`. `complete` now raises it there when no new BEGUN raises the channel's
+        // AWAKEN in the same latch (one AWAKEN per channel per latch: nvidia-drm counts events, not
+        // notifiers). The `atomic_remove_fb` timeout of m1c below is therefore kayfabe's, not hardware's.
         // ⊘ The rule's other half is the NEW state's notifier (`complete`): a window flipped to NO
         // surface is programmed with no notifier (`nvkms-evo3.c:3901-3904`, the KAPI sets one only
         // for a non-NULL surface, `nvkms-kapi.c:2956-2970`, `:3175-3189`), so it raises nothing,
@@ -1221,6 +1457,21 @@ impl Engine {
             return;
         };
         let Stage::Latch { .. } = c.stage else { return };
+        // ★ 2026-10-10 (Windows TDR hunt, `traces/windows_tdr_hunt_20261010/README.md`): what a window latch writes for
+        // the entry it FLIPS AWAY (the outgoing ARMED state, read before the arm below): its release semaphore and its
+        // notifier FINISHED. The display writes a release when its entry is flipped away (`ogkm-595.84:
+        // nvidia-modeset/src/nvkms-displayless.c:272-280`, `include/nvkms-headsurface-priv.h:236-244`), and a window
+        // flip's notifier BEGUN when it performs the flip (`src/nvkms-headsurface.c:1925-1952`). [measured, Windows runs
+        // 282-287, RTX 4070] the Windows driver polls flip N's and flip N-1's notifiers after programming flip N and
+        // leaves only once N-1 reads FINISHED; with a VSync handler that sees the post-latch state, every flip stuck
+        // (5 TDR cycles in boot) unless N-1 was FINISHED at N's latch.
+        let outgoing = (c.kind == ChannelKind::Window).then(|| {
+            let notify = Self::notify_of(&v, c, n, Chan::armed, true, false);
+            // the flipped-away entry asked for AWAKEN (its own notifier mode)
+            let awaken_mode = c.armed(v.w_ctxdma_notifier) != 0
+                && fld(c.armed(v.w_notifier_control), v.n_mode) == v.n_mode_awaken;
+            (Self::release_of(&v, c, n), notify, awaken_mode)
+        });
         // 1. arm
         let mut changed = Vec::new();
         for (i, (a, b)) in c.assy.iter().zip(c.armed.iter_mut()).enumerate() {
@@ -1248,38 +1499,41 @@ impl Engine {
                         handle,
                         offset: u64::from(fld(ctl, v.n_offset)) * 16,
                         awaken: fld(ctl, v.n_mode) == v.n_mode_awaken,
+                        finished: true,
                     });
                 }
             }
             ChannelKind::Window => {
                 st.effects.push(Effect::Latched { window: c.instance });
-                let sem = c.armed(v.w_ctxdma_sem);
-                if sem != 0 {
-                    let ctl = c.armed(v.w_sem_control);
-                    let wide = fld(ctl, v.w_sem_payload) == 1;
-                    let hi = v.w_sem_release_hi.map_or(0, |m| c.armed(m));
-                    let lo = u64::from(c.armed(v.w_sem_release));
-                    st.effects.push(Effect::Release {
-                        chn: n,
-                        client: c.client,
-                        handle: sem,
-                        offset: u64::from(fld(ctl, v.w_sem_offset)) * 16,
-                        value: if wide { u64::from(hi) << 32 | lo } else { lo },
-                        wide,
-                        awaken: fld(ctl, v.w_sem_rel_mode) == 1,
-                    });
+                // the new entry's own notifier: BEGUN (AWAKEN per its mode, for a previously active window)
+                let begun = Self::notify_of(&v, c, n, Chan::armed, false, was_active);
+                let begun_awakens = matches!(begun, Some(Effect::Notify { awaken: true, .. }));
+                // the entry this latch flipped away: its release, its notifier FINISHED — never the new entry's.
+                // ★ 2026-10-14: its FINISHED raises the channel's AWAKEN (in its own WRITE_AWAKEN mode) when the
+                // window was active and nothing else in this latch raises it — a flip to NO surface (a plane
+                // disable) completes as on hardware [measured, the plane oracle's AD104 reference].
+                if let Some((release, notify, awaken_mode)) = outgoing {
+                    st.effects.extend(release);
+                    st.effects.extend(notify.map(|e| match e {
+                        Effect::Notify {
+                            chn,
+                            client,
+                            handle,
+                            offset,
+                            finished,
+                            ..
+                        } => Effect::Notify {
+                            chn,
+                            client,
+                            handle,
+                            offset,
+                            awaken: awaken_mode && was_active && !begun_awakens,
+                            finished,
+                        },
+                        other => other,
+                    }));
                 }
-                let handle = c.armed(v.w_ctxdma_notifier);
-                if handle != 0 {
-                    let ctl = c.armed(v.w_notifier_control);
-                    st.effects.push(Effect::Notify {
-                        chn: n,
-                        client: c.client,
-                        handle,
-                        offset: u64::from(fld(ctl, v.n_offset)) * 16,
-                        awaken: was_active && fld(ctl, v.n_mode) == v.n_mode_awaken,
-                    });
-                }
+                st.effects.extend(begun);
             }
             ChannelKind::WindowImm | ChannelKind::Cursor => {}
         }
@@ -1291,6 +1545,52 @@ impl Engine {
         {
             c.get = c.queue.front().map_or(c.decoded, |f| f.header);
         }
+    }
+
+    /// The release a window's ARMED entry asks for: `None` without a semaphore context DMA.
+    fn release_of(v: &Vocab, c: &Chan, n: u32) -> Option<Effect> {
+        let sem = c.armed(v.w_ctxdma_sem);
+        if sem == 0 {
+            return None;
+        }
+        let ctl = c.armed(v.w_sem_control);
+        let wide = fld(ctl, v.w_sem_payload) == 1;
+        let hi = v.w_sem_release_hi.map_or(0, |m| c.armed(m));
+        let lo = u64::from(c.armed(v.w_sem_release));
+        Some(Effect::Release {
+            chn: n,
+            client: c.client,
+            handle: sem,
+            offset: u64::from(fld(ctl, v.w_sem_offset)) * 16,
+            value: if wide { u64::from(hi) << 32 | lo } else { lo },
+            wide,
+            awaken: fld(ctl, v.w_sem_rel_mode) == 1,
+        })
+    }
+
+    /// The notifier a window entry asks for, read through `get`: `None` without a notifier context DMA. `finished`:
+    /// the flip-away (FINISHED; `complete` decides its AWAKEN); else the entry's own latch (BEGUN, AWAKEN per its mode if `was_active`).
+    fn notify_of(
+        v: &Vocab,
+        c: &Chan,
+        n: u32,
+        get: fn(&Chan, u32) -> u32,
+        finished: bool,
+        was_active: bool,
+    ) -> Option<Effect> {
+        let handle = get(c, v.w_ctxdma_notifier);
+        if handle == 0 {
+            return None;
+        }
+        let ctl = get(c, v.w_notifier_control);
+        Some(Effect::Notify {
+            chn: n,
+            client: c.client,
+            handle,
+            offset: u64::from(fld(ctl, v.n_offset)) * 16,
+            awaken: !finished && was_active && fld(ctl, v.n_mode) == v.n_mode_awaken,
+            finished,
+        })
     }
 
     /// The head window `w` is owned by in the ARMED core state (`None`: no owner or no core).
@@ -1366,6 +1666,67 @@ impl Engine {
 }
 
 impl Engine {
+    /// ★ Per head, the ARMED mode while its raster runs (`None` when it does not): the visible raster
+    /// (`BLANK_START - BLANK_END` per axis: the blanking interval ends where the active region
+    /// begins and starts where it ends), the full raster (`HEAD_SET_RASTER_SIZE`) and the pixel
+    /// clock — what the physical-RM control `0x73011a` reports. Derived from the core channel's
+    /// armed words only.
+    #[must_use]
+    pub fn head_timings(&self) -> Vec<Option<HeadTiming>> {
+        let v = &self.vocab;
+        let modes = self.heads_armed();
+        (0..self.heads)
+            .map(|h| {
+                let core = self.chans[0].as_ref()?;
+                let m = modes.iter().find(|m| m.head == h && m.period_ns > 0)?;
+                let pclk = core.armed(v.c_pclk.0 + h * v.c_pclk.1);
+                let mut hz = u64::from(fld(pclk, v.c_pclk_hz));
+                if fld(pclk, v.c_pclk_adj) == 1 {
+                    hz = hz * 1000 / 1001;
+                }
+                let be = core.armed(v.c_blank_end.0 + h * v.c_blank_end.1);
+                let bs = core.armed(v.c_blank_start.0 + h * v.c_blank_start.1);
+                Some(HeadTiming {
+                    active: (
+                        fld(bs, v.c_blank_x).saturating_sub(fld(be, v.c_blank_x)),
+                        fld(bs, v.c_blank_y).saturating_sub(fld(be, v.c_blank_y)),
+                    ),
+                    total: m.raster,
+                    pclk_hz: hz,
+                })
+            })
+            .collect()
+    }
+
+    /// ★ Per head, the raster its LIVE scan position follows (`None` when its raster does not run):
+    /// `BLANK_END.Y`, `BLANK_START.Y`, `RASTER_SIZE.HEIGHT` and the frame period, from the core
+    /// channel's armed words only ([`crate::ports::ScanGeom`]).
+    #[must_use]
+    pub fn head_scan_geoms(&self) -> Vec<Option<crate::ports::ScanGeom>> {
+        let v = &self.vocab;
+        let modes = self.heads_armed();
+        (0..self.heads)
+            .map(|h| {
+                let core = self.chans[0].as_ref()?;
+                let m = modes.iter().find(|m| m.head == h && m.period_ns > 0)?;
+                let be = core.armed(v.c_blank_end.0 + h * v.c_blank_end.1);
+                let bs = core.armed(v.c_blank_start.0 + h * v.c_blank_start.1);
+                Some(crate::ports::ScanGeom {
+                    blank_end_y: fld(be, v.c_blank_y),
+                    blank_start_y: fld(bs, v.c_blank_y),
+                    total_h: m.raster.1,
+                    period_ns: m.period_ns,
+                })
+            })
+            .collect()
+    }
+
+    /// Per window, the head that owns it in the ARMED core state (`None`: no owner, or no core).
+    #[must_use]
+    pub fn window_heads(&self) -> Vec<Option<u32>> {
+        (0..self.windows).map(|w| self.owner_head(w)).collect()
+    }
+
     /// ★ Per head, the SOR it lights: the lowest SOR whose ARMED `SOR_SET_CONTROL.OWNER_MASK` names
     /// the head, while the head's raster runs — what `NV0073_CTRL_CMD_SYSTEM_GET_ACTIVE` reports
     /// (as the connector on that SOR). `None` for an idle head or one no SOR drives.
@@ -1433,6 +1794,15 @@ pub struct Scanout {
     pub out_width: u32,
     /// Output height.
     pub out_height: u32,
+    /// ★ Plane 1 (the chroma plane of a semi-planar YUV format): `SET_CONTEXT_DMA_ISO(1)` handle
+    /// (0 = the class has no plane 1, or it was never programmed: the luma plane's context DMA).
+    pub iso1: u32,
+    /// `SET_OFFSET(1)` in bytes.
+    pub offset1: u64,
+    /// `SET_PLANAR_STORAGE(1).PITCH`, in the units of `pitch`.
+    pub pitch1: u32,
+    /// `SET_PARAMS.SWAP_UV`.
+    pub swap_uv: bool,
     /// `SET_COMPOSITION_CONTROL.DEPTH` — smaller is closer to the front (`nvkms-evo3.c:4813`).
     pub depth: u32,
     /// `SET_COMPOSITION_CONSTANT_ALPHA.K1` / `.K2`.
@@ -1443,6 +1813,11 @@ pub struct Scanout {
     pub src_factor: u32,
     /// `DST_COLOR_FACTOR_NO_MATCH_SELECT`.
     pub dst_factor: u32,
+    /// ★ `SET_FMT_COEFFICIENT_C00..C23` — the 3x4 S4.16 matrix NVKMS programs to convert the window's
+    /// input format to the RGB pipe (`nvkms-evo3.c` EvoSetFMTMatrixC5: "In nvdisplay 3 ... a generic
+    /// 3x4 S5.16 coefficient matrix that SW must explicitly configure"), rows R, G, B over the input
+    /// channels (V/Cr, Y, U/Cb, 1), sign-extended. All zero: the class has none, or it is unprogrammed.
+    pub fmt: [i32; 12],
 }
 
 /// ★ What a head shows: its composition space and every enabled window, BACK TO FRONT.
@@ -1471,6 +1846,10 @@ pub struct ScanVocab {
     params: (u32, (u8, u8)),
     storage: (u32, (u8, u8)),
     size_out: (u32, (u8, u8), (u8, u8)),
+    /// Plane 1 of a semi-planar format (`None`: the class names none).
+    plane1: Option<(u32, u32, u32, (u8, u8))>,
+    /// `SET_PARAMS.SWAP_UV`.
+    swap_uv: Option<(u8, u8)>,
     comp_depth: (u32, (u8, u8)),
     comp_alpha: (u32, (u8, u8), (u8, u8)),
     comp_factor: (u32, (u8, u8), (u8, u8)),
@@ -1478,6 +1857,8 @@ pub struct ScanVocab {
     point_out: (u32, (u8, u8), (u8, u8)),
     /// Core `HEAD_SET_VIEWPORT_SIZE_IN(head)`: base, stride, width, height.
     viewport_in: (u32, u32, (u8, u8), (u8, u8)),
+    /// `SET_FMT_COEFFICIENT_C00` and its `VALUE` field (`None`: the class has no FMT matrix).
+    fmt: Option<(u32, (u8, u8))>,
 }
 
 /// A method's offset and two `(hi, lo)` fields of its data word — e.g. `SET_SIZE`'s `_WIDTH` and
@@ -1515,6 +1896,15 @@ impl ScanVocab {
                 t.f(win, "SET_STORAGE_BLOCK_HEIGHT")?,
             ),
             size_out: wh("SET_SIZE_OUT")?,
+            plane1: (|| {
+                Some((
+                    t.a(win, "SET_CONTEXT_DMA_ISO", 1)?,
+                    t.a(win, "SET_OFFSET", 1)?,
+                    t.a(win, "SET_PLANAR_STORAGE", 1)?,
+                    t.f(win, "SET_PLANAR_STORAGE_PITCH")?,
+                ))
+            })(),
+            swap_uv: t.f(win, "SET_PARAMS_SWAP_UV"),
             comp_depth: (
                 t.v(win, "SET_COMPOSITION_CONTROL")?,
                 t.f(win, "SET_COMPOSITION_CONTROL_DEPTH")?,
@@ -1550,6 +1940,11 @@ impl ScanVocab {
                     t.f(core, "HEAD_SET_VIEWPORT_SIZE_IN_HEIGHT")?,
                 )
             },
+            // the twelve coefficients are consecutive words from C00 (C00..C03, C10..C13, C20..C23)
+            fmt: t
+                .v(win, "SET_FMT_COEFFICIENT_C00")
+                .zip(t.f(win, "SET_FMT_COEFFICIENT_C00_VALUE"))
+                .filter(|(c00, _)| t.v(win, "SET_FMT_COEFFICIENT_C23") == Some(c00 + 44)),
         })
     }
 }
@@ -1632,11 +2027,25 @@ impl Engine {
                 out_y: fld(point_out, qy),
                 out_width: fld(c.armed(om), ow),
                 out_height: fld(c.armed(om), oh),
+                iso1: sv.plane1.map_or(0, |p| c.armed(p.0)),
+                offset1: sv.plane1.map_or(0, |p| u64::from(c.armed(p.1)) << 8),
+                pitch1: sv.plane1.map_or(0, |p| fld(c.armed(p.2), p.3)),
+                swap_uv: sv
+                    .swap_uv
+                    .is_some_and(|f| fld(c.armed(sv.params.0), f) != 0),
                 depth: fld(c.armed(sv.comp_depth.0), sv.comp_depth.1),
                 k1: fld(alpha, sv.comp_alpha.1),
                 k2: fld(alpha, sv.comp_alpha.2),
                 src_factor: fld(factor, sv.comp_factor.1),
                 dst_factor: fld(factor, sv.comp_factor.2),
+                fmt: sv.fmt.map_or([0; 12], |(c00, (hi, lo))| {
+                    std::array::from_fn(|i| {
+                        let raw = fld(c.armed(c00 + 4 * i as u32), (hi, lo));
+                        // sign-extend the (hi - lo + 1)-bit two's-complement field
+                        let bits = u32::from(hi - lo) + 1;
+                        ((raw << (32 - bits)) as i32) >> (32 - bits)
+                    })
+                }),
             })
         }
     }
@@ -1783,6 +2192,14 @@ impl Engine {
             mode: fld(comp, cv.mode),
         })
     }
+}
+
+fn ring_push(ring: &mut VecDeque<(u64, RingEvent)>, seq: &mut u64, e: RingEvent) {
+    if ring.len() >= RING_EVENTS {
+        ring.pop_front();
+    }
+    *seq = seq.wrapping_add(1);
+    ring.push_back((*seq, e));
 }
 
 /// The channels an UPDATE on `c` (with data `update`) waits for.

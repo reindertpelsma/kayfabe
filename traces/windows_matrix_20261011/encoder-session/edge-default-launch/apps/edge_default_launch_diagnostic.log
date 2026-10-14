@@ -1,0 +1,4 @@
+=== edge_default_launch_diagnostic start=2026-10-11T16:07:59.0005331+00:00 host=VASTWIN session=1 boot=2026-10-11T16:06:02.5000000Z timeout=120
+EDGE_VERSION 154.0.4258.53
+EDGE_DEFAULT_LAUNCH_ALIVE seconds=60
+=== end rc=0 secs=64 2026-10-11T16:09:03.1125841+00:00

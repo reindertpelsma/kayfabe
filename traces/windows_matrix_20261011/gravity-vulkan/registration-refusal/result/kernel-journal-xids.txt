@@ -1,0 +1,1 @@
+2026-10-12T01:02:37+02:00 claude kernel: NVRM: Xid (PCI:0000:01:00): 32, pid=594180, name=qemu-system-x86, channel 0x0000004e intr 00800000

@@ -1,0 +1,65 @@
+{
+ "quiet": 2,
+ "end_utc": "2026-10-11T16:01:33.5715895Z",
+ "start_utc": "2026-10-11T15:58:34.5587926Z",
+ "rc": 0,
+ "secs": 179,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4090 status=OK code=0"
+ ],
+ "digests": [],
+ "session": 1,
+ "out_files": [
+  "C:\\kf\\out\\gravitymark_d3d12\\gm.png 862122",
+  "C:\\kf\\out\\gravitymark_d3d12\\gm_times.txt 5436340"
+ ],
+ "boot_utc_start": "2026-10-11T14:31:59.5000000Z",
+ "log_tail": [
+  "=== gravitymark_d3d12 start=2026-10-11T08:58:34.5587926-07:00 host=DESKTOP-JR70RMQ session=1 boot=2026-10-11T14:31:59.5000000Z timeout=660",
+  "KFWAIT gravitymark_d3d12 EXITED rc=0",
+  "GM_OK image=862122 bytes",
+  "GM_TIMES lines=155324",
+  "=== end rc=0 secs=179 2026-10-11T09:01:33.5715895-07:00"
+ ],
+ "pdh": {
+  "pids": [
+   "5956",
+   "7100",
+   "2284"
+  ],
+  "nv": {
+   "security": 0,
+   "3d": 95.72869191220998,
+   "vr": 0,
+   "videodecode": 0,
+   "copy": 1.2567460264589205,
+   "ofa_0": 0,
+   "legacyoverlay": 0,
+   "videoencode": 0
+  },
+  "samples": 81,
+  "other": {},
+  "nvidia_luids": "0_5f8e"
+ },
+ "timed_out": false,
+ "token": "g1-gravitymark_d3d12-1791734300",
+ "boot_utc_end": "2026-10-11T14:31:59.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "gravitymark_d3d12",
+ "smi": {
+  "samples": 30,
+  "mem_used_base_mb": 166,
+  "util_max": 95,
+  "mem_used_max_mb": 2336
+ }
+}

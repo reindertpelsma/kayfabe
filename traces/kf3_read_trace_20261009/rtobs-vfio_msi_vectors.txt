@@ -1,0 +1,6 @@
+# MSIs (01:00.0) 170 in window, 170 total; with no LEAF W1C before the next MSI: 26
+vector 0(GR0 nonstall): 143
+vector 129(CPU_DOORBELL stall): 1
+# per second: time  total-MSIs  vector:count ...
+22:55:15 169 0:142 129:1
+22:55:16 1 0:1

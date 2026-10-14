@@ -1,0 +1,8 @@
+Generation reuse and ambiguous query pairing tests passed
+Traceback (most recent call last):
+  File "/data/kf-inval-absent/tools/vfio-gsp-observer/tests/test_decode.py", line 46, in <module>
+    allocation = decoder.parse(alloc_blob())['records'][0]['allocation']
+                 ~~~~~~~~~~~~~^^^^^^^^^^^^^^
+  File "/data/kf-inval-absent/tools/vfio-gsp-observer/decode.py", line 118, in parse
+    raise InvalidTrace('invalid record flags')
+decoder.InvalidTrace: invalid record flags

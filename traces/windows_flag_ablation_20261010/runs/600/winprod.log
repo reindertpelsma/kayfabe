@@ -1,0 +1,35 @@
+TDRRUN 2026-10-10T22:47:13.77712904Z START run=600 drop=[] skip_shorts=1 bin=kf3-bins/89721ca4 flags=[] etw=0 hold=180 xid_before=29 pre-qemu=0
+TDRRUN 2026-10-10T22:47:13.117062773Z gpu: NVIDIA GeForce RTX 4070, 595.91.07, 9 MiB
+IOMMU_SWITCH_START group=11 from=DMA-FQ to=identity 2026-10-11T00:47:13+02:00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=identity 2026-10-11T00:47:15+02:00
+TDRRUN 2026-10-10T22:47:16.737433395Z launched qpid=2662235
+ENV_PASSED KF3_ASYNC_PREEMPT KF3_DEFERRED_API KF3_DISPLAY_CAPS_PROBE KF3_DISPLAY_CTRL_PROBE KF3_DISPLAY_ILUT_OFFSET_256 KF3_DISPLAY_IMP_ENABLE KF3_DISPLAY_LUT_MIRROR KF3_DISPLAY_SDR_COLOR KF3_GFX_POOL_PROBE KF3_KERNEL_GR_CE KF3_KERNEL_GR_WORK KF3_MEMORY_LIST_PROBE KF3_PREEMPT_BIND_PROBE KF3_SW_RUNLIST_HOST_OWNED KF3_SW_RUNLIST_PROBE KF3_TIMER_MAP KF3_TRANSLATED_CE_RELAY KF3_WIN_TWIN_DEFAPI_OBJECT KF3_WIN_USER_CHANNELS_PASSTHROUGH KF3_ZCULL_BIND_PROBE
+TDRRUN 2026-10-10T22:47:33.188278554Z qga answered: ta=1791672453 alive=1
+TDRRUN 2026-10-10T22:47:34.294971197Z password set rc=0 (tries 1)
+TDRRUN 2026-10-10T22:47:36.405753855Z edge policy: 1 EDGEPOLICY HideFirstRunExperience AutoplayAllowed ---------------------- --------------- 1 1 
+TDRRUN 2026-10-10T22:47:38.718261660Z dwm overlay off:  OverlayTestMode : 5 PSPath : Microsoft.PowerShell.Core\Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Dwm PSParentPath : Microsoft.PowerShell.Core\Reg
+TDRRUN 2026-10-10T22:48:04.305254660Z PHASE boot tdr_cycles=0
+TDRRUN 2026-10-10T22:48:04.311820390Z SIGNIN keys at +31s
+TDRRUN 2026-10-10T22:48:10.510986009Z SIGNIN sent
+TDRRUN 2026-10-10T22:48:35.904698802Z PHASE after-signin tdr_cycles=0
+TDRRUN 2026-10-10T22:48:56.473780937Z DWM restarted (overlay test mode 5): SUCCESS: The process "dwm.exe" with PID 1364 has been terminated. 1  PHASE after-dwm-restart tdr_cycles=0
+TDRRUN 2026-10-10T22:48:57.752565457Z EDGE double-click sent (abs 802,4854)
+TDRRUN 2026-10-10T22:49:00.114246358Z EDGE Enter sent
+TDRRUN 2026-10-10T22:49:25.381770411Z PHASE after-edge tdr_cycles=0
+TDRRUN 2026-10-10T22:49:27.493749207Z edge cmdline: "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" |"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --type=crashpad-handler "--user-data-dir=C:\Users\vast\AppData\Local\Microsoft\Edge\User Data" /prefetch:4 --monitor-self-annotation=ptype=crashpad-handler "--database=C:\Users\vast\AppData\Local\Microsoft\Edge\User Data\Crashpad" --annotation=IsOfficialBuild=1 --annotatio
+TDRRUN 2026-10-10T22:49:42.782514026Z PHASE after-shorts-load tdr_cycles=0
+TDRRUN 2026-10-10T22:49:42.786872596Z READY alive=1 tdr_cycles=0
+TDRRUN 2026-10-10T22:52:44.572498052Z PHASE end-of-hold tdr_cycles=0
+TDRRUN 2026-10-10T22:52:44.583198764Z HOLD ended: alive=1 tdr_cycles=0 stopfile=0 hold_s=182
+TDRRUN 2026-10-10T22:52:49.800833155Z ABLATE guest: utc now: 2026-10-10T22:52:47.2349576Z;ADAPTER NVIDIA GeForce RTX 4070 code=0 status=OK;EDGE_PROCS 8;EXPLORER s1;DWM 1;EV_nvlddmkm153 0;EV_dxgkrnl141_4101 0;
+TDRRUN 2026-10-10T22:52:49.806452883Z DONE tdr_cycles=0
+TDRRUN 2026-10-10T22:52:49.812125410Z CLEANUP begin (alive=1) tdr_cycles=0
+[windows] run600 stopped (Xid count now 29)
+TDRRUN 2026-10-10T22:53:09.297794302Z qemu left: 0
+IOMMU_SWITCH_START group=11 from=identity to=DMA-FQ 2026-10-11T00:53:09+02:00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-11T00:53:11+02:00
+TDRRUN 2026-10-10T22:53:11.782914368Z END type=DMA-FQ driver=nvidia xid_lines=29

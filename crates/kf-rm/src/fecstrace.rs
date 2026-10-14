@@ -78,6 +78,7 @@ impl CommandPolicy for FecsTracePolicy {
             );
         }
         Some(Reply {
+            rpc_result_private: None,
             rpc_result: NV_OK,
             body,
         })

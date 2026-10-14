@@ -1,0 +1,41 @@
+{
+ "started_utc": "2026-10-11T15:37:51Z",
+ "kind": "native-nvidia-baseline",
+ "args": {
+  "cmd": "run",
+  "run_dir": "/data/kf-native-reference-20261011/remaining-apps",
+  "apps": "vkcube,llama_cuda_gen,dxdiag_report,llama_cuda_bench,llama_vulkan_bench,blender_cycles,vkpeak,gravitymark_d3d12_raster,gravitymark_d3d12_rt,torch_ai_bench,gravitymark_d3d12,gravitymark_gl,gravitymark_d3d11,clpeak_ocl,torch_burn",
+  "tier": 3,
+  "category": "",
+  "exclude": "",
+  "manifest": "/data/kf-native-harness-demo-qa/scripts/bench/windows/appmatrix/manifest.json",
+  "apps_json": "/data/kf-native-harness-demo-qa/scripts/bench/windows/appmatrix/apps.json",
+  "image_manifest": "/data/kf-native-harness-demo-qa/scripts/bench/windows/appmatrix/manifest.json",
+  "per_guest": 1000,
+  "max_tdr": 1000,
+  "boot_timeout": 900,
+  "no_isolate": true,
+  "override_dir": "/tmp/kf-reference-tools",
+  "no_reboot": false,
+  "resume": false,
+  "list": false
+ },
+ "image_identity": "b67d6a2a8629278d5ef7000e7765577038ab546a54344eb09500d6b08c7ee6b8",
+ "apps": [
+  "vkcube",
+  "llama_cuda_gen",
+  "dxdiag_report",
+  "llama_cuda_bench",
+  "llama_vulkan_bench",
+  "blender_cycles",
+  "vkpeak",
+  "gravitymark_d3d12_raster",
+  "gravitymark_d3d12_rt",
+  "torch_ai_bench",
+  "gravitymark_d3d12",
+  "gravitymark_gl",
+  "gravitymark_d3d11",
+  "clpeak_ocl",
+  "torch_burn"
+ ]
+}

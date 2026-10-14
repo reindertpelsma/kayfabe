@@ -1,0 +1,5 @@
+=== gravitymark_d3d11 start=2026-10-10T07:46:29.1859050-07:00 host=DESKTOP-397P3NI session=1 boot=2026-10-10T13:30:47.5000000Z timeout=360
+KFWAIT gravitymark_d3d11 EXITED rc=0
+GM_OK image=864039 bytes
+GM_TIMES lines=38930
+=== end rc=0 secs=204 2026-10-10T07:49:53.4376767-07:00

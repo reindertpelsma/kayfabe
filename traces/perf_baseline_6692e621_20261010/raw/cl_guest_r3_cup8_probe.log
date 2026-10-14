@@ -1,0 +1,212 @@
+=== boot_capture tag=cl_perf_6692e621_g3_cup8_cup8_1 at 2026-10-10T00:59:54+02:00 ===
+=== source revision: c6fff2e3f ===
+=== qemu binary: -rwxr-xr-x 1 root root 93468360 Oct 10 00:16 /var/lib/kf-windows-20261005/kf3-bins/6692e621/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /var/lib/kf-windows-20261005/kayfabe-perf-harness/scripts/bench/boot_nvkvm.sh  sha256=82f88b7bb676717a
+    used: /var/lib/kf-windows-20261005/kayfabe-perf-harness/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+Fri Oct  9 22:59:55 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 595.84                 Driver Version: 595.84         CUDA Version: 13.2     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 4070        Off |   00000000:00:03.0 Off |                  N/A |
+| N/A   N/A  N/A             N/A  /  N/A  |       0MiB /   8192MiB |     N/A      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+SMI_RC=0
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Oct  9 22:59 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Oct  9 22:59 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Oct  9 22:59 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Oct  9 22:59 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Oct  9 22:59 .
+drwxr-xr-x 18 root root   4000 Oct  9 22:59 ..
+cr--------  1 root root 240, 1 Oct  9 22:59 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Oct  9 22:59 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2064384  0
+nvidia              14807040  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /var/lib/kf-windows-20261005/kayfabe-perf-harness/scripts/bench/cup8_hook.sh at 2026-10-10T00:59:56+02:00 ===
+=== source (md5 — a run cannot silently be a different copy) ===
+    /var/lib/kf-windows-20261005/kayfabe-perf-harness/scripts/bench/cup8.c   115 lines  md5 9947ae7ae0b98dc5b4d5b08a7b08d5c8
+    ⊘ NOT the vendored cup8.c: this source is md5 9947ae7ae0b98dc5b4d5b08a7b08d5c8, the C artifact's
+      tests/mode2/cup8.c is md5 593c1ef978503af6a6a67c58430dda5b. ⇒ this run is a VARIANT and the
+      two stacks are NOT running the same program. Read every comparison accordingly.
+CUP8_SAME_PROGRAM=no
+
+=== ★★★ GUEST PRECONDITION 1 — the PTX JIT (cuModuleLoadData needs it) ===
+    /usr/lib/x86_64-linux-gnu/libnvidia-ptxjitcompiler.so
+    /usr/lib/x86_64-linux-gnu/libnvidia-ptxjitcompiler.so.1
+    /usr/lib/x86_64-linux-gnu/libnvidia-ptxjitcompiler.so.595.84
+CUP8_JIT_PRESENT=yes
+
+=== ★★ GUEST PRECONDITION 2 — HOST-SIDE RAM. cup8 mallocs 3 x N^2 x 4 bytes ===
+    ⊘ At N=2048 that is 48 MiB of GUEST RAM in a 2048 MiB guest. If malloc fails cup8
+      prints 'OOM host' and exits 1 — a GUEST-IMAGE failure, not our address plane.
+                   total        used        free      shared  buff/cache   available
+    Mem:            1967         417        1259           0         400        1550
+GUEST_MEMFREE_MB=1274
+
+=== push + build in the guest ===
+GCC_CUP8_RC=0
+    guest-side source md5: 9947ae7ae0b98dc5b4d5b08a7b08d5c8  /tmp/cup8.c
+
+=== launch cup8 DETACHED under its own 1200s timeout ===
+    ⊘ NOT comparable to cup3's 300s and NOT to the cup2 baseline of 180s — a different
+      program at a different size, with a bound DERIVED from it (see header).
+    CUP8_N_OVERRIDE=[<unset — cup8 uses its OWN default, N=2048>]
+LAUNCHED pid=
+    STARTED 2026-10-09T22:59:58+00:00 epoch=1791586798
+
+=== waiting for cup8's terminator — deadline 1320s from now ===
+    [+0s] ★ terminator present
+CUP8_TERMINATOR_SEEN=yes
+CUP8_HOOK_WAITED_S=0
+
+=== ★ cup8 FINAL OUTPUT, verbatim (⚠ INDENTED — the graded lines below are NOT) ===
+    ok   cuInit(0)
+    ok   cuDeviceGetCount(&nd)
+    ok   cuDeviceGet(&d,0)
+    ok   cuCtxCreate(&ctx,0,d)
+    CTX OK
+    PTX_TARGET=sm_86 (device cc 8.9)
+    ok   cuModuleLoadData(&mod,PTX)
+    MODULE OK
+    ok   cuModuleGetFunction(&fn,mod,"mm")
+    FUNC OK
+    CUP8 matmul N=2048  per-matrix=16 MiB  device=48 MiB
+    ok   cuMemAlloc(&dA,sz)
+    ok   cuMemAlloc(&dB,sz)
+    ok   cuMemAlloc(&dC,sz)
+    MEMALLOC A=0x76438ec00000 B=0x76437e000000 C=0x76437f000000
+    ok   cuMemcpyHtoD(dA,hA,sz)
+    ok   cuMemcpyHtoD(dB,hB,sz)
+    ok   cuMemsetD32(dC,0,(size_t)N*N)
+    LAUNCH grid=(128,128) block=(16,16)
+    ok   cuLaunchKernel(fn, g,g,1, 16,16,1, 0,0, args,0)
+    LAUNCH OK
+    ok   cuCtxSynchronize()
+    SYNC OK
+    ok   cuMemcpyDtoH(hC,dC,sz)
+    CUP8 RESULT N=2048 bad=0 maxerr=0 C[0]=2048(exp 2048) -> PASS
+    CUP8 VERDICT: PASS (host GR matmul byte-exact at scale)
+    DONE
+CUP8_OUT_BYTES=779
+
+CUP8_RC=0
+CUP8_BAD=0
+CUP8_MAXERR=0
+CUP8_N=2048
+CUP8_C0=2048
+CUP8_WALL_S=1
+CUP8_RESULT_LINE=CUP8 RESULT N=2048 bad=0 maxerr=0 C[0]=2048(exp 2048) -> PASS
+CUP8_VERDICT_LINE=CUP8 VERDICT: PASS (host GR matmul byte-exact at scale)
+CUP8_SIZE_LINE=CUP8 matmul N=2048  per-matrix=16 MiB  device=48 MiB
+CUP8_GRID_LINE=LAUNCH grid=(128,128) block=(16,16)
+CUP8_MEMALLOC_LINE=MEMALLOC A=0x76438ec00000 B=0x76437e000000 C=0x76437f000000
+CUP8_FIRSTBAD_LINE=ABSENT
+
+=== ★★★★★ THE VALUE LADDER — what this reading MEANS ===
+    ★★★★★ bad=0 — REAL COMPUTE AT SCALE. Every one of the N^2 elements matched the
+          closed form. ⊘ Note this direction IS a whole-matrix statement: the
+          early-exit guard only trips on a MISMATCH, so bad=0 means the verifier
+          scanned all N rows. The GR engine ran a full grid and the address plane
+          held over every byte of A, B and C.
+          maxerr=0 (0 => bit-exact, not merely within tolerance).
+
+=== ★ THE STAGE LADDER — how far it got (the furthest ✔ before the first ✘ is the wall) ===
+    ✔ CTX OK
+    ✔ MODULE OK
+    ✔ FUNC OK
+    ✔ CUP8 matmul
+    ✔ MEMALLOC
+    ✔ LAUNCH grid=
+    ✔ LAUNCH OK
+    ✔ SYNC OK
+    ✔ CUP8 RESULT
+    ✔ CUP8 VERDICT
+    ✔ DONE
+    ⊘ a ✘ before any ✔ means it never started; ⊘ ALL ✘ means the output file is empty,
+      which is a state that needs its own check and is NOT 'not yet'.
+
+=== ★ THE PER-CALL LADDER — cup8 wraps EVERY CUDA call in CK() and prints it on success
+    (⊘ so the LAST 'ok' line names the last call that RETURNED, and any 'FAIL' line
+     names the exact call that did not — a finer wall than the stage ladder)
+    ok   cuCtxCreate(&ctx,0,d)
+    ok   cuModuleLoadData(&mod,PTX)
+    ok   cuModuleGetFunction(&fn,mod,"mm")
+    ok   cuMemAlloc(&dA,sz)
+    ok   cuMemAlloc(&dB,sz)
+    ok   cuMemAlloc(&dC,sz)
+    ok   cuMemcpyHtoD(dA,hA,sz)
+    ok   cuMemcpyHtoD(dB,hB,sz)
+    ok   cuMemsetD32(dC,0,(size_t)N*N)
+    ok   cuLaunchKernel(fn, g,g,1, 16,16,1, 0,0, args,0)
+    ok   cuCtxSynchronize()
+    ok   cuMemcpyDtoH(hC,dC,sz)
+    ★ the FAIL line, if cup8 named its own failure:
+
+=== ★ guest dmesg tail (NVRM/Xid land here, not in the serial log) ===
+    [    8.152995] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _gpushareddataSendDataPollRpc(pGpu, polledDataMask, pollingIntervalMs) @ gpu_user_shared_data.c:618
+    [    8.153002] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _handlePollMaskHelper(pGpu, NV_FALSE, NV_FALSE) @ gpu_user_shared_data.c:688
+    [    8.153746] NVRM: nvCheckFailedNoLog: Check failed: (status == NV_OK) || (status == NV_ERR_GPU_IN_FULLCHIP_RESET) @ gpu_user_shared_data.c:503
+    [    8.153749] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _gpushareddataSendDataPollRpc(pGpu, polledDataMask, pollingIntervalMs) @ gpu_user_shared_data.c:618
+    [    8.153751] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _handlePollMaskHelper(pGpu, NV_FALSE, NV_FALSE) @ gpu_user_shared_data.c:688
+    [    8.155988] NVRM: rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1d00001; hParent=0xa55a0030; hObject=0xa55a0070; hClass=0x0000208f; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+    [    8.200340] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:248
+    [   10.896459] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:297
+    [   10.896486] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_USER_SHARED_DATA_SET_DATA_POLL, &params, sizeof(params)) @ gpu_user_shared_data.c:362
+    [   10.901759] NVRM: GPU0 kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+    [   10.902381] NVRM: GPU0 kperfGpuBoostSyncStateInit_IMPL: Failed to read Sync Gpu Boost init state, status=0x56
+    [   10.902410] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_CE_GET_PCE_CONFIG_FOR_LCE_TYPE, &pceConfigParams, sizeof(pceConfigParams)) @ kernel_ce.c:1086
+    [   10.902414] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kceGetPceConfigForLceType(pGpu, pKCe, NV2080_CTRL_CE_LCE_TYPE_DECOMP, &numPcesPerLce, &numLces, &supportedPceMask, &supportedLceMask, &pcesPerHshub) @ kernel_ce_gp100.c:62
+    [   11.106920] NVRM: GPU0 nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgrobjPromoteContext(pGpu, pKernelGraphicsObject, pKernelGraphics) @ kernel_graphics_object.c:224
+    [   11.107107] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->AllocWithHandle(pRmApi, hClientId, KGRAPHICS_CHANNEL_HANDLE_CHANNELID, KGRAPHICS_CHANNEL_HANDLE_3DOBJ, classNum, NULL, 0) @ kernel_graphics.c:2528
+    [   11.107672] NVRM: GPU0 vaListDestroy: non-zero mapCount(pVaList): 0x1
+    [   11.107674] NVRM: GPU0 vaListDestroy: non-zero mapCount(pVaList): 0x1
+    [   11.107676] NVRM: GPU0 vaListDestroy: non-zero mapCount(pVaList): 0x1
+    [   11.107677] NVRM: GPU0 vaListDestroy: non-zero mapCount(pVaList): 0x1
+    [   11.108689] NVRM: GPU0 nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from kgraphicsCreateGoldenImageChannel(pGpu, pKernelGraphics) @ kernel_graphics.c:510
+    [   11.108692] NVRM: GPU0 nvAssertFailedNoLog: Assertion failed: 0 @ kernel_fifo.c:3110
+    [   11.110829] NVRM: GPU0 rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1e00013; hParent=0x31415903; hObject=0x31415900; hClass=0x0000c36f; paramsSize=0x00000170; paramsStatus=0x00000056; status=0x00000056
+    [   11.110832] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from status @ kernel_channel.c:2744
+    [   11.110835] NVRM: GPU0 nvAssertOkFailedNoLog: Assertion failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from _kchannelSendChannelAllocRpc(pKernelChannel, pChannelGpfifoParams, pKernelChannelGroup, bFullSriov) @ kernel_channel.c:947
+    [   11.111593] NVRM: GPU0 rpcRmApiAlloc_GSP: GspRmAlloc failed: hClient=0xc1e00014; hParent=0xcaf00001; hObject=0xcaf00002; hClass=0x0000402c; paramsSize=0x00000000; paramsStatus=0x00000056; status=0x00000056
+    [   11.115388] NVRM: GPU0 nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_STATIC_GRMGR_GET_SKYLINE_INFO, &internalParams, sizeof(internalParams)) @ subdevice_ctrl_gpu_smc.c:64
+    [   11.617077] NVRM: GPU0 kgmmuClientShadowFaultBufferUnregister_IMPL: Unregistering non-replayable fault buffer failed (status=0x00000056), proceeding...
+    [   11.617233] NVRM: GPU0 kgmmuFaultBufferReplayableDestroy_IMPL: Unregistering Replayable Fault buffer failed (status=0x00000056), proceeding...
+    [   11.617389] NVRM: GPU0 uvmTerminateAccessCntrBuffer_IMPL: Unloading UVM Access counters failed (status=0x00000056), proceeding...
+    [   11.687322] NVRM: nvCheckOkFailedNoLog: Check failed: Call not supported [NV_ERR_NOT_SUPPORTED] (0x00000056) returned from pRmApi->Control(pRmApi, pGpu->hInternalClient, pGpu->hInternalSubdevice, NV2080_CTRL_CMD_INTERNAL_INIT_USER_SHARED_DATA, &params, sizeof(params)) @ gpu_user_shared_data.c:248
+    ★ guest-side Xid count = [0]
+=== cup8 hook DONE ===
+HOOK_RC=0
+=== GUEST dmesg AFTER the workload (phase 3b captured 33 lines BEFORE it) ===
+GUEST_DMESG_AFTER_LINES=56
+GUEST_DMESG_AFTER_NVRM=53
+GUEST_DMESG_WORKLOAD_DELTA=23
+=== HOST dmesg delta for this boot (watermark 1639 → 1639) ===
+HOST_DMESG_LINES=0
+HOST_DMESG_NVRM=0
+0
+HOST_DMESG_XID=0
+0

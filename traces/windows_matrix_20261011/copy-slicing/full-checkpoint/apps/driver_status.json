@@ -1,0 +1,51 @@
+{
+ "quiet": 2,
+ "end_utc": "2026-10-11T13:23:30.3312502Z",
+ "start_utc": "2026-10-11T13:23:27.4606365Z",
+ "rc": 0,
+ "secs": 3,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4070 status=OK code=0"
+ ],
+ "digests": [],
+ "session": 0,
+ "out_files": [],
+ "boot_utc_start": "2026-10-11T13:20:18.5000000Z",
+ "log_tail": [
+  "=== driver_status start=2026-10-11T13:23:27.4606365+00:00 host=VASTWIN session=0 boot=2026-10-11T13:20:18.5000000Z timeout=60",
+  "VIDEO name=NVIDIA GeForce RTX 4070 driver=32.0.15.8088 status=OK code=0",
+  "DRIVER_OK",
+  "=== end rc=0 secs=3 2026-10-11T13:23:30.3312502+00:00"
+ ],
+ "pdh": {
+  "pids": [
+   "4736",
+   "2508"
+  ],
+  "nv": {},
+  "samples": 1,
+  "other": {},
+  "nvidia_luids": "0_5f0a"
+ },
+ "timed_out": false,
+ "token": "g1-driver_status-1791725005",
+ "boot_utc_end": "2026-10-11T13:20:18.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "driver_status",
+ "smi": {
+  "samples": 0,
+  "mem_used_base_mb": null,
+  "util_max": 0,
+  "mem_used_max_mb": 0
+ }
+}

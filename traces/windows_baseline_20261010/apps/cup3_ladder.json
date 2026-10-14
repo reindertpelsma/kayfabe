@@ -1,0 +1,71 @@
+{
+ "quiet": 2,
+ "end_utc": "2026-10-10T14:15:15.0099298Z",
+ "start_utc": "2026-10-10T14:15:12.2535924Z",
+ "rc": 0,
+ "secs": 3,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4060 Ti status=OK code=0"
+ ],
+ "digests": [],
+ "session": 0,
+ "out_files": [],
+ "boot_utc_start": "2026-10-10T13:30:47.5000000Z",
+ "log_tail": [
+  "=== cup3_ladder start=2026-10-10T07:15:12.2535924-07:00 host=DESKTOP-397P3NI session=0 boot=2026-10-10T13:30:47.5000000Z timeout=60",
+  "ok   cuInit(0)",
+  "ok   cuDeviceGetCount(&n)",
+  "ok   cuDeviceGet(&d,0)",
+  "ok   cuCtxCreate(&ctx,0,d)",
+  "CTX OK",
+  "PTX_TARGET=sm_86 (device cc 8.9)",
+  "ok   cuModuleLoadData(&mod,PTX)",
+  "MODULE OK",
+  "ok   cuModuleGetFunction(&fn,mod,\"k\")",
+  "FUNC OK",
+  "ok   cuMemAlloc(&d_in,4)",
+  "ok   cuMemAlloc(&d_out,4)",
+  "MEMALLOC in=0x1006600000 out=0x1006600200",
+  "ok   cuMemcpyHtoD(d_in,&hv,4)",
+  "ok   cuMemsetD32(d_out,0,1)",
+  "ok   cuLaunchKernel(fn, 1,1,1, 1,1,1, 0, 0, args, 0)",
+  "LAUNCH OK",
+  "ok   cuCtxSynchronize()",
+  "SYNC OK",
+  "ok   cuMemcpyDtoH(&rv,d_out,4)",
+  "KERNEL rv=43 want=43 -> PASS",
+  "DONE",
+  "=== end rc=0 secs=3 2026-10-10T07:15:15.0099298-07:00"
+ ],
+ "pdh": {
+  "pids": [
+   "8096",
+   "3720"
+  ],
+  "nv": {},
+  "samples": 1,
+  "other": {},
+  "nvidia_luids": "0_5ecc"
+ },
+ "timed_out": false,
+ "token": "g1-cup3_ladder-1791641698",
+ "boot_utc_end": "2026-10-10T13:30:47.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "cup3_ladder",
+ "smi": {
+  "samples": 1,
+  "mem_used_base_mb": 122,
+  "util_max": 0,
+  "mem_used_max_mb": 122
+ }
+}

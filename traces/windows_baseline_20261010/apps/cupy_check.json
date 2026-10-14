@@ -1,0 +1,66 @@
+{
+ "quiet": 1,
+ "end_utc": "2026-10-10T16:39:00.2180367Z",
+ "start_utc": "2026-10-10T16:38:51.1427065Z",
+ "rc": 0,
+ "secs": 9,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4060 Ti status=OK code=0"
+ ],
+ "digests": [],
+ "session": 0,
+ "out_files": [],
+ "boot_utc_start": "2026-10-10T15:50:57.5000000Z",
+ "log_tail": [
+  "=== cupy_check start=2026-10-10T09:38:51.1427065-07:00 host=DESKTOP-397P3NI session=0 boot=2026-10-10T15:50:57.5000000Z timeout=300",
+  "KFDEV NVIDIA GeForce RTX 4060 Ti",
+  "CHECK cupy_matmul ok",
+  "CHECK cupy_reduce ok",
+  "CHECK cupy_nvrtc_kernel ok",
+  "CHECK cupy_fft ok",
+  "CHECK cupy_random ok",
+  "CUPY_DONE",
+  "=== end rc=0 secs=9 2026-10-10T09:39:00.2180367-07:00"
+ ],
+ "pdh": {
+  "pids": [
+   "1936",
+   "7220",
+   "4820"
+  ],
+  "nv": {
+   "security": 0,
+   "3d": 0,
+   "vr": 0,
+   "videodecode": 0,
+   "copy": 0,
+   "ofa_0": 0,
+   "legacyoverlay": 0,
+   "videoencode": 0
+  },
+  "samples": 4,
+  "other": {},
+  "nvidia_luids": "0_6040"
+ },
+ "timed_out": false,
+ "token": "g1-cupy_check-1791650314",
+ "boot_utc_end": "2026-10-10T15:50:57.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "cupy_check",
+ "smi": {
+  "samples": 2,
+  "mem_used_base_mb": 107,
+  "util_max": 0,
+  "mem_used_max_mb": 247
+ }
+}

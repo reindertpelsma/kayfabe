@@ -266,6 +266,12 @@ pub trait RmObjects: Send {
     ) -> Option<u32> {
         None
     }
+
+    /// ★ EXPERIMENT `KF3_GSS_NATIVE`: is `(client, object)` a live `NV20_SUBDEVICE_0` in this
+    /// object model? Default: no (a model that does not know cannot say yes).
+    fn is_subdevice(&self, _client: u32, _object: u32) -> bool {
+        false
+    }
 }
 
 /// ★ The host-free [`RmObjects`]: the object graph alone.
@@ -283,6 +289,7 @@ pub struct GraphObjects {
     /// ★ OWNER_RULINGS §U: the VM's deferred-API tables (shared with the channel plane, which
     /// looks entries up at the trigger). `None`: 5080 controls fall through, refused as before.
     deferred: Option<std::sync::Arc<crate::defapi::Registry>>,
+    fifo_update_filter: Option<std::sync::Arc<dyn crate::defapi::FifoUpdateFilter>>,
 }
 
 impl GraphObjects {
@@ -320,6 +327,17 @@ impl GraphObjects {
         crate::memory_list::write(&self.graph, self.ram.as_ref(), key, offset, bytes)
     }
 
+    /// Bounded worker read with typed nonblocking topology admission.
+    pub fn try_read_memory_list(&self, key: crate::rmgraph::NodeKey, offset: u64,
+        bytes: &mut [u8]) -> Result<(), crate::memory_list::AccessError> {
+        crate::memory_list::try_read(&self.graph, self.ram.as_ref(), key, offset, bytes)
+    }
+    /// Bounded worker write; never falls back to a blocking RAM authority.
+    pub fn try_write_memory_list(&self, key: crate::rmgraph::NodeKey, offset: u64,
+        bytes: &[u8]) -> Result<(), crate::memory_list::AccessError> {
+        crate::memory_list::try_write(&self.graph, self.ram.as_ref(), key, offset, bytes)
+    }
+
     /// A fresh graph for `family`.
     #[must_use]
     pub fn new(family: kf_chip::Family) -> GraphObjects {
@@ -328,6 +346,7 @@ impl GraphObjects {
             ram: None,
             fb: None,
             deferred: None,
+            fifo_update_filter: None,
         }
     }
 
@@ -336,6 +355,16 @@ impl GraphObjects {
     #[must_use]
     pub fn with_deferred_api(mut self, registry: std::sync::Arc<crate::defapi::Registry>) -> Self {
         self.deferred = Some(registry);
+        self
+    }
+
+    /// Default-off diagnostic admission filter; class-5080 allocation is unchanged.
+    #[must_use]
+    pub fn with_fifo_update_filter(
+        mut self,
+        filter: Option<std::sync::Arc<dyn crate::defapi::FifoUpdateFilter>>,
+    ) -> Self {
+        self.fifo_update_filter = filter;
         self
     }
 
@@ -376,6 +405,18 @@ impl GraphObjects {
 }
 
 impl RmObjects for GraphObjects {
+    fn is_subdevice(&self, client: u32, object: u32) -> bool {
+        self.graph
+            .allocated_node(crate::rmgraph::NodeKey::new(
+                kf_arch::ids::HClient(client),
+                kf_arch::ids::HObject(object),
+            ))
+            .is_some_and(|n| {
+                n.kind == kf_arch::ObjectKind::Subdevice
+                    && n.class.0 == kf_abi::generated::classes::NV20_SUBDEVICE_0
+            })
+    }
+
     fn memory_list(
         &mut self,
         request: kf_abi::memory_list::Declaration,
@@ -412,8 +453,16 @@ impl RmObjects for GraphObjects {
         if !self.is_deferred_api_object(key) {
             return Some(kf_abi::defapi::NV_ERR_INVALID_OBJECT_HANDLE);
         }
+        // Resolve the original object's parent from the validated graph. Never trust the
+        // FIFO bundle's hClient/hChannel to choose another channel's admission policy.
+        // Finish the channel lookup BEFORE taking the registry mutex (no nested locks).
+        let refuse_fifo = self.fifo_update_filter.as_ref().is_some_and(|filter| {
+            self.graph
+                .allocated_node(key)
+                .is_some_and(|n| filter.refuse_on_channel(client, n.parent.0))
+        });
         let graph = &self.graph;
-        Some(crate::defapi::serve(
+        Some(crate::defapi::serve_with_fifo_refusal(
             &reg,
             abi,
             crate::defapi::ObjKey { client, object },
@@ -427,6 +476,7 @@ impl RmObjects for GraphObjects {
                     ))
                     .is_some()
             },
+            refuse_fifo,
         ))
     }
 
@@ -560,6 +610,7 @@ impl Bridge {
     fn respond(&mut self, objects: &mut dyn RmObjects, cmd: &RpcCommand) -> Reply {
         match self.deliver(objects, cmd) {
             Ok(_) => Reply {
+                rpc_result_private: None,
                 rpc_result: 0, // NV_OK
                 body: cmd.payload.clone(),
             },
@@ -696,6 +747,7 @@ fn refusal_reply(r: BridgeRefusal) -> Reply {
         );
     }
     Reply {
+        rpc_result_private: None,
         rpc_result: r.rpc_result(),
         body: Vec::new(),
     }
@@ -723,6 +775,9 @@ pub struct ObjectPolicy {
     defapi: Option<kf_abi::defapi::DefApiAbi>,
     /// 5080 controls served (for the bounded log).
     defapi_served: u64,
+    /// ★ EXPERIMENT `KF3_GSS_NATIVE` (default off; `None`): GSS-legacy subdevice controls carried to
+    /// the host ([`crate::gssnative`]).
+    gss: Option<crate::gssnative::GssNative>,
 }
 
 /// The RPC functions [`ObjectPolicy`] claims. **Closed, and public, so a test can quantify
@@ -771,7 +826,17 @@ impl ObjectPolicy {
             objects,
             defapi: kf_abi::defapi::DefApiAbi::at(abi.driver_version()),
             defapi_served: 0,
+            gss: None,
         }
+    }
+
+    /// ★ EXPERIMENT `KF3_GSS_NATIVE` (default off): carry non-privileged subdevice-level GSS-legacy
+    /// controls to the host RM through `seat` (`docs/design/V3_GSS_NATIVE.md`). Without this call
+    /// the link is byte for byte what it was.
+    #[must_use]
+    pub fn with_gss_native(mut self, seat: crate::gssnative::GssSeat) -> Self {
+        self.gss = Some(crate::gssnative::GssNative::new(seat));
+        self
     }
 
     /// ★ OWNER_RULINGS §U — a class-5080 registration control, served from the object graph's
@@ -792,6 +857,7 @@ impl ObjectPolicy {
             return None;
         }
         let refuse = |status: u32| Reply {
+            rpc_result_private: None,
             rpc_result: status,
             body: Vec::new(),
         };
@@ -834,6 +900,7 @@ impl ObjectPolicy {
             w.copy_from_slice(&kf_abi::defapi::NV_OK.to_le_bytes());
         }
         Some(Reply {
+            rpc_result_private: None,
             rpc_result: kf_abi::defapi::NV_OK,
             body,
         })
@@ -879,11 +946,27 @@ impl core::fmt::Debug for ObjectPolicy {
 }
 
 impl CommandPolicy for ObjectPolicy {
+    fn defers(&mut self, _cmd: &RpcCommand) -> Option<kf_gsp::Deferred> {
+        self.gss
+            .as_mut()
+            .and_then(crate::gssnative::GssNative::take_pending)
+    }
+
     fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply> {
         if cmd.function == kf_gsp::RpcFunction::RmControl
             && let Some(r) = self.deferred_api_control(cmd)
         {
             return Some(r);
+        }
+        // ★ EXPERIMENT `KF3_GSS_NATIVE`: after the links that answer known controls, before the
+        // ledger. Off (`gss: None`): not here.
+        if cmd.function == kf_gsp::RpcFunction::RmControl
+            && let Some(gss) = self.gss.as_mut()
+        {
+            let objects = &*self.objects;
+            if let Some(r) = gss.control(&self.bridge.abi, cmd, |c, o| objects.is_subdevice(c, o)) {
+                return Some(r);
+            }
         }
         let memory = self.bridge.memory_list_probe
             && kf_abi::memory_list::cell(self.bridge.abi.driver_version())

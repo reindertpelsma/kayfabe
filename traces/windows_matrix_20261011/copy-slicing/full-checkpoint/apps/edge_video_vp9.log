@@ -1,0 +1,3 @@
+=== edge_video_vp9 start=2026-10-11T14:58:17.0335228+00:00 host=VASTWIN session=1 boot=2026-10-11T14:56:33.5000000Z timeout=180
+KFEDGE {"page":"video","src":"/media/t_vp9.webm","ok":true,"can_play":"probably","mc_supported":false,"mc_smooth":false,"mc_power_efficient":false,"wall_s":15.009,"played_s":15.009,"total_frames":455,"dropped_frames":3,"decoded_w":1280,"decoded_h":720}
+=== end rc=0 secs=50 2026-10-11T14:59:07.1029916+00:00

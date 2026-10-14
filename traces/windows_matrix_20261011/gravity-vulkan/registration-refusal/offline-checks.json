@@ -1,0 +1,56 @@
+{
+  "vfio_plain_fifo_update_rpc": null,
+  "vfio_capture_complete": false,
+  "reported_missing": {
+    "0": 0,
+    "1": 0
+  },
+  "native_deferred_execution": "UNMEASURED; no plain RPC is required for GSP-internal execution",
+  "vfio_updates": [
+    {
+      "line": 11811,
+      "qpc": 180099575548355,
+      "generation": 2,
+      "client": "0xc1d00076",
+      "object": "0xff1fe010",
+      "outer": "0x50800104",
+      "api_handle": "0x40000028",
+      "inner": "0x20801116",
+      "update": {
+        "hClient": "0xc1d00076",
+        "hChannel": "0xff040026",
+        "hUserdMemory": "0xff00a00b",
+        "gpFifoEntries": "0x10000",
+        "gpFifoOffset": "0xa1c2c0000",
+        "userdOffset": "0x600"
+      },
+      "reply_line": 11813,
+      "reply_status": "0x0"
+    },
+    {
+      "line": 13999,
+      "qpc": 180157459631053,
+      "generation": 2,
+      "client": "0xc1d00076",
+      "object": "0xff1fe010",
+      "outer": "0x50800104",
+      "api_handle": "0x40000029",
+      "inner": "0x20801116",
+      "update": {
+        "hClient": "0xc1d00076",
+        "hChannel": "0xff040026",
+        "hUserdMemory": "0xff00a00c",
+        "gpFifoEntries": "0x20000",
+        "gpFifoOffset": "0x2dfe90000",
+        "userdOffset": "0x800"
+      },
+      "reply_line": 14001,
+      "reply_status": "0x0"
+    }
+  ],
+  "vfio_original_alloc_facts": {
+    "0xff040001": null,
+    "0xff040026": null
+  },
+  "manual_1380": "No observed new host Xid / FIFO update in bounded existing records; no shared cause established"
+}

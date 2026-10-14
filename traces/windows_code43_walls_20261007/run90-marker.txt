@@ -1,0 +1,9 @@
+WINDOWS_START kf3=5f3c17b4 run=/var/lib/kf-windows-20261005/boundary-kayfabe-90 checkout=6f91a53d xid_before=60 2026-10-08T20:58:45+02:00
+WINDOWS_EXIT stop=UNCLEAN-kill 2026-10-08T21:16:05+02:00 xid=60
+WINDOWS_EXIT qemu-gone 2026-10-08T21:16:06+02:00 xid_after=60
+WINDOWS_START kf3=5f3c17b4 run=/var/lib/kf-windows-20261005/boundary-kayfabe-90 checkout=6f91a53d xid_before=60 2026-10-08T21:16:27+02:00
+WINDOWS_EXIT stop=UNCLEAN-kill 2026-10-08T21:23:49+02:00 xid=60
+WINDOWS_EXIT qemu-gone 2026-10-08T21:23:54+02:00 xid_after=60
+WINDOWS_START kf3=5f3c17b4 run=/var/lib/kf-windows-20261005/boundary-kayfabe-90 checkout=6f91a53d xid_before=60 2026-10-08T21:24:48+02:00
+WINDOWS_EXIT qemu-gone 2026-10-08T21:26:00+02:00 xid_after=60
+WINDOWS_EXIT stop=qmp-quit-after-bugcheck 2026-10-08T21:31:14+02:00

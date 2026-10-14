@@ -46,6 +46,9 @@ pub struct Bar0Facts {
     pub fb_mb: u64,
     /// The PCIe link capabilities word to present (the host's own, see [`pcie_link_caps`]).
     pub pcie_link_caps: u32,
+    /// ★ 2026-10-14: this device's BAR1 aperture in bytes (the `bar1-size` it was realized with) —
+    /// what [`resize_bar1_ctrl`] reports.
+    pub bar1_bytes: u64,
 }
 
 /// `NV_PMC_BOOT_0` (`ogkm-580 nv_ref.h:108-136`): architecture `28:24` (= `MC arch >> 4`),
@@ -78,6 +81,30 @@ pub const fn pcie_link_caps(max_gen: kf_abi::businfo::PcieGen, max_width: u32) -
         None => None,
     }
 }
+
+/// ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`) — `NV_XVE_RESIZE_BAR1_CTRL` for a BAR1 of
+/// `bar1_bytes`: `BAR_SIZE` (`12:8`) is the PCIe Resizable-BAR size encoding, `log2(bytes) - 20`
+/// (`ogkm-580: published/ampere/ga100/dev_nv_xve.h:38-41`; `_MIN` 6 = 64 MiB, `_MAX` 0x13). RM
+/// caches it at load and, on every resume, refuses a cached value below `_MIN` — `[measured b2,
+/// 91afc335]` the zero this device served made `kbusRestoreBAR1ResizeSize_WAR_BUG_3249028_GA100`
+/// fail `gpuStateLoad` (`kern_bus_ga100.c:1501`, `kern_bus_gm107.c:551`). `None` for a size the
+/// encoding cannot state (not a power of two, or outside `_MIN…_MAX`): nothing is served then.
+#[must_use]
+pub const fn resize_bar1_ctrl(bar1_bytes: u64) -> Option<u32> {
+    if !bar1_bytes.is_power_of_two() {
+        return None;
+    }
+    let index = bar1_bytes.trailing_zeros();
+    if index < 20 + RESIZE_BAR1_SIZE_MIN || index > 20 + RESIZE_BAR1_SIZE_MAX {
+        return None;
+    }
+    Some((index - 20) << 8)
+}
+/// `NV_XVE_RESIZE_BAR1_CTRL_BAR_SIZE_MIN` / `_MAX` (`dev_nv_xve.h:40-41`).
+const RESIZE_BAR1_SIZE_MIN: u32 = 6;
+const RESIZE_BAR1_SIZE_MAX: u32 = 0x13;
+/// `NV_PCFG` (`0x88000`) + `NV_XVE_RESIZE_BAR1_CTRL` (`0xBC0`, `ampere/ga100/dev_nv_xve.h:38`).
+const NV_XVE_RESIZE_BAR1_CTRL: u64 = 0x0008_8BC0;
 
 const NV_PMC_BOOT_0: u64 = 0x0000_0000;
 const NV_PMC_BOOT_1: u64 = 0x0000_0004;
@@ -234,6 +261,22 @@ pub fn boot_regs(family: Family, f: &Bar0Facts) -> Vec<BootReg> {
             value: f.pcie_link_caps,
             name: "NV_EP_PCFGM + NV_EP_PCFG_GPU_LINK_CAPABILITIES",
             from: Provenance::Host("the host's PCIe link capability"),
+        });
+    }
+    // ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`): GA100…AD107 bind
+    // `kbus{Cache,Restore}BAR1ResizeSize_WAR_BUG_3249028_GA100`, which read this word through the
+    // BAR0 XVE mirror (`g_kern_bus_nvoc.c:1419-1421`); Turing binds a no-op and Hopper/Blackwell
+    // read the config space's Resizable-BAR capability, absent here, which clears the property.
+    if matches!(family, Family::Ampere | Family::Ada)
+        && let Some(value) = resize_bar1_ctrl(f.bar1_bytes)
+    {
+        v.push(BootReg {
+            off: NV_XVE_RESIZE_BAR1_CTRL,
+            value,
+            name: "NV_XVE_RESIZE_BAR1_CTRL",
+            from: Provenance::Advertised(
+                "this device's own BAR1 size, in the Resizable-BAR encoding RM checks at resume",
+            ),
         });
     }
     // ★ Ada only (`kgspExecuteScrubberIfNeeded_AD102`, `ogkm-580: kernel_gsp_ad102.c`; the image is
@@ -573,6 +616,7 @@ mod hwref_check {
             revision: 0xA1,
             fb_mb: 8192,
             pcie_link_caps: 0x0040_4103,
+            bar1_bytes: 128 << 20,
         }
     }
 
@@ -590,6 +634,9 @@ mod hwref_check {
                 let want = match r.name {
                     "NV_XVE_LINK_CAPABILITIES" => {
                         Some(base(g, "NV_PCFG") + val(g, "NV_XVE_LINK_CAPABILITIES"))
+                    }
+                    "NV_XVE_RESIZE_BAR1_CTRL" => {
+                        Some(base(g, "NV_PCFG") + val(g, "NV_XVE_RESIZE_BAR1_CTRL"))
                     }
                     "NV_VIRTUAL_FUNCTION_PRIV_ACCESS_COUNTER_NOTIFY_BUFFER_SIZE" => Some(
                         base(g, "NV_VIRTUAL_FUNCTION_FULL_PHYS_OFFSET")
@@ -617,6 +664,27 @@ mod hwref_check {
                 }
             }
         }
+    }
+
+    /// ★ 2026-10-14: the resizable-BAR1 word's field and bounds are the header's, wherever it is
+    /// served, and the encoding states this device's BAR1 exactly.
+    #[test]
+    fn the_resize_bar1_word_is_the_header_field() {
+        for g in [DieGroup::Ga100, DieGroup::Ga10x, DieGroup::Ad10x] {
+            assert_eq!(range(g, "NV_XVE_RESIZE_BAR1_CTRL_BAR_SIZE"), (12, 8), "{g:?}");
+            assert_eq!(
+                val(g, "NV_XVE_RESIZE_BAR1_CTRL_BAR_SIZE_MIN"),
+                u64::from(RESIZE_BAR1_SIZE_MIN)
+            );
+            assert_eq!(
+                val(g, "NV_XVE_RESIZE_BAR1_CTRL_BAR_SIZE_MAX"),
+                u64::from(RESIZE_BAR1_SIZE_MAX)
+            );
+        }
+        assert_eq!(resize_bar1_ctrl(128 << 20), Some(7 << 8));
+        assert_eq!(resize_bar1_ctrl(64 << 20), Some(6 << 8));
+        assert_eq!(resize_bar1_ctrl(32 << 20), None, "below _MIN: not stated");
+        assert_eq!(resize_bar1_ctrl(96 << 20), None, "not a Resizable-BAR size");
     }
 
     #[test]

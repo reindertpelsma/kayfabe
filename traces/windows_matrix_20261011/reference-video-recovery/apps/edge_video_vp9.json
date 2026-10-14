@@ -1,0 +1,79 @@
+{
+ "quiet": 2,
+ "end_utc": "2026-10-11T15:24:50.0577977Z",
+ "start_utc": "2026-10-11T15:24:22.4253636Z",
+ "rc": 0,
+ "secs": 28,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4090 status=OK code=0"
+ ],
+ "digests": [],
+ "session": 1,
+ "out_files": [
+  "C:\\kf\\out\\edge_video_vp9\\edge_result.json 250"
+ ],
+ "boot_utc_start": "2026-10-11T14:31:59.5000000Z",
+ "log_tail": [
+  "=== edge_video_vp9 start=2026-10-11T08:24:22.4253636-07:00 host=DESKTOP-JR70RMQ session=1 boot=2026-10-11T14:31:59.5000000Z timeout=180",
+  "KFEDGE {\"page\":\"video\",\"src\":\"/media/t_vp9.webm\",\"ok\":true,\"can_play\":\"probably\",\"mc_supported\":false,\"mc_smooth\":false,\"mc_power_efficient\":false,\"wall_s\":15.003,\"played_s\":14.68,\"total_frames\":446,\"dropped_frames\":45,\"decoded_w\":1280,\"decoded_h\":720}",
+  "=== end rc=0 secs=28 2026-10-11T08:24:50.0577977-07:00"
+ ],
+ "pdh": {
+  "pids": [
+   "7884",
+   "2744",
+   "7372",
+   "7260",
+   "3736",
+   "7828",
+   "4716",
+   "672",
+   "1592",
+   "6252",
+   "2276",
+   "5164",
+   "736",
+   "4668",
+   "5448",
+   "3876",
+   "3624",
+   "5280",
+   "7992",
+   "7244"
+  ],
+  "nv": {
+   "security": 0,
+   "3d": 0.9559506354009236,
+   "vr": 0,
+   "videodecode": 2.2633982312814274,
+   "copy": 0.10972136637025581,
+   "ofa_0": 0,
+   "legacyoverlay": 0,
+   "videoencode": 0
+  },
+  "samples": 12,
+  "other": {},
+  "nvidia_luids": "0_5f8e"
+ },
+ "timed_out": false,
+ "token": "g1-edge_video_vp9-1791732248",
+ "boot_utc_end": "2026-10-11T14:31:59.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "edge_video_vp9",
+ "smi": {
+  "samples": 5,
+  "mem_used_base_mb": 165,
+  "util_max": 3,
+  "mem_used_max_mb": 222
+ }
+}

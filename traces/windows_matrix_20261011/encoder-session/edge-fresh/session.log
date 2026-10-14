@@ -1,0 +1,27 @@
+2026-10-11T15:37:03Z START run_dir=/var/lib/kf-windows-20261005/codex-edge-fresh-20261011-a61af1c3 vm=broker kf3_rev=a61af1c3 apps=2
+2026-10-11T15:37:03Z MATRIX_START apps=2 (resume skips 0) per_guest=2 max_tdr=3 tier<=3
+2026-10-11T15:37:05Z pre-guest hook rc=0 :00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=identity 2026-10-11T17:37:05+02:00
+2026-10-11T15:37:07Z broker run 1170 rc=0 ['  └────────────────────────────────────────────────────────────────────────────────────────────┘']
+2026-10-11T15:37:07Z [g1] launched; waiting for the guest agent (<= 900s)
+2026-10-11T15:37:23Z [g1] agent answered after 19s
+2026-10-11T15:37:23Z [g1] password set for vast rc=0
+2026-10-11T15:38:11Z [g1] verified sign-in attempt=1 rc=0
+2026-10-11T15:38:13Z [g1] interactive session: VASTWIN\vast
+2026-10-11T15:38:15Z [g1] pushed 25 guest files
+2026-10-11T15:38:15Z [g1] app disk attached (usb-storage)
+2026-10-11T15:38:25Z [g1] setup ok: cd=D: nvidia_adapters=1 NVIDIA GeForce RTX 4070, 580.88, 4096 MiB
+2026-10-11T15:38:28Z [g1] override tool kf_cuda_control.exe sha256=3906f520c10e272215d9d7d79a90ce9a2042581923a4717db90be312ab3a67c8
+2026-10-11T15:38:30Z [g1] override tool kf_dxprobe.exe sha256=3c6ededa77430a18a13321eb72fdca7f60282f8d12ddc147a7e7df1284832c5f
+2026-10-11T15:38:45Z [g1] staged vc_redist (installer, 13s)
+2026-10-11T15:38:50Z [g1] READY boot=2026-10-11T15:37:13.5000000Z user=VASTWIN\vast smi_ok=True
+2026-10-11T15:39:25Z [g1] edge_webgl: PASS
+2026-10-11T15:39:56Z [g1] edge_webgpu: PASS
+2026-10-11T15:40:26Z post-guest hook rc=0 A GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-11T17:40:26+02:00
+RECLAIM_STOPPED_OVERLAY 1170 3215413248
+2026-10-11T15:40:26Z [g1] stopped (clean)
+2026-10-11T15:40:26Z MATRIX_DONE batched: 2 pass / 2
+2026-10-11T15:40:26Z EXIT rc=0

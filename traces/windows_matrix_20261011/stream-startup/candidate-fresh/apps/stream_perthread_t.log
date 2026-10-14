@@ -1,0 +1,6 @@
+=== stream_perthread_t start=2026-10-11T19:00:35.6904698+00:00 host=VASTWIN session=0 boot=2026-10-11T18:57:39.5000000Z timeout=120
+STREAM_STAGE cupy_import elapsed_s=89.156000
+KFDEV NVIDIA GeForce RTX 4070 cupy 14.2.0
+CHECK stream_perthread ok elements=1048576 stream=2
+STREAM_PROBE_DONE perthread rc=0
+=== end rc=0 secs=94 2026-10-11T19:02:09.9359211+00:00

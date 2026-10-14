@@ -1,0 +1,9 @@
+kf-host: host tier: stock
+kf-host: channel birth h=0xcafe000a engine=0x1 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=not-held
+USER_RING_SETUP driver=595.91.07 mode=WriteAttempt channel=Channel { tsg: cafe0009, chan: cafe000a, token: 4, born_user: Some(BirthPrivilege { reply_flags: 80 }) } ring_va=0x120000000 output_va=0x120010000 perm=MapPerm { read_only: true, atomic_disable: false, volatile: false } userd_gpu_mapped=false
+USER_RING_OBSERVATION finished=false fence=0 sentinel=0x31415926 initial=0x31415926 attempted=0x27182818 GP_GET=1 GP_PUT=1 elapsed_us=3000409
+USER_RING_BUFFER_CLEANUP view=Ok(()) unmap=Ok(Some(())) memory=Ok(())
+USER_RING_BUFFER_CLEANUP view=Ok(()) unmap=Ok(Some(())) memory=Ok(())
+USER_RING_BUFFER_CLEANUP view=Ok(()) unmap=Ok(None) memory=Ok(())
+USER_RING_CLEANUP result=Ok(())
+USER_RING_PROBE=FAIL write-attempt collected; journal attribution required, no application verdict

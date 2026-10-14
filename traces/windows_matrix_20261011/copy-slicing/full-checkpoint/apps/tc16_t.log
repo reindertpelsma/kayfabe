@@ -1,0 +1,6 @@
+=== tc16_t start=2026-10-11T13:43:56.6484637+00:00 host=VASTWIN session=0 boot=2026-10-11T13:39:00.5000000Z timeout=120
+KFDEV NVIDIA GeForce RTX 4070
+[eq] device NVIDIA GeForce RTX 4070 torch 2.8.0+cu126
+CHECK gemm_fp16_tensorcore ok relerr=3.60e-04
+WINEQ_DONE tc16
+=== end rc=0 secs=7 2026-10-11T13:44:03.2610258+00:00

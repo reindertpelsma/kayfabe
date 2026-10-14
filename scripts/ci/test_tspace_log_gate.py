@@ -85,6 +85,20 @@ class TspaceLogGate(unittest.TestCase):
         other = CLEAN + ["kf3: chan token 0x9 (VasKey(1)) DEAD: ring: Read { gp: 0 }"]
         self.assertNotIn("NO-DEAD", failed(other))
 
+    def test_the_6fafcc6e_kernel_ce_death_is_caught(self):
+        # REGRESSION 2026-10-10 (fast suite 0/30 at 6fafcc6e; first bad 7acb811b): the guest RM's
+        # kernel CE channel, born Translated, died binding its ring because the kernel mirror had
+        # refused the whole flat FB alias straddling the carve-out. The measured lines, verbatim.
+        born = ("kf3: act birth translated: chan 0xc1e00007:0x2 BORN Translated: token 0x802 -> host 0x10019 "
+                "in VasKey(13970166074168049674) gpfifo=0x320064000x4096")
+        dead = ("kf3: chan token 0x802 (VasKey(13970166074168049674)) DEAD: tspace bind: virtual_unresolved "
+                "VirtualUnresolved { va: 30fb55000, at: 30fb55000 }")
+        self.assertIn("NO-DEAD", failed(CLEAN + [born, dead]))
+        self.assertNotIn("NO-DEAD", failed(CLEAN + [born]))
+        # The fix adds `carve_clipped=` after `carve_cpu=` on the status line; the counters still parse.
+        clipped = subst("carve_cpu=0 fn70=1", "carve_cpu=0 carve_clipped=0x20000 fn70=1")
+        self.assertNotIn("COUNTERS", failed(clipped))
+
     def test_p0_evidence_is_required_or_the_pass_is_scoped(self):
         no_p0 = [ln for ln in CLEAN if "kf-host: channel birth" not in ln]
         self.assertIn("P0-EVIDENCE", failed(no_p0))

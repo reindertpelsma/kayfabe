@@ -1,0 +1,8 @@
+=== reduce_t start=2026-10-11T09:51:48.4120097-07:00 host=DESKTOP-JR70RMQ session=0 boot=2026-10-11T14:31:59.5000000Z timeout=120
+KFDEV NVIDIA GeForce RTX 4090
+[eq] device NVIDIA GeForce RTX 4090 torch 2.8.0+cu126
+CHECK reduce_sum_f32 ok tol=2.0 over 16M
+CHECK reduce_sum_i64_exact ok
+CHECK reduce_minmax ok
+WINEQ_DONE reduce
+=== end rc=0 secs=6 2026-10-11T09:51:54.7487779-07:00

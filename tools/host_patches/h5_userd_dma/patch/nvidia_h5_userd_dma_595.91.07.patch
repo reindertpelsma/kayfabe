@@ -1,0 +1,432 @@
+diff -ruN a/common/inc/nv-kf-dma-window.h b/common/inc/nv-kf-dma-window.h
+--- a/common/inc/nv-kf-dma-window.h
++++ b/common/inc/nv-kf-dma-window.h
+@@ -0,0 +1,66 @@
++/*
++ * kayfabe host patch tier, H5: the decision logic of the DMA window, kept free of kernel types so
++ * that it can be tested in userspace (tools/host_patches/h5_userd_dma/tests).
++ * SPDX-License-Identifier: MIT
++ *
++ * The question it answers: given the width the caller asks for, the device's current DMA mask, and
++ * whether the device sits behind a translating IOMMU domain, may the mask be lowered for one call,
++ * and to what?
++ *
++ * It only ever LOWERS the mask. A lower mask makes the IOMMU hand out smaller I/O virtual
++ * addresses, which every consumer of a wider mask also accepts; it can never name an address, grant
++ * access to memory the caller could not already describe, or widen a window.
++ */
++
++#ifndef NV_KF_DMA_WINDOW_H
++#define NV_KF_DMA_WINDOW_H
++
++#include "nv-kf-host-patch.h"
++
++/* (1 << bits) - 1 for 1 <= bits <= 63 */
++static inline NvU64 nv_kf_dma_mask_for_bits(NvU32 bits)
++{
++    return (((NvU64)1) << bits) - 1;
++}
++
++/* Number of bits of a (contiguous low-bits) DMA mask. */
++static inline NvU32 nv_kf_dma_mask_bits(NvU64 mask)
++{
++    NvU32 n = 0;
++    while (mask != 0)
++    {
++        n++;
++        mask >>= 1;
++    }
++    return n;
++}
++
++/*
++ * Returns an NV_KF_DMA_WINDOW_* verdict. On NV_KF_DMA_WINDOW_APPLIED, *new_mask is the mask to set
++ * for the call; otherwise *new_mask is the current mask (unchanged).
++ *
++ *   BAD_ARGUMENT    bits outside [MIN, MAX]: refuse, run nothing
++ *   DISABLED        the admin turned the feature off: refuse, run nothing
++ *   NOT_TRANSLATED  no translating IOMMU domain (none, or identity): the DMA address is the
++ *                   physical address or a bounce buffer, a lower mask cannot help and could
++ *                   bounce: run the call unchanged
++ *   ALREADY_NARROW  the mask is already at most the requested width: run the call unchanged
++ *   APPLIED         lower the mask to the requested width for the call
++ */
++static inline NvU32 nv_kf_dma_window_plan(NvU32 bits, NvU64 cur_mask, int translated, int enabled,
++                                          NvU64 *new_mask)
++{
++    *new_mask = cur_mask;
++    if (bits < NV_KF_DMA_WINDOW_BITS_MIN || bits > NV_KF_DMA_WINDOW_BITS_MAX)
++        return NV_KF_DMA_WINDOW_BAD_ARGUMENT;
++    if (!enabled)
++        return NV_KF_DMA_WINDOW_DISABLED;
++    if (!translated)
++        return NV_KF_DMA_WINDOW_NOT_TRANSLATED;
++    if (nv_kf_dma_mask_bits(cur_mask) <= bits)
++        return NV_KF_DMA_WINDOW_ALREADY_NARROW;
++    *new_mask = nv_kf_dma_mask_for_bits(bits);
++    return NV_KF_DMA_WINDOW_APPLIED;
++}
++
++#endif /* NV_KF_DMA_WINDOW_H */
+diff -ruN a/common/inc/nv-kf-host-patch.h b/common/inc/nv-kf-host-patch.h
+--- a/common/inc/nv-kf-host-patch.h
++++ b/common/inc/nv-kf-host-patch.h
+@@ -0,0 +1,82 @@
++/*
++ * kayfabe host patch tier: ioctl ABI of the kayfabe additions to nvidia.ko.
++ * SPDX-License-Identifier: MIT
++ *
++ * Two escapes, both on the nvidia character devices, both outside the RM
++ * escape range (RM uses 0x27..0x5F, the frontend uses NV_IOCTL_BASE+0..+18):
++ *
++ *   NV_ESC_KF_QUERY                    what this build provides (H0).
++ *                                      Stock builds do not know the escape;
++ *                                      nvidia_ioctl() answers it with -EINVAL
++ *                                      (nv_validate_ioctls(), "unknown NVRM
++ *                                      ioctl command").
++ *   NV_ESC_KF_ALLOC_MEMORY_DMA_WINDOW  H5: NV_ESC_RM_ALLOC_MEMORY with the
++ *                                      device DMA mask lowered for the duration
++ *                                      of that one call, so the DMA address that
++ *                                      RM gives an OS descriptor fits N bits.
++ *
++ * Neither escape adds an RM verb, a mapping, or any way to name an address.
++ */
++
++#ifndef NV_KF_HOST_PATCH_H
++#define NV_KF_HOST_PATCH_H
++
++#include <nv-ioctl-numbers.h>
++#include <nvtypes.h>
++
++/* NV_IOCTL_BASE + 55 is the last number an ioctl can have (see nv-ioctl-numbers.h). */
++#define NV_ESC_KF_QUERY                    (NV_IOCTL_BASE + 40)
++#define NV_ESC_KF_ALLOC_MEMORY_DMA_WINDOW  (NV_IOCTL_BASE + 41)
++
++/*
++ * The one RM escape the window may wrap: NV_ESC_RM_ALLOC_MEMORY (0x27, a userspace ABI constant of
++ * src/nvidia/arch/nvalloc/unix/include/nv_escape.h, which is RM-core-private and not in the
++ * packaged kernel-open tree).
++ */
++#define NV_KF_ESC_RM_ALLOC_MEMORY          0x27
++
++/* ABI of the query struct itself. */
++#define NV_KF_QUERY_ABI                    1
++
++/* Feature bits of nv_ioctl_kf_query_t.features; feature_abi[bit] is that feature's own ABI. */
++#define NV_KF_FEATURE_H5_DMA_WINDOW        0x1u
++#define NV_KF_FEATURE_H5_DMA_WINDOW_BIT    0
++#define NV_KF_H5_DMA_WINDOW_ABI            1
++
++typedef struct nv_ioctl_kf_query
++{
++    NvU32 flags;            /* in:  must be 0                               */
++    NvU32 abi;              /* out: NV_KF_QUERY_ABI                         */
++    NvU32 features;         /* out: NV_KF_FEATURE_* present AND enabled     */
++    NvU32 reserved;         /* out: 0                                       */
++    NvU8  feature_abi[8];   /* out: per-feature ABI, indexed by bit number  */
++} nv_ioctl_kf_query_t;      /* 24 bytes */
++
++/* Verdicts of nv_ioctl_kf_alloc_mem_dma_window_t.verdict (see nv-kf-dma-window.h). */
++#define NV_KF_DMA_WINDOW_APPLIED           0
++#define NV_KF_DMA_WINDOW_BAD_ARGUMENT      1
++#define NV_KF_DMA_WINDOW_DISABLED          2
++#define NV_KF_DMA_WINDOW_NOT_TRANSLATED    3
++#define NV_KF_DMA_WINDOW_ALREADY_NARROW    4
++#define NV_KF_DMA_WINDOW_MASK_REFUSED      5
++
++/* The USERD pointer is 40 bits wide on Turing, Ampere and Ada; nothing narrower is ever needed,
++ * and a floor of 2^40 (1 TiB) of I/O virtual address space cannot be exhausted by one client. */
++#define NV_KF_DMA_WINDOW_BITS_MIN          40
++#define NV_KF_DMA_WINDOW_BITS_MAX          63
++#define NV_KF_DMA_WINDOW_INNER_MAX         512
++
++typedef struct nv_ioctl_kf_alloc_mem_dma_window
++{
++    NvU32 abi;              /* in:  NV_KF_H5_DMA_WINDOW_ABI                           */
++    NvU32 dma_bits;         /* in:  address bits the mapping must fit, MIN..MAX       */
++    NvU32 flags;            /* in:  must be 0                                         */
++    NvU32 inner_size;       /* in:  size of the NV_ESC_RM_ALLOC_MEMORY argument       */
++    NvU64 inner_ptr  NV_ALIGN_BYTES(8); /* in: user VA of that argument (in/out)      */
++    NvU32 applied;          /* out: 1 if the mask was lowered for the call            */
++    NvU32 verdict;          /* out: NV_KF_DMA_WINDOW_*                                */
++    NvU32 mask_bits;        /* out: DMA mask width in effect while RM ran             */
++    NvU32 reserved;         /* out: 0                                                 */
++} nv_ioctl_kf_alloc_mem_dma_window_t; /* 40 bytes */
++
++#endif /* NV_KF_HOST_PATCH_H */
+diff -ruN a/nvidia/nv.c b/nvidia/nv.c
+--- a/nvidia/nv.c
++++ b/nvidia/nv.c
+@@ -107,6 +107,13 @@
+ #include "conftest/patches.h"
+ #include "detect-self-hosted.h"
+ 
++/* kayfabe host patch tier (H0 query, H5 DMA window); see nv-kf-host-patch.h */
++#include "nv-kf-host-patch.h"
++#include "nv-kf-dma-window.h"
++#if defined(CONFIG_IOMMU_API)
++#include <linux/iommu.h>
++#endif
++
+ #if defined(NV_BPMP_MRQ_HAS_STRAP_SET) && defined(NV_PM_RUNTIME_AVAILABLE)
+ #include <soc/tegra/bpmp-abi.h>
+ #endif
+@@ -125,6 +132,19 @@
+ MODULE_ALIAS_CHARDEV_MAJOR(NV_MAJOR_DEVICE_NUMBER);
+ 
+ /*
++ * kayfabe H5: 1 (default) lets NV_ESC_KF_ALLOC_MEMORY_DMA_WINDOW lower the DMA mask for one
++ * allocation call; 0 turns it off at runtime (the escape is refused and NV_ESC_KF_QUERY no longer
++ * reports the feature), which restores the stock behaviour of this module exactly.
++ */
++static int nv_kf_dma_window_enable = 1;
++module_param_named(kf_dma_window, nv_kf_dma_window_enable, int, 0644);
++MODULE_PARM_DESC(kf_dma_window,
++                 "kayfabe H5: allow NV_ESC_KF_ALLOC_MEMORY_DMA_WINDOW (default 1; 0 = stock behaviour)");
++
++/* Serialises the mask lowering; taken only by NV_ESC_KF_ALLOC_MEMORY_DMA_WINDOW. */
++static DEFINE_MUTEX(nv_kf_dma_window_lock);
++
++/*
+  * MODULE_IMPORT_NS() is added by commit id 8651ec01daeda
+  * ("module: add support for symbol namespaces") in 5.4
+  */
+@@ -2435,6 +2455,8 @@
+         _NV_IOCTL_ENTRY(NV_ESC_WAIT_OPEN_COMPLETE, nv_ioctl_wait_open_complete_t, NV_FALSE),
+         _NV_IOCTL_ENTRY(NV_ESC_NUMA_INFO, nv_ioctl_numa_info_t, NV_FALSE),
+         _NV_IOCTL_ENTRY(NV_ESC_SET_NUMA_STATUS, nv_ioctl_set_numa_status_t, NV_FALSE),
++        _NV_IOCTL_ENTRY(NV_ESC_KF_QUERY, nv_ioctl_kf_query_t, NV_FALSE),
++        _NV_IOCTL_ENTRY(NV_ESC_KF_ALLOC_MEMORY_DMA_WINDOW, nv_ioctl_kf_alloc_mem_dma_window_t, NV_FALSE),
+     };
+ 
+     status = rm_validate_ioctls(cmd, arg_size);
+@@ -2466,6 +2488,183 @@
+     return NV_ERR_INVALID_ARGUMENT;
+ }
+ 
++/*
++ * kayfabe H0: what this build provides. Open to every caller of the device node, like
++ * NV_ESC_CHECK_VERSION_STR; it reads two constants and one module parameter.
++ */
++static int nv_kf_query(nv_ioctl_kf_query_t *q)
++{
++    if (q->flags != 0)
++        return -EINVAL;
++
++    memset(q, 0, sizeof(*q));
++    q->abi = NV_KF_QUERY_ABI;
++    if (nv_kf_dma_window_enable)
++    {
++        q->features |= NV_KF_FEATURE_H5_DMA_WINDOW;
++        q->feature_abi[NV_KF_FEATURE_H5_DMA_WINDOW_BIT] = NV_KF_H5_DMA_WINDOW_ABI;
++    }
++    return 0;
++}
++
++/* Is the device behind a translating (DMA API) IOMMU domain? */
++static NvBool nv_kf_dma_is_translated(struct device *dev)
++{
++#if defined(CONFIG_IOMMU_API) && defined(NV_IOMMU_IS_DMA_DOMAIN_PRESENT)
++    struct iommu_domain *domain = iommu_get_domain_for_dev(dev);
++
++    return (domain != NULL) && iommu_is_dma_domain(domain);
++#else
++    return NV_FALSE;
++#endif
++}
++
++/*
++ * kayfabe H5: RM_ALLOC_MEMORY (NV_KF_ESC_RM_ALLOC_MEMORY) with the DMA mask of this GPU lowered while it runs.
++ *
++ * RM assigns an OS descriptor its I/O virtual addresses inside the allocation call
++ * (osCreateMemFromOsDescriptor -> memdescMapIommu -> osIovaMap -> nv_dma_map_alloc ->
++ * dma_map_page_attrs / dma_map_sg), and the IOMMU layer allocates them top-down from
++ * dma_get_mask(dev) at that moment. This is the only way to make those addresses fit fewer bits
++ * for ONE allocation: the DMA API has no per-mapping limit.
++ *
++ * What the caller gets: the same RM call, with its I/O virtual addresses below 2^dma_bits (when the
++ * device is behind a translating IOMMU domain; the verdict says what happened). What it cannot do:
++ * name an address, or run any other RM escape (the inner command is fixed to RM_ALLOC_MEMORY and
++ * goes through the same validation and the same rm_ioctl() entry as an ordinary one).
++ *
++ * Concurrent DMA mappings of this GPU made while the mask is lowered (by other clients, by UVM)
++ * get addresses below 2^dma_bits too, which a wider-mask consumer accepts; they are not refused.
++ * nv_set_dma_address_size() runs at adapter init only, and an open file keeps the adapter
++ * initialised, so it cannot interleave with the window.
++ */
++static int nv_kf_alloc_memory_dma_window(
++    nv_linux_state_t *nvl,
++    nv_state_t *nv,
++    nvidia_stack_t *sp,
++    nv_linux_file_private_t *nvlfp,
++    nv_ioctl_kf_alloc_mem_dma_window_t *p
++)
++{
++    void *inner = NULL;
++    void __user *inner_user = (void __user *)(NvUPtr)p->inner_ptr;
++    struct device *dev = nvl->dma_dev.dev;
++    NvU64 cur_mask = NV_U64_MAX;
++    NvU64 new_mask = NV_U64_MAX;
++    NvBool translated = NV_FALSE;
++    NV_STATUS rmStatus;
++    int status = 0;
++    int locked = 0;
++    int lowered = 0;
++
++    p->applied = 0;
++    p->verdict = NV_KF_DMA_WINDOW_BAD_ARGUMENT;
++    p->mask_bits = 0;
++    p->reserved = 0;
++
++    if ((p->abi != NV_KF_H5_DMA_WINDOW_ABI) || (p->flags != 0) ||
++        (p->inner_size == 0) || (p->inner_size > NV_KF_DMA_WINDOW_INNER_MAX) ||
++        (p->inner_ptr == 0))
++        return -EINVAL;
++
++    /* The inner command is fixed; it is validated like an ordinary RM_ALLOC_MEMORY. */
++    if (nv_validate_ioctls(_IOC(_IOC_READ | _IOC_WRITE, NV_IOCTL_MAGIC, NV_KF_ESC_RM_ALLOC_MEMORY, p->inner_size)) != NV_OK)
++        return -EINVAL;
++
++    NV_KMALLOC(inner, p->inner_size);
++    if (inner == NULL)
++        return -ENOMEM;
++
++    if (copy_from_user(inner, inner_user, p->inner_size))
++    {
++        status = -EFAULT;
++        goto out_free;
++    }
++
++    if (mutex_lock_interruptible(&nv_kf_dma_window_lock))
++    {
++        status = -ERESTARTSYS;
++        goto out_free;
++    }
++    locked = 1;
++
++    if ((dev != NULL) && !nvl->tce_bypass_enabled)
++    {
++        cur_mask = dma_get_mask(dev);
++        translated = nv_kf_dma_is_translated(dev);
++    }
++
++    p->verdict = nv_kf_dma_window_plan(p->dma_bits, cur_mask, translated,
++                                       nv_kf_dma_window_enable != 0, &new_mask);
++
++    if (p->verdict == NV_KF_DMA_WINDOW_BAD_ARGUMENT)
++    {
++        status = -EINVAL;
++        goto out_unlock;
++    }
++    if (p->verdict == NV_KF_DMA_WINDOW_DISABLED)
++    {
++        status = -EOPNOTSUPP;
++        goto out_unlock;
++    }
++
++    if (p->verdict == NV_KF_DMA_WINDOW_APPLIED)
++    {
++        if (dma_set_mask(dev, new_mask) != 0)
++        {
++            /* Run the call as stock; the caller sees applied == 0. */
++            p->verdict = NV_KF_DMA_WINDOW_MASK_REFUSED;
++        }
++        else
++        {
++            lowered = 1;
++            p->applied = 1;
++        }
++    }
++
++    if (!lowered)
++    {
++        /* Nothing changed: no reason to keep other windowed callers waiting. */
++        mutex_unlock(&nv_kf_dma_window_lock);
++        locked = 0;
++    }
++
++    p->mask_bits = (dev != NULL) ? nv_kf_dma_mask_bits(dma_get_mask(dev)) : 0;
++
++    rmStatus = rm_ioctl(sp, nv, &nvlfp->nvfp, NV_KF_ESC_RM_ALLOC_MEMORY, inner, p->inner_size);
++    status = (rmStatus == NV_OK) ? 0 : -EINVAL;
++
++    if (lowered)
++    {
++        /* Restore exactly what was there; nothing else changes the mask while we hold the lock. */
++        if (dma_set_mask(dev, cur_mask) != 0)
++        {
++            nv_printf(NV_DBG_ERRORS,
++                      "NVRM: kf H5: could not restore the DMA mask 0x%llx\n", cur_mask);
++        }
++    }
++
++    if (locked)
++    {
++        mutex_unlock(&nv_kf_dma_window_lock);
++        locked = 0;
++    }
++
++    /* RM wrote its status into the inner structure; hand it back whether or not it succeeded. */
++    if (copy_to_user(inner_user, inner, p->inner_size))
++        status = -EFAULT;
++
++    goto out_free;
++
++out_unlock:
++    if (locked)
++        mutex_unlock(&nv_kf_dma_window_lock);
++
++out_free:
++    NV_KFREE(inner, p->inner_size);
++    return status;
++}
++
+ int
+ nvidia_ioctl(
+     struct inode *inode,
+@@ -2853,6 +3052,34 @@
+ 
+             break;
+         }
++
++        case NV_ESC_KF_QUERY:
++        {
++            if (arg_size != sizeof(nv_ioctl_kf_query_t))
++            {
++                status = -EINVAL;
++                goto done;
++            }
++
++            status = nv_kf_query(arg_copy);
++
++            break;
++        }
++
++        case NV_ESC_KF_ALLOC_MEMORY_DMA_WINDOW:
++        {
++            if (arg_size != sizeof(nv_ioctl_kf_alloc_mem_dma_window_t))
++            {
++                status = -EINVAL;
++                goto done;
++            }
++
++            NV_ACTUAL_DEVICE_ONLY(nv);
++
++            status = nv_kf_alloc_memory_dma_window(nvl, nv, sp, nvlfp, arg_copy);
++
++            break;
++        }
+ 
+         default:
+             rmStatus = rm_ioctl(sp, nv, &nvlfp->nvfp, arg_cmd, arg_copy, arg_size);
+diff -ruN a/nvidia/nvidia.Kbuild b/nvidia/nvidia.Kbuild
+--- a/nvidia/nvidia.Kbuild
++++ b/nvidia/nvidia.Kbuild
+@@ -143,6 +143,7 @@
+ NV_CONFTEST_FUNCTION_COMPILE_TESTS += icc_put
+ NV_CONFTEST_FUNCTION_COMPILE_TESTS += icc_set_bw
+ NV_CONFTEST_FUNCTION_COMPILE_TESTS += dma_map_ops_has_map_phys
++NV_CONFTEST_FUNCTION_COMPILE_TESTS += iommu_is_dma_domain
+ NV_CONFTEST_FUNCTION_COMPILE_TESTS += dma_buf_ops_has_map
+ NV_CONFTEST_FUNCTION_COMPILE_TESTS += dma_buf_ops_has_map_atomic
+ NV_CONFTEST_FUNCTION_COMPILE_TESTS += dma_buf_attachment_has_peer2peer

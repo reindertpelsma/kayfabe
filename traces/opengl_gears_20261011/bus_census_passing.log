@@ -1,0 +1,179 @@
+warning: missing documentation for a function
+    --> crates/kf-util/src/lock.rs:1150:5
+     |
+1150 |     pub fn note_wait(rank: LockRank, d: Duration) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a function
+    --> crates/kf-util/src/lock.rs:1432:5
+     |
+1432 |     pub fn note_hold(rank: LockRank, d: Duration) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/kf-util/src/lockwitness.rs:193:5
+    |
+193 |     pub fn is_vcpu() -> bool {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `kf-util` (lib) generated 3 warnings
+warning: missing documentation for a method
+   --> crates/kf-arch/src/gsp.rs:814:5
+    |
+814 | /     fn on_read(
+815 | |         &self,
+816 | |         _model: &dyn GspModel,
+817 | |         _bar: u8,
+...   |
+820 | |         _state: &ArchBootState,
+821 | |     ) -> Option<u64> {
+    | |____________________^
+    |
+    = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a method
+   --> crates/kf-arch/src/gsp.rs:943:5
+    |
+943 |     fn libos_region_layout(&self) -> LibosRegionLayout;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `kf-arch` (lib) generated 2 warnings
+   Compiling kf-abi v0.1.0 (/data/kf-inval-absent/crates/kf-abi)
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:90:18
+   |
+90 |     NoChannels { engine: u32 },
+   |                  ^^^^^^^^^^^
+   |
+   = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:92:20
+   |
+92 |     BelowMinimum { asked: u32 },
+   |                    ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:95:9
+   |
+95 |         asked: u32,
+   |         ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:96:9
+   |
+96 |         limit: u32,
+   |         ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:97:9
+   |
+97 |         engine: u32,
+   |         ^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:98:9
+   |
+98 |         total: u32,
+   |         ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:99:9
+   |
+99 |         in_use: u32,
+   |         ^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-abi/src/chanbudget.rs:103:9
+    |
+103 |         derived: u32,
+    |         ^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-abi/src/chanbudget.rs:104:9
+    |
+104 |         engine: u32,
+    |         ^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-abi/src/chanbudget.rs:105:9
+    |
+105 |         total: u32,
+    |         ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates/kf-abi/src/chanbudget.rs:106:9
+    |
+106 |         in_use: u32,
+    |         ^^^^^^^^^^^
+
+   Compiling kf-gsp v0.1.0 (/data/kf-inval-absent/crates/kf-gsp)
+warning: `kf-abi` (lib) generated 11 warnings
+warning: missing documentation for a method
+    --> crates/kf-gsp/src/boot.rs:2550:5
+     |
+2550 |     pub fn release_held(&mut self, ram: &mut dyn GuestRam) -> Result<usize, GspFault> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a method
+    --> crates/kf-gsp/src/boot.rs:2668:5
+     |
+2668 | /     pub fn post_event(
+2669 | |         &mut self,
+2670 | |         ram: &mut dyn GuestRam,
+2671 | |         rpc: &OutgoingRpc,
+2672 | |     ) -> Result<(), GspFault> {
+     | |_____________________________^
+
+   Compiling kf-chip v0.1.0 (/data/kf-inval-absent/crates/kf-chip)
+warning: `kf-gsp` (lib) generated 2 warnings
+   Compiling kf-disp v0.1.0 (/data/kf-inval-absent/crates/kf-disp)
+   Compiling kf-rm v0.1.0 (/data/kf-inval-absent/crates/kf-rm)
+warning: unused import: `kf_abi::submit as s`
+   --> crates/kf-rm/src/authored.rs:452:9
+    |
+452 |     use kf_abi::submit as s;
+    |         ^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: missing documentation for a function
+  --> crates/kf-rm/src/rpc.rs:84:1
+   |
+84 | pub fn name_of(function: u32) -> Option<&'static str> {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a constant
+   --> crates/kf-rm/src/rpc.rs:135:1
+    |
+135 | pub const CONTROLS: [(u32, ControlDisposition); 33] = [
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/kf-rm/src/rpc.rs:201:1
+    |
+201 | pub fn control_disposition(cmd: u32) -> ControlDisposition {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `kf-rm` (lib) generated 4 warnings (run `cargo fix --lib -p kf-rm` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.83s
+     Running tests/bus_get_info_v2.rs (/root/kf-codex-display-target/debug/deps/bus_get_info_v2-b8bd045469db97ef)
+
+running 8 tests
+test one_unmeasured_index_alongside_the_served_one_refuses_the_whole_call ... ok
+test a_guest_supplied_list_size_is_not_taken_on_trust ... ok
+test a_wrongly_sized_request_is_refused_rather_than_answered ... ok
+test an_index_with_no_derivation_refuses_the_whole_call_by_name ... ok
+test the_control_is_classified_and_sized_as_the_sdk_declares_it ... ok
+test the_deprecated_gen2_index_is_the_same_word ... ok
+test the_forwarded_index_is_answered_in_the_envelope_and_the_tail_is_left_alone ... ok
+test virtual_link_status_and_error_census_are_answered ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

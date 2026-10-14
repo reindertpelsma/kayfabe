@@ -169,6 +169,7 @@ fn command(function: RpcFunction, code: u32, payload_len: usize) -> RpcCommand {
 fn the_encoder_reproduces_the_oracles_own_fb_region_bytes() {
     let body = encode_gsp_static_info(
         &GspStaticInfo {
+            gr_caps: [0; kf_abi::grstatic::GR_CAPS_TBL_SIZE],
             fb_regions: &ORACLE_ROWS,
             fb_length: TWELVE_GIB,
             bar1_pde_base: ga106::bar1_pde_base_for(ga106::FB_SIZE_MB),
@@ -578,4 +579,73 @@ fn a_request_whose_body_is_not_the_struct_this_port_encodes_is_refused_in_the_en
         .expect("answered");
     assert_eq!(ok.rpc_result, 0);
     assert_eq!(ok.body.len(), GSP_STATIC_CONFIG_INFO_SIZE);
+}
+
+#[test]
+fn static_graphics_caps_follow_the_supplied_host_facts() {
+    // A synthetic pattern tests the full field without capturing a physical GPU's bits.
+    let caps = std::array::from_fn(|i| (i as u8).wrapping_mul(7).wrapping_add(1));
+    let policy = StaticInfoPolicy::new(
+        std::sync::Arc::new(chip()),
+        *table_for(BENCH_DRIVER).expect("bench ABI"),
+    )
+    .with_gr_caps(caps);
+    let body = policy.body_measured().expect("encodes host caps");
+    assert_eq!(&body[..caps.len()], &caps);
+    assert_eq!(policy.body().expect("legacy layout"), body);
+}
+
+#[test]
+fn served_chain_publishes_host_graphics_caps_only_in_layouts_that_have_the_field() {
+    use kf_abi::DriverVersion;
+    for tag in [
+        "535.309.01",
+        "580.65.06",
+        "590.48.01",
+        "595.91.07",
+        "610.43.02",
+    ] {
+        let version = DriverVersion::parse(tag).expect("version");
+        let driver = *table_for(version).expect("supported ABI");
+        let caps = std::array::from_fn(|i| (i as u8).wrapping_add(9));
+        let body_for = |caps| {
+            let mut host = ga106::host_facts();
+            host.gr_static.caps = caps;
+            let mut chain = kf_rm::served_chain(
+                ga106::board(),
+                std::sync::Arc::new(host),
+                driver,
+                Default::default(),
+                Default::default(),
+                Default::default(),
+            );
+            let lay = kf_abi::matrix::Resolved::of(
+                &kf_abi::generated::matrix::GSPSTATICCONFIGINFO,
+                version,
+            )
+            .unwrap();
+            chain
+                .respond(&RpcCommand {
+                    function: RpcFunction::GetGspStaticInfo,
+                    code: 65,
+                    sequence: 1,
+                    payload: vec![0; lay.size()],
+                    elements: 1,
+                    delivered: Vec::new(),
+                })
+                .expect("fn65 reply")
+                .body
+        };
+        let with = body_for(caps);
+        let without = body_for([0; kf_abi::grstatic::GR_CAPS_TBL_SIZE]);
+        if version.major < 595 {
+            assert_eq!(&with[..caps.len()], &caps);
+            assert_eq!(&with[caps.len()..], &without[caps.len()..]);
+        } else {
+            assert_eq!(
+                with, without,
+                "removed member must not overwrite the new first field"
+            );
+        }
+    }
 }

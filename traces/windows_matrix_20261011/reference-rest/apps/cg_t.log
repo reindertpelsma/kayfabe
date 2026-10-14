@@ -1,0 +1,6 @@
+=== cg_t start=2026-10-11T09:28:31.0925633-07:00 host=DESKTOP-JR70RMQ session=0 boot=2026-10-11T14:31:59.5000000Z timeout=120
+KFDEV NVIDIA GeForce RTX 4090
+[eq] device NVIDIA GeForce RTX 4090 torch 2.8.0+cu126
+CHECK cg_residual ok iters=28 relres=2.24e-12
+WINEQ_DONE cg
+=== end rc=0 secs=6 2026-10-11T09:28:37.4814996-07:00

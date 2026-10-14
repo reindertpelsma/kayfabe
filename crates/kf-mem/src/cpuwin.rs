@@ -193,7 +193,7 @@ impl SeedRetired {
             (None, 0) => "no placement inside it (no console adopted)".to_string(),
             (None, k) => format!(
                 "⚠ {k} placements inside it, first {:?} — the console is NOT one view",
-                self.inside[0]
+                self.inside.first()
             ),
         };
         format!(
@@ -248,6 +248,19 @@ pub enum Reseed {
         /// 2 for the first re-seed.
         life: u32,
     },
+}
+
+/// What [`CpuWindow::reset_to_boot`] did.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct WindowReset {
+    /// Placements removed (scratch placed, aperture released).
+    pub unmapped: usize,
+    /// Placements the host refused to re-point to scratch: they stay, counted.
+    pub kept: usize,
+    /// The seed's outcome (`None`: refused, named in `first_refusal`).
+    pub seed: Option<Reseed>,
+    /// The first refusal, by name.
+    pub first_refusal: Option<String>,
 }
 
 /// ★★★ **A guest BAR aperture as a [`MapTarget`]**: guest BAR VA `v` IS window offset `v`
@@ -361,7 +374,10 @@ impl<V: ViewOps> CpuWindow<V> {
         }
         let cov = self.coverage(at, len);
         if let Some(&(va, n, off)) = cov.inside.first() {
-            self.stats.borrow_mut().refused += 1;
+            {
+                let mut st = self.stats.borrow_mut();
+                st.refused = st.refused.saturating_add(1);
+            }
             return Err(format!(
                 "boot framebuffer [{at:#x}, +{len:#x}): {} placement(s) of the guest's still overlap \
                  it (first {va:#x}+{n:#x} -> {off:x?}) — BAR1's physical view not restored",
@@ -369,7 +385,10 @@ impl<V: ViewOps> CpuWindow<V> {
             ));
         }
         if let Err(e) = self.place_seed(at, store_off, len) {
-            self.stats.borrow_mut().refused += 1;
+            {
+                let mut st = self.stats.borrow_mut();
+                st.refused = st.refused.saturating_add(1);
+            }
             return Err(e);
         }
         let life = self.lives.get().saturating_add(1);
@@ -403,12 +422,12 @@ impl<V: ViewOps> CpuWindow<V> {
             }
             out.inside.push((va, h.len, h.store_off));
             if va > cursor {
-                out.gaps.push((cursor, va - cursor));
+                out.gaps.push((cursor, va.saturating_sub(cursor)));
             }
             cursor = cursor.max(h_end);
         }
         if cursor < end {
-            out.gaps.push((cursor, end - cursor));
+            out.gaps.push((cursor, end.saturating_sub(cursor)));
         }
         out
     }
@@ -443,7 +462,10 @@ impl<V: ViewOps> CpuWindow<V> {
         let Coverage { inside, gaps } = self.coverage(at, len);
         for &(g, n) in &gaps {
             if let Err(e) = self.ops.sink(g, n) {
-                self.stats.borrow_mut().refused += 1;
+                {
+                    let mut st = self.stats.borrow_mut();
+                    st.refused = st.refused.saturating_add(1);
+                }
                 return Err(format!(
                     "seed {at:#x}+{len:#x}: re-pointing the uncovered {g:#x}+{n:#x} to scratch: {e} — \
                      the seed stays"
@@ -455,7 +477,10 @@ impl<V: ViewOps> CpuWindow<V> {
         };
         let release_refused = self.ops.release(seed.view).is_err();
         if release_refused {
-            self.stats.borrow_mut().refused += 1;
+            {
+                let mut st = self.stats.borrow_mut();
+                st.refused = st.refused.saturating_add(1);
+            }
         }
         let report = SeedRetired {
             range: (at, len),
@@ -466,6 +491,44 @@ impl<V: ViewOps> CpuWindow<V> {
         };
         *self.retired.borrow_mut() = Some(report.clone());
         Ok(Some(report))
+    }
+
+    /// ★★ **Device reset** (`docs/design/V3_DEVICE_RESET.md`): the window back to what realize left
+    /// — every placement of the old life gone (each by [`MapTarget::unmap`]: scratch FIRST, then
+    /// the view's host aperture released), and, on a window that had a seed, the seed placed again
+    /// over the boot framebuffer (a real card's BAR1 is physical after reset: FB `[0, G)` at BAR1
+    /// `[0, G)`). A seed still placed stays placed.
+    ///
+    /// A placement whose re-point to scratch the host refuses STAYS (the guest could still reach
+    /// it; releasing its aperture would leave the guest a mapping of memory we gave back) and is
+    /// counted in [`WindowReset::kept`]; the reset goes on with the rest. VA-manager thread only,
+    /// like every other verb of the window.
+    pub fn reset_to_boot(&self) -> WindowReset {
+        let vas: Vec<u64> = self.placed.borrow().keys().copied().collect();
+        let mut out = WindowReset::default();
+        for va in vas {
+            match MapTarget::unmap(self, va, false) {
+                Ok(()) => out.unmapped = out.unmapped.saturating_add(1),
+                Err(e) => {
+                    out.kept = out.kept.saturating_add(1);
+                    out.first_refusal.get_or_insert(e);
+                }
+            }
+        }
+        out.seed = match self.reseed() {
+            Ok(r) => Some(r),
+            Err(e) => {
+                out.first_refusal.get_or_insert(e);
+                None
+            }
+        };
+        out
+    }
+
+    /// Placements the window holds (the reset's accounting; never a decision input).
+    #[must_use]
+    pub fn placements(&self) -> usize {
+        self.placed.borrow().len()
     }
 
     /// The counters.
@@ -481,7 +544,10 @@ impl<V: ViewOps> CpuWindow<V> {
     }
 
     fn refuse<T>(&self, why: String) -> Result<T, String> {
-        self.stats.borrow_mut().refused += 1;
+        {
+            let mut st = self.stats.borrow_mut();
+            st.refused = st.refused.saturating_add(1);
+        }
         Err(why)
     }
 }
@@ -508,7 +574,10 @@ impl<V: ViewOps> MapTarget for CpuWindow<V> {
                     d.va, d.len, d.off
                 ));
             }
-            self.stats.borrow_mut().ram_placed += 1;
+            {
+                let mut st = self.stats.borrow_mut();
+                st.ram_placed = st.ram_placed.saturating_add(1);
+            }
             Held {
                 len: d.len,
                 view: None,
@@ -535,8 +604,8 @@ impl<V: ViewOps> MapTarget for CpuWindow<V> {
                 ));
             }
             let mut s = self.stats.borrow_mut();
-            s.views_placed += 1;
-            s.view_bytes += d.len;
+            s.views_placed = s.views_placed.saturating_add(1);
+            s.view_bytes = s.view_bytes.saturating_add(d.len);
             Held {
                 len: d.len,
                 view: Some(view),
@@ -560,7 +629,7 @@ impl<V: ViewOps> MapTarget for CpuWindow<V> {
         }
         let held = self.placed.borrow_mut().remove(&va);
         let mut s = self.stats.borrow_mut();
-        s.sunk += 1;
+        s.sunk = s.sunk.saturating_add(1);
         if let Some(Held {
             view: Some(v), len, ..
         }) = held
@@ -568,13 +637,19 @@ impl<V: ViewOps> MapTarget for CpuWindow<V> {
             s.view_bytes = s.view_bytes.saturating_sub(len);
             drop(s);
             match self.ops.release(v) {
-                Ok(()) => self.stats.borrow_mut().released += 1,
+                Ok(()) => {
+                    let mut st = self.stats.borrow_mut();
+                    st.released = st.released.saturating_add(1);
+                }
                 // ★ The guest can no longer see it (scratch is in place), so the UNMAP happened
                 // and is acknowledged APPLIED; only the aperture is leaked, and that is counted.
                 // ⊘ Answering FAILED would keep a placement the window no longer holds, and every
                 // later diff would re-emit an unmap nothing can satisfy.
                 Err(e) => {
-                    self.stats.borrow_mut().refused += 1;
+                    {
+                        let mut st = self.stats.borrow_mut();
+                        st.refused = st.refused.saturating_add(1);
+                    }
                     eprintln!(
                         "kf3: window unmap {va:#x}: view release refused ({e}) — aperture leaked, counted"
                     );
@@ -685,19 +760,19 @@ fn runs(slots: &[SlotSource], granule: u64) -> Vec<Run> {
     for (i, src) in slots.iter().enumerate() {
         let extended = match (out.last_mut(), *src) {
             (Some(Run::Store { n, off, .. }), SlotSource::Store(o))
-                if *off + *n as u64 * granule == o =>
+                if off.checked_add((*n as u64).saturating_mul(granule)) == Some(o) =>
             {
-                *n += 1;
+                *n = n.saturating_add(1);
                 true
             }
             (Some(Run::Ram { n, gpa, .. }), SlotSource::Ram(g))
-                if *gpa + *n as u64 * granule == g =>
+                if gpa.checked_add((*n as u64).saturating_mul(granule)) == Some(g) =>
             {
-                *n += 1;
+                *n = n.saturating_add(1);
                 true
             }
             (Some(Run::Nothing { n, .. }), SlotSource::Nothing) => {
-                *n += 1;
+                *n = n.saturating_add(1);
                 true
             }
             _ => false,
@@ -819,10 +894,10 @@ impl<V: ViewOps> PraminPool<V> {
         let mut out = Repointed::default();
         let g = self.granule;
         let Ok(mut st) = self.state.lock() else {
-            out.refused += 1;
+            out.refused = out.refused.saturating_add(1);
             return out;
         };
-        st.now += 1;
+        st.now = st.now.saturating_add(1);
         let now = st.now;
         if st.landed.len() < slots.len() {
             st.landed.resize(slots.len(), 0);
@@ -835,25 +910,28 @@ impl<V: ViewOps> PraminPool<V> {
                 | Run::Ram { first, n, .. }
                 | Run::Nothing { first, n } => (first, n),
             };
-            let (at, len) = (first as u64 * g, n as u64 * g);
+            let (at, len) = (
+                (first as u64).saturating_mul(g),
+                (n as u64).saturating_mul(g),
+            );
             let n32 = u32::try_from(n).unwrap_or(u32::MAX);
             // `placed_ok`: whether the window range now shows what this run put there.
             let (placed_ok, r) = match run {
                 Run::Store { off, .. } => {
-                    out.maps += 1;
+                    out.maps = out.maps.saturating_add(1);
                     let t = std::time::Instant::now();
                     let armed = self.ops.arm_store_in_trap(off, len);
                     self.worst_map_ns
                         .fetch_max(elapsed_ns(t), Ordering::Relaxed);
                     match armed {
                         Ok(v) => {
-                            out.mmaps += 1;
+                            out.mmaps = out.mmaps.saturating_add(1);
                             let t = std::time::Instant::now();
                             let r = self.ops.place_view(at, len, &v);
                             self.worst_mmap_ns
                                 .fetch_max(elapsed_ns(t), Ordering::Relaxed);
                             if r.is_ok() {
-                                out.views += n32;
+                                out.views = out.views.saturating_add(n32);
                                 fresh.push(LiveView {
                                     first,
                                     n,
@@ -867,38 +945,41 @@ impl<V: ViewOps> PraminPool<V> {
                             (r.is_ok(), r)
                         }
                         Err(e) => {
-                            out.missed += n32;
-                            out.mmaps += 1;
+                            out.missed = out.missed.saturating_add(n32);
+                            out.mmaps = out.mmaps.saturating_add(1);
                             let sunk = self.ops.sink(at, len);
                             (sunk.is_ok(), sunk.and(Err(e)))
                         }
                     }
                 }
                 Run::Ram { gpa, .. } => {
-                    out.mmaps += 1;
+                    out.mmaps = out.mmaps.saturating_add(1);
                     let r = match (self.ram_offset)(gpa, len) {
-                        Some(foff) => self.ops.place_ram(at, len, foff).map(|()| out.ram += n32),
+                        Some(foff) => self
+                            .ops
+                            .place_ram(at, len, foff)
+                            .map(|()| out.ram = out.ram.saturating_add(n32)),
                         None => {
-                            out.missed += n32;
+                            out.missed = out.missed.saturating_add(n32);
                             self.ops.sink(at, len)
                         }
                     };
                     (r.is_ok(), r)
                 }
                 Run::Nothing { .. } => {
-                    out.missed += n32;
-                    out.mmaps += 1;
+                    out.missed = out.missed.saturating_add(n32);
+                    out.mmaps = out.mmaps.saturating_add(1);
                     let r = self.ops.sink(at, len);
                     (r.is_ok(), r)
                 }
             };
-            if placed_ok {
-                for s in &mut st.landed[first..first + n] {
+            if placed_ok && let Some(slots) = st.landed.get_mut(first..first.saturating_add(n)) {
+                for s in slots {
                     *s = now;
                 }
             }
             if r.is_err() {
-                out.refused += 1;
+                out.refused = out.refused.saturating_add(1);
             }
         }
         let mut newly_kept = 0u64;
@@ -907,10 +988,10 @@ impl<V: ViewOps> PraminPool<V> {
                 // Every slot it was placed over shows something placed later: unreachable.
                 doomed.push(old.view);
             } else {
-                out.kept += 1;
+                out.kept = out.kept.saturating_add(1);
                 if !old.counted {
                     old.counted = true;
-                    newly_kept += 1;
+                    newly_kept = newly_kept.saturating_add(1);
                 }
                 fresh.push(old);
             }
@@ -1022,7 +1103,114 @@ mod tests {
             ram,
             kind: 0,
             perm: kf_host::MapPerm::READ_WRITE,
+            leaf: 0,
         }
+    }
+
+    /// ★ Device reset: a BAR1 window that lived a whole guest life (seed retired, guest views of
+    /// the store and of guest RAM placed) comes back as realize left it — no placement, the seed
+    /// shown again — every armed view released exactly once, scratch placed before each release.
+    #[test]
+    fn a_reset_window_is_the_seeded_window_realize_left_and_every_view_is_released() {
+        let r = Rec::default();
+        let w = CpuWindow::new(&r, 256 << 20);
+        w.seed(0, 0, 0x80_0000).unwrap();
+        w.map(&d(0, 0x10_0000, 0x1000, false), true).unwrap();
+        w.invalidate().unwrap(); // the first batch retires the seed
+        w.map(&d(0x2000, 0x40_0000, 0x4000, false), true).unwrap();
+        w.map(&d(0x10_0000, 0x5000_0000, 0x1000, true), true).unwrap();
+        assert!(w.seeded().is_none());
+        assert_eq!(w.placements(), 3);
+        let rep = w.reset_to_boot();
+        assert_eq!(
+            rep,
+            WindowReset {
+                unmapped: 3,
+                kept: 0,
+                seed: Some(Reseed::Placed { life: 2 }),
+                first_refusal: None
+            }
+        );
+        assert_eq!(w.placements(), 0);
+        assert_eq!(w.seeded(), Some((0, 0, 0x80_0000)));
+        // Accounting: every view armed for the guest's life was released; the only view still
+        // armed is the seed.
+        let ops = r.ops.lock().unwrap().clone();
+        let arms = ops.iter().filter(|o| matches!(o, Op::Arm(..))).count();
+        let rels = ops.iter().filter(|o| matches!(o, Op::Release(..))).count();
+        assert_eq!(arms - rels, 1, "{ops:?}");
+        // Scratch before release, for every guest view.
+        for (i, o) in ops.iter().enumerate() {
+            if let Op::Release(v) = o
+                && *v != 0
+            {
+                assert!(
+                    ops[..i].iter().any(|p| matches!(p, Op::Sink(..))),
+                    "release of {v:#x} before any sink: {ops:?}"
+                );
+            }
+        }
+        // The next life behaves like the first: its first change retires the seed.
+        w.map(&d(0, 0x10_0000, 0x1000, false), true).unwrap();
+        w.invalidate().unwrap();
+        assert!(w.seeded().is_none());
+        // Reset twice in a row is one reset; a window that never had a seed only empties.
+        let _ = w.reset_to_boot();
+        assert_eq!(w.reset_to_boot().seed, Some(Reseed::AlreadyShown));
+        let b2 = CpuWindow::new(&r, 32 << 20);
+        b2.map(&d(0, 0x7000, 0x1000, false), true).unwrap();
+        let rep = b2.reset_to_boot();
+        assert_eq!((rep.unmapped, rep.seed), (1, Some(Reseed::NoBootFramebuffer)));
+    }
+
+    /// ★ The accounting property over N lives: every life places views of the store and of guest
+    /// RAM at moving offsets and ends in a reset; after each reset the host holds exactly what it
+    /// held after realize — one armed view (the seed) — and arms − releases never grows.
+    #[test]
+    fn n_lives_and_resets_leave_exactly_the_seed_armed() {
+        let r = Rec::default();
+        let w = CpuWindow::new(&r, 256 << 20);
+        w.seed(0, 0, 0x80_0000).unwrap();
+        let held = |r: &Rec| {
+            let ops = r.ops.lock().unwrap();
+            let arms = ops.iter().filter(|o| matches!(o, Op::Arm(..))).count();
+            let rels = ops.iter().filter(|o| matches!(o, Op::Release(..))).count();
+            arms - rels
+        };
+        assert_eq!(held(&r), 1, "after realize: the seed");
+        for life in 0..50u64 {
+            let base = 0x100_0000 + life * 0x1_0000;
+            w.map(&d(0, 0x10_0000, 0x1000, false), true).unwrap();
+            w.invalidate().unwrap();
+            for i in 0..(life % 7 + 1) {
+                w.map(&d(base + i * 0x1000, 0x40_0000 + i * 0x1000, 0x1000, false), true)
+                    .unwrap();
+            }
+            w.map(&d(base + 0x8000, 0x5000_0000, 0x1000, true), true).unwrap();
+            let rep = w.reset_to_boot();
+            assert_eq!(rep.kept, 0, "life {life}");
+            assert_eq!(w.placements(), 0, "life {life}");
+            assert_eq!(held(&r), 1, "life {life}: only the seed stays armed");
+            assert!(w.seeded().is_some());
+        }
+    }
+
+    /// ⊘ A placement the host refuses to re-point to scratch is KEPT (releasing its aperture would
+    /// leave the guest a view of memory we gave back) and counted; the rest of the reset goes on.
+    #[test]
+    fn a_reset_keeps_a_view_whose_scratch_is_refused_and_says_so() {
+        let r = Rec::default();
+        let w = CpuWindow::new(&r, 32 << 20);
+        w.map(&d(0x1000, 0x9000, 0x1000, false), true).unwrap();
+        r.refuse_sink.store(true, Ordering::Relaxed);
+        let rep = w.reset_to_boot();
+        assert_eq!((rep.unmapped, rep.kept), (0, 1));
+        assert!(rep.first_refusal.is_some());
+        assert!(r.releases().is_empty(), "nothing released while the guest can still see it");
+        r.refuse_sink.store(false, Ordering::Relaxed);
+        let rep = w.reset_to_boot();
+        assert_eq!((rep.unmapped, rep.kept), (1, 0));
+        assert_eq!(r.releases(), vec![0x9000]);
     }
 
     #[test]
@@ -1260,6 +1448,7 @@ mod tests {
             kind: 0,
             perm: kf_host::MapPerm::READ_WRITE,
             privileged: false,
+            leaf: 0,
         }
     }
 

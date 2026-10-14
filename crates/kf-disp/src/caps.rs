@@ -19,8 +19,11 @@
 //!   (`nvkms-evo3.c:5616-5621`), whose published home is `v05_01`'s `NV_PDISP_FE_SW_HEAD_CLK_CAP`
 //!   (`0x6405E8` = the page + `0x5e8`) with its reset value;
 //! - per window: the CSC matrices and LUTs NVKMS programs unconditionally (CSC11 is asserted,
-//!   `nvkms-evo3.c:1057`); no scaler, no TMO, no planar/rotation — features a virtual engine need not
+//!   `nvkms-evo3.c:1057`); no scaler, no TMO, no 3-plane/rotation — features a virtual engine need not
 //!   claim, so NVKMS never asks for them.
+//! - ⊘ CORRECTED 2026-10-14 (the line above said "no planar"): SEMI-planar YUV IS claimed
+//!   (`IHUB_COMMON_CAPC.SUPPORT_SEMI_PLANAR`, Turing's `CAPA.SUPPORT_PLANAR`): the engine executes those
+//!   windows and the console composes them; a real AD104 claims it (the plane oracle, `page()` below).
 
 use crate::class::{ClassTable, put};
 use crate::regs::Regs;
@@ -31,6 +34,26 @@ pub const PAGE: usize = 0x1000;
 /// Why the page could not be authored (the missing name).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Missing(pub String);
+
+/// The `TMDS_MAX` field value the page authors for every SOR (`NVC573_SOR_CLK_CAP_TMDS_MAX_INIT`).
+///
+/// # Errors
+/// [`Missing`] when the class table lacks it.
+pub fn tmds_max_field(t: &ClassTable) -> Result<u32, Missing> {
+    t.v(0xC573, "SOR_CLK_CAP_TMDS_MAX_INIT")
+        .ok_or_else(|| Missing("NVC573_SOR_CLK_CAP_TMDS_MAX_INIT".into()))
+}
+
+/// The same clock in kHz, the way NVKMS reads it back (`maxTMDSClkKHz = TMDS_MAX * 10000`,
+/// `nvkms-evo3.c:5185`).
+///
+/// # Errors
+/// [`Missing`] when the class table lacks it or the product overflows.
+pub fn tmds_max_khz(t: &ClassTable) -> Result<u32, Missing> {
+    tmds_max_field(t)?
+        .checked_mul(10_000)
+        .ok_or_else(|| Missing("TMDS_MAX kHz overflow".into()))
+}
 
 /// ★ The page: `(byte offset within the page, value)` for every non-zero word, and its BAR0 base.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -355,9 +378,7 @@ pub fn page(
         set(sys_capb, fa("SYS_CAPB_WINDOW_EXISTS", i)?, 1);
     }
     // SORs
-    let tmds_max = t
-        .v(0xC573, "SOR_CLK_CAP_TMDS_MAX_INIT")
-        .ok_or_else(|| m("NVC573_SOR_CLK_CAP_TMDS_MAX_INIT".into()))?;
+    let tmds_max = tmds_max_field(t)?;
     for s in 0..heads {
         let cap = a("SOR_CAP", s)?;
         for fld in [
@@ -416,6 +437,31 @@ pub fn page(
             set(capa, f(fld)?, 1);
         }
     }
+    // ★ 2026-10-14 (`V3_DISPLAY_PLANES_ORACLE.md`): semi-planar YUV windows. kayfabe's engine executes a
+    // window of any format (its UPDATE/notifier/latch path is format-blind) and the console composes the
+    // semi-planar formats (`scanout::ScanFormats`, `cuda/display/kf_yuv.cu`), so the page says so. NVKMS
+    // reads it per class (`nvkms-evo3.c` nvEvoParseCapabilityNotifier6 / EvoParseCapabilityNotifierC5):
+    // C673+ `IHUB_COMMON_CAPC.SUPPORT_SEMI_PLANAR`; C573, which has no CAPC, `IHUB_COMMON_CAPA.
+    // SUPPORT_PLANAR` ("on Turing ... actually reports whether IHUB supports YUV _semi-planar_ formats").
+    // [measured, AD104 under 580.159.04, the plane oracle's bare-metal reference] the real page sets it:
+    // nvidia-drm lists NV12/NV21/NV16/NV61/NV24/NV42/P010/P012/P210 on every plane; without the bit the
+    // kayfabe guest listed none. 3-plane (`CAPA.SUPPORT_PLANAR` on C673+) stays unclaimed, as on that board.
+    let semi = t
+        .v(caps, "IHUB_COMMON_CAPC")
+        .zip(t.f(caps, "IHUB_COMMON_CAPC_SUPPORT_SEMI_PLANAR"))
+        .zip(t.v(caps, "IHUB_COMMON_CAPC_SUPPORT_SEMI_PLANAR_TRUE"))
+        .or_else(|| {
+            (t.v(caps, "IHUB_COMMON_CAPC").is_none())
+                .then(|| {
+                    t.v(caps, "IHUB_COMMON_CAPA")
+                        .zip(t.f(caps, "IHUB_COMMON_CAPA_SUPPORT_PLANAR"))
+                        .zip(t.v(caps, "IHUB_COMMON_CAPA_SUPPORT_PLANAR_TRUE"))
+                })
+                .flatten()
+        });
+    if let Some(((off, field), yes)) = semi {
+        set(off, field, yes);
+    }
     for off in w.keys() {
         if *off as usize + 4 > PAGE || off % 4 != 0 {
             return Err(m(format!("caps word at {off:#x} is outside the page")));
@@ -430,6 +476,33 @@ pub fn page(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// ★ 2026-10-14: every family's authored page claims semi-planar YUV windows in the field its NVKMS
+    /// parser reads (C673+ CAPC.SUPPORT_SEMI_PLANAR; Turing CAPA.SUPPORT_PLANAR), and never claims
+    /// 3-plane YUV (C673+ CAPA.SUPPORT_PLANAR) — what a real AD104 under 580.159.04 offers.
+    #[test]
+    fn the_page_claims_semi_planar_and_never_three_plane_yuv() {
+        for version in ["580.65.06", "580.159.04"] {
+            let t = crate::class::for_version(version).unwrap();
+            for row in kf_chip::display::ALL {
+                let r = Regs::for_ip(version, row.ip_version).unwrap();
+                let c = row.classes.caps;
+                let p = page(t, &r, c, row.heads, row.windows).unwrap();
+                let capa = p.word(t.v(c, "IHUB_COMMON_CAPA").unwrap());
+                let planar = crate::class::get(capa, t.f(c, "IHUB_COMMON_CAPA_SUPPORT_PLANAR").unwrap());
+                if let Some(capc) = t.v(c, "IHUB_COMMON_CAPC") {
+                    let semi = crate::class::get(
+                        p.word(capc),
+                        t.f(c, "IHUB_COMMON_CAPC_SUPPORT_SEMI_PLANAR").unwrap(),
+                    );
+                    assert_eq!((semi, planar), (1, 0), "{version} NV{c:04X}");
+                } else {
+                    assert_eq!(c, 0xC573, "only Turing reads semi-planar from CAPA");
+                    assert_eq!(planar, 1, "{version} NV{c:04X}");
+                }
+            }
+        }
+    }
 
     #[test]
     fn sdr_caps_declare_real_table_limits_with_tmo_in_every_cell() {

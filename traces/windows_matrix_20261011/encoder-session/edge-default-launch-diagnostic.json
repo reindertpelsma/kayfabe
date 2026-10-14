@@ -1,0 +1,252 @@
+{
+ "schema": 1,
+ "generator": "gen_apps.py",
+ "prelude": "$ErrorActionPreference = 'Continue'\n. C:\\kf\\kf_apphelpers.ps1\n$K = 'C:\\kfapps'; $CD = '@@CD@@'; $OUT = 'C:\\kf\\out\\@@ID@@'\n$PY = \"$K\\py\\python.exe\"; $TL = \"$K\\py\\Lib\\site-packages\\torch\\lib\"\nNew-Item -ItemType Directory -Force -Path $OUT | Out-Null\n$env:CUPY_CACHE_DIR = 'C:\\kf\\cupy_cache'; $env:KF_TORCH_LIB = $TL; $env:CUDA_PATH = \"$K\\cuda_cudart\"\n$env:KF_CUDA_INCLUDE = \"$K\\cuda_cudart\\include;$K\\cuda_cccl\\include\"\n$PYA = @('-X', 'utf8', '-X', 'pycache_prefix=C:\\kf\\pycache')\n",
+ "apps": [
+  {
+   "id": "edge_default_launch_diagnostic",
+   "category": "diagnostic-launch-only",
+   "linux": [],
+   "pkgs": [
+    "vc_redist"
+   ],
+   "session": "interactive",
+   "tier": 1,
+   "timeout_s": 120,
+   "expect_s": 60,
+   "rx": "^EDGE_DEFAULT_LAUNCH_ALIVE seconds=60",
+   "fail_rx": "^CHECK .*FAIL",
+   "proof": [],
+   "difficulty": "high",
+   "why": "Reproduce owner observed ordinary Edge launch without NVENC or benchmark launch flags.",
+   "ps": "$edge = @(\"${env:ProgramFiles(x86)}\\Microsoft\\Edge\\Application\\msedge.exe\", \"$env:ProgramFiles\\Microsoft\\Edge\\Application\\msedge.exe\") | Where-Object { Test-Path $_ } | Select-Object -First 1\nif (-not $edge) { 'EDGE_MISSING'; exit 3 }\n\"EDGE_VERSION $((Get-Item $edge).VersionInfo.FileVersion)\"\nStart-Process -FilePath $edge\nfor ($i=0; $i -lt 60; $i++) {\n Start-Sleep -Seconds 1\n if (-not (Get-Process msedge -ErrorAction SilentlyContinue)) { \"EDGE_EXITED seconds=$i\"; exit 4 }\n}\n'EDGE_DEFAULT_LAUNCH_ALIVE seconds=60'\nexit 0\n",
+   "kill_names": [
+    "msedge"
+   ],
+   "screenshot_s": 10,
+   "note": "Diagnostic only: normal profile browser launch and recovery counts; no GPU correctness or matrix coverage claim.",
+   "digest": false,
+   "smi": false,
+   "nvidia_only": true,
+   "cmd": "msedge.exe (normal profile, no arguments)"
+  }
+ ],
+ "linux_map": {
+  "BlackScholes": [
+   "blackscholes_t"
+  ],
+  "MersenneTwisterGP11213": [
+   "randomFog_demo",
+   "rng_t"
+  ],
+  "UnifiedMemoryPerf": [
+   "managed_t"
+  ],
+  "UnifiedMemoryStreams": [
+   "managed_t"
+  ],
+  "asyncAPI": [
+   "streams_t"
+  ],
+  "attach_verify": [
+   "managed_t"
+  ],
+  "bandwidthTest": [
+   "bandwidthTest_demo"
+  ],
+  "bf16TensorCoreGemm": [
+   "tcbf16_t"
+  ],
+  "blackscholes": [
+   "blackscholes_t"
+  ],
+  "blender_cycles": [
+   "blender_cycles"
+  ],
+  "cdpSimpleQuicksort": [
+   "cdp_quicksort"
+  ],
+  "clinfo": [
+   "opencl_icd"
+  ],
+  "clpeak": [
+   "clpeak_ocl"
+  ],
+  "concurrentKernels": [
+   "streams_t"
+  ],
+  "conjugateGradient": [
+   "cg_t"
+  ],
+  "conjugateGradientUM": [
+   "managed_t"
+  ],
+  "conv2d": [
+   "torch_correct"
+  ],
+  "cudaTensorCoreGemm": [
+   "tc16_t"
+  ],
+  "cupy": [
+   "cupy_check"
+  ],
+  "deviceQuery": [
+   "deviceQuery_demo"
+  ],
+  "egl_offscreen": [
+   "glgears_wgl"
+  ],
+  "fastWalshTransform": [
+   "fwt_t"
+  ],
+  "fft_cufft": [
+   "fft_t"
+  ],
+  "globalToShmemAsyncCopy": [
+   "cupy_asynccopy"
+  ],
+  "gpu_burn": [
+   "furmark_gl_stress",
+   "torch_burn"
+  ],
+  "graphMemoryNodes": [
+   "graphs_t"
+  ],
+  "hashcat": [
+   "hashcat"
+  ],
+  "hf_generate": [
+   "hf_generate"
+  ],
+  "histogram": [
+   "hist_t"
+  ],
+  "llama_bench": [
+   "llama_cuda_bench"
+  ],
+  "llama_cpp_gen": [
+   "llama_cuda_gen"
+  ],
+  "mandelbrot": [
+   "mandelbrot_t"
+  ],
+  "matrixMul": [
+   "matmul_t"
+  ],
+  "matrixMulDrv": [
+   "cup8_ladder"
+  ],
+  "memcpy2d": [
+   "memcpy2d_t"
+  ],
+  "nbody": [
+   "nbody_demo_bench",
+   "nbody_demo_gl",
+   "nbody_t"
+  ],
+  "nvdec_h264": [
+   "nvdec_h264"
+  ],
+  "nvenc_h264": [
+   "nvenc_h264"
+  ],
+  "nvenc_hevc": [
+   "nvenc_hevc"
+  ],
+  "nvidia_smi": [
+   "nvidia_smi"
+  ],
+  "reduce": [
+   "reduce_t"
+  ],
+  "reduction": [
+   "reduce_t"
+  ],
+  "scan": [
+   "scan_t"
+  ],
+  "sgemm_cublas": [
+   "matmul_t"
+  ],
+  "sha256": [
+   "cupy_sha256"
+  ],
+  "simpleAtomicIntrinsics": [
+   "atomics_t"
+  ],
+  "simpleCUBLAS": [
+   "matmul_t"
+  ],
+  "simpleCUFFT": [
+   "fft_t",
+   "oceanFFT_demo"
+  ],
+  "simpleCallback": [
+   "cuda_callback"
+  ],
+  "simpleCooperativeGroups": [
+   "cupy_cg"
+  ],
+  "simpleCudaGraphs": [
+   "graphs_t"
+  ],
+  "simpleOccupancy": [
+   "cuda_occupancy"
+  ],
+  "simpleStreams": [
+   "streams_t"
+  ],
+  "simpleZeroCopy": [
+   "zerocopy_t"
+  ],
+  "sortingNetworks": [
+   "sort_t"
+  ],
+  "stream_created": [
+   "stream_created_t"
+  ],
+  "stream_created2nd": [
+   "stream_created2nd_t"
+  ],
+  "stream_default": [
+   "stream_default_t"
+  ],
+  "stream_nonblocking": [
+   "stream_nonblocking_t"
+  ],
+  "stream_perthread": [
+   "stream_perthread_t"
+  ],
+  "stream_triad": [
+   "triad_t"
+  ],
+  "stream_two": [
+   "stream_two_t"
+  ],
+  "torch_ai_bench": [
+   "torch_ai_bench"
+  ],
+  "torch_correct": [
+   "torch_correct"
+  ],
+  "transpose": [
+   "transpose_t"
+  ],
+  "vectorAdd": [
+   "vectorAdd_demo"
+  ],
+  "vectorAddDrv": [
+   "cup2_ladder"
+  ],
+  "vkpeak": [
+   "vkpeak"
+  ],
+  "vulkaninfo": [
+   "vulkaninfo"
+  ]
+ },
+ "no_equivalent": {
+  "simpleIPC": "CUDA IPC (cudaIpcGetMemHandle) is not supported on WDDM Windows (TCC/Linux only)",
+  "geekbench_gpu": "Geekbench needs the internet to upload results (the Linux pass string is 'Uploading results'); the lane forbids guest internet at run time"
+ }
+}

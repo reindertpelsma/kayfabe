@@ -1,0 +1,26 @@
+{
+  "mode": "read-only",
+  "verdict": "PASS",
+  "pid": 667813,
+  "start_utc": "2026-10-12 00:11:36.222077 UTC",
+  "process_end_utc": "2026-10-12 00:11:36.253978 UTC",
+  "end_utc": "2026-10-12 00:11:38.254301 UTC",
+  "rc": 0,
+  "killed": false,
+  "journal_query_exit": 0,
+  "journal_stderr": "",
+  "xid_records": 0,
+  "pid_attributed_xids": 0,
+  "asserted_user_channel": true,
+  "cleanup_ok": true,
+  "observation": {
+    "finished": true,
+    "fence": 1,
+    "sentinel": 826366246,
+    "initial": 826366246,
+    "attempted": 655894552,
+    "gp_get": 1,
+    "gp_put": 1,
+    "elapsed_us": 5
+  }
+}

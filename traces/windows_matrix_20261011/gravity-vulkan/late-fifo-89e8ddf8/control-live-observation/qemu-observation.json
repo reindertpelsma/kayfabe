@@ -1,0 +1,35 @@
+{
+  "captured_utc": "2026-10-11T21:56:08.984175+00:00",
+  "source": "/var/lib/kf-windows-20261005/boundary-kayfabe-1495/qemu.log",
+  "snapshot_bytes": 1672449,
+  "source_size_at_open": 1672449,
+  "prefix_sha256": "54631ff73696913a65c2a328a30ffee8be39d52f9caa03a93d71771d50688a2b",
+  "line_count": 11758,
+  "counts": {
+    "RELAY-PEEK ARMED": 0,
+    "SW-SUBCH METHOD": 0,
+    "method 0x200 ": 17,
+    "CHANGED after its doorbell": 0,
+    "RELAY-PEEK BUDGET exhausted": 0,
+    "walk capacity ceiling": 0,
+    "slot pool exhausted": 0,
+    "OverDeclaredCap": 0,
+    "birth_refused": 90,
+    "HELD-BY-HOST": 0,
+    "REFUSED": 104,
+    "GSP phase Running -> Suspending": 1,
+    "cmd=0x20801116": 1
+  },
+  "counter_maxima": {
+    "birth_refused_cap": 0,
+    "unreconciled": 0,
+    "held": 0,
+    "named_missed": 152,
+    "invalidate_boot_max_us": 115329
+  },
+  "selected_count": 299,
+  "selected_written": 299,
+  "selected_truncated": false,
+  "candidate_methods_0x200": [],
+  "limits": "Guest-byte sample after forwarding, not GPU fetch/execution proof. Earlier object bindings/Legacy/arming/post-doorbell races remain. Boot-wide invalidate maxima do not identify the fault-time latency."
+}

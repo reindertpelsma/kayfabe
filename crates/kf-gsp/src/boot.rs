@@ -174,6 +174,12 @@ pub struct QueueBinding {
     /// `ogkm-610: :1436`, `ogkm-580: :1479`). The allowlist it guards has eight entries at
     /// 610 and six at 580 — see the crate-level note above.
     peer_read_at_bind: u32,
+    /// ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`): set only by a RESUME
+    /// ([`Transition::E15`]) — the peer's status-queue read pointer when the saved binding was
+    /// restored. A resume does not re-link (the guest's `rxReadPtr` continues where it stopped,
+    /// `ogkm-580: kernel_gsp_tu102.c:563-570`), so "the guest consumed `GSP_INIT_DONE`" is "the
+    /// pointer moved off this value", not "off zero".
+    resume_mark: Option<u32>,
 }
 
 impl QueueBinding {
@@ -262,6 +268,15 @@ pub enum Transition {
     E10,
     /// `device_reset` → `Cold`, unbound, every counter zero.
     E11,
+    /// ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`) — the platform's WAKE reset of a device whose
+    /// life a PM-transition suspend ended ([`GspFsm::wake_reset`]): every register back to
+    /// power-on (`Cold`), and the saved GSP-RM state — the queue binding, both cursors and both
+    /// sequence numbers — kept, as Booter Unload's suspend/resume data keeps it on silicon.
+    E14,
+    /// ★ 2026-10-14 — the resume ([`BootStep::FirmwareResume`] on a saved life): `Booted`, the
+    /// saved binding restored **without a publish** (no header write, no re-link, sequence numbers
+    /// continue), `GSP_INIT_DONE` posted into it.
+    E15,
     /// The guest drained `GSP_INIT_DONE` → `Running`. Observed, not assumed.
     Running,
 }
@@ -339,11 +354,31 @@ pub struct Unserviced {
 /// What the caller wants replied to a command.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Reply {
-    /// `rpc_result`, and `rpc_result_private` with it.
+    /// The envelope `rpc_result`. A non-zero value is a HARD STOP for the guest: `_issueRpcAndWait`
+    /// returns it verbatim and nothing else in the reply is read (`ogkm-595.84: rpc.c:2008-2025`).
     pub rpc_result: u32,
+    /// ★ The envelope `rpc_result_private`, when it must differ from `rpc_result`. `None` (every
+    /// reply but one) means "same value", which is what the guest has always been sent. Only fn 1's
+    /// down-negotiation sets it: OK in `rpc_result` and a private status that makes the guest read
+    /// the host's pair out of the body and retry (`ogkm-595.84: rpc.c:8947-8968`).
+    pub rpc_result_private: Option<u32>,
     /// The reply body. **Clamped** to the request's own body length
     /// ([`RpcCommand::reply`]).
     pub body: Vec<u8>,
+}
+
+impl Reply {
+    /// The reply as it goes on the wire for `cmd`: body clamped to the request
+    /// ([`RpcCommand::reply`]), and the private status split from `rpc_result` only when the policy
+    /// asked for it.
+    #[must_use]
+    pub fn on_wire(&self, cmd: &RpcCommand) -> OutgoingRpc {
+        let mut out = cmd.reply(self.rpc_result, &self.body);
+        if let Some(private) = self.rpc_result_private {
+            out.rpc_result_private = private;
+        }
+        out
+    }
 }
 
 /// ★★★ One reply the FSM is holding until the page-table refresh that its command triggered
@@ -381,6 +416,21 @@ struct HeldReply {
 pub struct Deferred {
     outcome: std::sync::Arc<core::sync::atomic::AtomicU64>,
     undo: std::sync::Arc<std::sync::Mutex<Option<OrphanUndo>>>,
+    /// ★ EXPERIMENT `KF3_GSS_NATIVE`: the HOST's reply bytes, written into the held reply when the
+    /// act succeeded ([`Self::set_reply_patch`]). `None` for every other act.
+    patch: std::sync::Arc<std::sync::Mutex<Option<ReplyPatch>>>,
+}
+
+/// ★ EXPERIMENT `KF3_GSS_NATIVE`: bytes an act wants in its held reply's payload, at `at`. Applied by
+/// [`GspFsm::release_held`] only when the act resolved `NV_OK` and only inside the payload the reply
+/// already has (the reply is clamped to the request's own size, `RpcCommand::reply`): a patch never
+/// grows a reply.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReplyPatch {
+    /// Offset into the reply payload.
+    pub at: usize,
+    /// The bytes.
+    pub bytes: Vec<u8>,
 }
 
 /// What undoes a deferred act whose command another link refused ([`Deferred::on_orphaned`]).
@@ -397,7 +447,23 @@ impl Deferred {
         Deferred {
             outcome: std::sync::Arc::new(core::sync::atomic::AtomicU64::new(Self::PENDING)),
             undo: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            patch: std::sync::Arc::new(std::sync::Mutex::new(None)),
         }
+    }
+
+    /// ★ EXPERIMENT `KF3_GSS_NATIVE`: the bytes the held reply carries when the act succeeds. Set
+    /// BEFORE [`Self::resolve`] (the reply may be posted the moment the cell resolves). A second
+    /// call replaces the first.
+    pub fn set_reply_patch(&self, at: usize, bytes: Vec<u8>) {
+        if let Ok(mut p) = self.patch.lock() {
+            *p = Some(ReplyPatch { at, bytes });
+        }
+    }
+
+    /// The reply patch, if one was set (a copy: a post that fails is retried).
+    #[must_use]
+    pub fn reply_patch(&self) -> Option<ReplyPatch> {
+        self.patch.lock().ok().and_then(|p| p.clone())
     }
 
     /// Resolve with an `NV_STATUS` (`0` = the act succeeded). The first resolution wins.
@@ -482,7 +548,16 @@ fn settle_deferred(rpc: &mut OutgoingRpc, d: &Deferred, alloc: bool) -> bool {
             );
             true
         }
-        Some(0) => true,
+        Some(0) => {
+            // ★ EXPERIMENT `KF3_GSS_NATIVE`: the host's bytes, only inside the payload the reply has.
+            if let Some(p) = d.reply_patch()
+                && let Some(end) = p.at.checked_add(p.bytes.len())
+                && let Some(dst) = rpc.payload.get_mut(p.at..end)
+            {
+                dst.copy_from_slice(&p.bytes);
+            }
+            true
+        }
         Some(status) => {
             rpc.rpc_result = status;
             rpc.rpc_result_private = status;
@@ -717,6 +792,7 @@ impl CommandPolicy for EchoOk {
         // the change: echoing is a thing a caller opts into, in one place, with this
         // type's docs attached — never something a caller gets by not deciding.
         Some(Reply {
+            rpc_result_private: None,
             rpc_result: 0,
             body: cmd.payload.clone(),
         })
@@ -937,6 +1013,16 @@ pub struct GspFsm {
     /// Found by B4's drain-on-publish: before it, the first *doorbell* after a re-acquire
     /// hit exactly the same wall, but no test rang one.
     cmd_read_ptr: u32,
+    /// ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`) — the binding a fn-47 suspend ended, kept
+    /// **inert** when the life entered `Halted` from `Suspending` (E2/E4/E13): nothing reads guest
+    /// RAM through it (a doorbell while `Halted` is still [`Transition::E8`], zero reads). Only a
+    /// resume ([`Transition::E15`]) of a life whose fn 47 was a PM transition
+    /// ([`GspFsm::note_pm_suspend`]) brings it back; a cold boot (E1), a publish (E6) or a reset
+    /// (E11) discards it.
+    suspended: Option<QueueBinding>,
+    /// ★ 2026-10-14 — the fn 47 that ended this life said `bInPMTransition` (and not GC6): the
+    /// device decodes the body and tells the FSM ([`GspFsm::note_pm_suspend`]).
+    pm_suspend: bool,
     /// `sharedMemPhysAddr` of the region the last bind used, if any — the discriminator
     /// between a re-acquire and a new driver life. See [`GspFsm::publish`].
     ///
@@ -1042,6 +1128,8 @@ impl GspFsm {
             cmd_seq: 0,
             cmd_read_ptr: 0,
             region_identity: None,
+            suspended: None,
+            pm_suspend: false,
             max_entries: 4096,
             fwsec_image: None,
             frts_image: None,
@@ -1136,6 +1224,59 @@ impl GspFsm {
         *self = GspFsm::new(self.abi);
         self.system_info = system_info;
         Transition::E11
+    }
+
+    /// ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`) — **the fn 47 that ended this life was a PM
+    /// transition** (`bInPMTransition`, not GC6), decoded by the device from the body. Recorded
+    /// only while that fn 47's suspend is current: `Suspending` (the falcon regime, before its
+    /// teardown STARTCPU) or `Halted` with the binding already saved (a regime whose firmware
+    /// halts itself, E13). Returns whether it was recorded.
+    pub fn note_pm_suspend(&mut self) -> bool {
+        let current = self.phase == BootPhase::Suspending
+            || (self.phase == BootPhase::Halted && self.suspended.is_some());
+        if current {
+            self.pm_suspend = true;
+        }
+        current
+    }
+
+    /// ★ 2026-10-14 — a saved GSP-RM life a resume can restore: a PM-transition fn 47 ended it and
+    /// its binding is kept ([`GspFsm::note_pm_suspend`]).
+    #[must_use]
+    pub fn resumable(&self) -> bool {
+        self.pm_suspend && self.suspended.is_some()
+    }
+
+    /// ★★ **E14 — the platform's WAKE reset** (QEMU's `RESET_TYPE_WAKEUP`, `hw/i386/pc.c:1723-1727`)
+    /// of a device whose life a PM-transition suspend ended and whose firmware has stopped
+    /// (`Halted`). `Some(E14)`: every register is back to power-on (`Cold`: WPR2 down, the
+    /// processor not running, the mailboxes and latches clear) and the saved GSP-RM state is
+    /// kept — the binding, both cursors, both sequence numbers and the region identity — as
+    /// Booter Unload's suspend/resume data keeps it across D3cold on silicon
+    /// (`_kgspGetBooterUnloadArgs`, `ogkm-580: kernel_gsp_tu102.c:589-606`). `None`: nothing to
+    /// keep — the caller resets totally ([`GspFsm::device_reset`], E11). ⊘ Any other phase
+    /// (a suspend that never reached its teardown, a running device) is never kept.
+    pub fn wake_reset(&mut self) -> Option<Transition> {
+        if self.phase != BootPhase::Halted || !self.resumable() {
+            return None;
+        }
+        let suspended = self.suspended.take();
+        let (stat_seq, cmd_seq, cmd_read_ptr, region_identity) = (
+            self.stat_seq,
+            self.cmd_seq,
+            self.cmd_read_ptr,
+            self.region_identity,
+        );
+        let refusals = std::mem::take(&mut self.refusals);
+        self.device_reset();
+        self.suspended = suspended;
+        self.pm_suspend = true;
+        self.stat_seq = stat_seq;
+        self.cmd_seq = cmd_seq;
+        self.cmd_read_ptr = cmd_read_ptr;
+        self.region_identity = region_identity;
+        self.refusals = refusals;
+        Some(Transition::E14)
     }
 
     /// Serve a register read, if this is a GSP register.
@@ -1319,6 +1460,18 @@ impl GspFsm {
                     report.transitions.push(Transition::E5);
                 }
             }
+            BootStep::FirmwareResume => {
+                // E15 — only a saved PM-suspended life resumes; every other case is the cold
+                // device's own SEC2 traffic (Ada's scrubber) and changes nothing.
+                if matches!(self.phase, BootPhase::Cold | BootPhase::Halted) && self.resumable() {
+                    let mut r = self.resume(ram, policy)?;
+                    report.transitions.push(Transition::E15);
+                    report.transitions.append(&mut r.transitions);
+                    report.commands.extend(r.commands);
+                    report.unserviced.extend(r.unserviced);
+                    report.raise_status_irq = true;
+                }
+            }
             BootStep::BootArgsLo(v) => {
                 self.mailbox_lo = v;
                 self.boot_args_seen.0 = true;
@@ -1400,6 +1553,10 @@ impl GspFsm {
             BootPhase::Cold | BootPhase::Halted => {
                 self.phase = BootPhase::ProtectedRegionUp;
                 self.fw_halted_after_suspend = false;
+                // ★ 2026-10-14: FWSEC runs only on a NORMAL boot (`ogkm-580:
+                // kernel_gsp_tu102.c:514-532`) — the guest is not resuming the saved life.
+                self.suspended = None;
+                self.pm_suspend = false;
                 self.frts_image = image;
                 self.frts_offset = None;
                 Transition::E1
@@ -1418,6 +1575,20 @@ impl GspFsm {
     /// Enter `Halted`: WPR2 down and — the load-bearing half — **the binding dropped by
     /// value**.
     fn enter_halted(&mut self) {
+        // ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`): a life a fn 47 suspended keeps its binding,
+        // INERT, for a resume; nothing reads through it until [`Transition::E15`]. Entering from
+        // any other phase saves nothing new and leaves a saved life as it is (a Booter Unload
+        // after the teardown STARTCPU already halted it changes nothing about it).
+        let queue = std::mem::take(&mut self.queue);
+        if self.phase == BootPhase::Suspending {
+            self.suspended = match queue {
+                QueueState::Bound(b) => Some(b),
+                QueueState::Unbound => None,
+            };
+            if self.suspended.is_none() {
+                self.pm_suspend = false;
+            }
+        }
         self.phase = BootPhase::Halted;
         // ★ v3-initrace: WPR2 is down; the next FWSEC-FRTS carries its own command.
         self.frts_offset = None;
@@ -1728,7 +1899,11 @@ impl GspFsm {
                 read_ptr: count.slot(self.cmd_read_ptr).index(),
             },
             peer_read_at_bind,
+            resume_mark: None,
         });
+        // ★ 2026-10-14: a publish is a new queue instance — a suspended life is not resumed.
+        self.suspended = None;
+        self.pm_suspend = false;
         self.init_done_posted = false;
 
         let init_done = OutgoingRpc {
@@ -1753,6 +1928,69 @@ impl GspFsm {
         // *recovered by luck*. Draining on the bind makes the recovery structural, and on
         // a guest whose ring is empty (610's order) it reads the write pointer, finds
         // nothing, and does nothing.
+        self.service_command_queue(ram, policy)
+    }
+
+    /// ★★ **E15 — the resume** (`docs/design/V3_S3_RESUME.md`). The design intent the
+    /// reachability theorem in [`GspFsm::publish`] wrote down: *"when it is built it must RESTORE
+    /// the binding without publishing, and the preserved-sequence contract belongs at THAT door"*.
+    ///
+    /// The guest's `KGSP_BOOT_MODE_SR_RESUME` does not link the status queue again — *"for resume
+    /// or GC6 exit, GSP-RM will restore queue state"* — and waits for `GSP_INIT_DONE` on the queue
+    /// it kept (`kgspWaitForRmInitDone`, `ogkm-580: kernel_gsp_tu102.c:563-575`,
+    /// `kernel_gsp.c:5214-5240`): its `rxReadPtr` and `rxSeqNum` continue, and so do ours. So the
+    /// saved binding comes back exactly as the suspend left it — no header write, no peek, no
+    /// sequence reset — and `GSP_INIT_DONE` is posted at the status stream's next sequence number.
+    ///
+    /// ⊘ Reads one word of guest RAM before posting (the peer's status read pointer, the
+    /// [`QueueBinding::resume_mark`]), through the geometry validated at the original bind.
+    ///
+    /// # Errors
+    ///
+    /// A refusal of a guest-supplied pointer; the life stays saved and the phase unchanged.
+    fn resume(
+        &mut self,
+        ram: &mut dyn GuestRam,
+        policy: &mut dyn CommandPolicy,
+    ) -> Result<ServiceReport, GspFault> {
+        let Some(mut binding) = self.suspended.take() else {
+            return Ok(ServiceReport::default());
+        };
+        let mark = match binding
+            .geom
+            .region()
+            .read_u32(ram, binding.geom.peer_stat_read_ptr_off())
+        {
+            Ok(v) => v,
+            Err(e) => {
+                self.suspended = Some(binding);
+                return Err(e);
+            }
+        };
+        binding.resume_mark = Some(mark);
+        binding.cmd = RxCursor {
+            read_ptr: binding.geom.msg_count().slot(self.cmd_read_ptr).index(),
+        };
+        self.queue = QueueState::Bound(binding);
+        self.pm_suspend = false;
+        self.fw_halted_after_suspend = false;
+        self.phase = BootPhase::Booted;
+        self.events_outstanding = false;
+        self.init_done_posted = false;
+        eprintln!(
+            "kayfabe: GSP-RESUME the saved binding restored (no publish): stat_seq={} cmd_seq={} cmd_read_ptr={} peer_stat_read={mark}",
+            self.stat_seq, self.cmd_seq, self.cmd_read_ptr
+        );
+        let init_done = OutgoingRpc {
+            function: self.abi.rpc.codes.gsp_init_done,
+            sequence: 0,
+            rpc_result: 0,
+            rpc_result_private: 0,
+            payload: Vec::new(),
+        };
+        self.post(ram, &init_done)?;
+        self.init_done_posted = true;
+        // As at a publish: whatever the guest queued before the resume is served now.
         self.service_command_queue(ram, policy)
     }
 
@@ -2083,12 +2321,21 @@ impl GspFsm {
     /// maxRpcSize)`, `rpc.c:2061`). ⊘ Both conditions: a short message that under-carries its
     /// params is NOT a head — holding it would wait for continuations that never come.
     fn large_head_declared(&self, cmd: &RpcCommand) -> Option<usize> {
-        if cmd.function != RpcFunction::RmControl {
-            return None;
-        }
-        let w = self.abi.driver.rm_control_wire();
-        let size = cmd.payload.get(w.params_size_off..w.params_size_off + 4)?;
-        let declared = w.params_off + u32::from_le_bytes(size.try_into().ok()?) as usize;
+        let declared = if cmd.function == RpcFunction::RmControl {
+            let w = self.abi.driver.rm_control_wire();
+            let size = cmd.payload.get(w.params_size_off..w.params_size_off + 4)?;
+            w.params_off + u32::from_le_bytes(size.try_into().ok()?) as usize
+        } else {
+            // ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`): an `ALLOC_MEMORY` whose PTE list
+            // outgrew one message — the suspend buffer GSP-RM's heap is saved into
+            // (`_fbsrInitGsp`, `ogkm-580: fbsr_gm107.c:104-138`). The layout is the version's
+            // generated MemoryList contract; no contract, no join.
+            let cell = kf_abi::memory_list::cell(self.abi.driver.driver_version())?;
+            if cmd.function != RpcFunction::Other(cell.function()) {
+                return None;
+            }
+            cell.declared_len(&cmd.payload)?
+        };
         let max_rpc =
             (self.abi.element_size_max as usize).saturating_sub(self.abi.element.hdr_size());
         (declared > cmd.payload.len() && cmd.payload.len() + crate::large::RPC_HEADER == max_rpc)
@@ -2107,7 +2354,7 @@ impl GspFsm {
         report: &mut ServiceReport,
     ) -> Result<(), GspFault> {
         let full = match policy.respond(whole) {
-            Some(r) => whole.reply(r.rpc_result, &r.body),
+            Some(r) => r.on_wire(whole),
             None => {
                 report.unserviced.push(Unserviced {
                     code: whole.code,
@@ -2116,8 +2363,15 @@ impl GspFsm {
                 whole.reply(NV_ERR_NOT_SUPPORTED, &[])
             }
         };
-        let replies =
-            crate::large::split_reply(&full, fragments, self.abi.rpc.codes.continuation_record);
+        let replies = if crate::large::bidirectional(whole.function) {
+            crate::large::split_reply(&full, fragments, self.abi.rpc.codes.continuation_record)
+        } else {
+            // ★ 2026-10-14: one reply, at the head, carrying only the status the guest reads.
+            vec![OutgoingRpc {
+                payload: Vec::new(),
+                ..full.clone()
+            }]
+        };
         let QueueState::Bound(binding) = &self.queue else {
             return Err(GspFault::QueueNotBound);
         };
@@ -2217,7 +2471,7 @@ impl GspFsm {
             Some(r) if cmd.function == RpcFunction::RmAlloc => {
                 cmd.reply_alloc(r.rpc_result, &r.body, &self.abi.driver, payload_max)
             }
-            Some(r) => cmd.reply(r.rpc_result, &r.body),
+            Some(r) => r.on_wire(cmd),
             None => {
                 report.unserviced.push(Unserviced {
                     code: cmd.code,
@@ -2751,7 +3005,12 @@ impl GspFsm {
         // everything": a reply posted in this very service pass is not yet drained, and
         // waiting for it would keep the FSM out of `Running` for exactly as long as it
         // keeps answering.
-        let drained = linked && peer_read != 0;
+        let drained = match b.resume_mark {
+            // ★ 2026-10-14: a resumed binding was never re-linked — the pointer continues from
+            // where the suspend left it, so moving off that value is consuming `GSP_INIT_DONE`.
+            Some(mark) => peer_read != mark,
+            None => linked && peer_read != 0,
+        };
         if self.phase == BootPhase::Booted && self.init_done_posted && drained {
             self.phase = BootPhase::Running;
             return Ok(true);
@@ -3011,6 +3270,50 @@ mod a_reply_whose_status_is_a_host_act {
         assert!(!bare.run_orphan_undo());
     }
 
+    /// ★ EXPERIMENT `KF3_GSS_NATIVE`: the host's bytes land in the held reply when the act succeeded,
+    /// only inside the payload the reply has, and never when the act failed or the reply is a refusal.
+    #[test]
+    fn a_reply_patch_lands_only_on_success_and_only_inside_the_reply() {
+        let bytes = vec![0xAB, 0xCD, 0xEF];
+        // Success: written at `at`, nothing else moves.
+        let d = Deferred::new();
+        d.set_reply_patch(10, bytes.clone());
+        d.resolve(0);
+        let mut rpc = held(0);
+        assert!(settle_deferred(&mut rpc, &d, false));
+        assert_eq!(&rpc.payload[10..13], &bytes[..]);
+        assert_eq!(rpc.payload.len(), 40);
+        assert!(rpc.payload[..10].iter().all(|b| *b == 0));
+        assert!(rpc.payload[13..].iter().all(|b| *b == 0));
+        // A retried post settles again from a fresh clone: the patch is still there.
+        let mut again = held(0);
+        assert!(settle_deferred(&mut again, &d, false));
+        assert_eq!(again.payload, rpc.payload);
+        // Failure: the status is the reply's and the bytes are NOT written.
+        let bad = Deferred::new();
+        bad.set_reply_patch(10, bytes.clone());
+        bad.resolve(0x56);
+        let mut r = held(0);
+        assert!(settle_deferred(&mut r, &bad, false));
+        assert_eq!(r.rpc_result, 0x56);
+        assert!(r.payload.iter().all(|b| *b == 0));
+        // A patch that does not fit the reply is dropped whole (the reply never grows).
+        let big = Deferred::new();
+        big.set_reply_patch(38, bytes);
+        big.resolve(0);
+        let mut r = held(0);
+        assert!(settle_deferred(&mut r, &big, false));
+        assert_eq!(r.payload.len(), 40);
+        assert!(r.payload.iter().all(|b| *b == 0));
+        // A refused reply (another link) is not patched.
+        let refused = Deferred::new();
+        refused.set_reply_patch(0, vec![1]);
+        refused.resolve(0);
+        let mut r = held(0x19);
+        assert!(settle_deferred(&mut r, &refused, false));
+        assert!(r.payload.iter().all(|b| *b == 0));
+    }
+
     /// ⊘ The default defers nothing, and a chain reports the one link that deferred wherever it
     /// sits — the channel link is seated ahead of the answerer.
     #[test]
@@ -3151,7 +3454,7 @@ mod a_life_ends_and_the_next_one_boots {
     }
 
     /// A guest RAM the test proves is never touched.
-    struct Untouchable;
+    pub(super) struct Untouchable;
     impl GuestRam for Untouchable {
         fn read(&mut self, gpa: u64, _buf: &mut [u8]) -> Result<(), crate::fault::RamRefused> {
             panic!("a suspended GSP read guest RAM at {gpa:#x}");
@@ -3508,5 +3811,1316 @@ mod fn72_is_kept_for_fn65 {
             &rpc(RpcFunction::GspSetSystemInfo, 72, vec![7; 936], 3),
         );
         assert_eq!(f, GspFsm::new(abi()));
+    }
+}
+
+#[cfg(test)]
+mod device_reset_from_every_phase {
+    //! ★★★ E11 is wired to QEMU's PCI device reset, so it must be **total from wherever the guest left
+    //! the device**: every [`BootPhase`], with and without live state (held replies, command doorbells
+    //! not yet serviced, a recorded refusal, the boot-args shadows, an outstanding event batch, a large
+    //! RPC half-joined), with and without the shared system-info cell.
+    //!
+    //! GPU-free and QEMU-free. The device is driven the way the register plane drives it: through
+    //! [`GspFsm::mmio_write_with`] with a minimal in-test register model (a [`GspModel`] and a
+    //! [`kf_arch::BootSequence`] that map a handful of made-up offsets onto the real [`BootStep`]s),
+    //! and through the guest's side of the queues in a sparse fake guest RAM — the region array, the
+    //! init args, the page table and both rings are laid out for real, so `publish`, `post`, the
+    //! command drain and the Booted → Running edge are the FSM's own code.
+    //!
+    //! ⊘ Two things are injected rather than reached, and both only where no queue exists yet:
+    //! in `Cold` and `ProtectedRegionUp` a held reply is made by calling the private `answer` (the
+    //! function the queue drain calls) directly, because there is no ring to carry a command; and
+    //! no refusal can be recorded there at all (a refusal is written only after a reply is posted).
+    use super::a_life_ends_and_the_next_one_boots::abi;
+    use super::*;
+    use crate::ring::TxHeader;
+    use crate::sysinfo::SystemInfoCell;
+    use kf_abi::postevent::PostEvent;
+    use kf_arch::gsp::{
+        BootSequence, BootStageDesc, BootSteps, FalconDma, GspModel, GspReg, LibosRegionLayout,
+    };
+    use std::collections::BTreeMap;
+
+    // ---- the in-test register model ---------------------------------------------------------
+
+    const OFF_START: u64 = 0x10;
+    const OFF_FWSEC: u64 = 0x18;
+    const OFF_FW_LOADED: u64 = 0x20;
+    /// ★ 2026-10-14: the resume's Booter Load ([`BootStep::FirmwareResume`]).
+    const OFF_FW_RESUME: u64 = 0x28;
+    const OFF_TEARDOWN: u64 = 0x30;
+    const OFF_ARGS_LO: u64 = 0x40;
+    const OFF_ARGS_HI: u64 = 0x44;
+    const OFF_PUBLISH: u64 = 0x48;
+    const OFF_DOORBELL: u64 = 0x50;
+    const OFF_IRQ_CLEAR: u64 = 0x60;
+    const OFF_BCR: u64 = 0x70;
+    /// Every offset the model can read back.
+    const READ_OFFS: [u64; 7] = [0x70, 0x100, 0x104, 0x108, 0x10c, 0x110, 0x114];
+    const RMARGS_ID: u64 = 0x0052_4d41_5247_5300;
+
+    /// Exhaustive on purpose: a new [`BootPhase`] stops this test module compiling until every
+    /// driver below has been taught about it.
+    fn ordinal(p: BootPhase) -> u64 {
+        match p {
+            BootPhase::Cold => 0,
+            BootPhase::ProtectedRegionUp => 1,
+            BootPhase::Booted => 2,
+            BootPhase::Running => 3,
+            BootPhase::Suspending => 4,
+            BootPhase::Halted => 5,
+        }
+    }
+
+    const PHASES: [BootPhase; 6] = [
+        BootPhase::Cold,
+        BootPhase::ProtectedRegionUp,
+        BootPhase::Booted,
+        BootPhase::Running,
+        BootPhase::Suspending,
+        BootPhase::Halted,
+    ];
+
+    struct Seq {
+        after: AfterSuspend,
+    }
+
+    impl BootSequence for Seq {
+        fn stages(&self) -> &'static [BootStageDesc] {
+            &[]
+        }
+        fn on_write(
+            &self,
+            _model: &dyn GspModel,
+            w: &RegWrite,
+            _ctx: &BootContext,
+            state: &mut ArchBootState,
+        ) -> BootSteps {
+            match w.off {
+                OFF_START => BootSteps::one(BootStep::StartProcessor),
+                OFF_FWSEC => {
+                    // generation-local state that only `arch_state` holds, so a reset has to clear it
+                    state.set_latch(0, w.val);
+                    BootSteps::one(BootStep::FwsecCommand(w.val))
+                }
+                OFF_FW_LOADED => BootSteps::one(BootStep::FirmwareLoaded),
+                OFF_FW_RESUME => BootSteps::one(BootStep::FirmwareResume),
+                OFF_TEARDOWN => BootSteps::one(BootStep::Teardown),
+                OFF_ARGS_LO => BootSteps::one(BootStep::BootArgsLo(w.val as u32)),
+                OFF_ARGS_HI => {
+                    state.window_write_u32(0, w.val as u32);
+                    BootSteps::one(BootStep::BootArgsHi(w.val as u32))
+                }
+                OFF_PUBLISH => BootSteps::one(BootStep::PublishBootArgs(w.val)),
+                OFF_DOORBELL => BootSteps::one(BootStep::CommandDoorbell),
+                OFF_IRQ_CLEAR => BootSteps::one(BootStep::ClearStatusIrq),
+                _ => BootSteps::none(),
+            }
+        }
+        fn after_suspend(&self) -> AfterSuspend {
+            self.after
+        }
+    }
+
+    struct Mini {
+        seq: Seq,
+    }
+
+    impl GspModel for Mini {
+        fn decode_reg(&self, bar: u8, off: u64) -> Option<GspReg> {
+            if bar != 0 {
+                return None;
+            }
+            match off {
+                0x70 => Some(GspReg::GspRiscvBcrCtrl),
+                0x100 => Some(GspReg::GspFalconCpuctl),
+                0x104 => Some(GspReg::GspFalconMailbox0),
+                0x108 => Some(GspReg::GspFalconMailbox1),
+                0x10c => Some(GspReg::GspFalconIrqstat),
+                0x110 => Some(GspReg::Wpr2AddrLo),
+                0x114 => Some(GspReg::GspRiscvCpuctl),
+                _ => None,
+            }
+        }
+        fn is_startcpu(&self, _value: u64) -> bool {
+            false
+        }
+        fn is_booter_unload(&self, _sec2_mailbox0: u32) -> bool {
+            false
+        }
+        fn is_swgen0_clear(&self, _value: u64) -> bool {
+            false
+        }
+        /// Every observable field reaches some register, so a read-back compares the whole
+        /// [`GspObservation`].
+        fn encode(&self, reg: GspReg, o: &GspObservation) -> Option<u64> {
+            Some(match reg {
+                GspReg::GspRiscvBcrCtrl => o.riscv_bcr_ctrl.map_or(0xffff_ffff, u64::from),
+                GspReg::GspFalconCpuctl => {
+                    ordinal(o.stage)
+                        | (u64::from(o.wpr2_up) << 8)
+                        | (u64::from(o.riscv_active) << 9)
+                        | (u64::from(o.suspended) << 10)
+                        | (u64::from(o.swgen0_pending) << 11)
+                }
+                GspReg::GspFalconMailbox0 => u64::from(o.boot_args_lo),
+                GspReg::GspFalconMailbox1 => u64::from(o.boot_args_hi),
+                GspReg::GspFalconIrqstat => u64::from(o.swgen0_pending),
+                GspReg::Wpr2AddrLo => o.frts_offset.unwrap_or(0xdead),
+                GspReg::GspRiscvCpuctl => u64::from(o.riscv_active),
+                _ => return None,
+            })
+        }
+        fn libos_region_layout(&self) -> LibosRegionLayout {
+            LibosRegionLayout {
+                entry_stride: 24,
+                id_offset: 0,
+                pa_offset: 8,
+                size_offset: 16,
+                max_entries: 4,
+                rmargs_id: RMARGS_ID,
+            }
+        }
+        fn falcon_dma(&self, _bar: u8, _off: u64, _value: u64) -> Option<FalconDma> {
+            None
+        }
+        fn boot_sequence(&self) -> &dyn BootSequence {
+            &self.seq
+        }
+    }
+
+    // ---- the policy: the three outcomes a reset must be able to interrupt ---------------------
+
+    /// `GSP_RM_CONTROL` is unmodelled (a refusal, recorded), `GSP_RM_ALLOC` is held for its
+    /// refresh (a held reply), everything else is echoed.
+    struct Live;
+    impl CommandPolicy for Live {
+        fn respond(&mut self, cmd: &RpcCommand) -> Option<Reply> {
+            match cmd.function {
+                RpcFunction::RmControl => None,
+                _ => Some(Reply {
+                    rpc_result: 0,
+                    rpc_result_private: None,
+                    body: cmd.payload.clone(),
+                }),
+            }
+        }
+        fn holds_for_refresh(&self, cmd: &RpcCommand) -> bool {
+            cmd.function == RpcFunction::RmAlloc
+        }
+    }
+
+    // ---- sparse fake guest RAM -----------------------------------------------------------------
+
+    const PAGE: u64 = 4096;
+
+    /// Unwritten pages are refused, as unregistered RAM is.
+    #[derive(Default, Clone, PartialEq, Eq)]
+    struct Ram(BTreeMap<u64, Box<[u8; PAGE as usize]>>);
+
+    impl Ram {
+        fn put(&mut self, gpa: u64, bytes: &[u8]) {
+            for (i, b) in bytes.iter().enumerate() {
+                let at = gpa + i as u64;
+                self.0
+                    .entry(at / PAGE)
+                    .or_insert_with(|| Box::new([0; PAGE as usize]))[(at % PAGE) as usize] = *b;
+            }
+        }
+        fn put32(&mut self, gpa: u64, v: u32) {
+            self.put(gpa, &v.to_le_bytes());
+        }
+        fn put64(&mut self, gpa: u64, v: u64) {
+            self.put(gpa, &v.to_le_bytes());
+        }
+        fn get32(&mut self, gpa: u64) -> u32 {
+            let mut b = [0u8; 4];
+            self.read(gpa, &mut b).expect("mapped");
+            u32::from_le_bytes(b)
+        }
+    }
+
+    impl GuestRam for Ram {
+        fn read(&mut self, gpa: u64, buf: &mut [u8]) -> Result<(), crate::fault::RamRefused> {
+            let len = buf.len();
+            for (i, o) in buf.iter_mut().enumerate() {
+                let at = gpa + i as u64;
+                *o = self
+                    .0
+                    .get(&(at / PAGE))
+                    .map(|p| p[(at % PAGE) as usize])
+                    .ok_or(crate::fault::RamRefused {
+                        gpa,
+                        len,
+                        why: "not registered",
+                    })?;
+            }
+            Ok(())
+        }
+        fn write(&mut self, gpa: u64, bytes: &[u8]) -> Result<(), crate::fault::RamRefused> {
+            self.put(gpa, bytes);
+            Ok(())
+        }
+    }
+
+    // ---- the guest's memory layout --------------------------------------------------------------
+
+    const ARRAY: u64 = 0x10_0000;
+    const ARGS: u64 = 0x11_0000;
+    const REGION: u64 = 0x20_0000;
+    const IMAGE: u64 = 0x7654_3000;
+    const ELEM: u64 = PAGE;
+    /// Elements per ring. Large enough to hold one maximum-size RPC and the traffic around it.
+    const COUNT: u64 = 64;
+    const CMD_OFF: u64 = 0x1000;
+    const QSIZE: u64 = ELEM * (1 + COUNT);
+    const STAT_OFF: u64 = CMD_OFF + QSIZE;
+    const REGION_PAGES: u64 = (STAT_OFF + QSIZE) / PAGE;
+    const RX_HDR_OFF: u64 = 32;
+
+    /// One device and the guest around it: the FSM, the guest RAM, the register model, the policy.
+    struct Dev {
+        fsm: GspFsm,
+        ram: Ram,
+        model: Mini,
+        policy: Live,
+        /// The guest's command `seqNum` and the producer's `writePtr`.
+        guest_seq: u32,
+        guest_wp: u32,
+        /// A `GSP_SET_SYSTEM_INFO` body was sent this life.
+        sent_sysinfo: bool,
+    }
+
+    impl Dev {
+        /// A guest life with its queues laid out in fresh RAM, against `fsm`.
+        fn life(fsm: GspFsm, after: AfterSuspend) -> Dev {
+            let il = fsm.abi.init_args;
+            let hdr_size = fsm.abi.element.hdr_size() as u64;
+            let swap = fsm.abi.msgq.swap_rx_flag;
+            let mut ram = Ram::default();
+            // the LibOS region array: entry 0 is RMARGS
+            ram.put64(ARRAY, RMARGS_ID);
+            ram.put64(ARRAY + 8, ARGS);
+            // MESSAGE_QUEUE_INIT_ARGUMENTS
+            let mut args = vec![0u8; il.min_size.max(64)];
+            let mut set64 =
+                |off: usize, v: u64| args[off..off + 8].copy_from_slice(&v.to_le_bytes());
+            set64(il.shared_mem_pa_off, REGION);
+            set64(il.cmd_queue_off_off, CMD_OFF);
+            set64(il.stat_queue_off_off, STAT_OFF);
+            if let Some(off) = il.element_hdr_size_off {
+                set64(off, hdr_size);
+            }
+            args[il.pte_count_off..il.pte_count_off + 4]
+                .copy_from_slice(&(REGION_PAGES as u32).to_le_bytes());
+            ram.put(ARGS, &args);
+            // the region's page table lives in its own first page
+            for i in 0..REGION_PAGES {
+                ram.put64(REGION + i * 8, REGION + i * PAGE);
+            }
+            // the guest's command queue header
+            let hdr = TxHeader {
+                version: 0,
+                size: QSIZE as u32,
+                msg_size: ELEM as u32,
+                msg_count: COUNT as u32,
+                write_ptr: 0,
+                flags: swap,
+                rx_hdr_off: RX_HDR_OFF as u32,
+                entry_off: ELEM as u32,
+            };
+            ram.put(REGION + CMD_OFF, &hdr.encode());
+            // the DMEM image RM patched for FWSEC-FRTS (`a_retry_after_a_failed_boot_…`'s fixture)
+            let g = kf_abi::vbios::GENERATED_FWSEC;
+            let base = IMAGE + u64::from(g.dmem_phys_base);
+            ram.put(base, &vec![0u8; g.dmem_load_size as usize]);
+            ram.put32(
+                base + u64::from(g.dmem_mapper_offset + 8),
+                g.cmd_in_buffer_offset,
+            );
+            ram.put32(base + u64::from(g.dmem_mapper_offset + 44), 0x15);
+            let desc = base + u64::from(g.cmd_in_buffer_offset + 24);
+            for (i, v) in [1u32, 20, 0x1f6e0, 0x100, 2].into_iter().enumerate() {
+                ram.put32(desc + 4 * i as u64, v);
+            }
+            Dev {
+                fsm,
+                ram,
+                model: Mini { seq: Seq { after } },
+                policy: Live,
+                guest_seq: 0,
+                guest_wp: 0,
+                sent_sysinfo: false,
+            }
+        }
+
+        fn write(&mut self, off: u64, val: u64) -> String {
+            format!(
+                "{:?}",
+                self.fsm
+                    .mmio_write_with(&mut self.ram, &self.model, &mut self.policy, 0, off, val)
+            )
+        }
+
+        fn read(&self, off: u64) -> Option<Result<u64, GspFault>> {
+            self.fsm.mmio_read_with(&self.model, 0, off)
+        }
+
+        /// The guest's own command element: the wire format is shared with `post`'s, which is not
+        /// what is under test here.
+        fn send(&mut self, code: u32, payload: Vec<u8>) {
+            let abi = self.fsm.abi;
+            let rpc = OutgoingRpc {
+                function: code,
+                sequence: 100 + self.guest_seq,
+                rpc_result: 0,
+                rpc_result_private: 0,
+                payload,
+            };
+            let bytes = encode_message(
+                &abi.element,
+                abi.rpc.header_version,
+                ELEM as u32,
+                abi.element_size_max,
+                self.guest_seq,
+                &rpc,
+            )
+            .expect("a command that fits");
+            let n = bytes.len() as u64 / ELEM;
+            for i in 0..n {
+                let slot = (u64::from(self.guest_wp) + i) % COUNT;
+                let from = (i * ELEM) as usize;
+                self.ram.put(
+                    REGION + CMD_OFF + ELEM + slot * ELEM,
+                    &bytes[from..from + ELEM as usize],
+                );
+            }
+            self.guest_wp = ((u64::from(self.guest_wp) + n) % COUNT) as u32;
+            self.ram.put32(REGION + CMD_OFF + 16, self.guest_wp);
+            self.guest_seq += 1;
+        }
+
+        /// The guest ISR: it has read everything the status ring holds (writes its `readPtr`).
+        fn guest_drains_status(&mut self) {
+            let wp = self.ram.get32(REGION + STAT_OFF + 16);
+            self.ram.put32(REGION + CMD_OFF + RX_HDR_OFF, wp);
+        }
+
+        /// Ring the command doorbell and let the worker service it.
+        fn ring(&mut self) -> String {
+            let w = self.write(OFF_DOORBELL, 1);
+            let s = format!(
+                "{:?}",
+                self.fsm
+                    .service_one_deferred_command(&mut self.ram, &mut self.policy)
+            );
+            format!("{w} / {s}")
+        }
+
+        fn start_with_frts(&mut self) -> String {
+            let a = self.write(OFF_FWSEC, IMAGE);
+            let b = self.write(OFF_START, 1);
+            let c = format!("{:?}", self.fsm.resolve_frts_command(&mut self.ram));
+            format!("{a} / {b} / {c}")
+        }
+
+        fn firmware_loaded(&mut self) -> String {
+            self.write(OFF_FW_LOADED, 1)
+        }
+
+        fn publish(&mut self) -> String {
+            let a = self.write(OFF_ARGS_LO, ARRAY & 0xffff_ffff);
+            let b = self.write(OFF_ARGS_HI, ARRAY >> 32);
+            let c = self.write(OFF_PUBLISH, ARRAY);
+            format!("{a} / {b} / {c}")
+        }
+
+        fn run(&mut self) -> String {
+            self.guest_drains_status();
+            self.ring()
+        }
+
+        /// A set-system-info (async), an unmodelled control (a refusal) and an alloc (a held reply).
+        fn queue_traffic(&mut self) -> String {
+            let abi = self.fsm.abi;
+            self.send(abi.rpc.codes.gsp_set_system_info, vec![7; 936]);
+            self.sent_sysinfo = true;
+            self.send(abi.rpc.codes.gsp_rm_control, vec![0; 40]);
+            self.send(abi.rpc.codes.gsp_rm_alloc, vec![0; 64]);
+            self.ring()
+        }
+
+        /// fn 47, the guest's last close.
+        fn unload(&mut self) -> String {
+            let code = self.fsm.abi.rpc.codes.unloading_guest_driver;
+            self.send(code, vec![0; 8]);
+            self.ring()
+        }
+
+        fn deliver_an_event(&mut self) -> String {
+            let ev = PostEvent {
+                client: 1,
+                event: 2,
+                notify_index: 3,
+            };
+            format!("{:?}", self.fsm.deliver_events(&mut self.ram, &[ev]))
+        }
+
+        /// The head of a `GSP_RM_CONTROL` that needs continuations: a maximum-size message whose
+        /// declared params are longer — the assembler is left holding it.
+        fn open_a_large_control(&mut self) -> String {
+            let abi = self.fsm.abi;
+            let w = abi.driver.rm_control_wire();
+            let len =
+                abi.element_size_max as usize - abi.element.hdr_size() - crate::large::RPC_HEADER;
+            let mut payload = vec![0u8; len];
+            payload[w.params_size_off..w.params_size_off + 4]
+                .copy_from_slice(&(1u32 << 16).to_le_bytes());
+            self.send(abi.rpc.codes.gsp_rm_control, payload);
+            self.ring()
+        }
+
+        /// A command held where there is no ring to carry it: the private `answer`, as the drain calls it.
+        fn hold_a_reply_directly(&mut self) {
+            let cmd = RpcCommand {
+                function: RpcFunction::RmAlloc,
+                code: 103,
+                sequence: 9,
+                payload: vec![0u8; 64],
+                elements: 1,
+                delivered: Vec::new(),
+            };
+            let mut report = ServiceReport::default();
+            self.fsm
+                .answer(&mut self.ram, &mut self.policy, &cmd, &mut report)
+                .expect("a held reply posts nothing");
+        }
+
+        /// Pending doorbells, the boot-args shadows and the BCR shadow: register-plane state with no
+        /// queue behind it.
+        fn dirty_the_register_plane(&mut self) {
+            self.write(OFF_ARGS_LO, 0xaaaa_0001);
+            self.write(OFF_ARGS_HI, 0x0000_00bb);
+            self.write(OFF_BCR, 0x1234);
+            self.write(OFF_DOORBELL, 1);
+            self.write(OFF_DOORBELL, 1);
+            self.fsm.note_command_doorbells(1);
+        }
+
+        /// Everything an outside reader can see of the device.
+        fn snapshot(&self) -> String {
+            let reads: Vec<_> = READ_OFFS.iter().map(|o| self.read(*o)).collect();
+            format!(
+                "{:?} {:?} reads={reads:?} held={} pending={} cmd_seq={} refusals={} large_open={}",
+                self.fsm.phase(),
+                self.fsm.observe(),
+                self.fsm.held_len(),
+                self.fsm.pending_command_doorbells(),
+                self.fsm.command_seq(),
+                self.fsm.refusals().total(),
+                self.fsm.large.is_open(),
+            )
+        }
+    }
+
+    fn fresh(cell: Option<&SystemInfoCell>) -> GspFsm {
+        let f = GspFsm::new(abi());
+        match cell {
+            Some(c) => f.with_system_info_cell(c.clone()),
+            None => f,
+        }
+    }
+
+    /// Drive a fresh device into `phase`; with `live`, leave as much in flight as that phase can hold.
+    ///
+    /// ★ The `match` is exhaustive: a new [`BootPhase`] must be given a driver here.
+    fn drive(phase: BootPhase, live: bool, cell: Option<&SystemInfoCell>) -> Dev {
+        let after = match phase {
+            BootPhase::Halted => AfterSuspend::FirmwareHalts,
+            BootPhase::Cold
+            | BootPhase::ProtectedRegionUp
+            | BootPhase::Booted
+            | BootPhase::Running
+            | BootPhase::Suspending => AfterSuspend::AwaitsTeardownUcode,
+        };
+        let mut d = Dev::life(fresh(cell), after);
+        match phase {
+            BootPhase::Cold => {
+                if live {
+                    d.write(OFF_FWSEC, IMAGE); // a DMEM load nobody started
+                    d.dirty_the_register_plane();
+                    d.hold_a_reply_directly();
+                }
+            }
+            BootPhase::ProtectedRegionUp => {
+                d.start_with_frts();
+                if live {
+                    d.dirty_the_register_plane();
+                    d.hold_a_reply_directly();
+                }
+            }
+            BootPhase::Booted => {
+                d.start_with_frts();
+                d.firmware_loaded();
+                d.publish();
+                if live {
+                    d.queue_traffic();
+                }
+            }
+            BootPhase::Running => {
+                d.start_with_frts();
+                d.firmware_loaded();
+                d.publish();
+                d.run();
+                if live {
+                    d.queue_traffic();
+                    d.deliver_an_event();
+                    d.open_a_large_control();
+                }
+            }
+            BootPhase::Suspending | BootPhase::Halted => {
+                d.start_with_frts();
+                d.firmware_loaded();
+                d.publish();
+                d.run();
+                if live {
+                    d.queue_traffic();
+                    d.deliver_an_event();
+                }
+                d.unload();
+            }
+        }
+        if live {
+            d.fsm.note_command_doorbells(2);
+        }
+        d
+    }
+
+    /// Booter Unload ends the life instead of the firmware halting itself.
+    fn drive_halted_by_booter_unload(live: bool, cell: Option<&SystemInfoCell>) -> Dev {
+        let mut d = Dev::life(fresh(cell), AfterSuspend::AwaitsTeardownUcode);
+        d.start_with_frts();
+        d.firmware_loaded();
+        d.publish();
+        d.run();
+        if live {
+            d.queue_traffic();
+            d.deliver_an_event();
+        }
+        d.write(OFF_TEARDOWN, 1);
+        if live {
+            d.fsm.note_command_doorbells(1);
+        }
+        d
+    }
+
+    // ---- 0. the drivers really do what they claim ---------------------------------------------
+
+    #[test]
+    fn every_driver_reaches_its_phase_with_the_live_state_it_claims() {
+        let ph = |p: BootPhase| usize::try_from(ordinal(p)).expect("small");
+        for phase in PHASES {
+            assert_eq!(ph(phase), PHASES.iter().position(|p| *p == phase).unwrap());
+            let quiet = drive(phase, false, None);
+            assert_eq!(quiet.fsm.phase(), phase, "{phase:?}: quiet driver");
+            assert_eq!(quiet.fsm.held_len(), 0, "{phase:?}: nothing held");
+            assert_eq!(quiet.fsm.pending_command_doorbells(), 0, "{phase:?}");
+
+            let d = drive(phase, true, None);
+            assert_eq!(d.fsm.phase(), phase, "{phase:?}: live driver");
+            assert!(d.fsm.held_len() > 0, "{phase:?}: a reply is held");
+            assert!(
+                d.fsm.pending_command_doorbells() > 0,
+                "{phase:?}: a doorbell waits"
+            );
+            assert_ne!(
+                d.fsm.observe().boot_args_lo,
+                0,
+                "{phase:?}: the shadows were written"
+            );
+            let has_queue = ordinal(phase) >= 2;
+            assert_eq!(
+                d.fsm.refusals().total() > 0,
+                has_queue,
+                "{phase:?}: a refusal is recorded exactly where a ring exists"
+            );
+            assert_eq!(d.sent_sysinfo, has_queue, "{phase:?}");
+            // the outstanding event batch dies with the binding (`enter_halted`), not at fn 47
+            assert_eq!(
+                d.fsm.events_outstanding,
+                matches!(phase, BootPhase::Running | BootPhase::Suspending),
+                "{phase:?}: events outstanding"
+            );
+            assert_eq!(
+                d.fsm.large.is_open(),
+                phase == BootPhase::Running,
+                "{phase:?}: a large control is half-joined only in the Running driver"
+            );
+            assert_eq!(
+                matches!(d.fsm.queue(), QueueState::Bound(_)),
+                matches!(
+                    phase,
+                    BootPhase::Booted | BootPhase::Running | BootPhase::Suspending
+                ),
+                "{phase:?}: binding"
+            );
+        }
+        let d = drive(BootPhase::Halted, true, None);
+        assert!(
+            d.fsm.fw_halted_after_suspend,
+            "the FSP regime halted itself"
+        );
+        assert!(d.fsm.observe().swgen0_pending, "and kept its status IRQ");
+    }
+
+    // ---- 1. reset from every phase -------------------------------------------------------------
+
+    #[test]
+    fn a_device_reset_from_every_phase_is_e11_and_a_fresh_device() {
+        for phase in PHASES {
+            for live in [false, true] {
+                let mut d = drive(phase, live, None);
+                if phase != BootPhase::Cold || live {
+                    assert_ne!(
+                        d.fsm,
+                        GspFsm::new(abi()),
+                        "{phase:?} live={live}: not vacuous"
+                    );
+                }
+                assert_eq!(
+                    d.fsm.device_reset(),
+                    Transition::E11,
+                    "{phase:?} live={live}"
+                );
+                assert_eq!(d.fsm, GspFsm::new(abi()), "{phase:?} live={live}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_device_reset_from_every_phase_keeps_the_system_info_cell_and_nothing_else() {
+        for phase in PHASES {
+            for live in [false, true] {
+                let cell = SystemInfoCell::new();
+                let mut d = drive(phase, live, Some(&cell));
+                let stashed = cell.latest();
+                assert_eq!(
+                    stashed.is_some(),
+                    d.sent_sysinfo,
+                    "{phase:?} live={live}: fn 72 reached the cell exactly when the ring carried it"
+                );
+                assert_eq!(
+                    d.fsm.device_reset(),
+                    Transition::E11,
+                    "{phase:?} live={live}"
+                );
+                assert_eq!(
+                    d.fsm,
+                    GspFsm::new(abi()).with_system_info_cell(cell.clone()),
+                    "{phase:?} live={live}: fresh, with the same cell"
+                );
+                assert_ne!(
+                    d.fsm,
+                    GspFsm::new(abi()),
+                    "the cell is the one thing that stays"
+                );
+                assert_eq!(
+                    cell.latest(),
+                    stashed,
+                    "the cell's contents are not the reset's to touch"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_life_ended_by_booter_unload_resets_to_a_fresh_device() {
+        for live in [false, true] {
+            let cell = SystemInfoCell::new();
+            for c in [None, Some(&cell)] {
+                let mut d = drive_halted_by_booter_unload(live, c);
+                assert_eq!(d.fsm.phase(), BootPhase::Halted);
+                assert!(!d.fsm.fw_halted_after_suspend, "E4, not E13");
+                if live {
+                    assert!(d.fsm.held_len() > 0 && d.fsm.refusals().total() > 0);
+                }
+                assert_eq!(d.fsm.device_reset(), Transition::E11);
+                assert_eq!(d.fsm, fresh(c), "live={live}");
+            }
+        }
+    }
+
+    /// The compile-time half of "total": every field of the value is named, so a field added to
+    /// [`GspFsm`] stops this test compiling until someone decides what a reset does to it.
+    #[test]
+    fn a_reset_value_is_fresh_field_by_field() {
+        let mut d = drive(BootPhase::Running, true, None);
+        d.fsm.device_reset();
+        let GspFsm {
+            pending_command_doorbells,
+            held,
+            refusals,
+            bcr_ctrl,
+            after_suspend,
+            fw_halted_after_suspend,
+            abi: reset_abi,
+            phase,
+            queue,
+            large,
+            swgen0_pending,
+            events_outstanding,
+            mailbox_lo,
+            mailbox_hi,
+            boot_args_seen,
+            arch_state,
+            init_done_posted,
+            stat_seq,
+            cmd_seq,
+            cmd_read_ptr,
+            region_identity,
+            suspended,
+            pm_suspend,
+            max_entries,
+            fwsec_image,
+            frts_image,
+            frts_offset,
+            system_info,
+        } = d.fsm;
+        let GspFsm {
+            pending_command_doorbells: p0,
+            held: h0,
+            refusals: r0,
+            bcr_ctrl: b0,
+            after_suspend: a0,
+            fw_halted_after_suspend: w0,
+            abi: abi0,
+            phase: ph0,
+            queue: q0,
+            large: l0,
+            swgen0_pending: s0,
+            events_outstanding: e0,
+            mailbox_lo: lo0,
+            mailbox_hi: hi0,
+            boot_args_seen: bs0,
+            arch_state: as0,
+            init_done_posted: i0,
+            stat_seq: ss0,
+            cmd_seq: cs0,
+            cmd_read_ptr: crp0,
+            region_identity: ri0,
+            suspended: su0,
+            pm_suspend: pm0,
+            max_entries: me0,
+            fwsec_image: fi0,
+            frts_image: fr0,
+            frts_offset: fo0,
+            system_info: si0,
+        } = GspFsm::new(abi());
+        assert_eq!(pending_command_doorbells, p0);
+        assert_eq!(held, h0);
+        assert_eq!(refusals, r0);
+        assert_eq!(bcr_ctrl, b0);
+        assert_eq!(after_suspend, a0);
+        assert_eq!(fw_halted_after_suspend, w0);
+        assert_eq!(reset_abi, abi0);
+        assert_eq!(phase, ph0);
+        assert_eq!(queue, q0);
+        assert_eq!(large, l0);
+        assert_eq!(swgen0_pending, s0);
+        assert_eq!(events_outstanding, e0);
+        assert_eq!(mailbox_lo, lo0);
+        assert_eq!(mailbox_hi, hi0);
+        assert_eq!(boot_args_seen, bs0);
+        assert_eq!(arch_state, as0);
+        assert_eq!(init_done_posted, i0);
+        assert_eq!(stat_seq, ss0);
+        assert_eq!(cmd_seq, cs0);
+        assert_eq!(cmd_read_ptr, crp0);
+        assert_eq!(region_identity, ri0);
+        assert_eq!(suspended, su0);
+        assert_eq!(pm_suspend, pm0);
+        assert_eq!(max_entries, me0);
+        assert_eq!(fwsec_image, fi0);
+        assert_eq!(frts_image, fr0);
+        assert_eq!(frts_offset, fo0);
+        assert_eq!(system_info, si0);
+    }
+
+    // ---- 2. reset after reset ------------------------------------------------------------------
+
+    #[test]
+    fn a_reset_straight_after_a_reset_is_e11_again_and_still_fresh() {
+        for phase in PHASES {
+            let cell = SystemInfoCell::new();
+            for c in [None, Some(&cell)] {
+                let mut d = drive(phase, true, c);
+                assert_eq!(d.fsm.device_reset(), Transition::E11, "{phase:?}");
+                assert_eq!(d.fsm, fresh(c), "{phase:?}: first reset");
+                assert_eq!(d.fsm.device_reset(), Transition::E11, "{phase:?}");
+                assert_eq!(d.fsm, fresh(c), "{phase:?}: second reset");
+            }
+        }
+    }
+
+    #[test]
+    fn a_reset_of_a_device_nothing_ever_touched_changes_nothing() {
+        let mut f = GspFsm::new(abi());
+        assert_eq!(f.device_reset(), Transition::E11);
+        assert_eq!(f, GspFsm::new(abi()));
+        let cell = SystemInfoCell::new();
+        let mut f = fresh(Some(&cell));
+        assert_eq!(f.device_reset(), Transition::E11);
+        assert_eq!(f.device_reset(), Transition::E11);
+        assert_eq!(f, fresh(Some(&cell)));
+    }
+
+    // ---- 3. the second life is a first life ------------------------------------------------------
+
+    /// Apply `step` to both devices and require everything observable, and the values themselves, to
+    /// agree afterwards.
+    fn lockstep(
+        a: &mut Dev,
+        b: &mut Dev,
+        label: &str,
+        mut step: impl FnMut(&mut Dev) -> String,
+    ) -> String {
+        let (ra, rb) = (step(a), step(b));
+        assert_eq!(ra, rb, "{label}: what the step returned");
+        assert_eq!(a.snapshot(), b.snapshot(), "{label}: observable state");
+        assert!(a.ram == b.ram, "{label}: guest RAM (every reply posted)");
+        assert_eq!(a.fsm, b.fsm, "{label}: the values");
+        ra
+    }
+
+    /// A step the guest's boot depends on must have succeeded, or the comparison above is two
+    /// identical refusals.
+    fn ok(label: &str, out: String) {
+        assert!(!out.contains("Err("), "{label}: {out}");
+    }
+
+    fn second_life_after_a_reset_matches_a_fresh_device(after: AfterSuspend, with_cell: bool) {
+        let cell = SystemInfoCell::new();
+        let c = with_cell.then_some(&cell);
+        // (a) a device that has never been used; (b) one driven to Running with everything in
+        // flight, then reset by the guest-visible PCI reset.
+        let mut a = Dev::life(fresh(c), after);
+        let mut b = Dev::life(fresh(c), after);
+        b.start_with_frts();
+        b.firmware_loaded();
+        b.publish();
+        b.run();
+        b.queue_traffic();
+        b.deliver_an_event();
+        b.open_a_large_control();
+        b.fsm.note_command_doorbells(3);
+        assert_eq!(b.fsm.phase(), BootPhase::Running);
+        assert!(b.fsm.held_len() > 0);
+        assert_eq!(b.fsm.device_reset(), Transition::E11);
+        // the guest's next life: new queues in new RAM, the command stream starts again at 0
+        let mut b = Dev::life(b.fsm, after);
+
+        lockstep(&mut a, &mut b, "before anything", |d| d.snapshot());
+        ok(
+            "FWSEC-FRTS + STARTCPU",
+            lockstep(&mut a, &mut b, "FWSEC-FRTS + STARTCPU", |d| {
+                d.start_with_frts()
+            }),
+        );
+        ok(
+            "firmware loaded",
+            lockstep(&mut a, &mut b, "firmware loaded", |d| d.firmware_loaded()),
+        );
+        ok(
+            "boot args published",
+            lockstep(&mut a, &mut b, "boot args published", |d| d.publish()),
+        );
+        assert_eq!(a.fsm.phase(), BootPhase::Booted);
+        ok(
+            "traffic before INIT_DONE is drained",
+            lockstep(&mut a, &mut b, "traffic before INIT_DONE is drained", |d| {
+                d.queue_traffic()
+            }),
+        );
+        ok(
+            "the guest drains INIT_DONE",
+            lockstep(&mut a, &mut b, "the guest drains INIT_DONE", |d| d.run()),
+        );
+        assert_eq!(a.fsm.phase(), BootPhase::Running);
+        ok(
+            "traffic while running",
+            lockstep(&mut a, &mut b, "traffic while running", |d| {
+                d.queue_traffic()
+            }),
+        );
+        lockstep(&mut a, &mut b, "held replies released", |d| {
+            format!("{:?}", d.fsm.release_held(&mut d.ram))
+        });
+        assert_eq!(a.fsm.held_len(), 0);
+        ok(
+            "an event batch",
+            lockstep(&mut a, &mut b, "an event batch", |d| d.deliver_an_event()),
+        );
+        lockstep(&mut a, &mut b, "a second batch is gated", |d| {
+            d.deliver_an_event()
+        });
+        lockstep(&mut a, &mut b, "the guest clears the status IRQ", |d| {
+            d.write(OFF_IRQ_CLEAR, 1)
+        });
+        ok(
+            "a large control opens",
+            lockstep(&mut a, &mut b, "a large control opens", |d| {
+                d.open_a_large_control()
+            }),
+        );
+        ok("fn 47", lockstep(&mut a, &mut b, "fn 47", |d| d.unload()));
+        lockstep(&mut a, &mut b, "a doorbell after the last close", |d| {
+            d.ring()
+        });
+        lockstep(&mut a, &mut b, "the teardown start", |d| {
+            d.write(OFF_START, 1)
+        });
+        lockstep(&mut a, &mut b, "a next open starts the processor", |d| {
+            d.start_with_frts()
+        });
+        assert_eq!(a.fsm.phase(), BootPhase::ProtectedRegionUp);
+    }
+
+    #[test]
+    fn a_second_life_after_a_reset_is_a_first_life_on_the_falcon_regime() {
+        second_life_after_a_reset_matches_a_fresh_device(AfterSuspend::AwaitsTeardownUcode, false);
+    }
+
+    #[test]
+    fn a_second_life_after_a_reset_is_a_first_life_on_the_fsp_regime() {
+        second_life_after_a_reset_matches_a_fresh_device(AfterSuspend::FirmwareHalts, false);
+    }
+
+    #[test]
+    fn a_second_life_after_a_reset_is_a_first_life_with_a_system_info_cell() {
+        second_life_after_a_reset_matches_a_fresh_device(AfterSuspend::AwaitsTeardownUcode, true);
+        second_life_after_a_reset_matches_a_fresh_device(AfterSuspend::FirmwareHalts, true);
+    }
+
+    // ---- 4. nothing accumulates ------------------------------------------------------------------
+
+    #[test]
+    fn fifty_boot_and_reset_cycles_leave_nothing_behind() {
+        let cell = SystemInfoCell::new();
+        for with_cell in [false, true] {
+            let c = with_cell.then_some(&cell);
+            let mut fsm = fresh(c);
+            for cycle in 0..50 {
+                let after = if cycle % 2 == 0 {
+                    AfterSuspend::AwaitsTeardownUcode
+                } else {
+                    AfterSuspend::FirmwareHalts
+                };
+                let mut d = Dev::life(fsm, after);
+                d.start_with_frts();
+                d.firmware_loaded();
+                d.publish();
+                d.run();
+                d.queue_traffic();
+                d.deliver_an_event();
+                d.open_a_large_control();
+                d.fsm.note_command_doorbells(2);
+                assert_eq!(d.fsm.phase(), BootPhase::Running, "cycle {cycle}");
+                assert!(d.fsm.held_len() > 0, "cycle {cycle}: live held replies");
+                assert!(d.fsm.refusals().total() > 0, "cycle {cycle}: a refusal");
+                assert!(d.fsm.command_seq() > 0, "cycle {cycle}: the stream moved");
+                fsm = d.fsm;
+                assert_eq!(fsm.device_reset(), Transition::E11, "cycle {cycle}");
+                assert_eq!(fsm.held_len(), 0, "cycle {cycle}");
+                assert_eq!(fsm.pending_command_doorbells(), 0, "cycle {cycle}");
+                assert_eq!(fsm.refusals().total(), 0, "cycle {cycle}");
+                assert_eq!(fsm.command_seq(), 0, "cycle {cycle}");
+                assert_eq!(fsm, fresh(c), "cycle {cycle}: nothing accumulated");
+            }
+        }
+    }
+
+    // ---- 3. S3: a PM-transition suspend, the platform's wake reset, the resume ---------------
+    //
+    // ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`). Measured on the bench before this: the guest's
+    // `KGSP_BOOT_MODE_SR_RESUME` found the GSP Cold after the wake (`device reset #2 … Halted ->
+    // Cold`), its Booter Load changed nothing, and `kgspBootstrap_TU102` returned NOT_READY (0x55).
+    mod s3_resume {
+        use super::*;
+
+        /// The guest's status-queue element at `slot`: its transport `seqNum`.
+        fn stat_seq_at(d: &mut Dev, slot: u64) -> u32 {
+            let mut buf = vec![0u8; ELEM as usize];
+            d.ram
+                .read(REGION + STAT_OFF + ELEM + slot * ELEM, &mut buf)
+                .expect("mapped");
+            peek_seq_num(&d.fsm.abi.element, &buf).expect("an element")
+        }
+
+        fn stat_wp(d: &mut Dev) -> u32 {
+            d.ram.get32(REGION + STAT_OFF + 16)
+        }
+
+        /// A running falcon-regime life that answered some traffic, then a fn 47 the device
+        /// decoded as a PM transition (or not), then FWSEC-SB's STARTCPU: `Halted`.
+        fn suspended(pm: bool) -> Dev {
+            let mut d = Dev::life(fresh(None), AfterSuspend::AwaitsTeardownUcode);
+            d.start_with_frts();
+            d.firmware_loaded();
+            d.publish();
+            d.run();
+            let code = d.fsm.abi.rpc.codes.gsp_set_system_info;
+            d.send(code, vec![1; 64]);
+            d.ring();
+            d.guest_drains_status();
+            d.unload();
+            d.guest_drains_status();
+            assert_eq!(d.fsm.phase(), BootPhase::Suspending);
+            if pm {
+                assert!(d.fsm.note_pm_suspend(), "recorded while Suspending");
+            }
+            d.write(OFF_START, 1); // FWSEC-SB: E2
+            assert_eq!(d.fsm.phase(), BootPhase::Halted);
+            d
+        }
+
+        /// ★★ The whole S3 cycle: suspend (PM), wake reset (E14), Booter Load (E15), and the RPC
+        /// stream continues — sequence numbers on both queues kept, nothing re-published.
+        #[test]
+        fn a_pm_suspended_life_survives_the_wake_reset_and_resumes_without_a_publish() {
+            let mut d = suspended(true);
+            let (stat_seq, cmd_seq) = (d.fsm.stat_seq, d.fsm.command_seq());
+            assert!(stat_seq > 0 && cmd_seq > 0, "the streams moved before the suspend");
+            let wp = stat_wp(&mut d);
+            let hdr_before = {
+                let mut b = vec![0u8; 32];
+                d.ram.read(REGION + STAT_OFF, &mut b).expect("mapped");
+                b
+            };
+
+            assert_eq!(d.fsm.wake_reset(), Some(Transition::E14));
+            assert_eq!(d.fsm.phase(), BootPhase::Cold);
+            assert_eq!(
+                d.fsm.observe(),
+                fresh(None).observe(),
+                "every register reads power-on after the wake"
+            );
+            assert!(matches!(d.fsm.queue(), QueueState::Unbound));
+            assert!(d.fsm.resumable());
+
+            // SR_RESUME: scrubber/Booter Load only — no FWSEC, no mailbox pair.
+            let out = d.write(OFF_FW_RESUME, 1);
+            assert!(out.contains("E15"), "{out}");
+            assert!(!out.contains("E6"), "a resume never publishes: {out}");
+            assert_eq!(d.fsm.phase(), BootPhase::Booted);
+            assert!(d.fsm.observe().riscv_active, "kflcnIsRiscvActive after Booter Load");
+            assert!(!d.fsm.resumable(), "the saved life is consumed");
+
+            // GSP_INIT_DONE at the stream's next sequence number, in the slot after the last reply
+            assert_eq!(stat_wp(&mut d), (wp + 1) % COUNT as u32);
+            assert_eq!(stat_seq_at(&mut d, u64::from(wp)), stat_seq);
+            let mut hdr_after = vec![0u8; 32];
+            d.ram.read(REGION + STAT_OFF, &mut hdr_after).expect("mapped");
+            assert_eq!(
+                hdr_after[..16],
+                hdr_before[..16],
+                "the status header is not re-published"
+            );
+
+            // the guest consumes INIT_DONE and its next RPC carries the next command sequence
+            d.guest_drains_status();
+            // `FREE` is answered (fn 72 is not), so the reply's sequence is observable
+            let code = d.fsm.abi.rpc.codes.free;
+            d.send(code, vec![2; 64]);
+            let out = d.ring();
+            assert!(out.contains("E7"), "served, not refused: {out}");
+            assert!(out.contains("Running"), "{out}");
+            assert_eq!(d.fsm.phase(), BootPhase::Running);
+            assert_eq!(d.fsm.command_seq(), cmd_seq + 1);
+            assert_eq!(stat_seq_at(&mut d, u64::from((wp + 1) % COUNT as u32)), stat_seq + 1);
+        }
+
+        /// The same life suspended and resumed three times in one boot.
+        #[test]
+        fn three_suspend_resume_cycles_keep_one_stream() {
+            let mut d = suspended(true);
+            for cycle in 0..3 {
+                if cycle > 0 {
+                    d.unload();
+                    d.guest_drains_status();
+                    assert!(d.fsm.note_pm_suspend(), "cycle {cycle}");
+                    d.write(OFF_START, 1);
+                }
+                let (stat_seq, cmd_seq) = (d.fsm.stat_seq, d.fsm.command_seq());
+                assert_eq!(d.fsm.wake_reset(), Some(Transition::E14), "cycle {cycle}");
+                assert!(d.write(OFF_FW_RESUME, 1).contains("E15"), "cycle {cycle}");
+                d.guest_drains_status();
+                let code = d.fsm.abi.rpc.codes.free;
+                d.send(code, vec![3; 64]);
+                assert!(d.ring().contains("E7"), "cycle {cycle}");
+                assert_eq!(d.fsm.phase(), BootPhase::Running, "cycle {cycle}");
+                assert_eq!(d.fsm.command_seq(), cmd_seq + 1, "cycle {cycle}");
+                assert_eq!(d.fsm.stat_seq, stat_seq + 2, "cycle {cycle}: INIT_DONE + reply");
+                d.guest_drains_status();
+            }
+        }
+
+        /// ★ A device without power loss (s2idle): `Halted`, no wake reset, the resume still works.
+        #[test]
+        fn a_resume_without_a_wake_reset_restores_the_binding_too() {
+            let mut d = suspended(true);
+            assert!(d.write(OFF_FW_RESUME, 1).contains("E15"));
+            assert_eq!(d.fsm.phase(), BootPhase::Booted);
+        }
+
+        /// ⊘ A reset that does NOT follow a PM suspend still goes Cold.
+        #[test]
+        fn only_a_halted_pm_suspend_is_kept_by_a_wake_reset() {
+            // an unload that was not a PM transition (rmmod, last close)
+            let mut d = suspended(false);
+            assert!(!d.fsm.resumable());
+            assert_eq!(d.fsm.wake_reset(), None, "a teardown is not kept");
+            // a PM suspend whose teardown STARTCPU never came
+            for phase in [BootPhase::Running, BootPhase::Booted, BootPhase::Cold] {
+                let mut d = drive(phase, false, None);
+                assert!(!d.fsm.note_pm_suspend(), "{phase:?}: no fn 47 is current");
+                assert_eq!(d.fsm.wake_reset(), None, "{phase:?}");
+            }
+            let mut d = drive(BootPhase::Suspending, false, None);
+            assert!(d.fsm.note_pm_suspend());
+            assert_eq!(
+                d.fsm.wake_reset(),
+                None,
+                "Suspending: the firmware has not stopped — not kept"
+            );
+        }
+
+        /// ⊘ After the wake, a guest that boots instead of resuming (FWSEC, a publish) gets a
+        /// fresh queue instance: the saved life is gone and never comes back.
+        #[test]
+        fn a_cold_boot_after_the_wake_discards_the_saved_life() {
+            let mut d = suspended(true);
+            assert_eq!(d.fsm.wake_reset(), Some(Transition::E14));
+            d.start_with_frts();
+            assert!(!d.fsm.resumable(), "FWSEC runs only on a NORMAL boot");
+            d.firmware_loaded();
+            assert!(d.publish().contains("E6"));
+            assert!(!d.write(OFF_FW_RESUME, 1).contains("E15"));
+            assert_eq!(d.fsm.phase(), BootPhase::Booted);
+        }
+
+        /// ⊘ With nothing saved, the resume step reads no RAM and changes nothing (Ada's
+        /// scrubber on a cold device takes this path; so does a hostile guest).
+        #[test]
+        fn a_resume_step_with_nothing_saved_reads_no_ram_and_changes_nothing() {
+            let model = Mini {
+                seq: Seq {
+                    after: AfterSuspend::AwaitsTeardownUcode,
+                },
+            };
+            let mut f = fresh(None);
+            let mut ram = super::super::a_life_ends_and_the_next_one_boots::Untouchable;
+            let r = f
+                .mmio_write_with(&mut ram, &model, &mut Live, 0, OFF_FW_RESUME, 1)
+                .expect("no refusal");
+            assert!(r.transitions.is_empty());
+            assert_eq!(f, fresh(None));
+        }
+
+        /// ★★ The saved binding is INERT while `Halted`: a doorbell reads nothing through it.
+        #[test]
+        fn a_saved_binding_reads_no_ram_until_the_resume() {
+            let d = suspended(true);
+            let mut f = d.fsm;
+            f.note_command_doorbells(1);
+            let mut ram = super::super::a_life_ends_and_the_next_one_boots::Untouchable;
+            assert_eq!(
+                f.service_one_deferred_command(&mut ram, &mut Live)
+                    .unwrap_err(),
+                GspFault::QueueNotBound,
+                "E8, zero guest-RAM reads"
+            );
+            assert_eq!(f.wake_reset(), Some(Transition::E14));
+            f.note_command_doorbells(1);
+            assert!(
+                f.service_one_deferred_command(&mut ram, &mut Live)
+                    .is_ok(),
+                "Cold after the wake: E12, zero reads"
+            );
+        }
+
+        /// The status reply at `slot`: `(function, sequence, rpc_result, payload_len)`.
+        fn reply_at(d: &mut Dev, slot: u64) -> (u32, u32, u32, usize) {
+            let abi = d.fsm.abi;
+            let mut first = vec![0u8; ELEM as usize];
+            d.ram
+                .read(REGION + STAT_OFF + ELEM + slot * ELEM, &mut first)
+                .expect("mapped");
+            let len = peek_len(&abi.element, &first, ELEM as u32, abi.element_size_max)
+                .expect("a reply");
+            let seq = peek_seq_num(&abi.element, &first).expect("seq");
+            let m = decode_message(&abi.element, &first, len, seq, &abi.driver).expect("decodes");
+            (
+                m.envelope.function,
+                m.envelope.sequence,
+                m.envelope.rpc_result,
+                m.envelope.payload_len,
+            )
+        }
+
+        /// ★★ The suspend buffer's registration (`ALLOC_MEMORY`, a PTE list longer than one
+        /// message, `_issuePteDescRpc` with `bBidirectional = NV_FALSE`) is joined and answered
+        /// ONCE, at its head — `[measured b1, 44e9b092]` it was answered twice (a refusal of the
+        /// head and one of the continuation), and the guest logged `Unexpected RPC event …
+        /// CONTINUATION_RECORD`.
+        #[test]
+        fn a_large_alloc_memory_is_joined_and_answered_once_at_its_head() {
+            let mut d = Dev::life(fresh(None), AfterSuspend::AwaitsTeardownUcode);
+            d.start_with_frts();
+            d.firmware_loaded();
+            d.publish();
+            d.run();
+            d.guest_drains_status();
+            let abi = d.fsm.abi;
+            let cell = kf_abi::memory_list::cell(abi.driver.driver_version()).expect("contract");
+            let head_len =
+                abi.element_size_max as usize - abi.element.hdr_size() - crate::large::RPC_HEADER;
+            let pages = head_len / 8 + 10;
+            let mut body = vec![0u8; 56 + pages * 8];
+            for (off, v) in [(0usize, 1u32), (4, 2), (8, 0x77), (12, 0x81), (40, pages as u32)] {
+                body[off..off + 4].copy_from_slice(&v.to_le_bytes());
+            }
+            assert_eq!(cell.declared_len(&body[..head_len]), Some(body.len()));
+            let head_seq = 100 + d.guest_seq;
+            d.send(4, body[..head_len].to_vec());
+            d.send(abi.rpc.codes.continuation_record, body[head_len..].to_vec());
+            let wp = stat_wp(&mut d);
+            let out = d.ring();
+            assert!(out.contains("Ok"), "{out}");
+            assert_eq!(stat_wp(&mut d), (wp + 1) % COUNT as u32, "exactly one reply");
+            assert_eq!(reply_at(&mut d, u64::from(wp)), (4, head_seq, 0, 0));
+            // the stream goes on: the next command is answered at its own sequence
+            d.guest_drains_status();
+            let next_seq = 100 + d.guest_seq;
+            d.send(abi.rpc.codes.free, vec![0; 16]);
+            d.ring();
+            assert_eq!(reply_at(&mut d, u64::from((wp + 1) % COUNT as u32)).1, next_seq);
+        }
+
+        /// The FSP regime's firmware halts itself at fn 47 (E13); the device decodes the body
+        /// after that, so the PM note must still find the saved binding.
+        #[test]
+        fn a_firmware_halted_pm_suspend_is_resumable_too() {
+            let mut d = Dev::life(fresh(None), AfterSuspend::FirmwareHalts);
+            d.start_with_frts();
+            d.firmware_loaded();
+            d.publish();
+            d.run();
+            d.unload();
+            assert_eq!(d.fsm.phase(), BootPhase::Halted);
+            assert!(d.fsm.note_pm_suspend());
+            assert_eq!(d.fsm.wake_reset(), Some(Transition::E14));
+            assert!(d.write(OFF_FW_RESUME, 1).contains("E15"));
+        }
     }
 }

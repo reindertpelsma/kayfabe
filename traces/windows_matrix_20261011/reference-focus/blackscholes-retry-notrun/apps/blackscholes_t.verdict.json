@@ -1,0 +1,14 @@
+{
+ "verdict": "NOTRUN",
+ "rc": "-",
+ "secs": 0,
+ "quiet": "-",
+ "note": "stage-failed:python_embed:no KFSTAGE line",
+ "proof": "-",
+ "tdr": 0,
+ "wer": 0,
+ "rebooted": false,
+ "gsp_cycles": "-",
+ "restart": "",
+ "guest": "g1"
+}

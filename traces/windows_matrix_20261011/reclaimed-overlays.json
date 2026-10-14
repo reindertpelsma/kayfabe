@@ -1,0 +1,65 @@
+[
+  {
+    "run": 291,
+    "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-291/windows.qcow2",
+    "backing": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+    "allocated_bytes": 17692672000,
+    "virtual_bytes": 161061273600
+  },
+  {
+    "run": 295,
+    "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-295/windows.qcow2",
+    "backing": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+    "allocated_bytes": 13812305920,
+    "virtual_bytes": 161061273600
+  },
+  {
+    "run": 384,
+    "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-384/windows.qcow2",
+    "backing": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+    "allocated_bytes": 11488210944,
+    "virtual_bytes": 161061273600
+  },
+  {
+    "run": 400,
+    "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-400/windows.qcow2",
+    "backing": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+    "allocated_bytes": 18985664512,
+    "virtual_bytes": 161061273600
+  },
+  {
+    "run": 403,
+    "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-403/windows.qcow2",
+    "backing": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+    "allocated_bytes": 16022441984,
+    "virtual_bytes": 161061273600
+  },
+  {
+    "run": 404,
+    "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-404/windows.qcow2",
+    "backing": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+    "allocated_bytes": 12344913920,
+    "virtual_bytes": 161061273600
+  },
+  {
+    "run": 644,
+    "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-644/windows.qcow2",
+    "backing": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+    "allocated_bytes": 2647691264,
+    "virtual_bytes": 161061273600
+  },
+  {
+    "run": 647,
+    "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-647/windows.qcow2",
+    "backing": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+    "allocated_bytes": 4102012928,
+    "virtual_bytes": 161061273600
+  },
+  {
+    "run": 648,
+    "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-648/windows.qcow2",
+    "backing": "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+    "allocated_bytes": 1281933312,
+    "virtual_bytes": 161061273600
+  }
+]

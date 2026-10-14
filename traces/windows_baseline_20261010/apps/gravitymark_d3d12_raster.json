@@ -1,0 +1,65 @@
+{
+ "quiet": 0,
+ "end_utc": "2026-10-11T01:24:35.1774159Z",
+ "start_utc": "2026-10-11T01:21:38.1517286Z",
+ "rc": 0,
+ "secs": 177,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4060 Ti status=OK code=0"
+ ],
+ "digests": [],
+ "session": 1,
+ "out_files": [
+  "C:\\kf\\out\\gravitymark_d3d12_raster\\gm.png 875989",
+  "C:\\kf\\out\\gravitymark_d3d12_raster\\gm_times.txt 3176670"
+ ],
+ "boot_utc_start": "2026-10-11T00:42:27.5000000Z",
+ "log_tail": [
+  "=== gravitymark_d3d12_raster start=2026-10-10T18:21:38.1517286-07:00 host=DESKTOP-397P3NI session=1 boot=2026-10-11T00:42:27.5000000Z timeout=660",
+  "KFWAIT gravitymark_d3d12_raster EXITED rc=0",
+  "GM_OK image=875989 bytes",
+  "GM_TIMES lines=90762",
+  "=== end rc=0 secs=177 2026-10-10T18:24:35.1774159-07:00"
+ ],
+ "pdh": {
+  "pids": [
+   "9160",
+   "9172",
+   "3332"
+  ],
+  "nv": {
+   "security": 0,
+   "3d": 100.13142899783244,
+   "vr": 0,
+   "videodecode": 0,
+   "copy": 0,
+   "ofa_0": 0,
+   "legacyoverlay": 0,
+   "videoencode": 0
+  },
+  "samples": 81,
+  "other": {},
+  "nvidia_luids": "0_6bdf"
+ },
+ "timed_out": false,
+ "token": "g1-gravitymark_d3d12_raster-1791656482",
+ "boot_utc_end": "2026-10-11T00:42:27.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "gravitymark_d3d12_raster",
+ "smi": {
+  "samples": 28,
+  "mem_used_base_mb": 130,
+  "util_max": 99,
+  "mem_used_max_mb": 2299
+ }
+}

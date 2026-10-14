@@ -1,0 +1,11 @@
+{
+  "iommu_group_11": "DMA-FQ",
+  "qemu_absent": true,
+  "lock_free": true,
+  "stop_absent": true,
+  "free_bytes": 120306757632,
+  "gpu_query_exit": 0,
+  "gpu": "NVIDIA GeForce RTX 4070, 595.91.07",
+  "personal_image_bytes": 28240642048,
+  "personal_image_mode": "0o444"
+}

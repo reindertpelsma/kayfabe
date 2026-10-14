@@ -1,8 +1,14 @@
 # Optional native timer mapping for the Windows experiment
 
-**STATUS: RESEARCH, 2026-10-05.** Opt-in `KF3_TIMER_MAP=1`; no Windows success or merge-bar
-claim. This adds a real host timer page after the allocation-only experiment still produced
-Code 43. The timer-map failure is a source-grounded hypothesis, not proven Windows causality.
+**STATUS: LIVE, 2026-10-11.** Native timer mapping is now automatic when its
+exact host/guest layout and read-only span validate; KF3_TIMER_MAP is no longer
+required. Unsupported views/layouts are explicitly named and omitted, without
+failing device realize. 906 relevant GPU-free tests pass; hardware regression
+of this default change is pending. Prior run604 established boot necessity on
+Windows580.88 (without mapping: Code43); no complete Windows matrix claim.
+
+This supersedes the 2026-10-05 opt-in status and unproven-necessity statement.
+The mapping/source/lifetime contract below remains applicable.
 
 The timer SDK object is not Windows-only: OGKM's `tmrapiGetRegBaseOffsetAndSize_IMPL` reads
 `NV_REG_BASE_TIMER`, returns errors from that lookup, and reports `sizeof(Nv01TimerMap)`.

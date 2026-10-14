@@ -1,0 +1,10 @@
+=== torch_burn start=2026-10-10T10:07:53.8265339-07:00 host=DESKTOP-397P3NI session=0 boot=2026-10-10T15:50:57.5000000Z timeout=180
+KFDEV NVIDIA GeForce RTX 4060 Ti
+[burn] t=10s iters=805 errors=0
+[burn] t=20s iters=1621 errors=0
+[burn] t=30s iters=2429 errors=0
+[burn] t=40s iters=3237 errors=0
+[burn] t=50s iters=4041 errors=0
+iterations=4833 seconds=60.0 GFLOPS=11066 compare_errors=0
+GPU 0: OK
+=== end rc=0 secs=67 2026-10-10T10:09:00.9669495-07:00

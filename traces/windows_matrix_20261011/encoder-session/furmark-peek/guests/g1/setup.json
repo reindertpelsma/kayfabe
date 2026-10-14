@@ -1,0 +1,45 @@
+{
+ "os": "Microsoft Windows 11 Enterprise LTSC Evaluation build 26100",
+ "smi": "NVIDIA GeForce RTX 4070, 580.88, 4096 MiB",
+ "explorer": true,
+ "image_identity": "f5d28f726680218377c79dc62ece49af0257dd61791c6d1b828a377d3b768254",
+ "tools": [
+  "cup2.exe",
+  "cup3.exe",
+  "cup8.exe",
+  "kf_cuda_control.exe",
+  "kf_dxprobe.exe",
+  "kf_glgears.exe"
+ ],
+ "notes": [],
+ "user": "VASTWIN\\vast",
+ "boot_utc": "2026-10-11T16:02:37.5000000Z",
+ "adapters": [
+  {
+   "device": 10118,
+   "index": 0,
+   "luid_high": "00000000",
+   "name": "NVIDIA GeForce RTX 4070",
+   "luid_low": "00006158",
+   "flags": 0,
+   "vendor": 4318,
+   "dedicated_mb": 3747
+  },
+  {
+   "device": 140,
+   "index": 1,
+   "luid_high": "00000000",
+   "name": "Microsoft Basic Render Driver",
+   "luid_low": "00006bbe",
+   "flags": 2,
+   "vendor": 5140,
+   "dedicated_mb": 0
+  }
+ ],
+ "cd": "D:",
+ "ok": true,
+ "nvidia_adapters": 1,
+ "video": [
+  "NVIDIA GeForce RTX 4070 | 32.0.15.8088 | OK | code 0"
+ ]
+}

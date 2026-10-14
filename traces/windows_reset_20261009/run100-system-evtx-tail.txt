@@ -1,0 +1,46 @@
+2026-10-08 23:10:33.742504+00:00 Microsoft-Windows-Kernel-General 12 MajorVersion=10; MinorVersion=0; BuildVersion=26100; QfeVersion=1742; ServiceVersion=0; BootMode=0; StartTime=2026-10-08 23:10:33.500000+00:00
+2026-10-08 23:10:33.742512+00:00 Microsoft-Windows-Kernel-General 25 SystemTime=2026-10-08 23:10:33.500000+00:00; LoaderTime=2026-10-08 23:10:33+00:00; InternalBootFlags=2; HalRtcErrorCode=0; RealTimeIsUniversal=False; IsSoftBoot=False; Success=True; Phase=0
+2026-10-08 23:10:33.742626+00:00 Microsoft-Windows-Kernel-Boot 153 Status=0; EnableDisableReason=0; VsmPolicy=0
+2026-10-08 23:10:33.742783+00:00 Microsoft-Windows-Kernel-Boot 20 LastShutdownGood=False; LastBootGood=True; LastBootId=12; BootStatusPolicy=2
+2026-10-08 23:10:33.742830+00:00 Microsoft-Windows-Kernel-Boot 247 Status=0; FailureReason=4
+2026-10-08 23:10:33.743528+00:00 Microsoft-Windows-Kernel-Boot 238 EfiTimeZoneBias=2047; EfiDaylightFlags=0; EfiTime=2026-10-08 23:10:33+00:00
+2026-10-08 23:10:33.743538+00:00 Microsoft-Windows-Kernel-Boot 25 BootMenuPolicy=1
+2026-10-08 23:10:33.743546+00:00 Microsoft-Windows-Kernel-Boot 27 BootType=0; LoadOptions= TESTSIGNING  NOEXECUTE=OPTIN  FVEBOOT=2666496  NOVGA
+2026-10-08 23:10:33.743614+00:00 Microsoft-Windows-Kernel-Boot 18 EntryCount=1
+2026-10-08 23:10:33.743647+00:00 Microsoft-Windows-Kernel-Boot 32 BitlockerUserInputTime=0
+2026-10-08 23:10:33.746115+00:00 Microsoft-Windows-Kernel-General 20 UpdateReason=0; EnabledNew=True; CountNew=0; CountOld=0
+2026-10-08 23:10:35.383566+00:00 Microsoft-Windows-Ntfs 98 DriveName=C:; DeviceName=\Device\HarddiskVolume3; CorruptionActionState=0
+
+2026-10-08 23:10:35.911013+00:00 Microsoft-Windows-Kernel-Power 41 BugcheckCode=278; BugcheckParameter1=0xffffa50b72918010; BugcheckParameter2=0xfffff8016b1d4930; BugcheckParameter3=0xffffffffc000009a; BugcheckParameter4=0x0000000000000004; SleepInProgress=0; PowerButtonTimestamp=0; BootAppStatus=0;
+2026-10-08 23:10:35.911375+00:00 Microsoft-Windows-Kernel-Power 172 State=2; Reason=6
+2026-10-08 23:10:36.597391+00:00 Microsoft-Windows-Ntfs 98 DriveName=\\?\Volume{84940e1a-b442-45cc-a207-05c476b56fc0}; DeviceName=\Device\HarddiskVolume4; CorruptionActionState=0
+2026-10-08 23:10:36.808125+00:00 Microsoft-Windows-Kernel-General 24 ExitReason=0; CurrentBias=0; CurrentTimeZoneID=0; TimeZoneInfoCacheUpdated=0; FirstRefresh=0
+2026-10-08 23:10:38.006407+00:00 Microsoft-Windows-Wininit 14 Config=2; IsTestConfig=0; IsAutoEnabled=1
+2026-10-08 23:10:38.006443+00:00 Microsoft-Windows-Wininit 15 
+2026-10-08 23:10:38.007906+00:00 Microsoft-Windows-Wininit 12 Level=4
+2026-10-08 23:10:38.079807+00:00 LsaSrv 6156 HardwareChecks=1; ADDomainJoin=0; AADDomainJoin=0; IsLicensed=1; DomainController=0
+
+
+2026-10-08 23:10:39.776363+00:00 EventLog 6005 
+
+2026-10-08 23:10:39.951725+00:00 Microsoft-Windows-Dhcp-Client 50036 
+2026-10-08 23:10:39.952620+00:00 Microsoft-Windows-Dhcp-Client 50103 
+2026-10-08 23:10:39.952862+00:00 Microsoft-Windows-Dhcp-Client 50036 
+2026-10-08 23:10:39.979788+00:00 Microsoft-Windows-DHCPv6-Client 51046 
+2026-10-08 23:10:40.736378+00:00 Service Control Manager 7026 param1=
+dam
+uiomap
+2026-10-08 23:10:41.397711+00:00 Microsoft-Windows-WER-SystemErrorReporting 1001 param1=0x00000116 (0xffffa50b72918010, 0xfffff8016b1d4930, 0xffffffffc000009a, 0x0000000000000004); param2=C:\Windows\MEMORY.DMP; param3=8528a913-f65e-4e47-9007-31dc220257ab
+2026-10-08 23:11:03.275055+00:00 Microsoft-Windows-WindowsUpdateClient 44 updateTitle=Security Intelligence Update for Microsoft Defender Antivirus - KB2267602 (Version 1.459.629.0) - Current Channel (Broad); updateGuid={97b5f8bb-1418-4295-8a47-28d9569898af}; updateRevisionNumber=200
+2026-10-08 23:11:14.369362+00:00 Microsoft-Windows-WindowsUpdateClient 43 updateTitle=Security Intelligence Update for Microsoft Defender Antivirus - KB2267602 (Version 1.459.629.0) - Current Channel (Broad); updateGuid={97b5f8bb-1418-4295-8a47-28d9569898af}; updateRevisionNumber=200
+2026-10-08 23:11:26.791529+00:00 Microsoft-Windows-WindowsUpdateClient 19 updateTitle=Security Intelligence Update for Microsoft Defender Antivirus - KB2267602 (Version 1.459.629.0) - Current Channel (Broad); updateGuid={97b5f8bb-1418-4295-8a47-28d9569898af}; updateRevisionNumber=200; serviceGuid={9
+2026-10-08 23:12:42.012375+00:00 Microsoft-Windows-DistributedCOM 10016 param1=application-specific; param2=Local; param3=Launch; param4=Windows.SecurityCenter.WscDataProtection; param5=Unavailable; param6=NT AUTHORITY; param7=SYSTEM; param8=S-1-5-18; param9=LocalHost (Using LRPC); param10=Unavailab
+2026-10-08 23:13:05.239214+00:00 User32 1074 param1=C:\Windows\system32\winlogon.exe (VASTWIN); param2=VASTWIN; param3=No title for this reason could be found; param4=0x500ff; param5=power off; param6=; param7=NT AUTHORITY\SYSTEM
+2026-10-08 23:13:06.680071+00:00 Service Control Manager 7031 param1=OpenSSH SSH Server; param2=1; param3=0; param4=1; param5=Restart the service
+2026-10-08 23:13:11.753010+00:00 Microsoft-Windows-Dhcp-Client 50104 
+2026-10-08 23:13:11.753410+00:00 Microsoft-Windows-Dhcp-Client 50105 
+2026-10-08 23:13:11.757210+00:00 Microsoft-Windows-Dhcp-Client 50106 
+2026-10-08 23:13:11.760168+00:00 Microsoft-Windows-DHCPv6-Client 51047 DwordVal=1
+2026-10-08 23:13:11.760176+00:00 Microsoft-Windows-DHCPv6-Client 51057 DwordVal=1
+2026-10-08 23:13:11.760288+00:00 EventLog 6006 
+2026-10-08 23:13:11.764944+00:00 Microsoft-Windows-Dhcp-Client 50037 DwordVal=1

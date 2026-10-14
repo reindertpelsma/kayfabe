@@ -1,0 +1,13 @@
+NOISY_WAIT_LOCK 2026-10-08T23:33:36+02:00
+NOISY_LOCKED 2026-10-08T23:33:36+02:00 qemu=0
+NOISY_NEIGHBOUR_RUNNING 2026-10-08T23:33:41+02:00 after 6s qemu=1
+FAST_CELL_ARM arm=ce-interrupt verdict=PASS secs=10 client_ms=6670
+
+FAST_SUITE_PASS=1 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=1
+FAST_SUITE_RC=0
+NOISY_VICTIM_DONE 2026-10-08T23:33:58+02:00 qemu=0
+NOISY_NEIGHBOUR_DONE rc=0 2026-10-08T23:33:58+02:00
+awk: cannot open "/var/lib/kf-nsi-20261008/stranded_tokens.awk" (No such file or directory)
+== hardware: 110 doorbell(s) forwarded across 1 guest token(s); 0 stranded, 0 declared by the operand gate
+FAST_VERDICT=PASS (11s)
+NOISY_UNLOCKED 2026-10-08T23:33:58+02:00 qemu=0

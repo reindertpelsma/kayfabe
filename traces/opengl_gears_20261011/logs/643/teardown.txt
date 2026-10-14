@@ -1,0 +1,18 @@
+TDRRUN 2026-10-11T10:25:00.516625449Z GL result: 2026-10-11T10:24:28.5956132Z D: tools present=True;2026-10-11T10:24:30.2219546Z cup2.exe exit=0 out=ok   cuInit(0) | ok   cuDeviceGetCount(&n) | devices=1 | ok   cuDeviceGet(&d,0) | ok   cuDeviceGetName(nm,256,d) | name=NVIDIA GeForce RTX 4070 | ok   cuDeviceGetAttribute(&maj,CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR,d) | ok   cuDeviceGetAttribute(&min,CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR,d) | compute=8.9 | ok   cuDeviceTotalMem(&tot,d) | totalMem=3835 MiB | ok   cuCtxCreate(&ctx,0,d) | CTX OK | ok   cuMemAlloc(&dp,4096) | MEMALLOC OK 0x609400000 | ok   cuMemcpyHtoD(dp,&hv,4) | ok   cuMemcpyDtoH(&rv,dp,4) | CE rv=0xabcd1234 want=0xabcd1234 -> PASS | DONE | ;2026-10-11T10:24:31.0984892Z cup3.exe exit=0 out=ok   cuInit(0) | ok   cuDeviceGetCount(&n) | ok   cuDeviceGet(&d,0) | ok   cuCtxCreate(&ctx,0,d) | CTX OK | PTX_TARGET=sm_86 (device cc 8.9) | ok   cuModuleLoadData(&mod,PTX)
+TDRRUN 2026-10-11T10:25:00.883578732Z qemu.log lines after the GL tasks: 12613
+TDRRUN 2026-10-11T10:25:59.783016269Z dump fetched: kf_glgears.exe.2836.dmp 5053318 of 5053318 bytes
+TDRRUN 2026-10-11T10:26:15.176899816Z PHASE after-shorts-load tdr_cycles=0
+TDRRUN 2026-10-11T10:26:15.182796144Z READY alive=1 tdr_cycles=0
+TDRRUN 2026-10-11T10:26:25.578666351Z PHASE end-of-hold tdr_cycles=0
+TDRRUN 2026-10-11T10:26:25.586478349Z HOLD ended: alive=1 tdr_cycles=0 stopfile=0 hold_s=10
+TDRRUN 2026-10-11T10:26:30.803027718Z ABLATE guest: utc now: 2026-10-11T10:26:29.0855558Z;ADAPTER NVIDIA GeForce RTX 4070 code=0 status=OK;EDGE_PROCS 0;EXPLORER s1;DWM 1;EV_nvlddmkm153 0;EV_dxgkrnl141_4101 0;
+TDRRUN 2026-10-11T10:26:30.808863857Z DONE tdr_cycles=0
+TDRRUN 2026-10-11T10:26:30.814601027Z CLEANUP begin (alive=1) tdr_cycles=0
+[windows] run643 stopped (Xid count now 35)
+TDRRUN 2026-10-11T10:26:52.392679302Z qemu left: 0
+IOMMU_SWITCH_START group=11 from=identity to=DMA-FQ 2026-10-11T12:26:52+02:00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-11T12:26:54+02:00
+TDRRUN 2026-10-11T10:26:54.845212936Z END type=DMA-FQ driver=nvidia xid_lines=35
+RUN643_EXIT=0

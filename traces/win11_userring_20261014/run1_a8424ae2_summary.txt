@@ -1,0 +1,41 @@
+# run1: VM 2990, kf3 a8424ae2, production profile (no KF3_ measurement flags), DMA-FQ launcher, 2026-10-14
+MARKS_START 2026-10-14T20:09:26+02:00 pid=472224
+MCL_START host=20:10:48.662 lines=6546
+MC_PLAY host=20:11:41.961 lines=12493
+MC_SP host=20:12:40.601 lines=13517
+MC_WORLD host=20:12:58.489 lines=13975
+MC_INWORLD host=20:14:09.123 lines=30343
+MC_END host=20:20:10.284 lines=111354
+EDGE_START host=20:20:28.932 lines=111792
+EDGE_END host=20:32:33.006 lines=115483
+
+## counters (claude-cnt.sh) at EDGE_END
+GSP phase Running -> Suspending: 0
+USER_RING_REFUSED: 0
+USER_RING_SCAN: 0
+REFUSED fn76: 69
+display: STALL: 18
+BLACK:: 0
+
+## USER_RING_SYNC_CARRIED
+12903:kf3: USER_RING_MIGRATED 0xc1d000b4:0xff04002d source=0xd160000x65536 generation=2; private native ring/USERD unchanged; no host migration verb
+14002:kf3: USER_RING_SYNC_CARRIED 0xc1d000b4:0xff04002d generation=2 cursor=19937 entry=0x800066000f266400 open_packet=IncrementOnce sub0 m0x3870 4/29 (#1) — control witness, no pushbuffer byte
+14003:kf3: USER_RING_SYNC_CARRIED 0xc1d000b4:0xff04002d generation=2 cursor=19945 entry=0x80007a000f266464 open_packet=IncrementOnce sub0 m0x3870 4/34 (#2) — control witness, no pushbuffer byte
+14004:kf3: USER_RING_SYNC_CARRIED 0xc1d000b4:0xff04002d generation=2 cursor=20466 entry=0x800066000f266000 open_packet=IncrementOnce sub0 m0x3870 4/29 (#3) — control witness, no pushbuffer byte
+14005:kf3: USER_RING_SYNC_CARRIED 0xc1d000b4:0xff04002d generation=2 cursor=21003 entry=0x800142000f265200 open_packet=IncrementOnce sub0 m0x3870 4/84 (#4) — control witness, no pushbuffer byte
+111488:kf3: USER_RING_SYNC_CARRIED SUMMARY 0xc1d000b4:0xff04002d gated_with_open_packet=25153
+
+## host kernel Xid since launch (journal)
+0
+
+## display STALL reports (first line of each)
+kf3: display: STALL Window 0 (chn 1) update 0x0 parked 1000 ms: ready, waiting for a vblank or its acquire group/interlock bits 0x2 head Some(0) acquire None current None; every parked channel: [(1, 0
+kf3: display: STALL Window 0 (chn 1) update 0x0 parked 1000 ms: ready, waiting for a vblank or its acquire group/interlock bits 0x2 head Some(0) acquire None current None; every parked channel: [(1, 0
+
+## kernel NVDEC channel
+1611:kf-host: channel birth h=0xcafe0049 engine=0x13 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+1612:kf3: act birth translated: chan 0xc1d00018:0xff040003 BORN Translated: token 0x1805 -> host 0x3002c in VasKey(13965662457344034928) gpfifo=0x12050b000x2048 userd=Some(Sysmem { base: 9550308864, size: 512 }) engine=0
+9841:kf-host: channel birth h=0xcafe08a3 engine=0x13 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+9855:kf3: act engine object: 0xc1d0008f:0xff1fe021 class 0xc9b0 (VideoDecoder) on twin host 0x30055 -> host object 0xcafe08a5 (735 us, off the GSP lock)
+112695:kf-host: channel birth h=0xcafe1fa3 engine=0x13 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=cleared-for-call
+112709:kf3: act engine object: 0xc1d000cd:0xff1fe021 class 0xc9b0 (VideoDecoder) on twin host 0x3004e -> host object 0xcafe1fa5 (594 us, off the GSP lock)

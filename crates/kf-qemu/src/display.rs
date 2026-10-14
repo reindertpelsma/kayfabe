@@ -52,6 +52,338 @@ use std::time::{Duration, Instant};
 /// Heads any family's register file indexes.
 const MAX_HEADS: usize = kf_disp::ports::MAX_HEADS;
 
+/// How often [`Device::scanline_loop`] republishes a running raster's position: 250 us, shorter than
+/// any vertical blank of a mode this display drives (1080p60 0.67 ms, 1440p144 ~0.3 ms), so a guest
+/// polling once per frame sees the blank.
+const SCAN_LINE_STEP: Duration = Duration::from_micros(250);
+/// …and how often it looks for a running raster when none runs.
+const SCAN_LINE_IDLE: Duration = Duration::from_millis(20);
+
+/// ★ 2026-10-08 EXPERIMENT (H-loadv; `KF3_DISPLAY_LOADV=1`, default off): bit 0 of
+/// `NV_PDISP_FE_EVT_STAT_HEAD_TIMING(h)`. ⚠ NOT in ogkm's published `dev_disp.h` (v03_00 names only
+/// LAST_DATA 1:1, VBLANK 2:2, RG_LINE_A 5:5, RG_LINE_B 6:6), so it is named here by hand, from:
+/// nouveau `nvkm/engine/disp/gv100.c` `gv100_disp_intr_head_timing` ("`/* LAST_DATA, LOADV. */`",
+/// `stat & 0x00000003`, LAST_DATA being bit 1); and the measurement `[measured, VFIO DVI reference
+/// boot3, 2026-10-08, traces/vfio_dvi_reference_20261008]`: on real hardware Windows reads
+/// `0x611800` = `0x7` at every head-timing ISR (1902 reads) and `0x5` after it write-1-clears `0x2`
+/// (it never clears bit 0), while kf3 publishes `0x6`/`0x4`. The bit is not an enable bit Windows
+/// sets (`0x611d80` <- `0x3f0062`), so it never reaches RM by itself; what it changes is what the
+/// guest READS. Owner review needed before it may become default (a hand-named field).
+pub const EVT_STAT_HEAD_TIMING_LOADV: u32 = 1 << 0;
+
+/// `KF3_DISPLAY_LOADV=1` (read once): the H-loadv experiment ([`EVT_STAT_HEAD_TIMING_LOADV`]).
+fn loadv_on() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("KF3_DISPLAY_LOADV").is_ok_and(|v| v == "1"))
+}
+
+/// ⚠ DIAGNOSTIC (2026-10-08, `KF3_DISPLAY_WRITE_TRACE=1`, default off): every guest write in the
+/// display aperture (BAR0 writes trap by design — no read is trapped), the head-timing interrupts
+/// raised and the window latches, each with the host-uptime clock the `maplog` lines use, so they
+/// align with the channel/ETW timelines. Bounded: [`display_trace_cap`] lines per kind and run.
+fn write_trace_on() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("KF3_DISPLAY_WRITE_TRACE").is_ok_and(|v| v == "1"))
+}
+
+/// ⚠ EXPERIMENT (default off, 2026-10-08, H-blankstate; `KF3_DISPLAY_BLANK_STATE=1`, read once).
+/// The core channel's `SET_GET_BLANKING_CTRL(h)` (core user area, derived) READS back the head's
+/// blanking state on the hardware: `[measured, VFIO DVI reference boot3, RTX 4070, 2026-10-08]`
+/// Windows reads all four heads right after the core channel's birth (11.0769 s): `0x2` (UNBLANK)
+/// for the head the firmware lit, `0x1` (BLANK) for the three unlit ones — kf3's plain shadow word
+/// reads `0` (neither), a value the hardware never returned. Under the experiment a new core life
+/// publishes BLANK for every head (kf3 presents no head lit at the core's birth:
+/// `SYSTEM_GET_ACTIVE` answers 0); the guest's own writes then overwrite it as before.
+fn blank_state_on() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("KF3_DISPLAY_BLANK_STATE").is_ok_and(|v| v == "1"))
+}
+
+/// ⚠ EXPERIMENT (default off, 2026-10-08, H-armeddefault; `KF3_DISPLAY_ARMED_DEFAULTS=1`, read
+/// once). `[measured, VFIO DVI reference boot3, RTX 4070, 2026-10-08]` Windows reads the core's
+/// ARMED `HEAD_SET_MIN_FRAME_IDLE(h)` (`0x68a218 + h·0x400`) 335 times around its first
+/// IS_MODE_POSSIBLE and once inside the modeset (12.498437 s, right after BLANK): `0x10002` for all
+/// four heads, a value its own pushbuffers never write (`[measured, run96]`: no `0x2218/0x2618/…`
+/// method), i.e. the engine's default — the one NVKMS itself programs when IMP gives none
+/// (`ogkm-595.84 nvkms-evo3.c:1433-1438`: LEADING_RASTER_LINES 2, TRAILING_RASTER_LINES 1). kf3's
+/// ARMED mirror reads `0` until the guest writes the method. Under the experiment a new core life's
+/// ARMED mirror starts with that default for every head (field positions derived).
+fn armed_defaults_on() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("KF3_DISPLAY_ARMED_DEFAULTS").is_ok_and(|v| v == "1"))
+}
+
+/// ⚠ EXPERIMENTS (default off, 2026-10-09, H-mirror; `KF3_DISPLAY_LUT_MIRROR=1`,
+/// `KF3_DISPLAY_ILUT_OFFSET_256=1`, read once; `traces/windows_reset_20261009/`). `[measured,
+/// runs 98/99, RTX 4070]` Windows' first colour program (window 0 ILUT and head 0 OLUT, control
+/// `0x4050a` = DIRECT10 + MIRROR; ILUT offset `0x21`) is refused by the SDR decoder, the refusal
+/// halts every display channel, no later flip or core update is consumed, and ~17.5 s later the
+/// guest resets the display and bugchecks 0x116. See `kf_disp::color::Experiments` for what each
+/// flag changes and why it is exact.
+fn color_experiments() -> kf_disp::color::Experiments {
+    static X: std::sync::OnceLock<kf_disp::color::Experiments> = std::sync::OnceLock::new();
+    *X.get_or_init(|| {
+        let on = |n: &str| std::env::var(n).is_ok_and(|v| v == "1");
+        let x = kf_disp::color::Experiments {
+            lut_mirror: on("KF3_DISPLAY_LUT_MIRROR"),
+            ilut_offset_256: on("KF3_DISPLAY_ILUT_OFFSET_256"),
+        };
+        if x.lut_mirror {
+            eprintln!(
+                "kf3: display: EXPERIMENT KF3_DISPLAY_LUT_MIRROR=1 — MIRROR accepted on DIRECT ILUT/OLUT where no negative input can reach it"
+            );
+        }
+        if x.ilut_offset_256 {
+            eprintln!(
+                "kf3: display: EXPERIMENT KF3_DISPLAY_ILUT_OFFSET_256=1 — SET_OFFSET_ILUT read in 256-byte units (as OLUT/TMO)"
+            );
+        }
+        x
+    })
+}
+
+/// `nvkms-evo3.c:1437-1438`'s default `MIN_FRAME_IDLE` (H-armeddefault): leading, trailing lines.
+const MIN_FRAME_IDLE_DEFAULT: (u32, u32) = (2, 1);
+
+/// ⚠⚠ PROBE (default off, 2026-10-09, H-caps; `KF3_DISPLAY_CAPS_PROBE=1`, read once) — never a
+/// shipped behaviour, and a CAPTURED table (the defect v3 exists to end), so it may only ever be a
+/// probe. `[measured, VFIO DVI reference boot3, RTX 4070, 2026-10-08]` (record
+/// `traces/display_reply_diff_20261008/` §0 row P16r) Windows reads the whole caps page
+/// (`NV_PDISP_FE_SW`) at 10.9488 s and 0.12 s later initialises only windows 0/2/4/6 — the windows
+/// whose `PRECOMP_WIN_PIPE_HDR_CAPA` has the scaler and TMO; the odd windows have CSC11 only — while
+/// under kf3 (every window alike) it initialises all eight. 101 of the page's 1024 words differ.
+/// Under the probe kf3 publishes the real GPU's page, for its caps class and page base only.
+fn caps_probe_on() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("KF3_DISPLAY_CAPS_PROBE").is_ok_and(|v| v == "1"))
+}
+
+/// The caps class and page base the probe's page was measured with (RTX 4070, 2026-10-08).
+const CAPS_PROBE_AT: (u32, u64) = (0xC773, 0x0064_0000);
+
+/// The real GPU's caps page: every non-zero word, `(byte offset, value)` (VFIO DVI reference boot3,
+/// 8-byte reads 10.948826-10.953350 s; RTX 4070, 2026-10-08).
+const CAPS_PROBE_WORDS: [(u32, u32); 99] = [
+    (0x000, 0x00000f0f),
+    (0x004, 0x000000ff),
+    (0x008, 0x00000432),
+    (0x00c, 0x00000100),
+    (0x010, 0x81f22b20),
+    (0x018, 0x00001822),
+    (0x048, 0x00000a00),
+    (0x058, 0x00000a00),
+    (0x068, 0x00000a00),
+    (0x078, 0x00000a00),
+    (0x0c0, 0x00000010),
+    (0x0d0, 0x00000010),
+    (0x0e0, 0x00000010),
+    (0x0f0, 0x00000010),
+    (0x144, 0x1b000300),
+    (0x14c, 0x1b000300),
+    (0x154, 0x1b000300),
+    (0x15c, 0x1b000300),
+    (0x5e4, 0x00000086),
+    (0x5e8, 0x00000086),
+    (0x5ec, 0x00000086),
+    (0x5f0, 0x00000086),
+    (0x5f4, 0x00000086),
+    (0x5f8, 0x00000086),
+    (0x5fc, 0x00000086),
+    (0x600, 0x00000086),
+    (0x604, 0x00000086),
+    (0x608, 0x003c0051),
+    (0x60c, 0x003c0051),
+    (0x610, 0x003c0051),
+    (0x614, 0x003c0051),
+    (0x618, 0x003c0051),
+    (0x61c, 0x003c0051),
+    (0x620, 0x003c0051),
+    (0x624, 0x003c0051),
+    (0x680, 0x00ff01d0),
+    (0x684, 0x0000d681),
+    (0x688, 0x03580e0e),
+    (0x68c, 0x0a001400),
+    (0x690, 0x00000506),
+    (0x694, 0x00001400),
+    (0x6a0, 0x00ff01d0),
+    (0x6a4, 0x0000d680),
+    (0x6a8, 0x03580e0e),
+    (0x6ac, 0x0a001400),
+    (0x6b0, 0x00000506),
+    (0x6b4, 0x00001400),
+    (0x6c0, 0x00ff01d0),
+    (0x6c4, 0x0000d680),
+    (0x6c8, 0x03580e0e),
+    (0x6cc, 0x0a001400),
+    (0x6d0, 0x00000506),
+    (0x6d4, 0x00001400),
+    (0x6e0, 0x00ff01d0),
+    (0x6e4, 0x0000d680),
+    (0x6e8, 0x03580e0e),
+    (0x6ec, 0x0a001400),
+    (0x6f0, 0x00000506),
+    (0x6f4, 0x00001400),
+    (0x780, 0x01df21d0),
+    (0x784, 0x0000da90),
+    (0x788, 0x000e164e),
+    (0x78c, 0x5075816a),
+    (0x790, 0x000e1a4e),
+    (0x794, 0x0a001400),
+    (0x7a0, 0x010021d0),
+    (0x7a4, 0x0000da90),
+    (0x7b0, 0x000e0000),
+    (0x7b4, 0x0a001400),
+    (0x7c0, 0x01df21d0),
+    (0x7c4, 0x0000da90),
+    (0x7c8, 0x000e164e),
+    (0x7cc, 0x5075816a),
+    (0x7d0, 0x000e1a4e),
+    (0x7d4, 0x0a001400),
+    (0x7e0, 0x010021d0),
+    (0x7e4, 0x0000da90),
+    (0x7f0, 0x000e0000),
+    (0x7f4, 0x0a001400),
+    (0x800, 0x01df21d0),
+    (0x804, 0x0000da90),
+    (0x808, 0x000e164e),
+    (0x80c, 0x5075816a),
+    (0x810, 0x000e1a4e),
+    (0x814, 0x0a001400),
+    (0x820, 0x010021d0),
+    (0x824, 0x0000da90),
+    (0x830, 0x000e0000),
+    (0x834, 0x0a001400),
+    (0x840, 0x01df21d0),
+    (0x844, 0x0000da90),
+    (0x848, 0x000e164e),
+    (0x84c, 0x5075816a),
+    (0x850, 0x000e1a4e),
+    (0x854, 0x0a001400),
+    (0x860, 0x010021d0),
+    (0x864, 0x0000da90),
+    (0x870, 0x000e0000),
+    (0x874, 0x0a001400),
+];
+
+/// H-caps: the measured page (VFIO DVI reference boot3, RTX 4070, 2026-10-08) for the caps class and
+/// page base it was measured with, else `None`.
+fn caps_probe_page(base: u64, caps_class: u32) -> Option<kf_disp::caps::CapsPage> {
+    ((caps_class, base) == CAPS_PROBE_AT).then(|| kf_disp::caps::CapsPage {
+        base,
+        words: CAPS_PROBE_WORDS.to_vec(),
+    })
+}
+
+/// Lines per kind the display write trace prints in a run.
+const DISPLAY_TRACE_CAP_DEFAULT: u32 = 4096;
+
+/// Lines per kind: [`DISPLAY_TRACE_CAP_DEFAULT`], or `KF3_DISPLAY_TRACE_CAP` (diagnostic only; read once).
+fn display_trace_cap() -> u32 {
+    static CAP: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
+    *CAP.get_or_init(|| {
+        std::env::var("KF3_DISPLAY_TRACE_CAP")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(DISPLAY_TRACE_CAP_DEFAULT)
+    })
+}
+
+/// Take one of a bounded trace's lines (`false` once `cap` were taken). Lock-free.
+fn trace_slot(n: &AtomicU32, cap: u32) -> bool {
+    n.fetch_add(1, Ordering::Relaxed) < cap
+}
+
+/// ★ One head's FRAME EDGE (the worker's tick for that head), as the hardware latches it: the
+/// head-timing events every frame sets — LAST_DATA and VBLANK, plus LOADV under the H-loadv
+/// experiment — become PENDING whether or not the guest enabled them (`[measured, VFIO DVI
+/// reference boot3, RTX 4070, 2026-10-08]` `0x611800` reads `0x7` while LAST_DATA is disabled), and the display interrupt
+/// is due at this edge exactly when an ENABLED bit is pending (`RM_INTR_STAT_HEAD_TIMING`, derived).
+/// So: an interrupt at every frame edge while the guest keeps LAST_DATA enabled, none after it
+/// disabled it, and none at the enable itself when the guest cleared the bit first (Windows'
+/// order on hardware, 113/113: `0x611800` <- `0x2`, then `0x611d80` <- enable; its first interrupt
+/// came 0.58-16.87 ms later, at the next frame edge). Returns the RM-visible bits (non-zero =
+/// raise the display vector after this tick's effects).
+fn frame_edge(ports: &Ports, map: &RegMap, h: usize, loadv: bool) -> u32 {
+    let mut bits = map.head_last_data | map.head_vblank;
+    if loadv {
+        bits |= EVT_STAT_HEAD_TIMING_LOADV;
+    }
+    ports.raise(EventReg::HeadTiming(h), bits);
+    ports.rm_head_timing(h)
+}
+
+/// A head's whole frame edge: its frame counters (`RG_DPCA`, LOADV), then [`frame_edge`]. Returns the RM-visible bits.
+fn frame_edge_out(
+    dp: &DisplayPlane,
+    store: &dyn Fn(u64, u32),
+    h: usize,
+    f: u32,
+    loadv: bool,
+    wtrace: bool,
+    traced: &AtomicU32,
+) -> u32 {
+    let (b, st, fld) = dp.map.rg_dpca;
+    store(b + h as u64 * st, kf_disp::class::put(0, fld, f));
+    if let Some((lb, ls)) = dp.map.loadv {
+        store(lb + h as u64 * ls, f);
+    }
+    // ★ 2026-10-14: the raster is at the start of its vertical blank now — the scan-line words read
+    // so (VBLANK, line BLANK_START.Y) before the interrupt the guest reads them in.
+    let now = dp.ports.now_ns();
+    dp.ports.note_frame_edge_at(h, now);
+    for (o, v) in dp.map.scan_words(&dp.ports, now, Some(h)) {
+        store(o, v);
+    }
+    let irq = frame_edge(&dp.ports, &dp.map, h, loadv);
+    if wtrace && irq != 0 && trace_slot(traced, display_trace_cap()) {
+        eprintln!(
+            "kf3: display: WTRACE t={:.6} VSYNC h{h} frame={f} evt={:#x} en={:#x} rm={irq:#x}",
+            kf_mem::maplog::t(),
+            dp.ports.event(EventReg::HeadTiming(h)),
+            dp.ports.event(EventReg::HeadTimingEn(h)),
+        );
+    }
+    irq
+}
+
+/// ★ 2026-10-14 — **THE VBLANK COUNTER A GSP CLIENT READS.** On a GSP system kernel RM answers
+/// `NV0073_CTRL_CMD_SYSTEM_GET_VBLANK_COUNTER` (normal latency) from `kHeadVblankCount[head]` in the
+/// display shared-data page it handed physical RM (`MAP_SHARED_DATA`; ogkm
+/// `disp_common_kern_ctrl_minimal.c:401-410`, `kern_disp.c:557-627`), and physical RM keeps it. kf3 is
+/// physical RM here and never wrote it: the count stayed 0. `[measured run 2990, 2026-10-14]` an OpenGL
+/// application with swap interval 1 (`kf_glvsync --swap 1`, Minecraft) never completed its second
+/// SwapBuffers; the ICD gave up after 300 s ("Unable to communicate with the display driver", error 2).
+/// Writes head `h`'s count (u32, little-endian, at `4*h`, `g_kern_disp_nvoc.h:72-75`) into the page,
+/// bounded by the size the guest stated; FB pages through the store, sysmem through guest RAM.
+fn write_vblank_count(io: &Io<'_>, page: kf_disp::model::InstMem, h: usize, n: u32) -> Result<(), String> {
+    let off = (h as u64).checked_mul(4).ok_or("head")?;
+    if off.checked_add(4).is_none_or(|e| e > page.size) {
+        return Err(format!("head {h}'s count is past the {:#x}-byte page", page.size));
+    }
+    let at = page.phys.checked_add(off).ok_or("address")?;
+    let bytes = n.to_le_bytes();
+    match page.addr_space {
+        2 => io
+            .gpu
+            .as_ref()
+            .ok_or("no display GPU context")?
+            .write_store(at, &bytes)
+            .map_err(|e| e.to_string()),
+        1 => {
+            let b = io
+                .dev
+                .ram
+                .block_for(at, 4)
+                .ok_or_else(|| format!("{at:#x} is not guest RAM"))?;
+            b.mem
+                .write_from((at - b.gpa) as usize, &bytes)
+                .then_some(())
+                .ok_or_else(|| "guest RAM write refused".to_string())
+        }
+        s => Err(format!("address space {s}")),
+    }
+}
+
 /// `NV_PDISP_FE_CORE_HEAD_STATE(i)`: base, stride, the `OPERATING_MODE` field `(hi, lo)`, and its
 /// `AWAKE` and `SLEEP` values.
 type CoreHeadState = (u64, u64, (u8, u8), u32, u32);
@@ -98,6 +430,18 @@ pub struct RegMap {
     core_head_state: Option<CoreHeadState>,
     rg_dpca: (u64, u64, (u8, u8)),
     loadv: Option<(u64, u64)>,
+    /// ★ The core's `GET_RG_SCAN_LINE(h)` (offset in the core user area, stride, the LINE and VBLANK
+    /// fields) — a LIVE raster position on the hardware ([`kf_disp::ports::ScanGeom`]).
+    rg_scan_line: Option<(u64, u64, (u8, u8), (u8, u8))>,
+    /// ★ The window channel's `GET_LINE` (offset in a window's user area, the LINE field): the line
+    /// of the raster of the head the window belongs to.
+    win_get_line: Option<(u64, (u8, u8))>,
+    /// H-blankstate: the core's `SET_GET_BLANKING_CTRL(h)` (offset in the core user area, stride)
+    /// and its BLANK read-back value; `None` when the class table lacks the names.
+    blanking: Option<(u64, u64, u32)>,
+    /// H-armeddefault: the core's `HEAD_SET_MIN_FRAME_IDLE(h)` (method offset, stride) and the
+    /// default word; `None` when the class table lacks the names.
+    min_frame_idle: Option<(u64, u64, u32)>,
 }
 
 fn kind_index(k: ChannelKind) -> usize {
@@ -188,6 +532,46 @@ impl RegMap {
             None => None,
         };
         let dpca = a2("NV_PDISP_RG_DPCA")?;
+        // ⚠ the two experiments' class names (optional: a table without them leaves them off)
+        let core = row.classes.core;
+        let arr = |n: &str| -> Option<(u64, u64)> {
+            let b = u64::from(t.a(core, n, 0)?);
+            Some((b, u64::from(t.a(core, n, 1)?).checked_sub(b)?))
+        };
+        let blanking = arr("SET_GET_BLANKING_CTRL").and_then(|(b, s)| {
+            let blank = kf_disp::class::put(
+                0,
+                t.f(core, "SET_GET_BLANKING_CTRL_BLANK")?,
+                t.v(core, "SET_GET_BLANKING_CTRL_BLANK_ENABLE")?,
+            );
+            Some((b, s, blank))
+        });
+        let min_frame_idle = arr("HEAD_SET_MIN_FRAME_IDLE").and_then(|(b, s)| {
+            let (lead, trail) = MIN_FRAME_IDLE_DEFAULT;
+            let w = kf_disp::class::put(
+                0,
+                t.f(core, "HEAD_SET_MIN_FRAME_IDLE_LEADING_RASTER_LINES")?,
+                lead,
+            );
+            let w = kf_disp::class::put(
+                w,
+                t.f(core, "HEAD_SET_MIN_FRAME_IDLE_TRAILING_RASTER_LINES")?,
+                trail,
+            );
+            Some((b, s, w))
+        });
+        let rg_scan_line = arr("GET_RG_SCAN_LINE").and_then(|(b, s)| {
+            Some((
+                b,
+                s,
+                t.f(core, "GET_RG_SCAN_LINE_LINE")?,
+                t.f(core, "GET_RG_SCAN_LINE_VBLANK")?,
+            ))
+        });
+        let win_get_line = t
+            .v(row.classes.window, "GET_LINE")
+            .zip(t.f(row.classes.window, "GET_LINE_LINE"))
+            .map(|(o, f)| (u64::from(o), f));
         Ok(RegMap {
             lo,
             hi,
@@ -247,7 +631,69 @@ impl RegMap {
             core_head_state,
             rg_dpca: (dpca.0, dpca.1, f("NV_PDISP_RG_DPCA_FRM_CNT")?),
             loadv: a2("NV_PDISP_POSTCOMP_HEAD_LOADV_COUNTER").ok(),
+            blanking,
+            min_frame_idle,
+            rg_scan_line,
+            win_get_line,
         })
+    }
+
+    /// ★ The live scan-line words at `now_ns` as `(BAR0 offset, value)`: every running head's core
+    /// `GET_RG_SCAN_LINE(h)` (LINE, VBLANK) and every owned window's `GET_LINE` (its head's LINE);
+    /// `only` limits both to one head. Empty for a head with no running raster or no frame edge yet
+    /// (its words keep their last value), and for a class table without the words.
+    #[must_use]
+    pub fn scan_words(&self, ports: &Ports, now_ns: u64, only: Option<usize>) -> Vec<(u64, u32)> {
+        let mut pos = [None; MAX_HEADS];
+        for (h, p) in pos.iter_mut().enumerate().take(self.heads as usize) {
+            if only.is_none_or(|o| o == h) {
+                *p = ports.scan_position_at(h, now_ns);
+            }
+        }
+        let mut out = Vec::new();
+        if let Some((b, s, lf, vf)) = self.rg_scan_line {
+            for (h, p) in pos.iter().enumerate() {
+                if let Some((line, vblank)) = *p {
+                    let w = kf_disp::class::put(
+                        kf_disp::class::put(0, lf, line),
+                        vf,
+                        u32::from(vblank),
+                    );
+                    out.push((self.core_assy + b + h as u64 * s, w));
+                }
+            }
+        }
+        if let Some((o, lf)) = self.win_get_line {
+            for w in 0..self.windows {
+                let Some(h) = ports.window_head(w as usize) else {
+                    continue;
+                };
+                if let Some(Some((line, _))) = pos.get(h as usize) {
+                    out.push((
+                        self.user_base(ChannelKind::Window, w) + o,
+                        kf_disp::class::put(0, lf, *line),
+                    ));
+                }
+            }
+        }
+        out
+    }
+
+    /// ★ The words a new core life publishes under the H-blankstate / H-armeddefault experiments,
+    /// as `(BAR0 offset, value)`: BLANK in every head's `SET_GET_BLANKING_CTRL`, and the default
+    /// `MIN_FRAME_IDLE` in every head's ARMED copy. Empty with both off (the default).
+    #[must_use]
+    pub fn core_birth_words(&self, blank_state: bool, armed_defaults: bool) -> Vec<(u64, u32)> {
+        let mut out = Vec::new();
+        for h in 0..u64::from(self.heads) {
+            if blank_state && let Some((b, s, v)) = self.blanking {
+                out.push((self.core_assy + b + h * s, v));
+            }
+            if armed_defaults && let Some((b, s, v)) = self.min_frame_idle {
+                out.push((self.core_armed + b + h * s, v));
+            }
+        }
+        out
     }
 
     /// Is BAR0 offset `off` in the display aperture (`NV_PDISP`)?
@@ -392,6 +838,13 @@ pub struct DispCounters {
     pub scanouts: AtomicU64,
     /// Scanouts refused (a surface the console cannot copy, by name in the log).
     pub scanout_refused: AtomicU64,
+    /// ★ Windows left out of a console copy because the console cannot compose them (a format with
+    /// no console pixel format, a context DMA that does not resolve, ...). Console-only: the
+    /// guest's flip of that window still completes.
+    pub console_windows_left_out: AtomicU64,
+    /// ★ Console copies given up for a console-only reason (a colour program the console cannot
+    /// build). The flips behind them completed; the console kept its last frame.
+    pub console_copies_skipped: AtomicU64,
     /// Microseconds from queueing a scanout copy to observing its completion: the sum and the max.
     pub scanout_us_total: AtomicU64,
     /// The longest one.
@@ -932,6 +1385,8 @@ impl ColorDmas {
 #[derive(Debug, Default)]
 struct Planned {
     layers: Vec<LayerPlan>,
+    /// ★ Semi-planar YUV windows (Edge's video overlay), composed after the RGB layers.
+    yuv: Vec<kf_disp::scanout::YuvPlan>,
     refused: Vec<String>,
 }
 
@@ -956,6 +1411,19 @@ enum Dark {
 /// black frame there is a flash no real monitor shows. A head left windowless for longer is a black
 /// screen on bare metal; ten times the longest measured transient is the margin.
 const WINDOWLESS_HOLD: Duration = Duration::from_millis(250);
+
+/// ★ What the console holds when a guest life ends ([`DisplayPlane::rm_unloaded`], a device reset):
+/// nothing the guest left — no preserved scanout — and, if a guest scanout was ever shown, it is
+/// LOST: with the boot display the boot layer is chosen first anyway (`boot_done` goes back to
+/// `false`); without it (`gop=off`) the monitor shows black, the bare-metal answer for a monitor
+/// whose scanout went away, never the old life's last frame.
+fn held_after_life_reset(prev: &Held) -> Held {
+    Held {
+        preserved: None,
+        scanned: prev.scanned,
+        dark: Dark::Unlit,
+    }
+}
 
 /// ★★ Choose what the console shows. The boot layer is chosen BEFORE the window vocabulary's gate
 /// (`console_composition` is `None` without a `ScanVocab`, as on GB20x), so every family shows the
@@ -1112,6 +1580,8 @@ struct WorkerInit {
     gpu: Option<DisplayGpu>,
     layout: Layout,
     notifier_finished: u32,
+    /// `NV_DISP_NOTIFIER__0_STATUS_BEGUN` as a status word: a window flip's notifier at its latch.
+    notifier_begun: u32,
     /// ★ The GPU-copy rung's worker half (§8.11), when the device offers it.
     vram: Option<VramWorker>,
 }
@@ -1330,6 +1800,36 @@ pub struct DisplayPlane {
     /// ★ The worker's `fps[...]` status fragment, the last window's (published with `try_lock`,
     /// read with `try_lock`: a diagnostic never waits).
     fps: Mutex<String>,
+    /// ★ Device reset (`docs/design/V3_DEVICE_RESET.md`): the epoch the display worker has reset its
+    /// per-life state for.
+    pub life_reset: crate::reset::Ack,
+    /// ★ The guest's RM gave the display up (fn 47 without a PM transition: GSP-RM's own unload) —
+    /// how many times; the worker ends the display's life at each ([`DisplayPlane::rm_unloaded`]).
+    unloads: AtomicU64,
+}
+
+impl DisplayPlane {
+    /// ★★ **The guest's RM unloaded** (`UNLOADING_GUEST_DRIVER` without `bInPMTransition`, observed
+    /// on the drainer): the display's guest life is over. GSP-RM's own unload destroys every display
+    /// object it held, so the worker drops the engine's channels and heads, the model's registry and
+    /// what the console held, and — with the boot display (`gop=on`) — shows the BOOT LAYER again:
+    /// store `[0, G)`, which BAR1 `[0, G)` reaches again from the same moment (RM's
+    /// `kbusStatePreUnload` → `kbusTeardownMailbox` put BAR1 back to physical mode,
+    /// `ogkm-580: src/nvidia/src/kernel/gpu/bus/arch/maxwell/kern_bus_gm107.c:746-787`; the
+    /// re-seed is `crate::bar1phys`), so what the firmware console, efifb/simpledrm or Windows'
+    /// basic display adapter draws there is what the monitor shows. Never waits: one counter, one
+    /// wake.
+    pub fn rm_unloaded(&self) {
+        self.unloads.fetch_add(1, Ordering::AcqRel);
+        let _ = self.wake.signal();
+    }
+
+    /// ★ Device reset: ask the worker to end the display's life for `epoch` (acknowledged on
+    /// [`DisplayPlane::life_reset`]).
+    pub fn request_life_reset(&self, epoch: u64) {
+        self.life_reset.request(epoch);
+        let _ = self.wake.signal();
+    }
 }
 
 impl std::fmt::Debug for DisplayPlane {
@@ -1439,6 +1939,10 @@ impl DisplayPlane {
             kf_disp::caps::page
         };
         let sdr_color = std::env::var("KF3_DISPLAY_SDR_COLOR").as_deref() == Ok("1");
+        if sdr_color {
+            // read (and confirm in the log) the decoder experiments at birth, not at first use
+            let _ = color_experiments();
+        }
         if sdr_color && constructor_probe {
             return Err(
                 "display=on: SDR processing cannot be combined with constructor-only probes".into(),
@@ -1457,6 +1961,27 @@ impl DisplayPlane {
             caps_author(t, &regs, row.classes.caps, row.heads, row.windows)
         }
         .map_err(|e| format!("display=on: caps page: {}", e.0))?;
+        // ⚠⚠ PROBE (default off, H-caps): the real GPU's caps page instead of the authored one
+        let caps = if caps_probe_on() {
+            match caps_probe_page(caps.base, row.classes.caps) {
+                Some(p) => {
+                    eprintln!(
+                        "kf3: display: PROBE KF3_DISPLAY_CAPS_PROBE=1 — the caps page is the real GPU's measured page ({} words; H-caps probe, not a shipped behaviour)",
+                        p.words.len()
+                    );
+                    p
+                }
+                None => {
+                    eprintln!(
+                        "kf3: display: PROBE KF3_DISPLAY_CAPS_PROBE=1 REFUSED — caps class {:#x} / page {:#x} is not the measured one; the authored page stays",
+                        row.classes.caps, caps.base
+                    );
+                    caps
+                }
+            }
+        } else {
+            caps
+        };
         let layout = Layout::from_regs(&regs)
             .ok_or("display=on: the instance-memory layout is not derived")?;
         let map = RegMap::resolve(&regs, t, row)?;
@@ -1465,6 +1990,15 @@ impl DisplayPlane {
             .zip(t.notifier_value("__0_STATUS_FINISHED"))
             .map(|(fld, v)| kf_disp::class::put(0, fld, v))
             .ok_or("display=on: NV_DISP_NOTIFIER__0_STATUS is not derived")?;
+        // ★ 2026-10-10: a WINDOW flip's notifier is BEGUN at its latch and FINISHED at its flip-away (open NVKMS: the
+        // display writes it BEGUN when it performs the flip, `ogkm-595.84: nvidia-modeset/src/nvkms-headsurface.c:
+        // 1925-1952`; `kf_disp::engine::Effect::Notify`); the core's completion notifier is FINISHED
+        // (`nvkms-evo3.c:6224-6243`)
+        let notifier_begun = t
+            .notifier_field("__0_STATUS")
+            .zip(t.notifier_value("__0_STATUS_BEGUN"))
+            .map(|(fld, v)| kf_disp::class::put(0, fld, v))
+            .ok_or("display=on: NV_DISP_NOTIFIER__0_STATUS_BEGUN is not derived")?;
         let model = kf_rm::display::model_for(table, row, max_fps).ok_or_else(|| {
             format!("display=on: no derived display layouts for driver {version}")
         })?;
@@ -1482,6 +2016,25 @@ impl DisplayPlane {
             );
         }
         let ports = model.ports.clone();
+        // ★ 2026-10-09 EXPERIMENT (`KF3_DISPLAY_HEAD_TIMING_EN_BASE=<hex>`, default off, DIAGNOSTIC): the
+        // value `NV_PDISP_FE_RM_INTR_EN_HEAD_TIMING(h)` (0x611D80) reads back before the guest writes it.
+        // `[measured, VFIO DVI reference boot3, RTX 4070, 2026-10-08/09, traces/windows_reset_20261009
+        // README §13.1 point 3]` real hardware reads `0x3f0060` (firmware's enabled RG_LINE_A/B and
+        // semaphore events; ogkm names only LAST_DATA 1:1 and RG_LINE_A/B 5/6 in the STATUS register)
+        // and the guest read-modify-writes it (`0x3f0062`/`0x3f0060`); kf3 reads back 0 and the guest
+        // writes `0x2`/`0x0`. Per-die firmware state: NOT derived, so never a default without an owner
+        // ruling (derive, never capture).
+        if let Some(base) = std::env::var("KF3_DISPLAY_HEAD_TIMING_EN_BASE")
+            .ok()
+            .and_then(|v| u32::from_str_radix(v.trim_start_matches("0x"), 16).ok())
+        {
+            for h in 0..MAX_HEADS {
+                ports.head_timing_en[h].store(base, Ordering::Release);
+            }
+            eprintln!(
+                "kf3: display: EXPERIMENT KF3_DISPLAY_HEAD_TIMING_EN_BASE={base:#x} — 0x611d80 reads back this base (hardware: 0x3f0060)"
+            );
+        }
         let wake = Arc::new(Notifier::create().map_err(|e| format!("display eventfd: {e:?}"))?);
         let model: SharedDisplayModel = Arc::new(Mutex::new(model));
         {
@@ -1536,6 +2089,7 @@ impl DisplayPlane {
                 gpu: Some(gpu),
                 layout,
                 notifier_finished,
+                notifier_begun,
                 vram,
             })),
             cursor: core::array::from_fn(|_| CursorPorts::default()),
@@ -1549,6 +2103,8 @@ impl DisplayPlane {
             sdr_color: sdr_color.then_some((t, classes.window, classes.core)),
             cursor_vocab,
             ui_request: AtomicU64::new(0),
+            life_reset: crate::reset::Ack::default(),
+            unloads: AtomicU64::new(0),
             formats,
             boot: None,
             max_fps,
@@ -1631,7 +2187,18 @@ impl DisplayPlane {
         self.counters.writes.fetch_add(1, Ordering::Relaxed);
         #[allow(clippy::cast_possible_truncation)]
         let v = val as u32;
-        match self.map.classify(off) {
+        let class = self.map.classify(off);
+        if write_trace_on() {
+            // ⚠ DIAGNOSTIC (default off, bounded): one line from the vCPU — never on in production
+            static N: AtomicU32 = AtomicU32::new(0);
+            if trace_slot(&N, display_trace_cap()) {
+                eprintln!(
+                    "kf3: display: WTRACE t={:.6} WRITE {off:#08x} <- {val:#x} w{width} {class:?}",
+                    kf_mem::maplog::t()
+                );
+            }
+        }
+        match class {
             DispWrite::Put(chn) => {
                 store(off, v);
                 if self.ports.post_put(chn, v) {
@@ -1653,6 +2220,32 @@ impl DisplayPlane {
                 self.ports.guest_write(r, v);
                 self.publish_events(store);
                 if let EventReg::HeadTimingEn(h) = r {
+                    // ⚠ DIAGNOSTIC (2026-10-08, after run78: Windows raised 2 display interrupts in
+                    // 161 vblanks, Linux 2123 in 2642): the guest's head-timing interrupt enables,
+                    // the first 32, under the existing method-trace switch. A line from the vCPU —
+                    // never on in production.
+                    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+                    static N: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+                    if *ON.get_or_init(|| {
+                        std::env::var("KF3_DISPLAY_METHOD_TRACE").is_ok_and(|x| x == "1")
+                    }) && N.fetch_add(1, Ordering::Relaxed) < 32
+                    {
+                        eprintln!(
+                            "kf3: display: RM_INTR_EN_HEAD_TIMING({h}) <- {v:#x} (LAST_DATA bit {:#x} {}, VBLANK bit {:#x} {})",
+                            self.map.head_last_data,
+                            if v & self.map.head_last_data != 0 {
+                                "on"
+                            } else {
+                                "off"
+                            },
+                            self.map.head_vblank,
+                            if v & self.map.head_vblank != 0 {
+                                "on"
+                            } else {
+                                "off"
+                            }
+                        );
+                    }
                     return self.ports.rm_head_timing(h) != 0;
                 }
             }
@@ -1749,6 +2342,7 @@ struct Io<'d> {
     /// The instance-memory image, read (by the GPU) at most once per worker pass.
     img: Option<Vec<u8>>,
     notifier_finished: u32,
+    notifier_begun: u32,
     refusals_logged: u32,
 }
 
@@ -1863,6 +2457,15 @@ impl Io<'_> {
         a.satisfied_by(u64::from_le_bytes(b))
     }
 
+    /// The semaphore value an acquire reads now (diagnostic: `Err` text when it cannot be read).
+    fn peek_acquire(&mut self, a: &Acquire) -> Result<u64, String> {
+        let dma = self.resolve(a.client, a.handle, a.chn)?;
+        let mut b = [0u8; 8];
+        let n = if a.wide { 8 } else { 4 };
+        self.read(dma, a.offset, &mut b[..n])?;
+        Ok(u64::from_le_bytes(b))
+    }
+
     fn refuse(&mut self, why: &str) {
         self.dp.counters.refused.fetch_add(1, Ordering::Relaxed);
         if self.refusals_logged < 64 {
@@ -1894,6 +2497,34 @@ impl Io<'_> {
 }
 
 impl Device {
+    /// ★ **The live scan-line publisher** — its own thread (`kf3-scanline`), never a vCPU, never the
+    /// drainer, no lock. BAR0 reads do not trap, so a raster position the guest polls (`GET_RG_SCAN_LINE`,
+    /// window `GET_LINE`; `D3DKMTGetScanLine`, the vblank path of the Windows driver) is a shadow word
+    /// this thread rewrites every [`SCAN_LINE_STEP`] while a head's raster runs (every frame edge also
+    /// writes it, before its interrupt). `[measured run 2990, 2026-10-14]` with the words constant 0 an
+    /// OpenGL application with vsync on (Minecraft, swap interval 1) hung 300 s and the ICD aborted
+    /// ("Unable to communicate with the display driver", error 2).
+    pub fn scanline_loop(&self) {
+        let Some(dp) = self.display else { return };
+        if dp.map.rg_scan_line.is_none() && dp.map.win_get_line.is_none() {
+            eprintln!(
+                "kf3: display: no GET_RG_SCAN_LINE / GET_LINE in the class table — no live scan line"
+            );
+            return;
+        }
+        while !self.stop.load(Ordering::Acquire) {
+            let words = dp.map.scan_words(&dp.ports, dp.ports.now_ns(), None);
+            for (o, v) in &words {
+                self.shadow_store(*o, u64::from(*v), 4);
+            }
+            std::thread::sleep(if words.is_empty() {
+                SCAN_LINE_IDLE
+            } else {
+                SCAN_LINE_STEP
+            });
+        }
+    }
+
     /// ★★★ **The display worker** — its own thread; see the module docs. ⊘ Never a vCPU, never the
     /// drainer, and it holds the model's lock only to take statements.
     pub fn display_loop(&self) {
@@ -1904,6 +2535,7 @@ impl Device {
             gpu,
             layout,
             notifier_finished,
+            notifier_begun,
             vram,
         } = init;
         if let Some(g) = &gpu
@@ -1947,6 +2579,45 @@ impl Device {
         }
         let trace = std::env::var("KF3_DISPLAY_TRACE").is_ok_and(|v| v == "1");
         engine.trace = trace;
+        // ⚠ EXPERIMENT (default off, 2026-10-08, H-corelatch): core updates latch at an active
+        // head's vblank, as the hardware's do (`kf_disp::engine::Engine::core_latch_at_vblank`)
+        engine.core_latch_at_vblank =
+            std::env::var("KF3_DISPLAY_CORE_AT_VBLANK").is_ok_and(|v| v == "1");
+        if engine.core_latch_at_vblank {
+            eprintln!(
+                "kf3: display: EXPERIMENT KF3_DISPLAY_CORE_AT_VBLANK=1 — a core update on an active head latches (and notifies) at its next vblank"
+            );
+        }
+        let loadv = loadv_on();
+        let (blank_state, armed_defaults) = (blank_state_on(), armed_defaults_on());
+        if blank_state {
+            eprintln!(
+                "kf3: display: EXPERIMENT KF3_DISPLAY_BLANK_STATE=1 — a new core life reads BLANK in every head's SET_GET_BLANKING_CTRL ({} words)",
+                dp.map.core_birth_words(true, false).len()
+            );
+        }
+        if armed_defaults {
+            eprintln!(
+                "kf3: display: EXPERIMENT KF3_DISPLAY_ARMED_DEFAULTS=1 — a new core life's ARMED HEAD_SET_MIN_FRAME_IDLE is the engine default (leading 2, trailing 1; {} words)",
+                dp.map.core_birth_words(false, true).len()
+            );
+        }
+        let wtrace = write_trace_on();
+        let vsync_traced = AtomicU32::new(0);
+        let latch_traced = AtomicU32::new(0);
+        if wtrace {
+            // anchor the trace clock here, so no vCPU ever pays its first `/proc/uptime` read
+            let _ = kf_mem::maplog::t();
+            eprintln!(
+                "kf3: display: WRITE TRACE diagnostic enabled (guest display writes, raised head-timing interrupts, window latches; {} lines per kind)",
+                display_trace_cap()
+            );
+        }
+        if loadv {
+            eprintln!(
+                "kf3: display: EXPERIMENT KF3_DISPLAY_LOADV=1 — every frame edge also sets EVT_STAT_HEAD_TIMING bit {EVT_STAT_HEAD_TIMING_LOADV:#x} (LOADV), and the event registers are republished at every edge"
+            );
+        }
         if std::env::var("KF3_DISPLAY_METHOD_TRACE").is_ok_and(|v| v == "1") {
             engine.trace_methods(kf_disp::engine::MAX_METHOD_TRACE);
             eprintln!("kf3: display: bounded METHOD diagnostic enabled (65536 DMA writes maximum)");
@@ -1956,6 +2627,9 @@ impl Device {
             dp.map.heads, dp.map.windows
         );
         let store = |o: u64, v: u32| self.shadow_store(o, u64::from(v), 4);
+        // ★ the display shared-data page (`Statement::SharedData`) and each head's vblank count in it
+        let mut shared_data: Option<kf_disp::model::InstMem> = None;
+        let mut vblank_counts = [0u32; MAX_HEADS];
         let mut io = Io {
             dev: self,
             dp,
@@ -1964,6 +2638,7 @@ impl Device {
             inst: None,
             img: None,
             notifier_finished,
+            notifier_begun,
             refusals_logged: 0,
         };
         // ★ `display-max-fps` (§8.16): every head's vblank tick, CAPPED — the pacer owns the periods
@@ -1979,6 +2654,15 @@ impl Device {
         let mut counts = [HeadCounts::default(); MAX_HEADS];
         let mut fps_printed: Option<(Instant, String)> = None;
         let mut watch_epoch = dp.console.watch_epoch();
+        let mut last_stall_check = Instant::now();
+        let mut parked_since: std::collections::HashMap<(u32, u32), Instant> =
+            std::collections::HashMap::new();
+        let mut stall_reported: std::collections::HashSet<(u32, u32)> =
+            std::collections::HashSet::new();
+        let mut stall_logged = 0u32;
+        // ★ the last effects the plane performed (notifier writes, releases, latches), for the STALL report
+        let mut fx_ring: VecDeque<(u64, &'static str, u32, u32, u64, u64, bool)> = VecDeque::new();
+        let mut fx_seq = 0u64;
         // Boot/preserved pictures have no armed head: their non-flip checks run at the preferred
         // rate under the cap
         let idle_period = Duration::from_nanos(kf_disp::pace::paced_period_ns(
@@ -2007,11 +2691,20 @@ impl Device {
             ..ScanState::default()
         };
         let mut queue: VecDeque<Queued> = VecDeque::new();
+        // ★ 2026-10-10: a head's frame edge is OWED until its vblank's completions are published (`vblankgate`)
+        let mut gate = crate::vblankgate::VblankGate::default();
+        let mut edge_frame = [0u32; MAX_HEADS];
+        let mut forced_logged = 0u64;
+        let mut put_head = 0u64;
+        let mut put_dropped = 0u64;
         let mut cursor_seen = [0u32; MAX_HEADS];
         let mut published_get = [u32::MAX; kf_disp::ports::NUM_CHANNELS];
         let mut logged_updates = 0u32;
-        // ★ The boot display: sticky once the guest arms its first head.
+        // ★ The boot display: sticky once the guest arms its first head — until a guest life ends
+        // (`DisplayPlane::rm_unloaded`, a device reset).
         let mut boot_done = false;
+        let mut unloads_seen = dp.unloads.load(Ordering::Acquire);
+        let mut life_ends = 0u64;
         // ★ B5 (`V3_DISPLAY.md` §4.11.13): what the console shows when nothing is scanned
         let mut shown_last: Option<u64> = None;
         let mut shown_lines = 0u32;
@@ -2024,6 +2717,8 @@ impl Device {
                 b.layer.extent, b.size.0, b.size.1, b.layer.pitch
             );
         }
+        self.display_up.store(true, Ordering::Release);
+        let _up = crate::device::Up(&self.display_up);
         while !self.stop.load(Ordering::Acquire) {
             // the deadline: the earliest (capped) vblank, a 2 ms acquire poll, the boot picture's
             // check clock, or 50 ms
@@ -2036,6 +2731,9 @@ impl Device {
                 deadline = deadline.min(now + Duration::from_millis(2));
             }
             if let Some(t) = scan.idle_at {
+                deadline = deadline.min(t);
+            }
+            if let Some(t) = gate.deadline() {
                 deadline = deadline.min(t);
             }
             // a lit head without a window: wake when its hold ends (then the console may go black)
@@ -2051,6 +2749,55 @@ impl Device {
             let _ = poller.wait(&mut ready, PollTimeout::Millis(ms));
             let _ = dp.wake.drain();
             io.img = None;
+            // ★★ A guest life ended (`docs/design/V3_DEVICE_RESET.md`): a device reset, or the
+            // guest's RM unloading. Once no copy is in flight (its completion wakes this loop), every
+            // per-life piece of the worker goes back to what the loop started with; the queued
+            // completions of the old life are DROPPED — never written, never forged.
+            let owed = dp.life_reset.owed();
+            let unloads = dp.unloads.load(Ordering::Acquire);
+            if (owed.is_some() || unloads != unloads_seen) && scan.inflight.is_none() {
+                unloads_seen = unloads;
+                let channels = dp.model.lock().map_or(0, |mut m| m.reset_life());
+                engine.reset_life();
+                scan.reset_life();
+                held = held_after_life_reset(&held);
+                boot_done = false;
+                windowless_since = None;
+                let dropped = queue.len();
+                queue.clear();
+                gate = crate::vblankgate::VblankGate::default();
+                pacer = Pacer::new(cap);
+                edge_frame = [0u32; MAX_HEADS];
+                cursor_seen = [0u32; MAX_HEADS];
+                published_get = [u32::MAX; kf_disp::ports::NUM_CHANNELS];
+                parked_since.clear();
+                stall_reported.clear();
+                io.inst = None;
+                io.img = None;
+                shown_last = None;
+                life_ends += 1;
+                if crate::reset::loud(life_ends) {
+                    eprintln!(
+                        "kf3: display: +{} ms the guest's display life ENDED ({}): {channels} model channel(s), {dropped} queued completion(s) dropped (never written){}",
+                        started.elapsed().as_millis(),
+                        if owed.is_some() {
+                            "device reset"
+                        } else {
+                            "its RM unloaded"
+                        },
+                        if dp.boot.is_some() {
+                            " — the boot layer is shown again"
+                        } else {
+                            ""
+                        }
+                    );
+                }
+                if let Some(e) = owed {
+                    dp.life_reset.done(e);
+                    let _ = self.drainer_efd.signal();
+                }
+                continue;
+            }
             let mut effects: Vec<Effect> = Vec::new();
             let mut gets: Vec<(u32, u32, u32)> = Vec::new();
             // 1. statements (the model's lock, only to take them)
@@ -2062,6 +2809,10 @@ impl Device {
             for s in st {
                 eprintln!("kf3: display: {s:?}");
                 match s {
+                    Statement::SharedData(page) => {
+                        shared_data = page;
+                        vblank_counts = [0; MAX_HEADS];
+                    }
                     Statement::InstMem(im) => {
                         io.inst = Some(im);
                         // a new instance memory voids every resolution made from the old one
@@ -2114,6 +2865,11 @@ impl Device {
                                 for o in (0..dp.map.core_len / 2).step_by(4) {
                                     store(dp.map.core_armed + o, 0);
                                 }
+                                // ⚠ H-blankstate / H-armeddefault (default off): the hardware's
+                                // read-backs at a core channel's birth
+                                for (o, v) in dp.map.core_birth_words(blank_state, armed_defaults) {
+                                    store(o, v);
+                                }
                             }
                             self.display_chan_status(kind, instance, Some(true));
                         }
@@ -2141,17 +2897,17 @@ impl Device {
             if req != 0 {
                 self.apply_ui_request(dp, req);
             }
-            // 2. every DMA channel whose PUT moved
-            for chn in 0..kf_disp::ports::NUM_CHANNELS as u32 {
-                if queue.len() >= QUEUE_CAP {
-                    break; // backpressure: PUT stays behind in the guest's ring (see QUEUE_CAP)
-                }
+            // 2. every DMA channel whose PUT moved — ★ 2026-10-11 in the ORDER THE GUEST WROTE THE PUTs. The hardware
+            // fetches each channel as its PUT arrives, so UPDATEs become pending in arrival order; applying the
+            // channels in number order at whatever moment the worker wakes pairs them differently (the overlay
+            // stall H1: window 0's UPDATE joined an earlier group of window 4's, leaving window 4's first flip
+            // without partners). The latest-PUT pass below runs only to resynchronise after the log lost writes.
+            let mut step_put = |chn: u32, put: u32| {
                 let Some((pb, decoded, life)) = engine.pushbuffer(chn) else {
-                    continue;
+                    return;
                 };
-                let put = dp.ports.put(chn);
                 if put == decoded || dp.ports.generation(chn) != life {
-                    continue;
+                    return;
                 }
                 match io.pushbuffer(pb) {
                     Ok(bytes) => {
@@ -2166,6 +2922,22 @@ impl Device {
                         gets.extend(s.gets);
                     }
                     Err(e) => io.refuse(&format!("channel {chn}: {e}")),
+                }
+            };
+            while queue.len() < QUEUE_CAP {
+                // backpressure otherwise: PUT stays behind in the guest's ring (see QUEUE_CAP) and the log keeps the rest
+                match dp.ports.put_log.next(&mut put_head) {
+                    kf_disp::ports::PutPoll::Put(chn, put) => step_put(chn, put),
+                    kf_disp::ports::PutPoll::Empty | kf_disp::ports::PutPoll::Pending => break,
+                }
+            }
+            if dp.ports.put_log.dropped() != put_dropped {
+                put_dropped = dp.ports.put_log.dropped();
+                for chn in 0..kf_disp::ports::NUM_CHANNELS as u32 {
+                    if queue.len() >= QUEUE_CAP {
+                        break;
+                    }
+                    step_put(chn, dp.ports.put(chn));
                 }
             }
             // 3. cursors: every posted Update
@@ -2210,25 +2982,106 @@ impl Device {
                 let s = engine.vblank(t.head, &mut |a| io.acquired(a));
                 effects.extend(s.effects);
                 gets.extend(s.gets);
-                let f = dp.ports.frames[h]
+                // ★ the frame edge itself (frame counters, head-timing event, interrupt) is NOT raised here: the
+                // hardware raises it after the latch it announces — it is owed until step 7b
+                edge_frame[h] = dp.ports.frames[h]
                     .fetch_add(1, Ordering::AcqRel)
                     .wrapping_add(1);
-                let (b, st, fld) = dp.map.rg_dpca;
-                store(b + h as u64 * st, kf_disp::class::put(0, fld, f));
-                if let Some((lb, ls)) = dp.map.loadv {
-                    store(lb + h as u64 * ls, f);
-                }
-                dp.ports.raise(
-                    EventReg::HeadTiming(h),
-                    dp.map.head_last_data | dp.map.head_vblank,
-                );
-                let irq = dp.ports.rm_head_timing(h);
-                raised |= irq != 0;
                 counts[h].ticks += 1;
-                if irq & dp.map.head_vblank != 0 {
-                    counts[h].vblirq += 1;
-                }
                 ticked |= 1 << h;
+            }
+            // 4b. ★ a loud, bounded STALL report (2026-10-10, runs 400/401: an overlay-plane flip never
+            // completed after ~10 min of playback and the guest declared a TDR 2 s later): when an
+            // update has been parked at its UPDATE for over a second, name what it waits for,
+            // once per episode and at most 16 lines per VM. Read-only; decides nothing.
+            if last_stall_check.elapsed() >= Duration::from_millis(250) {
+                last_stall_check = Instant::now();
+                let parked = engine.parked();
+                let now = Instant::now();
+                parked_since.retain(|k, _| parked.iter().any(|p| (p.chn, p.update) == *k));
+                for p in &parked {
+                    let first = *parked_since.entry((p.chn, p.update)).or_insert(now);
+                    if now.duration_since(first) >= Duration::from_secs(1)
+                        && stall_logged < 16
+                        && !stall_reported.contains(&(p.chn, p.update))
+                    {
+                        stall_reported.insert((p.chn, p.update));
+                        stall_logged += 1;
+                        let seen = p.acquire.map(|a| io.peek_acquire(&a));
+                        eprintln!(
+                            "kf3: display: STALL {:?} {} (chn {}) update {:#x} parked {} ms: {} group/interlock bits {:#x} head {:?} acquire {:?} current {:?}; every parked channel: {:?}",
+                            p.kind,
+                            p.instance,
+                            p.chn,
+                            p.update,
+                            now.duration_since(first).as_millis(),
+                            if p.waiting_for_interlock {
+                                "waiting for its interlock group"
+                            } else {
+                                "ready, waiting for a vblank or its acquire"
+                            },
+                            p.set,
+                            p.head,
+                            p.acquire,
+                            seen,
+                            parked
+                                .iter()
+                                .map(|q| (q.chn, q.update, q.waiting_for_interlock))
+                                .collect::<Vec<_>>()
+                        );
+                        eprintln!(
+                            "kf3: display: STALL recent effects (seq, kind, chn, handle, offset, awaken-or-value, ok; oldest first): {:?}",
+                            fx_ring.iter().rev().take(60).rev().collect::<Vec<_>>()
+                        );
+                        eprintln!(
+                            "kf3: display: STALL recent events (seq, event; oldest first): {:?}",
+                            {
+                                let e = engine.recent_events();
+                                let from = e.len().saturating_sub(200);
+                                e[from..].to_vec()
+                            }
+                        );
+                        for chn in [0u32, 1, 5, 33, 37] {
+                            let words = engine.pushbuffer(chn).and_then(|(pb, decoded, _)| {
+                                io.pushbuffer(pb).ok().map(|b| {
+                                    let at = (decoded as usize & !3).saturating_sub(16);
+                                    b.get(at..(at + 64).min(b.len()))
+                                        .unwrap_or(&[])
+                                        .chunks_exact(4)
+                                        .map(|w| u32::from_le_bytes([w[0], w[1], w[2], w[3]]))
+                                        .collect::<Vec<_>>()
+                                })
+                            });
+                            eprintln!(
+                                "kf3: display: STALL chn {chn}: PUT {:#x} ports-generation {} engine {:?} generation {:?}; ring words from decoded-16: {:x?}",
+                                dp.ports.put(chn),
+                                dp.ports.generation(chn),
+                                engine.chan_state(chn),
+                                engine.generation(chn),
+                                words
+                            );
+                        }
+                        eprintln!(
+                            "kf3: display: STALL context: queue {}/{QUEUE_CAP} copies started {} done {} barrier {} inflight {} want {} failed {} nonflip_pending {} vblanks_total {} ticks_per_head {:?} heads_armed {:?}",
+                            queue.len(),
+                            scan.started,
+                            scan.done,
+                            scan.barrier,
+                            scan.inflight.is_some(),
+                            scan.want,
+                            scan.failed,
+                            scan.nonflip.pending(),
+                            dp.counters.vblanks.load(Ordering::Relaxed),
+                            counts.iter().map(|c| c.ticks).collect::<Vec<_>>(),
+                            engine
+                                .heads_armed()
+                                .iter()
+                                .map(|m| (m.head, m.period_ns))
+                                .collect::<Vec<_>>()
+                        );
+                    }
+                }
+                stall_reported.retain(|k| parked.iter().any(|p| (p.chn, p.update) == *k));
             }
             // 5. acquires waiting without a vblank
             if engine.acquire_pending() {
@@ -2376,12 +3229,21 @@ impl Device {
                     need: scan.barrier,
                     item: Item::Effect(e),
                 });
+                gate.pushed();
             }
             for (chn, life, get) in gets {
                 queue.push_back(Queued {
                     need: scan.barrier,
                     item: Item::Get(chn, life, get),
                 });
+                gate.pushed();
+            }
+            // every head that ticked: its edge is owed until everything queued up to its vblank is published
+            let tick_at = Instant::now();
+            for h in 0..MAX_HEADS {
+                if ticked & (1 << h) != 0 {
+                    gate.tick(h, tick_at);
+                }
             }
             if io
                 .gpu
@@ -2458,6 +3320,17 @@ impl Device {
                         for (h, sor) in engine.lit_sors().into_iter().enumerate() {
                             dp.ports.set_lit_sor(h, sor);
                         }
+                        // and its armed mode (`0x73011a`)
+                        for (h, t) in engine.head_timings().into_iter().enumerate() {
+                            dp.ports.set_head_timing(h, t);
+                        }
+                        // and the raster its live scan line follows, and the head of every window
+                        for (h, g) in engine.head_scan_geoms().into_iter().enumerate() {
+                            dp.ports.set_scan_geom(h, g);
+                        }
+                        for (w, h) in engine.window_heads().into_iter().enumerate() {
+                            dp.ports.set_window_head(w, h);
+                        }
                     }
                     Effect::Notify {
                         chn,
@@ -2465,7 +3338,13 @@ impl Device {
                         handle,
                         offset,
                         awaken,
+                        finished,
                     } => {
+                        let status = if finished {
+                            io.notifier_finished
+                        } else {
+                            io.notifier_begun
+                        };
                         let r = io.resolve(client, handle, chn).and_then(|dma| {
                             let ts = self.rm.gpu_time_ns().unwrap_or(0);
                             let mut n = [0u8; 16];
@@ -2473,8 +3352,25 @@ impl Device {
                             n[12..16].copy_from_slice(&((ts >> 32) as u32).to_le_bytes());
                             // the timestamp words first, the status word (what the guest polls) last
                             io.write(dma, offset + 4, &n[4..16])?;
-                            io.write(dma, offset, &io.notifier_finished.to_le_bytes())
+                            io.write(dma, offset, &status.to_le_bytes())
                         });
+                        fx_seq += 1;
+                        if fx_ring.len() >= 192 {
+                            fx_ring.pop_front();
+                        }
+                        fx_ring.push_back((
+                            fx_seq,
+                            if finished {
+                                "NOTIFY-FINISHED"
+                            } else {
+                                "NOTIFY-BEGUN"
+                            },
+                            chn,
+                            handle,
+                            offset,
+                            u64::from(awaken),
+                            r.is_ok(),
+                        ));
                         if trace {
                             eprintln!(
                                 "kf3: display: TRACE notify chn {chn} handle {handle:#x} +{offset:#x} awaken={awaken} -> {r:?}"
@@ -2509,6 +3405,19 @@ impl Device {
                             let b = value.to_le_bytes();
                             io.write(dma, offset, if wide { &b[..] } else { &b[..4] })
                         });
+                        fx_seq += 1;
+                        if fx_ring.len() >= 192 {
+                            fx_ring.pop_front();
+                        }
+                        fx_ring.push_back((
+                            fx_seq,
+                            "RELEASE",
+                            chn,
+                            handle,
+                            offset,
+                            value,
+                            r.is_ok(),
+                        ));
                         if trace {
                             eprintln!(
                                 "kf3: display: TRACE release chn {chn} handle {handle:#x} +{offset:#x} value {value:#x} -> {r:?}"
@@ -2544,6 +3453,12 @@ impl Device {
                         if trace {
                             eprintln!("kf3: display: TRACE window {window} latched");
                         }
+                        if wtrace && trace_slot(&latch_traced, display_trace_cap()) {
+                            eprintln!(
+                                "kf3: display: WTRACE t={:.6} LATCH window {window}",
+                                kf_mem::maplog::t()
+                            );
+                        }
                     }
                     Effect::Trace(line) => eprintln!("kf3: display: TRACE {line}"),
                     Effect::Exception { chn, at, what } => {
@@ -2551,6 +3466,39 @@ impl Device {
                         eprintln!("kf3: display: channel {chn} STOPPED at {at:#x}: {what}");
                     }
                 }
+            }
+            // 7b. ★ 2026-10-10 (`vblankgate`): the owed frame edges whose vblank's completions are all published —
+            // the hardware's order: latch, notifier/semaphore/GET, THEN the vblank event and its interrupt. Every
+            // guest-visible word above is written (the vidmem writes are synchronous) before the fence; the edge after.
+            gate.remaining(queue.len());
+            let due = gate.due(Instant::now());
+            if !due.is_empty() {
+                std::sync::atomic::fence(Ordering::SeqCst);
+            }
+            for h in due {
+                if let Some(page) = shared_data {
+                    vblank_counts[h] = vblank_counts[h].wrapping_add(1);
+                    if let Err(e) = write_vblank_count(&io, page, h, vblank_counts[h]) {
+                        io.refuse(&format!("display shared data: {e}"));
+                        shared_data = None;
+                    }
+                }
+                let irq =
+                    frame_edge_out(dp, &store, h, edge_frame[h], loadv, wtrace, &vsync_traced);
+                raised |= irq != 0;
+                if irq & dp.map.head_vblank != 0 {
+                    counts[h].vblirq += 1;
+                }
+            }
+            if gate.forced > forced_logged {
+                if forced_logged < 20 {
+                    eprintln!(
+                        "kf3: display: a frame edge waited {} ms for its completions (a console copy behind the host) and was raised without them — {} so far",
+                        crate::vblankgate::EDGE_CAP.as_millis(),
+                        gate.forced
+                    );
+                }
+                forced_logged = gate.forced;
             }
             if engine.updates > u64::from(logged_updates) && logged_updates < 64 {
                 logged_updates = u32::try_from(engine.updates.min(64)).unwrap_or(64);
@@ -2561,10 +3509,12 @@ impl Device {
             }
             dp.counters.updates.store(engine.updates, Ordering::Relaxed);
             dp.counters.methods.store(engine.methods, Ordering::Relaxed);
-            // 8. the display interrupt — after the registers it announces
-            if raised {
+            // 8. the display interrupt — after the registers it announces. ★ H-loadv: the event
+            // registers are also republished at every frame edge without an interrupt, so a read
+            // shows what the frame latched (the hardware's `0x611800` is live)
+            if raised || (loadv && ticked != 0) {
                 dp.publish_events(&store);
-                if dp.ports.anything_pending(dp.map.heads as usize) {
+                if raised && dp.ports.anything_pending(dp.map.heads as usize) {
                     dp.counters.irqs.fetch_add(1, Ordering::Relaxed);
                     self.latch_and_deliver(kf_rm::authored::DISP_STALL_VECTOR);
                 }
@@ -2719,6 +3669,69 @@ fn console_composition(engine: &Engine, dp: &DisplayPlane) -> Option<Composition
         .find_map(|m| engine.composition(sv, m.head))
 }
 
+/// ★ One composed item of a copy, in back-to-front order ([`z_order`]): an RGB layer or a YUV window,
+/// by index into the plan.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Z {
+    /// `planned.layers[i]`.
+    Rgb(usize),
+    /// `planned.yuv[j]`.
+    Yuv(usize),
+}
+
+/// ★ The back-to-front order of a copy's RGB layers and YUV windows: deepest
+/// `SET_COMPOSITION_CONTROL.DEPTH` first, equal depths in window order (the engine's own order for
+/// [`Composition::layers`]). `depth` maps a window to its armed depth. Without a YUV window the
+/// RGB layers keep the order they were planned in (a preserved composition is already ordered).
+fn z_order(
+    layers: &[LayerPlan],
+    yuv: &[kf_disp::scanout::YuvPlan],
+    depth: impl Fn(u32) -> u32,
+) -> Vec<Z> {
+    let mut v: Vec<(u32, u32, Z)> = layers
+        .iter()
+        .enumerate()
+        .map(|(i, l)| (depth(l.window), l.window, Z::Rgb(i)))
+        .chain(
+            yuv.iter()
+                .enumerate()
+                .map(|(j, y)| (depth(y.window), y.window, Z::Yuv(j))),
+        )
+        .collect();
+    if !yuv.is_empty() {
+        v.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
+    }
+    v.into_iter().map(|(_, _, z)| z).collect()
+}
+
+/// The kf-cuda mirror of a planned YUV window.
+fn yuv_layer(l: &kf_disp::scanout::YuvPlan) -> kf_cuda::display::YuvLayer {
+    kf_cuda::display::YuvLayer {
+        y_src: l.y_src,
+        y_extent: l.y_extent,
+        c_src: l.c_src,
+        c_extent: l.c_extent,
+        block_linear: l.block_linear,
+        y_pitch: l.y_pitch,
+        c_pitch: l.c_pitch,
+        block_height_log2: l.block_height_log2,
+        sx0: l.sx0,
+        sy0: l.sy0,
+        sw: l.sw,
+        sh: l.sh,
+        ox: l.ox,
+        oy: l.oy,
+        dw: l.dw,
+        dh: l.dh,
+        sub_x_log2: l.sub_x_log2,
+        sub_y_log2: l.sub_y_log2,
+        vu_first: l.vu_first,
+        layout: l.layout,
+        filter: l.filter,
+        fmt: l.fmt,
+    }
+}
+
 /// The kf-cuda mirror of a planned layer.
 fn compose_layer(l: &LayerPlan) -> ComposeLayer {
     ComposeLayer {
@@ -2810,6 +3823,16 @@ const FRAME_MAX: usize = kf_disp::scanout::MAX_PIXELS as usize * 4;
 /// grab; in hover only a cursor the host cannot show ([`CursorMode::composes`]).
 fn cursor_composed(mode: CursorMode, want: Option<&CursorWant>) -> bool {
     want.is_none_or(|w| mode.composes(w))
+}
+
+/// ★ Who a failed scanout copy is the failure of ([`ScanState::fault`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Fault {
+    /// The console cannot show it; nothing reached the GPU or the guest's display. The flips
+    /// behind the copy complete.
+    Console(String),
+    /// Work sent to the GPU failed or was lost. The display stops; nothing is forged.
+    Gpu(String),
 }
 
 /// ★ M2 — the worker's scanout copies (`V3_DISPLAY.md` §4.6). One copy in flight at a time, on the
@@ -3087,6 +4110,29 @@ fn fnv_rgb_xrgb8888(bytes: &[u8], stride: usize, width: usize, height: usize) ->
 }
 
 impl ScanState {
+    /// ★ A guest life ends: forget what the old life's windows resolved to and what was composed,
+    /// and want a copy at once (the next pass shows what the new life shows: the boot layer, or
+    /// black). ⊘ Only with no copy in flight (the caller waits for its completion): its frame slot
+    /// and the completions waiting on it are the old life's. Kept: the frames (process-lifetime
+    /// page-locked memory), the GPU-copy rung, the broker refusal, the self-test verdict, a failed
+    /// GPU context (`failed` describes the device's own context, not the guest), the counters.
+    fn reset_life(&mut self) {
+        debug_assert!(self.inflight.is_none());
+        self.barrier = self.started;
+        self.done = self.started;
+        self.want = true;
+        self.active = false;
+        self.idle_at = None;
+        self.last_plan = None;
+        self.latched = LatchedDmas::default();
+        self.colors = ColorDmas::default();
+        self.cursor_mode = CursorMode::default();
+        self.cursor_in_frame = false;
+        self.cursor_posted = None;
+        self.hot = HotTracker::default();
+        self.hot_epoch = None;
+    }
+
     /// ★ §8.16: the check clock of a picture with no armed head — due every `period` while `run`
     /// (late ticks rescheduled as the pacer does), stopped otherwise.
     fn idle_tick(&mut self, now: Instant, period: Duration, run: bool) -> bool {
@@ -3114,20 +4160,54 @@ impl ScanState {
     /// ★ Copy `n` is over (published, found unchanged, refused, or given up): the completions
     /// behind it go, and the refresh requests it started after are served.
     fn finish(&mut self, dp: &DisplayPlane, n: u64, req: u64) {
+        self.finish_with(&dp.counters, &dp.console, n, req);
+    }
+
+    fn finish_with(&mut self, c: &DispCounters, console: &ConsoleShare, n: u64, req: u64) {
         self.done = self.done.max(n);
         if self.nonflip.serve(req) {
-            dp.counters.ondemand.fetch_add(1, Ordering::Relaxed);
-            dp.console.serve_refresh(req);
+            c.ondemand.fetch_add(1, Ordering::Relaxed);
+            console.serve_refresh(req);
         }
     }
 
     /// ★ Nothing can be copied now (nothing shown, no GPU): every waiting request is served by the
     /// frame the console already has.
     fn serve_now(&mut self, dp: &DisplayPlane) {
+        self.serve_now_with(&dp.counters, &dp.console);
+    }
+
+    fn serve_now_with(&mut self, c: &DispCounters, console: &ConsoleShare) {
         let req = self.nonflip.snapshot();
         if self.nonflip.serve(req) {
-            dp.counters.ondemand.fetch_add(1, Ordering::Relaxed);
-            dp.console.serve_refresh(req);
+            c.ondemand.fetch_add(1, Ordering::Relaxed);
+            console.serve_refresh(req);
+        }
+    }
+
+    /// ★ A copy `n` that cannot be made. The two kinds are NOT alike:
+    ///
+    /// * [`Fault::Console`]: the console (the host's viewer, not the guest's scanout) cannot
+    ///   show something: a colour program it cannot build. The display engine here is emulated
+    ///   and no GPU work stands behind the guest's flip, so the flips behind this copy COMPLETE
+    ///   ([`ScanState::finish`]) with the console keeping its last good frame; the refusal is
+    ///   loud (named counter, the first lines in the log). Never sets `failed`: a console-only
+    ///   refusal must not halt the guest's display channels (run 296: it did, and the guest's
+    ///   flips stopped until the TDR).
+    /// * [`Fault::Gpu`]: work sent to the GPU failed or was lost: no synthetic success, `failed`
+    ///   stops the display (`engine.halt_scanout`).
+    fn fault(&mut self, c: &DispCounters, console: &ConsoleShare, n: u64, req: u64, f: Fault) {
+        match f {
+            Fault::Console(why) => {
+                c.console_copies_skipped.fetch_add(1, Ordering::Relaxed);
+                self.note_refusal(c, &why);
+                self.finish_with(c, console, n, req);
+            }
+            Fault::Gpu(why) => {
+                self.note_refusal(c, &why);
+                self.failed = true;
+                self.serve_now_with(c, console);
+            }
         }
     }
 
@@ -3322,7 +4402,11 @@ impl ScanState {
     }
 
     fn refuse(&mut self, dp: &DisplayPlane, why: &str) {
-        dp.counters.scanout_refused.fetch_add(1, Ordering::Relaxed);
+        self.note_refusal(&dp.counters, why);
+    }
+
+    fn note_refusal(&mut self, c: &DispCounters, why: &str) {
+        c.scanout_refused.fetch_add(1, Ordering::Relaxed);
         if self.refusals_logged < 16 {
             self.refusals_logged += 1;
             eprintln!("kf3: display: scanout REFUSED {why}");
@@ -3496,22 +4580,31 @@ impl ScanState {
         });
         for e in &planned.refused {
             self.refuse(dp, e);
+            dp.counters
+                .console_windows_left_out
+                .fetch_add(1, Ordering::Relaxed);
         }
         let color = if let (Some((t, win, core)), Shown::Armed(comp)) = (dp.sdr_color, shown) {
             let program = (|| -> Result<_, String> {
-                if !planned.refused.is_empty() {
-                    return Err("colour frame has refused windows".into());
-                }
+                // ★ a window the console cannot compose (planned.refused, already counted and named)
+                // is simply not among `planned.layers`: the colour frame is composed without it.
+                // It used to fail the whole copy, and `failed` halted the guest's display.
                 let mut inputs = Vec::new();
+                let x = color_experiments();
+                let mut matrices = Vec::new();
+                let mut ilut_mirror = false;
                 for layer in &planned.layers {
                     let so = comp
                         .layers
                         .iter()
                         .find(|so| so.window == layer.window)
                         .ok_or("colour layer has no armed window")?;
-                    let lut = kf_disp::color::input(t, win, |m| {
-                        engine.armed(ChannelKind::Window, so.window, m).unwrap_or(0)
-                    })
+                    let lut = kf_disp::color::input(
+                        t,
+                        win,
+                        |m| engine.armed(ChannelKind::Window, so.window, m).unwrap_or(0),
+                        x,
+                    )
                     .map_err(str::to_owned)?;
                     let life = engine
                         .generation(so.chn)
@@ -3525,6 +4618,8 @@ impl ScanState {
                             .ok_or("missing armed inline tables")?,
                     )
                     .map_err(str::to_owned)?;
+                    matrices.extend(pipeline.matrices);
+                    ilut_mirror |= lut.is_some_and(|l| l.mirror);
                     let tmo = self.colors.resolve(
                         32 + so.window as usize,
                         so.client,
@@ -3557,10 +4652,32 @@ impl ScanState {
                     )?;
                     inputs.push((input, tmo, program));
                 }
-                let out = kf_disp::color::output(t, core, comp.head, |m| {
-                    engine.armed(ChannelKind::Core, 0, m).unwrap_or(0)
-                })
+                let out = kf_disp::color::output(
+                    t,
+                    core,
+                    comp.head,
+                    |m| engine.armed(ChannelKind::Core, 0, m).unwrap_or(0),
+                    x,
+                )
                 .map_err(str::to_owned)?;
+                // ⚠ KF3_DISPLAY_LUT_MIRROR: the kernels have no negative side, so a mirrored
+                // OLUT is taken only when no armed matrix can make its input negative
+                if out.lut.is_some_and(|l| l.mirror)
+                    && !kf_disp::color::mirror_inert(matrices.iter().chain([&out.matrix]))
+                {
+                    return Err(
+                        "mirrored OLUT behind a signed matrix (input may be negative)".into(),
+                    );
+                }
+                if ilut_mirror || out.lut.is_some_and(|l| l.mirror) {
+                    static NOTED: std::sync::Once = std::sync::Once::new();
+                    NOTED.call_once(|| {
+                        eprintln!(
+                            "kf3: display: EXPERIMENT KF3_DISPLAY_LUT_MIRROR=1 — a mirrored LUT accepted (ILUT mirrored={ilut_mirror}, OLUT {:?}; every input provably nonnegative)",
+                            out.lut
+                        );
+                    });
+                }
                 let client = engine.client(0).ok_or("no core colour client")?;
                 let life = engine.generation(0).ok_or("no core colour incarnation")?;
                 let lut = self
@@ -3573,9 +4690,14 @@ impl ScanState {
             match program {
                 Ok(p) => Some(p),
                 Err(e) => {
-                    self.refuse(dp, &format!("SDR colour program: {e}"));
-                    self.failed = true;
-                    self.serve_now(dp);
+                    // the console's colour conversion of this frame is what failed: console-only
+                    self.fault(
+                        &dp.counters,
+                        &dp.console,
+                        n,
+                        req,
+                        Fault::Console(format!("SDR colour program: {e}")),
+                    );
                     return;
                 }
             }
@@ -3613,45 +4735,138 @@ impl ScanState {
             self.finish(dp, n, req);
             return;
         };
-        let composed =
-            if let Some((inputs, out, matrix)) = &color {
-                gpu.color_begin(w, h)
-                    .and_then(|()| {
-                        planned.layers.iter().zip(inputs).try_for_each(
-                            |(l, (lut, tmo, program))| {
-                                gpu.color_pipeline_layer(
-                                    l.window,
-                                    &compose_layer(l),
-                                    *lut,
-                                    *tmo,
-                                    Some(program),
-                                    w,
-                                    h,
-                                )
-                            },
-                        )
-                    })
-                    .and_then(|()| gpu.color_output(w, h, *out, matrix))
-                    .and_then(|()| {
-                        layers[planned.layers.len()..]
-                            .iter()
-                            .try_for_each(|l| gpu.compose_layer(&compose_layer(l), w, h))
-                    })
-                    .map_err(|e| format!("SDR composition {w}x{h}: {e}"))
+        // ★ the YUV windows: composed after the RGB layers and before the cursor. Without the
+        // kernel, or for a window the kernel's own bounds refuse, the window is left out of the
+        // console copy by name (console-only); a real CUDA error still fails the copy.
+        let yuv_run: &[kf_disp::scanout::YuvPlan] = match (planned.yuv.is_empty(), gpu.yuv_ready())
+        {
+            (true, _) => &[],
+            (false, Ok(())) => &planned.yuv,
+            (false, Err(e)) => {
+                for y in &planned.yuv {
+                    self.note_refusal(
+                        &dp.counters,
+                        &format!("window {} left out of the console copy: {e}", y.window),
+                    );
+                    dp.counters
+                        .console_windows_left_out
+                        .fetch_add(1, Ordering::Relaxed);
+                }
+                &[]
+            }
+        };
+        let mut yuv_left_out: Vec<String> = Vec::new();
+        // ★ one YUV window onto the staging frame (`colour`: the FP32 frame of the SDR pipeline)
+        let mut yuv_one = |gpu: &kf_cuda::display::DisplayGpu,
+                           y: &kf_disp::scanout::YuvPlan,
+                           colour: bool|
+         -> Result<(), kf_cuda::CudaError> {
+            let l = yuv_layer(y);
+            let r = if colour {
+                gpu.color_yuv(&l, w, h)
             } else {
-                gpu.compose_begin(w, h)
-                    .map_err(|e| format!("composition {w}x{h}: {e}"))
-                    .and_then(|()| {
-                        layers.iter().try_for_each(|l| {
-                            gpu.compose_layer(&compose_layer(l), w, h)
-                                .map_err(|e| format!("window {}: {e}", l.window))
-                        })
-                    })
+                gpu.compose_yuv(&l, w, h)
             };
+            match r {
+                Err(kf_cuda::CudaError::Refused { code: 0, name, .. }) => {
+                    yuv_left_out.push(format!("window {}: {name}", y.window));
+                    Ok(())
+                }
+                r => r,
+            }
+        };
+        // ★ the programmed depth order: RGB layers and YUV windows back to front by
+        // `SET_COMPOSITION_CONTROL.DEPTH` (deepest first), not "YUV last"
+        let depth_of = |win: u32| match shown {
+            Shown::Armed(c) => c
+                .layers
+                .iter()
+                .find(|l| l.window == win)
+                .map_or(0, |l| l.depth),
+            _ => 0,
+        };
+        let order = z_order(&planned.layers, yuv_run, depth_of);
+        if !yuv_run.is_empty() {
+            static ORDER_LOGGED: AtomicU32 = AtomicU32::new(0);
+            if trace_slot(&ORDER_LOGGED, 4) {
+                let depths: Vec<_> = match shown {
+                    Shown::Armed(c) => c
+                        .layers
+                        .iter()
+                        .map(|l| {
+                            (
+                                l.window,
+                                l.depth,
+                                l.format,
+                                l.src_factor,
+                                l.dst_factor,
+                                l.k1,
+                            )
+                        })
+                        .collect(),
+                    _ => Vec::new(),
+                };
+                eprintln!(
+                    "kf3: display: composition with a YUV window: (window, depth, format, src_factor, dst_factor, k1) {depths:?}; back-to-front order {order:?}"
+                );
+            }
+        }
+        let n_rgb = planned.layers.len();
+        let composed = if let Some((inputs, out, matrix)) = &color {
+            gpu.color_begin(w, h)
+                .and_then(|()| {
+                    order.iter().try_for_each(|z| match *z {
+                        Z::Rgb(i) => {
+                            let (lut, tmo, program) = &inputs[i];
+                            gpu.color_pipeline_layer(
+                                planned.layers[i].window,
+                                &compose_layer(&planned.layers[i]),
+                                *lut,
+                                *tmo,
+                                Some(program),
+                                w,
+                                h,
+                            )
+                        }
+                        Z::Yuv(j) => yuv_one(gpu, &yuv_run[j], true),
+                    })
+                })
+                .and_then(|()| gpu.color_output(w, h, *out, matrix))
+                .and_then(|()| {
+                    layers[n_rgb..]
+                        .iter()
+                        .try_for_each(|l| gpu.compose_layer(&compose_layer(l), w, h))
+                })
+                .map_err(|e| format!("SDR composition {w}x{h}: {e}"))
+        } else {
+            gpu.compose_begin(w, h)
+                .map_err(|e| format!("composition {w}x{h}: {e}"))
+                .and_then(|()| {
+                    order.iter().try_for_each(|z| match *z {
+                        Z::Rgb(i) => gpu
+                            .compose_layer(&compose_layer(&layers[i]), w, h)
+                            .map_err(|e| format!("window {}: {e}", layers[i].window)),
+                        Z::Yuv(j) => {
+                            yuv_one(gpu, &yuv_run[j], false).map_err(|e| format!("YUV window: {e}"))
+                        }
+                    })
+                })
+                .and_then(|()| {
+                    layers[n_rgb..].iter().try_for_each(|l| {
+                        gpu.compose_layer(&compose_layer(l), w, h)
+                            .map_err(|e| format!("window {}: {e}", l.window))
+                    })
+                })
+        };
+        for why in std::mem::take(&mut yuv_left_out) {
+            self.note_refusal(&dp.counters, &format!("YUV {why}"));
+            dp.counters
+                .console_windows_left_out
+                .fetch_add(1, Ordering::Relaxed);
+        }
         if let Err(e) = composed {
-            self.refuse(dp, &e);
-            self.failed = true;
-            self.serve_now(dp);
+            // work sent to the GPU failed: no synthetic success
+            self.fault(&dp.counters, &dp.console, n, req, Fault::Gpu(e));
             return;
         }
         // ★ §8.16: the change detector, queued behind the composition (a refusal costs only the
@@ -3901,6 +5116,35 @@ impl ScanState {
             Shown::Blank(_) => &[],
         };
         for so in windows {
+            // ★ a semi-planar YUV window (Edge's video overlay, `FORMAT 0x38`): its own planner
+            if let Some(yf) = formats.yuv_of(so.format) {
+                let planned = self.latched.resolve(so, || resolve(so)).and_then(|y_dma| {
+                    let c_dma = if so.iso1 == 0 || so.iso1 == so.handle {
+                        y_dma
+                    } else {
+                        resolve(&kf_disp::engine::Scanout {
+                            handle: so.iso1,
+                            ..*so
+                        })?
+                    };
+                    kf_disp::scanout::plan_yuv(so, yf, &y_dma, &c_dma, w, h).map_err(|r| r.0)
+                });
+                match planned {
+                    Ok(Some(l)) => {
+                        static LOGGED: AtomicU32 = AtomicU32::new(0);
+                        if trace_slot(&LOGGED, 6) {
+                            eprintln!(
+                                "kf3: display: YUV window {} composed for the console: armed {so:?} -> {l:?}",
+                                so.window
+                            );
+                        }
+                        p.yuv.push(l);
+                    }
+                    Ok(None) => {}
+                    Err(e) => p.refused.push(e),
+                }
+                continue;
+            }
             let planned = self.latched.resolve(so, || resolve(so)).and_then(|dma| {
                 kf_disp::scanout::plan_layer(so, &dma, formats, w, h).map_err(|r| r.0)
             });
@@ -4009,6 +5253,7 @@ mod tests {
                 offset: 256,
             },
             interpolate: false,
+            mirror: false,
         });
         let dma = CtxDma {
             target: Target::Vidmem,
@@ -4181,6 +5426,150 @@ mod tests {
         RegMap::resolve(&r, t, &kf_chip::display::AMPERE).expect("GA10x register map")
     }
 
+    /// ⚠⚠ H-caps probe (default off): the measured page is published only for the caps class and
+    /// page base it was measured with (Ada's C773 at `0x640000`, VFIO DVI reference boot3, RTX 4070,
+    /// 2026-10-08); its words are in the page, 4-byte aligned, distinct, and it presents the same
+    /// engine as kf3's authored page (`SYS_CAP` heads 0-3 + SORs 0-3, `SYS_CAPB` windows 0-7) — what
+    /// differs is the per-window / per-head / per-SOR capabilities only.
+    #[test]
+    fn the_caps_probe_page_is_the_measured_one_for_its_class_only() {
+        assert!(
+            caps_probe_page(0x0064_0000, 0xC673).is_none(),
+            "another class"
+        );
+        assert!(
+            caps_probe_page(0x0064_1000, 0xC773).is_none(),
+            "another base"
+        );
+        let p = caps_probe_page(0x0064_0000, 0xC773).expect("the measured class");
+        let mut seen = std::collections::BTreeSet::new();
+        for (o, _) in &p.words {
+            assert!(*o < 0x1000 && o % 4 == 0 && seen.insert(*o), "{o:#x}");
+        }
+        let t = kf_disp::class::for_version("580.65.06").unwrap();
+        let r = Regs::for_ip("580.65.06", kf_chip::display::ADA.ip_version).unwrap();
+        let authored = kf_disp::caps::sdr_page(t, &r, 0xC773, 0xC77D, 4, 8).expect("SDR page");
+        assert_eq!(authored.base, p.base);
+        assert_eq!(p.word(0), authored.word(0), "SYS_CAP");
+        assert_eq!(p.word(4), authored.word(4), "SYS_CAPB");
+        // the window-capability difference the record names: even windows scaler + TMO, odd not
+        assert_ne!(p.word(0x780), p.word(0x7a0));
+        assert_eq!(authored.word(0x780), authored.word(0x7a0));
+    }
+
+    /// ★ 2026-10-14 — THE SCAN LINE IS LIVE. The words the Windows driver reads per vblank and per
+    /// `D3DKMTGetScanLine` (`[measured run 2990, BAR0 read trace]` `0x680220` = core
+    /// `GET_RG_SCAN_LINE(0)`, `0x690208` = window 0 `GET_LINE`) are derived at those offsets on Ada and
+    /// Ampere; a frame edge reads VBLANK at line `BLANK_START.Y`, the raster then moves and leaves the
+    /// blank, a window follows its head's line, and nothing is published before a raster runs.
+    #[test]
+    fn the_scan_line_words_are_live_at_the_derived_offsets() {
+        use kf_disp::ports::ScanGeom;
+        let g = ScanGeom {
+            blank_end_y: 41,
+            blank_start_y: 1121,
+            total_h: 1125,
+            period_ns: 16_666_667,
+        };
+        for (ver, ip, row) in [
+            ("580.65.06", 0x0404_0000, &kf_chip::display::ADA),
+            ("580.159.04", 0x0401_0000, &kf_chip::display::AMPERE),
+        ] {
+            let r = Regs::for_ip(ver, ip).unwrap();
+            let t = kf_disp::class::for_version(ver).unwrap();
+            let m = RegMap::resolve(&r, t, row).expect("register map");
+            let p = Ports::default();
+            assert!(
+                m.scan_words(&p, 10, None).is_empty(),
+                "{ver}: no raster, no words"
+            );
+            p.set_scan_geom(0, Some(g));
+            assert!(
+                m.scan_words(&p, 10, None).is_empty(),
+                "{ver}: no frame edge yet"
+            );
+            p.note_frame_edge_at(0, 1_000);
+            p.set_window_head(0, Some(0));
+            let at_edge = m.scan_words(&p, 1_000, None);
+            assert_eq!(
+                at_edge,
+                vec![(0x0068_0220, 0x0001_0461), (0x0069_0208, 0x461)],
+                "{ver}"
+            );
+            let mid = m.scan_words(&p, 1_000 + g.period_ns / 2, None);
+            let core = mid.iter().find(|(o, _)| *o == 0x0068_0220).unwrap().1;
+            assert_eq!(
+                core & 0x0001_0000,
+                0,
+                "{ver}: mid-frame is not in the blank"
+            );
+            assert!((41..1121).contains(&(core & 0xffff)), "{ver}: {core:#x}");
+            assert_eq!(
+                mid.iter().find(|(o, _)| *o == 0x0069_0208).unwrap().1,
+                core & 0xffff
+            );
+            // another head's edge leaves head 0's words out of a per-head publication
+            assert!(m.scan_words(&p, 5_000, Some(1)).is_empty());
+            // a window with no owner gets no word
+            p.set_window_head(0, None);
+            assert_eq!(
+                m.scan_words(&p, 1_000, None),
+                vec![(0x0068_0220, 0x0001_0461)]
+            );
+            assert_eq!(
+                m.classify(0x0068_0220),
+                DispWrite::Plain,
+                "{ver}: core user area"
+            );
+        }
+    }
+
+    /// ⚠ H-blankstate / H-armeddefault (default off): a new core life publishes nothing extra with
+    /// both off; under the experiments, the hardware's measured read-backs at the derived offsets —
+    /// on Ada (the 580.88 guest's C77D core, the guest-driver row `580.65.06`) `0x680240 + 4h` reads
+    /// BLANK (`0x1`) and the ARMED `0x68a218 + 0x400h` reads `0x10002`, the values the RTX 4070
+    /// returned for its unlit heads / every head (VFIO DVI reference boot3). Each stored word is
+    /// inside the core user area, the BLANK one in the guest-writable half (the guest overwrites it).
+    #[test]
+    fn the_core_birth_words_are_the_hardware_read_backs_only_under_the_experiments() {
+        for (ver, ip, row) in [
+            ("580.65.06", 0x0404_0000, &kf_chip::display::ADA),
+            ("580.159.04", 0x0401_0000, &kf_chip::display::AMPERE),
+        ] {
+            let r = Regs::for_ip(ver, ip).unwrap();
+            let t = kf_disp::class::for_version(ver).unwrap();
+            let m = RegMap::resolve(&r, t, row).expect("register map");
+            assert!(
+                m.core_birth_words(false, false).is_empty(),
+                "{ver}: off by default"
+            );
+            let blank = m.core_birth_words(true, false);
+            let armed = m.core_birth_words(false, true);
+            let heads = u64::from(m.heads);
+            assert_eq!(blank.len() as u64, heads);
+            assert_eq!(armed.len() as u64, heads);
+            for h in 0..heads {
+                assert_eq!(
+                    blank[h as usize],
+                    (0x0068_0240 + 4 * h, 0x1),
+                    "{ver} head {h}"
+                );
+                assert_eq!(
+                    armed[h as usize],
+                    (0x0068_a218 + 0x400 * h, 0x0001_0002),
+                    "{ver} head {h}"
+                );
+                assert_eq!(m.classify(blank[h as usize].0), DispWrite::Plain);
+                assert_eq!(
+                    m.classify(armed[h as usize].0),
+                    DispWrite::ReadOnly,
+                    "ARMED half"
+                );
+            }
+            assert_eq!(m.core_birth_words(true, true).len() as u64, 2 * heads);
+        }
+    }
+
     /// ★ The vCPU decode on GA10x: each DMA channel's PUT, its read-only GET and ARMED half, the
     /// cursor PIO window and its read-only `Free`, the W1C event registers, the derived summaries.
     #[test]
@@ -4238,6 +5627,81 @@ mod tests {
         assert_eq!(m.classify(0x0061_2078), DispWrite::Plain);
     }
 
+    /// ★ 2026-10-08 (H-flip, the VFIO DVI reference): the head-timing interrupt follows the frame
+    /// edges while the guest keeps LAST_DATA enabled, and only then. Replays Windows' measured order
+    /// on hardware (boot3, 113/113 enables): read `0x611800`, write-1-clear LAST_DATA, enable — no
+    /// interrupt at the enable; one at EVERY following frame edge while enabled (the ISR clears it
+    /// each time); none once the guest disabled it, although the event keeps latching.
+    #[test]
+    fn the_head_timing_interrupt_is_every_frame_edge_while_enabled_and_never_at_the_enable() {
+        let m = map();
+        let p = Ports::default();
+        let ld = m.head_last_data;
+        assert_eq!(ld, 0x2, "LAST_DATA is bit 1 (dev_disp.h v03_00)");
+        // frames before the guest enables anything: pending, but nothing reaches RM
+        for _ in 0..3 {
+            assert_eq!(frame_edge(&p, &m, 0, false), 0, "disabled: no interrupt");
+        }
+        assert_eq!(p.event(EventReg::HeadTiming(0)) & ld, ld, "still latched");
+        // Windows' enable: clear, then enable — the stale latch must not fire at the enable
+        p.guest_write(EventReg::HeadTiming(0), ld);
+        p.guest_write(EventReg::HeadTimingEn(0), 0x003f_0062);
+        assert_eq!(p.rm_head_timing(0), 0, "no early interrupt at the enable");
+        assert_eq!(p.rm_dispatch(4), 0);
+        // every frame edge while enabled raises; the ISR's W1C re-arms it for the next frame
+        for frame in 0..5 {
+            assert_eq!(
+                frame_edge(&p, &m, 0, false),
+                ld,
+                "frame {frame}: LAST_DATA reaches RM"
+            );
+            assert_eq!(p.rm_dispatch(4), 1, "head 0 is the pending head");
+            p.guest_write(EventReg::HeadTiming(0), ld);
+            assert_eq!(p.rm_head_timing(0), 0, "cleared until the next edge");
+        }
+        // the disable is honoured at once, and at every later edge
+        p.guest_write(EventReg::HeadTimingEn(0), 0x003f_0060);
+        for _ in 0..3 {
+            assert_eq!(frame_edge(&p, &m, 0, false), 0, "disabled: no interrupt");
+        }
+        // another head's edge never raises head 0
+        p.guest_write(EventReg::HeadTimingEn(1), 0);
+        assert_eq!(frame_edge(&p, &m, 1, false), 0);
+    }
+
+    /// ★ H-loadv (`KF3_DISPLAY_LOADV`): the guest reads `EVT_STAT_HEAD_TIMING` as the hardware
+    /// showed it — `0x7` at the ISR, `0x5` after its write-1-clear of `0x2` — and LOADV, which no
+    /// enable Windows writes covers, never raises an interrupt by itself.
+    #[test]
+    fn loadv_reads_as_the_hardware_read_it_and_raises_nothing_by_itself() {
+        let m = map();
+        let p = Ports::default();
+        assert_eq!(frame_edge(&p, &m, 0, true), 0, "nothing enabled yet");
+        assert_eq!(
+            p.event(EventReg::HeadTiming(0)),
+            0x7,
+            "hardware: 0x611800 = 0x7"
+        );
+        p.guest_write(EventReg::HeadTiming(0), 0x2);
+        p.guest_write(EventReg::HeadTimingEn(0), 0x003f_0062);
+        assert_eq!(
+            p.event(EventReg::HeadTiming(0)),
+            0x5,
+            "hardware: 0x5 after the clear"
+        );
+        assert_eq!(p.rm_head_timing(0), 0, "LOADV and VBLANK are not enabled");
+        assert_eq!(
+            frame_edge(&p, &m, 0, true),
+            0x2,
+            "only LAST_DATA reaches RM"
+        );
+        assert_eq!(p.event(EventReg::HeadTiming(0)), 0x7);
+        // without the experiment the register reads what kf3 published before it
+        let q = Ports::default();
+        let _ = frame_edge(&q, &m, 0, false);
+        assert_eq!(q.event(EventReg::HeadTiming(0)), 0x6);
+    }
+
     fn frame(addr: usize, serial: u64) -> FrameView {
         FrameView {
             addr,
@@ -4285,11 +5749,16 @@ mod tests {
             out_y: 0,
             out_width: 1920,
             out_height: 1080,
+            iso1: 0,
+            offset1: 0,
+            pitch1: 0,
+            swap_uv: false,
             depth: 0,
             k1: 255,
             k2: 0,
             src_factor: 0,
             dst_factor: 0,
+            fmt: [0; 12],
         }
     }
 
@@ -4331,6 +5800,66 @@ mod tests {
         );
         assert_eq!(choose_shown(Some(comp), Some(&boot), true, &fresh), armed);
         assert_eq!(choose_shown(None, Some(&boot), true, &fresh), None);
+    }
+
+    /// ★★ 2026-10-13 (owner requirement, `docs/design/V3_DEVICE_RESET.md` §6): when a guest life
+    /// ends — the guest's RM unloads (fn 47 without a PM transition), or the device is reset — the
+    /// console goes back to the BOOT LAYER (store `[0, G)`, what BAR1 `[0, G)` shows again), from
+    /// every state the old life left: an armed scanout lost, a `PRESERVE_HW` scanout, black. Without
+    /// the boot display (`gop=off`) a scanout that was shown is black, never the old life's last
+    /// frame; one that never was stays QEMU's placeholder (no frame). The next life's first armed
+    /// head takes over as on the first boot.
+    #[test]
+    fn a_guest_life_that_ends_shows_the_boot_layer_again_from_every_state() {
+        let boot = boot_scan();
+        let comp = Composition {
+            head: 0,
+            width: 1920,
+            height: 1080,
+            layers: Vec::new(),
+        };
+        let states = [
+            Held::default(),
+            Held {
+                preserved: None,
+                scanned: Some((1280, 720)),
+                dark: Dark::Unlit,
+            },
+            Held {
+                preserved: Some((vec![boot.layer], (1920, 1080))),
+                scanned: Some((1920, 1080)),
+                dark: Dark::Unlit,
+            },
+            Held {
+                preserved: None,
+                scanned: Some((1920, 1080)),
+                dark: Dark::WindowlessBrief,
+            },
+        ];
+        for prev in &states {
+            let held = held_after_life_reset(prev);
+            assert!(
+                held.preserved.is_none(),
+                "{prev:?}: nothing the old life preserved"
+            );
+            // gop=on: boot_done goes back to false with the life
+            assert_eq!(
+                choose_shown(None, Some(&boot), false, &held),
+                Some(Shown::Boot(boot.layer, boot.size)),
+                "{prev:?}"
+            );
+            // the next life's first armed head takes over, as on the first boot
+            assert_eq!(
+                choose_shown(Some(comp.clone()), Some(&boot), false, &held),
+                Some(Shown::Armed(comp.clone()))
+            );
+            // gop=off: black if a scanout was ever shown, else no frame (the placeholder)
+            assert_eq!(
+                choose_shown(None, None, false, &held),
+                prev.scanned.map(Shown::Blank),
+                "{prev:?}"
+            );
+        }
     }
 
     /// ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13): a head's scanout that WAS shown and is lost is
@@ -4529,6 +6058,223 @@ mod tests {
         assert_eq!(
             scan.plan(&armed, &formats, size, 7, unbound).refused.len(),
             1
+        );
+    }
+
+    /// ★ Windows playback (run 296, 2026-10-10): Edge's YUV video overlay (window 4, `SET_PARAMS.FORMAT`
+    /// 0x38) has no console pixel format. The SDR colour program used to fail the whole copy for
+    /// it (`colour frame has refused windows`), `failed` was set for the VM's life and the display
+    /// thread halted EVERY guest display channel: window 0's flips froze and the guest reset the GPU
+    /// (TDR). A console-only refusal now leaves the window out of the console copy, the flips behind
+    /// the copy complete, nothing is halted, and the refusal is counted by name. A GPU failure still
+    /// stops the display (known-positive: no forged completion for work that reached the GPU).
+    #[test]
+    fn a_console_only_refusal_completes_the_flip_and_never_halts_the_display() {
+        let formats =
+            ScanFormats::resolve(kf_disp::class::for_version("580.159.04").unwrap(), 0xC67E);
+        let desktop = kf_disp::engine::Scanout {
+            window: 0,
+            head: 0,
+            ..scanout_6()
+        };
+        let video = kf_disp::engine::Scanout {
+            window: 4,
+            head: 0,
+            format: 0x38,
+            iso1: 0,
+            offset1: 0x10_0000,
+            pitch1: 120,
+            width: 1920,
+            height: 1080,
+            ..scanout_6()
+        };
+        assert!(formats.of(video.format).is_none(), "no RGB console format");
+        assert!(
+            formats.yuv_of(video.format).is_some(),
+            "but a console YUV format"
+        );
+        let armed = Shown::Armed(Composition {
+            head: 0,
+            width: 1920,
+            height: 1080,
+            layers: vec![desktop, video],
+        });
+        let console_dma = CtxDma {
+            target: Target::Vidmem,
+            base: 0,
+            limit: 0x7F_FFFF,
+            block_linear: false,
+            writable: true,
+        };
+        let mut scan = ScanState::default();
+        let planned = scan.plan(&armed, &formats, (1920, 1080), 1, |_| Ok(console_dma));
+        assert_eq!(
+            planned.layers.len(),
+            1,
+            "the desktop window is still composed"
+        );
+        assert_eq!(planned.layers[0].window, 0);
+        assert_eq!(
+            planned.yuv.len(),
+            1,
+            "the YUV overlay is composed for the console"
+        );
+        assert_eq!(planned.yuv[0].window, 4);
+        assert!(planned.refused.is_empty(), "{:?}", planned.refused);
+        // a window format nothing can compose (I8) is left out by name, console-only
+        let odd = kf_disp::engine::Scanout {
+            format: 0x1E,
+            ..video
+        };
+        let armed_odd = Shown::Armed(Composition {
+            head: 0,
+            width: 1920,
+            height: 1080,
+            layers: vec![desktop, odd],
+        });
+        let planned = scan.plan(&armed_odd, &formats, (1920, 1080), 2, |_| Ok(console_dma));
+        assert_eq!(planned.layers.len(), 1);
+        assert!(planned.yuv.is_empty());
+        assert_eq!(planned.refused.len(), 1);
+        assert!(
+            planned.refused[0].contains("0x1e has no console format"),
+            "{:?}",
+            planned.refused
+        );
+
+        // a flip of window 0 waits for copy 1; the copy cannot be made for the console
+        let (counters, console) = (DispCounters::default(), ConsoleShare::default());
+        scan.barrier = 1;
+        scan.started = 1;
+        scan.fault(
+            &counters,
+            &console,
+            1,
+            0,
+            Fault::Console("SDR colour program: x".into()),
+        );
+        assert!(
+            !scan.failed,
+            "the display thread would halt every guest channel on this"
+        );
+        assert!(
+            scan.done >= scan.barrier,
+            "the flip queued behind copy 1 is released"
+        );
+        assert_eq!(counters.console_copies_skipped.load(Ordering::Relaxed), 1);
+        assert_eq!(counters.scanout_refused.load(Ordering::Relaxed), 1);
+        // ... and the next copy is made as usual
+        scan.barrier = 2;
+        scan.started = 2;
+        scan.finish_with(&counters, &console, 2, 0);
+        assert!(scan.done >= scan.barrier && !scan.failed);
+
+        // known-positive: a lost or failed GPU copy still stops the display and completes nothing
+        let mut gpu = ScanState::default();
+        gpu.barrier = 1;
+        gpu.started = 1;
+        gpu.fault(
+            &counters,
+            &console,
+            1,
+            0,
+            Fault::Gpu("the completion signal: x".into()),
+        );
+        assert!(gpu.failed);
+        assert!(gpu.done < gpu.barrier, "no forged completion for GPU work");
+    }
+
+    /// ★ The overlay's place is its programmed depth, not "last": a base plane in front of the video
+    /// (an underlay with an alpha hole, depth smaller than the video's) composes AFTER it; a video in
+    /// front of the base composes after the base; equal depths follow the window order.
+    #[test]
+    fn rgb_layers_and_yuv_windows_compose_in_programmed_depth_order() {
+        let rgb = |window| LayerPlan {
+            window,
+            src: 0,
+            extent: 0,
+            block_linear: false,
+            pitch: 0,
+            block_height_log2: 0,
+            x0_bytes: 0,
+            y0: 0,
+            width: 1,
+            rows: 1,
+            ox: 0,
+            oy: 0,
+            flags: 0,
+            a_s: 255,
+            b_s: 0,
+            a_d: 0,
+            b_d: 0,
+        };
+        let yuv = |window| kf_disp::scanout::YuvPlan {
+            window,
+            y_src: 0,
+            y_extent: 0,
+            c_src: 0,
+            c_extent: 0,
+            block_linear: false,
+            y_pitch: 0,
+            c_pitch: 0,
+            block_height_log2: 0,
+            sx0: 0,
+            sy0: 0,
+            sw: 1,
+            sh: 1,
+            ox: 0,
+            oy: 0,
+            dw: 1,
+            dh: 1,
+            sub_x_log2: 1,
+            sub_y_log2: 1,
+            vu_first: false,
+            layout: 0,
+            filter: 0,
+            fmt: kf_disp::scanout::BT709_LIMITED,
+        };
+        let d = |m: &[(u32, u32)]| {
+            let m = m.to_vec();
+            move |w: u32| m.iter().find(|(x, _)| *x == w).map_or(0, |(_, d)| *d)
+        };
+        // Windows' MPO as measured (run 401): base window 0, overlay window 4 at depth 11
+        assert_eq!(
+            z_order(&[rgb(0)], &[yuv(4)], d(&[(0, 255), (4, 11)])),
+            [Z::Rgb(0), Z::Yuv(0)],
+            "the video in front of the base"
+        );
+        // the underlay: the base plane (alpha hole) in front of the video
+        assert_eq!(
+            z_order(&[rgb(0)], &[yuv(4)], d(&[(0, 5), (4, 11)])),
+            [Z::Yuv(0), Z::Rgb(0)],
+            "the base in front of the video"
+        );
+        // between two RGB layers
+        assert_eq!(
+            z_order(
+                &[rgb(0), rgb(2)],
+                &[yuv(4)],
+                d(&[(0, 255), (2, 100), (4, 50)])
+            ),
+            [Z::Rgb(0), Z::Rgb(1), Z::Yuv(0)]
+        );
+        assert_eq!(
+            z_order(
+                &[rgb(0), rgb(2)],
+                &[yuv(4)],
+                d(&[(0, 255), (2, 20), (4, 50)])
+            ),
+            [Z::Rgb(0), Z::Yuv(0), Z::Rgb(1)]
+        );
+        // equal depth: window order
+        assert_eq!(
+            z_order(&[rgb(3)], &[yuv(1)], d(&[(3, 10), (1, 10)])),
+            [Z::Yuv(0), Z::Rgb(0)]
+        );
+        // no YUV window: the planned order stands, whatever the depths
+        assert_eq!(
+            z_order(&[rgb(2), rgb(0)], &[], d(&[(0, 255), (2, 1)])),
+            [Z::Rgb(0), Z::Rgb(1)]
         );
     }
 

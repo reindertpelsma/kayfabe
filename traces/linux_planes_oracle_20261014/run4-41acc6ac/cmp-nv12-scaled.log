@@ -1,0 +1,1 @@
+CMP what=nv12-scaled size=1920x1080 tol=6 mismatched=516376 in_overlay=516376 of 518400 max_err=255 best_match=709F(err 196) bt709L_err=216 bars=275f40,375f40,475f40,575f40,675f40,775f40,875f40,975f40 verdict=OVERLAY_DIFF

@@ -1,0 +1,20 @@
+nvkvm-broker:     XR24  modifier 0x0000000000000000 (LINEAR)
+nvkvm-broker: backend 'wayland': window 1920x1080
+nvkvm-broker: grab capabilities: keyboard=1 abs=1 rel=1 lock=1 shortcuts-inhibited=1 focus-events=1 fullscreen=1
+nvkvm-broker: GRAB IS TOTAL: under CTRL+ALT+G every key reaches the guest and the pointer is locked to the window.
+nvkvm-broker: listening on /run/user/1000/nvkvm/windows.sock (mode 0600)
+nvkvm-broker:   allowed uid 0
+nvkvm-broker:   allowed uid 1000
+nvkvm-broker: no client yet: showing the placeholder (1920x1080)
+nvkvm-broker: accepted uid 0 gid 0 pid 2068981
+nvkvm-broker: client attached: window 1920x1080, capabilities 0xfff, display device render node 226:128
+nvkvm-broker: grab: CTRL+ALT+G toggles, CTRL+ALT+F fullscreen. all keyboard input is captured under grab.
+nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0300000000606014 (NVIDIA) -> YES
+nvkvm-broker: the VM reports: clipboard agent not seen yet (it is announced the first time the guest copies something)
+nvkvm-broker: QUERY_FORMAT XR24 modifier 0x0000000000000000 (LINEAR) -> YES
+nvkvm-broker: probing whether this display can import XR24 modifier 0x0000000000000000 (one frame is dropped to find out)
+nvkvm-broker: ERROR: this display ADVERTISED XR24 modifier 0x0000000000000000 and then refused to import it.  Frames in that layout will be rejected rather than retried; the VMM is being told so it can send something else.
+nvkvm-broker: probing whether this display can import XR24 modifier 0x0300000000606014 (one frame is dropped to find out)
+nvkvm-broker: this display CAN import XR24 modifier 0x0300000000606014 — proven by import, not by advertisement
+nvkvm-broker: host output refresh is 59.996 Hz — telling the guest, so it need not stay at its built-in default
+nvkvm-broker: Present: COPY - the compositor is compositing it  (refresh 16.667 ms)

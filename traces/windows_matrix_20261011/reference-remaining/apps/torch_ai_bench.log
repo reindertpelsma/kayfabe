@@ -1,0 +1,19 @@
+=== torch_ai_bench start=2026-10-11T08:57:24.7308153-07:00 host=DESKTOP-JR70RMQ session=0 boot=2026-10-11T14:31:59.5000000Z timeout=900
+KFDEV NVIDIA GeForce RTX 4090
+[ai] device NVIDIA GeForce RTX 4090 torch 2.8.0+cu126
+METRIC torch_matmul_fp32_TFLOPs 54.87
+CHECK torch_matmul_fp32_TFLOPs ok
+METRIC torch_matmul_fp16_TFLOPs 163.71
+CHECK torch_matmul_fp16_TFLOPs ok
+METRIC resnet50_infer_imgs 2193.59
+CHECK resnet50_infer_imgs ok
+METRIC resnet50_infer_amp_imgs 2184.50
+CHECK resnet50_infer_amp_imgs ok
+METRIC resnet50_train_imgs 730.67
+CHECK resnet50_train_imgs ok
+METRIC vit_b16_infer_imgs 856.60
+CHECK vit_b16_infer_imgs ok
+METRIC bert_infer_seqs 1649.24
+CHECK bert_infer_seqs ok
+[ai] done
+=== end rc=0 secs=35 2026-10-11T08:57:59.9047156-07:00

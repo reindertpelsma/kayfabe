@@ -1,0 +1,46 @@
+=== control1
+RUN 600 drop=[] flags_set=20
+  phases: boot tdr_cycles=0 after-signin tdr_cycles=0 after-dwm-restart tdr_cycles=0 after-edge tdr_cycles=0 after-shorts-load tdr_cycles=0 end-of-hold tdr_cycles=0 
+  hold: alive=1 tdr_cycles=0 stopfile=0 hold_s=182 ; tdr_cycles_final=1
+  host: xid_before=29 xid_after=29 ; qemu.log: DEAD=0 panicked=0 GSP_REFUSED_lines=62 GSP_cmd_REFUSED=0 STALL=0 halted=0 failclosed=0
+  guest: utc now: 2026-10-10T22:52:47.2349576Z;ADAPTER NVIDIA GeForce RTX 4070 code=0 status=OK;EDGE_PROCS 8;EXPLORER s1;DWM 1;EV_nvlddmkm153 0;EV_dxgkrnl141_4101 0;
+  refused-set: fn103/0x0000402c=0x56 fn76/0x0073011d=0x56 fn76/0x00730122=0x56 fn76/0x00730128=0x56 fn76/0x00730280=0x56 fn76/0x00730282=0x56 fn76/0x00730285=0x56 fn76/0x00730288=0x56 fn76/0x007302a2=0x56 fn76/0x007302a5=0x56 fn76/0x007302a6=0x56 fn76/0x00800106=0x56 fn76/0x00800292=0x56 fn76/0x00801306=0x56 fn76/0x00809908=0x56 fn76/0x2080012f=0x56 fn76/0x2080013f=0x56 fn76/0x20800160=0x56 fn76/0x20800173=0x56 fn76/0x2080017e=0x56 fn76/0x2080080b=0x56 fn76/0x20800a2e=0x56 fn76/0x20800a30=0x56 fn76/0x20800a3a=0x56 fn76/0x20800a3f=0x56 fn76/0x20800a80=0x56 fn76/0x20800a87=0x56 fn76/0x20800a9a=0x56 fn76/0x20800aaf=0x56 fn76/0x20800ab8=0x56 fn76/0x20800afe=0x56 fn76/0x20800aff=0x56 fn76/0x20800b03=0x56 fn76/0x20800b05=0x56 fn76/0x20801110=0x56 fn76/0x20801220=0x56 fn76/0x20801222=0x56 fn76/0x20801823=0x56 fn76/0x2080205b=0x56 fn76/0x20802068=0x56 fn76/0x20802801=0x56 fn76/0x20802806=0x56 fn76/0x20802a0f=0x56 fn76/0x20802a12=0x56 fn76/0x208081ea=0x56 fn76/0x20808524=0x56 fn76/0x2080852a=0x56 fn76/0x2080852e=0x56 fn76/0x2080852f=0x56 fn76/0x2080853a=0x56 fn76/0x2080853b=0x56 fn76/0x20809004=0x56 fn76/0x2080a02f=0x56 fn76/0x2080a060=0x56 fn76/0x2080a088=0x56 fn76/0x2080a618=0x56 fn76/0x2080a619=0x56 fn76/0x2080a630=0x56 fn76/0x2080a70a=0x56 fn76/0x2080a801=0x56 fn76/0x2080b201=0x56 fn76/0x20810108=0x56 
+=== control2
+RUN 601 drop=[] flags_set=20
+  phases: boot tdr_cycles=0 after-signin tdr_cycles=0 after-dwm-restart tdr_cycles=0 after-edge tdr_cycles=0 after-shorts-load tdr_cycles=0 end-of-hold tdr_cycles=0 
+  hold: alive=1 tdr_cycles=0 stopfile=0 hold_s=182 ; tdr_cycles_final=1
+  host: xid_before=29 xid_after=29 ; qemu.log: DEAD=0 panicked=0 GSP_REFUSED_lines=62 GSP_cmd_REFUSED=0 STALL=0 halted=0 failclosed=0
+  guest: Traceback (most recent call last):;  File "/var/lib/kf-windows-20261005/boundary-tools/qmp.py", line 201, in <module>;    sys.exit(main(sys.argv));             ~~~~^^^^^^^^^^;  File "/var/lib/kf-windows-20261005/boundary-tools/qmp.py", line 195, in main;    return qga_exec(sock, rest[0], rest[1:]);  File "/var/lib/kf-windows-20261005/boundary-tools/qmp.py", line 158, in qga_exec;    s, f = qga_open(sock, timeout=30.0
+  refused-set vs control600: only-here=[] only-control=[] total=62
+=== SDR_GROUP
+RUN 602 drop=[KF3_DISPLAY_SDR_COLOR KF3_DISPLAY_LUT_MIRROR KF3_DISPLAY_ILUT_OFFSET_256] flags_set=17
+  phases: boot tdr_cycles=0 after-signin tdr_cycles=0 after-dwm-restart tdr_cycles=0 after-edge tdr_cycles=0 after-shorts-load tdr_cycles=0 end-of-hold tdr_cycles=0 
+  hold: alive=1 tdr_cycles=0 stopfile=0 hold_s=182 ; tdr_cycles_final=1
+  host: xid_before=29 xid_after=29 ; qemu.log: DEAD=0 panicked=0 GSP_REFUSED_lines=62 GSP_cmd_REFUSED=0 STALL=0 halted=0 failclosed=0
+  guest: utc now: 2026-10-10T23:05:22.3244013Z;ADAPTER NVIDIA GeForce RTX 4070 code=0 status=OK;EDGE_PROCS 8;EXPLORER s1;DWM 1;EV_nvlddmkm153 0;EV_dxgkrnl141_4101 0;
+  refused-set vs control600: only-here=[] only-control=[] total=62
+  guest-events: nvlddmkm=0 dxgkrnl/display141_4101=0 bugcheck=0 ; screens(unique colours): signin=103323 edge=74428 final=74590 hold=83785
+=== ASYNC_PREEMPT
+RUN 603 drop=[KF3_ASYNC_PREEMPT] flags_set=19
+  phases: boot tdr_cycles=0 after-signin tdr_cycles=0 after-dwm-restart tdr_cycles=0 after-edge tdr_cycles=0 after-shorts-load tdr_cycles=0 end-of-hold tdr_cycles=0 
+  hold: alive=1 tdr_cycles=0 stopfile=0 hold_s=182 ; tdr_cycles_final=1
+  host: xid_before=29 xid_after=29 ; qemu.log: DEAD=0 panicked=0 GSP_REFUSED_lines=64 GSP_cmd_REFUSED=0 STALL=0 halted=0 failclosed=0
+  guest: utc now: 2026-10-10T23:33:55.9005338Z;ADAPTER NVIDIA GeForce RTX 4070 code=0 status=OK;EDGE_PROCS 8;EXPLORER s1;DWM 1;EV_nvlddmkm153 0;EV_dxgkrnl141_4101 0;
+  refused-set vs control600: only-here=[fn76/0x2080110b=0x1f ] only-control=[] total=63
+  guest-events: nvlddmkm=0 dxgkrnl/display141_4101=0 bugcheck=0 ; screens(unique colours): signin=103325 edge=90095 final=81343 hold=94124
+=== TIMER_MAP
+RUN 604 drop=[KF3_TIMER_MAP] flags_set=19
+  phases: boot tdr_cycles=1 after-signin tdr_cycles=1 after-dwm-restart tdr_cycles=1 after-edge tdr_cycles=1 after-shorts-load tdr_cycles=1 end-of-hold tdr_cycles=1 
+  hold: alive=1 tdr_cycles=1 stopfile=0 hold_s=182 ; tdr_cycles_final=1
+  host: xid_before=29 xid_after=29 ; qemu.log: DEAD=0 panicked=0 GSP_REFUSED_lines=45 GSP_cmd_REFUSED=0 STALL=0 halted=0 failclosed=0
+  guest: utc now: 2026-10-10T23:39:59.1420143Z;ADAPTER NVIDIA GeForce RTX 4070 code=43 status=Error;EDGE_PROCS 0;EXPLORER ;DWM 1;EV_nvlddmkm153 0;EV_dxgkrnl141_4101 0;
+  refused-set vs control600: only-here=[] only-control=[fn103/0x0000402c=0x56 fn76/0x00730122=0x56 fn76/0x00730280=0x56 fn76/0x00730282=0x56 fn76/0x007302a5=0x56 fn76/0x00809908=0x56 fn76/0x20800a9a=0x56 fn76/0x2080852a=0x56 fn76/0x2080852e=0x56 fn76/0x2080852f=0x56 fn76/0x2080853a=0x56 fn76/0x2080853b=0x56 fn76/0x2080a088=0x56 fn76/0x2080a618=0x56 fn76/0x2080a619=0x56 fn76/0x2080a630=0x56 fn76/0x2080b201=0x56 ] total=45
+  guest-events: nvlddmkm=0 dxgkrnl/display141_4101=0 bugcheck=0 ; screens(unique colours): signin=80 edge=80 final=80 hold=80
+=== TRANSLATED_CE_RELAY
+RUN 605 drop=[KF3_TRANSLATED_CE_RELAY] flags_set=19
+  phases: boot tdr_cycles=0 after-signin tdr_cycles=0 after-dwm-restart tdr_cycles=0 after-edge tdr_cycles=0 after-shorts-load tdr_cycles=0 end-of-hold tdr_cycles=0 
+  hold: alive=1 tdr_cycles=0 stopfile=0 hold_s=182 ; tdr_cycles_final=1
+  host: xid_before=29 xid_after=29 ; qemu.log: DEAD=0 panicked=0 GSP_REFUSED_lines=62 GSP_cmd_REFUSED=0 STALL=0 halted=0 failclosed=0
+  guest: utc now: 2026-10-10T23:47:02.8910617Z;ADAPTER NVIDIA GeForce RTX 4070 code=0 status=OK;EDGE_PROCS 8;EXPLORER s1;DWM 1;EV_nvlddmkm153 0;EV_dxgkrnl141_4101 0;
+  refused-set vs control600: only-here=[] only-control=[] total=62
+  guest-events: nvlddmkm=0 dxgkrnl/display141_4101=0 bugcheck=0 ; screens(unique colours): signin=103324 edge=83790 final=76867 hold=75293

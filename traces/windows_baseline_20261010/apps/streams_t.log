@@ -1,0 +1,7 @@
+=== streams_t start=2026-10-10T08:31:55.5590692-07:00 host=DESKTOP-397P3NI session=0 boot=2026-10-10T13:30:47.5000000Z timeout=120
+[eq] device NVIDIA GeForce RTX 4060 Ti torch 2.8.0+cu126
+CHECK streams_4_independent ok
+CHECK streams_event_timing ok ms=32.090
+CHECK streams_cross_dependency ok
+WINEQ_DONE streams
+=== end rc=0 secs=7 2026-10-10T08:32:02.1447366-07:00

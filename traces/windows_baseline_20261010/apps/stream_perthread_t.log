@@ -1,0 +1,5 @@
+=== stream_perthread_t start=2026-10-10T08:30:34.5834050-07:00 host=DESKTOP-397P3NI session=0 boot=2026-10-10T13:30:47.5000000Z timeout=120
+[eq] device NVIDIA GeForce RTX 4060 Ti torch 2.8.0+cu126
+CHECK stream_perthread ok
+STREAM_PROBE_DONE perthread rc=0
+=== end rc=0 secs=7 2026-10-10T08:30:41.1933099-07:00

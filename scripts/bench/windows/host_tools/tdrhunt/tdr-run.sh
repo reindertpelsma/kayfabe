@@ -1,0 +1,128 @@
+#!/bin/bash
+# tdr-run.sh N — TDR hunt runner (host-only tool, copy kept in git as the record of how runs 264+ were launched).
+# Derived from winprod-run3.sh. ONE interactive Windows 11 guest on kf3; the CALLER holds /tmp/kayfabe-fastguest.lock (flock -o).
+# env: RUN_WIN_FLAGS (extra KF3_* flags; NAME or NAME=VALUE), KF3_REV_BIN (binary under kf3-bins/, default 459da55d),
+#      HOLD_SECS (hold after READY, default 900), ETW=1 (live DxgKrnl ETW session started right after QGA answers),
+#      SCROLL_EVERY (seconds between Shorts "down" keys during the hold, default 20), KF_GUEST_PW (the throwaway test guest password).
+# Writes $W/winprod/runN/{winprod.log,tdr-timeline.txt,guest-*.txt,etw-*.txt,...}. Cleans up exactly like winprod-run3.sh.
+set -u
+W=/var/lib/kf-windows-20261005
+N=$1
+REV=${KF3_REV_BIN:-459da55d}
+B=$W/kayfabe-win-6fafcc6e/scripts/bench/windows/windows_broker_prod2.sh
+RUN=$W/boundary-kayfabe-$N
+O=$W/winprod/run$N
+STOPF=/tmp/kf-stop-winprod
+PW=${KF_GUEST_PW:?set KF_GUEST_PW}
+HOLD=${HOLD_SECS:-900}
+mkdir -p $O; echo $$ > $O/runner.pid
+L(){ echo "TDRRUN $(date -u +%FT%T.%3NZ) $*" | tee -a $O/winprod.log; }
+for v in $(compgen -e | grep '^KF3_'); do unset "$v"; done
+unset WIN_TRACE WIN_GSP_OBSERVER WIN_OBS_ONLY WIN_DROP WIN_FLAGS PROD_EXTRA_FLAGS
+export KF3_REV=$REV; export WIN_FLAGS="${RUN_WIN_FLAGS:-}"
+XID0=$(dmesg | grep -c 'NVRM: Xid')
+dmesg | grep 'NVRM: Xid' > $O/xid-before.txt
+L "START run=$N bin=kf3-bins/$REV flags=[$WIN_FLAGS] etw=${ETW:-0} hold=$HOLD xid_before=$XID0 pre-qemu=$(pgrep -c qemu-system)"
+if [ "$(pgrep -c qemu-system)" != 0 ]; then L "REFUSED: another QEMU is running"; exit 4; fi
+[ -e "$RUN" ] && { L "REFUSED: $RUN exists"; exit 5; }
+Q(){ timeout 15 python3 $W/boundary-tools/qmp.py $RUN/qmp.sock "$@"; }
+G(){ timeout ${GT:-40} python3 $W/boundary-tools/qmp.py $RUN/qga.sock "$@"; }
+key(){ Q cmd send-key "{\"keys\":[{\"type\":\"qcode\",\"data\":\"$1\"}]}" >/dev/null 2>&1; sleep 0.25; }
+alive(){ [ -n "${QPID:-}" ] && kill -0 $QPID 2>/dev/null; }
+shot(){ Q cmd screendump "{\"filename\":\"$O/$1.ppm\",\"device\":\"kf0\"}" >/dev/null 2>&1 && convert $O/$1.ppm $O/$1.png 2>/dev/null; rm -f $O/$1.ppm; }
+ncyc(){ grep -a -c 'GSP phase Running -> Suspending' $RUN/qemu.log 2>/dev/null; }
+snap(){
+  local T=$1 Lg=$RUN/qemu.log
+  { echo "== snap $T $(date -u +%FT%T)  alive=$(alive && echo 1 || echo 0) tdr_cycles=$(ncyc)"
+    grep -a "phase=Running" $Lg | tail -1 | grep -a -o -E '(inval|walks|cleared|unreconciled|mapped|unmapped)=[^ ]+' | tr '\n' ' '; echo
+    echo "xid_now=$(dmesg | grep -c 'NVRM: Xid') (before=$XID0)"
+    echo "DEAD=$(grep -a -c 'DEAD:' $Lg) PROBE-DUMP=$(grep -a -c 'PROBE-DUMP' $Lg) PT-SNAP=$(grep -a -c 'PT-SNAP BEGIN' $Lg) panics=$(grep -a -c -i 'panicked' $Lg)"
+  } >> $O/evidence.log
+}
+gps(){ # run a PowerShell snippet in the guest through QGA, output to $O/$1
+  local out=$1; shift
+  GT=${GT:-120} G qga-exec powershell.exe -NoProfile -Command "$1" 2>&1 | tr -d '\r' >> $O/$out
+}
+cleanup(){
+  trap - TERM INT
+  L "CLEANUP begin (alive=$(alive && echo 1 || echo 0)) tdr_cycles=$(ncyc)"
+  snap final
+  shot final-screen
+  if alive; then bash $B stop $N 2>&1 | tail -3 | tee -a $O/winprod.log; fi
+  for j in $(seq 1 60); do alive || break; sleep 2; done
+  if alive; then Q cmd quit >/dev/null 2>&1; sleep 5; L "clean stop failed: QMP quit"; fi
+  sleep 3
+  L "qemu left: $(pgrep -c qemu-system)"
+  bash $W/pti-iommu_nogdm.sh DMA-FQ 2>&1 | tee -a $O/winprod.log
+  GRP=$(basename "$(readlink /sys/bus/pci/devices/0000:01:00.0/iommu_group)")
+  snap after-stop
+  L "END type=$(cat /sys/kernel/iommu_groups/$GRP/type) driver=$(basename $(readlink /sys/bus/pci/devices/0000:01:00.0/driver)) xid_lines=$(dmesg | grep -c 'NVRM: Xid')"
+  rm -f $STOPF
+  exit 0
+}
+trap cleanup TERM INT
+L "gpu: $(nvidia-smi --query-gpu=name,driver_version,memory.used --format=csv,noheader)"
+bash $W/pti-iommu_nogdm.sh identity 2>&1 | tee -a $O/winprod.log
+GRP=$(basename "$(readlink /sys/bus/pci/devices/0000:01:00.0/iommu_group)")
+T=$(cat /sys/kernel/iommu_groups/$GRP/type)
+if [ "$T" != identity ]; then L "REFUSED: group $GRP is $T"; bash $W/pti-iommu_nogdm.sh DMA-FQ; exit 3; fi
+rm -f $STOPF
+WIN_REUSE=0 bash $B run $N > $W/wr-launch-$N.log 2>&1 || { L "LAUNCH FAILED"; tail -20 $W/wr-launch-$N.log | tee -a $O/winprod.log; bash $W/pti-iommu_nogdm.sh DMA-FQ; exit 2; }
+QPID=$(sed -n 's/^QPID=//p' $W/windows-broker-run$N.state)
+L "launched qpid=$QPID"
+python3 -I -c "import json;d=json.load(open('$RUN/command.json'));print('ENV_PASSED',' '.join(sorted(d['flags'])))" | tee -a $O/winprod.log
+cp $RUN/command.json $O/command.json
+TA=0; for j in $(seq 1 90); do alive || break; G qga-ping >/dev/null 2>&1 && { TA=$(date +%s); break; }; sleep 2; done
+L "qga answered: ta=$TA alive=$(alive && echo 1 || echo 0)"
+if [ "$TA" != 0 ] && alive; then
+  G qga-exec net.exe user vast $PW >/dev/null 2>&1; L "password set rc=$?"
+  gps guest-pre.txt '"utc now: " + (Get-Date).ToUniversalTime().ToString("o"); $gd="HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers"; "GraphicsDrivers: " + ((Get-ItemProperty $gd | Select-Object Td*,HwSchMode | Out-String).Trim()); "hags/HwSchMode=" + (Get-ItemProperty $gd).HwSchMode'
+  if [ "${ETW:-0}" = 1 ]; then
+    gps etw-arm.txt 'New-Item -ItemType Directory -Force -Path C:\kf | Out-Null; logman delete kfdxg -ets 2>&1 | Out-Null; logman create trace kfdxg -p "Microsoft-Windows-DxgKrnl" 0x1 5 -o C:\kf\kfdxg.etl -f bincirc -bs 1024 -nb 64 512 -ft 1 -max 512 -ets 2>&1; logman query kfdxg -ets 2>&1 | Select-Object -First 12'
+    L "ETW armed (live): $(tail -3 $O/etw-arm.txt | tr '\n' ' ')"
+  fi
+  if [ "${ETW:-0}" = 1 ]; then
+    ( while alive && [ "$(ncyc)" -lt "${ETW_AFTER_CYCLES:-1}" ]; do sleep 0.5; done
+      alive && { L "ETW stop (tdr_cycles=$(ncyc))"; GT=900 timeout 900 python3 $W/boundary-tools/qmp.py $RUN/qga.sock qga-exec powershell.exe -NoProfile -Command "$(cat $W/kayfabe-win-6fafcc6e/scripts/bench/windows/dxg_etw_stop_tail.ps1)" > $O/etw-stop.txt 2>&1; L "ETW stop rc=$? lines=$(wc -l < $O/etw-stop.txt)"; } ) &
+  fi
+  while alive && [ $(( $(date +%s) - TA )) -lt ${SIGNIN_DELAY:-30} ]; do sleep 1; done
+  if alive; then
+    shot pre-signin
+    L "SIGNIN keys at +$(( $(date +%s) - TA ))s"
+    key spc; sleep 3
+    for c in k f s i g n 7; do key $c; done; key ret
+    L "SIGNIN sent"
+    sleep 25; shot after-signin; snap after-signin
+    ev(){ Q cmd input-send-event "{\"events\":$1}" >/dev/null 2>&1; sleep 0.15; }
+    ev '[{"type":"abs","data":{"axis":"x","value":802}},{"type":"abs","data":{"axis":"y","value":4854}}]'
+    for k in 1 2; do ev '[{"type":"btn","data":{"down":true,"button":"left"}}]'; ev '[{"type":"btn","data":{"down":false,"button":"left"}}]'; done
+    L "EDGE double-click sent (abs 802,4854)"
+    sleep 2; key ret; L "EDGE Enter sent"
+    sleep 25; shot after-edge
+    if alive; then
+      Q cmd send-key '{"keys":[{"type":"qcode","data":"ctrl"},{"type":"qcode","data":"l"}]}' >/dev/null 2>&1; sleep 1
+      for c in y o u t u b e dot c o m slash s h o r t s; do key $c; done; key ret
+      L "SHORTS url typed"
+      for n in $(seq 1 6); do sleep 9; key down; alive || break; done
+      L "SHORTS scrolled"
+    fi
+    sleep 15; shot after-shorts; snap after-shorts
+    L "READY alive=$(alive && echo 1 || echo 0) tdr_cycles=$(ncyc)"
+  fi
+fi
+# ---- timed hold: scroll Shorts, log the TDR (GSP cycle) count against the host clock every 5 s ----
+T0=$(date +%s); LASTC=-1; LASTK=0; I=0
+while alive && [ ! -e $STOPF ] && [ $(( $(date +%s) - T0 )) -lt $HOLD ]; do
+  C=$(ncyc); NOW=$(date +%s)
+  if [ "$C" != "$LASTC" ]; then echo "$(date -u +%FT%T) tdr_cycles=$C hold_t=$((NOW-T0))" >> $O/tdr-timeline.txt; LASTC=$C; fi
+  if [ $((NOW-LASTK)) -ge ${SCROLL_EVERY:-20} ]; then key down; LASTK=$NOW; fi
+  I=$((I+1)); [ $((I % 12)) = 0 ] && { snap periodic; shot "hold-$((NOW-T0))"; }
+  sleep 5
+done
+L "HOLD ended: alive=$(alive && echo 1 || echo 0) tdr_cycles=$(ncyc) stopfile=$([ -e $STOPF ] && echo 1 || echo 0) hold_s=$(( $(date +%s) - T0 ))"
+# ---- guest evidence (read-only) ----
+if alive; then
+  gps guest-events.txt '"utc now: " + (Get-Date).ToUniversalTime().ToString("o"); "uptime: " + ((Get-Date) - (gcim Win32_OperatingSystem).LastBootUpTime).ToString(); Get-WinEvent -FilterHashtable @{LogName="System";StartTime=(Get-Date).AddMinutes(-60)} -ErrorAction SilentlyContinue | Where-Object { $_.ProviderName -match "nvlddmkm|Display|dxg|Kernel-Power|WER|BugCheck|LiveKernel|Watchdog|Wininit" -or $_.Id -in 4101,141,117,116,1001,41 } | Sort-Object TimeCreated | ForEach-Object { "{0} {1} {2} {3}" -f $_.TimeCreated.ToUniversalTime().ToString("o"),$_.ProviderName,$_.Id,(($_.Message -replace "\s+"," ")[0..220] -join "") }; "LiveKernelReports: " + ((Get-ChildItem C:\Windows\LiveKernelReports -Recurse -ErrorAction SilentlyContinue | Select-Object -First 30 FullName,Length,LastWriteTime | Out-String).Trim())'
+fi
+L "DONE tdr_cycles=$(ncyc)"
+cleanup

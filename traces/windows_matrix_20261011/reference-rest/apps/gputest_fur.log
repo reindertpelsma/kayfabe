@@ -1,0 +1,6 @@
+=== gputest_fur start=2026-10-11T09:39:07.8346866-07:00 host=DESKTOP-JR70RMQ session=1 boot=2026-10-11T14:31:59.5000000Z timeout=100
+KFWAIT gputest_fur EXITED rc=0
+GPUTEST 2026/10/11@09:39:10(0000000002) < > GpuTest: Cross Platform Graphics Benchmark Utility
+GPUTEST 2026/10/11@09:39:11(0000000027) < > FurMark - OpenGL - Renderer model: NVIDIA GeForce RTX 4090/PCIe/SSE2
+GPUTEST 2026/10/11@09:39:25(0000000032) < > [Benchmark_Score] - module: FurMark - Score: 6190 points (1028x720 windowed, duration:10000 ms).
+=== end rc=0 secs=20 2026-10-11T09:39:27.9353743-07:00

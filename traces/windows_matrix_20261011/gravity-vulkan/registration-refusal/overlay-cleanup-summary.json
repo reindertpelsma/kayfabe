@@ -1,0 +1,22 @@
+{
+  "protected": [
+    "/var/lib/kf-windows-20261005/boundary-kayfabe-1380/windows.qcow2",
+    "/var/lib/kf-windows-20261005/baseline/windows.qcow2",
+    "/var/lib/kf-windows-20261005/owner-state/manual1380/resume.qcow2"
+  ],
+  "checked_headers": 162,
+  "removed": [
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-1490/windows.qcow2",
+      "allocated": 11102027776
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-1495/windows.qcow2",
+      "allocated": 7213813760
+    },
+    {
+      "path": "/var/lib/kf-windows-20261005/boundary-kayfabe-1510/windows.qcow2",
+      "allocated": 6170574848
+    }
+  ]
+}

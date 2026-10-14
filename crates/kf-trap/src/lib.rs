@@ -32,6 +32,7 @@ pub mod memmap;
 pub mod mmuinval;
 pub mod model;
 pub mod pramin;
+pub mod relay_dispatch;
 pub mod ring;
 pub mod shadow;
 pub mod timer;

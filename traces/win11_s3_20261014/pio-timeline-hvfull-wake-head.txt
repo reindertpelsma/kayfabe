@@ -1,0 +1,130 @@
+pm timer reads: 10775
+0.000 PCI read 00:00.0 reg 02 = 1237
+0.000 PCI read 00:01.3 reg 80 = 0
+0.000 PCI read 00:01.3 reg 40 = b001
+0.000 PCI write 00:01.3 reg 40 = b001
+0.000 PCI read 00:01.3 reg 80 = 0
+0.000 PCI write 00:01.3 reg 80 = 1
+0.000 0x21 write ff
+0.000 0xa1 write ff
+0.000 cmos write f
+0.000 cmos read fe
+0.000 PCI read 00:00.0 reg 02 = 1237
+0.000 PCI read 00:01.3 reg 80 = 1
+0.000 PCI read 00:01.3 reg 40 = b001
+0.001 PCI read 00:00.0 reg 02 = 1237
+0.001 PCI read 00:01.3 reg 80 = 1
+0.001 PCI read 00:01.3 reg 40 = b001
+0.001 PCI read 00:00.0 reg 02 = 1237
+0.001 PCI read 00:01.3 reg 80 = 1
+0.001 PCI read 00:01.3 reg 40 = b001
+0.001 fwcfg write 0
+0.001 fwcfg read 51
+0.001 fwcfg write 1
+0.001 fwcfg read 3
+0.001 fwcfg write 19
+0.001 fwcfg-dma x2
+0.001 fwcfg write 19
+0.001 fwcfg-dma x50
+0.001 fwcfg write 19
+0.001 fwcfg-dma x74
+0.002 fwcfg write 19
+0.002 fwcfg-dma x98
+0.002 fwcfg write 19
+0.002 fwcfg-dma x98
+0.003 fwcfg write 19
+0.003 fwcfg-dma x98
+0.004 fwcfg write 19
+0.004 fwcfg-dma x98
+0.004 fwcfg write 19
+0.004 fwcfg-dma x18
+0.004 fwcfg write 0
+0.004 fwcfg-dma x2
+0.004 fwcfg write 1
+0.004 fwcfg-dma x2
+0.004 fwcfg write 19
+0.004 fwcfg-dma x2
+0.004 fwcfg write 25
+0.004 fwcfg-dma x2
+0.004 fwcfg write 28
+0.004 fwcfg-dma x2
+0.004 fwcfg write e
+0.004 fwcfg-dma x2
+0.004 fwcfg write 21
+0.004 fwcfg-dma x2
+0.004 cmos write f
+0.004 cmos read fe
+0.004 cmos write f
+0.004 cmos write 0
+0.004 PCI read 00:00.0 reg 02 = 1237
+0.005 fwcfg write 5
+0.005 fwcfg-dma x2
+0.005 pcihp write 0 x2
+0.005 0xaf05 write 0
+0.005 pcihp read 0
+0.005 pcihp write 0
+0.005 pcihp read 1
+0.005 pcihp write 1
+0.005 pcihp read 1 x2
+0.005 pcihp write 2
+0.005 pcihp read 2
+0.005 pcihp read 1
+0.005 pcihp write 3
+0.005 pcihp read 3
+0.005 pcihp read 1
+0.005 pcihp write 4
+0.005 pcihp read 4
+0.005 pcihp read 1
+0.005 pcihp write 5
+0.005 pcihp read 5
+0.005 pcihp read 1
+0.005 pcihp write 6
+0.005 pcihp read 6
+0.005 pcihp read 1
+0.005 pcihp write 7
+0.005 pcihp read 7
+0.005 pcihp read 1
+0.005 pcihp write 8
+0.005 pcihp read 0
+0.005 0x92 read 2
+0.005 0x92 write 2
+0.005 PCI read 00:01.3 reg 80 = 1
+0.005 PCI read 00:00.0 reg 02 = 1237
+0.005 PCI read 00:01.3 reg 80 = 1
+0.005 PCI read 00:01.3 reg 40 = b001
+0.005 PCI read 00:00.0 reg 02 = 1237
+0.005 PCI read 00:01.3 reg 80 = 1
+0.005 PCI read 00:01.3 reg 40 = b001
+0.005 PCI read 00:00.0 reg 02 = 1237
+0.005 PCI read 00:01.3 reg 80 = 1
+0.005 PCI read 00:01.3 reg 40 = b001
+0.005 PCI read 00:00.0 reg 02 = 1237
+0.005 PCI read 00:01.3 reg 80 = 1
+0.005 PCI read 00:01.3 reg 40 = b001
+0.058 PCI read 00:00.0 reg 02 = 1237
+0.058 PCI read 00:01.3 reg 80 = 1
+0.058 PCI read 00:01.3 reg 40 = b001
+0.058 PCI read 00:00.0 reg 02 = 1237
+0.058 PCI read 00:01.3 reg 80 = 1
+0.058 PCI read 00:01.3 reg 40 = b001
+0.058 PCI read 00:00.0 reg 02 = 1237
+0.058 PCI read 00:01.3 reg 80 = 1
+0.058 PCI read 00:01.3 reg 40 = b001
+0.058 PCI read 00:00.0 reg 02 = 1237
+0.058 PCI read 00:01.3 reg 80 = 1
+0.058 PCI read 00:01.3 reg 40 = b001
+0.058 PCI read 00:00.0 reg 02 = 1237
+0.058 PCI read 00:01.3 reg 80 = 1
+0.058 PCI read 00:01.3 reg 40 = b001
+0.069 pm1cnt write 1
+0.069 pm1 read 8101
+0.069 pm1 read 0
+0.069 pm1 write 0
+0.071 cmos write a
+0.071 cmos write 26
+0.071 cmos write b
+0.071 cmos write 2
+0.071 cmos write c
+0.071 cmos read 0
+0.071 cmos write d
+0.071 cmos read 80

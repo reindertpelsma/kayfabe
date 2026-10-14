@@ -1,0 +1,7 @@
+{
+  "since": "2026-10-11 16:35:18 UTC",
+  "until": "2026-10-11 16:39:40 UTC",
+  "query_exit": 0,
+  "xid_records": 5,
+  "scope": "Five expected deliberate missing-page/alias-unmap fault probes; not an Xid-free claim"
+}

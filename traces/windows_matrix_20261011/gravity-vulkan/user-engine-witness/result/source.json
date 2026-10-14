@@ -1,0 +1,8 @@
+{
+  "revision": "47509a6896e68c63b2ed37fefd33dad7761655d7",
+  "binary_sha256": "be6f77a574e61c69bd39fb8a955a91555a74305ed016172899a3df7503866bb6",
+  "binary": "/var/lib/kf-windows-20261005/codex-user-engine-witness-build-47509a689/kf-user-ring-probe",
+  "uid": 65534,
+  "gid": 65534,
+  "scope": "native C56F/C997 engine-held unique PB processing witness, no VM/migration implementation"
+}

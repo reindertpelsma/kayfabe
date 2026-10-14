@@ -1,0 +1,79 @@
+{
+ "quiet": 1,
+ "end_utc": "2026-10-10T15:19:01.0875875Z",
+ "start_utc": "2026-10-10T15:18:54.3216773Z",
+ "rc": 0,
+ "secs": 7,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4060 Ti status=OK code=0"
+ ],
+ "digests": [],
+ "session": 0,
+ "out_files": [
+  "C:\\kf\\out\\nvenc_h264\\enc.mp4 4082424"
+ ],
+ "boot_utc_start": "2026-10-10T13:30:47.5000000Z",
+ "log_tail": [
+  "=== nvenc_h264 start=2026-10-10T08:18:54.3216773-07:00 host=DESKTOP-397P3NI session=0 boot=2026-10-10T13:30:47.5000000Z timeout=180",
+  "Input #0, lavfi, from 'testsrc=size=1280x720:rate=30:duration=20':",
+  "  Duration: N/A, start: 0.000000, bitrate: N/A",
+  "  Stream #0:0: Video: wrapped_avframe, rgb24, 1280x720 [SAR 1:1 DAR 16:9], 30 fps, 30 tbr, 30 tbn",
+  "Stream mapping:",
+  "  Stream #0:0 -> #0:0 (wrapped_avframe (native) -> h264 (h264_nvenc))",
+  "Press [q] to stop, [?] for help",
+  "Output #0, mp4, to 'C:\\kf\\out\\nvenc_h264\\enc.mp4':",
+  "  Metadata:",
+  "    encoder         : Lavf62.12.103",
+  "  Stream #0:0: Video: h264 (High 4:4:4 Predictive) (avc1 / 0x31637661), gbrp(pc, gbr/unknown/unknown, progressive), 1280x720 [SAR 1:1 DAR 16:9], q=2-31, 2000 kb/s, 30 fps, 15360 tbn",
+  "    Metadata:",
+  "      encoder         : Lavc62.28.103 h264_nvenc",
+  "    Side data:",
+  "      CPB properties: bitrate max/min/avg: 0/0/2000000 buffer size: 4000000 vbv_delay: N/A",
+  "[out#0/mp4 @ 00000223f0add500] video:3979KiB audio:0KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: 0.199568%",
+  "frame=  600 fps=199 q=17.0 Lsize=    3987KiB time=00:00:19.90 bitrate=1641.2kbits/s speed=6.61x elapsed=0:00:03.00    ",
+  "frame= 600 ",
+  "=== end rc=0 secs=7 2026-10-10T08:19:01.0875875-07:00"
+ ],
+ "pdh": {
+  "pids": [
+   "8560",
+   "7060",
+   "8980",
+   "7040"
+  ],
+  "nv": {
+   "security": 0,
+   "3d": 0,
+   "vr": 0,
+   "videodecode": 0,
+   "copy": 0,
+   "ofa_0": 0,
+   "legacyoverlay": 0,
+   "videoencode": 19.031953707901835
+  },
+  "samples": 3,
+  "other": {},
+  "nvidia_luids": "0_5ecc"
+ },
+ "timed_out": false,
+ "token": "g1-nvenc_h264-1791645520",
+ "boot_utc_end": "2026-10-10T13:30:47.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "nvenc_h264",
+ "smi": {
+  "samples": 1,
+  "mem_used_base_mb": 130,
+  "util_max": 3,
+  "mem_used_max_mb": 349
+ }
+}

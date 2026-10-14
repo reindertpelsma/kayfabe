@@ -1,0 +1,7 @@
+=== fft_t start=2026-10-11T09:36:19.9365512-07:00 host=DESKTOP-JR70RMQ session=0 boot=2026-10-11T14:31:59.5000000Z timeout=120
+KFDEV NVIDIA GeForce RTX 4090
+[eq] device NVIDIA GeForce RTX 4090 torch 2.8.0+cu126
+CHECK fft_forward ok relerr=3.00e-07
+CHECK fft_roundtrip ok relerr=3.53e-07
+WINEQ_DONE fft
+=== end rc=0 secs=6 2026-10-11T09:36:26.2541413-07:00

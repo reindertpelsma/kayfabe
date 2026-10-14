@@ -1,0 +1,40 @@
+[
+  {
+    "uid": 65534,
+    "gid": 65534,
+    "pid": 672449,
+    "start_utc": "2026-10-12 00:16:05.352637 UTC",
+    "process_end_utc": "2026-10-12 00:16:07.379630 UTC",
+    "end_utc": "2026-10-12 00:16:09.379738 UTC",
+    "rc": 0,
+    "killed": false,
+    "asserted_user_channel": true,
+    "gpu_tail": true,
+    "hold_complete": true,
+    "cleanup_ok": true,
+    "journal_query_exit": 0,
+    "journal_stderr": "",
+    "xid_records": 1,
+    "pid_attributed_xids": 1,
+    "verdict": "FAIL"
+  },
+  {
+    "uid": 0,
+    "gid": 0,
+    "pid": 672489,
+    "start_utc": "2026-10-12 00:16:09.390819 UTC",
+    "process_end_utc": "2026-10-12 00:16:11.417317 UTC",
+    "end_utc": "2026-10-12 00:16:13.417813 UTC",
+    "rc": 0,
+    "killed": false,
+    "asserted_user_channel": true,
+    "gpu_tail": true,
+    "hold_complete": true,
+    "cleanup_ok": true,
+    "journal_query_exit": 0,
+    "journal_stderr": "",
+    "xid_records": 1,
+    "pid_attributed_xids": 1,
+    "verdict": "FAIL"
+  }
+]

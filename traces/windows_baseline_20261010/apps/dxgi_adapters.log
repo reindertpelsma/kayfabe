@@ -1,0 +1,5 @@
+=== dxgi_adapters start=2026-10-10T07:25:22.9536752-07:00 host=DESKTOP-397P3NI session=0 boot=2026-10-10T13:30:47.5000000Z timeout=60
+ADAPTER index=0 vendor=4318 name=NVIDIA GeForce RTX 4060 Ti luid=00000000_00005ecc dedicated_mb=16109 software=False
+ADAPTER index=1 vendor=5140 name=Microsoft Basic Render Driver luid=00000000_00006f2d dedicated_mb=0 software=True
+DXGI_OK NVIDIA hardware adapter present
+=== end rc=0 secs=3 2026-10-10T07:25:25.5774352-07:00

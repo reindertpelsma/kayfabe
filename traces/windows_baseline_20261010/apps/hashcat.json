@@ -1,0 +1,101 @@
+{
+ "quiet": 0,
+ "end_utc": "2026-10-10T17:02:56.7321853Z",
+ "start_utc": "2026-10-10T17:02:34.3413496Z",
+ "rc": 0,
+ "secs": 22,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4060 Ti status=OK code=0"
+ ],
+ "digests": [],
+ "session": 0,
+ "out_files": [
+  "C:\\kf\\out\\hashcat\\hashcat.stderr.txt 0",
+  "C:\\kf\\out\\hashcat\\hashcat.stdout.txt 3442"
+ ],
+ "boot_utc_start": "2026-10-10T15:50:57.5000000Z",
+ "log_tail": [
+  "Initialized device kernels and memoryStarting self-test. Please be patient...Finished self-testStarting autotune. Please be patient...Finished autotune",
+  "                                                          ",
+  "The wordlist or mask that you are using is too small.",
+  "This means that hashcat cannot use the full parallel power of your device(s).",
+  "Hashcat is expecting at least 940032 base words but only got 48.6% of that.",
+  "Unless you supply more work, your cracking speed will drop.",
+  "For tips on supplying more work, see: https://hashcat.net/faq/morework",
+  "",
+  "",
+  "                                                          ",
+  "[s]tatus [p]ause [b]ypass [c]heckpoint [f]inish [q]uit => ",
+  "                                                          ",
+  "Approaching final keyspace - workload adjusted.",
+  "",
+  "[s]tatus [p]ause [b]ypass [c]heckpoint [f]inish [q]uit => ",
+  "                                                          ",
+  "e4726719b68b205913167f0975d977ee:kayfab",
+  "",
+  "                                                          ",
+  "",
+  "Session..........: hashcat",
+  "Status...........: Cracked",
+  "Hash.Mode........: 0 (MD5)",
+  "Hash.Target......: e4726719b68b205913167f0975d977ee",
+  "Time.Started.....: Sat Oct 10 10:02:40 2026 (0 secs)",
+  "Time.Estimated...: Sat Oct 10 10:02:40 2026 (0 secs)",
+  "Kernel.Feature...: Optimized Kernel (password length 0-55 bytes)",
+  "Guess.Mask.......: ?l?l?l?l?l?l [6]",
+  "Guess.Queue......: 1/1 (100.00%)",
+  "Speed.#01........: 24716.3 MH/s (6.13ms) @ Accel:27 Loops:512 Thr:1024 Vec:8",
+  "Recovered........: 1/1 (100.00%) Digests (total), 1/1 (100.00%) Digests (new)",
+  "Progress.........: 233971712/308915776 (75.74%)",
+  "Rejected.........: 0/233971712 (0.00%)",
+  "Restore.Point....: 0/456976 (0.00%)",
+  "Restore.Sub.#01..: Salt:0 Amplifier:0-512 Iteration:0-512",
+  "Candidate.Engine.: Device Generator",
+  "Candidates.#01...: sanier -> ezqfqx",
+  "Hardware.Mon.#01.: Temp: 57c Fan:  0% Util: 98% Core:2640MHz Mem:8751MHz Bus:8",
+  "",
+  "=== end rc=0 secs=22 2026-10-10T10:02:56.7321853-07:00"
+ ],
+ "pdh": {
+  "pids": [
+   "8020",
+   "8460",
+   "6748",
+   "8908"
+  ],
+  "nv": {
+   "security": 0,
+   "3d": 0,
+   "vr": 0,
+   "videodecode": 0,
+   "copy": 0,
+   "ofa_0": 0,
+   "legacyoverlay": 0,
+   "videoencode": 0
+  },
+  "samples": 10,
+  "other": {},
+  "nvidia_luids": "0_6040"
+ },
+ "timed_out": false,
+ "token": "g1-hashcat-1791651733",
+ "boot_utc_end": "2026-10-10T15:50:57.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "hashcat",
+ "smi": {
+  "samples": 4,
+  "mem_used_base_mb": 127,
+  "util_max": 0,
+  "mem_used_max_mb": 234
+ }
+}

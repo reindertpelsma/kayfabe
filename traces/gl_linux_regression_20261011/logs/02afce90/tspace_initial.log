@@ -1,0 +1,10 @@
+LOG=/var/lib/kf-windows-20261005/codex-gl-regression-20261011-02afce90/bench/fast_codexglreview_alias-two-vas_qemu.log
+T-TSPACE-BUILD PASS: fb ends 0x30fbe0000, ram ends 0x38fbe0000, line 34, first BORN Translated 733, build_us=33782
+BORN-TRANSLATED PASS: 2 Translated births
+WINDOWS=NONE PASS: 5 mirrors, 3 spares, 0 with a window
+COUNTERS PASS: tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] carve_gpu=0 carve_kernel=0 carve_cpu=0 inca[strict=yes counted=0 heap_out=0 rows_inexact=0]
+STALE-BIND PASS: stale 0 of 16 over 2 retires (unload the guest driver first: retire lines print at free)
+NO-DEAD PASS: 0 Translated channels died: []
+P0-EVIDENCE PASS: 3 USER host births for 3 channel births, 0 privileged (--p0-pending scopes a build without P0)
+USER-BIRTHS FAIL: 0 unprivileged of 1 passthrough births
+VERDICT: FAIL

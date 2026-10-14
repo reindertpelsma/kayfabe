@@ -1,0 +1,42 @@
+<!doctype html><meta charset="utf-8"><title>kf webgpu</title>
+<body style="margin:0;background:#222"><canvas id="c" width="640" height="360"></canvas>
+<script>
+const P = new URLSearchParams(location.search), secs = +(P.get('s') || 10);
+async function post(o) { try { await fetch('/result', {method: 'POST', body: JSON.stringify(o)}); } catch (e) {} }
+(async () => {
+  const r = {page: 'webgpu', ok: false};
+  try {
+    if (!navigator.gpu) { r.why = 'navigator.gpu missing'; return post(r); }
+    const ad = await navigator.gpu.requestAdapter({powerPreference: 'high-performance'});
+    if (!ad) { r.why = 'no adapter'; return post(r); }
+    const info = ad.info || (ad.requestAdapterInfo ? await ad.requestAdapterInfo() : {});
+    r.vendor = info.vendor; r.architecture = info.architecture; r.description = info.description; r.device_name = info.device;
+    r.fallback = !!ad.isFallbackAdapter;
+    const dev = await ad.requestDevice();
+    const N = 4096;
+    const mod = dev.createShaderModule({code: `@group(0) @binding(0) var<storage, read_write> o : array<u32>;
+      @compute @workgroup_size(64) fn main(@builtin(global_invocation_id) id : vec3<u32>) { o[id.x] = id.x * 7u + 3u; }`});
+    const pipe = dev.createComputePipeline({layout: 'auto', compute: {module: mod, entryPoint: 'main'}});
+    const buf = dev.createBuffer({size: N * 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC});
+    const rb = dev.createBuffer({size: N * 4, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ});
+    const bg = dev.createBindGroup({layout: pipe.getBindGroupLayout(0), entries: [{binding: 0, resource: {buffer: buf}}]});
+    const ctx = document.getElementById('c').getContext('webgpu'); const fmt = navigator.gpu.getPreferredCanvasFormat();
+    ctx.configure({device: dev, format: fmt, alphaMode: 'opaque'});
+    let frames = 0, bad = 0; const t0 = performance.now();
+    while (performance.now() - t0 < secs * 1000) {
+      const enc = dev.createCommandEncoder();
+      const cp = enc.beginComputePass(); cp.setPipeline(pipe); cp.setBindGroup(0, bg); cp.dispatchWorkgroups(N / 64); cp.end();
+      enc.copyBufferToBuffer(buf, 0, rb, 0, N * 4);
+      const rp = enc.beginRenderPass({colorAttachments: [{view: ctx.getCurrentTexture().createView(), clearValue: {r: .25, g: .5, b: .75, a: 1}, loadOp: 'clear', storeOp: 'store'}]}); rp.end();
+      dev.queue.submit([enc.finish()]);
+      await rb.mapAsync(GPUMapMode.READ); const u = new Uint32Array(rb.getMappedRange().slice(0)); rb.unmap();
+      for (let i = 0; i < N; i++) if (u[i] !== ((i * 7 + 3) >>> 0)) bad++;
+      frames++; await new Promise(res => requestAnimationFrame(res));
+    }
+    r.frames = frames; r.bad = bad; r.secs = (performance.now() - t0) / 1000;
+    r.ok = String(r.vendor).toLowerCase() === 'nvidia' && !r.fallback && bad === 0 && frames >= 5;
+    if (!r.ok) r.why = r.fallback ? 'fallback (software) adapter' : String(r.vendor).toLowerCase() !== 'nvidia' ? 'adapter vendor is not nvidia' : bad ? 'compute mismatch' : 'too few frames';
+  } catch (e) { r.why = String(e); }
+  post(r);
+})();
+</script>

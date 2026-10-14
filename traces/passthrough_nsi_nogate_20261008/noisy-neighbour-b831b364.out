@@ -1,0 +1,22 @@
+== kf3 binary: /var/lib/kf-windows-20261005/kf3-bins/b831b364/qemu-system-x86_64 (rev unknown)
+== serializing on /var/lib/kf-nsi-20261008/neighbour.lock (GPU runs are strictly serial)
+== arms: --ce-interrupt,--probe-launch-dma   budget: 240s   self-deadline: 236000ms   trace: ring
+== qemu:  /var/lib/kf-windows-20261005/kf3-bins/b831b364/qemu-system-x86_64  (built 2026-10-08 23:36:06)
+== device(s): -device kf3-gpu,fb-mb=4096,bar1-size=134217728,bar2-size=33554432,id=kf0
+== console: hvc (console=ttyS0 console=hvc0)
+=== FAST GUEST nsi_N1200_b831b364 — 102s of a 240s budget, qemu rc=0 ===
+    FASTGUEST: up 1.53s
+    FASTGUEST: switch_root prepared in 0.3s
+    FASTGUEST: up 1.86s
+    FASTGUEST: root is a real mount (switch_root done) — the isolate sandbox can pivot_root
+    FASTGUEST: insmod nvidia.ko ok
+    FASTGUEST: insmod nvidia-uvm.ko ok
+    FASTGUEST: insmod wmi.ko ok
+    FASTGUEST: insmod video.ko ok
+    FASTGUEST: insmod nvidia-modeset.ko ok
+    FASTGUEST: nodes /dev/nvidia-caps/nvidia-cap1 /dev/nvidia-uvm /dev/nvidia-uvm-tools /dev/nvidia0 /dev/nvidiactl  /dev/nvidia-caps: nvidia-cap1 
+    FASTGUEST: ready 1.99s
+    FASTGUEST: arms --ce-interrupt --probe-launch-dma  deadline 236s (budget 240s, 1s already spent booting)
+    FASTGUEST: client rc=1 at 100.10s
+    FASTGUEST: DONE
+FAST_VERDICT=FAIL (raw client rc=1)

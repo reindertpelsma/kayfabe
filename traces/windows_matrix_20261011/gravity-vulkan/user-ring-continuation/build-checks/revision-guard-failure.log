@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "/data/kf-user-continuation-host-ed5c3ec08/traces/windows_matrix_20261011/gravity-vulkan/user-ring-continuation/run_continuation.py", line 113, in <module>
+    main()
+    ~~~~^^
+  File "/data/kf-user-continuation-host-ed5c3ec08/traces/windows_matrix_20261011/gravity-vulkan/user-ring-continuation/run_continuation.py", line 34, in main
+    assert revision == args.revision
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError

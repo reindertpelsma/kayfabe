@@ -1,0 +1,32 @@
+17:49:14 no GM process
+0 %, 122 MiB, 7.01 W, 210 MHz
+17:50:47 no GM process
+0 %, 125 MiB, 7.01 W, 210 MHz
+17:52:21 cpu_s=83.9 ws_MB=697 threads=24 responding=True title=[]
+87 %, 2135 MiB, 83.49 W, 2655 MHz
+17:53:54 cpu_s=166.5 ws_MB=577 threads=24 responding=True title=[]
+83 %, 2100 MiB, 83.86 W, 2640 MHz
+17:55:28 cpu_s=252.0 ws_MB=513 threads=22 responding=True title=[]
+71 %, 2100 MiB, 85.96 W, 2640 MHz
+17:57:01 cpu_s=338.7 ws_MB=521 threads=25 responding=True title=[]
+88 %, 2100 MiB, 85.57 W, 2640 MHz
+17:58:35 cpu_s=424.8 ws_MB=528 threads=23 responding=True title=[]
+81 %, 2100 MiB, 90.89 W, 2640 MHz
+18:00:08 cpu_s=511.4 ws_MB=526 threads=21 responding=True title=[]
+73 %, 2100 MiB, 81.27 W, 2640 MHz
+18:01:42 cpu_s=597.1 ws_MB=521 threads=22 responding=True title=[]
+73 %, 2100 MiB, 90.07 W, 2640 MHz
+18:03:15 cpu_s=683.6 ws_MB=530 threads=21 responding=True title=[]
+75 %, 2100 MiB, 83.79 W, 2640 MHz
+18:04:49 cpu_s=768.0 ws_MB=519 threads=21 responding=True title=[]
+89 %, 2100 MiB, 87.88 W, 2640 MHz
+18:06:22 cpu_s=852.4 ws_MB=518 threads=21 responding=True title=[]
+92 %, 2100 MiB, 84.02 W, 2640 MHz
+18:07:55 cpu_s=938.7 ws_MB=535 threads=21 responding=True title=[]
+88 %, 2100 MiB, 87.69 W, 2640 MHz
+18:09:29 cpu_s=1,024.1 ws_MB=535 threads=21 responding=True title=[]
+77 %, 2100 MiB, 81.89 W, 2640 MHz
+18:11:02 cpu_s=1,108.9 ws_MB=521 threads=20 responding=True title=[]
+79 %, 2100 MiB, 91.35 W, 2640 MHz
+18:12:35 no GM process
+0 %, 127 MiB, 7.24 W, 210 MHz

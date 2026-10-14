@@ -1,0 +1,87 @@
+[
+  {
+    "mode": "reference",
+    "verdict": "PASS",
+    "pid": 796268,
+    "start_utc": "2026-10-12 01:54:35.191354 UTC",
+    "process_end_utc": "2026-10-12 01:54:35.207113 UTC",
+    "end_utc": "2026-10-12 01:54:37.207444 UTC",
+    "rc": 0,
+    "killed": false,
+    "journal_query_exit": 0,
+    "journal_stderr": "",
+    "xid_records": 0,
+    "pid_attributed_xids": 0,
+    "asserted_user_channel": true,
+    "cleanup_ok": true,
+    "observation": {
+      "finished": true,
+      "reference": 1,
+      "copy_matches": true,
+      "ce_semaphore": 1,
+      "gp_get": 1,
+      "gp_put": 1,
+      "elapsed_us": 2267
+    },
+    "held_observation": null
+  },
+  {
+    "mode": "reference-split",
+    "verdict": "PASS",
+    "pid": 796272,
+    "start_utc": "2026-10-12 01:54:37.219655 UTC",
+    "process_end_utc": "2026-10-12 01:54:37.251345 UTC",
+    "end_utc": "2026-10-12 01:54:39.251666 UTC",
+    "rc": 0,
+    "killed": false,
+    "journal_query_exit": 0,
+    "journal_stderr": "",
+    "xid_records": 0,
+    "pid_attributed_xids": 0,
+    "asserted_user_channel": true,
+    "cleanup_ok": true,
+    "observation": {
+      "finished": true,
+      "reference": 1,
+      "copy_matches": true,
+      "ce_semaphore": 1,
+      "gp_get": 2,
+      "gp_put": 2,
+      "elapsed_us": 2254
+    },
+    "held_observation": null
+  },
+  {
+    "mode": "reference-split-held",
+    "verdict": "PASS",
+    "pid": 796315,
+    "start_utc": "2026-10-12 01:54:39.263156 UTC",
+    "process_end_utc": "2026-10-12 01:54:39.377462 UTC",
+    "end_utc": "2026-10-12 01:54:41.377752 UTC",
+    "rc": 0,
+    "killed": false,
+    "journal_query_exit": 0,
+    "journal_stderr": "",
+    "xid_records": 0,
+    "pid_attributed_xids": 0,
+    "asserted_user_channel": true,
+    "cleanup_ok": true,
+    "observation": {
+      "finished": true,
+      "reference": 1,
+      "copy_matches": true,
+      "ce_semaphore": 1,
+      "gp_get": 2,
+      "gp_put": 2,
+      "elapsed_us": 52682
+    },
+    "held_observation": {
+      "samples": 47,
+      "early_reference": false,
+      "fetched": true,
+      "acquire": 0,
+      "reference": 0,
+      "ce_semaphore": 0
+    }
+  }
+]

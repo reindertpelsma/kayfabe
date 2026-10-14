@@ -6,8 +6,8 @@
 //! |---|---|
 //! | `_Class5080AddDeferredApi` (`:60-116`): validate the handle as a new resource handle of the OBJECT's client, refuse a duplicate on the object, copy the params, record the caller's `privLevel` | [`Registry::register`] — same checks, same order, same statuses; the cmd is NOT checked |
 //! | `_Class5080DelDeferredApi` (`:140-182`): unlink; a WAIT_FOR_TLB_FLUSH entry that executed and never saw a flush decrements `NumWaitingOnTLBFlush`; `NV_ERR_GENERIC` if absent | [`Registry::remove`] |
-//! | `_class5080DeferredApiV2` (`:443-674`): look `Data` up in THIS object's tree (`NV_ERR_INVALID_DATA` if absent), run the control, then — whatever its status — mark executed and delete implicitly unless EXPLICIT or WAIT_FOR_TLB_FLUSH (then count it waiting) | [`Registry::lookup`] at the trigger, [`Registry::executed`] when the host-authored action has finished |
-//! | `_Class5080UpdateTLBFlushState` (`:185-227`), run by a successful deferred `DMA_INVALIDATE_TLB` BEFORE its own entry is marked | [`Registry::executed`] with `tlb_flushed = true` |
+//! | `_class5080DeferredApiV2` (`:443-674`): look `Data` up in THIS object's tree (`NV_ERR_INVALID_DATA` if absent), run the control, then — whatever its status — mark executed and delete implicitly unless EXPLICIT or WAIT_FOR_TLB_FLUSH (then count it waiting) | [`Registry::lookup`] at the trigger, [`Registry::executed_entry`] when the host-authored action has finished |
+//! | `_Class5080UpdateTLBFlushState` (`:185-227`), run by a successful deferred `DMA_INVALIDATE_TLB` BEFORE its own entry is marked | [`Registry::executed_entry`] with `tlb_flushed = true` |
 //! | `defapiDestruct_IMPL` (`:257-278`): every entry freed with the object | [`Registry::prune`] after every graph free |
 //!
 //! ⊘ **The tables never execute anything.** Execution is the channel plane's, on Translated
@@ -30,7 +30,7 @@ use kf_abi::defapi::{
     NV_ERR_INVALID_OBJECT_HANDLE, NV_ERR_NO_MEMORY, NV_OK, Registration,
 };
 use std::collections::{BTreeMap, HashMap};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 /// A 5080 object, by the guest's names.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -51,6 +51,9 @@ pub enum Registrant {
 /// One registered entry.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Entry {
+    // Retained by action snapshots; numeric handle and identical bytes are not
+    // allocation identity. Compare this only with Arc::ptr_eq.
+    allocation: Arc<()>,
     /// `hApiHandle`.
     pub handle: u32,
     /// The control that carried it.
@@ -149,6 +152,8 @@ pub struct Stats {
     pub registered: u64,
     /// Registrations refused (any status).
     pub refused: u64,
+    /// Deliberate FIFO-update registration refusals in the default-off fallback experiment.
+    pub fifo_update_refused: u64,
     /// `_REMOVE_API`s that removed an entry.
     pub removed: u64,
     /// Triggers that found their entry.
@@ -159,6 +164,8 @@ pub struct Stats {
     pub implicit_deletes: u64,
     /// Entries freed with their object.
     pub destroyed: u64,
+    /// Deferred completions whose exact registration was removed or replaced.
+    pub stale_completions: u64,
 }
 
 #[derive(Debug, Default)]
@@ -178,6 +185,31 @@ impl State {
             if *c == 0 {
                 self.per_client.remove(&client);
             }
+        }
+    }
+
+    fn executed(&mut self, key: ObjKey, handle: u32, tlb_flushed: bool) {
+        let mut deleted = 0;
+        if let Some(t) = self.objects.get_mut(&key) {
+            let before = t.entries.len();
+            if tlb_flushed && t.waiting_tlb > 0 {
+                t.tlb_flushed();
+            }
+            if let Some(e) = t.entries.get_mut(&handle) {
+                e.executed = true;
+                if !e.flags.explicit_delete {
+                    if e.flags.wait_tlb_flush {
+                        t.waiting_tlb += 1;
+                    } else {
+                        t.entries.remove(&handle);
+                    }
+                }
+            }
+            deleted = before - t.entries.len();
+        }
+        if deleted > 0 {
+            self.count_down(key.client, deleted);
+            self.stats.implicit_deletes += deleted as u64;
         }
     }
 
@@ -206,6 +238,19 @@ impl Registry {
         }
     }
 
+    /// ★ Device reset (`docs/design/V3_DEVICE_RESET.md`): every 5080 object's table goes — they
+    /// were the previous guest life's, and a handle the next life reuses must find nothing (an old
+    /// registration names guest memory of a life that is gone). Bounds and the counters stay.
+    /// Returns the entries dropped.
+    pub fn clear_life(&self) -> usize {
+        let mut st = self.st();
+        let n = st.total;
+        st.objects.clear();
+        st.per_client.clear();
+        st.total = 0;
+        n
+    }
+
     fn st(&self) -> std::sync::MutexGuard<'_, State> {
         // A poisoned registry is a bug in this module; its state stays consistent per call.
         self.inner
@@ -222,6 +267,17 @@ impl Registry {
         reg: Registration,
         decoded: Bundle,
         live_handle: impl Fn(u32) -> bool,
+    ) -> u32 {
+        self.register_filtered(key, reg, decoded, live_handle, false)
+    }
+
+    fn register_filtered(
+        &self,
+        key: ObjKey,
+        reg: Registration,
+        decoded: Bundle,
+        live_handle: impl Fn(u32) -> bool,
+        refuse_fifo_update: bool,
     ) -> u32 {
         let mut st = self.st();
         // `serverutilValidateNewResourceHandle(hClient, hDeferredApi)` (`:76-79`), then a
@@ -244,7 +300,19 @@ impl Registry {
             st.stats.refused += 1;
             return NV_ERR_NO_MEMORY;
         }
+        if refuse_fifo_update {
+            st.stats.refused += 1;
+            st.stats.fifo_update_refused += 1;
+            if st.stats.fifo_update_refused == 1 {
+                eprintln!(
+                    "kf-rm: EXPERIMENT KF3_WIN_REFUSE_PT_FIFO_UPDATE: first refusal client={:#x} object={:#x} api={:#x} cmd={:#x} status=NV_ERR_NOT_SUPPORTED count=1; deliberately differs from native registration OK",
+                    key.client, key.object, reg.handle, reg.cmd
+                );
+            }
+            return kf_abi::defapi::NV_ERR_NOT_SUPPORTED;
+        }
         let e = Entry {
+            allocation: Arc::new(()),
             handle: reg.handle,
             form: reg.form,
             cmd: reg.cmd,
@@ -311,30 +379,26 @@ impl Registry {
     /// waiting entries are updated FIRST (`:525-526`), then this one is marked executed and
     /// deleted implicitly unless EXPLICIT or WAIT_FOR_TLB_FLUSH (then counted waiting). An entry
     /// a `_REMOVE_API` took while the action ran is simply gone.
+    /// This numeric compatibility API requires external exclusion of remove and
+    /// reuse. Asynchronous channel actions must use executed_entry instead.
     pub fn executed(&self, key: ObjKey, handle: u32, tlb_flushed: bool) {
         let mut st = self.st();
-        let mut deleted = 0;
-        if let Some(t) = st.objects.get_mut(&key) {
-            let before = t.entries.len();
-            if tlb_flushed && t.waiting_tlb > 0 {
-                t.tlb_flushed();
-            }
-            if let Some(e) = t.entries.get_mut(&handle) {
-                e.executed = true;
-                if !e.flags.explicit_delete {
-                    if e.flags.wait_tlb_flush {
-                        t.waiting_tlb += 1;
-                    } else {
-                        t.entries.remove(&handle);
-                    }
-                }
-            }
-            deleted = before - t.entries.len();
+        st.executed(key, handle, tlb_flushed);
+    }
+
+    /// Complete only the exact registration resolved by the trigger. A guest
+    /// remove/re-register or object destruction must not let a delayed action
+    /// mark/delete a replacement or flush its new table. Returns false without
+    /// changing entries when the original allocation is gone.
+    pub fn executed_entry(&self, key: ObjKey, entry: &Entry, tlb_flushed: bool) -> bool {
+        let mut st = self.st();
+        let current = st.objects.get(&key).and_then(|t| t.entries.get(&entry.handle));
+        if !current.is_some_and(|e| Arc::ptr_eq(&e.allocation, &entry.allocation)) {
+            st.stats.stale_completions += 1;
+            return false;
         }
-        if deleted > 0 {
-            st.count_down(key.client, deleted);
-            st.stats.implicit_deletes += deleted as u64;
-        }
+        st.executed(key, entry.handle, tlb_flushed);
+        true
     }
 
     /// ★ `defapiDestruct_IMPL`: drop the tree of every object `alive` says is gone.
@@ -384,11 +448,26 @@ pub fn serve(
     params: &[u8],
     live_handle: impl Fn(u32) -> bool,
 ) -> u32 {
+    serve_with_fifo_refusal(reg, abi, key, ctl, params, live_handle, false)
+}
+
+/// Diagnostic registration filter. `refuse_on_channel` is host-authored from the live
+/// parent channel, not the bundle's guest-supplied target. Other commands/removals are unchanged.
+pub fn serve_with_fifo_refusal(
+    reg: &Registry,
+    abi: &DefApiAbi,
+    key: ObjKey,
+    ctl: Control,
+    params: &[u8],
+    live_handle: impl Fn(u32) -> bool,
+    refuse_on_channel: bool,
+) -> u32 {
     match ctl {
         Control::Register(form) => match abi.decode_registration(form, params) {
             Ok(r) => {
                 let decoded = abi.decode_bundle(r.cmd, &r.bundle);
-                reg.register(key, r, decoded, live_handle)
+                let refuse = refuse_on_channel && r.cmd == abi.cmds.update_channel_info;
+                reg.register_filtered(key, r, decoded, live_handle, refuse)
             }
             Err(_) => kf_abi::defapi::NV_ERR_INVALID_PARAM_STRUCT,
         },
@@ -400,6 +479,13 @@ pub fn serve(
 }
 
 kf_util::assert_send_sync!(Registry);
+
+/// Optional host-authored admission policy, consulted only on the RPC drainer, never a vCPU.
+/// No host action, guest-memory access, or waiting for GPU progress is permitted here.
+pub trait FifoUpdateFilter: std::fmt::Debug + Send + Sync {
+    /// Whether this live parent channel is in the FIFO-refusal experiment's scope.
+    fn refuse_on_channel(&self, client: u32, channel: u32) -> bool;
+}
 
 #[cfg(test)]
 mod tests {
@@ -439,6 +525,51 @@ mod tests {
         )
     }
 
+    /// ★ Device reset: the previous life's registrations are gone (a handle the next life reuses
+    /// finds nothing), the bounds hold for the next life exactly as on a fresh registry.
+    #[test]
+    fn a_cleared_registry_holds_nothing_of_the_old_life_and_admits_the_next_one() {
+        let r = Registry::new(Bounds::default());
+        let fresh = Registry::new(Bounds::default());
+        assert_eq!(reg(&r, 0x4000_0002, 0x2080_012d, 0), NV_OK);
+        assert_eq!(reg(&r, 0x4000_0003, 0x2080_012b, 0), NV_OK);
+        assert_eq!(r.stats().0, 2);
+        assert_eq!(r.clear_life(), 2);
+        assert_eq!(r.stats().0, 0);
+        assert_eq!(r.lookup(OBJ, 0x4000_0002), fresh.lookup(OBJ, 0x4000_0002));
+        assert_eq!(r.entries(OBJ), fresh.entries(OBJ));
+        assert_eq!(reg(&r, 0x4000_0002, 0x2080_012d, 0), reg(&fresh, 0x4000_0002, 0x2080_012d, 0));
+        assert_eq!(r.entries(OBJ), fresh.entries(OBJ));
+        assert_eq!(r.clear_life(), 1);
+        assert_eq!(r.clear_life(), 0);
+    }
+
+    /// Fallback experiment: refuse only the requested inner command, with no saved entry.
+    #[test]
+    fn fifo_refusal_is_narrow_and_preserves_validation_and_object() {
+        let r = Registry::new(Bounds::default());
+        let abi = abi();
+        let update = abi.cmds.update_channel_info;
+        let call = |handle, cmd, scope| serve_with_fifo_refusal(
+            &r, &abi, OBJ, Control::Register(Form::V1),
+            &params(handle, cmd, 0), |_| false, scope,
+        );
+        assert_eq!(call(0, update, true), NV_ERR_INVALID_OBJECT_HANDLE);
+        assert_eq!(call(0x4000_0002, update, true), kf_abi::defapi::NV_ERR_NOT_SUPPORTED);
+        assert_eq!(r.lookup(OBJ, 0x4000_0002), Err(NV_ERR_INVALID_DATA));
+        assert_eq!(r.stats().0, 0);
+        assert_eq!(r.stats().1.fifo_update_refused, 1);
+        // Other deferred APIs and channels outside the experiment remain unchanged.
+        assert_eq!(call(0x4000_0003, abi.cmds.invalidate_tlb, true), NV_OK);
+        assert_eq!(call(0x4000_0002, update, false), NV_OK);
+        assert_eq!(call(0x4000_0002, update, true), NV_ERR_INVALID_OBJECT_HANDLE);
+        assert_eq!(r.stats().1.fifo_update_refused, 1);
+        assert_eq!(r.remove(OBJ, 0x4000_0002), NV_OK);
+        assert_eq!(call(0x4000_0002, update, true), kf_abi::defapi::NV_ERR_NOT_SUPPORTED);
+        assert_eq!(r.stats().1.fifo_update_refused, 2);
+        assert_eq!(r.lookup(OBJ, 0x4000_0003).unwrap().cmd, abi.cmds.invalidate_tlb);
+    }
+
     /// ★ The VFIO sequence: register, look up, execute → implicitly deleted; the same handle may
     /// then be registered again (the falsification's "executed" observable).
     #[test]
@@ -462,6 +593,47 @@ mod tests {
             "re-registrable"
         );
         assert_eq!(r.stats().0, 2);
+    }
+
+    #[test]
+    fn deferred_completion_cannot_delete_reused_registration() {
+        let r = Registry::default();
+        let h = 0x4000_0002;
+        assert_eq!(reg(&r, h, 0x2080_012d, 0), NV_OK);
+        let old = r.lookup(OBJ, h).unwrap();
+        assert_eq!(r.remove(OBJ, h), NV_OK);
+        // Identical bytes and numeric names still denote a NEW registration.
+        assert_eq!(reg(&r, h, 0x2080_012d, 0), NV_OK);
+        assert!(!r.executed_entry(OBJ, &old, false));
+        assert!(!r.lookup(OBJ, h).unwrap().executed);
+        assert_eq!(r.stats().0, 1);
+        let current = r.lookup(OBJ, h).unwrap();
+        assert!(r.executed_entry(OBJ, &current, false));
+        assert_eq!(r.lookup(OBJ, h), Err(NV_ERR_INVALID_DATA));
+    }
+
+    #[test]
+    fn stale_flush_cannot_update_recreated_object_table() {
+        let r = Registry::default();
+        let flush = 0x4000_0002;
+        let wait = 0x4000_0003;
+        assert_eq!(reg(&r, flush, 0x2080_2502, 0), NV_OK);
+        let old = r.lookup(OBJ, flush).unwrap();
+        r.prune(|_| false);
+        assert_eq!(reg(&r, flush, 0x2080_2502, 0), NV_OK);
+        // Public WAIT_FOR_TLB_FLUSH bit from the existing ABI decoder.
+        assert_eq!(reg(&r, wait, 0x2080_012d, 2), NV_OK);
+        let waiting = r.lookup(OBJ, wait).unwrap();
+        assert!(waiting.flags.wait_tlb_flush);
+        assert!(r.executed_entry(OBJ, &waiting, false));
+        assert_eq!(r.waiting_tlb(OBJ), 1);
+        assert!(!r.executed_entry(OBJ, &old, true));
+        assert_eq!(r.waiting_tlb(OBJ), 1);
+        assert_eq!(r.stats().0, 2);
+        let current = r.lookup(OBJ, flush).unwrap();
+        assert!(r.executed_entry(OBJ, &current, true));
+        assert_eq!(r.waiting_tlb(OBJ), 0);
+        assert_eq!(r.stats().0, 0);
     }
 
     /// ★ Hostile handles, the F7a set (2026-10-07, host 595.91.07): 0, the client's own, the firmware range, a live

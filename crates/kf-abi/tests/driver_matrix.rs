@@ -573,3 +573,27 @@ fn the_page_directory_rpcs_embed_the_control_struct_at_every_tag() {
         .expect("fn 79 decodes");
     assert_eq!(u.params, &unset[8..16]);
 }
+
+#[test]
+fn authored_channel_subdevice_identity_carries_by_name_at_every_measured_tag() {
+    use kf_abi::generated::matrix::NV_CHANNEL_ALLOC_PARAMS;
+    use kf_abi::{host_driver::HostDriverVersion, hostabi::HostAbi, submit::ChannelAllocParams};
+    let p = ChannelAllocParams::default();
+    let mut ordinary = [0u8; ChannelAllocParams::SIZE];
+    p.encode_into(&mut ordinary).unwrap();
+    let mut private = ordinary;
+    p.encode_with_subdevice_id(&mut private, 1).unwrap();
+    assert_eq!(ordinary, [0; ChannelAllocParams::SIZE]);
+    for version in MEASURED {
+        let host =
+            HostAbi::for_host(HostDriverVersion::parse(&version.to_string()).unwrap()).unwrap();
+        let bytes = host.to_host(&NV_CHANNEL_ALLOC_PARAMS, &private).unwrap();
+        let layout = NV_CHANNEL_ALLOC_PARAMS.at(*version).unwrap().unwrap();
+        let field = layout.field("subDeviceId").unwrap().range().unwrap();
+        assert_eq!(&bytes[field], &1u32.to_le_bytes());
+        assert_eq!(
+            host.to_host(&NV_CHANNEL_ALLOC_PARAMS, &ordinary).unwrap(),
+            vec![0; layout.size()]
+        );
+    }
+}

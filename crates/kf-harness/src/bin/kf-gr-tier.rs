@@ -422,6 +422,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
         tier: true,
         inert_sw_subch: true,
         deferred_api: false,
+        video: 0,
     });
     let mut chan = TranslatedChannel::new(ring, host, 1);
     chan.set_tspace(win, false);
@@ -568,6 +569,7 @@ fn run(l: &mut Checks) -> Result<(), String> {
         tier: false,
         inert_sw_subch: true,
         deferred_api: false,
+        video: 0,
     });
     let mut chan2 = TranslatedChannel::new(ring2, host2, 2);
     chan2.set_tspace(win, false);

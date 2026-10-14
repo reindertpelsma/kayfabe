@@ -1,0 +1,28 @@
+== run78 (run78-qemu.log.gz)
+249292.946401 async-preempt REFUSED
+249292.946401 async-preempt REFUSED
+249296.444762 first twin free (TDR teardown)
+== run79 (run79-qemu.log.gz)
+249983.931699 async-preempt REFUSED
+249983.931699 async-preempt REFUSED
+250015.286233 first twin free (TDR teardown)
+== run82 (run82-qemu.log.gz)
+251212.171675 DISABLE_CHANNELS REFUSED cross-client
+251212.173681 DISABLE_CHANNELS REFUSED cross-client
+251215.608996 first twin free (TDR teardown)
+== run83 (run83-qemu.log.gz)
+251371.918865 async-preempt SERVED
+251371.918865 RUNLIST_PREEMPT_COMPLETE posted
+251371.918865 async-preempt SERVED
+251371.918865 RUNLIST_PREEMPT_COMPLETE posted
+251371.939271 DISABLE_CHANNELS REFUSED cross-client
+251371.939271 DISABLE_CHANNELS REFUSED cross-client
+251502.573519 first twin free (TDR teardown)
+== run84 (run84-qemu.log.gz)
+251657.817206 RUNLIST_PREEMPT_COMPLETE posted
+251657.816551 async-preempt SERVED
+251657.817926 async-preempt SERVED
+251657.817926 RUNLIST_PREEMPT_COMPLETE posted
+251657.837247 re-enable SERVED
+251657.837247 re-enable SERVED
+251661.323207 first twin free (TDR teardown)

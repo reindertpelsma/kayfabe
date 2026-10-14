@@ -1,0 +1,7 @@
+kf3: chan token 0xf RELAY-PEEK (diagnostic) SW-SUBCH METHOD GP[0x10] word 7502 subch 5 method 0x0 data Some(5080) — a software method (PBDMA DEVICE on the twin)
+kf3: chan token 0x11 RELAY-PEEK (diagnostic) SW-SUBCH METHOD GP[0x10] word 7502 subch 5 method 0x0 data Some(5080) — a software method (PBDMA DEVICE on the twin)
+kf3: chan token 0x1012 RELAY-PEEK (diagnostic) SW-SUBCH METHOD GP[0xe] word 6 subch 5 method 0x0 data Some(5080) — a software method (PBDMA DEVICE on the twin)
+kf3: chan token 0x13 RELAY-PEEK (diagnostic) SW-SUBCH METHOD GP[0x10] word 7502 subch 5 method 0x0 data Some(5080) — a software method (PBDMA DEVICE on the twin)
+kf3: chan token 0x1014 RELAY-PEEK (diagnostic) SW-SUBCH METHOD GP[0xe] word 6 subch 5 method 0x0 data Some(5080) — a software method (PBDMA DEVICE on the twin)
+kf3: chan token 0x15 RELAY-PEEK (diagnostic) SW-SUBCH METHOD GP[0x10] word 7502 subch 5 method 0x0 data Some(5080) — a software method (PBDMA DEVICE on the twin)
+kf3: chan token 0x1016 RELAY-PEEK (diagnostic) SW-SUBCH METHOD GP[0xe] word 6 subch 5 method 0x0 data Some(5080) — a software method (PBDMA DEVICE on the twin)

@@ -1,0 +1,104 @@
+{
+ "quiet": 2,
+ "end_utc": "2026-10-11T14:24:13.0264863Z",
+ "start_utc": "2026-10-11T14:23:28.6836897Z",
+ "rc": 0,
+ "secs": 44,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4070 status=OK code=0"
+ ],
+ "digests": [],
+ "session": 0,
+ "out_files": [
+  "C:\\kf\\out\\nvdec_h264\\prog.txt 4065",
+  "C:\\kf\\out\\nvdec_h264\\x264.mp4 291920"
+ ],
+ "boot_utc_start": "2026-10-11T14:15:46.5000000Z",
+ "log_tail": [
+  "[libx264 @ 000001beb582ef40] mb B  I16..4:  0.6%  0.0%  0.0%  B16..8:  2.9%  0.1%  0.0%  direct: 0.4%  skip:96.0%  L0:48.0% L1:50.7% BI: 1.3%",
+  "[libx264 @ 000001beb582ef40] 8x8 transform intra:9.3% inter:70.6%",
+  "[libx264 @ 000001beb582ef40] coded y,uvDC,uvAC intra: 2.3% 21.2% 10.2% inter: 0.0% 1.2% 0.0%",
+  "[libx264 @ 000001beb582ef40] i16 v,h,dc,p: 84% 11%  1%  4%",
+  "[libx264 @ 000001beb582ef40] i8 v,h,dc,ddl,ddr,vr,hd,vl,hu: 40% 25% 35%  0%  0%  0%  0%  0%  0%",
+  "[libx264 @ 000001beb582ef40] i4 v,h,dc,ddl,ddr,vr,hd,vl,hu: 19% 51% 27%  1%  0%  1%  0%  1%  0%",
+  "[libx264 @ 000001beb582ef40] i8c dc,h,v,p: 31% 14% 45%  9%",
+  "[libx264 @ 000001beb582ef40] Weighted P-Frames: Y:0.0% UV:0.0%",
+  "[libx264 @ 000001beb582ef40] ref P L0: 71.2%  0.7% 22.8%  5.3%",
+  "[libx264 @ 000001beb582ef40] ref B L0: 85.5% 11.7%  2.7%",
+  "[libx264 @ 000001beb582ef40] ref B L1: 93.5%  6.5%",
+  "[libx264 @ 000001beb582ef40] kb/s:113.27",
+  "Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'C:\\kf\\out\\nvdec_h264\\x264.mp4':",
+  "  Metadata:",
+  "    major_brand     : isom",
+  "    minor_version   : 512",
+  "    compatible_brands: isomiso2avc1mp41",
+  "    encoder         : Lavf62.12.103",
+  "  Duration: 00:00:20.00, start: 0.000000, bitrate: 116 kb/s",
+  "  Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(progressive), 1280x720 [SAR 1:1 DAR 16:9], 113 kb/s, 30 fps, 30 tbr, 15360 tbn (default)",
+  "    Metadata:",
+  "      handler_name    : VideoHandler",
+  "      encoder         : Lavc62.28.103 libx264",
+  "Stream mapping:",
+  "  Stream #0:0 -> #0:0 (h264 (native) -> wrapped_avframe (native))",
+  "Press [q] to stop, [?] for help",
+  "Output #0, null, to 'pipe:':",
+  "  Metadata:",
+  "    major_brand     : isom",
+  "    minor_version   : 512",
+  "    compatible_brands: isomiso2avc1mp41",
+  "    encoder         : Lavf62.12.103",
+  "  Stream #0:0(und): Video: wrapped_avframe, cuda(progressive), 1280x720 [SAR 1:1 DAR 16:9], q=2-31, 200 kb/s, 30 fps, 30 tbn (default)",
+  "    Metadata:",
+  "      encoder         : Lavc62.28.103 wrapped_avframe",
+  "      handler_name    : VideoHandler",
+  "[out#0/null @ 00000283344ab740] video:7453KiB audio:0KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: unknown",
+  "frame=18000 fps=1685 q=-0.0 Lsize=N/A time=00:10:00.00 bitrate=N/A speed=56.2x elapsed=0:00:10.68    ",
+  "frame= 18000 ",
+  "=== end rc=0 secs=44 2026-10-11T14:24:13.0264863+00:00"
+ ],
+ "pdh": {
+  "pids": [
+   "6932",
+   "3460",
+   "6812",
+   "6552"
+  ],
+  "nv": {
+   "copy": 0,
+   "3d": 0,
+   "videoencode": 0,
+   "videodecode": 97.16488039242873,
+   "vr": 0,
+   "legacyoverlay": 0,
+   "ofa_0": 0
+  },
+  "samples": 10,
+  "other": {},
+  "nvidia_luids": "0_60b4"
+ },
+ "timed_out": false,
+ "token": "g8-nvdec_h264-1791728602",
+ "boot_utc_end": "2026-10-11T14:15:46.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 3,
+  "other_nvlddmkm": 0,
+  "lines": [
+   "2026-10-11T14:24:05.2923759Z nvlddmkm/153 ",
+   "2026-10-11T14:24:04.8452286Z nvlddmkm/153 ",
+   "2026-10-11T14:24:02.3430869Z nvlddmkm/153 "
+  ],
+  "live_kernel": 0
+ },
+ "app": "nvdec_h264",
+ "smi": {
+  "samples": 0,
+  "mem_used_base_mb": null,
+  "util_max": 0,
+  "mem_used_max_mb": 0
+ }
+}

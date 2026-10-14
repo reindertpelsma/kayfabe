@@ -1,0 +1,5 @@
+=== tcbf16_t start=2026-10-10T08:33:17.2261635-07:00 host=DESKTOP-397P3NI session=0 boot=2026-10-10T13:30:47.5000000Z timeout=120
+[eq] device NVIDIA GeForce RTX 4060 Ti torch 2.8.0+cu126
+CHECK gemm_bf16_tensorcore ok relerr=2.87e-03
+WINEQ_DONE tcbf16
+=== end rc=0 secs=7 2026-10-10T08:33:23.8430273-07:00

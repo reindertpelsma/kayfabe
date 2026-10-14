@@ -1,0 +1,29 @@
+15:42:13 | Application Error | javaw.exe / 25.0.1.0 / dc6a4206 / nvoglv64.dll / 32.0.15.8088 / 6885c454 / c0000409 / 00000000010816ad / 10096 / 134364589123994046 / C:\Users\kfadmin\AppData\Local\Packages\Microsoft.4297127D64EC6_8wekyb3d8bbwe\LocalCache\Local\r
+15:42:12 | NVIDIA OpenGL Driver | Unable to recover from a kernel exception. The application must close. Error code: 3 (subcode 2) (pid=10096 tid=13204 javaw.exe 64bit) Visit http://www.nvidia.com/page/support.html for more information.
+15:39:24 | Application Error | javaw.exe / 25.0.1.0 / dc6a4206 / nvoglv64.dll / 32.0.15.8088 / 6885c454 / c0000409 / 00000000010816ad / 6620 / 134364586482987736 / C:\Users\kfadmin\AppData\Local\Packages\Microsoft.4297127D64EC6_8wekyb3d8bbwe\LocalCache\Local\ru
+15:39:21 | NVIDIA OpenGL Driver | Unable to recover from a kernel exception. The application must close. Error code: 3 (subcode 2) (pid=6620 tid=8280 javaw.exe 64bit) Visit http://www.nvidia.com/page/support.html for more information.
+15:19:32 | Application Error | javaw.exe / 25.0.1.0 / dc6a4206 / nvoglv64.dll / 32.0.15.8088 / 6885c454 / c0000409 / 00000000010816ad / 8524 / 134364572629877528 / C:\Users\kfadmin\AppData\Local\Packages\Microsoft.4297127D64EC6_8wekyb3d8bbwe\LocalCache\Local\ru
+15:19:32 | NVIDIA OpenGL Driver | Unable to communicate with the display driver. The application must close. Error code: 2 (pid=8524 tid=2568 javaw.exe 64bit) Visit http://www.nvidia.com/page/support.html for more information.
+15:04:50 | Application Error | javaw.exe / 25.0.1.0 / dc6a4206 / nvoglv64.dll / 32.0.15.8088 / 6885c454 / c0000409 / 00000000010816ad / 3148 / 134364566488153545 / C:\Users\kfadmin\AppData\Local\Packages\Microsoft.4297127D64EC6_8wekyb3d8bbwe\LocalCache\Local\ru
+15:04:44 | NVIDIA OpenGL Driver | Unable to recover from a kernel exception. The application must close. Error code: 3 (subcode 2) (pid=3148 tid=2788 javaw.exe 64bit) Visit http://www.nvidia.com/page/support.html for more information.
+15:04:00 | Application Error | javaw.exe / 25.0.1.0 / dc6a4206 / nvoglv64.dll / 32.0.15.8088 / 6885c454 / c0000409 / 00000000010816ad / 7052 / 134364563249391523 / C:\Users\kfadmin\AppData\Local\Packages\Microsoft.4297127D64EC6_8wekyb3d8bbwe\LocalCache\Local\ru
+15:03:59 | NVIDIA OpenGL Driver | Unable to communicate with the display driver. The application must close. Error code: 2 (pid=7052 tid=4572 javaw.exe 64bit) Visit http://www.nvidia.com/page/support.html for more information.
+14:49:51 | Application Error | javaw.exe / 25.0.1.0 / dc6a4206 / nvoglv64.dll / 32.0.15.8088 / 6885c454 / c0000409 / 00000000010816ad / 6528 / 134364554784288844 / C:\Users\kfadmin\AppData\Local\Packages\Microsoft.4297127D64EC6_8wekyb3d8bbwe\LocalCache\Local\ru
+14:49:51 | NVIDIA OpenGL Driver | Unable to communicate with the display driver. The application must close. Error code: 2 (pid=6528 tid=12304 javaw.exe 64bit) Visit http://www.nvidia.com/page/support.html for more information.
+14:13:59 | Application Error | javaw.exe / 25.0.1.0 / dc6a4206 / nvoglv64.dll / 32.0.15.8088 / 6885c454 / c0000409 / 00000000010816ad / 11896 / 134364533283329706 / C:\Users\kfadmin\AppData\Local\Packages\Microsoft.4297127D64EC6_8wekyb3d8bbwe\LocalCache\Local\r
+14:13:58 | NVIDIA OpenGL Driver | Unable to communicate with the display driver. The application must close. Error code: 2 (pid=11896 tid=6420 javaw.exe 64bit) Visit http://www.nvidia.com/page/support.html for more information.
+15:47:08 | nvlddmkm 153
+15:47:08 | nvlddmkm 153
+15:47:08 | nvlddmkm 153
+15:42:11 | nvlddmkm 153
+15:42:11 | nvlddmkm 153
+15:42:10 | nvlddmkm 153
+15:39:19 | nvlddmkm 153
+15:39:19 | nvlddmkm 153
+15:39:19 | nvlddmkm 153
+15:04:43 | nvlddmkm 153
+15:04:43 | nvlddmkm 153
+15:04:42 | nvlddmkm 153
+14:21:57 | nvlddmkm 153
+14:21:57 | nvlddmkm 153
+14:21:56 | nvlddmkm 153

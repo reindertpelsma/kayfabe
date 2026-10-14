@@ -1,0 +1,18 @@
+RUNALL_START 2026-10-08T21:38:27+02:00 rev=9925108e
+RUNALL_GPU_STATE waited=0s qemu=0
+--ce-interrupt PASS 6s 6s tenant-qemu before=0 after=0
+--ce-interrupt PASS 7s 7s tenant-qemu before=0 after=0
+--ce-interrupt PASS 6s 6s tenant-qemu before=0 after=0
+== unprivileged (euid 65534, no groups)
+unpriv rc=0 tenant-qemu before=0 after=0
+== guest (kf3 6d9e6a76, initrd with 9925108e's client)
+ARM                          VERDICT   secs  why
+--ce-client                  PASS      4s    4s
+FAST_CELL_ARM arm=ce-client verdict=PASS secs=4 client_ms=439
+--ce-interrupt               FAIL      20s   raw client rc=1
+FAST_CELL_ARM arm=ce-interrupt verdict=FAIL secs=20 client_ms=16129
+
+FAST_SUITE_PASS=1 FAST_SUITE_FAIL=1 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=2
+FAST_SUITE_RC=1
+GUESTRUN_EXIT=1 2026-10-08T21:39:19+02:00 qemu-after: 0
+RUNALL_DONE 2026-10-08T21:39:19+02:00

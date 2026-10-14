@@ -1,0 +1,12 @@
+{
+ "verdict": "PASS",
+ "rc": 0,
+ "secs": 1176,
+ "quiet": 1,
+ "note": "warn:LiteRT: LiteRT library (libLiteRt) not found",
+ "proof": "out,pdh:3d+copy",
+ "tdr": 3,
+ "wer": 0,
+ "rebooted": false,
+ "run": "t1b"
+}

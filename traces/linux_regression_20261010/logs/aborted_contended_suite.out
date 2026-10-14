@@ -1,0 +1,23 @@
+FAST_SUITE_STARTED=2026-10-10T21:52:16+02:00 arms=30 budget=180s
+rev=c66d1b9
+ARM                          VERDICT   secs  why
+--timer                      PASS      4s    4s
+FAST_CELL_ARM arm=timer verdict=PASS secs=4 client_ms=399
+--engines                    PASS      4s    4s
+FAST_CELL_ARM arm=engines verdict=PASS secs=4 client_ms=540
+--doorbell-census            PASS      4s    4s
+FAST_CELL_ARM arm=doorbell-census verdict=PASS secs=4 client_ms=620
+--gpu-info-sweep             PASS      4s    4s
+FAST_CELL_ARM arm=gpu-info-sweep verdict=PASS secs=4 client_ms=390
+--bus-info-sweep             PASS      7s    7s
+FAST_CELL_ARM arm=bus-info-sweep verdict=PASS secs=7 client_ms=3600
+--concurrency                PASS      7s    7s
+FAST_CELL_ARM arm=concurrency verdict=PASS secs=7 client_ms=3390
+--defer-liveness             PASS      16s   16s
+FAST_CELL_ARM arm=defer-liveness verdict=PASS secs=16 client_ms=12510
+--blockage-coverage          PASS      4s    4s
+FAST_CELL_ARM arm=blockage-coverage verdict=PASS secs=4 client_ms=800
+--alias-two-vas              PASS      4s    4s
+FAST_CELL_ARM arm=alias-two-vas verdict=PASS secs=4 client_ms=399
+--alias-unmap-observe        PASS      4s    4s
+FAST_CELL_ARM arm=alias-unmap-observe verdict=PASS secs=4 client_ms=390

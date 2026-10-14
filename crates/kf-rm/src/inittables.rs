@@ -1770,6 +1770,7 @@ impl InitTablePolicy {
             .copy_from_slice(&u32::try_from(gsz).unwrap_or(u32::MAX).to_le_bytes());
         body.extend_from_slice(&down);
         Some(Reply {
+            rpc_result_private: None,
             rpc_result: reply.rpc_result,
             body,
         })
@@ -1778,6 +1779,7 @@ impl InitTablePolicy {
 
 fn refuse() -> Option<Reply> {
     Some(Reply {
+        rpc_result_private: None,
         rpc_result: NV_ERR_NOT_SUPPORTED,
         body: Vec::new(),
     })
@@ -1941,6 +1943,7 @@ impl CommandPolicy for InitTablePolicy {
             body[CONTROL_STATUS_OFF..CONTROL_STATUS_OFF + 4].copy_from_slice(&NV_OK.to_le_bytes());
             body[req.params_at..req.params_at + ps].copy_from_slice(&params);
             return Some(Reply {
+                rpc_result_private: None,
                 rpc_result: NV_OK,
                 body,
             });
@@ -1963,6 +1966,7 @@ impl CommandPolicy for InitTablePolicy {
                         .copy_from_slice(&NV_OK.to_le_bytes());
                     body[req.params_at..req.params_at + ps].copy_from_slice(&params);
                     return Some(Reply {
+                        rpc_result_private: None,
                         rpc_result: NV_OK,
                         body,
                     });
@@ -1992,6 +1996,7 @@ impl CommandPolicy for InitTablePolicy {
                             .copy_from_slice(&NV_OK.to_le_bytes());
                         body[req.params_at..req.params_at + ps].copy_from_slice(&params);
                         return Some(Reply {
+                            rpc_result_private: None,
                             rpc_result: NV_OK,
                             body,
                         });
@@ -2028,6 +2033,7 @@ impl CommandPolicy for InitTablePolicy {
                             }
                             body[req.params_at..req.params_at + ps].copy_from_slice(&params);
                             Reply {
+                                rpc_result_private: None,
                                 rpc_result: NV_OK,
                                 body,
                             }
@@ -2037,6 +2043,7 @@ impl CommandPolicy for InitTablePolicy {
                                 "kf3: FIFO_GET_LATENCY_BUFFER_SIZE REFUSED (INVALID_ARGUMENT): {why:?}"
                             );
                             Reply {
+                                rpc_result_private: None,
                                 rpc_result: kf_abi::fifoctl::NV_ERR_INVALID_ARGUMENT,
                                 body,
                             }
@@ -2433,6 +2440,12 @@ impl CommandPolicy for InitTablePolicy {
                     // ★ 2026-10-07, owner ruling §S: stub / absent-on-virtual-display / posted
                     // by the display plane (`RULED_NOTIFIERS`, every row with its argument).
                     && !eventnotify::is_ruled_notifier(self.driver.driver_version(), reg.event)
+                    // ★ 2026-10-08: an engine's non-stall notifier — the guest's own CPU-RM
+                    // delivers it from the vector this device raises (`ENGINE_NONSTALL_NOTIFIERS`).
+                    && !eventnotify::is_engine_nonstall_notifier(
+                        self.driver.driver_version(),
+                        reg.event,
+                    )
                     && !self.probe_arm.contains(reg.event)
                 {
                     return refuse();
@@ -2760,10 +2773,21 @@ impl CommandPolicy for InitTablePolicy {
                 // `[measured 2026-08-08, real GA106, R22]`
                 // `traces/real_ga106/rmladder_r22_businfo_sweep_real_ga106.txt:38,63` and
                 // `traces/real_ga106/rmladder_r22_businfo_loaded_real_ga106.txt:37,62`.
-                let answers = [
+                let mut answers = vec![
                     (kf_abi::businfo::BUS_INFO_INDEX_PCIE_GEN_INFO, gen_info),
                     (kf_abi::businfo::BUS_INFO_INDEX_PCIE_GEN2_INFO, gen_info),
                 ];
+                // The presented PCIe link never changes width/speed or enters ASPM.
+                // ctrl2080bus.h:479-502: PCIe PRESENT, ASLM unsupported; ASPM VALID
+                // and DISABLED. The link has no physical error source: the switch,
+                // line-code/CRC/NAK/L0s and AER counters (including clear-on-read)
+                // are zero by construction, not copied from the host's live link.
+                // Windows' boot census returns on the first refusal; refusing ASLM
+                // also discards the already answered bus/link/DMA fields.
+                answers.extend((0x18..=0x2b).map(|index| {
+                    let value = if index == 0x18 || index == 0x1b { 1 } else { 0 };
+                    (index, value)
+                }));
                 match kf_abi::businfo::answer_bus_get_info_v2(
                     &cmd.payload[at..at + kf_abi::businfo::BUS_GET_INFO_V2_PARAMS_SIZE],
                     &answers,
@@ -3210,6 +3234,7 @@ impl CommandPolicy for InitTablePolicy {
         body[req.params_at..req.params_at + params.len()].copy_from_slice(&params);
 
         Some(Reply {
+            rpc_result_private: None,
             rpc_result: NV_OK,
             body,
         })

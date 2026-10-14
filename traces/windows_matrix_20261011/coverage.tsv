@@ -1,0 +1,111 @@
+windows_test	category	linux_rows	native_reference
+atomics_t	cuda-equiv	simpleAtomicIntrinsics	PASS
+bandwidthTest_demo	cuda-demo	bandwidthTest	PASS
+blackscholes_t	cuda-equiv	BlackScholes,blackscholes	PASS
+blender_cycles	render	blender_cycles	PASS
+cg_t	cuda-equiv	conjugateGradient	PASS
+clpeak_cuda	opencl		PASS
+clpeak_ocl	opencl	clpeak	PASS
+cuda_callback	cuda-equiv	simpleCallback	NOTRUN
+cuda_occupancy	cuda-equiv	simpleOccupancy	NOTRUN
+cup2_ladder	cuda-ladder	vectorAddDrv	PASS
+cup3_ladder	cuda-ladder		PASS
+cup8_ladder	cuda-ladder	matrixMulDrv	PASS
+cupy_asynccopy	cuda-equiv	globalToShmemAsyncCopy	PASS
+cupy_cg	cuda-equiv	simpleCooperativeGroups	PASS
+cupy_check	torch	cupy	PASS
+cupy_sha256	cuda-equiv	sha256	PASS
+d3d11va_h264	video		PASS
+d3d12_signal_probe	d3d		PASS
+deviceQuery_demo	cuda-demo	deviceQuery	PASS
+driver_status	probe		PASS
+dxdiag_report	probe		PASS
+dxgi_adapters	probe		PASS
+dxprobe_d3d11	d3d		PASS
+dxprobe_d3d12	d3d		PASS
+dxva2_h264	video		PASS
+edge_video_h264	video		PASS
+edge_video_vp9	video		PASS
+edge_webgl	browser		PASS
+edge_webgl_headless	browser		PASS
+edge_webgpu	browser		PASS
+fft_t	cuda-equiv	simpleCUFFT,fft_cufft	PASS
+furmark_gl_bench	opengl		PASS
+furmark_gl_stress	stress	gpu_burn	PASS
+furmark_glinfo	opengl		PASS
+furmark_knot_gl	opengl		PASS
+furmark_vk_bench	vulkan		PASS
+furmark_vkinfo	vulkan		PASS
+fwt_t	cuda-equiv	fastWalshTransform	PASS
+glgears_wgl	opengl	egl_offscreen	PASS
+gputest_fur	opengl		PASS
+gputest_gi	opengl		PASS
+gputest_pixmark_piano	opengl		PASS
+gputest_plot3d	opengl		PASS
+gputest_tess	opengl		PASS
+gputest_triangle	opengl		PASS
+graphs_t	cuda-equiv	simpleCudaGraphs,graphMemoryNodes	PASS
+gravitymark_d3d11	d3d		PASS
+gravitymark_d3d12	d3d		PASS
+gravitymark_d3d12_raster	d3d		PASS
+gravitymark_d3d12_rt	d3d		PASS
+gravitymark_gl	opengl		PASS
+gravitymark_vk	vulkan		TIMEOUT
+hashcat	crypto	hashcat	PASS
+heaven_d3d11	d3d		PASS
+heaven_opengl	opengl		PASS
+hist_t	cuda-equiv	histogram	PASS
+llama_cuda_bench	llm	llama_bench	PASS
+llama_cuda_gen	llm	llama_cpp_gen	PASS
+llama_vulkan_bench	llm		PASS
+managed_t	cuda-equiv	UnifiedMemoryStreams,UnifiedMemoryPerf,conjugateGradientUM,attach_verify	PASS
+mandelbrot_t	cuda-equiv	mandelbrot	PASS
+matmul_t	cuda-equiv	matrixMul,sgemm_cublas,simpleCUBLAS	PASS
+memcpy2d_t	cuda-equiv	memcpy2d	PASS
+nbody_demo_bench	cuda-demo	nbody	PASS
+nbody_demo_gl	cuda-demo	nbody	PASS
+nbody_t	cuda-equiv	nbody	PASS
+nvdec_h264	video	nvdec_h264	PASS
+nvenc_av1	video		PASS
+nvenc_h264	video	nvenc_h264	PASS
+nvenc_hevc	video	nvenc_hevc	PASS
+nvidia_smi	smi	nvidia_smi	PASS
+oceanFFT_demo	cuda-demo	simpleCUFFT	PASS
+opencl_icd	opencl	clinfo	PASS
+ort_directml	d3d		PASS
+overlay_yuv_fullscreen	d3d		NOTRUN
+overlay_yuv_hide	d3d		NOTRUN
+overlay_yuv_move	d3d		NOTRUN
+overlay_yuv_occlude	d3d		NOTRUN
+overlay_yuv_probe	d3d		NOTRUN
+overlay_yuv_recreate	d3d		NOTRUN
+overlay_yuv_resize	d3d		NOTRUN
+overlay_yuv_soak	d3d		NOTRUN
+randomFog_demo	cuda-demo	MersenneTwisterGP11213	PASS
+reduce_t	cuda-equiv	reduction,reduce	PASS
+rng_t	cuda-equiv	MersenneTwisterGP11213	PASS
+scale_cuda_nvenc	video		PASS
+scan_t	cuda-equiv	scan	PASS
+sort_t	cuda-equiv	sortingNetworks	PASS
+stream_created2nd_t	stream-probe	stream_created2nd	PASS
+stream_created_t	stream-probe	stream_created	PASS
+stream_default_t	stream-probe	stream_default	PASS
+stream_nonblocking_t	stream-probe	stream_nonblocking	PASS
+stream_perthread_t	stream-probe	stream_perthread	PASS
+stream_two_t	stream-probe	stream_two	PASS
+streams_t	cuda-equiv	simpleStreams,asyncAPI,concurrentKernels	PASS
+tc16_t	cuda-equiv	cudaTensorCoreGemm	PASS
+tcbf16_t	cuda-equiv	bf16TensorCoreGemm	PASS
+torch_ai_bench	torch	torch_ai_bench	PASS
+torch_burn	stress	gpu_burn	PASS
+torch_correct	torch	torch_correct,conv2d	PASS
+transpose_t	cuda-equiv	transpose	PASS
+triad_t	cuda-equiv	stream_triad	PASS
+valley_d3d11	d3d		PASS
+valley_opengl	opengl		PASS
+vectorAdd_demo	cuda-demo	vectorAdd	PASS
+vkcube	vulkan		PASS
+vkpeak	vulkan	vkpeak	PASS
+vulkan_video_decode	video		PASS
+vulkaninfo	vulkan	vulkaninfo	PASS
+zerocopy_t	cuda-equiv	simpleZeroCopy	PASS

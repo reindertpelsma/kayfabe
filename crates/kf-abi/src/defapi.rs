@@ -1,7 +1,12 @@
 //! ★ OWNER_RULINGS §U (2026-10-07) — **`NV50_DEFERRED_API_CLASS` (`0x5080`): the registration
 //! controls and the bundles they carry, read at the GUEST's measured layout.**
 //!
-//! What the real GSP receives (measured, Windows 580.88, VFIO boots 8/9/10, `gsp.jsonl`): only
+//! Correction 2026-10-11: the passing same-GPU GravityMark Vulkan VFIO capture includes two
+//! `_INTERNAL` registrations, both status0 (`traces/windows_matrix_20261011/gravity-vulkan/
+//! vfio-reference/`). The older observation below is scoped to boots8/9/10; it is not a
+//! statement that Windows never sends `_INTERNAL`. Layouts still come from public source.
+//!
+//! Historical observation (measured, Windows 580.88, VFIO boots 8/9/10, `gsp.jsonl`): only
 //! `NV5080_CTRL_CMD_DEFERRED_API` (`0x50800101`) as `GSP_RM_CONTROL` (fn 76), `paramsSize` 584,
 //! answered `NV_OK` with the params echoed. Why that and not `_V2` (`ogkm-580.95.05:
 //! src/nvidia/generated/g_deferred_api_nvoc.c:183-230`, flags decoded against
@@ -162,6 +167,8 @@ pub struct InnerCmds {
 /// The fields of the bundle members kayfabe reads.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct BundleOffsets {
+    // Optional: an unmeasured FIFO layout refuses only this bundle kind.
+    fifo: Option<FifoOffsets>,
     // NV2080_CTRL_GPU_INITIALIZE_CTX_PARAMS
     init_size: usize,
     init_engine: usize,
@@ -203,6 +210,36 @@ struct BundleOffsets {
     zcull_mode: usize,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct FifoOffsets {
+    size: usize,
+    client: usize,
+    channel: usize,
+    userd_memory: usize,
+    entries: usize,
+    gpfifo_va: usize,
+    userd_offset: usize,
+}
+
+impl FifoOffsets {
+    fn at(version: DriverVersion) -> Option<Self> {
+        let l = Resolved::of(&m::NV2080_CTRL_FIFO_UPDATE_CHANNEL_INFO_PARAMS, version).ok()?;
+        let field = |name, bytes| {
+            let f = l.need(name).ok()?;
+            (f.bytes() == Some(bytes) && f.off().checked_add(bytes)? <= l.size()).then_some(f.off())
+        };
+        Some(Self {
+            size: l.size(),
+            client: field("hClient", 4)?,
+            channel: field("hChannel", 4)?,
+            userd_memory: field("hUserdMemory", 4)?,
+            entries: field("gpFifoEntries", 4)?,
+            gpfifo_va: field("gpFifoOffset", 8)?,
+            userd_offset: field("userdOffset", 8)?,
+        })
+    }
+}
+
 impl BundleOffsets {
     fn at(v: DriverVersion) -> Option<Self> {
         let i = Resolved::of(&m::NV2080_CTRL_GPU_INITIALIZE_CTX_PARAMS, v).ok()?;
@@ -212,6 +249,7 @@ impl BundleOffsets {
         let z = Resolved::of(&m::NV2080_CTRL_GR_CTXSW_ZCULL_BIND_PARAMS, v).ok()?;
         let o = |r: &Resolved, f: &'static str| r.need(f).ok().map(crate::matrix::FieldAt::off);
         Some(Self {
+            fifo: FifoOffsets::at(v),
             init_size: i.size(),
             init_engine: o(&i, "engineType")?,
             init_h_client: o(&i, "hClient")?,
@@ -312,6 +350,9 @@ pub enum DecodeError {
 /// The bundle of a registration, decoded for the command it names.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Bundle {
+    /// Public measured FIFO migration fields. Decoding grants no mapping,
+    /// ownership, native verb, cursor reset, or migration/completion authority.
+    UpdateChannelInfo(FifoUpdate),
     /// `NV2080_CTRL_GPU_INITIALIZE_CTX_PARAMS` (`ctrl2080gpu.h:1039-1103`).
     InitializeCtx {
         /// `engineType`.
@@ -387,7 +428,7 @@ pub enum Bundle {
         /// `zcullMode`.
         mode: u32,
     },
-    /// `GR_CTXSW_PM_BIND`, `GR_CTXSW_PREEMPTION_BIND`, `FIFO_UPDATE_CHANNEL_INFO`: known, never
+    /// `GR_CTXSW_PM_BIND`, `GR_CTXSW_PREEMPTION_BIND`: known, never
     /// served (see the trigger's refusals) — so not decoded.
     Unserved {
         /// The command.
@@ -400,6 +441,24 @@ pub enum Bundle {
         /// The command.
         cmd: u32,
     },
+}
+
+/// `NV2080_CTRL_FIFO_UPDATE_CHANNEL_INFO_PARAMS`, resolved at the guest version
+/// from generated ogkm layouts. Every field remains untrusted until admission.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FifoUpdate {
+    /// Guest client owning the channel and USERD memory object.
+    pub client: u32,
+    /// Must name the triggering channel's own allocation lifetime.
+    pub channel: u32,
+    /// Same-client client-allocated USERD; must be resolved and pinned.
+    pub userd_memory: u32,
+    /// Guest source ring capacity; adapter validates power-of-two/trusted cap.
+    pub entries: u32,
+    /// Guest source ring VA; complete span must resolve in the own mirror.
+    pub gpfifo_va: u64,
+    /// Offset in the USERD object, requiring alignment, complete bounds and pin.
+    pub userd_offset: u64,
 }
 
 /// The rules `serverutilValidateNewResourceHandle` applies (`rs_utils.c:227-236` →
@@ -631,9 +690,17 @@ impl DefApiAbi {
                 what: "GR_CTXSW_PREEMPTION_BIND",
             }
         } else if cmd == c.update_channel_info {
-            Bundle::Unserved {
-                cmd,
-                what: "FIFO_UPDATE_CHANNEL_INFO",
+            if let Some(f) = b.fifo.filter(|f| fits(f.size)) {
+                Bundle::UpdateChannelInfo(FifoUpdate {
+                    client: w(f.client),
+                    channel: w(f.channel),
+                    userd_memory: w(f.userd_memory),
+                    entries: w(f.entries),
+                    gpfifo_va: q(f.gpfifo_va),
+                    userd_offset: q(f.userd_offset),
+                })
+            } else {
+                Bundle::Unknown { cmd }
             }
         } else {
             Bundle::Unknown { cmd }
@@ -796,6 +863,74 @@ mod tests {
             }
         );
         assert_eq!(a.promote_params_size(), 560);
+    }
+
+    #[test]
+    fn fifo_update_uses_measured_layout_and_never_reads_a_short_member() {
+        for version in [
+            W,
+            DriverVersion {
+                major: 535,
+                minor: 309,
+                patch: 1,
+            },
+            DriverVersion {
+                major: 615,
+                minor: 71,
+                patch: 9,
+            },
+        ] {
+            let abi = DefApiAbi::at(version).unwrap();
+            let layout =
+                Resolved::of(&m::NV2080_CTRL_FIFO_UPDATE_CHANNEL_INFO_PARAMS, version).unwrap();
+            let expected = FifoUpdate {
+                client: 0x1234,
+                channel: 0x9876,
+                userd_memory: 0x4455,
+                entries: 131072,
+                gpfifo_va: 0x1234_5678_90ab_cdef,
+                userd_offset: 0xfedc_ba98_7654_3210,
+            };
+            let mut bytes = vec![0; layout.size()];
+            for (name, value) in [
+                ("hClient", expected.client),
+                ("hChannel", expected.channel),
+                ("hUserdMemory", expected.userd_memory),
+                ("gpFifoEntries", expected.entries),
+            ] {
+                let field = layout.need(name).unwrap();
+                assert_eq!(field.bytes(), Some(4));
+                bytes[field.off()..field.off() + 4].copy_from_slice(&value.to_le_bytes());
+            }
+            for (name, value) in [
+                ("gpFifoOffset", expected.gpfifo_va),
+                ("userdOffset", expected.userd_offset),
+            ] {
+                let field = layout.need(name).unwrap();
+                assert_eq!(field.bytes(), Some(8));
+                bytes[field.off()..field.off() + 8].copy_from_slice(&value.to_le_bytes());
+            }
+            assert_eq!(
+                abi.decode_bundle(abi.cmds.update_channel_info, &bytes),
+                Bundle::UpdateChannelInfo(expected)
+            );
+            for n in 0..bytes.len() {
+                assert_eq!(
+                    abi.decode_bundle(abi.cmds.update_channel_info, &bytes[..n]),
+                    Bundle::Unknown {
+                        cmd: abi.cmds.update_channel_info
+                    }
+                );
+            }
+            let mut unmeasured = abi;
+            unmeasured.bundle.fifo = None;
+            assert_eq!(
+                unmeasured.decode_bundle(abi.cmds.update_channel_info, &bytes),
+                Bundle::Unknown {
+                    cmd: abi.cmds.update_channel_info
+                }
+            );
+        }
     }
 
     #[test]

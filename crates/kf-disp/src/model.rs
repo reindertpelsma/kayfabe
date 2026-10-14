@@ -15,8 +15,9 @@
 //! - one connector per configured monitor: a DVI-D connector on SOR `i`, protocol
 //!   `SINGLE_TMDS_A`, display id `0x100 << i` — no DPCD, no link training, EDID over
 //!   `SPECIFIC_GET_EDID_V2` (the simplest connector NVKMS accepts, §4.7).
-//! - no crossbar (`SYSTEM_GET_CAPS_V2` clear), so NVKMS uses each output's own SOR and never asks
-//!   `DFP_ASSIGN_SOR`.
+//! - a FIXED crossbar (`SYSTEM_GET_CAPS_V2` derives `CROSS_BAR_SUPPORTED` from this model answering
+//!   `DFP_ASSIGN_SOR`, [`crate::dispcaps`]): `DFP_ASSIGN_SOR` reports connector `i` on SOR `i` and
+//!   never moves it, the routing the real GPU reported for its one connected display.
 
 use crate::edid::Monitor;
 use crate::layout::{Layouts, Params};
@@ -33,6 +34,26 @@ pub const NV_ERR_INVALID_ARGUMENT: u32 = 0x1f;
 /// `NV_ERR_INVALID_OBJECT` — a channel query for a channel that does not exist.
 pub const NV_ERR_INVALID_OBJECT: u32 = 0x31;
 
+/// ★ `NV0073` display-common SYSTEM control `0x73011a` (2026-10-11): reports a display's CURRENT mode.
+/// ⊘ Not in the open ogkm headers (`ctrl0073system.h` has `GET_SRM_STATUS 0x730119` and
+/// `HDCP_REVOCATION_CHECK 0x73011b`, nothing between), so the id and the layout are `[observed on
+/// the real GPU]` ONCE: VFIO reference, RTX 4070 (die AD104), Windows guest driver 580.88 (branch
+/// `r580_78-7`, changelist 36308443; the port keys it as the Linux twin `580.65.06`), 2026-10-11,
+/// the OpenGL ICD's calls, 5 of 5 answered `NV_OK`: 28 bytes of params = 7 little-endian `u32`
+/// words, request `[displayId, 0, 0, 0, 0, 0, 0]`, reply `[displayId, w, h, total_w, total_h, 0,
+/// refresh_hz]`. The reply follows the head's current mode (observed at 1920x1080 and 1280x720,
+/// both 60 Hz). The FIELD MEANINGS are inferred from those values (1920/1080 and 2200/1125,
+/// 1280/720 and 1650/750 are the CEA-861 totals); no header defines them. Only the VALUES come from
+/// this display's own armed state; the observation is a test oracle, not data. The layout is
+/// answered ONLY for the guest branches observed ([`DISPLAY_MODE_OBSERVED_BRANCHES`]); any other
+/// is refused by name and counted ([`DisplayModel::display_mode_unverified`]).
+pub const GET_DISPLAY_MODE: u32 = 0x0073_011a;
+/// The guest driver branches (the layouts key; Windows 580.88 is `580.65.06`) on which
+/// [`GET_DISPLAY_MODE`]'s layout was observed on hardware.
+pub const DISPLAY_MODE_OBSERVED_BRANCHES: &[&str] = &["580.65.06"];
+/// The size of [`GET_DISPLAY_MODE`]'s params: seven `u32` words (observed).
+pub const GET_DISPLAY_MODE_SIZE: usize = 28;
+
 /// `NV2080_CTRL_CMD_INTERNAL_DISPLAY_GET_STATIC_INFO`.
 pub const GET_STATIC_INFO: u32 = 0x2080_0a01;
 /// `NV2080_CTRL_CMD_INTERNAL_DISPLAY_WRITE_INST_MEM`.
@@ -48,6 +69,18 @@ pub const SET_STATIC_EDID_DATA: u32 = 0x2080_0adf;
 
 /// `NV402C_CTRL_NUM_I2C_PORTS` — "no external daughterboard" (`kern_disp.c:504-511`).
 pub const NO_I2C_PORT: u32 = 16;
+
+/// ⚠ EXPERIMENT (2026-10-08, H-hdcp, `KF3_DISPLAY_HDCP_STATE=1`, default off):
+/// `NV0073_CTRL_CMD_SPECIFIC_GET_HDCP_STATE`. ⚠ Not in ogkm-580's published `ctrl0073specific.h` (the
+/// guest's branch); taken from ogkm-595.84 `ctrl0073specific.h:787-795` (id `0x730280`; params
+/// `{ NvU32 subDeviceInstance; NvU32 displayId; NvU32 flags; }`, 12 bytes) — the size the 580.88
+/// guest sends (`paramsSize 0xc`, VFIO DVI reference capture, RTX 4070, 2026-10-08). Hand-typed, not
+/// derived: owner review before it may become default.
+pub const GET_HDCP_STATE: u32 = 0x0073_0280;
+
+/// `NV0073_CTRL_SPECIFIC_HDCP_STATE_ENCRYPTING_CACHED` (bit 1, an INPUT — ogkm-595.84
+/// `ctrl0073specific.h:800`); every other defined bit is an output.
+const HDCP_STATE_ENCRYPTING_CACHED: u32 = 1 << 1;
 /// Display channel numbers run core `0`, windows `1..=32`, window-immediates `33..=64`, cursors
 /// `73..=80` (`published/disp/v03_00/dev_disp.h`: `NV_PDISP_CHN_NUM_*`); `clientChannelTable` is
 /// indexed by it without a bounds check (`disp_channel.c:254-263`), so the count is one past the
@@ -62,6 +95,7 @@ pub const MAX_STATEMENTS: usize = 1024;
 /// The subdevice-internal display controls (`ctrl2080internal.h`) and the kind of answer each gets.
 const INTERNAL_CONTROLS: &[(u32, &str)] = &[
     (GET_IP_VERSION, "ip_version"),
+    (GET_DISPLAY_MODE, "display_mode"),
     (GET_STATIC_INFO, "static_info"),
     (INIT_BRIGHTC_STATE_LOAD, "echo"),
     (SET_STATIC_EDID_DATA, "echo"),
@@ -82,7 +116,12 @@ const NAMED_CONTROLS: &[(&str, &str)] = &[
         "NV0073_CTRL_CMD_SYSTEM_GET_HEAD_ROUTING_MAP",
         "head_routing",
     ),
-    ("NV0073_CTRL_CMD_SYSTEM_MAP_SHARED_DATA", "echo"),
+    // ★ 2026-10-14: the display SHARED DATA page — kernel RM's per-head vblank counters
+    // (`KernelDisplaySharedMem.kHeadVblankCount[]`, ogkm `kern_disp.c:557-627`), which physical RM
+    // updates and a GSP client's `NV0073_CTRL_CMD_SYSTEM_GET_VBLANK_COUNTER` READS
+    // (`disp_common_kern_ctrl_minimal.c:401-410`). Stated to the worker, which counts each head's
+    // vblanks into it (see `Statement::SharedData`).
+    ("NV0073_CTRL_CMD_SYSTEM_MAP_SHARED_DATA", "map_shared"),
     (
         "NV0073_CTRL_CMD_SYSTEM_GET_INTERNAL_DISPLAYS",
         "internal_displays",
@@ -111,6 +150,7 @@ const NAMED_CONTROLS: &[(&str, &str)] = &[
         "not_supported",
     ),
     ("NV0073_CTRL_CMD_DFP_GET_INFO", "dfp_info"),
+    ("NV0073_CTRL_CMD_DFP_ASSIGN_SOR", "assign_sor"),
     ("NV0073_CTRL_CMD_DFP_GET_DISPLAYPORT_DONGLE_INFO", "dongle"),
     ("NV5070_CTRL_CMD_SYSTEM_GET_CAPS_V2", "caps5070"),
     ("NVC370_CTRL_CMD_IDLE_CHANNEL", "echo"),
@@ -133,6 +173,12 @@ const NAMED_CONTROLS: &[(&str, &str)] = &[
     // §S) and every SET/RESET stays refused NOT_SUPPORTED. [measured] vfio-10 RPC 2645: GET of
     // index 1 on head 0 (the real GPU answered TRUE: it runs IMP).
     ("NV5070_CTRL_CMD_IMP_SET_GET_PARAMETER", "imp_param"),
+    // ★ 2026-10-14 (Win11 queue item: `D3DKMTGetScanLine` read line 0 / never in the blank; the
+    // control was refused NOT_SUPPORTED, `traces/win11_opengl_20261014/guest_probe_results.txt`).
+    // `GET_RG_SCAN_LINE` (`ctrl5070rg.h:361-391`, layout derived): the raster generator's current
+    // line and VBLANK state — the same live raster position the core's `GET_RG_SCAN_LINE(h)` word
+    // answers (`crate::ports::Ports::scan_position_at`), read from atomics, no lock.
+    ("NV5070_CTRL_CMD_GET_RG_SCAN_LINE", "rg_scan_line"),
     // ★ 2026-10-07 (Windows run29): `SYSTEM_GET_HOTPLUG_STATE` (`ctrl0073system.h:476-528`, flags
     // 0x48 ROUTE_TO_PHYSICAL). Lid open (a desktop monitor). `hotplugAfterEdidMask` lists every
     // display of this device: [measured] vfio-10 RPC 2917 answered every supported display (0x7f00)
@@ -200,6 +246,8 @@ const NAMED_CONTROLS: &[(&str, &str)] = &[
 
 /// `NV2080_NOTIFIERS_HOTPLUG` (`cl2080_notification.h:37`).
 pub const NOTIFIERS_HOTPLUG: u32 = 1;
+/// `NV2080_NOTIFIERS_RUNLIST_PREEMPT_COMPLETE` (`ogkm-580: cl2080_notification.h:178`).
+pub const NOTIFIERS_RUNLIST_PREEMPT_COMPLETE: u32 = 139;
 /// `NV01_EVENT_CLIENT_RM` (`nvos.h:436`): what a `GSP_RM_ALLOC` of an event carries on top of its
 /// notify index (`event.c:148-170`).
 pub const EVENT_CLIENT_RM: u32 = 0x0400_0000;
@@ -420,6 +468,10 @@ pub enum Statement {
         /// The generation the shared ports minted for this life.
         life: u32,
     },
+    /// ★ `NV0073_CTRL_CMD_SYSTEM_MAP_SHARED_DATA`: kernel RM's display shared-data page (`None`: unmapped).
+    /// Its first words are `kHeadVblankCount[OBJ_MAX_HEADS]` (u32 each, ogkm `g_kern_disp_nvoc.h:72-75`):
+    /// physical RM's count of each head's vblanks, which a GSP client's `GET_VBLANK_COUNTER` returns.
+    SharedData(Option<InstMem>),
     /// A display channel was freed.
     ChannelFreed {
         /// Kind.
@@ -457,6 +509,15 @@ pub struct DisplayModel {
     pub statements: Vec<Statement>,
     /// Statements not kept because [`Self::statements`] was full.
     pub statements_dropped: u64,
+    /// [`GET_DISPLAY_MODE`] requests refused because the guest's branch is not one whose layout was
+    /// observed on hardware ([`DISPLAY_MODE_OBSERVED_BRANCHES`]).
+    pub display_mode_unverified: u64,
+    /// [`SYSTEM_GET_CAPS_V2`](crate::dispcaps) answers given as the empty table because a name the
+    /// derivation needs is missing from the class table or the layouts (the clean mode "no optional
+    /// capability", what the model answered before the caps were derived).
+    pub caps_unverified: u64,
+    /// The one-time log line for the first such refusal; drained by [`Self::take_notice`].
+    notice: Option<String>,
     /// Every display control answered (the first 512), for the log.
     pub seen: Vec<u32>,
     /// ★ The lock-free state shared with the vCPU and the display worker (PUT/GET, events).
@@ -468,10 +529,36 @@ pub struct DisplayModel {
     /// query instead of refusing it (see `NAMED_CONTROLS`). Set only by a link that also twins the
     /// object on the host ([`Self::offer_display_sw`]).
     display_sw_offered: bool,
+    /// ⚠ PROBE (default `false`, 2026-10-08, Windows run56 — `KF3_DISPLAY_IMP_ENABLE=1` through
+    /// [`Self::report_imp_enabled`]): answer `IMP_SET_GET_PARAMETER` GET `IMP_ENABLE` TRUE, as the real
+    /// GPU does (vfio-10 RPC 2645), instead of FALSE. Consistent with `mode_possible`, which already
+    /// answers every IS_MODE_POSSIBLE "possible".
+    imp_enabled: bool,
+    /// ⚠ EXPERIMENT (default `false`, 2026-10-08, H-hdcp — `KF3_DISPLAY_HDCP_STATE=1` through
+    /// [`Self::answer_hdcp_state`]): answer [`GET_HDCP_STATE`] for a display of this device — NV_OK,
+    /// nothing capable, nothing encrypting (an emulated DVI-D attach point has no HDCP transmitter
+    /// and its virtual monitor no receiver) — instead of refusing it NOT_SUPPORTED.
+    hdcp_state: bool,
+    /// ⚠ EXPERIMENT (default `false`, 2026-10-08, H-edidseen — `KF3_DISPLAY_HOTPLUG_EDID_SEEN=1`
+    /// through [`Self::answer_hotplug_edid_seen`]): `SYSTEM_GET_HOTPLUG_STATE.hotplugAfterEdidMask`
+    /// as ogkm defines it — "the set of displays that have seen a hotplug or hotunplug event sometime
+    /// after the last valid EDID read; if the device never has a valid EDID read, then it will always
+    /// be listed" (`ogkm-595.84 ctrl0073system.h:503-507`) — instead of every display of this device.
+    /// `[measured, VFIO DVI reference boots 1-3, RTX 4070, 2026-10-08]` the real GPU answers `0x7e00`:
+    /// every display EXCEPT the connected `0x100`, whose EDID the guest had read.
+    hotplug_edid_seen: bool,
+    /// The displays whose EDID the guest read (`SPECIFIC_GET_EDID_V2`, answered) since their monitor
+    /// last changed ([`Self::set_monitor`] clears the bit). Kept whether or not the experiment is on;
+    /// only [`Self::hotplug_edid_seen`] lets an answer read it.
+    pub edid_seen: u32,
     /// ★ 3c: display ids whose monitor changed since the last `INTERNAL_GET_HOTPLUG_UNPLUG_STATE`.
     pub pending_plug: u32,
     /// ★ 3c: the live hotplug registrations (at most [`MAX_HOTPLUG_REGISTRATIONS`]).
     pub hotplug: Vec<HotplugRegistration>,
+    /// ★ 2026-10-08 (`KF3_ASYNC_PREEMPT`): the live `NV2080_NOTIFIERS_RUNLIST_PREEMPT_COMPLETE`
+    /// registrations (same bound, same retire rules as [`Self::hotplug`]) — where a preempt-complete
+    /// `POST_EVENT` is addressed.
+    pub preempt: Vec<HotplugRegistration>,
     /// ★ Bound events and notifier actions by display object `(client, handle)` (at most
     /// [`MAX_EVENT_OBJECTS`]). ⊘ Bookkeeping only: this display raises no NV0073 notifier, so no
     /// event is ever posted for these (`NV0073_CTRL_CMD_EVENT_SET_NOTIFICATION` answers).
@@ -547,12 +634,20 @@ impl DisplayModel {
             channels: BTreeMap::new(),
             statements: Vec::new(),
             statements_dropped: 0,
+            display_mode_unverified: 0,
+            caps_unverified: 0,
+            notice: None,
             seen: Vec::new(),
             ports: Arc::new(Ports::default()),
             waker: None,
             display_sw_offered: false,
+            imp_enabled: false,
+            hdcp_state: false,
+            hotplug_edid_seen: false,
+            edid_seen: 0,
             pending_plug: 0,
             hotplug: Vec::new(),
+            preempt: Vec::new(),
             display_events: BTreeMap::new(),
             rmfree_marks: BTreeSet::new(),
             rmfree_spent: BTreeSet::new(),
@@ -565,6 +660,22 @@ impl DisplayModel {
     /// an object offered WITHOUT a host twin is run m3c (186 host Xid 32, 1.3 FPS GL).
     pub fn offer_display_sw(&mut self, on: bool) {
         self.display_sw_offered = on;
+    }
+
+    /// ⚠ PROBE (default off): report IMP as enabled (`IMP_SET_GET_PARAMETER` GET `IMP_ENABLE` = TRUE).
+    pub fn report_imp_enabled(&mut self, on: bool) {
+        self.imp_enabled = on;
+    }
+
+    /// ⚠ EXPERIMENT (default off, H-hdcp): answer [`GET_HDCP_STATE`] (see the field).
+    pub fn answer_hdcp_state(&mut self, on: bool) {
+        self.hdcp_state = on;
+    }
+
+    /// ⚠ EXPERIMENT (default off, H-edidseen): answer `hotplugAfterEdidMask` from the EDID reads
+    /// the guest made (see the field).
+    pub fn answer_hotplug_edid_seen(&mut self, on: bool) {
+        self.hotplug_edid_seen = on;
     }
 
     /// Whether the display-SW object is offered ([`Self::offer_display_sw`]).
@@ -585,6 +696,8 @@ impl DisplayModel {
         }
         c.monitor = monitor;
         self.pending_plug |= c.display_id;
+        // a new monitor: its EDID has not been read since this hotplug
+        self.edid_seen &= !c.display_id;
         Some(c.display_id)
     }
 
@@ -609,18 +722,49 @@ impl DisplayModel {
     /// ★ 3c: an accepted FREE of `handle` under `client` (the client itself when equal): every
     /// registration naming it as its event, its parent or its client is retired. Returns how many.
     pub fn retire_hotplug(&mut self, client: u32, handle: u32) -> usize {
-        let before = self.hotplug.len();
-        self.hotplug.retain(|h| {
+        let keep = |h: &HotplugRegistration| {
             h.client != client || (handle != client && h.event != handle && h.parent != handle)
-        });
-        before - self.hotplug.len()
+        };
+        let before = self.hotplug.len() + self.preempt.len();
+        self.hotplug.retain(keep);
+        self.preempt.retain(keep);
+        before - self.hotplug.len() - self.preempt.len()
     }
 
-    /// ★ 3c: a GSP re-init (the guest driver reloaded): every registration is dead.
+    /// ★ 3c: a GSP re-init (the guest driver reloaded): every registration is dead (the
+    /// preempt-complete ones too).
     pub fn retire_all_hotplug(&mut self) -> usize {
-        let n = self.hotplug.len();
+        let n = self.hotplug.len() + self.preempt.len();
         self.hotplug.clear();
+        self.preempt.clear();
         n
+    }
+
+    /// ★ 2026-10-08 (`KF3_ASYNC_PREEMPT`): record a `RUNLIST_PREEMPT_COMPLETE` registration (an
+    /// ACCEPTED event alloc with that notify index), bounded as [`Self::register_hotplug`].
+    pub fn register_preempt(&mut self, r: HotplugRegistration) -> bool {
+        if self
+            .preempt
+            .iter()
+            .any(|h| (h.client, h.event) == (r.client, r.event))
+        {
+            return true;
+        }
+        if self.preempt.len() >= MAX_HOTPLUG_REGISTRATIONS {
+            return false;
+        }
+        self.preempt.push(r);
+        true
+    }
+
+    /// ★ 2026-10-08: the live `RUNLIST_PREEMPT_COMPLETE` registration of `client` (newest first).
+    #[must_use]
+    pub fn preempt_target(&self, client: u32) -> Option<HotplugRegistration> {
+        self.preempt
+            .iter()
+            .rev()
+            .find(|h| h.client == client)
+            .copied()
     }
 
     /// ★ Record an ACCEPTED `GSP_RM_ALLOC` of an `NV01_EVENT*` handle `event` whose parent is the
@@ -689,6 +833,73 @@ impl DisplayModel {
         self.waker.clone()
     }
 
+    /// A one-time message for the log (drained), e.g. the first refusal of a control whose layout was
+    /// not observed for the guest's branch.
+    pub fn take_notice(&mut self) -> Option<String> {
+        self.notice.take()
+    }
+
+    /// ★★ **A guest life ends** (`docs/design/V3_DEVICE_RESET.md`): a device reset, or the guest's
+    /// RM unloading (`UNLOADING_GUEST_DRIVER` without a PM transition — GSP-RM's own unload, after
+    /// which no display object of that RM exists). Everything the guest stated goes — instance
+    /// memory, pushbuffers, channels (each one's port released), queued statements, hotplug /
+    /// preempt / display-event registrations, `PRESERVE_HW` marks, custom EDIDs, the EDID-seen and
+    /// pending-plug masks — and the ports read as a fresh model's. What realize decided stays: the
+    /// layouts, the chip row's facts, the monitors (the host's, not the guest's), the plane's wake,
+    /// the experiment switches, and the counters of the VM's run. Returns the channels dropped.
+    ///
+    /// ⊘ Exhaustive on purpose: a field added later stops this compiling until it is sorted into
+    /// one of the two lists.
+    pub fn reset_life(&mut self) -> usize {
+        let DisplayModel {
+            l: _,
+            ip_version: _,
+            heads: _,
+            windows: _,
+            classes: _,
+            connectors,
+            inst_mem,
+            pushbuffers,
+            channels,
+            statements,
+            statements_dropped: _,
+            display_mode_unverified: _,
+            caps_unverified: _,
+            notice: _,
+            seen: _,
+            ports,
+            waker: _,
+            display_sw_offered: _,
+            imp_enabled: _,
+            hdcp_state: _,
+            hotplug_edid_seen: _,
+            edid_seen,
+            pending_plug,
+            hotplug,
+            preempt,
+            display_events,
+            rmfree_marks,
+            rmfree_spent,
+        } = self;
+        let n = channels.len();
+        for c in connectors.iter_mut() {
+            c.custom_edid = None;
+        }
+        *inst_mem = None;
+        pushbuffers.clear();
+        channels.clear();
+        statements.clear();
+        *edid_seen = 0;
+        *pending_plug = 0;
+        hotplug.clear();
+        preempt.clear();
+        display_events.clear();
+        rmfree_marks.clear();
+        rmfree_spent.clear();
+        ports.reset_life();
+        n
+    }
+
     /// ★ Answer with another driver version's `layouts` (a `ReselectAtFn1` rebuild for the guest's
     /// own version). Everything stated so far is kept; the ports and the plane stay attached.
     pub fn retarget(&mut self, layouts: &'static Layouts) {
@@ -729,6 +940,140 @@ impl DisplayModel {
         self.connectors.iter().find(|c| c.display_id == display_id)
     }
 
+    /// ★ Heads "currently in use by an NV client": those whose raster runs, i.e. the ones
+    /// `SYSTEM_GET_ACTIVE` reports a display for (the worker publishes both from the ARMED core
+    /// state; no vCPU lock). `[inferred]` rule: ogkm defines the count's meaning but the physical-RM
+    /// implementation is closed; the real GPU answered 1 with one connected monitor lit on head 0
+    /// (VFIO reference, RTX 4070, Windows 580.88, 2026-10-11) and 4 without the flag.
+    fn heads_in_use(&self) -> u32 {
+        (0..self.heads as usize)
+            .filter(|h| self.ports.lit_sor(*h).is_some())
+            .count() as u32
+    }
+
+    /// ★ The `NV0073_CTRL_CMD_SYSTEM_GET_CAPS_V2` table: [`crate::dispcaps`]'s derivation from this
+    /// model's own facts. The empty table (the model's answer before the caps were derived) when the
+    /// class table or a layout name the derivation needs is missing, counted in
+    /// [`Self::caps_unverified`] and logged once.
+    fn caps0073_table(&mut self) -> Vec<u8> {
+        let l = self.l;
+        let sor_routing = l.k32("NV0073_CTRL_CMD_DFP_ASSIGN_SOR").is_some();
+        let table = crate::class::for_version(&l.version)
+            .ok_or_else(|| {
+                crate::caps::Missing(format!("class table for guest branch {}", l.version))
+            })
+            .and_then(|t| crate::dispcaps::EngineFacts::derive(t, sor_routing))
+            .and_then(|f| crate::dispcaps::caps_table(l, &f));
+        match table {
+            Ok(t) => t,
+            Err(crate::caps::Missing(what)) => {
+                self.caps_unverified += 1;
+                if self.caps_unverified == 1 && self.notice.is_none() {
+                    self.notice = Some(format!(
+                        "display caps unverified ({what} missing): GET_CAPS_V2 answers the empty table"
+                    ));
+                }
+                let n = l
+                    .field("NV0073_CTRL_SYSTEM_GET_CAPS_V2_PARAMS", "capsTbl")
+                    .map_or(0, |f| f.1);
+                vec![0; n]
+            }
+        }
+    }
+
+    /// ★ `NV0073_CTRL_CMD_DFP_ASSIGN_SOR` (`ctrl0073dfp.h`, 80 bytes; the real GPU answered 8 of 8
+    /// `NV_OK` with 80 bytes, VFIO reference 2026-10-11): the crossbar here is FIXED, connector `i`
+    /// on SOR `i` (`or_info` says the same), so the answer is that table whatever was asked.
+    /// `sorAssignList[sor]` / `sorAssignListWithTag[sor]` = the display on that SOR (type SINGLE).
+    /// Refused: another subdevice, a display of another device, a slave display or `bIs2Head1Or`
+    /// (dual-SST / two-head-one-OR are not modelled: NOT_SUPPORTED by name), and an exclude mask
+    /// that bars the connector's only SOR (nothing else can drive it).
+    fn assign_sor(&mut self, params: &[u8]) -> Result<Vec<u8>, u32> {
+        let mut p = self.view("NV0073_CTRL_DFP_ASSIGN_SOR_PARAMS", params)?;
+        if p.get("subDeviceInstance").unwrap_or(u64::MAX) != 0 {
+            return Err(NV_ERR_INVALID_ARGUMENT);
+        }
+        let max = self
+            .l
+            .konst("NV0073_CTRL_CMD_DFP_ASSIGN_SOR_MAX_SORS")
+            .and_then(|n| u32::try_from(n).ok())
+            .ok_or(NV_ERR_NOT_SUPPORTED)?;
+        let single = self
+            .l
+            .konst("NV0073_CTRL_DFP_SOR_TYPE_SINGLE")
+            .ok_or(NV_ERR_NOT_SUPPORTED)?;
+        let id = p.get("displayId").unwrap_or(u64::MAX) as u32;
+        if p.get("slaveDisplayId").unwrap_or(1) != 0 || p.get("bIs2Head1Or").unwrap_or(1) != 0 {
+            return Err(NV_ERR_NOT_SUPPORTED);
+        }
+        let sublink = p.get("forceSublinkConfig").ok_or(NV_ERR_NOT_SUPPORTED)?;
+        let none = self
+            .l
+            .konst("NV0073_CTRL_DFP_ASSIGN_SOR_FORCE_NONE")
+            .ok_or(NV_ERR_NOT_SUPPORTED)?;
+        let primary = self
+            .l
+            .konst("NV0073_CTRL_DFP_ASSIGN_SOR_FORCE_PRIMARY_SOR_LINK")
+            .ok_or(NV_ERR_NOT_SUPPORTED)?;
+        let secondary = self
+            .l
+            .konst("NV0073_CTRL_DFP_ASSIGN_SOR_FORCE_SECONDARY_SOR_LINK")
+            .ok_or(NV_ERR_NOT_SUPPORTED)?;
+        if sublink == secondary {
+            return Err(NV_ERR_NOT_SUPPORTED);
+        }
+        if sublink != none && sublink != primary {
+            return Err(NV_ERR_INVALID_ARGUMENT);
+        }
+        let flags = p.get("flags").ok_or(NV_ERR_NOT_SUPPORTED)?;
+        let audio = self
+            .l
+            .konst("ASSIGN_SOR_FLAGS_AUDIO_OPTIMAL_MASK")
+            .ok_or(NV_ERR_NOT_SUPPORTED)?;
+        let active_non_audio = self
+            .l
+            .konst("ASSIGN_SOR_FLAGS_ACTIVE_SOR_NOT_AUDIO_CAPABLE_YES_MASK")
+            .ok_or(NV_ERR_NOT_SUPPORTED)?;
+        if flags & !(audio | active_non_audio) != 0 {
+            return Err(NV_ERR_INVALID_ARGUMENT);
+        }
+        // No audio-capable SOR selection is implemented. The other flag is output only.
+        if flags & audio != 0 {
+            return Err(NV_ERR_NOT_SUPPORTED);
+        }
+        // displayId 0: "RM shall return the XBAR config it has stored" (the header)
+        if id != 0 {
+            let c = self.connector(id).ok_or(NV_ERR_INVALID_ARGUMENT)?;
+            if c.or_index >= max {
+                return Err(NV_ERR_NOT_SUPPORTED);
+            }
+            if p.get("sorExcludeMask").unwrap_or(0) & (1 << c.or_index) != 0 {
+                return Err(NV_ERR_NOT_SUPPORTED);
+            }
+        }
+        let mut list = vec![0u32; max as usize];
+        let mut tagged = vec![(0u32, 0u32); max as usize];
+        for c in &self.connectors {
+            if let Some(slot) = list.get_mut(c.or_index as usize) {
+                *slot = c.display_id;
+                tagged[c.or_index as usize] = (c.display_id, single as u32);
+            }
+        }
+        let bytes = |w: Vec<u32>| w.iter().flat_map(|x| x.to_le_bytes()).collect::<Vec<u8>>();
+        let ok = p.set("flags", 0)
+            && p.set("reservedSorMask", 0)
+            && p.set_bytes("sorAssignList", &bytes(list))
+            && p.set_bytes(
+                "sorAssignListWithTag",
+                &bytes(tagged.iter().flat_map(|(m, t)| [*m, *t]).collect()),
+            );
+        if ok {
+            Ok(p.buf)
+        } else {
+            Err(NV_ERR_NOT_SUPPORTED)
+        }
+    }
+
     fn all_displays(&self) -> u32 {
         self.connectors.iter().fold(0, |m, c| m | c.display_id)
     }
@@ -748,12 +1093,16 @@ impl DisplayModel {
             .iter()
             .map(|(c, _)| *c)
             .chain(NAMED_CONTROLS.iter().filter_map(|(n, _)| self.l.k32(n)))
+            .chain(self.hdcp_state.then_some(GET_HDCP_STATE))
             .collect()
     }
 
     fn kind_of(&self, cmd: u32) -> Option<&'static str> {
         if let Some((_, k)) = INTERNAL_CONTROLS.iter().find(|(c, _)| *c == cmd) {
             return Some(k);
+        }
+        if self.hdcp_state && cmd == GET_HDCP_STATE {
+            return Some("hdcp_state");
         }
         NAMED_CONTROLS
             .iter()
@@ -817,6 +1166,32 @@ impl DisplayModel {
                     Err(NV_ERR_INVALID_ARGUMENT)
                 }
             }
+            "rg_scan_line" => {
+                let mut p = self.view("NV5070_CTRL_CMD_GET_RG_SCAN_LINE_PARAMS", params)?;
+                if p.get("base.subdeviceIndex").unwrap_or(u64::MAX) != 0 {
+                    return Err(NV_ERR_INVALID_ARGUMENT);
+                }
+                let head = p.get("head").unwrap_or(u64::MAX);
+                if head >= u64::from(self.heads) {
+                    return Err(NV_ERR_INVALID_ARGUMENT);
+                }
+                // A head with no running raster (or no frame edge yet) reads as the core's
+                // GET_RG_SCAN_LINE word does before its first edge: line 0, not in the blank.
+                let (line, vblank) = usize::try_from(head)
+                    .ok()
+                    .and_then(|h| self.ports.scan_position_at(h, self.ports.now_ns()))
+                    .unwrap_or((0, false));
+                p.set("scanLine", u64::from(line));
+                p.set(
+                    "inVblank",
+                    if vblank {
+                        k("NV5070_CTRL_CMD_GET_RG_SCAN_LINE_IN_VBLANK_YES")?
+                    } else {
+                        k("NV5070_CTRL_CMD_GET_RG_SCAN_LINE_IN_VBLANK_NO")?
+                    },
+                );
+                Ok(p.buf)
+            }
             "imp_param" => {
                 let mut p = self.view("NV5070_CTRL_IMP_SET_GET_PARAMETER_PARAMS", params)?;
                 let get = k("NV5070_CTRL_IMP_SET_GET_PARAMETER_OPERATION_GET")?;
@@ -827,8 +1202,26 @@ impl DisplayModel {
                 if p.get("operation") != Some(get) || p.get("index") != Some(imp_enable) {
                     return Err(NV_ERR_NOT_SUPPORTED);
                 }
-                p.set("value", 0);
+                p.set("value", u64::from(self.imp_enabled));
                 Ok(p.buf)
+            }
+            "hdcp_state" => {
+                // ⊘ Hostile guest: exactly the 12-byte shape, subdevice 0, ONE display of this
+                // device (ogkm-595.84 `ctrl0073specific.h:705-709`: more than one is
+                // INVALID_ARGUMENT). The answer is the real GPU's for its DVI-mode monitor, too
+                // (VFIO DVI reference capture, RTX 4070, 2026-10-08: flags 0 in every reply).
+                if params.len() != 12 {
+                    return Err(NV_ERR_INVALID_ARGUMENT);
+                }
+                let w =
+                    |i: usize| u32::from_le_bytes(params[i..i + 4].try_into().unwrap_or([0; 4]));
+                let (sub, id, flags) = (w(0), w(4), w(8));
+                if sub != 0 || id.count_ones() != 1 || id & self.all_displays() == 0 {
+                    return Err(NV_ERR_INVALID_ARGUMENT);
+                }
+                let mut out = params.to_vec();
+                out[8..12].copy_from_slice(&(flags & HDCP_STATE_ENCRYPTING_CACHED).to_le_bytes());
+                Ok(out)
             }
             "hotplug_after_edid" => {
                 let mut p = self.view("NV0073_CTRL_SYSTEM_GET_HOTPLUG_STATE_PARAMS", params)?;
@@ -839,7 +1232,14 @@ impl DisplayModel {
                     "flags",
                     k("NV0073_CTRL_SYSTEM_GET_HOTPLUG_STATE_FLAGS_LID_OPEN")?,
                 );
-                p.set("hotplugAfterEdidMask", u64::from(self.all_displays()));
+                // ⚠ H-edidseen (default off): a display whose EDID was read since its last
+                // hotplug is not listed (ogkm's definition; the real GPU's measured answer, RTX 4070, 2026-10-08)
+                let after_edid = if self.hotplug_edid_seen {
+                    self.all_displays() & !self.edid_seen
+                } else {
+                    self.all_displays()
+                };
+                p.set("hotplugAfterEdidMask", u64::from(after_edid));
                 Ok(p.buf)
             }
             "ip_version" => {
@@ -864,6 +1264,16 @@ impl DisplayModel {
                 p.set("numHeads", u64::from(self.heads));
                 p.set("i2cPort", u64::from(NO_I2C_PORT));
                 p.set("numDispChannels", u64::from(NUM_DISP_CHANNELS));
+                Ok(p.buf)
+            }
+            "map_shared" => {
+                let p = self.view("NV0073_CTRL_CMD_SYSTEM_MAP_SHARED_DATA_PARAMS", params)?;
+                let page = (p.get("bMap").unwrap_or(0) != 0).then(|| InstMem {
+                    phys: p.get("memDescInfo.base").unwrap_or(0),
+                    size: p.get("memDescInfo.size").unwrap_or(0),
+                    addr_space: p.get("memDescInfo.addressSpace").unwrap_or(0) as u32,
+                });
+                self.state(Statement::SharedData(page));
                 Ok(p.buf)
             }
             "inst_mem" => {
@@ -907,9 +1317,60 @@ impl DisplayModel {
                 }
                 Ok(p.buf)
             }
+            "display_mode" => {
+                // ⊘ Not observed for this guest branch: do not guess a layout. Refused by name,
+                // counted, logged once.
+                if !DISPLAY_MODE_OBSERVED_BRANCHES.contains(&self.l.version.as_str()) {
+                    if self.display_mode_unverified == 0 {
+                        self.notice = Some(format!(
+                            "NV0073 0x73011a (display mode): layout unverified for guest branch {} \
+                             (observed only on {:?}); refused NOT_SUPPORTED, counted in display_mode_unverified",
+                            self.l.version, DISPLAY_MODE_OBSERVED_BRANCHES
+                        ));
+                    }
+                    self.display_mode_unverified = self.display_mode_unverified.saturating_add(1);
+                    return Err(NV_ERR_NOT_SUPPORTED);
+                }
+                // ⊘ Hostile guest: exactly the observed 28-byte shape; the display id must be one
+                // connector of this device (the status `OR_GET_INFO` and `GET_EDID_V2` give an id we
+                // do not have: the real GPU's answer for an unknown id was not captured).
+                if params.len() != GET_DISPLAY_MODE_SIZE {
+                    return Err(NV_ERR_INVALID_ARGUMENT);
+                }
+                let id = u32::from_le_bytes(params[0..4].try_into().unwrap_or([0; 4]));
+                let c = self.connector(id).ok_or(NV_ERR_INVALID_ARGUMENT)?;
+                // the head the display's SOR is lit by, from the ARMED state; its mode is the one
+                // the guest programmed. A display no head lights (never modeset) answers with the
+                // monitor's authored preferred mode, the one its EDID advertises ([inferred]: the
+                // real GPU's answer for an unlit display was not captured).
+                let lit = (0..crate::ports::MAX_HEADS)
+                    .find(|h| self.ports.lit_sor(*h) == Some(c.or_index))
+                    .and_then(|h| self.ports.head_timing(h));
+                let t = lit.unwrap_or_else(|| {
+                    let t = &c.monitor.preferred;
+                    crate::ports::HeadTiming {
+                        active: (t.h_active, t.v_active),
+                        total: (t.h_total(), t.v_total()),
+                        pclk_hz: u64::from(t.pixel_khz) * 1000,
+                    }
+                });
+                // refresh in whole Hz: round to nearest ([inferred]: only 60.00 Hz was observed)
+                let hz = t.refresh_mhz().map_or(0, |mhz| (mhz + 500) / 1000);
+                let words = [
+                    id,
+                    t.active.0,
+                    t.active.1,
+                    t.total.0,
+                    t.total.1,
+                    0,
+                    u32::try_from(hz).unwrap_or(u32::MAX),
+                ];
+                Ok(words.iter().flat_map(|w| w.to_le_bytes()).collect())
+            }
             "caps0073" => {
                 let mut p = self.view("NV0073_CTRL_SYSTEM_GET_CAPS_V2_PARAMS", params)?;
-                p.set_bytes("capsTbl", &[]); // no crossbar, no MIO power quirk, no ACR bug
+                let tbl = self.caps0073_table();
+                p.set_bytes("capsTbl", &tbl);
                 Ok(p.buf)
             }
             "caps5070" => {
@@ -919,9 +1380,30 @@ impl DisplayModel {
             }
             "num_heads" => {
                 let mut p = self.view("NV0073_CTRL_SYSTEM_GET_NUM_HEADS_PARAMS", params)?;
-                p.set("numHeads", u64::from(self.heads));
+                // ogkm-580: ctrl0073system.h: "This parameter must specify a value between zero and the total number of
+                // subdevices" - this device has one.
+                if p.get("subDeviceInstance").unwrap_or(u64::MAX) != 0 {
+                    return Err(NV_ERR_INVALID_ARGUMENT);
+                }
+                // ★ `flags` (ctrl0073system.h): CLIENT "is used to request the number of heads that
+                // are currently in use by an NV client using a user display class instance … If this
+                // flag is disabled then the total number of heads supported is returned." The header
+                // defines no other bit, so another bit is refused (INVALID_ARGUMENT is in the
+                // control's status list), never ignored.
+                let client = k("NV0073_CTRL_SYSTEM_GET_NUM_HEADS_FLAGS_CLIENT_ENABLE")?;
+                let flags = p.get("flags").unwrap_or(u64::MAX);
+                if flags & !client != 0 {
+                    return Err(NV_ERR_INVALID_ARGUMENT);
+                }
+                let n = if flags & client != 0 {
+                    self.heads_in_use()
+                } else {
+                    self.heads
+                };
+                p.set("numHeads", u64::from(n));
                 Ok(p.buf)
             }
+            "assign_sor" => self.assign_sor(params),
             "head_mask" => {
                 let mut p = self.view("NV0073_CTRL_SPECIFIC_GET_ALL_HEAD_MASK_PARAMS", params)?;
                 p.set("headMask", u64::from((1u32 << self.heads) - 1));
@@ -1042,6 +1524,8 @@ impl DisplayModel {
                     return Err(NV_ERR_INVALID_ARGUMENT);
                 }
                 p.set("bufferSize", edid.len() as u64);
+                // a valid EDID read of this display (H-edidseen's `hotplugAfterEdidMask`)
+                self.edid_seen |= c.display_id;
                 Ok(p.buf)
             }
             "set_edid" => {
@@ -1423,6 +1907,91 @@ mod tests {
             .expect(f)
     }
 
+    /// ⚠ H-hdcp (`KF3_DISPLAY_HDCP_STATE`): refused NOT_SUPPORTED by default (not claimed at all);
+    /// with the experiment, a well-formed query for one of this device's displays is NV_OK with
+    /// every output bit clear (the cached-state INPUT bit passes through), anything else is
+    /// INVALID_ARGUMENT — the request/reply pair the real GPU gave, replayed.
+    #[test]
+    fn get_hdcp_state_is_refused_by_default_and_answered_not_capable_under_the_experiment() {
+        let mut m = model();
+        let id = m.all_displays();
+        assert_eq!(id.count_ones(), 1, "one monitor");
+        let req = |sub: u32, id: u32, flags: u32| {
+            [sub.to_le_bytes(), id.to_le_bytes(), flags.to_le_bytes()].concat()
+        };
+        assert!(
+            m.control(GET_HDCP_STATE, &req(0, id, 0)).is_none(),
+            "not claimed by default"
+        );
+        m.answer_hdcp_state(true);
+        assert_eq!(
+            m.control(GET_HDCP_STATE, &req(0, id, 0)),
+            Some(Ok(req(0, id, 0)))
+        );
+        assert_eq!(
+            m.control(GET_HDCP_STATE, &req(0, id, 0xffff_ffff)),
+            Some(Ok(req(0, id, HDCP_STATE_ENCRYPTING_CACHED))),
+            "outputs cleared, the input bit kept"
+        );
+        for bad in [
+            req(1, id, 0),
+            req(0, id | (id << 1), 0),
+            req(0, id << 1, 0),
+            req(0, 0, 0),
+        ] {
+            assert_eq!(
+                m.control(GET_HDCP_STATE, &bad),
+                Some(Err(NV_ERR_INVALID_ARGUMENT))
+            );
+        }
+        assert_eq!(
+            m.control(GET_HDCP_STATE, &req(0, id, 0)[..8]),
+            Some(Err(NV_ERR_INVALID_ARGUMENT)),
+            "short params"
+        );
+    }
+
+    /// ⚠ H-edidseen (`KF3_DISPLAY_HOTPLUG_EDID_SEEN`): by default every display is listed in
+    /// `hotplugAfterEdidMask` (unchanged); with the experiment a display drops out once its EDID
+    /// was answered, and comes back when its monitor changes (a hotplug) — ogkm's definition, and
+    /// the real GPU's measured `0x7e00` (the connected `0x100` NOT listed after its EDID read; VFIO DVI
+    /// reference boots 1-3, RTX 4070, 2026-10-08).
+    #[test]
+    fn hotplug_after_edid_lists_a_display_until_its_edid_is_read_only_under_the_experiment() {
+        let mut m = model();
+        let id = m.all_displays();
+        let words = |w: &[u32]| -> Vec<u8> { w.iter().flat_map(|x| x.to_le_bytes()).collect() };
+        let hp = cmd(&m, "NV0073_CTRL_CMD_SYSTEM_GET_HOTPLUG_STATE");
+        let ed = cmd(&m, "NV0073_CTRL_CMD_SPECIFIC_GET_EDID_V2");
+        let mut edid_req = vec![0u8; size(&m, "NV0073_CTRL_SPECIFIC_GET_EDID_V2_PARAMS")];
+        edid_req[4..8].copy_from_slice(&id.to_le_bytes());
+        // default: listed before and after an EDID read
+        assert_eq!(m.control(hp, &[0; 12]), Some(Ok(words(&[0, 0, id]))));
+        assert!(matches!(m.control(ed, &edid_req), Some(Ok(_))));
+        assert_eq!(m.edid_seen, id, "the read is recorded either way");
+        assert_eq!(m.control(hp, &[0; 12]), Some(Ok(words(&[0, 0, id]))));
+        // the experiment: not listed after the read …
+        m.answer_hotplug_edid_seen(true);
+        assert_eq!(m.control(hp, &[0; 12]), Some(Ok(words(&[0, 0, 0]))));
+        // … listed again after a hotplug (a new monitor), until it is read again
+        let mut other = Monitor::default_1080p();
+        other.max_pixel_khz += 1;
+        assert_eq!(m.set_monitor(0, other), Some(id));
+        assert_eq!(m.control(hp, &[0; 12]), Some(Ok(words(&[0, 0, id]))));
+        // a refused read (a display this device lacks) records nothing
+        edid_req[4..8].copy_from_slice(&(id << 1).to_le_bytes());
+        assert_eq!(m.control(ed, &edid_req), Some(Err(NV_ERR_INVALID_ARGUMENT)));
+        assert_eq!(m.control(hp, &[0; 12]), Some(Ok(words(&[0, 0, id]))));
+        edid_req[4..8].copy_from_slice(&id.to_le_bytes());
+        assert!(matches!(m.control(ed, &edid_req), Some(Ok(_))));
+        assert_eq!(m.control(hp, &[0; 12]), Some(Ok(words(&[0, 0, 0]))));
+        // hostile shapes stay refused
+        assert_eq!(
+            m.control(hp, &words(&[1, 0, 0])),
+            Some(Err(NV_ERR_INVALID_ARGUMENT))
+        );
+    }
+
     /// ★ The NVKMS bring-up conversation, in its order (`nvkms-rm.c:1665-1882`): caps, heads, the
     /// window assignment, the supported displays, the output and its connector, the EDID.
     #[test]
@@ -1501,6 +2070,36 @@ mod tests {
         );
     }
 
+    /// ★ 2026-10-14: `MAP_SHARED_DATA` states the display shared-data page to the worker (which
+    /// keeps each head's vblank count in it): bMap 1 -> the page as kernel RM described it (FB base,
+    /// size, address space), bMap 0 -> unmapped; the reply is the request.
+    #[test]
+    fn map_shared_data_states_the_vblank_count_page() {
+        let mut m = model();
+        let s = "NV0073_CTRL_CMD_SYSTEM_MAP_SHARED_DATA_PARAMS";
+        let c = cmd(&m, "NV0073_CTRL_CMD_SYSTEM_MAP_SHARED_DATA");
+        let mut q = Params::new(m.layouts(), s, &vec![0; size(&m, s)]).unwrap();
+        q.set("memDescInfo.base", 0xe9f0_0000);
+        q.set("memDescInfo.size", 32);
+        q.set("memDescInfo.addressSpace", 2);
+        q.set("bMap", 1);
+        let r = m.control(c, &q.buf).unwrap().unwrap();
+        assert_eq!(r, q.buf);
+        let st = m.take_statements();
+        assert!(
+            st.iter().any(|x| *x
+                == Statement::SharedData(Some(InstMem {
+                    phys: 0xe9f0_0000,
+                    size: 32,
+                    addr_space: 2
+                }))),
+            "{st:?}"
+        );
+        q.set("bMap", 0);
+        let _ = m.control(c, &q.buf).unwrap().unwrap();
+        assert!(m.take_statements().contains(&Statement::SharedData(None)));
+    }
+
     /// ★ `SYSTEM_GET_ACTIVE` reports what the engine's ARMED state lights (the worker publishes it
     /// into the shared ports): nothing at boot, the connector on the head's SOR while it runs, and
     /// nothing again once the head goes idle. A head the engine does not have answers 0.
@@ -1539,6 +2138,103 @@ mod tests {
             Some(Err(NV_ERR_NOT_SUPPORTED))
         );
         assert!(!m.display_sw_offered(), "refused by default");
+    }
+
+    /// ★ `0x73011a` (the OpenGL ICD's mode query), observed on the real RTX 4070 (VFIO reference,
+    /// 2026-10-11): 28 bytes, the display id echoed, the head's CURRENT mode (visible, total),
+    /// 0, refresh in Hz. The vectors are the observed layouts for 1920x1080@60 and 1280x720@60; the
+    /// numbers come from the head's armed mode (published by the worker), not from a table.
+    #[test]
+    fn display_mode_follows_the_heads_armed_mode_in_the_observed_layout() {
+        use crate::ports::HeadTiming;
+        let mut m = DisplayModel::new(
+            &kf_chip::display::AMPERE,
+            vec![Monitor::default_1080p()],
+            crate::layout::for_version("580.65.06").expect("layouts"),
+        );
+        let words = |r: &[u8]| -> Vec<u32> {
+            r.chunks(4)
+                .map(|c| u32::from_le_bytes(c.try_into().unwrap()))
+                .collect()
+        };
+        let ask = |m: &mut DisplayModel, id: u32| {
+            let mut q = vec![0u8; GET_DISPLAY_MODE_SIZE];
+            q[0..4].copy_from_slice(&id.to_le_bytes());
+            m.control(GET_DISPLAY_MODE, &q)
+        };
+        assert!(m.claims(GET_DISPLAY_MODE) && m.claimed().contains(&GET_DISPLAY_MODE));
+        // head 0 lights SOR 0 (connector 0, display id 0x100), 1920x1080@60
+        m.ports.set_lit_sor(0, Some(0));
+        m.ports.set_head_timing(
+            0,
+            Some(HeadTiming {
+                active: (1920, 1080),
+                total: (2200, 1125),
+                pclk_hz: 148_500_000,
+            }),
+        );
+        let r = ask(&mut m, 0x100).unwrap().unwrap();
+        assert_eq!(r.len(), 28);
+        assert_eq!(words(&r), [0x100, 0x780, 0x438, 0x898, 0x465, 0, 0x3c]);
+        // the guest changes the mode to 1280x720@60: the answer follows
+        m.ports.set_head_timing(
+            0,
+            Some(HeadTiming {
+                active: (1280, 720),
+                total: (1650, 750),
+                pclk_hz: 74_250_000,
+            }),
+        );
+        let r = ask(&mut m, 0x100).unwrap().unwrap();
+        assert_eq!(words(&r), [0x100, 0x500, 0x2d0, 0x672, 0x2ee, 0, 0x3c]);
+        // the 1000/1001 clock (59.94 Hz) rounds to whole Hz [inferred]
+        m.ports.set_head_timing(
+            0,
+            Some(HeadTiming {
+                active: (1920, 1080),
+                total: (2200, 1125),
+                pclk_hz: 148_351_648,
+            }),
+        );
+        assert_eq!(words(&ask(&mut m, 0x100).unwrap().unwrap())[6], 60);
+        // a head that is idle: the monitor's authored preferred mode (1080p60), the id still echoed
+        m.ports.set_lit_sor(0, None);
+        m.ports.set_head_timing(0, None);
+        let r = ask(&mut m, 0x100).unwrap().unwrap();
+        assert_eq!(words(&r), [0x100, 0x780, 0x438, 0x898, 0x465, 0, 0x3c]);
+        // hostile guest: wrong sizes, an id we do not have, several ids, id 0
+        for bad in [0x200, 0x300, 0, u32::MAX] {
+            assert_eq!(
+                ask(&mut m, bad),
+                Some(Err(NV_ERR_INVALID_ARGUMENT)),
+                "{bad:#x}"
+            );
+        }
+        for n in [0usize, 4, 27, 29, 4096] {
+            assert_eq!(
+                m.control(GET_DISPLAY_MODE, &vec![0; n]),
+                Some(Err(NV_ERR_INVALID_ARGUMENT)),
+                "{n} bytes"
+            );
+        }
+        assert_eq!(m.display_mode_unverified, 0);
+        // a guest branch the layout was not observed on: refused by name, counted, logged once —
+        // never guessed (even for a well-formed request)
+        let mut other = model(); // 580.159.04
+        let mut q = vec![0u8; GET_DISPLAY_MODE_SIZE];
+        q[0..4].copy_from_slice(&0x100u32.to_le_bytes());
+        for n in 1..=3 {
+            assert_eq!(
+                other.control(GET_DISPLAY_MODE, &q),
+                Some(Err(NV_ERR_NOT_SUPPORTED))
+            );
+            assert_eq!(other.display_mode_unverified, n);
+            let note = other.take_notice();
+            assert_eq!(note.is_some(), n == 1, "logged once");
+            if let Some(note) = note {
+                assert!(note.contains("layout unverified for guest branch 580.159.04"));
+            }
+        }
     }
 
     /// ★ EXPERIMENT `x11-dispsw`: offered, the display-SW constructor's query is answered with the
@@ -1685,6 +2381,80 @@ mod tests {
         ));
     }
 
+    /// ★ Device reset / RM unload: a model that lived a guest life (a channel allocated with its
+    /// pushbuffer, a PUT posted, a hotplug registration, a PRESERVE_HW mark, a custom EDID) answers
+    /// every query of the next life as a fresh model does, and its ports read fresh.
+    #[test]
+    fn a_reset_model_answers_the_next_life_as_a_fresh_one() {
+        let mut m = model();
+        let fresh = model();
+        let s = "NV2080_CTRL_INTERNAL_DISPLAY_CHANNEL_PUSHBUFFER_PARAMS";
+        let mut q = Params::new(m.layouts(), s, &vec![0; size(&m, s)]).unwrap();
+        q.set("hclass", 0xC67D);
+        q.set("channelInstance", 0);
+        q.set("addressSpace", 1);
+        q.set("physicalAddr", 0x1234_5000);
+        q.set("limit", 0xfff);
+        q.set("valid", 1);
+        assert!(matches!(m.control(CHANNEL_PUSHBUFFER, &q.buf), Some(Ok(_))));
+        let s = "NV50VAIO_CHANNELDMA_ALLOCATION_PARAMETERS";
+        assert!(m.alloc(
+            0xc1d0_0001,
+            0xc670_0000,
+            0xc67d_0000,
+            0xC67D,
+            &vec![0; size(&m, s)]
+        ));
+        m.ports.post_put(0, 0x40);
+        assert!(m.register_hotplug(HotplugRegistration {
+            client: 1,
+            event: 10,
+            parent: 5
+        }));
+        m.rmfree_marks.insert((0xc1d0_0001, 0xc670_0000));
+        m.connectors[0].custom_edid = Some(vec![0; 128]);
+        m.edid_seen = 1;
+        m.pending_plug = 0x100;
+        assert_eq!(m.reset_life(), 1);
+        assert!(m.channels.is_empty() && m.pushbuffers.is_empty() && m.inst_mem.is_none());
+        assert!(
+            m.take_statements().is_empty(),
+            "the old life's statements are not the next one's"
+        );
+        assert_eq!(m.hotplug_target(), None);
+        assert!(m.rmfree_marks.is_empty() && m.rmfree_spent.is_empty());
+        assert_eq!((m.edid_seen, m.pending_plug), (0, 0));
+        assert!(m.connectors.iter().all(|c| c.custom_edid.is_none()));
+        for chn in 0..kf_disp_ports_channels() {
+            assert_eq!(m.ports.put(chn), fresh.ports.put(chn), "chn {chn}");
+            assert_eq!(m.ports.get(chn), fresh.ports.get(chn), "chn {chn}");
+            assert_eq!(m.ports.generation(chn) % 2, 0, "chn {chn}: not allocated");
+        }
+        let s = "NVC370_CTRL_CMD_GET_CHANNEL_INFO_PARAMS";
+        let mut q = Params::new(m.layouts(), s, &vec![0; size(&m, s)]).unwrap();
+        q.set("channelClass", 0xC67D);
+        let mut f = model();
+        assert_eq!(
+            m.control(cmd(&m, "NVC370_CTRL_CMD_GET_CHANNEL_INFO"), &q.buf),
+            f.control(cmd(&f, "NVC370_CTRL_CMD_GET_CHANNEL_INFO"), &q.buf)
+        );
+        // The next life allocates the core channel again, with a NEW generation (never reused).
+        assert!(m.alloc(
+            0xc1d0_0009,
+            0xc670_0009,
+            0xc67d_0009,
+            0xC67D,
+            &vec![0; size(&m, "NV50VAIO_CHANNELDMA_ALLOCATION_PARAMETERS")]
+        ));
+        assert_eq!(m.ports.generation(0) % 2, 1);
+        assert_eq!(m.reset_life(), 1);
+        assert_eq!(m.reset_life(), 0, "reset twice is reset once");
+    }
+
+    fn kf_disp_ports_channels() -> u32 {
+        crate::ports::NUM_CHANNELS as u32
+    }
+
     /// ★ 2026-10-03 (B5): `SET_RMFREE_FLAGS` PRESERVE_HW is the DISPLAY OBJECT's
     /// (`disp_objs.c:563-578`) and lasts for the free it was set for (`ctrl5070chnc.h:901-913`).
     /// ⊘ CORRECTED the same day (the review of `v3-gop-unload`): it was one model-wide flag, cleared
@@ -1817,7 +2587,10 @@ mod tests {
         // 41 → 42 on 2026-10-07: NV0073_CTRL_CMD_EVENT_SET_NOTIFICATION (Windows StartDevice).
         // 42 → 47 the same day (Windows run29): IMP_SET_GET_PARAMETER, SYSTEM_GET_HOTPLUG_STATE,
         // INTERNAL_DISPLAY_ACPI_SUBSYSTEM_ACTIVATED and INTERNAL_DISPLAY_PRE/POST_MODESET.
-        assert_eq!(set.len(), 47);
+        // 47 → 48 on 2026-10-11: NV0073 `0x73011a` (the display's current mode, GL ICD; observed id).
+        // 48 → 49 on 2026-10-11: NV0073 `DFP_ASSIGN_SOR` (0x731152; the crossbar the derived caps claim).
+        // 49 → 50 on 2026-10-14: NV5070 `GET_RG_SCAN_LINE` (D3DKMTGetScanLine).
+        assert_eq!(set.len(), 50);
         let distinct: std::collections::BTreeSet<u32> = set.iter().copied().collect();
         assert_eq!(distinct.len(), set.len(), "no id twice");
         assert!(set.iter().all(|c| m.claims(*c)));
@@ -2005,6 +2778,70 @@ mod tests {
         assert_eq!(m.retire_hotplug(3, 31), 1, "the event's own FREE");
         assert_eq!(m.retire_all_hotplug(), MAX_HOTPLUG_REGISTRATIONS - 1);
         assert_eq!(m.hotplug_target(), None);
+    }
+
+    /// ★ 2026-10-14: `GET_RG_SCAN_LINE` answers the live raster position of the head it names
+    /// (the core word's), line 0 / not in the blank before a raster runs, and refuses a head the
+    /// display does not have, another subdevice or a short struct — both derived driver versions.
+    #[test]
+    fn get_rg_scan_line_answers_the_live_raster_position() {
+        for v in ["580.65.06", "580.159.04"] {
+            let mut m = DisplayModel::new(
+                &kf_chip::display::AMPERE,
+                vec![Monitor::default_1080p()],
+                crate::layout::for_version(v).expect("layouts"),
+            );
+            let words = |w: &[u32]| -> Vec<u8> { w.iter().flat_map(|x| x.to_le_bytes()).collect() };
+            let c = cmd(&m, "NV5070_CTRL_CMD_GET_RG_SCAN_LINE");
+            assert_eq!(c, 0x5070_020c, "{v}");
+            // no raster yet
+            assert_eq!(
+                m.control(c, &words(&[0, 0, 7, 7])),
+                Some(Ok(words(&[0, 0, 0, 0])))
+            );
+            // a 1125-line raster at 60 Hz whose blank starts at line 1121 and ends at 41
+            let g = crate::ports::ScanGeom {
+                blank_end_y: 41,
+                blank_start_y: 1121,
+                total_h: 1125,
+                period_ns: 16_666_667,
+            };
+            m.ports.set_scan_geom(0, Some(g));
+            // the ports' clock must be past half a frame for the second probe's edge
+            std::thread::sleep(std::time::Duration::from_millis(10));
+            let now = m.ports.now_ns();
+            m.ports.note_frame_edge_at(0, now);
+            let Some(Ok(r)) = m.control(c, &words(&[0, 0, 0, 0])) else {
+                panic!("{v}: refused")
+            };
+            let line = u32::from_le_bytes(r[8..12].try_into().unwrap());
+            let vbl = u32::from_le_bytes(r[12..16].try_into().unwrap());
+            // within a few lines of the edge: in the blank (1121..1125 or 0..41)
+            assert!(line >= 1121 || line < 41, "{v}: line {line}");
+            assert_eq!(vbl, 1, "{v}");
+            // half a frame later the raster is in the active region
+            m.ports
+                .note_frame_edge_at(0, now.saturating_sub(g.period_ns / 2));
+            let Some(Ok(r)) = m.control(c, &words(&[0, 0, 0, 0])) else {
+                panic!("{v}: refused")
+            };
+            let line = u32::from_le_bytes(r[8..12].try_into().unwrap());
+            assert!((41..1121).contains(&line), "{v}: line {line}");
+            assert_eq!(u32::from_le_bytes(r[12..16].try_into().unwrap()), 0);
+            // hostile: a head the display does not have, another subdevice, a short struct
+            assert_eq!(
+                m.control(c, &words(&[0, m.heads, 0, 0])),
+                Some(Err(NV_ERR_INVALID_ARGUMENT))
+            );
+            assert_eq!(
+                m.control(c, &words(&[1, 0, 0, 0])),
+                Some(Err(NV_ERR_INVALID_ARGUMENT))
+            );
+            assert_eq!(
+                m.control(c, &words(&[0, 0])),
+                Some(Err(NV_ERR_INVALID_ARGUMENT))
+            );
+        }
     }
 
     /// ★ 2026-10-07 (Windows run29): the VFIO shapes of IMP_SET_GET_PARAMETER (vfio-10 2645),
@@ -2207,5 +3044,398 @@ mod tests {
         assert!(m.bind_display_event(3, 0x73, 0x5));
         assert_eq!(m.retire_all_display_events(), 1);
         assert!(m.display_events.is_empty());
+    }
+
+    // ---- 2026-10-11: GET_CAPS_V2 derived, GET_NUM_HEADS(CLIENT), DFP_ASSIGN_SOR (V3_DISPLAY.md §4.15) ----
+
+    fn ada(version: &str) -> DisplayModel {
+        DisplayModel::new(
+            &kf_chip::display::ADA,
+            vec![Monitor::default_1080p()],
+            crate::layout::for_version(version).expect("layouts"),
+        )
+    }
+    fn caps_of(m: &mut DisplayModel) -> Vec<u8> {
+        let c = cmd(m, "NV0073_CTRL_CMD_SYSTEM_GET_CAPS_V2");
+        let r = m.control(c, &[0, 0]).unwrap().unwrap();
+        assert_eq!(r.len(), 2);
+        r
+    }
+
+    #[test]
+    fn tmds_only_models_do_not_advertise_dp_stream_support() {
+        for row in [
+            &kf_chip::display::TURING,
+            &kf_chip::display::AMPERE,
+            &kf_chip::display::ADA,
+            &kf_chip::display::BLACKWELL_GB20X,
+        ] {
+            for version in ["580.65.06", "580.159.04"] {
+                let mut m = DisplayModel::new(
+                    row,
+                    vec![Monitor::default_1080p()],
+                    crate::layout::for_version(version).unwrap(),
+                );
+                let caps = caps_of(&mut m);
+                for name in [
+                    "SINGLE_HEAD_MST_SUPPORTED",
+                    "SINGLE_HEAD_DUAL_SST_SUPPORTED",
+                ] {
+                    let byte = m.l.konst(&format!("CAP_{name}_BYTE")).unwrap() as usize;
+                    let mask = m.l.konst(&format!("CAP_{name}_MASK")).unwrap() as u8;
+                    assert_eq!(caps[byte] & mask, 0, "{} {version} {name}", row.chips);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn assign_sor_authors_reserved_panel_mask() {
+        let mut m = ada("580.65.06");
+        let r = assign_sor(&mut m, |p| {
+            assert!(p.set("displayId", 0x100));
+            assert!(p.set("reservedSorMask", 0xff));
+        })
+        .unwrap();
+        assert_eq!(
+            get(
+                &m,
+                "NV0073_CTRL_DFP_ASSIGN_SOR_PARAMS",
+                &r,
+                "reservedSorMask"
+            ),
+            0
+        );
+    }
+
+    #[test]
+    fn physical_rm_features_are_not_emulator_capabilities() {
+        let mut m = ada("580.65.06");
+        let caps = caps_of(&mut m);
+        for name in [
+            "AA_FOS_GAMMA_COMP_SUPPORTED",
+            "KSV_SRM_VALIDATION_SUPPORTED",
+            "GLITCHLESS_MODESET_SUPPORTED",
+        ] {
+            let byte = m.l.konst(&format!("CAP_{name}_BYTE")).unwrap() as usize;
+            let mask = m.l.konst(&format!("CAP_{name}_MASK")).unwrap() as u8;
+            assert_eq!(caps[byte] & mask, 0, "{name}");
+        }
+    }
+
+    #[test]
+    fn assign_sor_validates_audio_request_and_authors_output_flags() {
+        for version in ["580.65.06", "580.159.04"] {
+            let mut m = ada(version);
+            // Open ctrl0073dfp.h: AUDIO at bit 0 (input), ACTIVE_SOR_NOT_AUDIO_CAPABLE at bit 1 (output).
+            let r = assign_sor(&mut m, |p| {
+                assert!(p.set("flags", 2));
+            })
+            .unwrap();
+            assert_eq!(get(&m, "NV0073_CTRL_DFP_ASSIGN_SOR_PARAMS", &r, "flags"), 0);
+            assert_eq!(
+                assign_sor(&mut m, |p| {
+                    assert!(p.set("displayId", 0x100));
+                    assert!(p.set("flags", 1));
+                }),
+                Err(NV_ERR_NOT_SUPPORTED)
+            );
+            for flags in [4, u64::from(u32::MAX)] {
+                assert_eq!(
+                    assign_sor(&mut m, |p| {
+                        assert!(p.set("flags", flags));
+                    }),
+                    Err(NV_ERR_INVALID_ARGUMENT)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn assign_sor_respects_requested_sublink() {
+        for version in ["580.65.06", "580.159.04"] {
+            let mut m = ada(version);
+            for name in ["NONE", "PRIMARY_SOR_LINK", "SECONDARY_SOR_LINK"] {
+                let value =
+                    m.l.konst(&format!("NV0073_CTRL_DFP_ASSIGN_SOR_FORCE_{name}"))
+                        .unwrap();
+                let result = assign_sor(&mut m, |p| {
+                    assert!(p.set("displayId", 0x100));
+                    assert!(p.set("forceSublinkConfig", value));
+                });
+                if name == "SECONDARY_SOR_LINK" {
+                    assert_eq!(result, Err(NV_ERR_NOT_SUPPORTED), "{version}");
+                } else {
+                    assert!(result.is_ok(), "{version} {name}");
+                }
+            }
+            assert_eq!(
+                assign_sor(&mut m, |p| {
+                    assert!(p.set("displayId", 0x100));
+                    assert!(p.set("forceSublinkConfig", u64::from(u32::MAX)));
+                }),
+                Err(NV_ERR_INVALID_ARGUMENT)
+            );
+        }
+    }
+
+    /// The vector: the real AD104 answered `81 2f` (VFIO reference, 2026-10-11). Derived, the Ada
+    /// model omits DP stream and physical-RM software bits on every family and guest branch.
+    #[test]
+    fn get_caps_v2_is_derived_from_the_family_and_model_support() {
+        for v in ["580.65.06", "580.159.04"] {
+            assert_eq!(caps_of(&mut ada(v)), [0x00, 0x0c], "{v}");
+        }
+        let mut amp = model();
+        assert_eq!(caps_of(&mut amp), [0x00, 0x0c]);
+        let mut tu = DisplayModel::new(
+            &kf_chip::display::TURING,
+            vec![Monitor::default_1080p()],
+            crate::layout::for_version("580.159.04").expect("layouts"),
+        );
+        assert_eq!(caps_of(&mut tu), [0x00, 0x0c]);
+        assert_eq!(amp.caps_unverified, 0);
+        // hostile: only the 2-byte shape
+        let c = cmd(&amp, "NV0073_CTRL_CMD_SYSTEM_GET_CAPS_V2");
+        for n in [0usize, 1, 3, 64] {
+            assert_eq!(
+                amp.control(c, &vec![0; n]),
+                Some(Err(NV_ERR_INVALID_ARGUMENT))
+            );
+        }
+    }
+
+    /// The crossbar bit follows the model: the claim set holds `DFP_ASSIGN_SOR` exactly when the
+    /// table carries `CROSS_BAR` (here: both).
+    #[test]
+    fn the_crossbar_bit_and_the_assign_sor_claim_agree() {
+        let mut m = ada("580.65.06");
+        let a = cmd(&m, "NV0073_CTRL_CMD_DFP_ASSIGN_SOR");
+        assert_eq!(a, 0x0073_1152);
+        assert!(m.claims(a) && m.claimed().contains(&a));
+        assert_eq!(caps_of(&mut m)[1] & 0x08, 0x08);
+    }
+
+    fn num_heads(m: &mut DisplayModel, sub: u32, flags: u32, n: usize) -> Result<u32, u32> {
+        let s = "NV0073_CTRL_SYSTEM_GET_NUM_HEADS_PARAMS";
+        let mut q = vec![0u8; n];
+        if n == size(m, s) {
+            let mut p = Params::new(m.layouts(), s, &q).unwrap();
+            p.set("subDeviceInstance", u64::from(sub));
+            p.set("flags", u64::from(flags));
+            q = p.buf;
+        }
+        let c = cmd(m, "NV0073_CTRL_CMD_SYSTEM_GET_NUM_HEADS");
+        m.control(c, &q)
+            .unwrap()
+            .map(|r| get(m, s, &r, "numHeads") as u32)
+    }
+
+    /// `NV0073_CTRL_SYSTEM_GET_NUM_HEADS_FLAGS_CLIENT` counts the heads in use (their rasters run,
+    /// the heads `GET_ACTIVE` reports a display for); without it, the heads supported. The vector:
+    /// the real GPU, one monitor lit on head 0, answered 4 without the flag and 1 with it.
+    #[test]
+    fn get_num_heads_with_the_client_flag_counts_the_heads_in_use() {
+        let mut m = ada("580.65.06");
+        let n = size(&m, "NV0073_CTRL_SYSTEM_GET_NUM_HEADS_PARAMS");
+        assert_eq!(num_heads(&mut m, 0, 0, n), Ok(4));
+        // nothing lit (a fresh boot): no head is in use
+        assert_eq!(num_heads(&mut m, 0, 1, n), Ok(0));
+        m.ports.set_lit_sor(0, Some(0));
+        assert_eq!(num_heads(&mut m, 0, 1, n), Ok(1));
+        assert_eq!(num_heads(&mut m, 0, 0, n), Ok(4), "the total does not move");
+        // the count IS the number of heads GET_ACTIVE reports a display for
+        m.ports.set_lit_sor(2, Some(0));
+        let act = cmd(&m, "NV0073_CTRL_CMD_SYSTEM_GET_ACTIVE");
+        let sa = "NV0073_CTRL_SYSTEM_GET_ACTIVE_PARAMS";
+        let active = (0..4u32)
+            .filter(|h| {
+                let mut p = Params::new(m.layouts(), sa, &vec![0; size(&m, sa)]).unwrap();
+                p.set("head", u64::from(*h));
+                let r = m.control(act, &p.buf).unwrap().unwrap();
+                get(&m, sa, &r, "displayId") != 0
+            })
+            .count() as u32;
+        assert_eq!(num_heads(&mut m, 0, 1, n), Ok(active));
+        assert_eq!(active, 2);
+        // the head goes dark
+        m.ports.set_lit_sor(0, None);
+        m.ports.set_lit_sor(2, None);
+        assert_eq!(num_heads(&mut m, 0, 1, n), Ok(0));
+    }
+
+    /// Hostile guest: another subdevice, a flag the header does not define, and a wrong shape are
+    /// refused, never answered.
+    #[test]
+    fn get_num_heads_refuses_hostile_shapes_by_name() {
+        let mut m = ada("580.65.06");
+        let n = size(&m, "NV0073_CTRL_SYSTEM_GET_NUM_HEADS_PARAMS");
+        for (sub, flags) in [
+            (1, 0),
+            (1, 1),
+            (u32::MAX, 0),
+            (0, 2),
+            (0, 3),
+            (0, u32::MAX),
+            (0, 0x8000_0000),
+        ] {
+            assert_eq!(
+                num_heads(&mut m, sub, flags, n),
+                Err(NV_ERR_INVALID_ARGUMENT),
+                "sub {sub} flags {flags:#x}"
+            );
+        }
+        for bad in [0, 1, n - 1, n + 1, 4096] {
+            assert_eq!(num_heads(&mut m, 0, 0, bad), Err(NV_ERR_INVALID_ARGUMENT));
+        }
+    }
+
+    fn assign_sor(m: &mut DisplayModel, mutate: impl FnOnce(&mut Params)) -> Result<Vec<u8>, u32> {
+        let s = "NV0073_CTRL_DFP_ASSIGN_SOR_PARAMS";
+        let mut p = Params::new(m.layouts(), s, &vec![0; size(m, s)]).unwrap();
+        mutate(&mut p);
+        let c = cmd(m, "NV0073_CTRL_CMD_DFP_ASSIGN_SOR");
+        m.control(c, &p.buf).unwrap()
+    }
+
+    /// `DFP_ASSIGN_SOR` reports the fixed crossbar - display `0x100 << i` on SOR `i`, type SINGLE.
+    /// The vector (real GPU, one display): `sorAssignList[0] = 0x100`, `sorAssignListWithTag[0] =
+    /// {0x100, SINGLE}`, the rest zero, 80 bytes, `NV_OK`.
+    #[test]
+    fn assign_sor_reports_the_fixed_crossbar() {
+        let mut m = ada("580.65.06");
+        let s = "NV0073_CTRL_DFP_ASSIGN_SOR_PARAMS";
+        assert_eq!(size(&m, s), 80);
+        let r = assign_sor(&mut m, |p| {
+            p.set("displayId", 0x100);
+        })
+        .unwrap();
+        let p = Params::new(m.layouts(), s, &r).unwrap();
+        let w = |b: &[u8]| -> Vec<u32> {
+            b.chunks(4)
+                .map(|c| u32::from_le_bytes(c.try_into().unwrap()))
+                .collect()
+        };
+        assert_eq!(p.get("displayId"), Some(0x100));
+        assert_eq!(w(p.bytes("sorAssignList").unwrap()), [0x100, 0, 0, 0]);
+        assert_eq!(
+            w(p.bytes("sorAssignListWithTag").unwrap()),
+            [0x100, 1, 0, 0, 0, 0, 0, 0]
+        );
+        // displayId 0 returns the stored configuration (the header)
+        let r0 = assign_sor(&mut m, |_| {}).unwrap();
+        let p0 = Params::new(m.layouts(), s, &r0).unwrap();
+        assert_eq!(w(p0.bytes("sorAssignList").unwrap()), [0x100, 0, 0, 0]);
+        // two monitors: display 0x200 is on SOR 1, and the table lists both
+        let mut two = DisplayModel::new(
+            &kf_chip::display::ADA,
+            vec![Monitor::default_1080p(), Monitor::default_1080p()],
+            crate::layout::for_version("580.65.06").expect("layouts"),
+        );
+        let r2 = assign_sor(&mut two, |p| {
+            p.set("displayId", 0x200);
+        })
+        .unwrap();
+        let p2 = Params::new(two.layouts(), s, &r2).unwrap();
+        assert_eq!(w(p2.bytes("sorAssignList").unwrap()), [0x100, 0x200, 0, 0]);
+        assert_eq!(
+            w(p2.bytes("sorAssignListWithTag").unwrap()),
+            [0x100, 1, 0x200, 1, 0, 0, 0, 0]
+        );
+        // asking for SOR 1's display while excluding SOR 1 is refused; SOR 0 excluded is fine
+        assert_eq!(
+            assign_sor(&mut two, |p| {
+                p.set("displayId", 0x200);
+                p.set("sorExcludeMask", 0x02);
+            }),
+            Err(NV_ERR_NOT_SUPPORTED)
+        );
+        assert!(
+            assign_sor(&mut two, |p| {
+                p.set("displayId", 0x200);
+                p.set("sorExcludeMask", 0x01);
+            })
+            .is_ok()
+        );
+    }
+
+    /// Hostile guest: every refusal is by name and nothing is left half-written.
+    #[test]
+    fn assign_sor_refuses_what_it_does_not_model() {
+        let mut m = ada("580.65.06");
+        // a display this device lacks, several displays, another subdevice
+        for id in [0x200u32, 0x300, 0x1, 0x8000_0000, u32::MAX] {
+            assert_eq!(
+                assign_sor(&mut m, |p| {
+                    p.set("displayId", u64::from(id));
+                }),
+                Err(NV_ERR_INVALID_ARGUMENT),
+                "{id:#x}"
+            );
+        }
+        assert_eq!(
+            assign_sor(&mut m, |p| {
+                p.set("displayId", 0x100);
+                p.set("subDeviceInstance", 1);
+            }),
+            Err(NV_ERR_INVALID_ARGUMENT)
+        );
+        // dual SST / two heads one OR are not modelled
+        assert_eq!(
+            assign_sor(&mut m, |p| {
+                p.set("displayId", 0x100);
+                p.set("slaveDisplayId", 0x200);
+            }),
+            Err(NV_ERR_NOT_SUPPORTED)
+        );
+        assert_eq!(
+            assign_sor(&mut m, |p| {
+                p.set("displayId", 0x100);
+                p.set("bIs2Head1Or", 1);
+            }),
+            Err(NV_ERR_NOT_SUPPORTED)
+        );
+        // the exclude mask bars the connector's only SOR
+        assert_eq!(
+            assign_sor(&mut m, |p| {
+                p.set("displayId", 0x100);
+                p.set("sorExcludeMask", 0x01);
+            }),
+            Err(NV_ERR_NOT_SUPPORTED)
+        );
+        assert!(
+            assign_sor(&mut m, |p| {
+                p.set("displayId", 0x100);
+                p.set("sorExcludeMask", 0xfe);
+            })
+            .is_ok()
+        );
+        // wrong shapes
+        let c = cmd(&m, "NV0073_CTRL_CMD_DFP_ASSIGN_SOR");
+        for n in [0usize, 4, 79, 81, 4096] {
+            assert_eq!(
+                m.control(c, &vec![0; n]),
+                Some(Err(NV_ERR_INVALID_ARGUMENT))
+            );
+        }
+    }
+
+    /// A guest branch whose class table this tree lacks answers the empty table by name (counted,
+    /// logged once): the clean mode "no optional capability" the model had before the derivation.
+    #[test]
+    fn caps_without_a_class_table_are_the_empty_table_by_name() {
+        let tsv = include_str!("../data/layouts-580.65.06.tsv")
+            .replace("VERSION\t580.65.06", "VERSION\t9.9.9");
+        let l: &'static Layouts = Box::leak(Box::new(Layouts::parse(&tsv)));
+        let mut m = DisplayModel::new(&kf_chip::display::ADA, vec![Monitor::default_1080p()], l);
+        assert_eq!(caps_of(&mut m), [0, 0]);
+        assert_eq!(caps_of(&mut m), [0, 0]);
+        assert_eq!(m.caps_unverified, 2);
+        let note = m.take_notice().expect("named once");
+        assert!(
+            note.contains("display caps unverified") && note.contains("9.9.9"),
+            "{note}"
+        );
+        assert!(m.take_notice().is_none());
     }
 }

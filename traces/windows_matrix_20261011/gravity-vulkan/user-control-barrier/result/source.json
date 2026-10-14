@@ -1,0 +1,8 @@
+{
+  "revision": "6e60662d17b2b1d86ba9a3ace3cf58139a8b482a",
+  "binary_sha256": "aaed7a5af97840210432197cf2af4f24c5195acb62030339a83795eeb052d6ad",
+  "binary": "/var/lib/kf-windows-20261005/codex-user-control-barrier-build-6e60662d1/kf-user-ring-probe",
+  "uid": 65534,
+  "gid": 65534,
+  "scope": "native C56F CONTROL NOP WAIT plus subsequent processing witness, no VM/migration implementation"
+}

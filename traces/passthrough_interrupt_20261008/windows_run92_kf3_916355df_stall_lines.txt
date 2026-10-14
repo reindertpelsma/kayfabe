@@ -1,0 +1,52 @@
+24:kf3: passthrough NSI relay: host FIFO_EVENT_MTHD edges -> the guest vector of every engine with a live Passthrough twin AND a doorbell outstanding (relay=on afterglow=1000000 us gate_engine_notifie
+2149:kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730108 client=0xc1d00002 object=0xff0a0000 result=0x0
+2181:kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730108 client=0xc1d00002 object=0xff0a0000 result=0x0
+21323:kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730108 client=0xc1d00002 object=0xff0a0000 result=0x0
+21555:kf3: act birth passthrough: chan 0xc1d00027:0xff04000c BORN Passthrough: token 0xe -> host 0x35 in VasKey(13965662607667890256) gpfifo=0x1200c4000x32768 userd=Ram { ram: 3405643793, off: 8479559
+22824:kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x007302a5 client=0xc1d00002 object=0xff0a0000 result=none
+22827:kf3: GSP REFUSED fn76/0x007302a5=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+23036:kf3: act birth passthrough: chan 0xc1d0002a:0xff04000d BORN Passthrough: token 0xf -> host 0x36 in VasKey(13965662620552792144) gpfifo=0x4000000x8192 userd=Ram { ram: 3405643793, off: 8479547392
+23621:kf3: act birth passthrough: chan 0xc1d0002b:0xff04000e BORN Passthrough: token 0x1010 -> host 0x20037 in VasKey(13965662620552792144) gpfifo=0x4036000x8192 userd=Ram { ram: 3405643793, off: 8479
+25089:kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x007302a5 client=0xc1d00002 object=0xff0a0000 result=none
+25098:kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x007302a5 client=0xc1d00002 object=0xff0a0000 result=none
+25198:kf3: act birth passthrough: chan 0xc1d0002f:0xff04000f BORN Passthrough: token 0x11 -> host 0x38 in VasKey(13965662620552792144) gpfifo=0x14533000x8192 userd=Ram { ram: 3405643793, off: 84793876
+26039:kf3: act birth passthrough: chan 0xc1d00030:0xff040010 BORN Passthrough: token 0x1012 -> host 0x20039 in VasKey(13965662620552792144) gpfifo=0x145ea000x8192 userd=Ram { ram: 3405643793, off: 847
+28996:kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x007302a5 client=0xc1d00002 object=0xff0a0000 result=none
+29143:kf3: act birth passthrough: chan 0xc1d00031:0xff040011 BORN Passthrough: token 0x13 -> host 0x3a in VasKey(13965662620552792144) gpfifo=0x14de4000x8192 userd=Ram { ram: 3405643793, off: 84795514
+30175:kf3: act birth passthrough: chan 0xc1d00033:0xff040012 BORN Passthrough: token 0x1014 -> host 0x2003b in VasKey(13965662620552792144) gpfifo=0x15161000x8192 userd=Ram { ram: 3405643793, off: 847
+34930:kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x007302a5 client=0xc1d00002 object=0xff0a0000 result=none
+35147:kf3: act birth passthrough: chan 0xc1d00038:0xff040013 BORN Passthrough: token 0x15 -> host 0x3c in VasKey(13965662680682334288) gpfifo=0x4000000x8192 userd=Ram { ram: 3405643793, off: 847909683
+35697:kf3: act birth passthrough: chan 0xc1d00039:0xff040014 BORN Passthrough: token 0x1016 -> host 0x2003d in VasKey(13965662680682334288) gpfifo=0x4036000x8192 userd=Ram { ram: 3405643793, off: 8479
+38963:kf3: family=Ada phase=Running trapped=68516 applied=1917 refused=0 serviced=1086 ram_refused=0 unshadowed_writes=2 read_exits=33 last_off=0xb81000 mem[inval=2443 walks=3092/3092 cleared=2443 sup
+38997:kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730108 client=0xc1d00002 object=0xff0a0000 result=0x0
+38999:kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x007302a5 client=0xc1d00002 object=0xff0a0000 result=none
+39002:kf3: family=Ada phase=Running trapped=68615 applied=1919 refused=0 serviced=1088 ram_refused=0 unshadowed_writes=2 read_exits=33 last_off=0xb81608 mem[inval=2443 walks=3094/3094 cleared=2443 sup
+40466:kf3: DOORBELL-LEDGER tok=0x0000000e route=passthrough rung=165 emulated=0 forwarded=165 host=0x35 trap=165 fast=0
+40515:kf3: DOORBELL-LEDGER tok=0x0000000f route=passthrough rung=1 emulated=0 forwarded=1 host=0x36 trap=1 fast=0
+40542:kf3: DOORBELL-LEDGER tok=0x00001010 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20037 trap=0 fast=0
+40589:kf3: DOORBELL-LEDGER tok=0x00000011 route=passthrough rung=4 emulated=0 forwarded=4 host=0x38 trap=4 fast=0
+40616:kf3: DOORBELL-LEDGER tok=0x00001012 route=passthrough rung=1 emulated=0 forwarded=1 host=0x20039 trap=1 fast=0
+40663:kf3: DOORBELL-LEDGER tok=0x00000013 route=passthrough rung=6 emulated=0 forwarded=6 host=0x3a trap=6 fast=0
+40690:kf3: DOORBELL-LEDGER tok=0x00001014 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2003b trap=1 fast=0
+40737:kf3: DOORBELL-LEDGER tok=0x00000015 route=passthrough rung=11 emulated=0 forwarded=11 host=0x3c trap=11 fast=0
+40764:kf3: DOORBELL-LEDGER tok=0x00001016 route=passthrough rung=5 emulated=0 forwarded=5 host=0x2003d trap=5 fast=0
+42986:kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730108 client=0xc1d0003b object=0xff0a0000 result=0x0
+43013:kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x00730108 client=0xc1d0003b object=0xff0a0000 result=0x0
+51990:kf3: act birth passthrough: chan 0xc1d0004a:0xff040000 BORN Passthrough: token 0x802 -> host 0x10029 in VasKey(13965662702157170800) gpfifo=0x12024b000x16384 userd=Ram { ram: 3405643793, off: 84
+52203:kf3: act birth passthrough: chan 0xc1d0004f:0xff040002 BORN Passthrough: token 0x803 -> host 0x1002a in VasKey(13965662779466582096) gpfifo=0x1200c4000x4096 userd=Ram { ram: 3405643793, off: 848
+52238:kf3: family=Ada phase=Running trapped=83046 applied=3664 refused=0 serviced=1890 ram_refused=0 unshadowed_writes=2 read_exits=33 last_off=0xb81608 mem[inval=2819 walks=3411/3411 cleared=2819 sup
+52244:kf3: family=Ada phase=Running trapped=83053 applied=3665 refused=0 serviced=1891 ram_refused=0 unshadowed_writes=2 read_exits=33 last_off=0xb81610 mem[inval=2819 walks=3411/3411 cleared=2819 sup
+52246:kf3: family=Ada phase=Running trapped=83053 applied=3665 refused=0 serviced=1891 ram_refused=0 unshadowed_writes=2 read_exits=33 last_off=0xb81610 mem[inval=2819 walks=3411/3411 cleared=2819 sup
+52248:kf3: family=Ada phase=Running trapped=83053 applied=3665 refused=0 serviced=1891 ram_refused=0 unshadowed_writes=2 read_exits=33 last_off=0xb81610 mem[inval=2819 walks=3411/3411 cleared=2819 sup
+52250:kf3: family=Ada phase=Running trapped=83053 applied=3665 refused=0 serviced=1891 ram_refused=0 unshadowed_writes=2 read_exits=33 last_off=0xb81610 mem[inval=2819 walks=3411/3411 cleared=2819 sup
+52252:kf3: family=Ada phase=Running trapped=83053 applied=3665 refused=0 serviced=1891 ram_refused=0 unshadowed_writes=2 read_exits=33 last_off=0xb81610 mem[inval=2819 walks=3411/3411 cleared=2819 sup
+52254:kf3: family=Ada phase=Running trapped=83053 applied=3665 refused=0 serviced=1891 ram_refused=0 unshadowed_writes=2 read_exits=33 last_off=0xb81610 mem[inval=2819 walks=3411/3411 cleared=2819 sup
+52256:kf3: family=Ada phase=Running trapped=83053 applied=3665 refused=0 serviced=1891 ram_refused=0 unshadowed_writes=2 read_exits=33 last_off=0xb81610 mem[inval=2819 walks=3411/3411 cleared=2819 sup
+52257:kf3: family=Ada phase=Running trapped=83053 applied=3665 refused=0 serviced=1891 ram_refused=0 unshadowed_writes=2 read_exits=33 last_off=0xb81610 mem[inval=2819 walks=3411/3411 cleared=2819 sup
+52259:kf3: family=Ada phase=Running trapped=83053 applied=3665 refused=0 serviced=1891 ram_refused=0 unshadowed_writes=2 read_exits=33 last_off=0xb81610 mem[inval=2819 walks=3411/3411 cleared=2819 sup
+52261:kf3: family=Ada phase=Running trapped=83053 applied=3665 refused=0 serviced=1891 ram_refused=0 unshadowed_writes=2 read_exits=33 last_off=0xb81610 mem[inval=2819 walks=3411/3411 cleared=2819 sup
+52263:kf3: family=Ada phase=Running trapped=83053 applied=3665 refused=0 serviced=1891 ram_refused=0 unshadowed_writes=2 read_exits=33 last_off=0xb81610 mem[inval=2819 walks=3411/3411 cleared=2819 sup
+52265:kf3: family=Ada phase=Running trapped=83053 applied=3665 refused=0 serviced=1891 ram_refused=0 unshadowed_writes=2 read_exits=33 last_off=0xb81610 mem[inval=2819 walks=3411/3411 cleared=2819 sup
+52267:kf3: family=Ada phase=Running trapped=83053 applied=3665 refused=0 serviced=1891 ram_refused=0 unshadowed_writes=2 read_exits=33 last_off=0xb81610 mem[inval=2819 walks=3411/3411 cleared=2819 sup
+ nsi=[GR0:3501/2969raised(nolive=2474,novec=0) CE2:1016/937raised(nolive=1016,novec=0) CE3:587/1107raised(nolive=580,novec=0)]
+pt_nsi=[fifo_edges=5138 verdicts_raised=3036 unvectored=0 relay=on GR0[edges=8639 fresh=82 afterglow=2768 idle=246 no_twin=5543 submits=187 vec=Some(0) live=0 wakes=3501 raised=2969] CE2[edges=6154 fresh=0 afterglow=0 idle=16 no_twin=6138 submits=0 vec=Some(1) live=2 wakes=1016 raised=937] CE3[edges=5725 fresh=7 afterglow=1100 idle=710 no_twin=3908 submits=7 vec=Some(2) live=0 wakes=587 raised=1107]] served=3319 parks=10165 host_rings=1635 contended=0 poisoned=0 tokens=

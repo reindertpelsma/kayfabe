@@ -1,0 +1,6 @@
+=== gputest_plot3d start=2026-10-11T14:22:23.3229566+00:00 host=VASTWIN session=1 boot=2026-10-11T14:15:46.5000000Z timeout=100
+KFWAIT gputest_plot3d EXITED rc=0
+GPUTEST 2026/10/11@14:22:24(0000000002) < > GpuTest: Cross Platform Graphics Benchmark Utility
+GPUTEST 2026/10/11@14:22:25(0000000026) < > Plot3D - OpenGL - Renderer model: NVIDIA GeForce RTX 4070/PCIe/SSE2
+GPUTEST 2026/10/11@14:22:39(0000000032) < > [Benchmark_Score] - module: Plot3D - Score: 18499 points (1280x720 windowed, duration:10000 ms).
+=== end rc=0 secs=17 2026-10-11T14:22:40.7570074+00:00

@@ -188,4 +188,25 @@ impl PrivRing {
     pub fn high_water(&self) -> u32 {
         self.high_water.load(Ordering::Acquire)
     }
+
+    /// ★ Device reset (`docs/design/V3_DEVICE_RESET.md`): drop every queued write and lift the
+    /// poison — the ring a fresh device has, as the next life sees it. Returns the writes dropped.
+    ///
+    /// ⊘ Drainer only, and only while no producer can push (the device's vCPU gate is closed and
+    /// quiet): a push racing this could be half-written into a slot this marks free.
+    ///
+    /// ⊘ `head`/`tail`/`applied_seq` are NOT rewound: they are monotonic numbers other paths fence
+    /// against (§5.4), so the discarded writes count as passed (`applied_seq = tail`), never as
+    /// future ones. `high_water` is a diagnostic of the VM's whole run and is kept.
+    pub fn discard_all(&self) -> u64 {
+        let tail = self.tail.load(Ordering::Acquire);
+        let head = self.head.load(Ordering::Acquire);
+        for seq in head..tail {
+            self.ready[(seq as usize) % CAPACITY].store(false, Ordering::Release);
+        }
+        self.head.store(tail, Ordering::Release);
+        self.applied_seq.fetch_max(tail, Ordering::AcqRel);
+        self.poisoned.store(false, Ordering::Release);
+        tail - head
+    }
 }

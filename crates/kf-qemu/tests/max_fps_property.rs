@@ -23,6 +23,7 @@ fn config(display: bool, display_max_fps: u32) -> Config {
         gpu_uuid: None,
         vm_id: None,
         pci_devfn: 0,
+        channel_budget: 0,
     }
 }
 

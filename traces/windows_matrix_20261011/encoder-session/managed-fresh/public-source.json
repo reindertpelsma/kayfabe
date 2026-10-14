@@ -1,0 +1,14 @@
+{
+  "pbdma": {
+    "url": "https://raw.githubusercontent.com/NVIDIA/open-gpu-doc/2ef75cf8d6cc6311625c772171834c465e0319d0/manuals/ampere/ga100/dev_pbdma.ref.txt",
+    "sha256_full": "3d17bab0ab33501e44a2a4e1308bd569af3a96e492292145f080db767dae2355",
+    "scope": "Public GA100 definition; applicability of these interrupt field names to AD104 is an inference, not an Ada register measurement"
+  },
+  "ce": {
+    "url": "https://github.com/NVIDIA/open-gpu-kernel-modules/blob/580.65.06/src/common/sdk/nvidia/inc/class/clc7b5.h",
+    "sha256_full": "9e8dbda2d6741abeb2d2c81bb92cb621445aac7facf8c8113f3cb3d12f1c7660"
+  },
+  "observed_launch_word": "0x3185",
+  "source_physical_bit12": true,
+  "destination_physical_bit13": true
+}

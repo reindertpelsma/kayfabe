@@ -1,0 +1,10 @@
+Instance 55385171; captured 2026-10-11 12:01 UTC; selected progress only.
+[   55.021415] bash[1301]: Erasing /dev/vda.
+[   60.791767] bash[8547]: Boot0004* reinstall (windows)
+[   60.948694] bash[8608]: menuentry "reinstall (windows)" --unrestricted {
+[   61.003662] bash[7929]: Reboot to start the reinstallation.
+[   61.143884] bash[1301]: Rebooting.
+[=3hBdsDxe: loading Boot0004 "reinstall (windows)" from HD(15,GPT,31313937-EE75-496A-8D0E-FFC8F6411CDC,0x2800,0x35000)/\EFI\reinstall\grubx64.efi
+BdsDxe: starting Boot0004 "reinstall (windows)" from HD(15,GPT,31313937-EE75-496A-8D0E-FFC8F6411CDC,0x2800,0x35000)/\EFI\reinstall\grubx64.efi
+      before booting or `c' for a command-line.                            *reinstall (windows)                                                                                                                                                                                                             
+[    0.140402] Booting paravirtualized kernel on KVM

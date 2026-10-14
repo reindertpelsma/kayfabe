@@ -1,0 +1,73 @@
+{
+ "quiet": 1,
+ "end_utc": "2026-10-11T15:29:26.2089965Z",
+ "start_utc": "2026-10-11T15:29:21.9671088Z",
+ "rc": 0,
+ "secs": 4,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4090 status=OK code=0"
+ ],
+ "digests": [],
+ "session": 0,
+ "out_files": [],
+ "boot_utc_start": "2026-10-11T14:31:59.5000000Z",
+ "log_tail": [
+  "=== nbody_compare_diagnostic start=2026-10-11T08:29:21.9671088-07:00 host=DESKTOP-JR70RMQ session=0 boot=2026-10-11T14:31:59.5000000Z timeout=120",
+  "Run \"nbody -benchmark [-numbodies=<numBodies>]\" to measure performance.",
+  "\t-fullscreen       (run n-body simulation in fullscreen mode)",
+  "\t-fp64             (use double precision floating point values for simulation)",
+  "\t-hostmem          (stores simulation data in host memory)",
+  "\t-benchmark        (run benchmark to measure performance) ",
+  "\t-numbodies=<N>    (number of bodies (>= 1) to run in simulation) ",
+  "\t-device=<d>       (where d=0,1,2.... for the CUDA device to use)",
+  "\t-numdevices=<i>   (where i=(number of CUDA devices > 0) to use for simulation)",
+  "\t-compare          (compares simulation results running once on the default GPU and once on the CPU)",
+  "\t-cpu              (run n-body simulation on the CPU)",
+  "\t-tipsy=<file.bin> (load a tipsy model file for simulation)",
+  "",
+  "NOTE: The CUDA Samples are not meant for performance measurements. Results may vary when GPU Boost is enabled.",
+  "",
+  "> Windowed mode",
+  "> Simulation data stored in video memory",
+  "> Single precision floating point simulation",
+  "> 1 Devices used for simulation",
+  "MapSMtoCores for SM 8.9 is undefined.  Default to use 128 Cores/SM",
+  "MapSMtoArchName for SM 8.9 is undefined.  Default to use Ampere",
+  "GPU Device 0: \"Ampere\" with compute capability 8.9",
+  "",
+  "> Compute 8.9 CUDA device: [NVIDIA GeForce RTX 4090]",
+  "number of bodies = 4096",
+  "=== end rc=0 secs=4 2026-10-11T08:29:26.2089965-07:00"
+ ],
+ "pdh": {
+  "pids": [
+   "6556",
+   "7504"
+  ],
+  "nv": {},
+  "samples": 2,
+  "other": {},
+  "nvidia_luids": "0_5f8e"
+ },
+ "timed_out": false,
+ "token": "g1-nbody_compare_diagnostic-1791732544",
+ "boot_utc_end": "2026-10-11T14:31:59.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "nbody_compare_diagnostic",
+ "smi": {
+  "samples": 1,
+  "mem_used_base_mb": 162,
+  "util_max": 0,
+  "mem_used_max_mb": 162
+ }
+}

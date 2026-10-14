@@ -1,0 +1,6 @@
+=== stream_perthread_t start=2026-10-11T10:05:23.1298132-07:00 host=DESKTOP-JR70RMQ session=0 boot=2026-10-11T14:31:59.5000000Z timeout=120
+STREAM_STAGE cupy_import elapsed_s=3.172000
+KFDEV NVIDIA GeForce RTX 4090 cupy 14.2.0
+CHECK stream_perthread ok elements=1048576 stream=2
+STREAM_PROBE_DONE perthread rc=0
+=== end rc=0 secs=7 2026-10-11T10:05:30.0427966-07:00

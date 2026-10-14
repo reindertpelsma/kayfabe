@@ -1,0 +1,28 @@
+=== vkpeak start=2026-10-10T08:40:05.4320746-07:00 host=DESKTOP-397P3NI session=0 boot=2026-10-10T13:30:47.5000000Z timeout=600
+device       = NVIDIA GeForce RTX 4060 Ti
+driver       = NVIDIA / 595.97
+System.Management.Automation.RemoteException
+fp32-scalar  = 15375.63 GFLOPS
+fp32-vec4    = 15291.41 GFLOPS
+fp16-scalar  = 22884.49 GFLOPS
+fp16-vec4    = 16734.80 GFLOPS
+fp16-matrix  = 91924.24 GFLOPS
+fp64-scalar  = 359.80 GFLOPS
+fp64-vec4    = 355.67 GFLOPS
+int32-scalar = 11467.21 GIOPS
+int32-vec4   = 11462.38 GIOPS
+int16-scalar = 9942.27 GIOPS
+int16-vec4   = 8616.85 GIOPS
+int64-scalar = 3497.70 GIOPS
+int64-vec4   = 2766.07 GIOPS
+int8-dotprod = 11051.97 GIOPS
+int8-matrix  = 182699.56 GIOPS
+bf16-dotprod = 0.00 GFLOPS
+bf16-matrix  = 45564.84 GFLOPS
+fp8-matrix   = 182775.96 GFLOPS
+bf8-matrix   = 182847.20 GFLOPS
+copy-h2h     = 19.60 GBPS
+copy-h2d     = 19.76 GBPS
+copy-d2h     = 19.16 GBPS
+copy-d2d     = 125.71 GBPS
+=== end rc=0 secs=136 2026-10-10T08:42:21.0638208-07:00

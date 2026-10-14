@@ -1,0 +1,51 @@
+{
+ "quiet": 1,
+ "end_utc": "2026-10-10T14:22:42.5220416Z",
+ "start_utc": "2026-10-10T14:22:38.2558178Z",
+ "rc": 0,
+ "secs": 4,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4060 Ti status=OK code=0"
+ ],
+ "digests": [],
+ "session": 0,
+ "out_files": [],
+ "boot_utc_start": "2026-10-10T13:30:47.5000000Z",
+ "log_tail": [
+  "=== driver_status start=2026-10-10T07:22:38.2558178-07:00 host=DESKTOP-397P3NI session=0 boot=2026-10-10T13:30:47.5000000Z timeout=60",
+  "VIDEO name=NVIDIA GeForce RTX 4060 Ti driver=32.0.15.9597 status=OK code=0",
+  "DRIVER_OK",
+  "=== end rc=0 secs=4 2026-10-10T07:22:42.5220416-07:00"
+ ],
+ "pdh": {
+  "pids": [
+   "3720",
+   "7440"
+  ],
+  "nv": {},
+  "samples": 2,
+  "other": {},
+  "nvidia_luids": "0_5ecc"
+ },
+ "timed_out": false,
+ "token": "g1-driver_status-1791642144",
+ "boot_utc_end": "2026-10-10T13:30:47.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "driver_status",
+ "smi": {
+  "samples": 0,
+  "mem_used_base_mb": 122,
+  "util_max": 0,
+  "mem_used_max_mb": 122
+ }
+}

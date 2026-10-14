@@ -1,0 +1,16 @@
+2026-10-12T20:02:13Z START run_dir=/var/lib/kf-windows-20261005/codex-user-worker-windows-b50774a7a/relay vm=broker kf3_rev=b50774a7 apps=1
+2026-10-12T20:02:13Z MATRIX_START apps=1 (resume skips 0) per_guest=1 max_tdr=3 tier<=3
+2026-10-12T20:02:15Z pre-guest hook rc=0 :00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=identity 2026-10-12T22:02:15+02:00
+2026-10-12T20:02:16Z broker run 1600 rc=0 ['  └────────────────────────────────────────────────────────────────────────────────────────────┘']
+2026-10-12T20:02:16Z [g1] launched; waiting for the guest agent (<= 900s)
+2026-10-12T20:02:33Z [g1] agent answered after 19s
+2026-10-12T20:02:33Z [g1] password set for vast rc=0
+2026-10-12T20:03:19Z [g1] verified sign-in attempt=1 rc=0
+2026-10-12T20:03:20Z [g1] interactive session: VASTWIN\vast
+2026-10-12T20:03:21Z [g1] pushed 26 guest files
+2026-10-12T20:03:21Z [g1] app disk attached (usb-storage)
+2026-10-12T20:03:28Z [g1] setup ok: cd=D: nvidia_adapters=1 NVIDIA GeForce RTX 4070, 580.88, 4096 MiB
+2026-10-12T20:03:30Z [g1] override tool kf_cuda_control.exe sha256=3906f520c10e272215d9d7d79a90ce9a2042581923a4717db90be312ab3a67c8

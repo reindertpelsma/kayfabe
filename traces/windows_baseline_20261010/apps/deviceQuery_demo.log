@@ -1,0 +1,49 @@
+=== deviceQuery_demo start=2026-10-10T07:21:59.6473279-07:00 host=DESKTOP-397P3NI session=0 boot=2026-10-10T13:30:47.5000000Z timeout=60
+C:\kfapps\cuda_demo\demo_suite\deviceQuery.exe Starting...
+
+ CUDA Device Query (Runtime API)
+
+Detected 1 CUDA Capable device(s)
+
+Device 0: "NVIDIA GeForce RTX 4060 Ti"
+  CUDA Driver Version / Runtime Version          13.2 / 12.9
+  CUDA Capability Major/Minor version number:    8.9
+  Total amount of global memory:                 16380 MBytes (17175150592 bytes)
+MapSMtoCores for SM 8.9 is undefined.  Default to use 128 Cores/SM
+MapSMtoCores for SM 8.9 is undefined.  Default to use 128 Cores/SM
+  (34) Multiprocessors, (128) CUDA Cores/MP:     4352 CUDA Cores
+  GPU Max Clock rate:                            2610 MHz (2.61 GHz)
+  Memory Clock rate:                             9001 Mhz
+  Memory Bus Width:                              128-bit
+  L2 Cache Size:                                 33554432 bytes
+  Maximum Texture Dimension Size (x,y,z)         1D=(131072), 2D=(131072, 65536), 3D=(16384, 16384, 16384)
+  Maximum Layered 1D Texture Size, (num) layers  1D=(32768), 2048 layers
+  Maximum Layered 2D Texture Size, (num) layers  2D=(32768, 32768), 2048 layers
+  Total amount of constant memory:               zu bytes
+  Total amount of shared memory per block:       zu bytes
+  Total number of registers available per block: 65536
+  Warp size:                                     32
+  Maximum number of threads per multiprocessor:  1536
+  Maximum number of threads per block:           1024
+  Max dimension size of a thread block (x,y,z): (1024, 1024, 64)
+  Max dimension size of a grid size    (x,y,z): (2147483647, 65535, 65535)
+  Maximum memory pitch:                          zu bytes
+  Texture alignment:                             zu bytes
+  Concurrent copy and kernel execution:          Yes with 1 copy engine(s)
+  Run time limit on kernels:                     Yes
+  Integrated GPU sharing Host Memory:            No
+  Support host page-locked memory mapping:       Yes
+  Alignment requirement for Surfaces:            Yes
+  Device has ECC support:                        Disabled
+  CUDA Device Driver Mode (TCC or WDDM):         WDDM (Windows Display Driver Model)
+  Device supports Unified Addressing (UVA):      Yes
+  Device supports Compute Preemption:            Yes
+  Supports Cooperative Kernel Launch:            Yes
+  Supports MultiDevice Co-op Kernel Launch:      No
+  Device PCI Domain ID / Bus ID / location ID:   0 / 0 / 7
+  Compute Mode:
+     < Default (multiple host threads can use ::cudaSetDevice() with device simultaneously) >
+
+deviceQuery, CUDA Driver = CUDART, CUDA Driver Version = 13.2, CUDA Runtime Version = 12.9, NumDevs = 1, Device0 = NVIDIA GeForce RTX 4060 Ti
+Result = PASS
+=== end rc=0 secs=3 2026-10-10T07:22:02.8122164-07:00

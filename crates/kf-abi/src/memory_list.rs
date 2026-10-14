@@ -182,6 +182,62 @@ impl Cell {
     }
 }
 
+/// ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`) — the identity of ANY SYSTEM MemoryList
+/// registration (`ALLOC_MEMORY`), whatever its page count: what `memdescSendMemDescToGSP` sends
+/// for the suspend buffer GSP-RM saves its heap into (`ogkm-580: fbsr_gm107.c:104-138`,
+/// `mem_desc.c:4786-4870`, `mem.c:515-570`). No page is read or kept.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Registration {
+    /// Owning guest client.
+    pub client: u32,
+    /// Parent (Device or Subdevice).
+    pub parent: u32,
+    /// The memory handle being registered.
+    pub handle: u32,
+    /// Pages in the descriptor (`pageCount`).
+    pub page_count: u32,
+}
+
+impl Cell {
+    /// ★ 2026-10-14: the whole `ALLOC_MEMORY` payload length a HEAD declares — the fixed struct
+    /// up to the PTE array plus `pageCount` PTEs (`_issuePteDescRpc`, `ogkm-580: rpc.c:2252-2300`:
+    /// `recordSize = offsetToPTE + pteCount * 8`). `None` for a body too short to carry the count.
+    #[must_use]
+    pub fn declared_len(&self, head: &[u8]) -> Option<usize> {
+        let at = self.offsets[8];
+        let count = u32::from_le_bytes(head.get(at..at.checked_add(4)?)?.try_into().ok()?);
+        self.pte.checked_add(usize::try_from(count).ok()?.checked_mul(8)?)
+    }
+
+    /// ★ 2026-10-14: a SYSTEM MemoryList registration of any page count, whole (the joined
+    /// payload is exactly [`Self::declared_len`] long), with non-null, distinct handles. `None`
+    /// for anything else — an FBMEM list, a malformed or short body.
+    #[must_use]
+    pub fn registration(&self, body: &[u8]) -> Option<Registration> {
+        let u32_at = |offset: usize| {
+            Some(u32::from_le_bytes(
+                body.get(offset..offset.checked_add(4)?)?.try_into().ok()?,
+            ))
+        };
+        let [client, parent, handle, class, _, _, _, _, count, _] = self.offsets;
+        if u32_at(class)? != self.class || self.declared_len(body)? != body.len() {
+            return None;
+        }
+        let r = Registration {
+            client: u32_at(client)?,
+            parent: u32_at(parent)?,
+            handle: u32_at(handle)?,
+            page_count: u32_at(count)?,
+        };
+        (r.client != 0
+            && r.parent != 0
+            && r.handle != 0
+            && r.handle != r.client
+            && r.handle != r.parent)
+            .then_some(r)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -203,6 +259,36 @@ mod tests {
         b[56..64].copy_from_slice(&2u64.to_le_bytes());
         b
     }
+    /// ★ 2026-10-14: the suspend buffer's registration — noncontiguous, many PTEs — is
+    /// identified at every contract, and its whole length is what the head declares.
+    #[test]
+    fn a_many_page_system_registration_is_identified_with_its_declared_length() {
+        for c in generated::CELLS {
+            let mut b = request();
+            b[40..44].copy_from_slice(&3u32.to_le_bytes());
+            b.resize(c.pte + 3 * 8, 0);
+            assert_eq!(c.declared_len(&b[..48]), Some(c.pte + 24), "{}", c.version);
+            assert_eq!(
+                c.registration(&b),
+                Some(Registration {
+                    client: 1,
+                    parent: 2,
+                    handle: 4,
+                    page_count: 3
+                }),
+                "{}",
+                c.version
+            );
+            assert_eq!(c.registration(&b[..b.len() - 8]), None, "a short body");
+            let mut fb = b.clone();
+            fb[12..16].copy_from_slice(&0x82u32.to_le_bytes());
+            assert_eq!(c.registration(&fb), None, "an FBMEM list is not this");
+            let mut same = b.clone();
+            same[8..12].copy_from_slice(&1u32.to_le_bytes());
+            assert_eq!(c.registration(&same), None, "handle == client");
+        }
+    }
+
     #[test]
     fn memory_list_framebuffer_specimen_requires_audited_class_and_vidmem_location() {
         let mut b = request();

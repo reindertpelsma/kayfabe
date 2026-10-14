@@ -1,0 +1,75 @@
+{
+ "quiet": 0,
+ "end_utc": "2026-10-11T15:39:46.5252793Z",
+ "start_utc": "2026-10-11T15:39:28.3905374Z",
+ "rc": 0,
+ "secs": 18,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4070 status=OK code=0"
+ ],
+ "digests": [],
+ "session": 1,
+ "out_files": [
+  "C:\\kf\\out\\edge_webgpu\\edge_result.json 162"
+ ],
+ "boot_utc_start": "2026-10-11T15:37:13.5000000Z",
+ "log_tail": [
+  "=== edge_webgpu start=2026-10-11T15:39:28.3905374+00:00 host=VASTWIN session=1 boot=2026-10-11T15:37:13.5000000Z timeout=150",
+  "KFEDGE {\"page\":\"webgpu\",\"ok\":true,\"vendor\":\"nvidia\",\"architecture\":\"lovelace\",\"description\":\"\",\"device_name\":\"\",\"fallback\":false,\"frames\":702,\"bad\":0,\"secs\":12.016}",
+  "=== end rc=0 secs=18 2026-10-11T15:39:46.5252793+00:00"
+ ],
+ "pdh": {
+  "pids": [
+   "7800",
+   "7916",
+   "3536",
+   "6620",
+   "10276",
+   "7220",
+   "10228",
+   "7072",
+   "6500",
+   "9356",
+   "2620",
+   "9424",
+   "7832",
+   "10296",
+   "9612",
+   "1604",
+   "10520"
+  ],
+  "nv": {
+   "copy": 0.00603591963942284,
+   "3d": 0,
+   "videoencode": 0,
+   "videodecode": 0,
+   "vr": 0,
+   "legacyoverlay": 0,
+   "ofa_0": 0
+  },
+  "samples": 8,
+  "other": {},
+  "nvidia_luids": "0_609c"
+ },
+ "timed_out": false,
+ "token": "g1-edge_webgpu-1791733165",
+ "boot_utc_end": "2026-10-11T15:37:13.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "edge_webgpu",
+ "smi": {
+  "samples": 0,
+  "mem_used_base_mb": null,
+  "util_max": 0,
+  "mem_used_max_mb": 0
+ }
+}

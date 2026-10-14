@@ -1,0 +1,27 @@
+{"source": "NVIDIA/open-gpu-kernel-modules tag 580.65.06",
+"channel": {
+"gpFifoOffset": 8,
+"gpFifoEntries": 16,
+"flags": 20,
+"hContextShare": 24,
+"hVASpace": 28,
+"hUserdMemory": 32,
+"userdOffset": 64,
+"engineType": 128,
+"internalFlags": 244,
+"ProcessID": 296,
+"SubProcessID": 300,
+"size": 368},
+"registration": {
+"hApiHandle": 0,
+"cmd": 4,
+"api_bundle": 24,
+"size": 584},
+"update": {
+"hClient": 0,
+"hChannel": 4,
+"hUserdMemory": 8,
+"gpFifoEntries": 12,
+"gpFifoOffset": 16,
+"userdOffset": 24,
+"size": 32}}

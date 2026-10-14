@@ -69,9 +69,17 @@ pub static VERBATIM_ESCAPES: &[&StructRuns] = &[
     &m::NV_IOCTL_NVOS02_PARAMETERS_WITH_FD,
     &m::NV_IOCTL_NVOS33_PARAMETERS_WITH_FD,
     &m::NV_IOCTL_REGISTER_FD_T,
+    // 2026-10-08 (`--ce-interrupt`): the OS-event registration, written at hand offsets in
+    // `rm::osevent`. 16 bytes, one layout at every measured tag.
+    &m::NV_IOCTL_ALLOC_OS_EVENT_T,
     &m::NV_IOCTL_CARD_INFO_T,
     &m::NV_IOCTL_RM_API_VERSION_T,
 ];
+
+/// ★ Escape NUMBERS the client sends that are not `NV_ESC_RM_*` (those are typed in
+/// `kayfabe_abi::generated::nvos`): each is `nv_ioctl_consts:<name>` in the matrix, and [`gate`]
+/// requires the host's value to be the bench's. 2026-10-08 (`--ce-interrupt`).
+pub static VERBATIM_ESCAPE_NUMBERS: &[&str] = &["NV_ESC_ALLOC_OS_EVENT"];
 
 /// The one control issued on a bare `NVOS54` before a connection exists to carry it
 /// (`rm::resolve_device_instance`): [`gate`] requires its layout and its id to be the bench's.
@@ -165,6 +173,11 @@ pub static ALLOC_PARAMS: &[(ClassName, &StructRuns)] = &[
         ClassName::Contains("_COMPUTE_"),
         &m::NV_GR_ALLOCATION_PARAMETERS,
     ),
+    // 2026-10-08 (`--ce-interrupt`): the OS-event object (`NV01_EVENT_OS_EVENT`, 0x79).
+    (
+        ClassName::Exact("NV01_EVENT_OS_EVENT"),
+        &m::NV0005_ALLOC_PARAMETERS,
+    ),
 ];
 
 /// Every control the client issues, by its SDK name (`ctrl_cmds:<name>` in the matrix — the id is
@@ -257,6 +270,11 @@ pub static CONTROLS: &[(&str, &StructRuns)] = &[
     (
         "NV2080_CTRL_CMD_DMA_INVALIDATE_TLB",
         &m::NV2080_CTRL_DMA_INVALIDATE_TLB_PARAMS,
+    ),
+    // 2026-10-08 (`--ce-interrupt`): arms a subdevice notifier (REPEAT) for an OS event.
+    (
+        "NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION",
+        &m::NV2080_CTRL_EVENT_SET_NOTIFICATION_PARAMS,
     ),
     ("NVA06C_CTRL_CMD_BIND", &m::NVA06C_CTRL_BIND_PARAMS),
     (
@@ -444,6 +462,20 @@ pub fn gate(reported: Option<&str>) -> Result<(String, ClientAbi), String> {
     for runs in CARRIED_ESCAPES {
         abi.carry(runs)
             .map_err(|e| format!("host driver {v}: {e}"))?;
+    }
+    // ★ The escape NUMBERS outside the typed `NV_ESC_RM_*` set: the host's matrix value must be the
+    // bench's, or the ioctl would be a different escape.
+    for name in VERBATIM_ESCAPE_NUMBERS {
+        let key = format!("nv_ioctl_consts:{name}");
+        let host = value(&key, client.version());
+        let bench = value(&key, kf_abi::versions::BENCH_DRIVER);
+        if bench.is_none() || host != bench {
+            return Err(Refusal::VerbatimDiffers {
+                strukt: name,
+                version: client.version(),
+            }
+            .to_string());
+        }
     }
     // `resolve_device_instance` issues GPU_GET_ID_INFO_V2 on a raw `NVOS54` before any
     // connection exists to carry it, so its body and its id must be the bench's.
@@ -697,6 +729,37 @@ impl ClientAbi {
                 strukt: runs.name,
                 carry: c,
             },
+        })
+    }
+
+    /// ★ A `NV2080_NOTIFIERS_*` index at THIS host driver, from the matrix (`nv2080_notifiers:`),
+    /// never typed: `name` is the SDK's, e.g. `"NV2080_NOTIFIERS_CE0"`.
+    ///
+    /// # Errors
+    /// [`Refusal::VerbatimDiffers`] naming the notifier when the host's driver has none by that
+    /// name (e.g. `NV2080_NOTIFIERS_CE10` before 560).
+    pub fn notifier(&self, name: &'static str) -> Result<u32, Refusal> {
+        value(&format!("nv2080_notifiers:{name}"), self.version()).ok_or(Refusal::VerbatimDiffers {
+            strukt: name,
+            version: self.version(),
+        })
+    }
+
+    /// The escape number `nv_ioctl_consts:<name>` at this host, which [`gate`] already required
+    /// to be the bench's for every name in [`VERBATIM_ESCAPE_NUMBERS`].
+    ///
+    /// # Errors
+    /// [`Refusal::VerbatimDiffers`] when `name` is not a listed escape or has no value here.
+    pub fn escape_number(&self, name: &'static str) -> Result<u32, Refusal> {
+        if !VERBATIM_ESCAPE_NUMBERS.contains(&name) {
+            return Err(Refusal::VerbatimDiffers {
+                strukt: name,
+                version: self.version(),
+            });
+        }
+        value(&format!("nv_ioctl_consts:{name}"), self.version()).ok_or(Refusal::VerbatimDiffers {
+            strukt: name,
+            version: self.version(),
         })
     }
 
@@ -1342,5 +1405,71 @@ mod tests {
             host("595.91.07").alloc_crossing(chan, 368),
             Ok(Crossing::Verbatim)
         ));
+    }
+
+    /// ★★★ `--ce-interrupt` (2026-10-08): the OS-event blocks are rows, are one layout across the
+    /// matrix, and their sizes are what `rm::osevent` encodes; the escape number, the event class
+    /// and the notifier indices come from the matrix at every measured tag.
+    #[test]
+    fn the_os_event_blocks_are_rows_and_the_numbers_come_from_the_matrix() {
+        let size = |r: &'static StructRuns| Resolved::of(r, BENCH_DRIVER).expect("bench").size();
+        assert_eq!(size(&m::NV_IOCTL_ALLOC_OS_EVENT_T), 16);
+        assert_eq!(size(&m::NV0005_ALLOC_PARAMETERS), 24);
+        assert_eq!(size(&m::NV2080_CTRL_EVENT_SET_NOTIFICATION_PARAMS), 20);
+        assert!(
+            VERBATIM_ESCAPES
+                .iter()
+                .any(|r| r.name == "nv_ioctl_alloc_os_event_t")
+        );
+        assert!(
+            ALLOC_PARAMS
+                .iter()
+                .any(|(c, r)| c.matches("NV01_EVENT_OS_EVENT")
+                    && r.name == "NV0005_ALLOC_PARAMETERS")
+        );
+        assert!(
+            CONTROLS
+                .iter()
+                .any(|(n, _)| *n == "NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION")
+        );
+        for t in MEASURED {
+            let v = tag(*t);
+            let abi = host(&v);
+            // The escape number is 206 (`NV_IOCTL_BASE + 6`) and the class 0x79 at every tag.
+            assert_eq!(
+                abi.escape_number("NV_ESC_ALLOC_OS_EVENT").ok(),
+                Some(206),
+                "{v}"
+            );
+            assert!(
+                matches!(abi.alloc_crossing(0x79, 24), Ok(Crossing::Verbatim)),
+                "{v}: NV0005 is one layout, so it crosses verbatim"
+            );
+            assert_eq!(abi.notifier("NV2080_NOTIFIERS_CE0").ok(), Some(23), "{v}");
+            assert_eq!(abi.notifier("NV2080_NOTIFIERS_CE9").ok(), Some(32), "{v}");
+            assert_eq!(
+                abi.notifier("NV2080_NOTIFIERS_FIFO_EVENT_MTHD").ok(),
+                Some(35),
+                "{v}"
+            );
+            assert_eq!(
+                value(
+                    "ctrl_cmds:NV2080_CTRL_CMD_EVENT_SET_NOTIFICATION",
+                    abi.version()
+                ),
+                Some(0x2080_0301),
+                "{v}"
+            );
+        }
+        // A name that is not a listed escape is refused by name, not looked up.
+        assert!(matches!(
+            host("595.91.07").escape_number("NV_ESC_REGISTER_FD"),
+            Err(Refusal::VerbatimDiffers { .. })
+        ));
+        assert!(
+            host("595.91.07")
+                .notifier("NV2080_NOTIFIERS_NO_SUCH")
+                .is_err()
+        );
     }
 }

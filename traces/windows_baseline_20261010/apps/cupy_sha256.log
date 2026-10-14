@@ -1,0 +1,5 @@
+=== cupy_sha256 start=2026-10-10T07:19:25.5739133-07:00 host=DESKTOP-397P3NI session=0 boot=2026-10-10T13:30:47.5000000Z timeout=180
+[nvrtc] device NVIDIA GeForce RTX 4060 Ti cupy 14.2.0 include ['C:\\kfapps\\cuda_cudart\\include', 'C:\\kfapps\\cuda_cccl\\include']
+CHECK sha256_4096_messages_vs_hashlib ok
+NVRTC_DONE sha256
+=== end rc=0 secs=7 2026-10-10T07:19:32.8217900-07:00

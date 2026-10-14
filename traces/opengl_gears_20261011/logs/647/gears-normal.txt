@@ -1,0 +1,6 @@
+KFGL vendor NVIDIA Corporation
+KFGL renderer NVIDIA GeForce RTX 4070/PCIe/SSE2
+KFGL version 4.6.0 NVIDIA 580.88
+KFGL pixel 64,128,191,255
+KFGL gears frames=95688 secs=45.0 fps=2126.4 glerr=0x0
+KFGL RESULT OK

@@ -1,0 +1,76 @@
+REFERENCE_REST_QUEUED=2026-10-11T17:56:08+02:00 waits_for=208739
+2026-10-11T16:25:04Z START run_dir=/data/kf-native-reference-20261011/rest-reference vm=native apps=50
+2026-10-11T16:25:04Z MATRIX_START apps=50 (resume skips 0) per_guest=1000 max_tdr=1000 tier<=3
+2026-10-11T16:25:06Z [g1] launched; waiting for the guest agent (<= 900s)
+2026-10-11T16:25:08Z [g1] agent answered after 3s
+2026-10-11T16:25:08Z [g1] no KF_GUEST_PW: assuming autologon
+2026-10-11T16:25:11Z [g1] interactive session: DESKTOP-JR70RMQ\vast
+2026-10-11T16:26:03Z [g1] pushed 25 guest files
+2026-10-11T16:26:08Z [g1] app disk attached (KFMOUNT D:)
+2026-10-11T16:26:16Z [g1] setup ok: cd=D: nvidia_adapters=1 NVIDIA GeForce RTX 4090, 580.88, 24564 MiB
+2026-10-11T16:26:26Z [g1] override tool kf_cuda_control.exe sha256=3906f520c10e272215d9d7d79a90ce9a2042581923a4717db90be312ab3a67c8
+2026-10-11T16:26:35Z [g1] override tool kf_dxprobe.exe sha256=3c6ededa77430a18a13321eb72fdca7f60282f8d12ddc147a7e7df1284832c5f
+2026-10-11T16:26:39Z [g1] staged vc_redist (cached, 0s)
+2026-10-11T16:26:46Z [g1] READY boot=2026-10-11T14:31:59.5000000Z user=DESKTOP-JR70RMQ\vast smi_ok=True
+2026-10-11T16:26:50Z [g1] staged python_embed (cached, 0s)
+2026-10-11T16:26:54Z [g1] staged pywheels (cached, 0s)
+2026-10-11T16:27:34Z [g1] atomics_t: PASS
+2026-10-11T16:27:37Z [g1] staged cuda_demo_suite (cached, 0s)
+2026-10-11T16:28:17Z [g1] bandwidthTest_demo: PASS
+2026-10-11T16:28:57Z [g1] cg_t: PASS
+2026-10-11T16:29:37Z [g1] cup2_ladder: PASS
+2026-10-11T16:30:16Z [g1] cup3_ladder: PASS
+2026-10-11T16:30:56Z [g1] d3d12_signal_probe: PASS
+2026-10-11T16:31:32Z [g1] driver_status: PASS
+2026-10-11T16:32:06Z [g1] dxgi_adapters: PASS
+2026-10-11T16:32:47Z [g1] dxprobe_d3d11: PASS
+2026-10-11T16:33:27Z [g1] dxprobe_d3d12: PASS
+2026-10-11T16:34:20Z [g1] edge_webgl: PASS
+2026-10-11T16:35:11Z [g1] edge_webgl_headless: PASS
+2026-10-11T16:36:06Z [g1] edge_webgpu: PASS
+2026-10-11T16:36:46Z [g1] fft_t: PASS
+2026-10-11T16:36:49Z [g1] staged furmark2 (cached, 0s)
+2026-10-11T16:37:29Z [g1] furmark_glinfo: PASS
+2026-10-11T16:38:10Z [g1] furmark_vkinfo: PASS
+2026-10-11T16:38:49Z [g1] fwt_t: PASS
+2026-10-11T16:38:53Z [g1] staged gputest (unzip, 0s)
+2026-10-11T16:39:46Z [g1] gputest_fur: PASS
+2026-10-11T16:40:40Z [g1] gputest_gi: PASS
+2026-10-11T16:41:33Z [g1] gputest_pixmark_piano: PASS
+2026-10-11T16:42:27Z [g1] gputest_plot3d: PASS
+2026-10-11T16:43:20Z [g1] gputest_tess: PASS
+2026-10-11T16:44:15Z [g1] gputest_triangle: PASS
+2026-10-11T16:44:55Z [g1] graphs_t: PASS
+2026-10-11T16:44:59Z [g1] staged sevenzip (copy, 0s)
+2026-10-11T16:45:06Z [g1] staged hashcat (7z, 4s)
+2026-10-11T16:46:24Z [g1] hashcat: PASS
+2026-10-11T16:47:04Z [g1] hist_t: PASS
+2026-10-11T16:47:44Z [g1] mandelbrot_t: PASS
+2026-10-11T16:48:24Z [g1] memcpy2d_t: PASS
+2026-10-11T16:49:00Z [g1] nbody_demo_bench: PASS
+2026-10-11T16:49:39Z [g1] nbody_t: PASS
+2026-10-11T16:50:14Z [g1] nvidia_smi: PASS
+2026-10-11T16:50:50Z [g1] opencl_icd: PASS
+2026-10-11T16:51:34Z [g1] ort_directml: PASS
+2026-10-11T16:52:14Z [g1] reduce_t: PASS
+2026-10-11T16:52:54Z [g1] rng_t: PASS
+2026-10-11T16:53:35Z [g1] scan_t: PASS
+2026-10-11T16:54:15Z [g1] sort_t: PASS
+2026-10-11T16:54:55Z [g1] stream_created2nd_t: PASS
+2026-10-11T16:55:35Z [g1] stream_created_t: PASS
+2026-10-11T16:56:15Z [g1] stream_default_t: PASS
+2026-10-11T16:56:55Z [g1] stream_nonblocking_t: PASS
+2026-10-11T16:57:36Z [g1] stream_two_t: PASS
+2026-10-11T16:58:15Z [g1] streams_t: PASS
+2026-10-11T16:58:55Z [g1] tc16_t: PASS
+2026-10-11T16:59:35Z [g1] tcbf16_t: PASS
+2026-10-11T17:00:20Z [g1] torch_correct: PASS
+2026-10-11T17:00:59Z [g1] transpose_t: PASS
+2026-10-11T17:01:39Z [g1] triad_t: PASS
+2026-10-11T17:01:43Z [g1] staged vulkan_rt (unzip, 1s)
+2026-10-11T17:02:24Z [g1] vulkaninfo: PASS
+2026-10-11T17:03:04Z [g1] zerocopy_t: PASS
+2026-10-11T17:03:04Z [g1] stopped (noop (native box stays up))
+2026-10-11T17:03:04Z MATRIX_DONE batched: 50 pass / 50
+2026-10-11T17:03:04Z EXIT rc=0
+REFERENCE_REST_EXIT=0 at=2026-10-11T19:03:04+02:00

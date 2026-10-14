@@ -107,6 +107,14 @@ impl<T: MapTarget> MapTarget for Recorded<T> {
     fn map_sked(&self, s: &kf_mem::ledger::SkedRow, defer: bool) -> Result<Mapped, String> {
         self.inner.map_sked(s, defer)
     }
+    // ★ Review fix 2026-10-10: forwarded EXPLICITLY — the trait default (`None`) would keep pages
+    // the inner target's ledger says are not ours, or parts of mappings it cannot split.
+    fn own_view(&self, va: u64, end: u64) -> Option<kf_mem::ledger::OwnView> {
+        self.inner.own_view(va, end)
+    }
+    fn begin_refresh(&self) {
+        self.inner.begin_refresh();
+    }
 }
 
 /// ★ `V3_BATCHED_MAP.md`: a host space that places VA-contiguous guest-RAM runs as batches
@@ -133,7 +141,7 @@ impl<'a> Batching<'a> {
 
 impl MapTarget for Batching<'_> {
     fn map(&self, d: &Desired, defer: bool) -> Result<Mapped, String> {
-        let m = self.bv.vas.map(d, defer)?;
+        let m = self.bv.map(d, defer)?;
         if m == Mapped::Placed {
             self.lens.borrow_mut().insert(d.va, d.len);
         }
@@ -166,7 +174,7 @@ impl MapTarget for Batching<'_> {
     }
     // ★ v3-cdp: the production verb; its unmap is the whole-mapping one (`unmap_run` with no length).
     fn map_sked(&self, s: &kf_mem::ledger::SkedRow, defer: bool) -> Result<Mapped, String> {
-        self.bv.vas.map_sked(s, defer)
+        self.bv.map_sked(s, defer)
     }
 }
 

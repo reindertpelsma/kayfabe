@@ -1,0 +1,7 @@
+=== managed_t start=2026-10-10T10:04:29.8784397-07:00 host=DESKTOP-397P3NI session=0 boot=2026-10-10T15:50:57.5000000Z timeout=180
+KFDEV NVIDIA GeForce RTX 4060 Ti
+[eq] device NVIDIA GeForce RTX 4060 Ti torch 2.8.0+cu126
+CHECK managed_gpu_write_cpu_read ok
+CHECK managed_cpu_write_gpu_read ok
+WINEQ_DONE managed
+=== end rc=0 secs=9 2026-10-10T10:04:38.9450791-07:00

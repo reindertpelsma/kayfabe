@@ -14,7 +14,7 @@
 //! 2. the token that admits a channel class is made in exactly one place, `born_user`, and
 //!    cannot be copied or defaulted into existence;
 //! 3. `born_user` issues inside the bracket and checks the reply after it, freeing on refusal;
-//! 4. `birth_member`, the one caller, goes through `born_user` on the live thread, and the
+//! 4. `birth_member_profile`, the one caller, goes through `born_user` on the live thread, and the
 //!    channel role is unwrapped nowhere else.
 //!
 //! ⊘ These read source text. They pin a shape and say nothing about what RM does; the box
@@ -359,14 +359,21 @@ fn born_user_brackets_the_call_and_checks_the_reply() {
     assert!(body.contains("if skip_bracket {"));
 }
 
-/// ★★★ (4) The one caller: `birth_member` goes through `born_user` on the live thread, and the
+/// ★★★ (4) The one caller: `birth_member_profile` goes through `born_user` on the live thread, and the
 /// channel class is unwrapped nowhere else in the crate.
 #[test]
-fn birth_member_is_the_one_caller_and_uses_the_live_thread() {
-    let body = one_fn("channel.rs", "birth_member");
+fn birth_profiles_share_one_caller_and_use_the_live_thread() {
+    for name in ["birth_member", "birth_user_ring_member"] {
+        let wrapper = one_fn("channel.rs", name);
+        assert!(wrapper.contains("self.birth_member_profile("));
+        assert!(!wrapper.contains("born_user("));
+    }
+    let private = one_fn("channel.rs", "birth_user_ring_member");
+    assert!(private.contains("PhysicalCeBelt::Deny"));
+    let body = one_fn("channel.rs", "birth_member_profile");
     assert!(
         body.contains("crate::birth::born_user(") && body.contains("capability::ThisThread"),
-        "★★★ `birth_member` no longer allocates through `born_user` on the calling thread"
+        "★★★ `birth_member_profile` no longer allocates through `born_user` on the calling thread"
     );
     let unwraps: Vec<_> = all_functions()
         .into_iter()
@@ -375,8 +382,8 @@ fn birth_member_is_the_one_caller_and_uses_the_live_thread() {
         .collect();
     assert_eq!(
         unwraps,
-        vec!["src/channel.rs: fn birth_member".to_string()],
-        "★★★ the channel class is named outside `birth_member`"
+        vec!["src/channel.rs: fn birth_member_profile".to_string()],
+        "★★★ the channel class is named outside `birth_member_profile`"
     );
     let callers: Vec<_> = all_functions()
         .into_iter()
@@ -385,7 +392,7 @@ fn birth_member_is_the_one_caller_and_uses_the_live_thread() {
         .collect();
     assert_eq!(
         callers,
-        vec!["src/channel.rs: fn birth_member".to_string()],
+        vec!["src/channel.rs: fn birth_member_profile".to_string()],
         "a second caller of `born_user` — check it uses the live thread, then widen this"
     );
 }

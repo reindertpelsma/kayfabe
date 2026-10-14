@@ -1,0 +1,33 @@
+2026-10-11T13:49:58Z START run_dir=/data/kf-native-reference-20261011/supplement-retry vm=native apps=9
+2026-10-11T13:49:58Z MATRIX_START apps=9 (resume skips 0) per_guest=1000 max_tdr=1000 tier<=1
+2026-10-11T13:50:00Z [g1] launched; waiting for the guest agent (<= 900s)
+2026-10-11T13:50:02Z [g1] agent answered after 3s
+2026-10-11T13:50:02Z [g1] no KF_GUEST_PW: assuming autologon
+2026-10-11T13:50:05Z [g1] interactive session: DESKTOP-JR70RMQ\vast
+2026-10-11T13:50:57Z [g1] pushed 25 guest files
+2026-10-11T13:51:04Z [g1] app disk attached (KFMOUNT D:)
+2026-10-11T13:51:12Z [g1] setup ok: cd=D: nvidia_adapters=1 NVIDIA GeForce RTX 4090, 580.88, 24564 MiB
+2026-10-11T13:51:21Z [g1] override tool kf_cuda_control.exe sha256=3906f520c10e272215d9d7d79a90ce9a2042581923a4717db90be312ab3a67c8
+2026-10-11T13:51:31Z [g1] override tool kf_dxprobe.exe sha256=3c6ededa77430a18a13321eb72fdca7f60282f8d12ddc147a7e7df1284832c5f
+2026-10-11T13:51:34Z [g1] staged vc_redist (cached, 0s)
+2026-10-11T13:51:42Z [g1] READY boot=2026-10-11T12:38:54.5000000Z user=DESKTOP-JR70RMQ\vast smi_ok=True
+2026-10-11T13:51:45Z [g1] staged python_embed (cached, 0s)
+2026-10-11T13:51:49Z [g1] staged pywheels (cached, 0s)
+2026-10-11T13:51:52Z [g1] staged hf_wheels (cached, 0s)
+2026-10-11T13:51:56Z [g1] staged hf_model (cached, 0s)
+2026-10-11T13:53:10Z [g1] hf_generate: PASS
+2026-10-11T13:53:14Z [g1] staged cuda_nvrtc (cached, 0s)
+2026-10-11T13:53:17Z [g1] staged cuda_cudart (cached, 0s)
+2026-10-11T13:54:19Z [g1] cdp_quicksort: FAIL
+2026-10-11T13:55:18Z [g1] stream_perthread_t: PASS
+2026-10-11T13:55:23Z [g1] staged cuda_cccl (unzip, 1s)
+2026-10-11T13:56:02Z [g1] cupy_sha256: PASS
+2026-10-11T13:56:46Z [g1] cupy_cg: PASS
+2026-10-11T13:57:26Z [g1] cupy_asynccopy: PASS
+2026-10-11T13:58:05Z [g1] cupy_check: PASS
+2026-10-11T13:58:45Z [g1] managed_t: PASS
+2026-10-11T13:58:48Z [g1] staged cuda_demo_suite (cached, 0s)
+2026-10-11T13:59:25Z [g1] vectorAdd_demo: PASS
+2026-10-11T13:59:25Z [g1] stopped (noop (native box stays up))
+2026-10-11T13:59:25Z MATRIX_DONE batched: 8 pass / 9
+2026-10-11T13:59:25Z EXIT rc=0

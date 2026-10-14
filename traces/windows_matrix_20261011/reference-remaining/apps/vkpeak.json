@@ -1,0 +1,85 @@
+{
+ "quiet": 123,
+ "end_utc": "2026-10-11T15:49:26.7756294Z",
+ "start_utc": "2026-10-11T15:47:19.3575433Z",
+ "rc": 0,
+ "secs": 127,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4090 status=OK code=0"
+ ],
+ "digests": [],
+ "session": 0,
+ "out_files": [],
+ "boot_utc_start": "2026-10-11T14:31:59.5000000Z",
+ "log_tail": [
+  "=== vkpeak start=2026-10-11T08:47:19.3575433-07:00 host=DESKTOP-JR70RMQ session=0 boot=2026-10-11T14:31:59.5000000Z timeout=600",
+  "device       = NVIDIA GeForce RTX 4090",
+  "driver       = NVIDIA / 580.88",
+  "System.Management.Automation.RemoteException",
+  "fp32-scalar  = 59911.47 GFLOPS",
+  "fp32-vec4    = 58577.94 GFLOPS",
+  "fp16-scalar  = 89341.82 GFLOPS",
+  "fp16-vec4    = 65249.55 GFLOPS",
+  "fp16-matrix  = 357924.86 GFLOPS",
+  "fp64-scalar  = 1407.23 GFLOPS",
+  "fp64-vec4    = 1402.99 GFLOPS",
+  "int32-scalar = 44699.12 GIOPS",
+  "int32-vec4   = 44567.87 GIOPS",
+  "int16-scalar = 37466.90 GIOPS",
+  "int16-vec4   = 32778.56 GIOPS",
+  "int64-scalar = 13657.17 GIOPS",
+  "int64-vec4   = 10751.80 GIOPS",
+  "int8-dotprod = 42331.11 GIOPS",
+  "int8-matrix  = 714706.77 GIOPS",
+  "bf16-dotprod = 0.00 GFLOPS",
+  "bf16-matrix  = 179841.59 GFLOPS",
+  "fp8-matrix   = 0.00 GFLOPS",
+  "bf8-matrix   = 0.00 GFLOPS",
+  "copy-h2h     = 15.76 GBPS",
+  "copy-h2d     = 15.66 GBPS",
+  "copy-d2h     = 16.97 GBPS",
+  "copy-d2d     = 451.06 GBPS",
+  "=== end rc=0 secs=127 2026-10-11T08:49:26.7756294-07:00"
+ ],
+ "pdh": {
+  "pids": [
+   "2844",
+   "5788",
+   "1644"
+  ],
+  "nv": {
+   "security": 0,
+   "3d": 281.6987058450666,
+   "vr": 0,
+   "videodecode": 0,
+   "copy": 0.3064822028629664,
+   "ofa_0": 0,
+   "legacyoverlay": 0,
+   "videoencode": 0
+  },
+  "samples": 59,
+  "other": {},
+  "nvidia_luids": "0_5f8e"
+ },
+ "timed_out": false,
+ "token": "g1-vkpeak-1791733621",
+ "boot_utc_end": "2026-10-11T14:31:59.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "vkpeak",
+ "smi": {
+  "samples": 20,
+  "mem_used_base_mb": 163,
+  "util_max": 100,
+  "mem_used_max_mb": 721
+ }
+}

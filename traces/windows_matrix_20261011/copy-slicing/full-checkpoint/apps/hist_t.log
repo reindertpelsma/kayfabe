@@ -1,0 +1,6 @@
+=== hist_t start=2026-10-11T13:27:28.3780687+00:00 host=VASTWIN session=0 boot=2026-10-11T13:24:26.5000000Z timeout=120
+KFDEV NVIDIA GeForce RTX 4070
+[eq] device NVIDIA GeForce RTX 4070 torch 2.8.0+cu126
+CHECK histogram_bincount_exact ok
+WINEQ_DONE hist
+=== end rc=0 secs=113 2026-10-11T13:29:20.8991650+00:00

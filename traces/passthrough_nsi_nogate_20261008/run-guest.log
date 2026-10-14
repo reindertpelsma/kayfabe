@@ -1,0 +1,9 @@
+NSI_START 2026-10-08T23:24:54+02:00 rev=f589ab23 steps=guest src=f589ab23 qemu=0 9 MiB, 0 %
+== STEP guest start 2026-10-08T23:24:54+02:00 qemu=0
+--ce-interrupt               FAIL      11s   raw client rc=1
+FAST_CELL_ARM arm=ce-interrupt verdict=FAIL secs=11 client_ms=6719
+
+FAST_SUITE_PASS=1 FAST_SUITE_FAIL=1 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=2
+FAST_SUITE_RC=1
+== STEP guest exit 2026-10-08T23:25:12+02:00 qemu=0
+NSI_DONE 2026-10-08T23:25:12+02:00

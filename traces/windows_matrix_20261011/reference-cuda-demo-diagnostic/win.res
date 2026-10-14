@@ -1,0 +1,4 @@
+APPRES side=win app=oceanFFT_demo verdict=PASS rc=0 secs=30 quiet=29 note=- boot=g1 guest_tdr=0 wer=0 gsp_cycles=- proof=pdh:3d tier=1 cat=cuda-demo
+APPRES side=win app=randomFog_demo verdict=PASS rc=0 secs=30 quiet=29 note=- boot=g1 guest_tdr=0 wer=0 gsp_cycles=- proof=pdh:3d tier=1 cat=cuda-demo
+APPRES side=win app=oceanFFT_qa_diagnostic verdict=FAIL rc=1 secs=4 quiet=1 note=rc:1,no-gpu-proof | compareBin2Bin <float> unable to find <ref_spatialDomain.bin> in <C:\kfapps\cuda_demo\demo_suite\oceanFFT.exe> boot=g1 guest_tdr=0 wer=0 gsp_cycles=- proof=none:pdh:Cuda|Compute|3D|Copy tier=1 cat=cuda-demo
+APPRES side=win app=randomFog_qa_diagnostic verdict=FAIL rc=1 secs=3 quiet=2 note=rc:1,no-gpu-proof | compareBin2Bin <float> unable to find <ref_randomFog.bin> in <C:\kfapps\cuda_demo\demo_suite\randomFog.exe> boot=g1 guest_tdr=0 wer=0 gsp_cycles=- proof=none:pdh:Cuda|Compute|3D|Copy tier=1 cat=cuda-demo

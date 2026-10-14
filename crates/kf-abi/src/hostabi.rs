@@ -471,6 +471,17 @@ pub enum HostParams {
         /// Where the layout came from.
         source: &'static str,
     },
+    /// An authored, fixed-size opaque request measured on exact host versions.
+    /// No guest bytes or captured replies cross this interface. Unknown versions
+    /// outside the original encoded interval are still refused by name.
+    MeasuredOpaque {
+        /// Published unprivileged probe and source tag.
+        source: &'static str,
+        /// Exact measured tags; never a nearest-version or branch-wide match.
+        versions: &'static [DriverVersion],
+        /// Request and reply size, checked before the host ioctl.
+        size: usize,
+    },
 }
 
 /// One control issued to the host.
@@ -547,6 +558,13 @@ pub static HOST_CONTROLS: &[HostControl] = &[
         "NV0080_CTRL_CMD_FIFO_GET_LATENCY_BUFFER_SIZE",
         0x0080_170e,
         NV0080_CTRL_FIFO_GET_LATENCY_BUFFER_SIZE_PARAMS
+    ),
+    // ★ 2026-10-11 (channel budget, `kf_abi::chanbudget`): NON_PRIVILEGED (`flags = 0x30008`), asked at realize
+    // once per served runlist for its channel count and what is in use. One measured layout in the matrix.
+    hc!(
+        "NV2080_CTRL_CMD_FIFO_GET_INFO",
+        0x2080_1109,
+        NV2080_CTRL_FIFO_GET_INFO_PARAMS
     ),
     HostControl {
         name: "NV0080_CTRL_CMD_MSENC_GET_CAPS_V2",
@@ -822,15 +840,27 @@ pub static HOST_CONTROLS: &[HostControl] = &[
     HostControl {
         name: "",
         cmd: 0x2080_8163,
-        params: HostParams::NoHeader {
-            source: "kf_abi::gssreplay ENC session (measured on 580.159.04 hosts)",
+        params: HostParams::MeasuredOpaque {
+            source: "measured:AD104,595.91.07,2026-10-11; traces/windows_matrix_20261011/encoder-session/probe.log; existing580 contract",
+            versions: &[DriverVersion {
+                major: 595,
+                minor: 91,
+                patch: 7,
+            }],
+            size: crate::gssreplay::ENC_SESSION_PARAMS_SIZE,
         },
     },
     HostControl {
         name: "",
         cmd: 0x2080_8164,
-        params: HostParams::NoHeader {
-            source: "kf_abi::gssreplay ENC session (measured on 580.159.04 hosts)",
+        params: HostParams::MeasuredOpaque {
+            source: "measured:AD104,595.91.07,2026-10-11; traces/windows_matrix_20261011/encoder-session/probe.log; existing580 contract",
+            versions: &[DriverVersion {
+                major: 595,
+                minor: 91,
+                patch: 7,
+            }],
+            size: crate::gssreplay::ENC_SESSION_PARAMS_SIZE,
         },
     },
 ];
@@ -865,6 +895,21 @@ impl HostAbi {
             Some(HostParams::Measured(runs)) => self.carry(runs).map(Some),
             Some(HostParams::Renamed { before, after }) => {
                 self.carry_renamed(before, after).map(Some)
+            }
+            Some(HostParams::MeasuredOpaque {
+                source,
+                versions,
+                size,
+            }) => {
+                if self.in_encoded_interval() || versions.contains(&self.version) {
+                    Ok(Some(Carry::Same { size }))
+                } else {
+                    Err(HostAbiError::NoHeader {
+                        cmd,
+                        source,
+                        version: self.version,
+                    })
+                }
             }
             Some(HostParams::NoHeader { source }) => {
                 if self.in_encoded_interval() {
@@ -903,7 +948,7 @@ mod tests {
             let (runs, after) = match c.params {
                 HostParams::Measured(r) => (r, None),
                 HostParams::Renamed { before, after } => (before, Some(after)),
-                HostParams::NoHeader { .. } => continue,
+                HostParams::NoHeader { .. } | HostParams::MeasuredOpaque { .. } => continue,
             };
             let row = hm::ALL_VALUES
                 .iter()
@@ -987,6 +1032,56 @@ mod tests {
                 .expect("interval")
                 .is_none()
         );
+    }
+
+    /// Regression: the locally refused acquire/release prevented all three
+    /// Windows encoders from opening. Only the two measured four-byte controls
+    /// gain595.91.07 support; adjacent tags and unrelated opaque controls refuse.
+    #[test]
+    fn encoder_session_contract_is_exact_and_bounded() {
+        for cmd in [
+            crate::gssreplay::GSS_ENC_SESSION_ACQUIRE,
+            crate::gssreplay::GSS_ENC_SESSION_RELEASE,
+        ] {
+            for version in ["595.91.07", "580.159.04"] {
+                let h = host(version);
+                let carry = h
+                    .control_carry(cmd)
+                    .expect("measured")
+                    .expect("size checked");
+                assert_eq!(carry.host_size(), 4);
+                assert_eq!(
+                    h.carry_out("encoder session", &carry, &[0; 4])
+                        .expect("authored body"),
+                    [0; 4]
+                );
+                for size in [0, 1, 3, 5, 8] {
+                    assert!(matches!(
+                        h.carry_out("encoder session", &carry, &vec![0; size]),
+                        Err(HostAbiError::Size { want: 4, .. })
+                    ));
+                }
+            }
+            for version in ["575.57.08", "595.84", "610.43.02", "610.57.04"] {
+                assert!(
+                    matches!(
+                        host(version).control_carry(cmd),
+                        Err(HostAbiError::NoHeader { .. })
+                    ),
+                    "{version}"
+                );
+            }
+        }
+        for cmd in [0x2080_9064, 0x2080_a028, 0x2080_a084, 0x2080_a026] {
+            assert!(matches!(
+                host("595.91.07").control_carry(cmd),
+                Err(HostAbiError::NoHeader { .. })
+            ));
+        }
+        assert!(matches!(
+            HostAbi::for_host(HostDriverVersion::parse("595.91.08").expect("parse")),
+            Err(HostAbiError::Unmeasured { .. })
+        ));
     }
 
     /// ★ The MSENC caps query was malformed on hosts the old gate accepted: 8 bytes with

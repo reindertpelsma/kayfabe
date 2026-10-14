@@ -1,0 +1,10 @@
+=== torch_burn start=2026-10-11T17:26:54.4301378+00:00 host=VASTWIN session=0 boot=2026-10-11T17:19:23.5000000Z timeout=180
+KFDEV NVIDIA GeForce RTX 4070
+[burn] t=10s iters=1445 errors=0
+[burn] t=20s iters=2905 errors=0
+[burn] t=30s iters=4365 errors=0
+[burn] t=40s iters=5821 errors=0
+[burn] t=50s iters=7265 errors=0
+iterations=8697 seconds=60.0 GFLOPS=19918 compare_errors=0
+GPU 0: OK
+=== end rc=0 secs=117 2026-10-11T17:28:51.4142523+00:00

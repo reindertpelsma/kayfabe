@@ -1,0 +1,6 @@
+=== cupy_cg start=2026-10-11T06:56:14.8203728-07:00 host=DESKTOP-JR70RMQ session=0 boot=2026-10-11T12:38:54.5000000Z timeout=180
+KFDEV NVIDIA GeForce RTX 4090
+[nvrtc] device NVIDIA GeForce RTX 4090 cupy 14.2.0 include ['C:\\kfapps\\cuda_cudart\\include', 'C:\\kfapps\\cuda_cccl\\include']
+CHECK cooperative_groups_block_sum ok
+NVRTC_DONE cg
+=== end rc=0 secs=9 2026-10-11T06:56:23.4609964-07:00

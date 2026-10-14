@@ -1,0 +1,449 @@
+{
+  "coverage": "Mutable first samples, NOT execution or complete PB corpus. UnknownSuffix stops later reads; gaps include publication retries. No interfaces/constants derived.",
+  "classes": {
+    "1610": {
+      "UnknownSuffix": 32,
+      "Source": 2
+    },
+    "1611": {
+      "UnknownSuffix": 26,
+      "Source": 2
+    }
+  },
+  "records": [
+    {
+      "run": "1610",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "14cf51a79d16c1578e34550c0c0a28ff54e9508bdf1fd8eea4fe80ec65359fa7",
+      "observation": "kf3: USER_RING_SHADOW (c1d00030, ff04000f) idx=17 native=Some((cafe00d2, 38)) source_generation=1 native_issued=16 class=UnknownSuffix category=b GP=0x007d9e00148a003c cursor=16 source_epoch=401 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1610",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "14cf51a79d16c1578e34550c0c0a28ff54e9508bdf1fd8eea4fe80ec65359fa7",
+      "observation": "kf3: USER_RING_SHADOW (c1d00032, ff040011) idx=19 native=Some((cafe0104, 3a)) source_generation=1 native_issued=16 class=UnknownSuffix category=b GP=0x007d9e001514103c cursor=16 source_epoch=713 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1610",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "14cf51a79d16c1578e34550c0c0a28ff54e9508bdf1fd8eea4fe80ec65359fa7",
+      "observation": "kf3: USER_RING_SHADOW (c1d00036, ff040013) idx=21 native=Some((cafe015c, 3c)) source_generation=1 native_issued=56 class=UnknownSuffix category=b GP=0x0001a200144f6380 cursor=56 source_epoch=373 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1610",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "14cf51a79d16c1578e34550c0c0a28ff54e9508bdf1fd8eea4fe80ec65359fa7",
+      "observation": "kf3: USER_RING_SHADOW (c1d00033, ff040012) idx=4116 native=Some((cafe0111, 2003b)) source_generation=1 native_issued=458 class=UnknownSuffix category=b GP=0x0000300120378aa0 cursor=458 source_epoch=913 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1610",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "14cf51a79d16c1578e34550c0c0a28ff54e9508bdf1fd8eea4fe80ec65359fa7",
+      "observation": "kf3: USER_RING_SHADOW (c1d00027, ff04000c) idx=14 native=Some((cafe008d, 35)) source_generation=1 native_issued=219 class=Source category=a,c,d GP=0x0000280120105750 cursor=219 source_epoch=111 software identity Retry; sample_first128=[200406c0, 1, 20244000, 93, 10000004, 200406c0, 1, 20244930, 1, 4]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1610",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "14cf51a79d16c1578e34550c0c0a28ff54e9508bdf1fd8eea4fe80ec65359fa7",
+      "observation": "kf3: USER_RING_SHADOW (c1d00027, ff04000c) idx=14 native=Some((cafe008d, 35)) source_generation=1 native_issued=220 class=UnknownSuffix category=b GP=0x0000ba0000010000 cursor=220 source_epoch=111 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1610",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "14cf51a79d16c1578e34550c0c0a28ff54e9508bdf1fd8eea4fe80ec65359fa7",
+      "observation": "kf3: USER_RING_SHADOW (c1d0003e, ff040016) idx=24 native=Some((cafe01e5, 3f)) source_generation=1 native_issued=16 class=UnknownSuffix category=b GP=0x007d9e000401403c cursor=16 source_epoch=183 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1610",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "14cf51a79d16c1578e34550c0c0a28ff54e9508bdf1fd8eea4fe80ec65359fa7",
+      "observation": "kf3: USER_RING_SHADOW (c1d0003d, ff040015) idx=23 native=Some((cafe01da, 3e)) source_generation=1 native_issued=16 class=UnknownSuffix category=b GP=0x007d9e000401403c cursor=16 source_epoch=215 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1610",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "14cf51a79d16c1578e34550c0c0a28ff54e9508bdf1fd8eea4fe80ec65359fa7",
+      "observation": "kf3: USER_RING_SHADOW (c1d0003f, ff040017) idx=4121 native=Some((cafe01f0, 20040)) source_generation=1 native_issued=14 class=UnknownSuffix category=b GP=0x000b5a0004046000 cursor=14 source_epoch=659 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1610",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "14cf51a79d16c1578e34550c0c0a28ff54e9508bdf1fd8eea4fe80ec65359fa7",
+      "observation": "kf3: USER_RING_SHADOW (c1d00046, ff04001a) idx=28 native=Some((cafe02a8, 43)) source_generation=1 native_issued=16 class=UnknownSuffix category=b GP=0x007d9e000401403c cursor=16 source_epoch=193 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1610",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "14cf51a79d16c1578e34550c0c0a28ff54e9508bdf1fd8eea4fe80ec65359fa7",
+      "observation": "kf3: USER_RING_SHADOW (c1d00045, ff040019) idx=27 native=Some((cafe027a, 42)) source_generation=1 native_issued=55 class=UnknownSuffix category=b GP=0x00002e00144d6254 cursor=55 source_epoch=343 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1610",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "14cf51a79d16c1578e34550c0c0a28ff54e9508bdf1fd8eea4fe80ec65359fa7",
+      "observation": "kf3: USER_RING_SHADOW (c1d00048, ff04001c) idx=4126 native=Some((cafe02cd, 20045)) source_generation=1 native_issued=49 class=Source category=a,c,d GP=0x00003001200e8170 cursor=49 source_epoch=397 software identity Retry; sample_first128=[20038090, 1, 200eb000, 6, 200180c0, 8, 20038090, 1, 200eb060, 0, 200180c0, 10]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1610",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "14cf51a79d16c1578e34550c0c0a28ff54e9508bdf1fd8eea4fe80ec65359fa7",
+      "observation": "kf3: USER_RING_SHADOW (c1d00048, ff04001c) idx=4126 native=Some((cafe02cd, 20045)) source_generation=1 native_issued=49 class=UnknownSuffix category=b GP=0x00003001200e8170 cursor=49 source_epoch=397 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1610",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "14cf51a79d16c1578e34550c0c0a28ff54e9508bdf1fd8eea4fe80ec65359fa7",
+      "observation": "kf3: USER_RING_SHADOW (c1d00049, ff04001d) idx=31 native=Some((cafe0342, 46)) source_generation=1 native_issued=16 class=UnknownSuffix category=b GP=0x007d9e0016d8003c cursor=16 source_epoch=653 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1610",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "14cf51a79d16c1578e34550c0c0a28ff54e9508bdf1fd8eea4fe80ec65359fa7",
+      "observation": "kf3: USER_RING_SHADOW (c1d0004b, ff04001f) idx=33 native=Some((cafe035b, 48)) source_generation=1 native_issued=16 class=UnknownSuffix category=b GP=0x007d9e0015b8003c cursor=16 source_epoch=1361 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1610",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "14cf51a79d16c1578e34550c0c0a28ff54e9508bdf1fd8eea4fe80ec65359fa7",
+      "observation": "kf3: USER_RING_SHADOW (c1d00063, ff040013) idx=21 native=Some((cafe054d, 3c)) source_generation=1 native_issued=73 class=UnknownSuffix category=b GP=0x0000e20014555a00 cursor=73 source_epoch=377 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1610",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "14cf51a79d16c1578e34550c0c0a28ff54e9508bdf1fd8eea4fe80ec65359fa7",
+      "observation": "kf3: USER_RING_SHADOW (c1d0002a, ff04000d) idx=15 native=Some((cafe00aa, 36)) source_generation=1 native_issued=49 class=UnknownSuffix category=b GP=0x00005a00144d5000 cursor=49 source_epoch=1189 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1610",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "14cf51a79d16c1578e34550c0c0a28ff54e9508bdf1fd8eea4fe80ec65359fa7",
+      "observation": "kf3: USER_RING_SHADOW (c1d00077, ff040022) idx=4132 native=Some((cafe064b, 2004b)) source_generation=1 native_issued=14 class=UnknownSuffix category=b GP=0x00012a0004046000 cursor=14 source_epoch=271 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1610",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "14cf51a79d16c1578e34550c0c0a28ff54e9508bdf1fd8eea4fe80ec65359fa7",
+      "observation": "kf3: USER_RING_SHADOW (c1d00076, ff040021) idx=35 native=Some((cafe0640, 4a)) source_generation=1 native_issued=91 class=UnknownSuffix category=b GP=0x00266600144d6504 cursor=91 source_epoch=649 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1610",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "14cf51a79d16c1578e34550c0c0a28ff54e9508bdf1fd8eea4fe80ec65359fa7",
+      "observation": "kf3: USER_RING_SHADOW (c1d0007a, ff040025) idx=39 native=Some((cafe076b, 4e)) source_generation=1 native_issued=18 class=UnknownSuffix category=b GP=0x0001b6001af5cdd8 cursor=18 source_epoch=1635 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1610",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "14cf51a79d16c1578e34550c0c0a28ff54e9508bdf1fd8eea4fe80ec65359fa7",
+      "observation": "kf3: USER_RING_SHADOW (c1d00078, ff040023) idx=6181 native=Some((cafe071d, 3004c)) source_generation=1 native_issued=2 class=UnknownSuffix category=b GP=0x0000060120013000 cursor=2 source_epoch=1715 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1610",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "14cf51a79d16c1578e34550c0c0a28ff54e9508bdf1fd8eea4fe80ec65359fa7",
+      "observation": "kf3: USER_RING_SHADOW (c1d00079, ff040024) idx=38 native=Some((cafe075f, 4d)) source_generation=1 native_issued=64 class=UnknownSuffix category=b GP=0x000028012021b198 cursor=64 source_epoch=1891 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1610",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "14cf51a79d16c1578e34550c0c0a28ff54e9508bdf1fd8eea4fe80ec65359fa7",
+      "observation": "kf3: USER_RING_SHADOW (c1d0007d, ff040025) idx=39 native=Some((cafe0813, 4e)) source_generation=1 native_issued=16 class=UnknownSuffix category=b GP=0x007d9e001b08703c cursor=16 source_epoch=3431 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1610",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "14cf51a79d16c1578e34550c0c0a28ff54e9508bdf1fd8eea4fe80ec65359fa7",
+      "observation": "kf3: USER_RING_SHADOW (c1d00082, ff04002b) idx=2093 native=Some((cafe0874, 10054)) source_generation=1 native_issued=39 class=UnknownSuffix category=b GP=0x0000060120013000 cursor=39 source_epoch=3923 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1610",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "14cf51a79d16c1578e34550c0c0a28ff54e9508bdf1fd8eea4fe80ec65359fa7",
+      "observation": "kf3: USER_RING_SHADOW (c1d00088, ff040025) idx=39 native=Some((cafe08ae, 4e)) source_generation=1 native_issued=16 class=UnknownSuffix category=b GP=0x007d9e001b51903c cursor=16 source_epoch=4681 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1610",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "14cf51a79d16c1578e34550c0c0a28ff54e9508bdf1fd8eea4fe80ec65359fa7",
+      "observation": "kf3: USER_RING_SHADOW (c1d0008d, ff04002b) idx=2093 native=Some((cafe08ef, 10054)) source_generation=1 native_issued=2 class=UnknownSuffix category=b GP=0x0000060120013000 cursor=2 source_epoch=4777 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1610",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "14cf51a79d16c1578e34550c0c0a28ff54e9508bdf1fd8eea4fe80ec65359fa7",
+      "observation": "kf3: USER_RING_SHADOW (c1d000bb, ff04000e) idx=16 native=Some((cafe0994, 37)) source_generation=1 native_issued=16 class=UnknownSuffix category=b GP=0x007d9e00182a003c cursor=16 source_epoch=225 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1610",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "14cf51a79d16c1578e34550c0c0a28ff54e9508bdf1fd8eea4fe80ec65359fa7",
+      "observation": "kf3: USER_RING_SHADOW (c1d000be, ff04000d) idx=15 native=Some((cafe09d2, 36)) source_generation=1 native_issued=33 class=UnknownSuffix category=b GP=0x00108200183d0000 cursor=33 source_epoch=1465 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1610",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "14cf51a79d16c1578e34550c0c0a28ff54e9508bdf1fd8eea4fe80ec65359fa7",
+      "observation": "kf3: USER_RING_SHADOW (c1d000c0, ff040011) idx=19 native=Some((cafe09fd, 3a)) source_generation=1 native_issued=32 class=UnknownSuffix category=b GP=0x008c1a0004027340 cursor=32 source_epoch=255 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1610",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "14cf51a79d16c1578e34550c0c0a28ff54e9508bdf1fd8eea4fe80ec65359fa7",
+      "observation": "kf3: USER_RING_SHADOW (c1d000c3, ff040012) idx=20 native=Some((cafe0a68, 3b)) source_generation=1 native_issued=16 class=UnknownSuffix category=b GP=0x007d9e000401403c cursor=16 source_epoch=223 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1610",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "14cf51a79d16c1578e34550c0c0a28ff54e9508bdf1fd8eea4fe80ec65359fa7",
+      "observation": "kf3: USER_RING_SHADOW (c1d000c6, ff040015) idx=23 native=Some((cafe0af2, 3e)) source_generation=1 native_issued=16 class=UnknownSuffix category=b GP=0x007d9e00148a003c cursor=16 source_epoch=517 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1610",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "14cf51a79d16c1578e34550c0c0a28ff54e9508bdf1fd8eea4fe80ec65359fa7",
+      "observation": "kf3: USER_RING_SHADOW (c1d000c8, ff040017) idx=25 native=Some((cafe0b36, 40)) source_generation=1 native_issued=16 class=UnknownSuffix category=b GP=0x007d9e00151c103c cursor=16 source_epoch=827 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1610",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "14cf51a79d16c1578e34550c0c0a28ff54e9508bdf1fd8eea4fe80ec65359fa7",
+      "observation": "kf3: USER_RING_SHADOW (c1d000cf, ff040019) idx=27 native=Some((cafe0c95, 42)) source_generation=1 native_issued=16 class=UnknownSuffix category=b GP=0x007d9e000401403c cursor=16 source_epoch=177 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1610",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "14cf51a79d16c1578e34550c0c0a28ff54e9508bdf1fd8eea4fe80ec65359fa7",
+      "observation": "kf3: USER_RING_SHADOW (c1d000c9, ff040018) idx=4122 native=Some((cafe0b43, 20041)) source_generation=1 native_issued=1036 class=UnknownSuffix category=b GP=0x0000300120379760 cursor=1036 source_epoch=2023 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1611",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "1234495cdd40efb3a220788d661cded48f332ce1b0794e4280777a467e9a78c5",
+      "observation": "kf3: USER_RING_SHADOW (c1d0002a, ff04000d) idx=15 native=Some((cafe00ab, 36)) source_generation=1 native_issued=30 class=UnknownSuffix category=b GP=0x0001620014440200 cursor=30 source_epoch=177 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1611",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "1234495cdd40efb3a220788d661cded48f332ce1b0794e4280777a467e9a78c5",
+      "observation": "kf3: USER_RING_SHADOW (c1d00030, ff04000f) idx=17 native=Some((cafe00d3, 38)) source_generation=1 native_issued=16 class=UnknownSuffix category=b GP=0x007d9e00148a003c cursor=16 source_epoch=459 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1611",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "1234495cdd40efb3a220788d661cded48f332ce1b0794e4280777a467e9a78c5",
+      "observation": "kf3: USER_RING_SHADOW (c1d00032, ff040011) idx=19 native=Some((cafe0109, 3a)) source_generation=1 native_issued=16 class=UnknownSuffix category=b GP=0x007d9e001514103c cursor=16 source_epoch=739 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1611",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "1234495cdd40efb3a220788d661cded48f332ce1b0794e4280777a467e9a78c5",
+      "observation": "kf3: USER_RING_SHADOW (c1d00038, ff040013) idx=21 native=Some((cafe015d, 3c)) source_generation=1 native_issued=51 class=UnknownSuffix category=b GP=0x00009a00144d5058 cursor=51 source_epoch=369 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1611",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "1234495cdd40efb3a220788d661cded48f332ce1b0794e4280777a467e9a78c5",
+      "observation": "kf3: USER_RING_SHADOW (c1d0003c, ff040015) idx=23 native=Some((cafe01e2, 3e)) source_generation=1 native_issued=16 class=UnknownSuffix category=b GP=0x007d9e000401403c cursor=16 source_epoch=175 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1611",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "1234495cdd40efb3a220788d661cded48f332ce1b0794e4280777a467e9a78c5",
+      "observation": "kf3: USER_RING_SHADOW (c1d0003f, ff040016) idx=24 native=Some((cafe01ed, 3f)) source_generation=1 native_issued=16 class=UnknownSuffix category=b GP=0x007d9e000401403c cursor=16 source_epoch=241 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1611",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "1234495cdd40efb3a220788d661cded48f332ce1b0794e4280777a467e9a78c5",
+      "observation": "kf3: USER_RING_SHADOW (c1d00041, ff040018) idx=4122 native=Some((cafe01fd, 20041)) source_generation=1 native_issued=15 class=UnknownSuffix category=b GP=0x00003001200e80b0 cursor=15 source_epoch=295 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1611",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "1234495cdd40efb3a220788d661cded48f332ce1b0794e4280777a467e9a78c5",
+      "observation": "kf3: USER_RING_SHADOW (c1d00033, ff040012) idx=4116 native=Some((cafe0114, 2003b)) source_generation=1 native_issued=592 class=Source category=a,c,d GP=0x00009200175fb058 cursor=592 source_epoch=937 software identity Retry; sample_first128=[2005e017, 14daf000, 0, 250, 0, 1000001, 20048090, 0, 14a8e7c0, 109c, 0, 200180c0, 800000c, 20048090, 0, 14a8e680, 23, 0, 200180c0, 800000c, 20048090, 0, 14a8e7c0, 109d, 0, 200180c0, 800000c, 20048090, 0, 14a8e7c0, 109d, 0, 200180c0, 800000c, 200180c0, 4c]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1611",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "1234495cdd40efb3a220788d661cded48f332ce1b0794e4280777a467e9a78c5",
+      "observation": "kf3: USER_RING_SHADOW (c1d00033, ff040012) idx=4116 native=Some((cafe0114, 2003b)) source_generation=1 native_issued=592 class=UnknownSuffix category=b GP=0x00009200175fb058 cursor=592 source_epoch=937 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1611",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "1234495cdd40efb3a220788d661cded48f332ce1b0794e4280777a467e9a78c5",
+      "observation": "kf3: USER_RING_SHADOW (c1d00040, ff040017) idx=4121 native=Some((cafe01f7, 20040)) source_generation=1 native_issued=48 class=UnknownSuffix category=b GP=0x0000ea00145f7058 cursor=48 source_epoch=1039 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1611",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "1234495cdd40efb3a220788d661cded48f332ce1b0794e4280777a467e9a78c5",
+      "observation": "kf3: USER_RING_SHADOW (c1d00044, ff040019) idx=27 native=Some((cafe0260, 42)) source_generation=1 native_issued=16 class=UnknownSuffix category=b GP=0x007d9e000401403c cursor=16 source_epoch=181 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1611",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "1234495cdd40efb3a220788d661cded48f332ce1b0794e4280777a467e9a78c5",
+      "observation": "kf3: USER_RING_SHADOW (c1d00047, ff04001a) idx=28 native=Some((cafe028d, 43)) source_generation=1 native_issued=16 class=UnknownSuffix category=b GP=0x007d9e000401403c cursor=16 source_epoch=257 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1611",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "1234495cdd40efb3a220788d661cded48f332ce1b0794e4280777a467e9a78c5",
+      "observation": "kf3: USER_RING_SHADOW (c1d0004a, ff04001d) idx=31 native=Some((cafe033e, 46)) source_generation=1 native_issued=16 class=UnknownSuffix category=b GP=0x007d9e0016d8003c cursor=16 source_epoch=723 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1611",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "1234495cdd40efb3a220788d661cded48f332ce1b0794e4280777a467e9a78c5",
+      "observation": "kf3: USER_RING_SHADOW (c1d0004c, ff04001f) idx=33 native=Some((cafe034f, 48)) source_generation=1 native_issued=33 class=UnknownSuffix category=b GP=0x0010820017d69000 cursor=33 source_epoch=1361 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1611",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "1234495cdd40efb3a220788d661cded48f332ce1b0794e4280777a467e9a78c5",
+      "observation": "kf3: USER_RING_SHADOW (c1d00039, ff040014) idx=4118 native=Some((cafe0168, 2003d)) source_generation=1 native_issued=202 class=UnknownSuffix category=b GP=0x00003001200e84d0 cursor=202 source_epoch=871 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1611",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "1234495cdd40efb3a220788d661cded48f332ce1b0794e4280777a467e9a78c5",
+      "observation": "kf3: USER_RING_SHADOW (c1d00064, ff040013) idx=21 native=Some((cafe053c, 3c)) source_generation=1 native_issued=36 class=Source category=a,c,d GP=0x00002801200c40d0 cursor=36 source_epoch=407 software identity Retry; sample_first128=[200406c0, 1, 200cf000, 3, 10000004, 200406c0, 1, 200cf030, 1, 4]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1611",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "1234495cdd40efb3a220788d661cded48f332ce1b0794e4280777a467e9a78c5",
+      "observation": "kf3: USER_RING_SHADOW (c1d00064, ff040013) idx=21 native=Some((cafe053c, 3c)) source_generation=1 native_issued=49 class=UnknownSuffix category=b GP=0x00005a00144d5000 cursor=49 source_epoch=407 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1611",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "1234495cdd40efb3a220788d661cded48f332ce1b0794e4280777a467e9a78c5",
+      "observation": "kf3: USER_RING_SHADOW (c1d00078, ff040025) idx=39 native=Some((cafe0652, 4e)) source_generation=1 native_issued=19 class=UnknownSuffix category=b GP=0x00108200074f0000 cursor=19 source_epoch=893 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1611",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "1234495cdd40efb3a220788d661cded48f332ce1b0794e4280777a467e9a78c5",
+      "observation": "kf3: USER_RING_SHADOW (c1d00078, ff0e0103) idx=41 native=Some((cafe0663, 50)) source_generation=1 native_issued=76 class=UnknownSuffix category=b GP=0x0001e600084f6000 cursor=76 source_epoch=1297 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1611",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "1234495cdd40efb3a220788d661cded48f332ce1b0794e4280777a467e9a78c5",
+      "observation": "kf3: USER_RING_SHADOW (c1d00078, ff0e0102) idx=40 native=Some((cafe065d, 4f)) source_generation=1 native_issued=104 class=UnknownSuffix category=b GP=0x0001ae0008730000 cursor=104 source_epoch=1337 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1611",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "1234495cdd40efb3a220788d661cded48f332ce1b0794e4280777a467e9a78c5",
+      "observation": "kf3: USER_RING_SHADOW (c1d000aa, ff04000d) idx=15 native=Some((cafe0831, 36)) source_generation=1 native_issued=16 class=UnknownSuffix category=b GP=0x007d9e000401403c cursor=16 source_epoch=241 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1611",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "1234495cdd40efb3a220788d661cded48f332ce1b0794e4280777a467e9a78c5",
+      "observation": "kf3: USER_RING_SHADOW (c1d000a4, ff04000f) idx=17 native=Some((cafe07f5, 38)) source_generation=1 native_issued=53 class=UnknownSuffix category=b GP=0x005e76001b5b01f0 cursor=53 source_epoch=1087 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1611",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "1234495cdd40efb3a220788d661cded48f332ce1b0794e4280777a467e9a78c5",
+      "observation": "kf3: USER_RING_SHADOW (c1d000ab, ff04000e) idx=16 native=Some((cafe0838, 37)) source_generation=1 native_issued=16 class=UnknownSuffix category=b GP=0x007d9e001b5d003c cursor=16 source_epoch=1309 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1611",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "1234495cdd40efb3a220788d661cded48f332ce1b0794e4280777a467e9a78c5",
+      "observation": "kf3: USER_RING_SHADOW (c1d000b0, ff040013) idx=21 native=Some((cafe0938, 3c)) source_generation=1 native_issued=16 class=UnknownSuffix category=b GP=0x007d9e000401403c cursor=16 source_epoch=253 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1611",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "1234495cdd40efb3a220788d661cded48f332ce1b0794e4280777a467e9a78c5",
+      "observation": "kf3: USER_RING_SHADOW (c1d000b2, ff040015) idx=23 native=Some((cafe0961, 3e)) source_generation=1 native_issued=16 class=UnknownSuffix category=b GP=0x007d9e00145aa03c cursor=16 source_epoch=531 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1611",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "1234495cdd40efb3a220788d661cded48f332ce1b0794e4280777a467e9a78c5",
+      "observation": "kf3: USER_RING_SHADOW (c1d000b4, ff040017) idx=25 native=Some((cafe099b, 40)) source_generation=1 native_issued=16 class=UnknownSuffix category=b GP=0x007d9e001519803c cursor=16 source_epoch=825 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1611",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "1234495cdd40efb3a220788d661cded48f332ce1b0794e4280777a467e9a78c5",
+      "observation": "kf3: USER_RING_SHADOW (c1d000b5, ff040018) idx=4122 native=Some((cafe09aa, 20041)) source_generation=1 native_issued=152 class=UnknownSuffix category=b GP=0x00003001203783e0 cursor=152 source_epoch=2103 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "run": "1611",
+      "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+      "log_sha256": "1234495cdd40efb3a220788d661cded48f332ce1b0794e4280777a467e9a78c5",
+      "observation": "kf3: USER_RING_SHADOW (c1d000be, ff040019) idx=27 native=Some((cafe0ae2, 42)) source_generation=1 native_issued=16 class=UnknownSuffix category=b GP=0x007d9e000401403c cursor=16 source_epoch=209 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    }
+  ]
+}

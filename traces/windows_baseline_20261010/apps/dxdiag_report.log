@@ -1,0 +1,11 @@
+=== dxdiag_report start=2026-10-10T07:23:19.3628009-07:00 host=DESKTOP-397P3NI session=0 boot=2026-10-10T13:30:47.5000000Z timeout=180
+DXDIAG Card name: NVIDIA GeForce RTX 4060 Ti
+DXDIAG Chip type: NVIDIA GeForce RTX 4060 Ti
+DXDIAG Display Memory: 41886 MB
+DXDIAG Driver Version: 32.0.15.9597
+DXDIAG DDI Version: 12
+DXDIAG Feature Levels: 12_2,12_1,12_0,11_1,11_0,10_1,10_0,9_3,9_2,9_1,1_0_CORE
+DXDIAG Driver Model: WDDM 3.2
+DXDIAG Driver Version:
+DXDIAG_OK
+=== end rc=0 secs=88 2026-10-10T07:24:47.0955309-07:00

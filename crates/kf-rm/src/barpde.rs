@@ -188,6 +188,7 @@ impl CommandPolicy for BarPdePolicy {
                 self.held_last = true;
                 // ★ An EMPTY body with NV_OK: the command has no `[OUT]` field.
                 Some(Reply {
+                    rpc_result_private: None,
                     rpc_result: NV_OK,
                     body: Vec::new(),
                 })
@@ -197,6 +198,7 @@ impl CommandPolicy for BarPdePolicy {
                 self.held_last = false;
                 eprintln!("kf-rm: UPDATE_BAR_PDE refused: {e:?} — the aperture stays as it was");
                 Some(Reply {
+                    rpc_result_private: None,
                     rpc_result: NV_ERR_INVALID_ARGUMENT,
                     body: Vec::new(),
                 })
@@ -419,6 +421,7 @@ impl PageDirPolicy {
         self.carried += 1;
         self.held_last = true;
         Some(Reply {
+            rpc_result_private: None,
             rpc_result: NV_OK,
             body: cmd.payload.clone(),
         })
@@ -507,6 +510,7 @@ impl CommandPolicy for PageDirPolicy {
                 .decode_rpc_control(&cmd.payload)
                 .is_ok_and(|h| h.cmd == SET_PAGE_DIRECTORY);
         is_set.then(|| Reply {
+            rpc_result_private: None,
             rpc_result: NV_OK,
             body: cmd.payload.clone(),
         })

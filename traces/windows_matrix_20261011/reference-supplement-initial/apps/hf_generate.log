@@ -1,0 +1,9 @@
+=== hf_generate start=2026-10-11T06:46:43.0430930-07:00 host=DESKTOP-JR70RMQ session=0 boot=2026-10-11T12:38:54.5000000Z timeout=600
+KFDEV NVIDIA GeForce RTX 4090
+Traceback (most recent call last):
+  File "C:\kf\py\kf_runpy.py", line 22, in <module>
+    runpy.run_path(script, run_name="__main__")
+  File "<frozen runpy>", line 286, in run_path
+  File "<frozen runpy>", line 254, in _get_code_from_file
+FileNotFoundError: [Errno 2] No such file or directory: 'C:\\kf\\py\\hf_generate.py'
+=== end rc=1 secs=6 2026-10-11T06:46:49.4128811-07:00

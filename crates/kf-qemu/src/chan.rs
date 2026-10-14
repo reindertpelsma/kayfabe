@@ -34,10 +34,27 @@
 //! irqfd — `Device::latch_and_deliver`. ⊘ Never forged, never inline: a host NSI is the only
 //! trigger, and it carries no channel identity (RM's waiters re-check their semaphores).
 
+// ★ Review addendum (2026-10-10, `V3_BATCHED_MAP.md` §8.8.9): THE GUEST IS UNTRUSTED. This plane
+// reads the guest's rings, pushbuffers and USERD and the rows that back them; a panic on a thread
+// that serves it is a denial of service. Guest-derived values (VAs, lengths, ring indices) are only
+// added/subtracted/divided with `checked_*` / `saturating_*`, and nothing unwraps or indexes blindly.
+// A new panic site fails CI.
+#![cfg_attr(
+    not(test),
+    deny(
+        clippy::arithmetic_side_effects,
+        clippy::indexing_slicing,
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::unreachable
+    )
+)]
+
 use crate::mem::{Mirror, Mirrors, RamMap, resolve_placed, resolve_placed_prefix};
 use crate::raw_unsafe::RawRegion;
 use kf_chan::completions::Completions;
-use kf_chan::host::{ChanError, GuestUserd, HostRing, Publisher, Split, TranslatedChannel};
+use kf_chan::host::{ChanError, GuestUserd, Publisher, Split, TranslatedChannel};
 use kf_chan::ring::{GuestMemory, TranslatedRing};
 use kf_chan::translated::{Target, Window};
 use kf_core::{Owner, Plane, VmCaps};
@@ -49,6 +66,15 @@ use kf_trap::Route;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
+
+#[path = "userrelay.rs"]
+mod userrelay;
+#[path = "userpump.rs"]
+mod userpump;
+#[path = "usershadow.rs"]
+mod usershadow;
+#[path = "userquota.rs"]
+mod userquota;
 
 /// `NV_ERR_INVALID_STATE`.
 const NV_ERR_INVALID_STATE: u32 = 0x40;
@@ -63,11 +89,347 @@ const NV_ERR_INVALID_CLASS: u32 = 0x22;
 /// `NV2080_NOTIFIERS_GR0` = `NV2080_NOTIFIERS_GRAPHICS` (`ogkm-580: cl2080_notification.h:48,185`).
 const NV2080_NOTIFIERS_GR0: u32 = 12;
 
+/// ★ EXPERIMENT `KF3_GSS_NATIVE`: the host seam of `kf_rm::gssnative` over OUR host client: one
+/// `NV_ESC_RM_CONTROL` on kayfabe's own host subdevice, params carried unchanged
+/// ([`HostRm::raw_control_opaque`]).
+struct GssHostRm(&'static HostRm);
+
+impl kf_rm::gssnative::GssHost for GssHostRm {
+    fn control(&self, cmd: u32, params: &mut [u8]) -> Result<u32, String> {
+        self.0
+            .raw_control_opaque(self.0.subdevice(), cmd, params)
+            .map_err(|e| format!("{e:?}"))
+    }
+}
+
 /// ★ P5b: one host act, run on the plane's act thread. `Err((status, why))` refuses by name.
 type Act = Box<dyn FnOnce(&ChanPlane) -> Result<String, (u32, String)> + Send>;
 
+/// ★ Review 4 item 1: how much to hand to host RM for a falcon ctx at G of length `ctx_len`: the whole
+/// union of the placement row and ctx range, else the ctx range itself — a MISSING row (an earlier
+/// try removed it and the steer was refused; the mapping stayed in the ledger) never means "nothing
+/// of ours there", so the hand-over is attempted all the same and only `Free` lets the alloc go.
+fn steer_len(removed_row_len: Option<u64>, ctx_len: u64) -> u64 {
+    removed_row_len.unwrap_or(ctx_len).max(ctx_len)
+}
+
+/// ★ Review 3 item 5: the status an act returns after it has put ITSELF back on the act queue
+/// ([`ChanPlane::requeue`]): the act loop neither resolves its `Deferred` nor counts a refusal.
+const ACT_REQUEUED: u32 = 0xFFFF_FFF0;
+
+thread_local! {
+    /// ★ Review 4 item 4: acts the running act asked to be parked ([`delay_act`]); the act loop moves
+    /// them into its delay list after the act returns.
+    static ACT_DELAYED: std::cell::RefCell<Vec<(std::time::Instant, Act, kf_gsp::Deferred, &'static str)>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// ★ Review 4 item 4: from INSIDE an act (on the act thread), park `act` until `not_before`; the act
+/// loop runs everything else meanwhile (no sleeping). The act then returns [`ACT_REQUEUED`].
+fn delay_act(not_before: std::time::Instant, what: &'static str, act: Act, d: kf_gsp::Deferred) {
+    ACT_DELAYED.with(|c| c.borrow_mut().push((not_before, act, d, what)));
+}
+
+/// ★★ v3-video — one guest `engine object` alloc on a Passthrough twin, as a RE-QUEUEABLE act.
+///
+/// STEER THE HOST'S FALCON CONTEXT ONTO THE GUEST'S. In a video channel's VA space guest RM and host
+/// RM place buffers with the SAME lowest-free allocator, user buffers and RM-internal ones alike.
+/// `[measured vvid vid10, V3_VIDEO_ENGINES.md]` the guest put its falcon ctx at G = 0x12002a000; host RM, allocating the
+/// twin's own ctx with this object, found G mirrored and took G+0x1000 — where nvcuvid then mapped a
+/// live 4 KiB buffer, which the walker could only report HELD BY HOST: the engine used the wrong page
+/// and NVDEC produced untouched frames. So G (the guest's ctx, which no engine ever reads — the twin
+/// runs on the host's) is unmapped from the twin first, and host RM takes G itself.
+///
+/// ★ Review 3 item 5: the host alloc happens ONLY after the hand-over answered `Free`
+/// ([`kf_mem::batch::steer_step`]). Before D2 a failed unmap was "logged, best effort" and the alloc
+/// went ahead — which re-introduces exactly the wrong-frames bug; D2's `Busy`/`StillOurs`/`Refused`
+/// answers were then treated the same. Now each is retried (re-queued behind the other acts, after a
+/// 1 ms pause — the act thread never waits on the VA thread) up to [`kf_mem::batch::STEER_MAX_TRIES`]
+/// / [`kf_mem::batch::STEER_MAX_AGE`], then the birth is REFUSED by name. Where there is nothing to
+/// steer (no falcon ctx, G inside a reserved guest range, the row not mirrored yet) it proceeds as it
+/// always did.
+#[derive(Clone)]
+struct EngineObj {
+    object_allocation: Arc<()>,
+    /// Allocation identity survives parked acts; numeric native handles can reuse.
+    allocation: Arc<()>,
+    client: u32,
+    parent: u32,
+    handle: u32,
+    class: u32,
+    copy_engine: Option<u32>,
+    chan: kf_host::Channel,
+    engine: u32,
+    space: kf_host::VaSpace,
+    rows: crate::mem::PlacedRows,
+    ledger: Option<Arc<kf_mem::batch::BatchedVas<'static>>>,
+    kind: kf_chip::classes::Kind,
+    user_regions: Arc<crate::userva::Regions>,
+    steer_claim: Option<Arc<crate::userva::SteerClaim>>,
+    steer_source: Option<(u64, u64)>,
+}
+
+impl EngineObj {
+    /// The act for try number `tries`; `steered` = the `(va, row length)` whose placement row an
+    /// earlier try already removed (a retry must not read the missing row as "nothing there").
+    fn act(
+        self,
+        tries: u32,
+        born: Option<std::time::Instant>,
+        steered: Option<(u64, u64)>,
+        d: kf_gsp::Deferred,
+    ) -> Act {
+        Box::new(move |me: &ChanPlane| self.run(me, tries, born, steered, d))
+    }
+
+    fn run(
+        mut self,
+        me: &ChanPlane,
+        tries: u32,
+        born: Option<std::time::Instant>,
+        steered: Option<(u64, u64)>,
+        d: kf_gsp::Deferred,
+    ) -> Result<String, (u32, String)> {
+        let Self {
+            client,
+            parent,
+            space,
+            ref rows,
+            ref ledger,
+            kind,
+            ..
+        } = self;
+        // ★ Review 4 item 3: the age bound runs from the FIRST EXECUTION of the step, not from its
+        // enqueue — a busy act queue must not eat the retry budget.
+        let born = born.unwrap_or_else(std::time::Instant::now);
+        // Check allocation identity on the first turn AND every parked retry,
+        // before any context handover. Native tokens/handles can be reused.
+        if !engine_object_pending(
+            &me.pt,
+            (client, parent),
+            &self.allocation,
+            self.chan,
+            self.handle,
+            &self.object_allocation,
+        ) {
+            return Err((
+                NV_ERR_INVALID_STATE,
+                format!("ENGINE_OBJECT_OWNER_CHANGED chan {client:#x}:{parent:#x} before steer"),
+            ));
+        }
+        let fc = if matches!(
+            kind,
+            kf_chip::classes::Kind::VideoEncoder
+                | kf_chip::classes::Kind::VideoDecoder
+                | kf_chip::classes::Kind::OpticalFlow
+        ) {
+            me.pt.lock().ok().and_then(|m| {
+                m.get(&(client, parent))
+                    .filter(|v| Arc::ptr_eq(&v.allocation, &self.allocation) && v.chan == self.chan)
+                    .and_then(|v| v.falcon_ctx)
+            })
+        } else {
+            None
+        };
+        // ★★ v3-int — HOW THIS COMPOSES WITH THE v3-gfx GUEST-VA RESERVATION
+        // (`kf_host::GUEST_VA_RANGES`). The collision above exists only where host RM's
+        // allocator may place: with the guest's ranges reserved in the twin's space, host
+        // RM's falcon ctx can only land in the host hole `[HOST_HOLE_LO, 1 TiB)` — never
+        // at G nor G+0x1000 — so no guest buffer can meet it and there is nothing to steer.
+        // ⇒ Steer ONLY when G is outside a live reservation (reservation refused, or
+        // `KF3_NO_GUEST_VA_RESERVE`); otherwise the guest's own mapping at G is left alone.
+        let fc = fc.filter(|&(va, len)| {
+            let reserved = space.guest_reserved(va, len);
+            if reserved && tries == 0 {
+                eprintln!(
+                    "kf3: chan {client:#x}:{parent:#x} falcon ctx G={va:#x}+{len:#x} is inside the reserved guest VA — host RM places its own ctx in the host hole; not steered"
+                );
+            }
+            !reserved
+        });
+        if steered.is_some() && !steer_source_unchanged(self.steer_source, fc) {
+            return Err((
+                NV_ERR_INVALID_STATE,
+                format!(
+                    "chan {client:#x}:{parent:#x}: falcon ctx changed while steer was parked; object birth REFUSED"
+                ),
+            ));
+        }
+        let mut steer_msg = String::new();
+        if let Some((va, len)) = fc {
+            // The row goes first: from here G is host RM's. `rows.remove` is also the arbitration
+            // `cut_own`'s argument relies on (`V3_BATCHED_MAP.md` §8.8.2). The `rows` write lock is
+            // held for the `remove` ONLY (review 3 item 6): the ledger walk below is outside it.
+            // ★ Review 4 item 1: a MISSING row is NOT "nothing mirrored there". After a refused first
+            // try the guest ctx mapping stays in the ledger (and `falcon_ctx` in `pt`): a later alloc
+            // on the same channel finds the row gone, and used to run the host alloc unsteered —
+            // the vvid wrong-frames bug. So with no row the ctx RANGE `[va, va+len)` is handed over
+            // all the same: `Free` is the proof that nothing of ours covers it (no mapping, no
+            // reservation), and only then does the host alloc go ahead.
+            let row_len = match steered {
+                Some((_, l)) => l,
+                None => {
+                    let mut placed = rows.write().map_err(|_| {
+                        (
+                            NV_ERR_INVALID_STATE,
+                            format!("guest ctx VA {va:#x}: poisoned placement rows; steer REFUSED"),
+                        )
+                    })?;
+                    let length = steer_len(placed.get(&va).map(|row| row.0), len);
+                    // Same rows -> Regions lock order as the VA allocator. Claim
+                    // the FULL row before removing it or touching native RM.
+                    self.steer_claim = Some(
+                        self.user_regions
+                            .steer(va, length)
+                            .map_err(|e| (NV_ERR_INVALID_STATE, e))?,
+                    );
+                    self.steer_source = Some((va, len));
+                    placed.remove(&va);
+                    length
+                }
+            };
+            {
+                let rl = row_len;
+                // ★ 2026-10-09: by RANGE over the whole row — outside a reservation a row is many host
+                // mappings (D1: one per 4 KiB page, or one reservation holding it), so a start-keyed
+                // unmap would take only its first. THROUGH the space's ownership ledger
+                // (`BatchedVas::hand_to_host`): our mappings only, each through the hDma it was mapped
+                // through, the ledger cut. D2: the ledger's locks are taken here (act thread) and held
+                // for at most one chunk; the observed bounds are part of the log line.
+                let Some(bv) = ledger.as_ref() else {
+                    steer_msg = format!(
+                        " [guest ctx VA {va:#x}: no ownership ledger for this space — nothing of ours to hand over, host ctx placement unsteered]"
+                    );
+                    return self.finish(me, steer_msg);
+                };
+                // One act's hand-over is bounded by a time slice (a hostile row is thousands of
+                // hulls); the rest continues in a later act.
+                let over = bv.hand_to_host_within(va, rl, kf_mem::batch::STEER_SLICE);
+                let (touched, hold_us) = bv.hold_stats();
+                let (act_wait_us, act_op_us) = bv.act_stats();
+                let holds = format!(
+                    " (ledger lock holds: at most {touched} entries, longest {hold_us} us; this thread waited at most {act_wait_us} us for a ledger lock, hand-over took at most {act_op_us} us; try {})",
+                    tries.saturating_add(1)
+                );
+                match kf_mem::batch::steer_step(&over, tries, born.elapsed()) {
+                    kf_mem::batch::SteerStep::Done => {
+                        steer_msg = format!(
+                            " [host ctx steered onto the guest's ctx VA {va:#x}+{len:#x}{holds}]"
+                        );
+                    }
+                    kf_mem::batch::SteerStep::Retry => {
+                        eprintln!(
+                            "kf3: chan {client:#x}:{parent:#x} falcon ctx steer of {va:#x}+{rl:#x} not complete ({over:?}){holds} — re-queued, the host alloc waits"
+                        );
+                        let next = self.clone().act(
+                            tries.saturating_add(1),
+                            Some(born),
+                            Some((va, rl)),
+                            d.clone(),
+                        );
+                        // PARKED, not slept on: the act thread runs other acts until it is due.
+                        let due = std::time::Instant::now()
+                            .checked_add(kf_mem::batch::STEER_RETRY_SPACING)
+                            .unwrap_or_else(std::time::Instant::now);
+                        delay_act(due, "engine object", next, d);
+                        return Err((ACT_REQUEUED, "steer retry".into()));
+                    }
+                    kf_mem::batch::SteerStep::Refuse => {
+                        return Err((
+                            NV_ERR_INVALID_STATE,
+                            format!(
+                                "falcon ctx VA {va:#x}+{rl:#x} could not be handed to host RM after {} tries / {} ms: {over:?}{holds} — object birth REFUSED (a host ctx placed beside the guest's would land on a live guest buffer: wrong frames)",
+                                tries.saturating_add(1),
+                                born.elapsed().as_millis()
+                            ),
+                        ));
+                    }
+                }
+            }
+        }
+        self.finish(me, steer_msg)
+    }
+
+    /// The host alloc and the bookkeeping, after the steer is done (or not needed).
+    fn finish(&self, me: &ChanPlane, steer: String) -> Result<String, (u32, String)> {
+        let Self {
+            client,
+            parent,
+            handle,
+            class,
+            copy_engine,
+            chan,
+            engine,
+            kind,
+            ..
+        } = *self;
+        if !engine_object_pending(
+            &me.pt,
+            (client, parent),
+            &self.allocation,
+            chan,
+            handle,
+            &self.object_allocation,
+        ) {
+            return Err((
+                NV_ERR_INVALID_STATE,
+                "ENGINE_OBJECT_OWNER_CHANGED before allocation".into(),
+            ));
+        }
+        let h = kf_chan::passthrough::engine_object(me.rm, chan, engine, class, kind, copy_engine)
+            .map_err(|e| (NV_ERR_INVALID_CLASS, e))?;
+        if !keep_engine_object(
+            &me.pt,
+            &me.pt_objs,
+            (client, parent),
+            &self.allocation,
+            chan,
+            handle,
+            EngineObject {
+                allocation: self.object_allocation.clone(),
+                host: h,
+                kind,
+                class,
+            },
+        ) {
+            // Native verbs stay outside metadata locks. A refused free retains
+            // the object under its native parent/session; no replacement owns it.
+            let cleanup = me.rm.free(h);
+            return Err((
+                NV_ERR_INVALID_STATE,
+                format!(
+                    "ENGINE_OBJECT_OWNER_CHANGED after allocation; host object {h:#x} cleanup={cleanup:?}"
+                ),
+            ));
+        }
+        Ok(format!(
+            "{client:#x}:{handle:#x} class {class:#x} ({kind:?}) on twin host {:#x} -> host object {h:#x}{steer}",
+            chan.token
+        ))
+    }
+}
+
+fn steer_source_unchanged(original: Option<(u64, u64)>, current: Option<(u64, u64)>) -> bool {
+    original.is_some() && original == current
+}
+#[cfg(test)]
+mod steer_identity_tests {
+    use super::steer_source_unchanged;
+    #[test]
+    fn parked_claim_never_authorizes_a_changed_context() {
+        let original = Some((0x4000, 0x2000));
+        assert!(steer_source_unchanged(original, original));
+        assert!(!steer_source_unchanged(original, Some((0x8000, 0x2000))));
+        assert!(!steer_source_unchanged(original, Some((0x4000, 0x3000))));
+        assert!(!steer_source_unchanged(original, None));
+        assert!(!steer_source_unchanged(None, None));
+    }
+}
+
 /// ★ P5b: a guest USER channel's host twin (Passthrough).
 struct PtChan {
+    /// Distinct from a guest/native handle; retained by every parked birth act.
+    allocation: Arc<()>,
     chan: kf_host::Channel,
     /// The guest token (table index = the guest's chid).
     idx: u32,
@@ -81,8 +443,10 @@ struct PtChan {
     device: u32,
     /// The host engine (= the guest's `engineType`).
     engine: u32,
-    /// Engine objects on the twin: guest handle → (host handle, its class kind).
-    objects: HashMap<u32, (u32, kf_chip::classes::Kind)>,
+    /// Engine objects owned by this allocation, with the exact allocated class.
+    objects: HashMap<u32, EngineObject>,
+    /// Weak pending identities cannot keep failed/canceled acts alive.
+    pending_objects: HashMap<u32, std::sync::Weak<()>>,
     /// ★ EXPERIMENT `x11-dispsw`: the guest's `GF100_DISP_SW` objects on this channel, twinned on
     /// the twin: guest handle → host handle. Always empty with the switch off. Host RM frees them
     /// with the twin's channel (`HostRm::free` forgets the subtree), so they go with the twin.
@@ -96,9 +460,22 @@ struct PtChan {
     /// the guest's `SET_OBJECT` meets) — every later display-SW alloc here is refused by name
     /// ([`crate::dispsw::twin_watched`]). Set once, never cleared: it goes with the twin.
     dispsw_host_refused: bool,
+    /// ⚠ EXPERIMENT (2026-10-08, `KF3_WIN_TWIN_DEFAPI_OBJECT=1`, default off; [`twin_defapi_object`]):
+    /// the host `NV50_DEFERRED_API` authored on this Windows user-work twin from the guest's own
+    /// alloc of that class on the channel — (guest handle, host handle). At most one per twin; freed
+    /// by host RM with the twin's channel.
+    defapi_host: Option<(u32, u32)>,
+    user_defapi: Option<userpump::Software>,
+    user_published: bool,
+    /// Late probe's first 5080 lifetime; invalidated at guest object/subtree free.
+    peek_defapi: Option<PeekDefapi>,
     /// ★ v3-promote: the guest's `GPU_PROMOTE_CTX` / `GPU_EVICT_CTX` statements for this channel,
     /// satisfied by the twin (never forwarded).
     ctx: CtxBind,
+    /// ★ 2026-10-08: a Windows guest-kernel channel classified per-process USER work at its alloc
+    /// (`KF3_WIN_USER_CHANNELS_PASSTHROUGH`); fixed for the twin's life.
+    user_work: bool,
+    user_ring: bool,
     /// ★ P5c: the mirror's live-channel count (released at free).
     live: Arc<AtomicU64>,
     /// ★ P1+P2 inc D: the twin's state word, when this channel was counted as a user of it
@@ -115,9 +492,17 @@ struct PtChan {
     /// ★ v3-video: the twin's host VA space (the mirror of the guest's) and its placement rows.
     space: kf_host::VaSpace,
     rows: crate::mem::PlacedRows,
+    /// Shared per-VAS private-span admission, including mixed channel kinds.
+    user_regions: Arc<crate::userva::Regions>,
+    /// ★ Review fix 2026-10-10 (finding 6): the space's ownership ledger ([`crate::mem::Mirror::ledger`]).
+    ledger: Option<Arc<kf_mem::batch::BatchedVas<'static>>>,
     /// ★ v3-video: the guest's falcon context buffer `(VA, size)` from its falcon promote — the VA
     /// the host's own falcon context is steered onto (see `ChanPlane::engine_object`).
     falcon_ctx: Option<(u64, u64)>,
+    /// ⚠ DIAGNOSTIC (2026-10-09, [`ChanPlane::pt_stall_snapshot_poll`]): where the guest declared
+    /// this channel's ring — `(GPFIFO VA, entries, USERD GPA if in guest RAM)`. Read only by the
+    /// default-off stall snapshot; never used to act.
+    ring_at: (u64, u32, Option<u64>),
 }
 
 /// ★★★ v3-promote — **the guest's context-buffer statements, satisfied by the twin** (owner
@@ -173,6 +558,64 @@ struct PtNotifier {
     guest_stop_write: bool,
 }
 
+/// ★ 2026-10-08 (`KF3_ASYNC_PREEMPT`): at most this many completed async preempts wait for the
+/// drainer (a guest cannot grow a host allocation by preempting in a loop).
+const PREEMPT_DONE_MAX: usize = 64;
+
+/// ★★ 2026-10-08 (after run84) — **a `RUNLIST_PREEMPT_COMPLETE` goes out only after its control's
+/// reply.** The GSP answers the async `DISABLE_CHANNELS` first and posts 139 after it, every time
+/// (`[measured, vfio-10]` RPCs 6628-6633 and 8100-8126: reply, then event). kayfabe's act pushes the
+/// completion when the host verb returns, BEFORE its deferred reply settles; a drainer pass between
+/// the two posted the event first (`[measured, run84 at 4d733007]`: the first preempt's event
+/// preceded its reply). The drainer that posts is the one that holds replies, so "no reply held"
+/// (`held_replies == 0`, read under the GSP lock) means this act's reply is already in the queue.
+#[must_use]
+pub fn preempt_posts_ready(held_replies: usize) -> bool {
+    held_replies == 0
+}
+
+/// What a `DISABLE_CHANNELS` list resolves to in THIS VM's plane: twins (`pt`), Translated host rings
+/// (`tr`, by host token) and entries naming nothing here (`unknown`).
+#[derive(Debug, PartialEq, Eq)]
+struct DisableList<T> {
+    pt: Vec<((u32, u32), T)>,
+    tr: Vec<((u32, u32), u32)>,
+    unknown: Vec<(u32, u32)>,
+}
+
+/// ★ v3-chanctl (pure since 2026-10-08) — resolve each `(hClient, hChannel)` entry: a twin by its own
+/// handle; else a Translated ring; else (★ run82) a CHANNEL GROUP handle — every twin of that client
+/// allocated under it (Windows' kernel preempts a process's TSG by its handle); else unknown. Only this
+/// VM's maps are consulted, so a handle of another VM (or a freed group) is `unknown`, which the caller
+/// refuses whole (nothing half-done).
+fn resolve_disable_list<T>(
+    list: &[(u32, u32)],
+    twin: impl Fn(u32, u32) -> Option<T>,
+    group: impl Fn(u32, u32) -> Vec<((u32, u32), T)>,
+    translated: impl Fn(u32, u32) -> Option<u32>,
+) -> DisableList<T> {
+    let mut out = DisableList {
+        pt: Vec::new(),
+        tr: Vec::new(),
+        unknown: Vec::new(),
+    };
+    for &(c, h) in list {
+        if let Some(t) = twin(c, h) {
+            out.pt.push(((c, h), t));
+        } else if let Some(ht) = translated(c, h) {
+            out.tr.push(((c, h), ht));
+        } else {
+            let members = group(c, h);
+            if members.is_empty() {
+                out.unknown.push((c, h));
+            } else {
+                out.pt.extend(members);
+            }
+        }
+    }
+    out
+}
+
 /// `ROBUST_CHANNEL_PREEMPTIVE_REMOVAL` (`ogkm-580: nverror.h:61`).
 const ROBUST_CHANNEL_PREEMPTIVE_REMOVAL: u32 = 45;
 
@@ -180,7 +623,7 @@ impl PtNotifier {
     fn words(&self) -> Option<[u32; 4]> {
         let mut w = [0u32; 4];
         for (i, x) in w.iter_mut().enumerate() {
-            *x = self.view.load(4 * i as u64).ok()?;
+            *x = self.view.load((i as u64).saturating_mul(4)).ok()?;
         }
         Some(w)
     }
@@ -216,6 +659,11 @@ pub struct EngineEvent {
     pub wakes: AtomicU64,
     /// Wakes raised to the guest.
     pub raised: AtomicU64,
+    /// ★ 2026-10-08 (coordinator's first step on H-ce-intr): wakes NOT raised because no guest twin
+    /// was live on this engine (`live == 0`)…
+    pub unraised_no_live: AtomicU64,
+    /// …and because the served table gives this engine no guest vector (`vector == None`).
+    pub unraised_no_vector: AtomicU64,
     /// ★ GR tier (2026-10-07): live Translated kernel-GR rings on this engine whose completions
     /// are the guest's work (their fence tail's `NON_STALL_INTERRUPT` follows the engine's own
     /// writes of the guest's semaphores and `GP_GET`).
@@ -227,6 +675,14 @@ pub struct EngineEvent {
     pub cpending: AtomicU64,
     /// Relays raised on this engine's guest vector for Translated copy-engine work.
     pub crelays: AtomicU64,
+    /// ★ 2026-10-08 (owner ruling §X, `kf_chan::ptnsi`): the guest's non-stall subscription slot
+    /// for this engine (`kf_abi::eventnotify::nonstall_slot_*`; `None`: no such row).
+    pub slot: Option<usize>,
+    /// Host notifier wakes on this engine whose event the guest had not armed (nothing raised).
+    pub not_armed: AtomicU64,
+    /// ★ 2026-10-09: an edge of THIS engine is in a paced raise still owed (credited to `raised`
+    /// when the tick delivers it). Written by the one worker thread only.
+    pub owed_late: std::sync::atomic::AtomicBool,
 }
 
 /// A CE class id on ANY family — the class tables are generated per family and class ids are
@@ -281,20 +737,20 @@ impl UserdView {
     fn load(&self, off: u64) -> Result<u32, String> {
         match self {
             UserdView::Store { region, at, .. } => region
-                .load_u32(HostOffset::new(at + off))
+                .load_u32(HostOffset::new(at.saturating_add(off)))
                 .map_err(|e| format!("{e:?}")),
             UserdView::Ram { mem, at } => mem
-                .load_u32(at + off as usize)
+                .load_u32(at.saturating_add(off as usize))
                 .ok_or_else(|| "guest-RAM USERD load".to_string()),
         }
     }
     fn store(&self, off: u64, v: u32) -> Result<(), String> {
         match self {
             UserdView::Store { region, at, .. } => region
-                .store_u32(HostOffset::new(at + off), v)
+                .store_u32(HostOffset::new(at.saturating_add(off)), v)
                 .map_err(|e| format!("{e:?}")),
             UserdView::Ram { mem, at } => mem
-                .store_u32(at + off as usize, v)
+                .store_u32(at.saturating_add(off as usize), v)
                 .then_some(())
                 .ok_or_else(|| "guest-RAM USERD store".to_string()),
         }
@@ -307,11 +763,458 @@ impl UserdView {
 impl kf_chan::host::UserdInit for UserdView {
     fn store_u32(&mut self, off: u64, v: u32) -> Result<(), String> {
         if let UserdView::Store { at, .. } = self
-            && *at + off + 4 > 0x1000
+            && at.saturating_add(off).saturating_add(4) > 0x1000
         {
             return Err(format!("USERD +{off:#x} is past the page its view maps"));
         }
         self.store(off, v)
+    }
+}
+
+/// ★★ 2026-10-08 (`docs/design/V3_USERD_RELAY.md`, `KF3_WIN_USER_CHANNELS_PASSTHROUGH`): a Passthrough
+/// twin whose USERD the host cannot adopt (a Windows per-process channel's USERD is a guest-RAM slot at
+/// an IOVA wider than a USERD may be). The twin's USERD is a kayfabe-owned video-memory object; a
+/// worker relays `GP_PUT` in and `GP_GET` out, four bytes each, never a GP entry or push-buffer word.
+struct Relay {
+    st: kf_chan::userd_relay::RelayState,
+    /// The guest's own USERD slot (guest RAM).
+    guest: UserdView,
+    /// kayfabe's USERD object (4 KiB, in no GPU VA space), its CPU view, and the view's release
+    /// cookie.
+    host: VolatileRegion,
+    _node: kf_linux_raw::CharDevice,
+    cookie: u64,
+    mem: u32,
+    /// The twin.
+    chan: kf_host::Channel,
+    /// The guest token (for the log).
+    idx: u32,
+    /// ⚠ DIAGNOSTIC only (`KF3_RELAY_PB_PEEK=1`, default off): the guest VA space's mirror, the
+    /// ring's VA, and how many GP entries were peeked — see [`ChanPlane::relay_peek`].
+    mirror: Mirror,
+    views: StoreViews,
+    gpfifo_va: u64,
+    peek: PeekState,
+    /// Guest object corresponding to this twin's authored 5080. Diagnostic lookup only;
+    /// no registration or guest bundle is ever forwarded to the host object.
+    peek_defapi: Option<PeekDefapi>,
+}
+
+/// Diagnostic association with one allocation lifetime, not just a reusable handle.
+#[derive(Clone)]
+struct PeekDefapi {
+    key: kf_rm::defapi::ObjKey,
+    live: Arc<AtomicBool>,
+}
+
+/// ⚠ DIAGNOSTIC only (`KF3_RELAY_PB_PEEK=1`): the peek's cursor and bounds for one relayed twin.
+#[derive(Default)]
+struct PeekState {
+    /// Late diagnostic mode arms once, at the first observed FIFO-update registration.
+    /// Never rearm/reset the bounded budget on another guest registration.
+    fifo_update_armed: bool,
+    /// Report truncated coverage once; registration cannot reset the budget.
+    budget_reported: bool,
+    /// The next GP index to peek.
+    next: u32,
+    /// GP entries peeked so far (bounded by [`PEEK_ENTRY_BUDGET`]).
+    entries: u32,
+    /// Software-subchannel methods logged so far (bounded by [`PEEK_SW_BUDGET`]).
+    sw_logged: u32,
+    /// The previous batch's raw entries, re-read at the next step: a change means the guest wrote
+    /// an entry AFTER ringing for it.
+    prev: Vec<(u32, [u8; 8])>,
+    /// ⚠ (after run76) the last one-word semaphore release peeked — (engine form, VA, payload, GP
+    /// index) — compared with memory at the twin's release ([`last_fence_release`]).
+    fence: Option<(&'static str, u64, u32, u32)>,
+}
+
+/// Per relayed twin: at most this many GP entries are peeked.
+const PEEK_ENTRY_BUDGET: u32 = 512;
+/// Per relayed twin: at most this many software-subchannel methods are logged.
+const PEEK_SW_BUDGET: u32 = 64;
+/// Per segment: at most this many words are read (and scanned); at most 64 are printed.
+const PEEK_SEGMENT_WORDS: usize = 16384;
+
+/// The late mode avoids exhausting a channel's budget before its migration registration.
+/// Both modes only sample guest bytes after forwarding; neither gates/executes GPU work.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RelayPeekMode {
+    Off,
+    FromBirth,
+    AfterFifoUpdate,
+}
+
+fn relay_peek_mode(value: Option<&str>) -> RelayPeekMode {
+    match value {
+        Some("1") => RelayPeekMode::FromBirth,
+        Some("after-fifo-update") => RelayPeekMode::AfterFifoUpdate,
+        _ => RelayPeekMode::Off,
+    }
+}
+
+fn configured_relay_peek_mode() -> RelayPeekMode {
+    static MODE: std::sync::OnceLock<RelayPeekMode> = std::sync::OnceLock::new();
+    *MODE.get_or_init(|| relay_peek_mode(std::env::var("KF3_RELAY_PB_PEEK").ok().as_deref()))
+}
+
+/// ⚠ DIAGNOSTIC (2026-10-08, run73): one method a push-buffer segment addresses to a SOFTWARE
+/// subchannel. `[NVIDIA, open-gpu-doc ga100 dev_ram.ref "Subchannels 5-7 are for software methods"
+/// and dev_pbdma.ref NV_PPBDMA_INTR_0_DEVICE]`: any method on subchannels 5-7, SetObject included,
+/// is kicked back to software through the PBDMA's DEVICE interrupt; Host-only methods (the
+/// `NV_UDMA` range below `0x100`, SetObject excepted) ignore the subchannel.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct SwMethod {
+    /// Index of the header word in the segment.
+    word: usize,
+    subch: u32,
+    /// Byte method address.
+    method: u32,
+    /// The first datum (the header's own for an immediate), if it was read.
+    data: Option<u32>,
+}
+
+/// What [`scan_sw_methods`] found in one segment.
+#[derive(Debug, Default, PartialEq, Eq)]
+struct SwScan {
+    hits: Vec<SwMethod>,
+    /// Method headers seen, per subchannel.
+    per_subch: [u32; 8],
+    /// A header word with no defined format stopped the scan here (`method_header_decode` = None).
+    undecodable_at: Option<usize>,
+}
+
+/// Walk a segment's words header by header (bounded by `words`) and collect every method on a
+/// software subchannel. Pure; never follows anything outside `words`.
+fn scan_sw_methods(words: &[u32]) -> SwScan {
+    let mut out = SwScan::default();
+    let mut i = 0usize;
+    while let Some(&word) = words.get(i) {
+        let Some(h) = kf_abi::submit::method_header_decode(word) else {
+            out.undecodable_at = Some(i);
+            break;
+        };
+        let counted = !matches!(
+            h.form,
+            kf_abi::submit::MethodForm::EndPbSegment | kf_abi::submit::MethodForm::SubDeviceMask
+        );
+        if counted && (h.arg_words > 0 || h.form == kf_abi::submit::MethodForm::Immediate) {
+            if let Some(n) = out.per_subch.get_mut(h.subchannel as usize) {
+                *n = n.saturating_add(1);
+            }
+            // A packet can reach 0x200 after its first datum, or issue several
+            // API handles at 0x200. Do not reduce it to the starting method.
+            // Legacy forms are sized only by the public ABI; retain that limitation.
+            use kf_abi::submit::MethodForm;
+            let args = if matches!(h.form, MethodForm::Immediate | MethodForm::Legacy) {
+                1
+            } else {
+                h.arg_words.min(words.len().saturating_sub(i + 1)).max(1)
+            };
+            if h.subchannel >= 5 {
+                for arg in 0..args {
+                    let advance = match h.form {
+                        MethodForm::Incrementing => arg as u32 * 4,
+                        MethodForm::IncrementOnce if arg != 0 => 4,
+                        _ => 0,
+                    };
+                    let method = h.method + advance;
+                    let host_only = method != kf_abi::submit::SET_OBJECT && method < 0x100;
+                    if !host_only {
+                        out.hits.push(SwMethod {
+                            word: i,
+                            subch: h.subchannel,
+                            method,
+                            data: if h.form == MethodForm::Immediate {
+                                Some(h.immd)
+                            } else {
+                                words.get(i + 1 + arg).copied()
+                            },
+                        });
+                    }
+                }
+            }
+        }
+        if h.form == kf_abi::submit::MethodForm::EndPbSegment {
+            break;
+        }
+        i = i.saturating_add(1).saturating_add(h.arg_words);
+    }
+    out
+}
+
+/// ⚠ DIAGNOSTIC switch (default off, 2026-10-09): `KF3_PT_STALL_SNAPSHOT=1` arms the stall snapshot
+/// ([`ChanPlane::pt_stall_snapshot_poll`]); `KF3_PT_STALL_SNAPSHOT_MS` the silence (200..=10000,
+/// default 1000). `None` = off.
+fn pt_stall_snapshot_ms() -> Option<u64> {
+    static ON: std::sync::OnceLock<Option<u64>> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| {
+        if std::env::var("KF3_PT_STALL_SNAPSHOT").as_deref() != Ok("1") {
+            return None;
+        }
+        let ms = std::env::var("KF3_PT_STALL_SNAPSHOT_MS")
+            .ok()
+            .and_then(|v| v.trim().parse::<u64>().ok())
+            .unwrap_or(1000)
+            .clamp(200, 10_000);
+        eprintln!(
+            "kf3: ⚠ DIAGNOSTIC KF3_PT_STALL_SNAPSHOT=1: after {ms} ms with no doorbell to any live Passthrough twin (and at each twin's free), its USERD, ring entries, segment methods and semaphores are read from guest memory and logged (at most {SNAP_MAX} stalls, {SNAP_FREE_MAX} frees per boot)"
+        );
+        Some(ms)
+    })
+}
+
+/// Stall snapshots per boot (one per silence).
+const SNAP_MAX: u32 = 4;
+/// Snapshots at a twin's free per boot.
+const SNAP_FREE_MAX: u32 = 32;
+/// GPFIFO entries listed per twin.
+const SNAP_ENTRIES: u32 = 12;
+/// Entries before `GPPut` whose segments are decoded.
+const SNAP_SEGMENTS: u32 = 3;
+/// Words read per segment.
+const SNAP_WORDS: usize = 256;
+/// Methods listed per segment.
+const SNAP_METHODS: usize = 48;
+/// Semaphores read back per twin.
+const SNAP_SEMS: usize = 8;
+
+/// ⚠ DIAGNOSTIC: a semaphore a segment names — host `SEM_EXECUTE` (`NVC56F_SEM_*`,
+/// `ogkm-595.84: clc56f.h:206-229`), or the 3D/CE release [`last_fence_release`] finds.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SemRef {
+    op: &'static str,
+    va: u64,
+    payload: u64,
+    wide: bool,
+    /// The GPFIFO entry whose segment named it (`u32::MAX` until the caller sets it).
+    gp: u32,
+}
+
+/// ⚠ DIAGNOSTIC, pure: a segment's methods as `(subchannel, method byte offset, value)` (at most
+/// `max`), and its host semaphore operations. Host methods (`< 0x100`) apply on every subchannel;
+/// `SEM_ADDR_LO/HI` (0x5c/0x60), `SEM_PAYLOAD_LO/HI` (0x64/0x68) latch, `SEM_EXECUTE` (0x6c)
+/// executes: OPERATION `2:0`, PAYLOAD_SIZE `24:24` (`clc56f.h:206-229`). Stops at the first
+/// undecodable header (named) or the segment's end.
+struct SnapDecoded {
+    methods: Vec<(u32, u32, u32)>,
+    sems: Vec<SemRef>,
+    stopped_at: Option<usize>,
+}
+
+fn snap_decode(words: &[u32], max: usize) -> SnapDecoded {
+    use kf_abi::submit::{MethodForm, method_header_decode};
+    const OPS: [&str; 8] = [
+        "ACQUIRE",
+        "RELEASE",
+        "ACQ_STRICT_GEQ",
+        "ACQ_CIRC_GEQ",
+        "ACQ_AND",
+        "ACQ_NOR",
+        "REDUCTION",
+        "OP7",
+    ];
+    let mut d = SnapDecoded {
+        methods: Vec::new(),
+        sems: Vec::new(),
+        stopped_at: None,
+    };
+    let (mut lo, mut hi, mut plo, mut phi) = (0u32, 0u32, 0u32, 0u32);
+    let mut i = 0usize;
+    while let Some(&word) = words.get(i) {
+        let Some(h) = method_header_decode(word) else {
+            d.stopped_at = Some(i);
+            break;
+        };
+        let args: Vec<(u32, u32)> = match h.form {
+            MethodForm::EndPbSegment => break,
+            MethodForm::Immediate => vec![(h.method, h.immd)],
+            MethodForm::Incrementing => (0..h.arg_words)
+                .filter_map(|k| {
+                    words
+                        .get(i.saturating_add(1).saturating_add(k))
+                        .map(|v| (h.method.saturating_add((k as u32).saturating_mul(4)), *v))
+                })
+                .collect(),
+            MethodForm::NonIncrementing => (0..h.arg_words)
+                .filter_map(|k| {
+                    words
+                        .get(i.saturating_add(1).saturating_add(k))
+                        .map(|v| (h.method, *v))
+                })
+                .collect(),
+            MethodForm::IncrementOnce => (0..h.arg_words)
+                .filter_map(|k| {
+                    words.get(i.saturating_add(1).saturating_add(k)).map(|v| {
+                        (
+                            if k == 0 {
+                                h.method
+                            } else {
+                                h.method.saturating_add(4)
+                            },
+                            *v,
+                        )
+                    })
+                })
+                .collect(),
+            _ => Vec::new(),
+        };
+        for (m, v) in args {
+            if d.methods.len() < max {
+                d.methods.push((h.subchannel, m, v));
+            }
+            match m {
+                0x5c => lo = v,
+                0x60 => hi = v,
+                0x64 => plo = v,
+                0x68 => phi = v,
+                0x6c => {
+                    let wide = (v >> 24) & 1 == 1;
+                    d.sems.push(SemRef {
+                        op: OPS.get((v & 7) as usize).copied().unwrap_or("?"),
+                        va: (u64::from(hi & 0xff) << 32) | u64::from(lo & !3),
+                        payload: if wide {
+                            (u64::from(phi) << 32) | u64::from(plo)
+                        } else {
+                            u64::from(plo)
+                        },
+                        wide,
+                        gp: u32::MAX,
+                    });
+                }
+                _ => {}
+            }
+        }
+        i = i.saturating_add(1).saturating_add(h.arg_words);
+    }
+    d
+}
+
+/// ⚠ DIAGNOSTIC (2026-10-08, after run76; `KF3_RELAY_PB_PEEK=1` only): the LAST one-word semaphore
+/// RELEASE a peeked segment asks the engine for — `(engine, VA, payload)` — so the twin's release can
+/// compare the payload with what the memory holds (did the engine write its last fence?). Two
+/// incrementing forms, the ones Windows' per-process streams use `[measured, run76 at f649d2c3]`:
+/// the 3D/compute `SET_REPORT_SEMAPHORE_A..D` (`0x1b00`, 4 words; `D.OPERATION` 1:0 = RELEASE and
+/// `D.STRUCTURE_SIZE` 28 = ONE_WORD; `ogkm-580: clc797.h`), and the copy engine's
+/// `SET_SEMAPHORE_A/B` + `SET_SEMAPHORE_PAYLOAD` (`0x240`, 3 words; `clc7b5.h`). Pure; bounded by
+/// `words`; anything else is skipped.
+fn last_fence_release(words: &[u32]) -> Option<(&'static str, u64, u32)> {
+    let mut out = None;
+    let mut i = 0usize;
+    while let Some(&word) = words.get(i) {
+        let Some(h) = kf_abi::submit::method_header_decode(word) else {
+            break;
+        };
+        let args = words.get(i.saturating_add(1)..i.saturating_add(1).saturating_add(h.arg_words));
+        if h.form == kf_abi::submit::MethodForm::Incrementing
+            && let Some(a) = args
+        {
+            match (h.method, a) {
+                (0x1b00, &[a0, a1, a2, a3]) if a3 & 3 == 0 && a3 & (1 << 28) != 0 => {
+                    out = Some(("3d", (u64::from(a0 & 0xff) << 32) | u64::from(a1), a2));
+                }
+                (0x240, &[a0, a1, a2]) => {
+                    out = Some(("ce", (u64::from(a0 & 0x1ffff) << 32) | u64::from(a1), a2));
+                }
+                _ => {}
+            }
+        }
+        if h.form == kf_abi::submit::MethodForm::EndPbSegment {
+            break;
+        }
+        i = i.saturating_add(1).saturating_add(h.arg_words);
+    }
+    out
+}
+
+/// What an `NV50_DEFERRED_API` alloc on a Passthrough channel becomes (the experiment's decision).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TwinDefapiPlan {
+    /// The pre-experiment behaviour: a guest-graph node only (Windows user work), or §U.1's path.
+    NoHostObject,
+    /// ⚠ `KF3_WIN_TWIN_DEFAPI_OBJECT=1` on a Windows user-work twin: author one host object.
+    AuthorHostObject,
+}
+
+/// Pure: the experiment applies only with its switch on AND on a Windows user-work twin; a Linux
+/// Passthrough channel or a Translated one never gets a host `NV50_DEFERRED_API` from it.
+fn twin_defapi_plan(switch_on: bool, user_work: bool) -> TwinDefapiPlan {
+    if switch_on && user_work {
+        TwinDefapiPlan::AuthorHostObject
+    } else {
+        TwinDefapiPlan::NoHostObject
+    }
+}
+
+/// ⚠ EXPERIMENT switch (default off): [`ChanPlane::twin_defapi_act`].
+fn twin_defapi_object() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var("KF3_WIN_TWIN_DEFAPI_OBJECT").as_deref() == Ok("1"))
+}
+
+/// Default-off compatibility experiment: decline the privileged FIFO migration at
+/// registration, allowing Windows to choose its own fallback. No trigger is consumed.
+pub(crate) struct PtFifoUpdateFilter(&'static ChanPlane);
+
+impl std::fmt::Debug for PtFifoUpdateFilter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("PtFifoUpdateFilter(KF3_WIN_REFUSE_PT_FIFO_UPDATE)")
+    }
+}
+
+impl PtFifoUpdateFilter {
+    pub(crate) fn configured(
+        plane: &'static ChanPlane,
+    ) -> Option<Arc<dyn kf_rm::defapi::FifoUpdateFilter>> {
+        (std::env::var("KF3_WIN_REFUSE_PT_FIFO_UPDATE").as_deref() == Ok("1"))
+            .then(|| Arc::new(Self(plane)) as Arc<dyn kf_rm::defapi::FifoUpdateFilter>)
+    }
+}
+
+impl kf_rm::defapi::FifoUpdateFilter for PtFifoUpdateFilter {
+    fn refuse_on_channel(&self, client: u32, channel: u32) -> bool {
+        // Drainer-only, the same short bookkeeping lock used at 5080 admission.
+        // No registry lock is held here, and this path never calls host RM.
+        self.0
+            .pt
+            .lock()
+            .ok()
+            .is_some_and(|m| m.get(&(client, channel)).is_some_and(|twin| twin.user_work))
+    }
+}
+
+/// The I/O of one relay step ([`kf_chan::userd_relay::step`]).
+struct RelayMem<'a> {
+    guest: &'a UserdView,
+    host: &'a VolatileRegion,
+    rm: &'a HostRm,
+    token: u32,
+}
+
+impl kf_chan::userd_relay::RelayIo for RelayMem<'_> {
+    fn guest_put(&mut self) -> Result<u32, String> {
+        self.guest.load(kf_abi::submit::USERD_GP_PUT)
+    }
+    fn store_host_put(&mut self, put: u32) -> Result<(), String> {
+        self.host
+            .store_u32(HostOffset::new(kf_abi::submit::USERD_GP_PUT), put)
+            .map_err(|e| format!("{e:?}"))
+    }
+    fn fence(&mut self) {
+        kf_linux_raw::release_fence();
+    }
+    fn ring(&mut self) -> Result<(), String> {
+        self.rm
+            .doorbell(self.token)
+            .map_err(|e| format!("doorbell: {e:?}"))
+    }
+    fn host_get(&mut self) -> Result<u32, String> {
+        self.host
+            .load_u32(HostOffset::new(kf_abi::submit::USERD_GP_GET))
+            .map_err(|e| format!("{e:?}"))
+    }
+    fn store_guest_get(&mut self, get: u32) -> Result<(), String> {
+        self.guest.store(kf_abi::submit::USERD_GP_GET, get)
     }
 }
 
@@ -362,6 +1265,34 @@ fn view_span(bound: u64, at: u64) -> Result<(u64, u64), String> {
     Ok((off, len))
 }
 
+/// `(a - b) mod n` on a ring of `n` entries (`a`, `b` taken mod `n` first; `n == 0` is a ring of
+/// one). The stall snapshot's GP indices come from the guest's USERD: no `%`, `-` or `+` on them
+/// may panic.
+fn ring_dist(a: u32, b: u32, n: u32) -> u32 {
+    let n = u64::from(n.max(1));
+    let (a, b) = (
+        u64::from(a).checked_rem(n).unwrap_or(0),
+        u64::from(b).checked_rem(n).unwrap_or(0),
+    );
+    u32::try_from(
+        a.saturating_add(n)
+            .saturating_sub(b)
+            .checked_rem(n)
+            .unwrap_or(0),
+    )
+    .unwrap_or(0)
+}
+
+/// ★ Review addendum (hostile guest): the `[done, done + n)` window of a read buffer, or a named
+/// error — a read loop's indices come from guest-derived row lengths and never index blindly.
+fn out_window(out: &mut [u8], done: u64, n: u64) -> Result<&mut [u8], String> {
+    let a = usize::try_from(done).map_err(|_| format!("read offset {done:#x} out of range"))?;
+    let b = usize::try_from(done.saturating_add(n))
+        .map_err(|_| format!("read end {done:#x}+{n:#x} out of range"))?;
+    out.get_mut(a..b)
+        .ok_or_else(|| format!("read window {done:#x}+{n:#x} is outside the buffer"))
+}
+
 impl StoreViews {
     const fn new() -> Self {
         StoreViews {
@@ -374,7 +1305,7 @@ impl StoreViews {
         if let Some(i) = self
             .views
             .iter()
-            .position(|v| at >= v.off && at < v.off + v.len)
+            .position(|v| at >= v.off && at < v.off.saturating_add(v.len))
         {
             return Ok(i);
         }
@@ -396,7 +1327,7 @@ impl StoreViews {
             HostPageSize::query(),
         )
         .map_err(|e| format!("view mmap: {e:?}"))?;
-        self.armed += 1;
+        self.armed = self.armed.saturating_add(1);
         self.views.push(StoreSpan {
             off,
             len,
@@ -404,7 +1335,7 @@ impl StoreViews {
             _node: node,
             cookie,
         });
-        Ok(self.views.len() - 1)
+        Ok(self.views.len().saturating_sub(1))
     }
 
     fn read(
@@ -418,17 +1349,27 @@ impl StoreViews {
         let len = out.len() as u64;
         let mut done = 0u64;
         while done < len {
-            let at = off + done;
+            let at = off.saturating_add(done);
             let i = self.view_for(rm, store, fb_len, at)?;
-            let v = &self.views[i];
-            let n = (v.off + v.len - at).min(len - done);
+            let v = self
+                .views
+                .get(i)
+                .ok_or_else(|| format!("store read {at:#x}: no view"))?;
+            let n = v
+                .off
+                .saturating_add(v.len)
+                .saturating_sub(at)
+                .min(len.saturating_sub(done));
+            if n == 0 {
+                return Err(format!("store read {at:#x}: no progress"));
+            }
             v.region
                 .copy_out(
-                    HostOffset::new(at - v.off),
-                    &mut out[done as usize..(done + n) as usize],
+                    HostOffset::new(at.saturating_sub(v.off)),
+                    out_window(out, done, n)?,
                 )
                 .map_err(|e| format!("store read {at:#x}: {e:?}"))?;
-            done += n;
+            done = done.saturating_add(n);
         }
         Ok(())
     }
@@ -462,11 +1403,11 @@ struct Mem<'a> {
 /// completion probe's read-backs). ⊘ Never the mirror's store-WINDOW length: a T-mode twin carries
 /// no window and records `fb_len = 0`, so a bound taken from it made every vidmem fetch fail
 /// "past the store (0x0)" — every UVM Translated channel died at its first fetch (UVM's GPFIFO is
-/// vidmem on a dGPU, `ogkm-580: kernel-open/nvidia-uvm/uvm_channel.c:3386-3390`). In T-mode the
-/// bound is the carve-out base — a CPU read never touches kayfabe's firmware region either; on
-/// the default path it is the mirror's `fb_len`, which is the store's length there (today's value).
-const fn store_read_bound(tmode: bool, mirror_fb_len: u64, carve: u64) -> u64 {
-    if tmode { carve } else { mirror_fb_len }
+/// vidmem on a dGPU, `ogkm-580: kernel-open/nvidia-uvm/uvm_channel.c:3386-3390`). The bound is the
+/// carve-out base — a CPU read never touches kayfabe's firmware region either. ★ 2026-10-10: the
+/// legacy arm (the mirror's window length) is deleted with `KF3_TSPACE`; a mirror has no window.
+const fn store_read_bound(carve: u64) -> u64 {
+    carve
 }
 /// ★ P1+P2 inc C (`docs/design/V3_P1P2_TSPACE.md` §3.4) — the T-mode resolver's view of a
 /// mirror: OUR placement rows (never a copy of the guest's tables), each operand resolved under ONE
@@ -480,7 +1421,12 @@ pub(crate) fn resolve_rows(
     kf_chan::tmode::resolve_spans(va, len, |at| {
         let (&start, &(rlen, off, ram, perm)) = r.range(..=at).next_back()?;
         let end = start.checked_add(rlen)?;
-        (at < end).then(|| (ram, off + (at - start), end - at, perm))
+        (at < end)
+            .then(|| {
+                off.checked_add(at.saturating_sub(start))
+                    .map(|o| (ram, o, end.saturating_sub(at), perm))
+            })
+            .flatten()
     })
 }
 
@@ -512,7 +1458,7 @@ impl GuestMemory for Mem<'_> {
         // ★ P5b: piece by piece across OUR rows — a segment may span two adjacent placements.
         let mut done = 0u64;
         while done < len {
-            let at_va = va + done;
+            let at_va = va.saturating_add(done);
             let (ram, off, avail) =
                 resolve_placed_prefix(&self.mirror.rows, at_va).ok_or_else(|| {
                     format!(
@@ -520,11 +1466,14 @@ impl GuestMemory for Mem<'_> {
                         crate::mem::describe_neighbours(&self.mirror.rows, at_va)
                     )
                 })?;
-            let n = avail.min(len - done);
+            let n = avail.min(len.saturating_sub(done));
+            if n == 0 {
+                return Err(format!("{at_va:#x}: no progress"));
+            }
             if !ram {
                 // ★ P6 (Q3): a vidmem GPFIFO / pushbuffer (UVM's default GPFIFO) is read through a
                 // CPU view WE arm over the store slice our own row placed there.
-                let dst = &mut out[done as usize..(done + n) as usize];
+                let dst = out_window(out, done, n)?;
                 let t0 = crate::prof::on().then(crate::prof::now_ns);
                 self.views
                     .read(self.rm, self.store, self.store_len, off, dst)
@@ -535,19 +1484,19 @@ impl GuestMemory for Mem<'_> {
                     crate::prof::VIEW_READ_NS
                         .fetch_add(crate::prof::now_ns().saturating_sub(t0), Ordering::Relaxed);
                 }
-                done += n;
+                done = done.saturating_add(n);
                 continue;
             }
             let (mem, at) = self
                 .ram
                 .at_file_offset(off, n)
                 .ok_or_else(|| format!("{at_va:#x}: guest-RAM offset {off:#x} unregistered"))?;
-            let dst = &mut out[done as usize..(done + n) as usize];
+            let dst = out_window(out, done, n)?;
             if !mem.read_into(at, dst) {
                 return Err(format!("{at_va:#x}: guest-RAM read"));
             }
             crate::prof::RAM_READ_BYTES.fetch_add(n, Ordering::Relaxed);
-            done += n;
+            done = done.saturating_add(n);
         }
         Ok(())
     }
@@ -620,27 +1569,33 @@ impl Publisher for VaSplit<'_> {
             .clone()
             .ok_or("software method started with nothing planned")?;
         let p = self.sw.plane;
-        p.defapi_triggers.fetch_add(1, Ordering::Relaxed);
-        eprintln!(
-            "kf3: DEFERRED-API trigger token {:#x} subch {} value {:#x} method {:#x} hApiHandle {:#x} on {:#x}:{:#x} cmd {:#x}: {:?}",
-            self.token,
-            call.sub,
-            call.value,
-            call.method,
-            call.data,
-            planned.key.client,
-            planned.key.object,
-            planned.entry.cmd,
-            planned.entry.decoded
-        );
+        // Logged: the first 16 triggers, then powers of two (the guest's trigger rate must not grow the log).
+        let nth = p.defapi_triggers.fetch_add(1, Ordering::Relaxed) + 1;
+        let log = nth <= 16 || nth.is_power_of_two();
+        if log {
+            eprintln!(
+                "kf3: DEFERRED-API trigger #{nth} token {:#x} subch {} value {:#x} method {:#x} hApiHandle {:#x} on {:#x}:{:#x} cmd {:#x}: {:?}",
+                self.token,
+                call.sub,
+                call.value,
+                call.method,
+                call.data,
+                planned.key.client,
+                planned.key.object,
+                planned.entry.cmd,
+                planned.entry.decoded
+            );
+        }
         if let kf_abi::defapi::Bundle::InvalidateTlb { vaspace } = planned.entry.decoded {
             let (g, payload) =
                 gate.ok_or("deferred DMA_INVALIDATE_TLB started without its gate")?;
             // ★ §U.2: the guest's hClientVA/hDeviceVA/hVASpace are ignored: our OWN space.
-            eprintln!(
-                "kf3: DEFERRED-API token {:#x}: DMA_INVALIDATE_TLB (guest hVASpace {vaspace:#x} ignored) -> gate payload {payload} on the channel's own space {:?}",
-                self.token, self.sw.space
-            );
+            if log {
+                eprintln!(
+                    "kf3: DEFERRED-API token {:#x}: DMA_INVALIDATE_TLB (guest hVASpace {vaspace:#x} ignored) -> gate payload {payload} on the channel's own space {:?}",
+                    self.token, self.sw.space
+                );
+            }
             self.sw.st.ticket =
                 Some(
                     self.inbox
@@ -678,14 +1633,19 @@ impl Publisher for VaSplit<'_> {
         );
         if let Some(reg) = self.sw.plane.defapi_reg.get() {
             // The trigger's cleanup, whatever the outcome (`deferred_api.c:653-670`).
-            reg.executed(planned.key, planned.entry.handle, tlb && outcome.is_ok());
+            reg.executed_entry(planned.key, &planned.entry, tlb && outcome.is_ok());
         }
         match outcome {
             Ok(line) => {
-                eprintln!(
-                    "kf3: DEFERRED-API token {:#x} hApiHandle {:#x} DONE: {line}",
-                    self.token, planned.entry.handle
-                );
+                // First 16 completions, then powers of two (as the trigger line above).
+                static DONE: AtomicU64 = AtomicU64::new(0);
+                let nth = DONE.fetch_add(1, Ordering::Relaxed) + 1;
+                if nth <= 16 || nth.is_power_of_two() {
+                    eprintln!(
+                        "kf3: DEFERRED-API token {:#x} hApiHandle {:#x} DONE #{nth}: {line}",
+                        self.token, planned.entry.handle
+                    );
+                }
                 Ok(Split::Done)
             }
             Err(e) => Err(format!(
@@ -698,7 +1658,7 @@ impl Publisher for VaSplit<'_> {
     fn invalidated(&mut self, pdb: Option<u64>) -> Result<Split, String> {
         let Some(t) = *self.ticket else {
             *self.ticket = Some(self.inbox.request_split(self.token, pdb));
-            *self.requested += 1;
+            *self.requested = self.requested.saturating_add(1);
             return Ok(Split::Pending);
         };
         match self.inbox.split_result(t) {
@@ -712,38 +1672,16 @@ impl Publisher for VaSplit<'_> {
     }
 }
 
-/// The two windows of a mirror, for the rewriter.
-struct Windows<'a>(&'a Mirror);
-impl Window for Windows<'_> {
-    fn translate(&self, t: Target, phys: u64, len: u64) -> Option<u64> {
-        let end = phys.checked_add(len)?;
-        match t {
-            Target::LocalFb if end <= self.0.fb_len => Some(self.0.fb_base + phys),
-            // ⊘ A sysmem operand is a guest-PHYSICAL address; the RAM window is by memfd FILE
-            // offset. Identity only when guest RAM is one flat memfd from GPA 0 — resolved per
-            // block by the caller's layout, never assumed (see `Slot::ram_window`).
-            Target::CoherentSysmem | Target::NonCoherentSysmem => None,
-            Target::Peer => None,
-            _ => None,
-        }
-    }
-}
-
-/// The window with guest RAM resolved through the VMM's own layout.
-struct SlotWindow<'a> {
-    mirror: &'a Mirror,
-    ram: &'a RamMap,
-}
-impl Window for SlotWindow<'_> {
-    fn translate(&self, t: Target, phys: u64, len: u64) -> Option<u64> {
-        match t {
-            Target::CoherentSysmem | Target::NonCoherentSysmem => {
-                let (base, rlen) = self.mirror.ram?;
-                let off = self.ram.dma_to_file_range(phys, len)?;
-                (off.checked_add(len)? <= rlen).then(|| base + off)
-            }
-            other => Windows(self.mirror).translate(other, phys, len),
-        }
+/// ⊘ 2026-10-10 (`OWNER_RULINGS.md` §AB): **no mirror window.** The legacy rewriter translated
+/// physical operands through the store and guest-RAM windows every mirror carried (deleted with
+/// `KF3_TSPACE`); every Translated ring is now a T-mode ring, which binds its operands against the
+/// T-space's windows at push (`kf_chan::tmode::push_bound`) and never consults this one
+/// (`TranslatedRing::next` returns before the legacy rewrite). So the pump's `Window` argument
+/// translates nothing.
+struct NoMirrorWindow;
+impl Window for NoMirrorWindow {
+    fn translate(&self, _: Target, _: u64, _: u64) -> Option<u64> {
+        None
     }
 }
 
@@ -780,8 +1718,6 @@ struct Slot {
     disabled: bool,
     /// ★ v3-initrace: the completion probe's record (empty unless `KF3_COMPLETION_PROBE`).
     probe: ProbeRec,
-    /// ★ P1+P2 inc D: the ring lives in the T-space (its slot goes back to the T-space's pool).
-    tspace_ring: bool,
     /// ★ P1+P2 inc A: the channel's count-only total already summed into
     /// [`ChanPlane::inca_counted`].
     inca_seen: u64,
@@ -796,6 +1732,12 @@ struct Slot {
 
 // Experiment on this branch: kernel GR channels run only authored CE work in
 // the private T-space, with a real host-owned GR context. Default off.
+// ★ 2026-10-10 (§AB, `KF3_TSPACE` hardwired): KEPT as a switch, deliberately. ON, it changes the
+// route of a channel every Linux boot creates — the guest RM's internal kernel GR channel (the
+// golden-image channel, today "not born") becomes a Translated ring with an owned host GR
+// context — and no Linux run with it exists; ON without `KF3_KERNEL_GR_WORK` (which §S.2 keeps
+// default-off "until proven") it is a ring that refuses every GR segment. The two are an owner
+// ruling together; the Windows profile sets both.
 fn kernel_gr_ce() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| std::env::var_os("KF3_KERNEL_GR_CE").is_some_and(|v| v == "1"))
@@ -839,20 +1781,29 @@ fn translated_ce_relay() -> bool {
     *ON.get_or_init(|| std::env::var_os("KF3_TRANSLATED_CE_RELAY").is_some_and(|v| v == "1"))
 }
 
-// Experimental decoder context ownership only; codec submissions still refuse.
-fn kernel_nvdec_ctx() -> bool {
+// ★ 2026-10-08 (`V3_USERD_RELAY.md` §2.2's follow-up; H-getget after run76): a relayed twin's
+// engine-written GP_GET is also written into the guest's slot on every host non-stall wake (before the
+// guest's interrupt) and on the worker's park tick — not only at a doorbell. Host-derived only; never
+// rings, never reads GP_PUT. Default off (one variable per run).
+fn relay_get_refresh() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| std::env::var_os("KF3_KERNEL_NVDEC_CTX").is_some_and(|v| v == "1"))
+    *ON.get_or_init(|| std::env::var_os("KF3_RELAY_GET_REFRESH").is_some_and(|v| v == "1"))
 }
 
-fn kernel_nvenc_ctx() -> bool {
+// ⚠ CONTROL (2026-10-08, owner decision): `KF3_USERD_RELAY_OFF=1` births Windows user-work twins over
+// the guest's own sysmem USERD (adoption, no relay). Default off.
+fn userd_relay_off() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| std::env::var_os("KF3_KERNEL_NVENC_CTX").is_some_and(|v| v == "1"))
+    *ON.get_or_init(|| std::env::var_os("KF3_USERD_RELAY_OFF").is_some_and(|v| v == "1"))
 }
 
-fn kernel_ofa_ctx() -> bool {
+// ⚠ DIAGNOSTIC (2026-10-08, after run84; default off, never shipped): answer a twins-only re-enable
+// (`DISABLE_CHANNELS(bDisable=FALSE)`) NV_OK with no host act — see [`ChanPlane::disable_channels`].
+fn reenable_noact() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| std::env::var_os("KF3_KERNEL_OFA_CTX").is_some_and(|v| v == "1"))
+    *ON.get_or_init(|| {
+        std::env::var_os("KF3_ASYNC_PREEMPT_REENABLE_NOACT").is_some_and(|v| v == "1")
+    })
 }
 
 /// ★ P1+P2 inc D (§7.13) — **`KF3_NEGCTL_STALE_BIND=1`**, the stale-bind counter's POSITIVE
@@ -861,15 +1812,6 @@ fn kernel_ofa_ctx() -> bool {
 fn negctl_stale_bind() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| std::env::var_os("KF3_NEGCTL_STALE_BIND").is_some_and(|v| v != "0"))
-}
-
-/// ★ Review fix 2026-10-04 — **`KF3_NEGCTL_SHADOW=1`**, the shadow counters' POSITIVE CONTROL
-/// (`kf_chan::tmode::Shadow::negctl_probe`): with `KF3_TSHADOW=1`, every observed segment moves
-/// `unclassified`, `unknown_field`, `resolve_miss` and `would_refuse` through the real decode and
-/// bind. Count-only (the shadow emits nothing). Default OFF; read once.
-fn negctl_shadow() -> bool {
-    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| std::env::var_os("KF3_NEGCTL_SHADOW").is_some_and(|v| v != "0"))
 }
 
 /// ★ Review fix 2026-10-04 — **`KF3_NEGCTL_HEAP=1`**, the `heap_out=` counter's POSITIVE CONTROL:
@@ -889,32 +1831,12 @@ fn negctl_twin() -> bool {
     *ON.get_or_init(|| std::env::var_os("KF3_NEGCTL_TWIN").is_some_and(|v| v != "0"))
 }
 
-/// ★ P1+P2 inc C (`docs/design/V3_P1P2_TSPACE.md` §3.6) — **`KF3_TSHADOW=1`**: every
-/// Translated channel runs the T-mode rewriter in shadow on today's path (its output discarded, its
-/// verdicts counted) and dumps one `TSHADOW` line at free. Default OFF; read once.
-fn tshadow_on() -> bool {
-    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| std::env::var_os("KF3_TSHADOW").is_some_and(|v| v != "0"))
-}
-
-/// The shadow's windows: the store window over `[0, carve)` at the base RM chose on GA106/580, the
-/// guest-RAM window after it (`THE_TRANSLATED_PLANE.md` §17.1). Nominal bases — the shadow counts
-/// coverage and refusals, and never emits. `None` without a guest-RAM object.
-fn shadow_windows(carve: u64, ram_len: Option<u64>) -> Option<kf_chan::tspace_unsafe::TWindows> {
-    const FB_BASE: u64 = 0x1_2000_0000;
-    let ram_base = (FB_BASE + carve).next_multiple_of(2 << 20);
-    kf_chan::tspace_unsafe::TWindows::new(
-        (FB_BASE, carve),
-        (ram_base, ram_len?),
-        crate::mem::RING_REGION_BASE,
-    )
-    .ok()
-}
-
 /// ★ P1+P2 inc A (`docs/design/V3_P1P2_TSPACE.md` §3.6) — **`KF3_TCENSUS=1`** (or
-/// `KF3_TSHADOW=1`, which runs the census with the shadow): every Translated channel counts what it
+/// `KF3_TSHADOW=1`, which ran the census with the shadow): every Translated channel counts what it
 /// fetches and dumps one `TCENSUS` line at free. Default OFF; read once. Count-only: nothing the
-/// rewriter emits changes.
+/// rewriter emits changes. ⊘ 2026-10-10: the shadow itself ran only beside the legacy rewriter
+/// (deleted with `KF3_TSPACE`), so `KF3_TSHADOW` now turns on the census only, and
+/// `KF3_NEGCTL_SHADOW` (the shadow's positive control) has nothing left to control.
 /// ⚠ AWAITING OWNER CONFIRMATION (default off, `KF3_SW_RUNLIST_HOST_OWNED=1`): software-runlist
 /// option (b), host-owned scheduling (`kf_rm::sw_runlist_host`). A Translated (kernel) channel's
 /// host ring is scheduled on the host at birth already (`kf_chan::host`); with the flag on, the
@@ -1079,8 +2001,8 @@ fn probe_read(
 fn hex16(b: &[u8]) -> String {
     b.chunks(4)
         .map(|c| {
-            if c.len() == 4 {
-                format!("{:08x}", u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+            if let Ok(w) = <[u8; 4]>::try_from(c) {
+                format!("{:08x}", u32::from_le_bytes(w))
             } else {
                 format!("{c:02x?}")
             }
@@ -1309,14 +2231,14 @@ pub struct ChanPlane {
     /// ★ P1+P2 / S1-43: the framebuffer layout this device declared — a guest-named FB USERD or
     /// notifier must lie inside one of its usable heap regions ([`ChanPlane::heap_bounds`]).
     layout: kf_chip::bar0::FbLayout,
-    /// ★ P1+P2 inc D: the T-space (`KF3_TSPACE=1`), built by the VA thread at prewarm.
+    /// ★ P1+P2 inc D: the T-space (always, since 2026-10-10), built by the VA thread at prewarm.
     tspace: crate::tspace::TSpaceCell,
     mirrors: Mirrors,
     /// ★ P6: the VA thread's inbox — a Translated channel's `MEM_OP` split goes through it.
     inbox: std::sync::Arc<crate::mem::Inbox>,
     /// The session's ONE completion fd + in-flight set (`kf_chan::completions`).
     pub completions: Completions,
-    caps: Mutex<VmCaps>,
+    caps: Arc<Mutex<VmCaps>>,
     /// Host token → channel.
     slots: RwLock<HashMap<u32, Arc<Mutex<Slot>>>>,
     /// `(hClient, hObject)` → host token.
@@ -1348,6 +2270,20 @@ pub struct ChanPlane {
     family: kf_chip::Family,
     /// ★ P5b: the guest's user channels' twins, by `(hClient, hChannel)`.
     pt: Mutex<HashMap<(u32, u32), PtChan>>,
+    /// Exact pending Windows USER births, canceled before live subtree removal.
+    user_births: crate::userbirth::Book,
+    user_rings: Mutex<HashMap<u32, Arc<userrelay::Cell>>>,
+    /// ★ 2026-10-14 (`kf_chan::user_loop`): the USER-ring relays' bounded production counters.
+    pub relay_stats: kf_chan::user_loop::Stats,
+    /// Summary lines printed when the last USER-ring relay went away.
+    relay_reports: AtomicU64,
+    // Bounded ownership for every native attempt, including errors whose legacy
+    // unwind result is unavailable. These rows never retire on a plain Err.
+    user_birth_holds: Mutex<Vec<(Arc<()>, Arc<userrelay::Cell>)>>,
+    /// Current live object graph for bounded, exact-lifetime USERD access.
+    pub memory_access: Arc<kf_rm::memory_access::Access>,
+    /// ★ 2026-10-08 (`V3_USERD_RELAY.md`): relayed-USERD twins, by host token.
+    relays: Mutex<HashMap<u32, Arc<Mutex<Relay>>>>,
     /// ★ P5b: guest engine object `(hClient, hObject)` → its channel's key.
     pt_objs: Mutex<HashMap<(u32, u32), (u32, u32)>>,
     /// ★ w827: guest debugger session `(hClient, hDebugger)` → its host twin: `(guest device, host
@@ -1367,12 +2303,22 @@ pub struct ChanPlane {
     pub acts_run: AtomicU64,
     /// Acts refused.
     pub acts_refused: AtomicU64,
+    /// ★ 2026-10-11: births refused because the guest's channel budget (`channel-budget`, the count
+    /// it was told per runlist) is spent on the birth's runlist. Named and always on: the status line's `birth_refused_cap`.
+    pub birth_refused_cap: AtomicU64,
     /// Slowest act, µs.
     pub act_worst_us: AtomicU64,
     /// ★ w827: every act's time, summed (the act thread's busy time).
     pub act_total_us: AtomicU64,
     /// Passthrough twins born.
     pub pt_births: AtomicU64,
+    /// ★ 2026-10-08 (owner ruling §X): host `FIFO_EVENT_MTHD` edges seen by the relay.
+    pub pt_fifo_edges: AtomicU64,
+    /// …of which raised a guest vector (at once, or late through optional pacing).
+    pub pt_fifo_raised: AtomicU64,
+    /// ★ 2026-10-09: one bit per guest vector — a paced raise still owed there carries a
+    /// `FIFO_EVENT_MTHD` edge (credited to `pt_fifo_raised` when the tick delivers it).
+    pt_fifo_owed: [AtomicU64; kf_chan::ptnsi::VECTORS / 64],
     /// ★ v3-video: host NVENC session slots held per guest client (acquired on OUR host client;
     /// released with the guest's release or its client's free).
     enc_sessions: Mutex<HashMap<u32, u32>>,
@@ -1387,6 +2333,9 @@ pub struct ChanPlane {
     /// class `c797`) — fence never signalled. Per-ctxshare groups keep CUDA's one-group shape and
     /// restore v3-gfx's measured shape for Vulkan (a separate host group per subcontext).
     groups: Mutex<HashMap<(u32, u32, u32), (u32, u32)>>,
+    /// ★ 2026-10-09 (`crate::latejoin`): which guest TSGs the guest has scheduled — written at
+    /// statement time by the drainer, read by the birth act (`crate::latejoin`).
+    guest_sched: Mutex<crate::latejoin::GuestTsgSched>,
     /// ★ Per guest token: doorbells the vCPU trap rang INLINE, and how many reached the host's
     /// doorbell (the `DOORBELL-LEDGER` line at free; atomics only — the vCPU writes them).
     rung: Box<[AtomicU64]>,
@@ -1394,12 +2343,39 @@ pub struct ChanPlane {
     /// ★ `KF3_MAPLOG` only: per guest token, when its last inline doorbell was rung (µs on the
     /// `kf_mem::maplog` clock; 0 = never, or maplog off).
     rung_at_us: Box<[AtomicU64]>,
+    /// ★ 2026-10-14, `KF3_USER_RING_TRACE` only: per guest token, doorbells on a WORKER-served
+    /// (Translated) token, for the USER ring trace (`userpump`). Monotonic; nothing decides on it.
+    queued: Box<[AtomicU64]>,
+    /// `KF3_USER_RING_TRACE` only: every doorbell-class write by route (translated, passthrough,
+    /// other/none) and the last value of an "other" one. Measurement; nothing reads it to decide.
+    db_census: [AtomicU64; 4],
+    /// ★ 2026-10-08 (owner ruling §X, `kf_chan::ptnsi`): host non-stall edges → the guest vectors
+    /// of the events this VM's guest armed; never dropped (`KF3_PT_NSI_*`, read once at realize).
+    pub nsi: kf_chan::ptnsi::Relay,
+    /// The guest's non-stall subscriptions (`kf_rm::osevent::NonstallArms`), set once at realize
+    /// from the served chain's os-event registry; read lock-free by the workers.
+    nsi_arms: std::sync::OnceLock<std::sync::Arc<kf_rm::osevent::NonstallArms>>,
+    /// The same registry (a shared handle), for its overflow counts in the report.
+    nsi_log: std::sync::OnceLock<kf_rm::osevent::OsEventLog>,
+    /// The index into [`ChanPlane::engines`] of GR0 — the fallback vector for a host
+    /// `FIFO_EVENT_MTHD` edge when every vector carries an armed engine.
+    host_notify_engine: Option<usize>,
+    /// The plane's monotonic origin (the relay's pacing clock).
+    t0: std::time::Instant,
     /// ★ P5c: the host robust-channel event fd — one dataless `NV01_EVENT_OS_EVENT` per twin's
     /// context DMA (notify index 0: `krcErrorSendEventNotificationsCtxDma_FWCLIENT` walks exactly
     /// those, `kernel_rc_notification.c:380-400`), all on this fd. A worker's poller watches it.
     pub rc_ev: kf_host::EventFd,
     /// ★ P5c: RC events waiting for the register drainer (which owns the GSP queue).
     rc_queue: Mutex<Vec<RcEvent>>,
+    /// ★ 2026-10-08 (`KF3_ASYNC_PREEMPT`): `(hClient, pRunlistPreemptEvent)` of async
+    /// `DISABLE_CHANNELS` whose HOST disable+preempt returned — posted by the drainer as
+    /// `RUNLIST_PREEMPT_COMPLETE` ([`ChanPlane::take_preempt_done`]). Bounded.
+    preempt_done: Mutex<Vec<(u32, u64)>>,
+    /// ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`): the twins `DISABLE_USERMODE_CHANNELS(bDisable)`
+    /// disabled on the host — exactly those its `bDisable=FALSE` re-enables (a twin the guest
+    /// disabled itself with `DISABLE_CHANNELS` is neither taken nor given back).
+    usermode_off: Mutex<Vec<(u32, u32)>>,
     /// Twins born with the guest's notifier armed as their host error context.
     pub rc_armed: AtomicU64,
     /// Twins whose declared notifier could NOT be armed (named at birth) — their faults are silent.
@@ -1434,19 +2410,26 @@ pub struct ChanPlane {
     pub rc_wakes: AtomicU64,
     /// ★ EXPERIMENT `x11-dispsw`: the display-SW twins' counters (all zero with the switch off).
     pub dispsw: crate::dispsw::DispSwCounters,
+    /// ★ Device reset (`docs/design/V3_DEVICE_RESET.md`): the epoch whose guest clients the act
+    /// thread has freed ([`ChanPlane::reset_life`]).
+    pub life_reset: crate::reset::Ack,
+    /// Retries the act thread holds parked ([`crate::actq::ActQueue::parked`]), as of its last act.
+    acts_parked: std::sync::atomic::AtomicUsize,
+    /// Device resets that gave up waiting for a parked retry or a refused free (counted, named).
+    pub reset_incomplete: AtomicU64,
 }
 
 /// ★ **What a guest free of `object` takes from a twin that still lives — pure** (review
 /// 2026-10-03, MEDIUM): its engine object (`false`) or, x11-dispsw only, its display-SW twin
 /// (`true`), with the host handle to free; `None` if the twin holds neither.
 fn take_twin_object(
-    objects: &mut HashMap<u32, (u32, kf_chip::classes::Kind)>,
+    objects: &mut HashMap<u32, EngineObject>,
     disp_sw: &mut HashMap<u32, u32>,
     object: u32,
 ) -> Option<(u32, bool)> {
     objects
         .remove(&object)
-        .map(|o| (o.0, false))
+        .map(|o| (o.host, false))
         .or_else(|| disp_sw.remove(&object).map(|h| (h, true)))
 }
 
@@ -1456,6 +2439,178 @@ type PtMap = HashMap<(u32, u32), PtChan>;
 /// The plane's object index, `(client, object handle) → (client, channel handle)` ([`ChanPlane`]'s
 /// `pt_objs`).
 type ObjIndex = HashMap<(u32, u32), (u32, u32)>;
+
+/// Exact generated/validated class allocated on this channel, never inferred
+/// from a family/kind or from a guest's later SET_OBJECT word.
+#[derive(Clone)]
+struct EngineObject {
+    allocation: Arc<()>,
+    host: u32,
+    kind: kf_chip::classes::Kind,
+    // Retained for the forthcoming immutable Windows user-stream binding lookup.
+    #[allow(dead_code)]
+    class: u32,
+}
+
+#[cfg(test)]
+fn engine_owner_current(
+    pt: &Mutex<PtMap>,
+    key: (u32, u32),
+    allocation: &Arc<()>,
+    chan: kf_host::Channel,
+) -> bool {
+    pt.lock().is_ok_and(|m| {
+        m.get(&key)
+            .is_some_and(|v| Arc::ptr_eq(&v.allocation, allocation) && v.chan == chan)
+    })
+}
+
+fn engine_object_pending(
+    pt: &Mutex<PtMap>,
+    key: (u32, u32),
+    allocation: &Arc<()>,
+    chan: kf_host::Channel,
+    handle: u32,
+    object: &Arc<()>,
+) -> bool {
+    pt.lock().is_ok_and(|pt| {
+        pt.get(&key).is_some_and(|v| {
+            Arc::ptr_eq(&v.allocation, allocation)
+                && v.chan == chan
+                && v.pending_objects
+                    .get(&handle)
+                    .and_then(std::sync::Weak::upgrade)
+                    .is_some_and(|pending| Arc::ptr_eq(&pending, object))
+        })
+    })
+}
+
+/// Trusted concurrent pending-object budget, not a family/die fact.
+const PENDING_ENGINE_OBJECTS: usize = 64;
+
+fn admit_engine_object(
+    v: &mut PtChan,
+    index: &ObjIndex,
+    key: (u32, u32),
+    handle: u32,
+) -> Result<Arc<()>, String> {
+    v.pending_objects.retain(|_, weak| weak.strong_count() != 0);
+    if v.objects.contains_key(&handle)
+        || v.disp_sw.contains_key(&handle)
+        || v.pending_objects.contains_key(&handle)
+        || index.contains_key(&(key.0, handle))
+    {
+        return Err("ENGINE_OBJECT_HANDLE_BUSY".into());
+    }
+    if v.pending_objects.len() >= PENDING_ENGINE_OBJECTS {
+        return Err("ENGINE_OBJECT_PENDING_BUDGET".into());
+    }
+    v.pending_objects
+        .try_reserve(1)
+        .map_err(|_| "ENGINE_OBJECT_PENDING_ALLOCATION")?;
+    let allocation = Arc::new(());
+    v.pending_objects
+        .insert(handle, Arc::downgrade(&allocation));
+    Ok(allocation)
+}
+
+fn cancel_pending_engine_objects(pt: &Mutex<PtMap>, client: u32, object: u32) {
+    if let Ok(mut pt) = pt.lock() {
+        for ((owner, _), channel) in pt.iter_mut() {
+            if *owner == client {
+                channel.pending_objects.remove(&object);
+            }
+        }
+    }
+}
+
+/// One brief metadata transaction; caller performs no host verb under either lock.
+fn keep_engine_object(
+    pt: &Mutex<PtMap>,
+    index: &Mutex<ObjIndex>,
+    key: (u32, u32),
+    allocation: &Arc<()>,
+    chan: kf_host::Channel,
+    handle: u32,
+    object: EngineObject,
+) -> bool {
+    let (Ok(mut pt), Ok(mut index)) = (pt.lock(), index.lock()) else {
+        return false;
+    };
+    let Some(v) = pt.get_mut(&key) else {
+        return false;
+    };
+    if !Arc::ptr_eq(&v.allocation, allocation)
+        || v.chan != chan
+        || !v
+            .pending_objects
+            .get(&handle)
+            .and_then(std::sync::Weak::upgrade)
+            .is_some_and(|pending| Arc::ptr_eq(&pending, &object.allocation))
+        || v.objects.contains_key(&handle)
+        || v.disp_sw.contains_key(&handle)
+        || index.contains_key(&(key.0, handle))
+    {
+        return false;
+    }
+    v.objects.insert(handle, object);
+    v.pending_objects.remove(&handle);
+    index.insert((key.0, handle), key);
+    true
+}
+
+/// Orphan undo names allocation identities, so a reused numeric guest/native
+/// handle cannot withdraw somebody else's later object. Host free is act-only.
+fn attach_engine_withdraw(
+    d: &kf_gsp::Deferred,
+    tx: std::sync::mpsc::Sender<(Act, kf_gsp::Deferred, &'static str)>,
+    key: (u32, u32),
+    channel: Arc<()>,
+    object: Arc<()>,
+    handle: u32,
+) {
+    d.on_orphaned(move || {
+        let undo: Act = Box::new(move |me| {
+            let h = withdraw_engine_object(&me.pt, &me.pt_objs, key, &channel, &object, handle);
+            Ok(match h {
+                Some(h) => format!(
+                    "ENGINE_OBJECT_ORPHAN {:#x}:{handle:#x} host {h:#x} cleanup={:?}",
+                    key.0,
+                    me.rm.free(h)
+                ),
+                None => "ENGINE_OBJECT_ORPHAN no allocation of this act remains".into(),
+            })
+        });
+        let _ = tx.send((undo, kf_gsp::Deferred::new(), "engine object withdraw"));
+    });
+}
+
+fn withdraw_engine_object(
+    pt: &Mutex<PtMap>,
+    index: &Mutex<ObjIndex>,
+    key: (u32, u32),
+    channel: &Arc<()>,
+    object: &Arc<()>,
+    handle: u32,
+) -> Option<u32> {
+    let (Ok(mut pt), Ok(mut index)) = (pt.lock(), index.lock()) else {
+        return None;
+    };
+    let v = pt.get_mut(&key)?;
+    if !Arc::ptr_eq(&v.allocation, channel) {
+        return None;
+    }
+    let o = v.objects.get(&handle)?;
+    if !Arc::ptr_eq(&o.allocation, object) {
+        return None;
+    }
+    let host = o.host;
+    v.objects.remove(&handle);
+    if index.get(&(key.0, handle)) == Some(&key) {
+        index.remove(&(key.0, handle));
+    }
+    Some(host)
+}
 
 /// ★ x11-dispsw: what the act checks before a display-SW twin ([`crate::dispsw::twin_one`]), read
 /// from the plane's channel map on the act thread, where every display-SW alloc and free runs in
@@ -1568,6 +2723,34 @@ fn withdraw_kept<H: crate::dispsw::DispSwHost>(
     )
 }
 
+/// ★ 2026-10-08 (owner ruling §X): the relay's settings (`kf_chan::ptnsi`), read once at realize.
+/// - `KF3_PT_NSI_RELAY=0` — the falsifier mode: host `FIFO_EVENT_MTHD` edges are counted and NOT
+///   raised (engine-notifier edges still are). Default on.
+/// - `KF3_PT_NSI_MIN_INTERVAL_US` — optional, loss-free pacing per guest vector (an edge inside the
+///   interval is owed and raised by the worker's tick). Default `0` = OFF; clamped to 1 s.
+fn nsi_relay_from_env() -> kf_chan::ptnsi::Relay {
+    kf_chan::ptnsi::Relay::new(
+        kf_chan::ptnsi::min_interval_ns_from(
+            std::env::var("KF3_PT_NSI_MIN_INTERVAL_US").ok().as_deref(),
+        ),
+        std::env::var("KF3_PT_NSI_RELAY").map_or(true, |v| v.trim() != "0"),
+    )
+}
+
+/// ★ 2026-10-08 (owner ruling §X): the guest's non-stall subscription slot for an engine kind.
+fn engine_slot(kind: kf_rm::authored::EngineKind) -> Option<usize> {
+    use kf_abi::eventnotify as ev;
+    use kf_rm::authored::EngineKind as K;
+    match kind {
+        K::Graphics(0) => Some(ev::NONSTALL_SLOT_GR0),
+        K::Copy(i) => ev::nonstall_slot_ce(i),
+        K::VideoEncode(i) => ev::nonstall_slot_nvenc(i),
+        K::VideoDecode(i) => ev::nonstall_slot_nvdec(i),
+        K::OpticalFlow(i) => ev::nonstall_slot_ofa(i),
+        _ => None,
+    }
+}
+
 impl ChanPlane {
     /// Build the plane: open the session's completion fd (host ioctls — realize, never a vCPU).
     ///
@@ -1589,6 +2772,7 @@ impl ChanPlane {
         family: kf_chip::Family,
         intr_table: &[kf_abi::inittables::IntrTableEntry],
         engine_table: &[kf_abi::inittables::FifoDeviceEntry],
+        channel_budget: u32,
         dbfast: &'static kf_chan::dbfast::DbFast,
         token_fmt: Option<kf_trap::tokenindex::GuestTokenFormat>,
     ) -> Result<ChanPlane, String> {
@@ -1601,7 +2785,7 @@ impl ChanPlane {
             .find(|&et| rm.ce_is_grce(et) == Ok(false))
             .ok_or("no async (non-GRCE) copy engine on the host — a Translated ring has nowhere to run")?;
         let completions = Completions::open(rm, tokens)?;
-        let lce = host_ce - kf_abi::submit::ENGINE_TYPE_COPY0;
+        let lce = host_ce.saturating_sub(kf_abi::submit::ENGINE_TYPE_COPY0);
         completions.also(rm, kf_host::event::notifier_ce(lce))?;
         // ★ GR tier: a kernel-GR ring's fence tail NSI wakes FIFO_EVENT_MTHD, and NOT the GR0
         // notifier (measured 2026-10-07 by `kf-gr-tier` at 01870988, `completion_edges`:
@@ -1679,10 +2863,15 @@ impl ChanPlane {
                 live: AtomicU64::new(0),
                 wakes: AtomicU64::new(0),
                 raised: AtomicU64::new(0),
+                unraised_no_live: AtomicU64::new(0),
+                unraised_no_vector: AtomicU64::new(0),
                 tlive: AtomicU64::new(0),
                 trelays: AtomicU64::new(0),
                 cpending: AtomicU64::new(0),
                 crelays: AtomicU64::new(0),
+                slot: engine_slot(kind),
+                not_armed: AtomicU64::new(0),
+                owed_late: std::sync::atomic::AtomicBool::new(false),
             });
         }
         eprintln!(
@@ -1693,10 +2882,36 @@ impl ChanPlane {
                 .collect::<Vec<_>>()
                 .join(" ")
         );
+        let nsi = nsi_relay_from_env();
+        let host_notify_engine = engines
+            .iter()
+            .position(|e| e.engine_type == kf_abi::submit::ENGINE_TYPE_GRAPHICS);
+        eprintln!(
+            "kf3: non-stall relay (owner ruling 2026-10-08): every host edge -> the guest vector of every event this guest ARMED, never dropped; FIFO_EVENT_MTHD -> a vector no armed engine shares, else {} vector {:?} (relay={}, pacing={}; KF3_PT_NSI_RELAY / KF3_PT_NSI_MIN_INTERVAL_US)",
+            host_notify_engine
+                .and_then(|i| engines.get(i))
+                .map_or("no GR0", |e| e.name.as_str()),
+            host_notify_engine
+                .and_then(|i| engines.get(i))
+                .and_then(|e| e.vector),
+            if nsi.relays_fifo() {
+                "on"
+            } else {
+                "OFF (FIFO_EVENT_MTHD edges counted only)"
+            },
+            match nsi.pacer().interval_ns() {
+                0 => "off".to_string(),
+                ns => format!("{} us, loss-free", ns / 1000),
+            }
+        );
         // ★ P5c: the RC fd (realize-time host ioctls, never a vCPU).
         let rc_ev = rm
             .open_event_fd()
             .map_err(|e| format!("RC event fd: {e:?}"))?;
+        let user_births = {
+            let inbox = inbox.clone();
+            crate::userbirth::Book::with_wake(move || { let _ = inbox.wake.signal(); })
+        };
         Ok(ChanPlane {
             gr_relay: AtomicU64::new(0),
             bar0trace: crate::bar0trace::Bar0Trace::from_env(),
@@ -1709,8 +2924,10 @@ impl ChanPlane {
             mirrors,
             inbox,
             completions,
-            // Declared caps: channels are the only twin this plane mints.
-            caps: Mutex::new(VmCaps::from_declared(64, 64, 64, 64)),
+            // Declared caps: channels are the only twin this plane mints, and the cap is the number
+            // the guest was TOLD per runlist (`kf_abi::chanbudget`, the `channel-budget` property, §9.1)
+            // — a hardcoded 64 refused the 65th live channel of a Windows desktop (OpenGL ICD crash, CUDA 999).
+            caps: Arc::new(Mutex::new(VmCaps::from_declared(channel_budget, 64, 64, 64))),
             slots: RwLock::new(HashMap::new()),
             by_obj: Mutex::new(HashMap::new()),
             sw_objs: Mutex::new(HashMap::new()),
@@ -1726,6 +2943,13 @@ impl ChanPlane {
             stop: AtomicBool::new(false),
             family,
             pt: Mutex::new(HashMap::new()),
+            user_births,
+            user_rings: Mutex::new(HashMap::new()),
+            relay_stats: kf_chan::user_loop::Stats::default(),
+            relay_reports: AtomicU64::new(0),
+            user_birth_holds: Mutex::new(Vec::new()),
+            memory_access: Arc::default(),
+            relays: Mutex::new(HashMap::new()),
             pt_objs: Mutex::new(HashMap::new()),
             dbg: Mutex::new(HashMap::new()),
             cuda_limit: Mutex::new((std::collections::BTreeSet::new(), false)),
@@ -1734,16 +2958,30 @@ impl ChanPlane {
             engines,
             acts_run: AtomicU64::new(0),
             acts_refused: AtomicU64::new(0),
+            birth_refused_cap: AtomicU64::new(0),
             act_worst_us: AtomicU64::new(0),
             act_total_us: AtomicU64::new(0),
             pt_births: AtomicU64::new(0),
+            pt_fifo_edges: AtomicU64::new(0),
+            pt_fifo_raised: AtomicU64::new(0),
+            pt_fifo_owed: std::array::from_fn(|_| AtomicU64::new(0)),
             groups: Mutex::new(HashMap::new()),
+            guest_sched: Mutex::new(crate::latejoin::GuestTsgSched::default()),
             enc_sessions: Mutex::new(HashMap::new()),
             rung: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
             rang: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
             rung_at_us: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
+            queued: (0..tokens).map(|_| AtomicU64::new(0)).collect(),
+            db_census: std::array::from_fn(|_| AtomicU64::new(0)),
+            nsi,
+            nsi_arms: std::sync::OnceLock::new(),
+            nsi_log: std::sync::OnceLock::new(),
+            host_notify_engine,
+            t0: std::time::Instant::now(),
             rc_ev,
             rc_queue: Mutex::new(Vec::new()),
+            preempt_done: Mutex::new(Vec::new()),
+            usermode_off: Mutex::new(Vec::new()),
             rc_armed: AtomicU64::new(0),
             rc_unarmed: AtomicU64::new(0),
             heap_out: AtomicU64::new(0),
@@ -1754,6 +2992,9 @@ impl ChanPlane {
             rc_seen: AtomicU64::new(0),
             rc_wakes: AtomicU64::new(0),
             dispsw: crate::dispsw::DispSwCounters::default(),
+            life_reset: crate::reset::Ack::default(),
+            acts_parked: std::sync::atomic::AtomicUsize::new(0),
+            reset_incomplete: AtomicU64::new(0),
             dbfast,
             token_fmt,
         })
@@ -1808,20 +3049,36 @@ impl ChanPlane {
     pub fn start(&'static self) -> Result<(), String> {
         let (tx, rx) = std::sync::mpsc::channel::<(Act, kf_gsp::Deferred, &'static str)>();
         std::thread::Builder::new()
-            .name("kf3-chan-act".into())
+            .name(kf_rm::gssnative::ACT_THREAD.into())
             .spawn(move || {
-                while let Ok((act, d, what)) = rx.recv() {
+                let mut q = crate::actq::ActQueue::new(rx);
+                while let Some((act, d, what)) = q.next_act() {
+                    // What is parked BESIDES the act about to run (the reset's barrier reads it).
+                    self.acts_parked.store(q.parked(), Ordering::Release);
                     let t0 = std::time::Instant::now();
                     let r = act(self);
+                    // Retries the act parked (a steer waiting for a map in flight to end).
+                    for (when, a, dd, w) in
+                        ACT_DELAYED.with(|c| std::mem::take(&mut *c.borrow_mut()))
+                    {
+                        q.delay(when, (a, dd, w));
+                    }
+                    self.acts_parked.store(q.parked(), Ordering::Release);
                     let us = u64::try_from(t0.elapsed().as_micros()).unwrap_or(u64::MAX);
                     self.act_worst_us.fetch_max(us, Ordering::Relaxed);
                     self.act_total_us.fetch_add(us, Ordering::Relaxed);
                     self.acts_run.fetch_add(1, Ordering::Relaxed);
                     match r {
                         Ok(line) => {
-                            eprintln!("kf3: act {what}: {line} ({us} us, off the GSP lock)");
+                            // EXPERIMENT KF3_GSS_NATIVE: an act that says nothing is quiet (its own
+                            // counters and once-lines speak; no per-RPC print).
+                            if !line.is_empty() {
+                                eprintln!("kf3: act {what}: {line} ({us} us, off the GSP lock)");
+                            }
                             d.resolve(0);
                         }
+                        // ★ Review 3 item 5: the act put itself back on the queue; its reply is NOT given.
+                        Err((ACT_REQUEUED, _)) => continue,
                         Err((status, why)) => {
                             self.acts_refused.fetch_add(1, Ordering::Relaxed);
                             eprintln!("kf3: act {what} REFUSED ({status:#x}): {why} ({us} us)");
@@ -1837,6 +3094,232 @@ impl ChanPlane {
             *a = Some(tx);
         }
         Ok(())
+    }
+
+    /// ★ Realize (2026-10-08, owner ruling §X): the guest's non-stall subscriptions, from the
+    /// served chain's os-event registry. Set once; until then no event counts as armed.
+    pub fn set_os_events(&self, log: &kf_rm::osevent::OsEventLog) {
+        let _ = self.nsi_arms.set(log.nonstall_arms());
+        let _ = self.nsi_log.set(log.clone());
+    }
+
+    /// Whether the guest armed subscription `slot` (lock-free).
+    fn nsi_armed(&self, slot: Option<usize>) -> bool {
+        match (slot, self.nsi_arms.get()) {
+            (Some(s), Some(a)) => a.armed(s),
+            _ => false,
+        }
+    }
+
+    /// The relay's pacing clock: ns since the plane was built.
+    fn nsi_now_ns(&self) -> u64 {
+        u64::try_from(self.t0.elapsed().as_nanos()).unwrap_or(u64::MAX)
+    }
+
+    /// ★ **Worker**, on a REAL host `FIFO_EVENT_MTHD` edge (2026-10-08, owner ruling §X): if the
+    /// guest armed `FIFO_EVENT_MTHD`, raise the vector `kf_chan::ptnsi::host_notify_vector` picks —
+    /// one whose guest service fires the guest's own HOST notifier and, if possible, no engine
+    /// event the guest armed (GR0's otherwise) — via `deliver`. Never dropped: unarmed is counted,
+    /// paced is owed. With `KF3_PT_NSI_RELAY=0` the edge is counted only (the falsifier run).
+    pub fn nsi_fifo_edge(&self, deliver: impl FnOnce(u32)) -> kf_chan::ptnsi::Verdict {
+        let n = self
+            .pt_fifo_edges
+            .fetch_add(1, Ordering::Relaxed)
+            .saturating_add(1);
+        let armed = self.nsi_armed(Some(kf_abi::eventnotify::NONSTALL_SLOT_FIFO_EVENT_MTHD));
+        let vector = if armed {
+            kf_chan::ptnsi::host_notify_vector(
+                self.engines
+                    .iter()
+                    .map(|e| (e.vector, self.nsi_armed(e.slot))),
+                self.host_notify_engine
+                    .and_then(|i| self.engines.get(i))
+                    .and_then(|e| e.vector),
+            )
+        } else {
+            None
+        };
+        let verdict = self.nsi.edge(
+            kf_chan::ptnsi::EdgeKind::Fifo,
+            armed,
+            vector,
+            self.nsi_now_ns(),
+        );
+        match verdict {
+            kf_chan::ptnsi::Verdict::Raise(v) => {
+                self.pt_fifo_raised.fetch_add(1, Ordering::Relaxed);
+                deliver(v);
+            }
+            kf_chan::ptnsi::Verdict::Owed => {
+                if let Some(v) = vector.map(|v| v as usize)
+                    && let Some(w) = self.pt_fifo_owed.get(v / 64)
+                {
+                    w.fetch_or(1 << (v % 64), Ordering::Relaxed);
+                }
+            }
+            _ => {}
+        }
+        if n <= 16 || n.is_power_of_two() {
+            eprintln!(
+                "kf3: PT-NSI host FIFO_EVENT_MTHD edge #{n}: {verdict:?} (guest armed={armed}, vector {vector:?})"
+            );
+        }
+        verdict
+    }
+
+    /// ★ **Worker**, on engine `e`'s own host notifier (2026-10-08, owner ruling §X): raise the
+    /// engine's guest vector if the guest armed that engine's notifier — whoever's work it was
+    /// (the notifier is GPU-wide, as RM's own delivery is). Never dropped.
+    pub fn nsi_engine_edge(
+        &self,
+        e: &EngineEvent,
+        deliver: impl FnOnce(u32),
+    ) -> kf_chan::ptnsi::Verdict {
+        let armed = self.nsi_armed(e.slot);
+        let verdict = self.nsi.edge(
+            kf_chan::ptnsi::EdgeKind::Engine,
+            armed,
+            e.vector,
+            self.nsi_now_ns(),
+        );
+        match verdict {
+            kf_chan::ptnsi::Verdict::Raise(v) => {
+                e.raised.fetch_add(1, Ordering::Relaxed);
+                deliver(v);
+            }
+            kf_chan::ptnsi::Verdict::NotArmed => {
+                e.not_armed.fetch_add(1, Ordering::Relaxed);
+            }
+            kf_chan::ptnsi::Verdict::Owed => {
+                e.owed_late.store(true, Ordering::Relaxed);
+            }
+            _ => {}
+        }
+        verdict
+    }
+
+    /// ★ **Worker tick** (every loop; at least every millisecond while something is owed): raise
+    /// what the optional pacing owes. Returns whether anything is still owed. With pacing off
+    /// (the default) it is one branch.
+    ///
+    /// ★ 2026-10-09: a late raise is credited to the source(s) whose edge it carries — `pt_fifo_raised`
+    /// if a `FIFO_EVENT_MTHD` edge was owed on its vector, and `raised` of every engine whose own
+    /// edge was owed there (the edge side marks them; edges, tick and marks all run on the one
+    /// worker thread). One late raise can carry both kinds, so the per-source counts may sum above
+    /// the vector's `raised`; per vector, `late` stays exact.
+    pub fn nsi_tick(&self, mut deliver: impl FnMut(u32)) -> bool {
+        if self.nsi.pacer().interval_ns() == 0 {
+            return false;
+        }
+        self.nsi.flush(self.nsi_now_ns(), |v| {
+            let i = v as usize;
+            if let Some(w) = self.pt_fifo_owed.get(i / 64)
+                && w.fetch_and(!(1 << (i % 64)), Ordering::Relaxed) & (1 << (i % 64)) != 0
+            {
+                self.pt_fifo_raised.fetch_add(1, Ordering::Relaxed);
+            }
+            for e in self.engines.iter().filter(|e| e.vector == Some(v)) {
+                if e.owed_late.swap(false, Ordering::Relaxed) {
+                    e.raised.fetch_add(1, Ordering::Relaxed);
+                }
+            }
+            deliver(v);
+        })
+    }
+
+    /// The `PT-NSI` report: the relay's counters, the guest's armed subscriptions and every engine
+    /// that woke or is armed.
+    #[must_use]
+    pub fn pt_summary(&self) -> String {
+        let o = Ordering::Relaxed;
+        let fifo_refusals = self
+            .defapi_reg
+            .get()
+            .map_or(0, |r| r.stats().1.fifo_update_refused);
+        let fifo_refusal_summary = if fifo_refusals == 0 {
+            String::new()
+        } else {
+            format!(" fifo_update_registration_refused={fifo_refusals}")
+        };
+        let arms = self.nsi_arms.get();
+        let count = |slot: Option<usize>| match (slot, arms) {
+            (Some(s), Some(a)) => a.count(s),
+            _ => 0,
+        };
+        let per: Vec<String> = self
+            .engines
+            .iter()
+            .filter(|e| e.wakes.load(o) > 0 || count(e.slot) > 0)
+            .map(|e| {
+                format!(
+                    "{}[vec={:?} armed={} wakes={} not_armed={} raised={} live_twins={}]",
+                    e.name,
+                    e.vector,
+                    count(e.slot),
+                    e.wakes.load(o),
+                    e.not_armed.load(o),
+                    e.raised.load(o),
+                    e.live.load(o)
+                )
+            })
+            .collect();
+        format!(
+            "fifo_edges={} fifo_raised={} fifo_armed={} sticky={:#x} kernel_nonstall_registered={} arm_clears={} os_event_overflowed={} kernel_nonstall_overflowed={} {} {}",
+            self.pt_fifo_edges.load(o),
+            self.pt_fifo_raised.load(o),
+            count(Some(kf_abi::eventnotify::NONSTALL_SLOT_FIFO_EVENT_MTHD)),
+            arms.map_or(0, |a| a.sticky()),
+            arms.map_or(0, |a| a.kernel_registered.load(o)),
+            arms.map_or(0, |a| a.clears.load(o)),
+            self.nsi_log
+                .get()
+                .map_or(0, kf_rm::osevent::OsEventLog::overflowed),
+            self.nsi_log
+                .get()
+                .map_or(0, kf_rm::osevent::OsEventLog::kernel_overflowed),
+            self.nsi.summary(),
+            per.join(" ") + &fifo_refusal_summary
+        )
+    }
+
+    /// ★ **vCPU/drainer**: a doorbell on worker-served guest token `idx` (Translated). One relaxed
+    /// atomic. Monotonic for the plane's life, so a pump compares two reads.
+    pub fn note_queued(&self, idx: u32) {
+        if let Some(c) = self.queued.get(idx as usize) {
+            c.fetch_add(1, Ordering::Release);
+        }
+    }
+
+    /// Whether the USER ring measurement trace is on (`KF3_USER_RING_TRACE`).
+    pub fn user_ring_tracing(&self) -> bool {
+        userpump::tracing()
+    }
+
+    /// `KF3_USER_RING_TRACE` only ([`Self::db_census`]).
+    pub fn doorbell_census(&self, value: u32, route: Option<kf_trap::Route>) {
+        if !userpump::tracing() {
+            return;
+        }
+        let i = match route {
+            Some(kf_trap::Route::Translated) => 0,
+            Some(kf_trap::Route::Passthrough) => 1,
+            _ => {
+                self.db_census[3].store(u64::from(value), Ordering::Relaxed);
+                2
+            }
+        };
+        self.db_census[i].fetch_add(1, Ordering::Relaxed);
+    }
+    /// `(translated, passthrough, other, last other value)`.
+    pub(crate) fn doorbell_census_now(&self) -> [u64; 4] {
+        std::array::from_fn(|i| self.db_census[i].load(Ordering::Relaxed))
+    }
+
+    /// Doorbells counted on guest token `idx` ([`Self::note_queued`]).
+    pub(crate) fn queued(&self, idx: u32) -> u64 {
+        self.queued
+            .get(idx as usize)
+            .map_or(0, |c| c.load(Ordering::Acquire))
     }
 
     /// ★ **vCPU**: a doorbell on guest token `idx` was rung inline; `reached` = the host store
@@ -1875,6 +3358,29 @@ impl ChanPlane {
         (r, f)
     }
 
+    /// ★ 2026-10-08 (`KF3_ASYNC_PREEMPT`): the completed async preempts not yet posted (drained) —
+    /// ⊘ none while any reply is still held ([`preempt_posts_ready`]): the event must follow its
+    /// control's reply, as the GSP posts it.
+    pub fn take_preempt_done(&self, held_replies: usize) -> Vec<(u32, u64)> {
+        if !preempt_posts_ready(held_replies) {
+            return Vec::new();
+        }
+        self.preempt_done
+            .lock()
+            .map(|mut q| std::mem::take(&mut *q))
+            .unwrap_or_default()
+    }
+
+    /// ★ 2026-10-08: give back preempt completions the queue could not take yet (front first).
+    pub fn requeue_preempt_done(&self, back: Vec<(u32, u64)>) {
+        if let Ok(mut q) = self.preempt_done.lock() {
+            let mut v = back;
+            v.append(&mut q);
+            v.truncate(PREEMPT_DONE_MAX);
+            *q = v;
+        }
+    }
+
     /// ★ GR tier: the guest vector to raise because a GR-tier pump retired engine-written work
     /// since the last call — `(vector, engine name, relay number, live GR-tier rings)`, or `None`.
     /// Called by the worker right after [`ChanPlane::serve`].
@@ -1888,7 +3394,7 @@ impl ChanPlane {
             .find(|e| e.engine_type == kf_abi::submit::ENGINE_TYPE_GRAPHICS)?;
         let v = e.vector?;
         e.raised.fetch_add(1, Ordering::Relaxed);
-        let n = e.trelays.fetch_add(1, Ordering::Relaxed) + 1;
+        let n = e.trelays.fetch_add(1, Ordering::Relaxed).saturating_add(1);
         Some((v, e.name.as_str(), n, e.tlive.load(Ordering::Relaxed)))
     }
 
@@ -1902,7 +3408,7 @@ impl ChanPlane {
             }
             let Some(v) = e.vector else { continue };
             e.raised.fetch_add(1, Ordering::Relaxed);
-            let n = e.crelays.fetch_add(1, Ordering::Relaxed) + 1;
+            let n = e.crelays.fetch_add(1, Ordering::Relaxed).saturating_add(1);
             f(v, e.name.as_str(), n);
         }
     }
@@ -1934,6 +3440,11 @@ impl ChanPlane {
     /// Queue `act` and answer [`ChanAnswer::Deferred`] — the drainer returns at once.
     fn defer(&self, what: &'static str, act: Act) -> ChanAnswer {
         let d = kf_gsp::Deferred::new();
+        self.defer_cell(what, act, d)
+    }
+
+    /// [`Self::defer`] with the caller's own cell (an act that must reach its own `Deferred`).
+    fn defer_cell(&self, what: &'static str, act: Act, d: kf_gsp::Deferred) -> ChanAnswer {
         let sent = self
             .acts
             .lock()
@@ -1949,6 +3460,32 @@ impl ChanPlane {
         }
     }
 
+    /// ★ EXPERIMENT `KF3_GSS_NATIVE` (`docs/design/V3_GSS_NATIVE.md`): a non-privileged subdevice-level
+    /// GSS-legacy control, carried to OUR host subdevice as an act — the host call is the act
+    /// thread's (statement order, off the drainer, off every lock the drainer holds), the reply is
+    /// held on the cell, and a call that blocks on the host RM API lock shows in `acts` /
+    /// `act_worst_us`. The act resolves the cell itself (the host's status, not `0`) and says
+    /// nothing per call (`kf_rm::gssnative` counts, and says each first answer once).
+    pub fn gss_forward(
+        &self,
+        req: kf_rm::gssnative::GssRequest,
+        stats: &Arc<kf_rm::gssnative::Stats>,
+    ) -> kf_rm::gssnative::GssAnswer {
+        let d = kf_gsp::Deferred::new();
+        let (cell, stats) = (d.clone(), stats.clone());
+        let act: Act = Box::new(move |me: &ChanPlane| {
+            kf_rm::gssnative::execute(&stats, &GssHostRm(me.rm), req, &cell);
+            Ok(String::new())
+        });
+        match self.defer_cell("gss-native control", act, d) {
+            ChanAnswer::Deferred(d) => kf_rm::gssnative::GssAnswer::Deferred(d),
+            ChanAnswer::Refused { why, .. } => kf_rm::gssnative::GssAnswer::Refused { why },
+            _ => kf_rm::gssnative::GssAnswer::Refused {
+                why: "unexpected answer".into(),
+            },
+        }
+    }
+
     /// The passthrough twins matching `f`, removed.
     fn take_pt(&self, f: impl Fn(&(u32, u32), &PtChan) -> bool) -> Vec<((u32, u32), PtChan)> {
         let Ok(mut m) = self.pt.lock() else {
@@ -1958,6 +3495,109 @@ impl ChanPlane {
         keys.into_iter()
             .filter_map(|k| m.remove(&k).map(|v| (k, v)))
             .collect()
+    }
+
+    /// A `GPFIFO_SCHEDULE` statement on `object` (a channel or a TSG): the guest's own schedule,
+    /// carried to its twins' host groups. ⊘ Never blocks: the host verb is an act.
+    fn schedule_statement(&self, client: u32, object: u32, enable: bool) -> ChanAnswer {
+        if let Some(ht) = self
+            .by_obj
+            .lock()
+            .ok()
+            .and_then(|m| m.get(&(client, object)).copied())
+        {
+            return self.schedule_translated(client, object, ht, enable);
+        }
+        // ★ P6: a TSG schedule (`0xa06c0101`) over Translated members (nvidia-uvm's
+        // channels live in groups): every member's slot, as its own schedule.
+        let members: Vec<u32> = self
+            .by_obj
+            .lock()
+            .map(|m| {
+                m.iter()
+                    .filter(|(k, _)| k.0 == client)
+                    .map(|(_, v)| *v)
+                    .collect::<Vec<u32>>()
+            })
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|ht| {
+                self.slot(*ht)
+                    .is_some_and(|s| s.lock().is_ok_and(|g| g.tsg == Some(object)))
+            })
+            .collect();
+        if !members.is_empty() {
+            for ht in members {
+                if let ChanAnswer::Refused { status, why } =
+                    self.schedule_translated(client, object, ht, enable)
+                {
+                    return ChanAnswer::Refused { status, why };
+                }
+            }
+            return ChanAnswer::Done;
+        }
+        // ★ P5b: a user channel (or its group) — the twin's own schedule, as an act.
+        let twins: Vec<((u32, u32), kf_host::Channel)> = self
+            .pt
+            .lock()
+            .map(|m| {
+                m.iter()
+                    .filter(|(k, v)| k.0 == client && (k.1 == object || v.tsg == Some(object)))
+                    .map(|(k, v)| (*k, v.chan))
+                    .collect()
+            })
+            .unwrap_or_default();
+        if twins.is_empty() {
+            return ChanAnswer::NotOurs;
+        }
+        self.defer(
+            "schedule",
+            Box::new(move |me: &ChanPlane| {
+                let run = || -> Result<String, (u32, String)> {
+                    let mut restarted = 0u32;
+                    // ★ v3-video: twins of one guest TSG share ONE host group — schedule it once.
+                    let mut groups_done = std::collections::HashSet::new();
+                    for (k, c) in &twins {
+                        // ★ v3-chanctl: a STOPPED twin is re-enabled before it is scheduled
+                        // (STOP disabled it; "it has to be scheduled, bound and enabled again",
+                        // `ctrla06fgpfifo.h:219-221`) — unless the guest ALSO disabled it with
+                        // DISABLE_CHANNELS, which only its own `bDisable=FALSE` undoes.
+                        let (stopped, disabled) =
+                            me.pt.lock().ok().and_then(|m| m.get(k).map(|v| (v.stopped, v.disabled))).unwrap_or((false, false));
+                        if enable && stopped {
+                            if !disabled {
+                                me.rm
+                                    .disable_channels(&[*c], false, false, false)
+                                    .map_err(|e| (NV_ERR_INVALID_STATE, format!("host {:#x} re-enable after STOP: {e:?}", c.token)))?;
+                            }
+                            restarted = restarted.saturating_add(1);
+                            if let Ok(mut m) = me.pt.lock()
+                                && let Some(v) = m.get_mut(k)
+                            {
+                                v.stopped = false;
+                                if let Some(n) = v.notifier.as_mut() {
+                                    // The record as the guest left it is the new baseline.
+                                    n.guest_stop_write = false;
+                                    n.at_arm = n.words().unwrap_or(n.at_arm);
+                                }
+                            }
+                        }
+                        crate::latejoin::schedule_group_once(me.rm, &mut groups_done, *c, enable)
+                            .map_err(|e| (NV_ERR_INVALID_STATE, e))?;
+                        if enable { me.user_ring_wake(c.token); }
+                    }
+                    Ok(format!("{client:#x}:{object:#x} GPFIFO_SCHEDULE enable={enable} on {} twin(s) ({restarted} restarted after STOP)", twins.len()))
+                };
+                let result = run();
+                // ★ 2026-10-09: a schedule the host refused is not the guest's scheduled state.
+                if result.is_err()
+                    && let Ok(mut s) = me.guest_sched.lock()
+                {
+                    s.forget(client, object);
+                }
+                result
+            }),
+        )
     }
 
     /// ★ The drainer's entry: one statement from the served chain (`kf_rm::chanlink`). ⊘ Never
@@ -1971,96 +3611,16 @@ impl ChanPlane {
                 object,
                 enable,
             } => {
-                if let Some(ht) = self
-                    .by_obj
-                    .lock()
-                    .ok()
-                    .and_then(|m| m.get(&(client, object)).copied())
+                let answer = self.schedule_statement(client, object, enable);
+                // ★ 2026-10-09 (late TSG joiners): the guest's own scheduled state, recorded at
+                // STATEMENT time (statement order is the act thread's order, so a twin whose birth
+                // act is still queued sees it). A refused statement is not a schedule.
+                if !matches!(answer, ChanAnswer::Refused { .. })
+                    && let Ok(mut s) = self.guest_sched.lock()
                 {
-                    return self.schedule_translated(client, object, ht, enable);
+                    s.record(client, object, enable);
                 }
-                // ★ P6: a TSG schedule (`0xa06c0101`) over Translated members (nvidia-uvm's
-                // channels live in groups): every member's slot, as its own schedule.
-                let members: Vec<u32> = self
-                    .by_obj
-                    .lock()
-                    .map(|m| {
-                        m.iter()
-                            .filter(|(k, _)| k.0 == client)
-                            .map(|(_, v)| *v)
-                            .collect::<Vec<u32>>()
-                    })
-                    .unwrap_or_default()
-                    .into_iter()
-                    .filter(|ht| {
-                        self.slot(*ht)
-                            .is_some_and(|s| s.lock().is_ok_and(|g| g.tsg == Some(object)))
-                    })
-                    .collect();
-                if !members.is_empty() {
-                    for ht in members {
-                        if let ChanAnswer::Refused { status, why } =
-                            self.schedule_translated(client, object, ht, enable)
-                        {
-                            return ChanAnswer::Refused { status, why };
-                        }
-                    }
-                    return ChanAnswer::Done;
-                }
-                // ★ P5b: a user channel (or its group) — the twin's own schedule, as an act.
-                let twins: Vec<((u32, u32), kf_host::Channel)> = self
-                    .pt
-                    .lock()
-                    .map(|m| {
-                        m.iter()
-                            .filter(|(k, v)| {
-                                k.0 == client && (k.1 == object || v.tsg == Some(object))
-                            })
-                            .map(|(k, v)| (*k, v.chan))
-                            .collect()
-                    })
-                    .unwrap_or_default();
-                if twins.is_empty() {
-                    return ChanAnswer::NotOurs;
-                }
-                self.defer(
-                    "schedule",
-                    Box::new(move |me: &ChanPlane| {
-                        let mut restarted = 0;
-                        // ★ v3-video: twins of one guest TSG share ONE host group — schedule it once.
-                        let mut groups_done = std::collections::HashSet::new();
-                        for (k, c) in &twins {
-                            // ★ v3-chanctl: a STOPPED twin is re-enabled before it is scheduled
-                            // (STOP disabled it; "it has to be scheduled, bound and enabled again",
-                            // `ctrla06fgpfifo.h:219-221`) — unless the guest ALSO disabled it with
-                            // DISABLE_CHANNELS, which only its own `bDisable=FALSE` undoes.
-                            let (stopped, disabled) =
-                                me.pt.lock().ok().and_then(|m| m.get(k).map(|v| (v.stopped, v.disabled))).unwrap_or((false, false));
-                            if enable && stopped {
-                                if !disabled {
-                                    me.rm
-                                        .disable_channels(&[*c], false, false, false)
-                                        .map_err(|e| (NV_ERR_INVALID_STATE, format!("host {:#x} re-enable after STOP: {e:?}", c.token)))?;
-                                }
-                                restarted += 1;
-                                if let Ok(mut m) = me.pt.lock()
-                                    && let Some(v) = m.get_mut(k)
-                                {
-                                    v.stopped = false;
-                                    if let Some(n) = v.notifier.as_mut() {
-                                        // The record as the guest left it is the new baseline.
-                                        n.guest_stop_write = false;
-                                        n.at_arm = n.words().unwrap_or(n.at_arm);
-                                    }
-                                }
-                            }
-                            if groups_done.insert(c.tsg) {
-                                me.rm.schedule_enable(*c, enable).map_err(|e| (NV_ERR_INVALID_STATE, format!("host {:#x}: {e:?}", c.token)))?;
-                            }
-                        }
-                        Ok(format!("{client:#x}:{object:#x} GPFIFO_SCHEDULE enable={enable} on {} twin(s) ({restarted} restarted after STOP)", twins.len()))
-                    }),
-                )
+                answer
             }
             ChanStatement::Bind {
                 client,
@@ -2188,7 +3748,8 @@ impl ChanPlane {
                 client,
                 parent,
                 handle,
-            } => self.deferred_api_object(client, parent, handle),
+                notify_completion,
+            } => self.deferred_api_object(client, parent, handle, notify_completion),
             ChanStatement::DebuggerExceptionMask {
                 client,
                 object,
@@ -2493,13 +4054,18 @@ impl ChanPlane {
                 only_scheduling,
                 rewind_gp_put,
                 list,
+                preempt_event,
             } => self.disable_channels(
                 client,
                 disable,
                 only_scheduling,
                 rewind_gp_put,
                 list.as_slice(),
+                preempt_event,
             ),
+            ChanStatement::DisableUsermode { client, disable } => {
+                self.disable_usermode(client, disable)
+            }
             ChanStatement::Preempt {
                 client,
                 object,
@@ -2597,6 +4163,87 @@ impl ChanPlane {
     /// guest's (the guest's cursor is in its USERD, which the pump reads).
     /// ⊘ A list naming a channel the plane does not own is refused whole (nothing is half-done);
     /// a list naming none of ours is not ours.
+    /// ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`) — **`DISABLE_USERMODE_CHANNELS`, as the host's
+    /// `DISABLE_CHANNELS` over this VM's user twins.** RM's promise is "disable or enable scheduling
+    /// of all usermode channels" (`ctrl2080fifo.h:832-841`); this VM's usermode channels are its
+    /// passthrough twins (the RM-internal kernel channels — CeUtils, the FBSR copies — are Translated
+    /// rings this verb does not name). `bDisable`: every twin the guest has not disabled itself is
+    /// disabled on the host and remembered; `bDisable=FALSE`: exactly the remembered twins that
+    /// still exist are re-enabled. Unprivileged host verbs on our own channels, as an act; the reply
+    /// waits for it. No twin: vacuously done.
+    fn disable_usermode(&self, client: u32, disable: bool) -> ChanAnswer {
+        let list: Vec<(u32, u32)> = if disable {
+            let Ok(m) = self.pt.lock() else {
+                return ChanAnswer::Refused {
+                    status: NV_ERR_INVALID_STATE,
+                    why: "twins poisoned".into(),
+                };
+            };
+            let keys: Vec<(u32, u32)> = m
+                .iter()
+                .filter(|(_, v)| !v.disabled)
+                .map(|(k, _)| *k)
+                .collect();
+            drop(m);
+            if let Ok(mut off) = self.usermode_off.lock() {
+                off.clone_from(&keys);
+            }
+            keys
+        } else {
+            let taken = self
+                .usermode_off
+                .lock()
+                .map(|mut off| std::mem::take(&mut *off))
+                .unwrap_or_default();
+            let Ok(m) = self.pt.lock() else {
+                return ChanAnswer::Refused {
+                    status: NV_ERR_INVALID_STATE,
+                    why: "twins poisoned".into(),
+                };
+            };
+            taken
+                .into_iter()
+                .filter(|k| m.get(k).is_some_and(|v| !v.disabled))
+                .collect()
+        };
+        // ⊘ Bounded: a guest can send this in a loop.
+        static SAID: AtomicU64 = AtomicU64::new(0);
+        if SAID.fetch_add(1, Ordering::Relaxed) < 64 {
+            eprintln!(
+                "kf3: chan DISABLE_USERMODE_CHANNELS bDisable={disable} from {client:#x}: {} user twin(s) {}",
+                list.len(),
+                if disable { "disabled on the host" } else { "re-enabled on the host" }
+            );
+        }
+        let hosts: Vec<kf_host::Channel> = match self.pt.lock() {
+            Ok(m) => list.iter().filter_map(|k| m.get(k).map(|v| v.chan)).collect(),
+            Err(_) => Vec::new(),
+        };
+        if hosts.is_empty() {
+            return ChanAnswer::Done;
+        }
+        self.defer(
+            "disable usermode channels",
+            Box::new(move |me: &ChanPlane| {
+                me.rm
+                    .disable_channels(&hosts, disable, false, false)
+                    .map_err(|e| {
+                        (
+                            NV_ERR_INVALID_STATE,
+                            format!(
+                                "host DISABLE_CHANNELS(bDisable={disable}) over {} user twin(s): {e:?}",
+                                hosts.len()
+                            ),
+                        )
+                    })?;
+                Ok(format!(
+                    "DISABLE_USERMODE_CHANNELS bDisable={disable}: {} twin(s)",
+                    hosts.len()
+                ))
+            }),
+        )
+    }
+
     fn disable_channels(
         &self,
         client: u32,
@@ -2604,31 +4251,36 @@ impl ChanPlane {
         only_scheduling: bool,
         rewind: bool,
         list: &[(u32, u32)],
+        preempt_event: Option<u64>,
     ) -> ChanAnswer {
         if list.is_empty() {
             // Vacuously true: RM disables nothing (the only in-tree caller never sends it).
             return ChanAnswer::Done;
         }
-        let mut pt = Vec::new();
-        let mut tr = Vec::new();
-        let mut unknown = Vec::new();
-        {
+        let (DisableList { pt, tr, unknown }, private_ring) = {
             let Ok(m) = self.pt.lock() else {
                 return ChanAnswer::Refused {
                     status: NV_ERR_INVALID_STATE,
                     why: "twins poisoned".into(),
                 };
             };
-            for &(c, h) in list {
-                if let Some(v) = m.get(&(c, h)) {
-                    pt.push(((c, h), v.chan));
-                } else if let Some(ht) = self.translated_of(c, h) {
-                    tr.push(((c, h), ht));
-                } else {
-                    unknown.push((c, h));
-                }
-            }
-        }
+            let resolved = resolve_disable_list(
+                list,
+                |c, h| m.get(&(c, h)).map(|v| v.chan),
+                |c, h| {
+                    m.iter()
+                        .filter(|(k, v)| k.0 == c && v.tsg == Some(h))
+                        .map(|(k, v)| (*k, v.chan))
+                        .collect()
+                },
+                |c, h| self.translated_of(c, h),
+            );
+            // Same locked allocation snapshot as native channel resolution.
+            // A second lookup by numeric handle could see a replacement.
+            let private_ring = resolved.pt.iter().any(|(key, _)|
+                m.get(key).is_some_and(|t| t.user_ring));
+            (resolved, private_ring)
+        };
         if pt.is_empty() && tr.is_empty() {
             return ChanAnswer::NotOurs;
         }
@@ -2641,17 +4293,37 @@ impl ChanPlane {
                 ),
             };
         }
-        if rewind && !tr.is_empty() {
+        if rewind && (!tr.is_empty() || private_ring) {
             return ChanAnswer::Refused {
                 status: NV_ERR_INVALID_ARGUMENT,
                 why: format!(
-                    "DISABLE_CHANNELS bRewindGpPut on Translated channel(s) {tr:x?}: our host ring's GP_PUT is not the guest's"
+                    "DISABLE_CHANNELS bRewindGpPut on private host ring(s) {tr:x?}: our host ring's GP_PUT is not the guest's"
                 ),
             };
+        }
+        // ⚠ DIAGNOSTIC (2026-10-08, after run84; `KF3_ASYNC_PREEMPT_REENABLE_NOACT=1`, default off, NEVER
+        // shipped): the coordinator's bisect — a re-enable of twins only (no Translated ring) is answered
+        // NV_OK with NO host act, so the twins stay disabled on the host. It is a status the host did not
+        // earn (a diagnostic, not a behaviour): it tells whether the host re-enable act itself is what
+        // the guest's later timeout follows (run83 refused it and survived; run84 served it and TDR'd).
+        if !disable && tr.is_empty() && reenable_noact() {
+            let toks: Vec<String> = pt
+                .iter()
+                .map(|(k, c)| format!("{:#x}:{:#x}->host {:#x}", k.0, k.1, c.token))
+                .collect();
+            eprintln!(
+                "kf3: ⚠ DIAGNOSTIC KF3_ASYNC_PREEMPT_REENABLE_NOACT: {client:#x} DISABLE_CHANNELS(bDisable=false) over twin(s) [{}] answered NV_OK with NO host act (the twins stay disabled on the host){}",
+                toks.join(", "),
+                self.relay_snapshots(&pt)
+            );
+            return ChanAnswer::Done;
         }
         self.defer(
             "disable channels",
             Box::new(move |me: &ChanPlane| {
+                // ⚠ DIAGNOSTIC (after run84): which twins this act names, and each relay's cursors
+                // before the host verb (host-derived reads of 4 bytes each; nothing forwarded).
+                let before = me.relay_snapshots(&pt);
                 let mut hosts: Vec<kf_host::Channel> = pt.iter().map(|(_, c)| *c).collect();
                 let mut slots = Vec::new();
                 for (_, ht) in &tr {
@@ -2677,6 +4349,16 @@ impl ChanPlane {
                         }
                     }
                 }
+                // ★ 2026-10-08 (`KF3_ASYNC_PREEMPT`): the host's disable+preempt RETURNED — the host's
+                // real completion — so the guest's RUNLIST_PREEMPT_COMPLETE may be posted now (by the
+                // drainer, after this act's held reply). Never before, never without it.
+                if let Some(ev) = preempt_event
+                    && disable
+                    && let Ok(mut q) = me.preempt_done.lock()
+                    && q.len() < PREEMPT_DONE_MAX
+                {
+                    q.push((client, ev));
+                }
                 if !disable {
                     for s in &slots {
                         let idx = s.lock().ok().map(|mut g| {
@@ -2691,10 +4373,22 @@ impl ChanPlane {
                         }
                     }
                 }
+                if !disable { for (_, chan) in &pt { me.user_ring_wake(chan.token); } }
+                let after = me.relay_snapshots(&pt);
+                let toks: Vec<String> = pt
+                    .iter()
+                    .map(|(k, c)| format!("{:#x}:{:#x}->host {:#x}", k.0, k.1, c.token))
+                    .collect();
                 Ok(format!(
-                    "{client:#x} DISABLE_CHANNELS(bDisable={disable}, bOnlyDisableScheduling={only_scheduling}, bRewindGpPut={rewind}) over {} twin(s) + {} Translated ring(s)",
+                    "{client:#x} DISABLE_CHANNELS(bDisable={disable}, bOnlyDisableScheduling={only_scheduling}, bRewindGpPut={rewind}) over {} twin(s) [{}] + {} Translated ring(s){}; relays before{before} after{after}",
                     pt.len(),
-                    tr.len()
+                    toks.join(", "),
+                    tr.len(),
+                    if preempt_event.is_some() {
+                        " — async preempt: host preempt completed, RUNLIST_PREEMPT_COMPLETE queued (posted only after this reply)"
+                    } else {
+                        ""
+                    }
                 ))
             }),
         )
@@ -2793,7 +4487,7 @@ impl ChanPlane {
                 g.ctx.initialized |= initialize;
                 g.ctx.va_bound |= with_va;
                 g.ctx.bound |= with_va != 0;
-                g.ctx.promotes += 1;
+                g.ctx.promotes = g.ctx.promotes.saturating_add(1);
                 Ok(format!("{client:#x}:{object:#x} GPU_PROMOTE_CTX satisfied by Translated host {ht:#x} GR={context:x?} VIDEO={video:x?} entries={entries} init_ids={initialize:#x} va_ids={with_va:#x} bound={} — no guest buffer touched", g.ctx.bound))
             }));
         }
@@ -2824,7 +4518,7 @@ impl ChanPlane {
             let Some(v) = m.get_mut(&(client, object)) else {
                 return ChanAnswer::NotOurs;
             };
-            v.ctx.promotes += 1;
+            v.ctx.promotes = v.ctx.promotes.saturating_add(1);
             eprintln!(
                 "kf3: chan {client:#x}:{object:#x} GPU_PROMOTE_CTX (video falcon ctx, engine {engine:#x}) SATISFIED BY TWIN host {ht:#x}: entries={entries} host_objects={} — not forwarded",
                 v.objects.len()
@@ -2850,7 +4544,7 @@ impl ChanPlane {
                 return ChanAnswer::NotOurs;
             };
             v.ctx.initialized |= initialize;
-            v.ctx.promotes += 1;
+            v.ctx.promotes = v.ctx.promotes.saturating_add(1);
             eprintln!(
                 "kf3: chan {client:#x}:{object:#x} GPU_PROMOTE_CTX (initialize) SATISFIED BY TWIN host {ht:#x}: entries={entries} init_ids={initialize:#x} host_objects={} — not forwarded, no guest byte touched",
                 v.objects.len()
@@ -2867,8 +4561,8 @@ impl ChanPlane {
                 let host_ctx: Vec<u32> = v
                     .objects
                     .values()
-                    .filter(|(_, k)| matches!(k, kf_chip::classes::Kind::Compute | kf_chip::classes::Kind::ThreeD))
-                    .map(|(h, _)| *h)
+                    .filter(|o| matches!(o.kind, kf_chip::classes::Kind::Compute | kf_chip::classes::Kind::ThreeD))
+                    .map(|o| o.host)
                     .collect();
                 // ★ v3-gfx: a graphics object's promote ARRIVES BEFORE its alloc — the guest's CPU-RM
                 // maps the context buffers into the channel's VA space and promotes them inside
@@ -2881,7 +4575,7 @@ impl ChanPlane {
                 v.ctx.initialized |= initialize;
                 v.ctx.va_bound |= with_va;
                 v.ctx.bound |= with_va != 0;
-                v.ctx.promotes += 1;
+                v.ctx.promotes = v.ctx.promotes.saturating_add(1);
                 Ok(format!(
                     "chan {client:#x}:{object:#x} GPU_PROMOTE_CTX SATISFIED BY TWIN host {ht:#x} (host GR object(s) {host_ctx:x?}{}): entries={entries} init_ids={initialize:#x} va_ids={with_va:#x} bound={} — not forwarded, no guest byte touched",
                     if pending { " — none yet: the engine object this promote precedes births the host context" } else { "" },
@@ -2913,7 +4607,7 @@ impl ChanPlane {
                 g.scheduled = false;
                 g.ctx.bound = false;
                 g.ctx.va_bound = 0;
-                g.ctx.evicts += 1;
+                g.ctx.evicts = g.ctx.evicts.saturating_add(1);
                 Ok(format!("{client:#x}:{object:#x} GPU_EVICT_CTX: Translated host {ht:#x} off runlist, context UNBOUND"))
             }));
         }
@@ -2942,7 +4636,7 @@ impl ChanPlane {
                     m.get_mut(&(client, object)).map(|v| {
                         v.ctx.bound = false;
                         v.ctx.va_bound = 0;
-                        v.ctx.evicts += 1;
+                        v.ctx.evicts = v.ctx.evicts.saturating_add(1);
                         v.ctx
                     })
                 });
@@ -3024,79 +4718,77 @@ impl ChanPlane {
         class: u32,
         copy_engine: Option<u32>,
     ) -> ChanAnswer {
-        let Some((chan, engine, space, rows)) = self.pt.lock().ok().and_then(|m| {
-            m.get(&(client, parent))
-                .map(|v| (v.chan, v.engine, v.space, v.rows.clone()))
-        }) else {
-            return ChanAnswer::NotOurs;
-        };
-        let Some(kind) = kf_chip::classes_for(self.family).kind_of(class) else {
-            return ChanAnswer::Refused {
-                status: NV_ERR_INVALID_CLASS,
-                why: format!(
-                    "class {class:#x} is not an engine class of the host family {:?}",
-                    self.family
-                ),
-            };
-        };
-        self.defer(
-            "engine object",
-            Box::new(move |me: &ChanPlane| {
-                // ★★ v3-video — STEER THE HOST'S FALCON CONTEXT ONTO THE GUEST'S. In a video
-                // channel's VA space guest RM and host RM place buffers with the SAME lowest-free
-                // allocator, user buffers and RM-internal ones alike. `[measured vvid vid10]` the
-                // guest put its falcon ctx at G = 0x12002a000; host RM, allocating the twin's own ctx
-                // with this object, found G mirrored and took G+0x1000 — where nvcuvid then mapped a
-                // live 4 KiB buffer, which the walker could only report HELD BY HOST: the engine
-                // used the wrong page and NVDEC produced untouched frames. So G (the guest's ctx,
-                // which no engine ever reads — the twin runs on the host's) is unmapped from the
-                // twin first, and host RM takes G itself. Best effort: a failed unmap is logged.
-                let fc = if matches!(
-                    kind,
-                    kf_chip::classes::Kind::VideoEncoder | kf_chip::classes::Kind::VideoDecoder | kf_chip::classes::Kind::OpticalFlow
-                ) {
-                    me.pt.lock().ok().and_then(|m| m.get(&(client, parent)).and_then(|v| v.falcon_ctx))
-                } else {
-                    None
+        let key = (client, parent);
+        let (chan, engine, space, rows, ledger, user_regions, allocation, object_allocation, kind) = {
+            let (Ok(mut pt), Ok(index)) = (self.pt.lock(), self.pt_objs.lock()) else {
+                return ChanAnswer::Refused {
+                    status: NV_ERR_INVALID_STATE,
+                    why: "ENGINE_OBJECT_MAP_POISONED".into(),
                 };
-                // ★★ v3-int — HOW THIS COMPOSES WITH THE v3-gfx GUEST-VA RESERVATION
-                // (`kf_host::GUEST_VA_RANGES`). The collision above exists only where host RM's
-                // allocator may place: with the guest's ranges reserved in the twin's space, host
-                // RM's falcon ctx can only land in the host hole `[HOST_HOLE_LO, 1 TiB)` — never
-                // at G nor G+0x1000 — so no guest buffer can meet it and there is nothing to steer.
-                // ⇒ Steer ONLY when G is outside a live reservation (reservation refused, or
-                // `KF3_NO_GUEST_VA_RESERVE`); otherwise the guest's own mapping at G is left alone.
-                let fc = fc.filter(|&(va, len)| {
-                    let reserved = space.guest_reserved(va, len);
-                    if reserved {
-                        eprintln!(
-                            "kf3: chan {client:#x}:{parent:#x} falcon ctx G={va:#x}+{len:#x} is inside the reserved guest VA — host RM places its own ctx in the host hole; not steered"
-                        );
-                    }
-                    !reserved
-                });
-                // The row goes first (and for good): from here G is host RM's, and the walker's
-                // eventual unmap of the guest's page there is answered without a host call.
-                let steer = fc.map(|(va, len)| match rows.write().map(|mut r| r.remove(&va)) {
-                    Ok(None) => format!(" [guest ctx VA {va:#x} not mirrored yet — host RM takes it free; the walker will find it held]"),
-                    Err(_) => format!(" [placement rows poisoned — host ctx placement unsteered]"),
-                    Ok(Some(_)) => match me.rm.unmap(space, va, false) {
-                    Ok(()) => format!(" [host ctx steered onto the guest's ctx VA {va:#x}+{len:#x}]"),
-                    Err(e) => format!(" [guest ctx VA {va:#x} not unmapped ({e:?}) — host ctx placement unsteered]"),
-                    },
-                });
-                let h = kf_chan::passthrough::engine_object(me.rm, chan, engine, class, kind, copy_engine).map_err(|e| (NV_ERR_INVALID_CLASS, e))?;
-                if let Ok(mut m) = me.pt.lock()
-                    && let Some(v) = m.get_mut(&(client, parent))
-                {
-                    v.objects.insert(handle, (h, kind));
+            };
+            let Some(v) = pt.get_mut(&key) else {
+                return ChanAnswer::NotOurs;
+            };
+            let Some(kind) = kf_chip::classes_for(self.family).kind_of(class) else {
+                return ChanAnswer::Refused {
+                    status: NV_ERR_INVALID_CLASS,
+                    why: format!(
+                        "class {class:#x} is not an engine class of the host family {:?}",
+                        self.family
+                    ),
+                };
+            };
+            let object_allocation = match admit_engine_object(v, &index, key, handle) {
+                Ok(identity) => identity,
+                Err(why) => {
+                    return ChanAnswer::Refused {
+                        status: NV_ERR_INVALID_STATE,
+                        why,
+                    };
                 }
-                if let Ok(mut m) = me.pt_objs.lock() {
-                    m.insert((client, handle), (client, parent));
-                }
-                Ok(format!("{client:#x}:{handle:#x} class {class:#x} ({kind:?}) on twin host {:#x} -> host object {h:#x}{}", chan.token, steer.unwrap_or_default()))
-            }),
-        )
+            };
+            (
+                v.chan,
+                v.engine,
+                v.space,
+                v.rows.clone(),
+                v.ledger.clone(),
+                v.user_regions.clone(),
+                v.allocation.clone(),
+                object_allocation,
+                kind,
+            )
+        };
+        let d = kf_gsp::Deferred::new();
+        if let Some(tx) = self.acts.lock().ok().and_then(|a| a.as_ref().cloned()) {
+            attach_engine_withdraw(
+                &d,
+                tx,
+                key,
+                allocation.clone(),
+                object_allocation.clone(),
+                handle,
+            );
+        }
+        let step = EngineObj {
+            object_allocation,
+            allocation,
+            client,
+            parent,
+            handle,
+            class,
+            copy_engine,
+            chan,
+            engine,
+            space,
+            rows,
+            ledger,
+            kind,
+            user_regions,
+            steer_claim: None,
+            steer_source: None,
+        };
+        self.defer_cell("engine object", step.act(0, None, None, d.clone()), d)
     }
 
     /// ★ EXPERIMENT `x11-dispsw` (default off; carried only when the device property is on,
@@ -3239,14 +4931,36 @@ impl ChanPlane {
 
     /// ★★ OWNER_RULINGS §U.1: an `NV50_DEFERRED_API_CLASS` alloc — admitted (and numbered) under a
     /// Translated channel, refused `NV_ERR_NOT_SUPPORTED` under a Passthrough twin.
-    fn deferred_api_object(&self, client: u32, parent: u32, handle: u32) -> ChanAnswer {
-        let passthrough = self
+    fn deferred_api_object(&self, client: u32, parent: u32, handle: u32, notify_completion: bool) -> ChanAnswer {
+        let (passthrough, user_work, user_ring) = self
             .pt
             .lock()
-            .is_ok_and(|m| m.contains_key(&(client, parent)));
+            .ok()
+            .and_then(|m| m.get(&(client, parent)).map(|v| (true, v.user_work, v.user_ring)))
+            .unwrap_or((false, false, false));
+        if user_ring {
+            return self.user_ring_software_object(client, parent, handle, notify_completion);
+        }
         if passthrough {
             // The guest numbered it anyway: keep the twin's display-SW mirror equal.
             let _ = register_other_sw(&self.pt, (client, parent));
+        }
+        if user_work {
+            // ★★ 2026-10-08 (§V, `KF3_WIN_USER_CHANNELS_PASSTHROUGH`): Windows allocates a 5080 on
+            // EVERY channel, its per-process ones included; refusing it fails the D3D device
+            // creation. On a Passthrough twin nothing ever reads the ring, so the object is a
+            // guest-graph node only: no host object, no trigger. A `0x200` the guest's bytes
+            // carry reaches the host engine as a software method with no host object behind it,
+            // and the host RCs that channel (fail closed). `[measured, runs 47-57]` Windows' deferred
+            // triggers all ran on its kernel GR channel.
+            if twin_defapi_plan(twin_defapi_object(), user_work) == TwinDefapiPlan::AuthorHostObject
+            {
+                return self.twin_defapi_act(client, parent, handle);
+            }
+            eprintln!(
+                "kf3: chan {client:#x}:{parent:#x}: NV50_DEFERRED_API {handle:#x} ADMITTED as a guest-graph object on a Windows user-work Passthrough twin (never triggered by kayfabe; §V)"
+            );
+            return ChanAnswer::Done;
         }
         let ht = self.translated_ht(client, parent);
         let verdict = {
@@ -3267,6 +4981,97 @@ impl ChanPlane {
             }
             crate::defapi::Admission::Refused(status, why) => ChanAnswer::Refused { status, why },
         }
+    }
+
+    /// ⚠ EXPERIMENT (2026-10-08, `KF3_WIN_TWIN_DEFAPI_OBJECT=1`, default off — an owner decision is
+    /// pending: OWNER_RULINGS §U.1 says the class is Translated-only). `[measured, run73 at 3f23995a]`
+    /// every D3D device copy channel of Windows 580.88 binds its `NV50_DEFERRED_API` to SOFTWARE
+    /// subchannel 5 (`SET_OBJECT` data `0x5080`) early in its stream; on an unprivileged host twin with
+    /// no such object, host RM answers that software method with an RC (Xid 32, PBDMA `DEVICE`).
+    ///
+    /// What this does: one host `NV50_DEFERRED_API` under the twin's host channel, AUTHORED from the
+    /// guest's own alloc of that class on that channel (no params: `RS_OPTIONAL(NV5080_ALLOC_PARAMS)`,
+    /// `resource_list.h:1524-1528`; the guest's params never reach the host), so the guest's
+    /// `SET_OBJECT` on its software subchannel finds an object of that class on the twin (RM matches a
+    /// software `SET_OBJECT` by external class or software classID, `kernel_channel.c:3433-3436`).
+    /// What it does NOT do: register any deferred entry on the host object (the guest's
+    /// `NV5080_CTRL_CMD_DEFERRED_API*` controls stay guest-graph only, §U.4 undecided), so a `0x200`
+    /// trigger on that subchannel finds nothing registered and host RM fails it (fail closed, an RC of
+    /// that twin only); no host action is ever taken from a guest word. At most one per twin.
+    fn twin_defapi_act(&self, client: u32, parent: u32, handle: u32) -> ChanAnswer {
+        // Publish at admission, before the act can even queue. A hostile guest
+        // can free an object without waiting for its deferred allocation reply.
+        // Associate only the first lifetime; later guest-only objects cannot
+        // overwrite the flag a pending host allocation/free pair shares.
+        let peek = if configured_relay_peek_mode() == RelayPeekMode::AfterFifoUpdate {
+            self.pt.lock().ok().and_then(|mut m| {
+                let v = m.get_mut(&(client, parent))?;
+                if v.defapi_host.is_some() || v.peek_defapi.is_some() {
+                    return None;
+                }
+                let p = PeekDefapi {
+                    key: kf_rm::defapi::ObjKey {
+                        client,
+                        object: handle,
+                    },
+                    live: Arc::new(AtomicBool::new(true)),
+                };
+                v.peek_defapi = Some(p.clone());
+                Some(p)
+            })
+        } else {
+            None
+        };
+        self.defer(
+            "deferred-API twin object",
+            Box::new(move |me: &ChanPlane| {
+                let chan = {
+                    let m = me
+                        .pt
+                        .lock()
+                        .map_err(|_| (NV_ERR_NOT_SUPPORTED, "pt poisoned".to_string()))?;
+                    let v = m
+                        .get(&(client, parent))
+                        .ok_or((NV_ERR_NOT_SUPPORTED, "the twin is gone".to_string()))?;
+                    if let Some((g, h)) = v.defapi_host {
+                        return Ok(format!(
+                            "{client:#x}:{handle:#x}: twin host {:#x} already carries the host NV50_DEFERRED_API {h:#x} (for guest {g:#x}); this one is guest-graph only",
+                            v.chan.token
+                        ));
+                    }
+                    v.chan
+                };
+                let h = me.rm.alloc_deferred_api(chan).map_err(|e| {
+                    (
+                        NV_ERR_NOT_SUPPORTED,
+                        format!(
+                            "EXPERIMENT KF3_WIN_TWIN_DEFAPI_OBJECT: the host refused the authored NV50_DEFERRED_API ({e:?})"
+                        ),
+                    )
+                })?;
+                if let Ok(mut m) = me.pt.lock()
+                    && let Some(v) = m.get_mut(&(client, parent))
+                {
+                    v.defapi_host = Some((handle, h));
+                }
+                // Offline H1 audit: FIFO update registers long after this Passthrough
+                // channel is scheduled. Remember its own guest 5080 for opt-in late sampling.
+                // The pt guard above is gone; neither this relay lock nor the registry is
+                // ever taken by a vCPU. Do not turn this into host registration/translation.
+                if configured_relay_peek_mode() == RelayPeekMode::AfterFifoUpdate {
+                    let relay = me.relays.lock().ok().and_then(|m| m.get(&chan.token).cloned());
+                    if let Some(relay) = relay
+                        && let Ok(mut g) = relay.lock()
+                    {
+                        g.peek_defapi = peek;
+                    }
+                }
+                Ok(format!(
+                    "EXPERIMENT KF3_WIN_TWIN_DEFAPI_OBJECT: {client:#x}:{handle:#x} NV50_DEFERRED_API on Windows user-work twin host {:#x} -> host object {h:#x} (authored, no params, NOTHING registered: a 0x200 on it fails closed)",
+                    chan.token
+                ))
+            }),
+        )
     }
 
     /// ★★ OWNER_RULINGS §U: a deferred INITIALIZE/PROMOTE/EVICT — on the plane's act thread (it
@@ -3343,6 +5148,12 @@ impl ChanPlane {
                 .filter_map(|(k, _)| by_obj.get(k).copied())
                 .collect()
         };
+        if named.is_empty()
+            && let Some(r) =
+                self.deferred_ctx_passthrough(&planned.entry.decoded, chan_client, object)
+        {
+            return r;
+        }
         let mut targets = Vec::new();
         for ht in &named {
             let Some(slot) = self.slot(*ht) else { continue };
@@ -3365,7 +5176,7 @@ impl ChanPlane {
                     let mut g = slot
                         .lock()
                         .map_err(|_| (NV_ERR_INVALID_STATE, "slot poisoned".to_string()))?;
-                    g.ctx.promotes += 1;
+                    g.ctx.promotes = g.ctx.promotes.saturating_add(1);
                 }
                 crate::defapi::CtxEffect::Evict => {
                     let host = slot
@@ -3383,7 +5194,7 @@ impl ChanPlane {
                     g.scheduled = false;
                     g.ctx.bound = false;
                     g.ctx.va_bound = 0;
-                    g.ctx.evicts += 1;
+                    g.ctx.evicts = g.ctx.evicts.saturating_add(1);
                 }
             }
         }
@@ -3396,6 +5207,64 @@ impl ChanPlane {
                 crate::defapi::CtxEffect::Evict => "host ring(s) off the runlist, context UNBOUND",
             }
         ))
+    }
+
+    /// ★★ 2026-10-08 (§V): a deferred INITIALIZE/PROMOTE/EVICT whose target is a Windows user-work
+    /// Passthrough twin (the channel, or every member of the TSG it names). INITIALIZE and PROMOTE are
+    /// satisfied by the twin's own host context (ruling B, as for Translated twins); EVICT takes the
+    /// twin's host channel off its runlist (the direct path's act, `evict_ctx`). `None` when no
+    /// user-work twin matches (the caller's Translated path then decides).
+    fn deferred_ctx_passthrough(
+        &self,
+        bundle: &kf_abi::defapi::Bundle,
+        chan_client: u32,
+        object: u32,
+    ) -> Option<Result<String, (u32, String)>> {
+        let hit: Vec<((u32, u32), kf_host::Channel, u32)> = self
+            .pt
+            .lock()
+            .ok()?
+            .iter()
+            .filter(|((c, h), v)| {
+                *c == chan_client && v.user_work && (*h == object || v.tsg == Some(object))
+            })
+            .map(|(k, v)| (*k, v.chan, v.engine))
+            .collect();
+        if hit.is_empty() {
+            return None;
+        }
+        let evict = matches!(bundle, kf_abi::defapi::Bundle::EvictCtx { .. });
+        for (k, chan, engine) in &hit {
+            if *engine != kf_abi::submit::ENGINE_TYPE_GRAPHICS {
+                continue;
+            }
+            if evict && let Err(e) = self.rm.schedule_enable(*chan, false) {
+                return Some(Err((
+                    NV_ERR_INVALID_STATE,
+                    format!("Passthrough twin host {:#x} evict: {e:?}", chan.token),
+                )));
+            }
+            if let Ok(mut m) = self.pt.lock()
+                && let Some(v) = m.get_mut(k)
+            {
+                if evict {
+                    v.ctx.bound = false;
+                    v.ctx.va_bound = 0;
+                    v.ctx.evicts = v.ctx.evicts.saturating_add(1);
+                } else {
+                    v.ctx.promotes = v.ctx.promotes.saturating_add(1);
+                }
+            }
+        }
+        Some(Ok(format!(
+            "{bundle:?} on {chan_client:#x}:{object:#x} -> Windows user-work Passthrough twin(s) {:x?}: {} (owner ruling B / §U / §V)",
+            hit.iter().map(|h| h.1.token).collect::<Vec<_>>(),
+            if evict {
+                "host channel(s) off the runlist, context UNBOUND"
+            } else {
+                "satisfied by each twin's own host context"
+            }
+        )))
     }
 
     fn software_object(&self, client: u32, parent: u32, class: u32) -> ChanAnswer {
@@ -3464,11 +5333,15 @@ impl ChanPlane {
                 self.pt
                     .lock()
                     .ok()
-                    .and_then(|m| m.get(&key).and_then(|v| v.objects.get(&obj3d).copied()))
+                    .and_then(|m| m.get(&key).and_then(|v| v.objects.get(&obj3d).cloned()))
             });
         let host_obj = match host_obj {
-            Some((h, kf_chip::classes::Kind::Compute | kf_chip::classes::Kind::ThreeD)) => h,
-            Some((_, k)) => {
+            Some(EngineObject {
+                host: h,
+                kind: kf_chip::classes::Kind::Compute | kf_chip::classes::Kind::ThreeD,
+                ..
+            }) => h,
+            Some(EngineObject { kind: k, .. }) => {
                 return ChanAnswer::Refused {
                     status: NV_ERR_INVALID_ARGUMENT,
                     why: format!(
@@ -3498,6 +5371,50 @@ impl ChanPlane {
     }
 
     fn free(&self, client: u32, object: u32) -> ChanAnswer {
+        match self.user_births.cancel(client, object) {
+            Ok(_) => {},
+            Err(why) => eprintln!("kf3: USER_RING_BIRTH_CANCEL_REFUSED {client:#x}:{object:#x}: {why}"),
+        }
+        // Invalidate before another allocation can reuse the guest handle. No relay
+        // lock here: a worker can hold it while sampling registry entries. The
+        // sampler checks this allocation's flag both before and after that lookup.
+        if configured_relay_peek_mode() == RelayPeekMode::AfterFifoUpdate
+            && let Ok(m) = self.pt.lock()
+        {
+            for (owner, twin) in m.iter() {
+                if let Some(peek) = &twin.peek_defapi {
+                    let scope = ChanScope {
+                        tsg: twin.tsg,
+                        parent: twin.parent,
+                        device: twin.device,
+                    };
+                    if (peek.key.client == client && peek.key.object == object)
+                        || scope.freed_by(*owner, client, object)
+                    {
+                        peek.live.store(false, Ordering::Release);
+                    }
+                }
+            }
+        }
+        // Exact USER software lifetimes are invalidated at statement time; host
+        // children remain retained by their native channel until confirmed Free.
+        if let Ok(pt) = self.pt.lock() {
+            for (key, t) in pt.iter() {
+                if let Some(sw) = &t.user_defapi {
+                    if (key.0 == client && sw.guest == object)
+                        || (ChanScope { tsg: t.tsg, parent: t.parent, device: t.device })
+                            .freed_by(*key, client, object) {
+                        sw.live.store(false, Ordering::Release);
+                    }
+                }
+            }
+        }
+        cancel_pending_engine_objects(&self.pt, client, object);
+        // ★ 2026-10-09: a freed TSG (or client) is no longer scheduled — its handle may come back
+        // as a new group, whose first channel must not be scheduled from the old one's state.
+        if let Ok(mut s) = self.guest_sched.lock() {
+            s.forget(client, object);
+        }
         // ★ §U: a freed 5080 names nothing any more; a freed channel's numbering goes with it.
         if let (Ok(mut m), Ok(scopes)) = (self.sw_objs.lock(), self.scopes.lock()) {
             m.retain(|_, o| {
@@ -3526,7 +5443,7 @@ impl ChanPlane {
                         }
                         .freed_by(**k, client, object)
                     })
-                    .flat_map(|(_, v)| v.objects.values().map(|o| o.0).collect::<Vec<_>>())
+                    .flat_map(|(_, v)| v.objects.values().map(|o| o.host).collect::<Vec<_>>())
                     .collect()
             })
             .unwrap_or_default();
@@ -3538,7 +5455,7 @@ impl ChanPlane {
             .and_then(|key| {
                 self.pt.lock().ok().and_then(|m| {
                     m.get(&key)
-                        .and_then(|v| v.objects.get(&object).map(|o| o.0))
+                        .and_then(|v| v.objects.get(&object).map(|o| o.host))
                 })
             });
         let debuggers: Vec<u32> = self
@@ -3658,8 +5575,11 @@ impl ChanPlane {
             }
             // ★ The guest's token stops ringing the twin before its host free (a Passthrough token
             // is never BUSY: no worker ever claims one).
-            if let Ok(mut c) = self.caps.lock() {
-                for (_, t) in &twins {
+            for (_, t) in &twins {
+                if t.user_ring {
+                    // Native-attempt quota survives guest token retirement.
+                    self.retire_user_ring_token(t.chan.token, &t.allocation);
+                } else if let Ok(mut c) = self.caps.lock() {
                     let _ = self.plane.free_channel(&mut c, t.idx);
                 }
             }
@@ -3702,9 +5622,21 @@ impl ChanPlane {
                     // ★ The fast path goes FIRST: its placements removed, its eventfd's last count
                     // delivered (to the token word, retired on the drainer at the statement — so
                     // absorbed), acknowledged — only then may the twin go and the token be reborn.
+                    // ⚠ DIAGNOSTIC (`KF3_PT_STALL_SNAPSHOT=1`, bounded per boot): the twin's state
+                    // before it goes — a TDR teardown frees the stalled twins here.
+                    if pt_stall_snapshot_ms().is_some() {
+                        static FREES: AtomicU32 = AtomicU32::new(0);
+                        if FREES.fetch_add(1, Ordering::Relaxed) < SNAP_FREE_MAX {
+                            eprintln!("kf3: PT-SNAP BEGIN at free of tok={:#x} (maplog t={:.6})", t.idx, kf_mem::maplog::t());
+                            me.pt_snapshot_twin(c, h, &t);
+                            eprintln!("kf3: PT-SNAP END");
+                        }
+                    }
                     let fast = me.dbfast.deregister(t.idx);
                     let r = me.release_twin(c, t.tsg, t.ctx_share, t.chan);
-                    t.live.fetch_sub(1, Ordering::AcqRel);
+                    if !t.user_ring || r.is_ok() {
+                        t.live.fetch_sub(1, Ordering::AcqRel);
+                    }
                     // ★ P1+P2 inc D, review fix 2026-10-04 (§4.2): the twin's user ends only if
                     // host RM really freed the channel. A refused free leaves it counted — the
                     // space can then never become a guest-KERNEL space, where privileged leaves
@@ -3722,7 +5654,9 @@ impl ChanPlane {
                     // The error context goes AFTER its channel (host RM refuses freeing a context
                     // DMA a live channel names as its error context).
                     if let Some(n) = t.notifier {
-                        me.release_notifier(n);
+                        if t.user_ring && r.is_err() {
+                            me.retain_user_ring_notifier(t.chan.token, &t.allocation, n);
+                        } else { me.release_notifier(n); }
                     }
                     me.engine_live(t.engine, false);
                     // ★ The per-token hardware ledger (`run_fast_guest.sh` gates on it): every ring
@@ -3731,12 +5665,12 @@ impl ChanPlane {
                     // `rung`/`forwarded` cover BOTH transports (the grader's rule is per token and
                     // must not lose the doorbells the trap no longer sees); `trap=`/`fast=` split them.
                     let (trap_rung, trap_reached) = me.take_ledger(t.idx);
-                    let (f_rung, f_fwd) = fast.map_or((0, 0), |l| (l.doorbells - l.absorbed, l.forwarded));
-                    let (rung, reached) = (trap_rung + f_rung, trap_reached + f_fwd);
+                    let (f_rung, f_fwd) = fast.map_or((0, 0), |l| (l.doorbells.saturating_sub(l.absorbed), l.forwarded));
+                    let (rung, reached) = (trap_rung.saturating_add(f_rung), trap_reached.saturating_add(f_fwd));
                     eprintln!(
                         "kf3: DOORBELL-LEDGER tok={:#010x} route=passthrough rung={rung} emulated={} forwarded={reached} host={:#x} trap={trap_rung}{}",
                         t.idx,
-                        rung - reached.min(rung),
+                        rung.saturating_sub(reached.min(rung)),
                         t.chan.token,
                         Self::fast_fields(fast)
                     );
@@ -3800,7 +5734,7 @@ impl ChanPlane {
                 let now = me.enc_sessions.lock().map(|mut m| {
                     let c = m.entry(client).or_insert(0);
                     if acquire {
-                        *c += 1
+                        *c = c.saturating_add(1)
                     } else {
                         *c = c.saturating_sub(1)
                     }
@@ -3847,16 +5781,42 @@ impl ChanPlane {
         ctx_share: u32,
         chan: kf_host::Channel,
     ) -> Result<(), kf_host::RmError> {
+        let user_record = self.user_ring_record(chan.token);
+        if let Some(record) = &user_record {
+            let quota = {
+                let mut owned = record.lock().map_err(|_| kf_host::RmError::Other(NV_ERR_INVALID_STATE))?;
+                // Quiesce CPU publication first; native free is OUTSIDE this guard.
+                // An uncertain native cleanup is quarantined until session teardown,
+                // with no second Free decrementing group/count state.
+                if !owned.chan.is_some_and(|owned| owned.chan == chan.chan && owned.tsg == chan.tsg)
+                    || owned.free_attempted {
+                    return Err(kf_host::RmError::Other(NV_ERR_INVALID_STATE));
+                }
+                owned.free_attempted = true;
+                record.cancel();
+                owned.quota.clone()
+            };
+            if let Err(why) = quota.prepare_native_cleanup() {
+                eprintln!("kf3: USER_RING_FREE_QUARANTINED host {:#x}: {why}; no native free attempted", chan.token);
+                return Err(kf_host::RmError::Other(NV_ERR_INVALID_STATE));
+            }
+        }
         let Some(k) = guest_tsg.map(|t| (client, t, ctx_share)) else {
-            return self.rm.free_channel(chan);
+            let r = self.rm.free_channel(chan);
+            self.drop_relay(chan.token);
+            self.finish_user_ring_free(chan.token, user_record.as_ref(), r.is_ok());
+            return r;
         };
         let r = self.rm.free_member(chan);
+        self.drop_relay(chan.token);
+        if user_record.is_some() && r.is_err() { return r; }
         let last = self
             .groups
             .lock()
             .map_or(true, |mut m| match m.get_mut(&k) {
+                Some(g) if user_record.is_some() && g.0 != chan.tsg => false,
                 Some(g) if g.1 > 1 => {
-                    g.1 -= 1;
+                    g.1 = g.1.saturating_sub(1);
                     false
                 }
                 _ => {
@@ -3864,11 +5824,704 @@ impl ChanPlane {
                     true
                 }
             });
-        if last {
-            r.and(self.rm.free(chan.tsg))
-        } else {
-            r
+        let outcome = if last { r.and(self.rm.free(chan.tsg)) } else { r };
+        self.finish_user_ring_free(chan.token, user_record.as_ref(), outcome.is_ok());
+        outcome
+    }
+
+    /// ★ 2026-10-08 (`V3_USERD_RELAY.md` §2): kayfabe's own USERD for a relayed twin — a 4 KiB
+    /// device-local object (in no GPU VA space) and one CPU view of it. Everything made is given back on
+    /// failure.
+    fn relay_userd(&self) -> Result<(u32, kf_linux_raw::CharDevice, u64, VolatileRegion), String> {
+        let mem = self
+            .rm
+            .alloc_device_local(0x1000)
+            .map_err(|e| format!("USERD object: {e:?}"))?;
+        let (node, cookie) =
+            match self
+                .rm
+                .arm_cpu_view(MapNode::Gpu, mem, 0, 0x1000, ViewAccess::ReadWrite)
+            {
+                Ok(v) => v,
+                Err(e) => {
+                    let _ = self.rm.free(mem);
+                    return Err(format!("USERD view: {e:?}"));
+                }
+            };
+        match VolatileRegion::map(
+            Backing::DeviceFile { fd: node.as_fd() },
+            0x1000,
+            CachePolicy::Uncached,
+            HostPageSize::query(),
+        ) {
+            Ok(region) => Ok((mem, node, cookie, region)),
+            Err(e) => {
+                let _ = self.rm.release_cpu_view(kf_host::CpuViewRelease {
+                    h_memory: mem,
+                    p_linear_address: cookie,
+                });
+                let _ = self.rm.free(mem);
+                Err(format!("USERD mmap: {e:?}"))
+            }
         }
+    }
+
+    /// ★ 2026-10-08: remove the relay of host token `token` (if any) and give back its USERD — after
+    /// the host channel is gone; a worker step holds the relay's lock, so none is mid-store.
+    fn drop_relay(&self, token: u32) {
+        let Some(r) = self.relays.lock().ok().and_then(|mut m| m.remove(&token)) else {
+            return;
+        };
+        let Ok(mut g) = r.lock() else { return };
+        let (mem, cookie) = (g.mem, g.cookie);
+        // ⚠ DIAGNOSTIC (after run76; only when the peek ran): did the engine write the last fence
+        // release the guest asked of this twin? Read 4 bytes at its VA through the mirror's rows.
+        if let Some((kind, fva, payload, gp)) = g.peek.fence {
+            let g = &mut *g;
+            let mirror = g.mirror.clone();
+            let store_len = store_read_bound(self.layout.carve());
+            let mut m = Mem {
+                mirror: &mirror,
+                ram: self.ram,
+                rm: self.rm,
+                store: self.store,
+                store_len,
+                views: &mut g.views,
+                inbox: &self.inbox,
+            };
+            let mut b = [0u8; 4];
+            let now = m.read(fva, &mut b).map(|()| u32::from_le_bytes(b));
+            eprintln!(
+                "kf3: chan token {:#x} (host {token:#x}) FENCE-AT-RELEASE (diagnostic) last {kind} release GP[{gp:#x}] va={fva:#x} payload={payload:#x} memory={now:x?} — {}",
+                g.idx,
+                match now {
+                    Ok(v) if v == payload => "the engine wrote it",
+                    Ok(_) =>
+                        "NOT the payload (the engine did not write it, or a later one overwrote it)",
+                    Err(_) => "unreadable",
+                }
+            );
+        }
+        // Diagnostic: the guest slot's cursors at release — a GP_PUT ahead of the relay's means the
+        // guest queued work it never rang for.
+        eprintln!(
+            "kf3: chan token {:#x} (host {token:#x}) USERD relay released: forwarded={} refused={} gets={} last_put={} guest[GP_PUT={:x?} GP_GET={:x?}] host[GP_PUT={:x?} GP_GET={:x?}]",
+            g.idx,
+            g.st.forwarded,
+            g.st.refused,
+            g.st.gets,
+            g.st.host_put,
+            g.guest.load(kf_abi::submit::USERD_GP_PUT).ok(),
+            g.guest.load(kf_abi::submit::USERD_GP_GET).ok(),
+            g.host
+                .load_u32(HostOffset::new(kf_abi::submit::USERD_GP_PUT))
+                .ok(),
+            g.host
+                .load_u32(HostOffset::new(kf_abi::submit::USERD_GP_GET))
+                .ok()
+        );
+        drop(g);
+        drop(r);
+        let _ = self.rm.release_cpu_view(kf_host::CpuViewRelease {
+            h_memory: mem,
+            p_linear_address: cookie,
+        });
+        let _ = self.rm.free(mem);
+    }
+
+    /// ★ 2026-10-08 (`V3_USERD_RELAY.md` §2.1-2.2): one relay step for host token `ht`, on a worker.
+    /// `None` when `ht` is not a relayed twin.
+    fn relay_serve(&self, ht: u32) -> Option<bool> {
+        let r = self.relays.lock().ok()?.get(&ht).cloned()?;
+        // ⊘ A BLOCKING lock (2026-10-08, run77 at 492fb3f0): the token's BUSY state keeps two steps
+        // apart, but the GP_GET refresh (`relay_refresh_all`, on a host wake or the park tick) also
+        // takes this lock for two 4-byte accesses — a `try_lock` here then CONSUMED the doorbell
+        // (run77: the compositor's guest GP_PUT 0x12 never forwarded, host stuck at 0xf, TDR). The
+        // refresh never waits (it skips a held relay); a step waits at most for its two accesses —
+        // on a worker, never a vCPU, never under a lock a vCPU takes.
+        let Ok(mut g) = r.lock() else {
+            self.poisoned.fetch_add(1, Ordering::Relaxed);
+            return Some(false);
+        };
+        let g = &mut *g;
+        let mut io = RelayMem {
+            guest: &g.guest,
+            host: &g.host,
+            rm: self.rm,
+            token: g.chan.token,
+        };
+        let previous_put = g.st.host_put;
+        match kf_chan::userd_relay::step(&mut g.st, &mut io) {
+            Ok(kf_chan::userd_relay::Outcome::Forwarded(p)) => {
+                self.relay_peek(g, p, previous_put);
+                if g.st.forwarded <= 8 || g.st.forwarded.is_power_of_two() {
+                    eprintln!(
+                        "kf3: chan token {:#x} (host {ht:#x}) USERD relay: GP_PUT {p:#x} forwarded and rung (#{}) — no GP entry or push-buffer word read",
+                        g.idx, g.st.forwarded
+                    );
+                }
+                Some(true)
+            }
+            Ok(kf_chan::userd_relay::Outcome::Unchanged) => Some(false),
+            Ok(kf_chan::userd_relay::Outcome::Refused(p)) => {
+                if g.st.refused <= 4 {
+                    eprintln!(
+                        "kf3: chan token {:#x} (host {ht:#x}) USERD relay REFUSED a guest GP_PUT {p:#x} outside its {}-entry ring (not stored, not rung; #{})",
+                        g.idx, g.st.entries, g.st.refused
+                    );
+                }
+                Some(false)
+            }
+            Err(e) => {
+                eprintln!(
+                    "kf3: chan token {:#x} (host {ht:#x}) USERD relay step failed: {e}",
+                    g.idx
+                );
+                Some(false)
+            }
+        }
+    }
+
+    /// ⚠ DIAGNOSTIC (2026-10-08, after run84): for each named twin that is relayed, its cursors as
+    /// ` [host H: guest PUT/GET, relay host_put, engine GET]` — four-byte loads of the guest's slot and
+    /// the twin's USERD, nothing stored or rung. A relay a doorbell step holds is reported `busy`.
+    fn relay_snapshots(&self, pt: &[((u32, u32), kf_host::Channel)]) -> String {
+        let Ok(m) = self.relays.lock() else {
+            return " [relays poisoned]".into();
+        };
+        let mut out = String::new();
+        for (_, c) in pt {
+            let Some(r) = m.get(&c.token) else { continue };
+            let Ok(g) = r.try_lock() else {
+                out.push_str(&format!(" [host {:#x}: busy]", c.token));
+                continue;
+            };
+            let mut io = RelayMem {
+                guest: &g.guest,
+                host: &g.host,
+                rm: self.rm,
+                token: g.chan.token,
+            };
+            use kf_chan::userd_relay::RelayIo;
+            let gput = io.guest_put();
+            let hget = io.host_get();
+            let gget = g.guest.load(kf_abi::submit::USERD_GP_GET);
+            out.push_str(&format!(
+                " [host {:#x}: guest PUT={:x?} GET={:x?} relay host_put={:#x} engine GET={:x?}]",
+                c.token, gput, gget, g.st.host_put, hget
+            ));
+        }
+        out
+    }
+
+    /// ★ 2026-10-08 (`KF3_RELAY_GET_REFRESH=1`, default off; [`kf_chan::userd_relay::refresh`]): on a
+    /// worker, write every relayed twin's engine-written `GP_GET` into its guest slot when it moved —
+    /// called on an engine's host non-stall wake (before the guest's interrupt is raised) and on the
+    /// worker's park tick. A relay whose lock a doorbell step holds is skipped (that step writes it
+    /// back). Returns `(relays seen, stores made)`; nothing at all with the switch off.
+    pub fn relay_refresh_all(&self, why: &str) -> (u32, u32) {
+        self.user_ring_refresh();
+        if !relay_get_refresh() {
+            return (0, 0);
+        }
+        let rs: Vec<_> = match self.relays.lock() {
+            Ok(m) if !m.is_empty() => m.iter().map(|(k, v)| (*k, v.clone())).collect(),
+            _ => return (0, 0),
+        };
+        let (mut seen, mut stored) = (0u32, 0u32);
+        for (ht, r) in rs {
+            let Ok(mut g) = r.try_lock() else { continue };
+            seen = seen.saturating_add(1);
+            let g = &mut *g;
+            let mut io = RelayMem {
+                guest: &g.guest,
+                host: &g.host,
+                rm: self.rm,
+                token: g.chan.token,
+            };
+            match kf_chan::userd_relay::refresh(&mut g.st, &mut io) {
+                Ok(kf_chan::userd_relay::Refresh::Stored(v)) => {
+                    stored = stored.saturating_add(1);
+                    let n = g.st.refreshed;
+                    if n <= 8 || n.is_power_of_two() {
+                        eprintln!(
+                            "kf3: chan token {:#x} (host {ht:#x}) USERD relay: GP_GET {v:#x} refreshed on {why} (#{n}; engine-written, outside a doorbell)",
+                            g.idx
+                        );
+                    }
+                }
+                Ok(kf_chan::userd_relay::Refresh::Same) => {}
+                Ok(kf_chan::userd_relay::Refresh::Refused(v)) => {
+                    if g.st.get_refused <= 4 {
+                        eprintln!(
+                            "kf3: chan token {:#x} (host {ht:#x}) USERD relay: engine GP_GET {v:#x} outside its {}-entry ring — NOT stored (#{})",
+                            g.idx, g.st.entries, g.st.get_refused
+                        );
+                    }
+                }
+                Err(e) => eprintln!(
+                    "kf3: chan token {:#x} (host {ht:#x}) USERD relay refresh failed: {e}",
+                    g.idx
+                ),
+            }
+        }
+        (seen, stored)
+    }
+
+    /// ⚠⚠ DIAGNOSTIC (2026-10-08, `KF3_RELAY_PB_PEEK=1`, default off — the one place a relayed
+    /// twin's guest bytes are READ, never executed or forwarded by kayfabe): log the GP entries a relayed
+    /// twin was rung for (v2, run73: EVERY entry of each batch up to [`PEEK_ENTRY_BUDGET`], runs of zero
+    /// entries coalesced, each segment scanned for software-subchannel methods ([`scan_sw_methods`]),
+    /// and the previous batch re-read for late writes), so a host RC of that twin
+    /// (`[measured, run71 at 2959ed5f]` Xid 32, PBDMA `DEVICE` interrupt) can be traced to a method, and
+    /// so the owner's physical-operand question has a sample from a per-process channel. Bounded per
+    /// twin; reads go through the mirror's own rows (an unmapped VA is reported, never followed).
+    /// `KF3_RELAY_PB_PEEK=after-fifo-update` samples only after a registration
+    /// on this channel's own 5080. Starts at the previous forwarded PUT, wraps
+    /// using this ring's entry count and retains the existing per-twin caps.
+    /// Sampling occurs AFTER the real doorbell: guest bytes can race with GPU
+    /// fetch. A sampled method is not a hardware execution/completion record.
+    fn relay_peek(&self, g: &mut Relay, new_put: u32, previous_put: u32) {
+        let mode = configured_relay_peek_mode();
+        if mode == RelayPeekMode::Off {
+            return;
+        }
+        if mode == RelayPeekMode::AfterFifoUpdate
+            && g.peek_defapi.as_ref().is_none_or(|p| !p.live.load(Ordering::Acquire))
+        {
+            return;
+        }
+        let entries = g.st.entries.max(1);
+        if mode == RelayPeekMode::AfterFifoUpdate && !g.peek.fifo_update_armed {
+            let Some(peek) = g.peek_defapi.as_ref() else {
+                return;
+            };
+            if !peek.live.load(Ordering::Acquire) {
+                return;
+            }
+            let key = peek.key;
+            let Some(reg) = self.defapi_reg.get() else {
+                return;
+            };
+            // Registry bounds cap this snapshot at 64 entries/object. `entries`
+            // does not mark an API executed, consume it or change lookup counters.
+            let update = reg.entries(key).into_iter().find(|e| {
+                matches!(
+                    e.decoded,
+                    kf_abi::defapi::Bundle::UpdateChannelInfo(_)
+                )
+            });
+            let Some(update) = update else { return };
+            if !peek.live.load(Ordering::Acquire) { return; }
+            g.peek.next = previous_put;
+            g.peek.fifo_update_armed = true;
+            eprintln!(
+                "kf3: chan token {:#x} (host {:#x}) RELAY-PEEK ARMED after FIFO_UPDATE_CHANNEL_INFO registration on {:#x}:{:#x} api={:#x} cmd={:#x} GP=[{previous_put:#x},{new_put:#x}) entries={entries} t={:.6} — guest-byte sample after forwarding, NOT hardware trigger proof",
+                g.idx, g.chan.token, key.client, key.object, update.handle, update.cmd,
+                kf_mem::maplog::t()
+            );
+            eprintln!(
+                "kf3: chan token {:#x} RELAY-PEEK registration bundle prefix (diagnostic, <=64 bytes): {:02x?}",
+                g.idx, &update.bundle[..update.bundle.len().min(64)]
+            );
+        }
+        let mirror = g.mirror.clone();
+        let store_len = store_read_bound(self.layout.carve());
+        let mut mem = Mem {
+            mirror: &mirror,
+            ram: self.ram,
+            rm: self.rm,
+            store: self.store,
+            store_len,
+            views: &mut g.views,
+            inbox: &self.inbox,
+        };
+        let tok = g.idx;
+        // ★ run73 (v2): first re-read the previous batch — an entry that changed was written by the
+        // guest AFTER it rang for it (then the engine may have fetched the old bytes).
+        for (i, old) in std::mem::take(&mut g.peek.prev) {
+            let mut e = [0u8; 8];
+            let gpva = g.gpfifo_va.saturating_add(u64::from(i).saturating_mul(8));
+            if mem.read(gpva, &mut e).is_ok() && e != old {
+                eprintln!(
+                    "kf3: chan token {tok:#x} RELAY-PEEK (diagnostic) GP[{i:#x}] CHANGED after its doorbell: was {:016x} now {:016x}",
+                    u64::from_le_bytes(old),
+                    u64::from_le_bytes(e)
+                );
+            }
+        }
+        // Every entry in [next, new_put), bounded per twin; zero entries are counted, not listed.
+        let mut idx = g.peek.next.checked_rem(entries).unwrap_or(0);
+        let mut zeros: Option<(u32, u32)> = None;
+        let flush_zeros = |z: &mut Option<(u32, u32)>| {
+            if let Some((a, n)) = z.take() {
+                eprintln!(
+                    "kf3: chan token {tok:#x} RELAY-PEEK (diagnostic) GP[{a:#x}..+{n:#x}] all-zero entries (NOP control entries)"
+                );
+            }
+        };
+        while g.peek.entries < PEEK_ENTRY_BUDGET && idx != new_put.checked_rem(entries).unwrap_or(0)
+        {
+            let mut e = [0u8; 8];
+            let gpva = g.gpfifo_va.saturating_add(u64::from(idx).saturating_mul(8));
+            g.peek.entries = g.peek.entries.saturating_add(1);
+            match mem.read(gpva, &mut e) {
+                Err(why) => {
+                    flush_zeros(&mut zeros);
+                    eprintln!(
+                        "kf3: chan token {tok:#x} RELAY-PEEK (diagnostic) GP[{idx:#x}] @{gpva:#x}: unreadable ({why})"
+                    );
+                }
+                Ok(()) if e == [0u8; 8] => {
+                    g.peek.prev.push((idx, e));
+                    zeros = match zeros {
+                        Some((a, n)) => Some((a, n.saturating_add(1))),
+                        None => Some((idx, 1)),
+                    };
+                }
+                Ok(()) => {
+                    flush_zeros(&mut zeros);
+                    g.peek.prev.push((idx, e));
+                    let lo = u32::from_le_bytes([e[0], e[1], e[2], e[3]]);
+                    let hi = u32::from_le_bytes([e[4], e[5], e[6], e[7]]);
+                    let va = u64::from(lo & !3) | (u64::from(hi & 0xff) << 32);
+                    let words = (hi >> 10) & 0x1f_ffff;
+                    if words == 0 {
+                        eprintln!(
+                            "kf3: chan token {tok:#x} RELAY-PEEK (diagnostic) GP[{idx:#x}] lo={lo:#010x} hi={hi:#010x} CONTROL entry opcode={:#x} sync={}",
+                            lo & 0xff,
+                            hi >> 31
+                        );
+                    } else {
+                        let n = (words as usize).min(PEEK_SEGMENT_WORDS);
+                        let mut buf = vec![0u8; n.saturating_mul(4)];
+                        match mem.read(va, &mut buf) {
+                            Ok(()) => {
+                                let w: Vec<u32> = buf
+                                    .as_chunks::<4>()
+                                    .0
+                                    .iter()
+                                    .map(|c| u32::from_le_bytes(*c))
+                                    .collect();
+                                let scan = scan_sw_methods(&w);
+                                if let Some((k, fva, p)) = last_fence_release(&w) {
+                                    g.peek.fence = Some((k, fva, p, idx));
+                                }
+                                let body = w
+                                    .iter()
+                                    .take(64)
+                                    .map(|x| format!("{x:08x}"))
+                                    .collect::<Vec<_>>()
+                                    .join(" ");
+                                eprintln!(
+                                    "kf3: chan token {tok:#x} RELAY-PEEK (diagnostic) GP[{idx:#x}] lo={lo:#010x} hi={hi:#010x} va={va:#x} words={words} level={} sync={} subch_headers={:?} sw_methods={} undecodable_at={:?}: {body}",
+                                    (hi >> 9) & 1,
+                                    hi >> 31,
+                                    scan.per_subch,
+                                    scan.hits.len(),
+                                    scan.undecodable_at
+                                );
+                                for h in scan.hits {
+                                    if g.peek.sw_logged >= PEEK_SW_BUDGET {
+                                        break;
+                                    }
+                                    g.peek.sw_logged = g.peek.sw_logged.saturating_add(1);
+                                    eprintln!(
+                                        "kf3: chan token {tok:#x} RELAY-PEEK (diagnostic) SW-SUBCH METHOD GP[{idx:#x}] word {} subch {} method {:#x} data {:x?} — a software method (PBDMA DEVICE on the twin)",
+                                        h.word, h.subch, h.method, h.data
+                                    );
+                                }
+                            }
+                            Err(why) => eprintln!(
+                                "kf3: chan token {tok:#x} RELAY-PEEK (diagnostic) GP[{idx:#x}] lo={lo:#010x} hi={hi:#010x} va={va:#x} words={words}: segment unreadable ({why})"
+                            ),
+                        }
+                    }
+                }
+            }
+            idx = idx.saturating_add(1).checked_rem(entries).unwrap_or(0);
+        }
+        flush_zeros(&mut zeros);
+        g.peek.next = idx;
+        if g.peek.entries >= PEEK_ENTRY_BUDGET && !g.peek.budget_reported {
+            g.peek.budget_reported = true;
+            eprintln!(
+                "kf3: chan token {tok:#x} RELAY-PEEK BUDGET exhausted after {} entries; next={idx:#x} observed_put={new_put:#x}; later methods UNMEASURED",
+                g.peek.entries
+            );
+        }
+    }
+
+    /// ⚠ DIAGNOSTIC (default off, 2026-10-09, `KF3_PT_STALL_SNAPSHOT=1`; record
+    /// `traces/windows_reset_20261009/`): **the stall snapshot**. Called by the drainer (never a
+    /// vCPU) about every 250 ms. When no doorbell has reached any live Passthrough twin for
+    /// `KF3_PT_STALL_SNAPSHOT_MS` (default 1000, 200..=10000) after at least one did, it reads, once
+    /// per silence and at most [`SNAP_MAX`] times per boot, every live twin's state from GUEST
+    /// memory ([`Self::pt_snapshot_twin`]). Post-mortem only: it logs; nothing it reads reaches a
+    /// host action. With the switch off it returns at its first load.
+    pub fn pt_stall_snapshot_poll(&self) {
+        let Some(silence) = pt_stall_snapshot_ms() else {
+            return;
+        };
+        static STATE: Mutex<(u64, Option<std::time::Instant>, bool, u32)> =
+            Mutex::new((0, None, false, 0));
+        let tokens: Vec<u32> = match self.pt.lock() {
+            Ok(m) => m.values().map(|t| t.idx).collect(),
+            Err(_) => return,
+        };
+        let total: u64 = tokens
+            .iter()
+            .filter_map(|&i| self.rung.get(i as usize))
+            .map(|c| c.load(Ordering::Relaxed))
+            .sum();
+        let Ok(mut st) = STATE.lock() else { return };
+        let (last, since, armed, taken) = &mut *st;
+        let now = std::time::Instant::now();
+        if total != *last || since.is_none() {
+            *armed = *armed || (total > *last && since.is_some());
+            *last = total;
+            *since = Some(now);
+            return;
+        }
+        let quiet = since.map_or(0, |t| now.duration_since(t).as_millis());
+        if !*armed || *taken >= SNAP_MAX || quiet < u128::from(silence) {
+            return;
+        }
+        *armed = false;
+        *taken = taken.saturating_add(1);
+        let n = *taken;
+        drop(st);
+        self.pt_snapshot_all(&format!(
+            "stall #{n}: no doorbell to any of {} live Passthrough twin(s) for {quiet} ms (doorbells so far {total})",
+            tokens.len()
+        ));
+    }
+
+    /// ⚠ DIAGNOSTIC: [`Self::pt_snapshot_twin`] for every live twin, under one `pt` lock.
+    fn pt_snapshot_all(&self, why: &str) {
+        let Ok(m) = self.pt.lock() else { return };
+        eprintln!(
+            "kf3: PT-SNAP BEGIN {why} (maplog t={:.6})",
+            kf_mem::maplog::t()
+        );
+        let mut twins: Vec<_> = m.iter().collect();
+        twins.sort_by_key(|(_, t)| t.idx);
+        for ((c, h), t) in twins {
+            self.pt_snapshot_twin(*c, *h, t);
+        }
+        eprintln!("kf3: PT-SNAP END");
+    }
+
+    /// ⚠ DIAGNOSTIC: one twin's state, read from guest memory — its USERD (`NVC56F` USERD layout,
+    /// `ogkm-595.84: clc56f.h:49-63`), the GPFIFO entries around `GPGet`/`GPPut`, the push-buffer
+    /// methods of the last [`SNAP_SEGMENTS`] entries before `GPPut` (decoded by
+    /// [`snap_decode`]), and the current value at every semaphore those methods name. Bounded:
+    /// [`SNAP_ENTRIES`] entries, [`SNAP_WORDS`] words per segment, [`SNAP_SEMS`] semaphores. Every
+    /// read goes through the guest's declared USERD GPA (checked against guest RAM) or OUR placement
+    /// rows (an unplaced or vidmem VA is named, never followed).
+    fn pt_snapshot_twin(&self, c: u32, h: u32, t: &PtChan) {
+        let tok = t.idx;
+        let (gpfifo_va, entries, userd_gpa) = t.ring_at;
+        let db = self
+            .rung
+            .get(tok as usize)
+            .map_or(0, |x| x.load(Ordering::Relaxed));
+        let db_at = self
+            .rung_at_us
+            .get(tok as usize)
+            .map_or(0, |x| x.load(Ordering::Relaxed));
+        let mut u = [0u8; 0x90];
+        let userd = userd_gpa
+            .ok_or_else(|| "USERD not in guest RAM".to_string())
+            .and_then(|gpa| {
+                let off = self
+                    .ram
+                    .dma_to_file_range(gpa, u.len() as u64)
+                    .ok_or_else(|| format!("USERD GPA {gpa:#x} outside guest RAM"))?;
+                let (mem, at) = self
+                    .ram
+                    .at_file_offset(off, u.len() as u64)
+                    .ok_or_else(|| format!("USERD offset {off:#x} unregistered"))?;
+                if mem.read_into(at, &mut u) {
+                    Ok(())
+                } else {
+                    Err("USERD read".to_string())
+                }
+            });
+        let w = |o: usize| {
+            u.get(o..o.saturating_add(4))
+                .and_then(|b| <[u8; 4]>::try_from(b).ok())
+                .map_or(0, u32::from_le_bytes)
+        };
+        let (gp_get, gp_put) = (w(0x88), w(0x8c));
+        match &userd {
+            Ok(()) => eprintln!(
+                "kf3: PT-SNAP tok={tok:#x} chan {c:#x}:{h:#x} host={:#x} engine={:#x} user_work={} doorbells={db} last_doorbell_us={db_at} USERD@{:#x}: Put={:#x} Get={:#x} Reference={:#x} PutHi={:#x} TopLevelGet={:#x} TopLevelGetHi={:#x} GetHi={:#x} GPGet={gp_get:#x} GPPut={gp_put:#x} ring={gpfifo_va:#x}x{entries} — {}",
+                t.chan.token,
+                t.engine,
+                t.user_work,
+                userd_gpa.unwrap_or(0),
+                w(0x40),
+                w(0x44),
+                w(0x48),
+                w(0x4c),
+                w(0x58),
+                w(0x5c),
+                w(0x60),
+                if gp_get == gp_put {
+                    "GPGet == GPPut: the engine fetched every entry the guest put"
+                } else {
+                    "GPGet != GPPut: entries put and NOT fetched"
+                }
+            ),
+            Err(e) => eprintln!(
+                "kf3: PT-SNAP tok={tok:#x} chan {c:#x}:{h:#x} host={:#x} engine={:#x} doorbells={db} last_doorbell_us={db_at} USERD unreadable ({e}) ring={gpfifo_va:#x}x{entries}",
+                t.chan.token, t.engine
+            ),
+        }
+        if entries == 0 || userd.is_err() {
+            return;
+        }
+        let n = entries.max(1);
+        // entries [GPGet - 2, GPPut + 2), at most SNAP_ENTRIES; the segments of the last
+        // SNAP_SEGMENTS before GPPut are decoded
+        let first = ring_dist(gp_get, 2.min(n.saturating_sub(1)), n);
+        let span = ring_dist(gp_put, first, n)
+            .saturating_add(2)
+            .min(SNAP_ENTRIES);
+        let mut sems: Vec<SemRef> = Vec::new();
+        for k in 0..span {
+            let i = u32::try_from(
+                u64::from(first)
+                    .saturating_add(u64::from(k))
+                    .checked_rem(u64::from(n))
+                    .unwrap_or(0),
+            )
+            .unwrap_or(0);
+            let mut e = [0u8; 8];
+            let gpva = gpfifo_va.saturating_add(u64::from(i).saturating_mul(8));
+            if let Err(why) = self.snap_read(&t.rows, gpva, &mut e) {
+                eprintln!("kf3: PT-SNAP tok={tok:#x} GP[{i:#x}] @{gpva:#x}: {why}");
+                continue;
+            }
+            let lo = u32::from_le_bytes([e[0], e[1], e[2], e[3]]);
+            let hi = u32::from_le_bytes([e[4], e[5], e[6], e[7]]);
+            let va = u64::from(lo & !3) | (u64::from(hi & 0xff) << 32);
+            let words = (hi >> 10) & 0x1f_ffff;
+            let pending = ring_dist(i, gp_get, n) < ring_dist(gp_put, gp_get, n);
+            let to_put = ring_dist(gp_put, i, n);
+            let decode = to_put <= SNAP_SEGMENTS && to_put > 0;
+            let mut line = format!(
+                "kf3: PT-SNAP tok={tok:#x} GP[{i:#x}] {} lo={lo:#010x} hi={hi:#010x} va={va:#x} words={words}",
+                if pending { "PENDING" } else { "fetched" }
+            );
+            if decode && words > 0 {
+                let mut buf = vec![0u8; (words as usize).min(SNAP_WORDS).saturating_mul(4)];
+                match self.snap_read(&t.rows, va, &mut buf) {
+                    Ok(()) => {
+                        let ws: Vec<u32> = buf
+                            .as_chunks::<4>()
+                            .0
+                            .iter()
+                            .map(|c| u32::from_le_bytes(*c))
+                            .collect();
+                        let d = snap_decode(&ws, SNAP_METHODS);
+                        line.push_str(&format!(
+                            " methods[{}{}]: {}",
+                            d.methods.len(),
+                            d.stopped_at
+                                .map_or(String::new(), |w| format!(", undecodable at word {w}")),
+                            d.methods
+                                .iter()
+                                .map(|(s, m, v)| format!("s{s}:{m:#x}={v:#x}"))
+                                .collect::<Vec<_>>()
+                                .join(" ")
+                        ));
+                        for s in d.sems {
+                            if sems.len() < SNAP_SEMS {
+                                sems.push(s);
+                            }
+                        }
+                        if let Some((k, fva, p)) = last_fence_release(&ws)
+                            && sems.len() < SNAP_SEMS
+                        {
+                            sems.push(SemRef {
+                                op: k,
+                                va: fva,
+                                payload: u64::from(p),
+                                wide: false,
+                                gp: i,
+                            });
+                        }
+                        for s in sems.iter_mut().filter(|s| s.gp == u32::MAX) {
+                            s.gp = i;
+                        }
+                    }
+                    Err(why) => line.push_str(&format!(" segment unreadable ({why})")),
+                }
+            }
+            eprintln!("{line}");
+        }
+        for s in &sems {
+            let mut b = [0u8; 8];
+            let now = self
+                .snap_read(&t.rows, s.va, b.split_at_mut(if s.wide { 8 } else { 4 }).0)
+                .map(|()| u64::from_le_bytes(b));
+            eprintln!(
+                "kf3: PT-SNAP tok={tok:#x} SEM {} (GP[{:#x}]) va={:#x} payload={:#x} memory={} — {}",
+                s.op,
+                s.gp,
+                s.va,
+                s.payload,
+                now.as_ref()
+                    .map_or_else(|e| format!("unreadable ({e})"), |v| format!("{v:#x}")),
+                match (&now, s.op.starts_with("ACQ")) {
+                    (Ok(v), true) if *v >= s.payload =>
+                        "an acquire the memory already satisfies (>=)",
+                    (Ok(_), true) =>
+                        "an ACQUIRE NOT YET SATISFIED (memory < payload): who releases it?",
+                    (Ok(v), false) if *v == s.payload => "a release the memory holds",
+                    (Ok(_), false) =>
+                        "a release NOT in memory (not executed, or overwritten later)",
+                    (Err(_), _) => "",
+                }
+            );
+        }
+    }
+
+    /// ⚠ DIAGNOSTIC: read guest memory at a VA through OUR placement rows, guest-RAM rows only (a
+    /// vidmem row is named, not read: the snapshot arms no CPU view of the store).
+    fn snap_read(
+        &self,
+        rows: &crate::mem::PlacedRows,
+        va: u64,
+        out: &mut [u8],
+    ) -> Result<(), String> {
+        let len = out.len() as u64;
+        let mut done = 0u64;
+        while done < len {
+            let at_va = va.saturating_add(done);
+            let (ram, off, avail) = crate::mem::resolve_placed_prefix(rows, at_va)
+                .ok_or_else(|| format!("{at_va:#x} not placed by us"))?;
+            if !ram {
+                return Err(format!(
+                    "{at_va:#x} is a vidmem row (not read by the snapshot)"
+                ));
+            }
+            let n = avail.min(len.saturating_sub(done));
+            if n == 0 {
+                return Err(format!("{at_va:#x}: no progress"));
+            }
+            let (mem, at) = self
+                .ram
+                .at_file_offset(off, n)
+                .ok_or_else(|| format!("{at_va:#x}: guest-RAM offset {off:#x} unregistered"))?;
+            if !mem.read_into(at, out_window(out, done, n)?) {
+                return Err(format!("{at_va:#x}: guest-RAM read"));
+            }
+            done = done.saturating_add(n);
+        }
+        Ok(())
     }
 
     fn slot(&self, ht: u32) -> Option<Arc<Mutex<Slot>>> {
@@ -3887,24 +6540,24 @@ impl ChanPlane {
             );
             ChanAnswer::Refused { status, why }
         };
-        let passthrough = !a.kernel_client;
-        let kernel_gr = a.kernel_client
-            && engine == kf_abi::submit::ENGINE_TYPE_GRAPHICS
-            && kernel_gr_ce()
-            && crate::tspace::enabled();
-        let kernel_nvdec = a.kernel_client
-            && kf_abi::submit::nvdec_index_of_engine_type(engine).is_some()
-            && kernel_nvdec_ctx()
-            && crate::tspace::enabled();
-        let kernel_nvenc = a.kernel_client
-            && kf_abi::submit::nvenc_index_of_engine_type(engine).is_some()
-            && kernel_nvenc_ctx()
-            && crate::tspace::enabled();
-        let kernel_ofa = a.kernel_client
-            && kf_abi::submit::ofa_index_of_engine_type(engine).is_some()
-            && kernel_ofa_ctx()
-            && crate::tspace::enabled();
-        if a.kernel_client
+        // ★★ 2026-10-08 (OWNER_RULINGS §V, `KF3_WIN_USER_CHANNELS_PASSTHROUGH`): a Windows
+        // guest-kernel channel the link classified as per-process USER work at its alloc
+        // (`kf_rm::chanlink::windows_user_work`) takes the Passthrough route; every kernel-only
+        // route below is for the others.
+        let passthrough = !a.kernel_client || a.user_work;
+        let kernel_work = a.kernel_client && !a.user_work;
+        // ★ 2026-10-10 (§AB): `KF3_TSPACE` is hardwired, so no route below is gated on it.
+        // `KF3_KERNEL_NVDEC_CTX`/`_NVENC_CTX`/`_OFA_CTX` are deleted and hardwired ON (the
+        // Windows profile's values; measured required, runs 21-24); `KF3_KERNEL_GR_CE` stays a
+        // switch ([`kernel_gr_ce`] says why).
+        let kernel_gr =
+            kernel_work && engine == kf_abi::submit::ENGINE_TYPE_GRAPHICS && kernel_gr_ce();
+        let kernel_nvdec =
+            kernel_work && kf_abi::submit::nvdec_index_of_engine_type(engine).is_some();
+        let kernel_nvenc =
+            kernel_work && kf_abi::submit::nvenc_index_of_engine_type(engine).is_some();
+        let kernel_ofa = kernel_work && kf_abi::submit::ofa_index_of_engine_type(engine).is_some();
+        if kernel_work
             && !is_copy_engine(engine)
             && !kernel_gr
             && !kernel_nvdec
@@ -3931,10 +6584,10 @@ impl ChanPlane {
         }
         // ★ P1+P2 inc A / S1-43: a guest-named FB USERD or error notifier inside the usable heap,
         // checked here — before any host call — for both routes. ★ Review fix 2026-10-04: REFUSED
-        // only when strict (`crate::tspace::inca_strict`); on the default path COUNTED and named,
-        // and the birth proceeds exactly as before inc A (box step 1 must show `heap_out=0`).
+        // when strict ([`crate::tspace::INCA_STRICT`], hardwired ON 2026-10-10 with the T-space);
+        // the count-only arm is reached only by its unit test.
         match heap_gate(
-            crate::tspace::inca_strict(),
+            crate::tspace::INCA_STRICT,
             negctl_heap(),
             &self.layout,
             a.userd,
@@ -3997,6 +6650,28 @@ impl ChanPlane {
             );
         }
         if passthrough {
+            // ★★ 2026-10-08 (`V3_USERD_RELAY.md`): a Windows user-work twin with a guest-RAM USERD is
+            // born over kayfabe's own USERD and relayed; the guest's slot is only read (`GP_PUT`) and
+            // written (`GP_GET`) by a worker. Its guest-RAM view is made here, before any host verb.
+            // ⚠ CONTROL (2026-10-08, owner decision; `KF3_USERD_RELAY_OFF=1`, default off): no relay —
+            // the Windows user-work twin ADOPTS the guest's sysmem USERD like any Passthrough twin.
+            // Only meaningful with the GPU's IOMMU group in identity mode (host RM refuses a USERD
+            // whose DMA address is wider than PTR_HI allows; the birth then fails by name, as run61).
+            let relay_guest = if userd_relay_off() || (userrelay::enabled() && a.user_ring_permit.is_some()) {
+                None
+            } else if a.user_work && matches!(a.userd, Some(kf_arch::UserdMem::Sysmem { .. })) {
+                match self.userd_view(a.userd) {
+                    Ok(v) => Some(v),
+                    Err(e) => {
+                        return refuse(
+                            NV_ERR_NOT_SUPPORTED,
+                            format!("USERD relay: guest slot: {e}"),
+                        );
+                    }
+                }
+            } else {
+                None
+            };
             // ★ The guest's USERD, adopted AT CREATION (RM zeroes it — `rm_takes_a_guest_userd`):
             // a store slice, or guest RAM through the mirror's RAM object.
             let userd = match a.userd {
@@ -4079,13 +6754,16 @@ impl ChanPlane {
                 err_ctx: 0,
             };
             let space = mirror.space;
+            let relay_mirror = mirror.clone();
             let rows = mirror.rows.clone();
+            let ledger = mirror.ledger.clone();
             // ★ P5c: counted NOW (on the drainer, in statement order), so a VA-space free that
             // follows can never recycle the space under a birth still queued.
             let live = mirror.live.clone();
-            // ★★ P1+P2 inc D (§4.2): in T-mode a passthrough birth moves the twin to User(n+1), in
-            // statement order, and is REFUSED by name in a guest-KERNEL space — never waited on.
-            let twin = if crate::tspace::enabled() {
+            // ★★ P1+P2 inc D (§4.2), hardwired 2026-10-10: a passthrough birth moves the twin to
+            // User(n+1), in statement order, and is REFUSED by name in a guest-KERNEL space —
+            // never waited on.
+            let twin = {
                 if negctl_twin() || mirror.kernel_vas.try_user().is_err() {
                     self.twin_refused.fetch_add(1, Ordering::Relaxed);
                     return refuse(
@@ -4101,22 +6779,40 @@ impl ChanPlane {
                     );
                 }
                 Some(mirror.kernel_vas.clone())
-            } else {
-                None
             };
             live.fetch_add(1, Ordering::AcqRel);
+            if userrelay::enabled() && a.user_ring_permit.is_some() {
+                return self.birth_user_ring(a, mirror, idx, twin, err_at);
+            }
             return self.defer(
                 "birth passthrough",
                 Box::new(move |me: &ChanPlane| {
                     let notifier = err_at.and_then(|(obj, off, at)| me.arm_notifier(a.client, a.handle, obj, off, at));
-                    let g = kf_chan::passthrough::GuestChannel { err_ctx: notifier.as_ref().map_or(0, |n| n.ctx), ..g0 };
+                    // ★ 2026-10-08: the relayed twin's own USERD (refused by name, fail closed, if it
+                    // cannot be made — never a twin without its relay).
+                    let relay_host = match relay_guest.as_ref().map(|_| me.relay_userd()) {
+                        Some(Ok(h)) => Some(h),
+                        Some(Err(e)) => {
+                            live.fetch_sub(1, Ordering::AcqRel);
+                            if let Some(t) = &twin {
+                                t.user_done();
+                            }
+                            if let Some(n) = notifier {
+                                me.release_notifier(n);
+                            }
+                            return Err((NV_ERR_INSUFFICIENT_RESOURCES, format!("USERD relay: {e}")));
+                        }
+                        None => None,
+                    };
+                    let userd_at = relay_host.as_ref().map_or(g0.userd, |h| kf_chan::passthrough::UserdAt::Store { store: h.0, off: 0 });
+                    let g = kf_chan::passthrough::GuestChannel { err_ctx: notifier.as_ref().map_or(0, |n| n.ctx), userd: userd_at, ..g0 };
                     // ★ v3-video: a member of a guest TSG joins the host group standing for it.
                     let gkey = a.tsg.map(|t| (a.client, t, a.ctx_share));
                     let join = gkey.and_then(|k| me.groups.lock().ok().and_then(|m| m.get(&k).map(|g| g.0)));
                     let chan = match kf_chan::passthrough::birth_twin_in(me.rm, space, g, join) {
                         Ok(c) => {
                             if let (Some(k), Ok(mut m)) = (gkey, me.groups.lock()) {
-                                m.entry(k).and_modify(|g| g.1 += 1).or_insert((c.tsg, 1));
+                                m.entry(k).and_modify(|g| g.1 = g.1.saturating_add(1)).or_insert((c.tsg, 1));
                             }
                             c
                         }
@@ -4128,15 +6824,32 @@ impl ChanPlane {
                             if let Some(n) = notifier {
                                 me.release_notifier(n);
                             }
+                            if let Some((mem, _node, cookie, region)) = relay_host {
+                                drop(region);
+                                let _ = me.rm.release_cpu_view(kf_host::CpuViewRelease { h_memory: mem, p_linear_address: cookie });
+                                let _ = me.rm.free(mem);
+                            }
                             return Err((NV_ERR_INSUFFICIENT_RESOURCES, e));
                         }
                     };
-                    let owner = if a.kernel_client { Owner::Kernel } else { Owner::User };
-                    let alloc = me
-                        .caps
-                        .lock()
-                        .map_err(|_| "caps poisoned".to_string())
-                        .and_then(|mut c| me.plane.allocate_channel(&mut c, idx, Route::Passthrough, chan.token, owner).map_err(|e| format!("{e:?}")));
+                    let owner = if a.kernel_client && !a.user_work { Owner::Kernel } else { Owner::User };
+                    // ★ 2026-10-09, hardwired 2026-10-10 (`crate::latejoin`, hardware-verified): a twin
+                    // born into a guest TSG the guest has ALREADY scheduled is in a host group nobody
+                    // else schedules (the guest sent its one schedule before the channel existed).
+                    // The schedule of its own host group, authored from the guest's own scheduled
+                    // state. A refusal is the birth's refusal, by name.
+                    let late = crate::latejoin::schedule_late_joiner(me.rm, &me.guest_sched, a.client, a.tsg, chan);
+                    let alloc = late
+                        .clone()
+                        .map(|_| ())
+                        .and_then(|()| me.caps.lock().map_err(|_| "caps poisoned".to_string()))
+                        .and_then(|mut c| me.plane.allocate_channel(&mut c, idx, if relay_host.is_some() { Route::Translated } else { Route::Passthrough }, chan.token, owner).map_err(|e| {
+                            // ★ 2026-10-11: LOUD and counted by reason (a refused birth is a guest crash: the OpenGL ICD dereferences it).
+                            let rl = me.plane.token_index.runlist_of(me.plane.token_index.clamp(idx));
+                            let n = me.birth_refused_cap.fetch_add(1, Ordering::Relaxed) + 1;
+                            eprintln!("kf3: ⚠ CHANNEL BUDGET EXHAUSTED on guest runlist {rl}: {e:?} (refusal #{n}; the `channel-budget` property, docs/design/V3_CHANNEL_BUDGET.md)");
+                            format!("{e:?}")
+                        }));
                     if let Err(e) = alloc {
                         let _ = me.release_twin(a.client, a.tsg, a.ctx_share, chan);
                         live.fetch_sub(1, Ordering::AcqRel);
@@ -4146,11 +6859,17 @@ impl ChanPlane {
                         if let Some(n) = notifier {
                             me.release_notifier(n);
                         }
+                        if let Some((mem, _node, cookie, region)) = relay_host {
+                            drop(region);
+                            let _ = me.rm.release_cpu_view(kf_host::CpuViewRelease { h_memory: mem, p_linear_address: cookie });
+                            let _ = me.rm.free(mem);
+                        }
                         return Err((NV_ERR_INSUFFICIENT_RESOURCES, format!("token {idx:#x}: {e}")));
                     }
                     let rc = if notifier.is_some() { "armed" } else { "none" };
                     if let Ok(mut m) = me.pt.lock() {
                         m.insert((a.client, a.handle), PtChan {
+                            allocation: Arc::new(()),
                             chan,
                             idx,
                             tsg: a.tsg,
@@ -4159,10 +6878,15 @@ impl ChanPlane {
                             device: a.device,
                             engine,
                             objects: HashMap::new(),
+                            pending_objects: HashMap::new(),
                             disp_sw: HashMap::new(),
                             sw_ids: crate::dispsw::SwClassIds::default(),
                             dispsw_host_refused: false,
+                            defapi_host: None, user_defapi: None, user_published: false,
+                            peek_defapi: None,
                             ctx: CtxBind::default(),
+                            user_work: a.user_work,
+                            user_ring: false,
                             live,
                             twin,
                             notifier,
@@ -4170,35 +6894,81 @@ impl ChanPlane {
                             disabled: false,
                             space,
                             rows,
+                            user_regions: relay_mirror.user_regions.clone(),
+                            ledger,
                             falcon_ctx: None,
+                            ring_at: (
+                                a.gpfifo_va,
+                                g.entries,
+                                match a.userd {
+                                    Some(kf_arch::UserdMem::Sysmem { base, .. }) => Some(base),
+                                    _ => None,
+                                },
+                            ),
                         });
                     }
                     me.pt_births.fetch_add(1, Ordering::Relaxed);
                     me.engine_live(engine, true);
+                    let relayed = match (relay_host, relay_guest) {
+                        (Some((mem, node, cookie, host)), Some(guest)) => {
+                            if let Ok(mut m) = me.relays.lock() {
+                                m.insert(chan.token, Arc::new(Mutex::new(Relay {
+                                    st: kf_chan::userd_relay::RelayState::new(g.entries),
+                                    guest,
+                                    host,
+                                    _node: node,
+                                    cookie,
+                                    mem,
+                                    chan,
+                                    idx,
+                                    mirror: relay_mirror.clone(),
+                                    views: StoreViews::new(),
+                                    gpfifo_va: a.gpfifo_va,
+                                    peek: PeekState::default(),
+                                    peek_defapi: None,
+                                })));
+                            }
+                            true
+                        }
+                        _ => false,
+                    };
                     let _ = me.take_ledger(idx);
                     // ★ After the token word and the twin: until its placement lands, the trap
                     // serves this token; after, its eventfd does. No lock is held here.
-                    let fast = me.fast_register(idx, runlist, chid);
+                    let fast = if relayed { "fast=off (USERD relay: doorbells go to a worker)".to_string() } else { me.fast_register(idx, runlist, chid) };
                     Ok(format!(
-                        "chan {:#x}:{:#x} BORN Passthrough: token {idx:#x} -> host {:#x} in {key:?} gpfifo={:#x}x{} userd={userd:?} engine={engine:#x} declared_kernel_pid={} {} rc={rc} {fast}",
+                        "chan {:#x}:{:#x} BORN Passthrough: token {idx:#x} -> host {:#x} in {key:?} gpfifo={:#x}x{} userd={userd:?} engine={engine:#x} declared_kernel_pid={} {}{} rc={rc} late_joiner_schedule={:?} {fast}",
                         a.client,
                         a.handle,
                         chan.token,
                         a.gpfifo_va,
                         g.entries,
                         a.declared_kernel_pid,
-                        kernel_by(&a)
+                        kernel_by(&a),
+                        if a.user_work { " WINDOWS-USER-WORK (§V, ProcessID/subcontext)" } else { "" },
+                        late.as_ref().ok()
                     ))
                 }),
             );
         }
         let entries = a.entries.max(1);
-        // ★★★ P1+P2 inc D (`V3_P1P2_TSPACE.md` §2.3, §4.2): in T-mode the channel runs in the T-space
-        // — refused by name if it is not built (never a fallback to mirror windows: that would
-        // reopen S1-21) — and its space moves Unclassified -> Kernel, refused while user channels
-        // live there. Statement order, before the channel can run.
-        let tmode = crate::tspace::enabled();
-        if tmode {
+        // ★★★ OWNER_RULINGS §AB rule 4 (2026-10-10): the T-space maps all of guest RAM and the
+        // guest store, so a Translated channel runs in it only with a [`crate::tspace::Privileged`]
+        // witness, made from the alloc's facts. Today's routes send only guest-kernel work here
+        // (`passthrough` above takes every other channel), so this refusal cannot fire; it keeps
+        // an unprivileged Translated channel out of the T-space if a route ever sends one.
+        let Some(privileged) = crate::tspace::Privileged::of(a.kernel_client, a.user_work) else {
+            self.tspace_refused.fetch_add(1, Ordering::Relaxed);
+            return refuse(
+                NV_ERR_INVALID_STATE,
+                crate::tspace::UNPRIVILEGED_TRANSLATED.to_string(),
+            );
+        };
+        // ★★★ P1+P2 inc D (`V3_P1P2_TSPACE.md` §2.3, §4.2), hardwired 2026-10-10 (§AB): the
+        // channel runs in the T-space — refused by name if it is not built (never a fallback to
+        // mirror windows: there are none, S1-21) — and its space moves Unclassified -> Kernel,
+        // refused while user channels live there. Statement order, before the channel can run.
+        {
             match self.tspace.get() {
                 Some(Ok(_)) => {}
                 built => {
@@ -4236,17 +7006,12 @@ impl ChanPlane {
         mirror.live.fetch_add(1, Ordering::AcqRel);
         // ★★★ v3-roperm: a guest-KERNEL channel lives here (`kernel_channel`: facts guest
         // userspace cannot produce), so this space is the kernel's and mirrors privileged leaves
-        // from its next walk on. Set NOW, in statement order, before the channel can run.
-        // ⚠ A privileged leaf walked BEFORE this birth was withheld (never committed) and is placed
-        // at the space's next walk (its next invalidate or split), not here. `[measured 5fead67d]`
-        // no privileged leaf was ever walked in a space that turned kernel this way (UVM's): they
-        // live in RM-internal clients' spaces, which are kernel from creation (`kernel_vas_for`).
-        if !tmode && !mirror.kernel_vas.force_kernel() {
-            eprintln!(
-                "kf3: {key:?} is a guest-KERNEL space (Translated chan {:#x}:{:#x}): privileged leaves are mirrored here",
-                a.client, a.handle
-            );
-        }
+        // from its next walk on — set above by `try_kernel`, in statement order. ⚠ A privileged
+        // leaf walked BEFORE this birth was withheld (never committed) and is placed at the
+        // space's next walk (its next invalidate or split). `[measured 5fead67d]` no privileged
+        // leaf was ever walked in a space that turned kernel this way (UVM's): they live in
+        // RM-internal clients' spaces, which are kernel from creation (`kernel_vas_for`).
+        // ⊘ 2026-10-10: the legacy `force_kernel` arm (no refusal) is deleted with `KF3_TSPACE`.
         self.defer(
             "birth translated",
             Box::new(move |me: &ChanPlane| {
@@ -4275,44 +7040,33 @@ impl ChanPlane {
                 let mut userd = userd;
                 let zeroed = kf_chan::host::zero_userd(&mut userd, declared)
                     .map_err(|e| fail((NV_ERR_INSUFFICIENT_RESOURCES, format!("USERD initialisation: {e}"))))?;
-                // ★★★ P1+P2 inc D: in T-mode the ring is born in the T-space at a T-space ring slot,
-                // in the T-space layout — the guest's mirror gets nothing of ours.
-                let ts = if tmode {
-                    match me.tspace.get() {
-                        Some(Ok(t)) => Some(t),
-                        _ => return Err(fail((NV_ERR_INVALID_STATE, "tspace: not built".to_string()))),
-                    }
-                } else {
-                    None
+                // ★★★ P1+P2 inc D, hardwired 2026-10-10 (§AB rules 2-4): the ring is born in the
+                // privileged T-space at a T-space ring slot, in the T-space layout — the guest's
+                // mirror gets nothing of ours. No T-space: refused by name, never a mirror ring.
+                let t = match me.tspace.get() {
+                    Some(Ok(t)) => t,
+                    _ => return Err(fail((NV_ERR_INVALID_STATE, "tspace: not built".to_string()))),
                 };
-                let host = match ts {
-                    Some(t) => t.ring(me.rm, if kernel_gr || kernel_nvdec || kernel_nvenc || kernel_ofa { engine } else { me.host_ce }).map_err(|e| fail((NV_ERR_INSUFFICIENT_RESOURCES, e)))?,
-                    None => {
-                        // ★ P6b: OUR ring goes in OUR region of the space, never where RM's allocator (the
-                        // guest's own allocator) would put it — `crate::mem::RING_REGION_BASE`.
-                        let at = crate::mem::take_ring_slot(&mirror.rings)
-                            .ok_or_else(|| fail((NV_ERR_INSUFFICIENT_RESOURCES, "host ring: the space's ring region is exhausted".to_string())))?;
-                        HostRing::on_engine_at(me.rm, mirror.space, me.host_ce, Some(at))
-                            .map_err(|e| fail((NV_ERR_INSUFFICIENT_RESOURCES, format!("host ring: {e}"))))?
-                    }
-                };
-                let mut host = host;
+                let mut host = t
+                    .ring(me.rm, if kernel_gr || kernel_nvdec || kernel_nvenc || kernel_ofa { engine } else { me.host_ce }, privileged)
+                    .map_err(|e| fail((NV_ERR_INSUFFICIENT_RESOURCES, e)))?;
                 let ht = host.channel().token;
                 let ring_va = host.va();
                 // ★★★ GR tier (owner rulings 2026-10-07): USER assertion, then the allowlisted host
                 // objects — refused by name, the ring freed, the birth refused, on any failure.
                 let gr_tier = kernel_gr && kernel_gr_work();
                 let gr_gp_get = if gr_tier {
-                    let at = ts.and_then(|t| match a.userd {
+                    let at = match a.userd {
                         Some(kf_arch::UserdMem::Framebuffer { base, .. }) => {
-                            t.windows().fb(base + kf_abi::submit::USERD_GP_GET, 4)
+                            t.windows(privileged)
+                                .fb(base.saturating_add(kf_abi::submit::USERD_GP_GET), 4)
                         }
                         Some(kf_arch::UserdMem::Sysmem { base, .. }) => me
                             .ram
-                            .dma_to_file_range(base + kf_abi::submit::USERD_GP_GET, 4)
-                            .and_then(|off| t.windows().ram(off, 4)),
+                            .dma_to_file_range(base.saturating_add(kf_abi::submit::USERD_GP_GET), 4)
+                            .and_then(|off| t.windows(privileged).ram(off, 4)),
                         _ => None,
-                    });
+                    };
                     let admitted = host.admit_gr_tier(me.rm).and_then(|objects| {
                         at.map(|at| (objects, at)).ok_or_else(|| {
                             "GR tier REFUSED: the guest USERD's GP_GET word is in no T-space window".to_string()
@@ -4323,57 +7077,48 @@ impl ChanPlane {
                         Err(e) => {
                             let _ = me.rm.free_channel(host.channel());
                             let released = host.release(me.rm).is_some_and(|l| !l.contains("REFUSED"));
-                            if let Some(t) = ts {
-                                t.give_ring(ring_va, released);
-                            }
+                            t.give_ring(ring_va, released);
                             return Err(fail((NV_ERR_INSUFFICIENT_RESOURCES, e)));
                         }
                     }
                 } else {
                     None
                 };
+                // ★ 2026-10-14: a kernel video ring decodes subchannels 0-4 against the class of
+                // the video object its host channel holds (`kf_chan::vtables`), never as CE work.
+                let video_class = host.video_context().map_or(0, |(_, class, _)| class);
                 let gr_cfg = kf_chan::tmode::GrConfig {
                     tier: gr_tier,
                     inert_sw_subch: sw_subch_inert(),
                     deferred_api: deferred_api_trigger(),
+                    video: video_class,
                 };
-                let mut chan = match ts {
-                    Some(t) => {
-                        let mut ring = TranslatedRing::new_tmode(a.gpfifo_va, entries, 0);
-                        ring.set_gr(gr_cfg);
-                        let mut c = TranslatedChannel::new(ring, host, idx);
-                        c.set_tspace(t.windows(), negctl_stale_bind());
-                        c
-                    }
-                    None => TranslatedChannel::new(TranslatedRing::new(a.gpfifo_va, entries, 0), host, idx),
+                let mut chan = {
+                    let mut ring = TranslatedRing::new_tmode(a.gpfifo_va, entries, 0);
+                    ring.set_gr(gr_cfg);
+                    let mut c = TranslatedChannel::new(ring, host, idx);
+                    c.set_tspace(t.windows(privileged), negctl_stale_bind());
+                    c
                 };
                 if let Some(at) = gr_gp_get
                     && let Err(e) = chan.set_gpu_gp_get(at)
                 {
                     let _ = me.rm.free_channel(chan.host().channel());
                     let released = chan.release_host(me.rm).is_some_and(|l| !l.contains("REFUSED"));
-                    if let Some(t) = ts {
-                        t.give_ring(ring_va, released);
-                    }
+                    t.give_ring(ring_va, released);
                     return Err(fail((NV_ERR_INSUFFICIENT_RESOURCES, format!("GR tier REFUSED: {e}"))));
                 }
                 chan.set_probe(completion_probe_ms().is_some());
                 chan.set_census(tcensus_on());
-                // ★ P1+P2 inc A (review fix 2026-10-04): count-only on the default path, refusing
-                // when strict; the GP extended base exists from Hopper's `NVC86F` on
-                // (`clc86f.h:184-189`) — kayfabe presents the host family.
+                // ★ P1+P2 inc A (review fix 2026-10-04): strict (hardwired 2026-10-10); the GP
+                // extended base exists from Hopper's `NVC86F` on (`clc86f.h:184-189`) — kayfabe
+                // presents the host family. ⊘ The T-mode SHADOW (`KF3_TSHADOW`'s shadow half,
+                // `KF3_NEGCTL_SHADOW`) ran only beside the legacy rewriter, which no ring runs
+                // any more: it is not armed (`KF3_TSHADOW` still turns the census on).
                 chan.set_inca(
-                    crate::tspace::inca_strict(),
+                    crate::tspace::INCA_STRICT,
                     matches!(me.family, kf_chip::Family::Hopper | kf_chip::Family::Blackwell),
                 );
-                if tshadow_on() && ts.is_none() {
-                    // ★ P1+P2 inc C: the T-mode shadow binds against windows shaped like the
-                    // T-space's (the store window ends at the carve-out); their bases are nominal.
-                    chan.set_shadow(
-                        shadow_windows(me.layout.carve(), mirror.ram.map(|(_, l)| l)),
-                        negctl_shadow(),
-                    );
-                }
                 let alloc = me
                     .caps
                     .lock()
@@ -4384,11 +7129,7 @@ impl ChanPlane {
                     let _ = me.rm.free_channel(chan.host().channel());
                     // ★ v3-appfix J: and the ring's own object, mapping and CPU view.
                     let released = chan.release_host(me.rm).is_some_and(|l| !l.contains("REFUSED"));
-                    match ts {
-                        Some(t) => t.give_ring(ring_va, released),
-                        None if released => crate::mem::give_ring_slot(&mirror.rings, ring_va),
-                        None => {}
-                    }
+                    t.give_ring(ring_va, released);
                     return Err(fail((NV_ERR_INSUFFICIENT_RESOURCES, format!("token {idx:#x}: {e}"))));
                 }
                 let slot = Slot {
@@ -4412,7 +7153,6 @@ impl ChanPlane {
                     stopped: false,
                     disabled: false,
                     probe: ProbeRec::default(),
-                    tspace_ring: ts.is_some(),
                     inca_seen: 0,
                     gr_tier,
                     err_notifier: a.error_notifier,
@@ -4613,7 +7353,10 @@ impl ChanPlane {
         };
         let words = |f: &dyn Fn(u64) -> Result<u32, String>, n: u64| -> String {
             (0..n)
-                .map(|i| f(4 * i).map_or_else(|e| format!("?({e})"), |v| format!("{v:08x}")))
+                .map(|i| {
+                    f(i.saturating_mul(4))
+                        .map_or_else(|e| format!("?({e})"), |v| format!("{v:08x}"))
+                })
                 .collect::<Vec<_>>()
                 .join(" ")
         };
@@ -4638,7 +7381,7 @@ impl ChanPlane {
                             "sysmem @{gpa:#x}: {}",
                             words(
                                 &|o| mem
-                                    .load_u32(at + o as usize)
+                                    .load_u32(at.saturating_add(o as usize))
                                     .ok_or_else(|| "load".to_string()),
                                 4
                             )
@@ -4697,7 +7440,7 @@ impl ChanPlane {
                     region,
                     _node: node,
                     cookie,
-                    at: base - page,
+                    at: base.saturating_sub(page),
                 })
             }
             Some(kf_arch::UserdMem::Sysmem { base, .. }) => {
@@ -4766,20 +7509,17 @@ impl ChanPlane {
             None
         };
         let released = ring_line.as_deref().is_some_and(|l| !l.contains("REFUSED"));
-        if g.tspace_ring {
-            // ★ P1+P2 inc D: a T-space ring slot; one whose release did not fully succeed leaks.
-            if let Some(Ok(t)) = self.tspace.get() {
-                t.give_ring(ring_va, released);
-            }
-            eprintln!(
-                "kf3: TSPACE-RETIRE tok={:#x} host={ht:#x} key={:?} ring_va={ring_va:#x} released={released} {}",
-                g.guest_idx,
-                g.key,
-                g.chan.stale_line()
-            );
-        } else if released {
-            crate::mem::give_ring_slot(&g.mirror.rings, ring_va);
+        // ★ P1+P2 inc D: every Translated ring is a T-space ring slot (hardwired 2026-10-10); one
+        // whose release did not fully succeed leaks.
+        if let Some(Ok(t)) = self.tspace.get() {
+            t.give_ring(ring_va, released);
         }
+        eprintln!(
+            "kf3: TSPACE-RETIRE tok={:#x} host={ht:#x} key={:?} ring_va={ring_va:#x} released={released} {}",
+            g.guest_idx,
+            g.key,
+            g.chan.stale_line()
+        );
         if let Some(l) = ring_line.as_deref().filter(|l| l.contains("REFUSED")) {
             eprintln!("kf3: chan token {:#x} (host {ht:#x}) {l}", g.guest_idx);
         }
@@ -4881,6 +7621,10 @@ impl ChanPlane {
     /// ★ A WORKER's entry (`HostOps::run_translated`): pump the channel behind `ht`. Never waits.
     /// Returns whether anything reached the GPU.
     pub fn serve(&self, ht: u32) -> bool {
+        if let Some(r) = self.user_ring_serve(ht) { return r; }
+        if let Some(r) = self.relay_serve(ht) {
+            return r;
+        }
         let Some(slot) = self.slot(ht) else {
             return false;
         };
@@ -4890,7 +7634,7 @@ impl ChanPlane {
             return false;
         };
         let g = &mut *g;
-        g.serves += 1;
+        g.serves = g.serves.saturating_add(1);
         if g.dead.is_some()
             || !g.scheduled
             || g.disabled
@@ -4933,8 +7677,7 @@ impl ChanPlane {
         }
         // ★ Review fix 2026-10-04 (HIGH): the CPU store views' bound is the STORE's readable
         // extent, never the mirror's window length (0 on a T-mode twin) — [`store_read_bound`].
-        let store_len =
-            store_read_bound(crate::tspace::enabled(), mirror.fb_len, self.layout.carve());
+        let store_len = store_read_bound(self.layout.carve());
         let mut mem = Mem {
             mirror: &mirror,
             ram: self.ram,
@@ -4943,10 +7686,6 @@ impl ChanPlane {
             store_len,
             views: &mut g.views,
             inbox: &self.inbox,
-        };
-        let win = SlotWindow {
-            mirror: &mirror,
-            ram: self.ram,
         };
         let mut split = VaSplit {
             inbox: &self.inbox,
@@ -4968,7 +7707,7 @@ impl ChanPlane {
             &mut Userd(&g.userd),
             &mut split,
             is_any_ce_class,
-            &win,
+            &NoMirrorWindow,
         );
         if !g.gr_tier
             && translated_ce_relay()
@@ -4998,7 +7737,7 @@ impl ChanPlane {
         let inca = g.chan.inca().total();
         if inca > g.inca_seen {
             self.inca_counted
-                .fetch_add(inca - g.inca_seen, Ordering::Relaxed);
+                .fetch_add(inca.saturating_sub(g.inca_seen), Ordering::Relaxed);
             g.inca_seen = inca;
         }
         if probe {
@@ -5051,7 +7790,7 @@ impl ChanPlane {
                     ));
                 }
                 if g.probe.logged < 8 || bad || copy_bad {
-                    g.probe.logged += 1;
+                    g.probe.logged = g.probe.logged.saturating_add(1);
                     eprintln!(
                         "kf3: PROBE t={:.6} tok={:#x} fence seq={} gp_get={:?} submit->seen-complete={dt}us put={:?} releases=[{}]{} data=[{}]",
                         kf_mem::maplog::t(),
@@ -5272,6 +8011,16 @@ impl ChanPlane {
     /// Whether the channel behind `ht` can take work (a dead one cannot: §7 then poisons).
     #[must_use]
     pub fn alive(&self, ht: u32) -> bool {
+        // ★ 2026-10-08 (`V3_USERD_RELAY.md`): a relayed twin is served by the worker too; it has no
+        // Translated slot (its ring is the guest's, never pumped), so its liveness is the relay's.
+        // [measured, run67 at 8288ff8e] without this the plane judged it untranslatable and never
+        // ran a relay step (gets=0).
+        if let Some(record) = self.user_ring_record(ht) {
+            return record.alive(|r| !r.retired && !r.free_attempted && r.dead.is_none());
+        }
+        if self.relays.lock().is_ok_and(|m| m.contains_key(&ht)) {
+            return true;
+        }
         self.slot(ht)
             .is_some_and(|s| s.try_lock().map_or(true, |g| g.dead.is_none()))
     }
@@ -5306,6 +8055,339 @@ impl ChanPlane {
     pub fn stop(&self) {
         self.stop.store(true, Ordering::Release);
     }
+
+    /// ★★ **Device reset, stage Release** (`docs/design/V3_DEVICE_RESET.md` §3): free every guest
+    /// client through the plane's OWN free path — the path a guest RM's `GSP_RM_FREE` of a client
+    /// takes (twins, their tokens and doorbell registrations, relays, USER rings, groups, debugger
+    /// sessions, the CUDA limit, encoder sessions), in its order (§9) — and acknowledge `epoch` on
+    /// [`ChanPlane::life_reset`] once nothing of the guest is left.
+    ///
+    /// ⊘ The frees are issued FROM THE ACT THREAD, behind every act already queued: a birth act in
+    /// flight lands first, and its twin is then freed like any other (a free computed on the drainer
+    /// now would miss it). Never blocks the drainer: this queues one act.
+    ///
+    /// ⊘ No completion is forged: a channel with work in flight is stopped by the host's own free
+    /// (preempt + unbind), and nothing is written to guest memory on its behalf.
+    pub fn reset_life(&'static self, epoch: u64) {
+        self.life_reset.request(epoch);
+        let queued = self.defer(
+            "device reset: free every guest client",
+            Box::new(move |me: &ChanPlane| me.reset_free_round(epoch, 0)),
+        );
+        if matches!(queued, ChanAnswer::Refused { .. }) {
+            // No act thread (it never started): nothing was ever born on it.
+            self.reset_nonhost_state();
+            self.life_reset.done(epoch);
+            let _ = self.release.signal();
+        }
+    }
+
+    /// ★ Device reset, stage Drainer (on the drainer, BEFORE the frees are even queued): every
+    /// Translated pump stops at once — its next serve finds the channel unscheduled and does not
+    /// read the guest's ring again, which the next life's firmware may already be reusing. ⊘ Never
+    /// blocks: `try_read`/`try_lock` only; a slot a worker holds right now is stopped by its free.
+    /// Returns how many were stopped.
+    pub fn stop_pumps(&self) -> usize {
+        let Ok(slots) = self.slots.try_read() else {
+            return 0;
+        };
+        let mut n = 0usize;
+        for s in slots.values() {
+            if let Ok(mut g) = s.try_lock()
+                && g.scheduled
+            {
+                g.scheduled = false;
+                n = n.saturating_add(1);
+            }
+        }
+        n
+    }
+
+    /// ★★ **The guest RM unloaded** (fn 47, a teardown — owner decision D4, 2026-10-13): every
+    /// client a table of the plane still names belonged to the RM that is gone, so its twins are
+    /// dead. Each is freed through [`ChanPlane::free`] exactly as the guest's own client free is —
+    /// on the DRAINER, as a statement, so its host acts queue in statement order and nothing waits.
+    /// Returns the clients freed (empty after a clean unload).
+    ///
+    /// ⊘ Not the reset's round on the act thread: there is no gate here, and a reloading guest's
+    /// next life may already be queuing births — the set is taken NOW (every birth of the dead RM
+    /// completed before its fn 47 could be sent: its RPCs are synchronous), and no barrier sweeps
+    /// whatever appears later. No completion is forged: the host's own free stops any work.
+    pub fn free_dead_clients(&self) -> Vec<u32> {
+        let clients = self.guest_clients();
+        for c in &clients {
+            let _ = self.free(*c, *c);
+        }
+        clients
+    }
+
+    /// One round of the reset's frees (act thread), then a barrier act behind them.
+    fn reset_free_round(&self, epoch: u64, round: u32) -> Result<String, (u32, String)> {
+        let clients = self.guest_clients();
+        for c in &clients {
+            let _ = self.free(*c, *c);
+        }
+        let _ = self.defer(
+            "device reset: barrier",
+            Box::new(move |me: &ChanPlane| me.reset_barrier(epoch, round)),
+        );
+        Ok(if clients.is_empty() || !crate::reset::loud(epoch) {
+            String::new()
+        } else {
+            format!("device reset epoch {epoch} round {round}: freeing {} guest client(s) {clients:x?}", clients.len())
+        })
+    }
+
+    /// The barrier (act thread): every free act of the round has run. A client born meanwhile, or
+    /// a retry still parked, takes another round (bounded: [`RESET_ROUNDS`] × [`RESET_RETRY`]);
+    /// then the per-life state that holds no host resource is cleared and the epoch acknowledged.
+    fn reset_barrier(&self, epoch: u64, round: u32) -> Result<String, (u32, String)> {
+        let left = self.guest_clients();
+        let parked = self.acts_parked.load(Ordering::Acquire);
+        match reset_barrier_next(left.len(), parked, round) {
+            ResetNext::FreeAgain => return self.reset_free_round(epoch, round.saturating_add(1)),
+            ResetNext::WaitParked => {
+                // Only parked retries: wait for them, off the queue (the act loop runs everything
+                // else meanwhile), never a sleep.
+                delay_act(
+                    std::time::Instant::now()
+                        .checked_add(RESET_RETRY)
+                        .unwrap_or_else(std::time::Instant::now),
+                    "device reset: barrier",
+                    Box::new(move |me: &ChanPlane| me.reset_barrier(epoch, round.saturating_add(1))),
+                    kf_gsp::Deferred::new(),
+                );
+                return Err((ACT_REQUEUED, String::new()));
+            }
+            ResetNext::Done => {}
+        }
+        let census = self.live_census();
+        let complete = left.is_empty() && census.is_empty();
+        if !complete {
+            self.reset_incomplete.fetch_add(1, Ordering::Relaxed);
+        }
+        self.reset_nonhost_state();
+        self.life_reset.done(epoch);
+        let _ = self.release.signal();
+        if complete && !crate::reset::loud(epoch) {
+            return Ok(String::new());
+        }
+        Ok(format!(
+            "device reset epoch {epoch}: channel plane {} after {} round(s) — {census}",
+            if complete {
+                "EMPTY"
+            } else {
+                "NOT EMPTY (host frees refused or retries still parked; counted reset_incomplete, the guest's tables are cleared regardless)"
+            },
+            round.saturating_add(1)
+        ))
+    }
+
+    /// Every guest client any table of the plane still names.
+    fn guest_clients(&self) -> Vec<u32> {
+        let mut out = std::collections::BTreeSet::new();
+        if let Ok(m) = self.pt.lock() {
+            out.extend(m.keys().map(|k| k.0));
+        }
+        if let Ok(m) = self.by_obj.lock() {
+            out.extend(m.keys().map(|k| k.0));
+        }
+        if let Ok(m) = self.scopes.lock() {
+            out.extend(m.keys().map(|k| k.0));
+        }
+        if let Ok(m) = self.pt_objs.lock() {
+            out.extend(m.keys().map(|k| k.0));
+        }
+        if let Ok(m) = self.dbg.lock() {
+            out.extend(m.keys().map(|k| k.0));
+        }
+        if let Ok(m) = self.cuda_limit.lock() {
+            out.extend(m.0.iter().map(|k| k.0));
+        }
+        if let Ok(m) = self.enc_sessions.lock() {
+            out.extend(m.iter().filter(|(_, n)| **n > 0).map(|(c, _)| *c));
+        }
+        if let Ok(m) = self.groups.lock() {
+            out.extend(m.keys().map(|k| k.0));
+        }
+        if let Ok(m) = self.sw_objs.lock() {
+            out.extend(m.values().map(|o| o.owner.0));
+        }
+        out.extend(self.user_births.clients());
+        out.into_iter().collect()
+    }
+
+    /// ★ The reset's accounting: what the plane still holds (never a decision input). ⊘ Takes the
+    /// doorbell registry's lock (held across `KVM_IOEVENTFD`): the act thread's, never the drainer's.
+    #[must_use]
+    pub fn live_census(&self) -> LiveCensus {
+        let n = |r: Result<usize, ()>| r.unwrap_or(usize::MAX);
+        LiveCensus {
+            twins: n(self.pt.lock().map(|m| m.len()).map_err(|_| ())),
+            translated: n(self.slots.read().map(|m| m.len()).map_err(|_| ())),
+            relays: n(self.relays.lock().map(|m| m.len()).map_err(|_| ())),
+            user_rings: n(self.user_rings.lock().map(|m| m.len()).map_err(|_| ())),
+            groups: n(self.groups.lock().map(|m| m.len()).map_err(|_| ())),
+            debuggers: n(self.dbg.lock().map(|m| m.len()).map_err(|_| ())),
+            caps_live: self
+                .caps
+                .lock()
+                .map_or(u32::MAX, |c| c.live(kf_core::caps::Twin::Channel)),
+            tokens: self.plane.live_tokens(),
+            doorbell_regs: self.dbfast.live().0,
+        }
+    }
+
+    /// The per-life state that holds no host resource (act thread, at the reset's barrier).
+    fn reset_nonhost_state(&self) {
+        if let Ok(mut m) = self.rc_queue.lock() {
+            m.clear();
+        }
+        if let Ok(mut m) = self.preempt_done.lock() {
+            m.clear();
+        }
+        if let Ok(mut m) = self.usermode_off.lock() {
+            m.clear();
+        }
+        for w in &self.pt_fifo_owed {
+            w.store(0, Ordering::Release);
+        }
+        for w in self.rung.iter().chain(self.rang.iter()).chain(self.rung_at_us.iter()) {
+            w.store(0, Ordering::Relaxed);
+        }
+        if let Ok(mut m) = self.guest_sched.lock() {
+            *m = crate::latejoin::GuestTsgSched::default();
+        }
+        if let Ok(mut m) = self.sw_objs.lock() {
+            m.clear();
+        }
+        if let Ok(mut m) = self.scopes.lock() {
+            m.clear();
+        }
+        if let Ok(mut m) = self.by_obj.lock() {
+            m.clear();
+        }
+        if let Ok(mut m) = self.pt_objs.lock() {
+            m.clear();
+        }
+        let mut inflight = Vec::new();
+        self.completions.for_each_inflight(|t| inflight.push(t));
+        for t in inflight {
+            self.completions.clear(t);
+        }
+    }
+}
+
+/// What the reset's barrier does next.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ResetNext {
+    /// Clients are still named (a birth landed after the round's frees): free them.
+    FreeAgain,
+    /// Only retries are parked: wait for them ([`RESET_RETRY`]).
+    WaitParked,
+    /// Nothing left, or the bound reached: clear and acknowledge.
+    Done,
+}
+
+/// ★ The barrier's decision — `clients` still named, `parked` retries, this `round` — bounded by
+/// [`RESET_ROUNDS`] so a host that never lets go cannot keep the device in reset forever.
+fn reset_barrier_next(clients: usize, parked: usize, round: u32) -> ResetNext {
+    if round >= RESET_ROUNDS {
+        ResetNext::Done
+    } else if clients > 0 {
+        ResetNext::FreeAgain
+    } else if parked > 0 {
+        ResetNext::WaitParked
+    } else {
+        ResetNext::Done
+    }
+}
+
+/// ★ Device reset: how many free rounds the act thread runs before it acknowledges anyway.
+const RESET_ROUNDS: u32 = 400;
+/// … and how long a round waits for a parked retry (400 × 5 ms = 2 s).
+const RESET_RETRY: std::time::Duration = std::time::Duration::from_millis(5);
+
+/// ★ What the channel plane still holds — the device reset's accounting (`docs/design/V3_DEVICE_RESET.md`
+/// §5): after a reset every field is 0, after N resets too.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct LiveCensus {
+    /// Passthrough twins (host channels).
+    pub twins: usize,
+    /// Translated slots (host rings).
+    pub translated: usize,
+    /// USERD relays (host objects + CPU views).
+    pub relays: usize,
+    /// Windows USER rings.
+    pub user_rings: usize,
+    /// Host TSGs standing for guest TSGs.
+    pub groups: usize,
+    /// Host debugger sessions.
+    pub debuggers: usize,
+    /// Channel caps held.
+    pub caps_live: u32,
+    /// Token words not fresh.
+    pub tokens: usize,
+    /// Doorbell fast-path registrations (KVM ioeventfds).
+    pub doorbell_regs: usize,
+}
+
+impl LiveCensus {
+    /// Nothing of a guest life is held. (Tokens are swept at the reset's Finish, so they are not
+    /// part of this test.)
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.twins == 0
+            && self.translated == 0
+            && self.relays == 0
+            && self.user_rings == 0
+            && self.groups == 0
+            && self.debuggers == 0
+            && self.caps_live == 0
+            && self.doorbell_regs == 0
+    }
+}
+
+impl core::fmt::Display for LiveCensus {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(
+            f,
+            "twins={} translated={} relays={} user_rings={} groups={} debuggers={} caps={} tokens={} db_regs={}",
+            self.twins,
+            self.translated,
+            self.relays,
+            self.user_rings,
+            self.groups,
+            self.debuggers,
+            self.caps_live,
+            self.tokens,
+            self.doorbell_regs
+        )
+    }
+}
+
+#[cfg(test)]
+mod reset_tests {
+    use super::{RESET_ROUNDS, RESET_RETRY, ResetNext, reset_barrier_next};
+
+    /// ★ Device reset: the act thread's barrier frees again while clients are named (a birth that
+    /// was queued behind the round landed), waits while only retries are parked, and is bounded —
+    /// at most `RESET_ROUNDS` × `RESET_RETRY` (2 s) before it acknowledges anyway (the leak is then
+    /// counted, the guest's tables cleared regardless).
+    #[test]
+    fn the_reset_barrier_frees_again_waits_for_parked_retries_and_is_bounded() {
+        assert_eq!(reset_barrier_next(0, 0, 0), ResetNext::Done);
+        assert_eq!(reset_barrier_next(3, 0, 0), ResetNext::FreeAgain);
+        assert_eq!(reset_barrier_next(3, 5, 7), ResetNext::FreeAgain, "clients first");
+        assert_eq!(reset_barrier_next(0, 2, 7), ResetNext::WaitParked);
+        assert_eq!(reset_barrier_next(3, 2, RESET_ROUNDS), ResetNext::Done, "bounded");
+        let mut round = 0;
+        while reset_barrier_next(0, 1, round) == ResetNext::WaitParked {
+            round += 1;
+        }
+        assert_eq!(round, RESET_ROUNDS);
+        assert!(RESET_RETRY * RESET_ROUNDS <= std::time::Duration::from_secs(2));
+    }
 }
 
 #[cfg(test)]
@@ -5313,6 +8395,10 @@ mod dispsw_tests {
     use super::{
         CtxBind, DISPSW_WITHDRAW, PtChan, PtMap, attach_dispsw_withdraw, dispsw_live,
         dispsw_mark_host_refused, register_other_sw, take_twin_object, withdraw_kept,
+    };
+    use super::{
+        EngineObject, PENDING_ENGINE_OBJECTS, admit_engine_object, engine_object_pending,
+        engine_owner_current, keep_engine_object, withdraw_engine_object,
     };
     use crate::dispsw::{
         DispSwCounters, DispSwHost, Live, NV_ERR_INSUFFICIENT_RESOURCES, PER_CHANNEL_CAP, twin_one,
@@ -5331,6 +8417,7 @@ mod dispsw_tests {
     /// A twin as the plane holds it, with `disp_sw` (guest handle → host object) on it.
     fn twin(token: u32, disp_sw: &[(u32, u32)]) -> PtChan {
         PtChan {
+            allocation: Arc::new(()),
             chan: kf_host::Channel {
                 tsg: token,
                 chan: token,
@@ -5344,10 +8431,15 @@ mod dispsw_tests {
             device: 0,
             engine: 0,
             objects: HashMap::new(),
+            pending_objects: HashMap::new(),
             disp_sw: disp_sw.iter().copied().collect(),
             sw_ids: crate::dispsw::SwClassIds::default(),
             dispsw_host_refused: false,
+            defapi_host: None, user_defapi: None, user_published: false,
+            peek_defapi: None,
             ctx: CtxBind::default(),
+            user_work: false,
+            user_ring: false,
             live: Arc::new(AtomicU64::new(0)),
             twin: None,
             notifier: None,
@@ -5356,10 +8448,13 @@ mod dispsw_tests {
             space: kf_host::VaSpace {
                 space: 0,
                 range: 0,
-                guest: [kf_host::channel::GuestVaRange::default(); 2],
+                guest: [kf_host::channel::GuestVaRange::default(); 3],
             },
             rows: crate::mem::PlacedRows::default(),
+            user_regions: Arc::default(),
+            ledger: None,
             falcon_ctx: None,
+            ring_at: (0, 0, None),
         }
     }
 
@@ -5382,6 +8477,195 @@ mod dispsw_tests {
             vm,
             host_refused_before: false,
         }
+    }
+
+    #[test]
+    fn parked_engine_birth_cannot_attach_after_identical_numeric_handles_reuse() {
+        let old = twin(1, &[]);
+        let allocation = old.allocation.clone();
+        let chan = old.chan;
+        let pt = Mutex::new(HashMap::from([((A, CH1), old)]));
+        let index = Mutex::new(HashMap::new());
+        assert!(engine_owner_current(&pt, (A, CH1), &allocation, chan));
+        // Exact guest key and ALL numeric host fields repeat; allocation does not.
+        pt.lock().unwrap().insert((A, CH1), twin(1, &[]));
+        assert!(!engine_owner_current(&pt, (A, CH1), &allocation, chan));
+        assert!(!keep_engine_object(
+            &pt,
+            &index,
+            (A, CH1),
+            &allocation,
+            chan,
+            0x10,
+            EngineObject {
+                allocation: Arc::new(()),
+                host: 0xa1,
+                kind: Kind::ThreeD,
+                class: 0xc997
+            }
+        ));
+        assert!(
+            pt.lock()
+                .unwrap()
+                .get(&(A, CH1))
+                .unwrap()
+                .objects
+                .is_empty()
+        );
+        assert!(index.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn engine_binding_retains_exact_owned_class_and_never_replaces_a_live_object() {
+        let v = twin(1, &[(0x20, 0xb2)]);
+        let allocation = v.allocation.clone();
+        let chan = v.chan;
+        let pt = Mutex::new(HashMap::from([((A, CH1), v)]));
+        let index = Mutex::new(HashMap::from([((A, 0x30), (A, CH2))]));
+        let object_allocation = admit_engine_object(
+            pt.lock().unwrap().get_mut(&(A, CH1)).unwrap(),
+            &index.lock().unwrap(),
+            (A, CH1),
+            0x10,
+        )
+        .unwrap();
+        let object = EngineObject {
+            allocation: object_allocation,
+            host: 0xa1,
+            kind: Kind::ThreeD,
+            class: 0xc997,
+        };
+        assert!(keep_engine_object(
+            &pt,
+            &index,
+            (A, CH1),
+            &allocation,
+            chan,
+            0x10,
+            object.clone()
+        ));
+        for handle in [0x10, 0x20, 0x30] {
+            assert!(!keep_engine_object(
+                &pt,
+                &index,
+                (A, CH1),
+                &allocation,
+                chan,
+                handle,
+                EngineObject {
+                    allocation: Arc::new(()),
+                    host: 0xa2,
+                    class: 0xc5c0,
+                    kind: Kind::Compute
+                }
+            ));
+        }
+        let taken = pt.lock().unwrap().get(&(A, CH1)).unwrap().objects[&0x10].clone();
+        assert_eq!(
+            (taken.host, taken.class, taken.kind),
+            (0xa1, 0xc997, Kind::ThreeD)
+        );
+        assert_eq!(index.lock().unwrap().get(&(A, 0x10)), Some(&(A, CH1)));
+        assert_eq!(index.lock().unwrap().get(&(A, 0x30)), Some(&(A, CH2)));
+        pt.lock().unwrap().remove(&(A, CH1));
+        assert!(!engine_owner_current(&pt, (A, CH1), &allocation, chan));
+        assert!(!keep_engine_object(
+            &pt,
+            &index,
+            (A, CH1),
+            &allocation,
+            chan,
+            0x40,
+            object.clone()
+        ));
+    }
+
+    #[test]
+    fn same_channel_object_free_reuse_cancels_parked_birth_and_old_orphan_undo() {
+        use super::cancel_pending_engine_objects;
+        let mut v = twin(1, &[]);
+        let channel = v.allocation.clone();
+        let chan = v.chan;
+        let key = (A, CH1);
+        let old = admit_engine_object(&mut v, &HashMap::new(), key, 0x10).unwrap();
+        let pt = Mutex::new(HashMap::from([(key, v)]));
+        let index = Mutex::new(HashMap::new());
+        assert!(engine_object_pending(&pt, key, &channel, chan, 0x10, &old));
+        cancel_pending_engine_objects(&pt, B, 0x10);
+        assert!(
+            engine_object_pending(&pt, key, &channel, chan, 0x10, &old),
+            "another client cannot cancel"
+        );
+        cancel_pending_engine_objects(&pt, A, 0x10);
+        assert!(!engine_object_pending(&pt, key, &channel, chan, 0x10, &old));
+        let new = admit_engine_object(
+            pt.lock().unwrap().get_mut(&key).unwrap(),
+            &index.lock().unwrap(),
+            key,
+            0x10,
+        )
+        .unwrap();
+        assert!(!keep_engine_object(
+            &pt,
+            &index,
+            key,
+            &channel,
+            chan,
+            0x10,
+            EngineObject {
+                allocation: old.clone(),
+                host: 0xa1,
+                kind: Kind::ThreeD,
+                class: 0xc997
+            }
+        ));
+        assert!(engine_object_pending(&pt, key, &channel, chan, 0x10, &new));
+        assert!(keep_engine_object(
+            &pt,
+            &index,
+            key,
+            &channel,
+            chan,
+            0x10,
+            EngineObject {
+                allocation: new.clone(),
+                host: 0xa2,
+                kind: Kind::Compute,
+                class: 0xc5c0
+            }
+        ));
+        assert_eq!(
+            withdraw_engine_object(&pt, &index, key, &channel, &old, 0x10),
+            None
+        );
+        assert_eq!(
+            withdraw_engine_object(&pt, &index, key, &channel, &new, 0x10),
+            Some(0xa2)
+        );
+        assert_eq!(
+            withdraw_engine_object(&pt, &index, key, &channel, &new, 0x10),
+            None,
+            "ordinary free/orphan can only take once"
+        );
+        assert!(index.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn dropped_pending_acts_release_admission_budget_without_reusing_live_identities() {
+        let mut v = twin(1, &[]);
+        let mut held = Vec::new();
+        for handle in 0..PENDING_ENGINE_OBJECTS as u32 {
+            held.push(admit_engine_object(&mut v, &HashMap::new(), (A, CH1), handle).unwrap());
+        }
+        assert!(admit_engine_object(&mut v, &HashMap::new(), (A, CH1), 0).is_err());
+        assert!(admit_engine_object(&mut v, &HashMap::new(), (A, CH1), 1000).is_err());
+        held.pop();
+        let next = admit_engine_object(&mut v, &HashMap::new(), (A, CH1), 1000).unwrap();
+        assert_eq!(v.pending_objects.len(), PENDING_ENGINE_OBJECTS);
+        drop(held);
+        let last = admit_engine_object(&mut v, &HashMap::new(), (A, CH1), 2000).unwrap();
+        assert_eq!(v.pending_objects.len(), 2);
+        assert!(!Arc::ptr_eq(&next, &last));
     }
 
     /// A host that frees (recorded) and must never be asked to allocate or read back.
@@ -5562,9 +8846,17 @@ mod dispsw_tests {
     /// and their tests are `crate::dispsw`'s.)
     #[test]
     fn a_guest_free_takes_the_display_sw_twin_from_a_live_channel() {
-        let mut objects: HashMap<u32, (u32, Kind)> = HashMap::new();
+        let mut objects: HashMap<u32, EngineObject> = HashMap::new();
         let mut ds: HashMap<u32, u32> = HashMap::new();
-        objects.insert(0x10, (0xa1, Kind::ThreeD));
+        objects.insert(
+            0x10,
+            EngineObject {
+                allocation: Arc::new(()),
+                host: 0xa1,
+                kind: Kind::ThreeD,
+                class: 0xc997,
+            },
+        );
         ds.insert(0x20, 0xb2);
         assert_eq!(
             take_twin_object(&mut objects, &mut ds, 0x20),
@@ -5686,7 +8978,7 @@ mod heap_tests {
     }
 
     /// ★ Review fix 2026-10-04 (`V3_P1P2_TSPACE.md` §8): the S1-43 bound REFUSES only when strict
-    /// (`KF3_INCA_REFUSE=1` / `KF3_TSPACE=1`); on the default path the same birth is COUNTED and
+    /// (hardwired ON 2026-10-10; was `KF3_INCA_REFUSE=1` / `KF3_TSPACE=1`); the count-only arm COUNTS and
     /// proceeds as before inc A; a birth inside the heap is neither.
     #[test]
     fn the_heap_bound_refuses_only_when_strict() {
@@ -5727,16 +9019,15 @@ mod heap_tests {
 mod store_bound_tests {
     use super::{store_read_bound, view_span};
 
-    /// ★ Review fix 2026-10-04 (HIGH): a T-mode twin records NO store window (`fb_len` 0), yet
-    /// its Translated channel's GPFIFO and pushbuffer are read through vidmem rows — the CPU view
-    /// bound is the carve-out base in T-mode (a heap offset reads; the carve-out does not), and the
-    /// mirror's `fb_len` (the store's length) on the default path, as before.
+    /// ★ Review fix 2026-10-04 (HIGH): a twin records NO store window, yet its Translated
+    /// channel's GPFIFO and pushbuffer are read through vidmem rows — the CPU view bound is the
+    /// carve-out base (a heap offset reads; the carve-out does not).
     #[test]
     fn a_tmode_twin_reads_vidmem_rows_through_the_store_bound() {
         let l = kf_chip::bar0::fb_layout(12 << 30).expect("layout");
         let carve = l.carve();
-        let twin_fb_len = 0; // what a T-mode twin records: no window
-        let bound = store_read_bound(true, twin_fb_len, carve);
+        let twin_fb_len = 0; // what a twin holds: no window
+        let bound = store_read_bound(carve);
         assert_eq!(view_span(bound, 0x10_0040), Ok((0x10_0000, 0x1_0000)));
         assert_eq!(
             view_span(bound, carve - 4).map(|(o, n)| o + n),
@@ -5750,9 +9041,6 @@ mod store_bound_tests {
         assert!(view_span(bound, l.bar1_pde_base).is_err());
         // ⊘ The defect: the window length as the bound refuses every vidmem read.
         assert!(view_span(twin_fb_len, 0x10_0040).is_err());
-        // The default path: the mirror's fb_len (the store's length), unchanged.
-        assert_eq!(store_read_bound(false, l.fb_length, carve), l.fb_length);
-        assert!(view_span(l.fb_length, carve).is_ok());
     }
 }
 
@@ -5792,5 +9080,406 @@ mod rows_tests {
         );
         assert_eq!(resolve_rows(&rows, 0x4800, 0x1000), Err(0x5000));
         assert_eq!(resolve_rows(&rows, 0x800, 0x10), Err(0x800));
+    }
+}
+
+#[cfg(test)]
+mod sw_scan_tests {
+    use super::{SwMethod, scan_sw_methods};
+
+    /// ★ run73 diagnostic: the segments peeked in run72 (`[measured, run72 at 8de8ef26]`) carry no
+    /// software-subchannel method — the 3D report-semaphore pair on subchannel 0 and the CE
+    /// semaphore + LAUNCH_DMA on subchannel 4 are engine methods.
+    #[test]
+    fn run72_first_segments_have_no_software_method() {
+        let gr = [
+            0x2004_06c0,
+            1,
+            0x2024_4000,
+            1,
+            0x1000_0004,
+            0x2004_06c0,
+            1,
+            0x2024_4010,
+            1,
+            4,
+        ];
+        let s = scan_sw_methods(&gr);
+        assert!(s.hits.is_empty());
+        assert_eq!(s.per_subch[0], 2);
+        assert_eq!(s.undecodable_at, None);
+        let ce = [
+            0x2003_8090,
+            1,
+            0x2035_3000,
+            1,
+            0x2001_80c0,
+            8,
+            0x2003_8090,
+            1,
+            0x2035_3010,
+            1,
+            0x2001_80c0,
+            0x10,
+        ];
+        let s = scan_sw_methods(&ce);
+        assert!(s.hits.is_empty());
+        assert_eq!(s.per_subch[4], 4);
+    }
+
+    /// A method on subchannel 5 (the deferred-API trigger shape Windows' kernel channels use,
+    /// `[measured, run72 at 8de8ef26, 2026-10-08]` "subch 5 value 0x1 method 0x200") and a SetObject on subchannel 6 are
+    /// software methods; a Host-only method on subchannel 7 (NOP, `0x8`) is not.
+    #[test]
+    fn software_subchannel_methods_are_found_and_host_methods_are_not() {
+        // INC subch 5 method 0x200 count 1, data 0x40000002; IMMD subch 6 SET_OBJECT data 0x123;
+        // INC subch 7 method 0x8 (NOP, Host-only) count 1.
+        let words = [
+            0x2001_a080,
+            0x4000_0002,
+            0x8000_0000 | (0x123 << 16) | (6 << 13),
+            0x2001_e002,
+            0,
+        ];
+        let s = scan_sw_methods(&words);
+        assert_eq!(
+            s.hits,
+            vec![
+                SwMethod {
+                    word: 0,
+                    subch: 5,
+                    method: 0x200,
+                    data: Some(0x4000_0002)
+                },
+                SwMethod {
+                    word: 2,
+                    subch: 6,
+                    method: 0,
+                    data: Some(0x123)
+                },
+            ]
+        );
+        assert_eq!(s.per_subch[7], 1);
+    }
+
+    /// ⚠ The after-run76 fence finder: the kernel-inserted epilogue of a Windows per-process GR
+    /// segment (`[measured, run76 at f649d2c3]` token 0x15: a one-word release of the fence value,
+    /// then a four-word timestamp report) yields the ONE-WORD release; a copy-engine semaphore yields
+    /// its own; the last one in the segment wins.
+    #[test]
+    fn the_fence_finder_takes_the_last_one_word_release() {
+        use super::last_fence_release;
+        let gr = [
+            0x2004_06c0,
+            0x0000_0001,
+            0x200e_7000,
+            0x0000_000c,
+            0x1000_0004,
+            0x2004_06c0,
+            0x0000_0001,
+            0x200e_7020,
+            0x0000_0000,
+            0x0000_0004,
+        ];
+        assert_eq!(last_fence_release(&gr), Some(("3d", 0x1_200e_7000, 0xc)));
+        let ce = [
+            0x2003_8090,
+            0x0000_0001,
+            0x200e_b000,
+            0x0000_0009,
+            0x2001_80c0,
+            0x0000_0008,
+        ];
+        assert_eq!(last_fence_release(&ce), Some(("ce", 0x1_200e_b000, 9)));
+        // An acquire (OPERATION = 1) is not a release.
+        assert_eq!(
+            last_fence_release(&[0x2004_06c0, 1, 0x1000, 5, 0x1000_0001]),
+            None
+        );
+        // Truncated: the header promises more words than were read — nothing, never a read past.
+        assert_eq!(last_fence_release(&[0x2004_06c0, 1, 0x1000]), None);
+        assert_eq!(last_fence_release(&[]), None);
+    }
+
+    /// Hostile input: a count that runs past the words read never reads past them, and an
+    /// undefined header stops the scan by name.
+    #[test]
+    fn scan_is_bounded_and_stops_at_an_undefined_header() {
+        let s = scan_sw_methods(&[0x3fff_a080]); // INC subch 5, count 0x1fff, no data words
+        assert_eq!(s.hits.len(), 1);
+        assert_eq!(s.hits[0].data, None);
+        let s = scan_sw_methods(&[0xc000_0000, 0x2001_a080, 1]); // RESERVED6 first
+        assert_eq!(s.undecodable_at, Some(0));
+        assert!(s.hits.is_empty());
+    }
+
+    #[test]
+    fn diagnostic_finds_fifo_trigger_inside_an_incrementing_packet() {
+        let s = scan_sw_methods(&[0x2002_a07f, 7, 0x4000_002d]); // 0x1fc, then 0x200
+        assert!(s.hits.iter().any(|h| h.method == 0x200 && h.data == Some(0x4000_002d)));
+    }
+
+    #[test]
+    fn diagnostic_keeps_each_nonincrementing_api_datum() {
+        let s = scan_sw_methods(&[0x6002_a080, 0x4000_002c, 0x4000_002d]);
+        assert_eq!(s.hits.iter().filter(|h| h.method == 0x200).map(|h| h.data).collect::<Vec<_>>(),
+                   [Some(0x4000_002c), Some(0x4000_002d)]);
+    }
+
+    #[test]
+    fn diagnostic_keeps_increment_once_trigger_data() {
+        let s = scan_sw_methods(&[0xa003_a07f, 7, 0x4000_002c, 0x4000_002d]);
+        assert_eq!(s.hits.iter().filter(|h| h.method == 0x200).map(|h| h.data).collect::<Vec<_>>(),
+                   [Some(0x4000_002c), Some(0x4000_002d)]);
+    }
+}
+
+#[cfg(test)]
+mod twin_defapi_tests {
+    use super::{TwinDefapiPlan, twin_defapi_plan};
+
+    /// ⚠ EXPERIMENT `KF3_WIN_TWIN_DEFAPI_OBJECT`: off by default (the switch is read from the
+    /// environment, unset in production launchers), and even on it authors a host object only for a
+    /// Windows user-work twin.
+    #[test]
+    fn a_host_deferred_api_object_needs_the_switch_and_a_user_work_twin() {
+        assert_eq!(twin_defapi_plan(false, false), TwinDefapiPlan::NoHostObject);
+        assert_eq!(twin_defapi_plan(false, true), TwinDefapiPlan::NoHostObject);
+        assert_eq!(twin_defapi_plan(true, false), TwinDefapiPlan::NoHostObject);
+        assert_eq!(
+            twin_defapi_plan(true, true),
+            TwinDefapiPlan::AuthorHostObject
+        );
+    }
+}
+
+/// ★ 2026-10-08 (after run84) — the async preempt's ordering and the disable list's resolution, with
+/// fake host completions (no GPU): a model drainer that holds replies until their acts settle,
+/// releases them in order, then posts queued preempt completions through [`preempt_posts_ready`] —
+/// the same pass order as `Device::drainer_loop` (`release_settled`, then `deliver_preempt_complete`).
+#[cfg(test)]
+mod preempt_order_tests {
+    use super::{DisableList, preempt_posts_ready, resolve_disable_list};
+
+    /// One control on the model GSP: its reply waits for its act (`settled`).
+    struct Held {
+        name: &'static str,
+        settled: bool,
+    }
+
+    #[derive(Default)]
+    struct Drainer {
+        held: Vec<Held>,
+        /// Completions the act thread queued (as `ChanPlane::preempt_done`).
+        done: Vec<&'static str>,
+        /// What the guest's message queue receives, in order.
+        wire: Vec<String>,
+    }
+
+    impl Drainer {
+        fn request(&mut self, name: &'static str) {
+            self.held.push(Held {
+                name,
+                settled: false,
+            });
+        }
+        /// The act ran on the host: the completion is queued BEFORE the act's reply settles (the
+        /// window run84 hit).
+        fn act_queues(&mut self, ev: &'static str) {
+            self.done.push(ev);
+        }
+        fn act_settles(&mut self, name: &'static str) {
+            for h in &mut self.held {
+                if h.name == name {
+                    h.settled = true;
+                }
+            }
+        }
+        /// One drainer pass: release settled replies in order (a held one blocks those behind it),
+        /// then post completions only when the gate allows.
+        fn pass(&mut self) {
+            while self.held.first().is_some_and(|h| h.settled) {
+                let h = self.held.remove(0);
+                self.wire.push(format!("reply {}", h.name));
+            }
+            if preempt_posts_ready(self.held.len()) {
+                for ev in self.done.drain(..) {
+                    self.wire.push(format!("event {ev}"));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_event_follows_its_reply_even_when_the_act_queues_it_first() {
+        let mut d = Drainer::default();
+        d.request("disable A");
+        d.act_queues("A");
+        d.pass(); // run84's window: the act queued, its reply not settled yet
+        assert!(
+            d.wire.is_empty(),
+            "nothing may reach the guest before the reply"
+        );
+        d.act_settles("disable A");
+        d.pass();
+        assert_eq!(d.wire, ["reply disable A", "event A"]);
+    }
+
+    #[test]
+    fn an_enable_sent_before_the_disable_completed_never_puts_the_event_before_the_disable_reply() {
+        let mut d = Drainer::default();
+        d.request("disable A");
+        d.request("enable A");
+        d.act_queues("A");
+        d.pass();
+        d.act_settles("enable A"); // out of order: still blocked behind the disable's reply
+        d.pass();
+        assert!(d.wire.is_empty());
+        d.act_settles("disable A");
+        d.pass();
+        let pos = |s: &str| d.wire.iter().position(|w| w == s).unwrap();
+        assert!(pos("reply disable A") < pos("event A"));
+        assert!(pos("reply disable A") < pos("reply enable A"));
+        assert_eq!(d.wire.len(), 3);
+    }
+
+    #[test]
+    fn two_preempts_each_post_after_their_replies_in_order() {
+        let mut d = Drainer::default();
+        d.request("disable A");
+        d.act_queues("A");
+        d.act_settles("disable A");
+        d.pass();
+        d.request("disable B");
+        d.act_queues("B");
+        d.pass();
+        d.act_settles("disable B");
+        d.pass();
+        assert_eq!(
+            d.wire,
+            ["reply disable A", "event A", "reply disable B", "event B"]
+        );
+    }
+
+    #[test]
+    fn no_completion_without_a_host_act() {
+        let mut d = Drainer::default();
+        d.request("disable A");
+        d.act_settles("disable A"); // the act failed: nothing queued
+        d.pass();
+        assert_eq!(d.wire, ["reply disable A"]);
+        assert!(preempt_posts_ready(0));
+        assert!(!preempt_posts_ready(1));
+    }
+
+    /// This VM's plane: client 0x31 has twin 0x40 under group 0xe0 (token 0x13) and client 0x32 a
+    /// Translated ring 0x41 (host 0x80c). Nothing else exists here.
+    fn resolve(list: &[(u32, u32)]) -> DisableList<u32> {
+        let twins = [((0x31u32, 0x40u32), Some(0xe0u32), 0x13u32)];
+        resolve_disable_list(
+            list,
+            |c, h| twins.iter().find(|t| t.0 == (c, h)).map(|t| t.2),
+            |c, h| {
+                twins
+                    .iter()
+                    .filter(|t| t.0.0 == c && t.1 == Some(h))
+                    .map(|t| (t.0, t.2))
+                    .collect()
+            },
+            |c, h| ((c, h) == (0x32, 0x41)).then_some(0x80c),
+        )
+    }
+
+    #[test]
+    fn a_group_handle_resolves_to_its_twins_and_an_unknown_one_is_named() {
+        let r = resolve(&[(0x31, 0xe0)]);
+        assert_eq!(r.pt, [((0x31, 0x40), 0x13)]);
+        assert!(r.tr.is_empty() && r.unknown.is_empty());
+        // ENABLE of a group this plane never saw (freed, or never born): unknown, refused whole.
+        let r = resolve(&[(0x31, 0xe0), (0x31, 0xe1)]);
+        assert_eq!(r.unknown, [(0x31, 0xe1)]);
+        assert_eq!(r.pt.len(), 1);
+    }
+
+    #[test]
+    fn another_vms_handles_never_resolve_here() {
+        // Another VM's guest RM hands out the same handle shapes; this plane's maps hold only its own
+        // twins, so a foreign (client, group) pair is unknown — never a twin of this VM.
+        let r = resolve(&[(0x33, 0xe0)]);
+        assert!(r.pt.is_empty() && r.tr.is_empty());
+        assert_eq!(r.unknown, [(0x33, 0xe0)]);
+        // The same group handle under a different client is not this client's group.
+        let r = resolve(&[(0x32, 0xe0)]);
+        assert_eq!(r.unknown, [(0x32, 0xe0)]);
+        // A Translated ring resolves by its own handle only.
+        let r = resolve(&[(0x32, 0x41)]);
+        assert_eq!(r.tr, [((0x32, 0x41), 0x80c)]);
+    }
+}
+
+#[cfg(test)]
+mod snap_tests {
+    use super::{SNAP_METHODS, snap_decode};
+    use kf_abi::submit::{method_header_inc, method_header_non_inc};
+
+    #[test]
+    fn the_stall_snapshot_decodes_host_semaphores_and_is_bounded() {
+        // SEM_ADDR_LO/HI, PAYLOAD_LO/HI, EXECUTE(ACQ_CIRC_GEQ, 64-bit) on subchannel 3 (host methods
+        // apply on every subchannel), then a 32-bit RELEASE of the same address
+        let mut w = vec![
+            method_header_inc(3, 0x5c, 5).unwrap(),
+            0x1234_5678,
+            0x12,
+            7,
+            1,
+            3 | (1 << 24),
+        ];
+        w.extend([method_header_non_inc(0, 0x64, 1).unwrap(), 9]);
+        w.extend([method_header_inc(0, 0x6c, 1).unwrap(), 1]);
+        let d = snap_decode(&w, SNAP_METHODS);
+        assert_eq!(d.sems.len(), 2);
+        assert_eq!(
+            (
+                d.sems[0].op,
+                d.sems[0].va,
+                d.sems[0].payload,
+                d.sems[0].wide
+            ),
+            ("ACQ_CIRC_GEQ", 0x12_1234_5678, (1 << 32) | 7, true)
+        );
+        assert_eq!(
+            (
+                d.sems[1].op,
+                d.sems[1].va,
+                d.sems[1].payload,
+                d.sems[1].wide
+            ),
+            ("RELEASE", 0x12_1234_5678, 9, false)
+        );
+        assert_eq!(d.methods.len(), 7);
+        assert_eq!(d.methods[0], (3, 0x5c, 0x1234_5678));
+        assert!(d.stopped_at.is_none());
+        // bounded: never more than `max` methods listed, whatever the segment holds
+        let many: Vec<u32> = std::iter::once(method_header_non_inc(0, 0x100, 4000).unwrap())
+            .chain(std::iter::repeat_n(0, 4000))
+            .collect();
+        assert_eq!(snap_decode(&many, 5).methods.len(), 5);
+    }
+
+    /// ★ Review 4 item 1 — a missing row hands the ctx range over, it is not "nothing there".
+    #[test]
+    fn a_missing_steer_row_still_hands_the_ctx_range_over() {
+        assert_eq!(
+            crate::chan::steer_len(Some(0x20_0000), 0x1_0000),
+            0x20_0000,
+            "the whole row when one was removed"
+        );
+        assert_eq!(
+            crate::chan::steer_len(None, 0x1_0000),
+            0x1_0000,
+            "the ctx range when the row is gone"
+        );
+        assert_eq!(crate::chan::steer_len(Some(0x1000), 0x1_0000), 0x1_0000,
+            "a short row never truncates the required context span");
     }
 }

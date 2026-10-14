@@ -1,0 +1,28 @@
+HYPOTHESIS native USER default-zero and explicit-id1 allocations have equal initial ACTIVE/SET STORE USE behavior for the identical bounded mask fixture.
+FALSIFIER default-zero faults or has missing initial marker/excluded reference99/wrong copy or ordering while id1 control passes. This measures host595.91.07 USER only, never guest580.88 privileged GSP equivalence.
+ONE_VARIABLE native allocation subDeviceId0 vs explicit1; same fixture, caller uid65534, ring, USER privilege and physical-CE prohibition.
+MODE_START storage-subdevice-default-phased 2026-10-12T22:11:40+02:00
+USER_STORAGE_IDENTITY uid=65534
+kf-host: host tier: stock
+USER_STORAGE_PHASES prepare_us=50 clear_steps=256 max_clear_us=5 map_us=60
+kf-host: channel birth h=0xcafe000a engine=0x9 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=not-held
+USER_STORAGE_SETUP source_bytes=272 subdevice=true allocation_mask=Some(0) barrier_level=false sync_wait=true control_barrier=true class=0xc56f driver=595.91.07 entries=512 ring_gpu_read_only=true page_size=4096 userd_gpu_mapped=false
+USER_STORAGE_HELD samples=48 max_get=1 early_reference=false initial_marker_seen=true acquire=0 ce_semaphore=0
+USER_STORAGE_OBSERVATION finished=true reference=1 copy_matches=true ce_semaphore=1 GP_GET=4 GP_PUT=4 elapsed_us=52868
+USER_STORAGE_CLEANUP result=Ok(()) released=true
+USER_RING_BUFFER_CLEANUP view=Ok(()) unmap=Ok(Some(())) memory=Ok(())
+USER_RING_PROBE=PASS
+MODE_EXIT storage-subdevice-default-phased 0
+MODE_START storage-subdevice-phased 2026-10-12T22:11:40+02:00
+USER_STORAGE_IDENTITY uid=65534
+kf-host: host tier: stock
+USER_STORAGE_PHASES prepare_us=51 clear_steps=256 max_clear_us=1 map_us=62
+kf-host: channel birth h=0xcafe000a engine=0x9 reply_flags=0x00000080 PRIVILEGED_CHANNEL=0 privilege=USER cap_sys_admin=not-held
+USER_STORAGE_SETUP source_bytes=272 subdevice=true allocation_mask=Some(1) barrier_level=false sync_wait=true control_barrier=true class=0xc56f driver=595.91.07 entries=512 ring_gpu_read_only=true page_size=4096 userd_gpu_mapped=false
+USER_STORAGE_HELD samples=48 max_get=1 early_reference=false initial_marker_seen=true acquire=0 ce_semaphore=0
+USER_STORAGE_OBSERVATION finished=true reference=1 copy_matches=true ce_semaphore=1 GP_GET=4 GP_PUT=4 elapsed_us=52862
+USER_STORAGE_CLEANUP result=Ok(()) released=true
+USER_RING_BUFFER_CLEANUP view=Ok(()) unmap=Ok(Some(())) memory=Ok(())
+USER_RING_PROBE=PASS
+MODE_EXIT storage-subdevice-phased 0
+NATIVE_ZERO_HARNESS_EXIT=0

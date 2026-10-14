@@ -40,6 +40,14 @@
 //! is a bare `NV_OK` over a zeroed body, and `[inferred]` from that source rather than
 //! measured, because a run that refuses fn 1 never gets far enough to send it.
 //!
+//! ## ★★★ A pair mismatch is answered by DOWN-NEGOTIATION, not refused (2026-10-13)
+//!
+//! A guest whose driver string passes [`GuestSystemInfoPolicy::check_driver_version`] but whose VGX
+//! pair is not this row's (a Windows build of a served tag, whose pair no tree states) is sent
+//! `rpc_result = NV_OK`, `rpc_result_private = NV_VGPU_MSG_RESULT_GUEST_HOST_DRIVER_MISMATCH` and the
+//! row's pair in the body. `Reply::rpc_result_private` carries the split. See
+//! `kf_abi::guestsysinfo` and `docs/design/V3_FN1_NEGOTIATION_ORACLE.md`.
+//!
 //! ## ★★ Both of those are ACCEPTED answers, so: can the guest keep them forever?
 //!
 //! No, and the argument is structural rather than a property of these two replies. The
@@ -53,7 +61,8 @@
 
 use kf_abi::NV_ERR_NOT_SUPPORTED;
 use kf_abi::guestsysinfo::{
-    self, GuestSystemInfoError, VgxVersion, encode_set_guest_system_info_reply,
+    self, GuestSystemInfoError, NV_VGPU_MSG_RESULT_GUEST_HOST_DRIVER_MISMATCH, VgxVersion,
+    encode_set_guest_system_info_negotiation_reply, encode_set_guest_system_info_reply,
 };
 use kf_abi::versions::DriverAbiTable;
 use kf_gsp::{CommandPolicy, Reply, RpcCommand, RpcFunction};
@@ -159,6 +168,7 @@ impl core::fmt::Display for VersionCheck {
 /// A reply that carries no body and a non-zero envelope result — the short-circuit.
 fn refuse() -> Option<Reply> {
     Some(Reply {
+        rpc_result_private: None,
         rpc_result: NV_ERR_NOT_SUPPORTED,
         body: Vec::new(),
     })
@@ -184,13 +194,38 @@ impl CommandPolicy for GuestSystemInfoPolicy {
                 }
                 match self.agreed_version(&cmd.payload) {
                     Ok(ours) => Some(Reply {
+                        rpc_result_private: None,
                         rpc_result: NV_OK,
                         body: encode_set_guest_system_info_reply(ours),
                     }),
+                    // ★ 2026-10-13: the protocol's own answer to a pair we do not speak — OK in the
+                    // envelope (a non-zero `rpc_result` ends the handshake before the guest reads
+                    // anything), a private status, and OUR pair in the body. The guest follows it once
+                    // or fails by name; it never lands on its own pair.
+                    Err(GuestSystemInfoError::VersionMismatch { guest, ours }) => {
+                        eprintln!(
+                            "kf-rm: SET_GUEST_SYSTEM_INFO: the guest speaks vGPU RPC {:#x}.{:#x}, driver {} \
+                             speaks {:#x}.{:#x}: answering with the host's pair (down-negotiation)",
+                            guest.major,
+                            guest.minor,
+                            self.driver.driver_version(),
+                            ours.major,
+                            ours.minor
+                        );
+                        match encode_set_guest_system_info_negotiation_reply(ours, &cmd.payload) {
+                            Ok(body) => Some(Reply {
+                                rpc_result_private: Some(
+                                    NV_VGPU_MSG_RESULT_GUEST_HOST_DRIVER_MISMATCH,
+                                ),
+                                rpc_result: NV_OK,
+                                body,
+                            }),
+                            Err(_) => refuse(),
+                        }
+                    }
                     Err(e) => {
                         eprintln!(
-                            "kf-rm: SET_GUEST_SYSTEM_INFO refused: the vGPU handshake does not \
-                             agree for driver {} ({e})",
+                            "kf-rm: SET_GUEST_SYSTEM_INFO refused: the vGPU handshake does not agree for driver {} ({e})",
                             self.driver.driver_version()
                         );
                         refuse()
@@ -201,6 +236,7 @@ impl CommandPolicy for GuestSystemInfoPolicy {
             // request's three 256-byte `[IN]` strings are NOT reflected — `Reply` with an
             // empty body zero-fills to the request's own length.
             RpcFunction::SetGuestSystemInfoExt => Some(Reply {
+                rpc_result_private: None,
                 rpc_result: NV_OK,
                 body: Vec::new(),
             }),

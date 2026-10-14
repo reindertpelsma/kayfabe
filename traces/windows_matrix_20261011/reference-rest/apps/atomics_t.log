@@ -1,0 +1,6 @@
+=== atomics_t start=2026-10-11T09:27:08.0463658-07:00 host=DESKTOP-JR70RMQ session=0 boot=2026-10-11T14:31:59.5000000Z timeout=120
+KFDEV NVIDIA GeForce RTX 4090
+[eq] device NVIDIA GeForce RTX 4090 torch 2.8.0+cu126
+CHECK atomic_add_collisions_exact ok
+WINEQ_DONE atomics
+=== end rc=0 secs=6 2026-10-11T09:27:14.3900555-07:00

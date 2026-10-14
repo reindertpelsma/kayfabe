@@ -1,0 +1,7 @@
+     Running unittests src/lib.rs (target/debug/deps/kf_qemu-15335dd2dbdd475d)
+test chan::userquota::tests::token_free_retains_native_quota_until_confirmed_cleanup ... FAILED
+---- chan::userquota::tests::token_free_retains_native_quota_until_confirmed_cleanup stdout ----
+thread 'chan::userquota::tests::token_free_retains_native_quota_until_confirmed_cleanup' (635658) panicked at crates/kf-qemu/src/userquota.rs:116:9:
+assertion failed: NativeQuota::reserve(caps.clone(), plane, 1).is_err()
+    chan::userquota::tests::token_free_retains_native_quota_until_confirmed_cleanup
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 198 filtered out; finished in 0.00s

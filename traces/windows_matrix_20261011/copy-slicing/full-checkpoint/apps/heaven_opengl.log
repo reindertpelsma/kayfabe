@@ -1,0 +1,3 @@
+=== heaven_opengl start=2026-10-11T15:02:18.3645414+00:00 host=VASTWIN session=1 boot=2026-10-11T14:59:42.5000000Z timeout=150
+KFSURVIVE heaven_opengl EXITED_EARLY rc=-1073740791 after=29 s
+=== end rc=-1073740791 secs=44 2026-10-11T15:03:01.9296158+00:00

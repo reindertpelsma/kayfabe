@@ -1,0 +1,130 @@
+{
+  "source": "d8afb1e3ca9440580c227ee218ce0d1b3d06a7ef",
+  "log_sha256": "1f93d36333126cb4319c13c9a40be7020dbd531a5141eab9e22437924062beed",
+  "coverage": "Mutable partial samples, unknown history stops later PB reads; NOT execution or full corpus",
+  "classes": {
+    "UnknownSuffix": 30
+  },
+  "records": [
+    {
+      "observation": "kf3: USER_RING_SHADOW (c1d00030, ff04000f) idx=17 native=Some((cafe00d3, 38)) source_generation=1 native_issued=16 class=UnknownSuffix category=b GP=0x007d9e00148a003c cursor=16 source_epoch=471 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "observation": "kf3: USER_RING_SHADOW (c1d00032, ff040011) idx=19 native=Some((cafe0109, 3a)) source_generation=1 native_issued=16 class=UnknownSuffix category=b GP=0x007d9e001514103c cursor=16 source_epoch=707 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "observation": "kf3: USER_RING_SHADOW (c1d00037, ff040012) idx=20 native=Some((cafe0119, 3b)) source_generation=1 native_issued=26 class=UnknownSuffix category=b GP=0x00ae9a000401c4a8 cursor=26 source_epoch=217 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "observation": "kf3: USER_RING_SHADOW (c1d0003f, ff040016) idx=24 native=Some((cafe01ea, 3f)) source_generation=1 native_issued=16 class=UnknownSuffix category=b GP=0x007d9e000401403c cursor=16 source_epoch=225 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "observation": "kf3: USER_RING_SHADOW (c1d0003e, ff040015) idx=23 native=Some((cafe01e6, 3e)) source_generation=1 native_issued=26 class=UnknownSuffix category=b GP=0x00ae9a000401c4a8 cursor=26 source_epoch=189 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "observation": "kf3: USER_RING_SHADOW (c1d00046, ff040019) idx=27 native=Some((cafe0262, 42)) source_generation=1 native_issued=16 class=UnknownSuffix category=b GP=0x007d9e000401403c cursor=16 source_epoch=215 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "observation": "kf3: USER_RING_SHADOW (c1d00047, ff04001a) idx=28 native=Some((cafe027a, 43)) source_generation=1 native_issued=16 class=UnknownSuffix category=b GP=0x007d9e000401403c cursor=16 source_epoch=225 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "observation": "kf3: USER_RING_SHADOW (c1d0004a, ff04001d) idx=31 native=Some((cafe0344, 46)) source_generation=1 native_issued=16 class=UnknownSuffix category=b GP=0x007d9e00149dd03c cursor=16 source_epoch=699 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "observation": "kf3: USER_RING_SHADOW (c1d0004c, ff04001f) idx=33 native=Some((cafe035f, 48)) source_generation=1 native_issued=16 class=UnknownSuffix category=b GP=0x007d9e0015b8003c cursor=16 source_epoch=1331 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "observation": "kf3: USER_RING_SHADOW (c1d0004d, ff040020) idx=4130 native=Some((cafe037f, 20049)) source_generation=1 native_issued=32 class=UnknownSuffix category=b GP=0x0000300120350110 cursor=32 source_epoch=1465 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "observation": "kf3: USER_RING_SHADOW (c1d00027, ff04000c) idx=14 native=Some((cafe008d, 35)) source_generation=1 native_issued=282 class=UnknownSuffix category=b GP=0x0000280120105de0 cursor=282 source_epoch=3915 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "observation": "kf3: USER_RING_SHADOW (c1d00039, ff040014) idx=4118 native=Some((cafe0148, 2003d)) source_generation=1 native_issued=184 class=UnknownSuffix category=b GP=0x0000ae001453b058 cursor=184 source_epoch=871 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "observation": "kf3: USER_RING_SHADOW (c1d00064, ff040012) idx=20 native=Some((cafe0558, 3b)) source_generation=1 native_issued=16 class=UnknownSuffix category=b GP=0x007d9e000401403c cursor=16 source_epoch=187 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "observation": "kf3: USER_RING_SHADOW (c1d0002a, ff04000d) idx=15 native=Some((cafe00aa, 36)) source_generation=1 native_issued=49 class=UnknownSuffix category=b GP=0x00005a00144d5000 cursor=49 source_epoch=1229 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "observation": "kf3: USER_RING_SHADOW (c1d0002b, ff04000e) idx=4112 native=Some((cafe00b5, 20037)) source_generation=1 native_issued=29 class=UnknownSuffix category=b GP=0x00005a001a1fb000 cursor=29 source_epoch=1501 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "observation": "kf3: USER_RING_SHADOW (c1d00038, ff040013) idx=4117 native=Some((cafe0125, 2003c)) source_generation=1 native_issued=1015 class=UnknownSuffix category=b GP=0x00005a0017904000 cursor=1015 source_epoch=1625 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "observation": "kf3: USER_RING_SHADOW (c1d00078, ff040022) idx=2084 native=Some((cafe0666, 1004b)) source_generation=1 native_issued=3 class=UnknownSuffix category=b GP=0x0000060120013000 cursor=3 source_epoch=211 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "observation": "kf3: USER_RING_SHADOW (c1d0007b, ff0e0102) idx=40 native=Some((cafe06a4, 4f)) source_generation=1 native_issued=30 class=UnknownSuffix category=b GP=0x00002801202570d0 cursor=30 source_epoch=1043 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "observation": "kf3: USER_RING_SHADOW (c1d0007b, ff040025) idx=39 native=Some((cafe069a, 4e)) source_generation=1 native_issued=98 class=UnknownSuffix category=b GP=0x80000600069015fc cursor=98 source_epoch=1277 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "observation": "kf3: USER_RING_SHADOW (c1d000c3, ff04000f) idx=17 native=Some((cafe088e, 38)) source_generation=1 native_issued=93 class=UnknownSuffix category=b GP=0x0000420017680340 cursor=93 source_epoch=1083 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "observation": "kf3: USER_RING_SHADOW (c1d000c6, ff04000d) idx=15 native=Some((cafe08c5, 36)) source_generation=1 native_issued=26 class=UnknownSuffix category=b GP=0x00ae9a0017fe44a8 cursor=26 source_epoch=1203 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "observation": "kf3: USER_RING_SHADOW (c1d000c7, ff04000e) idx=4112 native=Some((cafe08de, 20037)) source_generation=1 native_issued=29 class=UnknownSuffix category=b GP=0x00005a0017d63000 cursor=29 source_epoch=1339 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "observation": "kf3: USER_RING_SHADOW (c1d000c8, ff040011) idx=19 native=Some((cafe08ee, 3a)) source_generation=1 native_issued=53 class=UnknownSuffix category=b GP=0x00116600144d50f0 cursor=53 source_epoch=825 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "observation": "kf3: USER_RING_SHADOW (c1d000cb, ff040012) idx=20 native=Some((cafe0987, 3b)) source_generation=1 native_issued=16 class=UnknownSuffix category=b GP=0x007d9e000401403c cursor=16 source_epoch=407 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "observation": "kf3: USER_RING_SHADOW (c1d000ce, ff040015) idx=23 native=Some((cafe09f6, 3e)) source_generation=1 native_issued=28 class=UnknownSuffix category=b GP=0x00016200145f5380 cursor=28 source_epoch=939 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "observation": "kf3: USER_RING_SHADOW (c1d000d3, ff040017) idx=25 native=Some((cafe0aa7, 40)) source_generation=1 native_issued=26 class=UnknownSuffix category=b GP=0x00ae9a001449d4a8 cursor=26 source_epoch=2809 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "observation": "kf3: USER_RING_SHADOW (c1d001a4, ff040019) idx=27 native=Some((cafe0c1a, 42)) source_generation=1 native_issued=56 class=UnknownSuffix category=b GP=0x0001a20016d01380 cursor=56 source_epoch=377 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "observation": "kf3: USER_RING_SHADOW (c1d000c4, ff040010) idx=4114 native=Some((cafe0899, 20039)) source_generation=1 native_issued=150 class=UnknownSuffix category=b GP=0x00024a0015bc6058 cursor=150 source_epoch=2413 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "observation": "kf3: USER_RING_SHADOW (c1d001db, ff04001b) idx=29 native=Some((cafe0d35, 44)) source_generation=1 native_issued=16 class=UnknownSuffix category=b GP=0x007d9e000401403c cursor=16 source_epoch=225 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    },
+    {
+      "observation": "kf3: USER_RING_SHADOW (c1d000d4, ff040018) idx=4122 native=Some((cafe0abe, 20041)) source_generation=1 native_issued=1899 class=UnknownSuffix category=b GP=0x00005a001a038000 cursor=1899 source_epoch=5571 history/address interpretation unknown; no further CPU PB reads; sample_first128=[]; mutable observation NOT execution",
+      "partial_sample_only": true
+    }
+  ]
+}

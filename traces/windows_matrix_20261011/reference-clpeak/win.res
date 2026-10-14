@@ -1,0 +1,1 @@
+APPRES side=win app=clpeak_cuda verdict=PASS rc=0 secs=906 quiet=2 note=warn:Failed to read file: C:\WINDOWS\TEMP\dep-7fc74d.d boot=g1 guest_tdr=0 wer=0 gsp_cycles=- proof=out,pdh:3d+copy tier=1 cat=opencl

@@ -1,0 +1,20 @@
+      1 kf3: walk report carried refusals=196 refuse_mask=0x400 pdbs=[ecd8d000] runs=7
+      1 kf3: mem t=1510.433s REFUSED VasKey(13965663367877101648) root 0xecd8d000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+      1 kf3: walk report carried refusals=196 refuse_mask=0x400 pdbs=[ecd8d000] runs=1
+      1 kf3: mem t=1510.433s REFUSED VasKey(13965663367877101648) root 0xecd8d000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+      1 kf3: walk report carried refusals=196 refuse_mask=0x400 pdbs=[ecd8d000] runs=1
+      1 kf3: mem t=1510.434s REFUSED VasKey(13965663367877101648) root 0xecd8d000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+      1 kf3: walk report carried refusals=196 refuse_mask=0x400 pdbs=[ecd8d000] runs=1
+      1 kf3: mem t=1510.434s REFUSED VasKey(13965663367877101648) root 0xecd8d000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+      1 kf3: walk report carried refusals=196 refuse_mask=0x400 pdbs=[ecd8d000] runs=1
+      1 kf3: mem t=1510.435s REFUSED VasKey(13965663367877101648) root 0xecd8d000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+      1 kf3: walk report carried refusals=196 refuse_mask=0x400 pdbs=[ecd8d000] runs=0
+      1 kf3: mem t=1510.435s REFUSED VasKey(13965663367877101648) root 0xecd8d000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+      1 kf3: walk report carried refusals=332 refuse_mask=0x400 pdbs=[ece0b000] runs=7
+      1 kf3: mem t=1913.113s REFUSED VasKey(13965663170308606032) root 0xece0b000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+      1 kf3: walk report carried refusals=332 refuse_mask=0x400 pdbs=[ece0b000] runs=1
+      1 kf3: mem t=1913.113s REFUSED VasKey(13965663170308606032) root 0xece0b000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+      1 kf3: walk report carried refusals=332 refuse_mask=0x400 pdbs=[ece0b000] runs=1
+      1 kf3: mem t=1913.113s REFUSED VasKey(13965663170308606032) root 0xece0b000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+      1 kf3: walk report carried refusals=332 refuse_mask=0x400 pdbs=[ece0b000] runs=1
+      1 kf3: mem t=1913.113s REFUSED VasKey(13965663170308606032) root 0xece0b000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped

@@ -1,0 +1,21 @@
+HOST_XID before=33 after=34
+[175111.403178] NVRM: Xid (PCI:0000:01:00): 32, pid=240656, name=qemu-system-x86, channel 0x0000004e intr 00800000
+[175883.283604] NVRM: Xid (PCI:0000:01:00): 109, pid=255534, name=qemu-system-x86, channel 0x0000004a, errorString CTX SWITCH TIMEOUT, Info 0x9c02e
+[177492.144375] NVRM: Xid (PCI:0000:01:00): 32, pid=287987, name=kf-deferred-upd, channel 0x00000004 intr 00800000
+[177858.110141] NVRM: Xid (PCI:0000:01:00): 32, pid=296888, name=kf-deferred-upd, channel 0x00000004 intr 00800000
+[178226.990667] NVRM: Xid (PCI:0000:01:00): 32, pid=302124, name=qemu-system-x86, channel 0x0000004e intr 00800000
+[179080.039787] NVRM: Xid (PCI:0000:01:00): 32, pid=317690, name=qemu-system-x86, channel 0x0000004e intr 00800000
+[180619.227136] NVRM: Xid (PCI:0000:01:00): 31, pid=358359, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+[180622.262516] NVRM: Xid (PCI:0000:01:00): 31, pid=358359, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+[180625.266793] NVRM: Xid (PCI:0000:01:00): 31, pid=358359, name=qemu-system-x86, channel 0x0000001b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+[180628.302292] NVRM: Xid (PCI:0000:01:00): 31, pid=358359, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+[180668.184967] NVRM: Xid (PCI:0000:01:00): 31, pid=359989, name=qemu-system-x86, channel 0x0000001b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+[182316.561499] NVRM: Xid (PCI:0000:01:00): 32, pid=397810, name=kf-deferred-upd, channel 0x00000004 intr 00800000
+[182318.610941] NVRM: Xid (PCI:0000:01:00): 32, pid=397864, name=kf-deferred-upd, channel 0x00000004 intr 00800000
+[187205.679478] NVRM: Xid (PCI:0000:01:00): 31, pid=494254, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+[187208.714718] NVRM: Xid (PCI:0000:01:00): 31, pid=494254, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+[187211.719654] NVRM: Xid (PCI:0000:01:00): 31, pid=494254, name=qemu-system-x86, channel 0x0000001b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+[187214.753873] NVRM: Xid (PCI:0000:01:00): 31, pid=494254, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+[187253.286649] NVRM: Xid (PCI:0000:01:00): 31, pid=495877, name=qemu-system-x86, channel 0x0000001b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+[188218.181370] NVRM: Xid (PCI:0000:01:00): 32, pid=514751, name=qemu-system-x86, channel 0x0000004e intr 00800000
+[189520.365989] NVRM: Xid (PCI:0000:01:00): 32, pid=538614, name=qemu-system-x86, channel 0x0000004e intr 00800000

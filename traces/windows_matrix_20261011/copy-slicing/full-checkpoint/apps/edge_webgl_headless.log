@@ -1,0 +1,3 @@
+=== edge_webgl_headless start=2026-10-11T14:43:13.8186056+00:00 host=VASTWIN session=1 boot=2026-10-11T14:40:49.5000000Z timeout=150
+KFEDGE {"page":"webgl","ok":true,"api":"webgl2","vendor":"Google Inc. (NVIDIA)","renderer":"ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 (0x00002786) Direct3D11 vs_5_0 ps_5_0, D3D11)","version":"WebGL 2.0 (OpenGL ES 3.0 Chromium)","pixel":[64,127,191,255],"pixel_ok":true,"frames":483,"secs":8,"fps":60.375,"glerr":0,"software":false}
+=== end rc=0 secs=13 2026-10-11T14:43:26.8310105+00:00

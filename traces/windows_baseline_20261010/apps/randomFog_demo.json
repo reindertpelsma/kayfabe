@@ -1,0 +1,61 @@
+{
+ "quiet": 29,
+ "end_utc": "2026-10-10T15:24:26.7538149Z",
+ "start_utc": "2026-10-10T15:23:57.4393489Z",
+ "rc": 0,
+ "secs": 29,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4060 Ti status=OK code=0"
+ ],
+ "digests": [],
+ "session": 1,
+ "out_files": [],
+ "boot_utc_start": "2026-10-10T13:30:47.5000000Z",
+ "log_tail": [
+  "=== randomFog_demo start=2026-10-10T08:23:57.4393489-07:00 host=DESKTOP-397P3NI session=1 boot=2026-10-10T13:30:47.5000000Z timeout=90",
+  "KFSURVIVE randomFog ALIVE_AT 25 s",
+  "=== end rc=0 secs=29 2026-10-10T08:24:26.7538149-07:00"
+ ],
+ "pdh": {
+  "pids": [
+   "10044",
+   "9428",
+   "8896",
+   "8668"
+  ],
+  "nv": {
+   "security": 0,
+   "3d": 23.839299791379247,
+   "vr": 0,
+   "videodecode": 0,
+   "copy": 0,
+   "ofa_0": 0,
+   "legacyoverlay": 0,
+   "videoencode": 0
+  },
+  "samples": 13,
+  "other": {},
+  "nvidia_luids": "0_5ecc"
+ },
+ "timed_out": false,
+ "token": "g1-randomFog_demo-1791645823",
+ "boot_utc_end": "2026-10-10T13:30:47.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 0,
+  "other_nvlddmkm": 0,
+  "lines": [],
+  "live_kernel": 0
+ },
+ "app": "randomFog_demo",
+ "smi": {
+  "samples": 5,
+  "mem_used_base_mb": 134,
+  "util_max": 50,
+  "mem_used_max_mb": 273
+ }
+}

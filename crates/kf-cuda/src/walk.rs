@@ -1366,6 +1366,9 @@ impl WalkKernel {
         if self.capacity_retry(&report, &f)? {
             return Ok(None);
         }
+        // ★ ABI 6: OBSERVATION ONLY — print the kernel's refusal samples (bounded: the first 32
+        // lines of the process). Nothing below depends on them.
+        crate::refusal_samples::log_report_samples(&report);
         Ok(Some(Collected {
             report,
             gpu_us,
@@ -1970,6 +1973,13 @@ impl WalkKernel {
             })?;
         self.store = Some((p, bytes));
         Ok(())
+    }
+
+    /// The format descriptor this kernel was brought up with (read by measurement code that
+    /// decodes guest tables the same way the walk does, e.g. `kf_mem::refusal_dump`).
+    #[must_use]
+    pub fn format(&self) -> &KfFormat {
+        &self.fmt
     }
 
     /// The imported store's length, if one was imported.

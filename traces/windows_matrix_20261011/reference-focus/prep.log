@@ -1,0 +1,2 @@
+KFPREP {"disk_free_gb":136.6,"ram_gb":100.7,"video":["NVIDIA GeForce RTX 4090 | 32.0.15.8088 | OK | code 0"],"smi":"NVIDIA GeForce RTX 4090, 580.88, 24564 MiB, 1, 450.00 W","cpu":"AMD EPYC 7502 32-Core Processor                ","cores":4,"os":"Microsoft Windows 11 Enterprise LTSC Evaluation build 26100","notes":["password set","defender exclusions","defender rt off"]}
+

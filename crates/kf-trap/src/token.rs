@@ -391,6 +391,23 @@ impl TokenWord {
         }
     }
 
+    /// ★ Device reset (`docs/design/V3_DEVICE_RESET.md`): back to the word a fresh device has (0:
+    /// idle, no route, no host token, sequence 0), from any state but `BUSY` — so the next life's
+    /// [`TokenWord::allocate_fresh`] takes it exactly as on a fresh device. Returns `false` while a
+    /// worker still owns it (the caller retries; §5.2's rule that nothing is pulled from under a
+    /// claim holds here too).
+    pub fn reset_fresh(&self) -> bool {
+        let cur = self.0.load(Ordering::Acquire);
+        match Token::decode(cur).state {
+            State::Busy | State::BusyRung => false,
+            _ if cur == 0 => true,
+            _ => self
+                .0
+                .compare_exchange(cur, 0, Ordering::AcqRel, Ordering::Acquire)
+                .is_ok(),
+        }
+    }
+
     /// Free path, first half. §5.2: `IDLE|RUNG → DEAD`, and **waits out `BUSY`**.
     /// Returns `false` while a worker still owns it — the caller must retry, and must NOT drop
     /// the twin until this returns `true`.

@@ -1,0 +1,53 @@
+KFPLANES_CONNECTOR id=126 type=3 status=1 modes=7 encoders=1
+KFPLANES_SETUP card=/dev/dri/card1 connector=126 crtc=60 crtc_index=0 mode=1920x1080@60 clock=148500 frame_us=16667 crtcs=4
+KFPLANES_EDID bytes=128 header_ok=1 checksum_ok=1 ext=0
+KFPLANES_MODE 1920x1080 60 Hz clock 148500 preferred
+KFPLANES_MODE 1680x1050 60 Hz clock 146250
+KFPLANES_MODE 1600x900 60 Hz clock 108000
+KFPLANES_MODE 1280x1024 60 Hz clock 108000
+KFPLANES_MODE 1024x768 60 Hz clock 65000
+KFPLANES_MODE 800x600 60 Hz clock 40000
+KFPLANES_CRTC_PROPS active=22 mode=23 gamma=28(size 1024) degamma=25(size 1024) ctm=27 out_fence=19 vrr=24
+KFPLANES_CONNECTOR_PROP name="HDR_OUTPUT_METADATA" id=0 value=0
+KFPLANES_CONNECTOR_PROP name="Colorspace" id=0 value=0
+KFPLANES_CONNECTOR_PROP name="max bpc" id=0 value=0
+KFPLANES_CONNECTOR_PROP name="content type" id=0 value=0
+KFPLANES_CONNECTOR_PROP name="link-status" id=5 value=0
+KFPLANES_CONNECTOR_PROP name="non-desktop" id=6 value=0
+KFPLANES_CONNECTOR_PROP name="vrr_capable" id=127 value=0
+KFPLANES_PLANE id=49 type=primary possible=0x1 mine=1 formats=13: AR15 XR15 RG16 AR24 XR24 AB30 XB30 AB24 XB24 AB4H YUYV UYVY XB4H props: [FB_ID] [CRTC_ID] [SRC_X] [SRC_Y] [SRC_W] [SRC_H] [CRTC_X] [CRTC_Y] [CRTC_W] [CRTC_H] [rotation] [COLOR_ENCODING] [COLOR_RANGE] [IN_FENCE_FD]
+KFPLANES_PLANE id=54 type=cursor possible=0x1 mine=1 formats=1: AR24 props: [FB_ID] [CRTC_ID] [SRC_X] [SRC_Y] [SRC_W] [SRC_H] [CRTC_X] [CRTC_Y] [CRTC_W] [CRTC_H] [alpha] [pixel blend mode] [COLOR_ENCODING] [COLOR_RANGE] [IN_FENCE_FD]
+KFPLANES_PLANE id=61 type=overlay possible=0x1 mine=1 formats=13: AR15 XR15 RG16 AR24 XR24 AB30 XB30 AB24 XB24 AB4H YUYV UYVY XB4H props: [FB_ID] [CRTC_ID] [SRC_X] [SRC_Y] [SRC_W] [SRC_H] [CRTC_X] [CRTC_Y] [CRTC_W] [CRTC_H] [alpha] [pixel blend mode] [rotation] [COLOR_ENCODING] [COLOR_RANGE] [IN_FENCE_FD]
+KFPLANES_PLANE id=68 type=primary possible=0x2 mine=0 formats=13: AR15 XR15 RG16 AR24 XR24 AB30 XB30 AB24 XB24 AB4H YUYV UYVY XB4H props: [FB_ID] [CRTC_ID] [SRC_X] [SRC_Y] [SRC_W] [SRC_H] [CRTC_X] [CRTC_Y] [CRTC_W] [CRTC_H] [rotation] [COLOR_ENCODING] [COLOR_RANGE] [IN_FENCE_FD]
+KFPLANES_PLANE id=73 type=cursor possible=0x2 mine=0 formats=1: AR24 props: [FB_ID] [CRTC_ID] [SRC_X] [SRC_Y] [SRC_W] [SRC_H] [CRTC_X] [CRTC_Y] [CRTC_W] [CRTC_H] [alpha] [pixel blend mode] [COLOR_ENCODING] [COLOR_RANGE] [IN_FENCE_FD]
+KFPLANES_PLANE id=80 type=overlay possible=0x2 mine=0 formats=13: AR15 XR15 RG16 AR24 XR24 AB30 XB30 AB24 XB24 AB4H YUYV UYVY XB4H props: [FB_ID] [CRTC_ID] [SRC_X] [SRC_Y] [SRC_W] [SRC_H] [CRTC_X] [CRTC_Y] [CRTC_W] [CRTC_H] [alpha] [pixel blend mode] [rotation] [COLOR_ENCODING] [COLOR_RANGE] [IN_FENCE_FD]
+KFPLANES_PLANE id=87 type=primary possible=0x4 mine=0 formats=13: AR15 XR15 RG16 AR24 XR24 AB30 XB30 AB24 XB24 AB4H YUYV UYVY XB4H props: [FB_ID] [CRTC_ID] [SRC_X] [SRC_Y] [SRC_W] [SRC_H] [CRTC_X] [CRTC_Y] [CRTC_W] [CRTC_H] [rotation] [COLOR_ENCODING] [COLOR_RANGE] [IN_FENCE_FD]
+KFPLANES_PLANE id=92 type=cursor possible=0x4 mine=0 formats=1: AR24 props: [FB_ID] [CRTC_ID] [SRC_X] [SRC_Y] [SRC_W] [SRC_H] [CRTC_X] [CRTC_Y] [CRTC_W] [CRTC_H] [alpha] [pixel blend mode] [COLOR_ENCODING] [COLOR_RANGE] [IN_FENCE_FD]
+KFPLANES_PLANE id=99 type=overlay possible=0x4 mine=0 formats=13: AR15 XR15 RG16 AR24 XR24 AB30 XB30 AB24 XB24 AB4H YUYV UYVY XB4H props: [FB_ID] [CRTC_ID] [SRC_X] [SRC_Y] [SRC_W] [SRC_H] [CRTC_X] [CRTC_Y] [CRTC_W] [CRTC_H] [alpha] [pixel blend mode] [rotation] [COLOR_ENCODING] [COLOR_RANGE] [IN_FENCE_FD]
+KFPLANES_PLANE id=106 type=primary possible=0x8 mine=0 formats=13: AR15 XR15 RG16 AR24 XR24 AB30 XB30 AB24 XB24 AB4H YUYV UYVY XB4H props: [FB_ID] [CRTC_ID] [SRC_X] [SRC_Y] [SRC_W] [SRC_H] [CRTC_X] [CRTC_Y] [CRTC_W] [CRTC_H] [rotation] [COLOR_ENCODING] [COLOR_RANGE] [IN_FENCE_FD]
+KFPLANES_PLANE id=111 type=cursor possible=0x8 mine=0 formats=1: AR24 props: [FB_ID] [CRTC_ID] [SRC_X] [SRC_Y] [SRC_W] [SRC_H] [CRTC_X] [CRTC_Y] [CRTC_W] [CRTC_H] [alpha] [pixel blend mode] [COLOR_ENCODING] [COLOR_RANGE] [IN_FENCE_FD]
+KFPLANES_PLANE id=118 type=overlay possible=0x8 mine=0 formats=13: AR15 XR15 RG16 AR24 XR24 AB30 XB30 AB24 XB24 AB4H YUYV UYVY XB4H props: [FB_ID] [CRTC_ID] [SRC_X] [SRC_Y] [SRC_W] [SRC_H] [CRTC_X] [CRTC_Y] [CRTC_W] [CRTC_H] [alpha] [pixel blend mode] [rotation] [COLOR_ENCODING] [COLOR_RANGE] [IN_FENCE_FD]
+KFPLANES_SUMMARY planes=12 primary=49 overlays=1 cursor=54 ovl_nv12=0 ovl_p010=0 ovl_yuyv=1 ovl_argb=1
+KFPLANES_MODESET rc=0
+KFPLANES_RESULT test=vblank-wait waits=120 errors=4 last_err=-95 interval_avg_us=0 min_us=0 max_us=0 frame_us=16667 verdict=FAIL
+KFPLANES_RESULT test=vblank-event requested=0 received=0 verdict=FAIL
+KFPLANES_RESULT test=primary-flip commits=120 events=120 timeouts=0 errors=0 last_err=0 ebusy=0 lat_avg_us=16663 lat_p95_us=16968 lat_max_us=17089 over1f=0 over2f=0 seq1=119 seq2=0 seqN=0 frame_us=16667 verdict=PASS
+KFPLANES_ENABLE test=overlay-argb-only rc=0 event=1
+KFPLANES_RESULT test=overlay-argb-only commits=120 events=120 timeouts=0 errors=0 last_err=0 ebusy=0 lat_avg_us=16753 lat_p95_us=17041 lat_max_us=27450 over1f=1 over2f=0 seq1=119 seq2=0 seqN=0 frame_us=16667 verdict=SLOW
+KFPLANES_DISABLE test=overlay-argb-only rc=0 event=0 lat_us=-1
+KFPLANES_ENABLE test=overlay-argb-both rc=0 event=1
+KFPLANES_TIMEOUT test=overlay-argb-both i=0 waited_us=250367
+KFPLANES_RESULT test=overlay-argb-both commits=120 events=119 timeouts=1 errors=0 last_err=0 ebusy=0 lat_avg_us=16624 lat_p95_us=17089 lat_max_us=17128 over1f=0 over2f=0 seq1=118 seq2=0 seqN=0 frame_us=16667 verdict=FAIL
+KFPLANES_DISABLE test=overlay-argb-both rc=0 event=0 lat_us=-1
+KFPLANES_ENABLE test=overlay-xrgb-only rc=0 event=1
+KFPLANES_TIMEOUT test=overlay-xrgb-only i=0 waited_us=250321
+KFPLANES_TIMEOUT test=overlay-xrgb-only i=1 waited_us=250645
+KFPLANES_TIMEOUT test=overlay-xrgb-only i=2 waited_us=250438
+KFPLANES_TIMEOUT test=overlay-xrgb-only i=3 waited_us=250372
+KFPLANES_RESULT test=overlay-xrgb-only commits=4 events=0 timeouts=4 errors=0 last_err=0 ebusy=0 lat_avg_us=0 lat_p95_us=0 lat_max_us=0 over1f=0 over2f=0 seq1=0 seq2=0 seqN=0 frame_us=16667 verdict=FAIL
+KFPLANES_DISABLE test=overlay-xrgb-only rc=0 event=0 lat_us=-1
+KFPLANES_RESULT test=overlay-nv12-only verdict=SKIP why="overlay plane does not list the format"
+KFPLANES_RESULT test=overlay-nv12-both verdict=SKIP why="overlay plane does not list the format"
+KFPLANES_RESULT test=overlay-p010-only verdict=SKIP why="overlay plane does not list the format"
+Read from remote host 192.168.77.2: Connection reset by peer
+client_loop: send disconnect: Broken pipe

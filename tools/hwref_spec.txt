@@ -20,6 +20,9 @@ NV_PMC_BOOT_42
 #    and GB10x's PF0 config space ──────────────────────────────────────────────────────────────
 NV_PCFG$
 NV_XVE_LINK_CAPABILITIES
+# 2026-10-14 (V3_S3_RESUME.md): the resizable-BAR1 size RM caches at load and checks at every resume
+# (kbusCache/RestoreBAR1ResizeSize_WAR_BUG_3249028_GA100, GA100…AD107).
+NV_XVE_RESIZE_BAR1_CTRL
 NV_EP_PCFGM$
 NV_EP_PCFG_GPU_LINK_CAPABILITIES
 NV_PF0_LINK_CAPABILITIES

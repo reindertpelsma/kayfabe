@@ -1,0 +1,210 @@
+kf-rm: chanlink: VAS-DECL 0xc1e00007:0xbaba0042 vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf-rm: chanlink: CLASSIFY 0xc1e00007:0xbaba0045 kernel work -> Translated (an RM-internal client)
+kf3: act birth translated: chan 0xc1e00007:0xbaba0045 BORN Translated: token 0x1 -> host 0x2e in VasKey(13970166077300801602) gpfifo=0x0x32 userd=Some(Framebuffer { base: 4020568064, size: 512 }) engine=0x1 tsg=None kernel_by=PRIVILEGE=KERNEL rm-internal ring_
+kf-rm: chanlink: VAS-DECL 0xc1e00008:0xa vaBase=0x0 vaSize=0x24006c008 end=Some(24006c008) shared_management=false
+kf-rm: chanlink: CLASSIFY 0xc1e00008:0x2 kernel work -> Translated (an RM-internal client)
+kf3: act birth translated: chan 0xc1e00008:0x2 BORN Translated: token 0x801 -> host 0x1002e in VasKey(13970166078463016970) gpfifo=0x220064000x4096 userd=Some(Framebuffer { base: 4019388416, size: 512 }) engine=0xb tsg=None kernel_by=PRIVILEGE=KERNEL rm-intern
+kf-rm: chanlink: VAS-DECL 0xc1d00002:0xff000870 vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf-rm: chanlink: CLASSIFY 0xc1d00013:0xff040000 kernel work -> Translated (the kernel driver's own process)
+kf3: act birth translated: chan 0xc1d00013:0xff040000 BORN Translated: token 0x802 -> host 0x1002f in VasKey(13965662457344034928) gpfifo=0x12024b000x16384 userd=Some(Sysmem { base: 9555570688, size: 512 }) engine=0xb tsg=Some(ff0e0000) kernel_by=PRIVILEGE=KER
+kf3: chan 0xc1d00013:0xff040000: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0x1002f, software classID Some(1) (OWNER_RULINGS §U.1)
+kf-rm: chanlink: CLASSIFY 0xc1d00015:0xff040001 kernel work -> Translated (no context share (the kernel driver's own channels declare none))
+kf3: act birth translated: chan 0xc1d00015:0xff040001 BORN Translated: token 0x3 -> host 0x30 in VasKey(13965662457344034928) gpfifo=0x120276000x8192 userd=Some(Sysmem { base: 9555571200, size: 512 }) engine=0x1 tsg=Some(ff0e0000) kernel_by=PRIVILEGE=KERNEL ri
+kf3: chan 0xc1d00015:0xff040001: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0x30, software classID Some(1) (OWNER_RULINGS §U.1)
+kf-rm: chanlink: VAS-DECL 0xc1d00002:0xff000870 vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf-rm: chanlink: VAS-DECL 0xc1d00002:0xff000850 vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf-rm: chanlink: VAS-DECL 0xc1d00002:0xff000850 vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf-rm: chanlink: VAS-DECL 0xc1d00002:0xff000850 vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf-rm: chanlink: CLASSIFY 0xc1d00016:0xff040002 kernel work -> Translated (the kernel driver's own process)
+kf3: act birth translated: chan 0xc1d00016:0xff040002 BORN Translated: token 0x804 -> host 0x10031 in VasKey(13965662457344034928) gpfifo=0x1204f0000x16384 userd=Some(Sysmem { base: 9555571712, size: 512 }) engine=0xb tsg=None kernel_by=PRIVILEGE=KERNEL ring_v
+kf3: chan 0xc1d00016:0xff040002: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0x10031, software classID Some(1) (OWNER_RULINGS §U.1)
+kf-rm: chanlink: CLASSIFY 0xc1d00018:0xff040003 kernel work -> Translated (not a graphics or copy engine)
+kf3: act birth translated: chan 0xc1d00018:0xff040003 BORN Translated: token 0x1805 -> host 0x30032 in VasKey(13965662457344034928) gpfifo=0x120299000x2048 userd=Some(Sysmem { base: 9555572224, size: 512 }) engine=0x13 tsg=None kernel_by=PRIVILEGE=KERNEL ring_
+kf3: chan 0xc1d00018:0xff040003: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0x30032, software classID Some(1) (OWNER_RULINGS §U.1)
+kf-rm: chanlink: CLASSIFY 0xc1d00019:0xff040004 kernel work -> Translated (the kernel driver's own process)
+kf3: act birth translated: chan 0xc1d00019:0xff040004 BORN Translated: token 0x806 -> host 0x10033 in VasKey(13965662457344034928) gpfifo=0x12051b000x2048 userd=Some(Sysmem { base: 9555572736, size: 512 }) engine=0xb tsg=Some(ff0e0000) kernel_by=PRIVILEGE=KERN
+kf3: chan 0xc1d00019:0xff040004: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0x10033, software classID Some(1) (OWNER_RULINGS §U.1)
+kf-rm: chanlink: CLASSIFY 0xc1d0001a:0xff040005 kernel work -> Translated (not a graphics or copy engine)
+kf3: act birth translated: chan 0xc1d0001a:0xff040005 BORN Translated: token 0x2007 -> host 0xc0034 in VasKey(13965662457344034928) gpfifo=0x120522000x2048 userd=Some(Sysmem { base: 9555573248, size: 512 }) engine=0x1c tsg=None kernel_by=PRIVILEGE=KERNEL ring_
+kf3: chan 0xc1d0001a:0xff040005: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0xc0034, software classID Some(1) (OWNER_RULINGS §U.1)
+kf-rm: chanlink: CLASSIFY 0xc1d0001b:0xff040006 kernel work -> Translated (not a graphics or copy engine)
+kf3: act birth translated: chan 0xc1d0001b:0xff040006 BORN Translated: token 0x2008 -> host 0xc0035 in VasKey(13965662457344034928) gpfifo=0x120529000x2048 userd=Some(Sysmem { base: 9555573760, size: 512 }) engine=0x1c tsg=None kernel_by=PRIVILEGE=KERNEL ring_
+kf3: chan 0xc1d0001b:0xff040006: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0xc0035, software classID Some(1) (OWNER_RULINGS §U.1)
+kf-rm: chanlink: CLASSIFY 0xc1d0001c:0xff040007 kernel work -> Translated (not a graphics or copy engine)
+kf3: act birth translated: chan 0xc1d0001c:0xff040007 BORN Translated: token 0x2809 -> host 0x50036 in VasKey(13965662457344034928) gpfifo=0x120530000x2048 userd=Some(Sysmem { base: 9555574272, size: 512 }) engine=0x33 tsg=None kernel_by=PRIVILEGE=KERNEL ring_
+kf3: chan 0xc1d0001c:0xff040007: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0x50036, software classID Some(1) (OWNER_RULINGS §U.1)
+kf-rm: chanlink: CLASSIFY 0xc1d0001d:0xff040008 kernel work -> Translated (not a graphics or copy engine)
+kf3: act birth translated: chan 0xc1d0001d:0xff040008 BORN Translated: token 0x200a -> host 0xc0037 in VasKey(13965662457344034928) gpfifo=0x120538000x2048 userd=Some(Sysmem { base: 9554821120, size: 512 }) engine=0x1c tsg=None kernel_by=PRIVILEGE=KERNEL ring_
+kf3: chan 0xc1d0001d:0xff040008: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0xc0037, software classID Some(1) (OWNER_RULINGS §U.1)
+kf-rm: chanlink: VAS-DECL 0xc1d0001e:0xff000850 vaBase=0x100000000 vaSize=0x40000000 end=Some(140000000) shared_management=true
+kf-rm: chanlink: CLASSIFY 0xc1d00020:0xff040009 kernel work -> Translated (the kernel driver's own process)
+kf3: act birth translated: chan 0xc1d00020:0xff040009 BORN Translated: token 0x80b -> host 0x10038 in VasKey(13965662577603119184) gpfifo=0x1200c4000x4096 userd=Some(Sysmem { base: 9554731008, size: 512 }) engine=0xb tsg=None kernel_by=PRIVILEGE=KERNEL ring_va
+kf3: chan 0xc1d00020:0xff040009: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0x10038, software classID Some(1) (OWNER_RULINGS §U.1)
+kf-rm: chanlink: VAS-DECL 0xc1d00021:0xff000850 vaBase=0x20000000 vaSize=0x40000000 end=Some(60000000) shared_management=true
+kf-rm: chanlink: CLASSIFY 0xc1d00023:0xff04000a kernel work -> Translated (the kernel driver's own process)
+kf3: act birth translated: chan 0xc1d00023:0xff04000a BORN Translated: token 0x80c -> host 0x10039 in VasKey(13965662590488021072) gpfifo=0x200c4000x16384 userd=Some(Sysmem { base: 9554403328, size: 512 }) engine=0xb tsg=Some(ff0e0000) kernel_by=PRIVILEGE=KERN
+kf3: chan 0xc1d00023:0xff04000a: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0x10039, software classID Some(1) (OWNER_RULINGS §U.1)
+kf-rm: chanlink: CLASSIFY 0xc1d00024:0xff04000b kernel work -> Translated (no context share (the kernel driver's own channels declare none))
+kf3: act birth translated: chan 0xc1d00024:0xff04000b BORN Translated: token 0xd -> host 0x3a in VasKey(13965662590488021072) gpfifo=0x200ef000x16384 userd=Some(Sysmem { base: 9554403840, size: 512 }) engine=0x1 tsg=Some(ff0e0000) kernel_by=PRIVILEGE=KERNEL ri
+kf3: chan 0xc1d00024:0xff04000b: NV50_DEFERRED_API 0xff1fe010 ADMITTED on Translated host 0x3a, software classID Some(1) (OWNER_RULINGS §U.1)
+kf-rm: chanlink: VAS-DECL 0xc1d00025:0xff000850 vaBase=0x100000000 vaSize=0x120000000 end=Some(220000000) shared_management=true
+kf-rm: chanlink: CLASSIFY 0xc1d00027:0xff04000c USER WORK -> Passthrough (subcontext and a process other than the kernel driver's)
+kf3: act birth passthrough: chan 0xc1d00027:0xff04000c BORN Passthrough: token 0xe -> host 0x44 in VasKey(13965662607667890256) gpfifo=0x1200c4000x32768 userd=Ram { ram: 3405643793, off: 8480092160 } engine=0x1 declared_kernel_pid=false PRIVILEGE=KERNEL WINDOW
+kf3: chan 0xc1d00027:0xff04000c: NV50_DEFERRED_API 0xff1fe010 ADMITTED as a guest-graph object on a Windows user-work Passthrough twin (never triggered by kayfabe; §V)
+kf3: act engine object: 0xc1d00027:0xff1fe034 class 0xc7b5 (DmaCopy) on twin host 0x44 -> host object 0xcafe0087 (209 us, off the GSP lock)
+kf3: act promote ctx: chan 0xc1d00027:0xff04000c GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x44 (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=4 init_ids=0x5 va_ids=0xa05 bound=true — not forwarded,
+kf3: act engine object: 0xc1d00027:0xff1fe01a class 0xa140 (InlineToMemory) on twin host 0x44 -> host object 0xcafe0088 (1080 us, off the GSP lock)
+kf3: act promote ctx: chan 0xc1d00027:0xff04000c GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x44 (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=4 init_ids=0x0 va_ids=0x78 bound=true — not forwarded, 
+kf3: act engine object: 0xc1d00027:0xff1fe02c class 0x902d (TwoD) on twin host 0x44 -> host object 0xcafe0089 (579 us, off the GSP lock)
+kf3: act engine object: 0xc1d00027:0xff1fe026 class 0xc997 (ThreeD) on twin host 0x44 -> host object 0xcafe008a (440 us, off the GSP lock)
+kf3: act engine object: 0xc1d00027:0xff1fe032 class 0xc9c0 (Compute) on twin host 0x44 -> host object 0xcafe008b (455 us, off the GSP lock)
+kf3: display: the guest armed its first head at +10670 ms — the boot layer is retired after 160 boot frame(s)
+kf3: display: 1 updates completed, 8589 methods
+kf3: display: 2 updates completed, 8591 methods
+kf3: display: 3 updates completed, 8614 methods
+kf3: display: 4 updates completed, 8617 methods
+kf3: display: 5 updates completed, 8620 methods
+kf3: chan token 0xe (host 0x44) USERD relay: GP_PUT 0x2 forwarded and rung (#1) — no GP entry or push-buffer word read
+kf3: chan token 0xe (host 0x44) USERD relay: GP_PUT 0x3 forwarded and rung (#2) — no GP entry or push-buffer word read
+kf3: chan token 0xe (host 0x44) USERD relay: GP_PUT 0x5 forwarded and rung (#3) — no GP entry or push-buffer word read
+kf3: chan token 0xe (host 0x44) USERD relay: GP_PUT 0x6 forwarded and rung (#4) — no GP entry or push-buffer word read
+kf3: chan token 0xe (host 0x44) USERD relay: GP_PUT 0x9 forwarded and rung (#5) — no GP entry or push-buffer word read
+kf3: chan token 0xe (host 0x44) USERD relay: GP_PUT 0xb forwarded and rung (#6) — no GP entry or push-buffer word read
+kf3: chan token 0xe (host 0x44) USERD relay: GP_PUT 0xc forwarded and rung (#7) — no GP entry or push-buffer word read
+kf3: chan token 0xe (host 0x44) USERD relay: GP_PUT 0xf forwarded and rung (#8) — no GP entry or push-buffer word read
+kf3: chan token 0xe (host 0x44) USERD relay: GP_PUT 0x1d forwarded and rung (#16) — no GP entry or push-buffer word read
+kf3: chan token 0xe (host 0x44) USERD relay: GP_PUT 0x39 forwarded and rung (#32) — no GP entry or push-buffer word read
+kf-rm: chanlink: VAS-DECL 0xc1d00028:0xff000850 vaBase=0x100000000 vaSize=0x120000000 end=Some(220000000) shared_management=true
+kf3: chan token 0xe (host 0x44) USERD relay: GP_PUT 0x87 forwarded and rung (#64) — no GP entry or push-buffer word read
+kf-rm: chanlink: CLASSIFY 0xc1d0002a:0xff04000d USER WORK -> Passthrough (subcontext and a process other than the kernel driver's)
+kf3: act birth passthrough: chan 0xc1d0002a:0xff04000d BORN Passthrough: token 0xf -> host 0x45 in VasKey(13965662620552792144) gpfifo=0x4000000x8192 userd=Ram { ram: 3405643793, off: 8480083968 } engine=0x1 declared_kernel_pid=false PRIVILEGE=KERNEL WINDOWS-U
+kf3: chan 0xc1d0002a:0xff04000d: NV50_DEFERRED_API 0xff1fe010 ADMITTED as a guest-graph object on a Windows user-work Passthrough twin (never triggered by kayfabe; §V)
+kf3: act engine object: 0xc1d0002a:0xff1fe034 class 0xc7b5 (DmaCopy) on twin host 0x45 -> host object 0xcafe009c (202 us, off the GSP lock)
+kf3: act promote ctx: chan 0xc1d0002a:0xff04000d GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x45 (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=3 init_ids=0x4 va_ids=0xa04 bound=true — not forwarded,
+kf3: act engine object: 0xc1d0002a:0xff1fe01a class 0xa140 (InlineToMemory) on twin host 0x45 -> host object 0xcafe009d (1086 us, off the GSP lock)
+kf3: act promote ctx: chan 0xc1d0002a:0xff04000d GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x45 (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=4 init_ids=0x0 va_ids=0x78 bound=true — not forwarded, 
+kf3: act engine object: 0xc1d0002a:0xff1fe02c class 0x902d (TwoD) on twin host 0x45 -> host object 0xcafe009e (568 us, off the GSP lock)
+kf3: act engine object: 0xc1d0002a:0xff1fe026 class 0xc997 (ThreeD) on twin host 0x45 -> host object 0xcafe009f (441 us, off the GSP lock)
+kf3: act engine object: 0xc1d0002a:0xff1fe032 class 0xc9c0 (Compute) on twin host 0x45 -> host object 0xcafe00a0 (485 us, off the GSP lock)
+kf-rm: chanlink: CLASSIFY 0xc1d0002d:0xff04000e USER WORK -> Passthrough (subcontext and a process other than the kernel driver's)
+kf3: act birth passthrough: chan 0xc1d0002d:0xff04000e BORN Passthrough: token 0x1010 -> host 0x20046 in VasKey(13965662620552792144) gpfifo=0x4036000x8192 userd=Ram { ram: 3405643793, off: 8480084480 } engine=0xc declared_kernel_pid=false PRIVILEGE=KERNEL WIN
+kf3: chan 0xc1d0002d:0xff04000e: NV50_DEFERRED_API 0xff1fe010 ADMITTED as a guest-graph object on a Windows user-work Passthrough twin (never triggered by kayfabe; §V)
+kf3: act engine object: 0xc1d0002d:0xff1fe034 class 0xc7b5 (DmaCopy) on twin host 0x20046 -> host object 0xcafe00a4 (208 us, off the GSP lock)
+kf3: chan token 0xf (host 0x45) USERD relay: GP_PUT 0x24 forwarded and rung (#1) — no GP entry or push-buffer word read
+kf-rm: chanlink: CLASSIFY 0xc1d0002f:0xff04000f USER WORK -> Passthrough (subcontext and a process other than the kernel driver's)
+kf3: act birth passthrough: chan 0xc1d0002f:0xff04000f BORN Passthrough: token 0x11 -> host 0x47 in VasKey(13965662620552792144) gpfifo=0x14533000x8192 userd=Ram { ram: 3405643793, off: 8479911936 } engine=0x1 declared_kernel_pid=false PRIVILEGE=KERNEL WINDOWS
+kf3: chan 0xc1d0002f:0xff04000f: NV50_DEFERRED_API 0xff1fe010 ADMITTED as a guest-graph object on a Windows user-work Passthrough twin (never triggered by kayfabe; §V)
+kf3: act engine object: 0xc1d0002f:0xff1fe034 class 0xc7b5 (DmaCopy) on twin host 0x47 -> host object 0xcafe00b8 (195 us, off the GSP lock)
+kf3: act promote ctx: chan 0xc1d0002f:0xff04000f GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x47 (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=3 init_ids=0x4 va_ids=0xa04 bound=true — not forwarded,
+kf3: act engine object: 0xc1d0002f:0xff1fe01a class 0xa140 (InlineToMemory) on twin host 0x47 -> host object 0xcafe00b9 (941 us, off the GSP lock)
+kf3: act promote ctx: chan 0xc1d0002f:0xff04000f GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x47 (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=4 init_ids=0x0 va_ids=0x78 bound=true — not forwarded, 
+kf3: act engine object: 0xc1d0002f:0xff1fe02c class 0x902d (TwoD) on twin host 0x47 -> host object 0xcafe00ba (549 us, off the GSP lock)
+kf3: act engine object: 0xc1d0002f:0xff1fe026 class 0xc997 (ThreeD) on twin host 0x47 -> host object 0xcafe00bb (428 us, off the GSP lock)
+kf3: act engine object: 0xc1d0002f:0xff1fe032 class 0xc9c0 (Compute) on twin host 0x47 -> host object 0xcafe00bc (458 us, off the GSP lock)
+kf-rm: chanlink: CLASSIFY 0xc1d00030:0xff040010 USER WORK -> Passthrough (subcontext and a process other than the kernel driver's)
+kf3: act birth passthrough: chan 0xc1d00030:0xff040010 BORN Passthrough: token 0x1012 -> host 0x20048 in VasKey(13965662620552792144) gpfifo=0x145ea000x8192 userd=Ram { ram: 3405643793, off: 8479912448 } engine=0xc declared_kernel_pid=false PRIVILEGE=KERNEL WI
+kf3: chan 0xc1d00030:0xff040010: NV50_DEFERRED_API 0xff1fe010 ADMITTED as a guest-graph object on a Windows user-work Passthrough twin (never triggered by kayfabe; §V)
+kf3: act engine object: 0xc1d00030:0xff1fe034 class 0xc7b5 (DmaCopy) on twin host 0x20048 -> host object 0xcafe00c4 (204 us, off the GSP lock)
+kf3: chan token 0x11 (host 0x47) USERD relay: GP_PUT 0x24 forwarded and rung (#1) — no GP entry or push-buffer word read
+kf3: chan token 0x1012 (host 0x20048) USERD relay: GP_PUT 0x10 forwarded and rung (#1) — no GP entry or push-buffer word read
+kf3: chan token 0x11 (host 0x47) USERD relay: GP_PUT 0x50 forwarded and rung (#2) — no GP entry or push-buffer word read
+kf-rm: chanlink: CLASSIFY 0xc1d00031:0xff040011 USER WORK -> Passthrough (subcontext and a process other than the kernel driver's)
+kf3: act birth passthrough: chan 0xc1d00031:0xff040011 BORN Passthrough: token 0x13 -> host 0x49 in VasKey(13965662620552792144) gpfifo=0x14de4000x8192 userd=Ram { ram: 3405643793, off: 8479936512 } engine=0x1 declared_kernel_pid=false PRIVILEGE=KERNEL WINDOWS
+kf3: chan 0xc1d00031:0xff040011: NV50_DEFERRED_API 0xff1fe010 ADMITTED as a guest-graph object on a Windows user-work Passthrough twin (never triggered by kayfabe; §V)
+kf3: act engine object: 0xc1d00031:0xff1fe034 class 0xc7b5 (DmaCopy) on twin host 0x49 -> host object 0xcafe00dc (198 us, off the GSP lock)
+kf3: act promote ctx: chan 0xc1d00031:0xff040011 GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x49 (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=3 init_ids=0x4 va_ids=0xa04 bound=true — not forwarded,
+kf3: act engine object: 0xc1d00031:0xff1fe01a class 0xa140 (InlineToMemory) on twin host 0x49 -> host object 0xcafe00dd (989 us, off the GSP lock)
+kf3: act promote ctx: chan 0xc1d00031:0xff040011 GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x49 (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=4 init_ids=0x0 va_ids=0x78 bound=true — not forwarded, 
+kf3: act engine object: 0xc1d00031:0xff1fe02c class 0x902d (TwoD) on twin host 0x49 -> host object 0xcafe00de (579 us, off the GSP lock)
+kf3: act engine object: 0xc1d00031:0xff1fe026 class 0xc997 (ThreeD) on twin host 0x49 -> host object 0xcafe00df (446 us, off the GSP lock)
+kf3: act engine object: 0xc1d00031:0xff1fe032 class 0xc9c0 (Compute) on twin host 0x49 -> host object 0xcafe00e0 (441 us, off the GSP lock)
+kf-rm: chanlink: CLASSIFY 0xc1d00033:0xff040012 USER WORK -> Passthrough (subcontext and a process other than the kernel driver's)
+kf3: act birth passthrough: chan 0xc1d00033:0xff040012 BORN Passthrough: token 0x1014 -> host 0x2004a in VasKey(13965662620552792144) gpfifo=0x15161000x8192 userd=Ram { ram: 3405643793, off: 8479937024 } engine=0xc declared_kernel_pid=false PRIVILEGE=KERNEL WI
+kf3: chan 0xc1d00033:0xff040012: NV50_DEFERRED_API 0xff1fe010 ADMITTED as a guest-graph object on a Windows user-work Passthrough twin (never triggered by kayfabe; §V)
+kf3: act engine object: 0xc1d00033:0xff1fe034 class 0xc7b5 (DmaCopy) on twin host 0x2004a -> host object 0xcafe00e6 (211 us, off the GSP lock)
+kf3: chan token 0x13 (host 0x49) USERD relay: GP_PUT 0x24 forwarded and rung (#1) — no GP entry or push-buffer word read
+kf3: chan token 0x1014 (host 0x2004a) USERD relay: GP_PUT 0x10 forwarded and rung (#1) — no GP entry or push-buffer word read
+kf3: chan token 0x13 (host 0x49) USERD relay: GP_PUT 0x3e forwarded and rung (#2) — no GP entry or push-buffer word read
+kf-rm: chanlink: VAS-DECL 0xc1d00034:0xff000850 vaBase=0x100000000 vaSize=0x120000000 end=Some(220000000) shared_management=true
+kf-rm: chanlink: CLASSIFY 0xc1d00036:0xff040013 USER WORK -> Passthrough (subcontext and a process other than the kernel driver's)
+kf3: act birth passthrough: chan 0xc1d00036:0xff040013 BORN Passthrough: token 0x15 -> host 0x4b in VasKey(13965662672092399696) gpfifo=0x4000000x8192 userd=Ram { ram: 3405643793, off: 8479834112 } engine=0x1 declared_kernel_pid=false PRIVILEGE=KERNEL WINDOWS-
+kf3: chan 0xc1d00036:0xff040013: NV50_DEFERRED_API 0xff1fe010 ADMITTED as a guest-graph object on a Windows user-work Passthrough twin (never triggered by kayfabe; §V)
+kf3: act engine object: 0xc1d00036:0xff1fe034 class 0xc7b5 (DmaCopy) on twin host 0x4b -> host object 0xcafe0100 (219 us, off the GSP lock)
+kf3: act promote ctx: chan 0xc1d00036:0xff040013 GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x4b (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=3 init_ids=0x4 va_ids=0xa04 bound=true — not forwarded,
+kf3: act engine object: 0xc1d00036:0xff1fe01a class 0xa140 (InlineToMemory) on twin host 0x4b -> host object 0xcafe0101 (1028 us, off the GSP lock)
+kf3: act promote ctx: chan 0xc1d00036:0xff040013 GPU_PROMOTE_CTX SATISFIED BY TWIN host 0x4b (host GR object(s) [] — none yet: the engine object this promote precedes births the host context): entries=4 init_ids=0x0 va_ids=0x78 bound=true — not forwarded, 
+kf3: act engine object: 0xc1d00036:0xff1fe02c class 0x902d (TwoD) on twin host 0x4b -> host object 0xcafe0102 (550 us, off the GSP lock)
+kf3: act engine object: 0xc1d00036:0xff1fe026 class 0xc997 (ThreeD) on twin host 0x4b -> host object 0xcafe0103 (449 us, off the GSP lock)
+kf3: act engine object: 0xc1d00036:0xff1fe032 class 0xc9c0 (Compute) on twin host 0x4b -> host object 0xcafe0104 (456 us, off the GSP lock)
+kf-rm: chanlink: CLASSIFY 0xc1d00037:0xff040014 USER WORK -> Passthrough (subcontext and a process other than the kernel driver's)
+kf3: act birth passthrough: chan 0xc1d00037:0xff040014 BORN Passthrough: token 0x1016 -> host 0x2004c in VasKey(13965662672092399696) gpfifo=0x4036000x8192 userd=Ram { ram: 3405643793, off: 8479834624 } engine=0xc declared_kernel_pid=false PRIVILEGE=KERNEL WIN
+kf3: chan 0xc1d00037:0xff040014: NV50_DEFERRED_API 0xff1fe010 ADMITTED as a guest-graph object on a Windows user-work Passthrough twin (never triggered by kayfabe; §V)
+kf3: act engine object: 0xc1d00037:0xff1fe034 class 0xc7b5 (DmaCopy) on twin host 0x2004c -> host object 0xcafe0109 (213 us, off the GSP lock)
+kf3: chan token 0x15 (host 0x4b) USERD relay: GP_PUT 0x24 forwarded and rung (#1) — no GP entry or push-buffer word read
+kf3: chan token 0x1016 (host 0x2004c) USERD relay: GP_PUT 0x10 forwarded and rung (#1) — no GP entry or push-buffer word read
+kf3: chan token 0x15 (host 0x4b) USERD relay: GP_PUT 0x5d forwarded and rung (#2) — no GP entry or push-buffer word read
+kf3: chan token 0x15 (host 0x4b) USERD relay: GP_PUT 0x78 forwarded and rung (#3) — no GP entry or push-buffer word read
+kf3: chan token 0x1016 (host 0x2004c) USERD relay: GP_PUT 0x21 forwarded and rung (#2) — no GP entry or push-buffer word read
+kf3: chan token 0x1016 (host 0x2004c) USERD relay: GP_PUT 0x32 forwarded and rung (#3) — no GP entry or push-buffer word read
+kf3: chan token 0x1016 (host 0x2004c) USERD relay: GP_PUT 0x43 forwarded and rung (#4) — no GP entry or push-buffer word read
+kf3: chan token 0x1016 (host 0x2004c) USERD relay: GP_PUT 0x54 forwarded and rung (#5) — no GP entry or push-buffer word read
+kf3: display: 6 updates completed, 8627 methods
+kf3: display: 7 updates completed, 8636 methods
+kf3: act free: 0xc1d00027:0xff1fe032: engine object host 0xcafe008b freed (354 us, off the GSP lock)
+kf3: act free: 0xc1d00027:0xff1fe026: engine object host 0xcafe008a freed (305 us, off the GSP lock)
+kf3: act free: 0xc1d00027:0xff1fe034: engine object host 0xcafe0087 freed (253 us, off the GSP lock)
+kf3: act free: 0xc1d00027:0xff1fe01a: engine object host 0xcafe0088 freed (293 us, off the GSP lock)
+kf3: act free: 0xc1d00027:0xff1fe02c: engine object host 0xcafe0089 freed (295 us, off the GSP lock)
+kf3: chan token 0xe (host 0x44) USERD relay released: forwarded=83 refused=0 gets=105 last_put=168 guest[GP_PUT=Some(a8) GP_GET=Some(a7)] host[GP_PUT=Some(a8) GP_GET=Some(a8)]
+kf3: act free: 0xc1d0002a:0xff1fe032: engine object host 0xcafe00a0 freed (283 us, off the GSP lock)
+kf3: act free: 0xc1d0002a:0xff1fe026: engine object host 0xcafe009f freed (267 us, off the GSP lock)
+kf3: act free: 0xc1d0002a:0xff1fe034: engine object host 0xcafe009c freed (194 us, off the GSP lock)
+kf3: act free: 0xc1d0002a:0xff1fe01a: engine object host 0xcafe009d freed (223 us, off the GSP lock)
+kf3: act free: 0xc1d0002a:0xff1fe02c: engine object host 0xcafe009e freed (229 us, off the GSP lock)
+kf3: chan token 0xf (host 0x45) USERD relay released: forwarded=1 refused=0 gets=1 last_put=36 guest[GP_PUT=Some(24) GP_GET=Some(0)] host[GP_PUT=Some(24) GP_GET=Some(24)]
+kf3: act free: 0xc1d0002d:0xff1fe034: engine object host 0xcafe00a4 freed (271 us, off the GSP lock)
+kf3: chan token 0x1010 (host 0x20046) USERD relay released: forwarded=0 refused=0 gets=0 last_put=0 guest[GP_PUT=Some(0) GP_GET=Some(0)] host[GP_PUT=Some(0) GP_GET=Some(0)]
+kf3: act free: 0xc1d0002f:0xff1fe032: engine object host 0xcafe00bc freed (253 us, off the GSP lock)
+kf3: act free: 0xc1d0002f:0xff1fe026: engine object host 0xcafe00bb freed (243 us, off the GSP lock)
+kf3: act free: 0xc1d0002f:0xff1fe034: engine object host 0xcafe00b8 freed (188 us, off the GSP lock)
+kf3: act free: 0xc1d0002f:0xff1fe01a: engine object host 0xcafe00b9 freed (226 us, off the GSP lock)
+kf3: act free: 0xc1d0002f:0xff1fe02c: engine object host 0xcafe00ba freed (239 us, off the GSP lock)
+kf3: chan token 0x11 (host 0x47) USERD relay released: forwarded=2 refused=0 gets=2 last_put=80 guest[GP_PUT=Some(50) GP_GET=Some(24)] host[GP_PUT=Some(50) GP_GET=Some(24)]
+kf3: act free: 0xc1d00030:0xff1fe034: engine object host 0xcafe00c4 freed (208 us, off the GSP lock)
+kf3: chan token 0x1012 (host 0x20048) USERD relay released: forwarded=1 refused=0 gets=1 last_put=16 guest[GP_PUT=Some(10) GP_GET=Some(0)] host[GP_PUT=Some(10) GP_GET=Some(10)]
+kf3: act free: 0xc1d00031:0xff1fe032: engine object host 0xcafe00e0 freed (268 us, off the GSP lock)
+kf3: act free: 0xc1d00031:0xff1fe026: engine object host 0xcafe00df freed (237 us, off the GSP lock)
+kf3: act free: 0xc1d00031:0xff1fe034: engine object host 0xcafe00dc freed (189 us, off the GSP lock)
+kf3: act free: 0xc1d00031:0xff1fe01a: engine object host 0xcafe00dd freed (223 us, off the GSP lock)
+kf3: act free: 0xc1d00031:0xff1fe02c: engine object host 0xcafe00de freed (232 us, off the GSP lock)
+kf3: chan token 0x13 (host 0x49) USERD relay released: forwarded=2 refused=0 gets=2 last_put=62 guest[GP_PUT=Some(3e) GP_GET=Some(24)] host[GP_PUT=Some(3e) GP_GET=Some(24)]
+kf3: act free: 0xc1d00033:0xff1fe034: engine object host 0xcafe00e6 freed (212 us, off the GSP lock)
+kf3: chan token 0x1014 (host 0x2004a) USERD relay released: forwarded=1 refused=0 gets=1 last_put=16 guest[GP_PUT=Some(10) GP_GET=Some(0)] host[GP_PUT=Some(10) GP_GET=Some(10)]
+kf3: act free: 0xc1d00036:0xff1fe032: engine object host 0xcafe0104 freed (270 us, off the GSP lock)
+kf3: act free: 0xc1d00036:0xff1fe026: engine object host 0xcafe0103 freed (237 us, off the GSP lock)
+kf3: act free: 0xc1d00036:0xff1fe034: engine object host 0xcafe0100 freed (191 us, off the GSP lock)
+kf3: act free: 0xc1d00036:0xff1fe01a: engine object host 0xcafe0101 freed (227 us, off the GSP lock)
+kf3: act free: 0xc1d00036:0xff1fe02c: engine object host 0xcafe0102 freed (229 us, off the GSP lock)
+kf3: chan token 0x15 (host 0x4b) USERD relay released: forwarded=3 refused=0 gets=3 last_put=120 guest[GP_PUT=Some(78) GP_GET=Some(24)] host[GP_PUT=Some(78) GP_GET=Some(24)]
+kf3: act free: 0xc1d00037:0xff1fe034: engine object host 0xcafe0109 freed (225 us, off the GSP lock)
+kf3: chan token 0x1016 (host 0x2004c) USERD relay released: forwarded=5 refused=0 gets=5 last_put=84 guest[GP_PUT=Some(54) GP_GET=Some(10)] host[GP_PUT=Some(54) GP_GET=Some(10)]
+kf3: GSP phase Running -> Suspending
+kf3: GSP phase Suspending -> Halted
+kf3: GSP phase Halted -> ProtectedRegionUp
+kf-rm: chanlink: VAS-DECL 0xc1e0003e:0xbaba0042 vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf-rm: chanlink: CLASSIFY 0xc1e0003e:0xbaba0045 kernel work -> Translated (an RM-internal client)
+kf3: act birth translated: chan 0xc1e0003e:0xbaba0045 BORN Translated: token 0x1 -> host 0x2e in VasKey(13970166313524002882) gpfifo=0x0x32 userd=Some(Framebuffer { base: 4020568064, size: 512 }) engine=0x1 tsg=None kernel_by=PRIVILEGE=KERNEL rm-internal ring_
+kf-rm: chanlink: VAS-DECL 0xc1e0003f:0xa vaBase=0x0 vaSize=0x24006c008 end=Some(24006c008) shared_management=false
+kf-rm: chanlink: CLASSIFY 0xc1e0003f:0x2 kernel work -> Translated (an RM-internal client)
+kf3: act birth translated: chan 0xc1e0003f:0x2 BORN Translated: token 0x801 -> host 0x1002e in VasKey(13970166314686218250) gpfifo=0x220064000x4096 userd=Some(Framebuffer { base: 4019388416, size: 512 }) engine=0xb tsg=None kernel_by=PRIVILEGE=KERNEL rm-intern
+kf-rm: chanlink: VAS-DECL 0xc1d00039:0xff000870 vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf-rm: chanlink: CLASSIFY 0xc1d00048:0xff040000 USER WORK -> Passthrough (subcontext and a process other than the kernel driver's)
+kf3: act birth passthrough: chan 0xc1d00048:0xff040000 BORN Passthrough: token 0x802 -> host 0x1002f in VasKey(13965662693567236208) gpfifo=0x12024b000x16384 userd=Ram { ram: 3405643793, off: 8481296384 } engine=0xb declared_kernel_pid=false PRIVILEGE=KERNEL W
+kf3: chan 0xc1d00048:0xff040000: NV50_DEFERRED_API 0xff1fe010 ADMITTED as a guest-graph object on a Windows user-work Passthrough twin (never triggered by kayfabe; §V)
+kf3: act engine object: 0xc1d00048:0xff1fe034 class 0xc7b5 (DmaCopy) on twin host 0x1002f -> host object 0xcafe0157 (200 us, off the GSP lock)
+kf-rm: chanlink: CLASSIFY 0xc1d0004a:0xff040001 kernel work -> Translated (no context share (the kernel driver's own channels declare none))
+kf-rm: chanlink: VAS-DECL 0xc1d0004b:0xff000850 vaBase=0x100000000 vaSize=0x40000000 end=Some(140000000) shared_management=true
+kf-rm: chanlink: CLASSIFY 0xc1d0004d:0xff040002 USER WORK -> Passthrough (subcontext and a process other than the kernel driver's)
+kf3: act birth passthrough: chan 0xc1d0004d:0xff040002 BORN Passthrough: token 0x803 -> host 0x10030 in VasKey(13965662770876647504) gpfifo=0x1200c4000x4096 userd=Ram { ram: 3405643793, off: 8481095680 } engine=0xb declared_kernel_pid=false PRIVILEGE=KERNEL WI
+kf3: chan 0xc1d0004d:0xff040002: NV50_DEFERRED_API 0xff1fe010 ADMITTED as a guest-graph object on a Windows user-work Passthrough twin (never triggered by kayfabe; §V)
+kf3: act engine object: 0xc1d0004d:0xff1fe034 class 0xc7b5 (DmaCopy) on twin host 0x10030 -> host object 0xcafe015d (201 us, off the GSP lock)

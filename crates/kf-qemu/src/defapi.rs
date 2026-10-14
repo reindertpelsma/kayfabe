@@ -199,7 +199,7 @@ pub fn classify(
     let bundle = entry.decoded;
     let refuse = |why: String| -> Result<(SwKind, Option<Planned>), String> {
         // The real cleanup: executed + implicit delete, whatever the status.
-        reg.executed(key, call.data, false);
+        reg.executed_entry(key, &entry, false);
         Err(format!(
             "NV50_DEFERRED_API {:#x}:{handle:#x} hApiHandle {:#x} cmd {:#x}: {why}",
             key.client, call.data, entry.cmd
@@ -216,6 +216,9 @@ pub fn classify(
                  Translated twin runs in the T-space, which maps no guest VA"
                     .into(),
             );
+        }
+        Bundle::UpdateChannelInfo(_) => {
+            return refuse("FIFO_UPDATE_CHANNEL_INFO REFUSED: this Translated/T-space path has no Windows USER relay migration adapter or unprivileged host migration verb".into());
         }
         Bundle::Unserved { what, .. } => {
             let why = match what {

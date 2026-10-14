@@ -243,6 +243,10 @@ pub struct DisplayPolicy {
     dispsw_pairing: Option<DispSwPairing>,
 }
 
+/// ⚠ EXPERIMENT flag (default off, 2026-10-08, H-edidseen): see
+/// [`kf_disp::model::DisplayModel::answer_hotplug_edid_seen`].
+pub const HOTPLUG_EDID_SEEN_FLAG: &str = "KF3_DISPLAY_HOTPLUG_EDID_SEEN";
+
 /// `NV2080_CTRL_CMD_INTERNAL_DISPLAY_GET_ACTIVE_DISPLAY_DEVICES` (`ogkm-580:
 /// ctrl2080internal.h:1537`) — sent by exactly one caller in the guest's CPU-RM, the
 /// `GF100_DISP_SW` constructor (`disp_sw.c:74`).
@@ -389,6 +393,32 @@ impl DisplayPolicy {
     /// With no derived layouts (the M0 link) the query is not claimed and stays refused.
     #[must_use]
     pub fn offering_display_sw(mut self, on: bool) -> DisplayPolicy {
+        // ⚠ PROBE (default off, 2026-10-08, Windows run56): report IMP enabled, as the real GPU does.
+        if std::env::var("KF3_DISPLAY_IMP_ENABLE").as_deref() == Ok("1")
+            && let Some(m) = &self.model
+        {
+            lock(m).report_imp_enabled(true);
+            eprintln!(
+                "kf-rm: display: PROBE KF3_DISPLAY_IMP_ENABLE=1 — IMP_SET_GET_PARAMETER GET IMP_ENABLE answered TRUE (real-GPU answer; IS_MODE_POSSIBLE already says possible)"
+            );
+        }
+        // ⚠ EXPERIMENT (default off, 2026-10-08, H-hdcp): see [`Self::answering_hdcp_state`].
+        if std::env::var("KF3_DISPLAY_HDCP_STATE").as_deref() == Ok("1") && self.model.is_some() {
+            self = self.answering_hdcp_state();
+            eprintln!(
+                "kf-rm: display: EXPERIMENT KF3_DISPLAY_HDCP_STATE=1 — NV0073 SPECIFIC_GET_HDCP_STATE answered NV_OK, flags 0 (no HDCP on the emulated DVI-D attach point)"
+            );
+        }
+        // ⚠ EXPERIMENT (default off, 2026-10-08, H-edidseen,
+        // `traces/display_reply_diff_20261008/`): `hotplugAfterEdidMask` from the guest's EDID reads.
+        if std::env::var(HOTPLUG_EDID_SEEN_FLAG).as_deref() == Ok("1")
+            && let Some(m) = &self.model
+        {
+            lock(m).answer_hotplug_edid_seen(true);
+            eprintln!(
+                "kf-rm: display: EXPERIMENT {HOTPLUG_EDID_SEEN_FLAG}=1 — SYSTEM_GET_HOTPLUG_STATE lists a display in hotplugAfterEdidMask only until its EDID is read (ogkm's definition; the real GPU's 0x7e00)"
+            );
+        }
         if on && let Some(m) = &self.model {
             lock(m).offer_display_sw(true);
             self.dispsw_pairing = Some(DispSwPairing::default());
@@ -408,6 +438,21 @@ impl DisplayPolicy {
             model,
             objects: BTreeMap::new(),
         })
+    }
+
+    /// ⚠ EXPERIMENT (default off, 2026-10-08, H-hdcp; `KF3_DISPLAY_HDCP_STATE=1`): answer
+    /// `NV0073_CTRL_CMD_SPECIFIC_GET_HDCP_STATE` (nothing capable, nothing encrypting) instead of
+    /// refusing it — the real GPU answers it OK right before Windows' first window programming (VFIO
+    /// DVI reference boot3, RTX 4070, 2026-10-08). The model answers it and this link CLAIMS it: the
+    /// claim set is taken from the model at construction, so it is added here too (run 94 at
+    /// `2c77140b` set only the model's flag, and the control stayed unserviced).
+    #[must_use]
+    pub fn answering_hdcp_state(mut self) -> DisplayPolicy {
+        if let Some(m) = &self.model {
+            lock(m).answer_hdcp_state(true);
+            self.claimed.insert(kf_disp::model::GET_HDCP_STATE);
+        }
+        self
     }
 
     /// The model this link delegates to (a handle on the same registry), if any.
@@ -491,14 +536,17 @@ impl DisplayPolicy {
         let Some(m) = self.model.clone() else {
             return self.answer_m0(cmd, params);
         };
-        let (r, st) = {
+        let (r, st, note) = {
             let mut g = lock(&m);
             let r = match target {
                 Some((c, o)) => g.control_on(c, o, cmd, params),
                 None => g.control(cmd, params),
             };
-            (r, settle(&mut g))
+            (r, settle(&mut g), g.take_notice())
         };
+        if let Some(n) = note {
+            eprintln!("kf-rm: display: {n}");
+        }
         finish(st);
         r
     }
@@ -550,6 +598,7 @@ impl DisplayPolicy {
         }
         let refuse = |status: u32| {
             Some(Reply {
+                rpc_result_private: None,
                 rpc_result: status,
                 body: Vec::new(),
             })
@@ -580,6 +629,7 @@ impl DisplayPolicy {
                     .copy_from_slice(&NV_OK.to_le_bytes());
                 body[req.params_at..req.params_at + p.len()].copy_from_slice(&p);
                 Some(Reply {
+                    rpc_result_private: None,
                     rpc_result: NV_OK,
                     body,
                 })
@@ -698,6 +748,24 @@ impl DisplayRegistry {
         // every event whose notify index is HOTPLUG). The top six bits are flags (`nvos.h:418-436`:
         // BROADCAST … CLIENT_RM), so NVKMS's `HOTPLUG | CLIENT_RM` (0x7e) and the Windows driver's
         // class-0x78 HOTPLUG event both register; any other index does not.
+        // ★ 2026-10-08 (`KF3_ASYNC_PREEMPT`): a RUNLIST_PREEMPT_COMPLETE registration is the
+        // `(hClient, hEvent)` a preempt-complete post names (vfio-10: `hEvent 0xff0620a0`, index 139).
+        if idx & NOTIFY_INDEX_MASK == kf_disp::model::NOTIFIERS_RUNLIST_PREEMPT_COMPLETE {
+            let kept = lock(&self.model).register_preempt(kf_disp::model::HotplugRegistration {
+                client,
+                event,
+                parent,
+            });
+            eprintln!(
+                "kf-rm: display: RUNLIST_PREEMPT_COMPLETE event {client:#x}:{event:#x} (parent {parent:#x}) {}",
+                if kept {
+                    "registered"
+                } else {
+                    "NOT registered (too many)"
+                }
+            );
+            return;
+        }
         if idx & NOTIFY_INDEX_MASK != kf_disp::model::NOTIFIERS_HOTPLUG {
             return;
         }
@@ -1156,6 +1224,43 @@ mod tests {
         }
     }
 
+    /// ⚠ H-hdcp: `GET_HDCP_STATE` is not claimed by default (refused, as before); under the
+    /// experiment the LINK claims it and answers it NV_OK, flags 0 — through `respond()`, the path the
+    /// guest's RPC takes (run 94 at `2c77140b` showed the model's flag alone left it unserviced).
+    #[test]
+    fn get_hdcp_state_is_claimed_and_answered_only_under_the_experiment() {
+        let cmd = kf_disp::model::GET_HDCP_STATE;
+        let p = policy();
+        assert!(!p.claims(cmd));
+        let mut p = p.answering_hdcp_state();
+        assert!(p.claims(cmd));
+        let id = {
+            let m = p.model().expect("model");
+            let mut g = m.lock().unwrap();
+            // one display of this device: the first bit GET_SUPPORTED would report
+            (0..32)
+                .map(|b| 1u32 << b)
+                .find(|b| {
+                    g.control(cmd, &[0u32.to_le_bytes(), b.to_le_bytes(), [0; 4]].concat())
+                        == Some(Ok([0u32.to_le_bytes(), b.to_le_bytes(), [0; 4]].concat()))
+                })
+                .expect("a display")
+        };
+        let params = [
+            0u32.to_le_bytes(),
+            id.to_le_bytes(),
+            0x0000_ffffu32.to_le_bytes(),
+        ]
+        .concat();
+        let r = p.respond(&control(cmd, 0, &params)).expect("answered");
+        assert_eq!(r.rpc_result, NV_OK);
+        assert_eq!(
+            u32::from_le_bytes(r.body[40 + 8..40 + 12].try_into().unwrap()),
+            1 << 1,
+            "outputs cleared, the cached-state input kept"
+        );
+    }
+
     /// ★ Step (1): the link's claims are the model's — the M0 set, `CHANNEL_PUSHBUFFER`, and the
     /// NVKMS bring-up controls the m0a run found refused (`0x730101`, `0x730107`, `0x730102`,
     /// `0x730151`) — and a claimed control is answered, not left for the ledger.
@@ -1241,7 +1346,10 @@ mod tests {
             claimed.len(),
             // +1 on 2026-10-07: NV0073 EVENT_SET_NOTIFICATION; +5 the same day (Windows run29):
             // IMP_SET_GET_PARAMETER, SYSTEM_GET_HOTPLUG_STATE, ACPI_SUBSYSTEM_ACTIVATED, PRE/POST_MODESET
-            41 + 6,
+            // +1 on 2026-10-11: NV0073 0x73011a (the display's current mode)
+            // +1 on 2026-10-11: NV0073 DFP_ASSIGN_SOR (0x731152; the crossbar the derived caps claim)
+            // +1 on 2026-10-14: NV5070 GET_RG_SCAN_LINE (0x5070020c; D3DKMTGetScanLine)
+            41 + 6 + 1 + 1 + 1,
             "the NVKMS bring-up set (with the console pair, the display-SW object's query, the \
              internal hotplug state and SET_RMFREE_FLAGS) and the six internal controls"
         );

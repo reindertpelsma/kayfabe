@@ -1,0 +1,12 @@
+{
+  "mode": "update",
+  "pid": 296888,
+  "start_utc": "2026-10-11 19:02:57.176857 UTC",
+  "process_end_utc": "2026-10-11 19:02:57.192371 UTC",
+  "end_utc": "2026-10-11 19:02:59.192561 UTC",
+  "rc": 0,
+  "xid_records": 1,
+  "verdict": "FAIL",
+  "observation_seconds": 2,
+  "scope": "same-config native probe only; not migration or Windows repair"
+}

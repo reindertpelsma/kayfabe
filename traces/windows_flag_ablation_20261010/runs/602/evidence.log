@@ -1,0 +1,28 @@
+== snap after-signin 2026-10-10T23:01:09  alive=1 tdr_cycles=0
+inval=3089 walks=6219/6219 cleared=3089 unreconciled=0 cleared=10 mapped=12769 unmapped=3829 walks=0 unmapped=0 
+xid_now=29 (before=29)
+DEAD=0 PROBE-DUMP=0 PT-SNAP=0 panics=0
+== snap after-shorts 2026-10-10T23:02:16  alive=1 tdr_cycles=0
+inval=3392 walks=9583/9583 cleared=3392 unreconciled=0 cleared=16 mapped=30580 unmapped=15699 walks=4 unmapped=0 
+xid_now=29 (before=29)
+DEAD=0 PROBE-DUMP=0 PT-SNAP=0 panics=0
+== snap periodic 2026-10-10T23:03:12  alive=1 tdr_cycles=0
+inval=3392 walks=10869/10869 cleared=3392 unreconciled=0 cleared=16 mapped=35284 unmapped=20653 walks=91 unmapped=0 
+xid_now=29 (before=29)
+DEAD=0 PROBE-DUMP=0 PT-SNAP=0 panics=0
+== snap periodic 2026-10-10T23:04:12  alive=1 tdr_cycles=0
+inval=3523 walks=12922/12922 cleared=3523 unreconciled=0 cleared=16 mapped=41075 unmapped=27807 walks=90 unmapped=0 
+xid_now=29 (before=29)
+DEAD=0 PROBE-DUMP=0 PT-SNAP=0 panics=0
+== snap periodic 2026-10-10T23:05:13  alive=1 tdr_cycles=0
+inval=3884 walks=16211/16211 cleared=3884 unreconciled=0 cleared=16 mapped=49414 unmapped=36264 walks=8 unmapped=0 
+xid_now=29 (before=29)
+DEAD=0 PROBE-DUMP=0 PT-SNAP=0 panics=0
+== snap final 2026-10-10T23:05:24  alive=1 tdr_cycles=0
+inval=3884 walks=16608/16608 cleared=3884 unreconciled=0 cleared=16 mapped=50634 unmapped=43164 walks=15 unmapped=0 
+xid_now=29 (before=29)
+DEAD=0 PROBE-DUMP=0 PT-SNAP=0 panics=0
+== snap after-stop 2026-10-10T23:05:44  alive=0 tdr_cycles=1
+inval=4248 walks=17713/17713 cleared=4248 unreconciled=0 cleared=22 mapped=51872 unmapped=46206 walks=0 unmapped=0 
+xid_now=29 (before=29)
+DEAD=0 PROBE-DUMP=0 PT-SNAP=0 panics=0

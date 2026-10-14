@@ -1,0 +1,81 @@
+{
+ "quiet": 0,
+ "end_utc": "2026-10-11T15:30:16.3898384Z",
+ "start_utc": "2026-10-11T15:29:47.7449321Z",
+ "rc": 0,
+ "secs": 29,
+ "gpu_devices": [
+  "NVIDIA GeForce RTX 4070 status=OK code=0"
+ ],
+ "digests": [],
+ "session": 0,
+ "out_files": [
+  "C:\\kf\\out\\nvenc_hevc\\enc.mp4 893910"
+ ],
+ "boot_utc_start": "2026-10-11T15:28:14.5000000Z",
+ "log_tail": [
+  "=== nvenc_hevc start=2026-10-11T15:29:47.7449321+00:00 host=VASTWIN session=0 boot=2026-10-11T15:28:14.5000000Z timeout=180",
+  "Input #0, lavfi, from 'testsrc=size=1280x720:rate=30:duration=20':",
+  "  Duration: N/A, start: 0.000000, bitrate: N/A",
+  "  Stream #0:0: Video: wrapped_avframe, rgb24, 1280x720 [SAR 1:1 DAR 16:9], 30 fps, 30 tbr, 30 tbn",
+  "Stream mapping:",
+  "  Stream #0:0 -> #0:0 (wrapped_avframe (native) -> hevc (hevc_nvenc))",
+  "Press [q] to stop, [?] for help",
+  "Output #0, mp4, to 'C:\\kf\\out\\nvenc_hevc\\enc.mp4':",
+  "  Metadata:",
+  "    encoder         : Lavf62.12.103",
+  "  Stream #0:0: Video: hevc (Main) (hev1 / 0x31766568), yuv420p(tv, progressive), 1280x720 [SAR 1:1 DAR 16:9], q=2-31, 2000 kb/s, 30 fps, 15360 tbn",
+  "    Metadata:",
+  "      encoder         : Lavc62.28.103 hevc_nvenc",
+  "    Side data:",
+  "      CPB properties: bitrate max/min/avg: 0/0/2000000 buffer size: 4000000 vbv_delay: N/A",
+  "[out#0/mp4 @ 00000174bd5eee40] video:865KiB audio:0KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: 0.920570%",
+  "frame=  600 fps=275 q=12.0 Lsize=     873KiB time=00:00:19.90 bitrate= 359.4kbits/s speed=9.13x elapsed=0:00:02.18    ",
+  "frame= 600 ",
+  "=== end rc=0 secs=29 2026-10-11T15:30:16.3898384+00:00"
+ ],
+ "pdh": {
+  "pids": [
+   "8296",
+   "8360",
+   "6304"
+  ],
+  "nv": {
+   "copy": 0.166018937901122,
+   "3d": 0,
+   "videoencode": 14.576196328026187,
+   "videodecode": 0,
+   "vr": 0,
+   "legacyoverlay": 0,
+   "ofa_0": 0
+  },
+  "samples": 9,
+  "other": {},
+  "nvidia_luids": "0_5f01"
+ },
+ "timed_out": false,
+ "token": "g2-nvenc_hevc-1791732581",
+ "boot_utc_end": "2026-10-11T15:28:14.5000000Z",
+ "events": {
+  "kernel_power_41": 0,
+  "bugcheck": 0,
+  "unexpected_shutdown_6008": 0,
+  "wer_1001": 0,
+  "display_4101": 0,
+  "nvlddmkm_153": 3,
+  "other_nvlddmkm": 0,
+  "lines": [
+   "2026-10-11T15:30:07.1145574Z nvlddmkm/153 ",
+   "2026-10-11T15:30:05.6793683Z nvlddmkm/153 ",
+   "2026-10-11T15:30:05.1530835Z nvlddmkm/153 "
+  ],
+  "live_kernel": 0
+ },
+ "app": "nvenc_hevc",
+ "smi": {
+  "samples": 0,
+  "mem_used_base_mb": null,
+  "util_max": 0,
+  "mem_used_max_mb": 0
+ }
+}

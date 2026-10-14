@@ -1,0 +1,6 @@
+=== mandelbrot_t start=2026-10-11T13:49:52.5752326+00:00 host=VASTWIN session=0 boot=2026-10-11T13:46:04.5000000Z timeout=120
+KFDEV NVIDIA GeForce RTX 4070
+[eq] device NVIDIA GeForce RTX 4070 torch 2.8.0+cu126
+CHECK mandelbrot_vs_cpu ok agree=0.99962
+WINEQ_DONE mandelbrot
+=== end rc=0 secs=63 2026-10-11T13:50:55.8092620+00:00

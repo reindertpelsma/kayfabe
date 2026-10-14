@@ -130,6 +130,7 @@ impl CommandPolicy for InertPolicy {
         // length. Not `cmd.payload.clone()`: the guest's declared physical address does
         // not come back at it, because nothing of the guest's ever should.
         Some(Reply {
+            rpc_result_private: None,
             rpc_result: NV_OK,
             body: Vec::new(),
         })

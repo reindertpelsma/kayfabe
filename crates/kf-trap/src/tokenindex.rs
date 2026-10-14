@@ -90,6 +90,16 @@ impl TokenIndex {
         }
     }
 
+    /// The guest runlist an index belongs to (the plane's per-runlist channel cap). `Vector` tables have
+    /// one chid namespace for the device: runlist 0.
+    #[must_use]
+    pub const fn runlist_of(self, index: u32) -> u32 {
+        match self {
+            TokenIndex::Vector { .. } => 0,
+            TokenIndex::RunlistVector => index >> Self::CHID_BITS,
+        }
+    }
+
     /// The guest's chid inside an index (what an `RC_TRIGGERED` names — with the engine, which
     /// the guest turns back into the runlist).
     #[must_use]

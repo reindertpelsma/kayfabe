@@ -1,0 +1,39 @@
+# run 2990 rev e821bf3a, KF3_WALK_REFUSAL_DUMP=1; space 0xece42000 burst at wall 1791989889 (16:58:09 CEST)
+kf3: walkdump wall=1791989889.179 space=0xece42000 va=0x16d00000000 level=3 bit=0x400 raw=0x0600000000daba01 gpga=0xdaba000 ps=0x20000000: bit0=1 ap=0 vol=0 priv=0 ro=0 kind=0x6 pcf=0x0 target=0xdaba000 | as-PTE ap->vid | as-PDE ap->INVALID
+kf3: walkdump   path dir[1] table=0xece42000 idx=0x0 raw=0x000000000ece4102: bit0=0 ap=1 vol=0 priv=0 ro=0 kind=0x0 pcf=0x0 target=0xece41000 | as-PTE ap->peer | as-PDE ap->vid
+kf3: walkdump   path dir[2] table=0xece41000 idx=0x5 raw=0x000000000dcbee22: bit0=0 ap=1 vol=0 priv=1 ro=0 kind=0x0 pcf=0x0 target=0xdcbee000 | as-PTE ap->peer | as-PDE ap->vid
+kf3: walkdump   table dir[3] at 0xdcbee000 slot 0x168 (entries 0x160..): 0x0600000000dab201 0x0600000000dab301 0x0600000000dab401 0x0600000000dab501 0x0600000000dab601 0x0600000000dab701 0x0600000000dab801 0x0600000000dab901 0x0600000000daba01 0x0600000000dabb01 0x0600000000dabc01 0x0600000000dabd01 0x0600000000dabe01 0x0600000010412d0d 0x0600000010412c0d 0x0600000010412b0d
+kf3: walkdump   slot re-read now: 0x0600000000daba01 (sample raw 0x0600000000daba01)
+kf3: walkdump   target page 0xdaba000: words=512 zero=512 valid8=0 consecutive4k=0 kind[0]=0 kind[6]=0 kind[7]=0 kind[other]=0 dual16_present=0/256
+kf3: walkdump   target page 0xdaba000 first 16: 0x0000000000000000 0x0000000000000000 0x0000000000000000 0x0000000000000000 0x0000000000000000 0x0000000000000000 0x0000000000000000 0x0000000000000000 0x0000000000000000 0x0000000000000000 0x0000000000000000 0x0000000000000000 0x0000000000000000 0x0000000000000000 0x0000000000000000 0x0000000000000000
+kf3: walkdump wall=1791989889.179 space=0xece42000 va=0x16d80000000 level=3 bit=0x400 raw=0x0600000000dabe01 gpga=0xdabe000 ps=0x20000000: bit0=1 ap=0 vol=0 priv=0 ro=0 kind=0x6 pcf=0x0 target=0xdabe000 | as-PTE ap->vid | as-PDE ap->INVALID
+kf3: walkdump   path dir[1] table=0xece42000 idx=0x0 raw=0x000000000ece4102: bit0=0 ap=1 vol=0 priv=0 ro=0 kind=0x0 pcf=0x0 target=0xece41000 | as-PTE ap->peer | as-PDE ap->vid
+kf3: walkdump   path dir[2] table=0xece41000 idx=0x5 raw=0x000000000dcbee22: bit0=0 ap=1 vol=0 priv=1 ro=0 kind=0x0 pcf=0x0 target=0xdcbee000 | as-PTE ap->peer | as-PDE ap->vid
+kf3: walkdump   table dir[3] at 0xdcbee000 slot 0x16c (entries 0x164..): 0x0600000000dab601 0x0600000000dab701 0x0600000000dab801 0x0600000000dab901 0x0600000000daba01 0x0600000000dabb01 0x0600000000dabc01 0x0600000000dabd01 0x0600000000dabe01 0x0600000010412d0d 0x0600000010412c0d 0x0600000010412b0d 0x0600000010412a0d 0x060000001041290d 0x060000001041280d 0x06000000236c500d
+kf3: walkdump   slot re-read now: 0x0600000000dabe01 (sample raw 0x0600000000dabe01)
+kf3: walkdump   target page 0xdabe000: words=512 zero=512 valid8=0 consecutive4k=0 kind[0]=0 kind[6]=0 kind[7]=0 kind[other]=0 dual16_present=0/256
+kf3: walkdump   target page 0xdabe000 first 16: 0x0000000000000000 0x0000000000000000 0x0000000000000000 0x0000000000000000 0x0000000000000000 0x0000000000000000 0x0000000000000000 0x0000000000000000 0x0000000000000000 0x0000000000000000 0x0000000000000000 0x0000000000000000 0x0000000000000000 0x0000000000000000 0x0000000000000000 0x0000000000000000
+kf3: walkdump wall=1791989889.179 space=0xece42000 va=0x16ce0000000 level=3 bit=0x400 raw=0x0600000000dab901 gpga=0xdab9000 ps=0x20000000: bit0=1 ap=0 vol=0 priv=0 ro=0 kind=0x6 pcf=0x0 target=0xdab9000 | as-PTE ap->vid | as-PDE ap->INVALID
+kf3: walkdump   path dir[1] table=0xece42000 idx=0x0 raw=0x000000000ece4102: bit0=0 ap=1 vol=0 priv=0 ro=0 kind=0x0 pcf=0x0 target=0xece41000 | as-PTE ap->peer | as-PDE ap->vid
+kf3: walkdump   path dir[2] table=0xece41000 idx=0x5 raw=0x000000000dcbee22: bit0=0 ap=1 vol=0 priv=1 ro=0 kind=0x0 pcf=0x0 target=0xdcbee000 | as-PTE ap->peer | as-PDE ap->vid
+kf3: walkdump   table dir[3] at 0xdcbee000 slot 0x167 (entries 0x15f..): 0x0000000000000000 0x0600000000dab201 0x0600000000dab301 0x0600000000dab401 0x0600000000dab501 0x0600000000dab601 0x0600000000dab701 0x0600000000dab801 0x0600000000dab901 0x0600000000daba01 0x0600000000dabb01 0x0600000000dabc01 0x0600000000dabd01 0x0600000000dabe01 0x0600000010412d0d 0x0600000010412c0d
+kf3: walkdump   slot re-read now: 0x0600000000dab901 (sample raw 0x0600000000dab901)
+kf3: walkdump   target page 0xdab9000: words=512 zero=512 valid8=0 consecutive4k=0 kind[0]=0 kind[6]=0 kind[7]=0 kind[other]=0 dual16_present=0/256
+kf3: walkdump   target page 0xdab9000 first 16: 0x0000000000000000 0x0000000000000000 0x0000000000000000 0x0000000000000000 0x0000000000000000 0x0000000000000000 0x0000000000000000 0x0000000000000000 0x0000000000000000 0x0000000000000000 0x0000000000000000 0x0000000000000000 0x0000000000000000 0x0000000000000000 0x0000000000000000 0x0000000000000000
+...
+kf3: walkdump watch wall=1791989889.379 space=0xece42000 va=0x16d00000000 left=5 above=0x000000000dcbee22 table=0xdcbee000 (same) slot=0x0600000000daba01 (same)
+kf3: walkdump watch wall=1791989889.379 space=0xece42000 va=0x16d80000000 left=5 above=0x000000000dcbee22 table=0xdcbee000 (same) slot=0x0600000000dabe01 (same)
+kf3: walkdump watch wall=1791989889.379 space=0xece42000 va=0x16ce0000000 left=5 above=0x000000000dcbee22 table=0xdcbee000 (same) slot=0x0600000000dab901 (same)
+kf3: walkdump watch wall=1791989889.379 space=0xece42000 va=0x16d60000000 left=5 above=0x000000000dcbee22 table=0xdcbee000 (same) slot=0x0600000000dabd01 (same)
+kf3: walkdump watch wall=1791989889.382 space=0xece42000 va=0x16dc0000000 left=5 above=0x000000000dcbee22 table=0xdcbee000 (same) slot=0x0600000010412c0d (same)
+kf3: walkdump watch wall=1791989889.382 space=0xece42000 va=0x178c0000000 left=5 above=0x000000000dcbee22 table=0xdcbee000 (same) slot=0x06000000135ca30d (same)
+kf3: walkdump watch wall=1791989889.382 space=0xece42000 va=0x17880000000 left=5 above=0x000000000dcbee22 table=0xdcbee000 (same) slot=0x06000000135ca10d (same)
+kf3: walkdump watch wall=1791989889.384 space=0xece42000 va=0x16d40000000 left=5 above=0x000000000dcbee22 table=0xdcbee000 (same) slot=0x0600000000dabc01 (same)
+kf3: walkdump watch wall=1791989889.580 space=0xece42000 va=0x16d00000000 left=4 above=0x000000000dcbe322 table=0xdcbe3000 (MOVED) slot=0x0000000000000020 (CHANGED)
+kf3: walkdump watch wall=1791989889.580 space=0xece42000 va=0x16d80000000 left=4 above=0x000000000dcbe322 table=0xdcbe3000 (MOVED) slot=0x0000000000000020 (CHANGED)
+kf3: walkdump watch wall=1791989889.580 space=0xece42000 va=0x16ce0000000 left=4 above=0x000000000dcbe322 table=0xdcbe3000 (MOVED) slot=0x0000000000000020 (CHANGED)
+kf3: walkdump watch wall=1791989889.580 space=0xece42000 va=0x16d60000000 left=4 above=0x000000000dcbe322 table=0xdcbe3000 (MOVED) slot=0x0000000000000020 (CHANGED)
+kf3: walkdump watch wall=1791989889.585 space=0xece42000 va=0x16dc0000000 left=4 above=0x000000000dcbe322 table=0xdcbe3000 (MOVED) slot=0x0000000000000020 (CHANGED)
+kf3: walkdump watch wall=1791989889.585 space=0xece42000 va=0x178c0000000 left=4 above=0x000000000dcbe322 table=0xdcbe3000 (MOVED) slot=0x0000000000000020 (CHANGED)
+kf3: walkdump watch wall=1791989889.585 space=0xece42000 va=0x17880000000 left=4 above=0x000000000dcbe322 table=0xdcbe3000 (MOVED) slot=0x0000000000000020 (CHANGED)
+kf3: walkdump watch wall=1791989889.585 space=0xece42000 va=0x16d40000000 left=4 above=0x000000000dcbe322 table=0xdcbe3000 (MOVED) slot=0x0000000000000020 (CHANGED)

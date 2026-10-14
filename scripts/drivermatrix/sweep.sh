@@ -41,7 +41,7 @@
 #     SWEEP_HOST_START <ts> rev=<rev> host=<v> arch=<die>
 #     SWAP host=<v> rc=<rc> got=<v> OPEN_MODULE=<yes|no> … | SWAP host=<v> already installed | HOSTROW host=<v> SWAP_FAILED
 #     BARE host=<v> cup2 rc=<rc> CE rv=… -> PASS verdict=PASS             (bare metal, same box, first)
-#     GATES host=<v> V3_GATES_SUMMARY pass=<p> fail=<f>
+#     GATES host=<v> V3_GATES_SUMMARY pass=<p> fail=<f> gate10=<PASS|FALLBACK|FAIL>  (gate 10 = the micro-reservation probe; FALLBACK is not a failure)
 #     CANARY host=<v> verdict=<PASS|FAIL|NO_RESULT> thin=<p>/<n> guest=<v> (gates the 30-arm suites)
 #     MATRIX_ROW host=<v> guest=<v> rev=<rev> thin=<p>/<n> ladder=-        (guest_walk.sh's own line)
 #       | THIN host=<v> guest=<v> rev=<rev> NO_RESULT thin=<what it said> rc=<rc>   (no numeric p/n)
