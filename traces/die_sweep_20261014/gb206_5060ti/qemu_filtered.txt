@@ -283,7 +283,7 @@ kf3: display: +78421 ms the guest's display life ENDED (its RM unloaded): 0 mode
 kf3: display: +78471 ms the console shows the BOOT layer (store 0x0, 1920x1080) (core channel FREE)
 -- last counter line
 kf3: family=Blackwell phase=Halted trapped=3811 applied=439 refused=2 serviced=389 ram_refused=0 unshadowed_writes=3 read_exits=62 last_off=0x110c00 mem[inval=179 walks=184/184 cleared=179 superseded=0 named_missed=0 unreconciled=0 absent_cleared=3 mapped=146 unmapped=146 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=6 sked=0/0held carve_gpu=0 carve_kernel=4 carve_cpu=1 carve_clipped=0x20000 fn70=2 roots=3 root_moves=0 stmts=8/8 refused=3 pramin_repoints=11 pramin_miss=0 last_miss=0x0 pramin_worst_us=846 (map 736 mmap 205) pramin_maps=11 pramin_mmaps=11 pramin_kept=0 pramin_kept_now=0 window_advice_refused=0 inline_opens=0 reaped=10 cache_ops=3 sysmembars=0 root_unsets=0] mirrors=0 reused=3 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=119477 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=50 host_calls=0] bar1db[trapped=1 unmirrored=0 deferred_clears=2 installed=1 removed=1 refused=0 rings=0] fsp[replies=2 last_nvdm=0x20] chan[births=2 pt_births=0 acts=5/0refused birth_refused_cap=0 worst_act_us=12332 nsi=[GR0:184/0raised(nolive=0,novec=0) CE7:117/0raised(nolive=0,novec=0)] pt
-== /root/win/run/qemu.log
+== /root/win/run/qemu-164738.log
 kf-host: HOST-ABI REFUSED control 0x2080014a: host control 0x2080014a has no row in kf_abi::hostabi::HOST_CONTROLS, and host driver 595.91.07 is outside the interval the host encoders were written for — its layout is unknown
 kf-host: HOST-ABI REFUSED control 0x20809064: host control 0x20809064 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 595.91.07 was never measured
 kf-host: HOST-ABI REFUSED control 0x2080a028: host control 0x2080a028 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 595.91.07 was never measured
@@ -394,3 +394,108 @@ kf3: display: +83974 ms the guest's display life ENDED (its RM unloaded): 0 mode
 kf3: display: +84025 ms the console shows the BOOT layer (store 0x0, 1920x1080) (core channel FREE)
 -- last counter line
 kf3: family=Blackwell phase=Halted trapped=3805 applied=439 refused=2 serviced=389 ram_refused=0 unshadowed_writes=3 read_exits=65 last_off=0x110c00 mem[inval=179 walks=184/184 cleared=179 superseded=0 named_missed=0 unreconciled=0 absent_cleared=3 mapped=145 unmapped=145 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=6 sked=0/0held carve_gpu=0 carve_kernel=4 carve_cpu=1 carve_clipped=0x20000 fn70=2 roots=3 root_moves=0 stmts=8/8 refused=3 pramin_repoints=11 pramin_miss=0 last_miss=0x0 pramin_worst_us=645 (map 541 mmap 145) pramin_maps=11 pramin_mmaps=11 pramin_kept=0 pramin_kept_now=0 window_advice_refused=0 inline_opens=0 reaped=10 cache_ops=3 sysmembars=0 root_unsets=0] mirrors=0 reused=3 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=129469 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=50 host_calls=0] bar1db[trapped=1 unmirrored=0 deferred_clears=2 installed=1 removed=1 refused=0 rings=0] fsp[replies=2 last_nvdm=0x20] chan[births=2 pt_births=0 acts=5/0refused birth_refused_cap=0 worst_act_us=10773 nsi=[GR0:184/0raised(nolive=0,novec=0) CE7:71/0raised(nolive=0,novec=0)] pt_
+== /root/win/run/qemu.log
+kf3: display plane ON — virtual NVDisplay for GB202 GB203 GB205 GB206 GB207 (IP 0x05020000, display class 0xca70, 4 heads)
+kf3: display: EXPERIMENT KF3_DISPLAY_LUT_MIRROR=1 — MIRROR accepted on DIRECT ILUT/OLUT where no negative input can reach it
+kf3: display: EXPERIMENT KF3_DISPLAY_ILUT_OFFSET_256=1 — SET_OFFSET_ILUT read in 256-byte units (as OLUT/TMO)
+kf3: display: PROBE KF3_DISPLAY_CAPS_PROBE=1 REFUSED — caps class 0xca73 / page 0x640000 is not the measured one; the authored page stays
+kf3: display: monitor 1920x1080 at 60000 mHz, range max 75 Hz, EDID fnv1a64=c9dcbb394c28b1c7 (display-max-fps 0)
+kf3: display plane built — derived registers, caps page, engine vocabulary, GPU context on 0000:00:07.0
+kf3: display: compose kernel self-test PASSED
+kf3: display worker up — engine 4 heads / 8 windows, caps page published
+kf3: display: display-max-fps unset — every head's vblank tick is capped at 75 Hz; copies without a flip are made at the console head's tick, while watched, and sent only when the frame's checksum changed
+kf3: display: boot layer — store [0, 0x7e9000) as 1920x1080 pitch 7680, shown until the guest arms a head
+qemu-system-x86_64: -device kf3-gpu,fb-mb=4096,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,guest-driver=580.65.06,bus=pci.0,addr=0x6,id=kf0: info: kf3: display console registered (head 0 of kf0)
+kf3: display: +50 ms the console shows the BOOT layer (store 0x0, 1920x1080) (core channel FREE)
+kf3: GSP REFUSED fn76/0x20800a87=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800afe=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800aff=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800aaf=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: display: InstMem(InstMem { phys: 4022009856, size: 65536, addr_space: 2 })
+kf3: GSP REFUSED fn76/0x00800292=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a80=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a89=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802a0f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800ab2=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080017e=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a30=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a2e=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800b03=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800b05=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a3f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: mem t=78.767s REFUSED VasKey(13970166078463016970) root 0xefba2000: 1 run(s) not applied: leaf 0x20fc00000+0x10400000 names store 0xefc00000, inside the firmware carve-out at 0xefbe0000 — a twin maps no kayfabe memory (§Q)
+kf3: mem t=78.773s REFUSED VasKey(13970166078463016970) root 0xefba2000: 1 run(s) not applied: leaf 0x20fc00000+0x10400000 names store 0xefc00000, inside the firmware carve-out at 0xefbe0000 — a twin maps no kayfabe memory (§Q)
+kf3: mem t=78.773s REFUSED VasKey(13970166078463016970) root 0xefba2000: 1 run(s) not applied: leaf 0x20fc00000+0x10400000 names store 0xefc00000, inside the firmware carve-out at 0xefbe0000 — a twin maps no kayfabe memory (§Q)
+kf3: GSP REFUSED fn76/0x2080013f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20809004=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00801306=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20810108=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800ab8=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800173=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802a12=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800160=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: RPC-REFUSED #1 AllocClassNotPermitted { class: 52171, denial: NotOnAllowlist } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusal census)
+kf3: GSP REFUSED fn103/0x0000cbcb=0x56 (GSP_RM_ALLOC) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802801=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080012f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802806=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080205b=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a060=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802068=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00800106=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a70a=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a801=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a02f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x208081ea=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20808524=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00730285=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a3a=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20801110=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080080b=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: display: ChannelAllocated { kind: Core, instance: 0, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9547968512, limit: 65535, size_enum: 4 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Window, instance: 0, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9547444224, limit: 65535, size_enum: 4 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Window, instance: 1, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9547509760, limit: 65535, size_enum: 4 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Window, instance: 2, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9547575296, limit: 65535, size_enum: 4 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Window, instance: 3, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9547640832, limit: 65535, size_enum: 4 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Window, instance: 4, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9547706368, limit: 65535, size_enum: 4 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Window, instance: 5, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9547771904, limit: 65535, size_enum: 4 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Window, instance: 6, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9547837440, limit: 65535, size_enum: 4 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Window, instance: 7, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9547902976, limit: 65535, size_enum: 4 }), life: 1 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 0, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9547411456, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 1, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9547415552, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 2, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9547419648, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 3, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9547423744, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 4, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9547427840, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 5, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9547431936, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 6, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9547436032, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 7, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9547440128, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Cursor, instance: 0, offset: 0, client: 3251634178, pb: None, life: 1 }
+kf3: display: ChannelAllocated { kind: Cursor, instance: 1, offset: 0, client: 3251634178, pb: None, life: 1 }
+kf3: display: ChannelAllocated { kind: Cursor, instance: 2, offset: 0, client: 3251634178, pb: None, life: 1 }
+kf3: display: ChannelAllocated { kind: Cursor, instance: 3, offset: 0, client: 3251634178, pb: None, life: 1 }
+kf3: display: ChannelFreed { kind: Cursor, instance: 0, preserve: false }
+kf3: display: ChannelFreed { kind: Cursor, instance: 1, preserve: false }
+kf3: display: ChannelFreed { kind: Cursor, instance: 2, preserve: false }
+kf3: display: ChannelFreed { kind: Cursor, instance: 3, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 0, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 1, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 2, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 3, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 4, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 5, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 6, preserve: false }
+kf3: display: ChannelFreed { kind: WindowImm, instance: 7, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 0, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 1, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 2, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 3, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 4, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 5, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 6, preserve: false }
+kf3: display: ChannelFreed { kind: Window, instance: 7, preserve: false }
+kf3: display: ChannelFreed { kind: Core, instance: 0, preserve: false }
+kf3: GSP REFUSED fn76/0x20800ab4=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: display: +80726 ms the guest's display life ENDED (its RM unloaded): 0 model channel(s), 0 queued completion(s) dropped (never written) — the boot layer is shown again
+kf3: display: +80776 ms the console shows the BOOT layer (store 0x0, 1920x1080) (core channel FREE)
+-- last counter line
+kf3: family=Blackwell phase=Halted trapped=3829 applied=439 refused=2 serviced=389 ram_refused=0 unshadowed_writes=3 read_exits=64 last_off=0x110c00 mem[inval=179 walks=184/184 cleared=179 superseded=0 named_missed=0 unreconciled=0 absent_cleared=3 mapped=145 unmapped=145 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=6 sked=0/0held carve_gpu=0 carve_kernel=4 carve_cpu=1 carve_clipped=0x20000 fn70=2 roots=3 root_moves=0 stmts=8/8 refused=3 pramin_repoints=11 pramin_miss=0 last_miss=0x0 pramin_worst_us=940 (map 846 mmap 197) pramin_maps=11 pramin_mmaps=11 pramin_kept=0 pramin_kept_now=0 window_advice_refused=0 inline_opens=0 reaped=10 cache_ops=3 sysmembars=0 root_unsets=0] mirrors=0 reused=3 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=128169 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=50 host_calls=0] bar1db[trapped=1 unmirrored=0 deferred_clears=2 installed=1 removed=1 refused=0 rings=0] fsp[replies=2 last_nvdm=0x20] chan[births=2 pt_births=0 acts=5/0refused birth_refused_cap=0 worst_act_us=11424 nsi=[GR0:184/0raised(nolive=0,novec=0) CE7:92/0raised(nolive=0,novec=0)] pt_

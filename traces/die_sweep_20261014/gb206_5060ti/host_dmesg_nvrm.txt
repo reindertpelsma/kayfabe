@@ -1,40 +1,40 @@
-[  143.782937] NVRM: GPU 0000:00:07.0: rm_init_adapter failed, device minor number 0
-[  147.797273] NVRM: The NVIDIA GPU 0000:00:07.0 (PCI ID: 10de:2d04)
-               NVRM: installed in this system requires use of the NVIDIA open kernel modules.
-[  147.797339] NVRM: GPU 0000:00:07.0: RmInitAdapter failed! (0x22:0x56:884)
-[  147.801998] NVRM: GPU 0000:00:07.0: rm_init_adapter failed, device minor number 0
-[  147.911104] NVRM: The NVIDIA GPU 0000:00:07.0 (PCI ID: 10de:2d04)
-               NVRM: installed in this system requires use of the NVIDIA open kernel modules.
-[  147.911164] NVRM: GPU 0000:00:07.0: RmInitAdapter failed! (0x22:0x56:884)
-[  147.917510] NVRM: GPU 0000:00:07.0: rm_init_adapter failed, device minor number 0
-[  221.263130] NVRM: The NVIDIA GPU 0000:00:07.0 (PCI ID: 10de:2d04)
-               NVRM: installed in this system requires use of the NVIDIA open kernel modules.
-[  221.263205] NVRM: GPU 0000:00:07.0: RmInitAdapter failed! (0x22:0x56:884)
-[  221.275691] NVRM: GPU 0000:00:07.0: rm_init_adapter failed, device minor number 0
-[  298.728658] NVRM: The NVIDIA GPU 0000:00:07.0 (PCI ID: 10de:2d04)
-               NVRM: installed in this system requires use of the NVIDIA open kernel modules.
-[  298.728734] NVRM: GPU 0000:00:07.0: RmInitAdapter failed! (0x22:0x56:884)
-[  298.740630] NVRM: GPU 0000:00:07.0: rm_init_adapter failed, device minor number 0
-[  558.838530] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
-[  616.882790] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 03:01:16 UTC 2026
-[  976.775478] NVRM:unknown NVRM ioctl command: 0xf0
-[  977.484921] NVRM:unknown NVRM ioctl command: 0xf0
-[  979.017060] NVRM:unknown NVRM ioctl command: 0xf0
-[  979.485291] NVRM:unknown NVRM ioctl command: 0xf0
-[  980.008029] NVRM:unknown NVRM ioctl command: 0xf0
-[  980.687371] NVRM:unknown NVRM ioctl command: 0xf0
-[  981.081628] NVRM:unknown NVRM ioctl command: 0xf0
-[  981.447164] NVRM:unknown NVRM ioctl command: 0xf0
-[  988.965798] NVRM:unknown NVRM ioctl command: 0xf0
-[  988.969298] NVRM: GPU0 virtmemAllocResources: VA Space alloc failed! Status Code: 0x1f Size: 0x100000000 RangeLo: 0x0, RangeHi: 0xffffffff, pageSzLockMask: 0x211000
-[  988.969369] NVRM: GPU0 virtmemAllocResources: VA Space alloc failed! Status Code: 0x51 Size: 0x1efc00000 RangeLo: 0x120000000, RangeHi: 0x30fbfffff, pageSzLockMask: 0x211000
-[  988.975048] NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
-[  988.975214] NVRM: dmaAllocMapping_GM107: can't alloc VA space for mapping.
-[ 1001.322394] NVRM:unknown NVRM ioctl command: 0xf0
-[ 1401.956847] NVRM:unknown NVRM ioctl command: 0xf0
-[ 1779.373776] NVRM:unknown NVRM ioctl command: 0xf0
-[ 2339.408482] NVRM:unknown NVRM ioctl command: 0xf0
-[ 3088.449295] NVRM:unknown NVRM ioctl command: 0xf0
-[ 3530.834136] NVRM:unknown NVRM ioctl command: 0xf0
-[ 3885.262612] NVRM:unknown NVRM ioctl command: 0xf0
-[ 4274.732434] NVRM:unknown NVRM ioctl command: 0xf0
+[ 6460.123131] NVRM: kbifInitLtr_GB202: LTR is disabled in the hierarchy
+[ 6461.962997] NVRM: kbifInitLtr_GB202: LTR is disabled in the hierarchy
+[ 6463.880659] NVRM: kbifInitLtr_GB202: LTR is disabled in the hierarchy
+[ 6463.998001] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[ 6484.968705] NVRM: kbifInitLtr_GB202: LTR is disabled in the hierarchy
+[ 6486.892322] NVRM: kbifInitLtr_GB202: LTR is disabled in the hierarchy
+[ 6488.702690] NVRM: kbifInitLtr_GB202: LTR is disabled in the hierarchy
+[ 6488.817051] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[ 6509.718499] NVRM: kbifInitLtr_GB202: LTR is disabled in the hierarchy
+[ 6511.530961] NVRM: kbifInitLtr_GB202: LTR is disabled in the hierarchy
+[ 6513.363567] NVRM: kbifInitLtr_GB202: LTR is disabled in the hierarchy
+[ 6513.477983] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[ 6534.468448] NVRM: kbifInitLtr_GB202: LTR is disabled in the hierarchy
+[ 6536.303509] NVRM: kbifInitLtr_GB202: LTR is disabled in the hierarchy
+[ 6538.150659] NVRM: kbifInitLtr_GB202: LTR is disabled in the hierarchy
+[ 6538.273458] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[ 6559.789383] NVRM: kbifInitLtr_GB202: LTR is disabled in the hierarchy
+[ 6561.591233] NVRM: kbifInitLtr_GB202: LTR is disabled in the hierarchy
+[ 6563.412851] NVRM: kbifInitLtr_GB202: LTR is disabled in the hierarchy
+[ 6563.526408] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[ 6619.241815] NVRM: kbifInitLtr_GB202: LTR is disabled in the hierarchy
+[ 6621.079933] NVRM: kbifInitLtr_GB202: LTR is disabled in the hierarchy
+[ 6622.925683] NVRM: kbifInitLtr_GB202: LTR is disabled in the hierarchy
+[ 6623.040302] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[ 6643.862615] NVRM: kbifInitLtr_GB202: LTR is disabled in the hierarchy
+[ 6645.662382] NVRM: kbifInitLtr_GB202: LTR is disabled in the hierarchy
+[ 6647.464682] NVRM: kbifInitLtr_GB202: LTR is disabled in the hierarchy
+[ 6647.578776] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[ 6672.226827] NVRM: kbifInitLtr_GB202: LTR is disabled in the hierarchy
+[ 6674.037765] NVRM: kbifInitLtr_GB202: LTR is disabled in the hierarchy
+[ 6675.878607] NVRM: kbifInitLtr_GB202: LTR is disabled in the hierarchy
+[ 6676.000307] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[ 6696.420468] NVRM: kbifInitLtr_GB202: LTR is disabled in the hierarchy
+[ 6698.217503] NVRM: kbifInitLtr_GB202: LTR is disabled in the hierarchy
+[ 6700.052379] NVRM: kbifInitLtr_GB202: LTR is disabled in the hierarchy
+[ 6700.166295] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0
+[ 6725.453567] NVRM: kbifInitLtr_GB202: LTR is disabled in the hierarchy
+[ 6734.424483] NVRM: kbifInitLtr_GB202: LTR is disabled in the hierarchy
+[ 6736.403993] NVRM: kbifInitLtr_GB202: LTR is disabled in the hierarchy
+[ 6736.530118] NVRM: RmIoctl: unknown NVRM ioctl command: 0xf0

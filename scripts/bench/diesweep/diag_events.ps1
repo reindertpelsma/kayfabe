@@ -17,4 +17,15 @@ foreach ($p in 'nvlddmkm', 'Display', 'Microsoft-Windows-Kernel-PnP', 'Microsoft
 }
 $ev = @(Get-WinEvent -FilterHashtable @{ LogName = 'System'; Level = 1,2; StartTime = (Get-Date).AddMinutes(-20) } -MaxEvents 25 -ErrorAction SilentlyContinue)
 foreach ($e in $ev) { $m = ($e.Message -replace "\s+", ' '); if ($m.Length -gt 240) { $m = $m.Substring(0, 240) }; Say "ERR $($e.ProviderName) id=$($e.Id) $m" }
+# the PnP's own record of the failed start (event 411 carries the NTSTATUS the driver returned)
+foreach ($ln in 'Microsoft-Windows-Kernel-PnP/Configuration', 'Microsoft-Windows-Kernel-PnP/Device Management') {
+    $ev = @(Get-WinEvent -LogName $ln -MaxEvents 30 -ErrorAction SilentlyContinue | Where-Object { $_.Message -match '10DE|NVIDIA|nvlddmkm' })
+    foreach ($e in $ev | Select-Object -First 8) {
+        $m = ($e.Message -replace "\s+", ' '); if ($m.Length -gt 400) { $m = $m.Substring(0, 400) }
+        Say "PNPLOG $ln id=$($e.Id) $m"
+    }
+}
+foreach ($d in @(Get-PnpDevice | Where-Object { $_.InstanceId -like 'PCI\VEN_10DE*' -and $_.Class -eq 'Display' -and $_.Present })) {
+    Say ("PNPUTIL " + ((& pnputil.exe /enum-devices /instanceid $d.InstanceId /problem 2>&1) -join ' | '))
+}
 Say "DONE"

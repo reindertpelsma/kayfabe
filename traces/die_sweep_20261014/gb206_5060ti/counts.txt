@@ -38,7 +38,7 @@ REFUSED fn76: 40
 display: STALL: 0
 BLACK:: 0
 HOST-ABI REFUSED: 6
-== /root/win/run/qemu.log
+== /root/win/run/qemu-164738.log
 GSP phase Running -> Suspending: 0
 USER_RING_REFUSED: 0
 USER_RING_SCAN: 0
@@ -46,3 +46,11 @@ REFUSED fn76: 40
 display: STALL: 0
 BLACK:: 0
 HOST-ABI REFUSED: 6
+== /root/win/run/qemu.log
+GSP phase Running -> Suspending: 0
+USER_RING_REFUSED: 0
+USER_RING_SCAN: 0
+REFUSED fn76: 40
+display: STALL: 0
+BLACK:: 0
+HOST-ABI REFUSED: 0
