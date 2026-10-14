@@ -2,6 +2,15 @@
 
 **STATUS: LIVE, 2026-10-13 (derived mechanically from `tier_checks/merged_classification.tsv`; 40 of 140 inventory rows; review the grouping).** Related: `V3_CONSTANT_STRATEGY.md` §2 (tiers), §4 step 1-3, `V3_CONSTANT_LISTS_20261011.md`.
 
+> **⊘ UPDATE 2026-10-14 (lane C, `V3_CONSTANT_MATRIX_20261014.md`; branch `claude/constants-night-20261014`).** Measured since this page was
+> written: (1) the Windows 580.88 driver's REQUEST for `0x2080852a`, `0x20808524`, `0x2080a70a`, `0x2080852e`, `0x2080853a`, `0x2080a618` (and 6 of
+> 12 `0x2080a088` calls) is all-zero, with one distinct reply each over three captures (AD103, kfwc); kayfabe now asks the host that zero request at
+> realize and answers an identical guest request with the host's bytes (`kf_abi::gssreplay` exact rows) — tier 2, no table. (2) Group C: at host
+> 595.91.07 an unprivileged libcudart issued `0x20809064`, `0x2080a084`, `0x2080a026` (and `0x20809009`/`0x20809001`) and the host answered `NV_OK`
+> (`traces/constants_night_20261014/`); those rows are no longer refused at 595.91.07 (`0x2080a028` is still unmeasured there). (3) `0x20809001`/
+> `0x20809009` are no longer a GA106 row served to every die: host first, then `kf_rm::consttab` per die, else refused. The class columns below are
+> the 2026-10-13 classification and were not re-run.
+
 > **⊘ CORRECTION 2026-10-13 (owner; verified in the host's own module source).** RM's administrator check is `capable(CAP_SYS_ADMIN)`, not uid 0:
 > `os_is_administrator()` returns `NV_IS_SUSER()` (`/usr/src/nvidia-595.91.07/nvidia/os-interface.c:382`), defined as `capable(CAP_SYS_ADMIN)`
 > (`common/inc/nv-linux.h:502`); the two other access rights map to `CAP_PERFMON` and `CAP_SYS_NICE` (`os-interface.c:385-400`). A default Docker container

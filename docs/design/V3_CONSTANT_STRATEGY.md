@@ -1,6 +1,12 @@
 # V3 per-die and per-driver constants: the strategy
 
-**STATUS: LIVE, 2026-10-11 (strategy; nothing here is implemented yet).** Owner rulings: `docs/OWNER_RULINGS.md` §AF (sources, source tags,
+> **⊘ CORRECTION 2026-10-14 (lane C, branch `claude/constants-night-20261014`): the table of §1/§3 now exists.** "Nothing here is implemented yet" is
+> no longer true: `crates/kf-rm/src/consttab.rs` loads the published, source-tagged table `crates/kf-rm/data/measured_constants.tsv`, keyed by the
+> host die (`kf_chip::DieId`, ogkm's names from `MC_GET_ARCH_INFO`) and the driver branch; it enforces §3 in its tests (exact membership, wildcards
+> only with a mechanism tag, `blob` refused, no board data, request words part of the key) and refuses an unmeasured die by name, counted. First
+> consumer: libcudart's init gate (the GA106 capture is no longer served to every die). The per-family matrix is `V3_CONSTANT_MATRIX_20261014.md`.
+
+**STATUS: LIVE, 2026-10-11 (strategy; first implementation 2026-10-14, see the correction above).** Owner rulings: `docs/OWNER_RULINGS.md` §AF (sources, source tags,
 published table), §AG (reverse engineering private), §AH (this strategy). Provenance rules: `V3_PROVENANCE.md`. The inventory this strategy works
 through: `V3_CONSTANT_INVENTORY_20261011.md` (being written; until it lands this page names no item as open).
 

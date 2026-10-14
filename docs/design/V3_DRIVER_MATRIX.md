@@ -741,6 +741,13 @@ into both words every 0.5 s, on GA102-and-later families (`kf_chip::Family::gsp_
 offsets pinned to each die group's `NV_PGSP_MAILBOX(i)`). Hardware check pending (a 595/610
 guest's dmesg must lose the *"heartbeat timed out"* lines).
 
+> **⊘ UPDATE 2026-10-14 (lane C):** the GSS-legacy row below is closed for host **595.91.07** for
+> `0x20809064`, `0x2080a084`, `0x2080a026` (and the cudart gate `0x20809009`/`0x20809001`): an
+> unprivileged libcudart asked them there and the host answered `NV_OK` at the sizes the rows name
+> (`traces/constants_night_20261014/host_cudart_probe_595.txt`); `kf_abi::hostabi` carries them as
+> `MeasuredOpaque` at that exact version. `0x2080a028` (NVENC's per-domain query) is still unmeasured
+> at 595.91.07 and still refused there.
+
 **Host axis — what a sub-580 host cannot be asked, measured on host 575.57.08 (all refused by
 name, none silent):**
 
