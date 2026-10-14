@@ -26,6 +26,8 @@ phase1)
     bash "$WD" ps "$HERE/evidence.ps1" 240 | sed 's/^/P1 /'
     nvidia-smi -q -d MEMORY | sed -n '/BAR1 Memory Usage/,/Free/p' | tr -s ' ' | tr '\n' ' ' | sed 's/^/HOSTBAR1 p1 /'; echo
     bash "$WD" ps "$W/secrets/phase1.ps1" 240
+    # D9: a new die's instance may still be driverless here (GB206: CM_PROB_REINSTALL) — bind + flag in the same boot
+    bash "$WD" ps "$HERE/drvbind.ps1" 400
     bash "$WD" stop ;;
 bind)
     # a new die whose device PnP left driverless (GB206: CM_PROB_REINSTALL): bind the image's own package, flag the new key

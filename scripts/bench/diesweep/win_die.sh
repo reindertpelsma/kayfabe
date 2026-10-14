@@ -67,6 +67,9 @@ start)
         -global i440FX-pcihost.pci-hole64-size=32G
         -device qemu-xhci,id=xhci,addr=0x7 -device usb-tablet,bus=xhci.0
         -device "$KF3")
+    # DIAGNOSTIC (default off), as windows_broker.sh's WIN_TRACE: QEMU trace events into $RUN/trace.log (kf3's BAR0 read
+    # records also need KF3_BAR0_READ_TRACE=1 in WIN_FLAGS)
+    [ "${WIN_TRACE:-0}" = 1 ] && ARGS+=(-msg timestamp=on -trace "events=$K/scripts/bench/trace-events-vfio-reference.txt,file=$RUN/trace.log")
     FLAGS="KF3_WIN_USER_CHANNELS_PASSTHROUGH KF3_WIN_TWIN_DEFAPI_OBJECT KF3_KERNEL_GR_CE KF3_KERNEL_GR_WORK KF3_TRANSLATED_CE_RELAY KF3_DEFERRED_API KF3_PREEMPT_BIND_PROBE KF3_DISPLAY_IMP_ENABLE KF3_DISPLAY_CTRL_PROBE KF3_ZCULL_BIND_PROBE KF3_SW_RUNLIST_HOST_OWNED KF3_ASYNC_PREEMPT KF3_GFX_POOL_PROBE KF3_SW_RUNLIST_PROBE KF3_MEMORY_LIST_PROBE KF3_DISPLAY_SDR_COLOR KF3_DISPLAY_CAPS_PROBE KF3_DISPLAY_LUT_MIRROR KF3_DISPLAY_ILUT_OFFSET_256 ${WIN_FLAGS:-}"
     while IFS= read -r name; do unset "$name"; done < <(compgen -e | sed -n '/^KF3_/p')
     ENV=(); for f in $FLAGS; do case $f in *=*) ENV+=("$f") ;; *) ENV+=("$f=1") ;; esac; done
