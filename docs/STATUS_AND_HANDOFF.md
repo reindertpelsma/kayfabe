@@ -1,5 +1,19 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-14 22:30 CEST - USER-ring relay is an event loop; the SYNC_WAIT gate was unsound (GP_GET) and is fixed
+
+Branch `claude/userring-eventloop-20261014` (from `claude/win11-userring-20261014` `77eaf762`), full account `docs/design/V3_USER_RING_EVENT_LOOP_20261014.md`.
+- [measured] **`GP_GET` runs ahead of processing** (bare metal 595.91.07: an acquire stalls entry 0, GP_GET already covers all entries, the segment behind a SYNC_WAIT barrier
+  has not run, `USERD.REFERENCE` is 0). The relay's gate (barrier + witness, "GP_GET past it") therefore did not gate: the new `kf-syncwait-stress` tool made the relay refuse
+  49/60 late-bytes plans. Fixed: markers `[SET_REFERENCE tag|n, NON_STALL_INTERRUPT]`, proof = tagged REFERENCE. A SYNC_WAIT behind an open packet is not gated (no witness
+  can enter a packet) and is read at once; late bytes there are unprotected (counter `carried_ungated`). Windows: the Minecraft 25k SYNC_WAIT-with-open-packet entries no longer wait a tick.
+- Loop: no tick, no `Poll` (its comment overread the data: 69 971 "puts without doorbell" were relayed ENTRIES, ~340 per doorbell), doorbell eventfd + engine non-stall events +
+  bounded spin (64) + a 50 ms safety net whose findings are counters (`USER_RING_LOOP SUMMARY`); `SyncGate::cleared` lap bug and `Grace` clock fixed.
+- Tests: `kf-chan/tests/user_loop_model.rs` (exhaustive interleaving model, 37), `user_gate_rules.rs` (118k exhaustive splits + 4k random against a PBDMA parse model, 9).
+- Validation (kf3 `1d845d50`, Linux): fast suite 30/30 off and on, desktop smoke + S3x3 both ways, gates 9/9 + gate10, stress 642/642 (relay) and 642/642 (control).
+  Debug-only `KF3_DEBUG=1 KF3_DEBUG_FORCE_MIGRATABLE=1` puts the Linux guest's USER channels on the relay. Drain path: ~4 ms -> ~60 us per three SYNC_WAITs (288 -> 14 000 plans/s).
+- Windows: not run (VM 2990 untouched). Open: full GPFIFO behind the guest's own gate deadlocks; staged-trigger path now marker-based but unexercised on Linux.
+
 ## UPDATE 2026-10-14 16:00 CEST - Win11 S3: the GSP side holds, Windows does not survive the wake yet
 
 **Win11 S3 update, 2026-10-14 (kf3 `0c5fedff` = S3 branch + user-ring-scan `c287af4f`, branch `claude/s3-win11-20261014`, `traces/win11_s3_20261014/`, [`V3_S3_RESUME.md`](design/V3_S3_RESUME.md) §7a).**

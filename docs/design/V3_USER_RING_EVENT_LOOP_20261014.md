@@ -8,6 +8,14 @@ Labels: **[measured]** = a run or a test result named here; **[read]** = public 
 
 ## 0. Short answer
 
+**UPDATE (end of the work, read this first):** the event loop is in the code and validated on Linux (§8): fast suite 30/30 with and without the
+debug switch, desktop smoke and 3 S3 cycles both ways, gates 9/9 + gate10, the stress tool 642/642 plans through the relay. Validating it
+exposed that the SYNC_WAIT gate itself was unsound: **`GP_GET` runs ahead of processing** (bare-metal measurement, §3.3), so a gate that waits for
+`GP_GET` lets the relay read bytes the guest has not written. The gate now proves the barrier by a tagged `USERD.REFERENCE` marker; a SYNC_WAIT behind
+an open packet cannot be gated and is read at once (a departure from the owner's text, §3.3). Drain path before/after: ~4 ms -> ~60 us per three
+SYNC_WAITs, 288 -> 14 000 plans/s (§8.1). The text below up to §5 is the state of the work at each step and is kept as the record.
+
+
 The relay of Windows USER rings (`crates/kf-qemu/src/userpump.rs`, driven by the one worker of
 `crates/kf-chan/src/worker.rs`) learns about everything that is not a doorbell by being re-rung on a
 timer: a 1 ms `TICK_TAG` refresh for `tick`/`retry`, a 250 ms active window and a 20 ms idle poll
