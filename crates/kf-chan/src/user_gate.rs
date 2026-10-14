@@ -28,6 +28,55 @@ use std::time::{Duration, Instant};
 /// How long the same unpublished segment must keep refusing before the refusal is final.
 pub const REFUSE_AFTER: Duration = Duration::from_millis(50);
 
+/// After new guest work was last seen, how long the relay keeps polling `GP_PUT` at the worker's
+/// short tick (1 ms) — the window in which a guest that believes its channel is still running
+/// advances `GP_PUT` without a doorbell.
+pub const ACTIVE_POLL: Duration = Duration::from_millis(250);
+/// Beyond that window, the longest a relay goes without reading `GP_PUT` (the worker's park tick,
+/// at most 50 ms, bounds it from above). Far below the guest's 2 s timeout detection.
+pub const IDLE_POLL: Duration = Duration::from_millis(20);
+
+/// ★ 2026-10-14 — **the relay must notice a `GP_PUT` advance that comes without a doorbell.**
+/// Public `dev_pbdma.ref` (`NV_PPBDMA_GP_PUT`): Host synchronizes its `GP_PUT` from
+/// `NV_RAMUSERD_GP_PUT` on its own ("there will be a delay in that synchronization") while the
+/// channel is loaded, so a driver that believes its channel is still running may skip the
+/// doorbell. Measured (Win11 + 580.88): 205 doorbells against ~70 000 new-work `GP_PUT` reads on
+/// one channel, and pumps idle 1.6-3.3 s with the guest's `GP_PUT` ahead of the cursor (no turn,
+/// no doorbell) right before the guest's per-channel recovery (`RESET_CHANNEL`) and the adapter
+/// reset. A relay that reads `GP_PUT` only on a doorbell or while its own ring is in flight leaves
+/// that work unread forever. [`Poll`] keeps reading it: every worker tick for [`ACTIVE_POLL`]
+/// after new work, then at least every [`IDLE_POLL`].
+#[derive(Debug, Clone, Copy)]
+pub struct Poll {
+    work_at: Instant,
+    turn_at: Instant,
+}
+
+impl Poll {
+    /// A new channel (counts as just active).
+    pub fn new(now: Instant) -> Self {
+        Self {
+            work_at: now,
+            turn_at: now,
+        }
+    }
+    /// A turn ran at `now`; `new_work` = it found `GP_PUT` ahead of the cursor.
+    pub fn turned(&mut self, now: Instant, new_work: bool) {
+        self.turn_at = now;
+        if new_work {
+            self.work_at = now;
+        }
+    }
+    /// Inside the active window: keep the worker's short tick.
+    pub fn active(&self, now: Instant) -> bool {
+        now.saturating_duration_since(self.work_at) < ACTIVE_POLL
+    }
+    /// An idle relay is due for a `GP_PUT` read at `now`.
+    pub fn due(&self, now: Instant) -> bool {
+        self.active(now) || now.saturating_duration_since(self.turn_at) >= IDLE_POLL
+    }
+}
+
 /// What the relay does with the guest entry at its cursor ([`SyncGate::entry`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Gate {
@@ -236,6 +285,31 @@ mod tests {
         g.published(14);
         assert_eq!(g.entry(seg(0x1000, 4, true), 1, 6, 14), Gate::Proceed);
         assert_eq!(g.entry(SYNC_NOP, 2, 5, 14), Gate::PublishBarrier);
+    }
+
+    /// The measured hang: the relay's ring drained, the guest advanced `GP_PUT` without a
+    /// doorbell. Under the old rule (read only on a doorbell or while in flight) no read is ever
+    /// due; under [`Poll`] one is due within the active window at once and later within
+    /// [`IDLE_POLL`].
+    #[test]
+    fn a_drained_relay_still_reads_put_without_a_doorbell() {
+        let t = Instant::now();
+        let mut p = Poll::new(t);
+        p.turned(t, true);
+        // drained at once: still polling at the short tick
+        assert!(p.active(t + Duration::from_millis(100)));
+        assert!(p.due(t + Duration::from_millis(100)));
+        // long idle: a read is due every IDLE_POLL, never later
+        let late = t + Duration::from_secs(5);
+        p.turned(late, false);
+        assert!(!p.active(late));
+        assert!(!p.due(late + Duration::from_millis(5)));
+        assert!(p.due(late + IDLE_POLL));
+        // the guest's timeout detection (2 s) is never reached by the polling gap
+        assert!(IDLE_POLL.max(Duration::from_millis(50)) < Duration::from_secs(2));
+        // new work re-enters the active window
+        p.turned(late + IDLE_POLL, true);
+        assert!(p.active(late + IDLE_POLL + Duration::from_millis(1)));
     }
 
     #[test]

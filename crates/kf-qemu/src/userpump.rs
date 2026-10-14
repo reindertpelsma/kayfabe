@@ -384,6 +384,9 @@ pub(super) struct Pump {
     grace: kf_chan::user_gate::Grace,
     grace_reported: u32,
     grace_was_retrying: bool,
+    /// ★ 2026-10-14: keep reading the guest's GP_PUT without a doorbell
+    /// ([`kf_chan::user_gate::Poll`]).
+    pub(super) poll: kf_chan::user_gate::Poll,
     /// Measurement only ([`trace_dir`]).
     pub(super) trace: Option<Box<Trace>>,
 }
@@ -450,6 +453,7 @@ impl Pump {
             grace: kf_chan::user_gate::Grace::default(),
             grace_reported: 0,
             grace_was_retrying: false,
+            poll: kf_chan::user_gate::Poll::new(std::time::Instant::now()),
             trace: trace_dir().map(|_| Box::new(Trace::new())),
         })
     }
@@ -1104,7 +1108,12 @@ impl Pump {
                 self.guest_get = None;
             }
         }
+        let now = std::time::Instant::now();
+        if self.segment.is_some() {
+            self.poll.turned(now, true);
+        }
         self.tick = self.fetch.fetched() != self.fetch.issued()
+            || self.poll.active(now)
             || self.sync.waiting()
             || self.grace.retrying()
             || self.trace.as_ref().is_some_and(|t| !t.rereads.is_empty());
@@ -1129,6 +1138,7 @@ impl Pump {
             if put >= r.source.1 {
                 return Err("USER_RING_PUT_BOUND".into());
             }
+            self.poll.turned(now, put != self.cursor);
             if put == self.cursor {
                 return Ok(false);
             }
@@ -2106,6 +2116,9 @@ impl ChanPlane {
         let Ok(rings) = self.user_rings.try_lock() else {
             return;
         };
+        // ★ 2026-10-14: an idle relay is still due a GP_PUT read every `IDLE_POLL` — the guest
+        // may advance GP_PUT without a doorbell (`kf_chan::user_gate::Poll`).
+        let now = std::time::Instant::now();
         for record in rings.values() {
             let mut signaled = false;
             record.wake_if(
@@ -2113,7 +2126,8 @@ impl ChanPlane {
                     !r.retired
                         && !r.free_attempted
                         && r.dead.is_none()
-                        && (record.pending() || r.pump.as_ref().is_some_and(|p| p.tick))
+                        && (record.pending()
+                            || r.pump.as_ref().is_some_and(|p| p.tick || p.poll.due(now)))
                 },
                 |idx| signaled = self.plane.ring_internal(idx),
             );
