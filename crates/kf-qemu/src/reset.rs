@@ -134,7 +134,13 @@ pub enum Stage {
 /// block: `begin_*` posts a request to the owning thread, `*_done` reads its acknowledgement.
 pub trait Owners {
     /// The drainer's own state, reset synchronously ([`Stage::Drainer`]).
-    fn reset_drainer_state(&self, epoch: u64);
+    ///
+    /// ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`): `wake` — every request this run covers was
+    /// the platform's S3 WAKE (QEMU's `RESET_TYPE_WAKEUP`). Returns [`Life::Kept`] when the owner
+    /// kept the guest life — the GSP-RM state a PM-transition suspend saved — and reset only what
+    /// a power cycle resets on silicon (registers, interrupts); the coordinator then skips
+    /// [`Stage::Release`] and [`Stage::Memory`]. Anything else is [`Life::Ended`]: the full reset.
+    fn reset_drainer_state(&self, epoch: u64, wake: bool) -> Life;
     /// Ask the channel plane (act thread) and the display worker to release this life.
     fn begin_release(&self, epoch: u64);
     /// Both have acknowledged `epoch`.
@@ -145,9 +151,21 @@ pub trait Owners {
     fn memory_done(&self, epoch: u64) -> bool;
     /// The last, synchronous step before the gate opens ([`Stage::Finish`]). `false`: not yet (a
     /// worker still owns a token) — nothing was changed, the drainer asks again on its next pass.
-    fn finish(&self, epoch: u64) -> bool;
+    /// `life`: what [`Owners::reset_drainer_state`] answered — a kept life keeps its tokens.
+    fn finish(&self, epoch: u64, life: Life) -> bool;
     /// A stage has waited `waited` for its acknowledgement (bounded logging is the caller's).
     fn stalled(&self, _stage: Stage, _epoch: u64, _waited: std::time::Duration) {}
+}
+
+/// ★ 2026-10-14 — what a reset run did to the guest life ([`Owners::reset_drainer_state`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Life {
+    /// The life ended: every stage ran, the device is as realize left it.
+    #[default]
+    Ended,
+    /// ★ An S3 wake of a PM-suspended life: registers and interrupts reset, the guest's GSP-RM
+    /// state (queues, objects, channels, address spaces, display) kept for its resume.
+    Kept,
 }
 
 /// What one [`Reset::poll`] did.
@@ -165,6 +183,7 @@ pub enum Progress {
 struct Run {
     stage: Stage,
     epoch: u64,
+    life: Life,
     since: Option<std::time::Instant>,
     stall_said: bool,
 }
@@ -196,6 +215,12 @@ pub struct Reset {
     from_vcpu: AtomicU64,
     /// Bounded waits ([`Reset::wait_completed`]) that hit their bound.
     waits_timed_out: AtomicU64,
+    /// ★ 2026-10-14: a request that was NOT the platform's S3 wake arrived since the last run's
+    /// Drainer stage read it — such a run never keeps a life. Set BEFORE the request is counted.
+    cold_pending: std::sync::atomic::AtomicBool,
+    /// Wake requests (status line) and runs that kept a PM-suspended life.
+    from_wake: AtomicU64,
+    kept: AtomicU64,
 }
 
 /// ★ How long the main loop waits, with every vCPU paused, for a reset to complete before it lets
@@ -224,8 +249,21 @@ impl Reset {
     /// [`Reset::request`], counting where QEMU asked from (`from_vcpu`: a vCPU thread — a bus
     /// reset; otherwise its main loop).
     pub fn request_from(&self, from_vcpu: bool) -> u64 {
+        self.request_typed(from_vcpu, false)
+    }
+
+    /// ★ 2026-10-14: [`Reset::request_from`] with QEMU's reset type: `wake` is
+    /// `RESET_TYPE_WAKEUP` (`hw/i386/pc.c:1723-1727`, the S3 resume's `qemu_devices_reset`).
+    /// Any other request marks the run cold BEFORE it is counted, so the run that covers it
+    /// never keeps a life ([`Owners::reset_drainer_state`]).
+    pub fn request_typed(&self, from_vcpu: bool, wake: bool) -> u64 {
         let c = if from_vcpu { &self.from_vcpu } else { &self.from_main };
         c.fetch_add(1, Ordering::Relaxed);
+        if wake {
+            self.from_wake.fetch_add(1, Ordering::Relaxed);
+        } else {
+            self.cold_pending.store(true, Ordering::SeqCst);
+        }
         self.request()
     }
 
@@ -304,6 +342,7 @@ impl Reset {
                 Stage::Idle => {
                     // The epoch is the newest request: everything up to it is covered by this run.
                     r.epoch = self.requested.load(Ordering::Acquire);
+                    r.life = Life::Ended;
                     // Idempotent: [`Reset::request`] closed it; a request that raced the previous
                     // run's open may not have.
                     self.gate.close();
@@ -317,6 +356,9 @@ impl Reset {
                     // is visible. Nothing admitted since the last reset began ⇒ nothing to undo.
                     if !self.touched.swap(false, Ordering::SeqCst) {
                         self.pristine.fetch_add(1, Ordering::Relaxed);
+                        // ★ 2026-10-14: the cold mark is this run's even when nothing was undone —
+                        // left set, it would make the NEXT life's S3 wake a full reset.
+                        self.cold_pending.store(false, Ordering::SeqCst);
                         self.enter(&mut r, Stage::Finish);
                         if let Some(p) = self.complete(&mut r) {
                             return p;
@@ -326,9 +368,21 @@ impl Reset {
                     self.enter(&mut r, Stage::Drainer);
                 }
                 Stage::Drainer => {
-                    o.reset_drainer_state(r.epoch);
-                    o.begin_release(r.epoch);
-                    self.enter(&mut r, Stage::Release);
+                    // ★ 2026-10-14: a cold request counted after this read restarts the run at
+                    // `complete` (its count is newer than the epoch), and the rerun is not
+                    // pristine after a kept life (`touched` is set below), so it resets fully.
+                    let wake = !self.cold_pending.swap(false, Ordering::SeqCst);
+                    r.life = o.reset_drainer_state(r.epoch, wake);
+                    if r.life == Life::Kept {
+                        self.kept.fetch_add(1, Ordering::Relaxed);
+                        // the device is not as realize left it: a later reset must not find it
+                        // pristine
+                        self.touched.store(true, Ordering::SeqCst);
+                        self.enter(&mut r, Stage::Finish);
+                    } else {
+                        o.begin_release(r.epoch);
+                        self.enter(&mut r, Stage::Release);
+                    }
                 }
                 Stage::Release => {
                     if !o.released(r.epoch) {
@@ -344,7 +398,7 @@ impl Reset {
                     self.enter(&mut r, Stage::Finish);
                 }
                 Stage::Finish => {
-                    if !o.finish(r.epoch) {
+                    if !o.finish(r.epoch, r.life) {
                         return self.waiting(&mut r, o);
                     }
                     if let Some(p) = self.complete(&mut r) {
@@ -363,6 +417,7 @@ impl Reset {
             // stays closed). Nothing was admitted since, so unless the guest got in before the
             // close, the rerun finds the device pristine and completes at once.
             r.epoch = newest;
+            r.life = Life::Ended;
             self.enter(r, Stage::Quiesce);
             return None;
         }
@@ -408,11 +463,13 @@ impl Reset {
     #[must_use]
     pub fn status(&self) -> String {
         format!(
-            "reset[req={} (main={} vcpu={}) done={} pristine={} waits_timed_out={} stage={:?} dropped={}]",
+            "reset[req={} (main={} vcpu={} wake={}) done={} kept={} pristine={} waits_timed_out={} stage={:?} dropped={}]",
             self.requested(),
             self.from_main.load(Ordering::Relaxed),
             self.from_vcpu.load(Ordering::Relaxed),
+            self.from_wake.load(Ordering::Relaxed),
             self.completed(),
+            self.kept.load(Ordering::Relaxed),
             self.pristine.load(Ordering::Relaxed),
             self.waits_timed_out.load(Ordering::Relaxed),
             self.stage(),
@@ -581,6 +638,8 @@ mod tests {
         /// The reset whose status a stall report reads (the device's `stalled` does).
         status_of: RefCell<Option<Arc<Reset>>>,
         status_seen: RefCell<Option<String>>,
+        /// ★ 2026-10-14: the life ended with a PM-transition suspend (the GSP `Halted`, saved).
+        pm_suspended: Cell<bool>,
     }
 
     impl Fake {
@@ -595,9 +654,16 @@ mod tests {
     }
 
     impl Owners for Fake {
-        fn reset_drainer_state(&self, e: u64) {
+        fn reset_drainer_state(&self, e: u64, wake: bool) -> Life {
+            if wake && self.pm_suspended.get() {
+                self.note(format!("drainer-kept {e}"));
+                self.pm_suspended.set(false);
+                return Life::Kept;
+            }
             self.note(format!("drainer {e}"));
             self.dirty.set(0);
+            self.pm_suspended.set(false);
+            Life::Ended
         }
         fn begin_release(&self, e: u64) {
             self.note(format!("release {e}"));
@@ -636,12 +702,15 @@ mod tests {
             }
             true
         }
-        fn finish(&self, e: u64) -> bool {
+        fn finish(&self, e: u64, life: Life) -> bool {
             if self.finish_polls.get() > 0 {
                 self.finish_polls.set(self.finish_polls.get() - 1);
                 return false;
             }
-            self.note(format!("finish {e}"));
+            self.note(match life {
+                Life::Ended => format!("finish {e}"),
+                Life::Kept => format!("finish-kept {e}"),
+            });
             true
         }
         fn stalled(&self, _s: Stage, _e: u64, _w: std::time::Duration) {
@@ -933,7 +1002,9 @@ mod tests {
     }
 
     impl Owners for SyncOwners {
-        fn reset_drainer_state(&self, _e: u64) {}
+        fn reset_drainer_state(&self, _e: u64, _wake: bool) -> Life {
+            Life::Ended
+        }
         fn begin_release(&self, _e: u64) {
             self.release_polls.store(20, Ordering::SeqCst);
         }
@@ -953,7 +1024,7 @@ mod tests {
         fn memory_done(&self, _e: u64) -> bool {
             true
         }
-        fn finish(&self, _e: u64) -> bool {
+        fn finish(&self, _e: u64, _life: Life) -> bool {
             self.finished.fetch_add(1, Ordering::SeqCst);
             true
         }
@@ -1044,5 +1115,111 @@ mod tests {
         a.done(2);
         assert_eq!(a.owed(), None);
         assert!(a.is_done(2));
+    }
+
+    // ---- ★ 2026-10-14: the S3 wake (`docs/design/V3_S3_RESUME.md`) ----------------------------
+
+    fn touched_life(r: &Reset, o: &Fake) {
+        r.touched();
+        o.live_a_life(3);
+    }
+
+    /// ★★ A wake reset of a PM-suspended life keeps it: no Release, no Memory, its resources stay.
+    #[test]
+    fn a_wake_of_a_pm_suspended_life_keeps_it_and_skips_release_and_memory() {
+        let r = Reset::default();
+        let o = Fake::default();
+        touched_life(&r, &o);
+        o.pm_suspended.set(true);
+        let e = r.request_typed(false, true);
+        assert_eq!(run_to_completion(&r, &o).last(), Some(&Progress::Completed(e)));
+        assert_eq!(
+            *o.calls.borrow(),
+            vec![format!("drainer-kept {e}"), format!("finish-kept {e}")]
+        );
+        assert_eq!(o.live.get(), 3, "the life's host resources are kept");
+        assert!(!r.gate.is_closed(), "the gate opens");
+        assert!(r.status().contains("kept=1"), "{}", r.status());
+    }
+
+    /// ⊘ The same wake without a PM suspend behind it is a full reset.
+    #[test]
+    fn a_wake_without_a_pm_suspend_is_a_full_reset() {
+        let r = Reset::default();
+        let o = Fake::default();
+        touched_life(&r, &o);
+        let e = r.request_typed(false, true);
+        run_to_completion(&r, &o);
+        assert_eq!(
+            *o.calls.borrow(),
+            vec![
+                format!("drainer {e}"),
+                format!("release {e}"),
+                format!("memory {e}"),
+                format!("finish {e}")
+            ]
+        );
+        assert_eq!(o.live.get(), 0);
+    }
+
+    /// ⊘ A COLD reset of a PM-suspended life (QMP `system_reset` while suspended) ends it.
+    #[test]
+    fn a_cold_reset_of_a_pm_suspended_life_ends_it() {
+        let r = Reset::default();
+        let o = Fake::default();
+        touched_life(&r, &o);
+        o.pm_suspended.set(true);
+        let e = r.request_from(false);
+        run_to_completion(&r, &o);
+        assert_eq!(o.calls.borrow()[0], format!("drainer {e}"));
+        assert_eq!(o.live.get(), 0);
+    }
+
+    /// ⊘ A wake and a cold request covered by one run: cold wins.
+    #[test]
+    fn a_wake_and_a_cold_request_in_one_run_is_a_full_reset() {
+        let r = Reset::default();
+        let o = Fake::default();
+        touched_life(&r, &o);
+        o.pm_suspended.set(true);
+        r.request_typed(false, true);
+        let e = r.request_from(false);
+        run_to_completion(&r, &o);
+        assert_eq!(o.calls.borrow()[0], format!("drainer {e}"));
+        assert_eq!(o.live.get(), 0);
+    }
+
+    /// ★ A cold reset right after a kept wake (nothing admitted in between) is NOT pristine: the
+    /// kept life is still there and is ended.
+    #[test]
+    fn a_cold_reset_after_a_kept_wake_still_ends_the_life() {
+        let r = Reset::default();
+        let o = Fake::default();
+        touched_life(&r, &o);
+        o.pm_suspended.set(true);
+        r.request_typed(false, true);
+        run_to_completion(&r, &o);
+        assert_eq!(o.live.get(), 3);
+        let e = r.request_from(false);
+        run_to_completion(&r, &o);
+        assert!(o.calls.borrow().contains(&format!("release {e}")));
+        assert_eq!(o.live.get(), 0);
+    }
+
+    /// ★ The machine's own cold reset at start-up finds the device pristine; its cold mark must not
+    /// survive into the next life and turn that life's S3 wake into a full reset.
+    #[test]
+    fn a_pristine_cold_reset_does_not_leave_its_mark_on_the_next_wake() {
+        let r = Reset::default();
+        let o = Fake::default();
+        r.request_from(false);
+        run_to_completion(&r, &o);
+        assert!(o.calls.borrow().iter().all(|c| c.starts_with("finish")));
+        touched_life(&r, &o);
+        o.pm_suspended.set(true);
+        let e = r.request_typed(false, true);
+        run_to_completion(&r, &o);
+        assert!(o.calls.borrow().contains(&format!("drainer-kept {e}")));
+        assert_eq!(o.live.get(), 3);
     }
 }

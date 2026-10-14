@@ -64,7 +64,9 @@
  * kf3_device_reset(h), called from the device's Resettable hold phase (built as c9ac4e77). */
 /* 28 (2026-10-13, same branch): kf3_device_reset gains from_vcpu, and kf3_device_reset_wait (the
  * exit phase's bounded wait, main loop only) joins. */
-#define KF3_ABI 28
+/* 29 (2026-10-14, claude/s3-resume-20261014, docs/design/V3_S3_RESUME.md): kf3_device_reset gains
+ * wake (the reset type is RESET_TYPE_WAKEUP: the S3 resume's device reset). */
+#define KF3_ABI 29
 #define KF3_BROKER_ON 1u
 #define KF3_BROKER_VRAM_AUTO 0u
 #define KF3_BROKER_VRAM_ON 1u
@@ -254,8 +256,9 @@ int32_t kf3_display_ui_info(void *h, uint32_t head, uint32_t width, uint32_t hei
 int32_t kf3_option_rom(void *h, const uint8_t **rom, uint64_t *rom_len);
 /* ★ ABI 28: QEMU reset this function (Resettable hold phase, BQL held). Rust closes its vCPU gate,
  * counts the request (from_vcpu: asked on a vCPU thread — a bus reset), wakes its register drainer
- * and returns; nothing here waits. */
-void kf3_device_reset(void *h, uint32_t from_vcpu);
+ * and returns; nothing here waits. ★ ABI 29: wake — the reset type is RESET_TYPE_WAKEUP (the S3
+ * resume); a PM-suspended guest life survives it, every other reset ends the life. */
+void kf3_device_reset(void *h, uint32_t from_vcpu, uint32_t wake);
 /* ★ ABI 28: the exit phase, MAIN LOOP ONLY (every vCPU paused around qemu_system_reset): wait at
  * most timeout_ms (0: the device's own bound) for that reset to complete. 0 complete, 1 bound passed (logged; the reset goes on
  * with the device closed), -1 no device. */

@@ -429,6 +429,16 @@ pub enum BootStep {
     /// generic bootloader descriptor's `dataDmaBase` written through the PIO port (TU10x
     /// `BOOT_WITH_LOADER`).
     FwsecCommand(u64),
+    /// ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`) — the RM firmware was loaded while no boot
+    /// was in progress (the processor not started, the protected region down). On a device whose
+    /// GSP-RM state a PM-transition suspend saved, this is the **resume**: the FSM restores the
+    /// saved queue binding (no publish, sequence numbers kept) and posts `GSP_INIT_DONE` into it.
+    /// Anywhere else the FSM does nothing with it.
+    ///
+    /// *Turing regime:* the SEC2 Booter Load with the suspend/resume metadata
+    /// (`kgspBootstrap_TU102`, `KGSP_BOOT_MODE_SR_RESUME`: no FWSEC, no `kflcnResetIntoRiscv`, no
+    /// boot-args mailbox pair — `ogkm-580: kernel_gsp_tu102.c:503-541`).
+    FirmwareResume,
 }
 
 impl BootStep {
@@ -446,6 +456,7 @@ impl BootStep {
             BootStep::CommandDoorbell => BootStepKind::CommandDoorbell,
             BootStep::ClearStatusIrq => BootStepKind::ClearStatusIrq,
             BootStep::FwsecCommand(_) => BootStepKind::FwsecCommand,
+            BootStep::FirmwareResume => BootStepKind::FirmwareResume,
         }
     }
 }
@@ -471,6 +482,8 @@ pub enum BootStepKind {
     ClearStatusIrq,
     /// See [`BootStep::FwsecCommand`].
     FwsecCommand,
+    /// See [`BootStep::FirmwareResume`].
+    FirmwareResume,
 }
 
 /// The steps one register write means — at most [`BootSteps::CAPACITY`] of them.

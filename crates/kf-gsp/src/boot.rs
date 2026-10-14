@@ -174,6 +174,12 @@ pub struct QueueBinding {
     /// `ogkm-610: :1436`, `ogkm-580: :1479`). The allowlist it guards has eight entries at
     /// 610 and six at 580 — see the crate-level note above.
     peer_read_at_bind: u32,
+    /// ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`): set only by a RESUME
+    /// ([`Transition::E15`]) — the peer's status-queue read pointer when the saved binding was
+    /// restored. A resume does not re-link (the guest's `rxReadPtr` continues where it stopped,
+    /// `ogkm-580: kernel_gsp_tu102.c:563-570`), so "the guest consumed `GSP_INIT_DONE`" is "the
+    /// pointer moved off this value", not "off zero".
+    resume_mark: Option<u32>,
 }
 
 impl QueueBinding {
@@ -262,6 +268,15 @@ pub enum Transition {
     E10,
     /// `device_reset` → `Cold`, unbound, every counter zero.
     E11,
+    /// ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`) — the platform's WAKE reset of a device whose
+    /// life a PM-transition suspend ended ([`GspFsm::wake_reset`]): every register back to
+    /// power-on (`Cold`), and the saved GSP-RM state — the queue binding, both cursors and both
+    /// sequence numbers — kept, as Booter Unload's suspend/resume data keeps it on silicon.
+    E14,
+    /// ★ 2026-10-14 — the resume ([`BootStep::FirmwareResume`] on a saved life): `Booted`, the
+    /// saved binding restored **without a publish** (no header write, no re-link, sequence numbers
+    /// continue), `GSP_INIT_DONE` posted into it.
+    E15,
     /// The guest drained `GSP_INIT_DONE` → `Running`. Observed, not assumed.
     Running,
 }
@@ -998,6 +1013,16 @@ pub struct GspFsm {
     /// Found by B4's drain-on-publish: before it, the first *doorbell* after a re-acquire
     /// hit exactly the same wall, but no test rang one.
     cmd_read_ptr: u32,
+    /// ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`) — the binding a fn-47 suspend ended, kept
+    /// **inert** when the life entered `Halted` from `Suspending` (E2/E4/E13): nothing reads guest
+    /// RAM through it (a doorbell while `Halted` is still [`Transition::E8`], zero reads). Only a
+    /// resume ([`Transition::E15`]) of a life whose fn 47 was a PM transition
+    /// ([`GspFsm::note_pm_suspend`]) brings it back; a cold boot (E1), a publish (E6) or a reset
+    /// (E11) discards it.
+    suspended: Option<QueueBinding>,
+    /// ★ 2026-10-14 — the fn 47 that ended this life said `bInPMTransition` (and not GC6): the
+    /// device decodes the body and tells the FSM ([`GspFsm::note_pm_suspend`]).
+    pm_suspend: bool,
     /// `sharedMemPhysAddr` of the region the last bind used, if any — the discriminator
     /// between a re-acquire and a new driver life. See [`GspFsm::publish`].
     ///
@@ -1103,6 +1128,8 @@ impl GspFsm {
             cmd_seq: 0,
             cmd_read_ptr: 0,
             region_identity: None,
+            suspended: None,
+            pm_suspend: false,
             max_entries: 4096,
             fwsec_image: None,
             frts_image: None,
@@ -1197,6 +1224,59 @@ impl GspFsm {
         *self = GspFsm::new(self.abi);
         self.system_info = system_info;
         Transition::E11
+    }
+
+    /// ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`) — **the fn 47 that ended this life was a PM
+    /// transition** (`bInPMTransition`, not GC6), decoded by the device from the body. Recorded
+    /// only while that fn 47's suspend is current: `Suspending` (the falcon regime, before its
+    /// teardown STARTCPU) or `Halted` with the binding already saved (a regime whose firmware
+    /// halts itself, E13). Returns whether it was recorded.
+    pub fn note_pm_suspend(&mut self) -> bool {
+        let current = self.phase == BootPhase::Suspending
+            || (self.phase == BootPhase::Halted && self.suspended.is_some());
+        if current {
+            self.pm_suspend = true;
+        }
+        current
+    }
+
+    /// ★ 2026-10-14 — a saved GSP-RM life a resume can restore: a PM-transition fn 47 ended it and
+    /// its binding is kept ([`GspFsm::note_pm_suspend`]).
+    #[must_use]
+    pub fn resumable(&self) -> bool {
+        self.pm_suspend && self.suspended.is_some()
+    }
+
+    /// ★★ **E14 — the platform's WAKE reset** (QEMU's `RESET_TYPE_WAKEUP`, `hw/i386/pc.c:1723-1727`)
+    /// of a device whose life a PM-transition suspend ended and whose firmware has stopped
+    /// (`Halted`). `Some(E14)`: every register is back to power-on (`Cold`: WPR2 down, the
+    /// processor not running, the mailboxes and latches clear) and the saved GSP-RM state is
+    /// kept — the binding, both cursors, both sequence numbers and the region identity — as
+    /// Booter Unload's suspend/resume data keeps it across D3cold on silicon
+    /// (`_kgspGetBooterUnloadArgs`, `ogkm-580: kernel_gsp_tu102.c:589-606`). `None`: nothing to
+    /// keep — the caller resets totally ([`GspFsm::device_reset`], E11). ⊘ Any other phase
+    /// (a suspend that never reached its teardown, a running device) is never kept.
+    pub fn wake_reset(&mut self) -> Option<Transition> {
+        if self.phase != BootPhase::Halted || !self.resumable() {
+            return None;
+        }
+        let suspended = self.suspended.take();
+        let (stat_seq, cmd_seq, cmd_read_ptr, region_identity) = (
+            self.stat_seq,
+            self.cmd_seq,
+            self.cmd_read_ptr,
+            self.region_identity,
+        );
+        let refusals = std::mem::take(&mut self.refusals);
+        self.device_reset();
+        self.suspended = suspended;
+        self.pm_suspend = true;
+        self.stat_seq = stat_seq;
+        self.cmd_seq = cmd_seq;
+        self.cmd_read_ptr = cmd_read_ptr;
+        self.region_identity = region_identity;
+        self.refusals = refusals;
+        Some(Transition::E14)
     }
 
     /// Serve a register read, if this is a GSP register.
@@ -1380,6 +1460,18 @@ impl GspFsm {
                     report.transitions.push(Transition::E5);
                 }
             }
+            BootStep::FirmwareResume => {
+                // E15 — only a saved PM-suspended life resumes; every other case is the cold
+                // device's own SEC2 traffic (Ada's scrubber) and changes nothing.
+                if matches!(self.phase, BootPhase::Cold | BootPhase::Halted) && self.resumable() {
+                    let mut r = self.resume(ram, policy)?;
+                    report.transitions.push(Transition::E15);
+                    report.transitions.append(&mut r.transitions);
+                    report.commands.extend(r.commands);
+                    report.unserviced.extend(r.unserviced);
+                    report.raise_status_irq = true;
+                }
+            }
             BootStep::BootArgsLo(v) => {
                 self.mailbox_lo = v;
                 self.boot_args_seen.0 = true;
@@ -1461,6 +1553,10 @@ impl GspFsm {
             BootPhase::Cold | BootPhase::Halted => {
                 self.phase = BootPhase::ProtectedRegionUp;
                 self.fw_halted_after_suspend = false;
+                // ★ 2026-10-14: FWSEC runs only on a NORMAL boot (`ogkm-580:
+                // kernel_gsp_tu102.c:514-532`) — the guest is not resuming the saved life.
+                self.suspended = None;
+                self.pm_suspend = false;
                 self.frts_image = image;
                 self.frts_offset = None;
                 Transition::E1
@@ -1479,6 +1575,20 @@ impl GspFsm {
     /// Enter `Halted`: WPR2 down and — the load-bearing half — **the binding dropped by
     /// value**.
     fn enter_halted(&mut self) {
+        // ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`): a life a fn 47 suspended keeps its binding,
+        // INERT, for a resume; nothing reads through it until [`Transition::E15`]. Entering from
+        // any other phase saves nothing new and leaves a saved life as it is (a Booter Unload
+        // after the teardown STARTCPU already halted it changes nothing about it).
+        let queue = std::mem::take(&mut self.queue);
+        if self.phase == BootPhase::Suspending {
+            self.suspended = match queue {
+                QueueState::Bound(b) => Some(b),
+                QueueState::Unbound => None,
+            };
+            if self.suspended.is_none() {
+                self.pm_suspend = false;
+            }
+        }
         self.phase = BootPhase::Halted;
         // ★ v3-initrace: WPR2 is down; the next FWSEC-FRTS carries its own command.
         self.frts_offset = None;
@@ -1789,7 +1899,11 @@ impl GspFsm {
                 read_ptr: count.slot(self.cmd_read_ptr).index(),
             },
             peer_read_at_bind,
+            resume_mark: None,
         });
+        // ★ 2026-10-14: a publish is a new queue instance — a suspended life is not resumed.
+        self.suspended = None;
+        self.pm_suspend = false;
         self.init_done_posted = false;
 
         let init_done = OutgoingRpc {
@@ -1814,6 +1928,69 @@ impl GspFsm {
         // *recovered by luck*. Draining on the bind makes the recovery structural, and on
         // a guest whose ring is empty (610's order) it reads the write pointer, finds
         // nothing, and does nothing.
+        self.service_command_queue(ram, policy)
+    }
+
+    /// ★★ **E15 — the resume** (`docs/design/V3_S3_RESUME.md`). The design intent the
+    /// reachability theorem in [`GspFsm::publish`] wrote down: *"when it is built it must RESTORE
+    /// the binding without publishing, and the preserved-sequence contract belongs at THAT door"*.
+    ///
+    /// The guest's `KGSP_BOOT_MODE_SR_RESUME` does not link the status queue again — *"for resume
+    /// or GC6 exit, GSP-RM will restore queue state"* — and waits for `GSP_INIT_DONE` on the queue
+    /// it kept (`kgspWaitForRmInitDone`, `ogkm-580: kernel_gsp_tu102.c:563-575`,
+    /// `kernel_gsp.c:5214-5240`): its `rxReadPtr` and `rxSeqNum` continue, and so do ours. So the
+    /// saved binding comes back exactly as the suspend left it — no header write, no peek, no
+    /// sequence reset — and `GSP_INIT_DONE` is posted at the status stream's next sequence number.
+    ///
+    /// ⊘ Reads one word of guest RAM before posting (the peer's status read pointer, the
+    /// [`QueueBinding::resume_mark`]), through the geometry validated at the original bind.
+    ///
+    /// # Errors
+    ///
+    /// A refusal of a guest-supplied pointer; the life stays saved and the phase unchanged.
+    fn resume(
+        &mut self,
+        ram: &mut dyn GuestRam,
+        policy: &mut dyn CommandPolicy,
+    ) -> Result<ServiceReport, GspFault> {
+        let Some(mut binding) = self.suspended.take() else {
+            return Ok(ServiceReport::default());
+        };
+        let mark = match binding
+            .geom
+            .region()
+            .read_u32(ram, binding.geom.peer_stat_read_ptr_off())
+        {
+            Ok(v) => v,
+            Err(e) => {
+                self.suspended = Some(binding);
+                return Err(e);
+            }
+        };
+        binding.resume_mark = Some(mark);
+        binding.cmd = RxCursor {
+            read_ptr: binding.geom.msg_count().slot(self.cmd_read_ptr).index(),
+        };
+        self.queue = QueueState::Bound(binding);
+        self.pm_suspend = false;
+        self.fw_halted_after_suspend = false;
+        self.phase = BootPhase::Booted;
+        self.events_outstanding = false;
+        self.init_done_posted = false;
+        eprintln!(
+            "kayfabe: GSP-RESUME the saved binding restored (no publish): stat_seq={} cmd_seq={} cmd_read_ptr={} peer_stat_read={mark}",
+            self.stat_seq, self.cmd_seq, self.cmd_read_ptr
+        );
+        let init_done = OutgoingRpc {
+            function: self.abi.rpc.codes.gsp_init_done,
+            sequence: 0,
+            rpc_result: 0,
+            rpc_result_private: 0,
+            payload: Vec::new(),
+        };
+        self.post(ram, &init_done)?;
+        self.init_done_posted = true;
+        // As at a publish: whatever the guest queued before the resume is served now.
         self.service_command_queue(ram, policy)
     }
 
@@ -2812,7 +2989,12 @@ impl GspFsm {
         // everything": a reply posted in this very service pass is not yet drained, and
         // waiting for it would keep the FSM out of `Running` for exactly as long as it
         // keeps answering.
-        let drained = linked && peer_read != 0;
+        let drained = match b.resume_mark {
+            // ★ 2026-10-14: a resumed binding was never re-linked — the pointer continues from
+            // where the suspend left it, so moving off that value is consuming `GSP_INIT_DONE`.
+            Some(mark) => peer_read != mark,
+            None => linked && peer_read != 0,
+        };
         if self.phase == BootPhase::Booted && self.init_done_posted && drained {
             self.phase = BootPhase::Running;
             return Ok(true);
@@ -3256,7 +3438,7 @@ mod a_life_ends_and_the_next_one_boots {
     }
 
     /// A guest RAM the test proves is never touched.
-    struct Untouchable;
+    pub(super) struct Untouchable;
     impl GuestRam for Untouchable {
         fn read(&mut self, gpa: u64, _buf: &mut [u8]) -> Result<(), crate::fault::RamRefused> {
             panic!("a suspended GSP read guest RAM at {gpa:#x}");
@@ -3649,6 +3831,8 @@ mod device_reset_from_every_phase {
     const OFF_START: u64 = 0x10;
     const OFF_FWSEC: u64 = 0x18;
     const OFF_FW_LOADED: u64 = 0x20;
+    /// ★ 2026-10-14: the resume's Booter Load ([`BootStep::FirmwareResume`]).
+    const OFF_FW_RESUME: u64 = 0x28;
     const OFF_TEARDOWN: u64 = 0x30;
     const OFF_ARGS_LO: u64 = 0x40;
     const OFF_ARGS_HI: u64 = 0x44;
@@ -3705,6 +3889,7 @@ mod device_reset_from_every_phase {
                     BootSteps::one(BootStep::FwsecCommand(w.val))
                 }
                 OFF_FW_LOADED => BootSteps::one(BootStep::FirmwareLoaded),
+                OFF_FW_RESUME => BootSteps::one(BootStep::FirmwareResume),
                 OFF_TEARDOWN => BootSteps::one(BootStep::Teardown),
                 OFF_ARGS_LO => BootSteps::one(BootStep::BootArgsLo(w.val as u32)),
                 OFF_ARGS_HI => {
@@ -4378,6 +4563,8 @@ mod device_reset_from_every_phase {
             cmd_seq,
             cmd_read_ptr,
             region_identity,
+            suspended,
+            pm_suspend,
             max_entries,
             fwsec_image,
             frts_image,
@@ -4406,6 +4593,8 @@ mod device_reset_from_every_phase {
             cmd_seq: cs0,
             cmd_read_ptr: crp0,
             region_identity: ri0,
+            suspended: su0,
+            pm_suspend: pm0,
             max_entries: me0,
             fwsec_image: fi0,
             frts_image: fr0,
@@ -4433,6 +4622,8 @@ mod device_reset_from_every_phase {
         assert_eq!(cmd_seq, cs0);
         assert_eq!(cmd_read_ptr, crp0);
         assert_eq!(region_identity, ri0);
+        assert_eq!(suspended, su0);
+        assert_eq!(pm_suspend, pm0);
         assert_eq!(max_entries, me0);
         assert_eq!(fwsec_image, fi0);
         assert_eq!(frts_image, fr0);
@@ -4630,6 +4821,232 @@ mod device_reset_from_every_phase {
                 assert_eq!(fsm.command_seq(), 0, "cycle {cycle}");
                 assert_eq!(fsm, fresh(c), "cycle {cycle}: nothing accumulated");
             }
+        }
+    }
+
+    // ---- 3. S3: a PM-transition suspend, the platform's wake reset, the resume ---------------
+    //
+    // ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`). Measured on the bench before this: the guest's
+    // `KGSP_BOOT_MODE_SR_RESUME` found the GSP Cold after the wake (`device reset #2 … Halted ->
+    // Cold`), its Booter Load changed nothing, and `kgspBootstrap_TU102` returned NOT_READY (0x55).
+    mod s3_resume {
+        use super::*;
+
+        /// The guest's status-queue element at `slot`: its transport `seqNum`.
+        fn stat_seq_at(d: &mut Dev, slot: u64) -> u32 {
+            let mut buf = vec![0u8; ELEM as usize];
+            d.ram
+                .read(REGION + STAT_OFF + ELEM + slot * ELEM, &mut buf)
+                .expect("mapped");
+            peek_seq_num(&d.fsm.abi.element, &buf).expect("an element")
+        }
+
+        fn stat_wp(d: &mut Dev) -> u32 {
+            d.ram.get32(REGION + STAT_OFF + 16)
+        }
+
+        /// A running falcon-regime life that answered some traffic, then a fn 47 the device
+        /// decoded as a PM transition (or not), then FWSEC-SB's STARTCPU: `Halted`.
+        fn suspended(pm: bool) -> Dev {
+            let mut d = Dev::life(fresh(None), AfterSuspend::AwaitsTeardownUcode);
+            d.start_with_frts();
+            d.firmware_loaded();
+            d.publish();
+            d.run();
+            let code = d.fsm.abi.rpc.codes.gsp_set_system_info;
+            d.send(code, vec![1; 64]);
+            d.ring();
+            d.guest_drains_status();
+            d.unload();
+            d.guest_drains_status();
+            assert_eq!(d.fsm.phase(), BootPhase::Suspending);
+            if pm {
+                assert!(d.fsm.note_pm_suspend(), "recorded while Suspending");
+            }
+            d.write(OFF_START, 1); // FWSEC-SB: E2
+            assert_eq!(d.fsm.phase(), BootPhase::Halted);
+            d
+        }
+
+        /// ★★ The whole S3 cycle: suspend (PM), wake reset (E14), Booter Load (E15), and the RPC
+        /// stream continues — sequence numbers on both queues kept, nothing re-published.
+        #[test]
+        fn a_pm_suspended_life_survives_the_wake_reset_and_resumes_without_a_publish() {
+            let mut d = suspended(true);
+            let (stat_seq, cmd_seq) = (d.fsm.stat_seq, d.fsm.command_seq());
+            assert!(stat_seq > 0 && cmd_seq > 0, "the streams moved before the suspend");
+            let wp = stat_wp(&mut d);
+            let hdr_before = {
+                let mut b = vec![0u8; 32];
+                d.ram.read(REGION + STAT_OFF, &mut b).expect("mapped");
+                b
+            };
+
+            assert_eq!(d.fsm.wake_reset(), Some(Transition::E14));
+            assert_eq!(d.fsm.phase(), BootPhase::Cold);
+            assert_eq!(
+                d.fsm.observe(),
+                fresh(None).observe(),
+                "every register reads power-on after the wake"
+            );
+            assert!(matches!(d.fsm.queue(), QueueState::Unbound));
+            assert!(d.fsm.resumable());
+
+            // SR_RESUME: scrubber/Booter Load only — no FWSEC, no mailbox pair.
+            let out = d.write(OFF_FW_RESUME, 1);
+            assert!(out.contains("E15"), "{out}");
+            assert!(!out.contains("E6"), "a resume never publishes: {out}");
+            assert_eq!(d.fsm.phase(), BootPhase::Booted);
+            assert!(d.fsm.observe().riscv_active, "kflcnIsRiscvActive after Booter Load");
+            assert!(!d.fsm.resumable(), "the saved life is consumed");
+
+            // GSP_INIT_DONE at the stream's next sequence number, in the slot after the last reply
+            assert_eq!(stat_wp(&mut d), (wp + 1) % COUNT as u32);
+            assert_eq!(stat_seq_at(&mut d, u64::from(wp)), stat_seq);
+            let mut hdr_after = vec![0u8; 32];
+            d.ram.read(REGION + STAT_OFF, &mut hdr_after).expect("mapped");
+            assert_eq!(
+                hdr_after[..16],
+                hdr_before[..16],
+                "the status header is not re-published"
+            );
+
+            // the guest consumes INIT_DONE and its next RPC carries the next command sequence
+            d.guest_drains_status();
+            // `FREE` is answered (fn 72 is not), so the reply's sequence is observable
+            let code = d.fsm.abi.rpc.codes.free;
+            d.send(code, vec![2; 64]);
+            let out = d.ring();
+            assert!(out.contains("E7"), "served, not refused: {out}");
+            assert!(out.contains("Running"), "{out}");
+            assert_eq!(d.fsm.phase(), BootPhase::Running);
+            assert_eq!(d.fsm.command_seq(), cmd_seq + 1);
+            assert_eq!(stat_seq_at(&mut d, u64::from((wp + 1) % COUNT as u32)), stat_seq + 1);
+        }
+
+        /// The same life suspended and resumed three times in one boot.
+        #[test]
+        fn three_suspend_resume_cycles_keep_one_stream() {
+            let mut d = suspended(true);
+            for cycle in 0..3 {
+                if cycle > 0 {
+                    d.unload();
+                    d.guest_drains_status();
+                    assert!(d.fsm.note_pm_suspend(), "cycle {cycle}");
+                    d.write(OFF_START, 1);
+                }
+                let (stat_seq, cmd_seq) = (d.fsm.stat_seq, d.fsm.command_seq());
+                assert_eq!(d.fsm.wake_reset(), Some(Transition::E14), "cycle {cycle}");
+                assert!(d.write(OFF_FW_RESUME, 1).contains("E15"), "cycle {cycle}");
+                d.guest_drains_status();
+                let code = d.fsm.abi.rpc.codes.free;
+                d.send(code, vec![3; 64]);
+                assert!(d.ring().contains("E7"), "cycle {cycle}");
+                assert_eq!(d.fsm.phase(), BootPhase::Running, "cycle {cycle}");
+                assert_eq!(d.fsm.command_seq(), cmd_seq + 1, "cycle {cycle}");
+                assert_eq!(d.fsm.stat_seq, stat_seq + 2, "cycle {cycle}: INIT_DONE + reply");
+                d.guest_drains_status();
+            }
+        }
+
+        /// ★ A device without power loss (s2idle): `Halted`, no wake reset, the resume still works.
+        #[test]
+        fn a_resume_without_a_wake_reset_restores_the_binding_too() {
+            let mut d = suspended(true);
+            assert!(d.write(OFF_FW_RESUME, 1).contains("E15"));
+            assert_eq!(d.fsm.phase(), BootPhase::Booted);
+        }
+
+        /// ⊘ A reset that does NOT follow a PM suspend still goes Cold.
+        #[test]
+        fn only_a_halted_pm_suspend_is_kept_by_a_wake_reset() {
+            // an unload that was not a PM transition (rmmod, last close)
+            let mut d = suspended(false);
+            assert!(!d.fsm.resumable());
+            assert_eq!(d.fsm.wake_reset(), None, "a teardown is not kept");
+            // a PM suspend whose teardown STARTCPU never came
+            for phase in [BootPhase::Running, BootPhase::Booted, BootPhase::Cold] {
+                let mut d = drive(phase, false, None);
+                assert!(!d.fsm.note_pm_suspend(), "{phase:?}: no fn 47 is current");
+                assert_eq!(d.fsm.wake_reset(), None, "{phase:?}");
+            }
+            let mut d = drive(BootPhase::Suspending, false, None);
+            assert!(d.fsm.note_pm_suspend());
+            assert_eq!(
+                d.fsm.wake_reset(),
+                None,
+                "Suspending: the firmware has not stopped — not kept"
+            );
+        }
+
+        /// ⊘ After the wake, a guest that boots instead of resuming (FWSEC, a publish) gets a
+        /// fresh queue instance: the saved life is gone and never comes back.
+        #[test]
+        fn a_cold_boot_after_the_wake_discards_the_saved_life() {
+            let mut d = suspended(true);
+            assert_eq!(d.fsm.wake_reset(), Some(Transition::E14));
+            d.start_with_frts();
+            assert!(!d.fsm.resumable(), "FWSEC runs only on a NORMAL boot");
+            d.firmware_loaded();
+            assert!(d.publish().contains("E6"));
+            assert!(!d.write(OFF_FW_RESUME, 1).contains("E15"));
+            assert_eq!(d.fsm.phase(), BootPhase::Booted);
+        }
+
+        /// ⊘ With nothing saved, the resume step reads no RAM and changes nothing (Ada's
+        /// scrubber on a cold device takes this path; so does a hostile guest).
+        #[test]
+        fn a_resume_step_with_nothing_saved_reads_no_ram_and_changes_nothing() {
+            let model = Mini {
+                seq: Seq {
+                    after: AfterSuspend::AwaitsTeardownUcode,
+                },
+            };
+            let mut f = fresh(None);
+            let mut ram = super::super::a_life_ends_and_the_next_one_boots::Untouchable;
+            let r = f
+                .mmio_write_with(&mut ram, &model, &mut Live, 0, OFF_FW_RESUME, 1)
+                .expect("no refusal");
+            assert!(r.transitions.is_empty());
+            assert_eq!(f, fresh(None));
+        }
+
+        /// ★★ The saved binding is INERT while `Halted`: a doorbell reads nothing through it.
+        #[test]
+        fn a_saved_binding_reads_no_ram_until_the_resume() {
+            let d = suspended(true);
+            let mut f = d.fsm;
+            f.note_command_doorbells(1);
+            let mut ram = super::super::a_life_ends_and_the_next_one_boots::Untouchable;
+            assert_eq!(
+                f.service_one_deferred_command(&mut ram, &mut Live)
+                    .unwrap_err(),
+                GspFault::QueueNotBound,
+                "E8, zero guest-RAM reads"
+            );
+            assert_eq!(f.wake_reset(), Some(Transition::E14));
+            f.note_command_doorbells(1);
+            assert!(
+                f.service_one_deferred_command(&mut ram, &mut Live)
+                    .is_ok(),
+                "Cold after the wake: E12, zero reads"
+            );
+        }
+
+        /// The FSP regime's firmware halts itself at fn 47 (E13); the device decodes the body
+        /// after that, so the PM note must still find the saved binding.
+        #[test]
+        fn a_firmware_halted_pm_suspend_is_resumable_too() {
+            let mut d = Dev::life(fresh(None), AfterSuspend::FirmwareHalts);
+            d.start_with_frts();
+            d.firmware_loaded();
+            d.publish();
+            d.run();
+            d.unload();
+            assert_eq!(d.fsm.phase(), BootPhase::Halted);
+            assert!(d.fsm.note_pm_suspend());
+            assert_eq!(d.fsm.wake_reset(), Some(Transition::E14));
+            assert!(d.write(OFF_FW_RESUME, 1).contains("E15"));
         }
     }
 }

@@ -253,6 +253,12 @@ impl BootSequence for FalconSecureBooterBoot {
                     BootSteps::one(BootStep::Teardown)
                 } else if ctx.obs.stage == BootPhase::ProtectedRegionUp {
                     BootSteps::one(BootStep::FirmwareLoaded)
+                } else if matches!(ctx.obs.stage, BootPhase::Cold | BootPhase::Halted) {
+                    // ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`): a Booter Load with no FWSEC
+                    // before it — `KGSP_BOOT_MODE_SR_RESUME` (`ogkm-580: kernel_gsp_tu102.c:
+                    // 503-541`). The FSM resumes only a life a PM suspend saved; anything else
+                    // (Ada's scrubber on a cold device, a hostile guest) changes nothing.
+                    BootSteps::one(BootStep::FirmwareResume)
                 } else {
                     BootSteps::none()
                 }

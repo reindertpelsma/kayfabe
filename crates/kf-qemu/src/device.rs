@@ -185,6 +185,11 @@ struct Gsp {
 pub struct Counters {
     /// Privileged BAR0 writes applied by the drainer.
     pub applied: AtomicU64,
+    /// ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`): privileged writes applied in THIS device
+    /// life — restarted by every logged reset ([`crate::reset::loud`]), so the first writes of
+    /// each life (a reboot's boot, an S3 resume) are logged like the first boot's. A reset that is
+    /// not logged parks it past the cap: a guest resetting in a loop gets no lines.
+    pub life_applied: AtomicU64,
     /// GSP command doorbells serviced.
     pub serviced: AtomicU64,
     /// Guest-RAM accesses refused (no block covers them).
@@ -2919,7 +2924,11 @@ impl Device {
         )
     }
 
-    fn log_report(&self, r: &kf_gsp::ServiceReport) {
+    /// Log a service pass. Returns whether it carried a fn 47 that was a PM transition (and not
+    /// GC6) — the caller records it in the FSM ([`kf_gsp::GspFsm::note_pm_suspend`]).
+    #[must_use]
+    fn log_report(&self, r: &kf_gsp::ServiceReport) -> bool {
+        let mut pm_suspend = false;
         for c in &r.commands {
             // ★ DIAGNOSTIC (`KF3_BAR0_TRACE`, default off): the RPC after a traced window names
             // what closed it; at the first `Free`, the window's channel memory is dumped once.
@@ -2938,17 +2947,20 @@ impl Device {
             }
             eprintln!("kf3: GSP rpc {:?} seq={}", c.function, c.sequence);
             if c.function == kf_gsp::RpcFunction::UnloadingGuestDriver {
-                self.observe_unloading(c);
+                pm_suspend = self.observe_unloading(c);
             }
         }
         for u in &r.unserviced {
             eprintln!("kf3: GSP rpc UNSERVICED {u:?}");
         }
+        pm_suspend
     }
 
     /// ★ 2026-10-03 (B5, `V3_DISPLAY.md` §4.11.13), on the drainer: the guest's fn 47 — GSP-RM's
     /// own unload. Decoded with the generated layout; logged.
-    fn observe_unloading(&self, c: &kf_gsp::RpcCommand) {
+    /// Returns whether this fn 47 was a PM transition that is not a GC6 entry (a suspend whose
+    /// GSP-RM state a resume restores, `docs/design/V3_S3_RESUME.md`).
+    fn observe_unloading(&self, c: &kf_gsp::RpcCommand) -> bool {
         // ⊘ bounded (the review of `v3-gop-unload`): one line per fn 47 is one per RM life, which
         // a guest controls
         let log = crate::bar1phys::bounded(
@@ -2999,11 +3011,31 @@ impl Device {
                         );
                     }
                 }
+                u.pm && !u.gc6
             }
             Err(e) if log => {
                 eprintln!("kf3: GSP fn 47 seq={}: body not decoded ({e})", c.sequence);
+                false
             }
-            Err(_) => {}
+            Err(_) => false,
+        }
+    }
+
+    /// ★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`), on the drainer: the fn 47 just served was a
+    /// PM transition — the FSM keeps this life's GSP-RM state for a resume.
+    fn note_pm_suspend(&self, fsm: &mut kf_gsp::GspFsm) {
+        let kept = fsm.note_pm_suspend();
+        let n = self.fn47_logged.load(Ordering::Relaxed);
+        if crate::bar1phys::bounded(n.saturating_sub(1), 64, "fn-47 PM note") {
+            eprintln!(
+                "kf3: GSP fn 47 is a PM transition: {} (phase {:?})",
+                if kept {
+                    "the GSP-RM state is kept for a resume"
+                } else {
+                    "NOT recorded — no fn-47 suspend is current"
+                },
+                fsm.phase()
+            );
         }
     }
 
@@ -3475,8 +3507,8 @@ impl Device {
     /// phase; `docs/design/V3_DEVICE_RESET.md`). Main loop or a vCPU in a bridge's config write,
     /// BQL held: closes the vCPU gate, counts the request and wakes the drainer — NOTHING else, and
     /// nothing that waits. The drainer runs the reset ([`crate::reset::Reset::poll`]).
-    pub fn request_reset(&self, from_vcpu: bool) -> u64 {
-        let n = self.reset.request_from(from_vcpu);
+    pub fn request_reset(&self, from_vcpu: bool, wake: bool) -> u64 {
+        let n = self.reset.request_typed(from_vcpu, wake);
         let _ = self.drainer_efd.signal();
         n
     }
@@ -3556,7 +3588,32 @@ impl Device {
 /// ★★ The device's owners of tier-B state, as the reset's coordinator drives them — every method
 /// on the register drainer, none blocking (`docs/design/V3_DEVICE_RESET.md` §3).
 impl crate::reset::Owners for Device {
-    fn reset_drainer_state(&self, epoch: u64) {
+    fn reset_drainer_state(&self, epoch: u64, wake: bool) -> crate::reset::Life {
+        // ★★ 2026-10-14 (`docs/design/V3_S3_RESUME.md`): the platform's S3 WAKE of a life a
+        // PM-transition suspend saved. On silicon the power cycle loses the registers and the
+        // interrupt state; GSP-RM's state survives in Booter's suspend/resume data and the guest
+        // resumes it (`KGSP_BOOT_MODE_SR_RESUME`). Here everything GSP-RM owned is tier-B state the
+        // reset would free — the chain's objects, the host twins, the address spaces, the display
+        // — so it is all KEPT, and only the register-level state is reset.
+        if wake
+            && let Ok(mut g) = self.gsp.lock()
+            && let Some(t) = g.fsm.wake_reset()
+        {
+            g.published.clear();
+            drop(g);
+            let dropped = self.plane.ring.discard_all();
+            self.intr.reset();
+            if let Some(f) = &self.fsp {
+                f.reset();
+            }
+            if crate::reset::loud(epoch) {
+                eprintln!(
+                    "kf3: device reset #{epoch} (S3 WAKE): GSP Halted -> Cold ({t:?}): the PM-suspended GSP-RM life is KEPT — queues and sequence numbers, the chain's objects, host twins, address spaces, display; {dropped} queued register write(s) dropped; interrupt tree{} reset",
+                    if self.fsp.is_some() { ", FSP EMEM" } else { "" }
+                );
+            }
+            return crate::reset::Life::Kept;
+        }
         let dropped = self.plane.ring.discard_all();
         // The Translated pumps stop reading guest rings now, not at their free.
         let pumps = self.chans.stop_pumps();
@@ -3588,12 +3645,13 @@ impl crate::reset::Owners for Device {
             f.reset();
         }
         if !crate::reset::loud(epoch) {
-            return;
+            return crate::reset::Life::Ended;
         }
         eprintln!(
             "kf3: device reset #{epoch}: vCPUs out (gate closed); {dropped} queued register write(s) dropped; {pumps} Translated pump(s) stopped; GSP {phase:?} -> Cold (E11, {held} held repl(ies) dropped, never posted); chain rebuilt; os-event arms, {defapi} deferred-API entr(ies), interrupt tree{} cleared",
             if self.fsp.is_some() { ", FSP EMEM" } else { "" }
         );
+        crate::reset::Life::Ended
     }
 
     fn begin_release(&self, epoch: u64) {
@@ -3627,13 +3685,16 @@ impl crate::reset::Owners for Device {
         self.mem.inbox.life_reset.is_done(epoch)
     }
 
-    fn finish(&self, epoch: u64) -> bool {
+    fn finish(&self, epoch: u64, life: crate::reset::Life) -> bool {
         // ⊘ Not while a worker owns a token (the review of 2026-10-13): its release would put the
         // word back IDLE with the old route. Nothing below runs until the sweep is complete; the
         // drainer asks again next pass (a stall is reported after `reset::STALL_AFTER`).
-        let busy = self.plane.reset_tokens();
-        if busy > 0 {
-            return false;
+        // ★ 2026-10-14: a KEPT life keeps its tokens — they are its live channels' doorbells.
+        if life == crate::reset::Life::Ended {
+            let busy = self.plane.reset_tokens();
+            if busy > 0 {
+                return false;
+            }
         }
         // ⊘ Again, now that every owner has stopped: a completion edge or a display event that
         // latched between the Drainer stage and the owners' acknowledgements is the old life's.
@@ -3647,9 +3708,23 @@ impl crate::reset::Owners for Device {
         for l in &self.irq_lines {
             stale += l.drain().unwrap_or(0);
         }
+        // ★ 2026-10-14: the next life's first writes are logged like the first boot's (bounded).
+        self.counters.life_applied.store(
+            if crate::reset::loud(epoch) {
+                0
+            } else {
+                LIFE_WRITES_LOGGED
+            },
+            Ordering::Relaxed,
+        );
         if crate::reset::loud(epoch) {
             eprintln!(
-                "kf3: device reset #{epoch}: tokens swept, register shadow restored and republished, {stale} stale interrupt(s) drained"
+                "kf3: device reset #{epoch}: {}, register shadow restored and republished, {stale} stale interrupt(s) drained",
+                if life == crate::reset::Life::Kept {
+                    "tokens KEPT (the life's channels)"
+                } else {
+                    "tokens swept"
+                }
             );
         }
         true
@@ -3662,6 +3737,9 @@ impl crate::reset::Owners for Device {
         );
     }
 }
+
+/// ★ How many privileged writes of each logged device life are logged (`Counters::life_applied`).
+const LIFE_WRITES_LOGGED: u64 = 512;
 
 /// ★ P5c: the RC fd's poller tag, past every engine's (`OTHER_TAG_BASE + engine index`).
 const RC_TAG_OFFSET: u64 = 1 << 16;
@@ -3785,9 +3863,11 @@ impl HostOps for Device {
         let g = &mut *g;
         let held_before = g.fsm.held_len();
         let mut n_cmds = 0usize;
-        let n = self.counters.applied.fetch_add(1, Ordering::Relaxed);
-        // The first writes ARE the boot sequence; logged on the drainer (never a vCPU).
-        if n < 512 {
+        self.counters.applied.fetch_add(1, Ordering::Relaxed);
+        let n = self.counters.life_applied.fetch_add(1, Ordering::Relaxed);
+        // The first writes ARE the boot sequence (and, after a reset, the next life's boot or
+        // resume); logged on the drainer (never a vCPU).
+        if n < LIFE_WRITES_LOGGED {
             eprintln!(
                 "kf3: w#{n} bar{bar} @{offset:#08x} = {value:#x} phase={:?}",
                 g.fsm.phase()
@@ -3837,7 +3917,9 @@ impl HostOps for Device {
         ) {
             Ok(r) => {
                 n_cmds += r.commands.len();
-                self.log_report(&r);
+                if self.log_report(&r) {
+                    self.note_pm_suspend(&mut g.fsm);
+                }
             }
             Err(e) => eprintln!("kf3: GSP write @{offset:#x}={value:#x} REFUSED: {e:?}"),
         }
@@ -3849,7 +3931,9 @@ impl HostOps for Device {
             {
                 Ok(r) => {
                     n_cmds += r.commands.len();
-                    self.log_report(&r);
+                    if self.log_report(&r) {
+                        self.note_pm_suspend(&mut g.fsm);
+                    }
                 }
                 Err(e) => {
                     eprintln!("kf3: GSP command service REFUSED: {e:?}");

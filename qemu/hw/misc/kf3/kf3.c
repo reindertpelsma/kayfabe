@@ -1908,9 +1908,10 @@ static void kf3_reset_hold(Object *obj, ResetType type)
 {
     Kf3State *s = KF3(obj);
 
-    (void)type;
     if (s->h) {
-        kf3_device_reset(s->h, current_cpu != NULL);
+        /* ★ ABI 29 (docs/design/V3_S3_RESUME.md): the S3 resume resets every device with
+         * RESET_TYPE_WAKEUP (hw/i386/pc.c pc_machine_wakeup); Rust keeps a PM-suspended life. */
+        kf3_device_reset(s->h, current_cpu != NULL, type == RESET_TYPE_WAKEUP);
     }
 }
 

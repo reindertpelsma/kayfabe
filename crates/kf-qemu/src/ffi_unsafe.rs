@@ -71,7 +71,7 @@ use std::os::unix::ffi::OsStrExt as _;
 /// `c9ac4e77`).
 /// 28 (2026-10-13, same branch): 27's `kf3_device_reset` gains `from_vcpu`, and
 /// [`kf3_device_reset_wait`] (the `exit` phase's bounded wait) joins.
-pub const KF3_ABI: u32 = 28;
+pub const KF3_ABI: u32 = 29;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -1087,10 +1087,14 @@ pub unsafe extern "C" fn kf3_option_rom(
 ///
 /// `from_vcpu`: QEMU asked from a vCPU thread (a bus reset; the other vCPUs run) rather than its
 /// main loop (a system reset with every vCPU paused, or the machine's own reset at creation).
+///
+/// ★ ABI 29 (2026-10-14, `docs/design/V3_S3_RESUME.md`): `wake` — QEMU's reset type is
+/// `RESET_TYPE_WAKEUP`, the S3 resume's device reset (`hw/i386/pc.c:1723-1727`). A wake of a life
+/// whose GSP-RM state a PM-transition suspend saved keeps that life; every other reset ends it.
 #[unsafe(no_mangle)]
-pub extern "C" fn kf3_device_reset(h: *mut c_void, from_vcpu: u32) {
+pub extern "C" fn kf3_device_reset(h: *mut c_void, from_vcpu: u32, wake: u32) {
     if let Some(d) = dev(h) {
-        d.request_reset(from_vcpu != 0);
+        d.request_reset(from_vcpu != 0, wake != 0);
     }
 }
 
