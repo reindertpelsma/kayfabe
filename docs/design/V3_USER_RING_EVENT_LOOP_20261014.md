@@ -546,3 +546,27 @@ Per entry now [measured]: about 4.5 us in a turn (12.5 us per 2.8 entries), down
 doorbell are amortised; what is left is the two snapshots (3.0 us), the publication (0.42) and the scan (0.09) -- the per-entry exact source
 guards the owner asked to keep. [inferred] the next lever is the fixed cost inside `userread::snapshot`/`Snapshot::admit` (two row resolutions, a
 `PIECES`-sized span vector per resolution, a block scan per piece), not a guard: a profile on the Windows build will say.
+
+**Validation of the batching (Linux guest, relay forced by `KF3_DEBUG=1 KF3_DEBUG_FORCE_MIGRATABLE=1`, kf3 `edcaaca6` unless noted; the card was shared with
+the owner VM 2990 and another agent\x27s VM, so the framebuffer store was 1024 MiB instead of 4096 and absolute rates are noisy):**
+
+| check | result [measured] |
+|---|---|
+| `kf-syncwait-stress`, all families incl. flood, relay forced / plain | `d5be61ed`: 1 570 plans pass, 0 fail, 0 `USER_RING_REFUSED`; `edcaaca6` the same on and off |
+| fast suite 30/30 | on: 30/30, off: 30/30 (`edcaaca6`) |
+| desktop smoke (Cinnamon, gears) | 0 flip timeouts, 0 Xid, 59.5-60 FPS, relay on / off / old build alike; the `display: STALL` lines (9-18) appear on the old build and with the relay off too: the 1 GiB store beside two other VMs, not the relay |
+| S3 suspend/resume x3 | on 3/3, off 3/3 (`edcaaca6`) |
+| unit | kf-chan, kf-qemu, kf-rm, kf-trap, kf-harness: 1 440 passed, 0 failed (release) |
+| `v3_gates.sh` | **7/9, gate10 PASS, births 12/12 USER.** gate5 and gate6 fail (`semaphore never reached`) on bare metal with no kayfabe code in the path, and the same two fail with the previous build\x27s binaries run now (they passed 9/9 at 22:19 on an idle card): the card is busy with two other VMs. Inconclusive, not attributable to this change; to be re-run on an idle card |
+
+**Where the rest of the per-entry cost is [measured, partly misread]:** a `perf record -g` of the relay worker threads (45 k samples) was dominated by
+`turn_body` (everything inlined) and attributed 18 % to `RawVec::finish_grow`/`malloc` under a `hash_one::<&(u32,u32)>` frame; the build has no frame
+pointers, so the call chain is a guess. The one allocation that provably scaled with the budget -- `userread::resolve` reserving all `PIECES` spans on
+every resolution -- was fixed (`d5be61ed`/`6c2cb437`) and gained about 100 ns per snapshot, not 18 %. The stage timers are the evidence; the remaining
+per-entry floor is the two snapshots (about 2.8 us) -- finer timers inside `snapshot` (resolve / prepare / blocks / copy) are the next measurement.
+
+**Open / for the Windows agent:** (1) run this build with `KF3_USER_RING_STAGES=1` on Heaven D3D11 and read the `USER_RING_LOOP SUMMARY` flow line (turns and
+host doorbells per segment, `segment_words_log2`, `put_delta_entries_log2`, stage ns); the Linux suite traffic is 16-word segments only (1 118 segments in
+19 arms, nothing like Heaven). (2) The chain bound `CHAIN_MAX = 16` is a guess from fairness, not from Heaven: the flood run hit it in 1 202 of 7 700
+chains. (3) Markers rose from 0.07 to 0.28 per segment because the faster relay catches up with the guest more often; each is a publication and an interrupt
+event. A rule that skips the marker when the chain ended exactly at the bound would need a way to know the next claim is coming without a timer -- not done.
