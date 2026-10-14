@@ -193,6 +193,8 @@ struct Reread {
     cursor: u32,
     /// The scan-time snapshot's backing pieces and rows-log epoch.
     backing: (String, u64),
+    /// Private-ring sequence this segment's descriptor got (issued count at scan time).
+    seq_at_scan: u64,
     va: u64,
     bytes: usize,
     scan_in: Scan,
@@ -219,6 +221,7 @@ pub(super) struct Trace {
     verified: u64,
     stale: u64,
     stale_desync: u64,
+    stale_prefetch: u64,
 }
 impl Trace {
     fn new() -> Self {
@@ -239,6 +242,7 @@ impl Trace {
             verified: 0,
             stale: 0,
             stale_desync: 0,
+            stale_prefetch: 0,
         }
     }
     fn note_put(&mut self, doorbells: u64) {
@@ -364,9 +368,12 @@ pub(super) struct Pump {
     guest_get: Option<(u64, u32)>,
     pub tick: bool,
     again: bool,
-    /// ★ 2026-10-14: which guest entries may be read yet ([`kf_chan::user_settle::Settle`]) and
-    /// the bounded retry of a scan refusal ([`kf_chan::user_settle::Grace`]).
-    settle: kf_chan::user_settle::Settle,
+    /// ★ 2026-10-14 — `GP_ENTRY1_SYNC_WAIT`: the private ring sequence of the authored barrier's
+    /// witness that must be fetched before the guest's SYNC_WAIT entry at the cursor (and anything
+    /// after it) may be READ, and the entry `(generation, cursor)` whose wait is already proven.
+    sync_witness: Option<u64>,
+    sync_cleared: Option<(u64, u32)>,
+    /// ★ 2026-10-14: the bounded retry of a scan refusal ([`kf_chan::user_settle::Grace`]).
     grace: kf_chan::user_settle::Grace,
     /// Measurement only ([`trace_dir`]).
     pub(super) trace: Option<Box<Trace>>,
@@ -430,7 +437,8 @@ impl Pump {
             guest_get: None,
             tick: false,
             again: false,
-            settle: kf_chan::user_settle::Settle::new(0),
+            sync_witness: None,
+            sync_cleared: None,
             grace: kf_chan::user_settle::Grace::default(),
             trace: trace_dir().map(|_| Box::new(Trace::new())),
         })
@@ -438,7 +446,7 @@ impl Pump {
     pub(super) fn release(&mut self) -> Result<(), String> {
         if let Some(t) = &self.trace {
             eprintln!(
-                "kf3: USER_RING_TRACE SUMMARY {:x?} segments={} puts_with_doorbell={} puts_without_doorbell={} straddles={} verified={} stale={} stale_desync={}",
+                "kf3: USER_RING_TRACE SUMMARY {:x?} segments={} puts_with_doorbell={} puts_without_doorbell={} straddles={} verified={} stale={} stale_desync={} stale_prefetch={}",
                 self.key,
                 t.seq,
                 t.puts_with_db,
@@ -446,7 +454,8 @@ impl Pump {
                 t.straddles,
                 t.verified,
                 t.stale,
-                t.stale_desync
+                t.stale_desync,
+                t.stale_prefetch
             );
         }
         if let Some(shadow) = self.shadow.take() {
@@ -501,6 +510,7 @@ impl Pump {
             Err(i) => format!("refused@{i}"),
         };
         let cursor = self.cursor;
+        let issued_now = self.fetch.issued();
         let scan_in = self.scan.clone();
         let Some(t) = self.trace.as_mut() else {
             return;
@@ -520,6 +530,7 @@ impl Pump {
                     seq: t.seq,
                     cursor,
                     backing: (pb.describe(), pb.epoch),
+                    seq_at_scan: issued_now,
                     va: d.gpu_va,
                     bytes: d.len_bytes as usize,
                     scan_in: scan_in.clone(),
@@ -563,6 +574,7 @@ impl Pump {
                     seq: t.seq,
                     cursor,
                     backing: (pb.describe(), pb.epoch),
+                    seq_at_scan: issued_now,
                     va: d.gpu_va,
                     bytes: d.len_bytes as usize,
                     scan_in: scan_in.clone(),
@@ -643,6 +655,12 @@ impl Pump {
                 t.verified += 1;
                 let mut write_file = false;
                 if !diffs.is_empty() {
+                    // Before the GPU began this entry: the GPU will execute the NEW bytes, the
+                    // scan saw the old ones — a real mismatch. After: possibly a legitimate reuse.
+                    let prefetch = self.fetch.fetched() <= x.seq_at_scan;
+                    if prefetch {
+                        t.stale_prefetch += 1;
+                    }
                     t.stale += 1;
                     let desync = *end_at_scan != end;
                     if desync {
@@ -651,7 +669,7 @@ impl Pump {
                     write_file = t.stale <= 8;
                     if t.stale <= 64 || desync && t.stale_desync <= 64 {
                         eprintln!(
-                            "kf3: USER_RING_TRACE STALE {:#x}:{:#x} seq={} after_us={} words={} changed={} first_diff={:?} last_diff={:?} carried_out_at_scan={end_at_scan} now={end} backing_moved={moved:?} rows_epoch(scan,now)={epoch:?} backing_at_scan=[{}] verified={} stale={} stale_desync={}",
+                            "kf3: USER_RING_TRACE STALE {:#x}:{:#x} seq={} after_us={} words={} changed={} first_diff={:?} last_diff={:?} carried_out_at_scan={end_at_scan} now={end} backing_moved={moved:?} rows_epoch(scan,now)={epoch:?} backing_at_scan=[{}] prefetch={} verified={} stale={} stale_desync={} stale_prefetch={}",
                             r.key.0,
                             r.key.1,
                             x.seq,
@@ -661,20 +679,23 @@ impl Pump {
                             diffs.first(),
                             diffs.last(),
                             x.backing.0,
+                            prefetch,
                             t.verified,
                             t.stale,
-                            t.stale_desync
+                            t.stale_desync,
+                            t.stale_prefetch
                         );
                     }
                 }
                 if t.verified % 5000 == 0 {
                     eprintln!(
-                        "kf3: USER_RING_TRACE VERIFY {:#x}:{:#x} verified={} stale={} stale_desync={} doorbell_census={:x?}",
+                        "kf3: USER_RING_TRACE VERIFY {:#x}:{:#x} verified={} stale={} stale_desync={} stale_prefetch={} doorbell_census={:x?}",
                         r.key.0,
                         r.key.1,
                         t.verified,
                         t.stale,
                         t.stale_desync,
+                        t.stale_prefetch,
                         me.doorbell_census_now()
                     );
                 }
@@ -1007,7 +1028,6 @@ impl Pump {
             }
         }
         self.tick = self.fetch.fetched() != self.fetch.issued()
-            || self.settle.waiting()
             || self.grace.retrying()
             || self.trace.as_ref().is_some_and(|t| !t.rereads.is_empty());
         if self.segment.is_none() {
@@ -1032,26 +1052,10 @@ impl Pump {
                 return Err("USER_RING_PUT_BOUND".into());
             }
             if put == self.cursor {
-                self.settle.reset(self.cursor);
                 return Ok(false);
             }
             if let Some(t) = self.trace.as_mut() {
                 t.note_put(doorbells);
-            }
-            // ★ 2026-10-14 (`kf_chan::user_settle`): a GP_PUT the guest has only just written may
-            // name pushbuffer bytes that are not yet visible here (measured: VRAM pushbuffers
-            // written through write-combined BAR1 read stale for up to ~1 ms). Read an entry only
-            // once its PUT was rung after we read it, or has settled. Doorbells are read AFTER
-            // the PUT read, so a doorbell that may predate the guest's PUT write never counts.
-            let readable = self.settle.observe(
-                self.cursor,
-                put,
-                std::time::Instant::now(),
-                me.queued(r.idx),
-            );
-            if readable == self.cursor {
-                self.tick = true;
-                return Ok(false);
             }
             // Declaration admission only, not a pin. Native never fetches the
             // guest ring; EACH current GP/PB still has fresh exact source guards.
@@ -1095,6 +1099,55 @@ impl Pump {
                 })?;
             let guest_get =
                 self.cursor.checked_add(1).ok_or("USER_RING_CURSOR")? & (r.source.1 - 1);
+            // ★★ 2026-10-14 — GP_ENTRY1_SYNC_WAIT (public dev_pbdma.ref "NV_PPBDMA_GP_ENTRY1_SYNC":
+            // Host does not begin fetching this entry's segment — and, for a LENGTH-0 entry, any
+            // later one — until the preceding segment has been PROCESSED). A guest may therefore
+            // publish entries behind a SYNC_WAIT whose pushbuffers it fills only later, gated by a
+            // semaphore acquire in the preceding segment (measured, Win11 + 580.88: every scan
+            // refusal and stale read sat behind an unfetched SYNC_WAIT NOP; the bytes were filled
+            // within ms). Reading them early scans bytes the GPU will never fetch. So: before
+            // touching anything at or after a SYNC_WAIT entry, author the same wait on our own
+            // ring (barrier NOP + witness, exactly as staged segments do) and read on only once
+            // the witness has begun processing — i.e. once the hardware itself would fetch.
+            if entry >> 63 & 1 == 1 && self.sync_cleared != Some((self.generation, self.cursor)) {
+                match self.sync_witness {
+                    Some(w) if self.fetch.fetched() >= w => {
+                        self.sync_witness = None;
+                        self.sync_cleared = Some((self.generation, self.cursor));
+                    }
+                    Some(_) => {
+                        self.tick = true;
+                        return Ok(false);
+                    }
+                    None => {
+                        if self.fetch.available() < 2 {
+                            self.tick = true;
+                            return Ok(false);
+                        }
+                        self.publish(
+                            me,
+                            r,
+                            None,
+                            ring.as_ref(),
+                            Some(&source),
+                            None,
+                            |pump, storage| {
+                                let (barrier, _) =
+                                    pump.fetch.publish(None).map_err(str::to_owned)?;
+                                storage.write_host_barrier(barrier)?;
+                                let (witness, put) =
+                                    pump.fetch.publish(None).map_err(str::to_owned)?;
+                                storage.write_host_witness(witness)?;
+                                storage.publish_put(put)
+                            },
+                        )?;
+                        self.source_admitted = true;
+                        self.sync_witness = Some(self.fetch.issued());
+                        self.tick = true;
+                        return Ok(true);
+                    }
+                }
+            }
             if matches!(descriptor, kf_chan::user_stream::Source::Nop) {
                 if self.fetch.available() == 0 {
                     self.tick = true;
@@ -1721,7 +1774,6 @@ impl Pump {
                     self.generation = generation;
                     self.source_admitted = false;
                     self.cursor = 0;
-                    self.settle.reset(0);
                     self.grace.clear();
                     self.guest_get = None;
                 })
