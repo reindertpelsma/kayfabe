@@ -150,6 +150,8 @@ struct Mutant {
     no_notify: bool,
     /// The RETIRED proof: the gate's marker is "processed" when `GP_GET` has popped past it.
     get_proof: bool,
+    /// ★ batching (doc §9): the chain ends without ringing the host doorbell it owes.
+    no_final_bell: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -193,6 +195,30 @@ struct Cfg {
     pt_windows: u8,
     /// Check terminal states (needs a finite graph: timers off or no cycles).
     liveness: bool,
+    /// ★ 2026-10-14 batching (doc §9). Count turns, host doorbells and entries per turn (adds state;
+    /// only the batching tests ask for it).
+    metrics: bool,
+    /// Defer the private ring's host doorbell to the end of the claim's chain: ONE doorbell per
+    /// batch instead of one per publication. `false` = the code at 24e7a297 (a doorbell per
+    /// publication). Design only.
+    defer_bell: bool,
+    /// Extra entries one turn may relay after its first, inside the same claim (`ul::chain_more`;
+    /// `ul::CHAIN_MAX - 1` in production). `0` = the code at 24e7a297 (one entry per turn). Design only.
+    chain: u8,
+}
+impl Cfg {
+    /// The private ring's host doorbell is deferred to the end of the chain.
+    fn defers(&self) -> bool {
+        self.policy == Policy::Design && self.defer_bell
+    }
+    /// Entries one turn may relay beyond its first.
+    fn chain_len(&self) -> u8 {
+        if self.policy == Policy::Design {
+            self.chain
+        } else {
+            0
+        }
+    }
 }
 impl Cfg {
     fn new(policy: Policy, chans: Vec<ChanSpec>) -> Self {
@@ -211,6 +237,9 @@ impl Cfg {
             lock_windows: 0,
             pt_windows: 0,
             liveness: true,
+            metrics: false,
+            defer_bell: true,
+            chain: 2,
         }
     }
 }
@@ -328,6 +357,20 @@ struct Chan {
     pt_held: bool,
     /// Consecutive contended turns (`Cell::contended`, `user_loop::may_retry`).
     contended_run: u8,
+    // ---- metrics (only with `Cfg::metrics`)
+    /// Private-ring publications since the last host doorbell.
+    pubs: u8,
+    /// Host doorbells rung.
+    bells: u8,
+    /// The private-ring entries the PBDMA can see: those published before the last host doorbell.
+    hw_vis: usize,
+    /// The `GP_PUT` this claim read (the chain reuses it).
+    put_cache: Option<u32>,
+    /// Relay turns run.
+    turns: u8,
+    /// Guest entries the turn in progress has relayed, and the most any turn relayed.
+    turn_entries: u8,
+    max_turn_entries: u8,
     // ---- Today's policy state (`Pump::tick`, `Cell::retry`, `Poll`)
     tick: bool,
     retry: bool,
@@ -388,6 +431,7 @@ const V_PUT_BOUND: u32 = 1 << 8;
 const V_BACKSTOP_PUT_AHEAD: u32 = 1 << 10;
 const V_BACKSTOP_CONTENDED: u32 = 1 << 11;
 const V_UNBOUNDED: u32 = 1 << 9;
+const V_CHAIN_BOUND: u32 = 1 << 12;
 
 fn viol_names(v: u32) -> Vec<&'static str> {
     let mut out = Vec::new();
@@ -429,6 +473,10 @@ fn viol_names(v: u32) -> Vec<&'static str> {
         (
             V_UNBOUNDED,
             "UNBOUNDED (the relay published more than one ring lap beyond the guest's entries)",
+        ),
+        (
+            V_CHAIN_BOUND,
+            "CHAIN_BOUND (one turn relayed more entries than the per-turn bound)",
         ),
     ] {
         if v & bit != 0 {
@@ -485,6 +533,13 @@ impl Chan {
             lock_held: false,
             pt_held: false,
             contended_run: 0,
+            pubs: 0,
+            bells: 0,
+            hw_vis: 0,
+            put_cache: None,
+            turns: 0,
+            turn_entries: 0,
+            max_turn_entries: 0,
             tick: false,
             retry: false,
             poll_active: false,
@@ -502,6 +557,7 @@ impl Chan {
         self.log.push(p);
         self.pend.push_back(receipt);
         self.issued += 1;
+        self.pubs = self.pubs.saturating_add(1);
     }
 }
 
@@ -608,12 +664,18 @@ fn guest_steps(cfg: &Cfg, w: &World, out: &mut Vec<Step>) {
     }
 }
 
+/// The private-ring entries the PBDMA may begin: with a deferred doorbell only those published before
+/// the last host doorbell (the PUT store alone does not start it).
+fn vis(cfg: &Cfg, ch: &Chan) -> usize {
+    if cfg.defers() { ch.hw_vis } else { ch.log.len() }
+}
+
 fn hw_steps(cfg: &Cfg, w: &World, out: &mut Vec<Step>) {
     for c in 0..w.ch.len() {
         let ch = &w.ch[c];
         // the next entry may begin only when the segment before it is processed (its acquire done)
         let blocked = ch.hw_wait.is_some_and(|s| ch.sem & (1 << s) == 0);
-        if ch.hw_get < ch.log.len() && !blocked {
+        if ch.hw_get < vis(cfg, ch) && !blocked {
             let mut n = w.clone();
             let m = &mut n.ch[c];
             match m.log[ch.hw_get] {
@@ -776,6 +838,20 @@ fn finish(cfg: &Cfg, n: &mut World, need: Need) {
         } else if !matches!(need, Need::Idle) || !ch.retry {
             ch.contended_run = 0;
         }
+    }
+    // host doorbells (metrics): the code at 24e7a297 rings one per publication, the batching design one
+    // per chain, at its end (the turn that ends the chain rings it, whatever it ends with)
+    {
+        let ch = &mut n.ch[c];
+        let rung = if cfg.defers() { u8::from(ch.pubs > 0) } else { ch.pubs };
+        if cfg.metrics {
+            ch.bells = ch.bells.saturating_add(rung);
+        }
+        if rung > 0 && !cfg.m.no_final_bell {
+            ch.hw_vis = ch.log.len();
+        }
+        ch.pubs = 0;
+        ch.put_cache = None;
     }
     // release
     let ch = &mut n.ch[c];
@@ -1056,6 +1132,10 @@ fn turn_step(cfg: &Cfg, w: &World, stage: u8, out: &mut Vec<Step>) {
         }
         T1 => {
             // observe the private GP_GET and REFERENCE (userpump.rs: the turn's first read)
+            if cfg.metrics {
+                n.ch[c].turns = ch.turns.saturating_add(1);
+            }
+            n.ch[c].turn_entries = 0;
             if design {
                 n.ch[c].ref_seen = ch.ref_seen.max(ch.ref_visible);
             }
@@ -1088,8 +1168,14 @@ fn turn_step(cfg: &Cfg, w: &World, stage: u8, out: &mut Vec<Step>) {
             }
         }
         T2 => {
-            // userpump.rs:1262 read GP_PUT -- AFTER the claim cleared the flag
-            let put = ch.put[ch.src];
+            // userpump.rs:1262 read GP_PUT -- AFTER the claim cleared the flag; a chain reuses the value
+            let put = match ch.put_cache {
+                Some(p) if cfg.chain_len() > 0 => p,
+                _ => ch.put[ch.src],
+            };
+            if cfg.chain_len() > 0 && (put as usize) < R {
+                n.ch[c].put_cache = Some(put);
+            }
             if put as usize >= R {
                 // USER_RING_PUT_BOUND: a bounded refusal; the record is cancelled, nothing re-arms
                 n.viol |= V_PUT_BOUND;
@@ -1232,6 +1318,14 @@ fn turn_step(cfg: &Cfg, w: &World, stage: u8, out: &mut Vec<Step>) {
             }
             let m = &mut n.ch[c];
             m.unnotified = true;
+            m.turn_entries = m.turn_entries.saturating_add(1);
+            if cfg.metrics {
+                m.max_turn_entries = m.max_turn_entries.max(m.turn_entries);
+            }
+            if u32::from(m.turn_entries) > u32::from(cfg.chain_len()) + 1 {
+                n.viol |= V_CHAIN_BOUND;
+            }
+            let m = &mut n.ch[c];
             if e.id != ZERO_ID {
                 m.relayed.push(e.id);
             }
@@ -1245,8 +1339,18 @@ fn turn_step(cfg: &Cfg, w: &World, stage: u8, out: &mut Vec<Step>) {
             } else {
                 m.cursor = next;
             }
-            finish(cfg, &mut n, Need::Again);
-            out.push(step(format!("w:T5 published {}", e.id), n));
+            // ★ batching: the claim goes on to the next covered entry (`ul::chain_more`: bounded by a
+            // count, a trigger -- the migration -- ends it) with NO release, observation, write-back or
+            // PUT re-read; the chain's last turn publishes the marker and rings the doorbell once
+            let split = e.kind == Kind::Trigger;
+            let relayed = u32::from(n.ch[c].turn_entries);
+            if cfg.chain_len() > 0 && ul::chain_more(relayed, true, split) && relayed <= u32::from(cfg.chain_len()) {
+                n.pc = Pc::T(T2);
+                out.push(step("w:T5 chained next entry", n));
+            } else {
+                finish(cfg, &mut n, Need::Again);
+                out.push(step(format!("w:T5 published {}", e.id), n));
+            }
         }
         _ => unreachable!(),
     }
@@ -1260,7 +1364,7 @@ fn normalize(cfg: &Cfg, w: &mut World) {
         return;
     }
     for ch in &mut w.ch {
-        let to = ch.log.len().min(ch.hw_get.saturating_add(cfg.pop_depth));
+        let to = vis(cfg, ch).min(ch.hw_get.saturating_add(cfg.pop_depth));
         if ch.popped < to {
             ch.popped = to;
             if !cfg.lag {
@@ -1344,6 +1448,9 @@ fn goal_failure(cfg: &Cfg, w: &World) -> Option<String> {
 #[derive(Debug)]
 struct Explored {
     states: usize,
+    /// Per terminal state (nothing can happen any more): `(host doorbells, turns, most entries one
+    /// turn relayed)` of each channel (`Cfg::metrics`).
+    terminals: std::collections::BTreeSet<Vec<(u8, u8, u8)>>,
     /// Every distinct step label taken (coverage: the races the tests claim to cover were reached).
     labels: std::collections::HashSet<String>,
 }
@@ -1377,6 +1484,7 @@ fn explore(cfg: &Cfg, allow: u32) -> Result<Explored, Counterexample> {
     q.push_back(start);
     let mut states = 0usize;
     let mut labels = std::collections::HashSet::new();
+    let mut terminals = std::collections::BTreeSet::new();
     let trace_of = |seen: &HashMap<u128, (u128, String)>, mut k: u128| {
         let mut t = Vec::new();
         while let Some((p, l)) = seen.get(&k) {
@@ -1405,6 +1513,13 @@ fn explore(cfg: &Cfg, allow: u32) -> Result<Explored, Counterexample> {
             });
         }
         let succ = successors(cfg, &w);
+        if succ.is_empty() && cfg.metrics {
+            terminals.insert(
+                w.ch.iter()
+                    .map(|c| (c.bells, c.turns, c.max_turn_entries))
+                    .collect(),
+            );
+        }
         if succ.is_empty() && cfg.liveness {
             if let Some(why) = goal_failure(cfg, &w) {
                 return Err(Counterexample {
@@ -1425,7 +1540,11 @@ fn explore(cfg: &Cfg, allow: u32) -> Result<Explored, Counterexample> {
             }
         }
     }
-    Ok(Explored { states, labels })
+    Ok(Explored {
+        states,
+        terminals,
+        labels,
+    })
 }
 
 fn report(name: &str, r: &Result<Explored, Counterexample>) -> String {
@@ -1985,7 +2104,10 @@ fn design_a_turn_deferred_by_a_busy_lock_is_resumed_by_an_event() {
 /// release is not an event.
 #[test]
 fn design_pt_admission_contention_is_spin_then_the_counted_backstop() {
+    // one entry per turn (`chain = 0`): the busy write-back stands between two turns' entries. (A chain
+    // relays the three covered entries before the write-back is due: `..._batching` below.)
     let mut cfg = Cfg::new(Policy::Design, s_batched());
+    cfg.chain = 0;
     cfg.pt_windows = 1;
     cfg.timers = false;
     cfg.spin = 1;
@@ -1999,6 +2121,34 @@ fn design_pt_admission_contention_is_spin_then_the_counted_backstop() {
         0,
         &["BACKSTOP_CONTENDED"],
     );
+}
+
+/// The same with batching, where the guest WAITS for the write-back (a ring of more entries than slots
+/// needs `GP_GET` past the relayed ones before it can push): the busy admission lock at the write-back
+/// still needs the spin or the counted safety net.
+#[test]
+fn design_pt_admission_contention_with_batching_is_spin_then_the_counted_backstop() {
+    let chans = vec![spec(
+        vec![
+            Push(seg(1)),
+            Push(seg(2)),
+            Push(seg(3)),
+            SetPut,
+            Ring,
+            Push(seg(4)), // needs the write-back of the first entries
+            SetPut,
+            Ring,
+        ],
+        vec![1, 2, 3, 4],
+        4,
+    )];
+    let mut cfg = Cfg::new(Policy::Design, chans);
+    cfg.pt_windows = 1;
+    cfg.timers = false;
+    cfg.spin = 1;
+    finds("design/pt/batching/no-backstop", &cfg, 0, &["DEADLOCK"]);
+    // (the safety net's side of it -- it wakes the relay and counts `BACKSTOP_CONTENDED` -- is the
+    // `chain = 0` test above; with a chain the same exploration exceeds the 3M-state budget)
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -2019,7 +2169,15 @@ fn mutant_lost_wakeup_is_found() {
 fn mutant_a_ring_during_a_turn_is_lost_is_found() {
     let mut cfg = Cfg::new(Policy::Design, s_coalesce());
     cfg.m.drop_busy_rung = true;
+    cfg.chain = 0; // one entry per turn
     finds("mutant/drop_busy_rung", &cfg, 0, &["DEADLOCK"]);
+    // with batching: the chain reads GP_PUT once, so the ring that lands after it is the ONLY way the
+    // later entry is found -- unless the marker's completion event happens to look (no interrupt here)
+    let mut cfg = Cfg::new(Policy::Design, s_coalesce());
+    cfg.m.drop_busy_rung = true;
+    cfg.irq = false;
+    cfg.spin = 0; // no look at the not-yet-fd words either: the doorbell is the only wake
+    finds("mutant/drop_busy_rung/batching", &cfg, 0, &["DEADLOCK"]);
 }
 #[test]
 fn mutant_byte_witness_inside_an_open_packet_is_found() {
@@ -2402,4 +2560,177 @@ fn a_guest_with_a_full_ring_behind_its_own_gate_deadlocks_by_construction() {
     let mut cfg = Cfg::new(Policy::Design, chans);
     cfg.timers = false;
     holds("design/full-ring-control", &cfg, 0);
+}
+
+// ------------------------------------------------------------------------------------------------
+// (e) ★ 2026-10-14 BATCHING (docs/design/V3_USER_RING_EVENT_LOOP_20261014.md §9)
+//
+// Measured on the Windows Heaven D3D11 run (`traces/win11_userring_20261014/README.md` §4c) and
+// reproduced on Linux with `kf-syncwait-stress --families flood` (guest, relay forced): 1.07-1.08 relay
+// turns per relayed GP segment, 1.05 host doorbells per segment, every turn relays exactly ONE entry
+// (`entries_per_turn_log2=[.., 28800, 0, ..]`). The owner's rule (V3 design; `OWNER_RULINGS.md`, "no
+// deliberate coalescing delay"): the doorbell contract is weak -- only the LAST doorbell must be
+// drained; batching comes from NATURAL backlog and never from a timer.
+//
+// The rule these tests pin: a turn that relayed an entry goes on to the next COVERED entry in the same
+// claim (bounded by a count), reads `GP_PUT` once, observes/writes back once, and rings the host doorbell
+// ONCE at the end of the chain -- after the batch marker, so the one doorbell covers the entries and
+// the marker. A gate, a staged segment, a migration, a credit shortage or a refusal retry ends the
+// chain (the prefix is published and rung first). Every test below that FAILS at 24e7a297 says so.
+
+fn batching(chans: Vec<ChanSpec>) -> Cfg {
+    let mut cfg = Cfg::new(Policy::Design, chans);
+    cfg.metrics = true;
+    cfg.defer_bell = true;
+    cfg.chain = 3; // up to 4 entries per turn: R = 4 leaves 3 usable ring slots, plus the marker
+    cfg.timers = false;
+    cfg.spin = 0;
+    cfg
+}
+
+/// ★ FAILS at 24e7a297: N covered entries cost N+1 turns' worth of work and N+1 host doorbells (one per
+/// publication, the marker's included). They must cost ONE turn and ONE doorbell, in every
+/// interleaving: the guest's `GP_PUT` covers all three entries at once (one `SetPut`).
+#[test]
+fn a_batch_of_covered_entries_is_one_turn_and_one_host_doorbell() {
+    let cfg = batching(s_batched());
+    let e = explore(&cfg, 0).expect("the batching design is safe and live");
+    assert!(!e.terminals.is_empty());
+    for t in &e.terminals {
+        assert_eq!(
+            t[0].0, 1,
+            "3 covered entries + the batch marker cost {} host doorbells (terminals {:?})",
+            t[0].0, e.terminals
+        );
+    }
+    // one turn does it all; the other turns are the event-driven look at the marker (publish nothing)
+    assert!(
+        e.terminals.iter().all(|t| t[0].2 == 3),
+        "one turn relays all three covered entries: {:?}",
+        e.terminals
+    );
+}
+
+/// ★ FAILS at 24e7a297 (one entry per turn): the per-turn bound is a COUNT, reached when the backlog
+/// is deeper than it. Bound 2 on a backlog of 3: the first turn relays two, the next the third.
+#[test]
+fn the_per_turn_bound_is_a_count_and_the_rest_follows_in_the_next_turn() {
+    let mut cfg = batching(s_batched());
+    cfg.chain = 1;
+    let e = explore(&cfg, 0).expect("bounded batching is safe and live (CHAIN_BOUND is an invariant)");
+    for t in &e.terminals {
+        assert_eq!(t[0].2, 2, "most entries one turn relayed: {:?}", e.terminals);
+        assert!(t[0].0 <= 2, "at most one doorbell per chain: {:?}", e.terminals);
+    }
+}
+
+/// ★ FAILS at 24e7a297 (the label never occurs): coverage, the batching race is reached.
+#[test]
+fn the_chained_next_entry_step_is_reachable() {
+    let cfg = batching(s_batched());
+    let e = explore(&cfg, 0).unwrap();
+    assert!(
+        e.labels.contains("w:T5 chained next entry"),
+        "labels: {:?}",
+        e.labels.iter().filter(|l| l.starts_with("w:T5")).collect::<Vec<_>>()
+    );
+}
+
+/// ★ FAILS at 24e7a297 (the mutant is not modelled): a chain that ends without ringing the doorbell it
+/// owes strands the published entries -- the PBDMA never sees the new PUT -- and the checker finds
+/// the deadlock (the property is not vacuous).
+#[test]
+fn a_chain_that_ends_without_its_doorbell_strands_the_entries() {
+    let mut cfg = batching(s_batched());
+    cfg.m.no_final_bell = true;
+    finds("batching/no-final-bell", &cfg, 0, &["DEADLOCK"]);
+}
+
+/// The doorbell contract with batching, every scenario: the LAST doorbell is always drained, with
+/// timers that never fire (these hold at 24e7a297 for the one-entry turns; they pin the design once
+/// the model chains).
+#[test]
+fn batching_keeps_the_last_doorbell_drained_in_every_scenario() {
+    for (name, chans) in contract_scenarios() {
+        let cfg = batching(chans);
+        holds(&format!("batching/{name}"), &cfg, V_TIMER_TURN);
+    }
+}
+
+/// Gates split a batch: the prefix is published and rung, the gate drains, the rest follows; the
+/// late pushbuffer behind the gate is never read early, whatever the chain bound.
+#[test]
+fn a_gate_splits_a_batch_and_late_bytes_are_never_read_early() {
+    for chain in [1, 2] {
+        let mut cfg = batching(s_gate_late_pb());
+        cfg.chain = chain;
+        holds(&format!("batching/gate/chain={chain}"), &cfg, 0);
+        let mut cfg = batching(s_lap_sync());
+        cfg.chain = chain;
+        holds(&format!("batching/lap-sync/chain={chain}"), &cfg, 0);
+    }
+}
+
+/// A migration inside a batch: the trigger ends the chain (a new source, cursor, generation); nothing
+/// before it is dropped, nothing after it replayed, and the entries behind it follow.
+#[test]
+fn a_migration_inside_a_batch_drops_and_replays_nothing() {
+    for chain in [1, 2] {
+        for chans in [s_migration(), s_migration_gated()] {
+            let mut cfg = batching(chans);
+            cfg.chain = chain;
+            holds(&format!("batching/migration/chain={chain}"), &cfg, 0);
+        }
+    }
+}
+
+/// Fairness and hostile guests: a deep backlog on one channel cannot starve its neighbour on the
+/// shared worker (the chain is bounded by a count; the neighbour is served after it), and a hostile
+/// `GP_PUT` is refused once, with the chain bound as the invariant.
+#[test]
+fn a_deep_backlog_cannot_starve_the_neighbour_and_a_hostile_put_is_still_refused() {
+    let chans = vec![
+        spec(
+            vec![Push(seg(1)), Push(seg(2)), Push(seg(3)), SetPut, Ring],
+            vec![1, 2, 3],
+            3,
+        ),
+        spec(vec![Push(seg(11)), SetPut, Ring], vec![11], 1),
+    ];
+    let mut cfg = batching(chans);
+    cfg.chain = 1;
+    holds("batching/neighbour", &cfg, 0);
+    let chans = vec![ChanSpec {
+        script: vec![Push(seg(1)), SetPut, Ring, PutRaw(0x7fff_0000), Ring, Ring],
+        expected: vec![1],
+        must_relay: 0,
+        may_block: false,
+    }];
+    holds("batching/hostile-put", &batching(chans), V_PUT_BOUND);
+    let chans = vec![ChanSpec {
+        script: vec![Push(seg(1)), Push(seg(2)), SetPut, Ring, PutRaw(1), Ring],
+        expected: vec![1, 2],
+        must_relay: 0,
+        may_block: false,
+    }];
+    holds("batching/put-backwards", &batching(chans), V_ORDER);
+}
+
+/// K doorbells never cost K turns each: six rings for one PUT. The token (`kf_trap::token`) absorbs a
+/// ring that lands while the worker holds the claim (BUSY_RUNG: ONE re-run), so the turns are bounded
+/// by the rings that arrive between claims plus the event-driven looks -- never by an unbounded
+/// amount. (Holds at 24e7a297 too; it pins the batching design against a per-ring queue.)
+#[test]
+fn k_doorbells_during_a_turn_cause_at_most_one_extra_turn() {
+    let chans = vec![spec(
+        vec![Push(seg(1)), SetPut, Ring, Ring, Ring, Ring, Ring, Ring],
+        vec![1],
+        1,
+    )];
+    let cfg = batching(chans);
+    let e = explore(&cfg, 0).expect("storm is safe and live");
+    for t in &e.terminals {
+        assert!(t[0].1 <= 6 + 2, "turns {} for 6 rings: {:?}", t[0].1, e.terminals);
+        assert!(t[0].0 <= 3, "host doorbells {} for 6 rings: {:?}", t[0].0, e.terminals);
+    }
 }

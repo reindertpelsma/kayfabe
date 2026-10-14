@@ -164,6 +164,28 @@ pub const fn idle(waiting: bool, spin_left: u32) -> Idle {
     }
 }
 
+/// ★ 2026-10-14 (batching, `docs/design/V3_USER_RING_EVENT_LOOP_20261014.md` §9). The most guest
+/// entries ONE claim of a relay's token may relay before it yields (a COUNT, never a time): the
+/// neighbour channels on the shared worker and the vCPU path stay responsive, and a hostile
+/// `GP_PUT` cannot hold the worker. `kf_trap::REACT_ROUNDS` bounds the re-claims on top of it.
+pub const CHAIN_MAX: u32 = 16;
+
+/// May the turn that just relayed an entry go on to the next covered entry inside the SAME claim
+/// (no token release, no re-claim, no second `GP_PUT` read, one host doorbell at the end)?
+///
+/// * `relayed`: entries this claim has relayed so far;
+/// * `again`: the turn published and asked for another turn (more covered entries, or the batch's
+///   marker still to be published);
+/// * `split`: the turn ended in something that needs its own turn -- a SYNC_WAIT gate, a staged
+///   (rare) segment, a migration, a credit shortage, a refusal retry.
+///
+/// (24e7a297 and before: never -- one segment per turn, the structural cut that gave 1.07 turns and
+/// 1.05 host doorbells per segment.)
+#[must_use]
+pub const fn chain_more(relayed: u32, again: bool, split: bool) -> bool {
+    again && !split && relayed < CHAIN_MAX
+}
+
 /// log2 buckets of microseconds: bucket `i` holds `[2^i, 2^(i+1))` us (bucket 0 also 0 us), the
 /// last one everything above. Bounded, lock-free.
 pub const DRAIN_BUCKETS: usize = 16;
@@ -207,12 +229,116 @@ pub struct Stats {
     pub markers: AtomicU64,
     /// SYNC_WAIT drain latency (gate published -> witness fetched), log2 buckets of microseconds.
     pub drain: [AtomicU64; DRAIN_BUCKETS],
+    // ---- 2026-10-14 flow counters (what one turn costs: how many turns, entries, publications, host
+    // doorbells). Always on: relaxed atomics, no clock.
+    /// Relay turns run (`Pump::turn`).
+    pub turns: AtomicU64,
+    /// Guest GP entries relayed (segments and control entries published to the private ring).
+    pub segments: AtomicU64,
+    /// Private-ring publications (`Pump::publish`: one PUT store each).
+    pub publications: AtomicU64,
+    /// Host doorbells rung for the private ring.
+    pub host_doorbells: AtomicU64,
+    /// Guest `GP_PUT` reads.
+    pub put_reads: AtomicU64,
+    /// Guest-visible `GP_GET` write-backs.
+    pub get_writebacks: AtomicU64,
+    /// Turns by the number of guest entries they relayed: bucket 0 = none, then log2 (1, 2-3, 4-7, ...).
+    pub per_turn: [AtomicU64; TURN_BUCKETS],
+    /// Relayed GP segments by pushbuffer length in words: log2 buckets (bucket 0 = 1 word, 1 = 2-3, ...).
+    pub seg_words: [AtomicU64; WORD_BUCKETS],
+    /// Total pushbuffer words relayed.
+    pub words_total: AtomicU64,
+    /// Guest `GP_PUT` deltas seen at a turn's PUT read, by entries ahead of the cursor: log2 buckets.
+    pub delta_entries: [AtomicU64; TURN_BUCKETS],
+    // ---- measurement only: per-stage cost, collected ONLY with `KF3_USER_RING_STAGES=1`.
+    pub stage_ns: [AtomicU64; STAGES.len()],
+    pub stage_n: [AtomicU64; STAGES.len()],
+}
+
+/// Buckets of [`Stats::per_turn`] and [`Stats::delta_entries`].
+pub const TURN_BUCKETS: usize = 10;
+/// Buckets of [`Stats::seg_words`] (1 word .. 2^19 words and above).
+pub const WORD_BUCKETS: usize = 20;
+
+/// The stages of one served relay turn, as timed by [`Stats::stage`] (measurement only).
+pub const STAGES: [&str; 12] = [
+    "serve_total",
+    "turn_total",
+    "observe",
+    "get_writeback",
+    "put_read",
+    "gp_snapshot",
+    "gate",
+    "pb_snapshot",
+    "scan",
+    "publish_total",
+    "host_doorbell",
+    "marker",
+];
+/// Index into [`STAGES`].
+pub mod stage {
+    pub const SERVE: usize = 0;
+    pub const TURN: usize = 1;
+    pub const OBSERVE: usize = 2;
+    pub const GET_WRITEBACK: usize = 3;
+    pub const PUT_READ: usize = 4;
+    pub const GP_SNAPSHOT: usize = 5;
+    pub const GATE: usize = 6;
+    pub const PB_SNAPSHOT: usize = 7;
+    pub const SCAN: usize = 8;
+    pub const PUBLISH: usize = 9;
+    pub const DOORBELL: usize = 10;
+    pub const MARKER: usize = 11;
+}
+
+/// Whether the per-stage timers run (`KF3_USER_RING_STAGES=1`, read once). Measurement only: never
+/// required, off by default.
+#[must_use]
+pub fn stages_enabled() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("KF3_USER_RING_STAGES").is_some_and(|v| v == "1"))
 }
 
 impl Stats {
     /// Bump a counter.
     pub fn bump(c: &AtomicU64) {
         c.fetch_add(1, Ordering::Relaxed);
+    }
+    /// Start a stage timer: `None` (no clock read) unless [`stages_enabled`].
+    #[must_use]
+    pub fn t0(&self) -> Option<std::time::Instant> {
+        stages_enabled().then(std::time::Instant::now)
+    }
+    /// End a stage timer started by [`Stats::t0`].
+    pub fn stage(&self, which: usize, t0: Option<std::time::Instant>) {
+        if let Some(t) = t0 {
+            let ns = u64::try_from(t.elapsed().as_nanos()).unwrap_or(u64::MAX);
+            self.stage_ns[which].fetch_add(ns, Ordering::Relaxed);
+            self.stage_n[which].fetch_add(1, Ordering::Relaxed);
+        }
+    }
+    /// A relayed GP segment of `words` pushbuffer words.
+    pub fn record_segment(&self, words: usize) {
+        let w = u64::try_from(words).unwrap_or(u64::MAX).max(1);
+        let i = (u64::BITS - w.leading_zeros() - 1) as usize;
+        self.seg_words[i.min(WORD_BUCKETS - 1)].fetch_add(1, Ordering::Relaxed);
+        self.words_total.fetch_add(w, Ordering::Relaxed);
+    }
+    /// A turn saw `GP_PUT` this many entries ahead of its cursor.
+    pub fn record_delta(&self, entries: u32) {
+        let i = (u32::BITS - entries.max(1).leading_zeros() - 1) as usize;
+        self.delta_entries[i.min(TURN_BUCKETS - 1)].fetch_add(1, Ordering::Relaxed);
+    }
+    /// One turn ended having relayed `entries` guest entries.
+    pub fn record_turn(&self, entries: u32) {
+        let i = if entries == 0 {
+            0
+        } else {
+            (u32::BITS - entries.leading_zeros()) as usize
+        };
+        self.per_turn[i.min(TURN_BUCKETS - 1)].fetch_add(1, Ordering::Relaxed);
+        self.segments.fetch_add(u64::from(entries), Ordering::Relaxed);
     }
     /// Record one drain latency.
     pub fn record_drain(&self, micros: u64) {
@@ -224,8 +350,20 @@ impl Stats {
     pub fn summary(&self) -> String {
         let g = |c: &AtomicU64| c.load(Ordering::Relaxed);
         let drain: Vec<u64> = self.drain.iter().map(g).collect();
+        let per_turn: Vec<u64> = self.per_turn.iter().map(g).collect();
+        let seg_words: Vec<u64> = self.seg_words.iter().map(g).collect();
+        let delta: Vec<u64> = self.delta_entries.iter().map(g).collect();
+        let mut stages = String::new();
+        if self.stage_n.iter().any(|n| g(n) != 0) {
+            stages.push_str(" stages_ns_per_call(");
+            for (i, name) in STAGES.iter().enumerate() {
+                let n = g(&self.stage_n[i]).max(1);
+                stages.push_str(&format!("{name}={}x{} ", g(&self.stage_ns[i]) / n, g(&self.stage_n[i])));
+            }
+            stages.push(')');
+        }
         format!(
-            "wakes(doorbell={} event={} spin={} backstop={}) backstop_found(work={} carried={} contended={} put_ahead={}) event_without_progress={} gates={} carried_ungated={} credit_waits={} contended_turns={} pop_writebacks={} markers={} drain_us_log2={drain:?}",
+            "wakes(doorbell={} event={} spin={} backstop={}) backstop_found(work={} carried={} contended={} put_ahead={}) event_without_progress={} gates={} carried_ungated={} credit_waits={} contended_turns={} pop_writebacks={} markers={} drain_us_log2={drain:?} flow(turns={} segments={} publications={} host_doorbells={} put_reads={} get_writebacks={} entries_per_turn_log2={per_turn:?} put_delta_entries_log2={delta:?} segment_words_log2={seg_words:?} words_total={}){stages}",
             g(&self.wake_doorbell),
             g(&self.wake_event),
             g(&self.wake_spin),
@@ -241,6 +379,13 @@ impl Stats {
             g(&self.contended),
             g(&self.pop_writebacks),
             g(&self.markers),
+            g(&self.turns),
+            g(&self.segments),
+            g(&self.publications),
+            g(&self.host_doorbells),
+            g(&self.put_reads),
+            g(&self.get_writebacks),
+            g(&self.words_total),
         )
     }
 }
@@ -248,6 +393,17 @@ impl Stats {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A claim relays the covered entries one after another, up to [`CHAIN_MAX`], and stops at
+    /// anything that needs its own turn. FAILS at 24e7a297 (`chain_more` is the one-segment cut).
+    #[test]
+    fn a_claim_continues_through_covered_entries_up_to_the_bound() {
+        assert!(chain_more(1, true, false), "the next covered entry is relayed in the same claim");
+        assert!(chain_more(CHAIN_MAX - 1, true, false));
+        assert!(!chain_more(CHAIN_MAX, true, false), "bounded by a count");
+        assert!(!chain_more(1, false, false), "the turn asked for nothing more: the batch ended");
+        assert!(!chain_more(1, true, true), "a gate / staged segment / migration splits the batch");
+    }
 
     #[test]
     fn a_marker_wait_is_over_when_enough_markers_were_processed_whatever_get_says() {

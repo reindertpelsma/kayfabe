@@ -1,5 +1,19 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-15 00:50 CEST - USER-ring relay batches: one claim relays a chain of entries and rings the host doorbell once
+
+Same branch `claude/userring-eventloop-20261014`, doc `docs/design/V3_USER_RING_EVENT_LOOP_20261014.md` section 9.
+- [measured, Heaven D3D11 / Windows agent] 1.07 relay turns and about one host doorbell per relayed GP segment, 17-20 fps; gate drains are not the cap.
+  Reproduced on Linux (`kf-syncwait-stress --families flood`): 1.08 turns, 1.06 host doorbells per segment, exactly one entry per turn even with 16-63 entries pending.
+- Per stage [measured, `KF3_USER_RING_STAGES=1`, off by default]: a segment turn is 5.6 us: observe 1.2, PUT read 0.6, GP snapshot 1.3, PB snapshot 1.7, publication 0.6, scan 0.1,
+  host doorbell 0.03. The INLINE/CopyRing path of V3_WINDOWS_USER_RING_RELAY section 4.3 is not implemented (no K constant, no inline claimant): the worker is the only path.
+- Fix: `Pump::turn` chains `turn_body` inside one claim (`user_loop::chain_more`, `CHAIN_MAX = 16`, a count; gate / staged segment / shadow end it), one PUT read, one observation, one
+  write-back and ONE host doorbell per chain (`Pump::ring_owed`); per-entry snapshots, scan, gate and exact source guards unchanged. Measured: 0.40 turns and 0.33 host doorbells
+  per segment, +40-45 % segments/s on flood (noisy host).
+- Linux: stress 1 570 plans pass relay on/off, fast suite 30/30 on and off, desktop smoke 0 flip timeouts / 0 Xid, S3 x3 on and off, unit 1 440 passed. `v3_gates.sh` 7/9 (gate5/6 fail on bare
+  metal beside two other VMs; the previous build fails the same now): re-run on an idle card.
+- Windows: not run. Next: the Windows agent measures Heaven with `KF3_USER_RING_STAGES=1` and reads the `flow(...)` line; remaining per-entry floor is the two snapshots.
+
 ## UPDATE 2026-10-14 22:30 CEST - USER-ring relay is an event loop; the SYNC_WAIT gate was unsound (GP_GET) and is fixed
 
 Branch `claude/userring-eventloop-20261014` (from `claude/win11-userring-20261014` `77eaf762`), full account `docs/design/V3_USER_RING_EVENT_LOOP_20261014.md`.
