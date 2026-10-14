@@ -506,6 +506,9 @@ const HOST_595_91_07: DriverVersion = DriverVersion {
 /// The source tag of the exact-zero Windows-only rows measured at 595.91.07.
 const CTL_PROBE_595_SOURCE: &str = "measured:AD104,595.91.07,2026-10-13; kf-ctl-probe unprivileged (CapEff 0), zero request, \
      traces/ctl_probe_20261013/probe_pass1.tsv";
+/// The source tag of the rows confirmed by asking kayfabe's own authored requests at 595.91.07.
+const GSS_ROWS_595_SOURCE: &str = "measured:AD104,595.91.07,2026-10-14; kf-ctl-probe KF_PROBE_GSS_ROWS=1 unprivileged, \
+     the kf_abi::gssreplay::ROWS requests, traces/constants_night_20261014/gss_rows_probe_595.txt";
 /// The source tag of those rows.
 const GSS_595_SOURCE: &str = "measured:AD104,595.91.07,2026-10-14; unprivileged libcudart 13.3 under nvdiff, \
      traces/constants_night_20261014/host_cudart_probe_595.txt; 0x20809009/0x20809001 also \
@@ -829,7 +832,9 @@ pub static HOST_CONTROLS: &[HostControl] = &[
     // answered `NV_OK` at these sizes (traces/constants_night_20261014/host_cudart_probe_595.txt;
     // `0x20809009`/`0x20809001` also by kf-ctl-probe, traces/ctl_probe_20261013/). The interval the
     // encoders were written for keeps its old contract. `0x2080a028` (the encoder's per-domain
-    // query) and `0x2080a001` (cudart's fallback) were NOT asked at 595.91.07 and stay NoHeader.
+    // query) and `0x2080a001` (cudart's fallback) were then asked at 595.91.07 with exactly the
+    // authored requests (`kf-ctl-probe` `KF_PROBE_GSS_ROWS=1`, unprivileged): NV_OK
+    // (traces/constants_night_20261014/gss_rows_probe_595.txt).
     HostControl {
         name: "",
         cmd: 0x2080_9064,
@@ -842,8 +847,10 @@ pub static HOST_CONTROLS: &[HostControl] = &[
     HostControl {
         name: "",
         cmd: 0x2080_a028,
-        params: HostParams::NoHeader {
-            source: "kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)",
+        params: HostParams::MeasuredOpaque {
+            source: GSS_ROWS_595_SOURCE,
+            versions: &[HOST_595_91_07],
+            size: 0x890,
         },
     },
     HostControl {
@@ -885,8 +892,10 @@ pub static HOST_CONTROLS: &[HostControl] = &[
     HostControl {
         name: "",
         cmd: 0x2080_a001,
-        params: HostParams::NoHeader {
-            source: "kf_abi::gssreplay ROWS (cudart's fallback request {0,0,0,0}, measured on a 580.159.04 host)",
+        params: HostParams::MeasuredOpaque {
+            source: GSS_ROWS_595_SOURCE,
+            versions: &[HOST_595_91_07],
+            size: 16,
         },
     },
     // ★ Lane C 2026-10-14: the exact-zero Windows-only GSS rows (`crate::gssreplay`, `exact`).
@@ -1215,7 +1224,18 @@ mod tests {
                 );
             }
         }
-        for cmd in [0x2080_a028, 0x2080_a001] {
+        for (cmd, size) in [(0x2080_a028, 0x890), (0x2080_a001, 16)] {
+            assert_eq!(
+                host("595.91.07")
+                    .control_carry(cmd)
+                    .expect("measured at 595.91.07")
+                    .map(|c| c.host_size()),
+                Some(size),
+                "{cmd:#x}"
+            );
+        }
+        // INVALID_ARGUMENT to a zero request at 595.91.07: refused there, by name.
+        for cmd in [0x2080_852e, 0x2080_853a, 0x2080_a618] {
             assert!(matches!(
                 host("595.91.07").control_carry(cmd),
                 Err(HostAbiError::NoHeader { .. })

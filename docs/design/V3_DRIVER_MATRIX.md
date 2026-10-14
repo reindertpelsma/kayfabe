@@ -745,8 +745,10 @@ guest's dmesg must lose the *"heartbeat timed out"* lines).
 > `0x20809064`, `0x2080a084`, `0x2080a026` (and the cudart gate `0x20809009`/`0x20809001`): an
 > unprivileged libcudart asked them there and the host answered `NV_OK` at the sizes the rows name
 > (`traces/constants_night_20261014/host_cudart_probe_595.txt`); `kf_abi::hostabi` carries them as
-> `MeasuredOpaque` at that exact version. `0x2080a028` (NVENC's per-domain query) is still unmeasured
-> at 595.91.07 and still refused there.
+> `MeasuredOpaque` at that exact version. `0x2080a028` (NVENC's per-domain query) and `0x2080a001`
+> were then asked at 595.91.07 with kayfabe's own authored requests (`kf-ctl-probe KF_PROBE_GSS_ROWS=1`,
+> `traces/constants_night_20261014/gss_rows_probe_595.txt`): `NV_OK` (a028's 0xa5-background probe is
+> refused, so kayfabe keeps the zero-probe bytes, by design). All GSS rows are closed at 595.91.07.
 
 **Host axis — what a sub-580 host cannot be asked, measured on host 575.57.08 (all refused by
 name, none silent):**

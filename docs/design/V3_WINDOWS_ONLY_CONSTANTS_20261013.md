@@ -7,7 +7,7 @@
 > 12 `0x2080a088` calls) is all-zero, with one distinct reply each over three captures (AD103, kfwc); kayfabe now asks the host that zero request at
 > realize and answers an identical guest request with the host's bytes (`kf_abi::gssreplay` exact rows) — tier 2, no table. (2) Group C: at host
 > 595.91.07 an unprivileged libcudart issued `0x20809064`, `0x2080a084`, `0x2080a026` (and `0x20809009`/`0x20809001`) and the host answered `NV_OK`
-> (`traces/constants_night_20261014/`); those rows are no longer refused at 595.91.07 (`0x2080a028` is still unmeasured there). (3) `0x20809001`/
+> (`traces/constants_night_20261014/`); those rows are no longer refused at 595.91.07; `0x2080a028` and `0x2080a001` were then asked there with kayfabe's own requests and answered `NV_OK` too (`gss_rows_probe_595.txt`). (3) `0x20809001`/
 > `0x20809009` are no longer a GA106 row served to every die: host first, then `kf_rm::consttab` per die, else refused. The class columns below are
 > the 2026-10-13 classification and were not re-run.
 
