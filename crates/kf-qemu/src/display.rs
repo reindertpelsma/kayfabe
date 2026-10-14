@@ -4579,8 +4579,14 @@ impl ScanState {
                 let n = self.cursor_refusals;
                 self.debug_cursor(io, cs, "host");
                 if n <= 4 || n.is_multiple_of(256) {
+                    // an XOR cursor is composed BY DESIGN (§O: no ARGB "over" inverts): not a refusal
+                    let verb = if e.contains("XOR cursor has no ARGB") {
+                        "host cursor COMPOSED"
+                    } else {
+                        "host cursor REFUSED"
+                    };
                     eprintln!(
-                        "kf3: display: host cursor REFUSED: {e} — composed into the frame instead, \
+                        "kf3: display: {verb}: {e} — composed into the frame instead, \
                          and the host's is hidden ({n} so far)"
                     );
                 }
