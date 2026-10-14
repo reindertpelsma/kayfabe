@@ -27,6 +27,7 @@ fn every_family_gets_its_own_architecture_in_boot_42() {
             revision: 0xA1,
             fb_mb: 8192,
             pcie_link_caps: pcie_link_caps(PcieGen::Gen4, 16).unwrap(),
+            bar1_bytes: 128 << 20,
         };
         let regs = boot_regs(fam, &f);
         let b42 = regs
@@ -62,6 +63,7 @@ fn the_fb_size_served_is_the_stores_not_a_die_constant() {
         revision: 0xA1,
         fb_mb: 11_857,
         pcie_link_caps: 0,
+        bar1_bytes: 128 << 20,
     };
     let r = boot_regs(Family::Ampere, &f);
     assert_eq!(
@@ -111,6 +113,7 @@ fn ada_advertises_the_sec2_scrubber_as_already_run() {
             revision: 0xA1,
             fb_mb: 8192,
             pcie_link_caps: 0,
+            bar1_bytes: 128 << 20,
         };
         let r = boot_regs(fam, &f);
         let s = r.iter().find(|r| r.off == 0x0011_80FC);
@@ -236,6 +239,7 @@ fn fsp_families_get_the_boot_gate_and_config_cycle_link_caps_at_their_die_groups
         revision: 0xA1,
         fb_mb: 8192,
         pcie_link_caps: caps,
+        bar1_bytes: 128 << 20,
     };
     for (arch, fam, therm, cfg) in [
         (0x1B0, Family::Blackwell, 0x00AD_00BC, 0x6C), // GB20x: gb202/dev_therm.h, _GH100 bus options

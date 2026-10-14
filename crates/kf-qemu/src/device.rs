@@ -600,6 +600,7 @@ impl Device {
                 "host link width x{} is not a PCIe width",
                 pci.max_width
             ))?,
+            bar1_bytes: cfg.bar1_bytes,
         };
         let boot = boot_regs(family, &facts);
         let config_words = config_words(family, &facts);

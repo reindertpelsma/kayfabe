@@ -386,6 +386,10 @@ ampere/ga100	dev_vm.h	NV_VIRTUAL_FUNCTION_TIME_0	0x30080
 ampere/ga100	dev_vm.h	NV_VIRTUAL_FUNCTION_TIME_0_NSEC	31:5
 ampere/ga100	dev_vm.h	NV_VIRTUAL_FUNCTION_TIME_1	0x30084
 ampere/ga100	dev_vm.h	NV_VIRTUAL_FUNCTION_TIME_1_NSEC	28:0
+ampere/ga100	dev_nv_xve.h	NV_XVE_RESIZE_BAR1_CTRL	0xbc0
+ampere/ga100	dev_nv_xve.h	NV_XVE_RESIZE_BAR1_CTRL_BAR_SIZE	12:8
+ampere/ga100	dev_nv_xve.h	NV_XVE_RESIZE_BAR1_CTRL_BAR_SIZE_MAX	0x13
+ampere/ga100	dev_nv_xve.h	NV_XVE_RESIZE_BAR1_CTRL_BAR_SIZE_MIN	0x6
 ampere/ga102	dev_falcon_second_pri.h	NV_FALCON2_GSP_BASE	0x111000
 ampere/ga102	dev_falcon_second_pri.h	NV_FALCON2_NVDEC0_BASE	0x849c00
 ampere/ga102	dev_falcon_second_pri.h	NV_FALCON2_SEC_BASE	0x841000
