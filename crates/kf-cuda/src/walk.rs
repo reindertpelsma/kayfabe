@@ -1975,6 +1975,13 @@ impl WalkKernel {
         Ok(())
     }
 
+    /// The format descriptor this kernel was brought up with (read by measurement code that
+    /// decodes guest tables the same way the walk does, e.g. `kf_mem::refusal_dump`).
+    #[must_use]
+    pub fn format(&self) -> &KfFormat {
+        &self.fmt
+    }
+
     /// The imported store's length, if one was imported.
     #[must_use]
     pub fn store_len(&self) -> Option<u64> {

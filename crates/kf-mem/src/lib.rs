@@ -36,6 +36,7 @@ pub mod batch;
 pub mod cpuwin;
 pub mod ledger;
 pub mod maplog;
+pub mod refusal_dump;
 #[cfg(test)]
 pub(crate) mod sim;
 pub mod vasmgr;

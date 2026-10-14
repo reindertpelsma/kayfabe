@@ -404,6 +404,26 @@ impl Walker for GpuWalker {
         let Some(c) = got? else {
             return Ok(None);
         };
+        // ★ MEASUREMENT ONLY (KF3_WALK_REFUSAL_DUMP): what a sampled refusal's entry and its
+        // neighbours are, read from the store the walk read (bounded; changes no decision).
+        if crate::refusal_dump::enabled() {
+            let fmt = *self.kernel.format();
+            let kernel = &self.kernel;
+            let mut read = |off: u64, buf: &mut [u8]| kernel.read_store(off, buf).is_ok();
+            for line in crate::refusal_dump::rewatch(&fmt, &mut read) {
+                eprintln!("{line}");
+            }
+            let r = &c.report;
+            let pdb_of = |e: u16| r.pdbs.get(usize::from(e)).map(|p| p.pdb);
+            for line in crate::refusal_dump::dump_report(
+                &fmt,
+                r.header.refusal_samples(),
+                &pdb_of,
+                &mut read,
+            ) {
+                eprintln!("{line}");
+            }
+        }
         let r = &c.report;
         r.validate()
             .map_err(|e| format!("walk report refused: {e}"))?;
@@ -1363,7 +1383,9 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
     fn refuse_batch(&mut self, batch: &Batch, why: String) {
         for (w, _, _) in &batch.wants {
             match w {
-                Want::Invalidate(..) => self.stats.unreconciled = self.stats.unreconciled.saturating_add(1),
+                Want::Invalidate(..) => {
+                    self.stats.unreconciled = self.stats.unreconciled.saturating_add(1)
+                }
                 Want::Split { ticket, .. } => self.splits_done.push((*ticket, Err(why.clone()))),
                 Want::Root(_) => {}
             }
@@ -1534,28 +1556,70 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                     .saturating_add(u64::from(a.invalidated)),
             );
             self.stats.batches = self.stats.batches.saturating_add(a.batches as u64);
-            self.stats.batched_runs = self.stats.batched_runs.saturating_add(a.batched_runs as u64);
-            self.stats.range_unmaps = self.stats.range_unmaps.saturating_add(a.range_unmaps as u64);
-            self.stats.batch_fallbacks = self.stats.batch_fallbacks.saturating_add(a.batch_fallbacks as u64);
-            self.stats.remade_unchanged_pages = self.stats.remade_unchanged_pages.saturating_add(a.remade_unchanged_pages);
-            self.stats.linked_failed = self.stats.linked_failed.saturating_add(a.linked_failed as u64);
+            self.stats.batched_runs = self
+                .stats
+                .batched_runs
+                .saturating_add(a.batched_runs as u64);
+            self.stats.range_unmaps = self
+                .stats
+                .range_unmaps
+                .saturating_add(a.range_unmaps as u64);
+            self.stats.batch_fallbacks = self
+                .stats
+                .batch_fallbacks
+                .saturating_add(a.batch_fallbacks as u64);
+            self.stats.remade_unchanged_pages = self
+                .stats
+                .remade_unchanged_pages
+                .saturating_add(a.remade_unchanged_pages);
+            self.stats.linked_failed = self
+                .stats
+                .linked_failed
+                .saturating_add(a.linked_failed as u64);
             self.stats.mapped = self.stats.mapped.saturating_add(a.mapped as u64);
             self.stats.unmapped = self.stats.unmapped.saturating_add(a.unmapped as u64);
-            self.stats.host_invalidates = self.stats.host_invalidates.saturating_add(u64::from(a.invalidated));
+            self.stats.host_invalidates = self
+                .stats
+                .host_invalidates
+                .saturating_add(u64::from(a.invalidated));
             self.stats.held = self.stats.held.saturating_add(a.held as u64);
-            self.stats.vmm_overlaps = self.stats.vmm_overlaps.saturating_add(a.vmm_overlaps as u64);
-            self.stats.usermode_trapped = self.stats.usermode_trapped.saturating_add(a.usermode_trapped as u64);
-            self.stats.usermode_unmirrored = self.stats.usermode_unmirrored.saturating_add(a.usermode_unmirrored as u64);
+            self.stats.vmm_overlaps = self
+                .stats
+                .vmm_overlaps
+                .saturating_add(a.vmm_overlaps as u64);
+            self.stats.usermode_trapped = self
+                .stats
+                .usermode_trapped
+                .saturating_add(a.usermode_trapped as u64);
+            self.stats.usermode_unmirrored = self
+                .stats
+                .usermode_unmirrored
+                .saturating_add(a.usermode_unmirrored as u64);
             self.stats.clipped_bytes = self.stats.clipped_bytes.saturating_add(a.clipped_bytes);
-            self.stats.priv_withheld = self.stats.priv_withheld.saturating_add(a.priv_withheld as u64);
-            self.stats.priv_withheld_bytes = self.stats.priv_withheld_bytes.saturating_add(a.priv_withheld_bytes);
-            self.stats.priv_mirrored = self.stats.priv_mirrored.saturating_add(a.priv_mirrored as u64);
+            self.stats.priv_withheld = self
+                .stats
+                .priv_withheld
+                .saturating_add(a.priv_withheld as u64);
+            self.stats.priv_withheld_bytes = self
+                .stats
+                .priv_withheld_bytes
+                .saturating_add(a.priv_withheld_bytes);
+            self.stats.priv_mirrored = self
+                .stats
+                .priv_mirrored
+                .saturating_add(a.priv_mirrored as u64);
             self.stats.sked_placed = self.stats.sked_placed.saturating_add(a.sked_placed as u64);
             self.stats.sked_held = self.stats.sked_held.saturating_add(a.sked_held as u64);
             self.stats.carve_gpu = self.stats.carve_gpu.saturating_add(a.carve_gpu as u64);
-            self.stats.carve_kernel = self.stats.carve_kernel.saturating_add(a.carve_kernel as u64);
+            self.stats.carve_kernel = self
+                .stats
+                .carve_kernel
+                .saturating_add(a.carve_kernel as u64);
             self.stats.carve_cpu = self.stats.carve_cpu.saturating_add(a.carve_cpu as u64);
-            self.stats.carve_clipped_bytes = self.stats.carve_clipped_bytes.saturating_add(a.carve_clipped_bytes);
+            self.stats.carve_clipped_bytes = self
+                .stats
+                .carve_clipped_bytes
+                .saturating_add(a.carve_clipped_bytes);
             if a.priv_mirrored > 0 {
                 static MIRRORED: std::sync::atomic::AtomicU32 =
                     std::sync::atomic::AtomicU32::new(0);
@@ -1688,9 +1752,9 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
             // (`[measured run 223]`: one uncleared MMU_INVALIDATE, TDR 0x117).
             let absent_ok = bad.is_some()
                 && self.clear_absent
-                && keys
-                    .iter()
-                    .all(|k| !failed.contains(k) || (absent_only.contains(k) && !rewalk.contains(k)));
+                && keys.iter().all(|k| {
+                    !failed.contains(k) || (absent_only.contains(k) && !rewalk.contains(k))
+                });
             if bad.is_some() && !absent_ok {
                 self.stats.unreconciled = self.stats.unreconciled.saturating_add(1);
                 out.unreconciled.push(r.seq);
@@ -1702,7 +1766,8 @@ impl<W: Walker, T: MapTarget> VaManager<W, T> {
                 // BAR1 doorbell overlay) defers THIS clear only — the guest keeps polling, which is
                 // legal; [`VaManager::on_targets`] clears it when the work is live.
                 if absent_ok {
-                    self.stats.cleared_over_absent = self.stats.cleared_over_absent.saturating_add(1);
+                    self.stats.cleared_over_absent =
+                        self.stats.cleared_over_absent.saturating_add(1);
                     if self.stats.cleared_over_absent <= 64 {
                         eprintln!(
                             "kf3: mem invalidate seq {} CLEARED OVER ABSENCE ({:?}): its refused leaves are absent on the host (a GPU access faults on that space's twin); KF3_INVALIDATE_CLEAR_OVER_ABSENT",
@@ -2700,7 +2765,11 @@ mod tests {
             ],
         );
         let out = settle(&mut r, PDB_A);
-        assert_eq!(out.completed.len(), 1, "the invalidate is cleared over absence");
+        assert_eq!(
+            out.completed.len(),
+            1,
+            "the invalidate is cleared over absence"
+        );
         assert!(!busy(&r.port));
         assert_eq!(r.m.stats.budget_refused_runs, 1, "counted by name");
         assert_eq!(
@@ -2740,8 +2809,17 @@ mod tests {
             assert_eq!(out.completed.len(), 1);
             assert_eq!(r.m.stats.budget_refused_runs, n);
         }
-        assert!(r.ops.borrow().iter().all(|(o, _)| !matches!(o, Op::Map(..))));
-        assert_eq!(r.m.walker().submits.len(), 3, "one walk per invalidate, none of its own");
+        assert!(
+            r.ops
+                .borrow()
+                .iter()
+                .all(|(o, _)| !matches!(o, Op::Map(..)))
+        );
+        assert_eq!(
+            r.m.walker().submits.len(),
+            3,
+            "one walk per invalidate, none of its own"
+        );
     }
 
     #[test]
@@ -3168,7 +3246,10 @@ mod tests {
         assert!(a.in_flight);
         assert_eq!((a.invalidates, a.split_tickets.clone()), (1, vec![77]));
         assert_eq!(r.m.pending(), 0);
-        assert!(r.port.reset(), "the armed request is abandoned at the port, not completed");
+        assert!(
+            r.port.reset(),
+            "the armed request is abandoned at the port, not completed"
+        );
         let walks = r.m.walker().submits.len();
         let out = r.m.on_walk_ready(r.port.trigger());
         assert_eq!(
@@ -3176,7 +3257,11 @@ mod tests {
             vec![(q1.seq, ClearOutcome::AlreadyIdle)],
             "the landing walk clears nothing the reset abandoned"
         );
-        assert_eq!(r.m.walker().submits.len(), walks, "nothing queued was submitted after it");
+        assert_eq!(
+            r.m.walker().submits.len(),
+            walks,
+            "nothing queued was submitted after it"
+        );
         assert!(!r.m.abandon_life().in_flight);
         // Re-register K_A as the device does with its BAR objects: the next life starts empty.
         let t = r.m.remove(K_A).expect("K_A");
@@ -3247,8 +3332,16 @@ mod tests {
             "the described leaf is applied"
         );
         assert_eq!(r.m.stats.cleared_over_absent, 1);
-        assert_eq!(r.m.stats.walk_refused_spaces, 1, "the refusal is still counted by name");
-        assert!(r.m.stats.refusals.iter().any(|x| x.contains("REFUSED leaves")));
+        assert_eq!(
+            r.m.stats.walk_refused_spaces, 1,
+            "the refusal is still counted by name"
+        );
+        assert!(
+            r.m.stats
+                .refusals
+                .iter()
+                .any(|x| x.contains("REFUSED leaves"))
+        );
     }
 
     /// ★ Owner ruling 2026-10-09: a host-REFUSED map is absence too — the invalidate completes, the
@@ -3269,10 +3362,17 @@ mod tests {
         );
         let out = settle(&mut r, PDB_A);
         assert!(out.unreconciled.is_empty());
-        assert_eq!(out.completed.len(), 1, "completed, last, after the maps that could land");
+        assert_eq!(
+            out.completed.len(),
+            1,
+            "completed, last, after the maps that could land"
+        );
         assert!(!busy(&r.port));
         assert_eq!(r.m.stats.cleared_over_absent, 1);
-        assert!(r.m.stats.refusals[0].contains("refused (fake)"), "still named");
+        assert!(
+            r.m.stats.refusals[0].contains("refused (fake)"),
+            "still named"
+        );
         // The next invalidate re-emits only what failed.
         if let Some(t) = r.m.table.target(K_A) {
             *t.refuse_map_at.borrow_mut() = None;
@@ -3295,7 +3395,9 @@ mod tests {
         let h = host(&r, None, Vec::new());
         r.m.table.insert(K_A, h);
         r.m.table.set_root(K_A, PDB_A, PdbAperture::Vidmem).unwrap();
-        r.tables.borrow_mut().insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0)]);
+        r.tables
+            .borrow_mut()
+            .insert(PDB_A, vec![(0x1000_0000, 0x0200_0000, 0x1000, 0)]);
         let _ = settle(&mut r, PDB_A);
         r.tables.borrow_mut().insert(PDB_A, vec![]);
         if let Some(t) = r.m.table.target(K_A) {
