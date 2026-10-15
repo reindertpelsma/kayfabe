@@ -3253,3 +3253,26 @@ mod tests {
         assert_eq!(cursor_debug_text(&c, &raw, false).len(), 1);
     }
 }
+
+#[cfg(test)]
+mod address_tests {
+    use super::*;
+
+    #[test]
+    fn address_iso_is_read_only_and_bounded_to_the_guest_store() {
+        for block_linear in [false, true] {
+            let surface = SurfaceAddress { aperture: Aperture::Vidmem, addr: 0x1000, block_linear };
+            let dma = address_dma(surface, 0x2000).unwrap();
+            assert_eq!(dma.span(0, 0x1000), Some(0x1000));
+            assert_eq!(dma.span(0, 0x1001), None);
+            assert_eq!(dma.span(u64::MAX, 2), None);
+            assert!(!dma.writable);
+            assert_eq!(dma.block_linear, block_linear);
+            for bytes in [0, 1, 0x1000] { assert!(address_dma(surface, bytes).is_err()); }
+            assert!(address_dma(SurfaceAddress { addr: u64::MAX, ..surface }, u64::MAX).is_err());
+            for aperture in [Aperture::Iova, Aperture::Sysmem] {
+                assert!(address_dma(SurfaceAddress { aperture, ..surface }, 0x2000).is_err());
+            }
+        }
+    }
+}
