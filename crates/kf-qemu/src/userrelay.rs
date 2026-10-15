@@ -401,14 +401,18 @@ impl Drop for NeverBorn {
 }
 
 /// Validate the channel declaration before resolving any own-VM USERD storage.
-/// This checks class and geometry only; it grants no GPU completion authority.
+/// The class is generated from ogkm's g_gpu_class_list.c/resource_list.h for
+/// this host-derived family, as in kf_rm::chanlink::alloc_shape. Every listed
+/// GPFIFO class uses NV_CHANNEL_ALLOC_PARAMS; engine and USERD permissions stay
+/// with the existing permit/native-birth path. This checks declaration geometry
+/// only; it grants no GPU completion authority or family hardware acceptance.
 fn source_declaration(
-    _family: kf_chip::Family,
+    family: kf_chip::Family,
     class: u32,
     entries: u32,
     gpfifo_va: u64,
 ) -> Result<(), &'static str> {
-    if class != kf_abi::generated::classes::AMPERE_CHANNEL_GPFIFO_A
+    if family.classes().kind_of(class) != Some(kf_chip::classes::Kind::ChannelGpfifo)
         || entries < 2
         || !entries.is_power_of_two()
         || entries > (1 << 20)
@@ -1020,8 +1024,11 @@ mod tests {
     fn user_ring_source_accepts_generated_channel_classes_for_every_family() {
         for family in kf_chip::Family::ALL {
             for &class in family.classes().channel_gpfifo {
-                assert_eq!(source_declaration(family, class, 1024, 0x300200000), Ok(()),
-                    "{family:?} channel {class:#x}");
+                assert_eq!(
+                    source_declaration(family, class, 1024, 0x300200000),
+                    Ok(()),
+                    "{family:?} channel {class:#x}"
+                );
             }
         }
     }
