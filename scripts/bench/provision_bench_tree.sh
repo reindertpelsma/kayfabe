@@ -387,6 +387,15 @@ UD
     $GS "tail -3 /var/log/nvidia-installer.log" 2>&1 | sed 's/^/     installer-log-tail: /'
     return 5 ;;
   esac
+  # The guest always installs the package named by RUN, independently of HOST_DRIVER.
+  # Match stage_fat_guest.sh's receipt so every fat lane selects that guest's ABI profile.
+  GUEST_VERSION=$($GS 'modinfo -F version nvidia' | tr -d '\r')
+  if [[ "$GUEST_VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+    { echo "version=$GUEST_VERSION"; echo "image=$BENCH/guest.qcow2"; echo "staged=$(date -Is)"; } > "$BENCH/guest.qcow2.STAGED"
+  else
+    kf_fatal "B2: guest driver version is not a valid profile: $GUEST_VERSION"
+    return 5
+  fi
   $GS "sudo poweroff" >/dev/null 2>&1 &
   sleep 20
   say "B2: guest powered off (qemu alive? $(kill -0 $(cat $BENCH/prov.pid 2>/dev/null) 2>/dev/null && echo yes || echo no))"
