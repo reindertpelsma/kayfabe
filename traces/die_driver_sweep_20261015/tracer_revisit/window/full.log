@@ -1,0 +1,139 @@
+
+== unit tests, synthetic queues (ASan + UBSan)
+make: Entering directory '/data/codex/windows-capture-revisit/tools/windows-capture/tests'
+mkdir -p /data/codex/test-tracer-window
+cc -std=c99 -O1 -g -Wall -Wextra -Werror -Wshadow -Wno-unused-function -I../lib -fsanitize=address,undefined -fno-sanitize-recover=undefined test_main.c ../lib/kfwc_record.c ../lib/kfwc_elem.c ../lib/kfwc_discover.c ../lib/kfwc_engine.c -o /data/codex/test-tracer-window/test_main
+/data/codex/test-tracer-window/test_main
+ok   record_format
+ok   file_header
+ok   elements
+ok   mailbox_ok
+ok   mailbox_failures
+ok   scan_signature_false_positives
+ok   walker_basic_pre610
+ok   walker_basic_610
+ok   walker_late_attach_prefix
+ok   walker_wrapped_ring
+ok   walker_lost_messages_lapped
+ok   walker_seq_gap_and_wraparound
+ok   walker_empty_then_history
+ok   walker_unpublished_and_budget
+ok   walker_status_header_pending
+ok   scan_discovery_rate_limited
+ok   recent_empty_epoch
+ok   recent_moved_table_early
+ok   recent_window_expires
+ok   recent_window_ram_edges
+ok   recent_sequence_zero_prefix
+ok   recent_stale_and_partial_epochs
+ok   recent_requires_scan_and_ram_validation
+ok   recent_seed_requires_wrapped_queues
+ok   recent_corrupt_prefix_is_refused
+ok   scan_gated_by_mailbox
+ok   events_and_mailbox_cross_check
+ok   detach_and_reattach
+ok   corrupt_and_torn
+ok   unsupported_cc_copied_raw
+ok   sink_full_is_announced
+ok   read_only_surface
+ok   ram_range_discipline
+ok   layout_autodetect_and_pin
+ok   scan_backoff
+ok   end_record
+test_main: 36/36 tests passed, 393 checks, 0 failed
+make: Leaving directory '/data/codex/windows-capture-revisit/tools/windows-capture/tests'
+
+== ring: two-thread stress (ASan/UBSan, then ThreadSanitizer)
+make: Entering directory '/data/codex/windows-capture-revisit/tools/windows-capture/tests'
+mkdir -p /data/codex/test-tracer-window
+cc -std=c99 -O1 -g -Wall -Wextra -Werror -Wshadow -Wno-unused-function -I../lib -fsanitize=address,undefined -fno-sanitize-recover=undefined test_ring.c ../lib/kfwc_ring.c ../lib/kfwc_record.c -lpthread -o /data/codex/test-tracer-window/test_ring
+mkdir -p /data/codex/test-tracer-window
+cc -std=c99 -O1 -g -Wall -Wextra -Werror -Wshadow -Wno-unused-function -I../lib -fsanitize=thread test_ring.c ../lib/kfwc_ring.c ../lib/kfwc_record.c -lpthread -o /data/codex/test-tracer-window/test_ring_tsan
+make: Leaving directory '/data/codex/windows-capture-revisit/tools/windows-capture/tests'
+  stress: 192249 stored, 7751 refused, high water 1040503 of 1048576 bytes
+test_ring: 51 checks, 0 failed
+  stress: 200000 stored, 0 refused, high water 810301 of 1048576 bytes
+test_ring: 51 checks, 0 failed
+
+== sidecar / metadata
+make: Entering directory '/data/codex/windows-capture-revisit/tools/windows-capture/tests'
+mkdir -p /data/codex/test-tracer-window
+cc -std=c99 -O1 -g -Wall -Wextra -Werror -Wshadow -Wno-unused-function -I../lib -fsanitize=address,undefined -fno-sanitize-recover=undefined test_meta.c ../lib/kfwc_meta.c ../lib/kfwc_record.c -o /data/codex/test-tracer-window/test_meta
+make: Leaving directory '/data/codex/windows-capture-revisit/tools/windows-capture/tests'
+test_meta: 21 checks, 0 failed
+
+== read-only guard + its self-test
+guard_readonly: clean
+self-test store to a device register in driver/kfwc_drv.c      caught
+self-test store to PCI configuration space in driver/kfwc_drv.c caught
+self-test writable or executable mapping in driver/kfwc_drv.c  caught
+self-test use MmMapIoSpaceEx in driver/kfwc_drv.c              caught
+self-test PAGE_READONLY in driver/kfwc_drv.c                   caught
+self-test mapped device pointer in driver/kfwc_drv.c           caught
+self-test mapped device pointer in driver/kfwc_drv.c           caught
+self-test hooking in driver/kfwc_drv.c                         caught
+self-test only physical copies are allowed in driver/kfwc_drv.c caught
+self-test store-like platform member in lib/kfwc_platform.h    caught
+self-test board/person in user/kfwc_collect.c                  caught
+self-test board/person in user/kfwc_collect.c                  caught
+guard self-test: all injected violations caught, real tree clean
+
+== mutation check (the tests must fail when the library is broken)
+caught    walker: a lapped producer is treated as no news
+caught    walker: seq compare inverted
+caught    walker: ring wrap not split into two records
+caught    walker: sink-full loss never announced
+caught    walker: late attach does not announce the missing prefix
+caught    walker: unparseable first-sight history skipped silently
+caught    walker: counter assigned after the sink accepted (holes invisible)
+caught    scan: the back-off pause is ignored
+caught    scan: the back-off never grows
+caught    scan: the back-off has no cap
+caught    scan: a mailbox change does not restart the back-off
+caught    scan: a restart does not cancel the pause
+caught    walker: detach does not announce the loss
+caught    elements: checksum never fails
+caught    elements: elemCount not cross-checked
+caught    discovery: SWAP_RX flag not required
+caught    discovery: duplicate region pages accepted
+caught    discovery: page table need not name itself
+caught    discovery: pages outside RAM accepted
+caught    platform: register whitelist widened
+caught    ring: priority reserve removed
+caught    record: LOSS may carry a payload
+caught    record: reserved file-header bytes ignored
+mutation check: 23 mutations, 0 not caught
+
+== round trip: kayfabe's own encoder -> rings -> engine -> KFGSPCAP
+wrote 517156 bytes to /data/codex/tracer-revisit-fixture.bin
+make: Entering directory '/data/codex/windows-capture-revisit/tools/windows-capture/tests'
+mkdir -p /data/codex/test-tracer-window
+cc -std=c99 -O1 -g -Wall -Wextra -Werror -Wshadow -Wno-unused-function -I../lib -fsanitize=address,undefined -fno-sanitize-recover=undefined test_kayfabe_roundtrip.c ../lib/kfwc_record.c ../lib/kfwc_elem.c ../lib/kfwc_discover.c ../lib/kfwc_engine.c -o /data/codex/test-tracer-window/test_kayfabe_roundtrip
+make: Leaving directory '/data/codex/windows-capture-revisit/tools/windows-capture/tests'
+wrote /data/codex/test-tracer-window/rt.pre610.kfgspcap (43 records)
+wrote /data/codex/test-tracer-window/rt.610.kfgspcap (43 records)
+wrote /data/codex/test-tracer-window/rt.lapped.kfgspcap (77 records)
+test_kayfabe_roundtrip: 221 checks, 0 failed
+
+== observer comparison script (validation step 2) against synthetic observer exports
+
+== the real decoder (kf-census) on the module's output
+kf-census: ogkm 580.82.07, 1 sources, 20 cmd + 20 status messages, 0 controls
+oracle: PASS (no gap, no parse failure, no trailing bytes, no unknown function)
+pairing: 0 controls with unanswered requests or orphan replies; rpc.sequence non-zero on 38 messages
+kf-census: ogkm 610.43.02, 1 sources, 20 cmd + 20 status messages, 0 controls
+oracle: PASS (no gap, no parse failure, no trailing bytes, no unknown function)
+pairing: 0 controls with unanswered requests or orphan replies; rpc.sequence non-zero on 38 messages
+lossy capture: announced loss and 87 missing messages, as counted by the engine
+
+== driver + companion build, PE check, import guard
+guard_readonly: clean
+1b0a549b7df5c9472dc6842eaf80e149fe7ec02a720fb9d874bade987413f1c6  kfwc.sys
+b7732d2edb0845f9d319d0dd2669474ff7cb7bec1adc54c10f261bd97c427acf  kfwc_collect.exe
+UNSIGNED. Sign on the target (install/install.ps1 does it) and load only on a machine you own.
+
+== negative compile: a store through the mapped pointer must not compile
+compiler said: /data/codex/test-tracer-window/neg/driver/kfwc_drv.c(298,18): error: read-only variable is not assignable
+
+== summary
+ALL STEPS PASSED
