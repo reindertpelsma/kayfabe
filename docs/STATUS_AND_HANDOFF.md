@@ -1,5 +1,23 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-15 19:23UTC — walk-completion CPU candidate; hardware pending
+
+Own codex/fix-walk-completion,/workspace/codex/walk-completion, candidate
+ffd72e3d4: before3970f7859 compiles and fails3of5 assertions; after5of5pass;
+full isolated kf-*3252pass/0fail/14ignored, exit0at19:20:58UTC. Trusted CPUhost
+/data/codex/walk-completion,target-walk-completion,2jobs. Logs under
+traces/die_driver_sweep_20261015/walk_completion/. No hardware performance claim.
+
+Repeated walk callback removed; fresh GPUevent recorded explicitly after each
+launch and required before report reads. Pending sleep budget1ms,idle50ms;
+failed tailrecord/query refuses storage reuse until context teardown. One-time
+bring-up callback remains. All observedNSIedges and GPU/map/ack ordering remain.
+Must replay original-depth R34 at180s/full30 plus Windows/broker before acceptance.
+No ownerGPU/VM touched. Independent Blackwell branch owns sole active56141654,
+created19:20:04UTC/timer2050117 deadline22:15:05/hardcap22:20:04; initialSSH
+bootstrap2050811 pending. Do not rent while thatownID is present. Earlier
+Turing-active/no-rental paragraphs below are historical, superseded here.
+
 ## UPDATE 2026-10-15 18:39UTC — Turing rental retired; Windows/broker pass, raw29/30
 
 Own instance56117789 was destroyed by its revised timer; absence verified at

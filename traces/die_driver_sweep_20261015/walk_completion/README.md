@@ -1,6 +1,14 @@
 # Walk callback experiment for the TU106 R34 timeout
 
-**STATUS: RESEARCH, 2026-10-15; hypothesis and failing-first model, hardware unrun.**
+**STATUS: RESEARCH, 2026-10-15 19:23UTC; CPU candidate passes, hardware unrun.**
+
+Measured CPU: before3970f7859 compiles,5tests with3expected assertion failures
+(stale signal, hidden CUDAerror,50ms pending sleep). Candidateffd72e3d4 passes
+all5; full isolated kf-* suite3252pass/0fail/14ignored,207resultgroups, exit0
+at19:20:58UTC. Trusted host2buildjobs, no GPU work. Logs before.log,after.log,
+all-tests.log. Existing warning/formatting debt remains; noCI-green/mastermerge
+claim. HardwareR34/Windows/Linuxbroker replay remainsNOTRUN.
+
 
 Parent product8e3a9d325, evidence parent728e6febd. Own branch
 codex/fix-walk-completion, worktrees/workspace/codex/walk-completion and
@@ -20,7 +28,8 @@ Candidate: record a fresh completion event explicitly after each graph launch
 on the same stream; no callback in the replay graph. Always query the real event
 before reading the pinned report, propagate CUDA errors and preserve one walk
 in flight, map/ack/invalidate ordering, GPU execution and every observed NSI.
-VA worker and harness check pending work at1ms, idle retains50ms backstop.
+VA worker and harness request at most1ms sleep while work is pending; idle
+retains50ms backstop. This is a scheduling budget, not a latency guarantee.
 No interrupt filtering or guest test-budget change. A one-time bring-up callback
 can remain to warm/drain the existing completion fd; it is not a report proof.
 
