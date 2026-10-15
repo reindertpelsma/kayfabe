@@ -20,9 +20,15 @@ The owner's running Windows VM and Claude checkouts are untouched. Base
   SHA256 comparison finds image chunks02/03 differ despite old transfer completion markers;
   19 others match. Transfer fix has two failing-first tests, now12 harness tests pass;
   source/relay/sink pipeline failures propagate and a final full-file hash is mandatory.
-  Repair of only those two chunks is in progress. No Windows pass is claimed.
+  Repair of only those two chunks succeeds; full source/destination SHA256 matches.
+  Phase1 boots, binds/flags580.88 and shuts down via QGA. Phase2 at f6d96614 reaches
+  Running /762 serviced RPCs, then QGA ping/status times out; no desktop verified.
+  No phase2 Code43 or zeroTDR claim is made. Full trace saved. Native-Windows
+  reinstall queued11:56UTC; completion remains unverified while SSH is unavailable.
 - `codex/fix-turing-display-semaphores` at `f1d4c8737`: public C57E semaphore model,
-  472 tests pass, high-bit mutation caught. Hardware test pending; no Turing offer yet.
+  472 tests pass, high-bit mutation caught. Combined8e45edc8 on GA104: full GPU-free3234/0/14ignored, fast30/30 and actual
+  X11 SHM broker pass, same12 assertions; SSH poweroff exits0. Five host Xid31 during
+  the raw fault suite, zero host Xid during broker. Turing hardware pending.
 - `codex/windows-display-caps-reader` at `de9c7b70a`: bounded fixed-page native Windows
   reader, ASan/UBSan tests, read-only guard and unsigned WDK/SDK build pass. Native load
   and per-die Windows facts not yet measured. No GA104/580 product caps row added.
@@ -32,7 +38,12 @@ cost/owned IDs: `COST.md` beside it. The sole own rental is 56076314, RTX3070,
 $0.3083333333/hour including disk, started 09:44:43 UTC; 175-minute autodestroy
 armed and verified, deadline about12:40UTC. Destroy only this ID. Images/unique text
 must be saved before any native-Windows conversion. At most one rental; total ceiling $40.
-Next: hash-verified Windows two-boot retry, native Windows caps reference, then remaining
+Additional topics: codex/windows-census-export ports the existing scrubber CLI to
+Windows (cross-build and51 Linux tests pass; native golden check pending).
+codex/display-vocabulary-595 derives exact595.91.07 public class/register tables;
+failing-first all-family tests now pass (472/0/2ignored), hardware595 display pending.
+Draft PR#7 holds the combined product candidates; PR#6 holds Linux harness/evidence.
+Next: native Windows caps/GSP reference within the original deadline, then remaining
 dies/driver endpoints. Never label the old GB206 host595 failure fixed from the GA104 result.
 
 ## UPDATE 2026-10-15 - GPU types: the constant table is wired per die (branch `claude/gpu-types-20261015`, draft PR against master)
