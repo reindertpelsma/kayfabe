@@ -1,5 +1,28 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-15 21:33UTC — GB206 Windows580 Code43 reproduced; graceful stop in progress
+
+Only own rental56141654, timer2050117 unchanged22:15:05UTC/hardcap22:20:04.
+Runtime c2092cf7, actualguest32.0.15.8088/GSPenabled: adapter Error /
+CM_PROB_FAILED_POST_START, nvidia-smi cannot communicate. Explorer/DWM are
+running but do not establish NVIDIA acceptance. Wrapper52404 exited1 after
+a QGA receive timeout; standalone QGA recovered and confirmed adapter failure.
+No USER_RING birth or user GPU work occurred. Native580 on this same board
+passed Code0/CUDA3/D3D11+12, so this is a kayfabe initialization defect.
+
+All Windows text is saved in blackwell_5060/windows580-failed-start/.
+The GET_CLASSLIST_V2 refusal also appears in the accepted TU106 Windows run;
+that comparison weakens it as the primary Blackwell hypothesis. Blackwell-only
+CCU/CMC and unknown CBCB allocation remain ranked candidates; no unsupported
+acknowledgements or borrowed RM scalar rows have been added. Native complete
+capture failed; public FSP COT discovery remains the next measurement question.
+
+Own secondbootQEMU52909 is stopping with /root/blackwell_stop_windows.sh
+(QGA60/ACPI60/exactTERM15). Next unblocked lane: c209 Linux broker/graphics,
+controller /workspace/codex/broker_blackwell_wave.sh; start only after exact
+QEMU quiescence. No root checkout pull/build during an active GPU job.
+Linux raw30/CUDA4/all USER evidence remains PASS/pushed. OwnerVM untouched.
+
 ## UPDATE 2026-10-15 21:02UTC — GB206 Linuxraw30/CUDA4pass; Windowswaveactive
 
 Own56141654 only,timer2050117 deadline22:15:05/hardcap22:20:04UTC. Devicec2092cf7,

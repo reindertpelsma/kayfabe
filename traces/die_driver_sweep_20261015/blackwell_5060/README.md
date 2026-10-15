@@ -1,6 +1,6 @@
 # Blackwell RTX5060 wave
 
-**STATUS: LIVE, 2026-10-15 19:43UTC; native Windows580 reference PASS, kayfabe NOTRUN.**
+**STATUS: LIVE, 2026-10-15 21:33UTC; Linux raw30/CUDA4 PASS, Windows580 Code43.**
 
 Native580.88 LTSC26100 oracle19:41:24–19:41:29: Code0/actual32.0.15.8088
 before/after, four trustedprobehashes, readableSystemlog, CUDA3/3(copy/kernel43/
@@ -148,3 +148,16 @@ Linuxdesktop/broker/fullgraphicsremainNOTRUN. WindowsownwavePID52404 started
 20:53:54onlyafterLinuxwrapperended/USERcensusOK/allQEMUsquiescent. Firstboot
 boundimage580INF andGSPflags; actualphase2adapter/apps pending. Productionprofile,
 sameoverlayUUID, normalQGA/ACPI/exactTERMstop only. Timerunchanged22:15:05UTC.
+
+## Windows580 failed start, source c2092cf7
+
+Actual driver32.0.15.8088, EnableGpuFirmware1; CM_PROB_FAILED_POST_START and
+nvidia-smi cannot communicate. Explorer/DWM alone do not pass acceptance.
+Secondboot QEMU52909 remains responsive to QGA after one transient timeout;
+wrapper52404 exited1. No USER_RING/user GPU work: initialization fails earlier.
+Native same-board580 Code0/CUDA3/D3D11+12 PASS rules out a hardware limit.
+Text in windows580-failed-start/ contains complete bounded QEMU/serial/wrapper
+logs, actual adapter evidence and named refusals. CUDA/D3D guest probes NOTRUN.
+The class-list refusal also occurs in successful TU106 initialization, weakening
+that candidate. CCU/CMC/CBCB need source/native comparison; no guessed replies.
+Graceful ownVM stop is in progress21:33UTC before Linux broker/graphics.
