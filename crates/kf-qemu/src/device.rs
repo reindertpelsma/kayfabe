@@ -3399,6 +3399,7 @@ impl Device {
         let rs = &self.chans.relay_stats;
         if rs.gates.load(Ordering::Relaxed) + rs.markers.load(Ordering::Relaxed) > 0 {
             eprintln!("kf3: USER_RING_LOOP SUMMARY {}", rs.summary());
+            eprintln!("kf3: {}", crate::userstore::summary());
         }
         self.stop.store(true, Ordering::Release);
         let _ = self.drainer_efd.signal();

@@ -538,6 +538,13 @@ impl Pump {
                 self.key, shadow.counts
             );
         }
+        let (armed, evicted, keep) = self.cache.stats();
+        if evicted > 0 {
+            eprintln!(
+                "kf3: USER_STORE_VIEWS channel {:x?} armed={armed} evicted_at_quota={evicted} keep={keep} (its working set exceeds the per-channel limit: raise user-view-keep)",
+                self.key
+            );
+        }
         self.cache
             .release()
             .map_err(|e| format!("USER_RING_SOURCE_CLEANUP {e:?}"))
