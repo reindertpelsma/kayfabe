@@ -1,5 +1,20 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-15 19:22 UTC — sole own rental56141654, fresh Blackwell5060
+
+Own56141654, offer50949277, different machine39241/host79466, created19:20:04UTC
+only after56140371 absence. Quote$0.1288888889/hour150GBdisk;175min timer2050117
+about22:15:05UTC; hardcap22:20:04UTC. SSHpublickey attached. InitialVM/SSHpending;
+marketingRTX5060 does not establish exactRMdie. Native-first plan remains.
+Controller bootstrap will wait bounded15minutes for SSH, verifydisk/KVM/oneGPU,
+stage the pinned native installer, and preserve its generatedPUBLICSSHhostkey
+before reboot. Nosecrets/agentforwarding, textonlyreturns. Nootherownrental.
+
+Ownwalk-completioncandidateffd72e3d4 targeted5pass after3expectedbeforefailures;
+fullCPUstillrunning ontrustedhost2jobs/ownisolatedtarget. NotmergedintoBlackwell
+beforehardwarecomparison. OwnerVM/GPUuntouched. Olderactive5090/no-rental
+paragraphsbelow superseded. Failure receipts/ledger alreadycommittedandpushed.
+
 ## UPDATE 2026-10-15 19:19 UTC — replacement5090 retired; no hardware ran
 
 Own56140371 also never started: actual_status=null, uptime=null, no mappedSSH.
