@@ -78,7 +78,7 @@ else
     echo "$GX" | sed 's/^/  /'; echo "$GX" | grep -E '^GLXR_(HASH_[AZB]|REF_FAILS)=|^GLX_RENDERER='
     echo "GFX_GLXR_RC=$GXRC"
     kill $XP 2>/dev/null; wait $XP 2>/dev/null
-    if echo "$GI" | grep -qi 'renderer string.*NVIDIA' && echo "$GX" | grep -q '^GLXR_REF_FAILS=0$' \
-       && echo "$GX" | grep -q '^GLX_RENDERER=.*NVIDIA'; then echo "GFX_S5=PASS"; else echo "GFX_S5=FAIL"; fi
+    if grep -qi 'renderer string.*NVIDIA' <<<"$GI" && grep -q '^GLXR_REF_FAILS=0$' <<<"$GX" \
+       && grep -q '^GLX_RENDERER=.*NVIDIA' <<<"$GX"; then echo "GFX_S5=PASS"; else echo "GFX_S5=FAIL"; fi
 fi
 echo "GFX_STEPS_END role=$ROLE at $(date -Is)"
