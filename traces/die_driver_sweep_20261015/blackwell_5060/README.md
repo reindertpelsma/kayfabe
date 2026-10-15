@@ -1,6 +1,6 @@
 # Blackwell RTX5060 wave
 
-**STATUS: LIVE, 2026-10-15 21:33UTC; Linux raw30/CUDA4 PASS, Windows580 Code43.**
+**STATUS: LIVE, 2026-10-15 21:29UTC; Linux raw30/CUDA4 PASS, Windows580 Code43.**
 
 Native580.88 LTSC26100 oracle19:41:24–19:41:29: Code0/actual32.0.15.8088
 before/after, four trustedprobehashes, readableSystemlog, CUDA3/3(copy/kernel43/
@@ -160,4 +160,4 @@ Text in windows580-failed-start/ contains complete bounded QEMU/serial/wrapper
 logs, actual adapter evidence and named refusals. CUDA/D3D guest probes NOTRUN.
 The class-list refusal also occurs in successful TU106 initialization, weakening
 that candidate. CCU/CMC/CBCB need source/native comparison; no guessed replies.
-Graceful ownVM stop is in progress21:33UTC before Linux broker/graphics.
+Graceful ownVM stop is in progress21:29UTC before Linux broker/graphics.

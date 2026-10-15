@@ -1,6 +1,6 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
-## UPDATE 2026-10-15 21:33UTC — GB206 Windows580 Code43 reproduced; graceful stop in progress
+## UPDATE 2026-10-15 21:29UTC — GB206 Windows580 Code43 reproduced; graceful stop in progress
 
 Only own rental56141654, timer2050117 unchanged22:15:05UTC/hardcap22:20:04.
 Runtime c2092cf7, actualguest32.0.15.8088/GSPenabled: adapter Error /
