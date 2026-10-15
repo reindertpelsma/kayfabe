@@ -362,7 +362,7 @@ pub fn decode_classlist(buf: &[u8]) -> Option<Vec<u32>> {
 /// `kf_chip::host_classes::DerivedHostClasses`).
 ///
 /// Per kind, the NEWEST id that is both an engine class of that kind on some family
-/// (`kayfabe_doorbell::classgen::FAMILIES`, GENERATED from ogkm's `g_gpu_class_list.c` — §50
+/// (`crate::classgen::FAMILIES`, GENERATED from ogkm's `g_gpu_class_list.c` — §50
 /// level 2) and on the host's own `GET_CLASSLIST_V2` (§50 level 1). "Newest" is RM's own rule:
 /// `findDeviceClasses` picks the numerically largest member of each family
 /// (`ogkm-580: nv_gpu_ops.c:8630-8699`).
@@ -381,7 +381,7 @@ pub struct DerivedHostClasses {
 
 /// A required kind the host's class list carries none of.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct HostLacksKind(pub kayfabe_doorbell::classgen::Kind);
+pub struct HostLacksKind(pub crate::classgen::Kind);
 
 impl DerivedHostClasses {
     /// Choose from the host's own class list.
@@ -391,7 +391,7 @@ impl DerivedHostClasses {
     /// Compute is optional (a CE-only host still runs the copy planes; the caller that needs it
     /// refuses by name).
     pub fn from_host_list(host: &[u32]) -> Result<Self, HostLacksKind> {
-        use kayfabe_doorbell::classgen::{FAMILIES, Kind};
+        use crate::classgen::{FAMILIES, Kind};
         let newest = |k: Kind| {
             FAMILIES
                 .iter()
@@ -430,7 +430,7 @@ impl HostClasses for DerivedHostClasses {
 #[cfg(test)]
 mod derived_tests {
     use super::*;
-    use kayfabe_doorbell::classgen::{FAMILIES, Family};
+    use crate::classgen::{FAMILIES, Family};
 
     /// ★ Over each family's generated list (the widest a die of it could answer), the derived
     /// profile names the family's newest classes — and on the GA10x list it reproduces the pin.

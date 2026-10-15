@@ -103,49 +103,12 @@ version = "0.1.0"
 dependencies = [
  "kayfabe-abi",
  "kayfabe-arch",
- "kayfabe-doorbell",
- "kayfabe-gsp",
- "kayfabe-mocks",
- "kayfabe-util",
-]
-
-[[package]]
-name = "kayfabe-completion"
-version = "0.1.0"
-dependencies = [
  "kayfabe-util",
 ]
 
 [[package]]
 name = "kayfabe-cuda"
 version = "0.1.0"
-
-[[package]]
-name = "kayfabe-device"
-version = "0.1.0"
-dependencies = [
- "kayfabe-abi",
- "kayfabe-arch",
- "kayfabe-gsp",
- "kayfabe-mmu",
- "kayfabe-trace",
- "kayfabe-util",
- "trybuild",
-]
-
-[[package]]
-name = "kayfabe-doorbell"
-version = "0.1.0"
-
-[[package]]
-name = "kayfabe-gsp"
-version = "0.1.0"
-dependencies = [
- "kayfabe-abi",
- "kayfabe-arch",
- "kayfabe-trace",
- "kayfabe-util",
-]
 
 [[package]]
 name = "kayfabe-isolate"
@@ -184,51 +147,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "kayfabe-mmu"
-version = "0.1.0"
-dependencies = [
- "kayfabe-arch",
- "kayfabe-chips",
- "kayfabe-isolate",
- "kayfabe-util",
-]
-
-[[package]]
-name = "kayfabe-mocks"
-version = "0.1.0"
-dependencies = [
- "kayfabe-abi",
- "kayfabe-arch",
- "kayfabe-isolate",
- "kayfabe-util",
- "kayfabe-vmm",
-]
-
-[[package]]
 name = "kayfabe-rm-ladder"
 version = "0.1.0"
 dependencies = [
  "kayfabe-abi",
  "kayfabe-arch",
- "kayfabe-chips",
- "kayfabe-device",
  "kayfabe-isolate",
  "kayfabe-isolate-host",
  "kayfabe-linux-raw",
- "kayfabe-mmu",
  "kayfabe-util",
-]
-
-[[package]]
-name = "kayfabe-trace"
-version = "0.1.0"
-dependencies = [
- "kayfabe-arch",
- "kayfabe-completion",
- "kayfabe-isolate",
- "kayfabe-mmu",
- "kayfabe-util",
- "kayfabe-vmm",
 ]
 
 [[package]]
