@@ -274,6 +274,15 @@ fn board_data_in(field: &str) -> Option<&'static str> {
     None
 }
 
+/// Key namespaces whose value is the HOST RM's hardware state, not a function of the driver the guest runs (see [`parse`]).
+pub const HOST_STATE_PREFIXES: &[&str] = &["zbc."];
+
+/// Is `key` a host-state key (may be a per-die measurement with branch `*`)?
+#[must_use]
+pub fn is_host_state_key(key: &str) -> bool {
+    HOST_STATE_PREFIXES.iter().any(|p| key.starts_with(p))
+}
+
 /// Parse and validate the published table.
 ///
 /// # Errors
@@ -320,7 +329,13 @@ pub fn parse(tsv: &str) -> Result<Vec<Row>, String> {
                     .map_err(|e| format!("line {ln}: branch {:?}: {e}", f[2]))?,
             )
         };
-        if (die == DieScope::Any || branch == BranchScope::Any) && !source.is_mechanism() {
+        // ★ 2026-10-15: ONE stated exception to "a measurement is never a wildcard": a HOST-STATE key (`zbc.*`, the table the host's
+        // physical RM installs in hardware at load) may be measured per DIE with the branch `*`, because no driver the GUEST runs
+        // changes it (the guest never installs it; its branch names the GSP the guest believes it talks to). The die stays exact.
+        let host_state = is_host_state_key(f[0]);
+        if (die == DieScope::Any && !source.is_mechanism())
+            || (branch == BranchScope::Any && !source.is_mechanism() && !host_state)
+        {
             return Err(format!(
                 "line {ln}: a wildcard row needs a mechanism tag (ogkm:/rule:/authored:), not a measurement"
             ));
@@ -336,7 +351,9 @@ pub fn parse(tsv: &str) -> Result<Vec<Row>, String> {
                 ));
             }
             let major = driver.split('.').next().and_then(|m| m.parse::<u16>().ok());
-            if BranchScope::Major(major.unwrap_or(0)) != branch {
+            if BranchScope::Major(major.unwrap_or(0)) != branch
+                && !(host_state && branch == BranchScope::Any)
+            {
                 return Err(format!(
                     "line {ln}: the tag's driver {driver} is not branch {}",
                     f[2]

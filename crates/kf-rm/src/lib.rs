@@ -650,7 +650,7 @@ pub fn served_chain(
         Box::new(pmsr::PmSuspendResumePolicy::new(driver)),
         // ★ v3-gfx: the per-VM ZBC table — claims only `0x9096xxxx` controls, answers them from
         // its own state and never forwards (`zbc.rs`).
-        Box::new(zbc::ZbcPolicy::new(driver, host.zbc_table_sizes)),
+        Box::new(zbc::ZbcPolicy::new(driver, host.zbc_table_sizes, host.die)),
         // ★ 2026-10-07: RC-recovery GET/SET (a stub under owner ruling §S) and the power source,
         // answered per VM; never forwarded (`vfguest.rs`).
         Box::new(vfguest::VfGuestPolicy::new(driver)),
