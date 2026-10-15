@@ -214,7 +214,7 @@ characters on `win32`, so long family lists run as several Blender processes aut
 
 ## 9. Measured proof run (host, CPU only, no GPU)
 
-Host `root@172.22.1.20`, work under `/data/claude-blender-suite/` (2.3 GB used in all: Blender tarball 384 MB plus
+Host the trusted host, work under `/data/claude-blender-suite/` (2.3 GB used in all: Blender tarball 384 MB plus
 its extraction, 16 MB of wheels, about 25 MB of data, the 28 MB sparse checkout). Sparse blobless fetch of tag `v5.2.0`: `.git` 28 MB. Official
 `blender-5.2.0-linux-x64.tar.xz` (sha256 `96f6c181...c48` matched upstream's `.sha256`). The host has an RTX 4070, so
 `CUDA_VISIBLE_DEVICES=""` and `--device CPU` were used, EEVEE/OpenGL was not run, and nothing touched a GPU.
