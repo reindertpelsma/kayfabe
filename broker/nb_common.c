@@ -1,0 +1,442 @@
+/* SPDX-License-Identifier: GPL-2.0 OR Apache-2.0 */
+/*
+ * nb_common.c — backend selection, the fourcc table, and the advertised-format
+ * set every backend fills and the validator consults.
+ */
+#include <dirent.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
+#include "nvkvm_broker.h"
+
+/*
+ * Bytes per pixel, for the single-plane 32-bit formats the nvkvm guest head
+ * can actually flip.  src/guest/nvkvm_kms.c's nvkvm_pipe_formats[] advertises
+ * XRGB8888 and ARGB8888; the BGR twins are the same 4-byte layout and cost
+ * nothing to carry.  This mirrors nvkvm_present_bpp() in
+ * src/qemu/nvkvm_isolate_handlers.c on purpose — the same default-deny list,
+ * one process further out.
+ *
+ * 0 means REJECT.  A format whose pitch cannot be computed is a format whose
+ * bounds cannot be checked, and an unchecked bound here is an out-of-bounds
+ * read in the compositor.
+ */
+#define NB_FOURCC(a, b, c, d) \
+    ((uint32_t)(a) | ((uint32_t)(b) << 8) | \
+     ((uint32_t)(c) << 16) | ((uint32_t)(d) << 24))
+
+uint32_t nb_fourcc_bpp(uint32_t fourcc)
+{
+    switch (fourcc) {
+    case NB_FOURCC('X', 'R', '2', '4'):   /* DRM_FORMAT_XRGB8888 */
+    case NB_FOURCC('A', 'R', '2', '4'):   /* DRM_FORMAT_ARGB8888 */
+    case NB_FOURCC('X', 'B', '2', '4'):   /* DRM_FORMAT_XBGR8888 */
+    case NB_FOURCC('A', 'B', '2', '4'):   /* DRM_FORMAT_ABGR8888 */
+        return 4;
+    default:
+        return 0;
+    }
+}
+
+/*
+ * The opaque twin of an alpha format.
+ *
+ * ARGB8888 and XRGB8888 are the SAME bytes; the only difference is whether the
+ * fourth channel is honoured.  A scanout has no meaningful alpha -- a KMS
+ * primary plane ignores it -- so a guest head that flips AR24 can always be
+ * shown as XR24 without changing a single pixel.
+ *
+ * This exists because compositors routinely advertise a modifier for the
+ * opaque format and NOT for its alpha twin: alpha has to go through their
+ * blend path, and block-linear layouts are not always wired up there.  MEASURED
+ * on GNOME/Mutter with an RTX 4070: the guest presented AR24 with NVIDIA
+ * block-linear 0x0300000000606014, the compositor advertised that modifier for
+ * XR24 only, and every frame was refused as "not advertised by this display".
+ *
+ * Substituting is strictly MORE conservative than accepting: XR24 tells the
+ * compositor the surface is opaque, so it may skip blending entirely.
+ */
+uint32_t nb_fourcc_opaque_twin(uint32_t fourcc)
+{
+    switch (fourcc) {
+    case NB_FOURCC('A', 'R', '2', '4'): return NB_FOURCC('X', 'R', '2', '4');
+    case NB_FOURCC('A', 'B', '2', '4'): return NB_FOURCC('X', 'B', '2', '4');
+    default:                            return 0;
+    }
+}
+
+/*
+ * The vendor half of a DRM format modifier.
+ *
+ * Worth naming in an error, because the most confusing way this fails is a
+ * VENDOR mismatch: the guest's GPU produces a tiling its own driver
+ * understands, the host compositor enumerates a different vendor's tilings
+ * entirely, and the rejection reads as if one specific pair were missing when
+ * in fact no pair could ever match.  MEASURED on a hybrid laptop: Mutter
+ * RENDERS on the NVIDIA GPU (renderD128 -> 0000:01:00.0) but advertised 28
+ * pairs that were all Intel (0x01), LINEAR or INVALID, because its v3 list is
+ * built from the Intel SCANOUT device -- while the guest presented NVIDIA
+ * block-linear (0x03).  Nothing about the format was wrong; the two sides were
+ * describing different GPUs, and no fourcc substitution can bridge that.
+ */
+const char *nb_modifier_vendor(uint64_t modifier)
+{
+    if (modifier == 0x00ffffffffffffffULL) return "implicit"; /* MOD_INVALID */
+    if (modifier == 0)                         return "LINEAR";
+    switch ((unsigned)(modifier >> 56) & 0xff) {
+    case 0x00: return "none";
+    case 0x01: return "INTEL";
+    case 0x02: return "AMD";
+    case 0x03: return "NVIDIA";
+    case 0x04: return "SAMSUNG";
+    case 0x05: return "QCOM";
+    case 0x06: return "VIVANTE";
+    case 0x07: return "BROADCOM";
+    case 0x08: return "ARM";
+    case 0x09: return "ALLWINNER";
+    case 0x0a: return "AMLOGIC";
+    default:   return "unknown vendor";
+    }
+}
+
+const char *nb_fourcc_name(uint32_t fourcc, char buf[8])
+{
+    unsigned i;
+
+    for (i = 0; i < 4; i++) {
+        unsigned char ch = (unsigned char)((fourcc >> (i * 8)) & 0xff);
+
+        buf[i] = (ch >= 0x20 && ch < 0x7f) ? (char)ch : '?';
+    }
+    buf[4] = '\0';
+    return buf;
+}
+
+/* ── the advertised (fourcc, modifier) set ───────────────────────────────── */
+
+/*
+ * HARDENING 3 lives here: a backend fills this from what the compositor or the
+ * X server enumerated, and nb_validate_desc() consults it.  Nothing in the
+ * broker carries a hardcoded modifier list — the modifiers nvkvm's guest GBM
+ * produces (0x0300000000606014 and 0x0300000000e08014 are the two seen so far,
+ * per src/guest/nvkvm_kms.c) are NVIDIA-specific and driver-version-specific,
+ * so a hardcoded list would be wrong on the next driver.
+ */
+/*
+ * --linear-only: advertise ONLY DRM_FORMAT_MOD_LINEAR.
+ *
+ * Two uses, and the second is why it stays supported rather than being a test
+ * hook.
+ *
+ * TESTING: the cross-vendor path is hard to reach on purpose -- it needs a host
+ * whose compositor scans out on a different GPU than the guest renders on.
+ * Forcing the advertised set down to LINEAR reproduces the CONDITION (the
+ * guest's tiling is not displayable) on any host, so the readback path can be
+ * exercised without a second GPU, a BIOS change or a cable move.
+ *
+ * COMPATIBILITY: a compositor can advertise a modifier it then fails to import.
+ * We have already measured NVIDIA accepting a LINEAR dma-buf into
+ * eglCreateImageKHR and refusing it at bind, so "advertised" and "works" are
+ * demonstrably not the same claim.  When a display lies, narrowing to the one
+ * layout every GPU can read is the escape hatch, at the cost of a readback.
+ *
+ * DRM_FORMAT_MOD_INVALID is dropped too: implicit modifiers mean "whatever the
+ * driver chose", which is exactly the uncertainty this option exists to remove.
+ */
+/*
+ * Which presentation tier the broker will offer.  ONE ordered option rather
+ * than a flag per tier: the tiers are a fallback LADDER, so the only sensible
+ * restriction is naming one rung, and six booleans would give sixty-four states
+ * of which most are meaningless ("--no-linear --linear-only").
+ *
+ *   NB_TIER_AUTO   walk the ladder: the guest's own modifier, then LINEAR
+ *                  dma-buf, then wl_shm.  The default.
+ *   NB_TIER_NATIVE advertise only what the display really offers; no LINEAR
+ *                  narrowing.  Zero-copy or nothing.
+ *   NB_TIER_LINEAR advertise only DRM_FORMAT_MOD_LINEAR, forcing the VMM to
+ *                  detile.  Reproduces a cross-vendor host on a single-GPU one.
+ *   NB_TIER_SHM    refuse dma-buf outright, so only shared memory is left.
+ *                  Slowest and universal; the honest floor.
+ */
+/*
+ * WHAT RESOLUTION DO WE SUGGEST TO THE GUEST?
+ *
+ * A SUGGESTION, never an instruction.  The broker has no authority over the
+ * guest's mode and does not try to acquire any: it emits EV_SURFACE only in
+ * response to HOST events -- startup and a geometry change -- and never in
+ * response to anything the guest did.  That is what makes a feedback loop
+ * unrepresentable rather than merely fixed: host events cause hints, guest
+ * frames cause only scaling, and there is no edge back.
+ *
+ * (Before this, a guest frame of an unexpected size was reported BACK to the
+ * guest as a new instruction.  On a fullscreen window the two sources disagreed
+ * and traded places about every two seconds, forever.)
+ *
+ * The frame path knows nothing about any of this.  It has a buffer, it has a
+ * window, and it fits one into the other per --scale.  Whatever arrives is
+ * displayed, at whatever size it arrives; a resolution disagreement must never
+ * cost a frame, because a frozen window reads to a user as a crash.
+ */
+/*
+ * The refresh we tell the guest, in millihertz.  0 with NB_HZ_AUTO means "not
+ * learned yet"; the broker's only source is presentation feedback, so it knows
+ * nothing until a frame has been presented.
+ *
+ * The override exists because that source can be wrong or absent: an X11
+ * session has none, a compositor may report the output's nominal rate while
+ * something else limits the real one, and a guest is sometimes wanted at a
+ * deliberately lower rate than the panel.
+ */
+int      nb_hz_mode = NB_HZ_AUTO;
+unsigned nb_hz_fixed;          /* millihertz, NB_HZ_FIXED only */
+
+int      nb_res_mode = NB_RES_AUTO;
+unsigned nb_res_w, nb_res_h;   /* NB_RES_FIXED only */
+
+int nb_tier = NB_TIER_AUTO;
+
+/* Back-compat: --linear-only is the old spelling of --present-mode=linear. */
+bool nb_linear_only;
+
+void nb_formats_add(struct nb_formats *f, uint32_t fourcc, uint64_t modifier)
+{
+    unsigned i;
+
+    /* LINEAR tier: hide every vendor modifier so the VMM must detile. */
+    if ((nb_linear_only || nb_tier == NB_TIER_LINEAR) && modifier != 0) {
+        return;
+    }
+    /* SHM tier: advertise no dma-buf format at all.  The VMM then has nothing
+     * left but a memfd, which is exactly the point. */
+    if (nb_tier == NB_TIER_SHM) {
+        return;
+    }
+
+    /*
+     * DROP WHAT WE COULD NEVER ACCEPT ANYWAY, BEFORE IT COSTS A SLOT.
+     *
+     * nb_validate_desc() rejects any fourcc nb_fourcc_bpp() does not know, so
+     * a pair for R8 or NV12 can only ever be looked up and refused.  Storing
+     * it is pure cost — and on a real compositor that cost is the whole
+     * feature.  Measured on sway 1.7 / wlroots 0.15 on an NVIDIA RTX 3090:
+     * zwp_linux_dmabuf_v1 advertises every DRM format the driver knows times
+     * thirteen modifiers, far more than 256 pairs.  The table filled with
+     * AB24/XB24/R8/... in enumeration order and XR24 — the format the nvkvm
+     * guest head actually flips (src/guest/nvkvm_kms.c) — never got in, so
+     * every single frame was rejected as "not advertised by this display".
+     * A black window, with the reason buried in a truncated list.
+     *
+     * Filtering here rather than in each backend keeps HARDENING 3 in one
+     * place: the set the validator consults holds exactly the pairs that
+     * could pass it.  The overflow flag stays, because it is still the only
+     * warning that would be given if even the filtered set were too large.
+     */
+    if (nb_fourcc_bpp(fourcc) == 0) {
+        return;
+    }
+
+    for (i = 0; i < f->n; i++) {
+        if (f->e[i].fourcc == fourcc && f->e[i].modifier == modifier) {
+            return;
+        }
+    }
+    if (f->n >= NB_MAX_FORMATS) {
+        /*
+         * Fixed capacity, and the overflow is REMEMBERED rather than silently
+         * dropped: a display that advertises more pairs than we can hold would
+         * otherwise turn into "the format you need is mysteriously rejected".
+         */
+        f->overflowed = true;
+        return;
+    }
+    f->e[f->n].fourcc = fourcc;
+    f->e[f->n].modifier = modifier;
+    f->n++;
+}
+
+bool nb_formats_has(const struct nb_formats *f, uint32_t fourcc, uint64_t mod)
+{
+    unsigned i;
+
+    for (i = 0; i < f->n; i++) {
+        if (f->e[i].fourcc == fourcc && f->e[i].modifier == mod) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void nb_formats_log(const struct nb_formats *f, const char *what)
+{
+    unsigned i, shown = 0;
+
+    nb_log("%s advertises %u (format, modifier) pair%s%s", what, f->n,
+           f->n == 1 ? "" : "s",
+           f->overflowed ? " (TRUNCATED — more than we can hold)" : "");
+    if (!nb_verbose) {
+        return;
+    }
+    for (i = 0; i < f->n && shown < 64; i++, shown++) {
+        char fcc[8];
+
+        nb_log("    %s  modifier 0x%016llx (%s)",
+               nb_fourcc_name(f->e[i].fourcc, fcc),
+               (unsigned long long)f->e[i].modifier,
+               nb_modifier_vendor(f->e[i].modifier));
+    }
+}
+
+/* ── pairs refused after being advertised ────────────────────────────────── */
+
+void nb_refused_add(struct nb_refused *r, uint32_t fourcc, uint64_t modifier)
+{
+    if (nb_refused_has(r, fourcc, modifier)) {
+        return;
+    }
+    /* A ring, not a growing list: the oldest refusal is the one forgotten. */
+    r->e[r->next].fourcc = fourcc;
+    r->e[r->next].modifier = modifier;
+    r->next = (r->next + 1u) % NB_REFUSED_SLOTS;
+    if (r->n < NB_REFUSED_SLOTS) {
+        r->n++;
+    }
+}
+
+bool nb_refused_has(const struct nb_refused *r, uint32_t fourcc,
+                    uint64_t modifier)
+{
+    unsigned i;
+
+    for (i = 0; i < r->n && i < NB_REFUSED_SLOTS; i++) {
+        if (r->e[i].fourcc == fourcc && r->e[i].modifier == modifier) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* ── which GPU the display is on (EV_DEVICE) ─────────────────────────────── */
+
+/*
+ * The display server answers with whichever node it opened: Mutter and
+ * wlroots report a render node through dmabuf feedback, an X server's DRI3Open
+ * may hand back the primary node.  A relay comparing that against its own
+ * render node would read the same GPU as a different one and pick a copy path
+ * it did not need -- safe, but exactly the waste EV_DEVICE exists to avoid.
+ *
+ * Both nodes of one GPU hang off the same parent device in sysfs, so the
+ * render node is one directory listing away.  Everything read here is the
+ * HOST's own sysfs; no client value reaches a path (major and minor come from
+ * the display server, and are printed as unsigned numbers).
+ */
+void nb_drm_device_resolve(uint32_t major, uint32_t minor, uint32_t *flags,
+                           uint32_t *out_major, uint32_t *out_minor)
+{
+    char dir[96];
+    DIR *d;
+    struct dirent *de;
+
+    *flags = NVKVM_BROKER_DEVICE_F_KNOWN;
+    *out_major = major;
+    *out_minor = minor;
+
+    snprintf(dir, sizeof dir, "/sys/dev/char/%u:%u/device/drm", major, minor);
+    d = opendir(dir);
+    if (!d) {
+        return;     /* KNOWN, not RENDER: the reported node as reported */
+    }
+    while ((de = readdir(d)) != NULL) {
+        char path[sizeof dir + 300], buf[32];
+        unsigned rmaj, rmin;
+        ssize_t n;
+        int fd, w;
+
+        if (strncmp(de->d_name, "renderD", 7) != 0) {
+            continue;
+        }
+        w = snprintf(path, sizeof path, "%s/%s/dev", dir, de->d_name);
+        if (w < 0 || (size_t)w >= sizeof path) {
+            continue;
+        }
+        fd = open(path, O_RDONLY | O_CLOEXEC);
+        if (fd < 0) {
+            continue;
+        }
+        n = read(fd, buf, sizeof buf - 1);
+        close(fd);
+        if (n <= 0) {
+            continue;
+        }
+        buf[n] = '\0';
+        if (sscanf(buf, "%u:%u", &rmaj, &rmin) != 2) {
+            continue;
+        }
+        *out_major = rmaj;
+        *out_minor = rmin;
+        *flags |= NVKVM_BROKER_DEVICE_F_RENDER;
+        break;
+    }
+    closedir(d);
+}
+
+/* ── backend selection ───────────────────────────────────────────────────── */
+
+struct nb_session *nb_session_open(const struct nb_config *cfg)
+{
+    struct nb_session *s;
+    const char *want = cfg->backend ? cfg->backend : "auto";
+    bool have_wl = getenv("WAYLAND_DISPLAY") != NULL;
+    bool have_x11 = getenv("DISPLAY") != NULL;
+
+    if (!strcmp(want, "x11")) {
+        return nb_session_x11(cfg);
+    }
+    if (!strcmp(want, "wayland")) {
+        return nb_session_wayland(cfg);
+    }
+    if (!strcmp(want, "test")) {
+        /* Deliberately not reachable from "auto": a backend that drives no
+         * display, and that relaxes the dma-buf check, must never be selected
+         * by accident. */
+        return nb_session_test(cfg);
+    }
+    if (strcmp(want, "auto") != 0) {
+        nb_err("unknown --backend '%s' (auto|wayland|x11|test)", want);
+        return NULL;
+    }
+
+    /*
+     * Wayland first when it is there.  It is not a preference: on Wayland the
+     * broker attaches the guest's buffer directly to its wl_surface, so the
+     * compositor takes it as the surface's content — one blit fewer than
+     * today's GTK/SDL path, and the case where the compositor can promote the
+     * frame to a hardware plane (direct scanout) at all.
+     */
+    if (have_wl) {
+        nb_log("auto: WAYLAND_DISPLAY is set — trying the Wayland backend");
+        s = nb_session_wayland(cfg);
+        if (s) {
+            return s;
+        }
+        nb_log("auto: the Wayland backend did not come up; falling through");
+    }
+    if (have_x11) {
+        nb_log("auto: DISPLAY is set — trying the X11 backend");
+        s = nb_session_x11(cfg);
+        if (s) {
+            return s;
+        }
+        nb_log("auto: the X11 backend did not come up");
+    }
+
+    nb_err("no display backend could open a window.");
+    nb_err("  The broker is a SESSION program: it draws on the user's desktop,");
+    nb_err("  so it needs WAYLAND_DISPLAY or DISPLAY set and reachable.  It is");
+    nb_err("  the VMM that is meant to be sandboxed away from the display");
+    nb_err("  server — running the BROKER without one defeats the design.");
+    return NULL;
+}
