@@ -1,9 +1,11 @@
 # Turing RTX2060Super wave
 
-**STATUS: LIVE, 2026-10-15 18:06UTC.** Own instance56117789, created only after
+**STATUS: LIVE, 2026-10-15 18:32UTC.** Own instance56117789, created only after
 AD10256096336 was verified absent. Offer55223684, Quebec, KVM image,150GB
-requested. Actual quote$0.1113888889/hour.175min teardown timerPID1995396,
-deadlineabout18:36:22UTC; never extend beyond18:41:16UTC three-hour cap.
+requested. Actual quote$0.1113888889/hour. Timer revised18:32:26UTC to
+PID2036504/deadline18:38:26UTC to finish the required raw suite and save its text.
+The old timer was canceled after verifying the new one; hard cap18:41:16UTC
+remains binding. Earlier18:36deadline notes below are historical.
 Host-derived exactdieTU106; restoredUbuntu22.04.5/kernel6.8.0-138,
 147GiBroot/138GiB initiallyfree andKVM verified. Windows580 acceptance nowPASS
 at8e3a9d32 after USER-ring class fix; Linux580raw remains29/30 at180s,
@@ -216,3 +218,59 @@ H-CLASS passes its hardware check: exactsame probes now run with correct GPU
 content after replacing the Ampere-only declaration gate. Linux raw/broker
 regressions of this fix remain pending. No full family/multi-driver acceptance,
 S3/Edge-long-run/OptiX-denoise claim.
+
+## Linux broker first attempt,18:18UTC
+
+Device8e3a9d32/guest580: Cinnamon1/Xorg1, NVIDIA OpenGL renderer; synchronized
+gears50.58/58.61/51.19FPS, guest0Xid/0fliptimeout/12assertions. Host wrapper
+first lackedXvfb, repaired before presentation; then xwininfo was absent and
+wrapperexits127. Preserve as harnessFAIL, not completed broker acceptance.
+VKCUBErc127 means not installed/NOTRUN, never a Vulkan pass. Text inbroker-first/.
+Actual broker reports1240commits/0rejected, but no independent window-pixel
+oracle completed. Installx11-utils and replay actual broker/pixels; raw suite
+continuation only starts after a real completed brokerPASS and cleanQEMUstop.
+
+R34 next falsifier, stated before any future implementation: long-run metrics
+show51,866GR0notifier wakes and672,876IRQ-register writes for only three host
+CErings. Hypothesis: CUDA walk-graph host callback signalling causes GPU-wide
+NSIs and nested guest acknowledgement traps. Falsifier: removing ONLY the helper
+host-callback node, observing its real recordedGPUevent on the VA worker instead,
+does not lower wakes/traps or original-depth elapsed time. This alternative must
+preserve actualGPU-event success/error, exact mapping/admission order, bounded
+inflight work and all observed nonstall edges; polling is not CPU GPU execution.
+The current50ms VA epoll backstop must not become a50ms-per-walk delay. Profile
+walk/map/unmap phases as well; aggregate counts alone do not establish a cost
+cause. This is an unimplemented candidate, not evidence or a shipped optimization.
+
+## Fixed Linux broker presentation PASS,18:22UTC
+
+Device8e3a9d32, sameguest580: Cinnamon1/Xorg1, NVIDIA OpenGL gears51.16/58.61/
+59.77FPS; actual X11SHM broker window1920x1080 independently has13,193colors,
+SHA157822c1e462292b3375c4d52fc57996cacb17bdb8f99851b95bd5d39f7781e7.
+Guest0Xid/0fliptimeouts,12assertions;18displaySTALL diagnostic lines (not18
+separate stalls). Hostjournal window18:19:21–18:21:20 has0NVRMXid. Normal
+poweroff/stop and wrapperexit0 at18:21:20. This validates C57E display hardware
+and presentation, not DMA-buf orVulkan (vkcuberc127/NOTRUN retained).
+
+Fixed raw regression starts18:21:21, required180s budget; gates9/9+gate10PASS.
+Build/packed-guest refresh precedes the full30-arm run. No final raw verdict yet.
+
+## Final regression and lease retirement,18:39UTC
+
+Fixed product8e3a9d325/device8e3a9d32, unchanged180s budget, full raw suite
+18:22:37–18:36:43:29PASS,0FAIL,1TIMEOUT(R34),0NOTRUN, exit1. Every other arm
+passes; gate9/9+gate10PASS,165suite/12gatebirthsUSER,90CUDAthreadposturelines.
+All90 arm text logs plus scoreboard/census/wrapper are saved infixed-linux/.
+Beforefix independentCUDA4 passes; post-fix LinuxCUDA/headlessgraphics were
+NOTRUN. Windows580 and Linuxbroker checks pass as stated above. This is a real
+remaining kayfabe performance defect against the passing native control; neither
+a physical-driver limit nor full Linux/family acceptance is claimed.
+
+The final monitor preserved suite output live before teardown. Its earlier
+monitor expired at its old controller deadline; that controller timeout is not
+another guest timeout. The replacement monitor exits0 with the wrapper's actual
+rc1 and the full census. No executable/binary capture was returned from rental.
+All QEMUs gone before teardown; revised timer destroys only own56117789 at
+18:38:26, absence verified18:39:01UTC before18:41:16 hard cap. No own rental
+active at this checkpoint. Compute upper bound rounded up$0.34, transfers unbilled.
+Native facts, code fixes and evidence are pushed; master/ownerVM/GPU untouched.

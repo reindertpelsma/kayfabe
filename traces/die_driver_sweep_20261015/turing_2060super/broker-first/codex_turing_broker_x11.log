@@ -1,0 +1,17 @@
+START 2026-10-15T18:07:42+00:00
+CINNAMON 1 XORG 1
+NVIDIA GeForce RTX 2060 SUPER, 580.159.04, 31 MiB
+OpenGL vendor string: NVIDIA Corporation
+OpenGL renderer string: NVIDIA GeForce RTX 2060 SUPER/PCIe/SSE2
+Running synchronized to the vertical refresh.  The framerate should be
+approximately the same as the monitor refresh rate.
+253 frames in 5.0 seconds = 50.582 FPS
+294 frames in 5.0 seconds = 58.608 FPS
+256 frames in 5.0 seconds = 51.185 FPS
+VKCUBE rc=127
+GUEST_DMESG flip_timeouts=0 nvassert=12 xid=0
+GUEST_DONE
+nvkvm-broker: shm tier: not requiring DRI3 or Present (frames arrive as shared memory and are put on screen with core PutImage)
+nvkvm-broker: shm tier: advertising no dma-buf format (frames are shared memory), so no modifier query is made
+/root/broker_turing_wave.sh: line 84: xwininfo: command not found
+EXIT rc=127 2026-10-15T18:17:15+00:00

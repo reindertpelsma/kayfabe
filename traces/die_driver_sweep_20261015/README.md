@@ -37,17 +37,17 @@ not prove the remaining dies in its family.
 
 | Family | This campaign | Full family acceptance |
 |---|---|---|
-| Turing | TU106 Windows580 Code0/DWM/CUDA3/D3D11+12/zeroTDR PASS after USER-ring class fix8e3a9d32; Linux580 CUDA4 PASS/raw29 of30 (R34timeout180s), fixed Linux regressions pending | incomplete: required Linux raw pass and several actual driver builds remain |
+| Turing | TU106 Windows580 Code0/DWM/CUDA3/D3D11+12/zeroTDR and Linux580 Cinnamon/OpenGL/X11broker PASS at8e3a9d32; Linux580 CUDA4 beforefix PASS/raw29 of30 before/afterfix (R34timeout180s) | incomplete: required Linux raw pass and several actual driver builds remain |
 | Ampere | GA104 Linux580 broad pass; Linux595 raw pass; Windows580 boot stall captured | incomplete |
 | Ada | AD102 Linux580 raw30/CUDA4/graphics10+broker and Windows580 Code0/DWM/CUDA3/D3D11+12/zeroTDR pass; Linux595 raw30/CUDA4/graphics10 pass (broker not run) | incomplete: several driver builds and other dies remain unverified |
 | Blackwell | not tried in this campaign; older GB206 results remain prior evidence | incomplete |
 
 Rental56076314 retired12:40:19UTC; native Windows installation completion
 was never verified there. AD10256096336 retired/absence verified15:39:44UTC.
-Sole active rental56117789/TU106 has nativeWindows580 reference/facts, native
-Linux595 raw/CUDA passes, partial Linux580 guest results and Windows guest running.
-Original175-minute timer remains armed, deadline18:36:22UTC. Exact source and
-results: turing_2060super/README.md and ad102_4090/README.md.
+Turing56117789 retired by its revised timer, absence verified18:39:01UTC below
+the authorized three-hour cap. Windows580 and Linux580 broker pass, raw29/30
+before/afterfix leaves full Linux acceptance open. No own rental is active at this
+checkpoint. Exact results: turing_2060super/README.md and ad102_4090/README.md.
 
 CPU verification audit: the bench README requires one Cargo target directory
 per checkout. Some CPU-only runs reused target-gpu-free across own worktrees.

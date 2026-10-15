@@ -1,6 +1,34 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
-## UPDATE 2026-10-15 18:06UTC — TU106 Windows580 acceptance PASS after USER-ring fix
+## UPDATE 2026-10-15 18:39UTC — Turing rental retired; Windows/broker pass, raw29/30
+
+Own instance56117789 was destroyed by its revised timer; absence verified at
+18:39:01UTC, before the18:41:16 three-hour cap. Every own QEMU was gone before
+teardown. All90 fixed-suite arm logs, scoreboard, gates, birth census and wrapper
+exit are saved as text in traces/die_driver_sweep_20261015/turing_2060super/.
+At this checkpoint no own rental is active. Do not reuse the retired SSH alias.
+
+Exact product8e3a9d325/device8e3a9d32: Windows580.88 LTSC26100 Code0/DWM,
+CUDA3/D3D11+12/readableSystemlog/zeroTDR and Linux580 Cinnamon/OpenGL/actual
+X11SHM broker pass. Fixed full Linux raw finishes18:36:43:29PASS,0FAIL,1TIMEOUT
+(R34 at unchanged180s), noNOTRUN.165suite/12gatebirthsUSER. Beforefix CUDA4
+passes; full headless graphics and post-fix CUDA ladder were not run on Turing.
+The R34 performance defect remains open; do not promote this as a full Linux
+cell or complete family. Ranked callback/IRQ versus map/cleanup candidates and
+their next falsifier are recorded; no interrupt filtering or budget relaxation.
+
+Own Turing branch/worktree codex/sweep-turing-20261015,/workspace/codex/turing-hw,
+draftPR10. The integration branch codex/die-driver-sweep-20261015 was advanced
+normally to include these candidate changes; master and owner branches untouched.
+Next family: own /workspace/codex/blackwell-hw, codex/sweep-blackwell-20261015,
+native-first plan in traces/die_driver_sweep_20261015/blackwell_plan.md. Rent only
+after checking prior own IDs absent, then arm a new175min timer immediately.
+Prepared controller /workspace/codex/rent_blackwell.py guards that order; installer
+policy helper pins its public source and must stage viaSCP (exceeds onstart limit).
+Blackwell hardware remains unrun. OwnerVM/GPU untouched. Older active/PID/deadline
+paragraphs below are historical and superseded by this completed wave.
+
+## UPDATE 2026-10-15 18:32UTC — TU106 Windows580 and Linux broker PASS; raw running
 
 Device8e3a9d32, source8e3a9d325, ownrental56117789, stockhost595.91.07.
 Windows580.88 LTSC26100: Code0/build checked before/after, Explorer+DWM,
@@ -15,12 +43,21 @@ same geometry/ownership/Windowspermit/nativeUSER checks. Two assertions fail
 beforec5ee774cb; full CPU8e3a9d3253247/0/14ignored. NativeWindows oracle passes.
 Declaration tests for all families do not prove their hardware execution.
 
-Windows normalshutdown requested18:06:13, ownstopwrapperPID55994; wait until
-QEMU55462 gone before Linux broker prep. Prepared broker/root script accepts
-KF3_REV=8e3a9d32; then /root/turing_fixed_raw.sh gates/build/raw30 at180s and
-birthcensus even on failure. Rootcheckout stays8e duringGPU jobs. Beforefix
+Windows normal shutdown completed18:06:38. Linux580 Cinnamon/Xorg/NVIDIA gears
+and actual X11 SHM broker presentation pass at8e3a9d32:1920x1080,13,193colors,
+zero guestXid/fliptimeouts,12assertions,zero hostXids in the second broker window.
+First host-dependency failure is preserved; attempted vkcube127 is NOTRUN.
+Broker normal stop and wrapperexit0 at18:21:20. Fixed gates9/9+gate10PASS,
+binary rebuilt18:21:55, raw client/packed580 guest rebuilt before full raw30
+started18:22:37 at unchanged180s budget. RawwrapperPID59250; controller live
+text monitorPID/session in/workspace/codex/turing_raw_monitor.sh; its final output
+/workspace/codex/raw-turing/fixed/required-suite-live-final.txt. Rootcheckout stays8e
+duringGPU jobs; do not pull/build. Birthcensus runs even on raw failure. Beforefix
 Linux580CUDA4PASS/raw29(R34timeout180; diagnostic201s) is not a fullLinuxpass.
-Original rental deadline18:36:22 remains armed, no extension. Capture text/push
+Timer revised18:32:26 to18:38:26UTC, PID2036504; old own timer canceled only
+after the replacement was alive. This permits full raw-suite completion/text
+collection, remains below the authorized18:41:16UTC three-hour cap, and does not
+change the180s test budget. Earlier18:36deadline notes below are superseded. Capture text/push
 after each run, retire ownID only. Controller /workspace/codex/turing-hw,
 branchcodex/sweep-turing-20261015, draftPR10. OwnerVM/GPU untouched.
 Older pending/process paragraphs below superseded by this update.

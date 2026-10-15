@@ -1,0 +1,20 @@
+START 2026-10-15T18:19:21+00:00
+CINNAMON 1 XORG 1
+NVIDIA GeForce RTX 2060 SUPER, 580.159.04, 25 MiB
+OpenGL vendor string: NVIDIA Corporation
+OpenGL renderer string: NVIDIA GeForce RTX 2060 SUPER/PCIe/SSE2
+Running synchronized to the vertical refresh.  The framerate should be
+approximately the same as the monitor refresh rate.
+256 frames in 5.0 seconds = 51.162 FPS
+294 frames in 5.0 seconds = 58.609 FPS
+299 frames in 5.0 seconds = 59.766 FPS
+VKCUBE rc=127
+GUEST_DMESG flip_timeouts=0 nvassert=12 xid=0
+GUEST_DONE
+nvkvm-broker: shm tier: not requiring DRI3 or Present (frames arrive as shared memory and are put on screen with core PutImage)
+nvkvm-broker: shm tier: advertising no dma-buf format (frames are shared memory), so no modifier query is made
+X11_WINDOW width=1920 height=1080 colors=13193 sha256=157822c1e462292b3375c4d52fc57996cacb17bdb8f99851b95bd5d39f7781e7
+X11_PRESENTATION_CHECKED=1
+DISPLAY_STALLS=18
+BROKER_DESKTOP_VERDICT=PASS
+EXIT rc=0 2026-10-15T18:21:20+00:00

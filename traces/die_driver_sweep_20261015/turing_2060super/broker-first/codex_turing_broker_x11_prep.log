@@ -1,0 +1,6 @@
+[interactive] broker badf2d707da4: nvkvm-display-broker backends:  dma-buf test source : NO - apt install libgbm-dev  wayland : NO - install libwayland-dev wayland-protocols  x11 : yes (dri3+present +xrender scaling and guest cursor) + xi2 raw motion  test : yes (always) 
+scripts/bench/display/interactive.sh: line 55: /proc/56806/cmdline: No such file or directory
+scripts/bench/display/interactive.sh: line 56: /proc/56806/cmdline: No such file or directory
+[interactive] provisioning boot, kf3 8e3a9d32 (/workspace/bench/kf3-bins/8e3a9d32/qemu-system-x86_64)
+[interactive] provision: APT_RC=0 + echo APT_RC=0 PROVISION_DONE + echo PROVISION_DONE  (log /root/codex-broker/prep-20261015-180757/provision.log)
+[interactive] INTERACTIVE_PREP_EXIT 2026-10-15T18:15:22+00:00
