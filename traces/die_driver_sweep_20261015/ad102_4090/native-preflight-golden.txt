@@ -1,0 +1,19 @@
+windows build                26100          Microsoft Windows 11 Enterprise LTSC Evaluation
+secure boot                  off            
+testsigning                  off            bcdedit /set {current} testsigning on needs Secure Boot off
+VBS / HVCI                   0 / 0          2 running = VBS on; 2 in services = HVCI (test signing still loads, see doc)
+nvidia gpu                   DEV_2684       driver 10.0.26100.1, status Error
+gsp                          (see nvidia-smi -q) GSP Firmware Version must not be N/A for queues to exist
+free disk C: (MiB)           129765         a capture of a boot is tens of MiB
+RAM (MiB)                    76736          the RAM scan fallback reads all of it once per pass
+kf-census: ogkm 580.82.07, 1 sources, 10 cmd + 11 status messages, 7 controls
+oracle: PASS (no gap, no parse failure, no trailing bytes, no unknown function)
+pairing: 0 controls with unanswered requests or orphan replies; rpc.sequence non-zero on 0 messages
+GOLDEN_RC=0
+F8D6A65D128F22C18F67DA1F6C0D47E312D04E0E1717B9FAFD5E7E76D08EB145 golden.controls.tsv
+5A830D6ED51C7DD0D8CEC9B07A42DA60C5750BEF83F62AF4A50C248950730C7C golden.functions.tsv
+2EB168FF5F366099B36C3BEB8B38A87DA61022E11FF6074EE3BF0787312D46FB golden.anomalies.tsv
+{"runs":1,"failures":0,"reboots":0,"ssh":true,"driver":false,"cuda":false,"complete":false}
+
+
+SSH_RC=0

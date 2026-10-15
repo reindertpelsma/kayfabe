@@ -33,3 +33,23 @@ Public installer: reindertpelsma/windows-on-vast93b65b3347601f35f4146602ff85950e
 upstream bin456789/reinstall80c3d5e175f39c2d2bbd267cd583842140154140.
 Measurement module source32973658a; census decoder4ff31a249. Their CPU/build
 checks are recorded on their topic branches; runtime remains unverified here.
+
+## Measured reference at13:19UTC
+
+Stock Windows11EnterpriseLTSC2024Evaluation build26100, NVIDIA580.88
+(32.0.15.8088), RTX4090/AD102 device2684: adapter Code0, WDDM.
+CUDA cup2/cup3/cup8 all pass, including2048x2048 matrix bad0/maxerr0.
+D3D11 hardware compute/draw and D3D12 hardware compute/fences pass,20iterations
+each; Microsoft Basic Render was enumerated but excluded. System Event4101
+count0 during the short oracle window. GSP firmware N/A in this default driver
+configuration; a separate explicitly enabled-GSP reference is still required.
+No interactive desktop/DWM claim was made for this SSH session.
+
+Windows census golden runtime passes:10command+11status messages,7controls,
+zero pairing/gap/parse anomalies. controls/functions/anomalies TSV SHA256 all
+match Linux exactly (native-preflight-golden.txt). H3 passes. NVIDIA/CUDA
+installer complete=true, failures0, reboots0 before our test-signing reboot.
+
+H1's native installation/adapter oracle succeeds. H2 measurement remains pending.
+This is native Windows, without kayfabe; Linux and Windows guest cells on AD102
+remain not tried in this campaign.
