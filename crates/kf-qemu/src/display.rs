@@ -5248,7 +5248,7 @@ mod tests {
     /// and layout are checked here for all four rows so the next refusal is a test failure, not a rented box.
     #[test]
     fn the_gpu_free_realize_path_resolves_for_every_row() {
-        for version in ["580.65.06", "580.159.04", "595.91.07"] {
+        for version in ["580.65.06", "580.159.04", "590.48.01", "595.91.07"] {
             let t = kf_disp::class::for_version(version).unwrap();
             for row in kf_chip::display::ALL {
                 let regs = Regs::for_ip(version, row.ip_version).unwrap();

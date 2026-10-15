@@ -2054,7 +2054,7 @@ fn surf(r: &mut Ring, cl: u32, what: &str, addr: u64, target: &str, enable: bool
 /// fields used to refuse `display=on` on TU10x/TU11x before the guest could boot.
 #[test]
 fn every_family_row_resolves_its_vocabulary() {
-    for version in ["580.65.06", "580.159.04", "595.91.07"] {
+    for version in ["580.65.06", "580.159.04", "590.48.01", "595.91.07"] {
         let tb = class::for_version(version).unwrap();
         for row in kf_chip::display::ALL {
             let r = Regs::for_ip(version, row.ip_version)
