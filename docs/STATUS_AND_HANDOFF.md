@@ -1,5 +1,28 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-15 20:06UTC — Blackwell nativefacts saved; Linuxreturn ready
+
+Own56141654 only,timer2050117 deadline22:15:05/hardcap22:20:04UTC. NativeWindows
+580.88 LTSC26100 passesCUDA3/D3D11+12/Code0/readableSystemlog/0TDRshortsuites
+bothlegacy(defaultGSPN/A) andGSP580.65.05. Boundedphysicalcapsword0x00c=0x102
+repeatedbothstates. NoexactRMdieyet; deriveafterLinuxreturn beforeT3 registration.
+NativefullcaptureFAIL: firstRAMscanlateprefixloss2/6413missingmessages; mailbox-only
+before-enable replay0bindings/collector4, despitehealthyGSPapps. Bothfalsifiers
+reported. Empty2801/2806bodyallowlist meansnoRMscalarrows accepted. Do notborrow
+Ada/Turingrows. PublicFSPCOTbootargsroute supports measurementtoolgap hypothesis;
+rankednextfalsifiers inblackwell_5060/README.md. Noindefiniterestartloop.
+
+Alloracles/caps/failures/aggregates/metadata savedastextandpushed. Rawcaptures
+stayedonrental. ModuleKayfabeWinCapturestopped. OwnCodexLinuxReturntaskReady,
+LastTaskResult0; Linuxreturnprepared, nextnormalnativeWindowsreboot erasesOS.
+Native580Code0verifiedbeforeerase. RegisternewLinuxaliasroot/codex-blackwell-linux
+withdifferentHostKeyAliasfor56141654; neveroverridepinnedWindowskey. Thenstage
+provision_box.sh/blackwell_linux_phase1.sh, stock595openmodules/hostunprivRMprobe,
+exactT3capstest/fix, phase2/build/nativegates andguestvalidation. Controllerfiles
+/workspace/codex; branchcodex/sweep-blackwell-20261015, ownworktreeblackwell-hw.
+Walkcandidateffd72e3d4 CPU3252/0/14/draftPR11 stillindependent/unmerged/hardwareunrun.
+OwnerVM/GPUuntouched. Olderactive-nativecapture/pendingcapsparagraphssuperseded.
+
 ## UPDATE 2026-10-15 19:43UTC — Blackwell native580 oracle PASS; caps/guests pending
 
 Soleown56141654, nativeWindowsLTSC26100 actual580.88: Code0/buildbeforeafter,

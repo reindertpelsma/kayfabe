@@ -1,0 +1,3 @@
+kind	count	first_example
+prefix_missing	2	src0: rec2 Cmd q(0x1,0x0): first sequence is 3182, not 0
+capture_loss	2	src0: record 1 LossUnknown q1 Cmd at entry 27: unknown number of entries lost

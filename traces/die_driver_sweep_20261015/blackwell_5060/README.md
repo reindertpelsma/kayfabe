@@ -61,3 +61,33 @@ decode/pairingfailure. Onecontrolledreplay onlybefore comparingalternatives.
 No read whitelist expansion or correctness-threshold relaxation. GetpostGSP
 caps before disable as an independent boundedmeasurement. Earlierdefaultcaps
 0x102, afterGSPpending. Every observedfailure remains in evidence.
+
+## Native conclusions before Linux restoration,20:06UTC
+
+Bounded physicalword0x00c=0x102 bothdefaultlegacy andGSP580.65.05, repeated
+before/aftercaptures. Trustedunsignedmeasurementmodule32973658a loaded/testsigned
+valid; exactdriver580Code0. This scalar is independentlyvalid; fullcapturerejected.
+No2801/2806 rows captured (allowlistedbodies containsheaderonly), none promoted.
+
+H-BC2 falsified: mailbox-only replayarmedbeforeenable yields0bindings/0elements,
+collectorRC4,END/filecheckOK. NativeGSP580Code0/CUDA3/D3D11+12/zeroTDR shortsuite
+stillpasses19:56:32–19:56:35. Firstcapture method2(RAMscan),3,664,158,720scanned
+bytes; mailbox1433reads/status2(zero). Replaymailbox10974reads/status2zero,
+scan0. PublicFspBoot describes Blackwellbootargspointer inFSPCOT payload,
+notFalconmailboxpair(kf-chip/fsp_gsp.rs,publickern_fsp_gh100.c). That supports
+anFSP-discoverygap explanation; Windowsprotocolwasnotdirectlyobserved. No
+furtherrestartloop. Rankednextfalsifiers: boundedside-effect-freeFSPpointer
+observation frompublicprotocol; fastvalidatedlast-live-regionrecheck across
+newqueueepoch; VFIOreferenceifneeded. Noauto-incrementregisterreads orGPUwrites.
+
+Capturepartial71controlaggregates andemptyscalarallowlist savedastext; rawbinary
+neverreturned. Everyfailure retained. Completecapture remainsFAIL, notgreen.
+Nextprimarywork: restoreLinux, derive exactdieunprivileged, registeronlymeasured
+caps scalar with failing-firsttest, thennativeLinux/gates/Linux/Windows guests.
+This independentcaps fact doesnotneed a completeRPCbootstrapcapture. Unknown
+RMscalarquestions stillrefuse; no neighbouringdie/branchrows borrowed.
+
+VerifiedunusedNVIDIADisplay610packageoem13.inf removedwithoutuninstall/force;
+actual580Code0unchanged. OwnVastWindowsSetupcompleted before normalsigningreboot.
+Measurementservice nowstopped; CodexLinuxReturnpreparationReady/LastTaskResult0,
+nativeadapter580Code0. Textpushedbefore intentionalnativeOSreboot/erase.

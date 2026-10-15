@@ -1,0 +1,16 @@
+{
+ "schema": "kfwc-cell/1",
+ "module": {"version": 1, "engine_abi": 3},
+ "windows": {"build": "26100", "ubr": "1742", "display_version": "24H2"},
+ "display_driver": {"driver_version": "32.0.15.8088"},
+ "decode_tag": "580.65.06",
+ "die": {"pci_vendor_id": "0x10de", "pci_device_id": "0x2d05", "pci_revision_id": "0xa1"},
+ "discovery": {"method": 0, "layout": 0, "bar0": 3, "gpu_count": 1, "mailbox_reads": 10974, "mailbox_status": 2, "scan_bytes": 0, "scan_passes": 0, "scan_candidates": 0, "scan_backoff_resets": 3, "scan_backoff_ticks": 17897725},
+ "ring": {"bytes": 16777216, "ring_refused": 0, "ring_high_water": 32},
+ "capture": {"records": 1, "end_seen": 1, "file_ok": 1, "by_kind": {"bind": 0, "elements": 0, "loss_overflow": 0, "loss_unreadable": 0, "loss_unknown": 0, "end": 1}},
+ "stats": {"steps": 50767, "attaches": 0, "detaches": 0, "messages_cmd": 0, "messages_status": 0, "lost_messages_exact": 0, "seq_gap_messages": 0, "lapped_messages": 0, "loss_records": 0, "torn_reads": 0, "invalid_elements": 0, "unsupported": 0, "read_failures": 0, "resyncs": 0, "sink_dropped": 0, "records_refused": 0},
+ "events": [
+  {"code": 1, "generation": 0, "data_hex": "0300000000000000010000000000000000000000052d0000000000000000000000000000000000000000000000000000"}
+ ],
+ "ticks_per_second": 3579545, "started_qpc": 2058254458
+}

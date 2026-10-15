@@ -1,0 +1,7 @@
+CONTROLLER_START 2026-10-15T20:05:08.026561+00:00
+{"State":3}
+{"LastTaskResult":0}
+{"Status":1}
+{"Name":"NVIDIA GeForce RTX 5060","DriverVersion":"32.0.15.8088","ConfigManagerErrorCode":0}
+
+CONTROLLER_EXIT_RC=0 UTC=2026-10-15T20:05:11.275596+00:00
