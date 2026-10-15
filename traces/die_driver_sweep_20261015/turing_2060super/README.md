@@ -254,3 +254,23 @@ and presentation, not DMA-buf orVulkan (vkcuberc127/NOTRUN retained).
 
 Fixed raw regression starts18:21:21, required180s budget; gates9/9+gate10PASS.
 Build/packed-guest refresh precedes the full30-arm run. No final raw verdict yet.
+
+## Final regression and lease retirement,18:39UTC
+
+Fixed product8e3a9d325/device8e3a9d32, unchanged180s budget, full raw suite
+18:22:37–18:36:43:29PASS,0FAIL,1TIMEOUT(R34),0NOTRUN, exit1. Every other arm
+passes; gate9/9+gate10PASS,165suite/12gatebirthsUSER,90CUDAthreadposturelines.
+All90 arm text logs plus scoreboard/census/wrapper are saved infixed-linux/.
+Beforefix independentCUDA4 passes; post-fix LinuxCUDA/headlessgraphics were
+NOTRUN. Windows580 and Linuxbroker checks pass as stated above. This is a real
+remaining kayfabe performance defect against the passing native control; neither
+a physical-driver limit nor full Linux/family acceptance is claimed.
+
+The final monitor preserved suite output live before teardown. Its earlier
+monitor expired at its old controller deadline; that controller timeout is not
+another guest timeout. The replacement monitor exits0 with the wrapper's actual
+rc1 and the full census. No executable/binary capture was returned from rental.
+All QEMUs gone before teardown; revised timer destroys only own56117789 at
+18:38:26, absence verified18:39:01UTC before18:41:16 hard cap. No own rental
+active at this checkpoint. Compute upper bound rounded up$0.34, transfers unbilled.
+Native facts, code fixes and evidence are pushed; master/ownerVM/GPU untouched.

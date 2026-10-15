@@ -1,5 +1,33 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-15 18:39UTC — Turing rental retired; Windows/broker pass, raw29/30
+
+Own instance56117789 was destroyed by its revised timer; absence verified at
+18:39:01UTC, before the18:41:16 three-hour cap. Every own QEMU was gone before
+teardown. All90 fixed-suite arm logs, scoreboard, gates, birth census and wrapper
+exit are saved as text in traces/die_driver_sweep_20261015/turing_2060super/.
+At this checkpoint no own rental is active. Do not reuse the retired SSH alias.
+
+Exact product8e3a9d325/device8e3a9d32: Windows580.88 LTSC26100 Code0/DWM,
+CUDA3/D3D11+12/readableSystemlog/zeroTDR and Linux580 Cinnamon/OpenGL/actual
+X11SHM broker pass. Fixed full Linux raw finishes18:36:43:29PASS,0FAIL,1TIMEOUT
+(R34 at unchanged180s), noNOTRUN.165suite/12gatebirthsUSER. Beforefix CUDA4
+passes; full headless graphics and post-fix CUDA ladder were not run on Turing.
+The R34 performance defect remains open; do not promote this as a full Linux
+cell or complete family. Ranked callback/IRQ versus map/cleanup candidates and
+their next falsifier are recorded; no interrupt filtering or budget relaxation.
+
+Own Turing branch/worktree codex/sweep-turing-20261015,/workspace/codex/turing-hw,
+draftPR10. The integration branch codex/die-driver-sweep-20261015 was advanced
+normally to include these candidate changes; master and owner branches untouched.
+Next family: own /workspace/codex/blackwell-hw, codex/sweep-blackwell-20261015,
+native-first plan in traces/die_driver_sweep_20261015/blackwell_plan.md. Rent only
+after checking prior own IDs absent, then arm a new175min timer immediately.
+Prepared controller /workspace/codex/rent_blackwell.py guards that order; installer
+policy helper pins its public source and must stage viaSCP (exceeds onstart limit).
+Blackwell hardware remains unrun. OwnerVM/GPU untouched. Older active/PID/deadline
+paragraphs below are historical and superseded by this completed wave.
+
 ## UPDATE 2026-10-15 18:32UTC — TU106 Windows580 and Linux broker PASS; raw running
 
 Device8e3a9d32, source8e3a9d325, ownrental56117789, stockhost595.91.07.
