@@ -91,3 +91,17 @@ VerifiedunusedNVIDIADisplay610packageoem13.inf removedwithoutuninstall/force;
 actual580Code0unchanged. OwnVastWindowsSetupcompleted before normalsigningreboot.
 Measurementservice nowstopped; CodexLinuxReturnpreparationReady/LastTaskResult0,
 nativeadapter580Code0. Textpushedbefore intentionalnativeOSreboot/erase.
+
+## Caps failing-first model, restored Linux stockdriver pending20:20UTC
+
+CPUd8afb5a34 compiles and exactGB206fixturefails: authored0 versus measured
+0x102. Logs caps-before.log. NeighbouringGB20x dies and570/590/595 branches
+must stayunmeasured. Identityfalsifier statedbeforehostprobe: MC_GET_ARCH_INFO
+must reportarch1b0/impl6 before anyGB206row is registered; PCIlabelaloneinsufficient.
+
+RestoredUbuntu22.04.5 kernel6.8.0-138,147GiBroot/138GiBfree,/dev/kvm,
+15logicalCPUs/50464MiBRAM. Minimalimage lackedpciutils (preflightretained),
+then curl/CA/pciutils installed andprovision_box completed20:18:37. Ownroot
+phase1PID1443 (phase0wrapper1000) nowinstallingstock595.91.07openmodules with
+matchingkernelcompiler/headers. No guestGPUwork yet. Rootcheckoutfollowsown
+codex/sweep-blackwell-20261015; ownerGPU/VMuntouched. Timerunchanged.

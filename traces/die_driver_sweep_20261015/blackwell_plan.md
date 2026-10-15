@@ -22,6 +22,19 @@ unanswered controls. Body allowlist only2801/2806, no852f or whole-board table.
 Export aggregate text and exact selected-question scalars only. RestoreLinux,
 derive tuple via unprivileged MC_GET_ARCH_INFO before registering exactT3rows.
 
+Public-source update2026-10-15 BEFORE guest runs: clc96f.h/clca6f.h at public
+ogkm580.159.04 b81d58ee0224d1d290bef1c080592b619e184042 define onlyGPPut in
+controlUSERD, and omitSET_REFERENCE/NON_STALL_INTERRUPT. CA6F also omitsFIFO
+MEM_OP. CurrentWindowsuser_storage/userpump uses legacyGP_GET/REFERENCE and
+synthesizedreference/NSImarkers. This is a known source-level capability gap,
+not a measured guest failure yet. The declaration gate fix doesnotresolveit.
+Falsifier for relevance: actual guest allocates/uses another progress mechanism
+or firstfails earlier; capture the first named refusal/class before changing it.
+A guest-writable privatefence would permit shader-forged progress and is not an
+acceptable substitute. An opaque native-copy route is only a candidate if its
+exactgeometry/ownership/lifetime and absence of required CPUsoftwareactions/
+migration are proved; no such route or proof is implemented/claimed here.
+
 H-B3 BEFORE guests: public CAXISO scanout decoding plus generated family channel
 admission removes the previous Blackwell-specific display/channel refusals.
 Falsifier: first named refusal, Code43, content/fence mismatch orTDR after the
