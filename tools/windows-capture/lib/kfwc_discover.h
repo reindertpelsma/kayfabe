@@ -35,6 +35,7 @@
 #define KFWC_METHOD_MAILBOX 1u      /* option (a): BAR0 boot-args mailbox */
 #define KFWC_METHOD_SCAN 2u         /* option (b): physical RAM scan */
 #define KFWC_METHOD_REVISIT 3u      /* internally retained table, fresh sequence-zero epoch */
+#define KFWC_METHOD_NEARBY 4u       /* bounded early scan near an internally validated old table */
 
 typedef struct kfwc_qgeom {
     kfwc_u32 valid;        /* tx header validated (the status header may still be zero) */

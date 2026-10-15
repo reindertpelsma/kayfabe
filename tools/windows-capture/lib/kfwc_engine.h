@@ -156,6 +156,8 @@ void kfwc_engine_stop(kfwc_engine *e);
 /* Internal rediscovery seed, or zero. Only a validated live pair whose two
  * transport sequences have advanced beyond ring capacity is eligible. */
 kfwc_u64 kfwc_engine_recent_table(const kfwc_engine *e);
+/* Internal early search is bounded separately from the ordinary scan/backoff. */
+int kfwc_engine_recent_scan_due(kfwc_engine *e);
 /* 1 when the next step would spend its time scanning RAM (searching, scan enabled, past the
  * mailbox-zero delay and not in a back-off pause); the driver uses it to pick its sleep. */
 int kfwc_engine_scan_due(kfwc_engine *e);
