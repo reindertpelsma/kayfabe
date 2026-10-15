@@ -1,0 +1,36 @@
+FACTS_START 2026-10-15T10:00:21+00:00
+KERNEL 6.8.0-59-generic
+DRIVER NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  
+KVM crw-rw---- /dev/kvm nested=Y
+CPU Genuine Intel(R) 0000 @ 3.40GHz nproc=15 mem_gib=49
+DISK size=146G avail=121G
+PCI 0000:00:07.0 VGA compatible controller [0300]: NVIDIA Corporation GA104 [GeForce RTX 3070] [10de:2484] (rev a1)
+PCIV 0000:00:07.0 	Region 0: Memory at c0000000 (32-bit, non-prefetchable) [size=16M]
+PCIV 0000:00:07.0 	Region 1: Memory at 7000000000 (64-bit, prefetchable) [size=256M]
+PCIV 0000:00:07.0 	Region 3: Memory at 7010000000 (64-bit, prefetchable) [size=32M]
+PCIV 0000:00:07.0 	Region 5: I/O ports at c000 [size=128]
+PCIV 0000:00:07.0 		LnkCap:	Port #0, Speed 8GT/s, Width x16, ASPM L0s L1, Exit Latency L0s <512ns, L1 <4us
+PCIV 0000:00:07.0 		LnkSta:	Speed 2.5GT/s (downgraded), Width x16 (ok)
+PCIV 0000:00:07.0 	Kernel driver in use: nvidia
+PCI 0000:00:08.0 Audio device [0403]: NVIDIA Corporation GA104 High Definition Audio Controller [10de:228b] (rev a1)
+PCIV 0000:00:08.0 	Region 0: Memory at c1080000 (32-bit, non-prefetchable) [size=16K]
+PCIV 0000:00:08.0 		LnkCap:	Port #0, Speed 8GT/s, Width x16, ASPM L0s L1, Exit Latency L0s <512ns, L1 <4us
+PCIV 0000:00:08.0 		LnkSta:	Speed 2.5GT/s (downgraded), Width x16 (ok)
+PCIV 0000:00:08.0 	Kernel driver in use: snd_hda_intel
+SMIQ name, pci.device_id, driver_version, memory.total [MiB], pcie.link.gen.max, pcie.link.width.max
+SMIQ NVIDIA GeForce RTX 3070, 0x248410DE, 595.91.07, 8192 MiB, 3, 16
+SMIMEM     FB Memory Usage
+SMIMEM         Total                                          : 8192 MiB
+SMIMEM         Reserved                                       : 350 MiB
+SMIMEM         Used                                           : 1 MiB
+SMIMEM         Free                                           : 7842 MiB
+SMIMEM     BAR1 Memory Usage
+SMIMEM         Total                                          : 256 MiB
+SMIMEM         Used                                           : 1 MiB
+SMIMEM         Free                                           : 255 MiB
+SMIMEM     Conf Compute Protected Memory Usage
+SMIMEM         Total                                          : 0 MiB
+SMIMEM         Used                                           : 0 MiB
+SMIMEM         Free                                           : 0 MiB
+SMIMEM 
+FACTS_EXIT 2026-10-15T10:00:21+00:00

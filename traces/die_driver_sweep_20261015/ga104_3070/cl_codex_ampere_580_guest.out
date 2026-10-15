@@ -1,0 +1,10 @@
+CUDA_LADDER_STARTED=2026-10-15T10:07:04+00:00 mode=guest reps=1 rungs=cup2,cup3,cup8,cup8bench rev=ba864a55
+bench sizes=16,2048 iters=20 batch=10
+CL_ROW mode=guest rung=cup2 rep=1 verdict=FAIL boot_rc=0 graded=[]  trapped=859 ledger=[]
+CL_ROW mode=guest rung=cup3 rep=1 verdict=FAIL boot_rc=0 graded=[CUP3_VAL=NO_KERNEL_LINE]  trapped=859 ledger=[]
+CL_ROW mode=guest rung=cup8 rep=1 verdict=FAIL boot_rc=0 graded=[CUP8_BAD=NO_RESULT_LINE CUP8_MAXERR=NO_RESULT_LINE] CUP8_WALL_S=0 trapped=859 ledger=[]
+CL_ROW mode=guest rung=cup8bench rep=1 verdict=FAIL boot_rc=0 graded=[GUEST_BENCH_TOTAL_BAD=NO_LINE GUEST_BENCH_VERDICT=] BENCH_measure_WALL_S=0 trapped=859 ledger=[]
+CL_BENCH mode=guest rep=1 GUEST_BENCH_INIT_MS=
+CL_BENCH mode=guest rep=1 GUEST_BENCH_CTX_MS=
+CL_BENCH mode=guest rep=1 GUEST_BENCH_MODULE_MS=
+CUDA_LADDER_DONE=2026-10-15T10:09:10+00:00

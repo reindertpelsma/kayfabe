@@ -1,0 +1,78 @@
+=== boot_capture tag=cl_codex_ampere_580_cup2_1 at 2026-10-15T10:07:15+00:00 ===
+=== source revision: ba864a551 ===
+=== qemu binary: -rwxr-xr-x 1 root root 94569120 Oct 15 10:00 /workspace/bench/kf3-bins/ba864a55/qemu-system-x86_64 ===
+=== archive rev STAMPED IN THE BINARY: 
+=== BUILD_REV.txt says (informational, NOT authoritative): 
+=== helpers (KAYFABE_BENCH_HELPERS=repo) ===
+    used: /root/kayfabe/scripts/bench/boot_nvkvm.sh  sha256=82f88b7bb676717a
+    used: /root/kayfabe/scripts/bench/gssh_nv  sha256=1785ac20cc7af28d
+WAS_LOADED
+MODPROBE_RC=0
+=== nvidia-smi (the device open) ===
+No devices were found
+SMI_RC=6
+=== /dev nodes (AFTER the open — they are created by it) ===
+crw-rw-rw- 1 root root 237,   0 Oct 15 10:07 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 237,   1 Oct 15 10:07 /dev/nvidia-uvm-tools
+crw-rw-rw- 1 root root 195,   0 Oct 15 10:07 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Oct 15 10:07 /dev/nvidiactl
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Oct 15 10:07 .
+drwxr-xr-x 18 root root   4000 Oct 15 10:07 ..
+cr--------  1 root root 240, 1 Oct 15 10:07 nvidia-cap1
+cr--r--r--  1 root root 240, 2 Oct 15 10:07 nvidia-cap2
+=== lsmod ===
+nvidia_uvm           2166784  0
+nvidia              14417920  1 nvidia_uvm
+ecc                    45056  1 nvidia
+=== POST_CAPTURE_HOOK /root/kayfabe/scripts/bench/cup2_hook_deadline.sh at 2026-10-15T10:07:22+00:00 ===
+=== cup2: locating a REAL cuda.h (3 of 5 hits in this guest are the PowerMac ADB
+===       header and sort AHEAD of it — check CONTENT, never the path) ===
+REAL: /usr/include/cuda.h
+=== cup2: build ===
+GCC_RC=0
+=== cup2: run (detached, deadline 150s on the HOST's clock) ===
+LAUNCHED pid=
+FAIL cuInit(0) -> unknown error (999)
+CUP2_RC=1
+=== cup2: guest dmesg delta ===
+[    8.968970] nvidia-nvlink: Nvlink Core is being initialized, major device number 239
+
+[    8.973049] nvidia 0000:00:03.0: vgaarb: VGA decodes changed: olddecodes=none,decodes=none:owns=io+mem
+[    8.974182] NVRM: loading NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  Release Build  (dvs-builder@U22-I3-AF04-09-6)  Wed Apr 29 17:15:53 UTC 2026
+[    9.722920] NVRM: tmrSetCurrentTime_GV100: ERROR: Write to PTIMER attempted even though Level 0 PLM is disabled.
+[    9.722925] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ timer_gv100.c:80
+[   13.739563] NVRM: GspStatusQueueInit: msgqRxLink failed: -7, nvStatus 0x00000065, retries: 30681841
+[   13.739573] NVRM: nvAssertOkFailedNoLog: Assertion failed: Call timed out [NV_ERR_TIMEOUT] (0x00000065) returned from GspStatusQueueInit(pGpu, &pKernelGsp->pRpc->pMessageQueueInfo) @ kernel_gsp_tu102.c:570
+[   13.739586] NVRM: _kgspBootGspRm: unexpected WPR2 already up, cannot proceed with booting GSP
+[   13.739587] NVRM: _kgspBootGspRm: (the GPU is likely in a bad state and may need to be reset)
+[   13.739610] NVRM: RmInitAdapter: Cannot initialize GSP firmware RM
+[   13.740141] NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x62:0x40:2028)
+[   13.741186] NVRM: GPU 0000:00:03.0: rm_init_adapter failed, device minor number 0
+[   17.150105] NVRM: tmrSetCurrentTime_GV100: ERROR: Write to PTIMER attempted even though Level 0 PLM is disabled.
+[   17.150111] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ timer_gv100.c:80
+[   17.150217] NVRM: _kgspBootGspRm: unexpected WPR2 already up, cannot proceed with booting GSP
+[   17.150220] NVRM: _kgspBootGspRm: (the GPU is likely in a bad state and may need to be reset)
+[   17.150243] NVRM: RmInitAdapter: Cannot initialize GSP firmware RM
+[   17.150685] NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x62:0x40:2028)
+[   17.151658] NVRM: GPU 0000:00:03.0: rm_init_adapter failed, device minor number 0
+[   17.221761] NVRM: tmrSetCurrentTime_GV100: ERROR: Write to PTIMER attempted even though Level 0 PLM is disabled.
+[   17.221765] NVRM: nvAssertFailedNoLog: Assertion failed: 0 @ timer_gv100.c:80
+[   17.221866] NVRM: _kgspBootGspRm: unexpected WPR2 already up, cannot proceed with booting GSP
+[   17.221868] NVRM: _kgspBootGspRm: (the GPU is likely in a bad state and may need to be reset)
+[   17.221887] NVRM: RmInitAdapter: Cannot initialize GSP firmware RM
+[   17.222288] NVRM: GPU 0000:00:03.0: RmInitAdapter failed! (0x62:0x40:2028)
+[   17.223317] NVRM: GPU 0000:00:03.0: rm_init_adapter failed, device minor number 0
+[   17.225395] NVRM: nvAssertFailedNoLog: Assertion failed: rmapiLockIsOwner() && rmGpuLockIsOwner() @ conf_compute_api.c:78
+HOOK_RC=0
+=== GUEST dmesg AFTER the workload (phase 3b captured 13 lines BEFORE it) ===
+GUEST_DMESG_AFTER_LINES=28
+GUEST_DMESG_AFTER_NVRM=25
+GUEST_DMESG_WORKLOAD_DELTA=15
+=== HOST dmesg delta for this boot (watermark 1082 → 1083) ===
+HOST_DMESG_LINES=1
+HOST_DMESG_NVRM=1
+HOST_DMESG_XID=0
+0

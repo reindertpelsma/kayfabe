@@ -1,0 +1,33 @@
+START 2026-10-15T10:15:29+00:00
+From https://github.com/reindertpelsma/kayfabe
+ * branch                codex/sweep-linux-ampere -> FETCH_HEAD
+   ba864a551..6f072e9d3  codex/sweep-linux-ampere -> origin/codex/sweep-linux-ampere
+Updating ba864a551..6f072e9d3
+Fast-forward
+ crates/kf-mem/src/batch.rs                |  8 +++-
+ scripts/bench/boot_nvkvm.sh               |  8 +++-
+ scripts/bench/guest_profile.sh            | 26 +++++++++++
+ scripts/bench/provision_bench_tree.sh     |  9 ++++
+ scripts/bench/tests/test_guest_profile.py | 76 +++++++++++++++++++++++++++++++
+ 5 files changed, 123 insertions(+), 4 deletions(-)
+ create mode 100644 scripts/bench/guest_profile.sh
+ create mode 100644 scripts/bench/tests/test_guest_profile.py
+FUZZ_REPLAY seed=1792058516649537499 rc=1
+FUZZ_SEED=0x18deabb9e59befdb
+⊘     W385 CONTROL FAILED = 0 violation(s) with ONE thread and no jitter, 0 engine ops, 1/1 workers finished
+FUZZ_REASON=CONTROL_FAILED
+RUNG_concurrent_fuzz=NOTRUN
+FUZZ_REPLAY seed=1 rc=0
+FUZZ_SEED=0x0000000000000001
+ok    W385 control        = 64 single-threaded ops of which 17 ran the ENGINE, zero violations — the verbs, the channel and the oracle all work
+FUZZ_REASON=CLEAN
+RUNG_concurrent_fuzz=PASS
+BARE_SUITE_STARTED=2026-10-15T10:15:30+00:00 arms=30 budget=180s
+BARE_SUITE_PASS=30 BARE_SUITE_FAIL=0 BARE_SUITE_CRASH=0 ARMS=30
+CUDA_LADDER_STARTED=2026-10-15T10:16:39+00:00 mode=guest reps=1 rungs=cup2,cup3,cup8,cup8bench rev=6f072e9d
+CL_ROW mode=guest rung=cup2 rep=1 verdict=PASS boot_rc=0 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]  trapped=10968 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f198 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f111 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f96 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f2 0x00000802:e0f2 0x00000801:e0f49]
+CL_ROW mode=guest rung=cup3 rep=1 verdict=PASS boot_rc=0 graded=[CUP3_VAL=43]  trapped=10946 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f195 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f117 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f96 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f2 0x00000802:e0f2 0x00000801:e0f49]
+CL_ROW mode=guest rung=cup8 rep=1 verdict=PASS boot_rc=0 graded=[CUP8_BAD=0 CUP8_MAXERR=0] CUP8_WALL_S=1 trapped=11054 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f199 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f116 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f128 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f17 0x00000802:e0f2 0x00000801:e0f51]
+CL_ROW mode=guest rung=cup8bench rep=1 verdict=PASS boot_rc=0 graded=[GUEST_BENCH_TOTAL_BAD=0 GUEST_BENCH_VERDICT=PASS (every timed iteration verified)] BENCH_measure_WALL_S=2 trapped=11714 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000803:e0f204 0x0000000e:e0f1 0x0000000d:e0f1 0x0000000c:e0f1 0x0000000b:e0f1 0x0000000a:e0f1 0x00000009:e0f1 0x00000008:e0f1 0x00000007:e0f218 0x00000812:e0f1 0x00000811:e0f1 0x00000810:e0f1 0x0000080f:e0f128 0x00001016:e0f1 0x00001015:e0f1 0x00001014:e0f1 0x00001013:e0f358 0x00000802:e0f2 0x00000801:e0f52]
+CUDA_LADDER_DONE=2026-10-15T10:19:32+00:00
+EXIT rc=0 2026-10-15T10:19:32+00:00
