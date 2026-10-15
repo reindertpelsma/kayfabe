@@ -38,3 +38,20 @@ with measured same-CL profiles. Strictly serialGPUjobs; builds stop before timin
 Allfamilies remain incomplete until bothguestOS suites across several actual
 builds pass; this wave prioritizes the first Blackwell validation, not a blanket
 family claim. Evidence text only, push after each run, no ownerVM/GPU touched.
+
+Native bootstrap hypothesis before the next installation: setting
+ExcludeWUDriversInQualityUpdate at the first bootstrap, before scheduling the
+pinned NVIDIA installer, reduces the driver-replacement race measured on TU106.
+Falsifier: update events install another driver during setup, or actual build
+around the oracle changes. This policy cannot cancel an update already in flight;
+strict actual-build/Code0 checks remain mandatory. Microsoft's policy mapping:
+https://learn.microsoft.com/en-us/windows/deployment/update/waas-configure-wufb.
+
+Own prepare-native-installer.py accepts only public windows-on-vast93b65b3347601f35f4146602ff85950e389b409f
+install.sh SHAac7faa15a606116ea162b2df95af9a5f7a163f0436989cfda92f2b7ab3e65af0,
+keeps its ISC header and inserts only the driver-exclusion policy. No service
+stop/disable claim. Render-only validation confirms policy precedes task scheduling;
+mutated input refuses without creating output; bashsyntax passes. Generated16840B
+SHAf79b75bbe6381a91c93f6543e2a6dd32a9731824a0ab2a43120d9ea36f74bb4b.
+It exceeds Vast's16KiB onstart limit: stage overSCP, never as the onstart text.
+Actual native execution remains unrun. No kayfabe production Rust changed.
