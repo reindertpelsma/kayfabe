@@ -299,6 +299,8 @@ pub struct Classes {
     pub common: u32,
     /// The display object.
     pub display: u32,
+    /// The capabilities class; its generated layout identifies tiled output.
+    pub caps: u32,
     /// Core channel.
     pub core: u32,
     /// Window channel.
@@ -319,6 +321,7 @@ impl Classes {
         Classes {
             common: c.common,
             display: c.display,
+            caps: c.caps,
             core: c.core,
             window: c.window,
             window_imm: c.window_imm,
@@ -1743,7 +1746,10 @@ impl DisplayModel {
                     // into the packed request head list, never a host head number.
                     let n = p.get("numHeads").ok_or(NV_ERR_NOT_SUPPORTED)? as usize;
                     let hs = "NVC372_CTRL_IMP_HEAD";
-                    let stride = self.l.size(hs).filter(|s| *s > 0)
+                    let stride = self
+                        .l
+                        .size(hs)
+                        .filter(|s| *s > 0)
                         .ok_or(NV_ERR_NOT_SUPPORTED)?;
                     let heads = p.bytes("head").ok_or(NV_ERR_NOT_SUPPORTED)?;
                     if n > self.heads as usize || n > heads.len() / stride {
@@ -1763,10 +1769,22 @@ impl DisplayModel {
                     }
                     let ts = "NVC372_TILING_ASSIGNMENT";
                     let es = "NVC372_TILE_ENTRY";
-                    let tsz = self.l.size(ts).filter(|s| *s > 0).ok_or(NV_ERR_NOT_SUPPORTED)?;
-                    let esz = self.l.size(es).filter(|s| *s > 0).ok_or(NV_ERR_NOT_SUPPORTED)?;
-                    let mut assignments = vec![0; p.bytes("tilingAssignments")
-                        .ok_or(NV_ERR_NOT_SUPPORTED)?.len()];
+                    let tsz = self
+                        .l
+                        .size(ts)
+                        .filter(|s| *s > 0)
+                        .ok_or(NV_ERR_NOT_SUPPORTED)?;
+                    let esz = self
+                        .l
+                        .size(es)
+                        .filter(|s| *s > 0)
+                        .ok_or(NV_ERR_NOT_SUPPORTED)?;
+                    let mut assignments = vec![
+                        0;
+                        p.bytes("tilingAssignments")
+                            .ok_or(NV_ERR_NOT_SUPPORTED)?
+                            .len()
+                    ];
                     let mut tiles = vec![0; p.bytes("tileList").ok_or(NV_ERR_NOT_SUPPORTED)?.len()];
                     if tsz > assignments.len() || n > tiles.len() / esz {
                         return Err(NV_ERR_NOT_SUPPORTED);
@@ -1774,11 +1792,16 @@ impl DisplayModel {
                     if n != 0 {
                         let mut a = Params::new(self.l, ts, &assignments[..tsz])
                             .ok_or(NV_ERR_NOT_SUPPORTED)?;
-                        if !a.set("numTiles", n as u64) { return Err(NV_ERR_NOT_SUPPORTED); }
+                        if !a.set("numTiles", n as u64) {
+                            return Err(NV_ERR_NOT_SUPPORTED);
+                        }
                         assignments[..tsz].copy_from_slice(&a.buf);
                         for (i, bytes) in tiles.chunks_exact_mut(esz).take(n).enumerate() {
-                            let mut entry = Params::new(self.l, es, bytes).ok_or(NV_ERR_NOT_SUPPORTED)?;
-                            if !entry.set("head", i as u64) { return Err(NV_ERR_NOT_SUPPORTED); }
+                            let mut entry =
+                                Params::new(self.l, es, bytes).ok_or(NV_ERR_NOT_SUPPORTED)?;
+                            if !entry.set("head", i as u64) {
+                                return Err(NV_ERR_NOT_SUPPORTED);
+                            }
                             bytes.copy_from_slice(&entry.buf);
                         }
                     }
@@ -1954,12 +1977,14 @@ mod tests {
         let mut p = Params::new(m.layouts(), s, &vec![0; size(&m, s)]).unwrap();
         p.set("numHeads", 1);
         let hs = "NVC372_CTRL_IMP_HEAD";
-        let mut head = Params::new(m.layouts(), hs,
-            &vec![0; m.layouts().size(hs).unwrap()]).unwrap();
+        let mut head =
+            Params::new(m.layouts(), hs, &vec![0; m.layouts().size(hs).unwrap()]).unwrap();
         head.set("headIndex", 1);
         p.set_bytes("head", &head.buf);
-        let out = m.control(cmd(&m, "NVC372_CTRL_CMD_IS_MODE_POSSIBLE"), &p.buf)
-            .unwrap().unwrap();
+        let out = m
+            .control(cmd(&m, "NVC372_CTRL_CMD_IS_MODE_POSSIBLE"), &p.buf)
+            .unwrap()
+            .unwrap();
         let p = Params::new(m.layouts(), s, &out).unwrap();
         assert_eq!(p.get("numTilingAssignments"), Some(1));
         assert_eq!(p.bytes("tilingAssignments").unwrap()[0], 1);
@@ -1978,7 +2003,11 @@ mod tests {
             for (indices, dsc, expected) in [
                 (vec![m.heads], false, NV_ERR_INVALID_ARGUMENT),
                 (vec![1, 1], false, NV_ERR_INVALID_ARGUMENT),
-                (vec![0; m.heads as usize + 1], false, NV_ERR_INVALID_ARGUMENT),
+                (
+                    vec![0; m.heads as usize + 1],
+                    false,
+                    NV_ERR_INVALID_ARGUMENT,
+                ),
                 (vec![0], true, NV_ERR_NOT_SUPPORTED),
             ] {
                 let s = "NVC372_CTRL_IS_MODE_POSSIBLE_PARAMS";
@@ -1994,8 +2023,12 @@ mod tests {
                     bytes.extend_from_slice(&h.buf);
                 }
                 assert!(p.set_bytes("head", &bytes));
-                assert_eq!(m.control(cmd(&m, "NVC372_CTRL_CMD_IS_MODE_POSSIBLE"), &p.buf)
-                    .unwrap(), Err(expected), "{version}");
+                assert_eq!(
+                    m.control(cmd(&m, "NVC372_CTRL_CMD_IS_MODE_POSSIBLE"), &p.buf)
+                        .unwrap(),
+                    Err(expected),
+                    "{version}"
+                );
             }
         }
     }

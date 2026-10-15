@@ -624,9 +624,18 @@ mod tests {
         let c = row.classes.caps;
         let word = p.word(t.v(c, "SYS_CAPC").unwrap());
         for i in 0..t.v(c, "SYS_CAPC_TILE_EXISTS__SIZE_1").unwrap() {
-            assert_eq!(get(word, t.fa(c, "SYS_CAPC_TILE_EXISTS", i).unwrap()),
-                       u32::from(i < row.heads), "tile {i}");
-            assert_eq!(get(word, t.fa(c, "SYS_CAPC_TILE_SUPPORT_MULTI_TILE", i).unwrap()), 0);
+            assert_eq!(
+                get(word, t.fa(c, "SYS_CAPC_TILE_EXISTS", i).unwrap()),
+                u32::from(i < row.heads),
+                "tile {i}"
+            );
+            assert_eq!(
+                get(
+                    word,
+                    t.fa(c, "SYS_CAPC_TILE_SUPPORT_MULTI_TILE", i).unwrap()
+                ),
+                0
+            );
         }
     }
 
@@ -642,7 +651,8 @@ mod tests {
                 let c = row.classes.caps;
                 let p = page(t, &r, c, row.heads, row.windows).unwrap();
                 let capa = p.word(t.v(c, "IHUB_COMMON_CAPA").unwrap());
-                let planar = crate::class::get(capa, t.f(c, "IHUB_COMMON_CAPA_SUPPORT_PLANAR").unwrap());
+                let planar =
+                    crate::class::get(capa, t.f(c, "IHUB_COMMON_CAPA_SUPPORT_PLANAR").unwrap());
                 if let Some(capc) = t.v(c, "IHUB_COMMON_CAPC") {
                     let semi = crate::class::get(
                         p.word(capc),
