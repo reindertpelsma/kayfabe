@@ -184,3 +184,12 @@ Windows shutdown completes through QGA, QEMU exit0, no SIGTERM/SIGKILL.
 Linux580 graphics atda0569a6: all5guest stages pass and10/10 Vulkan/EGL/GLX
 native/guest render hashes MATCH. The original kernel stays6.8.0-142-generic.
 Broker/Cinnamon actual X11 SHM presentation check is next; no broker pass yet.
+
+Linux580 broker atda0569a6: actual X11 SHM1920x1080,11,536colors,
+NVIDIA OpenGL renderer/gears, Cinnamon1/Xorg1, zero guest Xid/flip timeouts,
+12NVasserts retained,9STALL diagnostic lines (not9distinct events). HostXid0
+in broker window15:05:41–15:06:50UTC; QEMU exits0 after guest SSH poweroff.
+Full raw580 regression on the updatedda0569a6 binary also passes30/30.
+Linux595thin raw is now in progress; its fat CUDA/display remain unrun.
+Both OS580 suite results on AD102 are now measured; full family acceptance
+still requires several supported actual driver builds and keeps other dies unverified.

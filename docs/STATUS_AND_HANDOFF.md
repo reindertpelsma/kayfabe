@@ -1,5 +1,47 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-15 15:13UTC — AD102 both580 guest suites PASS; driver sweep still live
+
+Latest own branch `codex/sweep-ada-20261015`, draftPR#9. **Both OS suites pass
+on AD102 at580 builds; no complete family claim across drivers.** QEMUda0569a6
+(product Rust code identical to CPU-verified56f32dc0e,3241/0/14ignored).
+
+- Windows580.88 LTSC26100: Code0,1920x1080@60,DWM/Explorer, CUDA3/3,
+  hardware D3D11compute/draw+D3D12compute/fences,0TDR since boot, System log
+  readable,0NVIDIA events at follow-up. Rendered frame78,757colors. HostXid0
+  during phase2/app window. Clean QGA shutdown at14:55:57UTC.
+- Linux580.159.04: native595gates9/9+gate10, native raw30/CUDA4; guest raw30,
+  CUDA4, graphics5stages/10matching hashes, actual Cinnamon/X11SHM broker
+  presentation11536colors, guestXid0/fliptimeouts0,12assertions and9idleSTALL
+  lines retained. Broker QEMU exits0; hostXid0 in broker window. Fresh full
+  raw30/30 on updatedda0569a6 as well.161/161suite+12/12gate USER births.
+- First raw580 run29/30 failed timer's unchanged1ms pair bound at3.1384ms.
+  Three unchanged replays pass67–82us; full reruns pass30/30. Original failure
+  remains evidence; scheduling/I/O explanation is inferred, not proven.
+- Compressed Windows image verified source/destinationSHA539aaad2f7280d7fb80fcf67c16297792b7561113c9084978070e9d94ace044b.
+  QEMU's explicit--enable-zstd fixes image-open rc1->rc0 before guest boot.
+  Image producer now boundedpread; uutilsdd0.8 failed on piped output.19harness
+  tests pass. Matching kernel headers, guest580 package and NAT deps were
+  needed by the fresh restored Ubuntu image; fixes pushed in draftPR#6.
+
+**ONLY ACTIVE OWN RENTAL56096336**, original timerPID1954479/deadlineabout
+15:40:55UTC. SSHaliascodex-ada-linux, controller config/work scripts under
+/workspace/codex. Root checkout /root/kayfabe atda0569a6; don't pull mid-run.
+Current serial jobPID74226,/root/ada_next_linux_drivers.sh: updated580raw
+already30/30; building thin595 from host kernel/modules then running595raw30.
+Poll /root/prov/codex_ada_next_linux_drivers.log and actual PID. No concurrent
+GPU job, no cargo builds during guest timing.595fat CUDA/display not yet run.
+If enough lease remains after595raw, consider its independent fat-image cell;
+otherwise save evidence, retire own ID and take Turing/Blackwell next. Cost
+upper bounds$2.79plus unbilled transfers, ceiling$40; at most one rental.
+
+All native/T3, Linux and Windows result text is pushed under
+traces/die_driver_sweep_20261015/ad102_4090/. Owner VM2990 and trusted host
+GPU untouched. DraftPR#8 Blackwell address-scanout has477CPU tests but no
+Blackwell hardware. Turing hardware, GA104Windows580 and several driver
+builds per family remain open. No master merge. Earlier status paragraphs
+below are historical; active rental/state here supersedes them.
+
 ## UPDATE 2026-10-15 13:44UTC — Codex die/driver campaign (own branches; live)
 
 Worktrees `/workspace/codex/*`, trusted CPU builds `/data/codex/*`. Owner VM2990
