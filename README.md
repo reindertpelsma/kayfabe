@@ -82,7 +82,7 @@ itself a KVM guest (a VM exit costs 10 to 40 times bare metal, so they are conse
 | llama-bench, token generation | | | 0.877 |
 | device-to-device copy (`bandwidthTest`, 32 MB) | 327 GB/s | 322 GB/s | 0.98 |
 | host-to-device / device-to-host copy (pinned, 32 MB) | 7.8 / 8.0 GB/s | 9.7 / 10.3 GB/s | not slower |
-| 61 CUDA and graphics apps, sum of per-app seconds | 1075 s | 1193 s | 1.11x the time |
+| app matrix (65 apps, 61 pass in the guest), sum of per-app seconds | 1075 s | 1193 s | 1.11x the time |
 | NVENC 1080p H.264 (RTX 3070 box, older revision `d06833f0`) | 198 fps | 142 fps | 0.72 |
 | eager PyTorch decode (Qwen2-0.5B) | 42.2 tok/s | 12.2 tok/s | 0.29 |
 | CUDA context create | 0.13 s | 1.0 s | 7.7x the time |
