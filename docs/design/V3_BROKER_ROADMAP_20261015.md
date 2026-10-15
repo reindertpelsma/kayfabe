@@ -59,11 +59,18 @@ should offer (the owner remembers options to send such things; to be inventoried
 VMM-neutral hook through which kayfabe turns them into the VMM's powerdown/reset/sleep (QEMU: QMP `system_powerdown`,
 `system_reset`, `system_wakeup`; another VMM: its own).
 
-## F. Audio, VMM-agnostic (new)
-Nothing exists. Wanted: a guest audio device model in a neutral crate with a sink trait, played on the host through the broker or
-sent over the remote stream (item C). **Open:** the guest-visible device (Intel HDA vs virtio-snd; the Windows driver story decides),
-the broker channel (PCM in a memfd ring + clock, new protocol messages and capability bit), the host backend (PipeWire/Pulse), latency
-and clock-drift handling. Needs its own design document before any code.
+## F. Audio (new; owner decision 2026-10-15: same model as the clipboard, HYPERVISOR-AGNOSTIC interface)
+Nothing exists yet. **Decision:** kayfabe defines an abstract, VMM-neutral **audio sink interface** (a trait in a neutral crate:
+PCM format and clock in, optionally capture later, bounded buffers) and the broker carries it (new protocol channel and capability
+bit; played on the host, or sent into the remote stream of item C). **The guest-visible audio device is the hypervisor's own:**
+under QEMU one of its audio devices, under Cloud Hypervisor whatever audio device that hypervisor offers; each VMM adapter connects
+its device to the neutral interface. Kayfabe writes no guest driver and no guest agent.
+**Open (inferred, none of it verified here):** (1) under QEMU, the device is probably Intel HDA (Windows has an inbox HDA driver) or
+virtio-snd (needs a Windows driver from the virtio-win project); QEMU's audio backends are compiled in, so the adapter is probably a
+small audio backend in our QEMU tree rather than a separate process, to be checked in the QEMU source. (2) whether Cloud Hypervisor
+offers any audio device at all (not checked), and if not, that adapter does not exist yet. (3) the broker channel: PCM in a shared
+ring plus a clock, host playback through PipeWire/PulseAudio, latency and clock-drift handling (resampling or drop/insert). (4) a
+hostile guest cannot stall or flood the host: bounded ring, drop on overrun, rate limits. Needs its own design document before code.
 
 ## Suggested order (owner decides)
 A (running) -> B screendump + key/mouse -> E (small) -> D -> C -> F.
