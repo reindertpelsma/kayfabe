@@ -1,5 +1,33 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-15 18:48UTC — only active own rental56137859, Blackwell native-first
+
+Turing56117789 was verified absent at18:39:01 before the new rental. RTX5060Ti
+offer50694293, own instance56137859, API start18:44:29UTC; actual quote
+$0.2861111111/hour including150GB disk.175min timerPID2040597, deadline about
+21:39:30UTC; hard three-hour cap21:44:29UTC. API reports16GB GPU memory,
+193099 RAM units; disk/KVM/kernel/actualGPU and exact RM tuple still need SSH.
+Only this own rental is active; never act on other account instances.
+
+Own worktree/branch /workspace/codex/blackwell-hw,codex/sweep-blackwell-20261015.
+Current sourcec1a6aeb1c combines Turing's final evidence with the native bootstrap
+policy helper; production Rust/data remain8e3a9d325 (fullCPU3247/0/14ignored).
+No Blackwell hardware result or exactdie is inferred from the marketing name.
+Plan/falsifiers: traces/die_driver_sweep_20261015/blackwell_plan.md.
+
+Controller bootstrapPID2040741 waits for initial SSH aliascodex-blackwell using
+/workspace/codex/ssh_config, then stages the pinned patched installer viaSCP.
+Log /workspace/codex/blackwell-bootstrap.log. Native Windows580.88 LTSC oracle,
+bounded caps/scalar capture, then Linux restoration and bothguest suites. Save
+the generated native Windows SSH PUBLIC host key before erase/reboot. Installer
+policy output is16840B, too large for onstart; the SCP path is deliberate.
+No secrets/agent forwarding and only text comes back. One GPU job per rental.
+
+Trusted CPU host has102GiB free after checking lock use and removing four own
+obsolete targets; keep checkout-specific target-blackwell-hw for the new source.
+OwnerVM/GPU untouched. Older no-active-rental/process paragraphs below are
+superseded by this checkpoint. All Turing results remain inPR10/its trace folder.
+
 ## UPDATE 2026-10-15 18:39UTC — Turing rental retired; Windows/broker pass, raw29/30
 
 Own instance56117789 was destroyed by its revised timer; absence verified at

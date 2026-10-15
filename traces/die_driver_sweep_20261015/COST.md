@@ -10,10 +10,12 @@ Accrued cost is an estimate until account billing is available; transfers may ad
 | 56076314 | RTX 3070 / GA104 | 0.3083333333 | 2026-10-15 09:44:43 (1792057483.6353264) | 2026-10-15 12:40:19; timer destroyed, absence verified | Linux580/595; Windows guest stall; native reinstall did not regain SSH before deadline | compute upper bound $0.91; transfers unbilled |
 | 56096336 | RTX 4090 / AD102 | 0.6416666667 | 2026-10-15 12:45:54 (1792068354.8935983) | destroyed/absence verified by2026-10-15 15:39:44UTC | native Windows580.88 facts/oracle; Windows580 and Linux580 validation PASS; Linux595 raw/CUDA/graphics PASS | compute ceiling $1.88; transfers unbilled |
 | 56117789 | RTX2060Super / TU106 (host-derived) | 0.1113888889 | 2026-10-15 15:41:16 (1792078876.69137) | revised timer destroyed18:38:26; absence verified18:39:01UTC, below18:41:16UTC hard cap | nativeWindows580/nativeLinux595 PASS; Windows580 guest PASS afterfix; Linux580 CUDA4 beforefix/broker afterfix PASS, raw29 of30 before/afterfix (R34timeout180s) | compute upper bound$0.34; transfers unbilled |
+| 56137859 | RTX5060Ti / Blackwell, exactdie pending RM | 0.2861111111 | 2026-10-15 18:44:29 (1792089869.567632) | active;175min timerPID2040597, deadline about21:39:30UTC, hardcap21:44:29UTC | nativeWindows580 facts/oracle, then Linux and Windows guests | compute ceiling$0.86; transfers unbilled |
 
 AD102 absence was verified at15:39:44UTC before Turing was rented. Turing absence
-verified18:39:01UTC; at this checkpoint no own rental is active. No other account instances are owned by this campaign. The first rental was
-verified absent before the second was created. Compute upper bounds for these three leases total $3.13,
+verified18:39:01UTC, before Blackwell56137859 was created18:44:29. Only active
+own rental is56137859. No other account instances are owned by this campaign. The first rental was
+verified absent before the second was created. Compute upper bounds for four leases total $3.99,
 well below the $40 campaign budget; final transfer charges are not yet known.
 
 AD102 first SSH at12:59UTC: root146GiB/138GiB available, /dev/kvm present,
