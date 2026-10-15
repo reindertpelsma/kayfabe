@@ -115,3 +115,25 @@ All native facts/capture aggregates are pushed before the normal Linuxreturn
 reboot. Currentdriver580 still verified; next derive hostchiptuple and test/fix
 bothguest OSes. Sourcecandidate now includes exact590/595 tables; all Turing
 native results remain measured580.88 only.
+
+
+## Exact tuple and candidate CPU verification,17:07UTC
+
+RestoredUbuntu22.04.5/kernel6.8.0-138,stock open595.91.07. Host RM probe
+uid65534/CapEff0/cap_sys_admin=false reportsMC_GET_ARCH_INFO arch0x160,
+impl0x6,TU106. Tuple is measured, not inferred from PCI/name. Register only
+TU106/580 capsC573/word0xc100 and2801/2806 exact4byte request3 outputs2/0.
+No whole page, other selectors, neighbouring dies or unmeasured branches.
+
+Both new positive tests fail before rows. Full isolated CPU candidatec266772aa
+passes3245/0/14ignored (target-turing-hw);28bench harness tests pass. GPU device
+sourceb8d092b0 has identical production Rust/data; c266 changes tests formatting
+and docs/inventory only. Workspace fmt inherited differences remain; noCIgreen
+or master promotion. Source before/after logs are saved here.
+
+Windows compressed baseline relay13chunks completes17:00:26UTC, bothends
+SHA539aaad2f7280d7fb80fcf67c16297792b7561113c9084978070e9d94ace044b.
+Fresh Turing headless preflightSOUND after removing the obsolete Ampere-only
+marketing-name rejection; hardware-native workloads are still required by Tier2.
+Bench tree completes17:05:17, packed guest580 verified independently of host595.
+Hardware tests begin only after provisioning's QEMU/guest build completes.

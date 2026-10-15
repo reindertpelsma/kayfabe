@@ -1,0 +1,27 @@
+START 2026-10-15T17:00:46+00:00
+Updating deb945de..c266772a
+Fast-forward
+ crates/kf-disp/data/caps_measured.tsv              |   1 +
+ crates/kf-disp/tests/caps_derive.rs                |   8 +-
+ crates/kf-rm/data/measured_constants.tsv           |   2 +
+ crates/kf-rm/tests/gpu_types_wiring.rs             |  10 +-
+ docs/design/V3_GPU_TYPES_20261015.md               |  22 ++-
+ docs/design/v3_constant_inventory.tsv              |  99 +++++------
+ scripts/bench/host_preflight.sh                    |  17 +-
+ scripts/bench/tests/test_host_family.py            |  40 +++++
+ .../turing_2060super/codex_turing_die.log          |   5 +
+ .../turing_2060super/codex_turing_phase1.log       |   9 +
+ .../turing_2060super/turing-hw-before.log          |   3 +
+ .../turing_2060super/turing-hw-caps-before.log     | 159 +++++++++++++++++
+ .../turing_2060super/turing-hw-small-before.log    | 189 +++++++++++++++++++++
+ 13 files changed, 497 insertions(+), 67 deletions(-)
+ create mode 100644 scripts/bench/tests/test_host_family.py
+ create mode 100644 traces/die_driver_sweep_20261015/turing_2060super/codex_turing_die.log
+ create mode 100644 traces/die_driver_sweep_20261015/turing_2060super/codex_turing_phase1.log
+ create mode 100644 traces/die_driver_sweep_20261015/turing_2060super/turing-hw-before.log
+ create mode 100644 traces/die_driver_sweep_20261015/turing_2060super/turing-hw-caps-before.log
+ create mode 100644 traces/die_driver_sweep_20261015/turing_2060super/turing-hw-small-before.log
+FULL_CPU_SUITE_PASS=1
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/sda2       1.8T  1.6T  106G  94% /
+EXIT rc=0 2026-10-15T17:03:58+00:00
