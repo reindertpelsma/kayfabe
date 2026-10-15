@@ -1,0 +1,14 @@
+.F
+======================================================================
+FAIL: test_large_correct_hardware_output_passes (test_gfx_grade.GfxGradeTests.test_large_correct_hardware_output_passes)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/codex/wt/scripts/bench/tests/test_gfx_grade.py", line 26, in test_large_correct_hardware_output_passes
+    self.assertIn('GFX_S5=PASS', r.stdout, r.stderr)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'GFX_S5=PASS' not found in 'GFX_S5=FAIL\n' : 
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.048s
+
+FAILED (failures=1)
