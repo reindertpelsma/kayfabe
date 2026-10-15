@@ -1029,7 +1029,7 @@ mod tests {
     #[test]
     fn user_ring_source_refuses_wrong_classes_and_unbounded_geometry() {
         let family = kf_chip::Family::Turing;
-        let class = kf_abi::generated::classes::TURING_CHANNEL_GPFIFO_A;
+        let class = 0xc46f; // ogkm clc46f.h: TURING_CHANNEL_GPFIFO_A; generated family row.
         for wrong in [0, u32::MAX, 0xc5c0, 0xc5b5, 0xc461, 0xc56f, 0xca6f] {
             assert!(source_declaration(family, wrong, 1024, 0x300200000).is_err());
         }
