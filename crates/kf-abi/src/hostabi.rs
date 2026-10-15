@@ -1073,6 +1073,24 @@ mod tests {
         HostAbi::for_host(HostDriverVersion::parse(v).expect("version")).expect("measured")
     }
 
+    /// The production UUID query must cross the same bounded ABI path as other host facts.
+    #[test]
+    fn host_gid_query_is_carried_at_every_measured_tag() {
+        let cmd = crate::gspstaticinfo::NV2080_CTRL_CMD_GPU_GET_GID_INFO;
+        let mut request = vec![0; crate::gspstaticinfo::GID_INFO_SIZE];
+        request[4..8].copy_from_slice(&crate::gspstaticinfo::GID_FLAGS_SHA1_BINARY.to_le_bytes());
+        assert!(host_control(cmd).is_some(), "host UUID query is missing from the inventory");
+        for &version in m::MEASURED {
+            let h = host(&version.to_string());
+            let carry = h.control_carry(cmd).expect("published control").expect("measured layout");
+            assert_eq!(carry.host_size(), request.len(), "{version}");
+            assert_eq!(h.carry_out("host GID", &carry, &request).expect("authored request"), request);
+            for size in [0, request.len() - 1, request.len() + 1] {
+                assert!(matches!(h.carry_out("host GID", &carry, &vec![0; size]), Err(HostAbiError::Size { .. })));
+            }
+        }
+    }
+
     /// ★ Every listed id is the SDK's own for its name, at every measured tag where it exists —
     /// and where the id is absent, its struct is absent too (the carry then refuses by name).
     #[test]
