@@ -269,7 +269,6 @@ compile_error!(
 
 pub mod affinity;
 mod affinity_unsafe;
-mod arena_unsafe;
 pub mod bounds;
 pub mod cache;
 pub mod census;
@@ -283,9 +282,7 @@ pub mod ioctltrace;
 pub mod kvm_gate;
 mod kvm_unsafe;
 mod mapping_unsafe;
-pub mod memtype;
 pub mod page_size;
-pub mod procfd;
 mod sandbox_unsafe;
 mod scm_unsafe;
 mod signal_unsafe;
@@ -310,7 +307,6 @@ pub mod sandbox {
     };
 }
 
-pub use arena_unsafe::{ARENA_EXHAUSTED, ARENA_PAGE, ArenaPage, SharedPageArena};
 pub use bounds::HostOffset;
 pub use cache::CachePolicy;
 pub use chardev_unsafe::{CharDevice, DevAccess, DevDir, Indirect, POINTER_FIELD_WIDTH};
@@ -323,7 +319,6 @@ pub use mapping_unsafe::{
     release_fence,
 };
 pub use page_size::HostPageSize;
-pub use procfd::{MemfdCandidate, MemfdCensus, MemfdRefusal};
 pub use scm_unsafe::{
     DescriptorKind, MAX_FDS_PER_FRAME, descriptor_kind, recv_with_fds, require_kind, send_with_fds,
 };

@@ -76,14 +76,6 @@
 //!   crossing yet"*.
 
 pub mod child;
-/// ★★★★★ w755i — can the single store be OWNED by CUDA and NAMED by RM? See the module docs.
-/// ⊘ Gated exactly as [`cudawalk`] is: it needs `libcuda`, and the musl image has none.
-#[cfg(feature = "cuda-scratchpad")]
-pub mod cudastore;
-/// ★★★★★ The scratchpad isolate's CUDA half — `THE_CONSTRAINTS.md` §w724d. Present only in
-/// the glibc-linked second image; see the `cuda-scratchpad` feature.
-#[cfg(feature = "cuda-scratchpad")]
-pub mod cudawalk;
 pub mod export;
 pub mod fbjoin;
 pub mod fdcross;
@@ -92,7 +84,6 @@ pub mod hostabi;
 pub mod isolate;
 pub mod listobj;
 pub mod loopback;
-pub mod planreactor;
 pub mod proto;
 pub mod rm;
 
@@ -104,7 +95,3 @@ pub use isolate::{
     embedded_isolate_bytes,
 };
 pub use loopback::ParkVerb;
-pub use planreactor::{
-    DEFAULT_LANE_CAP, LanePolicy, PlanDone, PlanReactor, PlanReactorStats, RejectReason, Rejected,
-    abandoned_completions_total,
-};
