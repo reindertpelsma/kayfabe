@@ -1,5 +1,27 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-15 19:43UTC — Blackwell native580 oracle PASS; caps/guests pending
+
+Soleown56141654, nativeWindowsLTSC26100 actual580.88: Code0/buildbeforeafter,
+CUDA3/D3D11compute+draw/D3D12compute+fences20iterations/readableSystemlog/zeroTDR
+shortoracle PASS19:41:24–19:41:29, controllerexit0. DefaultGSP=N/A. Nativeonly,
+notkayfabeacceptance. Text inblackwell_5060/native-oracle580.txt. ExactRMdie
+pendingLinuxrestoration, PCI2d05/marketingnameinsufficientforT3key.
+
+WindowsUpdate610.88 raceddespite firstbootpolicy1; events43/19 proveinstall
+19:36:32–19:37:57, actual610brieflyCode0. Pinned580subsequentlywins; oracle
+strictlychecksactual32.0.15.8088. Policyfailedtopreventthisrun'srace, notclaimed
+effective. Nativecaps/module/GSPcapturepending. Testsigningnextbootflagset;
+waitownVastWindowsSetupcomplete before normalreboot. Donotinterruptinstaller.
+
+Nativealiascodex-native-blackwell5060,pinnedPUBLICkey,ownSSHconfig under
+/workspace/codex. Stageworker2054669 completedexit0; sourcecontroller
+blackwell5060_native_stage.py, finalcapturescript canonicalnative_capture.ps1
+at2230a1764 (runtimepending). Controllerlogs/probes/returnpayloadunder ownfolder.
+Onlyownrental56141654,timer2050117 unchanged22:15:05/hardcap22:20:04UTC.
+OwnerVM/GPUuntouched. Walkcandidateffd72e3d4 CPU3252/0/14/draftPR11, hardware
+pending/unmerged. Olderpendingnativeoracle/processparagraphssupersededhere.
+
 ## UPDATE 2026-10-15 19:30UTC — Blackwell56141654 native Windows installation running
 
 Own5060 rental56141654 reachedSSH19:22UTC. Actual initialroot146GiB/138GiBfree,

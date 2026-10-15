@@ -1,0 +1,5 @@
+{"runs":1,"failures":0,"ssh":true,"driver":true,"cuda":false,"complete":false,"reboots":0}
+{"Name":"NVIDIA GeForce RTX 5060","DriverVersion":"32.0.15.8088","ConfigManagerErrorCode":0}
+{"TimeCreated":"\/Date(1792093077255)\/","Id":19,"Message":"Installation Successful: Windows successfully installed the following update: NVIDIA Display Driver Update (32.0.16.1088)"}
+{"TimeCreated":"\/Date(1792092992341)\/","Id":43,"Message":"Installation Started: Windows has started installing the following update: NVIDIA Display Driver Update (32.0.16.1088)"}
+[{"Name":"cuda.exe","Length":2470810232},{"Name":"nvidia.exe","Length":890807536}]

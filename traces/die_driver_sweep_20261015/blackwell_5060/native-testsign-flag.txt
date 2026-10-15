@@ -1,0 +1,3 @@
+The operation completed successfully.
+testsigning is on for the NEXT boot. Reboot yourself, then run -Action Install.
+TESTSIGN_BOOT_FLAG_SET_NO_REBOOT_REQUESTED=1
