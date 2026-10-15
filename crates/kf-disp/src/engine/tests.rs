@@ -1099,8 +1099,8 @@ fn a_head_scans_out_its_lowest_enabled_window() {
     let sv =
         ScanVocab::resolve(t(), WIN, IMM, CORE).expect("GA10x window surfaces are context DMAs");
     assert!(
-        ScanVocab::resolve(t(), 0xCA7E, 0xCA7B, 0xCA7D).is_none(),
-        "GB20x names surfaces by address (M5)"
+        ScanVocab::resolve(t(), 0xCA7E, 0xCA7B, 0xCA7D).is_some(),
+        "GB20x address-named surfaces have a scanout vocabulary"
     );
     e.alloc(ChannelKind::Core, 0, CLIENT, 1, pb(), 0);
     e.alloc(ChannelKind::Window, 2, CLIENT, 1, pb(), 0);
@@ -2468,4 +2468,66 @@ fn gb20x_target_and_address_decoding() {
         })
     );
     assert_eq!(place(0, 0x0000_0FFE), None, "ENABLE clear: no semaphore");
+}
+
+/// The CAX ISO address is ARMED state, including address zero and a separate plane 1.
+/// Control bits must never enter the address, and ENABLE is independent of its value.
+#[test]
+fn gb20x_scanout_latches_iso_address_aperture_kind_and_plane_one() {
+    let sv = ScanVocab::resolve(t(), BWIN, bclasses().window_imm, BCORE).unwrap();
+    for (target, aperture) in [
+        ("IOVA", Aperture::Iova),
+        ("PHYSICAL_NVM", Aperture::Vidmem),
+        ("PHYSICAL_PCI", Aperture::Sysmem),
+        ("PHYSICAL_PCI_COHERENT", Aperture::Sysmem),
+    ] {
+        for addr in [0, 0x1234_5678_9abc_def0] {
+            for block_linear in [false, true] {
+                let mut e = bengine();
+                e.alloc(ChannelKind::Core, 0, CLIENT, 1, pb(), 0);
+                e.alloc(ChannelKind::Window, 0, CLIENT, 1, pb(), 0);
+                let mut c = Ring::new();
+                c.m(ma(BCORE, "HEAD_SET_RASTER_SIZE", 0), (1125 << 16) | 2200)
+                    .m(ma(BCORE, "HEAD_SET_PIXEL_CLOCK_FREQUENCY", 0), 148_500_000)
+                    .m(ma(BCORE, "WINDOW_SET_CONTROL", 0), 0)
+                    .m(m(BCORE, "UPDATE"), 0);
+                e.step(0, &c.bytes(), c.put(), &mut all_ok);
+                let mut w = Ring::new();
+                surf(&mut w, BWIN, "ISO", addr, target, true);
+                // The helper's last word is LO_ISO(0); set only its derived KIND field.
+                let n = w.words.len() - 1;
+                w.words[n] = put(w.words[n], fl(BWIN, "SET_SURFACE_ADDRESS_LO_ISO_KIND"),
+                    m(BWIN, if block_linear { "SET_SURFACE_ADDRESS_LO_ISO_KIND_BLOCKLINEAR" }
+                        else { "SET_SURFACE_ADDRESS_LO_ISO_KIND_PITCH" }));
+                w.m(ma(BWIN, "SET_SURFACE_ADDRESS_HI_ISO", 1), 2)
+                    .m(ma(BWIN, "SET_SURFACE_ADDRESS_LO_ISO", 1), 0x4000 | 5)
+                    .m(m(BWIN, "SET_SIZE"), (1080 << 16) | 1920)
+                    .m(m(BWIN, "SET_SIZE_IN"), (1080 << 16) | 1920)
+                    .m(m(BWIN, "SET_SIZE_OUT"), (1080 << 16) | 1920)
+                    .m(ma(BWIN, "SET_PLANAR_STORAGE", 0), 120)
+                    .m(ma(BWIN, "SET_PLANAR_STORAGE", 1), 60)
+                    .m(m(BWIN, "SET_PARAMS"), m(BWIN, "SET_PARAMS_FORMAT_X8R8G8B8"))
+                    .m(m(BWIN, "UPDATE"), 0);
+                e.step(1, &w.bytes(), w.put(), &mut all_ok);
+                assert!(e.scanout(&sv, 0).is_none(), "pending is not armed");
+                e.vblank(0, &mut all_ok);
+                let s = e.scanout(&sv, 0).expect("enabled ISO scans, even at address zero");
+                assert_eq!(s.address, Some(SurfaceAddress { aperture, addr, block_linear }));
+                assert_eq!((s.handle, s.offset, s.iso1, s.offset1), (0, 0, 0, 0));
+                assert_eq!(s.address1, Some(SurfaceAddress {
+                    aperture: Aperture::Vidmem, addr: 0x2_0000_4000, block_linear: false,
+                }));
+                assert_eq!((s.width, s.height, s.pitch, s.pitch1), (1920, 1080, 120, 60));
+                // Nonzero address with ENABLE clear is disabled after the next latch.
+                surf(&mut w, BWIN, "ISO", addr, target, false);
+                w.m(m(BWIN, "UPDATE"), 0);
+                e.step(1, &w.bytes(), w.put(), &mut all_ok);
+                assert_eq!(e.scanout(&sv, 0).unwrap().address, s.address);
+                e.vblank(0, &mut all_ok);
+                assert!(e.scanout(&sv, 0).is_none());
+                assert!(!e.window_was_active(1, &e.heads_armed()),
+                    "ENABLE clear must mean inactive even with retained address/target bits");
+            }
+        }
+    }
 }
