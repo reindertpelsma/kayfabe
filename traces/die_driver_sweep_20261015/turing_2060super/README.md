@@ -216,3 +216,14 @@ H-CLASS passes its hardware check: exactsame probes now run with correct GPU
 content after replacing the Ampere-only declaration gate. Linux raw/broker
 regressions of this fix remain pending. No full family/multi-driver acceptance,
 S3/Edge-long-run/OptiX-denoise claim.
+
+## Linux broker first attempt,18:18UTC
+
+Device8e3a9d32/guest580: Cinnamon1/Xorg1, NVIDIA OpenGL renderer; synchronized
+gears50.58/58.61/51.19FPS, guest0Xid/0fliptimeout/12assertions. Host wrapper
+first lackedXvfb, repaired before presentation; then xwininfo was absent and
+wrapperexits127. Preserve as harnessFAIL, not completed broker acceptance.
+VKCUBErc127 means not installed/NOTRUN, never a Vulkan pass. Text inbroker-first/.
+Actual broker reports1240commits/0rejected, but no independent window-pixel
+oracle completed. Installx11-utils and replay actual broker/pixels; raw suite
+continuation only starts after a real completed brokerPASS and cleanQEMUstop.
