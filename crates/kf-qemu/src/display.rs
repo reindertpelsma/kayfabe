@@ -1145,7 +1145,7 @@ struct LatchedDmas {
 }
 
 /// A window's context-DMA hash key as its ARMED state names it: `(client, handle, chn)`.
-type DmaKey = (u32, u32, u32);
+type DmaKey = (u32, u32, u32, Option<kf_disp::engine::SurfaceAddress>);
 
 impl LatchedDmas {
     /// Window `w`'s ARMED state changed (an UPDATE latched it) or its channel was allocated or
@@ -1163,7 +1163,7 @@ impl LatchedDmas {
         so: &kf_disp::engine::Scanout,
         fresh: impl FnOnce() -> Result<CtxDma, String>,
     ) -> Result<CtxDma, String> {
-        let key = (so.client, so.handle, so.chn);
+        let key = (so.client, so.handle, so.chn, so.address);
         let slot = self.by_window.get_mut(so.window as usize);
         if let Some(Some((k, dma))) = slot.as_deref()
             && *k == key
@@ -1651,9 +1651,10 @@ pub struct DisplayPlane {
     /// relay the C device's main loop drives (`crate::broker`). `None`: the console alone,
     /// exactly as before (`cuMemAllocHost`, three slots).
     pub broker: Option<crate::broker::BrokerSeat>,
-    /// The window-class methods a scanout reads (`None`: the family's windows name surfaces by
-    /// address — no console yet, M5).
+    /// The window-class methods a scanout reads; absent only for an unresolved vocabulary.
     scan: Option<ScanVocab>,
+    /// Bound for address-named ISO reads, independent of guest method values.
+    store_bytes: u64,
     /// Bounded SDR colour implementation, enabled for verification independently of
     /// constructor probes. Those probes still refuse all display methods.
     sdr_color: Option<(&'static kf_disp::class::ClassTable, u32, u32)>,
@@ -1849,9 +1850,8 @@ impl DisplayPlane {
                     die.architecture, die.implementation
                 );
             }
-            let tiers = |x: kf_disp::capsderive::Tier| {
-                d.provenance.iter().filter(|p| p.tier == x).count()
-            };
+            let tiers =
+                |x: kf_disp::capsderive::Tier| d.provenance.iter().filter(|p| p.tier == x).count();
             eprintln!(
                 "kf3: display: caps page derived — {} words: {} T1 rule, {} T3 measured ({} unmeasured)",
                 d.page.words.len(),
@@ -1979,6 +1979,7 @@ impl DisplayPlane {
             console,
             broker,
             scan,
+            store_bytes,
             sdr_color: sdr_color.then_some((t, classes.window, classes.core)),
             cursor_vocab,
             ui_request: AtomicU64::new(0),
@@ -2263,6 +2264,13 @@ impl Io<'_> {
         layout
             .resolve(img, client, handle, chn)
             .map_err(|m| format!("context DMA {handle:#x} on channel {chn}: {m:?}"))
+    }
+
+    fn scanout(&mut self, so: &kf_disp::engine::Scanout) -> Result<CtxDma, String> {
+        match so.address {
+            Some(address) => kf_disp::scanout::address_dma(address, self.dp.store_bytes),
+            None => self.resolve(so.client, so.handle, so.chn),
+        }
     }
 
     /// ★ A notifier's or semaphore's memory as a bounded context DMA plus an offset. A context-DMA place is
@@ -4572,9 +4580,7 @@ impl ScanState {
             return;
         }
         // plan every window (each bounded by its own context DMA) before the GPU sees one
-        let planned = self.plan(shown, &dp.formats, (w, h), n, |so| {
-            io.resolve(so.client, so.handle, so.chn)
-        });
+        let planned = self.plan(shown, &dp.formats, (w, h), n, |so| io.scanout(so));
         for e in &planned.refused {
             self.refuse(dp, e);
             dp.counters
@@ -5153,7 +5159,15 @@ impl ScanState {
             // ★ a semi-planar YUV window (Edge's video overlay, `FORMAT 0x38`): its own planner
             if let Some(yf) = formats.yuv_of(so.format) {
                 let planned = self.latched.resolve(so, || resolve(so)).and_then(|y_dma| {
-                    let c_dma = if so.iso1 == 0 || so.iso1 == so.handle {
+                    if yf.chroma_bytes() != 0 && so.address.is_some() && so.address1.is_none() {
+                        return Err("address-named YUV surface has no enabled chroma plane".into());
+                    }
+                    let c_dma = if let Some(address) = so.address1 {
+                        resolve(&kf_disp::engine::Scanout {
+                            address: Some(address),
+                            ..*so
+                        })?
+                    } else if so.iso1 == 0 || so.iso1 == so.handle {
                         y_dma
                     } else {
                         resolve(&kf_disp::engine::Scanout {
@@ -5774,6 +5788,8 @@ mod tests {
             chn: 7,
             client: 0xc1d0_0001,
             handle: 0x1_0088,
+            address: None,
+            address1: None,
             offset: 0,
             width: 1920,
             height: 1080,
