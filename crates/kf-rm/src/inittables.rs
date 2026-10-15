@@ -1973,6 +1973,36 @@ impl CommandPolicy for InitTablePolicy {
                 }
             }
         }
+        // ★ 2026-10-15: the Windows-captured statics the published table carries (`rm.*`, group P/K/A). A hit on this die and
+        // this guest branch for exactly the measured request is served; anything else falls through UNCHANGED to the refusal
+        // the control got before (counted notice naming the key). Keys whose serving is an owner decision are `Withheld`.
+        if let Some(key) = crate::rowserve::key_of_control(req.cmd)
+            && WantedTable::from_cmd(req.cmd).is_none()
+            && !kf_abi::rpc_params_are_serialized(req.rmapi_rpc_flags)
+        {
+            let ps = req.params_size as usize;
+            if cmd.payload.len() >= req.params_at + ps {
+                let request = &cmd.payload[req.params_at..req.params_at + ps];
+                if let crate::rowserve::Resolution::Serve(params, _) = crate::rowserve::resolve(
+                    key,
+                    self.host.die,
+                    self.driver.driver_version().major,
+                    request,
+                    None,
+                ) && params.len() == ps
+                {
+                    let mut body = cmd.payload.clone();
+                    body[CONTROL_STATUS_OFF..CONTROL_STATUS_OFF + 4]
+                        .copy_from_slice(&NV_OK.to_le_bytes());
+                    body[req.params_at..req.params_at + ps].copy_from_slice(&params);
+                    return Some(Reply {
+                        rpc_result_private: None,
+                        rpc_result: NV_OK,
+                        body,
+                    });
+                }
+            }
+        }
         if kf_abi::videocaps::caps_len(req.cmd).is_some()
             && !kf_abi::rpc_params_are_serialized(req.rmapi_rpc_flags)
         {
@@ -2301,9 +2331,16 @@ impl CommandPolicy for InitTablePolicy {
             // itself (`kern_gmmu.c:1909`), and a size that is not a multiple of
             // `NVC369_BUF_SIZE` is a partial fault packet in a queue whose capacity is a
             // division (`kern_gmmu.c:1725`).
+            // ★ 2026-10-15 (`rowserve`, `docs/design/V3_GPU_TYPES_20261015.md`): a row measured on THIS die at THIS guest
+            // branch (the Windows-captured GSP statics) wins; otherwise the AUTHORED value is served, labelled and counted
+            // (the matrix says AUTHORED; the AD104 states other numbers - owner decision D-1, so no AD104 row is published).
             WantedTable::GmmuStaticInfo => {
-                match gmmustatic::encode_gmmu_static_info(&self.host.gmmu_static) {
-                    Ok(p) => p,
+                match crate::rowserve::gmmu_static(
+                    self.host.die,
+                    self.driver.driver_version().major,
+                    &self.host.gmmu_static,
+                ) {
+                    Ok((p, _origin)) => p,
                     Err(e) => return refuse_named(req.cmd, &e),
                 }
             }
@@ -2572,9 +2609,16 @@ impl CommandPolicy for InitTablePolicy {
             // (`ogkm-580: mem_desc.c:239-241`) — and a policy whose worst case is a *silent*
             // wall is exactly the shape `#127`'s named-refusal default forbids.
             WantedTable::CeFaultMethodBufferSize => {
-                match kf_abi::fmbsize::encode_fault_method_buffer_size(
+                // ★ 2026-10-15: measured row for (die, guest branch), else the authored value, labelled and counted.
+                let size = match crate::rowserve::ce_fault_method_buffer_size(
+                    self.host.die,
+                    self.driver.driver_version().major,
                     self.host.ce_fault_method_buffer_size,
                 ) {
+                    Ok((v, _origin)) => v,
+                    Err(e) => return refuse_named(req.cmd, &e),
+                };
+                match kf_abi::fmbsize::encode_fault_method_buffer_size(size) {
                     Ok(p) => p,
                     Err(e) => return refuse_named(req.cmd, &e),
                 }

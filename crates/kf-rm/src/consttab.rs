@@ -141,6 +141,16 @@ pub enum Refusal {
         /// `DIE/branch` of every row the key has.
         measured_on: Vec<String>,
     },
+    /// ★ F-6: the value is a BOARD fact, not a die fact - two boards of this die measured different
+    /// answers - so no (die, branch) row may serve it. The host's own answer (tier 2) is the only source.
+    BoardSpecific {
+        /// The key.
+        key: String,
+        /// The host die.
+        die: String,
+        /// The measurements that contradict each other (SKU and value).
+        seen: String,
+    },
     /// A row exists for this (die, branch) but the guest's request is a different question.
     OtherRequest {
         /// The key.
@@ -164,6 +174,10 @@ impl std::fmt::Display for Refusal {
                 f,
                 "{key}: unmeasured on {die} branch {branch} (measured on: {}) — refused, a neighbour's row is never served",
                 measured_on.join(", ")
+            ),
+            Refusal::BoardSpecific { key, die, seen } => write!(
+                f,
+                "{key}: board-specific on {die} (measured: {seen}) - no table row serves it; only the host's own answer does"
             ),
             Refusal::OtherRequest { key, size } => write!(
                 f,
@@ -483,7 +497,103 @@ pub fn lookup_in<'a>(
 /// # Errors
 /// [`Refusal`], by name.
 pub fn lookup(key: &str, die: DieId, branch: u16) -> Result<&'static Row, Refusal> {
-    lookup_in(table()?, key, die, branch)
+    let rows = table()?;
+    if let Some(b) = board_specific()?.iter().find(|b| b.key == key && b.die == die) {
+        REFUSALS.fetch_add(1, Ordering::Relaxed);
+        return Err(Refusal::BoardSpecific {
+            key: key.to_string(),
+            die: die.to_string(),
+            seen: b.seen.clone(),
+        });
+    }
+    lookup_in(rows, key, die, branch)
+}
+
+/// The published board-specific registry (`data/board_specific.tsv`).
+pub const BOARD_SPECIFIC_TSV: &str = include_str!("../data/board_specific.tsv");
+
+/// One (key, die) whose answer differs between boards of the same die: never served from the table.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BoardSpecific {
+    /// The table key.
+    pub key: String,
+    /// The die.
+    pub die: DieId,
+    /// The contradicting measurements, SKU and value (product names only, never board identity).
+    pub seen: String,
+    /// The repo path of the evidence.
+    pub evidence: String,
+}
+
+/// Parse the board-specific registry against `rows`: every line needs its key to exist in the table
+/// for some die, a named die, two or more measurements, an evidence path, and the table must hold NO
+/// row for the same (key, die) on any branch (a row there would be a neighbour board's value).
+///
+/// # Errors
+/// The first violated rule, with its line.
+pub fn parse_board_specific(tsv: &str, rows: &[Row]) -> Result<Vec<BoardSpecific>, String> {
+    let mut out = Vec::new();
+    let mut header = false;
+    for (n, line) in tsv.lines().enumerate() {
+        let ln = n + 1;
+        if line.trim().is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if let Some(what) = board_data_in(line) {
+            return Err(format!("line {ln}: board data ({what}) is never published"));
+        }
+        let f: Vec<&str> = line.split('\t').collect();
+        if !header {
+            if f != ["key", "die", "seen", "evidence"] {
+                return Err(format!("line {ln}: header must be key,die,seen,evidence"));
+            }
+            header = true;
+            continue;
+        }
+        if f.len() != 4 {
+            return Err(format!("line {ln}: {} columns, want 4", f.len()));
+        }
+        let die = DieId::from_name(f[1])
+            .ok_or_else(|| format!("line {ln}: {:?} is not an ogkm die name", f[1]))?;
+        if f[2].split(';').filter(|m| !m.trim().is_empty()).count() < 2 {
+            return Err(format!("line {ln}: a board-specific entry needs two contradicting measurements"));
+        }
+        if f[3].trim().is_empty() {
+            return Err(format!("line {ln}: no evidence path"));
+        }
+        if let Some(r) = rows
+            .iter()
+            .find(|r| r.key == f[0] && r.die == DieScope::Die(die))
+        {
+            return Err(format!(
+                "line {ln}: {} still has a table row for {} on branch {:?}: a board-specific value is never tabled",
+                f[0], f[1], r.branch
+            ));
+        }
+        out.push(BoardSpecific {
+            key: f[0].to_string(),
+            die,
+            seen: f[2].to_string(),
+            evidence: f[3].to_string(),
+        });
+    }
+    if !header {
+        return Err("no header".into());
+    }
+    Ok(out)
+}
+
+/// The published board-specific registry, parsed once.
+///
+/// # Errors
+/// [`Refusal::TableInvalid`].
+pub fn board_specific() -> Result<&'static [BoardSpecific], Refusal> {
+    static B: OnceLock<Result<Vec<BoardSpecific>, String>> = OnceLock::new();
+    let rows = table()?;
+    match B.get_or_init(|| parse_board_specific(BOARD_SPECIFIC_TSV, rows)) {
+        Ok(v) => Ok(v.as_slice()),
+        Err(e) => Err(Refusal::TableInvalid(format!("board_specific.tsv: {e}"))),
+    }
 }
 
 /// ★ Answer a guest request from the table: the row for `(key, die, branch)` whose request it is.

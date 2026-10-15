@@ -39,6 +39,7 @@ pub mod pmsr;
 pub mod preempt_bind_probe;
 pub mod rmgraph;
 pub mod rmrpc;
+pub mod rowserve;
 pub mod rpc;
 pub mod staticinfo;
 pub mod sticky;
