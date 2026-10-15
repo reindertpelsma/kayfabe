@@ -1,0 +1,7 @@
+H-BP2 BEFORE recovery: null actual_status and missing mapped SSH may be transient provider scheduling. Falsifier: no VM/SSH five minutes after one own stop/start. No GPU workload ran.
+STOP_RC=0 UTC=2026-10-15T19:11:53.313512+00:00
+START_RC=0 UTC=2026-10-15T19:11:54.412584+00:00
+H-BP2 FALSIFIED at2026-10-15T19:17:57.724278+00:00: more than5minutes after restart, actual_status=null/uptime=null/no mapped22. No native or kayfabe GPU work ran.
+FINAL_METADATA={"id": 56140371, "machine_id": 69146, "host_id": 155385, "actual_status": null, "cur_state": "running", "intended_status": "running", "uptime": null, "dph_total": 0.42833333333333334, "start_date": 1792091319.0049653}
+DESTROY_REQUEST_RC=0 UTC=2026-10-15T19:17:58.936749+00:00
+ABSENCE_VERIFIED_UTC=2026-10-15T19:18:29.841000+00:00

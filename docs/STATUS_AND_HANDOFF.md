@@ -1,5 +1,24 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-15 19:19 UTC — replacement5090 retired; no hardware ran
+
+Own56140371 also never started: actual_status=null, uptime=null, no mappedSSH.
+One own stop/start19:11:53/19:11:54 failed to recover by19:17:57, falsifying
+H-BP2 after the five-minute recovery window. Destroy19:17:58, absence
+verified19:19UTC, timer2045281 canceled after absence. No native or kayfabe GPU
+work, no hardware failure claim. Different provider excluded: machine69146/host155385.
+Safe receipt in traces/die_driver_sweep_20261015/blackwell_5090/provisioning-failure.txt.
+No own rental currently active. New targeted search finds fresh5060/5070KVM
+offers with enough RAM/CPU/disk; native-first plan/falsifiers remain unchanged.
+
+Meanwhile own codex/fix-walk-completion,/workspace/codex/walk-completion:
+3970f7859 completion model compiles and fails3of5 tests as expected; candidate
+ffd72e3d4 passes5of5. Full CPU suite on trusted host currently running with
+2jobs and isolated target-walk-completion. This removes repeated callback nodes,
+records a fresh real CUDA event after launch and observes it at1ms while pending;
+no interrupt edge filtering or test-budget change. Hardware performance UNRUN.
+OwnerVM/GPU untouched. Older active56140371 paragraphs below superseded here.
+
 ## UPDATE 2026-10-15 19:09 UTC — sole own rental 56140371, Blackwell replacement
 
 RTX 5090 offer 43994880, different machine 69146/host155385, created

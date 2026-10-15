@@ -1,6 +1,13 @@
 # Blackwell RTX 5090 validation wave
 
-**STATUS: LIVE, 2026-10-15 19:09 UTC; hardware validation pending.**
+**STATUS: ANSWERED, 2026-10-15 19:19 UTC; provisioning FAIL, hardware NOTRUN.**
+
+Correction: own56140371 never obtained a VM/mappedSSH. Null actual_status and
+uptime persisted after one stop/start19:11:53/19:11:54; H-BP2 falsified19:17:57.
+Destroy19:17:58, absence verified19:19UTC, own timer canceled after absence. No
+native Windows, GPU workload or kayfabe guest ran. Compute upper bound$0.08
+through verified absence, transfers unbilled. Exclude this provider next time.
+Safe receipt: provisioning-failure.txt. Earlier pending plan below is historical.
 
 Own56140371, offer43994880, machine69146/host155385; created19:08:39UTC,
 after all earlier own IDs absent. Quote$0.4283333333/hour including150GBdisk.

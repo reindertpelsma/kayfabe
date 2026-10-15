@@ -12,11 +12,11 @@ Accrued cost is an estimate until account billing is available; transfers may ad
 | 56117789 | RTX2060Super / TU106 (host-derived) | 0.1113888889 | 2026-10-15 15:41:16 (1792078876.69137) | revised timer destroyed18:38:26; absence verified18:39:01UTC, below18:41:16UTC hard cap | nativeWindows580/nativeLinux595 PASS; Windows580 guest PASS afterfix; Linux580 CUDA4 beforefix/broker afterfix PASS, raw29 of30 before/afterfix (R34timeout180s) | compute upper bound$0.34; transfers unbilled |
 | 56137859 | RTX5060Ti / Blackwell, exactdie pending RM | 0.2861111111 | 2026-10-15 18:44:29 (1792089869.567632) | destroy requested19:01:35; absence verified19:06:18UTC | provider never createdVM; native/guest hardware NOTRUN | compute upper bound$0.11; transfers unbilled |
 
-| 56140371 | RTX5090 / Blackwell, exact die pending RM | 0.4283333333 | 2026-10-15 19:08:39 (1792091319.0049653) | active; timer2045281 deadline22:03:40UTC, hardcap22:08:39UTC | replacement nativeWindows580 reference, then both guestOS suites | compute ceiling$1.29; transfers unbilled |
+| 56140371 | RTX5090 / Blackwell, exact die pending RM | 0.4283333333 | 2026-10-15 19:08:39 (1792091319.0049653) | destroy19:17:58; absence verified19:19UTC | provider never startedVM; native/guest hardware NOTRUN | compute upper bound$0.08; transfers unbilled |
 
 AD102 absence was verified at15:39:44UTC before Turing was rented. Turing absence
-verified18:39:01UTC, before Blackwell56137859 was created18:44:29. Failed56137859 absence verified19:06:18 before56140371 creation19:08:39. Sole active own rental is56140371. No other account instances are owned by this campaign. The first rental was
-verified absent before the second was created. Compute upper bounds for five leases total $4.53,
+verified18:39:01UTC, before Blackwell56137859 was created18:44:29. Failed56137859 absence verified19:06:18 before56140371 creation19:08:39. No own rental active at19:19UTC. No other account instances are owned by this campaign. The first rental was
+verified absent before the second was created. Compute upper bounds for five leases total $3.32,
 well below the $40 campaign budget; final transfer charges are not yet known.
 
 AD102 first SSH at12:59UTC: root146GiB/138GiB available, /dev/kvm present,
