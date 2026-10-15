@@ -1,5 +1,29 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-15 19:30UTC — Blackwell56141654 native Windows installation running
+
+Own5060 rental56141654 reachedSSH19:22UTC. Actual initialroot146GiB/138GiBfree,
+/dev/kvm present,15logicalCPUs,50,464MiBRAM,kernel6.8.0-59. PCI10de:2d05 is
+listed in the pinned580.88INF. ExactRMdie stillpending until Linux restoration.
+InitialLinuxproprietary module refuses the GPU and explicitlyrequires open
+modules; noLinuxGPUwork ran. Ownpreflightretainedfailure, then verifiedone
+NVIDIAVGAfunction/disk/KVM independently and queuednativeinstaller19:26:03.
+GeneratedWindowsPUBLICSSHhostkey preserved/pinned19:26:28; bootstrap2052504
+completedexit0. Source2230a1764 productionRust/data remain8e3a9d325.
+
+NativeWindowsinstaller modifiedWIM and rebooted19:28:33. Use ownSSHconfig:
+codex-native-blackwell5060 (vast,pinnedfinalWindowskey), initialLinuxalias
+codex-blackwell5060, intermediatecodex-blackwell5060-installer(root,separatekey).
+A finalWindowsalias keymismatch during intermediateLinuxinstall is expected;
+never override its pinnedkey. Nativeoracles/caps/capture stillNOTRUN. Timer2050117
+unchanged22:15:05UTC,hardcap22:20:04UTC. Nootherownrental. Save/pushtexteachrun.
+
+New canonicalnative_capture.ps1 pins collector/censushashes, requires explicit
+collectorexit0 and all decode/scrub statuses, exports aggregates plus only2801/
+2806bodies. Runtimepending. Independentwalkcandidateffd72e3d4 CPU3252/0/14,
+draftPR11; nohardwareperfclaim, notmergedintoBlackwell. OwnerVM/GPUuntouched.
+OlderinitialSSHpending/processparagraphs below superseded here.
+
 ## UPDATE 2026-10-15 19:22 UTC — sole own rental56141654, fresh Blackwell5060
 
 Own56141654, offer50949277, different machine39241/host79466, created19:20:04UTC

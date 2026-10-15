@@ -1,0 +1,12 @@
+Thu Oct 15 19:26:00 UTC 2026
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/root       146G  8.0G  138G   6% /
+kvm
+00:07.0 VGA compatible controller [0300]: NVIDIA Corporation Device [10de:2d05] (rev a1)
+00:08.0 Audio device [0403]: NVIDIA Corporation Device [10de:22eb] (rev a1)
+No devices were found
+INITIAL_LINUX_PROPRIETARY_DRIVER_REFUSED_GPU_NOTRUN=1
+6.8.0-59-generic
+15
+               total        used        free      shared  buff/cache   available
+Mem:           50464         566       48873           1        1023       49388
