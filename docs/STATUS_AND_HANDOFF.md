@@ -1,5 +1,21 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-15 19:09 UTC — sole own rental 56140371, Blackwell replacement
+
+RTX 5090 offer 43994880, different machine 69146/host155385, created
+19:08:39 UTC after all prior own IDs were absent. Quote $0.4283333333/hour
+including150GBdisk; timer2045281 destroys at about22:03:40UTC, hardcap22:08:39.
+Public SSH key attached successfully. Correct alias codex-blackwell5090 uses
+publicIP plus mapped22/tcp port; never combine publicIP with the proxySSHport.
+Initial SSH/KVM/disk and exact RM tuple pending. No hardware result inferred.
+
+Current branch/worktree codex/sweep-blackwell-20261015,/workspace/codex/blackwell-hw.
+Native Windows580 oracle/facts first, Linux restoration and guest suites after.
+Capture native public host key before reimage. Controller files under
+/workspace/codex; original retired5060Ti bootstrap/timer canceled. OneGPUjob,
+text evidence only, no secrets/agent forwarding. OwnerVM/GPU untouched.
+Older no-rental and failed56137859-active paragraphs below superseded here.
+
 ## UPDATE 2026-10-15 19:07UTC — failed Blackwell provisioning retired; replacement search
 
 Own56137859 never obtained a VM or SSH: provider console reports missing libvirt
