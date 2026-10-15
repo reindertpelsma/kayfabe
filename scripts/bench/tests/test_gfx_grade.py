@@ -10,6 +10,33 @@ SCRIPT = Path(__file__).resolve().parents[1] / 'gfx' / 'gfx_steps.sh'
 
 
 class GfxGradeTests(unittest.TestCase):
+    def earlier_grade(self, stage, fails):
+        text = SCRIPT.read_text()
+        end = text.index(f'echo "GFX_S{stage}=PASS"')
+        start = text.rfind('\nif ', 0, end) + 1
+        condition = text[start:text.index('\n\n', end)]
+        fixture = ('deviceName NVIDIA fixture\nVKC_BAD={0}\n'
+                   'VKR_REF_FAILS={0}\nEGLR_REF_FAILS={0}\n'
+                   'EGL_RENDERER=NVIDIA fixture\n').format(fails) + 'detail\n' * 30000
+        with tempfile.TemporaryDirectory() as directory:
+            info = Path(directory) / 'info'
+            info.write_text(fixture)
+            cmd = 'set -o pipefail\nVI=$(cat "$1"); VC=$VI; VR=$VI; ER=$VI; VIRC=0\n' + condition
+            return subprocess.run(['bash', '-c', cmd, 'bash', str(info)],
+                                  capture_output=True, text=True, timeout=5)
+
+    def test_earlier_large_correct_outputs_pass(self):
+        for stage in (2, 3, 4):
+            with self.subTest(stage=stage):
+                r = self.earlier_grade(stage, 0)
+                self.assertIn(f'GFX_S{stage}=PASS', r.stdout, r.stderr)
+
+    def test_earlier_failed_references_are_rejected(self):
+        for stage in (2, 3, 4):
+            with self.subTest(stage=stage):
+                r = self.earlier_grade(stage, 1)
+                self.assertIn(f'GFX_S{stage}=FAIL', r.stdout, r.stderr)
+
     def grade(self, fails):
         text = SCRIPT.read_text()
         start = text.index('    if ', text.index('echo "GFX_GLXR_RC='))
