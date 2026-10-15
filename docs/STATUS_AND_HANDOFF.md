@@ -1,5 +1,31 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-15 23:48UTC — complete native Blackwell trace achieved
+
+H-BC4 source631f087e3/moduleunsigned1b0a549b...f1c6 gives method4, singlequeue,
+cmdseq0..4806/statusseq0..4871,4807+4872messages,0loss/gap/torn/parse/unknown/
+unbalancedcontrols,END/filecheckOK,strictCensus+sequenceexit0. Nativeactual
+32.0.15.8088/GSP580.65.05,CUDA3/D3D11+12/0TDR/Code0 PASSbefore/after. Complete
+raw46710336B/SHA b5f264924ea9d57532c53f591d8881c198f9bd8096049ffc7ee0a3beb23fa8d1
+staysrentalonly; orderedtext/censuses savednative_trace_revisit_20261016/.
+OldpointH-BC3failedmethod2/lostprefixes; allnegativeevidence preserved. New
+tracer36/36/393checks+fullWDK/ring/mutations/decoderharnessPASS. Earliercommit
+1e34premature36passclaim correctedby631f fixturefix and explicit historynote.
+
+Nativeacceptsa89/ab2/CBCB; ab4notobservedinsuccessfulwindow. Public580.65.06
+FINN_NV_SCHEDULER_RESERVED_INTERFACE_ID0xcbcb00 names matchinginterface,
+notyetallocationsemantics. CCUsamplesize4Boracle17296exportedafterexplicit
+singlecontrolscrub;notregistered/shipped. CMCaddressbodyNOTexported. First
+alignedreply/cause remainsUNPROVED; kayfabeWindowsstillCode43. PR14/15/16draft
+code-onlyagainstClaudeGPUtypes; evidence separate. Allcode/evidence pushed.
+
+Own56165326onlyactive, timer2120908 unchanged01:39:19UTC/hardcap01:44:19UTC.
+Nativecollectorsgone/moduleStopped23:38. Linuxreturnpreparationqueued23:45,
+needpollCodexLinuxReturn state/exit and rebootonlyafter0. FreshleaseRMtuple
+pending; priorphysicalmachineGB206probe retained,no newdie-factsregistered.
+Nextunblocked: Linuxrestoreunprivtuple and actualenv+orderedkayfabediagnostic
+comparison. W1 equality RED/tilingheld; no arbitraryCCU/CMC/scheduleracks.
+
 ## UPDATE 2026-10-15 22:48UTC — strict W1 comparison RED; new native trace lease
 
 W1 full4096byte comparisons at runtime0b6c501fb + toola84059a10 are RED:

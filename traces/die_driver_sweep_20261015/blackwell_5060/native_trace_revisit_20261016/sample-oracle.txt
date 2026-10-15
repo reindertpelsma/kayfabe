@@ -1,0 +1,13 @@
+CONTROLLER_START 2026-10-15T23:43:29.052083+00:00
+kf-census scrub: 9679 messages, allow-list of 1 control ids; bodies kept 2 / scrubbed 7374 (10103011 bytes), continuations kept 0 / scrubbed 6, other payloads scrubbed 2297
+  undecodable 0, padding zeroed on 901 messages, unframed bytes zeroed 0, lines dropped 0, keys dropped 0
+kf-census: ogkm 580.65.06, 1 sources, 4807 cmd + 4872 status messages, 218 controls
+oracle: PASS (no gap, no parse failure, no trailing bytes, no unknown function)
+pairing: 0 controls with unanswered requests or orphan replies; rpc.sequence non-zero on 0 messages
+cmd	dir	status	size	count	sha256	hex
+0x20800ab2	cmd	0x0	4	1	df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119	00000000
+0x20800ab2	status	0x0	4	1	037ac5237a6c2ecfb4c84c37b37276a91b19499d4162432fdeb8a618f698f9b8	90430000
+SAMPLE_ORACLE_ONLY product_value=not_registered
+#< CLIXML
+<Objs Version="1.1.0.1" xmlns="http://schemas.microsoft.com/powershell/2004/04"><Obj S="progress" RefId="0"><TN RefId="0"><T>System.Management.Automation.PSCustomObject</T><T>System.Object</T></TN><MS><I64 N="SourceId">1</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj></Objs>
+CONTROLLER_EXIT_RC=0 UTC=2026-10-15T23:43:30.731101+00:00
