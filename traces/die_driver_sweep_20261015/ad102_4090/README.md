@@ -101,3 +101,20 @@ interrupt/display-progress gaps remain candidates, not assumed root causes.
 Hardware order: stock Linux gates/raw/CUDA oracle, exact-revision guest raw,
 CUDA/graphics and broker regression, then Windows guest. No family coverage
 until both OS suites pass across several supported driver builds.
+
+## Linux pre-run checkpoint,14:07UTC
+
+Ubuntu22.04.5 restored, kernel6.8.0-138-generic, persistent root147GiB,
+KVM present, host595.91.07 open loaded. Bench READY at14:05:29UTC,
+QEMU binarykf3-bins/3ab534ca (product code identical to verified56f32dc0e).
+Running-kernel headers and the independent fat-guest580 package had to be
+installed on this minimal image; NAT additionally needed iptables. These were
+provisioning defects, not GPU/driver limits. The source image relay's uutils dd
+pipe failure is fixed with a bounded pread producer; full image hash is pending.
+
+H6, before hardware runs: exact candidate3ab534ca passes native Linux595 gates,
+raw/CUDA oracle, then guest580 raw30/30 and CUDA4/4 with USER births; subsequent
+graphics and broker must preserve those results. Falsifier: any gate/arm/rung,
+birth-privilege or display validation failure. A native failure is measured
+separately before a guest failure is attributed to kayfabe. No changed grader.
+The driver/guest/kayfabe axes remain independently recorded.
