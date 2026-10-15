@@ -7,6 +7,7 @@ Write-Output "NATIVE_ORACLE_START $($since.ToUniversalTime().ToString('o'))"
 $gpu=@(Get-CimInstance Win32_VideoController | Where-Object PNPDeviceID -like 'PCI\VEN_10DE*')
 $gpu | Select-Object Name,DriverVersion,Status,ConfigManagerErrorCode | ConvertTo-Json -Compress
 if($gpu.Count -ne 1 -or $gpu[0].ConfigManagerErrorCode -ne 0) { throw 'Need exactly one healthy NVIDIA adapter' }
+if($gpu[0].DriverVersion -ne '32.0.15.8088') { throw 'Native oracle requires actual driver580.88' }
 $hashes=@{
  'kf_dxprobe.exe'='2e672bc737a1c6c2332c8b7499cd5459a629d191b27ac4dd9a04a3254c821835'
  'cuda\cup2.exe'='eba68ac8f92cf1d65793a6df70d62624d33a8479b3137a45d07d7fd093d79798'
@@ -36,4 +37,7 @@ try { $tdr=@(Get-WinEvent -FilterHashtable @{LogName='System'; Id=4101; StartTim
 catch { if($_.FullyQualifiedErrorId -notlike 'NoMatchingEventsFound*') { throw }; $tdr=@() }
 Write-Output "NATIVE_TDR_COUNT=$($tdr.Count)"
 if($tdr.Count) { throw 'TDR during oracle' }
+$after=@(Get-CimInstance Win32_VideoController | Where-Object PNPDeviceID -like 'PCI\VEN_10DE*')
+if($after.Count -ne 1 -or $after[0].DriverVersion -ne '32.0.15.8088' -or $after[0].ConfigManagerErrorCode -ne 0) { throw 'Adapter/build changed during oracle' }
+Write-Output 'NATIVE_POST_DRIVER580_CODE0=1'
 Write-Output "NATIVE_ORACLE_EXIT rc=0 $([DateTime]::UtcNow.ToString('o'))"

@@ -46,3 +46,36 @@ Windows runner now honors WIN_GUEST_DRIVER for a measured public same-CL tag,
 records it and refuses malformed/injected properties before launch. Default
 remains580.65.06 for Windows580.88. Before/after actual argv is tested with
 stubbed QEMU;26harness tests pass. This adds no new driver compatibility claim.
+
+
+## Native580 reference,16:23UTC
+
+Stock580.88 actual32.0.15.8088: Code0/WDDM, CUDA3/3 (sm75 targets),
+hardware D3D11compute/draw andD3D12compute/fences20iterations pass;
+Systemlog readable,0Event4101 during16:22:30–16:22:44UTC suite. Actual driver
+and adapter health checked before/after;4probe hashes verified before execution.
+Default GSPN/A. This is a native reference, NOT a kayfabe guest pass.
+Installer complete=true/driver=true/cuda=true/failures0, measured before reboot.
+
+Windows Update raced the pinned installer: System events43/19 show591.86
+installation16:07:18–16:09:18; nativepreflight reported32.0.15.9186 while
+580installer was active. It later finishes with32.0.15.8088/Code0.
+ExcludeWUDriversInQualityUpdate=1 andDriverSearching SearchOrderConfig=0
+were set. The OS restarts wuauserv asManual/Running despite the stop/disable
+attempt; do not claim a permanently disabled service. Its now-unused oem13.inf
+was verified NVIDIA/Display/32.0.15.9186 and removed without uninstall/force,
+only after current580Code0 was checked. The exact oracle rejects any build
+change before/after. Measured: WU caused the temporary591 install; any claim
+that it explains all installer delay would be inference.
+
+H-PIN before reboot: exact580 remains active after removing unused higher-ranked
+store package and excluding WU drivers. Falsifier: a different actual build after
+reboot or during either native suite. Testsigning was enabled afterSecureBootoff,
+VBS/HVCI0/0 preflight; reboot requested normally at16:24 for module measurement.
+Native GSP-enabled reference, caps and captures are still pending. No Turing
+constant row has shipped and no closed binary reverse engineering was done.
+
+Exact590/595 display-table topic is merged in this branch; CPU source8149f0b53
+full3243passed/0failed/14ignored, fresh target-driver590.595removed swap-ready
+control is deliberately omitted, not assigned an older ID. No590 or595display-on
+hardware validation is inferred from CPU tests or the earlier headless graphics.
