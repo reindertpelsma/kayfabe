@@ -841,9 +841,15 @@ def expected_substitute(w, h, on):
     return out
 
 
-def move_cmd(x, y, **kw):
-    """MOVE: the image's top-left, signed, in the two hot-spot words."""
-    return CUR.pack(CMD_CURSOR, kw.get("flags", 0), 0, 0, 0, 0, 0,
+F_ABS = 1
+
+
+def move_cmd(x, y, abs=None, **kw):
+    """MOVE: the image's top-left, signed, in the two hot-spot words; `abs`, the
+    last absolute pointer position the VMM injected, in width/height with F_ABS."""
+    flags = kw.get("flags", F_ABS if abs is not None else 0)
+    ax, ay = abs if abs is not None else (0, 0)
+    return CUR.pack(CMD_CURSOR, flags, ax & 0xffffffff, ay & 0xffffffff, 0, 0, 0,
                     x & 0xffffffff, y & 0xffffffff, MOVE, 0)
 
 
@@ -892,6 +898,42 @@ def run_stream(b):
     check(shown(lines) is None or shown(lines)[0] != "none",
           "hover: a MOVE changes nothing shown")
     check(overlay(lines) is None, "hover: no overlay")
+    # hover: the hot spot is derived from the pair, latched on two equal differences
+    st0 = shown(b.since(0, 0))
+    m = b.mark()
+    send(s, cursor_cmd(SET, 32, 32, 128, 0, AR24, 0, 0), [memfd_with(32, 32, 128, 0, image(32, 32, 4))])
+    st = shown(b.since(m))
+    check(st is not None and st[0] == "shown" and st[3:5] == (0, 0), "a new image: the SET hot spot (0,0)")
+    m = b.mark()
+    send(s, move_cmd(100, 200, abs=(104, 209)))
+    lines = b.since(m)
+    check(not any("hot 4,9" in l for l in lines), "one pair: not latched")
+    m = b.mark()
+    send(s, move_cmd(100, 200, abs=(104, 209)))
+    st = shown(b.since(m))
+    check(st is not None and st[0] == "shown" and st[3:5] == (4, 9),
+          "the same difference twice: latched, hot = pointer - top-left (4,9)")
+    m = b.mark()
+    send(s, move_cmd(100, 200, abs=(500, 500)))      # outside the image: ignored
+    send(s, move_cmd(101, 200, abs=(105, 209)))      # the same difference moves with the cursor
+    time.sleep(0.2)
+    m = b.mark()
+    fd = memfd_with(32, 32, 128, 0, image(32, 32, 6))
+    send(s, cursor_cmd(SET, 32, 32, 128, 0, AR24, 2, 3), [fd])
+    os.close(fd)
+    st = shown(b.since(m))
+    check(st is not None and st[0] == "shown" and st[3:5] == (2, 3),
+          "a new image: back to the SET hot spot, nothing carried over")
+    # a pair beyond the limit is refused, the connection lives
+    m = b.mark()
+    send(s, move_cmd(0, 0, abs=(1 << 30, 0)))
+    check(not closed(s, 0.3), "an absurd absolute position is refused, not fatal")
+    # back to the XOR cursor at 40,50 for the grab below
+    fd = memfd_with(w, h, stride, 16, xor_mask(w, h, on))
+    send(s, cursor_cmd(SET, w, h, stride, 16, AR24, 7, 9, flags=F_XOR), [fd])
+    os.close(fd)
+    send(s, move_cmd(40, 50))
+    time.sleep(0.2)
     # grab: the broker draws the cursor itself at the last MOVE
     b.stdin("f 1")
     m = b.mark()
@@ -945,7 +987,9 @@ def run_stream(b):
     for what, payload, fdmaker in (
             ("HIDE+F_XOR", cursor_cmd(HIDE, flags=F_XOR), None),
             ("SHOW+F_XOR", cursor_cmd(SHOW, flags=F_XOR), None),
-            ("MOVE+F_XOR", move_cmd(1, 1, flags=F_XOR), None),
+            ("MOVE+unknown flag", move_cmd(1, 1, flags=2), None),
+            ("MOVE+width without F_ABS", move_cmd(1, 1, flags=0) and
+             CUR.pack(CMD_CURSOR, 0, 5, 6, 0, 0, 0, 1, 1, MOVE, 0), None),
             ("MOVE+width", CUR.pack(CMD_CURSOR, 0, 4, 0, 0, 0, 0, 0, 0, MOVE, 0), None),
             ("SET flags=2", cursor_cmd(SET, 8, 8, 32, 0, AR24, 1, 1, flags=2),
              lambda: memfd_with(8, 8, 32, 0, image(8, 8, 1))),

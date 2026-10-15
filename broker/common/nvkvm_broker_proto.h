@@ -452,7 +452,8 @@ enum {
 #define NVKVM_BROKER_CURSOR_HIDE 2u
 #define NVKVM_BROKER_CURSOR_SHOW 3u
 /* Only with NVKVM_BROKER_CAP_CURSOR_STREAM: the image's top-left on the guest
- * frame; see the MOVE note by struct nvkvm_broker_cursor_cmd. */
+ * frame, and the last absolute pointer position the VMM injected; see the MOVE
+ * note by struct nvkvm_broker_cursor_cmd. */
 #define NVKVM_BROKER_CURSOR_MOVE 4u
 
 /*
@@ -556,22 +557,41 @@ struct nvkvm_broker_clip_cmd {
  * other image.  An all-clear mask draws nothing.
  *
  * MOVE (only with CAP_CURSOR_STREAM; otherwise an unknown op, a violation): no
- * fd, flags 0, width/height/stride/offset/fourcc all zero, and the position in
- * the two hot-spot words read as signed 32-bit: hot_x = x, hot_y = y, the
- * image's TOP-LEFT in the guest's frame pixels (the cursor hangs off the frame
- * when negative or past its edge).  |x| and |y| above NVKVM_BROKER_CURSOR_MOVE_
- * LIMIT make the MOVE refused (the previous position stays, the connection
- * lives); otherwise it is clamped to -MAX_DIM .. NVKVM_BROKER_MAX_DIM, outside
- * of which the image is invisible anyway.  It is a position, nothing else: the
- * VMM sends it at its display pass rate, never per input event.  In HOVER
- * (absolute pointer, the host pointer is the guest's) the broker ignores it
- * and shows the image at the host pointer; under GRAB (relative, locked) the
- * broker has no pointer of its own and draws the image at the last MOVE,
- * scaled with the frame.  HIDE means: nothing is drawn -- the guest hid its
- * cursor, or its cursor plane is not enabled and it draws a software cursor
- * into the frame itself.
+ * fd, stride/offset/fourcc zero, and ONE atomic pair of facts:
+ *   (a) the image's TOP-LEFT in the guest's frame pixels, signed 32-bit in the
+ *       two hot-spot words: hot_x = x, hot_y = y (the cursor hangs off the frame
+ *       when negative or past its edge);
+ *   (b) the LAST ABSOLUTE pointer position the VMM injected into the guest, in
+ *       the same frame pixels, signed 32-bit in width (x) and height (y), valid
+ *       only when flags == NVKVM_BROKER_CURSOR_F_ABS.  The flag is CLEAR (and
+ *       width/height zero) when the last input was relative, or none was
+ *       injected yet: grab, where the hot spot is irrelevant.
+ * |value| above NVKVM_BROKER_CURSOR_MOVE_LIMIT makes the MOVE refused (the
+ * previous state stays, the connection lives); otherwise each value is clamped
+ * to -MAX_DIM .. NVKVM_BROKER_MAX_DIM, outside of which an image is invisible
+ * anyway.  Any other flag, or width/height without F_ABS, is a framing
+ * violation.  The VMM sends a MOVE at its display pass rate, when the pair
+ * changed, never per input event.
+ *
+ * What the broker does with it -- the VMM is mode-free (grab is the viewer's
+ * own state, not the protocol's): in HOVER (absolute pointer) it keeps showing
+ * the image at the HOST pointer through the native pointer API and ignores (a)
+ * for position, but derives the hot spot from the pair: the Windows driver
+ * programs hot 0,0 while the real spot is inside the image, and hot = (b) - (a).
+ * The pair is only meaningful while the pointer is stationary (the guest moves
+ * its cursor a little after it receives an injected event), so the broker
+ * LATCHES a derived hot spot only when the SAME difference appears in two
+ * consecutive MOVEs (event-counted, no timer), ignores a difference outside
+ * the image, corrects a latched spot only by more than a pixel, and until it
+ * latches -- and after every new image -- keeps the SET hot spot.  Under GRAB
+ * (relative, locked) it has no pointer of its own and draws the image at (a),
+ * scaled with the frame; (b) is then invalid and the hot spot irrelevant.
+ * HIDE means: nothing is drawn -- the guest hid its cursor, or its cursor plane
+ * is not enabled and it draws a software cursor into the frame itself.
  */
 #define NVKVM_BROKER_CURSOR_MOVE_LIMIT (1 << 20)
+/* MOVE flag: width/height carry the absolute pointer position. */
+#define NVKVM_BROKER_CURSOR_F_ABS (1u << 0)
 #define NVKVM_BROKER_CURSOR_F_XOR (1u << 0)
 
 struct nvkvm_broker_cursor_cmd {

@@ -40,7 +40,9 @@ int nb_cursor_check(const struct nvkvm_broker_cursor_cmd *c, bool has_fd,
      */
     if (c->flags != 0 &&
         !(c->flags == NVKVM_BROKER_CURSOR_F_XOR && stream_ok &&
-          c->op == NVKVM_BROKER_CURSOR_SET)) {
+          c->op == NVKVM_BROKER_CURSOR_SET) &&
+        !(c->flags == NVKVM_BROKER_CURSOR_F_ABS && stream_ok &&
+          c->op == NVKVM_BROKER_CURSOR_MOVE)) {
         *why = (c->flags == NVKVM_BROKER_CURSOR_F_XOR && !stream_ok)
                    ? "CURSOR_F_XOR without CAP_CURSOR_STREAM"
                    : "CURSOR flags are not zero (or F_XOR on a HIDE/SHOW)";
@@ -73,8 +75,12 @@ int nb_cursor_check(const struct nvkvm_broker_cursor_cmd *c, bool has_fd,
             *why = "CURSOR MOVE carried an fd";
             return NB_CURSOR_VIOLATION;
         }
-        if (c->width || c->height || c->stride || c->offset || c->fourcc) {
+        if (c->stride || c->offset || c->fourcc) {
             *why = "CURSOR MOVE carried image fields";
+            return NB_CURSOR_VIOLATION;
+        }
+        if (c->flags != NVKVM_BROKER_CURSOR_F_ABS && (c->width || c->height)) {
+            *why = "CURSOR MOVE carried an absolute position without F_ABS";
             return NB_CURSOR_VIOLATION;
         }
         *why = "";
@@ -200,6 +206,51 @@ int nb_cursor_move_clamp(int32_t x, int32_t y, int32_t *ox, int32_t *oy)
     return 0;
 }
 
+void nb_hot_reset(struct nb_hot *h)
+{
+    memset(h, 0, sizeof *h);
+}
+
+bool nb_hot_move(struct nb_hot *h, struct nb_cursor *c, bool abs_valid,
+                 int32_t abs_x, int32_t abs_y)
+{
+    int64_t dx, dy;
+
+    if (!c->defined || c->w == 0 || c->h == 0 || !abs_valid) {
+        /* relative input (or no image): the pair says nothing; a candidate from
+         * before it would be bridged over input the guest moved on through */
+        h->cand_valid = false;
+        return false;
+    }
+    dx = (int64_t)abs_x - (int64_t)c->x;
+    dy = (int64_t)abs_y - (int64_t)c->y;
+    if (dx < 0 || dy < 0 || dx >= (int64_t)c->w || dy >= (int64_t)c->h) {
+        /* the pointer and the cursor belong to different moments, or the
+         * pointer is not over this image: implausible, and it breaks the run */
+        h->cand_valid = false;
+        return false;
+    }
+    if (h->cand_valid && h->cand_x == (int32_t)dx && h->cand_y == (int32_t)dy) {
+        /* the same difference in two consecutive MOVEs: the pointer is still */
+        int64_t ddx = dx - (int64_t)c->hot_x, ddy = dy - (int64_t)c->hot_y;
+        bool far = ddx > 1 || ddx < -1 || ddy > 1 || ddy < -1;
+
+        if (!h->latched || far) {
+            bool changed = (uint32_t)dx != c->hot_x || (uint32_t)dy != c->hot_y;
+
+            h->latched = true;
+            c->hot_x = (uint32_t)dx;
+            c->hot_y = (uint32_t)dy;
+            return changed;
+        }
+        return false;
+    }
+    h->cand_valid = true;
+    h->cand_x = (int32_t)dx;
+    h->cand_y = (int32_t)dy;
+    return false;
+}
+
 enum nb_cursor_draw nb_cursor_policy(const struct nb_cursor *c, bool grabbed,
                                      bool stream)
 {
@@ -278,6 +329,9 @@ void nb_cursor_copy(struct nb_cursor *dst, const struct nb_cursor *src)
     dst->x = src->x;
     dst->y = src->y;
     dst->placed = src->placed;
+    dst->abs_x = src->abs_x;
+    dst->abs_y = src->abs_y;
+    dst->abs_valid = src->abs_valid;
     /*
      * Only the pixels the image has.  Bounded by the array, not by w*h alone:
      * a struct nobody loaded through nb_cursor_load() must not make this a

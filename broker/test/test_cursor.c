@@ -839,6 +839,17 @@ static struct nvkvm_broker_cursor_cmd move_cmd(int32_t x, int32_t y)
     return c;
 }
 
+/* A MOVE carrying the absolute-pointer pair (flag ABS, width/height = x/y). */
+static struct nvkvm_broker_cursor_cmd move_abs_cmd(int32_t x, int32_t y, int32_t ax, int32_t ay)
+{
+    struct nvkvm_broker_cursor_cmd c = move_cmd(x, y);
+
+    c.flags = NVKVM_BROKER_CURSOR_F_ABS;
+    c.width = (uint32_t)ax;
+    c.height = (uint32_t)ay;
+    return c;
+}
+
 static void test_move(void)
 {
     struct nvkvm_broker_cursor_cmd c = move_cmd(-5, 700);
@@ -848,11 +859,21 @@ static void test_move(void)
           "MOVE without CAP_CURSOR_STREAM is an unknown-op violation");
     CHECK(verdict_xor(&c, false, true) == NB_CURSOR_OK, "MOVE with the capability");
     CHECK(verdict_xor(&c, true, true) == NB_CURSOR_VIOLATION, "MOVE with an fd");
-    c.flags = NVKVM_BROKER_CURSOR_F_XOR;
-    CHECK(verdict_xor(&c, false, true) == NB_CURSOR_VIOLATION, "MOVE with F_XOR");
+    c.flags = 2;    /* bit 0 is F_ABS on a MOVE (as it is F_XOR on a SET) */
+    CHECK(verdict_xor(&c, false, true) == NB_CURSOR_VIOLATION, "MOVE with an unknown flag");
     c = move_cmd(0, 0);
     c.width = 1;
     CHECK(verdict_xor(&c, false, true) == NB_CURSOR_VIOLATION, "MOVE with a width");
+    /* the absolute-pointer pair: the flag says width/height are it; without the
+     * flag they are zero, with it only a MOVE may carry it */
+    c = move_abs_cmd(5, 6, 7, 8);
+    CHECK(verdict_xor(&c, false, true) == NB_CURSOR_OK, "MOVE with the ABS pair");
+    CHECK(verdict_xor(&c, false, false) == NB_CURSOR_VIOLATION, "ABS pair without the capability");
+    c.stride = 4;
+    CHECK(verdict_xor(&c, false, true) == NB_CURSOR_VIOLATION, "ABS pair with a stride");
+    c = move_abs_cmd(5, 6, 7, 8);
+    c.flags = NVKVM_BROKER_CURSOR_F_ABS | 2;
+    CHECK(verdict_xor(&c, false, true) == NB_CURSOR_VIOLATION, "MOVE with another flag bit");
     c = move_cmd(0, 0);
     c.stride = 4;
     CHECK(verdict_xor(&c, false, true) == NB_CURSOR_VIOLATION, "MOVE with a stride");
@@ -919,8 +940,113 @@ static void test_move(void)
     }
 }
 
+/*
+ * THE HOT SPOT FROM THE POINTER (hover).  The Windows driver programs hot 0,0 while the real spot
+ * is inside the image; the VMM sends, in each MOVE, the image's top-left and the last absolute
+ * pointer position it injected (valid flag clear after relative input), the broker derives
+ * hot = abs - top-left.  Rules ported from the VMM's Rust HotTracker (which is kept for the
+ * composing fallback), with the owner's latch: the guest moves its cursor a little after it gets
+ * an injected event, so the pair means something only when the pointer is stationary -- a
+ * derived hot spot is LATCHED only when the SAME difference appears in two consecutive MOVEs
+ * (event-counted, no timer); until then, and after every new image, the SET hot spot stands.
+ */
+static struct nb_hot hot_st;
+static struct nb_cursor hot_cur;
+
+static void hot_new_image(uint32_t w, uint32_t h, uint32_t hx, uint32_t hy)
+{
+    memset(&hot_cur, 0, sizeof hot_cur);
+    hot_cur.w = w;
+    hot_cur.h = h;
+    hot_cur.hot_x = hx;
+    hot_cur.hot_y = hy;
+    hot_cur.defined = hot_cur.visible = true;
+    nb_hot_reset(&hot_st);
+}
+
+/* One MOVE: top-left (x,y), absolute pointer (ax,ay) valid or not; whether the hot spot changed. */
+static bool hot_move(int32_t x, int32_t y, bool valid, int32_t ax, int32_t ay)
+{
+    hot_cur.x = x;
+    hot_cur.y = y;
+    hot_cur.placed = true;
+    return nb_hot_move(&hot_st, &hot_cur, valid, ax, ay);
+}
+
+static void test_hot_latch(void)
+{
+    /* a new image keeps the SET (guest-programmed) hot spot */
+    hot_new_image(32, 32, 0, 0);
+    CHECK(hot_cur.hot_x == 0 && hot_cur.hot_y == 0, "the SET hot spot");
+    /* one pair is not enough: the guest may still be moving its cursor */
+    CHECK(!hot_move(100, 200, true, 104, 209), "one pair: not latched");
+    CHECK(hot_cur.hot_x == 0 && hot_cur.hot_y == 0, "SET hot spot stands");
+    /* the same difference again: latched, and the change is reported */
+    CHECK(hot_move(100, 200, true, 104, 209), "two equal differences: latched");
+    CHECK(hot_cur.hot_x == 4 && hot_cur.hot_y == 9, "hot = abs - top-left");
+    CHECK(!hot_move(100, 200, true, 104, 209), "unchanged: nothing to publish");
+    /* rounding: one pixel either way is not a change (a moving pointer, one pixel of scaling) */
+    CHECK(!hot_move(100, 200, true, 105, 208), "1 px off: candidate");
+    CHECK(!hot_move(100, 200, true, 105, 208), "1 px off twice: still the latched spot");
+    CHECK(hot_cur.hot_x == 4 && hot_cur.hot_y == 9, "within a pixel: unchanged");
+    /* more than a pixel, seen twice: corrected */
+    CHECK(!hot_move(100, 200, true, 110, 212), "far: candidate only");
+    CHECK(hot_move(100, 200, true, 110, 212), "far twice: re-latched");
+    CHECK(hot_cur.hot_x == 10 && hot_cur.hot_y == 12, "the corrected hot spot");
+
+    /* a moving pointer (a new difference every event) never latches */
+    hot_new_image(32, 32, 1, 2);
+    CHECK(!hot_move(0, 0, true, 3, 3), "a");
+    CHECK(!hot_move(0, 0, true, 6, 6), "b: a different difference");
+    CHECK(!hot_move(0, 0, true, 9, 9), "c");
+    CHECK(hot_cur.hot_x == 1 && hot_cur.hot_y == 2, "a moving pointer keeps the SET hot spot");
+    /* ... and a non-consecutive repeat does not latch either */
+    CHECK(!hot_move(0, 0, true, 3, 3), "d: 3,3 again but not consecutive");
+    CHECK(hot_cur.hot_x == 1 && hot_cur.hot_y == 2, "still the SET hot spot");
+
+    /* implausible (the pointer is outside the image): ignored, and the candidate is dropped */
+    hot_new_image(32, 32, 1, 2);
+    CHECK(!hot_move(100, 100, true, 100, 140), "y 40 is outside a 32-high image");
+    CHECK(!hot_move(100, 100, true, 100, 140), "twice: still ignored");
+    CHECK(!hot_move(100, 100, true, 99, 100), "x -1 is outside too");
+    CHECK(!hot_move(100, 100, true, 105, 105), "plausible: candidate");
+    CHECK(!hot_move(100, 100, true, 100, 140), "an implausible one in between drops it");
+    CHECK(!hot_move(100, 100, true, 105, 105), "so this is a candidate again");
+    CHECK(hot_move(100, 100, true, 105, 105), "and now it latches");
+    CHECK(hot_cur.hot_x == 5 && hot_cur.hot_y == 5, "5,5");
+    /* the image's far edge: w-1 is inside, w is not */
+    hot_new_image(32, 32, 0, 0);
+    CHECK(!hot_move(0, 0, true, 31, 31) && hot_move(0, 0, true, 31, 31) && hot_cur.hot_x == 31, "31,31 inside");
+    hot_new_image(32, 32, 0, 0);
+    CHECK(!hot_move(0, 0, true, 32, 0) && !hot_move(0, 0, true, 32, 0), "32 is outside");
+
+    /* relative input (valid flag clear): the pair means nothing; the candidate is dropped, the hot
+     * spot already latched is kept (hot spot is irrelevant when the image is drawn at the top-left) */
+    hot_new_image(32, 32, 0, 0);
+    CHECK(!hot_move(0, 0, true, 7, 7), "candidate");
+    CHECK(!hot_move(0, 0, false, 0, 0), "relative: dropped");
+    CHECK(!hot_move(0, 0, true, 7, 7), "candidate again, not a latch");
+    CHECK(hot_move(0, 0, true, 7, 7), "latched");
+    CHECK(!hot_move(0, 0, false, 99, 99), "relative with garbage in the pair: ignored");
+    CHECK(hot_cur.hot_x == 7 && hot_cur.hot_y == 7, "kept");
+
+    /* a new image resets everything: the SET hot spot again, no latch, no candidate */
+    hot_new_image(48, 48, 2, 3);
+    CHECK(hot_cur.hot_x == 2 && hot_cur.hot_y == 3, "new image: SET hot spot");
+    CHECK(!hot_move(0, 0, true, 7, 7), "a fresh candidate, not a latch carried over");
+
+    /* a hostile guest cannot make it read outside: no image, a zero-size image, extreme values */
+    memset(&hot_cur, 0, sizeof hot_cur);
+    nb_hot_reset(&hot_st);
+    CHECK(!nb_hot_move(&hot_st, &hot_cur, true, 5, 5), "no image: nothing");
+    hot_new_image(32, 32, 0, 0);
+    CHECK(!hot_move(INT32_MIN, INT32_MAX, true, INT32_MAX, INT32_MIN), "extremes: implausible, no overflow");
+    CHECK(!hot_move(INT32_MAX, 0, true, INT32_MIN, 0), "difference overflow is implausible, not a wrap");
+}
+
 int main(void)
 {
+    test_hot_latch();
     test_move();
     test_xor_flag();
     test_xor_approx();

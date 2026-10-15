@@ -199,6 +199,9 @@ static void nb_client_state_reset(struct nb_sink *s)
      */
     s->cursor.defined = false;
     s->cursor.visible = false;
+    s->cursor.placed = false;
+    s->cursor.abs_valid = false;
+    nb_hot_reset(&s->cursor_hot);
     s->cursor.gen++;
     nb_cursor_copy(&s->cursor_pub, &s->cursor);
     s->cursor_dirty = false;
@@ -2128,6 +2131,7 @@ static void nb_cmd_cursor(struct nb_sink *s, const struct nvkvm_broker_cmd *raw,
             s->n_cursor_reject++;
             return;
         }
+        nb_hot_reset(&s->cursor_hot);   /* a new image: the SET hot spot stands */
         if (c.flags & NVKVM_BROKER_CURSOR_F_XOR) {
             /* an XOR cursor: a viewer cannot invert, so the substitute is the
              * broker's to draw, from the mask the VMM sent */
@@ -2138,23 +2142,39 @@ static void nb_cmd_cursor(struct nb_sink *s, const struct nvkvm_broker_cmd *raw,
         break;
     }
     case NVKVM_BROKER_CURSOR_MOVE: {
-        int32_t x, y;
+        int32_t x, y, ax = 0, ay = 0;
+        bool abs_valid = (c.flags & NVKVM_BROKER_CURSOR_F_ABS) != 0;
+        bool moved, hot_changed;
 
-        if (nb_cursor_move_clamp((int32_t)c.hot_x, (int32_t)c.hot_y, &x, &y) != 0) {
+        /* the image's top-left, and (flag set) the last absolute pointer the VMM
+         * injected: both bounded before use; a value outside is a refused MOVE */
+        if (nb_cursor_move_clamp((int32_t)c.hot_x, (int32_t)c.hot_y, &x, &y) != 0 ||
+            (abs_valid &&
+             nb_cursor_move_clamp((int32_t)c.width, (int32_t)c.height, &ax, &ay) != 0)) {
             s->n_cursor_reject++;
             if (nb_reject_log(s)) {
-                nb_err("CURSOR MOVE %d,%d is outside +-%d; refused (the "
-                       "previous position stays)", (int32_t)c.hot_x,
-                       (int32_t)c.hot_y, NVKVM_BROKER_CURSOR_MOVE_LIMIT);
+                nb_err("CURSOR MOVE %d,%d (pointer %d,%d) is outside +-%d; refused "
+                       "(the previous state stays)", (int32_t)c.hot_x,
+                       (int32_t)c.hot_y, (int32_t)c.width, (int32_t)c.height,
+                       NVKVM_BROKER_CURSOR_MOVE_LIMIT);
             }
             return;
         }
-        if (s->cursor.placed && s->cursor.x == x && s->cursor.y == y) {
-            return;             /* nothing moved: nothing to publish */
-        }
+        moved = !s->cursor.placed || s->cursor.x != x || s->cursor.y != y;
         s->cursor.x = x;
         s->cursor.y = y;
         s->cursor.placed = true;
+        s->cursor.abs_valid = abs_valid;
+        s->cursor.abs_x = abs_valid ? ax : 0;
+        s->cursor.abs_y = abs_valid ? ay : 0;
+        /* the hot spot from the pair (hover), latched on two equal differences */
+        hot_changed = nb_hot_move(&s->cursor_hot, &s->cursor, abs_valid, ax, ay);
+        if (hot_changed) {
+            s->cursor.gen++;    /* a new hot spot is a new pointer image to set */
+        }
+        if (!moved && !hot_changed) {
+            return;             /* only the pointer pair moved: nothing a backend draws */
+        }
         break;
     }
     case NVKVM_BROKER_CURSOR_HIDE:

@@ -212,6 +212,8 @@ struct nb_cursor {
     uint32_t w, h, hot_x, hot_y;
     int32_t  x, y;              /* the image's top-left on the guest frame,   */
     bool     placed;            /* once a MOVE set it (CAP_CURSOR_STREAM)     */
+    int32_t  abs_x, abs_y;      /* the last absolute pointer position (MOVE), */
+    bool     abs_valid;         /* valid only if the VMM's last input was one */
     uint32_t px[NVKVM_BROKER_CURSOR_MAX_DIM * NVKVM_BROKER_CURSOR_MAX_DIM];
 };
 
@@ -257,6 +259,27 @@ bool nb_cursor_xor_approx(struct nb_cursor *c);
  * clamp it to -NVKVM_BROKER_CURSOR_MAX_DIM .. NVKVM_BROKER_MAX_DIM (outside of
  * which the image cannot show) and return 0. */
 int  nb_cursor_move_clamp(int32_t x, int32_t y, int32_t *ox, int32_t *oy);
+/*
+ * The hot spot derived from the pointer (hover).  The Windows driver programs
+ * hot 0,0 while the real spot is inside the image; each MOVE carries the image's
+ * top-left and the last absolute pointer position, and hot = pointer - top-left.
+ * Rules ported from the VMM's HotTracker (crates/kf-broker/src/cursor.rs), with
+ * the owner's latch: the guest moves its cursor a little after it receives an
+ * injected event, so a derived spot is LATCHED only when the SAME difference
+ * appears in two consecutive MOVEs (event-counted, no timer).  Until then, and
+ * after every new image (nb_hot_reset), the SET hot spot stands.
+ */
+struct nb_hot {
+    bool    latched;            /* a derived hot spot replaced the SET one    */
+    bool    cand_valid;         /* the previous MOVE's plausible difference   */
+    int32_t cand_x, cand_y;
+};
+void nb_hot_reset(struct nb_hot *h);
+/* One MOVE: `c` holds the image (size, SET/latched hot spot) and its new top-left
+ * c->x,c->y.  Returns true when c->hot_x/hot_y changed (the backend re-renders). */
+bool nb_hot_move(struct nb_hot *h, struct nb_cursor *c, bool abs_valid,
+                 int32_t abs_x, int32_t abs_y);
+
 /* What a backend draws for the held cursor: nothing, the HOST POINTER image
  * (hover: the host pointer is the guest's), or an OVERLAY at c->x,c->y (grab,
  * where the broker has no pointer of its own; needs CAP_CURSOR_STREAM, a
@@ -472,6 +495,7 @@ struct nb_sink {
      * commits.
      */
     struct nb_cursor cursor;
+    struct nb_hot    cursor_hot;    /* hover: the hot spot derived from MOVEs   */
     struct nb_cursor cursor_pub;
     bool     cursor_dirty;      /* changed since the backend last saw it   */
     uint64_t cursor_applied_ms; /* when the backend last saw it            */
