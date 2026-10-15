@@ -128,9 +128,14 @@ transient; the old composing path is otherwise untouched and is the fallback.
 
 * kayfabe reports the guest's cursor and composes NOTHING in any mode: `CMD_CURSOR` `SET` (image, programmed/derived hot
   spot), `HIDE`/`SHOW` (hidden covers: the guest hid it; the cursor plane is off, so the guest draws a software cursor
-  into the frame itself; an empty or unconvertible image), and the new `MOVE` (the image's top-left on the frame,
-  signed, clamped to -256..8192 by the sender, refused by the broker beyond +-2^20), sent under grab only, one per
-  change of the position the worker notes once per pass (never per input event).
+  into the frame itself; an empty or unconvertible image), and the new `MOVE` — ONE atomic pair (⊘ CORRECTED 2026-10-15,
+  below the first version, which sent the top-left under grab only): the image's top-left on the frame and the last ABSOLUTE
+  pointer position the relay injected, in guest frame pixels, flag `CURSOR_F_ABS` clear after relative input; signed, clamped to
+  -256..8192 by the sender, refused by the broker beyond +-2^20; sent in every mode (grab is the viewer's state, not the
+  protocol's), one per change of the pair (the top-left is noted once per pass), never per input event. The broker derives the
+  hover hot spot `pointer - top-left` and latches it on two equal consecutive differences (see
+  `V3_BROKER_ROADMAP_20261015.md` section A); under the stream kayfabe sends the programmed hot spot and does not run the
+  `HotTracker` (the composing fallback keeps it).
 * An XOR cursor (the Windows I-beam) is converted by kayfabe to the inversion mask (`kf_disp::scanout::xor_mask`:
   alpha 0xff and the XOR colour where the colour bits are non-zero, regardless of the alpha bit; empty = hidden) and sent
   as a `SET` with `CURSOR_F_XOR`. The broker always draws the substitute: opaque black fill, one-pixel opaque white
