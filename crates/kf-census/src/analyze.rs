@@ -362,12 +362,17 @@ pub struct Analyzer {
     large: HashMap<StreamKey, Assembler>,
     large_joined: u64,
     tap: Option<MessageTap>,
+    record_tap: Option<MessageRecordTap>,
     bodies: Option<Bodies>,
 }
 
 /// A callback that sees every message run exactly as it reached the analyzer (tests use it to
 /// compare reassembled bytes with the bytes that were sent).
 pub type MessageTap = Box<dyn FnMut(Dir, &[u8])>;
+
+/// A diagnostic tap with source and queue-instance context. The bytes remain
+/// host-only; exporters must select metadata explicitly, never copy payloads.
+pub type MessageRecordTap = Box<dyn for<'a> FnMut(usize, &In<'a>)>;
 
 fn dir_ix(d: Dir) -> usize {
     match d {
@@ -412,6 +417,7 @@ impl Analyzer {
             large: HashMap::new(),
             large_joined: 0,
             tap: None,
+            record_tap: None,
             bodies: None,
         }
     }
@@ -426,6 +432,11 @@ impl Analyzer {
     /// Install a [`MessageTap`].
     pub fn set_tap(&mut self, tap: MessageTap) {
         self.tap = Some(tap);
+    }
+
+    /// Install a diagnostic tap retaining source/queue identity across restarts.
+    pub fn set_record_tap(&mut self, tap: MessageRecordTap) {
+        self.record_tap = Some(tap);
     }
 
     /// The ABI bundle (sources need the element size).
@@ -577,6 +588,9 @@ impl Analyzer {
             dir: m.dir,
         };
         self.messages[dir_ix(m.dir)] += 1;
+        if let Some(t) = self.record_tap.as_mut() {
+            t(source, &m);
+        }
         if let Some(t) = self.tap.as_mut() {
             t(m.dir, m.bytes);
         }
