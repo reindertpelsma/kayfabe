@@ -75,3 +75,29 @@ mistook a buffered, zero-length output file for failure. It is not evidence.
 The successful replacement capture's independent END/filecheck/oracle establish
 completion; PowerShell printed an empty collector ExitCode, so no process rc0
 is claimed from that field. CPU caps checks after the row:192pass/0fail/2ignored.
+
+## Merged candidate, before guest runs
+
+Source56f32dc0e: full kf-* CPU suite 3241pass/0fail/14ignored,
+checkout-specific /data/codex/target-ada. The first merged run caught only a
+stale42-row inventory assertion after adding two rows; corrected count44,
+then the complete suite reran green. Native requests are served exactly by the
+production responder, with wrong questions/dies/branches refused.
+
+H4 (before reboot to Linux): the same pinned public reinstall tool can restore
+Ubuntu22.04 minimal with root public-key SSH on this owned rental. Falsifier:
+no verified Linux SSH/KVM/GPU within the remaining lease. A conversion timeout
+is provisioning evidence, not a kayfabe GPU limit. Original timer stays armed.
+Windows-to-Linux preparation first failed its Cygwin certutil download; supplied
+the official public HTTPS installer (SHA256
+2c9f2fb56e1fb687b5d9680afa8f8b06e6214f0e483096af0eae1946431226c5),
+then retried. All native evidence was pushed before conversion.
+
+H5 (before subsequent kayfabe run): native AD102 caps and exact small controls
+remove the known per-die measurement gaps and Windows580.88 reaches Code0,
+DWM/desktop and hardware D3D with zero TDR under the production profile.
+Falsifier: any missing acceptance criterion. Additional refused controls or
+interrupt/display-progress gaps remain candidates, not assumed root causes.
+Hardware order: stock Linux gates/raw/CUDA oracle, exact-revision guest raw,
+CUDA/graphics and broker regression, then Windows guest. No family coverage
+until both OS suites pass across several supported driver builds.
