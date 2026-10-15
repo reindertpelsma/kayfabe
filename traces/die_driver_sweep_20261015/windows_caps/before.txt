@@ -1,0 +1,1 @@
+test_display_caps: tools/windows-capture/tests/test_display_caps.c:13: main: Assertion `kfwc_reg_allowed(0x00640000u + i * 4u)' failed.

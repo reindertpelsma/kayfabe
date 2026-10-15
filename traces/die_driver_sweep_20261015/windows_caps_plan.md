@@ -18,3 +18,13 @@ Public source for the fixed read range: ogkm display-capabilities classes
 `C573/C673/C773/CA73`, `kdispGetDisplayCapsBaseAndSize`, and the pinned source
 and field map in `docs/design/V3_DISPLAY_CAPS_DERIVATION_20261014.md` §0/§1.
 No guest-selected address or length is accepted by the measurement ioctl.
+
+GPU-free checks: the new caps whitelist test failed before implementation;
+C tests and the 1024-word snapshot bounds tests pass with ASan/UBSan. The
+read-only mutation guard passes. The current Windows build at `32973658a`
+succeeded using pinned official WDK/SDK NuGet packages on the trusted host.
+Driver SHA256: `371744be56f471aca3a5e882bf08afc03525cc008525ef7cf44a41d81306e2af`.
+Collector SHA256: `766dd94a088decfbd76db18b1ad4c18bd819bfa4461797e9dfbfaae755449afd`.
+The native Windows load and page read are NOT RUN. The output is unsigned;
+the existing installer test-signs it with a disposable on-target certificate.
+Evidence: `windows_caps/{before,after,read_only_guard,build}.txt`.
