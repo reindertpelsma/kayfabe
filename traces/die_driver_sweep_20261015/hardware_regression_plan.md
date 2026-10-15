@@ -15,3 +15,13 @@ clean completion. No Turing hardware result follows from an Ampere pass.
 The image repair streams are disk/network work, not a second GPU workload.
 The candidate build finishes before running timed GPU tests. One GPU job runs
 at a time. Windows continues to use its explicit GID-only binary f6d96614.
+
+Measured result at 8e45edc8a, QEMU kf3-bins/8e45edc8: fast suite30/30,
+actual X11 SHM broker presentation PASS, 1920x1080 with12826 colors, gears
+about60FPS, zero guest Xid/flip timeouts and12 NV assertions (same as baseline).
+18 STALL diagnostic lines retained; not18 separately measured events.
+Guest SSH poweroff succeeds and the interactive QEMU exits0, unlike the earlier
+forced ACPI teardown. Broker revision badf2d707da47a625e0ce69172a84785d20f81b8.
+Full GPU-free kf-* release suite also succeeds; see hardware_regression/gpu_free.txt.
+This does not establish Turing hardware acceptance or a Windows pass. The repaired
+Windows image is being tested separately on the GID-only binary f6d96614.
