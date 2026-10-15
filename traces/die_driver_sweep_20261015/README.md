@@ -49,8 +49,10 @@ are re-queried; no second lease exists.
 
 CPU verification audit: the bench README requires one Cargo target directory
 per checkout. Some CPU-only runs reused target-gpu-free across own worktrees.
-Fresh GPU-free runs now use target-host-gid and target-census-linux. Until those
-finish, treat the earlier overlapping-cache CPU checks as provisional. Rental
+Fresh GPU-free runs now use target-host-gid and target-census-linux. Fresh checks completed at12:35UTC: product42483a475 (GID+C57E+exact595
+vocabulary) passes3234 tests,0 failed,14 ignored; Windows-census topic passes51,
+0 failed,1 ignored. Logs in fresh_verification/. The audit is resolved by these
+checkout-specific runs. Rental
 hardware builds use one checkout and its own target; their binary provenance
 is unaffected. Record the fresh results either way.
 
