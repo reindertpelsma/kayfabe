@@ -66,7 +66,10 @@
  * exit phase's bounded wait, main loop only) joins. */
 /* 29 (2026-10-14, claude/s3-resume-20261014, docs/design/V3_S3_RESUME.md): kf3_device_reset gains
  * wake (the reset type is RESET_TYPE_WAKEUP: the S3 resume's device reset). */
-#define KF3_ABI 29
+/* 30 (2026-10-15, claude/perf-fix-20261015, docs/design/V3_WINDOWS_PERF_20261015.md): kf3_realize gains
+ * user_view_keep (the user-view-keep property: CPU views of the store each USER-ring channel keeps armed;
+ * 0 = the default, 16) after channel_budget. */
+#define KF3_ABI 30
 #define KF3_BROKER_ON 1u
 #define KF3_BROKER_VRAM_AUTO 0u
 #define KF3_BROKER_VRAM_ON 1u
@@ -169,7 +172,7 @@ int32_t kf3_realize(uint32_t gpu_minor, uint64_t fb_mb, uint64_t bar1_bytes, uin
                     const char *guest_driver, uint32_t display, uint32_t gop, uint32_t x11_dispsw,
                     uint32_t display_broker,
                     uint32_t display_max_fps, const char *gop_efi,
-                    const char *gpu_uuid, const char *vm_id, uint32_t pci_devfn, uint32_t channel_budget, void **out,
+                    const char *gpu_uuid, const char *vm_id, uint32_t pci_devfn, uint32_t channel_budget, uint32_t user_view_keep, void **out,
                     char *err, size_t err_len);
 int32_t kf3_identity(void *h, Kf3Identity *out);
 /* ★ ABI 7: config-space words the guest reads by config cycle (Hopper+ PCIe link caps). */

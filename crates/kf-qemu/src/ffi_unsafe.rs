@@ -71,7 +71,9 @@ use std::os::unix::ffi::OsStrExt as _;
 /// `c9ac4e77`).
 /// 28 (2026-10-13, same branch): 27's `kf3_device_reset` gains `from_vcpu`, and
 /// [`kf3_device_reset_wait`] (the `exit` phase's bounded wait) joins.
-pub const KF3_ABI: u32 = 29;
+/// 30 (2026-10-15, `claude/perf-fix-20261015`, `docs/design/V3_WINDOWS_PERF_20261015.md`): `kf3_realize` gains
+/// `user_view_keep` (the `user-view-keep` property; 0 = the default, 16) after `channel_budget`.
+pub const KF3_ABI: u32 = 30;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -157,6 +159,7 @@ pub unsafe extern "C" fn kf3_realize(
     vm_id: *const c_char,
     pci_devfn: u32,
     channel_budget: u32,
+    user_view_keep: u32,
     out: *mut *mut c_void,
     err: *mut c_char,
     err_len: usize,
@@ -200,6 +203,7 @@ pub unsafe extern "C" fn kf3_realize(
         pci_devfn,
         channel_budget,
     };
+    crate::userstore::configure(user_view_keep);
     // ★ Review addendum: a panic on any service thread stops the VM, visibly (`failclosed`).
     crate::failclosed::install();
     match Device::realize(&cfg) {
