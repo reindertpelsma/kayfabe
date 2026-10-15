@@ -1,5 +1,18 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-15 15:43UTC — only active rental56117789, Turing
+
+Own worktree/work branch/work plan:/workspace/codex/turing-hw,
+codex/sweep-turing-20261015,traces/die_driver_sweep_20261015/turing_2060super/.
+RTX2060Super exact die pending SSH, created15:41:16UTC after AD102absence.
+Quote$0.1113888889/hour150GB. TimerPID1995396 deadlineabout18:36:22UTC.
+Never extend past18:41:16UTC. Only this ID owned/active; at most one box.
+KVM initial boot pending. NativeWindows580oracle/facts first, thenrestoreLinux
+samelease and bothguest suites. Falsifiers recorded in plan before runs.
+ControllerSSHconfig/work scriptsunder/workspace/codex; no othercheckouts/VMs
+may be touched. Older AD102 active/process paragraphs below are historical.
+
+
 ## UPDATE 2026-10-15 15:40UTC — AD102 lease closed; two Linux builds pass
 
 Own branchcodex/sweep-ada-20261015, draftPR#9. Instance56096336 destroyed,
