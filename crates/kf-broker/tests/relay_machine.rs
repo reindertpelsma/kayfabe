@@ -819,6 +819,72 @@ fn a_later_no_downgrades_the_rung_and_reclaims_its_frames() {
     );
 }
 
+/// ★ 2026-10-15 incident (run 2990): the guest followed the window to 2080x1171 (pitch 8320, a
+/// multiple of 128 but not of 256) and the compositor, an AMD iGPU under mutter, refused the LINEAR
+/// dma-buf import with a fatal protocol error; 1920x1080 (7680) and 2048x1155 (8192) imported. A host
+/// frame whose pitch is not a multiple of 256 therefore never goes as a dma-buf: it goes as shared
+/// memory, which has no pitch rule, while an aligned frame keeps the zero-copy rung.
+#[test]
+fn an_unaligned_pitch_goes_as_shared_memory_and_an_aligned_one_as_a_dma_buf() {
+    use kf_broker::{DMABUF_PITCH_ALIGN, dmabuf_pitch_ok};
+    assert_eq!(DMABUF_PITCH_ALIGN, 256);
+    // (width, goes as a dma-buf): 4w is the host frame's pitch
+    for (w, dma) in [
+        (64, true),   // 256
+        (128, true),  // 512
+        (65, false),  // 260
+        (96, false),  // 384 = 1.5 x 256
+        (160, false), // 640 = 2.5 x 256
+        (192, true),  // 768
+    ] {
+        let mut t = T::new(true);
+        t.up(CAP_MODIFIERS | CAP_RELEASE);
+        let j = t.publish(w, 32);
+        t.frame();
+        let s = t.sent();
+        let a = s
+            .iter()
+            .find(|(c, _)| c.ty == CMD_ATTACH)
+            .unwrap_or_else(|| panic!("width {w}: no ATTACH"));
+        if dma {
+            assert_eq!(a.0.flags, 0, "width {w} (pitch {}): a dma-buf", w * 4);
+            assert_eq!(a.1, Some(t.dmabuf_id(j)), "width {w}");
+        } else {
+            assert_eq!(
+                a.0.flags,
+                CMD_F_SHM,
+                "width {w} (pitch {}): shared memory",
+                w * 4
+            );
+            assert_eq!(a.1, Some(t.memfd_id(j)), "width {w}");
+        }
+        assert_eq!(
+            a.0.stride,
+            w * 4,
+            "the stride on the wire is the frame's own"
+        );
+        assert_eq!(dmabuf_pitch_ok(w * 4), dma, "width {w}");
+    }
+}
+
+/// ★ The sizes of the incident, as a table, and the rule in general: `4w` is a multiple of 256
+/// exactly when `w` is a multiple of 64 (so the broker's suggested widths are, see
+/// `broker/test/test_hint.c`).
+#[test]
+fn the_pitch_rule_is_a_width_that_is_a_multiple_of_64() {
+    use kf_broker::dmabuf_pitch_ok;
+    assert!(dmabuf_pitch_ok(1920 * 4), "1920x1080 imported");
+    assert!(dmabuf_pitch_ok(2048 * 4), "2048x1155 imported");
+    assert!(
+        !dmabuf_pitch_ok(2080 * 4),
+        "2080x1171 was refused by the compositor"
+    );
+    assert!(!dmabuf_pitch_ok(0));
+    for w in 1..=8192u32 {
+        assert_eq!(dmabuf_pitch_ok(w * 4), w % 64 == 0, "width {w}");
+    }
+}
+
 /// ★ Rung 1b: a broker without CAP_MODIFIERS is asked about (XR24, MOD_INVALID); until it says
 /// yes frames go as shared memory, then as the dma-buf with the implicit modifier.
 #[test]

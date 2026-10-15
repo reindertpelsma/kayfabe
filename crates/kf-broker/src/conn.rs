@@ -1085,8 +1085,10 @@ impl<L: Link> Relay<L> {
             return Some((Rung::Shm, MOD_LINEAR));
         };
         // ★ the host dma-buf rungs, unless their detector backs off (`badf2d7`: a dma-buf the
-        // broker cannot prove is dropped without a word)
-        if fds.dmabuf().is_some() && c.dmabuf.allows(self.now_ms) {
+        // broker cannot prove is dropped without a word), and only for a row pitch a GPU can
+        // import ([`dmabuf_pitch_ok`]): an unaligned frame goes as shared memory, which has no
+        // pitch rule, instead of as an import the compositor may refuse
+        if fds.dmabuf().is_some() && dmabuf_pitch_ok(g.stride) && c.dmabuf.allows(self.now_ms) {
             if c.caps & CAP_MODIFIERS != 0 {
                 // an unknown verdict counts as yes (`relay.c:753-793`)
                 if verdict(c, g.fourcc, MOD_LINEAR) != Some(Verdict::No) {
@@ -2866,6 +2868,22 @@ fn verdict<S>(c: &Conn<S>, fourcc: u32, modifier: u64) -> Option<Verdict> {
         .iter()
         .find(|r| r.fourcc == fourcc && r.modifier == modifier)
         .map(|r| r.v)
+}
+
+/// ★ The row pitch, in bytes, a host dma-buf frame must be a multiple of to be offered to a
+/// compositor as a LINEAR (or implicit) dma-buf. MEASURED 2026-10-15 (run 2990, GNOME/mutter on an
+/// AMD Raphael iGPU, guest on the NVIDIA RTX 4070): 1920x1080 (pitch 7680 = 30 x 256) and
+/// 2048x1155 (8192) imported, 2080x1171 (pitch 8320 = 65 x 128, not a multiple of 256) was refused
+/// with `EGL failed to allocate resources`, twice. 256 is the portable value: public Mesa
+/// discussion says AMD GFX9+ does not take a 128-byte linear alignment, and `broker/nvkvm_broker.c`
+/// states "hardware pitch alignment is 256 or 512 bytes". INFERRED, not proven, that the pitch is
+/// the reason (the live check with an aligned odd height is owed).
+pub const DMABUF_PITCH_ALIGN: u32 = 256;
+
+/// Whether a host frame whose rows are `stride` bytes apart may go as a dma-buf (rungs 1 and 1b).
+#[must_use]
+pub fn dmabuf_pitch_ok(stride: u32) -> bool {
+    stride != 0 && stride.is_multiple_of(DMABUF_PITCH_ALIGN)
 }
 
 #[cfg(test)]

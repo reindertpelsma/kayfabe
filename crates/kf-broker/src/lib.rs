@@ -42,7 +42,10 @@ pub mod link;
 pub mod slots;
 pub mod wire;
 
-pub use conn::{Counters, Host, Input, Link, Pointer, Recv, Relay, RelayConfig, Rung, Sent};
+pub use conn::{
+    Counters, DMABUF_PITCH_ALIGN, Host, Input, Link, Pointer, Recv, Relay, RelayConfig, Rung, Sent,
+    dmabuf_pitch_ok,
+};
 #[doc(hidden)]
 pub use conn::{LogCapture, capture_log};
 pub use console::{

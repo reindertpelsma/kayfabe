@@ -232,6 +232,14 @@ struct nb_wl {
     } proven[NB_PROVEN_SLOTS];
     uint32_t probe_fourcc;   /* the pair the outstanding probe is about */
     uint64_t probe_mod;
+    /* ...and the buffer geometry it is about: a pair proven at one size is not
+     * proven at another (2026-10-15: proven at 1920x1080, refused at 2080x1171,
+     * and create_immed turned the refusal into a dead connection). */
+    uint32_t probe_w, probe_h, probe_stride, probe_offset;
+    struct nb_geom_set geoms;   /* geometries proven by import */
+    /* The last dma-buf handed to create_immed, for the one log line a fatal
+     * protocol error deserves. */
+    char     last_import[96];
     /* ...and there is at most ONE, because the two fields above are how its
      * answer is attributed.  See wl_attach(). */
     bool     probe_inflight;
@@ -700,10 +708,13 @@ static void probe_created(void *data, struct zwp_linux_buffer_params_v1 *params,
     if (i >= 0) {
         w->proven[i].state   = 1;
         w->proven[i].probing = false;
-        nb_log("this display CAN import %.4s modifier 0x%016llx — proven by "
-               "import, not by advertisement",
+        nb_geom_add(&w->geoms, w->probe_fourcc, w->probe_mod, w->probe_w,
+                    w->probe_h, w->probe_stride, w->probe_offset);
+        nb_log("this display CAN import %.4s modifier 0x%016llx at %ux%u "
+               "stride %u — proven by import, not by advertisement",
                (const char *)&w->proven[i].fourcc,
-               (unsigned long long)w->proven[i].mod);
+               (unsigned long long)w->proven[i].mod, w->probe_w, w->probe_h,
+               w->probe_stride);
     }
     wl_buffer_destroy(buf);
     zwp_linux_buffer_params_v1_destroy(params);
@@ -719,11 +730,13 @@ static void probe_failed(void *data, struct zwp_linux_buffer_params_v1 *params)
         w->proven[i].state   = -1;
         w->proven[i].probing = false;
         nb_err("this display ADVERTISED %.4s modifier 0x%016llx and then "
-               "refused to import it.  Frames in that layout will be rejected "
-               "rather than retried; the VMM is being told so it can send "
-               "something else.",
+               "refused to import it (%ux%u, stride %u).  Frames in that "
+               "layout will be rejected rather than retried; the VMM is "
+               "being told so it can send something else (shared memory), "
+               "and the connection stays up.",
                (const char *)&w->proven[i].fourcc,
-               (unsigned long long)w->proven[i].mod);
+               (unsigned long long)w->proven[i].mod, w->probe_w, w->probe_h,
+               w->probe_stride);
         w->probe_bad_pending = true;
         w->probe_bad_fourcc  = w->proven[i].fourcc;
         w->probe_bad_mod     = w->proven[i].mod;
@@ -880,9 +893,23 @@ static int wl_attach(struct nb_session *s, const struct nb_buf_desc *d)
         if (w->probe_inflight) {
             return 0;
         }
-        if (w->proven[ps].state == 0) {
-            /* First buffer of this pair: probe it asynchronously, so a refusal
-             * arrives as an event rather than as a fatal protocol error. */
+        /*
+         * A PAIR IS PROVEN AT A GEOMETRY, NOT IN GENERAL.  2026-10-15 (run
+         * 2990): XR24+LINEAR was proven on the first 1920x1080 buffer; the
+         * window was then maximized and restored, the guest followed it to
+         * 2080x1171 (row 8320 bytes, not a multiple of 256), and create_immed
+         * of THAT buffer was refused by mutter's EGL ("failed to allocate
+         * resources") -- a protocol error, so the connection died and the
+         * broker exited.  A buffer whose geometry this display has not been
+         * seen to import therefore goes through the asynchronous probe like a
+         * first buffer: the cost is one dropped frame per new size, the gain
+         * is that a refusal arrives as an event.
+         */
+        if (w->proven[ps].state == 0 ||
+            !nb_geom_has(&w->geoms, d->fourcc, d->modifier, d->width,
+                         d->height, d->stride, d->offset)) {
+            /* Probe it asynchronously, so a refusal arrives as an event
+             * rather than as a fatal protocol error. */
             struct zwp_linux_buffer_params_v1 *pp =
                 zwp_linux_dmabuf_v1_create_params(w->dmabuf);
 
@@ -895,15 +922,21 @@ static int wl_attach(struct nb_session *s, const struct nb_buf_desc *d)
             zwp_linux_buffer_params_v1_add_listener(pp, &probe_listener, w);
             w->probe_fourcc      = d->fourcc;
             w->probe_mod         = d->modifier;
+            w->probe_w           = d->width;
+            w->probe_h           = d->height;
+            w->probe_stride      = d->stride;
+            w->probe_offset      = d->offset;
             w->proven[ps].probing = true;
             w->probe_inflight     = true;
             zwp_linux_buffer_params_v1_create(pp, (int32_t)d->width,
                                               (int32_t)d->height, d->fourcc,
                                               0 /* flags */);
             nb_log("probing whether this display can import %.4s modifier "
-                   "0x%016llx (one frame is dropped to find out)",
+                   "0x%016llx at %ux%u stride %u (one frame is dropped to "
+                   "find out)",
                    (const char *)&d->fourcc,
-                   (unsigned long long)d->modifier);
+                   (unsigned long long)d->modifier, d->width, d->height,
+                   d->stride);
             w->pending = -1;
             return 0;
         }
@@ -924,6 +957,10 @@ static int wl_attach(struct nb_session *s, const struct nb_buf_desc *d)
      * protocol error on the params object instead, which we surface as a lost
      * display rather than as a stall.
      */
+    snprintf(w->last_import, sizeof w->last_import,
+             "%ux%u stride %u offset %u %.4s modifier 0x%016llx", d->width,
+             d->height, d->stride, d->offset, (const char *)&d->fourcc,
+             (unsigned long long)d->modifier);
     b = zwp_linux_buffer_params_v1_create_immed(params, (int32_t)d->width,
                                                 (int32_t)d->height, d->fourcc,
                                                 0 /* flags */);
@@ -1942,6 +1979,7 @@ static void wl_client_detach(struct nb_session *s, uint64_t generation)
      * EV_FORMAT about a buffer it never sent.
      */
     memset(w->proven, 0, sizeof w->proven);
+    nb_geom_clear(&w->geoms);
     w->probe_bad_pending = false;
 }
 
@@ -1988,16 +2026,21 @@ static void wl_report_surface(struct nb_wl *w, int lw, int lh)
     }
 
     /*
-     * ROUND THE WIDTH DOWN TO A MULTIPLE OF 8.
+     * ROUND THE WIDTH DOWN TO A MULTIPLE OF 64 (nb_hint_width()).
      *
      * The guest synthesises the mode with drm_cvt_mode(), which applies
      * CVT_H_GRANULARITY = 8, so a width that is not a multiple of 8 cannot be
-     * honoured exactly.  Exact is what matters: a compositor promotes a surface
-     * to a hardware plane only when it covers the output, so missing by four
-     * pixels silently costs direct scanout.  Down, never up, so the suggestion
-     * always fits the window we measured.
+     * honoured exactly -- and 8 was the whole rule until 2026-10-15.  At 32 bits
+     * per pixel a multiple of 64 is also a row of a multiple of 256 bytes, the
+     * pitch a GPU's dma-buf import accepts: the guest followed a restored
+     * window to 2080x1171 (row 8320) and an AMD-iGPU compositor refused the
+     * import, while 1920 and 2048 wide frames imported.  Down, never up, so the
+     * suggestion always fits the window we measured; the frame is scaled into
+     * the window, so up to 63 pixels of width cost a sliver of border, not
+     * a frame.  (Direct scanout needs the buffer to cover the output; the
+     * common outputs, 1920/2560/3840/5120 wide, are multiples of 64.)
      */
-    pw &= ~7u;
+    pw = nb_hint_width(pw);
     if (pw == 0 || ph == 0) {
         return;
     }
@@ -4451,6 +4494,21 @@ static int wl_pollfds(struct nb_session *s, struct pollfd *out, int max)
  * said POLLIN; otherwise the broker would stall on the compositor and stop
  * forwarding input, which is exactly the coupling this design forbids.
  */
+/*
+ * The compositor ended the connection (a protocol error is fatal, and a
+ * create_immed it refused is one).  libwayland has already printed its own
+ * line; this adds the one fact it cannot know: the last dma-buf this broker
+ * handed to create_immed, so the log names the size without a debugger.
+ */
+static void wl_log_dead(const struct nb_wl *w)
+{
+    if (w->last_import[0]) {
+        nb_err("the compositor closed the connection (wl error %d); the last "
+               "dma-buf imported with create_immed was %s",
+               wl_display_get_error(w->dpy), w->last_import);
+    }
+}
+
 static int wl_dispatch_session(struct nb_session *s, struct nb_sink *sink)
 {
     struct nb_wl *w = s->priv;
@@ -4472,6 +4530,7 @@ static int wl_dispatch_session(struct nb_session *s, struct nb_sink *sink)
     if (wl_display_prepare_read(w->dpy) != 0) {
         /* Another queue already has events buffered; drain those first. */
         if (wl_display_dispatch_pending(w->dpy) < 0) {
+            wl_log_dead(w);
             return -EIO;
         }
         return 0;
@@ -4479,14 +4538,17 @@ static int wl_dispatch_session(struct nb_session *s, struct nb_sink *sink)
     if (!readable) {
         wl_display_cancel_read(w->dpy);
         if (wl_display_dispatch_pending(w->dpy) < 0) {
+            wl_log_dead(w);
             return -EIO;
         }
         return 0;
     }
     if (wl_display_read_events(w->dpy) < 0) {
+        wl_log_dead(w);
         return -EIO;
     }
     if (wl_display_dispatch_pending(w->dpy) < 0) {
+        wl_log_dead(w);
         return -EIO;
     }
     if (w->quit) {

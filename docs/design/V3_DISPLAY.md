@@ -4216,3 +4216,29 @@ disjointness, name sanitising, the cursor sink); `kf-qemu` `raw_unsafe.rs`
 no QEMU); `wire_mirror.rs` (layouts of `Kf3Pointer`, `Kf3InputOps`, the 15 verb types redeclared from
 Rust, `KF3_BTN_*`, two new known-positive drifts). The relay's existing input tests are unchanged
 except the horizontal wheel.
+
+### 8.21 A window resize killed the broker: dma-buf proof is per geometry, and the pitch is 256 (2026-10-15)
+
+**STATUS: LIVE, 2026-10-15 — FIXED GPU-free (branch `claude/broker-resize-20261015`); the LIVE CHECKS
+are OWED.** Incident (run 2990, GNOME/mutter on the AMD Raphael iGPU `renderD129`, guest on the RTX
+4070): the broker window was maximized and restored; the broker SUGGESTED 2080x1171 and Windows
+applied it; mutter refused the LINEAR dma-buf import (`error 7: failed to import supplied dmabufs:
+EGL failed to allocate resources`), a Wayland protocol error, so the connection died and the broker
+exited; the relaunched broker refused the same size again and fell back to `wl_shm`.
+
+**Measured:** 1920x1080 (row 7680 = 30 x 256) and 2048x1155 (8192; odd height) imported on this
+compositor in four runs (501, 1380, 2980, 2990); 2080x1171 (row 8320 = 65 x 128) was refused twice,
+in the live broker and again after the relaunch with the guest still at that size. The host frame
+is `4·w` bytes a row (`kf-qemu` `display.rs` publish). The broker proved the pair
+(XR24, LINEAR) once, at the first buffer, and used `create_immed` for every later buffer of any
+size (`nb_session_wl.c`, `wl_attach`), and `create_immed` reports a refusal as a fatal protocol error.
+**Inferred, not proven:** that the 256-byte row alignment is the reason (public Mesa discussion
+says AMD GFX9+ takes no 128-byte linear alignment; the height 1155 case rules the height out).
+
+**Changes:** (1) `kf_broker::dmabuf_pitch_ok`: a host frame whose pitch is not a multiple of 256 goes
+as `F_SHM`, never as a dma-buf (`conn.rs`, `choose`). (2) The broker suggests widths that are a
+multiple of 64 (`nb_hint_width`, so the row is a multiple of 256 bytes). (3) Proof of import is per
+(fourcc, modifier, width, height, stride, offset) (`nb_geom_set`); an unproven geometry takes the
+asynchronous probe, so a refusal is an event and EV_FORMAT x=0 (the VMM falls back to shared memory),
+not a dead connection. **Residual:** a refusal of an already-proven geometry still ends the Wayland
+connection (the protocol makes it fatal); the broker now logs the last imported size when that happens.

@@ -841,6 +841,40 @@ extern unsigned nb_res_w, nb_res_h;
 extern int  nb_tier;
 extern bool nb_linear_only;   /* deprecated alias for NB_TIER_LINEAR */
 
+/*
+ * nb_geom.c.  The width the broker SUGGESTS to the guest is a multiple of
+ * NB_HINT_W_ALIGN pixels: at 32 bits per pixel the guest's frame then has a row
+ * that is a multiple of 256 bytes, the pitch every GPU's dma-buf import accepts
+ * (MEASURED 2026-10-15: a 2080-wide frame, row 8320 = 65 x 128, was refused by
+ * an AMD-iGPU compositor; 1920 and 2048 were not).  Below one unit the CVT
+ * granularity of 8 is all that is asked.  Heights need no rule.
+ */
+#define NB_HINT_W_ALIGN 64u
+unsigned nb_hint_width(unsigned w);
+
+/*
+ * The buffer geometries a display has been PROVEN to import.  Whether an import
+ * succeeds depends on the buffer, not only on its (fourcc, modifier): the
+ * pair was proven at 1920x1080 and refused at 2080x1171.  A small ring; a
+ * forgotten geometry costs one probe, never the connection.
+ */
+#define NB_GEOM_SLOTS 8
+struct nb_geom {
+    bool     used;
+    uint32_t fourcc;
+    uint64_t modifier;
+    uint32_t width, height, stride, offset;
+};
+struct nb_geom_set {
+    struct nb_geom e[NB_GEOM_SLOTS];
+    unsigned       next;
+};
+bool nb_geom_has(const struct nb_geom_set *s, uint32_t fourcc, uint64_t mod,
+                 uint32_t w, uint32_t h, uint32_t stride, uint32_t offset);
+void nb_geom_add(struct nb_geom_set *s, uint32_t fourcc, uint64_t mod,
+                 uint32_t w, uint32_t h, uint32_t stride, uint32_t offset);
+void nb_geom_clear(struct nb_geom_set *s);
+
 uint32_t nb_fourcc_bpp(uint32_t fourcc);
 /* The opaque twin of an alpha format (AR24->XR24), or 0 if there is none.
  * Same byte layout; only the alpha channel's meaning differs. */
