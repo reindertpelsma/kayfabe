@@ -38,12 +38,19 @@ stack by design**, but encoding wants one (NVENC or a CPU encoder), so the encod
 same frame fds. (3) the cursor travels as a separate stream (the broker already owns it, item A; RFB has a cursor pseudo-encoding);
 input comes back through the same event path as item B.
 
-## D. Clipboard (protocol exists, kayfabe side not wired)
+## D. Clipboard (protocol exists, kayfabe side not wired; owner decision 2026-10-15: the HYPERVISOR'S OWN GUEST TOOLS, interface abstract)
 **Measured:** the protocol has `EV_CLIPBOARD` (host to guest, chunked, 1 s window per direction), `CMD_CLIPBOARD` (guest to host),
 a transfer cap, and `CMD_CAPS` with the client bit `CLIENT_CLIPBOARD`; the broker side (`nvkvm_broker.c`) implements them;
-`crates/kf-broker/src/wire.rs` defines the constants and states they are "not used by this relay". **Open:** what the guest talks to.
-Candidates: a spice-vdagent-compatible virtio-serial channel (interop with existing guest tools, check licence), or our own small guest
-agent. Hostile-guest rules apply: size cap, text only first, bounded, no unvalidated forwarding.
+`crates/kf-broker/src/wire.rs` defines the constants and states they are "not used by this relay".
+**Decision:** kayfabe writes no guest agent and no guest-side protocol. The clipboard travels through whatever the hypervisor
+already ships for its guests; under QEMU that is the SPICE agent (`spice-vdagent` on Linux, SPICE guest tools on Windows, installed
+by the user in the image). Kayfabe defines only an **abstract, VMM-neutral clipboard port** (a trait in a neutral crate: host text in,
+guest text out, size-capped, bounded, text first) that the broker relay drives; each VMM adapter implements it with that VMM's
+mechanism. **Inferred, not verified here:** under QEMU the adapter would use QEMU's own agent chardev (`qemu-vdagent` on a
+virtio-serial port, QEMU >= 6.1) and register as the clipboard peer of QEMU's clipboard API; with `-display none` there is no other
+peer, so nothing else competes. To check before building: that this works with `-display none`, that the guest tools run in the Win11
+image (QGA's MSI did not, see the diagnostics notes; vdagent is separate software), and that the guest's clipboard bytes are
+size-capped before they reach the broker (hostile guest).
 
 ## E. ACPI / power (partly there)
 **Measured:** `EV_CLOSE` carries `CLOSE_POWERDOWN` (graceful) or force; `kf-broker/src/conn.rs` surfaces it to the VMM
