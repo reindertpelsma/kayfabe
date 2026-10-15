@@ -4,16 +4,16 @@
 
 Compared every aligned word of all4096bytes, including omitted zero words, using
 the actual runtime derivation at0b6c501fb (productc2092cf7b) plus measurement-only
-examplea84059a10. `receipt.json` pins both source revisions, the example hash and
+example/diagnostic patch886f885c5. `receipt.json` pins both source revisions, the example hash and
 each input oracle hash. Driver ABI580.65.06, shipped exact-die580rows, SDRenabled;
 no GPU, host driver or guest process exists in this check. No process-env claim.
 
-| Target | Native oracle | Differing words | Words containing unnamed register/bits | Result |
+| Target | Native oracle | Differing words | Words with gaps in the selected generated class layout | Result |
 |---|---|---:|---:|---|
 | AD104 | owner's existing AD104 test fixture |100|19|FAIL exit1|
 | AD102 | own nativeWindows580.88 measurement |100|19|FAIL exit1|
 | TU106 | own nativeWindows580.88 measurement |91|19|FAIL exit1|
-| GB206 | own nativeWindows580.88 measurement |125|65|FAIL exit1|
+| GB206 | own nativeWindows580.88 measurement |125|62|FAIL exit1|
 | AD106 | AD104 reference ONLY; no own native AD106 page |101|20|FAIL exit1; cross-die diagnostic only|
 | GA104 | native A4000-class measurement missing |—|—|NOTRUN|
 
@@ -25,10 +25,12 @@ value. Native-value derivations remain explicitly unknown. Some differences are
 intentional virtual connector/features policy (e.g. TMDS instead of native DP);
 others are unmodeled physical widths/limits, unnamed cells or family-specific
 capability words. These classifications do not prove which causes a guest fault.
+Correction folded in: the first tool labeled three published Blackwell SYS_CAPC/D/E words unknown because the pre-existing diagnostic name list omitted them. Test-firstf14089a3d fails;886f885c5 names their source-derived fields. All differing-word counts remain unchanged; GB206words with class-layout gaps are62, not65. Those names still do not derive native values.
+
 No captured page/value was added to product authoring by this comparison.
 
 The new checker validates the native page's end count, alignment, duplicate
-words and bounds. Two synthetic parser/difference tests pass. Exact equality is
+words and bounds. Three synthetic parser/difference tests pass; allkf-disp targets192pass/0fail/2existingignored. Exact equality is
 a separate red release gate, not hidden by the existing 'named unclaimed fields'
 test. W1(c)'s hardware falsifier (equal bytes but no window scan) is UNRUN because
 the equality precondition is false. The Blackwell tiling candidate remains held.

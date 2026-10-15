@@ -1,0 +1,4 @@
+guard_readonly: clean
+62e89c6dd256ec56c4b951c1d40faa485d1e2919756b36bda0449ca1f539f530  kfwc.sys
+b7732d2edb0845f9d319d0dd2669474ff7cb7bec1adc54c10f261bd97c427acf  kfwc_collect.exe
+UNSIGNED. Sign on the target (install/install.ps1 does it) and load only on a machine you own.
