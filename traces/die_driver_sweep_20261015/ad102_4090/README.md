@@ -158,3 +158,10 @@ this same verified baseline to open. Falsifier: the image still fails to open,
 or stock qemu-img identifies another compression type. Install libzstd-dev in
 canonical bench deps; add --enable-zstd to the recorded configure flags, rebuild,
 then retry the same overlay. Retain failure and final-image integrity evidence.
+
+QEMU zstd probe: image-open rc1 before, rc0 after explicit--enable-zstd;
+new binaryda0569a6, product code unchanged. Windows phase1 now QGA-boots,
+binds/flags580.88 and shuts down via QGA. Fresh phase2 reports NVIDIA
+Code0/CM_PROB_NONE,1920x1080@60Hz, DWM1/Explorer1. No app pass yet: first
+probe deployment accidentally used a literal filename; strict hash/path checks
+refused. Correcting the deployment and rerunning acceptance before any cell pass.
