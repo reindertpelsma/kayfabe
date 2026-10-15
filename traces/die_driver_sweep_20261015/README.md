@@ -39,7 +39,7 @@ not prove the remaining dies in its family.
 |---|---|---|
 | Turing | C57E fix passes GPU-free tests; Ampere regression passes; Turing hardware pending | incomplete |
 | Ampere | GA104 Linux580 broad pass; Linux595 raw pass; Windows580 boot stall captured | incomplete |
-| Ada | AD102 Linux580 raw30/CUDA4/graphics10+broker and Windows580 Code0/DWM/CUDA3/D3D11+12/zeroTDR pass; Linux595 in progress | incomplete: several driver builds and other dies remain unverified |
+| Ada | AD102 Linux580 raw30/CUDA4/graphics10+broker and Windows580 Code0/DWM/CUDA3/D3D11+12/zeroTDR pass; Linux595 raw30/CUDA4/graphics10 pass (broker not run) | incomplete: several driver builds and other dies remain unverified |
 | Blackwell | not tried in this campaign; older GB206 results remain prior evidence | incomplete |
 
 Rental56076314 retired12:40:19UTC; native Windows installation completion

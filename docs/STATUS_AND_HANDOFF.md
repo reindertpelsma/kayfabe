@@ -1,5 +1,35 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-15 15:40UTC — AD102 lease closed; two Linux builds pass
+
+Own branchcodex/sweep-ada-20261015, draftPR#9. Instance56096336 destroyed,
+absence verified by15:39:44UTC; all own QEMUs gone before teardown. Original
+timer was15:40:55UTC. At this checkpoint no active own rental.
+
+AD102 device da0569a6: Windows580.88 LTSC26100 Code0/DWM/Explorer,
+CUDA3,D3D11compute/draw+D3D12compute/fences,0TDR and clean shutdown;
+Linux580 raw30/CUDA4/graphics10+actualX11SHM broker pass;
+Linux595.91.07 raw30/CUDA4/graphics5stages+10matching hashes pass.
+595broker remainsNOTRUN; more Windows builds and other dies remain open.
+All text evidence pushed undertraces/die_driver_sweep_20261015/ad102_4090/.
+
+595graphics first failed due missing-lEGL link after.run uninstall, not GPU
+execution. Restore package files in the selected overlay; native/guest replay
+then passes. Graphics early-consumer predicates false-failed native successful
+output intermittently; all use here-strings now,23harness tests pass. Full
+updated provisioner not replayed end-to-end; repair used explicit remaining
+steps after its disabled-cloud-init wait. DeviceRust is unchanged since the
+3241pass/0fail/14ignored CPU candidate56f32dc0e.
+
+Next prioritize consumerTuring, thenBlackwell hardware. Fresh15:35eligible
+Turingoffer55223684 RTX2060S andBlackwell50949277 RTX5060 inQuebec; not
+reserved/rented. Recheck, rent at most one, arm175min timer immediately,
+writeledger. NativeWindows580 oracle/facts first then restoreLinux samelease;
+this ordering was reported to the owner. Full family needs bothOS across
+several builds. OwnerVM2990/trustedGPU untouched. No master merge.
+Older active-rental/process paragraphs below are superseded.
+
+
 ## UPDATE 2026-10-15 15:13UTC — AD102 both580 guest suites PASS; driver sweep still live
 
 Latest own branch `codex/sweep-ada-20261015`, draftPR#9. **Both OS suites pass

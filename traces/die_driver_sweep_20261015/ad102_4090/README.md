@@ -226,3 +226,24 @@ libegl-dev/libopengl-dev/libgl-dev owned files permits control build and render
 parity. Falsifier: rebuilt controls still fail, or rendered hashes disagree.
 The old provisioner hardcoded the base image, which must not be written while
 an overlay depends on it; it now honors KF_GUEST_IMG. Hardware replay pending.
+
+
+## Final Linux595 graphics replay and rental retirement,15:40UTC
+
+H10 repair is measured: only libEGL.so.1 existed before; package reinstall
+restores libEGL.so -> libEGL.so.1 and control build passes. cloud-init was
+intentionally disabled, so the provisioner's done-only wait was stopped before
+mutation; the remaining repair/control steps were run explicitly on the already
+running own stock VM. This does not validate the entire updated provisioner.
+Future staging accepts disabled as settled.
+
+Full native/guest595 graphics replay15:38:15–15:39:08UTC: all5steps PASS,
+all10Vulkan/EGL/GLX hashes MATCH, EXIT_rc=0. Device binaryda0569a6,
+harness42fc7d4f. Host595.91.07, guest595.91.07, kernel6.8.0-142.
+Linux595 thin raw30/30 and fatCUDA4/4+graphics10 pass; broker595 was NOTRUN.
+Windows580.88 and Linux580 broad validation remain PASS. No additional
+Windows build, S3, long-run Edge or all-dies family claim.
+
+All own QEMUs were gone before teardown. Instance56096336 was destroyed
+and verified absent by15:39:44UTC, before the original15:40:55timer and
+three-hour cap. No new rental existed at that verification.
