@@ -1,5 +1,9 @@
 //! # `kayfabe-linux-raw` — the one audited raw-OS adapter
 //!
+//! ★ **SLIMMED 2026-10-15 (`archive/README.md`).** Frozen pre-v3 crate, kept for the raw client.
+//! `arena_unsafe`, `memtype` and `procfd` moved to `archive/prev3-modules/kayfabe-linux-raw/`;
+//! references below to them are historical. v3's counterpart is `kf-linux-raw`.
+//!
 //! `l1_os_shell.md` §4 (decision 9). This is the **only** crate in the workspace where
 //! the `unsafe_code` lint is not `forbid`, and its API shape — not its implementation —
 //! is the subject of the L1-M2 security exit gate (§11).

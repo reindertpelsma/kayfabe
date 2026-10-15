@@ -23,11 +23,16 @@ is frozen (see *Layout*).
 ## Layout
 
 - `crates/kf-*` — **v3, the product.** The table is in `ARCHITECTURE.md`.
-- `crates/kayfabe-*` — the **pre-v3 tree, frozen**: reference, plus the grader. `kayfabe-rm-ladder`
-  (the 30-arm raw client used by `scripts/fastguest/` and the bare-metal suite) and its
-  dependency closure must keep building. Do not add features there, and never make a `kf-*`
-  crate depend on it. Code *may* be copied from it when the code's shape fits v3
-  (`V3_BUILD.md`, *Rules*).
+- `crates/kayfabe-*` — nine crates, the **pre-v3 grader and exactly its dependency closure**:
+  `kayfabe-rm-ladder` (the 30-arm raw client used by `scripts/fastguest/` and the bare-metal
+  suite) plus `-isolate-host`, `-isolate`, `-linux-raw`, `-vmm`, `-abi`, `-arch`, `-chips`,
+  `-util`. They must keep building; do not add features there, and never make a `kf-*` crate
+  depend on them (`scripts/ci/dependencies.py`). Everything else of the pre-v3 tree is in
+  `archive/` (crates in `archive/crates/`, dead modules of kept crates in
+  `archive/prev3-modules/<crate>/`; see `archive/README.md`, which also says where each moved
+  piece used to live). Code *may* be copied from it when the code's shape fits v3
+  (`V3_BUILD.md`, *Rules*). Keep the set minimal: a `kayfabe-*` module or crate the grader no
+  longer needs moves to `archive/`.
 - `qemu/hw/misc/kf3/` — the C QOM device. `cuda/walk/` — the walk kernel (`.cu` plus committed
   PTX). `scripts/bench/`, `scripts/fastguest/` — provisioning, gates, lanes. `traces/` —
   evidence. `third_party/` — pinned reference sources (submodules; not built). `archive/` — frozen.

@@ -88,7 +88,7 @@ pub fn embedded_isolate_bytes() -> &'static [u8] {
 /// `kayfabe-isolate` binary, for the ONE VM-lifetime scratchpad isolate.
 /// `THE_CONSTRAINTS.md` §w724d.
 ///
-/// ⊘ **Empty unless the `cuda-scratchpad` feature is on**, and empty is refused by name at
+/// ⊘ **Always empty since 2026-10-15** (the `cuda-scratchpad` feature was archived), and empty is refused by name at
 /// spawn rather than silently falling back to the static image — a fallback would produce an
 /// isolate that looks right and cannot `dlopen` anything, and the failure would surface as
 /// *"CUDA is not available on this host"*.
@@ -112,8 +112,9 @@ fn embedded_cuda_image() -> Result<&'static Arc<ProgramImage>, String> {
             if CUDA_IMAGE.is_empty() {
                 return Err(
                     "this build has no CUDA scratchpad isolate image: the `cuda-scratchpad` \
-                     feature of `kayfabe-isolate-host` was not enabled, so `build.rs` never \
-                     built the glibc-linked second image. ⊘ Refused by name rather than \
+                     feature of `kayfabe-isolate-host` was archived (2026-10-15, with \
+                     `kayfabe-cuda`), so `build.rs` never builds the glibc-linked second \
+                     image. ⊘ Refused by name rather than \
                      falling back to the static image, which could not `dlopen` libcuda and \
                      would report the absence as a host problem."
                         .to_string(),

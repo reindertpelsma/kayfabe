@@ -22,9 +22,10 @@
 # - slow (nightly + dispatch): the whole suite with KAYFABE_SLOW=1.
 #
 # 2026-09-29: v3 migration. Keep all workspace tests, including the retained grader.
-# Architecture checks cover the product and grader, not archived implementations or
-# the hash-frozen kayfabe-doorbell historical model. Existing warning/prose
-# debt is content-addressed; new sites fail. See docs/CI_V3.md for the exact boundary.
+# Architecture checks cover the product and grader, not archived implementations.
+# Existing warning/prose debt is content-addressed; new sites fail. See docs/CI_V3.md for
+# the exact boundary. (2026-10-15: the pre-v3 crates the grader does not need, including the
+# hash-frozen kayfabe-doorbell model, moved to archive/; archive/README.md.)
 # Hardware gates + the 30-arm suite remain an additional merge requirement.
 
 name: CI
@@ -275,7 +276,6 @@ jobs:
       - name: v3 dependency isolation and CI guard self-tests
         run: |
           python3 scripts/ci/dependencies.py
-          python3 scripts/ci/debt.py frozen
           python3 -m unittest discover -s scripts/ci -p 'test_*.py'
           bash scripts/bench/qemu_identity_selftest.sh
           bash scripts/bench/box/birth_census.sh --selftest
@@ -327,10 +327,9 @@ jobs:
       # word naming a userspace library this port has to talk ABOUT.
       - name: Hexagonal boundary gate (no OS vocabulary in the pure logic crates)
         run: |
-          pure="crates/kayfabe-completion \
-                crates/kayfabe-mmu crates/kayfabe-gsp crates/kayfabe-arch \
-                crates/kayfabe-abi crates/kayfabe-device \
-                crates/kayfabe-util crates/kayfabe-trace crates/kayfabe-isolate crates/kayfabe-vmm \
+          pure="crates/kayfabe-arch \
+                crates/kayfabe-abi \
+                crates/kayfabe-util crates/kayfabe-isolate crates/kayfabe-vmm \
                 crates/kayfabe-chips"
           if grep -rniE --exclude-dir=target 'eventfd|epoll|timerfd|rawfd|\blibc\b|O_NONBLOCK' $pure; then
             echo ""
@@ -381,10 +380,8 @@ jobs:
       # that reason.)
       - name: VMM-vocabulary gate (no hypervisor API vocabulary in the core or the shell)
         run: |
-          portable="crates/kayfabe-completion \
-                    crates/kayfabe-mmu crates/kayfabe-gsp \
-                    crates/kayfabe-arch crates/kayfabe-abi crates/kayfabe-device \
-                    crates/kayfabe-util crates/kayfabe-trace crates/kayfabe-isolate \
+          portable="crates/kayfabe-arch crates/kayfabe-abi \
+                    crates/kayfabe-util crates/kayfabe-isolate \
                     crates/kayfabe-vmm \
                     crates/kayfabe-chips"
           # ★ `crates/kayfabe-shell` ADDED 2026-07-29 (task #100). This step is named
@@ -484,9 +481,8 @@ jobs:
       #    to be a decision somebody writes down.
       - name: Generation-name gate (no concrete chip or driver version in the logic crates)
         run: |
-          pure="crates/kayfabe-completion \
-                crates/kayfabe-mmu crates/kayfabe-gsp crates/kayfabe-arch \
-                crates/kayfabe-util crates/kayfabe-trace crates/kayfabe-isolate \
+          pure="crates/kayfabe-arch \
+                crates/kayfabe-util crates/kayfabe-isolate \
                 crates/kayfabe-vmm crates/kayfabe-isolate-host"
           hits=$(grep -rniE --exclude-dir=target \
             '\b(kepler|maxwell|turing|ampere|lovelace|hopper|blackwell|rubin)|\b(ada|pascal|volta)\b|\b(g[kmpvab][0-9]{3}|tu1[0-9]{2}|ad1[0-9]{2}|gh[0-9]{3}|v[56][0-9]{2})\b' \
@@ -662,7 +658,7 @@ jobs:
             fi
             # The CUDA launch/report ABI already has a compiled C++ differential.
             case "$crate" in
-              crates/kf-cuda|crates/kayfabe-cuda)
+              crates/kf-cuda)
                 if [ -f "$crate/tests/walk_abi_matches_the_cu.rs" ] && \
                    grep -qw "$ty" "$crate/tests/walk_abi_matches_the_cu.rs"; then proof=yes; fi
                 # These are the CUDA runtime/OS FFI quarantine, not guest RM layouts.
@@ -759,7 +755,6 @@ jobs:
           # code is still caught, because the line does not START with the marker.
           offenders=$(find . -name '*.rs' -not -name '*_unsafe.rs' \
                         -not -path './archive/*' -not -path './third_party/*' \
-                        -not -path './crates/kayfabe-doorbell/*' \
                         -not -path './target/*' -not -path './*/target/*' \
                         -not -path './mutants.out/*' \
                         -exec grep -nw unsafe {} + 2>/dev/null \
@@ -827,7 +822,6 @@ jobs:
             fi
           done < <(find . -name '*.rs' -not -name '*_unsafe.rs' \
                      -not -path './archive/*' -not -path './third_party/*' \
-                     -not -path './crates/kayfabe-doorbell/*' \
                      -not -path './target/*' -not -path './*/target/*' \
                      -not -path './mutants.out/*')
           if [ -n "$(echo "$offenders" | tr -d '[:space:]')" ]; then
@@ -950,7 +944,7 @@ jobs:
           # MODEL it, and every test judges production code against that model. The oracle was
           # once 610-shaped for BOTH profiles (correction brief B1) — an untagged citation there
           # is a wrong test, which is worse than a wrong comment because it reports green.
-          hits=$(grep -rn 'ogkm:' crates --include='*.rs' --exclude-dir=kayfabe-doorbell --exclude-dir=target 2>/dev/null || true)
+          hits=$(grep -rn 'ogkm:' crates --include='*.rs' --exclude-dir=target 2>/dev/null || true)
           if [ -n "$hits" ]; then
             echo "$hits"
             echo ""
@@ -1747,7 +1741,7 @@ jobs:
           # 0 and does not move; kf-chan keeps `unsafe_code = "forbid"` through `[lints] workspace`.
           # Listing the crate here is what lets gate B accept a `*_unsafe.rs` file in it, and makes
           # the ratchet count it (0) from now on — a future `unsafe {}` there moves this number.
-          AUDITED="kayfabe-linux-raw:127 kayfabe-cuda:43 kf-linux-raw:97 kf-cuda:78 kf-qemu:86 firmware/kf-gop:78 kf-chan:0"
+          AUDITED="kayfabe-linux-raw:121 kf-linux-raw:97 kf-cuda:78 kf-qemu:86 firmware/kf-gop:78 kf-chan:0"
           audited_dir() { case "${1%%:*}" in */*) echo "${1%%:*}" ;; *) echo "crates/${1%%:*}" ;; esac; }
 
           # --- Gate A: every package but the named ones inherits `unsafe_code = "forbid"`.
@@ -1757,8 +1751,6 @@ jobs:
           # lets gate B accept its `*_unsafe.rs` file and the ratchet count it.
           missing=""
           for m in crates/*/Cargo.toml; do
-            # Historical dependency-free model, not product/grader; all its tests still run.
-            [ "$m" = crates/kayfabe-doorbell/Cargo.toml ] && continue
             exempt=0
             for entry in $AUDITED; do
               case "$m" in "crates/${entry%%:*}/Cargo.toml") [ "${entry##*:}" = 0 ] || exempt=1;; esac

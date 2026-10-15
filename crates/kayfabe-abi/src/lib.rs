@@ -1,5 +1,11 @@
 //! # kayfabe-abi — Axis A: the declarative ABI
 //!
+//! ★ **SLIMMED 2026-10-15 (`archive/README.md`).** This is the frozen pre-v3 ABI crate, kept
+//! only for the raw client (`kayfabe-rm-ladder`). 33 of its 49 modules (the per-control
+//! wire tables and info encoders) moved to `archive/prev3-modules/kayfabe-abi/`; the text
+//! below describes the whole crate as it was, and links to moved modules no longer resolve.
+//! v3's counterpart is `kf-abi`.
+//!
 //! `mode2_abi_agnostic_layer.md` §2/§4.1. This crate holds the **generated,
 //! committed** wire layouts produced by `kayfabe-abi-gen` from the vendored open
 //! kernel modules, the driver-version table that selects between them, and the
@@ -115,7 +121,6 @@ pub mod wire;
 pub use guest_os::{
     ClientKindRule, ClientKindRuleUnknown, GUEST_OS_CONFIG_NAMES, GuestOs, UnknownGuestOsName,
 };
-
 
 use kayfabe_arch::ids::ClassId;
 

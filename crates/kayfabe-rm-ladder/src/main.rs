@@ -6018,70 +6018,21 @@ fn fixed_placement(rm: &mut HostRmBackend) -> bool {
 }
 
 /// ★★★★★ **THE CUDA WINDOW** — step 4's precondition: the walker, in libcuda's VA space, reads the
-/// guest's page tables IN PLACE in the one GPGA object. See `HostRmBackend::prove_cuda_window`.
+/// guest's page tables IN PLACE in the one GPGA object.
+///
+/// ⊘ 2026-10-15: the arm itself (`HostRmBackend::prove_cuda_window`, the `cuda-window` feature)
+/// moved to `archive/` with `kayfabe-cuda`; the flag is kept so a script that passes it gets a
+/// NOTRUN line, as every build without the feature always did. v3's counterpart is `kf-cuda`.
 fn cuda_window(rm: &mut HostRmBackend) -> bool {
     println!(
         "REV_UNDER_TEST={}",
         option_env!("KAYFABE_BUILD_REV").unwrap_or("unstamped")
     );
-    #[cfg(not(feature = "cuda-window"))]
-    {
-        let _ = rm;
-        // ⊘ NOTRUN, not FAIL: a binary built without the feature has not tested anything.
-        println!("CUDA_WINDOW ⊘ NOTRUN — built without --features cuda-window");
-        println!("RUNG_cuda_window=NOTRUN");
-        return false;
-    }
-    #[cfg(feature = "cuda-window")]
-    {
-        // ⊘ Sized like the identity window (§15): what is MAPPABLE, not what is reservable.
-        // ★ Near the live guest's own roots (§21: pdb≈0x2cea9c000 ≈ 11498 MiB), page-aligned.
-        // ⊘ The object's size is derived INSIDE the probe, after the walker's context exists.
-        let origin: u64 = 0x2cea0_0000;
-        println!("CUDA_WINDOW origin={origin:#x} ({} MiB)", origin >> 20);
-        match rm.prove_cuda_window(12288, origin) {
-            Ok(ev) => {
-                println!(
-                    "CUDA_WINDOW dptr={:#x} root={:#x} found={} runs={} walk_us={} \
-                     control_found_nothing={} control_runs={}",
-                    ev.dptr,
-                    ev.root,
-                    ev.found,
-                    ev.runs,
-                    ev.walk_us,
-                    ev.control_found_nothing,
-                    ev.control_runs
-                );
-                if ev.found && ev.control_found_nothing {
-                    println!(
-                        "CUDA_WINDOW ✔ the walker reads the guest's tables IN PLACE at {} MiB",
-                        origin >> 20
-                    );
-                    println!("RUNGCTL_cuda_window=PASS");
-                    println!("RUNG_cuda_window=PASS");
-                    true
-                } else {
-                    println!(
-                        "FAIL  cuda window        = found={} control_found_nothing={} — {}",
-                        ev.found,
-                        ev.control_found_nothing,
-                        if !ev.found {
-                            "the walk did not find the fixture in the object"
-                        } else {
-                            "the walk still found it after the root was zeroed: NOT reading the live object"
-                        }
-                    );
-                    println!("RUNGCTL_cuda_window=FAIL");
-                    false
-                }
-            }
-            Err(e) => {
-                println!("CUDA_WINDOW ⊘ REFUSED {e}");
-                println!("RUNGCTL_cuda_window=FAIL");
-                false
-            }
-        }
-    }
+    let _ = rm;
+    // ⊘ NOTRUN, not FAIL: a binary without the arm has not tested anything.
+    println!("CUDA_WINDOW ⊘ NOTRUN — this binary has no CUDA arm (archived)");
+    println!("RUNG_cuda_window=NOTRUN");
+    false
 }
 
 /// ★★★★★ **THE IDENTITY WINDOW** — the first experiment of `THE_TRANSLATED_PLANE.md` §11.
@@ -14927,25 +14878,11 @@ fn ladder_main() -> std::process::ExitCode {
             let code = bare_metal_suite(role_gpu);
             return std::process::ExitCode::from(u8::try_from(code.clamp(0, 255)).unwrap_or(1));
         }
-        // ★★★★★ w755i — the CUDA-store ownership probe. Needs NO guest, NO QEMU, NO KVM:
-        // a CUDA container answers it. See `kayfabe_isolate_host::cudastore`.
-        #[cfg(feature = "cuda-window")]
+        // ★★★★★ w755i — the CUDA-store ownership probe. ⊘ The probe (`cudastore`) moved to
+        // `archive/` with `kayfabe-cuda`; the flag must SAY it is unavailable rather than
+        // falling through into the ladder's parser and running something else entirely.
         if argv.iter().any(|a| a == "--cuda-store-probe") {
-            return std::process::ExitCode::from(
-                u8::try_from(
-                    kayfabe_isolate_host::cudastore::cuda_store_probe(role_gpu).clamp(0, 255),
-                )
-                .unwrap_or(1),
-            );
-        }
-        // ⊘ Without the feature the flag must SAY it is unavailable rather than falling
-        // through into the ladder's parser and running something else entirely.
-        #[cfg(not(feature = "cuda-window"))]
-        if argv.iter().any(|a| a == "--cuda-store-probe") {
-            println!(
-                "CS_RESULT=UNMEASURED:this binary was built without `--features \
-                 cuda-window`, so libcuda is not linked and the probe cannot run"
-            );
+            println!("CS_RESULT=UNMEASURED:this binary has no CUDA probe (archived)");
             return std::process::ExitCode::from(1);
         }
         if argv.iter().any(|a| a == "--route-k") {

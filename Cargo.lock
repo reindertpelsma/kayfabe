@@ -107,10 +107,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "kayfabe-cuda"
-version = "0.1.0"
-
-[[package]]
 name = "kayfabe-isolate"
 version = "0.1.0"
 dependencies = [
@@ -127,7 +123,6 @@ dependencies = [
  "kayfabe-abi",
  "kayfabe-arch",
  "kayfabe-chips",
- "kayfabe-cuda",
  "kayfabe-isolate",
  "kayfabe-linux-raw",
  "kayfabe-util",

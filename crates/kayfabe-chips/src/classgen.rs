@@ -58,10 +58,15 @@
 /// GPU architecture family. ⊘ The axis, named — not a die.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Family {
+    /// Turing (`TU10x`).
     Turing,
+    /// Ampere (`GA10x`, plus `GA100`).
     Ampere,
+    /// Ada (`AD10x`).
     Ada,
+    /// Hopper (`GH100`).
     Hopper,
+    /// Blackwell (`GB10x` / `GB20x`).
     Blackwell,
 }
 
@@ -71,9 +76,13 @@ pub enum Family {
 /// there is not a degraded guest — it is a guest with no doorbell at all.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Kind {
+    /// The GPFIFO channel class.
     ChannelGpfifo,
+    /// The compute engine object.
     Compute,
+    /// The copy-engine object.
     DmaCopy,
+    /// The usermode (doorbell) region class.
     Usermode,
     /// The 3D sibling of `Compute` — same engine (`ENG_GR(0)`), different class. Modelled but
     /// not host-allocated (`rmgraph`), exactly as `AMPERE_B` was before it was generalised.
@@ -83,17 +92,24 @@ pub enum Kind {
 /// One family's **set** of engine classes, per kind. ⊘ Slices, not scalars: the whole point.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ClassSet {
+    /// The family this set describes.
     pub family: Family,
     /// The chips whose `hal<CHIP>ClassDescriptorList` were unioned. From the object's symbol table.
     pub chips: &'static [&'static str],
+    /// The listed [`Kind::ChannelGpfifo`] class ids.
     pub channel_gpfifo: &'static [u32],
+    /// The listed [`Kind::Compute`] class ids.
     pub compute: &'static [u32],
+    /// The listed [`Kind::DmaCopy`] class ids.
     pub dma_copy: &'static [u32],
+    /// The listed [`Kind::Usermode`] class ids.
     pub usermode: &'static [u32],
+    /// The listed [`Kind::ThreeD`] class ids.
     pub threed: &'static [u32],
 }
 
 impl ClassSet {
+    /// The class ids this family lists for `k`.
     pub fn of_kind(&self, k: Kind) -> &'static [u32] {
         match k {
             Kind::ChannelGpfifo => self.channel_gpfifo,
@@ -114,6 +130,7 @@ impl ClassSet {
 }
 
 impl Kind {
+    /// Every kind, in declaration order.
     pub const ALL: [Kind; 5] = [
         Kind::ChannelGpfifo,
         Kind::Compute,
@@ -234,6 +251,7 @@ pub const FAMILIES: [ClassSet; 5] = [
     },
 ];
 
+/// The class set of family `f`.
 pub fn classes_for(f: Family) -> &'static ClassSet {
     FAMILIES
         .iter()

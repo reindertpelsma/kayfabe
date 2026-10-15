@@ -29,14 +29,6 @@ def compare(actual: dict[str, str], baseline: dict[str, str]) -> list[str]:
     return sorted(actual.keys() - baseline.keys())
 
 
-def frozen() -> dict[str, str]:
-    """Bind the frozen prototype's gate exceptions to its exact existing source."""
-    crate = ROOT / "crates/kayfabe-doorbell"
-    paths = sorted([crate / "Cargo.toml", *crate.rglob("*.rs")])
-    return {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest()
-            for path in paths if "target" not in path.parts}
-
-
 def claims() -> dict[str, str]:
     spec = importlib.util.spec_from_file_location("claim_ledger", ROOT / "scripts/claim_ledger.py")
     module = importlib.util.module_from_spec(spec)
@@ -91,13 +83,13 @@ def clippy(log: Path) -> dict[str, str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("kind", choices=("claims", "clippy", "frozen"))
+    parser.add_argument("kind", choices=("claims", "clippy"))
     parser.add_argument("--log", type=Path)
     parser.add_argument("--record", action="store_true", help="explicitly record reviewed migration debt")
     args = parser.parse_args()
     if args.kind == "clippy" and args.log is None:
         parser.error("clippy requires --log")
-    actual = {"claims": claims, "clippy": lambda: clippy(args.log), "frozen": frozen}[args.kind]()
+    actual = {"claims": claims, "clippy": lambda: clippy(args.log)}[args.kind]()
     path = ROOT / "scripts/ci" / f"{args.kind}-debt.json"
     if args.record:
         path.write_text(json.dumps(actual, sort_keys=True, indent=2) + "\n")
@@ -105,13 +97,6 @@ def main() -> int:
         print("This is migration debt, not a claim that those diagnostics are fixed.")
         return 0
     baseline = json.loads(path.read_text())
-    if args.kind == "frozen":
-        changed = sorted(key for key in actual.keys() | baseline.keys()
-                         if actual.get(key) != baseline.get(key))
-        for key in changed:
-            print(f"FROZEN SOURCE CHANGED: {key}")
-        print(f"frozen prototype: files={len(actual)} changed={len(changed)}")
-        return bool(changed)
     new = compare(actual, baseline)
     for key in new:
         print(f"NEW {key}: {actual[key]}")

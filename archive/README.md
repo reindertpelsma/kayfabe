@@ -49,11 +49,34 @@ or maintained. History was preserved (`git mv`), so `git log --follow` works.
 
 ### What was deliberately NOT archived
 
-Sixteen `kayfabe-*` crates stay in `crates/`: `kayfabe-rm-ladder` — the 30-arm
+Nine `kayfabe-*` crates stay in `crates/`: `kayfabe-rm-ladder` — the 30-arm
 raw-client grader behind the thin-guest suite (`scripts/fastguest/`) and the
 bare-metal baseline — and its dependency closure (`abi`, `arch`, `chips`,
-`completion`, `cuda`, `device`, `doorbell`, `gsp`, `isolate`, `isolate-host`,
-`linux-raw`, `mmu`, `mocks`, `trace`, `util`, `vmm`). Moving the grader onto
+`isolate`, `isolate-host`, `linux-raw`, `util`, `vmm`). Moving the grader onto
 `kf-*` crates would let them follow.
+
+## The grader's dead weight (archived 2026-10-15)
+
+Last commit where all of the following was still in `crates/`: `6fb32dfb8`
+(`git show 6fb32dfb8:crates/<crate>/...`). The test for every move below was the
+same: the grader builds (`cargo build -p kayfabe-rm-ladder --bins`,
+`-p kayfabe-isolate-host --bins`) and every test target of a kept crate still
+compiles (`cargo test --workspace --no-run`). History was preserved (`git mv`).
+
+| path | what it was |
+|---|---|
+| `crates/kayfabe-device`, `-mmu`, `-trace`, `-gsp`, `-completion`, `-mocks` | the old register plane / device model, MMU walker, trace recorder, GSP state machine, completion model and mock backends. The grader listed `kayfabe-device` and `-mmu` as dependencies and never used them in code |
+| `crates/kayfabe-doorbell` | the hash-frozen doorbell-plane model (`scripts/ci/frozen-debt.json`, now gone). Its only live consumer was `classgen` (the generated per-family class tables), which now lives in `crates/kayfabe-chips/src/classgen.rs` and is **not** in the archived copy |
+| `crates/kayfabe-cuda`, `cuda/walk-v2-frozen/` (now `archive/cuda/walk-v2-frozen/`) | the old walk-kernel binding and its frozen PTX. Only the opt-in `cuda-scratchpad` / `cuda-window` features used it (no script passed them); v3's is `kf-cuda` |
+| `prev3-modules/kayfabe-chips/` | `ad10x`, `ga10x`, `gb20x`, `gh100` (per-generation `Arch`/`GspModel` adapters) with their tests; the three `host_classes` tests that cross-check those adapters are in `tests/host_classes_arch_crosscheck.rs` |
+| `prev3-modules/kayfabe-abi/` | 33 of 49 modules (per-control wire tables and info encoders) and two tests |
+| `prev3-modules/kayfabe-linux-raw/` | `arena_unsafe`, `memtype`, `procfd`, `tests/effective_memtype.rs` |
+| `prev3-modules/kayfabe-isolate-host/` | `planreactor`, `cudastore`, `cudawalk`, `tests/plan_reactor.rs` |
+
+`prev3-modules/<crate>/` mirrors the crate's own layout (`src/`, `tests/`). The
+modules are not a crate and are not built. The citation rule above applies:
+`crates/kayfabe-device/...` now resolves to `archive/crates/kayfabe-device/...`,
+and a moved module `crates/kayfabe-abi/src/X.rs` to
+`archive/prev3-modules/kayfabe-abi/src/X.rs`.
 
 The bench defaults to `KF_DEVICE=kf3`; `KF_DEVICE=nvkvm` refuses by name.

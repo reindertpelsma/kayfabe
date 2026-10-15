@@ -1,5 +1,9 @@
 //! # `kayfabe-isolate-host` — the REAL host isolate
 //!
+//! ★ **SLIMMED 2026-10-15 (`archive/README.md`).** Frozen pre-v3 crate, kept for the raw client
+//! (`kayfabe-rm-ladder`). `planreactor`, `cudastore` and `cudawalk` (and the `cuda-scratchpad`
+//! feature with `kayfabe-cuda`) moved to `archive/`; references below to them are historical.
+//!
 //! `host_execution_plane.md` §0 states the finding this crate answers, measured at
 //! `f0053ef`: **the host execution plane does not exist.** The only implementors of
 //! `IsolateFactory`, `Isolate`, `RmBackend` and `Present` were in `kayfabe-mocks`; nothing
