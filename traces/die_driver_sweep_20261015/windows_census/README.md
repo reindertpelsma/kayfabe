@@ -1,5 +1,15 @@
 # Decode native Windows measurements on the rental
 
+**UPDATE: MEASURED, 2026-10-15.** Native AD102 Windows580.88 LTSC26100 golden
+runtime passes, and all three TSV report hashes match Linux exactly. The same
+binary subsequently scrubs/decodes the native GSP capture using only explicit
+2801/2806 body allowlisting. Evidence:
+[golden runtime](../ad102_4090/native-preflight-golden.txt),
+[capture](../ad102_4090/native-capture-b-580.txt).
+The pre-run checkpoint below is superseded; no parser or disclosure policy was
+relaxed for this runtime check.
+
+
 **STATUS: LIVE, 2026-10-15.** H-EXPORT: the existing scrubber and capture decoder
 can build for Windows without changing parsing or body disclosure policy.
 Falsifier: cross-compilation still fails, the existing census tests regress, or
@@ -7,8 +17,8 @@ a golden capture produces a different result on Windows.
 
 Before at de9c7b70a: `cargo check -p kf-census --target x86_64-pc-windows-gnu`
 fails at the Unix-only open_out mode API. After at4ff31a249: release cross-build
-and existing Linux census tests pass. Native Windows golden-file runtime check
-is not yet run. Binary SHA256 c2119cc04ee54dde8e056d84fce78178f21634f1477e69f2b4fa8e9acbc46118.
+and existing Linux census tests pass. Original pre-run checkpoint: native golden-file runtime had not yet run
+(superseded by the measured update above). Binary SHA256 c2119cc04ee54dde8e056d84fce78178f21634f1477e69f2b4fa8e9acbc46118.
 
 Use an administrator/SYSTEM-only destination directory on Windows, since files
 inherit its ACL. Raw and scrubbed captures remain on the rental. Use an explicit

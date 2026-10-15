@@ -1,5 +1,16 @@
 # Native Windows display-capabilities measurement
 
+**UPDATE: MEASURED, 2026-10-15.** Native AD102/RTX4090 Windows580.88 LTSC26100
+loads the bounded module after on-target test signing and reads capsword0x00c=0x100,
+both before and after enabling GSP580.65.05.99nonzero words; only the decisive
+scalar ships through an exact AD102/580 T3 row. Evidence:
+[load/read](ad102_4090/native-module-caps-580.txt),
+[GSP-enabled read](ad102_4090/native-small-caps-gsp580.txt).
+The SHA256 values below identify the trusted unsigned artifacts before signing.
+GA104 nativeWindows580 remains unmeasured. The original not-run checkpoint
+below is superseded for AD102 only.
+
+
 **STATUS: RESEARCH, 2026-10-15.** The stock Linux 595.91.07 driver on our
 GA104 rental exposes word `0x00c = 0x100` in the physical display-capabilities
 page. This is measured text in `ga104_3070/codex_ampere_caps_linux595.txt`.
@@ -25,6 +36,6 @@ read-only mutation guard passes. The current Windows build at `32973658a`
 succeeded using pinned official WDK/SDK NuGet packages on the trusted host.
 Driver SHA256: `371744be56f471aca3a5e882bf08afc03525cc008525ef7cf44a41d81306e2af`.
 Collector SHA256: `766dd94a088decfbd76db18b1ad4c18bd819bfa4461797e9dfbfaae755449afd`.
-The native Windows load and page read are NOT RUN. The output is unsigned;
+Original pre-run checkpoint (superseded by the AD102 update above): native load/read had not run. The output is unsigned;
 the existing installer test-signs it with a disposable on-target certificate.
 Evidence: `windows_caps/{before,after,read_only_guard,build}.txt`.
