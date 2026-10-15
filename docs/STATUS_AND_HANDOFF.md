@@ -1,6 +1,6 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
-## UPDATE 2026-10-15 18:06UTC — TU106 Windows580 acceptance PASS after USER-ring fix
+## UPDATE 2026-10-15 18:28UTC — TU106 Windows580 and Linux broker PASS; raw running
 
 Device8e3a9d32, source8e3a9d325, ownrental56117789, stockhost595.91.07.
 Windows580.88 LTSC26100: Code0/build checked before/after, Explorer+DWM,
@@ -15,10 +15,16 @@ same geometry/ownership/Windowspermit/nativeUSER checks. Two assertions fail
 beforec5ee774cb; full CPU8e3a9d3253247/0/14ignored. NativeWindows oracle passes.
 Declaration tests for all families do not prove their hardware execution.
 
-Windows normalshutdown requested18:06:13, ownstopwrapperPID55994; wait until
-QEMU55462 gone before Linux broker prep. Prepared broker/root script accepts
-KF3_REV=8e3a9d32; then /root/turing_fixed_raw.sh gates/build/raw30 at180s and
-birthcensus even on failure. Rootcheckout stays8e duringGPU jobs. Beforefix
+Windows normal shutdown completed18:06:38. Linux580 Cinnamon/Xorg/NVIDIA gears
+and actual X11 SHM broker presentation pass at8e3a9d32:1920x1080,13,193colors,
+zero guestXid/fliptimeouts,12assertions,zero hostXids in the second broker window.
+First host-dependency failure is preserved; attempted vkcube127 is NOTRUN.
+Broker normal stop and wrapperexit0 at18:21:20. Fixed gates9/9+gate10PASS,
+binary rebuilt18:21:55, raw client/packed580 guest rebuilt before full raw30
+started18:22:37 at unchanged180s budget. RawwrapperPID59250; controller live
+text monitorPID/session in/workspace/codex/turing_raw_monitor.sh; its final output
+/workspace/codex/raw-turing/fixed/required-suite-live.txt. Rootcheckout stays8e
+duringGPU jobs; do not pull/build. Birthcensus runs even on raw failure. Beforefix
 Linux580CUDA4PASS/raw29(R34timeout180; diagnostic201s) is not a fullLinuxpass.
 Original rental deadline18:36:22 remains armed, no extension. Capture text/push
 after each run, retire ownID only. Controller /workspace/codex/turing-hw,

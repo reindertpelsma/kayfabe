@@ -37,7 +37,7 @@ not prove the remaining dies in its family.
 
 | Family | This campaign | Full family acceptance |
 |---|---|---|
-| Turing | TU106 Windows580 Code0/DWM/CUDA3/D3D11+12/zeroTDR PASS after USER-ring class fix8e3a9d32; Linux580 CUDA4 PASS/raw29 of30 (R34timeout180s), fixed Linux regressions pending | incomplete: required Linux raw pass and several actual driver builds remain |
+| Turing | TU106 Windows580 Code0/DWM/CUDA3/D3D11+12/zeroTDR and Linux580 Cinnamon/OpenGL/X11broker PASS at8e3a9d32; Linux580 CUDA4 beforefix PASS/raw29 of30 (R34timeout180s), fixed fullraw running | incomplete: required Linux raw pass and several actual driver builds remain |
 | Ampere | GA104 Linux580 broad pass; Linux595 raw pass; Windows580 boot stall captured | incomplete |
 | Ada | AD102 Linux580 raw30/CUDA4/graphics10+broker and Windows580 Code0/DWM/CUDA3/D3D11+12/zeroTDR pass; Linux595 raw30/CUDA4/graphics10 pass (broker not run) | incomplete: several driver builds and other dies remain unverified |
 | Blackwell | not tried in this campaign; older GB206 results remain prior evidence | incomplete |
