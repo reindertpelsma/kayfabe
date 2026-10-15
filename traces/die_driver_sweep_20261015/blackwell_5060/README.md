@@ -105,3 +105,14 @@ then curl/CA/pciutils installed andprovision_box completed20:18:37. Ownroot
 phase1PID1443 (phase0wrapper1000) nowinstallingstock595.91.07openmodules with
 matchingkernelcompiler/headers. No guestGPUwork yet. Rootcheckoutfollowsown
 codex/sweep-blackwell-20261015; ownerGPU/VMuntouched. Timerunchanged.
+
+## ExactGB206identity confirmed; measuredcaps scalar registered20:24UTC
+
+StockLinux595.91.07open installcompleted20:20:11, phase1exit0at20:20:18.
+HostprobeUID65534/CapEff0 derivesarch0x1b0/impl6=GB206, confirming the stated
+identity hypothesis. Receipt host-die-unprivileged.txt. Onlythatdie/580/classCA73
+word00c nowgets0x102 from the independent boundednativeWindowsreads. No private
+RMscalarrows or capturedpage/boardtables added; rejectedRPCcapture remainsFAIL.
+Befored8afb5a34 compiled/failsauthored0vs102; afterfix/fullCPU pending. Unknown
+otherdies and570/590/595 keyscleanlyremainunmeasured. Windowsbaselineimage
+transfercontrollerPID2064990 started, no timingbenchmarks whileprep/transfersrun.
