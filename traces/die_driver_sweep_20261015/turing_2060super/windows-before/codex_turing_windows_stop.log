@@ -1,0 +1,4 @@
+unix:/root/win/codex-tu106/qmp.sock,server=on,wait=off
+STOP_START pid=52629 2026-10-15T17:57:26+00:00
+STOP_COMPLETE=1
+EXIT rc=0 2026-10-15T17:57:48+00:00

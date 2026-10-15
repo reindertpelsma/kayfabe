@@ -165,3 +165,35 @@ Fresh production-profile phase2 starts17:49:51UTC; desktop/Code0/apps pending.
 Canonical strict Windows validator08f25dd9d checks actual build andCode0 before
 and after apps, verifies4trusted hashes, CUDA3, hardwareD3D11/12, and requires
 readableSystemlog before treating zeroTDR as evidence.
+
+## Windows580 first failure and fix,18:04UTC
+
+Before deviceb8d092b0: fresh phase2 reports Code0/32.0.15.8088/WDDM,
+Explorer+DWM,1920x1080; QGA final evidence reconnect times out once but responds
+again standalone. Do not call that a proved kernel hang. Initial app staging
+shell escaped the filename variable, so all probes shared one literal path;
+strict hash/path preflight rejects before any workload. Corrected paths retain
+the failed run. Actual cup2 then fails cuCtxCreate999.
+
+First relevant product refusal: c46f/TURING_CHANNEL_GPFIFO_A channel,
+USER_RING_SOURCE_DECLARATION. The relay explicitly accepts only AMPERE c56f,
+although the earlier per-family capability/alloc path admits c46f. Same native
+Windows580 reference passes these probes. H-CLASS, stated before rebuild:
+generated host-derived family ChannelGpfifo classification removes this refusal
+and admits correct GPU content; falsifier is the same declaration refusal or a
+GPU content/fence failure after rebuild. No privilege/ownership rule changes.
+
+Extracted original predicate plus two tests: both fail atc5ee774cb. One earlier
+fixture referenced a missing legacy generated ABI constant and did not compile;
+corrected fixture uses the generated-family/public clc46f value before recording
+the assertion failures. Fix8e3a9d325 uses family.classes().kind_of(class), retaining
+all entry/address bounds, Windows permit, USERD ownership and native USER birth.
+Every family class is tested; invalid/family-incompatible classes, unaligned or
+wrapping addresses and oversized/non-power-of-two counts refuse. Declaration
+acceptance is not Blackwell GPU execution proof. Existing private-ring progress
+semantics still require actual hardware checks per family.
+
+Exactfix8e3a9d325 full isolated CPU3247passed/0failed/14ignored,
+target-turing-hw; hardware binary8e3a9d32 built18:01:45UTC. Before logs and CPU
+results inwindows-before/. Old Windows VM shuts down normally17:57:48UTC.
+Fresh fixed boot18:02:30UTC; apps and Linux regressions pending. No family pass.

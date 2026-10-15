@@ -1,0 +1,76 @@
+DIE_RUN_START phase2 2026-10-15T17:49:51+00:00
+WIN_DIE_START kf3=b8d092b0 checkout=b8d092b0c guest_driver=580.65.06 gpu=NVIDIA GeForce RTX 2060 SUPER xid_before=10 2026-10-15T17:49:51+00:00
+[win_die] QEMU 52629 kf3 b8d092b0 run /root/win/codex-tu106
+[win_die] QGA answers 2026-10-15T17:50:57+00:00
+[win_die] shot /root/win/codex-tu106/shots/p2_t0030.ppm.gz 2026-10-15T17:51:28+00:00
+HOSTBAR1 t=30  BAR1 Memory Usage  Total : 256 MiB  Used : 36 MiB  Free : 220 MiB 
+[win_die] shot /root/win/codex-tu106/shots/p2_t0060.ppm.gz 2026-10-15T17:51:58+00:00
+HOSTBAR1 t=60  BAR1 Memory Usage  Total : 256 MiB  Used : 36 MiB  Free : 220 MiB 
+[win_die] shot /root/win/codex-tu106/shots/p2_t0090.ppm.gz 2026-10-15T17:52:28+00:00
+#< CLIXML
+<Objs Version="IP-REDACTED" xmlns="http://schemas.microsoft.com/powershell/2004/04"><Obj S="progress" RefId="0"><TN RefId="0"><T>System.Management.Automation.PSCustomObject</T><T>System.Object</T></TN><MS><I64 N="SourceId">1</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj><Obj S="progress" RefId="1"><TNRef RefId="0" /><MS><I64 N="SourceId">2</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj><Obj S="progress" RefId="2"><TNRef RefId="0" /><MS><I64 N="SourceId">2</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj><Obj S="progress" RefId="3"><TNRef RefId="0" /><MS><I64 N="SourceId">2</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj><Obj S="progress" RefId="4"><TNRef RefId="0" /><MS><I64 N="SourceId">3</I64><PR N="Record"><AV>Get-PnpDevice -PresentOnly | Where-Object { $_.InstanceId -like 'PCI\VEN_10DE*' })) {</AV><AI>536836397</AI><Nil /><PI>-1</PI><PC>100</PC><T>Completed</T><SR>0</SR><SD>1/1 completed</SD></PR></MS></Obj><Obj S="progress" RefId="5"><TNRef RefId="0" /><MS><I64 N="SourceId">4</I64><PR N="Record"><AV>Get-PnpDeviceProperty -InstanceId $id -KeyName DEVPKEY_Device_Driver -ErrorAction SilentlyContinue).Data</AV><AI>1519647291</AI><Nil /><PI>-1</PI><PC>100</PC><T>Completed</T><SR>0</SR><SD>2/2 completed</SD></PR></MS></Obj><Obj S="progress" RefId="6"><TNRef RefId="0" /><MS><I64 N="SourceId">5</I64><PR N="Record"><AV>Get-PnpDeviceProperty -InstanceId $id -KeyName DEVPKEY_Device_DriverVersion -ErrorAction SilentlyContinue).Data</AV><AI>562537490</AI><Nil /><PI>-1</PI><PC>100</PC><T>Completed</T><SR>0</SR><SD>2/2 completed</SD></PR></MS></Obj><Obj S="progress" RefId="7"><TNRef RefId="0" /><MS><I64 N="SourceId">2</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj></Objs>P2T90 EVID session_user=VASTWIN\vast logonui=False explorer=True dwm=True
+P2T90 EVID DEV hw=VEN_10DE&DEV_1F06&SUBSYS_652019DA&REV_A1 status=OK problem=CM_PROB_NONE class=Display name='NVIDIA GeForce RTX 2060 SUPER' driverkey={4d36e968-e325-11ce-bfc1-08002be10318}\0002 ver=32.0.15.8088 EnableGpuFirmware=1
+P2T90 EVID VIDEO name='NVIDIA GeForce RTX 2060 SUPER' status=OK mode=x refresh= driver=32.0.15.8088
+P2T90 EVID SMI path=C:\Windows\system32\nvidia-smi.exe
+P2T90 SMI Thu Oct 15 17:52:38 2026       
+P2T90 SMI +-----------------------------------------------------------------------------------------+
+P2T90 SMI | NVIDIA-SMI 580.88                 Driver Version: 580.88         CUDA Version: 13.0     |
+P2T90 SMI +-----------------------------------------+------------------------+----------------------+
+P2T90 SMI | GPU  Name                  Driver-Model | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+P2T90 SMI | Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+P2T90 SMI |                                         |                        |               MIG M. |
+P2T90 SMI |=========================================+========================+======================|
+P2T90 SMI |   0  NVIDIA GeForce RTX 2060 ...  WDDM  |   00000000:00:06.0 Off |                  N/A |
+P2T90 SMI | N/A    0C  N/A             N/A  /  N/A  |       0MiB /   4096MiB |     N/A      Default |
+P2T90 SMI |                                         |                        |                  N/A |
+P2T90 SMI +-----------------------------------------+------------------------+----------------------+
+P2T90 SMI 
+P2T90 SMI +-----------------------------------------------------------------------------------------+
+P2T90 SMI | Processes:                                                                              |
+P2T90 SMI |  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+P2T90 SMI |        ID   ID                                                               Usage      |
+P2T90 SMI |=========================================================================================|
+P2T90 SMI |  No running processes found                                                             |
+P2T90 SMI +-----------------------------------------------------------------------------------------+
+P2T90 SMIQ name, pci.device_id, driver_version, driver_model.current, memory.total [MiB], memory.used [MiB], pcie.link.gen.current, pcie.link.width.current
+P2T90 SMIQ NVIDIA GeForce RTX 2060 SUPER, 0x1F0610DE, 580.88, WDDM, 4096 MiB, 0 MiB, 3, [Unknown Error]
+P2T90 SMIMEM 
+P2T90 SMIMEM ==============NVSMI LOG==============
+P2T90 SMIMEM 
+P2T90 SMIMEM Timestamp                                 : Thu Oct 15 17:52:40 2026
+P2T90 SMIMEM Driver Version                            : 580.88
+P2T90 SMIMEM CUDA Version                              : 13.0
+P2T90 SMIMEM 
+P2T90 SMIMEM Attached GPUs                             : 1
+P2T90 SMIMEM GPU 00000000:00:06.0
+P2T90 SMIMEM     FB Memory Usage
+P2T90 SMIMEM         Total                             : 4096 MiB
+P2T90 SMIMEM         Reserved                          : 369 MiB
+P2T90 SMIMEM         Used                              : 0 MiB
+P2T90 SMIMEM         Free                              : 3728 MiB
+P2T90 SMIMEM     BAR1 Memory Usage
+P2T90 SMIMEM         Total                             : 128 MiB
+P2T90 SMIMEM         Used                              : 100 MiB
+P2T90 SMIMEM         Free                              : 28 MiB
+P2T90 SMIMEM     Conf Compute Protected Memory Usage
+P2T90 SMIMEM         Total                             : N/A
+P2T90 SMIMEM         Used                              : N/A
+P2T90 SMIMEM         Free                              : N/A
+P2T90 SMIMEM 
+P2T90 EVID DONE
+HOSTBAR1 t=90  BAR1 Memory Usage  Total : 256 MiB  Used : 36 MiB  Free : 220 MiB 
+Traceback (most recent call last):
+  File "/root/kayfabe/scripts/bench/windows/qmp.py", line 201, in <module>
+    sys.exit(main(sys.argv))
+  File "/root/kayfabe/scripts/bench/windows/qmp.py", line 195, in main
+    return qga_exec(sock, rest[0], rest[1:])
+  File "/root/kayfabe/scripts/bench/windows/qmp.py", line 158, in qga_exec
+    s, f = qga_open(sock, timeout=30.0)
+  File "/root/kayfabe/scripts/bench/windows/qmp.py", line 141, in qga_open
+    r = recv(f)
+  File "/root/kayfabe/scripts/bench/windows/qmp.py", line 42, in recv
+    line = f.readline()
+  File "/usr/lib/python3.10/socket.py", line 705, in readinto
+    return self._sock.recv_into(b)
+TimeoutError: timed out
+DIE_RUN_EXIT phase2 rc=1 2026-10-15T17:53:11+00:00
