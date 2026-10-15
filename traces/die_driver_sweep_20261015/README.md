@@ -66,3 +66,17 @@ correctly carried unprivileged control still fails or produces no valid UUID.
 Next: failing test, compile the public SDK layouts at the committed measured tags,
 register the control, rebuild, retry the same default Windows profile. No random
 UUID bypass is used to label this production cell passing.
+
+Image transfer hypothesis (stated before the comparison): interrupted source or
+sink pipelines can leave false completion markers. Falsifier: all21 chunk hashes
+match the trusted source. Measured: exactly02/03 differ; the other19 match.
+Two regression tests reproduce hidden receiver failure and premature marking on
+sender failure, fail before and pass after. The two repaired chunks and full
+source/destination SHA256 match are in image_transfer/repair.txt. Windows now
+reaches QGA on the same GID-only binary f6d96614; GPU acceptance still pending.
+
+Combined candidate 8e45edc8a (GID + C57E): full GPU-free3234/0/14 ignored,
+GA104 fast30/30 and actual X11 SHM broker presentation PASS, guest Xid0,
+flip timeouts0,12 NV assertions. SSH poweroff gives QEMU exit0. Detailed evidence
+is on codex/hardware-regression-20261015 in hardware_regression/. This does not
+claim Turing hardware or Windows acceptance.
