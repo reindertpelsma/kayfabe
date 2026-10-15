@@ -1,5 +1,138 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-15 18:39UTC — Turing rental retired; Windows/broker pass, raw29/30
+
+Own instance56117789 was destroyed by its revised timer; absence verified at
+18:39:01UTC, before the18:41:16 three-hour cap. Every own QEMU was gone before
+teardown. All90 fixed-suite arm logs, scoreboard, gates, birth census and wrapper
+exit are saved as text in traces/die_driver_sweep_20261015/turing_2060super/.
+At this checkpoint no own rental is active. Do not reuse the retired SSH alias.
+
+Exact product8e3a9d325/device8e3a9d32: Windows580.88 LTSC26100 Code0/DWM,
+CUDA3/D3D11+12/readableSystemlog/zeroTDR and Linux580 Cinnamon/OpenGL/actual
+X11SHM broker pass. Fixed full Linux raw finishes18:36:43:29PASS,0FAIL,1TIMEOUT
+(R34 at unchanged180s), noNOTRUN.165suite/12gatebirthsUSER. Beforefix CUDA4
+passes; full headless graphics and post-fix CUDA ladder were not run on Turing.
+The R34 performance defect remains open; do not promote this as a full Linux
+cell or complete family. Ranked callback/IRQ versus map/cleanup candidates and
+their next falsifier are recorded; no interrupt filtering or budget relaxation.
+
+Own Turing branch/worktree codex/sweep-turing-20261015,/workspace/codex/turing-hw,
+draftPR10. The integration branch codex/die-driver-sweep-20261015 was advanced
+normally to include these candidate changes; master and owner branches untouched.
+Next family: own /workspace/codex/blackwell-hw, codex/sweep-blackwell-20261015,
+native-first plan in traces/die_driver_sweep_20261015/blackwell_plan.md. Rent only
+after checking prior own IDs absent, then arm a new175min timer immediately.
+Prepared controller /workspace/codex/rent_blackwell.py guards that order; installer
+policy helper pins its public source and must stage viaSCP (exceeds onstart limit).
+Blackwell hardware remains unrun. OwnerVM/GPU untouched. Older active/PID/deadline
+paragraphs below are historical and superseded by this completed wave.
+
+## UPDATE 2026-10-15 18:32UTC — TU106 Windows580 and Linux broker PASS; raw running
+
+Device8e3a9d32, source8e3a9d325, ownrental56117789, stockhost595.91.07.
+Windows580.88 LTSC26100: Code0/build checked before/after, Explorer+DWM,
+CUDA3/3 including byte-exact2048matmul, hardwareD3D11compute/draw andD3D12
+compute/fences20iterations PASS; readableSystemlog,0TDRsinceboot. Rendered
+1920x1080frame78,707colors. HostXid0 in18:01:10–18:05:23 window; earlier
+raw-fault Xids remain recorded. Suite18:04:39–18:05:21, wrapperexit0.
+
+Cause fixed: USER-ring birth hardcoded Ampere c56f and refused validTuringc46f
+(cup2cuCtxCreate999). Now use generated host-derived family ChannelGpfifo set;
+same geometry/ownership/Windowspermit/nativeUSER checks. Two assertions fail
+beforec5ee774cb; full CPU8e3a9d3253247/0/14ignored. NativeWindows oracle passes.
+Declaration tests for all families do not prove their hardware execution.
+
+Windows normal shutdown completed18:06:38. Linux580 Cinnamon/Xorg/NVIDIA gears
+and actual X11 SHM broker presentation pass at8e3a9d32:1920x1080,13,193colors,
+zero guestXid/fliptimeouts,12assertions,zero hostXids in the second broker window.
+First host-dependency failure is preserved; attempted vkcube127 is NOTRUN.
+Broker normal stop and wrapperexit0 at18:21:20. Fixed gates9/9+gate10PASS,
+binary rebuilt18:21:55, raw client/packed580 guest rebuilt before full raw30
+started18:22:37 at unchanged180s budget. RawwrapperPID59250; controller live
+text monitorPID/session in/workspace/codex/turing_raw_monitor.sh; its final output
+/workspace/codex/raw-turing/fixed/required-suite-live-final.txt. Rootcheckout stays8e
+duringGPU jobs; do not pull/build. Birthcensus runs even on raw failure. Beforefix
+Linux580CUDA4PASS/raw29(R34timeout180; diagnostic201s) is not a fullLinuxpass.
+Timer revised18:32:26 to18:38:26UTC, PID2036504; old own timer canceled only
+after the replacement was alive. This permits full raw-suite completion/text
+collection, remains below the authorized18:41:16UTC three-hour cap, and does not
+change the180s test budget. Earlier18:36deadline notes below are superseded. Capture text/push
+after each run, retire ownID only. Controller /workspace/codex/turing-hw,
+branchcodex/sweep-turing-20261015, draftPR10. OwnerVM/GPU untouched.
+Older pending/process paragraphs below superseded by this update.
+
+## UPDATE 2026-10-15 17:50UTC — TU106 Linux partial; Windows guest running
+
+Own rental56117789 only, original teardown18:36:22UTC. Ubuntu22.04.5,
+kernel6.8.0-138, stock595.91.07; unprivileged host probe derives TU106
+arch0x160/impl6. Candidate b8d092b0 has exact measured580 caps and two scalar
+control rows, with refusing negative tests. Full CPU c266772aa3245/0/14ignored;
+28harness tests pass. Later08f25dd9d adds a strict Windows suite script only.
+
+Hardware b8d092b0: gates9/9+gate10PASS, all12birthsUSER; native595 raw30/30
+andCUDA4/4. Linux580 guest raw29/30: R34/ce-client-guest-ram TIMEOUT at180s;
+independent guestCUDA4/4 passes. Original frozen grader and budget unchanged.
+Diagnostic shallow0decoys passes; original13000decoys completes with correct
+content in201s at diagnostic300s budget. This proves finite completion on that
+run, not acceptance or the precise cost source. Ranked candidates: nested BAR0/
+IRQ and mapping/cleanup overhead; do not filter IRQs or loosen acceptance.
+Next falsifier: attribute map/unmap and callback/interrupt time before changing
+the completion path, then replay the unchanged180s suite. No full Linux pass.
+
+Windows580.88 first boot bound its own INF, set GSP flags, shut down cleanly;
+fresh phase2 QEMU started17:49:51, PID52629. Main wrapperPID51908, log
+/root/prov/codex_turing_windows_wave.log. Adapter/apps/desktop pending. If hung,
+use own /root/turing_stop_windows.sh (QGA, ACPI, then exactPID TERM; no KILL).
+Linux broker and graphics queued strictly after Windows stops. Capture text and
+push after each run. Root checkout remainsb8; do not pull during GPU jobs.
+Controller scripts/logs/SSH config under/workspace/codex. OwnerVM/GPU untouched.
+Older process/state paragraphs below are superseded by this checkpoint.
+
+## UPDATE 2026-10-15 16:33UTC — Turing native580 reference/facts PASS; guest pending
+
+ONLY active ownrental56117789 RTX2060Super, deadline18:36:22UTC,175min timer
+PID1995396. Ownbranchcodex/sweep-turing-20261015,/workspace/codex/turing-hw,
+draftPR#10. NativeWindows580.88 LTSC26100 Code0/WDDM,CUDA3,D3D11/12,
+readableSystemlog/0TDR in short suites, both default andGSP580.65.05 enabled.
+Bounded module loads;capsword0x00c100;loss-free9210message capture,END/filecheck/
+decode/pairing pass. Only2801request3->2 and2806request3->0 exported as bodies;
+all aggregate text reports saved. Native results are NOT kayfabe guest passes.
+
+WindowsUpdate raced591.86 into the native setup, recordedSystem43/19. Pinned580
+later completes; unused verified591driverpackage removed, driver-exclusionpolicy
+set. wuauserv restartsManual/Running, so do not claim disabledservice. Strictoracle
+checksactual580 andCode0before/after. Capturedata/rawfiles remainrental untilerase.
+
+Linuxreturn preparation ownscheduledtaskCodexLinuxReturn started16:31:49;
+controlleraliascodex-native-turing,ownSSHconfig/work scripts/work logsunder
+/workspace/codex. Poll taskstate/LastTaskResult; stopmeasurementmodule and push
+alltext BEFORE nativeWindows reboot/erase. Then registercodex-turing-linux alias
+forrestoredUbuntu, checkdisk/KVM/driver andprovisionnewbranch; deriveexactchiptuple
+beforeT3rows. ReuseAD102 fixedprovisioners andboundedimageproducer. OneGPUjob.
+
+Exact590class/register +590/595wire-layouttopic is merged: source8149f0b53 full
+3243pass/0fail/14ignored, owntarget-driver590, no hardware acceptance ofnewtags.
+Public595removes swap-readycontrol; omitID byname, modeltestprovesunclaimed.
+Workspaceformattingcheck stillhasinheriteddifferences; no merge/CI-greenclaim.
+Trustedhost~108GiBfree; obsolete ownsharedtarget-gpu-free removedafterlock-usecheck.
+Everyremainingcheckout hasitsowntarget. OwnerVM2990/trustedGPU untouched.
+Older active/process paragraphs below superseded bythis update.
+
+
+## UPDATE 2026-10-15 15:43UTC — only active rental56117789, Turing
+
+Own worktree/work branch/work plan:/workspace/codex/turing-hw,
+codex/sweep-turing-20261015,traces/die_driver_sweep_20261015/turing_2060super/.
+RTX2060Super exact die pending SSH, created15:41:16UTC after AD102absence.
+Quote$0.1113888889/hour150GB. TimerPID1995396 deadlineabout18:36:22UTC.
+Never extend past18:41:16UTC. Only this ID owned/active; at most one box.
+KVM initial boot pending. NativeWindows580oracle/facts first, thenrestoreLinux
+samelease and bothguest suites. Falsifiers recorded in plan before runs.
+ControllerSSHconfig/work scriptsunder/workspace/codex; no othercheckouts/VMs
+may be touched. Older AD102 active/process paragraphs below are historical.
+
+
 ## UPDATE 2026-10-15 15:40UTC — AD102 lease closed; two Linux builds pass
 
 Own branchcodex/sweep-ada-20261015, draftPR#9. Instance56096336 destroyed,

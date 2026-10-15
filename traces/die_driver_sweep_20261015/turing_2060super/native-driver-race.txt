@@ -1,0 +1,4 @@
+WU_EVENT 2026-10-15T16:09:18.0146064Z id=19 Installation Successful: Windows successfully installed the following update: NVIDIA Display Driver Update (32.0.15.9186)
+WU_EVENT 2026-10-15T16:07:18.2411964Z id=43 Installation Started: Windows has started installing the following update: NVIDIA Display Driver Update (32.0.15.9186)
+{"DeviceName":"NVIDIA GeForce RTX 2060 SUPER","DriverVersion":"32.0.15.9186","InfName":"oem13.inf","DriverProviderName":"NVIDIA"}
+2026-10-15T09:13:59.0073346-07:00

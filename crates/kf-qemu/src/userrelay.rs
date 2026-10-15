@@ -400,6 +400,33 @@ impl Drop for NeverBorn {
     }
 }
 
+/// Validate the channel declaration before resolving any own-VM USERD storage.
+/// The class is generated from ogkm's g_gpu_class_list.c/resource_list.h for
+/// this host-derived family, as in kf_rm::chanlink::alloc_shape. Every listed
+/// GPFIFO class uses NV_CHANNEL_ALLOC_PARAMS; engine and USERD permissions stay
+/// with the existing permit/native-birth path. This checks declaration geometry
+/// only; it grants no GPU completion authority or family hardware acceptance.
+fn source_declaration(
+    family: kf_chip::Family,
+    class: u32,
+    entries: u32,
+    gpfifo_va: u64,
+) -> Result<(), &'static str> {
+    if family.classes().kind_of(class) != Some(kf_chip::classes::Kind::ChannelGpfifo)
+        || entries < 2
+        || !entries.is_power_of_two()
+        || entries > (1 << 20)
+        || gpfifo_va & 7 != 0
+        || u64::from(entries)
+            .checked_mul(8)
+            .and_then(|n| gpfifo_va.checked_add(n))
+            .is_none()
+    {
+        return Err("USER_RING_SOURCE_DECLARATION");
+    }
+    Ok(())
+}
+
 struct Birth {
     a: ChannelAlloc,
     mirror: Mirror,
@@ -437,18 +464,8 @@ impl Birth {
         // The CPU-RM resolved descriptor supplies bounded own-VM RAM; runtime
         // CPU access additionally retains exact Pt allocation identity.
         let source = (|| {
-            if a.class != kf_abi::generated::classes::AMPERE_CHANNEL_GPFIFO_A
-                || a.entries < 2
-                || !a.entries.is_power_of_two()
-                || a.entries > (1 << 20)
-                || a.gpfifo_va & 7 != 0
-                || u64::from(a.entries)
-                    .checked_mul(8)
-                    .and_then(|n| a.gpfifo_va.checked_add(n))
-                    .is_none()
-            {
-                return Err("USER_RING_SOURCE_DECLARATION".to_string());
-            }
+            source_declaration(me.family, a.class, a.entries, a.gpfifo_va)
+                .map_err(str::to_string)?;
             let declared = a.subdevice_id.ok_or("USER_RING_SUBDEVICE_ID_UNMEASURED")?;
             let native_id = if shadow_enabled() && declared == 0 {
                 0 // Existing opaque diagnostic retains the host default.
@@ -1002,6 +1019,36 @@ mod tests {
     use kf_core::lifetime::Step;
     use kf_core::{HostOps, HostSlice, Owner, Plane, Translatable, VmCaps, Vmm};
     use kf_trap::token::Route;
+
+    #[test]
+    fn user_ring_source_accepts_generated_channel_classes_for_every_family() {
+        for family in kf_chip::Family::ALL {
+            for &class in family.classes().channel_gpfifo {
+                assert_eq!(
+                    source_declaration(family, class, 1024, 0x300200000),
+                    Ok(()),
+                    "{family:?} channel {class:#x}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn user_ring_source_refuses_wrong_classes_and_unbounded_geometry() {
+        let family = kf_chip::Family::Turing;
+        let class = 0xc46f; // ogkm clc46f.h: TURING_CHANNEL_GPFIFO_A; generated family row.
+        for wrong in [0, u32::MAX, 0xc5c0, 0xc5b5, 0xc461, 0xc56f, 0xca6f] {
+            assert!(source_declaration(family, wrong, 1024, 0x300200000).is_err());
+        }
+        for count in [0, 1, 3, (1 << 20) + 1, 1 << 21, u32::MAX] {
+            assert!(source_declaration(family, class, count, 0x300200000).is_err());
+        }
+        for va in [1, 7, u64::MAX - 7, u64::MAX - 15] {
+            assert!(source_declaration(family, class, 1024, va).is_err());
+        }
+        assert_eq!(source_declaration(family, class, 2, 0), Ok(()));
+        assert_eq!(source_declaration(family, class, 1 << 20, 0x1000), Ok(()));
+    }
 
     #[test]
     fn windows_relay_is_the_default_with_an_explicit_negative_control() {

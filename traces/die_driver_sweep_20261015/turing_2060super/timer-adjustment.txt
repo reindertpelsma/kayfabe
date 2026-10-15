@@ -1,0 +1,2 @@
+TIMER_ADJUSTMENT 2026-10-15T18:32:26.721061+00:00 own_instance=56117789 old_pid=1995396 new_pid=2036504 deadline=2026-10-15T18:38:26.721061+00:00 hard_cap=2026-10-15T18:41:16UTC reason=finish_required_raw_suite_and_save_text
+armed: destroy 56117789 in 360s (pid 2036504)

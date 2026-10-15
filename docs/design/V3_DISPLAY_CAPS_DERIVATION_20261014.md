@@ -2,9 +2,15 @@
 
 **STATUS: LIVE, 2026-10-15 (branch `claude/display-caps-derive-20261014`; every number below is a measured result with its
 run directory on the host, or is marked INFERRED).** Closes the *code* half of H01 (`V3_FEATURE_GAPS.md`): the captured
-AD104 page behind `KF3_DISPLAY_CAPS_PROBE` is gone from the product. Still open and stated in §7: the derived page has
-not yet been booted as the final binary (host VM runs are paused for the owner's SolidWorks test), and no die other than
-AD104 has been measured.
+AD104 page behind `KF3_DISPLAY_CAPS_PROBE` is gone from the product.
+**Correction, measured2026-10-15 in own Codex campaign:** bounded nativeWindows580
+reads now separately measure AD102/C773 andTU106/C573 word0x00c=0x100, with
+stable before/afterGSP readings. Only that scalar ships, never the other98/89
+nonzero words or a neighbouring die's page. Exact AD102da0569a6 andTU1068e3a9d32
+Windows580 guests pass Code0/DWM/CUDA/D3D11+12 with readableSystemlog/zeroTDR.
+The historical unmeasured/boot-pending statements in §7 are superseded for these
+two exact580 cells only. Evidence: `traces/die_driver_sweep_20261015/{ad102_4090,turing_2060super}/`.
+Other dies/branches still require their own facts and validation.
 
 ## 0. Result in one screen
 

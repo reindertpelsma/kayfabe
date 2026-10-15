@@ -1,0 +1,5 @@
+NATIVE_WINDOWS_DRIVER_UPDATES_DISABLED=1
+The operation completed successfully.
+testsigning is on for the NEXT boot. Reboot yourself, then run -Action Install.
+{"Status":2,"StartType":3}
+POLICY_EXIT rc=0 2026-10-15T16:15:47.6971127Z

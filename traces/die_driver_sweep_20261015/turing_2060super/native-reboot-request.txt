@@ -1,0 +1,11 @@
+{
+    "runs":  1,
+    "failures":  0,
+    "reboots":  0,
+    "ssh":  true,
+    "driver":  true,
+    "cuda":  true,
+    "complete":  true,
+    "error":  null
+}
+NATIVE_TESTSIGN_REBOOT_REQUESTED=1

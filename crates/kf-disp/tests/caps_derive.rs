@@ -156,7 +156,7 @@ fn every_word_names_its_tier() {
 /// branch). Every other die gets the clean authored page, and says what is missing.
 #[test]
 fn an_unmeasured_die_gets_the_clean_page_and_the_notice_never_a_neighbours_row() {
-    for (row, die) in [(&ADA, AD106), (&ADA, AD103), (&AMPERE, GA104), (&TURING, TU106), (&BLACKWELL_GB20X, GB206)] {
+    for (row, die) in [(&ADA, AD106), (&ADA, AD103), (&AMPERE, GA104), (&TURING, Die { architecture: 0x160, implementation: 4 }), (&BLACKWELL_GB20X, GB206)] {
         let d = go(row, die, true, true, BRANCH);
         assert_eq!(d.page.word(0x00c), 0, "{die:?} must not receive AD104's word");
         assert_eq!(d.unmeasured.len(), 1, "{die:?}");
@@ -331,6 +331,25 @@ fn the_ad102_580_caps_word_has_its_own_native_measurement() {
     assert!(p.why.contains("AD102") && p.why.contains("580.88"), "{}", p.why);
     for branch in ["570", "595"] {
         let d = go(&ADA, ad102, true, true, branch);
+        assert_eq!(d.page.word(0x00c), 0);
+        assert_eq!(d.unmeasured.len(), 1);
+    }
+}
+
+#[test]
+fn the_tu106_580_caps_word_has_its_own_native_measurement() {
+    let d = go(&TURING, TU106, true, true, "580");
+    assert_eq!(d.page.word(0x00c), 0x100);
+    assert!(d.unmeasured.is_empty());
+    let p = d.provenance.iter().find(|p| p.offset == 0x00c).unwrap();
+    assert_eq!(p.tier, Tier::Measured);
+    assert!(
+        p.why.contains("TU106") && p.why.contains("580.88"),
+        "{}",
+        p.why
+    );
+    for branch in ["570", "595"] {
+        let d = go(&TURING, TU106, true, true, branch);
         assert_eq!(d.page.word(0x00c), 0);
         assert_eq!(d.unmeasured.len(), 1);
     }

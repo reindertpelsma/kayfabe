@@ -232,7 +232,16 @@ CONSTS=(
     echo "  printf(\"CONST\\tCAP_${c}_BYTE\\t0x%llx\\n\", (unsigned long long)(1?NV0073_CTRL_SYSTEM_CAPS_${c}));"
     echo "  printf(\"CONST\\tCAP_${c}_MASK\\t0x%llx\\n\", (unsigned long long)(0?NV0073_CTRL_SYSTEM_CAPS_${c}));"
   done
-  for c in "${CONSTS[@]}"; do echo "  printf(\"CONST\\t$c\\t0x%llx\\n\", (unsigned long long)($c));"; done
+  for c in "${CONSTS[@]}"; do
+    # Removed controls must be absent from this version's claimed set.
+    if [[ "$c" == *_CTRL_CMD_* ]]; then echo "#ifdef $c"; fi
+    echo "  printf(\"CONST\\t$c\\t0x%llx\\n\", (unsigned long long)($c));"
+    if [[ "$c" == *_CTRL_CMD_* ]]; then
+      echo '#else'
+      echo "  fputs(\"MISSING\\tCONST\\t$c\\n\", stderr);"
+      echo '#endif'
+    fi
+  done
   for f in AUDIO_OPTIMAL ACTIVE_SOR_NOT_AUDIO_CAPABLE_YES; do
     range=${f%_*}
     echo "  printf(\"CONST\\tASSIGN_SOR_FLAGS_${f}_MASK\\t0x%llx\\n\", (unsigned long long)(NV0073_CTRL_DFP_ASSIGN_SOR_FLAGS_${f} << (0?NV0073_CTRL_DFP_ASSIGN_SOR_FLAGS_${range})));"

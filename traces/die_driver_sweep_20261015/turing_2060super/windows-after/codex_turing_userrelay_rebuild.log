@@ -1,0 +1,71 @@
+START 2026-10-15T18:01:10+00:00
+Updating b8d092b0c..8e3a9d325
+Fast-forward
+ crates/kf-disp/tests/caps_derive.rs                |    6 +-
+ crates/kf-qemu/src/userrelay.rs                    |   71 +-
+ crates/kf-rm/tests/gpu_types_wiring.rs             |    8 +-
+ docs/STATUS_AND_HANDOFF.md                         |   27 +
+ docs/design/V3_GPU_TYPES_20261015.md               |    2 +-
+ docs/design/v3_constant_inventory.tsv              |    9 +-
+ scripts/bench/diesweep/windows_validate.ps1        |   45 +
+ traces/die_driver_sweep_20261015/COST.md           |    2 +-
+ traces/die_driver_sweep_20261015/README.md         |   11 +-
+ .../turing_2060super/README.md                     |   50 +
+ .../turing_2060super/codex_turing_build.log        | 1864 ++++++
+ .../turing_2060super/codex_turing_fast_build.log   |   14 +
+ .../turing_2060super/codex_turing_gates.log        |  249 +
+ .../codex_turing_guest_cuda_independent.log        |   16 +
+ .../turing_2060super/codex_turing_guest_raw.run    |   66 +
+ .../turing_2060super/codex_turing_linux_facts.log  |   45 +
+ .../codex_turing_linux_validation.log              |   26 +
+ .../turing_2060super/codex_turing_native_cuda.log  |   21 +
+ .../turing_2060super/codex_turing_native_raw.log   |   66 +
+ .../turing_2060super/codex_turing_phase2.log       |   27 +
+ .../turing_2060super/codex_turing_preflight.log    |   15 +
+ .../turing_2060super/codex_turing_probe_build.log  | 1182 ++++
+ .../codex_turing_r34_diagnostic.log                |   10 +
+ .../turing_2060super/codex_turing_r34_shallow.log  |   25 +
+ .../turing_2060super/codex_turing_raw_build.log    |  810 +++
+ .../turing_2060super/codex_turing_windows_wave.log |    1 +
+ ...ex_turing_guest580_ce-client-guest-ram_qemu.log | 1246 ++++
+ ..._turing_guest580_ce-client-guest-ram_serial.log |   73 +
+ ...x_turing_guest580_ce-client-guest-ram_ttyS0.log |   64 +
+ ...ex_turing_r34_long_ce-client-guest-ram_qemu.log | 1327 +++++
+ ..._turing_r34_long_ce-client-guest-ram_serial.log |   81 +
+ ...x_turing_r34_long_ce-client-guest-ram_ttyS0.log |   66 +
+ .../fast_codex_turing_r34_shallow_qemu.log         | 1094 ++++
+ .../fast_codex_turing_r34_shallow_serial.log       |   81 +
+ .../fast_codex_turing_r34_shallow_ttyS0.log        |   66 +
+ .../turing_2060super/turing-hw-after.log           |   27 +
+ .../turing_2060super/turing-hw-all-tests.log       | 6249 ++++++++++++++++++++
+ 37 files changed, 15017 insertions(+), 25 deletions(-)
+ create mode 100644 scripts/bench/diesweep/windows_validate.ps1
+ create mode 100644 traces/die_driver_sweep_20261015/turing_2060super/codex_turing_build.log
+ create mode 100644 traces/die_driver_sweep_20261015/turing_2060super/codex_turing_fast_build.log
+ create mode 100644 traces/die_driver_sweep_20261015/turing_2060super/codex_turing_gates.log
+ create mode 100644 traces/die_driver_sweep_20261015/turing_2060super/codex_turing_guest_cuda_independent.log
+ create mode 100644 traces/die_driver_sweep_20261015/turing_2060super/codex_turing_guest_raw.run
+ create mode 100644 traces/die_driver_sweep_20261015/turing_2060super/codex_turing_linux_facts.log
+ create mode 100644 traces/die_driver_sweep_20261015/turing_2060super/codex_turing_linux_validation.log
+ create mode 100644 traces/die_driver_sweep_20261015/turing_2060super/codex_turing_native_cuda.log
+ create mode 100644 traces/die_driver_sweep_20261015/turing_2060super/codex_turing_native_raw.log
+ create mode 100644 traces/die_driver_sweep_20261015/turing_2060super/codex_turing_phase2.log
+ create mode 100644 traces/die_driver_sweep_20261015/turing_2060super/codex_turing_preflight.log
+ create mode 100644 traces/die_driver_sweep_20261015/turing_2060super/codex_turing_probe_build.log
+ create mode 100644 traces/die_driver_sweep_20261015/turing_2060super/codex_turing_r34_diagnostic.log
+ create mode 100644 traces/die_driver_sweep_20261015/turing_2060super/codex_turing_r34_shallow.log
+ create mode 100644 traces/die_driver_sweep_20261015/turing_2060super/codex_turing_raw_build.log
+ create mode 100644 traces/die_driver_sweep_20261015/turing_2060super/codex_turing_windows_wave.log
+ create mode 100644 traces/die_driver_sweep_20261015/turing_2060super/fast_codex_turing_guest580_ce-client-guest-ram_qemu.log
+ create mode 100644 traces/die_driver_sweep_20261015/turing_2060super/fast_codex_turing_guest580_ce-client-guest-ram_serial.log
+ create mode 100644 traces/die_driver_sweep_20261015/turing_2060super/fast_codex_turing_guest580_ce-client-guest-ram_ttyS0.log
+ create mode 100644 traces/die_driver_sweep_20261015/turing_2060super/fast_codex_turing_r34_long_ce-client-guest-ram_qemu.log
+ create mode 100644 traces/die_driver_sweep_20261015/turing_2060super/fast_codex_turing_r34_long_ce-client-guest-ram_serial.log
+ create mode 100644 traces/die_driver_sweep_20261015/turing_2060super/fast_codex_turing_r34_long_ce-client-guest-ram_ttyS0.log
+ create mode 100644 traces/die_driver_sweep_20261015/turing_2060super/fast_codex_turing_r34_shallow_qemu.log
+ create mode 100644 traces/die_driver_sweep_20261015/turing_2060super/fast_codex_turing_r34_shallow_serial.log
+ create mode 100644 traces/die_driver_sweep_20261015/turing_2060super/fast_codex_turing_r34_shallow_ttyS0.log
+ create mode 100644 traces/die_driver_sweep_20261015/turing_2060super/turing-hw-after.log
+ create mode 100644 traces/die_driver_sweep_20261015/turing_2060super/turing-hw-all-tests.log
+REBUILD_COMPLETE rev=8e3a9d32
+EXIT rc=0 2026-10-15T18:01:45+00:00
