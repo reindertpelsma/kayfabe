@@ -74,11 +74,6 @@ const IMAGE_FILE: &str = "kayfabe-isolate.image";
 /// scratchpad isolate runs this build, and only it is sandboxed late.
 const CUDA_IMAGE_FILE: &str = "kayfabe-isolate-cuda.image";
 
-/// The cargo feature that asks for the second image. ⊘ Off by default, so a build that does
-/// not want CUDA pays neither the build time nor a glibc-linked binary in its archive — and
-/// the runtime gate then refuses **by name** rather than finding an empty blob.
-const CUDA_FEATURE: &str = "CARGO_FEATURE_CUDA_SCRATCHPAD";
-
 /// The marker that tells a nested run of this script not to recurse.
 const NESTED: &str = "KAYFABE_ISOLATE_NESTED_BUILD";
 
@@ -158,19 +153,6 @@ fn main() {
                 .display()
         );
     }
-    // ★★★★★ **w826 — THE SAME CLASS, ONE LEVEL FURTHER OUT.** `kayfabe-cuda` embeds
-    // `cuda/walk/kf_walk.ptx` with `include_bytes!`, and that file lives OUTSIDE every
-    // `crates/*/src` above. `[measured w826 ct4–ct13]` a walker fix to the PTX never reached
-    // the scratchpad image: it stayed at exactly 1 203 872 bytes across the pre-fix and the
-    // post-fix builds, five boots "proved the fix did not work", and a diagnosis was built
-    // on them. It changed only when an unrelated edit to `cudawalk.rs` re-ran this script.
-    println!(
-        "cargo::rerun-if-changed={}",
-        root.join("cuda")
-            .join("walk-v2-frozen")
-            .join("kf_walk.ptx")
-            .display()
-    );
     println!(
         "cargo::rerun-if-changed={}",
         root.join("Cargo.lock").display()
@@ -209,43 +191,14 @@ fn main() {
     // ★★★ THE SECOND IMAGE, first because its absence must still write a file: every
     // consumer `include_bytes!`es it unconditionally, and a missing file is a build error
     // rather than a runtime refusal.
+    // ⊘ EMPTY, not absent. `isolate.rs` refuses an empty image by name, which is a different
+    // diagnosis from "the file is missing" (a build problem) and from "the library would not
+    // load" (a host problem). 2026-10-15: the glibc-linked CUDA image and its
+    // `cuda-scratchpad` feature moved to `archive/` with `kayfabe-cuda`; this slot stays empty.
     let cuda_image = out_dir.join(CUDA_IMAGE_FILE);
-    if std::env::var_os(CUDA_FEATURE).is_some() {
-        let cuda_triple = format!("{arch}-unknown-linux-gnu");
-        let cuda_stage = out_dir.join("isolate-cuda-stage");
-        let bytes = build_isolate_for(
-            &root,
-            &cargo,
-            &cuda_triple,
-            &cuda_stage,
-            &["cuda-scratchpad"],
-        );
-        // ⊘⊘ **THE MIRROR ASSERTION.** `the_embedded_image_is_a_static_elf` asserts the
-        // ordinary image has NO `PT_INTERP`. This one must HAVE one, and the check is here
-        // rather than only in a test because a statically-linked second image would `dlopen`
-        // nothing and the failure would surface as "CUDA is not available on this host".
-        assert!(
-            has_interp(&bytes),
-            "the CUDA scratchpad image was built for {cuda_triple} and has NO PT_INTERP — it \
-             is statically linked, so it cannot `dlopen` libcuda and the whole point of the \
-             second image is gone. §w724d's ordering does not rescue a static binary: the \
-             refusal is musl's (or the linker's), not CUDA's."
-        );
-        write(&cuda_image, &bytes);
-        println!(
-            "cargo::warning=embedded CUDA scratchpad image: {} bytes, {cuda_triple} (dynamic)",
-            bytes.len()
-        );
-    } else {
-        // ⊘ EMPTY, not absent. `isolate.rs` refuses an empty image by name, which is a
-        // different diagnosis from "the file is missing" (a build problem) and from "the
-        // library would not load" (a host problem).
-        write(&cuda_image, &[]);
-    }
+    write(&cuda_image, &[]);
 
-    // ⊘ The SAME helper the CUDA image uses, with no features: one statement of the
-    // environment scrub, the recursion guard and the strip setting, so the two images cannot
-    // drift into differing in something nobody chose.
+    // ⊘ One helper for the environment scrub, the recursion guard and the strip setting.
     let bytes = build_isolate_for(&root, &cargo, &triple, &stage, &[]);
     assert!(
         !has_interp(&bytes),
@@ -367,18 +320,6 @@ fn has_interp(bytes: &[u8]) -> bool {
 const DEPENDENCY_CRATES: &[&str] = &[
     "kayfabe-isolate-host",
     "kayfabe-isolate",
-    // ★★★★★ **ADDED 2026-09-14, AND IT COST A BOOT TO FIND.** `kayfabe-cuda` is linked into
-    // the CUDA scratchpad image, and it was not on this list — so editing it did NOT
-    // invalidate the embedded image, and cargo reused a stale one.
-    //
-    // ⊘⊘ **THE SHAPE IS WORSE THAN A STALE BUILD, AND IT IS WHY THIS COMMENT IS LONG.** The
-    // QEMU binary's own revision stamp said HEAD. The content checks the harness runs
-    // (`strings | grep 'SCRATCHPAD-CUDA AT'`) said HEAD. And the isolate image INSIDE it was
-    // from the previous commit, so a fixed constant was still wrong in the boot that was
-    // supposed to prove it fixed. ⇒ **a stamp on the outer artifact says nothing about an
-    // artifact embedded inside it**, and every instrument this tree has for "is the binary
-    // the tree" was looking at the outer one.
-    "kayfabe-cuda",
     "kayfabe-linux-raw",
     "kayfabe-util",
     "kayfabe-arch",

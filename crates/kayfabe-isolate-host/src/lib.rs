@@ -1,5 +1,9 @@
 //! # `kayfabe-isolate-host` — the REAL host isolate
 //!
+//! ★ **SLIMMED 2026-10-15 (`archive/README.md`).** Frozen pre-v3 crate, kept for the raw client
+//! (`kayfabe-rm-ladder`). `planreactor`, `cudastore` and `cudawalk` (and the `cuda-scratchpad`
+//! feature with `kayfabe-cuda`) moved to `archive/`; references below to them are historical.
+//!
 //! `host_execution_plane.md` §0 states the finding this crate answers, measured at
 //! `f0053ef`: **the host execution plane does not exist.** The only implementors of
 //! `IsolateFactory`, `Isolate`, `RmBackend` and `Present` were in `kayfabe-mocks`; nothing
@@ -76,14 +80,6 @@
 //!   crossing yet"*.
 
 pub mod child;
-/// ★★★★★ w755i — can the single store be OWNED by CUDA and NAMED by RM? See the module docs.
-/// ⊘ Gated exactly as [`cudawalk`] is: it needs `libcuda`, and the musl image has none.
-#[cfg(feature = "cuda-scratchpad")]
-pub mod cudastore;
-/// ★★★★★ The scratchpad isolate's CUDA half — `THE_CONSTRAINTS.md` §w724d. Present only in
-/// the glibc-linked second image; see the `cuda-scratchpad` feature.
-#[cfg(feature = "cuda-scratchpad")]
-pub mod cudawalk;
 pub mod export;
 pub mod fbjoin;
 pub mod fdcross;
@@ -92,7 +88,6 @@ pub mod hostabi;
 pub mod isolate;
 pub mod listobj;
 pub mod loopback;
-pub mod planreactor;
 pub mod proto;
 pub mod rm;
 
@@ -104,7 +99,3 @@ pub use isolate::{
     embedded_isolate_bytes,
 };
 pub use loopback::ParkVerb;
-pub use planreactor::{
-    DEFAULT_LANE_CAP, LanePolicy, PlanDone, PlanReactor, PlanReactorStats, RejectReason, Rejected,
-    abandoned_completions_total,
-};

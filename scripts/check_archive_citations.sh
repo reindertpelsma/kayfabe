@@ -40,7 +40,10 @@ cd "$(dirname "$0")/.." || exit 2
 #       scratchpad-isolate plane §10 deletes).
 # 2026-09-26: 1110 -> 928 (v3 archive move: crates/kayfabe-{core,fwd,rmrpc,rt,shell,crec,
 #       qemu-raw,vmm-kvm,vmm-qemu} left crates/, and their comments with them — no comment edited).
-BASE=${ARCHIVE_CITE_BASELINE:-928}
+# 2026-10-15: 938 -> 628 (pre-v3 prune: eight crates and 43 modules of the kept crates moved to
+#       archive/, and their comments with them — no comment edited. NB master was at 938, i.e.
+#       already above the 928 bar, before this change.)
+BASE=${ARCHIVE_CITE_BASELINE:-628}
 
 tmp=$(mktemp)
 grep -rhoE '[A-Za-z0-9_./-]+\.md' --include='*.rs' crates/ 2>/dev/null \

@@ -100,8 +100,9 @@ The v3 crates (`crates/kf-*`, descriptions condensed from their own `Cargo.toml`
 | `kf-crec`, `kf-trace` | C-trace differential (the `cap1`/`cap1b` replays). Oracle only, never linked into the product |
 | `kf-arch`, `kf-linux-raw`, `kf-util` | vocabulary and the `Arch` traits; the audited raw-OS adapter; generic utilities |
 
-`crates/kayfabe-*` is the **frozen pre-v3 tree**. It is kept because `kayfabe-rm-ladder`, the
-30-arm raw-client grader behind the thin-guest suite and the bare-metal baseline, depends on it.
+`crates/kayfabe-*` is the **frozen pre-v3 tree**, reduced (2026-10-15) to `kayfabe-rm-ladder`, the
+30-arm raw-client grader behind the thin-guest suite and the bare-metal baseline, and its
+dependency closure (nine crates). The rest of the pre-v3 tree is in `archive/` (`archive/README.md`).
 No `kf-*` crate depends on a `kayfabe-*` crate.
 
 ## Rules that shape the code

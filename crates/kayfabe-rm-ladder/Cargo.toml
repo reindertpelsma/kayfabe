@@ -31,14 +31,6 @@ path = "src/main.rs"
 kayfabe-util.workspace = true
 kayfabe-arch.workspace = true
 kayfabe-abi.workspace = true
-kayfabe-chips.workspace = true
-kayfabe-mmu.workspace = true
-kayfabe-device.workspace = true
 kayfabe-isolate.workspace = true
 kayfabe-isolate-host.workspace = true
 kayfabe-linux-raw.workspace = true
-
-[features]
-# ★ `[w825]` The CUDA-window arm needs libcuda at run time and the walk kernel's PTX. Opt-in, so
-# the default ladder stays runnable on a box with only the RM driver.
-cuda-window = ["kayfabe-isolate-host/cuda-scratchpad"]

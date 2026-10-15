@@ -74,7 +74,26 @@ fn walk(roots: &[&str], ext: &str) -> Vec<(String, String)> {
 }
 
 fn rust_sources() -> Vec<(String, String)> {
-    let out = walk(&["crates", "tests"], ".rs");
+    // 2026-10-15 (pre-v3 prune): the pre-v3 code the grader no longer needs moved out of
+    // `crates/` into these `archive/` paths. It is still source that cites oracle rows, so the
+    // universe this gate quantifies over keeps them — moving a file must not shrink the scan,
+    // and the floor below must not be lowered to follow it.
+    let out = walk(
+        &[
+            "crates",
+            "tests",
+            "archive/prev3-modules",
+            "archive/crates/kayfabe-completion",
+            "archive/crates/kayfabe-cuda",
+            "archive/crates/kayfabe-device",
+            "archive/crates/kayfabe-doorbell",
+            "archive/crates/kayfabe-gsp",
+            "archive/crates/kayfabe-mmu",
+            "archive/crates/kayfabe-mocks",
+            "archive/crates/kayfabe-trace",
+        ],
+        ".rs",
+    );
     assert!(
         out.len() > 100,
         "the source walk found only {} files — it is not walking the tree, and a gate that \

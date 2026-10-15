@@ -1,5 +1,9 @@
 //! # `kayfabe-linux-raw` — the one audited raw-OS adapter
 //!
+//! ★ **SLIMMED 2026-10-15 (`archive/README.md`).** Frozen pre-v3 crate, kept for the raw client.
+//! `arena_unsafe`, `memtype` and `procfd` moved to `archive/prev3-modules/kayfabe-linux-raw/`;
+//! references below to them are historical. v3's counterpart is `kf-linux-raw`.
+//!
 //! `l1_os_shell.md` §4 (decision 9). This is the **only** crate in the workspace where
 //! the `unsafe_code` lint is not `forbid`, and its API shape — not its implementation —
 //! is the subject of the L1-M2 security exit gate (§11).
@@ -269,7 +273,6 @@ compile_error!(
 
 pub mod affinity;
 mod affinity_unsafe;
-mod arena_unsafe;
 pub mod bounds;
 pub mod cache;
 pub mod census;
@@ -283,9 +286,7 @@ pub mod ioctltrace;
 pub mod kvm_gate;
 mod kvm_unsafe;
 mod mapping_unsafe;
-pub mod memtype;
 pub mod page_size;
-pub mod procfd;
 mod sandbox_unsafe;
 mod scm_unsafe;
 mod signal_unsafe;
@@ -310,7 +311,6 @@ pub mod sandbox {
     };
 }
 
-pub use arena_unsafe::{ARENA_EXHAUSTED, ARENA_PAGE, ArenaPage, SharedPageArena};
 pub use bounds::HostOffset;
 pub use cache::CachePolicy;
 pub use chardev_unsafe::{CharDevice, DevAccess, DevDir, Indirect, POINTER_FIELD_WIDTH};
@@ -323,7 +323,6 @@ pub use mapping_unsafe::{
     release_fence,
 };
 pub use page_size::HostPageSize;
-pub use procfd::{MemfdCandidate, MemfdCensus, MemfdRefusal};
 pub use scm_unsafe::{
     DescriptorKind, MAX_FDS_PER_FRAME, descriptor_kind, recv_with_fds, require_kind, send_with_fds,
 };

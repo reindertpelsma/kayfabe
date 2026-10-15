@@ -530,8 +530,8 @@ pub const CAPTURE_RELIANCE: &[CaptureReliance] = &[
         cmd: 0x2080_0a22,
         read_end: 16376,
         sites: &[
-            "crates/kayfabe-abi/src/grstatic.rs",
-            "crates/kayfabe-abi/tests/gr_static_info.rs",
+            "archive/prev3-modules/kayfabe-abi/src/grstatic.rs",
+            "archive/prev3-modules/kayfabe-abi/tests/gr_static_info.rs",
         ],
         why: "the fixture `ga106_ctl_20800a22.bin` IS the kept prefix, and \
               `assert_prefix_matches_for` compares exactly that many bytes — the one site \
@@ -542,8 +542,8 @@ pub const CAPTURE_RELIANCE: &[CaptureReliance] = &[
         cmd: 0x2080_0a1f,
         read_end: 176,
         sites: &[
-            "crates/kayfabe-abi/src/grstatic.rs",
-            "crates/kayfabe-abi/tests/gr_static_info.rs",
+            "archive/prev3-modules/kayfabe-abi/src/grstatic.rs",
+            "archive/prev3-modules/kayfabe-abi/tests/gr_static_info.rs",
         ],
         why: "the fixture `ga106_ctl_20800a1f.bin` IS the kept prefix; `GA106_GR_CAPS` \
               transcribes `engineCaps[0].capsTbl`, the first 23 bytes",
@@ -562,8 +562,8 @@ pub const CAPTURE_RELIANCE: &[CaptureReliance] = &[
         cmd: 0x2080_0a41,
         read_end: 4108,
         sites: &[
-            "crates/kayfabe-abi/src/regaccessmap.rs",
-            "crates/kayfabe-device/tests/user_register_access_map.rs",
+            "archive/prev3-modules/kayfabe-abi/src/regaccessmap.rs",
+            "archive/crates/kayfabe-device/tests/user_register_access_map.rs",
         ],
         why: "`profilingRangesSize` sits at 4104 and the module quotes its value; the \
               embedded `ORACLE_PREFIX` is the first 1277 bytes — the two size words plus \
@@ -574,7 +574,7 @@ pub const CAPTURE_RELIANCE: &[CaptureReliance] = &[
     CaptureReliance {
         cmd: 0x2080_1112,
         read_end: 1112,
-        sites: &["crates/kayfabe-device/tests/init_tables.rs"],
+        sites: &["archive/crates/kayfabe-device/tests/init_tables.rs"],
         why: "12-byte header plus all 11 entries the capture's own `numEntries` declares, \
               at 100 bytes each. `ORACLE_ENGINE_ENTRIES` embeds six of those eleven — \
               entries 0, 4, 5, 6, 7 and 10 — so its deepest byte is the end of entry 10. \
@@ -584,8 +584,8 @@ pub const CAPTURE_RELIANCE: &[CaptureReliance] = &[
         cmd: 0x2080_0a40,
         read_end: 580,
         sites: &[
-            "crates/kayfabe-abi/src/deviceinfo.rs",
-            "crates/kayfabe-device/tests/internal_device_info_table.rs",
+            "archive/prev3-modules/kayfabe-abi/src/deviceinfo.rs",
+            "archive/crates/kayfabe-device/tests/internal_device_info_table.rs",
         ],
         why: "4-byte header plus all 12 entries the capture's own `numEntries` declares, at \
               48 bytes each. `ORACLE_FIVE` embeds five of the twelve, ending at 388. ★ This \
@@ -596,8 +596,8 @@ pub const CAPTURE_RELIANCE: &[CaptureReliance] = &[
         cmd: 0x2080_01b0,
         read_end: 164,
         sites: &[
-            "crates/kayfabe-abi/src/falconinfo.rs",
-            "crates/kayfabe-device/tests/constructed_falcon_info.rs",
+            "archive/prev3-modules/kayfabe-abi/src/falconinfo.rs",
+            "archive/crates/kayfabe-device/tests/constructed_falcon_info.rs",
         ],
         why: "4-byte count plus all 8 falcons the capture's own `numConstructedFalcons` \
               declares, at 20 bytes each; `ORACLE_PREFIX` embeds the 163 non-zero bytes of \
@@ -607,7 +607,7 @@ pub const CAPTURE_RELIANCE: &[CaptureReliance] = &[
     CaptureReliance {
         cmd: 0x2080_0301,
         read_end: 0,
-        sites: &["crates/kayfabe-abi/src/eventnotify.rs"],
+        sites: &["archive/prev3-modules/kayfabe-abi/src/eventnotify.rs"],
         why: "NOT A READ. Every member is `[IN]` and this port re-encodes the reply from the \
               DECODED REQUEST rather than from any capture — see that module's `⊘ The reply \
               is a PURE STATUS` section. The four uncaptured bytes are `info16` and its pad; \
@@ -616,7 +616,7 @@ pub const CAPTURE_RELIANCE: &[CaptureReliance] = &[
     CaptureReliance {
         cmd: 0x2080_2a0f,
         read_end: 0,
-        sites: &["crates/kayfabe-device/src/sweep.rs"],
+        sites: &["archive/crates/kayfabe-device/src/sweep.rs"],
         why: "NOT A READ. `RefusalHalts`: the copy-engine topology triple is refused whole, \
               so no byte of this row is decoded. ⊘ If it is ever served, this row must be \
               re-decided — the five fields `kceGetPceConfigForLceType` copies out span 20 \

@@ -6774,25 +6774,6 @@ impl TiledWindowEvidence {
     }
 }
 
-/// What `prove_cuda_window` established. ⊘ Every field is a measurement; the arm decides.
-#[cfg(feature = "cuda-scratchpad")]
-#[derive(Debug, Clone)]
-pub struct CudaWindowEvidence {
-    pub object_bytes: u64,
-    /// The object's base in the WALKER's (libcuda's) address space.
-    pub dptr: u64,
-    /// Where the fixture's tables were written — the guest's real neighbourhood.
-    pub origin: u64,
-    pub root: u64,
-    /// The walk over the live object found exactly the fixture's mapping.
-    pub found: bool,
-    pub runs: usize,
-    /// ★ The control: after zeroing the root IN PLACE, a second walk found nothing.
-    pub control_found_nothing: bool,
-    pub control_runs: usize,
-    pub walk_us: u128,
-}
-
 /// What `prove_identity_window` established.
 ///
 /// ⊘⊘⊘ **v1 OF THIS STRUCT DISCARDED THE ERROR** — it stored `mapped.ok()`, so a refusal
@@ -8303,24 +8284,6 @@ impl RmBackend for HostRmBackend {
             return Err(RmError::NoMemory);
         }
         let h = self.conn.reserve_gpga(len)?;
-        // ★★★★★ **w755y — GIVE THE STORE A DEVICE POINTER, HERE, WHERE BOTH HALVES LIVE.**
-        //
-        // `[measured w755x]` an RM-owned allocation **is** addressable by CUDA: RM exports it
-        // to a control fd we open, `cuMemImportFromShareableHandle` + `cuMemMap` yield a real
-        // `dptr`. This is the reservation that becomes the single store, and the scratchpad
-        // child holds **both** the RM connection and the CUDA context — so the arming needs
-        // no IPC, no new protocol request, and no second party to agree with.
-        //
-        // ⊘⊘ **Why it matters:** the walk kernel dereferences `KfWin { base, len }` at
-        // **GPGA offsets**, and under the identity window a guest framebuffer address IS an
-        // offset into this object. So a `dptr` here is exactly what lets the kernel walk the
-        // guest's page tables **in place** — which is what deletes the CPU walk that CUT A
-        // refuses by name, rather than working around it.
-        //
-        // ⚠ **Failure is NOT fatal and NOT silent.** The arena arm does not need this, and a
-        // boot that could not arm it must say so rather than report a store that looks armed.
-        #[cfg(feature = "cuda-scratchpad")]
-        self.arm_store_device_pointer(h, len);
         Ok(self.stamp(h))
     }
 
@@ -11012,41 +10975,6 @@ impl HostRmBackend {
     /// **routing** defect, not an RM one: the guest declared a store-slice USERD and route K
     /// was not on the path. ⊘ Refused rather than birthed locally with a USERD of ours:
     /// `[measured w755h]` that is the `GP_PUT == GP_GET == 0` silence.
-    /// ★★★★★ **w755y — export the store to a ctl fd and hand it to CUDA.**
-    ///
-    /// See [`RmBackend::reserve_gpga`]'s call site for why it happens there. Records the
-    /// `dptr` for the walk kernel and prints either way: `[w755v]` this probe's question was
-    /// answered wrongly three times by treating a refusal as a verdict, so the arming states
-    /// its own outcome rather than leaving a reader to infer it from what did not appear.
-    #[cfg(feature = "cuda-scratchpad")]
-    fn arm_store_device_pointer(&mut self, store: u32, len: u64) {
-        let ctl = match CharDevice::openat(&self.conn.dev, c"nvidiactl") {
-            Ok(c) => c,
-            Err(e) => {
-                eprintln!(
-                    "kayfabe-isolate: STORE-DPTR ⊘ UNARMED open-ctl {e:?} — the walk kernel \
-                     will have no in-place window and the CPU walk stays the only source"
-                );
-                return;
-            }
-        };
-        if let Err(e) = self.conn.export_object_to_fd(store, ctl.fd_number()) {
-            eprintln!("kayfabe-isolate: STORE-DPTR ⊘ UNARMED rm-export {e:?}");
-            return;
-        }
-        // ⊘⊘ w826 — NOT imported here. `[w825]` this used to import through a separately
-        // opened `Cuda` handle, and a pointer minted in another context is not one the walk
-        // kernel can dereference (`WalkKernel::import_store`'s doc). The export fd is handed
-        // to `cudawalk`, which imports it INTO THE KERNEL'S OWN CONTEXT on first use —
-        // correct whichever of CUDA bring-up and the reservation happens first.
-        crate::cudawalk::arm_store_export(ctl.fd_number(), len);
-        eprintln!(
-            "kayfabe-isolate: STORE-DPTR ✔ EXPORTED store={store:#010x} len={len} ⇒ imported \
-             into the walk kernel's own context on its first refresh (`WALK-IN-PLACE`)"
-        );
-        core::mem::forget(ctl);
-    }
-
     /// ★★★★★ **w755r — DESCRIBE THE GUEST'S ERROR NOTIFIER INSIDE B.**
     ///
     /// The scratchpad's own [`RmBackend::describe_guest_ram`] mints the descriptor in **our**
@@ -14048,111 +13976,6 @@ impl HostRmBackend {
         out
     }
 
-    /// ★★★★★ **THE CUDA WINDOW — the walker reads the guest's tables IN PLACE, in the ONE object.**
-    ///
-    /// Step 4 of `THE_TRANSLATED_PLANE.md` §9 runs the walk kernel in **libcuda's** VA space (the
-    /// owner's VA #1), so the GPGA object must be visible *there*, not only in our RM space where
-    /// §15 measured it. `[measured w755x]` the import path works (RM exports to a control fd,
-    /// CUDA imports + maps); `[w758]` recorded that the resulting pointer had **zero readers**.
-    /// ⇒ This is the reader.
-    ///
-    /// ⊘ The fixture's tables are written at `origin` — chosen near the live guest's own roots
-    /// (`pdb≈0x2cea9c000`, §21) — with **absolute** entries (`synth::Image::at`), so nothing is
-    /// relocated on the way in. The kernel is handed the object's base and length and nothing else.
-    ///
-    /// ★ **The control is what makes it evidence.** After the walk, the root is **zeroed in place**
-    /// and the walk repeated. It must find nothing. A walker reading a staged copy — the shape
-    /// w758 caught — would still find the mapping.
-    #[cfg(feature = "cuda-scratchpad")]
-    pub fn prove_cuda_window(
-        &mut self,
-        start_mb: u64,
-        origin: u64,
-    ) -> Result<CudaWindowEvidence, String> {
-        use kayfabe_cuda::{WalkCfg, WalkKernel, abi::kf_format_ver2, synth};
-
-        // ⊘⊘⊘ `[measured w825]` THE WALKER COMES FIRST. The first run reserved 11857 MiB and THEN
-        // brought the walker up: `cuCtxCreate_v2 refused: 2 (CUDA_ERROR_OUT_OF_MEMORY)`. A CUDA
-        // context needs its own vidmem, and after the guest's framebuffer is reserved there is
-        // none left. ⇒ Production order: walker context, THEN reserve GPGA from what remains —
-        // and the context's footprint comes out of the guest's advertised framebuffer.
-        let mut k = WalkKernel::bring_up(WalkCfg::default(), kf_format_ver2())
-            .map_err(|e| format!("walk bring_up: {e}"))?;
-        let mb = self.largest_reservable_mb(start_mb);
-        if mb == 0 {
-            return Err("nothing reservable after the walker's context".into());
-        }
-        let bytes = mb << 20;
-        eprintln!("CUDA_WINDOW_SIZED reservable_after_walker_mib={mb} (start {start_mb})");
-        let obj = self
-            .conn
-            .reserve_gpga(bytes)
-            .map_err(|e| format!("reserve: {e:?}"))?;
-        let out = (|| -> Result<CudaWindowEvidence, String> {
-            let ctl = CharDevice::openat(&self.conn.dev, c"nvidiactl")
-                .map_err(|e| format!("open nvidiactl: {e:?}"))?;
-            self.conn
-                .export_object_to_fd(obj, ctl.fd_number())
-                .map_err(|e| format!("rm export: {e:?}"))?;
-            let dptr = k
-                .import_store(ctl.fd_number(), bytes)
-                .map_err(|e| format!("{e}"))?;
-
-            const VA: u64 = 0x1_2000_0000;
-            const PHYS: u64 = 0x4000_0000;
-            let (img, root, want) = synth::contiguous_small_pages_at(origin, VA, 16, PHYS);
-            if origin + img.mem.len() as u64 > bytes {
-                return Err(format!(
-                    "fixture at {origin:#x} runs past the object ({bytes:#x})"
-                ));
-            }
-            k.write_at(dptr + origin, &img.mem)
-                .map_err(|e| format!("write fixture: {e}"))?;
-
-            let t0 = std::time::Instant::now();
-            let rep = k
-                .refresh(dptr, bytes, &[root])
-                .map_err(|e| format!("walk: {e}"))?;
-            let walk_us = t0.elapsed().as_micros();
-            rep.validate()
-                .map_err(|e| format!("report invalid: {e:?}"))?;
-            let found = rep
-                .runs
-                .iter()
-                .any(|r| r.va == want.va && r.gpga == want.gpga && r.len == want.len);
-            let runs = rep.runs.len();
-
-            // ★ THE CONTROL — zero the root IN THE OBJECT and walk again.
-            let zeros = vec![0u8; 4096];
-            k.write_at(dptr + root, &zeros)
-                .map_err(|e| format!("zero root: {e}"))?;
-            let rep2 = k
-                .refresh(dptr, bytes, &[root])
-                .map_err(|e| format!("control walk: {e}"))?;
-            let control_found_nothing = !rep2
-                .runs
-                .iter()
-                .any(|r| r.va == want.va && r.gpga == want.gpga);
-            let control_runs = rep2.runs.len();
-
-            drop(ctl); // the export fd; the context (and the import) goes when `k` drops below
-            Ok(CudaWindowEvidence {
-                object_bytes: bytes,
-                dptr,
-                origin,
-                root,
-                found,
-                runs,
-                control_found_nothing,
-                control_runs,
-                walk_us,
-            })
-        })();
-        drop(k);
-        let _ = self.free(self.stamp(obj));
-        out
-    }
-
     /// ★★★★★ **FIXED PLACEMENT AT GUEST-SHAPED VAs, in a DEFAULT (RM-managed) VA space.**
     ///
     /// ⊘ `[w825]` Every FIXED refusal in `THE_TRANSLATED_PLANE.md` §13–§16 ran in one of two
@@ -16003,8 +15826,9 @@ mod tests {
             .expect("crates/ is this crate's parent")
             .to_path_buf();
         assert!(
-            // A KEPT sibling: `kayfabe-fwd`, the crate first named here, is archived (archive/README.md).
-            crates.join("kayfabe-device").is_dir(),
+            // A KEPT sibling: `kayfabe-fwd`, the crate first named here, is archived, and so
+            // is `kayfabe-device`, the one named after it (archive/README.md, 2026-10-15).
+            crates.join("kayfabe-isolate").is_dir(),
             "cannot see sibling crates at {crates:?} — this gate would otherwise pass by \
              scanning nothing"
         );

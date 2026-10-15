@@ -3,6 +3,14 @@
 **STATUS: LIVE, 2026-09-29.** This describes the CI repair, not an expansion of the
 hardware support matrix or a claim of complete unsafe-code soundness.
 
+**Correction, 2026-10-15 (pre-v3 prune, `archive/README.md`).** `kayfabe-doorbell`, `-cuda`,
+`-device`, `-mmu`, `-trace`, `-gsp`, `-completion` and `-mocks` are no longer in `crates/`, so
+everything below that speaks of the hash-frozen doorbell model is history: `debt.py frozen` and
+`frozen-debt.json` are gone, `dependencies.py` no longer special-cases `kayfabe-doorbell`
+(`classgen` moved into `kayfabe-chips`), the unsafe-count bar for the retained grader is
+`kayfabe-linux-raw` 121 (was 127) with no `kayfabe-cuda` (was 43), and the "optical flow"
+parser note and the `cuda-window` feature note below describe code that is archived.
+
 ## CI host prerequisites (2026-09-29)
 
 The local unprivileged reproduction of GitHub's `execve/EACCES` failure produced

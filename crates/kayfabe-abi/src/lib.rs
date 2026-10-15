@@ -1,5 +1,11 @@
 //! # kayfabe-abi — Axis A: the declarative ABI
 //!
+//! ★ **SLIMMED 2026-10-15 (`archive/README.md`).** This is the frozen pre-v3 ABI crate, kept
+//! only for the raw client (`kayfabe-rm-ladder`). 33 of its 49 modules (the per-control
+//! wire tables and info encoders) moved to `archive/prev3-modules/kayfabe-abi/`; the text
+//! below describes the whole crate as it was, and links to moved modules no longer resolve.
+//! v3's counterpart is `kf-abi`.
+//!
 //! `mode2_abi_agnostic_layer.md` §2/§4.1. This crate holds the **generated,
 //! committed** wire layouts produced by `kayfabe-abi-gen` from the vendored open
 //! kernel modules, the driver-version table that selects between them, and the
@@ -93,52 +99,18 @@
 //!   allowlist. Each needs a consumer first; a broad table with one wrong entry
 //!   is invisible until a guest trips it.
 
-/// The generated wire layouts. Produced by `kayfabe-abi-gen`; do not edit.
-pub mod bifstatic;
 pub mod bringup;
-pub mod businfo;
-pub mod c2cinfo;
 pub mod capability;
-pub mod cecaps;
-pub mod cepce;
-pub mod chipinfo;
-pub mod confcompute;
-pub mod cudartinit;
-pub mod deviceinfo;
-pub mod eventnotify;
-pub mod falconinfo;
-pub mod faultbuffer;
-pub mod fbinfo;
-pub mod fifochannels;
 pub mod fmbpromote;
-pub mod fmbsize;
 pub mod generated;
-pub mod gmmustatic;
-pub mod gpuatomics;
-pub mod gpuinfo;
-pub mod grfsinfo;
-pub mod grinfo;
-pub mod grstatic;
-pub mod gspfeatures;
-pub mod gspstaticinfo;
-pub mod gsslegacy;
 pub mod guest_os;
 pub mod guestsysinfo;
 pub mod gvaspacepdes;
-pub mod host_driver;
-pub mod inittables;
 // ★ #156 — the ⊘ half of the host-class seam: the three classes that do NOT vary,
 // named by role so a name-based gate can tell them from the three that do.
 pub mod invariant_classes;
-pub mod l2evict;
-pub mod memsysconfig;
 pub mod notifier;
 pub mod oracle;
-pub mod pcibars;
-pub mod postevent;
-pub mod rc;
-pub mod regaccessmap;
-pub mod smcmode;
 pub mod submit;
 pub mod transcribed;
 pub mod vbios;

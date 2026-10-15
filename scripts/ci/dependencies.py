@@ -24,7 +24,6 @@ def dependencies(manifest, workspace):
 def violations(name, deps):
     return [dep for dep in deps if
             (name.startswith("kf-") and dep.startswith("kayfabe-")) or
-            (dep == "kayfabe-doorbell" and name != "kayfabe-chips") or
             (name in PURE and dep not in PURE)]
 
 

@@ -338,18 +338,15 @@ fn build_backends(
             // nothing depends on it yet. So the outcome is RECORDED and the isolate carries
             // on — which is also what makes the census able to say *why* rather than leaving
             // the parent with a dead isolate and no diagnosis.
-            #[cfg(feature = "cuda-scratchpad")]
-            if args.cuda_walk {
-                crate::cudawalk::bring_up_before_sandbox();
-            }
-            #[cfg(not(feature = "cuda-scratchpad"))]
+            // ★ 2026-10-15: the CUDA half (`cudawalk`, feature `cuda-scratchpad`) moved to
+            // `archive/prev3-modules/kayfabe-isolate-host/` with `kayfabe-cuda`; no binary has it.
             if args.cuda_walk {
                 // ⊘ Named, not silent: a boot that ASKED for the CUDA scratchpad and got a
-                // binary built without it must say so, or the absent census line reads as
+                // binary without it must say so, or the absent census line reads as
                 // "the gate was off".
                 eprintln!(
-                    "kayfabe-isolate: ⊘ --cuda-walk=on but this binary was built WITHOUT the \
-                     `cuda-scratchpad` feature; no CUDA was brought up and none will be."
+                    "kayfabe-isolate: ⊘ --cuda-walk=on but this binary has NO CUDA scratchpad \
+                     (archived); no CUDA was brought up and none will be."
                 );
             }
             let dev = sandbox::enter(&SandboxPolicy::for_gpu(args.gpu)).map_err(|e| {
@@ -378,10 +375,6 @@ fn build_backends(
             })?;
             // ★★★ §w724d STEP 3 IS DONE (namespace + pivot_root + privilege drop). NOW the
             // two probes that the warm-up above cannot stand in for.
-            #[cfg(feature = "cuda-scratchpad")]
-            if args.cuda_walk {
-                crate::cudawalk::probe_after_sandbox();
-            }
             // ★ #156 — the host board's class profile. ⊘ CORRECTED 2026-09-26: it is now
             // ASKED of the device (`RmConnection::open_on_host`, R6a: the host's own
             // `GET_CLASSLIST_V2`, newest per role); the text below is the pinned era's.
@@ -1235,50 +1228,19 @@ fn execute(rm: &mut dyn RmBackend, request: Request) -> Reply {
         // feature is absent, so "this binary has no kernel" and "the kernel refused" stay
         // different facts.
         Request::WalkShadowStage { span, off, bytes } => {
-            #[cfg(feature = "cuda-scratchpad")]
-            {
-                match crate::cudawalk::stage(span, off, &bytes) {
-                    Ok(()) => Reply::Unit,
-                    Err(e) => Reply::Failed(WireError::Other(e)),
-                }
-            }
-            #[cfg(not(feature = "cuda-scratchpad"))]
-            {
-                let _ = (span, off, bytes);
-                Reply::Failed(WireError::Other(kayfabe_isolate::NOT_A_WALK_SHADOW))
-            }
+            let _ = (span, off, bytes);
+            Reply::Failed(WireError::Other(kayfabe_isolate::NOT_A_WALK_SHADOW))
         }
         Request::WalkShadowRun { pdbs, ack } => {
-            #[cfg(feature = "cuda-scratchpad")]
-            {
-                match crate::cudawalk::run(&pdbs, ack) {
-                    Ok(bytes) => Reply::Payload(bytes),
-                    Err(e) => Reply::Failed(WireError::Other(e)),
-                }
-            }
-            #[cfg(not(feature = "cuda-scratchpad"))]
-            {
-                let _ = (pdbs, ack);
-                Reply::Failed(WireError::Other(kayfabe_isolate::NOT_A_WALK_SHADOW))
-            }
+            let _ = (pdbs, ack);
+            Reply::Failed(WireError::Other(kayfabe_isolate::NOT_A_WALK_SHADOW))
         }
-        Request::CudaWalkReport => {
-            #[cfg(feature = "cuda-scratchpad")]
-            {
-                Reply::Payload(crate::cudawalk::report_line().into_bytes())
-            }
-            // ⊘ A NAMED absence, not an error: an isolate built without the feature is not
-            // broken, it simply never ran CUDA — and the parent's census must be able to say
-            // which of the two it is looking at.
-            #[cfg(not(feature = "cuda-scratchpad"))]
-            {
-                Reply::Payload(
-                    b"CUDA_WALK=ABSENT reason=\"this binary was built without the \
-                      cuda-scratchpad feature\""
-                        .to_vec(),
-                )
-            }
-        }
+        // ⊘ A NAMED absence, not an error: an isolate without the CUDA half is not broken, it
+        // simply never ran CUDA — and the parent's census must be able to say which of the two
+        // it is looking at.
+        Request::CudaWalkReport => Reply::Payload(
+            b"CUDA_WALK=ABSENT reason=\"this binary has no CUDA scratchpad (archived)\"".to_vec(),
+        ),
         // ⊘ `Ok(0)` crosses as `Reply::Megabytes(0)`, NOT as a failure: *"nothing down to
         // the probe's floor could be reserved"* is an answer about this host, and the
         // parent must be able to tell it from *"the verb is not available"*.

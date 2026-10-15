@@ -9,13 +9,9 @@ class DependencyTests(unittest.TestCase):
         deps = list(dependencies(manifest, {"shared": {"package": "kayfabe-device"}}))
         self.assertEqual(violations("kf-trap", deps), ["kayfabe-old", "kayfabe-device"])
 
-    def test_frozen_model_cannot_become_a_grader_dependency(self):
-        self.assertEqual(violations("kayfabe-rm-ladder", ["kayfabe-doorbell"]), ["kayfabe-doorbell"])
+    def test_v3_crates_cannot_depend_on_the_frozen_pre_v3_tree(self):
+        self.assertEqual(violations("kf-chip", ["kayfabe-chips"]), ["kayfabe-chips"])
         self.assertEqual(violations("kf-trap", ["kf-chip"]), [])
-
-    def test_only_existing_legacy_class_table_consumer_is_allowed(self):
-        self.assertEqual(violations("kayfabe-chips", ["kayfabe-doorbell"]), [])
-        self.assertEqual(violations("kf-chip", ["kayfabe-doorbell"]), ["kayfabe-doorbell"])
 
     def test_pure_crates_cannot_import_an_os_adapter_or_external_crate(self):
         self.assertEqual(violations("kf-trap", ["libc", "kf-linux-raw"]), ["libc", "kf-linux-raw"])
