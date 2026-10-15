@@ -1,0 +1,15 @@
+BENCH tris=1333760
+BENCH tex_gen_s=0.0
+BENCH scene_build_s=1.94
+BENCH device=OPTIX:NVIDIA GeForce RTX 4070
+00:31.422  render           | Saved: 'C:\kf\apps\blender\out\b_optix_n72_1920x1080\result.png.warm.png'
+BENCH warmup_s=28.76
+00:37.500  render           | Saved: 'C:\kf\apps\blender\out\b_optix_n72_1920x1080\result.png'
+BENCH render_result=['FINISHED']
+BENCH render_s=6.08
+BENCH pix_mean=0.64404
+BENCH pix_std=0.07991
+BENCH status=ok
+Blender 5.2.2 LTS (hash d13f752e3b9c built 2026-09-15 01:37:04)
+
+Blender quit

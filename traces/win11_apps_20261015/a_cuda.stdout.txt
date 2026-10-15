@@ -1,0 +1,15 @@
+BENCH tris=3934720
+BENCH tex_gen_s=0.0
+BENCH scene_build_s=5.29
+BENCH device=CUDA:NVIDIA GeForce RTX 4070
+00:09.281  render           | Saved: 'C:\kf\apps\blender\out\a_cuda\result.png.warm.png'
+BENCH warmup_s=3.34
+00:16.890  render           | Saved: 'C:\kf\apps\blender\out\a_cuda\result.png'
+BENCH render_result=['FINISHED']
+BENCH render_s=7.61
+BENCH pix_mean=0.63984
+BENCH pix_std=0.10051
+BENCH status=ok
+Blender 5.2.2 LTS (hash d13f752e3b9c built 2026-09-15 01:37:04)
+
+Blender quit

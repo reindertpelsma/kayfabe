@@ -10,7 +10,7 @@ import numpy as np
 def parse():
     a = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     o = dict(device="OPTIX", sub=7, objs=2, ntex=4, texsize=4096, res=[1920, 1080], samples=64, denoise=0, frames=0,
-             texdir=r"C:\kf\apps\blender\tex", out="result.json", threads=0, png="", warm=1, gensec=0)
+             texdir=r"C:\kf\apps\blender\tex", out="result.json", threads=0, png="", warm=1, tile=0)
     i = 0
     while i < len(a):
         k = a[i].lstrip("-")
@@ -116,6 +116,7 @@ def build(o, reset=True):
 def configure(o, sc):
     sc.render.engine = "CYCLES"; cy = sc.cycles
     cy.samples = o["samples"]; cy.use_adaptive_sampling = False; cy.seed = 7; cy.use_animated_seed = False
+    if o["tile"]: cy.tile_size = o["tile"]   # Cycles X allocates GPU film buffers per tile (default 2048^2), not per frame
     cy.max_bounces = 6; cy.use_denoising = bool(o["denoise"])
     if o["denoise"]:
         cy.denoiser = "OPTIX" if o["device"] == "OPTIX" else "OPENIMAGEDENOISE"

@@ -1,0 +1,2 @@
+step	ntex	tris	status	render_s	base_mib	peak_mib	delta_mib	min_free_ram_mib	xid_new	gsp_resets_new	host_vram_used_mib_end	note
+1	72@1920x1080	1333760	ok	6.08	728	6675	5947	5329	0	0	9069	

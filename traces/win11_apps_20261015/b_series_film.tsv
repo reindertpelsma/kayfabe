@@ -1,0 +1,7 @@
+step	ntex	tris	status	render_s	base_mib	peak_mib	delta_mib	min_free_ram_mib	xid_new	gsp_resets_new	host_vram_used_mib_end	note
+1	88@1920x1080	1338880	ok	18.18	728	7605	6877	4285	0	0	9069	
+2	88@3840x2160	1338880	ok	21.44	728	7653	6925	4209	0	0	9069	
+3	88@5760x3240	1338880	ok	24.14	728	7653	6925	4168	0	0	9069	
+4	88@7680x4320	1338880	ok	28.7	728	7653	6925	2515	0	0	9069	
+STOP: guest free RAM floor 3000 MiB reached (min 2515)
+SERIES_DONE 02:15:52
