@@ -1145,7 +1145,7 @@ struct LatchedDmas {
 }
 
 /// A window's context-DMA hash key as its ARMED state names it: `(client, handle, chn)`.
-type DmaKey = (u32, u32, u32);
+type DmaKey = (u32, u32, u32, Option<kf_disp::engine::SurfaceAddress>);
 
 impl LatchedDmas {
     /// Window `w`'s ARMED state changed (an UPDATE latched it) or its channel was allocated or
@@ -1163,7 +1163,7 @@ impl LatchedDmas {
         so: &kf_disp::engine::Scanout,
         fresh: impl FnOnce() -> Result<CtxDma, String>,
     ) -> Result<CtxDma, String> {
-        let key = (so.client, so.handle, so.chn);
+        let key = (so.client, so.handle, so.chn, so.address);
         let slot = self.by_window.get_mut(so.window as usize);
         if let Some(Some((k, dma))) = slot.as_deref()
             && *k == key
@@ -1651,9 +1651,10 @@ pub struct DisplayPlane {
     /// relay the C device's main loop drives (`crate::broker`). `None`: the console alone,
     /// exactly as before (`cuMemAllocHost`, three slots).
     pub broker: Option<crate::broker::BrokerSeat>,
-    /// The window-class methods a scanout reads (`None`: the family's windows name surfaces by
-    /// address — no console yet, M5).
+    /// The window-class methods a scanout reads; absent only for an unresolved vocabulary.
     scan: Option<ScanVocab>,
+    /// Bound for address-named ISO reads, independent of guest method values.
+    store_bytes: u64,
     /// Bounded SDR colour implementation, enabled for verification independently of
     /// constructor probes. Those probes still refuse all display methods.
     sdr_color: Option<(&'static kf_disp::class::ClassTable, u32, u32)>,
@@ -1849,9 +1850,8 @@ impl DisplayPlane {
                     die.architecture, die.implementation
                 );
             }
-            let tiers = |x: kf_disp::capsderive::Tier| {
-                d.provenance.iter().filter(|p| p.tier == x).count()
-            };
+            let tiers =
+                |x: kf_disp::capsderive::Tier| d.provenance.iter().filter(|p| p.tier == x).count();
             eprintln!(
                 "kf3: display: caps page derived — {} words: {} T1 rule, {} T3 measured ({} unmeasured)",
                 d.page.words.len(),
@@ -1979,6 +1979,7 @@ impl DisplayPlane {
             console,
             broker,
             scan,
+            store_bytes,
             sdr_color: sdr_color.then_some((t, classes.window, classes.core)),
             cursor_vocab,
             ui_request: AtomicU64::new(0),
@@ -2263,6 +2264,13 @@ impl Io<'_> {
         layout
             .resolve(img, client, handle, chn)
             .map_err(|m| format!("context DMA {handle:#x} on channel {chn}: {m:?}"))
+    }
+
+    fn scanout(&mut self, so: &kf_disp::engine::Scanout) -> Result<CtxDma, String> {
+        match so.address {
+            Some(address) => kf_disp::scanout::address_dma(address, self.dp.store_bytes),
+            None => self.resolve(so.client, so.handle, so.chn),
+        }
     }
 
     /// ★ A notifier's or semaphore's memory as a bounded context DMA plus an offset. A context-DMA place is
@@ -4572,9 +4580,7 @@ impl ScanState {
             return;
         }
         // plan every window (each bounded by its own context DMA) before the GPU sees one
-        let planned = self.plan(shown, &dp.formats, (w, h), n, |so| {
-            io.resolve(so.client, so.handle, so.chn)
-        });
+        let planned = self.plan(shown, &dp.formats, (w, h), n, |so| io.scanout(so));
         for e in &planned.refused {
             self.refuse(dp, e);
             dp.counters
@@ -5153,7 +5159,15 @@ impl ScanState {
             // ★ a semi-planar YUV window (Edge's video overlay, `FORMAT 0x38`): its own planner
             if let Some(yf) = formats.yuv_of(so.format) {
                 let planned = self.latched.resolve(so, || resolve(so)).and_then(|y_dma| {
-                    let c_dma = if so.iso1 == 0 || so.iso1 == so.handle {
+                    if yf.chroma_bytes() != 0 && so.address.is_some() && so.address1.is_none() {
+                        return Err("address-named YUV surface has no enabled chroma plane".into());
+                    }
+                    let c_dma = if let Some(address) = so.address1 {
+                        resolve(&kf_disp::engine::Scanout {
+                            address: Some(address),
+                            ..*so
+                        })?
+                    } else if so.iso1 == 0 || so.iso1 == so.handle {
                         y_dma
                     } else {
                         resolve(&kf_disp::engine::Scanout {
@@ -5254,11 +5268,10 @@ mod tests {
                         && t.notifier_value("__0_STATUS_BEGUN").is_some(),
                     "{version}"
                 );
-                // GB20x windows name surfaces by address: no scanout vocabulary yet, the boot layer shows
-                assert_eq!(
+                // Every supported family must expose its armed window surfaces to the console.
+                assert!(
                     ScanVocab::resolve(t, classes.window, classes.window_imm, classes.core)
-                        .is_none(),
-                    row.chips.starts_with("GB2"),
+                        .is_some(),
                     "{version} {}",
                     row.chips
                 );
@@ -5775,6 +5788,8 @@ mod tests {
             chn: 7,
             client: 0xc1d0_0001,
             handle: 0x1_0088,
+            address: None,
+            address1: None,
             offset: 0,
             width: 1920,
             height: 1080,
@@ -6629,5 +6644,80 @@ mod tests {
             None
         );
         assert!(none.is_none() && !plain.ring().withdrawn(kf_broker::Kind::Host));
+    }
+}
+
+#[cfg(test)]
+mod address_scan_tests {
+    use super::*;
+    use kf_disp::engine::{Scanout, SurfaceAddress};
+
+    fn surface() -> Scanout {
+        Scanout {
+            window: 0, head: 0, chn: 1, client: 7, handle: 0, offset: 0,
+            address: Some(SurfaceAddress { aperture: Aperture::Vidmem, addr: 0x1000, block_linear: false }),
+            address1: None, width: 1, height: 1, x: 0, y: 0, surface_width: 1,
+            surface_height: 1, pitch: 1, block_height_log2: 0, format: 0xe6,
+            out_x: 0, out_y: 0, out_width: 1, out_height: 1, iso1: 0,
+            offset1: 0, pitch1: 0, swap_uv: false, depth: 0, k1: 255,
+            k2: 0, src_factor: 0, dst_factor: 0, fmt: [0; 12],
+        }
+    }
+
+    #[test]
+    fn address_iso_cache_cannot_reuse_a_different_address_aperture_or_kind() {
+        let base = surface();
+        let mut cache = LatchedDmas::default();
+        let resolve = |s: &Scanout| kf_disp::scanout::address_dma(s.address.unwrap(), 0x4000);
+        assert_eq!(cache.resolve(&base, || resolve(&base)).unwrap().base, 0x1000);
+        for address in [
+            SurfaceAddress { addr: 0x2000, ..base.address.unwrap() },
+            SurfaceAddress { block_linear: true, ..base.address.unwrap() },
+        ] {
+            let s = Scanout { address: Some(address), ..base };
+            let dma = cache.resolve(&s, || resolve(&s)).unwrap();
+            assert_eq!((dma.base, dma.block_linear), (address.addr, address.block_linear));
+        }
+        for aperture in [Aperture::Sysmem, Aperture::Iova] {
+            let s = Scanout { address: Some(SurfaceAddress { aperture, ..base.address.unwrap() }), ..base };
+            assert!(cache.resolve(&s, || resolve(&s)).is_err());
+        }
+    }
+
+    #[test]
+    fn address_iso_rgb_plan_checks_the_last_byte_of_the_store() {
+        let formats = ScanFormats::resolve(kf_disp::class::for_version("580.159.04").unwrap(), 0xCA7E);
+        for (addr, good) in [(0, true), (0x1ff0, true), (0x1ffc, true), (0x2000, false)] {
+            let so = Scanout { address: Some(kf_disp::engine::SurfaceAddress {
+                addr, ..surface().address.unwrap()
+            }), ..surface() };
+            let shown = Shown::Armed(Composition { head: 0, width: 1, height: 1, layers: vec![so] });
+            let plan = ScanState::default().plan(&shown, &formats, (1, 1), 1,
+                |s| kf_disp::scanout::address_dma(s.address.unwrap(), 0x2000));
+            assert_eq!(plan.refused.is_empty(), good, "{addr:#x} {:?}", plan.refused);
+            assert_eq!(plan.layers.len(), usize::from(good));
+            if good { assert_eq!(plan.layers[0].src, addr); }
+        }
+    }
+
+    #[test]
+    fn address_iso_yuv_reads_its_separate_chroma_address_and_refuses_disabled_plane() {
+        let formats = ScanFormats::resolve(kf_disp::class::for_version("580.159.04").unwrap(), 0xCA7E);
+        let video = Scanout { format: 0x38, width: 2, height: 2, surface_width: 2,
+            surface_height: 2, out_width: 2, out_height: 2, pitch1: 1,
+            address1: Some(SurfaceAddress { addr: 0x3000, ..surface().address.unwrap() }),
+            ..surface() };
+        for (address1, good) in [(video.address1, true), (None, false),
+            (Some(SurfaceAddress { addr: 0x3ff0, ..video.address1.unwrap() }), true),
+            (Some(SurfaceAddress { addr: 0x4000, ..video.address1.unwrap() }), false)] {
+            let so = Scanout { address1, ..video };
+            let shown = Shown::Armed(Composition { head: 0, width: 2, height: 2, layers: vec![so] });
+            let plan = ScanState::default().plan(&shown, &formats, (2, 2), 1,
+                |s| kf_disp::scanout::address_dma(s.address.unwrap(), 0x4000));
+            assert_eq!(plan.refused.is_empty(), good, "{:?}", plan.refused);
+            assert_eq!(plan.yuv.len(), usize::from(good));
+            if good { assert_eq!((plan.yuv[0].y_src, plan.yuv[0].c_src),
+                (video.address.unwrap().addr, address1.unwrap().addr)); }
+        }
     }
 }

@@ -11,7 +11,7 @@
 //! display — the flip still completes (the engine latched it); only the console keeps its last frame.
 
 use crate::class::ClassTable;
-use crate::engine::{CursorScan, Scanout};
+use crate::engine::{Aperture, CursorScan, Scanout, SurfaceAddress};
 use crate::inst::{CtxDma, Target};
 
 /// The largest frame the console takes (3840x2160). Three page-locked frames of this size are the
@@ -20,6 +20,31 @@ use crate::inst::{CtxDma, Target};
 /// closed): 5 × (7.9 + 31.6) MiB ≈ 198 MiB (`docs/design/V3_DISPLAY.md` §8.3). A guest cannot make it
 /// more.
 pub const MAX_PIXELS: u64 = 3840 * 2160;
+
+/// Bound an address-named ISO surface to this guest's framebuffer store. The existing
+/// planners check every read span against this bound; the GPU compositor checks it again.
+/// The compositor cannot read system memory or an SoC display IOMMU aperture.
+pub fn address_dma(surface: SurfaceAddress, store_bytes: u64) -> Result<CtxDma, String> {
+    if surface.aperture != Aperture::Vidmem {
+        return Err(format!(
+            "ISO surface aperture {:?}: framebuffer scanout required",
+            surface.aperture
+        ));
+    }
+    if surface.addr >= store_bytes {
+        return Err(format!(
+            "ISO surface address {:#x} outside guest framebuffer {store_bytes:#x}",
+            surface.addr
+        ));
+    }
+    Ok(CtxDma {
+        target: Target::Vidmem,
+        base: surface.addr,
+        limit: store_bytes - 1,
+        block_linear: surface.block_linear,
+        writable: false,
+    })
+}
 
 /// ★ A console pixel format — the FFI code the QEMU console maps to its own (`kf3.c`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -810,7 +835,7 @@ pub fn plan_yuv(
     // separate chroma allocation. The console then read the chroma plane from the luma plane's
     // first byte (magenta/green picture). A chroma plane that was not programmed follows the luma
     // plane in the same surface: its first byte is the end of the luma plane's whole surface.
-    let chroma_off = if s.iso1 == 0 && s.offset1 == 0 {
+    let chroma_off = if s.address1.is_none() && s.iso1 == 0 && s.offset1 == 0 {
         let rows = u64::from(s.surface_height);
         let luma_bytes = if y_dma.block_linear {
             rows.div_ceil(8u64 << s.block_height_log2)
@@ -1964,6 +1989,8 @@ mod tests {
             chn: 7,
             client: 0xc1d0_0015,
             handle: 0x1008c,
+            address: None,
+            address1: None,
             offset: 0x1_0000,
             width: 1920,
             height: 1080,
@@ -3224,5 +3251,28 @@ mod tests {
         assert!(t[0].contains("first 64 bytes ffff0000"), "{}", t[0]);
         assert!(t[1].starts_with("|#"), "{}", t[1]);
         assert_eq!(cursor_debug_text(&c, &raw, false).len(), 1);
+    }
+}
+
+#[cfg(test)]
+mod address_tests {
+    use super::*;
+
+    #[test]
+    fn address_iso_is_read_only_and_bounded_to_the_guest_store() {
+        for block_linear in [false, true] {
+            let surface = SurfaceAddress { aperture: Aperture::Vidmem, addr: 0x1000, block_linear };
+            let dma = address_dma(surface, 0x2000).unwrap();
+            assert_eq!(dma.span(0, 0x1000), Some(0x1000));
+            assert_eq!(dma.span(0, 0x1001), None);
+            assert_eq!(dma.span(u64::MAX, 2), None);
+            assert!(!dma.writable);
+            assert_eq!(dma.block_linear, block_linear);
+            for bytes in [0, 1, 0x1000] { assert!(address_dma(surface, bytes).is_err()); }
+            assert!(address_dma(SurfaceAddress { addr: u64::MAX, ..surface }, u64::MAX).is_err());
+            for aperture in [Aperture::Iova, Aperture::Sysmem] {
+                assert!(address_dma(SurfaceAddress { aperture, ..surface }, 0x2000).is_err());
+            }
+        }
     }
 }
