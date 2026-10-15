@@ -133,3 +133,10 @@ late timer pair. This is inference. Falsifier: unchanged replay repeatedly
 exceeds the bound after relay completion, or the clock implementation/model
 shows divergent updates independent of guest scheduling. Retain every replay
 and rerun the full suite; never loosen or modify the frozen grader.
+
+Unchanged timer replays1/2/3 all pass: mirror deltas71,200/82,080/67,136ns.
+The source confirms production maps the unprivileged native host timer page;
+QEMU log says BAR0=0x9000, read-only4096bytes, matched host/guest layout.
+The grader prints a line between its second page reading and mirror reading;
+I/O/scheduling delay is consistent with the first failure but not proven.
+The original failure remains evidence. Full suite rerun follows, unchanged.
