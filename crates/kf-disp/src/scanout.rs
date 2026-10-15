@@ -1352,8 +1352,8 @@ impl CursorExpand {
 
     /// ★ The 32-bit layer and its tight pixels (`width * rows * 4` bytes, row pitch `width * 4`) from
     /// `raw`, the [`Self::extent`] bytes copied from [`Self::src`]. The layer's `src` is 0: the
-    /// caller composes it from wherever it keeps the pixels. XOR: the colour of the pixels the
-    /// alpha bit selects, so an all-zero image composes to nothing and a white pixel inverts.
+    /// caller composes it from wherever it keeps the pixels. XOR: the colour of every pixel (the alpha
+    /// bit is not a mask: measured), so an all-zero image composes to nothing and a white pixel inverts.
     /// Blend: opaque pixels, transparent ones empty (an OPAQUE composition stores every pixel,
     /// alpha ignored, as for `A8R8G8B8`).
     ///
@@ -1369,7 +1369,9 @@ impl CursorExpand {
             )));
         }
         let (w, rows, pitch) = (r.width as usize, r.rows as usize, r.pitch as usize);
-        let keep = r.flags & COMPOSE_OPAQUE != 0;
+        // XOR keeps the colour of every pixel: the alpha bit is NOT a mask there. The real Windows I-beam
+        // (measured, KF3_DEBUG_CURSOR dump 2026-10-15) is white 0x7fff pixels with the alpha bit CLEAR.
+        let keep = r.flags & (COMPOSE_OPAQUE | COMPOSE_XOR) != 0;
         let mut px = Vec::with_capacity(w * rows * 4);
         for y in 0..rows {
             let line = raw
@@ -2997,8 +2999,8 @@ mod tests {
         );
         assert_eq!(
             &frame[8..12],
-            &[0x12, 0x34, 0x56, 0],
-            "alpha clear: nothing"
+            &[0xed, 0xcb, 0xa9, 0],
+            "alpha clear, white: inverts too (the alpha bit is not a mask in XOR; the measured Windows I-beam is 0x7fff)"
         );
         assert_eq!(
             &frame[12..16],
