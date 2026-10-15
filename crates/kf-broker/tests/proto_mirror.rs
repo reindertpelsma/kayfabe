@@ -122,6 +122,7 @@ fn every_protocol_value_matches_the_header_text_both_ways() {
         ("NVKVM_BROKER_CAP_DEVICE", u64::from(CAP_DEVICE)),
         ("NVKVM_BROKER_CAP_CURSOR_STREAM", u64::from(CAP_CURSOR_STREAM)),
         ("NVKVM_BROKER_CURSOR_MOVE", u64::from(CURSOR_MOVE)),
+        ("NVKVM_BROKER_CURSOR_F_ABS", u64::from(CURSOR_F_ABS)),
         ("NVKVM_BROKER_CURSOR_MOVE_LIMIT", CURSOR_MOVE_LIMIT as u64),
         ("NVKVM_BROKER_CMD_CURSOR", u64::from(CMD_CURSOR)),
         ("NVKVM_BROKER_CURSOR_SET", u64::from(CURSOR_SET)),

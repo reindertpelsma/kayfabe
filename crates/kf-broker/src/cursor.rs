@@ -495,7 +495,8 @@ pub enum CursorRead {
 /// `PlaneOff` and `Empty` are `Hidden` (the guest hid it, or draws its own into the frame — the
 /// viewer shows nothing). An `Unshowable` cursor is composed into the frame (`Composed`) unless
 /// the viewer streams: nothing composes under the stream, so it is `Hidden` there. An image takes
-/// its hot spot from `hot` (derived from the injected pointer in hover).
+/// its hot spot from `hot` (derived from the injected pointer in hover) — except under the stream,
+/// which sends the programmed one and lets the viewer derive.
 ///
 /// # Errors
 /// An image whose size or pixel count breaks [`CursorImage::new`]'s bounds.
@@ -517,11 +518,38 @@ pub fn want_of(
             pixels,
             xor,
         } => {
-            let at = hot.hot(&pixels, seq, now_ms, derived, programmed);
+            // the stream sends the hot spot the guest PROGRAMMED: the broker derives the real one
+            // from the pointer pair in MOVE; the tracker is the composing fallback's
+            let at = if stream {
+                programmed
+            } else {
+                hot.hot(&pixels, seq, now_ms, derived, programmed)
+            };
             let i = CursorImage::new(size, size, at, pixels)?;
             Ok(CursorWant::Image(Arc::new(if xor { i.into_xor() } else { i })))
         }
     }
+}
+
+/// ★ The guest-frame pixel QEMU's absolute tablet puts the pointer at: the broker's position
+/// `abs` in its `range` goes through TWO integer scalings, each truncating — QEMU's onto the tablet's
+/// axis (`v = abs * 0x7fff / range`, `qemu_input_scale_axis`) and the guest's back onto the head
+/// (`v * size / 0x8000`). The VMM-neutral half of `kf_disp::scanout::hot_from_pointer`, for the
+/// stream: the broker is sent THIS (guest frame pixels) and derives `hot = pointer - top-left`.
+/// `None` for an empty range or frame.
+#[must_use]
+pub fn guest_point(abs: (i32, i32), range: (u32, u32), frame: (u32, u32)) -> Option<(i32, i32)> {
+    const TABLET_MAX: i64 = 0x7fff;
+    if range.0 == 0 || range.1 == 0 || frame.0 == 0 || frame.1 == 0 {
+        return None;
+    }
+    let one = |a: i32, r: u32, f: u32| {
+        (i64::from(a.max(0)) * TABLET_MAX / i64::from(r)) * i64::from(f) / (TABLET_MAX + 1)
+    };
+    Some((
+        i32::try_from(one(abs.0, range.0, frame.0)).ok()?,
+        i32::try_from(one(abs.1, range.1, frame.1)).ok()?,
+    ))
 }
 
 /// ★ **Worker**: whether this copy composes the guest's cursor into the frame. A streaming viewer
@@ -698,6 +726,23 @@ mod tests {
                 assert_eq!(composes(m, false, &want), m.composes(&want));
             }
         }
+    }
+
+    /// ★ The stream sends the hot spot the guest PROGRAMMED (the viewer derives the real one from the
+    /// MOVE pair); the tracker's derived spot is the composing fallback's alone.
+    #[test]
+    fn the_stream_sends_the_programmed_hot_spot_and_the_fallback_the_derived_one() {
+        let img = |stream| {
+            let read = CursorRead::Image { size: 8, hot: (1, 2), pixels: vec![9; 8 * 8 * 4], xor: false };
+            let CursorWant::Image(i) =
+                want_of(read, stream, &mut HotTracker::default(), 1, 0, Some((5, 6))).unwrap()
+            else {
+                panic!()
+            };
+            i.hot()
+        };
+        assert_eq!(img(true), (1, 2), "stream: programmed, whatever the pointer says");
+        assert_eq!(img(false), (5, 6), "fallback: derived at once for a new image");
     }
 
     /// The XOR bit is part of an image's identity and of the share the relay writes.

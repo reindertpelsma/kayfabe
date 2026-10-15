@@ -50,7 +50,7 @@ pub use console::{
 };
 pub use cursor::{
     CursorImage, CursorMode, CursorRead, CursorShare, CursorWant, HotTracker, PointerAbs, composes,
-    want_of,
+    guest_point, want_of,
 };
 pub use input::{
     AbsRange, Button, InputCounters, InputPolicy, InputSink, PointerDevice, PowerRequest,

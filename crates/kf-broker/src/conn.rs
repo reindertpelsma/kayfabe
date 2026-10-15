@@ -607,7 +607,10 @@ struct CursorConn {
     frame_composed: bool,
     /// ★ The position last sent as a `MOVE` on this connection (stream, under grab): a changed
     /// point sends one more; `None` after hover, so a grab starts with one.
-    moved: Option<(i32, i32)>,
+    moved: Option<((i32, i32), Option<(i32, i32)>)>,
+    /// ★ The last input injected was ABSOLUTE (`EV_ABS`, and the re-injection at a grab's end):
+    /// cleared by a relative event (`EV_REL`) — the `MOVE` pair's valid flag.
+    abs_live: bool,
 }
 
 /// ★ The relay. VM-lifetime: it outlives connections, holds the backoff, the held-frame table
@@ -1957,6 +1960,7 @@ impl<L: Link> Relay<L> {
                 let (x, y) = (p.x.clamp(0, w - 1), p.y.clamp(0, h - 1));
                 if let Some(c) = self.conn.as_mut() {
                     c.last_abs = Some((x, y, w, h));
+                    c.cursor.abs_live = true;
                 }
                 // ★ §O: the pointer the guest will move its cursor to — the worker derives the
                 // hot spot NVKMS does not program from it (`crate::cursor::HotTracker`)
@@ -1971,6 +1975,9 @@ impl<L: Link> Relay<L> {
                 emit(out, Input::Abs { x, y, w, h });
             }
             EV_REL => {
+                if let Some(c) = self.conn.as_mut() {
+                    c.cursor.abs_live = false; // the last input was relative: the pair's flag clears
+                }
                 if let Some(Input::Rel { dx, dy }) = out.last_mut() {
                     *dx = dx.saturating_add(p.x);
                     *dy = dy.saturating_add(p.y);
@@ -1995,6 +2002,9 @@ impl<L: Link> Relay<L> {
                 if p.x == 0
                     && let Some((x, y, w, h)) = self.conn.as_ref().and_then(|c| c.last_abs)
                 {
+                    if let Some(c) = self.conn.as_mut() {
+                        c.cursor.abs_live = true;
+                    }
                     emit(out, Input::Abs { x, y, w, h });
                 }
             }
@@ -2479,12 +2489,12 @@ impl<L: Link> Relay<L> {
             }
             _ => CursorMode::Off,
         };
-        // ★ whether the broker draws the guest's cursor itself, position included
-        let stream = mode != CursorMode::Off
-            && self
-                .conn
-                .as_ref()
-                .is_some_and(|c| c.caps & CAP_CURSOR_STREAM != 0);
+        // ★ whether the broker draws the guest's cursor itself, position included. Mode-free: grab
+        // is the viewer's own state, not the protocol's (the mode above is the composing
+        // fallback's and the worker's read gate)
+        let stream = self.conn.as_ref().is_some_and(|c| {
+            c.phase == Phase::Active && c.caps & CAP_CURSOR != 0 && c.caps & CAP_CURSOR_STREAM != 0
+        });
         if share.set_stream(stream) {
             say!(
                 "guest cursor: {}",
@@ -2514,7 +2524,7 @@ impl<L: Link> Relay<L> {
             c.cursor.want = Some(w);
         }
         if stream {
-            self.stream_sync(now, host, &share, mode);
+            self.stream_sync(now, host, &share);
             return;
         }
         if mode != CursorMode::Hover {
@@ -2543,13 +2553,15 @@ impl<L: Link> Relay<L> {
         self.push_cursor_op(now, host, op, &want);
     }
 
-    /// ★ The streaming broker (`CAP_CURSOR_STREAM`): bring it to the guest's image and visibility
-    /// (a cursor only a frame could show is hidden — nothing composes under the stream), then, UNDER
-    /// GRAB only (hover's host pointer is the guest's; the broker would ignore it), the position
-    /// the worker last noted: one `MOVE` when it changed since the last one sent on this
-    /// connection, so at most the display pass rate however many input events arrive. At most two
-    /// commands an entry (the image's, then the position).
-    fn stream_sync(&mut self, now: u64, host: &mut dyn Host, share: &CursorShare, mode: CursorMode) {
+    /// ★ The streaming broker (`CAP_CURSOR_STREAM`) — kayfabe is MODE-FREE here (grab is the viewer's
+    /// own state): bring it to the guest's image and visibility (a cursor only a frame could show is
+    /// hidden — nothing composes under the stream), then send ONE atomic `MOVE` pair whenever it
+    /// changed: the image's top-left (the worker's note, once per pass) and the last ABSOLUTE
+    /// pointer position injected, mapped to guest frame pixels — flag clear after relative input or
+    /// before any injection. The viewer derives the hot spot from the pair in hover and draws at the
+    /// top-left under grab. At most the display pass rate however many input events arrive; at most
+    /// two commands an entry (the image's, then the pair).
+    fn stream_sync(&mut self, now: u64, host: &mut dyn Host, share: &CursorShare) {
         let Some(c) = self.conn.as_mut() else { return };
         let Some(want) = c.cursor.want.clone() else {
             return;
@@ -2559,9 +2571,6 @@ impl<L: Link> Relay<L> {
         } else {
             want
         };
-        if mode != CursorMode::Grabbed {
-            c.cursor.moved = None; // the next grab starts with a MOVE
-        }
         match c.cursor.broker.next_op(&want) {
             Some(op) => {
                 if !self.push_cursor_op(now, host, op, &want) {
@@ -2571,19 +2580,34 @@ impl<L: Link> Relay<L> {
             None => c.cursor.owed = false,
         }
         let Some(c) = self.conn.as_mut() else { return };
-        if mode != CursorMode::Grabbed || !c.cursor.broker.visible {
+        if !c.cursor.broker.visible {
             return;
         }
         let Some(p) = share.point() else { return };
-        if c.cursor.moved == Some(p) {
+        // the pointer the guest was last given, in the frame pixels the broker shows
+        let abs = c
+            .cursor
+            .abs_live
+            .then_some(c.last_abs)
+            .flatten()
+            .and_then(|(x, y, w, h)| {
+                let frame = c.last_commit.map(|j| self.ring.geometry(j))?;
+                crate::cursor::guest_point(
+                    (x, y),
+                    (w.unsigned_abs(), h.unsigned_abs()),
+                    (frame.width, frame.height),
+                )
+            });
+        let pair = (p, abs);
+        if c.cursor.moved == Some(pair) {
             return;
         }
-        let cmd = CursorCmd::mov(p.0, p.1);
+        let cmd = CursorCmd::mov(p.0, p.1, abs);
         let r = self.link.send(&c.sock, &cmd.encode(), None);
         match r {
             Sent::Done => {
                 if let Some(c) = self.conn.as_mut() {
-                    c.cursor.moved = Some(p);
+                    c.cursor.moved = Some(pair);
                 }
                 self.counters.cursor_moves += 1;
             }

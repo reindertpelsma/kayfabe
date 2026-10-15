@@ -4581,7 +4581,7 @@ impl ScanState {
                 }
                 // ★ NVKMS programs hot spot 0 (`nvkms-evo3.c:6565-6569`): in hover the hot
                 // spot is derived from the pointer the relay injected
-                let derived = abs.filter(|_| hover).and_then(|a| {
+                let derived = abs.filter(|_| hover && !stream).and_then(|a| {
                     kf_disp::scanout::hot_from_pointer(cs, (a.x, a.y), (a.w, a.h), frame)
                 });
                 let read = match h.image(&raw).map_err(|r| r.0)? {
@@ -4817,10 +4817,10 @@ impl ScanState {
         // buffer kf owns) and posted to the relay; in hover it is then left out of the frame —
         // unless the host cannot show it, which is composed in every mode
         let mode = self.cursor_mode;
-        let want = mode
-            .reads()
-            .then(|| self.host_cursor_want(io, shown, cursor));
         let stream = dp.broker.as_ref().is_some_and(|b| b.cursor().stream());
+        // the stream is mode-free: the cursor is read whenever the broker streams (the mode is the
+        // composing fallback's)
+        let want = (stream || mode.reads()).then(|| self.host_cursor_want(io, shown, cursor));
         let compose = cursor.filter(|_| cursor_composed(mode, stream, want.as_ref()));
         if let (Some(w), Some(seat)) = (want, dp.broker.as_ref()) {
             let key = w.key();
@@ -5469,6 +5469,43 @@ mod tests {
             cursor_composed(CursorMode::Hover, false, Some(&CursorWant::Composed)),
             "XOR"
         );
+    }
+
+    /// ★ The pointer pair the relay sends the broker (`kf_broker::guest_point`) is the guest-frame
+    /// pixel the composing fallback's `hot_from_pointer` works from: both are the two truncating
+    /// scalings, so the broker's `hot = pointer - top-left` agrees with the tracker's.
+    #[test]
+    fn the_streamed_pointer_is_the_pixel_the_fallback_derives_its_hot_spot_from() {
+        let mut cs = kf_disp::engine::CursorScan {
+            head: 0,
+            client: 0,
+            handle: 0,
+            offset: 0,
+            size: 256,
+            argb8888: true,
+            a1r5g5b5: false,
+            format: 0xCF,
+            hot_x: 0,
+            hot_y: 0,
+            x: 300,
+            y: 200,
+            k1: 255,
+            cursor_factor: 2,
+            viewport_factor: 7,
+            mode: 0,
+        };
+        for (abs, range, frame) in [
+            ((48, 8), (1024, 695), (1024u32, 695u32)),
+            ((350, 260), (1000, 700), (1920, 1080)),
+            ((410, 255), (1024, 768), (1024, 768)),
+        ] {
+            let g = kf_broker::guest_point(abs, range, frame).unwrap();
+            // the image's top-left at (g.0 - 17, g.1 - 9): the derived hot spot is the difference
+            cs.x = g.0 - 17;
+            cs.y = g.1 - 9;
+            let hot = kf_disp::scanout::hot_from_pointer(&cs, abs, range, frame);
+            assert_eq!(hot, Some((17, 9)), "{abs:?} {range:?} {frame:?}");
+        }
     }
 
     /// ★ A streaming broker draws the cursor itself in EVERY mode: nothing is ever composed (the rule

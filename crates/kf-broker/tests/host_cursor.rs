@@ -7,13 +7,13 @@
 use kf_broker::console::DEFINE_MIN_MS;
 use kf_broker::wire::{
     CAP_CURSOR, CAP_DMABUF, CAP_CURSOR_STREAM, CMD_ATTACH, CMD_COMMIT, CMD_CURSOR, CMD_SIZE, CURSOR_HIDE, CURSOR_SET,
-    CURSOR_F_XOR, CURSOR_MOVE, CURSOR_SHOW, EV_ABS, EV_FOCUS, EV_FRAME, EV_GRAB, EV_HELLO, EV_KEY, EV_RELEASE, F_GRABBED, FOURCC_AR24,
+    CURSOR_F_ABS, CURSOR_F_XOR, CURSOR_MOVE, CURSOR_SHOW, EV_ABS, EV_FOCUS, EV_FRAME, EV_GRAB, EV_HELLO, EV_KEY, EV_REL, EV_RELEASE, F_GRABBED, FOURCC_AR24,
     FOURCC_XR24, Pkt,
 };
 use kf_broker::{
     ConsoleCursor, CursorImage, CursorMode, CursorShare, CursorWant, FrameGeom, FrameRing, Host,
     Link,
-    PointerAbs, Recv, Relay, RelayConfig, Sent, ShownFrame, SlotFds,
+    PointerAbs, Recv, Relay, RelayConfig, Sent, ShownFrame, SlotFds, guest_point,
 };
 use kf_linux_raw::{SharedRam, fd_inode};
 use std::cell::RefCell;
@@ -1083,13 +1083,35 @@ fn xor_mask(w: u32, h: u32, on: &[(u32, u32)], hot: (u32, u32)) -> CursorWant {
     CursorWant::Image(Arc::new(CursorImage::new(w, h, hot, px).unwrap().into_xor()))
 }
 
-/// The (x, y) of every MOVE sent, in order.
-fn moves(t: &T) -> Vec<(i32, i32)> {
+/// Every MOVE sent, in order: (the image's top-left, the absolute pointer pair if the flag is set).
+fn moves(t: &T) -> Vec<((i32, i32), Option<(i32, i32)>)> {
     t.cursors()
         .iter()
         .filter(|r| r.cursor()[7] == CURSOR_MOVE)
-        .map(|r| (r.cursor()[5] as i32, r.cursor()[6] as i32))
+        .map(|r| {
+            let f = u16::from_le_bytes([r.raw[2], r.raw[3]]);
+            let c = r.cursor();
+            // width/height are zero unless the flag says they are the pointer
+            assert!(f == 0 || f == CURSOR_F_ABS, "flags {f}");
+            assert!(f == CURSOR_F_ABS || (c[0], c[1]) == (0, 0), "a pair without its flag");
+            (
+                (c[5] as i32, c[6] as i32),
+                (f == CURSOR_F_ABS).then_some((c[0] as i32, c[1] as i32)),
+            )
+        })
         .collect()
+}
+
+fn abs(t: &T, x: i32, y: i32, w: u32, h: u32) {
+    let p = Pkt {
+        ty: EV_ABS,
+        x,
+        y,
+        w0: w,
+        w1: h,
+        ..Pkt::default()
+    };
+    t.wire.borrow_mut().inbox.extend(p.encode());
 }
 
 fn grab(t: &mut T, on: bool) {
@@ -1124,11 +1146,10 @@ fn the_stream_is_the_brokers_yes_and_an_old_broker_keeps_the_composing_path() {
     assert!(!t.share.stream());
 }
 
-/// ★ Hover, streaming: the image goes as today (SET once, HIDE for nothing, SHOW for the held one),
-/// a cursor only a frame could show is HIDE (nothing composes), and the position is NOT sent — the
-/// host pointer is the guest's. An XOR mask is a SET flagged `CURSOR_F_XOR`, with the mask's bytes.
+/// ★ Streaming: the image goes as today (SET once, HIDE for nothing, SHOW for the held one),
+/// a cursor only a frame could show is HIDE (nothing composes), and an XOR mask is a SET flagged `CURSOR_F_XOR`, with the mask's bytes.
 #[test]
-fn hover_streams_the_image_and_never_the_position() {
+fn hover_streams_the_image_and_the_xor_mask() {
     let mut t = T::new(true);
     t.up(CAP_CURSOR | CAP_CURSOR_STREAM, 0);
     t.tick();
@@ -1146,14 +1167,13 @@ fn hover_streams_the_image_and_never_the_position() {
         t.share.note_point(Some((10 + t.now as i32 % 7, 20)));
         t.tick();
         assert_eq!(t.ops(), op.into_iter().collect::<Vec<_>>(), "{want:?}");
-        assert_eq!(moves(&t), vec![], "hover: no MOVE");
     }
     // the XOR mask
     t.clear();
     let m = xor_mask(16, 16, &[(3, 3), (4, 3)], (1, 2));
     assert!(t.share.post(m.clone()));
     t.tick();
-    let recs = t.cursors();
+    let recs: Vec<Rec> = t.cursors().into_iter().filter(|r| r.cursor()[7] != CURSOR_MOVE).collect();
     assert_eq!(recs.len(), 1);
     assert_eq!(recs[0].cursor()[7], CURSOR_SET);
     assert_eq!(&recs[0].raw[2..4], &CURSOR_F_XOR.to_le_bytes(), "flags = F_XOR");
@@ -1169,69 +1189,98 @@ fn hover_streams_the_image_and_never_the_position() {
     assert_ne!(same.key(), m.key(), "the digest covers the XOR bit");
 }
 
-/// ★ Under grab the broker has no pointer: the position is sent — one MOVE on entering the grab, one
-/// per CHANGE after (the newest of however many the worker noted between two entries, so never per
-/// input event), clamped to the frame's range, none while hidden, none for the same point; the image
-/// still follows the guest; leaving the grab forgets the position so the next grab starts with one.
+/// ★ MODE-FREE: kayfabe reports, the viewer decides (grab is the viewer's state, not the protocol's).
+/// MOVE is ONE atomic pair — the image's top-left (the worker's note) and the last ABSOLUTE pointer
+/// the relay injected, mapped to guest frame pixels (the committed frame's size), flag clear after a
+/// relative event or before any injection — sent in hover AND grab, once per change of the pair,
+/// never per input event; forgotten nowhere (no mode). Clamped; none while hidden.
 #[test]
-fn grab_streams_the_position_once_per_change_and_hover_forgets_it() {
+fn move_is_one_atomic_pair_sent_once_per_change_in_every_mode() {
     let mut t = T::new(true);
     t.up(CAP_CURSOR | CAP_CURSOR_STREAM, 0);
+    t.tick();
+    // a committed 100x4 frame: the guest's frame size, for the pointer's mapping
+    t.publish(false);
     t.tick();
     assert!(t.share.post(image(32, 32, (0, 0), 1)));
     t.share.note_point(Some((5, 6)));
     t.tick();
-    assert_eq!(moves(&t), vec![], "hover: none");
-    t.clear();
-    grab(&mut t, true);
-    assert_eq!(t.share.mode(), CursorMode::Grabbed);
-    assert_eq!(moves(&t), vec![(5, 6)], "entering the grab sends the position once");
-    // many positions between two entries: the newest only
-    t.clear();
-    for i in 0..50 {
-        t.share.note_point(Some((100 + i, 200 + i)));
+    assert_eq!(moves(&t), vec![((5, 6), None)], "no absolute input yet: the flag is clear");
+    // absolute input (hover): the pair appears, mapped through QEMU's tablet scaling to guest pixels
+    abs(&t, 50, 2, 200, 8);
+    t.read();
+    let g = guest_point((50, 2), (200, 8), (100, 4)).unwrap();
+    assert_eq!(g, (24, 0), "50/200 of 100 px through the two truncations");
+    assert_eq!(moves(&t).last(), Some(&((5, 6), Some(g))));
+    let n = moves(&t).len();
+    t.tick();
+    t.tick();
+    assert_eq!(moves(&t).len(), n, "the same pair is not sent twice");
+    // the cursor moves, or the pointer moves: one more each, whatever the number of events between
+    for i in 0..30 {
+        t.share.note_point(Some((9 + i, 9)));
     }
     t.tick();
-    assert_eq!(moves(&t), vec![(149, 249)]);
+    assert_eq!(moves(&t).len(), n + 1);
+    assert_eq!(moves(&t).last(), Some(&((38, 9), Some(g))), "the newest of many notes");
+    abs(&t, 150, 6, 200, 8);
+    t.read();
+    let g2 = guest_point((150, 6), (200, 8), (100, 4)).unwrap();
+    assert_eq!(moves(&t).last(), Some(&((38, 9), Some(g2))));
+    // GRAB: relative input clears the flag in the very next pair (the viewer then draws at the top-left)
+    grab(&mut t, true);
+    t.pkt(EV_REL, 0, 3);
+    t.read();
+    t.share.note_point(Some((40, 10)));
     t.tick();
-    assert_eq!(moves(&t), vec![(149, 249)], "the same point is not sent twice");
-    // the image still follows the guest under grab
-    t.clear();
-    assert!(t.share.post(image(32, 32, (3, 3), 9)));
-    t.share.note_point(Some((1, 2)));
+    assert_eq!(moves(&t).last(), Some(&((40, 10), None)), "relative: flag clear, width/height zero");
+    // ... and it stays clear through grab-time cursor moves
+    t.share.note_point(Some((41, 11)));
     t.tick();
-    assert_eq!(t.ops(), vec![CURSOR_SET]);
-    assert_eq!(moves(&t), vec![(1, 2)], "an entry sends the image, then the position");
-    // far outside the frame: clamped to -256..=8192
-    t.clear();
+    assert_eq!(moves(&t).last(), Some(&((41, 11), None)));
+    // the grab ends: the relay puts the absolute device back where the host pointer was
+    grab(&mut t, false);
+    t.pkt(EV_GRAB, 0, 0);
+    t.read();
+    t.tick();
+    assert_eq!(moves(&t).last(), Some(&((41, 11), Some(g2))), "absolute again");
+    // far outside the frame: clamped to -256..=8192 (the pointer is clamped too)
     t.share.note_point(Some((i32::MIN, 100_000_000)));
     t.tick();
-    assert_eq!(moves(&t), vec![(-256, 8192)]);
-    // hidden: no position
+    assert_eq!(moves(&t).last(), Some(&((-256, 8192), Some(g2))));
+    // hidden: nothing to place; the guest's cursor back: SHOW, then the pair if it changed
     t.clear();
     assert!(t.share.post(CursorWant::Hidden));
     t.share.note_point(Some((7, 7)));
     t.tick();
     assert_eq!(t.ops(), vec![CURSOR_HIDE]);
-    assert_eq!(moves(&t), vec![], "hidden: nothing to place");
-    // the guest's cursor comes back (the plane is enabled again): SHOW, then where it is
+    assert_eq!(moves(&t), vec![], "hidden: no MOVE");
     t.clear();
-    assert!(t.share.post(image(32, 32, (3, 3), 9)));
+    assert!(t.share.post(image(32, 32, (0, 0), 1)));
     t.tick();
     assert_eq!(t.ops(), vec![CURSOR_SHOW]);
-    assert_eq!(moves(&t), vec![(7, 7)]);
+    assert_eq!(moves(&t), vec![((7, 7), Some(g2))]);
     // no point known (no enabled cursor): no MOVE
     t.clear();
     t.share.note_point(None);
     t.tick();
     assert_eq!(moves(&t), vec![]);
-    // leaving the grab forgets the position: the next grab starts with one, even for the same point
-    t.share.note_point(Some((7, 7)));
-    grab(&mut t, false);
-    t.clear();
-    grab(&mut t, true);
-    assert_eq!(moves(&t), vec![(7, 7)]);
-    assert!(t.relay.counters().cursor_moves >= 5);
+    assert!(t.relay.counters().cursor_moves >= 6);
+}
+
+/// The VMM-neutral mapping of the broker's pointer to the guest's pixels is the one
+/// `hot_from_pointer` uses (its two truncating scalings).
+#[test]
+fn the_pointer_maps_to_guest_pixels_through_the_two_truncating_scalings() {
+    assert_eq!(guest_point((0, 0), (1024, 768), (1920, 1080)), Some((0, 0)));
+    // 48 of 1024 reaches the guest as 47 of 1024 (brkA4's measurement), on a 1024-wide head
+    assert_eq!(guest_point((48, 8), (1024, 695), (1024, 695)).map(|p| p.0), Some(47));
+    assert_eq!(guest_point((8, 8), (695, 695), (695, 695)).map(|p| p.0), Some(7));
+    assert_eq!(guest_point((1, 1), (0, 5), (10, 10)), None, "empty range");
+    assert_eq!(guest_point((1, 1), (5, 5), (0, 10)), None, "empty frame");
+    assert_eq!(guest_point((-5, -5), (100, 100), (100, 100)), Some((0, 0)), "negative pins to 0");
+    let far = guest_point((i32::MAX, i32::MAX), (1, 1), (8192, 8192));
+    assert!(far.is_none() || far.unwrap().0 >= 0, "no overflow");
 }
 
 /// ★ The known-negative of the above: an old broker (no stream bit) is never sent a MOVE or the XOR

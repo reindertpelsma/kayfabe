@@ -80,6 +80,10 @@ pub const CAP_CURSOR_STREAM: u32 = 1 << 12;
 /// hot-spot words, no fd. Only with [`CAP_CURSOR_STREAM`]. In hover the viewer ignores it; under
 /// grab it draws the image there.
 pub const CURSOR_MOVE: u32 = 4;
+/// `NVKVM_BROKER_CURSOR_F_ABS` (the `flags` of a MOVE): `width`/`height` carry the last absolute
+/// pointer position the VMM injected, in guest frame pixels. Clear (and both zero) after relative
+/// input, or before any was injected.
+pub const CURSOR_F_ABS: u16 = 1 << 0;
 /// `NVKVM_BROKER_CURSOR_MOVE_LIMIT`: a MOVE beyond ±this is refused by the broker; the VMM clamps
 /// far inside it ([`CursorCmd::mov`]).
 pub const CURSOR_MOVE_LIMIT: i32 = 1 << 20;
@@ -407,14 +411,20 @@ impl CursorCmd {
         }
     }
 
-    /// ★ MOVE: the image's top-left at `(x, y)` on the guest frame, clamped to `-CURSOR_MAX_DIM ..=
-    /// MAX_DIM` (outside of which the image cannot show), carried in the hot-spot words as signed
-    /// 32-bit; every other field but `op` zero. Only for a broker that advertised
-    /// [`CAP_CURSOR_STREAM`].
+    /// ★ MOVE, ONE atomic pair: the image's top-left at `(x, y)` on the guest frame (the hot-spot
+    /// words) and `abs`, the last absolute pointer position the VMM injected in the same frame
+    /// pixels (`width`/`height`, with [`CURSOR_F_ABS`]; `None`: the last input was relative, or
+    /// none was injected yet — flag clear, both zero). Every value is clamped to `-CURSOR_MAX_DIM
+    /// ..= MAX_DIM` (outside of which a cursor cannot show) as signed 32-bit; every other field but
+    /// `op` zero. Only for a broker that advertised [`CAP_CURSOR_STREAM`].
     #[must_use]
-    pub fn mov(x: i32, y: i32) -> CursorCmd {
+    pub fn mov(x: i32, y: i32, abs: Option<(i32, i32)>) -> CursorCmd {
         let c = |v: i32| v.clamp(-(CURSOR_MAX_DIM as i32), MAX_DIM as i32).cast_unsigned();
+        let (ax, ay) = abs.unwrap_or((0, 0));
         CursorCmd {
+            flags: if abs.is_some() { CURSOR_F_ABS } else { 0 },
+            width: if abs.is_some() { c(ax) } else { 0 },
+            height: if abs.is_some() { c(ay) } else { 0 },
             hot_x: c(x),
             hot_y: c(y),
             op: CURSOR_MOVE,
