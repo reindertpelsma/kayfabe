@@ -1,0 +1,45 @@
+DIE_RUN_START phase2 2026-10-15T11:46:01+00:00
+WIN_DIE_START kf3=f6d96614 checkout=8e45edc8a gpu=NVIDIA GeForce RTX 3070 xid_before=25 2026-10-15T11:46:01+00:00
+[win_die] QEMU 123616 kf3 f6d96614 run /root/win/codex-ga104
+[win_die] QGA answers 2026-10-15T11:48:12+00:00
+[win_die] shot /root/win/codex-ga104/shots/p2_t0030.ppm.gz 2026-10-15T11:48:42+00:00
+HOSTBAR1 t=30  BAR1 Memory Usage  Total : 256 MiB  Used : 31 MiB  Free : 225 MiB 
+[win_die] shot /root/win/codex-ga104/shots/p2_t0060.ppm.gz 2026-10-15T11:49:12+00:00
+HOSTBAR1 t=60  BAR1 Memory Usage  Total : 256 MiB  Used : 31 MiB  Free : 225 MiB 
+[win_die] shot /root/win/codex-ga104/shots/p2_t0090.ppm.gz 2026-10-15T11:49:42+00:00
+Traceback (most recent call last):
+  File "/root/kayfabe/scripts/bench/windows/qmp.py", line 201, in <module>
+    sys.exit(main(sys.argv))
+  File "/root/kayfabe/scripts/bench/windows/qmp.py", line 195, in main
+    return qga_exec(sock, rest[0], rest[1:])
+  File "/root/kayfabe/scripts/bench/windows/qmp.py", line 158, in qga_exec
+    s, f = qga_open(sock, timeout=30.0)
+  File "/root/kayfabe/scripts/bench/windows/qmp.py", line 141, in qga_open
+    r = recv(f)
+  File "/root/kayfabe/scripts/bench/windows/qmp.py", line 42, in recv
+    line = f.readline()
+  File "/usr/lib/python3.10/socket.py", line 705, in readinto
+    return self._sock.recv_into(b)
+TimeoutError: timed out
+HOSTBAR1 t=90  BAR1 Memory Usage  Total : 256 MiB  Used : 31 MiB  Free : 225 MiB 
+[win_die] shot /root/win/codex-ga104/shots/p2_t0120.ppm.gz 2026-10-15T11:50:42+00:00
+HOSTBAR1 t=120  BAR1 Memory Usage  Total : 256 MiB  Used : 31 MiB  Free : 225 MiB 
+[win_die] shot /root/win/codex-ga104/shots/p2_t0150.ppm.gz 2026-10-15T11:51:12+00:00
+HOSTBAR1 t=150  BAR1 Memory Usage  Total : 256 MiB  Used : 31 MiB  Free : 225 MiB 
+[win_die] shot /root/win/codex-ga104/shots/p2_t0180.ppm.gz 2026-10-15T11:51:43+00:00
+Traceback (most recent call last):
+  File "/root/kayfabe/scripts/bench/windows/qmp.py", line 201, in <module>
+    sys.exit(main(sys.argv))
+  File "/root/kayfabe/scripts/bench/windows/qmp.py", line 195, in main
+    return qga_exec(sock, rest[0], rest[1:])
+  File "/root/kayfabe/scripts/bench/windows/qmp.py", line 158, in qga_exec
+    s, f = qga_open(sock, timeout=30.0)
+  File "/root/kayfabe/scripts/bench/windows/qmp.py", line 141, in qga_open
+    r = recv(f)
+  File "/root/kayfabe/scripts/bench/windows/qmp.py", line 42, in recv
+    line = f.readline()
+  File "/usr/lib/python3.10/socket.py", line 705, in readinto
+    return self._sock.recv_into(b)
+TimeoutError: timed out
+HOSTBAR1 t=180  BAR1 Memory Usage  Total : 256 MiB  Used : 31 MiB  Free : 225 MiB 
+DIE_RUN_EXIT phase2 rc=0 2026-10-15T11:52:17+00:00
