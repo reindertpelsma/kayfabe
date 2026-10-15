@@ -68,6 +68,31 @@ Blender 5.2.2 LTS renders its viewport; YouTube 4K60 watched for 30 minutes.
 | CUDA and applications (earlier, 2026-10-08, nested vast box, RTX 3060) | 61/65 apps + 6/6 probes pass in the guest; the four failures need UVM demand paging ([`V3_APP_MATRIX.md`](docs/design/V3_APP_MATRIX.md), `traces/merge_bar_20261008/`) |
 | CUDA speed (same box, nested) | `cup8bench`: 784 GFLOPS guest vs 786 host; llama-bench 1.5B Q4: prompt 0.998x, decode 0.877x of host; eager PyTorch decode 0.29x (every launch traps) ([`V3_LINUX_PERF_BASELINE_6692e621.md`](docs/design/V3_LINUX_PERF_BASELINE_6692e621.md)) |
 
+### Linux guest performance (measured, older revisions, nested box)
+
+How close the guest gets to the host on the same GPU. These are the numbers that exist; they were taken on a rented RTX 3060 that is
+itself a KVM guest (a VM exit costs 10 to 40 times bare metal, so they are conservative for the trapping parts) at revisions
+`b5c9f717`, `9d82f259` and `ca7a5006`, not at the current tree. Sources: [`V3_LINUX_PERF_BASELINE_6692e621.md`](docs/design/V3_LINUX_PERF_BASELINE_6692e621.md) §2,
+`traces/merge_bar_20261008/`, `traces/v3_candidates/cand2_20261004/`.
+
+| workload | host | guest | guest / host |
+|---|---|---|---|
+| matrix multiply (`cup8bench`, N=2048) | 786 GFLOPS | 784 GFLOPS | 0.997 |
+| llama-bench Qwen2.5-1.5B Q4_K_M, prompt processing | | | 0.998 |
+| llama-bench, token generation | | | 0.877 |
+| device-to-device copy (`bandwidthTest`, 32 MB) | 327 GB/s | 322 GB/s | 0.98 |
+| host-to-device / device-to-host copy (pinned, 32 MB) | 7.8 / 8.0 GB/s | 9.7 / 10.3 GB/s | not slower |
+| app matrix (65 apps, 61 pass in the guest), sum of per-app seconds | 1075 s | 1193 s | 1.11x the time |
+| NVENC 1080p H.264 (RTX 3070 box, older revision `d06833f0`) | 198 fps | 142 fps | 0.72 |
+| eager PyTorch decode (Qwen2-0.5B) | 42.2 tok/s | 12.2 tok/s | 0.29 |
+| CUDA context create | 0.13 s | 1.0 s | 7.7x the time |
+
+Reading it: large kernels and copies run at host speed, because the work is submitted once and runs on the real GPU. Anything that
+launches many tiny kernels (eager PyTorch) or creates contexts pays for every doorbell and control call, which is the cost the
+doorbell and relay work targets. **Not measured yet:** the same set on the home RTX 4070 without nesting, at the current revision
+(`scripts/bench/perf_compare.sh` is the harness; the baseline doc says the AFTER run has not been done). Treat these as a floor, not as
+a claim about the current tree.
+
 GPU-free tests at this tree: **3138 passed, 0 failed, 12 ignored** across the 22 `kf-*` crates (`cargo test --release`, 2026-10-15).
 
 ## What does not work, or is not finished
