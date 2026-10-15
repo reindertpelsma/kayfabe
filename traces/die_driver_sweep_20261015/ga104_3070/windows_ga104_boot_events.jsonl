@@ -1,0 +1,3 @@
+{"event": "KF_LOGGER_ATTACHED", "timestamp": {"seconds": 1792063738}}
+{"timestamp": {"seconds": 1792063740, "microseconds": 741293}, "event": "RTC_CHANGE", "data": {"offset": -1, "qom-path": "/machine/unattached/device[11]/rtc"}}
+{"timestamp": {"seconds": 1792063803, "microseconds": 742203}, "event": "SHUTDOWN", "data": {"guest": true, "reason": "guest-shutdown"}}

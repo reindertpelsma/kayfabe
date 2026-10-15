@@ -1,5 +1,40 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-15 — Codex die/driver implementation campaign (own branches; live)
+
+Worktrees are under `/workspace/codex/`; trusted CPU-only builds under `/data/codex/`.
+The owner's running Windows VM and Claude checkouts are untouched. Base
+`codex/die-driver-sweep-20261015` combines GPU-types with cursor fix `2f99e673d`.
+
+- `codex/sweep-linux-ampere`, draft PR #6: GA104 box 56076314, host 595.91.07,
+  QEMU `ba864a55`: gates 9/9 + gate10, native raw 30/30 on rerun, guest595 raw30/30;
+  guest580 raw30/30, CUDA4/4, graphics10/10 matching hashes, actual broker X11 SHM
+  presentation on Xvfb. Twelve guest NV assertions and idle-window STALL dumps remain;
+  zero guest Xid / flip timeouts. Teardown eventually forced QEMU after ACPI wait.
+  The harness now selects the actual guest driver from a validated image/initrd receipt.
+  Full GPU-free rerun after RSS-test isolation: 3231 passed, zero failed, 14 ignored.
+- `codex/fix-host-gid-abi`: Windows default auto UUID refused at realize on host595.
+  Missing public GID control added using compiler-derived layouts from all30 measured tags.
+  Failing-first regression then 1727 tests pass across ABI/RM/host/QEMU. Rental QEMU
+  `f6d96614` passes realize; Windows then stops at `winload.efi` 0xc00000bb.
+  SHA256 comparison finds image chunks02/03 differ despite old transfer completion markers;
+  19 others match. Transfer fix has two failing-first tests, now12 harness tests pass;
+  source/relay/sink pipeline failures propagate and a final full-file hash is mandatory.
+  Repair of only those two chunks is in progress. No Windows pass is claimed.
+- `codex/fix-turing-display-semaphores` at `f1d4c8737`: public C57E semaphore model,
+  472 tests pass, high-bit mutation caught. Hardware test pending; no Turing offer yet.
+- `codex/windows-display-caps-reader` at `de9c7b70a`: bounded fixed-page native Windows
+  reader, ASan/UBSan tests, read-only guard and unsigned WDK/SDK build pass. Native load
+  and per-die Windows facts not yet measured. No GA104/580 product caps row added.
+
+Campaign evidence and pre-run falsifiers: `traces/die_driver_sweep_20261015/README.md`;
+cost/owned IDs: `COST.md` beside it. The sole own rental is 56076314, RTX3070,
+$0.3083333333/hour including disk, started 09:44:43 UTC; 175-minute autodestroy
+armed and verified, deadline about12:40UTC. Destroy only this ID. Images/unique text
+must be saved before any native-Windows conversion. At most one rental; total ceiling $40.
+Next: hash-verified Windows two-boot retry, native Windows caps reference, then remaining
+dies/driver endpoints. Never label the old GB206 host595 failure fixed from the GA104 result.
+
 ## UPDATE 2026-10-15 - GPU types: the constant table is wired per die (branch `claude/gpu-types-20261015`, draft PR against master)
 
 Integration of six unverified-on-Windows branches (userring-eventloop batching, cursor-formats, display-caps-derive, die-sweep-20261014b, constants-measure-20261014b,
