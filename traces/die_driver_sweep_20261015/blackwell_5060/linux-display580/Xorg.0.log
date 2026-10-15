@@ -1,0 +1,133 @@
+[    31.632] 
+X.Org X Server IP_REDACTED
+X Protocol Version 11, Revision 0
+[    31.632] Current Operating System: Linux ubuntu 6.8.0-142-generic #142-Ubuntu SMP PREEMPT_DYNAMIC Wed Sep  2 14:24:27 UTC 2026 x86_64
+[    31.632] Kernel command line: BOOT_IMAGE=/vmlinuz-6.8.0-142-generic root=UUID=1bfefdfb-34c9-46c7-854f-399d0a1dea04 ro console=tty1 console=ttyS0 nvidia-drm.modeset=1 nvidia-drm.fbdev=1
+[    31.632] xorg-server 2:21.1.12-1ubuntu1.8 (For technical support please see http://www.ubuntu.com/support) 
+[    31.632] Current version of pixman: 0.42.2
+[    31.632] 	Before reporting problems, check http://wiki.x.org
+	to make sure that you have the latest version.
+[    31.632] Markers: (--) probed, (**) from config file, (==) default setting,
+	(++) from command line, (!!) notice, (II) informational,
+	(WW) warning, (EE) error, (NI) not implemented, (??) unknown.
+[    31.632] (==) Log file: "/var/log/Xorg.0.log", Time: Thu Oct 15 21:36:50 2026
+[    31.632] (==) Using config file: "/etc/X11/xorg.conf"
+[    31.632] (==) Using system config directory "/usr/share/X11/xorg.conf.d"
+[    31.632] (==) ServerLayout "kf3"
+[    31.632] (**) |-->Screen "kf3-screen" (0)
+[    31.632] (**) |   |-->Monitor "<default monitor>"
+[    31.632] (**) |   |-->Device "kf3-gpu"
+[    31.632] (==) No monitor specified for screen "kf3-screen".
+	Using a default monitor configuration.
+[    31.632] (**) Allowing byte-swapped clients
+[    31.632] (==) Automatically adding devices
+[    31.632] (==) Automatically enabling devices
+[    31.632] (==) Automatically adding GPU devices
+[    31.632] (==) Automatically binding GPU devices
+[    31.632] (==) Max clients allowed: 256, resource mask: 0x1fffff
+[    31.632] (WW) The directory "/usr/share/fonts/X11/cyrillic" does not exist.
+[    31.632] 	Entry deleted from font path.
+[    31.632] (WW) The directory "/usr/share/fonts/X11/100dpi/" does not exist.
+[    31.632] 	Entry deleted from font path.
+[    31.632] (WW) The directory "/usr/share/fonts/X11/75dpi/" does not exist.
+[    31.632] 	Entry deleted from font path.
+[    31.632] (WW) The directory "/usr/share/fonts/X11/100dpi" does not exist.
+[    31.632] 	Entry deleted from font path.
+[    31.632] (WW) The directory "/usr/share/fonts/X11/75dpi" does not exist.
+[    31.632] 	Entry deleted from font path.
+[    31.632] (==) FontPath set to:
+	/usr/share/fonts/X11/misc,
+	/usr/share/fonts/X11/Type1,
+	built-ins
+[    31.632] (==) ModulePath set to "/usr/lib/xorg/modules"
+[    31.632] (II) The server relies on udev to provide the list of input devices.
+	If no devices become available, reconfigure udev or disable AutoAddDevices.
+[    31.632] (II) Loader magic: 0x55ccec4f9020
+[    31.632] (II) Module ABI versions:
+[    31.632] 	X.Org ANSI C Emulation: 0.4
+[    31.632] 	X.Org Video Driver: 25.2
+[    31.632] 	X.Org XInput driver : 24.4
+[    31.632] 	X.Org Server Extension : 10.0
+[    31.633] (++) using VT number 7
+
+[    31.633] (II) systemd-logind: logind integration requires -keeptty and -keeptty was not provided, disabling logind integration
+[    31.634] (II) xfree86: Adding drm device (/dev/dri/card1)
+[    31.634] (II) Platform probe for /sys/devices/pci0000:00/0000:00:02.0/drm/card1
+[    31.640] (--) PCI:*(0@0:2:0) 10de:2d05:1462:5371 rev 161, Mem @ 0xc0000000/67108864, 0x800000000/134217728, 0x808000000/33554432, 0xc4000000/16384, BIOS @ 0x????????/131072
+[    31.640] (II) LoadModule: "glx"
+[    31.640] (II) Loading /usr/lib/xorg/modules/extensions/libglx.so
+[    31.641] (II) Module glx: vendor="X.Org Foundation"
+[    31.641] 	compiled for IP_REDACTED, module version = 1.0.0
+[    31.641] 	ABI class: X.Org Server Extension, version 10.0
+[    31.641] (II) LoadModule: "nvidia"
+[    31.641] (II) Loading /usr/lib/xorg/modules/drivers/nvidia_drv.so
+[    31.641] (II) Module nvidia: vendor="NVIDIA Corporation"
+[    31.641] 	compiled for 1.6.99.901, module version = 1.0.0
+[    31.641] 	Module class: X.Org Video Driver
+[    31.641] (II) NVIDIA dlloader X Driver  580.159.04  Wed Apr 29 17:01:30 UTC 2026
+[    31.641] (II) NVIDIA Unified Driver for all Supported NVIDIA GPUs
+[    31.641] (II) Loading sub module "fb"
+[    31.641] (II) LoadModule: "fb"
+[    31.641] (II) Module "fb" already built-in
+[    31.641] (II) Loading sub module "wfb"
+[    31.641] (II) LoadModule: "wfb"
+[    31.642] (II) Loading /usr/lib/xorg/modules/libwfb.so
+[    31.642] (II) Module wfb: vendor="X.Org Foundation"
+[    31.642] 	compiled for IP_REDACTED, module version = 1.0.0
+[    31.642] 	ABI class: X.Org ANSI C Emulation, version 0.4
+[    31.642] (II) NVIDIA(0): Creating default Display subsection in Screen section
+	"kf3-screen" for depth/fbbpp 24/32
+[    31.642] (==) NVIDIA(0): Depth 24, (==) framebuffer bpp 32
+[    31.642] (==) NVIDIA(0): RGB weight 888
+[    31.642] (==) NVIDIA(0): Default visual is TrueColor
+[    31.642] (==) NVIDIA(0): Using gamma correction (1.0, 1.0, 1.0)
+[    31.642] (**) NVIDIA(0): Enabling 2D acceleration
+[    31.642] (II) Loading sub module "glxserver_nvidia"
+[    31.642] (II) LoadModule: "glxserver_nvidia"
+[    31.642] (II) Loading /usr/lib/xorg/modules/extensions/libglxserver_nvidia.so
+[    31.655] (II) Module glxserver_nvidia: vendor="NVIDIA Corporation"
+[    31.655] 	compiled for 1.6.99.901, module version = 1.0.0
+[    31.655] 	Module class: X.Org Server Extension
+[    31.655] (II) NVIDIA GLX Module  580.159.04  Wed Apr 29 17:07:05 UTC 2026
+[    31.655] (II) NVIDIA: The X server supports PRIME Render Offload.
+[    31.658] (EE) NVIDIA(GPU-REDACTED): Failed to get virtual display support info.
+[    31.659] (--) NVIDIA(0): Valid display device(s) on GPU-REDACTED at PCI:0:2:0
+[    31.659] (--) NVIDIA(0):     DFP-0
+[    31.673] (II) NVIDIA(0): NVIDIA GPU NVIDIA GeForce RTX 5060 (GB206-A) at PCI:0:2:0
+[    31.673] (II) NVIDIA(0):     (GPU-REDACTED)
+[    31.673] (--) NVIDIA(0): Memory: 4194304 kBytes
+[    31.674] (--) NVIDIA(0): VideoBIOS: 98.06.4e.00.87
+[    31.674] (II) NVIDIA(0): Detected PCI Express Link width: 8X
+[    31.675] (--) NVIDIA(GPU-REDACTED): KFB kayfabe (DFP-0): connected
+[    31.675] (--) NVIDIA(GPU-REDACTED): KFB kayfabe (DFP-0): Internal TMDS
+[    31.675] (--) NVIDIA(GPU-REDACTED): KFB kayfabe (DFP-0): 165.0 MHz maximum pixel clock
+[    31.675] (--) NVIDIA(GPU-REDACTED): 
+[    31.758] (EE) NVIDIA(GPU-REDACTED): Unable to add conservative default mode "nvidia-auto-select".
+[    31.758] (EE) NVIDIA(GPU-REDACTED): Unable to add "nvidia-auto-select" mode to ModePool.
+[    31.758] (==) NVIDIA(0): 
+[    31.758] (==) NVIDIA(0): No modes were requested; the default mode "nvidia-auto-select"
+[    31.758] (==) NVIDIA(0):     will be used as the requested mode.
+[    31.758] (==) NVIDIA(0): 
+[    31.758] (WW) NVIDIA(0): No valid modes for "DFP-0:nvidia-auto-select"; removing.
+[    31.758] (WW) NVIDIA(0): 
+[    31.758] (WW) NVIDIA(0): Unable to validate any modes; falling back to the default mode
+[    31.758] (WW) NVIDIA(0):     "nvidia-auto-select".
+[    31.758] (WW) NVIDIA(0): 
+[    31.758] (WW) NVIDIA(0): No valid modes for "DFP-0:nvidia-auto-select"; removing.
+[    31.758] (EE) NVIDIA(0): Unable to use default mode "nvidia-auto-select".
+[    31.758] (EE) NVIDIA(0): Failing initialization of X screen
+[    31.768] (II) UnloadModule: "nvidia"
+[    31.768] (II) UnloadSubModule: "glxserver_nvidia"
+[    31.768] (II) Unloading glxserver_nvidia
+[    31.768] (II) UnloadSubModule: "wfb"
+[    31.768] (EE) Screen(s) found, but none have a usable configuration.
+[    31.768] (EE) 
+Fatal server error:
+[    31.768] (EE) no screens found(EE) 
+[    31.768] (EE) 
+Please consult the The X.Org Foundation support 
+	 at http://wiki.x.org
+ for help. 
+[    31.768] (EE) Please also check the log file at "/var/log/Xorg.0.log" for additional information.
+[    31.768] (EE) 
+[    31.768] (EE) Server terminated with error (1). Closing log file.

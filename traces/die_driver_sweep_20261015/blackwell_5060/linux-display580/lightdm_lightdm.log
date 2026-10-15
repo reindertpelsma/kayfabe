@@ -1,0 +1,700 @@
+[+0.00s] DEBUG: Logging to /var/log/lightdm/lightdm.log
+[+0.00s] DEBUG: Starting Light Display Manager 1.30.0, UID=0 PID=939
+[+0.00s] DEBUG: Loading configuration dirs from /usr/share/lightdm/lightdm.conf.d
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-disable-guest.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-disable-log-backup.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-greeter-wrapper.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-guest-wrapper.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-xserver-command.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/60-lightdm-gtk-greeter.conf
+[+0.00s] DEBUG: Loading configuration dirs from /usr/local/share/lightdm/lightdm.conf.d
+[+0.00s] DEBUG: Loading configuration dirs from /etc/xdg/lightdm/lightdm.conf.d
+[+0.00s] DEBUG: Loading configuration from /etc/lightdm/lightdm.conf.d/50-kf-autologin.conf
+[+0.00s] DEBUG: Loading configuration from /etc/lightdm/lightdm.conf
+[+0.00s] DEBUG: Registered seat module local
+[+0.00s] DEBUG: Registered seat module xremote
+[+0.00s] DEBUG: Using D-Bus name org.freedesktop.DisplayManager
+[+0.00s] DEBUG: Using cross-namespace EXTERNAL authentication (this will deadlock if server is GDBus < 2.73.3)
+[+0.00s] DEBUG: _g_io_module_get_default: Found default implementation local (GLocalVfs) for ‘gio-vfs’
+[+0.01s] DEBUG: Monitoring logind for seats
+[+0.01s] DEBUG: New seat added from logind: seat0
+[+0.01s] DEBUG: Seat seat0: Loading properties from config section Seat:*
+[+0.01s] DEBUG: Seat seat0 has property CanMultiSession=no
+[+0.01s] DEBUG: Seat seat0: Starting
+[+0.01s] DEBUG: Seat seat0: Creating user session
+[+0.01s] DEBUG: Loading users from org.freedesktop.Accounts
+[+0.01s] DEBUG: User /org/freedesktop/Accounts/User1000 added
+[+0.10s] DEBUG: Seat seat0: Creating display server of type x
+[+0.10s] DEBUG: Using VT 7
+[+0.10s] DEBUG: Seat seat0: Starting local X display on VT 7
+[+0.10s] DEBUG: XServer 0: Logging to /var/log/lightdm/x-0.log
+[+0.10s] DEBUG: XServer 0: Writing X server authority to /var/run/lightdm/root/:0
+[+0.10s] DEBUG: XServer 0: Launching X Server
+[+0.10s] DEBUG: Launching process 956: /usr/bin/X -core :0 -seat seat0 -auth /var/run/lightdm/root/:0 -nolisten tcp vt7 -novtswitch
+[+0.10s] DEBUG: XServer 0: Waiting for ready signal from X server :0
+[+0.10s] DEBUG: Acquired bus name org.freedesktop.DisplayManager
+[+0.10s] DEBUG: Registering seat with bus path /org/freedesktop/DisplayManager/Seat0
+[+4.15s] DEBUG: Process 956 terminated with signal 6
+[+4.15s] DEBUG: XServer 0: X server stopped
+[+4.15s] DEBUG: Releasing VT 7
+[+4.15s] DEBUG: XServer 0: Removing X server authority /var/run/lightdm/root/:0
+[+4.15s] DEBUG: Seat seat0: Display server stopped
+[+4.15s] DEBUG: Seat seat0: Stopping session
+[+4.15s] DEBUG: Seat seat0: Session stopped
+[+4.15s] DEBUG: Seat seat0: Stopping display server, no sessions require it
+[+4.15s] DEBUG: Seat seat0: Active display server stopped, starting greeter
+[+4.15s] DEBUG: Seat seat0: Creating greeter session
+[+4.15s] DEBUG: Seat seat0: Creating display server of type x
+[+4.15s] DEBUG: Using VT 7
+[+4.15s] DEBUG: Seat seat0: Starting local X display on VT 7
+[+4.15s] DEBUG: XServer 0: Logging to /var/log/lightdm/x-0.log
+[+4.15s] DEBUG: XServer 0: Writing X server authority to /var/run/lightdm/root/:0
+[+4.15s] DEBUG: XServer 0: Launching X Server
+[+4.15s] DEBUG: Launching process 1184: /usr/bin/X -core :0 -seat seat0 -auth /var/run/lightdm/root/:0 -nolisten tcp vt7 -novtswitch
+[+4.15s] DEBUG: XServer 0: Waiting for ready signal from X server :0
+[+5.66s] DEBUG: Process 1184 terminated with signal 6
+[+5.66s] DEBUG: XServer 0: X server stopped
+[+5.66s] DEBUG: Releasing VT 7
+[+5.66s] DEBUG: XServer 0: Removing X server authority /var/run/lightdm/root/:0
+[+5.66s] DEBUG: Seat seat0: Display server stopped
+[+5.66s] DEBUG: Seat seat0: Stopping session
+[+5.66s] DEBUG: Seat seat0: Session stopped
+[+5.66s] DEBUG: Seat seat0: Stopping display server, no sessions require it
+[+5.66s] DEBUG: Seat seat0: Stopping; greeter display server failed to start
+[+5.66s] DEBUG: Seat seat0: Stopping
+[+5.66s] DEBUG: Seat seat0: Stopped
+[+5.66s] DEBUG: Required seat has stopped
+[+5.66s] DEBUG: Stopping display manager
+[+5.66s] DEBUG: Display manager stopped
+[+5.66s] DEBUG: Stopping daemon
+[+5.66s] DEBUG: Exiting with return value 1
+[+0.00s] DEBUG: Logging to /var/log/lightdm/lightdm.log
+[+0.00s] DEBUG: Starting Light Display Manager 1.30.0, UID=0 PID=1199
+[+0.00s] DEBUG: Loading configuration dirs from /usr/share/lightdm/lightdm.conf.d
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-disable-guest.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-disable-log-backup.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-greeter-wrapper.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-guest-wrapper.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-xserver-command.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/60-lightdm-gtk-greeter.conf
+[+0.00s] DEBUG: Loading configuration dirs from /usr/local/share/lightdm/lightdm.conf.d
+[+0.00s] DEBUG: Loading configuration dirs from /etc/xdg/lightdm/lightdm.conf.d
+[+0.00s] DEBUG: Loading configuration from /etc/lightdm/lightdm.conf.d/50-kf-autologin.conf
+[+0.00s] DEBUG: Loading configuration from /etc/lightdm/lightdm.conf
+[+0.00s] DEBUG: Registered seat module local
+[+0.00s] DEBUG: Registered seat module xremote
+[+0.00s] DEBUG: Using D-Bus name org.freedesktop.DisplayManager
+[+0.00s] DEBUG: Using cross-namespace EXTERNAL authentication (this will deadlock if server is GDBus < 2.73.3)
+[+0.00s] DEBUG: _g_io_module_get_default: Found default implementation local (GLocalVfs) for ‘gio-vfs’
+[+0.00s] DEBUG: Monitoring logind for seats
+[+0.00s] DEBUG: New seat added from logind: seat0
+[+0.00s] DEBUG: Seat seat0: Loading properties from config section Seat:*
+[+0.00s] DEBUG: Seat seat0 has property CanMultiSession=no
+[+0.00s] DEBUG: Seat seat0: Starting
+[+0.00s] DEBUG: Seat seat0: Creating user session
+[+0.01s] DEBUG: Loading users from org.freedesktop.Accounts
+[+0.01s] DEBUG: User /org/freedesktop/Accounts/User1000 added
+[+0.01s] DEBUG: Seat seat0: Creating display server of type x
+[+0.01s] DEBUG: Using VT 7
+[+0.01s] DEBUG: Seat seat0: Starting local X display on VT 7
+[+0.01s] DEBUG: XServer 0: Logging to /var/log/lightdm/x-0.log
+[+0.01s] DEBUG: XServer 0: Writing X server authority to /var/run/lightdm/root/:0
+[+0.01s] DEBUG: XServer 0: Launching X Server
+[+0.01s] DEBUG: Launching process 1209: /usr/bin/X -core :0 -seat seat0 -auth /var/run/lightdm/root/:0 -nolisten tcp vt7 -novtswitch
+[+0.01s] DEBUG: XServer 0: Waiting for ready signal from X server :0
+[+0.01s] DEBUG: Acquired bus name org.freedesktop.DisplayManager
+[+0.01s] DEBUG: Registering seat with bus path /org/freedesktop/DisplayManager/Seat0
+[+0.76s] DEBUG: Process 1209 terminated with signal 6
+[+0.76s] DEBUG: XServer 0: X server stopped
+[+0.76s] DEBUG: Releasing VT 7
+[+0.76s] DEBUG: XServer 0: Removing X server authority /var/run/lightdm/root/:0
+[+0.76s] DEBUG: Seat seat0: Display server stopped
+[+0.76s] DEBUG: Seat seat0: Stopping session
+[+0.76s] DEBUG: Seat seat0: Session stopped
+[+0.76s] DEBUG: Seat seat0: Stopping display server, no sessions require it
+[+0.76s] DEBUG: Seat seat0: Active display server stopped, starting greeter
+[+0.76s] DEBUG: Seat seat0: Creating greeter session
+[+0.76s] DEBUG: Seat seat0: Creating display server of type x
+[+0.76s] DEBUG: Using VT 7
+[+0.76s] DEBUG: Seat seat0: Starting local X display on VT 7
+[+0.76s] DEBUG: XServer 0: Logging to /var/log/lightdm/x-0.log
+[+0.76s] DEBUG: XServer 0: Writing X server authority to /var/run/lightdm/root/:0
+[+0.76s] DEBUG: XServer 0: Launching X Server
+[+0.76s] DEBUG: Launching process 1213: /usr/bin/X -core :0 -seat seat0 -auth /var/run/lightdm/root/:0 -nolisten tcp vt7 -novtswitch
+[+0.76s] DEBUG: XServer 0: Waiting for ready signal from X server :0
+[+1.31s] DEBUG: Process 1213 terminated with signal 6
+[+1.32s] DEBUG: XServer 0: X server stopped
+[+1.32s] DEBUG: Releasing VT 7
+[+1.32s] DEBUG: XServer 0: Removing X server authority /var/run/lightdm/root/:0
+[+1.32s] DEBUG: Seat seat0: Display server stopped
+[+1.32s] DEBUG: Seat seat0: Stopping session
+[+1.32s] DEBUG: Seat seat0: Session stopped
+[+1.32s] DEBUG: Seat seat0: Stopping display server, no sessions require it
+[+1.32s] DEBUG: Seat seat0: Stopping; greeter display server failed to start
+[+1.32s] DEBUG: Seat seat0: Stopping
+[+1.32s] DEBUG: Seat seat0: Stopped
+[+1.32s] DEBUG: Required seat has stopped
+[+1.32s] DEBUG: Stopping display manager
+[+1.32s] DEBUG: Display manager stopped
+[+1.32s] DEBUG: Stopping daemon
+[+1.32s] DEBUG: Exiting with return value 1
+[+0.00s] DEBUG: Logging to /var/log/lightdm/lightdm.log
+[+0.00s] DEBUG: Starting Light Display Manager 1.30.0, UID=0 PID=1219
+[+0.00s] DEBUG: Loading configuration dirs from /usr/share/lightdm/lightdm.conf.d
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-disable-guest.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-disable-log-backup.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-greeter-wrapper.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-guest-wrapper.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-xserver-command.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/60-lightdm-gtk-greeter.conf
+[+0.00s] DEBUG: Loading configuration dirs from /usr/local/share/lightdm/lightdm.conf.d
+[+0.00s] DEBUG: Loading configuration dirs from /etc/xdg/lightdm/lightdm.conf.d
+[+0.00s] DEBUG: Loading configuration from /etc/lightdm/lightdm.conf.d/50-kf-autologin.conf
+[+0.00s] DEBUG: Loading configuration from /etc/lightdm/lightdm.conf
+[+0.00s] DEBUG: Registered seat module local
+[+0.00s] DEBUG: Registered seat module xremote
+[+0.00s] DEBUG: Using D-Bus name org.freedesktop.DisplayManager
+[+0.00s] DEBUG: Using cross-namespace EXTERNAL authentication (this will deadlock if server is GDBus < 2.73.3)
+[+0.00s] DEBUG: _g_io_module_get_default: Found default implementation local (GLocalVfs) for ‘gio-vfs’
+[+0.00s] DEBUG: Monitoring logind for seats
+[+0.00s] DEBUG: New seat added from logind: seat0
+[+0.00s] DEBUG: Seat seat0: Loading properties from config section Seat:*
+[+0.00s] DEBUG: Seat seat0 has property CanMultiSession=no
+[+0.00s] DEBUG: Seat seat0: Starting
+[+0.00s] DEBUG: Seat seat0: Creating user session
+[+0.01s] DEBUG: Loading users from org.freedesktop.Accounts
+[+0.01s] DEBUG: User /org/freedesktop/Accounts/User1000 added
+[+0.01s] DEBUG: Seat seat0: Creating display server of type x
+[+0.01s] DEBUG: Using VT 7
+[+0.01s] DEBUG: Seat seat0: Starting local X display on VT 7
+[+0.01s] DEBUG: XServer 0: Logging to /var/log/lightdm/x-0.log
+[+0.01s] DEBUG: XServer 0: Writing X server authority to /var/run/lightdm/root/:0
+[+0.01s] DEBUG: XServer 0: Launching X Server
+[+0.02s] DEBUG: Launching process 1230: /usr/bin/X -core :0 -seat seat0 -auth /var/run/lightdm/root/:0 -nolisten tcp vt7 -novtswitch
+[+0.02s] DEBUG: XServer 0: Waiting for ready signal from X server :0
+[+0.02s] DEBUG: Acquired bus name org.freedesktop.DisplayManager
+[+0.02s] DEBUG: Registering seat with bus path /org/freedesktop/DisplayManager/Seat0
+[+0.55s] DEBUG: Process 1230 terminated with signal 6
+[+0.55s] DEBUG: XServer 0: X server stopped
+[+0.55s] DEBUG: Releasing VT 7
+[+0.55s] DEBUG: XServer 0: Removing X server authority /var/run/lightdm/root/:0
+[+0.55s] DEBUG: Seat seat0: Display server stopped
+[+0.55s] DEBUG: Seat seat0: Stopping session
+[+0.55s] DEBUG: Seat seat0: Session stopped
+[+0.55s] DEBUG: Seat seat0: Stopping display server, no sessions require it
+[+0.55s] DEBUG: Seat seat0: Active display server stopped, starting greeter
+[+0.55s] DEBUG: Seat seat0: Creating greeter session
+[+0.55s] DEBUG: Seat seat0: Creating display server of type x
+[+0.55s] DEBUG: Using VT 7
+[+0.55s] DEBUG: Seat seat0: Starting local X display on VT 7
+[+0.55s] DEBUG: XServer 0: Logging to /var/log/lightdm/x-0.log
+[+0.55s] DEBUG: XServer 0: Writing X server authority to /var/run/lightdm/root/:0
+[+0.55s] DEBUG: XServer 0: Launching X Server
+[+0.55s] DEBUG: Launching process 1233: /usr/bin/X -core :0 -seat seat0 -auth /var/run/lightdm/root/:0 -nolisten tcp vt7 -novtswitch
+[+0.55s] DEBUG: XServer 0: Waiting for ready signal from X server :0
+[+0.85s] DEBUG: Process 1233 terminated with signal 6
+[+0.85s] DEBUG: XServer 0: X server stopped
+[+0.85s] DEBUG: Releasing VT 7
+[+0.85s] DEBUG: XServer 0: Removing X server authority /var/run/lightdm/root/:0
+[+0.85s] DEBUG: Seat seat0: Display server stopped
+[+0.85s] DEBUG: Seat seat0: Stopping session
+[+0.85s] DEBUG: Seat seat0: Session stopped
+[+0.85s] DEBUG: Seat seat0: Stopping display server, no sessions require it
+[+0.85s] DEBUG: Seat seat0: Stopping; greeter display server failed to start
+[+0.85s] DEBUG: Seat seat0: Stopping
+[+0.85s] DEBUG: Seat seat0: Stopped
+[+0.85s] DEBUG: Required seat has stopped
+[+0.85s] DEBUG: Stopping display manager
+[+0.85s] DEBUG: Display manager stopped
+[+0.85s] DEBUG: Stopping daemon
+[+0.85s] DEBUG: Exiting with return value 1
+[+0.00s] DEBUG: Logging to /var/log/lightdm/lightdm.log
+[+0.00s] DEBUG: Starting Light Display Manager 1.30.0, UID=0 PID=1242
+[+0.00s] DEBUG: Loading configuration dirs from /usr/share/lightdm/lightdm.conf.d
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-disable-guest.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-disable-log-backup.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-greeter-wrapper.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-guest-wrapper.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-xserver-command.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/60-lightdm-gtk-greeter.conf
+[+0.00s] DEBUG: Loading configuration dirs from /usr/local/share/lightdm/lightdm.conf.d
+[+0.00s] DEBUG: Loading configuration dirs from /etc/xdg/lightdm/lightdm.conf.d
+[+0.00s] DEBUG: Loading configuration from /etc/lightdm/lightdm.conf.d/50-kf-autologin.conf
+[+0.00s] DEBUG: Loading configuration from /etc/lightdm/lightdm.conf
+[+0.00s] DEBUG: Registered seat module local
+[+0.00s] DEBUG: Registered seat module xremote
+[+0.00s] DEBUG: Using D-Bus name org.freedesktop.DisplayManager
+[+0.00s] DEBUG: Using cross-namespace EXTERNAL authentication (this will deadlock if server is GDBus < 2.73.3)
+[+0.00s] DEBUG: _g_io_module_get_default: Found default implementation local (GLocalVfs) for ‘gio-vfs’
+[+0.00s] DEBUG: Monitoring logind for seats
+[+0.00s] DEBUG: New seat added from logind: seat0
+[+0.00s] DEBUG: Seat seat0: Loading properties from config section Seat:*
+[+0.00s] DEBUG: Seat seat0 has property CanMultiSession=no
+[+0.00s] DEBUG: Seat seat0: Starting
+[+0.00s] DEBUG: Seat seat0: Creating user session
+[+0.00s] DEBUG: Loading users from org.freedesktop.Accounts
+[+0.00s] DEBUG: User /org/freedesktop/Accounts/User1000 added
+[+0.01s] DEBUG: Seat seat0: Creating display server of type x
+[+0.01s] DEBUG: Using VT 7
+[+0.01s] DEBUG: Seat seat0: Starting local X display on VT 7
+[+0.01s] DEBUG: XServer 0: Logging to /var/log/lightdm/x-0.log
+[+0.01s] DEBUG: XServer 0: Writing X server authority to /var/run/lightdm/root/:0
+[+0.01s] DEBUG: XServer 0: Launching X Server
+[+0.01s] DEBUG: Launching process 1253: /usr/bin/X -core :0 -seat seat0 -auth /var/run/lightdm/root/:0 -nolisten tcp vt7 -novtswitch
+[+0.01s] DEBUG: XServer 0: Waiting for ready signal from X server :0
+[+0.01s] DEBUG: Acquired bus name org.freedesktop.DisplayManager
+[+0.01s] DEBUG: Registering seat with bus path /org/freedesktop/DisplayManager/Seat0
+[+0.32s] DEBUG: Process 1253 terminated with signal 6
+[+0.32s] DEBUG: XServer 0: X server stopped
+[+0.32s] DEBUG: Releasing VT 7
+[+0.32s] DEBUG: XServer 0: Removing X server authority /var/run/lightdm/root/:0
+[+0.32s] DEBUG: Seat seat0: Display server stopped
+[+0.32s] DEBUG: Seat seat0: Stopping session
+[+0.32s] DEBUG: Seat seat0: Session stopped
+[+0.32s] DEBUG: Seat seat0: Stopping display server, no sessions require it
+[+0.32s] DEBUG: Seat seat0: Active display server stopped, starting greeter
+[+0.32s] DEBUG: Seat seat0: Creating greeter session
+[+0.32s] DEBUG: Seat seat0: Creating display server of type x
+[+0.32s] DEBUG: Using VT 7
+[+0.32s] DEBUG: Seat seat0: Starting local X display on VT 7
+[+0.32s] DEBUG: XServer 0: Logging to /var/log/lightdm/x-0.log
+[+0.32s] DEBUG: XServer 0: Writing X server authority to /var/run/lightdm/root/:0
+[+0.32s] DEBUG: XServer 0: Launching X Server
+[+0.32s] DEBUG: Launching process 1255: /usr/bin/X -core :0 -seat seat0 -auth /var/run/lightdm/root/:0 -nolisten tcp vt7 -novtswitch
+[+0.32s] DEBUG: XServer 0: Waiting for ready signal from X server :0
+[+0.61s] DEBUG: Process 1255 terminated with signal 6
+[+0.61s] DEBUG: XServer 0: X server stopped
+[+0.61s] DEBUG: Releasing VT 7
+[+0.61s] DEBUG: XServer 0: Removing X server authority /var/run/lightdm/root/:0
+[+0.61s] DEBUG: Seat seat0: Display server stopped
+[+0.61s] DEBUG: Seat seat0: Stopping session
+[+0.61s] DEBUG: Seat seat0: Session stopped
+[+0.61s] DEBUG: Seat seat0: Stopping display server, no sessions require it
+[+0.61s] DEBUG: Seat seat0: Stopping; greeter display server failed to start
+[+0.61s] DEBUG: Seat seat0: Stopping
+[+0.61s] DEBUG: Seat seat0: Stopped
+[+0.61s] DEBUG: Required seat has stopped
+[+0.61s] DEBUG: Stopping display manager
+[+0.61s] DEBUG: Display manager stopped
+[+0.61s] DEBUG: Stopping daemon
+[+0.61s] DEBUG: Exiting with return value 1
+[+0.00s] DEBUG: Logging to /var/log/lightdm/lightdm.log
+[+0.00s] DEBUG: Starting Light Display Manager 1.30.0, UID=0 PID=1261
+[+0.00s] DEBUG: Loading configuration dirs from /usr/share/lightdm/lightdm.conf.d
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-disable-guest.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-disable-log-backup.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-greeter-wrapper.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-guest-wrapper.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-xserver-command.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/60-lightdm-gtk-greeter.conf
+[+0.00s] DEBUG: Loading configuration dirs from /usr/local/share/lightdm/lightdm.conf.d
+[+0.00s] DEBUG: Loading configuration dirs from /etc/xdg/lightdm/lightdm.conf.d
+[+0.00s] DEBUG: Loading configuration from /etc/lightdm/lightdm.conf.d/50-kf-autologin.conf
+[+0.00s] DEBUG: Loading configuration from /etc/lightdm/lightdm.conf
+[+0.00s] DEBUG: Registered seat module local
+[+0.00s] DEBUG: Registered seat module xremote
+[+0.00s] DEBUG: Using D-Bus name org.freedesktop.DisplayManager
+[+0.00s] DEBUG: Using cross-namespace EXTERNAL authentication (this will deadlock if server is GDBus < 2.73.3)
+[+0.00s] DEBUG: _g_io_module_get_default: Found default implementation local (GLocalVfs) for ‘gio-vfs’
+[+0.00s] DEBUG: Monitoring logind for seats
+[+0.00s] DEBUG: New seat added from logind: seat0
+[+0.00s] DEBUG: Seat seat0: Loading properties from config section Seat:*
+[+0.00s] DEBUG: Seat seat0 has property CanMultiSession=no
+[+0.00s] DEBUG: Seat seat0: Starting
+[+0.00s] DEBUG: Seat seat0: Creating user session
+[+0.01s] DEBUG: Loading users from org.freedesktop.Accounts
+[+0.01s] DEBUG: User /org/freedesktop/Accounts/User1000 added
+[+0.01s] DEBUG: Seat seat0: Creating display server of type x
+[+0.01s] DEBUG: Using VT 7
+[+0.01s] DEBUG: Seat seat0: Starting local X display on VT 7
+[+0.01s] DEBUG: XServer 0: Logging to /var/log/lightdm/x-0.log
+[+0.01s] DEBUG: XServer 0: Writing X server authority to /var/run/lightdm/root/:0
+[+0.01s] DEBUG: XServer 0: Launching X Server
+[+0.01s] DEBUG: Launching process 1272: /usr/bin/X -core :0 -seat seat0 -auth /var/run/lightdm/root/:0 -nolisten tcp vt7 -novtswitch
+[+0.01s] DEBUG: XServer 0: Waiting for ready signal from X server :0
+[+0.01s] DEBUG: Acquired bus name org.freedesktop.DisplayManager
+[+0.01s] DEBUG: Registering seat with bus path /org/freedesktop/DisplayManager/Seat0
+[+0.33s] DEBUG: Process 1272 terminated with signal 6
+[+0.33s] DEBUG: XServer 0: X server stopped
+[+0.33s] DEBUG: Releasing VT 7
+[+0.33s] DEBUG: XServer 0: Removing X server authority /var/run/lightdm/root/:0
+[+0.33s] DEBUG: Seat seat0: Display server stopped
+[+0.33s] DEBUG: Seat seat0: Stopping session
+[+0.33s] DEBUG: Seat seat0: Session stopped
+[+0.33s] DEBUG: Seat seat0: Stopping display server, no sessions require it
+[+0.33s] DEBUG: Seat seat0: Active display server stopped, starting greeter
+[+0.33s] DEBUG: Seat seat0: Creating greeter session
+[+0.33s] DEBUG: Seat seat0: Creating display server of type x
+[+0.33s] DEBUG: Using VT 7
+[+0.33s] DEBUG: Seat seat0: Starting local X display on VT 7
+[+0.33s] DEBUG: XServer 0: Logging to /var/log/lightdm/x-0.log
+[+0.33s] DEBUG: XServer 0: Writing X server authority to /var/run/lightdm/root/:0
+[+0.33s] DEBUG: XServer 0: Launching X Server
+[+0.33s] DEBUG: Launching process 1274: /usr/bin/X -core :0 -seat seat0 -auth /var/run/lightdm/root/:0 -nolisten tcp vt7 -novtswitch
+[+0.33s] DEBUG: XServer 0: Waiting for ready signal from X server :0
+[+0.68s] DEBUG: Process 1274 terminated with signal 6
+[+0.68s] DEBUG: XServer 0: X server stopped
+[+0.68s] DEBUG: Releasing VT 7
+[+0.68s] DEBUG: XServer 0: Removing X server authority /var/run/lightdm/root/:0
+[+0.68s] DEBUG: Seat seat0: Display server stopped
+[+0.68s] DEBUG: Seat seat0: Stopping session
+[+0.68s] DEBUG: Seat seat0: Session stopped
+[+0.68s] DEBUG: Seat seat0: Stopping display server, no sessions require it
+[+0.68s] DEBUG: Seat seat0: Stopping; greeter display server failed to start
+[+0.68s] DEBUG: Seat seat0: Stopping
+[+0.68s] DEBUG: Seat seat0: Stopped
+[+0.68s] DEBUG: Required seat has stopped
+[+0.68s] DEBUG: Stopping display manager
+[+0.68s] DEBUG: Display manager stopped
+[+0.68s] DEBUG: Stopping daemon
+[+0.68s] DEBUG: Exiting with return value 1
+[+0.00s] DEBUG: Logging to /var/log/lightdm/lightdm.log
+[+0.00s] DEBUG: Starting Light Display Manager 1.30.0, UID=0 PID=1282
+[+0.00s] DEBUG: Loading configuration dirs from /usr/share/lightdm/lightdm.conf.d
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-disable-guest.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-disable-log-backup.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-greeter-wrapper.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-guest-wrapper.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-xserver-command.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/60-lightdm-gtk-greeter.conf
+[+0.00s] DEBUG: Loading configuration dirs from /usr/local/share/lightdm/lightdm.conf.d
+[+0.00s] DEBUG: Loading configuration dirs from /etc/xdg/lightdm/lightdm.conf.d
+[+0.00s] DEBUG: Loading configuration from /etc/lightdm/lightdm.conf.d/50-kf-autologin.conf
+[+0.00s] DEBUG: Loading configuration from /etc/lightdm/lightdm.conf
+[+0.00s] DEBUG: Registered seat module local
+[+0.00s] DEBUG: Registered seat module xremote
+[+0.00s] DEBUG: Using D-Bus name org.freedesktop.DisplayManager
+[+0.00s] DEBUG: Using cross-namespace EXTERNAL authentication (this will deadlock if server is GDBus < 2.73.3)
+[+0.00s] DEBUG: _g_io_module_get_default: Found default implementation local (GLocalVfs) for ‘gio-vfs’
+[+0.00s] DEBUG: Monitoring logind for seats
+[+0.00s] DEBUG: New seat added from logind: seat0
+[+0.00s] DEBUG: Seat seat0: Loading properties from config section Seat:*
+[+0.00s] DEBUG: Seat seat0 has property CanMultiSession=no
+[+0.00s] DEBUG: Seat seat0: Starting
+[+0.00s] DEBUG: Seat seat0: Creating user session
+[+0.00s] DEBUG: Loading users from org.freedesktop.Accounts
+[+0.00s] DEBUG: User /org/freedesktop/Accounts/User1000 added
+[+0.01s] DEBUG: Seat seat0: Creating display server of type x
+[+0.01s] DEBUG: Using VT 7
+[+0.01s] DEBUG: Seat seat0: Starting local X display on VT 7
+[+0.01s] DEBUG: XServer 0: Logging to /var/log/lightdm/x-0.log
+[+0.01s] DEBUG: XServer 0: Writing X server authority to /var/run/lightdm/root/:0
+[+0.01s] DEBUG: XServer 0: Launching X Server
+[+0.01s] DEBUG: Launching process 1293: /usr/bin/X -core :0 -seat seat0 -auth /var/run/lightdm/root/:0 -nolisten tcp vt7 -novtswitch
+[+0.01s] DEBUG: XServer 0: Waiting for ready signal from X server :0
+[+0.01s] DEBUG: Acquired bus name org.freedesktop.DisplayManager
+[+0.01s] DEBUG: Registering seat with bus path /org/freedesktop/DisplayManager/Seat0
+[+0.35s] DEBUG: Process 1293 terminated with signal 6
+[+0.35s] DEBUG: XServer 0: X server stopped
+[+0.35s] DEBUG: Releasing VT 7
+[+0.35s] DEBUG: XServer 0: Removing X server authority /var/run/lightdm/root/:0
+[+0.35s] DEBUG: Seat seat0: Display server stopped
+[+0.35s] DEBUG: Seat seat0: Stopping session
+[+0.35s] DEBUG: Seat seat0: Session stopped
+[+0.35s] DEBUG: Seat seat0: Stopping display server, no sessions require it
+[+0.35s] DEBUG: Seat seat0: Active display server stopped, starting greeter
+[+0.35s] DEBUG: Seat seat0: Creating greeter session
+[+0.35s] DEBUG: Seat seat0: Creating display server of type x
+[+0.35s] DEBUG: Using VT 7
+[+0.35s] DEBUG: Seat seat0: Starting local X display on VT 7
+[+0.35s] DEBUG: XServer 0: Logging to /var/log/lightdm/x-0.log
+[+0.35s] DEBUG: XServer 0: Writing X server authority to /var/run/lightdm/root/:0
+[+0.35s] DEBUG: XServer 0: Launching X Server
+[+0.35s] DEBUG: Launching process 1295: /usr/bin/X -core :0 -seat seat0 -auth /var/run/lightdm/root/:0 -nolisten tcp vt7 -novtswitch
+[+0.35s] DEBUG: XServer 0: Waiting for ready signal from X server :0
+[+0.69s] DEBUG: Process 1295 terminated with signal 6
+[+0.69s] DEBUG: XServer 0: X server stopped
+[+0.69s] DEBUG: Releasing VT 7
+[+0.69s] DEBUG: XServer 0: Removing X server authority /var/run/lightdm/root/:0
+[+0.69s] DEBUG: Seat seat0: Display server stopped
+[+0.69s] DEBUG: Seat seat0: Stopping session
+[+0.69s] DEBUG: Seat seat0: Session stopped
+[+0.69s] DEBUG: Seat seat0: Stopping display server, no sessions require it
+[+0.69s] DEBUG: Seat seat0: Stopping; greeter display server failed to start
+[+0.69s] DEBUG: Seat seat0: Stopping
+[+0.69s] DEBUG: Seat seat0: Stopped
+[+0.69s] DEBUG: Required seat has stopped
+[+0.69s] DEBUG: Stopping display manager
+[+0.69s] DEBUG: Display manager stopped
+[+0.69s] DEBUG: Stopping daemon
+[+0.69s] DEBUG: Exiting with return value 1
+[+0.00s] DEBUG: Logging to /var/log/lightdm/lightdm.log
+[+0.00s] DEBUG: Starting Light Display Manager 1.30.0, UID=0 PID=1301
+[+0.00s] DEBUG: Loading configuration dirs from /usr/share/lightdm/lightdm.conf.d
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-disable-guest.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-disable-log-backup.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-greeter-wrapper.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-guest-wrapper.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-xserver-command.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/60-lightdm-gtk-greeter.conf
+[+0.00s] DEBUG: Loading configuration dirs from /usr/local/share/lightdm/lightdm.conf.d
+[+0.00s] DEBUG: Loading configuration dirs from /etc/xdg/lightdm/lightdm.conf.d
+[+0.00s] DEBUG: Loading configuration from /etc/lightdm/lightdm.conf.d/50-kf-autologin.conf
+[+0.00s] DEBUG: Loading configuration from /etc/lightdm/lightdm.conf
+[+0.00s] DEBUG: Registered seat module local
+[+0.00s] DEBUG: Registered seat module xremote
+[+0.00s] DEBUG: Using D-Bus name org.freedesktop.DisplayManager
+[+0.00s] DEBUG: Using cross-namespace EXTERNAL authentication (this will deadlock if server is GDBus < 2.73.3)
+[+0.00s] DEBUG: _g_io_module_get_default: Found default implementation local (GLocalVfs) for ‘gio-vfs’
+[+0.00s] DEBUG: Monitoring logind for seats
+[+0.00s] DEBUG: New seat added from logind: seat0
+[+0.00s] DEBUG: Seat seat0: Loading properties from config section Seat:*
+[+0.00s] DEBUG: Seat seat0 has property CanMultiSession=no
+[+0.00s] DEBUG: Seat seat0: Starting
+[+0.00s] DEBUG: Seat seat0: Creating user session
+[+0.01s] DEBUG: Loading users from org.freedesktop.Accounts
+[+0.01s] DEBUG: User /org/freedesktop/Accounts/User1000 added
+[+0.01s] DEBUG: Seat seat0: Creating display server of type x
+[+0.01s] DEBUG: Using VT 7
+[+0.01s] DEBUG: Seat seat0: Starting local X display on VT 7
+[+0.01s] DEBUG: XServer 0: Logging to /var/log/lightdm/x-0.log
+[+0.01s] DEBUG: XServer 0: Writing X server authority to /var/run/lightdm/root/:0
+[+0.01s] DEBUG: XServer 0: Launching X Server
+[+0.01s] DEBUG: Launching process 1312: /usr/bin/X -core :0 -seat seat0 -auth /var/run/lightdm/root/:0 -nolisten tcp vt7 -novtswitch
+[+0.01s] DEBUG: XServer 0: Waiting for ready signal from X server :0
+[+0.01s] DEBUG: Acquired bus name org.freedesktop.DisplayManager
+[+0.01s] DEBUG: Registering seat with bus path /org/freedesktop/DisplayManager/Seat0
+[+0.34s] DEBUG: Process 1312 terminated with signal 6
+[+0.34s] DEBUG: XServer 0: X server stopped
+[+0.34s] DEBUG: Releasing VT 7
+[+0.34s] DEBUG: XServer 0: Removing X server authority /var/run/lightdm/root/:0
+[+0.34s] DEBUG: Seat seat0: Display server stopped
+[+0.34s] DEBUG: Seat seat0: Stopping session
+[+0.34s] DEBUG: Seat seat0: Session stopped
+[+0.34s] DEBUG: Seat seat0: Stopping display server, no sessions require it
+[+0.34s] DEBUG: Seat seat0: Active display server stopped, starting greeter
+[+0.34s] DEBUG: Seat seat0: Creating greeter session
+[+0.34s] DEBUG: Seat seat0: Creating display server of type x
+[+0.34s] DEBUG: Using VT 7
+[+0.34s] DEBUG: Seat seat0: Starting local X display on VT 7
+[+0.34s] DEBUG: XServer 0: Logging to /var/log/lightdm/x-0.log
+[+0.34s] DEBUG: XServer 0: Writing X server authority to /var/run/lightdm/root/:0
+[+0.34s] DEBUG: XServer 0: Launching X Server
+[+0.34s] DEBUG: Launching process 1314: /usr/bin/X -core :0 -seat seat0 -auth /var/run/lightdm/root/:0 -nolisten tcp vt7 -novtswitch
+[+0.34s] DEBUG: XServer 0: Waiting for ready signal from X server :0
+[+0.63s] DEBUG: Process 1314 terminated with signal 6
+[+0.63s] DEBUG: XServer 0: X server stopped
+[+0.63s] DEBUG: Releasing VT 7
+[+0.63s] DEBUG: XServer 0: Removing X server authority /var/run/lightdm/root/:0
+[+0.63s] DEBUG: Seat seat0: Display server stopped
+[+0.63s] DEBUG: Seat seat0: Stopping session
+[+0.63s] DEBUG: Seat seat0: Session stopped
+[+0.63s] DEBUG: Seat seat0: Stopping display server, no sessions require it
+[+0.63s] DEBUG: Seat seat0: Stopping; greeter display server failed to start
+[+0.63s] DEBUG: Seat seat0: Stopping
+[+0.63s] DEBUG: Seat seat0: Stopped
+[+0.63s] DEBUG: Required seat has stopped
+[+0.63s] DEBUG: Stopping display manager
+[+0.63s] DEBUG: Display manager stopped
+[+0.63s] DEBUG: Stopping daemon
+[+0.63s] DEBUG: Exiting with return value 1
+[+0.00s] DEBUG: Logging to /var/log/lightdm/lightdm.log
+[+0.00s] DEBUG: Starting Light Display Manager 1.30.0, UID=0 PID=1322
+[+0.00s] DEBUG: Loading configuration dirs from /usr/share/lightdm/lightdm.conf.d
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-disable-guest.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-disable-log-backup.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-greeter-wrapper.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-guest-wrapper.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-xserver-command.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/60-lightdm-gtk-greeter.conf
+[+0.00s] DEBUG: Loading configuration dirs from /usr/local/share/lightdm/lightdm.conf.d
+[+0.00s] DEBUG: Loading configuration dirs from /etc/xdg/lightdm/lightdm.conf.d
+[+0.00s] DEBUG: Loading configuration from /etc/lightdm/lightdm.conf.d/50-kf-autologin.conf
+[+0.00s] DEBUG: Loading configuration from /etc/lightdm/lightdm.conf
+[+0.00s] DEBUG: Registered seat module local
+[+0.00s] DEBUG: Registered seat module xremote
+[+0.00s] DEBUG: Using D-Bus name org.freedesktop.DisplayManager
+[+0.00s] DEBUG: Using cross-namespace EXTERNAL authentication (this will deadlock if server is GDBus < 2.73.3)
+[+0.00s] DEBUG: _g_io_module_get_default: Found default implementation local (GLocalVfs) for ‘gio-vfs’
+[+0.00s] DEBUG: Monitoring logind for seats
+[+0.00s] DEBUG: New seat added from logind: seat0
+[+0.00s] DEBUG: Seat seat0: Loading properties from config section Seat:*
+[+0.00s] DEBUG: Seat seat0 has property CanMultiSession=no
+[+0.00s] DEBUG: Seat seat0: Starting
+[+0.00s] DEBUG: Seat seat0: Creating user session
+[+0.00s] DEBUG: Loading users from org.freedesktop.Accounts
+[+0.00s] DEBUG: User /org/freedesktop/Accounts/User1000 added
+[+0.01s] DEBUG: Seat seat0: Creating display server of type x
+[+0.01s] DEBUG: Using VT 7
+[+0.01s] DEBUG: Seat seat0: Starting local X display on VT 7
+[+0.01s] DEBUG: XServer 0: Logging to /var/log/lightdm/x-0.log
+[+0.01s] DEBUG: XServer 0: Writing X server authority to /var/run/lightdm/root/:0
+[+0.01s] DEBUG: XServer 0: Launching X Server
+[+0.01s] DEBUG: Launching process 1333: /usr/bin/X -core :0 -seat seat0 -auth /var/run/lightdm/root/:0 -nolisten tcp vt7 -novtswitch
+[+0.01s] DEBUG: XServer 0: Waiting for ready signal from X server :0
+[+0.01s] DEBUG: Acquired bus name org.freedesktop.DisplayManager
+[+0.01s] DEBUG: Registering seat with bus path /org/freedesktop/DisplayManager/Seat0
+[+0.36s] DEBUG: Process 1333 terminated with signal 6
+[+0.36s] DEBUG: XServer 0: X server stopped
+[+0.36s] DEBUG: Releasing VT 7
+[+0.36s] DEBUG: XServer 0: Removing X server authority /var/run/lightdm/root/:0
+[+0.36s] DEBUG: Seat seat0: Display server stopped
+[+0.36s] DEBUG: Seat seat0: Stopping session
+[+0.36s] DEBUG: Seat seat0: Session stopped
+[+0.36s] DEBUG: Seat seat0: Stopping display server, no sessions require it
+[+0.36s] DEBUG: Seat seat0: Active display server stopped, starting greeter
+[+0.36s] DEBUG: Seat seat0: Creating greeter session
+[+0.36s] DEBUG: Seat seat0: Creating display server of type x
+[+0.36s] DEBUG: Using VT 7
+[+0.36s] DEBUG: Seat seat0: Starting local X display on VT 7
+[+0.36s] DEBUG: XServer 0: Logging to /var/log/lightdm/x-0.log
+[+0.36s] DEBUG: XServer 0: Writing X server authority to /var/run/lightdm/root/:0
+[+0.36s] DEBUG: XServer 0: Launching X Server
+[+0.36s] DEBUG: Launching process 1335: /usr/bin/X -core :0 -seat seat0 -auth /var/run/lightdm/root/:0 -nolisten tcp vt7 -novtswitch
+[+0.36s] DEBUG: XServer 0: Waiting for ready signal from X server :0
+[+0.64s] DEBUG: Process 1335 terminated with signal 6
+[+0.64s] DEBUG: XServer 0: X server stopped
+[+0.64s] DEBUG: Releasing VT 7
+[+0.64s] DEBUG: XServer 0: Removing X server authority /var/run/lightdm/root/:0
+[+0.64s] DEBUG: Seat seat0: Display server stopped
+[+0.64s] DEBUG: Seat seat0: Stopping session
+[+0.64s] DEBUG: Seat seat0: Session stopped
+[+0.64s] DEBUG: Seat seat0: Stopping display server, no sessions require it
+[+0.64s] DEBUG: Seat seat0: Stopping; greeter display server failed to start
+[+0.64s] DEBUG: Seat seat0: Stopping
+[+0.64s] DEBUG: Seat seat0: Stopped
+[+0.64s] DEBUG: Required seat has stopped
+[+0.64s] DEBUG: Stopping display manager
+[+0.64s] DEBUG: Display manager stopped
+[+0.64s] DEBUG: Stopping daemon
+[+0.64s] DEBUG: Exiting with return value 1
+[+0.00s] DEBUG: Logging to /var/log/lightdm/lightdm.log
+[+0.00s] DEBUG: Starting Light Display Manager 1.30.0, UID=0 PID=1342
+[+0.00s] DEBUG: Loading configuration dirs from /usr/share/lightdm/lightdm.conf.d
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-disable-guest.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-disable-log-backup.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-greeter-wrapper.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-guest-wrapper.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-xserver-command.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/60-lightdm-gtk-greeter.conf
+[+0.00s] DEBUG: Loading configuration dirs from /usr/local/share/lightdm/lightdm.conf.d
+[+0.00s] DEBUG: Loading configuration dirs from /etc/xdg/lightdm/lightdm.conf.d
+[+0.00s] DEBUG: Loading configuration from /etc/lightdm/lightdm.conf.d/50-kf-autologin.conf
+[+0.00s] DEBUG: Loading configuration from /etc/lightdm/lightdm.conf
+[+0.00s] DEBUG: Registered seat module local
+[+0.00s] DEBUG: Registered seat module xremote
+[+0.00s] DEBUG: Using D-Bus name org.freedesktop.DisplayManager
+[+0.00s] DEBUG: Using cross-namespace EXTERNAL authentication (this will deadlock if server is GDBus < 2.73.3)
+[+0.00s] DEBUG: _g_io_module_get_default: Found default implementation local (GLocalVfs) for ‘gio-vfs’
+[+0.00s] DEBUG: Monitoring logind for seats
+[+0.00s] DEBUG: New seat added from logind: seat0
+[+0.00s] DEBUG: Seat seat0: Loading properties from config section Seat:*
+[+0.00s] DEBUG: Seat seat0 has property CanMultiSession=no
+[+0.00s] DEBUG: Seat seat0: Starting
+[+0.00s] DEBUG: Seat seat0: Creating user session
+[+0.00s] DEBUG: Loading users from org.freedesktop.Accounts
+[+0.00s] DEBUG: User /org/freedesktop/Accounts/User1000 added
+[+0.01s] DEBUG: Seat seat0: Creating display server of type x
+[+0.02s] DEBUG: Using VT 7
+[+0.02s] DEBUG: Seat seat0: Starting local X display on VT 7
+[+0.02s] DEBUG: XServer 0: Logging to /var/log/lightdm/x-0.log
+[+0.02s] DEBUG: XServer 0: Writing X server authority to /var/run/lightdm/root/:0
+[+0.02s] DEBUG: XServer 0: Launching X Server
+[+0.02s] DEBUG: Launching process 1352: /usr/bin/X -core :0 -seat seat0 -auth /var/run/lightdm/root/:0 -nolisten tcp vt7 -novtswitch
+[+0.02s] DEBUG: XServer 0: Waiting for ready signal from X server :0
+[+0.02s] DEBUG: Acquired bus name org.freedesktop.DisplayManager
+[+0.02s] DEBUG: Registering seat with bus path /org/freedesktop/DisplayManager/Seat0
+[+0.30s] DEBUG: Process 1352 terminated with signal 6
+[+0.30s] DEBUG: XServer 0: X server stopped
+[+0.30s] DEBUG: Releasing VT 7
+[+0.30s] DEBUG: XServer 0: Removing X server authority /var/run/lightdm/root/:0
+[+0.30s] DEBUG: Seat seat0: Display server stopped
+[+0.30s] DEBUG: Seat seat0: Stopping session
+[+0.30s] DEBUG: Seat seat0: Session stopped
+[+0.30s] DEBUG: Seat seat0: Stopping display server, no sessions require it
+[+0.30s] DEBUG: Seat seat0: Active display server stopped, starting greeter
+[+0.30s] DEBUG: Seat seat0: Creating greeter session
+[+0.30s] DEBUG: Seat seat0: Creating display server of type x
+[+0.30s] DEBUG: Using VT 7
+[+0.30s] DEBUG: Seat seat0: Starting local X display on VT 7
+[+0.30s] DEBUG: XServer 0: Logging to /var/log/lightdm/x-0.log
+[+0.30s] DEBUG: XServer 0: Writing X server authority to /var/run/lightdm/root/:0
+[+0.30s] DEBUG: XServer 0: Launching X Server
+[+0.30s] DEBUG: Launching process 1354: /usr/bin/X -core :0 -seat seat0 -auth /var/run/lightdm/root/:0 -nolisten tcp vt7 -novtswitch
+[+0.30s] DEBUG: XServer 0: Waiting for ready signal from X server :0
+[+0.59s] DEBUG: Process 1354 terminated with signal 6
+[+0.59s] DEBUG: XServer 0: X server stopped
+[+0.59s] DEBUG: Releasing VT 7
+[+0.59s] DEBUG: XServer 0: Removing X server authority /var/run/lightdm/root/:0
+[+0.59s] DEBUG: Seat seat0: Display server stopped
+[+0.59s] DEBUG: Seat seat0: Stopping session
+[+0.59s] DEBUG: Seat seat0: Session stopped
+[+0.59s] DEBUG: Seat seat0: Stopping display server, no sessions require it
+[+0.59s] DEBUG: Seat seat0: Stopping; greeter display server failed to start
+[+0.59s] DEBUG: Seat seat0: Stopping
+[+0.59s] DEBUG: Seat seat0: Stopped
+[+0.59s] DEBUG: Required seat has stopped
+[+0.59s] DEBUG: Stopping display manager
+[+0.59s] DEBUG: Display manager stopped
+[+0.59s] DEBUG: Stopping daemon
+[+0.59s] DEBUG: Exiting with return value 1
+[+0.00s] DEBUG: Logging to /var/log/lightdm/lightdm.log
+[+0.00s] DEBUG: Starting Light Display Manager 1.30.0, UID=0 PID=1362
+[+0.00s] DEBUG: Loading configuration dirs from /usr/share/lightdm/lightdm.conf.d
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-disable-guest.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-disable-log-backup.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-greeter-wrapper.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-guest-wrapper.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/50-xserver-command.conf
+[+0.00s] DEBUG: Loading configuration from /usr/share/lightdm/lightdm.conf.d/60-lightdm-gtk-greeter.conf
+[+0.00s] DEBUG: Loading configuration dirs from /usr/local/share/lightdm/lightdm.conf.d
+[+0.00s] DEBUG: Loading configuration dirs from /etc/xdg/lightdm/lightdm.conf.d
+[+0.00s] DEBUG: Loading configuration from /etc/lightdm/lightdm.conf.d/50-kf-autologin.conf
+[+0.00s] DEBUG: Loading configuration from /etc/lightdm/lightdm.conf
+[+0.00s] DEBUG: Registered seat module local
+[+0.00s] DEBUG: Registered seat module xremote
+[+0.00s] DEBUG: Using D-Bus name org.freedesktop.DisplayManager
+[+0.00s] DEBUG: Using cross-namespace EXTERNAL authentication (this will deadlock if server is GDBus < 2.73.3)
+[+0.00s] DEBUG: _g_io_module_get_default: Found default implementation local (GLocalVfs) for ‘gio-vfs’
+[+0.00s] DEBUG: Monitoring logind for seats
+[+0.00s] DEBUG: New seat added from logind: seat0
+[+0.00s] DEBUG: Seat seat0: Loading properties from config section Seat:*
+[+0.00s] DEBUG: Seat seat0 has property CanMultiSession=no
+[+0.00s] DEBUG: Seat seat0: Starting
+[+0.00s] DEBUG: Seat seat0: Creating user session
+[+0.00s] DEBUG: Loading users from org.freedesktop.Accounts
+[+0.00s] DEBUG: User /org/freedesktop/Accounts/User1000 added
+[+0.01s] DEBUG: Seat seat0: Creating display server of type x
+[+0.01s] DEBUG: Using VT 7
+[+0.01s] DEBUG: Seat seat0: Starting local X display on VT 7
+[+0.01s] DEBUG: XServer 0: Logging to /var/log/lightdm/x-0.log
+[+0.01s] DEBUG: XServer 0: Writing X server authority to /var/run/lightdm/root/:0
+[+0.01s] DEBUG: XServer 0: Launching X Server
+[+0.01s] DEBUG: Launching process 1373: /usr/bin/X -core :0 -seat seat0 -auth /var/run/lightdm/root/:0 -nolisten tcp vt7 -novtswitch
+[+0.01s] DEBUG: XServer 0: Waiting for ready signal from X server :0
+[+0.01s] DEBUG: Acquired bus name org.freedesktop.DisplayManager
+[+0.01s] DEBUG: Registering seat with bus path /org/freedesktop/DisplayManager/Seat0
+[+0.29s] DEBUG: Process 1373 terminated with signal 6
+[+0.29s] DEBUG: XServer 0: X server stopped
+[+0.29s] DEBUG: Releasing VT 7
+[+0.29s] DEBUG: XServer 0: Removing X server authority /var/run/lightdm/root/:0
+[+0.29s] DEBUG: Seat seat0: Display server stopped
+[+0.29s] DEBUG: Seat seat0: Stopping session
+[+0.29s] DEBUG: Seat seat0: Session stopped
+[+0.29s] DEBUG: Seat seat0: Stopping display server, no sessions require it
+[+0.29s] DEBUG: Seat seat0: Active display server stopped, starting greeter
+[+0.29s] DEBUG: Seat seat0: Creating greeter session
+[+0.29s] DEBUG: Seat seat0: Creating display server of type x
+[+0.29s] DEBUG: Using VT 7
+[+0.29s] DEBUG: Seat seat0: Starting local X display on VT 7
+[+0.29s] DEBUG: XServer 0: Logging to /var/log/lightdm/x-0.log
+[+0.29s] DEBUG: XServer 0: Writing X server authority to /var/run/lightdm/root/:0
+[+0.29s] DEBUG: XServer 0: Launching X Server
+[+0.29s] DEBUG: Launching process 1375: /usr/bin/X -core :0 -seat seat0 -auth /var/run/lightdm/root/:0 -nolisten tcp vt7 -novtswitch
+[+0.29s] DEBUG: XServer 0: Waiting for ready signal from X server :0
+[+0.58s] DEBUG: Process 1375 terminated with signal 6
+[+0.58s] DEBUG: XServer 0: X server stopped
+[+0.58s] DEBUG: Releasing VT 7
+[+0.58s] DEBUG: XServer 0: Removing X server authority /var/run/lightdm/root/:0
+[+0.58s] DEBUG: Seat seat0: Display server stopped
+[+0.58s] DEBUG: Seat seat0: Stopping session
+[+0.58s] DEBUG: Seat seat0: Session stopped
+[+0.58s] DEBUG: Seat seat0: Stopping display server, no sessions require it
+[+0.58s] DEBUG: Seat seat0: Stopping; greeter display server failed to start
+[+0.58s] DEBUG: Seat seat0: Stopping
+[+0.58s] DEBUG: Seat seat0: Stopped
+[+0.58s] DEBUG: Required seat has stopped
+[+0.58s] DEBUG: Stopping display manager
+[+0.58s] DEBUG: Display manager stopped
+[+0.58s] DEBUG: Stopping daemon
+[+0.58s] DEBUG: Exiting with return value 1

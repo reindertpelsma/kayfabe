@@ -14,10 +14,10 @@ Accrued cost is an estimate until account billing is available; transfers may ad
 
 | 56140371 | RTX5090 / Blackwell, exact die pending RM | 0.4283333333 | 2026-10-15 19:08:39 (1792091319.0049653) | destroy19:17:58; absence verified19:19UTC | provider never startedVM; native/guest hardware NOTRUN | compute upper bound$0.08; transfers unbilled |
 
-| 56141654 | RTX5060 / Blackwell, exact die pending RM | 0.1288888889 | 2026-10-15 19:20:04 (1792092004.016716) | active; timer2050117 deadline22:15:05UTC, hardcap22:20:04UTC | fresh provider, nativeWindows first then guestOS validation | compute ceiling$0.39; transfers unbilled |
+| 56141654 | RTX5060 / GB206 (unprivileged RM confirmed) | 0.1288888889 | 2026-10-15 19:20:04 (1792092004.016716) | destroyed22:05:44UTC; absence verified immediately; timer canceled after absence | nativeWindows580 PASS; Linux580 raw/CUDA/headlessgfx PASS; desktopFAIL; guestWindows580 Code43; Linux595raw29/30 | compute ceiling$0.39; transfers unbilled |
 
 AD102 absence was verified at15:39:44UTC before Turing was rented. Turing absence
-verified18:39:01UTC, before Blackwell56137859 was created18:44:29. Failed56137859 absence verified19:06:18 before56140371 creation19:08:39. 56140371 absence verified19:18:29 before56141654 creation19:20:04. Sole active own rental56141654. No other account instances are owned by this campaign. The first rental was
+verified18:39:01UTC, before Blackwell56137859 was created18:44:29. Failed56137859 absence verified19:06:18 before56140371 creation19:08:39. 56140371 absence verified19:18:29 before56141654 creation19:20:04. No own rental remains; account instance list empty22:05:44UTC. No other account instances are owned by this campaign. The first rental was
 verified absent before the second was created. Compute upper bounds for six leases total $3.71,
 well below the $40 campaign budget; final transfer charges are not yet known.
 

@@ -1,6 +1,6 @@
 # Blackwell RTX5060 wave
 
-**STATUS: LIVE, 2026-10-15 21:29UTC; Linux raw30/CUDA4 PASS, Windows580 Code43.**
+**STATUS: LIVE, 2026-10-15 22:07UTC; retired; Linux580 raw/CUDA/headlessgfx PASS, desktop FAIL, Windows580 Code43, Linux595 raw29/30.**
 
 Native580.88 LTSC26100 oracle19:41:24–19:41:29: Code0/actual32.0.15.8088
 before/after, four trustedprobehashes, readableSystemlog, CUDA3/3(copy/kernel43/
@@ -161,3 +161,25 @@ logs, actual adapter evidence and named refusals. CUDA/D3D guest probes NOTRUN.
 The class-list refusal also occurs in successful TU106 initialization, weakening
 that candidate. CCU/CMC/CBCB need source/native comparison; no guessed replies.
 Graceful ownVM stop is in progress21:29UTC before Linux broker/graphics.
+
+## Final wave result and retirement22:05:44UTC
+
+Runtimec2092cf7: headlessgraphics580 passes5/5 stages and10/10 native render
+hashes (linux-display580/). DesktopbrokerFAIL: Xorg sees connected virtualDVI,
+then no valid modes; Cinnamon0/Xorg0,50NVRM assertions,0guestXid/flip timeout.
+Windowsproduction580 Code43; nativeWindows580 PASS as above. Laterdiagnostic
+agent-ping answers but PScommand hits180s/124; no diagnostic events available.
+Linuxguest595.91.07 raw29PASS/1CRASH(concurrency180s timeout), exit1;146suite/
+12gatebirthsallUSER,90CUDAthreadpostures. See linux595/ scoreboards/receipts/logs.
+Heartbeat timeouts observed; clock-domain mismatch remains an untested hypothesis.
+Five hostXid31 records in the broad lane window require per-arm fault-probe
+attribution; no blanket zero-hostXid claim. Large logs are sanitized text .gz.
+
+Own56141654 destroyed22:05:44UTC, immediate verifiedabsence/accountids[], below
+22:15:05timer/22:20:04hardcap; timer canceled afterabsence. No active ownrental.
+New steering holds tiling candidate at GPU-free validation pending full native
+caps differential; sourcea655e1bc9 CPU3251/0/14, failing-first44b9678f8. No new
+hardware/cell pass from this candidate. Full nativecaps oracle has127nonzero words
+in the bounded1024word page; no captured page shipped. NativeRPCcompletecapture
+stillFAIL; fast validated-region rediscovery is a candidate, not implemented or
+measured. User emphasizes proper Blackwelltrace before further initialization fixes.

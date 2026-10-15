@@ -40,7 +40,7 @@ not prove the remaining dies in its family.
 | Turing | TU106 Windows580 Code0/DWM/CUDA3/D3D11+12/zeroTDR and Linux580 Cinnamon/OpenGL/X11broker PASS at8e3a9d32; Linux580 CUDA4 beforefix PASS/raw29 of30 before/afterfix (R34timeout180s) | incomplete: required Linux raw pass and several actual driver builds remain |
 | Ampere | GA104 Linux580 broad pass; Linux595 raw pass; Windows580 boot stall captured | incomplete |
 | Ada | AD102 Linux580 raw30/CUDA4/graphics10+broker and Windows580 Code0/DWM/CUDA3/D3D11+12/zeroTDR pass; Linux595 raw30/CUDA4/graphics10 pass (broker not run) | incomplete: several driver builds and other dies remain unverified |
-| Blackwell | GB206 Linux580 raw30/CUDA4/all USER PASS atc2092cf7, host595.91.07open; nativeWindows580 Code0/CUDA3/D3D11+12 PASS; kayfabeWindows580 Code43 before user work | incomplete: initialization fix, broker/graphics and several actual builds remain |
+| Blackwell | GB206 Linux580 raw30/CUDA4/headlessgfx5+10hashes PASS atc2092cf7; desktopFAIL(no valid modes); Linux595raw29/30(concurrencytimeout); nativeWindows580 PASS; kayfabeWindows580 Code43 before user work | incomplete: initialization fix, broker/graphics and several actual builds remain |
 
 Rental56076314 retired12:40:19UTC; native Windows installation completion
 was never verified there. AD10256096336 retired/absence verified15:39:44UTC.

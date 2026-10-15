@@ -1,0 +1,4 @@
+[interactive] broker badf2d707da4: nvkvm-display-broker backends:  dma-buf test source : NO - apt install libgbm-dev  wayland : NO - install libwayland-dev wayland-protocols  x11 : yes (dri3+present +xrender scaling and guest cursor) + xi2 raw motion  test : yes (always) 
+[interactive] provisioning boot, kf3 c2092cf7 (/workspace/bench/kf3-bins/c2092cf7/qemu-system-x86_64)
+[interactive] provision: APT_RC=0 + echo APT_RC=0 PROVISION_DONE + echo PROVISION_DONE  (log /root/codex-broker/prep-20261015-213203/provision.log)
+[interactive] INTERACTIVE_PREP_EXIT 2026-10-15T21:35:51+00:00

@@ -1,5 +1,51 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-15 22:07UTC — GB206 wave saved/retired; new steering and trace priority
+
+Own56141654 destroyed22:05:44UTC, immediate show-instances absence/account ids[];
+timer2050117 canceled after absence. Created19:20:04UTC,2h45m40s, compute<=0.36USD
+(ledger conservative campaign ceiling<=3.71USD; transfers unbilled). No active own
+rental or GPU job. Owner hostGPU/VM untouched; now explicitly reserved for Claude.
+
+Runtime c2092cf7: Linux580.159.04 raw30/CUDA4 PASS; headlessgfx5/5 and10/10 native
+hashes PASS21:39:28. Broker FAIL: Cinnamon0/Xorg0, Xorg sees connected virtualDVI
+but no valid modes;50NVRM assertion lines,0flip timeout,0Xid in guest. It is not a
+passing desktop. Windows580.88 actual32.0.15.8088/GSPenabled Code43, noUSER_RING.
+Native same-boardWindows580 Code0/CUDA3/D3D11+12 PASS, so not a hardware limit.
+DiagnosticWindows replay agent-ping answered but diagnosticPS timed out124 after
+180s; no Windows reason/event output obtained. OwnVMs stopped QGA/ACPI/exactTERM.
+
+Linux595.91.07 guest packed from stockopenhost: raw29PASS/0FAIL/1CRASH/0NOTRUN,
+concurrency180s timeout; wrapperexit1at22:00:11. USERcensus146/146suite,12/12gates,
+90CUDAthreadpostures. Native595raw30/CUDA4 PASS earlier. First observed failure
+includes LibOS/GSPheartbeat timeouts; clock-offset mismatch is a hypothesis, not
+proved cause. Five hostXid31 records in the broader display+raw window match CE
+fault probes; precise per-arm attribution still to audit. Do not claim zero hostXid
+for that whole window. Evidence linux595/ and linux-display580/; logs>1MiB are
+sanitized text compressed locally, per latest steering. Original raw logs were on
+retired rental /workspace/bench and /root/codex-broker; saved copies retained.
+
+New steering /root/codex_prompt_windows_dies_20261015_2.md: W1 caps derivation with
+nativepages as TEST ORACLES ONLY, full byte differential before hardware; W2 native
+Blackwell aligned fulltrace before guesses; W3 TU1067minTDRhold thenR34. User also
+emphasized properBlackwelltrace. From now smalltopiccodePRs against draft
+claude/gpu-types-20261015, bulk evidence separate. No mastermerge/ownerdecisions.
+ExistingselectedT3caps commits predate steering; no whole nativepage was shipped.
+New full nativecapspages are already preserved as text: AD102/TU106/GB206, plus
+AD104fixture. GB206 WORD127nonzero entries covers the bounded1024word page.
+Unknown fields stay namedunknown; no capturedboard table or borrowed row added.
+
+Independent tiling candidate branchcodex/fix-blackwell-tiling, sourcea655e1bc9:
+public EvoIsModePossibleCA requires usabletiles AND required assignment; failing
+first44b9678f8 two assertions0vs1, after3251/0/14fullisolatedkf-* at21:57:39UTC.
+Initial build caught missing modelcapsfield, then stale generatedfamilyartifact;
+both corrected, allCPUgreen. Hardware UNRUN and held under newW1 oracle equality
+requirement; not merged into runtime/integration. Next: fullcaps differential and
+Blackwell nativequeue discovery repair, not arbitrary CCU/CMC/CBCB successes.
+QGA correctiona4534e391 all34harnesstests PASS (sixresult testsinclrealAF_UNIX);
+will split into smallcodePR. IndependentR34PR11 CPU3252/0/14 stillhardwareunrun.
+Earlier active/pending rental/desktop/595 paragraphs are superseded here.
+
 ## UPDATE 2026-10-15 21:29UTC — GB206 Windows580 Code43 reproduced; graceful stop in progress
 
 Only own rental56141654, timer2050117 unchanged22:15:05UTC/hardcap22:20:04.
