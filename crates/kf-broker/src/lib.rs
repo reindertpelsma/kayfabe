@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 //! ★★★ **`kf-broker` — the display-broker relay, VMM-agnostic** (`docs/design/V3_DISPLAY.md` §8).
 //!
-//! nvkvm-pv's display broker (`nvkvm-pv src/broker/`, pinned at `368d2db`, installed
-//! separately) is a separate process that owns the host window, the compositor connection and
+//! The display broker (`broker/` in this repository, imported from nvkvm-pv `badf2d7`, 2026-10-15, and
+//! maintained here from then on; nvkvm-pv's copy is no longer the one to change) is a separate process
+//! that owns the host window, the compositor connection and
 //! the input grab. The VMM holds one unix socket: frames cross as descriptors (`ATTACH` +
 //! `SCM_RIGHTS`) and come back as `RELEASE`; input, pacing and window state come back as fixed
 //! 24-byte packets. This crate is the VMM half, with the wire protocol unchanged:
