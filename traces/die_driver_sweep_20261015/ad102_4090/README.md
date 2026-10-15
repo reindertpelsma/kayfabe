@@ -118,3 +118,18 @@ graphics and broker must preserve those results. Falsifier: any gate/arm/rung,
 birth-privilege or display validation failure. A native failure is measured
 separately before a guest failure is attributed to kayfabe. No changed grader.
 The driver/guest/kayfabe axes remain independently recorded.
+
+## First Linux hardware result and timer falsifier
+
+Native595 at3ab534ca: gates9/9+gate10PASS,12/12USER channel births,
+raw30/30, CUDA4/4. Guest580 first raw suite29/30: timer mapping read pairs
+advance, but the mirror read follows the page read by3,138,400ns, beyond the
+unchanged1,000,000ns grader bound. Other29arms pass; no full guest pass yet.
+The image relay completed13/13chunks and full source/destination SHA256
+539aaad2f7280d7fb80fcf67c16297792b7561113c9084978070e9d94ace044b matches.
+
+H7, before replay: scheduling during the image relay may explain the single
+late timer pair. This is inference. Falsifier: unchanged replay repeatedly
+exceeds the bound after relay completion, or the clock implementation/model
+shows divergent updates independent of guest scheduling. Retain every replay
+and rerun the full suite; never loosen or modify the frozen grader.
