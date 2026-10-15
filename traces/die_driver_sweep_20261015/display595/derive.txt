@@ -1,0 +1,13 @@
+START 2026-10-15T12:08:38+00:00
+From https://github.com/reindertpelsma/kayfabe
+ * branch              codex/display-vocabulary-595 -> FETCH_HEAD
+Switched to a new branch 'codex/display-vocabulary-595'
+BEFORE disp=101 qemu=101
+/data/codex/display595/git/src-595.91.07
+9f087a6d4e86d85acc0ce1d354d6276fe5047b29
+  6878 /data/codex/display595/classes-595.91.07.tsv
+   341 /data/codex/display595/regs-595.91.07.tsv
+  7219 total
+3252dacacb9602f0006d8061c3778ded4b9be3c99b7ee0294a5bd9c5d3ddbda2  /data/codex/display595/classes-595.91.07.tsv
+1c7d0be42e70f5550e14c4fcba6018feba8acbe8115806854ad3962e00a49c35  /data/codex/display595/regs-595.91.07.tsv
+EXIT rc=0 2026-10-15T12:09:25+00:00
