@@ -8,8 +8,13 @@ CFLAGS := -std=c99 -O1 -g -Wall -Wextra -Werror -Wshadow -Wno-unused-function -I
 SAN ?= -fsanitize=address,undefined -fno-sanitize-recover=undefined
 
 .PHONY: test clean
-test: $(OUT)/test_main
+test: $(OUT)/test_main $(OUT)/test_display_caps
 	$(OUT)/test_main
+	$(OUT)/test_display_caps
+
+$(OUT)/test_display_caps: test_display_caps.c $(wildcard $(LIB)/*.h)
+	mkdir -p $(OUT)
+	$(CC) $(CFLAGS) $(SAN) test_display_caps.c -o $@
 
 $(OUT)/test_main: test_main.c synth.h $(SRC) $(wildcard $(LIB)/*.h)
 	mkdir -p $(OUT)
