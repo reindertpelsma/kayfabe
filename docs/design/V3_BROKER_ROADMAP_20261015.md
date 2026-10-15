@@ -69,7 +69,12 @@ its device to the neutral interface. Kayfabe writes no guest driver and no guest
 virtio-snd (needs a Windows driver from the virtio-win project); QEMU's audio backends are compiled in, so the adapter is probably a
 small audio backend in our QEMU tree rather than a separate process, to be checked in the QEMU source. (2) whether Cloud Hypervisor
 offers any audio device at all (not checked), and if not, that adapter does not exist yet. (3) the broker channel: PCM in a shared
-ring plus a clock, host playback through PipeWire/PulseAudio, latency and clock-drift handling (resampling or drop/insert). (4) a
+ring plus a clock, host playback through PipeWire/PulseAudio. **Owner decision: audio/video synchronisation is NOT kayfabe's
+problem.** The broker runs on the same host as the VM, so the transport latency is practically zero and audio is simply played as it
+arrives; keeping audio and video in sync matters only when the broker streams over the network (item C), and that is the broker's
+job if and when it is added. What stays regardless (a different issue from A/V sync): the guest's audio clock and the host sound
+card's clock differ, so the sink/backend needs bounded buffering with drop-or-insert on drift, so a long session never grows a delay or
+underruns forever. (4) a
 hostile guest cannot stall or flood the host: bounded ring, drop on overrun, rate limits. Needs its own design document before code.
 
 ## Suggested order (owner decides)
