@@ -1,5 +1,13 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-15 - the display broker now lives in this repo; broker roadmap (cursor stream, control CLI with screendump/input, headless streaming, clipboard, ACPI, audio)
+
+`broker/` (from nvkvm-pv `badf2d7`, the revision in use; see `broker/IMPORTED.md`) is the broker to change from now on (branch
+`claude/broker-import-20261015`, not merged). The owner's plan for it, the queued tasks and the open questions are in
+`docs/design/V3_BROKER_ROADMAP_20261015.md`. A cursor-ownership change (broker draws the cursor in every mode, kayfabe stops
+composing) is being built on `claude/cursor-hover-20261015` (host `/data/claude-cursor2/wt`); live validation is owed
+(Windows hover + grab + the I-beam, and the Linux broker retest).
+
 ## UPDATE 2026-10-14 22:30 CEST - USER-ring relay is an event loop; the SYNC_WAIT gate was unsound (GP_GET) and is fixed
 
 Branch `claude/userring-eventloop-20261014` (from `claude/win11-userring-20261014` `77eaf762`), full account `docs/design/V3_USER_RING_EVENT_LOOP_20261014.md`.
