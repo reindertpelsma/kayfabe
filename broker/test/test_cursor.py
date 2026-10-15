@@ -40,8 +40,9 @@ EV_FORMAT, EV_DEVICE = 16, 17
 CMD_ATTACH, CMD_COMMIT, CMD_QUERY_FORMAT, CMD_CURSOR = 1, 2, 6, 7
 CMD_F_SHM = 1
 SET, HIDE, SHOW = 1, 2, 3
-CAP_CURSOR, CAP_DEVICE, CAP_XOR_CURSOR = 1 << 10, 1 << 11, 1 << 12
+CAP_CURSOR, CAP_DEVICE, CAP_CURSOR_STREAM = 1 << 10, 1 << 11, 1 << 12
 F_XOR = 1
+MOVE = 4
 F_KNOWN, F_RENDER = 1, 2
 AR24, XR24 = 0x34325241, 0x34325258
 F_ADD_SEALS, F_GET_SEALS, F_SEAL_SHRINK = 1033, 1034, 0x0002
@@ -328,10 +329,9 @@ def main():
         b = Broker(os.path.join(tmp, "broker.sock"))
         try:
             run(b)
-            run_xor_compose(b)
+            run_stream(b)
         finally:
             b.stop()
-        run_xor_option(tmp)
     if FAILS:
         print("%d cursor/device check(s) FAILED" % len(FAILS))
         sys.exit(1)
@@ -520,7 +520,7 @@ def run(b):
     print("-- VIOLATIONS: BYE(protocol) and the connection is closed")
     one = memfd_with(1, 1, 4, 0, [0xff000000])
     violations = [
-        ("flags set", cursor_cmd(SET, 1, 1, 4, 0, AR24, flags=1), [one]),
+        ("flags set (not F_XOR)", cursor_cmd(SET, 1, 1, 4, 0, AR24, flags=2), [one]),
         ("reserved1 set", cursor_cmd(SET, 1, 1, 4, 0, AR24, reserved=1),
          [one]),
         ("op 0", cursor_cmd(0, 1, 1, 4, 0, AR24), [one]),
@@ -841,96 +841,127 @@ def expected_substitute(w, h, on):
     return out
 
 
-def run_xor_compose(b):
-    print("-- xor-cursor=compose (the default): no new capability bit, and the "
-          "XOR flag is a framing violation")
+def move_cmd(x, y, **kw):
+    """MOVE: the image's top-left, signed, in the two hot-spot words."""
+    return CUR.pack(CMD_CURSOR, kw.get("flags", 0), 0, 0, 0, 0, 0,
+                    x & 0xffffffff, y & 0xffffffff, MOVE, 0)
+
+
+def overlay(lines):
+    """The last 'overlay' line, parsed: (w, h, x, y, hash) or None."""
+    for line in reversed(lines):
+        m = re.search(r"TEST cursor: overlay (\d+)x(\d+) at (-?\d+),(-?\d+) "
+                      r"gen (\d+) hash 0x([0-9a-f]+)", line)
+        if m:
+            w, h, x, y, _, hsh = m.groups()
+            return (int(w), int(h), int(x), int(y), int(hsh, 16))
+        if "TEST cursor:" in line:
+            return None
+    return None
+
+
+GRAB = ("k 29 1", "k 56 1", "k 34 1", "k 34 0", "k 56 0", "k 29 0")
+
+
+def run_stream(b):
+    print("-- CAP_CURSOR_STREAM: advertised; XOR SET, MOVE, hover and grab")
     s = b.connect()
     hs = [PKT.unpack(recv_exact(s, PKT.size)) for _ in range(6)]
-    check(not hs[0][6] & CAP_XOR_CURSOR, "HELLO does not advertise CAP_XOR_CURSOR")
+    check(bool(hs[0][6] & CAP_CURSOR_STREAM), "HELLO advertises CAP_CURSOR_STREAM")
     check(bool(hs[0][6] & CAP_CURSOR) and bool(hs[0][6] & CAP_DEVICE),
           "the other capability bits are as before")
-    fd = memfd_with(8, 8, 32, 0, xor_mask(8, 8, [(3, 3)]))
+    # the I-beam's shape, small: two serifs and a stem
+    w, h = 24, 24
+    on = [(x, 3) for x in (4, 5, 6, 8, 9, 10)] + [(7, y) for y in range(4, 16)] \
+        + [(x, 16) for x in (4, 5, 6, 8, 9, 10)]
+    stride = w * 4 + 8
+    m = b.mark()
+    fd = memfd_with(w, h, stride, 16, xor_mask(w, h, on))
+    send(s, cursor_cmd(SET, w, h, stride, 16, AR24, 7, 9, flags=F_XOR), [fd])
+    os.close(fd)
+    st = shown(b.since(m))
+    want = fnv(expected_substitute(w, h, on))
+    check(st is not None and st[0] == "shown" and st[1:5] == (w, h, 7, 9),
+          "an XOR SET is shown, with the guest's hot spot")
+    check(st is not None and st[0] == "shown" and st[6] == want,
+          "the pixels are black fill + white outline (hash %08x)" % want)
+    # MOVE is ignored in hover: the host pointer is the guest's
+    m = b.mark()
+    send(s, move_cmd(40, 50))
+    lines = b.since(m)
+    check(shown(lines) is None or shown(lines)[0] != "none",
+          "hover: a MOVE changes nothing shown")
+    check(overlay(lines) is None, "hover: no overlay")
+    # grab: the broker draws the cursor itself at the last MOVE
+    b.stdin("f 1")
+    m = b.mark()
+    b.stdin(*GRAB)
+    lines = b.since(m)
+    ov = overlay(lines)
+    check(ov == (w, h, 40, 50, want), "grab: the overlay at the MOVEd position (got %r)" % (ov,))
+    m = b.mark()
+    send(s, move_cmd(-9, 70))
+    ov = overlay(b.since(m))
+    check(ov is not None and ov[2:4] == (-9, 70), "a MOVE under grab moves it (negative: off the edge)")
+    m = b.mark()
+    send(s, move_cmd(1 << 30, 0))
+    lines = b.since(m)
+    check(overlay(lines) is None, "an absurd MOVE is refused: nothing moves")
+    check(not closed(s, 0.3), "... and the connection lives")
+    send(s, move_cmd(20000, -20000))
+    ov = overlay(b.since(m))
+    check(ov is not None and ov[2:4] == (8192, -256), "a far MOVE is clamped to the frame +- a cursor")
+    m = b.mark()
+    send(s, cursor_cmd(HIDE))
+    check(shown(b.since(m)) == ("none", "hidden"), "HIDE under grab: nothing drawn")
+    m = b.mark()
+    send(s, cursor_cmd(SHOW))
+    ov = overlay(b.since(m))
+    check(ov is not None and ov[2:4] == (8192, -256), "SHOW under grab: the overlay again, where it was")
+    m = b.mark()
+    b.stdin(*GRAB)
+    st = shown(b.since(m))
+    check(st is not None and st[0] == "shown", "ending the grab: the host pointer shows it")
+    # an empty XOR mask: the guest's cursor inverts nothing -> hidden
+    m = b.mark()
+    fd = memfd_with(8, 8, 32, 0, xor_mask(8, 8, []))
     send(s, cursor_cmd(SET, 8, 8, 32, 0, AR24, 1, 1, flags=F_XOR), [fd])
     os.close(fd)
-    pk = drain(s, 0.4)
-    check(any(p[0] == EV_BYE and p[3] == 2 for p in pk) and closed(s),
-          "SET with F_XOR is BYE(protocol) and a hang-up")
+    check(shown(b.since(m)) == ("none", "hidden"), "an empty XOR mask is hidden")
+    # an ordinary SET still goes the ordinary way
+    px = image(8, 8, 3)
+    m = b.mark()
+    fd = memfd_with(8, 8, 32, 0, px)
+    send(s, cursor_cmd(SET, 8, 8, 32, 0, AR24, 1, 1), [fd])
+    os.close(fd)
+    st = shown(b.since(m))
+    check(st is not None and st[0] == "shown" and
+          st[6] == fnv([premultiplied(v) for v in px]),
+          "a SET without the flag is the guest's image, as before")
     s.close()
-    time.sleep(0.2)
-
-
-def run_xor_option(tmp):
-    print("-- --xor-cursor: refused by name when wrong")
-    r = subprocess.run([BROKER, "--socket", os.path.join(tmp, "x.sock"),
-                        "--backend", "test", "--xor-cursor=invert"],
-                       capture_output=True, text=True, timeout=10)
-    check(r.returncode == 2 and "--xor-cursor must be compose or approx" in r.stderr
-          and "invert" in r.stderr, "--xor-cursor=invert is refused (exit 2)")
-    r = subprocess.run([BROKER, "--help"], capture_output=True, text=True,
-                       timeout=10)
-    check("--xor-cursor=MODE" in r.stdout + r.stderr, "--help documents it")
-    print("-- --xor-cursor=approx: the bit, and the broker draws the substitute")
-    b = Broker(os.path.join(tmp, "approx.sock"), ("--xor-cursor=approx",))
-    try:
-        s = b.connect()
-        hs = [PKT.unpack(recv_exact(s, PKT.size)) for _ in range(6)]
-        check(bool(hs[0][6] & CAP_XOR_CURSOR), "HELLO advertises CAP_XOR_CURSOR")
-        check(bool(hs[0][6] & CAP_CURSOR) and bool(hs[0][6] & CAP_DEVICE),
-              "the other capability bits are as before")
-        # the I-beam's shape, small: two serifs and a stem
-        w, h = 24, 24
-        on = [(x, 3) for x in (4, 5, 6, 8, 9, 10)] + [(7, y) for y in range(4, 16)] \
-            + [(x, 16) for x in (4, 5, 6, 8, 9, 10)]
-        stride = w * 4 + 8
-        m = b.mark()
-        fd = memfd_with(w, h, stride, 16, xor_mask(w, h, on))
-        send(s, cursor_cmd(SET, w, h, stride, 16, AR24, 7, 9, flags=F_XOR), [fd])
-        os.close(fd)
-        st = shown(b.since(m))
-        want = fnv(expected_substitute(w, h, on))
-        check(st is not None and st[0] == "shown" and st[1:5] == (w, h, 7, 9),
-              "an XOR SET is shown, with the guest's hot spot")
-        check(st is not None and st[0] == "shown" and st[6] == want,
-              "the pixels are black fill + white outline (hash %08x)" % want)
-        # an empty mask: shown as an image with nothing drawn (all transparent)
-        m = b.mark()
-        fd = memfd_with(8, 8, 32, 0, xor_mask(8, 8, []))
-        send(s, cursor_cmd(SET, 8, 8, 32, 0, AR24, 1, 1, flags=F_XOR), [fd])
-        os.close(fd)
-        st = shown(b.since(m))
-        check(st is not None and st[0] == "shown" and st[6] == fnv([0] * 64),
-              "an empty XOR mask draws nothing")
-        # an ordinary SET still goes the ordinary way
-        px = image(8, 8, 3)
-        m = b.mark()
-        fd = memfd_with(8, 8, 32, 0, px)
-        send(s, cursor_cmd(SET, 8, 8, 32, 0, AR24, 1, 1), [fd])
-        os.close(fd)
-        st = shown(b.since(m))
-        check(st is not None and st[0] == "shown" and
-              st[6] == fnv([premultiplied(v) for v in px]),
-              "a SET without the flag is the guest's image, as before")
-        s.close()
-        time.sleep(0.3)
-        # the flag stays a violation on HIDE and SHOW, and with other bits
-        for what, payload in (("HIDE+F_XOR", cursor_cmd(HIDE, flags=F_XOR)),
-                              ("SHOW+F_XOR", cursor_cmd(SHOW, flags=F_XOR)),
-                              ("SET flags=2", cursor_cmd(SET, 8, 8, 32, 0, AR24, 1, 1, flags=2)),
-                              ("SET flags=3", cursor_cmd(SET, 8, 8, 32, 0, AR24, 1, 1, flags=3))):
-            c = connected(b)
-            fds = []
-            if payload[:2] == b"\x07\x00" and CUR.unpack(payload)[9] == SET:
-                fds = [memfd_with(8, 8, 32, 0, image(8, 8, 1))]
-            send(c, payload, fds)
-            for f in fds:
-                os.close(f)
-            pk = drain(c, 0.4)
-            check(any(p[0] == EV_BYE and p[3] == 2 for p in pk) and closed(c),
-                  "%s is BYE(protocol)" % what)
-            c.close()
-            time.sleep(0.2)
-    finally:
-        b.stop()
+    time.sleep(0.3)
+    # framing: the flag stays a violation on HIDE and SHOW, and with other bits;
+    # MOVE with an fd or image fields
+    for what, payload, fdmaker in (
+            ("HIDE+F_XOR", cursor_cmd(HIDE, flags=F_XOR), None),
+            ("SHOW+F_XOR", cursor_cmd(SHOW, flags=F_XOR), None),
+            ("MOVE+F_XOR", move_cmd(1, 1, flags=F_XOR), None),
+            ("MOVE+width", CUR.pack(CMD_CURSOR, 0, 4, 0, 0, 0, 0, 0, 0, MOVE, 0), None),
+            ("SET flags=2", cursor_cmd(SET, 8, 8, 32, 0, AR24, 1, 1, flags=2),
+             lambda: memfd_with(8, 8, 32, 0, image(8, 8, 1))),
+            ("SET flags=3", cursor_cmd(SET, 8, 8, 32, 0, AR24, 1, 1, flags=3),
+             lambda: memfd_with(8, 8, 32, 0, image(8, 8, 1))),
+            ("MOVE+fd", move_cmd(1, 1), lambda: memfd_with(8, 8, 32, 0, image(8, 8, 1)))):
+        c = connected(b)
+        fds = [fdmaker()] if fdmaker else []
+        send(c, payload, fds)
+        for f in fds:
+            os.close(f)
+        pk = drain(c, 0.4)
+        check(any(p[0] == EV_BYE and p[3] == 2 for p in pk) and closed(c),
+              "%s is BYE(protocol)" % what)
+        c.close()
+        time.sleep(0.2)
 
 
 if __name__ == "__main__":

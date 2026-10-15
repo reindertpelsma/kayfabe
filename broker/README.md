@@ -159,22 +159,31 @@ had not been true since the X11 clipboard landed, and a doc that under-states
 what a security boundary permits is worse than one that says nothing. The
 explicit test backend has a simulated clipboard for regression tests.
 
-### `--xor-cursor=compose|approx`: the guest's XOR cursor (the Windows text I-beam)
+### The guest's cursor in every input mode (`CAP_CURSOR_STREAM`)
 
-A cursor that inverts the screen under it (Windows' text I-beam is one) has no
-ARGB image, so it cannot be the host pointer as it is. The default,
-`--xor-cursor=compose`, is what a VMM did before the option existed: the VMM
-draws that cursor into the picture itself and the host pointer over the picture
-is hidden while it shows. `--xor-cursor=approx` makes this program show a
-substitute instead, as an ordinary host pointer (scaled with the frame, shown
-and hidden like any other): opaque black where the cursor inverts the screen, a
-one-pixel opaque white outline around it so it reads on dark and light
-backgrounds, transparent elsewhere; the hot spot is the guest's. The option sets
-`CAP_XOR_CURSOR` (bit 12) in HELLO; a VMM that does not know the bit keeps
-composing, and an older broker never sets it. The VMM then sends the XOR cursor
-as a `CMD_CURSOR` `SET` with `CURSOR_F_XOR` whose alpha byte is a mask (`0xff`
-where it inverts); the flag is a framing violation without the capability, and on
-`HIDE`/`SHOW`. Any other value of the option is refused by name.
+A VMM that sees `CAP_CURSOR_STREAM` (HELLO bit 12) in this program's HELLO stops
+drawing the guest's cursor into the picture in every input mode and only reports
+it: the image (`CMD_CURSOR` `SET`), its position (`MOVE`, the image's top-left
+on the guest frame), and whether there is one (`HIDE`/`SHOW`; hidden also means
+the guest's cursor plane is off and the guest draws a software cursor into the
+frame itself). This program draws it:
+
+- **hover** (absolute pointer): the host pointer shows the image; `MOVE` is
+  ignored, the host pointer is the guest's pointer.
+- **grab** (locked, relative pointer): this program has no pointer of its own, so
+  it draws the image at the last `MOVE`, scaled with the frame, as an overlay
+  surface over the content that never touches the frame's buffer (Wayland: a
+  `wl_subsurface`).
+- **XOR cursors** (the Windows text I-beam inverts what is under it, which no
+  image can express): the VMM sends the inversion mask with `CURSOR_F_XOR` (alpha
+  `0xff` where it inverts); this program draws opaque black there with a
+  one-pixel opaque white outline, transparent elsewhere, so it reads on dark and
+  light backgrounds. An all-clear mask draws nothing.
+
+Backends that cannot overlay do not advertise the bit, and the VMM keeps
+composing the cursor into the frame as it always did (the Wayland and test
+backends advertise it; the X11 backend does not, see the log line at start).
+`MOVE` and `F_XOR` without the capability are framing violations.
 
 ### Putting the socket into a container
 

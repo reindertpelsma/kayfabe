@@ -201,7 +201,6 @@ int nb_tier = NB_TIER_AUTO;
 
 /* Back-compat: --linear-only is the old spelling of --present-mode=linear. */
 bool nb_linear_only;
-bool nb_xor_approx;
 
 void nb_formats_add(struct nb_formats *f, uint32_t fourcc, uint64_t modifier)
 {

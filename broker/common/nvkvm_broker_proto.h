@@ -253,17 +253,23 @@ enum {
                                                  * does not know the type), and
                                                  * the VMM must keep composing
                                                  * the cursor into the frame   */
-#define NVKVM_BROKER_CAP_XOR_CURSOR   (1u << 12)/* the user asked this viewer to
-                                                 * show an XOR cursor itself
-                                                 * (--xor-cursor=approx): a
-                                                 * CMD_CURSOR SET may carry
-                                                 * NVKVM_BROKER_CURSOR_F_XOR.
-                                                 * Clear ⇒ that flag is a
-                                                 * framing violation and the
-                                                 * VMM composes an XOR cursor
-                                                 * into the frame.  An older
-                                                 * broker never sets it; an
-                                                 * older VMM ignores it       */
+#define NVKVM_BROKER_CAP_CURSOR_STREAM (1u << 12)/* this viewer draws the
+                                                 * guest's cursor ITSELF in
+                                                 * every input mode, position
+                                                 * included: the host pointer
+                                                 * in hover, an overlay at the
+                                                 * last MOVE under grab.  Only
+                                                 * with CAP_CURSOR.  Then CMD_
+                                                 * CURSOR also takes MOVE and a
+                                                 * SET may carry F_XOR, and the
+                                                 * VMM composes NO cursor into
+                                                 * the frame in any mode.
+                                                 * Clear (an older broker, or a
+                                                 * backend that cannot overlay)
+                                                 * ⇒ MOVE and F_XOR are framing
+                                                 * violations and the VMM keeps
+                                                 * composing as before.  An
+                                                 * older VMM ignores the bit   */
 #define NVKVM_BROKER_CAP_DEVICE       (1u << 11)/* an EV_DEVICE follows the
                                                  * handshake's FRAME.  Set by
                                                  * every backend of a broker
@@ -445,6 +451,9 @@ enum {
 #define NVKVM_BROKER_CURSOR_SET  1u
 #define NVKVM_BROKER_CURSOR_HIDE 2u
 #define NVKVM_BROKER_CURSOR_SHOW 3u
+/* Only with NVKVM_BROKER_CAP_CURSOR_STREAM: the image's top-left on the guest
+ * frame; see the MOVE note by struct nvkvm_broker_cursor_cmd. */
+#define NVKVM_BROKER_CURSOR_MOVE 4u
 
 /*
  * Cursor bounds.  256x256 is the largest cursor plane any KMS driver this
@@ -533,18 +542,36 @@ struct nvkvm_broker_clip_cmd {
  *   computed in 64 bits.
  * HIDE / SHOW: no fd; width..hot_y all zero.
  * Every op: reserved1 == 0, and flags == 0 -- except a SET on a connection whose
- * HELLO advertised NVKVM_BROKER_CAP_XOR_CURSOR, which may carry
- * NVKVM_BROKER_CURSOR_F_XOR (any other bit, or the flag on HIDE/SHOW or without
- * the capability, is a framing violation).
+ * HELLO advertised NVKVM_BROKER_CAP_CURSOR_STREAM, which may carry
+ * NVKVM_BROKER_CURSOR_F_XOR (any other bit, or the flag on any other op or
+ * without the capability, is a framing violation).
  *
  * XOR SET (flags == NVKVM_BROKER_CURSOR_F_XOR): the same ARGB8888 memfd image,
  * the same geometry rules and bounds, but the alpha byte is a MASK: 0xff where
  * the guest's XOR cursor INVERTS the screen, 0 elsewhere (the colour channels
- * carry the XOR colour).  The broker builds the visible cursor from it itself
- * (nb_cursor_xor_approx(): opaque black fill, a one-pixel opaque white outline
- * around it, transparent elsewhere), so the substitute is scaled and shown
- * like any other image.  Presentation is the viewer's job.
+ * carry the XOR colour).  A viewer cannot invert, so the BROKER builds the
+ * visible cursor from it itself, always (nb_cursor_xor_approx(): opaque black
+ * fill, a one-pixel opaque white outline around it in the 8-neighbourhood,
+ * transparent elsewhere); the substitute is then scaled and shown like any
+ * other image.  An all-clear mask draws nothing.
+ *
+ * MOVE (only with CAP_CURSOR_STREAM; otherwise an unknown op, a violation): no
+ * fd, flags 0, width/height/stride/offset/fourcc all zero, and the position in
+ * the two hot-spot words read as signed 32-bit: hot_x = x, hot_y = y, the
+ * image's TOP-LEFT in the guest's frame pixels (the cursor hangs off the frame
+ * when negative or past its edge).  |x| and |y| above NVKVM_BROKER_CURSOR_MOVE_
+ * LIMIT make the MOVE refused (the previous position stays, the connection
+ * lives); otherwise it is clamped to -MAX_DIM .. NVKVM_BROKER_MAX_DIM, outside
+ * of which the image is invisible anyway.  It is a position, nothing else: the
+ * VMM sends it at its display pass rate, never per input event.  In HOVER
+ * (absolute pointer, the host pointer is the guest's) the broker ignores it
+ * and shows the image at the host pointer; under GRAB (relative, locked) the
+ * broker has no pointer of its own and draws the image at the last MOVE,
+ * scaled with the frame.  HIDE means: nothing is drawn -- the guest hid its
+ * cursor, or its cursor plane is not enabled and it draws a software cursor
+ * into the frame itself.
  */
+#define NVKVM_BROKER_CURSOR_MOVE_LIMIT (1 << 20)
 #define NVKVM_BROKER_CURSOR_F_XOR (1u << 0)
 
 struct nvkvm_broker_cursor_cmd {

@@ -93,8 +93,9 @@ struct nb_test {
     /* What was last shown, so a re-render that changes nothing logs nothing
      * -- the comparison the real backends make before re-uploading. */
     bool     shown_valid;
-    bool     shown_wanted;
+    enum nb_cursor_draw shown_draw;
     uint64_t shown_gen;
+    int32_t  shown_x, shown_y;
 };
 
 static uint64_t test_now_us(void)
@@ -114,20 +115,27 @@ static uint64_t test_now_us(void)
 static void test_cursor_show(struct nb_test *t)
 {
     const struct nb_cursor *c = t->cursor;
-    bool want;
+    enum nb_cursor_draw d;
 
     if (!c) {
         return;
     }
-    want = nb_cursor_wanted(c, t->grabbed);
+    /* this backend advertises CAP_CURSOR_STREAM: it would overlay under grab */
+    d = nb_cursor_policy(c, t->grabbed, true);
     t->shown_valid = true;
-    t->shown_wanted = want;
+    t->shown_draw = d;
     t->shown_gen = c->gen;
-    if (want) {
+    t->shown_x = c->x;
+    t->shown_y = c->y;
+    if (d == NB_CURSOR_POINTER) {
         nb_log("TEST cursor: shown %ux%u hot %u,%u gen %llu hash 0x%08x "
                "t_us %llu", c->w, c->h, c->hot_x, c->hot_y,
                (unsigned long long)c->gen, nb_cursor_hash(c),
                (unsigned long long)test_now_us());
+    } else if (d == NB_CURSOR_OVERLAY) {
+        nb_log("TEST cursor: overlay %ux%u at %d,%d gen %llu hash 0x%08x",
+               c->w, c->h, c->x, c->y, (unsigned long long)c->gen,
+               nb_cursor_hash(c));
     } else {
         nb_log("TEST cursor: none (%s)",
                !c->defined ? "no image" :
@@ -144,12 +152,15 @@ static void test_cursor_show(struct nb_test *t)
 static void test_cursor_refresh(struct nb_test *t)
 {
     const struct nb_cursor *c = t->cursor;
+    enum nb_cursor_draw d;
 
     if (!c) {
         return;
     }
-    if (t->shown_valid && t->shown_wanted == nb_cursor_wanted(c, t->grabbed) &&
-        (!t->shown_wanted || t->shown_gen == c->gen)) {
+    d = nb_cursor_policy(c, t->grabbed, true);
+    if (t->shown_valid && t->shown_draw == d &&
+        (d == NB_CURSOR_NONE || t->shown_gen == c->gen) &&
+        (d != NB_CURSOR_OVERLAY || (t->shown_x == c->x && t->shown_y == c->y))) {
         return;
     }
     test_cursor_show(t);
@@ -160,6 +171,16 @@ static void test_cursor(struct nb_session *s, const struct nb_cursor *cur)
     struct nb_test *t = s->priv;
 
     t->cursor = cur;
+    /* a position-only change in hover (MOVE is ignored there) logs nothing: the
+     * comparison the real backends make (gc_up_to_date) */
+    if (t->shown_valid && t->shown_draw == NB_CURSOR_POINTER &&
+        nb_cursor_policy(cur, t->grabbed, true) == NB_CURSOR_POINTER &&
+        t->shown_gen == cur->gen &&
+        (t->shown_x != cur->x || t->shown_y != cur->y)) {
+        t->shown_x = cur->x;
+        t->shown_y = cur->y;
+        return;
+    }
     test_cursor_show(t);
 }
 
@@ -426,7 +447,7 @@ static int test_open(struct nb_session *s, const struct nb_config *cfg)
               NVKVM_BROKER_CAP_TOTAL_GRAB | NVKVM_BROKER_CAP_FOCUS_EVENTS |
               NVKVM_BROKER_CAP_FULLSCREEN | NVKVM_BROKER_CAP_DMABUF |
               NVKVM_BROKER_CAP_MODIFIERS | NVKVM_BROKER_CAP_RELEASE |
-              NVKVM_BROKER_CAP_CURSOR;
+              NVKVM_BROKER_CAP_CURSOR | NVKVM_BROKER_CAP_CURSOR_STREAM;
     /* No display, so no device: "unknown" until a `d` line says otherwise,
      * which is a valid EV_DEVICE answer in its own right. */
     snprintf(s->grab_caveat, sizeof(s->grab_caveat),

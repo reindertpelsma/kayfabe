@@ -647,7 +647,7 @@ static int verdict_xor(const struct nvkvm_broker_cursor_cmd *c, bool fd, bool xo
 
 /*
  * NVKVM_BROKER_CURSOR_F_XOR: allowed only on a SET and only when the broker
- * advertised NVKVM_BROKER_CAP_XOR_CURSOR; any other flag bit is a violation
+ * advertised NVKVM_BROKER_CAP_CURSOR_STREAM; any other flag bit is a violation
  * either way; HIDE/SHOW never carry it.  Without the capability the flag is
  * exactly what it was before (flags must be 0).
  */
@@ -783,7 +783,7 @@ static void test_xor_approx(void)
     }
     /* an empty mask is a transparent image (nothing to show) */
     memset(xor_cur.px, 0, sizeof xor_cur.px);
-    nb_cursor_xor_approx(&xor_cur);
+    CHECK(!nb_cursor_xor_approx(&xor_cur), "an empty mask draws nothing (false)");
     for (x = 0; x < 256 * 256; x++) {
         if (xor_cur.px[x]) {
             CHECK(0, "an empty XOR mask drew pixel %u = %08x", x, xor_cur.px[x]);
@@ -797,7 +797,7 @@ static void test_xor_approx(void)
     xor_cur.defined = true;
     xor_set(0, 0);
     xor_set(39, 23);
-    nb_cursor_xor_approx(&xor_cur);
+    CHECK(nb_cursor_xor_approx(&xor_cur), "something drawn (true)");
     CHECK(xor_cur.px[0] == BLACK && xor_cur.px[1] == WHITE && xor_cur.px[40] == WHITE &&
           xor_cur.px[41] == WHITE, "top-left corner: fill + 3 outline");
     CHECK(xor_cur.px[39 + 23 * 40] == BLACK && xor_cur.px[38 + 23 * 40] == WHITE &&
@@ -824,29 +824,104 @@ static void test_xor_approx(void)
     CHECK(xor_cur.px[0] == BLACK, "1x1");
 }
 
-/* --xor-cursor=compose|approx and the capability word HELLO carries. */
-static void test_xor_option(void)
+/*
+ * CURSOR_MOVE (CAP_CURSOR_STREAM): framing, the clamp, and what a backend draws.
+ */
+static struct nvkvm_broker_cursor_cmd move_cmd(int32_t x, int32_t y)
 {
-    bool a = true;
+    struct nvkvm_broker_cursor_cmd c;
 
-    CHECK(nb_xor_cursor_parse("compose", &a) == 0 && !a, "compose");
-    CHECK(nb_xor_cursor_parse("approx", &a) == 0 && a, "approx");
-    a = true;
-    CHECK(nb_xor_cursor_parse("invert", &a) == -1 && a, "unknown value refused, untouched");
-    CHECK(nb_xor_cursor_parse("", &a) == -1, "empty refused");
-    CHECK(nb_xor_cursor_parse("Approx", &a) == -1, "case matters");
-    /* compose (the default) advertises exactly what it did before the option */
-    CHECK(nb_hello_caps(0x7ff, false) == (0x7ffu | NVKVM_BROKER_CAP_DEVICE),
-          "compose: no new bit");
-    CHECK(nb_hello_caps(0x7ff, true) ==
-          (0x7ffu | NVKVM_BROKER_CAP_DEVICE | NVKVM_BROKER_CAP_XOR_CURSOR),
-          "approx: the bit");
-    CHECK(NVKVM_BROKER_CAP_XOR_CURSOR == (1u << 12), "bit 12");
+    memset(&c, 0, sizeof c);
+    c.type = NVKVM_BROKER_CMD_CURSOR;
+    c.op = NVKVM_BROKER_CURSOR_MOVE;
+    c.hot_x = (uint32_t)x;
+    c.hot_y = (uint32_t)y;
+    return c;
+}
+
+static void test_move(void)
+{
+    struct nvkvm_broker_cursor_cmd c = move_cmd(-5, 700);
+    int32_t ox = 99, oy = 99;
+
+    CHECK(verdict_xor(&c, false, false) == NB_CURSOR_VIOLATION,
+          "MOVE without CAP_CURSOR_STREAM is an unknown-op violation");
+    CHECK(verdict_xor(&c, false, true) == NB_CURSOR_OK, "MOVE with the capability");
+    CHECK(verdict_xor(&c, true, true) == NB_CURSOR_VIOLATION, "MOVE with an fd");
+    c.flags = NVKVM_BROKER_CURSOR_F_XOR;
+    CHECK(verdict_xor(&c, false, true) == NB_CURSOR_VIOLATION, "MOVE with F_XOR");
+    c = move_cmd(0, 0);
+    c.width = 1;
+    CHECK(verdict_xor(&c, false, true) == NB_CURSOR_VIOLATION, "MOVE with a width");
+    c = move_cmd(0, 0);
+    c.stride = 4;
+    CHECK(verdict_xor(&c, false, true) == NB_CURSOR_VIOLATION, "MOVE with a stride");
+    c = move_cmd(0, 0);
+    c.offset = 4;
+    CHECK(verdict_xor(&c, false, true) == NB_CURSOR_VIOLATION, "MOVE with an offset");
+    c = move_cmd(0, 0);
+    c.fourcc = 4;
+    CHECK(verdict_xor(&c, false, true) == NB_CURSOR_VIOLATION, "MOVE with a fourcc");
+    c = move_cmd(0, 0);
+    c.reserved1 = 1;
+    CHECK(verdict_xor(&c, false, true) == NB_CURSOR_VIOLATION, "MOVE with reserved1");
+
+    /* the clamp: inside is kept, past the frame is pinned, absurd is refused */
+    CHECK(nb_cursor_move_clamp(100, 200, &ox, &oy) == 0 && ox == 100 && oy == 200, "inside");
+    CHECK(nb_cursor_move_clamp(-256, -256, &ox, &oy) == 0 && ox == -256 && oy == -256,
+          "hanging off the top-left by a whole cursor");
+    CHECK(nb_cursor_move_clamp(-300, -9000, &ox, &oy) == 0 &&
+          ox == -(int32_t)NVKVM_BROKER_CURSOR_MAX_DIM && oy == -(int32_t)NVKVM_BROKER_CURSOR_MAX_DIM,
+          "clamped at -MAX_DIM");
+    CHECK(nb_cursor_move_clamp(9000, 8193, &ox, &oy) == 0 &&
+          ox == (int32_t)NVKVM_BROKER_MAX_DIM && oy == (int32_t)NVKVM_BROKER_MAX_DIM,
+          "clamped at MAX_DIM");
+    ox = oy = 7;
+    CHECK(nb_cursor_move_clamp(NVKVM_BROKER_CURSOR_MOVE_LIMIT + 1, 0, &ox, &oy) == -1 &&
+          ox == 7 && oy == 7, "past the limit: refused, untouched");
+    CHECK(nb_cursor_move_clamp(0, -NVKVM_BROKER_CURSOR_MOVE_LIMIT - 1, &ox, &oy) == -1, "negative limit");
+    CHECK(nb_cursor_move_clamp(INT32_MIN, INT32_MAX, &ox, &oy) == -1, "int32 extremes");
+    CHECK(nb_cursor_move_clamp(NVKVM_BROKER_CURSOR_MOVE_LIMIT, -NVKVM_BROKER_CURSOR_MOVE_LIMIT,
+                               &ox, &oy) == 0 && ox == (int32_t)NVKVM_BROKER_MAX_DIM,
+          "the limit itself is clamped, not refused");
+
+    /*
+     * What a backend draws: hover = the host pointer, MOVE ignored; grab = an
+     * overlay at the last MOVE, only with the capability and a MOVE received;
+     * hidden (HIDE: the guest hid it, or its cursor plane is off and it draws
+     * a software cursor into the frame) = nothing in any mode.
+     */
+    memset(&cur, 0, sizeof cur);
+    CHECK(nb_cursor_policy(&cur, false, true) == NB_CURSOR_NONE, "no image: nothing");
+    CHECK(nb_cursor_policy(NULL, false, true) == NB_CURSOR_NONE, "no cursor at all");
+    cur.w = cur.h = 32;
+    cur.defined = cur.visible = true;
+    CHECK(nb_cursor_policy(&cur, false, true) == NB_CURSOR_POINTER, "hover: the host pointer");
+    CHECK(nb_cursor_policy(&cur, false, false) == NB_CURSOR_POINTER, "hover, no stream: the same");
+    CHECK(nb_cursor_policy(&cur, true, true) == NB_CURSOR_NONE, "grab, never MOVEd: nothing yet");
+    cur.x = 10;
+    cur.y = 20;
+    cur.placed = true;
+    CHECK(nb_cursor_policy(&cur, false, true) == NB_CURSOR_POINTER, "hover ignores the position");
+    CHECK(nb_cursor_policy(&cur, true, true) == NB_CURSOR_OVERLAY, "grab: the overlay at x,y");
+    CHECK(nb_cursor_policy(&cur, true, false) == NB_CURSOR_NONE,
+          "grab, a VMM that composes (no stream): the broker draws nothing");
+    cur.visible = false;
+    CHECK(nb_cursor_policy(&cur, true, true) == NB_CURSOR_NONE, "HIDE: nothing under grab");
+    CHECK(nb_cursor_policy(&cur, false, true) == NB_CURSOR_NONE, "HIDE: nothing in hover");
+    /* the position survives a publish */
+    {
+        static struct nb_cursor pub;
+
+        cur.visible = true;
+        nb_cursor_copy(&pub, &cur);
+        CHECK(pub.x == 10 && pub.y == 20 && pub.placed, "the published copy carries the position");
+    }
 }
 
 int main(void)
 {
-    test_xor_option();
+    test_move();
     test_xor_flag();
     test_xor_approx();
     test_framing();

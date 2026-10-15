@@ -24,7 +24,7 @@
 #define NB_CURSOR_FOURCC_AR24 0x34325241u
 
 int nb_cursor_check(const struct nvkvm_broker_cursor_cmd *c, bool has_fd,
-                    bool xor_ok, const char **why)
+                    bool stream_ok, const char **why)
 {
     /*
      * FRAMING FIRST, then content -- the same order the clipboard case learned
@@ -35,14 +35,14 @@ int nb_cursor_check(const struct nvkvm_broker_cursor_cmd *c, bool has_fd,
     /*
      * The one flag there is, NVKVM_BROKER_CURSOR_F_XOR, is a framing matter:
      * only on a SET, and only for a client that was told in HELLO that this
-     * broker takes it (--xor-cursor=approx).  Anything else stays "flags are
+     * broker takes it (CAP_CURSOR_STREAM).  Anything else stays "flags are
      * zero", exactly as before the flag existed.
      */
     if (c->flags != 0 &&
-        !(c->flags == NVKVM_BROKER_CURSOR_F_XOR && xor_ok &&
+        !(c->flags == NVKVM_BROKER_CURSOR_F_XOR && stream_ok &&
           c->op == NVKVM_BROKER_CURSOR_SET)) {
-        *why = (c->flags == NVKVM_BROKER_CURSOR_F_XOR && !xor_ok)
-                   ? "CURSOR_F_XOR without CAP_XOR_CURSOR (--xor-cursor=approx)"
+        *why = (c->flags == NVKVM_BROKER_CURSOR_F_XOR && !stream_ok)
+                   ? "CURSOR_F_XOR without CAP_CURSOR_STREAM"
                    : "CURSOR flags are not zero (or F_XOR on a HIDE/SHOW)";
         return NB_CURSOR_VIOLATION;
     }
@@ -60,6 +60,21 @@ int nb_cursor_check(const struct nvkvm_broker_cursor_cmd *c, bool has_fd,
         if (c->width || c->height || c->stride || c->offset || c->fourcc ||
             c->hot_x || c->hot_y) {
             *why = "CURSOR HIDE/SHOW carried image fields";
+            return NB_CURSOR_VIOLATION;
+        }
+        *why = "";
+        return NB_CURSOR_OK;
+    case NVKVM_BROKER_CURSOR_MOVE:
+        if (!stream_ok) {
+            *why = "CURSOR MOVE without CAP_CURSOR_STREAM";
+            return NB_CURSOR_VIOLATION;
+        }
+        if (has_fd) {
+            *why = "CURSOR MOVE carried an fd";
+            return NB_CURSOR_VIOLATION;
+        }
+        if (c->width || c->height || c->stride || c->offset || c->fourcc) {
+            *why = "CURSOR MOVE carried image fields";
             return NB_CURSOR_VIOLATION;
         }
         *why = "";
@@ -170,26 +185,34 @@ void nb_cursor_load(struct nb_cursor *dst, const uint8_t *src, uint32_t w,
     dst->gen++;
 }
 
-int nb_xor_cursor_parse(const char *value, bool *approx)
+int nb_cursor_move_clamp(int32_t x, int32_t y, int32_t *ox, int32_t *oy)
 {
-    if (!strcmp(value, "compose")) {
-        *approx = false;
-        return 0;
+    const int64_t lo = -(int64_t)NVKVM_BROKER_CURSOR_MAX_DIM;
+    const int64_t hi = (int64_t)NVKVM_BROKER_MAX_DIM;
+    int64_t X = x, Y = y;
+
+    if (X > NVKVM_BROKER_CURSOR_MOVE_LIMIT || X < -NVKVM_BROKER_CURSOR_MOVE_LIMIT ||
+        Y > NVKVM_BROKER_CURSOR_MOVE_LIMIT || Y < -NVKVM_BROKER_CURSOR_MOVE_LIMIT) {
+        return -1;
     }
-    if (!strcmp(value, "approx")) {
-        *approx = true;
-        return 0;
-    }
-    return -1;
+    *ox = (int32_t)(X < lo ? lo : X > hi ? hi : X);
+    *oy = (int32_t)(Y < lo ? lo : Y > hi ? hi : Y);
+    return 0;
 }
 
-uint32_t nb_hello_caps(uint32_t backend_caps, bool xor_approx)
+enum nb_cursor_draw nb_cursor_policy(const struct nb_cursor *c, bool grabbed,
+                                     bool stream)
 {
-    return backend_caps | NVKVM_BROKER_CAP_DEVICE |
-           (xor_approx ? NVKVM_BROKER_CAP_XOR_CURSOR : 0u);
+    if (!c || !c->defined || !c->visible) {
+        return NB_CURSOR_NONE;
+    }
+    if (!grabbed) {
+        return NB_CURSOR_POINTER;
+    }
+    return (stream && c->placed) ? NB_CURSOR_OVERLAY : NB_CURSOR_NONE;
 }
 
-void nb_cursor_xor_approx(struct nb_cursor *c)
+bool nb_cursor_xor_approx(struct nb_cursor *c)
 {
     /* Black fill, white outline: both opaque, so distinct from each other and
      * from the transparent rest -- which lets this run in place.  The outline
@@ -198,9 +221,11 @@ void nb_cursor_xor_approx(struct nb_cursor *c)
     const uint32_t BLACK = 0xff000000u, WHITE = 0xffffffffu;
     size_t n, x, y, w, h;
 
+    bool any = false;
+
     if (!c->defined || c->w == 0 || c->h == 0 ||
         c->w > NVKVM_BROKER_CURSOR_MAX_DIM || c->h > NVKVM_BROKER_CURSOR_MAX_DIM) {
-        return;
+        return false;
     }
     w = c->w;
     h = c->h;
@@ -208,6 +233,10 @@ void nb_cursor_xor_approx(struct nb_cursor *c)
     for (x = 0; x < n; x++) {
         /* the alpha byte is the mask: set where the XOR cursor inverts */
         c->px[x] = (c->px[x] >> 24) ? BLACK : 0;
+        any |= c->px[x] != 0;
+    }
+    if (!any) {
+        return false;
     }
     for (y = 0; y < h; y++) {
         for (x = 0; x < w; x++) {
@@ -229,6 +258,7 @@ void nb_cursor_xor_approx(struct nb_cursor *c)
 next:       ;
         }
     }
+    return true;
 }
 
 void nb_cursor_copy(struct nb_cursor *dst, const struct nb_cursor *src)
@@ -245,6 +275,9 @@ void nb_cursor_copy(struct nb_cursor *dst, const struct nb_cursor *src)
     dst->h = src->h;
     dst->hot_x = src->hot_x;
     dst->hot_y = src->hot_y;
+    dst->x = src->x;
+    dst->y = src->y;
+    dst->placed = src->placed;
     /*
      * Only the pixels the image has.  Bounded by the array, not by w*h alone:
      * a struct nobody loaded through nb_cursor_load() must not make this a
