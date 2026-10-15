@@ -1,6 +1,6 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
-## UPDATE 2026-10-15 18:28UTC — TU106 Windows580 and Linux broker PASS; raw running
+## UPDATE 2026-10-15 18:32UTC — TU106 Windows580 and Linux broker PASS; raw running
 
 Device8e3a9d32, source8e3a9d325, ownrental56117789, stockhost595.91.07.
 Windows580.88 LTSC26100: Code0/build checked before/after, Explorer+DWM,
@@ -23,10 +23,13 @@ Broker normal stop and wrapperexit0 at18:21:20. Fixed gates9/9+gate10PASS,
 binary rebuilt18:21:55, raw client/packed580 guest rebuilt before full raw30
 started18:22:37 at unchanged180s budget. RawwrapperPID59250; controller live
 text monitorPID/session in/workspace/codex/turing_raw_monitor.sh; its final output
-/workspace/codex/raw-turing/fixed/required-suite-live.txt. Rootcheckout stays8e
+/workspace/codex/raw-turing/fixed/required-suite-live-final.txt. Rootcheckout stays8e
 duringGPU jobs; do not pull/build. Birthcensus runs even on raw failure. Beforefix
 Linux580CUDA4PASS/raw29(R34timeout180; diagnostic201s) is not a fullLinuxpass.
-Original rental deadline18:36:22 remains armed, no extension. Capture text/push
+Timer revised18:32:26 to18:38:26UTC, PID2036504; old own timer canceled only
+after the replacement was alive. This permits full raw-suite completion/text
+collection, remains below the authorized18:41:16UTC three-hour cap, and does not
+change the180s test budget. Earlier18:36deadline notes below are superseded. Capture text/push
 after each run, retire ownID only. Controller /workspace/codex/turing-hw,
 branchcodex/sweep-turing-20261015, draftPR10. OwnerVM/GPU untouched.
 Older pending/process paragraphs below superseded by this update.

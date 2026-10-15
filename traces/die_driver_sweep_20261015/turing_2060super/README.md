@@ -1,9 +1,11 @@
 # Turing RTX2060Super wave
 
-**STATUS: LIVE, 2026-10-15 18:06UTC.** Own instance56117789, created only after
+**STATUS: LIVE, 2026-10-15 18:32UTC.** Own instance56117789, created only after
 AD10256096336 was verified absent. Offer55223684, Quebec, KVM image,150GB
-requested. Actual quote$0.1113888889/hour.175min teardown timerPID1995396,
-deadlineabout18:36:22UTC; never extend beyond18:41:16UTC three-hour cap.
+requested. Actual quote$0.1113888889/hour. Timer revised18:32:26UTC to
+PID2036504/deadline18:38:26UTC to finish the required raw suite and save its text.
+The old timer was canceled after verifying the new one; hard cap18:41:16UTC
+remains binding. Earlier18:36deadline notes below are historical.
 Host-derived exactdieTU106; restoredUbuntu22.04.5/kernel6.8.0-138,
 147GiBroot/138GiB initiallyfree andKVM verified. Windows580 acceptance nowPASS
 at8e3a9d32 after USER-ring class fix; Linux580raw remains29/30 at180s,
