@@ -1,0 +1,32 @@
+START 2026-10-15T10:03:44+00:00
+b5ad64f7d0f6f7036cd5c9afb66ecbd0a87c4ff4
+     Running unittests src/lib.rs (/data/codex/target-turing/release/deps/kf_disp-28dbe45d7fcff935)
+test result: ok. 169 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+     Running tests/bl_pack_kernel.rs (/data/codex/target-turing/release/deps/bl_pack_kernel-ad1eb3a65f8212cf)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+     Running tests/caps_derive.rs (/data/codex/target-turing/release/deps/caps_derive-dffe340bdd66fa9c)
+test result: ok. 11 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/compose_kernel.rs (/data/codex/target-turing/release/deps/compose_kernel-f6d87b8874a20604)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s
+     Running tests/yuv_kernel.rs (/data/codex/target-turing/release/deps/yuv_kernel-0b7a1eb006ab17a7)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+     Running unittests src/lib.rs (/data/codex/target-turing/release/deps/kf_qemu-377a752895ad55b0)
+test result: ok. 261 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+     Running tests/bar0_trace_gate.rs (/data/codex/target-turing/release/deps/bar0_trace_gate-e3d471b4661a0e40)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/channel_budget_lazy.rs (/data/codex/target-turing/release/deps/channel_budget_lazy-ec5fa56db5cc9893)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/gop_rom_knobs.rs (/data/codex/target-turing/release/deps/gop_rom_knobs-57bcaeeaf6355467)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests/gpu_uuid_property.rs (/data/codex/target-turing/release/deps/gpu_uuid_property-1e0ed5ffe30b65e0)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/kf3_realize_discard.rs (/data/codex/target-turing/release/deps/kf3_realize_discard-fcc50f41c20ae44e)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/max_fps_property.rs (/data/codex/target-turing/release/deps/max_fps_property-afaee3d4601929b8)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/wire_mirror.rs (/data/codex/target-turing/release/deps/wire_mirror-57e3b715fa58248a)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+EXIT rc=0 2026-10-15T10:04:22+00:00
+TOTAL passed=472 failed=0 ignored=2
