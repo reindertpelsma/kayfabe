@@ -49,15 +49,24 @@ pub(crate) static VIEWS_EVICTED: std::sync::atomic::AtomicU64 = std::sync::atomi
 pub(crate) fn summary() -> String {
     use std::sync::atomic::Ordering::Relaxed;
     format!(
-        "USER_STORE_VIEWS keep={} armed={} evicted_at_quota={} rm_refused_retry_ok={} rm_refused_fallback_ok={} rm_refused_read_refused={}",
+        "USER_STORE_VIEWS keep={} armed={} evicted_at_quota={} rm_refused_retry_ok={} rm_refused_fallback_ok={} rm_refused_read_refused={} view_copies={} view_copy_ms={} view_copy_bytes={}",
         KEEP.load(Relaxed),
         VIEWS_ARMED.load(Relaxed),
         VIEWS_EVICTED.load(Relaxed),
         ARM_RETRY_OK.load(Relaxed),
         ARM_FALLBACK_OK.load(Relaxed),
-        ARM_FAILED.load(Relaxed)
+        ARM_FAILED.load(Relaxed),
+        COPY_N.load(Relaxed),
+        COPY_NS.load(Relaxed) / 1_000_000,
+        COPY_BYTES.load(Relaxed)
     )
 }
+
+/// EXPERIMENT: view copies, their total time and bytes (all channels).
+pub(crate) static COPY_NS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+pub(crate) static COPY_N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+pub(crate) static COPY_BYTES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static FULL: std::sync::OnceLock<Option<NativeView>> = std::sync::OnceLock::new();
 
 /// Realize: the operator's `user-view-keep` (0 = the default).
 pub(crate) fn configure(keep: u32) {
@@ -82,6 +91,10 @@ trait Host {
     fn arm(&self, off: u64, len: u64) -> Result<Self::View, ArmError<Self::View>>;
     fn release(&self, view: &mut Self::View) -> Result<(), Refusal>;
     fn copy(&self, view: &Self::View, off: u64, bytes: &mut [u8]) -> Result<(), Refusal>;
+    /// EXPERIMENT (KF3_FULLMAP_EXP): ONE process-wide view over [0, bound), armed at first use.
+    fn full(&self, _bound: u64) -> Option<&Self::View> {
+        None
+    }
 }
 
 struct View<V> {
@@ -260,6 +273,9 @@ impl<H: Host> Store for Cache<H> {
     fn prepare(&mut self, spans: &[Span]) -> Result<(), Refusal> {
         // Validate the whole request before any native mutation or eviction.
         let required = required(self.bound, spans)?;
+        if self.host.full(self.bound).is_some() {
+            return Ok(());
+        }
         self.tick = self.tick.wrapping_add(1);
         // A view whose mapping failed half-way (or whose release failed) is retried first, as before.
         let mut i = 0;
@@ -300,6 +316,16 @@ impl<H: Host> Store for Cache<H> {
         if bytes.len() > crate::mem::userread::MAX_BYTES {
             return Err(Refusal::Bounds);
         }
+        let t0 = std::time::Instant::now();
+        if let Some(v) = self.host.full(self.bound) {
+            let end = off.checked_add(bytes.len() as u64).filter(|e| *e <= self.bound).ok_or(Refusal::Bounds)?;
+            let _ = end;
+            let r = self.host.copy(v, off, bytes);
+            COPY_NS.fetch_add(t0.elapsed().as_nanos() as u64, std::sync::atomic::Ordering::Relaxed);
+            COPY_N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            COPY_BYTES.fetch_add(bytes.len() as u64, std::sync::atomic::Ordering::Relaxed);
+            return r;
+        }
         let end = off
             .checked_add(bytes.len() as u64)
             .filter(|e| *e <= self.bound)
@@ -325,7 +351,11 @@ impl<H: Host> Store for Cache<H> {
             let n = usize::try_from((view.off + view.len - at).min(end - at))
                 .map_err(|_| Refusal::Bounds)?;
             let dest = bytes.get_mut(done..done + n).ok_or(Refusal::Bounds)?;
+            let tc = std::time::Instant::now();
             self.host.copy(&view.native, at - view.off, dest)?;
+            COPY_NS.fetch_add(tc.elapsed().as_nanos() as u64, std::sync::atomic::Ordering::Relaxed);
+            COPY_N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            COPY_BYTES.fetch_add(dest.len() as u64, std::sync::atomic::Ordering::Relaxed);
             done += n;
         }
         Ok(())
@@ -389,6 +419,20 @@ impl Host for Native {
             view.cookie = None;
         }
         Ok(())
+    }
+    fn full(&self, bound: u64) -> Option<&NativeView> {
+        std::env::var_os("KF3_FULLMAP_EXP")?;
+        FULL.get_or_init(|| match self.arm(0, bound) {
+            Ok(v) => {
+                eprintln!("kf3: FULLMAP_EXP armed ONE view over [0, {bound:#x}) ({} MiB)", bound >> 20);
+                Some(v)
+            }
+            Err(_) => {
+                eprintln!("kf3: FULLMAP_EXP refused: RM or mmap could not map [0, {bound:#x}); normal per-channel views");
+                None
+            }
+        })
+        .as_ref()
     }
     fn copy(&self, view: &NativeView, off: u64, bytes: &mut [u8]) -> Result<(), Refusal> {
         view.cpu
