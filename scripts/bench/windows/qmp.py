@@ -29,9 +29,13 @@ import time
 
 def connect(path, timeout=10.0):
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    s.settimeout(timeout)
-    s.connect(path)
-    return s, s.makefile("rwb", buffering=0)
+    try:
+        s.settimeout(timeout)
+        s.connect(path)
+        return s, s.makefile("rwb", buffering=0)
+    except BaseException:
+        s.close()
+        raise
 
 
 def send(f, obj):
@@ -136,11 +140,16 @@ def qga_open(path, timeout=10.0):
     s, f = connect(path, timeout)
     # guest-sync flushes any half-read state the agent may hold from an earlier client.
     token = int(time.time()) & 0x7FFFFFFF
-    send(f, {"execute": "guest-sync", "arguments": {"id": token}})
-    while True:
-        r = recv(f)
-        if r.get("return") == token:
-            return s, f
+    try:
+        send(f, {"execute": "guest-sync", "arguments": {"id": token}})
+        while True:
+            r = recv(f)
+            if r.get("return") == token:
+                return s, f
+    except BaseException:
+        f.close()
+        s.close()
+        raise
 
 
 def qga_ping(sock):
@@ -156,24 +165,53 @@ def qga_ping(sock):
 
 def qga_exec(sock, path, argv, timeout=300.0):
     s, f = qga_open(sock, timeout=30.0)
-    send(f, {"execute": "guest-exec", "arguments": {"path": path, "arg": argv, "capture-output": True}})
-    r = recv(f)
-    if "error" in r:
-        print(json.dumps(r["error"]), file=sys.stderr)
-        return 1
-    pid = r["return"]["pid"]
-    end = time.time() + timeout
-    while time.time() < end:
-        send(f, {"execute": "guest-exec-status", "arguments": {"pid": pid}})
-        st = recv(f).get("return", {})
-        if st.get("exited"):
-            for key, stream in (("out-data", sys.stdout), ("err-data", sys.stderr)):
-                if key in st:
-                    stream.write(base64.b64decode(st[key]).decode("utf-8", "replace"))
-            return int(st.get("exitcode", 1))
-        time.sleep(1.0)
-    print("qga-exec: timeout", file=sys.stderr)
-    return 124
+    try:
+        # Launch exactly once. If its reply is lost, the outcome is unknown; replaying
+        # could duplicate an installer, shutdown or probe with side effects.
+        send(f, {"execute": "guest-exec", "arguments": {"path": path, "arg": argv, "capture-output": True}})
+        r = recv(f)
+        if "error" in r:
+            print(json.dumps(r["error"]), file=sys.stderr)
+            return 1
+        pid = r["return"]["pid"]
+        end = time.monotonic() + timeout
+        while (remaining := end - time.monotonic()) > 0:
+            try:
+                if s is None:
+                    s, f = qga_open(sock, timeout=min(30.0, remaining))
+                    remaining = end - time.monotonic()
+                    if remaining <= 0:
+                        break
+                s.settimeout(min(30.0, remaining))
+                send(f, {"execute": "guest-exec-status", "arguments": {"pid": pid}})
+                r = recv(f)
+            except (OSError, EOFError):
+                # A timed-out socket's file object cannot safely read again. Re-sync
+                # a fresh connection, then ask only about the already launched PID.
+                if f is not None:
+                    f.close()
+                if s is not None:
+                    s.close()
+                s = f = None
+                time.sleep(min(1.0, max(0.0, end - time.monotonic())))
+                continue
+            if "error" in r:
+                print(json.dumps(r["error"]), file=sys.stderr)
+                return 1
+            st = r.get("return", {})
+            if st.get("exited"):
+                for key, stream in (("out-data", sys.stdout), ("err-data", sys.stderr)):
+                    if key in st:
+                        stream.write(base64.b64decode(st[key]).decode("utf-8", "replace"))
+                return int(st.get("exitcode", 1))
+            time.sleep(min(1.0, max(0.0, end - time.monotonic())))
+        print("qga-exec: timeout", file=sys.stderr)
+        return 124
+    finally:
+        if f is not None:
+            f.close()
+        if s is not None:
+            s.close()
 
 
 def main(argv):
