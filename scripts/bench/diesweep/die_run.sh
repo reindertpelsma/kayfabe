@@ -6,7 +6,7 @@
 #   phase2: the same overlay in a NEW QEMU process; wait for QGA; let autologon reach the desktop;
 #           evidence + screenshots every 30 s for PHASE2_SECONDS (default 300); the guest keeps running.
 # Log: $RUN/<phase>.log with a start marker and an EXIT line (CLAUDE.md: a killed job looks like a running one).
-set -uo pipefail
+set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 W=${WIN_DIR:-/root/win}; RUN=${WIN_RUN:-$W/run}; P=${1:?phase1|phase2}
 mkdir -p -m 0700 "$RUN" "$W/secrets"
