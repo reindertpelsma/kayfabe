@@ -31,3 +31,18 @@ compared with this board's native oracle before another wall-clearing run.
 
 No Turing hardware pass or complete family acceptance is claimed. Both OS suites
 across several supported driver builds remain required; this wave starts at580.
+
+
+First SSH15:44:57UTC: root146GiB/138GiB available,KVM present,19CPUs,
+50,541MiB RAM, GPU8192MiB, PCI device1f06, initial stock575.51.03,
+kernel6.8.0-59. Native Windows install queued via pinned
+windows-on-vast93b65b3347601f35f4146602ff85950e389b409f and
+reinstall80c3d5e175f39c2d2bbd267cd583842140154140. Expected final Windows
+SSH public host key was saved before the intentional Linux/installer reboots.
+Native oracle now explicitly rejects nonzero adapter code, hash mismatches and
+unreadable System logs; zero events is not inferred from a failed log query.
+
+Windows runner now honors WIN_GUEST_DRIVER for a measured public same-CL tag,
+records it and refuses malformed/injected properties before launch. Default
+remains580.65.06 for Windows580.88. Before/after actual argv is tested with
+stubbed QEMU;26harness tests pass. This adds no new driver compatibility claim.
