@@ -4,7 +4,8 @@
  *
  * A legacy (non-PnP) WDM driver, loaded on demand on a machine we own, that
  *   1. finds the NVIDIA display device through PCI configuration space reads,
- *   2. maps the first 1.1 MiB of its BAR0 read-only (MmMapIoSpaceEx, PAGE_READONLY),
+ *   2. maps the BAR0 prefix through the fixed display-caps page read-only
+ *      (MmMapIoSpaceEx, PAGE_READONLY); only whitelisted registers may be read,
  *   3. runs the platform independent engine (lib/): boot-args mailbox discovery, RAM scan
  *      fallback, queue walker, loss accounting, on a PASSIVE_LEVEL system thread with a bounded
  *      per-iteration budget,
@@ -44,6 +45,7 @@ typedef const volatile UCHAR *KFWC_MMIO;
 
 C_ASSERT(KFWC_IOCTL_INFO == CTL_CODE(FILE_DEVICE_UNKNOWN, 0x800, METHOD_BUFFERED, FILE_READ_ACCESS));
 C_ASSERT(KFWC_IOCTL_STOP == CTL_CODE(FILE_DEVICE_UNKNOWN, 0x804, METHOD_BUFFERED, FILE_READ_ACCESS));
+C_ASSERT(KFWC_IOCTL_DISPLAY_CAPS == CTL_CODE(FILE_DEVICE_UNKNOWN, 0x805, METHOD_BUFFERED, FILE_READ_ACCESS));
 
 typedef struct GPU {
     ULONG bus, dev, fn;
@@ -525,6 +527,22 @@ NTSTATUS KfwcDispatch(PDEVICE_OBJECT device, PIRP irp)
             ExReleaseFastMutex(&s->lock);
             info = sizeof(*i);
             status = STATUS_SUCCESS;
+        } else if (code == KFWC_IOCTL_DISPLAY_CAPS && in_len == 0 && out_len >= sizeof(kfwc_display_caps_out)) {
+            kfwc_display_caps_out *o = (kfwc_display_caps_out *)buf;
+            RtlZeroMemory(o, sizeof(*o));
+            ExAcquireFastMutex(&s->lock);
+            if (!s->gpu_count)
+                pci_find_gpus(s);
+            status = STATUS_DEVICE_NOT_READY;
+            if (s->gpu_sel < s->gpu_count &&
+                !kfwc_display_caps_read(&s->plat, o->words, KFWC_DISPLAY_CAPS_WORDS)) {
+                o->pci_vendor_id = s->gpus[s->gpu_sel].vendor;
+                o->pci_device_id = s->gpus[s->gpu_sel].device;
+                o->word_count = KFWC_DISPLAY_CAPS_WORDS;
+                info = sizeof(*o);
+                status = STATUS_SUCCESS;
+            }
+            ExReleaseFastMutex(&s->lock);
         } else if (code == KFWC_IOCTL_STATS && in_len == 0 && out_len >= sizeof(kfwc_stats_out)) {
             kfwc_stats_out *o = (kfwc_stats_out *)buf;
             ExAcquireFastMutex(&s->lock);
@@ -552,7 +570,7 @@ NTSTATUS KfwcDispatch(PDEVICE_OBJECT device, PIRP irp)
             capture_stop(s);
             status = STATUS_SUCCESS;
         } else if (code == KFWC_IOCTL_INFO || code == KFWC_IOCTL_STATS || code == KFWC_IOCTL_EVENTS ||
-                   code == KFWC_IOCTL_START || code == KFWC_IOCTL_STOP) {
+                   code == KFWC_IOCTL_START || code == KFWC_IOCTL_STOP || code == KFWC_IOCTL_DISPLAY_CAPS) {
             status = STATUS_BUFFER_TOO_SMALL;
         }
         break;

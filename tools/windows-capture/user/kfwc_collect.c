@@ -154,7 +154,7 @@ int main(int argc, char **argv)
     unsigned char *buf;
     kfwc_cap_file fh;
     unsigned char hb[KFWC_CAP_FILE_HEADER_BYTES];
-    int i, rc = 1, status_only = 0;
+    int i, rc = 1, status_only = 0, caps_only = 0;
     ULONGLONG deadline;
     char build[64] = "", ubr[32] = "", dispver[32] = "", drvver[64] = "";
     static kfwc_meta meta;
@@ -193,6 +193,8 @@ int main(int argc, char **argv)
             req.gpu_index = (kfwc_u32)strtoul(argv[++i], NULL, 10);
         else if (!strcmp(argv[i], "--status"))
             status_only = 1;
+        else if (!strcmp(argv[i], "--display-caps"))
+            caps_only = 1;
         else if (argv[i][0] != '-' && !outdir)
             outdir = argv[i];
         else {
@@ -200,9 +202,10 @@ int main(int argc, char **argv)
             return 2;
         }
     }
-    if ((!outdir && !status_only) || seconds == 0 || seconds > 86400) {
+    if ((!outdir && !status_only && !caps_only) || (caps_only && (status_only || req.gpu_index != 0)) ||
+        seconds == 0 || seconds > 86400) {
         fprintf(stderr, "usage: kfwc_collect OUTDIR [--seconds N] [--stop-file P] [--decode-tag T] [--layout auto|pre610|610]\n"
-                        "                    [--no-mailbox] [--no-scan] [--no-backoff] [--backoff-ms INITIAL MAX] [--gpu N] | --status\n");
+                        "                    [--no-mailbox] [--no-scan] [--no-backoff] [--backoff-ms INITIAL MAX] [--gpu N] | --status | --display-caps\n");
         return 2;
     }
     dev = CreateFileA(KFWC_DEVICE_USER_PATH, GENERIC_READ, 0, NULL, OPEN_EXISTING, 0, NULL);
@@ -215,6 +218,42 @@ int main(int argc, char **argv)
         fprintf(stderr, "driver ABI mismatch or INFO failed\n");
         CloseHandle(dev);
         return 1;
+    }
+    if (caps_only) {
+        kfwc_display_caps_out caps;
+        unsigned int attempt, j, nonzero = 0;
+        int ok = 0;
+        /* BAR mapping requires 20 ms of stable PCI configuration. At most 21 attempts,
+         * separated by 50 ms; every attempt reads at most the fixed 1024 words. */
+        for (attempt = 0; attempt < 21u; attempt++) {
+            if (!ioctl_out(dev, KFWC_IOCTL_DISPLAY_CAPS, &caps, sizeof(caps), &n) &&
+                n == sizeof(caps) && caps.word_count == KFWC_DISPLAY_CAPS_WORDS) {
+                ok = 1;
+                break;
+            }
+            Sleep(50);
+        }
+        if (!ok) {
+            fprintf(stderr, "display caps unavailable: Win32 %lu (new measurement driver, powered display engine?)\n", GetLastError());
+            CloseHandle(dev);
+            return 1;
+        }
+        nvidia_driver_version(drvver, sizeof(drvver));
+        printf("# kf-display-caps-page v1\n# native Windows driver %s vendor 0x%04x device 0x%04x\n",
+               drvver, (unsigned)caps.pci_vendor_id, (unsigned)caps.pci_device_id);
+        printf("DECISIVE 0x00c 0x%08x\n", (unsigned)caps.words[3]);
+        for (j = 0; j < 8u; j += 2u)
+            printf("EVENCAPA %u 0x%03x 0x%08x\n", j, 0x780u + j * 0x20u,
+                   (unsigned)caps.words[(0x780u + j * 0x20u) / 4u]);
+        for (j = 0; j < KFWC_DISPLAY_CAPS_WORDS; j++) {
+            if (caps.words[j]) {
+                printf("WORD 0x%03x 0x%08x\n", j * 4u, (unsigned)caps.words[j]);
+                nonzero++;
+            }
+        }
+        printf("# end words=%u\n", nonzero);
+        CloseHandle(dev);
+        return 0;
     }
     if (status_only) {
         printf("{\"driver_abi\":%u,\"running\":%u}\n", (unsigned)info.driver_abi, (unsigned)info.running);
