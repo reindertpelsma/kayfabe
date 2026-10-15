@@ -1,5 +1,5 @@
 windows build                26100          Microsoft Windows 11 Enterprise LTSC Evaluation
-secure boot                  off            
+secure boot                  off
 testsigning                  off            bcdedit /set {current} testsigning on needs Secure Boot off
 VBS / HVCI                   0 / 0          2 running = VBS on; 2 in services = HVCI (test signing still loads, see doc)
 nvidia gpu                   DEV_2D05       driver 32.0.15.8088, status OK

@@ -7,7 +7,7 @@ NATIVE_TRACE_HASH_OK=kf-census.exe
 NATIVE_TRACE_HASH_OK=caps\kfwc_collect.exe
 {"Name":"NVIDIA GeForce RTX 5060","DriverVersion":"32.0.15.8088","ConfigManagerErrorCode":0,"Status":"OK"}
 windows build                26100          Microsoft Windows 11 Enterprise LTSC Evaluation
-secure boot                  off            
+secure boot                  off
 testsigning                  on             bcdedit /set {current} testsigning on needs Secure Boot off
 VBS / HVCI                   0 / 0          2 running = VBS on; 2 in services = HVCI (test signing still loads, see doc)
 nvidia gpu                   DEV_2D05       driver 32.0.15.8088, status OK
@@ -17,16 +17,16 @@ RAM (MiB)                    51480          the RAM scan fallback reads all of i
 signed with                  Set-AuthenticodeSignature status Valid
 [SC] CreateService SUCCESS
 
-SERVICE_NAME: KayfabeWinCapture 
-        TYPE               : 1  KERNEL_DRIVER  
-        STATE              : 4  RUNNING 
+SERVICE_NAME: KayfabeWinCapture
+        TYPE               : 1  KERNEL_DRIVER
+        STATE              : 4  RUNNING
                                 (STOPPABLE, NOT_PAUSABLE, IGNORES_SHUTDOWN)
         WIN32_EXIT_CODE    : 0  (0x0)
         SERVICE_EXIT_CODE  : 0  (0x0)
         CHECKPOINT         : 0x0
         WAIT_HINT          : 0x0
         PID                : 0
-        FLAGS              : 
+        FLAGS              :
 Loaded. Certificate thumbprint (keep for -Action Cleanup): 890D65C4F5DAC1189639C725022B0CA3A210324B
 Next: kfwc_collect.exe C:\traces\run1 --seconds 600   (the folder must exist and be empty)
 {"driver_abi":3,"running":0}

@@ -3,7 +3,7 @@ NATIVE_TOOL_HASH_OK=caps\kfwc.sys
 NATIVE_TOOL_HASH_OK=kf-census.exe
 NATIVE_TOOL_HASH_OK=caps\kfwc_collect.exe
 windows build                26100          Microsoft Windows 11 Enterprise LTSC Evaluation
-secure boot                  off            
+secure boot                  off
 testsigning                  off            bcdedit /set {current} testsigning on needs Secure Boot off
 VBS / HVCI                   0 / 0          2 running = VBS on; 2 in services = HVCI (test signing still loads, see doc)
 nvidia gpu                   DEV_2D05       driver 10.0.26100.1, status Error

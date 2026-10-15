@@ -5,9 +5,9 @@ RAW_CAPTURE phase=seedwindow580 bytes=14525664 sha256=55660da1a5c33376b11ab5821e
 RAW_CAPTURE phase=revisitwindow580 bytes=46710336 sha256=b5f264924ea9d57532c53f591d8881c198f9bd8096049ffc7ee0a3beb23fa8d1
 {"Name":"NVIDIA GeForce RTX 5060","DriverVersion":"32.0.15.8088","ConfigManagerErrorCode":0,"Status":"OK"}
 
-SERVICE_NAME: KayfabeWinCapture 
-        TYPE               : 1  KERNEL_DRIVER  
-        STATE              : 1  STOPPED 
+SERVICE_NAME: KayfabeWinCapture
+        TYPE               : 1  KERNEL_DRIVER
+        STATE              : 1  STOPPED
         WIN32_EXIT_CODE    : 0  (0x0)
         SERVICE_EXIT_CODE  : 0  (0x0)
         CHECKPOINT         : 0x0
