@@ -1,0 +1,12 @@
+Traceback (most recent call last):
+  File "/root/kayfabe/scripts/bench/windows/qmp.py", line 201, in <module>
+    sys.exit(main(sys.argv))
+  File "/root/kayfabe/scripts/bench/windows/qmp.py", line 195, in main
+    return qga_exec(sock, rest[0], rest[1:])
+  File "/root/kayfabe/scripts/bench/windows/qmp.py", line 160, in qga_exec
+    r = recv(f)
+  File "/root/kayfabe/scripts/bench/windows/qmp.py", line 42, in recv
+    line = f.readline()
+  File "/usr/lib/python3.10/socket.py", line 705, in readinto
+    return self._sock.recv_into(b)
+TimeoutError: timed out

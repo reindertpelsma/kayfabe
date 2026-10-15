@@ -1,0 +1,20 @@
+Recovery
+
+Your PC/Device needs to be repaired
+
+The application or operating system couldn't be loaded because a required file is missing or
+contains errors.
+
+File: \Windows\system32\winload.efi
+Error code: Oxc00000bb
+
+You'll need to use recovery tools. If you don't have any installation media (like a disc or USB
+device), contact your PC administrator or PC/Device manufacturer.
+
+Press Enter to try again
+
+Press F1 to enter Recovery Environment
+Press F8 for Startup Settings
+
+Press Esc for UEFI Firmware Settings
+

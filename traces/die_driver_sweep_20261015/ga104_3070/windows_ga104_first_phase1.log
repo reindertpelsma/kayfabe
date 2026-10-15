@@ -1,0 +1,18 @@
+DIE_RUN_START phase1 2026-10-15T11:18:17+00:00
+WIN_DIE_START kf3=ba864a55 checkout=67a4bc953 gpu=NVIDIA GeForce RTX 3070 xid_before=20 2026-10-15T11:18:17+00:00
+[win_die] QEMU 113240 kf3 ba864a55 run /root/win/codex-ga104
+[win_die] FAIL QEMU is gone
+Traceback (most recent call last):
+  File "/root/kayfabe/scripts/bench/windows/qmp.py", line 201, in <module>
+    sys.exit(main(sys.argv))
+  File "/root/kayfabe/scripts/bench/windows/qmp.py", line 185, in main
+    return cmd(sock, rest[0], rest[1] if len(rest) > 1 else None)
+  File "/root/kayfabe/scripts/bench/windows/qmp.py", line 75, in cmd
+    s, f = qmp_open(sock)
+  File "/root/kayfabe/scripts/bench/windows/qmp.py", line 49, in qmp_open
+    s, f = connect(path, timeout)
+  File "/root/kayfabe/scripts/bench/windows/qmp.py", line 33, in connect
+    s.connect(path)
+ConnectionRefusedError: [Errno 111] Connection refused
+[win_die] FAIL screendump failed
+DIE_RUN_EXIT phase1 rc=3 2026-10-15T11:18:22+00:00

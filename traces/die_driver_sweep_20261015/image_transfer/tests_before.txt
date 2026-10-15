@@ -1,0 +1,36 @@
+FF
+======================================================================
+FAIL: test_failed_decompression_is_not_hidden_by_successful_dd (test_push_image.PushImageTests.test_failed_decompression_is_not_hidden_by_successful_dd)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/codex/wt/scripts/bench/tests/test_push_image.py", line 40, in test_failed_decompression_is_not_hidden_by_successful_dd
+    self.run_failed_stream('receiver')
+    ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/workspace/codex/wt/scripts/bench/tests/test_push_image.py", line 36, in run_failed_stream
+    self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 0 == 0 : CHUNK 00 ok try=1 13:31:35
+
+
+======================================================================
+FAIL: test_sender_failure_does_not_mark_a_successful_receiver_complete (test_push_image.PushImageTests.test_sender_failure_does_not_mark_a_successful_receiver_complete)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/codex/wt/scripts/bench/tests/test_push_image.py", line 43, in test_sender_failure_does_not_mark_a_successful_receiver_complete
+    self.run_failed_stream('sender')
+    ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "/workspace/codex/wt/scripts/bench/tests/test_push_image.py", line 37, in run_failed_stream
+    self.assertFalse((root / 'done' / 'c00').exists(), result.stdout + result.stderr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: True is not false : CHUNK 00 FAILED try=1 13:31:35
+CHUNK 00 FAILED try=2 13:31:35
+CHUNK 00 FAILED try=3 13:31:35
+CHUNK 00 FAILED try=4 13:31:35
+CHUNK 00 FAILED try=5 13:31:35
+CHUNK 00 FAILED try=6 13:31:35
+
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.103s
+
+FAILED (failures=2)

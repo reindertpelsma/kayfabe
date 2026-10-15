@@ -1,0 +1,10 @@
+START 2026-10-15T11:36:08+00:00
+From https://github.com/reindertpelsma/kayfabe
+ * branch                codex/hardware-regression-20261015 -> FETCH_HEAD
+ * [new branch]          codex/hardware-regression-20261015 -> origin/codex/hardware-regression-20261015
+Switched to a new branch 'codex/hardware-regression-20261015'
+Branch 'codex/hardware-regression-20261015' set up to track remote branch 'codex/hardware-regression-20261015' from 'origin'.
+FAST_SUITE_STARTED=2026-10-15T11:36:29+00:00 arms=30 budget=180s
+FAST_SUITE_PASS=30 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=0 NOTRUN=0 ARMS=30
+FAST_SUITE_RC=0
+EXIT rc=0 2026-10-15T11:42:17+00:00

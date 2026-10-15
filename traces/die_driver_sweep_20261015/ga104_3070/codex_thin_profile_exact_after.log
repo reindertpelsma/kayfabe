@@ -1,0 +1,25 @@
+== kf3 binary: /workspace/bench/kf3-bins/ba864a55/qemu-system-x86_64 (rev 62cc9789)
+== serializing on /tmp/kayfabe-fastguest.lock (GPU runs are strictly serial)
+== arms: --timer,--probe-launch-dma   budget: 180s   self-deadline: 176000ms   trace: ring
+== qemu:  /workspace/bench/kf3-bins/ba864a55/qemu-system-x86_64  (built 2026-10-15 10:00:48)
+KF_GUEST_PROFILE image=/workspace/bench/fastguest/initrd.cpio.gz source=explicit version=580.159.04
+== device(s): -device kf3-gpu,fb-mb=6144,bar1-size=134217728,bar2-size=33554432,id=kf0,guest-driver=580.159.04
+== console: hvc (console=ttyS0 console=hvc0)
+=== FAST GUEST codex_thin_profile_exact_after — 5s of a 180s budget, qemu rc=0 ===
+    FASTGUEST: up 2.32s
+    FASTGUEST: switch_root prepared in 0.5s
+    FASTGUEST: up 2.81s
+    FASTGUEST: root is a real mount (switch_root done) — the isolate sandbox can pivot_root
+    FASTGUEST: insmod ecc.ko ok
+    FASTGUEST: insmod nvidia.ko ok
+    FASTGUEST: insmod nvidia-uvm.ko ok
+    FASTGUEST: insmod wmi.ko ok
+    FASTGUEST: insmod video.ko ok
+    FASTGUEST: insmod nvidia-modeset.ko ok
+    FASTGUEST: nodes /dev/nvidia-caps/nvidia-cap1 /dev/nvidia-uvm /dev/nvidia-uvm-tools /dev/nvidia0 /dev/nvidiactl  /dev/nvidia-caps: nvidia-cap1 
+    FASTGUEST: ready 2.94s
+    FASTGUEST: arms --timer --probe-launch-dma  deadline 175s (budget 180s, 2s already spent booting)
+    FASTGUEST: client rc=0 at 3.64s
+    FASTGUEST: DONE
+== hardware: 0 doorbell(s) forwarded across 0 guest token(s); 0 stranded, 0 declared by the operand gate
+FAST_VERDICT=PASS (5s)

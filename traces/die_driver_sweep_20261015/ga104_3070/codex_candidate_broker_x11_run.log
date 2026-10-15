@@ -1,0 +1,21 @@
+INTERACTIVE_START kf3=8e45edc8 checkout=8e45edc8 2026-10-15T11:41:07+00:00
+[interactive] session: root (uid 0) session codex-test type=x11 wayland=none x=:99; locked=no
+[interactive] broker: pid 122449, backend x11, socket /run/user/0/nvkvm/display.sock, badf2d707da4 (/opt/nvkvm-broker/nvkvm-display-broker)
+[interactive] QEMU pid 122458, kf3 8e45edc8 (/workspace/bench/kf3-bins/8e45edc8/qemu-system-x86_64)
+
+  ┌──────────────────────────────────────────────────────────────────────────────┐
+  │ kayfabe guest window: "kayfabe guest" on root's desktop
+  │   pointer      hover = absolute tablet (the guest pointer follows yours)
+  │   CTRL+ALT+G   GRAB: keyboard + pointer locked to the guest, relative mouse (GNOME asks
+  │                once whether to allow inhibiting shortcuts: click Allow);
+  │                press CTRL+ALT+G again to RELEASE (focus loss also releases)
+  │   CTRL+ALT+F   fullscreen on/off
+  │   grub menu    10 s after TianoCore; arrows, e and Enter work in the window
+  │   desktop      Cinnamon logs in by itself as 'ubuntu' (~60-90 s)
+  │   stop         Ctrl-C here, or: scripts/bench/display/interactive.sh stop  (or close the window: it asks the
+  │                guest to power down)
+  │   guest ssh    ssh -i /workspace/bench/guest_key ubuntu@IP-REDACTED
+  │   logs         /root/codex-broker/validation-candidate
+  └──────────────────────────────────────────────────────────────────────────────┘
+[interactive] QEMU exited rc=0 (log /root/codex-broker/validation-candidate/qemu.log)
+INTERACTIVE_EXIT rc=0 2026-10-15T11:42:15+00:00

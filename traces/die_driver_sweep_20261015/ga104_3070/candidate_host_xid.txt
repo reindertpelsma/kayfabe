@@ -1,0 +1,7 @@
+[Thu Oct 15 11:04:45 2026] NVRM: Xid (PCI:0000:00:07): 31, pid=110181, name=qemu-system-x86, channel 0x0000001b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+[Thu Oct 15 11:37:23 2026] NVRM: Xid (PCI:0000:00:07): 31, pid=117815, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+[Thu Oct 15 11:37:26 2026] NVRM: Xid (PCI:0000:00:07): 31, pid=117815, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+[Thu Oct 15 11:37:29 2026] NVRM: Xid (PCI:0000:00:07): 31, pid=117815, name=qemu-system-x86, channel 0x0000001b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+[Thu Oct 15 11:37:32 2026] NVRM: Xid (PCI:0000:00:07): 31, pid=117815, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+[Thu Oct 15 11:38:14 2026] NVRM: Xid (PCI:0000:00:07): 31, pid=118733, name=qemu-system-x86, channel 0x0000001b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+HOST_BROKER_XID_COUNT=0
