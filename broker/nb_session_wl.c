@@ -478,6 +478,29 @@ struct nb_wl {
     bool                    gc_broken;  /* allocation failed: show none    */
 
     /*
+     * THE GUEST'S CURSOR UNDER GRAB (CAP_CURSOR_STREAM).  The pointer is
+     * locked, so there is no host pointer to carry the image: it is drawn as
+     * an overlay -- a wl_subsurface of the content surface placed above it, so
+     * the dma-buf frame is never touched -- at the last MOVE, scaled with the
+     * frame exactly as the host-pointer image is (gc_scale_now), the image
+     * rendered in device pixels with a viewport down to logical size.  Hover
+     * does not use it: there the host pointer is the guest's.
+     */
+    struct wl_surface      *ov_surf;
+    struct wl_subsurface   *ov_sub;
+    struct wp_viewport     *ov_vp;
+    struct wl_shm_pool     *ov_pool;
+    uint32_t               *ov_px;
+    struct nb_wl_gcslot     ov_slot[NB_GC_SLOTS];
+    bool                    ov_valid;   /* ov_surf holds ov_gen at ov_geom */
+    uint64_t                ov_gen;
+    struct nb_cursor_geom   ov_geom, ov_bgeom;
+    bool                    ov_on;      /* a buffer is attached            */
+    bool                    ov_starved; /* a re-render waits on a release  */
+    bool                    ov_broken;
+    int32_t                 ov_px_x, ov_px_y; /* last position, logical    */
+
+    /*
      * EV_DEVICE.  A SECOND zwp_linux_dmabuf_v1 object, bound at version 4,
      * used for nothing but get_default_feedback's main_device: the first
      * object stays at version 3 because version 4 stops the format/modifier
@@ -2268,7 +2291,7 @@ static bool gc_render(struct nb_wl *w)
     return true;
 }
 
-static void gc_refresh(struct nb_wl *w)
+static void gc_refresh_ptr(struct nb_wl *w)
 {
     bool want;
 
@@ -2289,6 +2312,260 @@ static void gc_refresh(struct nb_wl *w)
         }
     }
     cur_apply(w, w->last_serial);
+}
+
+/* ── the guest's cursor under grab: the overlay ───────────────────────────── */
+
+static void ov_buf_release(void *data, struct wl_buffer *b)
+{
+    struct nb_wl_gcslot *slot = data;
+    struct nb_wl *w = slot->w;
+
+    (void)b;
+    slot->busy = false;
+    if (w->ov_starved) {
+        w->ov_starved = false;
+        gc_refresh(w);
+    }
+}
+static const struct wl_buffer_listener ov_buf_listener = {
+    .release = ov_buf_release,
+};
+
+static void ov_geom_now(const struct nb_wl *w, struct nb_cursor_geom *g,
+                        struct nb_cursor_geom *b)
+{
+    uint32_t nx, dx, ny, dy;
+
+    gc_scale_now(w, &nx, &dx, &ny, &dy);
+    nb_cursor_scaled_geom(w->gcur, nx, dx, ny, dy, NB_CURSOR_SCALED_MAX, g);
+    if (w->ov_vp) {
+        nb_cursor_device_geom(w->gcur, nx, dx, ny, dy, w->scale_120,
+                              NB_CURSOR_SCALED_MAX, b);
+    } else {
+        *b = *g;
+    }
+}
+
+/* The surface, its subsurface, its (empty) input region and its pool: once. */
+static bool ov_ensure(struct nb_wl *w)
+{
+    const size_t sz = NB_GC_SLOTS * NB_GC_SLOT_BYTES;
+    struct wl_region *none;
+    uint32_t *px;
+    int fd, i;
+
+    if (w->ov_pool) {
+        return true;
+    }
+    if (w->ov_broken || !w->shm || !w->comp || !w->subcomp || !w->surf) {
+        return false;
+    }
+    fd = memfd_create("nvkvm-broker-guest-cursor-overlay", MFD_CLOEXEC);
+    if (fd < 0 || ftruncate(fd, (off_t)sz) < 0) {
+        goto broken;
+    }
+    px = mmap(NULL, sz, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if (px == MAP_FAILED) {
+        goto broken;
+    }
+    w->ov_pool = wl_shm_create_pool(w->shm, fd, (int32_t)sz);
+    close(fd);
+    fd = -1;
+    if (!w->ov_pool) {
+        munmap(px, sz);
+        goto broken;
+    }
+    w->ov_surf = wl_compositor_create_surface(w->comp);
+    w->ov_sub = w->ov_surf ? wl_subcompositor_get_subsurface(w->subcomp, w->ov_surf,
+                                                              w->surf) : NULL;
+    if (!w->ov_sub) {
+        if (w->ov_surf) {
+            wl_surface_destroy(w->ov_surf);
+            w->ov_surf = NULL;
+        }
+        wl_shm_pool_destroy(w->ov_pool);
+        w->ov_pool = NULL;
+        munmap(px, sz);
+        goto broken;
+    }
+    w->ov_px = px;
+    for (i = 0; i < NB_GC_SLOTS; i++) {
+        w->ov_slot[i].w = w;
+    }
+    wl_subsurface_place_above(w->ov_sub, w->surf);
+    /* Desynchronised: its buffer shows when ITS commit lands, not the parent's. */
+    wl_subsurface_set_desync(w->ov_sub);
+    /* No input: the overlay is never what the pointer is "over". */
+    none = wl_compositor_create_region(w->comp);
+    if (none) {
+        wl_surface_set_input_region(w->ov_surf, none);
+        wl_region_destroy(none);
+    }
+    if (w->viewporter) {
+        w->ov_vp = wp_viewporter_get_viewport(w->viewporter, w->ov_surf);
+    }
+    return true;
+
+broken:
+    if (fd >= 0) {
+        close(fd);
+    }
+    nb_err("guest cursor: could not set up its overlay surface (%s); under "
+           "grab no guest cursor is drawn by this program", strerror(errno));
+    w->ov_broken = true;
+    return false;
+}
+
+static void ov_hide(struct nb_wl *w)
+{
+    if (!w->ov_on) {
+        return;
+    }
+    wl_surface_attach(w->ov_surf, NULL, 0, 0);
+    wl_surface_commit(w->ov_surf);
+    w->ov_on = false;
+    w->ov_valid = false;
+}
+
+static bool ov_geom_eq(const struct nb_cursor_geom *a,
+                       const struct nb_cursor_geom *b)
+{
+    return a->w == b->w && a->h == b->h && a->hot_x == b->hot_x &&
+           a->hot_y == b->hot_y;
+}
+
+/*
+ * Draw, move or take down the overlay for the held cursor.  Called from every
+ * place gc_refresh() is: a new image, a MOVE, a grab change, a scale change.
+ */
+static void ov_refresh(struct nb_wl *w)
+{
+    struct nb_cursor_geom g, b;
+    const struct nb_cursor *c = w->gcur;
+    bool want = !w->dlg_open && w->current >= 0 &&
+                nb_cursor_policy(c, w->grabbed, true) == NB_CURSOR_OVERLAY;
+    uint32_t nx, dx, ny, dy;
+    int32_t lx, ly;
+    int i, slot = -1;
+
+    if (!want) {
+        ov_hide(w);
+        return;
+    }
+    if (!ov_ensure(w)) {
+        return;
+    }
+    ov_geom_now(w, &g, &b);
+    if (!(w->ov_valid && w->ov_on && w->ov_gen == c->gen &&
+          ov_geom_eq(&w->ov_geom, &g) && ov_geom_eq(&w->ov_bgeom, &b))) {
+        struct wl_buffer *buf;
+        uint32_t *px;
+
+        for (i = 0; i < NB_GC_SLOTS; i++) {
+            if (!w->ov_slot[i].busy) {
+                slot = i;
+                break;
+            }
+        }
+        if (slot < 0) {
+            /* Never draw into a buffer the compositor may still be reading;
+             * the release re-runs this. */
+            w->ov_starved = true;
+            return;
+        }
+        if (b.w == 0 || b.h == 0 || (size_t)b.w * b.h > NB_GC_SLOT_PX) {
+            return;
+        }
+        if (w->ov_slot[slot].buf) {
+            wl_buffer_destroy(w->ov_slot[slot].buf);
+            w->ov_slot[slot].buf = NULL;
+        }
+        px = w->ov_px + (size_t)slot * NB_GC_SLOT_PX;
+        nb_cursor_scale(c, px, b.w, b.h);
+        buf = wl_shm_pool_create_buffer(w->ov_pool,
+                                        (int32_t)((size_t)slot * NB_GC_SLOT_BYTES),
+                                        (int32_t)b.w, (int32_t)b.h,
+                                        (int32_t)(b.w * 4u),
+                                        WL_SHM_FORMAT_ARGB8888);
+        if (!buf) {
+            return;
+        }
+        wl_buffer_add_listener(buf, &ov_buf_listener, &w->ov_slot[slot]);
+        w->ov_slot[slot].buf = buf;
+        w->ov_slot[slot].busy = true;
+        if (w->ov_vp) {
+            if (b.w == g.w && b.h == g.h) {
+                wp_viewport_set_destination(w->ov_vp, -1, -1);
+            } else {
+                wp_viewport_set_destination(w->ov_vp, (int32_t)g.w, (int32_t)g.h);
+            }
+        }
+        wl_surface_attach(w->ov_surf, buf, 0, 0);
+        wl_surface_damage_buffer(w->ov_surf, 0, 0, (int32_t)b.w, (int32_t)b.h);
+        w->ov_valid = true;
+        w->ov_gen = c->gen;
+        w->ov_geom = g;
+        w->ov_bgeom = b;
+        w->ov_on = true;
+        w->ov_px_x = w->ov_px_y = INT32_MIN;    /* place it below */
+    }
+    /* The image's top-left on the frame, to the surface's logical pixels: the
+     * same factor the frame itself is shown at.  Its top-left is the position
+     * (the hot spot is the host pointer's business, not the overlay's). */
+    gc_scale_now(w, &nx, &dx, &ny, &dy);
+    lx = (int32_t)((int64_t)c->x * nx / dx);
+    ly = (int32_t)((int64_t)c->y * ny / dy);
+    if (lx != w->ov_px_x || ly != w->ov_px_y) {
+        w->ov_px_x = lx;
+        w->ov_px_y = ly;
+        wl_subsurface_set_position(w->ov_sub, lx, ly);
+        /* a subsurface's position is parent state: applied by the parent's commit */
+        wl_surface_commit(w->ov_surf);
+        wl_surface_commit(w->surf);
+    }
+}
+
+static void ov_drop(struct nb_wl *w)
+{
+    int i;
+
+    for (i = 0; i < NB_GC_SLOTS; i++) {
+        if (w->ov_slot[i].buf) {
+            wl_buffer_destroy(w->ov_slot[i].buf);
+            w->ov_slot[i].buf = NULL;
+        }
+        w->ov_slot[i].busy = false;
+    }
+    if (w->ov_vp) {
+        wp_viewport_destroy(w->ov_vp);
+        w->ov_vp = NULL;
+    }
+    if (w->ov_sub) {
+        wl_subsurface_destroy(w->ov_sub);
+        w->ov_sub = NULL;
+    }
+    if (w->ov_surf) {
+        wl_surface_destroy(w->ov_surf);
+        w->ov_surf = NULL;
+    }
+    if (w->ov_pool) {
+        wl_shm_pool_destroy(w->ov_pool);
+        w->ov_pool = NULL;
+    }
+    if (w->ov_px) {
+        munmap(w->ov_px, NB_GC_SLOTS * NB_GC_SLOT_BYTES);
+        w->ov_px = NULL;
+    }
+    w->ov_valid = false;
+    w->ov_on = false;
+}
+
+/* The host-pointer image (hover) and the overlay (grab) follow the same state. */
+static void gc_refresh(struct nb_wl *w)
+{
+    gc_refresh_ptr(w);
+    ov_refresh(w);
 }
 
 static void wl_cursor_op(struct nb_session *s, const struct nb_cursor *cur)
@@ -4373,6 +4650,7 @@ static void wl_close_session(struct nb_session *s)
     wl_idle_drop(w);
     tb_drop(w);
     gc_drop(w);
+    ov_drop(w);
 #ifdef ZWP_LINUX_DMABUF_V1_GET_DEFAULT_FEEDBACK_SINCE_VERSION
     if (w->dmabuf_fb) {
         zwp_linux_dmabuf_feedback_v1_destroy(w->dmabuf_fb);
@@ -4738,6 +5016,15 @@ static int wl_open(struct nb_session *s, const struct nb_config *cfg)
      * Wayland, and wl_pointer.set_cursor is how every client sets a pointer. */
     if (w->shm && w->comp) {
         s->caps |= NVKVM_BROKER_CAP_CURSOR;
+        /* ... and the stream needs one thing more: a subsurface to draw the
+         * cursor on under grab, where there is no host pointer to carry it */
+        if (w->subcomp) {
+            s->caps |= NVKVM_BROKER_CAP_CURSOR_STREAM;
+        } else {
+            nb_log("the compositor offers no wl_subcompositor: CAP_CURSOR_STREAM "
+                   "is not advertised, so a VMM keeps composing the guest's "
+                   "cursor into the frame");
+        }
     }
     if (!(s->dev_flags & NVKVM_BROKER_DEVICE_F_KNOWN)) {
         nb_log("the compositor did not say which GPU it imports on (%s); "
