@@ -17,6 +17,7 @@ pub mod authored;
 pub mod barpde;
 pub mod census;
 pub mod chanlink;
+pub mod consttab;
 pub mod defapi;
 pub mod display;
 pub mod display_ctrl_probe;
@@ -31,13 +32,14 @@ pub mod hostquery;
 pub mod hoststub;
 pub mod inert;
 pub mod inittables;
-pub mod memory_list;
 pub mod memory_access;
+pub mod memory_list;
 pub mod osevent;
 pub mod pmsr;
 pub mod preempt_bind_probe;
 pub mod rmgraph;
 pub mod rmrpc;
+pub mod rowserve;
 pub mod rpc;
 pub mod staticinfo;
 pub mod sticky;
@@ -648,7 +650,7 @@ pub fn served_chain(
         Box::new(pmsr::PmSuspendResumePolicy::new(driver)),
         // ★ v3-gfx: the per-VM ZBC table — claims only `0x9096xxxx` controls, answers them from
         // its own state and never forwards (`zbc.rs`).
-        Box::new(zbc::ZbcPolicy::new(driver, host.zbc_table_sizes)),
+        Box::new(zbc::ZbcPolicy::new(driver, host.zbc_table_sizes, host.die)),
         // ★ 2026-10-07: RC-recovery GET/SET (a stub under owner ruling §S) and the power source,
         // answered per VM; never forwarded (`vfguest.rs`).
         Box::new(vfguest::VfGuestPolicy::new(driver)),

@@ -3429,13 +3429,20 @@ straight alpha, each with or without a surface alpha in K1), EVO2's only `_ALPHA
 (`clc37d.h:836`), so an XOR cursor reaches a head only from a guest that writes the core channel
 itself — a hostile one, or another OS's driver.
 
+**⚠ CORRECTED 2026-10-15 (see [`V3_DISPLAY_CURSOR_FORMATS.md`](V3_DISPLAY_CURSOR_FORMATS.md)): `A1R5G5B5` is no longer refused.**
+Windows' text I-beam is invisible because the stock Windows driver programs a non-`A8R8G8B8` cursor (inferred:
+`A1R5G5B5`, probably with `MODE_XOR`), which both paths refused. It is now expanded to 32 bits from the GPU's copy and
+composed (blend and XOR), the host cursor converts blend-mode ones, and `KF3_DEBUG_CURSOR=1` dumps what a guest really
+programs. The paragraph below is the 2026-10-04 text, kept for its derivation; its sentence "`A1R5G5B5` stays refused by name"
+is SUPERSEDED, and the masked-colour question is still open until the dump is read.
+
 **The XOR blend, as built — a DEFINITION, stated as one:** `out = below XOR (source & 0x00ffffff)`;
 alpha and the composition factors play no part (the class header names the mode and says nothing of
 what it computes). The literal reading was taken: an all-zero image composes to nothing, a white
 pixel inverts. ⚠ The alternative is the masked-colour reading (alpha as the AND mask, which lets one
 surface carry opaque pixels too — what a Windows monochrome pointer needs); only hardware, with a
-producer that programs the mode, can settle it. `A1R5G5B5` stays refused by name (the kernel moves
-32-bit pixels). The host cursor still refuses XOR (no ARGB "over" expresses it), so in hover an XOR
+producer that programs the mode, can settle it. ~~`A1R5G5B5` stays refused by name (the kernel moves
+32-bit pixels)~~ (SUPERSEDED 2026-10-15: expanded to 32 bits and composed, `V3_DISPLAY_CURSOR_FORMATS.md`). The host cursor still refuses XOR (no ARGB "over" expresses it), so in hover an XOR
 cursor is composed AND the host's is hidden — now visibly, where before it was refused in the frame
 too.
 

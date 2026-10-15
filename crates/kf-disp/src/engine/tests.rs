@@ -254,8 +254,11 @@ fn a_core_update_arms_then_notifies() {
             Effect::Notify {
                 chn: 0,
                 client: CLIENT,
-                handle: 0xcafe_0001,
-                offset: 32,
+                at:
+                    Place::CtxDma {
+                        handle: 0xcafe_0001,
+                        offset: 32,
+                    },
                 awaken: true,
                 finished: true,
             },
@@ -706,7 +709,16 @@ fn a_non_tearing_flip_waits_for_vblank_and_its_acquire() {
     // a vblank whose acquire does not hold: still parked
     let mut sem = 0u64;
     let s = e.vblank(0, &mut |a: &Acquire| {
-        assert_eq!((a.handle, a.offset, a.mode), (0xcafe_0a00, 48, 0));
+        assert_eq!(
+            (a.at, a.mode),
+            (
+                Place::CtxDma {
+                    handle: 0xcafe_0a00,
+                    offset: 48
+                },
+                0
+            )
+        );
         a.satisfied_by(sem)
     });
     assert!(s.effects.is_empty());
@@ -725,8 +737,11 @@ fn a_non_tearing_flip_waits_for_vblank_and_its_acquire() {
             Effect::Latched { window: 0 },
             Effect::Notify {
                 chn: 1,
-                handle: 0xcafe_00f0,
-                offset: 16,
+                at:
+                    Place::CtxDma {
+                        handle: 0xcafe_00f0,
+                        offset: 16,
+                    },
                 awaken: false,
                 ..
             },
@@ -749,8 +764,11 @@ fn a_non_tearing_flip_waits_for_vblank_and_its_acquire() {
         [
             Effect::Latched { window: 0 },
             Effect::Release {
-                handle: 0xcafe_0b00,
-                offset: 64,
+                at:
+                    Place::CtxDma {
+                        handle: 0xcafe_0b00,
+                        offset: 64,
+                    },
                 value: 0xd00d_d00d,
                 wide: false,
                 ..
@@ -758,13 +776,13 @@ fn a_non_tearing_flip_waits_for_vblank_and_its_acquire() {
             // the outgoing entry's notifier FINISHED (its flip-away), then the incoming one's (BEGUN)
             Effect::Notify {
                 chn: 1,
-                offset: 16,
+                at: Place::CtxDma { offset: 16, .. },
                 finished: true,
                 ..
             },
             Effect::Notify {
                 chn: 1,
-                offset: 16,
+                at: Place::CtxDma { offset: 16, .. },
                 finished: false,
                 ..
             },
@@ -797,7 +815,7 @@ fn a_flip_away_writes_the_outgoing_notifier_finished_and_the_new_one_begun() {
         [
             Effect::Latched { window: 0 },
             Effect::Notify {
-                offset: 16,
+                at: Place::CtxDma { offset: 16, .. },
                 finished: false,
                 ..
             },
@@ -814,12 +832,12 @@ fn a_flip_away_writes_the_outgoing_notifier_finished_and_the_new_one_begun() {
         [
             Effect::Latched { window: 0 },
             Effect::Notify {
-                offset: 16,
+                at: Place::CtxDma { offset: 16, .. },
                 finished: true,
                 ..
             },
             Effect::Notify {
-                offset: 32,
+                at: Place::CtxDma { offset: 32, .. },
                 finished: false,
                 ..
             },
@@ -844,7 +862,7 @@ fn flips_without_an_active_head_latch_at_once() {
                 Effect::Latched { window: 2 },
                 Effect::Notify {
                     chn: 3,
-                    handle: 0x77,
+                    at: Place::CtxDma { handle: 0x77, .. },
                     ..
                 }
             ]
@@ -953,8 +971,10 @@ fn acquire_modes() {
     let a = |mode, value, wide| Acquire {
         chn: 1,
         client: 0,
-        handle: 1,
-        offset: 0,
+        at: Place::CtxDma {
+            handle: 1,
+            offset: 0,
+        },
         value,
         wide,
         mode,
@@ -1419,6 +1439,7 @@ fn a_head_cursor_is_scanned_from_the_core_and_its_pio_point() {
         (cs.handle, cs.offset, cs.size, cs.argb8888),
         (0xcafe, 0x2000, 64, true)
     );
+    assert_eq!((cs.a1r5g5b5, cs.format), (false, 0xCF));
     assert_eq!((cs.x, cs.y), (-5, 40), "the point is signed");
     assert_eq!(
         (cs.k1, cs.cursor_factor, cs.viewport_factor, cs.mode),
@@ -1428,6 +1449,108 @@ fn a_head_cursor_is_scanned_from_the_core_and_its_pio_point() {
     assert_eq!((cs.client, cs.head), (CLIENT, 1));
     assert_eq!(e.cursor_scan(&cv, 0), None, "head 0 has no cursor");
     assert_eq!(e.cursor_scan(&cv, 9), None, "no such head");
+}
+
+/// ★ 2026-10-15: a head whose cursor format is `A1R5G5B5` with `MODE_XOR` (what a guest's inverting
+/// pointer would program) is scanned as that, the raw format kept; an unknown format is neither.
+#[test]
+fn an_a1r5g5b5_xor_cursor_is_scanned_as_one() {
+    let k = 0xC67A;
+    let cv = CursorVocab::resolve(t(), CORE, k).expect("GA10x cursor vocabulary");
+    for (fmt, a8, a1, raw) in [
+        ("HEAD_SET_CONTROL_CURSOR_FORMAT_A1R5G5B5", false, true, 0xE9),
+        ("HEAD_SET_CONTROL_CURSOR_FORMAT_A8R8G8B8", true, false, 0xCF),
+    ] {
+        let mut e = engine();
+        e.alloc(ChannelKind::Core, 0, CLIENT, 1, pb(), 0);
+        e.alloc(ChannelKind::Cursor, 1, CLIENT, 1, None, 0);
+        let mut ctl = put(0, fl(CORE, "HEAD_SET_CONTROL_CURSOR_ENABLE"), 1);
+        ctl = put(
+            ctl,
+            fl(CORE, "HEAD_SET_CONTROL_CURSOR_FORMAT"),
+            m(CORE, fmt),
+        );
+        ctl = put(
+            ctl,
+            fl(CORE, "HEAD_SET_CONTROL_CURSOR_SIZE"),
+            m(CORE, "HEAD_SET_CONTROL_CURSOR_SIZE_W32_H32"),
+        );
+        let comp = put(
+            0,
+            fl(CORE, "HEAD_SET_CONTROL_CURSOR_COMPOSITION_MODE"),
+            m(CORE, "HEAD_SET_CONTROL_CURSOR_COMPOSITION_MODE_XOR"),
+        );
+        let a2 = |n: &str| t().a2(CORE, n, 1, 0).unwrap_or_else(|| panic!("{n}(1, 0)"));
+        let mut c = Ring::new();
+        modeset(&mut c, 1, 2);
+        c.m(a2("HEAD_SET_CONTEXT_DMA_CURSOR"), 0xcafe)
+            .m(a2("HEAD_SET_OFFSET_CURSOR"), 0x20)
+            .m(ma(CORE, "HEAD_SET_CONTROL_CURSOR", 1), ctl)
+            .m(ma(CORE, "HEAD_SET_CONTROL_CURSOR_COMPOSITION", 1), comp)
+            .m(m(CORE, "UPDATE"), 0);
+        e.step(0, &c.bytes(), c.put(), &mut all_ok);
+        let cs = e.cursor_scan(&cv, 1).expect("enabled");
+        assert_eq!(
+            (cs.argb8888, cs.a1r5g5b5, cs.format, cs.size, cs.mode),
+            (a8, a1, raw, 32, 1)
+        );
+    }
+}
+
+/// ★ 2026-10-15: the cursor vocabulary kf plans from — the two formats and the two composition modes —
+/// is the class table's (derived from ogkm's headers by `tools/derive_display_classes.sh`) in every
+/// cursor-capable class of both table versions, and where ogkm's headers are present (`KF_OGKM_CLASS_DIR`,
+/// default the host's `/data/claude-ogkm-580` checkout) the headers themselves say the same.
+#[test]
+fn the_cursor_format_vocabulary_is_the_headers() {
+    let want = [
+        ("HEAD_SET_CONTROL_CURSOR_FORMAT_A1R5G5B5", 0xE9),
+        ("HEAD_SET_CONTROL_CURSOR_FORMAT_A8R8G8B8", 0xCF),
+        ("HEAD_SET_CONTROL_CURSOR_COMPOSITION_MODE_BLEND", 0),
+        ("HEAD_SET_CONTROL_CURSOR_COMPOSITION_MODE_XOR", 1),
+    ];
+    let classes = [
+        0xC37Du32, 0xC57D, 0xC67D, 0xC77D, 0xC97D, 0xCA7D, 0xCB7D, 0xCC7D,
+    ];
+    for ver in ["580.159.04", "580.65.06"] {
+        let tab = class::for_version(ver).unwrap();
+        let mut have = 0;
+        for c in classes {
+            if tab.v(c, want[0].0).is_none() && tab.v(c, want[1].0).is_none() {
+                continue; // a class without a cursor format row
+            }
+            have += 1;
+            for (n, v) in want {
+                assert_eq!(tab.v(c, n), Some(v), "{ver} NV{c:04X}_{n}");
+            }
+        }
+        assert!(
+            have >= 4,
+            "{ver}: only {have} cursor-capable classes in the table"
+        );
+    }
+    let dir = std::env::var("KF_OGKM_CLASS_DIR")
+        .unwrap_or_else(|_| "/data/claude-ogkm-580/src/common/sdk/nvidia/inc/class".into());
+    let mut read = 0;
+    for c in classes {
+        let Ok(h) = std::fs::read_to_string(format!("{dir}/cl{c:x}.h")) else {
+            continue;
+        };
+        read += 1;
+        for (n, v) in want {
+            let line = h
+                .lines()
+                .find(|l| l.starts_with(&format!("#define NV{c:04X}_{n} ")))
+                .unwrap_or_else(|| panic!("NV{c:04X}_{n} is not in the header"));
+            let val = line.rsplit('(').next().unwrap().trim_end_matches(')');
+            assert_eq!(
+                u32::from_str_radix(val.trim_start_matches("0x"), 16).unwrap(),
+                v,
+                "{line}"
+            );
+        }
+    }
+    eprintln!("cursor vocabulary checked against {read} ogkm class headers in {dir}");
 }
 
 /// A window flip: `SET_PRESENT_CONTROL.BEGIN_MODE` = `mode` (0 non-tearing, 1 immediate — what
@@ -1873,4 +1996,388 @@ fn a_reset_engine_arms_nothing_and_lights_the_next_life_like_a_fresh_one() {
     e.reset_life();
     e.reset_life();
     assert_eq!(e.heads_armed(), fresh.heads_armed());
+}
+
+// ---------------------------------------------------------------------------------------------
+// Blackwell (GB20x, `NVCA7D`/`NVCA7E`): no context DMAs — the address is in the method.
+// The 2026-10-14 die sweep found `display=on` refused at realize on a GB206 because `Vocab::resolve`
+// demanded seven context-DMA/offset names that these classes do not have. The expectations below are the
+// class headers' (`ogkm-595.84: clca7d.h`, `clca7e.h`) and NVKMS's own use of them (`nvkms-evo4.c`,
+// `EvoSetWinNotifierSurfaceAddressAndControlC9` and the semaphore twins): `ADDRESS_LO` is bits 31:4,
+// `TARGET` 3:2 (IOVA 0, PHYSICAL_NVM 1, PHYSICAL_PCI 2, PHYSICAL_PCI_COHERENT 3), `ENABLE` bit 0, and the
+// control words carry no offset.
+
+const BCORE: u32 = 0xCA7D;
+const BWIN: u32 = 0xCA7E;
+
+fn bclasses() -> Classes {
+    Classes::of(&kf_chip::display::BLACKWELL_GB20X)
+}
+
+fn bengine() -> Engine {
+    let r = Regs::for_ip("580.159.04", kf_chip::display::BLACKWELL_GB20X.ip_version).unwrap();
+    Engine::new(
+        Vocab::resolve(t(), &bclasses(), &r).expect("GB20x vocabulary"),
+        4,
+        8,
+    )
+}
+
+/// `SET_SURFACE_ADDRESS_{HI,LO}_<what>` of class `cl`: `addr` (16-byte aligned) in aperture `target`.
+/// `ISO` is an array in the window class (surface 0 here).
+fn surf(r: &mut Ring, cl: u32, what: &str, addr: u64, target: &str, enable: bool) {
+    let at = |n: &str| {
+        if what == "ISO" {
+            ma(cl, n, 0)
+        } else {
+            m(cl, n)
+        }
+    };
+    r.m(
+        at(&format!("SET_SURFACE_ADDRESS_HI_{what}")),
+        (addr >> 32) as u32,
+    );
+    let lo = format!("SET_SURFACE_ADDRESS_LO_{what}");
+    let mut v = put(0, fl(cl, &format!("{lo}_ADDRESS_LO")), (addr as u32) >> 4);
+    v = put(
+        v,
+        fl(cl, &format!("{lo}_TARGET")),
+        m(cl, &format!("{lo}_TARGET_{target}")),
+    );
+    v = put(v, fl(cl, &format!("{lo}_ENABLE")), u32::from(enable));
+    r.m(at(&lo), v);
+}
+
+/// The vocabulary resolves for the display rows kayfabe serves with `display=on`, in both derived class
+/// tables — the hole that let GB20x's realize refusal ship (the only vocabulary test was GA10x's).
+/// ⚠ KNOWN GAP (found by this test, 2026-10-14, not yet a Turing offer to measure on): TURING's window class
+/// `NVC57E` has a different semaphore model — one semaphore for acquire AND release (`SET_SEMAPHORE_ACQUIRE`
+/// + `SET_SEMAPHORE_RELEASE`), 32-bit only, no `PAYLOAD_SIZE`/`REL_MODE`/`ACQ_SEMAPHORE_*` — so `display=on` is
+/// refused at realize on TU10x/TU11x exactly as it was on GB20x. The assertion below pins today's refusal so the
+/// change is deliberate; the fix is an acquire/release path for that model (V3_DIE_SWEEP_20261014.md §3.3).
+#[test]
+fn every_family_row_resolves_its_vocabulary() {
+    for version in ["580.65.06", "580.159.04"] {
+        let tb = class::for_version(version).unwrap();
+        for row in kf_chip::display::ALL {
+            let r = Regs::for_ip(version, row.ip_version)
+                .unwrap_or_else(|| panic!("{version}: no registers for IP {:#x}", row.ip_version));
+            let res = Vocab::resolve(tb, &Classes::of(row), &r);
+            if row.chips.starts_with("TU") {
+                let e = res.expect_err("Turing's semaphore model is not implemented");
+                assert_eq!(
+                    e.0, "NVC57E_SET_SEMAPHORE_CONTROL_PAYLOAD_SIZE",
+                    "{version}"
+                );
+            } else {
+                res.unwrap_or_else(|e| panic!("{version} {}: {} is not derived", row.chips, e.0));
+            }
+        }
+    }
+}
+
+/// The form is decided by the derived table, per family: GA10x names context DMAs (and has the
+/// controls' `OFFSET` field), GB20x has neither.
+#[test]
+fn the_naming_form_follows_the_derived_table() {
+    let tb = t();
+    for (cl, name) in [
+        (CORE, "SET_CONTEXT_DMA_NOTIFIER"),
+        (WIN, "SET_CONTEXT_DMA_NOTIFIER"),
+        (WIN, "SET_CONTEXT_DMA_SEMAPHORE"),
+        (WIN, "SET_CONTEXT_DMA_ACQ_SEMAPHORE"),
+    ] {
+        assert!(tb.v(cl, name).is_some(), "NV{cl:04X}_{name}");
+    }
+    assert!(tb.f(CORE, "SET_NOTIFIER_CONTROL_OFFSET").is_some());
+    for (cl, name) in [
+        (BCORE, "SET_CONTEXT_DMA_NOTIFIER"),
+        (BCORE, "SET_NOTIFIER_CONTROL_OFFSET"),
+        (BWIN, "SET_CONTEXT_DMA_NOTIFIER"),
+        (BWIN, "SET_CONTEXT_DMA_SEMAPHORE"),
+        (BWIN, "SET_CONTEXT_DMA_ACQ_SEMAPHORE"),
+        (BWIN, "SET_SEMAPHORE_CONTROL_OFFSET"),
+        (BWIN, "SET_ACQ_SEMAPHORE_CONTROL_OFFSET"),
+    ] {
+        assert!(
+            tb.v(cl, name).is_none() && tb.f(cl, name).is_none(),
+            "NV{cl:04X}_{name} must not exist"
+        );
+    }
+    let e = Naming::resolve(tb, BWIN, "NOTIFIER", "SET_NOTIFIER_CONTROL").unwrap();
+    assert!(matches!(e, Naming::Surface { .. }));
+    let g = Naming::resolve(tb, WIN, "NOTIFIER", "SET_NOTIFIER_CONTROL").unwrap();
+    assert!(matches!(g, Naming::CtxDma { .. }));
+    // a class with neither form names the first missing surface method, not a guess
+    let miss = Naming::resolve(tb, 0xC67B, "NOTIFIER", "SET_NOTIFIER_CONTROL").unwrap_err();
+    assert!(
+        miss.0.contains("SET_SURFACE_ADDRESS_HI_NOTIFIER"),
+        "{}",
+        miss.0
+    );
+}
+
+/// The 7 methods the GB206 night run named are exactly the ones whose absence the resolver now tolerates:
+/// every other required name is still required (a Blackwell table that lost `UPDATE` refuses).
+#[test]
+fn a_missing_non_naming_method_still_refuses() {
+    let tb = t();
+    let r = Regs::for_ip("580.159.04", kf_chip::display::BLACKWELL_GB20X.ip_version).unwrap();
+    let mut c = bclasses();
+    c.window = 0xC67B; // a class that has no SET_SEMAPHORE_CONTROL etc.: any miss is a named refusal
+    assert!(Vocab::resolve(tb, &c, &r).is_err());
+}
+
+/// ★ A core UPDATE on GB20x: the notifier named by ADDRESS (sysmem, coherent) is written after the arm, at the
+/// address the methods say — the control word has no offset.
+#[test]
+fn gb20x_core_notifier_is_a_surface_address() {
+    let mut e = bengine();
+    e.alloc(ChannelKind::Core, 0, CLIENT, 1, pb(), 0);
+    let mut r = Ring::new();
+    r.m(ma(BCORE, "WINDOW_SET_CONTROL", 1), 0);
+    surf(
+        &mut r,
+        BCORE,
+        "NOTIFIER",
+        0x1_2345_6780,
+        "PHYSICAL_PCI_COHERENT",
+        true,
+    );
+    let mut ctl = put(0, fl(BCORE, "SET_NOTIFIER_CONTROL_MODE"), 1);
+    ctl = put(ctl, fl(BCORE, "SET_NOTIFIER_CONTROL_NOTIFY"), 1);
+    r.m(m(BCORE, "SET_NOTIFIER_CONTROL"), ctl);
+    r.m(m(BCORE, "SET_INTERLOCK_FLAGS"), 0)
+        .m(m(BCORE, "SET_WINDOW_INTERLOCK_FLAGS"), 0)
+        .m(m(BCORE, "UPDATE"), 0);
+    let s = e.step(0, &r.bytes(), r.put(), &mut all_ok);
+    match s.effects.as_slice() {
+        [
+            Effect::CoreArmed(_),
+            Effect::Notify {
+                chn: 0,
+                at:
+                    Place::Addr {
+                        aperture: Aperture::Sysmem,
+                        addr: 0x1_2345_6780,
+                    },
+                awaken: true,
+                finished: true,
+                ..
+            },
+        ] => {}
+        other => panic!("{other:?}"),
+    }
+}
+
+/// The ENABLE bit is the "no notifier" of the surface form (handle 0 of the context-DMA form), and the
+/// control's NOTIFY bit still gates the core's.
+#[test]
+fn gb20x_a_disabled_or_unrequested_notifier_writes_nothing() {
+    for (enable, notify) in [(false, true), (true, false), (false, false)] {
+        let mut e = bengine();
+        e.alloc(ChannelKind::Core, 0, CLIENT, 1, pb(), 0);
+        let mut r = Ring::new();
+        surf(&mut r, BCORE, "NOTIFIER", 0x4000, "PHYSICAL_NVM", enable);
+        let ctl = put(
+            0,
+            fl(BCORE, "SET_NOTIFIER_CONTROL_NOTIFY"),
+            u32::from(notify),
+        );
+        r.m(m(BCORE, "SET_NOTIFIER_CONTROL"), ctl);
+        r.m(m(BCORE, "UPDATE"), 0);
+        let s = e.step(0, &r.bytes(), r.put(), &mut all_ok);
+        assert!(
+            !s.effects.iter().any(|x| matches!(x, Effect::Notify { .. })),
+            "enable={enable} notify={notify}: {:?}",
+            s.effects
+        );
+    }
+}
+
+/// ★ The window flip on GB20x: acquire, release and notifier all by address; the aperture is read from
+/// TARGET (vidmem for PHYSICAL_NVM, sysmem for PCI and PCI_COHERENT, IOVA kept apart for the plane to refuse),
+/// the 64-bit payload and AWAKEN come from the control word, and the outgoing entry's release is the
+/// one written at the next latch — as on the context-DMA families.
+#[test]
+fn gb20x_window_flip_uses_surface_addresses_for_notifier_release_and_acquire() {
+    let mut e = bengine();
+    e.alloc(ChannelKind::Core, 0, CLIENT, 1, pb(), 0);
+    e.alloc(ChannelKind::Window, 0, CLIENT, 1, pb(), 0);
+    let mut c = Ring::new();
+    c.m(
+        ma(BCORE, "HEAD_SET_RASTER_SIZE", 0),
+        put(
+            put(0, fl(BCORE, "HEAD_SET_RASTER_SIZE_WIDTH"), 2200),
+            fl(BCORE, "HEAD_SET_RASTER_SIZE_HEIGHT"),
+            1125,
+        ),
+    );
+    c.m(ma(BCORE, "HEAD_SET_PIXEL_CLOCK_FREQUENCY", 0), 148_500_000);
+    c.m(ma(BCORE, "WINDOW_SET_CONTROL", 0), 0);
+    c.m(m(BCORE, "UPDATE"), 0);
+    e.step(0, &c.bytes(), c.put(), &mut all_ok);
+
+    let mut w = Ring::new();
+    // a surface is scanned: the window's first ISO word is the surface address with its ENABLE bit
+    surf(&mut w, BWIN, "ISO", 0x20_0000, "PHYSICAL_NVM", true);
+    surf(&mut w, BWIN, "NOTIFIER", 0x8000_0010, "PHYSICAL_PCI", true);
+    w.m(
+        m(BWIN, "SET_NOTIFIER_CONTROL"),
+        put(0, fl(BWIN, "SET_NOTIFIER_CONTROL_MODE"), 1),
+    );
+    // acquire: a 64-bit EQ at 0x9000_0040 in vidmem
+    surf(
+        &mut w,
+        BWIN,
+        "ACQ_SEMAPHORE",
+        0x9000_0040,
+        "PHYSICAL_NVM",
+        true,
+    );
+    let mut acq = put(0, fl(BWIN, "SET_ACQ_SEMAPHORE_CONTROL_PAYLOAD_SIZE"), 1);
+    acq = put(acq, fl(BWIN, "SET_ACQ_SEMAPHORE_CONTROL_ACQ_MODE"), 0);
+    w.m(m(BWIN, "SET_ACQ_SEMAPHORE_CONTROL"), acq);
+    w.m(m(BWIN, "SET_ACQ_SEMAPHORE_VALUE"), 0xf473_f473);
+    w.m(m(BWIN, "SET_ACQ_SEMAPHORE_VALUE_HI"), 0x1);
+    // release: a 32-bit WRITE_AWAKEN at 0x7000_0020 in coherent sysmem
+    surf(
+        &mut w,
+        BWIN,
+        "SEMAPHORE",
+        0x7000_0020,
+        "PHYSICAL_PCI_COHERENT",
+        true,
+    );
+    w.m(
+        m(BWIN, "SET_SEMAPHORE_CONTROL"),
+        put(0, fl(BWIN, "SET_SEMAPHORE_CONTROL_REL_MODE"), 1),
+    );
+    w.m(m(BWIN, "SET_SEMAPHORE_RELEASE"), 0xd00d_d00d);
+    w.m(m(BWIN, "UPDATE"), 0);
+    let s = e.step(1, &w.bytes(), w.put(), &mut all_ok);
+    assert!(
+        s.effects.is_empty(),
+        "parked for vblank + acquire: {:?}",
+        s.effects
+    );
+    // the acquire the plane must evaluate: by address, 64-bit, EQ, value from VALUE and VALUE_HI
+    let mut sem = 0u64;
+    let s = e.vblank(0, &mut |a: &Acquire| {
+        assert_eq!(
+            a.at,
+            Place::Addr {
+                aperture: Aperture::Vidmem,
+                addr: 0x9000_0040
+            }
+        );
+        assert!(a.wide && a.mode == 0);
+        assert_eq!(a.value, 0x1_f473_f473);
+        a.satisfied_by(sem)
+    });
+    assert!(s.effects.is_empty());
+    assert!(e.waiting(1));
+    sem = 0x1_f473_f473;
+    let s = e.vblank(0, &mut |a: &Acquire| a.satisfied_by(sem));
+    // first latch on this window: its own notifier BEGUN only (the release waits for the flip-away)
+    match s.effects.as_slice() {
+        [
+            Effect::Latched { window: 0 },
+            Effect::Notify {
+                chn: 1,
+                at:
+                    Place::Addr {
+                        aperture: Aperture::Sysmem,
+                        addr: 0x8000_0010,
+                    },
+                finished: false,
+                ..
+            },
+        ] => {}
+        other => panic!("{other:?}"),
+    }
+    // the next flip (no new acquire) flips the first away: ITS release (sysmem, AWAKEN) and notifier FINISHED
+    let w2 = &mut w;
+    surf(w2, BWIN, "ACQ_SEMAPHORE", 0, "PHYSICAL_NVM", false);
+    surf(w2, BWIN, "ISO", 0x30_0000, "PHYSICAL_NVM", true);
+    w2.m(m(BWIN, "UPDATE"), 0);
+    let s = e.step(1, &w2.bytes(), w2.put(), &mut all_ok);
+    assert!(s.effects.is_empty(), "parked for vblank: {:?}", s.effects);
+    let s = e.vblank(0, &mut all_ok);
+    match s.effects.as_slice() {
+        [
+            Effect::Latched { window: 0 },
+            Effect::Release {
+                at:
+                    Place::Addr {
+                        aperture: Aperture::Sysmem,
+                        addr: 0x7000_0020,
+                    },
+                value: 0xd00d_d00d,
+                wide: false,
+                awaken: true,
+                ..
+            },
+            Effect::Notify { finished: true, .. },
+            Effect::Notify {
+                finished: false, ..
+            },
+        ] => {}
+        other => panic!("{other:?}"),
+    }
+}
+
+/// The IOVA target is decoded as its own aperture (a discrete GPU has none: the plane refuses it, the engine
+/// does not map it onto guest memory), and a low-word's reserved bits 3:0 never leak into the address.
+#[test]
+fn gb20x_target_and_address_decoding() {
+    let tb = t();
+    let n = Naming::resolve(tb, BWIN, "SEMAPHORE", "SET_SEMAPHORE_CONTROL").unwrap();
+    let hi = m(BWIN, "SET_SURFACE_ADDRESS_HI_SEMAPHORE");
+    let lo = m(BWIN, "SET_SURFACE_ADDRESS_LO_SEMAPHORE");
+    let place = |hi_w: u32, lo_w: u32| {
+        n.place(0, |mm| {
+            if mm == hi {
+                hi_w
+            } else if mm == lo {
+                lo_w
+            } else {
+                0
+            }
+        })
+    };
+    // target values: 0 IOVA, 1 NVM, 2 PCI, 3 PCI_COHERENT; ENABLE (bit 0) set
+    let p = |t: u32| place(0xAB, 0xDEAD_BEE0 | (t << 2) | 1);
+    assert_eq!(
+        p(0),
+        Some(Place::Addr {
+            aperture: Aperture::Iova,
+            addr: 0xAB_DEAD_BEE0
+        })
+    );
+    assert!(matches!(
+        p(1),
+        Some(Place::Addr {
+            aperture: Aperture::Vidmem,
+            ..
+        })
+    ));
+    for t in [2, 3] {
+        assert!(matches!(
+            p(t),
+            Some(Place::Addr {
+                aperture: Aperture::Sysmem,
+                ..
+            })
+        ));
+    }
+    // bits 3:2 (TARGET) and bit 0 (ENABLE) are not part of the address, whatever the low word holds
+    assert_eq!(
+        place(0, 0x0000_0FFF),
+        Some(Place::Addr {
+            aperture: Aperture::Sysmem,
+            addr: 0xFF0
+        })
+    );
+    assert_eq!(place(0, 0x0000_0FFE), None, "ENABLE clear: no semaphore");
 }

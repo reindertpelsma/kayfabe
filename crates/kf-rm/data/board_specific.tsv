@@ -1,0 +1,13 @@
+# kayfabe board-specific constants (owner rulings 2026-10-11 section AH; matrix finding F-6). STATUS: LIVE, 2026-10-15.
+#
+# A (key, die) here has TWO OR MORE boards of the same die that answered differently, so the pair (die, driver branch) - the
+# key of measured_constants.tsv - is too coarse for it: no table row may serve it, on any branch, and none may exist
+# (consttab::parse_board_specific enforces both). The only source is the host's own answer to the identical request (tier 2,
+# kf_abi::gssreplay at realize); where the host did not answer, the guest is refused by name and the refusal is counted.
+# `seen` lists the measurements as `SKU=value` separated by `;` (product names only: never a serial, UUID or board identity).
+# The registry is itself checked against traces/constants_measure_20261014b/tier2_summary.tsv by tests/gpu_types_wiring.rs: every
+# (key, die) whose boards disagree there MUST be listed here.
+key	die	seen	evidence
+gss.0x20808162	GA102	RTX 3090 (570.86.15)=01; RTX A5000 (580.126.09)=00	traces/constants_measure_20261014b/tier2_summary.tsv
+cudart.0x20809001	AD104	RTX 4070 (595.91.07)=0x03fc007f; L4 (595.84)=0x003c0037	traces/constants_measure_20261014b/tier2_summary.tsv
+cudart.0x2080a001	AD104	RTX 4070 (595.91.07)={1,5,2,0x11}; L4 (595.84)={1,2,2,0x11}	traces/constants_measure_20261014b/tier2_summary.tsv

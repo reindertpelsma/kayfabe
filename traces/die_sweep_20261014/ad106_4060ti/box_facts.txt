@@ -1,0 +1,72 @@
+FACTS_START 2026-10-14T11:54:02+00:00
+KERNEL 6.8.0-59-generic
+DRIVER NVRM version: NVIDIA UNIX x86_64 Kernel Module  575.51.03  Wed Apr 16 14:22:51 UTC 2025
+KVM crw-rw---- /dev/kvm nested=1
+CPU AMD EPYC 7713 64-Core Processor nproc=15 mem_gib=49
+DISK size=146G avail=138G
+PCI 0000:00:07.0 VGA compatible controller [0300]: NVIDIA Corporation Device [10de:2803] (rev a1)
+PCIV 0000:00:07.0 	Region 0: Memory at c0000000 (32-bit, non-prefetchable) [size=16M]
+PCIV 0000:00:07.0 	Region 1: Memory at 1000000000 (64-bit, prefetchable) [size=256M]
+PCIV 0000:00:07.0 	Region 3: Memory at 1010000000 (64-bit, prefetchable) [size=32M]
+PCIV 0000:00:07.0 	Region 5: I/O ports at c000 [size=128]
+PCIV 0000:00:07.0 		LnkCap:	Port #0, Speed 16GT/s, Width x8, ASPM L1, Exit Latency L1 <4us
+PCIV 0000:00:07.0 		LnkSta:	Speed 2.5GT/s (downgraded), Width x8 (ok)
+PCIV 0000:00:07.0 	Kernel driver in use: nvidia
+PCI 0000:00:08.0 Audio device [0403]: NVIDIA Corporation Device [10de:22bd] (rev a1)
+PCIV 0000:00:08.0 	Region 0: Memory at c1080000 (32-bit, non-prefetchable) [size=16K]
+PCIV 0000:00:08.0 		LnkCap:	Port #0, Speed 16GT/s, Width x8, ASPM L1, Exit Latency L1 <4us
+PCIV 0000:00:08.0 		LnkSta:	Speed 2.5GT/s (downgraded), Width x8 (ok)
+PCIV 0000:00:08.0 	Kernel driver in use: snd_hda_intel
+SMIQ name, pci.device_id, driver_version, memory.total [MiB], pcie.link.gen.max, pcie.link.width.max
+SMIQ NVIDIA GeForce RTX 4060 Ti, 0x280310DE, 575.51.03, 16380 MiB, 4, 8
+SMIMEM     FB Memory Usage
+SMIMEM         Total                             : 16380 MiB
+SMIMEM         Reserved                          : 432 MiB
+SMIMEM         Used                              : 2 MiB
+SMIMEM         Free                              : 15948 MiB
+SMIMEM     BAR1 Memory Usage
+SMIMEM         Total                             : 256 MiB
+SMIMEM         Used                              : 2 MiB
+SMIMEM         Free                              : 254 MiB
+SMIMEM     Conf Compute Protected Memory Usage
+SMIMEM         Total                             : 0 MiB
+SMIMEM         Used                              : 0 MiB
+SMIMEM         Free                              : 0 MiB
+SMIMEM 
+FACTS_EXIT 2026-10-14T11:54:03+00:00
+FACTS_START 2026-10-14T12:20:27+00:00
+KERNEL 6.8.0-59-generic
+DRIVER NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  
+KVM crw-rw---- /dev/kvm nested=1
+CPU AMD EPYC 7713 64-Core Processor nproc=15 mem_gib=49
+DISK size=146G avail=100G
+PCI 0000:00:07.0 VGA compatible controller [0300]: NVIDIA Corporation Device [10de:2803] (rev a1)
+PCIV 0000:00:07.0 	Region 0: Memory at c0000000 (32-bit, non-prefetchable) [size=16M]
+PCIV 0000:00:07.0 	Region 1: Memory at 1000000000 (64-bit, prefetchable) [size=256M]
+PCIV 0000:00:07.0 	Region 3: Memory at 1010000000 (64-bit, prefetchable) [size=32M]
+PCIV 0000:00:07.0 	Region 5: I/O ports at c000 [size=128]
+PCIV 0000:00:07.0 		LnkCap:	Port #0, Speed 16GT/s, Width x8, ASPM L1, Exit Latency L1 <4us
+PCIV 0000:00:07.0 		LnkSta:	Speed 16GT/s (ok), Width x8 (ok)
+PCIV 0000:00:07.0 	Kernel driver in use: nvidia
+PCI 0000:00:08.0 Audio device [0403]: NVIDIA Corporation Device [10de:22bd] (rev a1)
+PCIV 0000:00:08.0 	Region 0: Memory at c1080000 (32-bit, non-prefetchable) [size=16K]
+PCIV 0000:00:08.0 		LnkCap:	Port #0, Speed 16GT/s, Width x8, ASPM L1, Exit Latency L1 <4us
+PCIV 0000:00:08.0 		LnkSta:	Speed 16GT/s (ok), Width x8 (ok)
+PCIV 0000:00:08.0 	Kernel driver in use: snd_hda_intel
+SMIQ name, pci.device_id, driver_version, memory.total [MiB], pcie.link.gen.max, pcie.link.width.max
+SMIQ NVIDIA GeForce RTX 4060 Ti, 0x280310DE, 595.91.07, 16380 MiB, 4, 8
+SMIMEM     FB Memory Usage
+SMIMEM         Total                                          : 16380 MiB
+SMIMEM         Reserved                                       : 431 MiB
+SMIMEM         Used                                           : 4775 MiB
+SMIMEM         Free                                           : 11176 MiB
+SMIMEM     BAR1 Memory Usage
+SMIMEM         Total                                          : 256 MiB
+SMIMEM         Used                                           : 49 MiB
+SMIMEM         Free                                           : 207 MiB
+SMIMEM     Conf Compute Protected Memory Usage
+SMIMEM         Total                                          : 0 MiB
+SMIMEM         Used                                           : 0 MiB
+SMIMEM         Free                                           : 0 MiB
+SMIMEM 
+FACTS_EXIT 2026-10-14T12:20:27+00:00

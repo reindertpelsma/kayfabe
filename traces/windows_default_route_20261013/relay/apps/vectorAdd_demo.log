@@ -1,0 +1,8 @@
+=== vectorAdd_demo start=2026-10-13T09:44:46.9746679+00:00 host=VASTWIN session=0 boot=2026-10-13T09:38:46.5000000Z timeout=60
+[Vector addition of 50000 elements]
+Copy input data from the host memory to the CUDA device
+CUDA kernel launch with 196 blocks of 256 threads
+Copy output data from the CUDA device to the host memory
+Test PASSED
+Done
+=== end rc=0 secs=5 2026-10-13T09:44:51.4972654+00:00

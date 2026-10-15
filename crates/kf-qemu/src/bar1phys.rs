@@ -220,9 +220,18 @@ mod tests {
             "gop=off: no boot framebuffer to return to (D3), the twins are freed all the same"
         );
         for gop in [true, false] {
-            assert_eq!(unload_actions(Some(&u(true, false)), gop), UnloadActions::default());
-            assert_eq!(unload_actions(Some(&u(true, true)), gop), UnloadActions::default());
-            assert!(!unload_actions(Some(&u(false, true)), gop).free_twins, "GC6: RM state kept");
+            assert_eq!(
+                unload_actions(Some(&u(true, false)), gop),
+                UnloadActions::default()
+            );
+            assert_eq!(
+                unload_actions(Some(&u(true, true)), gop),
+                UnloadActions::default()
+            );
+            assert!(
+                !unload_actions(Some(&u(false, true)), gop).free_twins,
+                "GC6: RM state kept"
+            );
             assert_eq!(unload_actions(None, gop), UnloadActions::default());
         }
     }

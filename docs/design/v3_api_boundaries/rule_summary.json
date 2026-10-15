@@ -1,0 +1,62 @@
+{
+ "alloc_structs": {
+  "items": 25,
+  "items_with_violation": 1,
+  "reentry_events": 2,
+  "violating_B_tags_total": 15
+ },
+ "chip_lists_arch": {
+  "items": 103,
+  "items_with_violation": 31,
+  "reentry_events": 123,
+  "violating_B_tags_total": 546
+ },
+ "classes": {
+  "items": 335,
+  "items_with_violation": 14,
+  "reentry_events": 40,
+  "violating_B_tags_total": 342
+ },
+ "controls_all_flags": {
+  "items": 326,
+  "items_with_violation": 28,
+  "reentry_events": 68,
+  "violating_B_tags_total": 930
+ },
+ "controls_all_union": {
+  "items": 226,
+  "items_with_violation": 17,
+  "reentry_events": 31,
+  "violating_B_tags_total": 539
+ },
+ "controls_served": {
+  "items": 201,
+  "items_with_violation": 12,
+  "reentry_events": 15,
+  "violating_B_tags_total": 362
+ },
+ "controls_windows": {
+  "items": 121,
+  "items_with_violation": 10,
+  "reentry_events": 23,
+  "violating_B_tags_total": 319
+ },
+ "gsp_interface_all": {
+  "items": 953,
+  "items_with_violation": 108,
+  "reentry_events": 190,
+  "violating_B_tags_total": 6689
+ },
+ "gsp_interface_referenced": {
+  "items": 310,
+  "items_with_violation": 23,
+  "reentry_events": 55,
+  "violating_B_tags_total": 1050
+ },
+ "gsp_rpc_enum": {
+  "items": 238,
+  "items_with_violation": 9,
+  "reentry_events": 21,
+  "violating_B_tags_total": 292
+ }
+}

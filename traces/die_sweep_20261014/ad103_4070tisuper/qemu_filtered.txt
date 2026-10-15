@@ -1,0 +1,421 @@
+== /root/win/run/qemu-142404.log
+kf-host: HOST-ABI REFUSED control 0x2080014a: host control 0x2080014a has no row in kf_abi::hostabi::HOST_CONTROLS, and host driver 595.91.07 is outside the interval the host encoders were written for — its layout is unknown
+kf-host: HOST-ABI REFUSED control 0x20809064: host control 0x20809064 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 595.91.07 was never measured
+kf-host: HOST-ABI REFUSED control 0x2080a028: host control 0x2080a028 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 595.91.07 was never measured
+kf-host: HOST-ABI REFUSED control 0x2080a028: host control 0x2080a028 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 595.91.07 was never measured
+kf-host: HOST-ABI REFUSED control 0x2080a084: host control 0x2080a084 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 595.91.07 was never measured
+kf-host: HOST-ABI REFUSED control 0x2080a026: host control 0x2080a026 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 595.91.07 was never measured
+kf3: display plane ON — virtual NVDisplay for AD102 AD103 AD104 AD106 AD107 (IP 0x04040000, display class 0xc770, 4 heads)
+kf3: display: EXPERIMENT KF3_DISPLAY_LUT_MIRROR=1 — MIRROR accepted on DIRECT ILUT/OLUT where no negative input can reach it
+kf3: display: EXPERIMENT KF3_DISPLAY_ILUT_OFFSET_256=1 — SET_OFFSET_ILUT read in 256-byte units (as OLUT/TMO)
+kf3: display: PROBE KF3_DISPLAY_CAPS_PROBE=1 — the caps page is the real GPU's measured page (99 words; H-caps probe, not a shipped behaviour)
+kf3: display: monitor 1920x1080 at 60000 mHz, range max 75 Hz, EDID fnv1a64=c9dcbb394c28b1c7 (display-max-fps 0)
+kf3: display plane built — derived registers, caps page, engine vocabulary, GPU context on 0000:00:07.0
+kf3: display: compose kernel self-test PASSED
+kf3: display worker up — engine 4 heads / 8 windows, caps page published
+kf3: display: display-max-fps unset — every head's vblank tick is capped at 75 Hz; copies without a flip are made at the console head's tick, while watched, and sent only when the frame's checksum changed
+kf3: display: boot layer — store [0, 0x7e9000) as 1920x1080 pitch 7680, shown until the guest arms a head
+qemu-system-x86_64: -device kf3-gpu,fb-mb=4096,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,guest-driver=580.65.06,bus=pci.0,addr=0x6,id=kf0: info: kf3: display console registered (head 0 of kf0)
+kf3: display: +50 ms the console shows the BOOT layer (store 0x0, 1920x1080) (core channel FREE)
+kf3: GSP REFUSED fn76/0x20800a87=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800afe=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800aff=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800aaf=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: display: InstMem(InstMem { phys: 4022009856, size: 65536, addr_space: 2 })
+kf3: GSP REFUSED fn76/0x00800292=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a80=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802a0f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080017e=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a30=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a2e=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800b03=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800b05=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a3f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: mem t=207.388s REFUSED VasKey(13970166078463016970) root 0xefba4000: 1 run(s) not applied: leaf 0x20fc00000+0x10400000 names store 0xefc00000, inside the firmware carve-out at 0xefbe0000 — a twin maps no kayfabe memory (§Q)
+kf3: mem t=207.393s REFUSED VasKey(13970166078463016970) root 0xefba4000: 1 run(s) not applied: leaf 0x20fc00000+0x10400000 names store 0xefc00000, inside the firmware carve-out at 0xefbe0000 — a twin maps no kayfabe memory (§Q)
+kf3: mem t=207.393s REFUSED VasKey(13970166078463016970) root 0xefba4000: 1 run(s) not applied: leaf 0x20fc00000+0x10400000 names store 0xefc00000, inside the firmware carve-out at 0xefbe0000 — a twin maps no kayfabe memory (§Q)
+kf3: GSP REFUSED fn76/0x2080013f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20809004=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00801306=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20810108=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800ab8=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800173=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802a12=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800160=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802801=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080012f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802806=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080205b=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a060=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802068=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00800106=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a70a=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a801=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a02f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x208081ea=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20808524=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00730285=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x0073011d=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a3a=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20801110=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080080b=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: display: ChannelAllocated { kind: Core, instance: 0, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9555324928, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Window, instance: 0, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9555292160, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Window, instance: 1, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9555296256, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Window, instance: 2, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9555300352, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Window, instance: 3, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9555304448, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Window, instance: 4, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9555308544, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Window, instance: 5, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9555312640, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Window, instance: 6, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9555316736, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Window, instance: 7, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9555320832, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 0, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9555259392, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 1, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9555263488, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 2, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9555267584, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 3, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9555271680, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 4, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9555275776, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 5, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9555279872, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 6, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9555283968, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 7, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9555288064, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Cursor, instance: 0, offset: 0, client: 3251634178, pb: None, life: 1 }
+kf3: display: ChannelAllocated { kind: Cursor, instance: 1, offset: 0, client: 3251634178, pb: None, life: 1 }
+kf3: display: ChannelAllocated { kind: Cursor, instance: 2, offset: 0, client: 3251634178, pb: None, life: 1 }
+kf3: display: ChannelAllocated { kind: Cursor, instance: 3, offset: 0, client: 3251634178, pb: None, life: 1 }
+kf3: GSP REFUSED fn76/0x00730288=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20801220=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20801222=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00730293=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x007302a2=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x007302a6=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00730128=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a630=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080852e=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080852a=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: RPC-REFUSED #1 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusa
+kf3: GSP REFUSED fn103/0x0000402c=0x56 (GSP_RM_ALLOC) first_seq=0 — the guest read a non-OK status
+kf-rm: RPC-REFUSED #2 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusa
+kf-rm: RPC-REFUSED #3 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusa
+kf-rm: RPC-REFUSED #4 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusa
+kf-rm: RPC-REFUSED #5 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusa
+kf-rm: RPC-REFUSED #6 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusa
+kf-rm: RPC-REFUSED #7 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusa
+kf-rm: RPC-REFUSED #8 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusa
+kf-rm: RPC-REFUSED #9 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusa
+kf-rm: RPC-REFUSED #10 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refus
+kf-rm: RPC-REFUSED #11 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refus
+kf-rm: RPC-REFUSED #12 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refus
+kf-rm: RPC-REFUSED #13 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refus
+kf-rm: RPC-REFUSED #14 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refus
+kf-rm: RPC-REFUSED #15 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refus
+kf-rm: RPC-REFUSED #16 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refus
+kf-rm: RPC-REFUSED #17 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refus
+kf-rm: RPC-REFUSED #18 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refus
+kf-rm: RPC-REFUSED #19 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refus
+kf-rm: RPC-REFUSED #20 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refus
+kf-rm: RPC-REFUSED #21 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refus
+kf-rm: RPC-REFUSED #22 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refus
+kf-rm: RPC-REFUSED #23 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refus
+kf-rm: RPC-REFUSED #24 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refus
+kf3: GSP REFUSED fn76/0x2080b201=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080852f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a618=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a619=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080853a=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080853b=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00730280=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00730122=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: display: the guest armed its first head at +238731 ms — the boot layer is retired after 144 boot frame(s)
+kf3: display: +238731 ms the console shows no new frame: no armed head has scanned a window yet — the boot layer's last frame stays (no black at the handoff) (core channel allocated)
+kf3: display: head 0 ACTIVE raster 2200x1125 period 16666666 ns (raster 16666666 ns, cap 75 Hz)
+kf3: display: head 1 idle raster 0x0 period 0 ns (raster 0 ns, cap 75 Hz)
+kf3: display: head 2 idle raster 0x0 period 0 ns (raster 0 ns, cap 75 Hz)
+kf3: display: head 3 idle raster 0x0 period 0 ns (raster 0 ns, cap 75 Hz)
+kf3: display: 1 updates completed, 5597 methods
+kf3: display: 2 updates completed, 5599 methods
+kf3: display: 3 updates completed, 5622 methods
+kf3: display: 4 updates completed, 5625 methods
+kf3: display: 5 updates completed, 5628 methods
+kf3: GSP REFUSED fn76/0x00730282=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x007302a5=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a088=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00809908=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a9a=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: mem t=243.980s REFUSED VasKey(13965663616985204816) root 0xefa1c000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: mem t=244.026s REFUSED VasKey(13965663616985204816) root 0xefa1c000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: mem t=244.032s REFUSED VasKey(13965663616985204816) root 0xefa1c000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: mem t=244.082s REFUSED VasKey(13965663616985204816) root 0xefa1c000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: mem t=244.117s REFUSED VasKey(13965663616985204816) root 0xefa1c000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: mem t=244.122s REFUSED VasKey(13965663616985204816) root 0xefa1c000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: mem t=244.123s REFUSED VasKey(13965663616985204816) root 0xefa1c000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: mem t=244.130s REFUSED VasKey(13965663616985204816) root 0xefa1c000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: mem t=244.131s REFUSED VasKey(13965663616985204816) root 0xefa1c000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: mem t=244.131s REFUSED VasKey(13965663616985204816) root 0xefa1c000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: mem t=244.132s REFUSED VasKey(13965663616985204816) root 0xefa1c000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: mem t=244.152s REFUSED VasKey(13965663616985204816) root 0xefa1c000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: mem t=244.417s REFUSED VasKey(13965663616985204816) root 0xefa1c000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: display: 8 updates completed, 5639 methods
+kf3: display: 9 updates completed, 5687 methods
+kf3: display: 10 updates completed, 5701 methods
+kf3: display: 11 updates completed, 5718 methods
+kf3: display: 12 updates completed, 5735 methods
+kf3: display: +246515 ms the console shows head 0 1920x1080: [window 0 iso 0xff1d1002+0x0 1920x1080 pitch 120 fmt 0xcf] (core channel allocated)
+kf3: display: EXPERIMENT KF3_DISPLAY_LUT_MIRROR=1 — a mirrored LUT accepted (ILUT mirrored=true, OLUT Some(Lut { entries: 1025, binding: Dma { handle: 4280279364, offset: 0 }, interpolate: false, mirror: true }); every input provably nonnegative)
+kf3: display: 13 updates completed, 5736 methods
+kf3: display: 14 updates completed, 5746 methods
+kf3: display: 15 updates completed, 5750 methods
+kf3: display: 16 updates completed, 5760 methods
+kf3: display: 17 updates completed, 5764 methods
+kf3: display: 18 updates completed, 5774 methods
+kf3: display: 19 updates completed, 5778 methods
+kf3: display: 20 updates completed, 5788 methods
+kf3: display: 21 updates completed, 5792 methods
+kf3: display: 22 updates completed, 5805 methods
+kf3: display: 23 updates completed, 5806 methods
+kf3: display: 24 updates completed, 5816 methods
+kf3: display: 25 updates completed, 5820 methods
+kf3: display: 26 updates completed, 5833 methods
+kf3: display: 27 updates completed, 5834 methods
+kf3: display: 28 updates completed, 5847 methods
+kf3: display: 29 updates completed, 5848 methods
+kf3: display: 30 updates completed, 5861 methods
+kf3: display: 31 updates completed, 5862 methods
+kf3: display: 32 updates completed, 5875 methods
+kf3: display: 33 updates completed, 5876 methods
+kf3: display: 34 updates completed, 5889 methods
+kf3: display: 35 updates completed, 5890 methods
+kf3: display: 36 updates completed, 5900 methods
+kf3: display: 37 updates completed, 5904 methods
+kf3: display: 38 updates completed, 5914 methods
+kf3: display: 39 updates completed, 5918 methods
+kf3: display: 40 updates completed, 5928 methods
+kf3: display: 41 updates completed, 5932 methods
+kf3: display: 42 updates completed, 5945 methods
+kf3: display: 43 updates completed, 5946 methods
+kf3: display: 44 updates completed, 5959 methods
+kf3: display: 45 updates completed, 5960 methods
+kf3: display: 46 updates completed, 5970 methods
+kf3: display: 47 updates completed, 5974 methods
+kf3: display: 48 updates completed, 5987 methods
+kf3: display: 49 updates completed, 5988 methods
+kf3: display: 50 updates completed, 5998 methods
+kf3: display: 51 updates completed, 6002 methods
+kf3: display: 52 updates completed, 6015 methods
+kf3: display: 53 updates completed, 6016 methods
+kf3: display: 54 updates completed, 6029 methods
+kf3: display: 55 updates completed, 6030 methods
+kf3: display: 56 updates completed, 6043 methods
+kf3: display: 57 updates completed, 6044 methods
+kf3: display: 58 updates completed, 6057 methods
+kf3: display: 59 updates completed, 6058 methods
+kf3: display: 60 updates completed, 6068 methods
+kf3: display: 61 updates completed, 6072 methods
+kf3: display: 62 updates completed, 6082 methods
+kf3: display: 63 updates completed, 6086 methods
+kf3: display: 64 updates completed, 6096 methods
+kf3: display: +262448 ms the console shows no new frame: a lit head has no window (held up to 250 ms) — the last frame stays (core channel allocated)
+kf3: mem t=262.569s BAR1's physical view REFUSED: boot framebuffer [0x0, +0x7f0000): 56 placement(s) of the guest's still overlap it (first 0x0+0x10000 -> Some(ead20000)) — BAR1's physical view not restored
+kf3: mem t=262.574s BAR1's physical view REFUSED: boot framebuffer [0x0, +0x7f0000): 56 placement(s) of the guest's still overlap it (first 0x0+0x10000 -> Some(ead20000)) — BAR1's physical view not restored
+kf3: display: +262549 ms the guest's display life ENDED (its RM unloaded): 21 model channel(s), 0 queued completion(s) dropped (never written) — the boot layer is shown again
+kf3: GSP fn 47: the guest RM unloaded with 23 client(s) still holding host objects [c1d00013, c1d00015, c1d00016, c1d00018, c1d00019, c1d0001a, c1d0001b, c1d0001c, c1d0001d, c1d0001e, c1d0001f, c1d00022, c1d00029, c1d0002c, c1d0010e, c1d00116, c1d0011a, c1d0011d, c1d0011f, c1d00121, c1d00122, c1d001
+kf3: GSP phase Running -> Suspending
+kf3: display: +262599 ms the console shows the BOOT layer (store 0x0, 1920x1080) (core channel FREE)
+-- last counter line
+kf3: family=Ada phase=Running trapped=131961 applied=5034 refused=0 serviced=4165 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0x690000 mem[inval=2605 walks=3679/3679 cleared=2605 superseded=0 named_missed=0 unreconciled=0 absent_cleared=20 mapped=3628 unmapped=1418 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=9967 priv_withheld_bytes=0x1d2c0ed000 priv_mirrored=23 sked=7/0held carve_gpu=0 carve_kernel=4 carve_cpu=1 carve_clipped=0x20000 fn70=1 roots=12 root_moves=0 stmts=20/20 refused=16 pramin_repoints=18 pramin_miss=0 last_miss=0x0 pramin_worst_us=255 (map 179 mmap 107) pramin_maps=18 pramin_mmaps=18 pramin_kept=0 pramin_kept_now=0 window_advice_refused=0 inline_opens=0 reaped=17 cache_ops=0 sysmembars=2 root_unsets=0] mirrors=6 reused=6 prewarmed=3 mirror_avg_us=1501 mirror_max_us=1632 vat[invals=1 arrive->clear_avg_us=512 max_us=123179 walks=1 walk_avg_us=398 gpu_avg_us=97 plan_avg_us=0 apply_avg_us=10 leaves=0 host_calls=0] chan[births=16 pt_births=15 acts=540/0refused birth_refused_cap=0 worst_act_us=77622 nsi=[GR0:5477/5260raised(nolive=0,novec=0) CE2:2433/1997raised(nolive=0,novec=0) CE3:1650/787raised(nolive=0,novec=0)] pt_nsi=[fifo_edges=9569 fifo_raised=861
+== /root/win/run/qemu.log
+kf-host: HOST-ABI REFUSED control 0x2080014a: host control 0x2080014a has no row in kf_abi::hostabi::HOST_CONTROLS, and host driver 595.91.07 is outside the interval the host encoders were written for — its layout is unknown
+kf-host: HOST-ABI REFUSED control 0x20809064: host control 0x20809064 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 595.91.07 was never measured
+kf-host: HOST-ABI REFUSED control 0x2080a028: host control 0x2080a028 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 595.91.07 was never measured
+kf-host: HOST-ABI REFUSED control 0x2080a028: host control 0x2080a028 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 595.91.07 was never measured
+kf-host: HOST-ABI REFUSED control 0x2080a084: host control 0x2080a084 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 595.91.07 was never measured
+kf-host: HOST-ABI REFUSED control 0x2080a026: host control 0x2080a026 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 595.91.07 was never measured
+kf3: display plane ON — virtual NVDisplay for AD102 AD103 AD104 AD106 AD107 (IP 0x04040000, display class 0xc770, 4 heads)
+kf3: display: EXPERIMENT KF3_DISPLAY_LUT_MIRROR=1 — MIRROR accepted on DIRECT ILUT/OLUT where no negative input can reach it
+kf3: display: EXPERIMENT KF3_DISPLAY_ILUT_OFFSET_256=1 — SET_OFFSET_ILUT read in 256-byte units (as OLUT/TMO)
+kf3: display: PROBE KF3_DISPLAY_CAPS_PROBE=1 — the caps page is the real GPU's measured page (99 words; H-caps probe, not a shipped behaviour)
+kf3: display: monitor 1920x1080 at 60000 mHz, range max 75 Hz, EDID fnv1a64=c9dcbb394c28b1c7 (display-max-fps 0)
+kf3: display plane built — derived registers, caps page, engine vocabulary, GPU context on 0000:00:07.0
+kf3: display: compose kernel self-test PASSED
+kf3: display worker up — engine 4 heads / 8 windows, caps page published
+kf3: display: display-max-fps unset — every head's vblank tick is capped at 75 Hz; copies without a flip are made at the console head's tick, while watched, and sent only when the frame's checksum changed
+kf3: display: boot layer — store [0, 0x7e9000) as 1920x1080 pitch 7680, shown until the guest arms a head
+qemu-system-x86_64: -device kf3-gpu,fb-mb=4096,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,guest-driver=580.65.06,bus=pci.0,addr=0x6,id=kf0: info: kf3: display console registered (head 0 of kf0)
+kf3: display: +50 ms the console shows the BOOT layer (store 0x0, 1920x1080) (core channel FREE)
+kf3: GSP REFUSED fn76/0x20800a87=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800afe=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800aff=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800aaf=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: display: InstMem(InstMem { phys: 4022009856, size: 65536, addr_space: 2 })
+kf3: GSP REFUSED fn76/0x00800292=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a80=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802a0f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080017e=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a30=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a2e=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800b03=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800b05=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a3f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: mem t=102.555s REFUSED VasKey(13970166078463016970) root 0xefba4000: 1 run(s) not applied: leaf 0x20fc00000+0x10400000 names store 0xefc00000, inside the firmware carve-out at 0xefbe0000 — a twin maps no kayfabe memory (§Q)
+kf3: mem t=102.563s REFUSED VasKey(13970166078463016970) root 0xefba4000: 1 run(s) not applied: leaf 0x20fc00000+0x10400000 names store 0xefc00000, inside the firmware carve-out at 0xefbe0000 — a twin maps no kayfabe memory (§Q)
+kf3: mem t=102.564s REFUSED VasKey(13970166078463016970) root 0xefba4000: 1 run(s) not applied: leaf 0x20fc00000+0x10400000 names store 0xefc00000, inside the firmware carve-out at 0xefbe0000 — a twin maps no kayfabe memory (§Q)
+kf3: GSP REFUSED fn76/0x2080013f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20809004=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00801306=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20810108=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800ab8=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800173=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802a12=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800160=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802801=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080012f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802806=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080205b=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a060=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802068=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00800106=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a70a=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a801=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a02f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x208081ea=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20808524=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00730285=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x0073011d=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a3a=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20801110=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080080b=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: display: ChannelAllocated { kind: Core, instance: 0, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9663090688, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Window, instance: 0, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9555324928, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Window, instance: 1, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9555329024, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Window, instance: 2, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9555333120, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Window, instance: 3, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9555337216, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Window, instance: 4, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9555341312, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Window, instance: 5, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9555345408, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Window, instance: 6, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9555349504, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Window, instance: 7, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9555353600, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 0, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9555292160, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 1, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9555296256, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 2, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9555300352, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 3, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9555304448, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 4, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9555308544, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 5, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9555312640, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 6, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9555316736, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: WindowImm, instance: 7, offset: 0, client: 3251634178, pb: Some(Pushbuffer { addr_space: 1, phys: 9555320832, limit: 4095, size_enum: 0 }), life: 1 }
+kf3: display: ChannelAllocated { kind: Cursor, instance: 0, offset: 0, client: 3251634178, pb: None, life: 1 }
+kf3: display: ChannelAllocated { kind: Cursor, instance: 1, offset: 0, client: 3251634178, pb: None, life: 1 }
+kf3: display: ChannelAllocated { kind: Cursor, instance: 2, offset: 0, client: 3251634178, pb: None, life: 1 }
+kf3: display: ChannelAllocated { kind: Cursor, instance: 3, offset: 0, client: 3251634178, pb: None, life: 1 }
+kf3: GSP REFUSED fn76/0x00730288=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20801220=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20801222=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00730293=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x007302a2=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x007302a6=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00730128=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a630=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080852e=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080852a=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00730280=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00730122=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: display: the guest armed its first head at +111029 ms — the boot layer is retired after 1 boot frame(s)
+kf3: display: +111029 ms the console shows no new frame: no armed head has scanned a window yet — the boot layer's last frame stays (no black at the handoff) (core channel allocated)
+kf3: display: head 0 ACTIVE raster 2200x1125 period 16666666 ns (raster 16666666 ns, cap 75 Hz)
+kf3: display: head 1 idle raster 0x0 period 0 ns (raster 0 ns, cap 75 Hz)
+kf3: display: head 2 idle raster 0x0 period 0 ns (raster 0 ns, cap 75 Hz)
+kf3: display: head 3 idle raster 0x0 period 0 ns (raster 0 ns, cap 75 Hz)
+kf3: display: 1 updates completed, 5597 methods
+kf3: display: 2 updates completed, 5599 methods
+kf3: display: 3 updates completed, 5622 methods
+kf3: display: 4 updates completed, 5625 methods
+kf3: display: 5 updates completed, 5628 methods
+kf3: GSP REFUSED fn76/0x00730282=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: display: 8 updates completed, 5639 methods
+kf3: display: 9 updates completed, 5687 methods
+kf3: display: 10 updates completed, 5701 methods
+kf3: display: 11 updates completed, 5718 methods
+kf3: display: 12 updates completed, 5732 methods
+kf3: display: +111513 ms the console shows head 0 1920x1080: [window 0 iso 0xff1d1002+0x0 1920x1080 pitch 120 fmt 0xcf] (core channel allocated)
+kf3: display: EXPERIMENT KF3_DISPLAY_LUT_MIRROR=1 — a mirrored LUT accepted (ILUT mirrored=true, OLUT Some(Lut { entries: 1025, binding: Dma { handle: 4280279364, offset: 0 }, interpolate: false, mirror: true }); every input provably nonnegative)
+kf3: display: 13 updates completed, 5736 methods
+kf3: display: 14 updates completed, 5737 methods
+kf3: GSP REFUSED fn76/0x2080b201=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080852f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a618=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a619=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080853a=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080853b=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x007302a5=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: RPC-REFUSED #1 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusa
+kf3: GSP REFUSED fn103/0x0000402c=0x56 (GSP_RM_ALLOC) first_seq=0 — the guest read a non-OK status
+kf-rm: RPC-REFUSED #2 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusa
+kf-rm: RPC-REFUSED #3 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusa
+kf-rm: RPC-REFUSED #4 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusa
+kf3: GSP REFUSED fn76/0x20800a9a=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: RPC-REFUSED #5 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusa
+kf-rm: RPC-REFUSED #6 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusa
+kf-rm: RPC-REFUSED #7 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusa
+kf-rm: RPC-REFUSED #8 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusa
+kf-rm: RPC-REFUSED #9 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusa
+kf-rm: RPC-REFUSED #10 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refus
+kf3: display: 15 updates completed, 5751 methods
+kf3: display: 16 updates completed, 5752 methods
+kf3: display: 17 updates completed, 5762 methods
+kf3: display: 18 updates completed, 5766 methods
+kf3: display: 19 updates completed, 5776 methods
+kf3: display: 20 updates completed, 5780 methods
+kf3: display: 21 updates completed, 5793 methods
+kf3: display: 22 updates completed, 5794 methods
+kf3: display: 23 updates completed, 5807 methods
+kf3: display: 24 updates completed, 5808 methods
+kf3: display: 25 updates completed, 5818 methods
+kf3: display: 26 updates completed, 5822 methods
+kf3: display: 27 updates completed, 5832 methods
+kf3: display: 28 updates completed, 5836 methods
+kf3: display: 29 updates completed, 5849 methods
+kf3: display: 30 updates completed, 5850 methods
+kf3: display: 31 updates completed, 5863 methods
+kf3: display: 32 updates completed, 5864 methods
+kf3: display: 33 updates completed, 5877 methods
+kf3: display: 34 updates completed, 5878 methods
+kf3: display: 35 updates completed, 5891 methods
+kf3: display: 36 updates completed, 5892 methods
+kf3: display: 37 updates completed, 5902 methods
+kf3: display: 38 updates completed, 5906 methods
+kf3: display: 39 updates completed, 5916 methods
+kf3: display: 40 updates completed, 5920 methods
+kf3: display: 41 updates completed, 5930 methods
+kf3: display: 42 updates completed, 5934 methods
+kf3: display: 43 updates completed, 5947 methods
+kf3: display: 44 updates completed, 5948 methods
+kf3: display: 45 updates completed, 5958 methods
+kf3: display: 46 updates completed, 5962 methods
+kf3: display: 47 updates completed, 5972 methods
+kf3: display: 48 updates completed, 5976 methods
+kf3: display: 49 updates completed, 5986 methods
+kf3: display: 50 updates completed, 5990 methods
+kf3: display: 51 updates completed, 6003 methods
+kf3: display: 52 updates completed, 6004 methods
+kf3: display: 53 updates completed, 6017 methods
+kf3: display: 54 updates completed, 6018 methods
+kf3: display: 55 updates completed, 6031 methods
+kf3: display: 56 updates completed, 6032 methods
+kf3: display: 57 updates completed, 6042 methods
+kf3: display: 58 updates completed, 6046 methods
+kf3: display: 59 updates completed, 6056 methods
+kf3: display: 60 updates completed, 6060 methods
+kf3: display: 61 updates completed, 6073 methods
+kf3: display: 62 updates completed, 6074 methods
+kf3: display: 63 updates completed, 6087 methods
+kf3: display: 64 updates completed, 6088 methods
+kf3: GSP REFUSED fn76/0x00809908=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: mem t=161.989s REFUSED VasKey(13965662659207497808) root 0xefa06000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: mem t=161.991s REFUSED VasKey(13965662659207497808) root 0xefa06000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: mem t=161.995s REFUSED VasKey(13965662659207497808) root 0xefa06000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: mem t=161.998s REFUSED VasKey(13965662659207497808) root 0xefa06000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: mem t=162.006s REFUSED VasKey(13965662659207497808) root 0xefa06000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: mem t=162.012s REFUSED VasKey(13965662659207497808) root 0xefa06000: the walk REFUSED leaves (refuse_mask=0x400) — absent, not mapped
+kf3: GSP REFUSED fn76/0x00800294=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080014b=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800157=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20801357=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a612=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a097=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+-- last counter line
+kf3: family=Ada phase=Running trapped=268830 applied=3896 refused=0 serviced=3043 ram_refused=0 unshadowed_writes=2 read_exits=0 last_off=0xb81608 mem[inval=3216 walks=6361/6361 cleared=3216 superseded=0 named_missed=0 unreconciled=0 absent_cleared=9 mapped=12539 unmapped=6528 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=39568 priv_withheld_bytes=0x75da69f000 priv_mirrored=23 sked=14/0held carve_gpu=0 carve_kernel=4 carve_cpu=1 carve_clipped=0x20000 fn70=1 roots=33 root_moves=0 stmts=58/58 refused=9 pramin_repoints=18 pramin_miss=0 last_miss=0x0 pramin_worst_us=263 (map 178 mmap 134) pramin_maps=18 pramin_mmaps=18 pramin_kept=0 pramin_kept_now=0 window_advice_refused=0 inline_opens=0 reaped=17 cache_ops=0 sysmembars=2 root_unsets=0] mirrors=9 reused=24 prewarmed=3 mirror_avg_us=1685 mirror_max_us=1880 vat[invals=0 arrive->clear_avg_us=0 max_us=126955 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=0 host_calls=0] chan[births=16 pt_births=29 acts=511/0refused birth_refused_cap=0 worst_act_us=80038 nsi=[GR0:12621/12412raised(nolive=0,novec=0) CE2:6687/5845raised(nolive=0,novec=0) CE3:3506/3505raised(nolive=0,novec=0)] pt_nsi=[fifo_edges=22925 fifo_raised=228

@@ -9,6 +9,9 @@ the generator (`tools/derive_hwref.sh` → `kf_chip::hwref`) that now checks tho
 Companion documents: `THE_BAR0_DISPOSITION_MAP.md` (how each page is *trapped*; this document covers what
 the values *are*), `V3_FAMILY_PORT_ADA.md`, `V3_FAMILY_PORT_BLACKWELL.md`, `V3_FLOORSWEPT_GR.md`.
 
+> **⊘ CORRECTION 2026-10-15.** The `FspRow` boot-gate row for GB10x is FIXED (`FspRow::BLACKWELL_GB10X`, `0x200BC`; test `the_blackwell_fsp_boot_gate_is_each_die_groups_header_register`), and the
+> `OFFSET_UPPER` width (matrix F-2) is per class (`grtables::address_upper_bits`). The other `c✗` rows of GB10x/GB20x are unchanged (`V3_GPU_TYPES_20261015.md` section 4).
+
 ## 0. The answer
 
 **Before this branch: no.** The hardware boundary existed only as hand-written literals scattered over

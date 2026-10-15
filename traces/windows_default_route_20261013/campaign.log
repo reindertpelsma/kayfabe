@@ -1,0 +1,14 @@
+CLAUDE_DEFAULT_WINDOWS_START=2026-10-13T11:37:54+02:00
+HYPOTHESIS source-zero migration at the intercepted USER stream position preserves the original GravityMark Vulkan workload.
+FALSIFIER clean refusal, lost progress, wrong output, device loss, hostXid32 or guest141/4101.
+DEFAULT_ROUTE no relay enabling flag; unchanged production flags, original app media/oracles. Video/D3D12/CUDA smoke plus original600s Vulkan oracle.
+SUCCESS normal benchmark exit, original image/timings/GPU activity, zero recovery; same-GPU VFIO reference183s.
+KERNEL_JOURNAL_XID_RECORDS 0 QUERY_EXIT 0
+[windows] no run1660 guest running
+[windows] run1660 stopped (Xid count now 56)
+IOMMU_SWITCH_START group=11 from=DMA-FQ to=DMA-FQ 2026-10-13T11:48:30+02:00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-13T11:48:32+02:00
+USER_WORKER_WINDOWS_EXIT=0 at=2026-10-13T11:48:32+02:00 source=ec45aad99a81cb16eb0554b77f0ff331c47cf6d3 (harness status; app verdict separate)
+CLAUDE_DEFAULT_WINDOWS_EXIT=0 at=2026-10-13T11:48:32+02:00

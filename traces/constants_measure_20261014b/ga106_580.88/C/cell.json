@@ -1,0 +1,21 @@
+{
+ "schema": "kfwc-cell/1",
+ "module": {"version": 1, "engine_abi": 3},
+ "windows": {"build": "26100", "ubr": "1742", "display_version": "24H2"},
+ "display_driver": {"driver_version": "32.0.15.8088"},
+ "decode_tag": "580.82.07",
+ "die": {"pci_vendor_id": "0x10de", "pci_device_id": "0x2504", "pci_revision_id": "0xa1"},
+ "discovery": {"method": 1, "layout": 1, "bar0": 3, "gpu_count": 1, "mailbox_reads": 2350, "mailbox_status": 0, "scan_bytes": 3952672768, "scan_passes": 0, "scan_candidates": 3, "scan_backoff_resets": 3, "scan_backoff_ticks": 17897725},
+ "ring": {"bytes": 16777216, "ring_refused": 0, "ring_high_water": 573792},
+ "capture": {"records": 8277, "end_seen": 1, "file_ok": 1, "by_kind": {"bind": 4, "elements": 8268, "loss_overflow": 0, "loss_unreadable": 0, "loss_unknown": 4, "end": 1}},
+ "stats": {"steps": 80922, "attaches": 2, "detaches": 2, "messages_cmd": 4104, "messages_status": 4140, "lost_messages_exact": 0, "seq_gap_messages": 0, "lapped_messages": 0, "loss_records": 4, "torn_reads": 0, "invalid_elements": 0, "unsupported": 0, "read_failures": 0, "resyncs": 4, "sink_dropped": 0, "records_refused": 0},
+ "events": [
+  {"code": 1, "generation": 0, "data_hex": "030000000000000001000000010000000000000004250000000000000000000000000000000000000000000000000000"},
+  {"code": 2, "generation": 1, "data_hex": "02000000000000008100000000000400000004000010000001000000010000000060b814010000000000000000000000"},
+  {"code": 4, "generation": 1, "data_hex": "020000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},
+  {"code": 3, "generation": 1, "data_hex": "010000000000000079030000000000000000000000000000000000000000000000000000000000000000000000000000"},
+  {"code": 2, "generation": 2, "data_hex": "01000000000000008100000000000400000004000010000001000000000000000060bd140100000000c02ed60c000000"},
+  {"code": 3, "generation": 2, "data_hex": "040000000000000034200000000000000000000000000000000000000000000000000000000000000000000000000000"}
+ ],
+ "ticks_per_second": 3579545, "started_qpc": 392320607
+}

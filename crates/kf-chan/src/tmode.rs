@@ -720,7 +720,7 @@ fn gr_write(
     m: u32,
     v: u32,
 ) -> Result<(), Refusal> {
-    use crate::grtables::{Disposition, GrClass, gr_method, reauthor, report_semaphore};
+    use crate::grtables::{Disposition, GrClass, gr_method, reauthor_in_class, report_semaphore};
     let gc = GrClass::of_class(class).ok_or(Refusal::ForeignClass { subch: sub, class })?;
     // ★ Batch 3: the 3D report-semaphore rows are per family (the class id decides), the rest per kind.
     match report_semaphore(class, m).unwrap_or_else(|| gr_method(gc, m)) {
@@ -731,7 +731,7 @@ fn gr_write(
             name,
         }),
         Disposition::Allowed(row) => {
-            let word = reauthor(&row, v).map_err(|what| Refusal::GrField {
+            let word = reauthor_in_class(Some(class), &row, v).map_err(|what| Refusal::GrField {
                 class,
                 method: m,
                 word: v,

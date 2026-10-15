@@ -1,0 +1,36 @@
+2026-10-13T11:05:16Z START run_dir=/var/lib/kf-windows-20261005/claude-default-matrix-ec45aad99/b8 vm=broker kf3_rev=ec45aad9 apps=8
+2026-10-13T11:05:16Z MATRIX_START apps=8 (resume skips 0) per_guest=8 max_tdr=99 tier<=3
+2026-10-13T11:05:19Z pre-guest hook rc=0 :00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=identity 2026-10-13T13:05:19+02:00
+2026-10-13T11:05:20Z broker run 1780 rc=0 ['  └────────────────────────────────────────────────────────────────────────────────────────────┘']
+2026-10-13T11:05:20Z [g1] launched; waiting for the guest agent (<= 900s)
+2026-10-13T11:05:37Z [g1] agent answered after 20s
+2026-10-13T11:05:37Z [g1] password set for vast rc=0
+2026-10-13T11:06:23Z [g1] verified sign-in attempt=1 rc=0
+2026-10-13T11:06:25Z [g1] interactive session: VASTWIN\vast
+2026-10-13T11:06:26Z [g1] pushed 26 guest files
+2026-10-13T11:06:26Z [g1] app disk attached (usb-storage)
+2026-10-13T11:06:32Z [g1] setup ok: cd=D: nvidia_adapters=1 NVIDIA GeForce RTX 4070, 580.88, 4096 MiB
+2026-10-13T11:06:35Z [g1] override tool kf_cuda_control.exe sha256=3906f520c10e272215d9d7d79a90ce9a2042581923a4717db90be312ab3a67c8
+2026-10-13T11:06:37Z [g1] override tool kf_dxprobe.exe sha256=3c6ededa77430a18a13321eb72fdca7f60282f8d12ddc147a7e7df1284832c5f
+2026-10-13T11:06:51Z [g1] staged vc_redist (installer, 12s)
+2026-10-13T11:06:55Z [g1] READY boot=2026-10-13T11:05:26.5000000Z user=VASTWIN\vast smi_ok=True
+2026-10-13T11:06:57Z [g1] staged python_embed (python_embed, 0s)
+2026-10-13T11:07:43Z [g1] staged pywheels (wheels, 44s)
+2026-10-13T11:09:26Z [g1] reduce_t: PASS
+2026-10-13T11:09:41Z [g1] rng_t: PASS
+2026-10-13T11:10:04Z [g1] scan_t: PASS
+2026-10-13T11:10:23Z [g1] sort_t: PASS
+2026-10-13T11:10:37Z [g1] stream_created2nd_t: PASS
+2026-10-13T11:11:02Z [g1] stream_created_t: PASS
+2026-10-13T11:11:19Z [g1] stream_default_t: PASS
+2026-10-13T11:11:33Z [g1] stream_nonblocking_t: PASS
+2026-10-13T11:11:52Z post-guest hook rc=0 02:00 (gdm untouched)
+TYPE WRITTEN
+NVIDIA GeForce RTX 4070, 9 MiB
+IOMMU_SWITCH_END type=DMA-FQ 2026-10-13T13:11:52+02:00
+2026-10-13T11:11:52Z [g1] stopped (clean)
+2026-10-13T11:11:52Z MATRIX_DONE batched: 8 pass / 8
+2026-10-13T11:11:52Z EXIT rc=0

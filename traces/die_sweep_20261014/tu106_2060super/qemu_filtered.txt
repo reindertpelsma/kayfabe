@@ -1,0 +1,110 @@
+== /root/win/run/qemu-144101.log
+kf-host: HOST-ABI REFUSED control 0x2080014a: host control 0x2080014a has no row in kf_abi::hostabi::HOST_CONTROLS, and host driver 595.91.07 is outside the interval the host encoders were written for — its layout is unknown
+kf-host: HOST-ABI REFUSED control 0x20809064: host control 0x20809064 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 595.91.07 was never measured
+kf-host: HOST-ABI REFUSED control 0x2080a028: host control 0x2080a028 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 595.91.07 was never measured
+kf-host: HOST-ABI REFUSED control 0x2080a028: host control 0x2080a028 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 595.91.07 was never measured
+kf-host: HOST-ABI REFUSED control 0x2080a084: host control 0x2080a084 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 595.91.07 was never measured
+kf-host: HOST-ABI REFUSED control 0x2080a026: host control 0x2080a026 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 595.91.07 was never measured
+-- last counter line
+kf3: family=Turing phase=Cold trapped=10 applied=10 refused=0 serviced=0 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x88080 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 absent_cleared=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=0 sked=0/0held carve_gpu=0 carve_kernel=0 carve_cpu=0 carve_clipped=0x0 fn70=0 roots=0 root_moves=0 stmts=0/0 refused=0 pramin_repoints=0 pramin_miss=0 last_miss=0x0 pramin_worst_us=0 (map 0 mmap 0) pramin_maps=0 pramin_mmaps=0 pramin_kept=0 pramin_kept_now=0 window_advice_refused=0 inline_opens=0 reaped=0 cache_ops=0 sysmembars=0 root_unsets=0] mirrors=0 reused=0 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=0 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=0 host_calls=0] chan[births=0 pt_births=0 acts=0/0refused birth_refused_cap=0 worst_act_us=0 nsi=[] pt_nsi=[fifo_edges=0 fifo_raised=0 fifo_armed=0 sticky=0x0 kernel_nonstall_registered=0 arm_clears=0 os_event_overflowed=0 kernel_nonstall_overflowed=0 edges=0 not_armed=0 unvectored=0 relay_off=0 relay=on pacing=off refused=0  ] served
+== /root/win/run/qemu.log
+kf-host: HOST-ABI REFUSED control 0x2080014a: host control 0x2080014a has no row in kf_abi::hostabi::HOST_CONTROLS, and host driver 595.91.07 is outside the interval the host encoders were written for — its layout is unknown
+kf-host: HOST-ABI REFUSED control 0x20809064: host control 0x20809064 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 595.91.07 was never measured
+kf-host: HOST-ABI REFUSED control 0x2080a028: host control 0x2080a028 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 595.91.07 was never measured
+kf-host: HOST-ABI REFUSED control 0x2080a028: host control 0x2080a028 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 595.91.07 was never measured
+kf-host: HOST-ABI REFUSED control 0x2080a084: host control 0x2080a084 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 595.91.07 was never measured
+kf-host: HOST-ABI REFUSED control 0x2080a026: host control 0x2080a026 has no public header (kf_abi::gssreplay ROWS (measured on 580.159.04 hosts)); its layout at host driver 595.91.07 was never measured
+kf3: GSP REFUSED fn76/0x20800a4b=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800afe=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800aff=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800aaf=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00800292=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a80=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802a0f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080017e=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a30=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a2e=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800b03=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800b05=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a3f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00802046=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080013f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20809004=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00801306=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20810108=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800ab8=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800173=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802a12=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800160=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802801=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080012f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802806=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080205b=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a060=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20802068=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00800106=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a70a=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a801=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a02f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x208081ea=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800a3a=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20801110=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080080b=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20801220=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20801222=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a630=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080852e=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080852a=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: act Windows USER ring birth REFUSED (0x40): USER_RING_SOURCE_DECLARATION; storage cleanup Ok(()) (66 us)
+kf3: GSP REFUSED fn103/0x0000c46f=0x40 (GSP_RM_ALLOC) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080b201=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080852f=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a618=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a619=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080853a=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080853b=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: act Windows USER ring birth REFUSED (0x40): USER_RING_SOURCE_DECLARATION; storage cleanup Ok(()) (76 us)
+kf-rm: RPC-REFUSED #1 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusa
+kf3: GSP REFUSED fn103/0x0000402c=0x56 (GSP_RM_ALLOC) first_seq=0 — the guest read a non-OK status
+kf-rm: RPC-REFUSED #2 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusa
+kf-rm: RPC-REFUSED #3 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusa
+kf-rm: RPC-REFUSED #4 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusa
+kf3: act Windows USER ring birth REFUSED (0x40): USER_RING_SOURCE_DECLARATION; storage cleanup Ok(()) (75 us)
+kf3: act Windows USER ring birth REFUSED (0x40): USER_RING_SOURCE_DECLARATION; storage cleanup Ok(()) (49 us)
+kf3: act Windows USER ring birth REFUSED (0x40): USER_RING_SOURCE_DECLARATION; storage cleanup Ok(()) (41 us)
+kf3: act Windows USER ring birth REFUSED (0x40): USER_RING_SOURCE_DECLARATION; storage cleanup Ok(()) (48 us)
+kf3: act Windows USER ring birth REFUSED (0x40): USER_RING_SOURCE_DECLARATION; storage cleanup Ok(()) (48 us)
+kf-rm: RPC-REFUSED #5 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusa
+kf-rm: RPC-REFUSED #6 AllocClassNotPermitted { class: 16428, denial: Refused { name: "NV40_I2C", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusa
+kf3: GSP REFUSED fn76/0x2080a088=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x00809908=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: act Windows USER ring birth REFUSED (0x40): USER_RING_SOURCE_DECLARATION; storage cleanup Ok(()) (48 us)
+kf3: act Windows USER ring birth REFUSED (0x40): USER_RING_SOURCE_DECLARATION; storage cleanup Ok(()) (40 us)
+kf3: act Windows USER ring birth REFUSED (0x40): USER_RING_SOURCE_DECLARATION; storage cleanup Ok(()) (73 us)
+kf3: act Windows USER ring birth REFUSED (0x40): USER_RING_SOURCE_DECLARATION; storage cleanup Ok(()) (39 us)
+kf3: act Windows USER ring birth REFUSED (0x40): USER_RING_SOURCE_DECLARATION; storage cleanup Ok(()) (37 us)
+kf3: act Windows USER ring birth REFUSED (0x40): USER_RING_SOURCE_DECLARATION; storage cleanup Ok(()) (26 us)
+kf3: act Windows USER ring birth REFUSED (0x40): USER_RING_SOURCE_DECLARATION; storage cleanup Ok(()) (22 us)
+kf3: act Windows USER ring birth REFUSED (0x40): USER_RING_SOURCE_DECLARATION; storage cleanup Ok(()) (51 us)
+kf3: act Windows USER ring birth REFUSED (0x40): USER_RING_SOURCE_DECLARATION; storage cleanup Ok(()) (31 us)
+kf3: act Windows USER ring birth REFUSED (0x40): USER_RING_SOURCE_DECLARATION; storage cleanup Ok(()) (19 us)
+kf3: act Windows USER ring birth REFUSED (0x40): USER_RING_SOURCE_DECLARATION; storage cleanup Ok(()) (21 us)
+kf3: act Windows USER ring birth REFUSED (0x40): USER_RING_SOURCE_DECLARATION; storage cleanup Ok(()) (19 us)
+kf3: act Windows USER ring birth REFUSED (0x40): USER_RING_SOURCE_DECLARATION; storage cleanup Ok(()) (42 us)
+kf3: act Windows USER ring birth REFUSED (0x40): USER_RING_SOURCE_DECLARATION; storage cleanup Ok(()) (47 us)
+kf3: act Windows USER ring birth REFUSED (0x40): USER_RING_SOURCE_DECLARATION; storage cleanup Ok(()) (36 us)
+kf3: GSP REFUSED fn76/0x00800294=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080014b=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20800157=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x20801357=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a612=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf3: GSP REFUSED fn76/0x2080a097=0x56 (GSP_RM_CONTROL) first_seq=0 — the guest read a non-OK status
+kf-rm: RPC-REFUSED #7 UnmappedAllocClass { class: 8335 } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusal census)
+kf3: GSP REFUSED fn103/0x0000208f=0x56 (GSP_RM_ALLOC) first_seq=0 — the guest read a non-OK status
+kf-rm: RPC-REFUSED #8 UnmappedAllocClass { class: 8335 } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusal census)
+kf-rm: RPC-REFUSED #9 UnmappedAllocClass { class: 8335 } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusal census)
+kf-rm: RPC-REFUSED #10 UnmappedAllocClass { class: 8335 } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusal census)
+kf-rm: RPC-REFUSED #11 UnmappedAllocClass { class: 8335 } ⇒ answered NV_ERR_NOT_SUPPORTED (0x56). ⊘ The guest sees only the status; this line is the only place the REASON exists. (printing the first 24; the total rides the refusal census)
+kf3: act Windows USER ring birth REFUSED (0x40): USER_RING_SOURCE_DECLARATION; storage cleanup Ok(()) (45 us)
+-- last counter line
+kf3: family=Turing phase=Running trapped=147404 applied=90039 refused=0 serviced=2125 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0xb81608 mem[inval=2730 walks=2873/2873 cleared=2730 superseded=0 named_missed=0 unreconciled=0 absent_cleared=0 mapped=618 unmapped=274 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=24 sked=0/0held carve_gpu=0 carve_kernel=0 carve_cpu=1 carve_clipped=0x0 fn70=1 roots=39 root_moves=0 stmts=71/71 refused=0 pramin_repoints=18 pramin_miss=0 last_miss=0x0 pramin_worst_us=31212 (map 475 mmap 31110) pramin_maps=18 pramin_mmaps=18 pramin_kept=0 pramin_kept_now=0 window_advice_refused=0 inline_opens=0 reaped=17 cache_ops=0 sysmembars=2 root_unsets=0] mirrors=8 reused=31 prewarmed=3 mirror_avg_us=1954 mirror_max_us=2436 vat[invals=0 arrive->clear_avg_us=0 max_us=40449 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=0 host_calls=0] chan[births=13 pt_births=0 acts=204/24refused birth_refused_cap=0 worst_act_us=69524 nsi=[GR0:2875/2712raised(nolive=0,novec=0) CE2:396/397raised(nolive=0,novec=0)] pt_nsi=[fifo_edges=3306 fifo_raised=0 fifo_armed=0 sticky=0x0 kernel_nonstall_registered=5 arm_c

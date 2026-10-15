@@ -1,0 +1,23 @@
+interval	first_tag	last_tag	n_tags	branches	changed_at_start	start_sample
+0	515.43.04	515.105.01	17	515	0	
+1	520.56.06	520.61.07	3	520	4	chipclasses:halAD102:full chipclasses:halAD103:full chipclasses:halAD104:full chipclasses:halGH100:full
+2	525.47.04	530.41.03	29	525-530	17	chipclasses:halAD102:full chipclasses:halAD103:full chipclasses:halAD104:full chipclasses:halAD106:full chipclasses:halAD107:full chipclasses:halGA100:full
+3	535.43.02	535.43.23	12	535	12	chipclasses:halAD102:full chipclasses:halAD103:full chipclasses:halAD104:full chipclasses:halAD106:full chipclasses:halAD107:full chipclasses:halGA100:full
+4	535.43.24	535.43.28	3	535	17	chipclasses:halAD102:full chipclasses:halAD103:full chipclasses:halAD104:full chipclasses:halAD106:full chipclasses:halAD107:full chipclasses:halGA100:full
+5	535.54.03	535.113.01	7	535	17	chipclasses:halAD102:full chipclasses:halAD103:full chipclasses:halAD104:full chipclasses:halAD106:full chipclasses:halAD107:full chipclasses:halGA100:full
+6	535.129.03	535.309.01	17	535	17	chipclasses:halAD102:full chipclasses:halAD103:full chipclasses:halAD104:full chipclasses:halAD106:full chipclasses:halAD107:full chipclasses:halGA100:full
+7	545.23.06	545.29.06	5	545	12	chipclasses:halAD102:full chipclasses:halAD103:full chipclasses:halAD104:full chipclasses:halAD106:full chipclasses:halAD107:full chipclasses:halGA100:full
+8	550.40.07	555.58.02	39	550-555	17	chipclasses:halAD102:full chipclasses:halAD103:full chipclasses:halAD104:full chipclasses:halAD106:full chipclasses:halAD107:full chipclasses:halGA100:full
+9	560.28.03	560.35.03	3	560	19	chipclasses:halAD102:full chipclasses:halAD103:full chipclasses:halAD104:full chipclasses:halAD106:full chipclasses:halAD107:full chipclasses:halGA100:full
+10	565.57.01	565.77	2	565	16	mcarch:ARCHITECTURE_AD100 mcarch:ARCHITECTURE_GB100 mcarch:ARCHITECTURE_GH100 mcarch:IMPLEMENTATION_AD000 mcarch:IMPLEMENTATION_AD100 mcarch:IMPLEMENTATION_AD101
+11	570.86.15	570.211.01	25	570	29	chipclasses:halAD102:full chipclasses:halAD103:full chipclasses:halAD104:full chipclasses:halAD106:full chipclasses:halAD107:full chipclasses:halGA102:full
+12	575.51.02	575.64.05	6	575	7	chipclasses:halGB110:full chipclasses:halGB112:full chipclasses:halGB20B:full mcarch:IMPLEMENTATION_GB110 mcarch:IMPLEMENTATION_GB112 mcarch:IMPLEMENTATION_GB204
+13	580.65.06	580.94.13	10	580	64	chipclasses:generic:ids chipclasses:halAD102:full chipclasses:halAD102:ids chipclasses:halAD103:full chipclasses:halAD103:ids chipclasses:halAD104:full
+14	580.94.16	580.94.18	3	580	29	chipclasses:halAD102:full chipclasses:halAD103:full chipclasses:halAD104:full chipclasses:halAD106:full chipclasses:halAD107:full chipclasses:halGA100:full
+15	580.95.05	580.119.02	3	580	29	chipclasses:halAD102:full chipclasses:halAD103:full chipclasses:halAD104:full chipclasses:halAD106:full chipclasses:halAD107:full chipclasses:halGA100:full
+16	580.126.09	580.126.20	4	580	29	chipclasses:halAD102:full chipclasses:halAD103:full chipclasses:halAD104:full chipclasses:halAD106:full chipclasses:halAD107:full chipclasses:halGA100:full
+17	580.142	580.178.04	6	580	58	chipclasses:halAD102:full chipclasses:halAD102:ids chipclasses:halAD103:full chipclasses:halAD103:ids chipclasses:halAD104:full chipclasses:halAD104:ids
+18	590.44.01	590.48.01	2	590	29	chipclasses:halAD102:ids chipclasses:halAD103:ids chipclasses:halAD104:ids chipclasses:halAD106:ids chipclasses:halAD107:ids chipclasses:halGA100:ids
+19	595.44.02	595.104.02	20	595	60	chipclasses:generic:ids chipclasses:halAD102:full chipclasses:halAD102:ids chipclasses:halAD103:full chipclasses:halAD103:ids chipclasses:halAD104:full
+20	610.43.02	610.57.04	3	610	38	chipclasses:halAD102:ids chipclasses:halAD103:ids chipclasses:halAD104:ids chipclasses:halAD106:ids chipclasses:halAD107:ids chipclasses:halGA100:ids
+21	615.71.09	615.78.08	2	615	65	chipclasses:halAD102:full chipclasses:halAD102:ids chipclasses:halAD103:full chipclasses:halAD103:ids chipclasses:halAD104:full chipclasses:halAD104:ids

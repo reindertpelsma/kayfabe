@@ -1,0 +1,10 @@
+START 2026-10-14T14:57:57+00:00
+BOX_RC=0
+084a08ddd die sweep: TU106 (RTX 2060 SUPER) result and evidence (display=on refused at realize; display=off: driver OK, nvidia-smi OK)
+DRIVER_RC=0
+TREE_RC=0
+LADDER_RC=0
+FG_RC=0
+KF3_RC=0
+READY driver=595.91.07
+EXIT 2026-10-14T15:11:33+00:00

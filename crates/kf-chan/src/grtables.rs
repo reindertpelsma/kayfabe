@@ -383,6 +383,29 @@ pub fn gr_method(class: GrClass, method: u32) -> Disposition {
 /// # Errors
 /// A word with a bit outside the field, or a value the field does not name.
 pub fn reauthor(r: &Row, v: u32) -> Result<u32, &'static str> {
+    reauthor_in_class(None, r, v)
+}
+
+/// ★ F-2 (matrix `V3_CONSTANT_MATRIX_20261014.md` section 7; T1): the width of the `ADDRESS_UPPER` /
+/// `OFFSET_UPPER` field of `SET_NOTIFY_A` and `SET_REPORT_SEMAPHORE_A` for `class`, **from the class's own
+/// public header**: 7:0 in `clc597/clc697/clc797/clc997` (3D) and `clc5c0/clc6c0/clc7c0` (compute), 24:0 in
+/// `clcb97` (Hopper 3D) and `clcdc0` (Blackwell compute A). A class whose header names only the class id
+/// (`clc9c0`, `clcbc0`, `clcd97`, `clce97`, `clcec0`) states no width: it keeps the narrow 8 bits, so a larger
+/// value is REFUSED by name, never truncated and never guessed wider (a pinned test reads the headers when an
+/// ogkm tree is present).
+#[must_use]
+pub const fn address_upper_bits(class: u32) -> u32 {
+    match class {
+        0xCB97 | 0xCDC0 => 25,
+        _ => 8,
+    }
+}
+
+/// [`reauthor`] with the class the subchannel is bound to (`None`: the narrow default).
+///
+/// # Errors
+/// A word with a bit outside the field, or a value the field does not name.
+pub fn reauthor_in_class(class: Option<u32>, r: &Row, v: u32) -> Result<u32, &'static str> {
     match r.field {
         Field::Bool => {
             if v & !1 != 0 {
@@ -397,8 +420,13 @@ pub fn reauthor(r: &Row, v: u32) -> Result<u32, &'static str> {
             .ok_or("a value the class header does not name"),
         Field::Word => Ok(u32::from_le_bytes(v.to_le_bytes())),
         Field::AddressUpper8 => {
-            if v & !0xFF != 0 {
-                return Err("ADDRESS_UPPER beyond 7:0");
+            let bits = class.map_or(8, address_upper_bits);
+            if bits < 32 && v >> bits != 0 {
+                return Err(if bits == 8 {
+                    "ADDRESS_UPPER beyond 7:0"
+                } else {
+                    "ADDRESS_UPPER beyond 24:0"
+                });
             }
             Ok(v)
         }
@@ -475,6 +503,71 @@ mod tests {
         ] {
             assert!(reauthor_report_semaphore_d(bad).is_err(), "{bad:#x}");
         }
+    }
+
+    /// F-2: Hopper 3D and Blackwell compute A carry a 25-bit `ADDRESS_UPPER` (`clcb97.h:42`, `clcdc0.h:39`); the other
+    /// classes 8. Wider than the class's field is refused by name, never truncated.
+    #[test]
+    fn the_notify_upper_field_is_as_wide_as_the_class_header_says() {
+        for (class, wide) in [(0xCB97u32, true), (0xCDC0, true), (0xC997, false), (0xC7C0, false), (0xC9C0, false)] {
+            let r = &NOTIFY_ALLOWED[0];
+            assert_eq!(reauthor_in_class(Some(class), r, 0xFF), Ok(0xFF), "{class:#x}");
+            assert_eq!(
+                reauthor_in_class(Some(class), r, 0x100).is_ok(),
+                wide,
+                "{class:#x}: 0x100 is bit 8"
+            );
+            assert_eq!(
+                reauthor_in_class(Some(class), r, 0x1FF_FFFF).is_ok(),
+                wide,
+                "{class:#x}"
+            );
+            assert!(
+                reauthor_in_class(Some(class), r, 0x200_0000).is_err(),
+                "{class:#x}: bit 25 is beyond every field"
+            );
+        }
+        // no class known: the narrow default
+        assert!(reauthor(&NOTIFY_ALLOWED[0], 0x100).is_err());
+    }
+
+    /// F-2, derived: when an ogkm tree is present (`KF_OGKM_DIR`, or the bench host's copies), every graphics class kf-chip lists
+    /// has the width its own header states; a header that names only the class id gets the narrow default.
+    #[test]
+    fn the_notify_upper_width_matches_the_ogkm_class_headers() {
+        let dirs = [
+            std::env::var("KF_OGKM_DIR").unwrap_or_default(),
+            "/data/claude-ogkm-hist".to_string(),
+            "/data/claude-ogkm-580".to_string(),
+        ];
+        let Some(root) = dirs
+            .iter()
+            .find(|d| !d.is_empty() && std::path::Path::new(d).join("src/common/sdk/nvidia/inc/class").is_dir())
+        else {
+            eprintln!("no ogkm tree (set KF_OGKM_DIR): header cross-check skipped");
+            return;
+        };
+        let dir = std::path::Path::new(root).join("src/common/sdk/nvidia/inc/class");
+        let mut checked = 0;
+        for f in kf_chip::Family::ALL {
+            let set = kf_chip::classes::classes_for(f);
+            for &c in set.threed.iter().chain(set.compute) {
+                let Ok(text) = std::fs::read_to_string(dir.join(format!("cl{c:04x}.h"))) else {
+                    continue;
+                };
+                let width = text.lines().find_map(|l| {
+                    let mut it = l.split_whitespace();
+                    let (d, name, field) = (it.next()?, it.next()?, it.next()?);
+                    (d == "#define" && name.ends_with("_SET_NOTIFY_A_ADDRESS_UPPER")).then(|| {
+                        let (hi, lo) = field.split_once(':')?;
+                        Some(hi.parse::<u32>().ok()? - lo.parse::<u32>().ok()? + 1)
+                    })?
+                });
+                assert_eq!(address_upper_bits(c), width.unwrap_or(8), "class {c:#x}: header says {width:?}");
+                checked += 1;
+            }
+        }
+        assert!(checked >= 8, "only {checked} class headers found");
     }
 
     #[test]

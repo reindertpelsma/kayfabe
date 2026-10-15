@@ -1,0 +1,20 @@
+FACTS_START 2026-10-14T14:57:53+00:00
+KERNEL 6.8.0-59-generic
+DRIVER NVRM version: NVIDIA UNIX x86_64 Kernel Module  575.51.03  Wed Apr 16 14:22:51 UTC 2025
+KVM crw-rw---- /dev/kvm nested=1
+CPU AMD EPYC 7K62 48-Core Processor nproc=23 mem_gib=98
+DISK size=97G avail=89G
+PCI 0000:00:07.0 VGA compatible controller [0300]: NVIDIA Corporation Device [10de:2d04] (rev a1)
+PCIV 0000:00:07.0 	Region 0: Memory at c0000000 (32-bit, non-prefetchable) [size=64M]
+PCIV 0000:00:07.0 	Region 1: Memory at 2000000000 (64-bit, prefetchable) [size=256M]
+PCIV 0000:00:07.0 	Region 3: Memory at 2010000000 (64-bit, prefetchable) [size=32M]
+PCIV 0000:00:07.0 	Region 5: I/O ports at c000 [size=128]
+PCIV 0000:00:07.0 		LnkCap:	Port #0, Speed 32GT/s, Width x16, ASPM L1, Exit Latency L1 <4us
+PCIV 0000:00:07.0 		LnkSta:	Speed 16GT/s (downgraded), Width x8 (downgraded)
+PCIV 0000:00:07.0 	Kernel driver in use: nvidia
+PCI 0000:00:08.0 Audio device [0403]: NVIDIA Corporation Device [10de:22eb] (rev a1)
+PCIV 0000:00:08.0 	Region 0: Memory at c4080000 (32-bit, non-prefetchable) [size=16K]
+PCIV 0000:00:08.0 		LnkCap:	Port #0, Speed 32GT/s, Width x16, ASPM L1, Exit Latency L1 <4us
+PCIV 0000:00:08.0 		LnkSta:	Speed 16GT/s (downgraded), Width x8 (downgraded)
+PCIV 0000:00:08.0 	Kernel driver in use: snd_hda_intel
+SMIQ No devices were found

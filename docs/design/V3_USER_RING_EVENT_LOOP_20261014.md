@@ -403,3 +403,170 @@ table bounds the relay's share per SYNC_WAIT at <= 4 ms per 3 gates before and ~
 5. **Not measured**: Windows (the coordinator schedules it); the staged-trigger path (`segment_turn` rare packets, Windows migration) now waits on markers
    too but no Linux traffic reaches it; GP_GET/REFERENCE visibility lag after an interrupt is modelled, not observed (`event_without_progress`
    is 12-205 per run, spurious or early events, never a stalled wait: `backstop_found(work)` stayed 0).
+
+## 9. Batching: one turn per segment was structural (second task, 2026-10-14; STATUS: LIVE in the code, results in 9.5)
+
+Trigger: the Windows agent's Heaven D3D11 trace (`traces/win11_userring_20261014/README.md` §4c, run `fc8ba3b8`): 2 314 629 GP segments relayed
+(about 26 000/s, about 1 900 per frame), 2 486 644 relay turns (1.07 per segment), 5 592 guest doorbells (63/s), two `kf3-worker` threads at about
+50 % CPU, 17-20 fps. The gate drains are NOT the cap (about 4.6 per frame at 0.28 ms). The coordinator's questions, in order: what is
+already batched, what is per segment and why, is the INLINE path there, what do the numbers say.
+
+### 9.1 What is already batched, what is per segment [measured: `kf-syncwait-stress --families flood`, guest, relay forced, kf3 `639acf57`]
+
+`flood` = plans of 48 plain one-segment units (14 words each), the guest ringing after every entry / after PUT-ahead entries / once. The relay's
+own flow counters (always on, `USER_RING_LOOP SUMMARY`, line `flow(...)`), summed over the three variants (28 800 segments):
+
+| counter | value | per segment |
+|---|---|---|
+| relay turns | 31 223 | **1.08** (Windows: 1.07) |
+| entries relayed per turn | 28 800 turns of exactly 1, 2 423 of 0 | **1 every time** |
+| private-ring publications | 30 448 | 1.06 |
+| host doorbells (`Pump::publish` -> `rm.doorbell`) | 30 448 | **1.06: one per publication** |
+| guest `GP_PUT` reads | 31 222 | 1.08 |
+| guest `GP_GET` write-backs | 4 183 | 0.15 (once per turn that saw pops) |
+| batch markers | 1 648 | 0.057 (one per backlog drain) |
+| `GP_PUT` delta at a turn's PUT read (entries ahead of the cursor, log2 buckets 0..) | `[5931, 4154, 2251, 3232, 6417, 6815, 0, ..]` | **a backlog of 16-63 entries was present in 13 232 of 28 800 turns** |
+
+So: the doorbell is already coalesced where it is cheap (the token absorbs K guest rings into one claim, `DbFast` coalesces the stores of one eventfd
+read; Heaven rings for 0.24 % of its PUT advances), markers are per batch, the write-back is per turn. **Not batched, per segment:** the turn
+(token claim, `record.enter`, pt lock, `retry.swap`, `ring_internal` + `eventfd` write for the `Again`), the `GP_GET`/`REFERENCE` observation, the
+`GP_PUT` read, the GP-entry snapshot, the pushbuffer snapshot, the scan, the publication (guard nest + PUT store), the host doorbell. The natural
+backlog is there (the delta column) and one turn never takes more than one entry.
+
+Per-stage cost [measured, `KF3_USER_RING_STAGES=1` (measurement only, off by default, no clock read otherwise); ns per call; guest on a host that
+also ran two other VMs, so absolute times are noisy (the same binary ran the three variants at 97-111 k segments/s in one run and 50 k in another)]:
+
+| stage | ns/call | calls | share of a turn |
+|---|---|---|---|
+| `serve_total` (whole claim) | 5 764 | 31 223 | |
+| `turn_total` | 5 620 | 31 223 | 100 % |
+| observe (`GP_GET` + `REFERENCE` of the private USERD) | 1 155 | 31 223 | 21 % |
+| `GP_PUT` read (guest USERD) | 579 | 31 222 | 10 % |
+| GP-entry snapshot (8 bytes) | 1 270 | 28 800 | 22 % |
+| gate (`SyncGate::entry`) | 21 | 28 800 | 0.4 % |
+| pushbuffer snapshot (56 bytes) | 1 658 | 28 800 | 29 % |
+| scan | 94 | 28 800 | 2 % |
+| publication, total (guards, entry write, PUT store, host doorbell) | 630 | 30 448 | 11 % |
+| of which the host doorbell | **27** | 30 448 | 0.5 % |
+| guest `GP_GET` write-back | 178 | 4 183 | 0.4 % |
+| marker publication | 629 | 1 648 | 0.6 % |
+
+Reading: a segment turn costs about 5.6 us here, none of it in the doorbell (27 ns) or the scan (94 ns). The two snapshots (2.9 us for 64 bytes in
+two reads) are fixed cost, not byte cost [read: `userread::snapshot` builds a `Vec<Span>` with room for `PIECES` spans, resolves the rows twice
+and scans `ram.blocks` per piece; `Snapshot::admit` resolves again at publication] -- the exact source guards of the per-entry TOCTOU defence, which
+stay. The observation (two loads from the private USERD) and the PUT read are the per-turn costs batching removes. [inferred] The Windows 30-38 us
+per segment is worker CPU over the traced build (`KF3_USER_RING_TRACE` on) divided by segments; the production per-stage numbers on Windows are the
+Windows agent's to take with `KF3_USER_RING_STAGES=1` on this build (it prints the same line).
+
+### 9.2 Is the INLINE path there? [read: grep of `crates/`]
+
+No. There is no `CopyRing`, no inline claimant on the doorbell trap and no K constant for the Windows USER relay: every USER-ring turn runs in
+`ChanPlane::user_ring_serve` on the worker (`userpump.rs`), rung by the token. (`kf_trap::Action::RingHostInline` is the Passthrough route and
+unrelated.) `docs/design/V3_WINDOWS_USER_RING_RELAY.md` §4.3 calls the inline path an optimisation behind an owner ruling (§6.2) and the worker path
+the correctness baseline; the architecture review says CopyRing "rarely applies on Windows" (Windows channels are scanned from birth).
+[inferred, from the Heaven numbers] an inline path would not help this workload: the guest rings 63 times a second, and the worker relays about 410
+entries per doorbell from PUT advances nobody rang for. The lever is the worker pass, which is what this section changes.
+
+### 9.3 The change (minimal; no timer, no queue, no change to a guard)
+
+Owner rule (doorbell contract; `OWNER_RULINGS.md`, "no deliberate coalescing delay"): only the LAST doorbell must be drained; batching comes from the
+natural backlog. The relay already computes every step from "cursor to the current `GP_PUT`"; what it lacks is going on to the next covered entry
+inside the same claim:
+
+1. `Pump::turn` runs `turn_body` in a loop for as long as the previous iteration published and asked for another turn
+   (`user_loop::chain_more(relayed, again, split)`, bounded by `CHAIN_MAX` -- a COUNT; a gate, a staged segment, a migration, a credit shortage and a
+   refusal retry end the chain). The loop sits inside ONE token claim: no release, no re-claim, no `ring_internal`/eventfd write per entry.
+2. Per chain, once: the `GP_GET`/`REFERENCE` observation and the guest `GP_GET` write-back (the first iteration), the `GP_PUT` read (its value is
+   cached for the chain: the flag was cleared before the first read, so a doorbell that lands later makes the token re-run the claim, and a stale PUT
+   only means fewer entries now -- the existing construction rule), and the **host doorbell**: `publish` marks it owed, the chain rings it once at
+   its end, after the batch marker (so one doorbell covers the entries and the marker), on every exit including errors.
+3. Per entry, unchanged: GP snapshot, pushbuffer snapshot, scan, gate, the publication transaction with its exact source guards (`Snapshot::admit`
+   per source), the private-ring write. The per-entry guards are a hostile-guest TOCTOU defence and stay exact.
+4. Hostile guests: the per-claim work is bounded by `CHAIN_MAX` entries and (as before) by `REACT_ROUNDS` re-claims; a `GP_PUT` out of range or
+   backwards is refused/bounded by the same checks at the one PUT read; a neighbour channel is served between claims.
+
+Tests (written first, `crates/kf-chan/tests/user_loop_model.rs` section (e), `user_loop.rs`): the model gets `Cfg::{metrics, defer_bell, chain}`,
+host-doorbell and turn counters, `V_CHAIN_BOUND`, and the mutant `no_final_bell`. At the tests-first commit these FAIL (the model and `chain_more` are
+still today's): `a_batch_of_covered_entries_is_one_turn_and_one_host_doorbell` (3 covered entries cost **4 host doorbells and 5 turns**, expected 1
+and one turn relaying 3), `the_per_turn_bound_is_a_count_and_the_rest_follows_in_the_next_turn` (most entries one turn relayed: 1, expected 2),
+`the_chained_next_entry_step_is_reachable` (no chained step), `a_chain_that_ends_without_its_doorbell_strands_the_entries` (the mutant is not
+modelled), and `user_loop::tests::a_claim_continues_through_covered_entries_up_to_the_bound`. These pass and pin the rest: the last doorbell is
+drained in every contract scenario, a gate splits a batch, a migration inside a batch drops and replays nothing, a deep backlog cannot starve the
+neighbour, a hostile or backwards `GP_PUT` is bounded, K rings do not cost K turns.
+
+### 9.4 Large segments: scan, CE copy and the exact-source rule (options only; nothing implemented)
+
+What the code does with a segment [read]: the private ring's entry is the GUEST's own GP entry (`write_user_gp(slot, s.entry)`): the pushbuffer is
+never copied, the GPU fetches it from guest memory. The snapshot (a CPU copy of the pushbuffer, up to `MAX_SOURCE_BYTES`) exists only to be scanned
+for packet boundaries (the open-packet state across entries, where a marker may enter), for SYNC_WAIT/gate decisions and for the migration trigger
+and software methods. Only "rare" segments (a trigger or software method) are staged into the small private cell (`write_authored`). So there is
+nothing for a CE to copy on the common path, and a CE staging copy would not remove the CPU read the scan needs.
+
+| option | what it saves | cost / safety |
+|---|---|---|
+| A. do nothing for bulk; batch (9.3) | the per-turn costs | none; large segments cost one memcpy (`pb_snapshot` is fixed cost for 56 bytes, byte cost only for the rare multi-KB segment: the first Heaven segment is 8 966 words) |
+| B. sparse header walk: read only the packet HEADER words and skip `count` data words of a long INC/NON_INC/INC_ONCE packet (the scan already skips by count) | the memcpy and the page-piece loop of a big inline-data segment (O(headers) instead of O(words)) | the snapshot is today's immutable copy; a sparse read must still be one guarded, consistent read of the words the scan uses, and a changed header after the scan is the same exposure as any unscanned byte (hardware containment: a USER channel in its own space, measured Xid 32 on the guest's own channel only). Needs the snapshot API to read `Vec<(offset,len)>` pieces under one guard. Worth doing only if the segment-size histogram (counters below) shows bytes, not segments, dominate |
+| C. CE copy of the segment into the private staging area, the private GP entry pointing at the copy | closes the TOCTOU for that segment (the GPU executes the bytes the scan saw) | a host copy channel in the SAME VA space as the guest's (the CE must read guest VAs), a semaphore release + SYNC_WAIT barrier before the copied entry (the staged path already has barrier+marker), a completion path for the copy channel, staging space for up to 1 MiB per in-flight segment (the private cell is `CELL_BYTES`), and the scan still needs the header words on the CPU, so the CPU read is not removed. Compatible with the gate and markers (it IS the gate pattern) and with the exact-source guard (the guard is checked at the CE launch), but it adds a GPU-side dependency and latency per large segment (about the CE launch + 10s of us) and a new failure mode (a stalled copy channel blocks the guest's ring). No: not for the common path |
+| D. skip the scan for a segment that is one long data packet | all of it | unsafe as stated: the relay must know the packet ends exactly at the segment end (else a marker lands inside an open packet, the original Xid 32); that needs the header = option B |
+
+[inferred] B is the only one that removes a measured cost, and only for large segments; C trades CPU for GPU latency and complexity and does not help the
+dominant (small-segment) case. The histogram that decides (always-on counters in `USER_RING_LOOP SUMMARY`): `segment_words_log2` (relayed segments by
+pushbuffer length, bucket i = 2^i..2^(i+1)-1 words), `words_total`, `put_delta_entries_log2` (entries ahead of the cursor at each PUT read),
+`entries_per_turn_log2`. On `flood` all 28 800 segments are 14 words (bucket 3). The Heaven distribution is for the Windows agent to take on this build.
+
+### 9.5 Results (edcaaca6: tests-first `7476ef69f`, fix `edcaaca67`; Linux guest, relay forced, host RTX 4070 / 595.91.07, GPU shared with two other VMs)
+
+**GPU-free [measured]:** `cargo test -p kf-chan` 143 lib + the integration tests, the model file 47 tests (the five batching tests that failed at
+24e7a297 pass; the chained, deferred-doorbell model also passes every pre-existing contract, gate, lap, migration, retire, neighbour and
+mutant test; two mutant/limitation tests needed `chain = 0` or a different scenario because batching removes the interleaving that exposed them,
+see the test comments), `cargo test -p kf-qemu --lib` 259.
+
+**What changed in the code (fewest edits; no guard, timer or queue touched):** `user_loop::{CHAIN_MAX = 16, chain_more}`; `Pump::turn` loops
+`turn_body` inside one claim while the turn published and asked for another (`again`) and needs no turn of its own (`segment`, `shadow`); the
+first iteration observes `GP_GET`/`REFERENCE` and writes the guest's `GP_GET` back, the `GP_PUT` read is cached for the claim (keyed by source
+generation), `publish` only marks the host doorbell owed and `Pump::ring_owed` rings it once on every way out of the chain (errors included).
+Counters and the stage timers are the measurement of 9.1.
+
+**`kf-syncwait-stress --families flood` back to back, old (`639acf57`, counters only) vs new (`edcaaca6`), same guest, alternating rounds**
+(segments/s; noisy: one new-build 'each' round fell to 57 k while another VM was busy):
+
+| variant | old r1 / r2 | new r1 / r2 |
+|---|---|---|
+| each (PUT + doorbell per entry) | 79 k / 108 k | 103 k / 57 k |
+| put-ahead (PUT per entry, one doorbell) | 111 k / 111 k | 154 k / 147 k |
+| end (one PUT, one doorbell) | 113 k / 111 k | 163 k / 153 k |
+
+The relay's own counters, one pair of runs (28 800 segments each): turns 32 262 -> **11 390** (1.12 -> **0.40** per segment), host doorbells 30 821 ->
+**9 361** (1.07 -> **0.33**), `GP_PUT` reads 32 262 -> 11 390, `GP_GET` write-backs 26 375 -> **7 070**, entries per turn `[1: 28 800]` ->
+`[1: 6 413, 2-3: 1 268, 4-7: 52, 8-15: 26, 16: 1 202]` (the guest's PUT was one entry ahead in 8 159 of the turns: no backlog to take; where
+a backlog existed the chain reached its bound). Markers rose 2 021 -> 8 159 (a faster relay catches up with the guest more often, and each catch-up
+ends in the batch marker the owner's rule asks for) at 0.42 us each.
+
+Per entry now [measured]: about 4.5 us in a turn (12.5 us per 2.8 entries), down from 5.8: the observation (1.2 us), PUT read (0.7), write-back and
+doorbell are amortised; what is left is the two snapshots (3.0 us), the publication (0.42) and the scan (0.09) -- the per-entry exact source
+guards the owner asked to keep. [inferred] the next lever is the fixed cost inside `userread::snapshot`/`Snapshot::admit` (two row resolutions, a
+`PIECES`-sized span vector per resolution, a block scan per piece), not a guard: a profile on the Windows build will say.
+
+**Validation of the batching (Linux guest, relay forced by `KF3_DEBUG=1 KF3_DEBUG_FORCE_MIGRATABLE=1`, kf3 `edcaaca6` unless noted; the card was shared with
+the owner VM 2990 and another agent's VM, so the framebuffer store was 1024 MiB instead of 4096 and absolute rates are noisy):**
+
+| check | result [measured] |
+|---|---|
+| `kf-syncwait-stress`, all families incl. flood, relay forced / plain | `d5be61ed`: 1 570 plans pass, 0 fail, 0 `USER_RING_REFUSED`; `edcaaca6` the same on and off |
+| fast suite 30/30 | on: 30/30, off: 30/30 (`edcaaca6`) |
+| desktop smoke (Cinnamon, gears) | 0 flip timeouts, 0 Xid, 59.5-60 FPS, relay on / off / old build alike; the `display: STALL` lines (9-18) appear on the old build and with the relay off too: the 1 GiB store beside two other VMs, not the relay |
+| S3 suspend/resume x3 | on 3/3, off 3/3 (`edcaaca6`) |
+| unit | kf-chan, kf-qemu, kf-rm, kf-trap, kf-harness: 1 440 passed, 0 failed (release) |
+| `v3_gates.sh` | **7/9, gate10 PASS, births 12/12 USER.** gate5 and gate6 fail (`semaphore never reached`) on bare metal with no kayfabe code in the path, and the same two fail with the previous build's binaries run now (they passed 9/9 at 22:19 on an idle card): the card is busy with two other VMs. Inconclusive, not attributable to this change; to be re-run on an idle card |
+
+**Where the rest of the per-entry cost is [measured, partly misread]:** a `perf record -g` of the relay worker threads (45 k samples) was dominated by
+`turn_body` (everything inlined) and attributed 18 % to `RawVec::finish_grow`/`malloc` under a `hash_one::<&(u32,u32)>` frame; the build has no frame
+pointers, so the call chain is a guess. The one allocation that provably scaled with the budget -- `userread::resolve` reserving all `PIECES` spans on
+every resolution -- was fixed (`d5be61ed`/`6c2cb437`) and gained about 100 ns per snapshot, not 18 %. The stage timers are the evidence; the remaining
+per-entry floor is the two snapshots (about 2.8 us) -- finer timers inside `snapshot` (resolve / prepare / blocks / copy) are the next measurement.
+
+**Open / for the Windows agent:** (1) run this build with `KF3_USER_RING_STAGES=1` on Heaven D3D11 and read the `USER_RING_LOOP SUMMARY` flow line (turns and
+host doorbells per segment, `segment_words_log2`, `put_delta_entries_log2`, stage ns); the Linux suite traffic is 16-word segments only (1 118 segments in
+19 arms, nothing like Heaven). (2) The chain bound `CHAIN_MAX = 16` is a guess from fairness, not from Heaven: the flood run hit it in 1 202 of 7 700
+chains. (3) Markers rose from 0.07 to 0.28 per segment because the faster relay catches up with the guest more often; each is a publication and an interrupt
+event. A rule that skips the marker when the chain ended exactly at the bound would need a way to know the next claim is coming without a timer -- not done.

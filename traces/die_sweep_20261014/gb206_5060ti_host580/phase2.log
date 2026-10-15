@@ -1,0 +1,40 @@
+DIE_RUN_START phase2 2026-10-14T16:26:47+00:00
+WIN_DIE_START kf3=202c612e checkout=63a00f1f8 gpu=NVIDIA GeForce RTX 5060 Ti xid_before=0 2026-10-14T16:26:49+00:00
+[win_die] QEMU 147396 kf3 202c612e run /root/win/run_580
+[win_die] QGA answers 2026-10-14T16:29:20+00:00
+[win_die] shot /root/win/run_580/shots/p2_t0030.ppm.gz 2026-10-14T16:29:51+00:00
+HOSTBAR1 t=30  BAR1 Memory Usage  Total : 256 MiB  Used : 15 MiB  Free : 241 MiB 
+[win_die] shot /root/win/run_580/shots/p2_t0060.ppm.gz 2026-10-14T16:30:21+00:00
+HOSTBAR1 t=60  BAR1 Memory Usage  Total : 256 MiB  Used : 15 MiB  Free : 241 MiB 
+[win_die] shot /root/win/run_580/shots/p2_t0090.ppm.gz 2026-10-14T16:30:51+00:00
+P2T90 EVID DEV hw=VEN_10DE&DEV_2D04&SUBSYS_8A061043&REV_A1 status=Error problem=CM_PROB_FAILED_POST_START class=Display name='NVIDIA GeForce RTX 5060 Ti' driverkey={4d36e968-e325-11ce-bfc1-08002be10318}\0002 ver=32.0.15.8088 EnableGpuFirmware=1
+P2T90 EVID VIDEO name='NVIDIA GeForce RTX 5060 Ti' status=Error mode=x refresh= driver=32.0.15.8088
+P2T90 EVID SMI path=C:\Windows\system32\nvidia-smi.exe
+P2T90 SMI NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running. This can also be happening if non-NVIDIA GPU is running as primary display, and NVIDIA GPU is in WDDM mode.
+P2T90 SMI 
+P2T90 SMIQ NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running. This can also be happening if non-NVIDIA GPU is running as primary display, and NVIDIA GPU is in WDDM mode.
+P2T90 SMIQ 
+P2T90 SMIMEM NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running. This can also be happening if non-NVIDIA GPU is running as primary display, and NVIDIA GPU is in WDDM mode.
+P2T90 SMIMEM 
+P2T90 EVID DONE
+HOSTBAR1 t=90  BAR1 Memory Usage  Total : 256 MiB  Used : 15 MiB  Free : 241 MiB 
+[win_die] shot /root/win/run_580/shots/p2_t0120.ppm.gz 2026-10-14T16:31:28+00:00
+HOSTBAR1 t=120  BAR1 Memory Usage  Total : 256 MiB  Used : 15 MiB  Free : 241 MiB 
+[win_die] shot /root/win/run_580/shots/p2_t0150.ppm.gz 2026-10-14T16:31:58+00:00
+HOSTBAR1 t=150  BAR1 Memory Usage  Total : 256 MiB  Used : 15 MiB  Free : 241 MiB 
+[win_die] shot /root/win/run_580/shots/p2_t0180.ppm.gz 2026-10-14T16:32:28+00:00
+Traceback (most recent call last):
+  File "/root/kayfabe/scripts/bench/windows/qmp.py", line 201, in <module>
+    sys.exit(main(sys.argv))
+  File "/root/kayfabe/scripts/bench/windows/qmp.py", line 195, in main
+    return qga_exec(sock, rest[0], rest[1:])
+  File "/root/kayfabe/scripts/bench/windows/qmp.py", line 158, in qga_exec
+    s, f = qga_open(sock, timeout=30.0)
+  File "/root/kayfabe/scripts/bench/windows/qmp.py", line 141, in qga_open
+    r = recv(f)
+  File "/root/kayfabe/scripts/bench/windows/qmp.py", line 42, in recv
+    line = f.readline()
+  File "/usr/lib/python3.10/socket.py", line 705, in readinto
+    return self._sock.recv_into(b)
+ConnectionResetError: [Errno 104] Connection reset by peer
+HOSTBAR1 t=180  BAR1 Memory Usage  Total : 256 MiB  Used : 15 MiB  Free : 241 MiB 

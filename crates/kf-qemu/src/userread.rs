@@ -197,15 +197,15 @@ fn resolve(
     end: u64,
     pieces: usize,
 ) -> Result<Vec<Span>, Refusal> {
+    // `pieces` is the BOUND on the number of spans, not an allocation size: reserve room as spans
+    // are found (fallible, amortised), so a one-span source costs one small allocation.
     let mut spans = Vec::new();
-    spans
-        .try_reserve_exact(pieces)
-        .map_err(|_| Refusal::Allocation)?;
     let mut at = va;
     while at < end {
         if spans.len() == pieces {
             return Err(Refusal::Bounds);
         }
+        spans.try_reserve(1).map_err(|_| Refusal::Allocation)?;
         let (&base, &(len, off, ram, perm)) =
             rows.range(..=at).next_back().ok_or(Refusal::Missing(at))?;
         let row_end = base
@@ -339,6 +339,35 @@ mod tests {
     use super::*;
     use kf_host::MapPerm;
     use std::sync::atomic::Ordering;
+    /// 2026-10-15: every row resolution reserved the WHOLE span budget (`PIECES`, hundreds of 32-byte
+    /// spans) up front -- six times per relayed entry (two per snapshot, one per publication guard).
+    /// The budget is a BOUND, not an allocation size: a source that needs one span holds one span.
+    /// [measured] about 100 ns per snapshot (1.31 -> 1.22 us for the 8-byte GP read, 1.64 -> 1.60 us for
+    /// the pushbuffer); the rest of the snapshot is not this allocation (a perf stack attributed
+    /// `RawVec::finish_grow` to a hash lookup: frame pointers are absent, so call chains are guesses).
+    #[test]
+    fn resolving_a_small_source_reserves_what_it_needs_and_the_bound_still_holds() {
+        let rows = PlacedRows::default();
+        rows.write()
+            .unwrap()
+            .insert(0x1000, (4096, 0, true, MapPerm::READ_WRITE));
+        rows.write()
+            .unwrap()
+            .insert(0x2000, (4096, 4096, true, MapPerm::READ_WRITE));
+        let guard = rows.read().unwrap();
+        let spans = resolve(&guard, 0x1000, 0x1008, PIECES).unwrap();
+        assert_eq!(spans.len(), 1);
+        assert!(
+            spans.capacity() <= 8,
+            "reserved room for {} spans to hold {}",
+            spans.capacity(),
+            spans.len()
+        );
+        // the bound is unchanged: two rows do not fit a budget of one
+        assert_eq!(resolve(&guard, 0x1000, 0x2008, 1), Err(Refusal::Bounds));
+        assert_eq!(resolve(&guard, 0x1000, 0x2008, 2).unwrap().len(), 2);
+    }
+
     #[test]
     fn staging_sized_fragmented_source_is_bounded_and_rechecks_its_last_page() {
         let bytes = kf_chan::user_storage::GP_OFFSET as usize;

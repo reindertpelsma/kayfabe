@@ -1,5 +1,27 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-15 - GPU types: the constant table is wired per die (branch `claude/gpu-types-20261015`, draft PR against master)
+
+Integration of six unverified-on-Windows branches (userring-eventloop batching, cursor-formats, display-caps-derive, die-sweep-20261014b, constants-measure-20261014b,
+api-boundaries docs/tools) plus origin/master, then the wiring: `kf_rm::rowserve` (GMMU static / CE fault-method buffer from the (die, branch) row or the labelled authored default;
+group P scalars on a hit; gfx pool and NV5070 caps withheld), `board_specific.tsv` (F-6), per-die ZBC defaults (F-1), F-2 (OFFSET_UPPER width per class), F-3 (Blackwell FSP gate per die
+group). GPU-free tests only; **no hardware, no Windows, no Linux guest was run**. Per-die readiness, the wiring inventory, the hardware still needed and the owner decisions:
+`docs/design/V3_GPU_TYPES_20261015.md`.
+
+## UPDATE 2026-10-15 00:50 CEST - USER-ring relay batches: one claim relays a chain of entries and rings the host doorbell once
+
+Same branch `claude/userring-eventloop-20261014`, doc `docs/design/V3_USER_RING_EVENT_LOOP_20261014.md` section 9.
+- [measured, Heaven D3D11 / Windows agent] 1.07 relay turns and about one host doorbell per relayed GP segment, 17-20 fps; gate drains are not the cap.
+  Reproduced on Linux (`kf-syncwait-stress --families flood`): 1.08 turns, 1.06 host doorbells per segment, exactly one entry per turn even with 16-63 entries pending.
+- Per stage [measured, `KF3_USER_RING_STAGES=1`, off by default]: a segment turn is 5.6 us: observe 1.2, PUT read 0.6, GP snapshot 1.3, PB snapshot 1.7, publication 0.6, scan 0.1,
+  host doorbell 0.03. The INLINE/CopyRing path of V3_WINDOWS_USER_RING_RELAY section 4.3 is not implemented (no K constant, no inline claimant): the worker is the only path.
+- Fix: `Pump::turn` chains `turn_body` inside one claim (`user_loop::chain_more`, `CHAIN_MAX = 16`, a count; gate / staged segment / shadow end it), one PUT read, one observation, one
+  write-back and ONE host doorbell per chain (`Pump::ring_owed`); per-entry snapshots, scan, gate and exact source guards unchanged. Measured: 0.40 turns and 0.33 host doorbells
+  per segment, +40-45 % segments/s on flood (noisy host).
+- Linux: stress 1 570 plans pass relay on/off, fast suite 30/30 on and off, desktop smoke 0 flip timeouts / 0 Xid, S3 x3 on and off, unit 1 440 passed. `v3_gates.sh` 7/9 (gate5/6 fail on bare
+  metal beside two other VMs; the previous build fails the same now): re-run on an idle card.
+- Windows: not run. Next: the Windows agent measures Heaven with `KF3_USER_RING_STAGES=1` and reads the `flow(...)` line; remaining per-entry floor is the two snapshots.
+
 ## UPDATE 2026-10-14 22:30 CEST - USER-ring relay is an event loop; the SYNC_WAIT gate was unsound (GP_GET) and is fixed
 
 Branch `claude/userring-eventloop-20261014` (from `claude/win11-userring-20261014` `77eaf762`), full account `docs/design/V3_USER_RING_EVENT_LOOP_20261014.md`.
@@ -13,6 +35,16 @@ Branch `claude/userring-eventloop-20261014` (from `claude/win11-userring-2026101
 - Validation (kf3 `1d845d50`, Linux): fast suite 30/30 off and on, desktop smoke + S3x3 both ways, gates 9/9 + gate10, stress 642/642 (relay) and 642/642 (control).
   Debug-only `KF3_DEBUG=1 KF3_DEBUG_FORCE_MIGRATABLE=1` puts the Linux guest's USER channels on the relay. Drain path: ~4 ms -> ~60 us per three SYNC_WAITs (288 -> 14 000 plans/s).
 - Windows: not run (VM 2990 untouched). Open: full GPFIFO behind the guest's own gate deadlocks; staged-trigger path now marker-based but unexercised on Linux.
+
+## UPDATE 2026-10-15 - H01 display caps page derived per die; the captured AD104 table is gone (branch `claude/display-caps-derive-20261014`)
+
+[measured, host AD104, Windows 580.88, probe bisection in `V3_DISPLAY_CAPS_DERIVATION_20261014.md` §3] The Windows display needs exactly two facts
+of the 101 differing caps words: the main-layer windows' `SCLR_PRESENT` and the unnamed word `0x00c` (= `0x100`); no header names it, no
+unprivileged host control carries the page (display object alloc is privileged), so `0x00c` is a T3 per-(die, branch) row
+(`kf-disp/data/caps_measured.tsv`, reader `tools/read_display_caps_page.py`). `kf_disp::capsderive` derives the page; `KF3_DISPLAY_CAPS_PROBE` is removed.
+GPU-free tests green. Open: final-binary Windows boot (paused for the owner's SolidWorks run), Linux regression retest (the page now claims
+a main-layer scaler with zero limits), `0x00c` of AD106/AD103/GA104 (they fall back to the authored page + notice until measured: owner decision).
+
 
 ## UPDATE 2026-10-14 16:00 CEST - Win11 S3: the GSP side holds, Windows does not survive the wake yet
 
@@ -74,6 +106,37 @@ Branch `claude/linux-oracle-planes-20261014` (from prod-candidate-2 `bf510bdf`).
 - Vast: own rental 55821401 (RTX 4070 SUPER, the HW reference) destroyed after use; 55810567 is another
   session's and was not touched.
 - Left: D-EARLY (core-group commits complete before the vblank; A/B the existing `core_latch_at_vblank`), G16/G17.
+
+## UPDATE 2026-10-14 (daytime, lane C resumed) — Windows captures under 8 driver builds, F-4 answered, per-host-driver shape table
+
+Branch `claude/constants-measure-20261014b` (= constants-measure + constants-night). GPU-free tests green (`kf-abi`, `kf-rm`). Evidence
+`traces/constants_measure_20261014b/`; text in `docs/design/V3_CONSTANT_MATRIX_20261014.md` 5.3 and 7.
+- kfwc under the REAL Windows driver: GA106 at 572.83 / 576.80 / 580.88 / 581.80 / 591.74 / 596.36 / 610.88 (GSP 570.133.07 .. 610.57.01) and GA104
+  at 596.51 (GSP 595.76); every run attaches at seq 0; the Windows -> R-branch placement of the api-boundaries plan holds on all eight builds.
+- **F-4 answered:** the six "changed" GSS controls changed `paramsSize` per GSP branch (the request stays all-zero); a host accepts exactly the
+  size the Windows driver sends at its branch (15 host cells). `gssreplay` has exact rows for every observed size (behaviour change for 570..610
+  guests only: they were refused before). The 595.91.07 `INVALID_ARGUMENT` was the 580-branch size.
+- Findings for the owner: ZBC Turing defaults differ from the served ones (F-1); `0x20808162`/`0x20809001`/`0x2080a001` vary by board class inside
+  one die (F-6: the (die, branch) table key is too coarse for them); GMMU static / CE fault buffer equal the authored numbers on GA104/GA106 (D-1).
+- Not obtained: any Windows capture on Blackwell/Ada(AD102)/Turing (see traces README), the vsync oracle (the GL apps did not exist).
+- Vast: all boxes of this lane destroyed (see the report); the per-instance key of one create was printed once in a terminal, never stored.
+
+## UPDATE 2026-10-14 (night run, lane C) — constants: published table, host-first GSS rows, per-family matrix
+
+Branch `claude/constants-night-20261014` (base `integration/prod-candidate-2-20261013` `bf510bdf4` + the kfwc/census/ctl-probe/inventory
+evidence branches). **Not merged; GPU-free only** (kf-abi/kf-rm/kf-chip/kf-host 1486/0 at the first code commit, later commits re-run green;
+kf-qemu/kf-harness/kf-census 334/0); no Linux gate or Windows run on this branch yet. Read `docs/design/V3_CONSTANT_MATRIX_20261014.md`.
+- **New:** `kf_rm::consttab` + `crates/kf-rm/data/measured_constants.tsv` — the published, source-tagged table of §AF, keyed by the host die
+  (`kf_chip::DieId` from `MC_GET_ARCH_INFO`, ogkm names) and the guest branch; a neighbour die's row is never served (mutation-checked).
+- **Fixed CAPTURED-to-every-die values:** libcudart's init gate (GA106 rows) and `0x20808162` (GA106's `01`; the AD104 at 595.91.07 answers
+  `00`, and libcuda there sees `00` [M]). Order now: host answer to the identical request (tier 2) → table row for this die → refused, counted.
+- **Host 595.91.07:** every GSS row kayfabe asks at realize (cudart gate, cudart/NVENC clocks, 8162) answers an unprivileged client [M]
+  (`traces/constants_night_20261014/`); the "GSS … not served" lines on the owner host should be gone. Seven Windows-only GSS queries whose real
+  request is all-zero are now answered with the host's bytes (852e/853a/a618 stay refused at 595.91.07: INVALID_ARGUMENT there).
+- **Behaviour change to validate before merge:** Windows guests now get host answers for `0x2080852a/8524/a70a/a088` and `0x20808162 = 00` on the
+  owner host (both are what the real GPU answers). Run the Linux gates + a Win11/LTSC boot on this branch before integrating; revert the exact rows
+  if a Windows A/B regresses (matrix §7 D-3).
+- Measurement rentals (kfwc under stock Windows 580.88, GA104 and GB203): see the matrix §5.
 
 ## UPDATE 2026-10-13 09:11UTC — Vulkan PASS; default route verification follows
 
