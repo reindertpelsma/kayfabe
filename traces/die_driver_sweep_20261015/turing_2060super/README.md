@@ -137,3 +137,31 @@ Fresh Turing headless preflightSOUND after removing the obsolete Ampere-only
 marketing-name rejection; hardware-native workloads are still required by Tier2.
 Bench tree completes17:05:17, packed guest580 verified independently of host595.
 Hardware tests begin only after provisioning's QEMU/guest build completes.
+
+## Linux hardware partial,17:50UTC
+
+Deviceb8d092b0, host595.91.07, thin/fatguest580.159.04. Gates9/9+gate10PASS,
+all12gatebirthsUSER; native raw30/30 andCUDA4/4. Guest raw29PASS/0FAIL/
+1CRASH(TIMEOUT): ce-client-guest-ram/R34 exceeds unchanged180s budget.
+Independent guestCUDA4/4 passes. No full Linux cell pass or birth-census claim.
+Native success makes the guest timeout a kayfabe performance defect, not a
+physical GPU/driver limitation.
+
+H-R34 stated before diagnostics: high mapping/cleanup cost rather than a
+permanent CE stall. Falsifier: shallow copy/content failure, or no finite
+completion at the original13000decoys. Shallow0decoys passes; original13000
+passes correct content in201s (client184670ms), diagnostic300s budget. This
+supports finite overhead; it does not isolate allocation, walking, GPU callback,
+interrupt or cleanup costs, and does not make180s acceptance green. The frozen
+client prints its result after cleanup of operands and all decoys. Original
+failure logs retained. Ranked next candidates: nested trapped BAR0/IRQ cost,
+map/unmap/cleanup cost, host CUDA callback signalling. Next falsifier: profile
+those phases against this same native control before selecting a bounded
+completion-path change. Never filter owner-required NSI/IRQs to force a pass.
+
+Windows phase1 binds the image's exact580.88 INF, sets GSP flags and shuts down
+cleanly; its expected pre-reboot post-start error is not phase2 acceptance.
+Fresh production-profile phase2 starts17:49:51UTC; desktop/Code0/apps pending.
+Canonical strict Windows validator08f25dd9d checks actual build andCode0 before
+and after apps, verifies4trusted hashes, CUDA3, hardwareD3D11/12, and requires
+readableSystemlog before treating zeroTDR as evidence.

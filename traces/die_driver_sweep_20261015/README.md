@@ -37,16 +37,17 @@ not prove the remaining dies in its family.
 
 | Family | This campaign | Full family acceptance |
 |---|---|---|
-| Turing | C57E fix passes GPU-free tests; Ampere regression passes; Turing hardware pending | incomplete |
+| Turing | TU106 nativeWindows580 CUDA/D3D reference passes; Linux580 guest CUDA4 passes, raw29/30 (R34 timeout180s); Windows580 guest running | incomplete |
 | Ampere | GA104 Linux580 broad pass; Linux595 raw pass; Windows580 boot stall captured | incomplete |
 | Ada | AD102 Linux580 raw30/CUDA4/graphics10+broker and Windows580 Code0/DWM/CUDA3/D3D11+12/zeroTDR pass; Linux595 raw30/CUDA4/graphics10 pass (broker not run) | incomplete: several driver builds and other dies remain unverified |
 | Blackwell | not tried in this campaign; older GB206 results remain prior evidence | incomplete |
 
 Rental56076314 retired12:40:19UTC; native Windows installation completion
-was never verified there. Sole active rental56096336/AD102 has completed its
-native Windows reference and both580 guest OS suites. Original175-minute
-autodestroy remains armed, deadlineabout15:40:55UTC. Evidence and exact source
-revisions:ad102_4090/README.md. No other rental is active.
+was never verified there. AD10256096336 retired/absence verified15:39:44UTC.
+Sole active rental56117789/TU106 has nativeWindows580 reference/facts, native
+Linux595 raw/CUDA passes, partial Linux580 guest results and Windows guest running.
+Original175-minute timer remains armed, deadline18:36:22UTC. Exact source and
+results: turing_2060super/README.md and ad102_4090/README.md.
 
 CPU verification audit: the bench README requires one Cargo target directory
 per checkout. Some CPU-only runs reused target-gpu-free across own worktrees.

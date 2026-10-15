@@ -1,5 +1,32 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-15 17:50UTC — TU106 Linux partial; Windows guest running
+
+Own rental56117789 only, original teardown18:36:22UTC. Ubuntu22.04.5,
+kernel6.8.0-138, stock595.91.07; unprivileged host probe derives TU106
+arch0x160/impl6. Candidate b8d092b0 has exact measured580 caps and two scalar
+control rows, with refusing negative tests. Full CPU c266772aa3245/0/14ignored;
+28harness tests pass. Later08f25dd9d adds a strict Windows suite script only.
+
+Hardware b8d092b0: gates9/9+gate10PASS, all12birthsUSER; native595 raw30/30
+andCUDA4/4. Linux580 guest raw29/30: R34/ce-client-guest-ram TIMEOUT at180s;
+independent guestCUDA4/4 passes. Original frozen grader and budget unchanged.
+Diagnostic shallow0decoys passes; original13000decoys completes with correct
+content in201s at diagnostic300s budget. This proves finite completion on that
+run, not acceptance or the precise cost source. Ranked candidates: nested BAR0/
+IRQ and mapping/cleanup overhead; do not filter IRQs or loosen acceptance.
+Next falsifier: attribute map/unmap and callback/interrupt time before changing
+the completion path, then replay the unchanged180s suite. No full Linux pass.
+
+Windows580.88 first boot bound its own INF, set GSP flags, shut down cleanly;
+fresh phase2 QEMU started17:49:51, PID52629. Main wrapperPID51908, log
+/root/prov/codex_turing_windows_wave.log. Adapter/apps/desktop pending. If hung,
+use own /root/turing_stop_windows.sh (QGA, ACPI, then exactPID TERM; no KILL).
+Linux broker and graphics queued strictly after Windows stops. Capture text and
+push after each run. Root checkout remainsb8; do not pull during GPU jobs.
+Controller scripts/logs/SSH config under/workspace/codex. OwnerVM/GPU untouched.
+Older process/state paragraphs below are superseded by this checkpoint.
+
 ## UPDATE 2026-10-15 16:33UTC — Turing native580 reference/facts PASS; guest pending
 
 ONLY active ownrental56117789 RTX2060Super, deadline18:36:22UTC,175min timer
