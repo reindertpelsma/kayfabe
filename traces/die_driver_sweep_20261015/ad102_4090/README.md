@@ -140,3 +140,10 @@ QEMU log says BAR0=0x9000, read-only4096bytes, matched host/guest layout.
 The grader prints a line between its second page reading and mirror reading;
 I/O/scheduling delay is consistent with the first failure but not proven.
 The original failure remains evidence. Full suite rerun follows, unchanged.
+
+Full unchanged guest580 rerun:30/30, CUDA4/4, birth census161/161USER
+(+12/12USER gates), at3ab534ca. Initial timer failure and all three successful
+replays remain inlinux/. Native595raw30/30+CUDA4/4; image relay complete/hash
+matches. At14:26UTC, Windows580 guest takes priority before Linux graphics/broker
+regression so a failing cell can be investigated within the original lease.
+Order change reported to owner. No AD102 desktop/full-cell or family claim yet.
