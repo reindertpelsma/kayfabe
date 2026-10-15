@@ -501,6 +501,20 @@ pub fn page(
     for i in 0..windows {
         set(sys_capb, fa("SYS_CAPB_WINDOW_EXISTS", i)?, 1);
     }
+    // NVDisplay's tiled output model (nvkms-evo4.c, EvoGetCapabilitiesCA /
+    // UsableHwTilesCount) requires contiguous usable tiles. Our virtual output
+    // has one independent, unscaled tile per head; no multi-tile output is
+    // advertised. This is virtual topology, not a physical die's fuse mask.
+    if t.fa(caps, "SYS_CAPC_TILE_EXISTS", 0).is_some() {
+        let off = v("SYS_CAPC")?;
+        let limit = v("SYS_CAPC_TILE_EXISTS__SIZE_1")?;
+        if heads > limit || off % 4 != 0 || off as usize > PAGE - 4 {
+            return Err(m("SYS_CAPC virtual tile topology outside layout".into()));
+        }
+        for h in 0..heads {
+            set(off, fa("SYS_CAPC_TILE_EXISTS", h)?, 1);
+        }
+    }
     // SORs
     let tmds_max = tmds_max_field(t)?;
     for s in 0..heads {

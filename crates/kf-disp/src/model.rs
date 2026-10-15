@@ -1733,6 +1733,62 @@ impl DisplayModel {
                 // against the EDID and the pixel-clock limit is possible. The bandwidth numbers are
                 // what NVKMS carries forward (`nvkms-evo3.c:3440-3451`), so they are stated, not zero.
                 let mut p = self.view("NVC372_CTRL_IS_MODE_POSSIBLE_PARAMS", params)?;
+                let tiled = crate::class::for_version(&self.l.version)
+                    .and_then(|t| t.fa(self.classes.caps, "SYS_CAPC_TILE_EXISTS", 0))
+                    .is_some();
+                if tiled {
+                    // EvoIsModePossibleCA rejects bIsPossible alone: physical RM
+                    // must also return the required tile assignment. One virtual
+                    // tile serves each active virtual head. tile.head is an index
+                    // into the packed request head list, never a host head number.
+                    let n = p.get("numHeads").ok_or(NV_ERR_NOT_SUPPORTED)? as usize;
+                    let hs = "NVC372_CTRL_IMP_HEAD";
+                    let stride = self.l.size(hs).filter(|s| *s > 0)
+                        .ok_or(NV_ERR_NOT_SUPPORTED)?;
+                    let heads = p.bytes("head").ok_or(NV_ERR_NOT_SUPPORTED)?;
+                    if n > self.heads as usize || n > heads.len() / stride {
+                        return Err(NV_ERR_INVALID_ARGUMENT);
+                    }
+                    let mut seen = BTreeSet::new();
+                    for bytes in heads.chunks_exact(stride).take(n) {
+                        let h = Params::new(self.l, hs, bytes).ok_or(NV_ERR_NOT_SUPPORTED)?;
+                        let index = h.get("headIndex").ok_or(NV_ERR_NOT_SUPPORTED)?;
+                        if index >= u64::from(self.heads) || !seen.insert(index) {
+                            return Err(NV_ERR_INVALID_ARGUMENT);
+                        }
+                        // The virtual monitor/output has no DSC encoder.
+                        if h.get("bEnableDsc").ok_or(NV_ERR_NOT_SUPPORTED)? != 0 {
+                            return Err(NV_ERR_NOT_SUPPORTED);
+                        }
+                    }
+                    let ts = "NVC372_TILING_ASSIGNMENT";
+                    let es = "NVC372_TILE_ENTRY";
+                    let tsz = self.l.size(ts).filter(|s| *s > 0).ok_or(NV_ERR_NOT_SUPPORTED)?;
+                    let esz = self.l.size(es).filter(|s| *s > 0).ok_or(NV_ERR_NOT_SUPPORTED)?;
+                    let mut assignments = vec![0; p.bytes("tilingAssignments")
+                        .ok_or(NV_ERR_NOT_SUPPORTED)?.len()];
+                    let mut tiles = vec![0; p.bytes("tileList").ok_or(NV_ERR_NOT_SUPPORTED)?.len()];
+                    if tsz > assignments.len() || n > tiles.len() / esz {
+                        return Err(NV_ERR_NOT_SUPPORTED);
+                    }
+                    if n != 0 {
+                        let mut a = Params::new(self.l, ts, &assignments[..tsz])
+                            .ok_or(NV_ERR_NOT_SUPPORTED)?;
+                        if !a.set("numTiles", n as u64) { return Err(NV_ERR_NOT_SUPPORTED); }
+                        assignments[..tsz].copy_from_slice(&a.buf);
+                        for (i, bytes) in tiles.chunks_exact_mut(esz).take(n).enumerate() {
+                            let mut entry = Params::new(self.l, es, bytes).ok_or(NV_ERR_NOT_SUPPORTED)?;
+                            if !entry.set("head", i as u64) { return Err(NV_ERR_NOT_SUPPORTED); }
+                            bytes.copy_from_slice(&entry.buf);
+                        }
+                    }
+                    if !p.set("numTilingAssignments", u64::from(n != 0))
+                        || !p.set_bytes("tilingAssignments", &assignments)
+                        || !p.set_bytes("tileList", &tiles)
+                    {
+                        return Err(NV_ERR_NOT_SUPPORTED);
+                    }
+                }
                 p.set("bIsPossible", 1);
                 p.set("minImpVPState", 0);
                 p.set("minPState", 0);
@@ -1909,6 +1965,39 @@ mod tests {
         assert_eq!(p.bytes("tilingAssignments").unwrap()[0], 1);
         // tile.head indexes the packed input-head list, not hardware headIndex.
         assert_eq!(p.bytes("tileList").unwrap()[0], 0);
+    }
+
+    #[test]
+    fn blackwell_imp_refuses_invalid_head_lists_and_dsc_in_every_layout() {
+        for version in ["580.65.06", "580.159.04", "590.48.01", "595.91.07"] {
+            let mut m = DisplayModel::new(
+                &kf_chip::display::BLACKWELL_GB20X,
+                vec![Monitor::default_1080p()],
+                crate::layout::for_version(version).unwrap(),
+            );
+            for (indices, dsc, expected) in [
+                (vec![m.heads], false, NV_ERR_INVALID_ARGUMENT),
+                (vec![1, 1], false, NV_ERR_INVALID_ARGUMENT),
+                (vec![0; m.heads as usize + 1], false, NV_ERR_INVALID_ARGUMENT),
+                (vec![0], true, NV_ERR_NOT_SUPPORTED),
+            ] {
+                let s = "NVC372_CTRL_IS_MODE_POSSIBLE_PARAMS";
+                let mut p = Params::new(m.layouts(), s, &vec![0; size(&m, s)]).unwrap();
+                p.set("numHeads", indices.len() as u64);
+                let hs = "NVC372_CTRL_IMP_HEAD";
+                let stride = m.layouts().size(hs).unwrap();
+                let mut bytes = Vec::new();
+                for index in indices {
+                    let mut h = Params::new(m.layouts(), hs, &vec![0; stride]).unwrap();
+                    h.set("headIndex", u64::from(index));
+                    h.set("bEnableDsc", u64::from(dsc));
+                    bytes.extend_from_slice(&h.buf);
+                }
+                assert!(p.set_bytes("head", &bytes));
+                assert_eq!(m.control(cmd(&m, "NVC372_CTRL_CMD_IS_MODE_POSSIBLE"), &p.buf)
+                    .unwrap(), Err(expected), "{version}");
+            }
+        }
     }
 
     fn model() -> DisplayModel {
