@@ -37,3 +37,9 @@ pub(crate) mod userbirth;
 pub(crate) mod userstore;
 pub mod userva;
 pub mod vblankgate;
+
+// GPU-free store-view prototype; runtime wiring follows model/stress validation.
+#[allow(dead_code)]
+pub(crate) mod storeview;
+#[allow(dead_code)]
+pub(crate) mod storeview_unsafe;

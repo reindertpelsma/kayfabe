@@ -37,3 +37,6 @@ missing_docs = "warn"
 
 [lints.clippy]
 undocumented_unsafe_blocks = "deny"
+
+[dev-dependencies]
+loom = "=0.7.2"
