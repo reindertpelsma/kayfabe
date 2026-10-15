@@ -53,3 +53,25 @@ installer complete=true, failures0, reboots0 before our test-signing reboot.
 H1's native installation/adapter oracle succeeds. H2 measurement remains pending.
 This is native Windows, without kayfabe; Linux and Windows guest cells on AD102
 remain not tried in this campaign.
+
+## GSP-enabled native reference and exact small controls
+
+Same stock580.88, explicitly enabled GSP firmware580.65.05: adapter Code0,
+CUDA3/3 and D3D11/12 pass again; Event4101 count0 during the short workload.
+The decoder uses the public580.65.06 table, the same-CL Linux twin; its runtime
+transport/layout validation succeeds. The measured firmware version is580.65.05.
+
+Capture580b: mailbox attach,10009messages (4992command/5017status),
+10041records, END/filecheck OK; zero loss records, sequence gaps, torn reads,
+invalid elements, unreadable records or sink drops. Decoder oracle PASS, zero
+unanswered/orphan control pairs. Only controls2801/2806 were explicitly
+allow-listed; raw and scrubbed binary captures stay on the rental. Measured
+2801 request3 ->2 and2806 request0xb ->0, four-byte bodies, status0 each.
+GA106's request3 is not accepted for AD102's2806 row. Caps word0x00c remains
+0x100 with GSP enabled. No board-specific852f value was exported or installed.
+
+The first capture preparation aborted before restart because its readiness check
+mistook a buffered, zero-length output file for failure. It is not evidence.
+The successful replacement capture's independent END/filecheck/oracle establish
+completion; PowerShell printed an empty collector ExitCode, so no process rc0
+is claimed from that field. CPU caps checks after the row:192pass/0fail/2ignored.
