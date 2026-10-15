@@ -3187,8 +3187,13 @@ impl Device {
             dp.console.note_cursor_point(point);
             // ★ the same point for a streaming broker (`CAP_CURSOR_STREAM`): the relay sends it as a
             // MOVE under grab, when it changed — lock-free, once per pass, never per input event
-            if let Some(b) = dp.broker.as_ref() {
-                b.cursor().note_point(point);
+            if let Some(b) = dp.broker.as_ref()
+                && b.cursor().note_point(point)
+                && b.cursor().stream()
+            {
+                // the top-left changed, or a confirmation the relay armed is due: one non-blocking
+                // eventfd write wakes the relay (no frame would — the cursor is not in the frames)
+                b.frame_published();
             }
             // ★ §O: where the cursor goes, as the relay decided (hover: the host shows it; grab or
             // no cursor-capable broker: the frame). A switch recomposes at once — the cursor goes

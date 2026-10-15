@@ -1339,3 +1339,64 @@ fn the_console_defines_no_cursor_while_the_broker_streams() {
     let u = c3.poll(&t3.share, Some((0, 0)), ShownFrame::CursorFree, t3.now + 100);
     assert_eq!(u.define, Some(None), "hidden");
 }
+
+/// ★ The live defect (2026-10-15): in hover the I-beam sat ~15 px right/below the pointer because the
+/// broker's hot-spot latch (two equal differences in two consecutive MOVEs) never engaged — the relay
+/// sent a MOVE only when the pair CHANGED, so a pointer that stopped produced one settled MOVE, and
+/// the settled top-left was not even sent without an input event or frame to wake the relay. Now the
+/// worker's note wakes the relay when the top-left changes or an armed confirmation falls due, and
+/// the relay confirms a pair that held still for two worker passes AFTER it was sent with ONE
+/// identical MOVE (event-counted, no timer, bounded: at most one duplicate per pair).
+#[test]
+fn a_settled_pair_is_confirmed_once_after_two_worker_passes_so_the_broker_can_latch() {
+    let mut t = T::new(true);
+    t.up(CAP_CURSOR | CAP_CURSOR_STREAM, 0);
+    t.tick();
+    t.publish(false);
+    t.tick();
+    assert!(t.share.post(image(32, 32, (0, 0), 1)));
+    assert!(t.share.note_point(Some((100, 200))), "a changed top-left wakes the relay");
+    t.tick();
+    // the pointer is injected; the guest has not moved its cursor yet: the lagging pair
+    abs(&t, 50, 2, 200, 8);
+    t.read();
+    let g = guest_point((50, 2), (200, 8), (100, 4)).unwrap();
+    let lag = ((100, 200), Some(g));
+    assert_eq!(moves(&t).last(), Some(&lag));
+    let n = moves(&t).len();
+    // entries without worker passes in between do NOT confirm (the same lagging pair twice would
+    // latch the lag as the hot spot)
+    t.tick();
+    t.tick();
+    assert_eq!(moves(&t).len(), n, "no duplicate without two worker passes after the send");
+    // the guest moves its cursor: a new top-left (wakes), sent; then it holds still
+    assert!(t.share.note_point(Some((90, 192))));
+    t.tick();
+    let settled = ((90, 192), Some(g));
+    assert_eq!(moves(&t).last(), Some(&settled));
+    let n = moves(&t).len();
+    assert!(!t.share.note_point(Some((90, 192))), "one pass: no wake yet");
+    t.tick();
+    assert_eq!(moves(&t).len(), n, "one pass is not stationarity");
+    assert!(t.share.note_point(Some((90, 192))), "the second pass after the send: the armed confirmation wakes");
+    t.tick();
+    assert_eq!(moves(&t)[n..], [settled], "ONE identical MOVE: the broker sees two equal pairs");
+    // and no more, however long it holds still
+    for _ in 0..5 {
+        assert!(!t.share.note_point(Some((90, 192))));
+        t.tick();
+    }
+    assert_eq!(moves(&t).len(), n + 1);
+    // a new injected pointer re-arms (and does not confirm on stale stationarity)
+    abs(&t, 60, 3, 200, 8);
+    t.read();
+    let g2 = guest_point((60, 3), (200, 8), (100, 4)).unwrap();
+    assert_eq!(moves(&t).last(), Some(&((90, 192), Some(g2))));
+    let n = moves(&t).len();
+    t.tick();
+    assert_eq!(moves(&t).len(), n, "the stale stationary count does not confirm a fresh pair");
+    t.share.note_point(Some((90, 192)));
+    assert!(t.share.note_point(Some((90, 192))));
+    t.tick();
+    assert_eq!(moves(&t).len(), n + 1, "two passes after the new pair: confirmed again");
+}

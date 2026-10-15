@@ -332,6 +332,7 @@ def main():
             run_stream(b)
         finally:
             b.stop()
+        run_scripted_hot(tmp)
     if FAILS:
         print("%d cursor/device check(s) FAILED" % len(FAILS))
         sys.exit(1)
@@ -1006,6 +1007,47 @@ def run_stream(b):
               "%s is BYE(protocol)" % what)
         c.close()
         time.sleep(0.2)
+
+
+def run_scripted_hot(tmp):
+    """The live defect (2026-10-15), through the real broker: the I-beam (programmed hot 0,0, pointing
+    spot 4,8), a pointer that moves at constant speed with the cursor trailing it, then stops. The
+    hot spot latches only on the SAME pair twice (a settled MOVE and its confirmation), never during
+    the motion and never on one settled MOVE; --verbose says so."""
+    print("-- scripted I-beam stream: the hot spot latches on a settled, confirmed pair")
+    b = Broker(os.path.join(tmp, "hot.sock"), ("--verbose",))
+    try:
+        s = b.connect()
+        for _ in range(6):
+            recv_exact(s, PKT.size)
+        w = h = 64
+        fd = memfd_with(w, h, w * 4, 0, xor_mask(w, h, [(5, 8), (5, 9)]))
+        m = b.mark()
+        send(s, cursor_cmd(SET, w, h, w * 4, 0, AR24, 0, 0, flags=F_XOR), [fd])
+        os.close(fd)
+        px, py = 300, 400
+        for _ in range(12):               # constant speed, the cursor trails by one event
+            px += 5
+            py += 3
+            send(s, move_cmd(px - 5 - 4, py - 3 - 8, abs=(px, py)))
+        time.sleep(0.2)
+        lines = b.since(m)
+        check(not any("hot spot latched" in l for l in lines),
+              "motion with a trailing cursor never latches")
+        send(s, move_cmd(px - 4, py - 8, abs=(px, py)))      # settled: one MOVE
+        time.sleep(0.2)
+        check(not any("hot spot latched" in l for l in b.since(m)), "one settled MOVE does not latch")
+        send(s, move_cmd(px - 4, py - 8, abs=(px, py)))      # its confirmation
+        time.sleep(0.3)
+        lines = b.since(m)
+        check(any("hot spot latched 4,8" in l for l in lines),
+              "the confirmed settled pair latches 4,8 (verbose log)")
+        st = shown(lines)
+        check(st is not None and st[0] == "shown" and st[3:5] == (4, 8),
+              "the pointer image is set again with hot 4,8 (got %r)" % (st,))
+        s.close()
+    finally:
+        b.stop()
 
 
 if __name__ == "__main__":

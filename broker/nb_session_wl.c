@@ -2289,6 +2289,11 @@ static bool gc_render(struct nb_wl *w)
     w->gc_gen = c->gen;
     w->gc_geom = g;
     w->gc_bgeom = b;
+    if (nb_verbose) {
+        nb_log("cursor: host pointer image %ux%u (buffer %ux%u), hot spot %u,%u of the "
+               "guest's %u,%u, frame fit %d/%d, output scale %u/120", g.w, g.h, b.w, b.h,
+               g.hot_x, g.hot_y, c->hot_x, c->hot_y, w->fit_w, w->buf_w, w->scale_120);
+    }
     return true;
 }
 

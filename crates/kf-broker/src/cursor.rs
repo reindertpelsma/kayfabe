@@ -271,6 +271,11 @@ pub struct CursorShare {
     /// ★ The guest cursor image's top-left on the frame, written by the worker every pass (one
     /// word, lock-free) and read by the relay when it sends a `MOVE`.
     point: crate::console::CursorPoint,
+    /// ★ Worker passes that noted a point (the evidence clock of stationarity: event-counted, no
+    /// timer), and the pass number at which the relay asked to be woken to CONFIRM a pair sent
+    /// (0: none asked).
+    notes: AtomicU64,
+    confirm_at: AtomicU64,
     posted: AtomicU64,
     slot: Mutex<Option<(u64, CursorWant)>>,
     /// Posts that found the mailbox busy (retried on the next frame).
@@ -295,6 +300,8 @@ impl CursorShare {
             mode: AtomicU8::new(CursorMode::Off.code()),
             stream: AtomicBool::new(false),
             point: crate::console::CursorPoint::default(),
+            notes: AtomicU64::new(0),
+            confirm_at: AtomicU64::new(0),
             posted: AtomicU64::new(0),
             slot: Mutex::new(None),
             busy_posts: AtomicU64::new(0),
@@ -350,8 +357,35 @@ impl CursorShare {
 
     /// ★ **Worker**, every pass: where the guest cursor image's top-left is on the frame (`None`: no
     /// enabled cursor).
-    pub fn note_point(&self, p: Option<(i32, i32)>) {
+    ///
+    /// Returns whether the relay should be woken (one non-blocking eventfd write by the caller): the
+    /// top-left CHANGED (a pair to send), or a confirmation the relay armed
+    /// ([`CursorShare::arm_confirm`]) falls due this pass. Bounded: a held-still cursor wakes at
+    /// most once per armed pair.
+    pub fn note_point(&self, p: Option<(i32, i32)>) -> bool {
+        let changed = self.point.get() != p;
         self.point.set(p);
+        let n = self.notes.fetch_add(1, Ordering::AcqRel) + 1;
+        let due = self.confirm_at.load(Ordering::Acquire);
+        let confirm = due != 0 && n >= due;
+        if confirm {
+            self.confirm_at.store(0, Ordering::Release);
+        }
+        changed || confirm
+    }
+
+    /// ★ **Relay**: worker passes that noted a point so far.
+    #[must_use]
+    pub fn notes(&self) -> u64 {
+        self.notes.load(Ordering::Acquire)
+    }
+
+    /// ★ **Relay**, after sending a pair: ask to be woken two worker passes from now to confirm it —
+    /// a top-left that held still across two passes AFTER the pair was sent is stationary evidence
+    /// the broker can latch on (the guest moves its cursor a little after an injected event).
+    pub fn arm_confirm(&self) {
+        self.confirm_at
+            .store(self.notes.load(Ordering::Acquire) + 2, Ordering::Release);
     }
 
     /// ★ **Relay**: the point the worker last noted.

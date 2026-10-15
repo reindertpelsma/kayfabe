@@ -230,7 +230,8 @@ bool nb_hot_move(struct nb_hot *h, struct nb_cursor *c, bool abs_valid,
         h->cand_valid = false;
         return false;
     }
-    if (h->cand_valid && h->cand_x == (int32_t)dx && h->cand_y == (int32_t)dy) {
+    if (h->cand_valid && h->cand_x == (int32_t)dx && h->cand_y == (int32_t)dy &&
+        h->cand_ax == abs_x && h->cand_ay == abs_y) {
         /* the same difference in two consecutive MOVEs: the pointer is still */
         int64_t ddx = dx - (int64_t)c->hot_x, ddy = dy - (int64_t)c->hot_y;
         bool far = ddx > 1 || ddx < -1 || ddy > 1 || ddy < -1;
@@ -248,6 +249,8 @@ bool nb_hot_move(struct nb_hot *h, struct nb_cursor *c, bool abs_valid,
     h->cand_valid = true;
     h->cand_x = (int32_t)dx;
     h->cand_y = (int32_t)dy;
+    h->cand_ax = abs_x;
+    h->cand_ay = abs_y;
     return false;
 }
 

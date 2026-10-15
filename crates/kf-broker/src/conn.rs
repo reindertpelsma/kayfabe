@@ -608,6 +608,11 @@ struct CursorConn {
     /// ★ The position last sent as a `MOVE` on this connection (stream, under grab): a changed
     /// point sends one more; `None` after hover, so a grab starts with one.
     moved: Option<((i32, i32), Option<(i32, i32)>)>,
+    /// ★ The worker-pass count when `moved` was sent, and whether its one confirming duplicate went:
+    /// a pair that held still for two passes after its send is sent ONCE more, so the broker sees
+    /// two identical MOVEs (its latch needs them).
+    moved_at: u64,
+    confirmed: bool,
     /// ★ The last input injected was ABSOLUTE (`EV_ABS`, and the re-injection at a grab's end):
     /// cleared by a relative event (`EV_REL`) — the `MOVE` pair's valid flag.
     abs_live: bool,
@@ -2599,15 +2604,24 @@ impl<L: Link> Relay<L> {
                 )
             });
         let pair = (p, abs);
-        if c.cursor.moved == Some(pair) {
-            return;
+        let notes = share.notes();
+        let again = c.cursor.moved == Some(pair);
+        if again && (c.cursor.confirmed || notes < c.cursor.moved_at + 2) {
+            return; // unchanged, and either already confirmed or not yet held for two passes
         }
         let cmd = CursorCmd::mov(p.0, p.1, abs);
         let r = self.link.send(&c.sock, &cmd.encode(), None);
         match r {
             Sent::Done => {
                 if let Some(c) = self.conn.as_mut() {
-                    c.cursor.moved = Some(pair);
+                    if again {
+                        c.cursor.confirmed = true;
+                    } else {
+                        c.cursor.moved = Some(pair);
+                        c.cursor.moved_at = notes;
+                        c.cursor.confirmed = false;
+                        share.arm_confirm();
+                    }
                 }
                 self.counters.cursor_moves += 1;
             }

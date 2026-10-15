@@ -266,13 +266,16 @@ int  nb_cursor_move_clamp(int32_t x, int32_t y, int32_t *ox, int32_t *oy);
  * Rules ported from the VMM's HotTracker (crates/kf-broker/src/cursor.rs), with
  * the owner's latch: the guest moves its cursor a little after it receives an
  * injected event, so a derived spot is LATCHED only when the SAME difference
- * appears in two consecutive MOVEs (event-counted, no timer).  Until then, and
+ * appears in two consecutive MOVEs AT THE SAME POINTER (event-counted, no timer):
+ * a cursor trailing a pointer that moves at constant speed shows one constant,
+ * WRONG difference, so equal differences alone are not stationarity.  Until then, and
  * after every new image (nb_hot_reset), the SET hot spot stands.
  */
 struct nb_hot {
     bool    latched;            /* a derived hot spot replaced the SET one    */
     bool    cand_valid;         /* the previous MOVE's plausible difference   */
-    int32_t cand_x, cand_y;
+    int32_t cand_x, cand_y;     /* ... that difference                         */
+    int32_t cand_ax, cand_ay;   /* ... and the pointer it was taken at         */
 };
 void nb_hot_reset(struct nb_hot *h);
 /* One MOVE: `c` holds the image (size, SET/latched hot spot) and its new top-left

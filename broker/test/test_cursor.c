@@ -994,6 +994,15 @@ static void test_hot_latch(void)
     CHECK(hot_move(100, 200, true, 110, 212), "far twice: re-latched");
     CHECK(hot_cur.hot_x == 10 && hot_cur.hot_y == 12, "the corrected hot spot");
 
+    /* the SAME difference at a DIFFERENT pointer is a cursor trailing a moving pointer, not
+     * stationarity: no latch (the live scripted-motion case) */
+    hot_new_image(32, 32, 1, 2);
+    CHECK(!hot_move(100, 200, true, 105, 205), "p1");
+    CHECK(!hot_move(110, 210, true, 115, 215), "same difference 5,5 at another pointer: not a latch");
+    CHECK(!hot_move(120, 220, true, 125, 225), "and again");
+    CHECK(hot_cur.hot_x == 1 && hot_cur.hot_y == 2, "SET hot spot");
+    CHECK(hot_move(120, 220, true, 125, 225), "the pointer holds still: the same pair twice latches");
+    CHECK(hot_cur.hot_x == 5 && hot_cur.hot_y == 5, "5,5");
     /* a moving pointer (a new difference every event) never latches */
     hot_new_image(32, 32, 1, 2);
     CHECK(!hot_move(0, 0, true, 3, 3), "a");
@@ -1044,8 +1053,64 @@ static void test_hot_latch(void)
     CHECK(!hot_move(INT32_MAX, 0, true, INT32_MIN, 0), "difference overflow is implausible, not a wrap");
 }
 
+/*
+ * The scripted stream of the live defect (2026-10-15): the Windows I-beam, programmed hot 0,0, whose
+ * pointing spot is (4,8) inside the image.  The guest places the image's top-left at pointer - (4,8)
+ * but only AFTER it gets the injected event, so during motion the top-left trails the pointer; when
+ * the pointer stops it settles.  Placement in hover = the host pointer sits on the image's pointing
+ * spot, at window scale 1, 1.5 and 2: the logical hot spot (nb_cursor_scaled_geom, what
+ * wl_pointer.set_cursor takes) lands on the scaled pointing spot.
+ */
+static void test_hot_scripted_stream(void)
+{
+    static const uint32_t scales[][2] = { {1, 1}, {3, 2}, {2, 1} };   /* num, den */
+    unsigned si;
+
+    for (si = 0; si < 3; si++) {
+        int32_t px = 300, py = 400, i;
+        struct nb_cursor_geom g;
+        bool latched_in_motion = false;
+
+        hot_new_image(256, 256, 0, 0);
+        /* motion: 12 injected positions 5 px apart; the cursor trails the previous one */
+        for (i = 0; i < 12; i++) {
+            px += 5;
+            py += 3;
+            latched_in_motion |= hot_move(px - 5 - 4, py - 3 - 8, true, px, py);
+        }
+        CHECK(!latched_in_motion, "a trailing cursor never latches (scale %u/%u)", scales[si][0], scales[si][1]);
+        CHECK(hot_cur.hot_x == 0 && hot_cur.hot_y == 0, "SET hot spot during motion");
+        /* the pointer stops: the cursor settles, and the SAME pair arrives twice */
+        CHECK(!hot_move(px - 4, py - 8, true, px, py), "the first settled MOVE is only a candidate");
+        CHECK(hot_move(px - 4, py - 8, true, px, py), "the second equal one latches");
+        CHECK(hot_cur.hot_x == 4 && hot_cur.hot_y == 8, "hot = pointer - top-left = 4,8");
+        nb_cursor_scaled_geom(&hot_cur, scales[si][0], scales[si][1], scales[si][0], scales[si][1],
+                              NB_CURSOR_SCALED_MAX, &g);
+        /* the hot spot, in logical pixels of the scaled image, is the pointing spot scaled
+         * (rounded up where the scaler skips a pixel) */
+        CHECK(g.hot_x == (4 * g.w + 255) / 256 && g.hot_y == (8 * g.h + 255) / 256,
+              "scale %u/%u: hot %u,%u of %ux%u", scales[si][0], scales[si][1], g.hot_x, g.hot_y, g.w, g.h);
+        CHECK(g.hot_x == 4 * scales[si][0] / scales[si][1] && g.hot_y == 8 * scales[si][0] / scales[si][1],
+              "scale %u/%u: the pointing spot (4,8) scaled", scales[si][0], scales[si][1]);
+        /* a latched hot spot is applied: the published copy carries it (what a backend re-sets) */
+        {
+            static struct nb_cursor pub;
+
+            nb_cursor_copy(&pub, &hot_cur);
+            CHECK(pub.hot_x == 4 && pub.hot_y == 8, "the published copy carries the latched hot spot");
+        }
+    }
+    /* A SINGLE settled MOVE (a VMM that sends an unchanged pair once) never latches: the VMM must
+     * confirm a settled pair with a second MOVE -- this is what the live run showed */
+    hot_new_image(256, 256, 0, 0);
+    hot_move(300, 400, true, 310, 410);        /* the lag */
+    CHECK(!hot_move(306, 402, true, 310, 410), "one settled MOVE");
+    CHECK(hot_cur.hot_x == 0 && hot_cur.hot_y == 0, "not latched by one settled MOVE");
+}
+
 int main(void)
 {
+    test_hot_scripted_stream();
     test_hot_latch();
     test_move();
     test_xor_flag();

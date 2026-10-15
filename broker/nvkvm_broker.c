@@ -2170,6 +2170,11 @@ static void nb_cmd_cursor(struct nb_sink *s, const struct nvkvm_broker_cmd *raw,
         /* the hot spot from the pair (hover), latched on two equal differences */
         hot_changed = nb_hot_move(&s->cursor_hot, &s->cursor, abs_valid, ax, ay);
         if (hot_changed) {
+            if (nb_verbose) {
+                nb_log("cursor: hot spot latched %u,%u (pointer %d,%d - top-left %d,%d; "
+                       "image %ux%u)", s->cursor.hot_x, s->cursor.hot_y, ax, ay, x, y,
+                       s->cursor.w, s->cursor.h);
+            }
             s->cursor.gen++;    /* a new hot spot is a new pointer image to set */
         }
         if (!moved && !hot_changed) {
