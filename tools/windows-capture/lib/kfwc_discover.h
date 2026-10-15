@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
  *
- * Queue discovery. Two independent routes to the same object (a "binding": the shared
+ * Queue discovery. Independent routes to the same object (a "binding": the shared
  * region's page list and the two queue geometries). Read-only.
  *
  *  (a) kfwc_discover_mailbox: BAR0 NV_PGSP_FALCON_MAILBOX0/1 -> LibOS init-args array ->
@@ -16,6 +16,13 @@
  *      the route that produced 4,535 valid records on an RTX 4070 under driver 580.88 with
  *      the earlier tracer (origin/codex/windows-gsp-tracer-2026-10-04); it cannot recover
  *      messages that left the ring before it attached.
+ *
+ *  (c) engine revisit: a previously validated table retained internally by the
+ *      module on the same PCI device, only after both old queues advanced past
+ *      ring capacity. The full region validator is reused, and both published
+ *      prefixes must be zero-filled/empty or checksum-valid sequence zero.
+ *      No ioctl accepts a table address. Method 3 is reported separately; native
+ *      Blackwell prefix coverage remains unverified until a loss-free run.
  */
 #ifndef KFWC_DISCOVER_H
 #define KFWC_DISCOVER_H
@@ -27,6 +34,7 @@
 /* discovery methods */
 #define KFWC_METHOD_MAILBOX 1u      /* option (a): BAR0 boot-args mailbox */
 #define KFWC_METHOD_SCAN 2u         /* option (b): physical RAM scan */
+#define KFWC_METHOD_REVISIT 3u      /* internally retained table, fresh sequence-zero epoch */
 
 typedef struct kfwc_qgeom {
     kfwc_u32 valid;        /* tx header validated (the status header may still be zero) */
