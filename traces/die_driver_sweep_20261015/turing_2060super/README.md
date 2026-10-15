@@ -107,3 +107,11 @@ registering rows; no unmeasured tuple is presented as native evidence.
 Linux return preparation started16:31:49 via the pinned public reinstall payload,
 explicitusername/root+SSHport22+publickey and noninteractive stdin. Original
 175min rental timer still18:36:22UTC. No Turing kayfabe guest pass yet.
+
+Linuxreturn prep completesReady/LastTaskResult0 by16:38:24UTC. Measurement
+service stopped cleanly before erase. Native caps has90nonzero words before
+and afterGSP (distinct from AD102's99); only word0x00c100 is eligible to ship.
+All native facts/capture aggregates are pushed before the normal Linuxreturn
+reboot. Currentdriver580 still verified; next derive hostchiptuple and test/fix
+bothguest OSes. Sourcecandidate now includes exact590/595 tables; all Turing
+native results remain measured580.88 only.
