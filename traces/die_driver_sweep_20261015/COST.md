@@ -17,7 +17,7 @@ Accrued cost is an estimate until account billing is available; transfers may ad
 | 56141654 | RTX5060 / GB206 (unprivileged RM confirmed) | 0.1288888889 | 2026-10-15 19:20:04 (1792092004.016716) | destroyed22:05:44UTC; absence verified immediately; timer canceled after absence | nativeWindows580 PASS; Linux580 raw/CUDA/headlessgfx PASS; desktopFAIL; guestWindows580 Code43; Linux595raw29/30 | compute ceiling$0.39; transfers unbilled |
 
 AD102 absence was verified at15:39:44UTC before Turing was rented. Turing absence
-verified18:39:01UTC, before Blackwell56137859 was created18:44:29. Failed56137859 absence verified19:06:18 before56140371 creation19:08:39. 56140371 absence verified19:18:29 before56141654 creation19:20:04. No own rental remains; account instance list empty22:05:44UTC. No other account instances are owned by this campaign. The first rental was
+verified18:39:01UTC, before Blackwell56137859 was created18:44:29. Failed56137859 absence verified19:06:18 before56140371 creation19:08:39. 56140371 absence verified19:18:29 before56141654 creation19:20:04. Historical state: account instance list empty22:05:44UTC; superseded by new56165326 below. No other account instances are owned by this campaign. The first rental was
 verified absent before the second was created. Compute upper bounds for six leases total $3.71,
 well below the $40 campaign budget; final transfer charges are not yet known.
 
@@ -30,3 +30,9 @@ stopped cleanly and Windows rebooted into Linux restoration. Original timer stay
 armed. No new rental was created, and no AD102 guest result is claimed yet.
 
 Final AD102: device da0569a6; Windows580 Code0/DWM/D3D+CUDA passes, Linux580 raw/CUDA/graphics/broker passes, Linux595 raw/CUDA/graphics passes (broker595 not run). Retirement verified before original timer; compute upper bound remains$1.88.
+
+## Native trace replay wave, 2026-10-16 local date
+
+| Instance | GPU | USD/hour | StartUTC | StopUTC | Purpose | Cost |
+|---|---|---:|---|---|---|---|
+| 56165326 | RTX5060; fresh RM tuple pending | 0.1288888889 | 2026-10-15T22:44:19.841586+00:00 | ACTIVE; timer01:39:19UTC, hardcap01:44:19UTC | native complete-prefix H-BC3 trace | max3h compute<=0.39USD; campaign conservative ceiling<=4.10USD, transfers unbilled |

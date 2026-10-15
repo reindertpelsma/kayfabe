@@ -1,5 +1,30 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-15 22:48UTC — strict W1 comparison RED; new native trace lease
+
+W1 full4096byte comparisons at runtime0b6c501fb + toola84059a10 are RED:
+AD104100word differences, AD102100, TU10691, GB206125. AD106vsAD104reference101
+is explicitly cross-die only, no own nativeAD106page; GA104oracle missing.
+Every word/header/unknown + current derivation basis savedcaps_oracle/. No
+copied values or product changes. Newtiling candidate held, noW1hardwareclaim.
+New complete-capture tracer1d302de82 PR14:33/33unit381checks; fullCPUharness now
+ALLSTEPSPASSED including TSAN/ring,23mutations,2transport roundtrips,realcensus,
+WDK/importguard and forbidden-store compile rejection. First harness attempt
+had3dependentfixture failures from missingcargoPATH; corrected own paths/PATH,
+not productcode. Native proofpending; WDK unsignedSHA62e89c...f530.
+
+Only activeown rental56165326 created22:44:19UTC,$0.1288888889/h, timer2120908
+01:39:19UTC/hardcap01:44:19UTC. Same physical provider machine as retired56141654,
+newVM; all earlierownids absent before create. H-BC3 plan written in
+blackwell_5060/native_trace_revisit_20261016/PLAN.md before native capture.
+NativeWindows install bootstrap running; module keptloaded across one bounded
+seed→disable→capture→enable replay. Mustseq0bothdirs,method3,loss0,strictoracles;
+partial/stalecapture fails. No arbitraryCCU/CMC/CBCBreplies. NoownerGPU/VMtouch.
+FreshVMunprivilegedRMtuple pending, no newT3facts. Campaigncompute ceiling<=4.10.
+Metadata exporter separatecleanbranchcodex/census-sequence:56tests/0fail/1ignored,
+5newsemantic tests,WindowscrossbuildPASS; no nativeexecutionyet. No rawcaptures
+or executables come back from rentals. SmalldraftPRs only againstClaudeGPUtypes.
+
 ## UPDATE 2026-10-15 22:07UTC — GB206 wave saved/retired; new steering and trace priority
 
 Own56141654 destroyed22:05:44UTC, immediate show-instances absence/account ids[];
