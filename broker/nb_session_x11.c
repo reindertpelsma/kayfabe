@@ -2300,6 +2300,17 @@ formats_done:
         s->caps |= NVKVM_BROKER_CAP_CURSOR;
     }
 #endif
+    /* CAP_CURSOR_STREAM is NOT advertised here, on purpose: under grab the
+     * pointer is confined and this backend would have to draw the guest's cursor
+     * itself (an ARGB child window or an XRender-composed override-redirect
+     * window above the Present pixmap). That is not implemented, and nothing was
+     * measured about whether the user's X server would accept it. Without the
+     * bit a VMM keeps composing the cursor into the frame under grab (and in
+     * hover), as it always did; MOVE and CURSOR_F_XOR are framing violations
+     * here. */
+    nb_log("X11: CAP_CURSOR_STREAM is not advertised (no guest-cursor overlay "
+           "under grab is implemented on this backend): a VMM keeps composing "
+           "the guest's cursor into the frame");
     x11_query_device(x, s);
 
 #ifdef NB_HAVE_XCB_XINPUT
