@@ -44,3 +44,20 @@ Source87a3ce61a productionRust/dataidenticalto8e3a9d325 (CPU3247/0/14ignored).
 Candidatewalk-completionffd72e3d4 remainsindependent/unmerged; nohardware
 performanceclaim. NativepolicyhelperrendercheckedbutruntimeUNRUN. Thiswave
 hasnotestresultyet and all-family/multi-drivercoverage remainsincomplete.
+
+## First GSP capture rejected; controlled mailbox-only replay planned
+
+NativeGSP580.65.05 Code0/actual580/CUDA3/D3D11+12/zeroTDR shortoraclePASS
+19:49:37–19:49:40. Collector explicitexit0 nowworks with cachedlivehandle;
+3323records/2bindings/3318elements/END/filecheckOK, but loss0/0/2 (unknownprefix),
+1641commands/1652statuses/71controls,6413missingmessages. Pairing0. Aggregate
+decoderexit1 correctlyrejects; no completecapture or scalarrows accepted. This
+falsifies H-B2 for this run. Allnativeworkloads stillpass; nohardwarelimitclaim.
+
+H-BC2 BEFORE replay: defaultdiscovery missed the shortbootprefix; starting from
+an alreadydisabled ownedadapter, armingmailbox-only(--no-scan,1msrequestedpoll)
+before enable can capture fromsequence0. Falsifier: noattach, anyprefix/loss/
+decode/pairingfailure. Onecontrolledreplay onlybefore comparingalternatives.
+No read whitelist expansion or correctness-threshold relaxation. GetpostGSP
+caps before disable as an independent boundedmeasurement. Earlierdefaultcaps
+0x102, afterGSPpending. Every observedfailure remains in evidence.
