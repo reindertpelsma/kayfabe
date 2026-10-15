@@ -207,6 +207,8 @@ const PFSP_MSGQ_TAIL: u64 = 0x008F_2C84;
 /// so none of the FSP registers above are ever touched and the boot looks like it stopped
 /// before it started.
 const THERM_I2CS_SCRATCH: u64 = 0x00AD_00BC;
+/// `NV_THERM_I2CS_SCRATCH` on datacenter Blackwell (`blackwell/gb100/dev_therm.h:27`; also Hopper's).
+const THERM_I2CS_SCRATCH_GB10X: u64 = 0x0002_00BC;
 
 /// `NV_PFSP_EMEMC_OFFS` is `7:2` (`ogkm-580: hopper/gh100/dev_fsp_pri.h:28`).
 const EMEMC_OFFS_SHIFT: u32 = 2;
@@ -320,9 +322,18 @@ impl FspRow {
         wpr2: (WPR2_ADDR_LO_580, WPR2_ADDR_HI_580),
         wpr2_alt: None,
     };
-    /// Blackwell: the thermal gate, and WPR2 at the 610 HUBMMU pair AND the 580 FB pair.
+    /// Blackwell consumer (GB20x): the thermal gate at GB202's `0xAD00BC`, and WPR2 at the 610 HUBMMU pair AND the
+    /// 580 FB pair.
     pub const BLACKWELL: FspRow = FspRow {
         therm_boot_scratch: Some(THERM_I2CS_SCRATCH),
+        wpr2: (WPR2_ADDR_LO, WPR2_ADDR_HI),
+        wpr2_alt: Some((WPR2_ADDR_LO_580, WPR2_ADDR_HI_580)),
+    };
+    /// ★ F-3 (T1): Blackwell DATACENTER (GB10x). Its RM polls `kfspWaitForSecureBoot_GB100` over
+    /// `blackwell/gb100/dev_therm.h:27` = `0x200BC` (`g_kern_fsp_nvoc.c:428-431`), not GB202's `0xAD00BC` that
+    /// [`FspRow::BLACKWELL`] carries; the WPR2 pairs are unchanged (no header of either die group differs).
+    pub const BLACKWELL_GB10X: FspRow = FspRow {
+        therm_boot_scratch: Some(THERM_I2CS_SCRATCH_GB10X),
         wpr2: (WPR2_ADDR_LO, WPR2_ADDR_HI),
         wpr2_alt: Some((WPR2_ADDR_LO_580, WPR2_ADDR_HI_580)),
     };
@@ -932,25 +943,30 @@ mod hwref_check {
         );
     }
 
-    /// ★ RATCHET — a known die-group gap, asserted so it cannot rot silently: `FspRow::BLACKWELL` is
-    /// one row for GB10x AND GB20x, and its boot gate is GB20x's `0xAD00BC`; a GB10x RM polls
-    /// `kfspWaitForSecureBoot_GB100` → `0x200BC` (`g_kern_fsp_nvoc.c:428-431`, `blackwell/gb100/
-    /// dev_therm.h`). Harmless today — `bar0::boot_regs` serves `0x200BC` statically for GB10x and the
-    /// model's `on_read` is never published — but the model claims a register GB10x never reads.
-    /// When the row is split per die group, this test fails: delete it and the inventory's gap row.
+    /// F-3 (fixed, was a ratchet): the Blackwell FSP row is per die group - GB10x polls its own header's
+    /// `NV_THERM_I2CS_SCRATCH`, GB20x its own; each equals the generated header value for its group.
     #[test]
-    fn ratchet_the_blackwell_fsp_row_carries_gb20x_boot_gate_for_gb10x_too() {
-        let gb10x = val(DieGroup::Gb10x, "NV_THERM_I2CS_SCRATCH");
-        assert_ne!(
-            FspRow::BLACKWELL.therm_boot_scratch,
-            Some(gb10x),
-            "fixed? delete this ratchet (inventory §gaps)"
+    fn the_blackwell_fsp_boot_gate_is_each_die_groups_header_register() {
+        assert_eq!(
+            FspRow::BLACKWELL_GB10X.therm_boot_scratch,
+            Some(val(DieGroup::Gb10x, "NV_THERM_I2CS_SCRATCH"))
         );
         assert_eq!(
-            gb10x,
-            crate::bar0::therm_i2cs_scratch(crate::arch::GB100),
-            "the static row covers GB10x"
+            FspRow::BLACKWELL.therm_boot_scratch,
+            Some(val(DieGroup::Gb20x, "NV_THERM_I2CS_SCRATCH"))
         );
+        assert_ne!(
+            FspRow::BLACKWELL_GB10X.therm_boot_scratch,
+            FspRow::BLACKWELL.therm_boot_scratch
+        );
+        assert_eq!(
+            val(DieGroup::Gb10x, "NV_THERM_I2CS_SCRATCH"),
+            crate::bar0::therm_i2cs_scratch(crate::arch::GB100),
+            "the static BAR0 row agrees"
+        );
+        // the model a GB10x die gets carries the GB10x gate
+        let m = crate::Family::gsp_model_for_arch(crate::arch::GB100, 0x3, 8192).expect("GB10x model");
+        let _ = m;
     }
 
     #[test]

@@ -1016,8 +1016,7 @@ impl Device {
         };
         let policy = kf_rm::ReselectAtFn1::new(*table, source, build);
         let model: std::sync::Arc<dyn GspModel> = std::sync::Arc::from(
-            family
-                .gsp_model(implementation, cfg.fb_mb)
+            Family::gsp_model_for_arch(architecture, implementation, cfg.fb_mb)
                 .map_err(|e| format!("{e:?}"))?,
         );
         let store_model = model.clone();
