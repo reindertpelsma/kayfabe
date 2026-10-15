@@ -1,0 +1,9 @@
+START 2026-10-15T15:19:35+00:00
+CUDA_LADDER_STARTED=2026-10-15T15:20:46+00:00 mode=guest reps=1 rungs=cup2,cup3,cup8,cup8bench rev=da0569a6
+CL_ROW mode=guest rung=cup2 rep=1 verdict=PASS boot_rc=0 graded=[CE rv=0xabcd1234 want=0xabcd1234 -> PASS]  trapped=12730 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005
+CL_ROW mode=guest rung=cup3 rep=1 verdict=PASS boot_rc=0 graded=[CUP3_VAL=43]  trapped=12594 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0f1 0x00000804:e0f1 0x00000
+CL_ROW mode=guest rung=cup8 rep=1 verdict=PASS boot_rc=0 graded=[CUP8_BAD=0 CUP8_MAXERR=0] CUP8_WALL_S=1 trapped=12876 ledger=[0x00000802:e0f2 0x00000801:e0f0 0x00000802:e0f2 0x00000801:e0f0 0x00001006:e0f1 0x00001005:e0
+CL_ROW mode=guest rung=cup8bench rep=1 verdict=PASS boot_rc=0 graded=[GUEST_BENCH_TOTAL_BAD=0 GUEST_BENCH_VERDICT=PASS (every timed iteration verified)] BENCH_measure_WALL_S=1 trapped=13527 ledger=[0x00000802:e0f2 0x0000
+CUDA_LADDER_DONE=2026-10-15T15:22:57+00:00
+GFX_SUITE_VERDICT=NOTRUN (bare metal itself fails a step: the workload, not kayfabe)
+EXIT rc=3 2026-10-15T15:23:14+00:00

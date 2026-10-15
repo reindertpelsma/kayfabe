@@ -200,3 +200,29 @@ H9 before the independent fat595 run: exact595 profile/table and a separately
 staged image pass CUDA4/4 and graphics10matching hashes. Falsifier:any rung or
 native/guest render parity failure. Base580 and Windows580 stay separate;
 no595fat or Windows595 acceptance is inferred from the raw result.
+
+
+## Linux595 independent fat guest,15:36UTC
+
+H9 CUDA result: stock595.91.07 module and libcuda verified in a separate
+fat overlay, kernel6.8.0-142; CUDA ladder4/4 PASS at device revisionda0569a6.
+Thin595 raw30/30 is a separate kernel6.8.0-138 image. Neither is a Windows595 claim.
+
+Native graphics initially false-failed S5 despite NVIDIA renderer/reference0/rc0.
+S5 predicates now use here-strings; their large-output positive test fails before
+and passes after. Subsequent native S3 false-failed despite reference0/rc0, then
+passed unchanged with bash tracing. S2/S3/S4 had the same early-consumer pipeline;
+three positive fixtures fail before removing it. All23 harness tests pass after,
+negative references still rejected. Inferred: intermittent SIGPIPE caused the
+native short-output false failures; xtrace did not directly record the failing
+pipe's statuses. The native replay at harness34c8612f passes S2..S5.
+
+Guest595 then passes S1..S3 and all4 Vulkan hashes match native, but S4/S5
+FAIL: linker cannot find -lEGL, executable exit127, hashes absent. This is a
+measured provision/build failure, not evidence of an EGL GPU failure. H10 before
+repair: the driver uninstall removed development-link files while dpkg still
+considered their packages installed; selecting only the595 overlay and restoring
+libegl-dev/libopengl-dev/libgl-dev owned files permits control build and render
+parity. Falsifier: rebuilt controls still fail, or rendered hashes disagree.
+The old provisioner hardcoded the base image, which must not be written while
+an overlay depends on it; it now honors KF_GUEST_IMG. Hardware replay pending.

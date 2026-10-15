@@ -1,0 +1,6 @@
+GFX_SUITE_STARTED=2026-10-15T15:22:57+00:00 rev=da0569a6
+host GFX_S2=PASS
+host GFX_S3=PASS
+host GFX_S4=PASS
+host GFX_S5=FAIL
+GFX_SUITE_VERDICT=NOTRUN (bare metal itself fails a step: the workload, not kayfabe)
