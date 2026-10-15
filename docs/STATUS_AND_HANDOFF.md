@@ -1,50 +1,70 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
-## UPDATE 2026-10-15 — Codex die/driver implementation campaign (own branches; live)
+## UPDATE 2026-10-15 13:44UTC — Codex die/driver campaign (own branches; live)
 
-Worktrees are under `/workspace/codex/`; trusted CPU-only builds under `/data/codex/`.
-The owner's running Windows VM and Claude checkouts are untouched. Base
-`codex/die-driver-sweep-20261015` combines GPU-types with cursor fix `2f99e673d`.
+Worktrees `/workspace/codex/*`, trusted CPU builds `/data/codex/*`. Owner VM2990
+and Claude checkouts untouched. Every checkout has its own target directory.
+Family acceptance requires BOTH guest OS suites across several supported builds;
+prioritize Turing/Ampere/Ada/Blackwell. No family is complete yet.
 
-- `codex/sweep-linux-ampere`, draft PR #6: GA104 box 56076314, host 595.91.07,
-  QEMU `ba864a55`: gates 9/9 + gate10, native raw 30/30 on rerun, guest595 raw30/30;
-  guest580 raw30/30, CUDA4/4, graphics10/10 matching hashes, actual broker X11 SHM
-  presentation on Xvfb. Twelve guest NV assertions and idle-window STALL dumps remain;
-  zero guest Xid / flip timeouts. Teardown eventually forced QEMU after ACPI wait.
-  The harness now selects the actual guest driver from a validated image/initrd receipt.
-  Full GPU-free rerun after RSS-test isolation: 3231 passed, zero failed, 14 ignored.
-- `codex/fix-host-gid-abi`: Windows default auto UUID refused at realize on host595.
-  Missing public GID control added using compiler-derived layouts from all30 measured tags.
-  Failing-first regression then 1727 tests pass across ABI/RM/host/QEMU. Rental QEMU
-  `f6d96614` passes realize; Windows then stops at `winload.efi` 0xc00000bb.
-  SHA256 comparison finds image chunks02/03 differ despite old transfer completion markers;
-  19 others match. Transfer fix has two failing-first tests, now12 harness tests pass;
-  source/relay/sink pipeline failures propagate and a final full-file hash is mandatory.
-  Repair of only those two chunks succeeds; full source/destination SHA256 matches.
-  Phase1 boots, binds/flags580.88 and shuts down via QGA. Phase2 at f6d96614 reaches
-  Running /762 serviced RPCs, then QGA ping/status times out; no desktop verified.
-  No phase2 Code43 or zeroTDR claim is made. Full trace saved. Native-Windows
-  reinstall queued11:56UTC; completion remains unverified while SSH is unavailable.
-- `codex/fix-turing-display-semaphores` at `f1d4c8737`: public C57E semaphore model,
-  472 tests pass, high-bit mutation caught. Combined8e45edc8 on GA104: full GPU-free3234/0/14ignored, fast30/30 and actual
-  X11 SHM broker pass, same12 assertions; SSH poweroff exits0. Five host Xid31 during
-  the raw fault suite, zero host Xid during broker. Turing hardware pending.
-- `codex/windows-display-caps-reader` at `de9c7b70a`: bounded fixed-page native Windows
-  reader, ASan/UBSan tests, read-only guard and unsigned WDK/SDK build pass. Native load
-  and per-die Windows facts not yet measured. No GA104/580 product caps row added.
+- GA104 rental56076314 auto-retired12:40:19UTC; absence verified before re-renting.
+  Linux580 raw30/30, CUDA4/4,10/10 graphics hashes and actual X11 SHM broker pass;
+  Linux595 raw30/30 only. Baseline QEMUba864a55; combined GID+C57E8e45edc8
+  raw30/30+broker pass.12 guest NV assertions and idle STALL diagnostics remain.
+  Five host Xid31 during raw fault tests, zero in broker window. No DMA-buf claim.
+- GA104 Windows580.88 LTSC26100, GID-onlyf6d96614: repaired image hash matches,
+  phase1 binds INF/enables GSP/shuts down; phase2 Running/762RPCs, then QGA silent.
+  No desktop/DWM/D3D, no measured phase2 adapter code, no zero-TDR acceptance.
+  Native reinstall never regained SSH before deadline; this is provisioning timeout,
+  not a stock-driver/GPU limit. Ranked next candidates are in the campaign trace plan.
+- `codex/sweep-linux-ampere` draftPR#6, head54b6c5a28: actual guest ABI receipts,
+  complete streaming-pipeline/hash verification, stable Windows binary/UUID,
+  isolated RSS assertions, Windows phase errors propagated.16 harness tests pass;
+  three injected QGA failures previously returned false rc0. All results pushed.
+- `codex/hardware-regression-20261015` draftPR#7: public host-GID layout compiled
+  at30 tags and C57E shared32 semaphore model; Turing hardware remains pending.
+  Exact595.91.07 display tables are on `codex/display-vocabulary-595`, derived
+  from public ogkm9f087a6d4e86d85acc0ce1d354d6276fe5047b29. Fresh isolated full
+  verification at42483a475:3234pass/0fail/14ignored.
+- `codex/fix-blackwell-scanout` draftPR#8,598ca60f8 (codefc40d0017): resolve ISO
+  surface addresses from generated class tables, bound compositor reads to this
+  guest's framebuffer, refuse Sysmem/IOVA, honor independent ENABLE and KIND.
+  Vocabulary and retained-address enable tests fail before;477display/QEMU tests
+  pass after,2ignored. Blackwell hardware and Linux/Windows regression still required.
+- `codex/sweep-ada-20261015` draftPR#9: AD102 native Windows580.88 reference,
+  Code0/WDDM, CUDA3/3, D3D11compute/draw+D3D12compute/fences, zero Event4101
+  in short oracle windows. Same pass with GSP580.65.05 explicitly enabled.
+  Bounded native module loads; caps0x00c=0x100 before/after GSP. Loss-free native
+  GSP capture10009messages, END/filecheck/oracle pass, zero unanswered pairs.
+  Exact AD102/580 rows only:2801 request3->2,2806 request0xb->0; caps scalar100.
+  No852f row. Failing-first caps/responder tests then full merged CPU suite at
+  56f32dc0e:3241pass/0fail/14ignored, target-ada. Latest42413bdac adds evidence only.
+  Native census golden runtime's three report hashes match Linux exactly.
+  Native reference is not a guest pass; both AD102 guest OS suites remain unrun.
 
-Campaign evidence and pre-run falsifiers: `traces/die_driver_sweep_20261015/README.md`;
-cost/owned IDs: `COST.md` beside it. The sole own rental is 56076314, RTX3070,
-$0.3083333333/hour including disk, started 09:44:43 UTC; 175-minute autodestroy
-armed and verified, deadline about12:40UTC. Destroy only this ID. Images/unique text
-must be saved before any native-Windows conversion. At most one rental; total ceiling $40.
-Additional topics: codex/windows-census-export ports the existing scrubber CLI to
-Windows (cross-build and51 Linux tests pass; native golden check pending).
-codex/display-vocabulary-595 derives exact595.91.07 public class/register tables;
-failing-first all-family tests now pass (472/0/2ignored), hardware595 display pending.
-Draft PR#7 holds the combined product candidates; PR#6 holds Linux harness/evidence.
-Next: native Windows caps/GSP reference within the original deadline, then remaining
-dies/driver endpoints. Never label the old GB206 host595 failure fixed from the GA104 result.
+**ONLY ACTIVE OWN RENTAL:56096336, RTX4090/AD102, $0.6416666667/hour incl150GB.**
+Started12:45:54UTC. Original175-minute autodestroy PID1954479 stays armed;
+deadlineabout15:40:55UTC, never extend past the three-hour cap. Controller SSH
+config `/workspace/codex/ssh_config`, aliascodex-native-ada (Windows),
+aliascodex-ada-linux for the newly installed Linux (same mapped public endpoint).
+At13:43UTC native measurement module stopped cleanly, Windows reboot requested
+into pinned public Ubuntu22.04-minimal reinstall. Its preparation task completed
+rc0 after fixing downloader/username prompts. Linux SSH/KVM/GPU are not yet
+verified. Native text evidence is pushed before erasing; raw captures stay rental.
+
+Next: verify restored Linux disk/KVM/GPU, provision using own
+`/workspace/codex/ada_linux_prepare.sh`, HOST_DRIVER/KF_HOST_DRIVER595.91.07,
+branchcodex/sweep-ada-20261015; pin build_kf3 revision; native Linux oracle,
+fast30/30, CUDA/graphics+broker, then Windows580.88 guest acceptance. Windows
+compressed image relay is `/workspace/codex/push_windows_ada.sh`; it uses own
+trusted compressed baseline and mandatory whole-image hash. One GPU job at a time,
+no rental cargo builds during timed guest jobs. Preserve trusted-host free disk>100GB
+(current112GB); never use its GPU/owner VM without asking. No master merge.
+
+Evidence/falsifiers: `traces/die_driver_sweep_20261015/`; ownership/cost: `COST.md`.
+Total compute upper bounds$2.79 plus unbilled transfers, campaign ceiling$40.
+Native caps reader and Windows census topics are pushed; their native-runtime
+results are now in the AD102 wave. The older GB206 result has not been retested.
 
 ## UPDATE 2026-10-15 - GPU types: the constant table is wired per die (branch `claude/gpu-types-20261015`, draft PR against master)
 
