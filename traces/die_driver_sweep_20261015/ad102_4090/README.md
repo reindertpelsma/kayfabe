@@ -179,3 +179,8 @@ long-run/S3 claim. Frame1920x1080,78,757colors, rendered pixel hash inwindows/fr
 The GPU-backed Windows acceptance cell passes; Linux graphics/broker and more
 driver builds remain required. Individual necessity of the three T3 rows was
 not ablated. All old timer/provisioning/deployment failures remain recorded.
+
+Windows shutdown completes through QGA, QEMU exit0, no SIGTERM/SIGKILL.
+Linux580 graphics atda0569a6: all5guest stages pass and10/10 Vulkan/EGL/GLX
+native/guest render hashes MATCH. The original kernel stays6.8.0-142-generic.
+Broker/Cinnamon actual X11 SHM presentation check is next; no broker pass yet.
