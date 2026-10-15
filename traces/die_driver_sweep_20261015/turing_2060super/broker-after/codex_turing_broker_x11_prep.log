@@ -1,0 +1,2 @@
+[interactive] broker badf2d707da4: nvkvm-display-broker backends:  dma-buf test source : NO - apt install libgbm-dev  wayland : NO - install libwayland-dev wayland-protocols  x11 : yes (dri3+present +xrender scaling and guest cursor) + xi2 raw motion  test : yes (always) 
+[interactive] guest disk /root/codex-broker/desktop.qcow2 exists — kept (delete it to provision again)

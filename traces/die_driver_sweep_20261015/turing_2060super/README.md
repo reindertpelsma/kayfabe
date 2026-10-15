@@ -239,3 +239,16 @@ inflight work and all observed nonstall edges; polling is not CPU GPU execution.
 The current50ms VA epoll backstop must not become a50ms-per-walk delay. Profile
 walk/map/unmap phases as well; aggregate counts alone do not establish a cost
 cause. This is an unimplemented candidate, not evidence or a shipped optimization.
+
+## Fixed Linux broker presentation PASS,18:22UTC
+
+Device8e3a9d32, sameguest580: Cinnamon1/Xorg1, NVIDIA OpenGL gears51.16/58.61/
+59.77FPS; actual X11SHM broker window1920x1080 independently has13,193colors,
+SHA157822c1e462292b3375c4d52fc57996cacb17bdb8f99851b95bd5d39f7781e7.
+Guest0Xid/0fliptimeouts,12assertions;18displaySTALL diagnostic lines (not18
+separate stalls). Hostjournal window18:19:21–18:21:20 has0NVRMXid. Normal
+poweroff/stop and wrapperexit0 at18:21:20. This validates C57E display hardware
+and presentation, not DMA-buf orVulkan (vkcuberc127/NOTRUN retained).
+
+Fixed raw regression starts18:21:21, required180s budget; gates9/9+gate10PASS.
+Build/packed-guest refresh precedes the full30-arm run. No final raw verdict yet.
