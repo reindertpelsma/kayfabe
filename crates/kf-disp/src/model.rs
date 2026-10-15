@@ -1887,6 +1887,30 @@ impl DisplayModel {
 mod tests {
     use super::*;
 
+    #[test]
+    fn blackwell_imp_returns_one_required_tile_for_each_active_head() {
+        let mut m = DisplayModel::new(
+            &kf_chip::display::BLACKWELL_GB20X,
+            vec![Monitor::default_1080p()],
+            crate::layout::for_version("580.159.04").unwrap(),
+        );
+        let s = "NVC372_CTRL_IS_MODE_POSSIBLE_PARAMS";
+        let mut p = Params::new(m.layouts(), s, &vec![0; size(&m, s)]).unwrap();
+        p.set("numHeads", 1);
+        let hs = "NVC372_CTRL_IMP_HEAD";
+        let mut head = Params::new(m.layouts(), hs,
+            &vec![0; m.layouts().size(hs).unwrap()]).unwrap();
+        head.set("headIndex", 1);
+        p.set_bytes("head", &head.buf);
+        let out = m.control(cmd(&m, "NVC372_CTRL_CMD_IS_MODE_POSSIBLE"), &p.buf)
+            .unwrap().unwrap();
+        let p = Params::new(m.layouts(), s, &out).unwrap();
+        assert_eq!(p.get("numTilingAssignments"), Some(1));
+        assert_eq!(p.bytes("tilingAssignments").unwrap()[0], 1);
+        // tile.head indexes the packed input-head list, not hardware headIndex.
+        assert_eq!(p.bytes("tileList").unwrap()[0], 0);
+    }
+
     fn model() -> DisplayModel {
         DisplayModel::new(
             &kf_chip::display::AMPERE,
