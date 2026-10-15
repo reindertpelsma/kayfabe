@@ -2071,11 +2071,15 @@ fn separate_semaphore_controls_take_precedence_over_retained_legacy_method_names
         let regs = Regs::for_ip("580.159.04", row.ip_version).unwrap();
         let vocab = Vocab::resolve(t(), &Classes::of(row), &regs).unwrap();
         let cl = row.classes.window;
-        assert!(t().v(cl, "SET_SEMAPHORE_ACQUIRE").is_some(), "legacy name exists on every row");
+        assert!(
+            t().v(cl, "SET_SEMAPHORE_ACQUIRE").is_some(),
+            "legacy name exists on every row"
+        );
         assert_eq!(
             matches!(vocab.w_semaphores, WindowSemaphores::Separate { .. }),
             t().v(cl, "SET_ACQ_SEMAPHORE_CONTROL").is_some(),
-            "{}: the separate control selects the later model", row.chips,
+            "{}: the separate control selects the later model",
+            row.chips,
         );
     }
 }
@@ -2095,7 +2099,11 @@ fn turing_shared_semaphore_waits_then_releases_the_outgoing_flip() {
     let mut c = Ring::new();
     c.m(
         ma(core, "HEAD_SET_RASTER_SIZE", 0),
-        put(put(0, fl(core, "HEAD_SET_RASTER_SIZE_WIDTH"), 2200), fl(core, "HEAD_SET_RASTER_SIZE_HEIGHT"), 1125),
+        put(
+            put(0, fl(core, "HEAD_SET_RASTER_SIZE_WIDTH"), 2200),
+            fl(core, "HEAD_SET_RASTER_SIZE_HEIGHT"),
+            1125,
+        ),
     );
     c.m(ma(core, "HEAD_SET_PIXEL_CLOCK_FREQUENCY", 0), 148_500_000);
     c.m(ma(core, "WINDOW_SET_CONTROL", 0), 0);
@@ -2122,7 +2130,10 @@ fn turing_shared_semaphore_waits_then_releases_the_outgoing_flip() {
     assert!(e.waiting(1));
     let s = e.vblank(0, &mut |a| check(a, 0x1234_5678_f473_f473));
     assert!(s.effects.iter().any(|x| matches!(x, Effect::Latched { window: 0 })));
-    assert!(!s.effects.iter().any(|x| matches!(x, Effect::Release { .. })), "first latch does not release itself");
+    assert!(
+        !s.effects.iter().any(|x| matches!(x, Effect::Release { .. })),
+        "first latch does not release itself"
+    );
 
     w.m(m(win, "SET_CONTEXT_DMA_SEMAPHORE"), 0);
     w.m(m(win, "SET_SEMAPHORE_CONTROL"), 4);
@@ -2130,16 +2141,27 @@ fn turing_shared_semaphore_waits_then_releases_the_outgoing_flip() {
     w.m(m(win, "UPDATE"), 0);
     e.step(1, &w.bytes(), w.put(), &mut all_ok);
     let s = e.vblank(0, &mut |_| panic!("zero context DMA disables the acquire"));
-    let releases: Vec<_> = s.effects.iter().filter(|x| matches!(x, Effect::Release { .. })).collect();
-    assert_eq!(releases, vec![&Effect::Release {
-        chn: 1, client: CLIENT,
-        at: Place::CtxDma { handle: 0x20002, offset: 48 },
-        value: 0xd00d_d00d, wide: false, awaken: false,
-    }], "release is the outgoing entry's shared slot/value");
+    let releases: Vec<_> = s.effects.iter()
+        .filter(|x| matches!(x, Effect::Release { .. })).collect();
+    assert_eq!(
+        releases,
+        vec![&Effect::Release {
+            chn: 1,
+            client: CLIENT,
+            at: Place::CtxDma { handle: 0x20002, offset: 48 },
+            value: 0xd00d_d00d,
+            wide: false,
+            awaken: false,
+        }],
+        "release is the outgoing entry's shared slot/value"
+    );
     w.m(m(win, "UPDATE"), 0);
     e.step(1, &w.bytes(), w.put(), &mut all_ok);
     let s = e.vblank(0, &mut |_| panic!("acquire remains disabled"));
-    assert!(!s.effects.iter().any(|x| matches!(x, Effect::Release { .. })), "zero context DMA disables the release");
+    assert!(
+        !s.effects.iter().any(|x| matches!(x, Effect::Release { .. })),
+        "zero context DMA disables the release"
+    );
 }
 
 /// The form is decided by the derived table, per family: GA10x names context DMAs (and has the

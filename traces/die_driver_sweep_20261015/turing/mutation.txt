@@ -1,0 +1,22 @@
+START 2026-10-15T10:06:08+00:00
+b5ad64f7d0f6f7036cd5c9afb66ecbd0a87c4ff4
+     Running unittests src/lib.rs (/data/codex/target-turing/release/deps/kf_disp-28dbe45d7fcff935)
+failures:
+
+---- engine::tests::turing_shared_semaphore_waits_then_releases_the_outgoing_flip stdout ----
+
+thread 'engine::tests::turing_shared_semaphore_waits_then_releases_the_outgoing_flip' (1355979) panicked at crates/kf-disp/src/engine/tests.rs:2117:9:
+assertion `left == right` failed
+  left: (4101239923, true, 0)
+ right: (4101239923, false, 0)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    engine::tests::turing_shared_semaphore_waits_then_releases_the_outgoing_flip
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 168 filtered out; finished in 0.00s
+error: test failed, to rerun pass `-p kf-disp --lib`
+MUTATION_EXPECTED_RED rc=101
+EXIT rc=0 2026-10-15T10:06:14+00:00
+TOTAL passed=0 failed=1 ignored=0

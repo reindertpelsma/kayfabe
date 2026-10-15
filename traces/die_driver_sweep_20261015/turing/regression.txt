@@ -1,0 +1,62 @@
+START 2026-10-15T10:01:14+00:00
+37e9e6c24e9c46281217cc2c8cdb5ad41f5c1598
+     Running unittests src/lib.rs (/data/codex/target-turing/release/deps/kf_disp-28dbe45d7fcff935)
+failures:
+
+---- engine::tests::a_group_parked_on_a_head_that_goes_idle_latches stdout ----
+
+thread 'engine::tests::a_group_parked_on_a_head_that_goes_idle_latches' (1346508) panicked at crates/kf-disp/src/engine/tests.rs:1721:5:
+assertion failed: e.waiting(1) && e.acquire_pending()
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- engine::tests::a_non_tearing_flip_waits_for_vblank_and_its_acquire stdout ----
+
+thread 'engine::tests::a_non_tearing_flip_waits_for_vblank_and_its_acquire' (1346514) panicked at crates/kf-disp/src/engine/tests.rs:712:9:
+assertion `left == right` failed
+  left: (CtxDma { handle: 3405646592, offset: 64 }, 0)
+ right: (CtxDma { handle: 3405646336, offset: 48 }, 0)
+
+---- engine::tests::gb20x_window_flip_uses_surface_addresses_for_notifier_release_and_acquire stdout ----
+
+thread 'engine::tests::gb20x_window_flip_uses_surface_addresses_for_notifier_release_and_acquire' (1346535) panicked at crates/kf-disp/src/engine/tests.rs:2318:9:
+assertion `left == right` failed
+  left: Addr { aperture: Sysmem, addr: 1879048224 }
+ right: Addr { aperture: Vidmem, addr: 2415919168 }
+
+
+failures:
+    engine::tests::a_group_parked_on_a_head_that_goes_idle_latches
+    engine::tests::a_non_tearing_flip_waits_for_vblank_and_its_acquire
+    engine::tests::gb20x_window_flip_uses_surface_addresses_for_notifier_release_and_acquire
+
+test result: FAILED. 165 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+error: test failed, to rerun pass `-p kf-disp --lib`
+     Running tests/bl_pack_kernel.rs (/data/codex/target-turing/release/deps/bl_pack_kernel-ad1eb3a65f8212cf)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+     Running tests/caps_derive.rs (/data/codex/target-turing/release/deps/caps_derive-dffe340bdd66fa9c)
+test result: ok. 11 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/compose_kernel.rs (/data/codex/target-turing/release/deps/compose_kernel-f6d87b8874a20604)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s
+     Running tests/yuv_kernel.rs (/data/codex/target-turing/release/deps/yuv_kernel-0b7a1eb006ab17a7)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+     Running unittests src/lib.rs (/data/codex/target-turing/release/deps/kf_qemu-377a752895ad55b0)
+test result: ok. 261 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+     Running tests/bar0_trace_gate.rs (/data/codex/target-turing/release/deps/bar0_trace_gate-e3d471b4661a0e40)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/channel_budget_lazy.rs (/data/codex/target-turing/release/deps/channel_budget_lazy-ec5fa56db5cc9893)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/gop_rom_knobs.rs (/data/codex/target-turing/release/deps/gop_rom_knobs-57bcaeeaf6355467)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests/gpu_uuid_property.rs (/data/codex/target-turing/release/deps/gpu_uuid_property-1e0ed5ffe30b65e0)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/kf3_realize_discard.rs (/data/codex/target-turing/release/deps/kf3_realize_discard-fcc50f41c20ae44e)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/max_fps_property.rs (/data/codex/target-turing/release/deps/max_fps_property-afaee3d4601929b8)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/wire_mirror.rs (/data/codex/target-turing/release/deps/wire_mirror-57e3b715fa58248a)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+error: 1 target failed:
+EXIT rc=101 2026-10-15T10:01:53+00:00
+TOTAL passed=468 failed=3 ignored=2

@@ -325,7 +325,9 @@ impl Naming {
 /// acquire/release controls, with payload width and comparison/release modes in those controls.
 #[derive(Debug, Clone, Copy)]
 enum WindowSemaphores {
-    Shared32 { acquire_value: u32 },
+    Shared32 {
+        acquire_value: u32,
+    },
     Separate {
         payload: (u8, u8),
         release_mode: (u8, u8),
@@ -524,7 +526,9 @@ impl Vocab {
                 let acquire_value = v(win, "SET_SEMAPHORE_ACQUIRE")?;
                 for name in ["SET_SEMAPHORE_ACQUIRE_VALUE", "SET_SEMAPHORE_RELEASE_VALUE"] {
                     if f(win, name)? != (31, 0) {
-                        return Err(miss(&format!("NV{win:04X}_{name}: shared semaphore is not 32-bit")));
+                        return Err(miss(&format!(
+                            "NV{win:04X}_{name}: shared semaphore is not 32-bit"
+                        )));
                     }
                 }
                 WindowSemaphores::Shared32 { acquire_value }
@@ -1610,13 +1614,24 @@ impl Engine {
                 0, // equality, as the shared-semaphore NVKMS head-surface acquire check
             ),
             WindowSemaphores::Separate {
-                acquire, acquire_control, acquire_payload, acquire_mode, acquire_value, acquire_value_hi, ..
+                acquire,
+                acquire_control,
+                acquire_payload,
+                acquire_mode,
+                acquire_value,
+                acquire_value_hi,
+                ..
             } => {
                 let ctl = c.a(acquire_control);
                 let wide = fld(ctl, acquire_payload) == 1;
                 let hi = acquire_value_hi.map_or(0, |m| c.a(m));
                 let lo = u64::from(c.a(acquire_value));
-                (acquire.place(ctl, |m| c.a(m))?, if wide { u64::from(hi) << 32 | lo } else { lo }, wide, fld(ctl, acquire_mode))
+                (
+                    acquire.place(ctl, |m| c.a(m))?,
+                    if wide { u64::from(hi) << 32 | lo } else { lo },
+                    wide,
+                    fld(ctl, acquire_mode),
+                )
             }
         };
         Some(Acquire {
@@ -1733,8 +1748,11 @@ impl Engine {
         let at = v.w_sem.place(ctl, |m| c.armed(m))?;
         let (wide, awaken) = match v.w_semaphores {
             WindowSemaphores::Shared32 { .. } => (false, false),
-            WindowSemaphores::Separate { payload, release_mode, .. } =>
-                (fld(ctl, payload) == 1, fld(ctl, release_mode) == 1),
+            WindowSemaphores::Separate {
+                payload,
+                release_mode,
+                ..
+            } => (fld(ctl, payload) == 1, fld(ctl, release_mode) == 1),
         };
         let hi = v.w_sem_release_hi.map_or(0, |m| c.armed(m));
         let lo = u64::from(c.armed(v.w_sem_release));
