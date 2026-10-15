@@ -1,0 +1,35 @@
+FACTS_START 2026-10-15T14:07:50+00:00
+KERNEL 6.8.0-138-generic
+DRIVER NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  
+KVM crw-rw---- /dev/kvm nested=Y
+CPU Intel(R) Core(TM) Ultra 7 265K nproc=19 mem_gib=73
+DISK size=147G avail=111G
+PCI 0000:00:07.0 VGA compatible controller [0300]: NVIDIA Corporation Device [10de:2684] (rev a1)
+PCIV 0000:00:07.0 	Region 0: Memory at c0000000 (32-bit, non-prefetchable) [size=16M]
+PCIV 0000:00:07.0 	Region 1: Memory at 1800000000 (64-bit, prefetchable) [size=256M]
+PCIV 0000:00:07.0 	Region 3: Memory at 1810000000 (64-bit, prefetchable) [size=32M]
+PCIV 0000:00:07.0 	Region 5: I/O ports at c000 [size=128]
+PCIV 0000:00:07.0 		LnkCap:	Port #0, Speed 16GT/s, Width x16, ASPM L1, Exit Latency L1 <4us
+PCIV 0000:00:07.0 		LnkSta:	Speed 2.5GT/s (downgraded), Width x16 (ok)
+PCIV 0000:00:07.0 	Kernel driver in use: nvidia
+PCI 0000:00:08.0 Audio device [0403]: NVIDIA Corporation Device [10de:22ba] (rev a1)
+PCIV 0000:00:08.0 	Region 0: Memory at c1080000 (32-bit, non-prefetchable) [size=16K]
+PCIV 0000:00:08.0 		LnkCap:	Port #0, Speed 16GT/s, Width x16, ASPM L1, Exit Latency L1 <4us
+PCIV 0000:00:08.0 		LnkSta:	Speed 2.5GT/s (downgraded), Width x16 (ok)
+SMIQ name, pci.device_id, driver_version, memory.total [MiB], pcie.link.gen.max, pcie.link.width.max
+SMIQ NVIDIA GeForce RTX 4090, 0x268410DE, 595.91.07, 24564 MiB, 4, 16
+SMIMEM     FB Memory Usage
+SMIMEM         Total                                          : 24564 MiB
+SMIMEM         Reserved                                       : 482 MiB
+SMIMEM         Used                                           : 1 MiB
+SMIMEM         Free                                           : 24082 MiB
+SMIMEM     BAR1 Memory Usage
+SMIMEM         Total                                          : 256 MiB
+SMIMEM         Used                                           : 1 MiB
+SMIMEM         Free                                           : 255 MiB
+SMIMEM     Conf Compute Protected Memory Usage
+SMIMEM         Total                                          : 0 MiB
+SMIMEM         Used                                           : 0 MiB
+SMIMEM         Free                                           : 0 MiB
+SMIMEM 
+FACTS_EXIT 2026-10-15T14:07:50+00:00

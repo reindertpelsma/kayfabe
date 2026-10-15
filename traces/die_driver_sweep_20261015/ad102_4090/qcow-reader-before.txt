@@ -1,0 +1,20 @@
+{
+    "virtual-size": 161061273600,
+    "filename": "/root/win/base.qcow2",
+    "cluster-size": 65536,
+    "format": "qcow2",
+    "actual-size": 13866438656,
+    "format-specific": {
+        "type": "qcow2",
+        "data": {
+            "compat": "1.1",
+            "compression-type": "zstd",
+            "lazy-refcounts": false,
+            "refcount-bits": 16,
+            "corrupt": false,
+            "extended-l2": false
+        }
+    },
+    "dirty-flag": false
+}
+--target-list=x86_64-softmmu --disable-docs --disable-tools --disable-guest-agent --disable-werror --enable-slirp --enable-vnc --enable-pixman --disable-gtk --disable-sdl --disable-curses --disable-libssh --disable-vde --enable-tpm --without-default-features --enable-kvm --enable-systemThu Oct 15 14:32:43 UTC 2026

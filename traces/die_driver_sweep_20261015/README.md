@@ -39,13 +39,14 @@ not prove the remaining dies in its family.
 |---|---|---|
 | Turing | C57E fix passes GPU-free tests; Ampere regression passes; Turing hardware pending | incomplete |
 | Ampere | GA104 Linux580 broad pass; Linux595 raw pass; Windows580 boot stall captured | incomplete |
-| Ada | not tried in this campaign; owner AD104 baseline is separate prior evidence | incomplete |
+| Ada | AD102 Linux580 raw30/CUDA4/graphics10+broker and Windows580 Code0/DWM/CUDA3/D3D11+12/zeroTDR pass; Linux595 raw30/CUDA4/graphics10 pass (broker not run) | incomplete: several driver builds and other dies remain unverified |
 | Blackwell | not tried in this campaign; older GB206 results remain prior evidence | incomplete |
 
-Native Windows completion on56076314 remains unverified. Provider serial logs
-show the Alpine reinstall bootstrap's package-install completion; SSH is still
-unavailable. The original deadline is unchanged. Turing and other-die offers
-are re-queried; no second lease exists.
+Rental56076314 retired12:40:19UTC; native Windows installation completion
+was never verified there. Sole active rental56096336/AD102 has completed its
+native Windows reference and both580 guest OS suites. Original175-minute
+autodestroy remains armed, deadlineabout15:40:55UTC. Evidence and exact source
+revisions:ad102_4090/README.md. No other rental is active.
 
 CPU verification audit: the bench README requires one Cargo target directory
 per checkout. Some CPU-only runs reused target-gpu-free across own worktrees.

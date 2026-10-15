@@ -270,7 +270,7 @@ fn every_rm_key_of_the_table_has_a_wiring_decision_and_every_decision_has_rows()
     let decided: std::collections::BTreeSet<&str> = rowserve::USES.iter().map(|(k, _)| *k).collect();
     assert_eq!(rm_keys, decided, "a row consumed by no code, or a decision with no row");
     assert_eq!(rm_keys.len(), 6);
-    assert_eq!(rows.iter().filter(|r| r.key.starts_with("rm.")).count(), 42, "the 42 rows");
+    assert_eq!(rows.iter().filter(|r| r.key.starts_with("rm.")).count(), 44, "42 inherited rows plus the two exact AD102/580 questions");
 }
 
 #[test]
@@ -331,4 +331,23 @@ fn the_design_doc_lists_the_zbc_dies_and_the_board_specific_pairs_the_data_has()
         .map(|b| format!("{} {}", b.key, b.die))
         .collect();
     assert_eq!(doc_bs, data_bs);
+}
+
+/// Exact questions from the loss-free native AD102/580.88 initialization capture.
+#[test]
+fn ad102_580_small_controls_answer_only_the_measured_requests() {
+    let ad102 = DieId::new(arch::AD100, 2);
+    let mut p = policy(ad102, V580);
+    for (cmd, input, output) in [(0x2080_2801, 3u32, 2), (0x2080_2806, 0xb, 0)] {
+        let r = p.respond(&control(cmd, &input.to_le_bytes()));
+        assert!(ok(&r), "AD102/580 {cmd:#x} measured hit");
+        assert_eq!(w(&r.unwrap().body[PARAMS_AT..], 0), output);
+        assert!(!ok(&p.respond(&control(cmd, &(input ^ 1).to_le_bytes()))));
+    }
+    assert!(!ok(&p.respond(&control(0x2080_2806, &3u32.to_le_bytes()))),
+        "GA106's request is not AD102's measured question");
+    let mut wrong_branch = policy(ad102, V595);
+    assert!(!ok(&wrong_branch.respond(&control(0x2080_2801, &3u32.to_le_bytes()))));
+    let mut neighbour = policy(DieId::new(arch::AD100, 3), V580);
+    assert!(!ok(&neighbour.respond(&control(0x2080_2801, &3u32.to_le_bytes()))));
 }

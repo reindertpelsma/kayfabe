@@ -57,7 +57,7 @@ flock 9
 # guest) and `hostfwd`, so it needs no root tap (scripts/bench/windows/win_vm.sh). Needs libslirp-dev,
 # which provision_bench_tree.sh installs; the bench's Linux lanes keep their tap.
 CONF_FLAGS="--target-list=x86_64-softmmu --disable-docs --disable-tools --disable-guest-agent \
---disable-werror --enable-slirp --enable-vnc --enable-pixman --disable-gtk --disable-sdl \
+--disable-werror --enable-slirp --enable-vnc --enable-pixman --enable-zstd --disable-gtk --disable-sdl \
 --disable-curses --disable-libssh --disable-vde --enable-tpm --without-default-features \
 --enable-kvm --enable-system"
 if [ ! -f "$BUILD/build.ninja" ] || [ "$(cat "$BUILD/.kf3-configure" 2>/dev/null)" != "$CONF_FLAGS" ]; then

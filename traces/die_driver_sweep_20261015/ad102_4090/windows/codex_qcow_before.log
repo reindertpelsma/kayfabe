@@ -1,0 +1,1 @@
+qemu-system-x86_64: -drive if=none,id=probe,format=qcow2,readonly=on,file=/root/win/base.qcow2: qcow2: unknown compression type: 1

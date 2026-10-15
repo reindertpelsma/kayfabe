@@ -1,0 +1,69 @@
+START 2026-10-15T15:38:11+00:00
+(Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 92686 files and directories currently installed.)
+Preparing to unpack .../libegl-dev_1.7.0-1build1_amd64.deb ...
+Unpacking libegl-dev:amd64 (1.7.0-1build1) over (1.7.0-1build1) ...
+Preparing to unpack .../libgl-dev_1.7.0-1build1_amd64.deb ...
+Unpacking libgl-dev:amd64 (1.7.0-1build1) over (1.7.0-1build1) ...
+Preparing to unpack .../libopengl-dev_1.7.0-1build1_amd64.deb ...
+Unpacking libopengl-dev:amd64 (1.7.0-1build1) over (1.7.0-1build1) ...
+Setting up libopengl-dev:amd64 (1.7.0-1build1) ...
+Setting up libgl-dev:amd64 (1.7.0-1build1) ...
+Setting up libegl-dev:amd64 (1.7.0-1build1) ...
+
+Running kernel seems to be up-to-date.
+
+No services need to be restarted.
+
+No containers need to be restarted.
+
+No user sessions are running outdated binaries.
+
+No VM guests are running outdated hypervisor (qemu) binaries on this host.
+BUILD_GFX_OK ba4331af9705
+lrwxrwxrwx 1 root root 11 Apr  8  2024 /usr/lib/x86_64-linux-gnu/libEGL.so -> libEGL.so.1
+Connection to IP-REDACTED closed by remote host.
+GFX_SUITE_STARTED=2026-10-15T15:38:15+00:00 rev=42fc7d4f
+host GFX_S2=PASS
+host GFX_S3=PASS
+host GFX_S4=PASS
+host GFX_S5=PASS
+GFX_S1=PASS
+GFX_S2=PASS
+GFX_S3=PASS
+GFX_S4=PASS
+GFX_S5=PASS
+GFX_CMP_VKC_HASH=MATCH 9ef8f95225b2291f
+GFX_CMP_VKR_HASH_A=MATCH 2a4db0673ee94aaf
+GFX_CMP_VKR_HASH_Z=MATCH 0f85f96d2be8e557
+GFX_CMP_VKR_HASH_B=MATCH a74a7e3fdf3af27b
+GFX_CMP_EGLR_HASH_A=MATCH 2a4db0673ee94aaf
+GFX_CMP_EGLR_HASH_Z=MATCH d26f0e8bbed2b9bf
+GFX_CMP_EGLR_HASH_B=MATCH 238bd6f6f74e5280
+GFX_CMP_GLXR_HASH_A=MATCH 2a4db0673ee94aaf
+GFX_CMP_GLXR_HASH_Z=MATCH d26f0e8bbed2b9bf
+GFX_CMP_GLXR_HASH_B=MATCH 238bd6f6f74e5280
+GFX_SUITE_STEPS=5/5 GFX_SUITE_HASHES=10/10
+GFX_SUITE_VERDICT=PASS
+GFX_SUITE_EXIT=2026-10-15T15:39:08+00:00
+EXIT_rc=0 2026-10-15T15:39:08+00:00

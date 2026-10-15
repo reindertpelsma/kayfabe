@@ -40,13 +40,16 @@ fn usage() -> ExitCode {
 }
 
 fn open_out(path: &str) -> std::io::Result<File> {
-    use std::os::unix::fs::OpenOptionsExt;
-    std::fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(0o600)
-        .open(path)
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    // Windows files inherit the destination directory's ACL. Native measurements use a
+    // private administrator/SYSTEM directory; raw and scrubbed captures stay on that machine.
+    options.open(path)
 }
 
 fn scrub_main(mut args: impl Iterator<Item = String>) -> ExitCode {

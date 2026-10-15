@@ -1,0 +1,1130 @@
++ set -uo pipefail
++ ROLE=host
++ OUT=/root/gfxbin
++++ dirname scripts/bench/gfx/gfx_steps.sh
+++ cd scripts/bench/gfx
+++ pwd
++ SRC=/root/kayfabe/scripts/bench/gfx
++ SUDO=
+++ id -u
++ '[' 0 -ne 0 ']'
++ T=120
+++ date -Is
+++ uname -r
++ echo 'GFX_STEPS_START role=host at 2026-10-15T15:33:10+00:00 kernel=6.8.0-138-generic'
+GFX_STEPS_START role=host at 2026-10-15T15:33:10+00:00 kernel=6.8.0-138-generic
+++ cat /sys/module/nvidia/version
++ echo GFX_DRIVER=595.91.07
+GFX_DRIVER=595.91.07
++ '[' host = guest ']'
+++ cat /sys/module/nvidia_drm/parameters/modeset
++ MS=Y
+++ ls /dev/dri
+++ tr '\n' ' '
++ CARDS='by-path card0 renderD128 '
++ echo GFX_S1_MODESET=Y
+GFX_S1_MODESET=Y
++ echo 'GFX_S1_DRI=by-path card0 renderD128 '
+GFX_S1_DRI=by-path card0 renderD128 
++ grep -i 'nvidia-drm\|nvidia-modeset\|nvkms\|displayless'
++ tail -8
++ dmesg
++ sed 's/^/  dmesg: /'
+  dmesg: [  659.053428] nvidia-modeset: Loading NVIDIA UNIX Open Kernel Mode Setting Driver for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 02:47:37 UTC 2026
+  dmesg: [  659.058005] [drm] [nvidia-drm] [GPU ID 0x00000007] Loading driver
+  dmesg: [  659.058081] [drm] Initialized nvidia-drm 0.0.0 20160202 for 0000:00:07.0 on minor 0
+  dmesg: [  659.060479] [drm] [nvidia-drm] [GPU ID 0x00000007] Unloading driver
+  dmesg: [  659.081971] nvidia-modeset: Unloading
+  dmesg: [  663.608264] nvidia-modeset: Loading NVIDIA UNIX Open Kernel Mode Setting Driver for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Jul 29 02:47:37 UTC 2026
+  dmesg: [  663.612796] [drm] [nvidia-drm] [GPU ID 0x00000007] Loading driver
+  dmesg: [  664.650784] [drm] Initialized nvidia-drm 0.0.0 20160202 for 0000:00:07.0 on minor 0
++ '[' Y = Y ']'
++ echo 'by-path card0 renderD128 '
++ grep -q card
++ echo 'by-path card0 renderD128 '
++ grep -q renderD
++ echo GFX_S1=PASS
+GFX_S1=PASS
++ ls -la /dev/dri/
++ sed 's/^/  dri: /'
+  dri: total 0
+  dri: drwxr-xr-x  3 root root        100 Oct 15 13:59 .
+  dri: drwxr-xr-x 19 root root       4420 Oct 15 15:01 ..
+  dri: drwxr-xr-x  2 root root         80 Oct 15 13:59 by-path
+  dri: crw-rw----  1 root video  226,   0 Oct 15 13:59 card0
+  dri: crw-rw----  1 root render 226, 128 Oct 15 13:59 renderD128
++ bash /root/kayfabe/scripts/bench/gfx/build_gfx.sh /root/gfxbin
++ tail -3
+BUILD_GFX_OK ba6b9be88d18
++ '[' -x /root/gfxbin/vk_gfx ']'
++ '[' -x /root/gfxbin/egl_gfx ']'
++ '[' -x /root/gfxbin/glx_gfx ']'
++ echo GFX_BUILD=OK
+GFX_BUILD=OK
+++ timeout 120 vulkaninfo --summary
++ VI='WARNING: [Loader Message] Code 0 : terminator_CreateInstance: Failed to CreateInstance in ICD 2.  Skipping ICD.
+'\''DISPLAY'\'' environment variable not set... skipping surface info
+==========
+VULKANINFO
+==========
+
+Vulkan Instance Version: 1.3.204
+
+
+Instance Extensions: count = 20
+-------------------------------
+VK_EXT_acquire_drm_display             : extension revision 1
+VK_EXT_acquire_xlib_display            : extension revision 1
+VK_EXT_debug_report                    : extension revision 10
+VK_EXT_debug_utils                     : extension revision 2
+VK_EXT_direct_mode_display             : extension revision 1
+VK_EXT_display_surface_counter         : extension revision 1
+VK_EXT_swapchain_colorspace            : extension revision 5
+VK_KHR_device_group_creation           : extension revision 1
+VK_KHR_display                         : extension revision 23
+VK_KHR_external_fence_capabilities     : extension revision 1
+VK_KHR_external_memory_capabilities    : extension revision 1
+VK_KHR_external_semaphore_capabilities : extension revision 1
+VK_KHR_get_display_properties2         : extension revision 1
+VK_KHR_get_physical_device_properties2 : extension revision 2
+VK_KHR_get_surface_capabilities2       : extension revision 1
+VK_KHR_surface                         : extension revision 25
+VK_KHR_surface_protected_capabilities  : extension revision 1
+VK_KHR_wayland_surface                 : extension revision 6
+VK_KHR_xcb_surface                     : extension revision 6
+VK_KHR_xlib_surface                    : extension revision 6
+
+Instance Layers: count = 5
+--------------------------
+VK_LAYER_INTEL_nullhw       INTEL NULL HW                1.1.73   version 1
+VK_LAYER_MESA_device_select Linux device selection layer 1.3.211  version 1
+VK_LAYER_MESA_overlay       Mesa Overlay layer           1.3.211  version 1
+VK_LAYER_NV_optimus         NVIDIA Optimus layer         1.4.329  version 1
+VK_LAYER_NV_present         NVIDIA Presentation Layer    1.4.329  version 1
+
+Devices:
+========
+GPU0:
+	apiVersion         = 4211017 (1.4.329)
+	driverVersion      = 2497102272 (0x94d6c1c0)
+	vendorID           = 0x10de
+	deviceID           = 0x2684
+	deviceType         = PHYSICAL_DEVICE_TYPE_DISCRETE_GPU
+	deviceName         = NVIDIA GeForce RTX 4090
+	driverID           = DRIVER_ID_NVIDIA_PROPRIETARY
+	driverName         = NVIDIA
+	driverInfo         = 595.91.07
+	conformanceVersion = IP-REDACTED
+	deviceUUID         = da7830bd-b96e-6115-2a18-02b6c4e83666
+	driverUUID         = 84d66e5a-5337-5512-92cd-fc48fce44ebd
+GPU1:
+	apiVersion         = 4206847 (1.3.255)
+	driverVersion      = 1 (0x0001)
+	vendorID           = 0x10005
+	deviceID           = 0x0000
+	deviceType         = PHYSICAL_DEVICE_TYPE_CPU
+	deviceName         = llvmpipe (LLVM 15.0.7, 256 bits)
+	driverID           = DRIVER_ID_MESA_LLVMPIPE
+	driverName         = llvmpipe
+	driverInfo         = Mesa 23.2.1-1ubuntu3.1~22.04.4 (LLVM 15.0.7)
+	conformanceVersion = IP-REDACTED
+	deviceUUID         = 6d657361-3233-2e32-2e31-2d3175627500
+	driverUUID         = 6c6c766d-7069-7065-5555-494400000000'
++ VIRC=0
++ echo 'WARNING: [Loader Message] Code 0 : terminator_CreateInstance: Failed to CreateInstance in ICD 2.  Skipping ICD.
+'\''DISPLAY'\'' environment variable not set... skipping surface info
+==========
+VULKANINFO
+==========
+
+Vulkan Instance Version: 1.3.204
+
+
+Instance Extensions: count = 20
+-------------------------------
+VK_EXT_acquire_drm_display             : extension revision 1
+VK_EXT_acquire_xlib_display            : extension revision 1
+VK_EXT_debug_report                    : extension revision 10
+VK_EXT_debug_utils                     : extension revision 2
+VK_EXT_direct_mode_display             : extension revision 1
+VK_EXT_display_surface_counter         : extension revision 1
+VK_EXT_swapchain_colorspace            : extension revision 5
+VK_KHR_device_group_creation           : extension revision 1
+VK_KHR_display                         : extension revision 23
+VK_KHR_external_fence_capabilities     : extension revision 1
+VK_KHR_external_memory_capabilities    : extension revision 1
+VK_KHR_external_semaphore_capabilities : extension revision 1
+VK_KHR_get_display_properties2         : extension revision 1
+VK_KHR_get_physical_device_properties2 : extension revision 2
+VK_KHR_get_surface_capabilities2       : extension revision 1
+VK_KHR_surface                         : extension revision 25
+VK_KHR_surface_protected_capabilities  : extension revision 1
+VK_KHR_wayland_surface                 : extension revision 6
+VK_KHR_xcb_surface                     : extension revision 6
+VK_KHR_xlib_surface                    : extension revision 6
+
+Instance Layers: count = 5
+--------------------------
+VK_LAYER_INTEL_nullhw       INTEL NULL HW                1.1.73   version 1
+VK_LAYER_MESA_device_select Linux device selection layer 1.3.211  version 1
+VK_LAYER_MESA_overlay       Mesa Overlay layer           1.3.211  version 1
+VK_LAYER_NV_optimus         NVIDIA Optimus layer         1.4.329  version 1
+VK_LAYER_NV_present         NVIDIA Presentation Layer    1.4.329  version 1
+
+Devices:
+========
+GPU0:
+	apiVersion         = 4211017 (1.4.329)
+	driverVersion      = 2497102272 (0x94d6c1c0)
+	vendorID           = 0x10de
+	deviceID           = 0x2684
+	deviceType         = PHYSICAL_DEVICE_TYPE_DISCRETE_GPU
+	deviceName         = NVIDIA GeForce RTX 4090
+	driverID           = DRIVER_ID_NVIDIA_PROPRIETARY
+	driverName         = NVIDIA
+	driverInfo         = 595.91.07
+	conformanceVersion = IP-REDACTED
+	deviceUUID         = da7830bd-b96e-6115-2a18-02b6c4e83666
+	driverUUID         = 84d66e5a-5337-5512-92cd-fc48fce44ebd
+GPU1:
+	apiVersion         = 4206847 (1.3.255)
+	driverVersion      = 1 (0x0001)
+	vendorID           = 0x10005
+	deviceID           = 0x0000
+	deviceType         = PHYSICAL_DEVICE_TYPE_CPU
+	deviceName         = llvmpipe (LLVM 15.0.7, 256 bits)
+	driverID           = DRIVER_ID_MESA_LLVMPIPE
+	driverName         = llvmpipe
+	driverInfo         = Mesa 23.2.1-1ubuntu3.1~22.04.4 (LLVM 15.0.7)
+	conformanceVersion = IP-REDACTED
+	deviceUUID         = 6d657361-3233-2e32-2e31-2d3175627500
+	driverUUID         = 6c6c766d-7069-7065-5555-494400000000'
++ grep -E 'deviceName|driverVersion|apiVersion|deviceType|driverID|ERROR|error'
++ sed 's/^/  vulkaninfo: /'
++ head -12
+  vulkaninfo: 	apiVersion         = 4211017 (1.4.329)
+  vulkaninfo: 	driverVersion      = 2497102272 (0x94d6c1c0)
+  vulkaninfo: 	deviceType         = PHYSICAL_DEVICE_TYPE_DISCRETE_GPU
+  vulkaninfo: 	deviceName         = NVIDIA GeForce RTX 4090
+  vulkaninfo: 	driverID           = DRIVER_ID_NVIDIA_PROPRIETARY
+  vulkaninfo: 	apiVersion         = 4206847 (1.3.255)
+  vulkaninfo: 	driverVersion      = 1 (0x0001)
+  vulkaninfo: 	deviceType         = PHYSICAL_DEVICE_TYPE_CPU
+  vulkaninfo: 	deviceName         = llvmpipe (LLVM 15.0.7, 256 bits)
+  vulkaninfo: 	driverID           = DRIVER_ID_MESA_LLVMPIPE
++ echo GFX_VULKANINFO_RC=0
+GFX_VULKANINFO_RC=0
+++ cd /tmp
+++ timeout 120 /root/gfxbin/vk_gfx compute
++ VC='VK_START mode=compute
+VK_DEVICE[0]=NVIDIA GeForce RTX 4090 vendor=0x10de type=2 api=1.4.329 driver=0x94d6c1c0
+VK_DEVICE[1]=llvmpipe (LLVM 15.0.7, 256 bits) vendor=0x10005 type=4 api=1.3.255 driver=0x1
+VK_STAGE=device_created
+VKC_N=1048576
+VKC_HASH=9ef8f95225b2291f
+VKC_BAD=0
+VK_DONE rc=0'
++ VCRC=0
++ echo 'VK_START mode=compute
+VK_DEVICE[0]=NVIDIA GeForce RTX 4090 vendor=0x10de type=2 api=1.4.329 driver=0x94d6c1c0
+VK_DEVICE[1]=llvmpipe (LLVM 15.0.7, 256 bits) vendor=0x10005 type=4 api=1.3.255 driver=0x1
+VK_STAGE=device_created
+VKC_N=1048576
+VKC_HASH=9ef8f95225b2291f
+VKC_BAD=0
++ sed 's/^/  /'
+VK_DONE rc=0'
+  VK_START mode=compute
+  VK_DEVICE[0]=NVIDIA GeForce RTX 4090 vendor=0x10de type=2 api=1.4.329 driver=0x94d6c1c0
+  VK_DEVICE[1]=llvmpipe (LLVM 15.0.7, 256 bits) vendor=0x10005 type=4 api=1.3.255 driver=0x1
+  VK_STAGE=device_created
+  VKC_N=1048576
+  VKC_HASH=9ef8f95225b2291f
+  VKC_BAD=0
+  VK_DONE rc=0
++ grep -E '^VKC_(HASH|BAD)='
++ echo 'VK_START mode=compute
+VK_DEVICE[0]=NVIDIA GeForce RTX 4090 vendor=0x10de type=2 api=1.4.329 driver=0x94d6c1c0
+VK_DEVICE[1]=llvmpipe (LLVM 15.0.7, 256 bits) vendor=0x10005 type=4 api=1.3.255 driver=0x1
+VK_STAGE=device_created
+VKC_N=1048576
+VKC_HASH=9ef8f95225b2291f
+VKC_BAD=0
+VK_DONE rc=0'
+VKC_HASH=9ef8f95225b2291f
+VKC_BAD=0
++ echo GFX_VKC_RC=0
+GFX_VKC_RC=0
++ '[' 0 -eq 0 ']'
++ echo 'WARNING: [Loader Message] Code 0 : terminator_CreateInstance: Failed to CreateInstance in ICD 2.  Skipping ICD.
+'\''DISPLAY'\'' environment variable not set... skipping surface info
+==========
+VULKANINFO
+==========
+
+Vulkan Instance Version: 1.3.204
+
+
+Instance Extensions: count = 20
+-------------------------------
+VK_EXT_acquire_drm_display             : extension revision 1
+VK_EXT_acquire_xlib_display            : extension revision 1
+VK_EXT_debug_report                    : extension revision 10
+VK_EXT_debug_utils                     : extension revision 2
+VK_EXT_direct_mode_display             : extension revision 1
+VK_EXT_display_surface_counter         : extension revision 1
+VK_EXT_swapchain_colorspace            : extension revision 5
+VK_KHR_device_group_creation           : extension revision 1
+VK_KHR_display                         : extension revision 23
+VK_KHR_external_fence_capabilities     : extension revision 1
+VK_KHR_external_memory_capabilities    : extension revision 1
+VK_KHR_external_semaphore_capabilities : extension revision 1
+VK_KHR_get_display_properties2         : extension revision 1
+VK_KHR_get_physical_device_properties2 : extension revision 2
+VK_KHR_get_surface_capabilities2       : extension revision 1
+VK_KHR_surface                         : extension revision 25
+VK_KHR_surface_protected_capabilities  : extension revision 1
+VK_KHR_wayland_surface                 : extension revision 6
+VK_KHR_xcb_surface                     : extension revision 6
+VK_KHR_xlib_surface                    : extension revision 6
+
+Instance Layers: count = 5
+--------------------------
+VK_LAYER_INTEL_nullhw       INTEL NULL HW                1.1.73   version 1
+VK_LAYER_MESA_device_select Linux device selection layer 1.3.211  version 1
+VK_LAYER_MESA_overlay       Mesa Overlay layer           1.3.211  version 1
+VK_LAYER_NV_optimus         NVIDIA Optimus layer         1.4.329  version 1
+VK_LAYER_NV_present         NVIDIA Presentation Layer    1.4.329  version 1
+
+Devices:
+========
+GPU0:
+	apiVersion         = 4211017 (1.4.329)
+	driverVersion      = 2497102272 (0x94d6c1c0)
+	vendorID           = 0x10de
+	deviceID           = 0x2684
+	deviceType         = PHYSICAL_DEVICE_TYPE_DISCRETE_GPU
+	deviceName         = NVIDIA GeForce RTX 4090
+	driverID           = DRIVER_ID_NVIDIA_PROPRIETARY
+	driverName         = NVIDIA
+	driverInfo         = 595.91.07
+	conformanceVersion = IP-REDACTED
+	deviceUUID         = da7830bd-b96e-6115-2a18-02b6c4e83666
+	driverUUID         = 84d66e5a-5337-5512-92cd-fc48fce44ebd
+GPU1:
+	apiVersion         = 4206847 (1.3.255)
+	driverVersion      = 1 (0x0001)
+	vendorID           = 0x10005
+	deviceID           = 0x0000
+	deviceType         = PHYSICAL_DEVICE_TYPE_CPU
+	deviceName         = llvmpipe (LLVM 15.0.7, 256 bits)
+	driverID           = DRIVER_ID_MESA_LLVMPIPE
+	driverName         = llvmpipe
+	driverInfo         = Mesa 23.2.1-1ubuntu3.1~22.04.4 (LLVM 15.0.7)
+	conformanceVersion = IP-REDACTED
+	deviceUUID         = 6d657361-3233-2e32-2e31-2d3175627500
+	driverUUID         = 6c6c766d-7069-7065-5555-494400000000'
++ grep -q 'deviceName.*NVIDIA'
++ echo 'VK_START mode=compute
+VK_DEVICE[0]=NVIDIA GeForce RTX 4090 vendor=0x10de type=2 api=1.4.329 driver=0x94d6c1c0
+VK_DEVICE[1]=llvmpipe (LLVM 15.0.7, 256 bits) vendor=0x10005 type=4 api=1.3.255 driver=0x1
+VK_STAGE=device_created
+VKC_N=1048576
+VKC_HASH=9ef8f95225b2291f
+VKC_BAD=0
+VK_DONE rc=0'
++ grep -q '^VKC_BAD=0$'
++ echo GFX_S2=PASS
+GFX_S2=PASS
+++ cd /tmp
+++ timeout 120 /root/gfxbin/vk_gfx render /tmp/vkr_host
++ VR='VK_START mode=render
+VK_DEVICE[0]=NVIDIA GeForce RTX 4090 vendor=0x10de type=2 api=1.4.329 driver=0x94d6c1c0
+VK_DEVICE[1]=llvmpipe (LLVM 15.0.7, 256 bits) vendor=0x10005 type=4 api=1.3.255 driver=0x1
+VK_STAGE=device_created
+VK_STAGE=pipelines_built
+VKR_REF checked=6079 colour_bad=0 depth_bad=0 blit_checked=1296 blit_bad=0
+VKR_HASH_A=2a4db0673ee94aaf
+VKR_HASH_Z=0f85f96d2be8e557
+VKR_HASH_B=a74a7e3fdf3af27b
+VKR_REF_FAILS=0
+VK_DONE rc=0'
++ VRRC=0
++ echo 'VK_START mode=render
+VK_DEVICE[0]=NVIDIA GeForce RTX 4090 vendor=0x10de type=2 api=1.4.329 driver=0x94d6c1c0
+VK_DEVICE[1]=llvmpipe (LLVM 15.0.7, 256 bits) vendor=0x10005 type=4 api=1.3.255 driver=0x1
+VK_STAGE=device_created
+VK_STAGE=pipelines_built
+VKR_REF checked=6079 colour_bad=0 depth_bad=0 blit_checked=1296 blit_bad=0
+VKR_HASH_A=2a4db0673ee94aaf
+VKR_HASH_Z=0f85f96d2be8e557
+VKR_HASH_B=a74a7e3fdf3af27b
+VKR_REF_FAILS=0
+VK_DONE rc=0'
++ sed 's/^/  /'
+  VK_START mode=render
+  VK_DEVICE[0]=NVIDIA GeForce RTX 4090 vendor=0x10de type=2 api=1.4.329 driver=0x94d6c1c0
+  VK_DEVICE[1]=llvmpipe (LLVM 15.0.7, 256 bits) vendor=0x10005 type=4 api=1.3.255 driver=0x1
+  VK_STAGE=device_created
+  VK_STAGE=pipelines_built
+  VKR_REF checked=6079 colour_bad=0 depth_bad=0 blit_checked=1296 blit_bad=0
+  VKR_HASH_A=2a4db0673ee94aaf
+  VKR_HASH_Z=0f85f96d2be8e557
+  VKR_HASH_B=a74a7e3fdf3af27b
+  VKR_REF_FAILS=0
+  VK_DONE rc=0
++ echo 'VK_START mode=render
+VK_DEVICE[0]=NVIDIA GeForce RTX 4090 vendor=0x10de type=2 api=1.4.329 driver=0x94d6c1c0
+VK_DEVICE[1]=llvmpipe (LLVM 15.0.7, 256 bits) vendor=0x10005 type=4 api=1.3.255 driver=0x1
+VK_STAGE=device_created
+VK_STAGE=pipelines_built
+VKR_REF checked=6079 colour_bad=0 depth_bad=0 blit_checked=1296 blit_bad=0
+VKR_HASH_A=2a4db0673ee94aaf
+VKR_HASH_Z=0f85f96d2be8e557
+VKR_HASH_B=a74a7e3fdf3af27b
+VKR_REF_FAILS=0
+VK_DONE rc=0'
++ grep -E '^VKR_(HASH_[AZB]|REF_FAILS)='
+VKR_HASH_A=2a4db0673ee94aaf
+VKR_HASH_Z=0f85f96d2be8e557
+VKR_HASH_B=a74a7e3fdf3af27b
+VKR_REF_FAILS=0
++ echo GFX_VKR_RC=0
+GFX_VKR_RC=0
++ echo 'VK_START mode=render
+VK_DEVICE[0]=NVIDIA GeForce RTX 4090 vendor=0x10de type=2 api=1.4.329 driver=0x94d6c1c0
+VK_DEVICE[1]=llvmpipe (LLVM 15.0.7, 256 bits) vendor=0x10005 type=4 api=1.3.255 driver=0x1
+VK_STAGE=device_created
+VK_STAGE=pipelines_built
+VKR_REF checked=6079 colour_bad=0 depth_bad=0 blit_checked=1296 blit_bad=0
+VKR_HASH_A=2a4db0673ee94aaf
+VKR_HASH_Z=0f85f96d2be8e557
+VKR_HASH_B=a74a7e3fdf3af27b
+VKR_REF_FAILS=0
+VK_DONE rc=0'
++ grep -q '^VKR_REF_FAILS=0$'
++ echo GFX_S3=PASS
+GFX_S3=PASS
+++ timeout 120 eglinfo -B
++ EI='EGL client extensions string:
+    EGL_EXT_platform_base EGL_EXT_device_base EGL_EXT_device_enumeration
+    EGL_EXT_device_query EGL_KHR_client_get_all_proc_addresses
+    EGL_EXT_client_extensions EGL_KHR_debug EGL_KHR_platform_x11
+    EGL_EXT_platform_x11 EGL_EXT_platform_device
+    EGL_MESA_platform_surfaceless EGL_EXT_explicit_device
+    EGL_KHR_platform_wayland EGL_EXT_platform_wayland
+    EGL_KHR_platform_gbm EGL_MESA_platform_gbm EGL_EXT_platform_xcb
+
+GBM platform:
+EGL API version: 1.5
+EGL vendor string: NVIDIA
+EGL version string: 1.5
+EGL client APIs: OpenGL_ES OpenGL
+EGL extensions string:
+    EGL_ANDROID_native_fence_sync EGL_EXT_buffer_age EGL_EXT_client_sync
+    EGL_EXT_create_context_robustness EGL_EXT_image_dma_buf_import
+    EGL_EXT_image_dma_buf_import_modifiers EGL_MESA_image_dma_buf_export
+    EGL_EXT_output_base EGL_EXT_output_drm EGL_EXT_protected_content
+    EGL_EXT_stream_consumer_egloutput EGL_EXT_stream_acquire_mode
+    EGL_EXT_sync_reuse EGL_IMG_context_priority EGL_KHR_config_attribs
+    EGL_KHR_create_context_no_error EGL_KHR_context_flush_control
+    EGL_KHR_create_context EGL_KHR_fence_sync
+    EGL_KHR_get_all_proc_addresses EGL_KHR_partial_update
+    EGL_KHR_swap_buffers_with_damage EGL_KHR_no_config_context
+    EGL_KHR_gl_colorspace EGL_KHR_gl_renderbuffer_image
+    EGL_KHR_gl_texture_2D_image EGL_KHR_gl_texture_3D_image
+    EGL_KHR_gl_texture_cubemap_image EGL_KHR_image EGL_KHR_image_base
+    EGL_KHR_reusable_sync EGL_KHR_stream EGL_KHR_stream_attrib
+    EGL_KHR_stream_consumer_gltexture EGL_KHR_stream_cross_process_fd
+    EGL_KHR_stream_fifo EGL_KHR_stream_producer_eglsurface
+    EGL_KHR_surfaceless_context EGL_KHR_wait_sync EGL_NV_nvrm_fence_sync
+    EGL_NV_quadruple_buffer EGL_NV_stream_consumer_eglimage
+    EGL_NV_stream_cross_display EGL_NV_stream_cross_object
+    EGL_NV_stream_cross_process EGL_NV_stream_cross_system
+    EGL_NV_stream_dma EGL_NV_stream_flush EGL_NV_stream_metadata
+    EGL_NV_stream_remote EGL_NV_stream_reset EGL_NV_stream_socket
+    EGL_NV_stream_socket_inet EGL_NV_stream_socket_unix
+    EGL_NV_stream_sync EGL_NV_stream_fifo_next
+    EGL_NV_stream_fifo_synchronous EGL_NV_stream_consumer_gltexture_yuv
+    EGL_NV_stream_attrib EGL_NV_stream_origin EGL_NV_system_time
+    EGL_NV_output_drm_flip_event EGL_NV_triple_buffer
+    EGL_NV_robustness_video_memory_purge EGL_WL_bind_wayland_display
+    EGL_WL_wayland_eglstream
+Configurations:
+     bf lv colorbuffer dp st  ms    vis   cav bi  renderable  supported
+  id sz  l  r  g  b  a th cl ns b    id   eat nd gl es es2 vg surfaces 
+---------------------------------------------------------------------
+0x01 32  0  8  8  8  8 24  8  0 0 0x34325241--         y  y  y     win,pb,str
+0x02 32  0  8  8  8  8 24  0  0 0 0x34325241--         y  y  y     win,pb,str
+0x03 32  0  8  8  8  8  0  8  0 0 0x34325241--         y  y  y     win,pb,str
+0x04 32  0  8  8  8  8  0  0  0 0 0x34325241--         y  y  y     win,pb,str
+0x05 32  0  8  8  8  8 24  8  2 1 0x34325241--         y  y  y     win,pb,str
+0x06 32  0  8  8  8  8 24  0  2 1 0x34325241--         y  y  y     win,pb,str
+0x07 32  0  8  8  8  8  0  8  2 1 0x34325241--         y  y  y     win,pb,str
+0x08 32  0  8  8  8  8  0  0  2 1 0x34325241--         y  y  y     win,pb,str
+0x09 32  0  8  8  8  8 24  8  4 1 0x34325241--         y  y  y     win,pb,str
+0x0a 32  0  8  8  8  8 24  8  4 1 0x34325241--         y  y  y     win,pb,str
+0x0b 32  0  8  8  8  8 24  0  4 1 0x34325241--         y  y  y     win,pb,str
+0x0c 32  0  8  8  8  8 24  0  4 1 0x34325241--         y  y  y     win,pb,str
+0x0d 32  0  8  8  8  8  0  8  4 1 0x34325241--         y  y  y     win,pb,str
+0x0e 32  0  8  8  8  8  0  8  4 1 0x34325241--         y  y  y     win,pb,str
+0x0f 32  0  8  8  8  8  0  0  4 1 0x34325241--         y  y  y     win,pb,str
+0x10 32  0  8  8  8  8  0  0  4 1 0x34325241--         y  y  y     win,pb,str
+0x11 32  0  8  8  8  8 24  8  8 1 0x34325241--         y  y  y     win,pb,str
+0x12 32  0  8  8  8  8 24  0  8 1 0x34325241--         y  y  y     win,pb,str
+0x13 32  0  8  8  8  8  0  8  8 1 0x34325241--         y  y  y     win,pb,str
+0x14 32  0  8  8  8  8  0  0  8 1 0x34325241--         y  y  y     win,pb,str
+0x15 24  0  8  8  8  0 24  8  0 0 0x34325258--         y  y  y     win,pb,str
+0x16 24  0  8  8  8  0 24  0  0 0 0x34325258--         y  y  y     win,pb,str
+0x17 24  0  8  8  8  0  0  8  0 0 0x34325258--         y  y  y     win,pb,str
+0x18 24  0  8  8  8  0  0  0  0 0 0x34325258--         y  y  y     win,pb,str
+0x19 24  0  8  8  8  0 24  8  2 1 0x34325258--         y  y  y     win,pb,str
+0x1a 24  0  8  8  8  0 24  0  2 1 0x34325258--         y  y  y     win,pb,str
+0x1b 24  0  8  8  8  0  0  8  2 1 0x34325258--         y  y  y     win,pb,str
+0x1c 24  0  8  8  8  0  0  0  2 1 0x34325258--         y  y  y     win,pb,str
+0x1d 24  0  8  8  8  0 24  8  4 1 0x34325258--         y  y  y     win,pb,str
+0x1e 24  0  8  8  8  0 24  8  4 1 0x34325258--         y  y  y     win,pb,str
+0x1f 24  0  8  8  8  0 24  0  4 1 0x34325258--         y  y  y     win,pb,str
+0x20 24  0  8  8  8  0 24  0  4 1 0x34325258--         y  y  y     win,pb,str
+0x21 24  0  8  8  8  0  0  8  4 1 0x34325258--         y  y  y     win,pb,str
+0x22 24  0  8  8  8  0  0  8  4 1 0x34325258--         y  y  y     win,pb,str
+0x23 24  0  8  8  8  0  0  0  4 1 0x34325258--         y  y  y     win,pb,str
+0x24 24  0  8  8  8  0  0  0  4 1 0x34325258--         y  y  y     win,pb,str
+0x25 24  0  8  8  8  0 24  8  8 1 0x34325258--         y  y  y     win,pb,str
+0x26 24  0  8  8  8  0 24  0  8 1 0x34325258--         y  y  y     win,pb,str
+0x27 24  0  8  8  8  0  0  8  8 1 0x34325258--         y  y  y     win,pb,str
+0x28 24  0  8  8  8  0  0  0  8 1 0x34325258--         y  y  y     win,pb,str
+0x29 16  0  5  6  5  0 24  8  0 0 0x36314752--         y  y  y     win,pb,str
+0x2a 16  0  5  6  5  0 24  0  0 0 0x36314752--         y  y  y     win,pb,str
+0x2b 16  0  5  6  5  0 16  0  0 0 0x36314752--         y  y  y     win,pb,str
+0x2c 16  0  5  6  5  0  0  8  0 0 0x36314752--         y  y  y     win,pb,str
+0x2d 16  0  5  6  5  0  0  0  0 0 0x36314752--         y  y  y     win,pb,str
+0x2e 16  0  5  6  5  0 24  8  2 1 0x36314752--         y  y  y     win,pb,str
+0x2f 16  0  5  6  5  0 24  0  2 1 0x36314752--         y  y  y     win,pb,str
+0x30 16  0  5  6  5  0 16  0  2 1 0x36314752--         y  y  y     win,pb,str
+0x31 16  0  5  6  5  0  0  8  2 1 0x36314752--         y  y  y     win,pb,str
+0x32 16  0  5  6  5  0  0  0  2 1 0x36314752--         y  y  y     win,pb,str
+0x33 16  0  5  6  5  0 24  8  4 1 0x36314752--         y  y  y     win,pb,str
+0x34 16  0  5  6  5  0 24  8  4 1 0x36314752--         y  y  y     win,pb,str
+0x35 16  0  5  6  5  0 24  0  4 1 0x36314752--         y  y  y     win,pb,str
+0x36 16  0  5  6  5  0 24  0  4 1 0x36314752--         y  y  y     win,pb,str
+0x37 16  0  5  6  5  0 16  0  4 1 0x36314752--         y  y  y     win,pb,str
+0x38 16  0  5  6  5  0 16  0  4 1 0x36314752--         y  y  y     win,pb,str
+0x39 16  0  5  6  5  0  0  8  4 1 0x36314752--         y  y  y     win,pb,str
+0x3a 16  0  5  6  5  0  0  8  4 1 0x36314752--         y  y  y     win,pb,str
+0x3b 16  0  5  6  5  0  0  0  4 1 0x36314752--         y  y  y     win,pb,str
+0x3c 16  0  5  6  5  0  0  0  4 1 0x36314752--         y  y  y     win,pb,str
+0x3d 16  0  5  6  5  0 24  8  8 1 0x36314752--         y  y  y     win,pb,str
+0x3e 16  0  5  6  5  0 24  0  8 1 0x36314752--         y  y  y     win,pb,str
+0x3f 16  0  5  6  5  0 16  0  8 1 0x36314752--         y  y  y     win,pb,str
+0x40 16  0  5  6  5  0  0  8  8 1 0x36314752--         y  y  y     win,pb,str
+0x41 16  0  5  6  5  0  0  0  8 1 0x36314752--         y  y  y     win,pb,str
+
+Wayland platform:
+eglinfo: eglInitialize failed
+
+X11 platform:
+eglinfo: eglInitialize failed
+
+Device platform:
+EGL API version: 1.5
+EGL vendor string: NVIDIA
+EGL version string: 1.5
+EGL client APIs: OpenGL_ES OpenGL
+EGL extensions string:
+    EGL_ANDROID_native_fence_sync EGL_EXT_buffer_age EGL_EXT_client_sync
+    EGL_EXT_create_context_robustness EGL_EXT_image_dma_buf_import
+    EGL_EXT_image_dma_buf_import_modifiers EGL_MESA_image_dma_buf_export
+    EGL_EXT_output_base EGL_EXT_output_drm EGL_EXT_protected_content
+    EGL_EXT_stream_consumer_egloutput EGL_EXT_stream_acquire_mode
+    EGL_EXT_sync_reuse EGL_IMG_context_priority EGL_KHR_config_attribs
+    EGL_KHR_create_context_no_error EGL_KHR_context_flush_control
+    EGL_KHR_create_context EGL_KHR_fence_sync
+    EGL_KHR_get_all_proc_addresses EGL_KHR_partial_update
+    EGL_KHR_swap_buffers_with_damage EGL_KHR_no_config_context
+    EGL_KHR_gl_colorspace EGL_KHR_gl_renderbuffer_image
+    EGL_KHR_gl_texture_2D_image EGL_KHR_gl_texture_3D_image
+    EGL_KHR_gl_texture_cubemap_image EGL_KHR_image EGL_KHR_image_base
+    EGL_KHR_reusable_sync EGL_KHR_stream EGL_KHR_stream_attrib
+    EGL_KHR_stream_consumer_gltexture EGL_KHR_stream_cross_process_fd
+    EGL_KHR_stream_fifo EGL_KHR_stream_producer_eglsurface
+    EGL_KHR_surfaceless_context EGL_KHR_wait_sync EGL_NV_nvrm_fence_sync
+    EGL_NV_quadruple_buffer EGL_NV_stream_consumer_eglimage
+    EGL_NV_stream_cross_display EGL_NV_stream_cross_object
+    EGL_NV_stream_cross_process EGL_NV_stream_cross_system
+    EGL_NV_stream_dma EGL_NV_stream_flush EGL_NV_stream_metadata
+    EGL_NV_stream_remote EGL_NV_stream_reset EGL_NV_stream_socket
+    EGL_NV_stream_socket_inet EGL_NV_stream_socket_unix
+    EGL_NV_stream_sync EGL_NV_stream_fifo_next
+    EGL_NV_stream_fifo_synchronous EGL_NV_stream_consumer_gltexture_yuv
+    EGL_NV_stream_attrib EGL_NV_stream_origin EGL_NV_system_time
+    EGL_NV_output_drm_flip_event EGL_NV_triple_buffer
+    EGL_NV_robustness_video_memory_purge EGL_WL_bind_wayland_display
+    EGL_WL_wayland_eglstream
+Configurations:
+     bf lv colorbuffer dp st  ms    vis   cav bi  renderable  supported
+  id sz  l  r  g  b  a th cl ns b    id   eat nd gl es es2 vg surfaces 
+---------------------------------------------------------------------
+0x01 32  0  8  8  8  8 24  8  0 0 0x00--         y  y  y     pb,str
+0x02 32  0  8  8  8  8 24  0  0 0 0x00--         y  y  y     pb,str
+0x03 32  0  8  8  8  8  0  8  0 0 0x00--         y  y  y     pb,str
+0x04 32  0  8  8  8  8  0  0  0 0 0x00--         y  y  y     pb,str
+0x05 32  0  8  8  8  8 24  8  2 1 0x00--         y  y  y     pb,str
+0x06 32  0  8  8  8  8 24  0  2 1 0x00--         y  y  y     pb,str
+0x07 32  0  8  8  8  8  0  8  2 1 0x00--         y  y  y     pb,str
+0x08 32  0  8  8  8  8  0  0  2 1 0x00--         y  y  y     pb,str
+0x09 32  0  8  8  8  8 24  8  4 1 0x00--         y  y  y     pb,str
+0x0a 32  0  8  8  8  8 24  8  4 1 0x00--         y  y  y     pb,str
+0x0b 32  0  8  8  8  8 24  0  4 1 0x00--         y  y  y     pb,str
+0x0c 32  0  8  8  8  8 24  0  4 1 0x00--         y  y  y     pb,str
+0x0d 32  0  8  8  8  8  0  8  4 1 0x00--         y  y  y     pb,str
+0x0e 32  0  8  8  8  8  0  8  4 1 0x00--         y  y  y     pb,str
+0x0f 32  0  8  8  8  8  0  0  4 1 0x00--         y  y  y     pb,str
+0x10 32  0  8  8  8  8  0  0  4 1 0x00--         y  y  y     pb,str
+0x11 32  0  8  8  8  8 24  8  8 1 0x00--         y  y  y     pb,str
+0x12 32  0  8  8  8  8 24  0  8 1 0x00--         y  y  y     pb,str
+0x13 32  0  8  8  8  8  0  8  8 1 0x00--         y  y  y     pb,str
+0x14 32  0  8  8  8  8  0  0  8 1 0x00--         y  y  y     pb,str
+0x15 24  0  8  8  8  0 24  8  0 0 0x00--         y  y  y     pb,str
+0x16 24  0  8  8  8  0 24  0  0 0 0x00--         y  y  y     pb,str
+0x17 24  0  8  8  8  0  0  8  0 0 0x00--         y  y  y     pb,str
+0x18 24  0  8  8  8  0  0  0  0 0 0x00--         y  y  y     pb,str
+0x19 24  0  8  8  8  0 24  8  2 1 0x00--         y  y  y     pb,str
+0x1a 24  0  8  8  8  0 24  0  2 1 0x00--         y  y  y     pb,str
+0x1b 24  0  8  8  8  0  0  8  2 1 0x00--         y  y  y     pb,str
+0x1c 24  0  8  8  8  0  0  0  2 1 0x00--         y  y  y     pb,str
+0x1d 24  0  8  8  8  0 24  8  4 1 0x00--         y  y  y     pb,str
+0x1e 24  0  8  8  8  0 24  8  4 1 0x00--         y  y  y     pb,str
+0x1f 24  0  8  8  8  0 24  0  4 1 0x00--         y  y  y     pb,str
+0x20 24  0  8  8  8  0 24  0  4 1 0x00--         y  y  y     pb,str
+0x21 24  0  8  8  8  0  0  8  4 1 0x00--         y  y  y     pb,str
+0x22 24  0  8  8  8  0  0  8  4 1 0x00--         y  y  y     pb,str
+0x23 24  0  8  8  8  0  0  0  4 1 0x00--         y  y  y     pb,str
+0x24 24  0  8  8  8  0  0  0  4 1 0x00--         y  y  y     pb,str
+0x25 24  0  8  8  8  0 24  8  8 1 0x00--         y  y  y     pb,str
+0x26 24  0  8  8  8  0 24  0  8 1 0x00--         y  y  y     pb,str
+0x27 24  0  8  8  8  0  0  8  8 1 0x00--         y  y  y     pb,str
+0x28 24  0  8  8  8  0  0  0  8 1 0x00--         y  y  y     pb,str
+0x29 16  0  5  6  5  0 24  8  0 0 0x00--         y  y  y     pb,str
+0x2a 16  0  5  6  5  0 24  0  0 0 0x00--         y  y  y     pb,str
+0x2b 16  0  5  6  5  0 16  0  0 0 0x00--         y  y  y     pb,str
+0x2c 16  0  5  6  5  0  0  8  0 0 0x00--         y  y  y     pb,str
+0x2d 16  0  5  6  5  0  0  0  0 0 0x00--         y  y  y     pb,str
+0x2e 16  0  5  6  5  0 24  8  2 1 0x00--         y  y  y     pb,str
+0x2f 16  0  5  6  5  0 24  0  2 1 0x00--         y  y  y     pb,str
+0x30 16  0  5  6  5  0 16  0  2 1 0x00--         y  y  y     pb,str
+0x31 16  0  5  6  5  0  0  8  2 1 0x00--         y  y  y     pb,str
+0x32 16  0  5  6  5  0  0  0  2 1 0x00--         y  y  y     pb,str
+0x33 16  0  5  6  5  0 24  8  4 1 0x00--         y  y  y     pb,str
+0x34 16  0  5  6  5  0 24  8  4 1 0x00--         y  y  y     pb,str
+0x35 16  0  5  6  5  0 24  0  4 1 0x00--         y  y  y     pb,str
+0x36 16  0  5  6  5  0 24  0  4 1 0x00--         y  y  y     pb,str
+0x37 16  0  5  6  5  0 16  0  4 1 0x00--         y  y  y     pb,str
+0x38 16  0  5  6  5  0 16  0  4 1 0x00--         y  y  y     pb,str
+0x39 16  0  5  6  5  0  0  8  4 1 0x00--         y  y  y     pb,str
+0x3a 16  0  5  6  5  0  0  8  4 1 0x00--         y  y  y     pb,str
+0x3b 16  0  5  6  5  0  0  0  4 1 0x00--         y  y  y     pb,str
+0x3c 16  0  5  6  5  0  0  0  4 1 0x00--         y  y  y     pb,str
+0x3d 16  0  5  6  5  0 24  8  8 1 0x00--         y  y  y     pb,str
+0x3e 16  0  5  6  5  0 24  0  8 1 0x00--         y  y  y     pb,str
+0x3f 16  0  5  6  5  0 16  0  8 1 0x00--         y  y  y     pb,str
+0x40 16  0  5  6  5  0  0  8  8 1 0x00--         y  y  y     pb,str
+0x41 16  0  5  6  5  0  0  0  8 1 0x00--         y  y  y     pb,str'
++ EIRC=2
++ grep -iE 'platform|renderer|vendor|version string'
++ echo 'EGL client extensions string:
+    EGL_EXT_platform_base EGL_EXT_device_base EGL_EXT_device_enumeration
+    EGL_EXT_device_query EGL_KHR_client_get_all_proc_addresses
+    EGL_EXT_client_extensions EGL_KHR_debug EGL_KHR_platform_x11
+    EGL_EXT_platform_x11 EGL_EXT_platform_device
+    EGL_MESA_platform_surfaceless EGL_EXT_explicit_device
+    EGL_KHR_platform_wayland EGL_EXT_platform_wayland
+    EGL_KHR_platform_gbm EGL_MESA_platform_gbm EGL_EXT_platform_xcb
+
+GBM platform:
+EGL API version: 1.5
+EGL vendor string: NVIDIA
+EGL version string: 1.5
+EGL client APIs: OpenGL_ES OpenGL
+EGL extensions string:
+    EGL_ANDROID_native_fence_sync EGL_EXT_buffer_age EGL_EXT_client_sync
+    EGL_EXT_create_context_robustness EGL_EXT_image_dma_buf_import
+    EGL_EXT_image_dma_buf_import_modifiers EGL_MESA_image_dma_buf_export
+    EGL_EXT_output_base EGL_EXT_output_drm EGL_EXT_protected_content
+    EGL_EXT_stream_consumer_egloutput EGL_EXT_stream_acquire_mode
+    EGL_EXT_sync_reuse EGL_IMG_context_priority EGL_KHR_config_attribs
+    EGL_KHR_create_context_no_error EGL_KHR_context_flush_control
+    EGL_KHR_create_context EGL_KHR_fence_sync
+    EGL_KHR_get_all_proc_addresses EGL_KHR_partial_update
+    EGL_KHR_swap_buffers_with_damage EGL_KHR_no_config_context
+    EGL_KHR_gl_colorspace EGL_KHR_gl_renderbuffer_image
+    EGL_KHR_gl_texture_2D_image EGL_KHR_gl_texture_3D_image
+    EGL_KHR_gl_texture_cubemap_image EGL_KHR_image EGL_KHR_image_base
+    EGL_KHR_reusable_sync EGL_KHR_stream EGL_KHR_stream_attrib
+    EGL_KHR_stream_consumer_gltexture EGL_KHR_stream_cross_process_fd
+    EGL_KHR_stream_fifo EGL_KHR_stream_producer_eglsurface
+    EGL_KHR_surfaceless_context EGL_KHR_wait_sync EGL_NV_nvrm_fence_sync
+    EGL_NV_quadruple_buffer EGL_NV_stream_consumer_eglimage
+    EGL_NV_stream_cross_display EGL_NV_stream_cross_object
+    EGL_NV_stream_cross_process EGL_NV_stream_cross_system
+    EGL_NV_stream_dma EGL_NV_stream_flush EGL_NV_stream_metadata
+    EGL_NV_stream_remote EGL_NV_stream_reset EGL_NV_stream_socket
+    EGL_NV_stream_socket_inet EGL_NV_stream_socket_unix
+    EGL_NV_stream_sync EGL_NV_stream_fifo_next
+    EGL_NV_stream_fifo_synchronous EGL_NV_stream_consumer_gltexture_yuv
+    EGL_NV_stream_attrib EGL_NV_stream_origin EGL_NV_system_time
+    EGL_NV_output_drm_flip_event EGL_NV_triple_buffer
+    EGL_NV_robustness_video_memory_purge EGL_WL_bind_wayland_display
+    EGL_WL_wayland_eglstream
+Configurations:
+     bf lv colorbuffer dp st  ms    vis   cav bi  renderable  supported
+  id sz  l  r  g  b  a th cl ns b    id   eat nd gl es es2 vg surfaces 
+---------------------------------------------------------------------
+0x01 32  0  8  8  8  8 24  8  0 0 0x34325241--         y  y  y     win,pb,str
+0x02 32  0  8  8  8  8 24  0  0 0 0x34325241--         y  y  y     win,pb,str
+0x03 32  0  8  8  8  8  0  8  0 0 0x34325241--         y  y  y     win,pb,str
+0x04 32  0  8  8  8  8  0  0  0 0 0x34325241--         y  y  y     win,pb,str
+0x05 32  0  8  8  8  8 24  8  2 1 0x34325241--         y  y  y     win,pb,str
+0x06 32  0  8  8  8  8 24  0  2 1 0x34325241--         y  y  y     win,pb,str
+0x07 32  0  8  8  8  8  0  8  2 1 0x34325241--         y  y  y     win,pb,str
+0x08 32  0  8  8  8  8  0  0  2 1 0x34325241--         y  y  y     win,pb,str
+0x09 32  0  8  8  8  8 24  8  4 1 0x34325241--         y  y  y     win,pb,str
+0x0a 32  0  8  8  8  8 24  8  4 1 0x34325241--         y  y  y     win,pb,str
+0x0b 32  0  8  8  8  8 24  0  4 1 0x34325241--         y  y  y     win,pb,str
+0x0c 32  0  8  8  8  8 24  0  4 1 0x34325241--         y  y  y     win,pb,str
+0x0d 32  0  8  8  8  8  0  8  4 1 0x34325241--         y  y  y     win,pb,str
+0x0e 32  0  8  8  8  8  0  8  4 1 0x34325241--         y  y  y     win,pb,str
+0x0f 32  0  8  8  8  8  0  0  4 1 0x34325241--         y  y  y     win,pb,str
+0x10 32  0  8  8  8  8  0  0  4 1 0x34325241--         y  y  y     win,pb,str
+0x11 32  0  8  8  8  8 24  8  8 1 0x34325241--         y  y  y     win,pb,str
+0x12 32  0  8  8  8  8 24  0  8 1 0x34325241--         y  y  y     win,pb,str
+0x13 32  0  8  8  8  8  0  8  8 1 0x34325241-- + head -16
+        y  y  y     win,pb,str
+0x14 32  0  8  8  8  8  0  0  8 1 0x34325241--         y  y  y     win,pb,str
+0x15 24  0  8  8  8  0 24  8  0 0 0x34325258--         y  y  y     win,pb,str
+0x16 24  0  8  8  8  0 24  0  0 0 0x34325258--         y  y  y     win,pb,str
+0x17 24  0  8  8  8  0  0  8  0 0 0x34325258--         y  y  y     win,pb,str
+0x18 24  0  8  8  8  0  0  0  0 0 0x34325258--         y  y  y     win,pb,str
+0x19 24  0  8  8  8  0 24  8  2 1 0x34325258--         y  y  y     win,pb,str
+0x1a 24  0  8  8  8  0 24  0  2 1 0x34325258--         y  y  y     win,pb,str
+0x1b 24  0  8  8  8  0  0  8  2 1 0x34325258--         y  y  y     win,pb,str
+0x1c 24  0  8  8  8  0  0  0  2 1 0x34325258--         y  y  y     win,pb,str
+0x1d 24  0  8  8  8  0 24  8  4 1 0x34325258--         y  y  y     win,pb,str
+0x1e 24  0  8  8  8  0 24  8  4 1 0x34325258--         y  y  y     win,pb,str
+0x1f 24  0  8  8  8  0 24  0  4 1 0x34325258--         y  y  y     win,pb,str
+0x20 24  0  8  8  8  0 24  0  4 1 0x34325258--         y  y  y     win,pb,str
+0x21 24  0  8  8  8  0  0  8  4 1 0x34325258--         y  y  y     win,pb,str
+0x22 24  0  8  8  8  0  0  8  4 1 0x34325258--         y  y  y     win,pb,str
+0x23 24  0  8  8  8  0  0  0  4 1 0x34325258--         y  y  y     win,pb,str
+0x24 24  0  8  8  8  0  0  0  4 1 0x34325258--         y  y  y     win,pb,str
+0x25 24  0  8  8  8  0 24  8  8 1 0x34325258--         y  y  y     win,pb,str
+0x26 24  0  8  8  8  0 24  0  8 1 0x34325258--         y  y  y     win,pb,str
+0x27 24  0  8  8  8  0  0  8  8 1 0x34325258--         y  y  y     win,pb,str
+0x28 24  0  8  8  8  0  0  0  8 1 0x34325258--         y  y  y     win,pb,str
+0x29 16  0  5  6  5  0 24  8  0 0 0x36314752--         y  y  y     win,pb,str
+0x2a 16  0  5  6  5  0 24  0  0 0 0x36314752--         y  y  y     win,pb,str
+0x2b 16  0  5  6  5  0 16  0  0 0 0x36314752--         y  y  y     win,pb,str
+0x2c 16  0  5  6  5  0  0  8  0 0 0x36314752--         y  y  y     win,pb,str
+0x2d 16  0  5  6  5  0  0  0  0 0 0x36314752--         y  y  y     win,pb,str
+0x2e 16  0  5  6  5  0 24  8  2 1 0x36314752--         y  y  y     win,pb,str
+0x2f 16  0  5  6  5  0 24  0  2 1 0x36314752--         y  y  y     win,pb,str
+0x30 16  0  5  6  5  0 16  0  2 1 0x36314752--         y  y  y     win,pb,str
+0x31 16  0  5  6  5  0  0  8  2 1 0x36314752--         y  y  y     win,pb,str
+0x32 16  0  5  6  5  0  0  0  2 1 0x36314752--         y  y  y     win,pb,str
+0x33 16  0  5  6  5  0 24  8  4 1 0x36314752--         y  y  y     win,pb,str
+0x34 16  0  5  6  5  0 24  8  4 1 0x36314752--         y  y  y     win,pb,str
+0x35 16  0  5  6  5  0 24  0  4 1 0x36314752--         y  y  y     win,pb,str
+0x36 16  0  5  6  5  0 24  0  4 1 0x36314752--         y  y  y     win,pb,str
+0x37 16  0  5  6  5  0 16  0  4 1 0x36314752--         y  y  y     win,pb,str
+0x38 16  0  5  6  5  0 16  0  4 1 0x36314752--         y  y  y     win,pb,str
+0x39 16  0  5  6  5  0  0  8  4 1 0x36314752--         y  y  y     win,pb,str
+0x3a 16  0  5  6  5  0  0  8  4 1 0x36314752--         y  y  y     win,pb,str
+0x3b 16  0  5  6  5  0  0  0  4 1 0x36314752--         y  y  y     win,pb,str
+0x3c 16  0  5  6  5  0  0  0  4 1 0x36314752--         y  y  y     win,pb,str
+0x3d 16  0  5  6  5  0 24  8  8 1 0x36314752--         y  y  y     win,pb,str
+0x3e 16  0  5  6  5  0 24  0  8 1 0x36314752--         y  y  y     win,pb,str
+0x3f 16  0  5  6  5  0 16  0  8 1 0x36314752--         y  y  y     win,pb,str
+0x40 16  0  5  6  5  0  0  8  8 1 0x36314752--         y  y  y     win,pb,str
+0x41 16  0  5  6  5  0  0  0  8 1 0x36314752--         y  y  y     win,pb,str
+
+Wayland platform:
+eglinfo: eglInitialize failed
+
+X11 platform:
+eglinfo: eglInitialize failed
+
+Device platform:
+EGL API version: 1.5
+EGL vendor string: NVIDIA
+EGL version string: 1.5
+EGL client APIs: OpenGL_ES OpenGL
+EGL extensions string:
+    EGL_ANDROID_native_fence_sync EGL_EXT_buffer_age EGL_EXT_client_sync
+    EGL_EXT_create_context_robustness EGL_EXT_image_dma_buf_import
+    EGL_EXT_image_dma_buf_import_modifiers EGL_MESA_image_dma_buf_export
+    EGL_EXT_output_base EGL_EXT_output_drm EGL_EXT_protected_content
+    EGL_EXT_stream_consumer_egloutput EGL_EXT_stream_acquire_mode
+    EGL_EXT_sync_reuse EGL_IMG_context_priority EGL_KHR_config_attribs
+    EGL_KHR_create_context_no_error EGL_KHR_context_flush_control
+    EGL_KHR_create_context EGL_KHR_fence_sync
+    EGL_KHR_get_all_proc_addresses EGL_KHR_partial_update
+    EGL_KHR_swap_buffers_with_damage EGL_KHR_no_config_context
+    EGL_KHR_gl_colorspace EGL_KHR_gl_renderbuffer_image
+    EGL_KHR_gl_texture_2D_image EGL_KHR_gl_texture_3D_image
+    EGL_KHR_gl_texture_cubemap_image EGL_KHR_image EGL_KHR_image_base
+    EGL_KHR_reusable_sync EGL_KHR_stream EGL_KHR_stream_attrib
+    EGL_KHR_stream_consumer_gltexture EGL_KHR_stream_cross_process_fd
+    EGL_KHR_stream_fifo EGL_KHR_stream_producer_eglsurface
+    EGL_KHR_surfaceless_context EGL_KHR_wait_sync EGL_NV_nvrm_fence_sync
+    EGL_NV_quadruple_buffer EGL_NV_stream_consumer_eglimage
+    EGL_NV_stream_cross_display EGL_NV_stream_cross_object
+    EGL_NV_stream_cross_process EGL_NV_stream_cross_system
+    EGL_NV_stream_dma EGL_NV_stream_flush EGL_NV_stream_metadata
+    EGL_NV_stream_remote EGL_NV_stream_reset EGL_NV_stream_socket
+    EGL_NV_stream_socket_inet EGL_NV_stream_socket_unix
+    EGL_NV_stream_sync EGL_NV_stream_fifo_next
+    EGL_NV_stream_fifo_synchronous EGL_NV_stream_consumer_gltexture_yuv
+    EGL_NV_stream_attrib EGL_NV_stream_origin EGL_NV_system_time
+    EGL_NV_output_drm_flip_event EGL_NV_triple_buffer
+    EGL_NV_robustness_video_memory_purge EGL_WL_bind_wayland_display
+    EGL_WL_wayland_eglstream
+Configurations:
+     bf lv colorbuffer dp st  ms    vis   cav bi  renderable  supported
+  id sz  l  r  g  b  a th cl ns b    id   eat nd gl es es2 vg surfaces 
+---------------------------------------------------------------------
+0x01 32  0  8  8  8  8 24  8  0 0 0x00--         y  y  y     pb,str
+0x02 32  0  8  8  8  8 24  0  0 0 0x00--         y  y  y     pb,str
+0x03 32  0  8  8  8  8  0  8  0 0 0x00--         y  y  y     pb,str
+0x04 32  0  8  8  8  8  0  0  0 0 0x00--         y  y  y     pb,str
+0x05 32  0  8  8  8  8 24  8  2 1 0x00--         y  y  y     pb,str
+0x06 32  0  8  8  8  8 24  0  2 1 0x00--         y  y  y     pb,str
+0x07 32  0  8  8  8  8  0  8  2 1 0x00--         y  y  y     pb,str
+0x08 32  0  8  8  8  8  0  0  2 1 0x00--         y  y  y     pb,str
+0x09 32  0  8  8  8  8 24  8  4 1 0x00--         y  y  y     pb,str
+0x0a 32  0  8  8  8  8 24  8  4 1 0x00--         y  y  y     pb,str
+0x0b 32  0  8  8  8  8 24  0  4 1 0x00--         y  y  y     pb,str
+0x0c 32  0  8  8  8  8 24  0  4 1 0x00--         y  y  y     pb,str
+0x0d 32  0  8  8  8  8  0  8  4 1 0x00--         y  y  y     pb,str
+0x0e 32  0  8  8  8  8  0  8  4 1 0x00--         y  y  y     pb,str
+0x0f 32  0  8  8  8  8  0  0  4 1 0x00--         y  y  y     pb,str
+0x10 32  0  8  8  8  8  0  0  4 1 0x00--         y  y  y     pb,str
+0x11 32  0  8  8  8  8 24  8  8 1 0x00--         y  y  y     pb,str
+0x12 32  0  8  8  8  8 24  0  8 1 0x00--         y  y  y     pb,str
+0x13 32  0  8  8  8  8  0  8  8 1 0x00--         y  y  y     pb,str
+0x14 32  0  8  8  8  8  0  0  8 1 0x00--         y  y  y     pb,str
+0x15 24  0  8  8  8  0 24  8  0 0 0x00--         y  y  y     pb,str
+0x16 24  0  8  8  8  0 24  0  0 0 0x00--         y  y  y     pb,str
+0x17 24  0  8  8  8  0  0  8  0 0 0x00--         y  y  y     pb,str
+0x18 24  0  8  8  8  0  0  0  0 0 0x00--         y  y  y     pb,str
+0x19 24  0  8  8  8  0 24  8  2 1 0x00--         y  y  y     pb,str
+0x1a 24  0  8  8  8  0 24  0  2 1 0x00--         y  y  y     pb,str
+0x1b 24  0  8  8  8  0  0  8  2 1 0x00--         y  y  y     pb,str
+0x1c 24  0  8  8  8  0  0  0  2 1 0x00--         y  y  y     pb,str
+0x1d 24  0  8  8  8  0 24  8  4 1 0x00--         y  y  y     pb,str
+0x1e 24  0  8  8  8  0 24  8  4 1 0x00--         y  y  y     pb,str
+0x1f 24  0  8  8  8  0 24  0  4 1 0x00--         y  y  y     pb,str
+0x20 24  0  8  8  8  0 24  0  4 1 0x00--         y  y  y     pb,str
+0x21 24  0  8  8  8  0  0  8  4 1 0x00--         y  y  y     pb,str
+0x22 24  0  8  8  8  0  0  8  4 1 0x00--         y  y  y     pb,str
+0x23 24  0  8  8  8  0  0  0  4 1 0x00--         y  y  y     pb,str
+0x24 24  0  8  8  8  0  0  0  4 1 0x00--         y  y  y     pb,str
+0x25 24  0  8  8  8  0 24  8  8 1 0x00--         y  y  y     pb,str
+0x26 24  0  8  8  8  0 24  0  8 1 0x00--         y  y  y     pb,str
+0x27 24  0  8  8  8  0  0  8  8 1 0x00--         y  y  y     pb,str
+0x28 24  0  8  8  8  0  0  0  8 1 0x00--         y  y  y     pb,str
+0x29 16  0  5  6  5  0 24  8  0 0 0x00--         y  y  y     pb,str
+0x2a 16  0  5  6  5  0 24  0  0 0 0x00--         y  y  y     pb,str
+0x2b 16  0  5  6  5  0 16  0  0 0 0x00--         y  y  y     pb,str
+0x2c 16  0  5  6  5  0  0  8  0 0 0x00--         y  y  y     pb,str
+0x2d 16  0  5  6  5  0  0  0  0 0 0x00--         y  y  y     pb,str
+0x2e 16  0  5  6  5  0 24  8  2 1 0x00--         y  y  y     pb,str
+0x2f 16  0  5  6  5  0 24  0  2 1 0x00--         y  y  y     pb,str
+0x30 16  0  5  6  5  0 16  0  2 1 0x00--         y  y  y     pb,str
+0x31 16  0  5  6  5  0  0  8  2 1 0x00--         y  y  y     pb,str
+0x32 16  0  5  6  5  0  0  0  2 1 0x00--         y  y  y     pb,str
+0x33 16  0  5  6  5  0 24  8  4 1 0x00--         y  y  y     pb,str
+0x34 16  0  5  6  5  0 24  8  4 1 0x00--         y  y  y     pb,str
+0x35 16  0  5  6  5  0 24  0  4 1 0x00--         y  y  y     pb,str
+0x36 16  0  5  6  5  0 24  0  4 1 0x00--         y  y  y     pb,str
+0x37 16  0  5  6  5  0 16  0  4 1 0x00--         y  y  y     pb,str
+0x38 16  0  5  6  5  0 16  0  4 1 0x00--         y  y  y     pb,str
+0x39 16  0  5  6  5  0  0  8  4 1 0x00--         y  y  y     pb,str
+0x3a 16  0  5  6  5  0  0  8  4 1 0x00--         y  y  y     pb,str
+0x3b 16  0  5  6  5  0  0  0  4 1 0x00--         y  y  y     pb,str
+0x3c 16  0  5  6  5  0  0  0  4 1 0x00--         y  y  y     pb,str
+0x3d 16  0  5  6  5  0 24  8  8 1 0x00--         y  y  y     pb,str
+0x3e 16  0  5  6  5  0 24  0  8 1 0x00--         y  y  y     pb,str
+0x3f 16  0  5  6  5  0 16  0  8 1 0x00--         y  y  y     pb,str
+0x40 16  0  5  6  5  0  0  8  8 1 0x00--         y  y  y     pb,str
+0x41 16  0  5  6  5  0  0  0  8 1 0x00--         y  y  y     pb,str'
++ sed 's/^/  eglinfo: /'
+  eglinfo:     EGL_EXT_platform_base EGL_EXT_device_base EGL_EXT_device_enumeration
+  eglinfo:     EGL_EXT_client_extensions EGL_KHR_debug EGL_KHR_platform_x11
+  eglinfo:     EGL_EXT_platform_x11 EGL_EXT_platform_device
+  eglinfo:     EGL_MESA_platform_surfaceless EGL_EXT_explicit_device
+  eglinfo:     EGL_KHR_platform_wayland EGL_EXT_platform_wayland
+  eglinfo:     EGL_KHR_platform_gbm EGL_MESA_platform_gbm EGL_EXT_platform_xcb
+  eglinfo: GBM platform:
+  eglinfo: EGL vendor string: NVIDIA
+  eglinfo: EGL version string: 1.5
+  eglinfo: Wayland platform:
+  eglinfo: X11 platform:
+  eglinfo: Device platform:
+  eglinfo: EGL vendor string: NVIDIA
+  eglinfo: EGL version string: 1.5
++ echo GFX_EGLINFO_RC=2
+GFX_EGLINFO_RC=2
+++ cd /tmp
+++ timeout 120 /root/gfxbin/egl_gfx
++ ER='EGL_START
+EGL_DEVICE[0] drm=/dev/dri/card0 ext=EGL_NV_device_cuda EGL_EXT_device_drm EGL_EXT_device_drm_render_node EGL_EXT_device_query_name EGL_EXT_device_persistent_id
+EGL_DISPLAY[0] vendor=NVIDIA version=1.5
+EGL_DEVICE[1] drm=/dev/dri/card0 ext=EGL_EXT_device_drm EGL_EXT_device_drm_render_node
+EGL_DEVICE[2] drm=- ext=EGL_MESA_device_software EGL_EXT_device_drm_render_node
+EGL_RENDERER=NVIDIA GeForce RTX 4090/PCIe/SSE2
+EGL_GL_VERSION=4.6.0 NVIDIA 595.91.07
+EGL_STAGE=context_current
+EGLR_REF checked=6079 colour_bad=0 depth_bad=0 blit_checked=1296 blit_bad=0
+EGLR_HASH_A=2a4db0673ee94aaf
+EGLR_HASH_Z=d26f0e8bbed2b9bf
+EGLR_HASH_B=238bd6f6f74e5280
+EGLR_REF_FAILS=0
+EGL_DONE rc=0'
++ ERRC=0
++ echo 'EGL_START
+EGL_DEVICE[0] drm=/dev/dri/card0 ext=EGL_NV_device_cuda EGL_EXT_device_drm EGL_EXT_device_drm_render_node EGL_EXT_device_query_name EGL_EXT_device_persistent_id
+EGL_DISPLAY[0] vendor=NVIDIA version=1.5
+EGL_DEVICE[1] drm=/dev/dri/card0 ext=EGL_EXT_device_drm EGL_EXT_device_drm_render_node
+EGL_DEVICE[2] drm=- ext=EGL_MESA_device_software EGL_EXT_device_drm_render_node
+EGL_RENDERER=NVIDIA GeForce RTX 4090/PCIe/SSE2
+EGL_GL_VERSION=4.6.0 NVIDIA 595.91.07
+EGL_STAGE=context_current
+EGLR_REF checked=6079 colour_bad=0 depth_bad=0 blit_checked=1296 blit_bad=0
+EGLR_HASH_A=2a4db0673ee94aaf
+EGLR_HASH_Z=d26f0e8bbed2b9bf
+EGLR_HASH_B=238bd6f6f74e5280
+EGLR_REF_FAILS=0
+EGL_DONE rc=0'
++ sed 's/^/  /'
+  EGL_START
+  EGL_DEVICE[0] drm=/dev/dri/card0 ext=EGL_NV_device_cuda EGL_EXT_device_drm EGL_EXT_device_drm_render_node EGL_EXT_device_query_name EGL_EXT_device_persistent_id
+  EGL_DISPLAY[0] vendor=NVIDIA version=1.5
+  EGL_DEVICE[1] drm=/dev/dri/card0 ext=EGL_EXT_device_drm EGL_EXT_device_drm_render_node
+  EGL_DEVICE[2] drm=- ext=EGL_MESA_device_software EGL_EXT_device_drm_render_node
+  EGL_RENDERER=NVIDIA GeForce RTX 4090/PCIe/SSE2
+  EGL_GL_VERSION=4.6.0 NVIDIA 595.91.07
+  EGL_STAGE=context_current
+  EGLR_REF checked=6079 colour_bad=0 depth_bad=0 blit_checked=1296 blit_bad=0
+  EGLR_HASH_A=2a4db0673ee94aaf
+  EGLR_HASH_Z=d26f0e8bbed2b9bf
+  EGLR_HASH_B=238bd6f6f74e5280
+  EGLR_REF_FAILS=0
+  EGL_DONE rc=0
++ echo 'EGL_START
+EGL_DEVICE[0] drm=/dev/dri/card0 ext=EGL_NV_device_cuda EGL_EXT_device_drm EGL_EXT_device_drm_render_node EGL_EXT_device_query_name EGL_EXT_device_persistent_id
+EGL_DISPLAY[0] vendor=NVIDIA version=1.5
+EGL_DEVICE[1] drm=/dev/dri/card0 ext=EGL_EXT_device_drm EGL_EXT_device_drm_render_node
+EGL_DEVICE[2] drm=- ext=EGL_MESA_device_software EGL_EXT_device_drm_render_node
+EGL_RENDERER=NVIDIA GeForce RTX 4090/PCIe/SSE2
+EGL_GL_VERSION=4.6.0 NVIDIA 595.91.07
+EGL_STAGE=context_current
+EGLR_REF checked=6079 colour_bad=0 depth_bad=0 blit_checked=1296 blit_bad=0
+EGLR_HASH_A=2a4db0673ee94aaf
+EGLR_HASH_Z=d26f0e8bbed2b9bf
+EGLR_HASH_B=238bd6f6f74e5280
+EGLR_REF_FAILS=0
+EGL_DONE rc=0'
++ grep -E '^EGLR_(HASH_[AZB]|REF_FAILS)=|^EGL_RENDERER='
+EGL_RENDERER=NVIDIA GeForce RTX 4090/PCIe/SSE2
+EGLR_HASH_A=2a4db0673ee94aaf
+EGLR_HASH_Z=d26f0e8bbed2b9bf
+EGLR_HASH_B=238bd6f6f74e5280
+EGLR_REF_FAILS=0
++ echo GFX_EGLR_RC=0
+GFX_EGLR_RC=0
++ echo 'EGL_START
+EGL_DEVICE[0] drm=/dev/dri/card0 ext=EGL_NV_device_cuda EGL_EXT_device_drm EGL_EXT_device_drm_render_node EGL_EXT_device_query_name EGL_EXT_device_persistent_id
+EGL_DISPLAY[0] vendor=NVIDIA version=1.5
+EGL_DEVICE[1] drm=/dev/dri/card0 ext=EGL_EXT_device_drm EGL_EXT_device_drm_render_node
+EGL_DEVICE[2] drm=- ext=EGL_MESA_device_software EGL_EXT_device_drm_render_node
+EGL_RENDERER=NVIDIA GeForce RTX 4090/PCIe/SSE2
+EGL_GL_VERSION=4.6.0 NVIDIA 595.91.07
+EGL_STAGE=context_current
+EGLR_REF checked=6079 colour_bad=0 depth_bad=0 blit_checked=1296 blit_bad=0
+EGLR_HASH_A=2a4db0673ee94aaf
+EGLR_HASH_Z=d26f0e8bbed2b9bf
+EGLR_HASH_B=238bd6f6f74e5280
+EGLR_REF_FAILS=0
+EGL_DONE rc=0'
++ grep -q '^EGLR_REF_FAILS=0$'
++ echo 'EGL_START
+EGL_DEVICE[0] drm=/dev/dri/card0 ext=EGL_NV_device_cuda EGL_EXT_device_drm EGL_EXT_device_drm_render_node EGL_EXT_device_query_name EGL_EXT_device_persistent_id
+EGL_DISPLAY[0] vendor=NVIDIA version=1.5
+EGL_DEVICE[1] drm=/dev/dri/card0 ext=EGL_EXT_device_drm EGL_EXT_device_drm_render_node
+EGL_DEVICE[2] drm=- ext=EGL_MESA_device_software EGL_EXT_device_drm_render_node
+EGL_RENDERER=NVIDIA GeForce RTX 4090/PCIe/SSE2
+EGL_GL_VERSION=4.6.0 NVIDIA 595.91.07
+EGL_STAGE=context_current
+EGLR_REF checked=6079 colour_bad=0 depth_bad=0 blit_checked=1296 blit_bad=0
+EGLR_HASH_A=2a4db0673ee94aaf
+EGLR_HASH_Z=d26f0e8bbed2b9bf
+EGLR_HASH_B=238bd6f6f74e5280
+EGLR_REF_FAILS=0
+EGL_DONE rc=0'
++ grep -q '^EGL_RENDERER=.*NVIDIA'
++ echo GFX_S4=PASS
+GFX_S4=PASS
++ command -v Xvfb
++ command -v vglrun
++ pkill -x Xvfb
++ sleep 1
++ XP=86321
++ sleep 2
++ Xvfb :7 -screen 0 1280x720x24 -nolisten tcp
+++ DISPLAY=:7
+++ timeout 120 vglrun -d egl glxinfo -B
++ GI='name of display: :7
+display: :7  screen: 0
+direct rendering: Yes
+Memory info (GL_NVX_gpu_memory_info):
+    Dedicated video memory: 24564 MB
+    Total available memory: 24564 MB
+    Currently available dedicated video memory: 24065 MB
+OpenGL vendor string: NVIDIA Corporation
+OpenGL renderer string: NVIDIA GeForce RTX 4090/PCIe/SSE2
+OpenGL core profile version string: 4.6.0 NVIDIA 595.91.07
+OpenGL core profile shading language version string: 4.60 NVIDIA
+OpenGL core profile context flags: (none)
+OpenGL core profile profile mask: core profile
+
+OpenGL version string: 4.6.0 NVIDIA 595.91.07
+OpenGL shading language version string: 4.60 NVIDIA
+OpenGL context flags: (none)
+OpenGL profile mask: compatibility profile'
++ echo 'name of display: :7
+display: :7  screen: 0
+direct rendering: Yes
+Memory info (GL_NVX_gpu_memory_info):
+    Dedicated video memory: 24564 MB
+    Total available memory: 24564 MB
+    Currently available dedicated video memory: 24065 MB
+OpenGL vendor string: NVIDIA Corporation
+OpenGL renderer string: NVIDIA GeForce RTX 4090/PCIe/SSE2
+OpenGL core profile version string: 4.6.0 NVIDIA 595.91.07
+OpenGL core profile shading language version string: 4.60 NVIDIA
+OpenGL core profile context flags: (none)
+OpenGL core profile profile mask: core profile
+
+OpenGL version string: 4.6.0 NVIDIA 595.91.07
+OpenGL shading language version string: 4.60 NVIDIA
+OpenGL context flags: (none)
+OpenGL profile mask: compatibility profile'
++ grep -iE 'renderer|vendor string|version string|error'
++ sed 's/^/  glxinfo: /'
++ head -6
+  glxinfo: OpenGL vendor string: NVIDIA Corporation
+  glxinfo: OpenGL renderer string: NVIDIA GeForce RTX 4090/PCIe/SSE2
+  glxinfo: OpenGL core profile version string: 4.6.0 NVIDIA 595.91.07
+  glxinfo: OpenGL core profile shading language version string: 4.60 NVIDIA
+  glxinfo: OpenGL version string: 4.6.0 NVIDIA 595.91.07
+  glxinfo: OpenGL shading language version string: 4.60 NVIDIA
+++ DISPLAY=:7
+++ timeout 12 vglrun -d egl glxgears
++ GG='36422 frames in 5.0 seconds = 7284.381 FPS
+36235 frames in 5.0 seconds = 7246.819 FPS'
++ echo '36422 frames in 5.0 seconds = 7284.381 FPS
+36235 frames in 5.0 seconds = 7246.819 FPS'
++ grep -iE 'frames|error'
++ head -4
++ sed 's/^/  glxgears: /'
+  glxgears: 36422 frames in 5.0 seconds = 7284.381 FPS
+  glxgears: 36235 frames in 5.0 seconds = 7246.819 FPS
+++ echo '36422 frames in 5.0 seconds = 7284.381 FPS
+36235 frames in 5.0 seconds = 7246.819 FPS'
+++ grep -o '^[0-9]* frames'
+++ cut '-d ' -f1
+++ head -1
++ FR=36422
+++ echo 'name of display: :7
+display: :7  screen: 0
+direct rendering: Yes
+Memory info (GL_NVX_gpu_memory_info):
+    Dedicated video memory: 24564 MB
+    Total available memory: 24564 MB
+    Currently available dedicated video memory: 24065 MB
+OpenGL vendor string: NVIDIA Corporation
+OpenGL renderer string: NVIDIA GeForce RTX 4090/PCIe/SSE2
+OpenGL core profile version string: 4.6.0 NVIDIA 595.91.07
+OpenGL core profile shading language version string: 4.60 NVIDIA
+OpenGL core profile context flags: (none)
+OpenGL core profile profile mask: core profile
+
+OpenGL version string: 4.6.0 NVIDIA 595.91.07
+OpenGL shading language version string: 4.60 NVIDIA
+OpenGL context flags: (none)
+OpenGL profile mask: compatibility profile'
+++ grep -i 'OpenGL renderer string'
+++ sed 's/.*: //'
++ echo 'GFX_S5_RENDERER=NVIDIA GeForce RTX 4090/PCIe/SSE2'
+GFX_S5_RENDERER=NVIDIA GeForce RTX 4090/PCIe/SSE2
++ echo GFX_S5_FRAMES=36422
+GFX_S5_FRAMES=36422
+++ cd /tmp
+++ DISPLAY=:7
+++ timeout 120 vglrun -d egl /root/gfxbin/glx_gfx
++ GX='GLX_START
+GLX_RENDERER=NVIDIA GeForce RTX 4090/PCIe/SSE2
+GLX_GL_VERSION=4.6.0 NVIDIA 595.91.07
+GLXR_REF checked=6079 colour_bad=0 depth_bad=0 blit_checked=1296 blit_bad=0
+GLXR_HASH_A=2a4db0673ee94aaf
+GLXR_HASH_Z=d26f0e8bbed2b9bf
+GLXR_HASH_B=238bd6f6f74e5280
+GLXR_REF_FAILS=0
+GLX_DONE rc=0'
++ GXRC=0
++ echo 'GLX_START
+GLX_RENDERER=NVIDIA GeForce RTX 4090/PCIe/SSE2
+GLX_GL_VERSION=4.6.0 NVIDIA 595.91.07
+GLXR_REF checked=6079 colour_bad=0 depth_bad=0 blit_checked=1296 blit_bad=0
+GLXR_HASH_A=2a4db0673ee94aaf
+GLXR_HASH_Z=d26f0e8bbed2b9bf
+GLXR_HASH_B=238bd6f6f74e5280
+GLXR_REF_FAILS=0
+GLX_DONE rc=0'
++ sed 's/^/  /'
+  GLX_START
+  GLX_RENDERER=NVIDIA GeForce RTX 4090/PCIe/SSE2
+  GLX_GL_VERSION=4.6.0 NVIDIA 595.91.07
+  GLXR_REF checked=6079 colour_bad=0 depth_bad=0 blit_checked=1296 blit_bad=0
+  GLXR_HASH_A=2a4db0673ee94aaf
+  GLXR_HASH_Z=d26f0e8bbed2b9bf
+  GLXR_HASH_B=238bd6f6f74e5280
+  GLXR_REF_FAILS=0
+  GLX_DONE rc=0
++ echo 'GLX_START
+GLX_RENDERER=NVIDIA GeForce RTX 4090/PCIe/SSE2
+GLX_GL_VERSION=4.6.0 NVIDIA 595.91.07
+GLXR_REF checked=6079 colour_bad=0 depth_bad=0 blit_checked=1296 blit_bad=0
+GLXR_HASH_A=2a4db0673ee94aaf
+GLXR_HASH_Z=d26f0e8bbed2b9bf
+GLXR_HASH_B=238bd6f6f74e5280
+GLXR_REF_FAILS=0
+GLX_DONE rc=0'
++ grep -E '^GLXR_(HASH_[AZB]|REF_FAILS)=|^GLX_RENDERER='
+GLX_RENDERER=NVIDIA GeForce RTX 4090/PCIe/SSE2
+GLXR_HASH_A=2a4db0673ee94aaf
+GLXR_HASH_Z=d26f0e8bbed2b9bf
+GLXR_HASH_B=238bd6f6f74e5280
+GLXR_REF_FAILS=0
++ echo GFX_GLXR_RC=0
+GFX_GLXR_RC=0
++ kill 86321
++ wait 86321
++ grep -qi 'renderer string.*NVIDIA'
++ grep -q '^GLXR_REF_FAILS=0$'
++ grep -q '^GLX_RENDERER=.*NVIDIA'
++ echo GFX_S5=PASS
+GFX_S5=PASS
+++ date -Is
++ echo 'GFX_STEPS_END role=host at 2026-10-15T15:33:27+00:00'
+GFX_STEPS_END role=host at 2026-10-15T15:33:27+00:00

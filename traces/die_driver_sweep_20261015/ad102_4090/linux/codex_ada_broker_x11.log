@@ -1,0 +1,20 @@
+START 2026-10-15T15:04:05+00:00
+CINNAMON 1 XORG 1
+NVIDIA GeForce RTX 4090, 580.159.04, 116 MiB
+OpenGL vendor string: NVIDIA Corporation
+OpenGL renderer string: NVIDIA GeForce RTX 4090/PCIe/SSE2
+Running synchronized to the vertical refresh.  The framerate should be
+approximately the same as the monitor refresh rate.
+302 frames in 5.0 seconds = 60.262 FPS
+301 frames in 5.0 seconds = 60.007 FPS
+301 frames in 5.0 seconds = 60.001 FPS
+VKCUBE rc=124
+GUEST_DMESG flip_timeouts=0 nvassert=12 xid=0
+GUEST_DONE
+nvkvm-broker: shm tier: not requiring DRI3 or Present (frames arrive as shared memory and are put on screen with core PutImage)
+nvkvm-broker: shm tier: advertising no dma-buf format (frames are shared memory), so no modifier query is made
+X11_WINDOW width=1920 height=1080 colors=11536 sha256=796efd3812a294ecbeb46b0ce021d7b7f4eb8c32dad8a61821213f9509d3ac56
+X11_PRESENTATION_CHECKED=1
+DISPLAY_STALLS=9
+BROKER_DESKTOP_VERDICT=PASS
+EXIT rc=0 2026-10-15T15:06:46+00:00
