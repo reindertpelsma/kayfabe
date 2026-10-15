@@ -599,6 +599,82 @@ static void t_stat_header_pending(void)
 }
 
 /* ===================================================================================== */
+static void recent_setup(harness *h, kfwc_u32 layout, int scan)
+{
+    hn_init(h, layout, 1, scan);
+    h->m.mailbox0 = h->m.mailbox1 = 0;
+    h->cfg.scan_delay_ticks = 5000;
+    h->cfg.recent_table_pa = h->s.table_pa;
+    kfwc_engine_init(h->e, &h->plat, &h->sink, &h->cfg);
+}
+
+static void t_recent_empty_epoch(void)
+{
+    harness h;
+    recent_setup(&h, 1, 1);
+    hn_steps(&h, 1);
+    CHECK(h.e->state == KFWC_ST_ATTACHED);
+    CHECK(h.e->stats.method == 3); /* distinct evidence from a whole-RAM scan */
+    CHECK(h.e->stats.scan_bytes == 0);
+    CHECK(h.m.stores == 0 && h.m.refused == 0);
+    hn_free(&h);
+}
+
+static void t_recent_sequence_zero_prefix(void)
+{
+    kfwc_u32 layout;
+    for (layout = 1; layout <= 2; layout++) {
+        harness h;
+        msgs cmd, stat;
+        recent_setup(&h, layout, 1);
+        sy_post(&h.s, 0, 72, 8000); /* sequence zero spans several elements */
+        sy_post(&h.s, 1, 65, 32);
+        hn_steps(&h, 3);
+        CHECK(h.e->state == KFWC_ST_ATTACHED && h.e->stats.scan_bytes == 0);
+        cmd = sb_messages(&h.sb, 0);
+        stat = sb_messages(&h.sb, 1);
+        CHECK(cmd.n == 1 && stat.n == 1);
+        if (cmd.n) CHECK(msg_is(&cmd.m[0], layout, 0, 72, 8000));
+        if (stat.n) CHECK(msg_is(&stat.m[0], layout, 0, 65, 32));
+        CHECK(sb_losses(&h.sb) == 0);
+        msgs_free(&cmd);
+        msgs_free(&stat);
+        hn_free(&h);
+    }
+}
+
+static void t_recent_stale_and_partial_epochs(void)
+{
+    kfwc_u32 d;
+    for (d = 0; d < 2; d++) {
+        harness h;
+        recent_setup(&h, 1, 1);
+        h.s.q[d].seq = 99; /* retained old traffic; the prior queue already wrapped */
+        sy_post(&h.s, d, 76, 32);
+        sy_post(&h.s, 1u - d, 72, 32);
+        hn_steps(&h, 2);
+        CHECK(h.e->state == KFWC_ST_SEARCHING);
+        CHECK(h.e->stats.attaches == 0 && h.sb.n == 0);
+        CHECK(h.e->stats.scan_bytes == 0 && h.m.stores == 0);
+        hn_free(&h);
+    }
+}
+
+static void t_recent_requires_scan_and_ram_validation(void)
+{
+    harness h;
+    recent_setup(&h, 1, 0);
+    hn_steps(&h, 1);
+    CHECK(h.e->stats.attaches == 0 && h.sb.n == 0);
+    hn_free(&h);
+    recent_setup(&h, 1, 1);
+    h.cfg.recent_table_pa = RAM_BYTES + 4096u;
+    kfwc_engine_init(h.e, &h.plat, &h.sink, &h.cfg);
+    hn_steps(&h, 1);
+    CHECK(h.e->stats.attaches == 0 && h.m.refused == 0 && h.m.stores == 0);
+    hn_free(&h);
+}
+
 static void t_scan_discovery(void)
 {
     harness h;
@@ -1114,6 +1190,10 @@ int main(int argc, char **argv)
         {"walker_unpublished_and_budget", t_unpublished_and_budget},
         {"walker_status_header_pending", t_stat_header_pending},
         {"scan_discovery_rate_limited", t_scan_discovery},
+        {"recent_empty_epoch", t_recent_empty_epoch},
+        {"recent_sequence_zero_prefix", t_recent_sequence_zero_prefix},
+        {"recent_stale_and_partial_epochs", t_recent_stale_and_partial_epochs},
+        {"recent_requires_scan_and_ram_validation", t_recent_requires_scan_and_ram_validation},
         {"scan_gated_by_mailbox", t_scan_gated_by_mailbox_zero},
         {"events_and_mailbox_cross_check", t_events_and_xcheck},
         {"detach_and_reattach", t_detach_and_reattach},

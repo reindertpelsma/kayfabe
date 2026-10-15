@@ -63,6 +63,10 @@ typedef struct kfwc_config {
      * scan_backoff_initial_ticks == 0 disables the back-off (passes repeat back to back). */
     kfwc_u64 scan_backoff_initial_ticks;
     kfwc_u64 scan_backoff_max_ticks;
+    /* Internal only: a page table from this module's previously validated, wrapped
+     * queues on the same PCI device. Never accepted through the device ioctl. A
+     * revisit must prove a fresh sequence-zero prefix before it can attach. */
+    kfwc_u64 recent_table_pa;
 } kfwc_config;
 
 typedef struct kfwc_stats {          /* counters monotonic (scan_backoff_ticks is a level); 33 x u64 */
