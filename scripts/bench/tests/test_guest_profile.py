@@ -17,10 +17,10 @@ class GuestProfileTests(unittest.TestCase):
         self.image = Path(self.tmp.name) / "guest with spaces.qcow2"
         self.receipt = Path(str(self.image) + ".STAGED")
 
-    def resolve(self, extra=""):
+    def resolve(self, extra="", receipt=None):
         return subprocess.run(
-            ["bash", "-c", '. "$1"; kf_guest_driver_arg "$2" "$3"',
-             "bash", str(HELPER), str(self.image), extra],
+            ["bash", "-c", '. "$1"; kf_guest_driver_arg "$2" "$3" "$4"',
+             "bash", str(HELPER), str(self.image), extra, str(receipt or self.receipt)],
             capture_output=True, text=True, check=False,
         )
 
@@ -48,6 +48,14 @@ class GuestProfileTests(unittest.TestCase):
         result = self.resolve("guest-driver=595.84")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, "guest-driver=595.84\n")
+
+    def test_thin_guest_reads_its_packed_module_receipt(self):
+        receipt = Path(self.tmp.name) / "driver.STAGED"
+        receipt.write_text("version=580.159.04\nkernel=6.8.0-142-generic\n")
+        self.receipt.write_text("version=595.91.07\n")
+        result = self.resolve(receipt=receipt)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "guest-driver=580.159.04\n")
 
     def test_duplicate_profile_properties_are_refused(self):
         self.assertEqual(self.resolve("guest-driver=580.159.04,guest-driver=595.84").returncode, 2)
