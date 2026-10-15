@@ -66,7 +66,8 @@
 use crate::cursor::{BrokerCursor, CursorMode, CursorOp, CursorShare, CursorWant, PointerAbs};
 use crate::slots::{FrameRing, Kind, MAX_SLOTS, Take};
 use crate::wire::{
-    CAP_CURSOR, CAP_DEVICE, CAP_DMABUF, CAP_FOCUS_EVENTS, CAP_MODIFIERS, CAP_RELEASE, CLOSE_FORCE,
+    CAP_CURSOR, CAP_DEVICE, CAP_DMABUF, CAP_FOCUS_EVENTS, CAP_MODIFIERS, CAP_RELEASE, CAP_CURSOR_STREAM,
+    CLOSE_FORCE,
     CMD_ATTACH, CMD_F_SHM, CMD_SIZE, Cmd, CursorCmd, DEVICE_F_KNOWN, DEVICE_F_RENDER, EV_ABS,
     EV_BTN, EV_BYE, EV_CLIPBOARD, EV_CLOSE, EV_DEVICE, EV_FOCUS, EV_FORMAT, EV_FRAME, EV_GRAB,
     EV_HELLO, EV_KEY, EV_POINTER, EV_REL, EV_RELEASE, EV_SURFACE, EV_WHEEL, F_GRABBED, FOURCC_XR24,
@@ -340,6 +341,8 @@ pub struct Counters {
     pub cursor_hides: u64,
     /// … SHOWs …
     pub cursor_shows: u64,
+    /// ★ `MOVE`s sent (`CAP_CURSOR_STREAM`, under grab).
+    pub cursor_moves: u64,
     /// … and SETs that could not be made (no memfd) — nothing was sent for them.
     pub cursor_refused: u64,
 }
@@ -598,6 +601,13 @@ struct CursorConn {
     seen: u64,
     /// The last command met `EAGAIN`: retried at the next entry (the watch asks for writability).
     owed: bool,
+    /// ★ The frame COMMITted to the broker last carries the guest's cursor in its pixels (a frame
+    /// the worker published with [`crate::FrameGeom::cursor`]): the host cursor follows THAT frame,
+    /// not the newest want, so the broker never draws the host's cursor beside a composed one.
+    frame_composed: bool,
+    /// ★ The position last sent as a `MOVE` on this connection (stream, under grab): a changed
+    /// point sends one more; `None` after hover, so a grab starts with one.
+    moved: Option<(i32, i32)>,
 }
 
 /// ★ The relay. VM-lifetime: it outlives connections, holds the backoff, the held-frame table
@@ -759,7 +769,7 @@ impl<L: Link> Relay<L> {
     pub fn status(&self) -> String {
         let c = &self.counters;
         format!(
-            "broker[up={} sent={} gpucopy={} gpucopy_backoffs={} dmabuf_trips={} carrier_refused={} carrier_unchecked={} formats_unasked={} dropped={} uncommitted={} recovered={} releases={} unknown_releases={} reclaims={} blocked={} backstops={} reconnects={} failed_attempts={} peer_refused={} cursor={} cursor_sets={} cursor_hides={} cursor_shows={} cursor_refused={}]",
+            "broker[up={} sent={} gpucopy={} gpucopy_backoffs={} dmabuf_trips={} carrier_refused={} carrier_unchecked={} formats_unasked={} dropped={} uncommitted={} recovered={} releases={} unknown_releases={} reclaims={} blocked={} backstops={} reconnects={} failed_attempts={} peer_refused={} cursor={} cursor_sets={} cursor_hides={} cursor_shows={} cursor_moves={} cursor_refused={}]",
             u8::from(self.active()),
             c.sent,
             c.native,
@@ -783,6 +793,7 @@ impl<L: Link> Relay<L> {
             c.cursor_sets,
             c.cursor_hides,
             c.cursor_shows,
+            c.cursor_moves,
             c.cursor_refused
         )
     }
@@ -1403,7 +1414,9 @@ impl<L: Link> Relay<L> {
                 h.commit_no = self.commits;
                 h.committed = true;
             }
+            let composed = self.ring.geometry(slot).cursor;
             let prev = self.conn.as_mut().and_then(|c| {
+                c.cursor.frame_composed = composed;
                 c.credit = false;
                 c.credit_at = Some(now + CREDIT_BACKSTOP_MS);
                 c.last_commit.replace(slot)
@@ -2441,10 +2454,17 @@ impl<L: Link> Relay<L> {
 
     /// ★ §O (`crate::cursor`): publish the mode the worker composes by — [`CursorMode::Hover`]
     /// for an ACTIVE `CAP_CURSOR` broker that is not grabbed, [`CursorMode::Grabbed`] when it is,
-    /// [`CursorMode::Off`] otherwise — take the guest's newest cursor, and in hover send at most
-    /// ONE command that brings the broker to it. Under grab nothing is sent: the broker hides its
-    /// image itself and puts it back when the grab ends, and the first entry after that sends
+    /// [`CursorMode::Off`] otherwise — and whether the broker streams, take the guest's newest
+    /// cursor, and bring the broker to it.
+    ///
+    /// **Without `CAP_CURSOR_STREAM`** (the composing path, as before): in hover send at most ONE
+    /// command, following the frame the broker shows. Under grab nothing is sent: the broker hides
+    /// its image itself and puts it back when the grab ends, and the first entry after that sends
     /// whatever changed meanwhile.
+    ///
+    /// **With it** ([`Self::stream_sync`]): the broker draws the cursor itself in every mode; the
+    /// image and its visibility are sent whenever they change, the position (under grab only) as
+    /// it changes.
     fn cursor_sync(&mut self, now: u64, host: &mut dyn Host) {
         let Some(share) = self.cursor.clone() else {
             return;
@@ -2459,13 +2479,28 @@ impl<L: Link> Relay<L> {
             }
             _ => CursorMode::Off,
         };
+        // ★ whether the broker draws the guest's cursor itself, position included
+        let stream = mode != CursorMode::Off
+            && self
+                .conn
+                .as_ref()
+                .is_some_and(|c| c.caps & CAP_CURSOR_STREAM != 0);
+        if share.set_stream(stream) {
+            say!(
+                "guest cursor: {}",
+                if stream {
+                    "the BROKER draws it in every mode (CAP_CURSOR_STREAM); nothing is composed into the frame"
+                } else {
+                    "not streamed: composed into the frame as before"
+                }
+            );
+        }
         if share.set_mode(mode) {
             say!(
                 "guest cursor: {}",
                 match mode {
-                    CursorMode::Hover => "the HOST pointer shows it (hover; not composed)",
-                    CursorMode::Grabbed =>
-                        "composed into the frame (grabbed; the broker hides its own image)",
+                    CursorMode::Hover => "the HOST pointer shows it (hover)",
+                    CursorMode::Grabbed => "grabbed",
                     CursorMode::Off => "composed into the frame",
                 }
             );
@@ -2478,6 +2513,10 @@ impl<L: Link> Relay<L> {
             c.cursor.seen = g;
             c.cursor.want = Some(w);
         }
+        if stream {
+            self.stream_sync(now, host, &share, mode);
+            return;
+        }
         if mode != CursorMode::Hover {
             c.cursor.owed = false;
             return;
@@ -2485,14 +2524,88 @@ impl<L: Link> Relay<L> {
         let Some(want) = c.cursor.want.clone() else {
             return;
         };
+        // ★ ONE cursor, never two and never none: the host's follows the frame the broker shows
+        // (the console's rule, `ConsoleCursor::poll`). While that frame carries the guest's cursor
+        // the host's is hidden whatever the newest want; a want only the frame can show waits for
+        // the frame that carries it (the held image stays meanwhile); the rest is the want itself.
+        let want = if c.cursor.frame_composed {
+            CursorWant::Hidden
+        } else if want == CursorWant::Composed {
+            c.cursor.owed = false;
+            return;
+        } else {
+            want
+        };
         let Some(op) = c.cursor.broker.next_op(&want) else {
             c.cursor.owed = false;
             return;
         };
-        match self.send_cursor(op, &want) {
+        self.push_cursor_op(now, host, op, &want);
+    }
+
+    /// ★ The streaming broker (`CAP_CURSOR_STREAM`): bring it to the guest's image and visibility
+    /// (a cursor only a frame could show is hidden — nothing composes under the stream), then, UNDER
+    /// GRAB only (hover's host pointer is the guest's; the broker would ignore it), the position
+    /// the worker last noted: one `MOVE` when it changed since the last one sent on this
+    /// connection, so at most the display pass rate however many input events arrive. At most two
+    /// commands an entry (the image's, then the position).
+    fn stream_sync(&mut self, now: u64, host: &mut dyn Host, share: &CursorShare, mode: CursorMode) {
+        let Some(c) = self.conn.as_mut() else { return };
+        let Some(want) = c.cursor.want.clone() else {
+            return;
+        };
+        let want = if want == CursorWant::Composed {
+            CursorWant::Hidden
+        } else {
+            want
+        };
+        if mode != CursorMode::Grabbed {
+            c.cursor.moved = None; // the next grab starts with a MOVE
+        }
+        match c.cursor.broker.next_op(&want) {
+            Some(op) => {
+                if !self.push_cursor_op(now, host, op, &want) {
+                    return;
+                }
+            }
+            None => c.cursor.owed = false,
+        }
+        let Some(c) = self.conn.as_mut() else { return };
+        if mode != CursorMode::Grabbed || !c.cursor.broker.visible {
+            return;
+        }
+        let Some(p) = share.point() else { return };
+        if c.cursor.moved == Some(p) {
+            return;
+        }
+        let cmd = CursorCmd::mov(p.0, p.1);
+        let r = self.link.send(&c.sock, &cmd.encode(), None);
+        match r {
+            Sent::Done => {
+                if let Some(c) = self.conn.as_mut() {
+                    c.cursor.moved = Some(p);
+                }
+                self.counters.cursor_moves += 1;
+            }
+            Sent::Full => {
+                if let Some(c) = self.conn.as_mut() {
+                    c.cursor.owed = true; // retried at the next entry (the watch asks for writability)
+                }
+            }
+            Sent::Failed(e) => self.lost(
+                now,
+                host,
+                &format!("the broker socket failed on a cursor MOVE: {e}"),
+            ),
+        }
+    }
+
+    /// Send one cursor op for `want` and book its outcome; whether it was sent (`Done`).
+    fn push_cursor_op(&mut self, now: u64, host: &mut dyn Host, op: CursorOp, want: &CursorWant) -> bool {
+        match self.send_cursor(op, want) {
             Ok(Sent::Done) => {
                 if let Some(c) = self.conn.as_mut() {
-                    c.cursor.broker.applied(op, &want);
+                    c.cursor.broker.applied(op, want);
                     c.cursor.owed = false;
                 }
                 let k = &mut self.counters;
@@ -2500,7 +2613,7 @@ impl<L: Link> Relay<L> {
                     CursorOp::Set => {
                         k.cursor_sets += 1;
                         if loud(k.cursor_sets)
-                            && let CursorWant::Image(i) = &want
+                            && let CursorWant::Image(i) = want
                         {
                             say!(
                                 "guest cursor image {}x{} hot {},{} sent ({} so far)",
@@ -2515,11 +2628,13 @@ impl<L: Link> Relay<L> {
                     CursorOp::Hide => k.cursor_hides += 1,
                     CursorOp::Show => k.cursor_shows += 1,
                 }
+                true
             }
             Ok(Sent::Full) => {
                 if let Some(c) = self.conn.as_mut() {
                     c.cursor.owed = true;
                 }
+                false
             }
             Ok(Sent::Failed(e)) => {
                 self.lost(
@@ -2527,6 +2642,7 @@ impl<L: Link> Relay<L> {
                     host,
                     &format!("the broker socket failed on a cursor command: {e}"),
                 );
+                false
             }
             Err(e) => {
                 self.counters.cursor_refused += 1;
@@ -2534,6 +2650,7 @@ impl<L: Link> Relay<L> {
                 if loud(n) {
                     say!("guest cursor NOT sent: {e} ({n} so far)");
                 }
+                false
             }
         }
     }
@@ -2575,6 +2692,16 @@ impl<L: Link> Relay<L> {
                             i.height()
                         )
                     })?;
+                // ★ an XOR mask goes flagged, and only to a broker that said it takes it (the flag
+                // without the capability is a framing violation: never sent)
+                let cmd = if i.is_xor() {
+                    if c.caps & CAP_CURSOR_STREAM == 0 {
+                        return Err("an XOR cursor image for a broker without CAP_CURSOR_STREAM".into());
+                    }
+                    cmd.xor()
+                } else {
+                    cmd
+                };
                 let ram = kf_linux_raw::SharedRam::create_named(c"kayfabe-cursor", bytes)
                     .map_err(|e| format!("the cursor memfd: {e}"))?;
                 let f = std::fs::File::from(

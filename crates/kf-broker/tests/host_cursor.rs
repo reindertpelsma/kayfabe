@@ -6,11 +6,13 @@
 
 use kf_broker::console::DEFINE_MIN_MS;
 use kf_broker::wire::{
-    CAP_CURSOR, CAP_DMABUF, CMD_CURSOR, CMD_SIZE, CURSOR_HIDE, CURSOR_SET, CURSOR_SHOW, EV_ABS,
-    EV_FOCUS, EV_GRAB, EV_HELLO, EV_KEY, F_GRABBED, FOURCC_AR24, Pkt,
+    CAP_CURSOR, CAP_DMABUF, CAP_CURSOR_STREAM, CMD_ATTACH, CMD_COMMIT, CMD_CURSOR, CMD_SIZE, CURSOR_HIDE, CURSOR_SET,
+    CURSOR_F_XOR, CURSOR_MOVE, CURSOR_SHOW, EV_ABS, EV_FOCUS, EV_FRAME, EV_GRAB, EV_HELLO, EV_KEY, EV_RELEASE, F_GRABBED, FOURCC_AR24,
+    FOURCC_XR24, Pkt,
 };
 use kf_broker::{
-    ConsoleCursor, CursorImage, CursorMode, CursorShare, CursorWant, FrameRing, Host, Link,
+    ConsoleCursor, CursorImage, CursorMode, CursorShare, CursorWant, FrameGeom, FrameRing, Host,
+    Link,
     PointerAbs, Recv, Relay, RelayConfig, Sent, ShownFrame, SlotFds,
 };
 use kf_linux_raw::{SharedRam, fd_inode};
@@ -120,9 +122,11 @@ impl Host for H {
 struct T {
     wire: Rc<RefCell<Wire>>,
     relay: Relay<Fake>,
+    ring: Arc<FrameRing>,
     share: Arc<CursorShare>,
     host: H,
     now: u64,
+    serial: u64,
 }
 
 impl T {
@@ -140,7 +144,7 @@ impl T {
                 path: PathBuf::from("/run/test/display.sock"),
                 extra_uid: None,
             },
-            ring,
+            ring.clone(),
             Fake(wire.clone()),
         );
         let relay = if share {
@@ -151,10 +155,64 @@ impl T {
         T {
             wire,
             relay,
+            ring,
             share: cursor,
             host: H::default(),
             now: 1_000,
+            serial: 0,
         }
+    }
+
+    /// The worker publishes a frame; `cursor`: the guest's cursor is composed into its pixels. The
+    /// width says which (`100 + cursor`), so the ATTACH the broker receives tells it back.
+    fn publish(&mut self, cursor: bool) {
+        let slot = self.ring.fill_target(None).expect("a fill target");
+        self.serial += 1;
+        let w = 100 + u32::from(cursor);
+        self.ring.describe(
+            slot,
+            FrameGeom {
+                width: w,
+                height: 4,
+                stride: w * 4,
+                fourcc: FOURCC_XR24,
+                serial: self.serial,
+                cursor,
+            },
+        );
+        self.ring.publish(slot);
+    }
+
+    /// The broker presented what it was sent: the credit comes back (`EV_FRAME`).
+    fn credit(&mut self) {
+        for slot in 0..self.ring.slots() {
+            if self.ring.held_mask() & (1 << slot) != 0 {
+                let id = self.ring.fds(slot).unwrap().memfd_id();
+                let p = Pkt {
+                    ty: EV_RELEASE,
+                    w0: id as u32,
+                    w1: (id >> 32) as u32,
+                    ..Pkt::default()
+                };
+                self.wire.borrow_mut().inbox.extend(p.encode());
+            }
+        }
+        self.pkt(EV_FRAME, 0, 0);
+        self.read();
+    }
+
+    /// The frames committed to the broker so far, as "composes the cursor" (ATTACH, then COMMIT).
+    fn committed(&self) -> Vec<bool> {
+        let mut out = Vec::new();
+        let mut last = None;
+        for r in self.wire.borrow().sent.iter() {
+            match r.ty() {
+                CMD_ATTACH => last = Some(r.u32_at(4) == 101),
+                CMD_COMMIT => out.extend(last),
+                _ => {}
+            }
+        }
+        out
     }
 
     fn pkt(&self, ty: u16, flags: u16, x: i32) {
@@ -210,7 +268,12 @@ impl T {
     }
 
     fn ops(&self) -> Vec<u32> {
-        self.cursors().iter().map(|r| r.cursor()[7]).collect()
+        // the image/visibility ops; a MOVE is `moves()`'s
+        self.cursors()
+            .iter()
+            .map(|r| r.cursor()[7])
+            .filter(|op| *op != CURSOR_MOVE)
+            .collect()
     }
 
     fn clear(&self) {
@@ -334,6 +397,7 @@ fn hidden_is_a_hide_and_the_held_image_coming_back_is_a_show() {
     let mut t = T::new(true);
     t.up(CAP_CURSOR, 0);
     let a = image(32, 32, (0, 0), 1);
+    let mut last_composed = false;
     for (want, op) in [
         (CursorWant::Hidden, None),
         (a.clone(), Some(CURSOR_SET)),
@@ -345,7 +409,15 @@ fn hidden_is_a_hide_and_the_held_image_coming_back_is_a_show() {
     ] {
         t.clear();
         assert!(t.share.post(want.clone()));
+        // the worker's frame follows its want: a cursor kf composes is in the frame the broker
+        // is committed (and the host's is hidden then), every other frame is free of it
+        let composed = want == CursorWant::Composed;
+        if composed || last_composed {
+            t.publish(composed);
+        }
+        last_composed = composed;
         t.tick();
+        t.credit();
         assert_eq!(t.ops(), op.into_iter().collect::<Vec<_>>(), "{want:?}");
         for r in t.cursors() {
             if r.cursor()[7] != CURSOR_SET {
@@ -649,4 +721,572 @@ fn a_broker_flipping_its_grab_cannot_flood_the_console_with_cursor_defines() {
             "the newest state, defined once: {u:?} {u2:?}"
         );
     }
+}
+
+// ── the host cursor follows the frame the broker shows ───────────────────────────────────────
+
+/// ★ H2 (the measured "two cursors"): the worker posts the guest's new cursor at the START of a
+/// copy and publishes the frame when it ENDS, and the broker draws a frame only after the previous
+/// one was presented. The host cursor used to follow the post, so for that whole time the broker
+/// drew the host's arrow beside the I-beam still composed into the frame it showed (and, the other
+/// way, no cursor at all). It follows the frame the broker was last committed now.
+#[test]
+fn the_host_cursor_follows_the_frame_the_broker_shows_never_two_and_never_none() {
+    let mut t = T::new(true);
+    t.up(CAP_CURSOR, 0);
+    let arrow = image(32, 32, (0, 0), 1);
+    // an arrow over a cursor-free frame
+    assert!(t.share.post(arrow.clone()));
+    t.publish(false);
+    t.tick();
+    assert_eq!(t.ops(), vec![CURSOR_SET]);
+    assert_eq!(t.committed(), vec![false]);
+    // the guest turns to the XOR I-beam: the post comes first, the frame carrying it later (and the
+    // broker, still busy with the last one, has not returned its credit)
+    t.clear();
+    assert!(t.share.post(CursorWant::Composed));
+    t.tick();
+    assert_eq!(t.ops(), Vec::<u32>::new(), "the broker still shows the cursor-free frame");
+    t.publish(true);
+    t.tick();
+    assert_eq!(t.ops(), Vec::<u32>::new(), "the frame with the I-beam waits for the credit");
+    t.credit();
+    assert_eq!(t.committed(), vec![true]);
+    assert_eq!(t.ops(), vec![CURSOR_HIDE], "hidden as the frame that carries it is committed");
+    // and back to an arrow: the post first again — the I-beam is still in the frame on screen
+    t.clear();
+    assert!(t.share.post(arrow.clone()));
+    t.tick();
+    assert_eq!(t.ops(), Vec::<u32>::new(), "no host arrow beside the composed I-beam");
+    t.publish(false);
+    t.tick();
+    t.credit();
+    assert_eq!(t.committed(), vec![false]);
+    assert_eq!(t.ops(), vec![CURSOR_SHOW], "the held arrow, once the frame is free of the I-beam");
+}
+
+/// ★ A cursor the guest hides has nothing in any frame: the host's goes at once (no wait for a
+/// frame), and an XOR cursor over frames that never carry it leaves the held image alone.
+#[test]
+fn a_hidden_cursor_is_hidden_at_once_while_a_composed_one_waits_for_its_frame() {
+    let mut t = T::new(true);
+    t.up(CAP_CURSOR, 0);
+    assert!(t.share.post(image(32, 32, (0, 0), 1)));
+    t.publish(false);
+    t.tick();
+    t.clear();
+    assert!(t.share.post(CursorWant::Hidden));
+    t.tick();
+    assert_eq!(t.ops(), vec![CURSOR_HIDE], "nothing is composed: nothing to wait for");
+    t.clear();
+    assert!(t.share.post(CursorWant::Composed));
+    t.tick();
+    assert_eq!(t.ops(), Vec::<u32>::new());
+}
+
+// ── the whole path, modelled (worker, relay, console) ────────────────────────────────────────
+
+/// ★ A GPU-free model of everything between the guest's cursor and what the viewers draw, driven by
+/// the REAL relay, share, `ConsoleCursor` and `FrameCursors`; only the worker (which needs the GPU)
+/// is modelled from `display.rs`: the per-copy decision (`cursor_composed`), the key-deduplicated
+/// post (retried when the mailbox is busy), the force on a mode switch, "send when the cursor flag
+/// changed" (`NonFlip::wants_send`), and a copy that takes `latency` passes between its start (where
+/// the post happens) and its publish.
+struct World {
+    t: T,
+    guest: CursorWant,
+    posted: Option<(u8, u64)>,
+    mode_seen: CursorMode,
+    force: bool,
+    sent_flag: Option<bool>,
+    /// A copy in flight: (passes left, the cursor flag it composed).
+    inflight: Option<(u32, bool)>,
+    latency: u32,
+    /// The newest published frame carries the composed cursor (None: none yet).
+    published: Option<bool>,
+    // ── what the broker draws ──
+    broker_frame: bool,
+    broker_img: Option<u8>,
+    broker_visible: bool,
+    ops_seen: usize,
+    attached: bool,
+    // ── what the console draws ──
+    cons: ConsoleCursor,
+    frames: kf_broker::FrameCursors,
+    serial: usize,
+    cons_taken: usize,
+    cons_frame: ShownFrame,
+    /// The console's host cursor: `None` hidden / never defined, `Some(width)` an image.
+    cons_img: Option<u32>,
+}
+
+impl World {
+    fn new(latency: u32) -> World {
+        let mut t = T::new(true);
+        t.up(CAP_CURSOR, 0);
+        t.tick();
+        assert_eq!(t.share.mode(), CursorMode::Hover);
+        World {
+            t,
+            guest: CursorWant::Hidden,
+            posted: None,
+            mode_seen: CursorMode::Off,
+            force: false,
+            sent_flag: None,
+            inflight: None,
+            latency,
+            published: None,
+            broker_frame: false,
+            broker_img: None,
+            broker_visible: false,
+            ops_seen: 0,
+            attached: false,
+            cons: ConsoleCursor::default(),
+            frames: kf_broker::FrameCursors::default(),
+            serial: 0,
+            cons_taken: 0,
+            cons_frame: ShownFrame::Nothing,
+            cons_img: None,
+        }
+    }
+
+    /// The worker's pass: the copy's completion (publish) when it is due, else the next copy's start.
+    fn worker(&mut self) {
+        let mode = self.t.share.mode();
+        if mode != self.mode_seen {
+            self.mode_seen = mode;
+            self.force = true;
+        }
+        if let Some((left, flag)) = self.inflight {
+            if left > 0 {
+                self.inflight = Some((left - 1, flag));
+                return;
+            }
+            self.inflight = None;
+            if self.force || self.sent_flag != Some(flag) {
+                self.force = false;
+                self.sent_flag = Some(flag);
+                self.frames.publish(self.serial % 3, flag);
+                self.serial += 1;
+                self.published = Some(flag);
+                self.t.publish(flag);
+            }
+            return;
+        }
+        let want = mode.reads().then(|| self.guest.clone());
+        let compose = want.as_ref().is_none_or(|w| mode.composes(w));
+        if let Some(w) = want {
+            let key = w.key();
+            if self.posted != Some(key) && self.t.share.post(w) {
+                self.posted = Some(key);
+            }
+        }
+        self.inflight = Some((self.latency, compose));
+    }
+
+    /// One relay entry (a frame wake, and sometimes the broker handing its credit back); the
+    /// commands it sends are what the broker draws, in order.
+    fn relay(&mut self, credit: bool) {
+        self.t.tick();
+        if credit {
+            self.t.credit();
+        }
+        let wire = self.t.wire.borrow();
+        for r in &wire.sent[self.ops_seen..] {
+            match r.ty() {
+                CMD_ATTACH => self.attached = r.u32_at(4) == 101,
+                CMD_COMMIT => self.broker_frame = self.attached,
+                CMD_CURSOR => match r.cursor()[7] {
+                    CURSOR_SET => {
+                        self.broker_img = Some(r.fd.as_ref().unwrap().2[0]);
+                        self.broker_visible = true;
+                    }
+                    CURSOR_HIDE => self.broker_visible = false,
+                    CURSOR_SHOW => self.broker_visible = true,
+                    _ => unreachable!(),
+                },
+                _ => {}
+            }
+        }
+        self.ops_seen = wire.sent.len();
+    }
+
+    /// One console refresh: it takes the newest frame, then polls the cursor.
+    fn console(&mut self) {
+        if self.serial > self.cons_taken {
+            self.cons_taken = self.serial;
+            let c = self.frames.took((self.serial - 1) % 3);
+            self.cons_frame = if c {
+                ShownFrame::CursorComposed
+            } else {
+                ShownFrame::CursorFree
+            };
+        }
+        self.t.now += 16;
+        let u = self
+            .cons
+            .poll(&self.t.share, Some((40, 40)), self.cons_frame, self.t.now);
+        match u.define {
+            Some(None) => self.cons_img = None,
+            Some(Some(s)) => self.cons_img = Some(s.width),
+            None => {}
+        }
+        self.cons.done(u.define.is_some(), u.mouse.is_some());
+    }
+
+    /// The cursors a viewer sees right now: (broker host cursors, broker frame cursors, console
+    /// host cursors, console frame cursors).
+    fn broker_count(&self) -> usize {
+        usize::from(self.broker_visible) + usize::from(self.broker_frame)
+    }
+
+    fn console_count(&self) -> usize {
+        usize::from(self.cons_img.is_some())
+            + usize::from(self.cons_frame == ShownFrame::CursorComposed)
+    }
+
+    /// What exactly one cursor of the guest's kind looks like on each viewer.
+    fn settled(&self) -> Result<(), String> {
+        let (b_frame, b_img, c_frame, c_img) = match &self.guest {
+            CursorWant::Hidden => (false, None, false, None),
+            CursorWant::Composed => (true, None, true, None),
+            CursorWant::Image(i) => (
+                false,
+                Some(i.pixels()[0]),
+                false,
+                Some(i.width()),
+            ),
+        };
+        let b = (
+            self.broker_frame,
+            self.broker_visible.then_some(self.broker_img).flatten(),
+        );
+        let c = (
+            self.cons_frame == ShownFrame::CursorComposed,
+            self.cons_img,
+        );
+        if b != (b_frame, b_img) {
+            return Err(format!("broker shows {b:?}, guest {:?}", self.guest));
+        }
+        if c != (c_frame, c_img) {
+            return Err(format!("console shows {c:?}, guest {:?}", self.guest));
+        }
+        Ok(())
+    }
+}
+
+fn world_guests() -> [CursorWant; 4] {
+    [
+        CursorWant::Hidden,
+        CursorWant::Composed,
+        image(32, 32, (0, 0), 1),
+        image(48, 48, (0, 0), 9),
+    ]
+}
+
+/// A tiny deterministic generator (no dependency).
+fn lcg(s: &mut u64) -> u64 {
+    *s = s
+        .wrapping_mul(6364136223846793005)
+        .wrapping_add(1442695040888963407);
+    *s >> 33
+}
+
+/// ★ Convergence: whatever the order in which guest changes, copies, relay entries and console
+/// refreshes interleave, once the guest's cursor stops changing every viewer shows exactly that
+/// cursor — the composed one iff the shown frame carries it, the host one iff it does not.
+#[test]
+fn every_viewer_converges_to_the_guests_cursor() {
+    let guests = world_guests();
+    for latency in 0..4 {
+        for seed in 0..300u64 {
+            let mut s = seed * 7919 + 1;
+            let mut w = World::new(latency);
+            for step in 0..200 {
+                if lcg(&mut s) % 6 == 0 {
+                    w.guest = guests[(lcg(&mut s) % 4) as usize].clone();
+                }
+                w.worker();
+                if lcg(&mut s) % 3 != 0 {
+                    let credit = lcg(&mut s) % 2 == 0;
+                    w.relay(credit);
+                }
+                if lcg(&mut s) % 2 == 0 {
+                    w.console();
+                }
+                let _ = step;
+            }
+            // the guest stops changing; every actor runs at least once per pass
+            for _ in 0..(8 + 2 * latency) {
+                w.worker();
+                w.relay(true);
+                w.console();
+            }
+            if let Err(e) = w.settled() {
+                panic!("latency {latency} seed {seed}: {e}");
+            }
+        }
+    }
+}
+
+/// ★ "One cursor, never two": at every instant a viewer shows at most one of {the host cursor, the
+/// composed one}. A cursor that changes kind passes through the old frame, so the broker gets
+/// TWO cursors for as long as a copy takes if the host cursor is changed before the frame is.
+#[test]
+fn a_viewer_never_shows_two_cursors() {
+    let guests = world_guests();
+    let mut worst = (0usize, 0usize);
+    let mut first = None;
+    for latency in 0..4 {
+        for seed in 0..300u64 {
+            let mut s = seed * 104729 + 3;
+            let mut w = World::new(latency);
+            for _ in 0..200 {
+                if lcg(&mut s) % 6 == 0 {
+                    w.guest = guests[(lcg(&mut s) % 4) as usize].clone();
+                }
+                w.worker();
+                if lcg(&mut s) % 3 != 0 {
+                    let credit = lcg(&mut s) % 2 == 0;
+                    w.relay(credit);
+                }
+                if lcg(&mut s) % 2 == 0 {
+                    w.console();
+                }
+                worst = (worst.0.max(w.broker_count()), worst.1.max(w.console_count()));
+                if (w.broker_count() > 1 || w.console_count() > 1) && first.is_none() {
+                    first = Some(format!(
+                        "latency {latency} seed {seed}: broker {} (frame {}, host {}), console {} (frame {:?}, host {:?}), guest {:?}",
+                        w.broker_count(),
+                        w.broker_frame,
+                        w.broker_visible,
+                        w.console_count(),
+                        w.cons_frame,
+                        w.cons_img,
+                        w.guest
+                    ));
+                }
+            }
+        }
+    }
+    assert!(first.is_none(), "{first:?} (worst {worst:?})");
+}
+
+// ── the broker draws the guest's cursor itself (CAP_CURSOR_STREAM) ───────────────────────────
+
+/// A `w` x `h` XOR inversion mask: alpha 255 and the XOR colour where `on`, zero elsewhere.
+fn xor_mask(w: u32, h: u32, on: &[(u32, u32)], hot: (u32, u32)) -> CursorWant {
+    let mut px = vec![0u8; (w * h * 4) as usize];
+    for &(x, y) in on {
+        px[((y * w + x) * 4) as usize..][..4].copy_from_slice(&[255, 255, 255, 255]);
+    }
+    CursorWant::Image(Arc::new(CursorImage::new(w, h, hot, px).unwrap().into_xor()))
+}
+
+/// The (x, y) of every MOVE sent, in order.
+fn moves(t: &T) -> Vec<(i32, i32)> {
+    t.cursors()
+        .iter()
+        .filter(|r| r.cursor()[7] == CURSOR_MOVE)
+        .map(|r| (r.cursor()[5] as i32, r.cursor()[6] as i32))
+        .collect()
+}
+
+fn grab(t: &mut T, on: bool) {
+    t.pkt(EV_KEY, if on { F_GRABBED } else { 0 }, 30);
+    t.read();
+}
+
+/// ★ The stream is negotiated by the HELLO bit alone: with it the worker is told nothing is composed
+/// (`CursorShare::stream`); without it (an old broker) the composing path is untouched.
+#[test]
+fn the_stream_is_the_brokers_yes_and_an_old_broker_keeps_the_composing_path() {
+    let mut t = T::new(true);
+    t.up(CAP_CURSOR, 0);
+    t.tick();
+    assert!(!t.share.stream(), "no bit: composed as before");
+    let mut t = T::new(true);
+    t.up(CAP_CURSOR | CAP_CURSOR_STREAM, 0);
+    t.tick();
+    assert!(t.share.stream());
+    // the bit without CAP_CURSOR is nothing (the cursor path is off altogether)
+    let mut t = T::new(true);
+    t.up(CAP_CURSOR_STREAM, 0);
+    t.tick();
+    assert!(!t.share.stream());
+    // the broker goes: the worker composes again
+    let mut t = T::new(true);
+    t.up(CAP_CURSOR | CAP_CURSOR_STREAM, 0);
+    t.tick();
+    t.wire.borrow_mut().eof = true;
+    t.read();
+    t.tick();
+    assert!(!t.share.stream());
+}
+
+/// ★ Hover, streaming: the image goes as today (SET once, HIDE for nothing, SHOW for the held one),
+/// a cursor only a frame could show is HIDE (nothing composes), and the position is NOT sent — the
+/// host pointer is the guest's. An XOR mask is a SET flagged `CURSOR_F_XOR`, with the mask's bytes.
+#[test]
+fn hover_streams_the_image_and_never_the_position() {
+    let mut t = T::new(true);
+    t.up(CAP_CURSOR | CAP_CURSOR_STREAM, 0);
+    t.tick();
+    t.share.note_point(Some((10, 20)));
+    let a = image(32, 32, (0, 0), 1);
+    for (want, op) in [
+        (a.clone(), Some(CURSOR_SET)),
+        (CursorWant::Composed, Some(CURSOR_HIDE)),
+        (a.clone(), Some(CURSOR_SHOW)),
+        (CursorWant::Hidden, Some(CURSOR_HIDE)),
+        (CursorWant::Hidden, None),
+    ] {
+        t.clear();
+        assert!(t.share.post(want.clone()));
+        t.share.note_point(Some((10 + t.now as i32 % 7, 20)));
+        t.tick();
+        assert_eq!(t.ops(), op.into_iter().collect::<Vec<_>>(), "{want:?}");
+        assert_eq!(moves(&t), vec![], "hover: no MOVE");
+    }
+    // the XOR mask
+    t.clear();
+    let m = xor_mask(16, 16, &[(3, 3), (4, 3)], (1, 2));
+    assert!(t.share.post(m.clone()));
+    t.tick();
+    let recs = t.cursors();
+    assert_eq!(recs.len(), 1);
+    assert_eq!(recs[0].cursor()[7], CURSOR_SET);
+    assert_eq!(&recs[0].raw[2..4], &CURSOR_F_XOR.to_le_bytes(), "flags = F_XOR");
+    assert_eq!((recs[0].cursor()[5], recs[0].cursor()[6]), (1, 2), "the hot spot");
+    assert_eq!(recs[0].fd.as_ref().unwrap().2, pixels(&m), "the mask's bytes");
+    // a plain image after it: no flag
+    t.clear();
+    assert!(t.share.post(image(32, 32, (0, 0), 5)));
+    t.tick();
+    assert_eq!(&t.cursors()[0].raw[2..4], &[0, 0]);
+    // the same pixels as a plain image are another cursor
+    let same = CursorWant::Image(Arc::new(CursorImage::new(16, 16, (1, 2), pixels(&m)).unwrap()));
+    assert_ne!(same.key(), m.key(), "the digest covers the XOR bit");
+}
+
+/// ★ Under grab the broker has no pointer: the position is sent — one MOVE on entering the grab, one
+/// per CHANGE after (the newest of however many the worker noted between two entries, so never per
+/// input event), clamped to the frame's range, none while hidden, none for the same point; the image
+/// still follows the guest; leaving the grab forgets the position so the next grab starts with one.
+#[test]
+fn grab_streams_the_position_once_per_change_and_hover_forgets_it() {
+    let mut t = T::new(true);
+    t.up(CAP_CURSOR | CAP_CURSOR_STREAM, 0);
+    t.tick();
+    assert!(t.share.post(image(32, 32, (0, 0), 1)));
+    t.share.note_point(Some((5, 6)));
+    t.tick();
+    assert_eq!(moves(&t), vec![], "hover: none");
+    t.clear();
+    grab(&mut t, true);
+    assert_eq!(t.share.mode(), CursorMode::Grabbed);
+    assert_eq!(moves(&t), vec![(5, 6)], "entering the grab sends the position once");
+    // many positions between two entries: the newest only
+    t.clear();
+    for i in 0..50 {
+        t.share.note_point(Some((100 + i, 200 + i)));
+    }
+    t.tick();
+    assert_eq!(moves(&t), vec![(149, 249)]);
+    t.tick();
+    assert_eq!(moves(&t), vec![(149, 249)], "the same point is not sent twice");
+    // the image still follows the guest under grab
+    t.clear();
+    assert!(t.share.post(image(32, 32, (3, 3), 9)));
+    t.share.note_point(Some((1, 2)));
+    t.tick();
+    assert_eq!(t.ops(), vec![CURSOR_SET]);
+    assert_eq!(moves(&t), vec![(1, 2)], "an entry sends the image, then the position");
+    // far outside the frame: clamped to -256..=8192
+    t.clear();
+    t.share.note_point(Some((i32::MIN, 100_000_000)));
+    t.tick();
+    assert_eq!(moves(&t), vec![(-256, 8192)]);
+    // hidden: no position
+    t.clear();
+    assert!(t.share.post(CursorWant::Hidden));
+    t.share.note_point(Some((7, 7)));
+    t.tick();
+    assert_eq!(t.ops(), vec![CURSOR_HIDE]);
+    assert_eq!(moves(&t), vec![], "hidden: nothing to place");
+    // the guest's cursor comes back (the plane is enabled again): SHOW, then where it is
+    t.clear();
+    assert!(t.share.post(image(32, 32, (3, 3), 9)));
+    t.tick();
+    assert_eq!(t.ops(), vec![CURSOR_SHOW]);
+    assert_eq!(moves(&t), vec![(7, 7)]);
+    // no point known (no enabled cursor): no MOVE
+    t.clear();
+    t.share.note_point(None);
+    t.tick();
+    assert_eq!(moves(&t), vec![]);
+    // leaving the grab forgets the position: the next grab starts with one, even for the same point
+    t.share.note_point(Some((7, 7)));
+    grab(&mut t, false);
+    t.clear();
+    grab(&mut t, true);
+    assert_eq!(moves(&t), vec![(7, 7)]);
+    assert!(t.relay.counters().cursor_moves >= 5);
+}
+
+/// ★ The known-negative of the above: an old broker (no stream bit) is never sent a MOVE or the XOR
+/// flag, in grab or in hover — the grab sends nothing at all, as before.
+#[test]
+fn a_broker_without_the_stream_is_never_sent_a_move_or_the_xor_flag() {
+    let mut t = T::new(true);
+    t.up(CAP_CURSOR, 0);
+    t.tick();
+    assert!(t.share.post(image(32, 32, (0, 0), 1)));
+    t.share.note_point(Some((5, 6)));
+    t.tick();
+    grab(&mut t, true);
+    t.share.note_point(Some((50, 60)));
+    t.tick();
+    assert_eq!(moves(&t), vec![]);
+    assert!(t.share.post(xor_mask(16, 16, &[(3, 3)], (1, 2))));
+    grab(&mut t, false);
+    t.tick();
+    for r in t.cursors() {
+        assert_eq!(&r.raw[2..4], &[0, 0], "no flags");
+    }
+}
+
+/// ★ The console's cursor sink is not used while the broker streams: the frames carry no cursor and
+/// the console defines none (and hides one it was given before the stream began).
+#[test]
+fn the_console_defines_no_cursor_while_the_broker_streams() {
+    let mut t = T::new(true);
+    t.up(CAP_CURSOR, 0);
+    t.tick();
+    assert!(t.share.post(image(8, 8, (0, 0), 1)));
+    let mut c = ConsoleCursor::default();
+    let u = c.poll(&t.share, Some((0, 0)), ShownFrame::CursorFree, t.now);
+    assert!(u.define.is_some(), "composing path, hover: the console shows the image");
+    c.done(true, true);
+    // a streaming broker takes over
+    let mut t2 = T::new(true);
+    t2.up(CAP_CURSOR | CAP_CURSOR_STREAM, 0);
+    t2.tick();
+    assert!(t2.share.post(image(8, 8, (0, 0), 1)));
+    let mut c2 = ConsoleCursor::default();
+    let u = c2.poll(&t2.share, Some((0, 0)), ShownFrame::CursorFree, t2.now);
+    assert_eq!(u.define, None, "never defined");
+    // and one defined earlier is hidden once the stream starts
+    t.wire.borrow_mut().eof = true;
+    t.read();
+    let mut t3 = T::new(true);
+    t3.up(CAP_CURSOR, 0);
+    t3.tick();
+    assert!(t3.share.post(image(8, 8, (0, 0), 1)));
+    let mut c3 = ConsoleCursor::default();
+    let u = c3.poll(&t3.share, Some((0, 0)), ShownFrame::CursorFree, t3.now);
+    c3.done(u.define.is_some(), true);
+    t3.share.set_stream(true);
+    let u = c3.poll(&t3.share, Some((0, 0)), ShownFrame::CursorFree, t3.now + 100);
+    assert_eq!(u.define, Some(None), "hidden");
 }

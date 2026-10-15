@@ -243,6 +243,7 @@ impl Rig {
                 stride: W * 4,
                 fourcc,
                 serial: self.serial,
+                cursor: false,
             },
         );
         self.ring.publish(t);

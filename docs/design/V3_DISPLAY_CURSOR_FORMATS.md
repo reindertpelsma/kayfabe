@@ -103,3 +103,44 @@ over a Notepad text area, read `grep -a "DEBUG cursor" qemu.log`, screenshot wit
 (QMP `screendump` = the composed frame, so a composed I-beam is in it; a host-pointer ARGB cursor is NOT, it travels
 through the broker), and pass when the I-beam is visible and there is no `scanout REFUSED cursor` and no `host cursor
 REFUSED` line.
+
+## 8. The cursor stream: the broker draws the cursor in every mode (2026-10-15, branch `claude/cursor-hover-20261015`)
+
+**STATUS: BUILT, GPU-FREE-TESTED; live validation OWED (Windows VM with this broker: hover, grab, the I-beam; the
+Linux broker retest the owner's rule requires).** It does NOT supersede §4 (the composing of XOR cursors into the
+frame): that stays the whole story for a broker that does not advertise the stream.
+
+**Why.** The two reported symptoms (hover cursor invisible after the I-beam; an I-beam and a resize arrow drawn
+together) sit on the XOR (composed in the frame, host cursor hidden) <-> ARGB (host cursor, frame without) switch.
+*Measured* in the run-2990 log: 8064 "host cursor COMPOSED" lines (every 256th of ~2.07M XOR passes), `cursor_hides=127`,
+`cursor_sets=369`, one mode line only (no grab). *Measured* (GPU-free model, `crates/kf-broker/tests/host_cursor.rs`,
+the REAL relay, share and console cursor around a modelled worker): the relay sent the host cursor on the worker's
+**post** (start of the copy) while the frame carrying the matching composed bit was published at its **end** and shown by
+the broker only after the previous frame was presented, so for that whole time the broker drew both cursors (arrow
+before the I-beam left the frame) or none; every viewer **does** converge once the guest's cursor stops changing (300
+seeds x 4 copy latencies), so a state that stays wrong is NOT explained by the worker/relay/console logic — the persistent
+"invisible until you leave the window" is *inferred* to be in the broker (a Wayland cursor-surface buffer starved of its
+`release`, `gc_starved` in `nb_session_wl.c`: both slots busy leaves `set_cursor(NULL)`), unmeasured. The composing path
+now follows the frame the broker was last committed (`FrameGeom::cursor`, `CursorConn::frame_composed`): fixes the
+transient; the old composing path is otherwise untouched and is the fallback.
+
+**The stream** (`CAP_CURSOR_STREAM`, HELLO `w1` bit 12, `broker/common/nvkvm_broker_proto.h`, the one header):
+
+* kayfabe reports the guest's cursor and composes NOTHING in any mode: `CMD_CURSOR` `SET` (image, programmed/derived hot
+  spot), `HIDE`/`SHOW` (hidden covers: the guest hid it; the cursor plane is off, so the guest draws a software cursor
+  into the frame itself; an empty or unconvertible image), and the new `MOVE` (the image's top-left on the frame,
+  signed, clamped to -256..8192 by the sender, refused by the broker beyond +-2^20), sent under grab only, one per
+  change of the position the worker notes once per pass (never per input event).
+* An XOR cursor (the Windows I-beam) is converted by kayfabe to the inversion mask (`kf_disp::scanout::xor_mask`:
+  alpha 0xff and the XOR colour where the colour bits are non-zero, regardless of the alpha bit; empty = hidden) and sent
+  as a `SET` with `CURSOR_F_XOR`. The broker always draws the substitute: opaque black fill, one-pixel opaque white
+  outline (8-neighbourhood), transparent elsewhere (`nb_cursor_xor_approx`).
+* The broker draws: hover = the host pointer (MOVE ignored); grab = an overlay at the last MOVE, scaled with the frame
+  (Wayland: a `wl_subsurface` above the content, never touching the dma-buf frame). X11 does not advertise the bit (no
+  overlay implemented; nothing measured) and keeps the composing path. `MOVE` and `F_XOR` without the bit are framing
+  violations.
+* VMM-neutral code: the decisions (`kf_broker::want_of`, `composes`, the relay's `stream_sync`, `CursorShare`) are in
+  `kf-broker`; the conversion is in `kf-disp`. `kf-qemu` only reads the GPU (`host_cursor_want`) and calls them.
+  Still QEMU-bound: the display worker itself (`display.rs`, the GPU read and the per-pass loop) and the QEMU console
+  cursor sink (`ConsoleCursor`, used on the composing path; the console defines NO cursor while the broker streams — a
+  VNC viewer sees none then).

@@ -7,8 +7,8 @@
 //! `SCM_RIGHTS`) and come back as `RELEASE`; input, pacing and window state come back as fixed
 //! 24-byte packets. This crate is the VMM half, with the wire protocol unchanged:
 //!
-//! - [`wire`] — protocol v2, byte-compatible with `proto/nvkvm_broker_proto.h` (vendored
-//!   verbatim; `tests/proto_mirror.rs` compares the two);
+//! - [`wire`] — protocol v2, byte-compatible with `broker/common/nvkvm_broker_proto.h` (the
+//!   broker's own header; `tests/proto_mirror.rs` compares the two);
 //! - [`slots`] — the [`FrameRing`]: the display's copy targets, shared by the display worker,
 //!   the VMM's console and this relay through ONE atomic word;
 //! - [`conn`] — the [`Relay`]: connect, peer check, HELLO, replay, the owed frame, pacing,
@@ -29,7 +29,7 @@
 //! through `kf-qemu`).
 //!
 //! Attribution: protocol semantics and the input mapping are ported from nvkvm-pv
-//! `src/qemu/nvkvm_display_relay.c` at `368d2db` (Apache-2.0, same author); the vendored header
+//! `src/qemu/nvkvm_display_relay.c` at `368d2db` (Apache-2.0, same author); the broker's header
 //! keeps its own SPDX line (`GPL-2.0 OR Apache-2.0`).
 
 pub mod conn;
@@ -48,7 +48,10 @@ pub use console::{
     ConsoleCursor, ConsoleCursorUpdate, CursorPoint, CursorShape, CursorSink, FrameCursors,
     ShownFrame,
 };
-pub use cursor::{CursorImage, CursorMode, CursorShare, CursorWant, HotTracker, PointerAbs};
+pub use cursor::{
+    CursorImage, CursorMode, CursorRead, CursorShare, CursorWant, HotTracker, PointerAbs, composes,
+    want_of,
+};
 pub use input::{
     AbsRange, Button, InputCounters, InputPolicy, InputSink, PointerDevice, PowerRequest,
 };

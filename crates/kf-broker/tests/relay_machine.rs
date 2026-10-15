@@ -201,6 +201,7 @@ impl T {
                 stride: w * 4,
                 fourcc,
                 serial: self.serial,
+                cursor: false,
             },
         );
         self.ring.publish(t);
@@ -1393,6 +1394,7 @@ impl T {
                 stride: w * 4,
                 fourcc: FOURCC_XR24,
                 serial: self.serial,
+                cursor: false,
             },
         );
         t

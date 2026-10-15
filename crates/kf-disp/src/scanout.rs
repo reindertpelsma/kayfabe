@@ -1514,6 +1514,9 @@ pub struct HostCursorSrc {
     src_factor: (i32, i32),
     /// The viewport's (destination) factor, likewise.
     dst_factor: (i32, i32),
+    /// ★ An XOR cursor planned for a broker that shows XOR cursors itself
+    /// (`CAP_XOR_CURSOR`): [`Self::image`] is the inversion mask ([`xor_mask`]), not a blend.
+    xor: bool,
 }
 
 /// ★ Plan head `c.head`'s cursor for the host ([`HostCursorSrc`]). A cursor the host cannot show
@@ -1527,6 +1530,22 @@ pub struct HostCursorSrc {
 /// ARGB "over" expresses it); a system-memory or block-linear surface; a hot spot outside the image; an unknown factor;
 /// any byte outside the context DMA.
 pub fn plan_host_cursor(c: &CursorScan, dma: &CtxDma) -> Result<HostCursorSrc, Refused> {
+    plan_host_cursor_xor(c, dma, false)
+}
+
+/// ★ [`plan_host_cursor`] for a broker that advertised `CAP_XOR_CURSOR` (`xor_ok`): an XOR cursor
+/// is then planned (its composition factors are irrelevant: XOR reads none) and
+/// [`HostCursorSrc::image`] is its inversion mask ([`HostCursorSrc::is_xor`]), which the broker
+/// turns into a visible cursor. Without `xor_ok` it is refused by name, exactly as before, and the
+/// caller composes it into the frame.
+///
+/// # Errors
+/// As [`plan_host_cursor`].
+pub fn plan_host_cursor_xor(
+    c: &CursorScan,
+    dma: &CtxDma,
+    xor_ok: bool,
+) -> Result<HostCursorSrc, Refused> {
     let no = |why: String| Err(Refused(format!("host cursor head {}: {why}", c.head)));
     if !c.argb8888 && !c.a1r5g5b5 {
         return no(format!(
@@ -1538,7 +1557,8 @@ pub fn plan_host_cursor(c: &CursorScan, dma: &CtxDma) -> Result<HostCursorSrc, R
         return no(format!("{0}x{0} is not a cursor size", c.size));
     }
     let bpp = if c.argb8888 { 4 } else { 2 };
-    if c.mode != 0 {
+    let xor = c.mode != 0;
+    if xor && !xor_ok {
         return no("an XOR cursor has no ARGB equivalent".into());
     }
     if dma.target != Target::Vidmem || dma.block_linear {
@@ -1550,7 +1570,12 @@ pub fn plan_host_cursor(c: &CursorScan, dma: &CtxDma) -> Result<HostCursorSrc, R
             c.hot_x, c.hot_y, c.size, c.size
         ));
     }
-    let Some((src_factor, dst_factor)) = cursor_blend(c) else {
+    let blend = if xor {
+        Some(((0, 0), (0, 0)))
+    } else {
+        cursor_blend(c)
+    };
+    let Some((src_factor, dst_factor)) = blend else {
         return no(format!(
             "composition factors {:#x}/{:#x} are not known",
             c.cursor_factor, c.viewport_factor
@@ -1582,7 +1607,42 @@ pub fn plan_host_cursor(c: &CursorScan, dma: &CtxDma) -> Result<HostCursorSrc, R
         hot: (c.hot_x, c.hot_y),
         src_factor,
         dst_factor,
+        xor,
     })
+}
+
+/// ★ An XOR cursor as the broker takes it (`CURSOR_F_XOR`, `docs/design/V3_DISPLAY_CURSOR_FORMATS.md`):
+/// an XOR cursor inverts what lies below every pixel whose COLOUR is non-zero (the alpha bit is not a
+/// mask there, §O), and the host cannot invert — so the image sent is the inversion MASK: premultiplied
+/// `ARGB8888` as `[B, G, R, A]`, `size` x `size`, rows tight, with `A = 255` and the XOR colour where
+/// the cursor inverts and all zero elsewhere. The broker draws the visible substitute from it. `None`
+/// when nothing inverts (the guest shows no cursor). `raw` is the copied image (`pitch` apart rows,
+/// `bpp` 2 = `A1R5G5B5` or 4 = `A8R8G8B8` bytes a pixel). `O(size^2)`, `size <= 256`.
+fn xor_mask(raw: &[u8], size: usize, pitch: usize, bpp: usize) -> Option<Vec<u8>> {
+    let mut out = vec![0u8; size * size * 4];
+    let mut any = false;
+    for y in 0..size {
+        let row = &raw[y * pitch..y * pitch + size * bpp];
+        for x in 0..size {
+            let px = if bpp == 2 {
+                let w = u16::from_le_bytes([row[x * 2], row[x * 2 + 1]]);
+                (w & 0x7fff != 0).then(|| {
+                    let [b, g, r, _] = a1r5g5b5_to_bgra(w, true);
+                    [b, g, r, 255]
+                })
+            } else {
+                row[x * 4..x * 4 + 3]
+                    .iter()
+                    .any(|c| *c != 0)
+                    .then(|| [row[x * 4], row[x * 4 + 1], row[x * 4 + 2], 255])
+            };
+            if let Some(px) = px {
+                out[(y * size + x) * 4..(y * size + x) * 4 + 4].copy_from_slice(&px);
+                any = true;
+            }
+        }
+    }
+    any.then_some(out)
 }
 
 /// ★ The cursor's `HEAD_SET_CONTROL_CURSOR_COMPOSITION` word as programmed (`K1` 7:0,
@@ -1716,6 +1776,13 @@ impl HostCursorSrc {
         }
     }
 
+    /// ★ This is an XOR cursor planned for the broker ([`plan_host_cursor_xor`]): [`Self::image`] is
+    /// its inversion mask and the broker is sent it with `CURSOR_F_XOR`.
+    #[must_use]
+    pub fn is_xor(&self) -> bool {
+        self.xor
+    }
+
     /// ★ The [`AlphaCensus`] of the image `raw` (the [`Self::extent`] bytes copied from
     /// [`Self::src`]); `None` when `raw` is not that extent.
     #[must_use]
@@ -1756,6 +1823,9 @@ impl HostCursorSrc {
         }
         let n = self.size as usize;
         let pitch = self.pitch as usize;
+        if self.xor {
+            return Ok(xor_mask(raw, n, pitch, self.bpp as usize));
+        }
         let ((a_s, b_s), (a_d, b_d)) = (self.src_factor, self.dst_factor);
         // round(v / d) for v >= 0
         let div = |v: i64, d: i64| (v + d / 2) / d;
@@ -3186,6 +3256,99 @@ mod tests {
         // the A8R8G8B8 host path is byte-identical (same pitch, same bytes per pixel)
         let a = plan_host_cursor(&cursor(0, 0), &dma).unwrap();
         assert_eq!((a.bpp, a.pitch, a.extent), (4, 256, 63 * 256 + 64 * 4));
+    }
+
+    /// The measured Windows I-beam (`/data/claude-cursor/dump/cursor-d12026f40bd56ee8.bin`, run 2990):
+    /// a 256x256 A1R5G5B5 XOR cursor, 26 pixels of 0x7fff (alpha bit clear): serifs at rows 2 and 17
+    /// (x 7..=9 and 11..=13) and a stem at x 10, rows 3..=16; everything else 0.
+    fn ibeam_pixels() -> Vec<(usize, usize)> {
+        let mut v = Vec::new();
+        for y in [2usize, 17] {
+            v.extend([7, 8, 9, 11, 12, 13].map(|x| (x, y)));
+        }
+        v.extend((3..=16).map(|y| (10usize, y)));
+        v
+    }
+
+    /// ★ A broker that shows XOR cursors itself (`CAP_XOR_CURSOR`): the measured I-beam becomes an
+    /// inversion MASK — alpha 255 and the XOR colour on the 26 inverting pixels (whatever their alpha
+    /// bit), all zero elsewhere — with the guest's hot spot. Without the capability it is refused by
+    /// the same name as always, and the default `plan_host_cursor` is that.
+    #[test]
+    fn an_xor_cursor_is_an_inversion_mask_for_a_broker_that_shows_it_itself() {
+        let dma = vid(0x4000_0000, 1 << 20);
+        let mut x = cursor16(0, 0, 1);
+        x.size = 256;
+        x.hot_x = 5;
+        x.hot_y = 6;
+        let e = plan_host_cursor(&x, &dma).unwrap_err().0;
+        assert!(e.contains("an XOR cursor has no ARGB equivalent"), "{e}");
+        let e = plan_host_cursor_xor(&x, &dma, false).unwrap_err().0;
+        assert!(e.contains("an XOR cursor has no ARGB equivalent"), "{e}");
+        let h = plan_host_cursor_xor(&x, &dma, true).unwrap();
+        assert!(h.is_xor());
+        assert!(!plan_host_cursor(&cursor16(0, 0, 0), &dma).unwrap().is_xor());
+        assert_eq!((h.size, h.bpp, h.pitch, h.hot), (256, 2, 512, (5, 6)));
+        assert_eq!(h.extent, 255 * 512 + 256 * 2);
+        let mut raw = vec![0u8; h.extent as usize];
+        let fill = ibeam_pixels();
+        assert_eq!(fill.len(), 26);
+        for &(px, py) in &fill {
+            let at = py * 512 + px * 2;
+            raw[at..at + 2].copy_from_slice(&0x7fffu16.to_le_bytes());
+        }
+        let img = h.image(&raw).unwrap().unwrap();
+        assert_eq!(img.len(), 256 * 256 * 4, "bounded by the cursor size");
+        for py in 0..256usize {
+            for px in 0..256usize {
+                let p = &img[(py * 256 + px) * 4..(py * 256 + px) * 4 + 4];
+                if fill.contains(&(px, py)) {
+                    assert_eq!(p, [255, 255, 255, 255], "inverts at {px},{py}: white XOR colour");
+                } else {
+                    assert_eq!(p, [0; 4], "untouched at {px},{py}");
+                }
+            }
+        }
+        // deterministic
+        assert_eq!(h.image(&raw).unwrap().unwrap(), img);
+    }
+
+    /// The mask's edges: an empty XOR cursor is no cursor; the alpha bit is not a mask (a colour with
+    /// alpha clear inverts, black with alpha set does not); the XOR colour is carried (widened 5->8
+    /// bits); an A8R8G8B8 XOR cursor works on its colour bytes; a blend cursor is untouched by the
+    /// capability.
+    #[test]
+    fn the_xor_mask_hides_an_empty_cursor_and_carries_the_colour() {
+        let dma = vid(0x4000_0000, 1 << 20);
+        let mut x = cursor16(0, 0, 1);
+        x.size = 32;
+        let h = plan_host_cursor_xor(&x, &dma, true).unwrap();
+        assert_eq!(h.image(&vec![0; h.extent as usize]), Ok(None), "empty: hidden");
+        let mut raw = vec![0u8; h.extent as usize];
+        raw[0..2].copy_from_slice(&0x8000u16.to_le_bytes()); // alpha set, colour black: no inversion
+        assert_eq!(h.image(&raw), Ok(None), "black XOR is nothing");
+        raw[0..2].copy_from_slice(&0x0001u16.to_le_bytes()); // alpha clear, a blue bit: inverts
+        raw[2..4].copy_from_slice(&px16(0, 31, 0, 0).to_le_bytes()); // red 31, alpha clear
+        let img = h.image(&raw).unwrap().unwrap();
+        assert_eq!(&img[0..4], &[8, 0, 0, 255], "blue 1 widened to 8, opaque");
+        assert_eq!(&img[4..8], &[0, 0, 255, 255], "red 31 widened to 255, opaque");
+        assert_eq!(img.chunks(4).filter(|p| p[3] != 0).count(), 2);
+        // A8R8G8B8: the colour bytes decide, the alpha byte does not
+        let mut a = cursor(0, 0);
+        a.mode = 1;
+        let h = plan_host_cursor_xor(&a, &dma, true).unwrap();
+        let mut raw = vec![0u8; h.extent as usize];
+        raw[3] = 255; // alpha only
+        assert_eq!(h.image(&raw), Ok(None));
+        raw[1] = 7; // a green colour byte
+        let img = h.image(&raw).unwrap().unwrap();
+        assert_eq!(&img[0..4], &[0, 7, 0, 255]);
+        // a blend cursor is untouched by the capability
+        let b = cursor16(0, 0, 0);
+        assert_eq!(
+            plan_host_cursor_xor(&b, &dma, true),
+            plan_host_cursor(&b, &dma)
+        );
     }
 
     /// ★ Measurement only: the debug dump is bounded (the span, the text) and says what the format

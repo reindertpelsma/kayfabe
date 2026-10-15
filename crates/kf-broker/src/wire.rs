@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 //! ★ The display-broker wire protocol, version 2 — byte for byte nvkvm-pv's
-//! `src/common/nvkvm_broker_proto.h` at `368d2db` (vendored verbatim as
-//! `proto/nvkvm_broker_proto.h`; `tests/proto_mirror.rs` compares every value below with its
-//! text).
+//! `src/common/nvkvm_broker_proto.h`, now `broker/common/nvkvm_broker_proto.h` in this repository
+//! (the one copy; `tests/proto_mirror.rs` compares every value below with its text, both ways,
+//! and the record layouts with the compiled header).
 //!
 //! Two fixed-size records, little-endian, no length field anywhere: the broker sends 24-byte
 //! EVENT packets, the VMM sends 40-byte COMMAND records (one of which carries a descriptor as
@@ -51,13 +51,9 @@ pub const EV_CLIPBOARD: u16 = 15;
 /// `w0`,`w1` = the modifier.
 pub const EV_FORMAT: u16 = 16;
 
-// ── AHEAD OF THE VENDORED HEADER (2026-10-03) ─────────────────────────────────────────────
-// Defined by nvkvm-pv's broker on branch `broker-cursor-gpucopy` (its
-// `src/common/nvkvm_broker_proto.h`, read from that worktree before it was committed); the copy
-// vendored here is still `368d2db`. The broker owns the protocol: these are transcribed from it,
-// not proposed. `tests/proto_mirror.rs` asserts each is ABSENT from the vendored header (so the
-// day it lands, the test forces it into the mirrored map) and, given `KF_BROKER_PROTO_NEXT`, equal
-// to the newer header's value, the cursor record's layout compiled from it.
+// ── THE CURSOR AND DEVICE SURFACE (2026-10-03; `CAP_CURSOR_STREAM` 2026-10-15) ───────────────
+// The broker owns the protocol: these are transcribed from `broker/common/nvkvm_broker_proto.h`,
+// not proposed, and `tests/proto_mirror.rs` checks each against its text.
 
 /// ★ `NVKVM_BROKER_EV_DEVICE`: which DRM device the display renders on. Advertised by
 /// [`CAP_DEVICE`]; sent once at attach as the packet AFTER the priming FRAME, and again,
@@ -74,6 +70,23 @@ pub const DEVICE_F_RENDER: i32 = 1 << 1;
 /// `NVKVM_BROKER_CAP_CURSOR`: [`CMD_CURSOR`] is understood; clear ⇒ sending it is a violation and
 /// the VMM composes the cursor into the frame.
 pub const CAP_CURSOR: u32 = 1 << 10;
+/// ★ `NVKVM_BROKER_CAP_CURSOR_STREAM` (HELLO `w1` bit 12): the viewer draws the guest's cursor ITSELF
+/// in every input mode, position included (the host pointer in hover, an overlay at the last
+/// [`CURSOR_MOVE`] under grab). Then the VMM composes NO cursor into the frame, [`CMD_CURSOR`] also
+/// takes `MOVE`, and a SET may carry [`CURSOR_F_XOR`]. Clear ⇒ both are framing violations and the
+/// VMM composes the cursor as before. Only with [`CAP_CURSOR`].
+pub const CAP_CURSOR_STREAM: u32 = 1 << 12;
+/// `NVKVM_BROKER_CURSOR_MOVE`: the cursor image's top-left on the guest frame (signed), in the two
+/// hot-spot words, no fd. Only with [`CAP_CURSOR_STREAM`]. In hover the viewer ignores it; under
+/// grab it draws the image there.
+pub const CURSOR_MOVE: u32 = 4;
+/// `NVKVM_BROKER_CURSOR_MOVE_LIMIT`: a MOVE beyond ±this is refused by the broker; the VMM clamps
+/// far inside it ([`CursorCmd::mov`]).
+pub const CURSOR_MOVE_LIMIT: i32 = 1 << 20;
+/// `NVKVM_BROKER_CURSOR_F_XOR` (in the command's `flags`, SET only): the image's alpha byte is an
+/// inversion MASK (0xff where the guest's XOR cursor inverts the screen, 0 elsewhere; the colour
+/// channels carry the XOR colour) and the viewer draws the visible substitute itself.
+pub const CURSOR_F_XOR: u16 = 1 << 0;
 /// `NVKVM_BROKER_CAP_DEVICE`: an [`EV_DEVICE`] follows the handshake's FRAME (even when its answer
 /// is "unknown", so "too old to say" and "could not tell" differ).
 pub const CAP_DEVICE: u32 = 1 << 11;
@@ -328,10 +341,12 @@ impl Cmd {
 /// ★ `struct nvkvm_broker_cursor_cmd` — the 40-byte command record with ATTACH's buffer
 /// description at the same offsets (`type@0 flags@2 width@4 height@8 stride@12 offset@16
 /// fourcc@20`), the hot spot where ATTACH keeps its modifier (`hot_x@24 hot_y@28`), `op@32` where
-/// ATTACH keeps its seq, `reserved1@36` = 0. `flags` is always 0. Pixels are premultiplied
-/// `DRM_FORMAT_ARGB8888` only.
+/// ATTACH keeps its seq, `reserved1@36` = 0. `flags` is 0, or [`CURSOR_F_XOR`] on a SET to a broker
+/// that advertised [`CAP_CURSOR_STREAM`]. Pixels are premultiplied `DRM_FORMAT_ARGB8888` only.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct CursorCmd {
+    /// `flags@2`: 0, or [`CURSOR_F_XOR`] (SET only).
+    pub flags: u16,
     /// Pixels per row (SET: `1..=CURSOR_MAX_DIM`).
     pub width: u32,
     /// Rows (SET: `1..=CURSOR_MAX_DIM`).
@@ -371,6 +386,7 @@ impl CursorCmd {
             && u64::from(offset) + u64::from(stride) * u64::from(height - 1) + u64::from(width) * 4
                 <= memfd_bytes;
         ok.then_some(CursorCmd {
+            flags: 0,
             width,
             height,
             stride,
@@ -380,6 +396,30 @@ impl CursorCmd {
             hot_y: hot.1,
             op: CURSOR_SET,
         })
+    }
+
+    /// ★ The same SET, flagged [`CURSOR_F_XOR`]: the image is an XOR cursor's inversion mask.
+    #[must_use]
+    pub fn xor(self) -> CursorCmd {
+        CursorCmd {
+            flags: CURSOR_F_XOR,
+            ..self
+        }
+    }
+
+    /// ★ MOVE: the image's top-left at `(x, y)` on the guest frame, clamped to `-CURSOR_MAX_DIM ..=
+    /// MAX_DIM` (outside of which the image cannot show), carried in the hot-spot words as signed
+    /// 32-bit; every other field but `op` zero. Only for a broker that advertised
+    /// [`CAP_CURSOR_STREAM`].
+    #[must_use]
+    pub fn mov(x: i32, y: i32) -> CursorCmd {
+        let c = |v: i32| v.clamp(-(CURSOR_MAX_DIM as i32), MAX_DIM as i32).cast_unsigned();
+        CursorCmd {
+            hot_x: c(x),
+            hot_y: c(y),
+            op: CURSOR_MOVE,
+            ..CursorCmd::default()
+        }
     }
 
     /// HIDE: every field but `op` zero.
@@ -400,11 +440,12 @@ impl CursorCmd {
         }
     }
 
-    /// Encode at the header's offsets; `flags` and `reserved1` are zero by construction.
+    /// Encode at the header's offsets; `reserved1` is zero by construction.
     #[must_use]
     pub fn encode(&self) -> [u8; CMD_SIZE] {
         let mut b = [0u8; CMD_SIZE];
         b[0..2].copy_from_slice(&CMD_CURSOR.to_le_bytes());
+        b[2..4].copy_from_slice(&self.flags.to_le_bytes());
         for (at, v) in [
             (4, self.width),
             (8, self.height),

@@ -266,7 +266,13 @@ impl ConsoleCursor {
         };
         // ⊘ the share's newest post is stale without a broker (the worker reads the cursor only
         // while one is attached): broker gone, ours goes at once
-        let (goal, image) = if frame == ShownFrame::CursorComposed || mode == CursorMode::Off {
+        // ★ the broker draws the guest's cursor itself (`CAP_CURSOR_STREAM`) and the frames carry
+        // none: the console shows no cursor of ours then (a documented limitation: a VNC viewer
+        // sees none, and an XOR mask is not an image the console could define)
+        let (goal, image) = if share.stream()
+            || frame == ShownFrame::CursorComposed
+            || mode == CursorMode::Off
+        {
             (none, None)
         } else {
             match &self.want {

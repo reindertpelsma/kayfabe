@@ -32,7 +32,7 @@
 
 use crate::device::Device;
 use kf_broker::{
-    CursorImage, CursorMode, CursorPoint, CursorWant, FrameCursors, HotTracker, ShownFrame,
+    CursorMode, CursorPoint, CursorWant, FrameCursors, HotTracker, ShownFrame,
 };
 use kf_cuda::display::{ComposeLayer, DisplayGpu, Frame};
 use kf_disp::engine::{Acquire, Composition, Effect, Engine, PbLoc, ScanVocab, Vocab};
@@ -1131,8 +1131,10 @@ impl ConsoleShare {
         if host {
             self.addrs[i].store(f.addr, Ordering::Release);
             self.formats[i].store(f.format, Ordering::Release);
-            self.cursors.publish(i, f.cursor);
         }
+        // ★ the bit belongs to the frame whichever backing carries it: the console reads it with the
+        // host frame, the relay (the broker's host cursor) with the committed slot, VRAM-only too
+        self.cursors.publish(i, f.cursor);
         self.ring.describe(
             i,
             kf_broker::FrameGeom {
@@ -1142,6 +1144,7 @@ impl ConsoleShare {
                 // the console's x8r8g8b8 byte order is DRM's XRGB8888 (`kf3.c`'s pixman map)
                 fourcc: kf_broker::wire::FOURCC_XR24,
                 serial: f.serial,
+                cursor: f.cursor,
             },
         );
         self.ring.describe_backings(i, host, vram);
@@ -3175,12 +3178,18 @@ impl Device {
             };
             // ★ §8.13: where the cursor image's top-left is, for the console's cursor in hover (a
             // move makes no frame then, but the console still follows it)
-            dp.console.note_cursor_point(cursor.as_ref().map(|cs| {
+            let point = cursor.as_ref().map(|cs| {
                 (
                     cs.x.saturating_sub(i32::try_from(cs.hot_x).unwrap_or(0)),
                     cs.y.saturating_sub(i32::try_from(cs.hot_y).unwrap_or(0)),
                 )
-            }));
+            });
+            dp.console.note_cursor_point(point);
+            // ★ the same point for a streaming broker (`CAP_CURSOR_STREAM`): the relay sends it as a
+            // MOVE under grab, when it changed — lock-free, once per pass, never per input event
+            if let Some(b) = dp.broker.as_ref() {
+                b.cursor().note_point(point);
+            }
             // ★ §O: where the cursor goes, as the relay decided (hover: the host shows it; grab or
             // no cursor-capable broker: the frame). A switch recomposes at once — the cursor goes
             // into the frame or out of it — and in hover a MOVE makes no frame (the host pointer
@@ -3848,8 +3857,10 @@ impl CursorDebug {
     const EVERY_MS: u128 = 200;
 }
 
-fn cursor_composed(mode: CursorMode, want: Option<&CursorWant>) -> bool {
-    want.is_none_or(|w| mode.composes(w))
+/// ★ Whether this copy composes the head's cursor into the frame (the rule is `kf_broker::composes`:
+/// a streaming broker draws the cursor itself in every mode, so never; otherwise the mode's).
+fn cursor_composed(mode: CursorMode, stream: bool, want: Option<&CursorWant>) -> bool {
+    want.is_none_or(|w| kf_broker::composes(mode, stream, w))
 }
 
 /// ★ Who a failed scanout copy is the failure of ([`ScanState::fault`]).
@@ -4497,10 +4508,23 @@ impl ScanState {
         shown: &Shown,
         cursor: Option<&kf_disp::engine::CursorScan>,
     ) -> CursorWant {
-        let (Shown::Armed(comp), Some(cs)) = (shown, cursor) else {
-            return CursorWant::Hidden;
-        };
         let dp = io.dp;
+        // ★ the active broker advertised CAP_CURSOR_STREAM: it draws the cursor itself in every
+        // mode, an XOR cursor goes as its inversion mask (nothing is composed). The decisions are
+        // `kf_broker::want_of` / `kf_disp::scanout::plan_host_cursor_xor`; this reads the GPU.
+        let stream = dp.broker.as_ref().is_some_and(|b| b.cursor().stream());
+        let (Shown::Armed(comp), Some(cs)) = (shown, cursor) else {
+            // no armed head or no enabled cursor plane: the guest draws its own, or none
+            return kf_broker::want_of(
+                kf_broker::CursorRead::PlaneOff,
+                stream,
+                &mut self.hot,
+                0,
+                0,
+                None,
+            )
+            .unwrap_or(CursorWant::Hidden);
+        };
         let frame = (comp.width, comp.height);
         let hover = self.cursor_mode == CursorMode::Hover;
         let (seq, abs) = dp.broker.as_ref().map_or((0, None), |b| b.cursor().abs());
@@ -4515,7 +4539,7 @@ impl ScanState {
         let comp_log = &mut self.cursor_comp;
         let got = io
             .resolve(cs.client, cs.handle, 0)
-            .and_then(|dma| kf_disp::scanout::plan_host_cursor(cs, &dma).map_err(|r| r.0))
+            .and_then(|dma| kf_disp::scanout::plan_host_cursor_xor(cs, &dma, stream).map_err(|r| r.0))
             .and_then(|h| {
                 let gpu = io.gpu.as_ref().ok_or("no display GPU context")?;
                 let n = usize::try_from(h.extent).map_err(|_| "an impossible cursor extent")?;
@@ -4555,19 +4579,21 @@ impl ScanState {
                         kf_disp::scanout::CompositionLog::EVERY
                     );
                 }
-                match h.image(&raw).map_err(|r| r.0)? {
-                    None => Ok(CursorWant::Hidden),
-                    Some(px) => {
-                        // ★ NVKMS programs hot spot 0 (`nvkms-evo3.c:6565-6569`): in hover the hot
-                        // spot is derived from the pointer the relay injected
-                        let derived = abs.filter(|_| hover).and_then(|a| {
-                            kf_disp::scanout::hot_from_pointer(cs, (a.x, a.y), (a.w, a.h), frame)
-                        });
-                        let at = hot.hot(&px, seq, now_ms, derived, h.hot);
-                        CursorImage::new(h.size, h.size, at, px)
-                            .map(|i| CursorWant::Image(Arc::new(i)))
-                    }
-                }
+                // ★ NVKMS programs hot spot 0 (`nvkms-evo3.c:6565-6569`): in hover the hot
+                // spot is derived from the pointer the relay injected
+                let derived = abs.filter(|_| hover).and_then(|a| {
+                    kf_disp::scanout::hot_from_pointer(cs, (a.x, a.y), (a.w, a.h), frame)
+                });
+                let read = match h.image(&raw).map_err(|r| r.0)? {
+                    None => kf_broker::CursorRead::Empty,
+                    Some(pixels) => kf_broker::CursorRead::Image {
+                        size: h.size,
+                        hot: h.hot,
+                        pixels,
+                        xor: h.is_xor(),
+                    },
+                };
+                kf_broker::want_of(read, stream, hot, seq, now_ms, derived)
             });
         match got {
             Ok(w) => w,
@@ -4590,7 +4616,9 @@ impl ScanState {
                          and the host's is hidden ({n} so far)"
                     );
                 }
-                CursorWant::Composed
+                // composed into the frame — or, under the stream, hidden (nothing composes)
+                kf_broker::want_of(kf_broker::CursorRead::Unshowable, stream, &mut self.hot, 0, 0, None)
+                    .unwrap_or(CursorWant::Hidden)
             }
         }
     }
@@ -4792,7 +4820,8 @@ impl ScanState {
         let want = mode
             .reads()
             .then(|| self.host_cursor_want(io, shown, cursor));
-        let compose = cursor.filter(|_| cursor_composed(mode, want.as_ref()));
+        let stream = dp.broker.as_ref().is_some_and(|b| b.cursor().stream());
+        let compose = cursor.filter(|_| cursor_composed(mode, stream, want.as_ref()));
         if let (Some(w), Some(seat)) = (want, dp.broker.as_ref()) {
             let key = w.key();
             if self.cursor_posted != Some(key) && seat.cursor().post(w) {
@@ -5310,6 +5339,7 @@ impl ScanState {
 
 #[cfg(test)]
 mod tests {
+    use kf_broker::CursorImage;
     use super::*;
 
     /// ★ §8.18, the interleaving of runs e1-a…d (2026-10-08): the first copy is queued at +0.3 s,
@@ -5425,19 +5455,34 @@ mod tests {
         let img = CursorWant::Image(Arc::new(
             CursorImage::new(32, 32, (0, 0), vec![1; 32 * 32 * 4]).unwrap(),
         ));
-        assert!(cursor_composed(CursorMode::Off, None), "today's path");
+        assert!(cursor_composed(CursorMode::Off, false, None), "today's path");
         for w in [&img, &CursorWant::Hidden, &CursorWant::Composed] {
-            assert!(cursor_composed(CursorMode::Grabbed, Some(w)), "{w:?}");
+            assert!(cursor_composed(CursorMode::Grabbed, false, Some(w)), "{w:?}");
         }
-        assert!(!cursor_composed(CursorMode::Hover, Some(&img)));
+        assert!(!cursor_composed(CursorMode::Hover, false, Some(&img)));
         assert!(!cursor_composed(
             CursorMode::Hover,
+            false,
             Some(&CursorWant::Hidden)
         ));
         assert!(
-            cursor_composed(CursorMode::Hover, Some(&CursorWant::Composed)),
+            cursor_composed(CursorMode::Hover, false, Some(&CursorWant::Composed)),
             "XOR"
         );
+    }
+
+    /// ★ A streaming broker draws the cursor itself in EVERY mode: nothing is ever composed (the rule
+    /// is `kf_broker::composes`, tested there with plain inputs).
+    #[test]
+    fn a_streaming_broker_gets_no_cursor_composed_in_any_mode() {
+        let img = CursorWant::Image(Arc::new(
+            CursorImage::new(32, 32, (0, 0), vec![1; 32 * 32 * 4]).unwrap(),
+        ));
+        for m in [CursorMode::Off, CursorMode::Grabbed, CursorMode::Hover] {
+            for w in [&img, &CursorWant::Hidden, &CursorWant::Composed] {
+                assert!(!cursor_composed(m, true, Some(w)), "{m:?} {w:?}");
+            }
+        }
     }
 
     /// ★ §8.16: the check clock of a picture with no armed head (the boot layer, a preserved

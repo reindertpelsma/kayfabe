@@ -30,7 +30,7 @@
 //! the guest's cursor surface into a buffer kf owns — never a descriptor of guest memory.
 
 use crate::wire::CURSOR_MAX_DIM;
-use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, TryLockError};
 
 /// Where the guest's cursor goes on the current connection, as the relay last decided.
@@ -103,6 +103,10 @@ pub struct CursorImage {
     hot: (u32, u32),
     pixels: Vec<u8>,
     digest: u64,
+    /// ★ The pixels are an XOR cursor's inversion MASK (alpha 255 and the XOR colour where it
+    /// inverts, zero elsewhere), sent with `CURSOR_F_XOR` to a broker that advertised
+    /// `CAP_CURSOR_STREAM`, with `CURSOR_F_XOR`; the viewer draws the visible cursor from it.
+    xor: bool,
 }
 
 impl std::fmt::Debug for CursorImage {
@@ -158,7 +162,25 @@ impl CursorImage {
             hot,
             pixels,
             digest: d,
+            xor: false,
         })
+    }
+
+    /// ★ This image is an XOR cursor's inversion mask. The digest covers it: the same pixels as an
+    /// ordinary image are another cursor.
+    #[must_use]
+    pub fn into_xor(mut self) -> CursorImage {
+        if !self.xor {
+            self.xor = true;
+            self.digest = (self.digest ^ 0x58).wrapping_mul(0x0100_0000_01b3);
+        }
+        self
+    }
+
+    /// Whether the pixels are an XOR cursor's inversion mask ([`CursorImage::into_xor`]).
+    #[must_use]
+    pub fn is_xor(&self) -> bool {
+        self.xor
     }
 
     /// Pixels per row.
@@ -242,6 +264,13 @@ pub struct PointerAbs {
 #[derive(Debug)]
 pub struct CursorShare {
     mode: AtomicU8,
+    /// ★ The active broker advertised `CAP_CURSOR_STREAM`: it draws the guest's cursor itself in
+    /// every input mode, so the worker composes NO cursor and reports image, position and
+    /// visibility instead. The relay writes it, the worker reads it once per copy, like the mode.
+    stream: AtomicBool,
+    /// ★ The guest cursor image's top-left on the frame, written by the worker every pass (one
+    /// word, lock-free) and read by the relay when it sends a `MOVE`.
+    point: crate::console::CursorPoint,
     posted: AtomicU64,
     slot: Mutex<Option<(u64, CursorWant)>>,
     /// Posts that found the mailbox busy (retried on the next frame).
@@ -264,6 +293,8 @@ impl CursorShare {
     pub fn new() -> CursorShare {
         CursorShare {
             mode: AtomicU8::new(CursorMode::Off.code()),
+            stream: AtomicBool::new(false),
+            point: crate::console::CursorPoint::default(),
             posted: AtomicU64::new(0),
             slot: Mutex::new(None),
             busy_posts: AtomicU64::new(0),
@@ -304,6 +335,29 @@ impl CursorShare {
     #[must_use]
     pub fn mode(&self) -> CursorMode {
         CursorMode::of(self.mode.load(Ordering::Acquire))
+    }
+
+    /// ★ **Worker**, once per copy: the active broker draws the guest's cursor itself (`CAP_CURSOR_STREAM`).
+    #[must_use]
+    pub fn stream(&self) -> bool {
+        self.stream.load(Ordering::Acquire)
+    }
+
+    /// **Relay**: publish whether the active broker advertised `CAP_CURSOR_STREAM`; whether it changed.
+    pub fn set_stream(&self, on: bool) -> bool {
+        self.stream.swap(on, Ordering::AcqRel) != on
+    }
+
+    /// ★ **Worker**, every pass: where the guest cursor image's top-left is on the frame (`None`: no
+    /// enabled cursor).
+    pub fn note_point(&self, p: Option<(i32, i32)>) {
+        self.point.set(p);
+    }
+
+    /// ★ **Relay**: the point the worker last noted.
+    #[must_use]
+    pub fn point(&self) -> Option<(i32, i32)> {
+        self.point.get()
     }
 
     /// **Relay**: publish the mode; whether it changed.
@@ -408,6 +462,74 @@ impl HotTracker {
         }
         self.hot
     }
+}
+
+/// ★ What the display layer found when it read the guest's cursor, as plain data (the GPU copy and
+/// the format conversions stay with the VMM; the DECISION is here, so any VMM gets it and it tests
+/// without a GPU).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CursorRead {
+    /// No cursor plane is armed or enabled (or no picture is shown): the guest draws a software
+    /// cursor into the frame itself, or none.
+    PlaneOff,
+    /// An image that shows nothing (wholly transparent, or an XOR mask that inverts nothing).
+    Empty,
+    /// A cursor that cannot be shown as an image (refused by name by the display layer).
+    Unshowable,
+    /// The image: `size` x `size` premultiplied ARGB, rows tight; the hot spot the guest
+    /// programmed; `xor`: the pixels are an XOR cursor's inversion mask (alpha 255 and the XOR
+    /// colour where it inverts) for a viewer that draws that itself.
+    Image {
+        /// Edge in pixels.
+        size: u32,
+        /// The programmed hot spot.
+        hot: (u32, u32),
+        /// `size * size * 4` bytes.
+        pixels: Vec<u8>,
+        /// An XOR mask.
+        xor: bool,
+    },
+}
+
+/// ★ The stream's per-copy decision: what the guest shows as its cursor NOW, for the viewer.
+/// `PlaneOff` and `Empty` are `Hidden` (the guest hid it, or draws its own into the frame — the
+/// viewer shows nothing). An `Unshowable` cursor is composed into the frame (`Composed`) unless
+/// the viewer streams: nothing composes under the stream, so it is `Hidden` there. An image takes
+/// its hot spot from `hot` (derived from the injected pointer in hover).
+///
+/// # Errors
+/// An image whose size or pixel count breaks [`CursorImage::new`]'s bounds.
+pub fn want_of(
+    read: CursorRead,
+    stream: bool,
+    hot: &mut HotTracker,
+    seq: u64,
+    now_ms: u64,
+    derived: Option<(u32, u32)>,
+) -> Result<CursorWant, String> {
+    match read {
+        CursorRead::PlaneOff | CursorRead::Empty => Ok(CursorWant::Hidden),
+        CursorRead::Unshowable if stream => Ok(CursorWant::Hidden),
+        CursorRead::Unshowable => Ok(CursorWant::Composed),
+        CursorRead::Image {
+            size,
+            hot: programmed,
+            pixels,
+            xor,
+        } => {
+            let at = hot.hot(&pixels, seq, now_ms, derived, programmed);
+            let i = CursorImage::new(size, size, at, pixels)?;
+            Ok(CursorWant::Image(Arc::new(if xor { i.into_xor() } else { i })))
+        }
+    }
+}
+
+/// ★ **Worker**: whether this copy composes the guest's cursor into the frame. A streaming viewer
+/// draws it itself in every mode: never. Otherwise [`CursorMode::composes`] (no mode state machine
+/// for the stream).
+#[must_use]
+pub fn composes(mode: CursorMode, stream: bool, want: &CursorWant) -> bool {
+    !stream && mode.composes(want)
 }
 
 /// One `CMD_CURSOR` op.
@@ -546,6 +668,56 @@ mod tests {
         );
         assert!(!CursorMode::Off.reads());
         assert!(CursorMode::Grabbed.reads() && CursorMode::Hover.reads());
+    }
+
+    /// ★ The stream's decision (plain inputs): plane off and empty images are hidden, an unshowable
+    /// cursor is composed unless the viewer streams (then hidden), an image carries its hot spot and
+    /// its XOR flag, and under the stream nothing is ever composed.
+    #[test]
+    fn the_stream_hides_what_is_not_drawn_and_composes_nothing() {
+        let mut hot = HotTracker::default();
+        let mut w = |r: CursorRead, stream: bool| want_of(r, stream, &mut hot, 0, 0, None).unwrap();
+        assert_eq!(w(CursorRead::PlaneOff, true), CursorWant::Hidden, "plane off: HIDE");
+        assert_eq!(w(CursorRead::PlaneOff, false), CursorWant::Hidden);
+        assert_eq!(w(CursorRead::Empty, true), CursorWant::Hidden);
+        assert_eq!(w(CursorRead::Unshowable, false), CursorWant::Composed);
+        assert_eq!(w(CursorRead::Unshowable, true), CursorWant::Hidden, "nothing composes under the stream");
+        let img = |xor| CursorRead::Image { size: 4, hot: (1, 2), pixels: vec![9; 64], xor };
+        let CursorWant::Image(a) = w(img(false), true) else { panic!() };
+        let CursorWant::Image(x) = w(img(true), true) else { panic!() };
+        assert!(!a.is_xor() && x.is_xor());
+        assert_eq!((a.width(), a.hot()), (4, (1, 2)));
+        assert_ne!(a.digest(), x.digest());
+        // a bad image is an error by name, not a panic
+        let bad = CursorRead::Image { size: 4, hot: (9, 9), pixels: vec![0; 64], xor: false };
+        assert!(want_of(bad, true, &mut HotTracker::default(), 0, 0, None).is_err());
+        // composes: the stream never; otherwise the mode's rule
+        for m in [CursorMode::Off, CursorMode::Grabbed, CursorMode::Hover] {
+            for want in [CursorWant::Hidden, CursorWant::Composed, CursorWant::Image(a.clone())] {
+                assert!(!composes(m, true, &want), "{m:?} {want:?}");
+                assert_eq!(composes(m, false, &want), m.composes(&want));
+            }
+        }
+    }
+
+    /// The XOR bit is part of an image's identity and of the share the relay writes.
+    #[test]
+    fn the_xor_bit_is_in_the_digest_and_the_share_carries_the_brokers_yes() {
+        let a = img(8, 8, (0, 0), 3);
+        let x = CursorImage::new(8, 8, (0, 0), a.pixels().to_vec()).unwrap().into_xor();
+        assert!(x.is_xor() && !a.is_xor());
+        assert_ne!(a.digest(), x.digest());
+        assert_eq!(x.clone().into_xor().digest(), x.digest(), "idempotent");
+        let s = CursorShare::new();
+        assert!(!s.stream());
+        assert!(s.set_stream(true));
+        assert!(!s.set_stream(true), "no change");
+        assert!(s.stream());
+        assert_eq!(s.point(), None);
+        s.note_point(Some((-3, 700)));
+        assert_eq!(s.point(), Some((-3, 700)));
+        s.note_point(None);
+        assert_eq!(s.point(), None);
     }
 
     /// ★ The hot spot NVKMS does not program: a new image takes the derived one at once (else the
