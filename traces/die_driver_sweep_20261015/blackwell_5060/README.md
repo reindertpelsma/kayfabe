@@ -116,3 +116,17 @@ RMscalarrows or capturedpage/boardtables added; rejectedRPCcapture remainsFAIL.
 Befored8afb5a34 compiled/failsauthored0vs102; afterfix/fullCPU pending. Unknown
 otherdies and570/590/595 keyscleanlyremainunmeasured. Windowsbaselineimage
 transfercontrollerPID2064990 started, no timingbenchmarks whileprep/transfersrun.
+
+## Full isolated CPU regression PASS20:28:48UTC
+
+Sourceef8cd9dda: exactcapsafter14pass/0fail/2ignored; fullkf-*3248pass/0fail/
+14ignored,207resultgroups,2buildjobs ontrustedCPUhost withisolated
+/data/codex/target-blackwell-hw. ProductRust/data arec2092cf7b (laterinventory/
+negativefixture updates do not alter runtime). Logs caps-after.log/all-tests.log.
+Befored8 testfails0vs102; firstafterpositivepasses butoldnegativefixturestill
+listednow-measuredGB206 andfailed. Thatresultretainedincaps-after-first.log;
+fixture movedtoGB205 withallrefusalassertionsunchanged. No test-budgetrelaxation.
+
+Rentalphase2PID28198 currentlypreparesguest/QEMU, imagepushPID2064990; no
+GPUtimingwhilebuilds/transfersrun. Gates/nativeLinux/raw/CUDA/broker/Windows
+remainpending. This CPU result and nativephysicalcaps do not establishguestpass.

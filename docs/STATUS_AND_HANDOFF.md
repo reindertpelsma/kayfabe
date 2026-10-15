@@ -1,5 +1,37 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-15 20:31UTC — GB206 exactcapsfix CPU3248pass; builds/transfers running
+
+Own56141654 only,timer2050117 unchanged22:15:05UTC/hardcap22:20:04. Restored
+Linux595.91.07open works; UID65534/CapEff0 MC_GET_ARCH_INFO confirmsGB206
+arch1b0/impl6 (phase1exit0at20:20:18). ExactT3die/580/classCA73 word00c=102
+fromboundednative580Windowslegacy/GSPreads registeredatc2092cf7b. NoRMscalar
+rows added: fullnativeRPCcapturesfailed and2801/2806 allowlistempty. Native
+Code0/CUDA3/D3D11+12/0TDRshortsuitespassed; no kayfabeBlackwellpassyet.
+
+Befored8afb5a34 exactcapstestcompiles/fails0vs102. Sourceef8cd9dda after14caps
+pass/0fail/2ignored; fullisolatedkf-*3248/0/14ignored,exit0at20:28:48. Firstafter
+oldnegativefixturecalledGB206unmeasured; retainedfailure, movedfixturetoGB205
+withoutweakeningassertions. TrustedCPU/data/codex/blackwell-hw,target-blackwell-hw,
+2jobs, nowidle. Independentwalkcandidateffd72e3d4 CPU3252/0/14,draftPR11, still
+unmerged/hardwareunrun. ProductionBlackwellRust/data arec209 (laterdoc/testonly).
+
+Rentalphase2PID28198/log/root/prov/codex_blackwell_phase2.log prepares bench tree,
+frozenrawclient/packedguest/kf3. Startedatc209; do not pull whilebuilding. Imagepush
+controllerPID2064990/log/workspace/codex/blackwell5060-push-windows.log streams
+owncompressedbaseline (13,866,432,000B,SHA539aaad2...);13chunks2jobs. Waitbuild
+READY/exit0 andfullimagehashPASS andsenderexit beforetiming. Thenpulllatestown
+branch ifneeded, runv3_gates ->revisionbuild ->rawrebuild/fastguest ->native raw30/
+CUDA4 ->guest raw30/CUDA4, allserial andunchanged180s. Broker/Windowsfollow.
+ActualfirstWindowsrefusal needed before runtimefix; publicBlackwellGPGET/REF/
+marker gap documented inblackwell_plan.md. No writableprivatefence workaround.
+
+SSHaliascodex-blackwell-linux(root,pinnedUbuntuPublickey) nowvalid; nativeWindows
+aliaspinnedfinalkeybelongs erasedOS, neveroverrideit. Initialrestorebootstrap
+2063029 endedafterminimalmissinglspci; packagepreflightrepairedthenphase1ran.
+Nativecapturemodulewasstoppedandalltextevidencepushedbeforeerase. OwnerVM/GPU
+untouched; otheractive/processparagraphsbelow historical/superseded.
+
 ## UPDATE 2026-10-15 20:06UTC — Blackwell nativefacts saved; Linuxreturn ready
 
 Own56141654 only,timer2050117 deadline22:15:05/hardcap22:20:04UTC. NativeWindows
