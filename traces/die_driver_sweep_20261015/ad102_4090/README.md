@@ -165,3 +165,17 @@ binds/flags580.88 and shuts down via QGA. Fresh phase2 reports NVIDIA
 Code0/CM_PROB_NONE,1920x1080@60Hz, DWM1/Explorer1. No app pass yet: first
 probe deployment accidentally used a literal filename; strict hash/path checks
 refused. Correcting the deployment and rerunning acceptance before any cell pass.
+
+## Windows guest acceptance,14:41UTC
+
+QEMUda0569a6, host595.91.07 open, guest580.88/32.0.15.8088 LTSC26100:
+Code0,1920x1080@60Hz, DWM1/Explorer1. Hash-verified CUDAcup2/cup3/cup8
+all pass,2048x2048 matrix bad0/maxerr0. D3D11hardware compute/draw and D3D12
+hardware compute/fences pass,20iterations each, WARP excluded. Event4101
+since boot0; independent System-log read succeeds. Host Xid count0 during
+phase2/app window14:36:20–14:41:45UTC (15 pre-existing Xid during earlier
+Linux fault-suite work are not erased). This is a short-suite result, no Edge
+long-run/S3 claim. Frame1920x1080,78,757colors, rendered pixel hash inwindows/frame.txt.
+The GPU-backed Windows acceptance cell passes; Linux graphics/broker and more
+driver builds remain required. Individual necessity of the three T3 rows was
+not ablated. All old timer/provisioning/deployment failures remain recorded.
