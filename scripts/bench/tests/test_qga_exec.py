@@ -4,8 +4,11 @@
 import base64
 import importlib.util
 import io
+import json
 from pathlib import Path
 import socket
+import tempfile
+import threading
 import unittest
 from unittest.mock import Mock, patch
 
@@ -55,12 +58,63 @@ class GuestExecTests(unittest.TestCase):
         self.assertEqual(opens, 1)
 
     def test_deadline_expires_during_reconnection(self):
-        with patch.object(qmp.time, "monotonic", side_effect=[0, 0, 0, 6]):
-            rc, sends, _, _ = self.run_exec([
+        with patch.object(qmp.time, "monotonic", side_effect=[0, 0, 0, 0, 6, 6]):
+            rc, sends, opens, _ = self.run_exec([
                 {"return": {"pid": 73}}, socket.timeout("delayed agent"),
             ], opens=[(Mock(), Mock()), socket.timeout("still unavailable")])
         self.assertEqual(rc, 124)
+        self.assertEqual(opens, 2)
         self.assertEqual(sum(m["execute"] == "guest-exec" for m in sends), 1)
+
+    def test_unavailable_reconnect_preserves_the_original_pid(self):
+        rc, sends, opens, _ = self.run_exec([
+            {"return": {"pid": 73}}, EOFError("disconnected"),
+            {"return": {"exited": True, "exitcode": 0}},
+        ], opens=[(Mock(), Mock()), OSError("not ready"), (Mock(), Mock())])
+        self.assertEqual(rc, 0)
+        self.assertEqual(opens, 3)
+        self.assertEqual([m["execute"] for m in sends],
+                         ["guest-exec", "guest-exec-status", "guest-exec-status"])
+        self.assertEqual(sends[-1]["arguments"], {"pid": 73})
+
+    def test_real_socket_disconnect_does_not_duplicate_guest_execution(self):
+        requests, errors = [], []
+        with tempfile.TemporaryDirectory() as directory:
+            path = str(Path(directory) / "qga.sock")
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
+                listener.bind(path)
+                listener.listen(2)
+                listener.settimeout(5)
+
+                def agent():
+                    try:
+                        for attempt in range(2):
+                            with listener.accept()[0] as conn:
+                                conn.settimeout(5)
+                                with conn.makefile("rwb", buffering=0) as f:
+                                    sync = json.loads(f.readline())
+                                    qmp.send(f, {"return": sync["arguments"]["id"]})
+                                    msg = json.loads(f.readline())
+                                    requests.append(msg)
+                                    if attempt == 0:
+                                        qmp.send(f, {"return": {"pid": 73}})
+                                        requests.append(json.loads(f.readline()))
+                                        # The process still exists. Lose only this status reply.
+                                    else:
+                                        qmp.send(f, {"return": {"exited": True, "exitcode": 7}})
+                    except Exception as error:
+                        errors.append(error)
+
+                worker = threading.Thread(target=agent, daemon=True)
+                worker.start()
+                result = qmp.qga_exec(path, "probe.exe", ["--check"], timeout=5)
+                worker.join(timeout=6)
+                self.assertFalse(worker.is_alive())
+                self.assertEqual(errors, [])
+        self.assertEqual(result, 7)
+        self.assertEqual([m["execute"] for m in requests],
+                         ["guest-exec", "guest-exec-status", "guest-exec-status"])
+        self.assertEqual([m["arguments"]["pid"] for m in requests[1:]], [73, 73])
 
 
 if __name__ == "__main__":
