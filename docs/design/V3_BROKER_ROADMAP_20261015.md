@@ -25,12 +25,18 @@ A small tool talking to the running broker over a local unix socket (same uid, m
 - Later: set broker options at runtime (e.g. cursor style). A capability change mid-connection needs an event to the VMM; do it
   only after A is verified.
 
-## C. Headless broker for streaming (planned)
-A broker with no window: a backend that exposes a high-quality VNC-like stream over the network, no in-guest tools. Open design
-questions: the broker has **no GPU stack by design**, but encoding wants one (NVENC or a CPU encoder), so the encoder is probably a
-separate backend process receiving the same frame fds; the network side needs authentication and TLS before it listens on anything
-but loopback/unix; cursor travels as a separate stream (the broker already owns it, item A); input comes back through the same
-event path as item B.
+## C. Headless broker for streaming (planned; owner scope decision 2026-10-15: LOCAL NETWORK ONLY)
+A broker with no window: a backend that exposes a high-quality VNC-like stream on the **local network**, no in-guest tools. **Out of
+scope, by owner decision: making it reachable from the internet.** Whoever wants that puts a mature gateway in front (Apache
+Guacamole or similar); kayfabe does not wire one, and does not build TLS termination, user management or NAT traversal.
+What that scope still needs: it listens only where it is told to (default unix socket / loopback; a LAN address needs an explicit
+option), and a simple shared secret so that the LAN is not an open console (the transport security of anything beyond the LAN is the
+gateway's job). Open design questions: (1) **which protocol**: a gateway like Guacamole already ingests VNC (RFB), RDP and SSH, so
+speaking RFB (with its better encodings; H.264 extensions exist in some servers and clients, not verified here) would work with such
+gateways and standard viewers without us wiring anything; a custom protocol would not. Inferred, not decided. (2) the broker has **no GPU
+stack by design**, but encoding wants one (NVENC or a CPU encoder), so the encoder is probably a separate backend process receiving the
+same frame fds. (3) the cursor travels as a separate stream (the broker already owns it, item A; RFB has a cursor pseudo-encoding);
+input comes back through the same event path as item B.
 
 ## D. Clipboard (protocol exists, kayfabe side not wired)
 **Measured:** the protocol has `EV_CLIPBOARD` (host to guest, chunked, 1 s window per direction), `CMD_CLIPBOARD` (guest to host),
