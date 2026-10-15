@@ -18,3 +18,9 @@ SET_SURFACE_ADDRESS_HI/LO_ISO. Address high32 plus low31:4; independent
 ENABLE, TARGET and KIND. The whole framebuffer store belongs to this guest;
 IOVA has no display IOMMU on discrete GPUs, and system-memory scanout remains
 unsupported by the existing compositor. Neither aperture may be treated as vidmem.
+
+Follow-up hypothesis, before the added check: the engine's existing nonzero-ISO
+predicate mistakes retained CAX address/target bits for an enabled surface, even
+when ENABLE is clear. Falsifier: a disabled, nonzero LO_ISO word is already
+classified inactive. Test the activation predicate after the disable latch,
+then resolve the enable field from the generated table if it fails.

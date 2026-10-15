@@ -2525,6 +2525,8 @@ fn gb20x_scanout_latches_iso_address_aperture_kind_and_plane_one() {
                 assert_eq!(e.scanout(&sv, 0).unwrap().address, s.address);
                 e.vblank(0, &mut all_ok);
                 assert!(e.scanout(&sv, 0).is_none());
+                assert!(!e.window_was_active(1, &e.heads_armed()),
+                    "ENABLE clear must mean inactive even with retained address/target bits");
             }
         }
     }
