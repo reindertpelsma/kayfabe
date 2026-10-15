@@ -13,15 +13,15 @@
 //! caller's stack** (between the parallel walk and the diff, and again before the read-back),
 //! which `THE_TRANSLATED_PLANE.md` §5 and `THE_CONSTRAINTS.md` §41 forbid for a worker. Now:
 //! - [`WalkKernel::submit`] queues the whole walk on the kernel's **own stream** — the pdb
-//!   upload, every launch, the report read-back into **pinned** host memory — and ends it with
-//!   a `cuLaunchHostFunc` that writes an **eventfd** ([`WalkKernel::completion_fd`]). It returns
-//!   as soon as the work is queued.
-//! - [`WalkKernel::try_collect`] never blocks: it drains the fd (or, when the fd is silent,
-//!   asks `cuEventQuery` so a device fault is still named) and, once the walk is done, decodes
-//!   the report from pinned memory.
-//! - [`WalkKernel::refresh`] survives as `submit` + a `poll(2)` on the fd, **for harnesses and
-//!   the selftest only**. It runs no `cuCtxSynchronize` either; [`WalkKernel::ctx_sync_calls`]
-//!   is the counter gate 8 reads to prove it.
+//!   upload, every launch, the report in **pinned** host memory — then explicitly records a
+//!   completion event on that stream. It returns as soon as the work is queued. The graph
+//!   has no host callback per walk (the TU106 R34 callback/IRQ experiment, 2026-10-15).
+//! - [`WalkKernel::try_collect`] never blocks: `cuEventQuery` must prove the current walk
+//!   finished before the pinned report is decoded; a device fault is named and refuses it.
+//! - The VA worker checks a pending event at most every millisecond, retaining its 50ms
+//!   idle backstop and every observed nonstall interrupt. [`WalkKernel::refresh`] keeps a
+//!   bounded harness-only `poll(2)` between queries. No `cuCtxSynchronize` is added;
+//!   [`WalkKernel::ctx_sync_calls`] is the counter gate 8 reads to prove it.
 //!
 //! # ★★★★★ 2026-09-25 — THE WALK EMITS A DIFF, COMMITTED ON ACK
 //!
@@ -613,6 +613,8 @@ pub struct WalkKernel {
     pin_at: PinLayout,
     done_fd: CompletionFd,
     inflight: Option<InFlight>,
+    /// A failed tail record/query forbids storage reuse until context teardown.
+    completion_failed: bool,
     /// ★ P4b: the captured walk; `None` only when this driver has no graph API (then every
     /// walk is submitted launch by launch, and [`WalkKernel::submits_as_graph`] says so).
     graph: Option<WalkGraph>,
@@ -938,6 +940,7 @@ impl WalkKernel {
             pin_at,
             done_fd,
             inflight: None,
+            completion_failed: false,
             graph: None,
             par,
             fmt,
@@ -1091,8 +1094,8 @@ impl WalkKernel {
     /// Each entry walks `pdb` and is diffed against slot `slot`'s committed placements. The
     /// graph's first node commits the verdict staged by [`WalkKernel::ack`] on the PREVIOUS
     /// report (and empties the slots [`WalkKernel::reset_slot`] released); then the walk, the
-    /// diff, the report read-back into pinned memory, and a host function that signals
-    /// [`WalkKernel::completion_fd`]. **Nothing here waits on the GPU.**
+    /// diff, the report in pinned memory, and a fresh completion event on the same stream.
+    /// [`WalkKernel::try_collect`] queries it; **nothing here waits on the GPU**.
     ///
     /// # Errors
     /// [`CudaError::Refused`] naming the call; also refused, by name, when a walk is already in
@@ -1128,6 +1131,12 @@ impl WalkKernel {
         gpga_len: u64,
         entries: &[WalkEntry],
     ) -> Result<(), CudaError> {
+        if self.completion_failed {
+            return Err(refused(
+                "WalkKernel::submit",
+                "a completion observation failed; recreate the walker/context".to_string(),
+            ));
+        }
         if self.inflight.is_some() {
             return Err(refused(
                 "WalkKernel::submit",
@@ -1194,14 +1203,23 @@ impl WalkKernel {
         self.pin.write(at.ack, bytes_of(&ack));
         let args = self.args_for(gpga, gpga_len, npdb);
         if let Some(mut g) = self.graph.take() {
-            // ★ P4b: ONE driver call for the whole walk, plus a setter per args-bearing node
-            // only when the store or the entry count changed since the last walk.
+            // ★ P4b: one graph launch for the walk, followed by its completion event; setters
+            // run only when the store or entry count changed since the last walk.
             let r = Self::update_graph(&self.cu, &mut g, &args, npdb)
                 .and_then(|()| self.cu.graph_launch(g.exec, s));
             self.graph = Some(g);
             r?;
         } else {
             self.enqueue_walk(&args, npdb, &mut None)?;
+        }
+        // A fresh host-side record captures THIS launch, replacing the previous event state.
+        // Keeping this outside capture avoids relying on when a replayed record node resets
+        // a reused event. No host callback and no wait; the report precedes it on the stream.
+        if let Err(e) = self.cu.event_record(self.ev_done, s) {
+            // Work already reached the GPU. Never reuse its pinned storage without proof;
+            // only context teardown may reclaim this walker after a failed tail record.
+            self.completion_failed = true;
+            return Err(e);
         }
         self.inflight = Some(InFlight {
             gpga_len,
@@ -1287,7 +1305,8 @@ impl WalkKernel {
         crate::completion::poll_ms(self.in_flight())
     }
 
-    /// ★ The fd a walk's completion is signalled on — put it in the worker's `epoll` set.
+    /// Bring-up completion fd, retained for existing epoll registration. Pending walks use
+    /// [`Self::completion_poll_ms`] and real GPU-event queries; no per-walk callback writes it.
     #[must_use]
     pub fn completion_fd(&self) -> &CompletionFd {
         &self.done_fd
@@ -1328,23 +1347,13 @@ impl WalkKernel {
             return Ok(None);
         };
         let ready = crate::completion::ready(self.done_fd.drain() != 0, || {
-            // The fd is silent. Ask the event, so a failed stream — whose host function may
-            // never run — is named rather than waited on forever.
-            match self.cu.event_query(self.ev_done) {
-                Ok(false) => Ok(false),
-                Ok(true) => {
-                    // `ev_done` follows the host signal in the stream, so the fd was written;
-                    // consume it now so it cannot complete the next walk.
-                    let _ = self.done_fd.drain();
-                    Ok(true)
-                }
-                Err(e) => Err(e),
-            }
+            self.cu.event_query(self.ev_done)
         });
         match ready {
             Ok(false) => return Ok(None),
             Ok(true) => {}
             Err(e) => {
+                self.completion_failed = true;
                 self.inflight = None;
                 return Err(e);
             }
@@ -1544,9 +1553,9 @@ impl WalkKernel {
                     name: format!("the walk did not complete within {timeout_ms} ms"),
                 });
             }
-            // ⊘ Short slices, so a failed stream (no host function will ever run) is named by
-            // the next `try_collect`'s event query rather than waited out.
-            let slice = i32::try_from(left.as_millis().min(50)).unwrap_or(50);
+            // The fd is only a wake hint; promptly query the real GPU completion/error.
+            let slice = i32::try_from(left.as_millis().min(u128::from(self.completion_poll_ms())))
+                .unwrap_or(1);
             let _ = self.done_fd.wait_readable(slice);
         }
     }
@@ -1682,12 +1691,9 @@ impl WalkKernel {
         let _ = (s, at);
         let capturing = rec.is_some();
         self.record(self.ev_copied, capturing)?;
-        // ⊘ ORDER: the host signal BEFORE `ev_done`. Then `ev_done` complete ⇒ the fd was
-        // written, so a collect that saw the event can always drain the signal — a signal left
-        // behind would complete the NEXT walk before it ran. Under capture the host function
-        // becomes a HOST NODE of the graph: it runs on every replay, same fd, same order.
-        self.cu.launch_host_signal(s, &self.done_fd)?;
-        self.record(self.ev_done, capturing)
+        // The completion event is recorded explicitly after launch, outside this graph.
+        // A replay needs no host callback; real CUDA completion remains the sole proof.
+        Ok(())
     }
 
     /// `cuEventRecord`, or — under capture — the external record that becomes a graph node.
