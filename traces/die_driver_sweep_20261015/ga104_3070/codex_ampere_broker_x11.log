@@ -1,0 +1,20 @@
+START 2026-10-15T10:46:02+00:00
+CINNAMON 1 XORG 1
+NVIDIA GeForce RTX 3070, 580.159.04, 108 MiB
+OpenGL vendor string: NVIDIA Corporation
+OpenGL renderer string: NVIDIA GeForce RTX 3070/PCIe/SSE2
+Running synchronized to the vertical refresh.  The framerate should be
+approximately the same as the monitor refresh rate.
+302 frames in 5.0 seconds = 60.261 FPS
+301 frames in 5.0 seconds = 59.992 FPS
+301 frames in 5.0 seconds = 59.998 FPS
+VKCUBE rc=124
+GUEST_DMESG flip_timeouts=0 nvassert=12 xid=0
+GUEST_DONE
+nvkvm-broker: shm tier: not requiring DRI3 or Present (frames arrive as shared memory and are put on screen with core PutImage)
+nvkvm-broker: shm tier: advertising no dma-buf format (frames are shared memory), so no modifier query is made
+X11_WINDOW width=1920 height=1080 colors=13662 sha256=254368133a977ac2e15aff129332f30e10281e3152faa55701a2c4d6575fdb41
+X11_PRESENTATION_CHECKED=1
+DISPLAY_STALLS=36
+BROKER_DESKTOP_VERDICT=PASS
+EXIT rc=0 2026-10-15T10:48:16+00:00

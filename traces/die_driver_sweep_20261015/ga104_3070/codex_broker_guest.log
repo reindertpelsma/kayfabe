@@ -1,0 +1,12 @@
+CINNAMON 1 XORG 1
+NVIDIA GeForce RTX 3070, 580.159.04, 97 MiB
+OpenGL vendor string: NVIDIA Corporation
+OpenGL renderer string: NVIDIA GeForce RTX 3070/PCIe/SSE2
+Running synchronized to the vertical refresh.  The framerate should be
+approximately the same as the monitor refresh rate.
+301 frames in 5.0 seconds = 60.055 FPS
+300 frames in 5.0 seconds = 59.993 FPS
+300 frames in 5.0 seconds = 59.993 FPS
+VKCUBE rc=124
+GUEST_DMESG flip_timeouts=0 nvassert=12 xid=0
+GUEST_DONE
