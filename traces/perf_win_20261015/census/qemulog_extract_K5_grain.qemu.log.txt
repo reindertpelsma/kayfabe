@@ -1,0 +1,60 @@
+kf3: DOORBELL-LEDGER tok=0x0000000c route=passthrough rung=2025 emulated=0 forwarded=2025 host=0x33 trap=2025 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000817 route=passthrough rung=1 emulated=0 forwarded=1 host=0x1003e trap=1 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000816 route=passthrough rung=1 emulated=0 forwarded=1 host=0x1003d trap=1 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000815 route=passthrough rung=1 emulated=0 forwarded=1 host=0x1003c trap=1 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000814 route=passthrough rung=96 emulated=0 forwarded=96 host=0x1003b trap=96 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000101b route=passthrough rung=1 emulated=0 forwarded=1 host=0x20042 trap=1 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000101a route=passthrough rung=1 emulated=0 forwarded=1 host=0x20041 trap=1 fast=0
+kf3: DOORBELL-LEDGER tok=0x00001019 route=passthrough rung=1 emulated=0 forwarded=1 host=0x20040 trap=1 fast=0
+kf3: DOORBELL-LEDGER tok=0x00001018 route=passthrough rung=63 emulated=0 forwarded=63 host=0x2003f trap=63 fast=0
+kf3: MAPSTAT calls=1024 <64K:796(3MiB) 64K-2M:133(47MiB) 2M-64M:83(738MiB) >=64M:12(38424MiB) flag[4K=917 HUGE=87 default=20]
+kf3: act birth passthrough: chan 0xc1d0001f:0xbeef0100 BORN Passthrough: token 0x8 -> host 0x2f in VasKey(13965662580823229184) gpfifo=0x4070000x32768 userd=Store { store: 3405643781, off: 58981888 } engine=0x1 declared_kernel_pid=false privilege=0 rc=armed late_joiner_schedule=Some(GuestNotScheduled) fast=off (1867 us, off the GSP lock)
+kf3: act birth passthrough: chan 0xc1d0001f:0xbeef0101 BORN Passthrough: token 0x809 -> host 0x10030 in VasKey(13965662580823229184) gpfifo=0x4150000x32768 userd=Store { store: 3405643781, off: 58981376 } engine=0xb declared_kernel_pid=false privilege=0 rc=armed late_joiner_schedule=Some(NoTsg) fast=off (1519 us, off the GSP lock)
+kf3: act birth passthrough: chan 0xc1d0001f:0xbeef0102 BORN Passthrough: token 0x100a -> host 0x20031 in VasKey(13965662580823229184) gpfifo=0x41b0000x32768 userd=Store { store: 3405643781, off: 58980864 } engine=0xc declared_kernel_pid=false privilege=0 rc=armed late_joiner_schedule=Some(NoTsg) fast=off (1527 us, off the GSP lock)
+kf3: MAPSTAT calls=1536 <64K:1238(4MiB) 64K-2M:156(56MiB) 2M-64M:130(1174MiB) >=64M:12(38424MiB) flag[4K=1382 HUGE=134 default=20]
+kf3: MAPSTAT calls=2048 <64K:1634(6MiB) 64K-2M:202(119MiB) 2M-64M:200(1398MiB) >=64M:12(38424MiB) flag[4K=1824 HUGE=204 default=20]
+kf3: MAPSTAT calls=2560 <64K:2114(8MiB) 64K-2M:215(137MiB) 2M-64M:219(1476MiB) >=64M:12(38424MiB) flag[4K=2317 HUGE=223 default=20]
+kf3: MAPSTAT calls=3072 <64K:2626(10MiB) 64K-2M:215(137MiB) 2M-64M:219(1476MiB) >=64M:12(38424MiB) flag[4K=2829 HUGE=223 default=20]
+kf3: MAPSTAT calls=3584 <64K:3136(12MiB) 64K-2M:215(137MiB) 2M-64M:221(1480MiB) >=64M:12(38424MiB) flag[4K=3339 HUGE=225 default=20]
+kf3: MAPSTAT calls=4096 <64K:3648(14MiB) 64K-2M:215(137MiB) 2M-64M:221(1480MiB) >=64M:12(38424MiB) flag[4K=3851 HUGE=225 default=20]
+kf3: MAPSTAT calls=4608 <64K:4160(16MiB) 64K-2M:215(137MiB) 2M-64M:221(1480MiB) >=64M:12(38424MiB) flag[4K=4363 HUGE=225 default=20]
+kf3: MAPSTAT calls=5120 <64K:4672(18MiB) 64K-2M:215(137MiB) 2M-64M:221(1480MiB) >=64M:12(38424MiB) flag[4K=4875 HUGE=225 default=20]
+kf3: MAPSTAT calls=5632 <64K:5184(20MiB) 64K-2M:215(137MiB) 2M-64M:221(1480MiB) >=64M:12(38424MiB) flag[4K=5387 HUGE=225 default=20]
+kf3: MAPSTAT calls=6144 <64K:5696(22MiB) 64K-2M:215(137MiB) 2M-64M:221(1480MiB) >=64M:12(38424MiB) flag[4K=5899 HUGE=225 default=20]
+kf3: MAPSTAT calls=6656 <64K:6208(24MiB) 64K-2M:215(137MiB) 2M-64M:221(1480MiB) >=64M:12(38424MiB) flag[4K=6411 HUGE=225 default=20]
+kf3: MAPSTAT calls=7168 <64K:6720(26MiB) 64K-2M:215(137MiB) 2M-64M:221(1480MiB) >=64M:12(38424MiB) flag[4K=6923 HUGE=225 default=20]
+kf3: MAPBIG hDma=0xcafe00ad len=0x4000000 flag=0x400 fixed=true slice=true
+kf3: MAPSTAT calls=7680 <64K:7183(28MiB) 64K-2M:238(145MiB) 2M-64M:246(1680MiB) >=64M:13(38488MiB) flag[4K=7409 HUGE=251 default=20]
+kf3: MAPSTAT calls=8192 <64K:7694(30MiB) 64K-2M:239(145MiB) 2M-64M:246(1680MiB) >=64M:13(38488MiB) flag[4K=7921 HUGE=251 default=20]
+kf3: MAPSTAT calls=8704 <64K:8206(32MiB) 64K-2M:239(145MiB) 2M-64M:246(1680MiB) >=64M:13(38488MiB) flag[4K=8433 HUGE=251 default=20]
+kf3: MAPSTAT calls=9216 <64K:8717(34MiB) 64K-2M:240(146MiB) 2M-64M:246(1680MiB) >=64M:13(38488MiB) flag[4K=8945 HUGE=251 default=20]
+kf3: MAPSTAT calls=9728 <64K:9229(36MiB) 64K-2M:240(146MiB) 2M-64M:246(1680MiB) >=64M:13(38488MiB) flag[4K=9457 HUGE=251 default=20]
+kf3: MAPSTAT calls=10240 <64K:9741(38MiB) 64K-2M:240(146MiB) 2M-64M:246(1680MiB) >=64M:13(38488MiB) flag[4K=9969 HUGE=251 default=20]
+kf3: MAPSTAT calls=10752 <64K:10253(40MiB) 64K-2M:240(146MiB) 2M-64M:246(1680MiB) >=64M:13(38488MiB) flag[4K=10481 HUGE=251 default=20]
+kf3: MAPSTAT calls=11264 <64K:10765(42MiB) 64K-2M:240(146MiB) 2M-64M:246(1680MiB) >=64M:13(38488MiB) flag[4K=10993 HUGE=251 default=20]
+kf3: MAPSTAT calls=11776 <64K:11277(44MiB) 64K-2M:240(146MiB) 2M-64M:246(1680MiB) >=64M:13(38488MiB) flag[4K=11505 HUGE=251 default=20]
+kf3: MAPSTAT calls=12288 <64K:11789(46MiB) 64K-2M:240(146MiB) 2M-64M:246(1680MiB) >=64M:13(38488MiB) flag[4K=12017 HUGE=251 default=20]
+kf3: MAPSTAT calls=12800 <64K:12301(48MiB) 64K-2M:240(146MiB) 2M-64M:246(1680MiB) >=64M:13(38488MiB) flag[4K=12529 HUGE=251 default=20]
+kf3: MAPSTAT calls=13312 <64K:12813(50MiB) 64K-2M:240(146MiB) 2M-64M:246(1680MiB) >=64M:13(38488MiB) flag[4K=13041 HUGE=251 default=20]
+kf3: MAPSTAT calls=13824 <64K:13325(52MiB) 64K-2M:240(146MiB) 2M-64M:246(1680MiB) >=64M:13(38488MiB) flag[4K=13553 HUGE=251 default=20]
+kf3: MAPSTAT calls=14336 <64K:13837(54MiB) 64K-2M:240(146MiB) 2M-64M:246(1680MiB) >=64M:13(38488MiB) flag[4K=14065 HUGE=251 default=20]
+kf3: MAPSTAT calls=14848 <64K:14347(56MiB) 64K-2M:240(146MiB) 2M-64M:248(1684MiB) >=64M:13(38488MiB) flag[4K=14575 HUGE=253 default=20]
+kf3: MAPSTAT calls=15360 <64K:14852(58MiB) 64K-2M:240(146MiB) 2M-64M:255(1718MiB) >=64M:13(38488MiB) flag[4K=15080 HUGE=260 default=20]
+kf3: MAPSTAT calls=15872 <64K:15342(60MiB) 64K-2M:248(150MiB) 2M-64M:269(1798MiB) >=64M:13(38488MiB) flag[4K=15578 HUGE=274 default=20]
+kf3: MAPSTAT calls=16384 <64K:15852(62MiB) 64K-2M:248(150MiB) 2M-64M:271(1818MiB) >=64M:13(38488MiB) flag[4K=16088 HUGE=276 default=20]
+kf3: MAPSTAT calls=16896 <64K:16364(64MiB) 64K-2M:248(150MiB) 2M-64M:271(1818MiB) >=64M:13(38488MiB) flag[4K=16600 HUGE=276 default=20]
+kf3: MAPSTAT calls=17408 <64K:16870(66MiB) 64K-2M:248(150MiB) 2M-64M:277(1858MiB) >=64M:13(38488MiB) flag[4K=17106 HUGE=282 default=20]
+kf3: MAPSTAT calls=17920 <64K:17340(67MiB) 64K-2M:263(153MiB) 2M-64M:304(2016MiB) >=64M:13(38488MiB) flag[4K=17591 HUGE=309 default=20]
+kf3: MAPSTAT calls=18432 <64K:17852(69MiB) 64K-2M:263(153MiB) 2M-64M:304(2016MiB) >=64M:13(38488MiB) flag[4K=18103 HUGE=309 default=20]
+kf3: MAPBIG hDma=0xcafe00ad len=0x4000000 flag=0x400 fixed=true slice=true
+kf3: MAPBIG hDma=0xcafe00ad len=0x4000000 flag=0x400 fixed=true slice=true
+kf3: DOORBELL-LEDGER tok=0x00000809 route=passthrough rung=0 emulated=0 forwarded=0 host=0x10030 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000100a route=passthrough rung=0 emulated=0 forwarded=0 host=0x20031 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000008 route=passthrough rung=293065 emulated=0 forwarded=293065 host=0x2f trap=293065 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000806 route=passthrough rung=0 emulated=0 forwarded=0 host=0x1002d trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00001007 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2002e trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000005 route=passthrough rung=53063 emulated=0 forwarded=53063 host=0x2c trap=53063 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000004 route=passthrough rung=17 emulated=0 forwarded=17 host=0x2b trap=17 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000003 route=passthrough rung=18145 emulated=0 forwarded=18145 host=0x2a trap=18145 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10029 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=543 host=0x10028 fast=0

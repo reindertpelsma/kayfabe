@@ -1,0 +1,8 @@
+qpid=1757316 worker0=1757353 worker1=1757354 start=2026-10-15T19:38:46+02:00
+trace_s done 19:39:26
+record done 19:40:19
+8368 /data/claude-perf/ev/heaven/w_gl/wtrace/ioctl_raw.txt
+     0.000 ( 0.046 ms): kf3-worker1/1757354 ioctl(fd: 44, cmd: (READ|WRITE, 0x46, 0x4e, 0x38), arg: 0x7955305da720) = 0
+     0.079 ( 0.030 ms): kf3-worker1/1757354 ioctl(fd: 44, cmd: (READ|WRITE, 0x46, 0x4f, 0x20), arg: 0x7955305da830) = 0
+     0.123 ( 0.022 ms): kf3-worker1/1757354 ioctl(fd: 44, cmd: (READ|WRITE, 0x46, 0x4e, 0x38), arg: 0x7955305da720) = 0
+end=2026-10-15T19:40:27+02:00

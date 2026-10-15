@@ -1,0 +1,7 @@
+START 22:08:05.918 user=KAYFABE-WINDOWS$ session=0
+PRE guest_cpu_pct=0.6
+REP 0 dev=CUDA spp=128 warmup=True rc=0 wall_s=14.5 render_s=6.96 warmup_s=2.36 scene_s=4.27 status=ok device=CUDA:NVIDIA GeForce RTX 4070
+REP 1 dev=CUDA spp=128 warmup=False rc=0 wall_s=14.5 render_s=6.91 warmup_s=2.42 scene_s=4.32 status=ok device=CUDA:NVIDIA GeForce RTX 4070
+REP 2 dev=CUDA spp=128 warmup=False rc=0 wall_s=18.5 render_s=8.22 warmup_s=3.72 scene_s=5.58 status=ok device=CUDA:NVIDIA GeForce RTX 4070
+REP 3 dev=CUDA spp=128 warmup=False rc=0 wall_s=14.8 render_s=6.96 warmup_s=2.4 scene_s=4.54 status=ok device=CUDA:NVIDIA GeForce RTX 4070
+END 22:09:10.458

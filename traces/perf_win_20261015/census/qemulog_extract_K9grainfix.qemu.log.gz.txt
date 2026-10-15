@@ -1,0 +1,60 @@
+kf3: KINDSTAT runs=372992 last(kind=0x6 len=0x1073000 leaf=0x1000 ap=0) top kinds by bytes: 0x00:1337869MiB/173168runs 0x06:1201062MiB/197586runs 0x09:11327MiB/737runs 0x08:4019MiB/1356runs 0x0c:1289MiB/64runs 0x03:9MiB/18runs 0x0f:0MiB/63runs
+kf3: KINDSTAT runs=373248 last(kind=0x0 len=0x25f0000 leaf=0x10000 ap=0) top kinds by bytes: 0x00:1339611MiB/173380runs 0x06:1201786MiB/197630runs 0x09:11327MiB/737runs 0x08:4019MiB/1356runs 0x0c:1289MiB/64runs 0x03:9MiB/18runs 0x0f:0MiB/63runs
+kf3: DOORBELL-LEDGER tok=0x0000101a route=passthrough rung=0 emulated=0 forwarded=0 host=0x20041 trap=0 fast=0
+kf3: KINDSTAT runs=373504 last(kind=0x0 len=0xa0000 leaf=0x10000 ap=0) top kinds by bytes: 0x00:1341581MiB/173584runs 0x06:1202641MiB/197682runs 0x09:11327MiB/737runs 0x08:4019MiB/1356runs 0x0c:1289MiB/64runs 0x03:9MiB/18runs 0x0f:0MiB/63runs
+kf3: DOORBELL-LEDGER tok=0x00001024 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2004b trap=0 fast=0
+kf3: KINDSTAT runs=373760 last(kind=0x0 len=0xa0000 leaf=0x10000 ap=0) top kinds by bytes: 0x00:1343514MiB/173790runs 0x06:1203464MiB/197732runs 0x09:11327MiB/737runs 0x08:4019MiB/1356runs 0x0c:1289MiB/64runs 0x03:9MiB/18runs 0x0f:0MiB/63runs
+kf3: KINDSTAT runs=374016 last(kind=0x0 len=0x3000 leaf=0x1000 ap=0) top kinds by bytes: 0x00:1345599MiB/173995runs 0x06:1204303MiB/197783runs 0x09:11327MiB/737runs 0x08:4019MiB/1356runs 0x0c:1289MiB/64runs 0x03:9MiB/18runs 0x0f:0MiB/63runs
+kf3: KINDSTAT runs=374272 last(kind=0x0 len=0x25f0000 leaf=0x10000 ap=0) top kinds by bytes: 0x00:1347531MiB/174200runs 0x06:1205141MiB/197834runs 0x09:11327MiB/737runs 0x08:4019MiB/1356runs 0x0c:1289MiB/64runs 0x03:9MiB/18runs 0x0f:0MiB/63runs
+kf3: DOORBELL-LEDGER tok=0x00000016 route=passthrough rung=0 emulated=0 forwarded=0 host=0x3d trap=0 fast=0
+kf3: KINDSTAT runs=374528 last(kind=0x6 len=0x1000 leaf=0x1000 ap=3) top kinds by bytes: 0x00:1349548MiB/174408runs 0x06:1205685MiB/197882runs 0x09:11327MiB/737runs 0x08:4019MiB/1356runs 0x0c:1289MiB/64runs 0x03:9MiB/18runs 0x0f:0MiB/63runs
+kf3: KINDSTAT runs=374784 last(kind=0x6 len=0x1000 leaf=0x1000 ap=3) top kinds by bytes: 0x00:1350865MiB/174576runs 0x06:1206261MiB/197970runs 0x09:11327MiB/737runs 0x08:4019MiB/1356runs 0x0c:1289MiB/64runs 0x03:9MiB/18runs 0x0f:0MiB/63runs
+kf3: DOORBELL-LEDGER tok=0x00000033 route=passthrough rung=0 emulated=0 forwarded=0 host=0x5a trap=0 fast=0
+kf3: KINDSTAT runs=375040 last(kind=0x0 len=0xa0000 leaf=0x10000 ap=0) top kinds by bytes: 0x00:1352797MiB/174778runs 0x06:1206952MiB/198024runs 0x09:11327MiB/737runs 0x08:4019MiB/1356runs 0x0c:1289MiB/64runs 0x03:9MiB/18runs 0x0f:0MiB/63runs
+kf3: DOORBELL-LEDGER tok=0x00001035 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2005c trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00001021 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20048 trap=0 fast=0
+kf3: KINDSTAT runs=375296 last(kind=0x0 len=0x25f0000 leaf=0x10000 ap=0) top kinds by bytes: 0x00:1354693MiB/174984runs 0x06:1207742MiB/198074runs 0x09:11327MiB/737runs 0x08:4019MiB/1356runs 0x0c:1289MiB/64runs 0x03:9MiB/18runs 0x0f:0MiB/63runs
+kf3: DOORBELL-LEDGER tok=0x0000001f route=passthrough rung=0 emulated=0 forwarded=0 host=0x46 trap=0 fast=0
+kf3: KINDSTAT runs=375552 last(kind=0x6 len=0x1073000 leaf=0x1000 ap=0) top kinds by bytes: 0x00:1356511MiB/175201runs 0x06:1208383MiB/198113runs 0x09:11327MiB/737runs 0x08:4019MiB/1356runs 0x0c:1289MiB/64runs 0x03:9MiB/18runs 0x0f:0MiB/63runs
+kf3: DOORBELL-LEDGER tok=0x00001020 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20047 trap=0 fast=0
+kf3: KINDSTAT runs=375808 last(kind=0x0 len=0x10000 leaf=0x10000 ap=2) top kinds by bytes: 0x00:1358367MiB/175404runs 0x06:1209255MiB/198166runs 0x09:11327MiB/737runs 0x08:4019MiB/1356runs 0x0c:1289MiB/64runs 0x03:9MiB/18runs 0x0f:0MiB/63runs
+kf3: DOORBELL-LEDGER tok=0x0000001e route=passthrough rung=0 emulated=0 forwarded=0 host=0x45 trap=0 fast=0
+kf3: KINDSTAT runs=376064 last(kind=0x0 len=0x25f0000 leaf=0x10000 ap=0) top kinds by bytes: 0x00:1360186MiB/175622runs 0x06:1209880MiB/198204runs 0x09:11327MiB/737runs 0x08:4019MiB/1356runs 0x0c:1289MiB/64runs 0x03:9MiB/18runs 0x0f:0MiB/63runs
+kf3: KINDSTAT runs=376320 last(kind=0x0 len=0x3000 leaf=0x1000 ap=0) top kinds by bytes: 0x00:1362232MiB/175827runs 0x06:1210719MiB/198255runs 0x09:11327MiB/737runs 0x08:4019MiB/1356runs 0x0c:1289MiB/64runs 0x03:9MiB/18runs 0x0f:0MiB/63runs
+kf3: KINDSTAT runs=376576 last(kind=0x0 len=0x25f0000 leaf=0x10000 ap=0) top kinds by bytes: 0x00:1364203MiB/176032runs 0x06:1211558MiB/198306runs 0x09:11327MiB/737runs 0x08:4019MiB/1356runs 0x0c:1289MiB/64runs 0x03:9MiB/18runs 0x0f:0MiB/63runs
+kf3: KINDSTAT runs=376832 last(kind=0x6 len=0x1073000 leaf=0x1000 ap=0) top kinds by bytes: 0x00:1366173MiB/176236runs 0x06:1212413MiB/198358runs 0x09:11327MiB/737runs 0x08:4019MiB/1356runs 0x0c:1289MiB/64runs 0x03:9MiB/18runs 0x0f:0MiB/63runs
+kf3: DOORBELL-LEDGER tok=0x00001032 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20059 trap=0 fast=0
+kf3: KINDSTAT runs=377088 last(kind=0x0 len=0xa0000 leaf=0x10000 ap=0) top kinds by bytes: 0x00:1368144MiB/176442runs 0x06:1213236MiB/198408runs 0x09:11327MiB/737runs 0x08:4019MiB/1356runs 0x0c:1289MiB/64runs 0x03:9MiB/18runs 0x0f:0MiB/63runs
+kf3: DOORBELL-LEDGER tok=0x00000031 route=passthrough rung=0 emulated=0 forwarded=0 host=0x58 trap=0 fast=0
+kf3: KINDSTAT runs=377344 last(kind=0x0 len=0x25f0000 leaf=0x10000 ap=0) top kinds by bytes: 0x00:1370156MiB/176656runs 0x06:1213927MiB/198450runs 0x09:11327MiB/737runs 0x08:4019MiB/1356runs 0x0c:1289MiB/64runs 0x03:9MiB/18runs 0x0f:0MiB/63runs
+kf3: KINDSTAT runs=377600 last(kind=0x0 len=0x10000 leaf=0x10000 ap=2) top kinds by bytes: 0x00:1372126MiB/176860runs 0x06:1214782MiB/198502runs 0x09:11327MiB/737runs 0x08:4019MiB/1356runs 0x0c:1289MiB/64runs 0x03:9MiB/18runs 0x0f:0MiB/63runs
+kf3: KINDSTAT runs=377856 last(kind=0x0 len=0x10000 leaf=0x10000 ap=2) top kinds by bytes: 0x00:1374058MiB/177064runs 0x06:1215637MiB/198554runs 0x09:11327MiB/737runs 0x08:4019MiB/1356runs 0x0c:1289MiB/64runs 0x03:9MiB/18runs 0x0f:0MiB/63runs
+kf3: KINDSTAT runs=378112 last(kind=0x0 len=0x3000 leaf=0x1000 ap=0) top kinds by bytes: 0x00:1376067MiB/177268runs 0x06:1216493MiB/198606runs 0x09:11327MiB/737runs 0x08:4019MiB/1356runs 0x0c:1289MiB/64runs 0x03:9MiB/18runs 0x0f:0MiB/63runs
+kf3: DOORBELL-LEDGER tok=0x00001030 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20057 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000002f route=passthrough rung=0 emulated=0 forwarded=0 host=0x56 trap=0 fast=0
+kf3: KINDSTAT runs=378368 last(kind=0x0 len=0x25f0000 leaf=0x10000 ap=0) top kinds by bytes: 0x00:1378115MiB/177480runs 0x06:1217217MiB/198650runs 0x09:11327MiB/737runs 0x08:4019MiB/1356runs 0x0c:1289MiB/64runs 0x03:9MiB/18runs 0x0f:0MiB/63runs
+kf3: KINDSTAT runs=378624 last(kind=0x6 len=0x1073000 leaf=0x1000 ap=0) top kinds by bytes: 0x00:1380010MiB/177688runs 0x06:1218006MiB/198698runs 0x09:11327MiB/737runs 0x08:4019MiB/1356runs 0x0c:1289MiB/64runs 0x03:9MiB/18runs 0x0f:0MiB/63runs
+kf3: KINDSTAT runs=378880 last(kind=0x0 len=0xa0000 leaf=0x10000 ap=0) top kinds by bytes: 0x00:1381982MiB/177894runs 0x06:1218829MiB/198748runs 0x09:11327MiB/737runs 0x08:4019MiB/1356runs 0x0c:1289MiB/64runs 0x03:9MiB/18runs 0x0f:0MiB/63runs
+kf3: DOORBELL-LEDGER tok=0x00001023 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2004a trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000022 route=passthrough rung=0 emulated=0 forwarded=0 host=0x49 trap=0 fast=0
+kf3: KINDSTAT runs=379136 last(kind=0x0 len=0x3000 leaf=0x1000 ap=0) top kinds by bytes: 0x00:1383800MiB/178110runs 0x06:1219487MiB/198788runs 0x09:11327MiB/737runs 0x08:4019MiB/1356runs 0x0c:1289MiB/64runs 0x03:9MiB/18runs 0x0f:0MiB/63runs
+kf3: KINDSTAT runs=379392 last(kind=0x0 len=0x25f0000 leaf=0x10000 ap=0) top kinds by bytes: 0x00:1385809MiB/178316runs 0x06:1220309MiB/198838runs 0x09:11327MiB/737runs 0x08:4019MiB/1356runs 0x0c:1289MiB/64runs 0x03:9MiB/18runs 0x0f:0MiB/63runs
+kf3: DOORBELL-LEDGER tok=0x00001018 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2003f trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000017 route=passthrough rung=0 emulated=0 forwarded=0 host=0x3e trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=2 host=0x10028 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=1 host=0x10029 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000003 route=translated emulated=0 forwarded=121 host=0x2a fast=0
+kf3: DOORBELL-LEDGER tok=0x00000804 route=translated emulated=0 forwarded=0 host=0x1002b fast=0
+kf3: DOORBELL-LEDGER tok=0x00001805 route=translated emulated=0 forwarded=0 host=0x3002c fast=0
+kf3: DOORBELL-LEDGER tok=0x00000806 route=translated emulated=0 forwarded=0 host=0x1002d fast=0
+kf3: DOORBELL-LEDGER tok=0x00002007 route=translated emulated=0 forwarded=0 host=0xc002e fast=0
+kf3: DOORBELL-LEDGER tok=0x00002008 route=translated emulated=0 forwarded=0 host=0xc002f fast=0
+kf3: DOORBELL-LEDGER tok=0x00002809 route=translated emulated=0 forwarded=0 host=0x50030 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000200a route=translated emulated=0 forwarded=0 host=0xc0031 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000080b route=translated emulated=0 forwarded=0 host=0x10032 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000080c route=translated emulated=0 forwarded=1255583 host=0x10033 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000000d route=translated emulated=0 forwarded=1 host=0x34 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000000e route=passthrough rung=0 emulated=0 forwarded=0 host=0x35 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000000f route=passthrough rung=0 emulated=0 forwarded=0 host=0x36 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00001010 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20037 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000011 route=passthrough rung=0 emulated=0 forwarded=0 host=0x38 trap=0 fast=0

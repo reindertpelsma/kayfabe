@@ -1,0 +1,14 @@
+# started on Thu Oct 15 20:05:33 2026
+
+
+ Performance counter stats for thread id '1780867,1780868':
+
+                 0      syscalls:sys_enter_openat                                             
+                 0      syscalls:sys_enter_mmap                                               
+                 0      syscalls:sys_enter_munmap                                             
+                 0      syscalls:sys_enter_ioctl                                              
+           552,228      syscalls:sys_enter_epoll_wait                                         
+            70,564      syscalls:sys_enter_futex                                              
+
+      10.002786630 seconds time elapsed
+

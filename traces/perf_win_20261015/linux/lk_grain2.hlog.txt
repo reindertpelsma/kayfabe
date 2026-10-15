@@ -1,0 +1,7 @@
+21:28:06 Features: OpenGL OpenAL XPad360 Joystick Flash Editor
+21:28:06 GPU: NVIDIA GeForce RTX 4070 PCI Express 580.159.04 x1
+21:28:06 OpenGL vendor:   NVIDIA Corporation
+21:28:06 OpenGL renderer: NVIDIA GeForce RTX 4070/PCIe/SSE2
+21:28:06 OpenGL version:  3.2.0 NVIDIA 580.159.04
+21:28:06 OpenGL flags:    Core Profile
+21:33:01 Time:    260.6221:33:01 Frames:    7414321:33:01 FPS:    284.48721:33:01 Min FPS:    41.993621:33:01 Max FPS:    538.5921:33:01 Score:    7166.23

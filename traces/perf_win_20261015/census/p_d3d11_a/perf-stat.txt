@@ -1,0 +1,165 @@
+# started on Thu Oct 15 19:17:59 2026
+
+
+ Performance counter stats for process id '1757316':
+
+ qemu-system-x86-1757316           1,040.49 msec task-clock                                                            
+ qemu-system-x86-1757323      <not counted> msec task-clock                                                            
+ qemu-system-x86-1757325      <not counted> msec task-clock                                                            
+ qemu-system-x86-1757326          17,665.22 msec task-clock                                                            
+ qemu-system-x86-1757327          16,271.69 msec task-clock                                                            
+ qemu-system-x86-1757328          19,903.06 msec task-clock                                                            
+ qemu-system-x86-1757329          17,202.56 msec task-clock                                                            
+ qemu-system-x86-1757330          30,863.35 msec task-clock                                                            
+ qemu-system-x86-1757331          24,997.25 msec task-clock                                                            
+ qemu-system-x86-1757332          29,391.03 msec task-clock                                                            
+ qemu-system-x86-1757333          18,815.01 msec task-clock                                                            
+ cuda0000c800033-1757337      <not counted> msec task-clock                                                            
+   kf3-cuda-walk-1757341               4.37 msec task-clock                                                            
+  cuda-EvtHandlr-1757342             627.15 msec task-clock                                                            
+   kf3-cuda-walk-1757343              18.32 msec task-clock                                                            
+   kf3-cuda-walk-1757344              39.26 msec task-clock                                                            
+    kf3-chan-act-1757346              20.66 msec task-clock                                                            
+   kf3-cuda-disp-1757348               3.80 msec task-clock                                                            
+  cuda-EvtHandlr-1757349             788.21 msec task-clock                                                            
+ kf3-vram-provis-1757350      <not counted> msec task-clock                                                            
+ kf3-pramin-reap-1757351      <not counted> msec task-clock                                                            
+     kf3-drainer-1757352             181.06 msec task-clock                                                            
+     kf3-worker0-1757353          57,453.51 msec task-clock                                                            
+     kf3-worker1-1757354          64,752.36 msec task-clock                                                            
+     kf3-display-1757355          10,980.61 msec task-clock                                                            
+    kf3-scanline-1757356           2,827.59 msec task-clock                                                            
+       kf3-vamgr-1757357             871.67 msec task-clock                                                            
+ kvm-nx-lpage-re-1757358      <not counted> msec task-clock                                                            
+     kf3-display-1757359             144.58 msec task-clock                                                            
+ qemu-system-x86-1757409               0.06 msec task-clock                                                            
+ qemu-system-x86-1757414              56.05 msec task-clock                                                            
+ qemu-system-x86-1757424               0.11 msec task-clock                                                            
+ qemu-system-x86-1757426              58.66 msec task-clock                                                            
+ qemu-system-x86-1757432               1.07 msec task-clock                                                            
+ qemu-system-x86-1757433               0.50 msec task-clock                                                            
+ qemu-system-x86-1757434              53.17 msec task-clock                                                            
+ qemu-system-x86-1757486               0.54 msec task-clock                                                            
+ qemu-system-x86-1757488               0.76 msec task-clock                                                            
+ qemu-system-x86-1757492               0.73 msec task-clock                                                            
+ qemu-system-x86-1757495              57.81 msec task-clock                                                            
+ qemu-system-x86-1757496              54.41 msec task-clock                                                            
+  kf-view-reaper-1757498              46.62 msec task-clock                                                            
+ qemu-system-x86-1757589              55.59 msec task-clock                                                            
+ qemu-system-x86-1757590               0.58 msec task-clock                                                            
+ qemu-system-x86-1757593               0.36 msec task-clock                                                            
+ qemu-system-x86-1757594              53.43 msec task-clock                                                            
+ qemu-system-x86-1757596               0.69 msec task-clock                                                            
+ qemu-system-x86-1757597               0.65 msec task-clock                                                            
+ qemu-system-x86-1757599              53.70 msec task-clock                                                            
+ qemu-system-x86-1757600               0.55 msec task-clock                                                            
+ qemu-system-x86-1757601               3.71 msec task-clock                                                            
+ qemu-system-x86-1757316             28,208      context-switches                                                      
+ qemu-system-x86-1757323      <not counted>      context-switches                                                      
+ qemu-system-x86-1757325      <not counted>      context-switches                                                      
+ qemu-system-x86-1757326             75,160      context-switches                                                      
+ qemu-system-x86-1757327             78,132      context-switches                                                      
+ qemu-system-x86-1757328             89,555      context-switches                                                      
+ qemu-system-x86-1757329             81,390      context-switches                                                      
+ qemu-system-x86-1757330             70,314      context-switches                                                      
+ qemu-system-x86-1757331             72,776      context-switches                                                      
+ qemu-system-x86-1757332             71,326      context-switches                                                      
+ qemu-system-x86-1757333             76,499      context-switches                                                      
+ cuda0000c800033-1757337      <not counted>      context-switches                                                      
+   kf3-cuda-walk-1757341                241      context-switches                                                      
+  cuda-EvtHandlr-1757342             48,163      context-switches                                                      
+   kf3-cuda-walk-1757343              1,200      context-switches                                                      
+   kf3-cuda-walk-1757344              2,448      context-switches                                                      
+    kf3-chan-act-1757346                 80      context-switches                                                      
+   kf3-cuda-disp-1757348                240      context-switches                                                      
+  cuda-EvtHandlr-1757349             57,406      context-switches                                                      
+ kf3-vram-provis-1757350      <not counted>      context-switches                                                      
+ kf3-pramin-reap-1757351      <not counted>      context-switches                                                      
+     kf3-drainer-1757352              3,107      context-switches                                                      
+     kf3-worker0-1757353             76,054      context-switches                                                      
+     kf3-worker1-1757354             69,450      context-switches                                                      
+     kf3-display-1757355             25,436      context-switches                                                      
+    kf3-scanline-1757356            466,975      context-switches                                                      
+       kf3-vamgr-1757357              8,596      context-switches                                                      
+ kvm-nx-lpage-re-1757358      <not counted>      context-switches                                                      
+     kf3-display-1757359              7,272      context-switches                                                      
+ qemu-system-x86-1757409                  0      context-switches                                                      
+ qemu-system-x86-1757414              3,041      context-switches                                                      
+ qemu-system-x86-1757424                  1      context-switches                                                      
+ qemu-system-x86-1757426              3,011      context-switches                                                      
+ qemu-system-x86-1757432                 27      context-switches                                                      
+ qemu-system-x86-1757433                 14      context-switches                                                      
+ qemu-system-x86-1757434              2,906      context-switches                                                      
+ qemu-system-x86-1757486                 16      context-switches                                                      
+ qemu-system-x86-1757488                 19      context-switches                                                      
+ qemu-system-x86-1757492                 22      context-switches                                                      
+ qemu-system-x86-1757495              3,021      context-switches                                                      
+ qemu-system-x86-1757496              2,938      context-switches                                                      
+  kf-view-reaper-1757498                757      context-switches                                                      
+ qemu-system-x86-1757589              2,974      context-switches                                                      
+ qemu-system-x86-1757590                 18      context-switches                                                      
+ qemu-system-x86-1757593                 14      context-switches                                                      
+ qemu-system-x86-1757594              2,900      context-switches                                                      
+ qemu-system-x86-1757596                 18      context-switches                                                      
+ qemu-system-x86-1757597                 18      context-switches                                                      
+ qemu-system-x86-1757599              2,927      context-switches                                                      
+ qemu-system-x86-1757600                 16      context-switches                                                      
+ qemu-system-x86-1757601                126      context-switches                                                      
+ qemu-system-x86-1757316                821      cpu-migrations                                                        
+ qemu-system-x86-1757323      <not counted>      cpu-migrations                                                        
+ qemu-system-x86-1757325      <not counted>      cpu-migrations                                                        
+ qemu-system-x86-1757326              2,495      cpu-migrations                                                        
+ qemu-system-x86-1757327              3,184      cpu-migrations                                                        
+ qemu-system-x86-1757328              3,773      cpu-migrations                                                        
+ qemu-system-x86-1757329              2,910      cpu-migrations                                                        
+ qemu-system-x86-1757330              3,081      cpu-migrations                                                        
+ qemu-system-x86-1757331              3,091      cpu-migrations                                                        
+ qemu-system-x86-1757332              3,403      cpu-migrations                                                        
+ qemu-system-x86-1757333              3,809      cpu-migrations                                                        
+ cuda0000c800033-1757337      <not counted>      cpu-migrations                                                        
+   kf3-cuda-walk-1757341                 10      cpu-migrations                                                        
+  cuda-EvtHandlr-1757342              3,563      cpu-migrations                                                        
+   kf3-cuda-walk-1757343                 76      cpu-migrations                                                        
+   kf3-cuda-walk-1757344                215      cpu-migrations                                                        
+    kf3-chan-act-1757346                  9      cpu-migrations                                                        
+   kf3-cuda-disp-1757348                 23      cpu-migrations                                                        
+  cuda-EvtHandlr-1757349              2,352      cpu-migrations                                                        
+ kf3-vram-provis-1757350      <not counted>      cpu-migrations                                                        
+ kf3-pramin-reap-1757351      <not counted>      cpu-migrations                                                        
+     kf3-drainer-1757352                270      cpu-migrations                                                        
+     kf3-worker0-1757353              3,370      cpu-migrations                                                        
+     kf3-worker1-1757354              3,438      cpu-migrations                                                        
+     kf3-display-1757355              2,116      cpu-migrations                                                        
+    kf3-scanline-1757356              4,367      cpu-migrations                                                        
+       kf3-vamgr-1757357                681      cpu-migrations                                                        
+ kvm-nx-lpage-re-1757358      <not counted>      cpu-migrations                                                        
+     kf3-display-1757359                805      cpu-migrations                                                        
+ qemu-system-x86-1757409                  0      cpu-migrations                                                        
+ qemu-system-x86-1757414                 82      cpu-migrations                                                        
+ qemu-system-x86-1757424                  0      cpu-migrations                                                        
+ qemu-system-x86-1757426                104      cpu-migrations                                                        
+ qemu-system-x86-1757432                  4      cpu-migrations                                                        
+ qemu-system-x86-1757433                  3      cpu-migrations                                                        
+ qemu-system-x86-1757434                120      cpu-migrations                                                        
+ qemu-system-x86-1757486                  2      cpu-migrations                                                        
+ qemu-system-x86-1757488                  3      cpu-migrations                                                        
+ qemu-system-x86-1757492                  2      cpu-migrations                                                        
+ qemu-system-x86-1757495                142      cpu-migrations                                                        
+ qemu-system-x86-1757496                 83      cpu-migrations                                                        
+  kf-view-reaper-1757498                 41      cpu-migrations                                                        
+ qemu-system-x86-1757589                 96      cpu-migrations                                                        
+ qemu-system-x86-1757590                  3      cpu-migrations                                                        
+ qemu-system-x86-1757593                  2      cpu-migrations                                                        
+ qemu-system-x86-1757594                110      cpu-migrations                                                        
+ qemu-system-x86-1757596                  2      cpu-migrations                                                        
+ qemu-system-x86-1757597                  4      cpu-migrations                                                        
+ qemu-system-x86-1757599                 87      cpu-migrations                                                        
+ qemu-system-x86-1757600                  4      cpu-migrations                                                        
+ qemu-system-x86-1757601                  7      cpu-migrations                                                        
+
+     120.015683066 seconds time elapsed
+
+Some events weren't counted. Try disabling the NMI watchdog:
+	echo 0 > /proc/sys/kernel/nmi_watchdog
+	perf stat ...
+	echo 1 > /proc/sys/kernel/nmi_watchdog

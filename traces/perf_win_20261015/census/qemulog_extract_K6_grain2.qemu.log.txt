@@ -1,0 +1,60 @@
+kf3: MAPSTAT calls=7680 bytes_by_flag MiB [default=16123 4K=30 BIG=120 HUGE=9202] (0.1% 4K / 0.5% BIG / 36.1% HUGE) calls_by_flag_class [4K <64K=7307 64K-2M=5 2M-64M=0 >=64M=0 | BIG 0 171 0 0 | HUGE 0 0 188 1]
+kf3: MAPSTAT calls=8192 bytes_by_flag MiB [default=16123 4K=32 BIG=120 HUGE=9202] (0.1% 4K / 0.5% BIG / 36.1% HUGE) calls_by_flag_class [4K <64K=7819 64K-2M=5 2M-64M=0 >=64M=0 | BIG 0 171 0 0 | HUGE 0 0 188 1]
+kf3: KINDSTAT runs=5888 last(kind=0x0 len=0x11d000 leaf=0x1000 ap=0) top kinds by bytes: 0x06:20725MiB/4614runs 0x09:7924MiB/1runs 0x00:604MiB/1192runs 0x0c:356MiB/58runs 0x08:35MiB/20runs 0x03:0MiB/3runs
+kf3: MAPSTAT calls=8704 bytes_by_flag MiB [default=16123 4K=34 BIG=120 HUGE=9202] (0.1% 4K / 0.5% BIG / 36.1% HUGE) calls_by_flag_class [4K <64K=8331 64K-2M=5 2M-64M=0 >=64M=0 | BIG 0 171 0 0 | HUGE 0 0 188 1]
+kf3: MAPSTAT calls=9216 bytes_by_flag MiB [default=16123 4K=36 BIG=120 HUGE=9202] (0.1% 4K / 0.5% BIG / 36.1% HUGE) calls_by_flag_class [4K <64K=8843 64K-2M=5 2M-64M=0 >=64M=0 | BIG 0 171 0 0 | HUGE 0 0 188 1]
+kf3: MAPBIG hDma=0xcafe008f len=0x4000000 flag=0x400 fixed=true slice=true
+kf3: KINDSTAT runs=6144 last(kind=0x8 len=0x400000 leaf=0x200000 ap=0) top kinds by bytes: 0x06:22390MiB/4754runs 0x09:7924MiB/1runs 0x00:653MiB/1278runs 0x0c:430MiB/60runs 0x08:226MiB/46runs 0x03:0MiB/5runs
+kf3: MAPSTAT calls=9728 bytes_by_flag MiB [default=16123 4K=38 BIG=128 HUGE=9466] (0.2% 4K / 0.5% BIG / 36.8% HUGE) calls_by_flag_class [4K <64K=9306 64K-2M=5 2M-64M=0 >=64M=0 | BIG 0 194 0 0 | HUGE 0 0 213 2]
+kf3: MAPSTAT calls=10240 bytes_by_flag MiB [default=16123 4K=40 BIG=128 HUGE=9466] (0.2% 4K / 0.5% BIG / 36.7% HUGE) calls_by_flag_class [4K <64K=9817 64K-2M=5 2M-64M=0 >=64M=0 | BIG 0 195 0 0 | HUGE 0 0 213 2]
+kf3: MAPSTAT calls=10752 bytes_by_flag MiB [default=16123 4K=42 BIG=128 HUGE=9466] (0.2% 4K / 0.5% BIG / 36.7% HUGE) calls_by_flag_class [4K <64K=10329 64K-2M=5 2M-64M=0 >=64M=0 | BIG 0 195 0 0 | HUGE 0 0 213 2]
+kf3: MAPSTAT calls=11264 bytes_by_flag MiB [default=16123 4K=44 BIG=129 HUGE=9466] (0.2% 4K / 0.5% BIG / 36.7% HUGE) calls_by_flag_class [4K <64K=10840 64K-2M=5 2M-64M=0 >=64M=0 | BIG 0 196 0 0 | HUGE 0 0 213 2]
+kf3: MAPSTAT calls=11776 bytes_by_flag MiB [default=16123 4K=46 BIG=129 HUGE=9466] (0.2% 4K / 0.5% BIG / 36.7% HUGE) calls_by_flag_class [4K <64K=11352 64K-2M=5 2M-64M=0 >=64M=0 | BIG 0 196 0 0 | HUGE 0 0 213 2]
+kf3: MAPSTAT calls=12288 bytes_by_flag MiB [default=16123 4K=48 BIG=129 HUGE=9466] (0.2% 4K / 0.5% BIG / 36.7% HUGE) calls_by_flag_class [4K <64K=11864 64K-2M=5 2M-64M=0 >=64M=0 | BIG 0 196 0 0 | HUGE 0 0 213 2]
+kf3: MAPSTAT calls=12800 bytes_by_flag MiB [default=16123 4K=50 BIG=129 HUGE=9466] (0.2% 4K / 0.5% BIG / 36.7% HUGE) calls_by_flag_class [4K <64K=12376 64K-2M=5 2M-64M=0 >=64M=0 | BIG 0 196 0 0 | HUGE 0 0 213 2]
+kf3: MAPSTAT calls=13312 bytes_by_flag MiB [default=16123 4K=52 BIG=129 HUGE=9466] (0.2% 4K / 0.5% BIG / 36.7% HUGE) calls_by_flag_class [4K <64K=12888 64K-2M=5 2M-64M=0 >=64M=0 | BIG 0 196 0 0 | HUGE 0 0 213 2]
+kf3: MAPSTAT calls=13824 bytes_by_flag MiB [default=16123 4K=54 BIG=129 HUGE=9466] (0.2% 4K / 0.5% BIG / 36.7% HUGE) calls_by_flag_class [4K <64K=13400 64K-2M=5 2M-64M=0 >=64M=0 | BIG 0 196 0 0 | HUGE 0 0 213 2]
+kf3: MAPSTAT calls=14336 bytes_by_flag MiB [default=16123 4K=56 BIG=129 HUGE=9466] (0.2% 4K / 0.5% BIG / 36.7% HUGE) calls_by_flag_class [4K <64K=13912 64K-2M=5 2M-64M=0 >=64M=0 | BIG 0 196 0 0 | HUGE 0 0 213 2]
+kf3: MAPSTAT calls=14848 bytes_by_flag MiB [default=16123 4K=58 BIG=129 HUGE=9466] (0.2% 4K / 0.5% BIG / 36.7% HUGE) calls_by_flag_class [4K <64K=14424 64K-2M=5 2M-64M=0 >=64M=0 | BIG 0 196 0 0 | HUGE 0 0 213 2]
+kf3: KINDSTAT runs=6400 last(kind=0x6 len=0x1000 leaf=0x1000 ap=3) top kinds by bytes: 0x06:23457MiB/4932runs 0x09:7924MiB/1runs 0x00:685MiB/1348runs 0x0c:430MiB/60runs 0x08:231MiB/54runs 0x03:0MiB/5runs
+kf3: MAPSTAT calls=15360 bytes_by_flag MiB [default=16123 4K=60 BIG=131 HUGE=9466] (0.2% 4K / 0.5% BIG / 36.7% HUGE) calls_by_flag_class [4K <64K=14935 64K-2M=5 2M-64M=0 >=64M=0 | BIG 0 197 0 0 | HUGE 0 0 213 2]
+kf3: KINDSTAT runs=6656 last(kind=0x6 len=0x1000 leaf=0x1000 ap=3) top kinds by bytes: 0x06:23692MiB/5174runs 0x09:7924MiB/1runs 0x00:692MiB/1362runs 0x0c:430MiB/60runs 0x08:231MiB/54runs 0x03:0MiB/5runs
+kf3: KINDSTAT runs=6912 last(kind=0x6 len=0x1000 leaf=0x1000 ap=3) top kinds by bytes: 0x06:23693MiB/5430runs 0x09:7924MiB/1runs 0x00:692MiB/1362runs 0x0c:430MiB/60runs 0x08:231MiB/54runs 0x03:0MiB/5runs
+kf3: MAPSTAT calls=15872 bytes_by_flag MiB [default=16123 4K=62 BIG=131 HUGE=9468] (0.2% 4K / 0.5% BIG / 36.7% HUGE) calls_by_flag_class [4K <64K=15446 64K-2M=5 2M-64M=0 >=64M=0 | BIG 0 197 0 0 | HUGE 0 0 214 2]
+kf3: KINDSTAT runs=7168 last(kind=0x6 len=0x1000 leaf=0x1000 ap=3) top kinds by bytes: 0x06:23889MiB/5674runs 0x09:7924MiB/1runs 0x00:698MiB/1374runs 0x0c:430MiB/60runs 0x08:231MiB/54runs 0x03:0MiB/5runs
+kf3: KINDSTAT runs=7424 last(kind=0x6 len=0x1000 leaf=0x1000 ap=3) top kinds by bytes: 0x06:23890MiB/5930runs 0x09:7924MiB/1runs 0x00:698MiB/1374runs 0x0c:430MiB/60runs 0x08:231MiB/54runs 0x03:0MiB/5runs
+kf3: KINDSTAT runs=7680 last(kind=0x6 len=0xa0000 leaf=0x10000 ap=0) top kinds by bytes: 0x06:24162MiB/6170runs 0x09:7924MiB/1runs 0x00:707MiB/1390runs 0x0c:430MiB/60runs 0x08:231MiB/54runs 0x03:0MiB/5runs
+kf3: KINDSTAT runs=7936 last(kind=0x6 len=0x1000 leaf=0x1000 ap=3) top kinds by bytes: 0x06:24356MiB/6417runs 0x09:7924MiB/1runs 0x00:712MiB/1399runs 0x0c:430MiB/60runs 0x08:231MiB/54runs 0x03:0MiB/5runs
+kf3: KINDSTAT runs=8192 last(kind=0x6 len=0x1000 leaf=0x1000 ap=3) top kinds by bytes: 0x06:24357MiB/6673runs 0x09:7924MiB/1runs 0x00:712MiB/1399runs 0x0c:430MiB/60runs 0x08:231MiB/54runs 0x03:0MiB/5runs
+kf3: KINDSTAT runs=8448 last(kind=0x6 len=0x1000 leaf=0x1000 ap=3) top kinds by bytes: 0x06:24396MiB/6926runs 0x09:7924MiB/1runs 0x00:713MiB/1402runs 0x0c:430MiB/60runs 0x08:231MiB/54runs 0x03:0MiB/5runs
+kf3: KINDSTAT runs=8704 last(kind=0x6 len=0x1000 leaf=0x1000 ap=3) top kinds by bytes: 0x06:24397MiB/7182runs 0x09:7924MiB/1runs 0x00:713MiB/1402runs 0x0c:430MiB/60runs 0x08:231MiB/54runs 0x03:0MiB/5runs
+kf3: MAPSTAT calls=16384 bytes_by_flag MiB [default=16123 4K=64 BIG=135 HUGE=9502] (0.3% 4K / 0.5% BIG / 36.8% HUGE) calls_by_flag_class [4K <64K=15949 64K-2M=5 2M-64M=0 >=64M=0 | BIG 0 199 0 0 | HUGE 0 0 221 2]
+kf3: MAPSTAT calls=16896 bytes_by_flag MiB [default=16123 4K=66 BIG=135 HUGE=9502] (0.3% 4K / 0.5% BIG / 36.8% HUGE) calls_by_flag_class [4K <64K=16461 64K-2M=5 2M-64M=0 >=64M=0 | BIG 0 199 0 0 | HUGE 0 0 221 2]
+kf3: KINDSTAT runs=8960 last(kind=0x6 len=0x2600000 leaf=0x200000 ap=0) top kinds by bytes: 0x06:25986MiB/7334runs 0x09:7924MiB/1runs 0x00:761MiB/1486runs 0x0c:430MiB/60runs 0x08:337MiB/73runs 0x03:0MiB/6runs
+kf3: KINDSTAT runs=9216 last(kind=0x0 len=0x11d000 leaf=0x1000 ap=0) top kinds by bytes: 0x06:27765MiB/7478runs 0x09:7924MiB/1runs 0x00:816MiB/1579runs 0x08:453MiB/91runs 0x0c:430MiB/60runs 0x03:0MiB/7runs
+kf3: MAPSTAT calls=17408 bytes_by_flag MiB [default=16123 4K=68 BIG=135 HUGE=9692] (0.3% 4K / 0.5% BIG / 37.2% HUGE) calls_by_flag_class [4K <64K=16936 64K-2M=5 2M-64M=0 >=64M=0 | BIG 0 205 0 0 | HUGE 0 0 252 2]
+kf3: KINDSTAT runs=9472 last(kind=0x6 len=0x4000 leaf=0x1000 ap=3) top kinds by bytes: 0x06:27805MiB/7733runs 0x09:7924MiB/1runs 0x00:816MiB/1580runs 0x08:453MiB/91runs 0x0c:430MiB/60runs 0x03:0MiB/7runs
+kf3: MAPSTAT calls=17920 bytes_by_flag MiB [default=16123 4K=70 BIG=137 HUGE=9712] (0.3% 4K / 0.5% BIG / 37.3% HUGE) calls_by_flag_class [4K <64K=17443 64K-2M=5 2M-64M=0 >=64M=0 | BIG 0 206 0 0 | HUGE 0 0 256 2]
+kf3: KINDSTAT runs=9728 last(kind=0x0 len=0x10000 leaf=0x10000 ap=2) top kinds by bytes: 0x06:29393MiB/7885runs 0x09:7924MiB/1runs 0x00:866MiB/1666runs 0x08:523MiB/104runs 0x0c:442MiB/62runs 0x03:0MiB/10runs
+kf3: MAPSTAT calls=18432 bytes_by_flag MiB [default=16123 4K=72 BIG=140 HUGE=9800] (0.3% 4K / 0.5% BIG / 37.5% HUGE) calls_by_flag_class [4K <64K=17929 64K-2M=5 2M-64M=0 >=64M=0 | BIG 0 218 0 0 | HUGE 0 0 270 2]
+kf3: MAPSTAT calls=18944 bytes_by_flag MiB [default=16123 4K=74 BIG=140 HUGE=9800] (0.3% 4K / 0.5% BIG / 37.5% HUGE) calls_by_flag_class [4K <64K=18441 64K-2M=5 2M-64M=0 >=64M=0 | BIG 0 218 0 0 | HUGE 0 0 270 2]
+kf3: MAPSTAT calls=19456 bytes_by_flag MiB [default=16123 4K=76 BIG=140 HUGE=9800] (0.3% 4K / 0.5% BIG / 37.5% HUGE) calls_by_flag_class [4K <64K=18953 64K-2M=5 2M-64M=0 >=64M=0 | BIG 0 218 0 0 | HUGE 0 0 270 2]
+kf3: MAPBIG hDma=0xcafe008f len=0x4000000 flag=0x400 fixed=true slice=true
+kf3: KINDSTAT runs=9984 last(kind=0x0 len=0x11d000 leaf=0x1000 ap=0) top kinds by bytes: 0x06:31217MiB/8034runs 0x09:7924MiB/1runs 0x00:921MiB/1764runs 0x08:563MiB/110runs 0x0c:512MiB/64runs 0x03:0MiB/11runs
+kf3: MAPSTAT calls=19968 bytes_by_flag MiB [default=16123 4K=78 BIG=141 HUGE=9914] (0.3% 4K / 0.5% BIG / 37.8% HUGE) calls_by_flag_class [4K <64K=19451 64K-2M=5 2M-64M=0 >=64M=0 | BIG 0 222 0 0 | HUGE 0 0 279 3]
+kf3: MAPSTAT calls=20480 bytes_by_flag MiB [default=16123 4K=80 BIG=141 HUGE=9944] (0.3% 4K / 0.5% BIG / 37.8% HUGE) calls_by_flag_class [4K <64K=19958 64K-2M=5 2M-64M=0 >=64M=0 | BIG 0 222 0 0 | HUGE 0 0 284 3]
+kf3: MAPSTAT calls=20992 bytes_by_flag MiB [default=16123 4K=82 BIG=141 HUGE=9944] (0.3% 4K / 0.5% BIG / 37.8% HUGE) calls_by_flag_class [4K <64K=20470 64K-2M=5 2M-64M=0 >=64M=0 | BIG 0 222 0 0 | HUGE 0 0 284 3]
+kf3: KINDSTAT runs=10240 last(kind=0x8 len=0x600000 leaf=0x200000 ap=0) top kinds by bytes: 0x06:33078MiB/8180runs 0x09:7924MiB/1runs 0x00:976MiB/1861runs 0x08:637MiB/123runs 0x0c:512MiB/64runs 0x03:0MiB/11runs
+kf3: MAPBIG hDma=0xcafe008f len=0x4000000 flag=0x400 fixed=true slice=true
+kf3: MAPSTAT calls=21504 bytes_by_flag MiB [default=16123 4K=84 BIG=142 HUGE=10048] (0.3% 4K / 0.5% BIG / 38.1% HUGE) calls_by_flag_class [4K <64K=20970 64K-2M=5 2M-64M=0 >=64M=0 | BIG 0 225 0 0 | HUGE 0 0 292 4]
+kf3: DOORBELL-LEDGER tok=0x00000809 route=passthrough rung=0 emulated=0 forwarded=0 host=0x10030 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000100a route=passthrough rung=0 emulated=0 forwarded=0 host=0x20031 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000008 route=passthrough rung=292759 emulated=0 forwarded=292759 host=0x2f trap=292759 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000806 route=passthrough rung=0 emulated=0 forwarded=0 host=0x1002d trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00001007 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2002e trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000005 route=passthrough rung=53212 emulated=0 forwarded=53212 host=0x2c trap=53212 fast=0
+kf3: KINDSTAT runs=10496 last(kind=0x6 len=0xa0000 leaf=0x10000 ap=0) top kinds by bytes: 0x06:34743MiB/8319runs 0x09:7924MiB/1runs 0x00:1043MiB/1968runs 0x08:675MiB/130runs 0x0c:576MiB/65runs 0x03:0MiB/13runs
+kf3: DOORBELL-LEDGER tok=0x00000004 route=passthrough rung=17 emulated=0 forwarded=17 host=0x2b trap=17 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000003 route=passthrough rung=18191 emulated=0 forwarded=18191 host=0x2a trap=18191 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10029 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=486 host=0x10028 fast=0

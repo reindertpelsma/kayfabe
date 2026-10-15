@@ -1,0 +1,11 @@
+# job: cup8bench (many small kernels). @SMI@ unused. 3 reps + warmup. Placeholders: @REPS@
+$env:BENCH_SIZES = "16,2048"; $env:BENCH_ITERS = "50"; $env:BENCH_BATCH = "100"
+$cpu0 = (Get-Counter "\Processor(_Total)\% Processor Time" -SampleInterval 2 -MaxSamples 1).CounterSamples[0].CookedValue
+"PRE guest_cpu_pct=$([math]::Round($cpu0,1))"
+for ($i = 0; $i -le @REPS@; $i++) {
+  $t0 = Get-Date
+  $o = & C:\kfapps\tools\cup8bench.exe 2>&1
+  $wall = ((Get-Date) - $t0).TotalSeconds
+  "REP $i warmup=$($i -eq 0) wall_s=$([math]::Round($wall,1))"
+  $o | Select-String -Pattern "^BSUM|BENCH_INIT_MS|BENCH_CTX_MS|BENCH_MODULE_MS|BENCH_VERDICT|BENCH_TOTAL_BAD" | ForEach-Object { "R$i $($_.Line)" }
+}

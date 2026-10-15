@@ -1,0 +1,7 @@
+pid=1757316 dur=120 start=2026-10-15T19:23:09+02:00 rev=666ea966/qemu-system-x86_64
+perf.data bytes: 843810301
+display-fps lines: 59  max late_max_us: 9943
+PROF lines: 1400
+REFUSED lines: 1
+xid since start: 0
+end=2026-10-15T19:25:20+02:00

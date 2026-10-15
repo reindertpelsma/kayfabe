@@ -1,0 +1,25 @@
+window 7.22 s, lines P=2354801 C=645199 A=0
+prepares/s 326093, copies/s 89347, arms/s 0 (arm time avg 0.0 us)
+copy sizes: n=645199 total 23881.8 KB/s (23881813 B/s)  min 96  max 416
+copy size histogram: {'<=256': 419438, '<=1K': 225761}
+copy time total 2.766 s of 7.22 s window (38.30 %); avg 4.29 us, per-byte 16.0 ns
+  <=256: n=419438 p50 2.9 us p99 7.9 us max 517.3 us
+  <=4K: n=225761 p50 6.5 us p99 12.6 us max 927.7 us
+reads > 256 B: 225761 (35.0 %)
+channels (cache ids) in window: 6 [4, 6, 7, 21, 39, 40]
+distinct windows per channel: {4: 1, 21: 1, 39: 5}
+distinct windows overall: 7; summed per channel: 7 -> shared slices (touched by >1 channel): 0
+windows required per prepare: mean 0.27 max 2
+per frame at 103.0 fps: prepares 3166, copies 867, bytes 231862
+replay (window accesses 645199):
+  per-channel LRU  1 views: hit 54.18 %  misses/s 40943
+  per-channel LRU  2 views: hit 84.96 %  misses/s 13438
+  per-channel LRU  4 views: hit 99.94 %  misses/s 51
+  per-channel LRU  8 views: hit 100.00 %  misses/s 1
+  per-channel LRU 16 views: hit 100.00 %  misses/s 1
+  shared LRU keyed by store offset  16 views: hit 100.00 %  misses/s 1
+  shared LRU keyed by (channel,offset)  16 views: hit 100.00 %  misses/s 1
+  shared LRU keyed by store offset  64 views: hit 100.00 %  misses/s 1
+  shared LRU keyed by (channel,offset)  64 views: hit 100.00 %  misses/s 1
+  shared LRU keyed by store offset 256 views: hit 100.00 %  misses/s 1
+  shared LRU keyed by (channel,offset) 256 views: hit 100.00 %  misses/s 1

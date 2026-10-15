@@ -1,0 +1,75 @@
+19:23:10.482621191 kf3: PROF t=531.905s bar0_handler n=2931471 sum_ms=1425.0 avg_us=0.5 p50_us=0.4 p90_us=0.5 p99_us=4.1 max_us=5028.8
+19:23:10.596979529 kf3: PROF drainer_wake n=7729 sum_ms=89.7 avg_us=11.6 p50_us=8.2 p90_us=24.6 p99_us=41.0 max_us=2788.5
+19:23:10.629186533 kf3: PROF va invals=4240 arrive_to_clear_sum_ms=1747 arrive_to_clear_avg_us=412 max_us=112139 walks=21658 walk_sum_ms=5179 walk_avg_us=239 gpu_avg_us=147 plan_avg_us=0 apply_avg_us=347 host_calls=44671
+19:23:15.490262228 kf3: PROF t=536.912s bar0_handler n=2999318 sum_ms=1457.8 avg_us=0.5 p50_us=0.4 p90_us=0.5 p99_us=4.1 max_us=5028.8
+19:23:15.605319891 kf3: PROF drainer_wake n=7729 sum_ms=89.7 avg_us=11.6 p50_us=8.2 p90_us=24.6 p99_us=41.0 max_us=2788.5
+19:23:15.639818826 kf3: PROF va invals=4240 arrive_to_clear_sum_ms=1747 arrive_to_clear_avg_us=412 max_us=112139 walks=21658 walk_sum_ms=5179 walk_avg_us=239 gpu_avg_us=147 plan_avg_us=0 apply_avg_us=347 host_calls=44671
+19:23:20.497565104 kf3: PROF t=541.920s bar0_handler n=3068075 sum_ms=1489.8 avg_us=0.5 p50_us=0.4 p90_us=0.5 p99_us=4.1 max_us=5028.8
+19:23:20.614502681 kf3: PROF drainer_wake n=7729 sum_ms=89.7 avg_us=11.6 p50_us=8.2 p90_us=24.6 p99_us=41.0 max_us=2788.5
+19:23:20.650038048 kf3: PROF va invals=4240 arrive_to_clear_sum_ms=1747 arrive_to_clear_avg_us=412 max_us=112139 walks=21659 walk_sum_ms=5179 walk_avg_us=239 gpu_avg_us=147 plan_avg_us=0 apply_avg_us=347 host_calls=44674
+19:23:25.504993822 kf3: PROF t=546.927s bar0_handler n=3136017 sum_ms=1521.4 avg_us=0.5 p50_us=0.4 p90_us=0.5 p99_us=4.1 max_us=5028.8
+19:23:25.616543341 kf3: PROF drainer_wake n=7729 sum_ms=89.7 avg_us=11.6 p50_us=8.2 p90_us=24.6 p99_us=41.0 max_us=2788.5
+19:23:25.649552768 kf3: PROF va invals=4240 arrive_to_clear_sum_ms=1747 arrive_to_clear_avg_us=412 max_us=112139 walks=21675 walk_sum_ms=5184 walk_avg_us=239 gpu_avg_us=147 plan_avg_us=0 apply_avg_us=346 host_calls=44703
+19:23:30.512442918 kf3: PROF t=551.934s bar0_handler n=3201781 sum_ms=1552.3 avg_us=0.5 p50_us=0.4 p90_us=0.5 p99_us=4.1 max_us=5028.8
+19:23:30.628333073 kf3: PROF drainer_wake n=7729 sum_ms=89.7 avg_us=11.6 p50_us=8.2 p90_us=24.6 p99_us=41.0 max_us=2788.5
+19:23:30.660408787 kf3: PROF va invals=4240 arrive_to_clear_sum_ms=1747 arrive_to_clear_avg_us=412 max_us=112139 walks=21688 walk_sum_ms=5188 walk_avg_us=239 gpu_avg_us=147 plan_avg_us=0 apply_avg_us=346 host_calls=44727
+19:23:35.529625097 kf3: PROF t=556.951s bar0_handler n=3266572 sum_ms=1583.5 avg_us=0.5 p50_us=0.4 p90_us=0.5 p99_us=4.1 max_us=5028.8
+19:23:35.640779000 kf3: PROF drainer_wake n=7730 sum_ms=89.8 avg_us=11.6 p50_us=8.2 p90_us=24.6 p99_us=41.0 max_us=2788.5
+19:23:35.675349353 kf3: PROF va invals=4240 arrive_to_clear_sum_ms=1747 arrive_to_clear_avg_us=412 max_us=112139 walks=21698 walk_sum_ms=5192 walk_avg_us=239 gpu_avg_us=147 plan_avg_us=0 apply_avg_us=346 host_calls=44747
+19:23:40.536475368 kf3: PROF t=561.958s bar0_handler n=3334959 sum_ms=1615.6 avg_us=0.5 p50_us=0.4 p90_us=0.5 p99_us=4.1 max_us=5028.8
+19:23:40.656612458 kf3: PROF drainer_wake n=7730 sum_ms=89.8 avg_us=11.6 p50_us=8.2 p90_us=24.6 p99_us=41.0 max_us=2788.5
+19:23:40.687811559 kf3: PROF va invals=4240 arrive_to_clear_sum_ms=1747 arrive_to_clear_avg_us=412 max_us=112139 walks=21732 walk_sum_ms=5200 walk_avg_us=239 gpu_avg_us=147 plan_avg_us=0 apply_avg_us=346 host_calls=44821
+19:23:45.543872535 kf3: PROF t=566.965s bar0_handler n=3404149 sum_ms=1648.1 avg_us=0.5 p50_us=0.4 p90_us=0.5 p99_us=4.1 max_us=5028.8
+19:23:45.672326058 kf3: PROF drainer_wake n=7730 sum_ms=89.8 avg_us=11.6 p50_us=8.2 p90_us=24.6 p99_us=41.0 max_us=2788.5
+19:23:45.705064026 kf3: PROF va invals=4240 arrive_to_clear_sum_ms=1747 arrive_to_clear_avg_us=412 max_us=112139 walks=21745 walk_sum_ms=5205 walk_avg_us=239 gpu_avg_us=147 plan_avg_us=0 apply_avg_us=346 host_calls=44847
+19:23:50.573179607 kf3: PROF t=571.995s bar0_handler n=3475062 sum_ms=1681.8 avg_us=0.5 p50_us=0.4 p90_us=0.5 p99_us=4.1 max_us=5028.8
+19:23:50.685288240 kf3: PROF drainer_wake n=7731 sum_ms=89.8 avg_us=11.6 p50_us=8.2 p90_us=24.6 p99_us=41.0 max_us=2788.5
+19:23:50.719113839 kf3: PROF va invals=4240 arrive_to_clear_sum_ms=1747 arrive_to_clear_avg_us=412 max_us=112139 walks=21769 walk_sum_ms=5219 walk_avg_us=239 gpu_avg_us=147 plan_avg_us=0 apply_avg_us=345 host_calls=44899
+19:23:55.580939831 kf3: PROF t=577.002s bar0_handler n=3547591 sum_ms=1715.2 avg_us=0.5 p50_us=0.4 p90_us=0.5 p99_us=4.1 max_us=5028.8
+19:23:55.692331009 kf3: PROF drainer_wake n=7731 sum_ms=89.8 avg_us=11.6 p50_us=8.2 p90_us=24.6 p99_us=41.0 max_us=2788.5
+19:23:55.724883339 kf3: PROF va invals=4240 arrive_to_clear_sum_ms=1747 arrive_to_clear_avg_us=412 max_us=112139 walks=21769 walk_sum_ms=5219 walk_avg_us=239 gpu_avg_us=147 plan_avg_us=0 apply_avg_us=345 host_calls=44899
+19:24:00.618944283 kf3: PROF t=582.041s bar0_handler n=3607003 sum_ms=1741.6 avg_us=0.5 p50_us=0.4 p90_us=0.5 p99_us=4.1 max_us=5028.8
+19:24:00.732211537 kf3: PROF drainer_wake n=7732 sum_ms=89.8 avg_us=11.6 p50_us=8.2 p90_us=24.6 p99_us=41.0 max_us=2788.5
+19:24:00.765423121 kf3: PROF va invals=4240 arrive_to_clear_sum_ms=1747 arrive_to_clear_avg_us=412 max_us=112139 walks=21788 walk_sum_ms=5225 walk_avg_us=239 gpu_avg_us=147 plan_avg_us=0 apply_avg_us=345 host_calls=44942
+19:24:05.625898196 kf3: PROF t=587.048s bar0_handler n=3674151 sum_ms=1774.0 avg_us=0.5 p50_us=0.4 p90_us=0.5 p99_us=5.1 max_us=5028.8
+19:24:05.747197934 kf3: PROF drainer_wake n=7732 sum_ms=89.8 avg_us=11.6 p50_us=8.2 p90_us=24.6 p99_us=41.0 max_us=2788.5
+19:24:05.779809933 kf3: PROF va invals=4240 arrive_to_clear_sum_ms=1747 arrive_to_clear_avg_us=412 max_us=112139 walks=21788 walk_sum_ms=5225 walk_avg_us=239 gpu_avg_us=147 plan_avg_us=0 apply_avg_us=345 host_calls=44942
+19:24:10.648197256 kf3: PROF t=592.070s bar0_handler n=3744578 sum_ms=1807.2 avg_us=0.5 p50_us=0.4 p90_us=0.5 p99_us=5.1 max_us=5028.8
+19:24:10.761265599 kf3: PROF drainer_wake n=7733 sum_ms=89.8 avg_us=11.6 p50_us=8.2 p90_us=24.6 p99_us=41.0 max_us=2788.5
+19:24:10.793626090 kf3: PROF va invals=4240 arrive_to_clear_sum_ms=1747 arrive_to_clear_avg_us=412 max_us=112139 walks=21794 walk_sum_ms=5227 walk_avg_us=239 gpu_avg_us=147 plan_avg_us=0 apply_avg_us=345 host_calls=44954
+19:24:15.655623726 kf3: PROF t=597.077s bar0_handler n=3811232 sum_ms=1839.4 avg_us=0.5 p50_us=0.4 p90_us=0.5 p99_us=5.1 max_us=5028.8
+19:24:15.770343626 kf3: PROF drainer_wake n=7733 sum_ms=89.8 avg_us=11.6 p50_us=8.2 p90_us=24.6 p99_us=41.0 max_us=2788.5
+19:24:15.803805038 kf3: PROF va invals=4240 arrive_to_clear_sum_ms=1747 arrive_to_clear_avg_us=412 max_us=112139 walks=21823 walk_sum_ms=5234 walk_avg_us=239 gpu_avg_us=147 plan_avg_us=0 apply_avg_us=345 host_calls=45012
+19:24:20.663487034 kf3: PROF t=602.085s bar0_handler n=3875260 sum_ms=1869.9 avg_us=0.5 p50_us=0.4 p90_us=0.5 p99_us=5.1 max_us=5028.8
+19:24:20.778808869 kf3: PROF drainer_wake n=7733 sum_ms=89.8 avg_us=11.6 p50_us=8.2 p90_us=24.6 p99_us=41.0 max_us=2788.5
+19:24:20.811754095 kf3: PROF va invals=4240 arrive_to_clear_sum_ms=1747 arrive_to_clear_avg_us=412 max_us=112139 walks=21826 walk_sum_ms=5235 walk_avg_us=239 gpu_avg_us=147 plan_avg_us=0 apply_avg_us=345 host_calls=45018
+19:24:25.670838388 kf3: PROF t=607.093s bar0_handler n=3940160 sum_ms=1900.7 avg_us=0.5 p50_us=0.4 p90_us=0.5 p99_us=5.1 max_us=5028.8
+19:24:25.786277282 kf3: PROF drainer_wake n=7733 sum_ms=89.8 avg_us=11.6 p50_us=8.2 p90_us=24.6 p99_us=41.0 max_us=2788.5
+19:24:25.821399550 kf3: PROF va invals=4240 arrive_to_clear_sum_ms=1747 arrive_to_clear_avg_us=412 max_us=112139 walks=21832 walk_sum_ms=5241 walk_avg_us=240 gpu_avg_us=147 plan_avg_us=0 apply_avg_us=345 host_calls=45030
+19:24:30.679265435 kf3: PROF t=612.100s bar0_handler n=4010256 sum_ms=1933.3 avg_us=0.5 p50_us=0.4 p90_us=0.5 p99_us=5.1 max_us=5028.8
+19:24:30.800144274 kf3: PROF drainer_wake n=7733 sum_ms=89.8 avg_us=11.6 p50_us=8.2 p90_us=24.6 p99_us=41.0 max_us=2788.5
+19:24:30.835702059 kf3: PROF va invals=4240 arrive_to_clear_sum_ms=1747 arrive_to_clear_avg_us=412 max_us=112139 walks=21854 walk_sum_ms=5249 walk_avg_us=240 gpu_avg_us=147 plan_avg_us=0 apply_avg_us=345 host_calls=45076
+19:24:35.724426698 kf3: PROF t=617.146s bar0_handler n=4080483 sum_ms=1967.1 avg_us=0.5 p50_us=0.4 p90_us=0.5 p99_us=5.1 max_us=5028.8
+19:24:35.835377887 kf3: PROF drainer_wake n=7734 sum_ms=89.8 avg_us=11.6 p50_us=8.2 p90_us=24.6 p99_us=41.0 max_us=2788.5
+19:24:35.866600526 kf3: PROF va invals=4240 arrive_to_clear_sum_ms=1747 arrive_to_clear_avg_us=412 max_us=112139 walks=21937 walk_sum_ms=5277 walk_avg_us=240 gpu_avg_us=146 plan_avg_us=0 apply_avg_us=345 host_calls=45307
+19:24:40.743991630 kf3: PROF t=622.166s bar0_handler n=4145985 sum_ms=1997.0 avg_us=0.5 p50_us=0.4 p90_us=0.5 p99_us=5.1 max_us=5028.8
+19:24:40.864151034 kf3: PROF drainer_wake n=7762 sum_ms=90.5 avg_us=11.7 p50_us=8.2 p90_us=24.6 p99_us=41.0 max_us=2788.5
+19:24:40.895420093 kf3: PROF va invals=4240 arrive_to_clear_sum_ms=1747 arrive_to_clear_avg_us=412 max_us=112139 walks=21953 walk_sum_ms=5284 walk_avg_us=240 gpu_avg_us=146 plan_avg_us=0 apply_avg_us=345 host_calls=45341
+19:24:45.751838057 kf3: PROF t=627.173s bar0_handler n=4212029 sum_ms=2033.1 avg_us=0.5 p50_us=0.4 p90_us=0.5 p99_us=5.1 max_us=5101.2
+19:24:45.864336823 kf3: PROF drainer_wake n=7807 sum_ms=91.2 avg_us=11.7 p50_us=8.2 p90_us=24.6 p99_us=41.0 max_us=2788.5
+19:24:45.897061079 kf3: PROF va invals=4240 arrive_to_clear_sum_ms=1747 arrive_to_clear_avg_us=412 max_us=112139 walks=21961 walk_sum_ms=5287 walk_avg_us=240 gpu_avg_us=146 plan_avg_us=0 apply_avg_us=345 host_calls=45356
+19:24:50.790271901 kf3: PROF t=632.212s bar0_handler n=4271811 sum_ms=2060.7 avg_us=0.5 p50_us=0.4 p90_us=0.5 p99_us=5.1 max_us=5101.2
+19:24:50.920742111 kf3: PROF drainer_wake n=7837 sum_ms=91.8 avg_us=11.7 p50_us=8.2 p90_us=24.6 p99_us=41.0 max_us=2788.5
+19:24:50.956255236 kf3: PROF va invals=4240 arrive_to_clear_sum_ms=1747 arrive_to_clear_avg_us=412 max_us=112139 walks=22028 walk_sum_ms=5306 walk_avg_us=240 gpu_avg_us=146 plan_avg_us=0 apply_avg_us=344 host_calls=45490
+19:24:55.809190884 kf3: PROF t=637.231s bar0_handler n=4341119 sum_ms=2093.4 avg_us=0.5 p50_us=0.4 p90_us=0.5 p99_us=5.1 max_us=5101.2
+19:24:55.919792624 kf3: PROF drainer_wake n=7879 sum_ms=92.4 avg_us=11.7 p50_us=8.2 p90_us=24.6 p99_us=41.0 max_us=2788.5
+19:24:55.951753367 kf3: PROF va invals=4240 arrive_to_clear_sum_ms=1747 arrive_to_clear_avg_us=412 max_us=112139 walks=22041 walk_sum_ms=5312 walk_avg_us=241 gpu_avg_us=146 plan_avg_us=0 apply_avg_us=344 host_calls=45514
+19:25:00.817408476 kf3: PROF t=642.239s bar0_handler n=4406888 sum_ms=2123.0 avg_us=0.5 p50_us=0.4 p90_us=0.5 p99_us=5.1 max_us=5101.2
+19:25:00.931565997 kf3: PROF drainer_wake n=7879 sum_ms=92.4 avg_us=11.7 p50_us=8.2 p90_us=24.6 p99_us=41.0 max_us=2788.5
+19:25:00.963255292 kf3: PROF va invals=4240 arrive_to_clear_sum_ms=1747 arrive_to_clear_avg_us=412 max_us=112139 walks=22055 walk_sum_ms=5320 walk_avg_us=241 gpu_avg_us=146 plan_avg_us=0 apply_avg_us=344 host_calls=45550
+19:25:05.825375793 kf3: PROF t=647.247s bar0_handler n=4476298 sum_ms=2155.7 avg_us=0.5 p50_us=0.4 p90_us=0.5 p99_us=5.1 max_us=5101.2
+19:25:05.939538894 kf3: PROF drainer_wake n=7879 sum_ms=92.4 avg_us=11.7 p50_us=8.2 p90_us=24.6 p99_us=41.0 max_us=2788.5
+19:25:05.972580048 kf3: PROF va invals=4240 arrive_to_clear_sum_ms=1747 arrive_to_clear_avg_us=412 max_us=112139 walks=22062 walk_sum_ms=5324 walk_avg_us=241 gpu_avg_us=146 plan_avg_us=0 apply_avg_us=344 host_calls=45562
+19:25:10.832749288 kf3: PROF t=652.254s bar0_handler n=4541726 sum_ms=2186.8 avg_us=0.5 p50_us=0.4 p90_us=0.5 p99_us=5.1 max_us=5101.2
+19:25:10.947258285 kf3: PROF drainer_wake n=7879 sum_ms=92.4 avg_us=11.7 p50_us=8.2 p90_us=24.6 p99_us=41.0 max_us=2788.5
+19:25:10.978554873 kf3: PROF va invals=4240 arrive_to_clear_sum_ms=1747 arrive_to_clear_avg_us=412 max_us=112139 walks=22073 walk_sum_ms=5327 walk_avg_us=241 gpu_avg_us=146 plan_avg_us=0 apply_avg_us=344 host_calls=45580

@@ -1,0 +1,107 @@
+PREREG, Windows 11 GPU benchmarks, kayfabe vs VFIO native. Written 2026-10-15 ~17:50 CEST, BEFORE any run of mine.
+(Read first, not run: the task file, the VFIO harnesses, the launcher chain (launch3.sh -> windows_broker_claude_oglw.sh), the Blender bench scripts and the
+earlier Blender results (kayfabe, 5.3-5.9 s OptiX 128 spp, 7.6 s CUDA, 148 s CPU), the appmatrix manifest/commands, harvest.sh. The other agent still holds the VM.)
+
+Configurations (same overlay base win11-full-b/windows11.qcow2, own qcow2 overlay + own OVMF_VARS copy per configuration; same -smp 8, 16384 MB, same -cpu flags
+incl. hv_*, same SMBIOS/UUID/MAC, same net, same tools+virtio CDs, kfapps.iso as a third CD):
+  K  = kayfabe production build kf3 666ea966 + its broker, NO KF3_* measurement flags, display=on (virtual head, broker window).
+  K+ = same with KF3_PROF=1 (and in a separate run KF3_USER_RING_STAGES=1) - ONLY for the "where does the time go" repeat of a benchmark with gap > 10 %.
+  V  = vfio-pci of the 4070 (01:00.0 + 01:00.1), stock KVM irqfd/ioeventfd (NOT the reference harness's x-no-kvm-* / x-gsp-observer / trace flags, which add
+       overhead and would make V slower than a real native guest), std VGA as the second adapter (the host monitor is on the iGPU), same CPU/RAM.
+Rules: 1 warm-up run discarded + 3 timed reps per benchmark and configuration; report median and (max-min)/median spread. Gap = K/V (time) or V/K (rate), so >1 = kayfabe slower.
+A gap counts as REAL only if it exceeds 10 % AND 2x the larger of the two spreads. Otherwise it is "within noise".
+Guest load (Processor % total) noted before each run; a run with > 10 % background load is repeated once.
+
+Benchmark order: (1) Blender Cycles OptiX and CUDA, 1080p, 128 spp, the scene of /data/claude-blender (sub 9, 3 objs, 8 tex 4096) ; render_s from its own result.json.
+(2) GravityMark 1.89 d3d12/vk/d3d11/gl, 1920x1080, DEFAULT asteroid count, -benchmark 1 -close 1 -times. (3) vkpeak / clpeak (+ FurMark if time). (4) cup8bench
+(many small kernels). (5) Heaven / Minecraft only if all above are done. No PresentMon.
+
+HYPOTHESES (each with its falsifier; "measured" = a number from a run, "inferred" = reasoning)
+
+H7  none: kayfabe is within noise of native on the GPU-bound compute benchmarks (Blender OptiX/CUDA, vkpeak/clpeak throughput).
+    Falsifier: any of Blender OptiX, Blender CUDA, vkpeak fp32 or clpeak global bandwidth has a REAL gap (>10 % and > 2x spread) on K vs V.
+    Expectation stated beforehand (not evidence): the earlier agent's 5.3-5.9 s OptiX was run on kayfabe only; I have no native number, so I do not know whether it is close. I expect
+    compute to be near native (device compute does not trap) and the gaps, if any, to show in many-small-submission and presentation paths.
+
+H3  GPU power state / clocks are lower under kayfabe for the same work (the GPU is not busy enough or is boosted less).
+    Measured by host nvidia-smi dmon (K only; the host owns the GPU) AND guest nvidia-smi (both; note the guest reports util [N/A] under kayfabe).
+    Falsifier: during the timed phase of the largest-gap benchmark the median SM clock and pstate under K are within 5 % / equal to V's guest-side reading, AND
+    GPU util under K is >= 95 % of the run (host dmon sm%), i.e. the GPU is saturated at full clock: then the gap is not power state.
+    If K shows util well below V's while runtime is longer: latency-bound (H1/H2/H4), not H3. If equal util/clock and longer time: the GPU work itself is slower (inferred: translation of
+    work or memory placement H6).
+
+H1  trap cost per BAR0 write / doorbell is a material share of wall time.
+    Counts from the PROF census (bar0_handler count, handler time, max, p99) in the K+ repeat. Falsifier: cumulative trapped-write time < 2 % of the benchmark wall AND the
+    worst single trap < 1 ms, in the window of the benchmark. Then H1 is refuted as the main cost (it may still dominate cup8bench-style tiny-kernel loops; judged on that test separately:
+    falsifier there = cup8bench per-launch time K within 10 % of V).
+
+H2  completion / interrupt delivery latency (MSI path, user-ring-loop wake, 50 ms backstop) inflates short synchronous work.
+    Falsifier: USER_RING_LOOP SUMMARY shows backstop-firing count ~0 (< 1 % of wakes) and drainer wake latency p99 < 1 ms during the run, AND cup8bench sync/launch-to-completion
+    latency on K is within 10 % of V. Blender (long kernels) is not sensitive to H2; do not use Blender for H2.
+
+H4  the display present/copy path (broker window, flip/vsync) costs GPU time or caps fps.
+    Falsifier: GravityMark fps at 1080p on K (display=on) is within 10 % of V AND the K host dmon shows no display-copy engine activity; or: run the same GravityMark on K with the window minimized /
+    display off and the fps does not rise > 10 %. CONFOUND recorded with every graphics number: V has no display on the 4070 (headless secondary adapter + std VGA head), so every V frame is
+    presented through a cross-adapter copy that K does not do. A K slower than V therefore cannot be explained by "presentation" alone, a K faster than V proves nothing about kayfabe.
+
+H5  host CPU contention / scheduling (governor, SMT sibling, qemu thread placement).
+    Falsifier: perf stat/sched during the benchmark shows no qemu/kayfabe thread (vCPU, drainer, broker) with > 90 % of a core while the vCPU threads wait, and the guest-visible CPU benchmark
+    (Blender CPU is too slow; use the guest's own `Processor %`/a short CPU-bound loop) is within 10 % K vs V; max sched delay (perf sched latency) of kayfabe threads < 5 ms.
+
+H6  PCIe BAR1 / IOMMU (DMA-FQ vs identity) mapping limits H2D/D2H bandwidth.
+    Falsifier: clpeak transfer bandwidth (enqueueWriteBuffer / ReadBuffer) K within 10 % of V.
+
+Where-does-the-time-go outputs required for each benchmark with a real gap (K+ repeat, one run each with KF3_PROF=1; a separate one with KF3_USER_RING_STAGES=1):
+worst single trap (max), cumulative trap time % of wall, doorbell delay (from the user-ring-stages counters if present), host CPU by thread (perf stat per thread), off-CPU stacks
+(OFFCPU=1) vs on-CPU, GPU util/clock/pstate/power (host dmon). Measured and inferred kept apart in the doc.
+
+Failure policy: a crash/TDR is a result (guest events + host Xid + ring REFUSED lines recorded), at most one retry, then move on.
+Valid-run condition: guest GPU healthy at start (no nvlddmkm 153/4101 in the last 2 minutes), no other VM, host lock held, VFIO side restored to nvidia at the end.
+
+ADDENDUM 2026-10-15 ~17:55 CEST, before any run of mine (owner re-ordering received via coordinator):
+ORDER NOW: 1 Unigine Heaven (OpenGL and Direct3D11) PRIMARY repro, 1920x1080 windowed, same quality preset and API on K and V; 2 Blender Cycles OptiX/CUDA;
+3 GravityMark; 4 FurMark/vkpeak/clpeak; 5 cup8bench (moved earlier if quick: it answers doorbell delay directly, run it right after the first K boot's Heaven session if time allows).
+Heaven fps method (Basic has no CLI benchmark): in order of preference, decided at the first look at the installed Heaven: (a) the in-app benchmark (F9) if it works in Basic and writes a result/log file I can read;
+(b) the engine's own log/console fps if it writes one; (c) outside the app: K = host `kf3: display fps[... late_max_us ...]` lines (presented fps at the virtual head) + guest nvidia-smi util; V = guest-side only
+(no PresentMon): DWM composition counters / a screenshot sequence with timestamps. The method used per configuration is stated in the doc; a K-only host number is never compared against a V guest number as if equal.
+Owner's hypothesis: Heaven and Minecraft low fps on kayfabe share one cause. Heaven is the case profiled with KF3_PROF=1 + harvest.sh (GPU util, per-thread busy, off-CPU, late_max_us); if the VM is stable a short
+Minecraft-style window is captured too.
+H8  the low fps comes from the display present/copy path on kayfabe (display=on frame pacing, a vsync lock to a lower rate, late display ticks) and NOT from GPU submission.
+    Falsifier: the same Heaven run with display=off (or offscreen/uncapped, e.g. vsync off in the app and a window not shown) is just as slow as with display=on, OR late_max_us stays small (< a frame time) while fps is low.
+    Supporting (not proof): fps clusters at a divisor of the display rate (60, 30, 20); GPU util low while the app thread waits in present.
+    Relation to H4: H4 (present path costs GPU time/caps fps) is a sub-case; H8 is decided by the display=off control, which needs a K run with the display off (kf3 display=off property, or the broker window absent) - if that
+    cannot be built within the time-box it is reported as "not done", never inferred.
+
+ADDENDUM 2026-10-15 19:20 CEST, BEFORE the worker-syscall runs (written after seeing the first K results; so these are post-observation hypotheses and are labelled as such):
+Observed already (measured, K = kf3 666ea966, production flags): Heaven D3D11 20.9 fps vs Heaven OpenGL 229 fps on the same boot; GPU sm util ~28 % under D3D11; kf3-worker0/1 each ~150 s CPU per 293 s, of which ~106 s SYSTEM, ~120k involuntary context switches;
+vCPU threads 70-80 s; display flips = app fps; ticks on time.
+H9  (worker syscalls) the SYSTEM time of kf3-worker0/1 under D3D11 is dominated by ONE syscall/ioctl class.
+    Falsifier: in `perf trace -s` over the two worker tids for a 60 s D3D11 window, the top syscall class (by total time) is < 40 % of the workers' syscall time (so no single class dominates);
+    ALSO falsified if the top class by time is the same for OpenGL at a comparable share (then it does not explain the 11x gap).
+H10 (D3D11-specific) the slowdown is specific to the D3D11 path and also present for D3D12/Vulkan in GravityMark, or only D3D11.
+    Falsifier for "every non-GL API is slow": GravityMark D3D12 or Vulkan fps within 30 % of OpenGL's at the same settings (and the three are measured on one boot).
+    Falsifier for "D3D11-specific": GravityMark D3D12 or Vulkan < 50 % of OpenGL's fps while D3D11 is also slow.
+H11 the per-frame difference is in the doorbell/ring traffic: D3D11 produces many more BAR0 writes / ring submissions per frame than OpenGL.
+    Falsifier: PROF bar0_handler count per second (and per frame = count / fps) is within 2x between D3D11 and OpenGL.
+H8 control (display=off) is run only if a K launch with the display off exists without code changes (kf3 display property); otherwise reported as not done.
+
+ADDENDUM 2026-10-15 19:58 CEST, BEFORE the caller-naming run (post-observation; labelled so):
+Measured so far (K, 41 s perf trace on the two kf3 workers): D3D11 = 131,791 RM MAP_MEMORY(0x4e)/UNMAP_MEMORY(0x4f) ioctl pairs (+ the same number of openat/mmap/munmap/close) in an 8 s ioctl sample
+(~16.5k arm/release cycles per s over both workers = ~840 per frame), OpenGL = 4,184 pairs in 8 s (~523/s = ~2.3 per frame). Non-wait syscall time: ioctl 66 %, then munmap/mmap/openat/close.
+H9 result (not falsified): the top syscall class by time excluding epoll_wait is ioctl at 66 % (> 40 %), and 100 % of the sampled ioctls are the 0x4e/0x4f pair.
+Source reading (inferred, not measured): two candidate arming sites: (1) kf-qemu/src/chan.rs StoreViews::view_for (per channel, VIEWS_MAX=8 64-KiB windows, FIFO eviction; Translated path), (2) kf-qemu/src/userstore.rs Cache::prepare
+(USER-ring snapshot path, worker-owned: releases every ready view that is not in the new `required` set and arms the missing ones on every prepare), (3) mem.rs:666/752.
+H12  (coordinator) the arm/release rate equals the growth of StoreViews::armed, i.e. the caller is chan.rs StoreViews::view_for.
+     Falsifier: perf record -e syscalls:sys_enter_openat with dwarf (or fp) call graphs on the two worker tids for ~5 s of a D3D11 run shows the top user stacks NOT under StoreViews::view_for.
+H12b (mine) the caller is userstore::Cache::prepare under the USER-ring pump (userpump::Pump::turn_body / snapshot path), because the workers' perf profile shows userpump::Pump::trace_slots, UserdSource::write and
+     Vec growth under Pump::turn_body, and because Windows D3D11 channels are USER rings. Falsifier: the top stacks are under StoreViews::view_for (then H12 holds).
+H13  (experiment) enlarging or making persistent the CPU-view cache removes the D3D11 cost. Falsifier: with the experimental build (VIEWS_MAX 8 -> 64/256 in chan.rs, or a retained-view change in userstore.rs) the D3D11 fps stays within 10 % of 20.9.
+     The experiment is a scratch branch in /data/claude-perf/wt (no push, no master), built with the same recipe as build_kf3.sh, binary under a separate rev name; production numbers stay those of 666ea966.
+
+ADDENDUM 2026-10-15 22:35 CEST (Linux phase, before the grain experiment; after the Linux measurements below):
+Measured before this addendum: Linux Heaven native (vfio) 334.2 fps vs kayfabe 281.4/280.9 (84 %); P2 clock lock to 2820 MHz: 278.2 fps (clock cap not the cause; falsifier 'within 3 % of unlocked' met);
+cup8bench read bandwidth (R=1) native 463/470/473/475/476 vs kayfabe 422-435/421-427/415-419/404-420/419-433 GB/s at 256 MiB..6 GiB (88-94 %) and equal at 64-128 MiB; matmul 96.8 %; workers idle, BAR0 handler 0.18 %.
+H14 (grain) the GPU memory-path gap is caused by the host GMMU mapping grain: kf-mem places guest big-leaf rows at the 4 KiB grain (batch.rs BATCH_PAGE) so the real PTEs are small pages (TLB reach).
+    Test (scratch hack, measurement only): map 2 MiB-aligned 2 MiB guest leaves (and 64 KiB leaves) as host large-page mappings.
+    Falsifier: BW at 1 GiB stays < 95 % of native (463..475 GB/s => < ~450) with 2 MiB host mappings, or the 128->256 MiB knee remains => the grain is NOT the cause.
+    Support: knee disappears and BW >= 98 % of native at 1-6 GiB, Linux Heaven >= 95 % of 334 fps.

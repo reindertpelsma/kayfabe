@@ -1,0 +1,2 @@
+tids=1775111,1775112 bin=/var/lib/kf-windows-20261005/kf3-bins/666ea966/qemu-system-x86_64
+end=2026-10-15T19:52:26+02:00

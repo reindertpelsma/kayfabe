@@ -1,0 +1,5 @@
+qpid=1844460 worker0=1844492 worker1=1844493 start=2026-10-15T21:59:44+02:00
+trace_s done 22:00:25
+record done 22:00:54
+0 /data/claude-perf/ev/linux/lk_prof/wtrace/ioctl_raw.txt
+end=2026-10-15T22:01:02+02:00

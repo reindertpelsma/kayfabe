@@ -1,0 +1,40 @@
+c_d3d11            fps    20.60  min    9.46  max   40.69  score    519.0  frames 537317
+f_d3d11_r1         fps   102.44  min   19.51  max  179.35  score   2580.4  frames 2669120
+f_d3d11_r2         fps    97.65  min   31.75  max  209.87  score   2459.7  frames 2545321
+f_d3d11_r3         fps    96.04  min   31.14  max  207.73  score   2419.3  frames 2503621
+f_gl_r1            fps   215.27  min   26.98  max  437.19  score   5422.7  frames 5610721
+f_gl_r2            fps   222.47  min   37.22  max  491.67  score   5604.0  frames 5798421
+f_gl_r3            fps   222.70  min   30.59  max  491.05  score   5609.9  frames 5804221
+g_d3d11_r1         fps    97.85  min   19.30  max  212.92  score   2464.9  frames 2550822
+g_d3d11_r1_NOFLAG_fixonly fps    94.83  min   19.60  max  209.54  score   2388.8  frames 2471421
+g_gl_r1            fps   223.89  min   40.11  max  494.80  score   5639.9  frames 5835222
+g_gl_r1_NOFLAG_fixonly fps   213.76  min   27.89  max  420.58  score   5384.6  frames 5571421
+k_d3d11_r1         fps    20.89  min   13.08  max   39.09  score    526.2  frames 544716
+k_d3d11_r2         fps    20.56  min    9.40  max   32.88  score    518.0  frames 536216
+k_d3d11_r3         fps    20.99  min   13.12  max   40.23  score    528.8  frames 547316
+k_gl_r1            fps   221.58  min   29.79  max  495.96  score   5581.6  frames 5774917
+k_gl_r2            fps   231.57  min   41.58  max  500.84  score   5833.1  frames 6035217
+k_gl_r3            fps   228.91  min   48.08  max  444.47  score   5766.2  frames 5965817
+k_gl_rw            fps   230.48  min   33.06  max  497.71  score   5805.7  frames 6007116
+p_d3d11_a          fps    19.65  min   10.21  max   39.26  score    495.1  frames 512717
+p_d3d11_off        fps    19.95  min   12.98  max   40.09  score    502.5  frames 520217
+t_d3d11            fps   102.23  min   11.57  max  211.74  score   2575.2  frames 2664818
+t_gl               fps   233.69  min   33.33  max  492.65  score   5886.7  frames 6090618
+v_d3d11_r1         fps   330.18  min   65.81  max  722.06  score   8317.3  frames 8605118
+v_d3d11_r2         fps   329.48  min   67.27  max  733.24  score   8299.5  frames 8586918
+v_d3d11_r3         fps   330.05  min   64.62  max  708.78  score   8314.1  frames 8602019
+v_d3d11_w          fps   331.56  min   66.13  max  719.34  score   8351.9  frames 8640818
+v_gl_r1            fps   347.10  min   48.15  max  718.13  score   8743.5  frames 9046419
+v_gl_r2            fps   339.61  min   46.69  max  706.97  score   8554.7  frames 8851019
+v_gl_r3            fps   341.93  min   46.42  max  762.27  score   8613.3  frames 8911519
+v_gl_w             fps   347.08  min   44.89  max  743.53  score   8743.0  frames 9045719
+w_d3d11            fps    19.55  min    9.13  max   33.14  score    492.4  frames 509717
+w_gl               fps   232.53  min   48.18  max  498.15  score   5857.4  frames 6060217
+x_d3d11_r1         fps   102.84  min   23.41  max  211.51  score   2590.5  frames 2680518
+x_d3d11_r2         fps   103.80  min   40.35  max  213.80  score   2614.6  frames 2705318
+x_gl_r1            fps   235.18  min   46.09  max  514.26  score   5924.2  frames 6129518
+K prod  D3D11 (20.8916, 2.045798311282997, 3)
+K prod  GL (228.90717, 4.362903966704055, 3)
+K scratch(persistent) D3D11 (103.31899000000001, 0.923721766927842, 2)
+VFIO D3D11 (330.05419, 0.213298307165865, 3)
+VFIO GL (341.93319, 2.1922411217232174, 3)

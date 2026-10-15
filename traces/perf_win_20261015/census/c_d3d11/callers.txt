@@ -1,0 +1,26 @@
+   100.00%  [.] __syscall_cancel_arch_end
+            |          
+             --42.26%--__syscall_cancel_arch (inlined)
+                       __internal_syscall_cancel (inlined)
+                       __syscall_cancel
+                       __libc_openat64
+                       <kf_linux_raw::chardev_unsafe::CharDevice>::openat_mode
+                       <kf_host::HostRm>::open_view_node
+                       <kf_host::HostRm>::arm_cpu_view
+                       <kf_qemu::userstore::Native as kf_qemu::userstore::Host>::arm
+                       <kf_qemu::userstore::Cache as kf_qemu::mem::userread::Store>::prepare
+                       kf_qemu::mem::userread::snapshot::<kf_qemu::userstore::Cache>
+                       <kf_qemu::chan::userpump::Pump>::snapshot
+                       <kf_qemu::chan::userpump::Pump>::turn_body
+                       <kf_qemu::chan::userpump::Pump>::turn
+                       <kf_qemu::chan::ChanPlane>::serve
+                       <kf_qemu::device::Device as kf_core::plane::HostOps>::run_translated
+                       <kf_core::plane::Plane>::worker_pass
+                       kf_chan::worker::run_with_relay
+                       <kf_qemu::device::Device>::worker_loop
+                       std::sys::backtrace::__rust_begin_short_backtrace::<kf_qemu::ffi_unsafe::kf3_realize::{closure#2}, ()>
+                       <std::thread::lifecycle::spawn_unchecked<kf_qemu::ffi_unsafe::kf3_realize::{closure#2}, ()>::{closure#1} as core::ops::function::FnOnce<()>>::call_once::{shim:vtable#0}
+                       call_once<(), (dyn core::ops::function::FnOnce<(), Output=()> + core::marker::Send), alloc::alloc::Global> (inlined)
+                       thread_start (inlined)
+                       start_thread
+                       __clone3 (inlined)

@@ -1,0 +1,11 @@
+START 16:24:57.718 user=kfadmin session=1
+PRE guest_cpu_pct=0.9
+LAUNCH 16:24:59.977 -project_name Heaven -data_path ../ -engine_config ../data/heaven_4.0.cfg -system_script heaven/unigine.cpp -sound_app null -video_app direct3d11 -video_multisample 0 -video_fullsc
+RESULT_FOUND=True alive=True elapsed_s=293
+HLOG 16:25:00 Features: OpenGL Direct3D9 Direct3D11 OpenAL XAudio2 XPad360 Joystick Flash Editor
+HLOG 16:25:00 Direct3D11 desc: NVIDIA GeForce RTX 4070
+HLOG 16:25:00 Unigine Heaven Benchmark 4.0 (4.0)
+HLOG 16:25:31 Benchmark running
+HLOG 16:29:51 Benchmark results:
+HLOG 16:29:51 Time:    260.73416:29:51 Frames:    547316:29:51 FPS:    20.990816:29:51 Min FPS:    13.123616:29:51 Max FPS:    40.233316:29:51 Score:    528.757
+END 16:29:57.262

@@ -1,0 +1,7 @@
+START 21:21:44.078 user=KAYFABE-WINDOWS$ session=0
+PRE guest_cpu_pct=0.7
+REP 0 dev=OPTIX spp=128 warmup=True rc=0 wall_s=24.4 render_s=6.54 warmup_s=6.07 scene_s=5.59 status=ok device=OPTIX:NVIDIA GeForce RTX 4070
+REP 1 dev=OPTIX spp=128 warmup=False rc=0 wall_s=17.6 render_s=5.99 warmup_s=2.74 scene_s=7.28 status=ok device=OPTIX:NVIDIA GeForce RTX 4070
+REP 2 dev=OPTIX spp=128 warmup=False rc=0 wall_s=12.4 render_s=5.29 warmup_s=1.91 scene_s=4.29 status=ok device=OPTIX:NVIDIA GeForce RTX 4070
+REP 3 dev=OPTIX spp=128 warmup=False rc=0 wall_s=12.3 render_s=5.29 warmup_s=1.96 scene_s=4.23 status=ok device=OPTIX:NVIDIA GeForce RTX 4070
+END 21:22:53.125

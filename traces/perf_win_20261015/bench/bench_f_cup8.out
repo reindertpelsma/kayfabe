@@ -1,0 +1,35 @@
+START 21:23:09.662 user=KAYFABE-WINDOWS$ session=0
+PRE guest_cpu_pct=0.8
+REP 0 warmup=True wall_s=2.2
+R0 BENCH_INIT_MS=22.31
+R0 BENCH_CTX_MS=280.54
+R0 BENCH_MODULE_MS=16.18
+R0 BSUM N=16 iters=50 first_ms=0.212 med_ms=0.166 p90_ms=0.174 min_ms=0.020 max_ms=0.189 gflops=0.049 batch_per_launch_ms=0.093 batch_gflops=0.088 h2d_ms=3.694 d2h_med_ms=0.030 submit_med_ms=0.164 sync_med_ms=0.002 sync_cpu_med_ms
+R0 BSUM N=2048 iters=50 first_ms=10.323 med_ms=9.025 p90_ms=10.322 min_ms=8.830 max_ms=10.480 gflops=1903.481 batch_per_launch_ms=9.158 batch_gflops=1875.879 h2d_ms=16.769 d2h_med_ms=3.629 submit_med_ms=0.023 sync_med_ms=8.877 syn
+R0 BENCH_TOTAL_BAD=0
+R0 BENCH_VERDICT: PASS (every timed iteration verified)
+REP 1 warmup=False wall_s=2
+R1 BENCH_INIT_MS=20.20
+R1 BENCH_CTX_MS=266.73
+R1 BENCH_MODULE_MS=0.45
+R1 BSUM N=16 iters=50 first_ms=0.054 med_ms=0.029 p90_ms=0.146 min_ms=0.022 max_ms=0.270 gflops=0.285 batch_per_launch_ms=0.047 batch_gflops=0.175 h2d_ms=3.383 d2h_med_ms=0.027 submit_med_ms=0.021 sync_med_ms=0.007 sync_cpu_med_ms
+R1 BSUM N=2048 iters=50 first_ms=9.014 med_ms=9.031 p90_ms=9.064 min_ms=8.832 max_ms=9.292 gflops=1902.259 batch_per_launch_ms=9.169 batch_gflops=1873.602 h2d_ms=12.441 d2h_med_ms=1.653 submit_med_ms=0.020 sync_med_ms=9.011 sync_c
+R1 BENCH_TOTAL_BAD=0
+R1 BENCH_VERDICT: PASS (every timed iteration verified)
+REP 2 warmup=False wall_s=2.1
+R2 BENCH_INIT_MS=19.77
+R2 BENCH_CTX_MS=259.02
+R2 BENCH_MODULE_MS=0.42
+R2 BSUM N=16 iters=50 first_ms=0.047 med_ms=0.027 p90_ms=0.032 min_ms=0.023 max_ms=0.158 gflops=0.300 batch_per_launch_ms=0.044 batch_gflops=0.187 h2d_ms=3.276 d2h_med_ms=0.025 submit_med_ms=0.020 sync_med_ms=0.006 sync_cpu_med_ms
+R2 BSUM N=2048 iters=50 first_ms=8.844 med_ms=9.040 p90_ms=9.063 min_ms=8.835 max_ms=9.116 gflops=1900.512 batch_per_launch_ms=9.189 batch_gflops=1869.646 h2d_ms=13.054 d2h_med_ms=3.513 submit_med_ms=0.023 sync_med_ms=8.871 sync_c
+R2 BENCH_TOTAL_BAD=0
+R2 BENCH_VERDICT: PASS (every timed iteration verified)
+REP 3 warmup=False wall_s=2
+R3 BENCH_INIT_MS=20.15
+R3 BENCH_CTX_MS=268.00
+R3 BENCH_MODULE_MS=0.36
+R3 BSUM N=16 iters=50 first_ms=0.201 med_ms=0.171 p90_ms=0.213 min_ms=0.022 max_ms=0.268 gflops=0.048 batch_per_launch_ms=0.086 batch_gflops=0.096 h2d_ms=3.471 d2h_med_ms=0.031 submit_med_ms=0.169 sync_med_ms=0.002 sync_cpu_med_ms
+R3 BSUM N=2048 iters=50 first_ms=9.046 med_ms=9.036 p90_ms=9.061 min_ms=8.852 max_ms=9.288 gflops=1901.332 batch_per_launch_ms=9.196 batch_gflops=1868.196 h2d_ms=12.880 d2h_med_ms=1.642 submit_med_ms=0.020 sync_med_ms=9.014 sync_c
+R3 BENCH_TOTAL_BAD=0
+R3 BENCH_VERDICT: PASS (every timed iteration verified)
+END 21:23:20.194

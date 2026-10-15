@@ -1,0 +1,60 @@
+kf3: act birth translated: chan 0xc1d0072f:0xff040003 BORN Translated: token 0x1805 -> host 0x3002c in VasKey(13965670261299611760) gpfifo=0x12050b000x2048 userd=Some(Sysmem { base: 18144978432, size: 512 }) engine=0x13 tsg=None kernel_by=PRIVILEGE=KERNEL ring_va=0xff00300000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=false gp_get_by_engine=false sw_subch_inert=false sche
+kf3: act birth translated: chan 0xc1d00730:0xff040004 BORN Translated: token 0x806 -> host 0x1002d in VasKey(13965670261299611760) gpfifo=0x120512000x2048 userd=Some(Sysmem { base: 18144978944, size: 512 }) engine=0xb tsg=Some(ff0e0000) kernel_by=PRIVILEGE=KERNEL ring_va=0xff00900000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=false gp_get_by_engine=false sw_subch_inert=fa
+kf3: act birth translated: chan 0xc1d00731:0xff040005 BORN Translated: token 0x2007 -> host 0xc002e in VasKey(13965670261299611760) gpfifo=0x120519000x2048 userd=Some(Sysmem { base: 18144979456, size: 512 }) engine=0x1c tsg=None kernel_by=PRIVILEGE=KERNEL ring_va=0xff00800000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=false gp_get_by_engine=false sw_subch_inert=false sche
+kf3: act birth translated: chan 0xc1d00732:0xff040006 BORN Translated: token 0x2008 -> host 0xc002f in VasKey(13965670261299611760) gpfifo=0x120520000x2048 userd=Some(Sysmem { base: 18144979968, size: 512 }) engine=0x1c tsg=None kernel_by=PRIVILEGE=KERNEL ring_va=0xff00700000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=false gp_get_by_engine=false sw_subch_inert=false sche
+kf3: act birth translated: chan 0xc1d00733:0xff040007 BORN Translated: token 0x2809 -> host 0x50030 in VasKey(13965670261299611760) gpfifo=0x120528000x2048 userd=Some(Sysmem { base: 18144980480, size: 512 }) engine=0x33 tsg=None kernel_by=PRIVILEGE=KERNEL ring_va=0xff00600000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=false gp_get_by_engine=false sw_subch_inert=false sche
+kf3: act birth translated: chan 0xc1d00734:0xff040008 BORN Translated: token 0x200a -> host 0xc0031 in VasKey(13965670261299611760) gpfifo=0x120530000x2048 userd=Some(Sysmem { base: 18144227328, size: 512 }) engine=0x1c tsg=None kernel_by=PRIVILEGE=KERNEL ring_va=0xff00500000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=false gp_get_by_engine=false sw_subch_inert=false sche
+kf3: act birth translated: chan 0xc1d00735:0xff040009 BORN Translated: token 0x80b -> host 0x10032 in VasKey(13965662590488021072) gpfifo=0x200c4000x16384 userd=Some(Sysmem { base: 18143965184, size: 512 }) engine=0xb tsg=Some(ff0e0000) kernel_by=PRIVILEGE=KERNEL ring_va=0xff00400000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=false gp_get_by_engine=false sw_subch_inert=fa
+kf3: act birth translated: chan 0xc1d00736:0xff04000a BORN Translated: token 0xc -> host 0x33 in VasKey(13965662590488021072) gpfifo=0x200ef000x16384 userd=Some(Sysmem { base: 18143965696, size: 512 }) engine=0x1 tsg=Some(ff0e0000) kernel_by=PRIVILEGE=KERNEL ring_va=0xff00c00000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=true gp_get_by_engine=true sw_subch_inert=false sch
+kf3: act birth translated: chan 0xc1d00739:0xff04000b BORN Translated: token 0x80d -> host 0x10034 in VasKey(13965670381558696016) gpfifo=0x1200c4000x4096 userd=Some(Sysmem { base: 18143698944, size: 512 }) engine=0xb tsg=None kernel_by=PRIVILEGE=KERNEL ring_va=0xff00a00000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=false gp_get_by_engine=false sw_subch_inert=false schedu
+kf3: DOORBELL-LEDGER tok=0x00000014 route=passthrough rung=0 emulated=0 forwarded=0 host=0x3b trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00001018 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2003f trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000015 route=passthrough rung=0 emulated=0 forwarded=0 host=0x3c trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00001019 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20040 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000022 route=passthrough rung=0 emulated=0 forwarded=0 host=0x49 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000021 route=passthrough rung=0 emulated=0 forwarded=0 host=0x48 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000020 route=passthrough rung=0 emulated=0 forwarded=0 host=0x47 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000001f route=passthrough rung=0 emulated=0 forwarded=0 host=0x46 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000081e route=passthrough rung=0 emulated=0 forwarded=0 host=0x10045 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000101b route=passthrough rung=0 emulated=0 forwarded=0 host=0x20042 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00001016 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2003d trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000011 route=passthrough rung=0 emulated=0 forwarded=0 host=0x38 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000001f route=passthrough rung=0 emulated=0 forwarded=0 host=0x46 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00001020 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20047 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000000f route=passthrough rung=0 emulated=0 forwarded=0 host=0x36 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00001010 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20037 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000101e route=passthrough rung=0 emulated=0 forwarded=0 host=0x20045 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000016 route=passthrough rung=0 emulated=0 forwarded=0 host=0x3d trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000101b route=passthrough rung=0 emulated=0 forwarded=0 host=0x20042 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000015 route=passthrough rung=0 emulated=0 forwarded=0 host=0x3c trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000012 route=passthrough rung=0 emulated=0 forwarded=0 host=0x39 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00001013 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2003a trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00001022 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20049 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000020 route=passthrough rung=0 emulated=0 forwarded=0 host=0x47 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00001018 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2003f trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000011 route=passthrough rung=0 emulated=0 forwarded=0 host=0x38 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000101c route=passthrough rung=0 emulated=0 forwarded=0 host=0x20043 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000017 route=passthrough rung=0 emulated=0 forwarded=0 host=0x3e trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=2 host=0x10028 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=1 host=0x10029 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000003 route=translated emulated=0 forwarded=41 host=0x2a fast=0
+kf3: DOORBELL-LEDGER tok=0x00000804 route=translated emulated=0 forwarded=0 host=0x1002b fast=0
+kf3: DOORBELL-LEDGER tok=0x00001805 route=translated emulated=0 forwarded=0 host=0x3002c fast=0
+kf3: DOORBELL-LEDGER tok=0x00000806 route=translated emulated=0 forwarded=0 host=0x1002d fast=0
+kf3: DOORBELL-LEDGER tok=0x00002007 route=translated emulated=0 forwarded=0 host=0xc002e fast=0
+kf3: DOORBELL-LEDGER tok=0x00002008 route=translated emulated=0 forwarded=0 host=0xc002f fast=0
+kf3: DOORBELL-LEDGER tok=0x00002809 route=translated emulated=0 forwarded=0 host=0x50030 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000200a route=translated emulated=0 forwarded=0 host=0xc0031 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000080b route=translated emulated=0 forwarded=163333 host=0x10032 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000000c route=translated emulated=0 forwarded=1 host=0x33 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000080d route=translated emulated=0 forwarded=0 host=0x10034 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000000e route=passthrough rung=0 emulated=0 forwarded=0 host=0x35 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000001a route=passthrough rung=0 emulated=0 forwarded=0 host=0x41 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000101d route=passthrough rung=0 emulated=0 forwarded=0 host=0x20044 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000014 route=passthrough rung=0 emulated=0 forwarded=0 host=0x3b trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00001019 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20040 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000001f route=passthrough rung=0 emulated=0 forwarded=0 host=0x46 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00001021 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20048 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000023 route=passthrough rung=0 emulated=0 forwarded=0 host=0x4a trap=0 fast=0
+kf3: USER_RING_LOOP SUMMARY (all relays gone, #4) wakes(doorbell=1338806 event=1364366 spin=4150241 backstop=25925) backstop_found(work=0 carried=0 contended=3 put_ahead=57) event_without_progress=187443 gates=198152 carried_ungated=0 credit_waits=0 contended_turns=484941 pop_writebacks=132392 markers=277334 drain_us_log2=[1, 350, 24158, 37137, 35596, 38831, 27446, 15796, 8709, 7384, 1131, 1238, 2
+kf3: DOORBELL-LEDGER tok=0x00001024 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2004b trap=0 fast=0

@@ -1,0 +1,60 @@
+kf3: DOORBELL-LEDGER tok=0x00001024 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2004b trap=1 fast=0
+kf3: DOORBELL-LEDGER tok=0x00001023 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2004a trap=1 fast=0
+kf3: DOORBELL-LEDGER tok=0x00001022 route=passthrough rung=1 emulated=0 forwarded=1 host=0x20049 trap=1 fast=0
+kf3: DOORBELL-LEDGER tok=0x00001021 route=passthrough rung=904 emulated=0 forwarded=904 host=0x20048 trap=904 fast=0
+kf3: act birth translated: chan 0xc1d00022:0xcaf00150 BORN Translated: token 0x811 -> host 0x10038 in VasKey(13965662593909522755) gpfifo=0x121010000x1024 userd=Some(Framebuffer { base: 75825152, size: 512 }) engine=0xb tsg=Some(caf00146) kernel_by=PRIVILEGE=KERNEL+UVM_OWNED ring_va=0xff00200000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=false gp_get_by_engine=false sw_su
+kf3: act birth translated: chan 0xc1d00022:0xcaf0015b BORN Translated: token 0x812 -> host 0x10039 in VasKey(13965662593909522755) gpfifo=0x121040000x1024 userd=Some(Framebuffer { base: 76021760, size: 512 }) engine=0xb tsg=Some(caf00146) kernel_by=PRIVILEGE=KERNEL+UVM_OWNED ring_va=0xff00300000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=false gp_get_by_engine=false sw_su
+kf3: act birth translated: chan 0xc1d00022:0xcaf00166 BORN Translated: token 0x1013 -> host 0x1003a in VasKey(13965662593909522755) gpfifo=0x121070000x1024 userd=Some(Framebuffer { base: 79036416, size: 512 }) engine=0xc tsg=Some(caf0015e) kernel_by=PRIVILEGE=KERNEL+UVM_OWNED ring_va=0xff00400000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=false gp_get_by_engine=false sw_s
+kf3: act birth translated: chan 0xc1d00022:0xcaf00171 BORN Translated: token 0x1014 -> host 0x1003b in VasKey(13965662593909522755) gpfifo=0x1210a0000x1024 userd=Some(Framebuffer { base: 79233024, size: 512 }) engine=0xc tsg=Some(caf0015e) kernel_by=PRIVILEGE=KERNEL+UVM_OWNED ring_va=0xff00500000 userd_at_birth(GP_PUT,GP_GET)=(Some(0), Some(0)) zeroed=512B gr_tier=false gp_get_by_engine=false sw_s
+kf3: act birth passthrough: chan 0xc1d0002a:0x5c000019 BORN Passthrough: token 0x15 -> host 0x3c in VasKey(13965662626408038407) gpfifo=0x200200000x1024 userd=Store { store: 3405643781, off: 2357207040 } engine=0x1 declared_kernel_pid=false privilege=0 rc=armed late_joiner_schedule=Some(GuestNotScheduled) fast=off (1434 us, off the GSP lock)
+kf3: act birth passthrough: chan 0xc1d0002a:0x5c00001f BORN Passthrough: token 0x16 -> host 0x3d in VasKey(13965662626408038407) gpfifo=0x200203000x1024 userd=Store { store: 3405643781, off: 2357219328 } engine=0x1 declared_kernel_pid=false privilege=0 rc=armed late_joiner_schedule=Some(GuestNotScheduled) fast=off (781 us, off the GSP lock)
+kf3: act birth passthrough: chan 0xc1d0002a:0x5c000023 BORN Passthrough: token 0x17 -> host 0x3e in VasKey(13965662626408038407) gpfifo=0x200206000x1024 userd=Store { store: 3405643781, off: 2357231616 } engine=0x1 declared_kernel_pid=false privilege=0 rc=armed late_joiner_schedule=Some(GuestNotScheduled) fast=off (789 us, off the GSP lock)
+kf3: act birth passthrough: chan 0xc1d0002a:0x5c000027 BORN Passthrough: token 0x18 -> host 0x3f in VasKey(13965662626408038407) gpfifo=0x200209000x1024 userd=Store { store: 3405643781, off: 2357243904 } engine=0x1 declared_kernel_pid=false privilege=0 rc=armed late_joiner_schedule=Some(GuestNotScheduled) fast=off (765 us, off the GSP lock)
+kf3: act birth passthrough: chan 0xc1d0002a:0x5c00002b BORN Passthrough: token 0x19 -> host 0x40 in VasKey(13965662626408038407) gpfifo=0x20020c000x1024 userd=Store { store: 3405643781, off: 2357256192 } engine=0x1 declared_kernel_pid=false privilege=0 rc=armed late_joiner_schedule=Some(GuestNotScheduled) fast=off (760 us, off the GSP lock)
+kf3: act birth passthrough: chan 0xc1d0002a:0x5c00002f BORN Passthrough: token 0x1a -> host 0x41 in VasKey(13965662626408038407) gpfifo=0x20020f000x1024 userd=Store { store: 3405643781, off: 2357268480 } engine=0x1 declared_kernel_pid=false privilege=0 rc=armed late_joiner_schedule=Some(GuestNotScheduled) fast=off (769 us, off the GSP lock)
+kf3: act birth passthrough: chan 0xc1d0002a:0x5c000033 BORN Passthrough: token 0x1b -> host 0x42 in VasKey(13965662626408038407) gpfifo=0x200212000x1024 userd=Store { store: 3405643781, off: 2357280768 } engine=0x1 declared_kernel_pid=false privilege=0 rc=armed late_joiner_schedule=Some(GuestNotScheduled) fast=off (770 us, off the GSP lock)
+kf3: act birth passthrough: chan 0xc1d0002a:0x5c000037 BORN Passthrough: token 0x1c -> host 0x43 in VasKey(13965662626408038407) gpfifo=0x200215000x1024 userd=Store { store: 3405643781, off: 2357293056 } engine=0x1 declared_kernel_pid=false privilege=0 rc=armed late_joiner_schedule=Some(GuestNotScheduled) fast=off (769 us, off the GSP lock)
+kf3: act birth passthrough: chan 0xc1d0002a:0x5c00003d BORN Passthrough: token 0x81d -> host 0x10044 in VasKey(13965662626408038407) gpfifo=0x200218000x1024 userd=Store { store: 3405643781, off: 2357305344 } engine=0xb declared_kernel_pid=false privilege=0 rc=armed late_joiner_schedule=Some(GuestNotScheduled) fast=off (1405 us, off the GSP lock)
+kf3: act birth passthrough: chan 0xc1d0002a:0x5c000040 BORN Passthrough: token 0x81e -> host 0x10045 in VasKey(13965662626408038407) gpfifo=0x20021b000x1024 userd=Store { store: 3405643781, off: 2357317632 } engine=0xb declared_kernel_pid=false privilege=0 rc=armed late_joiner_schedule=Some(GuestNotScheduled) fast=off (667 us, off the GSP lock)
+kf3: act birth passthrough: chan 0xc1d0002a:0x5c000043 BORN Passthrough: token 0x81f -> host 0x10046 in VasKey(13965662626408038407) gpfifo=0x20021e000x1024 userd=Store { store: 3405643781, off: 2357329920 } engine=0xb declared_kernel_pid=false privilege=0 rc=armed late_joiner_schedule=Some(GuestNotScheduled) fast=off (673 us, off the GSP lock)
+kf3: act birth passthrough: chan 0xc1d0002a:0x5c000046 BORN Passthrough: token 0x820 -> host 0x10047 in VasKey(13965662626408038407) gpfifo=0x200221000x1024 userd=Store { store: 3405643781, off: 2357342208 } engine=0xb declared_kernel_pid=false privilege=0 rc=armed late_joiner_schedule=Some(GuestNotScheduled) fast=off (665 us, off the GSP lock)
+kf3: act birth passthrough: chan 0xc1d0002a:0x5c00004b BORN Passthrough: token 0x1021 -> host 0x20048 in VasKey(13965662626408038407) gpfifo=0x200224000x1024 userd=Store { store: 3405643781, off: 2357354496 } engine=0xc declared_kernel_pid=false privilege=0 rc=armed late_joiner_schedule=Some(GuestNotScheduled) fast=off (1426 us, off the GSP lock)
+kf3: act birth passthrough: chan 0xc1d0002a:0x5c00004e BORN Passthrough: token 0x1022 -> host 0x20049 in VasKey(13965662626408038407) gpfifo=0x200227000x1024 userd=Store { store: 3405643781, off: 2357366784 } engine=0xc declared_kernel_pid=false privilege=0 rc=armed late_joiner_schedule=Some(GuestNotScheduled) fast=off (680 us, off the GSP lock)
+kf3: act birth passthrough: chan 0xc1d0002a:0x5c000051 BORN Passthrough: token 0x1023 -> host 0x2004a in VasKey(13965662626408038407) gpfifo=0x20022a000x1024 userd=Store { store: 3405643781, off: 2357379072 } engine=0xc declared_kernel_pid=false privilege=0 rc=armed late_joiner_schedule=Some(GuestNotScheduled) fast=off (658 us, off the GSP lock)
+kf3: act birth passthrough: chan 0xc1d0002a:0x5c000054 BORN Passthrough: token 0x1024 -> host 0x2004b in VasKey(13965662626408038407) gpfifo=0x20022d000x1024 userd=Store { store: 3405643781, off: 2357391360 } engine=0xc declared_kernel_pid=false privilege=0 rc=armed late_joiner_schedule=Some(GuestNotScheduled) fast=off (644 us, off the GSP lock)
+kf3: DOORBELL-LEDGER tok=0x00001014 route=translated emulated=0 forwarded=1 host=0x1003b fast=0
+kf3: DOORBELL-LEDGER tok=0x00001013 route=translated emulated=0 forwarded=1 host=0x1003a fast=0
+kf3: DOORBELL-LEDGER tok=0x00000812 route=translated emulated=0 forwarded=1 host=0x10039 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000811 route=translated emulated=0 forwarded=246 host=0x10038 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000001c route=passthrough rung=1 emulated=0 forwarded=1 host=0x43 trap=1 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000001b route=passthrough rung=1 emulated=0 forwarded=1 host=0x42 trap=1 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000001a route=passthrough rung=1 emulated=0 forwarded=1 host=0x41 trap=1 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000019 route=passthrough rung=1 emulated=0 forwarded=1 host=0x40 trap=1 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000018 route=passthrough rung=1 emulated=0 forwarded=1 host=0x3f trap=1 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000017 route=passthrough rung=1 emulated=0 forwarded=1 host=0x3e trap=1 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000016 route=passthrough rung=1 emulated=0 forwarded=1 host=0x3d trap=1 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000015 route=passthrough rung=1262 emulated=0 forwarded=1262 host=0x3c trap=1262 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000820 route=passthrough rung=1 emulated=0 forwarded=1 host=0x10047 trap=1 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000081f route=passthrough rung=1 emulated=0 forwarded=1 host=0x10046 trap=1 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000081e route=passthrough rung=1 emulated=0 forwarded=1 host=0x10045 trap=1 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000081d route=passthrough rung=128 emulated=0 forwarded=128 host=0x10044 trap=128 fast=0
+kf3: DOORBELL-LEDGER tok=0x00001024 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2004b trap=1 fast=0
+kf3: DOORBELL-LEDGER tok=0x00001023 route=passthrough rung=1 emulated=0 forwarded=1 host=0x2004a trap=1 fast=0
+kf3: DOORBELL-LEDGER tok=0x00001022 route=passthrough rung=1 emulated=0 forwarded=1 host=0x20049 trap=1 fast=0
+kf3: DOORBELL-LEDGER tok=0x00001021 route=passthrough rung=904 emulated=0 forwarded=904 host=0x20048 trap=904 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000806 route=passthrough rung=0 emulated=0 forwarded=0 host=0x1002d trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00001007 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2002e trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000005 route=passthrough rung=109968 emulated=0 forwarded=109968 host=0x2c trap=109968 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000004 route=passthrough rung=25 emulated=0 forwarded=25 host=0x2b trap=25 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000003 route=passthrough rung=37320 emulated=0 forwarded=37320 host=0x2a trap=37320 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000809 route=passthrough rung=0 emulated=0 forwarded=0 host=0x10030 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000100a route=passthrough rung=0 emulated=0 forwarded=0 host=0x20031 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000008 route=passthrough rung=291728 emulated=0 forwarded=291728 host=0x2f trap=291728 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000080c route=passthrough rung=0 emulated=0 forwarded=0 host=0x10033 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000100d route=passthrough rung=0 emulated=0 forwarded=0 host=0x20034 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000000b route=passthrough rung=670380 emulated=0 forwarded=670380 host=0x32 trap=670380 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000080f route=passthrough rung=0 emulated=0 forwarded=0 host=0x10036 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00001010 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20037 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000000e route=passthrough rung=301851 emulated=0 forwarded=301851 host=0x35 trap=301851 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=2 host=0x10029 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=1632 host=0x10028 fast=0

@@ -1,0 +1,192 @@
+BENCH_BUILD sizes=[16] iters=5 batch=10 verify_every=1 nolaunch=0
+BENCH_W320 batch_sweep=[] batch_reps=5 ctx_flags=0x0 hostmem=0
+BENCH_W322 alloc=[vram] bw=[8,16,32,64,128,256,512,1024,2048,4096,6144] bw_iters=9 bw_target_mib=256 bw_only=0 bw_reps=1
+BENCH_TSTATE_AVAILABLE=yes cpu_ms=2.078630 nvcsw=0
+BENCH_CLOCK_ORIGIN mono_ms=46343.133 real_ms=1792096057375.477
+BENCH_MODE=MEASURE
+ok   cuInit(0)
+BENCH_INIT_MS=45.78
+ok   cuDeviceGetCount(&nd)
+ok   cuDeviceGet(&d,0)
+BENCH_DEVICE=[NVIDIA GeForce RTX 4070]
+ok   cuCtxCreate_v2(&ctx,CTXFLAGS,d)
+BENCH_CTX_MS=126.94
+PTX_TARGET=sm_86 (device cc 8.9)
+PTX_TARGET=sm_86 (device cc 8.9)
+ok   cuModuleLoadData(&mod,PTX)
+BENCH_MODULE_MS=0.08
+ok   cuModuleGetFunction(&fn,mod,"mm")
+
+BENCH_BW_MODULE_RC=0
+BENCH_BW_FUNC_RC=0
+BW_BEGIN mib=8 nf=2097152 reps=1 bytes_per_launch=8388608 alloc=vram in_ptr=0x715d5ce00000 out_ptr=0x715d5cc00000 grid=1024x256
+BWITER mib=8 i=0 submit_ms=0.018 sync_ms=0.006 total_ms=0.024 bad=0
+BWITER mib=8 i=1 submit_ms=0.011 sync_ms=0.006 total_ms=0.017 bad=0
+BWITER mib=8 i=2 submit_ms=0.011 sync_ms=0.006 total_ms=0.017 bad=0
+BWITER mib=8 i=3 submit_ms=0.011 sync_ms=0.006 total_ms=0.016 bad=0
+BWITER mib=8 i=4 submit_ms=0.011 sync_ms=0.006 total_ms=0.017 bad=0
+BWITER mib=8 i=5 submit_ms=0.011 sync_ms=0.006 total_ms=0.016 bad=0
+BWITER mib=8 i=6 submit_ms=0.011 sync_ms=0.006 total_ms=0.017 bad=0
+BWITER mib=8 i=7 submit_ms=0.011 sync_ms=0.006 total_ms=0.016 bad=0
+BWITER mib=8 i=8 submit_ms=0.011 sync_ms=0.006 total_ms=0.017 bad=0
+BWROW mib=8 alloc=vram nf=2097152 reps=1 bytes=8388608 iters=9 submit_med_ms=0.011 sync_med_ms=0.006 sync_min_ms=0.006 sync_max_ms=0.006 total_med_ms=0.017 read_GBps=1426.634 read_GBps_incl_submit=506.895 expect=8 got0=8 bad=0 ⚠SHORT_SYNC_LOWER_BOUND
+BW_BEGIN mib=16 nf=4194304 reps=1 bytes_per_launch=16777216 alloc=vram in_ptr=0x715d5ce00000 out_ptr=0x715d5cc00000 grid=1024x256
+BWITER mib=16 i=0 submit_ms=0.011 sync_ms=0.016 total_ms=0.027 bad=0
+BWITER mib=16 i=1 submit_ms=0.011 sync_ms=0.011 total_ms=0.022 bad=0
+BWITER mib=16 i=2 submit_ms=0.011 sync_ms=0.011 total_ms=0.022 bad=0
+BWITER mib=16 i=3 submit_ms=0.011 sync_ms=0.011 total_ms=0.022 bad=0
+BWITER mib=16 i=4 submit_ms=0.011 sync_ms=0.011 total_ms=0.022 bad=0
+BWITER mib=16 i=5 submit_ms=0.011 sync_ms=0.011 total_ms=0.022 bad=0
+BWITER mib=16 i=6 submit_ms=0.023 sync_ms=0.002 total_ms=0.025 bad=0
+BWITER mib=16 i=7 submit_ms=0.011 sync_ms=0.011 total_ms=0.022 bad=0
+BWITER mib=16 i=8 submit_ms=0.011 sync_ms=0.011 total_ms=0.022 bad=0
+BWROW mib=16 alloc=vram nf=4194304 reps=1 bytes=16777216 iters=9 submit_med_ms=0.011 sync_med_ms=0.011 sync_min_ms=0.002 sync_max_ms=0.016 total_med_ms=0.022 read_GBps=1499.170 read_GBps_incl_submit=765.000 expect=16 got0=16 bad=0 ⚠SHORT_SYNC_LOWER_BOUND
+BW_BEGIN mib=32 nf=8388608 reps=1 bytes_per_launch=33554432 alloc=vram in_ptr=0x715d54000000 out_ptr=0x715d5cc00000 grid=1024x256
+BWITER mib=32 i=0 submit_ms=0.011 sync_ms=0.021 total_ms=0.032 bad=0
+BWITER mib=32 i=1 submit_ms=0.011 sync_ms=0.021 total_ms=0.032 bad=0
+BWITER mib=32 i=2 submit_ms=0.011 sync_ms=0.021 total_ms=0.032 bad=0
+BWITER mib=32 i=3 submit_ms=0.011 sync_ms=0.021 total_ms=0.032 bad=0
+BWITER mib=32 i=4 submit_ms=0.011 sync_ms=0.021 total_ms=0.032 bad=0
+BWITER mib=32 i=5 submit_ms=0.011 sync_ms=0.023 total_ms=0.035 bad=0
+BWITER mib=32 i=6 submit_ms=0.011 sync_ms=0.021 total_ms=0.032 bad=0
+BWITER mib=32 i=7 submit_ms=0.011 sync_ms=0.021 total_ms=0.032 bad=0
+BWITER mib=32 i=8 submit_ms=0.011 sync_ms=0.026 total_ms=0.037 bad=0
+BWROW mib=32 alloc=vram nf=8388608 reps=1 bytes=33554432 iters=9 submit_med_ms=0.011 sync_med_ms=0.021 sync_min_ms=0.021 sync_max_ms=0.026 total_med_ms=0.032 read_GBps=1578.289 read_GBps_incl_submit=1045.016 expect=32 got0=32 bad=0 ⚠SHORT_SYNC_LOWER_BOUND
+BW_BEGIN mib=64 nf=16777216 reps=1 bytes_per_launch=67108864 alloc=vram in_ptr=0x715d52000000 out_ptr=0x715d5cc00000 grid=1024x256
+BWITER mib=64 i=0 submit_ms=0.011 sync_ms=0.174 total_ms=0.185 bad=0
+BWITER mib=64 i=1 submit_ms=0.011 sync_ms=0.152 total_ms=0.163 bad=0
+BWITER mib=64 i=2 submit_ms=0.011 sync_ms=0.147 total_ms=0.158 bad=0
+BWITER mib=64 i=3 submit_ms=0.011 sync_ms=0.147 total_ms=0.158 bad=0
+BWITER mib=64 i=4 submit_ms=0.011 sync_ms=0.147 total_ms=0.158 bad=0
+BWITER mib=64 i=5 submit_ms=0.011 sync_ms=0.147 total_ms=0.157 bad=0
+BWITER mib=64 i=6 submit_ms=0.011 sync_ms=0.147 total_ms=0.158 bad=0
+BWITER mib=64 i=7 submit_ms=0.011 sync_ms=0.147 total_ms=0.158 bad=0
+BWITER mib=64 i=8 submit_ms=0.011 sync_ms=0.147 total_ms=0.157 bad=0
+BWROW mib=64 alloc=vram nf=16777216 reps=1 bytes=67108864 iters=9 submit_med_ms=0.011 sync_med_ms=0.147 sync_min_ms=0.147 sync_max_ms=0.174 total_med_ms=0.158 read_GBps=456.337 read_GBps_incl_submit=425.332 expect=64 got0=64 bad=0 ⚠SHORT_SYNC_LOWER_BOUND
+BW_BEGIN mib=128 nf=33554432 reps=1 bytes_per_launch=134217728 alloc=vram in_ptr=0x715d4e000000 out_ptr=0x715d5cc00000 grid=1024x256
+BWITER mib=128 i=0 submit_ms=0.011 sync_ms=0.336 total_ms=0.347 bad=0
+BWITER mib=128 i=1 submit_ms=0.011 sync_ms=0.292 total_ms=0.302 bad=0
+BWITER mib=128 i=2 submit_ms=0.011 sync_ms=0.292 total_ms=0.302 bad=0
+BWITER mib=128 i=3 submit_ms=0.011 sync_ms=0.293 total_ms=0.303 bad=0
+BWITER mib=128 i=4 submit_ms=0.011 sync_ms=0.292 total_ms=0.302 bad=0
+BWITER mib=128 i=5 submit_ms=0.010 sync_ms=0.292 total_ms=0.302 bad=0
+BWITER mib=128 i=6 submit_ms=0.012 sync_ms=0.291 total_ms=0.302 bad=0
+BWITER mib=128 i=7 submit_ms=0.011 sync_ms=0.291 total_ms=0.302 bad=0
+BWITER mib=128 i=8 submit_ms=0.011 sync_ms=0.291 total_ms=0.302 bad=0
+BWROW mib=128 alloc=vram nf=33554432 reps=1 bytes=134217728 iters=9 submit_med_ms=0.011 sync_med_ms=0.292 sync_min_ms=0.291 sync_max_ms=0.336 total_med_ms=0.302 read_GBps=460.263 read_GBps_incl_submit=444.077 expect=128 got0=128 bad=0 ⚠SHORT_SYNC_LOWER_BOUND
+BW_BEGIN mib=256 nf=67108864 reps=1 bytes_per_launch=268435456 alloc=vram in_ptr=0x715d46000000 out_ptr=0x715d5cc00000 grid=1024x256
+BWITER mib=256 i=0 submit_ms=0.012 sync_ms=0.686 total_ms=0.698 bad=0
+BWITER mib=256 i=1 submit_ms=0.011 sync_ms=0.616 total_ms=0.627 bad=0
+BWITER mib=256 i=2 submit_ms=0.012 sync_ms=0.615 total_ms=0.627 bad=0
+BWITER mib=256 i=3 submit_ms=0.011 sync_ms=0.616 total_ms=0.627 bad=0
+BWITER mib=256 i=4 submit_ms=0.011 sync_ms=0.618 total_ms=0.629 bad=0
+BWITER mib=256 i=5 submit_ms=0.011 sync_ms=0.615 total_ms=0.626 bad=0
+BWITER mib=256 i=6 submit_ms=0.011 sync_ms=0.638 total_ms=0.649 bad=0
+BWITER mib=256 i=7 submit_ms=0.011 sync_ms=0.616 total_ms=0.627 bad=0
+BWITER mib=256 i=8 submit_ms=0.011 sync_ms=0.618 total_ms=0.628 bad=0
+BWROW mib=256 alloc=vram nf=67108864 reps=1 bytes=268435456 iters=9 submit_med_ms=0.011 sync_med_ms=0.616 sync_min_ms=0.615 sync_max_ms=0.686 total_med_ms=0.627 read_GBps=435.447 read_GBps_incl_submit=428.086 expect=256 got0=256 bad=0 ⚠SHORT_SYNC_LOWER_BOUND
+BW_BEGIN mib=512 nf=134217728 reps=1 bytes_per_launch=536870912 alloc=vram in_ptr=0x715d36000000 out_ptr=0x715d5cc00000 grid=1024x256
+BWITER mib=512 i=0 submit_ms=0.012 sync_ms=1.296 total_ms=1.308 bad=0
+BWITER mib=512 i=1 submit_ms=0.012 sync_ms=1.258 total_ms=1.270 bad=0
+BWITER mib=512 i=2 submit_ms=0.011 sync_ms=1.258 total_ms=1.269 bad=0
+BWITER mib=512 i=3 submit_ms=0.011 sync_ms=1.287 total_ms=1.298 bad=0
+BWITER mib=512 i=4 submit_ms=0.011 sync_ms=1.262 total_ms=1.273 bad=0
+BWITER mib=512 i=5 submit_ms=0.012 sync_ms=1.261 total_ms=1.273 bad=0
+BWITER mib=512 i=6 submit_ms=0.011 sync_ms=1.223 total_ms=1.234 bad=0
+BWITER mib=512 i=7 submit_ms=0.011 sync_ms=1.225 total_ms=1.236 bad=0
+BWITER mib=512 i=8 submit_ms=0.011 sync_ms=1.223 total_ms=1.234 bad=0
+BWROW mib=512 alloc=vram nf=134217728 reps=1 bytes=536870912 iters=9 submit_med_ms=0.011 sync_med_ms=1.258 sync_min_ms=1.223 sync_max_ms=1.296 total_med_ms=1.270 read_GBps=426.667 read_GBps_incl_submit=422.680 expect=512 got0=512 bad=0
+BW_BEGIN mib=1024 nf=268435456 reps=1 bytes_per_launch=1073741824 alloc=vram in_ptr=0x715d16000000 out_ptr=0x715d5cc00000 grid=1024x256
+BWITER mib=1024 i=0 submit_ms=0.020 sync_ms=2.591 total_ms=2.611 bad=0
+BWITER mib=1024 i=1 submit_ms=0.013 sync_ms=2.848 total_ms=2.861 bad=0
+BWITER mib=1024 i=2 submit_ms=0.011 sync_ms=2.567 total_ms=2.578 bad=0
+BWITER mib=1024 i=3 submit_ms=0.011 sync_ms=2.563 total_ms=2.575 bad=0
+BWITER mib=1024 i=4 submit_ms=0.011 sync_ms=2.562 total_ms=2.574 bad=0
+BWITER mib=1024 i=5 submit_ms=0.011 sync_ms=2.483 total_ms=2.494 bad=0
+BWITER mib=1024 i=6 submit_ms=0.011 sync_ms=2.484 total_ms=2.495 bad=0
+BWITER mib=1024 i=7 submit_ms=0.015 sync_ms=2.752 total_ms=2.767 bad=0
+BWITER mib=1024 i=8 submit_ms=0.011 sync_ms=2.491 total_ms=2.502 bad=0
+BWROW mib=1024 alloc=vram nf=268435456 reps=1 bytes=1073741824 iters=9 submit_med_ms=0.011 sync_med_ms=2.563 sync_min_ms=2.483 sync_max_ms=2.848 total_med_ms=2.575 read_GBps=418.860 read_GBps_incl_submit=417.005 expect=1024 got0=1024 bad=0
+BW_BEGIN mib=2048 nf=536870912 reps=1 bytes_per_launch=2147483648 alloc=vram in_ptr=0x715cd6000000 out_ptr=0x715d5cc00000 grid=1024x256
+BWITER mib=2048 i=0 submit_ms=0.015 sync_ms=5.644 total_ms=5.659 bad=0
+BWITER mib=2048 i=1 submit_ms=0.011 sync_ms=5.162 total_ms=5.174 bad=0
+BWITER mib=2048 i=2 submit_ms=0.011 sync_ms=5.114 total_ms=5.125 bad=0
+BWITER mib=2048 i=3 submit_ms=0.012 sync_ms=5.593 total_ms=5.604 bad=0
+BWITER mib=2048 i=4 submit_ms=0.011 sync_ms=5.047 total_ms=5.058 bad=0
+BWITER mib=2048 i=5 submit_ms=0.011 sync_ms=4.956 total_ms=4.967 bad=0
+BWITER mib=2048 i=6 submit_ms=0.011 sync_ms=5.418 total_ms=5.429 bad=0
+BWITER mib=2048 i=7 submit_ms=0.015 sync_ms=4.952 total_ms=4.967 bad=0
+BWITER mib=2048 i=8 submit_ms=0.014 sync_ms=4.953 total_ms=4.967 bad=0
+BWROW mib=2048 alloc=vram nf=536870912 reps=1 bytes=2147483648 iters=9 submit_med_ms=0.011 sync_med_ms=5.114 sync_min_ms=4.952 sync_max_ms=5.644 total_med_ms=5.125 read_GBps=419.922 read_GBps_incl_submit=419.010 expect=2048 got0=2048 bad=0
+BW_BEGIN mib=4096 nf=1073741824 reps=1 bytes_per_launch=4294967296 alloc=vram in_ptr=0x715c56000000 out_ptr=0x715d5cc00000 grid=1024x256
+BWITER mib=4096 i=0 submit_ms=0.014 sync_ms=10.194 total_ms=10.208 bad=0
+BWITER mib=4096 i=1 submit_ms=0.011 sync_ms=9.908 total_ms=9.919 bad=0
+BWITER mib=4096 i=2 submit_ms=0.011 sync_ms=10.399 total_ms=10.410 bad=0
+BWITER mib=4096 i=3 submit_ms=0.011 sync_ms=9.889 total_ms=9.900 bad=0
+BWITER mib=4096 i=4 submit_ms=0.012 sync_ms=10.394 total_ms=10.406 bad=0
+BWITER mib=4096 i=5 submit_ms=0.025 sync_ms=10.393 total_ms=10.418 bad=0
+BWITER mib=4096 i=6 submit_ms=0.012 sync_ms=9.886 total_ms=9.898 bad=0
+BWITER mib=4096 i=7 submit_ms=0.011 sync_ms=10.434 total_ms=10.445 bad=0
+BWITER mib=4096 i=8 submit_ms=0.011 sync_ms=10.169 total_ms=10.180 bad=0
+BWROW mib=4096 alloc=vram nf=1073741824 reps=1 bytes=4294967296 iters=9 submit_med_ms=0.011 sync_med_ms=10.194 sync_min_ms=9.886 sync_max_ms=10.434 total_med_ms=10.208 read_GBps=421.339 read_GBps_incl_submit=420.744 expect=4096 got0=4096 bad=0
+BW_BEGIN mib=6144 nf=1610612736 reps=1 bytes_per_launch=6442450944 alloc=vram in_ptr=0x715bd6000000 out_ptr=0x715d5cc00000 grid=1024x256
+BWITER mib=6144 i=0 submit_ms=0.015 sync_ms=15.188 total_ms=15.203 bad=0
+BWITER mib=6144 i=1 submit_ms=0.012 sync_ms=14.865 total_ms=14.877 bad=0
+BWITER mib=6144 i=2 submit_ms=0.013 sync_ms=15.365 total_ms=15.378 bad=0
+BWITER mib=6144 i=3 submit_ms=0.011 sync_ms=15.346 total_ms=15.357 bad=0
+BWITER mib=6144 i=4 submit_ms=0.013 sync_ms=15.383 total_ms=15.396 bad=0
+BWITER mib=6144 i=5 submit_ms=0.014 sync_ms=15.358 total_ms=15.372 bad=0
+BWITER mib=6144 i=6 submit_ms=0.013 sync_ms=15.338 total_ms=15.351 bad=0
+BWITER mib=6144 i=7 submit_ms=0.012 sync_ms=15.399 total_ms=15.411 bad=0
+BWITER mib=6144 i=8 submit_ms=0.012 sync_ms=15.370 total_ms=15.382 bad=0
+BWROW mib=6144 alloc=vram nf=1610612736 reps=1 bytes=6442450944 iters=9 submit_med_ms=0.013 sync_med_ms=15.358 sync_min_ms=14.865 sync_max_ms=15.399 total_med_ms=15.372 read_GBps=419.498 read_GBps_incl_submit=419.110 expect=6144 got0=6144 bad=0
+BENCH_BW_ROWS=11
+BENCH_BW_ROWS_UNMEASURED=0
+
+BENCH_SIZE_BEGIN N=16 per_matrix_MiB=0 device_MiB=0
+B16_ALLOC_MS=0.62
+B16_PTRS=A:0x715d5cc00000,B:0x715d5cc00400,C:0x715d5cc00800
+B16_H2D_MS=0.10  (2 x 0 MiB)
+B16_GRID=(1,1)x(16,16)
+ITER N=16 i=0 launch_ms=0.027 submit_ms=0.024 sync_ms=0.004 t0_mono_ms=47575.471 sub_cpu_ms=0.027 syn_cpu_ms=0.003 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.001 syn_stime_ms=0.002 verified=yes bad=0
+ITER N=16 i=1 launch_ms=0.016 submit_ms=0.012 sync_ms=0.004 t0_mono_ms=47575.539 sub_cpu_ms=0.014 syn_cpu_ms=0.003 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.002 syn_stime_ms=0.002 verified=yes bad=0
+ITER N=16 i=2 launch_ms=0.016 submit_ms=0.012 sync_ms=0.004 t0_mono_ms=47575.588 sub_cpu_ms=0.014 syn_cpu_ms=0.003 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.002 syn_stime_ms=0.001 verified=yes bad=0
+ITER N=16 i=3 launch_ms=0.015 submit_ms=0.011 sync_ms=0.004 t0_mono_ms=47575.638 sub_cpu_ms=0.014 syn_cpu_ms=0.003 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.002 syn_stime_ms=0.002 verified=yes bad=0
+ITER N=16 i=4 launch_ms=0.015 submit_ms=0.011 sync_ms=0.004 t0_mono_ms=47575.687 sub_cpu_ms=0.014 syn_cpu_ms=0.004 syn_offcpu_ms=0.000 syn_nvcsw=0 syn_nivcsw=0 syn_utime_ms=0.002 syn_stime_ms=0.002 verified=yes bad=0
+
+B16_N=16
+B16_ITERS=5
+B16_FIRST_MS=0.027
+B16_MEDIAN_MS=0.016
+B16_P90_MS=0.016
+B16_MIN_MS=0.015
+B16_MAX_MS=0.016
+B16_MEAN_MS=0.015
+B16_GFLOPS=0.527
+B16_BATCH=10
+B16_BATCH_TOTAL_MS=0.150
+B16_BATCH_PER_LAUNCH_MS=0.015
+B16_BATCH_GFLOPS=0.548
+B16_BATCH_BAD=0
+B16_H2D_MS=0.100
+B16_D2H_MED_MS=0.013
+B16_ALLOC_MS2=0.620
+B16_SUBMIT_MED_MS=0.012
+B16_SYNC_MED_MS=0.004
+B16_SYNC_CPU_MED_MS=0.003
+B16_SYNC_OFFCPU_MED_MS=0.000
+B16_SYNC_NVCSW_MED=0.0
+B16_SUBMIT_CPU_MED_MS=0.014
+B16_SUBMIT_MAX_MS=0.012
+B16_SYNC_MAX_MS=0.004
+B16_WINDOW_MONO_MS=47575.471..47575.702
+B16_BAD=0
+B16_MAXERR=0
+BSUM N=16 iters=5 first_ms=0.027 med_ms=0.016 p90_ms=0.016 min_ms=0.015 max_ms=0.016 gflops=0.527 batch_per_launch_ms=0.015 batch_gflops=0.548 h2d_ms=0.100 d2h_med_ms=0.013 submit_med_ms=0.012 sync_med_ms=0.004 sync_cpu_med_ms=0.003 sync_offcpu_med_ms=0.000 sync_nvcsw_med=0.0 submit_cpu_med_ms=0.014 bad=0 maxerr=0
+BENCH_SIZE_END N=16
+BENCH_CLOCK_END mono_ms=47576.420 real_ms=1792096058608.763
+
+BENCH_SIZES_DONE=1
+BENCH_TOTAL_BAD=0
+BENCH_VERDICT: PASS (every timed iteration verified)
+DONE

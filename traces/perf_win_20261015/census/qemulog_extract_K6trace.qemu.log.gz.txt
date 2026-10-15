@@ -1,0 +1,60 @@
+kf3: DOORBELL-LEDGER tok=0x0000102e route=passthrough rung=0 emulated=0 forwarded=0 host=0x20055 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000002d route=passthrough rung=0 emulated=0 forwarded=0 host=0x54 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00001033 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2005a trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000082e route=passthrough rung=0 emulated=0 forwarded=0 host=0x10055 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000002d route=passthrough rung=0 emulated=0 forwarded=0 host=0x54 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00001028 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2004f trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000027 route=passthrough rung=0 emulated=0 forwarded=0 host=0x4e trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00001026 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2004d trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000024 route=passthrough rung=0 emulated=0 forwarded=0 host=0x4b trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000102c route=passthrough rung=0 emulated=0 forwarded=0 host=0x20053 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000002b route=passthrough rung=0 emulated=0 forwarded=0 host=0x52 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000101c route=passthrough rung=0 emulated=0 forwarded=0 host=0x20043 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000001b route=passthrough rung=0 emulated=0 forwarded=0 host=0x42 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00001025 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2004c trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000021 route=passthrough rung=0 emulated=0 forwarded=0 host=0x48 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000102a route=passthrough rung=0 emulated=0 forwarded=0 host=0x20051 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000029 route=passthrough rung=0 emulated=0 forwarded=0 host=0x50 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00001037 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2005e trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000035 route=passthrough rung=0 emulated=0 forwarded=0 host=0x5c trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000019 route=passthrough rung=0 emulated=0 forwarded=0 host=0x40 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000101a route=passthrough rung=0 emulated=0 forwarded=0 host=0x20041 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00001020 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20047 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000001e route=passthrough rung=0 emulated=0 forwarded=0 host=0x45 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00001016 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2003d trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000015 route=passthrough rung=0 emulated=0 forwarded=0 host=0x3c trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000101f route=passthrough rung=0 emulated=0 forwarded=0 host=0x20046 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000001d route=passthrough rung=0 emulated=0 forwarded=0 host=0x44 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00001032 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20059 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000031 route=passthrough rung=0 emulated=0 forwarded=0 host=0x58 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00001030 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20057 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000002f route=passthrough rung=0 emulated=0 forwarded=0 host=0x56 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00001023 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2004a trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000022 route=passthrough rung=0 emulated=0 forwarded=0 host=0x49 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00001036 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2005d trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000034 route=passthrough rung=0 emulated=0 forwarded=0 host=0x5b trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00001018 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2003f trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000017 route=passthrough rung=0 emulated=0 forwarded=0 host=0x3e trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000801 route=translated emulated=0 forwarded=2 host=0x10028 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000802 route=translated emulated=0 forwarded=1 host=0x10029 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000003 route=translated emulated=0 forwarded=89 host=0x2a fast=0
+kf3: DOORBELL-LEDGER tok=0x00000804 route=translated emulated=0 forwarded=0 host=0x1002b fast=0
+kf3: DOORBELL-LEDGER tok=0x00001805 route=translated emulated=0 forwarded=0 host=0x3002c fast=0
+kf3: DOORBELL-LEDGER tok=0x00000806 route=translated emulated=0 forwarded=0 host=0x1002d fast=0
+kf3: DOORBELL-LEDGER tok=0x00002007 route=translated emulated=0 forwarded=0 host=0xc002e fast=0
+kf3: DOORBELL-LEDGER tok=0x00002008 route=translated emulated=0 forwarded=0 host=0xc002f fast=0
+kf3: DOORBELL-LEDGER tok=0x00002809 route=translated emulated=0 forwarded=0 host=0x50030 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000200a route=translated emulated=0 forwarded=0 host=0xc0031 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000080b route=translated emulated=0 forwarded=0 host=0x10032 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000080c route=translated emulated=0 forwarded=716566 host=0x10033 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000000d route=translated emulated=0 forwarded=1 host=0x34 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000000e route=passthrough rung=0 emulated=0 forwarded=0 host=0x35 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000000f route=passthrough rung=0 emulated=0 forwarded=0 host=0x36 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00001010 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20037 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000011 route=passthrough rung=0 emulated=0 forwarded=0 host=0x38 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00001012 route=passthrough rung=0 emulated=0 forwarded=0 host=0x20039 trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00000013 route=passthrough rung=0 emulated=0 forwarded=0 host=0x3a trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x00001014 route=passthrough rung=0 emulated=0 forwarded=0 host=0x2003b trap=0 fast=0
+kf3: DOORBELL-LEDGER tok=0x0000002d route=passthrough rung=0 emulated=0 forwarded=0 host=0x54 trap=0 fast=0
+kf3: USER_RING_LOOP SUMMARY (all relays gone, #1) wakes(doorbell=355210 event=1099288 spin=2750294 backstop=3192) backstop_found(work=0 carried=0 contended=1 put_ahead=13) event_without_progress=178305 gates=443357 carried_ungated=0 credit_waits=0 contended_turns=1154285 pop_writebacks=83096 markers=112418 drain_us_log2=[1, 21172, 123645, 92423, 49415, 29513, 39427, 47050, 24684, 14966, 973, 68, 3
+kf3: DOORBELL-LEDGER tok=0x0000102e route=passthrough rung=0 emulated=0 forwarded=0 host=0x20055 trap=0 fast=0

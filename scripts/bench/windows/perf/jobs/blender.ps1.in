@@ -1,0 +1,15 @@
+# job: Blender Cycles bench. Placeholders: @DEV@ (OPTIX|CUDA) @SPP@ @REPS@ (number of timed reps incl. warmup first) @SMI@ (0|1)
+$bl = "C:\Program Files\Blender Foundation\Blender 5.2\blender.exe"
+$cpu0 = (Get-Counter "\Processor(_Total)\% Processor Time" -SampleInterval 2 -MaxSamples 1).CounterSamples[0].CookedValue
+"PRE guest_cpu_pct=$([math]::Round($cpu0,1))"
+$smiflag = "$OUT\smi.stop"; if (@SMI@ -eq 1) { $sm = Start-Process powershell -ArgumentList "-NoProfile","-File","C:\kfperf\kfp_smi.ps1","-File","$OUT\smi.csv","-Stop",$smiflag -PassThru -WindowStyle Hidden; Start-Sleep 3 }
+for ($i = 0; $i -le @REPS@; $i++) {
+  $rf = "$OUT\r$i.json"; Remove-Item $rf -ErrorAction SilentlyContinue
+  $t0 = Get-Date
+  $p = Start-Process $bl -ArgumentList "-b --factory-startup -P C:\kf\apps\blender\cycles_bench.py -- --device @DEV@ --sub 9 --objs 3 --ntex 8 --texsize 4096 --res 1920 1080 --samples @SPP@ --out $rf --texdir C:\kf\apps\blender\tex" -PassThru -WindowStyle Hidden -RedirectStandardOutput "$OUT\so$i.txt" -RedirectStandardError "$OUT\se$i.txt"
+  $null = $p.Handle; if (-not $p.WaitForExit(600000)) { "TIMEOUT rep $i"; $p.Kill() }
+  $wall = ((Get-Date) - $t0).TotalSeconds
+  $r = if (Test-Path $rf) { Get-Content -Raw $rf | ConvertFrom-Json } else { $null }
+  "REP $i dev=@DEV@ spp=@SPP@ warmup=$($i -eq 0) rc=$($p.ExitCode) wall_s=$([math]::Round($wall,1)) render_s=$($r.render_s) warmup_s=$($r.warmup_s) scene_s=$($r.scene_build_s) status=$($r.status) device=$($r.device)"
+}
+if (@SMI@ -eq 1) { "" | Set-Content $smiflag; Start-Sleep 3; "SMI_CSV_BEGIN"; Get-Content "$OUT\smi.csv"; "SMI_CSV_END" }

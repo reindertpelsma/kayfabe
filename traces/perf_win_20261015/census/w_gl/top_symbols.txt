@@ -1,0 +1,45 @@
+    23.82%  [.] <kf_chan::user_scan::Scan>::segment_probed::<kf_qemu::chan::userpump::stage_plan::{closure#1}>
+    12.54%  [.] <kf_chan::user_scan::Scan>::segment::<<kf_qemu::chan::userpump::Pump>::segment_turn::{closure#0}>
+     9.03%  [.] <kf_qemu::chan::userpump::Pump>::turn_body
+     5.23%  [.] <std::hash::random::RandomState as core::hash::BuildHasher>::hash_one::<&(u32, u32)>
+     3.11%  [.] <kf_qemu::chan::userrelay::UserdSource>::owner
+     3.00%  [.] <kf_qemu::chan::userrelay::UserdSource>::write
+     2.94%  [.] <kf_linux_raw::mapping_unsafe::VolatileRegion>::load_u32
+     2.89%  [.] _int_free_chunk
+     2.82%  [.] __memmove_avx512_unaligned_erms
+     2.77%  [.] <kf_qemu::chan::ChanPlane as kf_chan::worker::RelayLoop>::peek
+     2.63%  [.] <kf_qemu::chan::userpump::Pump>::segment_turn
+     1.57%  [.] <kf_chan::user_scan::Fetch>::observe
+     1.45%  [.] kf_qemu::mem::userread::snapshot::<kf_qemu::userstore::Cache>
+     1.39%  [.] <kf_qemu::chan::ChanPlane as kf_chan::worker::RelayLoop>::waiting
+     0.92%  [.] <alloc::collections::btree::node::NodeRef<alloc::collections::btree::node::marker::Immut, u64, (u64, u64, bool, kf_host::channel::MapPerm), alloc::collections::btree::node::marker::LeafOrInternal>>::find_leaf_edges_spanning_range::<u64, core::ops::range::RangeToInclusive<u64>>
+     0.84%  [.] kf_qemu::mem::userread::resolve
+     0.84%  [k] entry_SYSRETQ_unsafe_stack
+     0.83%  [.] <alloc::raw_vec::RawVecInner>::finish_grow
+     0.80%  [.] cfree@GLIBC_2.2.5
+     0.64%  [.] _int_malloc
+     0.58%  [.] <kf_qemu::mem::Inbox>::walk_busy
+     0.57%  [.] <std::sys::sync::mutex::futex::Mutex>::lock_contended
+     0.51%  [.] <core::slice::iter::Iter<kf_qemu::mem::RamBlock> as core::iter::traits::iterator::Iterator>::try_fold::<(), <core::iter::adapters::enumerate::Enumerate<_> as core::iter::traits::iterator::Iterator>::try_fold::enumerate<&kf_qemu::mem::RamBlock, (), core::ops::control_flow::ControlFlow<()>, core::iter::traits::iterator::Iterator::any::check<(usize, &kf_qemu::mem::RamBlock), kf_qemu::mem::userread::snapshot<kf_qemu::userstore::Cache>::{closure#5}>::{closure#0}>::{closure#0}, core::ops::control_flow::ControlFlow<()>>
+     0.50%  [.] <core::slice::iter::Iter<kf_qemu::mem::RamBlock> as core::iter::traits::iterator::Iterator>::try_fold::<(), <core::iter::adapters::enumerate::Enumerate<_> as core::iter::traits::iterator::Iterator>::try_fold::enumerate<&kf_qemu::mem::RamBlock, (), core::ops::control_flow::ControlFlow<(usize, &kf_qemu::mem::RamBlock)>, core::iter::traits::iterator::Iterator::find::check<(usize, &kf_qemu::mem::RamBlock), &mut kf_qemu::mem::userread::snapshot<kf_qemu::userstore::Cache>::{closure#3}>::{closure#0}>::{closure#0}, core::ops::control_flow::ControlFlow<(usize, &kf_qemu::mem::RamBlock)>>
+     0.48%  [.] <std::hash::random::DefaultHasher as core::hash::Hasher>::write
+     0.45%  [.] <kf_trap::bitmap::RungBitmap>::scan
+     0.39%  [.] _int_free_merge_chunk
+     0.37%  [.] kf_chan::worker::run_with_relay
+     0.36%  [.] __libc_malloc2
+     0.36%  [.] core::ptr::drop_glue::<kf_qemu::chan::userpump::Segment>
+     0.34%  [.] <kf_qemu::chan::userpump::Pump>::snapshot
+     0.34%  [.] <std::hash::random::RandomState as core::hash::BuildHasher>::hash_one::<&u32>
+     0.34%  [.] <kf_qemu::chan::ChanPlane>::user_ring_record
+     0.32%  [.] <alloc::raw_vec::RawVecInner>::finish_grow
+     0.30%  [.] <kf_qemu::mem::MemoryListRam as kf_rm::memory_list::GuestRamAuthority>::try_read
+     0.28%  [.] <kf_core::plane::Plane>::worker_pass
+     0.27%  [.] <kf_qemu::chan::ChanPlane>::serve
+     0.26%  [.] _int_free_maybe_trim
+     0.24%  [.] <kf_qemu::chan::userrelay::Cell>::alive::<<kf_qemu::chan::ChanPlane>::alive::{closure#0}>
+     0.24%  [.] <kf_qemu::chan::userpump::Pump>::publish::<<kf_qemu::chan::userpump::Pump>::segment_turn::{closure#2}>::{closure#0}::{closure#3}
+     0.23%  [.] __memset_avx512_unaligned_erms
+     0.22%  [.] <kf_qemu::chan::userpump::Pump>::publish::<<kf_qemu::chan::userpump::Pump>::segment_turn::{closure#2}>::{closure#0}
+     0.22%  [.] malloc
+     0.22%  [.] <kf_qemu::chan::userpump::Pump>::publish::<<kf_qemu::chan::userpump::Pump>::segment_turn::{closure#2}>::{closure#0}::{closure#3}::{closure#0}
+     0.20%  [.] <kf_host::HostRm>::doorbell
