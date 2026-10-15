@@ -79,3 +79,31 @@ Exact590/595 display-table topic is merged in this branch; CPU source8149f0b53
 full3243passed/0failed/14ignored, fresh target-driver590.595removed swap-ready
 control is deliberately omitted, not assigned an older ID. No590 or595display-on
 hardware validation is inferred from CPU tests or the earlier headless graphics.
+
+
+## GSP reference and selected facts,16:33UTC
+
+After the normal measurement reboot: testsigningON,SecureBootoff,VBS/HVCI0/0,
+actualdriver32.0.15.8088 remainsCode0. Bounded module loads; physical caps
+word0x00c=0x100 before and after GSP enable. NativeGSP firmware580.65.05,
+public decode tag580.65.06. GSP-enabled native CUDA3/3 and hardwareD3D11/12
+pass again, exactdriver/Code0 checked before/after, readableSystemlog and0TDR
+in the short16:28:19–16:28:33 suite. No zero-TDR-whole-boot claim.
+
+Capture16:28:08–16:30:08:9210messages,4581command/4629status,208controls;
+9227records,bind2/elements9224,loss0/0/0,ENDyes/filecheckOK. Decoderoracle
+PASS, no gaps/parsefailures/trailingbytes/unknownfunction; zero unanswered
+controls/orphanreplies. PowerShell collector ExitCode printed blank; do not
+infer its process rc0 from that field. END/filecheck/decode are independent.
+
+Only two control IDs were body-allowlisted. Four measured4byte bodies:
+2801 request3 ->2,status0;2806 request3 ->0,status0. Whole caps page is evidence
+only; only its decisive scalar may ship. All three aggregate TSVs are saved as
+text, unlike the earlier AD102 run. Raw and scrubbed capture binaries stay on
+the rental and will be erased by Linux return. No852f or broad-screened export.
+Exact die tuple must still be derived from restored Linux host controls before
+registering rows; no unmeasured tuple is presented as native evidence.
+
+Linux return preparation started16:31:49 via the pinned public reinstall payload,
+explicitusername/root+SSHport22+publickey and noninteractive stdin. Original
+175min rental timer still18:36:22UTC. No Turing kayfabe guest pass yet.

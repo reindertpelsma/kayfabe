@@ -1,5 +1,36 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-15 16:33UTC — Turing native580 reference/facts PASS; guest pending
+
+ONLY active ownrental56117789 RTX2060Super, deadline18:36:22UTC,175min timer
+PID1995396. Ownbranchcodex/sweep-turing-20261015,/workspace/codex/turing-hw,
+draftPR#10. NativeWindows580.88 LTSC26100 Code0/WDDM,CUDA3,D3D11/12,
+readableSystemlog/0TDR in short suites, both default andGSP580.65.05 enabled.
+Bounded module loads;capsword0x00c100;loss-free9210message capture,END/filecheck/
+decode/pairing pass. Only2801request3->2 and2806request3->0 exported as bodies;
+all aggregate text reports saved. Native results are NOT kayfabe guest passes.
+
+WindowsUpdate raced591.86 into the native setup, recordedSystem43/19. Pinned580
+later completes; unused verified591driverpackage removed, driver-exclusionpolicy
+set. wuauserv restartsManual/Running, so do not claim disabledservice. Strictoracle
+checksactual580 andCode0before/after. Capturedata/rawfiles remainrental untilerase.
+
+Linuxreturn preparation ownscheduledtaskCodexLinuxReturn started16:31:49;
+controlleraliascodex-native-turing,ownSSHconfig/work scripts/work logsunder
+/workspace/codex. Poll taskstate/LastTaskResult; stopmeasurementmodule and push
+alltext BEFORE nativeWindows reboot/erase. Then registercodex-turing-linux alias
+forrestoredUbuntu, checkdisk/KVM/driver andprovisionnewbranch; deriveexactchiptuple
+beforeT3rows. ReuseAD102 fixedprovisioners andboundedimageproducer. OneGPUjob.
+
+Exact590class/register +590/595wire-layouttopic is merged: source8149f0b53 full
+3243pass/0fail/14ignored, owntarget-driver590, no hardware acceptance ofnewtags.
+Public595removes swap-readycontrol; omitID byname, modeltestprovesunclaimed.
+Workspaceformattingcheck stillhasinheriteddifferences; no merge/CI-greenclaim.
+Trustedhost~108GiBfree; obsolete ownsharedtarget-gpu-free removedafterlock-usecheck.
+Everyremainingcheckout hasitsowntarget. OwnerVM2990/trustedGPU untouched.
+Older active/process paragraphs below superseded bythis update.
+
+
 ## UPDATE 2026-10-15 15:43UTC — only active rental56117789, Turing
 
 Own worktree/work branch/work plan:/workspace/codex/turing-hw,
