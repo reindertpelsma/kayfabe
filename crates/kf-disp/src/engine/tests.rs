@@ -2065,6 +2065,68 @@ fn every_family_row_resolves_its_vocabulary() {
     }
 }
 
+/// ogkm EvoProgramSemaphore3: one context DMA and 16-byte slot for acquire and release,
+/// both 32-bit. Acquiring gates the latch; releasing belongs to the outgoing flip. A zero
+/// context DMA disables both, even if the old control/value words remain programmed.
+#[test]
+fn turing_shared_semaphore_waits_then_releases_the_outgoing_flip() {
+    let row = &kf_chip::display::TURING;
+    let regs = Regs::for_ip("580.159.04", row.ip_version).unwrap();
+    let core = row.classes.core;
+    let win = row.classes.window;
+    let mut e = Engine::new(Vocab::resolve(t(), &Classes::of(row), &regs).unwrap(), 4, 8);
+    e.alloc(ChannelKind::Core, 0, CLIENT, 1, pb(), 0);
+    e.alloc(ChannelKind::Window, 0, CLIENT, 1, pb(), 0);
+    let mut c = Ring::new();
+    c.m(
+        ma(core, "HEAD_SET_RASTER_SIZE", 0),
+        put(put(0, fl(core, "HEAD_SET_RASTER_SIZE_WIDTH"), 2200), fl(core, "HEAD_SET_RASTER_SIZE_HEIGHT"), 1125),
+    );
+    c.m(ma(core, "HEAD_SET_PIXEL_CLOCK_FREQUENCY", 0), 148_500_000);
+    c.m(ma(core, "WINDOW_SET_CONTROL", 0), 0);
+    c.m(m(core, "UPDATE"), 0);
+    e.step(0, &c.bytes(), c.put(), &mut all_ok);
+
+    let mut w = Ring::new();
+    w.m(ma(win, "SET_CONTEXT_DMA_ISO", 0), 0x10001);
+    w.m(m(win, "SET_CONTEXT_DMA_SEMAPHORE"), 0x20002);
+    // Only OFFSET is defined; reserved bits must not select the later model's width/modes.
+    w.m(m(win, "SET_SEMAPHORE_CONTROL"), 0xffff_ff03);
+    w.m(m(win, "SET_SEMAPHORE_ACQUIRE"), 0xf473_f473);
+    w.m(m(win, "SET_SEMAPHORE_RELEASE"), 0xd00d_d00d);
+    w.m(m(win, "UPDATE"), 0);
+    let s = e.step(1, &w.bytes(), w.put(), &mut all_ok);
+    assert!(s.effects.is_empty());
+    let check = |a: &Acquire, current| {
+        assert_eq!(a.at, Place::CtxDma { handle: 0x20002, offset: 48 });
+        assert_eq!((a.value, a.wide, a.mode), (0xf473_f473, false, 0));
+        a.satisfied_by(current)
+    };
+    let s = e.vblank(0, &mut |a| check(a, 0xf473_f474));
+    assert!(s.effects.is_empty(), "a larger value is not equality");
+    assert!(e.waiting(1));
+    let s = e.vblank(0, &mut |a| check(a, 0x1234_5678_f473_f473));
+    assert!(s.effects.iter().any(|x| matches!(x, Effect::Latched { window: 0 })));
+    assert!(!s.effects.iter().any(|x| matches!(x, Effect::Release { .. })), "first latch does not release itself");
+
+    w.m(m(win, "SET_CONTEXT_DMA_SEMAPHORE"), 0);
+    w.m(m(win, "SET_SEMAPHORE_CONTROL"), 4);
+    w.m(m(win, "SET_SEMAPHORE_RELEASE"), 0xbeef);
+    w.m(m(win, "UPDATE"), 0);
+    e.step(1, &w.bytes(), w.put(), &mut all_ok);
+    let s = e.vblank(0, &mut |_| panic!("zero context DMA disables the acquire"));
+    let releases: Vec<_> = s.effects.iter().filter(|x| matches!(x, Effect::Release { .. })).collect();
+    assert_eq!(releases, vec![&Effect::Release {
+        chn: 1, client: CLIENT,
+        at: Place::CtxDma { handle: 0x20002, offset: 48 },
+        value: 0xd00d_d00d, wide: false, awaken: false,
+    }], "release is the outgoing entry's shared slot/value");
+    w.m(m(win, "UPDATE"), 0);
+    e.step(1, &w.bytes(), w.put(), &mut all_ok);
+    let s = e.vblank(0, &mut |_| panic!("acquire remains disabled"));
+    assert!(!s.effects.iter().any(|x| matches!(x, Effect::Release { .. })), "zero context DMA disables the release");
+}
+
 /// The form is decided by the derived table, per family: GA10x names context DMAs (and has the
 /// controls' `OFFSET` field), GB20x has neither.
 #[test]
