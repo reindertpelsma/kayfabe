@@ -354,3 +354,24 @@ fn the_tu106_580_caps_word_has_its_own_native_measurement() {
         assert_eq!(d.unmeasured.len(), 1);
     }
 }
+
+#[test]
+fn the_gb206_580_caps_word_requires_its_own_native_measurement() {
+    let d = go(&BLACKWELL_GB20X, GB206, true, true, "580");
+    assert_eq!(d.page.word(0x00c), 0x102);
+    assert!(d.unmeasured.is_empty());
+    let p = d.provenance.iter().find(|p| p.offset == 0x00c).unwrap();
+    assert_eq!(p.tier, Tier::Measured);
+    assert!(p.why.contains("GB206") && p.why.contains("580.88"), "{}", p.why);
+    for branch in ["570", "590", "595"] {
+        let d = go(&BLACKWELL_GB20X, GB206, true, true, branch);
+        assert_eq!(d.page.word(0x00c), 0);
+        assert_eq!(d.unmeasured.len(), 1);
+    }
+    for implementation in [0x2, 0x3, 0x5] {
+        let die = Die { implementation, ..GB206 };
+        let d = go(&BLACKWELL_GB20X, die, true, true, "580");
+        assert_eq!(d.page.word(0x00c), 0, "a neighbouring die cannot borrow the row");
+        assert_eq!(d.unmeasured.len(), 1);
+    }
+}
