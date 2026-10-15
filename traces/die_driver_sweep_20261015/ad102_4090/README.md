@@ -193,3 +193,10 @@ Full raw580 regression on the updatedda0569a6 binary also passes30/30.
 Linux595thin raw is now in progress; its fat CUDA/display remain unrun.
 Both OS580 suite results on AD102 are now measured; full family acceptance
 still requires several supported actual driver builds and keeps other dies unverified.
+
+Linux595.91.07 thin guest atda0569a6 passes30/30, kernel6.8.0-138-generic,
+using verified host-mode module/firmware packing. Host595 remains fixed.
+H9 before the independent fat595 run: exact595 profile/table and a separately
+staged image pass CUDA4/4 and graphics10matching hashes. Falsifier:any rung or
+native/guest render parity failure. Base580 and Windows580 stay separate;
+no595fat or Windows595 acceptance is inferred from the raw result.
