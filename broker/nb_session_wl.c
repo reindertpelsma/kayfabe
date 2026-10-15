@@ -403,6 +403,7 @@ struct nb_wl {
     bool                     maximized;
     int                      tb_px_x, tb_px_y;   /* pointer, title-bar-local */
     uint32_t                 last_serial;
+    uint32_t                 ptr_serial;  /* the ENTER serial: the only valid one for wl_pointer.set_cursor */
     char                     title[128];
     bool                     quit;
 
@@ -1258,7 +1259,7 @@ static int wl_commit(struct nb_session *s, struct nb_sink *sink)
         /* First guest frame after the placeholder: the guest draws the cursor
          * from here on, so ours has to go even though the pointer never left. */
         w->current = w->pending;
-        cur_apply(w, w->last_serial);
+        cur_apply(w, w->ptr_serial);
     }
     w->current = w->pending;
     w->pending = -1;
@@ -2311,7 +2312,7 @@ static void gc_refresh_ptr(struct nb_wl *w)
             return;
         }
     }
-    cur_apply(w, w->last_serial);
+    cur_apply(w, w->ptr_serial);
 }
 
 /* ── the guest's cursor under grab: the overlay ───────────────────────────── */
@@ -2835,7 +2836,7 @@ static void dlg_hide(struct nb_wl *w)
     w->dlg_open = false;
     w->dlg_hover = w->dlg_press = -1;
     w->ptr_on_dlg = false;
-    cur_apply(w, w->last_serial);   /* back to whatever the content wants */
+    cur_apply(w, w->ptr_serial);   /* back to whatever the content wants */
     if (w->dlg_surf) {
         wl_surface_attach(w->dlg_surf, NULL, 0, 0);
         wl_surface_commit(w->dlg_surf);
@@ -2948,7 +2949,7 @@ static void dlg_show(struct nb_wl *w)
     }
     w->dlg_open = true;
     w->dlg_hover = w->dlg_press = -1;
-    cur_apply(w, w->last_serial);   /* give the pointer back over the content */
+    cur_apply(w, w->ptr_serial);   /* give the pointer back over the content */
     nb_log("close: asking what to do (ACPI / force off / display only / cancel)");
     dlg_commit(w);
 }
@@ -3214,7 +3215,7 @@ static int wl_show_idle(struct nb_session *s)
     wl_surface_commit(w->surf);
     wl_display_flush(w->dpy);
     w->current = -1;
-    cur_apply(w, w->last_serial);   /* placeholder now: give the cursor back */
+    cur_apply(w, w->ptr_serial);   /* placeholder now: give the cursor back */
     if (!w->idle_shown) {
         nb_log("no client yet: showing the placeholder (%dx%d)", wd, ht);
         w->idle_shown = true;
@@ -3338,6 +3339,7 @@ static void ptr_enter(void *d, struct wl_pointer *p, uint32_t serial,
     (void)x; (void)y;
 
     w->last_serial = serial;
+    w->ptr_serial = serial;
     /*
      * The title bar is a surface of ours too, and the pointer entering IT is
      * not the pointer entering the guest.  Leave the host cursor alone there
