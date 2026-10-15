@@ -9,7 +9,7 @@ initial combined product revision: `23585a319`.
 
 | ID | hypothesis | falsifier | result |
 |---|---|---|---|
-| B0 | The combined product revision passes all GPU-free `kf-*` tests. | Any failed test or failed compilation, with all crates attempted (`--no-fail-fast`). | Pending. |
+| B0 | The combined product revision passes all GPU-free `kf-*` tests. | Any failed test or failed compilation, with all crates attempted (`--no-fail-fast`). | Falsified at `23585a319`: 3230 passed, one aggregate-RSS test failed. The exact test passed alone. Fix `59ea4dbaa` isolates both process-RSS oracles; full rerun 3231 passed, zero failed, 14 ignored. `gpu_free/{before,after,rss-isolated}.txt`. |
 | A1 | GA104 (RTX 3070) on open host 595.91.07 runs the gates, raw bare-metal suite and fast guest on the combined revision. | A failed gate, non-USER birth, or any failed/crashed/not-run arm; distinguish provisioning failure from a product failure. | Pending. |
 | A2 | The same GA104 host runs the native CUDA ladder and the stock Linux 580.159.04 guest ladder correctly. | Any rung's content oracle fails; a native failure prevents attributing that workload's guest failure to kayfabe. | Pending. |
 

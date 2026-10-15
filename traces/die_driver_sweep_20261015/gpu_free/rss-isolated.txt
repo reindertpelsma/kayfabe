@@ -1,0 +1,8 @@
+kf-mem: batch 0x18100000000+0x1000000000: the batches of this space already span BATCH_MAX_TOTAL_EXTENT (512 GiB) of VA together: this batch's liveness bitmap is refused by name, the rows go per run
+kf-mem: batch 0x1a100000000+0x1000000000: the batches of this space already span BATCH_MAX_TOTAL_EXTENT (512 GiB) of VA together: this batch's liveness bitmap is refused by name, the rows go per run
+kf-mem: batch 0x1c100000000+0x1000000000: the batches of this space already span BATCH_MAX_TOTAL_EXTENT (512 GiB) of VA together: this batch's liveness bitmap is refused by name, the rows go per run
+kf-mem: batch 0x1e100000000+0x1000000000: the batches of this space already span BATCH_MAX_TOTAL_EXTENT (512 GiB) of VA together: this batch's liveness bitmap is refused by name, the rows go per run
+test batch::tests::the_aggregate_extent_of_the_batches_of_a_space_is_capped ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 181 filtered out; finished in 0.01s
+

@@ -1,0 +1,434 @@
+START 2026-10-15T09:46:09+00:00
+23585a3195dc8a8f1333cb9065bddadd46ea9c41
+CRATE_COUNT=44
+     Running unittests src/lib.rs (/data/codex/target-gpu-free/release/deps/kf_abi-5619445d7555d625)
+test result: ok. 469 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/capability_policy_550.rs (/data/codex/target-gpu-free/release/deps/capability_policy_550-dd36f64753f383c8)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/driver_matrix.rs (/data/codex/target-gpu-free/release/deps/driver_matrix-52b8fb0773841fe5)
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.41s
+     Running tests/fixed_map_page_size.rs (/data/codex/target-gpu-free/release/deps/fixed_map_page_size-072519daff47d2e2)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/fn1_negotiation_oracle.rs (/data/codex/target-gpu-free/release/deps/fn1_negotiation_oracle-f3bd633720760ff2)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/gr_static_info.rs (/data/codex/target-gpu-free/release/deps/gr_static_info-a1b4bf00ca14e319)
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/gvaspace_pdes.rs (/data/codex/target-gpu-free/release/deps/gvaspace_pdes-cf44ec3a60d09ebd)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/initctrl_census.rs (/data/codex/target-gpu-free/release/deps/initctrl_census-d03c5ca3af1764a7)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/invariant_classes.rs (/data/codex/target-gpu-free/release/deps/invariant_classes-cae15d8cdbf82eef)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/mean_wire.rs (/data/codex/target-gpu-free/release/deps/mean_wire-889e04d6ee9f248e)
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/oracle_layout.rs (/data/codex/target-gpu-free/release/deps/oracle_layout-c68b9721577c87cc)
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/real_ga106_bodies.rs (/data/codex/target-gpu-free/release/deps/real_ga106_bodies-c4b35dc3431cd507)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/truncated_row_reads.rs (/data/codex/target-gpu-free/release/deps/truncated_row_reads-47e2462813332434)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.38s
+     Running unittests src/lib.rs (/data/codex/target-gpu-free/release/deps/kf_arch-4602f1cb3d427b64)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/lib.rs (/data/codex/target-gpu-free/release/deps/kf_broker-e4f3ec9b105464aa)
+test result: ok. 42 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+     Running tests/broker_loopback.rs (/data/codex/target-gpu-free/release/deps/broker_loopback-cfea51602eed38b4)
+test result: ok. 0 passed; 0 failed; 8 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/host_cursor.rs (/data/codex/target-gpu-free/release/deps/host_cursor-2b39ce94b51ce9f9)
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/input_sink.rs (/data/codex/target-gpu-free/release/deps/input_sink-28335dc7e4c13da9)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/proto_mirror.rs (/data/codex/target-gpu-free/release/deps/proto_mirror-8776f4f1ad99222e)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+     Running tests/relay_machine.rs (/data/codex/target-gpu-free/release/deps/relay_machine-01af874f59d2ad62)
+test result: ok. 50 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running unittests src/lib.rs (/data/codex/target-gpu-free/release/deps/kf_census-b5e0b9a582bac4de)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/main.rs (/data/codex/target-gpu-free/release/deps/kf_census-7b48c911dddd0c61)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/golden.rs (/data/codex/target-gpu-free/release/deps/golden-0d864da586ad042f)
+test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/oracle.rs (/data/codex/target-gpu-free/release/deps/oracle-93b1537ff8905c9b)
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/scrub.rs (/data/codex/target-gpu-free/release/deps/scrub-def6e70ef0edc4c0)
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running unittests src/lib.rs (/data/codex/target-gpu-free/release/deps/kf_chan-f6cc2223d93f2309)
+test result: ok. 145 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/channel_formats_vs_ogkm.rs (/data/codex/target-gpu-free/release/deps/channel_formats_vs_ogkm-82a3b41b31e5c7af)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/dbfast_bench.rs (/data/codex/target-gpu-free/release/deps/dbfast_bench-6c0a8470f2f71d4b)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/dbfast_exhaust.rs (/data/codex/target-gpu-free/release/deps/dbfast_exhaust-99610073d5db3613)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+     Running tests/dbfast_kvm.rs (/data/codex/target-gpu-free/release/deps/dbfast_kvm-f0a8b5a1f79b3344)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+     Running tests/notifiers_vs_ogkm.rs (/data/codex/target-gpu-free/release/deps/notifiers_vs_ogkm-e67e63356ec30a9c)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/ring.rs (/data/codex/target-gpu-free/release/deps/ring-cc2263bb66b3fd81)
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/tmode.rs (/data/codex/target-gpu-free/release/deps/tmode-bdc2d57d7c4e0329)
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running tests/translated_rewrite.rs (/data/codex/target-gpu-free/release/deps/translated_rewrite-9981015a2c3469ed)
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/user_consumption_model.rs (/data/codex/target-gpu-free/release/deps/user_consumption_model-4ef398aac07acae9)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/user_gate_rules.rs (/data/codex/target-gpu-free/release/deps/user_gate_rules-a06175a706a59a56)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+     Running tests/user_loop_model.rs (/data/codex/target-gpu-free/release/deps/user_loop_model-94bc4abc81a6a04d)
+test result: ok. 47 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 40.63s
+     Running tests/user_progress_model.rs (/data/codex/target-gpu-free/release/deps/user_progress_model-b389ed3206f87bd0)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/user_ring_model.rs (/data/codex/target-gpu-free/release/deps/user_ring_model-a7febc8b8c69c227)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+     Running tests/user_stream_model.rs (/data/codex/target-gpu-free/release/deps/user_stream_model-e21836a68ebca563)
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running unittests src/lib.rs (/data/codex/target-gpu-free/release/deps/kf_chip-442c9fa1346fd0e1)
+test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/answer_on_store.rs (/data/codex/target-gpu-free/release/deps/answer_on_store-e2fd3e5a017d801d)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/bar0_boot_regs.rs (/data/codex/target-gpu-free/release/deps/bar0_boot_regs-00c32df81e278ffd)
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/boot_sequence_read_gate.rs (/data/codex/target-gpu-free/release/deps/boot_sequence_read_gate-c1729534724608ff)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/console_region.rs (/data/codex/target-gpu-free/release/deps/console_region-56c8c83132a7d13d)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/falcon_gsp_fb_size.rs (/data/codex/target-gpu-free/release/deps/falcon_gsp_fb_size-bb67459976cc5802)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/family_from_arch.rs (/data/codex/target-gpu-free/release/deps/family_from_arch-de0ac0e670f2bc53)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/fsp_cot_sequence.rs (/data/codex/target-gpu-free/release/deps/fsp_cot_sequence-45f0170baaf45df6)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/gsp_reset_fsm.rs (/data/codex/target-gpu-free/release/deps/gsp_reset_fsm-b5f6a6078084481b)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/gsp_teardown.rs (/data/codex/target-gpu-free/release/deps/gsp_teardown-dd1eba7e448f3ac3)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/hwref_is_current.rs (/data/codex/target-gpu-free/release/deps/hwref_is_current-c4d3efa2391867fc)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+     Running tests/riscv_bcr_ctrl.rs (/data/codex/target-gpu-free/release/deps/riscv_bcr_ctrl-3c8d9a38de75caad)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/usable_heap.rs (/data/codex/target-gpu-free/release/deps/usable_heap-5612f8dbb9597b62)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/wpr_end_margin.rs (/data/codex/target-gpu-free/release/deps/wpr_end_margin-28d4123827b586d6)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/lib.rs (/data/codex/target-gpu-free/release/deps/kf_core-7285df9bf1ae8a9f)
+test result: ok. 50 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running unittests src/lib.rs (/data/codex/target-gpu-free/release/deps/kf_crec-083d62dad2d13368)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+     Running tests/cap1_differential.rs (/data/codex/target-gpu-free/release/deps/cap1_differential-1b18dd0b4eb643d4)
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+     Running tests/cap1b_differential.rs (/data/codex/target-gpu-free/release/deps/cap1b_differential-873e860bee18d0cb)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s
+     Running unittests src/lib.rs (/data/codex/target-gpu-free/release/deps/kf_cuda-e10463ea769b2871)
+test result: ok. 45 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+     Running tests/cuda_thread_posture.rs (/data/codex/target-gpu-free/release/deps/cuda_thread_posture-ce9c672802523f5c)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+     Running tests/report_containment.rs (/data/codex/target-gpu-free/release/deps/report_containment-8edc0f2315f3178c)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/synth_origin.rs (/data/codex/target-gpu-free/release/deps/synth_origin-1c447fe44d8d9ff6)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/walk_abi_matches_the_cu.rs (/data/codex/target-gpu-free/release/deps/walk_abi_matches_the_cu-3b6ffa744b52c4c6)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.08s
+     Running tests/walk_never_synchronizes.rs (/data/codex/target-gpu-free/release/deps/walk_never_synchronizes-cb9c9f043d44784c)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running unittests src/lib.rs (/data/codex/target-gpu-free/release/deps/kf_disp-28dbe45d7fcff935)
+test result: ok. 167 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.37s
+     Running tests/bl_pack_kernel.rs (/data/codex/target-gpu-free/release/deps/bl_pack_kernel-ad1eb3a65f8212cf)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.54s
+     Running tests/caps_derive.rs (/data/codex/target-gpu-free/release/deps/caps_derive-dffe340bdd66fa9c)
+test result: ok. 11 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/compose_kernel.rs (/data/codex/target-gpu-free/release/deps/compose_kernel-f6d87b8874a20604)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.56s
+     Running tests/yuv_kernel.rs (/data/codex/target-gpu-free/release/deps/yuv_kernel-0b7a1eb006ab17a7)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.45s
+     Running unittests src/lib.rs (/data/codex/target-gpu-free/release/deps/kf_gop_image-21d023d52c5b0106)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running unittests src/bin/kf-gop-export.rs (/data/codex/target-gpu-free/release/deps/kf_gop_export-c7ecc894d8644ec3)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/embedded.rs (/data/codex/target-gpu-free/release/deps/embedded-6f543d40441e9663)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+     Running unittests src/lib.rs (/data/codex/target-gpu-free/release/deps/kf_gsp-8125d04dadceee33)
+test result: ok. 49 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+     Running unittests src/lib.rs (/data/codex/target-gpu-free/release/deps/kf_harness-2e6fda49dd5b91f4)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running unittests src/bin/kf-ctl-probe.rs (/data/codex/target-gpu-free/release/deps/kf_ctl_probe-0e65df3552da4718)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-deferred-update-probe.rs (/data/codex/target-gpu-free/release/deps/kf_deferred_update_probe-fe243fbf24574e5c)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-encoder-session-probe.rs (/data/codex/target-gpu-free/release/deps/kf_encoder_session_probe-987f4d33048608c6)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-gate1.rs (/data/codex/target-gpu-free/release/deps/kf_gate1-2c2765085037daa7)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-gate2.rs (/data/codex/target-gpu-free/release/deps/kf_gate2-3ec94f8db474f0d1)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-gate3.rs (/data/codex/target-gpu-free/release/deps/kf_gate3-97153649f19d6445)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-gate4.rs (/data/codex/target-gpu-free/release/deps/kf_gate4-0c194c15eef3d866)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-gate5.rs (/data/codex/target-gpu-free/release/deps/kf_gate5-e2e3473c1abcb025)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-gate6.rs (/data/codex/target-gpu-free/release/deps/kf_gate6-6184fbabc1f5f724)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-gate7.rs (/data/codex/target-gpu-free/release/deps/kf_gate7-73c96ad7dcde10d4)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-gate8.rs (/data/codex/target-gpu-free/release/deps/kf_gate8-5c2aeceac67454df)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-gate9.rs (/data/codex/target-gpu-free/release/deps/kf_gate9-3b126481e57082e3)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-gr-tier.rs (/data/codex/target-gpu-free/release/deps/kf_gr_tier-90c5179479ea0a26)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-micro-reserve-probe.rs (/data/codex/target-gpu-free/release/deps/kf_micro_reserve_probe-9e46a11e4830a5d5)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-nvdec-context.rs (/data/codex/target-gpu-free/release/deps/kf_nvdec_context-384cb83c70f3e31e)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-phys-oracle.rs (/data/codex/target-gpu-free/release/deps/kf_phys_oracle-f777d7988104f4b1)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-rc-journal-probe.rs (/data/codex/target-gpu-free/release/deps/kf_rc_journal_probe-e349ca50685d8876)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-syncwait-stress.rs (/data/codex/target-gpu-free/release/deps/kf_syncwait_stress-d12a48240c4bc03c)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-timer-probe.rs (/data/codex/target-gpu-free/release/deps/kf_timer_probe-0b8120aea17b79a7)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-user-ring-probe.rs (/data/codex/target-gpu-free/release/deps/kf_user_ring_probe-b64e62a2a60124ae)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/bin/kf-video-semaphore-probe.rs (/data/codex/target-gpu-free/release/deps/kf_video_semaphore_probe-41ac0b75c56c2eea)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running unittests src/lib.rs (/data/codex/target-gpu-free/release/deps/kf_host-b9ae8f430fcf2e6f)
+test result: ok. 60 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.16s
+     Running tests/channel_birth_bound.rs (/data/codex/target-gpu-free/release/deps/channel_birth_bound-68292a6a439cb3c5)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.85s
+     Running unittests src/lib.rs (/data/codex/target-gpu-free/release/deps/kf_linux_raw-0a230a0b6e3a71ba)
+test result: ok. 160 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+     Running tests/compile_fail.rs (/data/codex/target-gpu-free/release/deps/compile_fail-d0f5bab92117cd2a)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.50s
+     Running tests/effective_memtype.rs (/data/codex/target-gpu-free/release/deps/effective_memtype-7c5aa0fee04a9551)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+     Running tests/kvm_vm_discovery.rs (/data/codex/target-gpu-free/release/deps/kvm_vm_discovery-eb9cbdeedbdc83c8)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+     Running tests/unsafe_naming.rs (/data/codex/target-gpu-free/release/deps/unsafe_naming-96174b96824da759)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+     Running unittests src/lib.rs (/data/codex/target-gpu-free/release/deps/kf_mem-4847703a803973e4)
+test result: FAILED. 178 passed; 1 failed; 3 ignored; 0 measured; 0 filtered out; finished in 3.17s
+error: test failed, to rerun pass `-p kf-mem --lib`
+     Running tests/store_is_a_bounds_check.rs (/data/codex/target-gpu-free/release/deps/store_is_a_bounds_check-c2859197649654b3)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/walk_format_vs_ogkm.rs (/data/codex/target-gpu-free/release/deps/walk_format_vs_ogkm-59a88dd2b66316ba)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/lib.rs (/data/codex/target-gpu-free/release/deps/kf_oprom-e6e176415d7e8070)
+test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running unittests src/bin/kf-oprom.rs (/data/codex/target-gpu-free/release/deps/kf_oprom-941e8dd3b1f79a49)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/efi_virtio_golden.rs (/data/codex/target-gpu-free/release/deps/efi_virtio_golden-952eb60f9230ea0b)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/lib.rs (/data/codex/target-gpu-free/release/deps/kf_qemu-377a752895ad55b0)
+test result: ok. 261 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+     Running tests/bar0_trace_gate.rs (/data/codex/target-gpu-free/release/deps/bar0_trace_gate-e3d471b4661a0e40)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/channel_budget_lazy.rs (/data/codex/target-gpu-free/release/deps/channel_budget_lazy-ec5fa56db5cc9893)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/gop_rom_knobs.rs (/data/codex/target-gpu-free/release/deps/gop_rom_knobs-57bcaeeaf6355467)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+     Running tests/gpu_uuid_property.rs (/data/codex/target-gpu-free/release/deps/gpu_uuid_property-1e0ed5ffe30b65e0)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/kf3_realize_discard.rs (/data/codex/target-gpu-free/release/deps/kf3_realize_discard-fcc50f41c20ae44e)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/max_fps_property.rs (/data/codex/target-gpu-free/release/deps/max_fps_property-afaee3d4601929b8)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/wire_mirror.rs (/data/codex/target-gpu-free/release/deps/wire_mirror-57e3b715fa58248a)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+     Running unittests src/lib.rs (/data/codex/target-gpu-free/release/deps/kf_rm-805d365c3aa5fca9)
+test result: ok. 160 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s
+     Running tests/bus_get_c2c_info.rs (/data/codex/target-gpu-free/release/deps/bus_get_c2c_info-7f0600a7b09505e7)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/bus_get_info_v2.rs (/data/codex/target-gpu-free/release/deps/bus_get_info_v2-885fbee69d69c848)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/bus_get_pcie_supported_gpu_atomics.rs (/data/codex/target-gpu-free/release/deps/bus_get_pcie_supported_gpu_atomics-de62b693987da63d)
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/carried_controls.rs (/data/codex/target-gpu-free/release/deps/carried_controls-c752d5b9dc76cc99)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+     Running tests/ce_fault_method_buffer_size.rs (/data/codex/target-gpu-free/release/deps/ce_fault_method_buffer_size-edc1bf18d07861a3)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/ce_get_all_physical_caps.rs (/data/codex/target-gpu-free/release/deps/ce_get_all_physical_caps-8f425d026901769d)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/chip_info.rs (/data/codex/target-gpu-free/release/deps/chip_info-8b412edadf8bbe27)
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/code43_startdevice_batch.rs (/data/codex/target-gpu-free/release/deps/code43_startdevice_batch-d7ae054ba2b8166c)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/console_region.rs (/data/codex/target-gpu-free/release/deps/console_region-d75127f2d3e586da)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/constructed_falcon_info.rs (/data/codex/target-gpu-free/release/deps/constructed_falcon_info-22f943d45219c5f0)
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/control_census.rs (/data/codex/target-gpu-free/release/deps/control_census-0b912031292c555a)
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/cudart_clocks.rs (/data/codex/target-gpu-free/release/deps/cudart_clocks-6d20479562409b4b)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/cudart_gate_ad104_oracle.rs (/data/codex/target-gpu-free/release/deps/cudart_gate_ad104_oracle-3e10bd929cae9e54)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/cudart_gate_per_die.rs (/data/codex/target-gpu-free/release/deps/cudart_gate_per_die-8fcef6a510098338)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/deferred_api.rs (/data/codex/target-gpu-free/release/deps/deferred_api-f93ef8ffa70d8fd2)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/display_seat.rs (/data/codex/target-gpu-free/release/deps/display_seat-8ae31a7f98a940e8)
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/engine_nonstall_notifiers.rs (/data/codex/target-gpu-free/release/deps/engine_nonstall_notifiers-ad0f26b4dd126e1e)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/event_set_notification.rs (/data/codex/target-gpu-free/release/deps/event_set_notification-af8122d21d12abab)
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/fault_buffer_recorder.rs (/data/codex/target-gpu-free/release/deps/fault_buffer_recorder-67689d115ced014d)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/fb_get_info_v2.rs (/data/codex/target-gpu-free/release/deps/fb_get_info_v2-3225432af5707f95)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/fn1_negotiation_oracle.rs (/data/codex/target-gpu-free/release/deps/fn1_negotiation_oracle-f3a9edc4fe950258)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/gpu_types_wiring.rs (/data/codex/target-gpu-free/release/deps/gpu_types_wiring-11dcd08eaa5e8ddb)
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/gpu_uuid.rs (/data/codex/target-gpu-free/release/deps/gpu_uuid-20f5713e64ba8f16)
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/gr_info.rs (/data/codex/target-gpu-free/release/deps/gr_info-98ab663ddae36072)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/gr_static_floorswept.rs (/data/codex/target-gpu-free/release/deps/gr_static_floorswept-81bc1d8298c4d0b6)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/grmgr_get_gr_fs_info.rs (/data/codex/target-gpu-free/release/deps/grmgr_get_gr_fs_info-63427071f5f3251b)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/gsp_get_features.rs (/data/codex/target-gpu-free/release/deps/gsp_get_features-fec6c0c1776e2c39)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/gsp_static_info.rs (/data/codex/target-gpu-free/release/deps/gsp_static_info-388b3ee3f363c847)
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/gss_exact_zero_rows.rs (/data/codex/target-gpu-free/release/deps/gss_exact_zero_rows-10d84077c7bb54c0)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/gss_legacy_answer.rs (/data/codex/target-gpu-free/release/deps/gss_legacy_answer-633693d4758e5e61)
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/gss_native.rs (/data/codex/target-gpu-free/release/deps/gss_native-1131aa0b880f7d6e)
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+     Running tests/guest_system_info.rs (/data/codex/target-gpu-free/release/deps/guest_system_info-0c2710a00fc9fb74)
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/gvas_publication.rs (/data/codex/target-gpu-free/release/deps/gvas_publication-7a7ae20936157cd9)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/host_facts_ga106.rs (/data/codex/target-gpu-free/release/deps/host_facts_ga106-1ea2f5bb863fd4ae)
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/host_facts_query_ga106.rs (/data/codex/target-gpu-free/release/deps/host_facts_query_ga106-8b83c72c0d714d89)
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/inert.rs (/data/codex/target-gpu-free/release/deps/inert-8018080ce1b21773)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/init_tables.rs (/data/codex/target-gpu-free/release/deps/init_tables-b34f89c662e265cb)
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/internal_device_info_table.rs (/data/codex/target-gpu-free/release/deps/internal_device_info_table-149cc181f9962ce0)
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+     Running tests/internal_gpu_get_smc_mode.rs (/data/codex/target-gpu-free/release/deps/internal_gpu_get_smc_mode-d9b5693776591905)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/l2_invalidate_evict.rs (/data/codex/target-gpu-free/release/deps/l2_invalidate_evict-42eda0f76cfc9762)
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/mc_service_interrupts.rs (/data/codex/target-gpu-free/release/deps/mc_service_interrupts-e3be555471bbc148)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/memory_list_chain.rs (/data/codex/target-gpu-free/release/deps/memory_list_chain-ef33b46249ce4b25)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/memsys_static_config.rs (/data/codex/target-gpu-free/release/deps/memsys_static_config-e1b95e06bbfdc2e7)
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/notify_slots_are_reclaimed.rs (/data/codex/target-gpu-free/release/deps/notify_slots_are_reclaimed-05ed61e96d61b0fa)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/ofa_engine.rs (/data/codex/target-gpu-free/release/deps/ofa_engine-447e139c272e1425)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/pci_bar_info.rs (/data/codex/target-gpu-free/release/deps/pci_bar_info-8511d1915122ed77)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/promote_fault_method_buffers.rs (/data/codex/target-gpu-free/release/deps/promote_fault_method_buffers-36a80fb7d8be8a1e)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/register_fault_buffer.rs (/data/codex/target-gpu-free/release/deps/register_fault_buffer-6bb8a522e2974c9e)
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/reselect_at_fn1.rs (/data/codex/target-gpu-free/release/deps/reselect_at_fn1-372373ab53fe3a15)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/rmgraph.rs (/data/codex/target-gpu-free/release/deps/rmgraph-aea46f555ca61a63)
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/rmrpc_bridge.rs (/data/codex/target-gpu-free/release/deps/rmrpc_bridge-7265ee7058f33fc1)
+test result: ok. 103 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/sw_runlist_probe_chain.rs (/data/codex/target-gpu-free/release/deps/sw_runlist_probe_chain-9713f033836ef600)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/sweep_batch_controls.rs (/data/codex/target-gpu-free/release/deps/sweep_batch_controls-b087513acfbd6a64)
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/sweep_triage.rs (/data/codex/target-gpu-free/release/deps/sweep_triage-e26ed52ac2406272)
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/sysmembar.rs (/data/codex/target-gpu-free/release/deps/sysmembar-5992fdce8d209110)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/unserviced_ledger.rs (/data/codex/target-gpu-free/release/deps/unserviced_ledger-3a2f88d10bfb24b3)
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/user_register_access_map.rs (/data/codex/target-gpu-free/release/deps/user_register_access_map-6ac10ff806e61fda)
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/video_engines.rs (/data/codex/target-gpu-free/release/deps/video_engines-bd6a657457517d73)
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/wanted_table_versions.rs (/data/codex/target-gpu-free/release/deps/wanted_table_versions-dfb4846f4d8ed651)
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/windows_rows_vs_authored.rs (/data/codex/target-gpu-free/release/deps/windows_rows_vs_authored-21f222642792bb81)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/zbc_defaults_per_die.rs (/data/codex/target-gpu-free/release/deps/zbc_defaults_per_die-040c1fec829ff171)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/lib.rs (/data/codex/target-gpu-free/release/deps/kf_trace-ff7e373b9800f1c2)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/lib.rs (/data/codex/target-gpu-free/release/deps/kf_trap-5bb0b18e559e0595)
+test result: ok. 79 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s
+     Running tests/hw_boundary_vs_ogkm.rs (/data/codex/target-gpu-free/release/deps/hw_boundary_vs_ogkm-5a401b72187d5bca)
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/memory_map.rs (/data/codex/target-gpu-free/release/deps/memory_map-4b72613f6ad8366d)
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/lib.rs (/data/codex/target-gpu-free/release/deps/kf_util-7d006e80b872b3ed)
+test result: ok. 57 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+     Running tests/stale_claim_lint.rs (/data/codex/target-gpu-free/release/deps/stale_claim_lint-09c5783e8b047e55)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+   Doc-tests kf_abi
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests kf_arch
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+   Doc-tests kf_broker
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests kf_census
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests kf_chan
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests kf_chip
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests kf_core
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests kf_crec
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests kf_cuda
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests kf_disp
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests kf_gop_image
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests kf_gsp
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests kf_harness
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests kf_host
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests kf_linux_raw
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests kf_mem
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests kf_oprom
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests kf_qemu
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests kf_rm
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests kf_trace
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests kf_trap
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+   Doc-tests kf_util
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+error: 1 target failed:
+EXIT rc=101 2026-10-15T09:49:30+00:00
+TOTAL passed=3230 failed=1 ignored=14
+---- batch::tests::the_aggregate_extent_of_the_batches_of_a_space_is_capped stdout ----
+kf-mem: batch 0x10100000000+0x1000000000: the batches of this space already span BATCH_MAX_TOTAL_EXTENT (512 GiB) of VA together: this batch's liveness bitmap is refused by name, the rows go per run
+kf-mem: batch 0x12100000000+0x1000000000: the batches of this space already span BATCH_MAX_TOTAL_EXTENT (512 GiB) of VA together: this batch's liveness bitmap is refused by name, the rows go per run
+kf-mem: batch 0x14100000000+0x1000000000: the batches of this space already span BATCH_MAX_TOTAL_EXTENT (512 GiB) of VA together: this batch's liveness bitmap is refused by name, the rows go per run
+kf-mem: batch 0x16100000000+0x1000000000: the batches of this space already span BATCH_MAX_TOTAL_EXTENT (512 GiB) of VA together: this batch's liveness bitmap is refused by name, the rows go per run
+kf-mem: batch 0x18100000000+0x1000000000: the batches of this space already span BATCH_MAX_TOTAL_EXTENT (512 GiB) of VA together: this batch's liveness bitmap is refused by name, the rows go per run
+kf-mem: batch 0x1a100000000+0x1000000000: the batches of this space already span BATCH_MAX_TOTAL_EXTENT (512 GiB) of VA together: this batch's liveness bitmap is refused by name, the rows go per run
+kf-mem: batch 0x1c100000000+0x1000000000: the batches of this space already span BATCH_MAX_TOTAL_EXTENT (512 GiB) of VA together: this batch's liveness bitmap is refused by name, the rows go per run
+kf-mem: batch 0x1e100000000+0x1000000000: the batches of this space already span BATCH_MAX_TOTAL_EXTENT (512 GiB) of VA together: this batch's liveness bitmap is refused by name, the rows go per run
+
+thread 'batch::tests::the_aggregate_extent_of_the_batches_of_a_space_is_capped' (1250349) panicked at crates/kf-mem/src/batch.rs:3970:9:
+RSS 5 -> 86 MiB
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
