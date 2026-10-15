@@ -1,0 +1,11 @@
+START 2026-10-15T16:02:33+00:00
+BEFORE disp=101 layout=101 qemu=101
+/data/codex/display590/git/src-590.48.01
+2ccbad25e1af6a6ee6f38cf569f89f8b65d658ab
+⊘ layout program did not compile:
+/tmp/tmp.IMVjYzn2lV/l.c: In function ‘main’:
+/tmp/tmp.IMVjYzn2lV/l.c:296:88: error: ‘NVC370_CTRL_CMD_SET_SWAPRDY_GPIO_WAR’ undeclared (first use in this function)
+  296 |   printf("CONST\tNVC370_CTRL_CMD_SET_SWAPRDY_GPIO_WAR\t0x%llx\n", (unsigned long long)(NVC370_CTRL_CMD_SET_SWAPRDY_GPIO_WAR));
+      |                                                                                        ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/tmp.IMVjYzn2lV/l.c:296:88: note: each undeclared identifier is reported only once for each function it appears in
+EXIT rc=3 2026-10-15T16:03:30+00:00
