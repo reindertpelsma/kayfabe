@@ -1,20 +1,21 @@
-# Blackwell RTX5060Ti wave
+# Blackwell RTX5060Ti provisioning attempt
 
-**STATUS: LIVE, 2026-10-15 18:48UTC; SSH and hardware validation pending.**
-Own rental56137859, offer50694293, Quebec; API start1792089869.567632,
-actual$0.2861111111/hour with150GB disk.175min timerPID2040597,
-deadlineabout21:39:30UTC, hardcap21:44:29UTC. Created only after Turing was
-verified absent18:39:01UTC. No second own rental. Native Windows reference
-first, exact caps/small controls, restoreLinux and derive RM tuple, then guests.
-Falsifiers in../blackwell_plan.md. Marketing name does not prove exactdie.
+**STATUS: ANSWERED, 2026-10-15 19:07UTC; provisioning FAIL, hardware NOTRUN.**
 
-Quote transfers0.01953125USD/GB each direction (different from Turing's rate).
-All billing remains estimated. No secrets or agent forwarding to rentals; text
-only returns. Sourcec1a6aeb1c has production Rust/data identical to8e3a9d325,
-which passes3247GPU-free tests; no Blackwell hardware or family acceptance.
+Own56137859, offer50694293, machine45428/host70221, API start18:44:29UTC.
+Provider never created the VM: actual_status=created, uptime=null, console
+reports missing libvirt domain C.56137859. Correct direct mapped SSH was also
+unreachable. One stop/start18:54:21/18:54:32 did not recover by19:00:29,
+falsifying the stated transient-startup hypothesis. No native Windows install,
+measurement module, kayfabe guest or GPU workload ran. No hardware limit claim.
 
-Own controller bootstrapPID2040741/log/work scripts under/workspace/codex.
-New native installer policy is prepared and render-checked, not yet measured
-on Windows. Explicit driver/build checks remain mandatory. Original175min
-rental timer is armed while first SSH loads. Native Windows public SSH host key
-must be preserved before intentional reimage; no raw captures/executables back.
+Waiting own bootstrap was canceled before teardown. Destroy request19:01:35UTC,
+absence verified19:06:18UTC, before original175min deadline21:39:30UTC and3h
+hardcap21:44:29UTC. Own timer canceled after absence. No active own rental at
+this checkpoint. Receipt inprovisioning-failure.txt; provider excluded nexttime.
+
+Quote$0.2861111111/hour including150GBdisk; compute upper bound$0.11 through
+absence verification, transfers unbilled. Source0fd8d8038 production Rust/data
+identical to8e3a9d325 CPU3247/0/14ignored. Native policy helper render checks
+passed but its runtime remainsUNRUN. Blackwell hardware/family acceptance is
+still pending. All rental output remains data; text only returned, no secrets.

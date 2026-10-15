@@ -1,0 +1,4 @@
+H-BP falsified: after one stop/start18:54:32,19:00:29 still actual_status=created/uptime=null, direct mapped SSH silent; provider reports missing libvirt domain C.56137859. No native or kayfabe GPU workload ran.
+FINAL_METADATA={"id": 56137859, "machine_id": 45428, "host_id": 70221, "actual_status": "created", "cur_state": "running", "intended_status": "running", "uptime": null, "dph_total": 0.2861111111111111, "start_date": 1792089869.567632}
+DESTROY_REQUEST_RC=0 UTC=2026-10-15T19:01:35.435810+00:00
+ABSENCE_VERIFIED_UTC=2026-10-15T19:06:18.418439+00:00

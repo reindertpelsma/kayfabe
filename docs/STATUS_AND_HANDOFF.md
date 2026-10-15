@@ -1,5 +1,24 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-15 19:07UTC — failed Blackwell provisioning retired; replacement search
+
+Own56137859 never obtained a VM or SSH: provider console reports missing libvirt
+C.56137859, actual_status stayedcreated/uptime null after one controlled stop/start.
+H-BP transient-startup hypothesis falsified at19:00:29; no native or kayfabe GPU
+work ran. Destroy request19:01:35UTC, absence verified19:06:18UTC. Own waiting
+bootstrap2040741 was canceled before destroy; own timer2040597 canceled only
+after absence. Failed provider machine45428/host70221 excluded from replacement.
+Safe receipt: traces/die_driver_sweep_20261015/blackwell_5060ti/provisioning-failure.txt.
+No own rental currently active; ownerVM/GPU untouched. Full matrix incomplete.
+
+Search now filters GPU names server-side, explicitlimit1000/storage150/orderdph.
+Default verified-only search finds only the failed provider; removing that default
+finds alternatives, all treated as untrusted. Plan next5090 from a different
+machine with>=24GBRAM/8CPU/150GBdisk, one rental and175min timer. No exactdie or
+hardware acceptance inferred from its name. Native Windows first remains the plan.
+Current candidate product8e3a9d325 CPU3247/0/14ignored; new native policy helper
+remains runtimeUNRUN. Older active56137859 paragraphs are superseded here.
+
 ## UPDATE 2026-10-15 18:48UTC — only active own rental56137859, Blackwell native-first
 
 Turing56117789 was verified absent at18:39:01 before the new rental. RTX5060Ti
