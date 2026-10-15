@@ -1,5 +1,30 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-15 18:06UTC — TU106 Windows580 acceptance PASS after USER-ring fix
+
+Device8e3a9d32, source8e3a9d325, ownrental56117789, stockhost595.91.07.
+Windows580.88 LTSC26100: Code0/build checked before/after, Explorer+DWM,
+CUDA3/3 including byte-exact2048matmul, hardwareD3D11compute/draw andD3D12
+compute/fences20iterations PASS; readableSystemlog,0TDRsinceboot. Rendered
+1920x1080frame78,707colors. HostXid0 in18:01:10–18:05:23 window; earlier
+raw-fault Xids remain recorded. Suite18:04:39–18:05:21, wrapperexit0.
+
+Cause fixed: USER-ring birth hardcoded Ampere c56f and refused validTuringc46f
+(cup2cuCtxCreate999). Now use generated host-derived family ChannelGpfifo set;
+same geometry/ownership/Windowspermit/nativeUSER checks. Two assertions fail
+beforec5ee774cb; full CPU8e3a9d3253247/0/14ignored. NativeWindows oracle passes.
+Declaration tests for all families do not prove their hardware execution.
+
+Windows normalshutdown requested18:06:13, ownstopwrapperPID55994; wait until
+QEMU55462 gone before Linux broker prep. Prepared broker/root script accepts
+KF3_REV=8e3a9d32; then /root/turing_fixed_raw.sh gates/build/raw30 at180s and
+birthcensus even on failure. Rootcheckout stays8e duringGPU jobs. Beforefix
+Linux580CUDA4PASS/raw29(R34timeout180; diagnostic201s) is not a fullLinuxpass.
+Original rental deadline18:36:22 remains armed, no extension. Capture text/push
+after each run, retire ownID only. Controller /workspace/codex/turing-hw,
+branchcodex/sweep-turing-20261015, draftPR10. OwnerVM/GPU untouched.
+Older pending/process paragraphs below superseded by this update.
+
 ## UPDATE 2026-10-15 17:50UTC — TU106 Linux partial; Windows guest running
 
 Own rental56117789 only, original teardown18:36:22UTC. Ubuntu22.04.5,

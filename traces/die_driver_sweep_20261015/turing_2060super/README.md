@@ -1,10 +1,14 @@
 # Turing RTX2060Super wave
 
-**STATUS: LIVE, 2026-10-15 15:43UTC.** Own instance56117789, created only after
+**STATUS: LIVE, 2026-10-15 18:06UTC.** Own instance56117789, created only after
 AD10256096336 was verified absent. Offer55223684, Quebec, KVM image,150GB
 requested. Actual quote$0.1113888889/hour.175min teardown timerPID1995396,
 deadlineabout18:36:22UTC; never extend beyond18:41:16UTC three-hour cap.
-Exact die, running kernel, available disk and KVM still need SSH verification.
+Host-derived exactdieTU106; restoredUbuntu22.04.5/kernel6.8.0-138,
+147GiBroot/138GiB initiallyfree andKVM verified. Windows580 acceptance nowPASS
+at8e3a9d32 after USER-ring class fix; Linux580raw remains29/30 at180s,
+CUDA4PASS beforefix, fixed Linux regressions pending. The dated setup/pending
+notes below are historical; this paragraph and the latest result section supersede them.
 Own branchcodex/sweep-turing-20261015, parent455d13980 (AD102 candidate).
 
 Order: native Windows580.88 LTSC2024 reference/facts first, restore Linux on the
@@ -197,3 +201,18 @@ Exactfix8e3a9d325 full isolated CPU3247passed/0failed/14ignored,
 target-turing-hw; hardware binary8e3a9d32 built18:01:45UTC. Before logs and CPU
 results inwindows-before/. Old Windows VM shuts down normally17:57:48UTC.
 Fresh fixed boot18:02:30UTC; apps and Linux regressions pending. No family pass.
+
+## Windows580 acceptance PASS,18:06UTC
+
+Exact device8e3a9d32/source8e3a9d325, stockhost595.91.07, unchangedWindows
+580.88LTSC26100 overlay after normal fresh-process boot. Suite18:04:39–18:05:21:
+Code0/actual32.0.15.8088 before/after, DWM1/Explorer1, Systemlogreadable;
+CUDA3/3 (copy content, kernel43,2048matmulbad0/maxerr0), hardwareD3D11compute/
+draw andD3D12compute/fences20iterations PASS.0Event4101 since this boot.
+1920x1080frame78,707colors, SHA50c0f699ee27a5c9ea7edc0de20a4667d23150d30614cfc1732565d396b65844.
+HostXid0 in18:01:10–18:05:23; earlier raw negative-fault Xids are not erased.
+Wrapperexit0; normalshutdown requested18:06:13. Logs inwindows-after/.
+H-CLASS passes its hardware check: exactsame probes now run with correct GPU
+content after replacing the Ampere-only declaration gate. Linux raw/broker
+regressions of this fix remain pending. No full family/multi-driver acceptance,
+S3/Edge-long-run/OptiX-denoise claim.
