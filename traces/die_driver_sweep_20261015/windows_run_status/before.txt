@@ -1,0 +1,40 @@
+FFF.
+======================================================================
+FAIL: test_driver_binding_failure_fails_phase_one (test_die_run.DieRunTests.test_driver_binding_failure_fails_phase_one)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/codex/wt/scripts/bench/tests/test_die_run.py", line 46, in test_driver_binding_failure_fails_phase_one
+    self.assertEqual(rc, 77, log)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+AssertionError: 0 != 77 : DIE_RUN_START phase1 2026-10-15T15:16:27+02:00
+
+DIE_RUN_EXIT phase1 rc=0 2026-10-15T15:16:27+02:00
+
+
+======================================================================
+FAIL: test_evidence_failure_fails_phase_one (test_die_run.DieRunTests.test_evidence_failure_fails_phase_one)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/codex/wt/scripts/bench/tests/test_die_run.py", line 41, in test_evidence_failure_fails_phase_one
+    self.assertEqual(rc, 77, log)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+AssertionError: 0 != 77 : DIE_RUN_START phase1 2026-10-15T15:16:27+02:00
+
+DIE_RUN_EXIT phase1 rc=0 2026-10-15T15:16:27+02:00
+
+
+======================================================================
+FAIL: test_final_evidence_failure_fails_phase_two (test_die_run.DieRunTests.test_final_evidence_failure_fails_phase_two)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/codex/wt/scripts/bench/tests/test_die_run.py", line 50, in test_final_evidence_failure_fails_phase_two
+    self.assertEqual(rc, 77, log)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+AssertionError: 0 != 77 : DIE_RUN_START phase2 2026-10-15T15:16:27+02:00
+DIE_RUN_EXIT phase2 rc=0 2026-10-15T15:16:28+02:00
+
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.309s
+
+FAILED (failures=3)
