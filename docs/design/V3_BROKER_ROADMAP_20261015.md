@@ -12,6 +12,15 @@ broker draws it in every mode (hover: host pointer, position ignored; grab: the 
 subsurface, X11 best effort). XOR cursors: kayfabe converts to an "inverting mask" image, the broker approximates (black fill, white
 outline). Kayfabe stops composing cursors into frames when the broker advertises `CAP_CURSOR_STREAM`; the old composing path stays
 as the fallback for older brokers until the owner decides to delete it. The XOR/non-XOR hover/hide bug lives in that fallback.
+**Settled design (2026-10-15, built on `claude/cursor-hover-20261015`):** grab is CLIENT state and is not in the protocol; in the
+stream path kayfabe is mode-free for the cursor. `CMD_CURSOR` `MOVE` is ONE atomic pair: the image top-left on the guest frame, and
+the LAST ABSOLUTE pointer position kayfabe injected (guest frame pixels, valid flag `CURSOR_F_ABS`, clear after relative input or
+before any injection). Hover: the broker keeps the host pointer (native Wayland cursor call), ignores MOVE for position, and derives
+the hot spot `hot = pointer - top-left` (the Windows driver programs hot 0,0): it LATCHES it only when the same difference appears
+in two consecutive MOVEs (event-counted, no timer; a difference outside the image or a relative MOVE drops the candidate; a latched
+spot is corrected only by more than a pixel; a new image restores the SET hot spot). Grab/relative: the broker draws the image at
+the top-left and the hot spot is irrelevant. X11 still composes (it does not advertise the bit). An older bit-12 broker (before the
+pair) drops the connection on the first MOVE: kayfabe and broker come from the same branch.
 
 ## B. Broker control CLI (queued, after A is verified live)
 A small tool talking to the running broker over a local unix socket (same uid, mode 0600; whoever connects sees the guest screen).
