@@ -1,0 +1,35 @@
+START 2026-10-15T09:55:47+00:00
+b31f126545acd884611c0f610c6208f8820cd972
+     Running unittests src/lib.rs (/data/codex/target-turing/release/deps/kf_disp-28dbe45d7fcff935)
+failures:
+
+---- engine::tests::every_family_row_resolves_its_vocabulary stdout ----
+
+thread 'engine::tests::every_family_row_resolves_its_vocabulary' (1323058) panicked at crates/kf-disp/src/engine/tests.rs:2063:37:
+580.65.06 TU102 TU104 TU106 TU116 TU117: NVC57E_SET_SEMAPHORE_CONTROL_PAYLOAD_SIZE is not derived
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    engine::tests::every_family_row_resolves_its_vocabulary
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 166 filtered out; finished in 0.00s
+error: test failed, to rerun pass `-p kf-disp --lib`
+     Running unittests src/lib.rs (/data/codex/target-turing/release/deps/kf_qemu-377a752895ad55b0)
+failures:
+
+---- display::tests::the_gpu_free_realize_path_resolves_for_every_row stdout ----
+
+thread 'display::tests::the_gpu_free_realize_path_resolves_for_every_row' (1327465) panicked at crates/kf-qemu/src/display.rs:5250:42:
+580.65.06 TU102 TU104 TU106 TU116 TU117: NVC57E_SET_SEMAPHORE_CONTROL_PAYLOAD_SIZE
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    display::tests::the_gpu_free_realize_path_resolves_for_every_row
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 260 filtered out; finished in 0.00s
+error: test failed, to rerun pass `-p kf-qemu --lib`
+EXPECTED_RED disp=101 qemu=101
+EXIT rc=0 2026-10-15T09:56:28+00:00
+TOTAL passed=0 failed=2 ignored=0
