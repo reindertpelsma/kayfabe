@@ -239,7 +239,22 @@ struct nb_cursor_geom {
  * through every boundary without a socket (nb_cursor.c).
  */
 int  nb_cursor_check(const struct nvkvm_broker_cursor_cmd *c, bool has_fd,
-                     const char **why);
+                     bool xor_ok, const char **why);
+/*
+ * An XOR SET (NVKVM_BROKER_CURSOR_F_XOR) loaded into `c` -> the cursor the user
+ * sees: every pixel whose alpha is non-zero (the guest's XOR cursor inverts the
+ * screen there) becomes opaque BLACK, every other pixel touching one (the
+ * 8-neighbourhood, clipped at the image's edge) opaque WHITE, the rest
+ * transparent.  Size, hot spot, gen and visibility are untouched; bounded
+ * (<= 256x256, two passes), in place, deterministic.  `xor_ok` is the broker's
+ * --xor-cursor=approx: nb_cursor_check() refuses the flag without it. */
+void nb_cursor_xor_approx(struct nb_cursor *c);
+/* --xor-cursor=VALUE: "compose" -> *approx = false, "approx" -> true; 0, else -1
+ * (nothing written) so the caller can refuse the value by name. */
+int nb_xor_cursor_parse(const char *value, bool *approx);
+/* The capability word HELLO carries: the backend's, plus CAP_DEVICE (the core's
+ * own promise), plus CAP_XOR_CURSOR when --xor-cursor=approx. */
+uint32_t nb_hello_caps(uint32_t backend_caps, bool xor_approx);
 /* Bytes a valid SET covers, from row 0's first byte to the last row's last
  * pixel byte: stride*(h-1) + w*4.  Only meaningful for a record
  * nb_cursor_check() accepted; at most MAX_STRIDE * MAX_DIM. */
@@ -788,6 +803,9 @@ extern int      nb_res_mode;
 extern unsigned nb_res_w, nb_res_h;
 
 extern int  nb_tier;
+/* --xor-cursor=approx: advertise NVKVM_BROKER_CAP_XOR_CURSOR and draw the XOR
+ * substitute (nb_cursor_xor_approx()).  The default, compose, is today's. */
+extern bool nb_xor_approx;
 extern bool nb_linear_only;   /* deprecated alias for NB_TIER_LINEAR */
 
 uint32_t nb_fourcc_bpp(uint32_t fourcc);

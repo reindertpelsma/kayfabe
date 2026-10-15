@@ -40,7 +40,8 @@ EV_FORMAT, EV_DEVICE = 16, 17
 CMD_ATTACH, CMD_COMMIT, CMD_QUERY_FORMAT, CMD_CURSOR = 1, 2, 6, 7
 CMD_F_SHM = 1
 SET, HIDE, SHOW = 1, 2, 3
-CAP_CURSOR, CAP_DEVICE = 1 << 10, 1 << 11
+CAP_CURSOR, CAP_DEVICE, CAP_XOR_CURSOR = 1 << 10, 1 << 11, 1 << 12
+F_XOR = 1
 F_KNOWN, F_RENDER = 1, 2
 AR24, XR24 = 0x34325241, 0x34325258
 F_ADD_SEALS, F_GET_SEALS, F_SEAL_SHRINK = 1033, 1034, 0x0002
@@ -243,9 +244,10 @@ def udmabuf(size):
 
 
 class Broker:
-    def __init__(self, path):
+    def __init__(self, path, extra=()):
         self.proc = subprocess.Popen(
-            [BROKER, "--socket", path, "--backend", "test", "--persist"],
+            [BROKER, "--socket", path, "--backend", "test", "--persist",
+             *extra],
             stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE, text=True)
         self.path = path
@@ -326,8 +328,10 @@ def main():
         b = Broker(os.path.join(tmp, "broker.sock"))
         try:
             run(b)
+            run_xor_compose(b)
         finally:
             b.stop()
+        run_xor_option(tmp)
     if FAILS:
         print("%d cursor/device check(s) FAILED" % len(FAILS))
         sys.exit(1)
@@ -811,6 +815,122 @@ def run_taken_back(b):
     os.close(frame)
     s.close()
     time.sleep(0.2)
+
+
+def xor_mask(w, h, on):
+    """An XOR SET's image: alpha 0xff (and the XOR colour) where it inverts."""
+    px = [0] * (w * h)
+    for x, y in on:
+        px[y * w + x] = 0xffffffff
+    return px
+
+
+def expected_substitute(w, h, on):
+    """The broker's substitute: opaque black fill, opaque white 8-neighbour
+    outline clipped at the image's edge, transparent elsewhere (premultiplied
+    ARGB words, as the test backend hashes them)."""
+    fill = set(on)
+    out = [0] * (w * h)
+    for y in range(h):
+        for x in range(w):
+            if (x, y) in fill:
+                out[y * w + x] = 0xff000000
+            elif any((x + dx, y + dy) in fill
+                     for dx in (-1, 0, 1) for dy in (-1, 0, 1)):
+                out[y * w + x] = 0xffffffff
+    return out
+
+
+def run_xor_compose(b):
+    print("-- xor-cursor=compose (the default): no new capability bit, and the "
+          "XOR flag is a framing violation")
+    s = b.connect()
+    hs = [PKT.unpack(recv_exact(s, PKT.size)) for _ in range(6)]
+    check(not hs[0][6] & CAP_XOR_CURSOR, "HELLO does not advertise CAP_XOR_CURSOR")
+    check(bool(hs[0][6] & CAP_CURSOR) and bool(hs[0][6] & CAP_DEVICE),
+          "the other capability bits are as before")
+    fd = memfd_with(8, 8, 32, 0, xor_mask(8, 8, [(3, 3)]))
+    send(s, cursor_cmd(SET, 8, 8, 32, 0, AR24, 1, 1, flags=F_XOR), [fd])
+    os.close(fd)
+    pk = drain(s, 0.4)
+    check(any(p[0] == EV_BYE and p[3] == 2 for p in pk) and closed(s),
+          "SET with F_XOR is BYE(protocol) and a hang-up")
+    s.close()
+    time.sleep(0.2)
+
+
+def run_xor_option(tmp):
+    print("-- --xor-cursor: refused by name when wrong")
+    r = subprocess.run([BROKER, "--socket", os.path.join(tmp, "x.sock"),
+                        "--backend", "test", "--xor-cursor=invert"],
+                       capture_output=True, text=True, timeout=10)
+    check(r.returncode == 2 and "--xor-cursor must be compose or approx" in r.stderr
+          and "invert" in r.stderr, "--xor-cursor=invert is refused (exit 2)")
+    r = subprocess.run([BROKER, "--help"], capture_output=True, text=True,
+                       timeout=10)
+    check("--xor-cursor=MODE" in r.stdout + r.stderr, "--help documents it")
+    print("-- --xor-cursor=approx: the bit, and the broker draws the substitute")
+    b = Broker(os.path.join(tmp, "approx.sock"), ("--xor-cursor=approx",))
+    try:
+        s = b.connect()
+        hs = [PKT.unpack(recv_exact(s, PKT.size)) for _ in range(6)]
+        check(bool(hs[0][6] & CAP_XOR_CURSOR), "HELLO advertises CAP_XOR_CURSOR")
+        check(bool(hs[0][6] & CAP_CURSOR) and bool(hs[0][6] & CAP_DEVICE),
+              "the other capability bits are as before")
+        # the I-beam's shape, small: two serifs and a stem
+        w, h = 24, 24
+        on = [(x, 3) for x in (4, 5, 6, 8, 9, 10)] + [(7, y) for y in range(4, 16)] \
+            + [(x, 16) for x in (4, 5, 6, 8, 9, 10)]
+        stride = w * 4 + 8
+        m = b.mark()
+        fd = memfd_with(w, h, stride, 16, xor_mask(w, h, on))
+        send(s, cursor_cmd(SET, w, h, stride, 16, AR24, 7, 9, flags=F_XOR), [fd])
+        os.close(fd)
+        st = shown(b.since(m))
+        want = fnv(expected_substitute(w, h, on))
+        check(st is not None and st[0] == "shown" and st[1:5] == (w, h, 7, 9),
+              "an XOR SET is shown, with the guest's hot spot")
+        check(st is not None and st[0] == "shown" and st[6] == want,
+              "the pixels are black fill + white outline (hash %08x)" % want)
+        # an empty mask: shown as an image with nothing drawn (all transparent)
+        m = b.mark()
+        fd = memfd_with(8, 8, 32, 0, xor_mask(8, 8, []))
+        send(s, cursor_cmd(SET, 8, 8, 32, 0, AR24, 1, 1, flags=F_XOR), [fd])
+        os.close(fd)
+        st = shown(b.since(m))
+        check(st is not None and st[0] == "shown" and st[6] == fnv([0] * 64),
+              "an empty XOR mask draws nothing")
+        # an ordinary SET still goes the ordinary way
+        px = image(8, 8, 3)
+        m = b.mark()
+        fd = memfd_with(8, 8, 32, 0, px)
+        send(s, cursor_cmd(SET, 8, 8, 32, 0, AR24, 1, 1), [fd])
+        os.close(fd)
+        st = shown(b.since(m))
+        check(st is not None and st[0] == "shown" and
+              st[6] == fnv([premultiplied(v) for v in px]),
+              "a SET without the flag is the guest's image, as before")
+        s.close()
+        time.sleep(0.3)
+        # the flag stays a violation on HIDE and SHOW, and with other bits
+        for what, payload in (("HIDE+F_XOR", cursor_cmd(HIDE, flags=F_XOR)),
+                              ("SHOW+F_XOR", cursor_cmd(SHOW, flags=F_XOR)),
+                              ("SET flags=2", cursor_cmd(SET, 8, 8, 32, 0, AR24, 1, 1, flags=2)),
+                              ("SET flags=3", cursor_cmd(SET, 8, 8, 32, 0, AR24, 1, 1, flags=3))):
+            c = connected(b)
+            fds = []
+            if payload[:2] == b"\x07\x00" and CUR.unpack(payload)[9] == SET:
+                fds = [memfd_with(8, 8, 32, 0, image(8, 8, 1))]
+            send(c, payload, fds)
+            for f in fds:
+                os.close(f)
+            pk = drain(c, 0.4)
+            check(any(p[0] == EV_BYE and p[3] == 2 for p in pk) and closed(c),
+                  "%s is BYE(protocol)" % what)
+            c.close()
+            time.sleep(0.2)
+    finally:
+        b.stop()
 
 
 if __name__ == "__main__":

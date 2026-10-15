@@ -24,7 +24,7 @@
 #define NB_CURSOR_FOURCC_AR24 0x34325241u
 
 int nb_cursor_check(const struct nvkvm_broker_cursor_cmd *c, bool has_fd,
-                    const char **why)
+                    bool xor_ok, const char **why)
 {
     /*
      * FRAMING FIRST, then content -- the same order the clipboard case learned
@@ -32,8 +32,18 @@ int nb_cursor_check(const struct nvkvm_broker_cursor_cmd *c, bool has_fd,
      * it would have been judged, so the verdict must not depend on which
      * content check happens to run first.
      */
-    if (c->flags != 0) {
-        *why = "CURSOR flags are not zero";
+    /*
+     * The one flag there is, NVKVM_BROKER_CURSOR_F_XOR, is a framing matter:
+     * only on a SET, and only for a client that was told in HELLO that this
+     * broker takes it (--xor-cursor=approx).  Anything else stays "flags are
+     * zero", exactly as before the flag existed.
+     */
+    if (c->flags != 0 &&
+        !(c->flags == NVKVM_BROKER_CURSOR_F_XOR && xor_ok &&
+          c->op == NVKVM_BROKER_CURSOR_SET)) {
+        *why = (c->flags == NVKVM_BROKER_CURSOR_F_XOR && !xor_ok)
+                   ? "CURSOR_F_XOR without CAP_XOR_CURSOR (--xor-cursor=approx)"
+                   : "CURSOR flags are not zero (or F_XOR on a HIDE/SHOW)";
         return NB_CURSOR_VIOLATION;
     }
     if (c->reserved1 != 0) {
@@ -158,6 +168,67 @@ void nb_cursor_load(struct nb_cursor *dst, const uint8_t *src, uint32_t w,
     dst->defined = true;
     dst->visible = true;
     dst->gen++;
+}
+
+int nb_xor_cursor_parse(const char *value, bool *approx)
+{
+    if (!strcmp(value, "compose")) {
+        *approx = false;
+        return 0;
+    }
+    if (!strcmp(value, "approx")) {
+        *approx = true;
+        return 0;
+    }
+    return -1;
+}
+
+uint32_t nb_hello_caps(uint32_t backend_caps, bool xor_approx)
+{
+    return backend_caps | NVKVM_BROKER_CAP_DEVICE |
+           (xor_approx ? NVKVM_BROKER_CAP_XOR_CURSOR : 0u);
+}
+
+void nb_cursor_xor_approx(struct nb_cursor *c)
+{
+    /* Black fill, white outline: both opaque, so distinct from each other and
+     * from the transparent rest -- which lets this run in place.  The outline
+     * pass reads only BLACK neighbours, and writes only WHITE onto pixels that
+     * were transparent, so the order of the writes cannot matter. */
+    const uint32_t BLACK = 0xff000000u, WHITE = 0xffffffffu;
+    size_t n, x, y, w, h;
+
+    if (!c->defined || c->w == 0 || c->h == 0 ||
+        c->w > NVKVM_BROKER_CURSOR_MAX_DIM || c->h > NVKVM_BROKER_CURSOR_MAX_DIM) {
+        return;
+    }
+    w = c->w;
+    h = c->h;
+    n = w * h;
+    for (x = 0; x < n; x++) {
+        /* the alpha byte is the mask: set where the XOR cursor inverts */
+        c->px[x] = (c->px[x] >> 24) ? BLACK : 0;
+    }
+    for (y = 0; y < h; y++) {
+        for (x = 0; x < w; x++) {
+            size_t y0 = y ? y - 1 : 0, y1 = y + 1 < h ? y + 1 : h - 1;
+            size_t x0 = x ? x - 1 : 0, x1 = x + 1 < w ? x + 1 : w - 1;
+            size_t j, i;
+
+            if (c->px[y * w + x] != 0) {
+                continue;
+            }
+            for (j = y0; j <= y1; j++) {
+                for (i = x0; i <= x1; i++) {
+                    if (c->px[j * w + i] == BLACK) {
+                        c->px[y * w + x] = WHITE;
+                        goto next;
+                    }
+                }
+            }
+next:       ;
+        }
+    }
 }
 
 void nb_cursor_copy(struct nb_cursor *dst, const struct nb_cursor *src)

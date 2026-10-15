@@ -56,7 +56,7 @@ static struct nvkvm_broker_cursor_cmd base_set(void)
 static int verdict(const struct nvkvm_broker_cursor_cmd *c, bool fd)
 {
     const char *why = NULL;
-    int v = nb_cursor_check(c, fd, &why);
+    int v = nb_cursor_check(c, fd, false, &why);
 
     /* Every verdict names its rule, and an OK names none. */
     CHECK(why != NULL, "nb_cursor_check left *why unset");
@@ -573,7 +573,7 @@ static void test_fuzz(void)
         c.hot_x = edgy(c.width);
         c.hot_y = edgy(c.height);
         c.offset = edgy(4096);
-        v = nb_cursor_check(&c, true, &why);
+        v = nb_cursor_check(&c, true, (i & 1) != 0, &why);
         if (v != NB_CURSOR_OK || c.op != NVKVM_BROKER_CURSOR_SET) {
             continue;
         }
@@ -631,8 +631,224 @@ static void test_fuzz(void)
     CHECK(bad == 0, "%u accepted records broke an invariant", bad);
 }
 
+/* The record check with the XOR capability advertised or not. */
+static int verdict_xor(const struct nvkvm_broker_cursor_cmd *c, bool fd, bool xor_ok)
+{
+    const char *why = NULL;
+    int v = nb_cursor_check(c, fd, xor_ok, &why);
+
+    CHECK(why != NULL, "nb_cursor_check left *why unset");
+    if (why) {
+        CHECK((v == NB_CURSOR_OK) == (why[0] == '\0'),
+              "xor verdict %d with reason '%s'", v, why);
+    }
+    return v;
+}
+
+/*
+ * NVKVM_BROKER_CURSOR_F_XOR: allowed only on a SET and only when the broker
+ * advertised NVKVM_BROKER_CAP_XOR_CURSOR; any other flag bit is a violation
+ * either way; HIDE/SHOW never carry it.  Without the capability the flag is
+ * exactly what it was before (flags must be 0).
+ */
+static void test_xor_flag(void)
+{
+    struct nvkvm_broker_cursor_cmd c = base_set();
+    uint16_t f;
+
+    CHECK(verdict_xor(&c, true, false) == NB_CURSOR_OK, "plain SET, no cap");
+    CHECK(verdict_xor(&c, true, true) == NB_CURSOR_OK, "plain SET, cap");
+    c.flags = NVKVM_BROKER_CURSOR_F_XOR;
+    CHECK(verdict_xor(&c, true, false) == NB_CURSOR_VIOLATION,
+          "F_XOR without the capability is a framing violation");
+    CHECK(verdict_xor(&c, true, true) == NB_CURSOR_OK, "F_XOR with the capability");
+    /* the content rules are the same for an XOR SET */
+    c.width = 257;
+    CHECK(verdict_xor(&c, true, true) == NB_CURSOR_REJECT, "257 wide XOR SET");
+    c = base_set();
+    c.flags = NVKVM_BROKER_CURSOR_F_XOR;
+    c.fourcc = 0x1234;
+    CHECK(verdict_xor(&c, true, true) == NB_CURSOR_REJECT, "XOR SET, wrong fourcc");
+    c = base_set();
+    c.flags = NVKVM_BROKER_CURSOR_F_XOR;
+    CHECK(verdict_xor(&c, false, true) == NB_CURSOR_VIOLATION, "XOR SET without an fd");
+    for (f = 2; f != 0; f = (uint16_t)(f << 1)) {
+        c = base_set();
+        c.flags = f;
+        CHECK(verdict_xor(&c, true, true) == NB_CURSOR_VIOLATION, "flag bit %#x", f);
+        c.flags = (uint16_t)(f | NVKVM_BROKER_CURSOR_F_XOR);
+        CHECK(verdict_xor(&c, true, true) == NB_CURSOR_VIOLATION, "flag bits %#x|1", f);
+    }
+    c = base_set();
+    c.op = NVKVM_BROKER_CURSOR_HIDE;
+    c.width = c.height = c.stride = c.fourcc = c.hot_x = c.hot_y = 0;
+    CHECK(verdict_xor(&c, false, true) == NB_CURSOR_OK, "HIDE");
+    c.flags = NVKVM_BROKER_CURSOR_F_XOR;
+    CHECK(verdict_xor(&c, false, true) == NB_CURSOR_VIOLATION, "HIDE with F_XOR");
+    c.op = NVKVM_BROKER_CURSOR_SHOW;
+    CHECK(verdict_xor(&c, false, true) == NB_CURSOR_VIOLATION, "SHOW with F_XOR");
+}
+
+static struct nb_cursor xor_cur; /* 256 KiB: not on the stack */
+
+static void xor_set(uint32_t x, uint32_t y)
+{
+    xor_cur.px[y * xor_cur.w + x] = 0xff000000u | 0x00ffffffu; /* mask: inverts here */
+}
+
+/*
+ * nb_cursor_xor_approx(): an XOR SET's mask becomes a visible cursor -- every
+ * inverting pixel opaque BLACK, every other pixel touching one (8-neighbourhood,
+ * inside the image) opaque WHITE, the rest transparent; the hot spot and size
+ * are kept.  Shape: the measured Windows I-beam (run 2990, a 256x256 image,
+ * 26 inverting pixels: serifs on rows 2 and 17 at x 7..9 and 11..13, a stem on
+ * x 10 over rows 3..16).
+ */
+static void test_xor_approx(void)
+{
+    static const uint32_t BLACK = 0xff000000u, WHITE = 0xffffffffu;
+    uint32_t x, y, fill = 0, outline = 0, other = 0;
+
+    memset(&xor_cur, 0, sizeof xor_cur);
+    xor_cur.w = xor_cur.h = 256;
+    xor_cur.hot_x = 5;
+    xor_cur.hot_y = 6;
+    xor_cur.defined = true;
+    for (y = 2; y <= 17; y += 15) {
+        for (x = 7; x <= 13; x++) {
+            if (x != 10) {
+                xor_set(x, y);
+            }
+        }
+    }
+    for (y = 3; y <= 16; y++) {
+        xor_set(10, y);
+    }
+    nb_cursor_xor_approx(&xor_cur);
+    CHECK(xor_cur.w == 256 && xor_cur.h == 256, "size kept");
+    CHECK(xor_cur.hot_x == 5 && xor_cur.hot_y == 6, "hot spot kept");
+    CHECK(xor_cur.defined, "still defined");
+    for (y = 0; y < 256; y++) {
+        for (x = 0; x < 256; x++) {
+            uint32_t p = xor_cur.px[y * 256 + x];
+            int is_fill = (y == 2 || y == 17) ? (x >= 7 && x <= 13 && x != 10)
+                                              : (y >= 3 && y <= 16 && x == 10);
+            int near = 0, dy, dx;
+
+            for (dy = -1; dy <= 1; dy++) {
+                for (dx = -1; dx <= 1; dx++) {
+                    int yy = (int)y + dy, xx = (int)x + dx;
+
+                    if (yy >= 0 && yy < 256 && xx >= 0 && xx < 256 &&
+                        ((yy == 2 || yy == 17) ? (xx >= 7 && xx <= 13 && xx != 10)
+                                               : (yy >= 3 && yy <= 16 && xx == 10))) {
+                        near = 1;
+                    }
+                }
+            }
+            if (is_fill) {
+                CHECK(p == BLACK, "fill %u,%u is %08x", x, y, p);
+                fill++;
+            } else if (near) {
+                CHECK(p == WHITE, "outline %u,%u is %08x", x, y, p);
+                outline++;
+            } else {
+                CHECK(p == 0, "%u,%u should be transparent, is %08x", x, y, p);
+                other += p != 0;
+            }
+        }
+    }
+    CHECK(fill == 26, "26 inverting pixels, %u filled", fill);
+    CHECK(outline > 0 && other == 0, "outline %u, stray %u", outline, other);
+    /* the diagonal corner, the gap in the top serif, two away */
+    CHECK(xor_cur.px[1 * 256 + 6] == WHITE, "diagonal of the serif's corner");
+    CHECK(xor_cur.px[2 * 256 + 10] == WHITE, "the gap in the serif");
+    CHECK(xor_cur.px[2 * 256 + 5] == 0, "two left of the serif");
+    CHECK(xor_cur.px[19 * 256 + 10] == 0, "two below the lower serif");
+    /* deterministic: the same mask gives the same cursor */
+    {
+        static struct nb_cursor a, b;
+
+        memset(&a, 0, sizeof a);
+        a.w = a.h = 64;
+        a.defined = true;
+        a.px[5 * 64 + 5] = 0xff123456u;
+        a.px[6 * 64 + 9] = 0xff000000u;
+        memcpy(&b, &a, sizeof b);
+        nb_cursor_xor_approx(&a);
+        nb_cursor_xor_approx(&b);
+        CHECK(memcmp(&a, &b, sizeof a) == 0, "same input, same output");
+        CHECK(a.px[5 * 64 + 5] == BLACK && a.px[6 * 64 + 9] == BLACK,
+              "the colour channels do not matter, the alpha does");
+    }
+    /* an empty mask is a transparent image (nothing to show) */
+    memset(xor_cur.px, 0, sizeof xor_cur.px);
+    nb_cursor_xor_approx(&xor_cur);
+    for (x = 0; x < 256 * 256; x++) {
+        if (xor_cur.px[x]) {
+            CHECK(0, "an empty XOR mask drew pixel %u = %08x", x, xor_cur.px[x]);
+            break;
+        }
+    }
+    /* the outline is clipped at every edge and corner, never wrapped */
+    memset(&xor_cur, 0, sizeof xor_cur);
+    xor_cur.w = 40;
+    xor_cur.h = 24;
+    xor_cur.defined = true;
+    xor_set(0, 0);
+    xor_set(39, 23);
+    nb_cursor_xor_approx(&xor_cur);
+    CHECK(xor_cur.px[0] == BLACK && xor_cur.px[1] == WHITE && xor_cur.px[40] == WHITE &&
+          xor_cur.px[41] == WHITE, "top-left corner: fill + 3 outline");
+    CHECK(xor_cur.px[39 + 23 * 40] == BLACK && xor_cur.px[38 + 23 * 40] == WHITE &&
+          xor_cur.px[39 + 22 * 40] == WHITE && xor_cur.px[38 + 22 * 40] == WHITE,
+          "bottom-right corner: fill + 3 outline");
+    for (x = 0; x < 40 * 24; x++) {
+        fill += xor_cur.px[x] != 0;
+    }
+    CHECK(fill == 26 + 8, "only 8 pixels drawn (%u counted incl. the earlier 26)", fill);
+    CHECK(xor_cur.px[23 * 40] == 0 && xor_cur.px[39] == 0, "no wrap to the other edge");
+    /* a mask pixel carrying colour but alpha 0 does not invert */
+    memset(&xor_cur, 0, sizeof xor_cur);
+    xor_cur.w = xor_cur.h = 8;
+    xor_cur.defined = true;
+    xor_cur.px[9] = 0x00ffffffu;
+    nb_cursor_xor_approx(&xor_cur);
+    CHECK(xor_cur.px[9] == 0, "alpha is the mask");
+    /* a 1x1 image works */
+    memset(&xor_cur, 0, sizeof xor_cur);
+    xor_cur.w = xor_cur.h = 1;
+    xor_cur.defined = true;
+    xor_cur.px[0] = 0xff000001u;
+    nb_cursor_xor_approx(&xor_cur);
+    CHECK(xor_cur.px[0] == BLACK, "1x1");
+}
+
+/* --xor-cursor=compose|approx and the capability word HELLO carries. */
+static void test_xor_option(void)
+{
+    bool a = true;
+
+    CHECK(nb_xor_cursor_parse("compose", &a) == 0 && !a, "compose");
+    CHECK(nb_xor_cursor_parse("approx", &a) == 0 && a, "approx");
+    a = true;
+    CHECK(nb_xor_cursor_parse("invert", &a) == -1 && a, "unknown value refused, untouched");
+    CHECK(nb_xor_cursor_parse("", &a) == -1, "empty refused");
+    CHECK(nb_xor_cursor_parse("Approx", &a) == -1, "case matters");
+    /* compose (the default) advertises exactly what it did before the option */
+    CHECK(nb_hello_caps(0x7ff, false) == (0x7ffu | NVKVM_BROKER_CAP_DEVICE),
+          "compose: no new bit");
+    CHECK(nb_hello_caps(0x7ff, true) ==
+          (0x7ffu | NVKVM_BROKER_CAP_DEVICE | NVKVM_BROKER_CAP_XOR_CURSOR),
+          "approx: the bit");
+    CHECK(NVKVM_BROKER_CAP_XOR_CURSOR == (1u << 12), "bit 12");
+}
+
 int main(void)
 {
+    test_xor_option();
+    test_xor_flag();
+    test_xor_approx();
     test_framing();
     test_content();
     test_extent();

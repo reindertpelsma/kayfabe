@@ -253,6 +253,17 @@ enum {
                                                  * does not know the type), and
                                                  * the VMM must keep composing
                                                  * the cursor into the frame   */
+#define NVKVM_BROKER_CAP_XOR_CURSOR   (1u << 12)/* the user asked this viewer to
+                                                 * show an XOR cursor itself
+                                                 * (--xor-cursor=approx): a
+                                                 * CMD_CURSOR SET may carry
+                                                 * NVKVM_BROKER_CURSOR_F_XOR.
+                                                 * Clear ⇒ that flag is a
+                                                 * framing violation and the
+                                                 * VMM composes an XOR cursor
+                                                 * into the frame.  An older
+                                                 * broker never sets it; an
+                                                 * older VMM ignores it       */
 #define NVKVM_BROKER_CAP_DEVICE       (1u << 11)/* an EV_DEVICE follows the
                                                  * handshake's FRAME.  Set by
                                                  * every backend of a broker
@@ -521,11 +532,24 @@ struct nvkvm_broker_clip_cmd {
  *   and offset + stride*(height-1) + width*4 <= the memfd's real size,
  *   computed in 64 bits.
  * HIDE / SHOW: no fd; width..hot_y all zero.
- * Every op: flags == 0, reserved1 == 0.
+ * Every op: reserved1 == 0, and flags == 0 -- except a SET on a connection whose
+ * HELLO advertised NVKVM_BROKER_CAP_XOR_CURSOR, which may carry
+ * NVKVM_BROKER_CURSOR_F_XOR (any other bit, or the flag on HIDE/SHOW or without
+ * the capability, is a framing violation).
+ *
+ * XOR SET (flags == NVKVM_BROKER_CURSOR_F_XOR): the same ARGB8888 memfd image,
+ * the same geometry rules and bounds, but the alpha byte is a MASK: 0xff where
+ * the guest's XOR cursor INVERTS the screen, 0 elsewhere (the colour channels
+ * carry the XOR colour).  The broker builds the visible cursor from it itself
+ * (nb_cursor_xor_approx(): opaque black fill, a one-pixel opaque white outline
+ * around it, transparent elsewhere), so the substitute is scaled and shown
+ * like any other image.  Presentation is the viewer's job.
  */
+#define NVKVM_BROKER_CURSOR_F_XOR (1u << 0)
+
 struct nvkvm_broker_cursor_cmd {
     uint16_t type;      /* NVKVM_BROKER_CMD_CURSOR                  offset  0 */
-    uint16_t flags;     /* must be 0                                        2 */
+    uint16_t flags;     /* 0, or NVKVM_BROKER_CURSOR_F_XOR on a SET         2 */
     uint32_t width;     /*                                                  4 */
     uint32_t height;    /*                                                  8 */
     uint32_t stride;    /* bytes per row                                   12 */

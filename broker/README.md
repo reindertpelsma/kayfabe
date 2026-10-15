@@ -159,6 +159,23 @@ had not been true since the X11 clipboard landed, and a doc that under-states
 what a security boundary permits is worse than one that says nothing. The
 explicit test backend has a simulated clipboard for regression tests.
 
+### `--xor-cursor=compose|approx`: the guest's XOR cursor (the Windows text I-beam)
+
+A cursor that inverts the screen under it (Windows' text I-beam is one) has no
+ARGB image, so it cannot be the host pointer as it is. The default,
+`--xor-cursor=compose`, is what a VMM did before the option existed: the VMM
+draws that cursor into the picture itself and the host pointer over the picture
+is hidden while it shows. `--xor-cursor=approx` makes this program show a
+substitute instead, as an ordinary host pointer (scaled with the frame, shown
+and hidden like any other): opaque black where the cursor inverts the screen, a
+one-pixel opaque white outline around it so it reads on dark and light
+backgrounds, transparent elsewhere; the hot spot is the guest's. The option sets
+`CAP_XOR_CURSOR` (bit 12) in HELLO; a VMM that does not know the bit keeps
+composing, and an older broker never sets it. The VMM then sends the XOR cursor
+as a `CMD_CURSOR` `SET` with `CURSOR_F_XOR` whose alpha byte is a mask (`0xff`
+where it inverts); the flag is a framing violation without the capability, and on
+`HIDE`/`SHOW`. Any other value of the option is refused by name.
+
 ### Putting the socket into a container
 
 The broker socket is the **only** display-related thing the VMM needs. Bind-mount

@@ -436,7 +436,7 @@ int nb_sink_attach(struct nb_sink *s, int fd)
      * is sent on every backend, carrying "unknown" where the backend could
      * not find out. */
     p = nb_pkt(s, NVKVM_BROKER_EV_HELLO, 0, 0,
-               NVKVM_BROKER_PROTO_VERSION, ss->caps | NVKVM_BROKER_CAP_DEVICE);
+               NVKVM_BROKER_PROTO_VERSION, nb_hello_caps(ss->caps, nb_xor_approx));
     r = nb_send_now(fd, &p);
     if (r == 0) {
         p = nb_pkt(s, NVKVM_BROKER_EV_SURFACE,
@@ -479,7 +479,7 @@ int nb_sink_attach(struct nb_sink *s, int fd)
     }
 
     nb_log("client attached: window %ux%u, capabilities 0x%x, display device "
-           "%s%u:%u", ss->width, ss->height, ss->caps | NVKVM_BROKER_CAP_DEVICE,
+           "%s%u:%u", ss->width, ss->height, nb_hello_caps(ss->caps, nb_xor_approx),
            (ss->dev_flags & NVKVM_BROKER_DEVICE_F_KNOWN)
                ? ((ss->dev_flags & NVKVM_BROKER_DEVICE_F_RENDER)
                       ? "render node " : "node ")
@@ -2090,7 +2090,7 @@ static void nb_cmd_cursor(struct nb_sink *s, const struct nvkvm_broker_cmd *raw,
                         "CAP_CURSOR");
         return;
     }
-    verdict = nb_cursor_check(&c, fd >= 0, &why);
+    verdict = nb_cursor_check(&c, fd >= 0, nb_xor_approx != 0, &why);
     if (verdict == NB_CURSOR_VIOLATION) {
         if (fd >= 0) {
             nb_fd_drop(fd);
@@ -2126,6 +2126,11 @@ static void nb_cmd_cursor(struct nb_sink *s, const struct nvkvm_broker_cmd *raw,
         if (r != 0) {
             s->n_cursor_reject++;
             return;
+        }
+        if (c.flags & NVKVM_BROKER_CURSOR_F_XOR) {
+            /* an XOR cursor: the substitute is the broker's to draw
+             * (--xor-cursor=approx), from the mask the VMM sent */
+            nb_cursor_xor_approx(&s->cursor);
         }
         break;
     }
@@ -3293,6 +3298,13 @@ static void usage(void)
 "                         shm     no dma-buf at all: plain shared memory, which\n"
 "                                 no compositor can refuse.  Slowest, universal\n"
 "  --linear-only        deprecated alias for --present-mode=linear\n"
+"  --xor-cursor=MODE    compose (default) or approx.  The guest's XOR cursor (the\n"
+"                       Windows text I-beam) cannot be a host pointer image: with\n"
+"                       compose the VMM draws it into the picture and the host\n"
+"                       pointer is hidden over it; with approx this program shows\n"
+"                       a substitute pointer instead (black, with a white outline,\n"
+"                       where the cursor would invert the screen).  The VMM\n"
+"                       learns of it from the capability bit in HELLO\n"
 "  --verbose\n"
 "\n"
 "The broker owns the window, the compositor connection and the input grab.\n"
@@ -3580,6 +3592,12 @@ int main(int argc, char **argv)
             else if (!strcmp(mode, "shm"))    { nb_tier = NB_TIER_SHM;    }
             else {
                 nb_err("--present-mode must be auto, native, linear or shm");
+                return 2;
+            }
+        }
+        else if (!strncmp(a, "--xor-cursor=", 13)) {
+            if (nb_xor_cursor_parse(a + 13, &nb_xor_approx) != 0) {
+                nb_err("--xor-cursor must be compose or approx (not '%s')", a + 13);
                 return 2;
             }
         }
