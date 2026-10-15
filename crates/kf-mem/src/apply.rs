@@ -350,6 +350,7 @@ impl PermPolicy {
     /// One walk-report run → one [`DiffRun`].
     #[must_use]
     pub fn diff_run(self, m: &kf_cuda::abi::KfMapRun) -> DiffRun {
+        kindstat(m.kind(), m.len, leaf_bytes(m.page_size()), m.aperture() as u8, m.op == kf_cuda::abi::KFWR_OP_UNMAP);
         DiffRun {
             unmap: m.op == kf_cuda::abi::KFWR_OP_UNMAP,
             va: m.va,
@@ -2866,5 +2867,25 @@ mod tests {
             ]
         );
         assert_eq!((a.usermode_trapped, a.sked_placed), (1, 1));
+    }
+}
+
+
+/// EXPERIMENT (perf campaign): bytes and runs by guest PTE kind (map runs only), printed as the top kinds.
+fn kindstat(kind: u8, len: u64, leaf: u64, ap: u8, unmap: bool) {
+    use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
+    const Z: AtomicU64 = AtomicU64::new(0);
+    static BYTES: [AtomicU64; 256] = [Z; 256];
+    static RUNS: [AtomicU64; 256] = [Z; 256];
+    static N: AtomicU64 = AtomicU64::new(0);
+    if unmap { return; }
+    BYTES[kind as usize].fetch_add(len, Relaxed);
+    RUNS[kind as usize].fetch_add(1, Relaxed);
+    let n = N.fetch_add(1, Relaxed) + 1;
+    if n % 256 == 0 {
+        let mut v: Vec<(u64, usize)> = (0..256).map(|k| (BYTES[k].load(Relaxed), k)).filter(|x| x.0 > 0).collect();
+        v.sort_by(|a, b| b.0.cmp(&a.0));
+        let s: Vec<String> = v.iter().take(8).map(|(b, k)| format!("{k:#04x}:{}MiB/{}runs", b >> 20, RUNS[*k].load(Relaxed))).collect();
+        eprintln!("kf3: KINDSTAT runs={n} last(kind={kind:#x} len={len:#x} leaf={leaf:#x} ap={ap}) top kinds by bytes: {}", s.join(" "));
     }
 }

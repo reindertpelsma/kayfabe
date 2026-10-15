@@ -1270,6 +1270,17 @@ impl HostRm {
             // ★★★★★ w755 — a store slice is a slice of an object whose base we do not know,
             // so its page size is settled by congruence, not by alignment. See
             // [`kf_abi::bringup::nvos46_page_size_flag_for_store_slice`].
+            // EXPERIMENT (perf campaign 2026-10-15, branch claude/perf-grain-experiment-20261015, NEVER MERGED):
+            // a store slice whose VA, store offset and length are all 2 MiB aligned is mapped with 2 MiB
+            // PTEs instead of the 4 KiB pin, to measure whether the host mapping grain is the cause of
+            // the large-buffer bandwidth gap. Bypasses the w755e reasoning on purpose: RM may refuse or
+            // relocate (the placement assertion below then names it).
+            Some(a) if is_shared_slice && (a | offset | len) & 0x1f_ffff == 0 && std::env::var_os("KF3_GRAIN_EXP").is_some() => {
+                kf_abi::bringup::NVOS46_FLAGS_PAGE_SIZE_HUGE
+            }
+            Some(a) if is_shared_slice && (a | offset | len) & 0xffff == 0 && std::env::var_os("KF3_GRAIN_EXP").is_some() => {
+                (2 << 8) // NVOS46_FLAGS_PAGE_SIZE_BIG (64 KiB)
+            }
             Some(_) if is_shared_slice => {
                 // ⊘ The argument is ignored by design (w755e: FIXED is honoured only under the
                 // 4 KiB pin, contiguous or not); `false` states the conservative case honestly.
@@ -1316,6 +1327,7 @@ impl HostRm {
             return Err(RmError::Other(VA_ALREADY_MAPPED));
         }
         status_check(out.status)?;
+        mapstat(h_dma, len, page_size, at.is_some(), is_shared_slice);
         // ★★★★★ **CONSTRAINT 28, HALF TWO — EVERY FIXED MAP ASSERTS ITS OWN PLACEMENT.**
         //
         // ⊘ *"A `Result<u64, RmError>` returns `Ok` here and tells you nothing"* — the
@@ -2369,6 +2381,38 @@ mod display_slot_tests {
         assert!(
             !super::display_slot_exportable(Some(1 << 30), 1 << 30),
             "the store's size"
+        );
+    }
+}
+
+
+/// EXPERIMENT (perf campaign): per-flag x per-length-class byte and call counters of every GPU map call.
+fn mapstat(h_dma: u32, len: u64, flag: u32, fixed: bool, slice: bool) {
+    use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
+    const Z: AtomicU64 = AtomicU64::new(0);
+    // flag index: 0 default, 1 4K, 2 BIG, 3 HUGE ; class index: 0 <64K, 1 64K-2M, 2 2M-64M, 3 >=64M
+    static CALLS: [AtomicU64; 16] = [Z; 16];
+    static BYTES: [AtomicU64; 16] = [Z; 16];
+    static N: AtomicU64 = AtomicU64::new(0);
+    let class = if len < (64 << 10) { 0 } else if len < (2 << 20) { 1 } else if len < (64 << 20) { 2 } else { 3 };
+    let fi = match flag { 0x100 => 1, 0x200 => 2, 0x400 => 3, _ => 0 };
+    CALLS[fi * 4 + class].fetch_add(1, Relaxed);
+    BYTES[fi * 4 + class].fetch_add(len, Relaxed);
+    if class == 3 {
+        eprintln!("kf3: MAPBIG hDma={h_dma:#x} len={len:#x} flag={flag:#x} fixed={fixed} slice={slice}");
+    }
+    let n = N.fetch_add(1, Relaxed) + 1;
+    if n % 512 == 0 || (n % 64 == 0 && class >= 2) {
+        let mut tot = [0u64; 4];
+        for f in 0..4 { for c in 0..4 { tot[f] += BYTES[f * 4 + c].load(Relaxed); } }
+        let all: u64 = tot.iter().sum::<u64>().max(1);
+        eprintln!(
+            "kf3: MAPSTAT calls={n} bytes_by_flag MiB [default={} 4K={} BIG={} HUGE={}] ({:.1}% 4K / {:.1}% BIG / {:.1}% HUGE) calls_by_flag_class [4K <64K={} 64K-2M={} 2M-64M={} >=64M={} | BIG {} {} {} {} | HUGE {} {} {} {}]",
+            tot[0] >> 20, tot[1] >> 20, tot[2] >> 20, tot[3] >> 20,
+            100.0 * tot[1] as f64 / all as f64, 100.0 * tot[2] as f64 / all as f64, 100.0 * tot[3] as f64 / all as f64,
+            CALLS[4].load(Relaxed), CALLS[5].load(Relaxed), CALLS[6].load(Relaxed), CALLS[7].load(Relaxed),
+            CALLS[8].load(Relaxed), CALLS[9].load(Relaxed), CALLS[10].load(Relaxed), CALLS[11].load(Relaxed),
+            CALLS[12].load(Relaxed), CALLS[13].load(Relaxed), CALLS[14].load(Relaxed), CALLS[15].load(Relaxed)
         );
     }
 }
