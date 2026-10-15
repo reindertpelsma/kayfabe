@@ -130,3 +130,21 @@ fixture movedtoGB205 withallrefusalassertionsunchanged. No test-budgetrelaxation
 Rentalphase2PID28198 currentlypreparesguest/QEMU, imagepushPID2064990; no
 GPUtimingwhilebuilds/transfersrun. Gates/nativeLinux/raw/CUDA/broker/Windows
 remainpending. This CPU result and nativephysicalcaps do not establishguestpass.
+
+## GB206 Linux580 raw30/CUDA4 PASS20:53UTC
+
+Exactdevicec2092cf7/sourcec2092cf7b, stockhost595.91.07open, guest580.159.04
+fromitsownABIreceipt. NativeLinux595 raw30/30/CUDA4/4PASS. Gates9/9+gate10PASS,
+12gatebirthsUSER; revisionbinaryrebuiltaftergates, frozenclient/packedguestrebuild.
+Fullguest raw30PASS/0FAIL/0CRASH/0NOTRUN/exit0 atunchanged180s. R34original
+13000decoysPASS55s/client42589ms onthisbox; thisdoesnotresolve TU106'stimeout
+onadifferentbox and no walk-callbackcandidate is applied. GuestCUDA4/4PASS,
+including verified2048benchmark20iterations. Wrapperexit0at20:53:31.
+
+Birthcensus146suitebirths/12gatebirthsallUSER,90CUDAthreadpostures,30arms.
+All90armtextlogs plus scoreboard/gates/native/CUDA/census savedinlinux/ (103files).
+Noexecutables/captures returned; identifiers/secret-bearinglinessanitized.
+Linuxdesktop/broker/fullgraphicsremainNOTRUN. WindowsownwavePID52404 started
+20:53:54onlyafterLinuxwrapperended/USERcensusOK/allQEMUsquiescent. Firstboot
+boundimage580INF andGSPflags; actualphase2adapter/apps pending. Productionprofile,
+sameoverlayUUID, normalQGA/ACPI/exactTERMstop only. Timerunchanged22:15:05UTC.

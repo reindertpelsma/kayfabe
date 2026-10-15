@@ -1,5 +1,32 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-15 21:02UTC — GB206 Linuxraw30/CUDA4pass; Windowswaveactive
+
+Own56141654 only,timer2050117 deadline22:15:05/hardcap22:20:04UTC. Devicec2092cf7,
+sourcec2092cf7b (laterdoc/testonly), CPUef8cd9dda3248/0/14. Linuxhost595.91.07open
+native raw30/CUDA4PASS; gates9/9+gate10PASS; rebuiltrevisionbinary/raw/packedguest;
+guest580.159.04 fullraw30PASS/0FAIL/0CRASH/0NOTRUN/exit0,CUDA4PASS including20
+verified2048benchmarkiterations. Wrapper43390ended20:53:31exit0. USERcensus146suite/
+12gatebirths,90CUDAthreadpostures. All90armtextlogs+summary/native/census in
+traces/die_driver_sweep_20261015/blackwell_5060/linux/ (103files). R34PASS55s on
+thisbox atoriginal13000decoys/180s; noTU106resolutionclaim, noeventcandidateapplied.
+
+Windowsqueuecontroller2070916completedafterUSERcensus/QEMUquiescence, launched
+ownrootwave52404at20:53:54. Controller /workspace/codex/blackwell_windows_wave.sh,
+rootlog/root/prov/codex_blackwell_windows_wave.log, WIN_RUN/root/win/codex-gb206,
+QBIN/workspace/bench/kf3-bins/c2092cf7/qemu-system-x86_64,guestdriver580.65.06,
+8vCPU/8GiB/prodprofile. Firstbootbinds own580INF/setsGSPflags; freshphase2 then
+canonicalstrictWindowsvalidator. Safeownstop/root/blackwell_stop_windows.sh uses
+storedrevision/root/prov/codex_blackwell_windows_rev, exactPID+QMPguard, QGA60/
+ACPI60/TERM15; noKILL. Neverpull/buildwhileGPUjobsactive. ActualWindowsapps/
+adapterpending. NoLinuxbroker/graphicsyet. Textpushaftereachrun. DraftPR12.
+
+Windowsbaselinepush2064990finished13/13/fullhash539aaad2f7280d7fb80fcf67c16297792b7561113c9084978070e9d94ace044b
+beforetiming; noimagejobactive. Rootphase2build28198finished20:33:37exit0. OwnerVM/
+GPUuntouched. NativeWindowsreference/caps102proved; fullRPCcapturesfailed/empty
+RMscalarallowlist, noborrowedrows. WalkcandidatePR11 CPU3252/0/14 remainsindependent
+unmerged/hardwareunrun. Olderprocess/pendingLinuxparagraphssupersededhere.
+
 ## UPDATE 2026-10-15 20:31UTC — GB206 exactcapsfix CPU3248pass; builds/transfers running
 
 Own56141654 only,timer2050117 unchanged22:15:05UTC/hardcap22:20:04. Restored
