@@ -302,3 +302,33 @@ fn resolve_names_a_withheld_key_and_never_serves_it() {
         other => panic!("{other:?}"),
     }
 }
+
+/// The doc's machine-readable lines (`ZBC-MEASURED:`, `BOARD-SPECIFIC:`) equal the data.
+#[test]
+fn the_design_doc_lists_the_zbc_dies_and_the_board_specific_pairs_the_data_has() {
+    let doc = include_str!("../../../docs/design/V3_GPU_TYPES_20261015.md");
+    let line = |tag: &str| doc.lines().find_map(|l| l.strip_prefix(tag)).unwrap_or_else(|| panic!("no {tag} line")).to_string();
+    let doc_zbc: std::collections::BTreeSet<String> = line("ZBC-MEASURED:").split_whitespace().map(str::to_string).collect();
+    let data_zbc: std::collections::BTreeSet<String> = consttab::table()
+        .unwrap()
+        .iter()
+        .filter(|r| r.key == "zbc.color")
+        .map(|r| match &r.die {
+            DieScope::Die(d) => d.to_string(),
+            DieScope::Any => "*".into(),
+        })
+        .collect();
+    assert_eq!(doc_zbc, data_zbc);
+    let doc_bs: std::collections::BTreeSet<String> = line("BOARD-SPECIFIC:")
+        .split('`')
+        .skip(1)
+        .step_by(2)
+        .map(str::to_string)
+        .collect();
+    let data_bs: std::collections::BTreeSet<String> = consttab::board_specific()
+        .unwrap()
+        .iter()
+        .map(|b| format!("{} {}", b.key, b.die))
+        .collect();
+    assert_eq!(doc_bs, data_bs);
+}

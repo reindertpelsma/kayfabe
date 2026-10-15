@@ -1,5 +1,13 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-15 - GPU types: the constant table is wired per die (branch `claude/gpu-types-20261015`, draft PR against master)
+
+Integration of six unverified-on-Windows branches (userring-eventloop batching, cursor-formats, display-caps-derive, die-sweep-20261014b, constants-measure-20261014b,
+api-boundaries docs/tools) plus origin/master, then the wiring: `kf_rm::rowserve` (GMMU static / CE fault-method buffer from the (die, branch) row or the labelled authored default;
+group P scalars on a hit; gfx pool and NV5070 caps withheld), `board_specific.tsv` (F-6), per-die ZBC defaults (F-1), F-2 (OFFSET_UPPER width per class), F-3 (Blackwell FSP gate per die
+group). GPU-free tests only; **no hardware, no Windows, no Linux guest was run**. Per-die readiness, the wiring inventory, the hardware still needed and the owner decisions:
+`docs/design/V3_GPU_TYPES_20261015.md`.
+
 ## UPDATE 2026-10-15 00:50 CEST - USER-ring relay batches: one claim relays a chain of entries and rings the host doorbell once
 
 Same branch `claude/userring-eventloop-20261014`, doc `docs/design/V3_USER_RING_EVENT_LOOP_20261014.md` section 9.

@@ -6,6 +6,13 @@
 (kfwc, kf-census), the hardware evidence named per row. Labels: **[M]** measured (a command whose output is in the repo), **[R]** read in
 source (file:line), **[I]** inferred. An inference is never written as evidence.
 
+> **⊘ CORRECTION 2026-10-15 (branch `claude/gpu-types-20261015`, `V3_GPU_TYPES_20261015.md`; it wins over the text below where they differ).**
+> (1) The `rm.*` rows are no longer "consumed by no code": `kf_rm::rowserve` serves GMMU static and the CE fault-method buffer from the (die, branch) row or the
+> labelled AUTHORED default, serves `2806`/`2801` on a hit, and WITHHOLDS `121f`/`0709` (owner decisions); D-1 stays open (no AD104 row). (2) **F-1 is wired**: ZBC
+> defaults are per die (`zbc.*`, 13 dies, host-state rows with branch `*`), an unmeasured die starts with an EMPTY table. (3) **F-6 is wired**: `board_specific.tsv`
+> refuses GA102 `8162` and AD104 `9001`/`a001`; **the two AD104 rows `cudart.0x20809001` and `cudart.0x2080a001` are removed from the table** (statements below that
+> list them as TABLE are superseded). (4) **F-2 and the FSP part of F-3 are fixed in code** (`grtables::address_upper_bits`, `FspRow::BLACKWELL_GB10X`).
+
 ## 0. How to read it
 
 **Tiers** (owner-binding order): **T1** derive (ogkm, generated tables, kayfabe's own state) → **T2** unprivileged host RM control at

@@ -17,6 +17,9 @@
 #   source `measured:<DIE>,<host driver>,<date>`; the rows are the first 3 colour / 2 depth / 3 stencil valid entries of an idle host's table
 #   (11 words per entry: colorFB[4] colorDS[4] depth stencil format). Every other key keeps the exact (die, branch) rule.
 #
+# ★ 2026-10-15: a (key, die) listed in data/board_specific.tsv (two boards of one die disagree) has NO row here and is refused on every
+#   branch (consttab::parse_board_specific). The two AD104 rows of cudart.0x20809001 / cudart.0x2080a001 were removed for that reason.
+#
 # Lookup: exact (die, branch); then (die, *); then (*, branch); then (*, *). A neighbour die's row is never served:
 # an unmeasured (die, branch) is refused by name and counted (the clean fallback, §AE).
 #
