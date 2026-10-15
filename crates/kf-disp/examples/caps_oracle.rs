@@ -159,6 +159,23 @@ fn main() -> ExitCode {
 mod tests {
     use super::*;
     #[test]
+    fn blackwell_tiling_words_use_their_published_class_names() {
+        let t = class::for_version("580.65.06").unwrap();
+        let native = oracle("0x020 0x00000001\n").unwrap();
+        let d = Derived {
+            page: CapsPage {
+                base: native.base,
+                words: vec![],
+            },
+            provenance: vec![],
+            unmeasured: vec![],
+        };
+        let diff = differences(t, 0xCA73, &d, &native);
+        assert_eq!(diff.len(), 1);
+        assert!(diff[0].contains("header:SYS_CAPC"), "{}", diff[0]);
+        assert!(!diff[0].contains("unknown:0x020"));
+    }
+    #[test]
     fn sparse_native_page_requires_its_complete_end_count() {
         assert_eq!(
             oracle("WORD 0x004 0x12\n# end words=1\n").unwrap().word(0),
