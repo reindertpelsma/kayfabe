@@ -147,3 +147,14 @@ replays remain inlinux/. Native595raw30/30+CUDA4/4; image relay complete/hash
 matches. At14:26UTC, Windows580 guest takes priority before Linux graphics/broker
 regression so a failing cell can be investigated within the original lease.
 Order change reported to owner. No AD102 desktop/full-cell or family claim yet.
+
+Windows first launch at14:28UTC exits before guest boot: qcow2 "unknown
+compression type:1". Full image hash matches. The source image is zstd-compressed;
+kf3's --without-default-features build did not explicitly enable its zstd reader.
+No NVIDIA adapter or T3-fix verdict was obtained from that launch.
+
+H8, before the rebuild: explicitly enabling QEMU's public zstd decoder permits
+this same verified baseline to open. Falsifier: the image still fails to open,
+or stock qemu-img identifies another compression type. Install libzstd-dev in
+canonical bench deps; add --enable-zstd to the recorded configure flags, rebuild,
+then retry the same overlay. Retain failure and final-image integrity evidence.
