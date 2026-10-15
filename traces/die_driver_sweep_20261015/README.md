@@ -23,6 +23,37 @@ Boot, CUDA, graphics and display are separate checks; partial checks do not make
 The owner's running Windows VM is untouched. No GPU workload runs on the shared owner host.
 GPU-free builds use `/data/codex/` with two build jobs.
 
+
+## Family acceptance (owner clarification, 2026-10-15)
+
+A die/family is covered only after both Linux and Windows guest validation suites
+pass across several actual driver builds. Prioritize Turing, Ampere, Ada and
+Blackwell before adding many boards inside one family. Plan at least three
+supported driver builds per OS/family, selected by the public API boundaries
+and native driver support; never label an unsupported physical driver/die pair
+as a kayfabe regression. Every result remains keyed to the exact tested die,
+OS, host and guest driver, source revision and evidence. One passing die does
+not prove the remaining dies in its family.
+
+| Family | This campaign | Full family acceptance |
+|---|---|---|
+| Turing | C57E fix passes GPU-free tests; Ampere regression passes; Turing hardware pending | incomplete |
+| Ampere | GA104 Linux580 broad pass; Linux595 raw pass; Windows580 boot stall captured | incomplete |
+| Ada | not tried in this campaign; owner AD104 baseline is separate prior evidence | incomplete |
+| Blackwell | not tried in this campaign; older GB206 results remain prior evidence | incomplete |
+
+Native Windows completion on56076314 remains unverified. Provider serial logs
+show the Alpine reinstall bootstrap's package-install completion; SSH is still
+unavailable. The original deadline is unchanged. Turing and other-die offers
+are re-queried; no second lease exists.
+
+CPU verification audit: the bench README requires one Cargo target directory
+per checkout. Some CPU-only runs reused target-gpu-free across own worktrees.
+Fresh GPU-free runs now use target-host-gid and target-census-linux. Until those
+finish, treat the earlier overlapping-cache CPU checks as provisional. Rental
+hardware builds use one checkout and its own target; their binary provenance
+is unaffected. Record the fresh results either way.
+
 ## Next work
 
 Linux first: GA104, then available Ada, Turing and Blackwell; driver endpoints selected
