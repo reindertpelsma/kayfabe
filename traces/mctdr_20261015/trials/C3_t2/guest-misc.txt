@@ -1,0 +1,14 @@
+
+MC STARTED mode=agent pid=3416 at 15:19:41.264
+[15:19:57] [Server thread/INFO]: System chat: DeDrommedaris joined the game
+[15:19:57] [Server thread/INFO]: Changing view distance to 32, from 10
+[15:19:57] [Server thread/INFO]: Changing simulation distance to 32, from 0
+[15:19:57] [Render thread/INFO]: Loaded 13 advancements
+[15:19:57] [Render thread/WARN]: Requested post effect does not exist: minecraft:end_of_frame
+[15:20:03] [Server thread/WARN]: UUID of added entity already exists: Chicken['Chicken'/449, l='ServerLevel[New World]', x=349.80, y=64.00, z=962.86]
+[15:20:04] [Server thread/WARN]: UUID of added entity already exists: Sheep['Sheep'/467, l='ServerLevel[New World]', x=837.25, y=64.00, z=1117.50]
+[15:20:04] [Server thread/WARN]: UUID of added entity already exists: Armadillo['Armadillo'/504, l='ServerLevel[New World]', x=333.69, y=69.00, z=798.99]
+[15:20:07] [Server thread/WARN]: UUID of added entity already exists: Sheep['Sheep'/946, l='ServerLevel[New World]', x=342.43, y=90.00, z=1205.18]
+[15:20:07] [Server thread/WARN]: UUID of added entity already exists: Sheep['Sheep'/947, l='ServerLevel[New World]', x=351.50, y=84.00, z=1208.25]
+[15:20:07] [Server thread/WARN]: UUID of added entity already exists: Sheep['Sheep'/948, l='ServerLevel[New World]', x=351.51, y=84.00, z=1205.64]
+[15:20:07] [Server thread/WARN]: UUID of added entity already exists: Chicken['Chicken'/949, l='ServerLevel[New World]', x=348.43, y=87.00, z=1207.50]

@@ -1,0 +1,1 @@
+qemu_alive=yes broker_alive=yes lines=11068-26757

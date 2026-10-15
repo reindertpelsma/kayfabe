@@ -1,0 +1,6 @@
+NOW 15:32:38
+JAVAW none
+EVT 15:32:09 id=153 nvlddmkm
+EVT 15:32:10 id=153 nvlddmkm
+EVT 15:32:10 id=153 nvlddmkm
+APP 15:32:11 id=1000 Faulting application name: javaw.exe, version: 25.0.1.0, time stamp: 0xdc6a4206

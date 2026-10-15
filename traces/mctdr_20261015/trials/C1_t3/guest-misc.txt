@@ -1,0 +1,14 @@
+
+MC STARTED mode=agent pid=8460 at 14:50:30.798
+[14:50:40] [Server thread/INFO]: Preparing spawn area: 16%
+[14:50:40] [Server thread/INFO]: Preparing spawn area: 16%
+[14:50:40] [Server thread/INFO]: Time elapsed: 1157 ms
+[14:50:40] [Server thread/INFO]: DeDrommedaris[local:E:429b09f3] logged in with entity id 6 at (759.6999999880791, 79.56011845462471, 690.7952476088901)
+[14:50:40] [Server thread/INFO]: System chat: DeDrommedaris joined the game
+[14:50:40] [Server thread/INFO]: Changing view distance to 32, from 10
+[14:50:40] [Server thread/INFO]: Changing simulation distance to 32, from 0
+[14:50:40] [Render thread/INFO]: Loaded 13 advancements
+[14:50:40] [Render thread/WARN]: Requested post effect does not exist: minecraft:end_of_frame
+[14:50:48] [Server thread/WARN]: UUID of added entity already exists: Pig['Pig'/643, l='ServerLevel[New World]', x=307.82, y=69.00, z=795.80]
+[14:50:50] [Server thread/WARN]: UUID of added entity already exists: Villager['Villager'/757, l='ServerLevel[New World]', x=277.50, y=67.00, z=794.29]
+[14:50:50] [Server thread/WARN]: UUID of added entity already exists: IronGolem['Iron Golem'/868, l='ServerLevel[New World]', x=269.42, y=66.00, z=791.37]

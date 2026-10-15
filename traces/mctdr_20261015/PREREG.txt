@@ -1,0 +1,24 @@
+PREREG, Minecraft TDR bisect. Written 2026-10-15 ~16:50 CEST, BEFORE any new run. (Evidence read first, not a run: live4/crash1, qemu.log of run 2990 at a07a9ba0.)
+
+Observation already in hand before any trial (read, not a new run): in qemu.log of the crashed run, at the crash time (PROF t=2253 s = 16:28:50 CEST),
+  "kf3: ring REFUSED segment gp 34 ... NoCeObject { subch: 4, method: 576 }" -> "chan token 0x806 DEAD" -> "RETIRED forwarded=35 submissions=1"
+on kernel channel 0xc1d00019:0xff040004 (class 0xc56f, engine 0xb, born Translated at boot). Same refusal text as the open Edge/NVDEC defect. No host Xid.
+From eb9f2aa3 to a07a9ba0 only display/cursor code changed in crates/ (kf-disp, kf-qemu display.rs, kf-cuda display.rs, kf-broker); kf-chan/kf-rm/kf-mem untouched.
+
+H-A  the crash is deterministic for this launch on a07a9ba0+PROF.  Falsifier: >=2 of 3 trials survive 3 minutes (the first trial already crashed, so 2 more are needed; I run 2 and count the 3).
+H-B  KF3_PROF=1 matters.  Falsifier: the same outcome (crash/survive, same signature) without PROF on the same build.
+H-C  the a07a9ba0 relay/worker wake (cursor) matters.  Falsifier: 64449dc5 crashes the same way (ring REFUSED NoCeObject + TDR) with the same launch.
+H-D  launch parameters matter (-Xlog:gc, --quickPlaySingleplayer, no --quickPlayPath).  Falsifier: the owner-style launch (launcher UI path: launcher -> Play/quick play of the world, i.e. with a fresh --quickPlayPath file) crashes the same way, or survives while the agent launch crashes on the same VM life.
+H-E  pre-existing on every build.  Falsifier: 666ea966/64449dc5 survive all trials AND 2f99e673/eb9f2aa3 survive; supporting: the same ring REFUSED line appears on another build.
+H-F  (new, from the log) the proximate trigger is the kf3 ring decoder refusing a first CE-channel segment (NoCeObject) and not a timing/cursor effect.  Falsifier: a TDR with no "ring REFUSED"/"DEAD" line in the qemu.log within 10 s before the first nvlddmkm 153, or a ring REFUSED without a TDR.
+Valid trial = guest GPU healthy at start (no 153/4101 in the last 2 min, dmesg-equivalent clean); a trial after a crash needs a fresh Minecraft process only if the guest shows no degradation, else restart the VM first.
+Outcomes per trial: SURVIVED 3 min | TDR at t=<s after launch> + signature (153 count, ring REFUSED line, host Xid yes/no, javaw crash yes/no).
+
+ADDENDUM 2026-10-15 17:14 CEST (added BEFORE the first PresentMon trial; after the 5 matrix trials C1_t2,C1_t3,C2_t1,C2_t2,C2_t3 all survived and after reading the guest logs):
+Read, not run: the guest's PowerShell script-block log shows that at 14:28:45.2 (3 s before the first nvlddmkm 153 at 14:28:48, 41 s after javaw started) the earlier agent ran, as SYSTEM through kfagent:
+  powershell -ep bypass -File C:\kf\presentmon_minecraft.ps1 -Timed 12 -Tag test4 ...   (PresentMon 2.6 ETW session on javaw.exe and dwm.exe)
+and kf3's qemu.log shows a NEW guest RM client (0xc1d00101: 7 RmAlloc + RmControl) allocated in the same 5 s heartbeat window, then 37 DISABLE_CHANNELS in a row, then the NoCeObject refusal on kernel channel token 0x806.
+The same NoCeObject refusal (same 6 words but a different payload) also appears in the graceful-shutdown log of C2 (during guest driver teardown), so the refusal is downstream of the driver's reset/teardown path, not an independent trigger.
+H-P  starting PresentMon (ETW + its GPU-telemetry client) in the guest during the Minecraft run causes the TDR, on any build.
+     Falsifier: with the identical Minecraft launch and the identical PresentMon command at +~40 s, 3 trials on the same build all survive 3 minutes (a07a9ba0/64449dc5/666ea966). Control: the same trial without PresentMon survives (already seen 5 of 5).
+     If H-P holds the answer to the gate is (3)-variant: neither a kayfabe regression nor a Minecraft-launch effect; a measurement-tool trigger that is itself a defect to chase (which PresentMon action: ETW session vs the telemetry client).

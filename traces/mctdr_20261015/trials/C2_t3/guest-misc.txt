@@ -1,0 +1,20 @@
+
+15:07:14.310 focus javaw hwnd=721382 ok=True
+15:07:15.118 phase plain begin
+15:08:15.149 phase plain end
+15:08:15.151 phase busy begin
+15:10:15.187 phase busy end
+15:10:15.197 drive done
+MC STARTED mode=owner pid=260 at 15:06:46.363
+[15:06:56] [Server thread/INFO]: Saving chunks for level 'ServerLevel[New World]'/minecraft:the_end
+[15:06:56] [Server thread/INFO]: Saving chunks for level 'ServerLevel[New World]'/minecraft:the_nether
+[15:06:57] [Server thread/INFO]: Loading 49 chunks for player spawn...
+[15:06:57] [Server thread/INFO]: Preparing spawn area: 16%
+[15:06:57] [Server thread/INFO]: Preparing spawn area: 16%
+[15:06:57] [Server thread/INFO]: Time elapsed: 1320 ms
+[15:06:57] [Server thread/INFO]: DeDrommedaris[local:E:6ef0dc26] logged in with entity id 6 at (759.6999999880791, 79.56011845462471, 690.7952476088901)
+[15:06:57] [Server thread/INFO]: System chat: DeDrommedaris joined the game
+[15:06:57] [Server thread/INFO]: Changing view distance to 32, from 10
+[15:06:57] [Server thread/INFO]: Changing simulation distance to 32, from 0
+[15:06:57] [Render thread/INFO]: Loaded 13 advancements
+[15:06:57] [Render thread/WARN]: Requested post effect does not exist: minecraft:end_of_frame

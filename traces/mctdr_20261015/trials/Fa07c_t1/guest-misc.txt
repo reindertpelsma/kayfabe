@@ -1,0 +1,14 @@
+
+MC STARTED mode=agent pid=3324 at 15:46:01.527
+[15:46:15] [Server thread/INFO]: Preparing spawn area: 16%
+[15:46:15] [Server thread/INFO]: Preparing spawn area: 16%
+[15:46:16] [Server thread/INFO]: Time elapsed: 1298 ms
+[15:46:16] [Server thread/INFO]: DeDrommedaris[local:E:6517cc8b] logged in with entity id 5 at (759.6999999880791, 79.56011845462471, 690.7952476088901)
+[15:46:16] [Server thread/INFO]: System chat: DeDrommedaris joined the game
+[15:46:16] [Server thread/INFO]: Changing view distance to 32, from 10
+[15:46:16] [Server thread/INFO]: Changing simulation distance to 32, from 0
+[15:46:16] [Render thread/INFO]: Loaded 13 advancements
+[15:46:16] [Render thread/WARN]: Requested post effect does not exist: minecraft:end_of_frame
+[15:46:23] [Server thread/WARN]: UUID of added entity already exists: Chicken['Chicken'/447, l='ServerLevel[New World]', x=349.80, y=64.00, z=962.86]
+[15:46:23] [Server thread/WARN]: UUID of added entity already exists: Sheep['Sheep'/465, l='ServerLevel[New World]', x=837.25, y=64.00, z=1117.50]
+[15:46:23] [Server thread/WARN]: UUID of added entity already exists: Armadillo['Armadillo'/503, l='ServerLevel[New World]', x=333.69, y=69.00, z=798.99]

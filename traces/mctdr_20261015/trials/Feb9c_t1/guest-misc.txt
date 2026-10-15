@@ -1,0 +1,14 @@
+
+MC STARTED mode=agent pid=3040 at 15:50:29.713
+[15:50:45] [Render thread/INFO]: Loaded 13 advancements
+[15:50:45] [Render thread/WARN]: Requested post effect does not exist: minecraft:end_of_frame
+[15:50:51] [Server thread/WARN]: UUID of added entity already exists: Chicken['Chicken'/438, l='ServerLevel[New World]', x=349.80, y=64.00, z=962.86]
+[15:50:52] [Server thread/WARN]: UUID of added entity already exists: Sheep['Sheep'/456, l='ServerLevel[New World]', x=837.25, y=64.00, z=1117.50]
+[15:50:52] [Server thread/WARN]: UUID of added entity already exists: Armadillo['Armadillo'/492, l='ServerLevel[New World]', x=333.69, y=69.00, z=798.99]
+[15:52:25] [Server thread/INFO]: Player DeDrommedaris standing on air - force-sending blocks below
+[15:52:32] [Server thread/INFO]: Saving and pausing game...
+[15:52:32] [Server thread/INFO]: Saving chunks for level 'ServerLevel[New World]'/minecraft:overworld
+[15:52:32] [Server thread/INFO]: Saving chunks for level 'ServerLevel[New World]'/minecraft:the_end
+[15:52:32] [Server thread/INFO]: Saving chunks for level 'ServerLevel[New World]'/minecraft:the_nether
+[15:53:00] [Render thread/INFO]: Loaded 14 advancements
+[15:53:13] [Server thread/INFO]: Player DeDrommedaris standing on air - force-sending blocks below

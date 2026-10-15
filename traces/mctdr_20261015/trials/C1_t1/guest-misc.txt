@@ -1,0 +1,20 @@
+
+14:42:32.018 phase plain end
+14:42:32.022 phase busy begin
+14:43:12.664 phase busy end
+14:43:12.665 drive done
+14:44:32.045 phase busy end
+14:44:32.047 drive done
+MC STARTED mode=agent pid=4128 at 14:41:02.499
+[14:41:11] [Server thread/INFO]: Preparing spawn area: 16%
+[14:41:12] [Server thread/INFO]: Time elapsed: 1160 ms
+[14:41:12] [Server thread/INFO]: DeDrommedaris[local:E:12c53e6c] logged in with entity id 37 at (672.6158492433948, 74.36060750497478, 613.8366395006021)
+[14:41:12] [Server thread/INFO]: System chat: DeDrommedaris joined the game
+[14:41:12] [Server thread/INFO]: Changing view distance to 32, from 10
+[14:41:12] [Server thread/INFO]: Changing simulation distance to 32, from 0
+[14:41:12] [Render thread/WARN]: Requested post effect does not exist: minecraft:end_of_frame
+[14:41:12] [Render thread/INFO]: Loaded 13 advancements
+[14:41:31] [Server thread/INFO]: Saving and pausing game...
+[14:41:32] [Server thread/INFO]: Saving chunks for level 'ServerLevel[New World]'/minecraft:overworld
+[14:41:32] [Server thread/INFO]: Saving chunks for level 'ServerLevel[New World]'/minecraft:the_end
+[14:41:32] [Server thread/INFO]: Saving chunks for level 'ServerLevel[New World]'/minecraft:the_nether

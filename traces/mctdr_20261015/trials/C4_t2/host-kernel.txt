@@ -1,0 +1,1 @@
+Oct 15 17:32:13 claude kernel: NVRM: GPU0 virtmemAllocResources: VA Space alloc failed! Status Code: 0x51 Size: 0x80000 RangeLo: 0xb0000, RangeHi: 0x12ffff, pageSzLockMask: 0x11000

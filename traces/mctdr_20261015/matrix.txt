@@ -1,0 +1,16 @@
+trial    rev        mode      PM    result    t_first153 refused xid    javaw note
+C1_t1    a07a9ba0   agent     no    SURVIVED  -         0       0      0     prof=1
+C1_t2    a07a9ba0   agent     no    SURVIVED  -         0       0      0     prof=1
+C1_t3    a07a9ba0   agent     no    SURVIVED  -         0       0      0     prof=1
+C2_t1    a07a9ba0   agent     no    SURVIVED  -         0       0      0     prof=0
+C2_t2    a07a9ba0   agent     no    SURVIVED  -         0       0      0     prof=0
+C2_t3    a07a9ba0   owner     no    SURVIVED  -         0       0      0     prof=0
+C3_t1    64449dc5   agent     yes   TDR       42        1       0      1     prof=0
+C3_t2    64449dc5   agent     no    SURVIVED  -         0       0      0     prof=0
+C3_t3    64449dc5   agent     yes   TDR       42        1       0      1     prof=0
+C4_t1    666ea966   agent     no    TDR       106       1       0      1     prof=0
+C4_t2    666ea966   agent     yes   TDR       148       0       0      1     prof=0
+F644c_t1 64449dc5   agent     no    TDR       101       1       0      1     prof=0
+F666c_t1 666ea966   agent     no    SURVIVED  -         0       0      0     prof=0
+Fa07c_t1 a07a9ba0   agent     no    TDR       105       1       0      1     prof=0
+Feb9c_t1 eb9f2aa3   agent     no    SURVIVED  -         0       0      0     prof=0
