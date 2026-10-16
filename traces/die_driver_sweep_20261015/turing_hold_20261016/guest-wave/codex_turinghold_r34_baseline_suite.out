@@ -1,3 +1,8 @@
 FAST_SUITE_STARTED=2026-10-16T03:51:13+00:00 arms=1 budget=180s
 rev=59a290a0f
 ARM                          VERDICT   secs  why
+--ce-client-guest-ram        TIMEOUT   180s  budget 180s exceeded — a timeout IS a crash
+FAST_CELL_ARM arm=ce-client-guest-ram verdict=TIMEOUT secs=180 client_ms=?
+
+FAST_SUITE_PASS=0 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=1 NOTRUN=0 ARMS=1
+FAST_SUITE_RC=1

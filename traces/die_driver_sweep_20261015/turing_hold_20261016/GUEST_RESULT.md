@@ -1,6 +1,6 @@
 # Turing W3 hardware results
 
-**STATUS: RESEARCH, 2026-10-16 03:52 UTC. Baseline guest hold passes; R34 running.**
+**STATUS: RESEARCH, 2026-10-16 03:58 UTC. Baseline hold passes; both R34 variants time out.**
 
 Owned lease56180232, native unprivileged TU106 arch0x160/impl0x6, UID65534,
 CapEff0. Host Linux595.91.07. Guest Windows LTSC26100 actual32.0.15.8088
@@ -15,7 +15,7 @@ CapEff0. Host Linux595.91.07. Guest Windows LTSC26100 actual32.0.15.8088
 | Baseline Windows short suite | 05442b10 | Code0, DWM/Explorer, CUDA3, D3D11/12, zero System4101 TDR |
 | Baseline Windows seven-minute hold | 05442b10 | UNVALIDATED: helper deadline300s cut off requested660s |
 | Baseline Windows retry | ca0ad248 | PASS421.25s,11 D3D11/12 rounds, Code0/DWM/Explorer, zero4101 TDR; CUDA3/D3D11/12 before+after pass; two nonblank1920x1080 screenshot receipts; exact clean stop03:51:13 |
-| R34 baseline/event at180s | ca0ad248 /5b523ed5 | Baseline started03:51:13; no verdict yet |
+| R34 baseline/event at180s | ca0ad248 /5b523ed5 | Both TIMEOUT; event IRQraised45190→3 but fewer completed walks at175s; see R34_RESULT.md |
 
 H-T7 falsifier did not fire in the fresh baseline guest: actual580.88/Code0,
 DWM/Explorer,421.25second hold,11 repeated hardware D3D11/12 rounds, zero
@@ -24,7 +24,9 @@ pass. Native reference421.03s/13 rounds/zero TDR passes. First native desktop
 precondition and earlier guest helper deadline failures remain preserved.
 The on-rental screenshots will be erased at lease retirement; only metadata
 receipts are returned. This is one Windows driver build on one TU106 die.
-H-W1 event/callback falsifier has not been evaluated on R34. Gate8's old
+H-W1 performance falsifier fired: both R34 runs time out at180seconds.
+Event removes raised-IRQ burst but does not improve throughput; see
+R34_RESULT.md for matched snapshots and ranked next experiments. Gate8's old
 fd-only harness failure does not establish product failure: corrected native
 real-copy/map/clear/supersession checks pass using GPU event polling.
 

@@ -1,2 +1,23 @@
 R34_AB_START 2026-10-16T03:51:13+00:00
 R34_CELL_START label=baseline binary=ca0ad248 host=595.91.07 guest=580.159.04 budget=180 depth=original KF3_PROF=1 2026-10-16T03:51:13+00:00
+FAST_SUITE_STARTED=2026-10-16T03:51:13+00:00 arms=1 budget=180s
+rev=59a290a0f
+ARM                          VERDICT   secs  why
+--ce-client-guest-ram        TIMEOUT   180s  budget 180s exceeded — a timeout IS a crash
+FAST_CELL_ARM arm=ce-client-guest-ram verdict=TIMEOUT secs=180 client_ms=?
+
+FAST_SUITE_PASS=0 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=1 NOTRUN=0 ARMS=1
+FAST_SUITE_RC=1
+R34_CELL_EXIT label=baseline rc=1 2026-10-16T03:54:15+00:00
+R34_CELL_START label=event binary=5b523ed5 host=595.91.07 guest=580.159.04 budget=180 depth=original KF3_PROF=1 2026-10-16T03:54:15+00:00
+FAST_SUITE_STARTED=2026-10-16T03:54:15+00:00 arms=1 budget=180s
+rev=59a290a0f
+ARM                          VERDICT   secs  why
+--ce-client-guest-ram        TIMEOUT   181s  budget 180s exceeded — a timeout IS a crash
+FAST_CELL_ARM arm=ce-client-guest-ram verdict=TIMEOUT secs=181 client_ms=?
+
+FAST_SUITE_PASS=0 FAST_SUITE_FAIL=0 FAST_SUITE_CRASH=1 NOTRUN=0 ARMS=1
+FAST_SUITE_RC=1
+R34_CELL_EXIT label=event rc=1 2026-10-16T03:57:16+00:00
+R34_AB_COMPLETE 2026-10-16T03:57:16+00:00
+R34_AB_EXIT rc=0 2026-10-16T03:57:16+00:00

@@ -1,0 +1,145 @@
+{
+  "baseline": {
+    "va": "kf3: PROF va invals=45254 arrive_to_clear_sum_ms=44260 arrive_to_clear_avg_us=978 max_us=132065 walks=45261 walk_sum_ms=30208 walk_avg_us=667 gpu_avg_us=408 plan_avg_us=0 apply_avg_us=181 host_calls=90491",
+    "acts": "kf3: PROF acts run=5 worst_us=4344 total_us=12269 irq_raised=45190 irq_writes=587092",
+    "bar0": "kf3: PROF t=175.068s bar0_offsets distinct=55 total=1415277 overflow=0",
+    "vamgr": "kf3: PROF vamgr busy_ms=19579.8 wait_ms=155481.7 busy_pct=11.18 max_busy_us=2383945.1 waits=90808 timeouts=271 timeouts_with_work=0",
+    "last_GR0_wakes_raised_nolive_novec": [
+      "46223",
+      "0",
+      "0",
+      "0"
+    ],
+    "last_top_offsets": [
+      {
+        "offset": "0x000180",
+        "count": 338582,
+        "handler_avg_ns": 9930,
+        "name": "other"
+      },
+      {
+        "offset": "0x000160",
+        "count": 338582,
+        "handler_avg_ns": 8725,
+        "name": "other"
+      },
+      {
+        "offset": "0xb81608",
+        "count": 203189,
+        "handler_avg_ns": 1030,
+        "name": "CPU_INTR_TOP_EN_SET"
+      },
+      {
+        "offset": "0xb81610",
+        "count": 67745,
+        "handler_avg_ns": 972,
+        "name": "CPU_INTR_TOP_EN_CLEAR"
+      },
+      {
+        "offset": "0xb81210",
+        "count": 67744,
+        "handler_avg_ns": 1004,
+        "name": "CPU_INTR_LEAF_EN_SET"
+      },
+      {
+        "offset": "0xb81410",
+        "count": 67739,
+        "handler_avg_ns": 981,
+        "name": "CPU_INTR_LEAF_EN_CLEAR"
+      },
+      {
+        "offset": "0xb81408",
+        "count": 67738,
+        "handler_avg_ns": 1228,
+        "name": "CPU_INTR_LEAF_EN_CLEAR"
+      },
+      {
+        "offset": "0xb81208",
+        "count": 67733,
+        "handler_avg_ns": 1199,
+        "name": "CPU_INTR_LEAF_EN_SET"
+      },
+      {
+        "offset": "0xb830a0",
+        "count": 45255,
+        "handler_avg_ns": 728,
+        "name": "MMU_INVALIDATE(pdb/upper/trigger)"
+      },
+      {
+        "offset": "0xb830b0",
+        "count": 45255,
+        "handler_avg_ns": 9304,
+        "name": "MMU_INVALIDATE(pdb/upper/trigger)"
+      }
+    ]
+  },
+  "event": {
+    "va": "kf3: PROF va invals=41842 arrive_to_clear_sum_ms=58478 arrive_to_clear_avg_us=1397 max_us=135962 walks=41849 walk_sum_ms=46400 walk_avg_us=1108 gpu_avg_us=387 plan_avg_us=0 apply_avg_us=193 host_calls=83667",
+    "acts": "kf3: PROF acts run=5 worst_us=4294 total_us=12325 irq_raised=3 irq_writes=500977",
+    "bar0": "kf3: PROF t=175.066s bar0_offsets distinct=55 total=1267742 overflow=0",
+    "vamgr": "kf3: PROF vamgr busy_ms=16626.0 wait_ms=158437.1 busy_pct=9.50 max_busy_us=1510237.9 waits=84000 timeouts=42146 timeouts_with_work=0",
+    "last_GR0_wakes_raised_nolive_novec": null,
+    "last_top_offsets": [
+      {
+        "offset": "0x000180",
+        "count": 312994,
+        "handler_avg_ns": 8965,
+        "name": "other"
+      },
+      {
+        "offset": "0x000160",
+        "count": 312994,
+        "handler_avg_ns": 8044,
+        "name": "other"
+      },
+      {
+        "offset": "0xb81608",
+        "count": 187838,
+        "handler_avg_ns": 940,
+        "name": "CPU_INTR_TOP_EN_SET"
+      },
+      {
+        "offset": "0xb81610",
+        "count": 62628,
+        "handler_avg_ns": 898,
+        "name": "CPU_INTR_TOP_EN_CLEAR"
+      },
+      {
+        "offset": "0xb81210",
+        "count": 62627,
+        "handler_avg_ns": 891,
+        "name": "CPU_INTR_LEAF_EN_SET"
+      },
+      {
+        "offset": "0xb81410",
+        "count": 62622,
+        "handler_avg_ns": 898,
+        "name": "CPU_INTR_LEAF_EN_CLEAR"
+      },
+      {
+        "offset": "0xb81408",
+        "count": 62621,
+        "handler_avg_ns": 1243,
+        "name": "CPU_INTR_LEAF_EN_CLEAR"
+      },
+      {
+        "offset": "0xb81208",
+        "count": 62616,
+        "handler_avg_ns": 1109,
+        "name": "CPU_INTR_LEAF_EN_SET"
+      },
+      {
+        "offset": "0xb830a0",
+        "count": 41843,
+        "handler_avg_ns": 931,
+        "name": "MMU_INVALIDATE(pdb/upper/trigger)"
+      },
+      {
+        "offset": "0xb830b0",
+        "count": 41843,
+        "handler_avg_ns": 9209,
+        "name": "MMU_INVALIDATE(pdb/upper/trigger)"
+      }
+    ]
+  }
+}

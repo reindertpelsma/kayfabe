@@ -1,5 +1,24 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-16 03:58 UTC — R34 event performance falsifier FIRED
+
+Both original-depth R34 arms time out at unchanged180seconds: baselineca0ad248,
+event5b523ed5, safe harness59a290a0f, actual process env exactlyKF3_PROF1,
+host595.91.07/guest580.159.04 asserted. At matched175s snapshots baseline
+45261walks/667us mean,45190raisedIRQ,587092IRQwrites; event41849walks/1108us,
+3raisedIRQ,500977IRQwrites. Event eliminates notification burst but completes
+7.5% fewer walks and fails the budget. H-W1 performance prediction falsified;
+no speedup/whole-cell green claim. R34_AB_EXIT0 means measurement collected,
+not pass. Full results/normalized counts/ranked falsifiers: turing_hold_20261016/
+R34_RESULT.md; native same-lease raw30/30 includes R34PASS.
+
+Event Windows regression now running QEMU55332 sourceeb4dfad0a (same product
+as5b plus QGA deadline fix), private build03:57:35, actual env/ABI/SHA receipt
+asserted. Baseline421.25s/11rounds/zeroTDR Windows acceptance passes. Full
+Linux guest regressions remainUNRUN; no family complete. Stop/rank this wall
+within original own56180232 timer04:11:46/hard04:16:45; owner GPU untouched.
+
+
 ## UPDATE 2026-10-16 03:52 UTC — Turing baseline seven-minute guest acceptance PASS
 
 Correction to03:42 pending status: actual Windows32.0.15.8088/Code0,
