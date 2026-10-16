@@ -183,5 +183,12 @@
       "trace_result": "0x0",
       "effective_result": "unknown"
     }
-  ]
+  ],
+  "teardown_start": {
+    "on": 277,
+    "off": 277,
+    "on_predecessor": "RmAllocCA7A NV_OK@276",
+    "off_predecessor": "RmAllocCFB0 NV_ERR_NOT_SUPPORTED@276"
+  },
+  "prompt_rank1_literal_falsifier": "FIRED for teardown start; final fn47ordinal differs. Different paths prevent asserting common causal wall."
 }
