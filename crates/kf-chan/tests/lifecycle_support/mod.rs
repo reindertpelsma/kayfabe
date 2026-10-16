@@ -86,6 +86,8 @@ pub enum Kind {
     FalseTail,
     /// The remaining arguments of an `OpenHead`, but words that do not decode as a header.
     OpenTailBad,
+    /// `[SET_OBJECT sub6 = 5080, INC sub1 0x1b0 x3, a]`: binds AND ends inside an open packet (1 of 3 arguments).
+    SetObjOpen,
     /// `[STORE_SUBDEVICE_MASK 0x001]`: a header-only control for sub-device 1.
     MaskStore,
     /// `[USE_SUBDEVICE_MASK]`: refused by a scan that has nothing stored.
@@ -155,6 +157,7 @@ impl Ge {
             Kind::FalseHead => vec![h(0, 0x100, 3)],
             Kind::FalseTail => vec![h(6, 0x200, 1), HANDLE, 7],
             Kind::OpenTailBad => vec![POISON, 0x33],
+            Kind::SetObjOpen => vec![h(6, 0, 1), SW, h(1, 0x1b0, 3), 0x11],
             Kind::MaskStore => vec![0x20000 | (1 << 4)],
             Kind::MaskUse => vec![0x30000],
         }

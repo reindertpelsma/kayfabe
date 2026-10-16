@@ -2194,3 +2194,51 @@ fn i8_gp_put_advancing_mid_turn_backwards_and_beyond_the_ring_never_reads_beyond
     println!("i8: {} states {:?}", r.states, viol_names(r.viol));
     assert_eq!(r.viol & V_BEYOND_PUT, 0, "{:?}", r.first);
 }
+
+#[test]
+fn d2_a_packet_left_open_by_the_scan_before_pointer_mode_does_not_swallow_a_later_trigger() {
+    // The segment that binds the software object also ends inside an open packet; the packet's tail is forwarded
+    // unscanned in Pointer mode. The Window starts at the anchor with a restarted parser: the trigger is found. A
+    // Window that kept the stale open packet would read the trigger's words as the packet's arguments, miss the
+    // trigger, and the hardware would execute it unscanned.
+    let script = vec![
+        Op::Push(ge(0, Kind::SetObjOpen)),
+        Op::Push(ge(1, Kind::OpenTail)),
+        Op::Push(p(2)),
+        Op::SetPut,
+        Op::Ring,
+        Op::Register,
+        Op::AwaitReply,
+        Op::Push(ge(3, Kind::Trig { migrate: false }).post()),
+        Op::Push(p(4).post()),
+        Op::SetPut,
+        Op::Ring,
+    ];
+    let mut cfg = Cfg::new(spec(script, &[0, 1, 2, 3, 4]));
+    cfg.kind = Registration::Other;
+    let r = assert_clean(&cfg, "d2-stale-open-packet");
+    assert_eq!(r.triggers_found_max, 1);
+}
+
+#[test]
+fn d3_a_credit_stall_inside_a_packet_never_gets_a_marker() {
+    // One submission whose packet spans two entries, on a private ring too small for it: the credit wait happens
+    // mid-packet. Pointer mode must NOT author a marker there (it knows no boundary): the wake is a look.
+    let script = vec![
+        Op::Push(ge(0, Kind::SetObj)),
+        Op::SetPut,
+        Op::Ring,
+        Op::Push(ge(1, Kind::OpenHead)),
+        Op::Push(ge(2, Kind::OpenTail)),
+        Op::Push(p(3)),
+        Op::Push(p(4)),
+        Op::SetPut,
+        Op::Ring,
+    ];
+    let mut cfg = Cfg::new(spec(script, &[0, 1, 2, 3, 4]));
+    cfg.priv_entries = 4;
+    cfg.looks = true;
+    cfg.max_states = 8_000_000;
+    let r = assert_clean(&cfg, "d3-stall-in-packet");
+    assert_eq!(r.modes, HashSet::from([Mode::Pointer]));
+}

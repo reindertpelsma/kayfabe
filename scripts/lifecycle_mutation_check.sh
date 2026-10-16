@@ -22,7 +22,7 @@ T=crates/kf-chan/src/user_turn.rs
 L=crates/kf-chan/src/user_lifecycle.rs
 S=crates/kf-chan/src/user_scan.rs
 
-TESTS=(--lib --test user_lifecycle_model --test user_lifecycle_props --test user_lifecycle_stress)
+TESTS=(--lib --test user_lifecycle_model --test user_lifecycle_props --test user_lifecycle_stress --test user_turn_unit)
 
 for f in $T $L $S; do cp "$f" "$OUT/orig/$(basename "$f")"; done
 restore() { for f in $T $L $S; do cp "$OUT/orig/$(basename "$f")" "$f"; done; }
