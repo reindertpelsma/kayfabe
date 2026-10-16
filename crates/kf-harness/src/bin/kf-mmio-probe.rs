@@ -69,6 +69,7 @@ fn main() -> Result<(), String> {
     let threads: usize = arg("--threads", "1").parse().map_err(|_| "threads")?;
     let secs: f64 = arg("--secs", "2").parse().map_err(|_| "secs")?;
     let mode = arg("--mode", "rand");
+    let read_kind: u8 = arg("--read", "0").parse().map_err(|_| "read")?;
     let sizes: Vec<usize> = arg("--sizes", "8,64,256,1024,4096")
         .split(',')
         .filter_map(|x| x.parse().ok())
@@ -77,7 +78,7 @@ fn main() -> Result<(), String> {
     let dev = DevDir::open(c"/dev").map_err(|e| format!("open /dev: {e:?}"))?;
     let rm = HostRm::open(&dev, kf_harness::gate_gpu(), &kf_chip::choose_host_classes)
         .map_err(|e| e.to_string())?;
-    println!("PROBE driver={} mib={mib} threads={threads} mode={mode} secs={secs}", rm.driver_version());
+    println!("PROBE driver={} mib={mib} threads={threads} mode={mode} secs={secs} read_kind={read_kind} (0 memcpy, 1 movntdqa, 2 avx2)", rm.driver_version());
     let h = rm.alloc_device_local(len).map_err(|e| format!("alloc: {e:?}"))?;
     let mut views = Vec::new();
     for _ in 0..threads {
@@ -103,6 +104,7 @@ fn main() -> Result<(), String> {
                 .map(|(t, (_n, cpu))| {
                     let barrier = &barrier;
                     let mode = mode.as_str();
+                    let read_kind = read_kind;
                     sc.spawn(move || {
                         let mut buf = vec![0u8; size];
                         let mut lat: Vec<u32> = Vec::with_capacity(1 << 20);
@@ -112,7 +114,7 @@ fn main() -> Result<(), String> {
                         // warm-up: touch each page class once
                         for _ in 0..64 {
                             let o = (xorshift(&mut rng) % slots) * size.max(8) as u64;
-                            let _ = cpu.copy_out(HostOffset::new(o), &mut buf);
+                            let _ = cpu.copy_out_wide(HostOffset::new(o), &mut buf, read_kind);
                         }
                         barrier.wait();
                         let t0 = Instant::now();
@@ -127,7 +129,7 @@ fn main() -> Result<(), String> {
                                 };
                                 let o = slot * size.max(8) as u64;
                                 let c0 = Instant::now();
-                                let _ = cpu.copy_out(HostOffset::new(o), &mut buf);
+                                let _ = cpu.copy_out_wide(HostOffset::new(o), &mut buf, read_kind);
                                 let ns = c0.elapsed().as_nanos() as u64;
                                 bytes += size as u64;
                                 if lat.len() < (1 << 22) {
@@ -152,7 +154,7 @@ fn main() -> Result<(), String> {
             .collect();
         let sum_ns: u64 = all.iter().map(|x| u64::from(*x)).sum();
         println!(
-            "RESULT mode={mode} threads={threads} size={size} calls={} mean_ns={:.0} p50_ns={} p90_ns={} p99_ns={} max_ns={} ns_per_byte_mean={:.2} agg_MBps={:.2} per_thread_MBps=[{}]",
+            "RESULT read={read_kind} mode={mode} threads={threads} size={size} calls={} mean_ns={:.0} p50_ns={} p90_ns={} p99_ns={} max_ns={} ns_per_byte_mean={:.2} agg_MBps={:.2} per_thread_MBps=[{}]",
             all.len(),
             sum_ns as f64 / all.len().max(1) as f64,
             percentile(&all, 0.5),

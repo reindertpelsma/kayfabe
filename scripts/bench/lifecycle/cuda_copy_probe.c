@@ -43,6 +43,8 @@ static CUresult (*cuEventRecord)(CUevent, CUstream);
 static CUresult (*cuEventQuery)(CUevent);
 static CUresult (*cuModuleLoadData)(CUmodule *, const void *);
 static CUresult (*cuModuleGetFunction)(CUfunction *, CUmodule, const char *);
+typedef struct { int type; int id; } MemLoc; typedef struct { int srcAccessOrder; MemLoc srcLoc; MemLoc dstLoc; unsigned flags; } MemcpyAttr;
+static CUresult (*cuMemcpyBatchAsync2)(CUdeviceptr *, CUdeviceptr *, size_t *, size_t, MemcpyAttr *, size_t *, size_t, CUstream);
 static CUresult (*cuLaunchKernel)(CUfunction, unsigned, unsigned, unsigned, unsigned, unsigned, unsigned, unsigned, CUstream, void **, void **);
 
 #define CK(x) do { CUresult r_ = (x); if (r_) { fprintf(stderr, "%s failed: %d (line %d)\n", #x, r_, __LINE__); exit(2); } } while (0)
@@ -93,6 +95,7 @@ static void setup(void) {
   S(cuStreamCreate, "cuStreamCreate"); S(cuStreamSynchronize, "cuStreamSynchronize"); S(cuCtxSynchronize, "cuCtxSynchronize"); S(cuEventCreate, "cuEventCreate");
   S(cuEventRecord, "cuEventRecord"); S(cuEventQuery, "cuEventQuery"); S(cuModuleLoadData, "cuModuleLoadData"); S(cuModuleGetFunction, "cuModuleGetFunction");
   S(cuLaunchKernel, "cuLaunchKernel");
+  *(void **)&cuMemcpyBatchAsync2 = dlsym(h, "cuMemcpyBatchAsync_v2");
   CK(cuInit(0));
   int ver; CK(cuDriverGetVersion(&ver));
   CUdevice d; CK(cuDeviceGet(&d, 0)); char name[128]; CK(cuDeviceGetName(name, sizeof name, d));
@@ -139,6 +142,20 @@ static uint64_t one_gather(int size, int batch, uint64_t seq, uint64_t *enq) {
   return now_ns() - t0;
 }
 
+// cuMemcpyBatchAsync_v2 (CUDA 13 signature, no failIdx): <batch> copies of <size> bytes in one call
+static uint64_t one_bmemcpy(int size, int batch, CUevent ev, uint64_t *enq) {
+  CUdeviceptr d[256], sr[256]; size_t sz[256]; size_t idx[1] = { 0 };
+  MemcpyAttr at; memset(&at, 0, sizeof at); at.srcAccessOrder = 1;
+  for (int i = 0; i < batch; i++) { uint64_t off = (rnd() % (DEVBYTES / size)) * size; sr[i] = dev + off; d[i] = hbuf_d + (CUdeviceptr)i * size; sz[i] = size; }
+  uint64_t t0 = now_ns();
+  CUresult r = cuMemcpyBatchAsync2(d, sr, sz, batch, &at, idx, 1, st);
+  if (r) { fprintf(stderr, "cuMemcpyBatchAsync_v2 failed: %d\n", r); exit(3); }
+  CK(cuEventRecord(ev, st));
+  uint64_t t1 = now_ns(); *enq = t1 - t0;
+  while (cuEventQuery(ev) != 0) { }
+  return now_ns() - t0;
+}
+
 int main(int argc, char **argv) {
   if (argc < 2) return 1;
   setup();
@@ -153,6 +170,18 @@ int main(int argc, char **argv) {
     return 0;
   }
   CUevent ev; CK(cuEventCreate(&ev, 0 /*default: blocking-sync off*/));
+  if (!strcmp(argv[1], "bmemcpy")) {
+    if (!cuMemcpyBatchAsync2) { printf("RESULT bmemcpy unavailable (no cuMemcpyBatchAsync_v2)\n"); return 0; }
+    char *sz = strdup(argv[2]); int iters = atoi(argv[3]); int batch = atoi(argv[4]);
+    uint64_t *v = malloc(sizeof(uint64_t) * iters);
+    for (char *p = strtok(sz, ","); p; p = strtok(NULL, ",")) {
+      int size = atoi(p); uint64_t enq, esum = 0;
+      for (int i = 0; i < 200; i++) one_bmemcpy(size, batch, ev, &enq);
+      for (int i = 0; i < iters; i++) { v[i] = one_bmemcpy(size, batch, ev, &enq); esum += enq; }
+      report("bmemcpy", size, batch, v, iters, esum, 0);
+    }
+    return 0;
+  }
   if (!strcmp(argv[1], "memcpy") || !strcmp(argv[1], "gather")) {
     int gather = !strcmp(argv[1], "gather");
     char *sz = strdup(argv[2]); int iters = atoi(argv[3]); int batch = gather ? atoi(argv[4]) : 1;

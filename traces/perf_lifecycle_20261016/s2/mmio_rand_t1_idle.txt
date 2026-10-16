@@ -1,0 +1,20 @@
+kf-host: host tier: stock
+PROBE driver=595.91.07 mib=64 threads=1 mode=rand secs=2
+PROBE bar1_resource_line=0x000000f800000000 0x000000fbffffffff 0x000000000014220c
+PROBE pat PAT: [mem 0x000000f800380000-0x000000f800390000] write-combining
+PROBE pat PAT: [mem 0x000000f800390000-0x000000f800391000] write-combining
+PROBE pat PAT: [mem 0x000000f800400000-0x000000f804400000] write-combining
+PROBE pat PAT: [mem 0x000000f823410000-0x000000f823415000] write-combining
+PROBE pat PAT: [mem 0x000000f823420000-0x000000f823425000] write-combining
+PROBE pat PAT: [mem 0x000000f823430000-0x000000f823435000] write-combining
+PROBE pat PAT: [mem 0x000000f823440000-0x000000f823445000] write-combining
+PROBE pat PAT: [mem 0x000000f823450000-0x000000f823455000] write-combining
+PROBE pat PAT: [mem 0x000000f823460000-0x000000f823465000] write-combining
+PROBE pat PAT: [mem 0x000000f823470000-0x000000f823475000] write-combining
+PROBE pat PAT: [mem 0x000000f823480000-0x000000f823485000] write-combining
+PROBE pat PAT: [mem 0x000000f823490000-0x000000f823495000] write-combining
+RESULT mode=rand threads=1 size=8 calls=587520 mean_ns=3380 p50_ns=3630 p90_ns=4410 p99_ns=6390 max_ns=56819 ns_per_byte_mean=422.56 agg_MBps=2.35 per_thread_MBps=[2.35]
+RESULT mode=rand threads=1 size=64 calls=576192 mean_ns=3448 p50_ns=3670 p90_ns=4420 p99_ns=6610 max_ns=37750 ns_per_byte_mean=53.87 agg_MBps=18.44 per_thread_MBps=[18.44]
+RESULT mode=rand threads=1 size=256 calls=234688 mean_ns=8500 p50_ns=8720 p90_ns=12990 p99_ns=17090 max_ns=63310 ns_per_byte_mean=33.20 agg_MBps=30.04 per_thread_MBps=[30.04]
+RESULT mode=rand threads=1 size=1024 calls=60800 mean_ns=32898 p50_ns=33360 p90_ns=50270 p99_ns=60930 max_ns=184528 ns_per_byte_mean=32.13 agg_MBps=31.11 per_thread_MBps=[31.11]
+RESULT mode=rand threads=1 size=4096 calls=15616 mean_ns=128171 p50_ns=129249 p90_ns=188778 p99_ns=246107 max_ns=556434 ns_per_byte_mean=31.29 agg_MBps=31.95 per_thread_MBps=[31.95]

@@ -1193,6 +1193,45 @@ impl VolatileRegion {
         Ok(())
     }
 
+    /// MEASUREMENT ONLY (perf lifecycle campaign S2, scratch, never for merge): the bounded read of
+    /// [`Self::copy_out`] with the loads issued in a chosen shape, to measure whether the access shape
+    /// (not the mapping) bounds the BAR1 read rate. `kind`: 0 = `copy_out` (memcpy), 1 = SSE4.1 `MOVNTDQA`
+    /// 16-byte streaming loads, sixteen in flight per 256-byte round, 2 = AVX2 32-byte loads, eight in
+    /// flight per 256-byte round. A kind that needs alignment or a CPU feature the call does not have
+    /// falls back to `copy_out`.
+    ///
+    /// # Errors
+    ///
+    /// As [`VolatileRegion::copy_out`].
+    pub fn copy_out_wide(
+        &self,
+        offset: HostOffset,
+        dst: &mut [u8],
+        kind: u8,
+    ) -> Result<(), RawError> {
+        let n = dst.len() as u64;
+        let (start, _n) =
+            bounds::checked_span(self.map.len_bytes(), offset, n, "bulk read length")?;
+        #[cfg(target_arch = "x86_64")]
+        {
+            // SAFETY: `checked_span` proved `start .. start + dst.len()` is inside the mapping and the
+            // mapping outlives `&self`; `dst` cannot alias device memory. The feature checks gate the
+            // `target_feature` helpers; the 16-byte alignment check gates the streaming loads.
+            unsafe {
+                let src = self.map.base.as_ptr().add(start);
+                if kind == 1 && (src as usize) % 16 == 0 && std::arch::is_x86_feature_detected!("sse4.1") {
+                    stream_copy_sse41(src, dst.as_mut_ptr(), dst.len());
+                    return Ok(());
+                }
+                if kind == 2 && std::arch::is_x86_feature_detected!("avx2") {
+                    wide_copy_avx2(src, dst.as_mut_ptr(), dst.len());
+                    return Ok(());
+                }
+            }
+        }
+        self.copy_out(offset, dst)
+    }
+
     pub fn load_u32(&self, offset: HostOffset) -> Result<u32, RawError> {
         Ok(self.word_at::<AtomicU32>(offset)?.load(Ordering::Relaxed))
     }
@@ -1486,6 +1525,70 @@ impl Reservation {
 /// rather than to a unit test. A test asserting "this mapping is write-back" that could
 /// only ever pass would be the green instrument on an unexercised path the testing
 /// doctrine forbids, so it is not written.
+
+/// MEASUREMENT ONLY: 16-byte `MOVNTDQA` streaming loads, sixteen in flight per 256-byte round; the tail
+/// is copied byte-wise.
+///
+/// # Safety
+/// `src` is 16-byte aligned and readable for `len` bytes, `dst` is writable for `len` bytes, they do not
+/// overlap, and the CPU has SSE4.1.
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "sse4.1")]
+unsafe fn stream_copy_sse41(src: *const u8, dst: *mut u8, len: usize) {
+    use core::arch::x86_64::{__m128i, _mm_storeu_si128, _mm_stream_load_si128};
+    let mut at = 0usize;
+    while at + 256 <= len {
+        let mut r: [__m128i; 16] = [core::mem::zeroed(); 16];
+        for (i, slot) in r.iter_mut().enumerate() {
+            // SAFETY: in bounds by the loop condition; `src` is 16-byte aligned and `at`, `i * 16` are multiples of 16.
+            *slot = unsafe { _mm_stream_load_si128(src.add(at + i * 16) as *mut __m128i) };
+        }
+        for (i, v) in r.iter().enumerate() {
+            // SAFETY: in bounds by the loop condition; unaligned store.
+            unsafe { _mm_storeu_si128(dst.add(at + i * 16) as *mut __m128i, *v) };
+        }
+        at += 256;
+    }
+    while at + 16 <= len {
+        // SAFETY: in bounds by the loop condition; 16-byte aligned source.
+        let v = unsafe { _mm_stream_load_si128(src.add(at) as *mut __m128i) };
+        // SAFETY: in bounds by the loop condition.
+        unsafe { _mm_storeu_si128(dst.add(at) as *mut __m128i, v) };
+        at += 16;
+    }
+    if at < len {
+        // SAFETY: the remaining `len - at` bytes are inside both ranges and do not overlap.
+        unsafe { core::ptr::copy_nonoverlapping(src.add(at), dst.add(at), len - at) };
+    }
+}
+
+/// MEASUREMENT ONLY: 32-byte AVX2 loads, eight in flight per 256-byte round; the tail is copied byte-wise.
+///
+/// # Safety
+/// `src` is readable and `dst` writable for `len` bytes, they do not overlap, and the CPU has AVX2.
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2")]
+unsafe fn wide_copy_avx2(src: *const u8, dst: *mut u8, len: usize) {
+    use core::arch::x86_64::{__m256i, _mm256_loadu_si256, _mm256_storeu_si256};
+    let mut at = 0usize;
+    while at + 256 <= len {
+        let mut r: [__m256i; 8] = [core::mem::zeroed(); 8];
+        for (i, slot) in r.iter_mut().enumerate() {
+            // SAFETY: in bounds by the loop condition; unaligned load.
+            *slot = unsafe { _mm256_loadu_si256(src.add(at + i * 32) as *const __m256i) };
+        }
+        for (i, v) in r.iter().enumerate() {
+            // SAFETY: in bounds by the loop condition; unaligned store.
+            unsafe { _mm256_storeu_si256(dst.add(at + i * 32) as *mut __m256i, *v) };
+        }
+        at += 256;
+    }
+    if at < len {
+        // SAFETY: the remaining `len - at` bytes are inside both ranges and do not overlap.
+        unsafe { core::ptr::copy_nonoverlapping(src.add(at), dst.add(at), len - at) };
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[test]

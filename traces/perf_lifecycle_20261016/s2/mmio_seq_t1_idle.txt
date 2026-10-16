@@ -1,0 +1,5 @@
+RESULT mode=seq threads=1 size=64 calls=472000 mean_ns=4214 p50_ns=4100 p90_ns=4540 p99_ns=7020 max_ns=36889 ns_per_byte_mean=65.84 agg_MBps=15.10 per_thread_MBps=[15.10]
+RESULT mode=seq threads=1 size=256 calls=238912 mean_ns=8349 p50_ns=9990 p90_ns=13240 p99_ns=15440 max_ns=65809 ns_per_byte_mean=32.61 agg_MBps=30.57 per_thread_MBps=[30.57]
+RESULT mode=seq threads=1 size=1024 calls=40256 mean_ns=49726 p50_ns=50139 p90_ns=54780 p99_ns=112709 max_ns=175608 ns_per_byte_mean=48.56 agg_MBps=20.58 per_thread_MBps=[20.58]
+RESULT mode=seq threads=1 size=4096 calls=10240 mean_ns=195342 p50_ns=192808 p90_ns=199208 p99_ns=388846 max_ns=577194 ns_per_byte_mean=47.69 agg_MBps=20.97 per_thread_MBps=[20.97]
+RESULT mode=seq threads=1 size=65536 calls=704 mean_ns=3031355 p50_ns=3053279 p90_ns=3418255 p99_ns=3459624 max_ns=3476984 ns_per_byte_mean=46.25 agg_MBps=21.62 per_thread_MBps=[21.62]

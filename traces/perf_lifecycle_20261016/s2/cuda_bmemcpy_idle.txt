@@ -1,0 +1,7 @@
+RESULT bmemcpy size=256 batch=1 n=5000 p50_us=4.8 p90_us=5.1 p99_us=5.5 max_us=24.8 mean_us=4.9 enqueue_mean_us=1.98 achieved_per_s=0
+RESULT bmemcpy size=256 batch=8 n=3000 p50_us=6.7 p90_us=7.0 p99_us=8.6 max_us=15.3 mean_us=6.8 enqueue_mean_us=3.64 achieved_per_s=0
+RESULT bmemcpy size=1024 batch=8 n=3000 p50_us=6.8 p90_us=7.0 p99_us=9.8 max_us=16.4 mean_us=6.9 enqueue_mean_us=3.64 achieved_per_s=0
+RESULT bmemcpy size=256 batch=32 n=3000 p50_us=12.5 p90_us=12.8 p99_us=17.8 max_us=40.2 mean_us=12.7 enqueue_mean_us=9.20 achieved_per_s=0
+RESULT bmemcpy size=1024 batch=32 n=3000 p50_us=13.3 p90_us=13.7 p99_us=18.4 max_us=27.8 mean_us=13.6 enqueue_mean_us=9.27 achieved_per_s=0
+RESULT bmemcpy size=256 batch=128 n=3000 p50_us=36.2 p90_us=39.9 p99_us=43.2 max_us=65.2 mean_us=36.9 enqueue_mean_us=31.76 achieved_per_s=0
+RESULT bmemcpy size=1024 batch=128 n=3000 p50_us=39.9 p90_us=43.6 p99_us=45.6 max_us=55.8 mean_us=40.5 enqueue_mean_us=31.93 achieved_per_s=0

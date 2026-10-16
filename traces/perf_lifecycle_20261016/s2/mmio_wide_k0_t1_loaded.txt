@@ -1,0 +1,20 @@
+kf-host: host tier: stock
+PROBE driver=595.91.07 mib=64 threads=1 mode=rand secs=3 read_kind=0 (0 memcpy, 1 movntdqa, 2 avx2)
+PROBE bar1_resource_line=0x000000f800000000 0x000000fbffffffff 0x000000000014220c
+PROBE pat PAT: [mem 0x000000f800000000-0x000000f800080000] write-combining
+PROBE pat PAT: [mem 0x000000f800080000-0x000000f800081000] write-combining
+PROBE pat PAT: [mem 0x000000f800090000-0x000000f800290000] write-combining
+PROBE pat PAT: [mem 0x000000f800380000-0x000000f800390000] write-combining
+PROBE pat PAT: [mem 0x000000f800390000-0x000000f800391000] write-combining
+PROBE pat PAT: [mem 0x000000f8003a0000-0x000000f8004ab000] write-combining
+PROBE pat PAT: [mem 0x000000f8004b0000-0x000000f8006b0000] write-combining
+PROBE pat PAT: [mem 0x000000f8006b0000-0x000000f8008b0000] write-combining
+PROBE pat PAT: [mem 0x000000f8008b0000-0x000000f800ab0000] write-combining
+PROBE pat PAT: [mem 0x000000f800ab0000-0x000000f800c5f000] write-combining
+PROBE pat PAT: [mem 0x000000f800c60000-0x000000f800e60000] write-combining
+PROBE pat PAT: [mem 0x000000f800e60000-0x000000f8010bd000] write-combining
+RESULT read=0 mode=rand threads=1 size=64 calls=2395712 mean_ns=1224 p50_ns=1140 p90_ns=1390 p99_ns=2080 max_ns=31600 ns_per_byte_mean=19.13 agg_MBps=51.11 per_thread_MBps=[51.11]
+RESULT read=0 mode=rand threads=1 size=256 calls=1084096 mean_ns=2739 p50_ns=2540 p90_ns=3260 p99_ns=5640 max_ns=25540 ns_per_byte_mean=10.70 agg_MBps=92.51 per_thread_MBps=[92.51]
+RESULT read=0 mode=rand threads=1 size=416 calls=406528 mean_ns=7352 p50_ns=6890 p90_ns=8950 p99_ns=12920 max_ns=56989 ns_per_byte_mean=17.67 agg_MBps=56.37 per_thread_MBps=[56.37]
+RESULT read=0 mode=rand threads=1 size=1024 calls=261952 mean_ns=11427 p50_ns=10670 p90_ns=13890 p99_ns=18970 max_ns=83229 ns_per_byte_mean=11.16 agg_MBps=89.39 per_thread_MBps=[89.39]
+RESULT read=0 mode=rand threads=1 size=4096 calls=68160 mean_ns=43988 p50_ns=41979 p90_ns=52490 p99_ns=59140 max_ns=285577 ns_per_byte_mean=10.74 agg_MBps=93.05 per_thread_MBps=[93.05]

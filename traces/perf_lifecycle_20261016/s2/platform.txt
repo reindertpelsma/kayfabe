@@ -1,0 +1,6 @@
+host: claude 
+kernel: 7.0.0-34-generic
+governor: performance
+gpu: NVIDIA GeForce RTX 4070, 595.91.07, 4, 16
+bar1 resource: 0x000000f800000000 0x000000fbffffffff 0x000000000014220c
+cpu: AMD Ryzen 9 7900 12-Core (24 threads), governor performance, cpu2 ~4.36 GHz during the probes (scaling_cur_freq), SMT siblings of cpu2: 2,14; probe cores 2,3; CUDA probe core 4

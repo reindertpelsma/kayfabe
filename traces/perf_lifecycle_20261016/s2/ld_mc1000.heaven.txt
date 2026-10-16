@@ -1,0 +1,9 @@
+14:21:56 Features: OpenGL OpenAL XPad360 Joystick Flash Editor
+14:21:56 OpenGL vendor:   NVIDIA Corporation
+14:21:56 OpenGL renderer: NVIDIA GeForce RTX 4070/PCIe/SSE2
+14:21:56 OpenGL version:  3.2.0 NVIDIA 595.91.07
+14:21:56 OpenGL flags:    Core Profile
+14:21:56 Unigine Heaven Benchmark 4.0 (4.0)
+14:22:30 Benchmark running
+14:26:53 Benchmark results:
+14:26:53 Time:    260.60214:26:53 Frames:    8369114:26:53 FPS:    321.14514:26:53 Min FPS:    44.872714:26:53 Max FPS:    609.77914:26:53 Score:    8089.65

@@ -1,0 +1,3 @@
+CAPS driver_cuda_version=13020 device=NVIDIA GeForce RTX 4070
+RESULT gather size=256 batch=32 n=3000 p50_us=26.1 p90_us=26.7 p99_us=27.2 max_us=44.3 mean_us=26.3 enqueue_mean_us=1.16 achieved_per_s=0
+RESULT gather size=1024 batch=32 n=3000 p50_us=26.1 p90_us=27.2 p99_us=28.2 max_us=47.7 mean_us=26.2 enqueue_mean_us=1.15 achieved_per_s=0

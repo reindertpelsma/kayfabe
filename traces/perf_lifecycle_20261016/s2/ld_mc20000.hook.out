@@ -1,0 +1,3 @@
+CAPS driver_cuda_version=13020 device=NVIDIA GeForce RTX 4070
+RESULT rate-memcpy size=256 batch=1 n=3999993 p50_us=5.2 p90_us=9.8 p99_us=12.2 max_us=1132.1 mean_us=6.0 enqueue_mean_us=1.97 achieved_per_s=20000
+RATE target_per_s=20000 secs=200.0 dropped_ticks_ring_full=7
