@@ -6,7 +6,7 @@
 # desktop session is logged in; nothing of the session is stopped, restarted or reconfigured.
 #
 #   interactive.sh            boot the guest; the window appears on the desktop (Ctrl-C stops it)
-#   interactive.sh stop       stop a running guest (ACPI powerdown, then kill after 60 s) and its broker
+#   interactive.sh stop       stop an owned guest (ACPI powerdown, then TERM) and its broker
 #   interactive.sh prep       once: build the broker into /opt/nvkvm-broker and make the guest disk
 #                             (a qcow2 overlay of /workspace/bench/guest.qcow2 with a desktop installed)
 #   interactive.sh broker     only (re)start the broker in the desktop session (QEMU reconnects to it)
@@ -31,12 +31,24 @@ B=${BROKER_BIN:-/opt/nvkvm-broker/nvkvm-display-broker}
 IMG=${KF_IMG:-$WORK/desktop.qcow2}
 LOCK=${KF_LOCK:-/tmp/kayfabe-fastguest.lock}
 PIDF=$WORK/qemu.pid
+RECEIPT=$WORK/qemu-owned.json
+QSTOP=$HERE/owned_qemu.py
 cmd=${1:-run}
 RECORD=0; [ "${2:-}" = --record ] && RECORD=1
 GSSH=(ssh -i "$BENCH/guest_key" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=5 ubuntu@192.168.77.2)
 mkdir -p "$WORK"
 say(){ printf '[interactive] %s\n' "$*"; }
 die(){ printf '[interactive] ★ %s\n' "$*" >&2; exit 2; }
+record_qemu() {
+    python3 "$QSTOP" record "$q" "$QBIN" "$RUN/qemu.mon" "$RECEIPT" \
+        || die "cannot record the owned QEMU; inspect pid $q"
+    echo "$q" > "$PIDF"
+}
+stop_qemu() {
+    [ -f "$RECEIPT" ] || { say "owned QEMU receipt missing; refusing signals"; return 2; }
+    python3 "$QSTOP" stop "$RECEIPT" || return $?
+    rm -f "$PIDF" "$RECEIPT"
+}
 [ "$(id -u)" = 0 ] || die "run as root (QEMU opens /dev/nvidia*, the tap and the GPU lock)"
 
 # ── the desktop session: seat0's active graphical session, its user, its display ──────────────
@@ -162,17 +174,8 @@ EOF
 
 case "$cmd" in
 stop)
-    # Review 2026-10-08, finding 3: a stale pid file (a SIGKILLed launcher) may name a REUSED pid;
-    # only a process that is this launcher's QEMU (-name kayfabe-interactive) is ever signalled.
-    if [ -s "$PIDF" ] && ! tr '\0' ' ' <"/proc/$(cat "$PIDF")/cmdline" 2>/dev/null | grep -q -- '-name kayfabe-interactive'; then
-        rm -f "$PIDF"
-    fi
-    if [ -s "$PIDF" ] && kill -0 "$(cat "$PIDF")" 2>/dev/null; then
-        q=$(cat "$PIDF"); mon=$(ls -t "$WORK"/run-*/qemu.mon 2>/dev/null | head -1)
-        [ -S "$mon" ] && printf 'system_powerdown\n' | timeout 5 socat - "UNIX-CONNECT:$mon" >/dev/null 2>&1
-        for _ in $(seq 60); do kill -0 "$q" 2>/dev/null || break; sleep 1; done
-        kill -0 "$q" 2>/dev/null && { kill -9 "$q"; say "QEMU $q killed after 60 s"; }
-    fi
+    if [ -e "$RECEIPT" ]; then stop_qemu || exit $?;
+    elif [ -s "$PIDF" ]; then die "legacy PID without an owned receipt; inspect it manually"; fi
     session && brokers_down "$(SOCK_OF)"
     say "stopped"; exit 0 ;;
 broker)
@@ -211,8 +214,12 @@ EOF
     RUN=$WORK/prep-$(date +%Y%m%d-%H%M%S); mkdir -p "$RUN"
     qemu_args "$RUN"
     exec 9>"$LOCK"; flock -w 600 9 || die "the GPU lock $LOCK is held"
+    [ ! -e "$RECEIPT" ] || die "an owned QEMU receipt remains; run stop or inspect it first"
+    pgrep -x qemu-system-x86 >/dev/null && die "a QEMU is already running"
     say "provisioning boot, kf3 $QREV ($QBIN)"
     "$QBIN" "${QARGS[@]}" > "$RUN/qemu.log" 2>&1 & q=$!
+    record_qemu
+    trap 'rc=$?; trap - EXIT; stop_qemu || exit $?; exit "$rc"' EXIT
     G=(ssh -i "$BENCH/guest_key" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=5 ubuntu@192.168.77.2)
     for _ in $(seq 100); do "${G[@]}" true 2>/dev/null && break; kill -0 $q || die "QEMU died: $RUN/qemu.log"; sleep 3; done
     "${G[@]}" 'sudo bash -s' > "$RUN/provision.log" 2>&1 <<'GUEST'
@@ -268,8 +275,8 @@ echo PROVISION_DONE
 GUEST
     say "provision: $(grep -E 'APT_RC|PROVISION_DONE' "$RUN/provision.log" | tr '\n' ' ') (log $RUN/provision.log)"
     "${G[@]}" 'sudo systemctl poweroff' >/dev/null 2>&1
-    for _ in $(seq 90); do kill -0 $q 2>/dev/null || break; sleep 1; done
-    kill -0 $q 2>/dev/null && kill -9 $q
+    stop_qemu || exit $?
+    trap - EXIT
     say "INTERACTIVE_PREP_EXIT $(date -Is)"; exit 0 ;;
 collect)
     # ★ §8.19: the --record recorders' files, into the newest run directory
@@ -293,6 +300,7 @@ pick_qemu
 RUN=${KF_RUN_DIR:-$WORK/run-$(date +%Y%m%d-%H%M%S)}; mkdir -p "$RUN"
 echo "INTERACTIVE_START kf3=$QREV checkout=$(git -C "$REPO" rev-parse --short=8 HEAD) $(date -Is)" | tee "$RUN/marker.txt"
 exec 9>"$LOCK"; flock -n 9 || die "the GPU lock $LOCK is held by another run (fuser $LOCK)"
+[ ! -e "$RECEIPT" ] || die "an owned QEMU receipt remains; run stop or inspect it first"
 say "session: $SU (uid $SUID) session $SID type=$STYPE wayland=${WD:-none} x=${XD:-none}; locked=$(loginctl show-session "$SID" -p LockedHint --value)"
 # ⊘ CORRECTED 2026-10-08 (V3_DISPLAY.md §8.18): this launcher started the broker only after the
 # display worker was up plus 3 s, a workaround for a dead display when a frame was asked for in
@@ -309,9 +317,10 @@ fi
 qemu_args "$RUN"
 printf '%q ' "$QBIN" "${QARGS[@]}" > "$RUN/cmdline.txt"
 "$QBIN" "${QARGS[@]}" > "$RUN/qemu.log" 2>&1 &
-q=$!; echo "$q" > "$PIDF"
+q=$!; record_qemu
 cleanup() {
-    kill -0 "$q" 2>/dev/null && { kill "$q"; sleep 2; kill -9 "$q" 2>/dev/null; }
+    # An incomplete shutdown retains its receipt and PID for inspection.
+    [ ! -e "$RECEIPT" ] || stop_qemu || return $?
     [ "$OWN_BROKER" = 1 ] && brokers_down "$(SOCK_OF)"; rm -f "$PIDF"
     echo "INTERACTIVE_EXIT rc=${rc:-?} $(date -Is)" | tee -a "$RUN/marker.txt"
 }
