@@ -1,0 +1,10 @@
+{
+  "old_source": "traces/die_driver_sweep_20261015/blackwell_5060/native-module-caps580.txt",
+  "new_source": "traces/die_driver_sweep_20261015/blackwell_5060/display_phase_20261016/second_attempt/gb206phase_native_caps.txt",
+  "old_words": 127,
+  "new_words": 127,
+  "different_words": [],
+  "scope": "Different GB206 boards/actual drivers; oracle only, no branch wildcard or captured product page.",
+  "full4096_byte_sha256": "df5edaf5cb7cc5f27642fcf5a46aec77c6c9f8702d15e0f4b41a3ae24b747553",
+  "byte_equal": true
+}
