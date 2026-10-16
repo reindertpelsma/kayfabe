@@ -49,11 +49,11 @@ def parse(label):
         d = {}
         try:
             for l in open(p):
-                m = re.search(r"MEMREC \S+ psi.memory: (some|full) avg10=([\d.]+) avg60=([\d.]+) avg300=([\d.]+) total=(\d+)", l)
+                m = re.search(r"MEMREC psi.memory: (some|full) avg10=([\d.]+) avg60=([\d.]+) avg300=([\d.]+) total=(\d+)", l)
                 if m: d[m.group(1)] = (float(m.group(3)), int(m.group(5)))
-                m = re.search(r"MEMREC \S+ vmstat: (.*)", l)
+                m = re.search(r"MEMREC vmstat: (.*)", l)
                 if m: d["vm"] = dict((k, int(v)) for k, v in re.findall(r"(\w+) (\d+)", m.group(1)))
-                m = re.search(r"MEMREC \S+ meminfo: (.*)", l)
+                m = re.search(r"MEMREC meminfo: (.*)", l)
                 if m: d["mi"] = dict((k, int(v)) for k, v in re.findall(r"(\w+):\s+(\d+)", m.group(1)))
         except FileNotFoundError: pass
         return d

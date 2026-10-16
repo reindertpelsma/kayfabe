@@ -6,6 +6,7 @@ $cpu0 = (Get-Counter "\Processor(_Total)\% Processor Time" -SampleInterval 2 -Ma
 "PRE guest_cpu_pct=$([math]::Round($cpu0,1))"
 $smiflag = "$OUT\smi.stop"
 if (@SMI@ -eq 1) { $sm = Start-Process powershell -ArgumentList "-NoProfile","-File","C:\kfperf\kfp_smi.ps1","-File","$OUT\smi.csv","-Stop",$smiflag -PassThru -WindowStyle Hidden }
+if (@SMI@ -eq 2) { $dm = Start-Process "C:\Windows\System32\nvidia-smi.exe" -ArgumentList "dmon","-s","pucvmet","-d","1","-o","T" -RedirectStandardOutput "$OUT\guest_dmon.txt" -PassThru -WindowStyle Hidden }
 $args2 = "-project_name Heaven -data_path ../ -engine_config ../data/heaven_4.0.cfg -system_script heaven/unigine.cpp -sound_app null -video_app @API@ -video_multisample 0 -video_fullscreen 0 -video_mode -1 -video_width 1920 -video_height 1080 -extern_define @DEFS@"
 $t0 = Get-Date; "LAUNCH $($t0.ToString("HH:mm:ss.fff")) $args2"
 $p = Start-Process "$u\Heaven.exe" -ArgumentList $args2 -WorkingDirectory $u -PassThru
@@ -19,4 +20,5 @@ Start-Sleep 2
 if (Test-Path $lg) { Copy-Item $lg "$OUT\heaven_log.html"; Get-Content $lg | Where-Object { $_ -match "Benchmark|Time:|Frames:|FPS|Score|Direct3D11 desc|OpenGL|Renderer|GL_" } | ForEach-Object { "HLOG " + ($_ -replace "<[^>]*>","" -replace "&nbsp;"," ") } }
 if (-not $p.HasExited) { $p.Kill() }
 Start-Sleep 2
+if (@SMI@ -eq 2) { Start-Sleep 2; if (-not $dm.HasExited) { $dm.Kill() }; "DMON_BEGIN"; Get-Content "$OUT\guest_dmon.txt"; "DMON_END" }
 if (@SMI@ -eq 1) { "" | Set-Content $smiflag; Start-Sleep 3; "SMI_CSV_BEGIN"; Get-Content "$OUT\smi.csv"; "SMI_CSV_END" }
