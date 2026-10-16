@@ -12,12 +12,11 @@ use kf_chan::user_gate::{Marks, SyncGate};
 use kf_chan::user_lifecycle::{Lifecycle, Mode};
 use kf_chan::user_loop::Need;
 use kf_chan::user_scan::{Fetch, Scan};
-use kf_chan::user_stream::Source;
 use kf_chan::user_turn::{
     Ev, Fail, GpSegment, Io, Phase, PubKind, Relay, Staged, Step, SwView, Turn,
 };
 use std::collections::HashMap;
-use support::{Ge, Kind, SW, ge, sw};
+use support::{Ge, Kind, ge, sw};
 
 /// What the relay did to the world, in order.
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -18,7 +18,7 @@
 
 use kf_abi::submit::{gp_entry, method_header_inc};
 use kf_chan::user_gate::Marks;
-use kf_chan::user_lifecycle::{Lifecycle, Mode};
+use kf_chan::user_lifecycle::Lifecycle;
 use kf_chan::user_loop::{Need, Wait, wait_of};
 use kf_chan::user_scan::{Fetch, Scan};
 use kf_chan::user_stream::{Source, inspect_entry};
