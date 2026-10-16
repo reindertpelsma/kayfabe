@@ -1,4 +1,4 @@
-STATUS: IMPLEMENTED, 2026-10-16. Protocol gates/Linux smoke passed at c66ac9de. Deferred adapter correction is 4b2c2878; its final soak and hardware retest are in progress. Draft review only.
+STATUS: STOPPED, 2026-10-16. Final adapter 4b2c2878 failed the Linux fast gate (29/30); no mergeable verdict. Earlier c66ac9de data is research evidence only.
 
 # One store view for all channel readers
 

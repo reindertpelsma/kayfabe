@@ -1,4 +1,4 @@
-STATUS: IN PROGRESS, 2026-10-16 03:24 CEST. Final P2 adapter is 4b2c2878; its soak and hardware validation are pending. Tables below are labeled by their measured source.
+STATUS: STOPPED, 2026-10-16 04:14 CEST. Final adapter 4b2c2878 failed the Linux fast gate (29/30); do not merge.
 
 # Shared store validation
 
@@ -20,7 +20,7 @@ Hardware executable: `/data/codex-perf/kf3-bins/c66ac9de/qemu-system-x86_64`.
 | 8 threads, 600 s, seed 539365406 | 3,538,961 verified reads; 6,467,172 arms = releases; fds 4→4, owned maps 0→0 | `/data/codex-perf/logs/p2-stress-8.log` |
 | 16 threads, 600 s, seed 539365414 | 2,579,478 verified reads; 6,489,937 arms = releases; fds 4→4, owned maps 0→0 | `/data/codex-perf/logs/p2-stress-16.log` |
 | 32 threads, 600 s, seed 539365430 | 211,524 verified reads; 6,392,319 arms = releases; fds 4→4, owned maps 0→0 | `/data/codex-perf/logs/p2-stress-32.log` |
-| Final 32-thread, 3600 s soak | Running on dev box at 4b2c2878, 03:19:49 CEST start | `/workspace/codex-perf/private/logs/p2-soak-60min-local.log` |
+| Final 32-thread, 3600 s soak | Interrupted at 04:16:34 CEST by Linux-regression stop; no 60-minute pass | `/workspace/codex-perf/private/logs/p2-soak-60min-local.log` |
 | Read scaling, 1/2/4/8/16/32 threads | Passed; memfd data, not BAR1 | `/data/codex-perf/logs/p2-read-scaling.log` |
 
 CPU stress uses affinity 0–7 and nice 10; thread counts above eight are oversubscribed.
@@ -60,8 +60,8 @@ or return Retry; worker maintenance runs after all channel guards end. Channel r
 also releases temporary views after dropping its guard. Four new tests cover guarded misses,
 terminal refusal, retirement during an arm and fallback release after successful reads.
 The correction has not changed the USER-ring reader used by the ongoing c66ac9de Heaven
-campaign. Fresh hardware gates/fast/Linux checks on 4b2c2878 are queued behind that campaign;
-this source has no mergeable verdict yet.
+campaign. Fresh 4b2c2878 gates passed 9/9, then the fast suite failed defer-liveness (29/30).
+The pipeline stopped before broker/interactive checks. This source has no mergeable verdict.
 
 Read scaling on c66ac9de, affinity 0–7, three seconds per case, 64-byte reads:
 
@@ -108,7 +108,7 @@ KF3_DISPLAY_ILUT_OFFSET_256=1
 The launch explicitly selects `store-view-full=off` for WINDOWED and `on` for FULL;
 all other guest/GPU settings match the copied Heaven harness. Host driver 595.91.07,
 Windows guest driver 580.88 (actual guest nvidia-smi; the wire QOM property is 580.65.06).
-Three runs per API and mode are in progress. No host stress runs overlap these timings.
+Three runs per API and mode completed; see HEAVEN.md. No host stress overlapped these timings.
 
 Final adapter CPU checks, 4b2c2878 runtime code: 776 tests passed across kf-chan,
 kf-linux-raw and kf-qemu, including four deferred-adapter cases and the Loom model;
@@ -127,3 +127,13 @@ Heaven D3D11 on clean c66ac9de, three repetitions: WINDOWED 111.491/114.807/113.
 of the inherited same-image VFIO median 330.05 FPS. The new WINDOWED median is 16.1%
 above the inherited 0a746117 median 97.65; a fresh baseline control is required before
 attributing that difference to this change. No new native timing was collected.
+
+Final Linux gate failure: `/data/codex-perf/fastwork/codex_shared_4b2c2878_suite.out`
+reports 29 PASS / 1 FAIL / 0 CRASH / 0 NOTRUN. `--defer-liveness` returned raw client rc=1.
+The same arm previously passed on c66ac9de. Its QEMU log reports guest-RAM OS descriptor
+allocation for 0x80000000 bytes refused as Other(30), T-space not built, then channel birth
+refused. The serial log ends with driver bring-up failure and openat(nvidia<gpu>) EIO.
+This is a failed regression gate; causal attribution to the adapter is unproven. No retry
+was made and no P3 hardware work followed. The final soak was canceled by the stop rule.
+Earlier c66ac9de also retains the now-corrected arming-under-channel-guard requirement gap;
+its passing tests do not make that intermediate source ready to merge.
