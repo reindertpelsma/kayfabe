@@ -31,7 +31,7 @@ pub(crate) fn sample(
     let offset_ms = (guest_offset_ns()? / 1_000_000) as u32;
     let system_ms = (system_timer_ns()? / 1_000_000) as u32;
     // Mirror _kgspIsHeartbeatTimedOut's separate divisions exactly: subtracting
-    // nanoseconds first can place the millisecond heartbeat one tick in the future.
+    // nanoseconds first can place the millisecond heartbeat one tick behind.
     Some(system_ms.wrapping_sub(offset_ms))
 }
 
@@ -51,7 +51,8 @@ mod tests {
         let current = 8_000_000u64 * 1_000_000;
         let beat = sample(|| Some(current), || Some(offset)).unwrap();
         assert_eq!(
-            (current / 1_000_000) as u32 - beat.wrapping_add((offset / 1_000_000) as u32),
+            ((current / 1_000_000) as u32)
+                .wrapping_sub(beat.wrapping_add((offset / 1_000_000) as u32)),
             0
         );
     }
