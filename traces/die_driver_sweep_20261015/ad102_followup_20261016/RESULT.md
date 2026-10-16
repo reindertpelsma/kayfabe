@@ -1,6 +1,16 @@
 # AD102 missing lanes and passing Windows display reference
 
-**STATUS: LIVE, 2026-10-16 16:41 UTC. Linux raw regression passes; Windows acceptance pending.**
+**STATUS: LIVE, 2026-10-16 17:09 UTC. Windows580 production hold and Linux595 raw regression pass; broker/apps pending.**
+
+MEASURED A2 complete for this build: production QEMU103998 uses exactly19flags,
+no RPC diagnostics. Actual Windows32.0.15.8088, Code0, DWM/Explorer, CUDA cup2/3/8
+and hardware D3D11+12 pass before and after the421second/13round hold. Readable
+System4101 count is0during the hold and since boot. Both1920x1080screenshot
+receipts contain2072803nonblack pixels of2073600. Owned VM stops cleanly17:08:25UTC.
+Diagnostic process102707 separately passes the short suite with21flags and
+provides the connected-display trace; see passing_windows_display_trace/RESULT.md.
+The QGA helper's framed synchronization recovered probe staging; both staging
+failures remain recorded and are not mislabeled as GPU/Code43 failures.
 
 MEASURED update: private7d1be8882/e9744a23ab38ff45afbf788d9e426d71913d1f1e6954fa1ea0da1ea1920b25a6,
 host/guest595.91.07, actual KF3 environment empty, normal loglevel6: raw30/30 at
@@ -41,8 +51,8 @@ at16:11:25UTC. The native595 caps page is an oracle only.
 |AD102|native Linux CUDA|595.91.07|stock host|PASS4/4|linux595/cl_codex_adaref2_native595_host.out|
 |AD102|Linux guest raw|595.91.07|actual KF3={}, loglevel6|PASS30/30, startup heartbeat warnings remain|linux595/codex_adaref2_full595_suite.out|
 |AD102|Linux guest broker|595.91.07 planned|pending actual process receipt|UNRUN|pending|
-|AD102|Windows guest short / display trace|580.88 planned|production19 plus bounded metadata/body diagnostics|UNRUN|pending|
-|AD102|Windows guest seven-minute hold|580.88 planned|production19, diagnostics off|UNRUN|pending|
+|AD102|Windows guest short / display trace|580.88 /32.0.15.8088|production19 plus bounded metadata/body diagnostics|PASS|windows580/adaref2_windows_baseline.log; passing_windows_display_trace/|
+|AD102|Windows guest seven-minute hold|580.88 /32.0.15.8088|production19, diagnostics off|PASS421seconds/13rounds/0TDR|windows580/adaref2_windows_baseline.log|
 
 The Windows diagnostic boot will collect an ordered passing connected-display
 reference for prompt section2. Native GB206 was headless and cannot supply that

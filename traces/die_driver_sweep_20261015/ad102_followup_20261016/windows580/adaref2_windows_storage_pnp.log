@@ -1,0 +1,12 @@
+Microsoft PnP Utility
+
+Scanning for device hardware changes.
+Scan complete.
+
+[{"Class":"HDC","Status":"OK","FriendlyName":"Intel(R) 82371SB PCI Bus Master IDE Controller","Problem":0},{"Class":"SCSIAdapter","Status":"OK","FriendlyName":"Microsoft Storage Spaces Controller","Problem":0},{"Class":"USB","Status":"OK","FriendlyName":"USB Root Hub (USB 3.0)","Problem":0},{"Class":"SCSIAdapter","Status":"OK","FriendlyName":"Red Hat VirtIO SCSI controller","Problem":0},{"Class":"DiskDrive","Status":"OK","FriendlyName":"Red Hat VirtIO SCSI Disk Device","Problem":0},{"Class":"USB","Status":"OK","FriendlyName":"Standard USB 3.0 eXtensible Host Controller - 1.0 (Microsoft)","Problem":0},{"Class":null,"Status":"Error","FriendlyName":null,"Problem":28}]
+SERVICE name=USBSTOR Start=3
+SERVICE name=cdrom Start=1
+SERVICE name=pciide Start=0
+SERVICE name=storahci Start=0
+SERVICE name=USBXHCI Start=3
+{"DeviceID":"C:","DriveType":3,"VolumeName":"Windows"}
