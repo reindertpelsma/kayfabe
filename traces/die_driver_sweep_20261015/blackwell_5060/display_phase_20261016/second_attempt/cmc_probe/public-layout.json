@@ -1,0 +1,13 @@
+{
+  "tag": "580.65.06",
+  "revision": "307159f2623d3bf45feb9177bd2da52ffbc5ddf9",
+  "source": "src/common/sdk/nvidia/inc/ctrl/ctrl2080/ctrl2080internal.h",
+  "sha256": "d10f0801c2a9d55c0a0d1fb327ea99a1c867e0a53d43ca86eff9fc18095aeee3",
+  "command": "0x20800a89",
+  "size": 24,
+  "offsets": {
+    "PublicId": 0,
+    "logBufferSize": 8,
+    "logBufferAddr": 16
+  }
+}
