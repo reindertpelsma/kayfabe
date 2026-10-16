@@ -2,6 +2,18 @@
 
 **STATUS: RESEARCH, 2026-10-16. Ordered API comparison measured; full byte comparison pending.**
 
+**Correction2026-10-16 11:54UTC:** the complete tested aligner covers all
+382indexed calls (301APIpattern matches) and separately385raw pretty calls
+through explicit unload, including two Other(4) omitted by the old export.
+See ../offline_alignment_20261016/RESULT.md. Legacy aligned-api.tsv below
+remains a historical196-call snapshot. Post206 divergence is EDID versus
+headless connector/routing requests; native headless is not the display
+oracle. Virtual224refuses2080080b;225..274areOK. Display teardown begins275
+after successfulca7a alloc274; explicit UnloadingGuestDriver follows
+legacy381/20800afe. No Code43 cause or body-byte equality proved. The old
+500-call limitation is superseded.
+
+
 **Update, 2026-10-16 01:13 UTC:** The FMC observer replay recovered both
 virtual sequence-zero prefixes:387 command+385 status records, zero forward
 gaps. Strict census still fails109 anomalies/39 unpaired controls; see

@@ -1,5 +1,32 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-16 11:54UTC — new prompt Step0 done, no active rental
+
+Continuing /root/codex_prompt_dies_20261016.md in its stated order, Blackwell
+first. Code-only draftPR21 tools alignment3008bc834/testsfirstf8bb42da1:
+9fail-before/pass-after. All4807native and382indexedvirtual calls retained,
+301APIpattern matches/81virtual-only. Separate complete385call export adds
+Other(4)twice and explicit fn47unload. Firstpost206 divergence is EDID versus
+headless connector/routing; native is not connected-display oracle. Prompt
+correction:224refuses2080080b,225..274OK. Lastca7a alloc274succeeds then275
+SET_RMFREE_FLAGS; native continues73010c×4,c3700201. Lastbeforeexplicit
+unload is381/20800afe refusal; unloadcompleteordinal384. No body-byte/cause
+claim; repeatedAPI/FIFOassociation remains inference. Code43 stillred.
+
+Evidence blackwell_5060/offline_alignment_20261016/RESULT.md and fullTSVs,
+rawpretty audit, sourceinputSHA, fullP19+RPC_TRACE1 flags. Native reference
+actual580.88/GSP580.65.05; priorvirtual72fca168a actualprocessenv20asserted.
+Ada passing source da0569a6 savedlog lacks orderedRPCtrace: display-subtree
+comparison/served-vs-unissued controlsUNRUN until suitable passing trace.
+No ownerGPU/VM, no new rental. Budget4.36USD+unbilledtransfers; priorTHlease
+56180232retired04:08:27, own timercanceledafterabsence; accountIDs[]verified
+11:32UTC. COST.md reconciled withTH ledger. Next prepareB3first in one
+Blackwell lease thenB1displayoff/boundedreplybodies/B2derivedgroups. Native
+Windows on same die is stock-driver reference; screen/export needed reply
+bodies BEFOREreimage. No guessed/neighbor/capturedpage shipped. Constant
+rulingsAF/AHpreferred tiers apply; no reverseengineering requested/performed.
+
+
 ## UPDATE 2026-10-16 01:15 UTC — Blackwell wave saved and rental retired; W3 next
 
 Own56165326 destroyed; show-instances verified absent/account IDs[] at
