@@ -1,5 +1,32 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-16 21:34UTC — GB206595 raw/CUDA/headless graphics PASS; rental retired
+
+MEASURED exacte1bd2df4d/privateSHA6d1fe5c4...db046a: normal595raw30/30 at180,
+actualKF3{},146USER births/90CUDApostures/30receipts. Zero heartbeat warnings THIS rerun;
+earlier10startupHB0warnings remain known/readinessgap not declared fixed. Native595CUDA4
+and headlessgfx first; guest595CUDA4 and graphics5/5+10hashes matching baremetal PASS,
+actual595module/libcuda/kernel6.8.0-142,142USER app-channel births,0guestXid/fliptimeout,
+hostXids10→10unchanged, ownedQEMU118987exit0 at21:29:51. EvidencePUSHEDc9418f728
+underTS/blackwell_5060/display_phase_20261016/second_attempt/linux595_apps/;
+raw regressionPUSHEDb223edae5 insecond_attempt/cmc_probe/linux595_regression/.
+Linux595brokerUNRUN. Linux580B2samegroup Cinnamon1/Xorg1butblackSHM+flip1FAIL;
+Windows5808088/GSP1P19+diagnostics remainsCode43/teardown277/unload384 afterCMCecho.
+No family complete. PR29/30draft, no guessedCBCB/CCU or capturedfullpage.
+
+OWN56286918 retired/APIabsent21:32:48UTC after all GPU work stopped; timer2478432
+ownership checked/canceled afterabsence.8483sec computeceil1.71USD, campaign8.77+transfers.
+No active own rental. NextB4candidateoffer54571903/machine30498advertised5070/KVM,
+notyet rented. Preparedownbranchcodex/gb205-followup-hw-20261016 source9d6f210ba
+in/workspace/codex/gb206-tiles-hw: integrates ownPR24 exactGB205580/595 word0x00c=0x102
+(NOT0xc102) andPR31 public580.94.02 Windows581.51 displayvocabulary.206displayCPUtestsPASS/2ignored;
+firstintegrationfailed2stale tests treating newly measuredGB205 as unknown, corrected toGB203
+while separateGB205provenance/wildcard tests stay. CleanPR31test6e5f08a81/fix98b49a1a4,
+191displayCPUtestsPASS/2ignored/publicCderived7528rows; fullGSP/hardware8151stillUNRUN.
+Base/owner/master untouched. Any next rental onlyafter this verifiedabsence, max3h/onebox,
+newtimer andstartup15minGPU-PCI/KVM/disk checks; no root595caps wildcard or58094 guess.
+
+
 ## UPDATE 2026-10-16 21:16UTC — CMC policy probe leaves Windows43/teardown277 unchanged
 
 MEASURED sourcee1bd2df4d/privateSHA6d1fe5c4...db046a, same stopped580parent/freshsiblings,

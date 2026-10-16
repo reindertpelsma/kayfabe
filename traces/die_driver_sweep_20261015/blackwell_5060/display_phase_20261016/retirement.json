@@ -1,0 +1,13 @@
+{
+  "owned_instance": 56286918,
+  "absence_verified_utc": "2026-10-16T21:32:48.578008+00:00",
+  "all_own_gpu_work_stopped": true,
+  "present_in_api": false,
+  "unowned_instances_untouched": 0,
+  "created_epoch_conservative": 1792177885.7246804,
+  "quoted_usd_hour": 0.7222222222222222,
+  "seconds_ceiling": 8483,
+  "compute_usd_ceiling": 1.71,
+  "transfers": "unbilled",
+  "timer_2478432_canceled_after_absence": true
+}

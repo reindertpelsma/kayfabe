@@ -163,3 +163,15 @@ Verified offer56266289/machine152012 advertises64effectiveCPU/257596MiBRAM/
 6705GBfree/KVM. These remain claims until the bootstrap checks them. Reject
 missing NVIDIA PCI before driver installation and image transfer. No native
 Windows green repeat; per-die reference already exists if GB206 is measured.
+
+
+## Final GB206 follow-up retirement, 2026-10-16 21:32UTC
+
+Only own56286918 destroyed after all GPU work stopped; API absence verified21:32:48UTC,
+original timer2478432 canceled only after checking its owned destroy command and absence.
+Duration ceiling8483seconds, rate0.7222222USD/h including150GB disk, compute ceiling1.71USD.
+Previous retired ceiling7.06USD; campaign ceiling8.77USD plus unbilled transfers.
+No own rental active at this checkpoint. Full evidence pushed before retirement: B3raw30,
+B2one-group mode progress but presentation FAIL, Windows on/off and CMC Code43 negatives,
+exacte1bd candidate raw30, native/guest595CUDA4 and graphics5/5+10matchinghashes.
+Retirement receipt: blackwell_5060/display_phase_20261016/retirement.json.
