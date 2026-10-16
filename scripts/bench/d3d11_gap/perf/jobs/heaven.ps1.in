@@ -1,0 +1,22 @@
+# job (interactive): Unigine Heaven Basic, windowed 1920x1080, API @API@, preset @DEFS@. The host sends click + F9 (in-app benchmark) through QMP; this job waits for "Benchmark results" in the
+# engine's own log (C:\Users\kfadmin\Heaven\log.html), prints the result lines, and kills only the Heaven pid it started. @SMI@=1: guest nvidia-smi sampler at 1 Hz.
+$u = "C:\kfapps\heaven\bin"; if (-not (Test-Path "$u\Heaven.exe")) { "NO_HEAVEN"; return }
+$lg = "C:\Users\kfadmin\Heaven\log.html"; Remove-Item $lg -ErrorAction SilentlyContinue
+$cpu0 = (Get-Counter "\Processor(_Total)\% Processor Time" -SampleInterval 2 -MaxSamples 1).CounterSamples[0].CookedValue
+"PRE guest_cpu_pct=$([math]::Round($cpu0,1))"
+$smiflag = "$OUT\smi.stop"
+if (@SMI@ -eq 1) { $sm = Start-Process powershell -ArgumentList "-NoProfile","-File","C:\kfperf\kfp_smi.ps1","-File","$OUT\smi.csv","-Stop",$smiflag -PassThru -WindowStyle Hidden }
+$args2 = "-project_name Heaven -data_path ../ -engine_config ../data/heaven_4.0.cfg -system_script heaven/unigine.cpp -sound_app null -video_app @API@ -video_multisample 0 -video_fullscreen 0 -video_mode -1 -video_width 1920 -video_height 1080 -extern_define @DEFS@"
+$t0 = Get-Date; "LAUNCH $($t0.ToString("HH:mm:ss.fff")) $args2"
+$p = Start-Process "$u\Heaven.exe" -ArgumentList $args2 -WorkingDirectory $u -PassThru
+$found = $false
+while (((Get-Date) - $t0).TotalSeconds -lt 480 -and -not $p.HasExited) {
+  Start-Sleep -Seconds 2
+  if ((Test-Path $lg) -and (Select-String -Path $lg -Pattern "Benchmark results" -Quiet)) { $found = $true; break }
+}
+"RESULT_FOUND=$found alive=$(-not $p.HasExited) elapsed_s=$([int]((Get-Date) - $t0).TotalSeconds)"
+Start-Sleep 2
+if (Test-Path $lg) { Copy-Item $lg "$OUT\heaven_log.html"; Get-Content $lg | Where-Object { $_ -match "Benchmark|Time:|Frames:|FPS|Score|Direct3D11 desc|OpenGL|Renderer|GL_" } | ForEach-Object { "HLOG " + ($_ -replace "<[^>]*>","" -replace "&nbsp;"," ") } }
+if (-not $p.HasExited) { $p.Kill() }
+Start-Sleep 2
+if (@SMI@ -eq 1) { "" | Set-Content $smiflag; Start-Sleep 3; "SMI_CSV_BEGIN"; Get-Content "$OUT\smi.csv"; "SMI_CSV_END" }

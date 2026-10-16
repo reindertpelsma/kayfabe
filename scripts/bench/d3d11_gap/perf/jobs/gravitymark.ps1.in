@@ -1,0 +1,15 @@
+# job (interactive): GravityMark 1.89, API flag @API@ (-d3d12|-vk|-d3d11|-gl), 1920x1080 windowed, DEFAULT asteroid count, benchmark, times file. @REPS@ reps (first = warmup).
+$gmx = Get-ChildItem C:\kfapps\gravitymark -Recurse -Filter GravityMark.exe | Select-Object -First 1
+if (-not $gmx) { "GM_NOTFOUND"; return }
+$cpu0 = (Get-Counter "\Processor(_Total)\% Processor Time" -SampleInterval 2 -MaxSamples 1).CounterSamples[0].CookedValue
+"PRE guest_cpu_pct=$([math]::Round($cpu0,1))"
+$smiflag = "$OUT\smi.stop"; if (@SMI@ -eq 1) { $sm = Start-Process powershell -ArgumentList "-NoProfile","-File","C:\kfperf\kfp_smi.ps1","-File","$OUT\smi.csv","-Stop",$smiflag -PassThru -WindowStyle Hidden; Start-Sleep 3 }
+for ($i = 0; $i -le @REPS@; $i++) {
+  $tf = "$OUT\times$i.txt"; Remove-Item $tf -ErrorAction SilentlyContinue
+  $t0 = Get-Date
+  $p = Start-Process $gmx.FullName -WorkingDirectory $gmx.DirectoryName -PassThru -ArgumentList "-temporal 1 -fps 1 -info 1 -benchmark 1 -close 1 -count 1 -width 1920 -height 1080 -fullscreen 0 @API@ -times $tf"
+  $null = $p.Handle; if (-not $p.WaitForExit(420000)) { "TIMEOUT rep $i"; $p.Kill() }
+  "REP $i api=@API@ warmup=$($i -eq 0) rc=$($p.ExitCode) wall_s=$([math]::Round(((Get-Date) - $t0).TotalSeconds,1)) times_bytes=$(if (Test-Path $tf) { (Get-Item $tf).Length } else { -1 })"
+  if (Test-Path $tf) { $l = Get-Content $tf; "TIMES_LINES=$($l.Count)"; $l | Select-Object -First 3 | ForEach-Object { "T0 $_" }; $l | Select-Object -Last 3 | ForEach-Object { "TN $_" }; Copy-Item $tf "$OUT\times$i.keep.txt" }
+}
+if (@SMI@ -eq 1) { "" | Set-Content $smiflag; Start-Sleep 3; "SMI_CSV_BEGIN"; Get-Content "$OUT\smi.csv"; "SMI_CSV_END" }

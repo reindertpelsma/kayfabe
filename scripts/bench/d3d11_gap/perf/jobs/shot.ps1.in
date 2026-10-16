@@ -1,0 +1,14 @@
+# job (interactive): capture the whole screen of the interactive session and print coarse image statistics (no pixel data leaves the guest except a PNG in the job's own output directory).
+Add-Type -AssemblyName System.Windows.Forms,System.Drawing
+$b = [System.Windows.Forms.SystemInformation]::VirtualScreen
+$bmp = New-Object System.Drawing.Bitmap $b.Width,$b.Height
+$g = [System.Drawing.Graphics]::FromImage($bmp); $g.CopyFromScreen($b.Left,$b.Top,0,0,$bmp.Size)
+$small = New-Object System.Drawing.Bitmap 96,54
+$g2 = [System.Drawing.Graphics]::FromImage($small); $g2.InterpolationMode = "HighQualityBicubic"; $g2.DrawImage($bmp,0,0,96,54)
+$vals = New-Object System.Collections.Generic.List[double]; $cols = New-Object System.Collections.Generic.HashSet[int]
+for ($y=0; $y -lt 54; $y++) { for ($x=0; $x -lt 96; $x++) { $c = $small.GetPixel($x,$y); $vals.Add(($c.R+$c.G+$c.B)/3.0); [void]$cols.Add(($c.R -shr 4) * 256 + ($c.G -shr 4) * 16 + ($c.B -shr 4)) } }
+$m = ($vals | Measure-Object -Average).Average
+$sd = [math]::Sqrt((($vals | ForEach-Object { ($_ - $m) * ($_ - $m) }) | Measure-Object -Average).Average)
+"SHOT screen=$($b.Width)x$($b.Height) mean_luma=$([math]::Round($m,1)) std_luma=$([math]::Round($sd,1)) distinct_4bit_colours=$($cols.Count)"
+$bmp.Save("$OUT\shot.png", [System.Drawing.Imaging.ImageFormat]::Png)
+"SHOT_DONE"

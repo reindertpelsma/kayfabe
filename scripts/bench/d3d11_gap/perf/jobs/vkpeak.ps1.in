@@ -1,0 +1,11 @@
+# job: vkpeak device 0. @REPS@ reps (first = warmup)
+$cpu0 = (Get-Counter "\Processor(_Total)\% Processor Time" -SampleInterval 2 -MaxSamples 1).CounterSamples[0].CookedValue
+"PRE guest_cpu_pct=$([math]::Round($cpu0,1))"
+$smiflag = "$OUT\smi.stop"; if (@SMI@ -eq 1) { $sm = Start-Process powershell -ArgumentList "-NoProfile","-File","C:\kfperf\kfp_smi.ps1","-File","$OUT\smi.csv","-Stop",$smiflag -PassThru -WindowStyle Hidden; Start-Sleep 3 }
+for ($i = 0; $i -le @REPS@; $i++) {
+  $t0 = Get-Date
+  $o = & (Get-ChildItem C:\kfapps\vkpeak -Recurse -Filter vkpeak.exe | Select-Object -First 1).FullName 0 2>&1
+  "REP $i warmup=$($i -eq 0) wall_s=$([math]::Round(((Get-Date) - $t0).TotalSeconds,1))"
+  $o | ForEach-Object { "R$i $_" }
+}
+if (@SMI@ -eq 1) { "" | Set-Content $smiflag; Start-Sleep 3; "SMI_CSV_BEGIN"; Get-Content "$OUT\smi.csv"; "SMI_CSV_END" }
