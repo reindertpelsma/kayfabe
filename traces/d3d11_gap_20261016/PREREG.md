@@ -55,3 +55,19 @@ If something fails twice for the same reason: stop and report it.
 - Frame counts come from Heaven's own log (frames in the 260 s window), not from guest PresentMon (not used: TDR risk).
 - A hypothesis is "held" only if its prediction threshold is met AND the effect is larger than the larger arm spread.
 - Scratch counters are cumulative atomics printed on the existing 5 s tick; they never change relay behaviour.
+
+## Addendum A (2026-10-16 ~21:58, still before any result of the paired arms; coordinator items 1 and 2)
+G0a (control, wayland broker, no memory reset) had already run: D3D11 89.10, OpenGL 195.50 fps (the earlier controls: ~97 / ~217). The owner saw
+~81 fps live, host swap 3.6 GB used, free 0.4-1.3 GB, memory PSI full avg60 2.4%, flip rate (kms=) dropping to 0 in stretches.
+Paired comparisons on the 28a0ee9c control (counters only, no scan-off), interleaved, fresh boot per arm, 2 runs per cell, D3D11 and OpenGL in each boot:
+cells W-R (wayland broker, memory reset before the boot), T-R (`--backend test`, memory reset), W-N (wayland, no reset; G0a is the first W-N run).
+Order: G0a(W-N) PR1(W-R) PT1(T-R) PN2(W-N) PR2(W-R) PT2(T-R).
+- HM (memory pressure explains the control drift): W-R median D3D11 fps >= 5% above W-N. FALSIFIED if the difference is < 2% or inside the larger
+  cell spread. OpenGL reported alongside. (Prediction basis: INFERRED from PSI full 2.4% on the host; no result seen.)
+- HB2 (backend does not matter): T-R within 5% of W-R for both APIs. FALSIFIED (backend matters) if they differ by > 5%; then `--backend test` becomes the
+  backend of all later perf arms and the report says so. Earlier S1/S3 control runs used `--backend wayland` as user ubuntu (launch logs of /data/claude-perf2),
+  so wayland stays the default until HB2 is decided.
+- HH (hangs): zero/low flip seconds (`kms` < 10) are either 'guest paused with idle GPU' (dmon sm% < 20 in that second) or 'GPU busy but not presenting'
+  (sm% >= 50). No prediction on which; the split is reported per API.
+Every arm records: broker backend and uid, guest screen geometry (presentinfo job, 100 s into each benchmark), `free -m`, swap, memory PSI, pgmajfault /
+workingset_refault_file / pswpin deltas, vmstat 1 (steal, interrupts) over each run, host nvidia-smi dmon `-s pucvmet`.
