@@ -1,5 +1,21 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-16 22:49UTC — exact9d AD102 Windows580 fresh reference PASS
+
+Only own56302930 ACTIVE; originaltimer00:46UTC/hard00:51UTC2026-10-17 unchanged.
+Actual9d6f210ba/privateSHAcc2a86a6...34668/P19/no traces: 8088/GSP1/Code0/DWM1Explorer1,
+CUDA3/DX11+12 beforeafter PASS,1920x1080/78753colors,0TDR/hostXid5→5, ownedstop22:49exit0.
+Short suite14.656s, not a repeatedseven-minutehold. Same stoppedverifiedpayload parent
+for reference+threeone-rowablations. Caps00c ablation nowrunning;2801/2806queued.
+ContinuationV2 rootlog/prov/ada2build_resume_windows_v2.log, queue103135.
+FirstV1reference had missingprobes due shellquoting/negatedgrepguard; excluded as harnessfailure,
+oldVMsafe stopped22:45:30. Strict verifier+Pythonargv transfer fixed;218driverchunks staged94.709s.
+Firstreal581installer notyetstarted; cold8151/5809402/P19/420sacceptance remainsUNRUN.
+Linux590queue104416 waits fullWindowscompletion andnoQEMU; fat590queue104757 waits raw590.
+No sourcefetch/buildduringtimedGPU. MainPUSHEDe695c8a79 correctedmatrix and nativeAD102
+threeboard4096byteequality (99words, Win580+Linux595), nofamily/branchwildcard.
+
+
 ## UPDATE 2026-10-16 22:43UTC — AD102595 raw30 PASS; Windows media repair in progress
 
 Only own56302930 ACTIVE, actualAD102/PCI2684/native595/KVM/root146GiB.

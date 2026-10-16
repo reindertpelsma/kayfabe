@@ -1,0 +1,68 @@
+[
+  {
+    "name": "ada2build-reference580-v2-accept.log",
+    "bytes": 9911,
+    "sha256": "385c48779b96165a998d7516b8936d4ee1f32e39c89ca10015858f5524ad26ea"
+  },
+  {
+    "name": "ada2build-reference580-v2-host-xids.after.txt",
+    "bytes": 1125,
+    "sha256": "92e461c0250aa0c63018b363b62653f0b5d3f3177b71d43a8ee045ee140cd109"
+  },
+  {
+    "name": "ada2build-reference580-v2-shot-summary.json",
+    "bytes": 201,
+    "sha256": "168b70b9c32f39235ff161b85c87287ced4c62194260352bc2aa411c58b97ce2"
+  },
+  {
+    "name": "ada2build-reference580-v2-stop.log",
+    "bytes": 168,
+    "sha256": "d30d68ecf4fa52fbaa7d32a5f47532471b9bf39a473a81c328f9a8f4035414ef"
+  },
+  {
+    "name": "ada2build-reference580-v2-process-receipt.json",
+    "bytes": 2956,
+    "sha256": "49e1168cd4299c1481b3f4bfc1a14ad3ac9724634723c59be20f1319de6949b0"
+  },
+  {
+    "name": "ada2build-reference580-v2-flags.txt",
+    "bytes": 542,
+    "sha256": "1ea9fbf3a99319d8e9de26a178b1c1fa070c865c4eaa1abf4bafeda491b5b2be"
+  },
+  {
+    "name": "ada2build-reference580-v2-census.log",
+    "bytes": 1048,
+    "sha256": "a44510c4c5b055fb48287d0c5addfa1363c068153e3a341e3738fa8a8560bb1e"
+  },
+  {
+    "name": "ada2build-reference580-v2-qemu.log",
+    "bytes": 1397467,
+    "sha256": "fd4232d8e331d75fcc3123e4687da59936eae536f9a4c2502e12a59d55b5485c",
+    "excerpt_only": true
+  },
+  {
+    "name": "ada2build-reference580-v2-host-xids.before.txt",
+    "bytes": 1125,
+    "sha256": "92e461c0250aa0c63018b363b62653f0b5d3f3177b71d43a8ee045ee140cd109"
+  },
+  {
+    "name": "ada2build_stage_nvidia.log",
+    "bytes": 29997,
+    "sha256": "cff25c9bc53be957892a33684135bcae3509703cb0c7d4a74f151ea5dbcfe803"
+  },
+  {
+    "name": "ada2build_stage_probes_qga.log",
+    "bytes": 372,
+    "sha256": "b175473ece5168021f144224252fae4d5396e7a851829984fa11f3632d712ac2"
+  },
+  {
+    "name": "ada2build_after_stage_probes_v2.log",
+    "bytes": 595,
+    "sha256": "0f3842fafbc5391be3e229a8699ce13237280b625c13cbcbc6a0057b37bb4dcc"
+  },
+  {
+    "name": "ada2build_resume_windows_v2.log",
+    "bytes": 4235,
+    "sha256": "110d62993e675cc22fcf19524c57367fa92a05e8d217b6b7bf720fed780202c3"
+  }
+]
