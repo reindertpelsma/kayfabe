@@ -135,3 +135,13 @@ returned. Destroyed/API absence verified18:43:36UTC, exact timer cancelled after
 absence. Conservative duration9615seconds at0.61USD/h, estimate1.629214USD,
 rounded-up ceiling1.63USD; retired campaign ceiling7.00USD+unbilled transfers.
 Windows581.51 public ABI/package prerequisites pass, hardware remainsUNRUN.
+
+## GB206 display-phase follow-up, 2026-10-16 18:49UTC
+
+|Instance|GPU|USD/hour incl150GB|StartUTC|StopUTC|Purpose|Ceiling|
+|---|---|---:|---|---|---|---|
+|56284522|RTX5060advertised, exactdie pending unprivilegedRM|0.1680556quote|2026-10-16T18:49:33.182026+00:00|ACTIVE; timer2463545 at21:44:33/hard21:49:33|B3GB206clock revalidation, B1displayon/off, B2one virtual-tiling group|max0.51USD; campaign ceiling7.51USD+transfers|
+
+Prior own56267214 absence verified18:43:36UTC before creation. Verified
+machine46454 advertises6effectiveCPU/64244MiBRAM/KVM/523GBfree; actual disk,
+KVM and die pending. Startup deadline15min; no green hardware claim yet.
