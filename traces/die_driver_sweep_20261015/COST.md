@@ -98,7 +98,7 @@ Contract destroyed/absence verified15:41:34, timer canceled after absence.
 
 | Instance | GPU | USD/hour | StartUTC | StopUTC | Purpose | Ceiling |
 |---|---|---:|---|---|---|---|
-|56265118|4xRTX4060Ti advertised; GPU0 only; exactdie pending|pendingAPI actual rate; offer0.6947222222|2026-10-16T15:44:50.024520+00:00|ACTIVE; timer2392895 at18:39:50/hard18:44:50|A4 secondAda die, serial native/guest suites on GPU0 only|max3h provisional2.25USD; campaign ceiling7.41USD+transfers|
+|56265118|4xRTX4060Ti advertised; exactdie unmeasured|0.735|2026-10-16T15:44:50.024520+00:00|destroyed/absence verified16:01:36UTC; timer2392895 canceled after absence|A4 startup attempt; no usable SSH or hardware test|16m47s; compute ceiling0.21USD; campaign ceiling5.37USD+transfers|
 
 Verified offer51136946/machine146370,vms_enabled=true, advertises80CPU/
 386836MiBRAM/3186GBfree disk;150GBrequested. GPU0/BDF is selected explicitly;
@@ -106,3 +106,9 @@ no workload is assigned to the other three GPUs. New bootstrap fixes shell
 precondition/launch fail-fast before launch and caps startup at15min. No native
 or guest fact may be claimed until its own command completes. No data/values
 are borrowed across Ada dies. Prior56261059 absence precedes this creation.
+
+Final56265118: the startup controller exited1 at16:00:02UTC after its15minute
+deadline. No usable SSH, actual die identification, native suite or guest suite
+was obtained. Retirement and filtered startup text are saved under
+provider_startup_failures_20261016/. API absence was checked before cancelling
+the exact owned timer. Machine146370 is excluded from subsequent searches.

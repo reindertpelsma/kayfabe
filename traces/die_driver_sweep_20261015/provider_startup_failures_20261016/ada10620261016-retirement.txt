@@ -1,0 +1,7 @@
+instance=56265118
+created_utc=2026-10-16T15:44:50.024520+00:00
+retired_verified_utc=2026-10-16T16:01:36.554128+00:00
+absence_api=[]
+duration_seconds=1006.530
+rate_usd_per_hour=0.735
+reason=15-minute startup deadline exceeded; no working SSH; no actual die or hardware result
