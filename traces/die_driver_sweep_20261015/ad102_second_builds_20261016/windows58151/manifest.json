@@ -1,0 +1,63 @@
+[
+  {
+    "name": "ada2build-acceptance58151-qga-flags.txt",
+    "bytes": 542,
+    "sha256": "37179386529bcc788181cead1bf781703cfbd31fcfce25995db7ac3d5acffd03"
+  },
+  {
+    "name": "ada2build-acceptance58151-qga-census.log",
+    "bytes": 274,
+    "sha256": "52d5628f7dc8aee01dff2346ad074cfba3d6fff0eb862e74d81a9c06d5e154b7"
+  },
+  {
+    "name": "ada2build-acceptance58151-qga-host-xids.before.txt",
+    "bytes": 1125,
+    "sha256": "92e461c0250aa0c63018b363b62653f0b5d3f3177b71d43a8ee045ee140cd109"
+  },
+  {
+    "name": "ada2build-acceptance58151-qga-stop.log",
+    "bytes": 171,
+    "sha256": "dd11a5627a99c3b4f7c8678e311f9a03238ba63b0c762f123afc5dedac1a2da4"
+  },
+  {
+    "name": "ada2build-acceptance58151-qga-qemu.log",
+    "bytes": 305516,
+    "sha256": "5ca70747b8bd378f507e3a8c8f3a25c0aa643dc31afd2ca329236134bc8461c0"
+  },
+  {
+    "name": "ada2build-acceptance58151-qga-process-receipt.json",
+    "bytes": 2956,
+    "sha256": "a0417904930a11e326774f9af6d272773faa5f7440fc0a76325428e81844770d"
+  },
+  {
+    "name": "ada2build-install58151-qga-flags.txt",
+    "bytes": 542,
+    "sha256": "1ea9fbf3a99319d8e9de26a178b1c1fa070c865c4eaa1abf4bafeda491b5b2be"
+  },
+  {
+    "name": "ada2build-install58151-qga-process-receipt.json",
+    "bytes": 2957,
+    "sha256": "c16cc4c75f18da9c3aff7ed02ec8e4032d093ced6e4b23e05a6f49441e12570d"
+  },
+  {
+    "name": "ada2build-install58151-qga-qemu.log",
+    "bytes": 1572423,
+    "sha256": "e8fe15764ca30348dc1f65c965a47d756f1e8524225a57d7c0ae04405f6a35a9",
+    "excerpt_only": true
+  },
+  {
+    "name": "ada2build_install58151_qga.log",
+    "bytes": 540,
+    "sha256": "9ad4f3b66d6e2d64b8a97fef00993471defb4560b7b80dafb0381e64e32a8c97"
+  },
+  {
+    "name": "ada2build_set_gsp8151.log",
+    "bytes": 986,
+    "sha256": "168f3133293fb8c28cdc950229e1da964e18548c488d7181432e4353ad42dd7a"
+  },
+  {
+    "name": "ada2build_census8151_recovered.log",
+    "bytes": 561,
+    "sha256": "ae83bebf6bb0d34b3af89ffc9e1d3da1f0ae94c0f6e3e26b9e4a66055c0ba62a"
+  }
+]

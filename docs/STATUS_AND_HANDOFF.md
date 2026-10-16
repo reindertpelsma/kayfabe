@@ -1,5 +1,24 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-16 23:12UTC — Windows581 installed, first census UNVERIFIED; Linux590 raw running
+
+Only own56302930ACTIVE; timer00:46/hard00:51UTC2026-10-17 unchanged. Exact9d/privateSHAcc2a.
+58151fullhash+bothNVIDIA signaturesValid/setupONCEexit0 at23:03:47; selectedactual8151/GSP1.
+Install-timeCode43 usedold58065ABI, notnewcell. Cold5809402/P19QEMU110420QGAanswers23:05:17,
+readonlycensusPID2528 exceeded60s/noadapterstatus. Status-only recovery originalPIDexit1
+withcensusstart23:07:42 afterstopqueued; noCode0/43claim. Apps/holdUNRUN, native581UNRUN.
+OwnedVMstopped23:08:40noKILL. TS/ad102_second_builds_20261016/windows58151/RESULT.md.
+Linux590 queue104416 stagedexact590module/firmware at23:10:16, hostkept595, thinrebuilt,
+rawnormal6/frozen180/actualKF3{} starts23:10:34; concurrencyPASS13s/client4970ms.
+Finishqueue132509 waits rawcomplete/noQEMU, then ONEnew581freshsameparent/P19/census300
+(noinstallerreplay), holds420s onlyifCode0; afterwards fat590V3 onlyifstartbefore23:35UTC.
+Oldfatqueue109919 stoppedbeforeanyGPUfreeVM; V3absolutephasebounds reserve retirementmargin.
+Rootlogs/prov/ada2build_linux590.log,/prov/ada2build_finish_queue.log,
+/prov/ada2build_windows581_recovery.log (notyetstarted). Do not launchotherGPUjobs.
+Mainlatest a0eda8e86PUSHED A4threeablationsdone; LPWRbothindividuallyunneeded580P19,
+caps00cabsencefailsdesktop. Nojoint/family/build inference orproductrowdeletion.
+
+
 ## UPDATE 2026-10-16 23:00UTC — AD102 three single-row ablations complete
 
 Only56302930 ACTIVE; original00:46UTC timer/hard00:51UTC2026-10-17 unchanged.

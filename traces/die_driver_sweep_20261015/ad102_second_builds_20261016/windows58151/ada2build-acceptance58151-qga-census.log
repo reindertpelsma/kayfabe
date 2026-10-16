@@ -1,0 +1,5 @@
+GUEST_PROGRAM_STARTED ada2build_census8151.ps1 pid=2528
+Traceback (most recent call last):
+  File "/root/ada2build_ps.py", line 53, in <module>
+    raise TimeoutError('outcome pending; do not replay guest program')
+TimeoutError: outcome pending; do not replay guest program

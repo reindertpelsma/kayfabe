@@ -1,0 +1,10 @@
+READONLY_SYNC_RETRY 1
+GUEST_PROGRAM_STARTED ada2build_install58151_qga.ps1 pid=8904
+NVIDIA_SIGNATURE status=Valid signer=CN=NVIDIA Corporation, OU=2-J, O=NVIDIA Corporation, L=Santa Clara, S=California, C=US
+NVIDIA_SIGNATURE status=Valid signer=CN=NVIDIA Corporation, OU=1-F, O=NVIDIA Corporation, L=Santa Clara, S=California, C=US
+NVIDIA_INSTALL_PID=5712
+NVIDIA_INSTALL_EXIT code=0
+NVIDIA_INSTALL_COMPLETE=1; direct actual8151/GSP binding and cold ABI580.94.02 boot required
+
+
+GUEST_PROGRAM_EXIT ada2build_install58151_qga.ps1 code=0
