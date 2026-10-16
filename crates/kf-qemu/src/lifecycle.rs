@@ -46,11 +46,21 @@ pub(crate) fn on() -> bool {
     *ON.get_or_init(|| std::env::var("KF3_LIFECYCLE_COUNT").is_ok_and(|v| v == "1"))
 }
 
-/// EXPERIMENT ONLY (`KF3_SCAN_OFF_AFTER_5080=1`): stop reading pushbuffers once the channel has seen
-/// its 5080 SET_OBJECT. Never a production behaviour; the report states it as a scratch change.
+/// EXPERIMENT ONLY (`KF3_SCAN_OFF_AFTER_5080`, scratch, never for merge): stop reading pushbuffers once the
+/// channel has seen its 5080 SET_OBJECT. Mode 1: from then on, always (the registration window is NOT handled:
+/// the first FIFO_UPDATE_CHANNEL_INFO trigger reaches the hardware unscanned). Mode 2: also scan while a
+/// FIFO_UPDATE_CHANNEL_INFO registration is pending (the lifecycle plan's registration window).
+pub(crate) fn scan_off_mode() -> u8 {
+    static M: OnceLock<u8> = OnceLock::new();
+    *M.get_or_init(|| match std::env::var("KF3_SCAN_OFF_AFTER_5080").as_deref() {
+        Ok("1") => 1,
+        Ok("2") => 2,
+        _ => 0,
+    })
+}
+
 pub(crate) fn scan_off() -> bool {
-    static ON: OnceLock<bool> = OnceLock::new();
-    *ON.get_or_init(|| std::env::var("KF3_SCAN_OFF_AFTER_5080").is_ok_and(|v| v == "1"))
+    scan_off_mode() != 0
 }
 
 fn started() -> Instant {

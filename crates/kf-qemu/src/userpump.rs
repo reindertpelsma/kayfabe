@@ -1628,7 +1628,11 @@ impl Pump {
             let kf_chan::user_stream::Source::Segment(descriptor) = descriptor else {
                 return Err("USER_RING_GP_FORMAT".into());
             };
-            let scan_off = crate::lifecycle::scan_off() && self.lc_class(me, r) >= 1;
+            let scan_off = match crate::lifecycle::scan_off_mode() {
+                0 => false,
+                1 => self.lc_class(me, r) >= 1,
+                _ => self.lc_class(me, r) == 1,
+            };
             if scan_off {
                 // EXPERIMENT ONLY (scratch, never for merge): no pushbuffer byte is read or scanned.
                 let len = usize::try_from(descriptor.len_bytes).map_err(|_| "USER_RING_PB_SIZE")?;
