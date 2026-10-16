@@ -1,5 +1,26 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-16 21:16UTC — CMC policy probe leaves Windows43/teardown277 unchanged
+
+MEASURED sourcee1bd2df4d/privateSHA6d1fe5c4...db046a, same stopped580parent/freshsiblings,
+P19+two traceflags OFF versus plus CMC_LOG_BUFFER_PROBE ON. Actual8088/GSP1 bothCode43,
+385calls/teardown277/unload384; a89@51 policy none→0x0. Four positions208..211 reorder
+B297alloc/EDIDqueries; no identical-order claim. Existing bounded body tracer excludesa89,
+so posted status/body and guest buffer polling UNVERIFIED; direct nonheldecho unit-tested.
+No host newXid; both ownedVMs stopped21:10:49. Rank2didnotmove, NOCCU/CBCBguess.
+PR30defaultoffclean73af410b6/testd7be19b8f/791CPU; hardwaretopiccodex/gb206-cmc-hw-20261016.
+RESULT+20screenedartifacts/matrix PUSHED78bd07f74 underTS/blackwell_5060/display_phase_20261016/
+second_attempt/cmc_probe. PR29B2modefix remains partial/blackframe+flip timeout; stopONEgroup.
+ONLY own56286918 active. ROOTrawcontroller109892 runs exacte1bd normal595raw30 at180,
+source/rawclient/thin rebuilt after exact native gates9+10/12USER; actualenv{} receipts.
+Raw starts21:11:23, first8PASS includingconcurrency31s/14370ms. No builds/fetch while timing.
+QueuedCPU/fat595controller110388 waits rawCOMPLETE/noQEMU and refusesstartafter21:30;
+stockGPUfree595stage/publicgfx tools then nativeCUDA+gfx and one headless595guest validation
+only if deadlines permit. Rootlogs/prov/gb206phase_cmc_*. Own timer2478432~22:06:28,
+hard22:11:25UTC. Exportcompletedtext and retire by22:00; verifyAPIabsence then cancel exacttimer.
+No family complete. No ownerGPU/VM/checkout or master changes. Campaign ceiling9.23USD+transfers.
+
+
 ## UPDATE 2026-10-16 20:58UTC — GB206 Linux mode wall moved; presentation/Windows still FAIL
 
 MEASURED B2 ONE derived tiling group, source36d134bc5/privateSHAf317: Linux580.159.04
