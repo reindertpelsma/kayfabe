@@ -1,0 +1,12 @@
+CINNAMON 1 XORG 1
+NVIDIA GeForce RTX 4090, 595.91.07, 56 MiB
+OpenGL vendor string: NVIDIA Corporation
+OpenGL renderer string: NVIDIA GeForce RTX 4090/PCIe/SSE2
+Running synchronized to the vertical refresh.  The framerate should be
+approximately the same as the monitor refresh rate.
+280 frames in 5.0 seconds = 55.991 FPS
+300 frames in 5.0 seconds = 59.809 FPS
+300 frames in 5.0 seconds = 59.993 FPS
+VKCUBE rc=127
+GUEST_DMESG flip_timeouts=0 nvassert=9 xid=0
+GUEST_DONE

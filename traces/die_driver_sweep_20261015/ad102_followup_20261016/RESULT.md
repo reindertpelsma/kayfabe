@@ -1,6 +1,22 @@
 # AD102 missing lanes and passing Windows display reference
 
-**STATUS: LIVE, 2026-10-16 17:09 UTC. Windows580 production hold and Linux595 raw regression pass; broker/apps pending.**
+**STATUS: LIVE, 2026-10-16 18:13 UTC. Windows580 production hold, Linux595 raw and broker pass; guest apps pending.**
+
+MEASURED A1: broker595 passes at17:37:30UTC, private6265b980f. Cinnamon1/Xorg1,
+NVIDIA OpenGL renderer, guest flip_timeouts0/Xid0, and host Xid delta0 (5before,
+5after). X11 SHM presentation contains13506colors at1920x1080. Actual process
+environment has only KF3_REV, the binary selector. Its caps page has23T1 words,
+zero T3 words and one unmeasured word; no595caps row was borrowed from580.
+Nine host display STALL messages and nine guest nvAssert lines are retained as
+limitations; functional presentation is not a latency-clean claim. See broker595/.
+The first presentation launch was NOTRUN after a previous provisioning PID
+refusal; the explicit-parent-wait retry exercises that handoff and succeeds.
+
+Native Blender4.5 CUDA passes17:16:24UTC on stock595, NVIDIA RTX4090,
+mean0.6405. Image metadata is saved, image stays on the rental. Windows apps
+remainUNRUN: bulk staging stopped at chunk13's read-only guest-sync, before
+any application ran. Bounded synchronization reconnects are now covered by
+six CPU tests; mutating file commands are never automatically replayed.
 
 MEASURED A2 complete for this build: production QEMU103998 uses exactly19flags,
 no RPC diagnostics. Actual Windows32.0.15.8088, Code0, DWM/Explorer, CUDA cup2/3/8
@@ -50,7 +66,7 @@ at16:11:25UTC. The native595 caps page is an oracle only.
 |AD102|native Linux gates|595.91.07|gate harness|PASS9/9+gate10|adaref2_gates.log|
 |AD102|native Linux CUDA|595.91.07|stock host|PASS4/4|linux595/cl_codex_adaref2_native595_host.out|
 |AD102|Linux guest raw|595.91.07|actual KF3={}, loglevel6|PASS30/30, startup heartbeat warnings remain|linux595/codex_adaref2_full595_suite.out|
-|AD102|Linux guest broker|595.91.07 planned|pending actual process receipt|UNRUN|pending|
+|AD102|Linux guest broker|595.91.07|actual KF3_REV selector only|PASS;9STALL/9nvAssert retained|broker595/|
 |AD102|Windows guest short / display trace|580.88 /32.0.15.8088|production19 plus bounded metadata/body diagnostics|PASS|windows580/adaref2_windows_baseline.log; passing_windows_display_trace/|
 |AD102|Windows guest seven-minute hold|580.88 /32.0.15.8088|production19, diagnostics off|PASS421seconds/13rounds/0TDR|windows580/adaref2_windows_baseline.log|
 
