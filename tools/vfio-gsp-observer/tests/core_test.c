@@ -64,6 +64,36 @@ int main(void) {
     /* High mailbox alone or unrelated MMIO cannot attach. */
     fixture(f);vg_reset(v);vg_mmio(v,0x110044,0,4,1,8);assert(!v->active);
     vg_mmio(v,0x1000,0x1000,4,1,9);assert(!v->active);
+    /* GH100/GB20x mailbox route names FMC parameters, not LibOS directly.
+       Synthetic public layout: gspRmParams.target at 40, bootArgsOffset at 48. */
+    fixture(f);vg_reset(v);w32(f->ram+0xb028,1);w64(f->ram+0xb030,0x1000);
+    vg_mmio(v,0x110040,0xb000,4,1,12);vg_mmio(v,0x110044,0,4,1,13);
+    assert(v->active&&f->emitted==1&&f->last.queue_sequence==0);
+    header(f->ram+0x8000);message(f->ram+0x9000,0,4097,0);w32(f->ram+0x8010,1);
+    vg_poll(v,14);assert(f->emitted==2&&f->last.direction==1&&f->last.queue_sequence==0);
+    /* A single indirection, only system apertures, with all original queue
+       validation retained. Never walk recursive guest pointer chains. */
+    for(i=0;i<10;i++) {
+        fixture(f);vg_reset(v);w32(f->ram+0xb028,1);w64(f->ram+0xb030,0x1000);
+        if(i==0)w32(f->ram+0xb028,0); /* local FB is not guest RAM */
+        if(i==1)w32(f->ram+0xb028,3); /* unknown aperture */
+        if(i==2)w64(f->ram+0xb030,0);
+        if(i==3)w64(f->ram+0xb030,0x1001);
+        if(i==4)w64(f->ram+0xb030,0xc000);
+        if(i==5)w64(f->ram+0xb030,UINT64_MAX-7);
+        if(i==6)w64(f->ram+0xb030,0xb000); /* self */
+        if(i==7) { /* valid-looking second FMC must not be followed */
+            w64(f->ram+0xb030,0xa000);w32(f->ram+0xa028,1);w64(f->ram+0xa030,0x1000);
+        }
+        if(i==8)w32(f->ram+0x2008,513);
+        if(i==9)w64(f->ram+0x3010,0x3000);
+        vg_mmio(v,0x110040,0xb000,4,1,15);vg_mmio(v,0x110044,0,4,1,16);
+        assert(!v->active&&f->emitted==0);
+        assert(f->reads<40); /* fixed probe count, no scan or recursive walk */
+    }
+    fixture(f);vg_reset(v);w32(f->ram+0xb028,2);w64(f->ram+0xb030,0x1000);
+    vg_mmio(v,0x110040,0xb000,4,1,17);vg_mmio(v,0x110044,0,4,1,18);
+    assert(v->active&&f->emitted==1);
     /* fn103 declares params outside rpc.length but the committed transport
        element contains them. Capture only the bounded declared tail, mark it
        separately from the checksummed prefix, never include page padding. */
