@@ -10,3 +10,11 @@ copying the baseline. Physical die still requires unprivileged RM verification.
 Baseline sourcef8485f6db, candidate36d134bc5. Existing nativeGB206Windows580
 reference is reused only if this board measuresGB206; no neighboring die facts.
 Full native-page injection remains unauthorized/not performed.
+
+MEASURED19:29UTC: actual146GiB root/61logicalCPUs/202527MiBRAM/KVM,
+PCI10de:2d04. Stock open595.91.07 works and reports8151MiB VRAM (do not infer
+16GiB from marketing). UID65534/CapEff0 probe verifiesGB206 arch0x1b0/impl6.
+Native gates9/9+gate10PASS19:27:50UTC,12/12USER births. Privatef8485f6d QEMU
+build finished19:28:50UTC. Root595caps page saved as an oracle only. Thirteen
+Windows chunks copied; full-image integrity check remains pending at this note.
+Linux595raw/Windowson-off/candidate stillUNRUN; no unsupported-family fallback.

@@ -1,0 +1,27 @@
+[
+  {
+    "name": "gb206phase_die.log",
+    "bytes": 209,
+    "sha256": "10ba1b0ebc5a6fcdde9ae4684867b44d8e794206cb9367908a45cda98976b56a"
+  },
+  {
+    "name": "gb206phase_gates.log",
+    "bytes": 25124,
+    "sha256": "6d8a2285dc36be983abf439cbdb5dfaefd451e0f923a9ce77c7bfa540d8a2efa"
+  },
+  {
+    "name": "gb206phase_native_caps.txt",
+    "bytes": 3068,
+    "sha256": "35b1c4408b804b01e919f14b6cd23e8251f36635e867f7e2fc5e8adb45267556"
+  },
+  {
+    "name": "gb206phase_native_caps.err",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "name": "gb206phase_source",
+    "bytes": 41,
+    "sha256": "c9c97418011b595393a6391fa4d6cfa9c8636684436def331613230565b2da59"
+  }
+]

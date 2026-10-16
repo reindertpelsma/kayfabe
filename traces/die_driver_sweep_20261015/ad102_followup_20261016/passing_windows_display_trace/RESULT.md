@@ -16,22 +16,26 @@ cap:78public display/control bodies were exported,434opaque/allocation bodies
 were omitted before export. There is no complete-body-stream claim. Source-log
 SHA/size and all selected-control counts are in summary.json.
 
+Public-header naming correction2026-10-16: C67A/CA7A are
+CURSOR_IMM_CHANNEL_PIO, not window DMA classes (ogkm580.65.06 clc67a.h/clca7a.h).
+The measured ordinals and boundary are unchanged. C3700201 is GET_LOCKPINS_CAPS.
+
 | Event | Passing Ada policy ordinal | Blackwell complete385-command sequence | Earlier382-command trace |
 |---|---:|---:|---:|
-|Last initial display-window allocation|281, classC67A|276, classCA7A|274|
+|Last initial cursor PIO allocation|281, classC67A|276, classCA7A|274|
 |Immediate next command|282: controlC3700201, policy envelope0|277: SET_RMFREE_FLAGS, then Free|275: SET_RMFREE_FLAGS, then Free|
 |First control73010C|550; more calls later|not issued|not issued|
 
 The two extra Other4 records in the complete Blackwell reconstruction shift its
 display ordinals by2; its explicit unload adds the third extra record at the end.
 Do not mix the older274/275 convention with276/277. Ada's last A58 is280; its
-last window allocation281 likewise has no following A58. Blackwell's last A58
-is275, followed by its last window allocation276 and teardown277.
+last cursor PIO allocation281 likewise has no following A58. Blackwell's last A58
+is275, followed by its last cursor PIO allocation276 and teardown277.
 
 **Falsifier result, mixed:** the passing Ada driver does not issue native
 headless GB206's four73010C queries immediately before C3700201. Their absence
 at that exact point is therefore insufficient to identify the failure. Ada does
-issue C3700201 immediately after its initial window allocations and continues;
+issue C3700201 immediately after its initial display-channel allocations and continues;
 Blackwell frees the display objects there. The proposed falsifier that passing
 Ada also omits C3700201 did not fire. This keeps display reply/state as the first
 ranked investigation, without proving a particular capability word or reply byte.
