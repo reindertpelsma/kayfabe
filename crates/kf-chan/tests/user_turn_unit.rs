@@ -46,6 +46,8 @@ struct Mock {
     calls: Vec<Call>,
     events: Vec<Ev>,
     next_scan: Scan,
+    /// The private ring's `GP_GET` the mock reports (the PBDMA's pops).
+    hw_get: u32,
 }
 
 impl Mock {
@@ -61,6 +63,7 @@ impl Mock {
             calls: Vec::new(),
             events: Vec::new(),
             next_scan: Scan::default(),
+            hw_get: 0,
         }
     }
     /// The guest publishes `g` at `slot` (its pushbuffer words are known to the store).
@@ -79,7 +82,7 @@ impl Mock {
 impl Io for Mock {
     fn hw_words(&mut self) -> Turn<(u32, u32)> {
         self.calls.push(Call::HwWords);
-        Ok((0, 0))
+        Ok((self.hw_get, 0))
     }
     fn write_guest_get(&mut self, get: u32) -> Turn<bool> {
         self.calls.push(Call::WriteGuestGet(get));
@@ -577,4 +580,88 @@ fn a_fresh_window_forgets_a_packet_the_scan_left_open_before_pointer_mode() {
         "the Fresh restart forgot the packet left open before Pointer mode"
     );
     assert_eq!(r.life.mode(), Mode::Window);
+}
+
+// ---- PHASE 1c item 2: the ring-full anchor guard at the real turn, and the P2' notices
+
+#[test]
+fn the_guest_ring_is_full_when_gp_put_leaves_one_slot_before_the_gp_get_the_guest_sees() {
+    let mut io = Mock::new(8);
+    let mut r = pointer_relay(&mut io);
+    assert_eq!(r.written_get, 0, "nothing written back yet");
+    // the PBDMA popped both forwarded entries: the next turn writes GP_GET = 2 back
+    io.hw_get = 2;
+    // the guest filled slots 2..=7 and 0: GP_PUT = 1, so put + 1 == 2 == the GP_GET it sees
+    for slot in [2u32, 3, 4, 5, 6, 7, 0] {
+        io.put_entry(slot, &ge(10 + slot as u8, Kind::Plain));
+    }
+    io.put = 1;
+    let before = r.life.counts().anchor_refused_ring_full;
+    turn(&mut r, &mut io).unwrap();
+    assert_eq!(r.written_get, 2, "the write-back is what the guest sees");
+    assert!(io.calls.contains(&Call::WriteGuestGet(2)));
+    assert!(
+        r.put_full,
+        "GP_PUT = 1 leaves exactly one free slot before GP_GET = 2"
+    );
+    assert_eq!(
+        r.life.counts().anchor_refused_ring_full,
+        before + 1,
+        "the Pointer turn refused the anchor"
+    );
+    // an ordinary GP_PUT (not one slot before the GET) is an anchor again
+    io.put = 5;
+    turn(&mut r, &mut io).unwrap();
+    assert!(!r.put_full);
+    assert_eq!(r.life.counts().anchor_refused_ring_full, before + 1);
+}
+
+#[test]
+fn a_fresh_relay_sees_a_ring_filled_to_the_last_slot_as_full() {
+    let mut io = Mock::new(8);
+    let mut r = relay();
+    io.put_entry(0, &ge(0, Kind::SetObj));
+    io.put = 7; // the guest wrote 7 entries before any write-back: GP_GET it sees is 0
+    for slot in 1..7u32 {
+        io.put_entry(slot, &ge(slot as u8, Kind::Plain));
+    }
+    turn(&mut r, &mut io).unwrap();
+    assert!(
+        r.put_full,
+        "(7 + 1) mod 8 == 0 == the GP_GET the guest sees"
+    );
+}
+
+#[test]
+fn a_packet_open_at_gp_put_in_scan_mode_is_reported_with_the_packet_and_switches_markers_off() {
+    let mut io = Mock::new(16);
+    let mut r = relay();
+    io.put_entry(0, &ge(0, Kind::OpenHead));
+    io.put = 1;
+    turn(&mut r, &mut io).unwrap(); // scans the head; the packet stays open
+    assert!(r.scan.carried().is_some());
+    assert!(
+        r.life.take_notices().is_empty(),
+        "no GP_PUT boundary reached yet"
+    );
+    turn(&mut r, &mut io).unwrap(); // GP_PUT == cursor with the packet open
+    let (h, n) = r.put_packet.expect("the packet open at GP_PUT");
+    assert_eq!((h.subchannel, h.method, n), (1, 0x1b0, 1));
+    assert_eq!(r.life.counts().put_boundary_open_scan, 1);
+    assert_eq!(r.life.counts().pointer_markers_latched_off, 1);
+    assert!(r.life.markers_off());
+    use kf_chan::user_lifecycle::Notice;
+    let notices = r.life.take_notices();
+    assert!(matches!(
+        notices[0],
+        Notice::PutBoundaryOpen {
+            mode: Mode::Scan,
+            ..
+        }
+    ));
+    assert!(matches!(notices[1], Notice::MarkersLatchedOff { .. }));
+    assert!(
+        !io.calls.contains(&Call::Marker),
+        "no marker inside the open packet (Scan mode already refused it)"
+    );
 }

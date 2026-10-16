@@ -11,6 +11,30 @@ pub struct Scan {
     bindings: [u32; 8],
     pending: Option<(MethodHeader, usize)>,
     subdevice: Option<Subdevice>,
+    tally: BindTally,
+}
+
+/// ★ PHASE 1c measurement (owner request): how often the scan saw the 5080 software object bound, over the channel's
+/// scanned life (precondition P1: "the 5080 binds once"; Pointer mode cannot see a later rebind by construction, so the
+/// whole-run answer comes from `always_scan`). It commits with the scan (a refused or retried segment is not counted),
+/// decides nothing, and is invisible to equality and to the model's state key on purpose.
+#[derive(Clone, Copy, Default)]
+pub struct BindTally {
+    /// Scanned SET_OBJECTs whose class the software object accepts (every one, not only the first).
+    pub software_binds: u64,
+    /// Scanned SET_OBJECTs on a subchannel that held the software object and bound something else.
+    pub rebinds: u64,
+}
+impl PartialEq for BindTally {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+impl Eq for BindTally {}
+impl std::fmt::Debug for BindTally {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("-")
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -111,7 +135,13 @@ impl Scan {
             bindings: self.bindings,
             pending: None,
             subdevice: self.subdevice.clone(),
+            tally: self.tally,
         }
+    }
+    /// The SET_OBJECT tally of the scanned life so far ([`BindTally`]).
+    #[must_use]
+    pub fn tally(&self) -> BindTally {
+        self.tally
     }
 
     /// Whether the metadata is between complete method packets. This is not
@@ -280,6 +310,11 @@ impl Scan {
             .ok_or(Refusal::MethodOverflow)?;
         let sub = h.subchannel as usize;
         if method == 0 {
+            if software(data) {
+                self.tally.software_binds += 1;
+            } else if self.bindings[sub] != 0 && software(self.bindings[sub]) {
+                self.tally.rebinds += 1;
+            }
             self.bindings[sub] = data;
         }
         // Public dev_ram.ref/dev_pbdma.ref: fixed C56F runlist mapping sends
@@ -853,5 +888,41 @@ mod tests {
             g2.segment(&[0x30000], |v| v == 0x5080),
             Err(Refusal::SubDeviceMask(0x30000))
         );
+    }
+
+    /// PHASE 1c (owner request, precondition P1): every SET_OBJECT of the software class is counted, not only the first,
+    /// and a SET_OBJECT that replaces the software object on its subchannel is a rebind. The tally commits with the
+    /// scan: a refused segment leaves it unchanged.
+    #[test]
+    fn the_tally_counts_every_software_set_object_and_every_rebind_and_commits_with_the_scan() {
+        use kf_abi::submit::method_header_inc;
+        let sw = |v: u32| v == 0x5080;
+        let set = |sub: u32, class: u32| [method_header_inc(sub, 0, 1).unwrap(), class];
+        let mut s = Scan::for_subdevice(1).unwrap();
+        let words: Vec<u32> = [
+            set(6, 0x5080),
+            set(6, 0x5080),
+            set(7, 0x5080),
+            set(0, 0xc7c0),
+        ]
+        .concat();
+        s.segment(&words, sw).unwrap();
+        assert_eq!(
+            (s.tally().software_binds, s.tally().rebinds),
+            (3, 0),
+            "a non-software class on sub0 is not a rebind"
+        );
+        s.segment(&set(6, 0xc7c0), sw).unwrap();
+        assert_eq!((s.tally().software_binds, s.tally().rebinds), (3, 1));
+        // sub6 no longer holds the software object: another class there is not a rebind of it
+        s.segment(&set(6, 0xc7b5), sw).unwrap();
+        assert_eq!(s.tally().rebinds, 1);
+        // a refused segment is not counted (the scan state is transactional); a clone scanned for a retry is discarded
+        let mut t = s.clone();
+        let bad = [set(6, 0x5080)[0], set(6, 0x5080)[1], 0xC000_1234];
+        assert!(t.segment(&bad, sw).is_err());
+        assert_eq!(s.tally().software_binds, 3);
+        // the tally survives an unscanned stretch
+        assert_eq!(s.fresh_resume().tally().software_binds, 3);
     }
 }

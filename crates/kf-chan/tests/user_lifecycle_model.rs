@@ -852,6 +852,14 @@ pub struct Report {
     pub put_boundary_open_scan_max: u64,
     pub pointer_markers_max: u64,
     pub pointer_carried_no_marker_max: u64,
+    /// PHASE 1c: states in which this channel had latched Pointer markers off, the violations seen in them, and the
+    /// most Pointer markers / unannounced wakes counted there.
+    pub latched_states: usize,
+    pub viol_latched: u32,
+    pub latched_markers_max: u64,
+    pub latched_carried_max: u64,
+    pub set_object_total_max: u64,
+    pub set_object_rebinds_max: u64,
 }
 
 pub fn explore(cfg: &Cfg) -> Report {
@@ -889,6 +897,8 @@ pub fn explore(cfg: &Cfg) -> Report {
         rep.put_boundary_open_scan_max =
             rep.put_boundary_open_scan_max.max(c.put_boundary_open_scan);
         rep.pointer_markers_max = rep.pointer_markers_max.max(c.pointer_markers);
+        rep.set_object_total_max = rep.set_object_total_max.max(c.set_object_5080_total);
+        rep.set_object_rebinds_max = rep.set_object_rebinds_max.max(c.set_object_5080_rebinds);
         rep.pointer_carried_no_marker_max = rep
             .pointer_carried_no_marker_max
             .max(c.pointer_carried_no_marker);
@@ -897,6 +907,12 @@ pub fn explore(cfg: &Cfg) -> Report {
         rep.entry_refused = rep.entry_refused.max(w.env.entry_refused);
         rep.scan_refused = rep.scan_refused.max(w.env.scan_refused);
         let mut viol = w.env.viol;
+        let latched = c.pointer_markers_latched_off > 0;
+        if latched {
+            rep.latched_states += 1;
+            rep.latched_markers_max = rep.latched_markers_max.max(c.pointer_markers);
+            rep.latched_carried_max = rep.latched_carried_max.max(c.pointer_carried_no_marker);
+        }
         let succ = w.successors(cfg);
         if succ.is_empty() {
             rep.terminals += 1;
@@ -922,6 +938,9 @@ pub fn explore(cfg: &Cfg) -> Report {
             if w.env.viol & V_UNSCANNED_TRIGGER != 0 {
                 rep.unscanned_trigger_terminals += 1;
             }
+        }
+        if latched {
+            rep.viol_latched |= viol;
         }
         if viol != 0 {
             rep.viol |= viol;
@@ -2378,4 +2397,153 @@ fn m1_no_anchored_windows_is_the_phase_1_start_and_puts_the_marker_inside_the_pa
     assert_clean(&cfg, "m1-anchored");
     cfg.mode = LifecycleMode::NoAnchoredWindows;
     assert_found(&cfg, "m1-no-anchored-windows", V_MARKER_IN_PACKET);
+}
+
+// ---- PHASE 1c (owner request): P1 over a whole run. `always_scan` counts EVERY 5080 SET_OBJECT the scan sees and every
+// rebind of the software subchannel; the default machine stops looking at Pointer mode by construction.
+
+fn set_object_script(rebind: bool) -> (Vec<Op>, Vec<u8>) {
+    let mut script = vec![
+        Op::Push(ge(0, Kind::SetObj)),
+        Op::Push(p(1)),
+        Op::SetPut,
+        Op::Ring,
+        Op::Push(ge(2, Kind::SetObj)), // the same object bound AGAIN, long after the first binding
+        Op::Push(p(3)),
+        Op::SetPut,
+        Op::Ring,
+    ];
+    let mut expected = vec![0u8, 1, 2, 3];
+    if rebind {
+        script.extend([
+            Op::Push(ge(4, Kind::Rebind)),
+            Op::Push(p(5)),
+            Op::SetPut,
+            Op::Ring,
+        ]);
+        expected.extend([4, 5]);
+    } else {
+        script.extend([Op::Push(p(4)), Op::SetPut, Op::Ring]);
+        expected.push(4);
+    }
+    (script, expected)
+}
+
+#[test]
+fn m2_always_scan_counts_every_5080_set_object_and_every_rebind_of_the_whole_run() {
+    for rebind in [false, true] {
+        let (script, expected) = set_object_script(rebind);
+        let mut cfg = Cfg::new(spec(script, &expected));
+        cfg.mode = LifecycleMode::AlwaysScan;
+        let r = assert_clean(&cfg, &format!("m2-always-scan-rebind={rebind}"));
+        assert_eq!(
+            r.set_object_total_max, 2,
+            "both SET_OBJECTs of 5080 (rebind={rebind})"
+        );
+        assert_eq!(r.set_object_rebinds_max, u64::from(rebind));
+    }
+}
+
+#[test]
+fn m2_the_default_machine_cannot_see_a_binding_after_pointer_mode_began() {
+    // Documents the measurement gap on purpose: in Pointer mode nothing is scanned, so only the first binding counts.
+    let (script, expected) = set_object_script(true);
+    let cfg = Cfg::new(spec(script, &expected));
+    let r = assert_clean(&cfg, "m2-default");
+    assert_eq!(r.set_object_total_max, 1);
+    assert_eq!(r.set_object_rebinds_max, 0);
+}
+
+// ---- PHASE 1c item 2 (second review N1): the VM-wide latch. The first packet seen open at a GP_PUT boundary (Scan: the
+// parser state is known) switches Pointer markers off; markers are performance, never correctness, so no entry may be
+// lost, duplicated or reordered by switching them off, and the wake falls back to a look (counted).
+
+/// `SetObjOpen` binds AND ends inside an open packet; the guest's GP_PUT ends right there (an open boundary in Scan);
+/// then a Pointer-mode submission that ends INSIDE a packet again (the P2' residual of `p2prime_*`).
+fn latch_script() -> Vec<Op> {
+    vec![
+        Op::Push(ge(0, Kind::SetObjOpen)),
+        Op::SetPut,
+        Op::Ring,
+        Op::Push(ge(1, Kind::OpenTail)),
+        Op::Push(p(2)),
+        Op::Push(ge(3, Kind::OpenHead)),
+        Op::SetPut, // ends inside a packet, in Pointer mode
+        Op::Ring,
+        Op::Push(ge(4, Kind::OpenTail)),
+        Op::Push(p(5)),
+        Op::SetPut,
+        Op::Ring,
+    ]
+}
+
+#[test]
+fn l1_once_an_open_boundary_was_seen_no_marker_ever_lands_in_a_packet_and_nothing_is_lost() {
+    let cfg = Cfg::new(spec(latch_script(), &[0, 1, 2, 3, 4, 5]));
+    let r = explore(&cfg);
+    println!(
+        "l1: {} states, {} latched, viol={:?} latched viol={:?}",
+        r.states,
+        r.latched_states,
+        viol_names(r.viol),
+        viol_names(r.viol_latched)
+    );
+    assert!(r.latched_states > 0, "some interleaving sees the open boundary in Scan");
+    assert_eq!(
+        r.viol_latched, 0,
+        "in every latched interleaving: no marker in a packet, no loss, no duplicate, no deadlock (a look is allowed): {:?}",
+        r.first
+    );
+    assert_eq!(r.latched_markers_max, 0, "no Pointer marker after the latch");
+    assert!(
+        r.latched_carried_max > 0,
+        "and the wakes it cannot announce are counted (loud)"
+    );
+    // the residual the latch cannot remove: interleavings where the worker never read the open GP_PUT in Scan
+    assert!(
+        r.viol & V_MARKER_IN_PACKET != 0,
+        "unlatched interleavings still reach the P2' violation (the latch needs an observation)"
+    );
+}
+
+#[test]
+fn l1_latched_markers_off_the_wake_is_a_look_and_without_looks_the_run_deadlocks_as_counted() {
+    // d3 (4-slot guest ring) after a latch: the batch-end markers that announced the pops are gone.
+    let mut script = vec![
+        Op::Push(ge(0, Kind::SetObjOpen)),
+        Op::SetPut,
+        Op::Ring,
+        Op::Push(ge(1, Kind::OpenTail)),
+        Op::SetPut,
+        Op::Ring,
+    ];
+    let mut expected = vec![0u8, 1];
+    for id in 2..=4u8 {
+        script.extend([Op::Push(p(id)), Op::SetPut, Op::Ring]);
+        expected.push(id);
+    }
+    let mut cfg = Cfg::new(spec(script, &expected));
+    cfg.src_entries = 4;
+    cfg.priv_entries = 8;
+    cfg.max_states = 8_000_000;
+    cfg.looks = true;
+    let with = explore(&cfg);
+    assert!(with.latched_states > 0);
+    assert_eq!(
+        with.viol_latched, 0,
+        "markers off never loses or duplicates an entry: {:?}",
+        with.first
+    );
+    assert!(with.latched_carried_max > 0, "the fallback is counted");
+    cfg.looks = false;
+    let without = explore(&cfg);
+    assert!(
+        without.viol_latched & V_DEADLOCK != 0,
+        "with looks AND markers gone, a full guest ring is never woken: the fallback IS the look"
+    );
+    assert_eq!(
+        without.viol_latched & !V_DEADLOCK,
+        0,
+        "and nothing else goes wrong"
+    );
 }

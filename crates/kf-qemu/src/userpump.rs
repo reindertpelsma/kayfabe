@@ -940,7 +940,9 @@ impl Pump {
             source_admitted: false,
             core: kf_chan::user_turn::Relay::new(
                 kf_chan::user_storage::ENTRIES,
-                kf_chan::user_lifecycle::Lifecycle::new().with_mode(lifecycle_mode()),
+                kf_chan::user_lifecycle::Lifecycle::new()
+                    .with_mode(lifecycle_mode())
+                    .with_latch(me.relay_stats.life.latch.clone()),
                 scan,
             )
             .map_err(str::to_owned)?,
@@ -1765,9 +1767,14 @@ impl Pump {
         self.core.need = Need::Idle;
         self.core.again = false;
         let out = self.turn_body(me, r);
+        self.report_lifecycle_notices();
+        self.core.sync_tally();
         {
             let d = self.core.life.take_delta();
             me.relay_stats.life.add(&d);
+            me.relay_stats
+                .life
+                .set_object_max(self.core.life.counts().set_object_5080_total);
             if self.core.life.mode() == kf_chan::user_lifecycle::Mode::Window {
                 me.relay_stats
                     .life
@@ -1780,6 +1787,49 @@ impl Pump {
             _ => {}
         }
         out
+    }
+
+    /// Say aloud what the lifecycle machine queued in this turn (it has no I/O): the P2' falsifier lines and the
+    /// per-flip Window line. Bounded by the machine (a few per channel outside a Window).
+    fn report_lifecycle_notices(&mut self) {
+        use kf_chan::user_lifecycle::Notice;
+        for n in self.core.life.take_notices() {
+            let key = self.key;
+            match n {
+                Notice::PutBoundaryOpen {
+                    mode,
+                    relayed,
+                    put_abs,
+                    nth,
+                } => eprintln!(
+                    "kf3: USER_RING_PUT_BOUNDARY_OPEN {:#x}:{:#x} mode={mode:?} nth={nth} cursor_slot={} put_slot={} relayed={relayed} put_abs={put_abs} open_packet={} — the guest's GP_PUT is NOT a packet boundary here (assumption P2' is false for this guest)",
+                    key.0,
+                    key.1,
+                    self.core.cursor,
+                    self.core.put,
+                    carried_text(self.core.put_packet)
+                ),
+                Notice::MarkersLatchedOff {
+                    mode,
+                    relayed,
+                    put_abs,
+                } => eprintln!(
+                    "kf3: USER_RING_POINTER_MARKERS_LATCHED_OFF {:#x}:{:#x} mode={mode:?} relayed={relayed} put_abs={put_abs} — first packet open at a GP_PUT boundary in this VM: Pointer-mode markers are switched OFF for every channel (performance fallback: bounded spin and the counted backstop; no entry is lost or duplicated). Anchored windows stay.",
+                    key.0, key.1
+                ),
+                Notice::WindowFresh {
+                    cursor,
+                    anchor,
+                    anchor_forwarded,
+                    seeded,
+                    stale,
+                    first,
+                } => eprintln!(
+                    "kf3: USER_RING_WINDOW_FRESH {:#x}:{:#x} cursor={cursor} anchor={anchor} anchor_forwarded={anchor_forwarded} seeded={seeded} stale_anchor={stale} first_segment={first:?}",
+                    key.0, key.1
+                ),
+            }
+        }
     }
 
     fn turn_body(&mut self, me: &ChanPlane, r: &mut userrelay::Record) -> Turn<bool> {
@@ -2458,6 +2508,8 @@ impl Pump {
                     self.core.cursor = 0;
                     self.core.grace.clear();
                     self.core.guest_get = None;
+                    // the guest's GP_GET in the new USERD is read below; the ring looks empty until then
+                    self.core.written_get = 0;
                 })
                 .map_err(|e| source_error(e, "USER_RING_MIGRATION_ADMISSION"))
             })
@@ -2478,6 +2530,7 @@ impl Pump {
                 && u32::from_le_bytes(b) != 0
             {
                 self.core.life.switch_cursor_mismatch();
+                self.core.written_get = u32::from_le_bytes(b);
                 eprintln!(
                     "kf3: USER_RING_SWITCH_CURSOR_MISMATCH {:#x}:{:#x} the new ring's USERD shows GP_GET={} at the switch; the relay resets its cursor to 0 (reset-to-0 is contradicted for this growth)",
                     r.key.0,
@@ -3388,5 +3441,29 @@ mod tests {
         let turn = pump.split("fn turn_body(").nth(1).unwrap();
         let turn = turn.split("/// Measurement only: the final scan refusal").next().unwrap();
         assert!(!turn.contains("lifecycle_mode") && !turn.contains("env::var"), "no read per turn");
+    }
+    /// PHASE 1c: the pump gives every channel the VM's marker latch, says aloud what the machine queued and hands the
+    /// scan's SET_OBJECT tally over, at the end of EVERY turn (the machine and the relay have no I/O).
+    #[test]
+    fn the_pump_wires_the_marker_latch_the_notices_and_the_set_object_tally() {
+        let pump = include_str!("userpump.rs");
+        let pump = pump.split("#[cfg(test)]").next().unwrap();
+        assert_eq!(
+            pump.matches(".with_latch(me.relay_stats.life.latch.clone())").count(),
+            1,
+            "one latch per VM, handed to every channel at birth"
+        );
+        let turn = pump.split("fn turn(&mut self, me: &ChanPlane").nth(1).unwrap();
+        let turn = turn.split("fn turn_body(").next().unwrap();
+        for needle in [
+            "self.report_lifecycle_notices();",
+            "self.core.sync_tally();",
+            "set_object_max(",
+        ] {
+            assert!(turn.contains(needle), "turn() must call {needle}");
+        }
+        for line in ["USER_RING_PUT_BOUNDARY_OPEN", "USER_RING_WINDOW_FRESH", "USER_RING_POINTER_MARKERS_LATCHED_OFF"] {
+            assert_eq!(pump.matches(line).count(), 1, "{line} is printed in one place");
+        }
     }
 }

@@ -21,7 +21,7 @@
 mod support;
 
 use kf_chan::user_gate::MARK_TAG;
-use kf_chan::user_lifecycle::{Lifecycle, LifecycleMode, Mode};
+use kf_chan::user_lifecycle::{Lifecycle, LifecycleMode, MarkerLatch, Mode};
 use kf_chan::user_scan::Scan;
 use std::collections::{HashMap, VecDeque};
 use support::*;
@@ -130,6 +130,13 @@ pub struct Sim {
     pub gone: bool,
     /// Words by raw entry value (the corpus replay); consulted before `defs`.
     pub custom: HashMap<u64, Vec<u32>>,
+    /// PHASE 1c: the guest pauses after having published this many entries in total until the relay has READ a
+    /// `GP_PUT` equal to its cursor at that point (so the submission end is observed as a boundary).
+    pub pauses: Vec<usize>,
+    /// The relay's cursor (entries relayed), set by `drive` before every feed.
+    pub relayed_seen: u64,
+    /// Entries published when the relay last read a caught-up `GP_PUT` (`usize::MAX` = never).
+    pub observed: usize,
 }
 
 impl Sim {
@@ -167,6 +174,9 @@ impl Sim {
             poison_above_put: false,
             gone: false,
             custom: HashMap::new(),
+            pauses: Vec::new(),
+            relayed_seen: 0,
+            observed: usize::MAX,
         }
     }
 
@@ -179,6 +189,9 @@ impl Sim {
                 break;
             }
             fed += 1;
+            if self.pauses.contains(&self.fed_post.len()) && self.observed != self.fed_post.len() {
+                break;
+            }
             if self.held[r] || (self.put_local[r] + 1) % self.entries == self.guest_get[r] {
                 break;
             }
@@ -240,6 +253,9 @@ impl Env for Sim {
         self.gone
     }
     fn gp_put(&mut self) -> u32 {
+        if self.relayed_seen as usize == self.fed_post.len() {
+            self.observed = self.fed_post.len();
+        }
         self.put[self.src]
     }
     fn gp_dword(&mut self, slot: u32, hi: bool) -> u32 {
@@ -355,6 +371,7 @@ pub fn drive(sim: &mut Sim, relay: &mut Relay, max_turns: usize) -> usize {
     let mut idle_turns = 0;
     while turns < max_turns {
         sim.apply_sched(relay.relayed);
+        sim.relayed_seen = relay.relayed;
         sim.feed();
         if relay.dead {
             break;
@@ -586,6 +603,87 @@ fn modes_every_mode_forwards_the_same_entries_and_each_has_its_observable_differ
     assert!(
         default_markers > 0,
         "the default mode places Pointer markers (otherwise the comparison above proves nothing)"
+    );
+}
+
+/// PHASE 1c item 2 (second review N1). A guest that ends a submission inside a packet while the parser state is known
+/// (Scan) falsifies P2': Pointer markers go off VM-wide. Two channels share the latch: channel A sees the open
+/// boundary, channel B (which never does) loses its Pointer markers too. Neither loses, duplicates or reorders an
+/// entry, and B's unannounced wakes are counted.
+#[test]
+fn latch_an_open_gp_put_boundary_in_one_channel_switches_pointer_markers_off_for_the_whole_vm() {
+    let mut b_without = 0;
+    for seed in 0..80u64 {
+        let mut rng = Rng::new(seed ^ 0x1a7c);
+        let n = 10 + rng.below(60) as usize;
+        let mut a_stream = gen_stream(&mut rng, n, false, false);
+        a_stream[0] = ge(0, Kind::SetObjOpen);
+        a_stream.insert(1, ge(184, Kind::OpenTail));
+        let b_stream = gen_stream(&mut rng, n, false, false);
+        let ring = 16 << rng.below(2);
+        let latch = std::sync::Arc::new(MarkerLatch::default());
+
+        let run =
+            |stream: &[Ge], pauses: Vec<usize>, latch: Option<std::sync::Arc<MarkerLatch>>| {
+                let mut sim = Sim::new(ring, 8, stream, vec![]);
+                sim.pauses = pauses;
+                let mut relay = new_relay_mode(8, LifecycleMode::Default);
+                if let Some(l) = latch {
+                    relay.life = relay.life.clone().with_latch(l);
+                }
+                drive(&mut sim, &mut relay, 200_000);
+                sim.out.dead |= relay.dead;
+                (sim.out, relay)
+            };
+        let a_expect: Vec<u64> = a_stream.iter().map(Ge::raw).collect();
+        let (a, ra) = run(&a_stream, vec![1], Some(latch.clone()));
+        assert!(!a.dead, "seed {seed}");
+        assert_eq!(
+            a.forwarded, a_expect,
+            "seed {seed}: A loses/duplicates nothing"
+        );
+        assert_eq!(
+            ra.life.counts().put_boundary_open_scan,
+            1,
+            "seed {seed}: the open boundary was observed"
+        );
+        assert_eq!(
+            ra.life.counts().pointer_markers_latched_off,
+            1,
+            "seed {seed}"
+        );
+        assert_eq!(
+            ra.life.counts().pointer_markers,
+            0,
+            "seed {seed}: A places no Pointer marker"
+        );
+        assert!(latch.is_set());
+        let b_expect: Vec<u64> = b_stream.iter().map(Ge::raw).collect();
+        let (b, rb) = run(&b_stream, vec![], Some(latch.clone()));
+        assert!(!b.dead, "seed {seed}");
+        assert_eq!(
+            b.forwarded, b_expect,
+            "seed {seed}: B loses/duplicates nothing"
+        );
+        assert_eq!(b.beyond_put, 0);
+        assert_eq!(
+            rb.life.counts().pointer_markers_latched_off,
+            0,
+            "seed {seed}: counted once in the VM"
+        );
+        assert_eq!(
+            rb.life.counts().pointer_markers,
+            0,
+            "seed {seed}: B never saw an open packet but has no Pointer marker"
+        );
+        assert_eq!(rb.life.mode(), Mode::Pointer);
+        // the control: the same B without the latch places Pointer markers
+        let (_, rc) = run(&b_stream, vec![], None);
+        b_without += rc.life.counts().pointer_markers;
+    }
+    assert!(
+        b_without > 0,
+        "the control places Pointer markers, so the comparison above means something"
     );
 }
 

@@ -540,6 +540,12 @@ impl Relay {
 
     /// One micro-step of the turn.
     pub fn step(&mut self, env: &mut impl Env) {
+        self.step_inner(env);
+        // the pump does this at the end of every turn (the tally commits with the scan)
+        self.core.sync_tally();
+    }
+
+    fn step_inner(&mut self, env: &mut impl Env) {
         match self.sub {
             Sub::Core => {
                 let r = {
@@ -659,6 +665,7 @@ impl Relay {
                     };
                     self.core.grace.clear();
                     self.core.guest_get = None;
+                    self.core.written_get = 0;
                     self.core.life.source_switched();
                     env.event(Ev::Switched);
                 }

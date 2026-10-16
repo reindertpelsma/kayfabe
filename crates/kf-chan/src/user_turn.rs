@@ -296,6 +296,11 @@ pub struct Relay {
     pub raw: u64,
     /// The `GP_PUT` value read this turn.
     pub put: u32,
+    /// The packet the scan had open when this turn read `GP_PUT` (Scan / Window only): for the owner's
+    /// `USER_RING_PUT_BOUNDARY_OPEN` line, valid in the turn that queued that notice.
+    pub put_packet: Option<(MethodHeader, usize)>,
+    /// The guest `GP_GET` last written back (what the guest sees; 0 at birth and after a source switch).
+    pub written_get: u32,
     /// The guest `GP_GET` after this entry.
     pub next_get: u32,
     /// The decoded entry.
@@ -310,6 +315,8 @@ pub struct Relay {
     hi: u32,
     epoch: u64,
     put_abs: u64,
+    /// The guest ring was full when this turn read `GP_PUT` (see [`Relay::written_get`]).
+    pub put_full: bool,
     seed: bool,
     plan_forward: bool,
     permit: Option<ScanPermit>,
@@ -344,6 +351,8 @@ impl Relay {
             puts: 0,
             raw: 0,
             put: 0,
+            put_packet: None,
+            written_get: 0,
             next_get: 0,
             desc: None,
             words: Vec::new(),
@@ -353,6 +362,7 @@ impl Relay {
             hi: 0,
             epoch: 0,
             put_abs: 0,
+            put_full: false,
             seed: false,
             plan_forward: false,
             permit: None,
@@ -363,7 +373,7 @@ impl Relay {
     #[must_use]
     pub fn state_key(&self) -> String {
         format!(
-            "{}|{:?}|{:?}|{:?}|{:?}|{:?}|{}|{}|{}|{:?}|{}|{}|{}|{}|{:?}|{}|{:?}|{}|{}|{}|{:x}|{}|{}|{}|{}|{}",
+            "{}|{:?}|{:?}|{:?}|{:?}|{:?}|{}|{}|{}|{:?}|{}|{}|{}|{}|{:?}|{}|{:?}|{}|{}|{}|{:x}|{}|{}|{}|{}|{}|{}|{}",
             self.life.state_key(self.relayed),
             self.scan,
             self.sync,
@@ -390,6 +400,8 @@ impl Relay {
             u8::from(self.plan_forward),
             self.put,
             u8::from(self.segment_pending),
+            self.written_get,
+            u8::from(self.put_full),
         )
     }
 
@@ -400,6 +412,13 @@ impl Relay {
         self.scan_failed = false;
         self.published = None;
         self.phase = Phase::Obs;
+    }
+
+    /// Hand the scan's SET_OBJECT tally to the lifecycle counters (the owner calls it at the end of every turn, after
+    /// a scanned segment may have been committed).
+    pub fn sync_tally(&mut self) {
+        let t = self.scan.tally();
+        self.life.sync_set_objects(t.software_binds, t.rebinds);
     }
 
     /// No turn is running.
@@ -458,6 +477,7 @@ impl Relay {
                 if let Some((generation, get)) = self.guest_get {
                     if generation == self.generation {
                         if io.write_guest_get(get)? {
+                            self.written_get = get;
                             self.guest_get = None;
                         } else {
                             // an admission lock is busy: look again (spin, then the safety net)
@@ -536,8 +556,11 @@ impl Relay {
         }
         self.put = put;
         self.put_abs = self.relayed + u64::from(put.wrapping_sub(self.cursor) & (entries - 1));
-        let open = matches!(self.life.mode(), Mode::Scan | Mode::Window)
-            .then(|| self.scan.carried().is_some());
+        // the guest ring is FULL when the value it published leaves one slot before the `GP_GET` it sees
+        self.put_full = put.wrapping_add(1) & (entries - 1) == self.written_get;
+        let known = matches!(self.life.mode(), Mode::Scan | Mode::Window);
+        self.put_packet = known.then(|| self.scan.carried()).flatten();
+        let open = known.then(|| self.put_packet.is_some());
         self.life.observe_put(self.relayed, self.put_abs, open);
         if put == self.cursor {
             let submitted = self.end_batch(io)?;
@@ -578,6 +601,7 @@ impl Relay {
             abs: self.relayed,
             epoch: self.epoch,
             put_abs: self.put_abs,
+            put_full: self.put_full,
             sw_mask,
             have_software: view.have,
             quiescent: !self.sync.waiting(),
