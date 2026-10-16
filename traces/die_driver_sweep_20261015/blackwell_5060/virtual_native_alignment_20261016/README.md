@@ -2,6 +2,17 @@
 
 **STATUS: RESEARCH, 2026-10-16. Ordered API comparison measured; full byte comparison pending.**
 
+**Update, 2026-10-16 01:13 UTC:** The FMC observer replay recovered both
+virtual sequence-zero prefixes:387 command+385 status records, zero forward
+gaps. Strict census still fails109 anomalies/39 unpaired controls; see
+RESULT_FMC1.md and fmc/. Its richer metadata distinguishes envelope and body
+statuses: the first observed status-field difference among common aligned calls
+is0x20800a87 (native envelope0/body0x56; virtual envelope0x56/erased body).
+The collapsed-status comparison below hid that distinction. It remains useful
+only within its stated effective-status limits. Full reply bytes were not
+exported; no first-body-byte or Code43 cause is proved. H-FMC1 strict-validity
+falsifier fired even though attachment/prefix recovery succeeded.
+
 Owned56165326, fresh unprivileged RM tuple arch0x1b0/impl0x6/GB206 on host
 595.91.07, UID65534/CapEff0. Native Windows actual32.0.15.8088/GSP580.65.05
 passes CUDA copy/kernel/matmul, hardware D3D11/12 and short zero-TDR/Code0

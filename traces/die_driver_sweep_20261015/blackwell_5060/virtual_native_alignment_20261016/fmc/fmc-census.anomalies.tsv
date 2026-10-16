@@ -1,0 +1,3 @@
+kind	count	first_example
+trailing_bytes	60	src0: rec8 Cmd: 232 bytes carried, declared length rounds to 112
+control_extra_bytes	49	src0: rec27 Status cmd 0x0: declares 0 param bytes, message carries 1056

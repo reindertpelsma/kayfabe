@@ -1,0 +1,28 @@
+{
+  "kind": "footer",
+  "file_export_complete": true,
+  "capture_complete": false,
+  "records": 772,
+  "source_records": 772,
+  "omitted_records": 0,
+  "source_bytes": 468776,
+  "source_sha256": "712972a1c20db9731a083901e2597ff308941735ce18a1a07141212d06192878",
+  "observations_sha256": "17af6b55b40a3ecc72cd5fa3e53dc1b6b30cf12f12688171b88fa2c0b83eee7d",
+  "driver_stats": {
+    "triggers": 468,
+    "bootstrap_attempts": 2,
+    "attached_tables": 1,
+    "invalid_bootstrap": 0,
+    "uninitialized_headers": 1,
+    "invalid_headers": 0,
+    "read_failures": 0,
+    "unstable_snapshots": 0,
+    "mapping_changed": 0,
+    "recorded": 772,
+    "dropped": 0,
+    "sequence_gaps": 0,
+    "invalid_elements": 5953,
+    "limited": false,
+    "buffered_bytes": 0
+  }
+}
