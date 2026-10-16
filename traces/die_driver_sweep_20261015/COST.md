@@ -1,6 +1,6 @@
 # Campaign cost and instance ownership
 
-**STATUS: LIVE, 2026-10-15.** Ceiling $40; at most one rental at a time;
+**STATUS: LIVE, 2026-10-16.** Ceiling $40; at most one rental at a time;
 each rental at most three hours. Only the instance IDs listed here were created by this campaign.
 Hourly rates include requested disk as returned by `show instances`.
 Accrued cost is an estimate until account billing is available; transfers may add charges.
@@ -41,8 +41,10 @@ Final AD102: device da0569a6; Windows580 Code0/DWM/D3D+CUDA passes, Linux580 raw
 
 | Instance | GPU | USD/hour | StartUTC | StopUTC | Purpose | Cost |
 |---|---|---:|---|---|---|---|
-|56180232|RTX2060S, exact die pending unprivileged RM|0.1113888889|2026-10-16T01:16:45.814656+00:00|ACTIVE; timer2167738 at04:11:46UTC, hardcap04:16:45UTC|Native-first Windows580 reference, nested7min hold, callback/event R34 at180s|max3h compute ceiling0.34USD; campaign ceiling4.38USD, transfers unbilled|
+|56180232|RTX2060S / TU106, fresh unprivileged RM verified|0.1113888889|2026-10-16T01:16:45.814656+00:00|ACTIVE; timer2167738 at04:11:46UTC, hardcap04:16:45UTC|Native-first Windows580 reference, nested7min hold, callback/event R34 at180s|max3h compute ceiling0.34USD; campaign ceiling4.38USD, transfers unbilled|
 
 Prior own56165326 absence verified01:13:59UTC before this creation. No other
-own rental remains. Timer armed immediately; native installer bootstrap waits
-for initial SSH. Provider currently reports created; no new hardware result.
+own rental remains. Timer armed immediately. Updated03:47UTC: native Windows
+580.88 seven-minute reference and Linux595 raw30/30/native gates pass; nested
+Windows580.88 short suite passes, corrected-deadline hold running. R34 A/B
+pending. UID65534/CapEff0 RM tuple arch0x160/impl6 verifies TU106.
