@@ -1068,6 +1068,8 @@ pub enum ChanError {
 pub enum Pumped {
     /// Everything up to the guest's `GP_PUT` is submitted (or already retired).
     Caught,
+    /// Source-view contention; schedule another worker turn without waiting for a GPU event.
+    Retry,
     /// Waiting for a completion: a split's walk, or host ring space. Pump again on the next wake.
     Waiting,
 }
@@ -1582,6 +1584,7 @@ impl TranslatedChannel {
             };
             match next {
                 Next::Idle => break Pumped::Caught,
+                Next::Retry => break Pumped::Retry,
                 Next::Bind { ir, retires } => {
                     // ★ P1+P2 inc D (§3.5): bound NOW — after any earlier split's walk — and a
                     // piece the ring cannot take yet is stashed UNBOUND, bound again at retry.

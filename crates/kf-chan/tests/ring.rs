@@ -81,6 +81,7 @@ fn a_split_holds_the_rest_of_its_segment_and_retirement_follows_the_last_piece()
             Next::Submit { retires, .. } => format!("S{retires:?}"),
             Next::Walk { pdb, retires } => format!("W{pdb:x?}{retires:?}"),
             Next::Idle => "I".into(),
+            Next::Retry => panic!("unexpected retry"),
             Next::Bind { .. } => "B".into(),
             Next::Sw { .. } => "X".into(),
         })
@@ -586,6 +587,7 @@ fn a_tmode_ring_hands_out_unbound_work_and_splits() {
     loop {
         match r.next(1, &mut mem, is_ce, &W).unwrap() {
             Next::Idle => break,
+            Next::Retry => panic!("unexpected retry"),
             Next::Bind { ir, retires } => shape.push(format!("bind{}:{retires:?}", ir.len())),
             Next::Walk { pdb, retires } => shape.push(format!("walk{pdb:x?}:{retires:?}")),
             Next::Sw { call, retires } => {
@@ -620,4 +622,46 @@ fn a_refused_unmap_does_not_leave_the_other_maps_live() {
     assert_eq!(called, vec![0x10, 0x20, 0x30], "every map unmapped");
     assert_eq!(r, Err(0x10), "the first refusal");
     assert_eq!(unmap_every::<u64>(&[1, 2], |_| Ok(())), Ok(()));
+}
+
+#[test]
+fn source_view_retry_preserves_gp_cursor_and_has_no_retirement() {
+    struct Contended {
+        inner: Mem,
+        fail_at: u64,
+        busy: bool,
+    }
+    impl GuestMemory for Contended {
+        fn read(&mut self, va: u64, out: &mut [u8]) -> Result<(), String> {
+            if va == self.fail_at && self.busy {
+                self.busy = false;
+                return Err("busy".into());
+            }
+            self.inner.read(va, out)
+        }
+        fn retryable(&self) -> bool {
+            true
+        }
+    }
+    for fail_at in [GPFIFO, PB] {
+        let mut inner = Mem::default();
+        seg(&mut inner, 0, PB, &m(4, 0, &[CE_CLASS]));
+        let mut mem = Contended {
+            inner,
+            fail_at,
+            busy: true,
+        };
+        let mut ring = TranslatedRing::new(GPFIFO, 8, 0);
+        assert_eq!(ring.next(1, &mut mem, is_ce, &W), Ok(Next::Retry));
+        assert_eq!(ring.entries_fetched(), 0);
+        assert!(matches!(
+            ring.next(1, &mut mem, is_ce, &W),
+            Ok(Next::Submit {
+                retires: Some(1),
+                ..
+            })
+        ));
+        assert_eq!(ring.entries_fetched(), 1);
+        assert_eq!(ring.next(1, &mut mem, is_ce, &W), Ok(Next::Idle));
+    }
 }

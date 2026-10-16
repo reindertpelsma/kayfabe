@@ -28,6 +28,12 @@ pub trait GuestMemory {
     /// A range that is not mapped, or a failed read — refused by name by the caller.
     fn read(&mut self, va: u64, out: &mut [u8]) -> Result<(), String>;
 
+    /// A transient read failure requires another worker turn, not channel death.
+    /// Default false preserves existing terminal read failures.
+    fn retryable(&self) -> bool {
+        false
+    }
+
     /// ★ P1+P2 inc C: the placement rows behind this memory, for the T-mode resolver and its shadow
     /// ([`crate::tmode::Rows`]). `None` (the default) when the reader has none.
     fn rows(&self) -> Option<&dyn crate::tmode::Rows> {
@@ -57,6 +63,8 @@ pub enum Next {
     },
     /// Nothing to do: the cursor has reached the guest's `GP_PUT`.
     Idle,
+    /// Source-view contention; no entry consumed or completed. Repump off-vCPU.
+    Retry,
     /// ★ OWNER_RULINGS §U: a software method on a subchannel bound to one of the channel's own
     /// software objects. Like a split: everything before it must COMPLETE before its action runs,
     /// and nothing after it is fetched into the host ring until the action is done.
@@ -389,8 +397,14 @@ impl TranslatedRing {
             self.entries_fetched += 1;
             let at = self.gpfifo_va + u64::from(gp) * GP_ENTRY_SIZE;
             let mut raw = [0u8; 8];
-            mem.read(at, &mut raw)
-                .map_err(|why| RingRefusal::Read { gp, va: at, why })?;
+            if let Err(why) = mem.read(at, &mut raw) {
+                if mem.retryable() {
+                    self.cursor = gp;
+                    self.entries_fetched -= 1;
+                    return Ok(Next::Retry);
+                }
+                return Err(RingRefusal::Read { gp, va: at, why });
+            }
             self.pending_retires = Some(self.cursor);
             let mut e = match gp_entry_classify(u64::from_le_bytes(raw)) {
                 GpEntryKind::Segment(e) => {
@@ -437,12 +451,19 @@ impl TranslatedRing {
                 });
             }
             let mut bytes = vec![0u8; e.len_bytes as usize];
-            mem.read(e.gpu_va, &mut bytes)
-                .map_err(|why| RingRefusal::Read {
+            if let Err(why) = mem.read(e.gpu_va, &mut bytes) {
+                if mem.retryable() {
+                    self.cursor = gp;
+                    self.entries_fetched -= 1;
+                    self.pending_retires = None;
+                    return Ok(Next::Retry);
+                }
+                return Err(RingRefusal::Read {
                     gp,
                     va: e.gpu_va,
                     why,
-                })?;
+                });
+            }
             let words: Vec<u32> = bytes
                 .chunks_exact(4)
                 .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
