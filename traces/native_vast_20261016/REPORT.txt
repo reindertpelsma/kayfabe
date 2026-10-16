@@ -1,0 +1,42 @@
+NATIVE VAST REFERENCE (Heaven 4.0, Windows) - STOPPED BEFORE RENTING
+Branch claude/native-vast-20261016, date 2026-10-16.
+
+RESULT: no measurement was made and no instance was created. Reason: the task says to STOP when no
+4070-class KVM offer exists, and none does.
+
+Offer search, 2026-10-16T21:56Z (vastai search offers, no default filters, num_gpus=1
+vms_enabled=true rentable=true; 53 rentable KVM single-GPU offers; full list in
+OFFERS_20261016T2156Z.txt):
+- RTX 4070 (AD104), RTX 4070 Super (AD104), RTX 4070 Ti (AD104): ZERO rentable KVM offers.
+  Offers for these cards exist only as listings that are not rentable now (already rented) or as
+  non-KVM container offers. The windows-on-vast installer (bin456789/reinstall) needs a KVM VM and
+  erases the boot disk, so container offers cannot run it.
+  Non-KVM, rentable RTX 4070 containers (unusable for this): 16213981 0.176 USD/h, 45498591 0.135,
+  53613016 0.335, 54968172 0.401.
+- Nearest KVM alternatives (all with a different die, hence a different comparison):
+  * RTX 4070 Ti Super (Vast name "RTX 4070S Ti"; AD103, 16 GB, not the AD104 die): 53719523 at
+    0.291 USD/h (Bulgaria, EPYC 7642, reliability 0.76, pcie_bw 6.2) and 55828515 at 0.576 USD/h
+    (Wisconsin, Ryzen 9 7945HX, reliability 0.99, pcie_bw 25.1).
+  * RTX 4080 Super (AD103): 56294112 at 0.415 USD/h (Australia, i7-12700F).
+  * RTX 4000 Ada (AD104-based workstation card): 36173718 at 0.201 USD/h (Hungary).
+  * RTX 3070 (GA104): 32999051 at 0.101 USD/h. RTX 3090: 35376205 at 0.148 USD/h.
+  The die of the 4070 Ti Super is not the 4070's, so it is not "acceptable" under the task's
+  same-die rule; I did not decide that for the owner.
+
+Decision needed from the owner: (a) wait and re-poll for a 4070/4070S/4070 Ti KVM offer, (b) accept
+the RTX 4070 Ti Super (53719523 is cheapest but its reliability is 0.76; 55828515 is 0.576 USD/h and
+reliable; both fit the 0.6 USD/h cap only if the price holds), or (c) accept the RTX 4000 Ada (same
+AD104 family but a 130 W workstation board with a different power limit, which would distort the
+power comparison, so not recommended). Any substitute makes SM count, memory clock and power limit
+SKU effects (INFERRED), as PREREG.md already says.
+
+Prepared, not yet run: plan in PREREG.md. Reviewed (read, not executed): windows-on-vast install.sh
+(onstart script, pinned reinstall revision 80c3d5e1, erases the whole boot disk, then installs
+Windows 11 Enterprise LTSC 2024 Evaluation, OpenSSH, NVIDIA 580.88 and CUDA 13.0.48; SSH as user
+"vast" with the account's public key). The Vast account already has an SSH key registered.
+Not yet read: the codex sweep branches and the kayfabe perf harness Heaven arguments; they are needed
+only if a box is rented.
+
+Cost: 0.00 USD. Instance ids created: none. Teardown: nothing to tear down.
+`vastai show instances` at 2026-10-16T21:5xZ lists exactly one instance, 56302930 (RTX 4090,
+label codex-ada-two-builds-20261016), which is not mine and was not touched.

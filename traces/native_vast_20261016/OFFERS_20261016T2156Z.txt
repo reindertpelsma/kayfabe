@@ -1,0 +1,51 @@
+rentable VM single-GPU offers: 53
+38548700 RTX 3080 0.081 disk 169 vram 10240 pcie_bw 10.1 Xeon® E5-2682 v4  | Chongqing, CN rel 0.844 rentable True
+32999051 RTX 3070 0.101 disk 273 vram 8192 pcie_bw 23.5 AMD EPYC 7542 32-Core Processor | British Columbia, CA rel 0.999 rentable True
+34368676 RTX 3060 0.109 disk 542 vram 12288 pcie_bw 8.9 Xeon® E5-2673 v4  | United Kingdom, GB rel 0.843 rentable True
+35401052 RTX 3080 0.121 disk 199 vram 10240 pcie_bw 9.8 Xeon® E5-2682 v4  | , CN rel 0.99 rentable True
+35376205 RTX 3090 0.148 disk 223 vram 24576 pcie_bw 16.4 AMD EPYC 7K62 48-Core Processor | Guangxi Zhuangzu, CN rel 0.974 rentable True
+36173718 RTX 4000Ada 0.201 disk 469 vram 20475 pcie_bw 24.1 AMD Ryzen Threadripper PRO 3945WX 12-Cores | Hungary, HU rel 0.999 rentable True
+33642337 RTX 5080 0.201 disk 337 vram 16303 pcie_bw 19.5 AMD EPYC 7502 32-Core Processor | , CN rel 0.987 rentable True
+51156484 RTX 3090 0.228 disk 270 vram 24576 pcie_bw 12.5 AMD EPYC 7601 32-Core Processor | Quebec, CA rel 0.984 rentable True
+54485065 RTX 3090 0.281 disk 265 vram 24576 pcie_bw 25.1 AMD Ryzen 9 5900X 12-Core Processor | Australia, AU rel 0.971 rentable True
+53719523 RTX 4070S Ti 0.291 disk 276 vram 16376 pcie_bw 6.2 AMD EPYC 7642 48-Core Processor | Bulgaria, BG rel 0.759 rentable True
+47476584 RTX 3090 0.335 disk 694 vram 24576 pcie_bw 23.6 AMD EPYC 7532 32-Core Processor | United Kingdom, GB rel 0.992 rentable True
+43994873 RTX 5090 0.388 disk 331 vram 32607 pcie_bw 26.4 AMD EPYC 7742 64-Core Processor | , CN rel 0.996 rentable True
+25814730 RTX 4090 0.401 disk 284 vram 24564 pcie_bw 25.5 None | Iceland, IS rel 0.997 rentable True
+38341563 RTX 5090 0.401 disk 612 vram 32607 pcie_bw 26.9 AMD EPYC 7K62 48-Core Processor | , CN rel 0.973 rentable True
+56294112 RTX 4080S 0.415 disk 509 vram 16376 pcie_bw 23.4 12th Gen Core™ i7-12700F | Australia, AU rel 0.981 rentable True
+56262262 RTX 4090 0.442 disk 166 vram 24564 pcie_bw 24.1 Xeon® Platinum 8352V  | Quebec, CA rel 0.734 rentable True
+51194884 RTX 4090 0.442 disk 50 vram 24564 pcie_bw 24.0 Xeon® Platinum 8352V  | Quebec, CA rel 0.971 rentable True
+51737446 RTX 4090 0.442 disk 82 vram 24564 pcie_bw 23.8 Xeon® Platinum 8352V  | Quebec, CA rel 0.998 rentable True
+56242117 RTX 4090 0.468 disk 719 vram 24564 pcie_bw 23.3 AMD EPYC 7K62 48-Core Processor | Beijing, CN rel 0.743 rentable True
+56013699 RTX 3090 0.536 disk 534 vram 24576 pcie_bw 11.4 Xeon® E5-2673 v4  | Quebec, CA rel 0.968 rentable True
+50420387 RTX 5090 0.55 disk 304 vram 32607 pcie_bw 22.0 AMD EPYC 7452 32-Core Processor | Estonia, EE rel 0.977 rentable True
+55828515 RTX 4070S Ti 0.576 disk 333 vram 16376 pcie_bw 25.1 AMD Ryzen 9 7945HX with Radeon Graphics | Wisconsin, US rel 0.993 rentable True
+55795820 RTX 5090 0.587 disk 1049 vram 32607 pcie_bw 55.1 AMD Ryzen 7 9800X3D 8-Core Processor | Finland, FI rel 0.994 rentable True
+55429751 RTX 5090 0.601 disk 398 vram 32607 pcie_bw 26.6 AMD EPYC 7K62 48-Core Processor | Hubei, CN rel 0.98 rentable True
+56125172 RTX 4090 0.603 disk 650 vram 24564 pcie_bw 25.6 AMD Ryzen 7 9700X 8-Core Processor | Chile, CL rel 0.996 rentable True
+54382815 RTX 5090 0.635 disk 1402 vram 32607 pcie_bw 27.0 AMD EPYC 7642 48-Core Processor | Sweden, SE rel 0.997 rentable True
+53119697 RTX 5090 0.641 disk 603 vram 32607 pcie_bw 6.7 Core™ i9-14900KF | Australia, AU rel 0.862 rentable True
+42143434 RTX 5090 0.642 disk 1357 vram 32607 pcie_bw 27.5 AMD Ryzen 9 7950X 16-Core Processor | Mexico, MX rel 0.988 rentable True
+56302983 RTX 4090 0.655 disk 578 vram 24564 pcie_bw 25.6 AMD Ryzen 9 7950X 16-Core Processor | Israel, IL rel 0.995 rentable True
+30055206 RTX 4090 0.668 disk 2951 vram 49140 pcie_bw 23.6 AMD EPYC 7C13 64-Core Processor | United Kingdom, GB rel 0.999 rentable True
+33435509 RTX 4090 0.668 disk 700 vram 24564 pcie_bw 22.2 Xeon® Silver 4314  | , CN rel 0.997 rentable True
+56157609 RTX 4090 0.668 disk 1091 vram 24564 pcie_bw 24.3 Core™ Ultra 7 265K | Switzerland, CH rel 0.991 rentable True
+54902716 RTX 4090 0.669 disk 960 vram 24564 pcie_bw 25.0 AMD EPYC 7C13 64-Core Processor | Romania, RO rel 0.998 rentable True
+55828608 RTX 5070 Ti 0.669 disk 72 vram 16303 pcie_bw 37.2 AMD Ryzen 9 7945HX with Radeon Graphics | Wisconsin, US rel 0.994 rentable True
+56279046 RTX 3070 0.735 disk 6205 vram 8192 pcie_bw 21.3 AMD EPYC 7742 64-Core Processor | Taiwan, TW rel 0.997 rentable True
+47667744 RTX 4090 0.738 disk 644 vram 49140 pcie_bw 18.9 AMD EPYC 7B13 64-Core Processor | California, US rel 0.994 rentable True
+53904690 RTX PRO 5000 0.808 disk 652 vram 48935 pcie_bw 26.5 AMD EPYC 7452 32-Core Processor | Czechia, CZ rel 0.992 rentable True
+43092247 RTX 5090 0.869 disk 434 vram 32607 pcie_bw 46.6 AMD Ryzen 9 9950X 16-Core Processor | Denmark, DK rel 0.997 rentable True
+48289326 RTX 4090 0.869 disk 326 vram 49140 pcie_bw 23.4 AMD EPYC 7V73X 64-Core Processor | Romania, RO rel 0.998 rentable True
+55520592 RTX 5090 0.908 disk 2175 vram 32607 pcie_bw 27.0 AMD EPYC 7B13 64-Core Processor | Japan, JP rel 0.997 rentable True
+52960028 RTX 5090 0.935 disk 194 vram 32607 pcie_bw 54.2 AMD EPYC 9B14 96-Core Processor | Ontario, CA rel 0.99 rentable True
+56205580 RTX 4090 1.188 disk 1962 vram 24564 pcie_bw 25.5 AMD Ryzen Threadripper PRO 7965WX 24-Cores | Italy, IT rel 0.582 rentable True
+47802004 RTX 5090 1.335 disk 853 vram 32607 pcie_bw 25.5 AMD EPYC 7453 28-Core Processor | Italy, IT rel 0.993 rentable True
+53428983 RTX PRO 6000 WS 1.609 disk 1185 vram 97887 pcie_bw 3.2 13th Gen Core™ i5-13500 | Taiwan, TW rel 0.991 rentable True
+56270853 RTX 5090 1.735 disk 2601 vram 32607 pcie_bw 54.2 AMD EPYC 9654 96-Core Processor | United Kingdom, GB rel 0.994 rentable True
+56271881 RTX 5090 1.934 disk 4997 vram 32607 pcie_bw 26.9 AMD EPYC 7B13 64-Core Processor | Quebec, CA rel 0.989 rentable True
+51299966 RTX PRO 6000 WS 1.991 disk 1183 vram 97887 pcie_bw 27.0 AMD Ryzen 9 5950X 16-Core Processor | Bulgaria, BG rel 0.951 rentable True
+55942799 RTX PRO 6000 Max-Q 2.207 disk 1196 vram 97887 pcie_bw 13.1 Xeon® Gold 6154  | Texas, US rel 0.992 rentable True
+56181691 RTX 5090 3.335 disk 2756 vram 32607 pcie_bw 25.5 AMD EPYC 7B13 64-Core Processor | Quebec, CA rel 0.885 rentable True
+54391316 RTX 4060 6.001 disk 226 vram 8188 pcie_bw 6.3 AMD Ryzen 7 5700 | California, US rel 0.971 rentable True
