@@ -46,3 +46,4 @@ pub(crate) mod storeview;
 pub(crate) mod storeview_unsafe;
 
 pub(crate) mod storeview_native;
+pub(crate) mod storeview_deferred;

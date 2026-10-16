@@ -198,7 +198,12 @@ impl Reader {
     fn clear_fallback(&mut self) -> Result<(), Refusal> {
         while let Some(v) = self.fallback.last_mut() {
             v.ready = false;
-            self.shared.native.release(&mut v.view).map_err(refusal)?;
+            self.shared.native.release(&mut v.view).map_err(|e| {
+                if let Mode::Windowed(t) = &self.shared.mode {
+                    t.counters.release_refused.fetch_add(1, Ordering::Relaxed);
+                }
+                refusal(e)
+            })?;
             self.fallback.pop();
         }
         Ok(())
@@ -206,19 +211,7 @@ impl Reader {
     pub(crate) fn stats(&self) -> (u64, u64, usize) {
         (self.owner.live() as u64, 0, self.shared.windows)
     }
-    /// Translated source reader, invoked after its placement guard was dropped.
-    pub(crate) fn read_prepared(&mut self, off: u64, out: &mut [u8]) -> Result<(), Refusal> {
-        if out.len() > userread::MAX_BYTES {
-            return Err(Refusal::Bounds);
-        }
-        self.prepare(&[Span {
-            ram: false,
-            off,
-            len: out.len() as u64,
-            perm: kf_host::MapPerm::READ_WRITE,
-        }])?;
-        self.copy(off, out)
-    }
+
 }
 impl Store for Reader {
     fn prepare(&mut self, spans: &[Span]) -> Result<(), Refusal> {
@@ -329,4 +322,10 @@ impl Drop for Reader {
             }
         }
     }
+}
+
+impl crate::storeview_deferred::DeferredStore for Reader {
+    fn release(&mut self) -> Result<(), Refusal> { Reader::release(self) }
+    fn live(&self) -> u64 { self.stats().0 }
+    fn temporary(&self) -> bool { !self.fallback.is_empty() }
 }

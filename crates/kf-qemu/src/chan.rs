@@ -1234,7 +1234,7 @@ impl GuestUserd for Userd<'_> {
 /// mapping of OUR object, located through OUR placement rows. ⊘ Never a copy of a guest table, and
 /// only method words and GP entries are read through it — never data.
 struct StoreViews {
-    reader: crate::storeview_native::Reader,
+    reader: Arc<crate::storeview_deferred::Deferred<crate::storeview_native::Reader>>,
     armed: u64,
     retry: bool,
 }
@@ -1276,19 +1276,16 @@ fn out_window(out: &mut [u8], done: u64, n: u64) -> Result<&mut [u8], String> {
 
 impl StoreViews {
     fn new(shared: &'static crate::storeview_native::Shared) -> Self {
-        Self { reader: crate::storeview_native::Reader::new(shared), armed: 0, retry: false }
+        Self { reader: crate::storeview_deferred::Deferred::new(crate::storeview_native::Reader::new(shared)), armed: 0, retry: false }
     }
     fn read(&mut self, _rm: &HostRm, _store: u32, _fb_len: u64, off: u64, out: &mut [u8]) -> Result<(), String> {
         self.retry = false;
-        if let Err(e) = self.reader.read_prepared(off, out) {
+        if let Err(e) = self.reader.read(off, out) {
             self.retry = matches!(e, crate::mem::userread::Refusal::Busy | crate::mem::userread::Refusal::Changed);
             return Err(format!("STORE_VIEW {e:?}"));
         }
-        self.armed = self.reader.stats().0;
+        self.armed = self.reader.live();
         Ok(())
-    }
-    fn release_all(&mut self, _rm: &HostRm, _store: u32) {
-        if let Err(e) = self.reader.release() { eprintln!("kf3: STORE_VIEW cleanup retained: {e:?}"); }
     }
 }
 
@@ -5833,8 +5830,10 @@ impl ChanPlane {
                 .load_u32(HostOffset::new(kf_abi::submit::USERD_GP_GET))
                 .ok()
         );
+        let views = g.views.reader.clone();
         drop(g);
         drop(r);
+        views.retire();
         let _ = self.rm.release_cpu_view(kf_host::CpuViewRelease {
             h_memory: mem,
             p_linear_address: cookie,
@@ -7444,7 +7443,7 @@ impl ChanPlane {
         }
         g.mirror.live.fetch_sub(1, Ordering::AcqRel);
         let armed = g.views.armed;
-        g.views.release_all(self.rm, self.store);
+        let views = g.views.reader.clone();
         if let UserdView::Store { cookie, .. } = &g.userd {
             let _ = self.rm.release_cpu_view(kf_host::CpuViewRelease {
                 h_memory: self.store,
@@ -7529,12 +7528,27 @@ impl ChanPlane {
             g.chan.host().gr_objects(),
             g.chan.gpu_gp_get()
         );
+        drop(g);
+        views.retire();
     }
 
     /// ★ A WORKER's entry (`HostOps::run_translated`): pump the channel behind `ht`. Never waits.
     /// Returns whether anything reached the GPU.
     pub fn serve(&self, ht: u32) -> bool {
         if let Some(r) = self.user_ring_serve(ht) { return r; }
+        let result = self.serve_with_channel_guard(ht);
+        // Each lookup/guard ends before maintenance can open/map/unmap a node.
+        let views = if let Some(slot) = self.slot(ht) {
+            let owned = slot.try_lock().ok().map(|g| g.views.reader.clone());
+            owned
+        } else {
+            let relay = self.relays.try_lock().ok().and_then(|m| m.get(&ht).cloned());
+            relay.and_then(|r| r.try_lock().ok().map(|g| g.views.reader.clone()))
+        };
+        if let Some(views) = views { views.maintain(); }
+        result
+    }
+    fn serve_with_channel_guard(&self, ht: u32) -> bool {
         if let Some(r) = self.relay_serve(ht) {
             return r;
         }

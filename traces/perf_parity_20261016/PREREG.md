@@ -32,3 +32,12 @@ Stop and report immediately for an isolation hole, data-loss risk, >15% contradi
 Initial limitation: dev filesystem has only 2.0 GiB free. Local cargo uses the global cargo lock,
 two jobs, an owned target directory, debug information disabled, and no incremental output;
 remove owned artifacts after local validation. Do not consume shared build directories.
+
+P2 adapter correction, 03:20 CEST: review found that the inherited Translated adapter
+called preparation under its channel-state guard. Falsifier before the corrected hardware
+run: any native prepare/release observed under that guard, any miss that advances GP_GET,
+any unbounded wait, or Linux gate/smoke failure rejects the correction. Deferred requests
+reuse the modeled slot protocol; misses return Retry, and worker maintenance runs after all
+channel guards end. Temporary fallback views request cleanup after a successful read.
+The final P2 soak is restarted on this source; earlier interrupted soaks are not passes.
+The ongoing Heaven campaign remains attributed to its independently built c66ac9de source.
