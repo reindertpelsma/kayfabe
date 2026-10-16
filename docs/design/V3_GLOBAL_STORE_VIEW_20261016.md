@@ -1,4 +1,4 @@
-STATUS: IMPLEMENTED, 2026-10-16. Gates and Linux smoke passed at c66ac9de; final soak and Windows Heaven comparison are in progress. Draft review only.
+STATUS: IMPLEMENTED, 2026-10-16. Protocol gates/Linux smoke passed at c66ac9de. Deferred adapter correction is 4b2c2878; its final soak and hardware retest are in progress. Draft review only.
 
 # One store view for all channel readers
 
@@ -74,3 +74,10 @@ Validation and limits are maintained in [P2_VALIDATION](../../traces/perf_parity
 The native Linux renderer checks passed on the verified executable, and 8/16/32-thread
 ten-minute real-mapping tests passed with exact patterns and balanced resources. These
 checks do not establish a Heaven speedup. No experiment branch was merged.
+
+Translated and diagnostic readers use a small per-channel deferred adapter, with no persistent
+mapped cache. A miss records one offset/length request in the same audited slot protocol and
+returns Retry without advancing GP_GET. The worker leaves its channel-state guard before
+preparing that request. Retirement and temporary fallback cleanup also execute after caller
+guards end. A concurrent retire marks the adapter atomically; an active maintainer releases
+its temporary resources before publishing its state. Failed native cleanup retains ownership.

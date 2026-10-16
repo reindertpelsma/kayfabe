@@ -1,4 +1,4 @@
-STATUS: IN PROGRESS, 2026-10-16 02:54 CEST. Final soak and Heaven comparison pending.
+STATUS: IN PROGRESS, 2026-10-16 03:24 CEST. Final P2 adapter is 4b2c2878; its soak and hardware validation are pending. Tables below are labeled by their measured source.
 
 # Shared store validation
 
@@ -20,7 +20,7 @@ Hardware executable: `/data/codex-perf/kf3-bins/c66ac9de/qemu-system-x86_64`.
 | 8 threads, 600 s, seed 539365406 | 3,538,961 verified reads; 6,467,172 arms = releases; fds 4→4, owned maps 0→0 | `/data/codex-perf/logs/p2-stress-8.log` |
 | 16 threads, 600 s, seed 539365414 | 2,579,478 verified reads; 6,489,937 arms = releases; fds 4→4, owned maps 0→0 | `/data/codex-perf/logs/p2-stress-16.log` |
 | 32 threads, 600 s, seed 539365430 | 211,524 verified reads; 6,392,319 arms = releases; fds 4→4, owned maps 0→0 | `/data/codex-perf/logs/p2-stress-32.log` |
-| Final 32-thread, 3600 s soak | Running on dev box, 02:58:09 CEST start | `/workspace/codex-perf/private/logs/p2-soak-60min-local.log` |
+| Final 32-thread, 3600 s soak | Running on dev box at 4b2c2878, 03:19:49 CEST start | `/workspace/codex-perf/private/logs/p2-soak-60min-local.log` |
 | Read scaling, 1/2/4/8/16/32 threads | Passed; memfd data, not BAR1 | `/data/codex-perf/logs/p2-read-scaling.log` |
 
 CPU stress uses affinity 0–7 and nice 10; thread counts above eight are oversubscribed.
@@ -47,12 +47,21 @@ Claude's final report says its KF3_FULLMAP_EXP was scripted but never run. Its d
 experiment binary is not used. FULL/WINDOWED Heaven comparisons on this production revision
 remain required; no speedup claim is made.
 
-The host soak was deliberately canceled after its start, without a failing assertion,
-to move CPU-only work away from the performance host. Its incomplete log is not a pass.
-The full dev-box soak uses clean source `00ba4613e4da091096a2774a926e43c934e5f76b`,
-whose store-view protocol, native integration, USER pump and Translated readers are byte-for-byte
-identical to c66ac9de (git diff checked). Default features; 32 threads on affinity 0–3.
-The later source commits add the gated offline probe and evidence only.
+The host soak was canceled deliberately to move CPU-only work away from the performance
+host. Initial detached dev-box attempts did not survive their execution session. None is
+counted as a pass or retried failed assertion. The actual final run is a persistent execution
+session started at 03:19:49 CEST on clean `4b2c28784c8066b4c0299300427e014becf16d5b`,
+32 threads, affinity 0–3, seed 539365430. The slot protocol remains identical to c66ac9de;
+the corrected native adapter and its GPU-free tests are compiled in this final source.
+
+Review found the first Translated adapter could arm under its channel-state guard. Commit
+4b2c2878 replaces that with a bounded deferred request: guarded copies only read ready views
+or return Retry; worker maintenance runs after all channel guards end. Channel retirement
+also releases temporary views after dropping its guard. Four new tests cover guarded misses,
+terminal refusal, retirement during an arm and fallback release after successful reads.
+The correction has not changed the USER-ring reader used by the ongoing c66ac9de Heaven
+campaign. Fresh hardware gates/fast/Linux checks on 4b2c2878 are queued behind that campaign;
+this source has no mergeable verdict yet.
 
 Read scaling on c66ac9de, affinity 0–7, three seconds per case, 64-byte reads:
 
