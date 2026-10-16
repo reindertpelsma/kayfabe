@@ -1,0 +1,77 @@
+[
+  {
+    "name": "ada2build_windows.log",
+    "bytes": 3786,
+    "sha256": "85d60f72c975a3b5e8195787c616db9242c9270c40b60ae7f30b1d528a9679a9"
+  },
+  {
+    "name": "ada2build_bind580.log",
+    "bytes": 224,
+    "sha256": "55ad2164913f714ff4df52c783b8ad917d9334e78ed21ba9ba7d9bffa1748342"
+  },
+  {
+    "name": "ada2build-baseline580-census.log",
+    "bytes": 1070,
+    "sha256": "8916a9c15886eb6f08b14648d25382e723fb9b9cad89da9bfd04320b66362a71"
+  },
+  {
+    "name": "ada2build-baseline580-stage-probes.log",
+    "bytes": 800,
+    "sha256": "069c832738d752f59697a776178aaf5214398365211e228fae851d09bea79c6e"
+  },
+  {
+    "name": "ada2build-baseline580-process-receipt.json",
+    "bytes": 3135,
+    "sha256": "1aa15892bb7f15ad66bfb9eed4f5a6fedef2117aed5fc2c772cf0abdb89f9a00"
+  },
+  {
+    "name": "ada2build-baseline580-flags.txt",
+    "bytes": 542,
+    "sha256": "1ea9fbf3a99319d8e9de26a178b1c1fa070c865c4eaa1abf4bafeda491b5b2be"
+  },
+  {
+    "name": "ada2build-baseline580-stop.log",
+    "bytes": 167,
+    "sha256": "4a8390f27f86880790828f9073ae5ba24038275690a5e4fd2a5c46694699bb19"
+  },
+  {
+    "name": "ada2build_install58151.log",
+    "bytes": 827,
+    "sha256": "a4559ec296074c5c1d5994ce847f19b761f26c5ca97b353d9bfc66306849e046"
+  },
+  {
+    "name": "ada2build_install_outcome.log",
+    "bytes": 1171,
+    "sha256": "31211c7583291e08d975c60213a858de415744b0c59111284da06d0a0f80c727"
+  },
+  {
+    "name": "ada2build_disk_inventory.log",
+    "bytes": 657,
+    "sha256": "98b4df48cad0f1494b177dad6cb1762d5af3261f5e23d10c0b25bb0f53e6b99e"
+  },
+  {
+    "name": "ada2build_attach_usb.log",
+    "bytes": 37,
+    "sha256": "45752590c9b893ef64a0f35119115bbbe780b20d7b7826e53e51f6d510605679"
+  },
+  {
+    "name": "ada2build_usb_inventory.log",
+    "bytes": 235,
+    "sha256": "13abef7d08be4ed5cb395c7f34c3782cb021eaab926d7772dc1789a637b542a5"
+  },
+  {
+    "name": "ada2build_verify_probes.log",
+    "bytes": 287,
+    "sha256": "20d62388fb071cbae91647031b7df53b70dc028bc74d37c090ca2fb453815402"
+  },
+  {
+    "name": "ada2build_prepare_stage.log",
+    "bytes": 140,
+    "sha256": "ab244d62cdb98c43db805724768d7d5b4166db46a661a3b8678250e67cd4fb43"
+  },
+  {
+    "name": "ada2build_stage_7zr.log",
+    "bytes": 93,
+    "sha256": "a530003ecd4be19d4944174778c755997b0008f91b5c822c970f4e96727a3435"
+  }
+]

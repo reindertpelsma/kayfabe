@@ -1,5 +1,26 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-16 22:43UTC — AD102595 raw30 PASS; Windows media repair in progress
+
+Only own56302930 ACTIVE, actualAD102/PCI2684/native595/KVM/root146GiB.
+Original timer2571615 at00:46UTC/hard00:51UTC2026-10-17 remains binding.
+Exact9d6f210ba/privateSHAcc2a86a6...34668 nativegates9+10/CUDA4 then595raw30PASS
+normal6/frozen180/actualKF3{},161USER/90CUDApostures,1606HB0startup warnings;
+readiness gap remains,0nonzeroHBformula warnings. FiveXid31mapped deliberatefault arms.
+EvidencePUSHEDf08e05554 TS/ad102_second_builds_20261016/linux595_regression.
+New Windows580 baseline has verified8088/GSP1/Code0/DWM+Explorer but fullsuite
+UNRUN: IDECD absent inWindows.581installer exited BEFORE start marker/Start-Process;
+this is harness staging, not GPU-init failure. USBfallback alsoabsent, stopmediahunt.
+BoundedQGA fourprobes successfully transferred; public581package218chunks inprogress.
+Controller101374 /root/ada2build_resume_windows.sh waits staging, safeownedstop/freeze
+same580-payload parent, freshP19/noCD reference+threeAD102one-rowablations, then first
+real581install/signature+actual8151/GSP1/coldpublic5809402/420sacceptance. Allnewresults
+UNRUN until exits. Rootlog/prov/ada2build_resume_windows.log. Originalcontrollerstopped;
+doNOTrerunfromtop. Privatephase1log/password NEVERexport. Linux590stillUNRUN.
+Sources/privatebins ablationsa52494d4/a7509bf3/003ad0e7 gatedandPUSHED.
+No familycomplete; priorGB206595raw/CUDA/gfxPASS andWindows43negativeunchanged.
+
+
 ## UPDATE 2026-10-16 21:53UTC — new owned56302930 for Ada second driver builds
 
 ONLY own56302930 ACTIVE/provisioning. Advertised4090/machine42612/offer48798407,

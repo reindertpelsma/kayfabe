@@ -1,0 +1,9 @@
+GUEST_PROGRAM_STARTED ada2build_disk_inventory.ps1 pid=8836
+{"Name":"NVIDIA GeForce RTX 4090","DriverVersion":"32.0.15.8088","ConfigManagerErrorCode":0}
+{"DeviceID":"C:","DriveType":3,"VolumeName":"Windows","FileSystem":"NTFS","Size":160046247936}
+[{"Status":"Unknown","FriendlyName":"QEMU QEMU CD-ROM USB Device","Problem":45},{"Status":"Unknown","FriendlyName":"QEMU QEMU DVD-ROM ATA Device","Problem":45},{"Status":"Unknown","FriendlyName":"QEMU QEMU DVD-ROM ATA Device","Problem":45}]
+{"Name":"C","Root":"C:\\"}
+[{"ProcessName":"dwm","SessionId":1},{"ProcessName":"explorer","SessionId":1}]
+
+
+GUEST_PROGRAM_EXIT ada2build_disk_inventory.ps1 code=0

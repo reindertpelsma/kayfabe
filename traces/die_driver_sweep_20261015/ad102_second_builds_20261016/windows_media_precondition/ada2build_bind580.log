@@ -1,0 +1,7 @@
+GUEST_PROGRAM_STARTED ada2build_bind580.ps1 pid=5576
+BEFORE_BIND version= driverkey_present=False
+PNPUTIL_EXIT=0
+BIND580_COMPLETE actual8088 classGSP1; cold boot required
+
+
+GUEST_PROGRAM_EXIT ada2build_bind580.ps1 code=0

@@ -1,0 +1,5 @@
+GUEST_PROGRAM_STARTED ada2build_prepare_stage.ps1 pid=1352
+STAGE_DIRECTORY_READY=1
+
+
+GUEST_PROGRAM_EXIT ada2build_prepare_stage.ps1 code=0

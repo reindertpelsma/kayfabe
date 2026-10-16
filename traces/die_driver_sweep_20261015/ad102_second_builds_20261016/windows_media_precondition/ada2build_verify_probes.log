@@ -1,0 +1,9 @@
+GUEST_PROGRAM_STARTED ada2build_verify_probes.ps1 pid=6588
+PROBE_FILE_MISSING name=cup2.exe
+PROBE_FILE_MISSING name=cup3.exe
+PROBE_FILE_MISSING name=cup8.exe
+PROBE_FILE_MISSING name=kf_dxprobe.exe
+INSTALL_STARTED_MARKER=False
+
+
+GUEST_PROGRAM_EXIT ada2build_verify_probes.ps1 code=0
