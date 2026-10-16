@@ -1,5 +1,35 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-16 01:37 UTC — Turing native installation queued, clean event tests running
+
+Only own56180232, original timer2167738 unchanged04:11:46UTC/hardcap04:16:45UTC.
+Initial SSH key changed when cloud-init regenerated it; independently matched
+the live key against own Vast serial-console public key, then repinned only
+codex-initial-56180232. Initial disk146GiB/138free, KVM,19CPUs/~50GiBRAM,
+stock575.51.03. PCI saysTU106/1f06; fresh unprivileged RM die tuple still pending.
+No new die fact registered from PCI identity. NativeWindows installer queued
+01:27:41; generated nativeWindows public key pinned01:28:33 before reboot.
+Bootstrap/session10013 exited0. Native stager/session84523 still waiting for
+pinned Windows26100; native orchestrator/session65120 waits for stage exit0
+and actual580.88/setup.complete before one oracle→420second hold→oracle.
+No native or guest hardware pass yet. Never replay an uncertain job blindly.
+
+Clean event PR19 source0ec93e643 matches all four Rust files of historical
+ffd72e3d4 exactly. CUDA/QEMU353pass/0fail/0ignored. Full isolated GPU-free
+suite/session30981 is still running, currently spending time in unchanged
+user-loop Loom models; do not launch it again or call it complete. Log
+/workspace/codex/walk-clean-all.log; target/target-walk-completion-clean.
+Before and focused after logs archived in turing_hold_20261016/.
+
+Turing evidence/runtime branch tipfd3ffcd86 now includes clean QGA recovery
+PR13 commits, six tests PASS. Product remains baseline8e3a9d325; event changes
+not integrated yet. Prepared future Linux-return controller
+/workspace/codex/turinghold20261016_linux_bootstrap.py is NOT launched; its
+restored alias is defined, finalUbuntu key not yet pinned. Stage Linux595.91.07
+and derive RM tuple only after native validation/text save and explicit restore.
+Native hold script and pre-run definition are saved under traces. Owner host
+GPU/VM untouched, only trusted CPU/image artifacts may be used.
+
 ## UPDATE 2026-10-16 01:21 UTC — W3 Turing rental starting
 
 Only own56180232 active, RTX2060S offer55223684/provider13058, exact die pending

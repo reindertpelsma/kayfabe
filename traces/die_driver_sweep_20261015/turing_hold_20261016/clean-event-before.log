@@ -1,0 +1,136 @@
+   Compiling libc v0.2.189
+   Compiling kf-util v0.1.0 (/workspace/codex/walk-completion-clean/crates/kf-util)
+warning: missing documentation for a function
+    --> crates/kf-util/src/lock.rs:1150:5
+     |
+1150 |     pub fn note_wait(rank: LockRank, d: Duration) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a function
+    --> crates/kf-util/src/lock.rs:1432:5
+     |
+1432 |     pub fn note_hold(rank: LockRank, d: Duration) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/kf-util/src/lockwitness.rs:193:5
+    |
+193 |     pub fn is_vcpu() -> bool {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+   Compiling kf-linux-raw v0.1.0 (/workspace/codex/walk-completion-clean/crates/kf-linux-raw)
+warning: `kf-util` (lib) generated 3 warnings
+warning: missing documentation for a method
+    --> crates/kf-linux-raw/src/mapping_unsafe.rs:1196:5
+     |
+1196 |     pub fn load_u32(&self, offset: HostOffset) -> Result<u32, RawError> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: `kf-linux-raw` (lib) generated 1 warning
+   Compiling kf-cuda v0.1.0 (/workspace/codex/walk-completion-clean/crates/kf-cuda)
+warning: use of deprecated method `std::sync::atomic::Atomic::<u32>::fetch_update`: renamed to `try_update` for consistency
+  --> crates/kf-cuda/src/refusal_samples.rs:68:14
+   |
+68 |             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
+   |              ^^^^^^^^^^^^
+   |
+   = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+   |
+68 -             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
+68 +             .try_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
+   |
+
+warning: value assigned to `prop` is never read
+    --> crates/kf-cuda/src/driver_unsafe.rs:1873:9
+     |
+1873 |         prop.alloc_flags_reserved = [0; 4];
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: maybe it is overwritten before being read?
+     = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates/kf-cuda/src/walk.rs:871:13
+    |
+871 |         let mut h: KfDev = crate::driver_unsafe::zeroed();
+    |             ----^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: fields `cuMemUnmap` and `cuMemAddressFree` are never read
+   --> crates/kf-cuda/src/driver_unsafe.rs:253:16
+    |
+120 | pub struct Cuda {
+    |            ---- fields in this struct
+...
+253 |     pub(crate) cuMemUnmap: Option<unsafe extern "C" fn(u64, usize) -> CUresult>,
+    |                ^^^^^^^^^^
+254 |     pub(crate) cuMemAddressFree: Option<unsafe extern "C" fn(u64, usize) -> CUresult>,
+    |                ^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: missing documentation for a method
+    --> crates/kf-cuda/src/driver_unsafe.rs:1811:5
+     |
+1811 | /     pub fn export_device_allocation(
+1812 | |         &self,
+1813 | |         device: i32,
+1814 | |         bytes: usize,
+1815 | |     ) -> Result<ExportedAllocation, String> {
+     | |___________________________________________^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: `kf-cuda` (lib test) generated 5 warnings (run `cargo fix --lib -p kf-cuda --tests` to apply 2 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.68s
+     Running unittests src/lib.rs (/workspace/codex/target-walk-completion-clean/debug/deps/kf_cuda-0cef7063dcdfcca0)
+
+running 6 tests
+test completion::tests::a_completed_event_needs_no_callback_signal ... ok
+test completion::tests::a_pending_event_needs_another_look ... ok
+test completion::tests::a_signal_cannot_complete_a_pending_gpu_event ... FAILED
+test completion::tests::a_walk_is_checked_promptly_and_idle_keeps_the_backstop ... FAILED
+test completion::tests::a_signal_cannot_hide_a_gpu_failure ... FAILED
+test driver_unsafe::completion_fd_tests::the_host_function_signals_the_fd_and_drain_consumes_it ... ok
+
+failures:
+
+---- completion::tests::a_signal_cannot_complete_a_pending_gpu_event stdout ----
+
+thread 'completion::tests::a_signal_cannot_complete_a_pending_gpu_event' (2168852) panicked at crates/kf-cuda/src/completion.rs:28:13:
+assertion `left == right` failed
+  left: Ok(true)
+ right: Ok(false)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- completion::tests::a_walk_is_checked_promptly_and_idle_keeps_the_backstop stdout ----
+
+thread 'completion::tests::a_walk_is_checked_promptly_and_idle_keeps_the_backstop' (2168854) panicked at crates/kf-cuda/src/completion.rs:53:9:
+assertion `left == right` failed
+  left: 50
+ right: 1
+
+---- completion::tests::a_signal_cannot_hide_a_gpu_failure stdout ----
+
+thread 'completion::tests::a_signal_cannot_hide_a_gpu_failure' (2168853) panicked at crates/kf-cuda/src/completion.rs:35:9:
+assertion `left == right` failed
+  left: Ok(true)
+ right: Err("CUDA_ERROR_ILLEGAL_ADDRESS")
+
+
+failures:
+    completion::tests::a_signal_cannot_complete_a_pending_gpu_event
+    completion::tests::a_signal_cannot_hide_a_gpu_failure
+    completion::tests::a_walk_is_checked_promptly_and_idle_keeps_the_backstop
+
+test result: FAILED. 3 passed; 3 failed; 0 ignored; 0 measured; 44 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p kf-cuda --lib`

@@ -2,6 +2,16 @@
 
 **STATUS: RESEARCH, 2026-10-16. Written before new rental and hardware runs.**
 
+**Hold definition, 2026-10-16 01:37UTC, before the run:** hold.ps1 keeps
+adapter Code0, actual580.88, DWM and Explorer for at least420seconds, checking
+hardware D3D11/12 every30seconds and a readable System log for4101TDRs.
+Each established D3D probe creates its own hardware device. Run the same hold
+on native first, with CUDA/D3D oracles before and after, then in the guest.
+Save a guest QEMU screenshot with dimensions/hash/nonblank receipt on the
+rental; only its text receipt comes back. A timed-out query is a failure to
+validate, never an absent-event success. The wording below about a D3D
+workload alive for seven minutes refers to these repeated probes.
+
 The previous unprivileged TU106 lease passed Windows580.88 short validation
 after generated display vocabulary and C57E shared-semaphore fixes. It did
 not establish a seven-minute0TDR hold. Linux raw R34 at unchanged180seconds
