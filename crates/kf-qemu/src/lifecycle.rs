@@ -307,31 +307,30 @@ pub(crate) fn dump(me: &super::chan::ChanPlane, why: &str) {
         me.relay_stats.summary()
     );
     eprintln!("kf3: LIFECYCLE t={t:.1} wall={wall:.1} {why} {}", crate::userstore::summary());
-    if why != "tick" {
-        for c in &chans {
-            let pb_post: u64 = (1..3).map(|k| g(&c.calls[1][k])).sum();
-            let vc_post: u64 = (1..3).map(|k| g(&c.vram_copies[1][k])).sum();
-            eprintln!(
-                "kf3: LIFECYCLE_CHAN {:#x}:{:#x} turns={} pb_calls_pre={} pb_calls_post={} pb_vram_copies_pre={} pb_vram_copies_post={vc_post} gp_entries={} rare_segments={} migrated={} trig_uci={} trig_tlb={} trig_ctx={} trig_other={}{}",
-                c.key.0,
-                c.key.1,
-                g(&c.turns),
-                g(&c.calls[1][0]),
-                pb_post,
-                g(&c.vram_copies[1][0]),
-                g(&c.gp_entries),
-                g(&c.rare_segments),
-                g(&c.migrated),
-                g(&c.trig_update_channel_info),
-                g(&c.trig_invalidate_tlb),
-                g(&c.trig_context),
-                g(&c.trig_other),
-                if scan_off() {
-                    format!(" scanoff_skipped={}", g(&c.scanoff_skipped))
-                } else {
-                    String::new()
-                }
-            );
+    for c in &chans {
+        let pb_post: u64 = (1..3).map(|k| g(&c.calls[1][k])).sum();
+        let vc_post: u64 = (1..3).map(|k| g(&c.vram_copies[1][k])).sum();
+        let pb_pre = g(&c.calls[1][0]);
+        // periodic lines only for channels that have done real work; the final dump lists all
+        if why == "tick" && pb_post + pb_pre < 1000 {
+            continue;
         }
+        eprintln!(
+            "kf3: LIFECYCLE_CHAN t={t:.1} wall={wall:.1} {why} {:#x}:{:#x} turns={} gp_entries={} pb_calls_pre={pb_pre} pb_calls_post={pb_post} pb_vram_copies_pre={} pb_vram_copies_post={vc_post} pb_vram_ns={} pb_bytes={} rare_segments={} migrated={} trig_uci={} trig_tlb={} trig_ctx={} trig_other={} scanoff_skipped={}",
+            c.key.0,
+            c.key.1,
+            g(&c.turns),
+            g(&c.gp_entries),
+            g(&c.vram_copies[1][0]),
+            (0..3).map(|k| g(&c.vram_ns[1][k])).sum::<u64>(),
+            (0..3).map(|k| g(&c.bytes[1][k])).sum::<u64>(),
+            g(&c.rare_segments),
+            g(&c.migrated),
+            g(&c.trig_update_channel_info),
+            g(&c.trig_invalidate_tlb),
+            g(&c.trig_context),
+            g(&c.trig_other),
+            g(&c.scanoff_skipped),
+        );
     }
 }
