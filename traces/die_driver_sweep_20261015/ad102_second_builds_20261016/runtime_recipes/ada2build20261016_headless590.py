@@ -37,6 +37,10 @@ cd ~/codex590
 printf 'ACTUAL_GUEST_DRIVER='; nvidia-smi --query-gpu=driver_version --format=csv,noheader
 test "$(nvidia-smi --query-gpu=driver_version --format=csv,noheader)" = 590.48.01
 test "$(modinfo -F version nvidia)" = 590.48.01
+echo "ACTUAL_GUEST_KERNEL=$(uname -r)"
+cuda=$(readlink -f /usr/lib/x86_64-linux-gnu/libcuda.so.1)
+echo "ACTUAL_LIBCUDA=$cuda"
+test "${cuda##*.so.}" = 590.48.01
 I=-Iscripts/bench/cuda_min; L=/usr/lib/x86_64-linux-gnu/libcuda.so.1
 for rung in cup2 cup3 cup8 cup8bench; do
  case "$rung" in cup2) src=archive/nvkvm/tests/mode2/cup2.c;; *) src=scripts/bench/$rung.c;; esac

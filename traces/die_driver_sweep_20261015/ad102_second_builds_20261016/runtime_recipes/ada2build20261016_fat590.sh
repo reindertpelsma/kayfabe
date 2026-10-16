@@ -19,7 +19,7 @@ timeout --signal=TERM 1500 bash /root/ada2build_fat590_recipe.sh >/root/prov/ada
 test -z "$(pgrep -x qemu-system-x86 || true)"
 grep -q '^version=590.48.01$' /workspace/bench/guest.qcow2.STAGED
 qemu-img create -q -f qcow2 -F qcow2 -b /workspace/bench/guest.qcow2 /workspace/bench/guest-590.48.01.qcow2
-cp /workspace/bench/guest.qcow2.STAGED /workspace/bench/guest-590.48.01.qcow2.STAGED
+{ echo version=590.48.01; echo image=/workspace/bench/guest-590.48.01.qcow2; echo base=/workspace/bench/guest.qcow2; echo "staged=$(date -u -Is)"; } >/workspace/bench/guest-590.48.01.qcow2.STAGED
 timeout --signal=TERM 600 bash scripts/bench/provision_guest_gfx.sh host >/root/prov/ada2build_gfx_host_prepare.log 2>&1
 timeout --signal=TERM 600 env KF_GUEST_IMG=/workspace/bench/guest-590.48.01.qcow2 bash scripts/bench/provision_guest_gfx.sh >/root/prov/ada2build_gfx_guest590_prepare.log 2>&1
 test -z "$(pgrep -x qemu-system-x86 || true)"

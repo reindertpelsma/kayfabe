@@ -46,6 +46,56 @@
     "sha256": "92e461c0250aa0c63018b363b62653f0b5d3f3177b71d43a8ee045ee140cd109"
   },
   {
+    "name": "ada2build-ablate-caps00c-v2-flags.txt",
+    "bytes": 542,
+    "sha256": "1ea9fbf3a99319d8e9de26a178b1c1fa070c865c4eaa1abf4bafeda491b5b2be"
+  },
+  {
+    "name": "ada2build-ablate-caps00c-v2-qemu.log",
+    "bytes": 753591,
+    "sha256": "8aa71848a50cd9985cebe66dabfbe501ad866897311dbb4146bd440d4364cebe"
+  },
+  {
+    "name": "ada2build-ablate-lpwr2801-v2-accept.log",
+    "bytes": 78,
+    "sha256": "ab463495c74ac4412d6213e0f474c431261c2308bdfc58c995f0f82e53e75ccb"
+  },
+  {
+    "name": "ada2build-ablate-lpwr2801-v2-census.log",
+    "bytes": 1048,
+    "sha256": "eb1da59baf2c1f39910cfdfd32782e88119dde399f75c7f80abfab6bb326c0b1"
+  },
+  {
+    "name": "ada2build-ablate-caps00c-v2-process-receipt.json",
+    "bytes": 2956,
+    "sha256": "c0c61755ff3078a418ee056757ab484d3f202c73a2660398725d4c7a70ba2cbb"
+  },
+  {
+    "name": "ada2build-ablate-caps00c-v2-accept.log",
+    "bytes": 1753,
+    "sha256": "9192aba1e5f575f83773cf6c7f966b1e41bb1f7b817995cc886434bd907d0689"
+  },
+  {
+    "name": "ada2build-ablate-caps00c-v2-stop.log",
+    "bytes": 171,
+    "sha256": "72054a8cf5baeb5201030d84c8ca3d6dfc8eebbc66a7452278ca5c2636eedc09"
+  },
+  {
+    "name": "ada2build-ablate-caps00c-v2-host-xids.before.txt",
+    "bytes": 1125,
+    "sha256": "92e461c0250aa0c63018b363b62653f0b5d3f3177b71d43a8ee045ee140cd109"
+  },
+  {
+    "name": "ada2build-ablate-lpwr2801-v2-host-xids.before.txt",
+    "bytes": 1125,
+    "sha256": "92e461c0250aa0c63018b363b62653f0b5d3f3177b71d43a8ee045ee140cd109"
+  },
+  {
+    "name": "ada2build-ablate-caps00c-v2-census.log",
+    "bytes": 1048,
+    "sha256": "8c842dcc6d3a8a0633a19d3ef1d5921bb52738bb31209a3dc6f8450afe1fd872"
+  },
+  {
     "name": "ada2build_stage_nvidia.log",
     "bytes": 29997,
     "sha256": "cff25c9bc53be957892a33684135bcae3509703cb0c7d4a74f151ea5dbcfe803"
@@ -62,7 +112,7 @@
   },
   {
     "name": "ada2build_resume_windows_v2.log",
-    "bytes": 4235,
-    "sha256": "110d62993e675cc22fcf19524c57367fa92a05e8d217b6b7bf720fed780202c3"
+    "bytes": 5690,
+    "sha256": "e07ed9ec24797243b399080ae9353ee30b5ccac3dbe53e84a5c90e0aa0ace1a4"
   }
 ]

@@ -1,0 +1,35 @@
+{
+  "utc": "2026-10-16T22:51:34.637491+00:00",
+  "read_only": true,
+  "purchased": false,
+  "results": [
+    {
+      "gpu": "RTX_5070",
+      "offers": []
+    },
+    {
+      "gpu": "RTX_3070",
+      "offers": []
+    },
+    {
+      "gpu": "RTX_2060S",
+      "offers": []
+    },
+    {
+      "gpu": "RTX_4060_Ti",
+      "offers": [
+        {
+          "id": 54573432,
+          "machine_id": 38151,
+          "gpu_name": "RTX 4060 Ti",
+          "dph_total": 0.34405555555555556,
+          "cpu_cores_effective": 48.0,
+          "cpu_ram": 128784,
+          "disk_space": 1411.5,
+          "inet_down": 2431.4,
+          "vms_enabled": true
+        }
+      ]
+    }
+  ]
+}
