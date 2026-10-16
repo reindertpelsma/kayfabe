@@ -1,0 +1,223 @@
+{
+  "serial_arms": 30,
+  "qemu_arms": 30,
+  "heartbeat_formula_warnings": 0,
+  "heartbeat_raw_zero_warnings": 0,
+  "heartbeat_raw_nonzero_warnings": 0,
+  "per_arm": [
+    {
+      "arm": "alias-two-vas",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "alias-unmap-observe",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "atomics-probe",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "bar1-crossing",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "blockage-coverage",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "bus-info-sweep",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "ce-client-guest-ram",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "ce-client",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "concurrency",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "concurrent-fuzz",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "cross-client-leak",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "defer-liveness",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "dictated-ring-negative",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "dictated-ring",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "doorbell-census",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "engines",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "executor-vas",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "gpga-reserve-probe",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "gpu-info-sweep",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "guest-ram-pin",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "guest-ring-channel",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "late-map-race",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "map-propagation",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "map-stress",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "missing-page-fault",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "pce-mask-probe",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "rpc-mixed-allocs",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "timer",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "uvm-invalidate",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "uvm-mean",
+      "warnings": 0,
+      "samples": []
+    }
+  ],
+  "actual_process_receipts": 30,
+  "host_xids": [
+    {
+      "line": "[ 1191.583427] NVRM: Xid (PCI:0000:00:07): 31, pid=93242, name=qemu-system-x86, channel 0x0000000a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+      "pid": 93242,
+      "current_candidate_receipt": false,
+      "intentional_fault_arm": null
+    },
+    {
+      "line": "[ 1194.729873] NVRM: Xid (PCI:0000:00:07): 31, pid=93242, name=qemu-system-x86, channel 0x0000000a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+      "pid": 93242,
+      "current_candidate_receipt": false,
+      "intentional_fault_arm": null
+    },
+    {
+      "line": "[ 1197.711618] NVRM: Xid (PCI:0000:00:07): 31, pid=93242, name=qemu-system-x86, channel 0x0000000b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+      "pid": 93242,
+      "current_candidate_receipt": false,
+      "intentional_fault_arm": null
+    },
+    {
+      "line": "[ 1200.832176] NVRM: Xid (PCI:0000:00:07): 31, pid=93242, name=qemu-system-x86, channel 0x0000000a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+      "pid": 93242,
+      "current_candidate_receipt": false,
+      "intentional_fault_arm": null
+    },
+    {
+      "line": "[ 1315.424922] NVRM: Xid (PCI:0000:00:07): 31, pid=94176, name=qemu-system-x86, channel 0x0000000b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE",
+      "pid": 94176,
+      "current_candidate_receipt": false,
+      "intentional_fault_arm": null
+    },
+    {
+      "line": "[ 7171.925246] NVRM: Xid (PCI:0000:00:07): 31, pid=112110, name=qemu-system-x86, channel 0x0000000a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+      "pid": 112110,
+      "current_candidate_receipt": true,
+      "intentional_fault_arm": "defer-liveness"
+    },
+    {
+      "line": "[ 7175.018788] NVRM: Xid (PCI:0000:00:07): 31, pid=112110, name=qemu-system-x86, channel 0x0000000a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+      "pid": 112110,
+      "current_candidate_receipt": true,
+      "intentional_fault_arm": "defer-liveness"
+    },
+    {
+      "line": "[ 7178.053462] NVRM: Xid (PCI:0000:00:07): 31, pid=112110, name=qemu-system-x86, channel 0x0000000b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+      "pid": 112110,
+      "current_candidate_receipt": true,
+      "intentional_fault_arm": "defer-liveness"
+    },
+    {
+      "line": "[ 7181.128097] NVRM: Xid (PCI:0000:00:07): 31, pid=112110, name=qemu-system-x86, channel 0x0000000a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+      "pid": 112110,
+      "current_candidate_receipt": true,
+      "intentional_fault_arm": "defer-liveness"
+    },
+    {
+      "line": "[ 7296.485802] NVRM: Xid (PCI:0000:00:07): 31, pid=113122, name=qemu-system-x86, channel 0x0000000b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE",
+      "pid": 113122,
+      "current_candidate_receipt": true,
+      "intentional_fault_arm": "missing-page-fault"
+    }
+  ],
+  "host_new_candidate_xids": 5
+}

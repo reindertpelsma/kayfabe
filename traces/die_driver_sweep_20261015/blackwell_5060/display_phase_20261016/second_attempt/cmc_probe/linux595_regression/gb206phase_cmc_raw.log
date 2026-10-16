@@ -1,0 +1,8 @@
+CMC_RAW_QUEUED 2026-10-16T21:07:21+00:00
+CMC_RAW_PREPARE source=e1bd2df4df520fbbd204b22dcb133d15bf845067 2026-10-16T21:10:49+00:00
+6d1fe5c4c739e8176a3baf55be40660bddf906b4d17b921d033e7a938ddb046a  /workspace/bench/kf3-bins/e1bd2df4/qemu-system-x86_64
+0db4104321bc9f38d73d7e54e80902646a93547702f3218deb14295bebd4c0bf  target/release/kayfabe-rm-ladder
+6c7880b13be5b98cc8ad2d901b567bacdf9e6177563807ed553d56b52c63e1bc  /workspace/bench/fastguest-cmc595/initrd.cpio.gz
+CMC_RAW30_START normal_loglevel6 actual_KF3={} budget180 2026-10-16T21:11:23+00:00
+CMC_RAW30_COMPLETE 2026-10-16T21:22:43+00:00
+CMC_RAW_EXIT rc=0 2026-10-16T21:22:43+00:00
