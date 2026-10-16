@@ -12,6 +12,8 @@ license.workspace = true
 # today, and a shipping build must not: a forced page size that disagrees with the
 # kernel's is exactly the misalignment the newtype exists to prevent.
 force-host-page-size = []
+# Offline BAR1 data-read experiment; absent from shipping builds.
+bench-data-read = []
 
 [dependencies]
 libc = "0.2"

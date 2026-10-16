@@ -40,3 +40,10 @@ undocumented_unsafe_blocks = "deny"
 
 [dev-dependencies]
 loom = "=0.7.2"
+
+[features]
+store-read-bench = ["kf-linux-raw/bench-data-read"]
+
+[[example]]
+name = "bar1_read_cost"
+required-features = ["store-read-bench"]

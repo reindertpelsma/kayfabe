@@ -330,3 +330,6 @@ pub use unixsock_unsafe::{
 pub use vcpu_unsafe::{KvmVcpu, VcpuExit};
 pub use view::RegionView;
 pub use window_unsafe::{GuestWindow, WindowAdvice};
+
+#[cfg(all(feature = "bench-data-read", target_arch = "x86_64"))]
+pub use mapping_unsafe::DataReadKind;
