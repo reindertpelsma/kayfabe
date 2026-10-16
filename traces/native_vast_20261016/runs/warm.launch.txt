@@ -1,0 +1,17 @@
+LAUNCH_RUN done=True waited=316s
+15:55:08.123 START label=warm api=direct3d11 user=vast session=1 defs=RELEASE,QUALITY_ULTRA
+15:55:08.294 PRIMARY_SCREEN \\.\DISPLAY1 bounds={X=0,Y=0,Width=1920,Height=1080}
+15:55:08.965 VIDEO NVIDIA GeForce RTX 4070 Ti SUPER mode=1920x1080@60
+15:55:14.371 LAUNCH -project_name Heaven -data_path ../ -engine_config ../data/heaven_4.0.cfg -system_script heaven/unigine.cpp -sound_app null -video_app direct3d11 -video_multisample 0 -video_fullscreen 0 -video_mode -1 -video_width 1920 -video_height 1080 -extern_define RELEASE,QUALITY_ULTRA
+15:55:36.725 WINDOW hwnd=393844 exited=False after=22s
+15:55:48.846 WINRECT 0,0,1926,1100 w=1926 h=1100 style=0x14ca0000
+15:55:50.685 F9 sent at x=963 y=550
+15:57:31.825 LOAD_SNAP done
+16:00:12.483 RESULT_FOUND=True alive=True elapsed_s=298
+HLOG 15:55:15 Features: OpenGL Direct3D9 Direct3D11 OpenAL XAudio2 XPad360 Joystick Flash Editor
+HLOG 15:55:15 Direct3D11 desc: NVIDIA GeForce RTX 4070 Ti SUPER
+HLOG 15:55:16 Unigine Heaven Benchmark 4.0 (4.0)
+HLOG 15:55:50 Benchmark running
+HLOG 16:00:11 Benchmark results:
+HLOG 16:00:11 Time:    260.66816:00:11 Frames:    3745316:00:11 FPS:    143.68116:00:11 Min FPS:    17.559216:00:11 Max FPS:    369.51116:00:11 Score:    3619.32
+16:00:18.680 END

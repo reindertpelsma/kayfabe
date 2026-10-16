@@ -1,0 +1,14 @@
+heaven_total_cpu_pct_of_one_core=178.4
+vcpu 0=53%
+vcpu 1=49%
+vcpu 2=59%
+vcpu 3=64%
+vcpu _total=56%
+thread 9104 98.3%
+thread 2308 45.5%
+thread 4544 14.2%
+thread 7468 8.8%
+thread 9200 5%
+thread 2132 4.7%
+thread 9624 4.1%
+thread 1704 0.6%

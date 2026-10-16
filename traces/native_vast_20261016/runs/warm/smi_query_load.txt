@@ -1,0 +1,2 @@
+pstate, clocks.current.sm [MHz], clocks.current.memory [MHz], power.draw [W], utilization.gpu [%], pcie.link.gen.current, pcie.link.width.current, temperature.gpu
+P0, 2775 MHz, 10501 MHz, 149.02 W, 44 %, 4, 8, 56

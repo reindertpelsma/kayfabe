@@ -1,0 +1,6 @@
+SETUP password set for vast
+SETUP powercfg Power Scheme GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c  (High performance)
+SETUP HEAVEN_SHA256 497865a09af205a7d2e8812bfc2dd54870216cc1e95541b63cef89a4433b0e5f url=https://assets.unigine.com/d/Unigine_Heaven-4.0.exe size=259708359
+SETUP heaven installer rc=0
+SETUP heaven exe=True
+SETUP vcruntime140_1=False

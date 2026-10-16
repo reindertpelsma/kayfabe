@@ -1,0 +1,46 @@
+date_utc=2026-10-16T22:41:44.9299543Z
+os=Microsoft Windows 11 Enterprise LTSC Evaluation build=26100 ver=10.0.26100
+cpu=AMD EPYC 7702P 64-Core Processor                cores=1 logical=1 mhz=2000
+ram_gb=50.3 model=Standard PC (i440FX + PIIX, 1996) manufacturer=QEMU hypervisor_present=True
+powercfg=Power Scheme GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c  (High performance)
+HwSchMode= (2=on, 1=off, absent=default)
+GameBar AutoGameModeEnabled= AllowAutoGameMode=
+UserGpuPreferences=
+video=NVIDIA GeForce RTX 4070 Ti SUPER driver=32.0.15.8088 status=OK mode=1920x1080@60Hz pnp=PCI\VEN_10DE&DEV_2705&SUBSYS_571219DA&REV_A1\3&267A616A&0&40
+screen=\\.\DISPLAY1 primary=True bounds={X=0,Y=0,Width=1920,Height=1080}
+cuda sm_count=66
+cuda clock_khz=2610000
+cuda mem_clock_khz=10501000
+cuda bus_width_bits=256
+cuda l2_bytes=50331648
+cuda cc_major=8
+cuda cc_minor=9
+--- nvidia-smi
+Fri Oct 16 15:41:53 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 580.88                 Driver Version: 580.88         CUDA Version: 13.0     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                  Driver-Model | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 4070 ...  WDDM  |   00000000:00:08.0  On |                  N/A |
+| 35%   29C    P8              6W /  285W |     233MiB /  16376MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A            1556    C+G   C:\Windows\System32\dwm.exe           N/A      |
+|    0   N/A  N/A            6100    C+G   ...indows\System32\ShellHost.exe      N/A      |
+|    0   N/A  N/A            6108    C+G   C:\Windows\explorer.exe               N/A      |
+|    0   N/A  N/A            7752    C+G   ...y\StartMenuExperienceHost.exe      N/A      |
+|    0   N/A  N/A            8212    C+G   ..._cw5n1h2txyewy\SearchHost.exe      N/A      |
+|    0   N/A  N/A            8564    C+G   C:\Windows\System32\WWAHost.exe       N/A      |
++-----------------------------------------------------------------------------------------+
+--- nvidia-smi --query-gpu
+name, driver_version, vbios_version, pci.bus_id, pci.device_id, pstate, pcie.link.gen.current, pcie.link.gen.max, pcie.link.width.current, pcie.link.width.max, clocks.current.sm [MHz], clocks.current.memory [MHz], clocks.max.sm [MHz], clocks.max.memory [MHz], power.limit [W], power.default_limit [W], power.max_limit [W], memory.total [MiB], driver_model.current
+NVIDIA GeForce RTX 4070 Ti SUPER, 580.88, 95.03.45.c0.30, 00000000:00:08.0, 0x270510DE, P8, 1, 4, 8, 16, 210 MHz, 405 MHz, 3105 MHz, 10501 MHz, 285.00 W, 285.00 W, 285.00 W, 16376 MiB, WDDM

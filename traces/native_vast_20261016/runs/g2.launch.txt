@@ -1,0 +1,21 @@
+LAUNCH_RUN done=True waited=316s
+16:17:39.723 START label=g2 api=opengl user=vast session=1 defs=RELEASE,QUALITY_ULTRA
+16:17:39.841 PRIMARY_SCREEN \\.\DISPLAY1 bounds={X=0,Y=0,Width=1920,Height=1080}
+16:17:40.412 VIDEO NVIDIA GeForce RTX 4070 Ti SUPER mode=1920x1080@60
+16:17:45.726 LAUNCH -project_name Heaven -data_path ../ -engine_config ../data/heaven_4.0.cfg -system_script heaven/unigine.cpp -sound_app null -video_app opengl -video_multisample 0 -video_fullscreen 0 -video_mode -1 -video_width 1920 -video_height 1080 -extern_define RELEASE,QUALITY_ULTRA
+16:18:08.089 WINDOW hwnd=590074 exited=False after=22s
+16:18:20.226 WINRECT 0,0,1926,1100 w=1926 h=1100 style=0x14ca0000
+16:18:22.109 F9 sent at x=963 y=550
+16:20:03.912 LOAD_SNAP done
+16:22:44.343 RESULT_FOUND=True alive=True elapsed_s=299
+HLOG 16:17:46 Loading "opengl32.dll"...
+HLOG 16:17:46 Features: OpenGL Direct3D9 Direct3D11 OpenAL XAudio2 XPad360 Joystick Flash Editor
+HLOG 16:17:46 OpenGL vendor:   NVIDIA Corporation
+HLOG 16:17:46 OpenGL renderer: NVIDIA GeForce RTX 4070 Ti SUPER/PCIe/SSE2
+HLOG 16:17:46 OpenGL version:  3.2.0 NVIDIA 580.88
+HLOG 16:17:46 OpenGL flags:    Core Profile
+HLOG 16:17:47 Unigine Heaven Benchmark 4.0 (4.0)
+HLOG 16:18:21 Benchmark running
+HLOG 16:22:43 Benchmark results:
+HLOG 16:22:43 Time:    260.65916:22:43 Frames:    3449016:22:43 FPS:    132.31816:22:43 Min FPS:    22.180216:22:43 Max FPS:    238.79916:22:43 Score:    3333.1
+16:22:50.570 END

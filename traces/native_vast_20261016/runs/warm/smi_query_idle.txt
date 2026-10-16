@@ -1,0 +1,2 @@
+pstate, clocks.current.sm [MHz], clocks.current.memory [MHz], power.draw [W], utilization.gpu [%], pcie.link.gen.current, pcie.link.width.current, temperature.gpu
+P8, 210 MHz, 405 MHz, 4.77 W, 0 %, 1, 8, 31
