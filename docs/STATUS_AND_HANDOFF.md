@@ -1,5 +1,29 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-16 13:44 UTC — GB205 B3 normal logging/raw30 pass; Windows reference next
+
+MEASURED source304ca9adb10528ac73d809636174625199f40ba1: native gates9/9,
+gate10PASS; concurrency PASS18s/client7009ms at normal loglevel6 with zero
+heartbeat warnings; full Linux595 raw30/30 at180s (13:33:39–13:41:03). All31
+process receipts assert actual KF3 env{} and exact host/guest595.91.07. Final
+binary2cc299c67b35241d7b8b5692a5b062eef02fbc1e3125975bf64512b988e64903.
+Do not carry this result to GB206. First PTIMER-selector candidate still failed.
+
+Named gap: full suite has74 startup warnings in six arms, heartbeat0 before
+first real sample; no sustained doubled-offset storm. INFERRED first-sample
+readiness issue: deadline advances even when fn72 offset is missing. PR23 stays
+draft; no warning-free/full CUDA/graphics/broker claim. Stop B3 within its1h box
+and take Windows as the prompt prioritizes. Caps equality595 RED126 words;
+unknown0x00c remains explicit. See blackwell_5070/linux595_20261016/RESULT.md.
+
+Save/push final Linux text before reimage. Prepared own native queue controller
+/workspace/codex/bwbatch20261016_native_queue.py checks full30/exit0 and noQEMU,
+stages the pinned Windows-on-Vast installer, saves its generated PUBLIC SSH key
+and aliascodex-bwbatch-win. Native stock580 suite+7min hold and tracer fixed
+caps query planned; no GSP queue replay until virtual bodies justify it. Original
+rental56246613 timer15:35:50UTC/hard15:40:48 remains. Cost ceiling5.09USD+transfers.
+
+
 ## UPDATE 2026-10-16 13:30 UTC — GB205 B3 console ablation measured; first clock candidate falsified
 
 Fresh GB205 arch0x1b0/impl5 confirmed unprivileged on own56246613. Linux595

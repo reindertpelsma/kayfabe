@@ -1,0 +1,5 @@
+PUBLIC_DRIVER_URL=https://us.download.nvidia.com/Windows/580.88/580.88-desktop-win10-win11-64bit-international-dch-whql.exe
+INSTALLER_SHA256=90c49f925b41ee062e02cc8094a16b6d057abfde4e85235a76d63ffe267f63a9
+ACTUAL_DISPLAY_PCI=0x2f04
+%NVIDIA_DEV.2F04%           = Section089, PCI\VEN_10DE&DEV_2F04                 
+NVIDIA_DEV.2F04 = "NVIDIA GeForce RTX 5070"
