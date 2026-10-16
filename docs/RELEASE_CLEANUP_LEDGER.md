@@ -39,3 +39,16 @@ section B orders the reading by risk.
 ## C. Defence notes to write during the month (one per subsystem, 1 page each)
 What it does, the invariants it relies on, the owner ruling or measurement behind each, what would break it, how to test it. Start with the lifecycle (it is the freshest and the model/tests
 already enumerate its invariants I1-I8).
+
+## D. Release gate: correctness and reliability checklist (owner §AK, 2026-10-17: a checkmark that must hold; explicit refusal over undefined behaviour; crash loudly, never silently wrong)
+
+Each line must be demonstrably true at release, with the evidence named next to it. Append items; never delete one without the owner.
+- [ ] Every guest-reachable decision (ring entries, pushbuffers, registrations, RM controls) has a NAMED refusal counter and log line; unknown inputs are refused, not guessed. Inventory of the refusals with their tests.
+- [ ] No known path to a silent wrong result: stale-slot replay at a ring switch (lifecycle D5) detected or proven impossible; cursor semantics at the switch measured (P0 a); MOVNTDQA/WC reads rejected until the stale-line risk is tested.
+- [ ] Hangs are failures: every stuck state has a loud counter; no timer repairs a state (§AE); the counted 50 ms backstop never fires on real work (counter ~0 on the app matrix).
+- [ ] Containment measured: the blast radius of a channel reset on other VMs (M1-M3 in `V3_CHANNEL_RC_SCOPE`) is measured and a loud failure demonstrably stays inside the guest's own channel/VM.
+- [ ] Assumptions with explicit-failure semantics (P1 the 5080 binds once; P2' a GP_PUT is a packet boundary): counters read zero over the whole app matrix (Heaven, GravityMark, Minecraft, Edge, Blender, CUDA lanes) and the unsupported case is documented with the error it produces.
+- [ ] Supported-workload matrix: zero unexplained failures; failure RATES on supported apps tracked; each unsupported case listed with its error text.
+- [ ] Every fallback is a clean mode (complete, named, own tests, §AE); no shipped flag trades correctness for speed; research/sloppy builds never ship.
+- [ ] Mutation checks: every invariant is guarded by at least two tests; the real production function is exercised GPU-free (not a transliteration); independent hostile-guest review of each relay change; Linux gates 9/9 + gate 10, fast 30/30 and broker lane on the exact revision.
+- [ ] Evidence, not claims: every status claim names its revision, box and evidence (`docs/STATUS_DETAIL.md`, `traces/`).
