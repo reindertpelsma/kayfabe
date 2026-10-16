@@ -1,5 +1,30 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-16 14:55 UTC — provider loss; GB205 rental retired, no active box
+
+Own56246613 destroyed/absence verified14:42:21UTC; timer2319249 ownership
+checked and canceled after absence. Provider153389 went offline after final
+Ubuntu22 identification14:29:22/provisioningPID1400 launch14:29:37. Root job
+completion is UNVERIFIED; missing output is not a failed run. SSHNoRoute and
+APIactual_status offline persisted. No kayfabe Windows guest started. Exclude
+this machine. Lease2h01m33s ceiling0.49USD; campaign ceiling4.85USD+transfers.
+
+Completed native evidence already pushed2d2b59068: Windows580 Code0/CUDA3/
+D3D11+12 stock420.32s/0TDR hold (GSPN/A), and separate GSP580.65.05 enabled
+short suite PASS/caps127 unchanged. Linux595raw30 at180PASS source304ca9adb;
+74 startupHB0 warnings remain named. GB205Windowsguest stillUNRUN; GB206
+Code43 remainsRED. Blackwell5060/5070 narrow KVM searches currentlyempty;
+wide market search pending, then available Blackwell or Ada display reference.
+
+CleanPR25 fee2ac933 bounds host-enabled metadata tracing to16384 commands
+per process, one truncation notice, preserving underlying calls/replies. Actual
+production child fixture emitted32769 records before (3ab6a34f6), now bounded;
+790kfRM CPUtests pass. IntegratedBW79d43368d pushed, hardwareUNRUN. New
+Windows diagnostics must use it with boundedBODY_TRACE. PR24GB205 measured
+580/5950xc rows5b8dd3a5f remain UNINTEGRATED for initial-baseline/onewordA-B.
+No whole caps-page injection or branch compression performed. All PRs draft.
+
+
 ## UPDATE 2026-10-16 14:17 UTC — GB205 native Windows580 stock hold passes; GSP mode next
 
 Native LTSC26100/580.88 actual32.0.15.8088 Code0, CUDA cup2/3/8 and hardware

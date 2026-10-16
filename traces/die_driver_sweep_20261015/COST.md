@@ -60,7 +60,7 @@ turing_hold_20261016/retirement.txt. Screenshots/executables were not returned.
 
 | Instance | GPU | USD/hour | StartUTC | StopUTC | Purpose | Ceiling |
 |---|---|---:|---|---|---|---|
-|56246613|RTX5070 / GB205 (unprivileged RM confirmed)|0.2416666667|2026-10-16T12:40:48.060853+00:00 conservative requesttime|ACTIVE, timer2319249 at15:35:50UTC; hardcap15:40:48UTC|B3first, newdie nativeWindows reference/B4 while GB206KVM unavailable|max3h0.73USD; campaign ceiling5.09USD+unbilledtransfers|
+|56246613|RTX5070 / GB205 (unprivileged RM confirmed)|0.2416666667|2026-10-16T12:40:48.060853+00:00 conservative requesttime|destroyed/absence verified14:42:21UTC; timer2319249 canceled after absence|B3first, newdie nativeWindows reference/B4 while GB206KVM unavailable|2h01m33s; compute ceiling0.49USD; campaign ceiling4.85USD+unbilledtransfers|
 
 MEASURED APIaccount IDs[] before creation; only own new56246613 may be retired.
 Immediately armed175minute timer. Offer54561458/machine153389 advertises16CPU,
@@ -75,3 +75,5 @@ Update13:30UTC: measured GB205 arch0x1b0/impl5, UID65534/CapEff0. Stock595
 native gates9+10/concurrency pass. B3 normal180s timeout versus quiet18s pass;
 first PTIMER-selector candidate failed180s too. Corrected fn72-offset candidate
 304ca9adb running. ActualPCI2f04 matches public580.88INF. Windows suites UNRUN.
+
+Final56246613: provider153389 went offline during native Linux restoration after Ubuntu22 was identified and provisioning PID1400 launched. SSH NoRoute/actual_status offline persisted; no kayfabe Windows guest started. All completed evidence was pushed before reimage. Destroy/absence verified14:42:21UTC; owned timer canceled only after absence/ownership check. No own rental remains. Native Windows580 legacy hold/GSP short suite pass, Linux595raw30 pass; GB205Windowsguest UNRUN due provider loss. Exclude machine153389 from the next search.

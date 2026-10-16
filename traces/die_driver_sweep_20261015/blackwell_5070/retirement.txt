@@ -1,0 +1,7 @@
+RETIRE_OWN_ID=56246613
+destroying instance 56246613.
+DEPRECATED: `vastai show instances` will be removed in a future release. Use `vastai show instances-v1` for the new paginated command.
+ACCOUNT_INSTANCE_IDS []
+2026-10-16T14:42:21+00:00
+OWN_56246613_ABSENCE_VERIFIED=1
+OWN_TIMER_2319249_CANCELED_AFTER_ABSENCE=1
