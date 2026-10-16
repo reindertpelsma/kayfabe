@@ -207,6 +207,9 @@ pub struct Stats {
     pub markers: AtomicU64,
     /// SYNC_WAIT drain latency (gate published -> witness fetched), log2 buckets of microseconds.
     pub drain: [AtomicU64; DRAIN_BUCKETS],
+    /// ★ 2026-10-16: the USER-ring lifecycle's counters (`crate::user_lifecycle`), printed on their own
+    /// line (`USER_RING_LIFECYCLE SUMMARY`).
+    pub life: crate::user_lifecycle::LifecycleStats,
 }
 
 impl Stats {

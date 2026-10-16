@@ -188,7 +188,8 @@ impl State {
         }
     }
 
-    fn executed(&mut self, key: ObjKey, handle: u32, tlb_flushed: bool) {
+    /// Returns the number of entries deleted.
+    fn executed(&mut self, key: ObjKey, handle: u32, tlb_flushed: bool) -> usize {
         let mut deleted = 0;
         if let Some(t) = self.objects.get_mut(&key) {
             let before = t.entries.len();
@@ -211,6 +212,7 @@ impl State {
             self.count_down(key.client, deleted);
             self.stats.implicit_deletes += deleted as u64;
         }
+        deleted
     }
 
     fn live(&self, key: ObjKey) -> usize {
@@ -224,6 +226,11 @@ impl State {
 #[derive(Debug, Default)]
 pub struct Registry {
     inner: Mutex<State>,
+    /// ★ 2026-10-16 (`V3_USER_RING_LIFECYCLE_20261016.md` §1.1): bumped (release) AFTER every change of the
+    /// set of live entries, while the lock that made the change is still held, and so BEFORE the
+    /// registration's reply is built. A worker that loads it (acquire) after a guest GP entry and sees a
+    /// new value finds the change in [`Registry::live_count`].
+    epoch: std::sync::atomic::AtomicU64,
 }
 
 impl Registry {
@@ -235,6 +242,7 @@ impl Registry {
                 bounds,
                 ..State::default()
             }),
+            epoch: std::sync::atomic::AtomicU64::new(0),
         }
     }
 
@@ -248,7 +256,15 @@ impl Registry {
         st.objects.clear();
         st.per_client.clear();
         st.total = 0;
+        if n > 0 {
+            self.bump();
+        }
         n
+    }
+
+    /// The epoch moved: the set of live entries changed. Called with the state lock held.
+    fn bump(&self) {
+        self.epoch.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
     }
 
     fn st(&self) -> std::sync::MutexGuard<'_, State> {
@@ -333,6 +349,7 @@ impl Registry {
         *st.per_client.entry(key.client).or_default() += 1;
         st.total += 1;
         st.stats.registered += 1;
+        self.bump();
         NV_OK
     }
 
@@ -346,6 +363,7 @@ impl Registry {
         }
         st.count_down(key.client, 1);
         st.stats.removed += 1;
+        self.bump();
         NV_OK
     }
 
@@ -383,7 +401,9 @@ impl Registry {
     /// reuse. Asynchronous channel actions must use executed_entry instead.
     pub fn executed(&self, key: ObjKey, handle: u32, tlb_flushed: bool) {
         let mut st = self.st();
-        st.executed(key, handle, tlb_flushed);
+        if st.executed(key, handle, tlb_flushed) > 0 {
+            self.bump();
+        }
     }
 
     /// Complete only the exact registration resolved by the trigger. A guest
@@ -397,7 +417,9 @@ impl Registry {
             st.stats.stale_completions += 1;
             return false;
         }
-        st.executed(key, entry.handle, tlb_flushed);
+        if st.executed(key, entry.handle, tlb_flushed) > 0 {
+            self.bump();
+        }
         true
     }
 
@@ -405,27 +427,34 @@ impl Registry {
     pub fn prune(&self, alive: impl Fn(ObjKey) -> bool) {
         let mut st = self.st();
         let gone: Vec<ObjKey> = st.objects.keys().copied().filter(|k| !alive(*k)).collect();
+        let mut dropped = 0;
         for k in gone {
             if let Some(t) = st.objects.remove(&k) {
                 let n = t.entries.len();
                 st.count_down(k.client, n);
                 st.stats.destroyed += n as u64;
+                dropped += n;
             }
+        }
+        if dropped > 0 {
+            self.bump();
         }
     }
 
     /// ★ 2026-10-16 (`V3_USER_RING_LIFECYCLE_20261016.md` §1.1): the monotone epoch of the set of live
-    /// entries. STUB (tests-first commit).
+    /// entries (acquire load; see the field). One atomic load, no lock: the USER-ring worker calls it for
+    /// every GP entry.
     #[must_use]
     pub fn epoch(&self) -> u64 {
-        0
+        self.epoch.load(std::sync::atomic::Ordering::Acquire)
     }
 
-    /// ★ 2026-10-16: the number of live entries of `key`, whatever their kind and state.
-    /// STUB (tests-first commit).
+    /// ★ 2026-10-16: the number of live entries of `key`, whatever their kind and state (an executed
+    /// EXPLICIT-delete entry is still live). Takes the registry lock: call it only when [`Registry::epoch`]
+    /// moved.
     #[must_use]
-    pub fn live_count(&self, _key: ObjKey) -> u32 {
-        0
+    pub fn live_count(&self, key: ObjKey) -> u32 {
+        u32::try_from(self.st().live(key)).unwrap_or(u32::MAX)
     }
 
     /// The live entries of `key`, in handle order (tests, the log).

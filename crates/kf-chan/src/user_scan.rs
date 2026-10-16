@@ -88,17 +88,28 @@ impl Scan {
     }
 
     /// Subchannels (bit n, n >= 5) on which a scanned SET_OBJECT bound an object `software` accepts.
-    /// STUB (tests-first commit).
-    pub fn software_mask(&self, _software: impl Fn(u32) -> bool) -> u8 {
-        0
+    /// The lifecycle's "the software object is bound" (`kf_chan::user_lifecycle`).
+    pub fn software_mask(&self, software: impl Fn(u32) -> bool) -> u8 {
+        (5..8usize)
+            .filter(|s| self.bindings[*s] != 0 && software(self.bindings[*s]))
+            .fold(0, |m, s| m | (1 << s))
     }
 
     /// The scan after an UNSCANNED stretch (Pointer mode): the bindings are kept, the packet in
-    /// progress is forgotten and the sub-device mask state returns to its birth value.
-    /// STUB (tests-first commit).
+    /// progress is forgotten and the sub-device mask state returns to its birth value (assumption P2 of
+    /// `docs/design/V3_USER_RING_LIFECYCLE_20261016.md`: the first unscanned entry boundary is a packet
+    /// boundary).
     #[must_use]
     pub fn fresh_resume(&self) -> Self {
-        self.clone()
+        Self {
+            bindings: self.bindings,
+            pending: None,
+            subdevice: self.subdevice.as_ref().map(|s| Subdevice {
+                id: s.id,
+                active: true,
+                stored: None,
+            }),
+        }
     }
 
     /// Whether the metadata is between complete method packets. This is not

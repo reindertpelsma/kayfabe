@@ -432,6 +432,13 @@ pub(super) struct Pump {
     grace_was_retrying: bool,
     /// ★ 2026-10-14: guest SYNC_WAIT entries gated while a packet was open (control witness).
     sync_carried: u64,
+    /// ★ 2026-10-16 (`docs/design/V3_USER_RING_LIFECYCLE_20261016.md`): Scan -> Pointer -> Window. In
+    /// Pointer mode the relay copies GP entries as they are and reads no pushbuffer byte.
+    life: kf_chan::user_lifecycle::Lifecycle,
+    /// Guest entries relayed so far: monotone across ring generations (never a masked index).
+    relayed: u64,
+    /// The channel's software object once known (Scan and Window refresh it; Pointer only reads it).
+    sw: Option<Software>,
     /// Measurement only ([`trace_dir`]).
     pub(super) trace: Option<Box<Trace>>,
 }
@@ -507,10 +514,24 @@ impl Pump {
             grace_reported: 0,
             grace_was_retrying: false,
             sync_carried: 0,
+            life: kf_chan::user_lifecycle::Lifecycle::new(),
+            relayed: 0,
+            sw: None,
             trace: trace_dir().map(|_| Box::new(Trace::new())),
         })
     }
     pub(super) fn release(&mut self) -> Result<(), String> {
+        {
+            let c = self.life.counts();
+            if c.entries_scan.saturating_add(c.entries_pointer).saturating_add(c.entries_window) != 0 {
+                eprintln!(
+                    "kf3: USER_RING_LIFECYCLE {:x?} mode={:?} {c:?}",
+                    self.key,
+                    self.life.mode()
+                );
+            }
+        }
+        self.life.teardown();
         if self.sync_carried != 0 {
             eprintln!(
                 "kf3: USER_RING_SYNC_CARRIED SUMMARY {:#x}:{:#x} sync_wait_entries_behind_an_open_packet_read_ungated={}",
@@ -1265,6 +1286,15 @@ impl Pump {
         self.need = Need::Idle;
         self.again = false;
         let out = self.turn_body(me, r);
+        {
+            let d = self.life.take_delta();
+            me.relay_stats.life.add(&d);
+            if self.life.mode() == kf_chan::user_lifecycle::Mode::Window {
+                me.relay_stats
+                    .life
+                    .window_max(self.life.counts().window_entries_max);
+            }
+        }
         match &out {
             Ok(_) if self.again => self.need = Need::Again,
             Err(Failure::Retry) => self.need = Need::Contended,
@@ -1400,6 +1430,36 @@ impl Pump {
                 })?;
             let guest_get =
                 self.cursor.checked_add(1).ok_or("USER_RING_CURSOR")? & (r.source.1 - 1);
+            // ★★ 2026-10-16 — the lifecycle (design doc §1, §2). ONE load of the entry (`source`) was made
+            // above; the registry epoch is loaded AFTER it, inside `lifecycle_plan`. In Pointer mode the
+            // SAME value is validated (`inspect_entry` above) and published, and no pushbuffer byte is read.
+            let plan = self.lifecycle_plan(me, r, entry);
+            let (restart, seed_gate, permit) = match plan {
+                kf_chan::user_lifecycle::Plan::Forward => {
+                    return self.forward_pointer(me, r, ring, source, entry, guest_get);
+                }
+                kf_chan::user_lifecycle::Plan::Scan {
+                    restart,
+                    seed_gate,
+                    permit,
+                } => (restart, seed_gate, permit),
+            };
+            if restart {
+                // The first entry of a Fresh window (assumption P2): parser state restarted, bindings
+                // kept; a stale gate proof from before the unscanned stretch is forgotten.
+                self.scan = self.scan.fresh_resume();
+                self.sync = kf_chan::user_gate::SyncGate::default();
+                self.grace.clear();
+                self.life.restarted();
+            }
+            // A Window that follows Pointer mode with an unproven SYNC_WAIT behind it gates its first
+            // entry as if that entry were a SYNC_WAIT entry (barrier + tagged marker, read nothing
+            // before the marker is processed): the Pointer-mode record cannot be proven from `GP_GET`.
+            let gate_entry = if seed_gate {
+                entry | kf_chan::user_lifecycle::GP_SYNC_WAIT
+            } else {
+                entry
+            };
             // ★★ 2026-10-14 — GP_ENTRY1_SYNC_WAIT (public dev_pbdma.ref "NV_PPBDMA_GP_ENTRY1_SYNC":
             // Host does not begin fetching this entry's segment — and, for a LENGTH-0 entry, any
             // later one — until the preceding segment has been PROCESSED). A guest may therefore
@@ -1417,7 +1477,7 @@ impl Pump {
             // A SYNC_WAIT entry reached with a packet OPEN across it has no witness (no byte may
             // enter an open packet) and the hardware does not delay it either (the split packet's
             // header counts the preceding segment as processed): it is read at once and counted.
-            let verdict = if entry >> 63 & 1 == 1 && self.scan.carried().is_some() {
+            let verdict = if gate_entry >> 63 & 1 == 1 && self.scan.carried().is_some() {
                 Stats::bump(&me.relay_stats.carried_ungated);
                 if self.sync_carried < 4 {
                     self.sync_carried += 1;
@@ -1436,10 +1496,13 @@ impl Pump {
                 kf_chan::user_gate::Gate::Proceed
             } else {
                 self.sync
-                    .entry(entry, self.generation, self.cursor, self.marks.seen())
+                    .entry(gate_entry, self.generation, self.cursor, self.marks.seen())
             };
             match verdict {
                 kf_chan::user_gate::Gate::Proceed => {
+                    if seed_gate {
+                        self.life.gate_proven();
+                    }
                     // Measurement only: the SYNC_WAIT drain latency (gate authored -> marker processed).
                     if let Some(at) = self.gate_at.take() {
                         me.relay_stats.record_drain(
@@ -1522,6 +1585,7 @@ impl Pump {
                 });
                 self.source_admitted = true;
                 self.cursor = guest_get;
+                self.note_relayed(entry);
                 self.unnotified = true;
                 self.again = true;
                 return Ok(true);
@@ -1535,6 +1599,11 @@ impl Pump {
                 descriptor.gpu_va,
                 usize::try_from(descriptor.len_bytes).map_err(|_| "USER_RING_PB_SIZE")?,
             )?;
+            {
+                let vram = self.life.mode() == kf_chan::user_lifecycle::Mode::Window
+                    && pb.describe().contains("vram");
+                self.life.note_pb_read(&permit, pb.bytes.len(), vram);
+            }
             let mut words = Vec::new();
             words
                 .try_reserve_exact(pb.bytes.len() / 4)
@@ -1546,7 +1615,14 @@ impl Pump {
             }
             let software = software_snapshot(me, r)?;
             self.grace_was_retrying = self.grace.retrying();
-            let planned = match stage_plan(&self.scan, &software, &words) {
+            let planned0 = stage_plan(&self.scan, &software, &words);
+            if let Err(Failure::Refused(why)) = &planned0
+                && why.starts_with("USER_RING_SCAN ")
+                && !self.grace_was_retrying
+            {
+                self.life.scan_refused();
+            }
+            let planned = match planned0 {
                 // ★ 2026-10-14: a scan refusal of a segment never published is re-read and rescanned
                 // `REFUSE_RETRIES` times -- a COUNT, never a clock -- before it is final
                 // (`kf_chan::user_gate::Grace`); the re-read is an immediate re-turn.
@@ -1627,6 +1703,85 @@ impl Pump {
         }
     }
 
+    /// A guest entry was published on the private ring (any mode): the monotone count and the lifecycle's
+    /// per-mode bookkeeping (Pointer mode records a forwarded SYNC_WAIT entry).
+    fn note_relayed(&mut self, entry: u64) {
+        self.life.forwarded(self.relayed, entry);
+        self.relayed = self.relayed.saturating_add(1);
+    }
+
+    /// ★ 2026-10-16 -- what to do with the entry just loaded (`kf_chan::user_lifecycle`). The registry
+    /// epoch is loaded AFTER the entry (design §1.1) behind a SeqCst fence: an entry that was published
+    /// after a registration's reply is loaded after the epoch bump became visible, so it is scanned.
+    fn lifecycle_plan(
+        &mut self,
+        me: &ChanPlane,
+        r: &userrelay::Record,
+        entry: u64,
+    ) -> kf_chan::user_lifecycle::Plan {
+        use kf_chan::user_lifecycle::{Mode, Obs};
+        if matches!(self.life.mode(), Mode::Scan | Mode::Window)
+            && let Ok(Some(sw)) = software_snapshot(me, r)
+        {
+            self.sw = Some(sw);
+        }
+        let sw_mask = self
+            .sw
+            .as_ref()
+            .map_or(0, |sw| self.scan.software_mask(|v| sw.matches(v)));
+        let key = self.sw.as_ref().map(|sw| kf_rm::defapi::ObjKey {
+            client: r.key.0,
+            object: sw.guest,
+        });
+        let reg = me.defapi_reg.get();
+        std::sync::atomic::fence(Ordering::SeqCst);
+        let epoch = reg.map_or(0, |reg| reg.epoch());
+        let obs = Obs {
+            raw: entry,
+            abs: self.relayed,
+            epoch,
+            sw_mask,
+            have_software: self.sw.is_some(),
+            quiescent: !self.sync.waiting(),
+        };
+        self.life.entry(&obs, || match (reg, key) {
+            (Some(reg), Some(key)) => reg.live_count(key),
+            _ => 0,
+        })
+    }
+
+    /// Pointer mode: publish the entry exactly as it was loaded and validated; read no pushbuffer.
+    fn forward_pointer(
+        &mut self,
+        me: &ChanPlane,
+        r: &userrelay::Record,
+        ring: Option<Mapping<'static>>,
+        source: Snapshot<'static>,
+        entry: u64,
+        guest_get: u32,
+    ) -> Turn<bool> {
+        // one slot stays back for the batch marker (kept for the Window that may follow)
+        if self.fetch.available() < 2 {
+            return self.credit_wait(me, r);
+        }
+        self.publish(me, r, None, ring.as_ref(), Some(&source), None, |pump, storage| {
+            let (slot, put) = pump
+                .fetch
+                .publish(Some((pump.generation, guest_get)))
+                .map_err(str::to_owned)?;
+            storage.write_user_gp(slot, entry)?;
+            storage.publish_put(put)
+        })?;
+        let cursor = self.cursor;
+        self.trace_slots(|| vec![format!("guest pointer cursor={cursor} entry={entry:#018x}")]);
+        self.source_admitted = true;
+        self.cursor = guest_get;
+        self.note_relayed(entry);
+        self.unnotified = true;
+        self.again = true;
+        Ok(true)
+    }
+
     /// ★ 2026-10-14 -- the batch marker (`kf_chan::user_loop`, design doc §3.3): one private segment
     /// `[NON_STALL_INTERRUPT, 0]` behind everything published so far. Its `GP_GET` passing is the
     /// proof every earlier entry began processing; its interrupt (the engine's non-stall event, in the
@@ -1652,8 +1807,9 @@ impl Pump {
     fn end_batch(&mut self, me: &ChanPlane, r: &userrelay::Record) -> Turn<bool> {
         use kf_chan::user_loop::Need;
         if self.unnotified {
-            if self.scan.carried().is_some() {
-                // no marker is possible: the wake for this work is the spin or the safety net
+            if !self.life.marker_possible(self.scan.carried().is_some()) {
+                // no marker is possible (a packet is open, or Pointer mode has no parser state): the wake
+                // for this work is the spin or the safety net
                 self.unnotified = false;
                 self.marker_event = false;
                 self.need = Need::Popped {
@@ -1695,7 +1851,7 @@ impl Pump {
         use kf_chan::user_loop::Need;
         let mut marker = self.marker_event;
         if self.unnotified {
-            if self.scan.carried().is_none() && self.fetch.available() >= 1 {
+            if self.life.marker_possible(self.scan.carried().is_some()) && self.fetch.available() >= 1 {
                 self.publish_marker(me, r)?;
                 marker = true;
             } else {
@@ -2017,7 +2173,9 @@ impl Pump {
             });
             self.source_admitted = true;
             self.scan = next;
+            self.life.segment_scanned(self.scan.carried().is_some());
             self.cursor = s.guest_get;
+            self.note_relayed(s.entry);
             self.unnotified = true;
             return Ok((true, true));
         }
@@ -2099,9 +2257,11 @@ impl Pump {
         if !s.staged && s.generation == self.generation {
             self.source_admitted = true;
             self.cursor = s.guest_get;
+            self.note_relayed(s.entry);
         }
         s.staged = true;
         self.scan = next;
+        self.life.segment_scanned(self.scan.carried().is_some());
         s.wait = Some(Wait {
             witness: self.marks.issued(),
             trigger,
@@ -3158,5 +3318,43 @@ mod tests {
             Failure::from("NATIVE_DOORBELL_UNCERTAIN"),
             Failure::Refused(_)
         ));
+    }
+
+    /// G3 (`docs/design/V3_USER_RING_LIFECYCLE_20261016.md` section 0): the lifecycle machine is reachable
+    /// only from the Windows USER-ring pump, which only the Windows birth path constructs (it needs a
+    /// `WindowsUserRingPermit`). Linux Passthrough, Translated and Emulated channels never get one. This
+    /// pins the structure: no other source file of the device or of the channel crate constructs or names
+    /// the machine (the statistics line is the one shared reader).
+    #[test]
+    fn the_lifecycle_is_reachable_only_from_the_windows_user_ring_pump() {
+        let others: [(&str, &str); 7] = [
+            ("kf-qemu/chan.rs", include_str!("chan.rs")),
+            ("kf-qemu/twin.rs", include_str!("twin.rs")),
+            ("kf-qemu/userbirth.rs", include_str!("userbirth.rs")),
+            ("kf-chan/passthrough.rs", include_str!("../../kf-chan/src/passthrough.rs")),
+            ("kf-chan/translated.rs", include_str!("../../kf-chan/src/translated.rs")),
+            ("kf-chan/tmode.rs", include_str!("../../kf-chan/src/tmode.rs")),
+            ("kf-chan/userd_relay.rs", include_str!("../../kf-chan/src/userd_relay.rs")),
+        ];
+        for (name, text) in others {
+            assert!(
+                !text.contains("user_lifecycle") && !text.contains("Lifecycle::new"),
+                "{name} must not use the USER-ring lifecycle"
+            );
+        }
+        let relay = include_str!("userrelay.rs");
+        assert!(!relay.contains("Lifecycle::new"), "only the pump constructs it");
+        assert_eq!(
+            relay.matches("userpump::Pump::new(").count(),
+            1,
+            "the pump has exactly one constructor call, in the Windows USER-ring birth"
+        );
+        let pump = include_str!("userpump.rs");
+        let pump = pump.split("#[cfg(test)]").next().unwrap();
+        assert_eq!(
+            pump.matches("kf_chan::user_lifecycle::Lifecycle::new()").count(),
+            1,
+            "one machine per pump"
+        );
     }
 }

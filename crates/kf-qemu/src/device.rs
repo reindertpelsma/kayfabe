@@ -3397,6 +3397,9 @@ impl Device {
         // ★ 2026-10-14: the USER-ring event loop's bounded counters, one line (always; a backstop
         // that found work is the bug counter -- `docs/design/V3_USER_RING_EVENT_LOOP_20261014.md` §3.6).
         let rs = &self.chans.relay_stats;
+        if rs.life.any() {
+            eprintln!("kf3: USER_RING_LIFECYCLE SUMMARY {}", rs.life.summary());
+        }
         if rs.gates.load(Ordering::Relaxed) + rs.markers.load(Ordering::Relaxed) > 0 {
             eprintln!("kf3: USER_RING_LOOP SUMMARY {}", rs.summary());
             eprintln!("kf3: {}", crate::userstore::summary());

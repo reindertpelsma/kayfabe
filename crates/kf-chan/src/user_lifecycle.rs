@@ -4,7 +4,9 @@
 //! The pure state machine the relay (`crates/kf-qemu/src/userpump.rs`), the exhaustive model
 //! (`tests/user_lifecycle_model.rs`) and the property tests share. No I/O, no clock, no lock.
 //!
-//! STUB (tests-first commit): every entry plans a scan, i.e. the behaviour of the base revision.
+//! Scan until the software object's binding is known; then Pointer (no pushbuffer byte is read) while no
+//! registration is live; Window (scan again, with the SYNC_WAIT gate) while one is. See the design document
+//! for the invariants I1..I7 and the tests that enforce them.
 
 /// What the relay does with the guest's pushbuffers of a channel.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -142,6 +144,55 @@ impl Counts {
     }
 }
 
+macro_rules! lifecycle_stats {
+    ($($f:ident),*) => {
+        /// VM-wide lifecycle counters (fixed atomics, no per-event allocation): the per-channel
+        /// [`Counts`] merged by the relay, one bounded line at device stop.
+        #[derive(Debug, Default)]
+        pub struct LifecycleStats {
+            $(
+                #[doc = concat!("Sum over channels of `Counts::", stringify!($f), "`.")]
+                pub $f: std::sync::atomic::AtomicU64,
+            )*
+            /// Longest Window of any channel, in entries (a maximum).
+            pub window_entries_max: std::sync::atomic::AtomicU64,
+        }
+        impl LifecycleStats {
+            /// Merge one channel's delta ([`Lifecycle::take_delta`]).
+            pub fn add(&self, d: &Counts) {
+                use std::sync::atomic::Ordering::Relaxed;
+                $( if d.$f != 0 { self.$f.fetch_add(d.$f, Relaxed); } )*
+            }
+            /// Record a channel's longest Window.
+            pub fn window_max(&self, entries: u64) {
+                self.window_entries_max.fetch_max(entries, std::sync::atomic::Ordering::Relaxed);
+            }
+            /// Whether any channel ever left Scan or scanned anything.
+            #[must_use]
+            pub fn any(&self) -> bool {
+                use std::sync::atomic::Ordering::Relaxed;
+                self.entries_scan.load(Relaxed) + self.entries_pointer.load(Relaxed) + self.entries_window.load(Relaxed) > 0
+            }
+            /// One bounded line.
+            #[must_use]
+            pub fn summary(&self) -> String {
+                use std::sync::atomic::Ordering::Relaxed;
+                let mut s = String::new();
+                $( s.push_str(&format!("{}={} ", stringify!($f), self.$f.load(Relaxed))); )*
+                s.push_str(&format!("window_entries_max={}", self.window_entries_max.load(Relaxed)));
+                s
+            }
+        }
+    };
+}
+lifecycle_stats!(
+    entries_scan, entries_pointer, entries_window, to_pointer, to_window_exact, to_window_fresh,
+    to_pointer_from_window, restarts, seeded_gates, segments_scan, segments_window, straddles_scan,
+    straddles_window, window_fresh_start_parse_error, window_binding_changed, window_unscanned_long,
+    pb_bytes_scan, pb_bytes_window, window_bar1_bytes, pointer_pb_read_violation, scan_no_software,
+    after_teardown
+);
+
 /// What the relay observed at the entry it just loaded.
 #[derive(Clone, Copy, Debug)]
 pub struct Obs {
@@ -159,16 +210,81 @@ pub struct Obs {
     pub quiescent: bool,
 }
 
+/// A deliberate defect of the machine, for the mutation checks (`tests/user_lifecycle_mutants.rs`).
+#[cfg(feature = "lifecycle-mutants")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Mutant {
+    /// I1: Pointer mode plans a scan.
+    PointerScans,
+    /// I3: a Fresh window never seeds its gate.
+    NoSeed,
+    /// I3: Pointer mode forgets the SYNC_WAIT it forwarded.
+    ForgetSync,
+    /// I5: a registration in Pointer mode moves the channel back to Scan.
+    PointerToScan,
+    /// A teardown does not stop the machine.
+    ReviveAfterTeardown,
+    /// I4: a Window ends as soon as the relay is quiescent, whatever the registry says.
+    ExitIgnoresLive,
+    /// P1: a Window keeps the binding it started with (a moved binding is never noticed).
+    MaskFrozen,
+}
+
+#[cfg(feature = "lifecycle-mutants")]
+impl Mutant {
+    /// The mutant named by `KF_LIFECYCLE_MUTANT` (the mutation check script sets it).
+    #[must_use]
+    pub fn from_env() -> Option<Self> {
+        match std::env::var("KF_LIFECYCLE_MUTANT").ok()?.as_str() {
+            "pointer_scans" => Some(Self::PointerScans),
+            "no_seed" => Some(Self::NoSeed),
+            "forget_sync" => Some(Self::ForgetSync),
+            "pointer_to_scan" => Some(Self::PointerToScan),
+            "revive_after_teardown" => Some(Self::ReviveAfterTeardown),
+            "exit_ignores_live" => Some(Self::ExitIgnoresLive),
+            "mask_frozen" => Some(Self::MaskFrozen),
+            _ => None,
+        }
+    }
+}
+
 /// The pure lifecycle of one channel.
 #[derive(Clone, Debug)]
 pub struct Lifecycle {
     mode: Mode,
+    start: Option<Start>,
     counts: Counts,
+    reported: Counts,
+    legacy: bool,
+    live: u32,
+    live_known: bool,
+    seen_epoch: u64,
+    outstanding: Option<u64>,
+    need_restart: bool,
+    need_seed: bool,
+    mask: u8,
+    window_entries: u64,
+    window_segments: u64,
+    last: Option<Transition>,
+    no_software_counted: bool,
+    #[cfg(feature = "lifecycle-mutants")]
+    mutant: Option<Mutant>,
 }
 
 impl Default for Lifecycle {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// How many segments at the start of a Fresh window count as the P2 measurement.
+pub const FRESH_SEGMENTS: u64 = 4;
+
+fn scan_plan(restart: bool, seed_gate: bool) -> Plan {
+    Plan::Scan {
+        restart,
+        seed_gate,
+        permit: ScanPermit(()),
     }
 }
 
@@ -178,20 +294,57 @@ impl Lifecycle {
     pub fn new() -> Self {
         Self {
             mode: Mode::Scan,
+            start: None,
             counts: Counts::default(),
+            reported: Counts::default(),
+            legacy: false,
+            live: 0,
+            live_known: false,
+            seen_epoch: 0,
+            outstanding: None,
+            need_restart: false,
+            need_seed: false,
+            mask: 0,
+            window_entries: 0,
+            window_segments: 0,
+            last: None,
+            no_software_counted: false,
+            #[cfg(feature = "lifecycle-mutants")]
+            mutant: Mutant::from_env(),
         }
     }
     /// The base revision's behaviour: scan every entry for ever. For differential tests.
-    /// STUB (tests-first commit).
     #[must_use]
     pub fn always_scan() -> Self {
-        Self::new()
+        Self {
+            legacy: true,
+            ..Self::new()
+        }
+    }
+    /// A machine with a deliberate defect.
+    #[cfg(feature = "lifecycle-mutants")]
+    #[must_use]
+    pub fn with_mutant(m: Mutant) -> Self {
+        Self {
+            mutant: Some(m),
+            ..Self::new()
+        }
     }
     /// Everything that decides behaviour, none of the counters (model checking).
-    /// STUB (tests-first commit).
     #[must_use]
     pub fn state_key(&self) -> String {
-        String::new()
+        format!(
+            "{:?}|{:?}|{}|{}|{}|{:?}|{}|{}|{}",
+            self.mode,
+            self.start,
+            self.live,
+            self.live_known,
+            self.seen_epoch,
+            self.outstanding,
+            self.need_restart,
+            self.need_seed,
+            self.mask
+        )
     }
     /// The current mode.
     #[must_use]
@@ -201,66 +354,258 @@ impl Lifecycle {
     /// How the current Window began.
     #[must_use]
     pub fn start(&self) -> Option<Start> {
-        None
+        if self.mode == Mode::Window {
+            self.start
+        } else {
+            None
+        }
     }
     /// The newest forwarded SYNC_WAIT entry of Pointer mode that no marker has proven passed.
     #[must_use]
     pub fn outstanding_sync(&self) -> Option<u64> {
-        None
+        self.outstanding
     }
     /// The last live-registration count observed.
     #[must_use]
     pub fn live(&self) -> u32 {
-        0
+        self.live
     }
     /// The transition the last call made, if any (taken).
     pub fn take_transition(&mut self) -> Option<Transition> {
-        None
+        self.last.take()
     }
-    /// Decide what to do with the entry just loaded.
-    pub fn entry(&mut self, _o: &Obs, _live: impl FnOnce() -> u32) -> Plan {
-        Plan::Scan {
-            restart: false,
-            seed_gate: false,
-            permit: ScanPermit(()),
+
+    fn go(&mut self, to: Mode, cause: Cause) {
+        self.last = Some(Transition {
+            from: self.mode,
+            cause,
+            to,
+        });
+        self.mode = to;
+    }
+
+    /// Decide what to do with the entry just loaded. `o.epoch` must have been loaded AFTER `o.raw`.
+    /// `live` counts the live registrations of the channel's software object; it is called only when
+    /// the epoch moved since the last call (or on the first call).
+    pub fn entry(&mut self, o: &Obs, live: impl FnOnce() -> u32) -> Plan {
+        if self.mode == Mode::Dead {
+            self.counts.after_teardown += 1;
+            return scan_plan(false, false);
+        }
+        if self.legacy {
+            return scan_plan(false, false);
+        }
+        if !self.live_known || o.epoch != self.seen_epoch {
+            self.live = live();
+            self.seen_epoch = o.epoch;
+            self.live_known = true;
+        }
+        match self.mode {
+            Mode::Scan => {
+                if o.sw_mask != 0 {
+                    self.mask = o.sw_mask;
+                    if self.live == 0 {
+                        self.go(Mode::Pointer, Cause::SoftwareBound);
+                        self.counts.to_pointer += 1;
+                    } else {
+                        self.go(Mode::Window, Cause::SoftwareBoundRegistered);
+                        self.start = Some(Start::Exact);
+                        self.window_entries = 0;
+                        self.window_segments = 0;
+                        self.counts.to_window_exact += 1;
+                    }
+                } else if !o.have_software && !self.no_software_counted {
+                    self.no_software_counted = true;
+                    self.counts.scan_no_software += 1;
+                }
+            }
+            Mode::Pointer => {
+                if self.live > 0 {
+                    #[cfg(feature = "lifecycle-mutants")]
+                    if self.mutant == Some(Mutant::PointerToScan) {
+                        self.go(Mode::Scan, Cause::Registration);
+                        return scan_plan(false, false);
+                    }
+                    self.go(Mode::Window, Cause::Registration);
+                    self.start = Some(Start::Fresh);
+                    self.need_restart = true;
+                    self.need_seed = self.outstanding.is_some();
+                    #[cfg(feature = "lifecycle-mutants")]
+                    if self.mutant == Some(Mutant::NoSeed) {
+                        self.need_seed = false;
+                    }
+                    self.window_entries = 0;
+                    self.window_segments = 0;
+                    self.counts.to_window_fresh += 1;
+                }
+            }
+            Mode::Window => {
+                #[cfg(feature = "lifecycle-mutants")]
+                let drained = self.live == 0 || self.mutant == Some(Mutant::ExitIgnoresLive);
+                #[cfg(not(feature = "lifecycle-mutants"))]
+                let drained = self.live == 0;
+                if drained && o.quiescent {
+                    self.go(Mode::Pointer, Cause::RegistryDrained);
+                    self.start = None;
+                    self.need_restart = false;
+                    self.need_seed = false;
+                    self.outstanding = None;
+                    self.counts.to_pointer_from_window += 1;
+                }
+            }
+            Mode::Dead => {}
+        }
+        #[cfg(feature = "lifecycle-mutants")]
+        let frozen = self.mutant == Some(Mutant::MaskFrozen);
+        #[cfg(not(feature = "lifecycle-mutants"))]
+        let frozen = false;
+        if self.mode == Mode::Window && o.sw_mask != self.mask && !frozen {
+            self.counts.window_binding_changed += 1;
+            self.mask = o.sw_mask;
+        }
+        match self.mode {
+            Mode::Pointer => {
+                #[cfg(feature = "lifecycle-mutants")]
+                if self.mutant == Some(Mutant::PointerScans) {
+                    return scan_plan(false, false);
+                }
+                Plan::Forward
+            }
+            _ => scan_plan(self.need_restart, self.need_seed),
         }
     }
+
     /// The entry was published.
-    pub fn forwarded(&mut self, _abs: u64, _raw: u64) {}
+    pub fn forwarded(&mut self, abs: u64, raw: u64) {
+        match self.mode {
+            Mode::Scan => self.counts.entries_scan += 1,
+            Mode::Pointer => {
+                self.counts.entries_pointer += 1;
+                #[cfg(feature = "lifecycle-mutants")]
+                if self.mutant == Some(Mutant::ForgetSync) {
+                    return;
+                }
+                if raw & GP_SYNC_WAIT != 0 {
+                    self.outstanding = Some(abs);
+                }
+            }
+            Mode::Window => {
+                self.counts.entries_window += 1;
+                self.window_entries += 1;
+                self.counts.window_entries_max = self.counts.window_entries_max.max(self.window_entries);
+            }
+            Mode::Dead => self.counts.after_teardown += 1,
+        }
+    }
     /// The relay applied the restart.
-    pub fn restarted(&mut self) {}
+    pub fn restarted(&mut self) {
+        if self.need_restart {
+            self.need_restart = false;
+            self.counts.restarts += 1;
+        }
+    }
     /// The seeded gate's witness was processed.
-    pub fn gate_proven(&mut self) {}
+    pub fn gate_proven(&mut self) {
+        if self.need_seed {
+            self.need_seed = false;
+            self.outstanding = None;
+            self.counts.seeded_gates += 1;
+        }
+    }
     /// A segment was scanned and committed.
-    pub fn segment_scanned(&mut self, _ends_open: bool) {}
-    /// A scan refused a segment (first time for that entry).
-    pub fn scan_refused(&mut self) {}
+    pub fn segment_scanned(&mut self, ends_open: bool) {
+        match self.mode {
+            Mode::Scan => {
+                self.counts.segments_scan += 1;
+                self.counts.straddles_scan += u64::from(ends_open);
+            }
+            Mode::Window => {
+                self.counts.segments_window += 1;
+                self.counts.straddles_window += u64::from(ends_open);
+                self.window_segments += 1;
+            }
+            Mode::Pointer | Mode::Dead => {}
+        }
+    }
+    /// A scan refused a segment (call once per entry, on the first refusal).
+    pub fn scan_refused(&mut self) {
+        if self.mode == Mode::Window
+            && self.start == Some(Start::Fresh)
+            && self.window_segments < FRESH_SEGMENTS
+        {
+            self.counts.window_fresh_start_parse_error += 1;
+        }
+    }
     /// A pushbuffer was read (via a [`ScanPermit`]).
-    pub fn note_pb_read(&mut self, _permit: &ScanPermit, _bytes: usize, _vram: bool) {}
+    pub fn note_pb_read(&mut self, _permit: &ScanPermit, bytes: usize, vram: bool) {
+        let b = bytes as u64;
+        match self.mode {
+            Mode::Scan => self.counts.pb_bytes_scan += b,
+            Mode::Window => {
+                self.counts.pb_bytes_window += b;
+                if vram {
+                    self.counts.window_bar1_bytes += b;
+                }
+            }
+            Mode::Pointer | Mode::Dead => {
+                // a permit exists only for a scan plan; reaching here is a bug (the mutant PointerScans):
+                // loud in a debug build, a counter in release (G1: `pushbuffer_bytes_read == 0` in Pointer)
+                debug_assert!(self.mode != Mode::Pointer, "pushbuffer read in Pointer mode");
+                self.counts.pointer_pb_read_violation += 1;
+            }
+        }
+    }
     /// A pushbuffer was read WITHOUT a permit, i.e. a bug; counted loudly.
-    pub fn note_unpermitted_pb_read(&mut self, _bytes: usize) {}
-    /// A marker segment may be authored between GP entries now.
+    pub fn note_unpermitted_pb_read(&mut self, bytes: usize) {
+        let _ = bytes;
+        debug_assert!(
+            self.mode != Mode::Pointer,
+            "pushbuffer read in Pointer mode"
+        );
+        self.counts.pointer_pb_read_violation += 1;
+    }
+    /// A marker segment may be authored between GP entries now (a mode that knows the parser state, and
+    /// no packet open).
     #[must_use]
-    pub fn marker_possible(&self, _scan_carried: bool) -> bool {
-        !_scan_carried
+    pub fn marker_possible(&self, scan_carried: bool) -> bool {
+        matches!(self.mode, Mode::Scan | Mode::Window) && !scan_carried
     }
     /// The channel was freed.
-    pub fn teardown(&mut self) {}
+    pub fn teardown(&mut self) {
+        #[cfg(feature = "lifecycle-mutants")]
+        if self.mutant == Some(Mutant::ReviveAfterTeardown) {
+            return;
+        }
+        if self.mode != Mode::Dead {
+            self.go(Mode::Dead, Cause::Teardown);
+        }
+    }
     /// Counters so far.
     #[must_use]
     pub fn counts(&self) -> &Counts {
         &self.counts
     }
-    /// Counters since the last call.
+    /// Counters since the last call (`window_entries_max` is a maximum, not a sum: read it from
+    /// [`Lifecycle::counts`]).
     pub fn take_delta(&mut self) -> Counts {
-        Counts::default()
+        let d = self.counts.since(&self.reported);
+        self.reported = self.counts;
+        d
     }
 }
 
-/// The transition table (I5). `live` = live registrations, `bound` = the software object is bound.
+/// The transition table (I5).
 #[must_use]
-pub fn next(_mode: Mode, _cause: Cause) -> Option<Mode> {
-    None
+pub fn next(mode: Mode, cause: Cause) -> Option<Mode> {
+    match (mode, cause) {
+        (Mode::Dead, _) => Some(Mode::Dead),
+        (_, Cause::Teardown) => Some(Mode::Dead),
+        (Mode::Scan, Cause::SoftwareBound) => Some(Mode::Pointer),
+        (Mode::Scan, Cause::SoftwareBoundRegistered) => Some(Mode::Window),
+        (Mode::Pointer, Cause::Registration) => Some(Mode::Window),
+        (Mode::Window, Cause::RegistryDrained) => Some(Mode::Pointer),
+        _ => None,
+    }
 }
 
 /// The sync-wait bit of a GP entry (bit 31 of the high dword).
@@ -609,5 +954,38 @@ mod tests {
         l.forwarded(1, 1);
         let b = l.take_delta();
         assert_eq!((b.to_pointer, b.entries_pointer), (0, 1));
+    }
+
+    /// G4 / I6: nothing in the machine knows about time (OWNER_RULINGS section AE: no heuristics, no timers).
+    #[test]
+    fn the_machine_names_no_clock_no_sleep_and_no_poll() {
+        let text = include_str!("user_lifecycle.rs");
+        let prod = text.split("#[cfg(test)]\nmod tests").next().unwrap();
+        for banned in ["Instant", "SystemTime", "Duration", "sleep", "poll(", "Poll", "tick", "timeout", "thread::"] {
+            assert!(!prod.contains(banned), "the lifecycle machine must not mention {banned}");
+        }
+    }
+
+    /// A7: a reused channel key gets a NEW machine; it knows nothing of the old life's epoch, mode or SYNC_WAIT.
+    #[test]
+    fn a_fresh_channel_on_a_reused_key_reads_the_registry_once_whatever_the_epoch_and_starts_in_scan() {
+        let mut old = Lifecycle::new();
+        old.entry(&obs(0, 0, 0, B), || 0);
+        old.forwarded(0, SYNC | 1);
+        old.entry(&obs(1, 0, 9, B), || 1);
+        assert_eq!(old.mode(), Mode::Window);
+        old.teardown();
+        // the key is reused: a brand new machine, the registry epoch is far ahead
+        let mut fresh = Lifecycle::new();
+        assert_eq!((fresh.mode(), fresh.outstanding_sync(), fresh.live()), (Mode::Scan, None, 0));
+        let mut asked = 0;
+        for i in 0..10 {
+            fresh.entry(&obs(i, 0, 1000, 0), || {
+                asked += 1;
+                0
+            });
+        }
+        assert_eq!(asked, 1, "once, then only when the epoch moves");
+        assert_eq!(fresh.mode(), Mode::Scan);
     }
 }

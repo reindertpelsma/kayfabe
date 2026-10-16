@@ -30,14 +30,14 @@ impl Rng {
     pub fn new(seed: u64) -> Self {
         Self(seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1)
     }
-    pub fn next(&mut self) -> u64 {
+    pub fn next_u64(&mut self) -> u64 {
         self.0 ^= self.0 << 13;
         self.0 ^= self.0 >> 7;
         self.0 ^= self.0 << 17;
         self.0
     }
     pub fn below(&mut self, n: u64) -> u64 {
-        self.next() % n.max(1)
+        self.next_u64() % n.max(1)
     }
     pub fn chance(&mut self, percent: u64) -> bool {
         self.below(100) < percent
@@ -100,6 +100,8 @@ pub struct Sim {
     pub next_size: u32,
     pub mode_hint: Mode,
     held: [bool; 2],
+    /// Words by raw entry value (the corpus replay); consulted before `defs`.
+    pub custom: HashMap<u64, Vec<u32>>,
 }
 
 impl Sim {
@@ -130,6 +132,7 @@ impl Sim {
             next_size: entries,
             mode_hint: Mode::Scan,
             held: [false; 2],
+            custom: HashMap::new(),
         }
     }
 
@@ -202,6 +205,9 @@ impl Env for Sim {
         if self.mode_hint == Mode::Pointer {
             self.out.pb_reads_in_pointer += 1;
         }
+        if let Some(w) = self.custom.get(&(raw & !SYNC)) {
+            return w.clone();
+        }
         let id = entry_id(raw).expect("a known entry");
         self.defs[&id].words()
     }
@@ -250,15 +256,17 @@ impl Env for Sim {
         if migrate {
             self.out.switches.push(self.out.forwarded.len());
             // the new ring: the pending entries after the trigger move to it
-            let rest: VecDeque<u64> = std::mem::take(&mut self.pending[0]);
-            self.src = 1;
+            let from = self.src;
+            let to = 1 - from;
+            let rest: VecDeque<u64> = std::mem::take(&mut self.pending[from]);
+            self.src = to;
             self.entries = self.next_size;
-            self.pending[1] = rest;
-            self.held[0] = false;
-            self.put_local[1] = 0;
-            self.put[1] = 0;
-            self.guest_get[1] = 0;
-            self.rings[1].clear();
+            self.pending[to] = rest;
+            self.held[from] = false;
+            self.put_local[to] = 0;
+            self.put[to] = 0;
+            self.guest_get[to] = 0;
+            self.rings[to].clear();
         }
     }
     fn event(&mut self, e: Ev) {
@@ -318,7 +326,7 @@ pub fn new_relay(priv_entries: u32, always_scan: bool) -> Relay {
     } else {
         Lifecycle::new()
     };
-    Relay::new(priv_entries, life, Scan::for_subdevice(1).unwrap(), Glue::default())
+    Relay::new(priv_entries, life, Scan::for_subdevice(1).unwrap(), Glue::from_env())
 }
 
 pub fn run_stream(
@@ -344,11 +352,11 @@ pub fn gen_stream(rng: &mut Rng, n: usize, straddles: bool, bad_tails: bool) -> 
     // ids are per KIND class (a pushbuffer's words depend on the kind only), so streams of any length reuse them
     let mut v = Vec::new();
     let (mut plain, mut nop) = (0u8, 0u8);
-    let mut next_plain = |c: &mut u8| {
+    let next_plain = |c: &mut u8| {
         *c = *c % 120 + 1;
         *c
     };
-    let mut next_nop = |c: &mut u8| {
+    let next_nop = |c: &mut u8| {
         *c = *c % 60 + 121;
         *c
     };
@@ -404,13 +412,18 @@ fn g2_without_a_registration_the_forwarded_entries_are_bit_identical_to_always_s
     }
 }
 
+/// Register when `at` entries were forwarded (the flip: entry `at` is the first one loaded after it); the trigger
+/// is inserted at the first packet boundary at or after `at` (never inside an OpenHead/OpenTail pair).
+/// Returns the schedule, the flip index and the trigger index.
 fn plan_registration(rng: &mut Rng, stream: &mut Vec<Ge>, migrate: bool) -> (Vec<Sched>, usize, usize) {
-    // register when `k` entries were forwarded; the trigger is the entry at index `k` (published after the reply)
-    let k = 3 + rng.below((stream.len() as u64).saturating_sub(5).max(1)) as usize;
-    let k = k.min(stream.len() - 1);
-    let t = ge(190, Kind::Trig { migrate }).post();
-    stream.insert(k, t);
-    (vec![Sched::Register { at: k as u64, migrate }], k, k)
+    let at = 2 + rng.below((stream.len() as u64).saturating_sub(5).max(1)) as usize;
+    let at = at.min(stream.len() - 1);
+    let mut t = at;
+    while t > 0 && t < stream.len() && matches!(stream[t - 1].kind, Kind::OpenHead) {
+        t += 1;
+    }
+    stream.insert(t, ge(190, Kind::Trig { migrate }).post());
+    (vec![Sched::Register { at: at as u64, migrate }], at, t)
 }
 
 #[test]
@@ -421,10 +434,11 @@ fn g2_with_a_registration_at_any_flip_position_that_is_not_inside_a_packet_the_c
         let n = 8 + rng.below(80) as usize;
         let mut stream = gen_stream(&mut rng, n, true, false);
         let migrate = rng.chance(50);
-        let (sched, k, _) = plan_registration(&mut rng, &mut stream, migrate);
+        let (sched, k, t) = plan_registration(&mut rng, &mut stream, migrate);
         if flip_inside_open_packet(&stream, k) {
             continue; // P2 is not claimed there: see the P2 test below
         }
+        assert_eq!(t, k, "a flip on a boundary has its trigger right there");
         // the trigger neutralises: the staged entry is the trigger entry's position
         let ring = 16 << rng.below(3);
         let (old, _) = run_stream(&stream, &sched, true, ring, 8);
@@ -453,7 +467,7 @@ fn g2_p2_every_difference_between_the_lifecycle_and_always_scan_is_explained_by_
         let n = 10 + rng.below(60) as usize;
         let mut stream = gen_stream(&mut rng, n, true, true);
         let (sched, k, _) = plan_registration(&mut rng, &mut stream, false);
-        let in_packet = flip_inside_open_packet(&stream, k);
+        let in_packet = k > 0 && k < stream.len() && matches!(stream[k - 1].kind, Kind::OpenHead);
         let (old, _) = run_stream(&stream, &sched, true, 64, 8);
         let (new, relay) = run_stream(&stream, &sched, false, 64, 8);
         assert!(!old.dead, "seed {seed}: the base never refuses a valid stream");
@@ -502,4 +516,509 @@ fn g1_every_turn_publishes_at_most_one_guest_entry_and_does_bounded_work() {
     let stream = gen_stream(&mut rng, 3000, true, false);
     let (out, _) = run_stream(&stream, &[], false, 4096, 8);
     assert!(out.max_steps_per_turn <= 16, "{}", out.max_steps_per_turn);
+}
+
+// ------------------------------------------------------------------------------------------------
+// A4: entry-level validation is the only check in Pointer mode
+
+/// A channel that is bound and in Pointer mode, with `entries` waiting in a big ring.
+fn pointer_relay_with(entries: &[u64]) -> (Sim, Relay) {
+    let stream: Vec<Ge> = vec![ge(0, Kind::SetObj), ge(1, Kind::Plain)];
+    let mut sim = Sim::new(256, 8, &stream, vec![]);
+    let mut relay = new_relay(8, false);
+    drive(&mut sim, &mut relay, 100);
+    assert_eq!(relay.life.mode(), Mode::Pointer, "bound");
+    // now the hostile entries, written raw
+    let base = relay.cursor;
+    for (i, raw) in entries.iter().enumerate() {
+        sim.rings[0].insert((base + i as u32) % 256, *raw);
+    }
+    sim.put[0] = (base + entries.len() as u32) % 256;
+    sim.put_local[0] = sim.put[0];
+    (sim, relay)
+}
+
+#[test]
+fn a4_every_single_bit_flip_of_a_valid_entry_is_refused_by_name_or_forwarded_validated() {
+    let valid = [
+        ge(1, Kind::Plain).raw(),
+        ge(2, Kind::Plain).sync().raw(),
+        ge(3, Kind::Nop).raw(),
+        ge(4, Kind::Nop).sync().raw(),
+        // length 0 / 1 / max / max+1 (in dwords) with a plausible address
+        kf_abi::submit::gp_entry(0x4000, 4).unwrap(),
+        kf_abi::submit::gp_entry(0x4000, ((1u64 << 21) - 1) * 4).unwrap(),
+    ];
+    let mut refused = 0;
+    let mut forwarded = 0;
+    for base in valid {
+        for bit in 0..64 {
+            let raw = base ^ (1u64 << bit);
+            let (mut sim, mut relay) = pointer_relay_with(&[raw]);
+            drive(&mut sim, &mut relay, 20);
+            assert!(sim.out.max_steps_per_turn <= 16, "bounded work");
+            assert_eq!(sim.out.pb_reads_in_pointer, 0, "bit {bit} of {base:#x}");
+            let valid_now = kf_chan::user_stream::inspect_entry(raw, kf_chan::user_storage::MAX_SOURCE_BYTES).is_ok();
+            if valid_now {
+                forwarded += 1;
+                // forwarded exactly as flipped (after the SetObj entry), never a different value
+                assert_eq!(sim.out.forwarded.last().copied(), Some(raw), "bit {bit} of {base:#x}");
+            } else {
+                refused += 1;
+                assert!(relay.dead && relay.refused_entry == 1, "bit {bit} of {base:#x}: named refusal");
+                assert_eq!(sim.out.forwarded.len(), 2, "nothing unvalidated was stored (only SetObj and the first entry)");
+            }
+            assert_eq!(sim.out.torn, 0);
+        }
+    }
+    assert!(refused > 50 && forwarded > 50, "refused {refused} forwarded {forwarded}");
+}
+
+#[test]
+fn a4_hostile_entries_never_panic_and_never_store_an_unvalidated_value() {
+    let mut rng = Rng::new(0xA4);
+    for round in 0..2000 {
+        let mut raws = Vec::new();
+        for _ in 0..4 {
+            raws.push(rng.next_u64());
+        }
+        let (mut sim, mut relay) = pointer_relay_with(&raws);
+        drive(&mut sim, &mut relay, 50);
+        for f in sim.out.forwarded.iter().skip(2) {
+            assert!(
+                kf_chan::user_stream::inspect_entry(*f, kf_chan::user_storage::MAX_SOURCE_BYTES).is_ok(),
+                "round {round}: stored an entry inspect_entry refuses: {f:#x}"
+            );
+        }
+        assert_eq!(sim.out.pb_reads_in_pointer, 0);
+    }
+}
+
+// ------------------------------------------------------------------------------------------------
+// A2: SET_OBJECT at every dword position of a segment
+
+#[test]
+fn a2_set_object_at_every_dword_position_switches_after_the_segment_that_commits_it() {
+    // A single segment = `prefix` ordinary one-datum packets then SET_OBJECT then `suffix` packets, optionally
+    // ending inside an open packet. The binding is committed when the segment is scanned; the switch is at
+    // the NEXT entry; later entries are forwarded bit-exact and never read.
+    for prefix in 0..6usize {
+        for suffix in 0..4usize {
+            for open_tail in [false, true] {
+                let mut words = Vec::new();
+                for i in 0..prefix {
+                    words.push(kf_abi::submit::method_header_inc(0, 0x100, 1).unwrap());
+                    words.push(i as u32);
+                }
+                words.push(kf_abi::submit::method_header_inc(6, 0, 1).unwrap());
+                words.push(SW);
+                for _ in 0..suffix {
+                    words.push(kf_abi::submit::method_header_inc(0, 0x100, 1).unwrap());
+                    words.push(9);
+                }
+                if open_tail {
+                    words.push(kf_abi::submit::method_header_inc(1, 0x1b0, 3).unwrap());
+                    words.push(0x11);
+                }
+                let first = kf_abi::submit::gp_entry(seg_va(250), words.len() as u64 * 4).unwrap();
+                let mut sim = Sim::new(64, 8, &[], vec![]);
+                sim.custom.insert(first, words.clone());
+                sim.pending[0].push_back(first);
+                let mut expect = vec![first];
+                for i in 0..5u8 {
+                    let g = ge(1 + i, Kind::Plain);
+                    sim.defs.insert(g.id, g);
+                    sim.pending[0].push_back(g.raw());
+                    expect.push(g.raw());
+                }
+                let mut relay = new_relay(8, false);
+                drive(&mut sim, &mut relay, 1000);
+                let tag = format!("prefix {prefix} suffix {suffix} open_tail {open_tail}");
+                assert!(!relay.dead, "{tag}");
+                assert_eq!(sim.out.forwarded, expect, "{tag}: bit-exact");
+                assert_eq!(relay.life.mode(), Mode::Pointer, "{tag}");
+                assert_eq!(sim.out.pb_reads, 1, "{tag}: only the binding segment was read");
+                assert_eq!(relay.life.counts().straddles_scan, u64::from(open_tail), "{tag}");
+            }
+        }
+    }
+}
+
+#[test]
+fn a2_a_header_in_one_entry_and_the_datum_in_the_next_commits_only_with_the_second() {
+    let mut scan = Scan::for_subdevice(1).unwrap();
+    scan.segment(&[kf_abi::submit::method_header_inc(6, 0, 1).unwrap()], sw).unwrap();
+    assert_eq!(scan.software_mask(sw), 0, "the datum has not arrived: not bound, and a packet is open");
+    assert!(!scan.at_boundary());
+    scan.segment(&[SW], sw).unwrap();
+    assert_eq!(scan.software_mask(sw), 1 << 6);
+    assert!(scan.at_boundary());
+}
+
+// ------------------------------------------------------------------------------------------------
+// B: repeated cycles, ring growth, counter wraps
+
+#[test]
+fn b_ten_thousand_cycles_with_ring_growth_never_stick_and_never_lose_an_entry() {
+    // Scan -> Pointer -> (Register, trigger, switch to a ring twice as large) -> Pointer ..., the ring
+    // sizes 32768 -> 65536 -> 131072 -> 32768 ...; entries counted by the monotone u64 `abs`, marker count
+    // wraps its 16 bits many times.
+    let sizes = [32768u32, 65536, 131072];
+    let cycles = 10_000usize;
+    let mut stream = vec![ge(0, Kind::SetObj)];
+    let mut sched = Vec::new();
+    for c in 0..cycles {
+        for i in 0..2 {
+            stream.push(ge(1 + ((c * 2 + i) % 100) as u8, Kind::Plain));
+        }
+        let at = stream.len() as u64;
+        // the Window gates every SYNC_WAIT entry: one marker each, so the 16-bit marker count wraps
+        for i in 0..8 {
+            stream.push(ge(1 + ((c + i) % 100) as u8, Kind::Plain).sync().post());
+        }
+        stream.push(ge(190, Kind::Trig { migrate: true }).post());
+        sched.push(Sched::Register { at, migrate: true });
+    }
+    // one last ordinary entry: the Window of the last cycle ends at the next entry boundary
+    stream.push(ge(1, Kind::Plain));
+    let mut sim = Sim::new(sizes[0], 8, &stream, sched);
+    sim.next_size = sizes[1];
+    let mut relay = new_relay(8, false);
+    // grow the next ring each switch
+    let mut grown = 0;
+    let mut turns = 0usize;
+    while turns < 4_000_000 {
+        let before = sim.out.switches.len();
+        turns += drive(&mut sim, &mut relay, 64);
+        if sim.out.switches.len() != before {
+            grown += 1;
+            sim.next_size = sizes[(grown + 1) % 3];
+        }
+        if (sim.out.forwarded.len() >= stream.len() && sim.live == 0 && relay.idle()) || relay.dead {
+            break;
+        }
+    }
+    assert!(!relay.dead, "dead");
+    assert_eq!(sim.out.forwarded.len(), stream.len(), "every entry relayed exactly once");
+    assert_eq!(sim.out.switches.len(), cycles, "one switch per cycle");
+    assert_eq!(sim.out.unscanned_while_live, 0);
+    assert_eq!(relay.life.mode(), Mode::Pointer);
+    let c = relay.life.counts();
+    assert_eq!(c.to_window_fresh + c.to_window_exact, cycles as u64, "{c:?}");
+    assert_eq!(c.to_pointer_from_window + c.to_pointer, cycles as u64 + 1, "{c:?}");
+    assert!(relay.marks.issued() > 65_536, "the 16-bit marker count wrapped: {}", relay.marks.issued());
+    assert_eq!(relay.marks.issued(), relay.marks.seen());
+    assert_eq!(relay.fetch.issued(), relay.fetch.fetched());
+    assert_eq!(relay.life.live(), 0);
+}
+
+#[test]
+fn b_the_monotone_entry_counter_survives_the_u32_boundary() {
+    let stream: Vec<Ge> = std::iter::once(ge(0, Kind::SetObj))
+        .chain((0..40).map(|i| {
+            let g = ge(1 + (i % 100) as u8, Kind::Plain);
+            if i % 7 == 0 { g.sync() } else { g }
+        }))
+        .collect();
+    let mut sim = Sim::new(64, 8, &stream, vec![]);
+    let mut relay = new_relay(8, false);
+    relay.abs = u64::from(u32::MAX) - 10;
+    drive(&mut sim, &mut relay, 1000);
+    assert_eq!(sim.out.forwarded.len(), stream.len());
+    assert!(relay.abs > u64::from(u32::MAX));
+    // the recorded SYNC_WAIT index is a u64 across the boundary
+    let o = relay.life.outstanding_sync().expect("a SYNC_WAIT was forwarded in Pointer mode");
+    assert!(o > u64::from(u32::MAX) - 10 && o < relay.abs);
+}
+
+// ------------------------------------------------------------------------------------------------
+// soak (seconds by default; KF3_STRESS_SECS for longer)
+
+fn stress_secs() -> f64 {
+    std::env::var("KF3_STRESS_SECS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(2.0)
+}
+
+#[test]
+fn soak_millions_of_entries_many_laps_and_registrations_keep_every_invariant() {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs_f64(stress_secs());
+    let mut total = 0u64;
+    let mut seed = 0u64;
+    while std::time::Instant::now() < deadline {
+        seed += 1;
+        let mut rng = Rng::new(0x50AC + seed);
+        let n = 2000 + rng.below(3000) as usize;
+        let mut stream = gen_stream(&mut rng, n, true, false);
+        let mut sched = Vec::new();
+        for _ in 0..rng.below(4) {
+            let (s, _, _) = plan_registration(&mut rng, &mut stream, false);
+            sched.extend(s);
+        }
+        // keep the Register positions consistent with the inserted triggers (each insert shifts later ones)
+        sched.sort_by_key(|s| s.at());
+        let (out, relay) = {
+            let mut sim = Sim::new(64, 8, &stream, sched);
+            let mut relay = new_relay(8, false);
+            drive(&mut sim, &mut relay, 400_000);
+            (sim.out, relay)
+        };
+        if out.dead {
+            // a flip inside an open packet (P2) may legitimately kill a stream with bad tails; none here
+            panic!("seed {seed}: dead: {out:?}");
+        }
+        assert_eq!(out.unscanned_while_live, 0, "seed {seed}");
+        assert_eq!(out.torn, 0, "seed {seed}");
+        assert_eq!(relay.marks.issued(), relay.marks.seen(), "seed {seed}: markers");
+        assert_eq!(relay.fetch.issued(), relay.fetch.fetched(), "seed {seed}: private ring drained");
+        assert_eq!(relay.life.counts().pointer_pb_read_violation, 0);
+        total += out.forwarded.len() as u64;
+    }
+    println!("soak: {total} entries over {seed} streams");
+    assert!(total > 100_000);
+}
+
+// ------------------------------------------------------------------------------------------------
+// the real corpus
+
+fn corpus_dir() -> std::path::PathBuf {
+    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../traces/user_ring_scan_20261014")
+}
+
+/// `(entry, words, carried_out_is_open)` of every history segment of a refusal trace, in cursor order,
+/// duplicates (same cursor) dropped.
+fn parse_history(text: &str) -> Vec<(u64, Vec<u32>, bool)> {
+    let mut out: Vec<(u64, Vec<u32>, bool)> = Vec::new();
+    let mut cur: Option<(u64, Vec<u32>, bool, u32)> = None;
+    let mut last_cursor = u32::MAX;
+    let mut in_history = false;
+    for line in text.lines() {
+        if line.starts_with("history (oldest first") {
+            in_history = true;
+            continue;
+        }
+        if !in_history {
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix("-- seq=") {
+            if let Some((e, w, o, _)) = cur.take() {
+                out.push((e, w, o));
+            }
+            let field = |name: &str| {
+                rest.split_whitespace()
+                    .find_map(|t| t.strip_prefix(name))
+                    .map(str::to_owned)
+            };
+            let cursor: u32 = field("cursor=").and_then(|v| v.parse().ok()).unwrap_or(0);
+            let entry = field("entry=0x").and_then(|v| u64::from_str_radix(&v, 16).ok()).unwrap_or(0);
+            let open = field("carried_out=").is_some_and(|v| v != "none");
+            let len: u32 = field("words=").and_then(|v| v.parse().ok()).unwrap_or(0);
+            if cursor == last_cursor {
+                cur = None; // a re-scan of the same entry
+                continue;
+            }
+            last_cursor = cursor;
+            cur = Some((entry, Vec::with_capacity(len as usize), open, len));
+        } else if let Some((_, w, _, len)) = cur.as_mut()
+            && let Some((_, row)) = line.trim().split_once(':')
+        {
+            for tok in row.split_whitespace() {
+                if w.len() < *len as usize
+                    && let Ok(v) = u32::from_str_radix(tok, 16)
+                {
+                    w.push(v);
+                }
+            }
+        }
+    }
+    if let Some((e, w, o, _)) = cur.take() {
+        out.push((e, w, o));
+    }
+    out.retain(|(_, w, _)| !w.is_empty());
+    out
+}
+
+#[test]
+fn corpus_the_recorded_streams_replay_identically_through_the_base_and_the_lifecycle() {
+    // Real segments from the 2026-10-14 Win11 refusal traces (settled bytes: the history shows what the scan
+    // read, which for these segments was the final bytes). A SET_OBJECT is prepended, a registration fires at
+    // every position, a trigger follows it. Where the flip is not inside a recorded open packet the two
+    // relays must agree; every other position is reported as a measured P2 case.
+    let dir = corpus_dir();
+    let mut segments = 0usize;
+    let mut open = 0usize;
+    let mut cases = 0usize;
+    let mut p2_cases = 0usize;
+    let mut p2_differ = 0usize;
+    for entry in std::fs::read_dir(&dir).expect("corpus dir") {
+        let path = entry.unwrap().path();
+        let name = path.file_name().unwrap().to_string_lossy().to_string();
+        if !name.starts_with("user-ring-refusal-") {
+            continue;
+        }
+        let text = std::fs::read_to_string(&path).unwrap();
+        let hist = parse_history(&text);
+        // only segments the scan accepted as a whole stream from a boundary: skip leading continuations
+        segments += hist.len();
+        open += hist.iter().filter(|h| h.2).count();
+        if hist.len() < 4 {
+            continue;
+        }
+        // replay: the recorded GP entries and bytes, VA remapped to ids so Sim can serve the words
+        let mut stream_words: Vec<Vec<u32>> = Vec::new();
+        let mut raws = Vec::new();
+        for (i, (entry, words, _)) in hist.iter().enumerate() {
+            let sync = entry & SYNC != 0;
+            if i >= 120 {
+                break;
+            }
+            stream_words.push(words.clone());
+            let raw = kf_abi::submit::gp_entry(seg_va(i as u8), words.len() as u64 * 4).unwrap()
+                | if sync { SYNC } else { 0 };
+            raws.push(raw);
+        }
+        for k in 1..hist.len().min(60) {
+            // build the Sim by hand: SET_OBJECT first, then the recorded entries, a trigger at k+1
+            let mut sim_old = corpus_sim(&stream_words, &raws, k);
+            let mut sim_new = corpus_sim(&stream_words, &raws, k);
+            let mut relay_old = new_relay(8, true);
+            let mut relay_new = new_relay(8, false);
+            drive(&mut sim_old, &mut relay_old, 100_000);
+            drive(&mut sim_new, &mut relay_new, 100_000);
+            cases += 1;
+            let in_packet = hist.get(k - 1).is_some_and(|h| h.2);
+            let same = sim_old.out.forwarded == sim_new.out.forwarded
+                && sim_old.out.staged == sim_new.out.staged
+                && sim_old.out.dead == sim_new.out.dead;
+            if in_packet {
+                p2_cases += 1;
+                if !same {
+                    p2_differ += 1;
+                    assert!(relay_new.life.counts().window_fresh_start_parse_error > 0 || sim_new.out.triggers_found != sim_old.out.triggers_found, "{name} k={k}: unexplained difference");
+                }
+            } else {
+                assert!(same, "{name} k={k}: the base and the lifecycle differ with the flip on a boundary: old {:?} new {:?}", sim_old.out, sim_new.out);
+            }
+        }
+    }
+    println!("corpus: {segments} recorded segments, {open} end inside an open packet; {cases} replays, {p2_cases} flips inside an open packet ({p2_differ} differ)");
+    assert!(segments > 100 && cases > 100);
+}
+
+/// A Sim whose pushbuffer words are the recorded ones: entry 0 binds, entries 1.. are the recorded segments,
+/// and a registration fires after `k` forwarded entries with a trigger as the next entry.
+fn corpus_sim(words: &[Vec<u32>], raws: &[u64], k: usize) -> Sim {
+    let mut sim = Sim::new(256, 8, &[], vec![Sched::Register { at: k as u64 + 1, migrate: false }]);
+    let mut all: Vec<(u64, Vec<u32>)> = vec![(ge(250, Kind::SetObj).raw(), ge(250, Kind::SetObj).words())];
+    for (i, (w, r)) in words.iter().zip(raws).enumerate() {
+        all.push((*r, w.clone()));
+        if i + 1 == k {
+            all.push((ge(190, Kind::Trig { migrate: false }).raw(), ge(190, Kind::Trig { migrate: false }).words()));
+        }
+    }
+    sim.defs.insert(250, ge(250, Kind::SetObj));
+    sim.defs.insert(190, ge(190, Kind::Trig { migrate: false }));
+    sim.custom = all.iter().map(|(r, w)| (*r & !SYNC, w.clone())).collect();
+    for (r, _) in &all {
+        sim.pending[0].push_back(*r);
+    }
+    sim
+}
+
+// ---- the measured GravityMark Vulkan ring-growth trigger (run 1510, `GP[0x4b63]`, doc section 10)
+
+const GRAVITY_TRIGGER: [u32; 4] = [0x8000_c01e, 0x8000_c009, 0x2001_c080, 0x4000_002c];
+
+#[test]
+fn corpus_the_gravitymark_late_fifo_trigger_words_are_a_trigger_after_two_immediate_methods() {
+    let mut scan = Scan::for_subdevice(1).unwrap();
+    scan.segment(&[kf_abi::submit::method_header_inc(6, 0, 1).unwrap(), SW], sw).unwrap();
+    let t = scan.segment(&GRAVITY_TRIGGER, sw).unwrap().expect("the registered trigger");
+    assert_eq!((t.start, t.end, t.call.data, t.call.method), (2, 4, 0x4000_002c, 0x200));
+    // the same words with the scan restarted fresh (a Window after Pointer mode) at the segment boundary
+    let mut fresh = scan.fresh_resume();
+    let t = fresh.segment(&GRAVITY_TRIGGER, sw).unwrap().expect("found by a fresh scan too");
+    assert_eq!((t.start, t.end), (2, 4));
+}
+
+#[test]
+fn corpus_a_gravitymark_ring_growth_replays_identically_through_the_base_and_the_lifecycle() {
+    // [SET_OBJECT, ordinary entries..., the 4-word trigger segment, ordinary entries...] with the registration
+    // at every position before the trigger: the lifecycle stages the same trigger at the same position and
+    // switches the source at the same place as the base.
+    for k in 2..24usize {
+        let mut sim_words: Vec<(u64, Vec<u32>)> = vec![(ge(250, Kind::SetObj).raw(), ge(250, Kind::SetObj).words())];
+        for i in 0..30usize {
+            let g = ge(1 + i as u8, Kind::Plain);
+            sim_words.push((g.raw(), g.words()));
+        }
+        let trig_raw = kf_abi::submit::gp_entry(seg_va(190), 16).unwrap();
+        sim_words.insert(k, (trig_raw, GRAVITY_TRIGGER.to_vec()));
+        let mk = || {
+            let mut sim = Sim::new(256, 8, &[], vec![Sched::Register { at: k as u64, migrate: true }]);
+            sim.defs.insert(190, ge(190, Kind::Trig { migrate: true }));
+            sim.custom = sim_words.iter().map(|(r, w)| (*r & !SYNC, w.clone())).collect();
+            for (r, _) in &sim_words {
+                sim.pending[0].push_back(*r);
+            }
+            sim
+        };
+        let (mut a, mut b) = (mk(), mk());
+        let mut ra = new_relay(8, true);
+        let mut rb = new_relay(8, false);
+        drive(&mut a, &mut ra, 100_000);
+        drive(&mut b, &mut rb, 100_000);
+        assert!(!a.out.dead && !b.out.dead, "k={k}");
+        assert_eq!(a.out.staged, vec![k], "k={k}: the base stages the trigger at its position");
+        assert_eq!(a.out.forwarded, b.out.forwarded, "k={k}");
+        assert_eq!(a.out.staged, b.out.staged, "k={k}");
+        assert_eq!(a.out.switches, b.out.switches, "k={k}");
+        assert_eq!(b.out.unscanned_while_live, 0, "k={k}");
+        assert!(b.out.pb_reads < a.out.pb_reads, "k={k}: the lifecycle reads fewer pushbuffers");
+    }
+}
+
+#[test]
+fn obs_a_window_never_skips_an_entry_so_window_unscanned_long_stays_zero() {
+    let mut rng = Rng::new(99);
+    let mut stream = gen_stream(&mut rng, 400, true, false);
+    let (sched, _, _) = plan_registration(&mut rng, &mut stream, false);
+    let (_, relay) = run_stream(&stream, &sched, false, 64, 8);
+    assert_eq!(relay.life.counts().window_unscanned_long, 0);
+    assert!(relay.life.counts().entries_window > 0);
+}
+
+#[test]
+fn corpus_p2_is_contradicted_by_the_recorded_segments_that_end_inside_an_open_packet() {
+    // MEASURED, from the 2026-10-14 refusal traces (a sample taken around refusals, so biased towards the
+    // inline-upload shape; counted from the header lines, which survive the trimming of the word dumps): the
+    // Windows driver DOES end GP segments inside method packets (I2M inline uploads split across entries).
+    // Assumption P2 (a Window may start with fresh parser state at any entry boundary) is therefore not a
+    // property of the driver; it is a probability, measured by `straddles_window` / `window_fresh_start_parse_error`.
+    let dir = corpus_dir();
+    let (mut segments, mut open) = (0usize, 0usize);
+    for entry in std::fs::read_dir(&dir).expect("corpus dir") {
+        let path = entry.unwrap().path();
+        let name = path.file_name().unwrap().to_string_lossy().to_string();
+        if !name.starts_with("user-ring-refusal-") {
+            continue;
+        }
+        let text = std::fs::read_to_string(&path).unwrap();
+        let mut last_cursor = String::new();
+        for line in text.lines().filter(|l| l.starts_with("-- seq=")) {
+            let cursor = line.split_whitespace().find(|t| t.starts_with("cursor=")).unwrap_or("").to_owned();
+            if cursor == last_cursor {
+                continue;
+            }
+            last_cursor = cursor;
+            segments += 1;
+            if !line.contains("carried_out=none") {
+                open += 1;
+            }
+        }
+    }
+    println!("p2-corpus: {open} of {segments} recorded segments end inside an open packet");
+    assert!(segments > 150, "{segments}");
+    assert!(open >= 40, "P2 is contradicted by the recorded streams: {open} of {segments}");
 }

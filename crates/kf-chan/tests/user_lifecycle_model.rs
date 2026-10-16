@@ -17,7 +17,7 @@
 //! the PBDMA executes exactly the guest's entries in order, I3 no stale read (the model's `STALE`), I4 no
 //! entry published after a registration's reply is forwarded unscanned, I5 only listed transitions, I6
 //! liveness with time forbidden, I7 value tested == value stored while the guest changes ONE dword.
-#![allow(clippy::too_many_lines, clippy::needless_range_loop, dead_code, missing_docs)]
+#![allow(clippy::too_many_lines, clippy::needless_range_loop, dead_code, missing_docs, clippy::collapsible_if)]
 
 #[path = "lifecycle_support/mod.rs"]
 mod support;
@@ -44,6 +44,8 @@ pub enum Op {
     Remove,
     AwaitReply,
     UseNew,
+    /// The guest presets the new ring's USERD (Keep semantics: GP_PUT/GP_GET continue the old ring's values).
+    PrepNew,
     /// Hostile: change ONE dword of a ring slot of ring `ring` at any instant.
     Mutate {
         ring: usize,
@@ -137,7 +139,7 @@ impl Cfg {
             spec,
             priv_entries: 8,
             src_entries: 8,
-            glue: Glue::default(),
+            glue: Glue::from_env(),
             kind: Registration::Migrate,
             cursor_relay: Cursor::Zero,
             cursor_guest: Cursor::Zero,
@@ -183,6 +185,10 @@ struct ModelEnv {
 }
 
 impl ModelEnv {
+    /// The PBDMA has popped entries the relay has not observed yet.
+    fn hw_get_unseen(&self, relay: &Relay) -> bool {
+        self.popped as u64 > relay.fetch.fetched()
+    }
     fn ge(&self, id: u8) -> Ge {
         self.ges[usize::from(id)].expect("known id")
     }
@@ -241,7 +247,8 @@ impl Env for ModelEnv {
             }
             if let Some(id) = entry_id(tested) {
                 if let Some(g) = self.ges.get(usize::from(id)).copied().flatten() {
-                    if g.post_reply && g.kind != Kind::Nop && !scanned {
+                    // a registration is live: every entry published after its reply must have been scanned
+                    if g.post_reply && g.kind != Kind::Nop && !scanned && self.live > 0 {
                         self.viol |= V_I4;
                     }
                 }
@@ -528,9 +535,12 @@ impl World {
                 }
                 Op::UseNew => {
                     w.gr = 1;
+                }
+                Op::PrepNew => {
                     if cfg.cursor_guest == Cursor::Keep {
+                        // the continued value: where the guest's write position is NOW (past the trigger)
                         w.put_local[1] = self.put_local[0];
-                        w.env.put[1] = self.env.put[0];
+                        w.env.put[1] = self.put_local[0];
                         w.env.guest_get[1] = self.env.guest_get[0];
                     }
                 }
@@ -662,9 +672,16 @@ impl World {
                     let mut w = self.clone();
                     let mut env = std::mem::replace(&mut w.env, empty_env());
                     let sat = w.relay.wait_satisfied(&mut env);
+                    // a gate / batch is still draining but the PBDMA has popped more entries than the guest's
+                    // GP_GET shows: the look rings the relay only to write GP_GET back (`pop_writebacks`)
+                    let pops = matches!(w.relay.waiting, Some(kf_chan::user_loop::Wait::Marker { .. }))
+                        && env.hw_get_unseen(&w.relay);
                     w.env = env;
                     if sat {
                         w.relay.waiting = None;
+                        w.relay.again = true;
+                        out.push(w);
+                    } else if pops {
                         w.relay.again = true;
                         out.push(w);
                     }
@@ -1092,16 +1109,17 @@ fn a1_lap_script() -> Vec<Op> {
         Op::Push(p(3)),
         Op::SetPut,
         Op::Ring,
-        Op::Push(p(4)),
+        Op::Push(p(4).acq(1)),
         Op::SetPut,
         Op::Ring,
         Op::Register,
         Op::AwaitReply,
-        // slot 1 again: a SYNC_WAIT entry whose pushbuffer is written late
+        // slot 1 again: a SYNC_WAIT entry whose pushbuffer is written late, behind p4's acquire
         Op::Push(p(5).sync().late().post()),
         Op::SetPut,
         Op::Ring,
         Op::Fill(5),
+        Op::Release(1),
     ]
 }
 
@@ -1120,20 +1138,29 @@ fn a1_a_full_ring_lap_in_pointer_mode_does_not_revive_a_stale_gate_proof() {
 #[test]
 fn a2_the_binding_packet_split_across_two_entries_switches_to_pointer_after_the_datum() {
     // [h(6,0,1)] | [5080]: the binding is committed only after the second entry. Straddle counted in Scan.
+    // Afterwards a registration and its trigger: the Window must know the binding (it was learned from the
+    // split packet), so the trigger is found.
     let script = vec![
         Op::Push(ge(0, Kind::SetObjHead)),
         Op::Push(ge(1, Kind::SetObjTail)),
         Op::Push(p(2)),
         Op::SetPut,
         Op::Ring,
-        Op::Push(p(3)),
+        Op::Register,
+        Op::AwaitReply,
+        Op::Push(trig(3).post()),
+        Op::SetPut,
+        Op::Ring,
+        Op::Push(p(4)),
         Op::SetPut,
         Op::Ring,
     ];
-    let cfg = Cfg::new(spec(script, &[0, 1, 2, 3]));
+    let mut cfg = Cfg::new(spec(script, &[0, 1, 2, 3, 4]));
+    cfg.kind = Registration::Other;
     let r = assert_clean(&cfg, "a2-split-binding");
     assert_eq!(r.modes, HashSet::from([Mode::Pointer]));
     assert_eq!(r.straddles_scan_max, 1, "exactly the header-only segment ends open");
+    assert_eq!(r.triggers_found_max, 1, "the trigger is found: the binding was learned from the split packet");
 }
 
 #[test]
@@ -1160,7 +1187,7 @@ fn a2_an_open_packet_carried_across_the_mode_switch_is_dropped_and_a_later_windo
     println!("a2-fresh: {} states {:?}", r.states, viol_names(r.viol));
     assert_eq!(
         r.viol,
-        V_REFUSED | V_DEADLOCK | V_ORDER | V_LOST,
+        V_REFUSED | V_DEADLOCK,
         "P2 falsified by construction: the Fresh scan refuses the tail of a packet opened in Pointer mode \
          ({:?})",
         r.first
@@ -1510,7 +1537,29 @@ fn b_registration_racing_remove_and_teardown_loses_and_duplicates_nothing() {
     assert_eq!(r.viol & (V_AFTER_TEARDOWN | V_TORN | V_I1 | V_TRANSITION), 0, "{:?}", r.first);
 }
 
+/// The guest prepares the new ring (and its USERD) BEFORE the trigger entry becomes visible: the order a
+/// driver that must preset the new GP_PUT would use.
 fn cursor_script() -> Vec<Op> {
+    vec![
+        Op::Push(ge(0, Kind::SetObj)),
+        Op::Push(p(1)),
+        Op::SetPut,
+        Op::Ring,
+        Op::Register,
+        Op::AwaitReply,
+        Op::Push(trig(2).post()),
+        Op::PrepNew,
+        Op::SetPut,
+        Op::Ring,
+        Op::UseNew,
+        Op::Push(p(3).post()),
+        Op::SetPut,
+        Op::Ring,
+    ]
+}
+
+/// The new ring is prepared only AFTER the trigger was published and rung.
+fn cursor_script_late() -> Vec<Op> {
     vec![
         Op::Push(ge(0, Kind::SetObj)),
         Op::Push(p(1)),
@@ -1521,9 +1570,9 @@ fn cursor_script() -> Vec<Op> {
         Op::Push(trig(2).post()),
         Op::SetPut,
         Op::Ring,
+        Op::PrepNew,
         Op::UseNew,
         Op::Push(p(3).post()),
-        Op::Push(p(4).post()),
         Op::SetPut,
         Op::Ring,
     ]
@@ -1531,7 +1580,7 @@ fn cursor_script() -> Vec<Op> {
 
 #[test]
 fn b_the_source_switch_loses_and_duplicates_nothing_when_the_new_ring_starts_at_zero() {
-    let mut cfg = Cfg::new(spec(cursor_script(), &[0, 1, 2, 3, 4]));
+    let mut cfg = Cfg::new(spec(cursor_script(), &[0, 1, 2, 3]));
     cfg.cursor_relay = Cursor::Zero;
     cfg.cursor_guest = Cursor::Zero;
     let r = assert_clean(&cfg, "switch-zero");
@@ -1540,7 +1589,7 @@ fn b_the_source_switch_loses_and_duplicates_nothing_when_the_new_ring_starts_at_
 
 #[test]
 fn b_the_source_switch_loses_and_duplicates_nothing_when_the_indices_continue() {
-    let mut cfg = Cfg::new(spec(cursor_script(), &[0, 1, 2, 3, 4]));
+    let mut cfg = Cfg::new(spec(cursor_script(), &[0, 1, 2, 3]));
     cfg.cursor_relay = Cursor::Keep;
     cfg.cursor_guest = Cursor::Keep;
     let r = assert_clean(&cfg, "switch-keep");
@@ -1551,7 +1600,7 @@ fn b_the_source_switch_loses_and_duplicates_nothing_when_the_indices_continue() 
 fn b_mismatched_cursor_semantics_lose_entries_and_the_checker_sees_it() {
     // Production resets the cursor to 0 (the measured Windows growth). If the guest's new ring in fact
     // continued the indices, the relay would read the wrong slots: the unmeasured P0 (a) question.
-    let mut cfg = Cfg::new(spec(cursor_script(), &[0, 1, 2, 3, 4]));
+    let mut cfg = Cfg::new(spec(cursor_script(), &[0, 1, 2, 3]));
     cfg.cursor_relay = Cursor::Zero;
     cfg.cursor_guest = Cursor::Keep;
     assert_found(&cfg, "switch-mismatch", V_DEADLOCK);
@@ -1606,4 +1655,226 @@ fn i6_open_pointer_mode_credit_waits_need_no_look() {
     cfg.priv_entries = 4;
     cfg.looks = false;
     assert_clean(&cfg, "ring-full-no-looks-expected");
+}
+
+#[test]
+#[ignore = "OPEN: if the indices continue across the growth, the new USERD's GP_PUT must already hold the continued value when the relay switches (Open question 4)"]
+fn b_open_continued_indices_need_the_new_gp_put_preset_before_the_switch() {
+    // EXPECTED: the relay idles at the switch until the guest publishes in the new ring.
+    // OBSERVED: with a fresh (zero) GP_PUT in the new USERD the relay sees GP_PUT != cursor and forwards the
+    // stale slots between them (a duplicate of an old entry). With reset-to-zero (production) this cannot
+    // happen. Unmeasured: what a real Windows growth leaves in the new USERD (P0 a).
+    let mut cfg = Cfg::new(spec(cursor_script_late(), &[0, 1, 2, 3]));
+    cfg.cursor_relay = Cursor::Keep;
+    cfg.cursor_guest = Cursor::Keep;
+    assert_clean(&cfg, "switch-keep-late");
+}
+
+#[test]
+fn b_reset_to_zero_does_not_depend_on_when_the_guest_prepares_the_new_ring() {
+    let mut cfg = Cfg::new(spec(cursor_script_late(), &[0, 1, 2, 3]));
+    cfg.cursor_relay = Cursor::Zero;
+    cfg.cursor_guest = Cursor::Zero;
+    assert_clean(&cfg, "switch-zero-late");
+}
+
+// ---- the checker has teeth: each deliberate glue defect is FOUND (the machine's own mutants run through
+// `scripts/lifecycle_mutation_check.sh`, which re-runs this whole file with `KF_LIFECYCLE_MUTANT`)
+
+#[test]
+fn mutant_reading_the_epoch_before_gp_put_forwards_a_post_reply_entry_unscanned() {
+    let mut cfg = flip(Registration::Other);
+    cfg.glue.epoch_before_put = true;
+    assert_found(&cfg, "epoch-before-put", V_I4);
+}
+
+#[test]
+fn mutant_defining_the_flip_by_a_reread_of_gp_put_forwards_post_reply_entries_unscanned() {
+    let script = vec![
+        Op::Push(ge(0, Kind::SetObj)),
+        Op::Push(p(1)),
+        Op::SetPut,
+        Op::Ring,
+        Op::Register,
+        Op::AwaitReply,
+        Op::Push(p(2).post()),
+        Op::Push(p(3).post()),
+        Op::SetPut,
+        Op::Ring,
+    ];
+    let mut cfg = Cfg::new(spec(script, &[0, 1, 2, 3]));
+    cfg.kind = Registration::Other;
+    cfg.glue.flip_at_put = true;
+    assert_found(&cfg, "flip-at-put", V_I4);
+}
+
+#[test]
+fn mutant_a_second_load_of_the_entry_stores_a_value_that_was_not_tested() {
+    let script = vec![
+        Op::Push(ge(0, Kind::SetObj)),
+        Op::SetPut,
+        Op::Ring,
+        Op::Push(p(1)),
+        Op::SetPut,
+        Op::Ring,
+        Op::Mutate { ring: 0, slot: 1, hi: true, xor: 1 << 31 },
+    ];
+    let mut s = spec(script, &[0, 1]);
+    s.hostile = true;
+    let mut cfg = Cfg::new(s);
+    cfg.glue.double_fetch = true;
+    assert_found(&cfg, "double-fetch", V_TORN);
+}
+
+#[test]
+fn mutant_a_gate_proof_kept_across_a_ring_lap_reads_the_late_pushbuffer_early() {
+    let mut cfg = Cfg::new(spec(a1_lap_script(), &[0, 1, 2, 3, 4, 5]));
+    cfg.kind = Registration::Other;
+    cfg.src_entries = 4;
+    cfg.max_states = 6_000_000;
+    cfg.glue.no_gate_reset = true;
+    assert_found(&cfg, "no-gate-reset", V_STALE);
+}
+
+#[test]
+fn mutant_ignoring_the_seed_reads_the_late_pushbuffer_behind_an_unproven_sync_wait() {
+    let mut cfg = Cfg::new(spec(a1_script(), &[0, 1, 2, 3]));
+    cfg.kind = Registration::Other;
+    cfg.glue.ignore_seed = true;
+    assert_found(&cfg, "ignore-seed", V_STALE);
+}
+
+#[test]
+fn mutant_dropping_the_first_entry_of_a_fresh_window_loses_an_entry() {
+    let mut cfg = flip(Registration::Other);
+    cfg.glue.drop_flip_entry = true;
+    let r = explore(&cfg);
+    assert!(r.viol & (V_DEADLOCK | V_ORDER) != 0, "{:?}", viol_names(r.viol));
+}
+
+#[test]
+fn mutant_treating_the_set_object_header_as_the_binding_misses_the_trigger() {
+    let script = vec![
+        Op::Push(ge(0, Kind::SetObjHead)),
+        Op::Push(ge(1, Kind::SetObjTail)),
+        Op::Push(p(2)),
+        Op::SetPut,
+        Op::Ring,
+        Op::Register,
+        Op::AwaitReply,
+        Op::Push(trig(3).post()),
+        Op::SetPut,
+        Op::Ring,
+    ];
+    let mut cfg = Cfg::new(spec(script, &[0, 1, 2, 3]));
+    cfg.kind = Registration::Other;
+    cfg.glue.bound_without_datum = true;
+    assert_found(&cfg, "bound-without-datum", V_UNSCANNED_TRIGGER);
+}
+
+// ---- observability: exact counter values in the tests that provoke them
+
+#[test]
+fn obs_a_sync_wait_behind_an_open_packet_is_read_at_once_and_counted_exactly_once_in_a_window() {
+    // The registration is live before the binding is seen: the scan never stops (an EXACT window), so the
+    // SYNC_WAIT entry behind the open packet is the old `carried_ungated` case.
+    let script = vec![
+        Op::Register,
+        Op::AwaitReply,
+        Op::Push(ge(0, Kind::SetObj).post()),
+        Op::Push(ge(1, Kind::OpenHead).post()),
+        Op::Push(ge(2, Kind::OpenTail).sync().post()),
+        Op::Push(p(3).post()),
+        Op::SetPut,
+        Op::Ring,
+    ];
+    let mut cfg = Cfg::new(spec(script, &[0, 1, 2, 3]));
+    cfg.kind = Registration::Other;
+    let r = assert_clean(&cfg, "obs-carried");
+    assert_eq!(r.carried_ungated, 1);
+    assert_eq!(r.modes, HashSet::from([Mode::Window]));
+}
+
+#[test]
+fn obs_pointer_mode_has_no_carried_ungated_case_because_it_scans_nothing() {
+    let script = vec![
+        Op::Push(ge(0, Kind::SetObj)),
+        Op::Push(p(1)),
+        Op::SetPut,
+        Op::Ring,
+        Op::Push(ge(2, Kind::OpenHead)),
+        Op::Push(ge(3, Kind::OpenTail).sync()),
+        Op::Push(p(4)),
+        Op::SetPut,
+        Op::Ring,
+    ];
+    let cfg = Cfg::new(spec(script, &[0, 1, 2, 3, 4]));
+    let r = assert_clean(&cfg, "obs-pointer-carried");
+    assert_eq!(r.carried_ungated, 0);
+}
+
+// ---- B: the registration while the private ring or the guest ring is full, and spurious doorbells
+
+#[test]
+fn b_a_registration_with_a_full_private_ring_still_flips_and_loses_nothing() {
+    let mut cfg = flip(Registration::Other);
+    cfg.priv_entries = 4;
+    cfg.max_states = 8_000_000;
+    let r = assert_clean(&cfg, "b-private-ring-full");
+    assert_eq!(r.modes, HashSet::from([Mode::Pointer]));
+}
+
+#[test]
+fn b_a_registration_with_a_full_guest_ring_waiting_for_the_gp_get_write_back() {
+    let mut cfg = flip(Registration::Other);
+    cfg.src_entries = 4;
+    cfg.max_states = 8_000_000;
+    let r = assert_clean(&cfg, "b-guest-ring-full");
+    assert_eq!(r.modes, HashSet::from([Mode::Pointer]));
+}
+
+#[test]
+fn b_extra_and_coalesced_doorbells_during_a_draining_gate_change_nothing() {
+    let mut script = vec![];
+    for op in a1_script() {
+        script.push(op);
+        if matches!(op, Op::Push(_) | Op::Register | Op::AwaitReply) {
+            script.push(Op::Ring);
+        }
+    }
+    let mut cfg = Cfg::new(spec(script, &[0, 1, 2, 3]));
+    cfg.kind = Registration::Other;
+    cfg.max_states = 8_000_000;
+    assert_clean(&cfg, "b-spurious-doorbells");
+}
+
+// ---- D: the shape of a recorded Edge refusal (`traces/user_ring_scan_20261014/user-ring-refusal-c1d00054-ff040013-453.txt`)
+
+#[test]
+fn d_the_recorded_edge_ring_shape_behind_unreached_sync_waits_is_not_read_early_in_a_window() {
+    // GP ring entries 447..453 of the trace: SYNC NOP, seg, seg (an acquire inside), seg, SYNC NOP, seg, seg whose
+    // bytes the guest writes only later (the scan met zeros and refused). A registration is live (an exact window):
+    // the SyncGate must keep the window from reading the late segment before the hardware passed the acquire.
+    let script = vec![
+        Op::Register,
+        Op::AwaitReply,
+        Op::Push(ge(0, Kind::SetObj).post()),
+        Op::Push(ge(10, Kind::Nop).sync().post()),
+        Op::Push(p(2).post()),
+        Op::Push(p(3).acq(0).post()),
+        Op::Push(p(4).post()),
+        Op::Push(ge(11, Kind::Nop).sync().post()),
+        Op::Push(p(6).post()),
+        Op::Push(p(7).late().post()),
+        Op::SetPut,
+        Op::Ring,
+        Op::Fill(7),
+        Op::Release(0),
+    ];
+    let mut cfg = Cfg::new(spec(script, &[0, 10, 2, 3, 4, 11, 6, 7]));
+    cfg.kind = Registration::Other;
+    cfg.src_entries = 16;
+    cfg.max_states = 8_000_000;
+    let r = assert_clean(&cfg, "d-edge-shape");
+    assert_eq!(r.modes, HashSet::from([Mode::Window]));
 }

@@ -874,6 +874,9 @@ impl ChanPlane {
                 let n = self.relay_reports.fetch_add(1, Ordering::Relaxed) + 1;
                 if n <= 16 || n.is_power_of_two() {
                     eprintln!("kf3: USER_RING_LOOP SUMMARY (all relays gone, #{n}) {}", self.relay_stats.summary());
+                    if self.relay_stats.life.any() {
+                        eprintln!("kf3: USER_RING_LIFECYCLE SUMMARY (all relays gone, #{n}) {}", self.relay_stats.life.summary());
+                    }
                     eprintln!("kf3: {}", crate::userstore::summary());
                 }
             }

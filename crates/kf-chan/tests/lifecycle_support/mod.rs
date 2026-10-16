@@ -9,7 +9,7 @@
 //! `Wait`; only the I/O (`Pump::snapshot`, `publish`, the USERD accesses) and the lock handling are
 //! abstracted. A turn is split into micro-steps so that a driver may run any other actor between any
 //! two of them (the guest changes ONE dword at any instant, the registry epoch moves, the PBDMA pops).
-#![allow(dead_code, clippy::too_many_lines, clippy::type_complexity, missing_docs)]
+#![allow(dead_code, clippy::too_many_lines, clippy::type_complexity, missing_docs, clippy::collapsible_if)]
 
 use kf_abi::submit::{gp_entry, method_header_inc};
 use kf_chan::user_gate::{Gate, Grace, Marks, SyncGate};
@@ -167,7 +167,7 @@ pub fn seg_va(id: u8) -> u64 {
 pub fn entry_id(raw: u64) -> Option<u8> {
     match inspect_entry(raw, 1 << 20).ok()? {
         Source::Nop => u8::try_from((raw & 0xffff_ffff) >> 2).ok(),
-        Source::Segment(d) => u8::try_from(d.gpu_va / 0x1000 - 1).ok(),
+        Source::Segment(d) => u8::try_from((d.gpu_va / 0x1000).checked_sub(1)?).ok(),
     }
 }
 
@@ -237,8 +237,8 @@ pub trait Env {
 /// `kf_chan::user_lifecycle::Mutant` (feature `lifecycle-mutants`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Glue {
-    /// Load the registry epoch BEFORE the entry (the wrong order).
-    pub epoch_before_entry: bool,
+    /// Load the registry epoch BEFORE `GP_PUT` and the entry (the wrong order; the design loads it AFTER both).
+    pub epoch_before_put: bool,
     /// Store a second load of the entry instead of the tested value.
     pub double_fetch: bool,
     /// Do not reset the SyncGate at a Fresh restart.
@@ -251,6 +251,36 @@ pub struct Glue {
     pub ignore_events: bool,
     /// Drop the first entry of a Fresh window (advance the cursor without publishing it).
     pub drop_flip_entry: bool,
+    /// Publish an entry `inspect_entry` refused (no entry-level validation).
+    pub skip_validation: bool,
+    /// Treat a SET_OBJECT HEADER (the datum not yet scanned) as the binding being known.
+    pub bound_without_datum: bool,
+}
+
+impl Glue {
+    /// With the `lifecycle-mutants` feature, the glue defect named by `KF_LIFECYCLE_GLUE_MUTANT`; otherwise
+    /// (and when unset) the correct glue.
+    pub fn from_env() -> Self {
+        #[cfg(feature = "lifecycle-mutants")]
+        {
+            let mut g = Self::default();
+            match std::env::var("KF_LIFECYCLE_GLUE_MUTANT").ok().as_deref() {
+                Some("epoch_before_put") => g.epoch_before_put = true,
+                Some("double_fetch") => g.double_fetch = true,
+                Some("no_gate_reset") => g.no_gate_reset = true,
+                Some("flip_at_put") => g.flip_at_put = true,
+                Some("ignore_seed") => g.ignore_seed = true,
+                Some("ignore_events") => g.ignore_events = true,
+                Some("drop_flip_entry") => g.drop_flip_entry = true,
+                Some("skip_validation") => g.skip_validation = true,
+                Some("bound_without_datum") => g.bound_without_datum = true,
+                _ => {}
+            }
+            g
+        }
+        #[cfg(not(feature = "lifecycle-mutants"))]
+        Self::default()
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -534,6 +564,8 @@ impl Relay {
                 }
                 self.phase = if self.staged.is_some() {
                     Phase::SegTurn
+                } else if self.glue.epoch_before_put {
+                    Phase::Epoch
                 } else {
                     Phase::Put
                 };
@@ -560,11 +592,7 @@ impl Relay {
                     self.phase = Phase::Idle;
                     return;
                 }
-                self.phase = if self.glue.epoch_before_entry {
-                    Phase::Epoch
-                } else {
-                    Phase::Lo
-                };
+                self.phase = Phase::Lo;
             }
             Phase::Lo => {
                 self.lo = env.gp_dword(self.cursor, false);
@@ -573,7 +601,7 @@ impl Relay {
             Phase::Hi => {
                 self.hi = env.gp_dword(self.cursor, true);
                 self.raw = (u64::from(self.hi) << 32) | u64::from(self.lo);
-                self.phase = if self.glue.epoch_before_entry {
+                self.phase = if self.glue.epoch_before_put {
                     Phase::Plan
                 } else {
                     Phase::Epoch
@@ -581,8 +609,8 @@ impl Relay {
             }
             Phase::Epoch => {
                 self.epoch = env.registry_epoch();
-                self.phase = if self.glue.epoch_before_entry {
-                    Phase::Lo
+                self.phase = if self.glue.epoch_before_put {
+                    Phase::Put
                 } else {
                     Phase::Plan
                 };
@@ -706,6 +734,7 @@ impl Relay {
         // entry-level validation on THE loaded value (userpump.rs: inspect_entry)
         let desc = match inspect_entry(self.raw, kf_chan::user_storage::MAX_SOURCE_BYTES) {
             Ok(d) => d,
+            Err(_) if self.glue.skip_validation => Source::Nop,
             Err(_) => {
                 env.event(Ev::EntryRefused);
                 self.refused_entry += 1;
@@ -714,11 +743,19 @@ impl Relay {
                 return;
             }
         };
+        let mut sw_mask = self.scan.software_mask(sw);
+        if self.glue.bound_without_datum {
+            if let Some((h, _)) = self.scan.carried() {
+                if h.method == 0 && h.subchannel >= 5 {
+                    sw_mask |= 1 << h.subchannel;
+                }
+            }
+        }
         let obs = Obs {
             raw: self.raw,
             abs: self.abs,
             epoch: self.epoch,
-            sw_mask: self.scan.software_mask(sw),
+            sw_mask,
             have_software: true,
             quiescent: self.staged.is_none() && !self.sync.waiting(),
         };

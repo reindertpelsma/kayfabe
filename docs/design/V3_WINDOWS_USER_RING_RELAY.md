@@ -194,6 +194,13 @@ the `5080` subchannel (parser state tracked from birth); take a kayfabe-owned co
 
 ## 10. The owner/Codex lifecycle plan, 2026-10-13, and what must hold for it
 
+> ⊘ **UPDATE 2026-10-16:** implemented (PHASE 1, worker-only, GPU-free) as Scan / Pointer / Window in
+> [`V3_USER_RING_LIFECYCLE_20261016.md`](V3_USER_RING_LIFECYCLE_20261016.md). Read it for the states, the flip protocol (a wait-free registry epoch instead of a held
+> reply, until an inline claimant exists), the invariants and tests. Corrections to the preconditions below, above the text they correct: **P2 is contradicted** as a general
+> property (the driver splits inline uploads across GP entries; 55 of 196 recorded refusal-trace segments end inside an open packet, Minecraft has 27 334 SYNC_WAIT entries behind
+> open packets in a run), so a Window that starts with fresh parser state is a measured probability (`straddles_window`, `window_fresh_start_parse_error`), not a guarantee;
+> every registration kind (not only `FIFO_UPDATE_CHANNEL_INFO`) opens a Window, because the relay executes the other bundles at their triggers too.
+
 Plan: (1) a Windows USER channel is scanned from birth only until its `5080` SET_OBJECT has been seen (the subchannel binding is then known); (2) it then becomes *migratable passthrough*: GP entries copied as pointers, pushbuffers not inspected (inline for small deltas, worker otherwise);
 (3) when the guest registers the `FIFO_UPDATE_CHANNEL_INFO` bundle (the privileged inner control reaching kayfabe's GSP emulation) kayfabe holds the reply, flips the channel to the scanning (Translated-like) worker mode race-free (old-claim exclusion, modelled in `kf-trap`), and keeps scanning until it reads the trigger;
 (4) it applies the source switch at the trigger position and returns to migratable passthrough; a later registration (ring growth repeats: 32768 to 65536 to 131072) starts the cycle again. It avoids scanning every submission of every channel for life, and fits the owner rulings (pushbuffer integrity is not a security boundary; the vCPU reads only bounded ring entries; scan off vCPU before forwarding).
