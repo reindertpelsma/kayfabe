@@ -4100,6 +4100,84 @@ mod device_reset_from_every_phase {
         sent_sysinfo: bool,
     }
 
+    // GPU-free child fixture exercises the real queue publication path. Process-local
+    // environment avoids unsafe set_var and races between parallel Rust tests.
+    #[test]
+    fn reply_body_trace_fixture() {
+        let Ok(mode) = std::env::var("KF_POST_TRACE_FIXTURE") else { return };
+        let after = AfterSuspend::AwaitsTeardownUcode;
+        let mut d = Dev::life(GspFsm::new(abi()), after);
+        d.start_with_frts();
+        d.firmware_loaded();
+        d.publish();
+        let w = d.fsm.abi.driver.rm_control_wire();
+        let params = if mode == "large" { 5000 } else { 4 };
+        let selector: u32 = if mode == "large" { 0x0073_0245 } else { 0x2080_0a58 };
+        let mut payload = vec![0; w.params_off + params];
+        payload[8..12].copy_from_slice(&selector.to_le_bytes());
+        payload[w.params_size_off..w.params_size_off + 4]
+            .copy_from_slice(&(params as u32).to_le_bytes());
+        payload[w.params_off..].fill(0xab);
+        let rpc = OutgoingRpc { function: 76, sequence: 9, rpc_result: 0,
+                                rpc_result_private: 0, payload };
+        // A failed publication must not consume a record or report a sent body.
+        let queue = std::mem::replace(&mut d.fsm.queue, QueueState::Unbound);
+        assert!(d.fsm.post(&mut d.ram, &rpc).is_err());
+        d.fsm.queue = queue;
+        let count = match mode.as_str() { "reset" => 514, "large" => 100, _ => 1 };
+        for i in 0..count {
+            if mode == "reset" && i == 512 {
+                d.fsm.device_reset();
+                d = Dev::life(d.fsm, after);
+                d.start_with_frts();
+                d.firmware_loaded();
+                d.publish();
+            }
+            d.guest_drains_status();
+            d.fsm.post(&mut d.ram, &rpc).expect("fixture reply fits the ring");
+        }
+    }
+
+    fn reply_body_fixture_output(mode: &str, enabled: bool) -> Vec<String> {
+        let mut child = std::process::Command::new(std::env::current_exe().unwrap());
+        child.args(["reply_body_trace_fixture", "--nocapture", "--test-threads=1"])
+            .env("KF_POST_TRACE_FIXTURE", mode);
+        if enabled { child.env("KF3_RPC_BODY_TRACE", "1"); }
+        else { child.env_remove("KF3_RPC_BODY_TRACE"); }
+        let output = child.output().unwrap();
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        String::from_utf8_lossy(&output.stderr).lines()
+            .filter(|l| l.starts_with("kf-gsp: reply-body ")).map(str::to_owned).collect()
+    }
+
+    #[test]
+    fn posted_reply_body_is_logged_once_and_failed_post_is_absent() {
+        let rows = reply_body_fixture_output("one", true);
+        assert_eq!(rows.len(), 1, "capture only the successfully posted a58 reply");
+        assert!(rows[0].contains("selector=0x20800a58"));
+        assert!(rows[0].ends_with("abababab"));
+    }
+
+    #[test]
+    fn guest_reset_does_not_rearm_the_reply_record_budget() {
+        assert_eq!(reply_body_fixture_output("reset", true).len(), 512);
+    }
+
+    #[test]
+    fn large_reply_dumps_obey_both_per_record_and_total_byte_limits() {
+        let rows = reply_body_fixture_output("large", true);
+        assert_eq!(rows.len(), 64, "256KiB total at4096bytes per record");
+        for row in rows {
+            assert!(row.contains("saved=4096 truncated=1"));
+            assert_eq!(row.split("body=").last().unwrap().len(), 8192);
+        }
+    }
+
+    #[test]
+    fn reply_body_diagnostics_are_disabled_by_default() {
+        assert!(reply_body_fixture_output("one", false).is_empty());
+    }
+
     impl Dev {
         /// A guest life with its queues laid out in fresh RAM, against `fsm`.
         fn life(fsm: GspFsm, after: AfterSuspend) -> Dev {
