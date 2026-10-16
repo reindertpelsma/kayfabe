@@ -1,9 +1,49 @@
 # Die × driver campaign, 2026-10-15
 
-**STATUS: LIVE, 2026-10-15.** Implement, test and fix the other-die cells under
+**STATUS: LIVE, 2026-10-16.** Implement, test and fix the other-die cells under
 `/root/codex_prompt_die_driver_sweep.md` (including its added implementation requirement).
 Base: `origin/claude/gpu-types-20261015` plus cursor fix `2f99e673d`;
 initial combined product revision: `23585a319`.
+
+## Current measured matrix, 2026-10-16 04:01 UTC
+
+This corrects the older family checkpoint below. **No family is complete.**
+Both guest OSes across several actual driver builds remain required. Native
+reference passes and partial boot/driver queries are not guest suite passes.
+All current Windows guests use LTSC build26100 in nested KVM rentals; the
+native Windows reference uses the rental GPU directly. Owner GPU/VM unused.
+
+| Die/family | Linux580 guest | Linux595 guest | Windows580.88 guest | Remaining wall |
+|---|---|---|---|---|
+| TU106/Turing | raw29/30; CUDA4 before semaphore fix and broker after fix pass | UNRUN | baseline Code0/desktop/CUDA3/D3D11+12,421.25s/zeroTDR hold passes; event regression running | original-depth R34 times out180s for callback and event; event full regressions unrun |
+| GA104/Ampere | raw30/CUDA4/gfx10 hashes/broker pass | raw30 pass; fat lanes unrun | init stall, no accepted desktop | native GA104 caps oracle missing; authored caps equality red |
+| AD102/Ada | raw30/CUDA4/gfx10/broker pass | raw30/CUDA4/gfx10 pass; broker unrun | Code0/desktop/CUDA3/D3D11+12/zeroTDR short suite pass | more actual Windows builds and other die coverage |
+| GB206/Blackwell | raw30/CUDA4/headless gfx5+native hashes pass; desktop fails | raw29/30, concurrency timeout/crash | Code43 | native/virtual aligned control replies differ; strict virtual trace census still fails |
+
+Turing latest evidence: [GUEST_RESULT.md](turing_hold_20261016/GUEST_RESULT.md)
+and [R34_RESULT.md](turing_hold_20261016/R34_RESULT.md). Sourceca0ad248 and
+5b523ed5 are measured separately; event Windows useseb4dfad0 (same product as
+5b plus QGA deadline fix). Native host595 raw30/30 and both native9/9+gate10
+passes are references, not additional guest driver-build acceptance.
+
+Blackwell complete native trace evidence lives on its separate pushed branch:
+[alignment and limitations](https://github.com/reindertpelsma/kayfabe/blob/577f15a7e/traces/die_driver_sweep_20261015/blackwell_5060/virtual_native_alignment_20261016/README.md).
+Native actual580.88/GSP580.65.05 gives4807command+4872status records fromseq0,
+zero reported loss/gaps/anomalies. The raw capture was erased by Linux reimage;
+sanitized metadata, censuses, source/SHA receipts and alignment remain in git.
+Virtual observer recovered772records but strict census fails109anomalies/
+39unpaired controls; no complete validated virtual trace or first body-byte
+cause is claimed. First observed aligned status-layer difference0x20800a87:
+native envelope0/body0x56 versus virtual envelope0x56/erasedbody; both next
+0x20800a40. Refuseda89/ab2 and CBCB are candidates; no guessed ACK/value shipped.
+Cross-ABI host CCU formula equality failed; caps exact-equality tests remain
+red, candidate held. Transient native591.86/other build queries are not suites.
+
+New code-only draft PRs13,14,15,16,18,19,20 targetclaude/gpu-types-20261015.
+Evidence remains on campaign branches. PR19 now explicitly reports the failed
+R34 performance prediction; CPU/native gate green does not supersede it.
+Cost/ownership: [COST.md](COST.md), conservative compute ceiling4.38USD plus
+unbilled transfers. Only own56180232 active, original timer04:11:46 UTC.
 
 ## Hypotheses stated before runs
 
