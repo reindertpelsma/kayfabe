@@ -1,0 +1,163 @@
+   Compiling kf-util v0.1.0 (/workspace/codex/blackwell-virtual-tiles/crates/kf-util)
+warning: missing documentation for a function
+    --> crates/kf-util/src/lock.rs:1150:5
+     |
+1150 |     pub fn note_wait(rank: LockRank, d: Duration) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a function
+    --> crates/kf-util/src/lock.rs:1432:5
+     |
+1432 |     pub fn note_hold(rank: LockRank, d: Duration) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/kf-util/src/lockwitness.rs:193:5
+    |
+193 |     pub fn is_vcpu() -> bool {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+   Compiling kf-arch v0.1.0 (/workspace/codex/blackwell-virtual-tiles/crates/kf-arch)
+warning: missing documentation for a method
+   --> crates/kf-arch/src/gsp.rs:842:5
+    |
+842 | /     fn on_read(
+843 | |         &self,
+844 | |         _model: &dyn GspModel,
+845 | |         _bar: u8,
+...   |
+848 | |         _state: &ArchBootState,
+849 | |     ) -> Option<u64> {
+    | |____________________^
+    |
+    = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a method
+   --> crates/kf-arch/src/gsp.rs:971:5
+    |
+971 |     fn libos_region_layout(&self) -> LibosRegionLayout;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `kf-arch` (lib) generated 2 warnings
+   Compiling kf-abi v0.1.0 (/workspace/codex/blackwell-virtual-tiles/crates/kf-abi)
+warning: `kf-util` (lib) generated 3 warnings
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:90:18
+   |
+90 |     NoChannels { engine: u32 },
+   |                  ^^^^^^^^^^^
+   |
+   = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:92:20
+   |
+92 |     BelowMinimum { asked: u32 },
+   |                    ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:94:18
+   |
+94 |     AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },
+   |                  ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:94:30
+   |
+94 |     AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },
+   |                              ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:94:42
+   |
+94 |     AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },
+   |                                          ^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:94:55
+   |
+94 |     AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },
+   |                                                       ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:94:67
+   |
+94 |     AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },
+   |                                                                   ^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:96:19
+   |
+96 |     HostTooFull { derived: u32, engine: u32, total: u32, in_use: u32 },
+   |                   ^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:96:33
+   |
+96 |     HostTooFull { derived: u32, engine: u32, total: u32, in_use: u32 },
+   |                                 ^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:96:46
+   |
+96 |     HostTooFull { derived: u32, engine: u32, total: u32, in_use: u32 },
+   |                                              ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:96:58
+   |
+96 |     HostTooFull { derived: u32, engine: u32, total: u32, in_use: u32 },
+   |                                                          ^^^^^^^^^^^
+
+   Compiling kf-gsp v0.1.0 (/workspace/codex/blackwell-virtual-tiles/crates/kf-gsp)
+warning: missing documentation for a method
+    --> crates/kf-gsp/src/boot.rs:2772:5
+     |
+2772 |     pub fn release_held(&mut self, ram: &mut dyn GuestRam) -> Result<usize, GspFault> {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a method
+    --> crates/kf-gsp/src/boot.rs:2890:5
+     |
+2890 | /     pub fn post_event(
+2891 | |         &mut self,
+2892 | |         ram: &mut dyn GuestRam,
+2893 | |         rpc: &OutgoingRpc,
+2894 | |     ) -> Result<(), GspFault> {
+     | |_____________________________^
+
+warning: `kf-gsp` (lib) generated 2 warnings
+   Compiling kf-chip v0.1.0 (/workspace/codex/blackwell-virtual-tiles/crates/kf-chip)
+warning: `kf-abi` (lib) generated 11 warnings
+   Compiling kf-disp v0.1.0 (/workspace/codex/blackwell-virtual-tiles/crates/kf-disp)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 11.52s
+     Running unittests src/lib.rs (/workspace/codex/target-blackwell-virtual-tiles/debug/deps/kf_disp-4d2eb5c4978224d2)
+
+running 2 tests
+
+thread 'model::tests::blackwell_imp_returns_one_required_tile_for_each_active_head' (2462176) panicked at crates/kf-disp/src/model.rs:1908:9:
+assertion `left == right` failed
+  left: Some(0)
+ right: Some(1)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test model::tests::blackwell_imp_returns_one_required_tile_for_each_active_head ... FAILED
+
+thread 'caps::tests::blackwell_virtual_heads_have_contiguous_single_output_tiles' (2462175) panicked at crates/kf-disp/src/caps.rs:613:13:
+assertion `left == right` failed: tile 0
+  left: 0
+ right: 1
+test caps::tests::blackwell_virtual_heads_have_contiguous_single_output_tiles ... FAILED
+
+failures:
+
+failures:
+    caps::tests::blackwell_virtual_heads_have_contiguous_single_output_tiles
+    model::tests::blackwell_imp_returns_one_required_tile_for_each_active_head
+
+test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 167 filtered out; finished in 0.02s
+
+error: test failed, to rerun pass `-p kf-disp --lib`
