@@ -151,3 +151,15 @@ no native/guest hardware work. Partial Windows image transfer cancelled, no
 full hash PASS. Text saved under blackwell_5060/display_phase_20261016/. Rental
 destroyed/absence19:07:54UTC before timer/hard cap. Machine46454 excluded.
 Compute estimate0.051431USD/ceiling0.06USD; no own rental remains.
+
+## GB206 second display-phase attempt, 2026-10-16
+
+|Instance|GPU|USD/hour incl150GB quote|StartUTC|StopUTC|Purpose|Ceiling|
+|---|---|---:|---|---|---|---|
+|56286918|RTX5060Tiadvertised, exactdie pendingRM|0.7222222|2026-10-16T19:11:25.724680+00:00|ACTIVE; timer2478432 at22:06:25, hard22:11:25|B1/B2/B3; earlyPCIcheck, baseline then one derived tiling group|max2.17USD; campaign ceiling9.23USD+transfers|
+
+Previous56284522 API absence verified19:07:54UTC before this creation.
+Verified offer56266289/machine152012 advertises64effectiveCPU/257596MiBRAM/
+6705GBfree/KVM. These remain claims until the bootstrap checks them. Reject
+missing NVIDIA PCI before driver installation and image transfer. No native
+Windows green repeat; per-die reference already exists if GB206 is measured.
