@@ -320,6 +320,7 @@ pub(crate) fn dump(me: &super::chan::ChanPlane, why: &str) {
         me.relay_stats.summary()
     );
     eprintln!("kf3: LIFECYCLE t={t:.1} wall={wall:.1} {why} {}", crate::userstore::summary());
+    eprintln!("kf3: LIFECYCLE t={t:.1} wall={wall:.1} {why} {}", me.gap_line());
     for c in &chans {
         let pb_post: u64 = (1..3).map(|k| g(&c.calls[1][k])).sum();
         let vc_post: u64 = (1..3).map(|k| g(&c.vram_copies[1][k])).sum();

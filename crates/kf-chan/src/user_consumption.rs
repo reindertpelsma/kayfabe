@@ -14,7 +14,7 @@
 use std::collections::VecDeque;
 
 /// Trusted private-ring policy; independent of family/die/guest ring growth.
-pub const MAX_ENTRIES: u32 = 512;
+pub const MAX_ENTRIES: u32 = 2048; // SCRATCH d3d11-gap: was 512
 
 /// Opaque source descriptor progress, bound by the adapter to a pinned lifetime.
 /// This is not engine completion or permission to unmap engine operands.

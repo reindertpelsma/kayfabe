@@ -495,7 +495,7 @@ impl Pump {
             shadow: userrelay::shadow_enabled()
                 .then(|| super::usershadow::Shadow::new(subdevice_id)),
             key,
-            fetch: Fetch::new(kf_chan::user_storage::ENTRIES).map_err(str::to_owned)?,
+            fetch: Fetch::new(kf_chan::user_storage::entries()).map_err(str::to_owned)?,
             segment: None,
             guest_get: None,
             need: kf_chan::user_loop::Need::Idle,

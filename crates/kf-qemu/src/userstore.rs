@@ -15,7 +15,7 @@ use kf_linux_raw::{Backing, CachePolicy, CharDevice, HostOffset, HostPageSize, V
 const BYTES: u64 = 64 << 10;
 // Trusted CPU-view quota: at most1MiB per channel, independent of fragmentation.
 // A source requiring more disjoint64KiB store windows refuses before host actions.
-const VIEWS: usize = (kf_chan::user_storage::BYTES / BYTES) as usize;
+const VIEWS: usize = 16; // SCRATCH d3d11-gap: was BYTES(storage)/64 KiB = 16 with the 1 MiB storage; kept at 16
 const SPANS: usize = crate::mem::userread::MAX_BYTES / 4096 + 1;
 
 // ★ 2026-10-15 (perf campaign, `docs/design/V3_WINDOWS_PERF_20261015.md`): the cache KEEPS its views

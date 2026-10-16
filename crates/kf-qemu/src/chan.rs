@@ -3329,6 +3329,51 @@ impl ChanPlane {
         std::array::from_fn(|i| self.db_census[i].load(Ordering::Relaxed))
     }
 
+    /// MEASUREMENT ONLY (d3d11-gap campaign, scratch, never for merge): one cumulative line of
+    /// attribution counters for the 5 s lifecycle tick. Reads atomics and `try_lock`s only.
+    pub(crate) fn gap_line(&self) -> String {
+        let o = Ordering::Relaxed;
+        let toks = self.counts();
+        let (mut fwd, mut subs, mut serves) = (0u64, 0u64, 0u64);
+        for t in &toks {
+            fwd += t.forwarded;
+            subs += t.submissions;
+            serves += t.serves;
+        }
+        let rung: u64 = self.rung.iter().map(|a| a.load(o)).sum();
+        let rang: u64 = self.rang.iter().map(|a| a.load(o)).sum();
+        let eng: Vec<String> = self
+            .engines
+            .iter()
+            .filter(|e| e.wakes.load(o) > 0)
+            .map(|e| {
+                format!(
+                    "{}:wakes={},raised={},nolive={},trelays={},crelays={},cpending={},live={}",
+                    e.name,
+                    e.wakes.load(o),
+                    e.raised.load(o),
+                    e.unraised_no_live.load(o),
+                    e.trelays.load(o),
+                    e.crelays.load(o),
+                    e.cpending.load(o),
+                    e.live.load(o)
+                )
+            })
+            .collect();
+        format!(
+            "gap translated_slots={} translated_gp_fwd={fwd} translated_host_subs={subs} translated_serves={serves} inline_doorbells_rung={rung} reached_host={rang} acts_run={} act_total_us={} defapi_triggers={} births={} contended={} pt_fifo_edges={} pt_fifo_raised={} engines=[{}]",
+            toks.len(),
+            self.acts_run.load(o),
+            self.act_total_us.load(o),
+            self.defapi_triggers.load(o),
+            self.births.load(o),
+            self.contended.load(o),
+            self.pt_fifo_edges.load(o),
+            self.pt_fifo_raised.load(o),
+            eng.join(" ")
+        )
+    }
+
     /// MEASUREMENT ONLY: the defapi registry (the pump reads pending registrations from it).
     pub(crate) fn lifecycle_registry(&self) -> Option<&Arc<kf_rm::defapi::Registry>> {
         self.defapi_reg.get()

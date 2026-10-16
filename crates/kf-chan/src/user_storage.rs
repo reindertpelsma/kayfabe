@@ -15,19 +15,29 @@ use kf_host::{HostRm, MapNode, VaSpace, ViewAccess};
 use kf_linux_raw::{Backing, CachePolicy, CharDevice, HostOffset, HostPageSize, VolatileRegion};
 
 /// Trusted per-channel allocation policy, not a per-die fact.
-pub const BYTES: u64 = 1 << 20;
+pub const BYTES: u64 = 4 << 20; // SCRATCH d3d11-gap: was 1 << 20 (room for a 2048-entry ring)
 /// Pushbuffer region ends here; whole64KiB granules permit RO-only mapping.
-pub const GP_OFFSET: u64 = 0xe0000;
+pub const GP_OFFSET: u64 = 0x380000; // SCRATCH: was 0xe0000
 /// Trusted source snapshot limit: any intercepted segment must fit completely
 /// in the existing private staging region. This is an allocation policy, not
 /// the hardware maximum GPFIFO length or a per-die compatibility constant.
-pub const MAX_SOURCE_BYTES: u64 = GP_OFFSET;
+pub const MAX_SOURCE_BYTES: u64 = 0xe0000; // SCRATCH: unchanged source limit
 /// USERD starts here and has NO GPU VA mapping.
-pub const USERD_OFFSET: u64 = 0xf0000;
+pub const USERD_OFFSET: u64 = 0x390000; // SCRATCH: was 0xf0000
 /// Trusted private GP capacity, independent of the guest ring's changing size.
 pub const ENTRIES: u32 = 512;
+/// SCRATCH (d3d11-gap, never for merge): the private ring size actually used. `KF3_PRIV_RING_ENTRIES` in {512, 1024, 2048}
+/// (default 512 = today's size); anything else falls back to 512. Read once.
+pub fn entries() -> u32 {
+    static E: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
+    *E.get_or_init(|| match std::env::var("KF3_PRIV_RING_ENTRIES").as_deref() {
+        Ok("1024") => 1024,
+        Ok("2048") => 2048,
+        _ => ENTRIES,
+    })
+}
 /// The marker cells start this far beyond the descriptor array (after the 4-byte byte witness word,
-/// 16-aligned), inside the read-only mapping and below USERD: `ENTRIES` cells of [`MARKER_CELL`].
+/// 16-aligned), inside the read-only mapping and below USERD: `entries()` cells of [`MARKER_CELL`].
 const MARKER_OFFSET: u64 = 0x10;
 /// One marker cell: `[SET_REFERENCE, value, NON_STALL_INTERRUPT, 0]`.
 const MARKER_CELL: u64 = 16;
@@ -240,7 +250,7 @@ impl<V> Storage<V> {
         }
         Ok(kf_host::RingSpec {
             gp_fifo_va: self.va + GP_OFFSET,
-            gp_fifo_entries: ENTRIES,
+            gp_fifo_entries: entries(),
             userd_memory: self.memory.ok_or("USER_STORAGE_NOT_LIVE")?,
             userd_offset: USERD_OFFSET,
             err_notifier,
@@ -488,7 +498,7 @@ impl Storage<CpuView> {
         sync_wait: bool,
         subroutine: bool,
     ) -> Result<(), String> {
-        if slot >= ENTRIES
+        if slot >= entries()
             || bytes == 0
             || pb_offset
                 .checked_add(bytes)
@@ -520,7 +530,7 @@ impl Storage<CpuView> {
     /// space and retain source/channel admission through PUT publication.
     /// Never use this for privileged Translated work or bypass software triggers.
     pub fn write_user_gp(&self, slot: u32, entry: u64) -> Result<(), String> {
-        if slot >= ENTRIES {
+        if slot >= entries() {
             return Err("USER_STORAGE_GP_BOUND".into());
         }
         crate::user_stream::inspect_entry(entry, MAX_SOURCE_BYTES)
@@ -534,7 +544,7 @@ impl Storage<CpuView> {
     /// eligibility, exact slot/source/allocation admission and no CPU API actions.
     /// This does not validate native GP semantics or grant any receipt.
     pub fn write_shadow_gp(&self, slot: u32, entry: u64) -> Result<(), String> {
-        if slot >= ENTRIES {
+        if slot >= entries() {
             return Err("USER_STORAGE_SHADOW_GP_BOUND".into());
         }
         self.cpu()?
@@ -549,7 +559,7 @@ impl Storage<CpuView> {
     /// # Errors
     /// Invalid slot or retiring/released CPU view.
     pub fn write_host_barrier(&self, slot: u32) -> Result<(), String> {
-        if slot >= ENTRIES {
+        if slot >= entries() {
             return Err("USER_STORAGE_BARRIER_BOUND".into());
         }
         // Public595.84 class/clc56f.h: NOP opcode0, LENGTH0, SYNC_WAIT bit63.
@@ -565,12 +575,12 @@ impl Storage<CpuView> {
     /// # Errors
     /// Invalid slot or retiring/released CPU view.
     pub fn write_host_witness(&self, slot: u32) -> Result<(), String> {
-        if slot >= ENTRIES {
+        if slot >= entries() {
             return Err("USER_STORAGE_WITNESS_BOUND".into());
         }
         let va = self
             .va
-            .checked_add(GP_OFFSET + u64::from(ENTRIES) * 8)
+            .checked_add(GP_OFFSET + u64::from(entries()) * 8)
             .ok_or("USER_STORAGE_WITNESS_BOUND")?;
         // Synthetic private bytes must not replace TOP_LEVEL_GET monitoring.
         let entry =
@@ -594,10 +604,10 @@ impl Storage<CpuView> {
     /// # Errors
     /// Invalid slot or retiring/released CPU view.
     pub fn write_host_marker(&self, slot: u32, value: u32) -> Result<(), String> {
-        if slot >= ENTRIES {
+        if slot >= entries() {
             return Err("USER_STORAGE_MARKER_BOUND".into());
         }
-        let off = GP_OFFSET + u64::from(ENTRIES) * 8 + MARKER_OFFSET + u64::from(slot) * MARKER_CELL;
+        let off = GP_OFFSET + u64::from(entries()) * 8 + MARKER_OFFSET + u64::from(slot) * MARKER_CELL;
         let va = self.va.checked_add(off).ok_or("USER_STORAGE_MARKER_BOUND")?;
         let set_ref = kf_abi::submit::method_header_inc(0, kf_abi::submit::fifo::SET_REFERENCE_C56F, 1)
             .ok_or("USER_STORAGE_MARKER_FORMAT")?;
@@ -626,7 +636,7 @@ impl Storage<CpuView> {
     /// # Errors
     /// Invalid slot or retiring/released CPU view.
     pub fn write_host_control_witness(&self, slot: u32) -> Result<(), String> {
-        if slot >= ENTRIES {
+        if slot >= entries() {
             return Err("USER_STORAGE_WITNESS_BOUND".into());
         }
         self.cpu()?
@@ -640,7 +650,7 @@ impl Storage<CpuView> {
     /// # Errors
     /// Out-of-ring PUT or released CPU view.
     pub fn publish_put(&self, put: u32) -> Result<(), String> {
-        if put >= ENTRIES {
+        if put >= entries() {
             return Err("USER_STORAGE_PUT_BOUND".into());
         }
         kf_linux_raw::release_fence();
