@@ -97,3 +97,21 @@ if HG5 holds; < 5% falsifies it as the bottleneck.
 
 Owner profile request: perf record -g -F 999 on all QEMU threads for 30 s in the middle of D3D11 mode 2, D3D11 control (scan on) and OpenGL mode 2, plus 20 s
 off-CPU (bcc offcputime) per arm. Those runs are labelled `profiled`; their fps is not scored (perf perturbs it).
+
+## Addendum C (2026-10-17 ~01:10; before the first lazy-observe result; ladder a-rungs seen: L1/L4/L64 D3D11 196.2/194.5/196.7, credit waits 0.000 at all rungs)
+Seen before writing this (MEASURED, a-rung boots): HG1 is already falsified for D3D11 by its own rule (gain at 64x +0.2% AND credit_waits = 0 at 64x). Starvation proxy:
+23 publishes/frame with the private ring empty while the guest ring was >= 2 entries ahead (OpenGL 2.4): the relay, not the GPU credit, limits D3D11.
+Profile (perf, 30 s, D3D11 mode 2, two runs): both workers ~52% CPU each (sum ~1.05 cores = one serial chain), inclusive per worker thread: guest-USERD GP_GET write-back
+21.5%, Segment drop 11.8%, publish admission closure 11.4%, guest-USERD GP_PUT read 10.7%, Fetch::observe 10.2%, GP-entry snapshot 8.5%, private USERD loads (GET/REFERENCE) ~6%.
+Optimisation loop (owner decision; target ~300 fps; correctness always holds: a kept knob may only fail LOUDLY and only for a case it does not support):
+- R1 `KF3_LAZY_OBSERVE=16`: private-USERD observation (2 BAR1 loads), the guest GP_GET write-back and the guest GP_PUT read happen every 16th turn, or when the previous
+  turn ended waiting, or credits < 64, or a segment is open; GP_PUT is re-read only when the cursor reached the last PUT read. HYPOTHESIS: D3D11 mode-2 median fps >= +15% over
+  the same binary without the knob (L1 arms). FALSIFIED if < +5%. Support gap: none expected (a stale GET/PUT only delays); the guest sees GP_GET up to 16 turns later (guest ring 32768+ entries).
+- R2 `KF3_FAST_SEG=1`: a scan-off segment is published inline (no Segment value, no scan clone). HYPOTHESIS: >= +5% on top of R1; FALSIFIED if < +2%. Support gap: none (same publish call).
+- Later rounds are chosen from the per-thread profile of the previous best build and written here before their runs.
+Round protocol: 3 interleaved D3D11 runs knob vs previous best (plus 1 OpenGL regression run), medians and spreads; gate: Heaven completes with a sane score, no host Xid,
+no guest 153/4101 beyond boot, mid-run screenshot statistics, BAR1 read counters, no new USER_RING_REFUSED. Each kept knob is classified: explicit-failure/unsupported (trigger and
+error named) or silent-wrong-result (REJECTED). 5 rounds or 6 h from the first knob run, whichever first.
+Mode 2 implements the intended lifecycle in scratch form; the correctness EVIDENCE is Heaven only (one ring-growth registration/trigger per session, 7,372 window reads, no Xid);
+not exercised: other trigger kinds (TLB-invalidate, context), GravityMark growth, back-to-back registrations; window start uses stale parser state (the production lifecycle anchors it at a GP_PUT, assumption P2').
+Native reference: when `claude/native-vast-20261016` REPORT.txt exists it supplies the native column (different SKU, INFERRED); the local VFIO detach is NOT done.
