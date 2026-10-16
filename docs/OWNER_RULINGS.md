@@ -1287,8 +1287,8 @@ product. They are a checkmark that must hold, not one side of a trade-off. A per
   common apps is a bug, a safe one.
 - The release checklist lives in `docs/RELEASE_CLEANUP_LEDGER.md`, section D.
 - **Performance stop rule (owner, 2026-10-17; this is where the project differs from a leaderboard, where only the last percent counts and correctness need hold only on a fixed set).**
-  Once a workload is within about 10% of native, a further improvement that adds an unfixable race from missing synchronisation, a refusal that breaks a major app, or anything that makes
-  a failure silent is rejected: the honest version ships and the gap is documented. Below that band the rule still holds (the target is a goal, not a licence): where the only route to the
+  Once a workload is within roughly 10-20% of native (about 10% is the aim; up to about 20% is acceptable where it is really needed; these are judgement bands, not hard thresholds, and the owner asked not to treat them as such), a further improvement that adds an unfixable race from missing synchronisation, a refusal that breaks a major app, or anything that makes
+  a failure silent is rejected: the honest version ships and the gap is documented. Outside that band the rule still holds (the target is a goal, not a licence): where the only route to the
   target needs such a cost, we ship the number we can honestly hold, and the owner decides whether it is shippable for that workload or the workload is scoped out (a third of native on D3D11 is
   not shippable). Every performance change carries a RISK STATEMENT in its pre-registration: the new assumption or race it adds, whether it can be modelled and tested, and the explicit
   failure it produces if the assumption breaks; reviewers check it together with the fps. Research and sloppy builds never become the base of shipping code.
