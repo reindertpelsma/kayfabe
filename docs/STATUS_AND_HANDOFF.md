@@ -1,5 +1,25 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-16 03:52 UTC — Turing baseline seven-minute guest acceptance PASS
+
+Correction to03:42 pending status: actual Windows32.0.15.8088/Code0,
+DWM/Explorer, CUDA3 and hardware D3D11/12 pass before and after a421.25s
+hold (11 repeated D3D rounds, zero System4101 TDR). Before/after1920x1080
+screenshots have2072803/2073600 nonblack pixels; hashes in text log. Images
+stay on rental and will be erased at retirement. Sourceca0ad248, actual
+private binary SHA0a60d176...92c3300, process52347 exact clean stop03:51:13.
+H-T7 falsifier did not fire; prior five-minute helper truncation remains
+negative evidence, not a pass. Native baseline7min also passes as recorded.
+
+R34 A/B now RUNNING, callback baselineca0ad248 started03:51:13, event5b523ed5
+follows serially. Original180s/depth unchanged; safe harness59a290a0f,
+KF3_PROF1 both, actual process receipts asserted. Event Windows regression
+will useeb4dfad0a (same product plus QGA deadline fix) only after A/B ends,
+rebuilds with isolated target and before03:59 start cutoff. No R34/event
+Windows/fullLinuxregression pass is claimed. Timer2167738 unchanged04:11:46,
+hard04:16:45. Only own56180232; owner GPU/VM untouched; no family complete.
+
+
 ## UPDATE 2026-10-16 03:42 UTC — Turing native reference green; guest hold retry queued
 
 Correction to the 02:16 entry: fresh unprivileged RM probe verifies TU106
