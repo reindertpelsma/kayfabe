@@ -9,7 +9,7 @@ const MAX_RECORDS: usize = 512;
 const MAX_BYTES: usize = 256 * 1024;
 const MAX_BODY: usize = 4096;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub(crate) struct ReplyBodyTrace {
     enabled: bool,
     records: usize,
