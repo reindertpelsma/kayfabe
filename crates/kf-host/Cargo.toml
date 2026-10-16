@@ -13,3 +13,6 @@ kf-linux-raw.workspace = true
 
 [lints]
 workspace = true
+
+[features]
+bench-cpu-view-cache = []

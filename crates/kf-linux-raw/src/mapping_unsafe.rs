@@ -2639,6 +2639,31 @@ mod bench_data_tests {
             ));
             assert_eq!(unchanged, [77; 8]);
         }
+        for n in [1usize, 7, 15, 16, 17, 64, 416] {
+            let offsets = [0usize, 17, 128, 512];
+            let mut out = vec![0; n * 4];
+            r.bench_copy_four(offsets.map(|o| HostOffset::new(o as u64)), &mut out)
+                .unwrap();
+            let want: Vec<u8> = offsets
+                .iter()
+                .flat_map(|o| expected[*o..*o + n].iter().copied())
+                .collect();
+            assert_eq!(out, want);
+        }
+        let mut unchanged = [77; 64];
+        assert!(matches!(
+            r.bench_copy_four(
+                [
+                    HostOffset::new(0),
+                    HostOffset::new(0),
+                    HostOffset::new(0),
+                    HostOffset::new(page.bytes() - 1)
+                ],
+                &mut unchanged
+            ),
+            Err(RawError::OutOfRange { .. })
+        ));
+        assert_eq!(unchanged, [77; 64]);
         assert!(matches!(
             r.bench_copy_data(HostOffset::new(0), &mut [0; 16], DataReadKind::Stream16),
             Err(RawError::Unsupported { .. })
@@ -2692,5 +2717,69 @@ mod small_data_write_tests {
             ro.write_data_small(HostOffset::new(0), &[7]),
             Err(RawError::NotWritable)
         );
+    }
+}
+
+#[cfg(all(feature = "bench-data-read", target_arch = "x86_64"))]
+impl VolatileRegion {
+    /// Four disjoint-source reads in flight on one CPU. Complete preflight of
+    /// all sources happens before any output byte; destination holds four equal
+    /// streams concatenated. Offline data experiment, never register access.
+    pub fn bench_copy_four(
+        &self,
+        offsets: [HostOffset; 4],
+        dst: &mut [u8],
+    ) -> Result<(), RawError> {
+        if dst.len() % 4 != 0 {
+            return Err(RawError::Unsupported {
+                what: "four-stream copy",
+                detail: "destination length not divisible by four",
+            });
+        }
+        let n = dst.len() / 4;
+        let mut starts = [0usize; 4];
+        for i in 0..4 {
+            starts[i] = bounds::checked_span(
+                self.map.len_bytes(),
+                offsets[i],
+                n as u64,
+                "four-stream read",
+            )?
+            .0;
+        }
+        let mut at = 0;
+        while at < n {
+            let width = if n - at >= 16 { 16 } else { 1 };
+            // SAFETY: every source stream passed complete bounds preflight.
+            // Each destination stream covers n bytes of the safe dst slice;
+            // at+width<=n. Sources belong to the live mapping and cannot alias dst.
+            unsafe {
+                let p0 = self.map.base.as_ptr().add(starts[0] + at);
+                let p1 = self.map.base.as_ptr().add(starts[1] + at);
+                let p2 = self.map.base.as_ptr().add(starts[2] + at);
+                let p3 = self.map.base.as_ptr().add(starts[3] + at);
+                let q0 = dst.as_mut_ptr().add(at);
+                let q1 = dst.as_mut_ptr().add(n + at);
+                let q2 = dst.as_mut_ptr().add(2 * n + at);
+                let q3 = dst.as_mut_ptr().add(3 * n + at);
+                if width == 16 {
+                    core::arch::asm!(
+                        "movdqu xmm0, xmmword ptr [{p0}]", "movdqu xmm1, xmmword ptr [{p1}]",
+                        "movdqu xmm2, xmmword ptr [{p2}]", "movdqu xmm3, xmmword ptr [{p3}]",
+                        "movdqu xmmword ptr [{q0}], xmm0", "movdqu xmmword ptr [{q1}], xmm1",
+                        "movdqu xmmword ptr [{q2}], xmm2", "movdqu xmmword ptr [{q3}], xmm3",
+                        p0=in(reg)p0,p1=in(reg)p1,p2=in(reg)p2,p3=in(reg)p3,
+                        q0=in(reg)q0,q1=in(reg)q1,q2=in(reg)q2,q3=in(reg)q3,
+                        out("xmm0") _,out("xmm1") _,out("xmm2") _,out("xmm3") _,options(nostack,preserves_flags));
+                } else {
+                    *q0 = std::ptr::read_volatile(p0);
+                    *q1 = std::ptr::read_volatile(p1);
+                    *q2 = std::ptr::read_volatile(p2);
+                    *q3 = std::ptr::read_volatile(p3);
+                }
+            }
+            at += width;
+        }
+        Ok(())
     }
 }
