@@ -1,5 +1,31 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-16 19:40UTC — GB206595 concurrency passes; full suite running
+
+ONLY own56286918active: measuredGB206arch1b0impl6/PCI2d04/8151MiB, native
+595open, gates9/9+gate10/12USER births and CUDA4PASS. Privatef8485f6db/SHAe974,
+actualKF3{} normal6/frozen180: concurrencyPASS31s/client14180ms/0heartbeat
+warnings. Complete raw30RUNNING; do not count30PASS yet. Serial controller91843
+then runs Windows580 actualbinding/census, boundedRPC/body diagnostics and
+same-binary displayon/off from sibling overlays of one stopped bound parent.
+No builds/fetch during timed work. Full Windows baseSHA539aaad2...044b verified.
+Native595caps127words/all4096equal earlier GB206Windows580 oracle; no wildcard.
+PR29virtualtiling192CPUtests/2ignored, integration36d134bc5CPUgreen/HWUNRUN.
+After Windowsbaseline/off stop,580fatsetup then B2baseline and ONEtiling group,
+timebox1.5h. No fullnativepageinjection/noCBCB/CCUguess. Evidence under
+TS/blackwell_5060/display_phase_20261016/second_attempt/B3_RESULT.md.
+
+Originaltimer2478432~22:06:28UTC/hard22:11:25; onlythisIDmayberetired, verify
+APIabsencebeforecancelexacttimer. Receipt/workspace/codex/gb206phase2-20261016-owned.json,
+SSHcodex-gb206phase2-56286918ForwardAgentno, rootlogs/root/prov/gb206phase_*.
+Retiredcost7.06USD+currentmax2.17=>9.23+transfers. Prior56284522noNVIDIAPCI,
+allHWNOTRUN, retired19:07:54/excluded46454. Ada56267214retired18:43:36 after
+A1broker595/A2Windows421s0TDR/A5BlenderCUDA+EdgehardwareWebGL and survivor
+CUDA/D3DPASS; evidencePUSHEDf848. Passing Ada connected-display trace reaches
+C3700201withoutnativeheadlessfour-querybatch. GB206WindowsCode43remainsRED;
+no familycomplete. Previous handoff updates below are historical.
+
+
 ## UPDATE 2026-10-16 14:55 UTC — provider loss; GB205 rental retired, no active box
 
 Own56246613 destroyed/absence verified14:42:21UTC; timer2319249 ownership
