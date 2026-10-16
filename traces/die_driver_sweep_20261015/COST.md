@@ -10,10 +10,15 @@ Accrued cost is an estimate until account billing is available; transfers may ad
 | 56076314 | RTX 3070 / GA104 | 0.3083333333 | 2026-10-15 09:44:43 (1792057483.6353264) | 2026-10-15 12:40:19; timer destroyed, absence verified | Linux580/595; Windows guest stall; native reinstall did not regain SSH before deadline | compute upper bound $0.91; transfers unbilled |
 | 56096336 | RTX 4090 / AD102 | 0.6416666667 | 2026-10-15 12:45:54 (1792068354.8935983) | destroyed/absence verified by2026-10-15 15:39:44UTC | native Windows580.88 facts/oracle; Windows580 and Linux580 validation PASS; Linux595 raw/CUDA/graphics PASS | compute ceiling $1.88; transfers unbilled |
 | 56117789 | RTX2060Super / TU106 (host-derived) | 0.1113888889 | 2026-10-15 15:41:16 (1792078876.69137) | revised timer destroyed18:38:26; absence verified18:39:01UTC, below18:41:16UTC hard cap | nativeWindows580/nativeLinux595 PASS; Windows580 guest PASS afterfix; Linux580 CUDA4 beforefix/broker afterfix PASS, raw29 of30 before/afterfix (R34timeout180s) | compute upper bound$0.34; transfers unbilled |
+| 56137859 | RTX5060Ti / Blackwell, exactdie pending RM | 0.2861111111 | 2026-10-15 18:44:29 (1792089869.567632) | destroy requested19:01:35; absence verified19:06:18UTC | provider never createdVM; native/guest hardware NOTRUN | compute upper bound$0.11; transfers unbilled |
+
+| 56140371 | RTX5090 / Blackwell, exact die pending RM | 0.4283333333 | 2026-10-15 19:08:39 (1792091319.0049653) | destroy19:17:58; absence verified19:19UTC | provider never startedVM; native/guest hardware NOTRUN | compute upper bound$0.08; transfers unbilled |
+
+| 56141654 | RTX5060 / GB206 (unprivileged RM confirmed) | 0.1288888889 | 2026-10-15 19:20:04 (1792092004.016716) | destroyed22:05:44UTC; absence verified immediately; timer canceled after absence | nativeWindows580 PASS; Linux580 raw/CUDA/headlessgfx PASS; desktopFAIL; guestWindows580 Code43; Linux595raw29/30 | compute ceiling$0.39; transfers unbilled |
 
 AD102 absence was verified at15:39:44UTC before Turing was rented. Turing absence
-verified18:39:01UTC; at this checkpoint no own rental is active. No other account instances are owned by this campaign. The first rental was
-verified absent before the second was created. Compute upper bounds for these three leases total $3.13,
+verified18:39:01UTC, before Blackwell56137859 was created18:44:29. Failed56137859 absence verified19:06:18 before56140371 creation19:08:39. 56140371 absence verified19:18:29 before56141654 creation19:20:04. Historical state: account instance list empty22:05:44UTC; superseded by new56165326 below. No other account instances are owned by this campaign. The first rental was
+verified absent before the second was created. Compute upper bounds for six leases total $3.71,
 well below the $40 campaign budget; final transfer charges are not yet known.
 
 AD102 first SSH at12:59UTC: root146GiB/138GiB available, /dev/kvm present,
@@ -25,3 +30,19 @@ stopped cleanly and Windows rebooted into Linux restoration. Original timer stay
 armed. No new rental was created, and no AD102 guest result is claimed yet.
 
 Final AD102: device da0569a6; Windows580 Code0/DWM/D3D+CUDA passes, Linux580 raw/CUDA/graphics/broker passes, Linux595 raw/CUDA/graphics passes (broker595 not run). Retirement verified before original timer; compute upper bound remains$1.88.
+
+## Native trace replay wave, 2026-10-16 local date
+
+| Instance | GPU | USD/hour | StartUTC | StopUTC | Purpose | Cost |
+|---|---|---:|---|---|---|---|
+| 56165326 | RTX5060 / GB206, fresh unprivileged RM verified | 0.1288888889 | 2026-10-15T22:44:19.841586+00:00 | destroyed; absence/account IDs[] verified2026-10-16T01:13:59UTC; own timer canceled after absence | native complete-prefix H-BC4 PASS; host CCU negative cross-ABI query; virtual FMC prefixes recovered, strict oracle FAIL |2h29m40s; compute ceiling0.33USD; campaign conservative ceiling4.04USD, transfers unbilled |
+
+## W3 Turing hold and R34 replay, 2026-10-16
+
+| Instance | GPU | USD/hour | StartUTC | StopUTC | Purpose | Cost |
+|---|---|---:|---|---|---|---|
+|56180232|RTX2060S, exact die pending unprivileged RM|0.1113888889|2026-10-16T01:16:45.814656+00:00|ACTIVE; timer2167738 at04:11:46UTC, hardcap04:16:45UTC|Native-first Windows580 reference, nested7min hold, callback/event R34 at180s|max3h compute ceiling0.34USD; campaign ceiling4.38USD, transfers unbilled|
+
+Prior own56165326 absence verified01:13:59UTC before this creation. No other
+own rental remains. Timer armed immediately; native installer bootstrap waits
+for initial SSH. Provider currently reports created; no new hardware result.

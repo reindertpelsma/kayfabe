@@ -1,5 +1,452 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-16 01:21 UTC — W3 Turing rental starting
+
+Only own56180232 active, RTX2060S offer55223684/provider13058, exact die pending
+unprivileged RM. Created01:16:45UTC at0.1113888889USD/h; timer2167738 armed175min
+04:11:46UTC/hardcap04:16:45UTC. Prior56165326 destroyed/absence verified before
+create. Conservative campaign compute ceiling4.38USD, transfers unbilled.
+Initial provider state created/SSH refused, no new hardware result. Bootstrap
+controller/session10013 waits then checks disk/KVM, queues nativeWindows LTSC
+26100/580.88 and preserves its generated public host key. Native stager/session
+84523 waits for pinned finalWindows, stages trusted probes/Linux return scripts.
+Never replay an uncertain installer blindly; inspect own process markers.
+
+Working evidence tree/workspace/codex/turing-hold, branch
+codex/sweep-turing-hold-20261016, code baseline same8e3a9d325 (C57E+generated
+USER_RING display fixes). Pre-run falsifiers in turing_hold_20261016/PLAN.md.
+Native first, then nestedWindows580 seven-minute hold, unchanged180second R34
+callback vs event, exact-revision Linux/broker/Windows regressions. No new
+whole-native caps page deployed; W1 candidate remains held.
+
+Clean R34 code branch codex/walk-completion-events0ec93e643, failing first
+721beb7bd, draftPR19 against claude/gpu-types-20261015, four Rust files only.
+Focused before3fail/3pass; after CUDA/QEMU353pass/0fail/0ignored. Full isolated
+GPU-free suite/session30981 running locally with2jobs. Historical integrated
+event sourceffd72e3d4 already3252CPU-pass but hardware still UNRUN. Full R34
+180second success,7minTDR hold and family/multiple-driver acceptance unproved.
+Owner GPU/VM untouched. New controllers/cost receipt stay in own directories.
+
+## UPDATE 2026-10-16 01:15 UTC — Blackwell wave saved and rental retired; W3 next
+
+Own56165326 destroyed; show-instances verified absent/account IDs[] at
+01:13:59UTC. Timer2120908 canceled only after absence. No own GPU VM remains;
+owner host GPU/VM untouched. Lease2h29m40s, compute ceiling0.33USD; conservative
+campaign compute ceiling4.04USD, transfers unbilled. All evidence pushed at
+aeb8be8eb on codex/sweep-blackwell-20261015; observer code20e0ddc4b draftPR18
+against claude/gpu-types-20261015 (runtime3934a0895). No master merge.
+
+H-FMC1 recovered virtual cmdseq0..386/statusseq0..384,772 records,zero forward
+gaps/drops/read failures. Strict census and ordered exporter both exit1:
+109 anomalies/39 unpaired controls, so the predeclared validity falsifier fired.
+Actual process receipts and all negative output saved in
+blackwell_5060/virtual_native_alignment_20261016/fmc/ and RESULT_FMC1.md.
+Production writer test passes after building missing libqom.a; both attempts
+preserved. No malformed reply was changed to appease the oracle.
+
+Fuller metadata exposes an earlier distinction hidden by collapsed effective
+status: native0x20800a87 NVLINK_GET_NVLINK_DEVICE_INFO has envelope0/body0x56;
+virtual has envelope0x56 and erased control key. Both next issue0x20800a40.
+This is the first measured status-field difference among aligned common calls,
+not proof of first body-byte mismatch or Code43 cause. Ordered function-FIFO
+pairing of erased keys is inference, named in every row.196 aligned calls,
+45 status-field differences,zero successful reply-key conflicts. Native full
+capture still passes strict validation; its raw bytes were erased by reimage.
+Future full byte comparison requires another native capture with screened
+reply fields exported before restore. No full raw capture comes back.
+
+Ranked remaining W2 work: allocation-tail/refusal diagnostics with failing-first
+models; screened native outputs; source-derived CMC/CCU semantics with explicit
+ABI policy (595-to580 equality already falsified); scheduler lifetime semantics.
+No arbitrary acknowledgements or captured sample-size constant. W1 remains
+RED/tiling held. Stop this bounded wall and take W3: new own Turing rental,
+native reference first, Windows7min0TDR hold then callback-vs-event R34 at180s.
+The earlier active/pending statements below are superseded here.
+
+## UPDATE 2026-10-16 01:05 UTC — native trace verified; virtual byte capture replay running
+
+Native GB206 Windows580 capture is complete:4807 command+4872 status,
+both sequence-zero prefixes,0loss/anomaly/unbalanced controls, both strict
+oracles exit0; Code0/CUDA3/D3D11+12/short zero-TDR checks pass. Fresh lease
+56165326 independently verified arch0x1b0/impl0x6/GB206 on Linux595.91.07,
+UID65534/CapEff0 at00:11:11UTC. Native raw capture was rental-only and erased
+by Linux restoration after text/hash/census evidence was saved. This corrects
+the pending-tuple and still-present-raw statements in older updates below.
+
+Virtual72fca168a host595/actual Windows32.0.15.8088: first binding records
+CM_PROB_FAILED_POST_START; second evidence.ps1 times out, wrapper exit1.
+The shared observer attached0 tables/recorded0 messages. Ordered pretty API
+comparison aligns196 common startup calls,40 status differences; earliest
+aligned difference0x20800afe, then0x20800aff. Nativea89/ab2/CBCB succeed,
+virtual refuses0x56. This is not the first differing byte or a proved cause.
+Evidence virtual_native_alignment_20261016/ includes actual process receipts,
+sanitized logs and reproducible alignment with its pairing/body limitations.
+
+H-CCU2 public unprivileged metadata query succeeds, but cross-ABI equality
+falsified: host595 counterBlock34960 gives inverse17488; native580 oracle
+17296. Do not ship either as a derived580 value. Explicit probe free returned
+a local untracked-handle error; session closed at exit. Evidence host_ccu_metadata/.
+
+H-FMC1 code-only codex/observer-fmc d18aafad4, failing-first ade898857,
+draft PR18 against claude/gpu-types-20261015. One bounded FMC indirection
+from compiler-checked public580 offsets; no product reply/GPU write/scan.
+GCC+Clang sanitizer/core, decoder and compiler checks PASS. Integrated3934a0895
+build PASS, binarySHAf38954e6...d18f. Own replay42721 started00:59:57UTC;
+observer has recorded messages but completeness/decoder result PENDING.
+Controller42689 stops the exact VM and exports metadata, then exits. Actual
+KF3 process environment/executable/hostABI asserted. No extra control ack.
+
+Only own56165326 active, original timer2120908 at01:39:19UTC/hardcap01:44:19UTC.
+After replay save text, update ranked causes/PR18, retire by own ID and verify
+absence. W1 equality remains RED; tiling held. Next W3 TU1067min hold/R34 at
+unchanged180s. No family or multiple-driver acceptance claim yet. Owner GPU
+and VM untouched. Native tracer PR14 and sequence PR16 are pushed separately.
+
+## UPDATE 2026-10-15 23:48UTC — complete native Blackwell trace achieved
+
+H-BC4 source631f087e3/moduleunsigned1b0a549b...f1c6 gives method4, singlequeue,
+cmdseq0..4806/statusseq0..4871,4807+4872messages,0loss/gap/torn/parse/unknown/
+unbalancedcontrols,END/filecheckOK,strictCensus+sequenceexit0. Nativeactual
+32.0.15.8088/GSP580.65.05,CUDA3/D3D11+12/0TDR/Code0 PASSbefore/after. Complete
+raw46710336B/SHA b5f264924ea9d57532c53f591d8881c198f9bd8096049ffc7ee0a3beb23fa8d1
+staysrentalonly; orderedtext/censuses savednative_trace_revisit_20261016/.
+OldpointH-BC3failedmethod2/lostprefixes; allnegativeevidence preserved. New
+tracer36/36/393checks+fullWDK/ring/mutations/decoderharnessPASS. Earliercommit
+1e34premature36passclaim correctedby631f fixturefix and explicit historynote.
+
+Nativeacceptsa89/ab2/CBCB; ab4notobservedinsuccessfulwindow. Public580.65.06
+FINN_NV_SCHEDULER_RESERVED_INTERFACE_ID0xcbcb00 names matchinginterface,
+notyetallocationsemantics. CCUsamplesize4Boracle17296exportedafterexplicit
+singlecontrolscrub;notregistered/shipped. CMCaddressbodyNOTexported. First
+alignedreply/cause remainsUNPROVED; kayfabeWindowsstillCode43. PR14/15/16draft
+code-onlyagainstClaudeGPUtypes; evidence separate. Allcode/evidence pushed.
+
+Own56165326onlyactive, timer2120908 unchanged01:39:19UTC/hardcap01:44:19UTC.
+Nativecollectorsgone/moduleStopped23:38. Linuxreturnpreparationqueued23:45,
+needpollCodexLinuxReturn state/exit and rebootonlyafter0. FreshleaseRMtuple
+pending; priorphysicalmachineGB206probe retained,no newdie-factsregistered.
+Nextunblocked: Linuxrestoreunprivtuple and actualenv+orderedkayfabediagnostic
+comparison. W1 equality RED/tilingheld; no arbitraryCCU/CMC/scheduleracks.
+
+## UPDATE 2026-10-15 22:48UTC — strict W1 comparison RED; new native trace lease
+
+W1 full4096byte comparisons at runtime0b6c501fb + toola84059a10 are RED:
+AD104100word differences, AD102100, TU10691, GB206125. AD106vsAD104reference101
+is explicitly cross-die only, no own nativeAD106page; GA104oracle missing.
+Every word/header/unknown + current derivation basis savedcaps_oracle/. No
+copied values or product changes. Newtiling candidate held, noW1hardwareclaim.
+New complete-capture tracer1d302de82 PR14:33/33unit381checks; fullCPUharness now
+ALLSTEPSPASSED including TSAN/ring,23mutations,2transport roundtrips,realcensus,
+WDK/importguard and forbidden-store compile rejection. First harness attempt
+had3dependentfixture failures from missingcargoPATH; corrected own paths/PATH,
+not productcode. Native proofpending; WDK unsignedSHA62e89c...f530.
+
+Only activeown rental56165326 created22:44:19UTC,$0.1288888889/h, timer2120908
+01:39:19UTC/hardcap01:44:19UTC. Same physical provider machine as retired56141654,
+newVM; all earlierownids absent before create. H-BC3 plan written in
+blackwell_5060/native_trace_revisit_20261016/PLAN.md before native capture.
+NativeWindows install bootstrap running; module keptloaded across one bounded
+seed→disable→capture→enable replay. Mustseq0bothdirs,method3,loss0,strictoracles;
+partial/stalecapture fails. No arbitraryCCU/CMC/CBCBreplies. NoownerGPU/VMtouch.
+FreshVMunprivilegedRMtuple pending, no newT3facts. Campaigncompute ceiling<=4.10.
+Metadata exporter separatecleanbranchcodex/census-sequence:56tests/0fail/1ignored,
+5newsemantic tests,WindowscrossbuildPASS; no nativeexecutionyet. No rawcaptures
+or executables come back from rentals. SmalldraftPRs only againstClaudeGPUtypes.
+
+## UPDATE 2026-10-15 22:07UTC — GB206 wave saved/retired; new steering and trace priority
+
+Own56141654 destroyed22:05:44UTC, immediate show-instances absence/account ids[];
+timer2050117 canceled after absence. Created19:20:04UTC,2h45m40s, compute<=0.36USD
+(ledger conservative campaign ceiling<=3.71USD; transfers unbilled). No active own
+rental or GPU job. Owner hostGPU/VM untouched; now explicitly reserved for Claude.
+
+Runtime c2092cf7: Linux580.159.04 raw30/CUDA4 PASS; headlessgfx5/5 and10/10 native
+hashes PASS21:39:28. Broker FAIL: Cinnamon0/Xorg0, Xorg sees connected virtualDVI
+but no valid modes;50NVRM assertion lines,0flip timeout,0Xid in guest. It is not a
+passing desktop. Windows580.88 actual32.0.15.8088/GSPenabled Code43, noUSER_RING.
+Native same-boardWindows580 Code0/CUDA3/D3D11+12 PASS, so not a hardware limit.
+DiagnosticWindows replay agent-ping answered but diagnosticPS timed out124 after
+180s; no Windows reason/event output obtained. OwnVMs stopped QGA/ACPI/exactTERM.
+
+Linux595.91.07 guest packed from stockopenhost: raw29PASS/0FAIL/1CRASH/0NOTRUN,
+concurrency180s timeout; wrapperexit1at22:00:11. USERcensus146/146suite,12/12gates,
+90CUDAthreadpostures. Native595raw30/CUDA4 PASS earlier. First observed failure
+includes LibOS/GSPheartbeat timeouts; clock-offset mismatch is a hypothesis, not
+proved cause. Five hostXid31 records in the broader display+raw window match CE
+fault probes; precise per-arm attribution still to audit. Do not claim zero hostXid
+for that whole window. Evidence linux595/ and linux-display580/; logs>1MiB are
+sanitized text compressed locally, per latest steering. Original raw logs were on
+retired rental /workspace/bench and /root/codex-broker; saved copies retained.
+
+New steering /root/codex_prompt_windows_dies_20261015_2.md: W1 caps derivation with
+nativepages as TEST ORACLES ONLY, full byte differential before hardware; W2 native
+Blackwell aligned fulltrace before guesses; W3 TU1067minTDRhold thenR34. User also
+emphasized properBlackwelltrace. From now smalltopiccodePRs against draft
+claude/gpu-types-20261015, bulk evidence separate. No mastermerge/ownerdecisions.
+ExistingselectedT3caps commits predate steering; no whole nativepage was shipped.
+New full nativecapspages are already preserved as text: AD102/TU106/GB206, plus
+AD104fixture. GB206 WORD127nonzero entries covers the bounded1024word page.
+Unknown fields stay namedunknown; no capturedboard table or borrowed row added.
+
+Independent tiling candidate branchcodex/fix-blackwell-tiling, sourcea655e1bc9:
+public EvoIsModePossibleCA requires usabletiles AND required assignment; failing
+first44b9678f8 two assertions0vs1, after3251/0/14fullisolatedkf-* at21:57:39UTC.
+Initial build caught missing modelcapsfield, then stale generatedfamilyartifact;
+both corrected, allCPUgreen. Hardware UNRUN and held under newW1 oracle equality
+requirement; not merged into runtime/integration. Next: fullcaps differential and
+Blackwell nativequeue discovery repair, not arbitrary CCU/CMC/CBCB successes.
+QGA correctiona4534e391 all34harnesstests PASS (sixresult testsinclrealAF_UNIX);
+will split into smallcodePR. IndependentR34PR11 CPU3252/0/14 stillhardwareunrun.
+Earlier active/pending rental/desktop/595 paragraphs are superseded here.
+
+## UPDATE 2026-10-15 21:29UTC — GB206 Windows580 Code43 reproduced; graceful stop in progress
+
+Only own rental56141654, timer2050117 unchanged22:15:05UTC/hardcap22:20:04.
+Runtime c2092cf7, actualguest32.0.15.8088/GSPenabled: adapter Error /
+CM_PROB_FAILED_POST_START, nvidia-smi cannot communicate. Explorer/DWM are
+running but do not establish NVIDIA acceptance. Wrapper52404 exited1 after
+a QGA receive timeout; standalone QGA recovered and confirmed adapter failure.
+No USER_RING birth or user GPU work occurred. Native580 on this same board
+passed Code0/CUDA3/D3D11+12, so this is a kayfabe initialization defect.
+
+All Windows text is saved in blackwell_5060/windows580-failed-start/.
+The GET_CLASSLIST_V2 refusal also appears in the accepted TU106 Windows run;
+that comparison weakens it as the primary Blackwell hypothesis. Blackwell-only
+CCU/CMC and unknown CBCB allocation remain ranked candidates; no unsupported
+acknowledgements or borrowed RM scalar rows have been added. Native complete
+capture failed; public FSP COT discovery remains the next measurement question.
+
+Own secondbootQEMU52909 is stopping with /root/blackwell_stop_windows.sh
+(QGA60/ACPI60/exactTERM15). Next unblocked lane: c209 Linux broker/graphics,
+controller /workspace/codex/broker_blackwell_wave.sh; start only after exact
+QEMU quiescence. No root checkout pull/build during an active GPU job.
+Linux raw30/CUDA4/all USER evidence remains PASS/pushed. OwnerVM untouched.
+
+## UPDATE 2026-10-15 21:02UTC — GB206 Linuxraw30/CUDA4pass; Windowswaveactive
+
+Own56141654 only,timer2050117 deadline22:15:05/hardcap22:20:04UTC. Devicec2092cf7,
+sourcec2092cf7b (laterdoc/testonly), CPUef8cd9dda3248/0/14. Linuxhost595.91.07open
+native raw30/CUDA4PASS; gates9/9+gate10PASS; rebuiltrevisionbinary/raw/packedguest;
+guest580.159.04 fullraw30PASS/0FAIL/0CRASH/0NOTRUN/exit0,CUDA4PASS including20
+verified2048benchmarkiterations. Wrapper43390ended20:53:31exit0. USERcensus146suite/
+12gatebirths,90CUDAthreadpostures. All90armtextlogs+summary/native/census in
+traces/die_driver_sweep_20261015/blackwell_5060/linux/ (103files). R34PASS55s on
+thisbox atoriginal13000decoys/180s; noTU106resolutionclaim, noeventcandidateapplied.
+
+Windowsqueuecontroller2070916completedafterUSERcensus/QEMUquiescence, launched
+ownrootwave52404at20:53:54. Controller /workspace/codex/blackwell_windows_wave.sh,
+rootlog/root/prov/codex_blackwell_windows_wave.log, WIN_RUN/root/win/codex-gb206,
+QBIN/workspace/bench/kf3-bins/c2092cf7/qemu-system-x86_64,guestdriver580.65.06,
+8vCPU/8GiB/prodprofile. Firstbootbinds own580INF/setsGSPflags; freshphase2 then
+canonicalstrictWindowsvalidator. Safeownstop/root/blackwell_stop_windows.sh uses
+storedrevision/root/prov/codex_blackwell_windows_rev, exactPID+QMPguard, QGA60/
+ACPI60/TERM15; noKILL. Neverpull/buildwhileGPUjobsactive. ActualWindowsapps/
+adapterpending. NoLinuxbroker/graphicsyet. Textpushaftereachrun. DraftPR12.
+
+Windowsbaselinepush2064990finished13/13/fullhash539aaad2f7280d7fb80fcf67c16297792b7561113c9084978070e9d94ace044b
+beforetiming; noimagejobactive. Rootphase2build28198finished20:33:37exit0. OwnerVM/
+GPUuntouched. NativeWindowsreference/caps102proved; fullRPCcapturesfailed/empty
+RMscalarallowlist, noborrowedrows. WalkcandidatePR11 CPU3252/0/14 remainsindependent
+unmerged/hardwareunrun. Olderprocess/pendingLinuxparagraphssupersededhere.
+
+## UPDATE 2026-10-15 20:31UTC — GB206 exactcapsfix CPU3248pass; builds/transfers running
+
+Own56141654 only,timer2050117 unchanged22:15:05UTC/hardcap22:20:04. Restored
+Linux595.91.07open works; UID65534/CapEff0 MC_GET_ARCH_INFO confirmsGB206
+arch1b0/impl6 (phase1exit0at20:20:18). ExactT3die/580/classCA73 word00c=102
+fromboundednative580Windowslegacy/GSPreads registeredatc2092cf7b. NoRMscalar
+rows added: fullnativeRPCcapturesfailed and2801/2806 allowlistempty. Native
+Code0/CUDA3/D3D11+12/0TDRshortsuitespassed; no kayfabeBlackwellpassyet.
+
+Befored8afb5a34 exactcapstestcompiles/fails0vs102. Sourceef8cd9dda after14caps
+pass/0fail/2ignored; fullisolatedkf-*3248/0/14ignored,exit0at20:28:48. Firstafter
+oldnegativefixturecalledGB206unmeasured; retainedfailure, movedfixturetoGB205
+withoutweakeningassertions. TrustedCPU/data/codex/blackwell-hw,target-blackwell-hw,
+2jobs, nowidle. Independentwalkcandidateffd72e3d4 CPU3252/0/14,draftPR11, still
+unmerged/hardwareunrun. ProductionBlackwellRust/data arec209 (laterdoc/testonly).
+
+Rentalphase2PID28198/log/root/prov/codex_blackwell_phase2.log prepares bench tree,
+frozenrawclient/packedguest/kf3. Startedatc209; do not pull whilebuilding. Imagepush
+controllerPID2064990/log/workspace/codex/blackwell5060-push-windows.log streams
+owncompressedbaseline (13,866,432,000B,SHA539aaad2...);13chunks2jobs. Waitbuild
+READY/exit0 andfullimagehashPASS andsenderexit beforetiming. Thenpulllatestown
+branch ifneeded, runv3_gates ->revisionbuild ->rawrebuild/fastguest ->native raw30/
+CUDA4 ->guest raw30/CUDA4, allserial andunchanged180s. Broker/Windowsfollow.
+ActualfirstWindowsrefusal needed before runtimefix; publicBlackwellGPGET/REF/
+marker gap documented inblackwell_plan.md. No writableprivatefence workaround.
+
+SSHaliascodex-blackwell-linux(root,pinnedUbuntuPublickey) nowvalid; nativeWindows
+aliaspinnedfinalkeybelongs erasedOS, neveroverrideit. Initialrestorebootstrap
+2063029 endedafterminimalmissinglspci; packagepreflightrepairedthenphase1ran.
+Nativecapturemodulewasstoppedandalltextevidencepushedbeforeerase. OwnerVM/GPU
+untouched; otheractive/processparagraphsbelow historical/superseded.
+
+## UPDATE 2026-10-15 20:06UTC — Blackwell nativefacts saved; Linuxreturn ready
+
+Own56141654 only,timer2050117 deadline22:15:05/hardcap22:20:04UTC. NativeWindows
+580.88 LTSC26100 passesCUDA3/D3D11+12/Code0/readableSystemlog/0TDRshortsuites
+bothlegacy(defaultGSPN/A) andGSP580.65.05. Boundedphysicalcapsword0x00c=0x102
+repeatedbothstates. NoexactRMdieyet; deriveafterLinuxreturn beforeT3 registration.
+NativefullcaptureFAIL: firstRAMscanlateprefixloss2/6413missingmessages; mailbox-only
+before-enable replay0bindings/collector4, despitehealthyGSPapps. Bothfalsifiers
+reported. Empty2801/2806bodyallowlist meansnoRMscalarrows accepted. Do notborrow
+Ada/Turingrows. PublicFSPCOTbootargsroute supports measurementtoolgap hypothesis;
+rankednextfalsifiers inblackwell_5060/README.md. Noindefiniterestartloop.
+
+Alloracles/caps/failures/aggregates/metadata savedastextandpushed. Rawcaptures
+stayedonrental. ModuleKayfabeWinCapturestopped. OwnCodexLinuxReturntaskReady,
+LastTaskResult0; Linuxreturnprepared, nextnormalnativeWindowsreboot erasesOS.
+Native580Code0verifiedbeforeerase. RegisternewLinuxaliasroot/codex-blackwell-linux
+withdifferentHostKeyAliasfor56141654; neveroverridepinnedWindowskey. Thenstage
+provision_box.sh/blackwell_linux_phase1.sh, stock595openmodules/hostunprivRMprobe,
+exactT3capstest/fix, phase2/build/nativegates andguestvalidation. Controllerfiles
+/workspace/codex; branchcodex/sweep-blackwell-20261015, ownworktreeblackwell-hw.
+Walkcandidateffd72e3d4 CPU3252/0/14/draftPR11 stillindependent/unmerged/hardwareunrun.
+OwnerVM/GPUuntouched. Olderactive-nativecapture/pendingcapsparagraphssuperseded.
+
+## UPDATE 2026-10-15 19:43UTC — Blackwell native580 oracle PASS; caps/guests pending
+
+Soleown56141654, nativeWindowsLTSC26100 actual580.88: Code0/buildbeforeafter,
+CUDA3/D3D11compute+draw/D3D12compute+fences20iterations/readableSystemlog/zeroTDR
+shortoracle PASS19:41:24–19:41:29, controllerexit0. DefaultGSP=N/A. Nativeonly,
+notkayfabeacceptance. Text inblackwell_5060/native-oracle580.txt. ExactRMdie
+pendingLinuxrestoration, PCI2d05/marketingnameinsufficientforT3key.
+
+WindowsUpdate610.88 raceddespite firstbootpolicy1; events43/19 proveinstall
+19:36:32–19:37:57, actual610brieflyCode0. Pinned580subsequentlywins; oracle
+strictlychecksactual32.0.15.8088. Policyfailedtopreventthisrun'srace, notclaimed
+effective. Nativecaps/module/GSPcapturepending. Testsigningnextbootflagset;
+waitownVastWindowsSetupcomplete before normalreboot. Donotinterruptinstaller.
+
+Nativealiascodex-native-blackwell5060,pinnedPUBLICkey,ownSSHconfig under
+/workspace/codex. Stageworker2054669 completedexit0; sourcecontroller
+blackwell5060_native_stage.py, finalcapturescript canonicalnative_capture.ps1
+at2230a1764 (runtimepending). Controllerlogs/probes/returnpayloadunder ownfolder.
+Onlyownrental56141654,timer2050117 unchanged22:15:05/hardcap22:20:04UTC.
+OwnerVM/GPUuntouched. Walkcandidateffd72e3d4 CPU3252/0/14/draftPR11, hardware
+pending/unmerged. Olderpendingnativeoracle/processparagraphssupersededhere.
+
+## UPDATE 2026-10-15 19:30UTC — Blackwell56141654 native Windows installation running
+
+Own5060 rental56141654 reachedSSH19:22UTC. Actual initialroot146GiB/138GiBfree,
+/dev/kvm present,15logicalCPUs,50,464MiBRAM,kernel6.8.0-59. PCI10de:2d05 is
+listed in the pinned580.88INF. ExactRMdie stillpending until Linux restoration.
+InitialLinuxproprietary module refuses the GPU and explicitlyrequires open
+modules; noLinuxGPUwork ran. Ownpreflightretainedfailure, then verifiedone
+NVIDIAVGAfunction/disk/KVM independently and queuednativeinstaller19:26:03.
+GeneratedWindowsPUBLICSSHhostkey preserved/pinned19:26:28; bootstrap2052504
+completedexit0. Source2230a1764 productionRust/data remain8e3a9d325.
+
+NativeWindowsinstaller modifiedWIM and rebooted19:28:33. Use ownSSHconfig:
+codex-native-blackwell5060 (vast,pinnedfinalWindowskey), initialLinuxalias
+codex-blackwell5060, intermediatecodex-blackwell5060-installer(root,separatekey).
+A finalWindowsalias keymismatch during intermediateLinuxinstall is expected;
+never override its pinnedkey. Nativeoracles/caps/capture stillNOTRUN. Timer2050117
+unchanged22:15:05UTC,hardcap22:20:04UTC. Nootherownrental. Save/pushtexteachrun.
+
+New canonicalnative_capture.ps1 pins collector/censushashes, requires explicit
+collectorexit0 and all decode/scrub statuses, exports aggregates plus only2801/
+2806bodies. Runtimepending. Independentwalkcandidateffd72e3d4 CPU3252/0/14,
+draftPR11; nohardwareperfclaim, notmergedintoBlackwell. OwnerVM/GPUuntouched.
+OlderinitialSSHpending/processparagraphs below superseded here.
+
+## UPDATE 2026-10-15 19:22 UTC — sole own rental56141654, fresh Blackwell5060
+
+Own56141654, offer50949277, different machine39241/host79466, created19:20:04UTC
+only after56140371 absence. Quote$0.1288888889/hour150GBdisk;175min timer2050117
+about22:15:05UTC; hardcap22:20:04UTC. SSHpublickey attached. InitialVM/SSHpending;
+marketingRTX5060 does not establish exactRMdie. Native-first plan remains.
+Controller bootstrap will wait bounded15minutes for SSH, verifydisk/KVM/oneGPU,
+stage the pinned native installer, and preserve its generatedPUBLICSSHhostkey
+before reboot. Nosecrets/agentforwarding, textonlyreturns. Nootherownrental.
+
+Ownwalk-completioncandidateffd72e3d4 targeted5pass after3expectedbeforefailures;
+fullCPUstillrunning ontrustedhost2jobs/ownisolatedtarget. NotmergedintoBlackwell
+beforehardwarecomparison. OwnerVM/GPUuntouched. Olderactive5090/no-rental
+paragraphsbelow superseded. Failure receipts/ledger alreadycommittedandpushed.
+
+## UPDATE 2026-10-15 19:19 UTC — replacement5090 retired; no hardware ran
+
+Own56140371 also never started: actual_status=null, uptime=null, no mappedSSH.
+One own stop/start19:11:53/19:11:54 failed to recover by19:17:57, falsifying
+H-BP2 after the five-minute recovery window. Destroy19:17:58, absence
+verified19:19UTC, timer2045281 canceled after absence. No native or kayfabe GPU
+work, no hardware failure claim. Different provider excluded: machine69146/host155385.
+Safe receipt in traces/die_driver_sweep_20261015/blackwell_5090/provisioning-failure.txt.
+No own rental currently active. New targeted search finds fresh5060/5070KVM
+offers with enough RAM/CPU/disk; native-first plan/falsifiers remain unchanged.
+
+Meanwhile own codex/fix-walk-completion,/workspace/codex/walk-completion:
+3970f7859 completion model compiles and fails3of5 tests as expected; candidate
+ffd72e3d4 passes5of5. Full CPU suite on trusted host currently running with
+2jobs and isolated target-walk-completion. This removes repeated callback nodes,
+records a fresh real CUDA event after launch and observes it at1ms while pending;
+no interrupt edge filtering or test-budget change. Hardware performance UNRUN.
+OwnerVM/GPU untouched. Older active56140371 paragraphs below superseded here.
+
+## UPDATE 2026-10-15 19:09 UTC — sole own rental 56140371, Blackwell replacement
+
+RTX 5090 offer 43994880, different machine 69146/host155385, created
+19:08:39 UTC after all prior own IDs were absent. Quote $0.4283333333/hour
+including150GBdisk; timer2045281 destroys at about22:03:40UTC, hardcap22:08:39.
+Public SSH key attached successfully. Correct alias codex-blackwell5090 uses
+publicIP plus mapped22/tcp port; never combine publicIP with the proxySSHport.
+Initial SSH/KVM/disk and exact RM tuple pending. No hardware result inferred.
+
+Current branch/worktree codex/sweep-blackwell-20261015,/workspace/codex/blackwell-hw.
+Native Windows580 oracle/facts first, Linux restoration and guest suites after.
+Capture native public host key before reimage. Controller files under
+/workspace/codex; original retired5060Ti bootstrap/timer canceled. OneGPUjob,
+text evidence only, no secrets/agent forwarding. OwnerVM/GPU untouched.
+Older no-rental and failed56137859-active paragraphs below superseded here.
+
+## UPDATE 2026-10-15 19:07UTC — failed Blackwell provisioning retired; replacement search
+
+Own56137859 never obtained a VM or SSH: provider console reports missing libvirt
+C.56137859, actual_status stayedcreated/uptime null after one controlled stop/start.
+H-BP transient-startup hypothesis falsified at19:00:29; no native or kayfabe GPU
+work ran. Destroy request19:01:35UTC, absence verified19:06:18UTC. Own waiting
+bootstrap2040741 was canceled before destroy; own timer2040597 canceled only
+after absence. Failed provider machine45428/host70221 excluded from replacement.
+Safe receipt: traces/die_driver_sweep_20261015/blackwell_5060ti/provisioning-failure.txt.
+No own rental currently active; ownerVM/GPU untouched. Full matrix incomplete.
+
+Search now filters GPU names server-side, explicitlimit1000/storage150/orderdph.
+Default verified-only search finds only the failed provider; removing that default
+finds alternatives, all treated as untrusted. Plan next5090 from a different
+machine with>=24GBRAM/8CPU/150GBdisk, one rental and175min timer. No exactdie or
+hardware acceptance inferred from its name. Native Windows first remains the plan.
+Current candidate product8e3a9d325 CPU3247/0/14ignored; new native policy helper
+remains runtimeUNRUN. Older active56137859 paragraphs are superseded here.
+
+## UPDATE 2026-10-15 18:48UTC — only active own rental56137859, Blackwell native-first
+
+Turing56117789 was verified absent at18:39:01 before the new rental. RTX5060Ti
+offer50694293, own instance56137859, API start18:44:29UTC; actual quote
+$0.2861111111/hour including150GB disk.175min timerPID2040597, deadline about
+21:39:30UTC; hard three-hour cap21:44:29UTC. API reports16GB GPU memory,
+193099 RAM units; disk/KVM/kernel/actualGPU and exact RM tuple still need SSH.
+Only this own rental is active; never act on other account instances.
+
+Own worktree/branch /workspace/codex/blackwell-hw,codex/sweep-blackwell-20261015.
+Current sourcec1a6aeb1c combines Turing's final evidence with the native bootstrap
+policy helper; production Rust/data remain8e3a9d325 (fullCPU3247/0/14ignored).
+No Blackwell hardware result or exactdie is inferred from the marketing name.
+Plan/falsifiers: traces/die_driver_sweep_20261015/blackwell_plan.md.
+
+Controller bootstrapPID2040741 waits for initial SSH aliascodex-blackwell using
+/workspace/codex/ssh_config, then stages the pinned patched installer viaSCP.
+Log /workspace/codex/blackwell-bootstrap.log. Native Windows580.88 LTSC oracle,
+bounded caps/scalar capture, then Linux restoration and bothguest suites. Save
+the generated native Windows SSH PUBLIC host key before erase/reboot. Installer
+policy output is16840B, too large for onstart; the SCP path is deliberate.
+No secrets/agent forwarding and only text comes back. One GPU job per rental.
+
+Trusted CPU host has102GiB free after checking lock use and removing four own
+obsolete targets; keep checkout-specific target-blackwell-hw for the new source.
+OwnerVM/GPU untouched. Older no-active-rental/process paragraphs below are
+superseded by this checkpoint. All Turing results remain inPR10/its trace folder.
+
 ## UPDATE 2026-10-15 18:39UTC — Turing rental retired; Windows/broker pass, raw29/30
 
 Own instance56117789 was destroyed by its revised timer; absence verified at
