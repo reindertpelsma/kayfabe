@@ -72,8 +72,8 @@ use std::os::unix::ffi::OsStrExt as _;
 /// 28 (2026-10-13, same branch): 27's `kf3_device_reset` gains `from_vcpu`, and
 /// [`kf3_device_reset_wait`] (the `exit` phase's bounded wait) joins.
 /// 30 (2026-10-15, `claude/perf-fix-20261015`, `docs/design/V3_WINDOWS_PERF_20261015.md`): `kf3_realize` gains
-/// `user_view_keep` (the `user-view-keep` property; 0 = the default, 16) after `channel_budget`.
-pub const KF3_ABI: u32 = 30;
+/// ABI 31 adds explicit store_view_full and global store_view_windows after the retired user_view_keep.
+pub const KF3_ABI: u32 = 31;
 
 /// The PCI identity the C device presents.
 #[repr(C)]
@@ -160,6 +160,8 @@ pub unsafe extern "C" fn kf3_realize(
     pci_devfn: u32,
     channel_budget: u32,
     user_view_keep: u32,
+    store_view_full: u32,
+    store_view_windows: u32,
     out: *mut *mut c_void,
     err: *mut c_char,
     err_len: usize,
@@ -202,8 +204,12 @@ pub unsafe extern "C" fn kf3_realize(
         vm_id,
         pci_devfn,
         channel_budget,
+        store_view_full: store_view_full != 0,
+        store_view_windows,
     };
-    crate::userstore::configure(user_view_keep);
+    if user_view_keep != 0 {
+        eprintln!("kf3: user-view-keep is retired: views are shared; use store-view-windows for the global budget");
+    }
     // ★ Review addendum: a panic on any service thread stops the VM, visibly (`failclosed`).
     crate::failclosed::install();
     match Device::realize(&cfg) {

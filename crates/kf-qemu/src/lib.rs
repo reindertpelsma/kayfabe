@@ -34,6 +34,7 @@ pub mod rmfacts;
 pub mod tspace;
 pub mod twin;
 pub(crate) mod userbirth;
+#[cfg(test)]
 pub(crate) mod userstore;
 pub mod userva;
 pub mod vblankgate;
@@ -43,3 +44,5 @@ pub mod vblankgate;
 pub(crate) mod storeview;
 #[allow(dead_code)]
 pub(crate) mod storeview_unsafe;
+
+pub(crate) mod storeview_native;

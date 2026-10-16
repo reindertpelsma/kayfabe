@@ -81,7 +81,7 @@ impl Backend for Arc<Stub> {
             .copy_out(HostOffset::new(off), out)
             .map_err(|_| Error::Read)
     }
-    fn write(&self, v: &View, off: u64, bytes: &[u8]) -> Result<(), Error> {
+    fn write(&self, v: &mut View, off: u64, bytes: &[u8]) -> Result<(), Error> {
         // The production API must handle arbitrary byte writes; the test backend
         // only needs a checked aligned word for a nonconcurrent write test.
         let b: [u8; 8] = bytes.try_into().map_err(|_| Error::Write)?;
@@ -267,10 +267,11 @@ fn module_has_no_waiting_primitives() {
     for s in [
         include_str!("storeview.rs"),
         include_str!("storeview_unsafe.rs"),
+        include_str!("storeview_native.rs"),
     ] {
         for term in [
-            "Mutex::",
-            "RwLock::",
+            "Mutex",
+            "RwLock",
             "thread::sleep",
             "thread::park",
             "Condvar::",
@@ -354,4 +355,40 @@ fn concurrent_real_mapping_stress() {
         stub.arms.load(Ordering::Relaxed),
         stub.releases.load(Ordering::Relaxed)
     );
+}
+
+#[test]
+fn retired_owner_does_not_reserve_its_last_window_forever() {
+    let t = Windowed::new(Arc::new(Stub::default()), 4 * WINDOW, 1).unwrap();
+    let dead = Arc::new(Owner::default());
+    ready(&t, &dead, 0);
+    dead.retire();
+    let new = Arc::new(Owner::default());
+    ready(&t, &new, WINDOW);
+    assert_eq!(dead.live(), 0);
+    assert_eq!(new.live(), 1);
+}
+#[test]
+fn concurrent_hostile_evictions_leave_a_live_owners_last_window() {
+    let t = Arc::new(Windowed::new(Arc::new(Stub::default()), 16 * WINDOW, 16).unwrap());
+    let victim = Arc::new(Owner::default());
+    let hostile = Arc::new(Owner::default());
+    for i in 0..8 {
+        ready(&t, &victim, i * WINDOW);
+    }
+    let mut jobs = Vec::new();
+    for _ in 0..16 {
+        let t = t.clone();
+        let h = hostile.clone();
+        jobs.push(std::thread::spawn(move || {
+            for _ in 0..16 {
+                t.evict(&h).unwrap();
+            }
+        }));
+    }
+    for j in jobs {
+        j.join().unwrap();
+    }
+    assert_eq!(victim.live(), 1);
+    assert_eq!(t.live(), 1);
 }

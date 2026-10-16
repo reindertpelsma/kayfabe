@@ -28,13 +28,24 @@ pub(crate) trait Backend: Send + Sync {
     fn arm(&self, off: u64, len: u64) -> Result<Self::View, ArmError<Self::View>>;
     fn release(&self, view: &mut Self::View) -> Result<(), Error>;
     fn read(&self, view: &Self::View, off: u64, out: &mut [u8]) -> Result<(), Error>;
-    fn write(&self, view: &Self::View, off: u64, bytes: &[u8]) -> Result<(), Error>;
+    fn write(&self, view: &mut Self::View, off: u64, bytes: &[u8]) -> Result<(), Error>;
 }
-#[derive(Default)]
 pub(crate) struct Owner {
     live: AtomicUsize,
+    active: AtomicBool,
+}
+impl Default for Owner {
+    fn default() -> Self {
+        Self {
+            live: AtomicUsize::new(0),
+            active: AtomicBool::new(true),
+        }
+    }
 }
 impl Owner {
+    pub(crate) fn retire(&self) {
+        self.active.store(false, Ordering::Release);
+    }
     pub(crate) fn live(&self) -> usize {
         self.live.load(Ordering::Relaxed)
     }
@@ -98,10 +109,10 @@ impl<B: Backend> Full<B> {
         self.backend
             .read(self.view.as_ref().ok_or(Error::Read)?, off, out)
     }
-    pub(crate) fn write(&self, off: u64, bytes: &[u8]) -> Result<(), Error> {
+    pub(crate) fn write(&mut self, off: u64, bytes: &[u8]) -> Result<(), Error> {
         range(self.bound, off, bytes.len())?;
         self.backend
-            .write(self.view.as_ref().ok_or(Error::Write)?, off, bytes)
+            .write(self.view.as_mut().ok_or(Error::Write)?, off, bytes)
     }
     pub(crate) fn release(&mut self) -> Result<(), Error> {
         if let Some(v) = &mut self.view {
@@ -196,24 +207,34 @@ impl<B: Backend> Windowed<B> {
         if bytes.is_empty() {
             return Ok(());
         }
-        let a = self.slot(off)?.pin().ok_or(Error::Retry)?;
-        if !a.get().ready {
+        // CPU writers exclude readers as well as other writers. A backend's
+        // plain data copy must never race another host CPU access.
+        let mut a = self.slot(off)?.claim_idle().ok_or(Error::Retry)?;
+        let first = a.get_mut().as_mut().ok_or(Error::Write)?;
+        if !first.ready {
             return Err(Error::Retry);
         }
         let n = bytes.len().min((WINDOW - off % WINDOW) as usize);
-        let second = if n < bytes.len() {
-            Some(self.slot(end - 1)?.pin().ok_or(Error::Retry)?)
+        let mut second = if n < bytes.len() {
+            Some(self.slot(end - 1)?.claim_idle().ok_or(Error::Retry)?)
         } else {
             None
         };
-        if second.as_ref().is_some_and(|p| !p.get().ready) {
+        if second
+            .as_mut()
+            .is_some_and(|p| p.get_mut().as_ref().is_none_or(|e| !e.ready))
+        {
             return Err(Error::Retry);
         }
-        a.get().hot.store(true, Ordering::Relaxed);
+        first.hot.store(true, Ordering::Relaxed);
         self.backend
-            .write(&a.get().view, off % WINDOW, &bytes[..n])?;
-        if let Some(b) = second {
-            self.backend.write(&b.get().view, 0, &bytes[n..])?;
+            .write(&mut first.view, off % WINDOW, &bytes[..n])?;
+        if let Some(mut b) = second {
+            self.backend.write(
+                &mut b.get_mut().as_mut().ok_or(Error::Write)?.view,
+                0,
+                &bytes[n..],
+            )?;
         }
         Ok(())
     }
@@ -227,7 +248,7 @@ impl<B: Backend> Windowed<B> {
                 continue;
             };
             let e = claim.get_mut().as_mut().ok_or(Error::Release)?;
-            let own = Arc::ptr_eq(&e.owner, requester);
+            let own = Arc::ptr_eq(&e.owner, requester) || !e.owner.active.load(Ordering::Acquire);
             if !own && e.owner.live() <= requester.live().max(1) {
                 continue;
             }

@@ -178,7 +178,9 @@ struct Kf3State {
     char *gpu_uuid;
     char *vm_id;
     uint32_t channel_budget; /* ABI 26: channel-budget property (0 = derive from the host) */
-    uint32_t user_view_keep; /* ABI 30: user-view-keep property (0 = the default, 16 views per channel) */
+    bool store_view_full;
+    uint32_t store_view_windows;
+    uint32_t user_view_keep; /* retired ABI 30 property, accepted with a diagnostic */
     /* ★ ABI 10 (v3-display2's 9, M2): the console the display's frames are shown on, and the frame
      * it shows. Main thread only (gfx_update, realize, exit). */
     QemuConsole *con;
@@ -1606,7 +1608,7 @@ static void kf3_dev_realize(PCIDevice *pci, Error **errp)
     const char *vm_id = (s->vm_id && s->vm_id[0]) ? s->vm_id : qemu_vm_id;
     int32_t realize_rc = kf3_realize(s->gpu_minor, s->fb_mb, s->bar1_size, s->bar2_size, s->guest_driver, s->display ? 1 : 0,
                     s->gop ? 1 : 0, s->x11_dispsw ? 1 : 0, broker_word, s->display_max_fps, s->gop_efi,
-                    s->gpu_uuid, vm_id, (uint32_t)pci->devfn, s->channel_budget, s->user_view_keep, &s->h, err, sizeof(err));
+                    s->gpu_uuid, vm_id, (uint32_t)pci->devfn, s->channel_budget, s->user_view_keep, s->store_view_full, s->store_view_windows, &s->h, err, sizeof(err));
     g_free(qemu_vm_id); /* Rust copied what it keeps during the call */
     if (realize_rc != 0) {
         error_setg(errp, "kf3: realize refused: %s", err);
@@ -1964,6 +1966,8 @@ static const Property kf3_properties[] = {
      * per-channel quota, 1 MiB); max 256. An operator limit, never derived from the host's BAR1; RM refusing a
      * mapping evicts the channel's own least recently used view and retries once, then falls back to arm/release
      * for that read (counted and logged as USER_STORE_VIEW). */
+    DEFINE_PROP_BOOL("store-view-full", Kf3State, store_view_full, false),
+    DEFINE_PROP_UINT32("store-view-windows", Kf3State, store_view_windows, 0),
     DEFINE_PROP_UINT32("user-view-keep", Kf3State, user_view_keep, 0),
     /* ★ 2026-09-30: the doorbell fast path (docs/design/V3_DOORBELL_IOEVENTFD.md). OFF until measured. */
     DEFINE_PROP_BOOL("doorbell-ioeventfd", Kf3State, db_ioeventfd, false),

@@ -48,3 +48,24 @@ Acceptance: exact byte patterns, balanced arms/releases and fd/VMA counts, stall
 failure storms, fair-share adversary, 8/16/32-thread ten-minute runs, final sixty-minute soak,
 and 1..32-thread read scaling. Hardware: exact-revision Linux broker/interactive lanes, then
 Heaven comparisons. Existing FULLMAP experiment must be read before any FULL comparison.
+
+CPU write discipline: WINDOWED writes acquire exclusive idle-slot ownership, returning Retry
+if any reader exists; they never wait. FULL writes require an exclusive Rust borrow. This keeps
+the FULL read path free of atomics while preventing a plain data copy racing a host CPU writer.
+The runtime paths currently being replaced only read views; no new GPU work is CPU-executed.
+
+Integration draft, 02:25 CEST: both channel readers use one instance created at device realize.
+QOM ABI 31 adds `store-view-full` (default false) and `store-view-windows` (0 = 256 global windows).
+`user-view-keep` is retained as a deprecated property with a diagnostic, not reinterpreted as a quota.
+The old cache exists only in its baseline tests. Inactive channel owners no longer reserve their
+last window; active owners keep a minimum share under concurrent adversarial eviction.
+
+Translated read contention is a typed worker Retry: the ring restores its cursor and does not
+retire the entry; the runner fences any earlier queued work and schedules another worker turn.
+The new GPU-free test injects contention at the GP descriptor and at the pushbuffer separately,
+then verifies one fetch and one retirement. No completion is supplied for the refused read.
+
+New perimeter API: `VolatileRegion::write_data_small(&mut self, offset, bytes)` checks write
+protection, the 256-byte cap, overflow and the real mapping bounds before any byte is stored.
+Byte stores permit unaligned data writes. Its dedicated test covers arbitrary small lengths,
+boundary refusal, oversize refusal and a read-only mapping. It is not an engine executor.

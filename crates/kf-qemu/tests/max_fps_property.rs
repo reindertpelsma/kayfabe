@@ -24,6 +24,8 @@ fn config(display: bool, display_max_fps: u32) -> Config {
         vm_id: None,
         pci_devfn: 0,
         channel_budget: 0,
+        store_view_full: false,
+        store_view_windows: 0,
     }
 }
 

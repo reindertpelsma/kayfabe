@@ -1234,35 +1234,16 @@ impl GuestUserd for Userd<'_> {
 /// mapping of OUR object, located through OUR placement rows. ⊘ Never a copy of a guest table, and
 /// only method words and GP entries are read through it — never data.
 struct StoreViews {
-    views: Vec<StoreSpan>,
-    /// Views armed over the channel's life (the log's proof of how often it paid for one).
+    reader: crate::storeview_native::Reader,
     armed: u64,
+    retry: bool,
 }
 
-struct StoreSpan {
-    off: u64,
-    len: u64,
-    region: VolatileRegion,
-    _node: kf_linux_raw::CharDevice,
-    cookie: u64,
-}
-
-/// One view's span: a 64 KiB-aligned slice (a GPFIFO of 1024 entries is 8 KiB).
-const VIEW_BYTES: u64 = 64 << 10;
-/// Views kept per channel; the oldest is released beyond this (host BAR1 aperture is finite).
-const VIEWS_MAX: usize = 8;
-
-/// The 64 KiB-aligned store slice a CPU view of `at` covers, bounded by `bound` — `Err` when `at`
-/// lies at or past the bound.
+#[cfg(test)]
 fn view_span(bound: u64, at: u64) -> Result<(u64, u64), String> {
-    let off = at & !(VIEW_BYTES - 1);
-    let len = VIEW_BYTES.min(bound.saturating_sub(off));
-    if len == 0 || at >= bound {
-        return Err(format!(
-            "store offset {at:#x} is past the store ({bound:#x})"
-        ));
-    }
-    Ok((off, len))
+    if at >= bound { return Err("STORE_VIEW_BOUNDS".into()); }
+    let off=at/crate::storeview::WINDOW*crate::storeview::WINDOW;
+    Ok((off,crate::storeview::WINDOW.min(bound-off)))
 }
 
 /// `(a - b) mod n` on a ring of `n` entries (`a`, `b` taken mod `n` first; `n == 0` is a ring of
@@ -1294,93 +1275,20 @@ fn out_window(out: &mut [u8], done: u64, n: u64) -> Result<&mut [u8], String> {
 }
 
 impl StoreViews {
-    const fn new() -> Self {
-        StoreViews {
-            views: Vec::new(),
-            armed: 0,
-        }
+    fn new(shared: &'static crate::storeview_native::Shared) -> Self {
+        Self { reader: crate::storeview_native::Reader::new(shared), armed: 0, retry: false }
     }
-
-    fn view_for(&mut self, rm: &HostRm, store: u32, fb_len: u64, at: u64) -> Result<usize, String> {
-        if let Some(i) = self
-            .views
-            .iter()
-            .position(|v| at >= v.off && at < v.off.saturating_add(v.len))
-        {
-            return Ok(i);
+    fn read(&mut self, _rm: &HostRm, _store: u32, _fb_len: u64, off: u64, out: &mut [u8]) -> Result<(), String> {
+        self.retry = false;
+        if let Err(e) = self.reader.read_prepared(off, out) {
+            self.retry = matches!(e, crate::mem::userread::Refusal::Busy | crate::mem::userread::Refusal::Changed);
+            return Err(format!("STORE_VIEW {e:?}"));
         }
-        let (off, len) = view_span(fb_len, at)?;
-        if self.views.len() >= VIEWS_MAX {
-            let old = self.views.remove(0);
-            let _ = rm.release_cpu_view(kf_host::CpuViewRelease {
-                h_memory: store,
-                p_linear_address: old.cookie,
-            });
-        }
-        let (node, cookie) = rm
-            .arm_cpu_view(MapNode::Gpu, store, off, len, ViewAccess::ReadWrite)
-            .map_err(|e| format!("view of store {off:#x}+{len:#x}: {e:?}"))?;
-        let region = VolatileRegion::map(
-            Backing::DeviceFile { fd: node.as_fd() },
-            len,
-            CachePolicy::Uncached,
-            HostPageSize::query(),
-        )
-        .map_err(|e| format!("view mmap: {e:?}"))?;
-        self.armed = self.armed.saturating_add(1);
-        self.views.push(StoreSpan {
-            off,
-            len,
-            region,
-            _node: node,
-            cookie,
-        });
-        Ok(self.views.len().saturating_sub(1))
-    }
-
-    fn read(
-        &mut self,
-        rm: &HostRm,
-        store: u32,
-        fb_len: u64,
-        off: u64,
-        out: &mut [u8],
-    ) -> Result<(), String> {
-        let len = out.len() as u64;
-        let mut done = 0u64;
-        while done < len {
-            let at = off.saturating_add(done);
-            let i = self.view_for(rm, store, fb_len, at)?;
-            let v = self
-                .views
-                .get(i)
-                .ok_or_else(|| format!("store read {at:#x}: no view"))?;
-            let n = v
-                .off
-                .saturating_add(v.len)
-                .saturating_sub(at)
-                .min(len.saturating_sub(done));
-            if n == 0 {
-                return Err(format!("store read {at:#x}: no progress"));
-            }
-            v.region
-                .copy_out(
-                    HostOffset::new(at.saturating_sub(v.off)),
-                    out_window(out, done, n)?,
-                )
-                .map_err(|e| format!("store read {at:#x}: {e:?}"))?;
-            done = done.saturating_add(n);
-        }
+        self.armed = self.reader.stats().0;
         Ok(())
     }
-
-    fn release_all(&mut self, rm: &HostRm, store: u32) {
-        for v in self.views.drain(..) {
-            let _ = rm.release_cpu_view(kf_host::CpuViewRelease {
-                h_memory: store,
-                p_linear_address: v.cookie,
-            });
-        }
+    fn release_all(&mut self, _rm: &HostRm, _store: u32) {
+        if let Err(e) = self.reader.release() { eprintln!("kf3: STORE_VIEW cleanup retained: {e:?}"); }
     }
 }
 
@@ -1450,10 +1358,12 @@ impl kf_chan::tmode::Rows for Mem<'_> {
 }
 
 impl GuestMemory for Mem<'_> {
+    fn retryable(&self) -> bool { self.views.retry }
     fn rows(&self) -> Option<&dyn kf_chan::tmode::Rows> {
         Some(self)
     }
     fn read(&mut self, va: u64, out: &mut [u8]) -> Result<(), String> {
+        self.views.retry = false;
         let len = out.len() as u64;
         // ★ P5b: piece by piece across OUR rows — a segment may span two adjacent placements.
         let mut done = 0u64;
@@ -2227,6 +2137,7 @@ pub struct ChanPlane {
     rm: &'static HostRm,
     plane: &'static Plane<'static>,
     store: u32,
+    pub(crate) storeviews: &'static crate::storeview_native::Shared,
     ram: &'static RamMap,
     /// ★ P1+P2 / S1-43: the framebuffer layout this device declared — a guest-named FB USERD or
     /// notifier must lie inside one of its usable heap regions ([`ChanPlane::heap_bounds`]).
@@ -2775,6 +2686,7 @@ impl ChanPlane {
         channel_budget: u32,
         dbfast: &'static kf_chan::dbfast::DbFast,
         token_fmt: Option<kf_trap::tokenindex::GuestTokenFormat>,
+        storeviews: &'static crate::storeview_native::Shared,
     ) -> Result<ChanPlane, String> {
         // ★ Authored, never the guest's engine number: the first HOST copy engine that is not a
         // graphics CE. ⊘ A GRCE shares the GR runlist and routes subchannels 0-3 to GR — RM's
@@ -2913,6 +2825,7 @@ impl ChanPlane {
             crate::userbirth::Book::with_wake(move || { let _ = inbox.wake.signal(); })
         };
         Ok(ChanPlane {
+            storeviews,
             gr_relay: AtomicU64::new(0),
             bar0trace: crate::bar0trace::Bar0Trace::from_env(),
             rm,
@@ -6922,7 +6835,7 @@ impl ChanPlane {
                                     chan,
                                     idx,
                                     mirror: relay_mirror.clone(),
-                                    views: StoreViews::new(),
+                                    views: StoreViews::new(me.storeviews),
                                     gpfifo_va: a.gpfifo_va,
                                     peek: PeekState::default(),
                                     peek_defapi: None,
@@ -7148,7 +7061,7 @@ impl ChanPlane {
                     tsg: a.tsg,
                     split: None,
                     splits: 0,
-                    views: StoreViews::new(),
+                    views: StoreViews::new(me.storeviews),
                     privilege: a.privilege,
                     stopped: false,
                     disabled: false,
@@ -7709,6 +7622,9 @@ impl ChanPlane {
             is_any_ce_class,
             &NoMirrorWindow,
         );
+        if matches!(r, Ok(kf_chan::host::Pumped::Retry)) && self.plane.ring_internal(g.guest_idx) {
+            let _ = self.wake.signal();
+        }
         if !g.gr_tier
             && translated_ce_relay()
             && is_copy_engine(g.guest_engine)
