@@ -1,0 +1,238 @@
+warning: missing documentation for a function
+    --> crates/kf-util/src/lock.rs:1150:5
+     |
+1150 |     pub fn note_wait(rank: LockRank, d: Duration) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a function
+    --> crates/kf-util/src/lock.rs:1432:5
+     |
+1432 |     pub fn note_hold(rank: LockRank, d: Duration) {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates/kf-util/src/lockwitness.rs:193:5
+    |
+193 |     pub fn is_vcpu() -> bool {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `kf-util` (lib) generated 3 warnings
+warning: missing documentation for a method
+   --> crates/kf-arch/src/gsp.rs:842:5
+    |
+842 | /     fn on_read(
+843 | |         &self,
+844 | |         _model: &dyn GspModel,
+845 | |         _bar: u8,
+...   |
+848 | |         _state: &ArchBootState,
+849 | |     ) -> Option<u64> {
+    | |____________________^
+    |
+    = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a method
+   --> crates/kf-arch/src/gsp.rs:971:5
+    |
+971 |     fn libos_region_layout(&self) -> LibosRegionLayout;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `kf-arch` (lib) generated 2 warnings
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:90:18
+   |
+90 |     NoChannels { engine: u32 },
+   |                  ^^^^^^^^^^^
+   |
+   = note: requested on the command line with `-W missing-docs`
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:92:20
+   |
+92 |     BelowMinimum { asked: u32 },
+   |                    ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:94:18
+   |
+94 |     AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },
+   |                  ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:94:30
+   |
+94 |     AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },
+   |                              ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:94:42
+   |
+94 |     AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },
+   |                                          ^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:94:55
+   |
+94 |     AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },
+   |                                                       ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:94:67
+   |
+94 |     AboveLimit { asked: u32, limit: u32, engine: u32, total: u32, in_use: u32 },
+   |                                                                   ^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:96:19
+   |
+96 |     HostTooFull { derived: u32, engine: u32, total: u32, in_use: u32 },
+   |                   ^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:96:33
+   |
+96 |     HostTooFull { derived: u32, engine: u32, total: u32, in_use: u32 },
+   |                                 ^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:96:46
+   |
+96 |     HostTooFull { derived: u32, engine: u32, total: u32, in_use: u32 },
+   |                                              ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates/kf-abi/src/chanbudget.rs:96:58
+   |
+96 |     HostTooFull { derived: u32, engine: u32, total: u32, in_use: u32 },
+   |                                                          ^^^^^^^^^^^
+
+warning: `kf-abi` (lib) generated 11 warnings
+   Compiling kf-gsp v0.1.0 (/data/codex/reply-body-trace/crates/kf-gsp)
+error[E0277]: the trait bound `ReplyBodyTrace: Clone` is not satisfied
+   --> crates/kf-gsp/src/boot.rs:879:5
+    |
+876 | #[derive(Debug, Clone, PartialEq, Eq)]
+    |                 ----- in this derive macro expansion
+...
+879 |     reply_body_trace: crate::replytrace::ReplyBodyTrace,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `ReplyBodyTrace`
+    |
+help: consider annotating `ReplyBodyTrace` with `#[derive(Clone)]`
+   --> crates/kf-gsp/src/replytrace.rs:13:1
+    |
+ 13 + #[derive(Clone)]
+ 14 | pub(crate) struct ReplyBodyTrace {
+    |
+
+error[E0369]: binary operation `==` cannot be applied to type `ReplyBodyTrace`
+   --> crates/kf-gsp/src/boot.rs:879:5
+    |
+876 | #[derive(Debug, Clone, PartialEq, Eq)]
+    |                        --------- in this derive macro expansion
+...
+879 |     reply_body_trace: crate::replytrace::ReplyBodyTrace,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+note: an implementation of `PartialEq` might be missing for `ReplyBodyTrace`
+   --> crates/kf-gsp/src/replytrace.rs:13:1
+    |
+ 13 | pub(crate) struct ReplyBodyTrace {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ must implement `PartialEq`
+help: consider annotating `ReplyBodyTrace` with `#[derive(PartialEq)]`
+   --> crates/kf-gsp/src/replytrace.rs:13:1
+    |
+ 13 + #[derive(PartialEq)]
+ 14 | pub(crate) struct ReplyBodyTrace {
+    |
+
+error[E0277]: the trait bound `ReplyBodyTrace: Eq` is not satisfied
+   --> crates/kf-gsp/src/boot.rs:879:5
+    |
+876 | #[derive(Debug, Clone, PartialEq, Eq)]
+    |                                   -- in this derive macro expansion
+...
+879 |     reply_body_trace: crate::replytrace::ReplyBodyTrace,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Eq` is not implemented for `ReplyBodyTrace`
+    |
+note: required by a bound in `std::cmp::AssertParamIsEq`
+   --> /rustc/b940084d7eb6a299eb4bfeb8e34901bc051e7ac4/library/core/src/cmp.rs:392:0
+help: consider annotating `ReplyBodyTrace` with `#[derive(Eq)]`
+   --> crates/kf-gsp/src/replytrace.rs:13:1
+    |
+ 13 + #[derive(Eq)]
+ 14 | pub(crate) struct ReplyBodyTrace {
+    |
+
+error[E0027]: pattern does not mention field `reply_body_trace`
+    --> crates/kf-gsp/src/boot.rs:4705:13
+     |
+4705 |           let GspFsm {
+     |  _____________^
+4706 | |             pending_command_doorbells,
+4707 | |             held,
+4708 | |             refusals,
+...    |
+4734 | |             system_info,
+4735 | |         } = d.fsm;
+     | |_________^ missing field `reply_body_trace`
+     |
+help: include the missing field in the pattern
+     |
+4734 -             system_info,
+4735 -         } = d.fsm;
+4734 +             system_info, reply_body_trace } = d.fsm;
+     |
+help: if you don't care about this missing field, you can explicitly ignore it
+     |
+4734 -             system_info,
+4735 -         } = d.fsm;
+4734 +             system_info, reply_body_trace: _ } = d.fsm;
+     |
+help: or always ignore missing fields here
+     |
+4734 -             system_info,
+4735 -         } = d.fsm;
+4734 +             system_info, .. } = d.fsm;
+     |
+
+error[E0027]: pattern does not mention field `reply_body_trace`
+    --> crates/kf-gsp/src/boot.rs:4736:13
+     |
+4736 |           let GspFsm {
+     |  _____________^
+4737 | |             pending_command_doorbells: p0,
+4738 | |             held: h0,
+4739 | |             refusals: r0,
+...    |
+4765 | |             system_info: si0,
+4766 | |         } = GspFsm::new(abi());
+     | |_________^ missing field `reply_body_trace`
+     |
+help: include the missing field in the pattern
+     |
+4765 -             system_info: si0,
+4766 -         } = GspFsm::new(abi());
+4765 +             system_info: si0, reply_body_trace } = GspFsm::new(abi());
+     |
+help: if you don't care about this missing field, you can explicitly ignore it
+     |
+4765 -             system_info: si0,
+4766 -         } = GspFsm::new(abi());
+4765 +             system_info: si0, reply_body_trace: _ } = GspFsm::new(abi());
+     |
+help: or always ignore missing fields here
+     |
+4765 -             system_info: si0,
+4766 -         } = GspFsm::new(abi());
+4765 +             system_info: si0, .. } = GspFsm::new(abi());
+     |
+
+Some errors have detailed explanations: E0277, E0369.
+For more information about an error, try `rustc --explain E0277`.
+error: could not compile `kf-gsp` (lib) due to 3 previous errors
+warning: build failed, waiting for other jobs to finish...
+Some errors have detailed explanations: E0027, E0277, E0369.
+For more information about an error, try `rustc --explain E0027`.
+error: could not compile `kf-gsp` (lib test) due to 5 previous errors
