@@ -1,0 +1,5 @@
+b_d3d11_w              fps=  101.67 min=  30.82 max= 212.70 frames=26500 gpu_util=77.8 pwr=94 sm_mhz=2853 mem_mhz=10251 w0_cpu_s=146 w1_cpu_s=149 
+b_d3d11_r1             fps=  101.47 min=  26.43 max= 213.17 frames=26447 gpu_util=77.5 pwr=93 sm_mhz=2865 mem_mhz=10251 w0_cpu_s=149 w1_cpu_s=149 
+b_gl_r1                fps=  231.82 min=  44.06 max= 491.17 frames=60424 gpu_util=86.6 pwr=141 sm_mhz=2850 mem_mhz=10251 w0_cpu_s=147 w1_cpu_s=158 
+s1_d3d11               fps=   96.11 min=  23.26 max= 204.73 frames=25045 gpu_util=76.4 pwr=91 sm_mhz=2867 mem_mhz=10251 w0_cpu_s=145 w1_cpu_s=149 
+s1_gl                  fps=  221.20 min=  45.43 max= 480.88 frames=57653 gpu_util=85.2 pwr=138 sm_mhz=2852 mem_mhz=10251 w0_cpu_s=147 w1_cpu_s=157 
