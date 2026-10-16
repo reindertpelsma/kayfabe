@@ -44,12 +44,22 @@ source_mutant() { # name
   core_no_gate_reset) # a stale gate proof one ring lap later
     m $T '                    self.sync = SyncGate::default();
 ' '' ;;
-  core_epoch_before_put) # the registry epoch is loaded BEFORE GP_PUT and the entry
-    m $T '        let Some(put) = io.gp_put()? else {' '        self.epoch = io.registry_epoch();
-        let Some(put) = io.gp_put()? else {'
+  core_epoch_before_put) # the registry epoch is loaded FIRST (before GP_PUT and the entry), as its own step
+    m $T '                self.phase = if self.segment_pending {
+                    Phase::Segment
+                } else {
+                    Phase::Put
+                };' '                self.phase = if self.segment_pending {
+                    Phase::Segment
+                } else {
+                    Phase::Epoch
+                };'
     m $T '                self.epoch = io.registry_epoch();
-                self.phase = Phase::Plan;' '                let _ = io.registry_epoch();
-                self.phase = Phase::Plan;' ;;
+                self.phase = Phase::Plan;' '                self.epoch = io.registry_epoch();
+                self.phase = Phase::Put;'
+    m $T '                self.phase = Phase::Epoch;
+                Ok(Step::More)' '                self.phase = Phase::Plan;
+                Ok(Step::More)' ;;
   core_double_fetch) # a second load of the entry is what gets stored
     m $T '        io.publish_entry(
             kind,
@@ -137,7 +147,7 @@ run_tests() { # name, KEY=VALUE or ""
   local rc=$?
   grep -E "^test .* FAILED$" "$OUT/$name.log" | sed 's/^test //; s/ \.\.\. FAILED$//' | sort -u >"$OUT/$name.failing"
   local cerr=""
-  grep -q "^error" "$OUT/$name.log" && cerr=" COMPILE-ERROR"
+  grep -qE "^error(\[|: could not compile)" "$OUT/$name.log" && cerr=" COMPILE-ERROR"
   printf '%s\trc=%s\tfailing=%s%s\n' "$name" "$rc" "$(wc -l <"$OUT/$name.failing")" "$cerr" | tee -a "$OUT/summary.tsv"
   sed 's/^/    /' "$OUT/$name.failing"
 }

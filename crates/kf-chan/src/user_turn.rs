@@ -739,7 +739,9 @@ impl Relay {
                 Ok(Step::Scanned { rare: staged.rare })
             }
             Err(e) => {
-                self.scan_failed = true;
+                // a refusal of the scan itself (stage_plan) is traced by the owner; a software-object error
+                // (raised before the scan) is not
+                self.scan_failed = matches!(&e, Fail::Refused(why) if why.starts_with("USER_RING_SCAN") || why == PARTIAL_SUFFIX);
                 if matches!(e, Fail::Refused(_)) {
                     io.event(Ev::ScanRefused);
                 }

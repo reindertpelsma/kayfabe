@@ -86,6 +86,15 @@ impl Shared {
     }
 }
 
+/// Stops the writer threads when the main closure ends OR unwinds: a failing assertion must FAIL the test, not leave
+/// a thread spinning for ever (`std::thread::scope` joins its threads before it propagates a panic).
+struct StopOnDrop(Arc<Shared>);
+impl Drop for StopOnDrop {
+    fn drop(&mut self) {
+        self.0.stop.store(true, Ordering::Relaxed);
+    }
+}
+
 struct ThreadEnv {
     sh: Arc<Shared>,
     mode: Mode,
@@ -229,6 +238,7 @@ fn a_well_behaved_guest_with_concurrent_registrations_loses_and_duplicates_nothi
         mode: Mode::Scan,
     };
     let turns = std::thread::scope(|s| {
+        let _stop = StopOnDrop(sh.clone());
         let guest = {
             let (sh, sent, post_marks, done) =
                 (sh.clone(), sent.clone(), post_marks.clone(), done.clone());
@@ -371,6 +381,7 @@ fn a_hostile_writer_rewrites_ring_entries_and_gp_put_while_the_worker_runs() {
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs_f64(secs);
     let deaths = Arc::new(AtomicU64::new(0));
     let total_turns = std::thread::scope(|s| {
+        let _stop = StopOnDrop(sh.clone());
         // the hostile writer: random whole entries, random single-dword flips, random in-range GP_PUT
         let hostile = {
             let sh = sh.clone();

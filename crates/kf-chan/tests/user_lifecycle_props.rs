@@ -84,6 +84,8 @@ pub struct Out {
     pub unscanned_while_live: u32,
     /// I8: reads at or beyond the `GP_PUT` loaded in the turn.
     pub beyond_put: u32,
+    /// SYNC_WAIT gates published (barrier + marker pairs).
+    pub barriers: u32,
     /// Indices (into `forwarded`) of the entries counted by `unscanned_while_live`.
     pub unscanned_at: Vec<usize>,
     pub torn: u32,
@@ -301,7 +303,7 @@ impl Env for Sim {
                 self.out.staged.push(self.out.forwarded.len());
                 self.out.forwarded.push(u64::MAX); // placeholder: the staged copy replaces the entry
             }
-            Pub::Barrier => {}
+            Pub::Barrier => self.out.barriers += 1,
             Pub::Marker(_) => {
                 self.markers_done += 1;
                 self.out.markers += 1;
@@ -1531,4 +1533,47 @@ fn d4_a_stored_sub_device_mask_is_still_stored_when_a_window_scans_its_use() {
             if always { Mode::Scan } else { Mode::Pointer }
         );
     }
+}
+
+// ------------------------------------------------------------------------------------------------
+// T3: the gate proof of a window does not survive a ring lap (a second angle on the stale-proof invariant)
+
+#[test]
+fn t3_a_second_window_one_ring_lap_later_gates_its_sync_wait_entry_again() {
+    // 4-slot guest ring. Window 1 gates its trigger (a SYNC_WAIT entry at slot 1) and proves it at (generation 1,
+    // cursor 1). Pointer mode laps the ring. Window 2 starts with a SYNC_WAIT entry at slot 1 again: the proof of
+    // window 1 must be gone, so the entry is gated AGAIN (a second barrier + marker), not waved through.
+    let stream = vec![
+        ge(0, Kind::SetObj),
+        ge(190, Kind::Trig { migrate: false }).sync().post(),
+        ge(2, Kind::Plain),
+        ge(3, Kind::Plain),
+        ge(4, Kind::Plain),
+        ge(5, Kind::Plain).sync().post(),
+    ];
+    let sched = [
+        Sched::Register {
+            at: 1,
+            migrate: false,
+        },
+        Sched::Register {
+            at: 5,
+            migrate: false,
+        },
+    ];
+    let (out, relay) = run_stream(&stream, &sched, false, 4, 8);
+    assert!(!out.dead);
+    assert_eq!(out.forwarded.len(), stream.len());
+    assert_eq!(out.staged, vec![1], "window 1 staged its trigger");
+    assert_eq!(out.unscanned_while_live, 0);
+    let c = relay.life.counts();
+    assert_eq!(c.to_window_fresh + c.to_window_exact, 2, "{c:?}");
+    assert_eq!(
+        c.to_window_fresh, 1,
+        "window 2 starts after Pointer mode: {c:?}"
+    );
+    assert_eq!(
+        out.barriers, 2,
+        "window 1's gate of its SYNC_WAIT trigger + window 2's gate of its SYNC_WAIT entry"
+    );
 }
