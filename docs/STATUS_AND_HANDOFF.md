@@ -1,5 +1,44 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-16 01:05 UTC — native trace verified; virtual byte capture replay running
+
+Native GB206 Windows580 capture is complete:4807 command+4872 status,
+both sequence-zero prefixes,0loss/anomaly/unbalanced controls, both strict
+oracles exit0; Code0/CUDA3/D3D11+12/short zero-TDR checks pass. Fresh lease
+56165326 independently verified arch0x1b0/impl0x6/GB206 on Linux595.91.07,
+UID65534/CapEff0 at00:11:11UTC. Native raw capture was rental-only and erased
+by Linux restoration after text/hash/census evidence was saved. This corrects
+the pending-tuple and still-present-raw statements in older updates below.
+
+Virtual72fca168a host595/actual Windows32.0.15.8088: first binding records
+CM_PROB_FAILED_POST_START; second evidence.ps1 times out, wrapper exit1.
+The shared observer attached0 tables/recorded0 messages. Ordered pretty API
+comparison aligns196 common startup calls,40 status differences; earliest
+aligned difference0x20800afe, then0x20800aff. Nativea89/ab2/CBCB succeed,
+virtual refuses0x56. This is not the first differing byte or a proved cause.
+Evidence virtual_native_alignment_20261016/ includes actual process receipts,
+sanitized logs and reproducible alignment with its pairing/body limitations.
+
+H-CCU2 public unprivileged metadata query succeeds, but cross-ABI equality
+falsified: host595 counterBlock34960 gives inverse17488; native580 oracle
+17296. Do not ship either as a derived580 value. Explicit probe free returned
+a local untracked-handle error; session closed at exit. Evidence host_ccu_metadata/.
+
+H-FMC1 code-only codex/observer-fmc d18aafad4, failing-first ade898857,
+draft PR18 against claude/gpu-types-20261015. One bounded FMC indirection
+from compiler-checked public580 offsets; no product reply/GPU write/scan.
+GCC+Clang sanitizer/core, decoder and compiler checks PASS. Integrated3934a0895
+build PASS, binarySHAf38954e6...d18f. Own replay42721 started00:59:57UTC;
+observer has recorded messages but completeness/decoder result PENDING.
+Controller42689 stops the exact VM and exports metadata, then exits. Actual
+KF3 process environment/executable/hostABI asserted. No extra control ack.
+
+Only own56165326 active, original timer2120908 at01:39:19UTC/hardcap01:44:19UTC.
+After replay save text, update ranked causes/PR18, retire by own ID and verify
+absence. W1 equality remains RED; tiling held. Next W3 TU1067min hold/R34 at
+unchanged180s. No family or multiple-driver acceptance claim yet. Owner GPU
+and VM untouched. Native tracer PR14 and sequence PR16 are pushed separately.
+
 ## UPDATE 2026-10-15 23:48UTC — complete native Blackwell trace achieved
 
 H-BC4 source631f087e3/moduleunsigned1b0a549b...f1c6 gives method4, singlequeue,

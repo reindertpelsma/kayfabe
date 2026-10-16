@@ -2,6 +2,16 @@
 
 **STATUS: LIVE, 2026-10-16. Native reference PASS; kayfabe Windows still FAILS.**
 
+**Correction, 2026-10-16 01:03 UTC:** Linux restoration verified the fresh
+lease tuple at00:11:11UTC, UID65534/CapEff0: arch0x1b0/impl0x6/GB206 on
+595.91.07. The pending-tuple statements below are superseded. The raw native
+capture remained rental-only and was erased by that Linux reimage; its hash,
+ordered metadata, censuses and validation receipts were preserved first.
+The public GB100 inverse CCU formula exists, but the subsequent host595 query
+does not establish the580 sample format:17488 differs from native17296.
+See ../host_ccu_metadata/ and ../virtual_native_alignment_20261016/ for the
+negative experiment and the ordered status comparison. No sample constant ships.
+
 Own56165326, source631f087e3, unsignedmoduleSHA1b0a549b7df5c9472dc6842eaf80e149fe7ec02a720fb9d874bade987413f1c6;
 collectorunchangedb7732d2e...7acf; orderedexporter9251e45c4/WindowsSHA1f5442d0...ae82b.
 NativeWindowsLTSC26100, actual32.0.15.8088/GSP580.65.05 before/after both

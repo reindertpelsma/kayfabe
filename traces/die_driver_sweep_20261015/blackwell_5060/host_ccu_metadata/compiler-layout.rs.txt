@@ -1,0 +1,6 @@
+const CLASS: u32 = 0xcbca;
+const CONTROL: u32 = 0xcbca0101;
+const SIZE: usize = 16;
+const BUFFER: usize = 0;
+const BLOCK: usize = 8;
+const TRAILER: u32 = 8;

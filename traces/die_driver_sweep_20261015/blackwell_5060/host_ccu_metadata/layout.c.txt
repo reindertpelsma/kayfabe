@@ -1,0 +1,12 @@
+#include <stdio.h>
+#include <stddef.h>
+#include "class/clcbca.h"
+#include "ctrl/ctrlcbca.h"
+int main(void) {
+ printf("const CLASS: u32 = 0x%x;\n", NV_COUNTER_COLLECTION_UNIT);
+ printf("const CONTROL: u32 = 0x%x;\n", NV_COUNTER_COLLECTION_UNIT_CTRL_CMD_SUBSCRIBE);
+ printf("const SIZE: usize = %zu;\n", sizeof(NV_COUNTER_COLLECTION_UNIT_SUBSCRIBE_PARAMS));
+ printf("const BUFFER: usize = %zu;\n", offsetof(NV_COUNTER_COLLECTION_UNIT_SUBSCRIBE_PARAMS, bufferSize));
+ printf("const BLOCK: usize = %zu;\n", offsetof(NV_COUNTER_COLLECTION_UNIT_SUBSCRIBE_PARAMS, counterBlockSize));
+ printf("const TRAILER: u32 = %zu;\n", sizeof(NvU64));
+}
