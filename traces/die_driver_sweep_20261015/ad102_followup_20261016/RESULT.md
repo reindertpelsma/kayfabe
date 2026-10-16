@@ -1,6 +1,6 @@
 # AD102 missing lanes and passing Windows display reference
 
-**STATUS: LIVE, 2026-10-16 18:13 UTC. Windows580 production hold, Linux595 raw and broker pass; guest apps pending.**
+**STATUS: LIVE, 2026-10-16 18:44 UTC. Windows580 hold/apps and Linux595 raw/broker pass; rental retired.**
 
 MEASURED A1: broker595 passes at17:37:30UTC, private6265b980f. Cinnamon1/Xorg1,
 NVIDIA OpenGL renderer, guest flip_timeouts0/Xid0, and host Xid delta0 (5before,
@@ -12,11 +12,15 @@ limitations; functional presentation is not a latency-clean claim. See broker595
 The first presentation launch was NOTRUN after a previous provisioning PID
 refusal; the explicit-parent-wait retry exercises that handoff and succeeds.
 
-Native Blender4.5 CUDA passes17:16:24UTC on stock595, NVIDIA RTX4090,
-mean0.6405. Image metadata is saved, image stays on the rental. Windows apps
-remainUNRUN: bulk staging stopped at chunk13's read-only guest-sync, before
-any application ran. Bounded synchronization reconnects are now covered by
-six CPU tests; mutating file commands are never automatically replayed.
+MEASURED A5: native Blender4.5 CUDA passes17:16:24UTC on stock595, NVIDIA
+RTX4090, mean0.6405. Windows580.88 production apps pass18:38:30UTC: Blender CUDA
+exit0/NVIDIA/mean0.6405, Edge hardware WebGL2 correct pixels/722frames/12seconds,
+zero TDR, and CUDA cup2/3/8 plus hardware D3D11+12 before and after. Host Xid
+5before/5after, delta0. Source77a72da9e, actual19flags/diagnostics off, same
+product code and binary SHA as the production hold. Earlier file-sync failures
+and the false PowerShell null-exit-code failure are retained as harness negatives;
+see windows_apps/RESULT.md. Images stayed on rental. Bounded file staging has
+six passing CPU tests; mutating commands are never automatically replayed.
 
 MEASURED A2 complete for this build: production QEMU103998 uses exactly19flags,
 no RPC diagnostics. Actual Windows32.0.15.8088, Code0, DWM/Explorer, CUDA cup2/3/8
@@ -69,9 +73,11 @@ at16:11:25UTC. The native595 caps page is an oracle only.
 |AD102|Linux guest broker|595.91.07|actual KF3_REV selector only|PASS;9STALL/9nvAssert retained|broker595/|
 |AD102|Windows guest short / display trace|580.88 /32.0.15.8088|production19 plus bounded metadata/body diagnostics|PASS|windows580/adaref2_windows_baseline.log; passing_windows_display_trace/|
 |AD102|Windows guest seven-minute hold|580.88 /32.0.15.8088|production19, diagnostics off|PASS421seconds/13rounds/0TDR|windows580/adaref2_windows_baseline.log|
+|AD102|Windows guest Blender/Edge and survivor suite|580.88 /32.0.15.8088|production19, diagnostics off|PASS;0TDR/0new host Xid|windows_apps/RESULT.md|
+|AD102|Windows second build|581.51 /32.0.15.8151|planned production19|UNRUN; public ABI/package prerequisites pass|../driver58151_public_abi_20261016/RESULT.md|
 
-The Windows diagnostic boot will collect an ordered passing connected-display
-reference for prompt section2. Native GB206 was headless and cannot supply that
+The Windows diagnostic boot collected an ordered passing connected-display
+reference for prompt section2; see passing_windows_display_trace/RESULT.md. Native GB206 was headless and cannot supply that
 reference. Hypothesis H-display-reference (INFERRED): presence of73010c and
 c3700201 in the native sequence may identify missing display initialization.
 Falsifier, stated before this run: a passing Ada guest also skips these controls;
@@ -88,12 +94,14 @@ installation is needed because the per-die reference already exists.
 
 CPU harness correction: draft PR26 adds explicit KF_GUEST_DRIVER and backing-disk selection to
 interactive.sh; its previous hardcoded580 ABI would make a595 disk's receipt
-wrong. Failing-first assertions are saved; three test methods now pass. This
-does not itself validate a hardware broker. Separate draft PR27 records and
+wrong. Failing-first assertions are saved; three test methods now pass. Hardware broker595 passed on6265b980f with this change. Separate draft PR27 records and
 verifies owned QEMU identities and uses ACPI then bounded TERM cleanup. Its
 actual-launcher slow-cleanup fixture fails on the old code; four CPU tests pass
-after the fix. Neither PR is hardware-broker verified yet.
+after the fix. Both changes are hardware-broker verified on6265b980f, including the explicit
+parent-wait handoff correction; nine STALL/nvAssert warnings remain visible.
 
-No die family is complete. Timer18:58:22UTC; hard cap19:03:21UTC. Cost ledger
-includes the full maximum1.83USD for this lease, campaign ceiling7.20USD plus
-unbilled transfers. Only this owned ID may be retired.
+No die family is complete. Owned56267214 destroyed/API absence verified
+18:43:36UTC, before its original timer and hard cap. Exact timer2396076 cancelled
+after absence and command-identity verification. Conservative lease duration
+2h40m15s, compute estimate1.6293USD/ceiling1.63USD. Campaign compute ceiling
+7.00USD plus unbilled transfers. No own rental remains. See retirement.txt.

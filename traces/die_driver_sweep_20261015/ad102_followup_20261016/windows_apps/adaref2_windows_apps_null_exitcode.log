@@ -1,0 +1,185 @@
+WINDOWS_APPS_WAVE_START source=77a72da9eb4d3f4e694fbb449d75e5fe3926b28c 2026-10-16T18:17:17+00:00
+ACTUAL_PROCESS_RECEIPT {"actual_KF3_environment": {"KF3_ASYNC_PREEMPT": "1", "KF3_DEFERRED_API": "1", "KF3_DISPLAY_CAPS_PROBE": "1", "KF3_DISPLAY_CTRL_PROBE": "1", "KF3_DISPLAY_ILUT_OFFSET_256": "1", "KF3_DISPLAY_IMP_ENABLE": "1", "KF3_DISPLAY_LUT_MIRROR": "1", "KF3_DISPLAY_SDR_COLOR": "1", "KF3_GFX_POOL_PROBE": "1", "KF3_KERNEL_GR_CE": "1", "KF3_KERNEL_GR_WORK": "1", "KF3_MEMORY_LIST_PROBE": "1", "KF3_PREEMPT_BIND_PROBE": "1", "KF3_SW_RUNLIST_HOST_OWNED": "1", "KF3_SW_RUNLIST_PROBE": "1", "KF3_TRANSLATED_CE_RELAY": "1", "KF3_WIN_TWIN_DEFAPI_OBJECT": "1", "KF3_WIN_USER_CHANNELS_PASSTHROUGH": "1", "KF3_ZCULL_BIND_PROBE": "1"}, "binary_revision": "77a72da9", "binary_sha256": "e9744a23ab38ff45afbf788d9e426d71913d1f1e6954fa1ea0da1ea1920b25a6", "expected_windows_driver": "32.0.15.8088", "guest_public_abi": "580.65.06", "host_driver": "595.91.07", "pid": 109491, "source_revision": "77a72da9eb4d3f4e694fbb449d75e5fe3926b28c"}
+QGA_PUT bytes=1491 sha256=7300be6bddab6bbc1d9a49097e893d2bb96bba73b6d4c59146ee1406d5135e6a
+QGA_PUT bytes=6183 sha256=1ed4091dad9efbf0cafc6a3c470a145463231a1453fad970be42122cee6cad65
+QGA_PUT bytes=3447 sha256=b8ef03b4dac4b4d1841b7d464891dfd5030a1afb506f9fd2b91914638c6f041c
+QGA_PUT bytes=247 sha256=32a72ba0eecd98b7cb2ee0755397867dc26b60c729bb0fe1e2f691384fa9146f
+WIN_ACCEPT_START 2026-10-16T18:18:55.6585582Z
+{"Name":"NVIDIA GeForce RTX 4090","DriverVersion":"32.0.15.8088","Status":"OK","ConfigManagerErrorCode":0}
+WIN_DESKTOP dwm=1 explorer=1
+ok   cuInit(0)
+ok   cuDeviceGetCount(&n)
+devices=1
+ok   cuDeviceGet(&d,0)
+ok   cuDeviceGetName(nm,256,d)
+name=NVIDIA GeForce RTX 4090
+ok   cuDeviceGetAttribute(&maj,CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR,d)
+ok   cuDeviceGetAttribute(&min,CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR,d)
+compute=8.9
+ok   cuDeviceTotalMem(&tot,d)
+totalMem=3835 MiB
+ok   cuCtxCreate(&ctx,0,d)
+CTX OK
+ok   cuMemAlloc(&dp,4096)
+MEMALLOC OK 0x617a00000
+ok   cuMemcpyHtoD(dp,&hv,4)
+ok   cuMemcpyDtoH(&rv,dp,4)
+CE rv=0xabcd1234 want=0xabcd1234 -> PASS
+DONE
+WIN_CUDA cup2 rc=0
+ok   cuInit(0)
+ok   cuDeviceGetCount(&n)
+ok   cuDeviceGet(&d,0)
+ok   cuCtxCreate(&ctx,0,d)
+CTX OK
+PTX_TARGET=sm_86 (device cc 8.9)
+ok   cuModuleLoadData(&mod,PTX)
+MODULE OK
+ok   cuModuleGetFunction(&fn,mod,"k")
+FUNC OK
+ok   cuMemAlloc(&d_in,4)
+ok   cuMemAlloc(&d_out,4)
+MEMALLOC in=0x617a00000 out=0x617a00200
+ok   cuMemcpyHtoD(d_in,&hv,4)
+ok   cuMemsetD32(d_out,0,1)
+ok   cuLaunchKernel(fn, 1,1,1, 1,1,1, 0, 0, args, 0)
+LAUNCH OK
+ok   cuCtxSynchronize()
+SYNC OK
+ok   cuMemcpyDtoH(&rv,d_out,4)
+KERNEL rv=43 want=43 -> PASS
+DONE
+WIN_CUDA cup3 rc=0
+ok   cuInit(0)
+ok   cuDeviceGetCount(&nd)
+ok   cuDeviceGet(&d,0)
+ok   cuCtxCreate(&ctx,0,d)
+CTX OK
+PTX_TARGET=sm_86 (device cc 8.9)
+ok   cuModuleLoadData(&mod,PTX)
+MODULE OK
+ok   cuModuleGetFunction(&fn,mod,"mm")
+FUNC OK
+CUP8 matmul N=2048  per-matrix=16 MiB  device=48 MiB
+ok   cuMemAlloc(&dA,sz)
+ok   cuMemAlloc(&dB,sz)
+ok   cuMemAlloc(&dC,sz)
+MEMALLOC A=0x617a00000 B=0x618a00000 C=0x619a00000
+ok   cuMemcpyHtoD(dA,hA,sz)
+ok   cuMemcpyHtoD(dB,hB,sz)
+ok   cuMemsetD32(dC,0,(size_t)N*N)
+LAUNCH grid=(128,128) block=(16,16)
+ok   cuLaunchKernel(fn, g,g,1, 16,16,1, 0,0, args,0)
+LAUNCH OK
+ok   cuCtxSynchronize()
+SYNC OK
+ok   cuMemcpyDtoH(hC,dC,sz)
+CUP8 RESULT N=2048 bad=0 maxerr=0 C[0]=2048(exp 2048) -> PASS
+CUP8 VERDICT: PASS (host GR matmul byte-exact at scale)
+DONE
+WIN_CUDA cup8 rc=0
+KFDX start api=d3d11 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2684 luid=0x00000000_0x00005bd8 dedicated_mb=3757 software=0 name="NVIDIA GeForce RTX 4090"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000065d6 dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 4090"
+KFDX ok D3D11CreateDevice(hardware, chosen adapter)
+KFDX feature_level 0xb100
+KFDX ok compile cs_5_0
+KFDX ok CreateComputeShader
+KFDX ok CreateUnorderedAccessView
+KFDX compute iters=20 bad=0 ms=31
+KFDX ok compute shader result matches (UAV readback)
+KFDX ok compile vs_5_0/ps_5_0
+KFDX ok Map staging texture
+KFDX pixel 64,127,191,255
+KFDX ok draw result matches (centre pixel 64,128,191,255)
+KFDX RESULT OK api=d3d11 adapter="NVIDIA GeForce RTX 4090"
+WIN_D3D d3d11 rc=0
+KFDX start api=d3d12 iters=20 any_vendor=0
+KFDX ok CreateDXGIFactory1
+KFDX adapter index=0 vendor=0x10de device=0x2684 luid=0x00000000_0x00005bd8 dedicated_mb=3757 software=0 name="NVIDIA GeForce RTX 4090"
+KFDX adapter index=1 vendor=0x1414 device=0x008c luid=0x00000000_0x000065d6 dedicated_mb=0 software=1 name="Microsoft Basic Render Driver"
+KFDX selected "NVIDIA GeForce RTX 4090"
+KFDX ok D3D12CreateDevice(chosen adapter)
+KFDX feature_level 0xc200
+KFDX vidmem budget_mb=3193 usage_mb=7
+KFDX ok DIRECT
+KFDX ok DIRECT queue fence Signal/Wait x3
+KFDX ok COPY
+KFDX ok COPY queue fence Signal/Wait x3
+KFDX ok compile cs_5_0
+KFDX ok serialize root signature
+KFDX ok CreateRootSignature
+KFDX ok CreateComputePipelineState
+KFDX compute iters=20 bad=0 fence_wait_ok=1 ms=62
+KFDX ok compute queue fence completed
+KFDX ok compute shader result matches (UAV copy-back)
+KFDX RESULT OK api=d3d12 adapter="NVIDIA GeForce RTX 4090"
+WIN_D3D d3d12 rc=0
+WIN_TDR_SINCE_BOOT=0
+WIN_ACCEPT_EXIT rc=0 2026-10-16T18:19:14.8152712Z
+#< CLIXML
+<Objs Version="IP-REDACTED" xmlns="http://schemas.microsoft.com/powershell/2004/04"><S S="Error">Blender CUDA failed rc=_x000D__x000A_</S><S S="Error">At line:32 char:77_x000D__x000A_</S><S S="Error">+ ... K CUDA gpu=NVIDIA') { throw "Blender CUDA failed rc=$($p.ExitCode)" }_x000D__x000A_</S><S S="Error">+                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~_x000D__x000A_</S><S S="Error">    + CategoryInfo          : OperationStopped: (Blender CUDA failed rc=:String) [], RuntimeException_x000D__x000A_</S><S S="Error">    + FullyQualifiedErrorId : Blender CUDA failed rc=_x000D__x000A_</S><S S="Error"> _x000D__x000A_</S></Objs>WINDOWS_BLENDER_ZIP_PIN_PASS=1
+Blender 4.5.0 (hash 8cb6b388974a built 2025-07-15 01:36:24)
+Fra:1 Mem:10.46M (Peak 10.46M) | Time:00:01.49 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Synchronizing object | Cube
+Fra:1 Mem:10.46M (Peak 10.46M) | Time:00:01.49 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Synchronizing object | Sphere.004
+Fra:1 Mem:11.96M (Peak 11.96M) | Time:00:01.49 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Initializing
+Fra:1 Mem:11.37M (Peak 11.96M) | Time:00:01.50 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Waiting for render to start
+Fra:1 Mem:11.37M (Peak 11.96M) | Time:00:01.50 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Updating Scene
+Fra:1 Mem:11.37M (Peak 11.96M) | Time:00:01.50 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Updating Shaders
+Fra:1 Mem:11.45M (Peak 11.96M) | Time:00:01.50 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Loading render kernels (may take a few minutes the first time)
+Fra:1 Mem:11.45M (Peak 38.62M) | Time:00:02.68 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Updating Procedurals
+Fra:1 Mem:11.45M (Peak 38.62M) | Time:00:02.68 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Updating Background
+Fra:1 Mem:11.45M (Peak 38.62M) | Time:00:02.68 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Updating Camera
+Fra:1 Mem:11.45M (Peak 38.62M) | Time:00:02.68 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Updating Meshes Flags
+Fra:1 Mem:11.45M (Peak 38.62M) | Time:00:02.68 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Updating Objects
+Fra:1 Mem:11.45M (Peak 38.62M) | Time:00:02.68 | Mem:0.00M, Peak:0.00M | Scene, ViewLayer | Updating Objects | Copying Transformations to device
+Fra:1 Mem:11.46M (Peak 38.62M) | Time:00:02.68 | Mem:0.01M, Peak:0.01M | Scene, ViewLayer | Updating Particle Systems
+Fra:1 Mem:11.46M (Peak 38.62M) | Time:00:02.68 | Mem:0.01M, Peak:0.01M | Scene, ViewLayer | Updating Particle Systems | Copying Particles to device
+Fra:1 Mem:11.46M (Peak 38.62M) | Time:00:02.68 | Mem:0.01M, Peak:0.01M | Scene, ViewLayer | Updating Meshes
+Fra:1 Mem:11.46M (Peak 38.62M) | Time:00:02.68 | Mem:0.01M, Peak:0.01M | Scene, ViewLayer | Updating Objects | Applying Static Transformations
+Fra:1 Mem:11.46M (Peak 38.62M) | Time:00:02.69 | Mem:0.01M, Peak:0.01M | Scene, ViewLayer | Updating Mesh | Computing attributes
+Fra:1 Mem:11.57M (Peak 38.62M) | Time:00:02.69 | Mem:0.01M, Peak:0.01M | Scene, ViewLayer | Updating Mesh | Copying Attributes to device
+Fra:1 Mem:11.57M (Peak 38.62M) | Time:00:02.69 | Mem:0.12M, Peak:0.12M | Scene, ViewLayer | Updating Scene BVH | Building
+Fra:1 Mem:11.57M (Peak 38.62M) | Time:00:02.69 | Mem:0.12M, Peak:0.12M | Scene, ViewLayer | Updating Scene BVH | Building BVH
+Fra:1 Mem:12.71M (Peak 38.62M) | Time:00:02.70 | Mem:0.12M, Peak:0.12M | Scene, ViewLayer | Updating Scene BVH | Packing BVH triangles and strands
+Fra:1 Mem:12.78M (Peak 38.62M) | Time:00:02.70 | Mem:0.12M, Peak:0.12M | Scene, ViewLayer | Updating Scene BVH | Packing BVH nodes
+Fra:1 Mem:12.77M (Peak 38.62M) | Time:00:02.71 | Mem:0.12M, Peak:0.12M | Scene, ViewLayer | Updating Scene BVH | Copying BVH to device
+Fra:1 Mem:12.77M (Peak 38.62M) | Time:00:02.71 | Mem:0.72M, Peak:0.72M | Scene, ViewLayer | Updating Mesh | Computing normals
+Fra:1 Mem:13.30M (Peak 38.62M) | Time:00:02.71 | Mem:0.72M, Peak:0.72M | Scene, ViewLayer | Updating Mesh | Copying Mesh to device
+Fra:1 Mem:13.30M (Peak 38.62M) | Time:00:02.71 | Mem:1.25M, Peak:1.25M | Scene, ViewLayer | Updating Objects Flags
+Fra:1 Mem:13.30M (Peak 38.62M) | Time:00:02.71 | Mem:1.25M, Peak:1.25M | Scene, ViewLayer | Updating Primitive Offsets
+Fra:1 Mem:13.30M (Peak 38.62M) | Time:00:02.71 | Mem:1.25M, Peak:1.25M | Scene, ViewLayer | Updating Images
+Fra:1 Mem:13.30M (Peak 38.62M) | Time:00:02.71 | Mem:1.25M, Peak:1.25M | Scene, ViewLayer | Updating Camera Volume
+Fra:1 Mem:13.30M (Peak 38.62M) | Time:00:02.71 | Mem:1.25M, Peak:1.25M | Scene, ViewLayer | Updating Lookup Tables
+Fra:1 Mem:13.30M (Peak 38.62M) | Time:00:02.72 | Mem:1.33M, Peak:1.33M | Scene, ViewLayer | Updating Lights
+Fra:1 Mem:13.30M (Peak 38.62M) | Time:00:02.72 | Mem:1.33M, Peak:1.33M | Scene, ViewLayer | Updating Lights | Computing tree
+Fra:1 Mem:13.30M (Peak 38.62M) | Time:00:02.72 | Mem:1.33M, Peak:1.33M | Scene, ViewLayer | Updating Integrator
+Fra:1 Mem:13.30M (Peak 38.62M) | Time:00:02.72 | Mem:1.33M, Peak:1.33M | Scene, ViewLayer | Updating Film
+Fra:1 Mem:13.31M (Peak 38.62M) | Time:00:02.72 | Mem:1.25M, Peak:1.33M | Scene, ViewLayer | Updating Lookup Tables
+Fra:1 Mem:13.31M (Peak 38.62M) | Time:00:02.72 | Mem:1.34M, Peak:1.34M | Scene, ViewLayer | Updating Baking
+Fra:1 Mem:13.31M (Peak 38.62M) | Time:00:02.72 | Mem:1.34M, Peak:1.34M | Scene, ViewLayer | Updating Device | Writing constant memory
+Fra:1 Mem:25.31M (Peak 38.62M) | Time:00:03.37 | Mem:1021.34M, Peak:1021.34M | Scene, ViewLayer | Sample 0/256
+Fra:1 Mem:43.11M (Peak 43.11M) | Time:00:03.52 | Remaining:00:36.54 | Mem:1039.14M, Peak:1039.14M | Scene, ViewLayer | Sample 1/256
+Fra:1 Mem:43.12M (Peak 43.12M) | Time:00:03.98 | Remaining:00:01.34 | Mem:1039.15M, Peak:1039.15M | Scene, ViewLayer | Sample 80/256
+Fra:1 Mem:43.12M (Peak 43.12M) | Time:00:04.16 | Remaining:00:01.30 | Mem:1039.15M, Peak:1039.15M | Scene, ViewLayer | Sample 96/256
+Fra:1 Mem:43.12M (Peak 43.12M) | Time:00:04.36 | Remaining:00:01.27 | Mem:1039.15M, Peak:1039.15M | Scene, ViewLayer | Sample 112/256
+Fra:1 Mem:43.12M (Peak 43.12M) | Time:00:04.55 | Remaining:00:01.18 | Mem:1039.15M, Peak:1039.15M | Scene, ViewLayer | Sample 128/256
+Fra:1 Mem:43.12M (Peak 43.12M) | Time:00:04.75 | Remaining:00:01.07 | Mem:1039.15M, Peak:1039.15M | Scene, ViewLayer | Sample 144/256
+Fra:1 Mem:43.12M (Peak 43.12M) | Time:00:04.84 | Remaining:00:00.88 | Mem:1039.15M, Peak:1039.15M | Scene, ViewLayer | Sample 160/256
+Fra:1 Mem:43.12M (Peak 43.12M) | Time:00:05.02 | Remaining:00:00.74 | Mem:1039.15M, Peak:1039.15M | Scene, ViewLayer | Sample 176/256
+Fra:1 Mem:43.12M (Peak 43.12M) | Time:00:05.20 | Remaining:00:00.60 | Mem:1039.15M, Peak:1039.15M | Scene, ViewLayer | Sample 192/256
+Fra:1 Mem:43.12M (Peak 43.12M) | Time:00:05.39 | Remaining:00:00.46 | Mem:1039.15M, Peak:1039.15M | Scene, ViewLayer | Sample 208/256
+Fra:1 Mem:43.12M (Peak 43.12M) | Time:00:05.55 | Remaining:00:00.31 | Mem:1039.15M, Peak:1039.15M | Scene, ViewLayer | Sample 224/256
+Fra:1 Mem:43.12M (Peak 43.12M) | Time:00:05.76 | Remaining:00:00.15 | Mem:1039.15M, Peak:1039.15M | Scene, ViewLayer | Sample 240/256
+Fra:1 Mem:51.03M (Peak 66.85M) | Time:00:06.23 | Mem:1039.15M, Peak:1039.15M | Scene, ViewLayer | Sample 256/256
+Fra:1 Mem:51.03M (Peak 66.85M) | Time:00:06.24 | Mem:1039.15M, Peak:1039.15M | Scene, ViewLayer | Finished
+Saved: 'C:\kf\out\blender-cuda.png'
+Time: 00:06.82 (Saving: 00:00.13)
+
+BLENDER_OK CUDA gpu=NVIDIA GeForce RTX 4090 mean=0.6405
+
+Blender quit
+
+WINDOWS_APPS_WAVE_EXIT rc=1 2026-10-16T18:20:29+00:00

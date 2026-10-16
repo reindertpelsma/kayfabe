@@ -1,0 +1,21 @@
+STAGE_START utc=2026-10-16T17:58:17Z
+STAGE_CHUNK package=blender index=0 bytes=4194304 QGA_PUT bytes=4194304 sha256=1e5df2b4013e98b567ccfb257146a95785c72b799d3e616bb07953fbbad20c26
+STAGE_CHUNK package=blender index=1 bytes=4194304 QGA_PUT bytes=4194304 sha256=609cc3c6421f78d1a2004974bda191e6645571babf3a26b5d6b8384b7d13139d
+STAGE_CHUNK package=blender index=2 bytes=4194304 QGA_PUT bytes=4194304 sha256=103e64dc0bd78af0deb64d89ba5a26b09ebed8d2496dad828454acee83f0a475
+STAGE_CHUNK package=blender index=3 bytes=4194304 QGA_PUT bytes=4194304 sha256=c83bbe07fe8d5f3d65541d98cf2e04a3196d3ee5ddfbc14210ae6a6cd04036f0
+STAGE_CHUNK package=blender index=4 bytes=4194304 QGA_PUT bytes=4194304 sha256=fe3b026970066a556fce7783cb8a335b2878e727e9e60b0d8aced1d19c0d32f4
+STAGE_CHUNK package=blender index=5 bytes=4194304 QGA_PUT bytes=4194304 sha256=67689e5d9d5ff17acd94e730f451d58283b502a6044b5a78d37cdd745b77e6bc
+STAGE_CHUNK package=blender index=6 bytes=4194304 QGA_PUT bytes=4194304 sha256=89b665b1febfabfc66a12465f84323e72aaf077bc10a1d41591c36abfe7d325f
+STAGE_CHUNK package=blender index=7 bytes=4194304 QGA_PUT bytes=4194304 sha256=1c719ba5d646a5ff8061e5217f53d6efbc33638b93438484f058a1bc429fa4a2
+STAGE_CHUNK package=blender index=8 bytes=4194304 QGA_PUT bytes=4194304 sha256=aa755670d7f3b4d25e1a45b91845ed33a8c7325d0f3ecdef8dda6c3f0efcb374
+STAGE_CHUNK package=blender index=9 bytes=4194304 QGA_PUT bytes=4194304 sha256=ff5b10e28f02067f73062cba8c91ac08a2c2bdb47aa970e8b7e1c40811a37407
+STAGE_CHUNK package=blender index=10 bytes=4194304 QGA_PUT bytes=4194304 sha256=18dc92c4c33c0df4ff0776480e4c57a3252568878736985ee1fc9cb6b65c5fab
+STAGE_CHUNK package=blender index=11 bytes=4194304 QGA_PUT bytes=4194304 sha256=5f51d1df03eec2b42a88a824d191b1035cdc4f916b0d76f20067f481d9cdeae6
+STAGE_CHUNK package=blender index=12 bytes=4194304 QGA_PUT bytes=4194304 sha256=cc9e9726afb1ac75797eed7c69039e26d738aaec60c7ddaac2d8a7097b3b521f
+Traceback (most recent call last):
+  File "/root/kayfabe/scripts/bench/diesweep/qga_file_put.py", line 53, in <module>
+    raw = f.readline(32769)
+  File "/usr/lib/python3.10/socket.py", line 705, in readinto
+    return self._sock.recv_into(b)
+TimeoutError: timed out
+STAGE_EXIT rc=1 utc=2026-10-16T17:58:35Z

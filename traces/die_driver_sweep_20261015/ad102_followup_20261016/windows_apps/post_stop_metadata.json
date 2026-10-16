@@ -1,0 +1,11 @@
+{
+  "qemu_bytes": 1914818,
+  "qemu_sha256": "2436b0dac1c5f2633e31af1526838ff4b69ddf7f049c18639da71feabfbb2478",
+  "qemu_export": "raw log stayed on rental; no bodies exported",
+  "host_xids_after": 5,
+  "host_xids_before": 5,
+  "host_xid_delta": 0,
+  "qpid_exists": false,
+  "qemu_110767_alive": false,
+  "controller_110740_alive": false
+}

@@ -1,0 +1,58 @@
+[
+  {
+    "inf": "nvrfui.inf",
+    "DriverVer": [
+      "10/02/2025, 32.0.15.8151\r"
+    ],
+    "generic_AD102_id": false
+  },
+  {
+    "inf": "nvddui.inf",
+    "DriverVer": [
+      "10/02/2025, 32.0.15.8151\r"
+    ],
+    "generic_AD102_id": false
+  },
+  {
+    "inf": "nvmoui.inf",
+    "DriverVer": [
+      "10/02/2025, 32.0.15.8151\r"
+    ],
+    "generic_AD102_id": false
+  },
+  {
+    "inf": "nvhdcui.inf",
+    "DriverVer": [
+      "10/02/2025, 32.0.15.8151\r"
+    ],
+    "generic_AD102_id": false
+  },
+  {
+    "inf": "nvleui.inf",
+    "DriverVer": [
+      "10/02/2025, 32.0.15.8151\r"
+    ],
+    "generic_AD102_id": false
+  },
+  {
+    "inf": "nvmdui.inf",
+    "DriverVer": [
+      "10/02/2025, 32.0.15.8151\r"
+    ],
+    "generic_AD102_id": false
+  },
+  {
+    "inf": "nv_dispui.inf",
+    "DriverVer": [
+      "10/02/2025, 32.0.15.8151\r"
+    ],
+    "generic_AD102_id": true
+  },
+  {
+    "inf": "nvaeui.inf",
+    "DriverVer": [
+      "10/02/2025, 32.0.15.8151\r"
+    ],
+    "generic_AD102_id": false
+  }
+]

@@ -1,0 +1,4 @@
+WIN_DIE_START kf3=77a72da9 checkout=77a72da9e guest_driver=580.65.06 gpu=NVIDIA GeForce RTX 4090 xid_before=5 2026-10-16T18:23:17+00:00
+[win_die] QEMU 110241 kf3 77a72da9 run /root/win/codex-adaref2
+[win_die] QGA answers 2026-10-16T18:24:17+00:00
+APPS_EXITCODE_RETRY_EXIT rc=1

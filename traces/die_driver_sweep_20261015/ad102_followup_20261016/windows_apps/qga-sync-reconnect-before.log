@@ -1,0 +1,17 @@
+F
+======================================================================
+FAIL: test_lost_readonly_sync_can_reconnect_before_any_file_command (__main__.FilePut.test_lost_readonly_sync_can_reconnect_before_any_file_command)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/codex/qga-file-stage/scripts/bench/tests/test_qga_file_put.py", line 102, in test_lost_readonly_sync_can_reconnect_before_any_file_command
+    result,observed,data=self.transfer('lost-sync')
+                         ~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/workspace/codex/qga-file-stage/scripts/bench/tests/test_qga_file_put.py", line 64, in transfer
+    self.assertNotIn('error',observed,observed)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'error' unexpectedly found in {'writes': 0, 'data': bytearray(b''), 'connections': 1, 'error': "TimeoutError('timed out')"} : {'writes': 0, 'data': bytearray(b''), 'connections': 1, 'error': "TimeoutError('timed out')"}
+
+----------------------------------------------------------------------
+Ran 1 test in 5.047s
+
+FAILED (failures=1)
