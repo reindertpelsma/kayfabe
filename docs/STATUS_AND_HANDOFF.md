@@ -1,11 +1,13 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
-## UPDATE 2026-10-16 19:40UTC — GB206595 concurrency passes; full suite running
+## UPDATE 2026-10-16 19:47UTC — GB206595 raw30 passes; Windows binding in progress
 
 ONLY own56286918active: measuredGB206arch1b0impl6/PCI2d04/8151MiB, native
 595open, gates9/9+gate10/12USER births and CUDA4PASS. Privatef8485f6db/SHAe974,
 actualKF3{} normal6/frozen180: concurrencyPASS31s/client14180ms/0heartbeat
-warnings. Complete raw30RUNNING; do not count30PASS yet. Serial controller91843
+warnings. Complete raw30PASS19:43:08,146USER births/90CUDA thread postures,30receipts.
+TenrawHB0startupwarnings in bus-info-sweep remain; no nonzero-HBformula warnings.
+FiveXid31map to deliberatefault arms. PR23staysdraft, no readiness-fix claim. Serial controller91843
 then runs Windows580 actualbinding/census, boundedRPC/body diagnostics and
 same-binary displayon/off from sibling overlays of one stopped bound parent.
 No builds/fetch during timed work. Full Windows baseSHA539aaad2...044b verified.

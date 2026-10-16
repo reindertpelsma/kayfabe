@@ -1,0 +1,538 @@
+kf-host: host tier: stock
+kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 100000), (20c, 100000)]: the background probe was refused or changed the answer — zero-probe bytes only
+kf3: host facts: GSS 0x2080a028 [(0, 1), (8, 1), (c, 1), (20c, 1)]: the background probe was refused or changed the answer — zero-probe bytes only
+kf-host: HOST-ABI REFUSED control 0x2080852e: host control 0x2080852e has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+kf3: host facts: GSS 0x2080852e [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf-host: HOST-ABI REFUSED control 0x2080853a: host control 0x2080853a has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+kf3: host facts: GSS 0x2080853a [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf-host: HOST-ABI REFUSED control 0x2080a618: host control 0x2080a618 has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+kf3: host facts: GSS 0x2080a618 [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf-host: HOST-ABI REFUSED control 0x2080852e: host control 0x2080852e has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+kf3: host facts: GSS 0x2080852e [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf-host: HOST-ABI REFUSED control 0x2080853a: host control 0x2080853a has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+kf3: host facts: GSS 0x2080853a [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf-host: HOST-ABI REFUSED control 0x2080a618: host control 0x2080a618 has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+kf3: host facts: GSS 0x2080a618 [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf-host: HOST-ABI REFUSED control 0x2080853b: host control 0x2080853b has no row in kf_abi::hostabi::HOST_CONTROLS, and host driver 595.91.07 is outside the interval the host encoders were written for — its layout is unknown
+kf3: host facts: GSS 0x2080853b [(4, 1)] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf-host: HOST-ABI REFUSED control 0x2080852a: : body is 1716 bytes, its layout is 1784
+kf3: host facts: GSS 0x2080852a [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf-host: HOST-ABI REFUSED control 0x2080a618: host control 0x2080a618 has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+kf3: host facts: GSS 0x2080a618 [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf-host: HOST-ABI REFUSED control 0x2080a618: host control 0x2080a618 has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+kf3: host facts: GSS 0x2080a618 [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf-host: HOST-ABI REFUSED control 0x2080852e: host control 0x2080852e has no public header (zero request measured NV_OK on AD103 575.51.03 and GSP 580.65.05; INVALID_ARGUMENT at 595.91.07); its layout at host driver 595.91.07 was never measured
+kf3: host facts: GSS 0x2080852e [] refused by the host (HostRefusal { status: None, detail: "Other(19314)" }) — not served
+kf3: host facts: FIFO latency buffers (engine, gp, pb) from the host: [(1, 3a0, a700), (9, 3a0, a700), (d, 60, 1300), (10, 60, 1300), (13, 40, 100), (1b, 40, 100), (22, 40, 100), (33, 40, 100)]
+kf3: channel budget 1789 per runlist (Derived; derived default 1789, host limit 2045; the count the guest is told AND the enforced cap, refused by name past it — property channel-budget, docs/design/V3_CHANNEL_BUDGET.md)
+kf3: ⚠ gpu-uuid=auto: this VM has no identity (no vm-id= and no QEMU -uuid), so there is nothing stable to derive from; using a RANDOM UUID for this boot. Give the VM `-uuid <uuid>` (or vm-id=) for a UUID that is stable across boots.
+kf3: guest GPU UUID GPU-REDACTED (gpu-uuid=auto, basis RandomNoVmId, devfn 0x18)
+kf3: permission policy: READ_ONLY+VOLATILE carried to the host map, PRIVILEGED leaves withheld from user twins, ATOMIC_DISABLE not carried (KF3_CARRY_ATOMIC_DISABLE=1 enables it once fault delivery exists) (key_perm=0x68)
+kf-cuda: cuda thread posture thread=kf3-cuda-walk cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+kf-cuda: cuda thread posture thread=kf3-cuda-store cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+kf3: host GPU minor=0 bdf=0000:00:07.0 gpuId=0x7 rm_device_instance=0 cuda_device="NVIDIA GeForce RTX 5060 Ti" store=5120 MiB
+kf3: guest driver 595.91.07 (guest-driver=); measured ABI: static-info Unencoded, element Pre610, init-args NineField, rm-control params@40, vgx Some((45, 3))
+kf3: native timer BAR0=0x9000, read-only 4096-byte mapping, host/guest layout TimerLayout { register_bytes: 1044, time_low: 1024, time_high: 1040 }
+kf3: P1+P2 T-space ON: built at prewarm (hardwired, OWNER_RULINGS §AB; docs/design/V3_P1P2_TSPACE.md); mirrors carry no window and no ring; host channel births require USER replies
+kf3: channel plane: Translated rings on host COPY4 (engine 0xd); completions on FIFO_EVENT_MTHD + CE4
+kf3: interrupt plane: host non-stall events -> guest vectors [GR0->Some(0) CE0->Some(0) CE4->Some(1) CE7->Some(2) NVENC0->Some(4) NVDEC0->Some(3) OFA->Some(5)]
+kf3: non-stall relay (owner ruling 2026-10-08): every host edge -> the guest vector of every event this guest ARMED, never dropped; FIFO_EVENT_MTHD -> a vector no armed engine shares, else GR0 vector Some(0) (relay=on, pacing=off; KF3_PT_NSI_RELAY / KF3_PT_NSI_MIN_INTERVAL_US)
+kf3: PRAMIN scratch: tile 0x100000 x 1 over 0x100000 (host RAM bound 0x100000)
+kf3: BAR1 scratch: tile 0x200000 x 64 over 0x8000000 (host RAM bound 0x200000)
+kf3: BAR2 scratch: tile 0x200000 x 16 over 0x2000000 (host RAM bound 0x200000)
+kf3: scratch host-RAM bound 0x500000 for this device (PRAMIN 0x100000 + BAR1 0x200000 + BAR2 0x200000); whole-window scratch would have allowed 0xa100000
+kf3: P4 memory plane: store 5120 MiB (imported into the walker), walker pools 236 MiB of host GPU memory (walk pool 1048576 runs, slot pool 2097152 runs (2097152 free), max per space 1048576, slots held 0, grows 0, retries 0, ceilings 0, largest slot 0, largest walk 0), roots bar1=0x131cac000 bar2=0x133392000, PRAMIN one map+mmap per move, trigger @0xb830b0
+kf-cuda: cuda thread posture thread=kf3-vamgr cap_sys_admin=cleared-for-thread-life (libcuda's channels from this thread, and from threads it starts, are created without CAP_SYS_ADMIN)
+2026-10-16T19:33:22.171897Z qemu-system-x86_64: -device kf3-gpu,fb-mb=5120,bar1-size=134217728,bar2-size=33554432,id=kf0,guest-driver=595.91.07: info: kf3: family=Blackwell phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 absent_cleared=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=0 sked=0/0held carve_gpu=0 carve_kernel=0 carve_cpu=0 carve_clipped=0x0 fn70=0 roots=0 root_moves=0 stmts=0/0 refused=0 pramin_repoints=0 pramin_miss=0 last_miss=0x0 pramin_worst_us=0 (map 0 mmap 0) pramin_maps=0 pramin_mmaps=0 pramin_kept=0 pramin_kept_now=0 window_advice_refused=0 inline_opens=0 reaped=0 cache_ops=0 sysmembars=0 root_unsets=0] mirrors=0 reused=0 prewarmed=0 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=0 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=0 host_calls=0] bar1db[trapped=0 unmirrored=0 deferred_clears=0 installed=0 removed=0 refused=0 rings=0] fsp[replies=0 last_nvdm=0x0] chan[births=0 pt_births=0 acts=0/0refused birth_refused_cap=0 worst_act_us=0 nsi=[] pt_nsi=[fifo_edges=0 fifo_raised=0 fifo_armed=0 sticky=0x0 kernel_nonstall_registered=0 arm_clears=0 os_event_overflowed=0 kernel_nonstall_overflowed=0 edges=0 not_armed=0 unvectored=0 relay_off=0 relay=on pacing=off refused=0  ] served=0 parks=2 host_rings=0 contended=0 poisoned=0 tokens=[]] views[armed=2 released=0 refused=0 held=2] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] inca[strict=yes counted=0 heap_out=0 rows_inexact=0] tspace[built=not-yet twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] irq[writes=0 raised=0 held=0 oor=0] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[] gsp_refusals[total=0 distinct=0 []] (BAR0 pieces=15)
+kf3: device reset #1 COMPLETE — the device is as realize left it; guest writes accepted again (dropped while in reset: 0)
+kf3: device reset #1 complete before the vCPUs resume (the main loop waited 0 us)
+kf3: guest-RAM object 0xcafe0010 over 0x80000000 bytes of the guest memfd
+kf3: mem t=0.966s tspace space=0xcafe0011 fb=0x120000000+0x12fbe0000 ram=0x24fbe0000+0x80000000 (obj 0xcafe0010) rings=0xff00000000+0x100000000 build_us=51552 fb_pages=2M:0x12fa00000+4K:0x1e0000
+kf3: mem t=0.969s [1/3] prewarm: spare host space 0xcafe0014 ready before the guest runs — windows=none (vaspace 2574 us, ram_obj 0 us, total 2576 us)
+kf3: mem t=1.021s [2/3] prewarm: spare host space 0xcafe0018 ready before the guest runs — windows=none (vaspace 1635 us, ram_obj 0 us, total 1635 us)
+kf3: mem t=1.072s [3/3] prewarm: spare host space 0xcafe001c ready before the guest runs — windows=none (vaspace 1526 us, ram_obj 0 us, total 1526 us)
+kf3: family=Blackwell phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 absent_cleared=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=0 sked=0/0held carve_gpu=0 carve_kernel=0 carve_cpu=0 carve_clipped=0x0 fn70=0 roots=0 root_moves=0 stmts=0/0 refused=0 pramin_repoints=0 pramin_miss=0 last_miss=0x0 pramin_worst_us=0 (map 0 mmap 0) pramin_maps=0 pramin_mmaps=0 pramin_kept=0 pramin_kept_now=0 window_advice_refused=0 inline_opens=0 reaped=0 cache_ops=0 sysmembars=0 root_unsets=0] mirrors=0 reused=0 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=0 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=0 host_calls=0] bar1db[trapped=0 unmirrored=0 deferred_clears=0 installed=0 removed=0 refused=0 rings=0] fsp[replies=0 last_nvdm=0x0] chan[births=0 pt_births=0 acts=0/0refused birth_refused_cap=0 worst_act_us=0 nsi=[] pt_nsi=[fifo_edges=0 fifo_raised=0 fifo_armed=0 sticky=0x0 kernel_nonstall_registered=0 arm_clears=0 os_event_overflowed=0 kernel_nonstall_overflowed=0 edges=0 not_armed=0 unvectored=0 relay_off=0 relay=on pacing=off refused=0  ] served=0 parks=82 host_rings=0 contended=0 poisoned=0 tokens=[]] views[armed=2 released=0 refused=0 held=2] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] inca[strict=yes counted=0 heap_out=0 rows_inexact=0] tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] irq[writes=0 raised=0 held=0 oor=0] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[] gsp_refusals[total=0 distinct=0 []] reset[req=1 (main=1 vcpu=0 wake=0) done=1 kept=0 pristine=1 waits_timed_out=0 stage=Idle dropped=0]
+kf3: family=Blackwell phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 absent_cleared=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=0 sked=0/0held carve_gpu=0 carve_kernel=0 carve_cpu=0 carve_clipped=0x0 fn70=0 roots=0 root_moves=0 stmts=0/0 refused=0 pramin_repoints=0 pramin_miss=0 last_miss=0x0 pramin_worst_us=0 (map 0 mmap 0) pramin_maps=0 pramin_mmaps=0 pramin_kept=0 pramin_kept_now=0 window_advice_refused=0 inline_opens=0 reaped=0 cache_ops=0 sysmembars=0 root_unsets=0] mirrors=0 reused=0 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=0 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=0 host_calls=0] bar1db[trapped=0 unmirrored=0 deferred_clears=0 installed=0 removed=0 refused=0 rings=0] fsp[replies=0 last_nvdm=0x0] chan[births=0 pt_births=0 acts=0/0refused birth_refused_cap=0 worst_act_us=0 nsi=[] pt_nsi=[fifo_edges=0 fifo_raised=0 fifo_armed=0 sticky=0x0 kernel_nonstall_registered=0 arm_clears=0 os_event_overflowed=0 kernel_nonstall_overflowed=0 edges=0 not_armed=0 unvectored=0 relay_off=0 relay=on pacing=off refused=0  ] served=0 parks=162 host_rings=0 contended=0 poisoned=0 tokens=[]] views[armed=2 released=0 refused=0 held=2] rc[armed=0 unarmed=0 wakes=0 seen=0 posted=0] inca[strict=yes counted=0 heap_out=0 rows_inexact=0] tspace[built=yes twin_refused=0 tspace_refused=0 slots_leaked=0 twin_freeing=0] irq[writes=0 raised=0 held=0 oor=0] dbfast[off regs=0 placed=0/0 sites=0 doorbells=0 wakes=0 rang=0 handed=0 absorbed=0 refused(budget=0 kvm=0 enospc=0 eexist=0 fd=0) deassign_failed=0 ack_timeouts=0 double=0 stale=0 empty=0 polls=0/0 max_batch=0 wake_to_deliver[n=0 p50=0.0us p99=0.0us max=0.0us] ack_wait[n=0 p50=0.0us p99=0.0us max=0.0us]] unserviced=[] gsp_refusals[total=0 distinct=0 []] reset[req=1 (main=1 vcpu=0 wake=0) done=1 kept=0 pristine=1 waits_timed_out=0 stage=Idle dropped=0]
+kf3: family=Blackwell phase=Cold trapped=0 applied=0 refused=0 serviced=0 ram_refused=0 unshadowed_writes=0 read_exits=0 last_off=0x0 mem[inval=0 walks=0/0 cleared=0 superseded=0 named_missed=0 unreconciled=0 absent_cleared=0 mapped=0 unmapped=0 clipped=0x0 held=0 vmm_overlaps=0 priv_withheld=0 priv_withheld_bytes=0x0 priv_mirrored=0 sked=0/0held carve_gpu=0 carve_kernel=0 carve_cpu=0 carve_clipped=0x0 fn70=0 roots=0 root_moves=0 stmts=0/0 refused=0 pramin_repoints=0 pramin_miss=0 last_miss=0x0 pramin_worst_us=0 (map 0 mmap 0) pramin_maps=0 pramin_mmaps=0 pramin_kept=0 pramin_kept_now=0 window_advice_refused=0 inline_opens=0 reaped=0 cache_ops=0 sysmembars=0 root_unsets=0] mirrors=0 reused=0 prewarmed=3 mirror_avg_us=0 mirror_max_us=0 vat[invals=0 arrive->clear_avg_us=0 max_us=0 walks=0 walk_avg_us=0 gpu_avg_us=0 plan_avg_us=0 apply_avg_us=0 leaves=0 host_calls=0] bar1db[trapped=0 unmirrored=0 deferred_clears=0 installed=0 removed=0 refused=0 rings=0] fsp[replies=0 last_nvdm=0x0] chan[births=0 pt_births=0 acts=0/0refused birth_refused_cap=0 worst_act_us=0 nsi=[] pt_nsi=[fifo_edges=0 fifo_raised=0 fifo_armed=0 sticky=0x0 kernel_nonstall_registered=0 arm_clears=0 os_event_overflowed=0 kernel_nonstall_overflowed=0 edges=0 not_armed=0 unvectored=0 relay_off=0 relay=on pacing=off refused=0  ] served=0 parks=242 host_rings=0 contended=0 poisoned=0 tokens=[]] views[armed=2 released=0 refused=0 held=2] rc[ar
+[OMITTED: raw text exceeds1MiB; retained on rental]
+017
+kf3: GSP rpc Free seq=12018
+kf3: GSP rpc Free seq=12019
+kf3: GSP rpc Free seq=12020
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d00010:0xcafe0176 under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d00010:0xcafe0176 vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=12021
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: VasKey(13965662516601028982) mirror space=0xcafe002a: windows=none rings=none (recycled)
+kf3: GSP rpc RmControl seq=12022
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmAlloc seq=12023
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d0000f:0xcafe0176 under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d0000f:0xcafe0176 vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=12024
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: VasKey(13965662512306061686) mirror space=0xcafe002f: windows=none rings=none (recycled)
+kf3: GSP rpc RmControl seq=12025
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmAlloc seq=12026
+kf3: GSP rpc Free seq=12027
+kf3: GSP rpc Free seq=12028
+kf3: GSP rpc Free seq=12029
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d0000f:0xcafe0178 under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d0000f:0xcafe0178 vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=12030
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=12031
+kf3: VasKey(13965662512306061688) mirror space=0xcafe002f: windows=none rings=none (recycled)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmAlloc seq=12032
+kf3: GSP rpc Free seq=12033
+kf3: GSP rpc Free seq=12034
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d00011:0xcafe017e under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d00011:0xcafe017e vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=12035
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: VasKey(13965662520895996286) mirror space=0xcafe0014: windows=none rings=none (recycled)
+kf3: GSP rpc RmControl seq=12036
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmAlloc seq=12037
+kf3: GSP rpc Free seq=12038
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d00010:0xcafe0178 under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d00010:0xcafe0178 vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=12039
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=12040
+kf3: VasKey(13965662516601028984) mirror space=0xcafe002a: windows=none rings=none (recycled)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmAlloc seq=12041
+kf3: GSP rpc Free seq=12042
+kf3: GSP rpc Free seq=12043
+kf3: GSP rpc Free seq=12044
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d00010:0xcafe017a under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d00010:0xcafe017a vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=12045
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=12046
+kf3: VasKey(13965662516601028986) mirror space=0xcafe002a: windows=none rings=none (recycled)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmAlloc seq=12047
+kf3: GSP rpc Free seq=12048
+kf3: GSP rpc Free seq=12049
+kf3: GSP rpc Free seq=12050
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d00010:0xcafe017c under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d00010:0xcafe017c vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=12051
+kf3: VasKey(13965662516601028988) mirror space=0xcafe002a: windows=none rings=none (recycled)
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=12052
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmAlloc seq=12053
+kf3: GSP rpc Free seq=12054
+kf3: GSP rpc Free seq=12055
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d00011:0xcafe0180 under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d00011:0xcafe0180 vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=12056
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=12057
+kf3: VasKey(13965662520895996288) mirror space=0xcafe002f: windows=none rings=none (recycled)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d0000f:0xcafe017a under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d0000f:0xcafe017a vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=12058
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=12059
+kf3: VasKey(13965662512306061690) mirror space=0xcafe0014: windows=none rings=none (recycled)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=12060
+kf3: GSP rpc RmAlloc seq=12061
+kf3: GSP rpc Free seq=12062
+kf3: GSP rpc Free seq=12063
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d0000f:0xcafe017c under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d0000f:0xcafe017c vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=12064
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=12065
+kf3: VasKey(13965662512306061692) mirror space=0xcafe0014: windows=none rings=none (recycled)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmAlloc seq=12066
+kf3: GSP rpc RmAlloc seq=12067
+kf3: GSP rpc Free seq=12068
+kf3: GSP rpc Free seq=12069
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d0000f:0xcafe017e under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d0000f:0xcafe017e vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=12070
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=12071
+kf3: VasKey(13965662512306061694) mirror space=0xcafe0014: windows=none rings=none (recycled)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmAlloc seq=12072
+kf3: GSP rpc Free seq=12073
+kf3: GSP rpc Free seq=12074
+kf3: GSP rpc Free seq=12075
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d00011:0xcafe0182 under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d00011:0xcafe0182 vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=12076
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=12077
+kf3: VasKey(13965662520895996290) mirror space=0xcafe002f: windows=none rings=none (recycled)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmAlloc seq=12078
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d00010:0xcafe017e under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d00010:0xcafe017e vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=12079
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=12080
+kf3: VasKey(13965662516601028990) mirror space=0xcafe002a: windows=none rings=none (recycled)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmAlloc seq=12081
+kf3: GSP rpc Free seq=12082
+kf3: GSP rpc Free seq=12083
+kf3: GSP rpc Free seq=12084
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d00010:0xcafe0180 under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d00010:0xcafe0180 vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=12085
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=12086
+kf3: VasKey(13965662516601028992) mirror space=0xcafe002a: windows=none rings=none (recycled)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmAlloc seq=12087
+kf3: GSP rpc Free seq=12088
+kf3: GSP rpc Free seq=12089
+kf3: GSP rpc Free seq=12090
+kf3: GSP rpc Free seq=12091
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d00010:0xcafe0182 under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d00010:0xcafe0182 vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=12092
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: VasKey(13965662516601028994) mirror space=0xcafe002a: windows=none rings=none (recycled)
+kf3: GSP rpc RmControl seq=12093
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmAlloc seq=12094
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d0000f:0xcafe0180 under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d0000f:0xcafe0180 vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=12095
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=12096
+kf3: VasKey(13965662512306061696) mirror space=0xcafe0014: windows=none rings=none (recycled)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=12097
+kf3: GSP rpc RmAlloc seq=12098
+kf3: GSP rpc Free seq=12099
+kf3: GSP rpc Free seq=12100
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d0000f:0xcafe0182 under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d0000f:0xcafe0182 vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=12101
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=12102
+kf3: VasKey(13965662512306061698) mirror space=0xcafe0014: windows=none rings=none (recycled)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmAlloc seq=12103
+kf3: GSP rpc Free seq=12104
+kf3: GSP rpc Free seq=12105
+kf3: GSP rpc Free seq=12106
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d0000f:0xcafe0184 under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d0000f:0xcafe0184 vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=12107
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: VasKey(13965662512306061700) mirror space=0xcafe0014: windows=none rings=none (recycled)
+kf3: GSP rpc RmControl seq=12108
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmAlloc seq=12109
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d00011:0xcafe0184 under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d00011:0xcafe0184 vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=12110
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=12111
+kf3: VasKey(13965662520895996292) mirror space=0xcafe002f: windows=none rings=none (recycled)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmAlloc seq=12112
+kf3: GSP rpc Free seq=12113
+kf3: GSP rpc Free seq=12114
+kf3: GSP rpc Free seq=12115
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d00011:0xcafe0186 under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d00011:0xcafe0186 vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=12116
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: VasKey(13965662520895996294) mirror space=0xcafe002f: windows=none rings=none (recycled)
+kf3: GSP rpc RmControl seq=12117
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmAlloc seq=12118
+kf3: GSP rpc Free seq=12119
+kf3: GSP rpc Free seq=12120
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d00010:0xcafe0184 under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d00010:0xcafe0184 vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=12121
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=12122
+kf3: VasKey(13965662516601028996) mirror space=0xcafe0014: windows=none rings=none (recycled)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d0000f:0xcafe0186 under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d0000f:0xcafe0186 vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=12123
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=12124
+kf3: VasKey(13965662512306061702) mirror space=0xcafe002a: windows=none rings=none (recycled)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=12125
+kf3: GSP rpc RmAlloc seq=12126
+kf3: GSP rpc Free seq=12127
+kf3: GSP rpc Free seq=12128
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d0000f:0xcafe0188 under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d0000f:0xcafe0188 vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=12129
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=12130
+kf3: VasKey(13965662512306061704) mirror space=0xcafe002a: windows=none rings=none (recycled)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmAlloc seq=12131
+kf3: GSP rpc RmAlloc seq=12132
+kf3: GSP rpc Free seq=12133
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d00011:0xcafe0188 under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d00011:0xcafe0188 vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=12134
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: VasKey(13965662520895996296) mirror space=0xcafe002f: windows=none rings=none (recycled)
+kf3: GSP rpc RmControl seq=12135
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmAlloc seq=12136
+kf3: GSP rpc Free seq=12137
+kf3: GSP rpc Free seq=12138
+kf3: GSP rpc Free seq=12139
+kf3: GSP rpc Free seq=12140
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d00010:0xcafe0186 under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d00010:0xcafe0186 vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=12141
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: VasKey(13965662516601028998) mirror space=0xcafe0014: windows=none rings=none (recycled)
+kf3: GSP rpc RmControl seq=12142
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=12143
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d0000f:0xcafe018a under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d0000f:0xcafe018a vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=12144
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=12145
+kf3: VasKey(13965662512306061706) mirror space=0xcafe002a: windows=none rings=none (recycled)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmAlloc seq=12146
+kf3: GSP rpc RmAlloc seq=12147
+kf3: GSP rpc Free seq=12148
+kf3: GSP rpc Free seq=12149
+kf3: GSP rpc Free seq=12150
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d00010:0xcafe0188 under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d00010:0xcafe0188 vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=12151
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: VasKey(13965662516601029000) mirror space=0xcafe0014: windows=none rings=none (recycled)
+kf3: GSP rpc RmControl seq=12152
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmAlloc seq=12153
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d00011:0xcafe018a under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d00011:0xcafe018a vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=12154
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=12155
+kf3: VasKey(13965662520895996298) mirror space=0xcafe002f: windows=none rings=none (recycled)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmAlloc seq=12156
+kf3: GSP rpc Free seq=12157
+kf3: GSP rpc Free seq=12158
+kf3: GSP rpc Free seq=12159
+kf3: GSP rpc Free seq=12160
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d00011:0xcafe018c under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d00011:0xcafe018c vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=12161
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=12162
+kf3: VasKey(13965662520895996300) mirror space=0xcafe002a: windows=none rings=none (recycled)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d0000f:0xcafe018c under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d0000f:0xcafe018c vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=12163
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=12164
+kf3: VasKey(13965662512306061708) mirror space=0xcafe002f: windows=none rings=none (recycled)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=12165
+kf3: GSP rpc RmAlloc seq=12166
+kf3: GSP rpc RmAlloc seq=12167
+kf3: GSP rpc Free seq=12168
+kf3: GSP rpc Free seq=12169
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d00011:0xcafe018e under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d00011:0xcafe018e vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=12170
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: VasKey(13965662520895996302) mirror space=0xcafe002a: windows=none rings=none (recycled)
+kf3: GSP rpc RmControl seq=12171
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmAlloc seq=12172
+kf3: GSP rpc Free seq=12173
+kf3: GSP rpc Free seq=12174
+kf3: GSP rpc Free seq=12175
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d0000f:0xcafe018e under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d0000f:0xcafe018e vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=12176
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=12177
+kf3: VasKey(13965662512306061710) mirror space=0xcafe0014: windows=none rings=none (recycled)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d00010:0xcafe018a under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d00010:0xcafe018a vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=12178
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=12179
+kf3: VasKey(13965662516601029002) mirror space=0xcafe002f: windows=none rings=none (recycled)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=12180
+kf3: GSP rpc Free seq=12181
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d00011:0xcafe0190 under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d00011:0xcafe0190 vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=12182
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: VasKey(13965662520895996304) mirror space=0xcafe002a: windows=none rings=none (recycled)
+kf3: GSP rpc RmControl seq=12183
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmAlloc seq=12184
+kf3: GSP rpc RmAlloc seq=12185
+kf3: GSP rpc RmAlloc seq=12186
+kf3: GSP rpc Free seq=12187
+kf3: GSP rpc Free seq=12188
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d00011:0xcafe0192 under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d00011:0xcafe0192 vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=12189
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=12190
+kf3: VasKey(13965662520895996306) mirror space=0xcafe002a: windows=none rings=none (recycled)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmAlloc seq=12191
+kf3: GSP rpc Free seq=12192
+kf3: GSP rpc Free seq=12193
+kf3: GSP rpc Free seq=12194
+kf3: GSP rpc Free seq=12195
+kf3: GSP rpc Free seq=12196
+kf3: GSP rpc Free seq=12197
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d00010:0xcafe018c under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d00010:0xcafe018c vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=12198
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: VasKey(13965662516601029004) mirror space=0xcafe002f: windows=none rings=none (recycled)
+kf3: GSP rpc RmControl seq=12199
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmAlloc seq=12200
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d0000f:0xcafe0190 under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d0000f:0xcafe0190 vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=12201
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=12202
+kf3: VasKey(13965662512306061712) mirror space=0xcafe0014: windows=none rings=none (recycled)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=12203
+kf3: GSP rpc Free seq=12204
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d00010:0xcafe018e under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d00010:0xcafe018e vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=12205
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: VasKey(13965662516601029006) mirror space=0xcafe002f: windows=none rings=none (recycled)
+kf3: GSP rpc RmControl seq=12206
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc RmAlloc seq=12207
+kf3: GSP rpc RmAlloc seq=12208
+kf3: GSP rpc Free seq=12209
+kf3: GSP rpc Free seq=12210
+kf3: GSP rpc Free seq=12211
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d00010:0xcafe0190 under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d00010:0xcafe0190 vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=12212
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=12213
+kf3: VasKey(13965662516601029008) mirror space=0xcafe002f: windows=none rings=none (recycled)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=12214
+kf3: GSP rpc RmAlloc seq=12215
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d0000f:0xcafe0192 under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d0000f:0xcafe0192 vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=12216
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc RmControl seq=12217
+kf3: VasKey(13965662512306061714) mirror space=0xcafe0014: windows=none rings=none (recycled)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=12218
+kf3: GSP rpc Free seq=12219
+kf3: GSP rpc RmAlloc seq=12220
+kf-rm: chanlink: FERMI_VASPACE_A 0xc1d00010:0xcafe0192 under 0xcafe0001 (device default for it: 0xcafe0004) VAS-FACTS index=Some(0) flags=Some(0) bigPageSize=Some(0) vaBase(lo32)=Some(0) vaSize(lo32)=Some(0)
+kf-rm: chanlink: VAS-DECL 0xc1d00010:0xcafe0192 vaBase=0x0 vaSize=0x0 end=None shared_management=false
+kf3: GSP rpc RmAlloc seq=12221
+kayfabe: HELD-REPLY fn=RmControl depth=1 — this map reply WAITS for its rows
+kf3: VasKey(13965662516601029010) mirror space=0xcafe002f: windows=none rings=none (recycled)
+kf3: GSP rpc RmControl seq=12222
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=12223
+kf3: GSP rpc Free seq=12224
+kf3: GSP rpc RmAlloc seq=12225
+kf3: GSP rpc Free seq=12226
+kf3: GSP rpc Free seq=12227
+kf3: GSP rpc Free seq=12228
+kf3: GSP rpc Free seq=12229
+kf3: GSP rpc Free seq=12230
+kf3: GSP rpc Free seq=12231
+kf3: GSP rpc Free seq=12232
+kf3: GSP rpc Free seq=12233
+kf3: GSP rpc Free seq=12234
+kf3: GSP rpc Free seq=12235
+kf3: GSP rpc Free seq=12236
+kf3: GSP rpc Free seq=12237
+kf3: GSP rpc Free seq=12238
+kf3: GSP rpc Free seq=12239
+kf3: GSP rpc Free seq=12240
+kf3: GSP rpc Free seq=12241
+kf3: GSP rpc Free seq=12242
+kf3: GSP rpc Free seq=12243
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=12244
+kf3: TSPACE-RETIRE tok=0x2 host=0x400d000b key=VasKey(13970166074168049674) ring_va=0xff00100000 released=true stale_binds=0/0 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: DOORBELL-LEDGER tok=0x00000002 route=translated emulated=0 forwarded=0 host=0x400d000b fast=0
+kf3: chan token 0x2 (host 0x400d000b) RETIRED, forwarded=0 submissions=0 splits=0/0 serves=1 last_put=Some(0) gp_get=None store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+kf3: act free: 0xc1e00007:0x2: translated host 0x400d000b (2754 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=12245
+kf3: GSP rpc Free seq=12246
+kf3: GSP rpc Free seq=12247
+kf3: GSP rpc Free seq=12248
+kf3: GSP rpc Free seq=12249
+kf3: GSP rpc Free seq=12250
+kayfabe: HELD-REPLY fn=Free depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc Free seq=12251
+kf3: TSPACE-RETIRE tok=0x1 host=0x400d000a key=VasKey(13970166069873082380) ring_va=0xff00000000 released=true stale_binds=0/2290 late=0 indeterminate=0 unresolved[walk=0 acquire=0 refused=0]
+kf3: DOORBELL-LEDGER tok=0x00000001 route=translated emulated=0 forwarded=1145 host=0x400d000a fast=0
+kf3: chan token 0x1 (host 0x400d000a) RETIRED, forwarded=1145 submissions=1152 splits=0/0 serves=2285 last_put=Some(1145) gp_get=Some(1145) store_views=0 privilege=Some(ChannelPrivilege { level: 2, uvm_owned: false }) dead=None inca=[refused_methods=0 subdevice_masks=0 control_entries=0 ext_base_unapplied=0] gr_tier=false gr[methods=0 inert_binds=0 objects=[]] gp_get_by_engine=(false, 0)
+kf3: act free: 0xc1e00006:0x2: translated host 0x400d000a (2530 us, off the GSP lock)
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=12252
+kf3: GSP rpc Free seq=12253
+kf3: GSP rpc Free seq=12254
+kf3: GSP rpc Free seq=12255
+kf3: GSP rpc RmControl seq=12256
+kf3: mem t=29.730s the guest wrote NV_VIRTUAL_FUNCTION_PRIV_FUNC_BAR1_BLOCK_LOW_ADDR = 0x0 (MODE PHYSICAL) at GSP phase Running
+kf3: GSP rpc RmControl seq=12257
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 12257 }
+kf3: GSP REFUSED fn76/0x20800ab4=0x56 (GSP_RM_CONTROL) first_seq=12257 — the guest read a non-OK status
+kf3: GSP rpc Free seq=12258
+kf3: GSP rpc Free seq=12259
+kf3: GSP rpc Free seq=12260
+kf3: GSP rpc Free seq=12261
+kf3: GSP rpc Free seq=12262
+kf3: GSP rpc Free seq=12263
+kf-rm: FECS-TRACE GET_FECS_TRACE_HW_ENABLE 0x20800a38: NV_OK bEnable=NV_FALSE (no guest ctxsw trace; the SETs stay unserviced) #1
+kf3: GSP rpc RmControl seq=12264
+kayfabe: HELD-REPLY fn=UpdateBarPde depth=1 — this map reply WAITS for its rows
+kf3: GSP rpc UpdateBarPde seq=12265
+kayfabe: HELD-REPLY-POSTED n=1 — their rows are on the host now
+kf3: GSP rpc Free seq=12266
+kf3: GSP rpc Free seq=12267
+kf3: GSP rpc Free seq=12268
+kf3: GSP rpc Free seq=12269
+kf3: GSP rpc RmControl seq=12270
+kf3: GSP rpc UNSERVICED Unserviced { code: 76, sequence: 12270 }
+kf3: GSP rpc UnloadingGuestDriver seq=12271
+kf3: GSP fn 47 UNLOADING_GUEST_DRIVER seq=12271: bInPMTransition=false bGc6Entering=false newLevel=0 — the guest's RM gives BAR1 up
+kf3: GSP phase Running -> Halted

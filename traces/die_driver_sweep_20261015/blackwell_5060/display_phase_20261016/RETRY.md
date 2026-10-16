@@ -27,3 +27,11 @@ builds or source fetches during timed work. Structured display allocation export
 uses compiler-derived public580.65.06 PIO/DMA fields and class IDs, redacts
 pControl values, rejects serialized/truncated/unrelated allocations; no raw
 allocation/Other4 bodies return. Four synthetic screening assertions pass.
+
+MEASURED19:47UTC: full Linux595raw30/30PASS at180, normal6, sourcef8485f6db,
+30actualenv{} receipts/146USER births/90CUDA thread postures.10rawHB0startup
+warnings only in bus-info-sweep (82ms future-offset unsigned-wrap window), no
+nonzero-HBformula warnings; PR23remainsdraft/readinessgapnamed. FiveXid31map
+exactly to intentionaldefer-liveness/missing-page-fault arms. Complete proof in
+second_attempt/{B3_RESULT.md,linux595/}. Windowsbindingphase1QGA/PScomplete,
+drvbindrunning; no actualWindowscensus or displayon/off result yet.

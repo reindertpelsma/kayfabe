@@ -1,0 +1,178 @@
+{
+  "serial_arms": 30,
+  "qemu_arms": 30,
+  "heartbeat_formula_warnings": 10,
+  "per_arm": [
+    {
+      "arm": "pce-mask-probe",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "alias-two-vas",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "cross-client-leak",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "alias-unmap-observe",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "timer",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "executor-vas",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "late-map-race",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "ce-client",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "atomics-probe",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "map-stress",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "uvm-invalidate",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "rpc-mixed-allocs",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "concurrency",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "defer-liveness",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "dictated-ring-negative",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "doorbell-census",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "uvm-mean",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "gpga-reserve-probe",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "blockage-coverage",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "guest-ram-pin",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "missing-page-fault",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "engines",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "ce-client-guest-ram",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "concurrent-fuzz",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "guest-ring-channel",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "gpu-info-sweep",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "map-propagation",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "bus-info-sweep",
+      "warnings": 10,
+      "samples": [
+        "[   14.107586] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1177834691 heartbeat 0 heartbeatWithOffsetMs 1177834773 diff 4294967214 timeout 5200",
+        "[   14.116469] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1177834700 heartbeat 0 heartbeatWithOffsetMs 1177834773 diff 4294967223 timeout 5200"
+      ]
+    },
+    {
+      "arm": "dictated-ring",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "arm": "bar1-crossing",
+      "warnings": 0,
+      "samples": []
+    }
+  ],
+  "births": 146,
+  "USER_births": 146,
+  "CUDA_thread_posture_lines": 90,
+  "actual_process_receipts": 30,
+  "host_Xids": [
+    "[ 1191.583427] NVRM: Xid (PCI:0000:00:07): 31, pid=93242, name=qemu-system-x86, channel 0x0000000a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "[ 1194.729873] NVRM: Xid (PCI:0000:00:07): 31, pid=93242, name=qemu-system-x86, channel 0x0000000a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "[ 1197.711618] NVRM: Xid (PCI:0000:00:07): 31, pid=93242, name=qemu-system-x86, channel 0x0000000b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "[ 1200.832176] NVRM: Xid (PCI:0000:00:07): 31, pid=93242, name=qemu-system-x86, channel 0x0000000a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+    "[ 1315.424922] NVRM: Xid (PCI:0000:00:07): 31, pid=94176, name=qemu-system-x86, channel 0x0000000b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE"
+  ],
+  "xid_pid_arm_map": {
+    "93242": "--defer-liveness,--probe-launch-dma",
+    "94176": "--missing-page-fault,--probe-launch-dma"
+  },
+  "CUDA_threads_caps_cleared": 90,
+  "heartbeat_raw_zero_warnings": 10,
+  "heartbeat_raw_nonzero_warnings": 0
+}
