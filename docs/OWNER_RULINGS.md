@@ -1272,3 +1272,17 @@ worker-only submission and command inspection from birth, the owner answered:
 - A sloppy research build toward about 300 fps D3D11 is wanted as a reference, with every gap classified; it is evidence for a later redesign, not a product.
 - Open: expose `auto` | `always_scan` as a product property from the start, or keep it a measurement mode until the app matrix shows a need; an automatic degrade after a first unexpected
   reset needs a §AE review before it is built.
+
+## §AK. Correctness and reliability are a release gate; explicit refusal over undefined behaviour; crash loudly, never silently wrong, 2026-10-17
+
+**STATUS: LIVE, 2026-10-17 (owner).** For the production code that is eventually chosen, correctness and reliability matter far more than performance numbers, as with any hardware
+product. They are a checkmark that must hold, not one side of a trade-off. A performance feature ships only if it holds the gate; otherwise it stays a measurement or research mode.
+- **Explicit refusal over undefined behaviour or corruption.** Fail closed, loud and attributable (a named counter and a log line that say what was refused or what failed). Crash
+  safely and loudly rather than run silently wrong.
+- **Corollaries (coordinator's reading, owner agreed in principle):** every guest-reachable decision has a named refusal and unknown inputs are refused, not guessed; a state that cannot be
+  proven right is detected and turned into an explicit error (for example stale-slot replay at a ring switch must be detected or proven impossible before shipping, lifecycle review item D5);
+  a hang is a failure and a stuck state has a loud counter (no timer repairs it, §AE); a loud failure must be contained to the guest's own channel or VM (the blast radius on other VMs is
+  measured before the policy is relied on, `V3_CHANNEL_RC_SCOPE`, M1-M3); every unsupported case is documented with the error it produces and the supported-workload matrix has zero
+  unexplained failures; research shortcuts and hacks that could produce a silent wrong result never ship (§AJ). Failure RATES on supported apps are tracked too: a refusal that fires on
+  common apps is a bug, a safe one.
+- The release checklist lives in `docs/RELEASE_CLEANUP_LEDGER.md`, section D.
