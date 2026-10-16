@@ -1,0 +1,220 @@
+{
+  "serial_arms": 30,
+  "heartbeat_raw_zero_warnings": 0,
+  "heartbeat_raw_nonzero_warnings": 0,
+  "arms": [
+    {
+      "name": "fast_codex_ada2build_full590_gpga-reserve-probe_serial.log",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "name": "fast_codex_ada2build_full590_uvm-invalidate_serial.log",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "name": "fast_codex_ada2build_full590_bus-info-sweep_serial.log",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "name": "fast_codex_ada2build_full590_dictated-ring-negative_serial.log",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "name": "fast_codex_ada2build_full590_defer-liveness_serial.log",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "name": "fast_codex_ada2build_full590_engines_serial.log",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "name": "fast_codex_ada2build_full590_late-map-race_serial.log",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "name": "fast_codex_ada2build_full590_rpc-mixed-allocs_serial.log",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "name": "fast_codex_ada2build_full590_bar1-crossing_serial.log",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "name": "fast_codex_ada2build_full590_cross-client-leak_serial.log",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "name": "fast_codex_ada2build_full590_missing-page-fault_serial.log",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "name": "fast_codex_ada2build_full590_blockage-coverage_serial.log",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "name": "fast_codex_ada2build_full590_concurrency_serial.log",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "name": "fast_codex_ada2build_full590_doorbell-census_serial.log",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "name": "fast_codex_ada2build_full590_ce-client_serial.log",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "name": "fast_codex_ada2build_full590_alias-unmap-observe_serial.log",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "name": "fast_codex_ada2build_full590_map-propagation_serial.log",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "name": "fast_codex_ada2build_full590_pce-mask-probe_serial.log",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "name": "fast_codex_ada2build_full590_dictated-ring_serial.log",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "name": "fast_codex_ada2build_full590_atomics-probe_serial.log",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "name": "fast_codex_ada2build_full590_guest-ring-channel_serial.log",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "name": "fast_codex_ada2build_full590_map-stress_serial.log",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "name": "fast_codex_ada2build_full590_guest-ram-pin_serial.log",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "name": "fast_codex_ada2build_full590_gpu-info-sweep_serial.log",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "name": "fast_codex_ada2build_full590_timer_serial.log",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "name": "fast_codex_ada2build_full590_uvm-mean_serial.log",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "name": "fast_codex_ada2build_full590_alias-two-vas_serial.log",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "name": "fast_codex_ada2build_full590_concurrent-fuzz_serial.log",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "name": "fast_codex_ada2build_full590_executor-vas_serial.log",
+      "warnings": 0,
+      "samples": []
+    },
+    {
+      "name": "fast_codex_ada2build_full590_ce-client-guest-ram_serial.log",
+      "warnings": 0,
+      "samples": []
+    }
+  ],
+  "actual_process_receipts": 30,
+  "host_xids": [
+    {
+      "line": "[ 1419.742385] NVRM: Xid (PCI:0000:00:07): 31, pid=94179, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+      "pid": 94179,
+      "raw_arm": "defer-liveness",
+      "guest_driver": "595.91.07"
+    },
+    {
+      "line": "[ 1422.799241] NVRM: Xid (PCI:0000:00:07): 31, pid=94179, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+      "pid": 94179,
+      "raw_arm": "defer-liveness",
+      "guest_driver": "595.91.07"
+    },
+    {
+      "line": "[ 1425.804365] NVRM: Xid (PCI:0000:00:07): 31, pid=94179, name=qemu-system-x86, channel 0x0000001b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+      "pid": 94179,
+      "raw_arm": "defer-liveness",
+      "guest_driver": "595.91.07"
+    },
+    {
+      "line": "[ 1428.862743] NVRM: Xid (PCI:0000:00:07): 31, pid=94179, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+      "pid": 94179,
+      "raw_arm": "defer-liveness",
+      "guest_driver": "595.91.07"
+    },
+    {
+      "line": "[ 1492.747011] NVRM: Xid (PCI:0000:00:07): 31, pid=95003, name=qemu-system-x86, channel 0x0000001b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE",
+      "pid": 95003,
+      "raw_arm": "missing-page-fault",
+      "guest_driver": "595.91.07"
+    },
+    {
+      "line": "[ 4812.095077] NVRM: Xid (PCI:0000:00:07): 31, pid=133487, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+      "pid": 133487,
+      "raw_arm": "defer-liveness",
+      "guest_driver": "590.48.01"
+    },
+    {
+      "line": "[ 4815.155753] NVRM: Xid (PCI:0000:00:07): 31, pid=133487, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+      "pid": 133487,
+      "raw_arm": "defer-liveness",
+      "guest_driver": "590.48.01"
+    },
+    {
+      "line": "[ 4818.163611] NVRM: Xid (PCI:0000:00:07): 31, pid=133487, name=qemu-system-x86, channel 0x0000001b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+      "pid": 133487,
+      "raw_arm": "defer-liveness",
+      "guest_driver": "590.48.01"
+    },
+    {
+      "line": "[ 4821.221499] NVRM: Xid (PCI:0000:00:07): 31, pid=133487, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+      "pid": 133487,
+      "raw_arm": "defer-liveness",
+      "guest_driver": "590.48.01"
+    },
+    {
+      "line": "[ 4878.720926] NVRM: Xid (PCI:0000:00:07): 31, pid=134462, name=qemu-system-x86, channel 0x0000001b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE",
+      "pid": 134462,
+      "raw_arm": "missing-page-fault",
+      "guest_driver": "590.48.01"
+    }
+  ]
+}

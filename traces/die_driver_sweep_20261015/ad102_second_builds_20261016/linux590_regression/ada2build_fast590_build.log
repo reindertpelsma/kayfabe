@@ -1,0 +1,14 @@
+== GUEST DRIVER 590.48.01 from /workspace/drivers/590.48.01 (the host keeps its own)
+== HOST MODE: kernel 6.8.0-59-generic, modules from /lib/modules/6.8.0-59-generic
+== modules taken from the host (with closure): 6
+==   ecc.ko
+==   nvidia.ko
+==   nvidia-uvm.ko
+==   wmi.ko
+==   video.ko
+==   nvidia-modeset.ko
+== firmware taken from the host: 2 file(s)
+== GUEST DRIVER 590.48.01 (verified from the packed module; /workspace/bench/fastguest590/driver.STAGED)
+== built: /workspace/bench/fastguest590/vmlinuz  15M
+== built: /workspace/bench/fastguest590/initrd.cpio.gz  111M
+== kernel release: 6.8.0-59-generic

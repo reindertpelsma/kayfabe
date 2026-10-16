@@ -1,5 +1,21 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-16 23:19UTC — AD102 Linux590 raw30 PASS, Win581 recovery active
+
+Only56302930ACTIVE, originaltimer00:46/hard00:51UTC2026-10-17 unchanged.
+Exact9d/privateSHAcc2a host595/guest590.48.01, normal6/frozen180/actualKF3{}:
+30PASS/0FAIL/0CRASH/0NOTRUN23:10:34–23:16:16.161USER/90CUDApostures/30receipts,
+0HBwarnings THIS590run. Concurrency13s/client4970ms,R34guestRAM40s/client31970ms.
+590ogkmcommit2ccbad25e1af6a6ee6f38cf569f89f8b65d658ab/module/fwSHAretained.
+FiveadditionalintentionalrawXid31 mapped133487(4defer)/134462(1missingpage), host5→10;
+app/broker zero-new-Xid requirement notwaived. TS/ad102_second_builds_20261016/linux590_regression.
+Win581recoveryfreshsameinstalledparent/P19/ABI5809402 QEMU137670boot23:16:18,
+QGA23:17:33, readonlycensusPID4324 budget300 running. Rootlog/prov/ada2build_windows581_recovery.log.
+Noinstallerreplay. Finishqueue132509 thenfat590V3 onlyifstartbefore23:35; native595CUDA/gfx
+before590fatapps. Brokerqueue137981 waits fatCUDAgfxcomplete/noQEMU andstarts onlybefore00:05,
+25min bound; ownedPR27stop. No fetch/buildduringtimedGPU. No familycomplete.
+
+
 ## UPDATE 2026-10-16 23:12UTC — Windows581 installed, first census UNVERIFIED; Linux590 raw running
 
 Only own56302930ACTIVE; timer00:46/hard00:51UTC2026-10-17 unchanged. Exact9d/privateSHAcc2a.
