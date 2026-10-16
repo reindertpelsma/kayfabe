@@ -141,6 +141,18 @@ fn scan_refusal_detail(l: &kf_chan::user_scan::Located, words: &[u32], base: usi
     )
 }
 
+/// SCRATCH d3d11-gap: `KF3_LAZY_OBSERVE` (turns between private-USERD reads; 1 = every turn). Read once.
+fn lazy_observe() -> u64 {
+    static N: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
+    *N.get_or_init(|| {
+        std::env::var("KF3_LAZY_OBSERVE")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .filter(|n| (1..=4096).contains(n))
+            .unwrap_or(1)
+    })
+}
+
 /// ★ 2026-10-14 MEASUREMENT ONLY — `KF3_USER_RING_TRACE=<dir>` (default off; never needed to boot,
 /// never changes a decision). When a USER-ring scan refuses, the pump writes one bounded report per
 /// refused channel into `<dir>`: the GP descriptor and its backing, the GP ring around the cursor,
@@ -439,6 +451,8 @@ pub(super) struct Pump {
     lc_bound: bool,
     /// SCRATCH d3d11-gap: when the current private-ring credit wait began; guest ring backlog (entries ahead of the cursor) at the last turn.
     cw_at: Option<std::time::Instant>,
+    turn_no: u64,
+    prev_waiting: bool,
     backlog: u32,
     lc_sw_guest: Option<u32>,
 }
@@ -518,6 +532,8 @@ impl Pump {
             lc: crate::lifecycle::new_chan(key),
             lc_bound: false,
             cw_at: None,
+            turn_no: 0,
+            prev_waiting: true,
             backlog: 0,
             lc_sw_guest: None,
         })
@@ -1336,6 +1352,7 @@ impl Pump {
     /// for. No tick: the caller arms the wake ([`ChanPlane::user_ring_serve`]).
     fn turn(&mut self, me: &ChanPlane, r: &mut userrelay::Record) -> Turn<bool> {
         use kf_chan::user_loop::Need;
+        self.prev_waiting = !matches!(self.need, Need::Idle | Need::Again);
         self.need = Need::Idle;
         self.again = false;
         crate::lifecycle::tick(me);
@@ -1377,18 +1394,29 @@ impl Pump {
             self.trace_stall(me, r);
         }
         let native = r.chan.ok_or("USER_RING_NATIVE_ABSENT")?;
-        let (get, reference) = {
-            let storage = r
-                .lease
-                .storage
-                .lock()
-                .map_err(|_| "USER_RING_STORAGE_POISONED")?;
-            (storage.gpu_get()?, storage.gpu_reference()?)
-        };
-        self.marks.observe(reference);
-        for (generation, get) in self.fetch.observe(get).map_err(str::to_owned)? {
-            if generation == self.generation {
-                self.guest_get = Some((generation, get));
+        // SCRATCH d3d11-gap (HG5 causality test, never for merge): `KF3_LAZY_OBSERVE=N` reads the private USERD (GP_GET, REFERENCE: two BAR1/store-view loads)
+        // only every Nth turn, or when the previous turn ended waiting, or when credits are low, or while a segment is open. N=1 (default) = today's behaviour.
+        self.turn_no = self.turn_no.wrapping_add(1);
+        let lazy_n = lazy_observe();
+        let must = lazy_n <= 1
+            || self.prev_waiting
+            || self.turn_no % lazy_n == 0
+            || self.fetch.available() < 64
+            || self.segment.is_some();
+        if must {
+            let (get, reference) = {
+                let storage = r
+                    .lease
+                    .storage
+                    .lock()
+                    .map_err(|_| "USER_RING_STORAGE_POISONED")?;
+                (storage.gpu_get()?, storage.gpu_reference()?)
+            };
+            self.marks.observe(reference);
+            for (generation, get) in self.fetch.observe(get).map_err(str::to_owned)? {
+                if generation == self.generation {
+                    self.guest_get = Some((generation, get));
+                }
             }
         }
         if let Some((generation, get)) = self.guest_get {
