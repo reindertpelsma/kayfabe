@@ -175,3 +175,14 @@ No own rental active at this checkpoint. Full evidence pushed before retirement:
 B2one-group mode progress but presentation FAIL, Windows on/off and CMC Code43 negatives,
 exacte1bd candidate raw30, native/guest595CUDA4 and graphics5/5+10matchinghashes.
 Retirement receipt: blackwell_5060/display_phase_20261016/retirement.json.
+
+
+## Ada second actual driver builds, 2026-10-16 21:51UTC
+
+|Instance|GPU|USD/hour incl150GB|StartUTC|StopUTC|Purpose|Ceiling|
+|---|---|---:|---|---|---|---|
+|56302930|RTX4090 advertised, AD102 proof pending|0.61|2026-10-16T21:51:00.774332UTC|ACTIVE, originaltimer00:46UTC/hard00:51UTC2026-10-17|A3Windows581.51/Linux590; A4AD102three-row ablations|max1.83USD; campaignceil10.60USD+transfers|
+
+Prior own56286918retired/APIabsence21:32:48 beforecreation. PublicSSHkeyattached,
+timer2571615armed immediately. NoBlackwell5070contract created: preparedofferdisappeared.
+Own onlythisnewID; allotheraccountinstancesareuntouched. Startup15minKVM/disk/actualGPUchecks.

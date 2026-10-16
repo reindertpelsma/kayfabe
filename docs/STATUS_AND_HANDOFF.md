@@ -1,5 +1,21 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-16 21:53UTC — new owned56302930 for Ada second driver builds
+
+ONLY own56302930 ACTIVE/provisioning. Advertised4090/machine42612/offer48798407,
+actualAD102/PCI/KVM/disk pending. Creation21:51:00.774UTC, originaltimer2571615
+00:46UTC/hard00:51UTC2026-10-17. Quote0.61/h incl150GB/max1.83; campaignceil10.60+transfers.
+Receipt/workspace/codex/ada2build-20261016-owned.json; startupcontrollerbootstrap
+/workspace/codex/ada2build20261016_bootstrap.py (toolsession14743; pollstdout/local-log).
+SSHaliascodex-ada2build-56302930 willbewrittenbybootstrap, ForwardAgentno/ownknownhosts.
+Source9d6f210ba1dc6ab0edbc49ff265101091e8b08f1 commoncandidatebranchcodex/gb205-followup-hw-20261016,
+actual595nativegates/privatebuild first. AimA3Windows581.51 actual8151/public5809402 and
+Linux590; A4threeAD102rowablationsif time. NewdriverhardwareallUNRUN. No61088override.
+GB205preparedofferdisappearedbeforepurchase/nocharge;5070/5080/AD106/107/TU106/GA104KVM
+currentlyempty, so choose promptAda work. PlanTS/ad102_second_builds_20261016/PLAN.md.
+GB206previousbatchcomplete/retired21:32:48; resultsinpreviousupdate remainvalid, nofamilycomplete.
+
+
 ## UPDATE 2026-10-16 21:34UTC — GB206595 raw/CUDA/headless graphics PASS; rental retired
 
 MEASURED exacte1bd2df4d/privateSHA6d1fe5c4...db046a: normal595raw30/30 at180,
