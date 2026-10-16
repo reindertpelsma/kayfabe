@@ -1,5 +1,23 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-16 20:58UTC — GB206 Linux mode wall moved; presentation/Windows still FAIL
+
+MEASURED B2 ONE derived tiling group, source36d134bc5/privateSHAf317: Linux580.159.04
+now Cinnamon1/Xorg1/NVIDIA renderer/no invalid modes. Desktop acceptance FAIL: SHM1920x1080
+1 black color, glxgears3frames/15.1s,1 flip timeout/12 nvAssert/0 guest Xid. Host Xids5 unchanged.
+Baselinef848/e974: No valid modes/Cinnamon0/Xorg0. Fresh same-parent siblings, actual diagnostic
+KF3_REV selector+RPC_TRACE1. Falsifier invalid modes did not fire; stop B2 after this one group.
+Windows candidate580.88 actual8088/GSP1/P19+2diagnostics remains Code43/385commands,
+CA7A276→teardown277→unload384 unchanged, rank1 falsifier fired. Earlier displayoff also
+teardown277 without displayclasses (different CFB0 path; ordinal coincidence alone not cause).
+All three test VMs cleanly stopped; serial controller exited20:47:44. Evidence
+TS/blackwell_5060/display_phase_20261016/second_attempt/b2_tiles/RESULT.md and39 screened artifacts.
+PR29 stays draft; no family complete. Rank2 a89 pure-[In] probe next if time permits; public
+Linux caller handles NOT_SUPPORTED nonfatally, so inference is weak; no CBCB/CCU guesses.
+ONLY own56286918 remains active, timer2478432~22:06:28/hard22:11:25UTC. Retire before cap,
+verify API absence before canceling owned timer. Current/source root36d134bc5, SSHcodex-gb206phase2-56286918.
+
+
 ## UPDATE 2026-10-16 19:47UTC — GB206595 raw30 passes; Windows binding in progress
 
 ONLY own56286918active: measuredGB206arch1b0impl6/PCI2d04/8151MiB, native

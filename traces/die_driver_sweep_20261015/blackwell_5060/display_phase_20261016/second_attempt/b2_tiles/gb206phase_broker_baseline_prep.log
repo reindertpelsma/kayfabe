@@ -1,0 +1,6 @@
+[interactive] broker badf2d707da4: nvkvm-display-broker backends:  dma-buf test source : yes (libgbm)  wayland : NO - install libwayland-dev wayland-protocols  x11 : yes (dri3+present +xrender scaling and guest cursor) + xi2 raw motion  test : yes (always) 
+[interactive] provisioning boot, kf3 f8485f6d (/workspace/bench/kf3-bins/f8485f6d/qemu-system-x86_64)
+OWNED_QEMU_RECORDED pid=104684
+[interactive] provision: APT_RC=0 + echo APT_RC=0 PROVISION_DONE + echo PROVISION_DONE  (log /root/codex-broker-gb206phase/prep-20261016-203032/provision.log)
+OWNED_QEMU_STOP how=acpi
+[interactive] INTERACTIVE_PREP_EXIT 2026-10-16T20:36:14+00:00
