@@ -31,6 +31,31 @@ class GuestExecTests(unittest.TestCase):
             result = qmp.qga_exec("fixture.sock", "probe.exe", ["--check"], timeout)
         return result, sends, connect.call_count, out.getvalue()
 
+    def test_cli_deadline_allows_a_seven_minute_probe(self):
+        replies = [{"return": {"pid": 73}}, {"return": {"exited": False}},
+                   {"return": {"exited": True, "exitcode": 7}}]
+        sends = []
+        with patch.object(qmp, "qga_open", return_value=(Mock(), Mock())), \
+             patch.object(qmp, "send", side_effect=lambda f, m: sends.append(m)), \
+             patch.object(qmp, "recv", side_effect=replies), \
+             patch.object(qmp.time, "sleep"), \
+             patch.object(qmp.time, "monotonic", side_effect=[0, 0, 0, 421]):
+            rc = qmp.main(["qmp.py", "fixture.sock", "qga-exec", "--timeout=660",
+                           "probe.exe", "--check"])
+        self.assertEqual(rc, 7)
+        self.assertEqual(sends[0]["arguments"]["path"], "probe.exe")
+        self.assertEqual(sends[0]["arguments"]["arg"], ["--check"])
+        self.assertEqual(sum(m["execute"] == "guest-exec" for m in sends), 1)
+
+    def test_invalid_cli_deadline_never_launches(self):
+        for value in ("nan", "inf", "0", "-1", "3601", "bad"):
+            with self.subTest(value=value), patch.object(qmp, "qga_exec") as launch, \
+                 patch.object(qmp.sys, "stderr", new_callable=io.StringIO):
+                rc = qmp.main(["qmp.py", "fixture.sock", "qga-exec",
+                               "--timeout=" + value, "probe.exe"])
+                self.assertEqual(rc, 2)
+                launch.assert_not_called()
+
     def test_status_timeout_reconnects_to_the_same_process(self):
         encoded = base64.b64encode(b"hardware verdict: FAIL\n").decode()
         rc, sends, opens, output = self.run_exec([
