@@ -33,3 +33,28 @@ fn gb205_measurement_is_not_compressed_to_other_dies_or_branches() {
             && (m.branch == "*" || m.branch == "590" || m.branch == "610")
     }));
 }
+
+#[test]
+fn gb205_windows580_has_a_separately_measured_row() {
+    let rows: Vec<_> = shipped_measured()
+        .iter()
+        .filter(|m| {
+            m.die
+                == Die {
+                    architecture: 0x1b0,
+                    implementation: 5,
+                }
+                && m.branch == "580"
+                && m.caps_class == 0xca73
+                && m.offset == 0x00c
+        })
+        .collect();
+    assert_eq!(
+        rows.len(),
+        1,
+        "Windows580 requires its own native GB205 evidence"
+    );
+    assert_eq!(rows[0].value, 0x102);
+    assert!(rows[0].source.starts_with("measured:GB205"));
+    assert!(rows[0].source.contains("Windows580.88"));
+}
