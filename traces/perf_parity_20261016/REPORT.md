@@ -77,7 +77,7 @@ is retained. Windows and interactive Linux process environments were captured.
 **The failed gate — measured facts and unresolved cause.** The failing guest logs show
 NVIDIA driver 595.91.07. Host/QEMU logs first refuse the 2 GiB guest-RAM OS descriptor as
 Other(30), then report T-space not built and channel birth refused. The guest driver fails
-initialization; the client fails opening nvidia<gpu> with EIO. Public NVIDIA status headers
+initialization; the client fails opening nvidia<gpu> with EIO. [Public NVIDIA status headers](https://github.com/NVIDIA/open-gpu-kernel-modules/blob/595.84/src/common/sdk/nvidia/inc/nvstatuscodes.h#L59)
 identify decimal 30 (0x1e) as invalid address. This identifies the failure point, not its
 cause or a causal link to the deferred adapter. A later read-only host check had about
 25.5 GiB MemAvailable; there is no measured basis here for claiming memory exhaustion.

@@ -44,8 +44,8 @@ check, not a Heaven performance number. Linux smoke FPS is display capped and is
 throughput comparison with VFIO.
 
 Claude's final report says its KF3_FULLMAP_EXP was scripted but never run. Its dirty
-experiment binary is not used. FULL/WINDOWED Heaven comparisons on this production revision
-remain required; no speedup claim is made.
+experiment binary is not used. FULL/WINDOWED Heaven comparisons completed on c66ac9de; see HEAVEN.md.
+The corrected 4b2c2878 adapter has no Heaven result after its failed Linux gate.
 
 The host soak was canceled deliberately to move CPU-only work away from the performance
 host. Initial detached dev-box attempts did not survive their execution session. None is
