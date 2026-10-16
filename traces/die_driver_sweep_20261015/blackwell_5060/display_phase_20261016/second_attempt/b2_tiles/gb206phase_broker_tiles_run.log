@@ -15,7 +15,7 @@ OWNED_QEMU_RECORDED pid=106391
   │   desktop      Cinnamon logs in by itself as 'ubuntu' (~60-90 s)
   │   stop         Ctrl-C here, or: scripts/bench/display/interactive.sh stop  (or close the window: it asks the
   │                guest to power down)
-  │   guest ssh    ssh -i /workspace/bench/guest_key ubuntu@192.168.77.2
+  │   guest ssh    ssh -i /workspace/bench/guest_key ubuntu@PRIVATE-IP-REDACTED
   │   logs         /root/codex-broker-gb206phase/validation-tiles
   └──────────────────────────────────────────────────────────────────────────────┘
 [interactive] QEMU exited rc=0 (log /root/codex-broker-gb206phase/validation-tiles/qemu.log)

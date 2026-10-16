@@ -1,5 +1,7 @@
 # Blackwell RTX5060 wave
 
+**STATUS: LIVE, 2026-10-16 21:13UTC.** New GB206595raw30 PASS f8485f6db; one derived tiling group36d134bc5 starts Linux580 Cinnamon/Xorg but SHM is black with one flip timeout, so desktop FAIL. Windows580 actual8088/GSP1 stays Code43: displayON/OFF teardown277, tiling unchanged, CMC policy acknowledgement unchanged277/unload384. Current evidence in [display_phase_20261016/second_attempt](display_phase_20261016/second_attempt/). Only own56286918 active; exact candidate regression running. The following dated run notes are historical and superseded where they still say pending,29/30 or retired. No full family acceptance.
+
 **STATUS: LIVE, 2026-10-15 22:07UTC; retired; Linux580 raw/CUDA/headlessgfx PASS, desktop FAIL, Windows580 Code43, Linux595 raw29/30.**
 
 Native580.88 LTSC26100 oracle19:41:24–19:41:29: Code0/actual32.0.15.8088
