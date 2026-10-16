@@ -1,79 +1,128 @@
-//! Clock-domain selection for the GSP heartbeat, sampled only on the drainer.
-//! Guest RM adds its own system-timer offset to this raw millisecond value.
+//! GSP heartbeat clock conversion, sampled only on the drainer.
+//! Public595 kernel_gsp.c passes sysTimerOffsetNs in fn72 and adds its millisecond
+//! value back when checking the heartbeat. PTIMER and VF_TIME are system clocks.
+use kf_abi::DriverVersion;
+use kf_gsp::StashedSystemInfo;
+
+pub(crate) fn offset_ns(version: DriverVersion, info: &StashedSystemInfo) -> Option<u64> {
+    let layout = kf_abi::generated::matrix::GSPSYSTEMINFO
+        .at(version)
+        .ok()??;
+    if info.declared_len != layout.size() || info.bytes.len() != layout.size() {
+        return None;
+    }
+    let field = layout.field("sysTimerOffsetNs")?;
+    if field.size != 8 || field.elem != 0 {
+        return None;
+    }
+    let start = usize::try_from(field.off).ok()?;
+    Some(u64::from_le_bytes(
+        info.bytes
+            .get(start..start.checked_add(8)?)?
+            .try_into()
+            .ok()?,
+    ))
+}
 
 pub(crate) fn sample(
-    guest_timer_ns: impl FnOnce() -> Option<u64>,
-    _host_usermode_ns: impl FnOnce() -> Option<u64>,
+    system_timer_ns: impl FnOnce() -> Option<u64>,
+    _guest_offset_ns: impl FnOnce() -> Option<u64>,
 ) -> Option<u32> {
-    // Use the very page guest RM reads. NV_VIRTUAL_FUNCTION_TIME may already
-    // include the system offset that FSP guests add to the heartbeat themselves.
-    // The other reader remains lazy and is never a fallback for a missing clock.
-    guest_timer_ns().map(|ns| (ns / 1_000_000) as u32)
+    // Previous, hardware-falsified selector: PTIMER contains the system offset too.
+    system_timer_ns().map(|ns| (ns / 1_000_000) as u32)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::sample;
-    use std::cell::Cell;
-
-    #[test]
-    fn fsp_software_offset_is_applied_once_by_the_guest() {
-        // Synthetic separate epochs; public595 _kgspIsHeartbeatTimedOut formula.
-        let raw_gpu_ms = 20_000u32;
-        let system_offset_ms = 7_980_000u32;
-        let current_ms = raw_gpu_ms.wrapping_add(system_offset_ms);
-        let beat = sample(
-            || Some(u64::from(raw_gpu_ms) * 1_000_000),
-            || Some(u64::from(current_ms) * 1_000_000),
-        )
-        .unwrap();
-        let age = current_ms.wrapping_sub(beat.wrapping_add(system_offset_ms));
-        assert!(
-            age <= 5200,
-            "a second system offset creates a false timeout: {age}"
-        );
+    use super::*;
+    fn v() -> DriverVersion {
+        DriverVersion {
+            major: 595,
+            minor: 91,
+            patch: 7,
+        }
     }
-
     #[test]
-    fn only_the_validated_guest_timer_is_read() {
-        let guest_reads = Cell::new(0);
-        let other_reads = Cell::new(0);
-        let beat = sample(
-            || {
-                guest_reads.set(guest_reads.get() + 1);
-                Some(42_000_000)
-            },
-            || {
-                other_reads.set(other_reads.get() + 1);
-                Some(99_000_000)
-            },
-        );
-        assert_eq!(beat, Some(42));
-        assert_eq!(guest_reads.get(), 1);
-        assert_eq!(other_reads.get(), 0);
-    }
-
-    #[test]
-    fn unavailable_guest_clock_never_falls_back_to_a_different_epoch() {
-        assert_eq!(sample(|| None, || Some(99_000_000)), None);
-    }
-
-    #[test]
-    fn host_usermode_clock_failure_does_not_remove_a_valid_guest_clock() {
-        assert_eq!(sample(|| Some(42_000_000), || None), Some(42));
-    }
-
-    #[test]
-    fn millisecond_wrap_matches_unsigned_guest_arithmetic() {
-        let ms = u64::from(u32::MAX) + 7;
+    fn public595_formula_applies_guest_offset_once() {
+        let offset = 7_980_000u64 * 1_000_000;
+        let current = 8_000_000u64 * 1_000_000;
+        let beat = sample(|| Some(current), || Some(offset)).unwrap();
         assert_eq!(
-            sample(|| Some(ms * 1_000_000 + 999_999), || Some(0)),
-            Some(6)
+            (current / 1_000_000) as u32 - beat.wrapping_add((offset / 1_000_000) as u32),
+            0
         );
     }
-
     #[test]
-    fn equal_epochs_remain_equal() {
-        assert_eq!(sample(|| Some(42_000_000), || Some(42_000_000)), Some(42));
+    fn round_before_subtracting_like_guest_not_after() {
+        assert_eq!(sample(|| Some(10_100_000), || Some(3_900_000)), Some(7));
+    }
+    #[test]
+    fn millisecond_wrap_is_unsigned_in_both_operands() {
+        let ms = u64::from(u32::MAX) + 7;
+        assert_eq!(sample(|| Some(ms * 1_000_000), || Some(3_000_000)), Some(3));
+    }
+    #[test]
+    fn zero_offset_preserves_older_family_clock() {
+        assert_eq!(sample(|| Some(42_000_000), || Some(0)), Some(42));
+    }
+    #[test]
+    fn missing_offset_never_publishes_wrong_epoch() {
+        assert_eq!(sample(|| Some(42_000_000), || None), None);
+    }
+    #[test]
+    fn missing_clock_never_forges_freshness() {
+        assert_eq!(sample(|| None, || Some(0)), None);
+    }
+    #[test]
+    fn offset_is_decoded_at_every_exact_compiled_tag() {
+        for &version in kf_abi::generated::matrix::MEASURED {
+            let layout = kf_abi::generated::matrix::GSPSYSTEMINFO
+                .at(version)
+                .unwrap()
+                .unwrap();
+            let f = layout.field("sysTimerOffsetNs").unwrap();
+            let mut info = StashedSystemInfo {
+                declared_len: layout.size(),
+                bytes: vec![0; layout.size()],
+                sequence: 1,
+            };
+            let start = f.off as usize;
+            info.bytes[start..start + 8].copy_from_slice(&u64::MAX.to_le_bytes());
+            assert_eq!(offset_ns(version, &info), Some(u64::MAX));
+        }
+    }
+    #[test]
+    fn truncated_or_wrong_size_or_unknown_abi_is_refused() {
+        let layout = kf_abi::generated::matrix::GSPSYSTEMINFO
+            .at(v())
+            .unwrap()
+            .unwrap();
+        let mut info = StashedSystemInfo {
+            declared_len: layout.size(),
+            bytes: vec![0; layout.size()],
+            sequence: 1,
+        };
+        assert_eq!(offset_ns(v(), &info), Some(0));
+        info.declared_len += 1;
+        assert_eq!(offset_ns(v(), &info), None);
+        info.declared_len -= 1;
+        info.bytes.pop();
+        assert_eq!(offset_ns(v(), &info), None);
+        assert_eq!(
+            offset_ns(
+                DriverVersion {
+                    major: 595,
+                    minor: 91,
+                    patch: 8
+                },
+                &info
+            ),
+            None
+        );
+    }
+    #[test]
+    fn hostile_offset_extremes_are_bounded_clock_arithmetic() {
+        let beat = sample(|| Some(0), || Some(u64::MAX)).unwrap();
+        assert_eq!(beat.wrapping_add((u64::MAX / 1_000_000) as u32), 0);
     }
 }
