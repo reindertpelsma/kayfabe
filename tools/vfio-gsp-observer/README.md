@@ -8,7 +8,16 @@ It changes neither Kayfabe product semantics nor a guest/GPU queue pointer.
 
 ## 2026-10-16 FMC mailbox route
 
-**STATUS: RESEARCH, 2026-10-16. CPU validation passes; hardware validation pending.**
+**STATUS: RESEARCH, 2026-10-16. CPU validation passes; Blackwell prefixes recovered; strict census FAILS.**
+Owned GB206 replay at integrated3934a0895 attached one table and exported
+commandseq0..386/statusseq0..384,772 records with zero forward gaps/drops/read
+failures. Both sequence-zero prefixes are measured. The strict census exits1:
+109 anomalies and39 unpaired controls; no complete validated trace claim.
+The observer's invalid-slot-probe counter is5953, not a lost-message count.
+Native capture with the separate Windows module passed its strict oracle.
+Evidence remains separate on codex/sweep-blackwell-20261015 under
+traces/die_driver_sweep_20261015/blackwell_5060/virtual_native_alignment_20261016/.
+
 The shared observer also recognizes the mailbox route in public OGKM580.65.06
 `kgspBootstrapGspFmc_GH100`: MAILBOX0/1 names `GSP_FMC_BOOT_PARAMS`, whose
 `gspRmParams.bootArgsOffset` names LibOS. Compiler checks derive target offset
