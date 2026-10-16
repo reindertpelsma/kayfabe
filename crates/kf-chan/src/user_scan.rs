@@ -95,20 +95,22 @@ impl Scan {
             .fold(0, |m, s| m | (1 << s))
     }
 
-    /// The scan after an UNSCANNED stretch (Pointer mode): the bindings are kept, the packet in
-    /// progress is forgotten and the sub-device mask state returns to its birth value (assumption P2 of
-    /// `docs/design/V3_USER_RING_LIFECYCLE_20261016.md`: the first unscanned entry boundary is a packet
-    /// boundary).
+    /// The scan after an UNSCANNED stretch (Pointer mode): the bindings AND the sub-device mask state are kept as the
+    /// last scan left them, the packet in progress is forgotten (assumption P2' of
+    /// `docs/design/V3_USER_RING_LIFECYCLE_20261016.md`: the anchor, a `GP_PUT` value, is a packet boundary).
+    ///
+    /// The mask state is kept, not returned to its birth value: a guest that STOREd a mask at setup and USEs it later
+    /// would otherwise be refused ("USE with nothing stored") at the first USE after a Fresh start and lose the
+    /// channel (review D4). The kept state can be stale only if the guest changed the mask inside the unscanned
+    /// stretch, which a single-GPU Windows guest has no reason to do; an unknown mask has no conservative value
+    /// (`active = false` would hide a real trigger, `active = true` is what the birth state assumes), so the last
+    /// scanned state is the best-informed one.
     #[must_use]
     pub fn fresh_resume(&self) -> Self {
         Self {
             bindings: self.bindings,
             pending: None,
-            subdevice: self.subdevice.as_ref().map(|s| Subdevice {
-                id: s.id,
-                active: true,
-                stored: None,
-            }),
+            subdevice: self.subdevice.clone(),
         }
     }
 
@@ -813,12 +815,13 @@ mod tests {
     }
 
     #[test]
-    fn a_fresh_resume_keeps_the_bindings_and_forgets_the_open_packet_and_the_mask_state() {
+    fn a_fresh_resume_keeps_the_bindings_and_the_mask_state_and_forgets_only_the_open_packet() {
         let mut s = Scan::for_subdevice(1).unwrap();
         s.segment(&[h(6, 0, 1).unwrap(), 0x5080], |v| v == 0x5080)
             .unwrap();
+        // the guest STOREs a mask for this sub-device at setup, SETs it active, and opens a packet (all scanned)
         s.segment(
-            &[0x20000 | (4 << 4), 0x10000, h(1, 0x1b0, 3).unwrap(), 7],
+            &[0x20000 | (1 << 4), 0x10000 | (1 << 4), h(1, 0x1b0, 3).unwrap(), 7],
             |v| v == 0x5080,
         )
         .unwrap();
@@ -826,20 +829,24 @@ mod tests {
         let f = s.fresh_resume();
         assert!(f.at_boundary(), "the packet in progress is forgotten");
         assert_eq!(f.software_mask(|v| v == 0x5080), 1 << 6, "bindings kept");
-        // the mask is active again (birth state): a trigger scans as a trigger
+        // a trigger scans as a trigger
         let mut f2 = f.clone();
         let t = f2
             .segment(&[h(6, 0x200, 1).unwrap(), 27], |v| v == 0x5080)
             .unwrap()
             .unwrap();
         assert_eq!(t.call.data, 27);
-        // nothing stored: a USE with nothing stored is refused as it is at birth
+        // D4: the stored mask survives: a USE after the fresh resume is NOT refused
         let mut f3 = f.clone();
+        assert_eq!(f3.segment(&[0x30000], |v| v == 0x5080), Ok(None));
+        // the original is unchanged
+        assert!(!s.at_boundary());
+        // a scan that never stored anything still refuses a USE (unchanged behaviour)
+        let g = Scan::for_subdevice(1).unwrap().fresh_resume();
+        let mut g2 = g.clone();
         assert_eq!(
-            f3.segment(&[0x30000], |v| v == 0x5080),
+            g2.segment(&[0x30000], |v| v == 0x5080),
             Err(Refusal::SubDeviceMask(0x30000))
         );
-        // and the original is unchanged
-        assert!(!s.at_boundary());
     }
 }

@@ -1,14 +1,13 @@
-//! Shared test support for the USER-ring lifecycle (`docs/design/V3_USER_RING_LIFECYCLE_20261016.md`):
-//! ONE transliteration of the relay's per-entry turn (`crates/kf-qemu/src/userpump.rs`
-//! `Pump::turn_body` / `segment_turn` / `end_batch` / `credit_need`, line references in the comments)
-//! against an abstract [`Env`], driven three ways: the exhaustive interleaving model
-//! (`user_lifecycle_model.rs`), the sequential property / differential tests
-//! (`user_lifecycle_props.rs`) and the real-thread hostile-writer stress (`user_lifecycle_stress.rs`).
+//! Shared test support for the USER-ring lifecycle (`docs/design/V3_USER_RING_LIFECYCLE_20261016.md`).
 //!
-//! The turn uses the REAL `Lifecycle`, `SyncGate`, `Marks`, `Grace`, `Scan`, `Fetch`, `inspect_entry` and
-//! `Wait`; only the I/O (`Pump::snapshot`, `publish`, the USERD accesses) and the lock handling are
-//! abstracted. A turn is split into micro-steps so that a driver may run any other actor between any
-//! two of them (the guest changes ONE dword at any instant, the registry epoch moves, the PBDMA pops).
+//! PHASE 1b (review T1): the per-entry turn is PRODUCTION code now (`kf_chan::user_turn::Relay`, the same code the
+//! USER-ring pump in `kf-qemu` runs). This module wraps it with simulated accessors ([`Env`] -> `Io`) and carries
+//! the test-side stand-in of the pump's segment machinery (publication of a scanned segment, the staged trigger
+//! path, the software action and the ring switch: `PubScan` / `Stage` / `Action`), which is the only transliterated
+//! part left. It is driven three ways: the exhaustive interleaving model (`user_lifecycle_model.rs`), the sequential
+//! property / differential tests (`user_lifecycle_props.rs`) and the real-thread hostile-writer stress
+//! (`user_lifecycle_stress.rs`). A turn is a machine of micro-steps so that a driver may run any other actor between
+//! any two of them (the guest changes ONE dword at any instant, the registry epoch moves, the PBDMA pops).
 #![allow(
     dead_code,
     clippy::too_many_lines,
@@ -18,11 +17,13 @@
 )]
 
 use kf_abi::submit::{gp_entry, method_header_inc};
-use kf_chan::user_gate::{Gate, Grace, Marks, SyncGate};
-use kf_chan::user_lifecycle::{Lifecycle, Mode, Obs, Plan, ScanPermit};
+use kf_chan::user_gate::Marks;
+use kf_chan::user_lifecycle::{Lifecycle, Mode};
 use kf_chan::user_loop::{Need, Wait, wait_of};
 use kf_chan::user_scan::{Fetch, Scan};
 use kf_chan::user_stream::{Source, inspect_entry};
+use kf_chan::user_turn::{self as turn, Fail, GpSegment, Io, PubKind, Staged, Step, SwView, Turn};
+use std::ops::{Deref, DerefMut};
 
 /// The software object's class value the scan binds (`Software::matches`).
 pub const SW: u32 = 0x5080;
@@ -236,83 +237,17 @@ pub trait Env {
     fn event(&mut self, e: Ev);
 }
 
-// ------------------------------------------------------------------------------------------------
-// the relay
-
-/// Deliberate defects of the GLUE (the turn), for the mutation checks. The machine's own mutants are
-/// `kf_chan::user_lifecycle::Mutant` (feature `lifecycle-mutants`).
+/// Harness knobs (the production code has no test switches; code mutants are source patches applied by
+/// `scripts/lifecycle_mutation_check.sh`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Glue {
-    /// Load the registry epoch BEFORE `GP_PUT` and the entry (the wrong order; the design loads it AFTER both).
-    pub epoch_before_put: bool,
-    /// Store a second load of the entry instead of the tested value.
-    pub double_fetch: bool,
-    /// Do not reset the SyncGate at a Fresh restart.
-    pub no_gate_reset: bool,
-    /// Define the flip boundary by a re-read of `GP_PUT` instead of the cursor.
-    pub flip_at_put: bool,
-    /// Do not apply the seeded gate (ignore `seed_gate`).
-    pub ignore_seed: bool,
     /// The worker never LOOKS at its waits on an event (only a timer would): progress depends on time.
     pub ignore_events: bool,
-    /// Drop the first entry of a Fresh window (advance the cursor without publishing it).
-    pub drop_flip_entry: bool,
-    /// Publish an entry `inspect_entry` refused (no entry-level validation).
-    pub skip_validation: bool,
-    /// Treat a SET_OBJECT HEADER (the datum not yet scanned) as the binding being known.
-    pub bound_without_datum: bool,
 }
-
 impl Glue {
-    /// With the `lifecycle-mutants` feature, the glue defect named by `KF_LIFECYCLE_GLUE_MUTANT`; otherwise
-    /// (and when unset) the correct glue.
     pub fn from_env() -> Self {
-        #[cfg(feature = "lifecycle-mutants")]
-        {
-            let mut g = Self::default();
-            match std::env::var("KF_LIFECYCLE_GLUE_MUTANT").ok().as_deref() {
-                Some("epoch_before_put") => g.epoch_before_put = true,
-                Some("double_fetch") => g.double_fetch = true,
-                Some("no_gate_reset") => g.no_gate_reset = true,
-                Some("flip_at_put") => g.flip_at_put = true,
-                Some("ignore_seed") => g.ignore_seed = true,
-                Some("ignore_events") => g.ignore_events = true,
-                Some("drop_flip_entry") => g.drop_flip_entry = true,
-                Some("skip_validation") => g.skip_validation = true,
-                Some("bound_without_datum") => g.bound_without_datum = true,
-                _ => {}
-            }
-            g
-        }
-        #[cfg(not(feature = "lifecycle-mutants"))]
         Self::default()
     }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum Phase {
-    Idle,
-    Obs,
-    Wb,
-    SegTurn,
-    Put,
-    Lo,
-    Hi,
-    Epoch,
-    Plan,
-    PubPointer,
-    Gate,
-    PbRead,
-    ScanStep,
-    PubScan,
-    Stage,
-    Action,
-}
-
-#[derive(Clone, Debug)]
-struct Staged {
-    witness: u64,
-    migrate: bool,
 }
 
 /// The cursor after the source switch.
@@ -322,579 +257,338 @@ pub enum Cursor {
     Keep,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+enum Sub {
+    /// The relay core runs (`Relay::step`).
+    Core,
+    SegTurn,
+    PubScan,
+    Stage,
+    Action,
+}
+
+#[derive(Clone, Debug)]
+struct Staged2 {
+    witness: u64,
+    migrate: bool,
+}
+
+/// What the simulated `Io::stage` found (read back by the driver).
+#[derive(Clone, Debug, Default)]
+struct StageOut {
+    next_scan: Scan,
+    trigger: bool,
+}
+
+struct EnvIo<'a, E: Env> {
+    env: &'a mut E,
+    out: &'a mut StageOut,
+    validated: &'a mut u64,
+}
+
+impl<E: Env> Io for EnvIo<'_, E> {
+    fn hw_words(&mut self) -> Turn<(u32, u32)> {
+        let get = self.env.hw_get();
+        let reference = self.env.hw_reference();
+        Ok((get, reference))
+    }
+    fn write_guest_get(&mut self, get: u32) -> Turn<bool> {
+        self.env.write_guest_get(get);
+        Ok(true)
+    }
+    fn src_entries(&mut self) -> u32 {
+        self.env.src_entries()
+    }
+    fn max_entry_bytes(&mut self) -> u64 {
+        kf_chan::user_storage::MAX_SOURCE_BYTES
+    }
+    fn gp_put(&mut self) -> Turn<Option<u32>> {
+        Ok(Some(self.env.gp_put()))
+    }
+    fn load_dword(&mut self, slot: u32, hi: bool) -> Turn<u32> {
+        Ok(self.env.gp_dword(slot, hi))
+    }
+    fn registry_epoch(&mut self) -> u64 {
+        self.env.registry_epoch()
+    }
+    fn registry_live(&mut self) -> u32 {
+        self.env.registry_live()
+    }
+    fn software(&mut self, _refresh: bool) -> Turn<SwView> {
+        Ok(SwView {
+            have: true,
+            gone: false,
+        })
+    }
+    fn sw_matches(&self, value: u32) -> bool {
+        sw(value)
+    }
+    fn read_pb(&mut self, entry: u64, _seg: &GpSegment) -> Turn<(Vec<u32>, bool)> {
+        Ok((self.env.read_pb(entry), false))
+    }
+    fn stage(&mut self, scan: &Scan, words: &[u32]) -> Turn<Staged> {
+        let mut next = scan.clone();
+        match next.segment(words, sw) {
+            Err(e) => Err(Fail::Refused(format!("USER_RING_SCAN {e:?}"))),
+            Ok(t) => {
+                self.out.next_scan = next;
+                self.out.trigger = t.is_some();
+                Ok(Staged { rare: t.is_some() })
+            }
+        }
+    }
+    fn validated(&mut self, entry: u64) {
+        *self.validated = entry;
+    }
+    fn publish_entry(
+        &mut self,
+        kind: PubKind,
+        fetch: &mut Fetch,
+        generation: u64,
+        guest_get: u32,
+        entry: u64,
+    ) -> Turn<()> {
+        fetch
+            .publish(Some((generation, guest_get)))
+            .map_err(str::to_owned)?;
+        self.env.publish(Pub::Guest {
+            tested: *self.validated,
+            stored: entry,
+            scanned: kind == PubKind::Control,
+        });
+        Ok(())
+    }
+    fn publish_gate(&mut self, fetch: &mut Fetch, marks: &mut Marks) -> Turn<u64> {
+        fetch.publish(None).map_err(str::to_owned)?;
+        self.env.publish(Pub::Barrier);
+        fetch.publish(None).map_err(str::to_owned)?;
+        let (n, _) = marks.issue().map_err(str::to_owned)?;
+        self.env.publish(Pub::Marker(n));
+        Ok(n)
+    }
+    fn publish_marker(&mut self, fetch: &mut Fetch, marks: &mut Marks) -> Turn<()> {
+        fetch.publish(None).map_err(str::to_owned)?;
+        let (n, _) = marks.issue().map_err(str::to_owned)?;
+        self.env.publish(Pub::Marker(n));
+        Ok(())
+    }
+    fn event(&mut self, e: turn::Ev) {
+        match e {
+            turn::Ev::PutBound => self.env.event(Ev::PutBound),
+            turn::Ev::EntryRefused => self.env.event(Ev::EntryRefused),
+            turn::Ev::ScanRefused => self.env.event(Ev::ScanRefused),
+            turn::Ev::CarriedUngated { .. } => self.env.event(Ev::CarriedUngated),
+            turn::Ev::Retry { .. } => self.env.event(Ev::Retry),
+            turn::Ev::GatePublished | turn::Ev::GateProceeded | turn::Ev::CreditWait => {}
+        }
+    }
+}
+
+/// The relay under test: the PRODUCTION per-entry turn plus the test-side stand-in of the pump's segment machinery.
 #[derive(Clone, Debug)]
 pub struct Relay {
-    pub life: Lifecycle,
-    pub scan: Scan,
-    pub next_scan: Scan,
-    pub sync: SyncGate,
-    pub marks: Marks,
-    pub fetch: Fetch,
-    pub grace: Grace,
-    pub cursor: u32,
-    pub gener: u64,
-    pub abs: u64,
-    pub phase: Phase,
-    pub dead: bool,
-    pub again: bool,
-    pub waiting: Option<Wait>,
-    pub unnotified: bool,
-    pub marker_event: bool,
-    pub gate_target: u64,
-    pub wb: Option<(u64, u32)>,
-    pub glue: Glue,
+    pub core: turn::Relay,
+    sub: Sub,
+    staged: Option<Staged2>,
+    out: StageOut,
+    validated: u64,
     pub cursor_after_switch: Cursor,
-    // the entry in flight
-    lo: u32,
-    hi: u32,
-    raw: u64,
-    epoch: u64,
-    plan: Option<Plan>,
-    seed: bool,
-    words: Vec<u32>,
-    trigger_at: bool,
-    scanned_this: bool,
-    permit: Option<ScanPermit>,
-    staged: Option<Staged>,
-    until_abs: u64,
-    pub refused_entry: u64,
-    pub puts: u64,
+}
+
+impl Deref for Relay {
+    type Target = turn::Relay;
+    fn deref(&self) -> &Self::Target {
+        &self.core
+    }
+}
+impl DerefMut for Relay {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.core
+    }
 }
 
 impl Relay {
-    pub fn new(priv_entries: u32, life: Lifecycle, scan: Scan, glue: Glue) -> Self {
+    pub fn new(priv_entries: u32, life: Lifecycle, scan: Scan, _glue: Glue) -> Self {
         Self {
-            life,
-            scan,
-            next_scan: Scan::default(),
-            sync: SyncGate::default(),
-            marks: Marks::default(),
-            fetch: Fetch::new(priv_entries).expect("private ring"),
-            grace: Grace::default(),
-            cursor: 0,
-            gener: 1,
-            abs: 0,
-            phase: Phase::Idle,
-            dead: false,
-            again: false,
-            waiting: None,
-            unnotified: false,
-            marker_event: false,
-            gate_target: 0,
-            wb: None,
-            glue,
-            cursor_after_switch: Cursor::Zero,
-            lo: 0,
-            hi: 0,
-            raw: 0,
-            epoch: 0,
-            plan: None,
-            seed: false,
-            words: Vec::new(),
-            trigger_at: false,
-            scanned_this: false,
-            permit: None,
+            core: turn::Relay::new(priv_entries, life, scan).expect("private ring"),
+            sub: Sub::Core,
             staged: None,
-            until_abs: 0,
-            refused_entry: 0,
-            puts: 0,
+            out: StageOut::default(),
+            validated: 0,
+            cursor_after_switch: Cursor::Zero,
         }
     }
 
     /// The model-checking key: everything that decides behaviour, none of the counters.
     pub fn key(&self) -> String {
         format!(
-            "{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{}|{}|{}|{:?}|{:?}|{:?}|{}|{}|{:?}|{}|{}|{}|{}|{:x}|{}|{:?}|{}|{:?}|{}|{:?}",
-            self.life.state_key(),
-            self.scan,
-            self.sync,
-            self.marks,
-            self.fetch,
-            self.grace,
-            self.cursor,
-            self.gener,
-            self.abs,
-            self.phase,
-            self.dead,
-            self.again,
-            self.unnotified as u8,
-            self.marker_event as u8,
-            self.waiting,
-            self.gate_target,
-            self.wb.map_or(0, |w| w.1 + 1),
-            self.lo,
-            self.hi,
-            self.raw,
-            self.epoch,
-            self.plan.map(|p| matches!(p, Plan::Forward)),
-            self.seed as u8,
+            "{}|{:?}|{:?}|{:?}|{}",
+            self.core.state_key(),
+            self.sub,
             self.staged.as_ref().map(|s| (s.witness, s.migrate)),
-            self.until_abs,
-            self.next_scan,
+            self.out.next_scan,
+            self.out.trigger
         )
     }
 
     pub fn idle(&self) -> bool {
-        self.phase == Phase::Idle
+        self.core.phase == turn::Phase::Idle && self.sub == Sub::Core
+    }
+
+    /// Whether the outstanding wait, if any (from `need`).
+    pub fn waiting(&self) -> Option<Wait> {
+        wait_of(self.core.need)
+    }
+    pub fn clear_waiting(&mut self) {
+        self.core.need = Need::Idle;
     }
 
     /// Whether the relay has any reason to run a turn without a new doorbell.
     pub fn owes_turn(&self) -> bool {
-        !self.dead && self.again
+        !self.core.dead && self.core.again
     }
 
     /// Whether the outstanding wait is over, from the visible hardware words (the worker's LOOK).
     pub fn wait_satisfied(&self, env: &mut impl Env) -> bool {
-        let Some(w) = self.waiting else {
+        let Some(w) = self.waiting() else {
             return false;
         };
         let reference = env.hw_reference();
         let get = env.hw_get();
-        match self.fetch.peek(get) {
-            Ok(popped) => w.satisfied(self.marks.peek(reference), popped),
+        match self.core.fetch.peek(get) {
+            Ok(popped) => w.satisfied(self.core.marks.peek(reference), popped),
             Err(_) => true,
         }
     }
 
-    /// Start a turn (the claim). `flag` is the doorbell flag: cleared by the caller BEFORE the turn reads
-    /// `GP_PUT` (the construction rule).
+    /// Start a turn (the claim). The doorbell flag is cleared by the caller BEFORE the turn reads GP_PUT.
     pub fn claim(&mut self) {
-        debug_assert_eq!(self.phase, Phase::Idle);
-        self.again = false;
-        self.waiting = None;
-        self.phase = Phase::Obs;
+        debug_assert!(self.idle());
+        self.core.segment_pending = self.staged.is_some();
+        self.core.claim();
     }
 
-    fn marker_possible(&self) -> bool {
-        self.life.marker_possible(self.scan.carried().is_some())
-    }
-
-    fn publish(&mut self, env: &mut impl Env, p: Pub) {
-        env.publish(p);
-        self.puts += 1;
-    }
-
-    fn publish_marker(&mut self, env: &mut impl Env) {
-        let slot = self.fetch.publish(None).expect("credit");
-        let _ = slot;
-        let (n, _) = self.marks.issue().expect("markers");
-        self.publish(env, Pub::Marker(n));
-        self.unnotified = false;
-        self.marker_event = true;
-    }
-
-    /// `Pump::credit_need` (userpump.rs `credit_need`).
-    fn credit_need(&mut self, env: &mut impl Env) {
-        let mut marker = self.marker_event;
-        if self.unnotified {
-            if self.marker_possible() && self.fetch.available() >= 1 {
-                self.publish_marker(env);
-                marker = true;
-            } else {
-                self.unnotified = false;
-                self.marker_event = false;
-                marker = false;
-            }
-        }
-        self.waiting = wait_of(if marker {
-            Need::Marker {
-                target: self.marks.issued(),
-            }
-        } else {
-            Need::Popped {
-                target: self.fetch.fetched() + 1,
-            }
-        });
-    }
-
-    /// `Pump::end_batch`.
-    fn end_batch(&mut self, env: &mut impl Env) {
-        if self.unnotified {
-            if !self.marker_possible() {
-                self.unnotified = false;
-                self.marker_event = false;
-                self.waiting = wait_of(Need::Popped {
-                    target: self.fetch.issued(),
-                });
-                return;
-            }
-            if self.fetch.available() >= 1 {
-                self.publish_marker(env);
-                self.waiting = wait_of(Need::Marker {
-                    target: self.marks.issued(),
-                });
-                self.again = true;
-                return;
-            }
-            self.waiting = wait_of(Need::Popped {
-                target: self.fetch.fetched() + 1,
-            });
-            return;
-        }
-        if self.fetch.fetched() < self.fetch.issued() {
-            self.waiting = wait_of(if self.marker_event {
-                Need::Marker {
-                    target: self.marks.issued(),
-                }
-            } else {
-                Need::Popped {
-                    target: self.fetch.issued(),
-                }
-            });
+    fn io<'a, E: Env>(
+        env: &'a mut E,
+        out: &'a mut StageOut,
+        validated: &'a mut u64,
+    ) -> EnvIo<'a, E> {
+        EnvIo {
+            env,
+            out,
+            validated,
         }
     }
 
-    /// One micro-step of the turn. Returns whether the relay did anything visible (for the caller's
-    /// bookkeeping only).
+    /// One micro-step of the turn.
     pub fn step(&mut self, env: &mut impl Env) {
-        let entries = env.src_entries();
-        match self.phase {
-            Phase::Idle => {}
-            Phase::Obs => {
-                // userpump.rs turn_body: observe GP_GET / REFERENCE
-                let get = env.hw_get();
-                let reference = env.hw_reference();
-                self.marks.observe(reference);
-                for (g, gt) in self.fetch.observe(get).expect("observe") {
-                    if g == self.gener {
-                        self.wb = Some((g, gt));
-                    }
-                }
-                self.phase = Phase::Wb;
-            }
-            Phase::Wb => {
-                if let Some((g, gt)) = self.wb.take() {
-                    if g == self.gener {
-                        env.write_guest_get(gt);
-                    }
-                }
-                self.phase = if self.staged.is_some() {
-                    Phase::SegTurn
-                } else if self.glue.epoch_before_put {
-                    Phase::Epoch
-                } else {
-                    Phase::Put
+        match self.sub {
+            Sub::Core => {
+                let r = {
+                    let mut io = Self::io(env, &mut self.out, &mut self.validated);
+                    self.core.step(&mut io)
                 };
-            }
-            Phase::SegTurn => {
-                let w = self.staged.as_ref().expect("staged").witness;
-                if self.marks.seen() < w {
-                    self.waiting = wait_of(Need::Marker { target: w });
-                    self.phase = Phase::Idle;
-                } else {
-                    self.phase = Phase::Action;
-                }
-            }
-            Phase::Put => {
-                let put = env.gp_put();
-                if put >= entries {
-                    env.event(Ev::PutBound);
-                    self.dead = true;
-                    self.phase = Phase::Idle;
-                    return;
-                }
-                if put == self.cursor {
-                    self.end_batch(env);
-                    self.phase = Phase::Idle;
-                    return;
-                }
-                self.phase = Phase::Lo;
-            }
-            Phase::Lo => {
-                self.lo = env.gp_dword(self.cursor, false);
-                self.phase = Phase::Hi;
-            }
-            Phase::Hi => {
-                self.hi = env.gp_dword(self.cursor, true);
-                self.raw = (u64::from(self.hi) << 32) | u64::from(self.lo);
-                self.phase = if self.glue.epoch_before_put {
-                    Phase::Plan
-                } else {
-                    Phase::Epoch
-                };
-            }
-            Phase::Epoch => {
-                self.epoch = env.registry_epoch();
-                self.phase = if self.glue.epoch_before_put {
-                    Phase::Put
-                } else {
-                    Phase::Plan
-                };
-            }
-            Phase::Plan => self.plan_step(env, entries),
-            Phase::PubPointer => {
-                if self.fetch.available() < 2 {
-                    self.credit_need(env);
-                    self.phase = Phase::Idle;
-                    return;
-                }
-                self.publish_guest(env, entries, false);
-                self.phase = Phase::Idle;
-            }
-            Phase::Gate => self.gate_step(env),
-            Phase::PbRead => {
-                let permit = self.permit.take().expect("permit");
-                let words = env.read_pb(self.raw);
-                self.life.note_pb_read(&permit, words.len() * 4, false);
-                self.words = words;
-                self.scanned_this = true;
-                self.phase = Phase::ScanStep;
-            }
-            Phase::ScanStep => {
-                let mut next = self.scan.clone();
-                match next.segment(&self.words, sw) {
-                    Err(e) => {
-                        let _ = e;
-                        let first = !self.grace.retrying();
-                        if first {
-                            self.life.scan_refused();
-                        }
-                        if self.grace.refused(self.gener, self.cursor) {
-                            env.event(Ev::Retry);
-                            self.again = true;
-                            self.phase = Phase::Idle;
-                        } else {
-                            env.event(Ev::ScanRefused);
-                            self.dead = true;
-                            self.phase = Phase::Idle;
-                        }
-                    }
-                    Ok(t) => {
-                        self.grace.clear();
-                        self.next_scan = next;
-                        self.trigger_at = t.is_some();
-                        if t.is_some() {
+                match r {
+                    Ok(Step::More | Step::Shadow) | Err(_) => {}
+                    Ok(Step::Idle { .. }) => {}
+                    Ok(Step::Segment) => self.sub = Sub::SegTurn,
+                    Ok(Step::Scanned { rare }) => {
+                        if rare {
                             env.event(Ev::TriggerFound);
-                            self.phase = Phase::Stage;
+                            self.sub = Sub::Stage;
                         } else {
-                            self.phase = Phase::PubScan;
+                            self.sub = Sub::PubScan;
                         }
                     }
                 }
             }
-            Phase::PubScan => {
-                if self.fetch.available() < 2 {
-                    self.credit_need(env);
-                    self.phase = Phase::Idle;
-                    return;
+            Sub::SegTurn => {
+                let w = self.staged.as_ref().expect("staged").witness;
+                if self.core.marks.seen() < w {
+                    self.core.need = Need::Marker { target: w };
+                    self.sub = Sub::Core;
+                } else {
+                    self.sub = Sub::Action;
                 }
-                let nop = self.words.is_empty();
-                self.publish_guest(env, entries, true);
-                self.scan = self.next_scan.clone();
-                if !nop {
-                    self.life.segment_scanned(self.scan.carried().is_some());
-                }
-                self.phase = Phase::Idle;
             }
-            Phase::Stage => {
-                // barrier (carrying the entry's source receipt) + marker; the trigger neutralised
-                if self.fetch.available() < 2 {
-                    self.credit_need(env);
-                    self.phase = Phase::Idle;
+            Sub::PubScan => {
+                if self.core.fetch.available() < 2 {
+                    let mut io = Self::io(env, &mut self.out, &mut self.validated);
+                    let _ = self.core.credit_need(&mut io);
+                    self.sub = Sub::Core;
                     return;
                 }
-                let guest_get = (self.cursor + 1) & (entries - 1);
-                self.fetch
-                    .publish(Some((self.gener, guest_get)))
+                // the pump's segment_turn, non-rare path: publish, then commit the scan
+                let get = self.core.next_get;
+                self.core
+                    .fetch
+                    .publish(Some((self.core.generation, get)))
                     .expect("credit");
-                self.publish(env, Pub::Staged { tested: self.raw });
-                self.fetch.publish(None).expect("credit");
-                let (n, _) = self.marks.issue().expect("markers");
-                self.publish(env, Pub::Marker(n));
-                self.scan = self.next_scan.clone();
-                self.life.segment_scanned(self.scan.carried().is_some());
-                self.life.forwarded(self.abs, self.raw);
-                self.abs += 1;
-                self.cursor = guest_get;
-                let migrate = env.trigger_migrates(self.raw);
-                self.staged = Some(Staged {
-                    witness: self.marks.issued(),
+                env.publish(Pub::Guest {
+                    tested: self.core.raw,
+                    stored: self.core.raw,
+                    scanned: true,
+                });
+                self.core.puts += 1;
+                self.core.scan = self.out.next_scan.clone();
+                let open = self.core.scan.carried().is_some();
+                self.core.life.segment_scanned(open);
+                self.core.cursor = get;
+                self.core.note_relayed(self.core.raw);
+                self.core.unnotified = true;
+                self.core.again = true;
+                self.sub = Sub::Core;
+            }
+            Sub::Stage => {
+                // barrier (carrying the entry's source receipt) + marker; the trigger neutralised
+                if self.core.fetch.available() < 2 {
+                    let mut io = Self::io(env, &mut self.out, &mut self.validated);
+                    let _ = self.core.credit_need(&mut io);
+                    self.sub = Sub::Core;
+                    return;
+                }
+                let get = self.core.next_get;
+                self.core
+                    .fetch
+                    .publish(Some((self.core.generation, get)))
+                    .expect("credit");
+                env.publish(Pub::Staged {
+                    tested: self.core.raw,
+                });
+                self.core.fetch.publish(None).expect("credit");
+                let (n, _) = self.core.marks.issue().expect("markers");
+                env.publish(Pub::Marker(n));
+                self.core.puts += 2;
+                self.core.scan = self.out.next_scan.clone();
+                let open = self.core.scan.carried().is_some();
+                self.core.life.segment_scanned(open);
+                self.core.note_relayed(self.core.raw);
+                self.core.cursor = get;
+                let migrate = env.trigger_migrates(self.core.raw);
+                self.staged = Some(Staged2 {
+                    witness: self.core.marks.issued(),
                     migrate,
                 });
-                self.waiting = wait_of(Need::Marker { target: n });
-                self.phase = Phase::Idle;
+                self.core.need = Need::Marker { target: n };
+                self.sub = Sub::Core;
             }
-            Phase::Action => {
+            Sub::Action => {
                 let s = self.staged.take().expect("staged");
                 env.executed(s.migrate);
                 if s.migrate {
-                    self.gener += 1;
-                    self.cursor = match self.cursor_after_switch {
+                    self.core.generation += 1;
+                    self.core.cursor = match self.cursor_after_switch {
                         Cursor::Zero => 0,
-                        Cursor::Keep => self.cursor,
+                        Cursor::Keep => self.core.cursor,
                     };
-                    self.grace.clear();
-                    self.wb = None;
+                    self.core.grace.clear();
+                    self.core.guest_get = None;
+                    self.core.life.source_switched();
                     env.event(Ev::Switched);
                 }
-                self.again = true;
-                self.phase = Phase::Idle;
+                self.core.again = true;
+                self.sub = Sub::Core;
             }
         }
-    }
-
-    fn plan_step(&mut self, env: &mut impl Env, entries: u32) {
-        // entry-level validation on THE loaded value (userpump.rs: inspect_entry)
-        let desc = match inspect_entry(self.raw, kf_chan::user_storage::MAX_SOURCE_BYTES) {
-            Ok(d) => d,
-            Err(_) if self.glue.skip_validation => Source::Nop,
-            Err(_) => {
-                env.event(Ev::EntryRefused);
-                self.refused_entry += 1;
-                self.dead = true;
-                self.phase = Phase::Idle;
-                return;
-            }
-        };
-        let mut sw_mask = self.scan.software_mask(sw);
-        if self.glue.bound_without_datum {
-            if let Some((h, _)) = self.scan.carried() {
-                if h.method == 0 && h.subchannel >= 5 {
-                    sw_mask |= 1 << h.subchannel;
-                }
-            }
-        }
-        let obs = Obs {
-            raw: self.raw,
-            abs: self.abs,
-            epoch: self.epoch,
-            sw_mask,
-            have_software: true,
-            quiescent: self.staged.is_none() && !self.sync.waiting(),
-        };
-        let mut plan = self.life.entry(&obs, || env.registry_live());
-        if self.glue.drop_flip_entry && matches!(plan, Plan::Scan { restart: true, .. }) {
-            // a deliberate defect: the first entry of a Fresh window is skipped, never published
-            self.cursor = (self.cursor + 1) & (entries - 1);
-            self.abs += 1;
-            self.again = true;
-            self.phase = Phase::Idle;
-            return;
-        }
-        if self.glue.flip_at_put {
-            // the wrong definition of "published after the flip": everything up to a re-read of GP_PUT
-            if let Plan::Scan { restart: true, .. } = plan {
-                let put = env.gp_put();
-                self.until_abs =
-                    self.abs + u64::from(put.wrapping_sub(self.cursor) & (entries - 1));
-            }
-            if self.abs < self.until_abs && self.life.mode() == Mode::Window {
-                plan = Plan::Forward;
-            }
-        }
-        match plan {
-            Plan::Forward => {
-                self.plan = Some(plan);
-                self.phase = Phase::PubPointer;
-            }
-            Plan::Scan {
-                restart,
-                seed_gate,
-                permit,
-            } => {
-                if restart {
-                    self.scan = self.scan.fresh_resume();
-                    if !self.glue.no_gate_reset {
-                        self.sync = SyncGate::default();
-                    }
-                    self.grace.clear();
-                    self.life.restarted();
-                }
-                self.seed = seed_gate && !self.glue.ignore_seed;
-                self.permit = Some(permit);
-                self.plan = Some(plan);
-                self.phase = match desc {
-                    Source::Nop => Phase::Gate,
-                    Source::Segment(_) => Phase::Gate,
-                };
-            }
-        }
-    }
-
-    /// userpump.rs: the SYNC_WAIT gate, then the control-entry / segment split.
-    fn gate_step(&mut self, env: &mut impl Env) {
-        let sync_bit = self.raw & SYNC != 0;
-        let gate_raw = if self.seed { self.raw | SYNC } else { self.raw };
-        let verdict = if gate_raw & SYNC != 0 && self.scan.carried().is_some() {
-            env.event(Ev::CarriedUngated);
-            Gate::Proceed
-        } else {
-            self.sync
-                .entry(gate_raw, self.gener, self.cursor, self.marks.seen())
-        };
-        let _ = sync_bit;
-        match verdict {
-            Gate::Wait => {
-                self.waiting = wait_of(Need::Marker {
-                    target: self.gate_target,
-                });
-                self.phase = Phase::Idle;
-            }
-            Gate::PublishBarrier => {
-                if self.fetch.available() < 2 {
-                    self.credit_need(env);
-                    self.phase = Phase::Idle;
-                    return;
-                }
-                self.fetch.publish(None).expect("credit");
-                self.publish(env, Pub::Barrier);
-                self.fetch.publish(None).expect("credit");
-                let (n, _) = self.marks.issue().expect("markers");
-                self.publish(env, Pub::Marker(n));
-                self.sync.published(n);
-                self.gate_target = n;
-                self.unnotified = false;
-                self.marker_event = true;
-                self.waiting = wait_of(Need::Marker { target: n });
-                self.again = true;
-                self.phase = Phase::Idle;
-            }
-            Gate::Proceed => {
-                if self.seed {
-                    self.life.gate_proven();
-                    self.seed = false;
-                }
-                // a control entry publishes as it is; a segment is read and scanned
-                if inspect_entry(self.raw, kf_chan::user_storage::MAX_SOURCE_BYTES)
-                    == Ok(Source::Nop)
-                {
-                    self.permit = None;
-                    self.phase = Phase::PubScan;
-                    self.words = Vec::new();
-                    self.next_scan = self.scan.clone();
-                } else {
-                    self.phase = Phase::PbRead;
-                }
-            }
-        }
-    }
-
-    /// Publish the guest's entry (control entry, Pointer entry or scanned segment).
-    fn publish_guest(&mut self, env: &mut impl Env, entries: u32, scanned: bool) {
-        let guest_get = (self.cursor + 1) & (entries - 1);
-        let stored = if self.glue.double_fetch {
-            // a second load: the guest may have changed one dword since the first
-            let lo = env.gp_dword(self.cursor, false);
-            let hi = env.gp_dword(self.cursor, true);
-            (u64::from(hi) << 32) | u64::from(lo)
-        } else {
-            self.raw
-        };
-        self.fetch
-            .publish(Some((self.gener, guest_get)))
-            .expect("credit");
-        self.publish(
-            env,
-            Pub::Guest {
-                tested: self.raw,
-                stored,
-                scanned,
-            },
-        );
-        self.life.forwarded(self.abs, self.raw);
-        self.abs += 1;
-        self.cursor = guest_get;
-        self.unnotified = true;
-        self.again = true;
     }
 }

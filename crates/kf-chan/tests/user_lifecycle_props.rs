@@ -82,6 +82,8 @@ pub struct Out {
     pub dead: bool,
     pub refused_scan: u32,
     pub unscanned_while_live: u32,
+    /// Indices (into `forwarded`) of the entries counted by `unscanned_while_live`.
+    pub unscanned_at: Vec<usize>,
     pub torn: u32,
     pub pb_reads: u32,
     pub pb_reads_in_pointer: u32,
@@ -97,7 +99,9 @@ pub struct Sim {
     pub put: [u32; 2],
     put_local: [u32; 2],
     guest_get: [u32; 2],
-    pending: [VecDeque<u64>; 2],
+    pending: [VecDeque<(u64, bool)>; 2],
+    /// For every entry the guest has published, in order: was it published after a reply (`post`)?
+    fed_post: VecDeque<bool>,
     defs: HashMap<u8, Ge>,
     pub epoch: u64,
     pub live: u32,
@@ -110,6 +114,12 @@ pub struct Sim {
     pub next_size: u32,
     pub mode_hint: Mode,
     held: [bool; 2],
+    /// A cooperative guest publishes the entries marked `post` (published after a registration's reply) only
+    /// after the reply: one credit per applied registration, consumed by the first entry of a run of `post` entries.
+    post_credit: u32,
+    in_post: bool,
+    /// The guest publishes at most this many entries per `feed` (its `GP_PUT` then lands wherever that is).
+    pub chunk: usize,
     /// Words by raw entry value (the corpus replay); consulted before `defs`.
     pub custom: HashMap<u64, Vec<u32>>,
 }
@@ -120,7 +130,7 @@ impl Sim {
         let mut pending = [VecDeque::new(), VecDeque::new()];
         for g in stream {
             defs.insert(g.id, *g);
-            pending[0].push_back(g.raw());
+            pending[0].push_back((g.raw(), g.post_reply));
         }
         Self {
             entries,
@@ -130,6 +140,7 @@ impl Sim {
             put_local: [0; 2],
             guest_get: [0; 2],
             pending,
+            fed_post: VecDeque::new(),
             defs,
             epoch: 0,
             live: 0,
@@ -142,6 +153,9 @@ impl Sim {
             next_size: entries,
             mode_hint: Mode::Scan,
             held: [false; 2],
+            post_credit: 0,
+            in_post: false,
+            chunk: usize::MAX,
             custom: HashMap::new(),
         }
     }
@@ -149,10 +163,23 @@ impl Sim {
     /// The guest publishes as many pending entries as the ring has room for, then GP_PUT.
     fn feed(&mut self) {
         let r = self.src;
-        while let Some(&raw) = self.pending[r].front() {
+        let mut fed = 0usize;
+        while let Some(&(raw, post)) = self.pending[r].front() {
+            if fed >= self.chunk {
+                break;
+            }
+            fed += 1;
             if self.held[r] || (self.put_local[r] + 1) % self.entries == self.guest_get[r] {
                 break;
             }
+            if post && !self.in_post {
+                if self.post_credit == 0 {
+                    break; // the reply has not been seen yet: a cooperative guest waits for it
+                }
+                self.post_credit -= 1;
+            }
+            self.in_post = post;
+            self.fed_post.push_back(post);
             self.rings[r].insert(self.put_local[r], raw);
             self.put_local[r] = (self.put_local[r] + 1) % self.entries;
             self.pending[r].pop_front();
@@ -171,6 +198,7 @@ impl Sim {
         while let Some(i) = self.sched.iter().position(|s| s.at() <= forwarded) {
             match self.sched.remove(i) {
                 Sched::Register { migrate, .. } => {
+                    self.post_credit += 1;
                     self.live += 1;
                     self.epoch += 1;
                     self.kind_migrate = migrate;
@@ -235,18 +263,22 @@ impl Env for Sim {
                 if tested != stored {
                     self.out.torn += 1;
                 }
-                if self.live > 0 && !scanned {
-                    let id = entry_id(tested);
-                    let nop = id
+                // I4: an entry published AFTER the registration's reply (`post`) must have been scanned.
+                // Entries below the anchor were published before the reply and are forwarded unscanned.
+                let post = self.fed_post.pop_front().unwrap_or(false);
+                if self.live > 0 && !scanned && post {
+                    let nop = entry_id(tested)
                         .and_then(|i| self.defs.get(&i))
                         .is_some_and(|g| g.kind == Kind::Nop);
                     if !nop {
                         self.out.unscanned_while_live += 1;
+                        self.out.unscanned_at.push(self.out.forwarded.len());
                     }
                 }
                 self.out.forwarded.push(stored);
             }
             Pub::Staged { .. } => {
+                self.fed_post.pop_front();
                 self.out.staged.push(self.out.forwarded.len());
                 self.out.forwarded.push(u64::MAX); // placeholder: the staged copy replaces the entry
             }
@@ -271,7 +303,7 @@ impl Env for Sim {
             // the new ring: the pending entries after the trigger move to it
             let from = self.src;
             let to = 1 - from;
-            let rest: VecDeque<u64> = std::mem::take(&mut self.pending[from]);
+            let rest: VecDeque<(u64, bool)> = std::mem::take(&mut self.pending[from]);
             self.src = to;
             self.entries = self.next_size;
             self.pending[to] = rest;
@@ -300,12 +332,12 @@ pub fn drive(sim: &mut Sim, relay: &mut Relay, max_turns: usize) -> usize {
     let mut turns = 0;
     let mut idle_turns = 0;
     while turns < max_turns {
-        sim.apply_sched(relay.abs);
+        sim.apply_sched(relay.relayed);
         sim.feed();
         if relay.dead {
             break;
         }
-        let before = (relay.puts, relay.cursor, relay.abs, relay.gener);
+        let before = (relay.puts, relay.cursor, relay.relayed, relay.generation);
         relay.claim();
         let mut steps = 0;
         while !relay.idle() {
@@ -316,7 +348,7 @@ pub fn drive(sim: &mut Sim, relay: &mut Relay, max_turns: usize) -> usize {
         }
         sim.out.max_steps_per_turn = sim.out.max_steps_per_turn.max(steps);
         turns += 1;
-        let after = (relay.puts, relay.cursor, relay.abs, relay.gener);
+        let after = (relay.puts, relay.cursor, relay.relayed, relay.generation);
         if before == after && !relay.again {
             idle_turns += 1;
             // nothing moved: a pending registration that has not fired yet is the only reason to go on
@@ -470,6 +502,36 @@ fn plan_registration(
     )
 }
 
+/// `count` registrations in separate regions of the stream, each with its own trigger (a cooperative guest has one
+/// reply per trigger): the register position `at` is somewhere in the region, the trigger at the first packet
+/// boundary at or after it. Triggers are inserted from the last region to the first and the positions adjusted.
+fn plan_registrations_spaced(rng: &mut Rng, stream: &mut Vec<Ge>, count: usize) -> Vec<Sched> {
+    let n = stream.len();
+    let mut planned = Vec::new();
+    for j in (0..count).rev() {
+        let (lo, hi) = (2 + j * n / count.max(1), (j + 1) * n / count.max(1) - 3);
+        if hi <= lo + 2 {
+            continue;
+        }
+        let at = lo + rng.below((hi - lo) as u64) as usize;
+        let mut t = at;
+        while t > 0 && t < stream.len() && matches!(stream[t - 1].kind, Kind::OpenHead) {
+            t += 1;
+        }
+        stream.insert(t, ge(190, Kind::Trig { migrate: false }).post());
+        planned.push((j, at, t));
+    }
+    planned.sort();
+    let mut sched = Vec::new();
+    for (rank, (_, at, _)) in planned.iter().enumerate() {
+        sched.push(Sched::Register {
+            at: (*at + rank) as u64,
+            migrate: false,
+        });
+    }
+    sched
+}
+
 #[test]
 fn g2_with_a_registration_at_any_flip_position_that_is_not_inside_a_packet_the_cycle_is_identical()
 {
@@ -497,59 +559,127 @@ fn g2_with_a_registration_at_any_flip_position_that_is_not_inside_a_packet_the_c
         assert_eq!(old.switches, new.switches, "seed {seed}: switch position");
         assert_eq!(new.unscanned_while_live, 0, "seed {seed}: I4");
         assert_eq!(new.staged, vec![k], "seed {seed}: the trigger was staged");
-        assert!(
-            matches!(relay.life.mode(), Mode::Pointer),
-            "seed {seed}: back to Pointer"
-        );
+        // back to Pointer at the next entry; after a ring switch the new ring's first entries are scanned first
+        // (D5), so the Window closes only at the entry after POST_SWITCH_SCAN of them
+        let after = stream.len() - t - 1;
+        let want_pointer =
+            after >= 1 && (!migrate || after > kf_chan::user_lifecycle::POST_SWITCH_SCAN as usize);
+        if want_pointer {
+            assert!(
+                matches!(relay.life.mode(), Mode::Pointer),
+                "seed {seed}: back to Pointer ({after} entries after the trigger, migrate={migrate})"
+            );
+        }
         checked += 1;
     }
     assert!(checked > 200, "enough streams exercised: {checked}");
 }
 
 #[test]
-fn g2_p2_every_difference_between_the_lifecycle_and_always_scan_is_explained_by_a_flip_inside_a_packet()
+fn g2_p2prime_with_every_submission_ending_on_a_packet_boundary_a_registration_anywhere_changes_nothing()
  {
-    // Streams WITH straddles whose tails do not decode as headers (a fresh scan refuses them) and flips
-    // anywhere: a difference may appear only where the flip falls between an OpenHead and its OpenTail, and
-    // then the lifecycle counts it (`window_fresh_start_parse_error`). This is the P2 measurement.
-    let mut differ = 0;
+    // Streams WITH straddles whose tails do not decode as headers (a scan restarted inside the packet refuses them)
+    // and a registration at ANY position, including between an OpenHead and its OpenTail. The guest ends its
+    // submission where the trigger goes (a packet boundary), so the Window starts at the anchor and the lifecycle
+    // and the always-scan base agree EXACTLY, with no fresh-start parse error: the property the anchor buys
+    // (review D1 / D2). The registration position inside a packet is reached by the generator.
     let mut inside = 0;
     for seed in 0..600u64 {
         let mut rng = Rng::new(0x2000 + seed);
         let n = 10 + rng.below(60) as usize;
         let mut stream = gen_stream(&mut rng, n, true, true);
         let (sched, k, _) = plan_registration(&mut rng, &mut stream, false);
-        let in_packet = k > 0 && k < stream.len() && matches!(stream[k - 1].kind, Kind::OpenHead);
+        if k > 0 && k < stream.len() && matches!(stream[k - 1].kind, Kind::OpenHead) {
+            inside += 1;
+        }
         let (old, _) = run_stream(&stream, &sched, true, 64, 8);
         let (new, relay) = run_stream(&stream, &sched, false, 64, 8);
         assert!(
             !old.dead,
             "seed {seed}: the base never refuses a valid stream"
         );
-        let same = old.forwarded == new.forwarded && old.staged == new.staged && !new.dead;
-        if in_packet {
-            inside += 1;
-        }
-        if !same {
+        assert!(!new.dead, "seed {seed}: the lifecycle died (k={k})");
+        assert_eq!(
+            old.forwarded, new.forwarded,
+            "seed {seed}: forwarded (k={k})"
+        );
+        assert_eq!(old.staged, new.staged, "seed {seed}: staged (k={k})");
+        assert_eq!(
+            relay.life.counts().window_fresh_start_parse_error,
+            0,
+            "seed {seed}"
+        );
+    }
+    println!("g2-p2prime: 600 streams identical; {inside} registered inside an open packet");
+    assert!(
+        inside > 0,
+        "the generator must register inside a packet at least once"
+    );
+}
+
+#[test]
+fn g2_p2prime_a_guest_that_ends_submissions_inside_packets_is_the_documented_residual_and_is_counted()
+ {
+    // The same streams, but the guest's GP_PUT lands after EVERY entry, wherever that is (assumption P2' FALSE). A
+    // difference may then appear only where the anchor fell inside a packet; it is loud (a refusal counted as a
+    // fresh-start parse error) and is the case `put_boundary_open_*` measures in Scan mode.
+    let mut differ = 0;
+    for seed in 0..600u64 {
+        let mut rng = Rng::new(0x2000 + seed);
+        let n = 10 + rng.below(60) as usize;
+        let mut stream = gen_stream(&mut rng, n, true, true);
+        let (sched, _, _) = plan_registration(&mut rng, &mut stream, false);
+        let run = |always: bool| {
+            let mut sim = Sim::new(64, 8, &stream, sched.clone());
+            sim.chunk = 1;
+            let mut relay = new_relay(8, always);
+            drive(&mut sim, &mut relay, 200_000);
+            sim.out.dead |= relay.dead;
+            (sim.out, relay)
+        };
+        let (old, _) = run(true);
+        let (new, relay) = run(false);
+        assert!(!old.dead, "seed {seed}");
+        if !(old.forwarded == new.forwarded && old.staged == new.staged && !new.dead) {
             differ += 1;
             assert!(
-                in_packet,
-                "seed {seed}: a difference with the flip on a boundary (k={k})"
+                relay.life.counts().window_fresh_start_parse_error >= 1
+                    || new.triggers_found != old.triggers_found,
+                "seed {seed}: an unexplained difference"
             );
-            assert!(
-                relay.life.counts().window_fresh_start_parse_error >= 1,
-                "seed {seed}: the difference is not counted"
-            );
-            assert!(new.dead, "seed {seed}");
         }
     }
-    println!(
-        "g2-p2: {differ} streams differ, all with the flip inside an open packet ({inside} such flips)"
-    );
+    println!("g2-p2prime-residual: {differ} streams differ (all counted)");
     assert!(
         differ > 0,
-        "the generator must reach a flip inside a packet at least once"
+        "the generator must put an anchor inside a packet at least once"
     );
+}
+
+/// The falsifier of P2' (design section 5): in Scan mode, where the parser state is known, a packet that is OPEN
+/// where the cursor reaches a `GP_PUT` the worker read is counted, uncapped.
+#[test]
+fn p2prime_scan_mode_counts_a_packet_open_at_a_gp_put_boundary_and_one_that_is_not() {
+    // before the binding: [OpenHead] | [OpenTail] | [SetObj] | plain ...; the guest rings after EVERY entry
+    let stream = vec![
+        ge(181, Kind::OpenHead),
+        ge(182, Kind::OpenTail),
+        ge(0, Kind::SetObj),
+        ge(1, Kind::Plain),
+        ge(2, Kind::Plain),
+    ];
+    let mut sim = Sim::new(64, 8, &stream, vec![]);
+    sim.chunk = 1;
+    let mut relay = new_relay(8, false);
+    drive(&mut sim, &mut relay, 10_000);
+    assert!(!relay.dead);
+    let c = relay.life.counts();
+    assert_eq!(
+        (c.put_boundaries_scan, c.put_boundary_open_scan),
+        (3, 1),
+        "{c:?}: boundaries after OpenHead (open), OpenTail and SetObj (closed)"
+    );
+    assert_eq!(c.straddles_scan, 1);
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -707,12 +837,12 @@ fn a2_set_object_at_every_dword_position_switches_after_the_segment_that_commits
                 let first = kf_abi::submit::gp_entry(seg_va(250), words.len() as u64 * 4).unwrap();
                 let mut sim = Sim::new(64, 8, &[], vec![]);
                 sim.custom.insert(first, words.clone());
-                sim.pending[0].push_back(first);
+                sim.pending[0].push_back((first, false));
                 let mut expect = vec![first];
                 for i in 0..5u8 {
                     let g = ge(1 + i, Kind::Plain);
                     sim.defs.insert(g.id, g);
-                    sim.pending[0].push_back(g.raw());
+                    sim.pending[0].push_back((g.raw(), false));
                     expect.push(g.raw());
                 }
                 let mut relay = new_relay(8, false);
@@ -764,7 +894,9 @@ fn b_ten_thousand_cycles_with_ring_growth_never_stick_and_never_lose_an_entry() 
     let mut stream = vec![ge(0, Kind::SetObj)];
     let mut sched = Vec::new();
     for c in 0..cycles {
-        for i in 0..2 {
+        // enough ordinary entries between two registrations for the previous Window to close (the first
+        // POST_SWITCH_SCAN entries after a ring switch are scanned, D5)
+        for i in 0..(3 + kf_chan::user_lifecycle::POST_SWITCH_SCAN as usize) {
             stream.push(ge(1 + ((c * 2 + i) % 100) as u8, Kind::Plain));
         }
         let at = stream.len() as u64;
@@ -775,8 +907,11 @@ fn b_ten_thousand_cycles_with_ring_growth_never_stick_and_never_lose_an_entry() 
         stream.push(ge(190, Kind::Trig { migrate: true }).post());
         sched.push(Sched::Register { at, migrate: true });
     }
-    // one last ordinary entry: the Window of the last cycle ends at the next entry boundary
-    stream.push(ge(1, Kind::Plain));
+    // ordinary entries after the last ring switch: its first POST_SWITCH_SCAN are scanned (D5), the Window of the
+    // last cycle ends at the one after them
+    for _ in 0..=kf_chan::user_lifecycle::POST_SWITCH_SCAN {
+        stream.push(ge(1, Kind::Plain));
+    }
     let mut sim = Sim::new(sizes[0], 8, &stream, sched);
     sim.next_size = sizes[1];
     let mut relay = new_relay(8, false);
@@ -835,16 +970,16 @@ fn b_the_monotone_entry_counter_survives_the_u32_boundary() {
         .collect();
     let mut sim = Sim::new(64, 8, &stream, vec![]);
     let mut relay = new_relay(8, false);
-    relay.abs = u64::from(u32::MAX) - 10;
+    relay.relayed = u64::from(u32::MAX) - 10;
     drive(&mut sim, &mut relay, 1000);
     assert_eq!(sim.out.forwarded.len(), stream.len());
-    assert!(relay.abs > u64::from(u32::MAX));
+    assert!(relay.relayed > u64::from(u32::MAX));
     // the recorded SYNC_WAIT index is a u64 across the boundary
     let o = relay
         .life
         .outstanding_sync()
         .expect("a SYNC_WAIT was forwarded in Pointer mode");
-    assert!(o > u64::from(u32::MAX) - 10 && o < relay.abs);
+    assert!(o > u64::from(u32::MAX) - 10 && o < relay.relayed);
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -867,13 +1002,8 @@ fn soak_millions_of_entries_many_laps_and_registrations_keep_every_invariant() {
         let mut rng = Rng::new(0x50AC + seed);
         let n = 2000 + rng.below(3000) as usize;
         let mut stream = gen_stream(&mut rng, n, true, false);
-        let mut sched = Vec::new();
-        for _ in 0..rng.below(4) {
-            let (s, _, _) = plan_registration(&mut rng, &mut stream, false);
-            sched.extend(s);
-        }
-        // keep the Register positions consistent with the inserted triggers (each insert shifts later ones)
-        sched.sort_by_key(|s| s.at());
+        let regs = rng.below(4) as usize;
+        let sched = plan_registrations_spaced(&mut rng, &mut stream, regs);
         let (out, relay) = {
             let mut sim = Sim::new(64, 8, &stream, sched);
             let mut relay = new_relay(8, false);
@@ -884,12 +1014,26 @@ fn soak_millions_of_entries_many_laps_and_registrations_keep_every_invariant() {
             // a flip inside an open packet (P2) may legitimately kill a stream with bad tails; none here
             panic!("seed {seed}: dead: {out:?}");
         }
-        assert_eq!(out.unscanned_while_live, 0, "seed {seed}");
+        assert_eq!(
+            out.unscanned_while_live,
+            0,
+            "seed {seed}: at {:?} sched_len={} stream_len={}",
+            out.unscanned_at,
+            n,
+            stream.len()
+        );
         assert_eq!(out.torn, 0, "seed {seed}");
         assert_eq!(
             relay.marks.issued(),
             relay.marks.seen(),
-            "seed {seed}: markers"
+            "seed {seed}: markers {} need={:?} phase={:?} again={} fwd={}/{} mode={:?}",
+            relay.key(),
+            relay.need,
+            relay.phase,
+            relay.again,
+            out.forwarded.len(),
+            stream.len(),
+            relay.life.mode()
         );
         assert_eq!(
             relay.fetch.issued(),
@@ -1067,10 +1211,11 @@ fn corpus_sim(words: &[Vec<u32>], raws: &[u64], k: usize) -> Sim {
         }
     }
     sim.defs.insert(250, ge(250, Kind::SetObj));
-    sim.defs.insert(190, ge(190, Kind::Trig { migrate: false }));
+    sim.defs
+        .insert(190, ge(190, Kind::Trig { migrate: false }).post());
     sim.custom = all.iter().map(|(r, w)| (*r & !SYNC, w.clone())).collect();
     for (r, _) in &all {
-        sim.pending[0].push_back(*r);
+        sim.pending[0].push_back((*r, entry_id(*r) == Some(190)));
     }
     sim
 }
@@ -1128,13 +1273,14 @@ fn corpus_a_gravitymark_ring_growth_replays_identically_through_the_base_and_the
                     migrate: true,
                 }],
             );
-            sim.defs.insert(190, ge(190, Kind::Trig { migrate: true }));
+            sim.defs
+                .insert(190, ge(190, Kind::Trig { migrate: true }).post());
             sim.custom = sim_words
                 .iter()
                 .map(|(r, w)| (*r & !SYNC, w.clone()))
                 .collect();
             for (r, _) in &sim_words {
-                sim.pending[0].push_back(*r);
+                sim.pending[0].push_back((*r, entry_id(*r) == Some(190)));
             }
             sim
         };

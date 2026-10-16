@@ -144,6 +144,17 @@ pub const fn found(wait: Wait) -> Found {
     }
 }
 
+/// ★ PHASE 1b: whether a backstop wake of a Pointer-mode channel is LOUD: another one within a second of the
+/// previous (`prev_ms`, `now_ms` are milliseconds on one monotone clock). The clock only decides how loudly a timer
+/// wake is reported; nothing is decided by it.
+#[must_use]
+pub const fn loud_rate(prev_ms: Option<u64>, now_ms: u64) -> bool {
+    match prev_ms {
+        Some(p) => now_ms.saturating_sub(p) < 1000,
+        None => false,
+    }
+}
+
 /// What the worker does when no token is rung.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Idle {
@@ -295,6 +306,15 @@ mod tests {
 
     /// The backstop's classification is the model's: only a satisfied wait an interrupt should have
     /// announced is a bug.
+    #[test]
+    fn a_pointer_mode_backstop_wake_is_loud_only_beyond_about_one_a_second() {
+        assert!(!loud_rate(None, 10));
+        assert!(!loud_rate(Some(0), 1000), "exactly a second apart is not loud");
+        assert!(loud_rate(Some(0), 999));
+        assert!(loud_rate(Some(500), 500), "two in the same millisecond");
+        assert!(loud_rate(Some(5_000), 100), "a clock that went backwards saturates (loud), never panics");
+    }
+
     #[test]
     fn only_an_announced_wait_found_by_the_backstop_is_work() {
         assert_eq!(found(Wait::Popped { target: 1 }), Found::Carried);

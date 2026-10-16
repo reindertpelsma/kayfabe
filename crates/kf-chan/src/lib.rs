@@ -33,6 +33,7 @@ pub mod user_ring;
 pub mod user_scan;
 pub mod user_gate;
 pub mod user_lifecycle;
+pub mod user_turn;
 pub mod user_loop;
 pub mod user_storage;
 pub mod user_stream;

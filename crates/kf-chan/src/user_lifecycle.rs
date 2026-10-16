@@ -39,6 +39,8 @@ pub struct ScanPermit(());
 pub enum Plan {
     /// Publish the loaded value as it is; read nothing.
     Forward,
+    /// The channel was torn down: do nothing at all (no read, no publication).
+    Stop,
     /// Scan the pushbuffer before forwarding.
     Scan {
         /// Restart the parser state (and the gate) first, once.
@@ -125,6 +127,36 @@ pub struct Counts {
     pub scan_no_software: u64,
     /// Events after Teardown.
     pub after_teardown: u64,
+    /// PHASE 1b. GP_PUT values the cursor reached while the parser state was KNOWN (Scan), uncapped: the
+    /// measurement of the anchor assumption P2' ("a driver does not end a submission inside a packet").
+    pub put_boundaries_scan: u64,
+    /// Of those, the ones with a packet OPEN at the boundary (the falsifier of P2'; nonzero anywhere = the anchor
+    /// design must not be trusted for that workload).
+    pub put_boundary_open_scan: u64,
+    /// See above, in a Window.
+    pub put_boundaries_window: u64,
+    /// See above, in a Window.
+    pub put_boundary_open_window: u64,
+    /// Batch / credit markers authored in Pointer mode (at a GP_PUT boundary).
+    pub pointer_markers: u64,
+    /// A Pointer-mode marker that could not be placed (the cursor is not at an observed GP_PUT): the wake for that
+    /// work is the bounded spin or the 50 ms backstop. Loud on purpose.
+    pub pointer_carried_no_marker: u64,
+    /// Backstop wakes of a Pointer-mode channel that found work (a timer woke it: counted loudly).
+    pub pointer_backstop: u64,
+    /// Of those, the ones beyond about one per second.
+    pub pointer_backstop_loud: u64,
+    /// Entries forwarded unscanned in Pointer mode AFTER the registry showed a registration, up to the anchor.
+    pub anchor_forwarded: u64,
+    /// Entries scanned after a source switch before the Window may end (detection aid for the cursor semantics).
+    pub post_switch_scanned: u64,
+    /// The new ring's USERD showed a nonzero GP_GET at the switch: reset-to-0 (production) is contradicted.
+    pub switch_cursor_mismatch: u64,
+    /// Pointer-mode entries forwarded whose software-subchannel binding could not be re-checked, counted when the
+    /// stretch ends in a Fresh window.
+    pub pointer_binding_unchecked: u64,
+    /// The software object was found gone in Pointer mode (refused like the Scan path).
+    pub pointer_software_gone: u64,
 }
 
 macro_rules! counts_since {
@@ -158,7 +190,20 @@ impl Counts {
             window_bar1_bytes,
             pointer_pb_read_violation,
             scan_no_software,
-            after_teardown
+            after_teardown,
+            put_boundaries_scan,
+            put_boundary_open_scan,
+            put_boundaries_window,
+            put_boundary_open_window,
+            pointer_markers,
+            pointer_carried_no_marker,
+            pointer_backstop,
+            pointer_backstop_loud,
+            anchor_forwarded,
+            post_switch_scanned,
+            switch_cursor_mismatch,
+            pointer_binding_unchecked,
+            pointer_software_gone
         )
     }
 }
@@ -226,7 +271,20 @@ lifecycle_stats!(
     window_bar1_bytes,
     pointer_pb_read_violation,
     scan_no_software,
-    after_teardown
+    after_teardown,
+    put_boundaries_scan,
+    put_boundary_open_scan,
+    put_boundaries_window,
+    put_boundary_open_window,
+    pointer_markers,
+    pointer_carried_no_marker,
+    pointer_backstop,
+    pointer_backstop_loud,
+    anchor_forwarded,
+    post_switch_scanned,
+    switch_cursor_mismatch,
+    pointer_binding_unchecked,
+    pointer_software_gone
 );
 
 /// What the relay observed at the entry it just loaded.
@@ -238,6 +296,9 @@ pub struct Obs {
     pub abs: u64,
     /// The registry epoch, loaded AFTER `raw`.
     pub epoch: u64,
+    /// PHASE 1b. The absolute index of the `GP_PUT` value read in THIS turn (before `raw` and the epoch): the end of
+    /// a guest submission, the anchor at which a Window may start.
+    pub put_abs: u64,
     /// Subchannels (bit n) on which the scan has the software object bound; 0 outside Scan/Window.
     pub sw_mask: u8,
     /// The channel has a software object at all.
@@ -264,6 +325,12 @@ pub enum Mutant {
     ExitIgnoresLive,
     /// P1: a Window keeps the binding it started with (a moved binding is never noticed).
     MaskFrozen,
+    /// D1: a Window starts at the first entry that sees the registration, not at the anchor.
+    AnchorIgnored,
+    /// D3: Pointer mode places a marker wherever it is asked (inside a possibly open packet).
+    PointerMarkersAnywhere,
+    /// D3: Pointer mode never places a marker (the base behaviour).
+    PointerNoMarkers,
 }
 
 #[cfg(feature = "lifecycle-mutants")]
@@ -279,6 +346,9 @@ impl Mutant {
             "revive_after_teardown" => Some(Self::ReviveAfterTeardown),
             "exit_ignores_live" => Some(Self::ExitIgnoresLive),
             "mask_frozen" => Some(Self::MaskFrozen),
+            "anchor_ignored" => Some(Self::AnchorIgnored),
+            "pointer_markers_anywhere" => Some(Self::PointerMarkersAnywhere),
+            "pointer_no_markers" => Some(Self::PointerNoMarkers),
             _ => None,
         }
     }
@@ -303,6 +373,20 @@ pub struct Lifecycle {
     window_segments: u64,
     last: Option<Transition>,
     no_software_counted: bool,
+    /// PHASE 1b. Absolute index of the newest `GP_PUT` value read in a turn that showed no live registration: every
+    /// entry below it was published before any later registration's reply (design section 1.1, anchor argument). A
+    /// Window may start only at an index >= this one.
+    safe_end: u64,
+    /// The smallest `GP_PUT` index ahead of the cursor seen so far (a submission end the cursor has not reached).
+    next_boundary: Option<u64>,
+    /// `Some(relayed)` when the cursor sits at an observed `GP_PUT` boundary in this turn.
+    here: Option<u64>,
+    /// The last boundary counted (each boundary is counted once).
+    counted: Option<u64>,
+    /// Entries still to be scanned after a source switch before the Window may end.
+    post_switch: u32,
+    /// Entries forwarded unscanned in the current Pointer stretch.
+    pointer_stretch: u64,
     #[cfg(feature = "lifecycle-mutants")]
     mutant: Option<Mutant>,
 }
@@ -315,6 +399,10 @@ impl Default for Lifecycle {
 
 /// How many segments at the start of a Fresh window count as the P2 measurement.
 pub const FRESH_SEGMENTS: u64 = 4;
+
+/// How many entries of the NEW ring are scanned after a source switch before the Window may end (a bounded
+/// detection aid for the unmeasured cursor semantics; no correctness depends on the number).
+pub const POST_SWITCH_SCAN: u32 = 8;
 
 fn scan_plan(restart: bool, seed_gate: bool) -> Plan {
     Plan::Scan {
@@ -345,6 +433,12 @@ impl Lifecycle {
             window_segments: 0,
             last: None,
             no_software_counted: false,
+            safe_end: 0,
+            next_boundary: None,
+            here: None,
+            counted: None,
+            post_switch: 0,
+            pointer_stretch: 0,
             #[cfg(feature = "lifecycle-mutants")]
             mutant: Mutant::from_env(),
         }
@@ -366,11 +460,13 @@ impl Lifecycle {
             ..Self::new()
         }
     }
-    /// Everything that decides behaviour, none of the counters (model checking).
+    /// Everything that decides behaviour, none of the counters (model checking). Indices behind the cursor
+    /// (`relayed`) are equivalent and collapse, so the model's state space does not grow with history.
     #[must_use]
-    pub fn state_key(&self) -> String {
+    pub fn state_key(&self, relayed: u64) -> String {
+        let ahead = |v: u64| v.saturating_sub(relayed);
         format!(
-            "{:?}|{:?}|{}|{}|{}|{:?}|{}|{}|{}",
+            "{:?}|{:?}|{}|{}|{}|{:?}|{}|{}|{}|{}|{:?}|{}|{}",
             self.mode,
             self.start,
             self.live,
@@ -379,7 +475,11 @@ impl Lifecycle {
             self.outstanding,
             self.need_restart,
             self.need_seed,
-            self.mask
+            self.mask,
+            ahead(self.safe_end),
+            self.next_boundary.map(ahead).filter(|d| *d > 0),
+            u8::from(self.here == Some(relayed)),
+            self.post_switch
         )
     }
     /// The current mode.
@@ -426,7 +526,7 @@ impl Lifecycle {
     pub fn entry(&mut self, o: &Obs, live: impl FnOnce() -> u32) -> Plan {
         if self.mode == Mode::Dead {
             self.counts.after_teardown += 1;
-            return scan_plan(false, false);
+            return Plan::Stop;
         }
         if self.legacy {
             return scan_plan(false, false);
@@ -443,6 +543,9 @@ impl Lifecycle {
                     if self.live == 0 {
                         self.go(Mode::Pointer, Cause::SoftwareBound);
                         self.counts.to_pointer += 1;
+                        self.pointer_stretch = 0;
+                        // the scan is exact up to here: this turn's GP_PUT is the first anchor
+                        self.safe_end = o.put_abs;
                     } else {
                         self.go(Mode::Window, Cause::SoftwareBoundRegistered);
                         self.start = Some(Start::Exact);
@@ -456,23 +559,39 @@ impl Lifecycle {
                 }
             }
             Mode::Pointer => {
-                if self.live > 0 {
+                if self.live == 0 {
+                    // A turn that showed no live registration: its GP_PUT read happened before any later
+                    // registration's reply, so everything below it is pre-reply (design section 1.1, anchor).
+                    self.safe_end = self.safe_end.max(o.put_abs);
+                } else {
                     #[cfg(feature = "lifecycle-mutants")]
                     if self.mutant == Some(Mutant::PointerToScan) {
                         self.go(Mode::Scan, Cause::Registration);
                         return scan_plan(false, false);
                     }
-                    self.go(Mode::Window, Cause::Registration);
-                    self.start = Some(Start::Fresh);
-                    self.need_restart = true;
-                    self.need_seed = self.outstanding.is_some();
                     #[cfg(feature = "lifecycle-mutants")]
-                    if self.mutant == Some(Mutant::NoSeed) {
-                        self.need_seed = false;
+                    let at_anchor =
+                        o.abs >= self.safe_end || self.mutant == Some(Mutant::AnchorIgnored);
+                    #[cfg(not(feature = "lifecycle-mutants"))]
+                    let at_anchor = o.abs >= self.safe_end;
+                    if at_anchor {
+                        self.go(Mode::Window, Cause::Registration);
+                        self.start = Some(Start::Fresh);
+                        self.need_restart = true;
+                        self.need_seed = self.outstanding.is_some();
+                        #[cfg(feature = "lifecycle-mutants")]
+                        if self.mutant == Some(Mutant::NoSeed) {
+                            self.need_seed = false;
+                        }
+                        self.window_entries = 0;
+                        self.window_segments = 0;
+                        self.counts.to_window_fresh += 1;
+                        self.counts.pointer_binding_unchecked += self.pointer_stretch;
+                    } else {
+                        // Published before the reply, below the anchor: forwarded unscanned (a Window may not
+                        // start inside a submission: its packet state is unknown in Pointer mode).
+                        self.counts.anchor_forwarded += 1;
                     }
-                    self.window_entries = 0;
-                    self.window_segments = 0;
-                    self.counts.to_window_fresh += 1;
                 }
             }
             Mode::Window => {
@@ -480,13 +599,15 @@ impl Lifecycle {
                 let drained = self.live == 0 || self.mutant == Some(Mutant::ExitIgnoresLive);
                 #[cfg(not(feature = "lifecycle-mutants"))]
                 let drained = self.live == 0;
-                if drained && o.quiescent {
+                if drained && o.quiescent && self.post_switch == 0 {
                     self.go(Mode::Pointer, Cause::RegistryDrained);
                     self.start = None;
                     self.need_restart = false;
                     self.need_seed = false;
                     self.outstanding = None;
                     self.counts.to_pointer_from_window += 1;
+                    self.safe_end = o.put_abs;
+                    self.pointer_stretch = 0;
                 }
             }
             Mode::Dead => {}
@@ -517,6 +638,7 @@ impl Lifecycle {
             Mode::Scan => self.counts.entries_scan += 1,
             Mode::Pointer => {
                 self.counts.entries_pointer += 1;
+                self.pointer_stretch += 1;
                 #[cfg(feature = "lifecycle-mutants")]
                 if self.mutant == Some(Mutant::ForgetSync) {
                     return;
@@ -527,6 +649,10 @@ impl Lifecycle {
             }
             Mode::Window => {
                 self.counts.entries_window += 1;
+                if self.post_switch > 0 {
+                    self.post_switch -= 1;
+                    self.counts.post_switch_scanned += 1;
+                }
                 self.window_entries += 1;
                 self.counts.window_entries_max =
                     self.counts.window_entries_max.max(self.window_entries);
@@ -604,11 +730,85 @@ impl Lifecycle {
         );
         self.counts.pointer_pb_read_violation += 1;
     }
-    /// A marker segment may be authored between GP entries now (a mode that knows the parser state, and
-    /// no packet open).
-    #[must_use]
-    pub fn marker_possible(&self, scan_carried: bool) -> bool {
-        matches!(self.mode, Mode::Scan | Mode::Window) && !scan_carried
+    /// A marker segment may be authored between GP entries now. Scan and Window know the parser state: a marker only
+    /// when no packet is open. Pointer mode knows none; it authors a marker only where the cursor sits at a `GP_PUT`
+    /// boundary the guest wrote (the end of a submission: assumption P2', measured by `put_boundary_open_*`), and
+    /// counts (loudly) every wake it could not announce. `relayed` = the cursor's absolute index.
+    pub fn marker_possible(&mut self, scan_carried: bool, relayed: u64) -> bool {
+        match self.mode {
+            Mode::Scan | Mode::Window => !scan_carried,
+            Mode::Pointer => {
+                #[cfg(feature = "lifecycle-mutants")]
+                if self.mutant == Some(Mutant::PointerMarkersAnywhere) {
+                    return true;
+                }
+                #[cfg(feature = "lifecycle-mutants")]
+                if self.mutant == Some(Mutant::PointerNoMarkers) {
+                    return false;
+                }
+                if self.here == Some(relayed) {
+                    true
+                } else {
+                    self.counts.pointer_carried_no_marker += 1;
+                    false
+                }
+            }
+            Mode::Dead => false,
+        }
+    }
+    /// A marker was authored.
+    pub fn marker_published(&mut self) {
+        if self.mode == Mode::Pointer {
+            self.counts.pointer_markers += 1;
+        }
+    }
+    /// The turn read `GP_PUT` while the cursor was at the absolute index `relayed`; `put_abs` is the index of the
+    /// value read. Tracks the submission ends the cursor will reach, and measures (once per boundary) whether a
+    /// packet is OPEN there when the parser state is known (`open`; `None` in Pointer mode): the falsifier of P2'.
+    pub fn observe_put(&mut self, relayed: u64, put_abs: u64, open: Option<bool>) {
+        let at = put_abs == relayed || self.next_boundary == Some(relayed);
+        self.here = at.then_some(relayed);
+        if at && self.counted != Some(relayed) {
+            self.counted = Some(relayed);
+            if let Some(open) = open {
+                let o = u64::from(open);
+                match self.mode {
+                    Mode::Scan => {
+                        self.counts.put_boundaries_scan += 1;
+                        self.counts.put_boundary_open_scan += o;
+                    }
+                    Mode::Window => {
+                        self.counts.put_boundaries_window += 1;
+                        self.counts.put_boundary_open_window += o;
+                    }
+                    Mode::Pointer | Mode::Dead => {}
+                }
+            }
+        }
+        if put_abs > relayed && self.next_boundary.is_none_or(|b| b <= relayed) {
+            self.next_boundary = Some(put_abs);
+        }
+    }
+    /// The relay switched the channel's guest ring (ring growth). The new ring's first entries are scanned before a
+    /// Window may end: a detection aid for the cursor semantics at the switch (design D5), never an edge of the
+    /// table.
+    pub fn source_switched(&mut self) {
+        if self.mode == Mode::Window {
+            self.post_switch = POST_SWITCH_SCAN;
+        }
+    }
+    /// The new ring's USERD showed a nonzero `GP_GET` at the switch: reset-to-0 is contradicted (loud).
+    pub fn switch_cursor_mismatch(&mut self) {
+        self.counts.switch_cursor_mismatch += 1;
+    }
+    /// A Pointer-mode channel was woken by the 50 ms backstop and found work (`loud` = beyond about one per second).
+    pub fn pointer_backstop(&mut self, loud: bool) {
+        self.counts.pointer_backstop += 1;
+        self.counts.pointer_backstop_loud += u64::from(loud);
+    }
+    /// The software object was found gone in Pointer mode.
+    pub fn software_gone(&mut self) {
+        self.counts.pointer_software_gone += 1;
     }
     /// The channel was freed.
     pub fn teardown(&mut self) {
@@ -662,6 +862,7 @@ mod tests {
             raw,
             abs,
             epoch,
+            put_abs: abs + 1,
             sw_mask,
             have_software: true,
             quiescent: true,
@@ -672,7 +873,7 @@ mod tests {
             Plan::Scan {
                 restart, seed_gate, ..
             } => (restart, seed_gate),
-            Plan::Forward => panic!("expected a scan, got Forward"),
+            Plan::Forward | Plan::Stop => panic!("expected a scan, got {plan:?}"),
         }
     }
 
@@ -879,7 +1080,7 @@ mod tests {
         l.teardown();
         assert_eq!(l.mode(), Mode::Dead);
         let p = l.entry(&obs(1, 0, 9, B), || 1);
-        assert!(matches!(p, Plan::Scan { .. }), "the safe plan");
+        assert_eq!(p, Plan::Stop, "a torn-down channel reads nothing and publishes nothing (review D6)");
         assert_eq!(l.mode(), Mode::Dead);
         assert!(l.counts().after_teardown >= 1);
     }
@@ -1030,17 +1231,137 @@ mod tests {
     }
 
     #[test]
-    fn markers_need_a_mode_that_knows_the_parser_state() {
+    fn markers_need_a_known_parser_state_or_an_observed_gp_put_boundary() {
         let mut l = Lifecycle::new();
-        assert!(l.marker_possible(false));
-        assert!(!l.marker_possible(true), "a packet is open");
+        assert!(l.marker_possible(false, 0));
+        assert!(!l.marker_possible(true, 0), "a packet is open");
         l.entry(&obs(0, 0, 0, 1 << 6), || 0);
-        assert!(
-            !l.marker_possible(false),
-            "Pointer mode has no parser state"
-        );
+        // Pointer mode: no marker unless the cursor sits at a GP_PUT value the guest wrote
+        assert!(!l.marker_possible(false, 1), "no boundary observed at the cursor");
+        assert_eq!(l.counts().pointer_carried_no_marker, 1, "loud");
+        l.observe_put(1, 1, None);
+        assert!(l.marker_possible(false, 1), "the cursor is at GP_PUT");
+        l.observe_put(1, 5, None);
+        assert!(!l.marker_possible(false, 1), "GP_PUT is ahead: mid-submission");
+        assert!(!l.marker_possible(false, 3), "an index that was never a GP_PUT");
+        l.observe_put(4, 5, None);
+        assert!(!l.marker_possible(false, 4), "the remembered boundary is 5, not 4");
+        l.observe_put(5, 9, None);
+        assert!(l.marker_possible(false, 5), "the remembered boundary was reached");
         l.entry(&obs(1, 0, 1, B), || 1);
-        assert!(l.marker_possible(false));
+        assert!(l.marker_possible(false, 5) == l.marker_possible(false, 5));
+    }
+
+    /// PHASE 1b (D1): a Window starts at an anchor, a GP_PUT value read in a turn that showed no registration.
+    #[test]
+    fn a_window_starts_only_at_the_anchor_never_inside_the_submission_the_flip_was_seen_in() {
+        let mut l = Lifecycle::new();
+        let o = |abs: u64, put_abs: u64, epoch: u64| Obs {
+            put_abs,
+            ..obs(abs, 0x10, epoch, B)
+        };
+        // bind at entry 0, submission ends at 6 (put_abs = 6 for every turn of the submission)
+        l.entry(&o(0, 6, 0), || 0);
+        l.forwarded(0, 0x10);
+        l.entry(&o(1, 6, 0), || 0);
+        l.forwarded(1, 0x10);
+        // the registration shows up at entry 2; the submission's end (6) is the anchor
+        for abs in 2..6 {
+            assert_eq!(l.entry(&o(abs, 6, 1), || 1), Plan::Forward, "entry {abs} is below the anchor");
+            l.forwarded(abs, 0x10);
+            assert_eq!(l.mode(), Mode::Pointer);
+        }
+        assert_eq!(l.counts().anchor_forwarded, 4);
+        let p = l.entry(&o(6, 9, 1), || 1);
+        assert!(matches!(p, Plan::Scan { restart: true, .. }));
+        assert_eq!((l.mode(), l.start()), (Mode::Window, Some(Start::Fresh)));
+    }
+
+    #[test]
+    fn a_turn_that_showed_the_registration_never_moves_the_anchor() {
+        let mut l = Lifecycle::new();
+        let o = |abs: u64, put_abs: u64, epoch: u64| Obs {
+            put_abs,
+            ..obs(abs, 0x10, epoch, B)
+        };
+        l.entry(&o(0, 3, 0), || 0);
+        l.forwarded(0, 0x10);
+        // entry 1: the epoch moved; this turn's GP_PUT (9) was read AFTER the guest may have published post-reply
+        // entries, so it is not the anchor: the last clean turn's (3) is
+        assert_eq!(l.entry(&o(1, 9, 1), || 1), Plan::Forward);
+        l.forwarded(1, 0x10);
+        assert_eq!(l.entry(&o(2, 9, 1), || 1), Plan::Forward);
+        l.forwarded(2, 0x10);
+        assert!(matches!(l.entry(&o(3, 9, 1), || 1), Plan::Scan { restart: true, .. }));
+    }
+
+    #[test]
+    fn a_registration_removed_before_the_anchor_leaves_pointer_mode_alone() {
+        let mut l = Lifecycle::new();
+        let o = |abs: u64, put_abs: u64, epoch: u64| Obs {
+            put_abs,
+            ..obs(abs, 0x10, epoch, B)
+        };
+        l.entry(&o(0, 4, 0), || 0);
+        assert_eq!(l.entry(&o(1, 4, 1), || 1), Plan::Forward);
+        assert_eq!(l.entry(&o(2, 4, 2), || 0), Plan::Forward, "removed again");
+        assert_eq!(l.entry(&o(3, 8, 2), || 0), Plan::Forward);
+        assert_eq!(l.mode(), Mode::Pointer);
+        assert_eq!(l.counts().to_window_fresh, 0);
+    }
+
+    /// P2' measurement: a packet open at an observed GP_PUT is counted once per boundary, per mode, uncapped.
+    #[test]
+    fn a_packet_open_at_a_gp_put_boundary_is_counted_once_per_boundary_in_scan_and_window() {
+        let mut l = Lifecycle::new();
+        l.observe_put(3, 3, Some(false));
+        l.observe_put(3, 3, Some(false));
+        l.observe_put(3, 7, Some(true));
+        assert_eq!((l.counts().put_boundaries_scan, l.counts().put_boundary_open_scan), (1, 0));
+        l.observe_put(7, 7, Some(true));
+        assert_eq!((l.counts().put_boundaries_scan, l.counts().put_boundary_open_scan), (2, 1));
+        // a boundary the cursor reaches after the guest moved GP_PUT on is still measured
+        l.observe_put(8, 12, Some(false));
+        l.observe_put(12, 12, Some(true));
+        assert_eq!((l.counts().put_boundaries_scan, l.counts().put_boundary_open_scan), (3, 2));
+        l.entry(&obs(12, 0, 1, B), || 1);
+        assert_eq!(l.mode(), Mode::Window);
+        l.observe_put(13, 13, Some(true));
+        assert_eq!(
+            (l.counts().put_boundaries_window, l.counts().put_boundary_open_window),
+            (1, 1)
+        );
+    }
+
+    /// D5: after a source switch the first entries of the new ring are scanned before the Window may end.
+    #[test]
+    fn after_a_source_switch_the_window_stays_open_for_a_bounded_number_of_entries() {
+        let mut l = Lifecycle::new();
+        l.entry(&obs(0, 0, 0, B), || 0);
+        l.entry(&obs(1, 0, 1, B), || 1);
+        assert_eq!(l.mode(), Mode::Window);
+        l.forwarded(1, 0x10);
+        l.source_switched();
+        for i in 0..u64::from(POST_SWITCH_SCAN) {
+            // the registry is empty and the relay quiescent, yet the Window holds
+            assert!(
+                matches!(l.entry(&obs(2 + i, 0, 2, B), || 0), Plan::Scan { .. }),
+                "entry {i}"
+            );
+            assert_eq!(l.mode(), Mode::Window, "entry {i}");
+            l.forwarded(2 + i, 0x10);
+        }
+        assert_eq!(l.counts().post_switch_scanned, u64::from(POST_SWITCH_SCAN));
+        assert_eq!(l.entry(&obs(100, 0, 2, B), || 0), Plan::Forward);
+        assert_eq!(l.mode(), Mode::Pointer);
+    }
+
+    #[test]
+    fn a_source_switch_outside_a_window_changes_nothing() {
+        let mut l = Lifecycle::new();
+        l.entry(&obs(0, 0, 0, B), || 0);
+        l.source_switched();
+        assert_eq!(l.entry(&obs(1, 0, 0, B), || 0), Plan::Forward);
     }
 
     #[test]
