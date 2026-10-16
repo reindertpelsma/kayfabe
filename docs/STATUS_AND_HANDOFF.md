@@ -1,5 +1,43 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-16 12:42UTC — bounded reply diagnostic green, next Blackwell rental starting
+
+CleanPR22source4d83e661f (test-firsta2373bd9c, initialbe7fffaaa) all54GSP CPU
+pass after51pass/3fail; initial trait/exhaustive-reset compile failure saved.
+HostKF3_RPC_BODY_TRACE1 defaultoff, actualpost afterheldpatch/publication,
+fixed512record/256KiBtotal/4096byteprefix lifetime limits survive guest reset.
+Static/board replies excluded, export screening required; no host GPU verbs,
+guestRAMread, reply mutation or interruptfilter. IntegratedBW has QGAdeadline
+and safeFastGuest lifecycle;8QGA+2lifecycle CPUtests pass. Source99ce8207c
+currentlypushed before this evidence update; hardware diagnosticUNRUN.
+
+MEASURED market noRTX5060/5060TiKVM offer, includingunverified/multiGPU.
+ContinueBlackwell with available5070 offer54561458/provider153389, actualdie
+PENDINGunprivprobe; do notborrowGB206facts. Own56246613 created12:40:48UTC,
+175minute timer2319249 at15:35:50, hard15:40:48. Conservativecampaign ceiling
+5.09USD+transfers (preceding4.36 plusmax.73). Onlyone ownrental; priorallabsent.
+Localbootstrap /workspace/codex/bwbatch20261016_bootstrap.py execsession55767
+waits ownVM/Ubuntu22/KVM/disk>=100GB, pins ownTOFUhostaliascodex-bwbatch-56246613,
+stages ownsource provisioning and /root/bwbatch_linux.sh, records ownedPID
+beforeCPUbuild. Poll bootstrap logfile and start/exit; no duplicate uncertain
+launch. Linuxphase is root/prov/bwbatch_linux.log:stock595.91.07, UID65534/
+CapEff0dieprobe, privilegedreadonly nativecaps oracle, gates9, QEMU private
+build/rawclient/thin595guest. B3nativeconcurrency + samebinary noisy/quiet180s
+runs stilltoqueueafterbuild; no heartbeat code changed yet. Exact public595tag
+9f087a6d4e86d85acc0ce1d354d6276fe5047b29 and580tag307159f2623d3bf45feb9177bd2da52ffbc5ddf9
+fetched under /workspace/codex/ogkm-*. SourcecurrentTime includesPTIMERoffset
+and conditionalFSPsystemoffset; existing emitter useshostusermodeGPUclock.
+Clock-domain/responsiveness cause remainsINFERRED untilB3.
+
+Followpromptaspriority: nativeWindows same-die stockdriver/tracerreference,
+checkactualPCI against580INFbeforeuse; newdie needsnativeWindowsvalidation
+before blamingkayfabe. Capture screened useful replybodies BEFOREreimage.
+Current savedGB206metadata alignment full382/385done(PR21); Ada passing
+ordereddisplaytrace unavailable, cannotuse nativeheadlessdisplayasoracle.
+B2capturedpage override diagnostic requires explicitownerapprovalinprompt;
+source-derivedgroups alreadyallowed. No capturedtable or guessedvalue ships.
+
+
 ## UPDATE 2026-10-16 11:54UTC — new prompt Step0 done, no active rental
 
 Continuing /root/codex_prompt_dies_20261016.md in its stated order, Blackwell

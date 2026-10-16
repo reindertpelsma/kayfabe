@@ -55,3 +55,18 @@ Windows native and both guest seven-minute holds pass; R34 callback/event
 both fail180s. No lease extension or full-family acceptance. Only own timer
 canceled after absence; owner GPU/VM untouched. Text retirement receipt in
 turing_hold_20261016/retirement.txt. Screenshots/executables were not returned.
+
+## Additional Blackwell die, 2026-10-16 12:40 UTC
+
+| Instance | GPU | USD/hour | StartUTC | StopUTC | Purpose | Ceiling |
+|---|---|---:|---|---|---|---|
+|56246613|RTX5070, exactdie pending unprivilegedRM|0.2416666667|2026-10-16T12:40:48.060853+00:00 conservative requesttime|ACTIVE, timer2319249 at15:35:50UTC; hardcap15:40:48UTC|B3first, newdie nativeWindows reference/B4 while GB206KVM unavailable|max3h0.73USD; campaign ceiling5.09USD+unbilledtransfers|
+
+MEASURED APIaccount IDs[] before creation; only own new56246613 may be retired.
+Immediately armed175minute timer. Offer54561458/machine153389 advertises16CPU,
+32109MiBRAM/600.5GBfree disk;150GBrequested. These are offer claims, not measured
+hardware. Exact die/PCI/INFsupport/native suite remainUNRUN. No GB206constant
+or pass carried across. GB206Code43 remains red. Step0alignment is complete;
+newcode-onlyPR21 and22 staydraft, no owner/master merge. Shared ownerGPU/VM
+unused; trustedCPU54GSPtests at most2jobs, rentalbinary built onrental because
+trustedhostUbuntu26.04/glibc2.43 cannot promise Ubuntu22.04runtime compatibility.
