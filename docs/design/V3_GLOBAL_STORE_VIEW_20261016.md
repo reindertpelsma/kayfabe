@@ -1,4 +1,4 @@
-STATUS: RESEARCH, 2026-10-16. GPU-free prototype first; production integration and hardware validation are pending.
+STATUS: IMPLEMENTED, 2026-10-16. Gates and Linux smoke passed at c66ac9de; final soak and Windows Heaven comparison are in progress. Draft review only.
 
 # One store view for all channel readers
 
@@ -54,7 +54,7 @@ if any reader exists; they never wait. FULL writes require an exclusive Rust bor
 the FULL read path free of atomics while preventing a plain data copy racing a host CPU writer.
 The runtime paths currently being replaced only read views; no new GPU work is CPU-executed.
 
-Integration draft, 02:25 CEST: both channel readers use one instance created at device realize.
+Production integration: both channel readers use one instance created at device realize.
 QOM ABI 31 adds `store-view-full` (default false) and `store-view-windows` (0 = 256 global windows).
 `user-view-keep` is retained as a deprecated property with a diagnostic, not reinterpreted as a quota.
 The old cache exists only in its baseline tests. Inactive channel owners no longer reserve their
@@ -69,3 +69,8 @@ New perimeter API: `VolatileRegion::write_data_small(&mut self, offset, bytes)` 
 protection, the 256-byte cap, overflow and the real mapping bounds before any byte is stored.
 Byte stores permit unaligned data writes. Its dedicated test covers arbitrary small lengths,
 boundary refusal, oversize refusal and a read-only mapping. It is not an engine executor.
+
+Validation and limits are maintained in [P2_VALIDATION](../../traces/perf_parity_20261016/P2_VALIDATION.md).
+The native Linux renderer checks passed on the verified executable, and 8/16/32-thread
+ten-minute real-mapping tests passed with exact patterns and balanced resources. These
+checks do not establish a Heaven speedup. No experiment branch was merged.

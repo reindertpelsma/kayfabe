@@ -4,7 +4,7 @@ STATUS: IN PROGRESS, 2026-10-16 02:54 CEST. Final soak and Heaven comparison pen
 
 Production code/build: clean `c66ac9de1863e802dc3b8e275e100e23db800562` on
 `codex/perf-parity-20261016`. Default Cargo features, WINDOWED, global budget 256,
-no behavioral `KF3_*` flags. Host driver 595.91.07. Linux guest driver 580.159.04.
+Linux runs have no behavioral `KF3_*` flags. Host driver 595.91.07. Linux guest driver 580.159.04.
 Source after this commit adds documentation and an explicitly enabled offline probe only.
 Hardware executable: `/data/codex-perf/kf3-bins/c66ac9de/qemu-system-x86_64`.
 
@@ -69,3 +69,34 @@ Same-span contention returns Retry rather than waiting; separate-span runs repor
 retries. Timing and byte verification are included in throughput, so this is protocol/RAM
 scaling rather than a BAR1 bandwidth number. The same-span result saturates near six million
 verified reads/s; separate spans reached 15.861 million/s at 32 oversubscribed threads.
+
+Windows comparison runs use the copied production harness and its standard KF3 flags.
+`PERF_FLAGS` is empty; the actual process environment is:
+
+```text
+KF3_REV=c66ac9de
+KF3_WIN_USER_CHANNELS_PASSTHROUGH=1
+KF3_WIN_TWIN_DEFAPI_OBJECT=1
+KF3_KERNEL_GR_CE=1
+KF3_KERNEL_GR_WORK=1
+KF3_TRANSLATED_CE_RELAY=1
+KF3_DEFERRED_API=1
+KF3_PREEMPT_BIND_PROBE=1
+KF3_DISPLAY_IMP_ENABLE=1
+KF3_DISPLAY_CTRL_PROBE=1
+KF3_ZCULL_BIND_PROBE=1
+KF3_SW_RUNLIST_HOST_OWNED=1
+KF3_ASYNC_PREEMPT=1
+KF3_GFX_POOL_PROBE=1
+KF3_SW_RUNLIST_PROBE=1
+KF3_MEMORY_LIST_PROBE=1
+KF3_DISPLAY_SDR_COLOR=1
+KF3_DISPLAY_CAPS_PROBE=1
+KF3_DISPLAY_LUT_MIRROR=1
+KF3_DISPLAY_ILUT_OFFSET_256=1
+```
+
+The launch explicitly selects `store-view-full=off` for WINDOWED and `on` for FULL;
+all other guest/GPU settings match the copied Heaven harness. Host driver 595.91.07,
+Windows guest driver 580.88 (actual guest nvidia-smi; the wire QOM property is 580.65.06).
+Three runs per API and mode are in progress. No host stress runs overlap these timings.
