@@ -57,9 +57,25 @@ while not (r/'acpi').exists(): time.sleep(.01)
                         (root / 'acpi').touch()
                     thread = threading.Thread(target=answer)
                     thread.start()
-                result = subprocess.run([sys.executable, str(HELPER), 'stop', str(receipt),
-                    '--acpi-seconds', '1' if mode == 'acpi' else '0',
-                    '--term-seconds', '5'], capture_output=True, timeout=10)
+                if mode == 'launcher':
+                    script = Path(os.environ.get('INTERACTIVE_FIXTURE_SCRIPT',
+                        str(HELPER.with_name('interactive.sh')))).read_text()
+                    cleanup = 'cleanup() {' + script.split('cleanup() {', 1)[1].split(
+                        "\ntrap 'rc=130", 1)[0]
+                    stop_function = ''
+                    if 'stop_qemu() {' in script:
+                        stop_function = 'stop_qemu() {' + script.split('stop_qemu() {', 1)[1].split('\n}', 1)[0] + '\n}\n'
+                    env = os.environ.copy()
+                    env.update(RECEIPT=str(receipt), PIDF=str(root/'pid'), RUN=str(root),
+                        QSTOP=str(HELPER), OWN_BROKER='0', q=str(child.pid))
+                    result = subprocess.run(['bash', '-c', '''
+python3() { command python3 "$@" --acpi-seconds 0 --term-seconds 5; }
+''' + stop_function + cleanup + '\ncleanup'], env=env,
+                        capture_output=True, timeout=10)
+                else:
+                    result = subprocess.run([sys.executable, str(HELPER), 'stop', str(receipt),
+                        '--acpi-seconds', '1' if mode == 'acpi' else '0',
+                        '--term-seconds', '5'], capture_output=True, timeout=10)
                 if mode == 'mismatch':
                     self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
                     self.assertIsNone(child.poll())
@@ -68,7 +84,7 @@ while not (r/'acpi').exists(): time.sleep(.01)
                     self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                     child.wait(timeout=2)
                     self.assertTrue((root / 'cleanup').exists())
-                    self.assertEqual((root / 'term').exists(), mode == 'term')
+                    self.assertEqual((root / 'term').exists(), mode in ('term', 'launcher'))
                 if mode == 'acpi':
                     thread.join(timeout=5)
                     self.assertEqual((root / 'command').read_bytes(), b'system_powerdown\n')
@@ -87,6 +103,9 @@ while not (r/'acpi').exists(): time.sleep(.01)
 
     def test_reused_pid_identity_is_refused_without_a_signal(self):
         self.run_fixture('mismatch')
+
+    def test_launcher_cleanup_allows_the_owned_process_to_finish(self):
+        self.run_fixture('launcher')
 
 
 if __name__ == '__main__':
