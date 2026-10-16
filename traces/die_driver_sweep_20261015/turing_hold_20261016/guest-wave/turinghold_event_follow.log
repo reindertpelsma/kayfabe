@@ -7,3 +7,4 @@ Fast-forward
  scripts/bench/tests/test_qga_exec.py | 25 +++++++++++++++++++++++++
  scripts/bench/windows/qmp.py         | 15 +++++++++++++--
  3 files changed, 39 insertions(+), 3 deletions(-)
+EVENT_FOLLOW_EXIT rc=0 2026-10-16T04:08:04+00:00

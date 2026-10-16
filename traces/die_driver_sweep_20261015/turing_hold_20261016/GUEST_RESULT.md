@@ -1,6 +1,6 @@
 # Turing W3 hardware results
 
-**STATUS: RESEARCH, 2026-10-16 03:58 UTC. Baseline hold passes; both R34 variants time out.**
+**STATUS: RESEARCH, 2026-10-16 04:09 UTC. Both Windows holds pass; both R34 variants time out; lease retired.**
 
 Owned lease56180232, native unprivileged TU106 arch0x160/impl0x6, UID65534,
 CapEff0. Host Linux595.91.07. Guest Windows LTSC26100 actual32.0.15.8088
@@ -15,6 +15,7 @@ CapEff0. Host Linux595.91.07. Guest Windows LTSC26100 actual32.0.15.8088
 | Baseline Windows short suite | 05442b10 | Code0, DWM/Explorer, CUDA3, D3D11/12, zero System4101 TDR |
 | Baseline Windows seven-minute hold | 05442b10 | UNVALIDATED: helper deadline300s cut off requested660s |
 | Baseline Windows retry | ca0ad248 | PASS421.25s,11 D3D11/12 rounds, Code0/DWM/Explorer, zero4101 TDR; CUDA3/D3D11/12 before+after pass; two nonblank1920x1080 screenshot receipts; exact clean stop03:51:13 |
+| Event Windows regression | eb4dfad0 | PASS421.25s/11 D3D11+12 rounds/zero4101TDR; actual580.88 Code0/DWM/Explorer/CUDA3/D3D11+12 before+after, two nonblank1920x1080 screenshot receipts; clean stop04:08:03 |
 | R34 baseline/event at180s | ca0ad248 /5b523ed5 | Both TIMEOUT; event IRQraised45190→3 but fewer completed walks at175s; see R34_RESULT.md |
 
 H-T7 falsifier did not fire in the fresh baseline guest: actual580.88/Code0,
@@ -35,5 +36,11 @@ hold truncation, initial gate8 failure and build prerequisite failures.
 Actual process receipts carry source, private binary SHA, actual KF3 env and
 host/guest ABI. Raw screenshots/executables stay on rental; text only back.
 Clean code PRs13,19,20 target claude/gpu-types-20261015; evidence stays here.
-No full event guest regressions, family completion or multiple Windows builds
-are claimed. Deadline04:11:46 UTC/hard04:16:45 remains unchanged.
+Event Windows regression passes. Event Linux guest raw30/30/CUDA4/broker
+remain UNRUN; no full Linux cell, family completion or multiple Windows builds
+are claimed. Owned56180232 retired and account IDs[]/absence verified04:08:27,
+before original timer04:11:46/hard04:16:45. Only own timer2167738 canceled
+after absence. Screenshots/executables erased with rental, text receipts saved.
+Lease2h51m42s conservative compute ceiling0.32USD, campaign ceiling4.36USD
+plus unbilled transfers. Event Windows private binary SHA256:
+b6a4ed264c099f1b91253e7f1bd4a5d4b54467900430e9b59d3468837d797b39.

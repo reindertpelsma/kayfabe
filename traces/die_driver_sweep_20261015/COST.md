@@ -41,10 +41,17 @@ Final AD102: device da0569a6; Windows580 Code0/DWM/D3D+CUDA passes, Linux580 raw
 
 | Instance | GPU | USD/hour | StartUTC | StopUTC | Purpose | Cost |
 |---|---|---:|---|---|---|---|
-|56180232|RTX2060S / TU106, fresh unprivileged RM verified|0.1113888889|2026-10-16T01:16:45.814656+00:00|ACTIVE; timer2167738 at04:11:46UTC, hardcap04:16:45UTC|Native-first Windows580 reference, nested7min hold, callback/event R34 at180s|max3h compute ceiling0.34USD; campaign ceiling4.38USD, transfers unbilled|
+|56180232|RTX2060S / TU106, fresh unprivileged RM verified|0.1113888889|2026-10-16T01:16:45.814656+00:00|destroyed; absence/account IDs[] verified04:08:27UTC; own timer2167738 canceled after absence|Native-first Windows580 reference, nested7min hold, callback/event R34 at180s|2h51m42s; compute ceiling0.32USD; campaign conservative ceiling4.36USD, transfers unbilled|
 
 Prior own56165326 absence verified01:13:59UTC before this creation. No other
 own rental remains. Timer armed immediately. Updated03:47UTC: native Windows
 580.88 seven-minute reference and Linux595 raw30/30/native gates pass; nested
 Windows580.88 short suite passes, corrected-deadline hold running. R34 A/B
 pending. UID65534/CapEff0 RM tuple arch0x160/impl6 verifies TU106.
+
+Final W3 retirement04:08:27UTC verified before original04:11:46 timer and
+04:16:45 hard cap. No own rental remains (account IDs[] at this checkpoint).
+Windows native and both guest seven-minute holds pass; R34 callback/event
+both fail180s. No lease extension or full-family acceptance. Only own timer
+canceled after absence; owner GPU/VM untouched. Text retirement receipt in
+turing_hold_20261016/retirement.txt. Screenshots/executables were not returned.

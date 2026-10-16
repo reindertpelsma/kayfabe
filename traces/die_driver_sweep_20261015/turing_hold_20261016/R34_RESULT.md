@@ -56,9 +56,11 @@ Next bounded experiments, stated before any future run:
    map-before-clear and hostile-guest admission. Falsifier: measured costs too
    small to account for the remaining wall.
 
-Full Linux guest raw30/30/CUDA4/broker and event Windows regression remain
-required before any green performance or whole-cell claim. Windows event
-regression is running; no result is assumed. Code-only PR19 remains draft;
+Full Linux guest raw30/30/CUDA4/broker remain UNRUN and required before any
+green performance or whole-cell claim. Event Windows580.88 regression passes
+at sourceeb4dfad0 (same product5b plus QGA deadline fix):421.25s,11 rounds,
+zeroSystem4101TDR, Code0/DWM/Explorer, CUDA3/D3D11+12 before+after and nonblank
+screenshot receipts. Clean stop04:08:03; rental absence verified04:08:27. Code-only PR19 remains draft;
 CPU3236pass/14existing ignored and native9/9+gate10 pass do not override this
 negative hardware result. No lease extension or budget relaxation.
 

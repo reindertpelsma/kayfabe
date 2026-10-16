@@ -7,3 +7,4 @@ WIN_DIE_EXIT qemu-gone 2026-10-16T03:24:54+00:00 xid_after=7
 WIN_DIE_START kf3=ca0ad248 checkout=ca0ad248b guest_driver=580.65.06 gpu=NVIDIA GeForce RTX 2060 SUPER xid_before=7 2026-10-16T03:40:53+00:00
 WIN_DIE_EXIT qemu-gone 2026-10-16T03:51:14+00:00 xid_after=7
 WIN_DIE_START kf3=eb4dfad0 checkout=eb4dfad0a guest_driver=580.65.06 gpu=NVIDIA GeForce RTX 2060 SUPER xid_before=7 2026-10-16T03:57:35+00:00
+WIN_DIE_EXIT qemu-gone 2026-10-16T04:08:06+00:00 xid_after=7

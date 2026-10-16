@@ -5,7 +5,7 @@
 Base: `origin/claude/gpu-types-20261015` plus cursor fix `2f99e673d`;
 initial combined product revision: `23585a319`.
 
-## Current measured matrix, 2026-10-16 04:01 UTC
+## Current measured matrix, 2026-10-16 04:09 UTC
 
 This corrects the older family checkpoint below. **No family is complete.**
 Both guest OSes across several actual driver builds remain required. Native
@@ -15,7 +15,7 @@ native Windows reference uses the rental GPU directly. Owner GPU/VM unused.
 
 | Die/family | Linux580 guest | Linux595 guest | Windows580.88 guest | Remaining wall |
 |---|---|---|---|---|
-| TU106/Turing | raw29/30; CUDA4 before semaphore fix and broker after fix pass | UNRUN | baseline Code0/desktop/CUDA3/D3D11+12,421.25s/zeroTDR hold passes; event regression running | original-depth R34 times out180s for callback and event; event full regressions unrun |
+| TU106/Turing | raw29/30; CUDA4 before semaphore fix and broker after fix pass | UNRUN | baseline and event Code0/desktop/CUDA3/D3D11+12,421.25s/zeroTDR holds pass | original-depth R34 times out180s for callback and event; event full regressions unrun |
 | GA104/Ampere | raw30/CUDA4/gfx10 hashes/broker pass | raw30 pass; fat lanes unrun | init stall, no accepted desktop | native GA104 caps oracle missing; authored caps equality red |
 | AD102/Ada | raw30/CUDA4/gfx10/broker pass | raw30/CUDA4/gfx10 pass; broker unrun | Code0/desktop/CUDA3/D3D11+12/zeroTDR short suite pass | more actual Windows builds and other die coverage |
 | GB206/Blackwell | raw30/CUDA4/headless gfx5+native hashes pass; desktop fails | raw29/30, concurrency timeout/crash | Code43 | native/virtual aligned control replies differ; strict virtual trace census still fails |
@@ -42,8 +42,9 @@ red, candidate held. Transient native591.86/other build queries are not suites.
 New code-only draft PRs13,14,15,16,18,19,20 targetclaude/gpu-types-20261015.
 Evidence remains on campaign branches. PR19 now explicitly reports the failed
 R34 performance prediction; CPU/native gate green does not supersede it.
-Cost/ownership: [COST.md](COST.md), conservative compute ceiling4.38USD plus
-unbilled transfers. Only own56180232 active, original timer04:11:46 UTC.
+Cost/ownership: [COST.md](COST.md), conservative compute ceiling4.36USD plus
+unbilled transfers. Own56180232 retired/absence/account IDs[] verified04:08:27;
+own timer canceled after absence, before original04:11:46 UTC deadline.
 
 ## Hypotheses stated before runs
 

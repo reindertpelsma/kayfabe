@@ -1,5 +1,46 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-16 04:09 UTC — W3 holds pass, R34 performance negative, rental retired
+
+This supersedes active/running/pending statements in the earlier W3 entries.
+Windows actual32.0.15.8088, LTSC26100 nestedKVM on fresh unprivileged verified
+TU106/host595.91.07: baselineca0ad248 AND eventeb4dfad0 each pass421.25s,
+11 repeated hardware D3D11+12 rounds, zeroSystem4101TDR, Code0/DWM/Explorer,
+CUDA3/D3D11+12 before+after and nonblank1920x1080 screenshot receipts. Event
+clean stop04:08:03, follow/controller exit0. H-T7 falsifier did not fire.
+Images/executables stay on rental and are now erased; sanitized text/metadata
+and SHA/source/actual env/ABI receipts are in git. QGA deadline negative and
+initial gate8/QGA failures remain preserved. QGA fix cleanPR13 eightCPUtests
+pass, safe lifecycle cleanPR20 two failing-first fixtures pass.
+
+R34 remains FAIL: callbackca0ad248 and event5b523ed5 both time out at original
+180s/13000decoys, actualKF3_PROF1 both, safe harness59a290a0f. Matched175s:
+45261 versus41849walks,667 versus1108us mean,45190 versus3 raisedIRQ.
+Notification effect supported; performance prediction FALSIFIED. Native
+same-lease raw30/30 and both native9/9+gate10 pass; full event Linux guest
+raw30/30/CUDA4/broker UNRUN. PR19 draft updated with negative hardware result,
+full isolated CPU3236pass/14existing ignored and corrected gate8 checks remain
+valid. No whole-cell/family/multiple-Windows-driver acceptance is claimed.
+
+Next ranked bounded tests: reduce pending event polling wait on VA worker
+while retaining GPU-event/error/lifetime guarantees; decode dominant0x160/
+0x180 BAR0 writes from public sources before changing semantics; attribute
+host-map and nested exit costs. Falsifiers and normalized counts are in
+traces/die_driver_sweep_20261015/turing_hold_20261016/R34_RESULT.md. Stop/rank
+at this wall; no budget/depth increase, invented ACK or interrupt filtering.
+
+Only own56180232 retired; API absence/account IDs[] verified04:08:27 before
+original timer04:11:46/hard04:16:45. Timer2167738 identity checked and canceled
+ONLY after absence. No own rental remains. Lease2h51m42s compute ceiling0.32USD,
+campaign ceiling4.36USD plus unbilled transfers. OwnerGPU/WinVM unused.
+Evidence branchcodex/sweep-turing-hold-20261016, clean codePR13/19/20 draft
+againstclaude/gpu-types-20261015, no master/owner merge. Other W1/W2 blockers
+remain as documented: exact caps equality red; Blackwell native9679record
+trace clean but virtual strict census fails109anomalies/39unpaired controls
+and WindowsCode43. Blackwell main577f15a7e already pushed; raw native capture
+was erased by reimage after screened metadata export, not retained in git.
+
+
 ## UPDATE 2026-10-16 03:58 UTC — R34 event performance falsifier FIRED
 
 Both original-depth R34 arms time out at unchanged180seconds: baselineca0ad248,
