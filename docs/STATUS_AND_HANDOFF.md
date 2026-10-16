@@ -1,5 +1,41 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-16 01:15 UTC — Blackwell wave saved and rental retired; W3 next
+
+Own56165326 destroyed; show-instances verified absent/account IDs[] at
+01:13:59UTC. Timer2120908 canceled only after absence. No own GPU VM remains;
+owner host GPU/VM untouched. Lease2h29m40s, compute ceiling0.33USD; conservative
+campaign compute ceiling4.04USD, transfers unbilled. All evidence pushed at
+aeb8be8eb on codex/sweep-blackwell-20261015; observer code20e0ddc4b draftPR18
+against claude/gpu-types-20261015 (runtime3934a0895). No master merge.
+
+H-FMC1 recovered virtual cmdseq0..386/statusseq0..384,772 records,zero forward
+gaps/drops/read failures. Strict census and ordered exporter both exit1:
+109 anomalies/39 unpaired controls, so the predeclared validity falsifier fired.
+Actual process receipts and all negative output saved in
+blackwell_5060/virtual_native_alignment_20261016/fmc/ and RESULT_FMC1.md.
+Production writer test passes after building missing libqom.a; both attempts
+preserved. No malformed reply was changed to appease the oracle.
+
+Fuller metadata exposes an earlier distinction hidden by collapsed effective
+status: native0x20800a87 NVLINK_GET_NVLINK_DEVICE_INFO has envelope0/body0x56;
+virtual has envelope0x56 and erased control key. Both next issue0x20800a40.
+This is the first measured status-field difference among aligned common calls,
+not proof of first body-byte mismatch or Code43 cause. Ordered function-FIFO
+pairing of erased keys is inference, named in every row.196 aligned calls,
+45 status-field differences,zero successful reply-key conflicts. Native full
+capture still passes strict validation; its raw bytes were erased by reimage.
+Future full byte comparison requires another native capture with screened
+reply fields exported before restore. No full raw capture comes back.
+
+Ranked remaining W2 work: allocation-tail/refusal diagnostics with failing-first
+models; screened native outputs; source-derived CMC/CCU semantics with explicit
+ABI policy (595-to580 equality already falsified); scheduler lifetime semantics.
+No arbitrary acknowledgements or captured sample-size constant. W1 remains
+RED/tiling held. Stop this bounded wall and take W3: new own Turing rental,
+native reference first, Windows7min0TDR hold then callback-vs-event R34 at180s.
+The earlier active/pending statements below are superseded here.
+
 ## UPDATE 2026-10-16 01:05 UTC — native trace verified; virtual byte capture replay running
 
 Native GB206 Windows580 capture is complete:4807 command+4872 status,

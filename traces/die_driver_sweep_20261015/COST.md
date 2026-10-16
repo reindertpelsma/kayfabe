@@ -35,4 +35,4 @@ Final AD102: device da0569a6; Windows580 Code0/DWM/D3D+CUDA passes, Linux580 raw
 
 | Instance | GPU | USD/hour | StartUTC | StopUTC | Purpose | Cost |
 |---|---|---:|---|---|---|---|
-| 56165326 | RTX5060 / GB206, fresh unprivileged RM verified | 0.1288888889 | 2026-10-15T22:44:19.841586+00:00 | ACTIVE; timer01:39:19UTC, hardcap01:44:19UTC | native complete-prefix H-BC4 PASS; host CCU negative cross-ABI query; virtual FMC observer replay | max3h compute<=0.39USD; campaign conservative ceiling<=4.10USD, transfers unbilled |
+| 56165326 | RTX5060 / GB206, fresh unprivileged RM verified | 0.1288888889 | 2026-10-15T22:44:19.841586+00:00 | destroyed; absence/account IDs[] verified2026-10-16T01:13:59UTC; own timer canceled after absence | native complete-prefix H-BC4 PASS; host CCU negative cross-ABI query; virtual FMC prefixes recovered, strict oracle FAIL |2h29m40s; compute ceiling0.33USD; campaign conservative ceiling4.04USD, transfers unbilled |
