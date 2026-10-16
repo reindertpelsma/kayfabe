@@ -1,0 +1,2 @@
+kf-rm: PROBE KF3_CMC_LOG_BUFFER_PROBE=1: CMC log-buffer registration echo only; no log writer or host action
+kf-rm: rpc-trace fn=76 RmControl seq=0 cmd=0x20800a89 client=0x0 object=0x0 result=0x0

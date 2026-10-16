@@ -1,0 +1,100 @@
+[
+  {
+    "name": "gb206phase_cmc_controller.log",
+    "bytes": 439,
+    "sha256": "3ae0b956f83ae5307dcf57b0b1fff56edc6e6442ea0ae8e03f0d918d8b3134c2"
+  },
+  {
+    "name": "gb206phase_cmc_windows.log",
+    "bytes": 3253,
+    "sha256": "651877e19f11cc547db1c6dd11ce0f9ae78058ae58bda76de4b1df1ce9d91053"
+  },
+  {
+    "name": "gb206phase_cmc_gates.log",
+    "bytes": 25130,
+    "sha256": "6d85e493ced3c02f85cad0bebf16f30680fcbf4a78ed5a1c49a00159c6fee974"
+  },
+  {
+    "name": "gb206phase_cmc_cpu.log",
+    "bytes": 7181,
+    "sha256": "0af0375fc6ec32681065e98d28f59c04475c9742610ddaaa82374de7921d26e6"
+  },
+  {
+    "name": "gb206phase_cmc_build.log",
+    "bytes": 69027,
+    "sha256": "f412a843ab7b944ce90daf7304ef0eb2724a11ee815eb42f26294c211c95d88a"
+  },
+  {
+    "name": "gb206phase_cmc_host_xids.log",
+    "bytes": 1125,
+    "sha256": "70c3f2a150b993ef81e59fc69da04be7f3cb236c304685c1fc342bb0f3084500"
+  },
+  {
+    "name": "gb206phase-cmc-off-export.json",
+    "bytes": 46989,
+    "sha256": "794d616ced1ebe007c7b3b36d08d5f28860354ab0de9f1757a37e82bdbab06c7"
+  },
+  {
+    "name": "gb206phase-cmc-off-posted-status.json",
+    "bytes": 156,
+    "sha256": "1517d639910c73e2220a59636183cf17e62f5215072966310e60ce64e6fa9e19"
+  },
+  {
+    "name": "gb206phase-cmc-off-flags.txt",
+    "bytes": 579,
+    "sha256": "51514ef2e727958c4d8d12c7ad100662464d45cc195405e8b3bba26097fa5481"
+  },
+  {
+    "name": "gb206phase-cmc-off-process-receipt.json",
+    "bytes": 3018,
+    "sha256": "0d05de75f81048ef556babc8738ced8524133b4bf321e1dd3662e8aaa1685776"
+  },
+  {
+    "name": "gb206phase-cmc-off-census.log",
+    "bytes": 1004,
+    "sha256": "c38a21e01a77b9ba1deb9829440e325665521e66f9499e24d7e8774f29d2ec7e"
+  },
+  {
+    "name": "gb206phase-cmc-off-stop.log",
+    "bytes": 169,
+    "sha256": "c730e3e600e384b313637226c8d1bbc6cc5647b9a2fe8fe59e1effab2204074d"
+  },
+  {
+    "name": "gb206phase-cmc-on-export.json",
+    "bytes": 46987,
+    "sha256": "9f99dc5886211dabf6f26900050b4c328a1d0b371ad5a1d48468b0c2a58808e7"
+  },
+  {
+    "name": "gb206phase-cmc-on-posted-status.json",
+    "bytes": 156,
+    "sha256": "1517d639910c73e2220a59636183cf17e62f5215072966310e60ce64e6fa9e19"
+  },
+  {
+    "name": "gb206phase-cmc-on-flags.txt",
+    "bytes": 606,
+    "sha256": "2d869cc561af49694709ba394ca0477cfcdf419120166752e9a5a702847d4aa0"
+  },
+  {
+    "name": "gb206phase-cmc-on-process-receipt.json",
+    "bytes": 3055,
+    "sha256": "d69a6d9a647dffc9ffdd3455a7716239986ce4f212a208f64e9864b2a63123de"
+  },
+  {
+    "name": "gb206phase-cmc-on-census.log",
+    "bytes": 1004,
+    "sha256": "d6116150f3f69164afb74f6436d03b0ca63ddcbb4bf7eb7e1402f7feb5a358f5"
+  },
+  {
+    "name": "gb206phase-cmc-on-stop.log",
+    "bytes": 169,
+    "sha256": "9ac6347c269a03d19db66a1181eb537bc93fbaafa3387f2288c767fa7c134b07"
+  },
+  {
+    "name": "cmc-off-screened-probe-metadata.txt",
+    "note": "Only probe startup and policy a89 metadata; no input or address bytes"
+  },
+  {
+    "name": "cmc-on-screened-probe-metadata.txt",
+    "note": "Only probe startup and policy a89 metadata; no input or address bytes"
+  }
+]
