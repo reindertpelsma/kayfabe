@@ -26,6 +26,8 @@ fn config(gpu_uuid: Option<&str>, vm_id: Option<&str>, devfn: u32) -> Config {
         vm_id: vm_id.map(str::to_owned),
         pci_devfn: devfn,
         channel_budget: 0,
+        store_view_full: false,
+        store_view_windows: 0,
     }
 }
 

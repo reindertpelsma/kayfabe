@@ -395,7 +395,7 @@ fn software_snapshot(me: &ChanPlane, r: &userrelay::Record) -> Turn<Option<Softw
 }
 
 pub(super) struct Pump {
-    cache: crate::userstore::Cache,
+    cache: crate::storeview_native::Reader,
     ram_generation: u64,
     generation: u64,
     source_admitted: bool,
@@ -472,12 +472,7 @@ enum PendingAction {
 impl Pump {
     pub(super) fn new(me: &ChanPlane, subdevice_id: u32, key: (u32, u32)) -> Result<Self, String> {
         Ok(Self {
-            cache: crate::userstore::Cache::new(
-                me.rm,
-                me.store,
-                store_read_bound(me.layout.carve()),
-            )
-            .map_err(|e| format!("USER_RING_CACHE {e:?}"))?,
+            cache: crate::storeview_native::Reader::new(me.storeviews),
             ram_generation: me.ram.try_generation().ok_or("USER_RING_RAM_TOPOLOGY")?,
             generation: 1,
             source_admitted: false,
@@ -536,13 +531,6 @@ impl Pump {
             eprintln!(
                 "kf3: USER_RING_SHADOW_SUMMARY {:x?} observation_attempt_counts={:?}; never execution or completion",
                 self.key, shadow.counts
-            );
-        }
-        let (armed, evicted, keep) = self.cache.stats();
-        if evicted > 0 {
-            eprintln!(
-                "kf3: USER_STORE_VIEWS channel {:x?} armed={armed} evicted_at_quota={evicted} keep={keep} (its working set exceeds the per-channel limit: raise user-view-keep)",
-                self.key
             );
         }
         self.cache

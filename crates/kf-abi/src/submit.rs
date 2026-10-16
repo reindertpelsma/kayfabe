@@ -6400,3 +6400,25 @@ mod non_inc_header {
         assert_eq!(super::method_header_inc(1, 0x188, 2), Some(0x2002_2062));
     }
 }
+
+/// Explicit CPU mapping cache hints for the offline BAR1 probe.
+/// NVIDIA OGKM 595.84, nvos.h:1827-1832 (722ae84526a09ed672fbe75448e2909834ba4cce).
+#[derive(Debug, Clone, Copy)]
+pub enum CpuViewCache {
+    /// Existing product flags, unchanged.
+    Legacy,
+    /// NVOS33_FLAGS_CACHING_TYPE_UNCACHED.
+    Uncached,
+    /// NVOS33_FLAGS_CACHING_TYPE_WRITECOMBINED.
+    WriteCombining,
+}
+impl CpuViewCache {
+    /// Authored bits 25:23; no guest flags word accepted.
+    pub const fn flags(self) -> u32 {
+        match self {
+            Self::Legacy => 0,
+            Self::Uncached => 1 << 23,
+            Self::WriteCombining => 2 << 23,
+        }
+    }
+}

@@ -75,6 +75,10 @@ pub struct Config {
     /// (`GET_NUM_CHANNELS`) AND the enforced twin cap. 0 (unset) = derived from the host
     /// ([`kf_abi::chanbudget`]); refused at realize above what the host can give or below the minimum.
     pub channel_budget: u32,
+    /// Explicit whole-store CPU mapping. Default off; refusal at realize, no autodetection.
+    pub store_view_full: bool,
+    /// Global window budget (0 = 256), shared by every channel in this store.
+    pub store_view_windows: u32,
     /// ★ 2026-10-04 (`v3-windows`): `gop-efi=<path>`, a signed copy of the embedded GOP driver to
     /// serve instead of the unsigned one ([`crate::gop::SignedGop`]). Needs `gop=on`.
     pub gop_efi: Option<String>,
@@ -798,6 +802,9 @@ impl Device {
         eprintln!(
             "kf3: P1+P2 T-space ON: built at prewarm (hardwired, OWNER_RULINGS §AB; docs/design/V3_P1P2_TSPACE.md); mirrors carry no window and no ring; host channel births require USER replies"
         );
+        let storeviews = Box::leak(Box::new(crate::storeview_native::Shared::new(
+            rm, store.handle, layout.carve(), cfg.store_view_full, cfg.store_view_windows,
+        )?));
         let chans: &'static crate::chan::ChanPlane =
             Box::leak(Box::new(crate::chan::ChanPlane::new(
                 rm,
@@ -817,6 +824,7 @@ impl Device {
                 host.fifo_channels.channels_per_runlist,
                 dbfast,
                 token_fmt,
+                storeviews,
             )?));
         chans.start()?;
         // ★ OWNER_RULINGS §U: the VM's deferred-API tables — filled by the object seat (the guest's
@@ -3399,7 +3407,7 @@ impl Device {
         let rs = &self.chans.relay_stats;
         if rs.gates.load(Ordering::Relaxed) + rs.markers.load(Ordering::Relaxed) > 0 {
             eprintln!("kf3: USER_RING_LOOP SUMMARY {}", rs.summary());
-            eprintln!("kf3: {}", crate::userstore::summary());
+            eprintln!("kf3: {}", self.chans.storeviews.summary());
         }
         self.stop.store(true, Ordering::Release);
         let _ = self.drainer_efd.signal();
@@ -4146,6 +4154,8 @@ mod config_tests {
             display_broker_vram: Default::default(),
             display_max_fps: 0,
             channel_budget: 0,
+            store_view_full: false,
+            store_view_windows: 0,
             gop: false,
             gop_efi: None,
             gpu_uuid: None,

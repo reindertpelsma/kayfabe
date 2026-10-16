@@ -1037,6 +1037,14 @@ unsafe impl Send for VolatileRegion {}
 unsafe impl Sync for VolatileRegion {}
 
 impl VolatileRegion {
+    /// Full CPU memory barrier for the offline WC data probe. A release fence
+    /// alone does not order a subsequent device-memory load after WC stores.
+    #[cfg(all(feature = "bench-data-read", target_arch = "x86_64"))]
+    pub fn bench_data_fence(&self) {
+        // SAFETY: MFENCE is available on every x86_64 CPU and has no operands.
+        unsafe { core::arch::asm!("mfence", options(nostack, preserves_flags)) };
+    }
+
     /// Map `len` bytes of `backing` as a hardware-shared region, requiring cache policy
     /// `cache`. Read-write; use [`Self::map_read_only`] for a hardware register page whose
     /// contents the CPU must never change.
@@ -1189,6 +1197,36 @@ impl VolatileRegion {
                 dst.as_mut_ptr(),
                 dst.len(),
             );
+        }
+        Ok(())
+    }
+
+    /// Bounded CPU write to DATA bytes, never registers or GPU work execution.
+    /// An exclusive borrow excludes other CPU accesses through this owner.
+    /// Every input is checked here, including write protection and the 256-byte cap.
+    pub fn write_data_small(&mut self, offset: HostOffset, src: &[u8]) -> Result<(), RawError> {
+        if self.prot == HostProt::ReadOnly {
+            return Err(RawError::NotWritable);
+        }
+        if src.len() > 256 {
+            return Err(RawError::Unsupported {
+                what: "CPU data write",
+                detail: "more than 256 bytes",
+            });
+        }
+        let (start, _) = bounds::checked_span(
+            self.map.len_bytes(),
+            offset,
+            src.len() as u64,
+            "small data write",
+        )?;
+        for (i, byte) in src.iter().enumerate() {
+            // SAFETY: complete bounds and protection checks above; each i is
+            // inside src's checked span. No references into device memory are
+            // formed. &mut self excludes concurrent access through this owner.
+            unsafe {
+                std::ptr::write_volatile(self.map.base.as_ptr().add(start + i), *byte);
+            }
         }
         Ok(())
     }
@@ -2434,5 +2472,329 @@ mod tests {
             msg.contains("R1 no-blocking-under-lock violation"),
             "unexpected panic message: {msg}"
         );
+    }
+}
+
+/// Explicit x86 data-load algorithms for the offline BAR1 microbench only.
+#[cfg(all(feature = "bench-data-read", target_arch = "x86_64"))]
+#[derive(Debug, Clone, Copy)]
+pub enum DataReadKind {
+    /// Naturally aligned 8-byte volatile loads, byte tails.
+    Scalar8,
+    /// Unaligned SSE2 16-byte loads.
+    Simd16,
+    /// Unaligned AVX 32-byte loads (runtime feature checked).
+    Simd32,
+    /// Four independent 16-byte loads before storing their results.
+    Inflight16,
+    /// Aligned SSE4.1 MOVNTDQA loads; requires declared WC mapping.
+    Stream16,
+}
+#[cfg(all(feature = "bench-data-read", target_arch = "x86_64"))]
+impl VolatileRegion {
+    /// Offline experiment over DATA, never registers. Validates the whole source
+    /// span and CPU features before accessing it. No access is wider than the
+    /// remaining source/destination range; tails use byte loads. Does not promise
+    /// a coherent snapshot of bytes concurrently modified by the GPU.
+    pub fn bench_copy_data(
+        &self,
+        offset: HostOffset,
+        dst: &mut [u8],
+        kind: DataReadKind,
+    ) -> Result<(), RawError> {
+        let (start, _) = bounds::checked_span(
+            self.map.len_bytes(),
+            offset,
+            dst.len() as u64,
+            "bench data read",
+        )?;
+        if matches!(kind, DataReadKind::Simd32) && !std::is_x86_feature_detected!("avx") {
+            return Err(RawError::Unsupported {
+                what: "bench AVX read",
+                detail: "CPU has no AVX",
+            });
+        }
+        if matches!(kind, DataReadKind::Stream16) {
+            if self.cache != CachePolicy::WriteCombining || !std::is_x86_feature_detected!("sse4.1")
+            {
+                return Err(RawError::Unsupported {
+                    what: "bench MOVNTDQA read",
+                    detail: "requires SSE4.1 and declared WC mapping",
+                });
+            }
+            if start % 16 != 0 {
+                return Err(RawError::Misaligned {
+                    what: "MOVNTDQA source",
+                    value: offset.get(),
+                    required: 16,
+                });
+            }
+            // Intel SDM MOVNTDQA: temporary WC streaming buffers need MFENCE
+            // ordering when another agent may modify the source. Include the
+            // fence cost in this experiment rather than time stale reuse.
+            self.bench_data_fence();
+        }
+        // SAFETY: complete bounds check above; mapping is live for &self and
+        // dst is a disjoint safe mutable slice. No references into device memory.
+        let src = unsafe { self.map.base.as_ptr().add(start) };
+        let mut at = 0;
+        while at < dst.len() {
+            let left = dst.len() - at;
+            // SAFETY: at is below the validated length; each arm checks its width
+            // against left before the assembly or scalar load. asm writes only
+            // dst's same-width range. CPU feature gates are checked above.
+            unsafe {
+                let p = src.add(at);
+                let q = dst.as_mut_ptr().add(at);
+                match kind {
+                    DataReadKind::Inflight16 if left >= 64 => {
+                        core::arch::asm!(
+                            "movdqu xmm0, xmmword ptr [{p}]", "movdqu xmm1, xmmword ptr [{p} + 16]",
+                            "movdqu xmm2, xmmword ptr [{p} + 32]", "movdqu xmm3, xmmword ptr [{p} + 48]",
+                            "movdqu xmmword ptr [{q}], xmm0", "movdqu xmmword ptr [{q} + 16], xmm1",
+                            "movdqu xmmword ptr [{q} + 32], xmm2", "movdqu xmmword ptr [{q} + 48], xmm3",
+                            p=in(reg) p, q=in(reg) q, out("xmm0") _, out("xmm1") _, out("xmm2") _, out("xmm3") _,
+                            options(nostack, preserves_flags));
+                        at += 64;
+                    }
+                    DataReadKind::Simd32 if left >= 32 => {
+                        bench_avx(p, q);
+                        at += 32;
+                    }
+                    DataReadKind::Stream16 if left >= 16 => {
+                        core::arch::asm!("movntdqa xmm0, xmmword ptr [{p}]", "movdqu xmmword ptr [{q}], xmm0",
+                            p=in(reg) p, q=in(reg) q, out("xmm0") _, options(nostack, preserves_flags));
+                        at += 16;
+                    }
+                    DataReadKind::Simd16 | DataReadKind::Inflight16 if left >= 16 => {
+                        core::arch::asm!("movdqu xmm0, xmmword ptr [{p}]", "movdqu xmmword ptr [{q}], xmm0",
+                            p=in(reg) p, q=in(reg) q, out("xmm0") _, options(nostack, preserves_flags));
+                        at += 16;
+                    }
+                    DataReadKind::Scalar8 if left >= 8 && (start + at) % 8 == 0 => {
+                        let x = std::ptr::read_volatile(p.cast::<u64>());
+                        std::ptr::write_unaligned(q.cast::<u64>(), x);
+                        at += 8;
+                    }
+                    _ => {
+                        *q = std::ptr::read_volatile(p);
+                        at += 1;
+                    }
+                }
+            }
+        }
+        if matches!(kind, DataReadKind::Stream16) {
+            self.bench_data_fence();
+        }
+        Ok(())
+    }
+}
+#[cfg(all(feature = "bench-data-read", target_arch = "x86_64"))]
+#[target_feature(enable = "avx")]
+unsafe fn bench_avx(src: *const u8, dst: *mut u8) {
+    // SAFETY: caller checks AVX support and both live ranges cover 32 bytes.
+    unsafe {
+        core::arch::asm!("vmovdqu ymm0, ymmword ptr [{p}]", "vmovdqu ymmword ptr [{q}], ymm0",
+        p=in(reg) src, q=in(reg) dst, out("ymm0") _, options(nostack, preserves_flags));
+    }
+}
+
+#[cfg(all(test, feature = "bench-data-read", target_arch = "x86_64"))]
+mod bench_data_tests {
+    use super::*;
+    #[test]
+    fn widths_are_exact_for_unaligned_tails_and_mapping_edges() {
+        let page = HostPageSize::query();
+        let ram = crate::SharedRam::create_named(c"kf-width-test", page.bytes()).unwrap();
+        let fill = MappedRegion::map(
+            Backing::SharedFile {
+                fd: ram.as_backing_fd(),
+                offset: 0,
+            },
+            page.bytes(),
+            crate::HostProt::ReadWrite,
+            CachePolicy::WriteBack,
+            page,
+        )
+        .unwrap();
+        let expected: Vec<u8> = (0..page.bytes()).map(|n| (n ^ (n >> 8)) as u8).collect();
+        fill.write_from(HostOffset::new(0), &expected).unwrap();
+        drop(fill);
+        let r = VolatileRegion::map_read_only(
+            Backing::SharedFile {
+                fd: ram.as_backing_fd(),
+                offset: 0,
+            },
+            page.bytes(),
+            CachePolicy::WriteBack,
+            page,
+        )
+        .unwrap();
+        for kind in [
+            DataReadKind::Scalar8,
+            DataReadKind::Simd16,
+            DataReadKind::Simd32,
+            DataReadKind::Inflight16,
+        ] {
+            if matches!(kind, DataReadKind::Simd32) && !std::is_x86_feature_detected!("avx") {
+                continue;
+            }
+            for len in [1, 7, 8, 15, 16, 17, 31, 32, 33, 64, 256, 416] {
+                for off in [0, 1, 3, 7, 15, 31, page.bytes() as usize - len] {
+                    let mut out = vec![0; len];
+                    r.bench_copy_data(HostOffset::new(off as u64), &mut out, kind)
+                        .unwrap();
+                    assert_eq!(out, expected[off..off + len], "{kind:?} {off}+{len}");
+                }
+            }
+            let mut unchanged = [77; 8];
+            assert!(matches!(
+                r.bench_copy_data(HostOffset::new(page.bytes() - 1), &mut unchanged, kind),
+                Err(RawError::OutOfRange { .. })
+            ));
+            assert_eq!(unchanged, [77; 8]);
+        }
+        for n in [1usize, 7, 15, 16, 17, 64, 416] {
+            let offsets = [0usize, 17, 128, 512];
+            let mut out = vec![0; n * 4];
+            r.bench_copy_four(offsets.map(|o| HostOffset::new(o as u64)), &mut out)
+                .unwrap();
+            let want: Vec<u8> = offsets
+                .iter()
+                .flat_map(|o| expected[*o..*o + n].iter().copied())
+                .collect();
+            assert_eq!(out, want);
+        }
+        let mut unchanged = [77; 64];
+        assert!(matches!(
+            r.bench_copy_four(
+                [
+                    HostOffset::new(0),
+                    HostOffset::new(0),
+                    HostOffset::new(0),
+                    HostOffset::new(page.bytes() - 1)
+                ],
+                &mut unchanged
+            ),
+            Err(RawError::OutOfRange { .. })
+        ));
+        assert_eq!(unchanged, [77; 64]);
+        assert!(matches!(
+            r.bench_copy_data(HostOffset::new(0), &mut [0; 16], DataReadKind::Stream16),
+            Err(RawError::Unsupported { .. })
+        ));
+    }
+}
+
+#[cfg(test)]
+mod small_data_write_tests {
+    use super::*;
+    #[test]
+    fn data_write_checks_whole_span_and_protection_before_any_byte() {
+        let page = HostPageSize::query();
+        let ram = crate::SharedRam::create_named(c"kf-small-write", page.bytes()).unwrap();
+        let mut view = VolatileRegion::map(
+            Backing::SharedFile {
+                fd: ram.as_backing_fd(),
+                offset: 0,
+            },
+            page.bytes(),
+            CachePolicy::WriteBack,
+            page,
+        )
+        .unwrap();
+        for bytes in [1usize, 2, 17, 33, 256] {
+            let data = vec![bytes as u8; bytes];
+            view.write_data_small(HostOffset::new(3), &data).unwrap();
+            let mut actual = vec![0; bytes];
+            view.copy_out(HostOffset::new(3), &mut actual).unwrap();
+            assert_eq!(actual, data);
+        }
+        assert!(matches!(
+            view.write_data_small(HostOffset::new(page.bytes() - 1), &[7; 2]),
+            Err(RawError::OutOfRange { .. })
+        ));
+        assert!(matches!(
+            view.write_data_small(HostOffset::new(0), &[7; 257]),
+            Err(RawError::Unsupported { .. })
+        ));
+        let mut ro = VolatileRegion::map_read_only(
+            Backing::SharedFile {
+                fd: ram.as_backing_fd(),
+                offset: 0,
+            },
+            page.bytes(),
+            CachePolicy::WriteBack,
+            page,
+        )
+        .unwrap();
+        assert_eq!(
+            ro.write_data_small(HostOffset::new(0), &[7]),
+            Err(RawError::NotWritable)
+        );
+    }
+}
+
+#[cfg(all(feature = "bench-data-read", target_arch = "x86_64"))]
+impl VolatileRegion {
+    /// Four disjoint-source reads in flight on one CPU. Complete preflight of
+    /// all sources happens before any output byte; destination holds four equal
+    /// streams concatenated. Offline data experiment, never register access.
+    pub fn bench_copy_four(
+        &self,
+        offsets: [HostOffset; 4],
+        dst: &mut [u8],
+    ) -> Result<(), RawError> {
+        if dst.len() % 4 != 0 {
+            return Err(RawError::Unsupported {
+                what: "four-stream copy",
+                detail: "destination length not divisible by four",
+            });
+        }
+        let n = dst.len() / 4;
+        let mut starts = [0usize; 4];
+        for i in 0..4 {
+            starts[i] = bounds::checked_span(
+                self.map.len_bytes(),
+                offsets[i],
+                n as u64,
+                "four-stream read",
+            )?
+            .0;
+        }
+        let mut at = 0;
+        while at < n {
+            let width = if n - at >= 16 { 16 } else { 1 };
+            // SAFETY: every source stream passed complete bounds preflight.
+            // Each destination stream covers n bytes of the safe dst slice;
+            // at+width<=n. Sources belong to the live mapping and cannot alias dst.
+            unsafe {
+                let p0 = self.map.base.as_ptr().add(starts[0] + at);
+                let p1 = self.map.base.as_ptr().add(starts[1] + at);
+                let p2 = self.map.base.as_ptr().add(starts[2] + at);
+                let p3 = self.map.base.as_ptr().add(starts[3] + at);
+                let q0 = dst.as_mut_ptr().add(at);
+                let q1 = dst.as_mut_ptr().add(n + at);
+                let q2 = dst.as_mut_ptr().add(2 * n + at);
+                let q3 = dst.as_mut_ptr().add(3 * n + at);
+                if width == 16 {
+                    core::arch::asm!(
+                        "movdqu xmm0, xmmword ptr [{p0}]", "movdqu xmm1, xmmword ptr [{p1}]",
+                        "movdqu xmm2, xmmword ptr [{p2}]", "movdqu xmm3, xmmword ptr [{p3}]",
+                        "movdqu xmmword ptr [{q0}], xmm0", "movdqu xmmword ptr [{q1}], xmm1",
+                        "movdqu xmmword ptr [{q2}], xmm2", "movdqu xmmword ptr [{q3}], xmm3",
+                        p0=in(reg)p0,p1=in(reg)p1,p2=in(reg)p2,p3=in(reg)p3,
+                        q0=in(reg)q0,q1=in(reg)q1,q2=in(reg)q2,q3=in(reg)q3,
+                        out("xmm0") _,out("xmm1") _,out("xmm2") _,out("xmm3") _,options(nostack,preserves_flags));
+                } else {
+                    *q0 = std::ptr::read_volatile(p0);
+                    *q1 = std::ptr::read_volatile(p1);
+                    *q2 = std::ptr::read_volatile(p2);
+                    *q3 = std::ptr::read_volatile(p3);
+                }
+            }
+            at += width;
+        }
+        Ok(())
     }
 }

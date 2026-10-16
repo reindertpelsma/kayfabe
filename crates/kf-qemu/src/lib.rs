@@ -34,6 +34,16 @@ pub mod rmfacts;
 pub mod tspace;
 pub mod twin;
 pub(crate) mod userbirth;
+#[cfg(test)]
 pub(crate) mod userstore;
 pub mod userva;
 pub mod vblankgate;
+
+// GPU-free store-view prototype; runtime wiring follows model/stress validation.
+#[allow(dead_code)]
+pub(crate) mod storeview;
+#[allow(dead_code)]
+pub(crate) mod storeview_unsafe;
+
+pub(crate) mod storeview_native;
+pub(crate) mod storeview_deferred;

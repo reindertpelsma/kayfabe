@@ -1625,6 +1625,45 @@ impl HostRm {
         Ok((node, out.p_linear_address))
     }
 
+    /// Offline measurement only: an explicit public-header cache hint on our own mapping.
+    /// The driver's refusal is a result; default production calls remain unchanged.
+    #[cfg(feature = "bench-cpu-view-cache")]
+    pub fn arm_cpu_view_bench(
+        &self,
+        which: MapNode,
+        h_memory: u32,
+        offset: u64,
+        len: u64,
+        access: ViewAccess,
+        cache: kf_abi::submit::CpuViewCache,
+    ) -> Result<(CharDevice, u64), RmError> {
+        let node = self.open_view_node(which,access)?;
+        let mut arg = [0u8; Nvos33ParametersWithFd::SIZE];
+        Nvos33ParametersWithFd {
+            h_client: self.client.raw(),
+            h_device: self.device,
+            h_memory,
+            offset,
+            length: len,
+            p_linear_address: 0,
+            status: 0,
+            flags: access.os33_flags() | cache.flags(),
+            fd: node.fd_number(),
+        }
+        .encode_into(&mut arg)
+        .map_err(|_| RmError::Other(ABI_ENCODE_FAILED))?;
+        let req = ioctl::readwrite(NV_IOCTL_MAGIC, NV_ESC_RM_MAP_MEMORY, arg.len())
+            .map_err(|_| RmError::Other(IOCTL_NUMBER_UNBUILDABLE))?;
+        self.ctl
+            .ioctl(req, &mut arg, &mut [])
+            .map_err(|e| ioctl_error(&e))?;
+        let out =
+            Nvos33ParametersWithFd::decode(&arg).map_err(|_| RmError::Other(ABI_DECODE_FAILED))?;
+        status_check(out.status)?;
+        self.views[0].fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        Ok((node, out.p_linear_address))
+    }
+
     /// ★★★★★ **GIVE A CPU VIEW'S BAR1 APERTURE BACK** — `NV_ESC_RM_UNMAP_MEMORY` (`0x4F`).
     ///
     /// `[measured w722, GA106]` Over rounds mapping **fresh** offsets each time: with this ioctl,

@@ -418,6 +418,7 @@ dependencies = [
  "kf-oprom",
  "kf-rm",
  "kf-trap",
+ "loom",
 ]
 
 [[package]]

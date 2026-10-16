@@ -69,7 +69,9 @@
 /* 30 (2026-10-15, claude/perf-fix-20261015, docs/design/V3_WINDOWS_PERF_20261015.md): kf3_realize gains
  * user_view_keep (the user-view-keep property: CPU views of the store each USER-ring channel keeps armed;
  * 0 = the default, 16) after channel_budget. */
-#define KF3_ABI 30
+/* 31 (2026-10-16): explicit store_view_full (default off), global store_view_windows;
+ * user_view_keep is retired, accepted with a diagnostic. */
+#define KF3_ABI 31
 #define KF3_BROKER_ON 1u
 #define KF3_BROKER_VRAM_AUTO 0u
 #define KF3_BROKER_VRAM_ON 1u
@@ -172,7 +174,7 @@ int32_t kf3_realize(uint32_t gpu_minor, uint64_t fb_mb, uint64_t bar1_bytes, uin
                     const char *guest_driver, uint32_t display, uint32_t gop, uint32_t x11_dispsw,
                     uint32_t display_broker,
                     uint32_t display_max_fps, const char *gop_efi,
-                    const char *gpu_uuid, const char *vm_id, uint32_t pci_devfn, uint32_t channel_budget, uint32_t user_view_keep, void **out,
+                    const char *gpu_uuid, const char *vm_id, uint32_t pci_devfn, uint32_t channel_budget, uint32_t user_view_keep, uint32_t store_view_full, uint32_t store_view_windows, void **out,
                     char *err, size_t err_len);
 int32_t kf3_identity(void *h, Kf3Identity *out);
 /* ★ ABI 7: config-space words the guest reads by config cycle (Hopper+ PCIe link caps). */
