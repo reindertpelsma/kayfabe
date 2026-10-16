@@ -1,0 +1,17 @@
+F
+======================================================================
+FAIL: test_launcher_cleanup_allows_the_owned_process_to_finish (__main__.Stop.test_launcher_cleanup_allows_the_owned_process_to_finish)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/codex/interactive-stop/scripts/bench/tests/test_interactive_stop.py", line 108, in test_launcher_cleanup_allows_the_owned_process_to_finish
+    self.run_fixture('launcher')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/workspace/codex/interactive-stop/scripts/bench/tests/test_interactive_stop.py", line 86, in run_fixture
+    self.assertTrue((root / 'cleanup').exists())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true
+
+----------------------------------------------------------------------
+Ran 1 test in 2.140s
+
+FAILED (failures=1)
