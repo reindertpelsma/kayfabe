@@ -437,6 +437,9 @@ pub(super) struct Pump {
     /// MEASUREMENT ONLY (perf lifecycle campaign): counters, and the channel's lifecycle state.
     lc: Option<Arc<crate::lifecycle::Chan>>,
     lc_bound: bool,
+    /// SCRATCH d3d11-gap: when the current private-ring credit wait began; guest ring backlog (entries ahead of the cursor) at the last turn.
+    cw_at: Option<std::time::Instant>,
+    backlog: u32,
     lc_sw_guest: Option<u32>,
 }
 
@@ -514,6 +517,8 @@ impl Pump {
             trace: trace_dir().map(|_| Box::new(Trace::new())),
             lc: crate::lifecycle::new_chan(key),
             lc_bound: false,
+            cw_at: None,
+            backlog: 0,
             lc_sw_guest: None,
         })
     }
@@ -1438,6 +1443,7 @@ impl Pump {
             if put == self.cursor {
                 return self.end_batch(me, r);
             }
+            self.backlog = put.wrapping_sub(self.cursor) & (r.source.1 - 1);
             if let Some(t) = self.trace.as_mut() {
                 t.note_put(doorbells);
             }
@@ -1860,6 +1866,9 @@ impl Pump {
             }
         }
         Stats::bump(&me.relay_stats.credit_waits);
+        if crate::lifecycle::on() && self.cw_at.is_none() {
+            self.cw_at = Some(std::time::Instant::now());
+        }
         self.need = if marker {
             Need::Marker {
                 target: self.marks.issued(),
@@ -2024,6 +2033,12 @@ impl Pump {
         if me.inbox.walk_busy() {
             me.inbox.wait_walk(r.idx);
             return Err(Failure::Retry);
+        }
+        if crate::lifecycle::on() {
+            if let Some(t) = self.cw_at.take() {
+                crate::lifecycle::note_credit_wait(t.elapsed());
+            }
+            crate::lifecycle::note_publish(self.fetch.issued() == self.fetch.fetched() && self.backlog >= 2);
         }
         let userd = r.userd.clone();
         userd

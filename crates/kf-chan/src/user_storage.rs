@@ -15,24 +15,28 @@ use kf_host::{HostRm, MapNode, VaSpace, ViewAccess};
 use kf_linux_raw::{Backing, CachePolicy, CharDevice, HostOffset, HostPageSize, VolatileRegion};
 
 /// Trusted per-channel allocation policy, not a per-die fact.
-pub const BYTES: u64 = 4 << 20; // SCRATCH d3d11-gap: was 1 << 20 (room for a 2048-entry ring)
+pub const BYTES: u64 = 2 << 20; // SCRATCH d3d11-gap: was 1 << 20 (room for a 32768-entry ring; USERD moved)
 /// Pushbuffer region ends here; whole64KiB granules permit RO-only mapping.
-pub const GP_OFFSET: u64 = 0x380000; // SCRATCH: was 0xe0000
+pub const GP_OFFSET: u64 = 0xe0000;
 /// Trusted source snapshot limit: any intercepted segment must fit completely
 /// in the existing private staging region. This is an allocation policy, not
 /// the hardware maximum GPFIFO length or a per-die compatibility constant.
 pub const MAX_SOURCE_BYTES: u64 = 0xe0000; // SCRATCH: unchanged source limit
 /// USERD starts here and has NO GPU VA mapping.
-pub const USERD_OFFSET: u64 = 0x390000; // SCRATCH: was 0xf0000
+pub const USERD_OFFSET: u64 = 0x1b0000; // SCRATCH: was 0xf0000 (GP array + witness + marker cells of 32768 entries end at 0x1a0010)
+/// SCRATCH: staging cells are decoupled from ring slots: slot % STAGING_CELLS. Staging happens only for pushbuffer copies of the scan path
+/// (registration window, rare segments); with the scan off after 5080 nothing is staged, so reuse of a cell 896 slots later cannot race.
+pub const STAGING_CELLS: u64 = GP_OFFSET / 1024;
 /// Trusted private GP capacity, independent of the guest ring's changing size.
 pub const ENTRIES: u32 = 512;
-/// SCRATCH (d3d11-gap, never for merge): the private ring size actually used. `KF3_PRIV_RING_ENTRIES` in {512, 1024, 2048}
+/// SCRATCH (d3d11-gap, never for merge): the private ring size actually used. `KF3_PRIV_RING_ENTRIES` in {512, 1024, 2048, 32768}
 /// (default 512 = today's size); anything else falls back to 512. Read once.
 pub fn entries() -> u32 {
     static E: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
     *E.get_or_init(|| match std::env::var("KF3_PRIV_RING_ENTRIES").as_deref() {
         Ok("1024") => 1024,
         Ok("2048") => 2048,
+        Ok("32768") => 32768,
         _ => ENTRIES,
     })
 }
@@ -425,7 +429,7 @@ impl Storage<CpuView> {
         if words.is_empty() || words.len() > (CELL_BYTES / 4) as usize {
             return Err("USER_STORAGE_CELL_BOUND".into());
         }
-        let offset = u64::from(publication.command_slot)
+        let offset = (u64::from(publication.command_slot) % STAGING_CELLS)
             .checked_mul(CELL_BYTES)
             .ok_or("USER_STORAGE_CELL_BOUND")?;
         self.write_authored(offset, words)?;

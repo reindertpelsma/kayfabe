@@ -71,3 +71,29 @@ Order: G0a(W-N) PR1(W-R) PT1(T-R) PN2(W-N) PR2(W-R) PT2(T-R).
   (sm% >= 50). No prediction on which; the split is reported per API.
 Every arm records: broker backend and uid, guest screen geometry (presentinfo job, 100 s into each benchmark), `free -m`, swap, memory PSI, pgmajfault /
 workingset_refault_file / pswpin deltas, vmstat 1 (steal, interrupts) over each run, host nvidia-smi dmon `-s pucvmet`.
+
+## Addendum B (2026-10-16 ~22:50; coordinator/owner changes, formulated after reading the old M2exp1 log and the pump code, BEFORE the ladder/profile runs)
+Prior-campaign data re-read (not a new run; `/data/claude-perf2/ev/qemulog/M2exp1`, mode 2, 28a0ee9c): in the D3D11 benchmark window ONE USER channel
+(0xc1d00088:0xff040029) carries 320,345 GP entries/s (1,700/frame); `credit_waits` per D3D11 frame = 0.000 and 2.95 per OpenGL frame, so the
+"305,820 credit waits per session" quoted in the brief come from the OpenGL run, not from D3D11 (MEASURED from that log; D3D11 mode-2 g0 arms re-check it).
+OpenGL (933 entries/frame, 338 fps) runs at 315k entries/s: the same rate. Frame time / GP entries = 3.1 us (D3D11) and 3.2 us (GL). Both from the same log.
+
+HG1 becomes a LADDER (coordinator change): private ring 512 (1x), 2048 (4x), 32768 (64x) on the mode-2 scratch build, 3 interleaved runs per rung on D3D11,
+1 per rung on OpenGL. Prediction (owner): gain >= 3% at 64x. FALSIFIED if gain < 3% AND credit_waits ~ 0 at 64x. My own prediction (weaker, and made after the
+M2exp1 re-read above): D3D11 credit waits are already ~0 at 1x, so the gain at 64x is < 3% (the ring is not the limit). Recorded per rung: credit_waits per frame,
+the duration of each credit wait (log2-us histogram, p50/p99/max), publishes made with the private ring empty while the guest ring was >= 2 entries ahead
+(starvation proxy), fps, GPU util/power. Code changes in the scratch build (exact): `Fetch::new` cap 512 -> 65536; `Consumption` MAX_ENTRIES 512 -> 65536;
+`user_storage`: BYTES 1 MiB -> 2 MiB, USERD_OFFSET 0xf0000 -> 0x1b0000 (GP array + witness + marker cells of 32768 entries end at 0x1a0010), ring size chosen at run time by
+`KF3_PRIV_RING_ENTRIES` (default 512), staging cell = slot % 896 (decoupled from ring slots; staging only happens on the scan path, nothing is staged in
+mode 2 after 5080), `userstore` view quota pinned at 16.
+
+HG5 (new, POST-HOC, so weaker than HG1-HG4): the single-channel relay has a per-GP-entry cost of ~3.1 us (one entry per turn: guest USERD GP_PUT read, private
+USERD GP_GET/REFERENCE reads from the VRAM store view, guest GP_GET write-back, nested admission locks, publish, GP_PUT/doorbell), a ceiling of ~320k entries/s; D3D11
+reaches the ceiling at 189 fps because it issues 1.8x the entries per frame of OpenGL. Prediction: (a) perf shows the workers spending >= 70% of their samples in the
+relay turn (not in the kernel or waiting), with BAR1/store-view loads and admission locking as the largest leaves; (b) the profile of the OpenGL mode-2 arm looks the same per
+entry. FALSIFIED if the two workers together are < 50% busy on CPU AND off-CPU time shows them mostly blocked (then the ceiling is a wait, not work).
+Test of causality (G3): a scratch change that reads the private USERD GP_GET/REFERENCE only every Nth turn (or when credits run low) must raise D3D11 mode-2 fps >= 15%
+if HG5 holds; < 5% falsifies it as the bottleneck.
+
+Owner profile request: perf record -g -F 999 on all QEMU threads for 30 s in the middle of D3D11 mode 2, D3D11 control (scan on) and OpenGL mode 2, plus 20 s
+off-CPU (bcc offcputime) per arm. Those runs are labelled `profiled`; their fps is not scored (perf perturbs it).

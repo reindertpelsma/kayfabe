@@ -287,7 +287,7 @@ pub struct Fetch {
 impl Fetch {
     /// New private ring, with zero hardware cursors and one empty slot.
     pub fn new(entries: u32) -> Result<Self, &'static str> {
-        if entries < 4 || !entries.is_power_of_two() || entries > 2048 {  // SCRATCH d3d11-gap: was 512
+        if entries < 4 || !entries.is_power_of_two() || entries > 65536 {  // SCRATCH d3d11-gap: was 512
             return Err("USER_FETCH_CAPACITY");
         }
         let mut pending = std::collections::VecDeque::new();

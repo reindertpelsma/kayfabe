@@ -215,6 +215,36 @@ fn period_ms() -> u64 {
 static NEXT_MS: AtomicU64 = AtomicU64::new(0);
 static DB_TRANSLATED: AtomicU64 = AtomicU64::new(0);
 static DB_OTHER: AtomicU64 = AtomicU64::new(0);
+/// SCRATCH d3d11-gap: private-ring credit waits (first credit wait .. next publish), log2-microsecond histogram; publishes made with the
+/// private ring EMPTY (issued == fetched at the turn start) while the guest ring had >= 2 entries ahead (a starvation proxy).
+static CW_HIST: [AtomicU64; 24] = [const { AtomicU64::new(0) }; 24];
+static CW_SUM_US: AtomicU64 = AtomicU64::new(0);
+static CW_MAX_US: AtomicU64 = AtomicU64::new(0);
+static PUBLISHES: AtomicU64 = AtomicU64::new(0);
+static STARVE: AtomicU64 = AtomicU64::new(0);
+pub(crate) fn note_credit_wait(d: std::time::Duration) {
+    let us = u64::try_from(d.as_micros()).unwrap_or(u64::MAX);
+    let b = (64 - us.max(1).leading_zeros() as usize - 1).min(23);
+    CW_HIST[b].fetch_add(1, Relaxed);
+    CW_SUM_US.fetch_add(us, Relaxed);
+    CW_MAX_US.fetch_max(us, Relaxed);
+}
+pub(crate) fn note_publish(starved: bool) {
+    PUBLISHES.fetch_add(1, Relaxed);
+    if starved {
+        STARVE.fetch_add(1, Relaxed);
+    }
+}
+pub(crate) fn credit_line() -> String {
+    let h: Vec<u64> = CW_HIST.iter().map(|a| a.load(Relaxed)).collect();
+    format!(
+        "credit_wait_us_log2={h:?} credit_wait_sum_us={} credit_wait_max_us={} publishes={} publishes_ring_empty_guest_ahead={}",
+        CW_SUM_US.load(Relaxed),
+        CW_MAX_US.load(Relaxed),
+        PUBLISHES.load(Relaxed),
+        STARVE.load(Relaxed)
+    )
+}
 /// A doorbell write seen by the drainer / vCPU path (`translated` = a worker-served token).
 pub(crate) fn note_doorbell(translated: bool) {
     if translated {
@@ -321,6 +351,7 @@ pub(crate) fn dump(me: &super::chan::ChanPlane, why: &str) {
     );
     eprintln!("kf3: LIFECYCLE t={t:.1} wall={wall:.1} {why} {}", crate::userstore::summary());
     eprintln!("kf3: LIFECYCLE t={t:.1} wall={wall:.1} {why} {}", me.gap_line());
+    eprintln!("kf3: LIFECYCLE t={t:.1} wall={wall:.1} {why} cw {}", credit_line());
     for c in &chans {
         let pb_post: u64 = (1..3).map(|k| g(&c.calls[1][k])).sum();
         let vc_post: u64 = (1..3).map(|k| g(&c.vram_copies[1][k])).sum();
