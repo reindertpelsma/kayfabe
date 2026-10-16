@@ -140,8 +140,14 @@ Windows581.51 public ABI/package prerequisites pass, hardware remainsUNRUN.
 
 |Instance|GPU|USD/hour incl150GB|StartUTC|StopUTC|Purpose|Ceiling|
 |---|---|---:|---|---|---|---|
-|56284522|RTX5060advertised, exactdie pending unprivilegedRM|0.1680556quote|2026-10-16T18:49:33.182026+00:00|ACTIVE; timer2463545 at21:44:33/hard21:49:33|B3GB206clock revalidation, B1displayon/off, B2one virtual-tiling group|max0.51USD; campaign ceiling7.51USD+transfers|
+|56284522|RTX5060advertised, exactdie pending unprivilegedRM|0.1680556quote|2026-10-16T18:49:33.182026+00:00|destroyed/API absence verified19:07:54UTC; timer2463545 cancelled after absence|B3GB206clock revalidation, B1displayon/off, B2one virtual-tiling group|18m21.7s; compute ceiling0.06USD; campaign ceiling7.06USD+transfers|
 
 Prior own56267214 absence verified18:43:36UTC before creation. Verified
 machine46454 advertises6effectiveCPU/64244MiBRAM/KVM/523GBfree; actual disk,
 KVM and die pending. Startup deadline15min; no green hardware claim yet.
+
+Final56284522: PCI/sysfs NVIDIA device count0, installer No NVIDIA GPU found;
+no native/guest hardware work. Partial Windows image transfer cancelled, no
+full hash PASS. Text saved under blackwell_5060/display_phase_20261016/. Rental
+destroyed/absence19:07:54UTC before timer/hard cap. Machine46454 excluded.
+Compute estimate0.051431USD/ceiling0.06USD; no own rental remains.

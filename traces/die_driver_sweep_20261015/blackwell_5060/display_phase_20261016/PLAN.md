@@ -1,6 +1,6 @@
 # GB206 bounded display-path follow-up
 
-**STATUS: LIVE, 2026-10-16 18:51 UTC. CPU tests pass; hardware pending; only own56284522 active.**
+**STATUS: LIVE, 2026-10-16 18:51 UTC. SUPERSEDED BY RESULT.md: no GPU exposed; hardware NOTRUN; rental retired.**
 
 Main steering: /root/codex_prompt_dies_20261016.md sectionsB1/B2/B3 and2.
 A fresh verified KVM offer56180125/machine46454 became available after the Ada

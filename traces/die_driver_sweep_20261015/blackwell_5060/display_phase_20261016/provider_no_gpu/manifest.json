@@ -1,0 +1,22 @@
+[
+  {
+    "name": "gb206phase_linux.log",
+    "bytes": 207,
+    "sha256": "0ab2a80c408b692845ce43e052ba48dce67a22fd8e89aabafebabc48222f51d7"
+  },
+  {
+    "name": "gb206phase_provision.log",
+    "bytes": 22802,
+    "sha256": "8c184998cc7c309a255bd76b72266c026b8f915af1ab7691737767885c505b65"
+  },
+  {
+    "name": "gb206phase_driver.log",
+    "bytes": 4528,
+    "sha256": "0e0c76fc24280dc2d918740c198981882e1ee28c922c50e0e7e0e1cf1ee8c18a"
+  },
+  {
+    "name": "gb206phase_source",
+    "bytes": 41,
+    "sha256": "c9c97418011b595393a6391fa4d6cfa9c8636684436def331613230565b2da59"
+  }
+]
