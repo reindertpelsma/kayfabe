@@ -47,6 +47,8 @@ record_qemu() {
 stop_qemu() {
     [ -f "$RECEIPT" ] || { say "owned QEMU receipt missing; refusing signals"; return 2; }
     python3 "$QSTOP" stop "$RECEIPT" || return $?
+    # The provisioning parent must reap its exited child before the next launch's pgrep.
+    [ -z "${q:-}" ] || wait "$q" 2>/dev/null || true
     rm -f "$PIDF" "$RECEIPT"
 }
 [ "$(id -u)" = 0 ] || die "run as root (QEMU opens /dev/nvidia*, the tap and the GPU lock)"
