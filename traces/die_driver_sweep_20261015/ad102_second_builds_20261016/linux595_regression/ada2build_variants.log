@@ -1,0 +1,17 @@
+VARIANTS_START 2026-10-16T22:10:56+00:00
+Previous HEAD position was 9d6f210ba integrate: add exact public580.94.02 display ABI for the second Windows build
+HEAD is now at a52494d48 diagnostic: ablate only AD102580 caps00c row
+ABLATION_FALSIFIER_BEFORE_RUN label=caps00c: removing only this row still passesCode0/desktop/CUDA/D3D; then not required for tested580/profile.
+VARIANT_READY label=caps00c source=a52494d487e2ff3068cbae60e3ff1fe422ff281d 2026-10-16T22:11:20+00:00
+Previous HEAD position was a52494d48 diagnostic: ablate only AD102580 caps00c row
+HEAD is now at a7509bf3d diagnostic: ablate only AD102580 lpwr2801 row
+ABLATION_FALSIFIER_BEFORE_RUN label=lpwr2801: removing only this row still passesCode0/desktop/CUDA/D3D; then not required for tested580/profile.
+VARIANT_READY label=lpwr2801 source=a7509bf3d33a6986874beae0d03c95e6ef0efe19 2026-10-16T22:11:44+00:00
+Previous HEAD position was a7509bf3d diagnostic: ablate only AD102580 lpwr2801 row
+HEAD is now at 003ad0e74 diagnostic: ablate only AD102580 lpwr2806 row
+ABLATION_FALSIFIER_BEFORE_RUN label=lpwr2806: removing only this row still passesCode0/desktop/CUDA/D3D; then not required for tested580/profile.
+VARIANT_READY label=lpwr2806 source=003ad0e749eede980723cc64b9107a1d747b9cc7 2026-10-16T22:12:07+00:00
+Previous HEAD position was 003ad0e74 diagnostic: ablate only AD102580 lpwr2806 row
+HEAD is now at 9d6f210ba integrate: add exact public580.94.02 display ABI for the second Windows build
+VARIANTS_COMPLETE 2026-10-16T22:12:07+00:00
+VARIANTS_EXIT rc=0 2026-10-16T22:12:07+00:00

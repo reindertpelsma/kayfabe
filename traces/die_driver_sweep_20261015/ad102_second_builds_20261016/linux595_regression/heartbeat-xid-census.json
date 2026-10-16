@@ -1,0 +1,275 @@
+{
+  "serial_arms": 30,
+  "heartbeat_raw_zero_warnings": 1606,
+  "heartbeat_raw_nonzero_warnings": 0,
+  "arms": [
+    {
+      "name": "fast_codex_ada2build_full595_missing-page-fault_serial.log",
+      "warnings": 66,
+      "samples": [
+        "[    6.905253] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187622410 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187622410 timeout 5200",
+        "[    6.911883] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187622416 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187622416 timeout 5200"
+      ]
+    },
+    {
+      "name": "fast_codex_ada2build_full595_late-map-race_serial.log",
+      "warnings": 64,
+      "samples": [
+        "[    6.911020] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187611852 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187611852 timeout 5200",
+        "[    6.917577] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187611858 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187611858 timeout 5200"
+      ]
+    },
+    {
+      "name": "fast_codex_ada2build_full595_map-propagation_serial.log",
+      "warnings": 62,
+      "samples": [
+        "[    6.446823] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187601731 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187601731 timeout 5200",
+        "[    6.453496] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187601737 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187601737 timeout 5200"
+      ]
+    },
+    {
+      "name": "fast_codex_ada2build_full595_concurrency_serial.log",
+      "warnings": 68,
+      "samples": [
+        "[    6.921920] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187535023 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187535023 timeout 5200",
+        "[    6.928386] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187535030 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187535030 timeout 5200"
+      ]
+    },
+    {
+      "name": "fast_codex_ada2build_full595_uvm-invalidate_serial.log",
+      "warnings": 60,
+      "samples": [
+        "[    6.943718] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187635616 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187635616 timeout 5200",
+        "[    6.950186] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187635622 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187635622 timeout 5200"
+      ]
+    },
+    {
+      "name": "fast_codex_ada2build_full595_bar1-crossing_serial.log",
+      "warnings": 64,
+      "samples": [
+        "[    6.901626] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187755152 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187755152 timeout 5200",
+        "[    6.908096] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187755159 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187755159 timeout 5200"
+      ]
+    },
+    {
+      "name": "fast_codex_ada2build_full595_cross-client-leak_serial.log",
+      "warnings": 6,
+      "samples": [
+        "[    6.804406] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187829030 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187829030 timeout 5200",
+        "[    6.810868] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187829037 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187829037 timeout 5200"
+      ]
+    },
+    {
+      "name": "fast_codex_ada2build_full595_gpga-reserve-probe_serial.log",
+      "warnings": 64,
+      "samples": [
+        "[    7.042090] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187785171 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187785171 timeout 5200",
+        "[    7.048577] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187785178 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187785178 timeout 5200"
+      ]
+    },
+    {
+      "name": "fast_codex_ada2build_full595_guest-ring-channel_serial.log",
+      "warnings": 62,
+      "samples": [
+        "[    6.414122] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187666518 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187666518 timeout 5200",
+        "[    6.420658] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187666525 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187666525 timeout 5200"
+      ]
+    },
+    {
+      "name": "fast_codex_ada2build_full595_ce-client_serial.log",
+      "warnings": 62,
+      "samples": [
+        "[    6.453358] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187696110 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187696110 timeout 5200",
+        "[    6.459833] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187696117 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187696117 timeout 5200"
+      ]
+    },
+    {
+      "name": "fast_codex_ada2build_full595_ce-client-guest-ram_serial.log",
+      "warnings": 60,
+      "samples": [
+        "[    6.944073] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187706293 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187706293 timeout 5200",
+        "[    6.950558] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187706299 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187706299 timeout 5200"
+      ]
+    },
+    {
+      "name": "fast_codex_ada2build_full595_blockage-coverage_serial.log",
+      "warnings": 72,
+      "samples": [
+        "[    6.858180] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187571648 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187571648 timeout 5200",
+        "[    6.864669] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187571654 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187571654 timeout 5200"
+      ]
+    },
+    {
+      "name": "fast_codex_ada2build_full595_bus-info-sweep_serial.log",
+      "warnings": 74,
+      "samples": [
+        "[    6.343347] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187521638 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187521638 timeout 5200",
+        "[    6.349874] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187521645 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187521645 timeout 5200"
+      ]
+    },
+    {
+      "name": "fast_codex_ada2build_full595_concurrent-fuzz_serial.log",
+      "warnings": 54,
+      "samples": [
+        "[    6.983361] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187817405 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187817405 timeout 5200",
+        "[    6.989801] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187817411 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187817411 timeout 5200"
+      ]
+    },
+    {
+      "name": "fast_codex_ada2build_full595_doorbell-census_serial.log",
+      "warnings": 10,
+      "samples": [
+        "[    6.835211] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187501738 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187501738 timeout 5200",
+        "[    6.841649] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187501744 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187501744 timeout 5200"
+      ]
+    },
+    {
+      "name": "fast_codex_ada2build_full595_defer-liveness_serial.log",
+      "warnings": 56,
+      "samples": [
+        "[    6.969099] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187549448 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187549448 timeout 5200",
+        "[    6.975722] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187549454 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187549454 timeout 5200"
+      ]
+    },
+    {
+      "name": "fast_codex_ada2build_full595_gpu-info-sweep_serial.log",
+      "warnings": 52,
+      "samples": [
+        "[    6.505149] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187512147 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187512147 timeout 5200",
+        "[    6.511691] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187512154 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187512154 timeout 5200"
+      ]
+    },
+    {
+      "name": "fast_codex_ada2build_full595_pce-mask-probe_serial.log",
+      "warnings": 60,
+      "samples": [
+        "[    6.437662] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187774920 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187774920 timeout 5200",
+        "[    6.444188] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187774926 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187774926 timeout 5200"
+      ]
+    },
+    {
+      "name": "fast_codex_ada2build_full595_rpc-mixed-allocs_serial.log",
+      "warnings": 62,
+      "samples": [
+        "[    6.907330] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187838831 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187838831 timeout 5200",
+        "[    6.913788] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187838837 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187838837 timeout 5200"
+      ]
+    },
+    {
+      "name": "fast_codex_ada2build_full595_guest-ram-pin_serial.log",
+      "warnings": 50,
+      "samples": [
+        "[    6.999112] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187745121 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187745121 timeout 5200",
+        "[    7.005605] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187745127 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187745127 timeout 5200"
+      ]
+    },
+    {
+      "name": "fast_codex_ada2build_full595_engines_serial.log",
+      "warnings": 20,
+      "samples": [
+        "[    6.844153] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187491661 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187491661 timeout 5200",
+        "[    6.850511] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187491667 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187491667 timeout 5200"
+      ]
+    },
+    {
+      "name": "fast_codex_ada2build_full595_executor-vas_serial.log",
+      "warnings": 58,
+      "samples": [
+        "[    6.452245] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187656885 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187656885 timeout 5200",
+        "[    6.458778] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187656891 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187656891 timeout 5200"
+      ]
+    },
+    {
+      "name": "fast_codex_ada2build_full595_alias-two-vas_serial.log",
+      "warnings": 56,
+      "samples": [
+        "[    6.975389] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187582303 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187582303 timeout 5200",
+        "[    6.981964] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187582309 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187582309 timeout 5200"
+      ]
+    },
+    {
+      "name": "fast_codex_ada2build_full595_uvm-mean_serial.log",
+      "warnings": 72,
+      "samples": [
+        "[    6.843535] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187646061 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187646061 timeout 5200",
+        "[    6.850411] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187646068 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187646068 timeout 5200"
+      ]
+    },
+    {
+      "name": "fast_codex_ada2build_full595_dictated-ring-negative_serial.log",
+      "warnings": 8,
+      "samples": [
+        "[    6.927482] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187686800 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187686800 timeout 5200",
+        "[    6.933906] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187686807 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187686807 timeout 5200"
+      ]
+    },
+    {
+      "name": "fast_codex_ada2build_full595_timer_serial.log",
+      "warnings": 68,
+      "samples": [
+        "[    6.895679] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187481550 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187481550 timeout 5200",
+        "[    6.902073] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187481557 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187481557 timeout 5200"
+      ]
+    },
+    {
+      "name": "fast_codex_ada2build_full595_map-stress_serial.log",
+      "warnings": 58,
+      "samples": [
+        "[    6.946681] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187806860 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187806860 timeout 5200",
+        "[    6.953272] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187806866 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187806866 timeout 5200"
+      ]
+    },
+    {
+      "name": "fast_codex_ada2build_full595_dictated-ring_serial.log",
+      "warnings": 64,
+      "samples": [
+        "[    6.895196] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187676639 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187676639 timeout 5200",
+        "[    6.901605] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187676646 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187676646 timeout 5200"
+      ]
+    },
+    {
+      "name": "fast_codex_ada2build_full595_atomics-probe_serial.log",
+      "warnings": 58,
+      "samples": [
+        "[    6.941731] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187765304 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187765304 timeout 5200",
+        "[    6.948260] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187765310 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187765310 timeout 5200"
+      ]
+    },
+    {
+      "name": "fast_codex_ada2build_full595_alias-unmap-observe_serial.log",
+      "warnings": 16,
+      "samples": [
+        "[    6.864356] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187592356 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187592356 timeout 5200",
+        "[    6.871001] NVRM: GPU0 _kgspIsHeartbeatTimedOut: Heartbeat timed out, currentTimeMs 1187592363 heartbeat 0 heartbeatWithOffsetMs 0 diff 1187592363 timeout 5200"
+      ]
+    }
+  ],
+  "actual_process_receipts": 30,
+  "host_xids": [
+    {
+      "line": "[ 1419.742385] NVRM: Xid (PCI:0000:00:07): 31, pid=94179, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+      "pid": 94179,
+      "raw_arm": "defer-liveness"
+    },
+    {
+      "line": "[ 1422.799241] NVRM: Xid (PCI:0000:00:07): 31, pid=94179, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+      "pid": 94179,
+      "raw_arm": "defer-liveness"
+    },
+    {
+      "line": "[ 1425.804365] NVRM: Xid (PCI:0000:00:07): 31, pid=94179, name=qemu-system-x86, channel 0x0000001b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+      "pid": 94179,
+      "raw_arm": "defer-liveness"
+    },
+    {
+      "line": "[ 1428.862743] NVRM: Xid (PCI:0000:00:07): 31, pid=94179, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ",
+      "pid": 94179,
+      "raw_arm": "defer-liveness"
+    },
+    {
+      "line": "[ 1492.747011] NVRM: Xid (PCI:0000:00:07): 31, pid=95003, name=qemu-system-x86, channel 0x0000001b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE",
+      "pid": 95003,
+      "raw_arm": "missing-page-fault"
+    }
+  ]
+}
