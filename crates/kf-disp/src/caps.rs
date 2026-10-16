@@ -601,6 +601,21 @@ pub fn page(
 mod tests {
     use super::*;
 
+    #[test]
+    fn blackwell_virtual_heads_have_contiguous_single_output_tiles() {
+        let t = crate::class::for_version("580.159.04").unwrap();
+        let row = &kf_chip::display::BLACKWELL_GB20X;
+        let r = Regs::for_ip("580.159.04", row.ip_version).unwrap();
+        let p = page(t, &r, row.classes.caps, row.heads, row.windows).unwrap();
+        let c = row.classes.caps;
+        let word = p.word(t.v(c, "SYS_CAPC").unwrap());
+        for i in 0..t.v(c, "SYS_CAPC_TILE_EXISTS__SIZE_1").unwrap() {
+            assert_eq!(get(word, t.fa(c, "SYS_CAPC_TILE_EXISTS", i).unwrap()),
+                       u32::from(i < row.heads), "tile {i}");
+            assert_eq!(get(word, t.fa(c, "SYS_CAPC_TILE_SUPPORT_MULTI_TILE", i).unwrap()), 0);
+        }
+    }
+
     /// ★ 2026-10-14: every family's authored page claims semi-planar YUV windows in the field its NVKMS
     /// parser reads (C673+ CAPC.SUPPORT_SEMI_PLANAR; Turing CAPA.SUPPORT_PLANAR), and never claims
     /// 3-plane YUV (C673+ CAPA.SUPPORT_PLANAR) — what a real AD104 under 580.159.04 offers.
