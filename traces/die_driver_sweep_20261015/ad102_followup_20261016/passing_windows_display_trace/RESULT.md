@@ -2,6 +2,12 @@
 
 **STATUS: ANSWERED, 2026-10-16 17:09 UTC. Metadata narrows the phase; no causal reply-byte claim.**
 
+Correction2026-10-16: the namespace-only exporter included one private7302A3
+probe body. That body is excluded from the public artifact; its API metadata
+remains. Current counts77public/435omitted replace original78/434 below. No
+private layout or reply semantics are derived from it.
+
+
 MEASURED: owned AD102 instance56267214, host595.91.07, Windows580.88 /
 32.0.15.8088, private7d1be8882. The diagnostic process102707 uses the19production
 flags plus bounded RPC metadata and posted-body diagnostics. Code0, DWM/Explorer,

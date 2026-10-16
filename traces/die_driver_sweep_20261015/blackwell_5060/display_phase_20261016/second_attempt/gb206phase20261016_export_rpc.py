@@ -29,7 +29,7 @@ with source.open('rb') as incoming:
             fn=re.search(r' function=(0x[0-9a-fA-F]+)',line)
             selector=re.search(r' selector=(0x[0-9a-fA-F]+)',line)
             key=int(selector[1],16) if selector else None
-            public=fn and int(fn[1],16)==76 and key is not None and (key>>16==0x73 or key==0x20800a58)
+            public=fn and int(fn[1],16)==76 and key is not None and ((key>>16==0x73 and key!=0x7302a3) or key==0x20800a58)
             if public:
                 assert len(posted)<512,'posted body record quota exceeded'
                 posted.append(line)

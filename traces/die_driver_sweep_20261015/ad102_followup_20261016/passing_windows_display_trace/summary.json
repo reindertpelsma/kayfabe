@@ -6,8 +6,8 @@
   "prefix_commands_exported": 1000,
   "metadata_quota_notices": 0,
   "metadata_truncated": false,
-  "public_posted_body_records": 78,
-  "opaque_or_alloc_body_records_omitted": 434,
+  "public_posted_body_records": 77,
+  "opaque_or_alloc_body_records_omitted": 435,
   "critical": {
     "0x73010c": {
       "count": 26,
@@ -103,5 +103,10 @@
   },
   "status_limit": "trace_result is the policy envelope before held actions resolve; effective_result stays unknown. Actual posted display statuses are in the separate screened body log.",
   "body_limit": "Only function76 NV0073 and20800a58 bodies exported. Alloc and Other4 bytes remain on rental.",
-  "alignment_limit": "Prefix0..999 is an explicit comparable initialization phase; full metadata stays on rental."
+  "alignment_limit": "Prefix0..999 is an explicit comparable initialization phase; full metadata stays on rental.",
+  "original_export_body_counts": {
+    "selected": 78,
+    "omitted": 434
+  },
+  "private_probe_7302a3_body_excluded_from_public_artifact": 1
 }

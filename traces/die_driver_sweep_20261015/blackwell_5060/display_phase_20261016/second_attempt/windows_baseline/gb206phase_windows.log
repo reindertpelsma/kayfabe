@@ -1,0 +1,35 @@
+WINDOWS_PHASE_START source=f8485f6dbe2cdec62c3b1fa69133b5f266801dcc 2026-10-16T19:59:05+00:00
+DISPLAY_PHASE_START phase=on source=f8485f6dbe2cdec62c3b1fa69133b5f266801dcc 2026-10-16T19:59:05+00:00
+WIN_DIE_START kf3=f8485f6d checkout=f8485f6db guest_driver=580.65.06 gpu=NVIDIA GeForce RTX 5060 Ti xid_before=5 2026-10-16T19:59:05+00:00
+[win_die] QEMU 98863 kf3 f8485f6d run /root/win/codex-gb206phase
+ACTUAL_PROCESS_RECEIPT {"actual_KF3_environment": {"KF3_ASYNC_PREEMPT": "1", "KF3_DEFERRED_API": "1", "KF3_DISPLAY_CAPS_PROBE": "1", "KF3_DISPLAY_CTRL_PROBE": "1", "KF3_DISPLAY_ILUT_OFFSET_256": "1", "KF3_DISPLAY_IMP_ENABLE": "1", "KF3_DISPLAY_LUT_MIRROR": "1", "KF3_DISPLAY_SDR_COLOR": "1", "KF3_GFX_POOL_PROBE": "1", "KF3_KERNEL_GR_CE": "1", "KF3_KERNEL_GR_WORK": "1", "KF3_MEMORY_LIST_PROBE": "1", "KF3_PREEMPT_BIND_PROBE": "1", "KF3_RPC_BODY_TRACE": "1", "KF3_RPC_TRACE": "1", "KF3_SW_RUNLIST_HOST_OWNED": "1", "KF3_SW_RUNLIST_PROBE": "1", "KF3_TRANSLATED_CE_RELAY": "1", "KF3_WIN_TWIN_DEFAPI_OBJECT": "1", "KF3_WIN_USER_CHANNELS_PASSTHROUGH": "1", "KF3_ZCULL_BIND_PROBE": "1"}, "binary_revision": "f8485f6d", "binary_sha256": "e9744a23ab38ff45afbf788d9e426d71913d1f1e6954fa1ea0da1ea1920b25a6", "expected_windows_driver": "32.0.15.8088", "guest_public_abi": "580.65.06", "host_driver": "595.91.07", "pid": 98863, "source_revision": "f8485f6dbe2cdec62c3b1fa69133b5f266801dcc"}
+[win_die] QGA answers 2026-10-16T20:01:40+00:00
+GUEST_PROGRAM_STARTED gb206phase20261016_census.ps1 pid=5592
+DISPLAY_CENSUS_START 2026-10-16T20:02:01.9239669Z
+{"pci":"VEN_10DE\u0026DEV_2D04","class_gsp":1,"driver_version":"32.0.15.8088","status_flags":25191424,"problem":43}
+DISPLAY_CENSUS_DESKTOP dwm=1 explorer=1
+DISPLAY_CENSUS_END problem=43 2026-10-16T20:02:04.4100086Z
+
+#< CLIXML
+<Objs Version="1.1.0.1" xmlns="http://schemas.microsoft.com/powershell/2004/04"><Obj S="progress" RefId="0"><TN RefId="0"><T>System.Management.Automation.PSCustomObject</T><T>System.Object</T></TN><MS><I64 N="SourceId">1</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj><Obj S="progress" RefId="1"><TNRef RefId="0" /><MS><I64 N="SourceId">1</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj></Objs>
+GUEST_PROGRAM_EXIT gb206phase20261016_census.ps1 code=0
+DISPLAY_CENSUS_EXIT phase=on rc=0
+DISPLAY_PHASE_COMPLETE phase=on 2026-10-16T20:02:51+00:00
+DISPLAY_PHASE_START phase=off source=f8485f6dbe2cdec62c3b1fa69133b5f266801dcc 2026-10-16T20:02:51+00:00
+WIN_DIE_START kf3=f8485f6d checkout=f8485f6db guest_driver=580.65.06 gpu=NVIDIA GeForce RTX 5060 Ti xid_before=5 2026-10-16T20:02:51+00:00
+[win_die] QEMU 99358 kf3 f8485f6d run /root/win/codex-gb206phase
+ACTUAL_PROCESS_RECEIPT {"actual_KF3_environment": {"KF3_ASYNC_PREEMPT": "1", "KF3_DEFERRED_API": "1", "KF3_DISPLAY_CAPS_PROBE": "1", "KF3_DISPLAY_CTRL_PROBE": "1", "KF3_DISPLAY_ILUT_OFFSET_256": "1", "KF3_DISPLAY_IMP_ENABLE": "1", "KF3_DISPLAY_LUT_MIRROR": "1", "KF3_DISPLAY_SDR_COLOR": "1", "KF3_GFX_POOL_PROBE": "1", "KF3_KERNEL_GR_CE": "1", "KF3_KERNEL_GR_WORK": "1", "KF3_MEMORY_LIST_PROBE": "1", "KF3_PREEMPT_BIND_PROBE": "1", "KF3_RPC_BODY_TRACE": "1", "KF3_RPC_TRACE": "1", "KF3_SW_RUNLIST_HOST_OWNED": "1", "KF3_SW_RUNLIST_PROBE": "1", "KF3_TRANSLATED_CE_RELAY": "1", "KF3_WIN_TWIN_DEFAPI_OBJECT": "1", "KF3_WIN_USER_CHANNELS_PASSTHROUGH": "1", "KF3_ZCULL_BIND_PROBE": "1"}, "binary_revision": "f8485f6d", "binary_sha256": "e9744a23ab38ff45afbf788d9e426d71913d1f1e6954fa1ea0da1ea1920b25a6", "expected_windows_driver": "32.0.15.8088", "guest_public_abi": "580.65.06", "host_driver": "595.91.07", "pid": 99358, "source_revision": "f8485f6dbe2cdec62c3b1fa69133b5f266801dcc"}
+[win_die] QGA answers 2026-10-16T20:05:04+00:00
+GUEST_PROGRAM_STARTED gb206phase20261016_census.ps1 pid=8008
+DISPLAY_CENSUS_START 2026-10-16T20:05:29.7453120Z
+{"pci":"VEN_10DE\u0026DEV_2D04","class_gsp":1,"driver_version":"32.0.15.8088","status_flags":25191424,"problem":43}
+DISPLAY_CENSUS_DESKTOP dwm=1 explorer=1
+DISPLAY_CENSUS_END problem=43 2026-10-16T20:05:32.2161188Z
+
+#< CLIXML
+<Objs Version="1.1.0.1" xmlns="http://schemas.microsoft.com/powershell/2004/04"><Obj S="progress" RefId="0"><TN RefId="0"><T>System.Management.Automation.PSCustomObject</T><T>System.Object</T></TN><MS><I64 N="SourceId">1</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj><Obj S="progress" RefId="1"><TNRef RefId="0" /><MS><I64 N="SourceId">1</I64><PR N="Record"><AV>Preparing modules for first use.</AV><AI>0</AI><Nil /><PI>-1</PI><PC>-1</PC><T>Completed</T><SR>-1</SR><SD> </SD></PR></MS></Obj></Objs>
+GUEST_PROGRAM_EXIT gb206phase20261016_census.ps1 code=0
+DISPLAY_CENSUS_EXIT phase=off rc=0
+DISPLAY_PHASE_COMPLETE phase=off 2026-10-16T20:05:56+00:00
+WINDOWS_PHASE_COMPLETE 2026-10-16T20:05:56+00:00
+WINDOWS_PHASE_EXIT rc=0 2026-10-16T20:05:56+00:00

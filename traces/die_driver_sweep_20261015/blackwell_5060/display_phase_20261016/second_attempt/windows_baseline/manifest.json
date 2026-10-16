@@ -1,0 +1,76 @@
+[
+  {
+    "name": "on-api.tsv"
+  },
+  {
+    "name": "on-posted-public-display-bodies.txt"
+  },
+  {
+    "name": "on-screened-display-allocations.json"
+  },
+  {
+    "name": "on-summary.json"
+  },
+  {
+    "name": "off-api.tsv"
+  },
+  {
+    "name": "off-posted-public-display-bodies.txt"
+  },
+  {
+    "name": "off-screened-display-allocations.json"
+  },
+  {
+    "name": "off-summary.json"
+  },
+  {
+    "name": "gb206phase_windows.log",
+    "bytes": 5058,
+    "sha256": "c5b83560bfc38e489258e9a76751b05c30ca0add3b8ebfbcf4109b05c3f0704d"
+  },
+  {
+    "name": "gb206phase_finish_binding.log",
+    "bytes": 151,
+    "sha256": "9fe4721549c075d51264bed2f78d10cc4ab5f9633709006480cb21880edd7772"
+  },
+  {
+    "name": "gb206phase-on-census.log",
+    "bytes": 1004,
+    "sha256": "af66ef1bb45ea9e75d9445a05e2796dac9cfb9b59faa4938fbf7c161330620d9"
+  },
+  {
+    "name": "gb206phase-on-flags.txt",
+    "bytes": 579,
+    "sha256": "51514ef2e727958c4d8d12c7ad100662464d45cc195405e8b3bba26097fa5481"
+  },
+  {
+    "name": "gb206phase-on-stop.log",
+    "bytes": 168,
+    "sha256": "b0946693f8169c1889147a90325c4db6f7efa139b272117ce8b9ddab961536ae"
+  },
+  {
+    "name": "gb206phase-off-census.log",
+    "bytes": 1004,
+    "sha256": "f1437f911a7828cae75e2ed107a5a5f477a611d5a05fb982753ab9176c4fc8e8"
+  },
+  {
+    "name": "gb206phase-off-flags.txt",
+    "bytes": 573,
+    "sha256": "e4c68c675cb80c55967377c97641a2661958d8fcfd4ed7318a615e8505d0d3eb"
+  },
+  {
+    "name": "gb206phase-off-stop.log",
+    "bytes": 168,
+    "sha256": "2101672156a2e66ad3d7a5025f103bdb5009a986ac37e29ba4841642fbc80305"
+  },
+  {
+    "name": "process-receipt-98863.json",
+    "bytes": 3017,
+    "sha256": "0ada8462986412d2682b6039fd40ca32e5fa87f9a2336e80806b2979143362e6"
+  },
+  {
+    "name": "process-receipt-99358.json",
+    "bytes": 3054,
+    "sha256": "b6f4600fb8e80976578342aa2543c4add6cd056c5c7ca2cdf6c7dcaff511a47a"
+  }
+]
