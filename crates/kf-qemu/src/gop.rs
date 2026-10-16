@@ -10,7 +10,11 @@
 //! `KFGP` descriptor naming the framebuffer: **BAR1, offset 0, G bytes** of the virtual monitor's
 //! preferred mode (`kf_rm::display::monitors`, so the firmware mode is the native one).
 //!
-//! What `gop=on` changes, and where (each is `None`/absent with `gop=off`, so every path is today's):
+//! **2026-10-16 correction:** `Device` also retains bounded fn72 state with GOP off for
+//! the GSP heartbeat's `sysTimerOffsetNs`. `ConsoleWiring` still adds a console seat only
+//! with GOP on; its no-cell statements below describe console wiring alone.
+//!
+//! What `gop=on` changes in the boot display:
 //! - the ROM BAR: [`BootPlan::rom`] at realize, served by `kf3_option_rom` (KF3 ABI 11) and
 //!   registered by the C device in the shape of QEMU's `pci_add_option_rom`;
 //! - store `[0, G)`: zeroed by the GPU walker at realize, then shown at BAR1 offset 0 by ONE store
