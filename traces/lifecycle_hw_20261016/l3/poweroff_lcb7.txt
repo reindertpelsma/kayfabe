@@ -1,0 +1,1 @@
+poweroff_rc=0

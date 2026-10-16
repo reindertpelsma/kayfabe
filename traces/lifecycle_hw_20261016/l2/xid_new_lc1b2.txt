@@ -1,0 +1,32 @@
+1,25d0
+< NVRM: Xid (PCI:0000:01:00): 32, pid=375802, name=qemu-system-x86, channel 0x00000008 intr0 00040000
+< NVRM: Xid (PCI:0000:01:00): 32, pid=375802, name=qemu-system-x86, channel 0x00000008 intr0 00040000
+< NVRM: Xid (PCI:0000:01:00): 32, pid=409016, name=qemu-system-x86, channel 0x0000004c intr0 00040000
+< NVRM: Xid (PCI:0000:01:00): 32, pid=409016, name=qemu-system-x86, channel 0x0000004c intr0 00040000
+< NVRM: Xid (PCI:0000:01:00): 32, pid=411284, name=qemu-system-x86, channel 0x0000004c intr 00800000
+< NVRM: Xid (PCI:0000:01:00): 13, Graphics Exception: ESR 0x404000=0x80000010
+< NVRM: Xid (PCI:0000:01:00): 13, pid=472075, name=qemu-system-x86, Graphics Exception: channel 0x00000038, Class 0000c9c0, Offset 00000000, Data 00000000
+< NVRM: Xid (PCI:0000:01:00): 13, Graphics Exception: ESR 0x404000=0x80000010
+< NVRM: Xid (PCI:0000:01:00): 13, pid=472075, name=qemu-system-x86, Graphics Exception: channel 0x00000045, Class 0000c9c0, Offset 00000000, Data 00000000
+< NVRM: Xid (PCI:0000:01:00): 13, Graphics Exception: ESR 0x404000=0x80000010
+< NVRM: Xid (PCI:0000:01:00): 13, pid=472075, name=qemu-system-x86, Graphics Exception: channel 0x00000036, Class 0000c9c0, Offset 00000000, Data 00000000
+< NVRM: Xid (PCI:0000:01:00): 13, Graphics Exception: ESR 0x404000=0x80000010
+< NVRM: Xid (PCI:0000:01:00): 13, pid=472075, name=qemu-system-x86, Graphics Exception: channel 0x0000003e, Class 0000c9c0, Offset 00000000, Data 00000000
+< NVRM: Xid (PCI:0000:01:00): 13, Graphics Exception: ESR 0x404000=0x80000010
+< NVRM: Xid (PCI:0000:01:00): 13, pid=472075, name=qemu-system-x86, Graphics Exception: channel 0x0000003f, Class 0000c9c0, Offset 00000000, Data 00000000
+< NVRM: Xid (PCI:0000:01:00): 13, Graphics Exception: ESR 0x404000=0x80000010
+< NVRM: Xid (PCI:0000:01:00): 13, pid=472075, name=qemu-system-x86, Graphics Exception: channel 0x00000063, Class 0000c9c0, Offset 00000000, Data 00000000
+< NVRM: Xid (PCI:0000:01:00): 13, Graphics Exception: ESR 0x404000=0x80000010
+< NVRM: Xid (PCI:0000:01:00): 13, pid=522622, name=qemu-system-x86, Graphics Exception: channel 0x00000050, Class 0000c9c0, Offset 00000000, Data 00000000
+< NVRM: Xid (PCI:0000:01:00): 13, Graphics Exception: ESR 0x404000=0x80000010
+< NVRM: Xid (PCI:0000:01:00): 13, pid=522622, name=qemu-system-x86, Graphics Exception: channel 0x00000043, Class 0000c9c0, Offset 00000000, Data 00000000
+< NVRM: Xid (PCI:0000:01:00): 13, Graphics Exception: ESR 0x404000=0x80000010
+< NVRM: Xid (PCI:0000:01:00): 13, pid=526485, name=qemu-system-x86, Graphics Exception: channel 0x00000050, Class 0000c9c0, Offset 00000000, Data 00000000
+< NVRM: Xid (PCI:0000:01:00): 13, Graphics Exception: ESR 0x404000=0x80000010
+< NVRM: Xid (PCI:0000:01:00): 13, pid=526485, name=qemu-system-x86, Graphics Exception: channel 0x0000003e, Class 0000c9c0, Offset 00000000, Data 00000000
+84a60,64
+> NVRM: Xid (PCI:0000:01:00): 31, pid=2366766, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+> NVRM: Xid (PCI:0000:01:00): 31, pid=2366766, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+> NVRM: Xid (PCI:0000:01:00): 31, pid=2366766, name=qemu-system-x86, channel 0x0000001b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+> NVRM: Xid (PCI:0000:01:00): 31, pid=2366766, name=qemu-system-x86, channel 0x0000001a, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+> NVRM: Xid (PCI:0000:01:00): 31, pid=2368436, name=qemu-system-x86, channel 0x0000001b, intr 00000000. MMU Fault: ENGINE CE0 HUBCLIENT_CE1 faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE

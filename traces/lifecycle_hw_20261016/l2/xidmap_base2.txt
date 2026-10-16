@@ -1,0 +1,7 @@
+XID_JOURNAL tag=base2 lines=5
+  xid=31 pid=2358427 -> arms=KF_ARMS=--defer-liveness,--probe-launch-dma  | faulted @ 0x60_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+  xid=31 pid=2358427 -> arms=KF_ARMS=--defer-liveness,--probe-launch-dma  | faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+  xid=31 pid=2358427 -> arms=KF_ARMS=--defer-liveness,--probe-launch-dma  | faulted @ 0x62_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+  xid=31 pid=2358427 -> arms=KF_ARMS=--defer-liveness,--probe-launch-dma  | faulted @ 0x64_00010000. Fault is of type FAULT_PTE ACCESS_TYPE_VIRT_READ
+  xid=31 pid=2360085 -> arms=KF_ARMS=--missing-page-fault,--probe-launch-dma  | faulted @ 0xa_11000000. Fault is of type FAULT_PDE ACCESS_TYPE_VIRT_WRITE
+XID_UNMAPPED=0

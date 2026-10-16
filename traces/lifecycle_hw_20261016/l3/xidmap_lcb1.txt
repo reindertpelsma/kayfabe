@@ -1,0 +1,2 @@
+XID_JOURNAL tag=lcb1 lines=0
+XID_UNMAPPED=0

@@ -1,0 +1,10 @@
+STATE pre_lc1b3 2026-10-16T20:53:49+02:00
+xid_count=64
+driver=595.91.07 NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  595.91.07  Release Build  (dvs-builder@U22-I3-B08-02-2)  Wed Ju
+NVIDIA GeForce RTX 4070, 595.91.07, 10 MiB, P8
+qemu_procs=0
+lsmod nvidia_uvm 2088960 0
+lsmod nvidia 15114240 15
+lsmod vfio_pci 20480 0
+lsmod kvm 1527808 1
+lock_holders: 

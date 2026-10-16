@@ -1,0 +1,279 @@
+=== lcb1 kf3=e1e9947c run=/data/claude-life/interactive/run-20261016-205730
+births=11 user=11
+USER_RING_lines=0 LIFECYCLE_lines=0 pointer_pb_read_violation_lines=0
+REFUSED_signature_count=14
+        5 kf-host: HOST-ABI REFUSED control NxN: host control NxN has no public header (kf_abi::gssreplay ROWS (measured on N.N.N hosts)); its layout at host driver N.N.N was never measured
+        1 kf-host: HOST-ABI REFUSED control NxN: host control NxN has no row in kf_abi::hostabi::HOST_CONTROLS, and host driver N.N.N is outside the interval the host encoders were written for — its
+        1 kfN: ⚠ EXPERIMENT xN-dispsw ON (option A, OWNER_RULINGS §N; default off until its conditions hold): every guest GFN_DISP_SW is twinned under its channel's host twin with authored params (
+        1 kfN: channel budget N per runlist (Derived; derived default N, host limit N; the count the guest is told AND the enforced cap, refused by name past it — property channel-budget, docs/desig
+        2 kfN: GSP REFUSED fnN/NxN=NxN (GSP_RM_ALLOC) first_seq=N — the guest read a non-OK status
+       32 kfN: GSP REFUSED fnN/NxN=NxN (GSP_RM_CONTROL) first_seq=N — the guest read a non-OK status
+        2 kfN: host facts: GSS NxN [(N, N), (N, N), (c, N), (Nc, N)] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) — not served
+        1 kfN: host facts: GSS NxN [(N, N), (N, N), (N, N), (N, N), (N, N), (Nc, N), (N, N), (N, N), (N, N), (Nc, N), (N, N)] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) —
+        1 kfN: host facts: GSS NxN [(N, N), (N, N), (N, N)] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) — not served
+        1 kfN: host facts: GSS NxN [(N, N)] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) — not served
+        3 kfN: mem t=N.Ns REFUSED VasKey(N) root NxN: N run(s) not applied: leaf NxN+NxN names store NxN, inside the firmware carve-out at NxN — a twin maps no kayfabe memory (§Q)
+        1 kf-rm: display: EXPERIMENT xN-dispsw — GFN_DISP_SW is OFFERED (its constructor's query is answered; every alloc is twinned on the host or refused by name)
+        1 kf-rm: RPC-REFUSED #N AllocClassNotPermitted { class: N, denial: NotOnAllowlist } ⇒ answered NV_ERR_NOT_SUPPORTED (NxN). ⊘ The guest sees only the status; this line is the only place the
+        1 kf-rm: RPC-REFUSED #N AllocClassNotPermitted { class: N, denial: Refused { name: "NVN_INC", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (NxN). ⊘ The guest sees only the s
+broker_client: nvkvm-broker: client detached: closed the connection (1030 attach, 1030 commit, 0 rejected; 2 cursor, 0 cursor refused)
+reclaimed_frame_slots(last)=(13 reclaimed
+display: kf3: display fps[cap=75(unset) h3[armed=60.000 tick=60.94 clamped=0 late_max_us=4828 kms=0.0 tear=0.0 held=0 core_imm=6 vblirq=0.0] copies=0.0 checks=0.0 same=2293 ondemand=0 over=0]
+guest: NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  R | GL_RENDERER   = NVIDIA GeForce RTX 4070/PCIe/SSE2 | glxgears: 59.731 FPS 48.388 FPS 
+KMS: modeset=cat: /sys/module/nvidia_drm/parameters/modeset: Permission denied fbdev=cat: /sys/module/nvidia_drm/parameters/fbdev: Permission denied | /sys/class/drm/card1-DVI-D-1 status=connected mode0=1920x1080
+desktop: 1 cinnamon lines; Xorg=1
+shutdown: 
+xid_journal_lines=
+qemu_exit: [interactive] QEMU exited rc=137 
+=== lcb0 kf3=0a746117 run=/data/claude-life/interactive/run-20261016-210013
+births=11 user=11
+USER_RING_lines=0 LIFECYCLE_lines=0 pointer_pb_read_violation_lines=0
+REFUSED_signature_count=14
+        5 kf-host: HOST-ABI REFUSED control NxN: host control NxN has no public header (kf_abi::gssreplay ROWS (measured on N.N.N hosts)); its layout at host driver N.N.N was never measured
+        1 kf-host: HOST-ABI REFUSED control NxN: host control NxN has no row in kf_abi::hostabi::HOST_CONTROLS, and host driver N.N.N is outside the interval the host encoders were written for — its
+        1 kfN: ⚠ EXPERIMENT xN-dispsw ON (option A, OWNER_RULINGS §N; default off until its conditions hold): every guest GFN_DISP_SW is twinned under its channel's host twin with authored params (
+        1 kfN: channel budget N per runlist (Derived; derived default N, host limit N; the count the guest is told AND the enforced cap, refused by name past it — property channel-budget, docs/desig
+        2 kfN: GSP REFUSED fnN/NxN=NxN (GSP_RM_ALLOC) first_seq=N — the guest read a non-OK status
+       32 kfN: GSP REFUSED fnN/NxN=NxN (GSP_RM_CONTROL) first_seq=N — the guest read a non-OK status
+        2 kfN: host facts: GSS NxN [(N, N), (N, N), (c, N), (Nc, N)] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) — not served
+        1 kfN: host facts: GSS NxN [(N, N), (N, N), (N, N), (N, N), (N, N), (Nc, N), (N, N), (N, N), (N, N), (Nc, N), (N, N)] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) —
+        1 kfN: host facts: GSS NxN [(N, N), (N, N), (N, N)] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) — not served
+        1 kfN: host facts: GSS NxN [(N, N)] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) — not served
+        3 kfN: mem t=N.Ns REFUSED VasKey(N) root NxN: N run(s) not applied: leaf NxN+NxN names store NxN, inside the firmware carve-out at NxN — a twin maps no kayfabe memory (§Q)
+        1 kf-rm: display: EXPERIMENT xN-dispsw — GFN_DISP_SW is OFFERED (its constructor's query is answered; every alloc is twinned on the host or refused by name)
+        1 kf-rm: RPC-REFUSED #N AllocClassNotPermitted { class: N, denial: NotOnAllowlist } ⇒ answered NV_ERR_NOT_SUPPORTED (NxN). ⊘ The guest sees only the status; this line is the only place the
+        1 kf-rm: RPC-REFUSED #N AllocClassNotPermitted { class: N, denial: Refused { name: "NVN_INC", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (NxN). ⊘ The guest sees only the s
+broker_client: nvkvm-broker: client detached: closed the connection (1020 attach, 1020 commit, 0 rejected; 2 cursor, 0 cursor refused)
+reclaimed_frame_slots(last)=(12 reclaimed
+display: kf3: display fps[cap=75(unset) h3[armed=60.000 tick=59.98 clamped=0 late_max_us=1086 kms=0.0 tear=0.0 held=0 core_imm=6 vblirq=0.0] copies=0.0 checks=0.0 same=2296 ondemand=0 over=0]
+guest: NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  R | GL_RENDERER   = NVIDIA GeForce RTX 4070/PCIe/SSE2 | glxgears: 59.940 FPS 52.134 FPS 
+KMS: modeset=Y fbdev=Y | /sys/class/drm/card1-DVI-D-1 status=connected mode0=1920x1080
+desktop: 1 cinnamon lines; Xorg=1
+shutdown: L3_ACPI_POWERDOWN_IGNORED_25S (guest still up);L3_NOT_STOPPED_BY_GUEST: killing own qemu 2388032;
+xid_journal_lines=lines=0
+qemu_exit: [interactive] QEMU exited rc=137 
+guest_dmesg: 37 nvidia lines; NVRM-signature=0188e51425cb drm-signature=0ea52ef3319d
+=== lcb2 kf3=e1e9947c run=/data/claude-life/interactive/run-20261016-210348
+births=11 user=11
+USER_RING_lines=0 LIFECYCLE_lines=0 pointer_pb_read_violation_lines=0
+REFUSED_signature_count=14
+        5 kf-host: HOST-ABI REFUSED control NxN: host control NxN has no public header (kf_abi::gssreplay ROWS (measured on N.N.N hosts)); its layout at host driver N.N.N was never measured
+        1 kf-host: HOST-ABI REFUSED control NxN: host control NxN has no row in kf_abi::hostabi::HOST_CONTROLS, and host driver N.N.N is outside the interval the host encoders were written for — its
+        1 kfN: ⚠ EXPERIMENT xN-dispsw ON (option A, OWNER_RULINGS §N; default off until its conditions hold): every guest GFN_DISP_SW is twinned under its channel's host twin with authored params (
+        1 kfN: channel budget N per runlist (Derived; derived default N, host limit N; the count the guest is told AND the enforced cap, refused by name past it — property channel-budget, docs/desig
+        2 kfN: GSP REFUSED fnN/NxN=NxN (GSP_RM_ALLOC) first_seq=N — the guest read a non-OK status
+       32 kfN: GSP REFUSED fnN/NxN=NxN (GSP_RM_CONTROL) first_seq=N — the guest read a non-OK status
+        2 kfN: host facts: GSS NxN [(N, N), (N, N), (c, N), (Nc, N)] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) — not served
+        1 kfN: host facts: GSS NxN [(N, N), (N, N), (N, N), (N, N), (N, N), (Nc, N), (N, N), (N, N), (N, N), (Nc, N), (N, N)] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) —
+        1 kfN: host facts: GSS NxN [(N, N), (N, N), (N, N)] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) — not served
+        1 kfN: host facts: GSS NxN [(N, N)] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) — not served
+        3 kfN: mem t=N.Ns REFUSED VasKey(N) root NxN: N run(s) not applied: leaf NxN+NxN names store NxN, inside the firmware carve-out at NxN — a twin maps no kayfabe memory (§Q)
+        1 kf-rm: display: EXPERIMENT xN-dispsw — GFN_DISP_SW is OFFERED (its constructor's query is answered; every alloc is twinned on the host or refused by name)
+        1 kf-rm: RPC-REFUSED #N AllocClassNotPermitted { class: N, denial: NotOnAllowlist } ⇒ answered NV_ERR_NOT_SUPPORTED (NxN). ⊘ The guest sees only the status; this line is the only place the
+        1 kf-rm: RPC-REFUSED #N AllocClassNotPermitted { class: N, denial: Refused { name: "NVN_INC", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (NxN). ⊘ The guest sees only the s
+broker_client: nvkvm-broker: client detached: closed the connection (1017 attach, 1017 commit, 0 rejected; 2 cursor, 0 cursor refused)
+reclaimed_frame_slots(last)=(12 reclaimed
+display: kf3: display fps[cap=75(unset) h3[armed=60.000 tick=60.95 clamped=0 late_max_us=4977 kms=0.0 tear=0.0 held=0 core_imm=6 vblirq=0.0] copies=0.0 checks=0.0 same=2090 ondemand=0 over=0]
+guest: NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  R | GL_RENDERER   = NVIDIA GeForce RTX 4070/PCIe/SSE2 | glxgears: 59.911 FPS 48.267 FPS 
+KMS: modeset=Y fbdev=Y | /sys/class/drm/card1-DVI-D-1 status=connected mode0=1920x1080
+desktop: 1 cinnamon lines; Xorg=1
+shutdown: L3_ACPI_POWERDOWN_IGNORED_25S (guest still up);L3_NOT_STOPPED_BY_GUEST: killing own qemu 2392570;
+xid_journal_lines=lines=0
+qemu_exit: [interactive] QEMU exited rc=137 
+guest_dmesg: 37 nvidia lines; NVRM-signature=0188e51425cb drm-signature=0ea52ef3319d
+=== lcb3 kf3=e1e9947c run=/data/claude-life/interactive/run-20261016-210746
+births=11 user=11
+USER_RING_lines=0 LIFECYCLE_lines=0 pointer_pb_read_violation_lines=0
+REFUSED_signature_count=14
+        5 kf-host: HOST-ABI REFUSED control NxN: host control NxN has no public header (kf_abi::gssreplay ROWS (measured on N.N.N hosts)); its layout at host driver N.N.N was never measured
+        1 kf-host: HOST-ABI REFUSED control NxN: host control NxN has no row in kf_abi::hostabi::HOST_CONTROLS, and host driver N.N.N is outside the interval the host encoders were written for — its
+        1 kfN: ⚠ EXPERIMENT xN-dispsw ON (option A, OWNER_RULINGS §N; default off until its conditions hold): every guest GFN_DISP_SW is twinned under its channel's host twin with authored params (
+        1 kfN: channel budget N per runlist (Derived; derived default N, host limit N; the count the guest is told AND the enforced cap, refused by name past it — property channel-budget, docs/desig
+        2 kfN: GSP REFUSED fnN/NxN=NxN (GSP_RM_ALLOC) first_seq=N — the guest read a non-OK status
+       32 kfN: GSP REFUSED fnN/NxN=NxN (GSP_RM_CONTROL) first_seq=N — the guest read a non-OK status
+        2 kfN: host facts: GSS NxN [(N, N), (N, N), (c, N), (Nc, N)] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) — not served
+        1 kfN: host facts: GSS NxN [(N, N), (N, N), (N, N), (N, N), (N, N), (Nc, N), (N, N), (N, N), (N, N), (Nc, N), (N, N)] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) —
+        1 kfN: host facts: GSS NxN [(N, N), (N, N), (N, N)] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) — not served
+        1 kfN: host facts: GSS NxN [(N, N)] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) — not served
+        3 kfN: mem t=N.Ns REFUSED VasKey(N) root NxN: N run(s) not applied: leaf NxN+NxN names store NxN, inside the firmware carve-out at NxN — a twin maps no kayfabe memory (§Q)
+        1 kf-rm: display: EXPERIMENT xN-dispsw — GFN_DISP_SW is OFFERED (its constructor's query is answered; every alloc is twinned on the host or refused by name)
+        1 kf-rm: RPC-REFUSED #N AllocClassNotPermitted { class: N, denial: NotOnAllowlist } ⇒ answered NV_ERR_NOT_SUPPORTED (NxN). ⊘ The guest sees only the status; this line is the only place the
+        1 kf-rm: RPC-REFUSED #N AllocClassNotPermitted { class: N, denial: Refused { name: "NVN_INC", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (NxN). ⊘ The guest sees only the s
+broker_client: nvkvm-broker: client detached: closed the connection (1020 attach, 1020 commit, 0 rejected; 2 cursor, 0 cursor refused)
+reclaimed_frame_slots(last)=(13 reclaimed
+display: kf3: display fps[cap=75(unset) h3[armed=60.000 tick=60.96 clamped=0 late_max_us=1056 kms=0.0 tear=0.0 held=0 core_imm=6 vblirq=0.0] copies=0.0 checks=0.0 same=2273 ondemand=0 over=0]
+guest: NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  R | GL_RENDERER   = NVIDIA GeForce RTX 4070/PCIe/SSE2 | glxgears: 59.919 FPS 42.297 FPS 60.012 FPS 
+KMS: modeset=Y fbdev=Y | /sys/class/drm/card1-DVI-D-1 status=connected mode0=1920x1080
+desktop: 1 cinnamon lines; Xorg=1
+shutdown: L3_ACPI_POWERDOWN_IGNORED_25S (guest still up);L3_GUEST_POWEROFF_NOT_DONE_40S: trying systemctl poweroff -i (ignore inhibitors);L3_NOT_STOPPED_BY_GUEST: killing own qemu 2396950;
+xid_journal_lines=lines=0
+qemu_exit: [interactive] QEMU exited rc=137 
+guest_dmesg: 37 nvidia lines; NVRM-signature=0188e51425cb drm-signature=0ea52ef3319d
+=== lcb4 kf3=e1e9947c run=/data/claude-life/interactive/run-20261016-211240
+births=10 user=10
+USER_RING_lines=0 LIFECYCLE_lines=0 pointer_pb_read_violation_lines=0
+REFUSED_signature_count=14
+        5 kf-host: HOST-ABI REFUSED control NxN: host control NxN has no public header (kf_abi::gssreplay ROWS (measured on N.N.N hosts)); its layout at host driver N.N.N was never measured
+        1 kf-host: HOST-ABI REFUSED control NxN: host control NxN has no row in kf_abi::hostabi::HOST_CONTROLS, and host driver N.N.N is outside the interval the host encoders were written for — its
+        1 kfN: ⚠ EXPERIMENT xN-dispsw ON (option A, OWNER_RULINGS §N; default off until its conditions hold): every guest GFN_DISP_SW is twinned under its channel's host twin with authored params (
+        1 kfN: channel budget N per runlist (Derived; derived default N, host limit N; the count the guest is told AND the enforced cap, refused by name past it — property channel-budget, docs/desig
+        2 kfN: GSP REFUSED fnN/NxN=NxN (GSP_RM_ALLOC) first_seq=N — the guest read a non-OK status
+       32 kfN: GSP REFUSED fnN/NxN=NxN (GSP_RM_CONTROL) first_seq=N — the guest read a non-OK status
+        2 kfN: host facts: GSS NxN [(N, N), (N, N), (c, N), (Nc, N)] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) — not served
+        1 kfN: host facts: GSS NxN [(N, N), (N, N), (N, N), (N, N), (N, N), (Nc, N), (N, N), (N, N), (N, N), (Nc, N), (N, N)] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) —
+        1 kfN: host facts: GSS NxN [(N, N), (N, N), (N, N)] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) — not served
+        1 kfN: host facts: GSS NxN [(N, N)] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) — not served
+        3 kfN: mem t=N.Ns REFUSED VasKey(N) root NxN: N run(s) not applied: leaf NxN+NxN names store NxN, inside the firmware carve-out at NxN — a twin maps no kayfabe memory (§Q)
+        1 kf-rm: display: EXPERIMENT xN-dispsw — GFN_DISP_SW is OFFERED (its constructor's query is answered; every alloc is twinned on the host or refused by name)
+        1 kf-rm: RPC-REFUSED #N AllocClassNotPermitted { class: N, denial: NotOnAllowlist } ⇒ answered NV_ERR_NOT_SUPPORTED (NxN). ⊘ The guest sees only the status; this line is the only place the
+        1 kf-rm: RPC-REFUSED #N AllocClassNotPermitted { class: N, denial: Refused { name: "NVN_INC", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (NxN). ⊘ The guest sees only the s
+broker_client: nvkvm-broker: client detached: closed the connection (1037 attach, 1037 commit, 0 rejected; 2 cursor, 0 cursor refused)
+reclaimed_frame_slots(last)=(13 reclaimed
+display: kf3: display fps[cap=75(unset) h3[armed=60.000 tick=60.95 clamped=0 late_max_us=4692 kms=0.0 tear=0.0 held=0 core_imm=5 vblirq=0.0] copies=4.9 checks=60.9 same=2387 ondemand=0 over=0]
+guest: NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  R | GL_RENDERER   = NVIDIA GeForce RTX 4070/PCIe/SSE2 | glxgears: 59.920 FPS 45.398 FPS 59.990 FPS 
+KMS: modeset=Y fbdev=Y | /sys/class/drm/card1-DVI-D-1 status=connected mode0=1920x1080
+desktop: 1 cinnamon lines; Xorg=1
+shutdown: L3_GUEST_POWEROFF_CLEAN (qemu exited);
+xid_journal_lines=lines=0
+qemu_exit: [interactive] QEMU exited rc=0 
+guest_dmesg: 37 nvidia lines; NVRM-signature=0188e51425cb drm-signature=0ea52ef3319d
+=== lcb5 kf3=0a746117 run=/data/claude-life/interactive/run-20261016-211346
+births=10 user=10
+USER_RING_lines=0 LIFECYCLE_lines=0 pointer_pb_read_violation_lines=0
+REFUSED_signature_count=14
+        5 kf-host: HOST-ABI REFUSED control NxN: host control NxN has no public header (kf_abi::gssreplay ROWS (measured on N.N.N hosts)); its layout at host driver N.N.N was never measured
+        1 kf-host: HOST-ABI REFUSED control NxN: host control NxN has no row in kf_abi::hostabi::HOST_CONTROLS, and host driver N.N.N is outside the interval the host encoders were written for — its
+        1 kfN: ⚠ EXPERIMENT xN-dispsw ON (option A, OWNER_RULINGS §N; default off until its conditions hold): every guest GFN_DISP_SW is twinned under its channel's host twin with authored params (
+        1 kfN: channel budget N per runlist (Derived; derived default N, host limit N; the count the guest is told AND the enforced cap, refused by name past it — property channel-budget, docs/desig
+        2 kfN: GSP REFUSED fnN/NxN=NxN (GSP_RM_ALLOC) first_seq=N — the guest read a non-OK status
+       32 kfN: GSP REFUSED fnN/NxN=NxN (GSP_RM_CONTROL) first_seq=N — the guest read a non-OK status
+        2 kfN: host facts: GSS NxN [(N, N), (N, N), (c, N), (Nc, N)] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) — not served
+        1 kfN: host facts: GSS NxN [(N, N), (N, N), (N, N), (N, N), (N, N), (Nc, N), (N, N), (N, N), (N, N), (Nc, N), (N, N)] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) —
+        1 kfN: host facts: GSS NxN [(N, N), (N, N), (N, N)] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) — not served
+        1 kfN: host facts: GSS NxN [(N, N)] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) — not served
+        3 kfN: mem t=N.Ns REFUSED VasKey(N) root NxN: N run(s) not applied: leaf NxN+NxN names store NxN, inside the firmware carve-out at NxN — a twin maps no kayfabe memory (§Q)
+        1 kf-rm: display: EXPERIMENT xN-dispsw — GFN_DISP_SW is OFFERED (its constructor's query is answered; every alloc is twinned on the host or refused by name)
+        1 kf-rm: RPC-REFUSED #N AllocClassNotPermitted { class: N, denial: NotOnAllowlist } ⇒ answered NV_ERR_NOT_SUPPORTED (NxN). ⊘ The guest sees only the status; this line is the only place the
+        1 kf-rm: RPC-REFUSED #N AllocClassNotPermitted { class: N, denial: Refused { name: "NVN_INC", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (NxN). ⊘ The guest sees only the s
+broker_client: nvkvm-broker: client detached: closed the connection (1457 attach, 1457 commit, 0 rejected; 2 cursor, 0 cursor refused)
+reclaimed_frame_slots(last)=(12 reclaimed
+display: kf3: display fps[cap=75(unset) h3[armed=60.000 tick=60.95 clamped=0 late_max_us=1266 kms=0.0 tear=0.0 held=0 core_imm=5 vblirq=0.0] copies=4.9 checks=60.9 same=7155 ondemand=0 over=0]
+guest: NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  R | GL_RENDERER   = NVIDIA GeForce RTX 4070/PCIe/SSE2 | glxgears: 59.936 FPS 43.777 FPS 60.001 FPS 
+KMS: modeset=Y fbdev=Y | /sys/class/drm/card1-DVI-D-1 status=connected mode0=1920x1080
+desktop: 1 cinnamon lines; Xorg=1
+shutdown: L3_GUEST_POWEROFF_NOT_DONE_60S;L3_ACPI_POWERDOWN_IGNORED_25S;L3_NOT_STOPPED_BY_GUEST: killing own qemu 2403745;
+xid_journal_lines=lines=0
+qemu_exit: [interactive] QEMU exited rc=0 
+guest_dmesg: 37 nvidia lines; NVRM-signature=0188e51425cb drm-signature=0ea52ef3319d
+=== lcb6 kf3=e1e9947c run=/data/claude-life/interactive/run-20261016-211700
+births=10 user=10
+USER_RING_lines=0 LIFECYCLE_lines=0 pointer_pb_read_violation_lines=0
+REFUSED_signature_count=14
+        5 kf-host: HOST-ABI REFUSED control NxN: host control NxN has no public header (kf_abi::gssreplay ROWS (measured on N.N.N hosts)); its layout at host driver N.N.N was never measured
+        1 kf-host: HOST-ABI REFUSED control NxN: host control NxN has no row in kf_abi::hostabi::HOST_CONTROLS, and host driver N.N.N is outside the interval the host encoders were written for — its
+        1 kfN: ⚠ EXPERIMENT xN-dispsw ON (option A, OWNER_RULINGS §N; default off until its conditions hold): every guest GFN_DISP_SW is twinned under its channel's host twin with authored params (
+        1 kfN: channel budget N per runlist (Derived; derived default N, host limit N; the count the guest is told AND the enforced cap, refused by name past it — property channel-budget, docs/desig
+        2 kfN: GSP REFUSED fnN/NxN=NxN (GSP_RM_ALLOC) first_seq=N — the guest read a non-OK status
+       32 kfN: GSP REFUSED fnN/NxN=NxN (GSP_RM_CONTROL) first_seq=N — the guest read a non-OK status
+        2 kfN: host facts: GSS NxN [(N, N), (N, N), (c, N), (Nc, N)] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) — not served
+        1 kfN: host facts: GSS NxN [(N, N), (N, N), (N, N), (N, N), (N, N), (Nc, N), (N, N), (N, N), (N, N), (Nc, N), (N, N)] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) —
+        1 kfN: host facts: GSS NxN [(N, N), (N, N), (N, N)] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) — not served
+        1 kfN: host facts: GSS NxN [(N, N)] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) — not served
+        3 kfN: mem t=N.Ns REFUSED VasKey(N) root NxN: N run(s) not applied: leaf NxN+NxN names store NxN, inside the firmware carve-out at NxN — a twin maps no kayfabe memory (§Q)
+        1 kf-rm: display: EXPERIMENT xN-dispsw — GFN_DISP_SW is OFFERED (its constructor's query is answered; every alloc is twinned on the host or refused by name)
+        1 kf-rm: RPC-REFUSED #N AllocClassNotPermitted { class: N, denial: NotOnAllowlist } ⇒ answered NV_ERR_NOT_SUPPORTED (NxN). ⊘ The guest sees only the status; this line is the only place the
+        1 kf-rm: RPC-REFUSED #N AllocClassNotPermitted { class: N, denial: Refused { name: "NVN_INC", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (NxN). ⊘ The guest sees only the s
+broker_client: nvkvm-broker: client detached: closed the connection (1154 attach, 1154 commit, 0 rejected; 2 cursor, 0 cursor refused)
+reclaimed_frame_slots(last)=(12 reclaimed
+display: kf3: display fps[cap=75(unset) h3[armed=60.000 tick=60.93 clamped=0 late_max_us=1030 kms=0.0 tear=0.0 held=0 core_imm=5 vblirq=0.0] copies=4.9 checks=60.9 same=3429 ondemand=0 over=0]
+guest: NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  R | GL_RENDERER   = NVIDIA GeForce RTX 4070/PCIe/SSE2 | glxgears: 59.723 FPS 52.445 FPS 
+KMS: modeset=Y fbdev=Y | /sys/class/drm/card1-DVI-D-1 status=connected mode0=1920x1080
+desktop: 1 cinnamon lines; Xorg=1
+shutdown: L3_GUEST_POWEROFF_CLEAN (qemu exited at +29 s);
+xid_journal_lines=lines=0
+qemu_exit: [interactive] QEMU exited rc=0 
+guest_dmesg: 37 nvidia lines; NVRM-signature=0188e51425cb drm-signature=0ea52ef3319d
+=== lcb7 kf3=0a746117 run=/data/claude-life/interactive/run-20261016-211827
+births=10 user=10
+USER_RING_lines=0 LIFECYCLE_lines=0 pointer_pb_read_violation_lines=0
+REFUSED_signature_count=14
+        5 kf-host: HOST-ABI REFUSED control NxN: host control NxN has no public header (kf_abi::gssreplay ROWS (measured on N.N.N hosts)); its layout at host driver N.N.N was never measured
+        1 kf-host: HOST-ABI REFUSED control NxN: host control NxN has no row in kf_abi::hostabi::HOST_CONTROLS, and host driver N.N.N is outside the interval the host encoders were written for — its
+        1 kfN: ⚠ EXPERIMENT xN-dispsw ON (option A, OWNER_RULINGS §N; default off until its conditions hold): every guest GFN_DISP_SW is twinned under its channel's host twin with authored params (
+        1 kfN: channel budget N per runlist (Derived; derived default N, host limit N; the count the guest is told AND the enforced cap, refused by name past it — property channel-budget, docs/desig
+        2 kfN: GSP REFUSED fnN/NxN=NxN (GSP_RM_ALLOC) first_seq=N — the guest read a non-OK status
+       32 kfN: GSP REFUSED fnN/NxN=NxN (GSP_RM_CONTROL) first_seq=N — the guest read a non-OK status
+        2 kfN: host facts: GSS NxN [(N, N), (N, N), (c, N), (Nc, N)] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) — not served
+        1 kfN: host facts: GSS NxN [(N, N), (N, N), (N, N), (N, N), (N, N), (Nc, N), (N, N), (N, N), (N, N), (Nc, N), (N, N)] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) —
+        1 kfN: host facts: GSS NxN [(N, N), (N, N), (N, N)] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) — not served
+        1 kfN: host facts: GSS NxN [(N, N)] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) — not served
+        3 kfN: mem t=N.Ns REFUSED VasKey(N) root NxN: N run(s) not applied: leaf NxN+NxN names store NxN, inside the firmware carve-out at NxN — a twin maps no kayfabe memory (§Q)
+        1 kf-rm: display: EXPERIMENT xN-dispsw — GFN_DISP_SW is OFFERED (its constructor's query is answered; every alloc is twinned on the host or refused by name)
+        1 kf-rm: RPC-REFUSED #N AllocClassNotPermitted { class: N, denial: NotOnAllowlist } ⇒ answered NV_ERR_NOT_SUPPORTED (NxN). ⊘ The guest sees only the status; this line is the only place the
+        1 kf-rm: RPC-REFUSED #N AllocClassNotPermitted { class: N, denial: Refused { name: "NVN_INC", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (NxN). ⊘ The guest sees only the s
+broker_client: nvkvm-broker: client detached: closed the connection (1038 attach, 1038 commit, 0 rejected; 2 cursor, 0 cursor refused)
+reclaimed_frame_slots(last)=(14 reclaimed
+display: kf3: display fps[cap=75(unset) h3[armed=60.000 tick=59.99 clamped=0 late_max_us=4316 kms=0.0 tear=0.0 held=0 core_imm=5 vblirq=0.0] copies=4.9 checks=59.9 same=2270 ondemand=0 over=0]
+guest: NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  R | GL_RENDERER   = NVIDIA GeForce RTX 4070/PCIe/SSE2 | glxgears: 59.913 FPS 44.319 FPS 59.999 FPS 
+KMS: modeset=Y fbdev=Y | /sys/class/drm/card1-DVI-D-1 status=connected mode0=1920x1080
+desktop: 1 cinnamon lines; Xorg=1
+shutdown: L3_GUEST_POWEROFF_CLEAN (qemu exited at +6 s);
+xid_journal_lines=lines=0
+qemu_exit: [interactive] QEMU exited rc=0 
+guest_dmesg: 37 nvidia lines; NVRM-signature=0188e51425cb drm-signature=0ea52ef3319d
+=== lcb8 kf3=e1e9947c run=/data/claude-life/interactive/run-20261016-211932
+births=10 user=10
+USER_RING_lines=0 LIFECYCLE_lines=0 pointer_pb_read_violation_lines=0
+REFUSED_signature_count=14
+        5 kf-host: HOST-ABI REFUSED control NxN: host control NxN has no public header (kf_abi::gssreplay ROWS (measured on N.N.N hosts)); its layout at host driver N.N.N was never measured
+        1 kf-host: HOST-ABI REFUSED control NxN: host control NxN has no row in kf_abi::hostabi::HOST_CONTROLS, and host driver N.N.N is outside the interval the host encoders were written for — its
+        1 kfN: ⚠ EXPERIMENT xN-dispsw ON (option A, OWNER_RULINGS §N; default off until its conditions hold): every guest GFN_DISP_SW is twinned under its channel's host twin with authored params (
+        1 kfN: channel budget N per runlist (Derived; derived default N, host limit N; the count the guest is told AND the enforced cap, refused by name past it — property channel-budget, docs/desig
+        2 kfN: GSP REFUSED fnN/NxN=NxN (GSP_RM_ALLOC) first_seq=N — the guest read a non-OK status
+       32 kfN: GSP REFUSED fnN/NxN=NxN (GSP_RM_CONTROL) first_seq=N — the guest read a non-OK status
+        2 kfN: host facts: GSS NxN [(N, N), (N, N), (c, N), (Nc, N)] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) — not served
+        1 kfN: host facts: GSS NxN [(N, N), (N, N), (N, N), (N, N), (N, N), (Nc, N), (N, N), (N, N), (N, N), (Nc, N), (N, N)] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) —
+        1 kfN: host facts: GSS NxN [(N, N), (N, N), (N, N)] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) — not served
+        1 kfN: host facts: GSS NxN [(N, N)] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) — not served
+        3 kfN: mem t=N.Ns REFUSED VasKey(N) root NxN: N run(s) not applied: leaf NxN+NxN names store NxN, inside the firmware carve-out at NxN — a twin maps no kayfabe memory (§Q)
+        1 kf-rm: display: EXPERIMENT xN-dispsw — GFN_DISP_SW is OFFERED (its constructor's query is answered; every alloc is twinned on the host or refused by name)
+        1 kf-rm: RPC-REFUSED #N AllocClassNotPermitted { class: N, denial: NotOnAllowlist } ⇒ answered NV_ERR_NOT_SUPPORTED (NxN). ⊘ The guest sees only the status; this line is the only place the
+        1 kf-rm: RPC-REFUSED #N AllocClassNotPermitted { class: N, denial: Refused { name: "NVN_INC", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (NxN). ⊘ The guest sees only the s
+broker_client: nvkvm-broker: client detached: closed the connection (1041 attach, 1041 commit, 0 rejected; 2 cursor, 0 cursor refused)
+reclaimed_frame_slots(last)=(14 reclaimed
+display: kf3: display fps[cap=75(unset) h3[armed=60.000 tick=59.98 clamped=0 late_max_us=4203 kms=0.0 tear=0.0 held=0 core_imm=5 vblirq=0.0] copies=3.9 checks=59.9 same=2383 ondemand=0 over=0]
+guest: NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  R | GL_RENDERER   = NVIDIA GeForce RTX 4070/PCIe/SSE2 | glxgears: 60.122 FPS 48.536 FPS 
+KMS: modeset=Y fbdev=Y | /sys/class/drm/card1-DVI-D-1 status=connected mode0=1920x1080
+desktop: 1 cinnamon lines; Xorg=1
+shutdown: L3_GUEST_POWEROFF_CLEAN (qemu exited at +6 s);
+xid_journal_lines=lines=0
+qemu_exit: [interactive] QEMU exited rc=0 
+guest_dmesg: 37 nvidia lines; NVRM-signature=0188e51425cb drm-signature=0ea52ef3319d
+=== lcb9 kf3=0a746117 run=/data/claude-life/interactive/run-20261016-212038
+births=10 user=10
+USER_RING_lines=0 LIFECYCLE_lines=0 pointer_pb_read_violation_lines=0
+REFUSED_signature_count=14
+        5 kf-host: HOST-ABI REFUSED control NxN: host control NxN has no public header (kf_abi::gssreplay ROWS (measured on N.N.N hosts)); its layout at host driver N.N.N was never measured
+        1 kf-host: HOST-ABI REFUSED control NxN: host control NxN has no row in kf_abi::hostabi::HOST_CONTROLS, and host driver N.N.N is outside the interval the host encoders were written for — its
+        1 kfN: ⚠ EXPERIMENT xN-dispsw ON (option A, OWNER_RULINGS §N; default off until its conditions hold): every guest GFN_DISP_SW is twinned under its channel's host twin with authored params (
+        1 kfN: channel budget N per runlist (Derived; derived default N, host limit N; the count the guest is told AND the enforced cap, refused by name past it — property channel-budget, docs/desig
+        2 kfN: GSP REFUSED fnN/NxN=NxN (GSP_RM_ALLOC) first_seq=N — the guest read a non-OK status
+       32 kfN: GSP REFUSED fnN/NxN=NxN (GSP_RM_CONTROL) first_seq=N — the guest read a non-OK status
+        2 kfN: host facts: GSS NxN [(N, N), (N, N), (c, N), (Nc, N)] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) — not served
+        1 kfN: host facts: GSS NxN [(N, N), (N, N), (N, N), (N, N), (N, N), (Nc, N), (N, N), (N, N), (N, N), (Nc, N), (N, N)] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) —
+        1 kfN: host facts: GSS NxN [(N, N), (N, N), (N, N)] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) — not served
+        1 kfN: host facts: GSS NxN [(N, N)] refused by the host (HostRefusal { status: None, detail: "Other(N)" }) — not served
+        3 kfN: mem t=N.Ns REFUSED VasKey(N) root NxN: N run(s) not applied: leaf NxN+NxN names store NxN, inside the firmware carve-out at NxN — a twin maps no kayfabe memory (§Q)
+        1 kf-rm: display: EXPERIMENT xN-dispsw — GFN_DISP_SW is OFFERED (its constructor's query is answered; every alloc is twinned on the host or refused by name)
+        1 kf-rm: RPC-REFUSED #N AllocClassNotPermitted { class: N, denial: NotOnAllowlist } ⇒ answered NV_ERR_NOT_SUPPORTED (NxN). ⊘ The guest sees only the status; this line is the only place the
+        1 kf-rm: RPC-REFUSED #N AllocClassNotPermitted { class: N, denial: Refused { name: "NVN_INC", why: NoPhysicalBoardBus } } ⇒ answered NV_ERR_NOT_SUPPORTED (NxN). ⊘ The guest sees only the s
+broker_client: nvkvm-broker: client detached: closed the connection (1044 attach, 1044 commit, 0 rejected; 2 cursor, 0 cursor refused)
+reclaimed_frame_slots(last)=(13 reclaimed
+display: kf3: display fps[cap=75(unset) h3[armed=60.000 tick=59.97 clamped=0 late_max_us=4564 kms=0.0 tear=0.0 held=0 core_imm=5 vblirq=0.0] copies=4.9 checks=59.9 same=2327 ondemand=0 over=0]
+guest: NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.159.04  R | GL_RENDERER   = NVIDIA GeForce RTX 4070/PCIe/SSE2 | glxgears: 60.123 FPS 46.115 FPS 
+KMS: modeset=Y fbdev=Y | /sys/class/drm/card1-DVI-D-1 status=connected mode0=1920x1080
+desktop: 1 cinnamon lines; Xorg=1
+shutdown: L3_GUEST_POWEROFF_CLEAN (qemu exited at +7 s);
+xid_journal_lines=lines=0
+qemu_exit: [interactive] QEMU exited rc=0 
+guest_dmesg: 37 nvidia lines; NVRM-signature=0188e51425cb drm-signature=0ea52ef3319d

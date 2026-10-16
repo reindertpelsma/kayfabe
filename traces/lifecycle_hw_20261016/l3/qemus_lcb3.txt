@@ -1,0 +1,8 @@
+SAMPLER_START 2026-10-16T21:07:46+02:00
+QEMU pid=2396950 t=1792177668.102729254 uid=0 exe=/var/lib/kf-windows-20261005/kf3-bins/e1e9947c/qemu-system-x86_64 sha256=eab8c9c778fa0ccbd6d278636fd6f7e9a3ba815f332677466b11b31f48a96092
+  name=-name kayfabe-interactive
+  arms=
+  device=-device kf3-gpu,id=kf0,guest-driver=580.159.04,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,display=on,gop=on,x11-dispsw=on,display-broker=/run/user/1000/nvkvm/display.sock,display-broker-uid=1000
+  env: KF3_REV=e1e9947c KF_LOCK=/data/claude-life/fast.lock KF_INTERACTIVE_DIR=/data/claude-life/interactive KF_IMG=/data/claude-life/lc_desktop.qcow2 
+  env_nonkf_count=19
+SAMPLER_STOP 2026-10-16T21:12:03+02:00

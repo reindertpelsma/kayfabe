@@ -1,0 +1,192 @@
+LIFECYCLE PHASE 1b: LINUX HARDWARE VALIDATION (e1e9947cc against 0a7461173)
+
+STATUS: RESEARCH, 2026-10-16. Measured on root@172.22.1.20 (RTX 4070 AD104, host driver 595.91.07 open modules, kernel 7.0.0-34,
+Ubuntu 26.04), 20:35 to 21:25 CEST. Pre-registration: PREREG.md in this directory, committed before any build or run.
+Labels: MEASURED = observed in a command of this task, with its evidence file. INFERRED = reasoned, not observed.
+Scope: LINUX ONLY. No Windows guest was started. The lifecycle must never be entered by a Linux channel; this report tests that and
+the absence of any Linux regression against the base 0a7461173.
+
+VERDICT IN ONE PARAGRAPH
+H1 holds. e1e9947cc behaves for Linux guests exactly as 0a7461173 does: GPU-free tests 1,561 passed / 0 failed / 3 ignored; gates 9/9 +
+gate 10 PASS with 12/12 USER births (the gate logs are identical to the base after stripping numbers); the 30-arm fast suite 30/30 in
+all three runs (and the base 30/30 in both of its runs), with summed client time -0.46 % against the base (inside the noise); 161 channel
+births per suite, all PRIVILEGED_CHANNEL=0 privilege=USER, identical per arm to the base and to the rootless audit; the only host Xids are
+the five Xid 31 per suite that the frozen grader provokes on purpose (same five on the base); and no lifecycle line of any kind (0 of 150
+suite QEMU logs, 0 of 10 broker-lane QEMU logs). The Linux display-broker lane with the Cinnamon guest boots, brings up KMS and Cinnamon,
+runs glxgears at ~60 fps and shuts down cleanly when the guest is asked to power off, on both revisions. Three things are worth the owner's
+attention and none is a regression: (1) the first suite run after the build was 10 to 45 % slower on eight arms (wall +14 %; a first-run effect: two later
+runs of the same binary are at the base's level); (2) the ACPI power button does not power off the Cinnamon guest (same on the base);
+(3) the host's dmesg Xid count is a saturated ring-buffer count, so "84 before and after" is not evidence of "no new Xid"
+(also true of the rootless audit's statement). No falsifier fired.
+
+1. REVISIONS AND BINARIES (MEASURED; l1/, l2/qemu_assertions.txt)
+ under test  e1e9947ccd24a9c2a53e13f24f5cd0bbcc16057c, worktree detached, clean (dirty=0 before and after every step)
+ base        0a7461173, kf3-bins/0a746117 already installed (sha256 0445f3d69d3a5d436ed89600b3dc095c681062ea8630ab5b6b5efe52f128c5a8,
+             the same hash the rootless audit recorded)
+ new binary  /var/lib/kf-windows-20261005/kf3-bins/e1e9947c/qemu-system-x86_64
+             sha256 eab8c9c778fa0ccbd6d278636fd6f7e9a3ba815f332677466b11b31f48a96092, built 20:35:42 by scripts/bench/build_kf3.sh
+             (shared build dir qemu-build-kf3; cargo target /data/claude-life/target; 11 s of cargo, incremental QEMU relink).
+ The binary does NOT print its revision: `--version` says "QEMU emulator version 10.2.4" and `strings | grep e1e9947c` finds nothing. The
+ revision is identified by the install path, the build log line "KF3_BUILT ... rev=e1e9947c" and the sha256. (The task text assumed otherwise.)
+ The new binary contains the strings "kf3: USER_RING_LIFECYCLE", "... SUMMARY", "... SUMMARY (all relays gone" (3 hits) and
+ "pointer_pb_read_violation" (2); the base has 0 and 0. So the counters are really in the product under test.
+ Per QEMU, asserted by a sampler that read /proc/<pid> at first sight (l2/qemus_*.txt, l3/qemus_*.txt, summary l2/qemu_assertions.txt):
+   160 QEMUs: 150 fast-suite (30 x 5 suites) + 10 broker-lane. ASSERT_ALL=OK (15 of 15 groups):
+   exe path and sha256 as above for each revision; uid 0; KF3_* environment: NONE in any suite QEMU (the fast suite runs the product
+   defaults, no KF3_ switch); the environment holds only KF_LOCK, KF_ARMS and KAYFABE_GUEST_BAR1_MB=128 from the harness.
+   The broker-lane QEMUs carry one KF3_REV variable, which is interactive.sh's own binary selector (git grep: no crate reads KF3_REV).
+   Host driver 595.91.07 (live /sys/module/nvidia/version, nvidia-smi). Guest driver: fast suite 595.91.07 in all 150 serial logs (the
+   fast guest is built in host mode from the host's own modules, "kf3: guest driver 595.91.07 (defaulted to the host's)"); broker lane
+   guest 580.159.04 (Ubuntu 24.04 guest kernel 6.8.0-142, device property guest-driver=580.159.04).
+
+2. L1: GPU-FREE TESTS (MEASURED; l1/cargo_test.log, l1/l1_summary.txt)
+ `cargo test --release --no-fail-fast -p kf-chan -p kf-rm -p kf-trap -p kf-qemu` on the host, rc 0, 20:35 to 20:37:
+   kf-chan 414 (lib 174 + 240 in 18 test binaries, 3 ignored: the OPEN i6 residual of the model)   kf-qemu 291 (lib 271 + 20)
+   kf-rm 750 (lib 154 + 596 in 55 binaries)   kf-trap 106 (lib 86 + 20)      TOTAL 1,561 passed, 0 failed, 3 ignored
+ This is exactly the design doc's number. The structural pin
+ chan::userpump::tests::the_lifecycle_is_reachable_only_from_the_windows_user_ring_pump passed. user_lifecycle_model 47 (+3 ignored),
+ user_lifecycle_props 25, user_lifecycle_stress 2, user_turn_unit 16, user_loop_model 37 all passed.
+
+3. L2: GATES AND FAST SUITE
+3.1 v3_gates.sh (MEASURED; l2/gates_p1b.log, l2/gates_base.log, l2/gates_normalized_diff.txt)
+   e1e9947c: V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS; V3_GATES_BIRTHS births=12 user=12 refused=0 ok=1 (9 s)
+   0a746117: V3_GATES_SUMMARY pass=9 fail=0 gate10=PASS; V3_GATES_BIRTHS births=12 user=12 refused=0 ok=1 (12 s)
+   Every GATE/CHECK/PASS/FAIL line of the two logs is identical after replacing numbers (141 lines each, 0 diff lines). Host kernel NVRM
+   warnings during the gates are the same set and counts on both (9 "unknown NVRM ioctl command", 2 "VA Space alloc failed", 2 "can't
+   alloc VA space"); they are the gate-10 probe's reservation refusals and the audit saw the same.
+3.2 Raw client and fast guest (MEASURED; l2/client_build.log, l2/fg_build.log): `cargo build --release -p kayfabe-rm-ladder`, then
+   build_fast_guest.sh with KF_FROM_HOST=1 (guest.qcow2 untouched) into /data/claude-life/bench/fastguest, one build used for BOTH revisions.
+3.3 Fast suite, `KF_DEVICE=kf3 fast_suite.sh <tag> 180` (the harness picks kf3-bins/<HEAD rev>; a private KF_LOCK because the outer
+   `flock -o /tmp/kayfabe-fastguest.lock` holds the shared one; the audit's finding F1). Order A B B A A (A = e1e9947c, B = 0a746117):
+     tag     rev        start-end        verdict             wall secs (sum of arms)   sum client_ms
+     lc1b    e1e9947c   20:38:46-20:42:34  30/30 PASS          197                      67,568   (A1, first run after the build)
+     base1   0a746117   20:43:03-20:46:28  30/30 PASS          173                      67,048
+     base2   0a746117   20:46:29-20:49:52  30/30 PASS          173                      67,121
+     lc1b2   e1e9947c   20:49:52-20:53:16  30/30 PASS          170                      66,903
+     lc1b3   e1e9947c   20:53:49-20:57:12  30/30 PASS          170                      66,655
+     (rootless audit, root, 0a7461173, 19:35: 30/30, client sum 66,620 ms)
+   A2/A3 average 66,779 against B average 67,084: -306 ms (-0.46 %). No arm of A2/A3 is beyond twice the within-run spread and 5 % of the
+   B average (l2/timing_stats.txt, per-arm table l2/timing_table.txt). The largest relative gap is concurrent-fuzz, +9.7 % (1,415 vs 1,290 ms),
+   but B1 and B2 differ by 160 ms (1,210 vs 1,370) and the audit's root run has 1,370, so it is noise. ce-client-guest-ram, the long arm:
+   A 19.9/20.5/20.2 s, B 20.9/20.8 s, audit 20.2 s.
+   THE ONE DEVIATION (MEASURED): A1 was slower than every other run on eight arms (+10 % to +45 % each): map-propagation 540 vs 380-399 ms, uvm-mean 910 vs
+   629, uvm-invalidate 630 vs 489-509, late-map-race 970 vs 800-820, blockage-coverage 900 vs 799-810, alias-two-vas 430 vs 389-390,
+   doorbell-census 719 vs 649-660, gpu-info-sweep 439 vs 389-390; wall 197 s vs 170-173 s; +0.72 % on the client sum. The same binary
+   measured 3 and 6 minutes later (A2, A3) is at the base's level, and B1 ran from an equally idle GPU (P8) and was fast. So the
+   difference is not the revision. The cause is NOT established: it ran right after the 377 MB initrd and the raw client were written and
+   after two cargo builds (INFERRED: page-cache write-back or cold caches). Per the failure rule it was not re-run to "fix" it; the A2 and
+   A3 runs are the pre-registered ABBA repeats plus one extra. The A1 numbers stay in the table.
+
+4. L4: LIFECYCLE COUNTERS (MEASURED; l4/counters_*.txt, l3/analysis.txt)
+ Switch: none. The counters are always compiled in and always on; a `kf3: USER_RING_LIFECYCLE ...` line is printed when a relay-carried
+ channel is released with counted entries, and a `... SUMMARY` line at device stop and when the last relay goes, only if the VM-wide
+ Stats::life.any(). The relay (and so the Lifecycle) is built only in the Windows USER-ring birth (userpump.rs, one constructor call).
+ Result for every Linux QEMU log of the task (150 fast-suite arms in 5 suites, 10 broker-lane runs):
+   `USER_RING` lines 0; `LIFECYCLE` lines 0 (case-insensitive); `pointer_pb_read_violation` 0; any mode=Scan/Pointer/Window,
+   to_pointer, to_window or entries_scan/pointer/window text 0. So NO Linux channel entered Scan, Pointer or Window, and
+   pointer_pb_read_violation is 0 (it never printed). Per-arm table in l4/counters_*.txt: births 161 = USER 161, privileged 0, refused 0 in
+   each of the five suites; per-arm births equal the base's and the audit's (3,3,2,2,4,2,3,3,6,27,4,11,...).
+ What the zero does not prove (stated): a QEMU killed by the harness at the end of an arm may never run Device::stop(), so a missing
+ SUMMARY line is weak evidence by itself. The positive evidence is structural: the pin test passed (section 2), the binary has the
+ print code (section 1), the lifecycle is unreachable from the Linux birth path (INFERRED from the pin test: no other file names it).
+ There was no positive control of the counter line on hardware (it needs a Windows USER channel; that is the next stage).
+
+5. L3: LINUX DISPLAY-BROKER LANE WITH THE CINNAMON GUEST (MEASURED; l3/)
+ Script: scripts/bench/display/interactive.sh run (the current launcher). scripts/bench/display/broker_lane.sh could NOT be used: it looks for
+ `plasmashell` and an X11 broker, while the host desktop is GNOME on Wayland (it exits "no desktop session"). INTERACTIVE_SESSION: the
+ live graphical session of user ubuntu (seat0, Wayland, unlocked) was used, so the REAL display broker (/opt/nvkvm-broker, rev badf2d707da4,
+ backend wayland) ran in the owner's session and a "kayfabe guest" window was on the host desktop during each of the 10 runs
+ (about 1.5 to 2.5 minutes each, between 20:57 and 21:22); the test backend was not needed. Nothing of the session was changed. The guest
+ disk was a private qcow2 overlay of broker-interactive/desktop.qcow2 (the shared disk was not written); the run directories are under
+ /data/claude-life/interactive (the shared broker-interactive directory was not touched).
+ Per run (10 runs: six on e1e9947c, lcb1 lcb2 lcb3 lcb4 lcb6 lcb8; four on the base, lcb0 lcb5 lcb7 lcb9; see the table below):
+   boot: ssh up after 21-24 s, Cinnamon process up after 22-26 s (both revisions).
+   KMS: nvidia-drm loaded (card1-DVI-D-1 status=connected 1920x1080, "Initialized nvidia-drm", "nvidia-drmdrmfb frame buffer device", fbcon
+        primary), Xorg + lightdm + cinnamon --replace + nemo-desktop running, xdpyinfo 1920x1080 with GLX and NV-GLX.
+   glxgears: GL_RENDERER NVIDIA GeForce RTX 4070/PCIe/SSE2, GL_VERSION 4.6.0 NVIDIA 580.159.04, 59.7 to 60.1 fps in the first 5 s window
+        of every run; a later 5 s window dips to 42 to 52 fps in 10 of 10 runs on BOTH revisions (new 48.4 48.3 42.3 45.4 52.4 48.5; base
+        52.1 43.8 44.3 46.1), so it is not the revision (cause not examined).
+   host: births 10 or 11 per run, all PRIVILEGED_CHANNEL=0 privilege=USER (the 11th birth appears only in the four runs that started with the
+        ACPI button, base and new alike); 14 distinct REFUSED/refused signatures per run, with identical counts in 8 of 8 runs compared
+        (md5 of the signature block equal, both revisions; the host-ABI controls without a row, 32 GSP_RM_CONTROL status refusals, 3 carve-out refusals); broker client "1154 attach, 1154 commit, 0 rejected;
+        2 cursor, 0 cursor refused" in lcb6; xid lines in the kernel journal during each run: 0.
+   guest dmesg: 37 NVRM/nvidia lines, the same NVRM-signature (0188e51425cb) and drm-signature (0ea52ef3319d) in all runs of both revisions
+        (the guest RM's NV_ERR_NOT_SUPPORTED assertions at boot are the base's own and appear identically).
+   lifecycle: 0 USER_RING lines, 0 LIFECYCLE lines, 0 pointer_pb_read_violation lines in all 10 qemu logs.
+ Shutdown (the one place the runs differed in procedure, so each is listed; scripts changed between runs and the committed l3_broker.sh is the
+ final version: lcb0-2 = ACPI button first, 25 s, then the guest's `systemctl poweroff`; lcb3 = ACPI, then poweroff, then poweroff -i;
+ lcb4-9 = the guest's own `systemctl poweroff` first, then ACPI):
+   run   rev       first action                     result
+   lcb1  e1e9947c  ACPI via interactive.sh stop      guest not stopped within 60 s; QEMU killed by the script (rc=137)  [FIRST FAILURE]
+   lcb0  0a746117  ACPI, 25 s                        guest not stopped; ssh poweroff then also unreachable; killed (rc=137)
+   lcb2  e1e9947c  ACPI, 25 s                        same as lcb0; killed
+   lcb3  e1e9947c  ACPI, 25 s                        same; ssh to the guest: "Connection timed out" / "No route to host"; killed
+   lcb4  e1e9947c  guest poweroff                    clean: "reboot: Power down" at guest uptime 45.9 s, QEMU rc=0 within ~8 s
+   lcb5  0a746117  guest poweroff                    slow: "reboot: Power down" at guest uptime 133.2 s (about 70 s after the command); QEMU rc=0
+                                                      (my 60 s window ended first and the ACPI step ran; the guest still powered itself off)
+   lcb6  e1e9947c  guest poweroff (window 120 s)     clean, QEMU gone +29 s
+   lcb7  0a746117  guest poweroff                    clean, +6 s
+   lcb8  e1e9947c  guest poweroff                    clean, +6 s
+   lcb9  0a746117  guest poweroff                    clean, +7 s
+ Reading (MEASURED facts, then INFERRED cause): (a) a guest-initiated power-off ended with QEMU exiting rc=0 in 6 of 6 runs: new 3 of 3
+ (lcb4 lcb6 lcb8), base 3 of 3 (lcb5 after about 70 s, lcb7 lcb9). (b) The ACPI power button did not power off the guest
+ within 25 s (60 s once) in 4 of 4 runs, new 3 and base 1: the guest then answers neither ssh nor the serial console. This is the same on the
+ base, so it is not caused by the change. INFERRED cause: the guest's desktop handles the power button as a suspend or a dialog
+ (Cinnamon's default), and a suspended guest does not wake in this setup (cf. the S3 work); not examined. interactive.sh stop therefore
+ kills the QEMU after its 60 s for this guest. (c) The guest shutdown duration varies a lot on the base too (6 s, 7 s, about 70 s).
+ F-g is therefore met for boot, KMS, desktop and glxgears on both revisions, and for a guest-initiated clean shutdown (6 of 6), and the
+ ACPI-button shutdown is a finding that is identical on the base.
+
+6. HOST Xid AND KERNEL LOG (MEASURED; l2/xidmap_*.txt, l2/xid_journal_*.txt, l3/xidmap_*.txt)
+ Journal Xid lines from 20:35 to 21:25: 25 in total, all "Xid 31, MMU Fault, CE0 HUBCLIENT_CE1", each mapped by PID to the QEMU in the
+ sampler record: per suite exactly 5, four of them to --defer-liveness (FAULT_PTE ACCESS_TYPE_VIRT_READ at 0x60_00010000, 0x62_00010000 twice,
+ 0x64_00010000) and one to --missing-page-fault (FAULT_PDE VIRT_WRITE at 0xa_11000000); XID_UNMAPPED=0 in every suite. The base shows the same
+ five. No Xid during the gates (either revision) or in any of the 10 broker-lane runs. Other host kernel lines: no BUG, oops, call trace, hung
+ task or lockup; the NVRM warning counts are equal between the first e1e9947c suite and the first base suite (80 and 80).
+ SURPRISE: the dmesg Xid count is not a counter. The kernel ring buffer here is full (1,799 lines), so it holds the newest 84 Xid lines and
+ drops the oldest as new ones arrive: "84 before, 84 after" while 5 new Xids were logged (l2/xid_new_lc1b.txt shows the 5 rolled-out and the 5 new
+ lines), and it later fell to 62 as other lines pushed Xid lines out. The rootless audit's "Xid count 84 before and after" and this task's own
+ pre-registered baseline "84" are saturated. The journal (journalctl -k --since) is the right counter and is what the verdicts above use.
+ Host state before and after: nvidia 15 modules refcount, nvidia_uvm 0, vfio_pci 0, kvm 1, GPU memory 10 MiB, no QEMU, lock free
+ (l2/state_*.txt, l3/state_*.txt).
+
+7. FALSIFIER VERDICTS (PREREG.md)
+ F-a any gate failing                      NOT FIRED: 9/9, gate 10 PASS, births 12/12 USER, refused 0 (e1e9947c); identical to the base. MEASURED
+ F-b any arm other than PASS               NOT FIRED: 30/30 in all three e1e9947c runs; base 30/30 twice. MEASURED
+ F-c any non-USER birth                    NOT FIRED: 161/161 per suite, 12/12 gates, 10 or 11 of 10 or 11 per broker run. MEASURED
+ F-d a new Xid other than 31 of the grader NOT FIRED: 25 Xid 31, all mapped by PID to defer-liveness (20) and missing-page-fault (5). MEASURED
+ F-e any lifecycle line / state transition / pointer_pb_read_violation on a Linux channel
+                                           NOT FIRED: 0 of 160 QEMU logs; pin test passed. MEASURED (the zero is weak alone, section 4)
+ F-f unit-test totals                      NOT FIRED: 1,561 / 0 / 3 and the pin test. MEASURED
+ F-g Linux broker lane                     NOT FIRED for boot, KMS, Cinnamon, glxgears and clean guest-initiated shutdown (both revisions);
+                                           the ACPI-button shutdown fails identically on the base (finding, not a regression). MEASURED
+ Timing                                    reported, not a falsifier: -0.46 % (A2/A3 vs B), A1 +0.72 %, no arm beyond noise in A2/A3.
+
+8. THINGS TO KNOW (FINDINGS)
+ 1. The first suite after a build can be 10 to 45 % slower on eight arms (A1; suite wall +14 %); two later runs of the same binary are not. Repeat before reading a
+    single post-build suite as a regression. Cause not established.
+ 2. dmesg Xid counts saturate; use the journal and a PID map (scripts/bench/lifecycle_hw/xid_map.sh).
+ 3. scripts/bench/display/broker_lane.sh is stale for the current host (plasmashell, X11); interactive.sh is the working launcher.
+ 4. The ACPI power button does not shut the Cinnamon test guest down (new and base); interactive.sh stop waits 60 s and kills.
+    The same guest's own poweroff takes 6 s to about 70 s.
+ 5. The product binary does not carry its revision (only the path and the build log do); a "bench claim carries its revision" rule rests on the
+    directory name and the sha256 recorded here.
+ 6. Side effects on the shared host: build_kf3.sh re-linked the shared build dir /var/lib/kf-windows-20261005/qemu-build-kf3 (its
+    qemu-system-x86_64 and libkf_qemu.a are now e1e9947c's) and copied this revision's kf3 overlay into the shared QEMU source tree
+    qemu-10.2.4/hw/misc/kf3; this is the build script's standing behaviour, and the per-revision binary kf3-bins/e1e9947c is left in place on
+    purpose (task step L1). The pre-existing kf3-bins/0a746117 is unchanged (same sha256).
+ 7. A window "kayfabe guest" was shown on the host's live desktop for 10 short periods (section 5).
+
+9. NOT DONE / LIMITS
+ No Windows run, no Windows USER channel, so the lifecycle itself (Scan, Pointer, Window, P2' falsifier counters) has NO hardware measurement
+ here; this task only shows that Linux does not enter it and does not slow down. Not run: the fat-guest lanes (cuda_ladder, app matrix,
+ llm_parity, gfx_suite, video_lane), the pointer grab/cursor interaction in the window (nobody at the keyboard), a second GPU. One host, one
+ GPU, one driver. The glxgears dips and the A1 slowdown are unexplained. The shutdown comparison has small counts (3 and 3 guest-initiated).
+
+10. REPRODUCTION AND EVIDENCE
+ Scripts: scripts/bench/lifecycle_hw/ (l1_build.sh, l2_gates.sh, l2_fastguest.sh, l2_suite.sh, l2_chain.sh, l2_cmp.py, l2_stats.py,
+ l2_assert.sh, qsampler.sh, host_state.sh, xid_map.sh, l3_broker.sh, l3_analyze.sh, l4_counters.sh). Paths are the host's /data/claude-life.
+ Evidence: traces/lifecycle_hw_20261016/{l1,l2,l3,l4}. Raw logs over 1 MB are gzipped on the host and were kept there:
+   /data/claude-life/raw_fast_suites.tgz   (the 150 per-arm qemu, serial and ttyS0 logs of the five suites; 3.2 MB)
+   /data/claude-life/raw_l3_runs.tgz       (the ten broker-lane run directories: qemu.log, serial.log, broker.log; 0.8 MB)
+ End state: see the last section of the final message (restored host).

@@ -1,0 +1,182 @@
+SAMPLER_START 2026-10-16T20:43:03+02:00
+QEMU pid=2347926 t=1792176184.512185902 uid=0 exe=/var/lib/kf-windows-20261005/kf3-bins/0a746117/qemu-system-x86_64 sha256=0445f3d69d3a5d436ed89600b3dc095c681062ea8630ab5b6b5efe52f128c5a8
+  name=-name kf-fastguest
+  arms=KF_ARMS=--timer,--probe-launch-dma
+  device=-device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0
+  env: KF_LOCK=/data/claude-life/fast.lock KF_ARMS=--timer KAYFABE_GUEST_BAR1_MB=128 
+  env_nonkf_count=19
+QEMU pid=2348678 t=1792176189.641289708 uid=0 exe=/var/lib/kf-windows-20261005/kf3-bins/0a746117/qemu-system-x86_64 sha256=0445f3d69d3a5d436ed89600b3dc095c681062ea8630ab5b6b5efe52f128c5a8
+  name=-name kf-fastguest
+  arms=KF_ARMS=--engines,--probe-launch-dma
+  device=-device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0
+  env: KF_LOCK=/data/claude-life/fast.lock KF_ARMS=--engines KAYFABE_GUEST_BAR1_MB=128 
+  env_nonkf_count=19
+QEMU pid=2348907 t=1792176194.645379200 uid=0 exe=/var/lib/kf-windows-20261005/kf3-bins/0a746117/qemu-system-x86_64 sha256=0445f3d69d3a5d436ed89600b3dc095c681062ea8630ab5b6b5efe52f128c5a8
+  name=-name kf-fastguest
+  arms=KF_ARMS=--doorbell-census,--probe-launch-dma
+  device=-device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0
+  env: KF_LOCK=/data/claude-life/fast.lock KF_ARMS=--doorbell-census KAYFABE_GUEST_BAR1_MB=128 
+  env_nonkf_count=19
+QEMU pid=2349258 t=1792176200.066066303 uid=0 exe=/var/lib/kf-windows-20261005/kf3-bins/0a746117/qemu-system-x86_64 sha256=0445f3d69d3a5d436ed89600b3dc095c681062ea8630ab5b6b5efe52f128c5a8
+  name=-name kf-fastguest
+  arms=KF_ARMS=--gpu-info-sweep,--probe-launch-dma
+  device=-device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0
+  env: KF_LOCK=/data/claude-life/fast.lock KF_ARMS=--gpu-info-sweep KAYFABE_GUEST_BAR1_MB=128 
+  env_nonkf_count=19
+QEMU pid=2349519 t=1792176206.498520888 uid=0 exe=/var/lib/kf-windows-20261005/kf3-bins/0a746117/qemu-system-x86_64 sha256=0445f3d69d3a5d436ed89600b3dc095c681062ea8630ab5b6b5efe52f128c5a8
+  name=-name kf-fastguest
+  arms=KF_ARMS=--bus-info-sweep,--probe-launch-dma
+  device=-device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0
+  env: KF_LOCK=/data/claude-life/fast.lock KF_ARMS=--bus-info-sweep KAYFABE_GUEST_BAR1_MB=128 
+  env_nonkf_count=19
+QEMU pid=2349794 t=1792176214.678046704 uid=0 exe=/var/lib/kf-windows-20261005/kf3-bins/0a746117/qemu-system-x86_64 sha256=0445f3d69d3a5d436ed89600b3dc095c681062ea8630ab5b6b5efe52f128c5a8
+  name=-name kf-fastguest
+  arms=KF_ARMS=--concurrency,--probe-launch-dma
+  device=-device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0
+  env: KF_LOCK=/data/claude-life/fast.lock KF_ARMS=--concurrency KAYFABE_GUEST_BAR1_MB=128 
+  env_nonkf_count=19
+QEMU pid=2350109 t=1792176222.449908078 uid=0 exe=/var/lib/kf-windows-20261005/kf3-bins/0a746117/qemu-system-x86_64 sha256=0445f3d69d3a5d436ed89600b3dc095c681062ea8630ab5b6b5efe52f128c5a8
+  name=-name kf-fastguest
+  arms=KF_ARMS=--defer-liveness,--probe-launch-dma
+  device=-device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0
+  env: KF_LOCK=/data/claude-life/fast.lock KF_ARMS=--defer-liveness KAYFABE_GUEST_BAR1_MB=128 
+  env_nonkf_count=19
+QEMU pid=2350563 t=1792176239.624853450 uid=0 exe=/var/lib/kf-windows-20261005/kf3-bins/0a746117/qemu-system-x86_64 sha256=0445f3d69d3a5d436ed89600b3dc095c681062ea8630ab5b6b5efe52f128c5a8
+  name=-name kf-fastguest
+  arms=KF_ARMS=--blockage-coverage,--probe-launch-dma
+  device=-device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0
+  env: KF_LOCK=/data/claude-life/fast.lock KF_ARMS=--blockage-coverage KAYFABE_GUEST_BAR1_MB=128 
+  env_nonkf_count=19
+QEMU pid=2350800 t=1792176244.965091280 uid=0 exe=/var/lib/kf-windows-20261005/kf3-bins/0a746117/qemu-system-x86_64 sha256=0445f3d69d3a5d436ed89600b3dc095c681062ea8630ab5b6b5efe52f128c5a8
+  name=-name kf-fastguest
+  arms=KF_ARMS=--alias-two-vas,--probe-launch-dma
+  device=-device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0
+  env: KF_LOCK=/data/claude-life/fast.lock KF_ARMS=--alias-two-vas KAYFABE_GUEST_BAR1_MB=128 
+  env_nonkf_count=19
+QEMU pid=2351033 t=1792176250.582439379 uid=0 exe=/var/lib/kf-windows-20261005/kf3-bins/0a746117/qemu-system-x86_64 sha256=0445f3d69d3a5d436ed89600b3dc095c681062ea8630ab5b6b5efe52f128c5a8
+  name=-name kf-fastguest
+  arms=KF_ARMS=--alias-unmap-observe,--probe-launch-dma
+  device=-device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0
+  env: KF_LOCK=/data/claude-life/fast.lock KF_ARMS=--alias-unmap-observe KAYFABE_GUEST_BAR1_MB=128 
+  env_nonkf_count=19
+QEMU pid=2351262 t=1792176255.473851670 uid=0 exe=/var/lib/kf-windows-20261005/kf3-bins/0a746117/qemu-system-x86_64 sha256=0445f3d69d3a5d436ed89600b3dc095c681062ea8630ab5b6b5efe52f128c5a8
+  name=-name kf-fastguest
+  arms=KF_ARMS=--map-propagation,--probe-launch-dma
+  device=-device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0
+  env: KF_LOCK=/data/claude-life/fast.lock KF_ARMS=--map-propagation KAYFABE_GUEST_BAR1_MB=128 
+  env_nonkf_count=19
+QEMU pid=2351531 t=1792176260.400266581 uid=0 exe=/var/lib/kf-windows-20261005/kf3-bins/0a746117/qemu-system-x86_64 sha256=0445f3d69d3a5d436ed89600b3dc095c681062ea8630ab5b6b5efe52f128c5a8
+  name=-name kf-fastguest
+  arms=KF_ARMS=--late-map-race,--probe-launch-dma
+  device=-device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0
+  env: KF_LOCK=/data/claude-life/fast.lock KF_ARMS=--late-map-race KAYFABE_GUEST_BAR1_MB=128 
+  env_nonkf_count=19
+QEMU pid=2351776 t=1792176265.808425969 uid=0 exe=/var/lib/kf-windows-20261005/kf3-bins/0a746117/qemu-system-x86_64 sha256=0445f3d69d3a5d436ed89600b3dc095c681062ea8630ab5b6b5efe52f128c5a8
+  name=-name kf-fastguest
+  arms=KF_ARMS=--missing-page-fault,--probe-launch-dma
+  device=-device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0
+  env: KF_LOCK=/data/claude-life/fast.lock KF_ARMS=--missing-page-fault KAYFABE_GUEST_BAR1_MB=128 
+  env_nonkf_count=19
+QEMU pid=2352050 t=1792176273.889613481 uid=0 exe=/var/lib/kf-windows-20261005/kf3-bins/0a746117/qemu-system-x86_64 sha256=0445f3d69d3a5d436ed89600b3dc095c681062ea8630ab5b6b5efe52f128c5a8
+  name=-name kf-fastguest
+  arms=KF_ARMS=--uvm-invalidate,--probe-launch-dma
+  device=-device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0
+  env: KF_LOCK=/data/claude-life/fast.lock KF_ARMS=--uvm-invalidate KAYFABE_GUEST_BAR1_MB=128 
+  env_nonkf_count=19
+QEMU pid=2352320 t=1792176278.784916871 uid=0 exe=/var/lib/kf-windows-20261005/kf3-bins/0a746117/qemu-system-x86_64 sha256=0445f3d69d3a5d436ed89600b3dc095c681062ea8630ab5b6b5efe52f128c5a8
+  name=-name kf-fastguest
+  arms=KF_ARMS=--uvm-mean,--probe-launch-dma
+  device=-device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0
+  env: KF_LOCK=/data/claude-life/fast.lock KF_ARMS=--uvm-mean KAYFABE_GUEST_BAR1_MB=128 
+  env_nonkf_count=19
+QEMU pid=2352553 t=1792176283.900194768 uid=0 exe=/var/lib/kf-windows-20261005/kf3-bins/0a746117/qemu-system-x86_64 sha256=0445f3d69d3a5d436ed89600b3dc095c681062ea8630ab5b6b5efe52f128c5a8
+  name=-name kf-fastguest
+  arms=KF_ARMS=--executor-vas,--probe-launch-dma
+  device=-device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0
+  env: KF_LOCK=/data/claude-life/fast.lock KF_ARMS=--executor-vas KAYFABE_GUEST_BAR1_MB=128 
+  env_nonkf_count=19
+QEMU pid=2352787 t=1792176288.995981693 uid=0 exe=/var/lib/kf-windows-20261005/kf3-bins/0a746117/qemu-system-x86_64 sha256=0445f3d69d3a5d436ed89600b3dc095c681062ea8630ab5b6b5efe52f128c5a8
+  name=-name kf-fastguest
+  arms=KF_ARMS=--guest-ring-channel,--probe-launch-dma
+  device=-device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0
+  env: KF_LOCK=/data/claude-life/fast.lock KF_ARMS=--guest-ring-channel KAYFABE_GUEST_BAR1_MB=128 
+  env_nonkf_count=19
+QEMU pid=2353023 t=1792176293.916267004 uid=0 exe=/var/lib/kf-windows-20261005/kf3-bins/0a746117/qemu-system-x86_64 sha256=0445f3d69d3a5d436ed89600b3dc095c681062ea8630ab5b6b5efe52f128c5a8
+  name=-name kf-fastguest
+  arms=KF_ARMS=--dictated-ring,--probe-launch-dma
+  device=-device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0
+  env: KF_LOCK=/data/claude-life/fast.lock KF_ARMS=--dictated-ring KAYFABE_GUEST_BAR1_MB=128 
+  env_nonkf_count=19
+QEMU pid=2353290 t=1792176298.795249153 uid=0 exe=/var/lib/kf-windows-20261005/kf3-bins/0a746117/qemu-system-x86_64 sha256=0445f3d69d3a5d436ed89600b3dc095c681062ea8630ab5b6b5efe52f128c5a8
+  name=-name kf-fastguest
+  arms=KF_ARMS=--dictated-ring-negative,--probe-launch-dma
+  device=-device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0
+  env: KF_LOCK=/data/claude-life/fast.lock KF_ARMS=--dictated-ring-negative KAYFABE_GUEST_BAR1_MB=128 
+  env_nonkf_count=19
+QEMU pid=2353521 t=1792176303.732775442 uid=0 exe=/var/lib/kf-windows-20261005/kf3-bins/0a746117/qemu-system-x86_64 sha256=0445f3d69d3a5d436ed89600b3dc095c681062ea8630ab5b6b5efe52f128c5a8
+  name=-name kf-fastguest
+  arms=KF_ARMS=--ce-client,--probe-launch-dma
+  device=-device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0
+  env: KF_LOCK=/data/claude-life/fast.lock KF_ARMS=--ce-client KAYFABE_GUEST_BAR1_MB=128 
+  env_nonkf_count=19
+QEMU pid=2353754 t=1792176308.669119349 uid=0 exe=/var/lib/kf-windows-20261005/kf3-bins/0a746117/qemu-system-x86_64 sha256=0445f3d69d3a5d436ed89600b3dc095c681062ea8630ab5b6b5efe52f128c5a8
+  name=-name kf-fastguest
+  arms=KF_ARMS=--ce-client-guest-ram,--probe-launch-dma
+  device=-device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0
+  env: KF_LOCK=/data/claude-life/fast.lock KF_ARMS=--ce-client-guest-ram KAYFABE_GUEST_BAR1_MB=128 
+  env_nonkf_count=19
+QEMU pid=2354329 t=1792176334.032523785 uid=0 exe=/var/lib/kf-windows-20261005/kf3-bins/0a746117/qemu-system-x86_64 sha256=0445f3d69d3a5d436ed89600b3dc095c681062ea8630ab5b6b5efe52f128c5a8
+  name=-name kf-fastguest
+  arms=KF_ARMS=--guest-ram-pin,--probe-launch-dma
+  device=-device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0
+  env: KF_LOCK=/data/claude-life/fast.lock KF_ARMS=--guest-ram-pin KAYFABE_GUEST_BAR1_MB=128 
+  env_nonkf_count=19
+QEMU pid=2354595 t=1792176339.035279435 uid=0 exe=/var/lib/kf-windows-20261005/kf3-bins/0a746117/qemu-system-x86_64 sha256=0445f3d69d3a5d436ed89600b3dc095c681062ea8630ab5b6b5efe52f128c5a8
+  name=-name kf-fastguest
+  arms=KF_ARMS=--bar1-crossing,--probe-launch-dma
+  device=-device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0
+  env: KF_LOCK=/data/claude-life/fast.lock KF_ARMS=--bar1-crossing KAYFABE_GUEST_BAR1_MB=128 
+  env_nonkf_count=19
+QEMU pid=2354828 t=1792176343.973402652 uid=0 exe=/var/lib/kf-windows-20261005/kf3-bins/0a746117/qemu-system-x86_64 sha256=0445f3d69d3a5d436ed89600b3dc095c681062ea8630ab5b6b5efe52f128c5a8
+  name=-name kf-fastguest
+  arms=KF_ARMS=--atomics-probe,--probe-launch-dma
+  device=-device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0
+  env: KF_LOCK=/data/claude-life/fast.lock KF_ARMS=--atomics-probe KAYFABE_GUEST_BAR1_MB=128 
+  env_nonkf_count=19
+QEMU pid=2355057 t=1792176348.658027476 uid=0 exe=/var/lib/kf-windows-20261005/kf3-bins/0a746117/qemu-system-x86_64 sha256=0445f3d69d3a5d436ed89600b3dc095c681062ea8630ab5b6b5efe52f128c5a8
+  name=-name kf-fastguest
+  arms=KF_ARMS=--pce-mask-probe,--probe-launch-dma
+  device=-device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0
+  env: KF_LOCK=/data/claude-life/fast.lock KF_ARMS=--pce-mask-probe KAYFABE_GUEST_BAR1_MB=128 
+  env_nonkf_count=19
+QEMU pid=2355295 t=1792176353.758258417 uid=0 exe=/var/lib/kf-windows-20261005/kf3-bins/0a746117/qemu-system-x86_64 sha256=0445f3d69d3a5d436ed89600b3dc095c681062ea8630ab5b6b5efe52f128c5a8
+  name=-name kf-fastguest
+  arms=KF_ARMS=--gpga-reserve-probe,--probe-launch-dma
+  device=-device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0
+  env: KF_LOCK=/data/claude-life/fast.lock KF_ARMS=--gpga-reserve-probe KAYFABE_GUEST_BAR1_MB=128 
+  env_nonkf_count=19
+QEMU pid=2355709 t=1792176368.300077859 uid=0 exe=/var/lib/kf-windows-20261005/kf3-bins/0a746117/qemu-system-x86_64 sha256=0445f3d69d3a5d436ed89600b3dc095c681062ea8630ab5b6b5efe52f128c5a8
+  name=-name kf-fastguest
+  arms=KF_ARMS=--map-stress,--probe-launch-dma
+  device=-device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0
+  env: KF_LOCK=/data/claude-life/fast.lock KF_ARMS=--map-stress KAYFABE_GUEST_BAR1_MB=128 
+  env_nonkf_count=19
+QEMU pid=2355943 t=1792176373.617938128 uid=0 exe=/var/lib/kf-windows-20261005/kf3-bins/0a746117/qemu-system-x86_64 sha256=0445f3d69d3a5d436ed89600b3dc095c681062ea8630ab5b6b5efe52f128c5a8
+  name=-name kf-fastguest
+  arms=KF_ARMS=--concurrent-fuzz,--probe-launch-dma
+  device=-device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0
+  env: KF_LOCK=/data/claude-life/fast.lock KF_ARMS=--concurrent-fuzz KAYFABE_GUEST_BAR1_MB=128 
+  env_nonkf_count=19
+QEMU pid=2356185 t=1792176379.161505318 uid=0 exe=/var/lib/kf-windows-20261005/kf3-bins/0a746117/qemu-system-x86_64 sha256=0445f3d69d3a5d436ed89600b3dc095c681062ea8630ab5b6b5efe52f128c5a8
+  name=-name kf-fastguest
+  arms=KF_ARMS=--cross-client-leak,--probe-launch-dma
+  device=-device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0
+  env: KF_LOCK=/data/claude-life/fast.lock KF_ARMS=--cross-client-leak KAYFABE_GUEST_BAR1_MB=128 
+  env_nonkf_count=19
+QEMU pid=2356462 t=1792176384.036089375 uid=0 exe=/var/lib/kf-windows-20261005/kf3-bins/0a746117/qemu-system-x86_64 sha256=0445f3d69d3a5d436ed89600b3dc095c681062ea8630ab5b6b5efe52f128c5a8
+  name=-name kf-fastguest
+  arms=KF_ARMS=--rpc-mixed-allocs,--probe-launch-dma
+  device=-device kf3-gpu,fb-mb=8192,bar1-size=134217728,bar2-size=33554432,id=kf0
+  env: KF_LOCK=/data/claude-life/fast.lock KF_ARMS=--rpc-mixed-allocs KAYFABE_GUEST_BAR1_MB=128 
+  env_nonkf_count=19
+SAMPLER_STOP 2026-10-16T20:46:28+02:00

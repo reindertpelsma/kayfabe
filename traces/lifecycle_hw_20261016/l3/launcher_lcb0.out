@@ -1,0 +1,22 @@
+INTERACTIVE_START kf3=0a746117 checkout=0a746117 2026-10-16T21:00:13+02:00
+[interactive] session: ubuntu (uid 1000) session 131372 type=wayland wayland=wayland-0 x=:0; locked=no
+[interactive] broker: pid 2388014, backend wayland, socket /run/user/1000/nvkvm/display.sock, badf2d707da4 (/opt/nvkvm-broker/nvkvm-display-broker)
+[interactive] QEMU pid 2388032, kf3 0a746117 (/data/claude-life/bench/kf3-bins/0a746117/qemu-system-x86_64)
+
+  ┌──────────────────────────────────────────────────────────────────────────────┐
+  │ kayfabe guest window: "kayfabe guest" on ubuntu's desktop
+  │   pointer      hover = absolute tablet (the guest pointer follows yours)
+  │   CTRL+ALT+G   GRAB: keyboard + pointer locked to the guest, relative mouse (GNOME asks
+  │                once whether to allow inhibiting shortcuts: click Allow);
+  │                press CTRL+ALT+G again to RELEASE (focus loss also releases)
+  │   CTRL+ALT+F   fullscreen on/off
+  │   grub menu    10 s after TianoCore; arrows, e and Enter work in the window
+  │   desktop      Cinnamon logs in by itself as 'ubuntu' (~60-90 s)
+  │   stop         Ctrl-C here, or: scripts/bench/display/interactive.sh stop  (or close the window: it asks the
+  │                guest to power down)
+  │   guest ssh    ssh -i /data/claude-life/bench/guest_key ubuntu@192.168.77.2
+  │   logs         /data/claude-life/interactive/run-20261016-210013
+  └──────────────────────────────────────────────────────────────────────────────┘
+scripts/bench/display/interactive.sh: line 341: 2388032 Killed                     "$QBIN" "${QARGS[@]}" > "$RUN/qemu.log" 2>&1
+[interactive] QEMU exited rc=137 (log /data/claude-life/interactive/run-20261016-210013/qemu.log)
+INTERACTIVE_EXIT rc=137 2026-10-16T21:03:47+02:00

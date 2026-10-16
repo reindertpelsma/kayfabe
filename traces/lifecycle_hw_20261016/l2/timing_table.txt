@@ -1,0 +1,34 @@
+arm                          A1 ms       A2 ms       A3 ms       B1 ms       B2 ms        R ms  verdicts
+timer                          420         430         430         440         430         450  PASS/PASS/PASS/PASS/PASS/PASS
+engines                        559         540         549         549         540         569  PASS/PASS/PASS/PASS/PASS/PASS
+doorbell-census                719         649         649         660         649         770  PASS/PASS/PASS/PASS/PASS/PASS
+gpu-info-sweep                 439         389         389         389         390         419  PASS/PASS/PASS/PASS/PASS/PASS
+bus-info-sweep                3599        3590        3600        3580        3600        3599  PASS/PASS/PASS/PASS/PASS/PASS
+concurrency                   3449        3369        3369        3380        3360        3380  PASS/PASS/PASS/PASS/PASS/PASS
+defer-liveness               12590       12510       12500       12500       12510       12530  PASS/PASS/PASS/PASS/PASS/PASS
+blockage-coverage              900         800         799         799         810         800  PASS/PASS/PASS/PASS/PASS/PASS
+alias-two-vas                  430         390         390         390         389         390  PASS/PASS/PASS/PASS/PASS/PASS
+alias-unmap-observe            420         400         390         399         390         399  PASS/PASS/PASS/PASS/PASS/PASS
+map-propagation                540         380         380         389         399         379  PASS/PASS/PASS/PASS/PASS/PASS
+late-map-race                  970         800         810         820         810         810  PASS/PASS/PASS/PASS/PASS/PASS
+missing-page-fault            3559        3430        3430        3430        3429        3440  PASS/PASS/PASS/PASS/PASS/PASS
+uvm-invalidate                 630         489         509         500         489         500  PASS/PASS/PASS/PASS/PASS/PASS
+uvm-mean                       910         629         629         629         630         649  PASS/PASS/PASS/PASS/PASS/PASS
+executor-vas                   389         390         400         399         400         400  PASS/PASS/PASS/PASS/PASS/PASS
+guest-ring-channel             400         400         389         400         390         390  PASS/PASS/PASS/PASS/PASS/PASS
+dictated-ring                  390         390         399         389         380         390  PASS/PASS/PASS/PASS/PASS/PASS
+dictated-ring-negative         390         380         379         390         379         390  PASS/PASS/PASS/PASS/PASS/PASS
+ce-client                      399         399         410         390         399         399  PASS/PASS/PASS/PASS/PASS/PASS
+ce-client-guest-ram          19919       20540       20240       20890       20840       20150  PASS/PASS/PASS/PASS/PASS/PASS
+guest-ram-pin                  380         399         379         379         380         390  PASS/PASS/PASS/PASS/PASS/PASS
+bar1-crossing                  390         390         380         379         390         390  PASS/PASS/PASS/PASS/PASS/PASS
+atomics-probe                  390         390         379         379         379         390  PASS/PASS/PASS/PASS/PASS/PASS
+pce-mask-probe                 389         390         379         390         370         379  PASS/PASS/PASS/PASS/PASS/PASS
+gpga-reserve-probe           10340       10290       10389       10290       10280       10180  PASS/PASS/PASS/PASS/PASS/PASS
+map-stress                     649         640         660         639         659         659  PASS/PASS/PASS/PASS/PASS/PASS
+concurrent-fuzz               1330        1440        1390        1210        1370        1370  PASS/PASS/PASS/PASS/PASS/PASS
+cross-client-leak              429         430         419         430         430         409  PASS/PASS/PASS/PASS/PASS/PASS
+rpc-mixed-allocs              1250        1240        1240        1240        1250        1250  PASS/PASS/PASS/PASS/PASS/PASS
+SUM client_ms                67568       66903       66655       67048       67121       66620
+SUM wall secs                  197         170         170         173         173         174
+pass counts: A1=30/30, A2=30/30, A3=30/30, B1=30/30, B2=30/30, R=30/30

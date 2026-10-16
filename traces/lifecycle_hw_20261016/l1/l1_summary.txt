@@ -1,0 +1,4 @@
+L1_START rev=e1e9947ccd24a9c2a53e13f24f5cd0bbcc16057c dirty=0 2026-10-16T20:35:25+02:00
+BUILD_KF3 rc=0 KF3_BUILT /var/lib/kf-windows-20261005/kf3-bins/e1e9947c/qemu-system-x86_64 rev=e1e9947c mtime=2026-10-16 20:35:42.523569190 +0200 (shared build dir /var/lib/kf-windows-20261005/qemu-build-kf3)
+CARGO_TEST rc=0 passed=1561 failed=0 ignored=3 result_lines=90
+L1_EXIT dirty_after=0 2026-10-16T20:37:22+02:00
