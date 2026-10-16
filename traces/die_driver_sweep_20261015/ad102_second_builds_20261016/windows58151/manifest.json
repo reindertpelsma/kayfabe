@@ -10,9 +10,34 @@
     "sha256": "52d5628f7dc8aee01dff2346ad074cfba3d6fff0eb862e74d81a9c06d5e154b7"
   },
   {
+    "name": "ada2build-acceptance58151-recovery-stop.log",
+    "bytes": 171,
+    "sha256": "6d5d009a6bf3c17f89e4e29145246b16699af1f7b40e3c54fc38c942891566dc"
+  },
+  {
     "name": "ada2build-acceptance58151-qga-host-xids.before.txt",
     "bytes": 1125,
     "sha256": "92e461c0250aa0c63018b363b62653f0b5d3f3177b71d43a8ee045ee140cd109"
+  },
+  {
+    "name": "ada2build-acceptance58151-recovery-process-receipt.json",
+    "bytes": 2956,
+    "sha256": "514e73b0e02fcb620ff7824e1bbb659f00bf08c02faab5036733a5362e97d656"
+  },
+  {
+    "name": "ada2build-acceptance58151-recovery-census.log",
+    "bytes": 1050,
+    "sha256": "6b1df198504b5335b1f06de763630bb893c0e764483a731785a64820c274ad44"
+  },
+  {
+    "name": "ada2build-acceptance58151-recovery-host-xids.before.txt",
+    "bytes": 2255,
+    "sha256": "ba64ef7d4f5a5709bc39a13e88a7e56cd3dc89afb6779a88411c26234ffd1489"
+  },
+  {
+    "name": "ada2build-acceptance58151-recovery-qemu.log",
+    "bytes": 470182,
+    "sha256": "f5afd70566c205ae8bfa21a17088086288986570f30d27a293ebb182d6cc1c0a"
   },
   {
     "name": "ada2build-acceptance58151-qga-stop.log",
@@ -25,9 +50,19 @@
     "sha256": "5ca70747b8bd378f507e3a8c8f3a25c0aa643dc31afd2ca329236134bc8461c0"
   },
   {
+    "name": "ada2build-acceptance58151-recovery-flags.txt",
+    "bytes": 542,
+    "sha256": "37179386529bcc788181cead1bf781703cfbd31fcfce25995db7ac3d5acffd03"
+  },
+  {
     "name": "ada2build-acceptance58151-qga-process-receipt.json",
     "bytes": 2956,
     "sha256": "a0417904930a11e326774f9af6d272773faa5f7440fc0a76325428e81844770d"
+  },
+  {
+    "name": "ada2build-acceptance58151-recovery-host-xids.after.txt",
+    "bytes": 2255,
+    "sha256": "ba64ef7d4f5a5709bc39a13e88a7e56cd3dc89afb6779a88411c26234ffd1489"
   },
   {
     "name": "ada2build-install58151-qga-flags.txt",

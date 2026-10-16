@@ -1,6 +1,26 @@
 # AD102 Windows581.51: installed; first cold census UNVERIFIED
 
-**STATUS: LIVE, 2026-10-16 23:12UTC. Installation verified; GPU acceptance UNVERIFIED; one census recovery queued.**
+**STATUS: LIVE, 2026-10-16 23:23UTC. Recovery measures Code43; new Windows build FAIL acceptance.**
+
+
+MEASURED correction23:23UTC: the bounded recovery completed its readonlycensus.
+Freshsame bound58151parent, QEMU137670, exact9d/privateSHAcc2a, P19/no traceflags,
+publicABI580.94.02. QGA23:17:33; census actualOS26100/1742, actual32.0.15.8151/
+classGSP1/Code43/DWM1/Explorer1 at23:19:53–55. Thus the driver really fails healthy-
+adapter acceptance; a reachable desktop alone is not a hardware-rendering pass.
+CUDA/D3D/420shold and screenshot remainUNRUN due this failed precondition. H-W2
+falsifier FIRED: exact public displaytables alone do not enable this build.
+No newhostXid: snapshots10→10 byte-identical. Native AD102581.51 remainsUNRUN,
+so neither unsupportedhardware nor a specific kayfabe defect is established.
+Stop after this one census-recovery boot; compare against native/VFIO581.51 before
+further wall-clearing. Earlier firstboot UNVERIFIED remains named below.
+
+Refused-controls comparison finds no new refused control/status key versus the
+passing580reference in the retained cumulative censuses; the581set is a subset.
+The580file is an excerpt and these are not orderedtraces, so this does not prove
+absence of a failing RPC/body or locate the first divergence. See
+refused_controls_comparison.json. PR31 staysDRAFT; public compiler derivation
+is CPU-verified but fullWindows8151/GSP support is not accepted.
 
 Own56302930, actualAD102/PCI2684, host595.91.07, exactsource9d6f210ba1dc6ab0edbc49ff265101091e8b08f1,
 private QEMU SHA cc2a86a6dec3ec6bed91d9cd6e1963a1deadf2d75a768e9e3dada91559e34668.

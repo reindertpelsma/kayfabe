@@ -1,5 +1,21 @@
 # Status and handoff — where kayfabe v3 stands, and how to resume
 
+## UPDATE 2026-10-16 23:23UTC — AD102 Windows581 recovery verifies Code43; Linux590 fat prep next
+
+Only own56302930ACTIVE, originaltimer00:46/hard00:51UTC2026-10-17 unchanged.
+Freshsame8151boundparent/private9d/P19/no tracing/public5809402 QEMU137670:
+QGA23:17:33, longerreadonlycensus actual8151/GSP1/Code43/DWM1Explorer1 at23:19:55.
+NewWindows581cell FAIL adapterhealth; CUDA/D3D/420holdUNRUN, H-W2 falsifierfired.
+HostXid10→10 exactunchanged. Firstcoldcensus remainsUNVERIFIED (notreclassified);
+noinstallerreplay. Native581onAD102UNRUN, nohardwarelimit/rootcauseclaim.
+Stop afterONErecovery, native/VFIO581reference needed before morewallclearing.
+PR31DRAFTbodyupdated withnegative; compiler-derivedtablesCPUverifiedbutinsufficient.
+Rootfinishqueue132509 waits safeWindowsstop thenfat590V3 lateststart23:35;
+590raw30PASS alreadyPUSHED4ff55de0d, zeroHBwarnings/161USER/30receipts.
+Brokerqueue137981 waits fatCUDAgfxcomplete/noQEMU andstarts onlybefore00:05,
+25minbound. Retireby00:35orbeforeoriginaltimer; textexport/pushaftereachcompletedlane.
+
+
 ## UPDATE 2026-10-16 23:19UTC — AD102 Linux590 raw30 PASS, Win581 recovery active
 
 Only56302930ACTIVE, originaltimer00:46/hard00:51UTC2026-10-17 unchanged.
