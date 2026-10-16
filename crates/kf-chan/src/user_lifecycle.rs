@@ -1080,7 +1080,11 @@ mod tests {
         l.teardown();
         assert_eq!(l.mode(), Mode::Dead);
         let p = l.entry(&obs(1, 0, 9, B), || 1);
-        assert_eq!(p, Plan::Stop, "a torn-down channel reads nothing and publishes nothing (review D6)");
+        assert_eq!(
+            p,
+            Plan::Stop,
+            "a torn-down channel reads nothing and publishes nothing (review D6)"
+        );
         assert_eq!(l.mode(), Mode::Dead);
         assert!(l.counts().after_teardown >= 1);
     }
@@ -1237,17 +1241,32 @@ mod tests {
         assert!(!l.marker_possible(true, 0), "a packet is open");
         l.entry(&obs(0, 0, 0, 1 << 6), || 0);
         // Pointer mode: no marker unless the cursor sits at a GP_PUT value the guest wrote
-        assert!(!l.marker_possible(false, 1), "no boundary observed at the cursor");
+        assert!(
+            !l.marker_possible(false, 1),
+            "no boundary observed at the cursor"
+        );
         assert_eq!(l.counts().pointer_carried_no_marker, 1, "loud");
         l.observe_put(1, 1, None);
         assert!(l.marker_possible(false, 1), "the cursor is at GP_PUT");
         l.observe_put(1, 5, None);
-        assert!(!l.marker_possible(false, 1), "GP_PUT is ahead: mid-submission");
-        assert!(!l.marker_possible(false, 3), "an index that was never a GP_PUT");
+        assert!(
+            !l.marker_possible(false, 1),
+            "GP_PUT is ahead: mid-submission"
+        );
+        assert!(
+            !l.marker_possible(false, 3),
+            "an index that was never a GP_PUT"
+        );
         l.observe_put(4, 5, None);
-        assert!(!l.marker_possible(false, 4), "the remembered boundary is 5, not 4");
+        assert!(
+            !l.marker_possible(false, 4),
+            "the remembered boundary is 5, not 4"
+        );
         l.observe_put(5, 9, None);
-        assert!(l.marker_possible(false, 5), "the remembered boundary was reached");
+        assert!(
+            l.marker_possible(false, 5),
+            "the remembered boundary was reached"
+        );
         l.entry(&obs(1, 0, 1, B), || 1);
         assert!(l.marker_possible(false, 5) == l.marker_possible(false, 5));
     }
@@ -1267,7 +1286,11 @@ mod tests {
         l.forwarded(1, 0x10);
         // the registration shows up at entry 2; the submission's end (6) is the anchor
         for abs in 2..6 {
-            assert_eq!(l.entry(&o(abs, 6, 1), || 1), Plan::Forward, "entry {abs} is below the anchor");
+            assert_eq!(
+                l.entry(&o(abs, 6, 1), || 1),
+                Plan::Forward,
+                "entry {abs} is below the anchor"
+            );
             l.forwarded(abs, 0x10);
             assert_eq!(l.mode(), Mode::Pointer);
         }
@@ -1292,7 +1315,10 @@ mod tests {
         l.forwarded(1, 0x10);
         assert_eq!(l.entry(&o(2, 9, 1), || 1), Plan::Forward);
         l.forwarded(2, 0x10);
-        assert!(matches!(l.entry(&o(3, 9, 1), || 1), Plan::Scan { restart: true, .. }));
+        assert!(matches!(
+            l.entry(&o(3, 9, 1), || 1),
+            Plan::Scan { restart: true, .. }
+        ));
     }
 
     #[test]
@@ -1317,18 +1343,39 @@ mod tests {
         l.observe_put(3, 3, Some(false));
         l.observe_put(3, 3, Some(false));
         l.observe_put(3, 7, Some(true));
-        assert_eq!((l.counts().put_boundaries_scan, l.counts().put_boundary_open_scan), (1, 0));
+        assert_eq!(
+            (
+                l.counts().put_boundaries_scan,
+                l.counts().put_boundary_open_scan
+            ),
+            (1, 0)
+        );
         l.observe_put(7, 7, Some(true));
-        assert_eq!((l.counts().put_boundaries_scan, l.counts().put_boundary_open_scan), (2, 1));
+        assert_eq!(
+            (
+                l.counts().put_boundaries_scan,
+                l.counts().put_boundary_open_scan
+            ),
+            (2, 1)
+        );
         // a boundary the cursor reaches after the guest moved GP_PUT on is still measured
         l.observe_put(8, 12, Some(false));
         l.observe_put(12, 12, Some(true));
-        assert_eq!((l.counts().put_boundaries_scan, l.counts().put_boundary_open_scan), (3, 2));
+        assert_eq!(
+            (
+                l.counts().put_boundaries_scan,
+                l.counts().put_boundary_open_scan
+            ),
+            (3, 2)
+        );
         l.entry(&obs(12, 0, 1, B), || 1);
         assert_eq!(l.mode(), Mode::Window);
         l.observe_put(13, 13, Some(true));
         assert_eq!(
-            (l.counts().put_boundaries_window, l.counts().put_boundary_open_window),
+            (
+                l.counts().put_boundaries_window,
+                l.counts().put_boundary_open_window
+            ),
             (1, 1)
         );
     }
@@ -1375,6 +1422,60 @@ mod tests {
         l.forwarded(1, 1);
         let b = l.take_delta();
         assert_eq!((b.to_pointer, b.entries_pointer), (0, 1));
+    }
+
+    /// I8 at the machine: a Window starts only at an anchor, and an anchor is only a `GP_PUT` value the worker has
+    /// already read (never a later one, never an invented one). Random sequences of turns, registrations coming and
+    /// going, ring laps.
+    #[test]
+    fn the_anchor_is_always_a_gp_put_value_already_read_and_a_window_never_starts_below_it() {
+        let mut x = 0x9E37_79B9_7F4A_7C15u64;
+        let mut next = move || {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            x
+        };
+        for _ in 0..300 {
+            let mut l = Lifecycle::new();
+            let (mut abs, mut max_put, mut epoch, mut live) = (0u64, 0u64, 0u64, 0u32);
+            let mut windows = 0;
+            for _ in 0..400 {
+                // the guest's GP_PUT is ahead of the cursor, sometimes by a lot
+                let put_abs = abs + 1 + next() % 6;
+                max_put = max_put.max(put_abs);
+                if next() % 9 == 0 {
+                    live = u32::from(next() % 2 == 0);
+                    epoch += 1;
+                }
+                let o = Obs {
+                    put_abs,
+                    ..obs(abs, 0x10, epoch, B)
+                };
+                let was = l.mode();
+                let plan = l.entry(&o, || live);
+                assert!(
+                    l.safe_end <= max_put,
+                    "the anchor {} was never read (max {max_put})",
+                    l.safe_end
+                );
+                if was == Mode::Pointer && l.mode() == Mode::Window {
+                    windows += 1;
+                    assert!(
+                        abs >= l.safe_end,
+                        "a Window started at {abs}, below the anchor {}",
+                        l.safe_end
+                    );
+                    assert!(matches!(plan, Plan::Scan { restart: true, .. }));
+                }
+                l.forwarded(abs, 0x10);
+                abs += 1;
+                if l.mode() == Mode::Window {
+                    l.restarted();
+                }
+            }
+            let _ = windows;
+        }
     }
 
     /// G4 / I6: nothing in the machine knows about time (OWNER_RULINGS section AE: no heuristics, no timers).

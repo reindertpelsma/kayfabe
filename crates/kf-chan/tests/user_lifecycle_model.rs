@@ -79,6 +79,8 @@ pub const V_LOST: u32 = 1 << 11;
 pub const V_ENTRY_REFUSED: u32 = 1 << 12;
 /// REVIEW: a host marker published while the HARDWARE's view of the private stream has a packet open.
 pub const V_MARKER_IN_PACKET: u32 = 1 << 13;
+/// I8: the relay read something at or beyond the `GP_PUT` it loaded in the turn (or loaded `GP_PUT` twice).
+pub const V_BEYOND_PUT: u32 = 1 << 14;
 
 pub fn viol_names(v: u32) -> Vec<&'static str> {
     let mut out = Vec::new();
@@ -116,7 +118,14 @@ pub fn viol_names(v: u32) -> Vec<&'static str> {
             "I6 (a terminal state with covered work unrelayed and no timer)",
         ),
         (V_LOST, "I2 (covered entries not all relayed)"),
-        (V_MARKER_IN_PACKET, "MARKER_IN_PACKET (a host marker lands inside an open guest packet)"),
+        (
+            V_MARKER_IN_PACKET,
+            "MARKER_IN_PACKET (a host marker lands inside an open guest packet)",
+        ),
+        (
+            V_BEYOND_PUT,
+            "I8 (a ring entry or pushbuffer at or beyond the loaded GP_PUT was read)",
+        ),
         (
             V_ENTRY_REFUSED,
             "ENTRY_REFUSED (inspect_entry refused the loaded value)",
@@ -352,6 +361,7 @@ impl Env for ModelEnv {
             Ev::Retry => self.retries += 1,
             Ev::TriggerFound => self.triggers_found += 1,
             Ev::Switched => self.switched += 1,
+            Ev::BeyondPut => self.viol |= V_BEYOND_PUT,
         }
     }
 }
@@ -541,7 +551,9 @@ impl World {
         let mode_before = self.relay.life.mode();
         let log_before = self.env.log.len();
         self.relay.step(&mut self.env);
-        if before_phase == kf_chan::user_turn::Phase::PbRead && self.relay.life.mode() == Mode::Pointer {
+        if before_phase == kf_chan::user_turn::Phase::PbRead
+            && self.relay.life.mode() == Mode::Pointer
+        {
             self.env.viol |= V_I1;
         }
         let _ = mode_before;
@@ -1055,7 +1067,11 @@ fn i4_no_entry_published_after_the_reply_is_forwarded_before_a_window_scanned_it
         let r = assert_clean(&cfg, &format!("flip-{kind:?}"));
         // every interleaving ends back in Pointer with the registration consumed; after a ring switch the new
         // ring's first entries are still scanned (D5), so one post-switch entry leaves the Window open
-        let want = if kind == Registration::Migrate { Mode::Window } else { Mode::Pointer };
+        let want = if kind == Registration::Migrate {
+            Mode::Window
+        } else {
+            Mode::Pointer
+        };
         assert_eq!(r.modes, HashSet::from([want]), "{kind:?}");
         assert!(
             r.modes_seen.contains(&Mode::Window),
@@ -1957,7 +1973,6 @@ fn d_the_recorded_edge_ring_shape_behind_unreached_sync_waits_is_not_read_early_
     assert_eq!(r.modes, HashSet::from([Mode::Window]));
 }
 
-
 // ---- PHASE 1b (independent review, 2026-10-16): the hardware's view of the private stream
 //
 // `ModelEnv::hw_scan` re-parses everything the relay publishes as ONE packet stream across entries (what the
@@ -1991,7 +2006,10 @@ fn d1_a_registration_inside_a_submission_never_puts_a_host_marker_inside_a_guest
     let mut cfg = Cfg::new(spec(d1_script(), &[0, 1, 2, 3, 4, 5]));
     cfg.kind = Registration::Other;
     let r = assert_clean(&cfg, "d1-within-submission");
-    assert!(r.to_window_fresh_max >= 1, "some interleaving flips a Pointer channel");
+    assert!(
+        r.to_window_fresh_max >= 1,
+        "some interleaving flips a Pointer channel"
+    );
 }
 
 /// The reviewer's scenario as written: the SUBMISSION itself (a `GP_PUT` value) ends inside an open packet.
@@ -2046,8 +2064,15 @@ fn d2_data_that_looks_like_the_trigger_inside_a_packet_of_one_submission_is_neve
     let mut cfg = Cfg::new(spec(script, &[0, 1, 2, 3]));
     cfg.kind = Registration::Other;
     let r = assert_clean(&cfg, "d2-false-trigger");
-    assert_eq!(r.triggers_found_max, 0, "no interleaving may find a trigger in packet data");
-    assert_eq!(r.modes, HashSet::from([Mode::Window]), "the registration is still live");
+    assert_eq!(
+        r.triggers_found_max, 0,
+        "no interleaving may find a trigger in packet data"
+    );
+    assert_eq!(
+        r.modes,
+        HashSet::from([Mode::Window]),
+        "the registration is still live"
+    );
 }
 
 #[test]
@@ -2095,7 +2120,10 @@ fn t2_a1_with_a_length0_sync_wait_never_reads_the_late_pushbuffer_early() {
     let mut cfg = Cfg::new(spec(script, &[0, 1, 2, 3]));
     cfg.kind = Registration::Other;
     let r = assert_clean(&cfg, "t2-len0-sync");
-    assert!(r.seeded_max >= 1, "the length-0 SYNC_WAIT seeds the window's gate");
+    assert!(
+        r.seeded_max >= 1,
+        "the length-0 SYNC_WAIT seeds the window's gate"
+    );
 }
 
 /// D3: a guest ring that fills (4 slots) blocks the guest until the relay writes `GP_GET` back. The write-back
@@ -2138,4 +2166,31 @@ fn d3_the_same_run_deadlocks_if_the_worker_ignores_events() {
     cfg.glue.ignore_events = true;
     cfg.max_states = 8_000_000;
     assert_found(&cfg, "d3-ignore-events", V_DEADLOCK);
+}
+
+// ---- I8: nothing at or beyond the GP_PUT loaded in the turn is read (the model flags it in EVERY scenario via
+// V_BEYOND_PUT; this one adds GP_PUT moving backwards, leaving the ring and advancing mid-turn)
+
+#[test]
+fn i8_gp_put_advancing_mid_turn_backwards_and_beyond_the_ring_never_reads_beyond_the_value_loaded()
+{
+    let script = vec![
+        Op::Push(ge(0, Kind::SetObj)),
+        Op::SetPut,
+        Op::Ring,
+        Op::Push(p(1)),
+        Op::SetPut, // advances while the worker may be anywhere in a turn
+        Op::Ring,
+        Op::PutRaw(0), // backwards
+        Op::Ring,
+        Op::PutRaw(200), // beyond the ring
+        Op::Ring,
+    ];
+    let mut s = spec(script, &[0, 1]);
+    s.hostile = true;
+    let mut cfg = Cfg::new(s);
+    cfg.max_states = 4_000_000;
+    let r = explore(&cfg);
+    println!("i8: {} states {:?}", r.states, viol_names(r.viol));
+    assert_eq!(r.viol & V_BEYOND_PUT, 0, "{:?}", r.first);
 }

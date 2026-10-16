@@ -158,7 +158,12 @@ impl Env for ThreadEnv {
             .try_update(Ordering::AcqRel, Ordering::Acquire, |v| v.checked_sub(1));
         self.sh.epoch.fetch_add(1, Ordering::AcqRel);
     }
-    fn event(&mut self, _e: Ev) {}
+    fn event(&mut self, e: Ev) {
+        if e == Ev::BeyondPut {
+            self.sh
+                .violation("I8: the relay read at or beyond the GP_PUT it loaded".into());
+        }
+    }
 }
 
 fn plain_words(id: u8) -> Vec<u32> {
@@ -379,7 +384,7 @@ fn a_hostile_writer_rewrites_ring_entries_and_gp_put_while_the_worker_runs() {
                 };
                 while !sh.stop.load(Ordering::Relaxed) {
                     let slot = (next() % u64::from(N)) as u32;
-                    match next() % 6 {
+                    match next() % 8 {
                         0 | 1 => {
                             // a valid-looking entry
                             let g = ge(1 + (next() % 100) as u8, Kind::Plain);
@@ -405,9 +410,21 @@ fn a_hostile_writer_rewrites_ring_entries_and_gp_put_while_the_worker_runs() {
                         }
                         3 => sh.write_slot(slot, ge(0, Kind::SetObj).raw()),
                         4 => sh.write_slot(slot, ge(1 + (next() % 100) as u8, Kind::Nop).raw()),
-                        _ => sh
+                        5 => sh
                             .put
                             .store((next() % u64::from(N)) as u32, Ordering::Release),
+                        6 => {
+                            // GP_PUT beyond the ring: the relay refuses it by name and never reads for it
+                            sh.put.store(N + (next() % 1000) as u32, Ordering::Release);
+                        }
+                        _ => {
+                            // valid-looking entries just ABOVE the current GP_PUT: never to be read
+                            let put = sh.put.load(Ordering::Acquire) % N;
+                            for k in 0..3 {
+                                let g = ge(1 + (next() % 100) as u8, Kind::Plain);
+                                sh.write_slot((put + k) % N, g.raw());
+                            }
+                        }
                     }
                     if next().is_multiple_of(64) {
                         // let the writer run ahead of the reader sometimes

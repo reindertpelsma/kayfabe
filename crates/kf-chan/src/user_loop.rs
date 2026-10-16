@@ -298,8 +298,14 @@ mod tests {
         assert_eq!(wait_of(Need::Idle), None);
         assert_eq!(wait_of(Need::Again), None);
         assert_eq!(wait_of(Need::Contended), Some(Wait::Contended));
-        assert_eq!(wait_of(Need::Marker { target: 3 }), Some(Wait::Marker { target: 3 }));
-        assert_eq!(wait_of(Need::Popped { target: 3 }), Some(Wait::Popped { target: 3 }));
+        assert_eq!(
+            wait_of(Need::Marker { target: 3 }),
+            Some(Wait::Marker { target: 3 })
+        );
+        assert_eq!(
+            wait_of(Need::Popped { target: 3 }),
+            Some(Wait::Popped { target: 3 })
+        );
         assert!(Wait::Popped { target: 1 }.carried());
         assert!(!Wait::Marker { target: 1 }.carried());
     }
@@ -309,10 +315,16 @@ mod tests {
     #[test]
     fn a_pointer_mode_backstop_wake_is_loud_only_beyond_about_one_a_second() {
         assert!(!loud_rate(None, 10));
-        assert!(!loud_rate(Some(0), 1000), "exactly a second apart is not loud");
+        assert!(
+            !loud_rate(Some(0), 1000),
+            "exactly a second apart is not loud"
+        );
         assert!(loud_rate(Some(0), 999));
         assert!(loud_rate(Some(500), 500), "two in the same millisecond");
-        assert!(loud_rate(Some(5_000), 100), "a clock that went backwards saturates (loud), never panics");
+        assert!(
+            loud_rate(Some(5_000), 100),
+            "a clock that went backwards saturates (loud), never panics"
+        );
     }
 
     #[test]

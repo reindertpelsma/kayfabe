@@ -821,7 +821,12 @@ mod tests {
             .unwrap();
         // the guest STOREs a mask for this sub-device at setup, SETs it active, and opens a packet (all scanned)
         s.segment(
-            &[0x20000 | (1 << 4), 0x10000 | (1 << 4), h(1, 0x1b0, 3).unwrap(), 7],
+            &[
+                0x20000 | (1 << 4),
+                0x10000 | (1 << 4),
+                h(1, 0x1b0, 3).unwrap(),
+                7,
+            ],
             |v| v == 0x5080,
         )
         .unwrap();

@@ -82,6 +82,8 @@ pub struct Out {
     pub dead: bool,
     pub refused_scan: u32,
     pub unscanned_while_live: u32,
+    /// I8: reads at or beyond the `GP_PUT` loaded in the turn.
+    pub beyond_put: u32,
     /// Indices (into `forwarded`) of the entries counted by `unscanned_while_live`.
     pub unscanned_at: Vec<usize>,
     pub torn: u32,
@@ -120,6 +122,10 @@ pub struct Sim {
     in_post: bool,
     /// The guest publishes at most this many entries per `feed` (its `GP_PUT` then lands wherever that is).
     pub chunk: usize,
+    /// Hostile: after every `feed`, valid-looking POISON entries sit in the slots just above `GP_PUT`.
+    pub poison_above_put: bool,
+    /// The channel's software object was freed.
+    pub gone: bool,
     /// Words by raw entry value (the corpus replay); consulted before `defs`.
     pub custom: HashMap<u64, Vec<u32>>,
 }
@@ -156,6 +162,8 @@ impl Sim {
             post_credit: 0,
             in_post: false,
             chunk: usize::MAX,
+            poison_above_put: false,
+            gone: false,
             custom: HashMap::new(),
         }
     }
@@ -192,6 +200,14 @@ impl Sim {
             }
         }
         self.put[r] = self.put_local[r];
+        if self.poison_above_put {
+            // only FREE slots (not yet published by the guest, already consumed by the relay's write-back)
+            let free = (self.guest_get[r] + self.entries - self.put_local[r] - 1) % self.entries;
+            for k in 0..3u32.min(free) {
+                let slot = (self.put_local[r] + k) % self.entries;
+                self.rings[r].insert(slot, ge(251, Kind::Plain).raw());
+            }
+        }
     }
 
     fn apply_sched(&mut self, forwarded: u64) {
@@ -217,6 +233,9 @@ impl Sim {
 impl Env for Sim {
     fn src_entries(&self) -> u32 {
         self.entries
+    }
+    fn software_gone(&self) -> bool {
+        self.gone
     }
     fn gp_put(&mut self) -> u32 {
         self.put[self.src]
@@ -322,6 +341,7 @@ impl Env for Sim {
             }
             Ev::EntryRefused | Ev::PutBound => self.out.dead = true,
             Ev::TriggerFound => self.out.triggers_found += 1,
+            Ev::BeyondPut => self.out.beyond_put += 1,
             _ => {}
         }
     }
@@ -1355,4 +1375,160 @@ fn corpus_p2_is_contradicted_by_the_recorded_segments_that_end_inside_an_open_pa
         open >= 40,
         "P2 is contradicted by the recorded streams: {open} of {segments}"
     );
+}
+
+// ------------------------------------------------------------------------------------------------
+// I8: nothing at or beyond the GP_PUT loaded in the turn is read
+
+#[test]
+fn i8_entries_just_above_gp_put_are_never_read_or_forwarded_and_gp_put_is_loaded_once_per_turn() {
+    let mut rng = Rng::new(0x18);
+    for seed in 0..40u64 {
+        let mut r = Rng::new(seed + 5000);
+        let n = 20 + r.below(60) as usize;
+        let stream = gen_stream(&mut rng, n, true, false);
+        for chunk in [1usize, 2, 5, usize::MAX] {
+            let mut sim = Sim::new(32, 8, &stream, vec![]);
+            sim.chunk = chunk;
+            sim.poison_above_put = true;
+            let mut relay = new_relay(8, false);
+            drive(&mut sim, &mut relay, 100_000);
+            assert!(!relay.dead, "seed {seed} chunk {chunk}");
+            assert_eq!(sim.out.beyond_put, 0, "seed {seed} chunk {chunk}: I8");
+            let poison = ge(251, Kind::Plain).raw();
+            assert!(
+                !sim.out.forwarded.contains(&poison),
+                "seed {seed} chunk {chunk}: a poisoned slot above GP_PUT was forwarded"
+            );
+            let expect: Vec<u64> = stream.iter().map(Ge::raw).collect();
+            assert_eq!(sim.out.forwarded, expect, "seed {seed} chunk {chunk}");
+        }
+    }
+}
+
+#[test]
+fn i8_a_gp_put_that_moves_backwards_or_leaves_the_ring_reads_nothing_beyond_the_value_loaded() {
+    let stream: Vec<Ge> = std::iter::once(ge(0, Kind::SetObj))
+        .chain((1..10).map(|i| ge(i, Kind::Plain)))
+        .collect();
+    for hostile_put in [0u32, 1, 3, 31, 32, 33, 1000, u32::MAX] {
+        let mut sim = Sim::new(32, 8, &stream, vec![]);
+        let mut relay = new_relay(8, false);
+        drive(&mut sim, &mut relay, 1000);
+        // now the guest moves GP_PUT to a hostile value and rings
+        sim.put[sim.src] = hostile_put;
+        for _ in 0..8 {
+            relay.claim();
+            let mut steps = 0;
+            while !relay.idle() {
+                sim.mode_hint = relay.life.mode();
+                relay.step(&mut sim);
+                steps += 1;
+                assert!(steps < 64);
+            }
+            if relay.dead {
+                break;
+            }
+        }
+        assert_eq!(sim.out.beyond_put, 0, "put={hostile_put}: I8");
+        if hostile_put >= 32 {
+            assert!(
+                relay.dead,
+                "put={hostile_put}: refused by name (USER_RING_PUT_BOUND)"
+            );
+        }
+    }
+}
+
+// ------------------------------------------------------------------------------------------------
+// D6: a torn-down channel and a freed software object
+
+#[test]
+fn d6_a_torn_down_machine_reads_nothing_and_publishes_nothing() {
+    let stream: Vec<Ge> = std::iter::once(ge(0, Kind::SetObj))
+        .chain((1..20).map(|i| ge(i, Kind::Plain)))
+        .collect();
+    let mut sim = Sim::new(64, 8, &stream[..6], vec![]);
+    let mut relay = new_relay(8, false);
+    drive(&mut sim, &mut relay, 1000);
+    assert_eq!(sim.out.forwarded.len(), 6);
+    relay.life.teardown();
+    let (reads, fwd) = (sim.out.pb_reads, sim.out.forwarded.len());
+    for g in &stream[6..] {
+        sim.pending[0].push_back((g.raw(), false));
+        sim.defs.insert(g.id, *g);
+    }
+    drive(&mut sim, &mut relay, 1000);
+    assert_eq!(
+        sim.out.forwarded.len(),
+        fwd,
+        "nothing published after teardown"
+    );
+    assert_eq!(sim.out.pb_reads, reads, "nothing read after teardown");
+    assert!(relay.life.counts().after_teardown >= 1);
+}
+
+#[test]
+fn d6_pointer_mode_refuses_a_freed_software_object_like_the_scan_path_and_counts_it() {
+    let stream: Vec<Ge> = std::iter::once(ge(0, Kind::SetObj))
+        .chain((1..20).map(|i| ge(i, Kind::Plain)))
+        .collect();
+    let mut sim = Sim::new(64, 8, &stream[..5], vec![]);
+    let mut relay = new_relay(8, false);
+    drive(&mut sim, &mut relay, 1000);
+    assert_eq!(relay.life.mode(), Mode::Pointer);
+    sim.gone = true;
+    for g in &stream[5..] {
+        sim.pending[0].push_back((g.raw(), false));
+        sim.defs.insert(g.id, *g);
+    }
+    drive(&mut sim, &mut relay, 1000);
+    assert!(
+        relay.dead,
+        "refused by name (USER_RING_SOFTWARE_OBJECT_GONE)"
+    );
+    assert_eq!(relay.life.counts().pointer_software_gone, 1);
+    assert_eq!(
+        sim.out.forwarded.len(),
+        5,
+        "nothing forwarded for a freed object"
+    );
+}
+
+// ------------------------------------------------------------------------------------------------
+// D4: the sub-device mask state survives the Pointer stretch
+
+#[test]
+fn d4_a_stored_sub_device_mask_is_still_stored_when_a_window_scans_its_use() {
+    // STORE at setup (scanned, before the binding that starts Pointer mode), a Pointer stretch, a registration, then a USE (header-only control) and the
+    // trigger: a scan restarted with the mask state at its birth value refuses the USE ("nothing stored") and the
+    // channel is lost.
+    let stream = vec![
+        ge(1, Kind::MaskStore),
+        ge(0, Kind::SetObj),
+        ge(2, Kind::Plain),
+        ge(3, Kind::Plain),
+        ge(4, Kind::Plain),
+        ge(5, Kind::MaskUse).post(),
+        ge(190, Kind::Trig { migrate: false }).post(),
+        ge(6, Kind::Plain),
+    ];
+    let sched = [Sched::Register {
+        at: 5,
+        migrate: false,
+    }];
+    for always in [true, false] {
+        let (out, relay) = run_stream(&stream, &sched, always, 32, 8);
+        assert!(!out.dead, "always_scan={always}: the channel was lost");
+        assert_eq!(
+            out.staged,
+            vec![6],
+            "always_scan={always}: the trigger was staged"
+        );
+        assert_eq!(out.forwarded.len(), stream.len(), "always_scan={always}");
+        assert_eq!(
+            relay.life.mode(),
+            if always { Mode::Scan } else { Mode::Pointer }
+        );
+    }
 }

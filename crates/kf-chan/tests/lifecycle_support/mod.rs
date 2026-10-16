@@ -86,6 +86,10 @@ pub enum Kind {
     FalseTail,
     /// The remaining arguments of an `OpenHead`, but words that do not decode as a header.
     OpenTailBad,
+    /// `[STORE_SUBDEVICE_MASK 0x001]`: a header-only control for sub-device 1.
+    MaskStore,
+    /// `[USE_SUBDEVICE_MASK]`: refused by a scan that has nothing stored.
+    MaskUse,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -151,6 +155,8 @@ impl Ge {
             Kind::FalseHead => vec![h(0, 0x100, 3)],
             Kind::FalseTail => vec![h(6, 0x200, 1), HANDLE, 7],
             Kind::OpenTailBad => vec![POISON, 0x33],
+            Kind::MaskStore => vec![0x20000 | (1 << 4)],
+            Kind::MaskUse => vec![0x30000],
         }
     }
     /// The 8-byte GP entry for this entry (a real C56F entry; the pushbuffer VA names the id).
@@ -215,6 +221,9 @@ pub enum Ev {
     TriggerFound,
     /// The source was switched.
     Switched,
+    /// I8: the relay read a ring entry (or the pushbuffer of an entry) it had no right to read: an index at or
+    /// beyond the `GP_PUT` it loaded in this turn, a second `GP_PUT` load, or a pushbuffer of an entry it did not load.
+    BeyondPut,
 }
 
 pub trait Env {
@@ -235,6 +244,10 @@ pub trait Env {
     /// The trigger's action ran: the registration is consumed (implicit delete); `migrate` = switch source.
     fn executed(&mut self, migrate: bool);
     fn event(&mut self, e: Ev);
+    /// The software object the relay holds was freed (default: never).
+    fn software_gone(&self) -> bool {
+        false
+    }
 }
 
 /// Harness knobs (the production code has no test switches; code mutants are source patches applied by
@@ -284,6 +297,17 @@ struct EnvIo<'a, E: Env> {
     env: &'a mut E,
     out: &'a mut StageOut,
     validated: &'a mut u64,
+    /// I8 bookkeeping of the turn: the cursor, the `GP_PUT` loaded (once), the entry loaded.
+    cursor: u32,
+    turn: &'a mut TurnIo,
+}
+
+/// What the stub ring / store remembers of the current turn (invariant I8).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct TurnIo {
+    put: Option<u32>,
+    lo: Option<u32>,
+    loaded: Option<u64>,
 }
 
 impl<E: Env> Io for EnvIo<'_, E> {
@@ -303,10 +327,31 @@ impl<E: Env> Io for EnvIo<'_, E> {
         kf_chan::user_storage::MAX_SOURCE_BYTES
     }
     fn gp_put(&mut self) -> Turn<Option<u32>> {
-        Ok(Some(self.env.gp_put()))
+        if self.turn.put.is_some() {
+            self.env.event(Ev::BeyondPut); // GP_PUT is loaded ONCE per turn
+        }
+        let put = self.env.gp_put();
+        self.turn.put = Some(put);
+        Ok(Some(put))
     }
     fn load_dword(&mut self, slot: u32, hi: bool) -> Turn<u32> {
-        Ok(self.env.gp_dword(slot, hi))
+        // I8: only the slot at the cursor, and only while the loaded GP_PUT is ahead of it
+        let n = self.env.src_entries();
+        let ahead = self
+            .turn
+            .put
+            .map(|p| p.wrapping_sub(slot) & (n - 1))
+            .unwrap_or(0);
+        if slot != self.cursor || ahead == 0 {
+            self.env.event(Ev::BeyondPut);
+        }
+        let v = self.env.gp_dword(slot, hi);
+        if hi {
+            self.turn.loaded = self.turn.lo.map(|lo| (u64::from(v) << 32) | u64::from(lo));
+        } else {
+            self.turn.lo = Some(v);
+        }
+        Ok(v)
     }
     fn registry_epoch(&mut self) -> u64 {
         self.env.registry_epoch()
@@ -317,13 +362,16 @@ impl<E: Env> Io for EnvIo<'_, E> {
     fn software(&mut self, _refresh: bool) -> Turn<SwView> {
         Ok(SwView {
             have: true,
-            gone: false,
+            gone: self.env.software_gone(),
         })
     }
     fn sw_matches(&self, value: u32) -> bool {
         sw(value)
     }
     fn read_pb(&mut self, entry: u64, _seg: &GpSegment) -> Turn<(Vec<u32>, bool)> {
+        if self.turn.loaded != Some(entry) {
+            self.env.event(Ev::BeyondPut); // a pushbuffer only for the entry loaded in this turn
+        }
         Ok((self.env.read_pb(entry), false))
     }
     fn stage(&mut self, scan: &Scan, words: &[u32]) -> Turn<Staged> {
@@ -392,6 +440,7 @@ pub struct Relay {
     staged: Option<Staged2>,
     out: StageOut,
     validated: u64,
+    turn_io: TurnIo,
     pub cursor_after_switch: Cursor,
 }
 
@@ -415,6 +464,7 @@ impl Relay {
             staged: None,
             out: StageOut::default(),
             validated: 0,
+            turn_io: TurnIo::default(),
             cursor_after_switch: Cursor::Zero,
         }
     }
@@ -428,7 +478,7 @@ impl Relay {
             self.staged.as_ref().map(|s| (s.witness, s.migrate)),
             self.out.next_scan,
             self.out.trigger
-        )
+        ) + &format!("|{:?}", self.turn_io)
     }
 
     pub fn idle(&self) -> bool {
@@ -465,6 +515,7 @@ impl Relay {
     pub fn claim(&mut self) {
         debug_assert!(self.idle());
         self.core.segment_pending = self.staged.is_some();
+        self.turn_io = TurnIo::default();
         self.core.claim();
     }
 
@@ -472,11 +523,15 @@ impl Relay {
         env: &'a mut E,
         out: &'a mut StageOut,
         validated: &'a mut u64,
+        cursor: u32,
+        turn: &'a mut TurnIo,
     ) -> EnvIo<'a, E> {
         EnvIo {
             env,
             out,
             validated,
+            cursor,
+            turn,
         }
     }
 
@@ -485,7 +540,13 @@ impl Relay {
         match self.sub {
             Sub::Core => {
                 let r = {
-                    let mut io = Self::io(env, &mut self.out, &mut self.validated);
+                    let mut io = Self::io(
+                        env,
+                        &mut self.out,
+                        &mut self.validated,
+                        self.core.cursor,
+                        &mut self.turn_io,
+                    );
                     self.core.step(&mut io)
                 };
                 match r {
@@ -513,7 +574,13 @@ impl Relay {
             }
             Sub::PubScan => {
                 if self.core.fetch.available() < 2 {
-                    let mut io = Self::io(env, &mut self.out, &mut self.validated);
+                    let mut io = Self::io(
+                        env,
+                        &mut self.out,
+                        &mut self.validated,
+                        self.core.cursor,
+                        &mut self.turn_io,
+                    );
                     let _ = self.core.credit_need(&mut io);
                     self.sub = Sub::Core;
                     return;
@@ -542,7 +609,13 @@ impl Relay {
             Sub::Stage => {
                 // barrier (carrying the entry's source receipt) + marker; the trigger neutralised
                 if self.core.fetch.available() < 2 {
-                    let mut io = Self::io(env, &mut self.out, &mut self.validated);
+                    let mut io = Self::io(
+                        env,
+                        &mut self.out,
+                        &mut self.validated,
+                        self.core.cursor,
+                        &mut self.turn_io,
+                    );
                     let _ = self.core.credit_need(&mut io);
                     self.sub = Sub::Core;
                     return;
