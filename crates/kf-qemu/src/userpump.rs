@@ -452,6 +452,7 @@ pub(super) struct Pump {
     /// SCRATCH d3d11-gap: when the current private-ring credit wait began; guest ring backlog (entries ahead of the cursor) at the last turn.
     cw_at: Option<std::time::Instant>,
     turn_no: u64,
+    cached_put: Option<(u64, u32)>,
     prev_waiting: bool,
     backlog: u32,
     lc_sw_guest: Option<u32>,
@@ -533,6 +534,7 @@ impl Pump {
             lc_bound: false,
             cw_at: None,
             turn_no: 0,
+            cached_put: None,
             prev_waiting: true,
             backlog: 0,
             lc_sw_guest: None,
@@ -1448,23 +1450,35 @@ impl Pump {
             }
             // Doorbells counted BEFORE the PUT read (measurement only today).
             let doorbells = me.queued(r.idx);
-            let mut put = [0u8; 4];
-            r.userd
-                .read(
-                    me,
-                    r.key,
-                    &r.allocation,
-                    kf_abi::submit::USERD_GP_PUT,
-                    &mut put,
-                )
-                .map_err(|e| match e {
-                    // The USERD's allocation is no longer the channel's current one: the guest's
-                    // free is retiring this relay (`retire_user_ring_token` cancels the record next).
-                    // Not a refusal -- nothing was read or published; the look-again budget bounds it.
-                    kf_rm::memory_list::AccessError::Gone => Failure::Retry,
-                    e => access_error(e, "USER_RING_PUT_READ"),
-                })?;
-            let put = u32::from_le_bytes(put);
+            // SCRATCH d3d11-gap (HG5 causality test): with KF3_LAZY_OBSERVE > 1 the guest's GP_PUT is re-read only when the cursor has reached the last PUT read
+            // (entries up to a PUT already read stay valid: the guest only moves PUT forward within one generation).
+            let cached = if lazy_observe() > 1 {
+                self.cached_put.filter(|&(g, p)| g == self.generation && p != self.cursor).map(|(_, p)| p)
+            } else {
+                None
+            };
+            let put = if let Some(p) = cached {
+                p
+            } else {
+                let mut put = [0u8; 4];
+                r.userd
+                    .read(
+                        me,
+                        r.key,
+                        &r.allocation,
+                        kf_abi::submit::USERD_GP_PUT,
+                        &mut put,
+                    )
+                    .map_err(|e| match e {
+                        // The USERD's allocation is no longer the channel's current one: the guest's
+                        // free is retiring this relay (`retire_user_ring_token` cancels the record next).
+                        // Not a refusal -- nothing was read or published; the look-again budget bounds it.
+                        kf_rm::memory_list::AccessError::Gone => Failure::Retry,
+                        e => access_error(e, "USER_RING_PUT_READ"),
+                    })?;
+                u32::from_le_bytes(put)
+            };
+            self.cached_put = Some((self.generation, put));
             if put >= r.source.1 {
                 return Err("USER_RING_PUT_BOUND".into());
             }
