@@ -77,3 +77,17 @@ first PTIMER-selector candidate failed180s too. Corrected fn72-offset candidate
 304ca9adb running. ActualPCI2f04 matches public580.88INF. Windows suites UNRUN.
 
 Final56246613: provider153389 went offline during native Linux restoration after Ubuntu22 was identified and provisioning PID1400 launched. SSH NoRoute/actual_status offline persisted; no kayfabe Windows guest started. All completed evidence was pushed before reimage. Destroy/absence verified14:42:21UTC; owned timer canceled only after absence/ownership check. No own rental remains. Native Windows580 legacy hold/GSP short suite pass, Linux595raw30 pass; GB205Windowsguest UNRUN due provider loss. Exclude machine153389 from the next search.
+
+## Ada passing display reference and missing lanes, 2026-10-16 15:05UTC
+
+| Instance | GPU | USD/hour incl150GB | StartUTC | StopUTC | Purpose | Ceiling |
+|---|---|---:|---|---|---|---|
+|56261059|RTX4090, exactdie pending unprivilegedRM|0.5083333333|2026-10-16T15:05:43.770452+00:00|ACTIVE; timer2383207 at18:00:44/hard18:05:43|A1Linux595broker/A2Windows580hold and Ada passing display-subtree reference for Blackwell|max3h1.53USD; campaign ceiling6.38USD+transfers|
+
+Prior own56246613 absence verified14:42:21 before creation. Single-GPU
+unverified offer56242118/machine154064 advertises24CPU/48263MiBRAM/719GBdisk;
+actualKVM/disk/die remainUNRUN until bootstrap passes. No rentable5060/5070KVM
+consumer offer in narrow and wide/default/no-default searches; do not widen to
+P100/RTX6000D. Earlier provider153389 is excluded. Own startup deadline15min;
+original timer stays. Native Windows reference already exists per AD102; do not
+repeat green native installs. Validate native Linux on this box before guest work.

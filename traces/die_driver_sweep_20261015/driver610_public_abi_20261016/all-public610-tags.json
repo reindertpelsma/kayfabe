@@ -1,0 +1,26 @@
+[
+  {
+    "linux_tag": "610.43.02",
+    "linux_cl": 38015486,
+    "linux_branch": "rel/gpu_drv/r610/r610_45-162",
+    "win_name": "610.46",
+    "win_cl": 38014964,
+    "win_branch": "r610_45-1"
+  },
+  {
+    "linux_tag": "610.43.03",
+    "linux_cl": 38429115,
+    "linux_branch": "rel/gpu_drv/r610/r610_45-163",
+    "win_name": "610.62",
+    "win_cl": 38273252,
+    "win_branch": "r610_45-6"
+  },
+  {
+    "linux_tag": "610.57.04",
+    "linux_cl": 38610010,
+    "linux_branch": "rel/gpu_drv/r610/r610_85-4",
+    "win_name": "610.88",
+    "win_cl": 38566155,
+    "win_branch": "r610_85-151"
+  }
+]
