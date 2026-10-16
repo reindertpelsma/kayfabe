@@ -1406,6 +1406,9 @@ impl Pump {
             || self.fetch.available() < 64
             || self.segment.is_some();
         if must {
+            if crate::lifecycle::on() {
+                crate::lifecycle::OBSERVES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            }
             let (get, reference) = {
                 let storage = r
                     .lease
@@ -1431,7 +1434,12 @@ impl Pump {
                     kf_abi::submit::USERD_GP_GET,
                     &get.to_le_bytes(),
                 ) {
-                    Ok(()) => self.guest_get = None,
+                    Ok(()) => {
+                        self.guest_get = None;
+                        if crate::lifecycle::on() {
+                            crate::lifecycle::GET_WRITES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        }
+                    }
                     Err(kf_rm::memory_list::AccessError::Busy) => {
                         // an admission lock is busy: look again (spin, then the safety net)
                         self.need = Need::Contended;
@@ -1460,6 +1468,9 @@ impl Pump {
             let put = if let Some(p) = cached {
                 p
             } else {
+                if crate::lifecycle::on() {
+                    crate::lifecycle::PUT_READS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                }
                 let mut put = [0u8; 4];
                 r.userd
                     .read(

@@ -222,6 +222,10 @@ static CW_SUM_US: AtomicU64 = AtomicU64::new(0);
 static CW_MAX_US: AtomicU64 = AtomicU64::new(0);
 static PUBLISHES: AtomicU64 = AtomicU64::new(0);
 static STARVE: AtomicU64 = AtomicU64::new(0);
+/// SCRATCH: per-turn host I/O the relay does: private-USERD observations (2 BAR1/store-view loads each), guest GP_PUT reads, guest GP_GET write-backs.
+pub(crate) static OBSERVES: AtomicU64 = AtomicU64::new(0);
+pub(crate) static PUT_READS: AtomicU64 = AtomicU64::new(0);
+pub(crate) static GET_WRITES: AtomicU64 = AtomicU64::new(0);
 pub(crate) fn note_credit_wait(d: std::time::Duration) {
     let us = u64::try_from(d.as_micros()).unwrap_or(u64::MAX);
     let b = (64 - us.max(1).leading_zeros() as usize - 1).min(23);
@@ -238,11 +242,15 @@ pub(crate) fn note_publish(starved: bool) {
 pub(crate) fn credit_line() -> String {
     let h: Vec<u64> = CW_HIST.iter().map(|a| a.load(Relaxed)).collect();
     format!(
-        "credit_wait_us_log2={h:?} credit_wait_sum_us={} credit_wait_max_us={} publishes={} publishes_ring_empty_guest_ahead={}",
+        "credit_wait_us_log2={h:?} credit_wait_sum_us={} credit_wait_max_us={} publishes={} publishes_ring_empty_guest_ahead={} observes={} bar1_store_loads={} put_reads={} get_writes={}",
         CW_SUM_US.load(Relaxed),
         CW_MAX_US.load(Relaxed),
         PUBLISHES.load(Relaxed),
-        STARVE.load(Relaxed)
+        STARVE.load(Relaxed),
+        OBSERVES.load(Relaxed),
+        OBSERVES.load(Relaxed) * 2,
+        PUT_READS.load(Relaxed),
+        GET_WRITES.load(Relaxed)
     )
 }
 /// A doorbell write seen by the drainer / vCPU path (`translated` = a worker-served token).
