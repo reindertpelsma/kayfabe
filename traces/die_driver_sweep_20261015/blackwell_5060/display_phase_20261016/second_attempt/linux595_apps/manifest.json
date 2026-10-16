@@ -1,0 +1,140 @@
+[
+  {
+    "name": "guest-cuda-guest.log",
+    "path": "/root/gb206phase-cmc595-validation/cuda-guest.log",
+    "bytes": 14405,
+    "sha256": "34a9e227630f89d20910405b9855a9c894bb12313041f043efbde59c59c7f901"
+  },
+  {
+    "name": "guest-serial.log",
+    "path": "/root/gb206phase-cmc595-validation/serial.log",
+    "bytes": 70340,
+    "sha256": "68efaa9f7606c1df53ccce98874db97b3f6905f3d8f04b5b5c6d4825847c8cec"
+  },
+  {
+    "name": "guest-gfx-guest.log",
+    "path": "/root/gb206phase-cmc595-validation/gfx-guest.log",
+    "bytes": 5285,
+    "sha256": "d17d850115565cbecbf289bd390ab594de08ae2e32c9386a4b236a6b71cbe45d"
+  },
+  {
+    "name": "guest-qemu.log",
+    "path": "/root/gb206phase-cmc595-validation/qemu.log",
+    "bytes": 956067,
+    "sha256": "43fb0fc697902e9d1002fbd75b883ed6f6e0fc9887530dc0cbf280eb56343259"
+  },
+  {
+    "name": "guest-native-cuda.log",
+    "path": "/root/gb206phase-cmc595-validation/native-cuda.log",
+    "bytes": 2376,
+    "sha256": "9907b324d41a004e389ef50c5a97967ddeb8b3a57d87ece5be367e4d15a425bb"
+  },
+  {
+    "name": "guest-guest-after.log",
+    "path": "/root/gb206phase-cmc595-validation/guest-after.log",
+    "bytes": 10,
+    "sha256": "49741c0c35f7bcaa6796594b11893c82eb4a1e851e32e7722c883294010e6454"
+  },
+  {
+    "name": "guest-owned-receipt.json",
+    "path": "/root/gb206phase-cmc595-validation/owned-receipt.json",
+    "bytes": 246,
+    "sha256": "43f252746e4eaedc274cb96288719b4659d2040dd4a8b5b72ff5eb8a7ee0afd3"
+  },
+  {
+    "name": "guest-actual-process-receipt.json",
+    "path": "/root/gb206phase-cmc595-validation/actual-process-receipt.json",
+    "bytes": 1236,
+    "sha256": "d4d8da3714cda5fb77ec6346e8122982b8f97309d1151de92dfa8da916ad9619"
+  },
+  {
+    "name": "gb206phase_cmc_gfx_host_prepare.log",
+    "path": "/root/prov/gb206phase_cmc_gfx_host_prepare.log",
+    "bytes": 182,
+    "sha256": "314373842fdcde6b37128c3c7ce5b1a5183b0592fa123f28dafff2f6e83f434c"
+  },
+  {
+    "name": "gb206phase_cmc_native_gfx.log",
+    "path": "/root/prov/gb206phase_cmc_native_gfx.log",
+    "bytes": 5670,
+    "sha256": "bc0800e191addc63238916b0fb2585b70f52081457368717bea42a6db4624940"
+  },
+  {
+    "name": "gb206phase_cmc_gfx_guest_prepare.log",
+    "path": "/root/prov/gb206phase_cmc_gfx_guest_prepare.log",
+    "bytes": 1357,
+    "sha256": "5af412cf4839fcf7a39f854d12b0b625e21093e15d151f806f6f197cc2efa704"
+  },
+  {
+    "name": "gb206phase_cmc_headless595.log",
+    "path": "/root/prov/gb206phase_cmc_headless595.log",
+    "bytes": 228,
+    "sha256": "d9d9f5cec0647b0ead4e5623ed4a4b670bcf4753d5ff01ff1b28eebe2816d20d"
+  },
+  {
+    "name": "gb206phase_cmc_after_headless_xids.log",
+    "path": "/root/prov/gb206phase_cmc_after_headless_xids.log",
+    "bytes": 2255,
+    "sha256": "72e1b16258fda5b6cd00c7d9015ddd905cbd37424c813334787ddfe79c729ee4"
+  },
+  {
+    "name": "gb206phase_cmc_before_headless_xids.log",
+    "path": "/root/prov/gb206phase_cmc_before_headless_xids.log",
+    "bytes": 2255,
+    "sha256": "72e1b16258fda5b6cd00c7d9015ddd905cbd37424c813334787ddfe79c729ee4"
+  },
+  {
+    "name": "gb206phase_cmc_fat595.log",
+    "path": "/root/prov/gb206phase_cmc_fat595.log",
+    "bytes": 236,
+    "sha256": "32265bd3bd821616b7747539272a7333464e61af374f7785add88bde6d023403"
+  },
+  {
+    "name": "gb206phase_cmc_fat_stage.log",
+    "path": "/root/prov/gb206phase_cmc_fat_stage.log",
+    "bytes": 907,
+    "sha256": "d5a1dcc763a024bd2489ce66fd4d360e9f8e11f38fdf20551039e3a577f6d84c"
+  },
+  {
+    "name": "cl_codex_gb206phase_cmc_native595_host.out",
+    "path": "/workspace/bench/cl_codex_gb206phase_cmc_native595_host.out",
+    "bytes": 1723,
+    "sha256": "b28567e712c9afd5387a92ec821bf1d9c9f751fc89fecdff1873006772e370d0"
+  },
+  {
+    "name": "guest-595.91.07.qcow2.STAGED",
+    "path": "/workspace/bench/guest-595.91.07.qcow2.STAGED",
+    "bytes": 130,
+    "sha256": "97e4cc5e824adc18091d3c1fef118575909d79f0412b40fe3229d1a303c650c0"
+  },
+  {
+    "name": "gfx_lane.receipt",
+    "path": "/workspace/bench/gfx_lane.receipt",
+    "bytes": 495,
+    "sha256": "7fa04d2a3d09b5a931321f4b7a5d62d1aa3600b2877c7155c83ab041af2a9d6b"
+  },
+  {
+    "name": "cl_codex_gb206phase_cmc_native595_host_cup8bench_1.log",
+    "path": "/workspace/bench/cl_codex_gb206phase_cmc_native595_host_cup8bench_1.log",
+    "bytes": 12079,
+    "sha256": "5705fb2dcbf407254f6a4932b18f1d33e50398f4a87e1921ee7a18b74d982129"
+  },
+  {
+    "name": "cl_codex_gb206phase_cmc_native595_host_cup8_1.log",
+    "path": "/workspace/bench/cl_codex_gb206phase_cmc_native595_host_cup8_1.log",
+    "bytes": 805,
+    "sha256": "88112d931a88ad2744836adba426bba4fbab763eb0f5f29647a09a0b1c983726"
+  },
+  {
+    "name": "cl_codex_gb206phase_cmc_native595_host_cup3_1.log",
+    "path": "/workspace/bench/cl_codex_gb206phase_cmc_native595_host_cup3_1.log",
+    "bytes": 547,
+    "sha256": "c2bf36cf8eb69f381425d58f3c4bf87e5e4a266b125d6a6b1f0a169c93bc21f6"
+  },
+  {
+    "name": "cl_codex_gb206phase_cmc_native595_host_cup2_1.log",
+    "path": "/workspace/bench/cl_codex_gb206phase_cmc_native595_host_cup2_1.log",
+    "bytes": 545,
+    "sha256": "e9e9dab6553c62c8b653b00b3321de9960a5532659b5a4085a2207bde921f523"
+  }
+]
