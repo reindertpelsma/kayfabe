@@ -275,8 +275,8 @@ after every run). Each runs the whole GPU-free lifecycle suite (`--lib` and the 
 
 Result (baseline green; **27 mutants, every one caught by at least two tests**; counts include the new unit tests of `tests/user_turn_unit.rs`; the rows
 `core_ignore_seed`, `core_no_gate_reset`, `core_double_fetch`, `core_bound_without_datum`, `core_pointer_gone_unchecked`, `core_carried_gate_removed`,
-`core_no_fresh_resume` and `machine_pointer_markers_anywhere` are from the second pass after those tests were added; an earlier pass had caught the last five
-of them by ONE test each and `core_no_fresh_resume` by none, which is why the tests exist):
+`core_no_fresh_resume` and `machine_pointer_markers_anywhere` are from the second pass after those tests were added; an earlier pass had caught `core_bound_without_datum`, `core_pointer_gone_unchecked` and
+`core_carried_gate_removed` by ONE test each and `core_no_fresh_resume` by none, which is why the unit tests exist):
 
 | mutation (+ = machine mutant via `KF_LIFECYCLE_MUTANT`; `core_*` / `life_*` / `scan_*` = exact-text patch of the production source) | invariant | failing tests |
 |---|---|---|
