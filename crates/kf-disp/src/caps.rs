@@ -501,6 +501,20 @@ pub fn page(
     for i in 0..windows {
         set(sys_capb, fa("SYS_CAPB_WINDOW_EXISTS", i)?, 1);
     }
+    // NVDisplay's tiled output model (nvkms-evo4.c, EvoGetCapabilitiesCA /
+    // UsableHwTilesCount) requires contiguous usable tiles. Our virtual output
+    // has one independent, unscaled tile per head; no multi-tile output is
+    // advertised. This is virtual topology, not a physical die's fuse mask.
+    if t.fa(caps, "SYS_CAPC_TILE_EXISTS", 0).is_some() {
+        let off = v("SYS_CAPC")?;
+        let limit = v("SYS_CAPC_TILE_EXISTS__SIZE_1")?;
+        if heads > limit || off % 4 != 0 || off as usize > PAGE - 4 {
+            return Err(m("SYS_CAPC virtual tile topology outside layout".into()));
+        }
+        for h in 0..heads {
+            set(off, fa("SYS_CAPC_TILE_EXISTS", h)?, 1);
+        }
+    }
     // SORs
     let tmds_max = tmds_max_field(t)?;
     for s in 0..heads {
@@ -601,6 +615,30 @@ pub fn page(
 mod tests {
     use super::*;
 
+    #[test]
+    fn blackwell_virtual_heads_have_contiguous_single_output_tiles() {
+        let t = crate::class::for_version("580.159.04").unwrap();
+        let row = &kf_chip::display::BLACKWELL_GB20X;
+        let r = Regs::for_ip("580.159.04", row.ip_version).unwrap();
+        let p = page(t, &r, row.classes.caps, row.heads, row.windows).unwrap();
+        let c = row.classes.caps;
+        let word = p.word(t.v(c, "SYS_CAPC").unwrap());
+        for i in 0..t.v(c, "SYS_CAPC_TILE_EXISTS__SIZE_1").unwrap() {
+            assert_eq!(
+                get(word, t.fa(c, "SYS_CAPC_TILE_EXISTS", i).unwrap()),
+                u32::from(i < row.heads),
+                "tile {i}"
+            );
+            assert_eq!(
+                get(
+                    word,
+                    t.fa(c, "SYS_CAPC_TILE_SUPPORT_MULTI_TILE", i).unwrap()
+                ),
+                0
+            );
+        }
+    }
+
     /// ★ 2026-10-14: every family's authored page claims semi-planar YUV windows in the field its NVKMS
     /// parser reads (C673+ CAPC.SUPPORT_SEMI_PLANAR; Turing CAPA.SUPPORT_PLANAR), and never claims
     /// 3-plane YUV (C673+ CAPA.SUPPORT_PLANAR) — what a real AD104 under 580.159.04 offers.
@@ -613,7 +651,8 @@ mod tests {
                 let c = row.classes.caps;
                 let p = page(t, &r, c, row.heads, row.windows).unwrap();
                 let capa = p.word(t.v(c, "IHUB_COMMON_CAPA").unwrap());
-                let planar = crate::class::get(capa, t.f(c, "IHUB_COMMON_CAPA_SUPPORT_PLANAR").unwrap());
+                let planar =
+                    crate::class::get(capa, t.f(c, "IHUB_COMMON_CAPA_SUPPORT_PLANAR").unwrap());
                 if let Some(capc) = t.v(c, "IHUB_COMMON_CAPC") {
                     let semi = crate::class::get(
                         p.word(capc),
