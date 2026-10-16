@@ -1104,6 +1104,12 @@ impl Lifecycle {
     /// Window may end: a detection aid for the cursor semantics at the switch (design D5), never an edge of the
     /// table.
     pub fn source_switched(&mut self) {
+        // PHASE 1c (review 2, N4): `next_boundary`, `here` and `counted` are absolute indices of the OLD ring's `GP_PUT`
+        // values. They name nothing of the new ring: a Pointer marker believed "at a GP_PUT boundary" there would land
+        // in the middle of a guest submission.
+        self.next_boundary = None;
+        self.here = None;
+        self.counted = None;
         if self.mode == Mode::Window || self.kind == LifecycleMode::AlwaysScan {
             self.post_switch = POST_SWITCH_SCAN;
         }
@@ -1972,6 +1978,57 @@ mod tests {
             Plan::Scan { restart: true, .. }
         ));
         assert_eq!((l.mode(), l.counts().to_window_fresh), (Mode::Window, 2));
+    }
+
+    /// PHASE 1c item 4 (review 2, N4). `next_boundary` and `here` are absolute indices of the OLD ring's `GP_PUT`
+    /// values; after a source switch they name nothing of the new ring and must not make a Pointer marker "safe".
+    #[test]
+    fn a_remembered_gp_put_boundary_of_the_old_ring_is_forgotten_at_a_source_switch() {
+        let mut l = Lifecycle::new();
+        l.entry(&obs(0, 0, 0, B), || 0);
+        l.entry(&obs(1, 0, 1, B), || 1);
+        assert_eq!(l.mode(), Mode::Window);
+        l.forwarded(1, 0x10);
+        // the OLD ring's GP_PUT is far ahead of the trigger (30)
+        l.observe_put(2, 30, Some(false));
+        assert_eq!(l.next_boundary, Some(30));
+        l.source_switched();
+        assert_eq!(l.next_boundary, None, "the old ring's boundary is gone");
+        assert_eq!(l.here, None);
+        // out of the Window, the cursor reaches index 30 of the NEW ring, where no GP_PUT was ever 30
+        for abs in 3..14u64 {
+            l.entry(&obs(abs, 0x10, 2, B), || 0); // the post-switch scan holds the Window for 8 entries, then it ends
+            l.forwarded(abs, 0x10);
+        }
+        assert_eq!(l.mode(), Mode::Pointer);
+        l.observe_put(30, 35, None);
+        assert!(
+            !l.marker_possible(false, 30),
+            "30 was never a GP_PUT of the new ring: no marker there"
+        );
+        assert_eq!(l.counts().pointer_carried_no_marker, 1);
+        // a boundary of the NEW ring is still honoured
+        l.observe_put(31, 31, None);
+        assert!(l.marker_possible(false, 31));
+    }
+
+    /// The boundary already counted at this index belongs to the old ring too: the new ring's boundary at the same
+    /// index is a different one and is measured.
+    #[test]
+    fn a_boundary_counted_before_the_switch_does_not_hide_the_new_rings_boundary_at_the_same_index()
+    {
+        let mut l = Lifecycle::new();
+        l.observe_put(4, 4, Some(false));
+        assert_eq!(l.counts().put_boundaries_scan, 1);
+        l.source_switched();
+        l.observe_put(4, 4, Some(true));
+        assert_eq!(
+            (
+                l.counts().put_boundaries_scan,
+                l.counts().put_boundary_open_scan
+            ),
+            (2, 1)
+        );
     }
 
     // ---- PHASE 1c item 2: the ring-full anchor guard, the P2' latch, the notices

@@ -749,3 +749,40 @@ fn a_nonzero_guest_get_in_the_new_userd_contradicts_the_reset_and_is_what_the_gu
     assert_eq!(r.life.counts().switch_cursor_mismatch, 1);
     assert_eq!(r.written_get, 5);
 }
+
+#[test]
+fn the_switch_forgets_the_old_rings_gp_put_boundaries_so_no_marker_lands_at_a_stale_index() {
+    // Pointer mode; the OLD ring's GP_PUT is at absolute index 14 (remembered as the next boundary). The ring is switched.
+    // On the NEW ring the guest's GP_PUT is far ahead (40 entries): when the private ring runs out of credit at absolute
+    // index 14 (a credit stall in the middle of a submission) no marker may be authored there -- 14 was a GP_PUT of the
+    // old ring only.
+    let mut io = Mock::new(64);
+    let mut r = pointer_relay(&mut io);
+    for slot in 2..14u32 {
+        io.put_entry(slot, &ge(30 + slot as u8, Kind::Plain));
+    }
+    io.put = 14;
+    turn(&mut r, &mut io).unwrap(); // forwards one entry; the GP_PUT (absolute 14) is remembered
+    r.switch_source(2);
+    for slot in 0..40u32 {
+        io.put_entry(slot, &ge(60 + slot as u8, Kind::Plain));
+    }
+    io.put = 40;
+    for _ in 0..40 {
+        turn(&mut r, &mut io).unwrap();
+    }
+    assert_eq!(
+        r.relayed, 14,
+        "the private ring ran out of credit at the old ring's boundary index"
+    );
+    assert!(
+        matches!(r.need, Need::Popped { .. }),
+        "the stall waits for pops: {:?}",
+        r.need
+    );
+    assert_eq!(io.count(&Call::Marker), 0, "no marker at a stale boundary");
+    assert!(
+        r.life.counts().pointer_carried_no_marker > 0,
+        "the unannounced wake is counted instead"
+    );
+}
