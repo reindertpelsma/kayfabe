@@ -1258,3 +1258,17 @@ worker-only submission and command inspection from birth, the owner answered:
 - This authorizes development of the revised design, not a compatibility claim.
   Native cursor, lifetime and ordering semantics still require evidence, bounded
   models, independent review and exact-revision Linux/Windows hardware tests.
+
+## §AJ. Windows performance: scan off after 5080 is the default; unsupported means an explicit failure; evidence before hard steps, 2026-10-16
+
+**STATUS: LIVE, 2026-10-16 (owner).** Shipping Windows at about a third of native on D3D11 is not acceptable; the way there is decided as follows. Plan and evidence gates:
+`docs/design/V3_WINDOWS_PERF_STRATEGY_20261016.md`.
+- The lifecycle (scan until the channel's 5080 SET_OBJECT, then pointer copy without reading pushbuffers, a window that scans only while a registration is pending until the trigger is
+  seen) is the default Windows USER-ring design. It assumes the 5080 binds once; that assumption is measured on real workloads (counters in `always_scan`, the scan-on control arms, the
+  app matrix) and checked against the hardware (a bare-metal test), not settled by reverse engineering.
+- A guest that breaks the assumption is an UNSUPPORTED case that fails explicitly (a reset of its own channel), never an incorrect one. Correctness always holds: no shortcut or research
+  hack may produce a silent wrong result; the only acceptable gap is an explicit failure. A fallback is a clean mode with a defined contract and tests (§AE); `always_scan` is that mode.
+- No hard step (PTX rewrite, reverse engineering, a binding-independent trigger rule) before the evidence justifies it. The accepted costs: a larger private ring (VRAM per channel).
+- A sloppy research build toward about 300 fps D3D11 is wanted as a reference, with every gap classified; it is evidence for a later redesign, not a product.
+- Open: expose `auto` | `always_scan` as a product property from the start, or keep it a measurement mode until the app matrix shows a need; an automatic degrade after a first unexpected
+  reset needs a §AE review before it is built.
